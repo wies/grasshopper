@@ -1,0 +1,13 @@
+root := null;
+
+new x;
+f x := root;
+root := x;
+
+cut:
+
+new x;
+f x := root;
+root := x;
+
+assume ~ Btwn_f root null null;

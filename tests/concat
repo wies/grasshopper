@@ -1,0 +1,21 @@
+assume root ~= null;
+prev := null;
+curr := root;
+assume curr ~= null;
+prev := curr;
+curr := f curr;
+assume curr ~= null;
+prev := curr;
+curr := f curr;
+assume curr = null;
+f prev := x;
+curr := root;
+
+cut:
+
+assume curr ~= null & curr ~= x;
+curr := f curr; 
+assume curr ~= null & curr ~= x;
+curr := f curr;
+assume curr = null | curr = x;
+assume curr ~= x;

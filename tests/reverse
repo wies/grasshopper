@@ -1,0 +1,27 @@
+assume Btwn_f root null null;
+curr := root;
+prev := null;
+
+assume curr ~= null;
+succ := f curr;
+f curr := prev;
+prev := curr;
+curr := succ;
+
+cut:
+
+assume curr ~= null;
+succ := f curr;
+f curr := prev;
+prev := curr;
+curr := succ;
+
+assume curr ~= null;
+succ := f curr;
+f curr := prev;
+prev := curr;
+curr := succ;
+
+assume curr = null;
+root := prev;
+assume ~(Btwn_f root null null);
