@@ -6,12 +6,12 @@ open Logging
 
 let cmd_options =
   [("-v", Arg.Set Debug.verbose, "Display verbose messages");
-   ("-nobtwn", Arg.Clear Axioms.with_btwn_axioms, "Do not add axioms for Btwn predicates");
-   ("-nojp", Arg.Clear Axioms.with_jp_axioms, "Do not add axioms for jp functions")]
+   ("-noreach", Arg.Clear Axioms.with_reach_axioms, "Do not add axioms for reachability predicates");
+   ("-nojoin", Arg.Clear Axioms.with_jp_axioms, "Do not add axioms for join functions")]
 
 let usage_message =
   "Usage:\n  " ^ Sys.argv.(0) ^ 
-  " [-v] [-nobtwn] [-nojp] <input file>\n"
+  " [-v] [-noreach] [-nojoin] <input file>\n"
 
 let cmd_line_error msg =
   Arg.usage cmd_options usage_message;

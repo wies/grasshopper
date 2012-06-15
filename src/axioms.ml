@@ -1,6 +1,6 @@
 open Form
 
-let with_btwn_axioms = ref true
+let with_reach_axioms = ref true
 let with_jp_axioms = ref true
 let with_alloc_axioms = ref true
 
@@ -8,20 +8,21 @@ let var1 = mk_var (fresh_ident "v")
 let var2 = mk_var (fresh_ident "v")
 let var3 = mk_var (fresh_ident "v")
 let var4 = mk_var (fresh_ident "v")
+let var5 = mk_var (fresh_ident "v")
 
 let null_id = (mk_ident "null")
 let null = mk_const null_id
 
 let alloc_id = (mk_ident "Alloc")
 
-let btwn_name = "Btwn_"
+let reach_name = "Reach_"
 
-let btwn_id (f, n) = (btwn_name ^ f, n)
+let reach_id (f, n) = (reach_name ^ f, n)
 
-let btwn f x y z = mk_pred (btwn_id f) [x; y; z]
+let reach f x y z = mk_pred (reach_id f) [x; y; z]
 
-let is_btwn = 
-  let re = Str.regexp btwn_name in
+let is_reach = 
+  let re = Str.regexp reach_name in
   fun ((name, _) : ident) -> Str.string_match re name 0
 
 let jp_name = "jp_"
@@ -39,56 +40,49 @@ let update_axioms f new_f ind upd =
       mk_or [mk_eq ind var1; mk_not (mk_eq var1 var2); mk_eq (mk_app f [var1]) (mk_app new_f [var2])]
     in
     let f_upd2 = mk_eq (mk_app new_f [ind]) upd in
-    let btwn_upd =
-      let btw = btwn f in
-      let avoid u v w = mk_or [btw u v w; mk_and [btw u v v; mk_not (btw u w w)]] in
-      let new_btwn u v w =
-	mk_or [mk_and [btw u v w; avoid u w ind];
-	       mk_and [mk_not (mk_eq ind w); avoid u ind w; avoid upd w ind;
-		       mk_or [btw u v ind; btw upd v w]]]
+    let reach_upd =
+      let r = reach f in
+      let new_reach u v w =
+	mk_or [mk_and [r u v w; r u v ind];
+	       mk_and [mk_not (mk_eq ind w); r u ind w; r upd v ind; r upd v w]]
       in
-      if !with_btwn_axioms then
-	[mk_or [mk_not (btwn new_f var1 var2 var3); new_btwn var1 var2 var3];
-	 mk_or [btwn new_f var1 var2 var3; mk_not (new_btwn var1 var2 var3)]]
+      if !with_reach_axioms then
+	[mk_or [mk_not (reach new_f var1 var2 var3); new_reach var1 var2 var3];
+	 mk_or [reach new_f var1 var2 var3; mk_not (new_reach var1 var2 var3)]]
       else []
     in
-    f_upd1 :: f_upd2 :: btwn_upd
+    f_upd1 :: f_upd2 :: reach_upd
 
-let btwn_axioms f = 
+let reach_axioms f = 
   let af x = mk_app f [x] in
-  let btwn = btwn f in
+  let reach = reach f in
   (* axioms *)
-  let refl = btwn var1 var1 var1 in
-  let step = btwn var1 (af var1) (af var1) in
-  let reac = mk_or [mk_not (btwn var1 var2 var2); 
-		    mk_eq var1 var2; btwn var1 (af var1) var2] in
+  let refl = reach var1 var1 var2 in
+  let reac = mk_or [mk_not (reach var1 var2 var3); 
+		    reach var1 var2 var2] in
+  let step = mk_or [reach var1 (af var1) var2; mk_eq var1 var2] in
+  let ufld = mk_or [mk_not (reach var1 var2 var3); mk_eq var1 var2; reach (af var1) var2 var3] in
   let cycl = mk_or [mk_not (mk_eq (af var1) var1); 
-		    mk_not (btwn var1 var2 var2); mk_eq var1 var2] in
-  let sndw = mk_or [mk_not (btwn var1 var2 var1); mk_eq var1 var2] in
-  let ord1 = mk_or [mk_not (btwn var1 var2 var2); mk_not (btwn var1 var3 var3);
-		    btwn var1 var2 var3; btwn var1 var3 var2] in
-  let ord2 = mk_or [mk_not (btwn var1 var2 var3); 
-		    mk_and [btwn var1 var2 var2; btwn var2 var3 var3]] in
-  let trn1 = mk_or [mk_not (btwn var1 var2 var2); mk_not (btwn var2 var3 var3);
-		    btwn var1 var3 var3] in
-  let trn2 = mk_or [mk_not (btwn var1 var2 var3); mk_not (btwn var2 var4 var3);
-		    mk_and [btwn var1 var2 var4; btwn var1 var4 var3]] in
-  let trn3 = mk_or [mk_not (btwn var1 var2 var3); mk_not (btwn var1 var4 var2);
-		    mk_and [btwn var1 var4 var2; btwn var4 var2 var3]] in
+		    mk_not (reach var1 var2 var2); mk_eq var1 var2] in
+  let sndw = mk_or [mk_not (reach var1 var2 var1); mk_eq var1 var2] in
+  let linr  = mk_or [mk_not (reach var1 var2 var3); mk_not (reach var1 var4 var5); 
+		    mk_and [reach var1 var4 var3; reach var4 var2 var3]; 
+		    mk_and [reach var1 var2 var5; reach var2 var4 var5]] in
+  let trns = mk_or [mk_not (reach var1 var2 var3); mk_not (reach var2 var4 var3); 
+		    reach var1 var4 var3] in
   (**)
-  if !with_btwn_axioms then
-    [refl; step; reac; cycl; sndw; ord1; ord2; trn1; trn2; trn3]
+  if !with_reach_axioms then
+    [refl; reac; step; ufld; cycl; sndw; linr; trns]
   else []
 
 let jp_axioms f =
-  let btwn = btwn f in
-  let jp1 = mk_or [mk_not (btwn var1 var2 var2); mk_not (btwn var3 var2 var2); 
-		   btwn (jp f var1 var3) var2 var2] in
-  let jp2 = mk_or [mk_eq (jp f var1 var2) null; 
-		   mk_and [btwn var1 (jp f var1 var2) (jp f var1 var2); 
-			   btwn var2 (jp f var1 var2) (jp f var1 var2)]] in
-  let jp3 = mk_or [mk_not (btwn var1 var2 var2); mk_not (btwn var2 var1 var1); 
-		   mk_eq (jp f var1 var2) var1] in
+  let reach = reach f in
+  let jp1 = mk_or [mk_not (reach var1 var2 var2); mk_not (reach var3 var2 var2); 
+		   reach (jp f var1 var3) var2 var2] in
+  let jp2 = mk_or [mk_not (reach var1 var2 var2); mk_not (reach var3 var2 var2); 
+		   reach var1 (jp f var1 var3) (jp f var1 var3)] in
+  let jp3 = mk_or [mk_not (reach var1 var2 var2); mk_not (reach var3 var2 var2); 
+		   reach var3 (jp f var1 var3) (jp f var1 var3)] in
   if !with_jp_axioms then [jp1; jp2; jp3]
   else []
 
@@ -117,20 +111,20 @@ let simplify f =
 	smk_and (List.map rewrite_atoms fs)
     | Or fs ->
 	smk_or (List.map rewrite_atoms fs)
-    | Pred (fn, [t1; t2; t3]) when is_btwn fn ->
+    | Pred (fn, [t1; t2; t3]) when is_reach fn ->
 	if t1 = t3 then
 	  if t1 = t2 then mk_true
 	  else mk_eq t1 t2
 	else 
-	  if t1 = null then mk_eq t1 t3 
+	  if t1 = null then mk_eq t1 t2 
 	  else Pred (fn, [t1; t2; t3])
     | Eq (t1, t2) when t1 = t2 -> mk_true
     | f -> f
-  in rewrite_atoms (nnf f)	
+  in rewrite_atoms (nnf f) 
 	
 let simplify_model m : Model.model =
   Model.fold (fun id def sm -> 
-    if not (is_btwn id) then 
+    if not (is_reach id) then 
       Model.add_def id (def.Model.input, def.Model.output) sm
     else  
       match def.Model.input with 

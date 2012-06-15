@@ -28,5 +28,8 @@ rmodel:
   LPAREN LPAREN MODEL STRING RPAREN RPAREN 
     { let buff = Lexing.from_string $4 in
       ParseModel.main LexModel.token buff }
+| STRING 
+    { let buff = Lexing.from_string $1 in
+      ParseModel.main LexModel.token buff }
 ;
 

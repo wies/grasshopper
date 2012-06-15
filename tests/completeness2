@@ -1,0 +1,8 @@
+assume f null = null;
+assume Reach_f c a a;
+assume Reach_f a c c;
+assume Reach_f c b b;
+assume ~(Reach_f b c c);
+assume a ~= c;
+
+cut:

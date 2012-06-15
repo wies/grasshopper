@@ -28,12 +28,12 @@ let add_axioms pf_a pf_b =
       b_unary 
   in
   let a_axioms =
-    IdSet.fold (fun id acc -> btwn_axioms id @ acc) a_init_funs [] @
+    IdSet.fold (fun id acc -> reach_axioms id @ acc) a_init_funs [] @
     IdSet.fold (fun id acc -> fun_axioms id @ acc) a_unary [] @
     alloc_axioms 
   in
   let b_axioms =
-    IdSet.fold (fun id acc -> btwn_axioms id @ acc) b_init_funs [] @
+    IdSet.fold (fun id acc -> reach_axioms id @ acc) b_init_funs [] @
     IdSet.fold (fun id acc -> fun_axioms id @ acc) b_unary []
   in
   a_axioms @ pf_a, b_axioms @ pf_b
@@ -80,7 +80,7 @@ let path_form path =
     let new_id = (name, m + 1) in
     let new_ident_map = 
       IdMap.add (jp_id id) (jp_id new_id) 
-	(IdMap.add (btwn_id id) (btwn_id new_id)
+	(IdMap.add (reach_id id) (reach_id new_id)
 	   (IdMap.add id new_id ident_map))
     in
     new_id, new_ident_map

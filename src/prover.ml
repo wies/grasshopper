@@ -17,7 +17,7 @@ module SmtLib = struct
   let smt_cmd = "z3 -smt2 -ini:z3.ini -in"
 
   let write session cmd = 
-    (* print_endline cmd; *)
+    print_endline cmd; 
     output_string session.out_chan (cmd ^ "\n")
  
    
@@ -34,6 +34,7 @@ module SmtLib = struct
 		    stack_height = 0 }
     in
     write session "(set-option :print-success false)";
+    write session "(set-option :produce-models true)";
     write session "(set-logic QF_UF)";
     write session ("(declare-sort " ^ sort_str ^ ")");
     session
@@ -58,16 +59,16 @@ module SmtLib = struct
 
   let declare session sign =
     let write_decl id decl = 
-      let res_sort = if decl.is_pred then "bool" else sort_str in
+      let res_sort = if decl.is_pred then "Bool" else sort_str in
       let arg_sorts = String.concat " " (Util.generate_list (fun _ -> sort_str) decl.arity) in
       write session ("(declare-fun " ^ str_of_ident id ^ " (" ^ arg_sorts ^ ") " ^ res_sort ^ ")")
     in
     IdMap.iter write_decl sign
 
   let assert_form session f =
-    (* print_string "(assert ";
+    print_string "(assert ";
     print_smtlib_form stdout f;
-    print_endline ")"; *)
+    print_endline ")";
     output_string session.out_chan "(assert ";
     print_smtlib_form session.out_chan f;
     output_string session.out_chan ")\n"
@@ -89,7 +90,7 @@ module SmtLib = struct
     match is_sat session with
     | Some true | None ->
 	begin
-	  write session "(get-info model)";
+	  write session "(get-model)";
 	  match read session with
 	  | SmtModel m -> Some (Axioms.simplify_model m)
 	  | SmtError e -> fail session e
