@@ -64,15 +64,18 @@ let reach_axioms f =
   let ufld = mk_or [mk_not (reach var1 var2 var3); mk_eq var1 var2; reach (af var1) var2 var3] in
   let cycl = mk_or [mk_not (mk_eq (af var1) var1); 
 		    mk_not (reach var1 var2 var2); mk_eq var1 var2] in
+  let cycl2 = mk_or [mk_not (reach var1 var2 var3); mk_not (reach var2 var1 var3); mk_not (reach var1 var3 var3); mk_eq var1 var2; mk_eq var1 var3] in
   let sndw = mk_or [mk_not (reach var1 var2 var1); mk_eq var1 var2] in
   let linr  = mk_or [mk_not (reach var1 var2 var3); mk_not (reach var1 var4 var5); 
 		    mk_and [reach var1 var4 var3; reach var4 var2 var3]; 
 		    mk_and [reach var1 var2 var5; reach var2 var4 var5]] in
-  let trns = mk_or [mk_not (reach var1 var2 var3); mk_not (reach var2 var4 var3); 
+  let trn1 = mk_or [mk_not (reach var1 var2 var3); mk_not (reach var2 var4 var3); 
 		    reach var1 var4 var3] in
+  let trn2 = mk_or [mk_not (reach var1 var2 var2); mk_not (reach var2 var3 var3); 
+		    reach var1 var3 var3] in
   (**)
   if !with_reach_axioms then
-    [refl; reac; step; ufld; cycl; sndw; linr; trns]
+    [refl; reac; step; ufld; cycl; cycl2; sndw; linr; trn1; trn2]
   else []
 
 let jp_axioms f =
