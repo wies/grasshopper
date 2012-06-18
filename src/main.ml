@@ -7,6 +7,7 @@ open Logging
 let cmd_options =
   [("-v", Arg.Set Debug.verbose, "Display verbose messages");
    ("-noreach", Arg.Clear Axioms.with_reach_axioms, "Do not add axioms for reachability predicates");
+   ("-alloc", Arg.Set Axioms.with_alloc_axioms, "Add axioms for alloc predicate");
    ("-nojoin", Arg.Clear Axioms.with_jp_axioms, "Do not add axioms for join functions")]
 
 let usage_message =
@@ -76,17 +77,17 @@ let interpolate_with_model signature model session_b pf_b_inst =
 	      loop (f :: acc) fs1
 	  | [] -> 
 	      if !Debug.verbose then Model.print_model (unopt (Prover.SmtLib.get_model session_b));
-	      failwith ("no interpolant")
+	      failwith "Failed to compute interpolant. Input might be satisfiable."
 	end
     | Some false -> acc
-    | None -> failwith "failed due to incompleteness of prover"
+    | None -> failwith "Failed due to incompleteness of prover."
   in
   let core_literals = loop [] literals in
   ignore (Prover.SmtLib.pop session_b');
   let interpolant = 
     match Prover.get_interpolant (mk_and core_literals) (mk_and pf_b_inst) with
     | Some f -> f
-    | None -> failwith "wtf"
+    | None -> failwith "Failed to compute interpolant. Input might be satisfiable."
   in simplify interpolant
 
   

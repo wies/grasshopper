@@ -2,7 +2,7 @@ open Form
 
 let with_reach_axioms = ref true
 let with_jp_axioms = ref true
-let with_alloc_axioms = ref true
+let with_alloc_axioms = ref false
 
 let var1 = mk_var (fresh_ident "v")
 let var2 = mk_var (fresh_ident "v")
@@ -103,7 +103,7 @@ let alloc_update_axioms id alloc new_alloc =
    mk_or [mk_eq x var1; mk_not (mk_alloc var1); mk_new_alloc var1];
    mk_or [mk_eq x var1; mk_not (mk_new_alloc var1); mk_alloc var1]]
 
-let fun_axioms f = mk_eq (mk_app f [null]) null :: jp_axioms f
+let fun_axioms f = (*mk_eq (mk_app f [null]) null ::*) jp_axioms f
 
 let extract_axioms fs =
   List.partition (fun f -> IdSet.empty <> fv f) fs
