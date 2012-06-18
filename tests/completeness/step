@@ -1,0 +1,4 @@
+assume f null = null;
+assume ~ (Reach_f x (f x) (f x));
+
+cut:
