@@ -58,13 +58,13 @@ let reach_axioms f =
   let reach = reach f in
   (* axioms *)
   let refl = reach var1 var1 var2 in
-  let reac = mk_or [mk_not (reach var1 var2 var3); 
-		    reach var1 var2 var2] in
+  (* let reac = mk_or [mk_not (reach var1 var2 var3); 
+		    reach var1 var2 var2] in *)
   let step = mk_or [reach var1 (af var1) var2; mk_eq var1 var2] in
-  let ufld = mk_or [mk_not (reach var1 var2 var3); mk_eq var1 var2; reach (af var1) var2 var3] in
+  (* let ufld = mk_or [mk_not (reach var1 var2 var3); mk_eq var1 var2; reach (af var1) var2 var3] in *)
   let cycl = mk_or [mk_not (mk_eq (af var1) var1); 
 		    mk_not (reach var1 var2 var2); mk_eq var1 var2] in
-  let cycl2 = mk_or [mk_not (reach var1 var2 var3); mk_not (reach var2 var1 var3); mk_not (reach var1 var3 var3); mk_eq var1 var2; mk_eq var1 var3] in
+  (* let cycl2 = mk_or [mk_not (reach var1 var2 var3); mk_not (reach var2 var1 var3); mk_not (reach var1 var3 var3); mk_eq var1 var2; mk_eq var1 var3] in *)
   let sndw = mk_or [mk_not (reach var1 var2 var1); mk_eq var1 var2] in
   let linr  = mk_or [mk_not (reach var1 var2 var3); mk_not (reach var1 var4 var5); 
 		    mk_and [reach var1 var4 var3; reach var4 var2 var3]; 
@@ -73,9 +73,11 @@ let reach_axioms f =
 		    reach var1 var4 var3] in
   let trn2 = mk_or [mk_not (reach var1 var2 var2); mk_not (reach var2 var3 var3); 
 		    reach var1 var3 var3] in
+  let trn3 = mk_or [mk_not (reach var1 var2 var3); mk_not (reach var2 var4 var3); 
+		    mk_not (reach var2 var3 var3); reach var1 var2 var4] in
   (**)
   if !with_reach_axioms then
-    [refl; reac; step; ufld; cycl; cycl2; sndw; linr; trn1; trn2]
+    [refl; step; cycl; sndw; linr; trn1; trn2; trn3]
   else []
 
 let jp_axioms f =
