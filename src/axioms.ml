@@ -61,6 +61,7 @@ let reach_axioms f =
   (* let reac = mk_or [mk_not (reach var1 var2 var3); 
 		    reach var1 var2 var2] in *)
   let step = mk_or [reach var1 (af var1) var2; mk_eq var1 var2] in
+  let reac = mk_or [mk_not (reach var1 var2 var2); reach var1 var3 var3; reach var1 var2 var3] in
   (* let ufld = mk_or [mk_not (reach var1 var2 var3); mk_eq var1 var2; reach (af var1) var2 var3] in *)
   let cycl = mk_or [mk_not (mk_eq (af var1) var1); 
 		    mk_not (reach var1 var2 var2); mk_eq var1 var2] in
@@ -77,7 +78,7 @@ let reach_axioms f =
 		    mk_not (reach var2 var3 var3); reach var1 var2 var4] in
   (**)
   if !with_reach_axioms then
-    [refl; step; cycl; sndw; linr; trn1; trn2; trn3]
+    [refl; step; cycl; reac; sndw; linr; trn1; trn2; trn3]
   else []
 
 let jp_axioms f =
@@ -103,7 +104,7 @@ let alloc_update_axioms id alloc new_alloc =
    mk_or [mk_eq x var1; mk_not (mk_alloc var1); mk_new_alloc var1];
    mk_or [mk_eq x var1; mk_not (mk_new_alloc var1); mk_alloc var1]]
 
-let fun_axioms f = (*mk_eq (mk_app f [null]) null ::*) jp_axioms f
+let fun_axioms f = mk_eq (mk_app f [null]) null :: jp_axioms f
 
 let extract_axioms fs =
   List.partition (fun f -> IdSet.empty <> fv f) fs

@@ -1,6 +1,6 @@
 assume f null = f null;
-assume f x = x;
-assume Reach_f x y y;
+assume Reach_f x y x;
+assume Reach_f y x x;
 assume x ~= y;
 
 cut:

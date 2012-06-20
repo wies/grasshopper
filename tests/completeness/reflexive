@@ -1,0 +1,4 @@
+assume f x = f x;
+assume ~Reach_f x x y;
+
+cut:

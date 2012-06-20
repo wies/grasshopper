@@ -1,6 +1,6 @@
 assume f null = null;
-assume Reach_f x y u;
-assume Reach_f y z u;
-assume ~ (Reach_f x z u);
+assume Reach_f x y y;
+assume Reach_f y z z;
+assume ~ (Reach_f x z z);
 
 cut:

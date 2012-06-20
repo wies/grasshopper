@@ -2,6 +2,7 @@ assume Reach_f c a a;
 assume Reach_f a c c;
 assume a ~= c;
 assume f c ~= c;
+//assume ~ (Reach_f (f c) c c);
 
 cut:
 

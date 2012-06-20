@@ -485,8 +485,9 @@ module Model = struct
       m consts
       
   let to_clauses model =
-    let constants = const_map model in 
-    let mk_rep n = mk_const (IntMap.find n constants) in
+    let const_map = const_map model in 
+    let mk_rep n = mk_const (IntMap.find n const_map) in
+    let constants = IntMap.fold (fun n _ acc -> mk_rep n :: acc) const_map [] in
     let form_of_def id def = 
       match def.output with
       |	Bool b -> 
@@ -506,7 +507,12 @@ module Model = struct
 	  List.fold_left (fun acc def -> form_of_def id def :: acc) acc defs)
 	model []
     in
-    List.map (fun f -> [f]) def_forms
+    let diseqs = List.fold_left (fun acc c1 -> 
+      List.fold_left (fun acc c2 ->
+	if c1 = c2 then acc else [mk_not (mk_eq c1 c2)] :: acc) acc constants) 
+	[] constants
+    in
+    diseqs @ List.map (fun f -> [f]) def_forms
 
   let to_form model = Clauses.to_form (to_clauses model)
 
@@ -520,8 +526,8 @@ module Model = struct
 	match defs with
 	| [def] when List.length def.input = 0 -> 
 	    (match def.output with
-	      |	Int out -> Printf.printf " -> %d" out
-	      |	Bool out -> Printf.printf " -> %b" out)
+	      |	Int out -> Printf.printf " -> %d\n" out
+	      |	Bool out -> Printf.printf " -> %b\n" out)
 	| _ ->
 	    print_string "\n  [";
 	    List.iter (fun def -> 
@@ -560,4 +566,33 @@ module Model = struct
 	let args = List.map eval ts in
 	apply id args
     in try Some (eval t) with _ -> None
+
+  let prune model terms =
+    fold (fun id def sm -> 
+      let keep_def = 
+	match def.input, def.output with
+	| _ :: _ as inputs, Int _ -> 
+	    TermSet.exists (function 
+	      | FunApp (id', ts) when id = id' -> 
+		  List.fold_left2 
+		    (fun acc t i -> acc && 
+		      (match eval_term model t with
+		      | Some i' -> i = i'
+		      | None -> false))
+		    true ts inputs
+	      | _ -> false) terms
+	| _ :: _ as inputs, Bool _ ->
+	    List.for_all 
+	      (fun i -> 
+		TermSet.exists 
+		  (fun t -> 
+		    match eval_term model t with
+		    | Some i' -> i = i'
+		    | None -> false)
+		  terms)
+	      inputs
+	| _ -> true
+      in
+      if keep_def then add_def id (def.input, def.output) sm else sm)
+      model empty
 end

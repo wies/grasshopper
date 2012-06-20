@@ -1,4 +1,4 @@
-assume f null = null;
+assume f null = f null;
 assume Reach_f x y y;
 assume x ~= y;
 assume ~ (Reach_f x (f x) y & Reach_f (f x) y y);

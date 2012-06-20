@@ -2,10 +2,14 @@ let unopt = function
   | Some x -> x
   | None -> failwith "Util.unopt applied to None"
 
+let safe_unopt default = function
+  | Some x -> x
+  | None -> default
 
 let optmap f = function
   | Some x -> Some (f x)
   | None -> None
+
 
 (** generate a list of length [n] using generator [f] *)
 let generate_list (f : int -> 'a) (n : int) : 'a list = 

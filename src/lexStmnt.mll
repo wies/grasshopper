@@ -9,8 +9,8 @@ let tident = lcidchar (lcidchar | ucidchar | digitchar)*
 let pident = ucidchar (lcidchar | ucidchar | digitchar)*
 
 rule token = parse
-  [' ' '\t' '\n']* { token lexbuf }
-| "//" [^ '\n'] {token lexbuf }
+  [' ' '\t' '\n'] { token lexbuf }
+| "//" [^ '\n']* {token lexbuf }
 | '=' { EQ }
 | "~=" { NEQ }
 | ":=" { COLONEQ}
