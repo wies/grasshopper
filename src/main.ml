@@ -59,7 +59,7 @@ let compare_forms =
 let interpolate_with_model signature model session_b pf_a_axioms count =
   let session_b = Prover.SmtLib.push session_b in
   (* let _ = Model.print_model model in *)
-  let _ = Model.print_model2 model in 
+  (* let _ = Model.print_model2 model in *)
   let literals = 
     let cm = List.map List.hd (Model.to_clauses model) in
     List.sort compare_forms cm in
@@ -107,36 +107,32 @@ let interpolate pf_a pf_b =
   let session_a = Prover.SmtLib.start_z3 (Some "z3.in") in
   let pf_a_axioms, _ = extract_axioms pf_a in
   let pf_a_terms = ground_terms (mk_and pf_a) in
-  let _ = print_endline "Instantiating A" in
+  (* let _ = print_endline "Instantiating A" in *)
   let pf_a_inst = InstGen.instantiate pf_a in
-  let _ = print_endline "Instantiating B" in
+  (* let _ = print_endline "Instantiating B" in *)
   let pf_b_inst = InstGen.instantiate pf_b in
   let signature = sign (mk_and (pf_a_inst @ pf_b_inst)) in
   Prover.SmtLib.declare session_a signature;
   Prover.SmtLib.assert_forms session_a pf_a_inst;
   (* start session for interpolation generation *)
-  let start_session_b () = 
-    let session_b = Prover.SmtLib.start_mathsat (Some "mathsat.in") in
-    Prover.SmtLib.declare session_b signature;
-    Prover.SmtLib.assert_forms session_b ~igroup:(Some 0) pf_b_inst;
-    session_b
-  in
+  let session_b = Prover.SmtLib.start_mathsat (Some "mathsat.in") in
+  Prover.SmtLib.declare session_b signature;
+  Prover.SmtLib.assert_forms session_b ~igroup:(Some 0) pf_b_inst;
   let rec loop acc count =
     (* find next partial model for A and compute interpolant *)
     match Prover.SmtLib.get_model session_a with
     | Some model1 -> 
 	let model = Model.prune model1 pf_a_terms in
-	let session_b = start_session_b () in
 	let interpolant = interpolate_with_model signature model session_b pf_a_axioms count in
 	Prover.SmtLib.assert_form session_a (mk_not interpolant);
-	let _ = if count == 1 then exit 0 in
-	ignore (Prover.SmtLib.quit session_b);
+	(* let _ = if count == 1 then exit 0 in*)
 	loop (interpolant :: acc) (count + 1)
     | None -> smk_or acc
   in 
   (* compute interpolant *)
   let interpolant = loop [] 1 in
   ignore (Prover.SmtLib.quit session_a);
+  ignore (Prover.SmtLib.quit session_b);
   interpolant
 
 let _ =

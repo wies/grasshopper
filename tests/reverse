@@ -8,11 +8,7 @@ f curr := prev;
 prev := curr;
 curr := succ;
 
-assume curr ~= null;
-succ := f curr;
-f curr := prev;
-prev := curr;
-curr := succ;
+cut:
 
 assume curr ~= null;
 succ := f curr;
@@ -20,10 +16,15 @@ f curr := prev;
 prev := curr;
 curr := succ;
 
-assume ~(Reach_f prev null null);
+assume curr ~= null;
+succ := f curr;
+f curr := prev;
+prev := curr;
+curr := succ;
 
 assume curr = null;
 root := prev;
 assume ~(Reach_f root null null);
 
-cut:
+
+

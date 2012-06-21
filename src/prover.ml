@@ -124,7 +124,7 @@ module SmtLib = struct
 	begin
 	  writeln session "(get-model)";
 	  match read session with
-	  | SmtModel m -> Model.print_model2 m; Some ((*Axioms.simplify_model*) m)
+	  | SmtModel m -> Some ((*Axioms.simplify_model*) m)
 	  | SmtError e -> fail session e
 	  | _ -> None
 	end

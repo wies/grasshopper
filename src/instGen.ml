@@ -34,7 +34,7 @@ let congr_classes fs gterms =
       gterms IntMap.empty
   in
   IntMap.fold (fun _ cl acc -> cl :: acc) class_map []
-    
+  (* TermSet.fold (fun t acc -> [t]::acc) gterms [] *)
   
   (* match Prover.get_model f with
   | Some m -> 
@@ -126,7 +126,7 @@ let generate_instances axioms terms rep_map =
 	    ground_terms)
 	fun_terms
     in
-    if is_local then subst subst_map axiom :: acc else acc
+    if is_local || true then subst subst_map axiom :: acc else acc
   in
   let partitioned_axioms = 
     let fv_axioms = List.map (fun f -> (fv f, f)) axioms in
@@ -155,10 +155,8 @@ let generate_instances axioms terms rep_map =
   in
   List.concat (List.map gen partitioned_axioms)
 
-
-let instantiate f =
+let instantiate_with_terms f gterms_f =
   let axioms_f, ground_f = extract_axioms f in
-  let gterms_f = ground_terms (mk_and f) in
   let classes = congr_classes ground_f gterms_f in
   let _ = 
     if !Debug.verbose then
@@ -172,6 +170,10 @@ let instantiate f =
   let reps_f, defs_f, rep_map_f = choose_rep_terms classes in
   let instances_f = generate_instances axioms_f reps_f rep_map_f in
   defs_f @ ground_f @ instances_f
+
+let instantiate f =
+  let gterms_f = ground_terms (mk_and f) in
+  instantiate_with_terms f gterms_f
 
 let instantiate_interp pf_a pf_b =
   let a_axioms, a_ground = extract_axioms pf_a in
