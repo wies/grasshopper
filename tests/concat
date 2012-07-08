@@ -1,6 +1,6 @@
-assume root ~= null;
+assume x ~= null;
 prev := null;
-curr := root;
+curr := x;
 assume curr ~= null;
 prev := curr;
 curr := f curr;
@@ -8,14 +8,13 @@ assume curr ~= null;
 prev := curr;
 curr := f curr;
 assume curr = null;
-f prev := x;
-curr := root;
+f prev := y;
 
 cut:
-
-assume curr ~= null & curr ~= x;
+curr := x;
+assume curr ~= null & curr ~= y;
 curr := f curr; 
-assume curr ~= null & curr ~= x;
+assume curr ~= null & curr ~= y;
 curr := f curr;
-assume curr = null | curr = x;
-assume curr ~= x;
+assume curr = null | curr = y;
+assume curr ~= y;

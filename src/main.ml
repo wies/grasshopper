@@ -63,22 +63,24 @@ let interpolate_with_model signature model session_b pf_a_axioms count =
   let literals = 
     let cm = List.map List.hd (Model.to_clauses model) in
     List.sort compare_forms cm in
-  (* let _ = print_forms stdout literals in *)
+  (*let _ = print_endline "Literals:" in
+  let _ = print_forms stdout literals in*)
   let new_symbols =
     IdMap.fold (fun id decl acc -> 
       if IdMap.mem id signature then acc else IdMap.add id decl acc)
       (sign (mk_and literals)) IdMap.empty
   in
   Prover.SmtLib.declare session_b new_symbols;
-  let pf_a_inst = InstGen.instantiate (pf_a_axioms @ literals) in
-  Prover.SmtLib.assert_forms ~igroup:(Some count) session_b pf_a_inst;
+  (* let pf_a_inst = InstGen.instantiate (pf_a_axioms @ literals) in
+  Prover.SmtLib.assert_forms ~igroup:(Some count) session_b pf_a_inst;*)
   let rec loop acc fs = 
     match Prover.SmtLib.is_sat session_b with
     | Some true -> 
 	begin
 	  match fs with
 	  | f :: fs1 ->
-	      Prover.SmtLib.assert_form ~igroup:(Some count) session_b f;
+	      let curr_inst = InstGen.instantiate (pf_a_axioms @ (f::acc)) in
+	      Prover.SmtLib.assert_forms ~igroup:(Some count) session_b (f :: curr_inst);
 	      loop (f :: acc) fs1
 	  | [] -> 
 	      (* if !Debug.verbose then Model.print_model (unopt (Prover.SmtLib.get_model session_b)); *)
@@ -88,17 +90,18 @@ let interpolate_with_model signature model session_b pf_a_axioms count =
     | None -> failwith "Failed due to incompleteness of prover."
   in
   let core_literals = loop [] literals in
+  (*let _ = print_endline "Core literals:" in
+  let _ = print_forms stdout core_literals in *)
   (* let _ = print_forms stdout core_literals in *)
   let interpolant = 
     match Prover.SmtLib.get_interpolant session_b [count] with
-    | Some f -> print_form stdout f; f
+    | Some f -> f
     (* | None -> 
        match Prover.get_interpolant (mk_and literals) (mk_and pf_b_inst) with
        | Some f -> f*)
     | None -> failwith "Failed to compute interpolant. Input might be satisfiable2."
   in 
   ignore (Prover.SmtLib.pop session_b);
-  let _ = print_endline "simplified: "; print_form stdout (simplify interpolant) in
   simplify interpolant
 
   

@@ -1,30 +1,30 @@
-assume Reach_f root null null;
-curr := root;
+assume Reach_n x null null;
+curr := x;
 prev := null;
 
 assume curr ~= null;
-succ := f curr;
-f curr := prev;
+succ := n curr;
+n curr := prev;
 prev := curr;
 curr := succ;
 
+assume curr ~= null;
 cut:
 
-assume curr ~= null;
-succ := f curr;
-f curr := prev;
+succ := n curr;
+n curr := prev;
 prev := curr;
 curr := succ;
 
 assume curr ~= null;
-succ := f curr;
-f curr := prev;
+succ := n curr;
+n curr := prev;
 prev := curr;
 curr := succ;
 
 assume curr = null;
-root := prev;
-assume ~(Reach_f root null null);
+x := prev;
+assume ~(Reach_n x null null);
 
 
 
