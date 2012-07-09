@@ -63,8 +63,8 @@ let interpolate_with_model signature model session_b pf_a_axioms count =
   let literals = 
     let cm = List.map List.hd (Model.to_clauses model) in
     List.sort compare_forms cm in
-  (*let _ = print_endline "Literals:" in
-  let _ = print_forms stdout literals in*)
+  (* let _ = print_endline "Literals:" in
+  let _ = print_forms stdout literals in *)
   let new_symbols =
     IdMap.fold (fun id decl acc -> 
       if IdMap.mem id signature then acc else IdMap.add id decl acc)
@@ -102,6 +102,7 @@ let interpolate_with_model signature model session_b pf_a_axioms count =
     | None -> failwith "Failed to compute interpolant. Input might be satisfiable2."
   in 
   ignore (Prover.SmtLib.pop session_b);
+  (*print_endline "Interpolant:"; print_form stdout interpolant;*)
   simplify interpolant
 
   

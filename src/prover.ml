@@ -101,11 +101,10 @@ module SmtLib = struct
 	write session "(!";
 	writefn session (fun chan -> print_smtlib_form chan f);
 	write session (":interpolation-group " ^ string_of_int ig ^" :named a" ^ (string_of_int session.assert_count) ^ ")")
-    | None -> 
+    | None ->
 	writefn session (fun chan -> print_smtlib_form chan f));
     writeln session ")\n"
-     
-  let assert_forms session ?(igroup=None) fs =
+    let assert_forms session ?(igroup=None) fs =
     List.iter (fun f -> assert_form session ~igroup:igroup f) fs
     
 
