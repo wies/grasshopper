@@ -145,7 +145,7 @@ let generate_instances axioms terms rep_map =
       List.fold_left (fun subst_maps v ->
 	let new_subst_maps = 
 	  List.fold_left 
-	    (fun acc t -> List.rev_map (IdMap.add v t) subst_maps @ acc)
+	    (fun acc t -> List.fold_left (fun acc s -> (IdMap.add v t s) :: acc) acc subst_maps)
 	    [] terms
 	in new_subst_maps)
 	[IdMap.empty] vars
@@ -153,7 +153,7 @@ let generate_instances axioms terms rep_map =
       (fun instances subst_map -> List.fold_left (instantiate subst_map) instances axioms)
       [] subst_maps
   in
-  List.concat (List.map gen partitioned_axioms)
+  List.concat (List.rev_map gen (List.rev partitioned_axioms))
 
 let instantiate_with_terms f gterms_f =
   let axioms_f, ground_f = extract_axioms f in

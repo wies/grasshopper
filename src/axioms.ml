@@ -25,7 +25,7 @@ let is_reach =
   let re = Str.regexp reach_name in
   fun ((name, _) : ident) -> Str.string_match re name 0
 
-let jp_name = "jp_"
+let jp_name = "join_"
 
 let jp_id (f, n) = (jp_name ^ f, n)
 

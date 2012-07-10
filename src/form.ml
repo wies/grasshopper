@@ -338,10 +338,9 @@ let print_form out_ch =
 	print (indent ^ "~");  
 	pf "" f
     | Pred (p, ts) ->
-	print (indent ^ "= " ^ str_of_ident p ^ " [");
+	print (indent ^ str_of_ident p ^ " [");
 	print_list " " pt ts;
 	print "] ";
-	pt "" (mk_const id_true)
     | Eq (s, t) ->
 	print (indent ^ "= ");
 	print_list " " pt [s;t];

@@ -56,6 +56,8 @@ let compare_forms =
   else if has_unary_funs b then -1
   else comp a b
 
+let inst_num = ref 0
+
 let interpolate_with_model signature model session_b pf_a_axioms count =
   let session_b = Prover.SmtLib.push session_b in
   (* let _ = Model.print_model model in *)
@@ -84,6 +86,7 @@ let interpolate_with_model signature model session_b pf_a_axioms count =
 	  | f :: fs1 ->
 	      let terms = TermSet.union terms (ground_terms f) in
 	      let new_inst, unused_inst = partition_instances unused_inst terms in
+	      inst_num := !inst_num + List.length new_inst;
 	      Prover.SmtLib.assert_forms ~igroup:(Some count) session_b (f :: new_inst);
 	      loop (f :: acc, terms, unused_inst) fs1
 	  | [] -> 
@@ -130,11 +133,12 @@ let interpolate pf_a pf_b =
 	Prover.SmtLib.assert_form session_a (mk_not interpolant);
 	(* let _ = if count == 1 then exit 0 in*)
 	loop (interpolant :: acc) (count + 1)
-    | None -> smk_or acc, count
+    | None -> smk_or acc, count - 1
   in 
   (* compute interpolant *)
   let interpolant, count = loop [] 1 in
   let _ = print_endline ("# iterations: " ^ (string_of_int count)) in
+  let _ = print_endline ("# instances: " ^ (string_of_int (List.length pf_a_inst + List.length pf_b_inst))) in
   ignore (Prover.SmtLib.quit session_a);
   ignore (Prover.SmtLib.quit session_b);
   interpolant
