@@ -134,6 +134,7 @@ let interpolate pf_a pf_b =
   in 
   (* compute interpolant *)
   let interpolant, count = loop [] 1 in
+  let _ = print_endline ("# iterations: " ^ (string_of_int count)) in
   ignore (Prover.SmtLib.quit session_a);
   ignore (Prover.SmtLib.quit session_b);
   interpolant
@@ -159,31 +160,3 @@ let _ =
   | Parsing.Parse_error -> print_endline "parse error"
 	
     
-(* ---- *)
-
-  (* old code: (* compute abstracted model *)
-  let model1 = 
-    let cons_re = Str.regexp "rep" in
-    Model.filter_defs (fun (name, _ as id) def -> 
-      match def.Model.input with 
-      | [] -> not (Str.string_match cons_re name 0) 
-      | _ -> is_pred_id id || is_jp id) 
-      model 
-  in
-  let fmodel = Model.form_of_model model in
-  let amodel = Model.form_of_model model1 in
-  let _ = Debug.msg ("\nAbstracted partial model\n");
-    if !Debug.verbose then print_forms stdout (List.sort compare_forms (Model.to_clauses model))
-  in
-  let rec loop amodel =
-    match Prover.get_interpolant amodel (mk_and pf_b_inst) with
-    | Some f -> f
-    | None ->
-        (* refine amodel *) 
-        Logger.log main_log INFO (fun () -> "\nAbstracted partial model too weak - refining partial model...", []);
-        let bmodel = Prover.get_model (smk_and (amodel :: pf_b_inst)) (*Model.form_of_model model*) in
-	let bmodel_form = Model.form_of_model (unopt bmodel) in
-	match Prover.get_interpolant fmodel bmodel_form with
-	| Some f -> loop (smk_and [f; amodel])
-	| None -> failwith "no interpolant"
-  in simplify (loop amodel) *)
