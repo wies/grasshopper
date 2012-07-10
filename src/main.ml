@@ -71,36 +71,35 @@ let interpolate_with_model signature model session_b pf_a_axioms count =
       (sign (mk_and literals)) IdMap.empty
   in
   Prover.SmtLib.declare session_b new_symbols;
-  (* let pf_a_inst = InstGen.instantiate (pf_a_axioms @ literals) in
-  Prover.SmtLib.assert_forms ~igroup:(Some count) session_b pf_a_inst;*)
-  let rec loop acc fs = 
+  let pf_a_inst = InstGen.instantiate (pf_a_axioms @ literals) in
+  let partition_instances instances terms =
+    List.partition (fun c -> TermSet.subset (ground_terms c) terms) instances
+  in
+  (*Prover.SmtLib.assert_forms ~igroup:(Some count) session_b pf_a_inst;*)
+  let rec loop (acc, terms, unused_inst) fs = 
     match Prover.SmtLib.is_sat session_b with
     | Some true -> 
 	begin
 	  match fs with
 	  | f :: fs1 ->
-	      let curr_inst = InstGen.instantiate (pf_a_axioms @ (f::acc)) in
-	      Prover.SmtLib.assert_forms ~igroup:(Some count) session_b (f :: curr_inst);
-	      loop (f :: acc) fs1
+	      let terms = TermSet.union terms (ground_terms f) in
+	      let new_inst, unused_inst = partition_instances unused_inst terms in
+	      Prover.SmtLib.assert_forms ~igroup:(Some count) session_b (f :: new_inst);
+	      loop (f :: acc, terms, unused_inst) fs1
 	  | [] -> 
 	      (* if !Debug.verbose then Model.print_model (unopt (Prover.SmtLib.get_model session_b)); *)
-	      failwith "Failed to compute interpolant. Input might be satisfiable1."
+	      failwith "Failed to compute interpolant. Input might be satisfiable."
 	end
-    | Some false -> acc
+    | Some false ->
+	(match Prover.SmtLib.get_interpolant session_b [count] with
+	| Some f -> f
+	| None -> failwith "Failed to compute interpolant. Input might be satisfiable2.")
     | None -> failwith "Failed due to incompleteness of prover."
   in
-  let core_literals = loop [] literals in
+  let interpolant = loop ([], TermSet.empty, pf_a_inst) literals in
   (*let _ = print_endline "Core literals:" in
   let _ = print_forms stdout core_literals in *)
   (* let _ = print_forms stdout core_literals in *)
-  let interpolant = 
-    match Prover.SmtLib.get_interpolant session_b [count] with
-    | Some f -> f
-    (* | None -> 
-       match Prover.get_interpolant (mk_and literals) (mk_and pf_b_inst) with
-       | Some f -> f*)
-    | None -> failwith "Failed to compute interpolant. Input might be satisfiable2."
-  in 
   ignore (Prover.SmtLib.pop session_b);
   (*print_endline "Interpolant:"; print_form stdout interpolant;*)
   simplify interpolant
@@ -131,10 +130,10 @@ let interpolate pf_a pf_b =
 	Prover.SmtLib.assert_form session_a (mk_not interpolant);
 	(* let _ = if count == 1 then exit 0 in*)
 	loop (interpolant :: acc) (count + 1)
-    | None -> smk_or acc
+    | None -> smk_or acc, count
   in 
   (* compute interpolant *)
-  let interpolant = loop [] 1 in
+  let interpolant, count = loop [] 1 in
   ignore (Prover.SmtLib.quit session_a);
   ignore (Prover.SmtLib.quit session_b);
   interpolant
@@ -144,14 +143,10 @@ let _ =
     Arg.parse cmd_options (fun s -> input_file := s) usage_message;
     if !input_file = "" then cmd_line_error "input file missing" else
       let path = parse_input () in
-      let pf_a, pf_b = 
-	Logger.with_log main_log Logger.INFO (fun () -> "Computing path formula", []) 
-	  (fun () -> path_form path) 
+      let pf_a, pf_b = path_form path
       in
       (* let _ = if !Debug.verbose then print_forms stdout [mk_and pf_a; mk_and pf_b] in *)
-      let interpolant = 
-	Logger.with_log main_log Logger.INFO (fun () -> "Computing interpolant", []) 
-	  (fun () -> interpolate pf_a pf_b) 
+      let interpolant = interpolate pf_a pf_b
       in
       print_form stdout interpolant
       (*print_form stdout (mk_and (pf_a_inst @ pf_b_inst)) *)

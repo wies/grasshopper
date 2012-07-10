@@ -1,4 +1,5 @@
-assume Btwn_f root x null;
+assume Reach_f root x null;
+assume Reach_f root null null;
 assume x ~= null;
 
 prev := null;
@@ -8,11 +9,11 @@ assume curr ~= x;
 prev := curr;
 curr := f curr;
 
+cut: 
+
 assume curr ~= x;
 prev := curr;
 curr := f curr;
-
-cut: 
 
 assume curr = x;
 
@@ -20,4 +21,7 @@ f prev := f x;
 
 assume root ~= x;
 
-assume ~ Btwn_f root null null;
+//assume  Reach_f root x null;
+
+assume ~ Reach_f root null null;
+
