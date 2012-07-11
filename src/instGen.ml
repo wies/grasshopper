@@ -100,7 +100,7 @@ let choose_rep_terms classes =
     (cl_rep :: reps, defs, TermMap.add cl_rep (list_to_set cl) new_classes))
     ([], [], TermMap.empty) classes
 
-let generate_instances axioms terms rep_map =
+let generate_instances axioms terms rep_map = 
   let ground_terms = TermMap.fold (fun _ -> TermSet.union) rep_map TermSet.empty in
   let instantiate subst_map acc axiom =
     let fun_terms = 

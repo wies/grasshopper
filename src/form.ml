@@ -366,7 +366,9 @@ let print_smtlib_form out_ch f =
     | Const id 
     | Var id -> print (str_of_ident id)
     | FunApp (id, ts) ->
-	print ("(" ^ str_of_ident id ^ " ");
+	print "(";
+	print (str_of_ident id);
+	print " ";
 	print_list smt_term ts;
 	print ")"
   in
@@ -384,7 +386,9 @@ let print_smtlib_form out_ch f =
       smt_form f;
       print ")";
   | Pred (id, ts) -> 
-      print ("(" ^ str_of_ident id ^ " ");
+      print "(";
+      print (str_of_ident id);
+      print " ";
       print_list smt_term ts;
       print ")" 
   | Eq (s, t) -> 

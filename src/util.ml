@@ -1,3 +1,5 @@
+open Unix
+
 let unopt = function
   | Some x -> x
   | None -> failwith "Util.unopt applied to None"
@@ -52,3 +54,30 @@ let split_on_char c (str, off, len) =
   loop [] len (len - 1)
 
 let split_on_comma str = split_on_char ',' str;;
+
+let measured_time = ref 0.
+let measured_calls = ref 0
+
+(** measure accumulated execution time and number of calls to a particular function *)
+let measure fn arg =
+  let start_time = 
+    let ptime = Unix.times () in
+    ptime.tms_utime
+  in
+  try
+    let res = fn arg in
+    let end_time = 
+      let ptime = Unix.times () in
+      ptime.Unix.tms_utime
+    in
+    measured_time := !measured_time +. (end_time -. start_time);
+    incr measured_calls;
+    res
+  with e ->
+    let end_time = 
+      let ptime = Unix.times () in
+      ptime.Unix.tms_utime
+    in
+    measured_time := !measured_time +. (end_time -. start_time);
+    incr measured_calls;
+    raise e

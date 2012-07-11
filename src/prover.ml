@@ -17,16 +17,16 @@ module SmtLib = struct
   let fail session msg = raise (SmtLib_error (session, "SmtLib: " ^ msg))
 
   let write session cmd =
-    output_string session.out_chan cmd;
-    match session.replay_chan with
+    output_string session.out_chan cmd
+    (*match session.replay_chan with
     | Some chan -> output_string chan cmd;
-    | None -> ()	
+    | None -> ()	*)
 
   let writefn session fn =
-    fn session.out_chan;
-    match session.replay_chan with
+    fn session.out_chan
+    (* match session.replay_chan with
     | Some chan -> fn chan
-    | None -> ()
+    | None -> ()*)
 
   let writeln session cmd = 
     write session (cmd ^ "\n")  
@@ -104,7 +104,10 @@ module SmtLib = struct
     | None ->
 	writefn session (fun chan -> print_smtlib_form chan f));
     writeln session ")\n"
-    let assert_forms session ?(igroup=None) fs =
+
+  let assert_form session ?(igroup=None) f = Util.measure (assert_form session ~igroup:igroup) f
+      
+  let assert_forms session ?(igroup=None) fs =
     List.iter (fun f -> assert_form session ~igroup:igroup f) fs
     
 

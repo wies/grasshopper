@@ -153,6 +153,7 @@ let _ =
       (* let _ = if !Debug.verbose then print_forms stdout [mk_and pf_a; mk_and pf_b] in *)
       let interpolant = interpolate pf_a pf_b
       in
+      let _ = Printf.fprintf stdout "accumulated time: %.2fs\n"  !Util.measured_time in
       print_form stdout interpolant
       (*print_form stdout (mk_and (pf_a_inst @ pf_b_inst)) *)
       (*Debug.phase "Computing interpolant"
