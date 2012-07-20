@@ -87,13 +87,13 @@ let reach_axioms f =
 
 let jp_axioms f =
   let reach = reach f in
-  let jp1 = mk_or [mk_not (reach var1 var2 var2); mk_not (reach var3 var2 var2); 
-		   reach (jp f var1 var3) var2 var2] in
+  let jp1 = reach var1 (jp f var1 var3) (jp f var1 var3) in
   let jp2 = mk_or [mk_not (reach var1 var2 var2); mk_not (reach var3 var2 var2); 
-		   reach var1 (jp f var1 var3) (jp f var1 var3)] in
+		   reach var3 (jp f var1 var3) (jp f var1 var3)] in
   let jp3 = mk_or [mk_not (reach var1 var2 var2); mk_not (reach var3 var2 var2); 
 		   reach var1 (jp f var1 var3) var2] in
-  if !with_jp_axioms then [jp1; jp2; jp3]
+  let jp4 = mk_or [reach var3 (jp f var1 var3) (jp f var1 var3); mk_eq var1 (jp f var1 var3)] in
+  if !with_jp_axioms then [jp1; jp2; jp3; jp4]
   else []
 
 let alloc_axioms = 

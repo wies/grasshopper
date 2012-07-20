@@ -28,6 +28,7 @@ let fresh_ident =
 let sort_str = "usort"
 
 let str_of_ident (id, n) =
+  if n = 0 then id else
   Printf.sprintf "%s_%d" id n
 
 let is_pred_id id = String.capitalize (fst id) = fst id

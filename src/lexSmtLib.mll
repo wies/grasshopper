@@ -25,5 +25,5 @@ rule token = parse
 | '\"' ([^'\"']* as str) '\"' { STRING(str) }
 | digitchar+ as num { NUM (int_of_string num) }
 | ident as name '_' (digitchar+ as num) { IDENT (name, int_of_string num) }
-| ident as name { NAME name }
+| ident as name { IDENT(name, 0) }
 

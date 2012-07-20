@@ -7,7 +7,6 @@ open Axioms
 
 %token <int> NUM
 %token <string * int> IDENT
-%token <string> NAME
 %token <string> STRING
 %token LPAREN RPAREN LBRACE RBRACE QUOTE ARROW EQ
 %token SAT UNSAT UNKNOWN ERROR MODEL LET AND OR NOT 

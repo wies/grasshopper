@@ -95,6 +95,7 @@ let interpolate_with_model signature model session_b pf_a_axioms count =
 	      (* if !Debug.verbose then Model.print_model (unopt (Prover.SmtLib.get_model session_b)); *)
 	      if !model_file <> "" then begin
 		let model_chan = open_out !model_file in
+		Model.print_model2 model;
 		Model.output_graphviz model_chan model;
 		close_out model_chan;
 	      end;

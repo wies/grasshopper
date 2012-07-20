@@ -17,4 +17,5 @@ rule token = parse
 | "#unspecified" { UNSPEC }
 | ident as name '_' (digitchar+ as num) { IDENT(name, int_of_string num) }
 | ident "!" (digitchar+ as num) { ELEM(int_of_string num) }
+| ident as name { IDENT(name, 0) }
 | eof { EOF }
