@@ -9,7 +9,7 @@ open Form
 %token UNSPEC
 %token EOF
 %start main
-%type <Form.Model.model> main
+%type <Model.model> main
 %%
 
    

@@ -4,9 +4,13 @@ open Axioms
 open Util
 open Logging
 
+let input_file = ref ""
+let model_file = ref ""
+
 let cmd_options =
   [("-v", Arg.Set Debug.verbose, "Display verbose messages");
    ("-noreach", Arg.Clear Axioms.with_reach_axioms, "Do not add axioms for reachability predicates");
+   ("-m", Arg.Set_string model_file, "Produce model");
    ("-alloc", Arg.Set Axioms.with_alloc_axioms, "Add axioms for alloc predicate");
    ("-nojoin", Arg.Clear Axioms.with_jp_axioms, "Do not add axioms for join functions")]
 
@@ -17,8 +21,6 @@ let usage_message =
 let cmd_line_error msg =
   Arg.usage cmd_options usage_message;
   failwith ("Command line option error: " ^ msg)
-
-let input_file = ref ""
 
 let parse_input () =
   let ch = open_in !input_file in
@@ -91,7 +93,12 @@ let interpolate_with_model signature model session_b pf_a_axioms count =
 	      loop (f :: acc, terms, unused_inst) fs1
 	  | [] -> 
 	      (* if !Debug.verbose then Model.print_model (unopt (Prover.SmtLib.get_model session_b)); *)
-	      failwith "Failed to compute interpolant. Input might be satisfiable."
+	      if !model_file <> "" then begin
+		let model_chan = open_out !model_file in
+		Model.output_graphviz model_chan model;
+		close_out model_chan;
+	      end;
+	      failwith "Input might be satisfiable. Failed to compute interpolant."
 	end
     | Some false ->
 	(match Prover.SmtLib.get_interpolant session_b [count] with

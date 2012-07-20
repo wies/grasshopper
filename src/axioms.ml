@@ -21,6 +21,10 @@ let reach_id (f, n) = (reach_name ^ f, n)
 
 let reach f x y z = mk_pred (reach_id f) [x; y; z]
 
+let fun_of_reach = 
+  let reach_len = String.length reach_name in
+  fun (id : ident) -> (String.sub (fst id) reach_len (String.length (fst id) - reach_len), (snd id))
+
 let is_reach = 
   let re = Str.regexp reach_name in
   fun ((name, _) : ident) -> Str.string_match re name 0
@@ -88,7 +92,7 @@ let jp_axioms f =
   let jp2 = mk_or [mk_not (reach var1 var2 var2); mk_not (reach var3 var2 var2); 
 		   reach var1 (jp f var1 var3) (jp f var1 var3)] in
   let jp3 = mk_or [mk_not (reach var1 var2 var2); mk_not (reach var3 var2 var2); 
-		   reach var3 (jp f var1 var3) (jp f var1 var3)] in
+		   reach var1 (jp f var1 var3) var2] in
   if !with_jp_axioms then [jp1; jp2; jp3]
   else []
 
@@ -128,6 +132,7 @@ let simplify f =
     | f -> f
   in rewrite_atoms (nnf f) 
 	
+(*
 let simplify_model m : Model.model =
   Model.fold (fun id def sm -> 
     if not (is_reach id) then 
@@ -138,3 +143,4 @@ let simplify_model m : Model.model =
 	  Model.add_def id ([x1; x3; x3], def.Model.output) sm
       | i -> Model.add_def id (i, def.Model.output) sm) 
     m Model.empty
+*)
