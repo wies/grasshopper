@@ -2,7 +2,7 @@
 
 set -e
 
-TARGET1=src/main 
+TARGET1=src/interpolate
 FLAGS="-cflag -g -lflag -g -libs unix,str"
 OCAMLBUILD=ocamlbuild
 

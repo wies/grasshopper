@@ -154,14 +154,6 @@ module SmtLib = struct
 	end
 end
 
-let use_csisat = ref false
-
-let csisat_interpolate_cmd = "csisat" 
-(*let mathsat_interpolate_cmd outfile = "mathsat -input=foci -tsolver=euf -verbosity=0 -interpolate=" ^ outfile*)
-let mathsat_interpolate_cmd = "mathsat -verbosity=0 -interpolation=true"
-
-let interp_file_prefix = "interpol"
-let interp_file_name = interp_file_prefix ^ ".1.msat"
 
 let get_model f =
   let session = SmtLib.start_z3 None in
@@ -176,36 +168,7 @@ let get_model f =
     failwith e
 
   
-let get_interpolant_csisat a b = 
-  let out_ch = Unix.open_process_out csisat_interpolate_cmd in
-  print_forms out_ch [a; b];
-  close_out out_ch;
-  ignore (Unix.close_process_out out_ch);
-  None
 
-let get_interpolant_mathsat a b =
-  let cmd = mathsat_interpolate_cmd (*interp_file_prefix*) in
-  let in_ch, out_ch = Unix.open_process cmd in
-  print_forms out_ch [a; b];
-  close_out out_ch;
-  let interpolant =
-    if input_line in_ch = "unsat" then begin
-      let interp_in = open_in interp_file_name in
-      let lexbuf = Lexing.from_channel interp_in in
-      let interpolant = ParseMSATForm.main LexMSATForm.token lexbuf in
-      close_in interp_in;
-      Unix.unlink interp_file_name;
-      Some interpolant
-    end 
-    else None
-  in
-  close_in in_ch;
-  ignore (Unix.close_process (in_ch, out_ch));
-  interpolant
-
-let get_interpolant a b =
-  if !use_csisat then get_interpolant_csisat a b
-  else get_interpolant_mathsat a b
   
 
 
