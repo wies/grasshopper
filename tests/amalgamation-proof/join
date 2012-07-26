@@ -1,0 +1,14 @@
+assume f null = f null;
+assume join_f x y ~= a;
+assume join_f y x ~= a;
+assume Reach_f y a a;
+assume Reach_f x a a;
+assume ~ Reach_f (join_f x y) a a | y = join_f x y | Reach_f y a (join_f x y);
+assume ~ Reach_f (join_f x y) a a | x = join_f x y | Reach_f x a (join_f x y);
+assume ~ Reach_f (join_f y x) a a | y = join_f y x | Reach_f y a (join_f y x);
+assume ~ Reach_f (join_f y x) a a | x = join_f y x | Reach_f x a (join_f y x);
+assume ~ Reach_f y a a | x = y | Reach_f x a y;
+assume ~ Reach_f x a a | y = x | Reach_f y a x;
+assume x ~= y;
+
+cut:

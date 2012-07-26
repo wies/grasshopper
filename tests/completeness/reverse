@@ -1,0 +1,24 @@
+assume Reach_f curr null null;
+
+//assume f (f curr) = curr;
+
+//assume ~ Reach_f curr curr (f (f curr));
+
+//assume f (f curr) = f (f curr); 
+
+assume curr ~= null;
+succ := f curr;
+f curr := null;
+
+//assume Reach_f prev null null;
+//assume Reach_f curr null null;
+//assume f prev = null;
+
+assume f succ = curr;
+
+//assume ~Reach_f curr null (f succ);
+
+
+//assume curr ~= f curr;
+
+cut:

@@ -1,0 +1,11 @@
+assume f null = f null;
+
+assume Reach_f a a1 a1;
+assume Reach_f a a2 a1;
+assume a2 = a | Reach_f a a1 a2;
+assume a1 = a | Reach_f a a2 a1;
+assume a1 ~= a | ~Reach_f a a2 a2 | a1 = a2;
+assume a2 ~= a | ~Reach_f a a1 a1 | a1 = a2;
+assume a1 ~= a2;
+
+cut:

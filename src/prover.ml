@@ -17,16 +17,16 @@ module SmtLib = struct
   let fail session msg = raise (SmtLib_error (session, "SmtLib: " ^ msg))
 
   let write session cmd =
-    output_string session.out_chan cmd
-    (*match session.replay_chan with
-    | Some chan -> output_string chan cmd;
-    | None -> ()	*)
+    output_string session.out_chan cmd;
+    match session.replay_chan with
+    | Some chan -> output_string chan cmd
+    | None -> ()	
 
   let writefn session fn =
-    fn session.out_chan
-    (* match session.replay_chan with
+    fn session.out_chan;
+    match session.replay_chan with
     | Some chan -> fn chan
-    | None -> ()*)
+    | None -> ()
 
   let writeln session cmd = 
     write session (cmd ^ "\n")  
@@ -51,7 +51,9 @@ module SmtLib = struct
 		    stack_height = 0 }
     in
     writeln session "(set-option :print-success false)";
-    if produce_models then writeln session "(set-option :produce-models true)";
+    if produce_models then begin
+      writeln session "(set-option :produce-models true)"
+    end;
     if produce_interpolants then writeln session "(set-option :produce-interpolants true)";
     writeln session "(set-logic QF_UF)";
     writeln session ("(declare-sort " ^ sort_str ^ " 0)");
@@ -102,7 +104,13 @@ module SmtLib = struct
 	writefn session (fun chan -> print_smtlib_form chan f);
 	write session (":interpolation-group " ^ string_of_int ig ^" :named a" ^ (string_of_int session.assert_count) ^ ")")
     | None ->
-	writefn session (fun chan -> print_smtlib_form chan f));
+	match f with
+	| Comment (c, f) ->
+	    write session "(!";
+	    writefn session (fun chan -> print_smtlib_form chan f);
+	    write session (":named " ^ c ^ "_" ^ string_of_int session.assert_count ^ ")")
+	| f ->
+	    writefn session (fun chan -> print_smtlib_form chan f));
     writeln session ")\n"
 
   let assert_form session ?(igroup=None) f = Util.measure (assert_form session ~igroup:igroup) f

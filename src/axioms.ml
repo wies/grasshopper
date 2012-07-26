@@ -39,6 +39,12 @@ let is_jp =
   let re = Str.regexp jp_name in
   fun ((name, _) : ident) -> Str.string_match re name 0
 
+let lb_name = "lb_"
+
+let lb_id (f, n) = (lb_name ^ f, n)
+
+let lb f x y = mk_app (lb_id f) [x; y]
+
 let update_axioms f new_f ind upd =
     let f_upd1 = 
       mk_or [mk_eq ind var1; mk_not (mk_eq var1 var2); mk_eq (mk_app f [var1]) (mk_app new_f [var2])]
@@ -80,9 +86,20 @@ let reach_axioms f =
 		    reach var1 var3 var3] in
   let trn3 = mk_or [mk_not (reach var1 var2 var3); mk_not (reach var2 var4 var3); 
 		    mk_not (reach var2 var3 var3); reach var1 var2 var4] in
+  let lbef = mk_or [mk_not (reach var1 var2 var3); mk_not (mk_eq var3 (af var2)); mk_eq (lb f var1 var3) var2]  in
   (**)
   if !with_reach_axioms then
-    [refl; step; cycl; reac; sndw; lin1; lin2; trn1; trn2; trn3]
+    [mk_comment "refl" refl; 
+     mk_comment "step" step; 
+     mk_comment "cycl" cycl; 
+     mk_comment "reach" reac;
+     mk_comment "sndw" sndw; 
+     mk_comment "linear1" lin1;
+     mk_comment "linear2" lin2;
+     mk_comment "trans1" trn1;
+     mk_comment "trans2" trn2; 
+     mk_comment "trans3" trn3;
+     mk_comment "before" lbef]
   else []
 
 let jp_axioms f =
@@ -93,7 +110,11 @@ let jp_axioms f =
   let jp3 = mk_or [mk_not (reach var1 var2 var2); mk_not (reach var3 var2 var2); 
 		   reach var1 (jp f var1 var3) var2] in
   let jp4 = mk_or [reach var3 (jp f var1 var3) (jp f var1 var3); mk_eq var1 (jp f var1 var3)] in
-  if !with_jp_axioms then [jp1; jp2; jp3; jp4]
+  if !with_jp_axioms then 
+    [mk_comment "join1" jp1; 
+     mk_comment "join2" jp2;
+     mk_comment "join3" jp3;
+     mk_comment "join4" jp4]
   else []
 
 let alloc_axioms = 

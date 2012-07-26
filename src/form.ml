@@ -14,7 +14,8 @@ type form =
   | Not of form
   | And of form list
   | Or of form list
-  
+  | Comment of string * form  
+
 let fresh_ident =
   let used_names = Hashtbl.create 0 in
   fun (name : string) ->
@@ -51,6 +52,10 @@ let mk_not = function
   | f -> Not f
 let mk_eq s t = Eq (s, t)
 let mk_pred id ts = Pred (id, ts)
+
+let mk_comment c = function
+  | Comment (c', f) -> Comment (c ^ "_" ^ c', f)
+  | f -> Comment (c, f)
 
 let str_true = "True"
 let str_false = "False"
@@ -134,6 +139,8 @@ let rec nnf = function
   | Not (Or fs) -> smk_and (List.map (fun f -> nnf (mk_not f)) fs)
   | And fs -> smk_and (List.map nnf fs)
   | Or fs -> smk_or (List.map nnf fs)
+  | Not (Comment (c, f)) -> Comment (c, nnf (mk_not f))
+  | Comment (c, f) -> Comment (c, nnf f)
   | f -> f
   
 
@@ -149,6 +156,8 @@ let rec cnf =
 	  | fs -> mk_and fs
 	end
     | And fs :: fs1 -> cnf_and acc (fs @ fs1)
+    | Comment (c, And fs) :: fs1 -> 
+	cnf_and acc (List.map (fun f -> Comment (c, f)) fs @ fs1)
     | BoolConst false :: _ -> BoolConst false
     | BoolConst true :: fs -> cnf_and acc fs
     | f :: fs -> cnf_and (f :: acc) fs
@@ -162,6 +171,7 @@ let rec cnf =
 	  | fs -> mk_or fs
 	end
     | Or fs :: fs1 -> cnf_or acc (fs @ fs1)
+    | Comment (c, Or fs) :: fs1 -> cnf_or acc (List.map (fun f -> Comment (c, f)) fs @ fs1)
     | And fs :: fs1 -> 
 	let fs_or = acc @ fs1 in
 	let fs_and = List.map (fun f -> Or (f :: fs_or)) fs in
@@ -171,8 +181,10 @@ let rec cnf =
     | f :: fs -> cnf_or (f :: acc) fs  
   in
   function
-    | And fs ->  cnf_and [] (List.rev_map cnf fs)
-    | Or fs -> cnf_or [] (List.rev_map cnf fs)
+    | And fs
+    | Comment (_, And fs) ->  cnf_and [] (List.rev_map cnf fs)
+    | Or fs 
+    | Comment (_, Or fs) -> cnf_or [] (List.rev_map cnf fs)
     | f -> f
 
 let collect_from_terms col init f =
@@ -184,6 +196,7 @@ let collect_from_terms col init f =
     | Pred (_, ts) ->
 	List.fold_left col acc ts
     | Eq (s, t) -> col (col acc s) t
+    | Comment (c, f) -> ct acc f
     | _ -> acc
   in ct init f
 
@@ -232,6 +245,7 @@ let sign f =
 	let decl = {is_pred = true; arity = List.length ts} in
 	List.fold_left fts (IdMap.add id decl decls) ts
     | Eq (s, t) -> fts (fts decls s) t
+    | Comment (c, f) -> ffs decls f
     | _ -> decls
   in
   ffs IdMap.empty f
@@ -274,6 +288,7 @@ let subst_id subst_map f =
     | Not g -> Not (sub g)
     | Eq (s, t) -> Eq (subt s, subt t)
     | Pred (id, ts) -> Pred (sub_id id, List.map subt ts)
+    | Comment (c, f) -> Comment (c, sub f)
     | f -> f
   in sub f
 
@@ -295,6 +310,7 @@ let subst subst_map f =
     | Not g -> Not (sub g)
     | Eq (s, t) -> Eq (subt s, subt t)
     | Pred (id, ts) -> Pred (id, List.map subt ts)
+    | Comment (c, f) -> Comment (c, sub f)
     | f -> f
   in sub f
 
@@ -338,6 +354,8 @@ let print_form out_ch =
     | Not f ->
 	print (indent ^ "~");  
 	pf "" f
+    | Comment (c, f) ->
+	pf indent f
     | Pred (p, ts) ->
 	print (indent ^ str_of_ident p ^ " [");
 	print_list " " pt ts;
@@ -349,11 +367,13 @@ let print_form out_ch =
 	if b then pf indent (mk_eq (mk_const id_true) (mk_const id_true))
 	else pf indent (mk_not (mk_eq (mk_const id_true) (mk_const id_true)))
   in function
-    | And fs ->
+    | And fs 
+    | Comment (_, And fs) ->
 	print "& [";
 	print_list "\n   " pf fs;
 	print "\n]\n"
-    | Or fs ->
+    | Or fs 
+    | Comment (_, Or fs) ->
 	print "| [";
 	print_list "\n   " pf fs;
 	print "\n]\n"
@@ -386,6 +406,8 @@ let print_smtlib_form out_ch f =
       print "(not ";
       smt_form f;
       print ")";
+  | Comment (c, f) ->
+      smt_form f
   | Pred (id, ts) -> 
       print "(";
       print (str_of_ident id);
@@ -421,12 +443,16 @@ module Clauses = struct
     let nf = cnf (nnf f) in
     let to_clause = function
       | Or fs -> fs
-      | BoolConst false -> []
+      |	Comment (c, Or fs) -> List.map (fun f -> Comment (c, f)) fs
+      | BoolConst false
+      |	Comment (_, BoolConst false) -> []
       | f -> [f]
     in
     match nf with
     | And fs -> List.map to_clause fs
-    | BoolConst true -> []
+    | Comment (c, And fs) -> List.map (fun f -> to_clause (Comment (c, f))) fs
+    | BoolConst true 
+    | Comment (_, BoolConst true) -> []
     | f -> [to_clause f]
 	  
   (** convert a set of clauses into a formula *)
