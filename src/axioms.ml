@@ -82,9 +82,7 @@ let reach_axioms f =
 		    mk_and [reach var1 var2 var5; reach var2 var4 var5]] in
   let trn1 = mk_or [mk_not (reach var1 var2 var3); mk_not (reach var2 var4 var3); 
 		    reach var1 var4 var3] in
-  let trn2 = mk_or [mk_not (reach var1 var2 var2); mk_not (reach var2 var3 var3); 
-		    reach var1 var3 var3] in
-  let trn3 = mk_or [mk_not (reach var1 var2 var3); mk_not (reach var2 var4 var3); 
+  let trn2 = mk_or [mk_not (reach var1 var2 var3); mk_not (reach var2 var4 var3); 
 		    mk_not (reach var2 var3 var3); reach var1 var2 var4] in
   let lbef = mk_or [mk_not (reach var1 var2 var3); mk_not (mk_eq var3 (af var2)); mk_eq (lb f var1 var3) var2]  in
   (**)
@@ -96,7 +94,6 @@ let reach_axioms f =
      mk_comment "sndw" sndw; 
      mk_comment "linear1" lin1;
      mk_comment "linear2" lin2;
-     mk_comment "trans1" trn1;
      mk_comment "trans2" trn2; 
      mk_comment "trans3" trn3;
      mk_comment "before" lbef]
