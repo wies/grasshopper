@@ -94,8 +94,8 @@ let reach_axioms f =
      mk_comment "sndw" sndw; 
      mk_comment "linear1" lin1;
      mk_comment "linear2" lin2;
-     mk_comment "trans2" trn2; 
-     mk_comment "trans3" trn3;
+     mk_comment "trans1" trn1; 
+     mk_comment "trans2" trn2;
      mk_comment "before" lbef]
   else []
 
