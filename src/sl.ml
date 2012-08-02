@@ -11,6 +11,15 @@ module Pure =
       | Or of t list
       | BoolConst of bool
 
+    let compare: t -> t -> int = compare
+
+    let rec to_string f = match f with
+      | Eq (e1, e2) -> (Form.str_of_ident e1) ^ " = " ^ (Form.str_of_ident e2)
+      | Not t -> "~(" ^ (to_string t) ^")"
+      | And lst -> "(" ^ (String.concat ") && (" (List.map to_string lst)) ^ ")"
+      | Or lst ->  "(" ^ (String.concat ") || (" (List.map to_string lst)) ^ ")"
+      | BoolConst b -> string_of_bool b
+
     let mk_true = BoolConst true
     let mk_false = BoolConst false
 
@@ -109,6 +118,16 @@ module Spatial =
       | Conj of t list
       | Disj of t list
 
+    let compare: t -> t -> int = compare
+
+    let rec to_string f = match f with
+      | Emp -> "emp"
+      | PtsTo (a, b) -> (Form.str_of_ident a) ^ " |-> " ^ (Form.str_of_ident b)
+      | List (a, b) -> "lseg(" ^ (Form.str_of_ident a) ^ ", " ^ (Form.str_of_ident b) ^ ")"
+      | SepConj lst -> "(" ^ (String.concat ") * (" (List.map to_string lst)) ^ ")"
+      | Conj lst -> "(" ^ (String.concat ") && (" (List.map to_string lst)) ^ ")"
+      | Disj lst -> "(" ^ (String.concat ") || (" (List.map to_string lst)) ^ ")"
+
     let mk_pts a b = PtsTo (a, b)
 
     let mk_ls a b = List (a, b)
@@ -179,11 +198,14 @@ module Spatial =
 
 type sl_form = Pure.t * Spatial.t
 
+let to_string (pure, spatial) =
+  (Pure.to_string pure) ^ "   " ^ (Spatial.to_string spatial)
+
 let normalize (pure, spatial) =
   (Pure.nnf pure, Spatial.normalize spatial)
 
 (* the next pointer *)
-let pts = ("f", -1)
+let pts = ("sl_pts", 0)
 
 (* Assumes (pure, spatial) are normalized. *)
 let to_form (pure, spatial) =
@@ -209,6 +231,7 @@ let to_form (pure, spatial) =
     | Spatial.PtsTo (a, b) -> Form.mk_pred pts [cst a; cst b]
     | Spatial.List (a, b) -> reach a b
     | Spatial.SepConj lst ->
+      (*TODO disjointness also for |-> *)
       (* disjointness conditions for ls(e_1, e_2) * ls(e_1', e_2') :
        *   (e_1 = join(e_1', e_1) \/ reachWo(e_1, e_2, join(e_1',e_1))) /\
        *   (e_1' = join(e_1, e_1') \/ reachWo(e_1', e_2', join(e_1,e_1'))) /\
@@ -239,4 +262,11 @@ let to_form (pure, spatial) =
   let vars = List.map cst (Form.id_set_to_list (Spatial.variables spatial)) in
   let mk_axiom_part e1 e2 = Form.mk_and [(reachWoT e1 Axioms.var1 e2); (reachT Axioms.var1 e2)] in
   let tightness_axiom = Form.mk_or (List.flatten (List.map (fun e1 -> List.map (mk_axiom_part e1) vars) vars)) in
-    (Form.mk_and [convert_pure pure; convert_spatial spatial], tightness_axiom)
+  let fp = convert_pure pure in
+  let fs = convert_spatial spatial in
+  let f = Form.mk_and [fp; fs] in
+  let usual_axioms = match Axioms.add_axioms [[f]] with
+    | [a] -> a
+    | _ -> failwith "add_axioms did not return a single element"
+  in
+    Form.mk_and (f :: tightness_axiom :: usual_axioms)

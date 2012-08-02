@@ -35,6 +35,10 @@ let jp_id (f, n) = (jp_name ^ f, n)
 
 let jp f x y = mk_app (jp_id f) [x; y]
 
+let fun_of_jp =
+  let jp_len = String.length jp_name in
+  fun (id : ident) -> (String.sub (fst id) jp_len (String.length (fst id) - jp_len), (snd id))
+
 let is_jp = 
   let re = Str.regexp jp_name in
   fun ((name, _) : ident) -> Str.string_match re name 0
@@ -162,3 +166,64 @@ let simplify_model m : Model.model =
       | i -> Model.add_def id (i, def.Model.output) sm) 
     m Model.empty
 *)
+
+
+let unary_funs f =
+  IdMap.fold 
+    (fun id decl acc ->
+      if (not decl.is_pred) then
+        begin
+          if decl.arity = 1 then IdSet.add id acc
+          else if decl.arity = 2 && is_jp id then IdSet.add (fun_of_jp id) acc
+          else acc
+        end
+      else if decl.is_pred && decl.arity = 3 && is_reach id then IdSet.add (fun_of_reach id) acc
+      else acc)
+    (sign f) IdSet.empty
+
+(*
+let add_axioms pf_a pf_b =
+  let a_unary = unary_funs (mk_and pf_a) in
+  let b_unary = (*IdSet.diff*) (unary_funs (mk_and pf_b)) (*a_unary*) in
+  let a_init_funs = 
+    IdSet.filter (function (_, n) -> n = 0) a_unary 
+  in
+  let b_init_funs = 
+    IdSet.filter 
+      (function (_, n as id) -> n = 0 || IdSet.mem id a_unary) 
+      b_unary 
+  in
+  let a_axioms =
+    IdSet.fold (fun id acc -> reach_axioms id @ acc) a_init_funs [] @
+    IdSet.fold (fun id acc -> fun_axioms id @ acc) a_unary [] @
+    alloc_axioms 
+  in
+  let b_axioms =
+    IdSet.fold (fun id acc -> reach_axioms id @ acc) b_init_funs [] @
+    IdSet.fold (fun id acc -> fun_axioms id @ acc) b_unary []
+  in
+  a_axioms @ pf_a, b_axioms @ pf_b
+*)
+
+let add_axioms fs =
+  let unaries = List.map (fun f -> unary_funs (mk_and f)) fs in
+  let init_funs = List.map (fun set -> IdSet.filter (fun (_, n) -> n = 0) set) unaries in
+  let _, rev_already_declared =
+    List.fold_left
+      (fun (lhs, acc) uns -> (IdSet.union lhs uns, (IdSet.filter (fun id -> IdSet.mem id lhs) uns) :: acc) )
+      (IdSet.empty, [])
+      unaries
+  in
+  let already_declared = List.rev rev_already_declared in
+  let all_init = List.map2 IdSet.union init_funs already_declared in
+  let axioms =
+    List.map2
+      (fun unary init ->
+        IdSet.fold (fun id acc -> reach_axioms id @ acc) init [] @
+        IdSet.fold (fun id acc -> fun_axioms id @ acc) unary []
+      )
+      unaries
+      all_init
+  in
+  let axiomsWithAlloc = (alloc_axioms @ List.hd axioms) :: (List.tl axioms) in
+    List.map2 (@) axiomsWithAlloc fs

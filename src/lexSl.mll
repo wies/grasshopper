@@ -13,17 +13,18 @@ rule token = parse
 | "//" [^ '\n']* {token lexbuf }
 | '=' { EQ }
 | "~=" { NEQ }
-| '|' { OR }
-| '&' { AND }
+| "||" { OR }
+| "&&" { AND }
 | '~' { NOT }
 | '(' { LPAREN }
 | ')' { RPAREN }
+| ',' { COMMA }
 | '*' { SEP }
-| "->" { PTS }
-| "ls" { LS }
+| "|->" { PTS }
+| "lseg" { LS }
 | "true" { TRUE }
 | "false" { FALSE }
-| "emp" { Emp }
+| "emp" { EMP }
 | tident as name { TIDENT(name) }
 | pident as name { PIDENT(name) }
 | eof { EOF }

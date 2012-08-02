@@ -10,34 +10,6 @@ type stmnt =
 
 type path = stmnt list
 
-let unary_funs f =
-  IdMap.fold 
-    (fun id decl acc -> if (not decl.is_pred) && decl.arity = 1 then IdSet.add id acc else acc)
-    (sign f) IdSet.empty
-
-
-let add_axioms pf_a pf_b =
-  let a_unary = unary_funs (mk_and pf_a) in
-  let b_unary = (*IdSet.diff*) (unary_funs (mk_and pf_b)) (*a_unary*) in
-  let a_init_funs = 
-    IdSet.filter (function (_, n) -> n = 0) a_unary 
-  in
-  let b_init_funs = 
-    IdSet.filter 
-      (function (_, n as id) -> n = 0 || IdSet.mem id a_unary) 
-      b_unary 
-  in
-  let a_axioms =
-    IdSet.fold (fun id acc -> reach_axioms id @ acc) a_init_funs [] @
-    IdSet.fold (fun id acc -> fun_axioms id @ acc) a_unary [] @
-    alloc_axioms 
-  in
-  let b_axioms =
-    IdSet.fold (fun id acc -> reach_axioms id @ acc) b_init_funs [] @
-    IdSet.fold (fun id acc -> fun_axioms id @ acc) b_unary []
-  in
-  a_axioms @ pf_a, b_axioms @ pf_b
-
 let add_jp_terms pf_a pf_b =
   let consts f =
     IdMap.fold 
@@ -119,5 +91,7 @@ let path_form path =
     if !with_jp_axioms then add_jp_terms pf_a pf_b 
     else pf_a, pf_b
   in
-  add_axioms pf_a pf_b
+  match add_axioms [pf_a; pf_b] with
+  | [a; b] -> (a, b)
+  | _ -> failwith "add_axioms did not return two elements"
     

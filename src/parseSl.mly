@@ -7,9 +7,9 @@ open Sl
 %token <string> PIDENT
 %token LPAREN RPAREN
 %token EQ NEQ
-%token PTS LS TRUE FALSE
+%token PTS LS TRUE FALSE EMP
 %token SEP AND OR NOT
-%token EOF
+%token COMMA EOF
 
 %left OR
 %left AND
@@ -22,7 +22,7 @@ open Sl
 %nonassoc TRUE FALSE
 
 %start main
-%type <sl_form> main
+%type <Sl.sl_form> main
 %%
 
 main:
@@ -35,22 +35,22 @@ term:
 ;
 
 pure:
-| TRUE { mk_true }
-| FALSE { mk_false }
-| term EQ term { mk_eq $1 $3 }
-| term NEQ term { mk_not (mk_eq $1 $3) }
-| NOT pure { mk_not $2 }
-| pure AND pure { mk_and [$1; $3] }
-| pure OR pure { mk_or [$1; $3] }
+| TRUE { Pure.mk_true }
+| FALSE { Pure.mk_false }
+| term EQ term { Pure.mk_eq $1 $3 }
+| term NEQ term { Pure.mk_not (Pure.mk_eq $1 $3) }
+| NOT pure { Pure.mk_not $2 }
+| pure AND pure { Pure.mk_and [$1; $3] }
+| pure OR pure { Pure.mk_or [$1; $3] }
 | LPAREN pure RPAREN { $2 }
 ;
 
 spatial:
-| term PTS term { mk_pts $1 $3 }
-| LS term term { mk_ls $2 $3 }
-| spatial OR spatial { mk_disj [$1; $3] }
-| spatial AND spatial { mk_conj [$1; $3] }
-| spatial SEP spatial { mk_sep [$1; $3] }
+| term PTS term { Spatial.mk_pts $1 $3 }
+| LS LPAREN term COMMA term RPAREN { Spatial.mk_ls $3 $5 }
+| spatial OR spatial { Spatial.mk_disj [$1; $3] }
+| spatial AND spatial { Spatial.mk_conj [$1; $3] }
+| spatial SEP spatial { Spatial.mk_sep [$1; $3] }
 | LPAREN spatial RPAREN { $2 }
-| EMP { Emp }
+| EMP { Spatial.Emp }
 ;
