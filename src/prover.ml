@@ -32,6 +32,14 @@ let compare_forms =
 
 let inst_num = ref 0
 
+let dump_model model =
+  if !model_file <> "" then begin
+    let model_chan = open_out !model_file in
+    Model.print_model2 model;
+    Model.output_graphviz model_chan model;
+    close_out model_chan;
+  end
+
 let interpolate_with_model signature model session_b pf_a_axioms count =
   let session_b = SmtLib.push session_b in
   (* let _ = Model.print_model model in *)
@@ -65,12 +73,7 @@ let interpolate_with_model signature model session_b pf_a_axioms count =
 	      loop (f :: acc, terms, unused_inst) fs1
 	  | [] -> 
 	      (* if !Debug.verbose then Model.print_model (unopt (Prover.SmtLib.get_model session_b)); *)
-	      if !model_file <> "" then begin
-		let model_chan = open_out !model_file in
-		Model.print_model2 model;
-		Model.output_graphviz model_chan model;
-		close_out model_chan;
-	      end;
+	      dump_model model;
 	      failwith "Input might be satisfiable. Failed to compute interpolant."
 	end
     | Some false ->
@@ -135,5 +138,11 @@ let satisfiable f =
   Debug.msg "  f_inst done\n";
   let result = SmtLib.is_sat session in
   Debug.msg "prover came back\n";
+  (match result with
+  | Some true ->
+      if !model_file <> "" then
+	let model = SmtLib.get_model session in
+	dump_model (unopt model)
+  | _ -> ());
   ignore (SmtLib.quit session);
   result
