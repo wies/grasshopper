@@ -231,11 +231,11 @@ let to_form (pure, spatial) =
     | Spatial.PtsTo (a, b) -> Form.mk_eq (Form.mk_app pts [cst a]) (cst b)
     | Spatial.List (a, b) -> reach a b
     | Spatial.SepConj lst ->
-      (*TODO disjointness also for |-> *)
       (* disjointness conditions for ls(e_1, e_2) * ls(e_1', e_2') :
        *   (e_1 = join(e_1', e_1) \/ reachWo(e_1, e_2, join(e_1',e_1))) /\
        *   (e_1' = join(e_1, e_1') \/ reachWo(e_1', e_2', join(e_1,e_1'))) /\
        *   (e_1 = e_1' ==> e_1 = e_2 \/ e_1' = e_2')        *)
+      (* TODO there are a few corner cases missing *)
       let mk_disj e1 e2 e1p e2p =
         Form.mk_and [
           Form.mk_or [Form.mk_eq (cst e1) (join e1p e1); reachWoT (cst e1) (cst e2) (join e1p e1)];
@@ -243,6 +243,7 @@ let to_form (pure, spatial) =
           Form.mk_or [Form.mk_not (eq e1 e1p); eq e1 e2; eq e1p e2p]
         ]
       in
+      (*TODO disjointness also for |->, we can do a better/simpler job *)
       let lists = List.flatten (List.map (function Spatial.List (e1, e2) -> [(e1, e2)] | Spatial.PtsTo (e1, e2) -> [(e1, e2)] | _ -> []) lst) in
       let rec mk_disjs acc lst = match lst with
         | (e1, e2) :: xs ->
@@ -269,4 +270,4 @@ let to_form (pure, spatial) =
     | [a] -> a
     | _ -> failwith "add_axioms did not return a single element"
   in
-    Form.mk_and (f :: tightness_axiom :: usual_axioms)
+    Form.smk_and (f :: tightness_axiom :: usual_axioms)
