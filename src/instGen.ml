@@ -126,7 +126,7 @@ let generate_instances axioms terms rep_map =
 	    ground_terms)
 	fun_terms
     in
-    if is_local || true then subst subst_map axiom :: acc else acc
+    if is_local then subst subst_map axiom :: acc else acc
   in
   let partitioned_axioms = 
     let fv_axioms = List.map (fun f -> (fv f, f)) axioms in
@@ -155,8 +155,14 @@ let generate_instances axioms terms rep_map =
   in
   List.concat (List.rev_map gen (List.rev partitioned_axioms))
 
-let instantiate_with_terms f gterms_f =
-  let axioms_f, ground_f = extract_axioms f in
+let instantiate_with_terms fs gterms_f =
+  let rec normalize acc = function
+    | And fs :: gs -> normalize acc (fs @ gs)
+    | f :: gs -> normalize (f :: acc) gs
+    | [] -> List.rev acc
+  in
+  let normalized_fs = normalize [] fs in
+  let axioms_f, ground_f = extract_axioms normalized_fs in
   let classes = congr_classes ground_f gterms_f in
   let _ = 
     if !Debug.verbose then
@@ -171,9 +177,9 @@ let instantiate_with_terms f gterms_f =
   let instances_f = generate_instances axioms_f reps_f rep_map_f in
   defs_f @ ground_f @ instances_f
 
-let instantiate f =
-  let gterms_f = ground_terms (mk_and f) in
-  instantiate_with_terms f gterms_f
+let instantiate fs =
+  let gterms_f = ground_terms (mk_and fs) in
+  instantiate_with_terms fs gterms_f
 
 let instantiate_interp pf_a pf_b =
   let a_axioms, a_ground = extract_axioms pf_a in

@@ -228,7 +228,7 @@ let to_form (pure, spatial) =
   (* spatial part *)
   let rec convert_spatial s = match s with
     | Spatial.Emp -> Form.mk_true
-    | Spatial.PtsTo (a, b) -> Form.mk_pred pts [cst a; cst b]
+    | Spatial.PtsTo (a, b) -> Form.mk_eq (Form.mk_app pts [cst a]) (cst b)
     | Spatial.List (a, b) -> reach a b
     | Spatial.SepConj lst ->
       (*TODO disjointness also for |-> *)
@@ -243,7 +243,7 @@ let to_form (pure, spatial) =
           Form.mk_or [Form.mk_not (eq e1 e1p); eq e1 e2; eq e1p e2p]
         ]
       in
-      let lists = List.flatten (List.map (function Spatial.List (e1, e2) -> [(e1, e2)]| _ -> []) lst) in
+      let lists = List.flatten (List.map (function Spatial.List (e1, e2) -> [(e1, e2)] | Spatial.PtsTo (e1, e2) -> [(e1, e2)] | _ -> []) lst) in
       let rec mk_disjs acc lst = match lst with
         | (e1, e2) :: xs ->
           let d = List.map (fun (e1p, e2p) -> mk_disj e1 e2 e1p e2p) xs in
