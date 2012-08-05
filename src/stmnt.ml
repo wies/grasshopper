@@ -41,7 +41,7 @@ let add_jp_terms pf_a pf_b =
   in 
   pf_a @ jpt [] shared_consts, pf_b
 
-let path_form path =
+let ssa_form path =
   let subst_ident id ident_map =
     try 
       IdMap.find id ident_map
@@ -82,8 +82,11 @@ let path_form path =
       |	Label _ ->
 	  pf (List.rev fs :: segs) [] ident_map stmnts
   in
+    pf [] [] IdMap.empty path
+
+let path_form path =
   let pf_a, pf_b =
-    match pf [] [] IdMap.empty path with
+    match ssa_form path with
     | [pf_a; pf_b] -> pf_a, pf_b
     | _ -> failwith "Path should contain exactly one cut point."
   in

@@ -81,3 +81,17 @@ let measure fn arg =
     measured_time := !measured_time +. (end_time -. start_time);
     incr measured_calls;
     raise e
+
+
+let read_file file =
+  let chan = open_in file in
+  let rec read acc =
+    try
+      read (input_line chan :: acc)
+    with End_of_file ->
+      begin
+        close_in chan;
+        List.rev acc
+      end
+  in
+    String.concat "\n" (read [])

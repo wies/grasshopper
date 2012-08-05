@@ -9,6 +9,7 @@ let input_file = ref ""
 type mode =
   | Interpolate
   | SlSat
+  | SlEntails
 
 let mode = ref Interpolate
 
@@ -18,7 +19,8 @@ let cmd_options =
    ("-m", Arg.Set_string Prover.model_file, "Produce model");
    ("-alloc", Arg.Set Axioms.with_alloc_axioms, "Add axioms for alloc predicate");
    ("-nojoin", Arg.Clear Axioms.with_jp_axioms, "Do not add axioms for join functions");
-   ("-sl", Arg.Unit (fun () -> mode := SlSat), "SL satisfiability")
+   ("-sl", Arg.Unit (fun () -> mode := SlSat), "SL satisfiability");
+   ("-sl2", Arg.Unit (fun () -> mode := SlEntails), "SL satisfiability")
   ]
 
 let usage_message =
@@ -30,14 +32,11 @@ let cmd_line_error msg =
   failwith ("Command line option error: " ^ msg)
 
 let parse_input parse_fct =
-  let ch = open_in !input_file in
-  let path = 
-    try 
-      let lexbuf = Lexing.from_channel ch in
-      parse_fct lexbuf
-    with e -> close_in ch; raise e
-  in
-  close_in ch; path
+  let input = read_file !input_file in
+  ParseStmntAux.input := Some input;
+  let lexbuf = Lexing.from_string input in
+  ParseStmntAux.buffer := Some lexbuf;
+  parse_fct lexbuf
 
 let compute_interpolant () =
   let path = parse_input (fun lexbuf -> ParseStmnt.main LexStmnt.token lexbuf) in
@@ -68,6 +67,29 @@ let compute_sl_sat () =
     | Some false -> print_endline "unsat"
     | None -> print_endline "unknown"
 
+let compute_sl_entails () =
+  (* check that pre |- wp(path, post) *)
+  let (pre_sl, path, post_sl) = parse_input (fun lexbuf -> ParseSl2.main LexSl2.token lexbuf) in
+  let path_wo_label = List.filter (function Label _ -> false | _ -> true) path in
+  let pre = Sl.to_form (Sl.normalize pre_sl) in
+  let post = Sl.to_form (Sl.normalize post_sl) in
+  let (pref, pathf, postf) =
+    match ssa_form ((Assume pre) ::
+                    (Label "dummy1") ::
+                    path_wo_label @
+                    [(Label "dummy2"); (Assume post)])
+    with
+    | [a; b; c] -> (a,b,c)
+    | _ -> failwith "ssa_form did not return the expected number of formula"
+  in
+  let query = smk_and (List.map smk_and (add_axioms [ [mk_not (smk_and pref)]; pathf; postf])) in
+  let res = Prover.satisfiable query in
+    Printf.fprintf stdout "accumulated time: %.2fs\n" !Util.measured_time;
+    match res with
+    | Some true -> print_endline "not entailed"
+    | Some false -> print_endline "entailed"
+    | None -> print_endline "unknown"
+
 let _ =
   try
     Arg.parse cmd_options (fun s -> input_file := s) usage_message;
@@ -76,6 +98,7 @@ let _ =
         match !mode with
         | Interpolate -> compute_interpolant ()
         | SlSat -> compute_sl_sat ()
+        | SlEntails -> compute_sl_entails ()
       end
   with  
   | Sys_error s -> output_string stderr (s ^ "\n")
