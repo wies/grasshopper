@@ -278,6 +278,7 @@ module Spatial =
       in
         convert_spatial spatial
 
+    (*TODO the tightness axiom is not blobal anymore but depends on which part of the formula is true! *)
     let tightness heap (_, spatial) =
       (* axiom for tightness:
        * forall z. A(z) <=> \/_{lseg(x,y)} (between(x, z, y) /\ z != y) \/_{x|->y} z = x
