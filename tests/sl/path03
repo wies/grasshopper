@@ -1,0 +1,10 @@
+Pre
+a ~= b && b ~= c
+a |-> b * b |-> c
+
+Updates
+a.next := b;
+
+Post
+a ~= b
+a |-> b * b |-> a

@@ -2,6 +2,9 @@
 type ident = Form.ident
 let mk_ident = Form.mk_ident
 
+(* the next pointer *)
+let pts = ("sl_pts", 0)
+
 module Pure =
   struct
     type t =
@@ -106,6 +109,13 @@ module Pure =
           lst
       | BoolConst b -> Form.IdSet.empty
 
+    let rec to_form p = match p with
+      | Eq (e1, e2) -> Form.mk_eq (Form.mk_const e1) (Form.mk_const e2)
+      | Not t -> Form.mk_not (to_form t)
+      | And lst -> Form.smk_and (List.map to_form lst)
+      | Or lst -> Form.smk_or (List.map to_form lst)
+      | BoolConst b -> if b then Form.mk_true else Form.mk_false 
+
   end
 
 module Spatial =
@@ -194,6 +204,56 @@ module Spatial =
           (fun acc f -> Form.IdSet.union acc (variables f))
           Form.IdSet.empty
           lst
+
+    (* Assumes spatial is normalized. *)
+    let to_form spatial =
+      (* auxiliary fct *)
+      let cst = Form.mk_const in
+      let eq a b = Form.mk_eq (cst a) (cst b) in
+      let reachWoT a b c = Axioms.reach pts a b c in
+      let reachWo a b c = reachWoT (cst a) (cst b) (cst c) in
+      let reach a b = reachWo a b b in
+      let join a b = Axioms.jp pts (cst a) (cst b) in
+      (* spatial part *)
+      let rec convert_spatial s = match s with
+        | Emp -> Form.mk_true
+        | PtsTo (a, b) -> Form.mk_eq (Form.mk_app pts [cst a]) (cst b)
+        | List (a, b) -> reach a b
+        | SepConj lst ->
+          (* disjointness conditions for ls(e_1, e_2) * ls(e_1', e_2') :
+           *   (e_1 = join(e_1', e_1) \/ reachWo(e_1, e_2, join(e_1',e_1))) /\
+           *   (e_1' = join(e_1, e_1') \/ reachWo(e_1', e_2', join(e_1,e_1'))) /\
+           *   (e_1 = e_1' ==> e_1 = e_2 \/ e_1' = e_2')        *)
+          let mk_disj_ls_ls (e1, e2) (e1p, e2p) =
+            Form.mk_and [
+              Form.mk_or [Form.mk_eq (cst e1) (join e1p e1); reachWoT (cst e1) (cst e2) (join e1p e1)];
+              Form.mk_or [Form.mk_eq (cst e1p) (join e1 e1p); reachWoT (cst e1p) (cst e2p) (join e1 e1p)];
+              Form.mk_or [Form.mk_not (eq e1 e1p); eq e1 e2; eq e1p e2p]
+            ]
+          in
+          (* disjointness conditions for e_1 |-> e_2 * ls(e_1', e_2') : reachWo(e_1', e_2', e_1) *)
+          let mk_disj_ptr_ls (e1, e2) (e1p, e2p) = reachWo e1p e2p e1 in
+          (* disjointness conditions for e_1 |-> e_2 * e_1' |-> e_2' : e_1 ~= e_1' *)
+          let mk_disj_ptr_ptr (e1, e2) (e1p, e2p) = Form.mk_not (Form.mk_eq (cst e1) (cst e1p)) in
+          (* collect lists and pointers *)
+          let lists = List.flatten (List.map (function List (e1, e2) -> [(e1, e2)] | _ -> []) lst) in
+          let ptrs = List.flatten (List.map (function PtsTo (e1, e2) -> [(e1, e2)] | _ -> []) lst) in
+          let rec mk_disjs fct acc lst = match lst with
+            | x :: xs ->
+              let d = List.map (fct x) xs in
+                mk_disjs fct (d @ acc) xs
+            | [] -> acc
+          in
+          let part1 = List.map convert_spatial lst in
+          let part2 = mk_disjs mk_disj_ls_ls [] lists in
+          let part3 = List.flatten (List.map (fun p -> List.map (mk_disj_ptr_ls p) lists) ptrs) in
+          let part4 = mk_disjs mk_disj_ptr_ptr [] ptrs in
+            Form.smk_and (part1 @ part2 @ part3 @ part4)
+        | Conj lst -> Form.smk_and (List.map convert_spatial lst)
+        | Disj lst -> Form.smk_or (List.map convert_spatial lst)
+      in
+        convert_spatial spatial
+
   end
 
 type sl_form = Pure.t * Spatial.t
@@ -204,70 +264,48 @@ let to_string (pure, spatial) =
 let normalize (pure, spatial) =
   (Pure.nnf pure, Spatial.normalize spatial)
 
-(* the next pointer *)
-let pts = ("sl_pts", 0)
+let tightness heap (_, spatial) =
+  (* axiom for tightness:
+   * forall z. A(z) <=> \/_{x,y} (between(x, z, y) /\ (x = y \/ z != y))
+   * where between(x, z, y) = reachWo(x, z, y) /\ reach(x, y)
+   *)
+  let eq a b = Form.mk_eq a b in
+  let neq a b = Form.mk_not (eq a b) in
+  let between_not_empty x y =
+    Form.mk_and [
+      Axioms.reach pts x Axioms.var1 y;
+      Axioms.reach pts x y y;
+      Form.mk_or [ eq x y; neq Axioms.var1 y]
+    ]
+  in
+  let pred = Form.mk_pred heap [Axioms.var1] in
+  let vars = List.map Form.mk_const (Form.id_set_to_list (Spatial.variables spatial)) in
+  let btwns = Form.smk_or (List.flatten (List.map (fun e1 -> List.map (between_not_empty e1) vars) vars)) in
+    Form.smk_or [Form.smk_and [pred; btwns]; Form.smk_and [Form.mk_not pred; Form.nnf (Form.mk_not btwns)]]
 
 (* Assumes (pure, spatial) are normalized. *)
-let to_form (pure, spatial) =
-  (* auxiliary fct *)
-  let cst = Form.mk_const in
-  let eq a b = Form.mk_eq (cst a) (cst b) in
-  let reachWoT a b c = Axioms.reach pts a b c in
-  let reachWo a b c = reachWoT (cst a) (cst b) (cst c) in
-  let reachT a b = reachWoT a b b in
-  let reach a b = reachWo a b b in
-  let join a b = Axioms.jp pts (cst a) (cst b) in
-  (* pure part *)
-  let rec convert_pure p = match p with
-    | Pure.Eq (e1, e2) -> Form.mk_eq (cst e1) (cst e2)
-    | Pure.Not t -> Form.mk_not (convert_pure t)
-    | Pure.And lst -> Form.smk_and (List.map convert_pure lst)
-    | Pure.Or lst -> Form.smk_or (List.map convert_pure lst)
-    | Pure.BoolConst b -> if b then Form.mk_true else Form.mk_false 
-  in
-  (* spatial part *)
-  let rec convert_spatial s = match s with
-    | Spatial.Emp -> Form.mk_true
-    | Spatial.PtsTo (a, b) -> Form.mk_eq (Form.mk_app pts [cst a]) (cst b)
-    | Spatial.List (a, b) -> reach a b
-    | Spatial.SepConj lst ->
-      (* disjointness conditions for ls(e_1, e_2) * ls(e_1', e_2') :
-       *   (e_1 = join(e_1', e_1) \/ reachWo(e_1, e_2, join(e_1',e_1))) /\
-       *   (e_1' = join(e_1, e_1') \/ reachWo(e_1', e_2', join(e_1,e_1'))) /\
-       *   (e_1 = e_1' ==> e_1 = e_2 \/ e_1' = e_2')        *)
-      (* TODO there are a few corner cases missing *)
-      let mk_disj e1 e2 e1p e2p =
-        Form.mk_and [
-          Form.mk_or [Form.mk_eq (cst e1) (join e1p e1); reachWoT (cst e1) (cst e2) (join e1p e1)];
-          Form.mk_or [Form.mk_eq (cst e1p) (join e1 e1p); reachWoT (cst e1p) (cst e2p) (join e1 e1p)];
-          Form.mk_or [Form.mk_not (eq e1 e1p); eq e1 e2; eq e1p e2p]
-        ]
-      in
-      (*TODO disjointness also for |->, we can do a better/simpler job *)
-      let lists = List.flatten (List.map (function Spatial.List (e1, e2) -> [(e1, e2)] | Spatial.PtsTo (e1, e2) -> [(e1, e2)] | _ -> []) lst) in
-      let rec mk_disjs acc lst = match lst with
-        | (e1, e2) :: xs ->
-          let d = List.map (fun (e1p, e2p) -> mk_disj e1 e2 e1p e2p) xs in
-            mk_disjs (d @ acc) xs
-        | [] -> acc
-      in
-      let part1 = List.map convert_spatial lst in
-      let part2 = mk_disjs [] lists in
-        Form.smk_and (part1 @ part2)
-    | Spatial.Conj lst -> Form.smk_and (List.map convert_spatial lst)
-    | Spatial.Disj lst -> Form.smk_or (List.map convert_spatial lst)
-  in
-  (* tightness conditions:
-   *  \forall x. \/_{e_1, e_2} (reachWo(e_1, x, e_2) /\ reach(x, e_2))
-   * TODO this might break if the set of variables is empty ??? *)
-  let vars = List.map cst (Form.id_set_to_list (Spatial.variables spatial)) in
-  let mk_axiom_part e1 e2 = Form.mk_and [(reachWoT e1 Axioms.var1 e2); (reachT Axioms.var1 e2)] in
-  let tightness_axiom = Form.mk_or (List.flatten (List.map (fun e1 -> List.map (mk_axiom_part e1) vars) vars)) in
-  let fp = convert_pure pure in
-  let fs = convert_spatial spatial in
-  let f = Form.mk_and [fp; fs] in
+let to_form_without_axioms (pure, spatial) =
+  let fp = Pure.to_form pure in
+  let fs = Spatial.to_form spatial in
+    Form.smk_and [fp; fs]
+
+(* Assumes sl is normalized.
+ * This does not add the tightness axioms.
+ *)
+let to_form sl =
+  let f = to_form_without_axioms sl in
   let usual_axioms = match Axioms.add_axioms [[f]] with
     | [a] -> a
     | _ -> failwith "add_axioms did not return a single element"
   in
-    Form.smk_and (f :: tightness_axiom :: usual_axioms)
+    Form.smk_and (f :: usual_axioms)
+
+(* Assumes sl is normalized. *)
+let to_form_tight heap sl =
+  let f = to_form_without_axioms sl in
+  let specific_axiom = tightness heap sl in
+  let usual_axioms = match Axioms.add_axioms [[f]] with
+    | [a] -> a
+    | _ -> failwith "add_axioms did not return a single element"
+  in
+    Form.smk_and (f :: specific_axiom :: usual_axioms)

@@ -1,0 +1,10 @@
+Pre
+a ~= d
+a |-> b * lseg(c, d)
+
+Updates
+a.next := c;
+
+Post
+a ~= d
+lseg(a, d)

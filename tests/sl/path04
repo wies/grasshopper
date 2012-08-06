@@ -1,0 +1,11 @@
+Pre
+a ~= b
+a |-> b * b |-> a
+
+Updates
+//new c; TODO only true with the new
+b.next := c;
+
+Post
+a ~= b && a ~= c && b ~= c
+a |-> b * b |-> c

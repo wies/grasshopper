@@ -205,7 +205,7 @@ let add_axioms pf_a pf_b =
   a_axioms @ pf_a, b_axioms @ pf_b
 *)
 
-let add_axioms fs =
+let make_axioms fs =
   let unaries = List.map (fun f -> unary_funs (mk_and f)) fs in
   let init_funs = List.map (fun set -> IdSet.filter (fun (_, n) -> n = 0) set) unaries in
   let _, rev_already_declared =
@@ -225,5 +225,13 @@ let add_axioms fs =
       unaries
       all_init
   in
-  let axiomsWithAlloc = (alloc_axioms @ List.hd axioms) :: (List.tl axioms) in
-    List.map2 (@) axiomsWithAlloc fs
+    (alloc_axioms @ List.hd axioms) :: (List.tl axioms)
+
+let add_axioms fs =
+  let axioms = make_axioms fs in
+    List.map2 (@) axioms fs
+
+let skolemize fresh_const axiom =
+  let vars = fv axiom in
+  let subst_map = IdSet.fold (fun v acc -> IdMap.add v (fresh_const ()) acc ) vars IdMap.empty in
+    subst subst_map axiom

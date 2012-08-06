@@ -1,11 +1,10 @@
 Pre
-a ~= b
-a |-> b * b |-> a
+true
+emp
 
 Updates
-new c;
-b.next := c;
+a.next := b;
 
 Post
-a ~= b && a ~= c && b ~= c
-a |-> b * b |-> c
+true
+a |-> b
