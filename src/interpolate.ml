@@ -76,10 +76,10 @@ let compute_sl_entails () =
   (* convert wo axioms and add axioms later *)
   let pre_sl_n = Sl.normalize pre_sl in
   let pre = Sl.to_form_without_axioms pre_sl_n in
-  let tight_pre = Sl.tightness pre_heap pre_sl_n in
+  let tight_pre = Sl.Spatial.tightness pre_heap pre_sl_n in
   let post_sl_n = Sl.normalize post_sl in
   let post = Sl.to_form_without_axioms post_sl_n in
-  let tight_post = Sl.tightness post_heap post_sl_n in
+  let tight_post = Sl.Spatial.tightness post_heap post_sl_n in
   (* ssa *)
   let (pref, pre_sl_axioms, pathf, postf, post_sl_axioms) =
     match ssa_form ((Assume pre) ::

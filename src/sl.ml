@@ -130,6 +130,12 @@ module Spatial =
 
     let compare: t -> t -> int = compare
 
+    type t2 = t
+    module TermSet = Set.Make(struct
+        type t = t2
+        let compare = compare
+      end)
+
     let rec to_string f = match f with
       | Emp -> "emp"
       | PtsTo (a, b) -> (Form.str_of_ident a) ^ " |-> " ^ (Form.str_of_ident b)
@@ -205,6 +211,24 @@ module Spatial =
           Form.IdSet.empty
           lst
 
+    let rec points_to f = match f with
+      | PtsTo _ as p -> TermSet.singleton p
+      | SepConj lst | Conj lst | Disj lst ->
+        List.fold_left
+          (fun acc f -> TermSet.union acc (points_to f))
+          TermSet.empty
+          lst
+      | _ -> TermSet.empty
+
+    let rec lists f = match f with
+      | List _ as l -> TermSet.singleton l
+      | SepConj lst | Conj lst | Disj lst ->
+        List.fold_left
+          (fun acc f -> TermSet.union acc (lists f))
+          TermSet.empty
+          lst
+      | _ -> TermSet.empty
+
     (* Assumes spatial is normalized. *)
     let to_form spatial =
       (* auxiliary fct *)
@@ -254,6 +278,32 @@ module Spatial =
       in
         convert_spatial spatial
 
+    let tightness heap (_, spatial) =
+      (* axiom for tightness:
+       * forall z. A(z) <=> \/_{lseg(x,y)} (between(x, z, y) /\ z != y) \/_{x|->y} z = x
+       * where between(x, z, y) = reachWo(x, z, y) /\ reach(x, y)
+       *)
+      let eq a b = Form.mk_eq a b in
+      let neq a b = Form.mk_not (eq a b) in
+      let between_not_empty x y =
+        Form.mk_and [
+          Axioms.reach pts x Axioms.var1 y;
+          Axioms.reach pts x y y;
+          neq Axioms.var1 y
+        ]
+      in
+      let pred = Form.mk_pred heap [Axioms.var1] in
+      let mk_axiom_part f = match f with
+        | List (a, b) -> between_not_empty (Form.mk_const a) (Form.mk_const b)
+        | PtsTo (a, b) -> eq Axioms.var1 (Form.mk_const a)
+        | _ -> failwith "mk_axiom_part only for List or PtsTo"
+      in
+      let pts = points_to spatial in
+      let lst = lists spatial in
+      let leaves = TermSet.fold (fun a b -> a :: b) (TermSet.union pts lst) [] in
+      let in_heap = Form.smk_or (List.map mk_axiom_part leaves) in
+        Form.smk_or [Form.smk_and [pred; in_heap]; Form.smk_and [Form.mk_not pred; Form.nnf (Form.mk_not in_heap)]]
+
   end
 
 type sl_form = Pure.t * Spatial.t
@@ -263,25 +313,6 @@ let to_string (pure, spatial) =
 
 let normalize (pure, spatial) =
   (Pure.nnf pure, Spatial.normalize spatial)
-
-let tightness heap (_, spatial) =
-  (* axiom for tightness:
-   * forall z. A(z) <=> \/_{x,y} (between(x, z, y) /\ (x = y \/ z != y))
-   * where between(x, z, y) = reachWo(x, z, y) /\ reach(x, y)
-   *)
-  let eq a b = Form.mk_eq a b in
-  let neq a b = Form.mk_not (eq a b) in
-  let between_not_empty x y =
-    Form.mk_and [
-      Axioms.reach pts x Axioms.var1 y;
-      Axioms.reach pts x y y;
-      Form.mk_or [ eq x y; neq Axioms.var1 y]
-    ]
-  in
-  let pred = Form.mk_pred heap [Axioms.var1] in
-  let vars = List.map Form.mk_const (Form.id_set_to_list (Spatial.variables spatial)) in
-  let btwns = Form.smk_or (List.flatten (List.map (fun e1 -> List.map (between_not_empty e1) vars) vars)) in
-    Form.smk_or [Form.smk_and [pred; btwns]; Form.smk_and [Form.mk_not pred; Form.nnf (Form.mk_not btwns)]]
 
 (* Assumes (pure, spatial) are normalized. *)
 let to_form_without_axioms (pure, spatial) =
@@ -303,9 +334,20 @@ let to_form sl =
 (* Assumes sl is normalized. *)
 let to_form_tight heap sl =
   let f = to_form_without_axioms sl in
-  let specific_axiom = tightness heap sl in
+  let specific_axiom = Spatial.tightness heap sl in
   let usual_axioms = match Axioms.add_axioms [[f]] with
     | [a] -> a
     | _ -> failwith "add_axioms did not return a single element"
   in
     Form.smk_and (f :: specific_axiom :: usual_axioms)
+
+
+(*TODO secondary translation of the disjointness constraints that do not introduce the joint terms:
+ * forall z.
+ *  ( reachWo(x, z, y) ==> reachWo(x', y', z) ) /\
+ *  ( reachWo(x', z', y) ==> reachWo(x, y, z) )
+ * The tricky part this cannot be generated locally. The axioms need to be top-level.
+ * Therefore, if there is a boolean structure of the formula we need to intruduce some
+ * nullary predicates that trigger the axioms, i.e. the axioms has to be considered
+ * only if the solver is exploring the dijsunct in which it appears.
+ *)
