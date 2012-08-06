@@ -229,57 +229,126 @@ module Spatial =
           lst
       | _ -> TermSet.empty
 
-    (* Assumes spatial is normalized. *)
-    let to_form spatial =
+    (* Since we have a boolean structure on top of the separation logic and that
+     * our axioms are only top level, we need to introduce some predicates that
+     * say when the axioms are enabled.
+     * Assumes spatial is normalized.
+     *)
+    let triggers spatial =
+      let trig_cnt = ref 0 in
+      let trig () = 
+        trig_cnt := !trig_cnt + 1;
+        ("trigger", !trig_cnt)
+      in
+      let subformulae = match spatial with
+        | Disj lst -> lst
+        | other -> [other]
+      in
+        List.map (fun f -> (trig (), f)) subformulae
+
+    let convert_wo_disjointness spatial =
       (* auxiliary fct *)
       let cst = Form.mk_const in
-      let eq a b = Form.mk_eq (cst a) (cst b) in
       let reachWoT a b c = Axioms.reach pts a b c in
       let reachWo a b c = reachWoT (cst a) (cst b) (cst c) in
       let reach a b = reachWo a b b in
-      let join a b = Axioms.jp pts (cst a) (cst b) in
       (* spatial part *)
       let rec convert_spatial s = match s with
         | Emp -> Form.mk_true
         | PtsTo (a, b) -> Form.mk_eq (Form.mk_app pts [cst a]) (cst b)
         | List (a, b) -> reach a b
-        | SepConj lst ->
-          (* disjointness conditions for ls(e_1, e_2) * ls(e_1', e_2') :
-           *   (e_1 = join(e_1', e_1) \/ reachWo(e_1, e_2, join(e_1',e_1))) /\
-           *   (e_1' = join(e_1, e_1') \/ reachWo(e_1', e_2', join(e_1,e_1'))) /\
-           *   (e_1 = e_1' ==> e_1 = e_2 \/ e_1' = e_2')        *)
-          let mk_disj_ls_ls (e1, e2) (e1p, e2p) =
-            Form.mk_and [
-              Form.mk_or [Form.mk_eq (cst e1) (join e1p e1); reachWoT (cst e1) (cst e2) (join e1p e1)];
-              Form.mk_or [Form.mk_eq (cst e1p) (join e1 e1p); reachWoT (cst e1p) (cst e2p) (join e1 e1p)];
-              Form.mk_or [Form.mk_not (eq e1 e1p); eq e1 e2; eq e1p e2p]
-            ]
-          in
-          (* disjointness conditions for e_1 |-> e_2 * ls(e_1', e_2') : reachWo(e_1', e_2', e_1) *)
-          let mk_disj_ptr_ls (e1, e2) (e1p, e2p) = reachWo e1p e2p e1 in
-          (* disjointness conditions for e_1 |-> e_2 * e_1' |-> e_2' : e_1 ~= e_1' *)
-          let mk_disj_ptr_ptr (e1, e2) (e1p, e2p) = Form.mk_not (Form.mk_eq (cst e1) (cst e1p)) in
-          (* collect lists and pointers *)
-          let lists = List.flatten (List.map (function List (e1, e2) -> [(e1, e2)] | _ -> []) lst) in
-          let ptrs = List.flatten (List.map (function PtsTo (e1, e2) -> [(e1, e2)] | _ -> []) lst) in
-          let rec mk_disjs fct acc lst = match lst with
-            | x :: xs ->
-              let d = List.map (fct x) xs in
-                mk_disjs fct (d @ acc) xs
-            | [] -> acc
-          in
-          let part1 = List.map convert_spatial lst in
-          let part2 = mk_disjs mk_disj_ls_ls [] lists in
-          let part3 = List.flatten (List.map (fun p -> List.map (mk_disj_ptr_ls p) lists) ptrs) in
-          let part4 = mk_disjs mk_disj_ptr_ptr [] ptrs in
-            Form.smk_and (part1 @ part2 @ part3 @ part4)
-        | Conj lst -> Form.smk_and (List.map convert_spatial lst)
-        | Disj lst -> Form.smk_or (List.map convert_spatial lst)
+        | SepConj lst | Conj lst -> Form.smk_and (List.map convert_spatial lst)
+        | Disj lst -> failwith "Disj found, formula not normalized ?"
       in
-        convert_spatial spatial
+      let formulae = triggers spatial in
+        Form.smk_and (
+          (Form.smk_or (List.map (fun (t, f) -> Form.mk_pred t []) formulae)) ::
+          (List.map (fun (t, f) -> Form.mk_or [Form.mk_not (Form.mk_pred t []); convert_spatial f]) formulae)
+        )
 
-    (*TODO the tightness axiom is not blobal anymore but depends on which part of the formula is true! *)
-    let tightness heap (_, spatial) =
+
+    let constraints_for_trigger process_sep f =
+      let rec process_conj s = match s with
+        | SepConj lst -> process_sep lst
+        | Conj lst -> Form.smk_and (List.map process_conj lst)
+        | Disj lst -> failwith "Disj found, formula not normalized ?"
+        | _ -> Form.mk_true
+      in
+      let formulae = triggers f in
+        Form.smk_and (
+          List.map
+            (fun (t, f) -> Form.mk_or [Form.mk_not (Form.mk_pred t []); process_conj f])
+            formulae
+        )
+
+    (* disjointness constrains without quantifier *)
+    let disjointness_by_kind mk_disj_ls_ls mk_disj_ptr_ls mk_disj_ptr_ptr spatial =
+      (* contraints for a SepConj *)
+      let process lst =
+        (* collect lists and pointers *)
+        let lists = List.flatten (List.map (function List (e1, e2) -> [(e1, e2)] | _ -> []) lst) in
+        let ptrs = List.flatten (List.map (function PtsTo (e1, e2) -> [(e1, e2)] | _ -> []) lst) in
+        let rec mk_disjs fct acc lst = match lst with
+          | x :: xs ->
+            let d = List.map (fct x) xs in
+              mk_disjs fct (d @ acc) xs
+          | [] -> acc
+        in
+        let part1 = mk_disjs mk_disj_ls_ls [] lists in
+        let part2 = List.flatten (List.map (fun p -> List.map (mk_disj_ptr_ls p) lists) ptrs) in
+        let part3 = mk_disjs mk_disj_ptr_ptr [] ptrs in
+          Form.smk_and (part1 @ part2 @ part3)
+      in
+        constraints_for_trigger process spatial
+
+    (* disjointness constrains without quantifier *)
+    let qf_disjointness spatial =
+      (* auxiliary fct *)
+      let cst = Form.mk_const in
+      let eq a b = Form.mk_eq (cst a) (cst b) in
+      let reachWoT a b c = Axioms.reach pts a b c in
+      let reachWo a b c = reachWoT (cst a) (cst b) (cst c) in
+      let join a b = Axioms.jp pts (cst a) (cst b) in
+      (* disjointness conditions for ls(e_1, e_2) * ls(e_1', e_2') :
+       *   (e_1 = join(e_1', e_1) \/ reachWo(e_1, e_2, join(e_1',e_1))) /\
+       *   (e_1' = join(e_1, e_1') \/ reachWo(e_1', e_2', join(e_1,e_1'))) /\
+       *   (e_1 = e_1' ==> e_1 = e_2 \/ e_1' = e_2')        *)
+      let mk_disj_ls_ls (e1, e2) (e1p, e2p) =
+        Form.mk_and [
+          Form.mk_or [Form.mk_eq (cst e1) (join e1p e1); reachWoT (cst e1) (cst e2) (join e1p e1)];
+          Form.mk_or [Form.mk_eq (cst e1p) (join e1 e1p); reachWoT (cst e1p) (cst e2p) (join e1 e1p)];
+          Form.mk_or [Form.mk_not (eq e1 e1p); eq e1 e2; eq e1p e2p]
+        ]
+      in
+      (* disjointness conditions for e_1 |-> e_2 * ls(e_1', e_2') : reachWo(e_1', e_2', e_1) *)
+      let mk_disj_ptr_ls (e1, e2) (e1p, e2p) = reachWo e1p e2p e1 in
+      (* disjointness conditions for e_1 |-> e_2 * e_1' |-> e_2' : e_1 ~= e_1' *)
+      let mk_disj_ptr_ptr (e1, e2) (e1p, e2p) = Form.mk_not (Form.mk_eq (cst e1) (cst e1p)) in
+        disjointness_by_kind mk_disj_ls_ls mk_disj_ptr_ls mk_disj_ptr_ptr spatial
+
+    (* disjointness constrains without joint term *)
+    let jf_disjointness spatial =
+      (* auxiliary fct *)
+      let cst = Form.mk_const in
+      let reachWo a b c = Axioms.reach pts a b c in
+      (* translation of the disjointness constraints that do not introduce the joint terms:
+       * forall z. ( reachWo(x, z, y) ==> reachWo(x', y', z) ) /\
+       *           ( reachWo(x', z', y) ==> reachWo(x, y, z) )
+       *)
+      let mk_disj_ls_ls (e1, e2) (e1p, e2p) =
+        Form.mk_and [
+          Form.mk_or [Form.mk_not (reachWo (cst e1) Axioms.var1 (cst e2)); reachWo (cst e1p) (cst e2p) Axioms.var1];
+          Form.mk_or [Form.mk_not (reachWo (cst e1p) Axioms.var1 (cst e2p)); reachWo (cst e1) (cst e2) Axioms.var1]
+        ]
+      in
+      (* disjointness conditions for e_1 |-> e_2 * ls(e_1', e_2') : reachWo(e_1', e_2', e_1) *)
+      let mk_disj_ptr_ls (e1, e2) (e1p, e2p) = reachWo (cst e1p) (cst e2p) (cst e1) in
+      (* disjointness conditions for e_1 |-> e_2 * e_1' |-> e_2' : e_1 ~= e_1' *)
+      let mk_disj_ptr_ptr (e1, e2) (e1p, e2p) = Form.mk_not (Form.mk_eq (cst e1) (cst e1p)) in
+        disjointness_by_kind mk_disj_ls_ls mk_disj_ptr_ls mk_disj_ptr_ptr spatial
+
+
+    let tightness heap spatial =
       (* axiom for tightness:
        * forall z. A(z) <=> \/_{lseg(x,y)} (between(x, z, y) /\ z != y) \/_{x|->y} z = x
        * where between(x, z, y) = reachWo(x, z, y) /\ reach(x, y)
@@ -299,11 +368,16 @@ module Spatial =
         | PtsTo (a, b) -> eq Axioms.var1 (Form.mk_const a)
         | _ -> failwith "mk_axiom_part only for List or PtsTo"
       in
-      let pts = points_to spatial in
-      let lst = lists spatial in
-      let leaves = TermSet.fold (fun a b -> a :: b) (TermSet.union pts lst) [] in
-      let in_heap = Form.smk_or (List.map mk_axiom_part leaves) in
-        Form.smk_or [Form.smk_and [pred; in_heap]; Form.smk_and [Form.mk_not pred; Form.nnf (Form.mk_not in_heap)]]
+      let process lst =
+        (* collect lists and pointers *)
+        let lists = List.filter (function List (e1, e2) -> true | _ -> false) lst in
+        let ptrs = List.filter (function PtsTo (e1, e2) -> true | _ -> false) lst in
+        let part1 = List.map mk_axiom_part lists in
+        let part2 = List.map mk_axiom_part ptrs in
+        let in_heap = Form.smk_or (part1 @ part2) in
+          Form.smk_or [Form.smk_and [pred; in_heap]; Form.smk_and [Form.mk_not pred; Form.nnf (Form.mk_not in_heap)]]
+      in
+        constraints_for_trigger process spatial
 
   end
 
@@ -316,16 +390,18 @@ let normalize (pure, spatial) =
   (Pure.nnf pure, Spatial.normalize spatial)
 
 (* Assumes (pure, spatial) are normalized. *)
-let to_form_without_axioms (pure, spatial) =
+let to_form_not_tight (pure, spatial) =
   let fp = Pure.to_form pure in
-  let fs = Spatial.to_form spatial in
-    Form.smk_and [fp; fs]
+  let fs = Spatial.convert_wo_disjointness spatial in
+  (*let disj = Spatial.qf_disjointness spatial in*)
+  let disj = Spatial.jf_disjointness spatial in
+    Form.smk_and [fp; fs; disj]
 
 (* Assumes sl is normalized.
  * This does not add the tightness axioms.
  *)
 let to_form sl =
-  let f = to_form_without_axioms sl in
+  let f = to_form_not_tight sl in
   let usual_axioms = match Axioms.add_axioms [[f]] with
     | [a] -> a
     | _ -> failwith "add_axioms did not return a single element"
@@ -334,8 +410,8 @@ let to_form sl =
 
 (* Assumes sl is normalized. *)
 let to_form_tight heap sl =
-  let f = to_form_without_axioms sl in
-  let specific_axiom = Spatial.tightness heap sl in
+  let f = to_form_not_tight sl in
+  let specific_axiom = Spatial.tightness heap (snd sl) in
   let usual_axioms = match Axioms.add_axioms [[f]] with
     | [a] -> a
     | _ -> failwith "add_axioms did not return a single element"
@@ -343,12 +419,3 @@ let to_form_tight heap sl =
     Form.smk_and (f :: specific_axiom :: usual_axioms)
 
 
-(*TODO secondary translation of the disjointness constraints that do not introduce the joint terms:
- * forall z.
- *  ( reachWo(x, z, y) ==> reachWo(x', y', z) ) /\
- *  ( reachWo(x', z', y) ==> reachWo(x, y, z) )
- * The tricky part this cannot be generated locally. The axioms need to be top-level.
- * Therefore, if there is a boolean structure of the formula we need to intruduce some
- * nullary predicates that trigger the axioms, i.e. the axioms has to be considered
- * only if the solver is exploring the dijsunct in which it appears.
- *)

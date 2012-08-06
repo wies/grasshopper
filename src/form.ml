@@ -409,11 +409,16 @@ let print_smtlib_form out_ch f =
   | Comment (c, f) ->
       smt_form f
   | Pred (id, ts) -> 
-      print "(";
-      print (str_of_ident id);
-      print " ";
-      print_list smt_term ts;
-      print ")" 
+      if (ts = []) then
+        print (str_of_ident id)
+      else
+        begin
+          print "(";
+          print (str_of_ident id);
+          print " ";
+          print_list smt_term ts;
+          print ")"
+        end
   | Eq (s, t) -> 
       print "(= ";
       print_list smt_term [s; t];

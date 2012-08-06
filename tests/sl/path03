@@ -1,4 +1,4 @@
-\\entailed
+//entailed
 Pre
 a ~= b && b ~= c
 a |-> b * b |-> c
