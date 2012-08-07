@@ -47,12 +47,13 @@ let compute_interpolant () =
   print_form stdout interpolant
 
 let compute_sl_sat () =
+  let heap = mk_ident "" in
   (*print_endline "parsing";*)
   let sl = parse_input (fun lexbuf -> ParseSl.main LexSl.token lexbuf) in
   let _ = Debug.msg ("parsed: " ^ (Sl.to_string sl) ^ "\n") in
   let sln = Sl.normalize sl in
   let _ = Debug.msg ("normalized: " ^ (Sl.to_string sln) ^ "\n") in
-  let form = Sl.to_form sln in
+  let form = Sl.to_form heap sln in
   let _ = if !Debug.verbose then
     begin
       print_endline "converted: ";
@@ -67,78 +68,11 @@ let compute_sl_sat () =
     | Some false -> print_endline "unsat"
     | None -> print_endline "unknown"
 
+(* check that sp(pre, path) |- post *)
 let compute_sl_entails () =
-  let pre_heap = mk_ident "A" in
-  let post_heap = mk_ident "B" in
-  (* check that sp(pre, path) |- post *)
   let (pre_sl, path, post_sl) = parse_input (fun lexbuf -> ParseSl2.main LexSl2.token lexbuf) in
   let path_wo_label = List.filter (function Label _ -> false | _ -> true) path in
-  (* convert wo axioms and add axioms later *)
-  let pre_sl_n = Sl.normalize pre_sl in
-  let pre = Sl.to_form_not_tight pre_sl_n in
-  let tight_pre = Sl.Spatial.tightness pre_heap (snd pre_sl_n) in
-  let post_sl_n = Sl.normalize post_sl in
-  let post = Sl.to_form_not_tight post_sl_n in
-  let tight_post = Sl.Spatial.tightness post_heap (snd post_sl_n) in
-  (* ssa *)
-  let (pref, pre_sl_axioms, pathf, postf, post_sl_axioms) =
-    match ssa_form ((Assume pre) ::
-                    (Label "dummy") ::
-                    (Assume tight_pre) ::
-                    (Label "dummy") ::
-                    path_wo_label @
-                    [(Label "dummy");
-                     (Assume post);
-                     (Label "dummy");
-                     (Assume tight_post)])
-    with
-    | [a; b; c; d; e] -> (a, b, c, d, e)
-    | _ -> failwith "ssa_form did not return the expected number of formula"
-  in
-  let _ = if !Debug.verbose then
-    begin
-      print_endline "parsed: ";
-      print_endline ("pre: " ^ (Sl.to_string pre_sl));
-      print_endline "pre axioms:";
-      List.iter (print_form stdout) pre_sl_axioms;
-      print_endline "pre converted:";
-      List.iter (print_form stdout) pref;
-
-      print_endline "path: ";
-      List.iter (print_form stdout) pathf;
-
-      print_endline ("post: " ^ (Sl.to_string post_sl));
-      print_endline "post axioms:";
-      List.iter (print_form stdout) post_sl_axioms;
-      print_endline "post converted:";
-      List.iter (print_form stdout) postf
-    end
-  in
-  (* need to skolemize the post_sl_axioms *)
-  let fresh () = mk_const (fresh_ident "sk_var") in
-  let post_skolem = List.map (skolemize fresh) post_sl_axioms in
-  (* axioms from the logic *)
-  let (prea, patha, posta) = match add_axioms [ pref; pathf; postf] with
-    | [a; b; c] -> (a,b,c)
-    | _ -> failwith "ssa_form did not return the expected number of formula"
-  in
-  (* add forall x. A(x) <=> B(x) *)
-  let a_x = mk_pred pre_heap [var1] in
-  let b_x = mk_pred post_heap [var1] in
-  let same_heap_content = mk_or [mk_and [a_x; b_x]; mk_and [mk_not a_x; mk_not b_x]] in
-  (* query *)
-  let query = smk_and ( same_heap_content ::
-                        pref @ pre_sl_axioms @ prea @
-                        pathf @ patha @
-                        [nnf (mk_not (smk_and (postf @ post_skolem)))] @ posta )
-  in
-  let _ = if !Debug.verbose then
-    begin
-      print_endline "query: ";
-      print_form stdout query
-    end
-  in
-  let res = Prover.satisfiable query in
+  let res = Entails.check_entailment pre_sl path_wo_label post_sl in
     Printf.fprintf stdout "accumulated time: %.2fs\n" !Util.measured_time;
     match res with
     | Some true -> print_endline "not entailed"

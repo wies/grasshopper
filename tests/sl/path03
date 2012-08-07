@@ -1,11 +1,11 @@
 //entailed
 Pre
-a ~= b && b ~= c
+b ~= c
 a |-> b * b |-> c
 
 Updates
-a.next := b;
+b.next := a;
 
 Post
-a ~= b
+true
 a |-> b * b |-> a

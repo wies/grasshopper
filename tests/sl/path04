@@ -1,5 +1,5 @@
 Pre
-a ~= b
+true
 a |-> b * b |-> a
 
 Updates
@@ -7,5 +7,5 @@ Updates
 b.next := c;
 
 Post
-a ~= b && a ~= c && b ~= c
+a ~= c && b ~= c
 a |-> b * b |-> c

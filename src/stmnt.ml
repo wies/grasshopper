@@ -41,7 +41,7 @@ let add_jp_terms pf_a pf_b =
   in 
   pf_a @ jpt [] shared_consts, pf_b
 
-let ssa_form path =
+let ssa_partial ident_map path =
   let subst_ident id ident_map =
     try 
       IdMap.find id ident_map
@@ -58,7 +58,7 @@ let ssa_form path =
     new_id, new_ident_map
   in
   let rec pf segs fs ident_map = function
-    | [] -> List.rev (List.rev fs :: segs)
+    | [] -> (List.rev (List.rev fs :: segs), ident_map)
     | st :: stmnts -> match st with
       | Assume f ->
 	  pf segs (subst_id ident_map f :: fs) ident_map stmnts
@@ -82,7 +82,10 @@ let ssa_form path =
       |	Label _ ->
 	  pf (List.rev fs :: segs) [] ident_map stmnts
   in
-    pf [] [] IdMap.empty path
+    pf [] [] ident_map path
+
+
+let ssa_form path = fst (ssa_partial IdMap.empty path)
 
 let path_form path =
   let pf_a, pf_b =

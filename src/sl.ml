@@ -234,11 +234,12 @@ module Spatial =
      * say when the axioms are enabled.
      * Assumes spatial is normalized.
      *)
-    let triggers spatial =
+    let triggers heap spatial =
+      let tr_name = "trigger" ^ (Form.str_of_ident heap) in
       let trig_cnt = ref 0 in
       let trig () = 
         trig_cnt := !trig_cnt + 1;
-        ("trigger", !trig_cnt)
+        (tr_name, !trig_cnt)
       in
       let subformulae = match spatial with
         | Disj lst -> lst
@@ -246,7 +247,7 @@ module Spatial =
       in
         List.map (fun f -> (trig (), f)) subformulae
 
-    let convert_wo_disjointness spatial =
+    let convert_with_clauses heap spatial =
       (* auxiliary fct *)
       let cst = Form.mk_const in
       let reachWoT a b c = Axioms.reach pts a b c in
@@ -260,29 +261,33 @@ module Spatial =
         | SepConj lst | Conj lst -> Form.smk_and (List.map convert_spatial lst)
         | Disj lst -> failwith "Disj found, formula not normalized ?"
       in
-      let formulae = triggers spatial in
-        Form.smk_and (
-          (Form.smk_or (List.map (fun (t, f) -> Form.mk_pred t []) formulae)) ::
-          (List.map (fun (t, f) -> Form.mk_or [Form.mk_not (Form.mk_pred t []); convert_spatial f]) formulae)
-        )
+      let formulae = triggers heap spatial in
+      let head = Form.smk_or (List.map (fun (t, f) -> Form.mk_pred t []) formulae) in
+      let clauses =
+        List.fold_left
+          (fun acc (t, f) -> Form.IdMap.add t (convert_spatial f) acc)
+          Form.IdMap.empty
+          formulae
+      in
+        head, clauses
 
 
-    let constraints_for_trigger process_sep f =
+    (* this is for the constraints that are implied by a trigger (not equivalent) *)
+    let constraints_for_trigger heap process_sep f =
       let rec process_conj s = match s with
         | SepConj lst -> process_sep lst
         | Conj lst -> Form.smk_and (List.map process_conj lst)
         | Disj lst -> failwith "Disj found, formula not normalized ?"
-        | _ -> Form.mk_true
+        | other -> process_sep [other]
       in
-      let formulae = triggers f in
-        Form.smk_and (
-          List.map
-            (fun (t, f) -> Form.mk_or [Form.mk_not (Form.mk_pred t []); process_conj f])
-            formulae
-        )
+      let formulae = triggers heap f in
+        List.fold_left
+          (fun acc (t, f) -> Form.IdMap.add t (process_conj f) acc)
+          Form.IdMap.empty
+          formulae
 
     (* disjointness constrains without quantifier *)
-    let disjointness_by_kind mk_disj_ls_ls mk_disj_ptr_ls mk_disj_ptr_ptr spatial =
+    let disjointness_by_kind heap mk_disj_ls_ls mk_disj_ptr_ls mk_disj_ptr_ptr spatial =
       (* contraints for a SepConj *)
       let process lst =
         (* collect lists and pointers *)
@@ -299,10 +304,10 @@ module Spatial =
         let part3 = mk_disjs mk_disj_ptr_ptr [] ptrs in
           Form.smk_and (part1 @ part2 @ part3)
       in
-        constraints_for_trigger process spatial
+        constraints_for_trigger heap process spatial
 
     (* disjointness constrains without quantifier *)
-    let qf_disjointness spatial =
+    let qf_disjointness heap spatial =
       (* auxiliary fct *)
       let cst = Form.mk_const in
       let eq a b = Form.mk_eq (cst a) (cst b) in
@@ -324,10 +329,10 @@ module Spatial =
       let mk_disj_ptr_ls (e1, e2) (e1p, e2p) = reachWo e1p e2p e1 in
       (* disjointness conditions for e_1 |-> e_2 * e_1' |-> e_2' : e_1 ~= e_1' *)
       let mk_disj_ptr_ptr (e1, e2) (e1p, e2p) = Form.mk_not (Form.mk_eq (cst e1) (cst e1p)) in
-        disjointness_by_kind mk_disj_ls_ls mk_disj_ptr_ls mk_disj_ptr_ptr spatial
+        disjointness_by_kind heap mk_disj_ls_ls mk_disj_ptr_ls mk_disj_ptr_ptr spatial
 
     (* disjointness constrains without joint term *)
-    let jf_disjointness spatial =
+    let jf_disjointness heap spatial =
       (* auxiliary fct *)
       let cst = Form.mk_const in
       let reachWo a b c = Axioms.reach pts a b c in
@@ -345,7 +350,7 @@ module Spatial =
       let mk_disj_ptr_ls (e1, e2) (e1p, e2p) = reachWo (cst e1p) (cst e2p) (cst e1) in
       (* disjointness conditions for e_1 |-> e_2 * e_1' |-> e_2' : e_1 ~= e_1' *)
       let mk_disj_ptr_ptr (e1, e2) (e1p, e2p) = Form.mk_not (Form.mk_eq (cst e1) (cst e1p)) in
-        disjointness_by_kind mk_disj_ls_ls mk_disj_ptr_ls mk_disj_ptr_ptr spatial
+        disjointness_by_kind heap mk_disj_ls_ls mk_disj_ptr_ls mk_disj_ptr_ptr spatial
 
 
     let tightness heap spatial =
@@ -377,7 +382,7 @@ module Spatial =
         let in_heap = Form.smk_or (part1 @ part2) in
           Form.smk_or [Form.smk_and [pred; in_heap]; Form.smk_and [Form.mk_not pred; Form.nnf (Form.mk_not in_heap)]]
       in
-        constraints_for_trigger process spatial
+        constraints_for_trigger heap process spatial
 
   end
 
@@ -389,19 +394,42 @@ let to_string (pure, spatial) =
 let normalize (pure, spatial) =
   (Pure.nnf pure, Spatial.normalize spatial)
 
-(* Assumes (pure, spatial) are normalized. *)
-let to_form_not_tight (pure, spatial) =
+let clauses_to_forms clauses =
+  Form.IdMap.fold
+    (fun t f acc -> (Form.mk_implies (Form.mk_pred t []) f) :: acc)
+    clauses
+    []
+
+let disjointness_constraints heap (_, spatial) =
+  (*Spatial.qf_disjointness heap spatial*)
+  Spatial.jf_disjointness heap spatial
+
+let tightness_constraints heap (_, spatial) =
+  Spatial.tightness heap spatial
+
+(* No tightness and disjointness constraints
+ * Assumes (pure, spatial) are normalized. *)
+let to_form_with_clauses heap (pure, spatial) =
   let fp = Pure.to_form pure in
-  let fs = Spatial.convert_wo_disjointness spatial in
-  (*let disj = Spatial.qf_disjointness spatial in*)
-  let disj = Spatial.jf_disjointness spatial in
-    Form.smk_and [fp; fs; disj]
+  let fs, clauses = Spatial.convert_with_clauses heap spatial in
+    Form.smk_and [fp; fs], clauses
+
+(* Assumes (pure, spatial) are normalized. *)
+let to_form_not_disjoint_not_tight heap sl =
+  let f, clauses = to_form_with_clauses heap sl in
+    Form.smk_and (f :: (clauses_to_forms clauses))
+
+(* Assumes (pure, spatial) are normalized. *)
+let to_form_not_tight heap sl =
+  let f = to_form_not_disjoint_not_tight heap sl in
+  let disj = disjointness_constraints heap sl in
+    Form.smk_and (f :: (clauses_to_forms disj))
 
 (* Assumes sl is normalized.
  * This does not add the tightness axioms.
  *)
-let to_form sl =
-  let f = to_form_not_tight sl in
+let to_form heap sl =
+  let f = to_form_not_tight heap sl in
   let usual_axioms = match Axioms.add_axioms [[f]] with
     | [a] -> a
     | _ -> failwith "add_axioms did not return a single element"
@@ -410,12 +438,12 @@ let to_form sl =
 
 (* Assumes sl is normalized. *)
 let to_form_tight heap sl =
-  let f = to_form_not_tight sl in
+  let f = to_form_not_tight heap sl in
   let specific_axiom = Spatial.tightness heap (snd sl) in
   let usual_axioms = match Axioms.add_axioms [[f]] with
     | [a] -> a
     | _ -> failwith "add_axioms did not return a single element"
   in
-    Form.smk_and (f :: specific_axiom :: usual_axioms)
+    Form.smk_and (f :: usual_axioms @ (clauses_to_forms specific_axiom))
 
 

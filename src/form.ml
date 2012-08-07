@@ -187,6 +187,12 @@ let rec cnf =
     | Comment (_, Or fs) -> cnf_or [] (List.rev_map cnf fs)
     | f -> f
 
+let mk_implies a b =
+  smk_or [nnf (mk_not a); b]
+
+let mk_equiv a b =
+  smk_or [smk_and [a; b]; smk_and [nnf (mk_not a); nnf (mk_not b)]]
+
 let collect_from_terms col init f =
   let rec ct acc = function
     | And fs 
