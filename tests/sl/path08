@@ -1,0 +1,12 @@
+//entailed
+Pre
+true
+lseg(a, b)
+
+Updates
+new c;
+c.next := a;
+
+Post
+true
+lseg(c, b)

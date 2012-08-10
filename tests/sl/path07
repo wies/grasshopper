@@ -1,0 +1,11 @@
+//entailed: free c gives an error an error and false implies anything
+Pre
+true
+a |-> b
+
+Updates
+free c;
+
+Post
+true
+emp

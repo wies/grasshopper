@@ -23,6 +23,7 @@ rule token = parse
 | ';' { SEMICOLON }
 | "assume" { ASSUME }
 | "new" { NEW }
+| "free" { DISPOSE }
 | "True" { TRUE }
 | "False" { FALSE }
 | tident as name { TIDENT(name) }

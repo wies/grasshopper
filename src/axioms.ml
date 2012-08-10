@@ -130,6 +130,10 @@ let alloc_update_axioms id alloc new_alloc =
    mk_or [mk_eq x var1; mk_not (mk_alloc var1); mk_new_alloc var1];
    mk_or [mk_eq x var1; mk_not (mk_new_alloc var1); mk_alloc var1]]
 
+let alloc_dispose_axioms id alloc new_alloc =
+  (*dispose if the symmetric of new*)
+  alloc_update_axioms id new_alloc alloc
+
 let fun_axioms f = (*mk_eq (mk_app f [null]) null ::*) jp_axioms f
 
 let extract_axioms fs =

@@ -394,6 +394,10 @@ let to_string (pure, spatial) =
 let normalize (pure, spatial) =
   (Pure.nnf pure, Spatial.normalize spatial)
 
+(* TODO link the heap predicate with the alloc predicate.
+ * The goal is to have (de)allocation of memory location.
+ *)
+
 let clauses_to_forms clauses =
   Form.IdMap.fold
     (fun t f acc -> (Form.mk_implies (Form.mk_pred t []) f) :: acc)

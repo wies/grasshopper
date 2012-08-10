@@ -1,0 +1,11 @@
+//entailed
+Pre
+true
+a |-> b * lseg(b, c)
+
+Updates
+free a;
+
+Post
+true
+lseg(b, c)

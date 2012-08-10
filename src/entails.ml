@@ -54,6 +54,21 @@ let check_entailment pre_sl path post_sl =
       print_clauses tight_post_subst
     end
   in
+  
+  (* heap matches: A(x) <=> B(x) *)
+  let first_alloc = alloc_id in
+  let last_alloc =
+    if IdMap.mem alloc_id subst
+    then IdMap.find alloc_id subst
+    else alloc_id
+  in
+  let a_x = mk_pred pre_heap [var1] in
+  let b_x = mk_pred post_heap [var1] in
+  let same_heap_content =
+    [ mk_equiv a_x (mk_pred first_alloc [var1]);
+      mk_equiv b_x (mk_pred last_alloc [var1]) ]
+  in
+
 
   (* negating the post condition (need to skolemize axioms) *)
   let fresh () = mk_const (fresh_ident "sk_var") in
@@ -89,15 +104,9 @@ let check_entailment pre_sl path post_sl =
   (* axioms from the logic *)
   let logic_axioms = List.flatten (make_axioms [ pre_combined; pathf; post_neg_combined]) in
 
-  (* heap matches: forall x. A(x) <=> B(x) *)
-  let a_x = mk_pred pre_heap [var1] in
-  let b_x = mk_pred post_heap [var1] in
-  let same_heap_content = mk_equiv a_x b_x in
-
   (* query *)
-  let query = smk_and ( same_heap_content ::
-                        pre_combined @ pathf @ post_neg_combined @
-                        logic_axioms )
+  let query = smk_and ( same_heap_content @ pre_combined @
+                        pathf @ post_neg_combined @ logic_axioms )
   in
   let _ = if !Debug.verbose then
     begin

@@ -1,0 +1,12 @@
+//entailed
+Pre
+true
+emp
+
+Updates
+new a;
+a.next := b;
+
+Post
+true
+a |-> b

@@ -11,7 +11,7 @@ let parse_error = ParseStmntAux.parse_error
 %token EQ
 %token LPAREN RPAREN COLON SEMICOLON
 %token EQ NEQ COLONEQ 
-%token ASSUME NEW TRUE FALSE
+%token ASSUME NEW DISPOSE TRUE FALSE
 %token AND OR NOT
 %token EOF
 
@@ -24,7 +24,7 @@ let parse_error = ParseStmntAux.parse_error
 %nonassoc NEQ 
 %nonassoc COLON 
 %nonassoc COLONEQ 
-%nonassoc ASSUME NEW
+%nonassoc ASSUME NEW DISPOSE
 %nonassoc TRUE FALSE
 
 %start main
@@ -44,6 +44,7 @@ path:
 stmnt:
 | ASSUME form SEMICOLON { Assume $2 }
 | NEW TIDENT SEMICOLON { New (mk_ident $2) }
+| DISPOSE TIDENT SEMICOLON { Dispose (mk_ident $2) }
 | TIDENT COLONEQ term SEMICOLON { VarUpdate (mk_ident $1, $3) }
 | TIDENT term COLONEQ term SEMICOLON {FunUpdate (mk_ident $1, $2, $4) }
 | TIDENT COLON { Label $1 }

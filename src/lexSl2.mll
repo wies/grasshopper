@@ -29,6 +29,7 @@ rule token = parse
 (*| "assume" { ASSUME }*)
 | "next" { NEXT }
 | "new" { NEW }
+| "free" { DISPOSE }
 | "true" { TRUE }
 | "false" { FALSE }
 | "emp" { EMP }

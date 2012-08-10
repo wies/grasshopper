@@ -11,7 +11,7 @@ let parse_error = ParseStmntAux.parse_error
 %token LPAREN RPAREN COLON SEMICOLON DOT
 %token EQ NEQ
 %token PTS LS TRUE FALSE EMP
-%token COLONEQ /*ASSUME*/ NEW NEXT
+%token COLONEQ /*ASSUME*/ NEW NEXT DISPOSE
 %token SEP AND OR NOT COMMA
 %token PRE UPD POST
 %token EOF
@@ -29,7 +29,7 @@ let parse_error = ParseStmntAux.parse_error
 %nonassoc TRUE FALSE
 %nonassoc COLON 
 %nonassoc COLONEQ 
-%nonassoc /*ASSUME*/ NEW
+%nonassoc /*ASSUME*/ NEW DISPOSE
 
 %token <string> TIDENT
 %token <string> PIDENT
@@ -79,6 +79,7 @@ path:
 
 stmnt:
 | NEW TIDENT SEMICOLON { New (mk_ident $2) }
+| DISPOSE TIDENT SEMICOLON { Dispose (mk_ident $2) }
 | pterm COLONEQ pterm SEMICOLON   { match $1 with
                                     | Form.Const id -> VarUpdate (id, $3)
                                     | Form.FunApp (id, [arg]) -> FunUpdate (id, arg, $3)

@@ -1,0 +1,11 @@
+//entailed
+Pre
+true
+a |-> b
+
+Updates
+free a;
+
+Post
+true
+emp
