@@ -355,8 +355,8 @@ module Spatial =
 
     let tightness heap spatial =
       (* axiom for tightness:
-       * forall z. A(z) <=> \/_{lseg(x,y)} (between(x, z, y) /\ z != y) \/_{x|->y} z = x
-       * where between(x, z, y) = reachWo(x, z, y) /\ reach(x, y)
+       * forall z. A(z) <=> \/_{lseg(x,y)} (reachWo(x, z, y) /\ reach(x, y) /\ z != y)
+       *                    \/_{x|->y} z = x
        *)
       let eq a b = Form.mk_eq a b in
       let neq a b = Form.mk_not (eq a b) in

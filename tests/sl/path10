@@ -4,8 +4,7 @@ a ~= c
 a |-> b * lseg(b, c)
 
 Updates
-free a;
 
 Post
 true
-lseg(b, c)
+lseg(a, c)
