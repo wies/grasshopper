@@ -1,0 +1,12 @@
+//entailed (corrected version of example path08)
+Pre
+true
+null |-> null * lseg(a, null)
+
+Updates
+new c;
+c.next := a;
+
+Post
+true
+null |-> null * lseg(c, null)
