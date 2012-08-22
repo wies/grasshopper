@@ -1,0 +1,3 @@
+//unsat
+a ~= b && a ~= c
+lseg(a, b) * lseg(a, c)

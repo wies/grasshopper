@@ -337,13 +337,15 @@ module Spatial =
       let cst = Form.mk_const in
       let reachWo a b c = Axioms.reach pts a b c in
       (* translation of the disjointness constraints that do not introduce the joint terms:
-       * forall z. ( reachWo(x, z, y) ==> reachWo(x', y', z) ) /\
-       *           ( reachWo(x', z', y) ==> reachWo(x, y, z) )
+       * forall z. ( reachWo(x, z, y) ==> reachWo(x', y', z) \/ z = y ) /\
+       *           ( reachWo(x', z, y') ==> reachWo(x, y, z) \/ z = y')
        *)
       let mk_disj_ls_ls (e1, e2) (e1p, e2p) =
         Form.mk_and [
-          Form.mk_or [Form.mk_not (reachWo (cst e1) Axioms.var1 (cst e2)); reachWo (cst e1p) (cst e2p) Axioms.var1];
-          Form.mk_or [Form.mk_not (reachWo (cst e1p) Axioms.var1 (cst e2p)); reachWo (cst e1) (cst e2) Axioms.var1]
+          Form.mk_implies (reachWo (cst e1) Axioms.var1 (cst e2))
+                          (Form.mk_or [ (reachWo (cst e1p) (cst e2p) Axioms.var1); Form.mk_eq Axioms.var1 (cst e2)]);
+          Form.mk_implies (reachWo (cst e1p) Axioms.var1 (cst e2p))
+                          (Form.mk_or [ (reachWo (cst e1) (cst e2) Axioms.var1); Form.mk_eq Axioms.var1 (cst e2p)])
         ]
       in
       (* disjointness conditions for e_1 |-> e_2 * ls(e_1', e_2') : reachWo(e_1', e_2', e_1) *)
@@ -393,10 +395,6 @@ let to_string (pure, spatial) =
 
 let normalize (pure, spatial) =
   (Pure.nnf pure, Spatial.normalize spatial)
-
-(* TODO link the heap predicate with the alloc predicate.
- * The goal is to have (de)allocation of memory location.
- *)
 
 let clauses_to_forms clauses =
   Form.IdMap.fold
