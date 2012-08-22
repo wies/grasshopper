@@ -162,6 +162,24 @@ module Spatial =
       | [] -> Emp
       | [f] -> f
       | fs -> Disj fs
+    
+    let smk_sep = function
+      | [] -> Emp
+      | [f] -> f
+      | fs ->
+        begin
+          let fs2 = List.map (function SepConj inner -> inner | other -> [other]) fs in
+          SepConj (List.flatten fs2)
+        end
+
+    let smk_conj = function
+      | [] -> Emp
+      | [f] -> f
+      | fs ->
+        begin
+          let fs2 = List.map (function Conj inner -> inner | other -> [other]) fs in
+          Conj (List.flatten fs2)
+        end
 
     (** Normalize a spatial formula. The resulting formula is in DNF and
      *  inside the conjunct the first level is the cunjunctions and the lowest
@@ -178,10 +196,10 @@ module Spatial =
           | Disj lst -> List.flatten (List.map process lst)
           | Conj lst ->
             let sub_dnf = List.map process lst in
-              List.map mk_conj (pick_one_in_each sub_dnf)
+              List.map smk_conj (pick_one_in_each sub_dnf)
           | SepConj lst ->
             let sub_dnf = List.map process lst in
-              List.map mk_sep (pick_one_in_each sub_dnf)
+              List.map smk_sep (pick_one_in_each sub_dnf)
           | _ as t -> [t]
         in
           mk_disj (process f)
@@ -192,7 +210,7 @@ module Spatial =
           | Conj lst -> List.flatten (List.map process lst)
           | SepConj lst ->
             let sub = List.map process lst in
-              List.map mk_sep (pick_one_in_each sub)
+              List.map smk_sep (pick_one_in_each sub)
           | _ as t -> [t]
         in
           mk_conj (process f)
@@ -293,6 +311,10 @@ module Spatial =
         (* collect lists and pointers *)
         let lists = List.flatten (List.map (function List (e1, e2) -> [(e1, e2)] | _ -> []) lst) in
         let ptrs = List.flatten (List.map (function PtsTo (e1, e2) -> [(e1, e2)] | _ -> []) lst) in
+        (*print_endline ("lst = " ^ (String.concat " " (List.map to_string lst)));
+        print_endline ("lst = " ^ (string_of_int (List.length lst)));
+        print_endline ("lists = " ^ (string_of_int (List.length lists)));
+        print_endline ("ptrs = " ^ (string_of_int (List.length ptrs)));*)
         let rec mk_disjs fct acc lst = match lst with
           | x :: xs ->
             let d = List.map (fct x) xs in

@@ -1,0 +1,53 @@
+traverse
+--------
+precondition: lseg(a,null) * null |-> null
+postcondition: lseg(a,null) * null |-> null
+
+loop invariant: lseg(a,curr) * lseg(curr, null) * null |-> null
+cases:
+(1) a = curr /\ curr ~= null
+(2) a ~= curr /\ curr ~= null
+(3) curr = null
+
+insert
+------
+precondition: lseg(a,null) * null |-> null
+postcondition: lseg(a,null) * null |-> null
+
+TODO
+
+remove
+------
+precondition: lseg(a,null) * null |-> null
+postcondition: lseg(a,null) * null |-> null
+
+TODO
+
+append
+------
+precondition: lseg(a,null) * null |-> null
+postcondition: lseg(a,null) * null |-> null  where lseg(a,null) = b |-> null * lseg(a,b)
+
+TODO
+
+prepend
+-------
+precondition: lseg(a,null) * null |-> null
+postcondition: lseg(b,null) * null |-> null  where lseg(b,null) = b |-> a * lseg(a,null)
+
+TODO
+
+concat
+------
+precondition: lseg(a,null) * lseg(b,null) * null |-> null
+postcondition: lseg(a,b) * lseg(b,null) * null |-> null
+
+TODO
+
+reverse
+-------
+precondition: lseg(a,null) * null |-> null
+postcondition: lseg(a,null) * null |-> null
+
+TODO
+

@@ -1,0 +1,9 @@
+Pre
+curr = null
+null |-> null * lseg(a, curr) * lseg(curr, null)
+
+Updates
+
+Post
+curr = null
+null |-> null * lseg(a, curr) * lseg(curr, null)

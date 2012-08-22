@@ -6,6 +6,12 @@ let check_entailment pre_sl path post_sl =
   let pre_heap = mk_ident "A" in
   let post_heap = mk_ident "B" in
 
+  let print_clauses cl =
+    IdMap.iter
+      (fun t f -> print_form stdout (mk_implies (mk_pred t []) f))
+      cl
+  in
+
   (* convert wo axioms and add axioms later *)
   let translate heap sl =
     let sl_n = Sl.normalize sl in
@@ -38,11 +44,6 @@ let check_entailment pre_sl path post_sl =
       print_endline "path: ";
       List.iter (print_form stdout) pathf;
 
-      let print_clauses cl =
-        IdMap.iter
-          (fun t f -> print_form stdout (mk_implies (mk_pred t []) f))
-          cl
-      in
       print_endline ("post: " ^ (Sl.to_string post_sl));
       print_endline "post converted:";
       print_form stdout post_subst;
