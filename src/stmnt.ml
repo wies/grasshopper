@@ -81,9 +81,10 @@ let ssa_partial ident_map path =
 	  let axioms = alloc_update_axioms id1 alloc alloc1 in
 	  pf segs (List.rev_append axioms fs) ident_map2 stmnts
       |	Dispose id ->
+      let id1 = (subst_ident id ident_map) in
 	  let alloc = subst_ident alloc_id ident_map in
 	  let alloc1, ident_map = fresh_ident alloc_id ident_map in
-	  let axioms = alloc_dispose_axioms id alloc alloc1 in
+	  let axioms = alloc_dispose_axioms id1 alloc alloc1 in
 	  pf segs (List.rev_append axioms fs) ident_map stmnts
       |	Label _ ->
 	  pf (List.rev fs :: segs) [] ident_map stmnts

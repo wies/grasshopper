@@ -14,40 +14,40 @@ insert
 precondition: lseg(a,null) * null |-> null
 postcondition: lseg(a,null) * null |-> null
 
-TODO
+loop invariant: lseg(a,curr) * lseg(curr, null) * null |-> null
+cases:
+(1) a = curr /\ curr ~= null //traversing
+(2) a ~= curr /\ curr ~= null //traversing
+(3) curr ~= null //inserting
+(4) //inserting in front
 
 remove
 ------
 precondition: lseg(a,null) * null |-> null
 postcondition: lseg(a,null) * null |-> null
 
-TODO
-
-append
-------
-precondition: lseg(a,null) * null |-> null
-postcondition: lseg(a,null) * null |-> null  where lseg(a,null) = b |-> null * lseg(a,b)
-
-TODO
-
-prepend
--------
-precondition: lseg(a,null) * null |-> null
-postcondition: lseg(b,null) * null |-> null  where lseg(b,null) = b |-> a * lseg(a,null)
-
-TODO
+loop invariant: lseg(a,curr) * lseg(curr, null) * null |-> null
+cases:
+(1) a = curr /\ curr ~= null //traversing
+(2) a ~= curr /\ curr ~= null //traversing
+(3) curr |-> b /\ b ~= null //removing
 
 concat
 ------
 precondition: lseg(a,null) * lseg(b,null) * null |-> null
-postcondition: lseg(a,b) * lseg(b,null) * null |-> null
+postcondition: lseg(a, null) * null |-> null where  lseg(a, null) is lseg(a,b) * lseg(b,null)
 
-TODO
+loop invariant: lseg(a,curr) * lseg(curr, null) * lseg(b, null) * null |-> null
+cases:
+(1) a = curr /\ curr = null //return b
+(2) curr ~= null && curr |-> tmp && tmp ~= null //traversing
+(3) curr ~= null && curr |-> tmp && tmp = null //concat
 
 reverse
 -------
-precondition: lseg(a,null) * null |-> null
-postcondition: lseg(a,null) * null |-> null
+precondition: b ~= null && a ~= null, lseg(a,b) * b |-> null * null |-> null
+postcondition: lseg(b,a) * a |-> null * null |-> null
 
-TODO
-
+loop invariant: lseg(curr1, a) * lseg(curr2, b) * a |-> null * b |-> null * null |-> null
+cases:
+...

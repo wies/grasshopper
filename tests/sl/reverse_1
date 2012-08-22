@@ -1,0 +1,11 @@
+Pre
+a ~= null && curr1 = curr2 && curr1 = a && a ~= b
+lseg(curr1, a) * lseg(curr2, b) * b |-> null * null |-> null
+
+Updates
+curr2 := a.next;
+a.next := null;
+
+Post
+curr1 ~= curr2
+lseg(curr1, a) * lseg(curr2, b) * a |-> null * b |-> null * null |-> null

@@ -1,0 +1,11 @@
+Pre
+true
+null |-> null * lseg(a, null)
+
+Updates
+new b;
+b.next := a;
+
+Post
+true
+null |-> null * lseg(b, null)

@@ -1,0 +1,10 @@
+Pre
+curr ~= null && tmp ~= null
+null |-> null * lseg(a, curr) * curr |-> tmp * lseg(tmp, null) * lseg(b, null)
+
+Updates
+curr := curr.next;
+
+Post
+curr ~= null
+null |-> null * lseg(a, curr) * lseg(curr, null) * lseg(b, null)

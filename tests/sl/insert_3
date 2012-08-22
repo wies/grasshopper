@@ -1,8 +1,12 @@
 Pre
-curr = null
+curr ~= null
 null |-> null * lseg(a, curr) * lseg(curr, null)
 
 Updates
+new c;
+tmp := curr.next;
+curr.next := c;
+c.next := tmp;
 
 Post
 true
