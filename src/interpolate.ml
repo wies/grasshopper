@@ -73,7 +73,7 @@ let compute_sl_entails () =
   let (pre_sl, path, post_sl) = parse_input (fun lexbuf -> ParseSl2.main LexSl2.token lexbuf) in
   let path_wo_label = List.filter (function Label _ -> false | _ -> true) path in
   let res = Entails.check_entailment pre_sl path_wo_label post_sl in
-    Printf.fprintf stdout "accumulated time: %.2fs\n" !Util.measured_time;
+    Util.print_measures ();
     match res with
     | Some true -> print_endline "not entailed"
     | Some false -> print_endline "entailed"

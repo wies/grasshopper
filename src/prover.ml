@@ -128,16 +128,20 @@ let interpolate pf_a pf_b =
   
 
 let satisfiable f =
+  let f_inst = Util.measure_call "instantiate" InstGen.instantiate [f] in
   let session = SmtLib.start_z3 (Some "z3.in") in
-  let f_inst = InstGen.instantiate [f] in
-  let signature = sign (mk_and f_inst) in
-  Debug.msg "sending to prover\n";
-  SmtLib.declare session signature;
-  Debug.msg "  signature done\n";
-  SmtLib.assert_forms session f_inst;
-  Debug.msg "  f_inst done\n";
-  let result = SmtLib.is_sat session in
-  Debug.msg "prover came back\n";
+  let prove () =
+    let signature = sign (mk_and f_inst) in
+    Debug.msg "sending to prover\n";
+    SmtLib.declare session signature;
+    Debug.msg "  signature done\n";
+    SmtLib.assert_forms session f_inst;
+    Debug.msg "  f_inst done\n";
+    let result = SmtLib.is_sat session in
+    Debug.msg "prover came back\n";
+    result
+  in
+  let result = Util.measure_call "prove" prove () in
   (match result with
   | Some true ->
       if !model_file <> "" then

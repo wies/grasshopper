@@ -82,6 +82,35 @@ let measure fn arg =
     incr measured_calls;
     raise e
 
+let measures = Hashtbl.create 10
+
+let measure_call (id: string) fn arg =
+  let get_time () = 
+    let ptime = Unix.times () in
+    ptime.tms_utime
+  in
+  let (calls, time) =
+    if Hashtbl.mem measures id
+    then Hashtbl.find measures id
+    else (0, 0.)
+  in
+  let start_time = get_time () in
+  try
+    let res = fn arg in
+    let end_time = get_time () in
+    Hashtbl.replace measures id (calls + 1, time +. end_time -. start_time);
+    res
+  with e ->
+    let end_time = get_time () in
+    Hashtbl.replace measures id (calls + 1, time +. end_time -. start_time);
+    raise e
+
+let print_measures () =
+  Hashtbl.iter
+    (fun id (calls, time) ->
+      print_endline (id ^ ": " ^ (string_of_int calls) ^ " call(s), " ^ (string_of_float time) ^ " s")
+    )
+    measures
 
 let read_file file =
   let chan = open_in file in

@@ -2,7 +2,7 @@ open Form
 open Axioms
 open Stmnt
 
-let check_entailment pre_sl path post_sl =
+let translate pre_sl path post_sl =
   let pre_heap = mk_ident "A" in
   let post_heap = mk_ident "B" in
 
@@ -117,4 +117,9 @@ let check_entailment pre_sl path post_sl =
       print_form stdout query
     end
   in
+    query
+
+let check_entailment pre_sl path post_sl =
+  let mk_query () = translate pre_sl path post_sl in
+  let query = Util.measure_call "translation" mk_query () in
     Prover.satisfiable query
