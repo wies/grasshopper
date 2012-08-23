@@ -1,0 +1,10 @@
+//entailed (LHS is enpty)
+Pre
+x ~= y && x ~= z
+x |-> y * lseg(y, z)
+
+Updates
+
+Post
+true
+lseg(x, z)

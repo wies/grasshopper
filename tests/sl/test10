@@ -1,0 +1,3 @@
+//unsat
+true
+x |-> y && lseg(y,z)

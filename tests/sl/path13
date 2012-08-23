@@ -1,0 +1,10 @@
+//entailed
+Pre
+true
+x |-> y && lseg(y, z)
+
+Updates
+
+Post
+true
+lseg(x, z)

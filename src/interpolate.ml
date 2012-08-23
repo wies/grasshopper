@@ -48,13 +48,13 @@ let compute_interpolant () =
   print_form stdout interpolant
 
 let compute_sl_sat () =
-  let heap = mk_ident "" in
+  let heap = mk_ident "h" in
   (*print_endline "parsing";*)
   let sl = parse_input (fun lexbuf -> ParseSl.main LexSl.token lexbuf) in
   let _ = Debug.msg ("parsed: " ^ (Sl.to_string sl) ^ "\n") in
   let sln = Sl.normalize sl in
   let _ = Debug.msg ("normalized: " ^ (Sl.to_string sln) ^ "\n") in
-  let form = Sl.to_form heap sln in
+  let form = Sl.to_form_tight heap sln in
   let _ = if !Debug.verbose then
     begin
       print_endline "converted: ";
