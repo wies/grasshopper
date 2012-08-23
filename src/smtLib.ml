@@ -2,6 +2,9 @@ open Form
 open ParseSmtLibAux
 
 (* Todo: add proper error handling *)
+
+(*tell whether we are instantiating the axioms or relying on z3.*)
+let instantiate = ref true
     
 type session = { init: bool;
 		 in_chan: in_channel;
@@ -54,7 +57,13 @@ let start smt_cmd replay_file produce_models produce_interpolants =
     writeln session "(set-option :produce-models true)"
   end;
   if produce_interpolants then writeln session "(set-option :produce-interpolants true)";
-  writeln session "(set-logic QF_UF)";
+  if !instantiate then
+    writeln session "(set-logic QF_UF)"
+  else
+    begin
+      writeln session "(set-option :mbqi true)";
+      writeln session "(set-logic UF)"
+    end;
   writeln session ("(declare-sort " ^ sort_str ^ " 0)");
   session
     

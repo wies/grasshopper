@@ -128,8 +128,23 @@ let interpolate pf_a pf_b =
   
 
 let satisfiable f =
-  let f_inst = Util.measure_call "instantiate" InstGen.instantiate [f] in
-  let session = SmtLib.start_z3 (Some "z3.in") in
+  let f_inst =
+    if !SmtLib.instantiate
+    then Util.measure_call "instantiate" InstGen.instantiate [f]
+    else
+      begin
+        let rec normalize acc = function
+          | And fs :: gs -> normalize acc (fs @ gs)
+          | f :: gs -> normalize (f :: acc) gs
+          | [] -> List.rev acc
+        in
+        let normalized_fs = normalize [] [f] in
+        let axioms_f, ground_f = extract_axioms normalized_fs in
+          axioms_f @ ground_f
+      end
+  in
+  let z3_in = if !Debug.verbose then Some "z3.in" else None in
+  let session = SmtLib.start_z3 z3_in in
   let prove () =
     let signature = sign (mk_and f_inst) in
     Debug.msg "sending to prover\n";

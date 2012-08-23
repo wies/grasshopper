@@ -432,8 +432,9 @@ let print_smtlib_form out_ch f =
   | BoolConst b -> if b then print "true" else print "false"
   in 
   let vars = fv f in
-  if not (IdSet.is_empty vars) then print "(forall ";
+  if not (IdSet.is_empty vars) then print "(forall (";
   IdSet.iter (fun id -> print ("(" ^ str_of_ident id ^ " " ^ sort_str ^ ") ")) vars;
+  if not (IdSet.is_empty vars) then print ")";
   smt_form f;
   if not (IdSet.is_empty vars) then print ")"
       
