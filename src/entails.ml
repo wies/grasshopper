@@ -24,10 +24,15 @@ let translate pre_sl path post_sl =
   let (post, clauses_post, disj_post, tight_post) = translate post_heap post_sl in
 
   (* ssa *)
-  let pre_combined = pre :: (List.flatten (List.map Sl.clauses_to_forms [disj_pre; tight_pre; clauses_pre])) in
+  let pre_1 = List.map (fun f -> Comment ("clause_pre", f)) (Sl.clauses_to_forms clauses_pre) in
+  let pre_2 = List.map (fun f -> Comment ("tight_pre", f)) (Sl.clauses_to_forms tight_pre) in
+  let pre_3 = List.map (fun f -> Comment ("disj_pre", f)) (Sl.clauses_to_forms disj_pre) in
+  let pre_combined = pre :: pre_1 @ pre_2 @ pre_3 in
+
   let pathf, subst = ssa_partial IdMap.empty path in
   assert (List.length pathf = 1);
   let pathf = List.hd pathf in
+
   let subst_clauses clauses = IdMap.map (subst_id subst) clauses in
   let post_subst = subst_id subst post in
   let clauses_post_subst = subst_clauses clauses_post in
@@ -66,8 +71,8 @@ let translate pre_sl path post_sl =
   let a_x = mk_pred pre_heap [var1] in
   let b_x = mk_pred post_heap [var1] in
   let same_heap_content =
-    [ mk_equiv a_x (mk_pred first_alloc [var1]);
-      mk_equiv b_x (mk_pred last_alloc [var1]) ]
+    [ Comment ("same_heap_content_pre" , mk_equiv a_x (mk_pred first_alloc [var1]));
+      Comment ("same_heap_content_post", mk_equiv b_x (mk_pred last_alloc [var1])) ]
   in
 
 
@@ -100,7 +105,7 @@ let translate pre_sl path post_sl =
   in
   
   let cl_combined = combine_clauses [clauses_post_neg; disj_post_neg; tight_post_neg] in
-  let post_neg_combined = post_neg :: cl_combined in
+  let post_neg_combined = List.map (fun f -> Comment ("post", f)) (post_neg :: cl_combined) in
 
   (* axioms from the logic *)
   let logic_axioms = List.flatten (make_axioms [ pre_combined; pathf; post_neg_combined]) in

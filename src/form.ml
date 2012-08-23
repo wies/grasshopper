@@ -416,7 +416,7 @@ let print_smtlib_form out_ch f =
       smt_form f
   | Pred (id, ts) -> 
       if (ts = []) then
-        print (str_of_ident id)
+        print (" " ^ (str_of_ident id))
       else
         begin
           print "(";
@@ -429,7 +429,7 @@ let print_smtlib_form out_ch f =
       print "(= ";
       print_list smt_term [s; t];
       print ")"
-  | BoolConst b -> if b then print "true" else print "false"
+  | BoolConst b -> if b then print " true" else print " false"
   in 
   let vars = fv f in
   if not (IdSet.is_empty vars) then print "(forall (";
