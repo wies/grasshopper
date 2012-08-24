@@ -129,7 +129,7 @@ let interpolate pf_a pf_b =
 
 let satisfiable f =
   let f_inst =
-    if !SmtLib.instantiate
+    if !Config.instantiate
     then Util.measure_call "instantiate" InstGen.instantiate [f]
     else
       begin
@@ -146,12 +146,24 @@ let satisfiable f =
   let z3_in = if !Debug.verbose then Some "z3.in" else None in
   let session = SmtLib.start_z3 z3_in in
   let prove () =
-    let signature = sign (mk_and f_inst) in
     Debug.msg "sending to prover\n";
+
+    let signature = sign (mk_and f_inst) in
     SmtLib.declare session signature;
     Debug.msg "  signature done\n";
+
+    if not !Config.instantiate then
+      begin
+        let grounds = ground_terms (mk_and f_inst) in
+        let axioms_f, ground_f = extract_axioms f_inst in
+        let classes = InstGen.congr_classes ground_f grounds in 
+        SmtLib.declare_gound session (List.map List.hd classes);
+        Debug.msg "  ground terms done\n";
+      end;
+
     SmtLib.assert_forms session f_inst;
     Debug.msg "  f_inst done\n";
+
     let result = SmtLib.is_sat session in
     Debug.msg "prover came back\n";
     result

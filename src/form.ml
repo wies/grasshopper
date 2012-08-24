@@ -386,7 +386,7 @@ let print_form out_ch =
     | f -> pf "" f; print "\n"
   
 
-let print_smtlib_form out_ch f =
+let print_smtlib_form_generic before_f after_f out_ch f =
   let print = output_string out_ch in
   let print_list fn xs = List.iter (fun x -> fn x; print " ") xs in
   let rec smt_term = function
@@ -431,12 +431,47 @@ let print_smtlib_form out_ch f =
       print ")"
   | BoolConst b -> if b then print " true" else print " false"
   in 
-  let vars = fv f in
-  if not (IdSet.is_empty vars) then print "(forall (";
-  IdSet.iter (fun id -> print ("(" ^ str_of_ident id ^ " " ^ sort_str ^ ") ")) vars;
-  if not (IdSet.is_empty vars) then print ")";
+  before_f out_ch f;
   smt_form f;
-  if not (IdSet.is_empty vars) then print ")"
+  after_f out_ch f
+
+let print_smtlib_form out_ch f =
+  let before_quantify out_ch f =
+    let print = output_string out_ch in
+    let vars = fv f in
+    if not (IdSet.is_empty vars) then print "(forall (";
+    IdSet.iter (fun id -> print ("(" ^ str_of_ident id ^ " " ^ sort_str ^ ") ")) vars;
+    if not (IdSet.is_empty vars) then print ")"
+  in
+  let after_quantify out_ch f =
+    let print = output_string out_ch in
+    let vars = fv f in
+    if not (IdSet.is_empty vars) then print ")"
+  in
+    print_smtlib_form_generic before_quantify after_quantify out_ch f
+
+let print_smtlib_form_with_triggers out_ch f =
+  let before_quantify out_ch f =
+    let print = output_string out_ch in
+    let vars = fv f in
+    if not (IdSet.is_empty vars) then
+       begin
+         print "(forall (";
+         IdSet.iter (fun id -> print ("(" ^ str_of_ident id ^ " " ^ sort_str ^ ") ")) vars;
+         print ") (!";
+       end
+  in
+  let after_quantify out_ch f =
+    let print = output_string out_ch in
+    let vars = fv f in
+      if not (IdSet.is_empty vars) then
+        begin
+          print ":pattern (";
+          IdSet.iter (fun id -> print ("(ground " ^ str_of_ident id ^ ") ")) vars;
+          print ")))"
+        end
+  in
+    print_smtlib_form_generic before_quantify after_quantify out_ch f
       
 
 let print_forms ch = function

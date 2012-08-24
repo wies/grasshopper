@@ -21,7 +21,7 @@ let cmd_options =
    ("-nojoin", Arg.Clear Axioms.with_jp_axioms, "Do not add axioms for join functions");
    ("-sl", Arg.Unit (fun () -> mode := SlSat), "SL satisfiability");
    ("-sl2", Arg.Unit (fun () -> mode := SlEntails), "SL satisfiability");
-   ("-z3q", Arg.Clear SmtLib.instantiate, "Let z3 deal with quantifiers (only for sl).")
+   ("-z3q", Arg.Clear Config.instantiate, "Let z3 deal with quantifiers (only for sl).")
   ]
 
 let usage_message =

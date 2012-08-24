@@ -3,9 +3,6 @@ open ParseSmtLibAux
 
 (* Todo: add proper error handling *)
 
-(*tell whether we are instantiating the axioms or relying on z3.*)
-let instantiate = ref true
-    
 type session = { init: bool;
 		 in_chan: in_channel;
 		 out_chan: out_channel;
@@ -57,7 +54,7 @@ let start smt_cmd replay_file produce_models produce_interpolants =
     writeln session "(set-option :produce-models true)"
   end;
   if produce_interpolants then writeln session "(set-option :produce-interpolants true)";
-  if !instantiate then
+  if !Config.instantiate then
     writeln session "(set-logic QF_UF)"
   else
     begin
@@ -65,6 +62,8 @@ let start smt_cmd replay_file produce_models produce_interpolants =
       writeln session "(set-logic UF)"
     end;
   writeln session ("(declare-sort " ^ sort_str ^ " 0)");
+  if not !Config.instantiate then
+    writeln session "(declare-fun ground (usort) Bool)";
   session
     
 let start_z3 replay_file = start "z3 -smt2 -ini:z3.ini -in" replay_file true false
@@ -99,8 +98,14 @@ let declare session sign =
     writeln session ("(declare-fun " ^ str_of_ident id ^ " (" ^ arg_sorts ^ ") " ^ res_sort ^ ")")
   in
   IdMap.iter write_decl sign
-    
+
 let assert_form session ?(igroup=None) f =
+  let write_quantified f = 
+    if !Config.instantiate then
+	  writefn session (fun chan -> print_smtlib_form chan f)
+    else
+	  writefn session (fun chan -> print_smtlib_form_with_triggers chan f)
+  in
   session.assert_count <- session.assert_count + 1;
     (* print_string "(assert ";
        print_smtlib_form stdout f;
@@ -109,22 +114,25 @@ let assert_form session ?(igroup=None) f =
   (match igroup with
   | Some ig -> 
       write session "(!";
-      writefn session (fun chan -> print_smtlib_form chan f);
+	  write_quantified f;
       write session (":interpolation-group " ^ string_of_int ig ^" :named a" ^ (string_of_int session.assert_count) ^ ")")
   | None ->
       match f with
       | Comment (c, f) ->
 	  write session "(!";
-	  writefn session (fun chan -> print_smtlib_form chan f);
+	  write_quantified f;
 	  write session (":named " ^ c ^ "_" ^ string_of_int session.assert_count ^ ")")
       | f ->
-	  writefn session (fun chan -> print_smtlib_form chan f));
+	  write_quantified f);
   writeln session ")\n"
     
 let assert_form session ?(igroup=None) f = Util.measure (assert_form session ~igroup:igroup) f
     
 let assert_forms session ?(igroup=None) fs =
   List.iter (fun f -> assert_form session ~igroup:igroup f) fs
+    
+let declare_gound session terms =
+  List.iter (fun t -> assert_form session (mk_pred ("ground",0) [t])) terms
     
     
 let is_sat session = 
