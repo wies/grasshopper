@@ -1,6 +1,6 @@
-//entailed (LHS is enpty)
+//entailed
 Pre
-x ~= y && x ~= z
+x ~= z
 x |-> y * lseg(y, z)
 
 Updates
