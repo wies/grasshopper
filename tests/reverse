@@ -8,8 +8,9 @@ n curr := prev;
 prev := curr;
 curr := succ;
 
-assume curr ~= null;
 cut:
+
+assume curr ~= null;
 
 succ := n curr;
 n curr := prev;

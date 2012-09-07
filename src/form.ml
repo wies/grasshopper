@@ -34,6 +34,8 @@ let str_of_ident (id, n) =
 
 let is_pred_id id = String.capitalize (fst id) = fst id
 
+let eq_base (id1, n1) (id2, n2) = id1 = id2
+
 let mk_ident id = (id, 0)
 
 let mk_const id = Const id
@@ -326,64 +328,72 @@ let string_of_term t =
     | Var id -> str_of_ident id
     | FunApp (id, ts) ->
 	let str_ts = List.map st ts in
-	str_of_ident id ^ " [" ^ 
-	String.concat " " str_ts ^
-	"]"
+	str_of_ident id ^ "(" ^ 
+	String.concat ", " str_ts ^
+	")"
   in st t
 
 let print_form out_ch =
   let print = output_string out_ch in
-  let print_list indent p = function
+  let print_list indent delim p = function
     | [] -> ()
     | x :: xs ->
-	p "" x;
-	List.iter (p indent) xs 
+	p "" "" x;
+	List.iter (p indent delim) xs 
   in
-  let rec pt indent = function
+  let rec pt indent delim = function
     | Const id 
     | Var id -> 
-	print (indent ^ str_of_ident id)
+	print (indent ^ delim ^ str_of_ident id)
     | FunApp (id, ts) ->
-	print (indent ^ str_of_ident id ^ " [");
-	print_list " " pt ts;
-	print "]"
+	print (indent ^ delim ^ str_of_ident id ^ "(");
+	print_list "" ", " pt ts;
+	print ")"
   in
-  let rec pf indent = function
+  let rec pf indent delim = function
     | And fs ->
-	print (indent ^ "& [");
-	print_list " " pf fs;
-	print "]"
+	print indent;
+	print delim;
+	print "( ";
+	print_list (indent ^ "  ") "& " (fun indent delim f -> pf indent delim f; print "\n") fs;
+	print (indent ^ "  )");
     | Or fs ->
-      print (indent ^ "| [");
-	print_list " " pf fs;
-      print "]"
+	print indent;
+	print delim;
+	print "( ";
+	print_list (indent ^ "  ") "| " (fun indent delim f -> pf indent delim f; print "\n") fs;
+	print (indent ^ "  )");
+    | Not (Eq (s, t)) ->
+	print indent;
+	print delim;
+	print_list "" " ~= " pt [s;t]
     | Not f ->
-	print (indent ^ "~");  
-	pf "" f
+	print (indent ^ delim ^ "~");  
+	print_list (indent ^ " ") "" pf [f]
     | Comment (c, f) ->
-	pf indent f
+	pf indent delim f
     | Pred (p, ts) ->
-	print (indent ^ str_of_ident p ^ " [");
-	print_list " " pt ts;
-	print "] ";
+	print (indent ^ delim ^ str_of_ident p ^ "(");
+	print_list "" ", " pt ts;
+	print ")";
     | Eq (s, t) ->
-	print (indent ^ "= ");
-	print_list " " pt [s;t];
+	print indent;
+	print delim;
+	print_list "" " = " pt [s;t]
     | BoolConst b ->
-	if b then pf indent (mk_eq (mk_const id_true) (mk_const id_true))
-	else pf indent (mk_not (mk_eq (mk_const id_true) (mk_const id_true)))
+	print indent;
+	print delim;
+	if b then print "True" else print "False" 
   in function
     | And fs 
     | Comment (_, And fs) ->
-	print "& [";
-	print_list "\n   " pf fs;
-	print "\n]\n"
+	print "  ";
+	print_list "" "& " (fun indent delim f -> pf indent delim f; print "\n") fs;
     | Or fs 
     | Comment (_, Or fs) ->
-	print "| [";
-	print_list "\n   " pf fs;
-	print "\n]\n"
-    | f -> pf "" f; print "\n"
+	print "  ";
+	print_list "" "| " (fun indent delim f -> pf indent delim f; print "\n") fs;
+    | f -> pf "" "" f; print "\n"
   
 
 let print_smtlib_form_generic before_f after_f out_ch f =

@@ -2,6 +2,8 @@ open Util
 open Form
 open Axioms
 
+let use_aggressive_inst = ref false
+
 let add_class acc cl = 
   match cl with
   | [] -> acc 
@@ -126,7 +128,7 @@ let generate_instances axioms terms rep_map =
 	    ground_terms)
 	fun_terms
     in
-    if is_local then subst subst_map axiom :: acc else acc
+    if !use_aggressive_inst || is_local then subst subst_map axiom :: acc else acc
   in
   let partitioned_axioms = 
     let fv_axioms = List.map (fun f -> (fv f, f)) axioms in

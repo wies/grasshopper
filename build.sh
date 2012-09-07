@@ -2,7 +2,7 @@
 
 set -e
 
-TARGET1=src/interpolate
+TARGET="src/interpolate src/slprover "
 FLAGS="-cflag -g -lflag -g -libs unix,str"
 OCAMLBUILD=ocamlbuild
 
@@ -14,9 +14,9 @@ ocb()
 rule() {
     case $1 in
     clean)  ocb -clean;;
-    native) ocb $TARGET1.native ;;
-    byte)   ocb $TARGET1.byte ;;
-    all)    ocb $TARGET1.native $TARGET1.byte ;;
+    native) ocb ${TARGET//" "/".native "} ;;
+    byte)   ocb ${TARGET//" "/".byte "} ;;
+    all)    ocb ${TARGET//" "/".native "} ${TARGET//" "/".byte "} ;;
     prof)   ocb $TARGET1.p.native ;;
     depend) echo "Not needed.";;
     *)      echo "Unknown action $1";;
