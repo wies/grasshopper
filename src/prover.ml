@@ -126,8 +126,7 @@ let interpolate pf_a pf_b =
   ignore (SmtLib.quit session_b);
   interpolant
   
-
-let satisfiable f =
+let mk_solver f = 
   let f_inst =
     if !Config.instantiate
     then Util.measure_call "instantiate" InstGen.instantiate [f]
@@ -169,6 +168,10 @@ let satisfiable f =
     result
   in
   let result = Util.measure_call "prove" prove () in
+  (result, session)
+
+let satisfiable f =
+  let (result, session) = mk_solver f in
   (match result with
   | Some true ->
       if !model_file <> "" then
@@ -177,3 +180,35 @@ let satisfiable f =
   | _ -> ());
   ignore (SmtLib.quit session);
   result
+
+(* An incremental version for the frame inference.
+ * we can assume that the first query contains all the ground terms.
+ * further queries are only adding blocking clauses.
+ * also at each step we need to return the model if sat, none if unsat, error otherwise.
+ *)
+module ModelGenerator =
+  struct
+    type t = SmtLib.session
+
+    let try_get_model (result, generator) = 
+      match result with
+      | Some true ->
+        let model = SmtLib.get_model generator in
+        Some (generator, unopt model)
+      | Some false ->
+        ignore (SmtLib.quit generator);
+        None
+      | None ->
+        ignore (SmtLib.quit generator);
+        failwith "cannot solve ?!"
+
+    let initial_query f = try_get_model (mk_solver f)
+
+    let add_blocking_clause generator clause =
+      (*TODO sanity checks: no qantifiers, ... *)
+      SmtLib.assert_forms generator [(mk_not clause)];
+      let result = SmtLib.is_sat generator in
+        try_get_model (result, generator)
+
+  end
+

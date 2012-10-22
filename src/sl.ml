@@ -1,6 +1,7 @@
 
 type ident = Form.ident
 let mk_ident = Form.mk_ident
+module IdMap = Form.IdMap
 
 (* the next pointer *)
 let pts = ("sl_pts", 0)
@@ -283,8 +284,8 @@ module Spatial =
       let head = Form.smk_or (List.map (fun (t, f) -> Form.mk_pred t []) formulae) in
       let clauses =
         List.fold_left
-          (fun acc (t, f) -> Form.IdMap.add t (convert_spatial f) acc)
-          Form.IdMap.empty
+          (fun acc (t, f) -> IdMap.add t (convert_spatial f) acc)
+          IdMap.empty
           formulae
       in
         head, clauses
@@ -300,8 +301,8 @@ module Spatial =
       in
       let formulae = triggers heap f in
         List.fold_left
-          (fun acc (t, f) -> Form.IdMap.add t (process_conj f) acc)
-          Form.IdMap.empty
+          (fun acc (t, f) -> IdMap.add t (process_conj f) acc)
+          IdMap.empty
           formulae
 
     (* disjointness constrains without quantifier *)
@@ -418,7 +419,7 @@ let normalize (pure, spatial) =
   (Pure.nnf pure, Spatial.normalize spatial)
 
 let clauses_to_forms clauses =
-  Form.IdMap.fold
+  IdMap.fold
     (fun t f acc -> (Form.mk_implies (Form.mk_pred t []) f) :: acc)
     clauses
     []

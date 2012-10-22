@@ -9,6 +9,7 @@ let input_file = ref ""
 type mode =
   | SlSat
   | SlEntails
+  | SlFrame
 
 let mode = ref SlSat
 
@@ -19,6 +20,7 @@ let cmd_options =
    ("-alloc", Arg.Set Axioms.with_alloc_axioms, "Add axioms for alloc predicate");
    ("-nojoin", Arg.Clear Axioms.with_jp_axioms, "Do not add axioms for join functions");
    ("-entails", Arg.Unit (fun () -> mode := SlEntails), "check entailment");
+   ("-frame", Arg.Unit (fun () -> mode := SlFrame), "frame inference");
    ("-z3q", Arg.Clear Config.instantiate, "Let z3 deal with quantifiers.")
   ]
 
@@ -59,7 +61,7 @@ let compute_sl_sat () =
     | Some false -> print_endline "unsat"
     | None -> print_endline "unknown"
 
-(* check that sp(pre, path) |- post *)
+(* check that sp(pre, path) |= post *)
 let compute_sl_entails () =
   let (pre_sl, path, post_sl) = parse_input (fun lexbuf -> ParseSl2.main LexSl2.token lexbuf) in
   let path_wo_label = List.filter (function Label _ -> false | _ -> true) path in
@@ -70,6 +72,18 @@ let compute_sl_entails () =
     | Some false -> print_endline "entailed"
     | None -> print_endline "unknown"
 
+(* A |= B * frame *)
+let compute_sl_frame () =
+  let (pre_sl, path, post_sl) = parse_input (fun lexbuf -> ParseSl2.main LexSl2.token lexbuf) in
+  let path_wo_label = List.filter (function Label _ -> false | _ -> true) path in
+  let res = FrameInference.infer_frame pre_sl path_wo_label post_sl in
+    Util.print_measures ();
+    match res with
+    | Some frames ->
+      print_endline "frames:";
+      List.iter (fun frame -> print_endline ("  " ^ (Sl.to_string frame))) frames
+    | None -> print_endline "Error not entailed!"
+
 let _ =
   try
     Arg.parse cmd_options (fun s -> input_file := s) usage_message;
@@ -78,6 +92,7 @@ let _ =
         match !mode with
         | SlSat -> compute_sl_sat ()
         | SlEntails -> compute_sl_entails ()
+        | SlFrame -> compute_sl_frame ()
       end
   with  
   | Sys_error s -> output_string stderr (s ^ "\n")
