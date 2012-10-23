@@ -43,6 +43,11 @@ let mk_frame_query pre pathf post subst =
 
 (* make the frame from a model as described in the paper (section 8).*)
 let make_frame heap_a heap_b (model: Model.model) =
+  if !Debug.verbose then
+    begin
+      print_endline "making frame for: ";
+      Model.print_model model
+    end;
   (* pure part *)
   let csts =
     IdMap.fold
@@ -120,7 +125,7 @@ let make_frame heap_a heap_b (model: Model.model) =
   in
   (*the succ fct as in the paper (page 14)*)
   let succ v =
-    let candidates = reachable_from v in
+    let candidates = IdSet.remove v (reachable_from v) in
     let pruned =
       IdSet.fold
         (fun v2 acc -> 
@@ -144,6 +149,7 @@ let make_frame heap_a heap_b (model: Model.model) =
           Sl.Spatial.List (var, succ var)
   in
   let spatial = Sl.Spatial.Conj (List.map get_spatial (Form.id_set_to_list diff)) in
+    Debug.msg ("frame is " ^ (Sl.to_string (pure, spatial)) ^ "\n");
     (pure, spatial)
 
 
