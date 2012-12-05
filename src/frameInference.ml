@@ -6,9 +6,11 @@ open Entails
 module IdMap = Form.IdMap
 module IdSet = Form.IdSet
 
-let mk_frame_query pre pathf post subst =
+let implies_heap_content subst =
   (* heap axiom: B(x) => A(x)
-   * if we have a path then we must compare A(x) with first_alloc(x)
+   * if we have a path then we must compare
+   * A(x) with first_alloc(x) and
+   * B(x) with last_alloc(x)
    *)
   let first_alloc = alloc_id in
   let last_alloc =
@@ -18,19 +20,15 @@ let mk_frame_query pre pathf post subst =
   in
   let a_x = mk_pred pre_heap [var1] in
   let b_x = mk_pred post_heap [var1] in
-  let implies_heap_content =
-    [ Comment ("implies_heap_content_pre" , mk_implies (mk_pred first_alloc [var1]) a_x);
-      Comment ("same_heap_content_post", mk_equiv b_x (mk_pred last_alloc [var1])) ]
-  in
+  (* here the alloc/free in the path are part of the LHS *)
+    [ Comment ("same_heap_content_pre" , mk_equiv (mk_pred first_alloc [var1]) a_x);
+      Comment ("implies_heap_content_post", mk_implies b_x (mk_pred last_alloc [var1])) ]
 
-  let pre_combined = combine "pre_" pre in
-  let post_combined = combine "post_" post in
-
+let mk_frame_query_2 pre_combined pathf post_combined subst =
   (* axioms from the logic *)
   let logic_axioms = List.flatten (make_axioms [ pre_combined; pathf; post_combined]) in
-
   (* query *)
-  let query = smk_and ( implies_heap_content @ pre_combined @
+  let query = smk_and ( (implies_heap_content subst) @ pre_combined @
                         pathf @ post_combined @ logic_axioms )
   in
   let _ = if !Debug.verbose then
@@ -40,6 +38,11 @@ let mk_frame_query pre pathf post subst =
     end
   in
     query
+
+let mk_frame_query pre pathf post subst =
+  let pre_combined = combine "pre_" pre in
+  let post_combined = combine "post_" post in
+    mk_frame_query_2 pre_combined pathf post_combined subst
 
 (* make the frame from a model as described in the paper (section 8).*)
 let make_frame heap_a heap_b (model: Model.model) =
@@ -152,12 +155,7 @@ let make_frame heap_a heap_b (model: Model.model) =
     Debug.msg ("frame is " ^ (Sl.to_string (pure, spatial)) ^ "\n");
     (pure, spatial)
 
-
-let infer_frame pre_sl path post_sl =
-  let query =
-    let (pre, pathf, post_subst, subst) = translate pre_sl path post_sl in
-      mk_frame_query pre pathf post_subst subst
-  in
+let infer_frame_loop query =
   let rec loop acc gen = match gen with
     | Some (generator, model) ->
       let frame = make_frame pre_heap alloc_id model in
@@ -169,3 +167,29 @@ let infer_frame pre_sl path post_sl =
     match initial with
     | Some _ -> Some (loop [] initial)
     | None -> None
+
+let infer_frame_converted pre pathf post_subst subst =
+  let query = mk_frame_query pre pathf post_subst subst in
+    infer_frame_loop query
+
+let infer_frame pre_sl path post_sl =
+  let (pre, pathf, post_subst, subst) = translate pre_sl path post_sl in
+    infer_frame_converted pre pathf post_subst subst
+
+
+let combine_frames_with_f sll frames =
+  let (pure1, spatial1) = sll in
+  let frames2 =
+    if frames = [] then [(Sl.Pure.BoolConst true, Sl.Spatial.Emp)]
+    else frames
+  in
+  let distributed =
+    List.map
+      (fun (pure2, spatial2) ->
+        let pure = Sl.Pure.mk_and [pure1; pure2] in
+        let spatial = Sl.Spatial.normalize (Sl.Spatial.mk_sep [spatial1; spatial2]) in
+          (pure, spatial)
+      )
+      frames2
+  in
+    failwith "TODO: to combine them as a single formula we need to change Sll!!"

@@ -117,6 +117,19 @@ module Pure =
       | Or lst -> Form.smk_or (List.map to_form lst)
       | BoolConst b -> if b then Form.mk_true else Form.mk_false 
 
+    let subst_id subst_map f =
+      let sub_id id =
+        try IdMap.find id subst_map with Not_found -> id
+      in
+      let rec process f = match f with
+        | Eq (e1, e2) -> Eq (sub_id e1, sub_id e2)
+        | Not t -> Not (process t)
+        | And lst -> And (List.map process lst)
+        | Or lst -> Or (List.map process lst)
+        | BoolConst b -> BoolConst b
+      in
+        process f
+
   end
 
 module Spatial =
@@ -181,6 +194,20 @@ module Spatial =
           let fs2 = List.map (function Conj inner -> inner | other -> [other]) fs in
           Conj (List.flatten fs2)
         end
+    
+    let subst_id subst_map f =
+      let sub_id id =
+        try IdMap.find id subst_map with Not_found -> id
+      in
+      let rec process f = match f with
+        | Emp -> Emp
+        | PtsTo (a, b) -> PtsTo (sub_id a, sub_id b)
+        | List (a, b) -> List (sub_id a, sub_id b)
+        | SepConj lst -> SepConj (List.map process lst)
+        | Conj lst -> Conj (List.map process lst)
+        | Disj lst -> Disj (List.map process lst)
+      in
+        process f
 
     (** Normalize a spatial formula. The resulting formula is in DNF and
      *  inside the conjunct the first level is the cunjunctions and the lowest

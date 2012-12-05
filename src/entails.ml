@@ -40,7 +40,7 @@ let negate cls =
       tight = negate_clauses cls.tight
     }
 
-let combine_negated cls =
+let combine_negated prefix cls =
   (* assumes the set of trigger is the same for everybody *)
   let clauses_lst = [cls.clauses; cls.disj; cls.tight] in
   let keys = IdMap.fold (fun t _ acc -> t::acc) (List.hd clauses_lst) [] in
@@ -53,7 +53,12 @@ let combine_negated cls =
       )
       keys
   in
-    cls.bool_struct :: keysWithForm
+    List.map
+      (fun f -> match f with
+        | Comment(cmt, f2) -> Comment (prefix ^ cmt, f)
+        | other -> Comment(prefix, other)
+      )
+      (cls.bool_struct :: keysWithForm)
 
 let print_clauses prefix sl cls =
   let print_cls cl =
@@ -71,23 +76,22 @@ let print_clauses prefix sl cls =
     print_endline (prefix ^ " tight:");
     print_cls cls.tight
 
+let translate_sl heap sl =
+  let sl_n = Sl.normalize sl in
+  let f, clauses = Sl.to_form_with_clauses heap sl_n in
+  let disj = Sl.disjointness_constraints heap sl_n in
+  let tight = Sl.tightness_constraints heap sl_n in
+    { bool_struct = f;
+      clauses = clauses;
+      disj = disj;
+      tight = tight
+    }
 
 let translate pre_sl path post_sl =
 
   (* convert wo axioms and add axioms later *)
-  let translate heap sl =
-    let sl_n = Sl.normalize sl in
-    let f, clauses = Sl.to_form_with_clauses heap sl_n in
-    let disj = Sl.disjointness_constraints heap sl_n in
-    let tight = Sl.tightness_constraints heap sl_n in
-      { bool_struct = f;
-        clauses = clauses;
-        disj = disj;
-        tight = tight
-      }
-  in
-  let pre = translate pre_heap pre_sl in
-  let post = translate post_heap post_sl in
+  let pre = translate_sl pre_heap pre_sl in
+  let post = translate_sl post_heap post_sl in
 
   (* ssa *)
 
@@ -108,12 +112,7 @@ let translate pre_sl path post_sl =
   in
     (pre, pathf, post_subst, subst)
 
-
-
-(* negate post + add alloc + axioms *)
-let mk_entailment_query pre pathf post_subst subst =
-  let pre_combined = combine "pre_" pre in
-  
+let same_heap_axioms subst =
   (* heap matches: A(x) <=> B(x) *)
   let first_alloc = alloc_id in
   let last_alloc =
@@ -123,20 +122,22 @@ let mk_entailment_query pre pathf post_subst subst =
   in
   let a_x = mk_pred pre_heap [var1] in
   let b_x = mk_pred post_heap [var1] in
-  let same_heap_content =
     [ Comment ("same_heap_content_pre" , mk_equiv a_x (mk_pred first_alloc [var1]));
       Comment ("same_heap_content_post", mk_equiv b_x (mk_pred last_alloc [var1])) ]
-  in
+
+(* negate post + add alloc + axioms *)
+let mk_entailment_query pre pathf post_subst subst =
+  let pre_combined = combine "pre_" pre in
 
   (* negating the post condition (need to skolemize axioms) *)
   let post_neg = negate post_subst in
-  let post_neg_combined = List.map (fun f -> Comment ("post", f)) (combine_negated post_neg) in
+  let post_neg_combined = combine_negated "post" post_neg in
 
   (* axioms from the logic *)
   let logic_axioms = List.flatten (make_axioms [ pre_combined; pathf; post_neg_combined]) in
 
   (* query *)
-  let query = smk_and ( same_heap_content @ pre_combined @
+  let query = smk_and ( (same_heap_axioms subst) @ pre_combined @
                         pathf @ post_neg_combined @ logic_axioms )
   in
   let _ = if !Debug.verbose then
