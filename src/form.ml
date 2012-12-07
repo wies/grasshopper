@@ -322,6 +322,24 @@ let subst subst_map f =
     | f -> f
   in sub f
 
+let reset_ident f = 
+  let reset id = (fst id, 0) in 
+  let rec terms t = match t with
+    | Const id -> Const (reset id)
+    | Var id -> Var (reset id)
+    | FunApp (id, args) -> FunApp (reset id, List.map terms args)
+  in
+  let rec sub f = match f with
+    | And fs -> And (List.map sub fs)
+    | Or fs -> Or (List.map sub fs)
+    | Not g -> Not (sub g)
+    | Eq (s, t) -> Eq (terms s, terms t)
+    | Pred (id, ts) -> Pred (reset id, List.map terms ts)
+    | Comment (c, f) -> Comment (c, sub f)
+    | f -> f
+  in
+    sub f
+
 let string_of_term t = 
   let rec st = function
     | Const id 

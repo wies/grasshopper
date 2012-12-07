@@ -130,6 +130,17 @@ module Pure =
       in
         process f
 
+    let reset_ident f = 
+      let reset id = (fst id, 0) in 
+      let rec process f = match f with
+        | Eq (e1, e2) -> Eq (reset e1, reset e2)
+        | Not t -> Not (process t)
+        | And lst -> And (List.map process lst)
+        | Or lst -> Or (List.map process lst)
+        | BoolConst b -> BoolConst b
+      in
+        process f
+
   end
 
 module Spatial =
@@ -203,6 +214,19 @@ module Spatial =
         | Emp -> Emp
         | PtsTo (a, b) -> PtsTo (sub_id a, sub_id b)
         | List (a, b) -> List (sub_id a, sub_id b)
+        | SepConj lst -> SepConj (List.map process lst)
+        | Conj lst -> Conj (List.map process lst)
+        | Disj lst -> Disj (List.map process lst)
+      in
+        process f
+
+
+    let reset_ident f = 
+      let reset id = (fst id, 0) in 
+      let rec process f = match f with
+        | Emp -> Emp
+        | PtsTo (a, b) -> PtsTo (reset a, reset b)
+        | List (a, b) -> List (reset a, reset b)
         | SepConj lst -> SepConj (List.map process lst)
         | Conj lst -> Conj (List.map process lst)
         | Disj lst -> Disj (List.map process lst)
@@ -444,6 +468,13 @@ let to_string (pure, spatial) =
 
 let normalize (pure, spatial) =
   (Pure.nnf pure, Spatial.normalize spatial)
+
+let subst_id subst_map (pure, spatial) =
+  ( Pure.subst_id subst_map pure,
+    Spatial.subst_id subst_map spatial )
+
+let reset_ident (pure, spatial) =
+  (Pure.reset_ident pure, Spatial.reset_ident spatial)
 
 let clauses_to_forms clauses =
   IdMap.fold
