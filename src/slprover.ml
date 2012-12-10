@@ -3,6 +3,9 @@ open Stmnt
 open Axioms
 open Util
 open Logging
+(*
+open Sl2
+*)
 
 let input_file = ref ""
 
