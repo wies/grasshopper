@@ -1,2 +1,2 @@
-a = b
-a |-> b * b |-> a
+//unsat
+a = b * a |-> b * b |-> a

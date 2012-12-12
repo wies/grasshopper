@@ -64,9 +64,29 @@ let compute_sl_sat () =
     | Some false -> print_endline "unsat"
     | None -> print_endline "unknown"
 
+let compute_sl_sat2 () =
+  let heap = "D" in
+  (*print_endline "parsing";*)
+  let sl = parse_input (fun lexbuf -> ParseSl2.main LexSl2.token lexbuf) in
+  let _ = Debug.msg ("parsed: " ^ (Sl2.to_string sl) ^ "\n") in
+  let form = Sl2.to_lolli_with_axioms heap sl in
+  let _ = if !Debug.verbose then
+    begin
+      print_endline "converted: ";
+      print_form stdout form
+    end
+  in
+  (*print_endline "to prover";*)
+  let res = Prover.satisfiable form in
+    Printf.fprintf stdout "accumulated time: %.2fs\n" !Util.measured_time;
+    match res with
+    | Some true -> print_endline "sat"
+    | Some false -> print_endline "unsat"
+    | None -> print_endline "unknown"
+
 (* check that sp(pre, path) |= post *)
 let compute_sl_entails () =
-  let (pre_sl, path, post_sl) = parse_input (fun lexbuf -> ParseSl2.main LexSl2.token lexbuf) in
+  let (pre_sl, path, post_sl) = failwith "TODO" in (*parse_input (fun lexbuf -> ParseSl2.main LexSl2.token lexbuf) in*)
   let path_wo_label = List.filter (function Label _ -> false | _ -> true) path in
   let res = Entails.check_entailment pre_sl path_wo_label post_sl in
     Util.print_measures ();
@@ -77,7 +97,7 @@ let compute_sl_entails () =
 
 (* A |= B * frame *)
 let compute_sl_frame () =
-  let (pre_sl, path, post_sl) = parse_input (fun lexbuf -> ParseSl2.main LexSl2.token lexbuf) in
+  let (pre_sl, path, post_sl) = failwith "TODO" in (*parse_input (fun lexbuf -> ParseSl2.main LexSl2.token lexbuf) in*)
   let path_wo_label = List.filter (function Label _ -> false | _ -> true) path in
   let res = FrameInference.infer_frame pre_sl path_wo_label post_sl in
     Util.print_measures ();
@@ -93,7 +113,7 @@ let _ =
     if !input_file = "" then cmd_line_error "input file missing" else
       begin
         match !mode with
-        | SlSat -> compute_sl_sat ()
+        | SlSat -> compute_sl_sat2 ()
         | SlEntails -> compute_sl_entails ()
         | SlFrame -> compute_sl_frame ()
       end

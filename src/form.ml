@@ -189,6 +189,8 @@ let rec cnf =
     | Comment (_, Or fs) -> cnf_or [] (List.rev_map cnf fs)
     | f -> f
 
+let mk_neq s t = mk_not (mk_eq s t)
+
 let mk_implies a b =
   smk_or [nnf (mk_not a); b]
 

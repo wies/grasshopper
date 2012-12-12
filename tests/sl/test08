@@ -1,3 +1,2 @@
 //sat
-a ~= b
-lseg(a, b) * lseg(a, a)
+a ~= b * lseg(a, b) * lseg(a, a)

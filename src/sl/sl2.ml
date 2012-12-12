@@ -24,6 +24,28 @@ type form =
   | And of form list
   | Or of form list
 
+
+let mk_true = BoolConst true
+let mk_false = BoolConst false
+let mk_eq a b = Eq (a, b)
+let mk_not a = Not a
+let mk_pts a b = PtsTo (a, b)
+let mk_ls a b = List (a, b)
+let mk_and a b = And [a; b]
+let mk_or a b = Or [a; b]
+let mk_sep a b = SepConj [a; b]
+
+let rec to_string f = match f with
+  | Eq (e1, e2) -> (Form.str_of_ident e1) ^ " = " ^ (Form.str_of_ident e2)
+  | Not t -> "~(" ^ (to_string t) ^")"
+  | And lst -> "(" ^ (String.concat ") && (" (List.map to_string lst)) ^ ")"
+  | Or lst ->  "(" ^ (String.concat ") || (" (List.map to_string lst)) ^ ")"
+  | BoolConst b -> string_of_bool b
+  | Emp -> "emp"
+  | PtsTo (a, b) -> (Form.str_of_ident a) ^ " |-> " ^ (Form.str_of_ident b)
+  | List (a, b) -> "lseg(" ^ (Form.str_of_ident a) ^ ", " ^ (Form.str_of_ident b) ^ ")"
+  | SepConj lst -> "(" ^ (String.concat ") * (" (List.map to_string lst)) ^ ")"
+
 (* TODO translation to lolli:
  * tricky part is the scope of the quantifier -> looli does not have this explicitely,
  * (1) maybe we can have an intermediate step with a new AST
@@ -49,16 +71,17 @@ let one_and_rest lst =
   in
     process [] [] lst
 
-let to_lolli domain_name f =
+let to_form domain_name f =
   let v = Axioms.var1 in
   let rec process domain f = match f with
     | BoolConst b -> Form.mk_and [Form.BoolConst(b); process domain Emp]
     | Eq (id1, id2) -> Form.mk_and [Form.mk_eq (cst id1) (cst id2); process domain Emp]
+    | Not (Eq (id1, id2)) -> Form.mk_and [Form.mk_neq (cst id1) (cst id2); process domain Emp]
     | Emp -> mk_forall (Form.mk_not (mk_domain domain v))
     | PtsTo (id1, id2) ->
       Form.mk_and [
         Form.mk_eq (Form.mk_app pts [cst id1]) (cst id2) ;
-        mk_forall (Form.mk_equiv (Form.mk_eq (cst id1) (cst id2)) (mk_domain domain v))
+        mk_forall (Form.mk_equiv (Form.mk_eq (cst id1) v) (mk_domain domain v))
       ]
     | List (id1, id2) ->
       Form.mk_and [
@@ -67,7 +90,7 @@ let to_lolli domain_name f =
           Form.mk_equiv (
             Form.mk_and [
               reachWoT (cst id1) v (cst id2);
-              Form.mk_not (Form.mk_eq v (cst id2))
+              Form.mk_neq v (cst id2)
             ]; )
           (mk_domain domain v) )
       ]
@@ -77,8 +100,7 @@ let to_lolli domain_name f =
       let translated = List.map2 process ds forms in
       let d = mk_domain domain v in
       let sepration =
-        mk_forall (
-          Form.mk_and (
+        Form.mk_and (List.map mk_forall (
             (Form.mk_implies d (Form.mk_or dsP))
             :: (List.map (fun (x, xs) -> Form.mk_implies x (Form.mk_and (d :: (List.map Form.mk_not xs)))) (one_and_rest dsP))
           )
@@ -173,3 +195,11 @@ let equisat_with_topLvl_axioms f =
   in
     let (f2, acc) = process f in
       Form.mk_and (f2 :: acc)
+
+let to_lolli domain_name f =
+  equisat_with_topLvl_axioms (skolemize (to_form domain_name f))
+
+let to_lolli_with_axioms domain_name f =
+  let f2 = to_lolli domain_name f in
+  let ax = List.flatten (Axioms.make_axioms [[f2]]) in
+    Form.smk_and (f2 :: ax)
