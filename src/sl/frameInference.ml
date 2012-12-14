@@ -24,26 +24,6 @@ let implies_heap_content subst =
     [ Comment ("same_heap_content_pre" , mk_equiv (mk_pred first_alloc [var1]) a_x);
       Comment ("implies_heap_content_post", mk_implies b_x (mk_pred last_alloc [var1])) ]
 
-let mk_frame_query_2 pre_combined pathf post_combined subst =
-  (* axioms from the logic *)
-  let logic_axioms = List.flatten (make_axioms [ pre_combined; pathf; post_combined]) in
-  (* query *)
-  let query = smk_and ( (implies_heap_content subst) @ pre_combined @
-                        pathf @ post_combined @ logic_axioms )
-  in
-  let _ = if !Debug.verbose then
-    begin
-      print_endline "frame inference query: ";
-      print_form stdout query
-    end
-  in
-    query
-
-let mk_frame_query pre pathf post subst =
-  let pre_combined = combine "pre_" pre in
-  let post_combined = combine "post_" post in
-    mk_frame_query_2 pre_combined pathf post_combined subst
-
 (* make the frame from a model as described in the paper (section 8).*)
 let make_frame heap_a heap_b (model: Model.model) =
   if !Debug.verbose then
@@ -75,16 +55,16 @@ let make_frame heap_a heap_b (model: Model.model) =
   let representatives = List.map List.hd eqClasses in
   let same =
     List.fold_left2
-      (fun acc vs repr -> (List.map (fun v -> Sl.Pure.Eq (v, repr)) (List.tl vs)) @ acc )
+      (fun acc vs repr -> (List.map (fun v -> Sl2.Eq (v, repr)) (List.tl vs)) @ acc )
       []
       eqClasses
       representatives
   in
   let rec different acc reprs = match reprs with
-    | v :: vs -> (List.map (fun v2 -> Sl.Pure.Not (Sl.Pure.Eq (v, v2))) vs) @ acc
+    | v :: vs -> (List.map (fun v2 -> Sl2.Not (Sl2.Eq (v, v2))) vs) @ acc
     | _ -> acc
   in
-  let pure = Sl.Pure.And ((different [] representatives) @ same) in
+  let pure = Sl2.And ((different [] representatives) @ same) in
   (* spatial part *)
   let get_pred_def pred_id = 
     List.map
@@ -103,7 +83,7 @@ let make_frame heap_a heap_b (model: Model.model) =
   let vars_b = vars_in heap_b in
   let diff = IdSet.diff vars_a vars_b in
   (* get spatial term for a variable *)
-  let reach_def = get_pred_def (Axioms.reach_id Sl.pts) in
+  let reach_def = get_pred_def (Axioms.reach_id Sl2.pts) in
   let reachable_from v =
     List.fold_left
       (fun acc args ->
@@ -142,24 +122,25 @@ let make_frame heap_a heap_b (model: Model.model) =
     IdSet.choose pruned
   in 
   let get_spatial var = 
-    let term = Form.mk_app Sl.pts [Form.mk_const var] in
+    let term = Form.mk_app Sl2.pts [Form.mk_const var] in
       match Model.eval_term model term with
       | Some idx ->
         let var2 = List.hd (Util.IntMap.find idx csts) in
-          Sl.Spatial.PtsTo (var, var2)
+          Sl2.PtsTo (var, var2)
       | None ->
           (* no pts_to -> look for the successor in reach *)
-          Sl.Spatial.List (var, succ var)
+          Sl2.List (var, succ var)
   in
-  let spatial = Sl.Spatial.Conj (List.map get_spatial (Form.id_set_to_list diff)) in
-    Debug.msg ("frame is " ^ (Sl.to_string (pure, spatial)) ^ "\n");
-    (pure, spatial)
+  let spatial = Sl2.And (List.map get_spatial (Form.id_set_to_list diff)) in
+  let frame = Sl2.mk_sep pure spatial in
+    Debug.msg ("frame is " ^ (Sl2.to_string frame) ^ "\n");
+    frame
 
 let infer_frame_loop query =
   let rec loop acc gen = match gen with
     | Some (generator, model) ->
       let frame = make_frame pre_heap alloc_id model in
-      let blocking = Sl.to_form_not_disjoint_not_tight post_heap frame in
+      let blocking = Sl2.to_lolli post_heap_id frame in
         loop (frame :: acc) (Prover.ModelGenerator.add_blocking_clause generator blocking)
     | None -> acc
   in
@@ -168,28 +149,26 @@ let infer_frame_loop query =
     | Some _ -> Some (loop [] initial)
     | None -> None
 
-let infer_frame_converted pre pathf post_subst subst =
-  let query = mk_frame_query pre pathf post_subst subst in
-    infer_frame_loop query
 
 let infer_frame pre_sl path post_sl =
-  let (pre, pathf, post_subst, subst) = translate pre_sl path post_sl in
-    infer_frame_converted pre pathf post_subst subst
+  let pre = Sl2.to_lolli pre_heap_id pre_sl in
+
+  let pathf, subst = ssa_partial IdMap.empty path in
+  assert (List.length pathf = 1);
+  let pathf = List.hd pathf in
+
+  let post = Form.subst_id subst (Sl2.to_lolli post_heap_id post_sl) in
+  
+  (* axioms from the logic *)
+  let logic_axioms = List.flatten (make_axioms [ [pre]; pathf; [post]]) in
+  
+  (* query *)
+  let query = smk_and ( pre :: post :: pathf @
+                        (implies_heap_content subst) @ logic_axioms )
+  in
+    infer_frame_loop query
 
 
 let combine_frames_with_f sll frames =
-  let (pure1, spatial1) = sll in
-  let frames2 =
-    if frames = [] then [(Sl.Pure.BoolConst true, Sl.Spatial.Emp)]
-    else frames
-  in
-  let distributed =
-    List.map
-      (fun (pure2, spatial2) ->
-        let pure = Sl.Pure.mk_and [pure1; pure2] in
-        let spatial = Sl.Spatial.normalize (Sl.Spatial.mk_sep [spatial1; spatial2]) in
-          (pure, spatial)
-      )
-      frames2
-  in
-    failwith "TODO: to combine them as a single formula we need to change Sll!!"
+  if frames = [] then sll
+  else Sl2.SepConj (sll :: frames)

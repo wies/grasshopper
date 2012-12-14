@@ -8,6 +8,7 @@ let post_heap_id = "B"
 let pre_heap = mk_ident pre_heap_id
 let post_heap = mk_ident post_heap_id
 
+(*
 type clausified = {
     bool_struct: Form.form;
     clauses: Form.form IdMap.t;
@@ -113,6 +114,7 @@ let translate pre_sl path post_sl =
     end
   in
     (pre, pathf, post_subst, subst)
+*)
 
 let same_heap_axioms subst =
   (* heap matches: A(x) <=> B(x) *)
@@ -127,32 +129,7 @@ let same_heap_axioms subst =
     [ Comment ("same_heap_content_pre" , mk_equiv a_x (mk_pred first_alloc [var1]));
       Comment ("same_heap_content_post", mk_equiv b_x (mk_pred last_alloc [var1])) ]
 
-
-let mk_entailment_query pre pathf post_subst subst =
-  let pre_combined = combine "pre_" pre in
-
-  (* negating the post condition (need to skolemize axioms) *)
-  let post_neg = negate post_subst in
-  let post_neg_combined = combine_negated "post" post_neg in
-
-  (* axioms from the logic *)
-  let logic_axioms = List.flatten (make_axioms [ pre_combined; pathf; post_neg_combined]) in
-
-  (* query *)
-  let query = smk_and ( (same_heap_axioms subst) @ pre_combined @
-                        pathf @ post_neg_combined @ logic_axioms )
-  in
-  let _ = if !Debug.verbose then
-    begin
-      print_endline "post negated: ";
-      List.iter (print_form stdout) post_neg_combined;
-      print_endline "query: ";
-      print_form stdout query
-    end
-  in
-    query
-
-let mk_entailment_query2 pre_sl path post_sl =
+let mk_entailment_query pre_sl path post_sl =
   let pre = Sl2.to_lolli pre_heap_id pre_sl in
 
   let pathf, subst = ssa_partial IdMap.empty path in
@@ -177,15 +154,7 @@ let mk_entailment_query2 pre_sl path post_sl =
     query
 
 (*TODO test that ...*)
-let check_entailment2 pre_sl path post_sl =
-  let mk_query () = mk_entailment_query2 pre_sl path post_sl in
-  let query = Util.measure_call "translation" mk_query () in
-    Prover.satisfiable query
-
 let check_entailment pre_sl path post_sl =
-  let mk_query () =
-    let (pre, pathf, post_subst, subst) = translate pre_sl path post_sl in
-      mk_entailment_query pre pathf post_subst subst
-  in
+  let mk_query () = mk_entailment_query pre_sl path post_sl in
   let query = Util.measure_call "translation" mk_query () in
     Prover.satisfiable query

@@ -3,9 +3,6 @@ open Stmnt
 open Axioms
 open Util
 open Logging
-(*
-open Sl2
-*)
 
 let input_file = ref ""
 
@@ -42,6 +39,7 @@ let parse_input parse_fct =
   ParseStmntAux.buffer := Some lexbuf;
   parse_fct lexbuf
 
+(*
 let compute_sl_sat () =
   let heap = mk_ident "h" in
   (*print_endline "parsing";*)
@@ -63,8 +61,9 @@ let compute_sl_sat () =
     | Some true -> print_endline "sat"
     | Some false -> print_endline "unsat"
     | None -> print_endline "unknown"
+*)
 
-let compute_sl_sat2 () =
+let compute_sl_sat () =
   let heap = "D" in
   (*print_endline "parsing";*)
   let sl = parse_input (fun lexbuf -> ParseSl2.main LexSl2.token lexbuf) in
@@ -104,7 +103,7 @@ let compute_sl_frame () =
     match res with
     | Some frames ->
       print_endline "frames:";
-      List.iter (fun frame -> print_endline ("  " ^ (Sl.to_string frame))) frames
+      List.iter (fun frame -> print_endline ("  " ^ (Sl2.to_string frame))) frames
     | None -> print_endline "Error not entailed!"
 
 let _ =
@@ -113,7 +112,7 @@ let _ =
     if !input_file = "" then cmd_line_error "input file missing" else
       begin
         match !mode with
-        | SlSat -> compute_sl_sat2 ()
+        | SlSat -> compute_sl_sat ()
         | SlEntails -> compute_sl_entails ()
         | SlFrame -> compute_sl_frame ()
       end
