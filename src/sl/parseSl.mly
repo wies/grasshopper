@@ -1,5 +1,5 @@
 %{
-open Sl2
+open Sl
 
 let parse_error = ParseStmntAux.parse_error
 
@@ -24,7 +24,7 @@ let parse_error = ParseStmntAux.parse_error
 %nonassoc TRUE FALSE
 
 %start main
-%type <Sl2.form> main
+%type <Sl.form> main
 %%
 
 main:

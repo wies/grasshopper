@@ -1,5 +1,5 @@
 {
-open ParseSl2
+open ParseSl
 }
 
 let digitchar = ['0'-'9']

@@ -74,9 +74,8 @@ let one_and_rest lst =
 let to_form domain_name f =
   let v = Axioms.var1 in
   let rec process domain f = match f with
-    | BoolConst b -> Form.mk_and [Form.BoolConst(b); process domain Emp]
-    | Eq (id1, id2) -> Form.mk_and [Form.mk_eq (cst id1) (cst id2); process domain Emp]
-    | Not (Eq (id1, id2)) -> Form.mk_and [Form.mk_neq (cst id1) (cst id2); process domain Emp]
+    | BoolConst b -> Form.BoolConst b
+    | Eq (id1, id2) -> Form.mk_eq (cst id1) (cst id2)
     | Emp -> mk_forall (Form.mk_not (mk_domain domain v))
     | PtsTo (id1, id2) ->
       Form.mk_and [

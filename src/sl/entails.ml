@@ -130,13 +130,13 @@ let same_heap_axioms subst =
       Comment ("same_heap_content_post", mk_equiv b_x (mk_pred last_alloc [var1])) ]
 
 let mk_entailment_query pre_sl path post_sl =
-  let pre = Sl2.to_lolli pre_heap_id pre_sl in
+  let pre = Sl.to_lolli pre_heap_id pre_sl in
 
   let pathf, subst = ssa_partial IdMap.empty path in
   assert (List.length pathf = 1);
   let pathf = List.hd pathf in
 
-  let post = Form.subst_id subst (Sl2.to_lolli post_heap_id (Sl2.mk_not post_sl)) in
+  let post = Form.subst_id subst (Sl.to_lolli post_heap_id (Sl.mk_not post_sl)) in
   
   (* axioms from the logic *)
   let logic_axioms = List.flatten (make_axioms [ [pre]; pathf; [post]]) in
