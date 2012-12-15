@@ -7,11 +7,7 @@ module IdSet = Form.IdSet
 (* the next pointer *)
 let pts = mk_ident "sl_pts"
 
-(*
-type term =
-  | Const of ident
-  | Next of ident * ident
-*)
+let skolemCst = "SkolemCst"
 
 type form =
   | Emp
@@ -107,10 +103,10 @@ let to_form domain_name f =
       in
         Form.mk_and (sepration :: translated)
     | Not form -> Form.mk_not (process domain form)
-    | And forms -> Form.mk_and (List.map (process domain) forms)
-    | Or forms -> Form.mk_or (List.map (process domain) forms)
+    | And forms -> Form.smk_and (List.map (process domain) forms)
+    | Or forms -> Form.smk_or (List.map (process domain) forms)
   in
-    process (Form.fresh_ident domain_name) f
+    process (Form.mk_ident domain_name) f
 
 let nnf f =
   let rec process negate f = match f with
@@ -139,13 +135,13 @@ let nnf f =
 
 (* assumes no quantifier alternation *)
 let skolemize f =
-  let fresh () = cst (Form.fresh_ident "SkolemCst") in
+  let fresh () = cst (Form.fresh_ident skolemCst) in
   let rec process subst f = match f with
     | Form.BoolConst _ as b -> b
     | Form.Eq _ | Form.Pred _ -> Form.subst subst f
     | Form.Not form -> Form.mk_not (process subst form)
-    | Form.And forms -> Form.mk_and (List.map (process subst) forms) 
-    | Form.Or forms -> Form.mk_or (List.map (process subst) forms)
+    | Form.And forms -> Form.smk_and (List.map (process subst) forms) 
+    | Form.Or forms -> Form.smk_or (List.map (process subst) forms)
     | Form.Comment (c, form) ->
         if c = exists then
           let subst2 =
@@ -192,8 +188,18 @@ let equisat_with_topLvl_axioms f =
           let (f2, acc) = process form in
             (Form.mk_comment c f2, acc)
   in
-    let (f2, acc) = process f in
-      Form.mk_and (f2 :: acc)
+  let top_level f = match f with
+    | Form.BoolConst _ | Form.Eq _ | Form.Pred _ -> (f, [])
+    | Form.Comment (c, form) when c = exists -> (f, [])
+    | Form.Comment (c, form) when c = forall -> (f, [])
+    | other -> process other
+  in
+  let clauses = match f with
+    | Form.And lst -> lst
+    | other -> [other]
+  in
+  let (f2s, accs) = List.split (List.map top_level clauses) in
+    Form.smk_and (f2s  @ (List.flatten accs))
 
 let to_lolli domain_name f =
   equisat_with_topLvl_axioms (skolemize (to_form domain_name f))

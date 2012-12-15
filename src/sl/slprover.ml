@@ -90,6 +90,7 @@ let compute_sl_frame () =
 let _ =
   try
     Arg.parse cmd_options (fun s -> input_file := s :: !input_file) usage_message;
+    input_file := List.rev !input_file;
     if !input_file = [] then cmd_line_error "input file missing" else
       begin
         match !mode with

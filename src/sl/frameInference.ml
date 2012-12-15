@@ -24,6 +24,9 @@ let implies_heap_content subst =
     [ Comment ("same_heap_content_pre" , mk_equiv (mk_pred first_alloc [var1]) a_x);
       Comment ("implies_heap_content_post", mk_implies b_x (mk_pred last_alloc [var1])) ]
 
+let trim_model (model: Model.model) =
+  failwith "TODO remove the skolem cst"
+
 (* make the frame from a model as described in the paper (section 8).*)
 let make_frame heap_a heap_b (model: Model.model) =
   if !Debug.verbose then
@@ -64,7 +67,7 @@ let make_frame heap_a heap_b (model: Model.model) =
     | v :: vs -> (List.map (fun v2 -> Sl.Not (Sl.Eq (v, v2))) vs) @ acc
     | _ -> acc
   in
-  let pure = Sl.And ((different [] representatives) @ same) in
+  let pure = (different [] representatives) @ same in
   (* spatial part *)
   let get_pred_def pred_id = 
     List.map
@@ -131,16 +134,21 @@ let make_frame heap_a heap_b (model: Model.model) =
           (* no pts_to -> look for the successor in reach *)
           Sl.List (var, succ var)
   in
-  let spatial = Sl.And (List.map get_spatial (Form.id_set_to_list diff)) in
-  let frame = Sl.mk_and pure spatial in
+  let spatial = List.map get_spatial (Form.id_set_to_list diff) in
+  let spatial2 = match spatial with
+    | [] -> Sl.Emp
+    | [x] -> x
+    | xs -> Sl.SepConj xs
+  in
+  let frame = Sl.And (spatial2 :: pure) in
     Debug.msg ("frame is " ^ (Sl.to_string frame) ^ "\n");
-    frame
+    (frame, Sl.And pure)
 
 let infer_frame_loop query =
   let rec loop acc gen = match gen with
     | Some (generator, model) ->
-      let frame = make_frame pre_heap alloc_id model in
-      let blocking = Sl.to_lolli post_heap_id frame in
+      let frame, pure = make_frame pre_heap post_heap model in
+      let blocking = Sl.to_lolli post_heap_id pure in
         loop (frame :: acc) (Prover.ModelGenerator.add_blocking_clause generator blocking)
     | None -> acc
   in
@@ -166,6 +174,12 @@ let infer_frame pre_sl path post_sl =
   let query = smk_and ( pre :: post :: pathf @
                         (implies_heap_content subst) @
                         logic_axioms )
+  in
+  let _ = if !Debug.verbose then
+    begin
+      print_endline "query: ";
+      print_form stdout query
+    end
   in
     infer_frame_loop query
 
