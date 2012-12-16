@@ -3,26 +3,26 @@ open Axioms
 
 type expr =
   | Term of term
-  | Call of string * term list
+  | Call of ident * expr list
 
 type stmnt =
   | VarUpdate of ident * expr 
   | FunUpdate of ident * term * expr
   | New of ident
   | Dispose of ident
-  | Assume of Sl.sl_form
+  | Assume of Sl.form
   | Assume2 of form
-  | Assert of Sl.sl_form
+  | Assert of Sl.form
   | Block of stmnt list
-  | While of form * Sl.sl_form * stmnt
+  | While of form * Sl.form * stmnt
   | Ite of form * stmnt * stmnt
   | Return of term
 
 type procedure = {
   name: ident;
   args: ident list;
-  precondition: Sl.sl_form;
-  postcondition: Sl.sl_form;
+  precondition: Sl.form;
+  postcondition: Sl.form;
   body: stmnt
 }
 
@@ -86,13 +86,6 @@ module DecisionStack =
 
     let axiom stack f = (Axiom f) :: stack
 
-    (** makes an axiom depends on the currents decisions *)
-    let guard_axiom stack f =
-      mk_implies (mk_and (conditions stack)) f
-
-    let guard_and_add stack f =
-        axiom stack (guard_axiom stack f)
-
     let push stack f = (Branch f) :: stack
 
     (** Returns (a, b) where a is the part that was poped, b is the new stack.*)
@@ -116,16 +109,16 @@ module DecisionStack =
         | Branch f -> f
         | Axiom f -> f
       in
-        map get_form stack
+        map get stack
 
     let conditions stack =
-        map get_form (filter is_branch stack)
+        get_form (filter is_branch stack)
     
     let axioms stack =
-        map get_form (filter is_axiom stack)
+        get_form (filter is_axiom stack)
     
     let steps stack =
-        map get_form (filter is_step stack)
+        get_form (filter is_step stack)
 
     let get_subst stack =
       try 
@@ -133,6 +126,13 @@ module DecisionStack =
         | Step (m, s) -> s
         | _ -> failwith "is_step ?!?"
       with Not_found -> IdMap.empty
+
+    (** makes an axiom depends on the currents decisions *)
+    let guard_axiom stack f =
+      mk_implies (mk_and (conditions stack)) f
+
+    let guard_and_add stack f =
+        axiom stack (guard_axiom stack f)
 
   end
       
@@ -144,25 +144,23 @@ let to_stmnt s = match s with
   | _ -> failwith("cannot convert")
 
 let convert stmnt subst =
-  Stmnt.ssa_partial subst (to_stmnt stmnt) in
+  let (cstr, subst) = Stmnt.ssa_partial subst [(to_stmnt stmnt)] in
+    (Form.smk_and (List.flatten cstr), subst)
 
 let latest_alloc subst =
   if IdMap.mem alloc_id subst
   then IdMap.find alloc_id subst
   else alloc_id
 
-let to_lolli name heap sl =
-  let clauses = Entails.translate_sl heap sl in
-    combine (name ^ "_") clauses
+let to_lolli heap sl =
+  Sl.to_lolli heap sl
 
-let to_lolli_negated name heap sl =
-  let clauses = Entails.translate_sl heap sl in
-  let negated = Entails.negate clauses in
-    Entails.combine_negated name negated
+let to_lolli_negated heap sl =
+  Sl.to_lolli heap (Sl.mk_not sl)
 
 let rec get_clauses f = match f with
   | And lst -> List.flatten (List.map get_clauses lst)
-  | Comment (c, f) -> List.map (fun x -> Comment (c,x)) get_clauses f
+  | Comment (c, f) -> List.map (fun x -> Comment (c,x)) (get_clauses f)
   | other -> [other]
 
 let refresh subst_map =
@@ -184,13 +182,13 @@ let unify_subst subst1 subst2 =
       else if fst id1 = fst Axioms.alloc_id then
         ([mk_axioms [var1]], [])
       else (* constants *)
-        ([], [mk_eq id1 id2])
+        ([], [mk_eq (mk_const id1) (mk_const id2)])
     in
     let v1 = snd id1 in
     let v2 = snd id2 in
-      if (v1 = v2) (v1, [], [], [], [])
-      else if (v1 < v2) (v2, ax, cstr, [], [])
-      else (v1, [], [], ax, cstr)
+      if v1 = v2 then (id1, [], [], [], [])
+      else if v1 < v2 then (id2, ax, cstr, [], [])
+      else (id1, [], [], ax, cstr)
   in
   let keys1 = IdMap.fold (fun t _ acc -> IdSet.add t acc) subst1 IdSet.empty in
   let keys  = IdMap.fold (fun t _ acc -> IdSet.add t acc) subst2 keys1 in
@@ -203,9 +201,9 @@ let unify_subst subst1 subst2 =
             let id2 = IdMap.find id subst2 in
               cstr_for id1 id2
           | (true, false) ->
-            (id1, [], [], [], [])
+            (id, [], [], [], [])
           | (false, true) ->
-            (id2, [], [], [], [])
+            (id, [], [], [], [])
           | (false, false) ->
             failwith "not possible"
         in
@@ -213,6 +211,7 @@ let unify_subst subst1 subst2 =
             a2 @ as2, c2 @ cs2,
             IdMap.add id id3 s )
       )
+      keys
       ([], [], [], [], IdMap.empty)
 
 (* Returns a subst that unifies the two branches of an if
@@ -256,36 +255,36 @@ let add_to_stack stack subst cstr =
   let (ax, fs) = Axioms.extract_axioms (get_clauses cstr) in
     List.fold_left
       DecisionStack.guard_and_add
-      (DecisionStack.step stack (smk_and fs) s)
+      (DecisionStack.step stack (smk_and fs) subst)
       ax
 
 let check_entailment what pre_sl stack post_sl =
   (* TODO less copy-paste with Entails *)
   let subst = DecisionStack.get_subst stack in
-  let cur_alloc = latest_alloc subst in
-  let name = what ^ "_" in
-  let pre = to_lolli "pre_" Entails.pre_heap pre_sl in
-  let path = DecisionStack.get_form stack in
-  let post_neg = List.map (subst_id subs) (to_lolli_negated name Entails.post_heap post_sl) in
+  let pre = to_lolli Entails.pre_heap pre_sl in
+  let pathf = DecisionStack.get_form stack in
+  let post_neg = subst_id subst (to_lolli_negated Entails.post_heap post_sl) in
   let heap_content = Entails.same_heap_axioms subst in
-  let axioms = Axioms.make_axioms (pre @ pathf @ post_neg) in
-  let query = smk_and (axioms @ heap_content @ pre @ pathf @ post_neg) in
+  let axioms = List.flatten (Axioms.make_axioms [pre :: pathf @ [post_neg]]) in
+  let query = smk_and (axioms @ heap_content @ [pre] @ pathf @ [post_neg]) in
   let sat = Prover.satisfiable query in
-    if sat then
-      failwith "cannot prove assertion"
+    match sat with
+    | Some true -> failwith ("cannot prove assertion for " ^ what) (*TODO model*)
+    | Some false -> ()
+    | None -> failwith ("cannot prove assertion for " ^ what)
 
 let compute_frames pre_sl stack post_sl =
   let subst = DecisionStack.get_subst stack in
-  let pre = to_lolli "pre_" Entails.pre_heap pre_sl in
+  let pre = to_lolli Entails.pre_heap pre_sl in
   let path = DecisionStack.get_form stack in
-  let post = List.map (subst_id subs) (to_lolli "post_" Entails.post_heap post_sl) in
-  let query = FrameInference.mk_frame_query_2 pre path post subst in
-  let frames = infer_frame_loop query in
+  let post = subst_id subst (to_lolli Entails.post_heap post_sl) in
+  let query = FrameInference.mk_frame_query pre path post subst in
+  let frames = FrameInference.infer_frame_loop query in
     frames
 
 (* ... *)
 let check_procedure proceduresMap name =
-  let get name = Map.find proceduresMap name in
+  let get name = IdMap.find name proceduresMap in
   let get_pre name args =
     let m = get name in
     let subst =
@@ -313,11 +312,11 @@ let check_procedure proceduresMap name =
       Sl.subst_id subst m.precondition
   in
     
-  let procedure_call m args id =
+  let procedure_call pre stack m args id =
     let args_id =
       List.map
         (fun f -> match f with
-          | Term (Sl.Const id) -> id
+          | Term (Form.Const id) -> id
           | _ -> failwith "for the moment, the arguments of call should be constants"
         ) args
     in
@@ -331,31 +330,32 @@ let check_procedure proceduresMap name =
     let formula = FrameInference.combine_frames_with_f m_post frames in
     let subst = DecisionStack.get_subst stack in
     let subst2 = refresh subst in
-    let f2 = List.map (subst_id subst2) (to_lolli formula) in
+    let heap = failwith "TODO" in (*TODO heap*)
+    let f2 = subst_id subst2 (to_lolli heap formula) in
       (f2, subst2)
   in
   
   let proc = get name in
 
-  let check pre stmnt =
+  let rec check pre stmnt =
     let rec traverse stack stmnt = match stmnt with
       | VarUpdate (_, Term _) | FunUpdate (_, _, Term _)
       | New _ | Dispose _ ->
         let (c, s) = convert stmnt (DecisionStack.get_subst stack) in
           add_to_stack stack s c
-      | Return t -> 
+      | Return (Form.Const t) -> 
         let post = proc.postcondition in
         let subst = IdMap.add (mk_ident "returned") t (DecisionStack.get_subst stack) in
-        let stackWithReturn = DecisionStack.step stack (Sl.BoolConst true) subst in
+        let stackWithReturn = DecisionStack.step stack (Form.BoolConst true) subst in
           (*check postcond and assume false !*)
           check_entailment "return" pre stackWithReturn post;
-          DecisionStack.step stack (Sl.BoolConst false) IdMap.empty
+          DecisionStack.step stack (Form.BoolConst false) IdMap.empty
+      | Return t -> failwith "TODO: return expect an id for the moment"
       | Assume f ->
         (*sll to lolli*)
         let subst = DecisionStack.get_subst stack in
         let cur_alloc = latest_alloc subst in
-        let name = "assume_" ^ (fresh_cnt ()) in
-        let c = List.map (subst_id subst) (to_lolli name cur_alloc f) in
+        let c = subst_id subst (to_lolli cur_alloc f) in
           add_to_stack stack subst c
       | Assert f ->
         check_entailment "assertion" pre stack f;
@@ -371,6 +371,7 @@ let check_procedure proceduresMap name =
           let s1 = DecisionStack.push stack cond in
           let s2 = traverse s1 stmnt in
           let (branch, _) = DecisionStack.pop s2 in
+            branch
         in
         let sT = mk_branch c caseTrue in
         let sF = mk_branch (Not c) caseFalse in
@@ -392,22 +393,26 @@ let check_procedure proceduresMap name =
         let formula = FrameInference.combine_frames_with_f invariant frames in
         let subst = DecisionStack.get_subst stack in
         let subst2 = refresh subst in
-        let notC = subst_id subst2 (Not cond) in
-        let f2 = List.map (subst_id subst2) (to_lolli formula) in
-          add_to_stack stack (smk_and [notC; f2]) subst2
+        let notC = subst_id subst2 (Form.Not cond) in
+        let heap = failwith "TODO" in (*TODO heap*)
+        let f2 = subst_id subst2 (to_lolli heap formula) in
+          add_to_stack stack subst2 (smk_and [notC; f2])
         
       | VarUpdate (id, Call (m, args)) -> 
-        let f2, subst2 = procedure_call m args id in
-          add_to_stack stack f2 subst2
+        let f2, subst2 = procedure_call pre stack m args id in
+          add_to_stack stack subst2 f2
         (* goal: (post[returned \mapsto id'] @ frame, subst2) *)
       | FunUpdate (id, ptr, Call (m, args)) -> 
         let ret_id = fresh_ident "_returned" in
-        let f2, subst2 = procedure_call m args ret_id in
-        let stack2 = add_to_stack f2 subst2 in
-        let t2 = VarUpdate (id, Term (Sl.Const ret_id)) in
+        let f2, subst2 = procedure_call pre stack m args ret_id in
+        let stack2 = add_to_stack stack subst2 f2 in
+        let t2 = VarUpdate (id, Term (Form.Const ret_id)) in
           traverse stack2 t2
     in
-      let final_stack = traverse DecisionStack.empty stmnt in
-        (*TODO check for postcondition (void methods) *)
+    (* check the body *)
+    let final_stack = traverse DecisionStack.empty stmnt in
+    (* check for postcondition (void methods) *)
+    let post = proc.postcondition in
+      check_entailment "endOfMethod" pre final_stack post;
   in
     check proc.precondition proc.body

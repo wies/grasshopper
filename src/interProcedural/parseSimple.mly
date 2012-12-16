@@ -1,6 +1,7 @@
 %{
 open Sl
 open Stmnt
+open SimpleLanguage
 
 let parse_error = ParseStmntAux.parse_error
 
@@ -47,15 +48,11 @@ main:
 ;
 
 procedure:
-  TIDENT LPAREN args RPAREN REQUIRES sl_form ENSURES sl_form LBRACKET path RBRACKET { { name = $1,
-                                                                                        args = $3,
-                                                                                        precondition = $6,
-                                                                                        postcondition = $8,
-                                                                                        body = $10} }
-;
-
-sl_form: 
-  pure spatial { ($1, $2) }
+  TIDENT LPAREN args RPAREN REQUIRES sl_form ENSURES sl_form LBRACKET path RBRACKET { { name = mk_ident $1;
+                                                                                        args = $3;
+                                                                                        precondition = $6;
+                                                                                        postcondition = $8;
+                                                                                        body = Block $10} }
 ;
 
 term:
@@ -63,30 +60,24 @@ term:
 | LPAREN term RPAREN { $2 }
 ;
 
-pure:
-| TRUE { Pure.mk_true }
-| FALSE { Pure.mk_false }
-| term EQ term { Pure.mk_eq $1 $3 }
-| term NEQ term { Pure.mk_not (Pure.mk_eq $1 $3) }
-| NOT pure { Pure.mk_not $2 }
-| pure AND pure { Pure.mk_and [$1; $3] }
-| pure OR pure { Pure.mk_or [$1; $3] }
-| LPAREN pure RPAREN { $2 }
-;
-
-spatial:
-| term PTS term { Spatial.mk_pts $1 $3 }
-| LS LPAREN term COMMA term RPAREN { Spatial.mk_ls $3 $5 }
-| spatial OR spatial { Spatial.mk_disj [$1; $3] }
-| spatial AND spatial { Spatial.mk_conj [$1; $3] }
-| spatial SEP spatial { Spatial.mk_sep [$1; $3] }
-| LPAREN spatial RPAREN { $2 }
-| EMP { Spatial.Emp }
+sl_form:
+| TRUE { mk_true }
+| FALSE { mk_false }
+| EMP { Emp }
+| term EQ term { mk_eq $1 $3 }
+| term NEQ term { mk_not (mk_eq $1 $3) }
+| term PTS term { mk_pts $1 $3 }
+| LS LPAREN term COMMA term RPAREN { mk_ls $3 $5 }
+| NOT sl_form { mk_not $2 }
+| sl_form AND sl_form { mk_and $1 $3 }
+| sl_form OR sl_form { mk_or $1 $3 }
+| sl_form SEP sl_form { mk_sep $1 $3 }
+| LPAREN sl_form RPAREN { $2 }
 ;
 
 args:
-  TIDENT { [$1] }
-| TIDENT COMMA args { $1 :: $3 }
+  TIDENT { [mk_ident $1] }
+| TIDENT COMMA args { (mk_ident $1) :: $3 }
 | /* empty */ { [] }
 ;
 
@@ -106,18 +97,18 @@ stmnt:
 | ASSUME sl_form SEMICOLON { Assume $2 }
 | ASSERT sl_form SEMICOLON { Assert $2 }
 | IF LPAREN expr RPAREN stmnt ELSE stmnt { Ite ($3, $5, $7) }
-| WHILE LPAREN expr RPAREN sl_form LBRACKET path RBRACKET { While ($3, $5, $7) }
+| WHILE LPAREN expr RPAREN sl_form LBRACKET path RBRACKET { While ($3, $5, Block $7) }
 | RETURN pterm SEMICOLON { Return $2 }
 | LBRACKET path RBRACKET { Block $2 }
 ;
 
 rhs:
   pterm { Term $1 }
-| TIDENT LPAREN argsCall RPAREN { Call ($1, $3) }
+| TIDENT LPAREN argsCall RPAREN { Call (mk_ident $1, $3) }
 
 argsCall:
-  pterm { [$1] }
-| pterm COMMA argsCall { $1 :: $3 }
+  pterm { [Term $1] }
+| pterm COMMA argsCall { (Term $1) :: $3 }
 | /* empty */ { [] }
 ;
 
@@ -129,16 +120,16 @@ pterm:
 
 expr:
 | LPAREN expr RPAREN { $2 }
-| NOT expr { mk_not $2 }
-| expr AND expr { mk_and [$1; $3] }
-| expr OR expr { mk_or [$1; $3] }
+| NOT expr { Form.mk_not $2 }
+| expr AND expr { Form.mk_and [$1; $3] }
+| expr OR expr { Form.mk_or [$1; $3] }
 | atom { $1 }
 ;
 
 atom:
-| TRUE { mk_true }
-| FALSE { mk_false }
-| pterm EQ pterm { mk_eq $1 $3 }
-| pterm NEQ pterm { mk_not (mk_eq $1 $3) }
-| PIDENT args { mk_pred (mk_ident $1) $2 }
+| TRUE { Form.mk_true }
+| FALSE { Form.mk_false }
+| pterm EQ pterm { Form.mk_eq $1 $3 }
+| pterm NEQ pterm { Form.mk_not (Form.mk_eq $1 $3) }
+| PIDENT args { Form.mk_pred (mk_ident $1) (List.map (fun t -> Form.Const t) $2) }
 ;

@@ -25,7 +25,7 @@ let implies_heap_content subst =
       Comment ("implies_heap_content_post", mk_implies b_x (mk_pred last_alloc [var1])) ]
 
 let trim_model (model: Model.model) =
-  failwith "TODO remove the skolem cst"
+  failwith "TODO remove the skolem cst ??"
 
 (* make the frame from a model as described in the paper (section 8).*)
 let make_frame heap_a heap_b (model: Model.model) =
@@ -148,7 +148,7 @@ let infer_frame_loop query =
   let rec loop acc gen = match gen with
     | Some (generator, model) ->
       let frame, pure = make_frame pre_heap post_heap model in
-      let blocking = Sl.to_lolli post_heap_id pure in
+      let blocking = Sl.to_lolli post_heap pure in
         loop (frame :: acc) (Prover.ModelGenerator.add_blocking_clause generator blocking)
     | None -> acc
   in
@@ -158,15 +158,7 @@ let infer_frame_loop query =
     | None -> None
 
 
-let infer_frame pre_sl path post_sl =
-  let pre = Sl.to_lolli pre_heap_id pre_sl in
-
-  let pathf, subst = ssa_partial IdMap.empty path in
-  assert (List.length pathf = 1);
-  let pathf = List.hd pathf in
-
-  let post = Form.subst_id subst (Sl.to_lolli post_heap_id post_sl) in
-  
+let mk_frame_query pre pathf post subst =
   (* axioms from the logic *)
   let logic_axioms = List.flatten (make_axioms [ [pre]; pathf; [post]]) in
   
@@ -181,6 +173,15 @@ let infer_frame pre_sl path post_sl =
       print_form stdout query
     end
   in
+    query
+
+let infer_frame pre_sl path post_sl =
+  let pre = Sl.to_lolli pre_heap pre_sl in
+  let pathf, subst = ssa_partial IdMap.empty path in
+  assert (List.length pathf = 1);
+  let pathf = List.hd pathf in
+  let post = Form.subst_id subst (Sl.to_lolli post_heap post_sl) in
+  let query = mk_frame_query pre pathf post subst in
     infer_frame_loop query
 
 

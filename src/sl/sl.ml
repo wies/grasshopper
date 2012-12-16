@@ -67,7 +67,7 @@ let one_and_rest lst =
   in
     process [] [] lst
 
-let to_form domain_name f =
+let to_form domain f =
   let v = Axioms.var1 in
   let rec process domain f = match f with
     | BoolConst b -> Form.BoolConst b
@@ -106,7 +106,7 @@ let to_form domain_name f =
     | And forms -> Form.smk_and (List.map (process domain) forms)
     | Or forms -> Form.smk_or (List.map (process domain) forms)
   in
-    process (Form.mk_ident domain_name) f
+    process domain f
 
 let nnf f =
   let rec process negate f = match f with
@@ -201,10 +201,31 @@ let equisat_with_topLvl_axioms f =
   let (f2s, accs) = List.split (List.map top_level clauses) in
     Form.smk_and (f2s  @ (List.flatten accs))
 
-let to_lolli domain_name f =
-  equisat_with_topLvl_axioms (skolemize (to_form domain_name f))
+let to_lolli domain f =
+  equisat_with_topLvl_axioms (skolemize (to_form domain f))
 
-let to_lolli_with_axioms domain_name f =
-  let f2 = to_lolli domain_name f in
+let to_lolli_with_axioms domain f =
+  let f2 = to_lolli domain f in
   let ax = List.flatten (Axioms.make_axioms [[f2]]) in
     Form.smk_and (f2 :: ax)
+
+let rec map_id fct f = match f with
+  | Eq (e1, e2) -> Eq (fct e1, fct e2)
+  | Not t ->  Not (map_id fct t)
+  | And lst -> And (List.map (map_id fct) lst)
+  | Or lst -> Or (List.map (map_id fct) lst)
+  | BoolConst b -> BoolConst b
+  | Emp -> Emp
+  | PtsTo (a, b) -> PtsTo (fct a, fct b)
+  | List (a, b) -> List (fct a, fct b)
+  | SepConj lst -> SepConj (List.map (map_id fct) lst)
+
+let subst_id subst f =
+  let get id =
+    try IdMap.find id subst with Not_found -> id
+  in
+    map_id get f
+
+let reset_ident f =
+  let reset id = mk_ident (fst id) in
+    map_id reset f

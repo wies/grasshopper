@@ -4,6 +4,11 @@ open Axioms
 open Util
 open Logging
 
+(* force compilation *)
+open SimpleLanguage
+open LexSimple
+open ParseSimple
+
 let input_file = ref []
 
 type mode =
@@ -43,8 +48,9 @@ let parse_input parse_fct =
   let file = List.hd !input_file in
     parse_given_input parse_fct file
 
+let heap = Form.fresh_ident "D"
+
 let compute_sl_sat () =
-  let heap = "D" in
   (*print_endline "parsing";*)
   let sl = parse_input (fun lexbuf -> ParseSl.main LexSl.token lexbuf) in
   let _ = Debug.msg ("parsed: " ^ (Sl.to_string sl) ^ "\n") in
