@@ -4,11 +4,6 @@ open Axioms
 open Util
 open Logging
 
-(* force compilation *)
-open SimpleLanguage
-open LexSimple
-open ParseSimple
-
 let input_file = ref []
 
 type mode =

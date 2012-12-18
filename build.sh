@@ -3,7 +3,7 @@
 set -e
 
 DIRS="-Is src,src/sl,src/interProcedural"
-TARGET="src/interpolate src/sl/slprover "
+TARGET="src/interpolate src/sl/slprover src/interProcedural/programAnalysis "
 FLAGS="-cflag -g -lflag -g -libs unix,str $DIRS"
 OCAMLBUILD=ocamlbuild
 
