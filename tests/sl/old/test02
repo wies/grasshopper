@@ -1,2 +1,0 @@
-rear1 = rear2 && rear1 ~= top_front
-rear1 |-> top_front * lseg(rear2, top_front)

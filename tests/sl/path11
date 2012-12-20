@@ -1,0 +1,8 @@
+//entailed (corrected version of example path08)
+path11(a)
+requires null |-> null * lseg(a, null)
+ensures null |-> null * lseg(c, null)
+{
+  new c;
+  c.next := a;
+}

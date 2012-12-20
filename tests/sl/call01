@@ -1,0 +1,17 @@
+
+caller()
+requires emp
+ensures emp
+{
+  new a;
+  new b;
+  callee(a);
+  callee(b);
+}
+
+callee(a)
+requires a |-> b
+ensures emp
+{
+  free a;
+}

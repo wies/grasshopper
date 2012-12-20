@@ -1,0 +1,7 @@
+//entailed
+path02(a, b, c, d)
+requires a ~= d && (a |-> b * lseg(c, d))
+ensures a ~= d && lseg(a, d)
+{
+  a.next := c;
+}

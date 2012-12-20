@@ -1,0 +1,7 @@
+//entailed
+path09(a)
+requires a ~= c && (a |-> b * lseg(b, c))
+ensures lseg(b, c)
+{
+  free a;
+}

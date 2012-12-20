@@ -7,6 +7,7 @@ let input_file = ref ""
 
 let cmd_options =
   [("-v", Arg.Set Debug.verbose, "Display verbose messages");
+   ("-m", Arg.Set_string Prover.model_file, "Produce model");
    ("-z3q", Arg.Clear Config.instantiate, "Let z3 deal with quantifiers.")
   ]
 

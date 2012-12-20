@@ -1,0 +1,7 @@
+//entailed
+path06(a)
+requires a |-> b
+ensures emp
+{
+  free a;
+}

@@ -1,0 +1,7 @@
+path04(a, b)
+requires a |-> b * b |-> a
+ensures  a ~= c && b ~= c && (a |-> b * b|-> c)
+{
+  new c; //entailed with this line
+  b.next := c;
+}

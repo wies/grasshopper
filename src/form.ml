@@ -353,6 +353,16 @@ let string_of_term t =
 	")"
   in st t
 
+let rec string_of_form f = match f with
+    | And lst -> "(" ^ (String.concat ") && (" (List.map string_of_form lst)) ^ ")"
+    | Or lst -> "(" ^ (String.concat ") || (" (List.map string_of_form lst)) ^ ")"
+    | Eq (s, t) -> (string_of_term s) ^ " = " ^ (string_of_term t)
+    | Not (Eq (s, t)) -> (string_of_term s) ^ " ~= " ^ (string_of_term t)
+    | Not f -> "~ " ^ (string_of_form f)
+    | Comment (c, f) -> string_of_form f
+    | Pred (p, ts) -> (str_of_ident p) ^ "(" ^ (String.concat ", " (List.map string_of_term ts)) ^ ")"
+    | BoolConst b -> if b then "true" else "false" 
+
 let print_form out_ch =
   let print = output_string out_ch in
   let print_list indent delim p = function

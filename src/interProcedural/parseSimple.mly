@@ -99,11 +99,15 @@ stmnt:
 | IF LPAREN expr RPAREN stmnt ELSE stmnt { Ite ($3, $5, $7) }
 | WHILE LPAREN expr RPAREN sl_form LBRACKET path RBRACKET { While ($3, $5, Block $7) }
 | RETURN pterm SEMICOLON { Return $2 }
+| call SEMICOLON { VarUpdate (Form.mk_ident "no_return", $1) }
 | LBRACKET path RBRACKET { Block $2 }
 ;
 
 rhs:
   pterm { Term $1 }
+| call { $1 }
+
+call:
 | TIDENT LPAREN argsCall RPAREN { Call (mk_ident $1, $3) }
 
 argsCall:

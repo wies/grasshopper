@@ -1,11 +1,7 @@
 //entailed: free c gives an error an error and false implies anything
-Pre
-true
-a |-> b
-
-Updates
-free c;
-
-Post
-true
-emp
+path07(a)
+requires a |-> b
+ensures emp
+{
+  free c;
+}

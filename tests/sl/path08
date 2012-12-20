@@ -6,14 +6,10 @@
 //is pointed by the end of the list segment. This means that a circular list
 //c->a->b=c is created and lseg(c,b) does not hold.
 
-Pre
-true
-lseg(a, b)
-
-Updates
-new c;
-c.next := a;
-
-Post
-true
-lseg(c, b)
+path08(a)
+requires lseg(a, b)
+ensures lseg(c, b)
+{
+  new c;
+  c.next := a;
+}

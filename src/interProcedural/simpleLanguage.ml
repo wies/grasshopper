@@ -64,6 +64,14 @@ module DecisionStack =
 
     type subst = ident IdMap.t
 
+    let subst_to_string subst =
+      String.concat "\n"
+        (List.map
+          (fun (id1, id2) ->
+            (str_of_ident id1) ^ " -> " ^ (str_of_ident id2)
+          )
+          (IdMap.bindings subst) )
+
     type kind = Step of form * subst
               | Branch of form
               | Axiom of form
@@ -78,9 +86,17 @@ module DecisionStack =
       | Axiom _ -> true
       | _ -> false
 
+    let kind_to_string k = match k with
+      | Step (f, _) -> "Step: " ^ (string_of_form f)
+      | Branch f -> "Branch: " ^ (string_of_form f)
+      | Axiom f -> "Axiom: " ^ (string_of_form f)
+
     type t = kind list
 
     let empty = []
+
+    let to_string stack =
+      String.concat "\n" (List.map kind_to_string stack)
 
     let step stack f s = (Step (f, s)) :: stack
 
@@ -260,18 +276,30 @@ let add_to_stack stack subst cstr =
 
 let check_entailment what pre_sl stack post_sl =
   (* TODO less copy-paste with Entails *)
+  Debug.msg ("checking entailment: " ^ what ^ "\n");
+  Debug.msg ("checking entailment: precondition " ^ (Sl.to_string pre_sl) ^ "\n");
+  Debug.msg ("checking entailment: postcondition " ^ (Sl.to_string post_sl) ^ "\n");
+  Debug.msg ("checking entailment: stack\n" ^ (DecisionStack.to_string stack) ^ "\n");
+  Debug.msg ("checking entailment: subst\n" ^ (DecisionStack.subst_to_string (DecisionStack.get_subst stack)) ^ "\n");
   let subst = DecisionStack.get_subst stack in
   let pre = to_lolli Entails.pre_heap pre_sl in
   let pathf = DecisionStack.get_form stack in
+  (*TODO something is not right*)
   let post_neg = subst_id subst (to_lolli_negated Entails.post_heap post_sl) in
   let heap_content = Entails.same_heap_axioms subst in
   let axioms = List.flatten (Axioms.make_axioms [pre :: pathf @ [post_neg]]) in
   let query = smk_and (axioms @ heap_content @ [pre] @ pathf @ [post_neg]) in
+  let _ = if !Debug.verbose then
+    begin
+      print_endline "query: ";
+      print_form stdout query
+    end
+  in
   let sat = Prover.satisfiable query in
     match sat with
-    | Some true -> failwith ("cannot prove assertion for " ^ what) (*TODO model*)
+    | Some true -> failwith ("cannot prove assertion (sat) for " ^ what) (*TODO model*)
     | Some false -> ()
-    | None -> failwith ("cannot prove assertion for " ^ what)
+    | None -> failwith ("cannot prove assertion (unk) for " ^ what)
 
 let compute_frames pre_sl stack post_sl =
   let subst = DecisionStack.get_subst stack in
@@ -284,6 +312,7 @@ let compute_frames pre_sl stack post_sl =
 
 (* ... *)
 let check_procedure proceduresMap name =
+  print_endline ("checking: " ^ (str_of_ident name));
   let get name = IdMap.find name proceduresMap in
   let get_pre name args =
     let m = get name in
@@ -330,7 +359,7 @@ let check_procedure proceduresMap name =
     let formula = FrameInference.combine_frames_with_f m_post frames in
     let subst = DecisionStack.get_subst stack in
     let subst2 = refresh subst in
-    let heap = failwith "TODO" in (*TODO heap*)
+    let heap = failwith "TODO procedure_call heap" in (*TODO heap*)
     let f2 = subst_id subst2 (to_lolli heap formula) in
       (f2, subst2)
   in
@@ -345,7 +374,9 @@ let check_procedure proceduresMap name =
           add_to_stack stack s c
       | Return (Form.Const t) -> 
         let post = proc.postcondition in
-        let subst = IdMap.add (mk_ident "returned") t (DecisionStack.get_subst stack) in
+        let subst = DecisionStack.get_subst stack in
+        let newT = try IdMap.find t subst with Not_found -> t in
+        let subst = IdMap.add (mk_ident "returned") newT subst in
         let stackWithReturn = DecisionStack.step stack (Form.BoolConst true) subst in
           (*check postcond and assume false !*)
           check_entailment "return" pre stackWithReturn post;
@@ -394,7 +425,7 @@ let check_procedure proceduresMap name =
         let subst = DecisionStack.get_subst stack in
         let subst2 = refresh subst in
         let notC = subst_id subst2 (Form.Not cond) in
-        let heap = failwith "TODO" in (*TODO heap*)
+        let heap = failwith "TODO while loop heap" in (*TODO heap*)
         let f2 = subst_id subst2 (to_lolli heap formula) in
           add_to_stack stack subst2 (smk_and [notC; f2])
         

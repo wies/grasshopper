@@ -3,6 +3,7 @@ type ident = Form.ident
 let mk_ident = Form.mk_ident
 module IdMap = Form.IdMap
 module IdSet = Form.IdSet
+let ident_to_string = Form.str_of_ident
 
 (* the next pointer *)
 let pts = mk_ident "sl_pts"
@@ -32,7 +33,7 @@ let mk_or a b = Or [a; b]
 let mk_sep a b = SepConj [a; b]
 
 let rec to_string f = match f with
-  | Eq (e1, e2) -> (Form.str_of_ident e1) ^ " = " ^ (Form.str_of_ident e2)
+  | Eq (e1, e2) -> (ident_to_string e1) ^ " = " ^ (ident_to_string e2)
   | Not t -> "~(" ^ (to_string t) ^")"
   | And lst -> "(" ^ (String.concat ") && (" (List.map to_string lst)) ^ ")"
   | Or lst ->  "(" ^ (String.concat ") || (" (List.map to_string lst)) ^ ")"
@@ -95,7 +96,7 @@ let to_form domain f =
       let translated = List.map2 process ds forms in
       let d = mk_domain domain v in
       let sepration =
-        Form.mk_and (List.map mk_forall (
+        mk_forall (Form.mk_and (
             (Form.mk_implies d (Form.mk_or dsP))
             :: (List.map (fun (x, xs) -> Form.mk_implies x (Form.mk_and (d :: (List.map Form.mk_not xs)))) (one_and_rest dsP))
           )
