@@ -359,7 +359,7 @@ let check_procedure proceduresMap name =
     let formula = FrameInference.combine_frames_with_f m_post frames in
     let subst = DecisionStack.get_subst stack in
     let subst2 = refresh subst in
-    let heap = failwith "TODO procedure_call heap" in (*TODO heap*)
+    let heap = latest_alloc subst2 in
     let f2 = subst_id subst2 (to_lolli heap formula) in
       (f2, subst2)
   in
@@ -425,7 +425,7 @@ let check_procedure proceduresMap name =
         let subst = DecisionStack.get_subst stack in
         let subst2 = refresh subst in
         let notC = subst_id subst2 (Form.Not cond) in
-        let heap = failwith "TODO while loop heap" in (*TODO heap*)
+        let heap = latest_alloc subst2 in
         let f2 = subst_id subst2 (to_lolli heap formula) in
           add_to_stack stack subst2 (smk_and [notC; f2])
         
