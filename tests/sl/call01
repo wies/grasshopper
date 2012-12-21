@@ -10,7 +10,7 @@ ensures emp
 }
 
 callee(a)
-requires a |-> b
+requires a |-> c
 ensures emp
 {
   free a;

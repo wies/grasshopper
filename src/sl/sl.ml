@@ -43,6 +43,18 @@ let rec to_string f = match f with
   | List (a, b) -> "lseg(" ^ (Form.str_of_ident a) ^ ", " ^ (Form.str_of_ident b) ^ ")"
   | SepConj lst -> "(" ^ (String.concat ") * (" (List.map to_string lst)) ^ ")"
 
+let rec ids f = match f with
+  | Eq (a, b) | PtsTo (a, b) | List (a, b) -> 
+    IdSet.add a (IdSet.singleton b)
+  | Not t -> ids t
+  | And lst | Or lst | SepConj lst -> 
+    List.fold_left
+      (fun acc f2 -> IdSet.union acc (ids f2))
+      IdSet.empty
+      lst
+  | BoolConst _ | Emp -> IdSet.empty
+
+
 (* TODO translation to lolli:
  * tricky part is the scope of the quantifier -> looli does not have this explicitely,
  * (1) maybe we can have an intermediate step with a new AST

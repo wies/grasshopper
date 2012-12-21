@@ -302,6 +302,10 @@ let check_entailment what pre_sl stack post_sl =
     | None -> failwith ("cannot prove assertion (unk) for " ^ what)
 
 let compute_frames pre_sl stack post_sl =
+  Debug.msg ("compute frames: precondition " ^ (Sl.to_string pre_sl) ^ "\n");
+  Debug.msg ("compute frames: postcondition " ^ (Sl.to_string post_sl) ^ "\n");
+  Debug.msg ("compute frames: stack\n" ^ (DecisionStack.to_string stack) ^ "\n");
+  Debug.msg ("compute frames: subst\n" ^ (DecisionStack.subst_to_string (DecisionStack.get_subst stack)) ^ "\n");
   let subst = DecisionStack.get_subst stack in
   let pre = to_lolli Entails.pre_heap pre_sl in
   let path = DecisionStack.get_form stack in
@@ -314,6 +318,21 @@ let compute_frames pre_sl stack post_sl =
 let check_procedure proceduresMap name =
   print_endline ("checking: " ^ (str_of_ident name));
   let get name = IdMap.find name proceduresMap in
+  let fresh_local () = fresh_ident "_" in
+  let subst_with_fresh_local m subst form =
+    let non_args =
+      IdSet.filter
+        (fun id -> not (List.mem id m.args))
+        (Sl.ids form)
+    in
+    let subst2 =
+      IdSet.fold
+        (fun id acc -> IdMap.add id (fresh_local ()) acc)
+        non_args
+        subst
+    in
+      Sl.subst_id subst2 form 
+  in
   let get_pre name args =
     let m = get name in
     let subst =
@@ -324,11 +343,9 @@ let check_procedure proceduresMap name =
         m.args
         args
     in
-      Sl.subst_id subst m.precondition
+      subst_with_fresh_local m subst m.precondition
   in
   let get_post name args return =
-    (* TODO more complex since it might refer to the old values *)
-    (*let old_param = List.map (fun id -> ("old_" ^ (fst id), snd id)) m.args in*)
     let m = get name in
     let subst =
       List.fold_left2
@@ -338,7 +355,7 @@ let check_procedure proceduresMap name =
         m.args
         args
     in
-      Sl.subst_id subst m.precondition
+      subst_with_fresh_local m subst m.postcondition
   in
     
   let procedure_call pre stack m args id =
@@ -349,6 +366,7 @@ let check_procedure proceduresMap name =
           | _ -> failwith "for the moment, the arguments of call should be constants"
         ) args
     in
+    Debug.msg ("procedure_call: " ^ (str_of_ident m) ^ "(" ^ (String.concat ", " (List.map str_of_ident args_id))^ ")\n");
     let m_pre = get_pre m args_id in
     let opt_frames = compute_frames pre stack m_pre in
     let frames = match opt_frames with
@@ -360,6 +378,7 @@ let check_procedure proceduresMap name =
     let subst = DecisionStack.get_subst stack in
     let subst2 = refresh subst in
     let heap = latest_alloc subst2 in
+    Debug.msg ("procedure call: postcondition is " ^ (Sl.to_string formula) ^ "\n");
     let f2 = subst_id subst2 (to_lolli heap formula) in
       (f2, subst2)
   in
