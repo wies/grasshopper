@@ -75,6 +75,7 @@ module DecisionStack =
     type kind = Step of form * subst
               | Branch of form
               | Axiom of form
+              (*TODO a cut thing (drop everything before?? for calls, loops, ...) *)
 
     let is_step k = match k with
       | Step _ -> true
@@ -311,7 +312,7 @@ let compute_frames pre_sl stack post_sl =
   let path = DecisionStack.get_form stack in
   let post = subst_id subst (to_lolli Entails.post_heap post_sl) in
   let query = FrameInference.mk_frame_query pre path post subst in
-  let frames = FrameInference.infer_frame_loop query in
+  let frames = FrameInference.infer_frame_loop subst query in
     frames
 
 (* ... *)

@@ -6,6 +6,11 @@ open Entails
 module IdMap = Form.IdMap
 module IdSet = Form.IdSet
 
+let last_alloc subst = 
+  if IdMap.mem alloc_id subst
+  then IdMap.find alloc_id subst
+  else alloc_id
+
 let implies_heap_content subst =
   (* heap axiom: B(x) => A(x)
    * if we have a path then we must compare
@@ -13,11 +18,7 @@ let implies_heap_content subst =
    * B(x) with last_alloc(x)
    *)
   let first_alloc = alloc_id in
-  let last_alloc =
-    if IdMap.mem alloc_id subst
-    then IdMap.find alloc_id subst
-    else alloc_id
-  in
+  let last_alloc = last_alloc subst in
   let a_x = mk_pred pre_heap [var1] in
   let b_x = mk_pred post_heap [var1] in
   (* here the alloc/free in the path are part of the LHS *)
@@ -28,7 +29,7 @@ let trim_model (model: Model.model) =
   failwith "TODO remove the skolem cst ??"
 
 (* make the frame from a model as described in the paper (section 8).*)
-let make_frame heap_a heap_b (model: Model.model) =
+let make_frame heap_a last_alloc heap_b (model: Model.model) =
   if !Debug.verbose then
     begin
       print_endline "making frame for: ";
@@ -76,15 +77,17 @@ let make_frame heap_a heap_b (model: Model.model) =
         (fun def -> (def.Model.output = Model.Bool true) )
         (IdMap.find pred_id model))
   in
-  (* get the var in heap_a but not in heap_b *)
+  (* get the var in heap_a but not in heap_b
+   * TODO and the var allocated in the path !! *)
   let vars_in heap =
     let heap_def = get_pred_def heap in
     let vars = List.map List.hd heap_def in
       List.fold_left (fun acc v -> IdSet.add v acc) IdSet.empty vars
   in
-  let vars_a = vars_in heap_a in
+  (*let vars_a = vars_in heap_a in*)
+  let vars_alloc = vars_in last_alloc in
   let vars_b = vars_in heap_b in
-  let diff = IdSet.diff vars_a vars_b in
+  let diff = IdSet.diff vars_alloc vars_b in
   (* get spatial term for a variable *)
   let reach_def = get_pred_def (Axioms.reach_id Sl.pts) in
   let reachable_from v =
@@ -111,6 +114,7 @@ let make_frame heap_a heap_b (model: Model.model) =
   in
   (*the succ fct as in the paper (page 14)*)
   let succ v =
+    Debug.msg ("make_frame: looking for successor of " ^ (str_of_ident v) ^ "\n");
     let candidates = IdSet.remove v (reachable_from v) in
     let pruned =
       IdSet.fold
@@ -126,6 +130,7 @@ let make_frame heap_a heap_b (model: Model.model) =
   in 
   let get_spatial var = 
     let term = Form.mk_app Sl.pts [Form.mk_const var] in
+      (* TODO this might not be defined but still required ... *)
       match Model.eval_term model term with
       | Some idx ->
         let var2 = List.hd (Util.IntMap.find idx csts) in
@@ -144,10 +149,11 @@ let make_frame heap_a heap_b (model: Model.model) =
     Debug.msg ("frame is " ^ (Sl.to_string frame) ^ "\n");
     (frame, Sl.And pure)
 
-let infer_frame_loop query =
+let infer_frame_loop subst query =
+  let last_alloc = last_alloc subst in
   let rec loop acc gen = match gen with
     | Some (generator, model) ->
-      let frame, pure = make_frame pre_heap post_heap model in
+      let frame, pure = make_frame pre_heap last_alloc post_heap model in
       let blocking = Sl.to_lolli post_heap pure in
         loop (frame :: acc) (Prover.ModelGenerator.add_blocking_clause generator blocking)
     | None -> acc
@@ -182,7 +188,7 @@ let infer_frame pre_sl path post_sl =
   let pathf = List.hd pathf in
   let post = Form.subst_id subst (Sl.to_lolli post_heap post_sl) in
   let query = mk_frame_query pre pathf post subst in
-    infer_frame_loop query
+    infer_frame_loop subst query
 
 
 let combine_frames_with_f sll frames =
