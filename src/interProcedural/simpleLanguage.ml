@@ -371,16 +371,26 @@ let check_procedure proceduresMap name =
     let m_pre = get_pre m args_id in
     let opt_frames = compute_frames pre stack m_pre in
     let frames = match opt_frames with
-      | Some(lst) -> List.map Sl.reset_ident lst 
+      | Some(lst) ->
+        List.map
+          (Sl.map_id (fun id -> if (fst id) = "_" then id else (fst id, 0))) (* reset non wildcard idents *)
+          lst
       | None -> failwith "method call: precondition not satisfied"
     in
     let m_post = get_post m args_id id in
     let formula = FrameInference.combine_frames_with_f m_post frames in
+    Debug.msg ("procedure call: postcondition is " ^ (Sl.to_string formula) ^ "\n");
     let subst = DecisionStack.get_subst stack in
     let subst2 = refresh subst in
     let heap = latest_alloc subst2 in
-    Debug.msg ("procedure call: postcondition is " ^ (Sl.to_string formula) ^ "\n");
-    let f2 = subst_id subst2 (to_lolli heap formula) in
+    let f1 = to_lolli heap formula in
+    let f2 = subst_id subst2 f1 in
+    (*
+    Debug.msg ("procedure_call: subst\n" ^ (DecisionStack.subst_to_string subst) ^ "\n");
+    Debug.msg ("procedure_call: subst2\n" ^ (DecisionStack.subst_to_string subst2) ^ "\n");
+    Debug.msg ("procedure_call: f1\n" ^ (string_of_form f1) ^ "\n");
+    Debug.msg ("procedure_call: f2\n" ^ (string_of_form f2) ^ "\n");
+    *)
       (f2, subst2)
   in
   

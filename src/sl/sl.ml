@@ -21,6 +21,11 @@ type form =
   | And of form list
   | Or of form list
 
+module SlSet = Set.Make(struct
+    type t = form
+    let compare = compare
+  end)
+
 
 let mk_true = BoolConst true
 let mk_false = BoolConst false
@@ -33,6 +38,7 @@ let mk_or a b = Or [a; b]
 let mk_sep a b = SepConj [a; b]
 
 let rec to_string f = match f with
+  | Not (Eq (e1, e2)) -> (ident_to_string e1) ^ " ~= " ^ (ident_to_string e2)
   | Eq (e1, e2) -> (ident_to_string e1) ^ " = " ^ (ident_to_string e2)
   | Not t -> "~(" ^ (to_string t) ^")"
   | And lst -> "(" ^ (String.concat ") && (" (List.map to_string lst)) ^ ")"
@@ -54,6 +60,46 @@ let rec ids f = match f with
       lst
   | BoolConst _ | Emp -> IdSet.empty
 
+let rec normalize f = match f with
+  | Eq (e1, e2) -> if e1 = e2 then BoolConst true else Eq (e1, e2)
+  | Not t -> 
+    begin
+      match normalize t with
+      | BoolConst b -> BoolConst (not b)
+      | t2 -> Not t2
+    end
+  | And lst -> 
+    let sub_forms =
+      List.fold_left
+        (fun acc t -> SlSet.add (normalize t) acc)
+        SlSet.empty
+        lst
+    in
+    let sub_forms = SlSet.remove (BoolConst true) sub_forms in
+      if (SlSet.mem (BoolConst false) sub_forms) then BoolConst false
+      else if (SlSet.cardinal sub_forms = 0) then BoolConst true
+      else if (SlSet.cardinal sub_forms = 1) then SlSet.choose sub_forms
+      else And (SlSet.elements sub_forms)
+  | Or lst ->  
+    let sub_forms =
+      List.fold_left
+        (fun acc t -> SlSet.add (normalize t) acc)
+        SlSet.empty
+        lst
+    in
+    let sub_forms = SlSet.remove (BoolConst false) sub_forms in
+      if (SlSet.mem (BoolConst true) sub_forms) then BoolConst true
+      else if (SlSet.cardinal sub_forms = 0) then BoolConst false
+      else if (SlSet.cardinal sub_forms = 1) then SlSet.choose sub_forms
+      else Or (SlSet.elements sub_forms)
+  | SepConj lst -> 
+    let lst2 = List.map normalize lst in
+    let lst3 = List.filter (fun x -> x <> Emp) lst2 in
+      SepConj lst3
+  | BoolConst b -> BoolConst b
+  | Emp -> Emp
+  | PtsTo (a, b) -> PtsTo (a, b)
+  | List (a, b) -> if a = b then Emp else List (a, b)
 
 (* TODO translation to lolli:
  * tricky part is the scope of the quantifier -> looli does not have this explicitely,
@@ -103,7 +149,7 @@ let to_form domain f =
           (mk_domain domain v) )
       ]
     | SepConj forms ->
-      let ds = List.map (fun _ -> Form.fresh_ident (fst domain)) forms in
+      let ds = List.map (fun _ -> Form.fresh_ident ("sub_" ^(fst domain))) forms in
       let dsP = List.map (fun d -> mk_domain d v) ds in
       let translated = List.map2 process ds forms in
       let d = mk_domain domain v in

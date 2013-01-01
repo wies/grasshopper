@@ -25,9 +25,6 @@ let implies_heap_content subst =
     [ Comment ("same_heap_content_pre" , mk_equiv (mk_pred first_alloc [var1]) a_x);
       Comment ("implies_heap_content_post", mk_implies b_x (mk_pred last_alloc [var1])) ]
 
-let trim_model (model: Model.model) =
-  failwith "TODO remove the skolem cst ??"
-
 (* make the frame from a model as described in the paper (section 8).*)
 let make_frame heap_a last_alloc heap_b (model: Model.model) =
   if !Debug.verbose then
@@ -77,8 +74,7 @@ let make_frame heap_a last_alloc heap_b (model: Model.model) =
         (fun def -> (def.Model.output = Model.Bool true) )
         (IdMap.find pred_id model))
   in
-  (* get the var in heap_a but not in heap_b
-   * TODO and the var allocated in the path !! *)
+  (* get the var in heap_a but not in heap_b *)
   let vars_in heap =
     let heap_def = get_pred_def heap in
     let vars = List.map List.hd heap_def in
@@ -125,19 +121,22 @@ let make_frame heap_a last_alloc heap_b (model: Model.model) =
         candidates
         candidates
     in
-    assert (IdSet.cardinal pruned = 1);
-    IdSet.choose pruned
+      match IdSet.cardinal pruned with
+      | 0 -> None
+      | 1 -> Some (IdSet.choose pruned)
+      | _ -> assert false
   in 
   let get_spatial var = 
     let term = Form.mk_app Sl.pts [Form.mk_const var] in
-      (* TODO this might not be defined but still required ... *)
       match Model.eval_term model term with
       | Some idx ->
         let var2 = List.hd (Util.IntMap.find idx csts) in
           Sl.PtsTo (var, var2)
       | None ->
           (* no pts_to -> look for the successor in reach *)
-          Sl.List (var, succ var)
+          match succ var with
+          | Some var2 -> Sl.List (var, var2)
+          | None -> Sl.PtsTo (var, fresh_ident "_")
   in
   let spatial = List.map get_spatial (Form.id_set_to_list diff) in
   let spatial2 = match spatial with
@@ -193,4 +192,4 @@ let infer_frame pre_sl path post_sl =
 
 let combine_frames_with_f sll frames =
   if frames = [] then sll
-  else Sl.mk_sep sll (Sl.Or frames)
+  else Sl.normalize (Sl.mk_sep sll (Sl.Or frames))
