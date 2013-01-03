@@ -26,6 +26,11 @@ module SlSet = Set.Make(struct
     let compare = compare
   end)
 
+module SlMap = Map.Make(struct
+    type t = form
+    let compare = compare
+  end)
+
 
 let mk_true = BoolConst true
 let mk_false = BoolConst false

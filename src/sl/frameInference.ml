@@ -25,6 +25,8 @@ let implies_heap_content subst =
     [ Comment ("same_heap_content_pre" , mk_equiv (mk_pred first_alloc [var1]) a_x);
       Comment ("implies_heap_content_post", mk_implies b_x (mk_pred last_alloc [var1])) ]
 
+(*TODO versioning issue: only the latest version of the variables can be part of the frame!! *)
+
 (* make the frame from a model as described in the paper (section 8).*)
 let make_frame heap_a last_alloc heap_b (model: Model.model) =
   if !Debug.verbose then
@@ -146,16 +148,33 @@ let make_frame heap_a last_alloc heap_b (model: Model.model) =
   in
   let frame = Sl.And (spatial2 :: pure) in
     Debug.msg ("frame is " ^ (Sl.to_string frame) ^ "\n");
-    (frame, Sl.And pure)
+    ((*frame,*) spatial2, Sl.And pure)
 
 let infer_frame_loop subst query =
   let last_alloc = last_alloc subst in
   let rec loop acc gen = match gen with
     | Some (generator, model) ->
-      let frame, pure = make_frame pre_heap last_alloc post_heap model in
+      let spatial, pure = make_frame pre_heap last_alloc post_heap model in
       let blocking = Sl.to_lolli post_heap pure in
-        loop (frame :: acc) (Prover.ModelGenerator.add_blocking_clause generator blocking)
-    | None -> acc
+        loop ((spatial, pure) :: acc) (Prover.ModelGenerator.add_blocking_clause generator blocking)
+    | None ->
+      (* group by spatial ... *)
+      let by_spatial =
+        List.fold_left
+          (fun acc (s, p) ->
+            let old =
+              try Sl.SlMap.find s acc
+              with Not_found -> []
+            in
+              Sl.SlMap.add s (p :: old) acc
+          )
+          Sl.SlMap.empty
+          acc
+      in
+        List.map
+          (fun (spatial, pures) -> Sl.mk_and spatial (Sl.Or pures) )
+          (Sl.SlMap.bindings by_spatial)
+
   in
   let initial = Prover.ModelGenerator.initial_query query in
     match initial with

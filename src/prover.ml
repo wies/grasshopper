@@ -190,6 +190,49 @@ module ModelGenerator =
   struct
     type t = SmtLib.session
 
+    let get_eq_classes session terms =
+      let terms_idx, max =
+        List.fold_left
+          ( fun (acc, i) t -> (TermMap.add t i acc, i+1))
+          (TermMap.empty, 0)
+          terms
+      in
+      let rec process uf terms = match terms with
+        | x :: xs ->
+          let id1 = TermMap.find x terms_idx in
+            List.fold_left
+              (fun acc y ->
+                let id2 = TermMap.find y terms_idx in
+                  if Puf.find uf id1 = Puf.find uf id2 then uf
+                  else
+                    begin
+                      let s2 = SmtLib.push session in
+                      SmtLib.assert_form s2 (mk_not (mk_eq x y));
+                      let res = match SmtLib.is_sat s2 with
+                        | Some true -> uf
+                        | Some false -> Puf.union uf id1 id2
+                        | None ->
+                          ignore (SmtLib.quit s2);
+                          failwith "cannot solve ?! (get_eq_classes)"
+                      in
+                        ignore (SmtLib.pop s2);
+                        res
+                    end
+              )
+              uf
+              xs
+        | [] -> uf
+      in
+      let uf = process (Puf.create max) terms in
+      let classes = Array.make max [] in
+        List.iter
+          (fun (t, i) ->
+            let c = Puf.find uf i in
+              classes.(c) <- t :: classes.(c)
+          )
+          (TermMap.bindings terms_idx);
+        List.filter (fun x -> x <> []) (Array.to_list classes)
+
     let try_get_model (result, generator) = 
       match result with
       | Some true ->
