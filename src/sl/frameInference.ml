@@ -25,7 +25,36 @@ let implies_heap_content subst =
     [ Comment ("same_heap_content_pre" , mk_equiv (mk_pred first_alloc [var1]) a_x);
       Comment ("implies_heap_content_post", mk_implies b_x (mk_pred last_alloc [var1])) ]
 
-(*TODO versioning issue: only the latest version of the variables can be part of the frame!! *)
+(*TODO versioning issue: only the latest version of the variables can be part of the frame (or not ?) *)
+
+
+(*
+TODO new workflow
+
+exploring the spatial part:
+-get a model
+-get the succ / pts / ... from the model
+-get some contraints that fix the spatial part of the frame
+-push these constraints and explore which combination of the pure part are allowed
+-pop the constraints
+-assert ~constraints and goto step 1
+
+exploring the pure part:
+-at the beginning: get the equivalence classes
+-given a session: compute the equivalence classes and look difference between those and the original eq cls.
+-do something smart or ennumerate all the possible assignements and push them through a BDD package.
+
+TODO even if the succ is unchanged, the (dis)equalities of the consts change the frame ...
+-> the separating conj forces some disequalities -> what we need is the equalities ...
+-> is the number of csts in the frame the same ? NO
+
+
+how to code that:
+-???
+let equal model term1 term2 =
+let get_spatial_part heap_a heap_b (model: Model.model) =
+*)
+
 
 (* make the frame from a model as described in the paper (section 8).*)
 let make_frame heap_a last_alloc heap_b (model: Model.model) =
@@ -127,7 +156,24 @@ let make_frame heap_a last_alloc heap_b (model: Model.model) =
       | 0 -> None
       | 1 -> Some (IdSet.choose pruned)
       | _ -> assert false
-  in 
+  in
+  (* terms which forces the value of succ *)
+  (*
+  let terms_for_succ v s_v =
+    let rm_v_sv set = IdSet.remove s_v (IdSet.remove v set) in
+    (*let after = rm_v_sv (reachable_from v) in
+    let not_reachable = rm_v_sv (IdSet.difference csts after) in *)
+    let vars = rm_v_sv csts in (*TODO w.r.t. equivalence classes *)
+    (* for each vars it is either unreachable or after. *)
+    let clauses =
+      IdSet.fold
+        (fun v2 acc -> (Form.mk_not (Axioms.reach Sl.pts v v2 s_v)) :: acc)
+        vars
+        []
+    in
+      Form.smk_and clauses
+  in
+  *)
   let get_spatial var = 
     let term = Form.mk_app Sl.pts [Form.mk_const var] in
       match Model.eval_term model term with
@@ -155,7 +201,7 @@ let infer_frame_loop subst query =
   let rec loop acc gen = match gen with
     | Some (generator, model) ->
       let spatial, pure = make_frame pre_heap last_alloc post_heap model in
-      let blocking = Sl.to_lolli post_heap pure in
+      let blocking = Sl.to_lolli post_heap pure in (*TODO this is wrong!! *)
         loop ((spatial, pure) :: acc) (Prover.ModelGenerator.add_blocking_clause generator blocking)
     | None ->
       (* group by spatial ... *)

@@ -1,2 +1,2 @@
 //unsat
-a ~= b && a ~= c && (lseg(a, b) * lseg(a, c))
+(a ~= b && a ~= c) * lseg(a, b) * lseg(a, c)

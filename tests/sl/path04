@@ -1,7 +1,8 @@
+//entailed ?
 path04(a, b)
 requires a |-> b * b |-> a
-ensures  a ~= c && b ~= c && (a |-> b * b|-> c)
+ensures  a |-> b * b|-> c * c |-> _
 {
-  new c; //entailed with this line
+  new c;
   b.next := c;
 }

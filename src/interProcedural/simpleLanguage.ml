@@ -173,7 +173,7 @@ let to_lolli heap sl =
   Sl.to_lolli heap sl
 
 let to_lolli_negated heap sl =
-  Sl.to_lolli heap (Sl.mk_not sl)
+  Sl.to_lolli_negated heap sl
 
 let rec get_clauses f = match f with
   | And lst -> List.flatten (List.map get_clauses lst)
@@ -372,6 +372,7 @@ let check_procedure proceduresMap name =
     let opt_frames = compute_frames pre stack m_pre in
     let frames = match opt_frames with
       | Some(lst) ->
+        print_endline "TODO reset_ident is a bad idea -> mutliple version of the same var";
         List.map
           (Sl.map_id (fun id -> if (fst id) = "_" then id else (fst id, 0))) (* reset non wildcard idents *)
           lst
@@ -398,9 +399,15 @@ let check_procedure proceduresMap name =
 
   let rec check pre stmnt =
     let rec traverse stack stmnt = match stmnt with
-      | VarUpdate (_, Term _) | FunUpdate (_, _, Term _)
-      | New _ | Dispose _ ->
+      | VarUpdate (_, Term _) | FunUpdate (_, _, Term _) | Dispose _ ->
         let (c, s) = convert stmnt (DecisionStack.get_subst stack) in
+          add_to_stack stack s c
+      | New v ->
+        let (c, s) = convert stmnt (DecisionStack.get_subst stack) in
+        (* add a skolem cst v |-> _ *)
+        let v2 = IdMap.find v s in
+        let skolem_pts = Form.mk_eq (Form.mk_app Sl.pts [Form.mk_const v2]) (Form.mk_const (fresh_ident "_")) in
+        let c = Form.smk_and [skolem_pts; c] in
           add_to_stack stack s c
       | Return (Form.Const t) -> 
         let post = proc.postcondition in
@@ -448,7 +455,7 @@ let check_procedure proceduresMap name =
          * -goal: (Not cond) /\ (invariant * frame) *)
         let opt_frames = compute_frames pre stack invariant in
         let frames = match opt_frames with
-          | Some(lst) -> List.map Sl.reset_ident lst 
+          | Some(lst) -> failwith "TODO: reset_ident but _" (*List.map Sl.reset_ident lst*)
           | None -> failwith "while loop: invariant not satisfied when entering the loop"
         in
         let formula = FrameInference.combine_frames_with_f invariant frames in

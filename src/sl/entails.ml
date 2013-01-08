@@ -28,7 +28,7 @@ let mk_entailment_query pre_sl path post_sl =
   assert (List.length pathf = 1);
   let pathf = List.hd pathf in
 
-  let post = Form.subst_id subst (Sl.to_lolli post_heap (Sl.mk_not post_sl)) in
+  let post = Form.subst_id subst (Sl.to_lolli_negated post_heap post_sl) in
   
   (* axioms from the logic *)
   let logic_axioms = List.flatten (make_axioms [ [pre]; pathf; [post]]) in
