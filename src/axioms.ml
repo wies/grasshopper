@@ -47,7 +47,7 @@ let lb_name = "lb_"
 
 let lb_id (f, n) = (lb_name ^ f, n)
 
-let lb f x y = mk_app (lb_id f) [x; y]
+let lb f x y = mk_app (lb_id f) [x; y] (*DZ: switch for axioms with lb ??*)
 
 let update_axioms f new_f ind upd =
     let f_upd1 = 

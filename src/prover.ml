@@ -190,7 +190,7 @@ module ModelGenerator =
   struct
     type t = SmtLib.session
 
-    let get_eq_classes session terms =
+    let get_eq_classes_raw session terms =
       let terms_idx, max =
         List.fold_left
           ( fun (acc, i) t -> (TermMap.add t i acc, i+1))
@@ -224,6 +224,15 @@ module ModelGenerator =
         | [] -> uf
       in
       let uf = process (Puf.create max) terms in
+        (uf, terms_idx)
+
+    let get_eq_classes session terms =
+      let (uf, terms_idx) = get_eq_classes_raw session terms in
+        (fun v -> Puf.find uf (TermMap.find v terms_idx) )
+    
+    let get_eq_classes_lst session terms =
+      let (uf, terms_idx) = get_eq_classes_raw session terms in
+      let max = TermMap.cardinal terms_idx in
       let classes = Array.make max [] in
         List.iter
           (fun (t, i) ->

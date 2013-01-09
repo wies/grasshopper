@@ -124,3 +124,5 @@ let read_file file =
       end
   in
     String.concat "\n" (read [])
+
+let flat_map fct lst = List.flatten (List.map fct lst)
