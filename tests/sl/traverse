@@ -1,0 +1,23 @@
+
+traverse1(lst)
+requires lseg(lst, null)
+ensures lseg(lst, null)
+{
+    curr := lst;
+    while(curr ~= null) emp {
+        curr := curr.next; 
+    }
+}
+
+traverse2(lst)
+requires lseg(lst, null)
+ensures lseg(lst, null)
+{
+    if (lst = null) {
+    } else {
+        curr := lst;
+        while(curr.next ~= null) emp {
+          curr := curr.next; 
+        }
+    }
+}

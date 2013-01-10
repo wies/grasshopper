@@ -1,0 +1,15 @@
+
+reverse(lst)
+requires lseg(lst, null)
+ensures lseg(returned, null)
+{
+    curr := lst;
+    rev := null;
+    while(curr ~= null) lseg(rev, null) * lseg(curr, null) {
+        tmp := curr;
+        curr := curr.next;
+        tmp.next := rev;
+        rev := tmp;
+    }
+    return curr;
+}

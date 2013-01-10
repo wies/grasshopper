@@ -302,6 +302,12 @@ let check_entailment what pre_sl stack post_sl =
     | Some false -> ()
     | None -> failwith ("cannot prove assertion (unk) for " ^ what)
 
+(* checks is a frame exists (non-tight entailment) *)
+let check_if_frame_exists pre stack sl =
+  let subst = DecisionStack.get_subst stack in
+  let pathf = DecisionStack.get_form stack in
+    Frame.is_frame_defined pre pathf sl subst
+
 let compute_frames pre_sl stack post_sl =
   Debug.msg ("compute frames: precondition " ^ (Sl.to_string pre_sl) ^ "\n");
   Debug.msg ("compute frames: postcondition " ^ (Sl.to_string post_sl) ^ "\n");
@@ -311,8 +317,8 @@ let compute_frames pre_sl stack post_sl =
   let pre = to_lolli Entails.pre_heap pre_sl in
   let path = DecisionStack.get_form stack in
   let post = subst_id subst (to_lolli Entails.post_heap post_sl) in
-  let query = FrameInference.mk_frame_query pre path post subst in
-  let frames = FrameInference.infer_frame_loop subst query in
+  let query = Frame.mk_frame_query pre path post subst in
+  let frames = Frame.infer_frame_loop subst query in
     frames
 
 (* ... *)
@@ -358,6 +364,37 @@ let check_procedure proceduresMap name =
     in
       subst_with_fresh_local m subst m.postcondition
   in
+
+  (* assume pre,stack |= sl_1 * F  for some frame F
+   * then we want to replace sl_1 by sl_2 (e.g. method call)
+   * we need to:
+   * 1) check that F exists
+   * 2) push sl_1 (not tight) -> the heap predicate give the footprint of sl_1
+   * 3) push sl_2 and use the footprint of sl_1 to update the predicates like alloc
+   *)
+  let sl_replacement pre stack sl_1 sl_2 =
+    if not (check_if_frame_exists pre stack sl_1) then
+      failwith "sl_replacement: precondition is not respected"
+    else
+      begin
+        let subst = DecisionStack.get_subst stack in
+        let last_alloc = Frame.last_alloc subst in
+        let fp = fresh_ident "footprint" in
+        let sl_1f = Form.subst_id subst (Sl.to_lolli fp sl_1) in
+        let included = Sl.mk_forall (Sl.set_included fp last_alloc) in
+        (* TODO what needs a new version ?
+         * -the return variable
+         * -what about the other variables ??
+         * -sl_pts
+         * -reach
+         * -alloc
+         * -> what are the axioms like:
+             if not in the footprint then same as before
+             if in the footprint then ???
+         *)
+          failwith "TODO 2 & 3"
+      end
+  in
     
   let procedure_call pre stack m args id =
     let args_id =
@@ -379,7 +416,7 @@ let check_procedure proceduresMap name =
       | None -> failwith "method call: precondition not satisfied"
     in
     let m_post = get_post m args_id id in
-    let formula = FrameInference.combine_frames_with_f m_post frames in
+    let formula = Frame.combine_frames_with_f m_post frames in
     Debug.msg ("procedure call: postcondition is " ^ (Sl.to_string formula) ^ "\n");
     let subst = DecisionStack.get_subst stack in
     let subst2 = refresh subst in
@@ -448,7 +485,7 @@ let check_procedure proceduresMap name =
         List.fold_left traverse stack stmnts
       | While (cond, invariant, body) ->
         (* check the loop body *)
-        let _ = check invariant (Block [Assume2 cond; body; Assert invariant]) in
+        let _ = check invariant (Block [Assume2 cond; body; Assert invariant; Assume2 (BoolConst false)]) in
         (* state after the loop:
          * -compute the frame
          * -get fresh ids
@@ -458,7 +495,7 @@ let check_procedure proceduresMap name =
           | Some(lst) -> failwith "TODO: reset_ident but _" (*List.map Sl.reset_ident lst*)
           | None -> failwith "while loop: invariant not satisfied when entering the loop"
         in
-        let formula = FrameInference.combine_frames_with_f invariant frames in
+        let formula = Frame.combine_frames_with_f invariant frames in
         let subst = DecisionStack.get_subst stack in
         let subst2 = refresh subst in
         let notC = subst_id subst2 (Form.Not cond) in

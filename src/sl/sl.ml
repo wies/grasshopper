@@ -383,11 +383,18 @@ let to_lolli_with_axioms domain f =
   let ax = List.flatten (Axioms.make_axioms [[f2]]) in
     Form.smk_and (f2 :: ax)
 
+let to_lolli_not_contained domain f = (* different structure or larger footprint *)
+  let domain2 = Form.fresh_ident ("in_" ^(fst domain)) in
+  let sk_var = Form.mk_const (Form.fresh_ident "skolemCst") in
+  let different_domain = Form.mk_and [Form.mk_not (mk_domain domain sk_var); (mk_domain domain2 sk_var)] in
+  let (pointers, separations) = to_form domain2 f in
+  let pointers = negate_ignore_quantifiers pointers in
+    positive_with_top_Lvl_axioms (Form.smk_and [Form.smk_or [different_domain; pointers]; separations])
+
 let to_lolli_negated domain f =
-  (*TODO make a new domain ... *)
   let domain2 = Form.fresh_ident ("neg_" ^(fst domain)) in
   let sk_var = Form.mk_const (Form.fresh_ident "skolemCst") in
-  let different_domain = mk_forall (Form.mk_not (Form.mk_equiv (mk_domain domain sk_var) (mk_domain domain2 sk_var))) in
+  let different_domain = Form.mk_not (Form.mk_equiv (mk_domain domain sk_var) (mk_domain domain2 sk_var)) in
   let (pointers, separations) = to_form domain2 f in
   let pointers = negate_ignore_quantifiers pointers in
     positive_with_top_Lvl_axioms (Form.smk_and [Form.smk_or [different_domain; pointers]; separations])
@@ -396,3 +403,25 @@ let to_lolli_negated_with_axioms domain f =
   let f2 = to_lolli_negated domain f in
   let ax = List.flatten (Axioms.make_axioms [[f2]]) in
     Form.smk_and (f2 :: ax)
+
+(* helpers for sets *)
+
+let set_in set v = Form.mk_pred set [v]
+
+let set_included set1 set2 =
+  Form.mk_implies (set_in set1 Axioms.var1) (set_in set2 Axioms.var1)
+
+let set_equiv set1 set2 =
+  Form.mk_equiv (set_in set1 Axioms.var1) (set_in set2 Axioms.var1)
+
+let set_disjoint set1 set2 =
+  Form.mk_or [Form.mk_not (set_in set1 Axioms.var1); Form.mk_not (set_in set2 Axioms.var1)]
+
+let set_union union set1 set2 =
+  Form.mk_equiv (set_in union Axioms.var1) (Form.mk_or [(set_in set1 Axioms.var1); (set_in set2 Axioms.var1)])
+
+let set_inter inter set1 set2 =
+  Form.mk_equiv (set_in inter Axioms.var1) (Form.mk_and [(set_in set1 Axioms.var1); (set_in set2 Axioms.var1)])
+
+let set_difference diff set1 set2 =
+  Form.mk_equiv (set_in diff Axioms.var1) (Form.mk_and [(set_in set1 Axioms.var1); Form.mk_not (set_in set2 Axioms.var1)])

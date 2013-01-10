@@ -25,9 +25,6 @@ let implies_heap_content subst =
     [ Comment ("same_heap_content_pre" , mk_equiv (mk_pred first_alloc [var1]) a_x);
       Comment ("implies_heap_content_post", mk_implies b_x (mk_pred last_alloc [var1])) ]
 
-(*TODO versioning issue: only the latest version of the variables can be part of the frame (or not ?) *)
-
-
 (*
 TODO new workflow
 
@@ -171,7 +168,7 @@ let terms_for_succ model csts =
             Util.flat_map
               (fun s_v ->
                 List.map
-                  (fun o -> Axioms.reach Sl.pts v s_v o)
+                  (fun o -> Axioms.reach Sl.pts (Form.mk_const v) (Form.mk_const s_v) (Form.mk_const o))
                   others
               )
               s_vs
@@ -212,27 +209,48 @@ let weaken_model session eq_cls (model: Model.model) =
       | Some m -> m
       | None -> model
 
+let terms_for_blocking_clause model spatial =
+  let csts = get_constants model in
+  let eqClasses = snd (List.split (Util.IntMap.bindings csts)) in
+  let get_aliased v = List.find (List.mem v) eqClasses in
+  let ts = terms_for_succ model csts in
+  let rec process t = match t with
+    | Sl.PtsTo (a, b) ->
+      let aliased_a = get_aliased a in
+      let aliased_b = get_aliased b in
+        Util.flat_map
+          (fun x ->
+            List.map (fun y -> Form.mk_eq (Form.mk_app Sl.pts [Form.mk_const x]) (Form.mk_const y) ) aliased_b)
+          aliased_a
+    | Sl.List (a, b) -> [ts a b]
+    | Sl.SepConj lst -> Util.flat_map process lst
+    | Sl.Emp -> []
+    | _ -> failwith "terms_for_blocking_clause: expected only spatial terms"
+  in
+    failwith "TODO"
+  (*
+  let different_alloc_a = ... in
+  let different_alloc_b = ... in
+  let structure = process spatial in
+    Form.smk_and (structure @ different_alloc_a @ different_alloc_b)
+  *)
+
 (* make the frame from a model as described in the paper (section 8).*)
-let make_frame session first_eq_cls heap_a last_alloc heap_b (model: Model.model) =
+let make_frame heap_a last_alloc heap_b (model: Model.model) =
   if !Debug.verbose then
     begin
       print_endline "making frame for:";
       Model.print_model model
     end;
   
-  let model = weaken_model session first_eq_cls model in
-  if !Debug.verbose then
-    begin
-      print_endline "weakened model:";
-      Model.print_model model
-    end;
   
   (* pure part *)
   let csts = get_constants model in
   let eqClasses = snd (List.split (Util.IntMap.bindings csts)) in
   let representatives = List.map List.hd eqClasses in
   let same = List.flatten (List.map mk_same eqClasses) in
-  let pure = (mk_different representatives) @ same in
+  let pure = Sl.And ((mk_different representatives) @ same) in
+  (*TODO prune ~= implied by * *)
 
   (* spatial part *)
   let get_pred_def pred_id = get_pred_repr model csts pred_id in
@@ -263,7 +281,7 @@ let make_frame session first_eq_cls heap_a last_alloc heap_b (model: Model.model
           (* no pts_to -> look for the successor in reach *)
           match succ var with
           | Some var2 -> Sl.List (var, var2)
-          | None -> Sl.PtsTo (var, fresh_ident "_")
+          | None -> failwith "existential successor" (* Sl.PtsTo (var, fresh_ident "_") *)
   in
   let spatial = List.map get_spatial (Form.id_set_to_list diff) in
   let spatial2 = match spatial with
@@ -271,9 +289,9 @@ let make_frame session first_eq_cls heap_a last_alloc heap_b (model: Model.model
     | [x] -> x
     | xs -> Sl.SepConj xs
   in
-  let frame = Sl.And (spatial2 :: pure) in
+  let frame = Sl.SepConj [spatial2; pure] in
     Debug.msg ("frame is " ^ (Sl.to_string frame) ^ "\n");
-    ((*frame,*) spatial2, Sl.And pure)
+    ((*frame,*) spatial2, pure)
 
 
 let infer_frame_loop subst query =
@@ -285,8 +303,17 @@ let infer_frame_loop subst query =
       let eq_cls = Prover.ModelGenerator.get_eq_classes session nodes in
       let rec loop acc gen = match gen with
         | Some (generator, model) ->
-          let spatial, pure = make_frame generator eq_cls pre_heap last_alloc post_heap model in
-          let blocking = Sl.to_lolli post_heap pure in (*TODO this is wrong!! *)
+          let model = weaken_model generator eq_cls model in
+          (*
+          if !Debug.verbose then
+            begin
+              print_endline "weakened model:";
+              Model.print_model model
+            end;
+          *)
+          let spatial, pure = make_frame pre_heap last_alloc post_heap model in
+          let blocking = terms_for_blocking_clause model spatial in
+            Debug.msg ("blocking terms are " ^ (Form.string_of_form blocking) ^ "\n");
             loop ((spatial, pure) :: acc) (Prover.ModelGenerator.add_blocking_clause generator blocking)
         | None ->
           (* group by spatial ... *)
@@ -303,7 +330,7 @@ let infer_frame_loop subst query =
               acc
           in
             List.map
-              (fun (spatial, pures) -> Sl.mk_and spatial (Sl.Or pures) )
+              (fun (spatial, pures) -> Sl.mk_sep spatial (Sl.Or pures) )
               (Sl.SlMap.bindings by_spatial)
 
       in
@@ -337,7 +364,22 @@ let infer_frame pre_sl path post_sl =
   let query = mk_frame_query pre pathf post subst in
     infer_frame_loop subst query
 
+(* Checks whether the frame exists *)
+let is_frame_defined pre_sl pathf post_sl subst =
+  let pre = Sl.to_lolli pre_heap pre_sl in
+  let post = Form.subst_id subst (Sl.to_lolli_not_contained post_heap post_sl) in
+  let query = mk_frame_query pre pathf post subst in
+    match Prover.satisfiable query with
+    | Some b -> not b
+    | None -> failwith "is_frame_defined: Prover returned None"
 
+let is_frame_defined_path pre_sl path post_sl =
+  let pathf, subst = ssa_partial IdMap.empty path in
+  assert (List.length pathf = 1);
+  let pathf = List.hd pathf in
+    is_frame_defined pre_sl pathf post_sl subst
+
+(* TODO the normal for with disjunctions! *)
 let combine_frames_with_f sll frames =
   if frames = [] then sll
   else Sl.normalize (Sl.mk_sep sll (Sl.Or frames))

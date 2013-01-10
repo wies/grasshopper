@@ -1,0 +1,19 @@
+
+insert(lst)
+requires lseg(lst, null)
+ensures lseg(returned, null)
+{
+    new elt;
+    elt.next := null;
+    if (lst = null)
+        return elt;
+    else {
+        curr := lst;
+        while ( Random && curr.next ~= null ) curr ~= null * lseg(lst, curr) * lseg(curr, null) {
+            curr := curr.next;
+        }
+        elt.next := curr.next;
+        curr.next := elt;
+        return lst;
+    }
+}

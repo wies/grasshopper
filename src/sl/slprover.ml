@@ -80,7 +80,7 @@ let compute_sl_entails () =
 let compute_sl_frame () =
   let pre_sl  = parse_given_input (fun lexbuf -> ParseSl.main LexSl.token lexbuf) (List.nth !input_file 0) in
   let post_sl = parse_given_input (fun lexbuf -> ParseSl.main LexSl.token lexbuf) (List.nth !input_file 1) in
-  let res = FrameInference.infer_frame pre_sl [] post_sl in
+  let res = Frame.infer_frame pre_sl [] post_sl in
     Util.print_measures ();
     match res with
     | Some frames ->
