@@ -78,7 +78,8 @@ let get_constants model =
     csts
 
 let get_constants_terms model =
-  List.flatten (snd (List.split (Util.IntMap.bindings csts)))
+  let csts = get_constants model in
+    List.flatten (snd (List.split (Util.IntMap.bindings csts)))
   
 
 (* all equal *)
@@ -183,12 +184,12 @@ let terms_for_succ model csts =
 let weaken_model session eq_cls (model: Model.model) =
   (* the original eq classes: eq_cls *)
   (* the current eq classes *)
-  let terms = get_constants_terms model in
+  let terms = List.map Form.mk_const (get_constants_terms model) in
   let cur_eq_cls = Prover.ModelGenerator.get_eq_classes_lst session terms in
   let s2 = SmtLib.push session in
   (* see if it is seprarable *)
   let assert_if_still_sat x y =
-    if Puf.find eq_cls x <> Puf.find eq_cls y then
+    if eq_cls x <> eq_cls y then
       begin
         let eq = Form.mk_eq x y in
         let s3 = SmtLib.push s2 in
@@ -196,7 +197,7 @@ let weaken_model session eq_cls (model: Model.model) =
           match SmtLib.is_sat s3 with
           | Some b ->
             let s4 = SmtLib.pop s3 in
-              if b then SmtLib.assert_form eq
+              if b then SmtLib.assert_form s4 eq
           | None -> failwith "SmtLib.is_sat -> None"
       end
   in
@@ -207,13 +208,22 @@ let weaken_model session eq_cls (model: Model.model) =
     List.iter try_separate_cls cur_eq_cls;
     let m2 = SmtLib.get_model s2 in
       ignore (SmtLib.pop s2);
-      m2
+      match m2 with
+      | Some m -> m
+      | None -> model
 
 (* make the frame from a model as described in the paper (section 8).*)
 let make_frame session first_eq_cls heap_a last_alloc heap_b (model: Model.model) =
   if !Debug.verbose then
     begin
       print_endline "making frame for:";
+      Model.print_model model
+    end;
+  
+  let model = weaken_model session first_eq_cls model in
+  if !Debug.verbose then
+    begin
+      print_endline "weakened model:";
       Model.print_model model
     end;
   
@@ -270,9 +280,9 @@ let infer_frame_loop subst query =
   let last_alloc = last_alloc subst in
   let initial = Prover.ModelGenerator.initial_query query in
     match initial with
-    | Some _ ->
-      let nodes = ground_terms query in
-      let eq_cls = Prover.ModelGenerator.get_eq_classes (fst initial) nodes in
+    | Some (session, _) ->
+      let nodes = TermSet.elements (ground_terms query) in
+      let eq_cls = Prover.ModelGenerator.get_eq_classes session nodes in
       let rec loop acc gen = match gen with
         | Some (generator, model) ->
           let spatial, pure = make_frame generator eq_cls pre_heap last_alloc post_heap model in
