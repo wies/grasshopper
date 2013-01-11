@@ -239,3 +239,31 @@ let skolemize fresh_const axiom =
   let vars = fv axiom in
   let subst_map = IdSet.fold (fun v acc -> IdMap.add v (fresh_const ()) acc ) vars IdMap.empty in
     subst subst_map axiom
+
+
+(*entry point: when entering a part of the heap*)
+
+let ep_name = "ep_"
+
+let ep_id (f, n) = (ep_name ^ f, n)
+
+let ep f x = mk_app (ep_id f) [x]
+
+let fun_of_ep = 
+  let ep_len = String.length ep_name in
+  fun (id : ident) -> (String.sub (fst id) ep_len (String.length (fst id) - ep_len), (snd id))
+
+let is_ep = 
+  let re = Str.regexp ep_name in
+  fun ((name, _) : ident) -> Str.string_match re name 0
+
+(* f is the pred defining an heap zone, h the pointer fct *)
+let ep_axioms f h =
+  let ep = ep f var1 in
+  let reachWo = reach h in
+  let reach x y = reach h x y y in
+  let in_f v = mk_pred f [v] in
+  let ep1 = mk_and [reach var1 ep; mk_or [in_f ep; mk_and [mk_eq var1 ep; mk_implies (reach var1 var2) (mk_not (in_f var2))]]] in
+  let ep2 = mk_implies (mk_and [reach var1 var2; in_f var2]) (reachWo var1 ep var2) in
+    [mk_comment "entrypoint1" ep1; 
+     mk_comment "entrypoint2" ep2]

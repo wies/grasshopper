@@ -26,6 +26,14 @@ type procedure = {
   body: stmnt
 }
 
+let rec assigned stmnt = match stmnt with
+  | Assume _ | Assume2 _ | Assert _ | Return _ -> IdSet.empty
+  | VarUpdate (t, _) | FunUpdate (t, _, _) | New t -> IdSet.singleton t
+  | Dispose _ -> IdSet.empty
+  | Block lst -> List.fold_left (fun acc s -> IdSet.union acc (assigned s)) IdSet.empty lst
+  | While (_, _, s) -> assigned s
+  | Ite (_, s1, s2) -> IdSet.union (assigned s1) (assigned s2)
+
 (* TODO a proof object to link the different parts and the FI.
    pre: formula + option frame ID
    post: formula + option frame ID
@@ -180,8 +188,6 @@ let rec get_clauses f = match f with
   | Comment (c, f) -> List.map (fun x -> Comment (c,x)) (get_clauses f)
   | other -> [other]
 
-let refresh subst_map =
-  IdMap.map (fun id -> (fst id, (snd id) + 1)) subst_map
 
 let unify_subst subst1 subst2 =
   let cstr_for id1 id2 =
@@ -365,6 +371,39 @@ let check_procedure proceduresMap name =
       subst_with_fresh_local m subst m.postcondition
   in
 
+  let replacement_alloc alloc1 fp1 alloc2 fp2 =
+    let mk_pred d = Form.mk_pred d [Axioms.var1] in
+      Sl.mk_forall
+        (Form.mk_or [
+          Form.mk_and [mk_pred fp1; Form.mk_equiv (mk_pred alloc2) (mk_pred fp2)] ;
+          Form.mk_and [Form.mk_not (mk_pred fp1); Form.mk_equiv (mk_pred alloc2) (mk_pred alloc1)]
+        ])
+  in
+
+  let replacement_pts fp1 pts1 pts2 =
+    let mk_pred d = Form.mk_pred d [Axioms.var1] in
+    let mk_app d = Form.mk_app d [Axioms.var1] in
+      Sl.mk_forall
+        (Form.mk_implies
+          (Form.mk_not (mk_pred fp1))
+          (Form.mk_eq (mk_app pts1) (mk_app pts2))
+        )
+  in
+
+  let replacement_reach fp1 pts1 pts2 =
+    let mk_pred d = Form.mk_pred d [Axioms.var1] in
+    let ep v = Axioms.ep fp1 v in
+    let reach1 = Axioms.reach pts1 in
+    let reach2 = Axioms.reach pts2 in
+      (Sl.mk_forall
+        (Form.mk_implies
+          (Form.mk_not (mk_pred fp1))
+          (Form.mk_equiv (reach1 Axioms.var1 (ep Axioms.var1) Axioms.var2)
+                         (reach2 Axioms.var1 (ep Axioms.var1) Axioms.var2))
+        )
+      ) :: (Axioms.ep_axioms fp1 pts1)
+  in
+
   (* assume pre,stack |= sl_1 * F  for some frame F
    * then we want to replace sl_1 by sl_2 (e.g. method call)
    * we need to:
@@ -372,30 +411,40 @@ let check_procedure proceduresMap name =
    * 2) push sl_1 (not tight) -> the heap predicate give the footprint of sl_1
    * 3) push sl_2 and use the footprint of sl_1 to update the predicates like alloc
    *)
-  let sl_replacement pre stack sl_1 sl_2 =
+  let sl_replacement pre stack sl_1 subst2 sl_2 =
     if not (check_if_frame_exists pre stack sl_1) then
       failwith "sl_replacement: precondition is not respected"
     else
       begin
         let subst = DecisionStack.get_subst stack in
-        let last_alloc = Frame.last_alloc subst in
+        let alloc1 = Frame.last_alloc subst in
         let fp = fresh_ident "footprint" in
         let sl_1f = Form.subst_id subst (Sl.to_lolli fp sl_1) in
-        let included = Sl.mk_forall (Sl.set_included fp last_alloc) in
-        (* TODO what needs a new version ?
-         * -the return variable
-         * -what about the other variables ??
-         * -sl_pts
-         * -reach
-         * -alloc
-         * -> what are the axioms like:
-             if not in the footprint then same as before
-             if in the footprint then ???
-         *)
-          failwith "TODO 2 & 3"
+        let included = Sl.mk_forall (Sl.set_included fp alloc1) in
+        let fp2 = fresh_ident "footprint" in
+        let sl_2f = Form.subst_id subst2 (Sl.to_lolli fp2 sl_2) in
+        let alloc2 = Frame.last_alloc subst2 in
+        let get_pts subst = try IdMap.find Sl.pts subst with Not_found -> Sl.pts in
+        let axioms =
+          (replacement_alloc alloc1 fp alloc2 fp2) ::
+          (replacement_pts fp (get_pts subst) (get_pts subst2)) ::
+          (replacement_reach fp (get_pts subst) (get_pts subst2))
+        in
+          add_to_stack stack subst2 (Form.smk_and (sl_1f :: included :: sl_2f :: axioms))
       end
   in
-    
+  
+  let increase1 subst id =
+    let (name, version) =
+      try IdMap.find id subst
+      with Not_found -> id
+    in
+      IdMap.add id (name, version + 1) subst
+  in
+  let increase subst ids =
+    List.fold_left increase1 subst ids
+  in
+
   let procedure_call pre stack m args id =
     let args_id =
       List.map
@@ -405,31 +454,21 @@ let check_procedure proceduresMap name =
         ) args
     in
     Debug.msg ("procedure_call: " ^ (str_of_ident m) ^ "(" ^ (String.concat ", " (List.map str_of_ident args_id))^ ")\n");
-    let m_pre = get_pre m args_id in
-    let opt_frames = compute_frames pre stack m_pre in
-    let frames = match opt_frames with
-      | Some(lst) ->
-        print_endline "TODO reset_ident is a bad idea -> mutliple version of the same var";
-        List.map
-          (Sl.map_id (fun id -> if (fst id) = "_" then id else (fst id, 0))) (* reset non wildcard idents *)
-          lst
-      | None -> failwith "method call: precondition not satisfied"
-    in
-    let m_post = get_post m args_id id in
-    let formula = Frame.combine_frames_with_f m_post frames in
-    Debug.msg ("procedure call: postcondition is " ^ (Sl.to_string formula) ^ "\n");
     let subst = DecisionStack.get_subst stack in
-    let subst2 = refresh subst in
-    let heap = latest_alloc subst2 in
-    let f1 = to_lolli heap formula in
-    let f2 = subst_id subst2 f1 in
-    (*
-    Debug.msg ("procedure_call: subst\n" ^ (DecisionStack.subst_to_string subst) ^ "\n");
-    Debug.msg ("procedure_call: subst2\n" ^ (DecisionStack.subst_to_string subst2) ^ "\n");
-    Debug.msg ("procedure_call: f1\n" ^ (string_of_form f1) ^ "\n");
-    Debug.msg ("procedure_call: f2\n" ^ (string_of_form f2) ^ "\n");
-    *)
-      (f2, subst2)
+    let subst2 = increase subst [Sl.pts; Axioms.reach_id Sl.pts; Axioms.alloc_id; id] in 
+    let m_pre = get_pre m args_id in
+    let m_post = get_post m args_id id in
+      sl_replacement pre stack m_pre subst2 m_post
+  in
+
+  let while_pre_post pre stack cond invariant body =
+    (* pre/post *)
+    let subst = DecisionStack.get_subst stack in
+    let assigned = IdSet.elements (assigned body) in
+    let subst2 = increase subst (Sl.pts :: (Axioms.reach_id Sl.pts) :: Axioms.alloc_id :: assigned) in
+    let stack2 = sl_replacement pre stack invariant subst2 invariant in
+    let notC = subst_id subst2 (Form.Not cond) in
+      add_to_stack stack2 subst2 notC
   in
   
   let proc = get name in
@@ -486,31 +525,13 @@ let check_procedure proceduresMap name =
       | While (cond, invariant, body) ->
         (* check the loop body *)
         let _ = check invariant (Block [Assume2 cond; body; Assert invariant; Assume2 (BoolConst false)]) in
-        (* state after the loop:
-         * -compute the frame
-         * -get fresh ids
-         * -goal: (Not cond) /\ (invariant * frame) *)
-        let opt_frames = compute_frames pre stack invariant in
-        let frames = match opt_frames with
-          | Some(lst) -> failwith "TODO: reset_ident but _" (*List.map Sl.reset_ident lst*)
-          | None -> failwith "while loop: invariant not satisfied when entering the loop"
-        in
-        let formula = Frame.combine_frames_with_f invariant frames in
-        let subst = DecisionStack.get_subst stack in
-        let subst2 = refresh subst in
-        let notC = subst_id subst2 (Form.Not cond) in
-        let heap = latest_alloc subst2 in
-        let f2 = subst_id subst2 (to_lolli heap formula) in
-          add_to_stack stack subst2 (smk_and [notC; f2])
-        
+          while_pre_post pre stack cond invariant body
       | VarUpdate (id, Call (m, args)) -> 
-        let f2, subst2 = procedure_call pre stack m args id in
-          add_to_stack stack subst2 f2
+        procedure_call pre stack m args id
         (* goal: (post[returned \mapsto id'] @ frame, subst2) *)
       | FunUpdate (id, ptr, Call (m, args)) -> 
         let ret_id = fresh_ident "_returned" in
-        let f2, subst2 = procedure_call pre stack m args ret_id in
-        let stack2 = add_to_stack stack subst2 f2 in
+        let stack2 = procedure_call pre stack m args ret_id in
         let t2 = VarUpdate (id, Term (Form.Const ret_id)) in
           traverse stack2 t2
     in
@@ -518,6 +539,6 @@ let check_procedure proceduresMap name =
     let final_stack = traverse DecisionStack.empty stmnt in
     (* check for postcondition (void methods) *)
     let post = proc.postcondition in
-      check_entailment "endOfMethod" pre final_stack post;
+      check_entailment "endOfMethod" pre final_stack post
   in
     check proc.precondition proc.body
