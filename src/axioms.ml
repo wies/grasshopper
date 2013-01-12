@@ -146,6 +146,10 @@ let is_ep =
   let re = Str.regexp ep_name in
   fun ((name, _) : ident) -> Str.string_match re name 0
 
+let extract_ep t = match t with
+  | FunApp (id, _) when is_ep id -> Some (fun_of_ep id)
+  | _ -> None
+
 (* f is the pred defining an heap zone, h the pointer fct *)
 let ep_axioms f h =
   let ep = ep f var1 in

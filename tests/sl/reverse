@@ -1,4 +1,3 @@
-
 reverse(lst)
 requires lseg(lst, null)
 ensures lseg(returned, null)
@@ -11,5 +10,5 @@ ensures lseg(returned, null)
         tmp.next := rev;
         rev := tmp;
     }
-    return curr;
+    return rev;
 }

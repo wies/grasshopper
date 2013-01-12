@@ -264,7 +264,6 @@ let check_entailment what pre_sl stack post_sl =
   let subst = DecisionStack.get_subst stack in
   let pre = to_lolli Entails.pre_heap pre_sl in
   let pathf = DecisionStack.get_form stack in
-  (*TODO something is not right*)
   let post_neg = subst_id subst (to_lolli_negated Entails.post_heap post_sl) in
   let heap_content = Entails.same_heap_axioms subst in
   let axioms = List.flatten (Axioms.make_axioms [pre :: pathf @ [post_neg]]) in
@@ -391,6 +390,7 @@ let check_procedure proceduresMap name =
    * 3) push sl_2 and use the footprint of sl_1 to update the predicates like alloc
    *)
   let sl_replacement pre stack sl_1 subst2 sl_2 =
+    Debug.msg ("sl_replacement: " ^ (Sl.to_string sl_1) ^ " by " ^ (Sl.to_string sl_2) ^ "\n");
     if not (check_if_frame_exists pre stack sl_1) then
       failwith "sl_replacement: precondition is not respected"
     else
@@ -476,7 +476,8 @@ let check_procedure proceduresMap name =
         (* add a skolem cst v |-> _ *)
         let v2 = IdMap.find v s in
         let skolem_pts = Form.mk_eq (Form.mk_app Sl.pts [Form.mk_const v2]) (Form.mk_const (fresh_ident "_")) in
-        let c = Form.smk_and [skolem_pts; c] in
+        let not_null = Form.mk_not (Form.mk_eq Axioms.null (Form.mk_const v2)) in
+        let c = Form.smk_and [not_null; skolem_pts; c] in
           add_to_stack stack s c
       | Return (Form.Const t) -> 
         let post = proc.postcondition in
@@ -485,7 +486,7 @@ let check_procedure proceduresMap name =
         let subst = IdMap.add (mk_ident "returned") newT subst in
         let stackWithReturn = DecisionStack.step stack (Form.BoolConst true) subst in
           (*check postcond and assume false !*)
-          check_entailment "return" pre stackWithReturn post;
+          check_entailment ("return " ^ (str_of_ident newT)) pre stackWithReturn post;
           DecisionStack.step stack (Form.BoolConst false) IdMap.empty
       | Return t -> failwith "TODO: return expect an id for the moment"
       | Assume f ->
@@ -495,7 +496,7 @@ let check_procedure proceduresMap name =
         let c = subst_id subst (to_lolli cur_alloc f) in
           add_to_stack stack subst c
       | Assert f ->
-        check_entailment "assertion" pre stack f;
+        check_entailment ("assertion " ^ (Sl.to_string f)) pre stack f;
         stack
       | Assume2 f ->
         let subst = DecisionStack.get_subst stack in

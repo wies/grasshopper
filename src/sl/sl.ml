@@ -171,38 +171,28 @@ let to_form set_fct domain f =
   let fd why d = Form.fresh_ident ( why ^ "_" ^(fst d)) in
   let v = Axioms.var1 in
   let empty domain = mk_forall (Form.mk_not (mk_domain domain v)) in
-  let rec process domain f = match f with
-    | BoolConst b ->
-      let d' = fd "leaf" domain in
-        (Form.mk_and [Form.BoolConst b; mk_forall (set_fct d' domain)], empty d')
-    | Eq (id1, id2) -> 
-      let d' = fd "leaf" domain in
-        (Form.mk_and [Form.mk_eq (cst id1) (cst id2); mk_forall (set_fct d' domain)], empty d')
-    | Emp ->
-      let d' = fd "leaf" domain in
-        (mk_forall (set_fct d' domain), empty d')
+  let rec process_sep domain f = match f with
+    | BoolConst b -> (Form.BoolConst b, empty domain)
+    | Not (Eq (id1, id2)) -> (Form.mk_neq (cst id1) (cst id2), empty domain)
+    | Eq (id1, id2) -> (Form.mk_eq (cst id1) (cst id2), empty domain)
+    | Emp -> (Form.BoolConst true, empty domain)
     | PtsTo (id1, id2) ->
-      let d' = fd "leaf" domain in
-        ( Form.mk_and [ Form.mk_eq (Form.mk_app pts [cst id1]) (cst id2); mk_forall (set_fct d' domain)],
-          mk_forall (Form.mk_equiv (Form.mk_eq (cst id1) v) (mk_domain d' v))
+        ( Form.mk_eq (Form.mk_app pts [cst id1]) (cst id2),
+          mk_forall (Form.mk_equiv (Form.mk_eq (cst id1) v) (mk_domain domain v))
         )
     | List (id1, id2) ->
-      let d' = fd "leaf" domain in
-        ( Form.mk_and [ reach id1 id2; mk_forall (set_fct d' domain)],
+        ( reach id1 id2,
           mk_forall (
             Form.mk_equiv (
               Form.mk_and [
                 reachWoT (cst id1) v (cst id2);
                 Form.mk_neq v (cst id2)
               ]; )
-            (mk_domain d' v) )
+            (mk_domain domain v) )
         )
-    | Not form ->
-      let (structure, heap) = process domain form in
-        (Form.mk_not structure, heap)
     | SepConj forms ->
       let ds = List.map (fun _ -> fd "sep" domain) forms in
-      let translated = List.map2 process ds forms in
+      let translated = List.map2 process_sep ds forms in
       let (translated_1, translated_2) = List.split translated in
       let dsP = List.map (fun d -> mk_domain d v) ds in
       let d = mk_domain domain v in
@@ -216,34 +206,27 @@ let to_form set_fct domain f =
       let heap_part = Form.mk_and (sepration :: translated_2) in
       let struct_part = Form.smk_and translated_1 in
         (struct_part, heap_part)
+    | other -> failwith ("process_sep does not expect " ^ (to_string other))
+  in
+
+  let rec process_bool f = match f with
     | And forms ->
-      (*
-      let ds = List.map (fun _ -> Form.fresh_ident ("sub_" ^(fst domain))) forms in
-      let translated = List.map2 process ds forms in
-      let (translated_1, translated_2) = List.split translated in
-      let dsP = List.map (fun d -> mk_domain d v) ds in
-      let d = mk_domain domain v in
-      let pick_all = List.map (fun d2 -> mk_forall (Form.mk_equiv d d2)) dsP in
-        (Form.smk_and (pick_all @ translated_1), Form.smk_and translated_2)
-      *)
-      let translated = List.map (process domain) forms in
+      let translated = List.map process_bool forms in
       let (translated_1, translated_2) = List.split translated in
         (Form.smk_and translated_1, Form.smk_and translated_2)
     | Or forms ->
-      (*
-      let ds = List.map (fun _ -> Form.fresh_ident ("sub_" ^(fst domain))) forms in
-      let translated = List.map2 process ds forms in
-      let (translated_1, translated_2) = List.split translated in
-      let dsP = List.map (fun d -> mk_domain d v) ds in
-      let d = mk_domain domain v in
-      let pick_one = Form.smk_or (List.map2 (fun d2 f -> Form.smk_and [mk_forall (Form.mk_equiv d d2); f]) dsP translated_1) in
-        (pick_one, Form.smk_and translated_2)
-      *)
-      let translated = List.map (process domain) forms in
+      let translated = List.map process_bool forms in
       let (translated_1, translated_2) = List.split translated in
         (Form.smk_or translated_1, Form.smk_and translated_2)
+    | Not form ->
+      let (structure, heap) = process_bool form in
+        (Form.mk_not structure, heap)
+    | sep ->
+      let d' = fd "leaf" domain in
+      let (str, heap) = process_sep d' sep in
+        (Form.mk_and [str; mk_forall (set_fct d' domain)], heap)
   in
-    process domain f
+    process_bool f
 
 let nnf f =
   let rec process negate f = match f with

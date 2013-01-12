@@ -14,13 +14,40 @@ let congr_classes fs gterms =
       (fun t (tmap, c) -> (TermMap.add t c tmap, c + 1)) 
       gterms (TermMap.empty, 0) 
   in
+  let eps =
+    if (!Config.sl_mode) then
+      TermSet.fold
+        (fun t acc -> match Axioms.extract_ep t with
+          | Some e -> IdSet.add e acc
+          | None -> acc
+        )
+        gterms
+        IdSet.empty
+    else
+      IdSet.empty
+  in
+  let generalize_eq t1 t2 =
+    IdSet.fold
+      (fun e acc ->
+        let e1 = Axioms.ep e t1 in
+        let e2 = Axioms.ep e t2 in
+          if TermSet.mem e1 gterms && TermSet.mem e2 gterms then (e1, e2) :: acc
+          else acc
+      )
+      eps
+      [(t1, t2)]
+  in
   let puf = 
     List.fold_left 
       (fun puf -> function 
 	| Eq (t1, t2) -> 
-	    let t1_index = TermMap.find t1 term_index_map in
-	    let t2_index = TermMap.find t2 term_index_map in
-	    Puf.union puf (Puf.find puf t1_index) (Puf.find puf t2_index)
+        List.fold_left
+          (fun puf (t1, t2) ->
+            let t1_index = TermMap.find t1 term_index_map in
+            let t2_index = TermMap.find t2 term_index_map in
+              Puf.union puf (Puf.find puf t1_index) (Puf.find puf t2_index) )
+          puf
+          (generalize_eq t1 t2)
 	| _ -> puf)
       (Puf.create num) fs
   in
@@ -196,7 +223,7 @@ let get_ground_terms f =
 
 let instantiate fs =
   let gterms_f = get_ground_terms (mk_and fs) in
-  instantiate_with_terms fs gterms_f
+    instantiate_with_terms fs gterms_f
 
 let instantiate_interp pf_a pf_b =
   let a_axioms, a_ground = extract_axioms pf_a in

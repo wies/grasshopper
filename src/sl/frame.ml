@@ -310,14 +310,14 @@ let mk_frame_query pre pathf post subst =
   let logic_axioms = List.flatten (make_axioms [ [pre]; pathf; [post]]) in
   
   (* query *)
-  let query = smk_and ( pre :: post :: pathf @
-                        (implies_heap_content subst) @
-                        logic_axioms )
+  (*let wo_axioms = pre :: pathf @ [post] @ (implies_heap_content subst) in*)
+  let wo_axioms = pre :: pathf @ [post] @ (Entails.same_heap_axioms subst) in
+  let query = smk_and ( wo_axioms @ logic_axioms )
   in
   let _ = if !Debug.verbose then
     begin
-      print_endline "query: ";
-      print_form stdout query
+      print_endline "frame query: ";
+      print_form stdout (smk_and wo_axioms)
     end
   in
     query
