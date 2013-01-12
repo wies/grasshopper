@@ -123,11 +123,7 @@ let subst_id subst f =
   in
     map_id get f
 
-(* TODO translation to lolli:
- * tricky part is the scope of the quantifier -> looli does not have this explicitely,
- * (1) maybe we can have an intermediate step with a new AST
- * (2) interprete the comments as scope for the quantified variable (ugly hack)
- *)
+(* translation to lolli/grass *)
 
 let exists = "exists"
 let forall = "forall"
@@ -148,77 +144,64 @@ let one_and_rest lst =
   in
     process [] [] lst
 
-(*
-let to_form domain f =
-  let v = Axioms.var1 in
-  let rec process domain f = match f with
-    | BoolConst b -> Form.BoolConst b
-    | Eq (id1, id2) -> Form.mk_eq (cst id1) (cst id2)
-    | Emp -> mk_forall (Form.mk_not (mk_domain domain v))
-    | PtsTo (id1, id2) ->
-      Form.mk_and [
-        Form.mk_eq (Form.mk_app pts [cst id1]) (cst id2) ;
-        mk_forall (Form.mk_equiv (Form.mk_eq (cst id1) v) (mk_domain domain v))
-      ]
-    | List (id1, id2) ->
-      Form.mk_and [
-        reach id1 id2;
-        mk_forall (
-          Form.mk_equiv (
-            Form.mk_and [
-              reachWoT (cst id1) v (cst id2);
-              Form.mk_neq v (cst id2)
-            ]; )
-          (mk_domain domain v) )
-      ]
-    | SepConj forms ->
-      let ds = List.map (fun _ -> Form.fresh_ident ("sub_" ^(fst domain))) forms in
-      let dsP = List.map (fun d -> mk_domain d v) ds in
-      let translated = List.map2 process ds forms in
-      let d = mk_domain domain v in
-      let sepration =
-        mk_forall (Form.mk_and (
-            (Form.mk_implies d (Form.mk_or dsP))
-            :: (List.map (fun (x, xs) -> Form.mk_implies x (Form.mk_and (d :: (List.map Form.mk_not xs)))) (one_and_rest dsP))
-          )
-        )
-      in
-        Form.mk_and (sepration :: translated)
-    | Not form -> Form.mk_not (process domain form)
-    | And forms -> Form.smk_and (List.map (process domain) forms)
-    | Or forms -> Form.smk_or (List.map (process domain) forms)
-  in
-    process domain f
-*)
+(* helpers for sets *)
+let set_in set v = Form.mk_pred set [v]
+
+let set_included set1 set2 =
+  Form.mk_implies (set_in set1 Axioms.var1) (set_in set2 Axioms.var1)
+
+let set_equiv set1 set2 =
+  Form.mk_equiv (set_in set1 Axioms.var1) (set_in set2 Axioms.var1)
+
+let set_disjoint set1 set2 =
+  Form.mk_or [Form.mk_not (set_in set1 Axioms.var1); Form.mk_not (set_in set2 Axioms.var1)]
+
+let set_union union set1 set2 =
+  Form.mk_equiv (set_in union Axioms.var1) (Form.mk_or [(set_in set1 Axioms.var1); (set_in set2 Axioms.var1)])
+
+let set_inter inter set1 set2 =
+  Form.mk_equiv (set_in inter Axioms.var1) (Form.mk_and [(set_in set1 Axioms.var1); (set_in set2 Axioms.var1)])
+
+let set_difference diff set1 set2 =
+  Form.mk_equiv (set_in diff Axioms.var1) (Form.mk_and [(set_in set1 Axioms.var1); Form.mk_not (set_in set2 Axioms.var1)])
+(*********************)
 
 (* translation that keep the heap separation separated from the pointer structure *)
-let to_form domain f =
+let to_form set_fct domain f =
+  let fd why d = Form.fresh_ident ( why ^ "_" ^(fst d)) in
   let v = Axioms.var1 in
   let empty domain = mk_forall (Form.mk_not (mk_domain domain v)) in
   let rec process domain f = match f with
-    | BoolConst b -> (Form.BoolConst b, empty domain)
+    | BoolConst b ->
+      let d' = fd "leaf" domain in
+        (Form.mk_and [Form.BoolConst b; mk_forall (set_fct d' domain)], empty d')
     | Eq (id1, id2) -> 
-      (Form.mk_eq (cst id1) (cst id2), empty domain)
-    | Emp -> (Form.BoolConst true, empty domain)
+      let d' = fd "leaf" domain in
+        (Form.mk_and [Form.mk_eq (cst id1) (cst id2); mk_forall (set_fct d' domain)], empty d')
+    | Emp ->
+      let d' = fd "leaf" domain in
+        (mk_forall (set_fct d' domain), empty d')
     | PtsTo (id1, id2) ->
-      ( Form.mk_eq (Form.mk_app pts [cst id1]) (cst id2),
-        mk_forall (Form.mk_equiv (Form.mk_eq (cst id1) v) (mk_domain domain v))
-      )
+      let d' = fd "leaf" domain in
+        ( Form.mk_and [ Form.mk_eq (Form.mk_app pts [cst id1]) (cst id2); mk_forall (set_fct d' domain)],
+          mk_forall (Form.mk_equiv (Form.mk_eq (cst id1) v) (mk_domain d' v))
+        )
     | List (id1, id2) ->
-      ( reach id1 id2,
-        mk_forall (
-          Form.mk_equiv (
-            Form.mk_and [
-              reachWoT (cst id1) v (cst id2);
-              Form.mk_neq v (cst id2)
-            ]; )
-          (mk_domain domain v) )
-      )
+      let d' = fd "leaf" domain in
+        ( Form.mk_and [ reach id1 id2; mk_forall (set_fct d' domain)],
+          mk_forall (
+            Form.mk_equiv (
+              Form.mk_and [
+                reachWoT (cst id1) v (cst id2);
+                Form.mk_neq v (cst id2)
+              ]; )
+            (mk_domain d' v) )
+        )
     | Not form ->
       let (structure, heap) = process domain form in
         (Form.mk_not structure, heap)
     | SepConj forms ->
-      let ds = List.map (fun _ -> Form.fresh_ident ("sub_" ^(fst domain))) forms in
+      let ds = List.map (fun _ -> fd "sep" domain) forms in
       let translated = List.map2 process ds forms in
       let (translated_1, translated_2) = List.split translated in
       let dsP = List.map (fun d -> mk_domain d v) ds in
@@ -234,6 +217,7 @@ let to_form domain f =
       let struct_part = Form.smk_and translated_1 in
         (struct_part, heap_part)
     | And forms ->
+      (*
       let ds = List.map (fun _ -> Form.fresh_ident ("sub_" ^(fst domain))) forms in
       let translated = List.map2 process ds forms in
       let (translated_1, translated_2) = List.split translated in
@@ -241,7 +225,12 @@ let to_form domain f =
       let d = mk_domain domain v in
       let pick_all = List.map (fun d2 -> mk_forall (Form.mk_equiv d d2)) dsP in
         (Form.smk_and (pick_all @ translated_1), Form.smk_and translated_2)
+      *)
+      let translated = List.map (process domain) forms in
+      let (translated_1, translated_2) = List.split translated in
+        (Form.smk_and translated_1, Form.smk_and translated_2)
     | Or forms ->
+      (*
       let ds = List.map (fun _ -> Form.fresh_ident ("sub_" ^(fst domain))) forms in
       let translated = List.map2 process ds forms in
       let (translated_1, translated_2) = List.split translated in
@@ -249,6 +238,10 @@ let to_form domain f =
       let d = mk_domain domain v in
       let pick_one = Form.smk_or (List.map2 (fun d2 f -> Form.smk_and [mk_forall (Form.mk_equiv d d2); f]) dsP translated_1) in
         (pick_one, Form.smk_and translated_2)
+      *)
+      let translated = List.map (process domain) forms in
+      let (translated_1, translated_2) = List.split translated in
+        (Form.smk_or translated_1, Form.smk_and translated_2)
   in
     process domain f
 
@@ -277,6 +270,7 @@ let nnf f =
   in
     process false f
 
+(*
 let negate_ignore_quantifiers f =
   let rec process negate f = match f with
     | Form.BoolConst b -> Form.BoolConst (negate <> b)
@@ -296,14 +290,9 @@ let negate_ignore_quantifiers f =
         Form.mk_comment c form2
   in
     process true f
-
-(* TODO skolem and equisat, negation for entailement ?
- * translation should either or not, nnf/restricted form should make it so.
- * ...
- *)
+*)
 
 (* assumes no quantifier alternation *)
-(*
 let skolemize f =
   let fresh () = cst (Form.fresh_ident skolemCst) in
   let rec process subst f = match f with
@@ -329,7 +318,6 @@ let skolemize f =
           Form.mk_comment c (process subst form)
   in
     process IdMap.empty f
-*)
 
 (* pull the axioms at the top level.
  * assumes: nnf, skolemized
@@ -375,7 +363,7 @@ let positive_with_top_Lvl_axioms f =
     Form.smk_and (f2s  @ (List.flatten accs))
 
 let to_lolli domain f =
-  let (pointers, separations) = to_form domain f in
+  let (pointers, separations) = to_form set_equiv domain f in
     positive_with_top_Lvl_axioms (Form.smk_and [pointers; separations])
 
 let to_lolli_with_axioms domain f =
@@ -384,44 +372,27 @@ let to_lolli_with_axioms domain f =
     Form.smk_and (f2 :: ax)
 
 let to_lolli_not_contained domain f = (* different structure or larger footprint *)
+  let (pointers, separations) = to_form set_included domain (mk_not f) in
+    positive_with_top_Lvl_axioms (skolemize (nnf (Form.smk_and [pointers; separations])))
+(*
   let domain2 = Form.fresh_ident ("in_" ^(fst domain)) in
   let sk_var = Form.mk_const (Form.fresh_ident "skolemCst") in
   let different_domain = Form.mk_and [Form.mk_not (mk_domain domain sk_var); (mk_domain domain2 sk_var)] in
   let (pointers, separations) = to_form domain2 f in
   let pointers = negate_ignore_quantifiers pointers in
     positive_with_top_Lvl_axioms (Form.smk_and [Form.smk_or [different_domain; pointers]; separations])
+*)    
 
 let to_lolli_negated domain f =
+  (*
   let domain2 = Form.fresh_ident ("neg_" ^(fst domain)) in
   let sk_var = Form.mk_const (Form.fresh_ident "skolemCst") in
   let different_domain = Form.mk_not (Form.mk_equiv (mk_domain domain sk_var) (mk_domain domain2 sk_var)) in
-  let (pointers, separations) = to_form domain2 f in
-  let pointers = negate_ignore_quantifiers pointers in
-    positive_with_top_Lvl_axioms (Form.smk_and [Form.smk_or [different_domain; pointers]; separations])
+  *)
+  let (pointers, separations) = to_form set_equiv domain (mk_not f) in
+    positive_with_top_Lvl_axioms (skolemize (nnf (Form.smk_and [pointers; separations])))
 
 let to_lolli_negated_with_axioms domain f =
   let f2 = to_lolli_negated domain f in
   let ax = List.flatten (Axioms.make_axioms [[f2]]) in
     Form.smk_and (f2 :: ax)
-
-(* helpers for sets *)
-
-let set_in set v = Form.mk_pred set [v]
-
-let set_included set1 set2 =
-  Form.mk_implies (set_in set1 Axioms.var1) (set_in set2 Axioms.var1)
-
-let set_equiv set1 set2 =
-  Form.mk_equiv (set_in set1 Axioms.var1) (set_in set2 Axioms.var1)
-
-let set_disjoint set1 set2 =
-  Form.mk_or [Form.mk_not (set_in set1 Axioms.var1); Form.mk_not (set_in set2 Axioms.var1)]
-
-let set_union union set1 set2 =
-  Form.mk_equiv (set_in union Axioms.var1) (Form.mk_or [(set_in set1 Axioms.var1); (set_in set2 Axioms.var1)])
-
-let set_inter inter set1 set2 =
-  Form.mk_equiv (set_in inter Axioms.var1) (Form.mk_and [(set_in set1 Axioms.var1); (set_in set2 Axioms.var1)])
-
-let set_difference diff set1 set2 =
-  Form.mk_equiv (set_in diff Axioms.var1) (Form.mk_and [(set_in set1 Axioms.var1); Form.mk_not (set_in set2 Axioms.var1)])
