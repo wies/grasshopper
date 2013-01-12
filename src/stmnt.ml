@@ -1,5 +1,6 @@
 open Form
 open Axioms
+open Config
 
 type stmnt =
   | VarUpdate of ident * term

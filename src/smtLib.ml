@@ -62,8 +62,8 @@ let start smt_cmd replay_file produce_models produce_interpolants =
       writeln session "(set-logic UF)"
     end;
   writeln session ("(declare-sort " ^ sort_str ^ " 0)");
-  if not !Config.instantiate then
-    writeln session "(declare-fun ground (usort) Bool)";
+  (*if not !Config.instantiate then
+    writeln session "(declare-fun ground (usort) Bool)";*)
   session
     
 let start_z3 replay_file = start "z3 -smt2 -ini:z3.ini -in" replay_file true false
@@ -131,8 +131,8 @@ let assert_form session ?(igroup=None) f = Util.measure (assert_form session ~ig
 let assert_forms session ?(igroup=None) fs =
   List.iter (fun f -> assert_form session ~igroup:igroup f) fs
     
-let declare_gound session terms =
-  List.iter (fun t -> assert_form session (mk_pred ("ground",0) [t])) terms
+(*let declare_gound session terms =
+  List.iter (fun t -> assert_form session (mk_pred ("ground",0) [t])) terms*)
     
     
 let is_sat session = 

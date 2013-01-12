@@ -8,10 +8,10 @@ let input_file = ref ""
 
 let cmd_options =
   [("-v", Arg.Set Debug.verbose, "Display verbose messages");
-   ("-noreach", Arg.Clear Axioms.with_reach_axioms, "Do not add axioms for reachability predicates");
+   ("-noreach", Arg.Clear Config.with_reach_axioms, "Do not add axioms for reachability predicates");
    ("-m", Arg.Set_string Prover.model_file, "Produce model");
-   ("-alloc", Arg.Set Axioms.with_alloc_axioms, "Add axioms for alloc predicate");
-   ("-nojoin", Arg.Clear Axioms.with_jp_axioms, "Do not add axioms for join functions");
+   ("-alloc", Arg.Set Config.with_alloc_axioms, "Add axioms for alloc predicate");
+   ("-nojoin", Arg.Clear Config.with_jp_axioms, "Do not add axioms for join functions");
  ]
 
 let usage_message =
@@ -39,7 +39,7 @@ let compute_interpolant () =
 
 
 let _ =
-  InstGen.use_aggressive_inst := true;
+  Config.use_aggressive_inst := true;
   try
     Arg.parse cmd_options (fun s -> input_file := s) usage_message;
     if !input_file = "" then cmd_line_error "input file missing" else

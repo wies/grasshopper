@@ -31,13 +31,16 @@ let vc_gen file =
   let procMap = List.fold_left (fun acc m -> IdMap.add m.name m acc) IdMap.empty procs in
     List.iter (fun p -> check_procedure procMap p.name) procs
 
-
 let _ =
   try
     Arg.parse cmd_options (fun s -> input_file := s) usage_message;
     if !input_file = ""
     then cmd_line_error "input file missing"
-    else vc_gen !input_file
+    else
+      begin
+        Config.default_opts_for_sl ();
+        vc_gen !input_file
+      end
   with  
   | Sys_error s -> output_string stderr (s ^ "\n")
   | Failure s -> output_string stderr (s ^ "\n")

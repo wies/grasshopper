@@ -151,6 +151,7 @@ let mk_solver f =
     SmtLib.declare session signature;
     Debug.msg "  signature done\n";
 
+    (*
     if not !Config.instantiate then
       begin
         let grounds = ground_terms (mk_and f_inst) in
@@ -159,6 +160,7 @@ let mk_solver f =
         SmtLib.declare_gound session (List.map List.hd classes);
         Debug.msg "  ground terms done\n";
       end;
+    *)
 
     SmtLib.assert_forms session f_inst;
     Debug.msg "  f_inst done\n";

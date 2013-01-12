@@ -34,39 +34,6 @@ let rec assigned stmnt = match stmnt with
   | While (_, _, s) -> assigned s
   | Ite (_, s1, s2) -> IdSet.union (assigned s1) (assigned s2)
 
-(* TODO a proof object to link the different parts and the FI.
-   pre: formula + option frame ID
-   post: formula + option frame ID
-   path: assume(pre), statment list, assert(post)
-   call: (1) substitute the args in pre, need FI.
-         (2) substitute the args in post, add frame from (1)
-   while: (1) assert invariant + FI
-          (2) assume condition + invariant, loop body, assert invariant
-          (3) assume ~condition + invariant, add frame, continue ...
-   ite: -> case splitting to the solver
-*)
-  
-(* for pre and post conditions, do we need special variables:
-   old(v) + return for the postcond
-   old(v) is refering to the value at the moment of the call
-   return is a special var (used in subst after the call)
-*)
-
-(* problem: seq needs intermediate annotation, here we don't have those ...
-   can we replace them with place holder ?
-   how to get both at the same time the constraints for correctness and for the frame inference ?
-   exploring the proof tree (inorder) should give the path needed for the frame inference 
-type proof = 
-  | Seq of (*path*) proof list
-  | DischargedElsewhere of stmnt
-  | Branch of stmnt * (*true*) proof option * (*false*) proof option
-  | Loop of stmnt * (*frame*) Sl.sl_form * (*inside*) proof
-  | CallSite of stmnt * (*frame*) Sl.sl_form
-  | Assertion of stmnt
-  
-type m_proof = procedure * (*pre*) Sl.sl_form * proof * (*post*) Sl.sl_form
-*)
-
 module DecisionStack =
   struct
 
@@ -158,6 +125,12 @@ module DecisionStack =
 
     let guard_and_add stack f =
         axiom stack (guard_axiom stack f)
+
+    let ground_terms stack =
+      List.fold_left
+        (fun acc f -> TermSet.union (ground_terms f) acc)
+        TermSet.empty
+        (get_form stack)
 
   end
       
@@ -401,6 +374,12 @@ let check_procedure proceduresMap name =
           (Form.mk_equiv (reach1 Axioms.var1 (ep Axioms.var1) Axioms.var2)
                          (reach2 Axioms.var1 (ep Axioms.var1) Axioms.var2))
         )
+      ) :: (Sl.mk_forall
+        (Form.mk_implies
+          (Form.mk_and [Form.mk_not (mk_pred fp1); Form.mk_eq Axioms.var1 (ep Axioms.var1)])
+          (Form.mk_equiv (reach1 Axioms.var1 Axioms.var2 Axioms.var3)
+                         (reach2 Axioms.var1 Axioms.var2 Axioms.var3))
+        )
       ) :: (Axioms.ep_axioms fp1 pts1)
   in
 
@@ -430,7 +409,21 @@ let check_procedure proceduresMap name =
           (replacement_pts fp (get_pts subst) (get_pts subst2)) ::
           (replacement_reach fp (get_pts subst) (get_pts subst2))
         in
-          add_to_stack stack subst2 (Form.smk_and (sl_1f :: included :: sl_2f :: axioms))
+        (*
+        let ground_terms =
+          List.fold_left TermSet.union TermSet.empty [
+              DecisionStack.ground_terms stack;
+              ground_terms (Sl.to_lolli Entails.pre_heap pre);
+              ground_terms sl_1f;
+              ground_terms sl_2f
+            ]
+        in
+        let trivial_ep v = Form.mk_eq (Axioms.ep fp v) (Axioms.ep fp v) in
+        let inject_ep =
+          Form.mk_and (TermSet.fold (fun t acc -> (trivial_ep t):: acc) ground_terms [])
+        in
+        *)
+          add_to_stack stack subst2 (Form.smk_and ((*inject_ep ::*) sl_1f :: included :: sl_2f :: axioms))
       end
   in
   

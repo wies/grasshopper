@@ -426,7 +426,7 @@ let print_form out_ch =
     | f -> pf "" "" f; print "\n"
   
 
-let print_smtlib_form_generic before_f after_f out_ch f =
+let print_smtlib_term out_ch t =
   let print = output_string out_ch in
   let print_list fn xs = List.iter (fun x -> fn x; print " ") xs in
   let rec smt_term = function
@@ -439,6 +439,11 @@ let print_smtlib_form_generic before_f after_f out_ch f =
 	print_list smt_term ts;
 	print ")"
   in
+    smt_term t
+
+let print_smtlib_form_generic before_f after_f out_ch f =
+  let print = output_string out_ch in
+  let print_list fn xs = List.iter (fun x -> fn x; print " ") xs in
   let rec smt_form = function
   | And fs -> 
       print "(and ";
@@ -462,12 +467,12 @@ let print_smtlib_form_generic before_f after_f out_ch f =
           print "(";
           print (str_of_ident id);
           print " ";
-          print_list smt_term ts;
+          print_list (print_smtlib_term out_ch) ts;
           print ")"
         end
   | Eq (s, t) -> 
       print "(= ";
-      print_list smt_term [s; t];
+      print_list (print_smtlib_term out_ch) [s; t];
       print ")"
   | BoolConst b -> if b then print " true" else print " false"
   in 
@@ -491,9 +496,29 @@ let print_smtlib_form out_ch f =
     print_smtlib_form_generic before_quantify after_quantify out_ch f
 
 let print_smtlib_form_with_triggers out_ch f =
+  let vars = fv f in
+  let triggers = 
+    let with_vars =
+      if !Config.use_aggressive_inst then
+        begin
+          let rec has_var t = match t with 
+            | Var _ -> true
+            | Const _ -> false
+            | FunApp (_, ts) -> List.exists has_var ts
+          in
+          let rec get acc t =
+            if has_var t then TermSet.add t acc
+            else acc
+          in
+            collect_from_terms get TermSet.empty f
+        end
+      else
+        IdSet.fold (fun id acc -> TermSet.add (mk_var id) acc) vars TermSet.empty
+    in
+      TermSet.filter (fun t -> match t with Var _ -> false | _ -> true) with_vars
+  in
   let before_quantify out_ch f =
     let print = output_string out_ch in
-    let vars = fv f in
     if not (IdSet.is_empty vars) then
        begin
          print "(forall (";
@@ -503,13 +528,15 @@ let print_smtlib_form_with_triggers out_ch f =
   in
   let after_quantify out_ch f =
     let print = output_string out_ch in
-    let vars = fv f in
-      if not (IdSet.is_empty vars) then
+    let print_list fn xs = List.iter (fun x -> fn x; print " ") xs in
+      if not (TermSet.is_empty triggers) then
         begin
           print ":pattern (";
-          IdSet.iter (fun id -> print ("(ground " ^ str_of_ident id ^ ") ")) vars;
+          print_list (print_smtlib_term out_ch) (TermSet.elements triggers);
           print ")))"
         end
+      else if not (IdSet.is_empty vars) then
+        print "))"
   in
     print_smtlib_form_generic before_quantify after_quantify out_ch f
       

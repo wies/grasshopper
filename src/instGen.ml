@@ -2,8 +2,6 @@ open Util
 open Form
 open Axioms
 
-let use_aggressive_inst = ref false
-
 let add_class acc cl = 
   match cl with
   | [] -> acc 
@@ -128,7 +126,7 @@ let generate_instances axioms terms rep_map =
 	    ground_terms)
 	fun_terms
     in
-    if !use_aggressive_inst || is_local then subst subst_map axiom :: acc else acc
+    if !Config.use_aggressive_inst || is_local then subst subst_map axiom :: acc else acc
   in
   let partitioned_axioms = 
     let fv_axioms = List.map (fun f -> (fv f, f)) axioms in
@@ -179,8 +177,25 @@ let instantiate_with_terms fs gterms_f =
   let instances_f = generate_instances axioms_f reps_f rep_map_f in
   defs_f @ ground_f @ instances_f
 
+let get_ground_terms f =
+  let g1 = ground_terms f in
+    if !Config.sl_mode then
+      begin
+        let eps = Axioms.get_eps f in
+        let mk_eps t =
+          IdSet.fold
+            (fun ep acc -> TermSet.add (Axioms.ep ep t) acc)
+            eps
+            TermSet.empty
+        in
+          TermSet.fold
+            (fun t acc -> TermSet.union (mk_eps t) acc)
+            g1 g1
+      end
+    else g1
+
 let instantiate fs =
-  let gterms_f = ground_terms (mk_and fs) in
+  let gterms_f = get_ground_terms (mk_and fs) in
   instantiate_with_terms fs gterms_f
 
 let instantiate_interp pf_a pf_b =

@@ -25,38 +25,6 @@ let implies_heap_content subst =
     [ Comment ("same_heap_content_pre" , mk_equiv (mk_pred first_alloc [var1]) a_x);
       Comment ("implies_heap_content_post", mk_implies b_x (mk_pred last_alloc [var1])) ]
 
-(*
-TODO new workflow
-
-exploring the spatial part:
--get a model
--get the succ / pts / ... from the model
--get some contraints that fix the spatial part of the frame
--push these constraints and explore which combination of the pure part are allowed
--pop the constraints
--assert ~constraints and goto step 1
-
-exploring the pure part:
--at the beginning: get the equivalence classes
--given a session: compute the equivalence classes and look difference between those and the original eq cls.
--do something smart or ennumerate all the possible assignements and push them through a BDD package.
-
-TODO even if the succ is unchanged, the (dis)equalities of the consts change the frame ...
--> the separating conj forces some disequalities -> what we need is the equalities ...
--> is the number of csts in the frame the same ? NO
-
-what are the eq we can split: the ones which are not related to the nodes in the frame (changing those change the frame)
-
-negation of preds for succ needs to be expanded
-
-what is the negation of an existential follower: the empty set / false / nothing
-
-how to code that:
--???
-let equal model term1 term2 =
-let get_spatial_part heap_a heap_b (model: Model.model) =
-*)
-
 (* map: int -> id list *)
 let get_constants model =
   let csts =
@@ -152,6 +120,7 @@ let succ model csts =
         | _ -> assert false
     )
 
+(*
 (* terms which forces the value of succ *)
 let terms_for_succ model csts =
   let eqClasses = snd (List.split (Util.IntMap.bindings csts)) in
@@ -177,6 +146,7 @@ let terms_for_succ model csts =
       in
         Form.mk_and all_terms
     )
+*)
 
 let weaken_model session eq_cls (model: Model.model) =
   (* the original eq classes: eq_cls *)
@@ -209,6 +179,7 @@ let weaken_model session eq_cls (model: Model.model) =
       | Some m -> m
       | None -> model
 
+(*
 let terms_for_blocking_clause model spatial =
   let csts = get_constants model in
   let eqClasses = snd (List.split (Util.IntMap.bindings csts)) in
@@ -234,6 +205,7 @@ let terms_for_blocking_clause model spatial =
   let structure = process spatial in
     Form.smk_and (structure @ different_alloc_a @ different_alloc_b)
   *)
+*)
 
 (* make the frame from a model as described in the paper (section 8).*)
 let make_frame heap_a last_alloc heap_b (model: Model.model) =
@@ -258,11 +230,6 @@ let make_frame heap_a last_alloc heap_b (model: Model.model) =
   let vars_in heap =
     let heap_def = get_pred_def heap in
     let vars = List.map List.hd heap_def in
-      List.fold_left (fun acc v -> IdSet.add v acc) IdSet.empty vars
-  in
-  let all_vars_in heap =
-    let heap_def = get_pred_all model csts heap in
-    let vars = List.flatten (List.map List.hd heap_def) in
       List.fold_left (fun acc v -> IdSet.add v acc) IdSet.empty vars
   in
   (*let vars_a = vars_in heap_a in*)
@@ -312,7 +279,7 @@ let infer_frame_loop subst query =
             end;
           *)
           let spatial, pure = make_frame pre_heap last_alloc post_heap model in
-          let blocking = terms_for_blocking_clause model spatial in
+          let blocking = failwith "TODO older version" in (*terms_for_blocking_clause model spatial in*)
             Debug.msg ("blocking terms are " ^ (Form.string_of_form blocking) ^ "\n");
             loop ((spatial, pure) :: acc) (Prover.ModelGenerator.add_blocking_clause generator blocking)
         | None ->

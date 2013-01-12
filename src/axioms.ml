@@ -1,8 +1,5 @@
 open Form
-
-let with_reach_axioms = ref true
-let with_jp_axioms = ref true
-let with_alloc_axioms = ref false
+open Config
 
 let var1 = mk_var (fresh_ident "v")
 let var2 = mk_var (fresh_ident "v")
@@ -134,6 +131,40 @@ let alloc_dispose_axioms id alloc new_alloc =
   (*dispose if the symmetric of new*)
   alloc_update_axioms id new_alloc alloc
 
+(*entry point: when entering a part of the heap, used for SL*)
+let ep_name = "ep_"
+
+let ep_id (f, n) = (ep_name ^ f, n)
+
+let ep f x = mk_app (ep_id f) [x]
+
+let fun_of_ep = 
+  let ep_len = String.length ep_name in
+  fun (id : ident) -> (String.sub (fst id) ep_len (String.length (fst id) - ep_len), (snd id))
+
+let is_ep = 
+  let re = Str.regexp ep_name in
+  fun ((name, _) : ident) -> Str.string_match re name 0
+
+(* f is the pred defining an heap zone, h the pointer fct *)
+let ep_axioms f h =
+  let ep = ep f var1 in
+  let reachWo = reach h in
+  let reach x y = reach h x y y in
+  let in_f v = mk_pred f [v] in
+  let ep1 = mk_and [reach var1 ep; mk_or [in_f ep; mk_and [mk_eq var1 ep; mk_implies (reach var1 var2) (mk_not (in_f var2))]]] in
+  let ep2 = mk_implies (mk_and [reach var1 var2; in_f var2]) (reachWo var1 ep var2) in
+    [mk_comment "entrypoint1" ep1; 
+     mk_comment "entrypoint2" ep2]
+
+let get_eps f =
+  IdMap.fold 
+    (fun id decl acc ->
+      if (not decl.is_pred) && decl.arity = 1 && is_ep id then IdSet.add (fun_of_ep id) acc
+      else acc)
+    (sign f) IdSet.empty
+(*******)
+
 let fun_axioms f = (*mk_eq (mk_app f [null]) null ::*) jp_axioms f
 
 let extract_axioms fs =
@@ -177,7 +208,7 @@ let unary_funs f =
     (fun id decl acc ->
       if (not decl.is_pred) then
         begin
-          if decl.arity = 1 then IdSet.add id acc
+          if decl.arity = 1 && not (is_ep id) then IdSet.add id acc
           else if decl.arity = 2 && is_jp id then IdSet.add (fun_of_jp id) acc
           else acc
         end
@@ -240,30 +271,3 @@ let skolemize fresh_const axiom =
   let subst_map = IdSet.fold (fun v acc -> IdMap.add v (fresh_const ()) acc ) vars IdMap.empty in
     subst subst_map axiom
 
-
-(*entry point: when entering a part of the heap*)
-
-let ep_name = "ep_"
-
-let ep_id (f, n) = (ep_name ^ f, n)
-
-let ep f x = mk_app (ep_id f) [x]
-
-let fun_of_ep = 
-  let ep_len = String.length ep_name in
-  fun (id : ident) -> (String.sub (fst id) ep_len (String.length (fst id) - ep_len), (snd id))
-
-let is_ep = 
-  let re = Str.regexp ep_name in
-  fun ((name, _) : ident) -> Str.string_match re name 0
-
-(* f is the pred defining an heap zone, h the pointer fct *)
-let ep_axioms f h =
-  let ep = ep f var1 in
-  let reachWo = reach h in
-  let reach x y = reach h x y y in
-  let in_f v = mk_pred f [v] in
-  let ep1 = mk_and [reach var1 ep; mk_or [in_f ep; mk_and [mk_eq var1 ep; mk_implies (reach var1 var2) (mk_not (in_f var2))]]] in
-  let ep2 = mk_implies (mk_and [reach var1 var2; in_f var2]) (reachWo var1 ep var2) in
-    [mk_comment "entrypoint1" ep1; 
-     mk_comment "entrypoint2" ep2]
