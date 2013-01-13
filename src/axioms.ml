@@ -115,6 +115,9 @@ let jp_axioms f =
      mk_comment "join4" jp4]
   else []
 
+let null_axioms f =
+  [mk_eq (mk_app f [null]) null]
+
 let alloc_axioms = 
   if !with_alloc_axioms then [mk_pred alloc_id [null]] else []
 
@@ -259,7 +262,7 @@ let make_axioms fs =
     List.map2
       (fun unary init ->
         IdSet.fold (fun id acc -> reach_axioms id @ acc) init [] @
-        IdSet.fold (fun id acc -> fun_axioms id @ acc) unary []
+        IdSet.fold (fun id acc -> null_axioms id @ fun_axioms id @ acc) unary []
       )
       unaries
       all_init

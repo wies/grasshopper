@@ -1,0 +1,27 @@
+
+partition(x, y, z)
+requires lseg(x, null) * y = null * z = null
+ensures lseg(y, null) * lseg(z, null)
+{
+    new y_last;
+    y := y_last;
+    new z_last;
+    z := z_last;
+    z_last := z;
+    while (x ~= null) lseg(x,null) * lseg(y,y_last) * lseg(z,z_last) * y_last |-> _ * z_last |-> _ {
+      if (Random) {
+        y_last.next := x;
+      } else {
+        z_last.next := x;
+      }
+      x := x.next;
+    }
+    y_last.next := null;
+    z_last.next := null;
+    curr_y := y;
+    curr_z := z;
+    y := y.next;
+    z := z.next;
+    free curr_y;
+    free curr_z;
+}

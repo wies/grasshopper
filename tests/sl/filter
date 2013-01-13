@@ -1,0 +1,20 @@
+
+filter(x)
+requires lseg(x, null)
+ensures lseg(x, null)
+{
+    prev := null;
+    curr := x;
+    while (curr ~= null) (lseg(x,prev) * prev |-> curr * lseg(curr,null)) || 
+                         (prev = null * lseg(x,prev) * lseg(curr,null)) 
+    {
+      if (Random) {
+        if (prev ~= null) {
+          prev.next := curr.next;
+	} else {}
+        free curr;
+      } else {}
+      prev := curr;
+      curr := curr.next;
+    }
+}

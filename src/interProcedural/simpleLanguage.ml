@@ -384,11 +384,20 @@ let check_procedure proceduresMap name =
     let reach2 x y z = Form.mk_pred r2 [x; y; z] in
       (Sl.mk_forall
         (Form.mk_implies
+          (Form.mk_and 
+	     [Form.mk_not (mk_pred fp1); 
+	      reach1 Axioms.var1 Axioms.var2 (ep Axioms.var1)])
+          (Form.mk_equiv 
+	     (reach1 Axioms.var1 Axioms.var2 var3)
+             (reach2 Axioms.var1 Axioms.var2 var3))
+        )
+      )(* :: (Sl.mk_forall
+        (Form.mk_implies
           (Form.mk_not (mk_pred fp1))
           (Form.mk_equiv (reach1 Axioms.var1 (ep Axioms.var1) Axioms.var2)
                          (reach2 Axioms.var1 (ep Axioms.var1) Axioms.var2))
         )
-      ) :: (Sl.mk_forall
+      )*) :: (Sl.mk_forall
         (Form.mk_implies
           (Form.mk_and [Form.mk_not (mk_pred fp1); Form.mk_eq Axioms.var1 (ep Axioms.var1)])
           (Form.mk_equiv (reach1 Axioms.var1 Axioms.var2 Axioms.var3)
@@ -413,9 +422,13 @@ let check_procedure proceduresMap name =
         let subst = DecisionStack.get_subst stack in
         let alloc1 = Frame.last_alloc subst in
         let fp = fresh_ident "footprint" in
+        let fp2 = fresh_ident "footprint" in
         let sl_1f = Form.subst_id subst (Sl.to_lolli fp sl_1) in
         let included = Sl.mk_forall (Sl.set_included fp alloc1) in
-        let fp2 = fresh_ident "footprint" in
+	let preserve = Sl.mk_forall 
+	    (Form.mk_implies (mk_and [Sl.set_in alloc1 Axioms.var1; Sl.set_in fp2 Axioms.var1])
+	    (Sl.set_in fp Axioms.var1)) 
+	in
         let sl_2f = Form.subst_id subst2 (Sl.to_lolli fp2 sl_2) in
         (*let included2 = Sl.mk_forall (Sl.set_included fp2 alloc2) in*)
         let alloc2 = Frame.last_alloc subst2 in
@@ -440,7 +453,7 @@ let check_procedure proceduresMap name =
           Form.mk_and (TermSet.fold (fun t acc -> (trivial_ep t):: acc) ground_terms [])
         in
         *)
-          add_to_stack stack subst2 (Form.smk_and ((*inject_ep ::*) sl_1f :: included :: sl_2f :: axioms))
+          add_to_stack stack subst2 (Form.smk_and ((*inject_ep ::*) sl_1f :: included :: preserve :: sl_2f :: axioms))
       end
   in
   
