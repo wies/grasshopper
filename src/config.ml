@@ -11,6 +11,8 @@ let instantiate = ref true
 (* if true, do more than local inst. *)
 let use_aggressive_inst = ref false
 
+let use_triggers = ref true
+
 let sl_mode = ref false
 
 let default_opts_for_sl () =

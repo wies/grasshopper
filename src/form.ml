@@ -499,7 +499,7 @@ let print_smtlib_form_with_triggers out_ch f =
   let vars = fv f in
   let triggers = 
     let with_vars =
-      if !Config.use_aggressive_inst then
+      if !Config.use_triggers then
         begin
           let rec has_var t = match t with 
             | Var _ -> true
