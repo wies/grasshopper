@@ -21,7 +21,9 @@ rule token = parse
 | ',' { COMMA }
 | '*' { SEP }
 | "|->" { PTS }
+| "|<-" { BPTS }
 | "lseg" { LS }
+| "dlseg" { DLS }
 | "true" { TRUE }
 | "false" { FALSE }
 | "emp" { EMP }

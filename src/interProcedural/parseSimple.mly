@@ -12,7 +12,7 @@ let parse_error = ParseStmntAux.parse_error
 %token LPAREN RPAREN LBRACKET RBRACKET
 %token SEMICOLON DOT
 %token EQ NEQ
-%token PTS LS TRUE FALSE EMP
+%token PTS BPTS LS DLS TRUE FALSE EMP
 %token COLONEQ
 %token ASSUME ASSERT NEW NEXT DISPOSE RETURN
 %token SEP AND OR NOT COMMA
@@ -67,7 +67,9 @@ sl_form:
 | term EQ term { mk_eq $1 $3 }
 | term NEQ term { mk_not (mk_eq $1 $3) }
 | term PTS term { mk_pts $1 $3 }
+| term BPTS term { mk_prev_pts $1 $3 }
 | LS LPAREN term COMMA term RPAREN { mk_ls $3 $5 }
+| DLS LPAREN term COMMA term COMMA term COMMA term RPAREN { mk_dls $3 $5 $7 $9 }
 | NOT sl_form { mk_not $2 }
 | sl_form AND sl_form { mk_and $1 $3 }
 | sl_form OR sl_form { mk_or $1 $3 }

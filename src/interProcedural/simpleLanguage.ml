@@ -272,9 +272,9 @@ let check_entailment what pre_sl stack post_sl =
   let _ = if !Debug.verbose then
     begin
       print_endline "query wo axioms: ";
-      print_form stdout (mk_and (wo_axioms @ heap_content));
+      print_form stdout (mk_and (wo_axioms @ heap_content))(*;
       print_endline "query: ";
-      print_form stdout query
+      print_form stdout query*)
     end
   in
   let sat = Prover.satisfiable query in

@@ -243,7 +243,7 @@ let make_frame heap_a last_alloc heap_b (model: Model.model) =
       match Model.eval_term model term with
       | Some idx ->
         let var2 = List.hd (Util.IntMap.find idx csts) in
-          Sl.PtsTo (var, var2)
+          Sl.PtsTo (Sl.pts, var, var2)
       | None ->
           (* no pts_to -> look for the successor in reach *)
           match succ var with

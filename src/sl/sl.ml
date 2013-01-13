@@ -6,15 +6,17 @@ module IdSet = Form.IdSet
 let ident_to_string = Form.str_of_ident
 
 (* the next pointer *)
-let pts = mk_ident "sl_pts"
+let pts = mk_ident "sl_next"
+let prev_pts = mk_ident "sl_prev"
 
 let skolemCst = "SkolemCst"
 
 type form =
   | Emp
   | Eq of ident * ident
-  | PtsTo of ident * ident
+  | PtsTo of ident * ident * ident
   | List of ident * ident
+  | DList of ident * ident * ident * ident
   | SepConj of form list
   | BoolConst of bool
   | Not of form
@@ -36,8 +38,10 @@ let mk_true = BoolConst true
 let mk_false = BoolConst false
 let mk_eq a b = Eq (a, b)
 let mk_not a = Not a
-let mk_pts a b = PtsTo (a, b)
+let mk_pts a b = PtsTo (pts, a, b)
+let mk_prev_pts a b = PtsTo (prev_pts, a, b)
 let mk_ls a b = List (a, b)
+let mk_dls a b c d = DList (a, b, c, d)
 let mk_and a b = And [a; b]
 let mk_or a b = Or [a; b]
 let mk_sep a b = SepConj [a; b]
@@ -50,13 +54,17 @@ let rec to_string f = match f with
   | Or lst ->  "(" ^ (String.concat ") || (" (List.map to_string lst)) ^ ")"
   | BoolConst b -> string_of_bool b
   | Emp -> "emp"
-  | PtsTo (a, b) -> (Form.str_of_ident a) ^ " |-> " ^ (Form.str_of_ident b)
+  | PtsTo (h, a, b) when h = pts -> (Form.str_of_ident a) ^ " |-> " ^ (Form.str_of_ident b)
+  | PtsTo (h, a, b) when h = prev_pts -> (Form.str_of_ident a) ^ " |<- " ^ (Form.str_of_ident b)
+  | PtsTo (h, a, b) -> (Form.str_of_ident a) ^ " |"^(ident_to_string h)^"> " ^ (Form.str_of_ident b)
   | List (a, b) -> "lseg(" ^ (Form.str_of_ident a) ^ ", " ^ (Form.str_of_ident b) ^ ")"
+  | DList (a, b, c, d) -> "dlseg(" ^ (String.concat ", " (List.map ident_to_string [a;b;c;d])) ^ ")"
   | SepConj lst -> "(" ^ (String.concat ") * (" (List.map to_string lst)) ^ ")"
 
 let rec ids f = match f with
-  | Eq (a, b) | PtsTo (a, b) | List (a, b) -> 
+  | Eq (a, b) | PtsTo (_, a, b) | List (a, b) -> 
     IdSet.add a (IdSet.singleton b)
+  | DList (a, b, c, d) -> List.fold_right IdSet.add [a; b; c] (IdSet.singleton d)
   | Not t -> ids t
   | And lst | Or lst | SepConj lst -> 
     List.fold_left
@@ -103,8 +111,9 @@ let rec normalize f = match f with
       SepConj lst3
   | BoolConst b -> BoolConst b
   | Emp -> Emp
-  | PtsTo (a, b) -> PtsTo (a, b)
+  | PtsTo (h, a, b) -> PtsTo (h, a, b)
   | List (a, b) -> if a = b then Emp else List (a, b)
+  | DList (a, b, c, d) -> DList (a, b, c, d) (* TODO can we do better ?? *)
 
 let rec map_id fct f = match f with
   | Eq (e1, e2) -> Eq (fct e1, fct e2)
@@ -113,8 +122,9 @@ let rec map_id fct f = match f with
   | Or lst -> Or (List.map (map_id fct) lst)
   | BoolConst b -> BoolConst b
   | Emp -> Emp
-  | PtsTo (a, b) -> PtsTo (fct a, fct b)
+  | PtsTo (h, a, b) -> PtsTo (h, fct a, fct b)
   | List (a, b) -> List (fct a, fct b)
+  | DList (a, b, c, d) -> DList (fct a, fct b, fct c, fct d)
   | SepConj lst -> SepConj (List.map (map_id fct) lst)
 
 let subst_id subst f =
@@ -170,14 +180,15 @@ let set_difference diff set1 set2 =
 let to_form set_fct domain f =
   let fd why d = Form.fresh_ident ( why ^ "_" ^(fst d)) in
   let v = Axioms.var1 in
+  let v2 = Axioms.var2 in
   let empty domain = mk_forall (Form.mk_not (mk_domain domain v)) in
   let rec process_sep domain f = match f with
     | BoolConst b -> (Form.BoolConst b, empty domain)
     | Not (Eq (id1, id2)) -> (Form.mk_neq (cst id1) (cst id2), empty domain)
     | Eq (id1, id2) -> (Form.mk_eq (cst id1) (cst id2), empty domain)
     | Emp -> (Form.BoolConst true, empty domain)
-    | PtsTo (id1, id2) ->
-        ( Form.mk_eq (Form.mk_app pts [cst id1]) (cst id2),
+    | PtsTo (h, id1, id2) ->
+        ( Form.mk_eq (Form.mk_app h [cst id1]) (cst id2),
           mk_forall (Form.mk_equiv (Form.mk_eq (cst id1) v) (mk_domain domain v))
         )
     | List (id1, id2) ->
@@ -189,6 +200,19 @@ let to_form set_fct domain f =
                 Form.mk_neq v (cst id2)
               ]; )
             (mk_domain domain v) )
+        )
+    | DList (x1, x2, y1, y2) ->
+      let part1 = reach x1 y1 in
+      let part2 = mk_forall (Form.mk_equiv (mk_domain domain v) (Form.mk_and [reachWoT (cst x1) v (cst y1); Form.mk_neq v (cst y1)])) in
+      let part3 = mk_forall (Form.mk_implies (Form.mk_and [mk_domain domain v; mk_domain domain v2; Form.mk_eq (Form.mk_app pts [v]) v2]) (Form.mk_eq (Form.mk_app prev_pts [v2]) v)) in
+      let part4 = Form.mk_or [
+                    Form.mk_and [Form.mk_eq (cst x1) (cst x2); Form.mk_eq (cst y1) (cst y2)];
+                    Form.mk_and [ Form.mk_eq (Form.mk_app prev_pts [cst x1]) (cst x2);
+                                  Form.mk_eq (Form.mk_app pts [cst y2]) (cst y1);
+                                  mk_domain domain (cst y2)] ]
+      in
+        ( Form.mk_and [part1; part3; part4],
+          part2
         )
     | SepConj forms ->
       let ds = List.map (fun _ -> fd "sep" domain) forms in

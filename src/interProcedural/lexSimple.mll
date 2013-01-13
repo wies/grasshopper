@@ -26,7 +26,9 @@ rule token = parse
 | '.' { DOT }
 | '*' { SEP }
 | "|->" { PTS }
+| "|<-" { BPTS }
 | "lseg" { LS }
+| "dlseg" { DLS }
 | "assume" { ASSUME }
 | "requires" { REQUIRES }
 | "ensures" { ENSURES }
