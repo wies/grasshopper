@@ -126,3 +126,5 @@ let read_file file =
     String.concat "\n" (read [])
 
 let flat_map fct lst = List.flatten (List.map fct lst)
+
+let rev_concat lists = List.fold_left (List.fold_left (fun acc f -> f :: acc)) [] lists

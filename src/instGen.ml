@@ -180,7 +180,8 @@ let generate_instances axioms terms rep_map =
       (fun instances subst_map -> List.fold_left (instantiate subst_map) instances axioms)
       [] subst_maps
   in
-  List.concat (List.rev_map gen (List.rev partitioned_axioms))
+  rev_concat (List.rev_map gen partitioned_axioms)
+  
 
 let instantiate_with_terms fs gterms_f =
   let rec normalize acc = function
