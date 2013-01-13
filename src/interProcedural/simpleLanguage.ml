@@ -266,10 +266,13 @@ let check_entailment what pre_sl stack post_sl =
   let pathf = DecisionStack.get_form stack in
   let post_neg = subst_id subst (to_lolli_negated Entails.post_heap post_sl) in
   let heap_content = Entails.same_heap_axioms subst in
-  let axioms = List.flatten (Axioms.make_axioms [pre :: pathf @ [post_neg]]) in
-  let query = smk_and (axioms @ heap_content @ [pre] @ pathf @ [post_neg]) in
+  let wo_axioms = pre :: pathf @ [post_neg] in
+  let axioms = List.flatten (Axioms.make_axioms [wo_axioms]) in
+  let query = smk_and (axioms @ heap_content @ wo_axioms) in
   let _ = if !Debug.verbose then
     begin
+      print_endline "query wo axioms: ";
+      print_form stdout (mk_and (wo_axioms @ heap_content));
       print_endline "query: ";
       print_form stdout query
     end
@@ -345,11 +348,23 @@ let check_procedure proceduresMap name =
 
   let replacement_alloc alloc1 fp1 alloc2 fp2 =
     let mk_pred d = Form.mk_pred d [Axioms.var1] in
+    let a1 = mk_pred alloc1 in
+    let a2 = mk_pred alloc2 in
+    let f1 = mk_pred fp1 in
+    let f2 = mk_pred fp2 in
+    let nf1a1 = Form.mk_and [Form.mk_not f1; a1] in
       Sl.mk_forall
-        (Form.mk_or [
-          Form.mk_and [mk_pred fp1; Form.mk_equiv (mk_pred alloc2) (mk_pred fp2)] ;
-          Form.mk_and [Form.mk_not (mk_pred fp1); Form.mk_equiv (mk_pred alloc2) (mk_pred alloc1)]
+        (Form.mk_and [
+          (*Form.mk_implies (mk_pred fp1) (mk_pred alloc1);*)
+          Form.mk_implies f2 a2;
+          Form.mk_implies nf1a1 a2;
+          Form.mk_implies a2 (Form.mk_or [f2; nf1a1])
         ])
+          (*
+          Form.mk_implies (Form.mk_and [Form.mk_not (mk_pred fp1); Form.mk_not (mk_pred fp2)]) (Form.mk_equiv (mk_pred alloc2) (mk_pred alloc1))
+          Form.mk_and [mk_pred fp1; Form.mk_equiv (mk_pred alloc2) (mk_pred fp2)]
+          Form.mk_and [Form.mk_not (mk_pred fp1); Form.mk_equiv (mk_pred alloc2) (mk_pred alloc1)]
+          *)
   in
 
   let replacement_pts fp1 pts1 pts2 =
@@ -362,11 +377,11 @@ let check_procedure proceduresMap name =
         )
   in
 
-  let replacement_reach fp1 pts1 pts2 =
+  let replacement_reach fp1 r1 r2 =
     let mk_pred d = Form.mk_pred d [Axioms.var1] in
     let ep v = Axioms.ep fp1 v in
-    let reach1 = Axioms.reach pts1 in
-    let reach2 = Axioms.reach pts2 in
+    let reach1 x y z = Form.mk_pred r1 [x; y; z] in
+    let reach2 x y z = Form.mk_pred r2 [x; y; z] in
       (Sl.mk_forall
         (Form.mk_implies
           (Form.mk_not (mk_pred fp1))
@@ -379,7 +394,7 @@ let check_procedure proceduresMap name =
           (Form.mk_equiv (reach1 Axioms.var1 Axioms.var2 Axioms.var3)
                          (reach2 Axioms.var1 Axioms.var2 Axioms.var3))
         )
-      ) :: (Axioms.ep_axioms fp1 pts1)
+      ) :: (Axioms.ep_axioms fp1 (Axioms.fun_of_reach r1))
   in
 
   (* assume pre,stack |= sl_1 * F  for some frame F
@@ -402,12 +417,14 @@ let check_procedure proceduresMap name =
         let included = Sl.mk_forall (Sl.set_included fp alloc1) in
         let fp2 = fresh_ident "footprint" in
         let sl_2f = Form.subst_id subst2 (Sl.to_lolli fp2 sl_2) in
+        (*let included2 = Sl.mk_forall (Sl.set_included fp2 alloc2) in*)
         let alloc2 = Frame.last_alloc subst2 in
         let get_pts subst = try IdMap.find Sl.pts subst with Not_found -> Sl.pts in
+        let get_reach subst = try IdMap.find (Axioms.reach_id Sl.pts) subst with Not_found -> (Axioms.reach_id Sl.pts) in
         let axioms =
           (replacement_alloc alloc1 fp alloc2 fp2) ::
           (replacement_pts fp (get_pts subst) (get_pts subst2)) ::
-          (replacement_reach fp (get_pts subst) (get_pts subst2))
+          (replacement_reach fp (get_reach subst) (get_reach subst2))
         in
         (*
         let ground_terms =

@@ -246,7 +246,7 @@ let add_axioms pf_a pf_b =
 
 let make_axioms fs =
   let unaries = List.map (fun f -> unary_funs (mk_and f)) fs in
-  let init_funs = List.map (fun set -> IdSet.filter (fun (_, n) -> n = 0) set) unaries in
+  let init_funs = (*List.map (fun set -> IdSet.filter (fun (_, n) -> n = 0) set)*) unaries in
   let _, rev_already_declared =
     List.fold_left
       (fun (lhs, acc) uns -> (IdSet.union lhs uns, (IdSet.filter (fun id -> IdSet.mem id lhs) uns) :: acc) )

@@ -1,6 +1,6 @@
 //entailed
 path03(a, b, c)
-requires b ~= c && (a |-> b * b |-> c)
+requires b ~= c * a |-> b * b |-> c
 ensures  a |-> b * b |-> a
 {
   b.next := a;
