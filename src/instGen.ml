@@ -132,7 +132,6 @@ let generate_instances axioms terms rep_map =
   let axioms, epr_axioms = 
     List.partition (fun f -> IdMap.exists (fun _ decl -> not decl.is_pred && decl.arity >= 1) (sign f)) axioms
   in
-  print_forms stdout axioms; 
   let instantiate subst_map acc axiom =
     let fun_terms = 
       let rec tt terms t =
