@@ -52,6 +52,12 @@ let ssa_partial ident_map path =
   let fresh_ident id ident_map =
     let name, m = subst_ident id ident_map in
     let new_id = (name, m + 1) in
+    let new_ident_map = IdMap.add id new_id ident_map in
+    new_id, new_ident_map
+  in
+  let fresh_fct_ident id ident_map =
+    let name, m = subst_ident id ident_map in
+    let new_id = (name, m + 1) in
     let new_ident_map = 
       IdMap.add (jp_id id) (jp_id new_id) 
 	(IdMap.add (reach_id id) (reach_id new_id)
@@ -72,7 +78,7 @@ let ssa_partial ident_map path =
 	  let ind1 = subst_id_term ident_map ind in
 	  let upd1 = subst_id_term ident_map upd in
 	  let id = subst_ident id0 ident_map in
-	  let id1, ident_map1 = fresh_ident id0 ident_map in
+	  let id1, ident_map1 = fresh_fct_ident id0 ident_map in
 	  let axioms = update_axioms id id1 ind1 upd1 in
 	  pf segs (List.rev_append axioms fs) ident_map1 stmnts
       |	New id ->

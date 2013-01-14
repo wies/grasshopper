@@ -169,6 +169,11 @@ let unify_subst subst1 subst2 =
         (mk_pred id1 args)
         (mk_pred id2 args)
     in
+    let mk_axioms2 args =
+      mk_eq
+        (mk_app id1 args)
+        (mk_app id2 args)
+    in
     let (ax, cstr) =
       (* is a predicate or a cst ? *)
       if Axioms.is_reach id1 then
@@ -177,6 +182,9 @@ let unify_subst subst1 subst2 =
         ([mk_axioms [var1; var2]], [])
       else if fst id1 = fst Axioms.alloc_id then
         ([mk_axioms [var1]], [])
+      else if fst id1 = fst Sl.pts ||
+              fst id1 = fst Sl.prev_pts then
+        ([mk_axioms2 [var1]], [])
       else (* constants *)
         ([], [mk_eq (mk_const id1) (mk_const id2)])
     in
@@ -188,21 +196,13 @@ let unify_subst subst1 subst2 =
   in
   let keys1 = IdMap.fold (fun t _ acc -> IdSet.add t acc) subst1 IdSet.empty in
   let keys  = IdMap.fold (fun t _ acc -> IdSet.add t acc) subst2 keys1 in
+  let get subst id = try IdMap.find id subst with Not_found -> id in
     IdSet.fold
       (fun id (as1, cs1, as2, cs2, s) ->
         (* take the most recent version, if does not exists then ok. *)
-        let (id3, a1, c1, a2, c2) = match (IdMap.mem id subst1, IdMap.mem id subst2) with
-          | (true, true) ->
-            let id1 = IdMap.find id subst1 in
-            let id2 = IdMap.find id subst2 in
-              cstr_for id1 id2
-          | (true, false) ->
-            (id, [], [], [], [])
-          | (false, true) ->
-            (id, [], [], [], [])
-          | (false, false) ->
-            failwith "not possible"
-        in
+        let id1 = get subst1 id in
+        let id2 = get subst2 id in
+        let (id3, a1, c1, a2, c2) = cstr_for id1 id2 in
           ( a1 @ as1, c1 @ cs1,
             a2 @ as2, c2 @ cs2,
             IdMap.add id id3 s )
@@ -423,36 +423,22 @@ let check_procedure proceduresMap name =
         let fp = fresh_ident "footprint" in
         let fp2 = fresh_ident "footprint" in
         let sl_1f = Form.subst_id subst (Sl.to_lolli fp sl_1) in
+        let sl_2f = Form.subst_id subst2 (Sl.to_lolli fp2 sl_2) in
+        let alloc2 = Frame.last_alloc subst2 in
+        let get_pts subst = try IdMap.find Sl.pts subst with Not_found -> Sl.pts in
+        let get_reach subst = try IdMap.find (Axioms.reach_id Sl.pts) subst with Not_found -> (Axioms.reach_id Sl.pts) in
         let included = Sl.mk_forall (Sl.set_included fp alloc1) in
 	let preserve = Sl.mk_forall 
 	    (Form.mk_implies (mk_and [Sl.set_in alloc1 Axioms.var1; Sl.set_in fp2 Axioms.var1])
 	    (Sl.set_in fp Axioms.var1)) 
 	in
-        let sl_2f = Form.subst_id subst2 (Sl.to_lolli fp2 sl_2) in
-        (*let included2 = Sl.mk_forall (Sl.set_included fp2 alloc2) in*)
-        let alloc2 = Frame.last_alloc subst2 in
-        let get_pts subst = try IdMap.find Sl.pts subst with Not_found -> Sl.pts in
-        let get_reach subst = try IdMap.find (Axioms.reach_id Sl.pts) subst with Not_found -> (Axioms.reach_id Sl.pts) in
         let axioms =
+          included :: preserve ::
           (replacement_pts fp (get_pts subst) (get_pts subst2)) ::
           (replacement_alloc alloc1 fp alloc2 fp2) @
           (replacement_reach fp (get_reach subst) (get_reach subst2))
         in
-        (*
-        let ground_terms =
-          List.fold_left TermSet.union TermSet.empty [
-              DecisionStack.ground_terms stack;
-              ground_terms (Sl.to_lolli Entails.pre_heap pre);
-              ground_terms sl_1f;
-              ground_terms sl_2f
-            ]
-        in
-        let trivial_ep v = Form.mk_eq (Axioms.ep fp v) (Axioms.ep fp v) in
-        let inject_ep =
-          Form.mk_and (TermSet.fold (fun t acc -> (trivial_ep t):: acc) ground_terms [])
-        in
-        *)
-          add_to_stack stack subst2 (Form.smk_and ((*inject_ep ::*) sl_1f :: included :: preserve :: sl_2f :: axioms))
+          add_to_stack stack subst2 (Form.smk_and ((*inject_ep ::*) sl_1f :: sl_2f :: axioms))
       end
   in
   
