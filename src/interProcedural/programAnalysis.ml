@@ -8,6 +8,8 @@ let input_file = ref ""
 let cmd_options =
   [("-v", Arg.Set Debug.verbose, "Display verbose messages");
    ("-m", Arg.Set_string Prover.model_file, "Produce model");
+   ("-alloc", Arg.Set Config.with_alloc_axioms, "Add axioms for alloc predicate");
+   ("-null", Arg.Set Config.with_null_axioms, "Add axioms for null");
    ("-z3q", Arg.Clear Config.instantiate, "Let z3 deal with quantifiers.")
   ]
 
@@ -32,15 +34,12 @@ let vc_gen file =
     List.iter (fun p -> check_procedure procMap p.name) procs
 
 let _ =
+  Config.default_opts_for_sl ();
   try
     Arg.parse cmd_options (fun s -> input_file := s) usage_message;
     if !input_file = ""
     then cmd_line_error "input file missing"
-    else
-      begin
-        Config.default_opts_for_sl ();
-        vc_gen !input_file
-      end
+    else vc_gen !input_file
   with  
   | Sys_error s -> output_string stderr (s ^ "\n")
   | Failure s -> output_string stderr (s ^ "\n")

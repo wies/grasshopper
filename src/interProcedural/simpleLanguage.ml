@@ -353,13 +353,14 @@ let check_procedure proceduresMap name =
     let f1 = mk_pred fp1 in
     let f2 = mk_pred fp2 in
     let nf1a1 = Form.mk_and [Form.mk_not f1; a1] in
-      Sl.mk_forall
+    [mk_not (Sl.set_in alloc2 null);
+     Sl.mk_forall
         (Form.mk_and [
           (*Form.mk_implies (mk_pred fp1) (mk_pred alloc1);*)
           Form.mk_implies f2 a2;
           Form.mk_implies nf1a1 a2;
           Form.mk_implies a2 (Form.mk_or [f2; nf1a1])
-        ])
+        ])]
           (*
           Form.mk_implies (Form.mk_and [Form.mk_not (mk_pred fp1); Form.mk_not (mk_pred fp2)]) (Form.mk_equiv (mk_pred alloc2) (mk_pred alloc1))
           Form.mk_and [mk_pred fp1; Form.mk_equiv (mk_pred alloc2) (mk_pred fp2)]
@@ -435,8 +436,8 @@ let check_procedure proceduresMap name =
         let get_pts subst = try IdMap.find Sl.pts subst with Not_found -> Sl.pts in
         let get_reach subst = try IdMap.find (Axioms.reach_id Sl.pts) subst with Not_found -> (Axioms.reach_id Sl.pts) in
         let axioms =
-          (replacement_alloc alloc1 fp alloc2 fp2) ::
           (replacement_pts fp (get_pts subst) (get_pts subst2)) ::
+          (replacement_alloc alloc1 fp alloc2 fp2) @
           (replacement_reach fp (get_reach subst) (get_reach subst2))
         in
         (*

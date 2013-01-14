@@ -116,10 +116,10 @@ let jp_axioms f =
   else []
 
 let null_axioms f =
-  [mk_eq (mk_app f [null]) null]
+  if !with_null_axioms then [mk_eq (mk_app f [null]) null] else []
 
 let alloc_axioms = 
-  if !with_alloc_axioms then [mk_pred alloc_id [null]] else []
+  if !with_alloc_axioms then [mk_not (mk_pred alloc_id [null])] else []
 
 let alloc_update_axioms id alloc new_alloc =
   let x = mk_const id in

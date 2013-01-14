@@ -3,6 +3,7 @@
 let with_reach_axioms = ref true
 let with_jp_axioms = ref true
 let with_alloc_axioms = ref false
+let with_null_axioms = ref false
 
 
 (*tell whether we are instantiating the axioms or relying on z3.*)
