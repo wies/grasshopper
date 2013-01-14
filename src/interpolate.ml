@@ -24,9 +24,9 @@ let cmd_line_error msg =
 
 let parse_input parse_fct =
   let input = read_file !input_file in
-  ParseStmntAux.input := Some input;
+  ParseError.input := Some input;
   let lexbuf = Lexing.from_string input in
-  ParseStmntAux.buffer := Some lexbuf;
+  ParseError.buffer := Some lexbuf;
   parse_fct lexbuf
 
 let compute_interpolant () =

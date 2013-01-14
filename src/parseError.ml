@@ -17,5 +17,5 @@ let parse_error s = match !input with
       let init = String.sub inp 0 pos in
       let rest = String.sub inp pos (String.length inp - pos) in
       output_string stderr ("Parse error:\n" ^ init ^ marker ^ rest ^ "\n")
-  | _ -> output_string stderr ("Parse error in uninitialized parse state.\n"))
+  | _ -> output_string stderr ("Parse error in uninitialized parse state1.\n"))
 | _ -> output_string stderr ("Parse error in uninitialized parse state.\n")

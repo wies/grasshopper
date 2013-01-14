@@ -1,5 +1,7 @@
 %{
 open Form
+
+let parse_error = ParseError.parse_error
 %}
 
 %token <string * int> IDENT
@@ -27,6 +29,7 @@ definition:
 mappings:
   mapping mappings { $1 :: $2 }
 | ELSE ARROW UNSPEC { [] }
+| UNSPEC { [] }
 ;
 
 mapping:

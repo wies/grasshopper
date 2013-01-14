@@ -3,7 +3,7 @@ open Sl
 open Stmnt
 open SimpleLanguage
 
-let parse_error = ParseStmntAux.parse_error
+let parse_error = ParseError.parse_error
 
 %}
 

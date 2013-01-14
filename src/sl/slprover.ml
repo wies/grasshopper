@@ -33,9 +33,9 @@ let cmd_line_error msg =
 
 let parse_given_input parse_fct file =
   let input = read_file file in
-  ParseStmntAux.input := Some input;
+  ParseError.input := Some input;
   let lexbuf = Lexing.from_string input in
-  ParseStmntAux.buffer := Some lexbuf;
+  ParseError.buffer := Some lexbuf;
   parse_fct lexbuf
 
 let parse_input parse_fct =

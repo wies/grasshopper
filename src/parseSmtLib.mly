@@ -3,6 +3,7 @@ open Form
 open ParseSmtLibAux
 open Axioms
 
+(*let parse_error = ParseError.parse_error*)
 %}
 
 %token <int> NUM
@@ -30,10 +31,14 @@ rerror:
 
 rmodel:
   LPAREN LPAREN MODEL STRING RPAREN RPAREN 
-    { let buff = Lexing.from_string $4 in
+    { ParseError.input := Some $4;
+      let buff = Lexing.from_string $4 in
+      ParseError.buffer := Some buff;
       ParseModel.main LexModel.token buff }
 | STRING 
-    { let buff = Lexing.from_string $1 in
+    { ParseError.input := Some $1;
+      let buff = Lexing.from_string $1 in
+      ParseError.buffer := Some buff;
       ParseModel.main LexModel.token buff }
 ;
 
