@@ -8,11 +8,13 @@ ensures lseg(y, null) * lseg(z, null)
     new z_last;
     z := z_last;
     z_last := z;
-    while (x ~= null) lseg(x,null) * lseg(y,y_last) * lseg(z,z_last) * y_last |-> _ * z_last |-> _ {
+    while (x ~= null) lseg(x,null) * lseg(y,y_last) * lseg(z,z_last) * y_last |-> _0 * z_last |-> _1 {
       if (Random) {
         y_last.next := x;
+        y_last := x;
       } else {
         z_last.next := x;
+        z_last := x;
       }
       x := x.next;
     }
