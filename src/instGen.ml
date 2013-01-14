@@ -129,6 +129,10 @@ let choose_rep_terms classes =
 
 let generate_instances axioms terms rep_map = 
   let ground_terms = TermMap.fold (fun _ -> TermSet.union) rep_map TermSet.empty in
+  let axioms, epr_axioms = 
+    List.partition (fun f -> IdMap.exists (fun _ decl -> not decl.is_pred && decl.arity >= 1) (sign f)) axioms
+  in
+  print_forms stdout axioms; 
   let instantiate subst_map acc axiom =
     let fun_terms = 
       let rec tt terms t =
@@ -180,7 +184,7 @@ let generate_instances axioms terms rep_map =
       (fun instances subst_map -> List.fold_left (instantiate subst_map) instances axioms)
       [] subst_maps
   in
-  rev_concat (List.rev_map gen partitioned_axioms)
+  epr_axioms @ rev_concat (List.rev_map gen partitioned_axioms)
   
 
 let instantiate_with_terms fs gterms_f =

@@ -54,7 +54,7 @@ let start smt_cmd replay_file produce_models produce_interpolants =
     writeln session "(set-option :produce-models true)"
   end;
   if produce_interpolants then writeln session "(set-option :produce-interpolants true)";
-  if !Config.instantiate then
+  if false && !Config.instantiate then
     writeln session "(set-logic QF_UF)"
   else
     begin

@@ -370,11 +370,11 @@ let check_procedure proceduresMap name =
 
   let replacement_pts fp1 pts1 pts2 =
     let mk_pred d = Form.mk_pred d [Axioms.var1] in
-    let mk_app d = Form.mk_app d [Axioms.var1] in
+    let mk_app d v = Form.mk_app d v in
       Sl.mk_forall
         (Form.mk_implies
-          (Form.mk_not (mk_pred fp1))
-          (Form.mk_eq (mk_app pts1) (mk_app pts2))
+          (Form.mk_and [Form.mk_not (mk_pred fp1); Form.mk_eq Axioms.var1 Axioms.var2])
+          (Form.mk_eq (mk_app pts1 [Axioms.var1]) (mk_app pts2 [Axioms.var2]))
         )
   in
 

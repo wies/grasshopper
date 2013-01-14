@@ -59,7 +59,7 @@ let ssa_partial ident_map path =
     let name, m = subst_ident id ident_map in
     let new_id = (name, m + 1) in
     let new_ident_map = 
-      IdMap.add (jp_id id) (jp_id new_id) 
+      (if !with_jp_axioms then IdMap.add (jp_id id) (jp_id new_id) else (fun m -> m))
 	(IdMap.add (reach_id id) (reach_id new_id)
 	   (IdMap.add id new_id ident_map))
     in
