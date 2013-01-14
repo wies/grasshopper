@@ -153,16 +153,21 @@ let extract_ep t = match t with
   | FunApp (id, _) when is_ep id -> Some (fun_of_ep id)
   | _ -> None
 
-(* f is the pred defining an heap zone, h the pointer fct *)
+(* f is the pred defining a heap zone, h the pointer fct *)
 let ep_axioms f h =
   let ep = ep f var1 in
   let reachWo = reach h in
   let reach x y = reach h x y y in
   let in_f v = mk_pred f [v] in
-  let ep1 = mk_and [reach var1 ep; mk_or [in_f ep; mk_and [mk_eq var1 ep; mk_implies (reach var1 var2) (mk_not (in_f var2))]]] in
-  let ep2 = mk_implies (mk_and [reach var1 var2; in_f var2]) (reachWo var1 ep var2) in
+  let ep1 = reach var1 ep in
+  let ep2 = mk_or [mk_not (reach var1 var2); mk_not (in_f var2); in_f ep] in
+  let ep3 = mk_or [in_f ep; mk_eq var1 ep] in
+  (*let ep1 = mk_and [reach var1 ep; mk_or [in_f ep; mk_and [mk_eq var1 ep; mk_implies (reach var1 var2) (mk_not (in_f var2))]]] in*)
+  let ep4 = mk_implies (mk_and [reach var1 var2; in_f var2]) (reachWo var1 ep var2) in
     [mk_comment "entrypoint1" ep1; 
-     mk_comment "entrypoint2" ep2]
+     mk_comment "entrypoint2" ep2; 
+     mk_comment "entrypoint3" ep3; 
+     mk_comment "entrypoint4" ep4]
 
 let get_eps f =
   IdMap.fold 
