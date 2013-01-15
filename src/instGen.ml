@@ -3,7 +3,17 @@ open Form
 open Axioms
 
 
+let congr_classes fs gterms =
+  let cc_graph = new CongruenceClosure.dag (TermSet.elements gterms) in
+    List.iter
+      (fun f -> match f with
+	| Eq _ -> cc_graph#add_constr f
+	| _ -> () )
+      fs;
+    cc_graph#get_cc
 
+
+(*
 let congr_classes fs gterms =
   let term_index_map, num = 
     TermSet.fold 
@@ -80,6 +90,7 @@ let congr_classes fs gterms =
       (* ground clauses are already unsatisfiable, no instantiation required *)
       [] 
   TermSet.fold (fun t acc -> [t]::acc) gterms [] *)
+*)
 
 
 
