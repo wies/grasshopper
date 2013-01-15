@@ -46,6 +46,10 @@ let lb_id (f, n) = (lb_name ^ f, n)
 
 let lb f x y = mk_app (lb_id f) [x; y] (*DZ: switch for axioms with lb ??*)
 
+let is_lb = 
+  let re = Str.regexp lb_name in
+  fun ((name, _) : ident) -> Str.string_match re name 0
+
 let update_axioms f new_f ind upd =
     let f_upd1 = 
       mk_or [mk_eq ind var1; mk_eq (mk_app f [var1]) (mk_app new_f [var1])]

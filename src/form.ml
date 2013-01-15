@@ -290,6 +290,13 @@ let funs f =
 	List.fold_left fts (IdSet.add id funs) ts
   in collect_from_terms fts IdSet.empty f
 
+let funs_only f =
+  let rec fts funs = function
+    | Var _ | Const _ -> funs
+    | FunApp (id, ts) ->
+	List.fold_left fts (IdSet.add id funs) ts
+  in collect_from_terms fts IdSet.empty f
+
 let subst_id_term subst_map t =
   let sub_id id =
     try IdMap.find id subst_map with Not_found -> id

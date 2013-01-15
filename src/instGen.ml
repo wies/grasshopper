@@ -211,6 +211,28 @@ let instantiate_with_terms fs gterms_f =
 
 let get_ground_terms f =
   let g1 = ground_terms f in
+  let is_unary id = not (Axioms.is_ep id) &&
+                    not (Axioms.is_jp id) &&
+                    not (Axioms.is_lb id)
+  in
+  let unary_arg t = match t with
+    | FunApp (id, [arg]) when is_unary id -> Some arg
+    | _ -> None
+  in
+  let unaries = IdSet.filter is_unary (funs_only f) in
+  let mk_unaries t = match unary_arg t with
+    | Some arg ->
+      IdSet.fold
+        (fun id acc -> TermSet.add (mk_app id [arg]) acc)
+        unaries
+        TermSet.empty
+    | None -> TermSet.empty
+  in
+  let g1 =
+    TermSet.fold
+      (fun t acc -> TermSet.union (mk_unaries t) acc)
+      g1 g1
+  in
     if !Config.sl_mode then
       begin
         let eps = Axioms.get_eps f in
