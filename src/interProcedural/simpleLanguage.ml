@@ -34,6 +34,13 @@ let rec assigned stmnt = match stmnt with
   | While (_, _, s) -> assigned s
   | Ite (_, s1, s2) -> IdSet.union (assigned s1) (assigned s2)
 
+let rec change_heap stmnt = match stmnt with
+  | Assume _ | Assume2 _ | Assert _ | Return _ | VarUpdate _ -> false
+  | FunUpdate _ | New _ | Dispose _ -> true
+  | Block lst -> List.exists change_heap lst
+  | While (_, _, s) -> change_heap s
+  | Ite (_, s1, s2) -> (change_heap s1) || (change_heap s2)
+
 module DecisionStack =
   struct
 
@@ -443,7 +450,7 @@ let check_procedure proceduresMap name =
           (replacement_alloc alloc1 fp alloc2 fp2) @
           (replacement_reach fp (get_reach subst) (get_reach subst2))
         in
-          add_to_stack stack subst2 (Form.smk_and ((*inject_ep ::*) sl_1f :: sl_2f :: axioms))
+          add_to_stack stack subst2 (Form.smk_and (sl_1f :: sl_2f :: axioms))
       end
   in
   
@@ -485,14 +492,34 @@ let check_procedure proceduresMap name =
       sl_replacement pre stack m_pre subst2 m_post
   in
 
+  let loop_that_dont_change_heap pre stack cond invariant body =
+    if not (check_if_frame_exists pre stack invariant) then
+      failwith "sl_replacement: precondition is not respected"
+    else
+      begin
+        let assigned = IdSet.elements (assigned body) in
+        let subst = DecisionStack.get_subst stack in
+        let subst2 = increase subst (assigned) in
+        let fp = fresh_ident "footprint" in
+        let sl_f = Form.subst_id subst2 (Sl.to_lolli fp invariant) in
+        let notC = subst_id subst2 (Form.Not cond) in
+          add_to_stack stack subst2 (Form.smk_and [notC; sl_f])
+      end
+  in
+
   let while_pre_post pre stack cond invariant body =
-    (* pre/post *)
-    let subst = DecisionStack.get_subst stack in
-    let assigned = IdSet.elements (assigned body) in
-    let subst2 = increase subst (assigned @ (sl_stuff_to_increase pre subst invariant invariant)) in
-    let stack2 = sl_replacement pre stack invariant subst2 invariant in
-    let notC = subst_id subst2 (Form.Not cond) in
-      add_to_stack stack2 subst2 notC
+    if (change_heap body) then
+      begin
+        (* pre/post *)
+        let subst = DecisionStack.get_subst stack in
+        let assigned = IdSet.elements (assigned body) in
+        let subst2 = increase subst (assigned @ (sl_stuff_to_increase pre subst invariant invariant)) in
+        let stack2 = sl_replacement pre stack invariant subst2 invariant in
+        let notC = subst_id subst2 (Form.Not cond) in
+          add_to_stack stack2 subst2 notC
+      end
+    else
+      loop_that_dont_change_heap pre stack cond invariant body
   in
   
   let proc = get name in

@@ -1,4 +1,4 @@
-free(lst)
+free_(lst)
 requires lseg(lst, null)
 ensures emp
 {
