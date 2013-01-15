@@ -216,15 +216,15 @@ let get_ground_terms f =
                     not (Axioms.is_lb id)
   in
   let unary_arg t = match t with
-    | FunApp (id, [arg]) when is_unary id -> Some arg
+    | FunApp (id, [arg]) when is_unary id -> Some (id, arg)
     | _ -> None
   in
   let unaries = IdSet.filter is_unary (funs_only f) in
   let mk_unaries t = match unary_arg t with
-    | Some arg ->
+    | Some (id, arg) ->
       IdSet.fold
         (fun id acc -> TermSet.add (mk_app id [arg]) acc)
-        unaries
+        (IdSet.filter (fun id2 -> fst id = fst id2) unaries)
         TermSet.empty
     | None -> TermSet.empty
   in
