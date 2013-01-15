@@ -373,8 +373,8 @@ let check_procedure proceduresMap name =
     let mk_app d v = Form.mk_app d v in
       Sl.mk_forall
         (Form.mk_implies
-          (Form.mk_and [Form.mk_not (mk_pred fp1); Form.mk_eq Axioms.var1 Axioms.var2])
-          (Form.mk_eq (mk_app pts1 [Axioms.var1]) (mk_app pts2 [Axioms.var2]))
+          (Form.mk_not (mk_pred fp1))
+          (Form.mk_eq (mk_app pts1 [Axioms.var1]) (mk_app pts2 [Axioms.var1]))
         )
   in
 

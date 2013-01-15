@@ -1,10 +1,8 @@
 
-insert(lst)
-requires lseg(lst, null)
+insert(lst, elt)
+requires lseg(lst, null) * elt |-> null
 ensures lseg(returned, null)
 {
-    new elt;
-    elt.next := null;
     if (lst = null)
         return elt;
     else {

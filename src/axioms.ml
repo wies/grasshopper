@@ -48,7 +48,7 @@ let lb f x y = mk_app (lb_id f) [x; y] (*DZ: switch for axioms with lb ??*)
 
 let update_axioms f new_f ind upd =
     let f_upd1 = 
-      mk_or [mk_eq ind var1; mk_not (mk_eq var1 var2); mk_eq (mk_app f [var1]) (mk_app new_f [var2])]
+      mk_or [mk_eq ind var1; mk_eq (mk_app f [var1]) (mk_app new_f [var1])]
     in
     let f_upd2 = mk_eq (mk_app new_f [ind]) upd in
     let reach_upd =
@@ -118,7 +118,7 @@ let jp_axioms f =
 let null_axioms f =
   if !with_null_axioms then [mk_eq (mk_app f [null]) null] else []
 
-let alloc_axioms = 
+let alloc_axioms () = 
   if !with_alloc_axioms then [mk_not (mk_pred alloc_id [null])] else []
 
 let alloc_update_axioms id alloc new_alloc =
@@ -272,7 +272,7 @@ let make_axioms fs =
       unaries
       all_init
   in
-    (alloc_axioms @ List.hd axioms) :: (List.tl axioms)
+  (alloc_axioms () @ List.hd axioms) :: (List.tl axioms)
 
 let add_axioms fs =
   let axioms = make_axioms fs in
