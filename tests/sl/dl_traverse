@@ -1,0 +1,19 @@
+dl_traverse(lst)
+requires dlseg(lst, a, null, b)
+ensures dlseg(lst, a, null, b)
+{
+    curr := lst;
+    while(curr ~= null) emp {
+        curr := curr.next; 
+    }
+}
+
+dl_traverse_backward(lst)
+requires dlseg(lst, a, null, b)
+ensures dlseg(lst, a, null, b)
+{
+    curr := b;
+    while(curr ~= lst) emp {
+        curr := curr.back; 
+    }
+}

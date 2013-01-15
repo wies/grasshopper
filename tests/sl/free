@@ -1,0 +1,10 @@
+free(lst)
+requires lseg(lst, null)
+ensures emp
+{
+    while(lst ~= null) lseg(lst, null) {
+        curr := lst;
+        lst := lst.next; 
+        free curr;
+    }
+}

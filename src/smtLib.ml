@@ -8,6 +8,7 @@ type session = { init: bool;
 		 out_chan: out_channel;
 		 replay_chan: out_channel option;
 		 mutable assert_count: int;
+		 mutable sat_checked: bool;
 		 stack_height: int
 	       } 
 
@@ -47,6 +48,7 @@ let start smt_cmd replay_file produce_models produce_interpolants =
 		  out_chan = out_chan;
 		  replay_chan = replay_chan;
 		  assert_count = 0;
+                  sat_checked = false;
 		  stack_height = 0 }
   in
   writeln session "(set-option :print-success false)";
@@ -107,6 +109,7 @@ let assert_form session ?(igroup=None) f =
 	  writefn session (fun chan -> print_smtlib_form_with_triggers chan f)
   in
   session.assert_count <- session.assert_count + 1;
+  session.sat_checked <- false;
     (* print_string "(assert ";
        print_smtlib_form stdout f;
        print_endline ")"; *)
@@ -138,23 +141,29 @@ let assert_forms session ?(igroup=None) fs =
 let is_sat session = 
   writeln session "(check-sat)";
   match read session with
-  | SmtSat -> Some true
+  | SmtSat -> 
+    session.sat_checked <- true;
+    Some true
   | SmtUnsat -> Some false
-  | SmtUnknown -> None
+  | SmtUnknown ->
+    session.sat_checked <- true;
+    None
   | SmtError e -> fail session e
   | _ -> fail session "unexpected response of prover"
 	
 let get_model session = 
-  match is_sat session with
-  | Some true | None ->
-      begin
-	writeln session "(get-model)";
-	match read session with
-	| SmtModel m -> Some ((*Axioms.simplify_model*) m)
-	| SmtError e -> fail session e
-	| _ -> None
-      end
-    | Some false -> None
+  let gm () =
+    writeln session "(get-model)";
+    match read session with
+    | SmtModel m -> Some ((*Axioms.simplify_model*) m)
+    | SmtError e -> fail session e
+    | _ -> None
+  in
+    if session.sat_checked then gm ()
+    else
+      match is_sat session with
+      | Some true | None -> gm ()
+      | Some false -> None
 	  
 let get_interpolant session groups =
   match is_sat session with

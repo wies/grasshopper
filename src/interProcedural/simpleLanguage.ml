@@ -387,7 +387,7 @@ let check_procedure proceduresMap name =
         (Form.mk_implies
           (reach1 Axioms.var1 Axioms.var2 (ep Axioms.var1))
           (Form.mk_equiv 
-	     (reach1 Axioms.var1 Axioms.var2 var3)
+             (reach1 Axioms.var1 Axioms.var2 var3)
              (reach2 Axioms.var1 Axioms.var2 var3))
         )
       )(* :: (Sl.mk_forall
@@ -418,6 +418,7 @@ let check_procedure proceduresMap name =
       failwith "sl_replacement: precondition is not respected"
     else
       begin
+        (* Sl.pts + Sl.prev_pts *)
         let subst = DecisionStack.get_subst stack in
         let alloc1 = Frame.last_alloc subst in
         let fp = fresh_ident "footprint" in
@@ -425,16 +426,20 @@ let check_procedure proceduresMap name =
         let sl_1f = Form.subst_id subst (Sl.to_lolli fp sl_1) in
         let sl_2f = Form.subst_id subst2 (Sl.to_lolli fp2 sl_2) in
         let alloc2 = Frame.last_alloc subst2 in
-        let get_pts subst = try IdMap.find Sl.pts subst with Not_found -> Sl.pts in
+        let get_pts pts subst = try IdMap.find pts subst with Not_found -> pts in
+        let get_next = get_pts Sl.pts in
+        let get_prev = get_pts Sl.prev_pts in
         let get_reach subst = try IdMap.find (Axioms.reach_id Sl.pts) subst with Not_found -> (Axioms.reach_id Sl.pts) in
         let included = Sl.mk_forall (Sl.set_included fp alloc1) in
-	let preserve = Sl.mk_forall 
-	    (Form.mk_implies (mk_and [Sl.set_in alloc1 Axioms.var1; Sl.set_in fp2 Axioms.var1])
-	    (Sl.set_in fp Axioms.var1)) 
-	in
+        let preserve = Sl.mk_forall 
+            (Form.mk_implies (mk_and [Sl.set_in alloc1 Axioms.var1; Sl.set_in fp2 Axioms.var1])
+            (Sl.set_in fp Axioms.var1)) 
+        in
+        let has_prev = IdMap.mem Sl.prev_pts subst2 in
         let axioms =
           included :: preserve ::
-          (replacement_pts fp (get_pts subst) (get_pts subst2)) ::
+          (replacement_pts fp (get_next subst) (get_next subst2)) ::
+          (if has_prev then [replacement_pts fp (get_prev subst) (get_prev subst2)] else []) @
           (replacement_alloc alloc1 fp alloc2 fp2) @
           (replacement_reach fp (get_reach subst) (get_reach subst2))
         in
@@ -453,6 +458,17 @@ let check_procedure proceduresMap name =
     List.fold_left increase1 subst ids
   in
 
+  let sl_stuff_to_increase pre subst sl1 sl2 =
+    let always = [Sl.pts; Axioms.reach_id Sl.pts; Axioms.alloc_id] in
+      if  Sl.has_prev pre ||
+          Sl.has_prev sl1 ||
+          Sl.has_prev sl2 ||
+          IdMap.mem Sl.prev_pts subst then
+        Sl.prev_pts :: Axioms.reach_id Sl.prev_pts :: always
+      else
+        always
+  in
+
   let procedure_call pre stack m args id =
     let args_id =
       List.map
@@ -463,9 +479,9 @@ let check_procedure proceduresMap name =
     in
     Debug.msg ("procedure_call: " ^ (str_of_ident m) ^ "(" ^ (String.concat ", " (List.map str_of_ident args_id))^ ")\n");
     let subst = DecisionStack.get_subst stack in
-    let subst2 = increase subst [Sl.pts; Axioms.reach_id Sl.pts; Axioms.alloc_id; id] in 
     let m_pre = get_pre m args_id in
     let m_post = get_post m args_id id in
+    let subst2 = increase subst (sl_stuff_to_increase pre subst m_pre m_post) in 
       sl_replacement pre stack m_pre subst2 m_post
   in
 
@@ -473,7 +489,7 @@ let check_procedure proceduresMap name =
     (* pre/post *)
     let subst = DecisionStack.get_subst stack in
     let assigned = IdSet.elements (assigned body) in
-    let subst2 = increase subst (Sl.pts :: (Axioms.reach_id Sl.pts) :: Axioms.alloc_id :: assigned) in
+    let subst2 = increase subst (assigned @ (sl_stuff_to_increase pre subst invariant invariant)) in
     let stack2 = sl_replacement pre stack invariant subst2 invariant in
     let notC = subst_id subst2 (Form.Not cond) in
       add_to_stack stack2 subst2 notC

@@ -133,6 +133,14 @@ let subst_id subst f =
   in
     map_id get f
 
+let rec has_prev f = match f with
+  | Not t -> has_prev t
+  | Eq _ | BoolConst _ | List _ | Emp -> false
+  | PtsTo (h, a, b) -> h = prev_pts
+  | DList _ -> true
+  | SepConj lst | And lst | Or lst -> 
+    List.exists has_prev lst
+
 (* translation to lolli/grass *)
 
 let exists = "exists"
@@ -310,32 +318,60 @@ let negate_ignore_quantifiers f =
     process true f
 *)
 
-(* assumes no quantifier alternation *)
+(* assumes no quantifier alternation and NNF *)
 let skolemize f =
-  let fresh () = cst (Form.fresh_ident skolemCst) in
-  let rec process subst f = match f with
-    | Form.BoolConst _ as b -> b
-    | Form.Eq _ | Form.Pred _ -> Form.subst subst f
-    | Form.Not form -> Form.mk_not (process subst form)
-    | Form.And forms -> Form.smk_and (List.map (process subst) forms) 
-    | Form.Or forms -> Form.smk_or (List.map (process subst) forms)
+  let vars = ref [] in
+  let fresh idx = 
+    if idx < List.length !vars then (List.nth !vars idx, idx + 1)
+    else
+      begin
+        assert(List.length !vars = idx);
+        let c = cst (Form.fresh_ident skolemCst) in
+          vars := c :: !vars;
+          (c, idx + 1)
+      end
+  in
+  let rec process idx subst f = match f with
+    | Form.BoolConst _ as b -> (b, idx)
+    | Form.Eq _ | Form.Pred _ -> (Form.subst subst f, idx)
+    | Form.Not form ->
+      let (f2, idx) = process idx subst form in
+        (Form.mk_not f2, idx)
+    | Form.And forms ->
+      let (forms2, idx) =
+        List.fold_left
+          (fun (acc, i1) f -> 
+            let (f2, i2) = process i1 subst f in
+              (f2 :: acc, i2)
+          )
+          ([], idx)
+          forms
+      in
+        (Form.smk_and forms2, idx)
+    | Form.Or forms ->
+      let (forms2, idxs) = List.split (List.map (process idx subst) forms) in
+        (Form.smk_or forms2, List.fold_left max 0 idxs)
     | Form.Comment (c, form) ->
         if c = exists then
-          let subst2 =
+          let subst2, idx2 =
             IdSet.fold
-              (fun v acc -> IdMap.add v (fresh ()) acc) 
+              (fun v (acc, i1) ->
+                let c, i2 = fresh i1 in
+                  (IdMap.add v c acc, i2)) 
               (Form.fv form)
-              subst
+              (subst, idx)
           in
-            process subst2 form
+            process idx2 subst2 form
         else if c = forall then 
           let vs = Form.fv form in
           let subst2 = IdSet.fold IdMap.remove vs subst in
-            Form.mk_comment c (process subst2 form)
+          let (f2, idx2) = process idx subst2 form in
+            (Form.mk_comment c f2, idx2)
         else 
-          Form.mk_comment c (process subst form)
+          let (f2, idx2) = process idx subst form in
+            (Form.mk_comment c f2, idx2)
   in
-    process IdMap.empty f
+    fst (process 0 IdMap.empty f)
 
 (* pull the axioms at the top level.
  * assumes: nnf, skolemized

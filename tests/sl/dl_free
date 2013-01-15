@@ -1,0 +1,11 @@
+dl_free(lst)
+requires dlseg(lst, a, null, b)
+ensures emp
+{
+    prev := lst.back;
+    while(lst ~= null) dlseg(lst, prev, null, b) {
+        prev := lst;
+        lst := lst.next; 
+        free prev;
+    }
+}

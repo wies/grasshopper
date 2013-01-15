@@ -1,0 +1,16 @@
+dl_concat(start1, end1, start2, end2)
+requires dlseg(start1, a, end1, b) * dlseg(start2, c, end2, d)
+ensures (end2 ~= null * end1 ~= null * dlseg(returned, a, end2, d)) ||
+        (end1 = null * dlseg(returned, c, end2, d)) ||
+        (end2 = null * dlseg(returned, a, end1, b))
+{
+    if (start2 = null) {
+        return start1;
+    } else if (start1 = null) {
+        return start2;
+    } else {
+        end1.next := start2;
+        start2.back := end1;
+        return start1;
+    }
+}
