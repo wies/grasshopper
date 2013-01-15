@@ -398,7 +398,7 @@ let check_procedure proceduresMap name =
         )
       )*) :: (Sl.mk_forall
         (Form.mk_implies
-          (Form.mk_not (mk_pred fp1))
+          (mk_and [Form.mk_not (mk_pred fp1); Form.mk_eq Axioms.var1 (ep Axioms.var1)])
           (Form.mk_equiv (reach1 Axioms.var1 Axioms.var2 Axioms.var3)
                          (reach2 Axioms.var1 Axioms.var2 Axioms.var3))
         )

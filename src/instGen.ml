@@ -214,7 +214,7 @@ let get_ground_terms f =
       begin
         let eps = Axioms.get_eps f in
         let mk_eps t =
-          IdSet.fold
+	  IdSet.fold
             (fun ep acc -> TermSet.add (Axioms.ep ep t) acc)
             eps
             TermSet.empty
