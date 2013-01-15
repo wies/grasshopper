@@ -124,7 +124,7 @@ let output_graphviz chan model =
 	    match def.input with
 	    | [i] ->
 		(match def.output with
-		| Int o -> Printf.fprintf chan "%d -> %d [label = %s]\n" i o (str_of_ident id) 
+		| Int o -> Printf.fprintf chan "%d -> %d [label = \"%s\"]\n" i o (str_of_ident id) 
 		| _ -> ())
 	    | _ -> ())
 	  defs) 
@@ -149,7 +149,7 @@ let output_graphviz chan model =
 		else acc
 	    | _ -> acc) IntMap.empty defs
 	in
-	IntMap.iter (fun i o -> Printf.fprintf chan "%d -> %d [label = %s, style=dashed]\n" i o (str_of_ident (Axioms.fun_of_reach id))) reach)
+	IntMap.iter (fun i o -> Printf.fprintf chan "%d -> %d [label = \"%s\", style=dashed]\n" i o (str_of_ident (Axioms.fun_of_reach id))) reach)
       model
   in
   let output_vars () = 

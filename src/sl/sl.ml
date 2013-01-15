@@ -176,6 +176,13 @@ let set_difference diff set1 set2 =
   Form.mk_equiv (set_in diff Axioms.var1) (Form.mk_and [(set_in set1 Axioms.var1); Form.mk_not (set_in set2 Axioms.var1)])
 (*********************)
 
+let fresh_existentials f =
+  let fct id =
+    if (fst id) = "_" then Form.fresh_ident "_"
+    else id
+  in
+    map_id fct f
+
 (* translation that keep the heap separation separated from the pointer structure *)
 let to_form set_fct domain f =
   let fd why d = Form.fresh_ident ( why ^ "_" ^(fst d)) in
@@ -203,10 +210,14 @@ let to_form set_fct domain f =
         )
     | DList (x1, x2, y1, y2) ->
       let part1 = reach x1 y1 in
-      let part2 = mk_forall (Form.mk_equiv (mk_domain domain v) (Form.mk_and [reachWoT (cst x1) v (cst y1); Form.mk_neq v (cst y1)])) in
-      let part3 = mk_forall (Form.mk_implies (Form.mk_and [mk_domain domain v; mk_domain domain v2; Form.mk_eq (Form.mk_app pts [v]) v2]) (Form.mk_eq (Form.mk_app prev_pts [v2]) v)) in
+      let part2 = mk_forall (Form.mk_equiv  (mk_domain domain v)
+                                            (Form.mk_and [reachWoT (cst x1) v (cst y1); Form.mk_neq v (cst y1)])) in
+      let part3 = mk_forall (Form.mk_implies (Form.mk_and [ mk_domain domain v;
+                                                            mk_domain domain v2;
+                                                            Form.mk_eq (Form.mk_app pts [v]) v2])
+                                             (Form.mk_eq (Form.mk_app prev_pts [v2]) v)) in
       let part4 = Form.mk_or [
-                    Form.mk_and [Form.mk_eq (cst x1) (cst x2); Form.mk_eq (cst y1) (cst y2)];
+                    Form.mk_and [ Form.mk_eq (cst x1) (cst y1); Form.mk_eq (cst x2) (cst y2)];
                     Form.mk_and [ Form.mk_eq (Form.mk_app prev_pts [cst x1]) (cst x2);
                                   Form.mk_eq (Form.mk_app pts [cst y2]) (cst y1);
                                   mk_domain domain (cst y2)] ]
@@ -250,7 +261,7 @@ let to_form set_fct domain f =
       let (str, heap) = process_sep d' sep in
         (Form.mk_and [str; mk_forall (set_fct d' domain)], heap)
   in
-    process_bool f
+    process_bool (fresh_existentials f)
 
 let nnf f =
   let rec process negate f = match f with

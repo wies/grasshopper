@@ -14,7 +14,7 @@ let parse_error = ParseError.parse_error
 %token EQ NEQ
 %token PTS BPTS LS DLS TRUE FALSE EMP
 %token COLONEQ
-%token ASSUME ASSERT NEW NEXT DISPOSE RETURN
+%token ASSUME ASSERT NEW NEXT PREV DISPOSE RETURN
 %token SEP AND OR NOT COMMA
 %token IF ELSE WHILE
 %token REQUIRES ENSURES
@@ -120,6 +120,7 @@ argsCall:
 
 pterm:
 | TIDENT DOT NEXT { Form.mk_app pts [Form.mk_const (mk_ident $1)] }
+| TIDENT DOT PREV { Form.mk_app prev_pts [Form.mk_const (mk_ident $1)] }
 | TIDENT { Form.mk_const (mk_ident $1) }
 | LPAREN pterm RPAREN { $2 }
 ;

@@ -35,6 +35,7 @@ rule token = parse
 | "return" { RETURN }
 | "assert" { ASSERT }
 | "next" { NEXT }
+| "back" { PREV }
 | "new" { NEW }
 | "free" { DISPOSE }
 | "if" { IF }
