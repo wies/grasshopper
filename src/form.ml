@@ -235,6 +235,19 @@ let ground_terms f =
 	if is_ground then TermSet.add t terms, true else terms, false
   in collect_from_terms (fun acc t -> fst (gt acc t)) TermSet.empty f
   
+let fv_in_fun_terms f =
+  let rec fvt vars = function
+    | Var id -> IdSet.add id vars
+    | FunApp (_, ts) ->
+	List.fold_left fvt vars ts
+    | _ -> vars
+  in
+  let rec ct vars t = 
+    match t with
+    | FunApp (_, _) -> fvt vars t
+    | _ -> vars
+  in collect_from_terms ct IdSet.empty f
+     
 
 type decl = {is_pred: bool; arity: int}
 

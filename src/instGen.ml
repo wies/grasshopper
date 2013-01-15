@@ -2,11 +2,7 @@ open Util
 open Form
 open Axioms
 
-let add_class acc cl = 
-  match cl with
-  | [] -> acc 
-  | _ -> cl :: acc
-  
+
 
 let congr_classes fs gterms =
   let term_index_map, num = 
@@ -129,8 +125,8 @@ let choose_rep_terms classes =
 
 let generate_instances axioms terms rep_map = 
   let ground_terms = TermMap.fold (fun _ -> TermSet.union) rep_map TermSet.empty in
-  let axioms, epr_axioms = 
-    List.partition (fun f -> IdMap.exists (fun _ decl -> not decl.is_pred && decl.arity >= 1) (sign f)) axioms
+  let epr_axioms, axioms = 
+    List.partition (fun f -> IdSet.is_empty (fv_in_fun_terms f)) axioms
   in
   let instantiate subst_map acc axiom =
     let fun_terms = 
@@ -159,18 +155,23 @@ let generate_instances axioms terms rep_map =
     if !Config.use_aggressive_inst || is_local then subst subst_map axiom :: acc else acc
   in
   let partitioned_axioms = 
-    let fv_axioms = List.map (fun f -> (fv f, f)) axioms in
+    let add_class acc vars cl = 
+      match cl with
+      | [] -> acc
+      | _ -> (vars, cl) :: acc
+    in
+    let fv_axioms = List.map (fun f -> (fv_in_fun_terms f, f)) axioms in
     let sorted = List.sort (fun (vars1, _) (vars2, _) -> IdSet.compare vars1 vars2) fv_axioms in
-    let classes, _, cl = 
+    let classes, vars, cl = 
       List.fold_left 
 	(fun (acc, lvars, cl) (vars, f) ->
 	  if lvars = vars then (acc, lvars, f :: cl)
-	  else (add_class acc cl, vars, [f]))
+	  else (add_class acc lvars cl, vars, [f]))
 	([], IdSet.empty, []) sorted
-    in add_class classes cl	  
+    in add_class classes vars cl	  
   in
-  let gen axioms =
-    let vars = id_set_to_list (fv (mk_and axioms)) in
+  let gen (vars, axioms) =
+    (* let vars = id_set_to_list (fv (mk_and axioms)) in *)
     let subst_maps = 
       List.fold_left (fun subst_maps v ->
 	let new_subst_maps = 
@@ -178,7 +179,7 @@ let generate_instances axioms terms rep_map =
 	    (fun acc t -> List.fold_left (fun acc s -> (IdMap.add v t s) :: acc) acc subst_maps)
 	    [] terms
 	in new_subst_maps)
-	[IdMap.empty] vars
+	[IdMap.empty] (id_set_to_list vars)
     in List.fold_left 
       (fun instances subst_map -> List.fold_left (instantiate subst_map) instances axioms)
       [] subst_maps
