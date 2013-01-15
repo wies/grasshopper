@@ -1,0 +1,14 @@
+copy(lst)
+requires lseg(lst, null)
+ensures lseg(lst, null) * lseg(returned, null)
+{
+    curr := lst;
+    cp := null;
+    while(curr ~= null) lseg(cp, null) {
+        old_cp := cp;
+        new cp;
+        cp.next := old_cp;
+        curr := curr.next;
+    }
+    return cp;
+}

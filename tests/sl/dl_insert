@@ -1,0 +1,23 @@
+insert(lst, elt)
+requires dlseg(a, null, null, b) * elt |-> null
+ensures (a = null * dlseg(elt, null, null, elt)) || dlseg(a, null, null, b)
+{
+    if (a = null) {
+        elt.back := null;
+        return elt;
+    } else {
+        curr := a;
+        prev := null;
+        while ( Random && curr.next ~= null ) curr ~= null * dlseg(a, null, curr, prev) * dlseg(curr, prev, null, b) {
+            prev := curr;
+            curr := curr.next;
+        }
+        elt.next := curr;
+        curr.back := elt;
+        if (prev ~= null) {
+          prev.next := elt;
+        } else {}
+        elt.back := prev;
+        return a;
+    }
+}

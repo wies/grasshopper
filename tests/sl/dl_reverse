@@ -1,10 +1,10 @@
 dl_reverse(lst)
-requires dlseg(start, a, b, end)
-ensures dlseg(end, b, a, start)
+requires dlseg(start, null, null, end)
+ensures dlseg(end, null, null, start)
 {
-    curr := ? ;
-    prev := ? ;
-    while(curr ~= null) dlseg(curr, ?, b, end) * dlseg(pred, ?, a, start) {
+    curr := start;
+    prev := null;
+    while(curr ~= null) dlseg(curr, prev, null, end) * dlseg(prev, curr, null, start) {
         tmp := curr;
         tmp.next := prev;
         prev.back := tmp;
