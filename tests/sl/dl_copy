@@ -1,0 +1,16 @@
+copy()
+requires dlseg(a, null, null, b) * c = null * d = null
+ensures dlseg(a, null, null, b) * dlseg(c, null, null, d)
+{
+    curr := lst;
+    while(curr ~= null) dlseg(c, null, null, d) {
+        old_d := d;
+        new d;
+        d.next := null;
+        d.back := old_d;
+        if (old_d ~= null) {
+          old_d.next := d;
+        } else {}
+        curr := curr.next;
+    }
+}

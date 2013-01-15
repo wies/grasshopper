@@ -1,0 +1,31 @@
+
+remove()
+requires dlseg(a, null, null, b)
+ensures dlseg(a, null, null, b)
+{
+    if (a = null) {
+    } else if (a = b) {
+       free a;
+       a := null;
+       b := null;
+    } else {
+        curr := a;
+        prev := null;
+        while ( Random && curr.next ~= null ) curr ~= null * dlseg(a, null, curr, prev) * dlseg(curr, prev, null, b) {
+            prev := curr;
+            curr := curr.next;
+        }
+        tmp := curr.next;
+        if (prev ~= null) {
+            prev.next := curr.next;
+        } else {
+            a := tmp;
+        }
+        if (tmp ~= null) {
+            tmp.back := prev;
+        } else {
+            b := prev;
+        }
+        free curr;
+    }
+}

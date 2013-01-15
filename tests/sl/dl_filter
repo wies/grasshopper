@@ -1,0 +1,28 @@
+
+filter()
+requires dlseg(a, null, null, b)
+ensures dlseg(a, null, null, b)
+{
+    prev := null;
+    curr := a;
+    while (curr ~= null) dlseg(a,null,curr,prev) * dlseg(curr,prev,null,b)
+    {
+      if (Random) {
+        tmp := curr.next;
+        if (prev ~= null) {
+            prev.next := curr.next;
+        } else {
+            a := tmp;
+        }
+        if (tmp ~= null) {
+            tmp.back := prev;
+        } else {
+            b := prev;
+        }
+        free curr;
+      } else {
+        prev := curr;
+      }
+      curr := curr.next;
+    }
+}
