@@ -234,7 +234,9 @@ module ModelGenerator =
     
     let get_eq_classes_lst session terms =
       let (uf, terms_idx) = get_eq_classes_raw session terms in
-      let max = TermMap.cardinal terms_idx in
+      let max = (*TermMap.cardinal terms_idx *)
+	TermMap.fold (fun _ _ acc -> acc + 1) terms_idx 0
+      in
       let classes = Array.make max [] in
         List.iter
           (fun (t, i) ->
