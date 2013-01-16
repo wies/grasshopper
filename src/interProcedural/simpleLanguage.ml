@@ -526,9 +526,15 @@ let check_procedure proceduresMap name =
 
   let rec check pre stmnt =
     let rec traverse stack stmnt = match stmnt with
-      | VarUpdate (_, Term _) | FunUpdate (_, _, Term _) | Dispose _ ->
+      | FunUpdate (p, _, Term _) when p = Sl.prev_pts ->
+        let (c, s) = convert stmnt (DecisionStack.get_subst stack) in
+        let clauses = get_clauses c in
+        let reach_free = List.filter (fun c -> IdMap.for_all (fun id _ -> not (Axioms.is_reach id)) (Form.sign c)) clauses in
+          add_to_stack stack s (Form.mk_and reach_free)
+      | VarUpdate (_, Term _) | FunUpdate (_, _, Term _) | Dispose _ | New _ ->
         let (c, s) = convert stmnt (DecisionStack.get_subst stack) in
           add_to_stack stack s c
+      (*
       | New v ->
         let (c, s) = convert stmnt (DecisionStack.get_subst stack) in
         (* add a skolem cst v |-> _ *)
@@ -537,6 +543,7 @@ let check_procedure proceduresMap name =
         let not_null = Form.mk_not (Form.mk_eq Axioms.null (Form.mk_const v2)) in
         let c = Form.smk_and [not_null; skolem_pts; c] in
           add_to_stack stack s c
+      *)
       | Return (Form.Const t) -> 
         let post = proc.postcondition in
         let subst = DecisionStack.get_subst stack in
