@@ -1,9 +1,0 @@
-Pre
-a = null && curr = null
-null |-> null * lseg(a, curr) * lseg(curr, null) * lseg(b, null)
-
-Updates
-
-Post
-true
-null |-> null * lseg(b, null)

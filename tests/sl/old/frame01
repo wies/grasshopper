@@ -1,9 +1,0 @@
-Pre
-x ~= y
-lseg(x, y)
-
-Updates
-
-Post
-true
-x |-> z
