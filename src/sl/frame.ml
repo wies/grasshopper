@@ -306,18 +306,13 @@ let infer_frame_loop subst query =
 
 
 let mk_frame_query pre pathf post subst =
-  (* axioms from the logic *)
-  let logic_axioms = List.flatten (make_axioms [ [pre]; pathf; [post]]) in
-  
-  (* query *)
-  (*let wo_axioms = pre :: pathf @ [post] @ (implies_heap_content subst) in*)
-  let wo_axioms = pre :: pathf @ [post] @ (Entails.same_heap_axioms subst) in
-  let query = smk_and ( wo_axioms @ logic_axioms )
+  let query = smk_and ( (Sl.make_axioms (Form.mk_and (pre :: post :: pathf))) ::
+                        (same_heap_axioms subst) )
   in
   let _ = if !Debug.verbose then
     begin
       print_endline "frame query: ";
-      print_form stdout (smk_and wo_axioms)
+      print_form stdout query
     end
   in
     query

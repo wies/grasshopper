@@ -30,12 +30,9 @@ let mk_entailment_query pre_sl path post_sl =
 
   let post = Form.subst_id subst (Sl.to_lolli_negated post_heap post_sl) in
   
-  (* axioms from the logic *)
-  let logic_axioms = List.flatten (make_axioms [ [pre]; pathf; [post]]) in
-  
   (* query *)
-  let query = smk_and ( pre :: post :: pathf @
-                        (same_heap_axioms subst) @ logic_axioms )
+  let query = smk_and ( (Sl.make_axioms (Form.mk_and (pre :: post :: pathf))) ::
+                        (same_heap_axioms subst) )
   in
   let _ = if !Debug.verbose then
     begin

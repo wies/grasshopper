@@ -296,28 +296,6 @@ let nnf f =
   in
     process false f
 
-(*
-let negate_ignore_quantifiers f =
-  let rec process negate f = match f with
-    | Form.BoolConst b -> Form.BoolConst (negate <> b)
-    | Form.Pred _ as p -> if negate then Form.mk_not p else p
-    | Form.Eq _ as eq -> if negate then Form.mk_not eq else eq
-    | Form.Not form -> process (not negate) form
-    | Form.And forms ->
-      let forms2 = List.map (process negate) forms in
-        if negate then Form.mk_or forms2
-        else Form.mk_and forms2
-    | Form.Or forms -> 
-      let forms2 = List.map (process negate) forms in
-        if negate then Form.mk_and forms2
-        else Form.mk_or forms2
-    | Form.Comment (c, form) ->
-      let form2 = process negate form in
-        Form.mk_comment c form2
-  in
-    process true f
-*)
-
 (* assumes no quantifier alternation and NNF *)
 let skolemize f =
   let vars = ref [] in
@@ -416,37 +394,38 @@ let positive_with_top_Lvl_axioms f =
   let (f2s, accs) = List.split (List.map top_level clauses) in
     Form.smk_and (f2s  @ (List.flatten accs))
 
+
+let rec get_clauses f = match f with
+  | Form.And lst -> List.flatten (List.map get_clauses lst)
+  | Form.Comment (c, f) -> List.map (fun x -> Form.Comment (c,x)) (get_clauses f)
+  | other -> [other]
+
+let make_axioms f =
+  let ax = List.flatten (Axioms.make_axioms [[f]]) in
+  let clauses = List.flatten (List.map get_clauses ax) in
+  let reach_free =
+    List.filter
+      (fun c -> IdMap.for_all (fun id _ -> not (Axioms.is_reach id) || fst (Axioms.fun_of_reach id) <> (fst prev_pts)) (Form.sign c))
+      clauses
+  in
+    Form.smk_and (f :: reach_free)
+
 let to_lolli domain f =
   let (pointers, separations) = to_form set_equiv domain f in
     positive_with_top_Lvl_axioms (Form.smk_and [pointers; separations])
 
 let to_lolli_with_axioms domain f =
   let f2 = to_lolli domain f in
-  let ax = List.flatten (Axioms.make_axioms [[f2]]) in
-    Form.smk_and (f2 :: ax)
+    make_axioms f2
 
 let to_lolli_not_contained domain f = (* different structure or larger footprint *)
   let (pointers, separations) = to_form set_included domain (mk_not f) in
     positive_with_top_Lvl_axioms (skolemize (nnf (Form.smk_and [pointers; separations])))
-(*
-  let domain2 = Form.fresh_ident ("in_" ^(fst domain)) in
-  let sk_var = Form.mk_const (Form.fresh_ident "skolemCst") in
-  let different_domain = Form.mk_and [Form.mk_not (mk_domain domain sk_var); (mk_domain domain2 sk_var)] in
-  let (pointers, separations) = to_form domain2 f in
-  let pointers = negate_ignore_quantifiers pointers in
-    positive_with_top_Lvl_axioms (Form.smk_and [Form.smk_or [different_domain; pointers]; separations])
-*)    
 
 let to_lolli_negated domain f =
-  (*
-  let domain2 = Form.fresh_ident ("neg_" ^(fst domain)) in
-  let sk_var = Form.mk_const (Form.fresh_ident "skolemCst") in
-  let different_domain = Form.mk_not (Form.mk_equiv (mk_domain domain sk_var) (mk_domain domain2 sk_var)) in
-  *)
   let (pointers, separations) = to_form set_equiv domain (mk_not f) in
     positive_with_top_Lvl_axioms (skolemize (nnf (Form.smk_and [pointers; separations])))
 
 let to_lolli_negated_with_axioms domain f =
   let f2 = to_lolli_negated domain f in
-  let ax = List.flatten (Axioms.make_axioms [[f2]]) in
-    Form.smk_and (f2 :: ax)
+    make_axioms f2

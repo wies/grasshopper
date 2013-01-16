@@ -163,11 +163,6 @@ let to_lolli heap sl =
 let to_lolli_negated heap sl =
   Sl.to_lolli_negated heap sl
 
-let rec get_clauses f = match f with
-  | And lst -> List.flatten (List.map get_clauses lst)
-  | Comment (c, f) -> List.map (fun x -> Comment (c,x)) (get_clauses f)
-  | other -> [other]
-
 
 let unify_subst subst1 subst2 =
   let cstr_for id1 id2 =
@@ -201,8 +196,9 @@ let unify_subst subst1 subst2 =
       else if v1 < v2 then (id2, ax, cstr, [], [])
       else (id1, [], [], ax, cstr)
   in
-  let keys1 = IdMap.fold (fun t _ acc -> IdSet.add t acc) subst1 IdSet.empty in
-  let keys  = IdMap.fold (fun t _ acc -> IdSet.add t acc) subst2 keys1 in
+  let keys = IdMap.fold (fun t _ acc -> IdSet.add t acc) subst1 IdSet.empty in
+  let keys = IdMap.fold (fun t _ acc -> IdSet.add t acc) subst2 keys in
+  let keys = IdSet.remove (Axioms.reach_id Sl.prev_pts) keys in
   let get subst id = try IdMap.find id subst with Not_found -> id in
     IdSet.fold
       (fun id (as1, cs1, as2, cs2, s) ->
@@ -255,7 +251,7 @@ let unify stack branch1 branch2 =
     DecisionStack.step stack_with_axioms both_branches s3
   
 let add_to_stack stack subst cstr =
-  let (ax, fs) = Axioms.extract_axioms (get_clauses cstr) in
+  let (ax, fs) = Axioms.extract_axioms (Sl.get_clauses cstr) in
     List.fold_left
       DecisionStack.guard_and_add
       (DecisionStack.step stack (smk_and fs) subst)
@@ -274,8 +270,8 @@ let check_entailment what pre_sl stack post_sl =
   let post_neg = subst_id subst (to_lolli_negated Entails.post_heap post_sl) in
   let heap_content = Entails.same_heap_axioms subst in
   let wo_axioms = pre :: pathf @ [post_neg] in
-  let axioms = List.flatten (Axioms.make_axioms [wo_axioms]) in
-  let query = smk_and (axioms @ heap_content @ wo_axioms) in
+  let axioms = Sl.make_axioms (mk_and wo_axioms) in
+  let query = smk_and (axioms :: heap_content (*@ wo_axioms*)) in
   let _ = if !Debug.verbose then
     begin
       print_endline "query wo axioms: ";
@@ -528,7 +524,7 @@ let check_procedure proceduresMap name =
     let rec traverse stack stmnt = match stmnt with
       | FunUpdate (p, _, Term _) when p = Sl.prev_pts ->
         let (c, s) = convert stmnt (DecisionStack.get_subst stack) in
-        let clauses = get_clauses c in
+        let clauses = Sl.get_clauses c in
         let reach_free = List.filter (fun c -> IdMap.for_all (fun id _ -> not (Axioms.is_reach id)) (Form.sign c)) clauses in
           add_to_stack stack s (Form.mk_and reach_free)
       | VarUpdate (_, Term _) | FunUpdate (_, _, Term _) | Dispose _ | New _ ->
