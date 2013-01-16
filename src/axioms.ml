@@ -100,8 +100,8 @@ let reach_axioms f =
      mk_comment "linear1" lin1;
      mk_comment "linear2" lin2;
      mk_comment "trans1" trn1; 
-     mk_comment "trans2" trn2;
-     mk_comment "before" lbef]
+     mk_comment "trans2" trn2] @
+    (if !Config.with_before_axiom then [mk_comment "before" lbef] else [])
   else []
 
 let jp_axioms f =
@@ -258,7 +258,7 @@ let add_axioms pf_a pf_b =
 
 let make_axioms fs =
   let unaries = List.map (fun f -> unary_funs (mk_and f)) fs in
-  let init_funs = (*List.map (fun set -> IdSet.filter (fun (_, n) -> n = 0) set)*) unaries in
+  let init_funs = List.map (fun set -> IdSet.filter (fun (_, n) -> n = 0) set) unaries in
   let _, rev_already_declared =
     List.fold_left
       (fun (lhs, acc) uns -> (IdSet.union lhs uns, (IdSet.filter (fun id -> IdSet.mem id lhs) uns) :: acc) )

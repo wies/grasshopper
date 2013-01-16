@@ -19,13 +19,13 @@ let fail session msg = raise (SmtLib_error (session, "SmtLib: " ^ msg))
 let write session cmd =
   output_string session.out_chan cmd;
   match session.replay_chan with
-  | Some chan -> output_string chan cmd
+  | Some chan -> output_string chan cmd; flush chan
   | None -> ()	
 
 let writefn session fn =
   fn session.out_chan;
   match session.replay_chan with
-  | Some chan -> fn chan
+  | Some chan -> fn chan; flush chan
   | None -> ()
 
 let writeln session cmd = 

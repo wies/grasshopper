@@ -4,6 +4,7 @@ let with_reach_axioms = ref true
 let with_jp_axioms = ref true
 let with_alloc_axioms = ref false
 let with_null_axioms = ref false
+let with_before_axiom = ref true
 
 
 (*tell whether we are instantiating the axioms or relying on z3.*)
@@ -17,6 +18,7 @@ let use_triggers = ref false
 let sl_mode = ref false
 
 let default_opts_for_sl () =
+  with_before_axiom := false;
   with_jp_axioms := false;
   sl_mode := true;
   use_aggressive_inst := false

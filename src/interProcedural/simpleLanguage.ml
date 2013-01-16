@@ -434,6 +434,7 @@ let check_procedure proceduresMap name =
         let get_prev = get_pts Sl.prev_pts in
         let get_reach subst = try IdMap.find (Axioms.reach_id Sl.pts) subst with Not_found -> (Axioms.reach_id Sl.pts) in
         let included = Sl.mk_forall (Sl.set_included fp alloc1) in
+	let pts2_reach_axioms = List.map Sl.mk_forall (Axioms.reach_axioms (get_next subst2)) in
         let preserve = Sl.mk_forall 
             (Form.mk_implies (mk_and [Sl.set_in alloc1 Axioms.var1; Sl.set_in fp2 Axioms.var1])
             (Sl.set_in fp Axioms.var1)) 
@@ -442,6 +443,7 @@ let check_procedure proceduresMap name =
         let axioms =
           included :: preserve ::
           (replacement_pts fp (get_next subst) (get_next subst2)) ::
+	  pts2_reach_axioms @
           (if has_prev then [replacement_pts fp (get_prev subst) (get_prev subst2)] else []) @
           (replacement_alloc alloc1 fp alloc2 fp2) @
           (replacement_reach fp (get_reach subst) (get_reach subst2))
