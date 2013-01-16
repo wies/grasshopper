@@ -1,0 +1,23 @@
+copy1(curr, cp)
+requires lseg(cp, null) * lseg(curr, null)
+ensures  lseg(returned, null) * lseg(curr, null)
+{
+    if (curr = null) {
+        return cp;
+    } else {
+        old_cp := cp;
+        new cp;
+        cp.next := old_cp;
+        n := curr.next;
+        res := copy1(n, cp);
+        return res;
+    }
+}
+
+copy(lst)
+requires lseg(lst, null)
+ensures lseg(lst, null) * lseg(returned, null)
+{
+    cp := copy1(lst, null);
+    return cp;
+}

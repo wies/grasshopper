@@ -309,6 +309,7 @@ let compute_frames pre_sl stack post_sl =
 let check_procedure proceduresMap name =
   print_endline ("checking: " ^ (str_of_ident name));
   let get name = IdMap.find name proceduresMap in
+  (*
   let fresh_local () = fresh_ident "_" in
   let subst_with_fresh_local m subst form =
     let non_args =
@@ -324,6 +325,7 @@ let check_procedure proceduresMap name =
     in
       Sl.subst_id subst2 form 
   in
+  *)
   let get_pre name args =
     let m = get name in
     let subst =
@@ -334,7 +336,7 @@ let check_procedure proceduresMap name =
         m.args
         args
     in
-      subst_with_fresh_local m subst m.precondition
+      Sl.subst_id(*with_fresh_local m*) subst m.precondition
   in
   let get_post name args return =
     let m = get name in
@@ -346,7 +348,7 @@ let check_procedure proceduresMap name =
         m.args
         args
     in
-      subst_with_fresh_local m subst m.postcondition
+      Sl.subst_id(*with_fresh_local m*) subst m.postcondition
   in
 
   let replacement_alloc alloc1 fp1 alloc2 fp2 =

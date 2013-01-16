@@ -1,0 +1,18 @@
+
+filter(x)
+requires lseg(x, null)
+ensures lseg(returned, null)
+{
+    if (x = null) return x;
+    else if (Random) {
+        n1 := x.next;
+        n2 := filter(n1);
+        x.next := n2;
+        return x;
+    } else {
+        n1 := x.next;
+        free x;
+        n2 := filter(n1);
+        return n2;
+    }
+}

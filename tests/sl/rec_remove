@@ -1,0 +1,17 @@
+remove(lst)
+requires lseg(lst, null)
+ensures lseg(returned, null)
+{
+    if (lst = null)
+        return null;
+    else if (Random) {
+        n := lst.next;
+        free lst;
+        return n;
+    } else {
+        n1 := lst.next;
+        n2 := remove(n1);
+        lst.next := n2;
+        return lst;
+    }
+}

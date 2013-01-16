@@ -1,0 +1,21 @@
+
+find_last(a)
+requires a ~= null * lseg(a, null)
+ensures lseg(a, returned) * returned |-> null
+{
+    n := a.next;
+    if (n ~= null) {
+        n2 := find_last(n);
+        return n2;
+    } else {
+        return a;
+    }
+}
+
+concat(a, b)
+requires a ~= null * lseg(a, null) * lseg(b, null)
+ensures lseg(a, b) * lseg(b, null)
+{
+    l := find_last(a);
+    l.next := b;
+}

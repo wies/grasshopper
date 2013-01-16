@@ -1,0 +1,21 @@
+rev1(curr, rev)
+requires lseg(rev, null) * lseg(curr, null)
+ensures lseg(returned, null)
+{
+    if (curr = null) {
+        return rev;
+    } else {
+        tmp := curr.next;
+        curr.next := rev;
+        r := rev1(curr, tmp);
+        return r;
+    }
+}
+
+reverse(lst)
+requires lseg(lst, null)
+ensures lseg(returned, null)
+{
+    r := rev1(lst, null);
+    return r;
+}
