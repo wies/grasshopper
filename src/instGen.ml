@@ -166,10 +166,13 @@ let get_ground_terms f =
       begin
         let eps = Axioms.get_eps f in
         let mk_eps t =
+	  (*match t with
+	  | Const _ ->*)
 	  IdSet.fold
             (fun ep acc -> TermSet.add (Axioms.ep ep t) acc)
             eps
             TermSet.empty
+          (*| _ -> TermSet.empty*)
         in
           TermSet.fold
             (fun t acc -> TermSet.union (mk_eps t) acc)

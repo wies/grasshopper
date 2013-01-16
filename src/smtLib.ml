@@ -53,7 +53,8 @@ let start smt_cmd replay_file produce_models produce_interpolants =
   in
   writeln session "(set-option :print-success false)";
   if produce_models then begin
-    writeln session "(set-option :produce-models true)"
+    writeln session "(set-option :produce-models true)";
+    (*writeln session "(set-option :produce-unsat-cores true)"*)
   end;
   if produce_interpolants then writeln session "(set-option :produce-interpolants true)";
   if false && !Config.instantiate then
