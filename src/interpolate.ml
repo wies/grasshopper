@@ -2,7 +2,7 @@ open Form
 open Stmnt
 open Axioms
 open Util
-open Logging
+(*open Logging*)
 
 let input_file = ref ""
 

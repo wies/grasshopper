@@ -64,7 +64,7 @@ let start smt_cmd replay_file produce_models produce_interpolants =
     begin
   *)
   writeln session "(set-option :mbqi true)";
-  writeln session "(set-logic UF)"
+  writeln session "(set-logic UF)";
   (*end;*)
   writeln session ("(declare-sort " ^ sort_str ^ " 0)");
   session
