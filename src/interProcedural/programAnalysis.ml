@@ -8,8 +8,8 @@ let input_file = ref ""
 let cmd_options =
   [("-v", Arg.Set Debug.verbose, "Display verbose messages");
    ("-m", Arg.Set_string Prover.model_file, "Produce model");
-   ("-alloc", Arg.Set Config.with_alloc_axioms, "Add axioms for alloc predicate");
-   ("-null", Arg.Set Config.with_null_axioms, "Add axioms for null");
+   ("-noalloc", Arg.Clear Config.with_alloc_axioms, "Omit axioms for alloc predicate");
+   ("-nonull", Arg.Clear Config.with_null_axioms, "Omit axioms for null");
    ("-z3q", Arg.Clear Config.instantiate, "Let z3 deal with quantifiers.")
   ]
 

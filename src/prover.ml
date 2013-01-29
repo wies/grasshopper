@@ -93,7 +93,7 @@ let interpolate_with_model signature model session_b pf_a_axioms count =
   
 let interpolate pf_a pf_b =
   (* start session for model enumeration for A *)
-  let session_a = SmtLib.start_z3 (Some "z3.in") in
+  let session_a = SmtLib.start_z3 () in
   let pf_a_axioms, _ = extract_axioms pf_a in
   let pf_a_terms = ground_terms (mk_and pf_a) in
   (* let _ = print_endline "Instantiating A" in *)
@@ -142,25 +142,13 @@ let mk_solver f =
           axioms_f @ ground_f
       end
   in
-  let z3_in = if !Debug.verbose then Some "z3.in" else None in
-  let session = SmtLib.start_z3 z3_in in
+  let session = SmtLib.start_z3 () in
   let prove () =
     Debug.msg "sending to prover\n";
 
     let signature = sign (mk_and f_inst) in
     SmtLib.declare session signature;
     Debug.msg "  signature done\n";
-
-    (*
-    if not !Config.instantiate then
-      begin
-        let grounds = ground_terms (mk_and f_inst) in
-        let axioms_f, ground_f = extract_axioms f_inst in
-        let classes = InstGen.congr_classes ground_f grounds in 
-        SmtLib.declare_gound session (List.map List.hd classes);
-        Debug.msg "  ground terms done\n";
-      end;
-    *)
 
     SmtLib.assert_forms session f_inst;
     Debug.msg "  f_inst done\n";

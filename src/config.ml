@@ -20,5 +20,7 @@ let sl_mode = ref false
 let default_opts_for_sl () =
   with_before_axiom := false;
   with_jp_axioms := false;
+  with_alloc_axioms := true;
+  with_null_axioms := true;
   sl_mode := true;
   use_aggressive_inst := false

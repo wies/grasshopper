@@ -57,19 +57,31 @@ let start smt_cmd replay_file produce_models produce_interpolants =
     (*writeln session "(set-option :produce-unsat-cores true)"*)
   end;
   if produce_interpolants then writeln session "(set-option :produce-interpolants true)";
+  (*
   if false && !Config.instantiate then
     writeln session "(set-logic QF_UF)"
   else
     begin
-      writeln session "(set-option :mbqi true)";
-      writeln session "(set-logic UF)"
-    end;
+  *)
+  writeln session "(set-option :mbqi true)";
+  writeln session "(set-logic UF)"
+  (*end;*)
   writeln session ("(declare-sort " ^ sort_str ^ " 0)");
-  (*if not !Config.instantiate then
-    writeln session "(declare-fun ground (usort) Bool)";*)
   session
+
+let start_z3 =
+  let cnt = ref 0 in
+  let replay_file () =
+    if !Debug.verbose then
+      begin
+        cnt := !cnt + 1;
+        Some ("z3_" ^ (string_of_int !cnt) ^ ".in")
+      end
+    else None
+  in
+    (fun () -> start "z3 -smt2 -ini:z3.ini -in" (replay_file ()) true false)
     
-let start_z3 replay_file = start "z3 -smt2 -ini:z3.ini -in" replay_file true false
+(*let start_z3 replay_file = start "z3 -smt2 -ini:z3.ini -in" replay_file true false*)
       
 let start_mathsat replay_file = start "mathsat -verbosity=0 -interpolation=true" replay_file false true
     
@@ -134,10 +146,7 @@ let assert_form session ?(igroup=None) f = Util.measure (assert_form session ~ig
     
 let assert_forms session ?(igroup=None) fs =
   List.iter (fun f -> assert_form session ~igroup:igroup f) fs
-    
-(*let declare_gound session terms =
-  List.iter (fun t -> assert_form session (mk_pred ("ground",0) [t])) terms*)
-    
+
     
 let is_sat session = 
   writeln session "(check-sat)";
