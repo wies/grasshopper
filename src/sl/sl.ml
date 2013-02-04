@@ -162,28 +162,6 @@ let one_and_rest lst =
   in
     process [] [] lst
 
-(* helpers for sets *)
-let set_in set v = Form.mk_pred set [v]
-
-let set_included set1 set2 =
-  Form.mk_implies (set_in set1 Axioms.var1) (set_in set2 Axioms.var1)
-
-let set_equiv set1 set2 =
-  Form.mk_equiv (set_in set1 Axioms.var1) (set_in set2 Axioms.var1)
-
-let set_disjoint set1 set2 =
-  Form.mk_or [Form.mk_not (set_in set1 Axioms.var1); Form.mk_not (set_in set2 Axioms.var1)]
-
-let set_union union set1 set2 =
-  Form.mk_equiv (set_in union Axioms.var1) (Form.mk_or [(set_in set1 Axioms.var1); (set_in set2 Axioms.var1)])
-
-let set_inter inter set1 set2 =
-  Form.mk_equiv (set_in inter Axioms.var1) (Form.mk_and [(set_in set1 Axioms.var1); (set_in set2 Axioms.var1)])
-
-let set_difference diff set1 set2 =
-  Form.mk_equiv (set_in diff Axioms.var1) (Form.mk_and [(set_in set1 Axioms.var1); Form.mk_not (set_in set2 Axioms.var1)])
-(*********************)
-
 let fresh_existentials f =
   let fct id =
     if (fst id) = "_" then Form.fresh_ident "_"
@@ -428,7 +406,7 @@ let make_axioms f =
     Form.smk_and (f :: reach_free)
 
 let to_lolli domain f =
-  let (pointers, separations) = to_form set_equiv domain f in
+  let (pointers, separations) = to_form SSet.equiv domain f in
     positive_with_top_Lvl_axioms (Form.smk_and [pointers; separations])
 
 let to_lolli_with_axioms domain f =
@@ -436,11 +414,11 @@ let to_lolli_with_axioms domain f =
     make_axioms f2
 
 let to_lolli_not_contained domain f = (* different structure or larger footprint *)
-  let (pointers, separations) = to_form set_included domain (mk_not f) in
+  let (pointers, separations) = to_form SSet.included domain (mk_not f) in
     positive_with_top_Lvl_axioms (skolemize (nnf (Form.smk_and [pointers; separations])))
 
 let to_lolli_negated domain f =
-  let (pointers, separations) = to_form set_equiv domain (mk_not f) in
+  let (pointers, separations) = to_form SSet.equiv domain (mk_not f) in
     positive_with_top_Lvl_axioms (skolemize (nnf (Form.smk_and [pointers; separations])))
 
 let to_lolli_negated_with_axioms domain f =

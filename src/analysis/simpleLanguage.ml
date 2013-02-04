@@ -358,7 +358,7 @@ let check_procedure proceduresMap name =
     let f1 = mk_pred fp1 in
     let f2 = mk_pred fp2 in
     let nf1a1 = Form.mk_and [Form.mk_not f1; a1] in
-    [mk_not (Sl.set_in alloc2 null);
+    [mk_not (SSet.mem alloc2 null);
      Sl.mk_forall
         (Form.mk_and [
           (*Form.mk_implies (mk_pred fp1) (mk_pred alloc1);*)
@@ -435,11 +435,11 @@ let check_procedure proceduresMap name =
         let get_next = get_pts Sl.pts in
         let get_prev = get_pts Sl.prev_pts in
         let get_reach subst = try IdMap.find (Axioms.reach_id Sl.pts) subst with Not_found -> (Axioms.reach_id Sl.pts) in
-        let included = Sl.mk_forall (Sl.set_included fp alloc1) in
+        let included = Sl.mk_forall (SSet.included fp alloc1) in
 	let pts2_reach_axioms = List.map Sl.mk_forall (Axioms.reach_axioms (get_next subst2)) in
         let preserve = Sl.mk_forall 
-            (Form.mk_implies (mk_and [Sl.set_in alloc1 Axioms.var1; Sl.set_in fp2 Axioms.var1])
-            (Sl.set_in fp Axioms.var1)) 
+            (Form.mk_implies (mk_and [SSet.mem alloc1 Axioms.var1; SSet.mem fp2 Axioms.var1])
+            (SSet.mem fp Axioms.var1)) 
         in
         let has_prev = IdMap.mem Sl.prev_pts subst2 in
         let axioms =
