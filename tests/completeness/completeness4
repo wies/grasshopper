@@ -1,9 +1,0 @@
-assume prev ~= curr;
-assume f null = null;
-assume Reach_f curr null null;
-assume f prev = curr;
-
-assume ~Reach_f curr null prev;
-assume ~Reach_f curr prev prev;
-
-cut:

@@ -1,6 +1,0 @@
-assume f null = f null;
-assume Reach_f x y x;
-assume Reach_f y x x;
-assume x ~= y;
-
-cut:
