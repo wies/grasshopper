@@ -199,6 +199,35 @@ let rec nnf = function
   | Annot (a, f) -> Annot (a, nnf f)
   | f -> f
   
+(** compute conjunctive normal form of a formula *)
+(* Todo: avoid exponential blowup *)
+let rec cnf = 
+  let rec cnf_and acc = function
+    | [] -> mk_and acc
+    | BoolOp (Or, []) :: _ -> BoolOp (Or, [])
+    | BoolOp (And, fs) :: fs1 -> cnf_and acc (fs @ fs1)
+    | Annot (a, BoolOp(And, fs)) :: fs1 -> 
+	cnf_and acc (List.map (fun f -> Annot (a, f)) fs @ fs1)
+    | f :: fs -> cnf_and (f :: acc) fs
+  in
+  let rec cnf_or acc = function
+    | BoolOp (And, []) :: _ -> BoolOp (And, [])
+    | [] -> mk_or acc
+    | BoolOp(Or, fs) :: fs1 -> cnf_or acc (fs @ fs1)
+    | Annot (a, BoolOp (Or, fs)) :: fs1 -> cnf_or acc (List.map (fun f -> Annot (a, f)) fs @ fs1)
+    | BoolOp (And, fs) :: fs1 -> 
+	let fs_or = acc @ fs1 in
+	let fs_and = List.map (fun f -> mk_or (f :: fs_or)) fs in
+	cnf (mk_and fs_and)
+    | f :: fs -> cnf_or (f :: acc) fs  
+  in
+  function
+    | BoolOp(And, fs)
+    | Annot (_, BoolOp(And, fs)) ->  cnf_and [] (List.rev_map cnf fs)
+    | BoolOp (Or, fs) 
+    | Annot (_, BoolOp(Or, fs)) -> cnf_or [] (List.rev_map cnf fs)
+    | f -> f
+
 let mk_neq eq s t = mk_not (mk_eq eq s t)
 
 let mk_implies a b =
@@ -206,6 +235,7 @@ let mk_implies a b =
 
 let mk_equiv a b =
   smk_or [smk_and [a; b]; smk_and [nnf (mk_not a); nnf (mk_not b)]]
+
 
 let fold_terms fn init f =
   let rec ft acc = function
@@ -397,7 +427,6 @@ let str_of_ident (name, n) =
   Printf.sprintf "%s_%d" name n
 
 let pr_ident ppf (name, n) = fprintf ppf "%s_%d" name n
-
 
 let pr_sym ppf sym =
   let sym_str = match sym with
@@ -697,7 +726,7 @@ module Clauses = struct
     let nf = cnf (nnf f) in
     let to_clause = function
       | BoolOp (Or, fs) -> fs
-      |	Annot (a, BoolOp (Or fs)) -> List.map (fun f -> Annot (a, f)) fs
+      |	Annot (a, BoolOp (Or, fs)) -> List.map (fun f -> Annot (a, f)) fs
       | f -> [f]
     in
     match nf with
