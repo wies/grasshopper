@@ -12,30 +12,6 @@ let congr_classes fs gterms =
       fs;
     cc_graph#get_cc
 
-let choose_rep_terms_interp classes funs1 funs2 =
-  let find_rep symbs cl = 
-    let candidates = List.filter (fun t -> IdSet.subset (funs (mk_eq t t)) symbs) cl in
-    try
-      List.find (function Const _ -> true | _ -> false) candidates
-    with Not_found -> 
-      match candidates with
-      |	t :: _ -> t
-      |	[] -> raise Not_found
-  in
-  let list_to_set cl =
-    List.fold_left (fun acc t -> TermSet.add t acc) TermSet.empty cl
-  in
-  List.fold_left (fun (reps, defs, new_classes) cl ->
-    try
-      let cl_rep : term = find_rep funs1 cl in
-      (cl_rep :: reps, defs, TermMap.add cl_rep (list_to_set cl) new_classes)
-    with Not_found ->
-      let cl_rep = mk_const (fresh_ident "rep") in
-      let cl_def = find_rep funs2 cl in
-      (cl_rep :: reps, mk_eq cl_rep cl_def :: defs, TermMap.add cl_rep (list_to_set cl) new_classes))
-      (* (reps, defs, TermMap.add cl_rep (list_to_set cl) new_classes)) *)
-    ([], [], TermMap.empty) classes
-
 let choose_rep_terms classes =
   let find_rep cl = 
     try List.find (function Const _ -> true | _ -> false) cl
@@ -100,7 +76,7 @@ let generate_instances axioms terms rep_map =
     in add_class classes vars cl	  
   in
   let gen (vars, axioms) =
-    (* let vars = id_set_to_list (fv (mk_and axioms)) in *)
+    (* let vars = IdSet.elements (fv (mk_and axioms)) in *)
     let subst_maps = 
       List.fold_left (fun subst_maps v ->
 	let new_subst_maps = 
@@ -108,7 +84,7 @@ let generate_instances axioms terms rep_map =
 	    (fun acc t -> List.fold_left (fun acc s -> (IdMap.add v t s) :: acc) acc subst_maps)
 	    [] terms
 	in new_subst_maps)
-	[IdMap.empty] (id_set_to_list vars)
+	[IdMap.empty] (IdSet.elements vars)
     in List.fold_left 
       (fun instances subst_map -> List.fold_left (instantiate subst_map) instances axioms)
       [] subst_maps
@@ -184,31 +160,3 @@ let instantiate fs =
   let gterms_f = get_ground_terms (mk_and fs) in
     instantiate_with_terms fs gterms_f
 
-let instantiate_interp pf_a pf_b =
-  let a_axioms, a_ground = extract_axioms pf_a in
-  let b_axioms, b_ground = extract_axioms pf_b in
-  let gterms = ground_terms (mk_and (pf_a @ pf_b)) in
-  let classes = 
-    Debug.phase "Computing congruence classes" (congr_classes (a_ground @ b_ground))
-      gterms 
-  in
-  let _ = 
-    if !Debug.verbose then
-      ignore
-	(List.fold_left (fun num cl ->
-	  print_string ("Class " ^ string_of_int num ^ ": ");
-	  List.iter (fun t -> print_string (string_of_term t ^ ", ")) cl; 
-	  print_newline ();
-	  num + 1) 1 classes)
-  in
-  let funs_a = funs (mk_and pf_a) in
-  let funs_b = funs (mk_and pf_b) in
-  let a_reps, b_defs, a_rep_map = choose_rep_terms_interp classes funs_a funs_b in
-  let b_reps, a_defs, b_rep_map = choose_rep_terms_interp classes funs_b funs_a in
-  let a_instances, b_instances = 
-    Debug.phase "Generating instances" (fun () ->
-      let a_instances = generate_instances a_axioms a_reps a_rep_map in
-      let b_instances = generate_instances b_axioms b_reps b_rep_map in
-      a_instances, b_instances) ()
-  in
-  a_defs @ a_ground @ a_instances, b_defs @ b_ground @ b_instances

@@ -250,7 +250,7 @@ let make_frame heap_a last_alloc heap_b (model: Model.model) =
           | Some var2 -> Sl.List (var, var2)
           | None -> failwith "existential successor" (* Sl.PtsTo (var, fresh_ident "_") *)
   in
-  let spatial = List.map get_spatial (Form.id_set_to_list diff) in
+  let spatial = List.map get_spatial (IdSet.elements diff) in
   let spatial2 = match spatial with
     | [] -> Sl.Emp
     | [x] -> x
