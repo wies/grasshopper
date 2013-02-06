@@ -29,6 +29,7 @@ module SymbolMap = Map.Make(struct
 
 type signature = sort SymbolMap.t
 
+(*
 let base_sig =
   let decls =
     [(* function symbols *)
@@ -50,7 +51,7 @@ let base_sig =
   List.fold_left 
     (fun acc (sym, srt) -> SymbolMap.add sym srt acc)
     SymbolMap.empty decls 
-
+*)
 
 (* Terms and formulas *)
 
@@ -66,13 +67,13 @@ type binder =
 type termConstr = 
   | Var of ident
   | FunApp of symbol * term list
-and term = {tm: termConstr; ty: sort option}
+and term = {trm: termConstr; srt: sort option}
 
 type formConstr =
   | Atom of term
   | BoolOp of boolOp * form list
   | Binder of binder * (ident * simpleSort) list * form
-and form = {fo: formConstr; an: annot list}
+and form = {frm: formConstr; ann: annot list}
 
 let fresh_ident =
   let used_names = Hashtbl.create 0 in
@@ -102,9 +103,9 @@ let eq_name id1 id2 = name id1 = name id2
 
 let mk_ident name = (name, 0)
 
-let mk_const id = FunApp (Fun id, [])
-let mk_var id = Var id
-let mk_app sym ts = FunApp (sym, ts) 
+let mk_const id (srt=None) = {trm: FunApp (Fun id, []); srt:srt}
+let mk_var id (srt=None) = {trm: Var id; srt: srt}
+let mk_app sym ts (srt=None) = {trm: FunApp (sym, ts); srt: srt}
 
 let mk_true = BoolOp (And, [])
 let mk_false = BoolOp (Or, [])
