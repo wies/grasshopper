@@ -5,7 +5,9 @@ open Util
 type ident = string * int
 
 type simpleSort =
-  | Bool | Loc | LocSet | Fld
+  | Bool | Loc 
+  | Set of simpleSort 
+  | Fld of simpleSort * simpleSort
 
 type sort = simpleSort list * simpleSort
 
@@ -15,9 +17,9 @@ type symbol =
   | Empty | Union | Inter | Diff
   | Fun of ident
   (* predicate symbols *)
-  | FldEq
-  | LocEq | ReachWO
-  | Elem | SubsetEq | SetEq 
+  | Eq
+  | ReachWO
+  | Elem | SubsetEq 
   | Pred of ident
 
 module SymbolMap = Map.Make(struct
@@ -61,9 +63,10 @@ type annot =
 type binder =
   | Forall | Exists
 
-type term =
+type termConstr = 
   | Var of ident
   | FunApp of symbol * term list
+and term = {tm : termConstr; ty : sort}
 
 type form =
   | Atom of symbol * term list
@@ -85,7 +88,7 @@ let dualize_op op =
   match op with
   | And -> Or
   | Or -> And
-  | Not -> Not
+  | Not -> fail "tried to dualize Not"
   
 let dualize_binder = function
   | Forall -> Exists
