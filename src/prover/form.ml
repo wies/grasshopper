@@ -7,7 +7,7 @@ type ident = string * int
 type simpleSort =
   | Bool | Loc 
   | Set of simpleSort 
-  | Fld of simpleSort * simpleSort
+  | Fld of simpleSort
 
 type sort = simpleSort list * simpleSort
 
@@ -66,13 +66,13 @@ type binder =
 type termConstr = 
   | Var of ident
   | FunApp of symbol * term list
-and term = {tm : termConstr; ty : sort}
+and term = {tm: termConstr; ty: sort option}
 
-type form =
-  | Atom of symbol * term list
+type formConstr =
+  | Atom of term
   | BoolOp of boolOp * form list
   | Binder of binder * (ident * simpleSort) list * form
-  | Annot of annot * form  
+and form = {fo: formConstr; an: annot list}
 
 let fresh_ident =
   let used_names = Hashtbl.create 0 in
