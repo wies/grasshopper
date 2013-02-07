@@ -76,7 +76,7 @@ module OrdSet =
 
 class node = 
   fun
-    (ffname: ident) 
+    (ffname: symbol) 
     (aargs: node list) -> 
   object (self)
     val fname = ffname
@@ -175,9 +175,9 @@ class dag = fun expr ->
       end
   in
   let rec convert_exp expr = match expr with
-    | Const c as cst -> create_and_add cst c []
-    | Var v as var -> create_and_add var v []
-    | FunApp (f, args) as appl ->
+    | Var (v, _) as var -> create_and_add var (FreeSym v) []
+    | App (c, [], _) as cst -> create_and_add cst c []
+    | App (f, args, _) as appl ->
       let node_args = (List.map convert_exp args) in
       let new_node  = create_and_add appl f node_args in
         List.iter (fun n -> n#add_ccparent new_node) node_args;
@@ -207,7 +207,7 @@ class dag = fun expr ->
         Buffer.contents buffer
 
     method add_constr eq = match eq with
-      | Eq (e1, e2) ->
+      | Atom (App (Eq, [e1; e2], _)) ->
         let n1 = self#get_node e1 in
         let n2 = self#get_node e2 in
           n1#merge n2
