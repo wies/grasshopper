@@ -7,34 +7,41 @@ type output_sort =
 	
 type def = { input : int list;
 	     output : output_sort}
-type model = def list IdMap.t
-  
-let empty : model = IdMap.empty
 
-let add_def id (i, o) model = 
+type interpretation = def list SymbolMap.t
+
+type model = {sign: signature; interp: interpretation}
+
+let empty : model = {sign = SymbolMap.empty; interp = SymbolMap.empty}
+
+let get_sig m = m.sign
+
+let get_interp m = m.interp
+
+let add_def sym (i, o) model = 
   let defs = 
-    try IdMap.find id model
+    try SymbolMap.find sym model.interp
     with Not_found -> []
   in
-  IdMap.add id ({input=i; output=o} :: defs) model 
+  {model with interp = SymbolMap.add sym ({input=i; output=o} :: defs) model.interp}
     
 let filter_defs p model =
-  IdMap.fold 
+  SymbolMap.fold 
     (fun id defs fmodel ->
       match List.filter (p id) defs with
       | [] -> fmodel
-      | fdefs -> IdMap.add id defs fmodel)
-    model IdMap.empty
+      | fdefs -> SymbolMap.add id defs fmodel)
+    model.interp SymbolMap.empty
 
 let fold f model init = 
-  IdMap.fold 
+  SymbolMap.fold 
     (fun id defs acc ->
       List.fold_left (fun acc def -> f id def acc) acc defs)
-    model init
+    model.interp init
     
 let const_map m =
   let consts = 
-    IdMap.fold 
+    SymbolMap.fold 
       (fun id defs acc ->
 	match defs with
 	| [def] when def.input = [] -> 
@@ -42,40 +49,40 @@ let const_map m =
 	    | Int o -> IntMap.add o id acc
 	    | _ -> acc)
 	| _ -> acc)
-      m IntMap.empty
+      m.interp IntMap.empty
   in
-  IdMap.fold 
+  SymbolMap.fold 
     (fun id defs acc ->
       List.fold_left (fun acc def ->
 	List.fold_left (fun acc i ->
 	  if IntMap.mem i acc then acc
-	  else IntMap.add i (fresh_ident "c") acc)
+	  else IntMap.add i (FreeSym (fresh_ident "c")) acc)
 	  acc def.input)
 	acc defs)
-    m consts
+    m.interp consts
     
 let to_clauses model =
   let const_map = const_map model in 
   let mk_rep n = mk_const (IntMap.find n const_map) in
   let constants = IntMap.fold (fun n _ acc -> mk_rep n :: acc) const_map [] in
-  let form_of_def id def = 
+  let form_of_def sym def = 
     match def.output with
     | Bool b -> 
-	let a = mk_pred id (List.map mk_rep def.input) in
+	let a = mk_atom sym (List.map mk_rep def.input) in
 	if b then a else mk_not a
     | Int out ->
 	let rhs = mk_rep out in
 	let lhs =
 	  match def.input with
-	  | [] -> mk_const id
-	  | reps -> mk_app id (List.map mk_rep reps)
+	  | [] -> mk_const sym
+	  | reps -> mk_app sym (List.map mk_rep reps)
 	in mk_eq lhs rhs
   in
   let def_forms =
-    IdMap.fold 
+    SymbolMap.fold 
       (fun id defs acc ->
 	List.fold_left (fun acc def -> form_of_def id def :: acc) acc defs)
-      model []
+      model.interp []
   in
   let diseqs = List.fold_left (fun acc c1 -> 
     List.fold_left (fun acc c2 ->
@@ -90,9 +97,9 @@ let print_model model =
   print_form stdout (to_form model)
     
 let print_model2 model =
-  IdMap.iter
-    (fun id defs ->
-      print_string (str_of_ident id ^ " = ");
+  SymbolMap.iter
+    (fun sym defs ->
+      print_string (str_of_symbol sym ^ " = ");
       match defs with
       | [def] when List.length def.input = 0 -> 
 	  (match def.output with
@@ -116,52 +123,74 @@ let print_model2 model =
 	  print_string "]\n") model
     
 let output_graphviz chan model =
+  let const_map = const_map model in 
   let output_flds () = 
-    IdMap.iter 
-      (fun id defs ->
+    SymbolMap.iter 
+      (fun sym defs ->
 	List.iter 
 	  (fun def ->
 	    match def.input with
 	    | [i] ->
 		(match def.output with
-		| Int o -> Printf.fprintf chan "%d -> %d [label = \"%s\"]\n" i o (str_of_ident id) 
+		| Int o -> Printf.fprintf chan "%d -> %d [label = \"%s\"]\n" i o (str_of_symbol sym) 
 		| _ -> ())
 	    | _ -> ())
 	  defs) 
-      model	
+      model.interp	
   in
   let output_reach () = 
-    IdMap.iter 
-      (fun id defs ->
-	if not (Axioms.is_reach id) then () else
-	let defs = List.map (fun def -> def.input) (List.filter (fun def -> def.output = Bool true) defs) in
-	let reach = 
-	  List.fold_left (fun acc -> function 
-	    | [i11; i21; _] when i11 <> i21 ->
-		if (List.for_all (function
-		  | [i12; i22; i32] -> i11 <> i12 || i22 = i11 || 
+    let defs  = 
+      try 
+	Util.filter_map 
+	  (fun def -> def.output = Bool true) 
+	  (fun def -> (List.hd def.input, List.tl def.input))
+	  (SymbolMap.find ReachWO model.interp)
+      with Not_found -> []
+    in
+    let grouped_defs = 
+      List.fold_left 
+	(fun groups (fld, def) -> 
+	  let fld_defs = try IntMap.find fld groups with Not_found -> [] in
+	  IntMap.add fld (def :: fld_defs) groups
+	)
+	IntMap.empty defs
+    in
+    let process_fld fld defs =
+      let reach = 
+	List.fold_left (fun acc -> function 
+	  | [i11; i21; _] when i11 <> i21 ->
+	      if (List.for_all (function
+		| [i12; i22; i32] -> 
+		    i11 <> i12 || i22 = i11 || 
 		    List.exists (function
 		      | [i13; i23; i33] ->
 			  i11 = i13 && i23 = i21 && i33 = i32 
 		      | _ -> false) defs
 		  | _ -> true) defs)
-		then IntMap.add i11 i21 acc
-		else acc
-	    | _ -> acc) IntMap.empty defs
-	in
-	IntMap.iter (fun i o -> Printf.fprintf chan "%d -> %d [label = \"%s\", style=dashed]\n" i o (str_of_ident (Axioms.fun_of_reach id))) reach)
-      model
+	      then IntMap.add i11 i21 acc
+	      else acc
+	  | _ -> acc) IntMap.empty defs
+      in
+      let fld_sym = IntMap.find fld const_map in
+      IntMap.iter 
+	(fun i o -> 
+	  Printf.fprintf chan "%d -> %d [label = \"%s\", style=dashed]\n" 
+	    i o (str_of_symbol fld_sym)
+	) 
+	reach
+    in
+    IntMap.iter process_fld grouped_defs
   in
   let output_vars () = 
-    IdMap.iter (fun id defs ->
+    SymbolMap.iter (fun sym defs ->
       match defs with
       | [def] when List.length def.input = 0 ->
 	  (match def.output with
 	  | Int o -> 
-	      Printf.fprintf chan "%s [shape=box]\n" (str_of_ident id);
-	      Printf.fprintf chan "%s -> %d\n" (str_of_ident id) o 
+	      Printf.fprintf chan "%s [shape=box]\n" (str_of_symbol sym);
+	      Printf.fprintf chan "%s -> %d\n" (str_of_symbol sym) o 
 	  | _ -> ())
-      | _ -> ()) model
+      | _ -> ()) model.interp
   in
   output_string chan "digraph Model {\n";
   output_vars ();
@@ -171,7 +200,7 @@ let output_graphviz chan model =
     
 let eval_term model t = 
   let apply id args = 
-    let defs = try IdMap.find id model with Not_found -> [] in
+    let defs = try SymbolMap.find id model.interp with Not_found -> [] in
     try 
       let def = List.find (fun def -> def.input = args) defs in
       match def.output with
@@ -179,28 +208,27 @@ let eval_term model t =
       | Bool b -> failwith "expected Int"
     with Not_found -> begin
       match args with
-      | [] -> failwith ("Model.class_of_term: constant " ^ str_of_ident id ^ " is undefined")
-      | _ -> failwith ("Model.class_of_term: function " ^ str_of_ident id ^ " is not totally defined")
+      | [] -> failwith ("Model.class_of_term: constant " ^ str_of_symbol id ^ " is undefined")
+      | _ -> failwith ("Model.class_of_term: function " ^ str_of_symbol id ^ " is not totally defined")
     end
   in 
   let rec eval = function
-    | Var v -> failwith "Model.class_of_term: term is not ground"
-    | Const id -> apply id []
-    | FunApp (id, ts) ->
+    | Var _ -> failwith "Model.class_of_term: term is not ground"
+    | App (sym, ts, _) ->
 	let args = List.map eval ts in
-	apply id args
+	apply sym args
   in try Some (eval t) with _ -> None
       
-let prune model terms =
-  fold (fun id def sm -> 
+let prune m terms =
+  fold (fun sym def sm -> 
     let keep_def = 
       match def.input, def.output with
       | _ :: _ as inputs, Int _ -> 
 	  TermSet.exists (function 
-	    | FunApp (id', ts) when id = id' -> 
+	    | App (sym', ts, _) when sym = sym' -> 
 		List.fold_left2 
 		  (fun acc t i -> acc && 
-		    (match eval_term model t with
+		    (match eval_term m t with
 		    | Some i' -> i = i'
 		    | None -> false))
 		  true ts inputs
@@ -210,12 +238,12 @@ let prune model terms =
 	    (fun i -> 
 	      TermSet.exists 
 		(fun t -> 
-		  match eval_term model t with
+		  match eval_term m t with
 		  | Some i' -> i = i'
 		  | None -> false)
 		terms)
 	    inputs
       | _ -> true
     in
-    if keep_def then add_def id (def.input, def.output) sm else sm)
-    model empty
+    if keep_def then add_def sym (def.input, def.output) sm else sm)
+    m empty

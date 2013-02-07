@@ -20,6 +20,11 @@ let generate_list (f : int -> 'a) (n : int) : 'a list =
     else mk_tl (n - 1) (f n :: acc) 
   in mk_tl n []
 
+
+(** Composition of [List.map] and [List.filter] *)
+let filter_map p f xs =
+  List.fold_right (fun x ys -> if p x then f x :: ys else ys) xs []
+
 module IntMap = Map.Make(struct
     type t = int
     let compare = compare

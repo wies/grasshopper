@@ -122,7 +122,8 @@ let eq_name id1 id2 = name id1 = name id2
 
 let mk_ident name = (name, 0)
 
-let mk_const ?srt id = App (FreeSym id, [], srt)
+let mk_free_const ?srt id = App (FreeSym id, [], srt)
+let mk_const ?srt sym = App (sym, [], srt)
 
 let mk_var ?srt id =  Var (id, srt)
 
@@ -437,10 +438,7 @@ let str_of_ident (name, n) =
   if n = 0 then name else
   Printf.sprintf "%s_%d" name n
 
-let pr_ident ppf (name, n) = fprintf ppf "%s_%d" name n
-
-let pr_sym ppf sym =
-  let sym_str = match sym with
+let str_of_symbol = function
   (* function symbols *)
   | Null -> "null"
   | Sel -> "sel"
@@ -457,8 +455,10 @@ let pr_sym ppf sym =
   | SubsetEq -> "<="
   (* free symbols *)
   | FreeSym id -> str_of_ident id
-  in
-  fprintf ppf "%s" sym_str
+
+let pr_ident ppf (name, n) = fprintf ppf "%s_%d" name n
+
+let pr_sym ppf sym = fprintf ppf "%s" (str_of_symbol sym)
 
 
 let rec pr_term ppf = function
