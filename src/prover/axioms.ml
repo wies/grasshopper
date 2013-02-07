@@ -1,17 +1,34 @@
 open Form
 open Config
 
-let var1 = mk_var (fresh_ident "v")
-let var2 = mk_var (fresh_ident "v")
-let var3 = mk_var (fresh_ident "v")
-let var4 = mk_var (fresh_ident "v")
-let var5 = mk_var (fresh_ident "v")
+let l1 = fresh_ident "x", Loc
+let l2 = fresh_ident "y", Loc
+let l3 = fresh_ident "z", Loc
+let l4 = fresh_ident "u", Loc
+let l5 = fresh_ident "v", Loc
+let f1 = fresh_ident "f", Loc
+let s1 = fresh_ident "X", Set Loc 
 
-let null_id = (mk_ident "null")
-let null = mk_const null_id
+let loc1 = mk_var ~srt:(snd l1) (fst l1)
+let loc2 = mk_var ~srt:(snd l2) (fst l2)
+let loc3 = mk_var ~srt:(snd l3) (fst l3)
+let loc4 = mk_var ~srt:(snd l4) (fst l4)
+let loc5 = mk_var ~srt:(snd l5) (fst l5)
+let fld1 = mk_var ~srt:(snd f1) (fst f1)
+let set1 = mk_var ~srt:(snd s1) (fst s1)
+
+let all_vars = [f1; s1; l1; l2; l3; l4; l5]
 
 let alloc_id = (mk_ident "Alloc")
 
+let alloc_set = mk_var ~srt:(Set Loc) alloc_id
+
+let mk_axiom name f =
+  let fvars = fv f in
+  let bvars = List.filter (fun v -> IdSet.mem (fst v) fvars) all_vars in
+  mk_forall ~ann:[Comment name] bvars f 
+
+(*
 let reach_name = "Reach_"
 
 let reach_id (f, n) = (reach_name ^ f, n)
@@ -22,112 +39,80 @@ let fun_of_reach =
   let reach_len = String.length reach_name in
   fun (id : ident) -> (String.sub (fst id) reach_len (String.length (fst id) - reach_len), (snd id))
 
+
 let is_reach = 
   let re = Str.regexp reach_name in
   fun ((name, _) : ident) -> Str.string_match re name 0
+*)
 
-let jp_name = "join_"
+let f x = mk_sel fld1 x
+let reachwo = mk_reachwo fld1
+let reach = mk_reach fld1
 
-let jp_id (f, n) = (jp_name ^ f, n)
-
-let jp f x y = mk_app (jp_id f) [x; y]
-
-let fun_of_jp =
-  let jp_len = String.length jp_name in
-  fun (id : ident) -> (String.sub (fst id) jp_len (String.length (fst id) - jp_len), (snd id))
-
-let is_jp = 
-  let re = Str.regexp jp_name in
-  fun ((name, _) : ident) -> Str.string_match re name 0
-
-let lb_name = "lb_"
-
-let lb_id (f, n) = (lb_name ^ f, n)
-
-let lb f x y = mk_app (lb_id f) [x; y] (*DZ: switch for axioms with lb ??*)
-
-let is_lb = 
-  let re = Str.regexp lb_name in
-  fun ((name, _) : ident) -> Str.string_match re name 0
-
-let update_axioms f new_f ind upd =
-    let f_upd1 = 
-      mk_or [mk_eq ind var1; mk_eq (mk_app f [var1]) (mk_app new_f [var1])]
+let update_axioms () =
+  let new_fld1 = mk_upd fld1 loc1 loc2 in
+  let new_f x = mk_sel new_fld1 x in
+  let f_upd1 = 
+    mk_or [mk_eq loc3 loc1; mk_eq (f loc3) (new_f loc3)]
+  in
+  let f_upd2 = mk_eq (new_f loc1) loc2 in
+  let reachwo_upd =
+    let r = reachwo in
+    let new_reachwo u v w =
+      mk_or [mk_and [r u v w; r u v loc1];
+	     mk_and [mk_not (mk_eq loc1 w); r u loc1 w; r loc2 v loc1; r loc2 v w]]
     in
-    let f_upd2 = mk_eq (mk_app new_f [ind]) upd in
-    let reach_upd =
-      let r = reach f in
-      let new_reach u v w =
-	mk_or [mk_and [r u v w; r u v ind];
-	       mk_and [mk_not (mk_eq ind w); r u ind w; r upd v ind; r upd v w]]
-      in
-      if !with_reach_axioms then
-	[mk_or [mk_not (reach new_f var1 var2 var3); new_reach var1 var2 var3];
-	 mk_or [reach new_f var1 var2 var3; mk_not (new_reach var1 var2 var3)]]
-      else []
-    in
-    f_upd1 :: f_upd2 :: reach_upd
+    mk_and [mk_or [mk_not (mk_reachwo new_fld1 loc3 loc4 loc5); new_reachwo loc3 loc4 loc5];
+	    mk_or [mk_reachwo new_fld1 loc3 loc4 loc5; mk_not (new_reachwo loc3 loc4 loc5)]]
+  in
+  (if not !encode_fields_as_arrays then [mk_axiom "upd1" f_upd1; mk_axiom "upd2" f_upd2] else []) @ 
+  (if !with_reach_axioms then [mk_axiom "reachwo_upd" reachwo_upd] else [])
 
-let reach_axioms f = 
-  let af x = mk_app f [x] in
-  let reach = reach f in
+let reachwo_axioms () = 
   (* axioms *)
-  let refl = reach var1 var1 var2 in
-  let reac = mk_or [mk_not (reach var1 var2 var3); 
-		    reach var1 var2 var2] in 
-  let step = mk_or [reach var1 (af var1) var2; mk_eq var1 var2] in
-  (* let ufld = mk_or [mk_not (reach var1 var2 var3); mk_eq var1 var2; reach (af var1) var2 var3] in *)
-  let cycl = mk_or [mk_not (mk_eq (af var1) var1); 
-		    mk_not (reach var1 var2 var2); mk_eq var1 var2] in
-  (* let cycl2 = mk_or [mk_not (reach var1 var2 var3); mk_not (reach var2 var1 var3); mk_not (reach var1 var3 var3); mk_eq var1 var2; mk_eq var1 var3] in *)
-  let sndw = mk_or [mk_not (reach var1 var2 var1); mk_eq var1 var2] in
-  let lin1 = mk_or [mk_not (reach var1 var2 var2); reach var1 var3 var2; reach var1 var2 var3] in
-  let lin2  = mk_or [mk_not (reach var1 var2 var3); mk_not (reach var1 var4 var5); 
-		    mk_and [reach var1 var4 var3; reach var4 var2 var3]; 
-		    mk_and [reach var1 var2 var5; reach var2 var4 var5]] in
-  let trn1 = mk_or [mk_not (reach var1 var2 var3); mk_not (reach var2 var4 var3); 
-		    reach var1 var4 var3] in
-  let trn2 = mk_or [mk_not (reach var1 var2 var3); mk_not (reach var2 var4 var3); 
-		    mk_not (reach var2 var3 var3); reach var1 var2 var4] in
-  let lbef = mk_or [mk_not (reach var1 var2 var3); mk_not (mk_eq var3 (af var2)); mk_eq (lb f var1 var3) var2]  in
+  let refl = reachwo loc1 loc1 loc2 in
+  let reac = mk_or [mk_not (reachwo loc1 loc2 loc3); 
+		    reachwo loc1 loc2 loc2] in 
+  let step = mk_or [reachwo loc1 (f loc1) loc2; mk_eq loc1 loc2] in
+  (* let ufld = mk_or [mk_not (reachwo loc1 loc2 loc3); mk_eq loc1 loc2; reachwo (af loc1) loc2 loc3] in *)
+  let cycl = mk_or [mk_not (mk_eq (f loc1) loc1); 
+		    mk_not (reachwo loc1 loc2 loc2); mk_eq loc1 loc2] in
+  (* let cycl2 = mk_or [mk_not (reachwo loc1 loc2 loc3); mk_not (reachwo loc2 loc1 loc3); mk_not (reachwo loc1 loc3 loc3); mk_eq loc1 loc2; mk_eq loc1 loc3] in *)
+  let sndw = mk_or [mk_not (reachwo loc1 loc2 loc1); mk_eq loc1 loc2] in
+  let lin1 = mk_or [mk_not (reachwo loc1 loc2 loc2); reachwo loc1 loc3 loc2; reachwo loc1 loc2 loc3] in
+  let lin2  = mk_or [mk_not (reachwo loc1 loc2 loc3); mk_not (reachwo loc1 loc4 loc5); 
+		    mk_and [reachwo loc1 loc4 loc3; reachwo loc4 loc2 loc3]; 
+		    mk_and [reachwo loc1 loc2 loc5; reachwo loc2 loc4 loc5]] in
+  let trn1 = mk_or [mk_not (reachwo loc1 loc2 loc3); mk_not (reachwo loc2 loc4 loc3); 
+		    reachwo loc1 loc4 loc3] in
+  let trn2 = mk_or [mk_not (reachwo loc1 loc2 loc3); mk_not (reachwo loc2 loc4 loc3); 
+		    mk_not (reachwo loc2 loc3 loc3); reachwo loc1 loc2 loc4] in
   (**)
   if !with_reach_axioms then
-    [mk_comment "refl" refl; 
-     mk_comment "step" step; 
-     mk_comment "cycl" cycl; 
-     mk_comment "reach" reac;
-     mk_comment "sndw" sndw; 
-     mk_comment "linear1" lin1;
-     mk_comment "linear2" lin2;
-     mk_comment "trans1" trn1; 
-     mk_comment "trans2" trn2] @
-    (if !Config.with_before_axiom then [mk_comment "before" lbef] else [])
+    [mk_axiom "refl" refl; 
+     mk_axiom "step" step; 
+     mk_axiom "cycl" cycl; 
+     mk_axiom "reach" reac;
+     mk_axiom "sndw" sndw; 
+     mk_axiom "linear1" lin1;
+     mk_axiom "linear2" lin2;
+     mk_axiom "trans1" trn1; 
+     mk_axiom "trans2" trn2]
   else []
 
-let jp_axioms f =
-  let reach = reach f in
-  let jp1 = reach var1 (jp f var1 var3) (jp f var1 var3) in
-  let jp2 = mk_or [mk_not (reach var1 var2 var2); mk_not (reach var3 var2 var2); 
-		   reach var3 (jp f var1 var3) (jp f var1 var3)] in
-  let jp3 = mk_or [mk_not (reach var1 var2 var2); mk_not (reach var3 var2 var2); 
-		   reach var1 (jp f var1 var3) var2] in
-  let jp4 = mk_or [reach var3 (jp f var1 var3) (jp f var1 var3); mk_eq var1 (jp f var1 var3)] in
-  if !with_jp_axioms then 
-    [mk_comment "join1" jp1; 
-     mk_comment "join2" jp2;
-     mk_comment "join3" jp3;
-     mk_comment "join4" jp4]
-  else []
-
-let null_axioms f =
-  if !with_null_axioms then [mk_eq (mk_app f [null]) null] else []
+let null_axioms () =
+  let nll = mk_eq (f mk_null) mk_null in
+  if !with_null_axioms then [mk_axiom "null" nll] else []
 
 let alloc_axioms () = 
-  if !with_alloc_axioms then [mk_not (mk_pred alloc_id [null])] else []
+  let alc = mk_not (mk_elem mk_null alloc_set) in
+  if !with_alloc_axioms then [mk_axiom "alloc_init" alc] else []
+
+(* the following two axioms should be redundant 
 
 let alloc_update_axioms id alloc new_alloc =
   let x = mk_const id in
-  let mk_alloc x = mk_pred alloc [x] in
+  let in_alloc x = mk_elem x alloc_set in
   let mk_new_alloc x = mk_pred new_alloc [x] in
   [mk_not (mk_alloc x); 
    mk_new_alloc x;
@@ -135,44 +120,24 @@ let alloc_update_axioms id alloc new_alloc =
    mk_or [mk_eq x var1; mk_not (mk_new_alloc var1); mk_alloc var1]]
 
 let alloc_dispose_axioms id alloc new_alloc =
-  (*dispose if the symmetric of new*)
   alloc_update_axioms id new_alloc alloc
+*)
 
-(*entry point: when entering a part of the heap, used for SL*)
-let ep_name = "ep_"
+(* entry point axioms: when entering a part of the heap, used for SL*)
 
-let ep_id (f, n) = (ep_name ^ f, n)
+let ep_axioms () =
+  let ep = mk_ep fld1 set1 loc1 in
+  let in_set1 v = mk_elem v set1 in
+  let ep1 = reach loc1 ep in
+  let ep2 = mk_or [mk_not (reach loc1 loc2); mk_not (in_set1 loc2); in_set1 ep] in
+  let ep3 = mk_or [in_set1 ep; mk_eq loc1 ep] in
+  let ep4 = mk_implies (mk_and [reach loc1 loc2; in_set1 loc2]) (reachwo loc1 ep loc2) in
+    [mk_axiom "entrypoint1" ep1; 
+     mk_axiom "entrypoint2" ep2; 
+     mk_axiom "entrypoint3" ep3; 
+     mk_axiom "entrypoint4" ep4]
 
-let ep f x = mk_app (ep_id f) [x]
-
-let fun_of_ep = 
-  let ep_len = String.length ep_name in
-  fun (id : ident) -> (String.sub (fst id) ep_len (String.length (fst id) - ep_len), (snd id))
-
-let is_ep = 
-  let re = Str.regexp ep_name in
-  fun ((name, _) : ident) -> Str.string_match re name 0
-
-let extract_ep t = match t with
-  | FunApp (id, _) when is_ep id -> Some (fun_of_ep id)
-  | _ -> None
-
-(* f is the pred defining a heap zone, h the pointer fct *)
-let ep_axioms f h =
-  let ep = ep f var1 in
-  let reachWo = reach h in
-  let reach x y = reach h x y y in
-  let in_f v = mk_pred f [v] in
-  let ep1 = reach var1 ep in
-  let ep2 = mk_or [mk_not (reach var1 var2); mk_not (in_f var2); in_f ep] in
-  let ep3 = mk_or [in_f ep; mk_eq var1 ep] in
-  (*let ep1 = mk_and [reach var1 ep; mk_or [in_f ep; mk_and [mk_eq var1 ep; mk_implies (reach var1 var2) (mk_not (in_f var2))]]] in*)
-  let ep4 = mk_implies (mk_and [reach var1 var2; in_f var2]) (reachWo var1 ep var2) in
-    [mk_comment "entrypoint1" ep1; 
-     mk_comment "entrypoint2" ep2; 
-     mk_comment "entrypoint3" ep3; 
-     mk_comment "entrypoint4" ep4]
-
+(*
 let get_eps f =
   IdMap.fold 
     (fun id decl acc ->
@@ -181,42 +146,9 @@ let get_eps f =
     (sign f) IdSet.empty
 (*******)
 
-let fun_axioms f = (*mk_eq (mk_app f [null]) null ::*) jp_axioms f
 
 let extract_axioms fs =
   List.partition (fun f -> IdSet.empty <> fv f) fs
-
-
-let simplify f =
-  let rec rewrite_atoms = function
-    | Not f -> mk_not (rewrite_atoms f)
-    | And fs ->
-	smk_and (List.map rewrite_atoms fs)
-    | Or fs ->
-	smk_or (List.map rewrite_atoms fs)
-    | Pred (fn, [t1; t2; t3]) when is_reach fn ->
-	if t1 = t3 then
-	  if t1 = t2 then mk_true
-	  else mk_eq t1 t2
-	else 
-	  if t1 = null then mk_eq t1 t2 
-	  else Pred (fn, [t1; t2; t3])
-    | Eq (t1, t2) when t1 = t2 -> mk_true
-    | f -> f
-  in rewrite_atoms (nnf f) 
-	
-(*
-let simplify_model m : Model.model =
-  Model.fold (fun id def sm -> 
-    if not (is_reach id) then 
-      Model.add_def id (def.Model.input, def.Model.output) sm
-    else  
-      match def.Model.input with 
-      | [x1; x2; x3] when x1 = x2 -> 
-	  Model.add_def id ([x1; x3; x3], def.Model.output) sm
-      | i -> Model.add_def id (i, def.Model.output) sm) 
-    m Model.empty
-*)
 
 
 let unary_funs f =
@@ -232,29 +164,6 @@ let unary_funs f =
       else acc)
     (sign f) IdSet.empty
 
-(*
-let add_axioms pf_a pf_b =
-  let a_unary = unary_funs (mk_and pf_a) in
-  let b_unary = (*IdSet.diff*) (unary_funs (mk_and pf_b)) (*a_unary*) in
-  let a_init_funs = 
-    IdSet.filter (function (_, n) -> n = 0) a_unary 
-  in
-  let b_init_funs = 
-    IdSet.filter 
-      (function (_, n as id) -> n = 0 || IdSet.mem id a_unary) 
-      b_unary 
-  in
-  let a_axioms =
-    IdSet.fold (fun id acc -> reach_axioms id @ acc) a_init_funs [] @
-    IdSet.fold (fun id acc -> fun_axioms id @ acc) a_unary [] @
-    alloc_axioms 
-  in
-  let b_axioms =
-    IdSet.fold (fun id acc -> reach_axioms id @ acc) b_init_funs [] @
-    IdSet.fold (fun id acc -> fun_axioms id @ acc) b_unary []
-  in
-  a_axioms @ pf_a, b_axioms @ pf_b
-*)
 
 let make_axioms fs =
   let unaries = List.map (fun f -> unary_funs (mk_and f)) fs in
@@ -281,6 +190,7 @@ let make_axioms fs =
 let add_axioms fs =
   let axioms = make_axioms fs in
     List.map2 (@) axioms fs
+*)
 
 let skolemize fresh_const axiom =
   let vars = fv axiom in

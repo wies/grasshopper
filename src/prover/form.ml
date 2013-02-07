@@ -1,59 +1,32 @@
 open Util
 
-(** Sorts and signatures *)
+(** Sorts and symbols *)
 
 type ident = string * int
 
-type simpleSort =
+type sort =
   | Bool | Loc 
-  | Set of simpleSort 
-  | Fld of simpleSort
+  | Set of sort 
+  | Fld of sort
 
-type sort = simpleSort list * simpleSort
+type arity = sort list * sort
 
 type symbol =
   (* function symbols *)
-  | Null | Sel | Upd 
+  | Null | Sel | Upd | EntPnt
   | Empty | Union | Inter | Diff
-  | Fun of ident
   (* predicate symbols *)
   | Eq
   | ReachWO
   | Elem | SubsetEq 
-  | Pred of ident
-
-module SymbolMap = Map.Make(struct
-    type t = symbol
-    let compare = compare
-  end)
-
-type signature = sort SymbolMap.t
-
-(*
-let base_sig =
-  let decls =
-    [(* function symbols *)
-     (Null, ([], Loc));
-     (Sel, ([Fld; Loc], Loc));
-     (Upd, ([Fld; Loc; Loc], Fld));
-     (Empty, ([], LocSet));
-     (Union, ([LocSet; LocSet], LocSet));
-     (Inter, ([LocSet; LocSet], LocSet));
-     (Diff, ([LocSet; LocSet], LocSet));
-     (* predicate symbols *)
-     (FldEq, ([Fld; Fld], Bool));
-     (LocEq, ([Loc; Loc], Bool));
-     (ReachWO, ([Fld; Loc; Loc; Loc], Bool));
-     (Elem, ([Loc; LocSet], Bool));
-     (SubsetEq, ([LocSet; LocSet], Bool));
-     (SetEq, ([LocSet; LocSet], Bool))]
-  in
-  List.fold_left 
-    (fun acc (sym, srt) -> SymbolMap.add sym srt acc)
-    SymbolMap.empty decls 
-*)
+  (* free constants, functions, and predicates *)
+  | FreeSym of ident
 
 (* Terms and formulas *)
+
+type term = 
+  | Var of ident * sort option
+  | App of symbol * term list * sort option
 
 type boolOp =
   | And | Or | Not
@@ -64,76 +37,10 @@ type annot =
 type binder =
   | Forall | Exists
 
-type termConstr = 
-  | Var of ident
-  | FunApp of symbol * term list
-and term = {trm: termConstr; srt: sort option}
-
-type formConstr =
+type form =
   | Atom of term
   | BoolOp of boolOp * form list
-  | Binder of binder * (ident * simpleSort) list * form
-and form = {frm: formConstr; ann: annot list}
-
-let fresh_ident =
-  let used_names = Hashtbl.create 0 in
-  fun (name : string) ->
-    let last_index = 
-      try Hashtbl.find used_names name 
-      with Not_found -> -1
-    in 
-    Hashtbl.replace used_names name (last_index + 1);
-    (name, last_index + 1)
-
-let dualize_op op = 
-  match op with
-  | And -> Or
-  | Or -> And
-  | Not -> fail "tried to dualize Not"
-  
-let dualize_binder = function
-  | Forall -> Exists
-  | Exists -> Forall
-
-let is_pred_id id = String.capitalize (fst id) = fst id
-
-let name id = fst id
-
-let eq_name id1 id2 = name id1 = name id2
-
-let mk_ident name = (name, 0)
-
-let mk_const id (srt=None) = {trm: FunApp (Fun id, []); srt:srt}
-let mk_var id (srt=None) = {trm: Var id; srt: srt}
-let mk_app sym ts (srt=None) = {trm: FunApp (sym, ts); srt: srt}
-
-let mk_true = BoolOp (And, [])
-let mk_false = BoolOp (Or, [])
-
-let mk_and = function
-  | [f] -> f
-  | fs -> BoolOp(And, fs)
-
-let mk_or = function
-  | [f] -> f
-  | fs -> BoolOp (Or, fs)
-
-let mk_not = function
-  | BoolOp (op, []) -> BoolOp (dualize_op op, [])
-  | f -> BoolOp (Not, [f])
-
-let mk_eq eq s t = Atom (eq, [s; t])
-
-let mk_LocEq s t = mk_eq LocEq s t
-let mk_FldEq s t = mk_eq FldEq s t
-let mk_SetEq s t = mk_eq SetEq s t
-
-let mk_pred id ts = Atom (Pred id, ts)
-
-let mk_comment c = function
-  | Annot (Comment c', f) -> 
-      Annot (Comment (c ^ "_" ^ c'), f)
-  | f -> Annot (Comment c, f)
+  | Binder of binder * (ident * sort) list * form * annot list
 
 module IdSet = Set.Make(struct
     type t = ident
@@ -160,12 +67,129 @@ module FormSet = Set.Make(struct
     let compare = compare
   end)
 
+module SymbolMap = Map.Make(struct
+    type t = symbol
+    let compare = compare
+  end)
+
+type signature = arity SymbolMap.t
+
 type subst_map = term IdMap.t
 
 let form_set_of_list fs =
   List.fold_left 
     (fun acc f -> FormSet.add f acc) 
     FormSet.empty fs
+
+let fresh_ident =
+  let used_names = Hashtbl.create 0 in
+  fun (name : string) ->
+    let last_index = 
+      try Hashtbl.find used_names name 
+      with Not_found -> -1
+    in 
+    Hashtbl.replace used_names name (last_index + 1);
+    (name, last_index + 1)
+
+let dualize_op op = 
+  match op with
+  | And -> Or
+  | Or -> And
+  | Not -> failwith "tried to dualize Not"
+  
+let dualize_binder = function
+  | Forall -> Exists
+  | Exists -> Forall
+
+let is_pred_id id = String.capitalize (fst id) = fst id
+
+let name id = fst id
+
+let sort_of = function
+  | Var (_, s) 
+  | App (_, _, s) -> s
+
+let rec sort_ofs = function
+  | [] -> None
+  | t :: ts -> 
+      match sort_of t with
+      |	None -> sort_ofs ts
+      |	s -> s
+
+let eq_name id1 id2 = name id1 = name id2
+
+(** Smart constructors *)
+
+let mk_ident name = (name, 0)
+
+let mk_const ?srt id = App (FreeSym id, [], srt)
+
+let mk_var ?srt id =  Var (id, srt)
+
+let mk_app ?srt sym ts = App (sym, ts, srt)
+
+let mk_atom sym ts = Atom (mk_app ~srt:Bool sym ts)
+
+let mk_pred id ts = mk_atom (FreeSym id) ts
+
+let mk_eq s t = mk_atom Eq [s; t]
+
+let mk_null = mk_app ~srt:Loc Null []
+
+let mk_sel fld ind = 
+  let srt = match sort_of fld with
+  | Some (Fld s) -> Some s
+  | _ -> None
+  in mk_app ?srt:srt Sel [fld; ind]
+
+let mk_upd fld ind upd =
+  mk_app ?srt:(sort_of fld) Upd [fld; ind; upd]
+
+let mk_ep fld set t = mk_app ~srt:Loc EntPnt [fld; set; t]
+
+let mk_reachwo fld t1 t2 t3 =
+  mk_atom ReachWO [fld; t1; t2; t3]
+  
+let mk_reach fld t1 t2 = mk_reachwo fld t1 t2 t2
+
+let mk_empty srt = mk_app ?srt:srt Empty []
+
+let mk_inter sets = mk_app ?srt:(sort_ofs sets) Inter sets
+
+let mk_union sets = mk_app ?srt:(sort_ofs sets) Union sets
+
+let mk_diff s t = mk_app ?srt:(sort_of s) Diff [s; t]
+
+let mk_elem e s = mk_atom Elem [e; s]
+
+let mk_subseteq s t = mk_atom SubsetEq [s; t]
+
+let mk_true = BoolOp (And, [])
+let mk_false = BoolOp (Or, [])
+
+let mk_and = function
+  | [f] -> f
+  | fs -> BoolOp(And, fs)
+
+let mk_or = function
+  | [f] -> f
+  | fs -> BoolOp (Or, fs)
+
+let mk_not = function
+  | BoolOp (op, []) -> BoolOp (dualize_op op, [])
+  | f -> BoolOp (Not, [f])
+
+let mk_neq s t = mk_not (mk_eq s t)
+
+let mk_forall ?(ann=[]) bv f = Binder (Forall, bv, f, ann) 
+let mk_exists ?(ann=[]) bv f = Binder (Exists, bv, f, ann) 
+
+let annotate f ann = 
+  match f with
+  | Binder (b, vs, f1, ann1) -> Binder (b, vs, f1, ann @ ann1)
+  | _ -> Binder (Forall, [], f, ann)
+
+let mk_comment c f = annotate f [Comment c]
 
 let smk_op op fs =
   match op with
@@ -194,13 +218,10 @@ let rec nnf = function
   | BoolOp (Not, [BoolOp (Not, [f])]) -> nnf f
   | BoolOp (Not, [BoolOp (op, fs)]) -> 
       smk_op (dualize_op op) (List.map (fun f -> nnf (mk_not f)) fs)
-  | BoolOp (Not, [Binder (b, xs, f)]) -> 
-      Binder (dualize_binder b, xs, nnf (mk_not f))
-  | BoolOp (Not, [Annot (a, f)]) -> 
-      Annot (a, nnf (mk_not f))
+  | BoolOp (Not, [Binder (b, xs, f, a)]) -> 
+      Binder (dualize_binder b, xs, nnf (mk_not f), a)
   | BoolOp (op, fs) -> smk_op op (List.map nnf fs)
-  | Binder (b, vs, f) -> Binder (b, vs, nnf f)
-  | Annot (a, f) -> Annot (a, nnf f)
+  | Binder (b, vs, f, a) -> Binder (b, vs, nnf f, a)
   | f -> f
   
 (** compute conjunctive normal form of a formula *)
@@ -210,15 +231,12 @@ let rec cnf =
     | [] -> mk_and acc
     | BoolOp (Or, []) :: _ -> BoolOp (Or, [])
     | BoolOp (And, fs) :: fs1 -> cnf_and acc (fs @ fs1)
-    | Annot (a, BoolOp(And, fs)) :: fs1 -> 
-	cnf_and acc (List.map (fun f -> Annot (a, f)) fs @ fs1)
     | f :: fs -> cnf_and (f :: acc) fs
   in
   let rec cnf_or acc = function
     | BoolOp (And, []) :: _ -> BoolOp (And, [])
     | [] -> mk_or acc
     | BoolOp(Or, fs) :: fs1 -> cnf_or acc (fs @ fs1)
-    | Annot (a, BoolOp (Or, fs)) :: fs1 -> cnf_or acc (List.map (fun f -> Annot (a, f)) fs @ fs1)
     | BoolOp (And, fs) :: fs1 -> 
 	let fs_or = acc @ fs1 in
 	let fs_and = List.map (fun f -> mk_or (f :: fs_or)) fs in
@@ -226,13 +244,9 @@ let rec cnf =
     | f :: fs -> cnf_or (f :: acc) fs  
   in
   function
-    | BoolOp(And, fs)
-    | Annot (_, BoolOp(And, fs)) ->  cnf_and [] (List.rev_map cnf fs)
-    | BoolOp (Or, fs) 
-    | Annot (_, BoolOp(Or, fs)) -> cnf_or [] (List.rev_map cnf fs)
+    | BoolOp(And, fs) -> cnf_and [] (List.rev_map cnf fs)
+    | BoolOp (Or, fs) -> cnf_or [] (List.rev_map cnf fs)
     | f -> f
-
-let mk_neq eq s t = mk_not (mk_eq eq s t)
 
 let mk_implies a b =
   smk_or [nnf (mk_not a); b]
@@ -243,34 +257,32 @@ let mk_equiv a b =
 
 let fold_terms fn init f =
   let rec ft acc = function
-    | Atom (_, ts) -> List.fold_left fn acc ts
+    | Atom t -> fn acc t
     | BoolOp (_, fs) ->	List.fold_left ft acc fs
-    | Binder (b, vs, f) -> ft acc f
-    | Annot (a, f) -> ft acc f
+    | Binder (_, _, f, _) -> ft acc f
   in ft init f
 
 let fold_terms_with_bound fn init f =
   let rec ft bv acc = function
-    | Atom (_, ts) -> List.fold_left (fn bv) acc ts
+    | Atom t -> fn bv acc t
     | BoolOp (_, fs) ->	List.fold_left (ft bv) acc fs
-    | Binder (b, vs, f) -> 
+    | Binder (_, vs, f, _) -> 
 	ft (List.fold_left (fun bv (x, _) -> IdSet.add x bv) bv vs) acc f
-    | Annot (a, f) -> ft bv acc f
   in ft IdSet.empty init f
 
 let fvt vars t =
   let rec fvt1 vars = function
-  | Var id -> IdSet.add id vars
-  | FunApp (_, ts) -> List.fold_left fvt1 vars ts
+  | Var (id, _) -> IdSet.add id vars
+  | App (_, ts, _) -> List.fold_left fvt1 vars ts
   in fvt1 vars t
 
 let fv f = 
   let rec fvt bv vars = function
-    | Var id -> 
+    | Var (id, _) -> 
 	if IdSet.mem id bv 
 	then vars 
 	else IdSet.add id vars
-    | FunApp (_, ts) ->
+    | App (_, ts, _) ->
 	List.fold_left (fvt bv) vars ts
   in fold_terms_with_bound fvt IdSet.empty f
 
@@ -278,8 +290,8 @@ let fv f =
 let ground_terms f =
   let rec gt bv terms t = 
     match t with
-    | Var id -> terms, false
-    | FunApp (_, ts) ->
+    | Var (id, _) -> terms, false
+    | App (_, ts, _) ->
 	let terms1, is_ground = 
 	  List.fold_left 
 	    (fun (terms, is_ground) t ->
@@ -297,13 +309,15 @@ let ground_terms f =
   
 let vars_in_fun_terms f =
   let rec fvt vars = function
-    | Var id -> IdSet.add id vars
-    | FunApp (_, ts) ->
+    | Var (id, _) -> IdSet.add id vars
+    | App (_, ts, _) ->
 	List.fold_left fvt vars ts
   in
   let rec ct vars t = 
     match t with
-    | FunApp _ -> fvt vars t
+    | App (_, ts, Some Bool) -> 
+	List.fold_left ct vars ts
+    | App _ -> fvt vars t
     | _ -> vars
   in fold_terms ct IdSet.empty f
      
@@ -361,32 +375,23 @@ let subst_id_term subst_map t =
     try IdMap.find id subst_map with Not_found -> id
   in
   let rec sub = function
-    | Var id -> Var (sub_id id)
-    | FunApp (sym, ts) -> 
+    | Var (id, srt) -> Var (sub_id id, srt)
+    | App (sym, ts, srt) -> 
 	let sym1 = match sym with
-	| Fun id -> Fun (sub_id id)
+	| FreeSym id -> FreeSym (sub_id id)
 	| _ -> sym
 	in
-	FunApp (sym1, List.map sub ts)
+	App (sym1, List.map sub ts, srt)
   in sub t
 
 (* Substitute all identifiers in formula f according to substitution map subst_map *)
 (* Not capture avoiding *)
 let subst_id subst_map f =
-  let sub_id id =
-    try IdMap.find id subst_map with Not_found -> id
-  in
   let subt = subst_id_term subst_map in
   let rec sub = function 
     | BoolOp (op, fs) -> BoolOp (op, List.map sub fs)
-    | Atom (sym, ts) -> 
-	let sym1 = match sym with
-	| Pred id -> Pred (sub_id id)
-	| _ -> sym
-	in
-	Atom (sym1, List.map subt ts)
-    | Binder (b, vs, f) -> Binder (b, vs, sub f)
-    | Annot (a, f) -> Annot (a, sub f)
+    | Atom t -> Atom (subt t)
+    | Binder (b, vs, f, a) -> Binder (b, vs, sub f, a)
   in sub f
 
 (* Substitute all variables in formula f according to substitution map subst_map *)
@@ -395,17 +400,20 @@ let subst_term subst_map t =
     try IdMap.find id subst_map with Not_found -> t
   in
   let rec sub = function
-    | (Var id as t) -> sub_id id t 
-    | FunApp (sym, ts) -> FunApp (sym, List.map sub ts)
+    | (Var (id, srt) as t) -> sub_id id t 
+    | App (sym, ts, srt) -> App (sym, List.map sub ts, srt)
   in sub t
 
 (* Substitute all free variables in formula f according to substitution map subst_map *)
 (* Capture avoiding *)
 let subst subst_map f =
+  let suba sm = function
+    | Comment c -> Comment c
+  in
   let rec sub sm = function 
     | BoolOp (op, fs) -> BoolOp (op, List.map (sub sm) fs)
-    | Atom (sym, ts) -> Atom (sym, List.map (subst_term sm) ts)
-    | Binder (b, vs, f) ->
+    | Atom t -> Atom (subst_term sm t)
+    | Binder (b, vs, f, a) ->
 	let not_bound id _ = not (List.mem_assoc id vs) in
 	let sm1 = IdMap.filter not_bound sm in 
 	let occuring = IdMap.fold (fun _ t acc -> fvt acc t) sm IdSet.empty in
@@ -415,11 +423,10 @@ let subst subst_map f =
 	      if IdSet.mem x occuring 
 	      then 
 		let x1 = fresh_ident (name x) in
-		(x1, srt) :: vs1, IdMap.add x (Var x1) sm2
+		(x1, srt) :: vs1, IdMap.add x (Var (x1, Some srt)) sm2
 	      else (x, srt) :: vs1, sm2)
 	    vs ([], sm1)
-	in Binder (b, vs1, sub sm2 f)
-    | Annot (a, f) -> Annot (a, sub sm f)
+	in Binder (b, vs1, sub sm2 f, List.map (suba sm2) a)
   in sub subst_map f
 
 (** Pretty printing *)
@@ -438,27 +445,26 @@ let pr_sym ppf sym =
   | Null -> "null"
   | Sel -> "sel"
   | Upd -> "upd"
+  | EntPnt -> "ep"
   | Empty -> "{}"
   | Union -> "+"
   | Inter -> "&"
   | Diff -> "-"
-  | Fun id -> str_of_ident id
   (* predicate symbols *)
-  | FldEq -> "="
-  | LocEq -> "="
+  | Eq -> "="
   | ReachWO -> "ReachWO"
   | Elem -> ":"
   | SubsetEq -> "<="
-  | SetEq -> "="
-  | Pred id -> str_of_ident id
+  (* free symbols *)
+  | FreeSym id -> str_of_ident id
   in
   fprintf ppf "%s" sym_str
 
 
 let rec pr_term ppf = function
-  | Var id -> fprintf ppf "%a" pr_ident id
-  | FunApp (sym, []) -> fprintf ppf "%a" pr_sym sym
-  | FunApp (sym, ts) -> fprintf ppf "@[<2>(%a@ %a)@]" pr_sym sym pr_terms ts
+  | Var (id, _) -> fprintf ppf "%a" pr_ident id
+  | App (sym, [], _) -> fprintf ppf "%a" pr_sym sym
+  | App (sym, ts, _) -> fprintf ppf "@[<2>(%a@ %a)@]" pr_sym sym pr_terms ts
 
 and pr_terms ppf = function
   | [] -> ()
@@ -480,17 +486,18 @@ let pr_boolop ppf op =
   in 
   fprintf ppf "%s" op_str
 
-let pr_simple_sort ppf srt =
-  let srt_str = match srt with
-  | Fld -> "Fld"
-  | Loc -> "Loc"
-  | LocSet -> "LocSet"
-  | Bool -> "Bool"
-  in fprintf ppf "%s" srt_str
-      
+let rec pr_sort0 ppf srt = match srt with
+  | Loc | Bool -> fprintf ppf "%a" pr_sort srt
+  | _ -> fprintf ppf "@[<1>(%a)@]" pr_sort srt
 
+and pr_sort ppf = function
+  | Loc -> fprintf ppf "%s" "Loc"
+  | Bool -> fprintf ppf "%s" "Bool"
+  | Fld s -> fprintf ppf "@[<4>%s@ %a@]" "Fld" pr_sort0 s
+  | Set s -> fprintf ppf "@[<4>%s@ %a@]" "Set" pr_sort0 s
+		
 let pr_var ppf (x, srt) =
-  fprintf ppf "@[<1>(%a@ %a)@]" pr_ident x pr_simple_sort srt
+  fprintf ppf "@[<1>(%a@ %a)@]" pr_ident x pr_sort srt
 
 let rec pr_vars ppf = function
   | [] -> ()
@@ -498,10 +505,9 @@ let rec pr_vars ppf = function
   | v :: vs -> fprintf ppf "%a@ %a" pr_var v pr_vars vs
 
 let rec pr_form ppf = function
-  | Binder (b, vs, f) -> fprintf ppf "@[<2>(%a@ @[<1>(%a)@]@ %a)" pr_binder b pr_vars vs pr_form f
-  | Atom (sym, []) -> fprintf ppf "%a" pr_sym sym 
-  | Atom (sym, ts) -> fprintf ppf "@[<2>(%a@ %a)@]" pr_sym sym pr_terms ts
-  | Annot (Comment c, f) -> fprintf ppf "@[<2>(!@ %a:named@ %s)@]" pr_form f c
+  (* TODO: print annotated comments *)
+  | Binder (b, vs, f, a) -> fprintf ppf "@[<2>(%a@ @[<1>(%a)@]@ %a)" pr_binder b pr_vars vs pr_form f
+  | Atom t -> fprintf ppf "%a" pr_term t
   | BoolOp (And, []) -> fprintf ppf "%s" "true"
   | BoolOp (Or, []) -> fprintf ppf "%s" "false"
   | BoolOp (op, fs) -> fprintf ppf "@[<2>(%a@ %a)@]" pr_boolop op pr_forms fs
@@ -510,6 +516,15 @@ and pr_forms ppf = function
   | [] -> ()
   | [t] -> fprintf ppf "%a" pr_form t
   | t :: ts -> fprintf ppf "%a@ %a" pr_form t pr_forms ts
+
+let print_term out_ch t = pr_term (formatter_of_out_channel out_ch) t
+let print_form out_ch f = pr_form (formatter_of_out_channel out_ch) f
+
+let print_smtlib_term out_ch t = pr_term (formatter_of_out_channel out_ch) t
+let print_smtlib_form out_ch f = pr_form (formatter_of_out_channel out_ch) f
+
+let string_of_term t = pr_term str_formatter t; flush_str_formatter ()
+let string_of_form f = pr_form str_formatter f; flush_str_formatter ()
 
 (*
 
@@ -730,12 +745,10 @@ module Clauses = struct
     let nf = cnf (nnf f) in
     let to_clause = function
       | BoolOp (Or, fs) -> fs
-      |	Annot (a, BoolOp (Or, fs)) -> List.map (fun f -> Annot (a, f)) fs
       | f -> [f]
     in
     match nf with
     | BoolOp (And, fs) -> List.map to_clause fs
-    | Annot (a, BoolOp (And, fs)) -> List.map (fun f -> to_clause (Annot (a, f))) fs
     | f -> [to_clause f]
 	  
   (** convert a set of clauses into a formula *)
