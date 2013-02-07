@@ -36,6 +36,11 @@ let read session =
   let lexbuf = Lexing.from_channel session.in_chan in
   ParseSmtLib.main LexSmtLib.token lexbuf
 
+let declare_sorts session =
+  writeln session ("(declare-sort" ^ loc_sort_string ^ "0");
+  writeln session ("(declare-sort" ^ set_sort_string ^ "1");
+  writeln session ("(define-sort" ^ fld_sort_string ^ "(X) (Array Loc X)")
+
 let start smt_cmd replay_file produce_models produce_interpolants = 
   let in_chan, out_chan = Unix.open_process smt_cmd in
   let replay_chan = 
@@ -66,7 +71,7 @@ let start smt_cmd replay_file produce_models produce_interpolants =
   writeln session "(set-option :mbqi true)";
   writeln session "(set-logic UF)";
   (*end;*)
-  writeln session ("(declare-sort " ^ sort_str ^ " 0)");
+  declare_sorts session;
   session
 
 let start_z3 =
@@ -107,45 +112,27 @@ let push session =
   new_session
 
 let declare session sign =
-  let write_decl id decl = 
-    let res_sort = if decl.is_pred then "Bool" else sort_str in
-    let arg_sorts = String.concat " " (Util.generate_list (fun _ -> sort_str) decl.arity) in
-    writeln session ("(declare-fun " ^ str_of_ident id ^ " (" ^ arg_sorts ^ ") " ^ res_sort ^ ")")
+  let write_decl sym (arg_sorts, res_sort) = 
+    let arg_sorts_str = String.concat " " (List.map (fun srt -> string_of_sort srt) arg_sorts) in
+    writeln session ("(declare-fun " ^ str_of_symbol sym ^ " (" ^ arg_sorts_str ^ ") " ^ string_of_sort res_sort ^ ")")
   in
-  IdMap.iter write_decl sign
+  SymbolMap.iter write_decl sign
 
-let assert_form session ?(igroup=None) f =
-  let write_quantified f = 
-    if !Config.instantiate then
-	  writefn session (fun chan -> print_smtlib_form chan f)
-    else
-	  writefn session (fun chan -> print_smtlib_form_with_triggers chan f)
-  in
+let assert_form session f =
   session.assert_count <- session.assert_count + 1;
   session.sat_checked <- false;
     (* print_string "(assert ";
        print_smtlib_form stdout f;
        print_endline ")"; *)
   write session "(assert ";
-  (match igroup with
-  | Some ig -> 
-      write session "(!";
-	  write_quantified f;
-      write session (":interpolation-group " ^ string_of_int ig ^" :named a" ^ (string_of_int session.assert_count) ^ ")")
-  | None ->
-      match f with
-      | Comment (c, f) ->
-	  write session "(!";
-	  write_quantified f;
-	  write session (":named " ^ c ^ "_" ^ string_of_int session.assert_count ^ ")")
-      | f ->
-	  write_quantified f);
+  let cf = mk_comment (string_of_int session.assert_count) f in
+  writefn session (fun chan -> print_smtlib_form chan cf);
   writeln session ")\n"
     
-let assert_form session ?(igroup=None) f = Util.measure (assert_form session ~igroup:igroup) f
+let assert_form session f = Util.measure (assert_form session) f
     
-let assert_forms session ?(igroup=None) fs =
-  List.iter (fun f -> assert_form session ~igroup:igroup f) fs
+let assert_forms session fs =
+  List.iter (fun f -> assert_form session f) fs
 
     
 let is_sat session = 

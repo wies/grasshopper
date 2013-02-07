@@ -137,6 +137,9 @@ let ep_axioms () =
      mk_axiom "entrypoint3" ep3; 
      mk_axiom "entrypoint4" ep4]
 
+let extract_axioms fs =
+  List.partition (fun f -> IdSet.empty <> fv f) fs
+
 (*
 let get_eps f =
   IdMap.fold 
@@ -147,8 +150,6 @@ let get_eps f =
 (*******)
 
 
-let extract_axioms fs =
-  List.partition (fun f -> IdSet.empty <> fv f) fs
 
 
 let unary_funs f =

@@ -486,15 +486,20 @@ let pr_boolop ppf op =
   in 
   fprintf ppf "%s" op_str
 
+let loc_sort_string = "Loc"
+let fld_sort_string = "Fld"
+let set_sort_string = "Set"
+let bool_sort_string = "Bool"
+
 let rec pr_sort0 ppf srt = match srt with
   | Loc | Bool -> fprintf ppf "%a" pr_sort srt
   | _ -> fprintf ppf "@[<1>(%a)@]" pr_sort srt
 
 and pr_sort ppf = function
-  | Loc -> fprintf ppf "%s" "Loc"
-  | Bool -> fprintf ppf "%s" "Bool"
-  | Fld s -> fprintf ppf "@[<4>%s@ %a@]" "Fld" pr_sort0 s
-  | Set s -> fprintf ppf "@[<4>%s@ %a@]" "Set" pr_sort0 s
+  | Loc -> fprintf ppf "%s" loc_sort_string
+  | Bool -> fprintf ppf "%s" bool_sort_string
+  | Fld s -> fprintf ppf "@[<4>%s@ %a@]" fld_sort_string pr_sort0 s
+  | Set s -> fprintf ppf "@[<4>%s@ %a@]" set_sort_string pr_sort0 s
 		
 let pr_var ppf (x, srt) =
   fprintf ppf "@[<1>(%a@ %a)@]" pr_ident x pr_sort srt
@@ -520,9 +525,11 @@ and pr_forms ppf = function
 let print_term out_ch t = pr_term (formatter_of_out_channel out_ch) t
 let print_form out_ch f = pr_form (formatter_of_out_channel out_ch) f
 
+let print_smtlib_sort out_ch s = pr_sort (formatter_of_out_channel out_ch) s
 let print_smtlib_term out_ch t = pr_term (formatter_of_out_channel out_ch) t
 let print_smtlib_form out_ch f = pr_form (formatter_of_out_channel out_ch) f
 
+let string_of_sort s = pr_sort str_formatter s; flush_str_formatter ()
 let string_of_term t = pr_term str_formatter t; flush_str_formatter ()
 let string_of_form f = pr_form str_formatter f; flush_str_formatter ()
 

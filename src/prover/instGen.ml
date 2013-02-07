@@ -7,14 +7,14 @@ let congr_classes fs gterms =
   let cc_graph = new CongruenceClosure.dag (TermSet.elements gterms) in
     List.iter
       (fun f -> match f with
-	| Eq _ -> cc_graph#add_constr f
+	| Atom (App (Eq, _, _)) -> cc_graph#add_constr f
 	| _ -> () )
       fs;
     cc_graph#get_cc
 
 let choose_rep_terms classes =
   let find_rep cl = 
-    try List.find (function Const _ -> true | _ -> false) cl
+    try List.find (function App (_, [], _) -> true | _ -> false) cl
     with Not_found -> 
       match cl with
       |	t :: _ -> t
@@ -31,24 +31,24 @@ let choose_rep_terms classes =
 let generate_instances axioms terms rep_map = 
   let ground_terms = TermMap.fold (fun _ -> TermSet.union) rep_map TermSet.empty in
   let epr_axioms, axioms = 
-    List.partition (fun f -> IdSet.is_empty (fv_in_fun_terms f)) axioms
+    List.partition (fun f -> IdSet.is_empty (vars_in_fun_terms f)) axioms
   in
   let instantiate subst_map acc axiom =
     let fun_terms = 
       let rec tt terms t =
 	match t with  
-	| FunApp (fn, [Var v]) -> ([v], fn) :: terms
-	| FunApp (fn, [Var v1; Var v2]) -> ([v1; v2], fn) :: terms
-	| FunApp (_, ts) -> List.fold_left tt terms ts
+	| App (fn, [Var (v, _)], _) -> ([v], fn) :: terms
+	| App (fn, [Var (v1, _); Var (v2, _)], _) -> ([v1; v2], fn) :: terms
+	| App (_, ts, _) -> List.fold_left tt terms ts
 	| _ -> terms
-      in collect_from_terms tt [] axiom
+      in fold_terms tt [] axiom
     in
     let is_local = 
       List.for_all 
 	(fun (vs, fn) ->
 	  TermSet.exists 
 	    (function 
-	      | FunApp (fn2, ts) when fn = fn2 -> 
+	      | App (fn2, ts, _) when fn = fn2 -> 
 		  List.for_all2 (fun v t ->
 		    let rep = IdMap.find v subst_map in
 		    let rep_class = TermMap.find rep rep_map in
@@ -65,7 +65,7 @@ let generate_instances axioms terms rep_map =
       | [] -> acc
       | _ -> (vars, cl) :: acc
     in
-    let fv_axioms = List.map (fun f -> (fv_in_fun_terms f, f)) axioms in
+    let fv_axioms = List.map (fun f -> (vars_in_fun_terms f, f)) axioms in
     let sorted = List.sort (fun (vars1, _) (vars2, _) -> IdSet.compare vars1 vars2) fv_axioms in
     let classes, vars, cl = 
       List.fold_left 
@@ -94,7 +94,7 @@ let generate_instances axioms terms rep_map =
 
 let instantiate_with_terms fs gterms_f =
   let rec normalize acc = function
-    | And fs :: gs -> normalize acc (fs @ gs)
+    | BoolOp(And, fs) :: gs -> normalize acc (fs @ gs)
     | f :: gs -> normalize (f :: acc) gs
     | [] -> List.rev acc
   in
@@ -114,12 +114,9 @@ let instantiate_with_terms fs gterms_f =
   let instances_f = generate_instances axioms_f reps_f rep_map_f in
   defs_f @ ground_f @ instances_f
 
+(*
 let get_ground_terms f =
   let g1 = ground_terms f in
-  let is_unary id = not (Axioms.is_ep id) &&
-                    not (Axioms.is_jp id) &&
-                    not (Axioms.is_lb id)
-  in
   let unary_arg t = match t with
     | FunApp (id, [arg]) when is_unary id -> Some (id, arg)
     | _ -> None
@@ -155,8 +152,9 @@ let get_ground_terms f =
             g1 g1
       end
     else g1
+*)
 
 let instantiate fs =
-  let gterms_f = get_ground_terms (mk_and fs) in
+  let gterms_f = ground_terms (mk_and fs) in
     instantiate_with_terms fs gterms_f
 
