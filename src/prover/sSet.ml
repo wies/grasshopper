@@ -5,6 +5,7 @@ open Form
  * rather than using axioms we shoud introduce predicates/operations.
  *)
 
+(*
 let mem set v = mk_pred set [v]
 
 let included set1 set2 =
@@ -73,3 +74,4 @@ let fun_of tmpl id =
 let extract tmpl f = match f with
   | Pred (id, _) when is tmpl id -> Some (fun_of tmpl id)
   | _ -> None
+*)

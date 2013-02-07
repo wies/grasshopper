@@ -37,9 +37,9 @@ let read session =
   ParseSmtLib.main LexSmtLib.token lexbuf
 
 let declare_sorts session =
-  writeln session ("(declare-sort" ^ loc_sort_string ^ "0");
-  writeln session ("(declare-sort" ^ set_sort_string ^ "1");
-  writeln session ("(define-sort" ^ fld_sort_string ^ "(X) (Array Loc X)")
+  writeln session ("(declare-sort " ^ loc_sort_string ^ " 0)");
+  writeln session ("(declare-sort " ^ set_sort_string ^ " 1)");
+  writeln session ("(define-sort " ^ fld_sort_string ^ " (X) (Array Loc X))")
 
 let start smt_cmd replay_file produce_models produce_interpolants = 
   let in_chan, out_chan = Unix.open_process smt_cmd in
@@ -69,7 +69,7 @@ let start smt_cmd replay_file produce_models produce_interpolants =
     begin
   *)
   writeln session "(set-option :mbqi true)";
-  writeln session "(set-logic UF)";
+  writeln session "(set-logic AUFLIA)";
   (*end;*)
   declare_sorts session;
   session
@@ -125,7 +125,7 @@ let assert_form session f =
        print_smtlib_form stdout f;
        print_endline ")"; *)
   write session "(assert ";
-  let cf = mk_comment (string_of_int session.assert_count) f in
+  let cf = mk_comment ("_" ^ string_of_int session.assert_count) f in
   writefn session (fun chan -> print_smtlib_form chan cf);
   writeln session ")\n"
     
@@ -152,7 +152,7 @@ let get_model session =
   let gm () =
     writeln session "(get-model)";
     match read session with
-    | SmtModel m -> Some ((*Axioms.simplify_model*) m)
+    | SmtModel m -> Some m
     | SmtError e -> fail session e
     | _ -> None
   in

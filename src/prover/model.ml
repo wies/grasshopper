@@ -120,7 +120,7 @@ let print_model2 model =
 	    | Bool out -> Printf.printf " -> %b" out);
 	    print_string "\n   ")
 	    defs;
-	  print_string "]\n") model
+	  print_string "]\n") model.interp
     
 let output_graphviz chan model =
   let const_map = const_map model in 

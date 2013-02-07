@@ -13,7 +13,7 @@ type arity = sort list * sort
 
 type symbol =
   (* function symbols *)
-  | Null | Sel | Upd | EntPnt
+  | Null | Select | Store | EntPnt
   | Empty | Union | Inter | Diff
   (* predicate symbols *)
   | Eq
@@ -137,14 +137,14 @@ let mk_eq s t = mk_atom Eq [s; t]
 
 let mk_null = mk_app ~srt:Loc Null []
 
-let mk_sel fld ind = 
+let mk_select fld ind = 
   let srt = match sort_of fld with
   | Some (Fld s) -> Some s
   | _ -> None
-  in mk_app ?srt:srt Sel [fld; ind]
+  in mk_app ?srt:srt Select [fld; ind]
 
-let mk_upd fld ind upd =
-  mk_app ?srt:(sort_of fld) Upd [fld; ind; upd]
+let mk_store fld ind upd =
+  mk_app ?srt:(sort_of fld) Store [fld; ind; upd]
 
 let mk_ep fld set t = mk_app ~srt:Loc EntPnt [fld; set; t]
 
@@ -255,7 +255,7 @@ let mk_implies a b =
 let mk_equiv a b =
   smk_or [smk_and [a; b]; smk_and [nnf (mk_not a); nnf (mk_not b)]]
 
-
+(** Fold all terms appearing in the formula f using fold function fn and initial value init *)
 let fold_terms fn init f =
   let rec ft acc = function
     | Atom t -> fn acc t
@@ -263,6 +263,7 @@ let fold_terms fn init f =
     | Binder (_, _, f, _) -> ft acc f
   in ft init f
 
+(** Like fold_terms except that fn takes the set of bound variables of the given context as additional argument *)
 let fold_terms_with_bound fn init f =
   let rec ft bv acc = function
     | Atom t -> fn bv acc t
@@ -271,12 +272,14 @@ let fold_terms_with_bound fn init f =
 	ft (List.fold_left (fun bv (x, _) -> IdSet.add x bv) bv vs) acc f
   in ft IdSet.empty init f
 
+(** Computes the set of free variables of term t *)
 let fvt vars t =
   let rec fvt1 vars = function
   | Var (id, _) -> IdSet.add id vars
   | App (_, ts, _) -> List.fold_left fvt1 vars ts
   in fvt1 vars t
 
+(** Computes the set of free variables of formula f *)
 let fv f = 
   let rec fvt bv vars = function
     | Var (id, _) -> 
@@ -287,7 +290,8 @@ let fv f =
 	List.fold_left (fvt bv) vars ts
   in fold_terms_with_bound fvt IdSet.empty f
 
-(* free variables are treated as implicitly universally quantified *)
+(** Computes the set of ground terms appearing in f
+ * free variables are treated as implicitly universally quantified *)
 let ground_terms f =
   let rec gt bv terms t = 
     match t with
@@ -322,27 +326,31 @@ let vars_in_fun_terms f =
     | _ -> vars
   in fold_terms ct IdSet.empty f
      
+(** Extracts the signature of f *)
+let sign f : signature =
+  let fail () = failwith "tried to extract signature from untyped formula" in
+  let rec signt (decls : signature) = function
+    | Var _ -> decls
+    | App (sym, args, res_srt_opt) ->
+	let res_srt = 
+	  match res_srt_opt with
+	  | Some srt -> srt
+	  | None -> fail ()
+	in
+	let arg_srts = 
+	  List.map
+	    (function 
+	      |	Var (_, Some srt) 
+	      | App (_, _, Some srt) -> srt 
+	      | _ -> fail ()
+	    )
+	    args
+	in List.fold_left signt (SymbolMap.add sym (arg_srts, res_srt) decls) args
+  in 
+  fold_terms signt SymbolMap.empty f
+
 
 (*
-let sign f : signature =
-  let rec fts decls = function
-    | Var id -> decls
-    | FunApp (sym, ts) ->
-	let arity = List.length ts in
-	List.fold_left fts (SymbolMap.add (FunSym sym) arity decls) ts
-  in 
-  let rec ffs decls = function
-    | BoolOp (op, fs) ->
-	List.fold_left ffs decls fs
-    | Atom (sym, ts) ->
-	let arity = List.length ts in
-	List.fold_left fts (SymbolMap.add (PredSym sym) arity decls) ts
-    | Annot (_, f)
-    | Binder (_, _, f) -> ffs decls f
-  in
-  ffs SymbolMap.empty f
-
-
 let funs_in_term t =
   let rec fts funs = function
     | Var _ -> funs
@@ -350,14 +358,6 @@ let funs_in_term t =
 	let arity = List.length ts in
 	List.fold_left fts (FunSymbolMap.add sym arity funs) ts
   in fts FunSymbolMap.empty t
-
-let funs f =
-  let rec fts funs = function
-    | Var _ -> funs
-    | FunApp (sym, ts) ->
-	let arity = List.length ts in
-	List.fold_left fts (FunSymbolMap.add sym arity funs) ts
-  in fold_terms fts FunSymbolMap.empty f
 
 let proper_funs f =
   let rec fts funs = function
@@ -370,7 +370,7 @@ let proper_funs f =
   in collect_from_terms fts IdSet.empty f
 *)
 
-(* Substitute all identifiers in term t according to substitution map subst_map *)
+(* Substitutes all identifiers in term t according to substitution map subst_map *)
 let subst_id_term subst_map t =
   let sub_id id =
     try IdMap.find id subst_map with Not_found -> id
@@ -385,8 +385,8 @@ let subst_id_term subst_map t =
 	App (sym1, List.map sub ts, srt)
   in sub t
 
-(* Substitute all identifiers in formula f according to substitution map subst_map *)
-(* Not capture avoiding *)
+(** Substitutes all identifiers in formula f according to substitution map subst_map.
+ ** Not capture avoiding. *)
 let subst_id subst_map f =
   let subt = subst_id_term subst_map in
   let rec sub = function 
@@ -395,7 +395,7 @@ let subst_id subst_map f =
     | Binder (b, vs, f, a) -> Binder (b, vs, sub f, a)
   in sub f
 
-(* Substitute all variables in formula f according to substitution map subst_map *)
+(** Substitutes all variables in term t according to substitution map subst_map. *)
 let subst_term subst_map t =
   let sub_id id t =
     try IdMap.find id subst_map with Not_found -> t
@@ -405,8 +405,8 @@ let subst_term subst_map t =
     | App (sym, ts, srt) -> App (sym, List.map sub ts, srt)
   in sub t
 
-(* Substitute all free variables in formula f according to substitution map subst_map *)
-(* Capture avoiding *)
+(** Substitutes all free variables in formula f according to substitution map subst_map.
+ ** Capture avoiding. *)
 let subst subst_map f =
   let suba sm = function
     | Comment c -> Comment c
@@ -441,8 +441,8 @@ let str_of_ident (name, n) =
 let str_of_symbol = function
   (* function symbols *)
   | Null -> "null"
-  | Sel -> "sel"
-  | Upd -> "upd"
+  | Select -> "select"
+  | Store -> "store"
   | EntPnt -> "ep"
   | Empty -> "{}"
   | Union -> "+"
@@ -509,27 +509,43 @@ let rec pr_vars ppf = function
   | [v] -> fprintf ppf "%a" pr_var v
   | v :: vs -> fprintf ppf "%a@ %a" pr_var v pr_vars vs
 
+let extract_comments ann =
+  let cmnts = Util.filter_map 
+      (function Comment _ -> true (*| _ -> false*)) 
+      (function Comment c -> c (*| _ -> ""*)) 
+      ann 
+  in
+  String.concat "_" cmnts
+
 let rec pr_form ppf = function
-  (* TODO: print annotated comments *)
-  | Binder (b, vs, f, a) -> fprintf ppf "@[<2>(%a@ @[<1>(%a)@]@ %a)" pr_binder b pr_vars vs pr_form f
+  | Binder (b, vs, f, a) -> 
+      let cmnts = extract_comments a in
+      (match cmnts with
+      |	"" -> fprintf ppf "%a" pr_quantifier (b, vs, f)
+      |	c -> fprintf ppf "@[<2>(!%a@ :named@ %s)@]" pr_quantifier (b, vs, f) c)
   | Atom t -> fprintf ppf "%a" pr_term t
   | BoolOp (And, []) -> fprintf ppf "%s" "true"
   | BoolOp (Or, []) -> fprintf ppf "%s" "false"
   | BoolOp (op, fs) -> fprintf ppf "@[<2>(%a@ %a)@]" pr_boolop op pr_forms fs
+
+and pr_quantifier ppf = function
+  | (_, [], f) -> fprintf ppf "%a" pr_form f
+  | (b, vs, f) -> fprintf ppf "@[<2>(%a@ @[<1>(%a)@]@ %a)" pr_binder b pr_vars vs pr_form f
+
 
 and pr_forms ppf = function
   | [] -> ()
   | [t] -> fprintf ppf "%a" pr_form t
   | t :: ts -> fprintf ppf "%a@ %a" pr_form t pr_forms ts
 
-let print_term out_ch t = pr_term (formatter_of_out_channel out_ch) t
-let print_form out_ch f = pr_form (formatter_of_out_channel out_ch) f
+let print_term out_ch t = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_term t
+let print_form out_ch f = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_form f
 
 let print_smtlib_sort out_ch s = pr_sort (formatter_of_out_channel out_ch) s
-let print_smtlib_term out_ch t = pr_term (formatter_of_out_channel out_ch) t
-let print_smtlib_form out_ch f = pr_form (formatter_of_out_channel out_ch) f
+let print_smtlib_term out_ch t = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_term t
+let print_smtlib_form out_ch f =  fprintf (formatter_of_out_channel out_ch) "%a@?" pr_form f
 
-let string_of_sort s = pr_sort str_formatter s; flush_str_formatter ()
+let string_of_sort s = pr_sort0 str_formatter s; flush_str_formatter ()
 let string_of_term t = pr_term str_formatter t; flush_str_formatter ()
 let string_of_form f = pr_form str_formatter f; flush_str_formatter ()
 

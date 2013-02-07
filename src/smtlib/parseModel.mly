@@ -21,9 +21,9 @@ main:
 ;
 
 definition:
-  IDENT ARROW ELEM { ($1, [([], Model.Int $3)]) }
-| IDENT ARROW BOOL { ($1, [([], Model.Bool $3)]) }
-| IDENT ARROW LBRACE mappings RBRACE { ($1, $4) }
+  IDENT ARROW ELEM { (FreeSym $1, [([], Model.Int $3)]) }
+| IDENT ARROW BOOL { (FreeSym $1, [([], Model.Bool $3)]) }
+| IDENT ARROW LBRACE mappings RBRACE { (FreeSym $1, $4) }
 ; 
 
 mappings:

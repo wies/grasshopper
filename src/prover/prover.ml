@@ -4,32 +4,6 @@ open Axioms
 
 let model_file = ref ""
 
-let compare_forms =
-  let cons_re = Str.regexp "rep" in
-  let has_rep_consts a = 
-    IdSet.exists 
-      (fun (name, _) -> Str.string_match cons_re name 0)
-      (funs a)
-  in
-  let has_unary_funs a =
-    IdMap.fold
-	(fun _ decl acc -> acc || not decl.is_pred && decl.arity = 1)
-	(sign a) false
-  in
-  let comp a b =
-    if has_rep_consts a then
-      if has_rep_consts b then compare a b
-      else 1
-    else if has_rep_consts b then -1
-    else compare a b
-  in
-  fun a b ->
-  if has_unary_funs a then 
-    if has_unary_funs b then comp a b
-    else 1
-  else if has_unary_funs b then -1
-  else comp a b
-
 let inst_num = ref 0
 
 let dump_model model =
@@ -48,7 +22,7 @@ let mk_solver f =
     else
       begin
         let rec normalize acc = function
-          | And fs :: gs -> normalize acc (fs @ gs)
+          | BoolOp(And, fs) :: gs -> normalize acc (fs @ gs)
           | f :: gs -> normalize (f :: acc) gs
           | [] -> List.rev acc
         in

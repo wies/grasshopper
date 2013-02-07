@@ -45,13 +45,13 @@ let is_reach =
   fun ((name, _) : ident) -> Str.string_match re name 0
 *)
 
-let f x = mk_sel fld1 x
+let f x = mk_select fld1 x
 let reachwo = mk_reachwo fld1
 let reach = mk_reach fld1
 
 let update_axioms () =
-  let new_fld1 = mk_upd fld1 loc1 loc2 in
-  let new_f x = mk_sel new_fld1 x in
+  let new_fld1 = mk_store fld1 loc1 loc2 in
+  let new_f x = mk_select new_fld1 x in
   let f_upd1 = 
     mk_or [mk_eq loc3 loc1; mk_eq (f loc3) (new_f loc3)]
   in
