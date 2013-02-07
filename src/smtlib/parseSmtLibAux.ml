@@ -26,7 +26,7 @@ let add_def id ft =
 
 let resolve_id_to_term id =
   try Hashtbl.find term_defs id 
-  with Not_found -> mk_const id
+  with Not_found -> mk_free_const id
 
 let resolve_id_to_form id =
   try Hashtbl.find form_defs id
