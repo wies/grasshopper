@@ -10,11 +10,11 @@ let open_axiom openCond = function
 
 let openFld f = function (_, Fld _) -> true | _ -> false
 
-let filter_terms_by_sort ts srt = TermSet.filter (fun t -> sort_of t = Some srt) ts
-
 let openFunVars f =
   let fvars = vars_in_fun_terms f in
   fun v -> IdSrtSet.mem v fvars
+
+let filter_terms_by_sort ts srt = TermSet.filter (fun t -> sort_of t = Some srt) ts
 
 (** Adds instantiated theory axioms for graph reachability to formula f
  ** assumes that f is typed *)
