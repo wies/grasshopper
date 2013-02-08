@@ -1,5 +1,5 @@
-
 open Form
+open FormUtil
 
 type smtlib_answer =
   | SmtSat

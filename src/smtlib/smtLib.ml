@@ -1,4 +1,5 @@
 open Form
+open FormUtil
 open ParseSmtLibAux
 
 (* Todo: add proper error handling *)
@@ -113,8 +114,12 @@ let push session =
 
 let declare session sign =
   let write_decl sym (arg_sorts, res_sort) = 
-    let arg_sorts_str = String.concat " " (List.map (fun srt -> string_of_sort srt) arg_sorts) in
-    writeln session ("(declare-fun " ^ str_of_symbol sym ^ " (" ^ arg_sorts_str ^ ") " ^ string_of_sort res_sort ^ ")")
+    match sym with
+    (* Skip inbuilt symbols *)
+    | Select | Store | Eq -> ()
+    | _ ->
+	let arg_sorts_str = String.concat " " (List.map (fun srt -> string_of_sort srt) arg_sorts) in
+	writeln session ("(declare-fun " ^ str_of_symbol sym ^ " (" ^ arg_sorts_str ^ ") " ^ string_of_sort res_sort ^ ")")
   in
   SymbolMap.iter write_decl sign
 

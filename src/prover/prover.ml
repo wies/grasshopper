@@ -1,4 +1,5 @@
 open Form
+open FormUtil
 open Util
 open Axioms
 
@@ -49,7 +50,8 @@ let mk_solver f =
   let result = Util.measure_call "prove" prove () in
   (result, session)
 
-let satisfiable f =
+let check_sat f0 =
+  let f = Reduction.reduce f0 in
   let (result, session) = mk_solver f in
   (match result with
   | Some true ->

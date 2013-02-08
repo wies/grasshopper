@@ -1,4 +1,5 @@
 open Form
+open FormUtil
 open Axioms
 open Util
 open Logging
@@ -46,7 +47,7 @@ let process_input () =
     print_form stdout form  
   in
   (*print_endline "to prover";*)
-  let res = Prover.satisfiable form in
+  let res = Prover.check_sat form in
     Printf.fprintf stdout "accumulated time: %.2fs\n" !Util.measured_time;
     match res with
     | Some true -> print_endline "sat"
