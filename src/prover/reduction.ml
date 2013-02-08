@@ -6,6 +6,7 @@ open InstGen
  ** assumes that f is typed *)
 let reduce_reach fs =
   let gts = ground_terms (mk_and fs) in
+  (* instantiate the variables of sort fld in all reachability axioms *)
   let open_axiom = function
     | Binder (b, vs, f, a) ->
 	Binder (b, List.filter (function (_, Fld _) -> false | _ -> true) vs, f, a)
@@ -21,6 +22,7 @@ let reduce_reach fs =
   in
   let reachwo_ax = List.map open_axiom (Axioms.reachwo_axioms ()) in
   let defs, reachwo_ax1 = instantiate_with_terms false fs reachwo_ax basic_pt_flds in
+  (* generate local instances of all axioms in which variables occur below function symbols *)
   let open_axiom2 = function
     | Binder (b, vs, f, a) ->
 	let fvars = vars_in_fun_terms f in
