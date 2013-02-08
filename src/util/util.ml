@@ -1,5 +1,14 @@
 open Unix
 
+module IntMap = Map.Make(struct
+    type t = int
+    let compare = compare
+  end)
+
+
+(** Utility functions on option types *)
+
+
 let unopt = function
   | Some x -> x
   | None -> failwith "Util.unopt applied to None"
@@ -13,6 +22,8 @@ let optmap f = function
   | None -> None
 
 
+(** Utility functions on lists *)
+
 (** generate a list of length [n] using generator [f] *)
 let generate_list (f : int -> 'a) (n : int) : 'a list = 
   let rec mk_tl n acc = 
@@ -25,10 +36,27 @@ let generate_list (f : int -> 'a) (n : int) : 'a list =
 let filter_map p f xs =
   List.fold_right (fun x ys -> if p x then f x :: ys else ys) xs []
 
-module IntMap = Map.Make(struct
-    type t = int
-    let compare = compare
-  end)
+let flat_map f ls = List.flatten (List.map f ls)
+
+let rec partial_map f = function
+  | [] -> []
+  | x :: xs -> 
+      match f x with 
+      |	Some y -> y :: partial_map f xs
+      |	None -> partial_map f xs
+
+(** Tail-recursive concatenation of lists *)
+let rev_concat lists = List.fold_left (List.fold_left (fun acc f -> f :: acc)) [] lists
+
+
+(** Boolean operators on predicates *)
+
+let (~~) f x = not (f x)
+
+let (&&&) f g x = f x && g x
+
+let (|||) f g x = f x || g x
+
 
 (* the following is stripped from module BatSubstring in OCaml Batteries included *)
 
@@ -130,8 +158,3 @@ let read_file file =
   in
     String.concat "\n" (read [])
 
-let flat_map fct lst = List.flatten (List.map fct lst)
-
-let rev_concat lists = List.fold_left (List.fold_left (fun acc f -> f :: acc)) [] lists
-
-let neg f x = not (f x)

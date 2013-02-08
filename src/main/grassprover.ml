@@ -42,25 +42,34 @@ let process_input () =
   let loc1 = mk_free_const ~srt:Loc (fresh_ident "x") in
   let loc2 = mk_free_const ~srt:Loc (fresh_ident "y") in
   let loc3 = mk_free_const ~srt:Loc (fresh_ident "z") in
-  let form = mk_reachwo fld loc1 loc2 loc3 in
-  let _ = if true || !Debug.verbose then
-    print_form stdout form  
+  let form = 
+    mk_and 
+      [mk_eq (mk_read fld loc3) loc1;
+       mk_reachwo fld loc1 loc2 loc3] 
+  in
+  let _ = if!Debug.verbose then
+    print_forms stdout [form] 
   in
   (*print_endline "to prover";*)
   let res = Prover.check_sat form in
-    Printf.fprintf stdout "accumulated time: %.2fs\n" !Util.measured_time;
-    match res with
-    | Some true -> print_endline "sat"
-    | Some false -> print_endline "unsat"
-    | None -> print_endline "unknown"
+  (* Printf.fprintf stdout "accumulated time: %.2fs\n" !Util.measured_time;*)
+  match res with
+  | Some true -> print_endline "sat"
+  | Some false -> print_endline "unsat"
+  | None -> print_endline "unknown"
 
 let _ =
+  let print_exception s =
+    output_string stderr (s ^ "\n");
+    if !Debug.verbose then
+      Printexc.print_backtrace stderr
+  in
   try
     Arg.parse cmd_options (fun s -> input_file := open_in s) usage_message;
     process_input ()
   with  
-  | Sys_error s -> output_string stderr (s ^ "\n")
-  | Failure s -> output_string stderr (s ^ "\n")
-  | Parsing.Parse_error -> output_string stderr "Parse error\n"
+  | Sys_error s
+  | Failure s -> print_exception s
+  | Parsing.Parse_error -> print_exception "Parse error"
 	
     

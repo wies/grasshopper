@@ -39,6 +39,15 @@ let rec sort_ofs = function
       |	None -> sort_ofs ts
       |	s -> s
 
+let has_sort srt t = 
+  match sort_of t with
+  | Some srt' -> srt = srt'
+  | None -> false
+
+let is_free_const = function
+  | App (FreeSym _, [], _) -> true
+  | _ -> false
+
 let eq_name id1 id2 = name id1 = name id2
 
 (** Smart constructors *)
@@ -60,19 +69,19 @@ let mk_eq s t = mk_atom Eq [s; t]
 
 let mk_null = mk_app ~srt:Loc Null []
 
-let mk_select fld ind = 
+let mk_read fld ind = 
   let srt = match sort_of fld with
   | Some (Fld s) -> Some s
   | None -> None
   | Some s -> 
       failwith 
-	("tried to select from term" ^ 
+	("tried to read from term" ^ 
          (string_of_term fld) ^ " which is of sort " ^ (string_of_sort s) ^ ".\n" ^
          "Expected sort (Fld X) for some sort X.")
-  in mk_app ?srt:srt Select [fld; ind]
+  in mk_app ?srt:srt Read [fld; ind]
 
-let mk_store fld ind upd =
-  mk_app ?srt:(sort_of fld) Store [fld; ind; upd]
+let mk_write fld ind upd =
+  mk_app ?srt:(sort_of fld) Write [fld; ind; upd]
 
 let mk_ep fld set t = mk_app ~srt:Loc EntPnt [fld; set; t]
 

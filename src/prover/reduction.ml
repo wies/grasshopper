@@ -3,31 +3,34 @@ open Form
 open FormUtil
 open InstGen
 
-let open_axiom openCond = function
+let open_axioms openCond axioms = 
+  let open_axiom = function
   | Binder (b, vs, f, a) -> 
-      Binder (b, List.filter (neg (openCond f)) vs, f, a)
+      Binder (b, List.filter (~~ (openCond f)) vs, f, a)
   | f -> f
+  in List.map open_axiom axioms
 
-let openFld f = function (_, Fld _) -> true | _ -> false
+let isFld f = function (_, Fld _) -> true | _ -> false
 
-let openFunVars f =
+let isFunVar f =
   let fvars = vars_in_fun_terms f in
   fun v -> IdSrtSet.mem v fvars
 
-let filter_terms_by_sort ts srt = TermSet.filter (fun t -> sort_of t = Some srt) ts
 
 (** Adds instantiated theory axioms for graph reachability to formula f
  ** assumes that f is typed *)
 let reduce_reach fs =
-  let gts = ground_terms (mk_and fs) in
+  let gts = TermSet.add mk_null (ground_terms (mk_and fs)) in
   (* instantiate the variables of sort fld in all reachability axioms *)
-  let basic_pt_flds = filter_terms_by_sort gts (Fld Loc) in
-  let reachwo_ax = List.map (open_axiom openFld) (Axioms.reachwo_axioms ()) in
+  let basic_pt_flds = TermSet.filter (has_sort (Fld Loc) &&& is_free_const) gts in
+  let reachwo_ax = open_axioms isFld (Axioms.reachwo_axioms ()) in
   let defs, reachwo_ax1 = instantiate_with_terms false fs reachwo_ax basic_pt_flds in
   (* generate local instances of all axioms in which variables occur below function symbols *)
-  let reachwo_ax2 = List.map (open_axiom openFunVars) reachwo_ax1 in
-  let defs2, instances = instantiate_with_terms true fs reachwo_ax2 gts in
-  defs @ defs2 @ fs, instances
+  let defs2, reachwo_ax2 = instantiate_with_terms true fs (open_axioms isFunVar reachwo_ax1) gts in
+  (* generate instances of all update axioms *)
+  let write_ax = open_axioms isFunVar (Axioms.write_axioms ()) in
+  let defs3, write_ax1 = instantiate_with_terms true fs write_ax gts in
+  defs @ defs2 @ defs3 @ fs, write_ax1 @ reachwo_ax2
 
 
 (** Reduces the given formula to the target theory fragment, as specified by the configuration *)

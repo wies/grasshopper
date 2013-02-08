@@ -8,6 +8,7 @@ let l3 = fresh_ident "z", Loc
 let l4 = fresh_ident "u", Loc
 let l5 = fresh_ident "v", Loc
 let f1 = fresh_ident "f", Fld Loc
+let f2 = fresh_ident "g", Fld Loc
 let s1 = fresh_ident "X", Set Loc 
 
 let loc1 = mk_var ~srt:(snd l1) (fst l1)
@@ -16,9 +17,10 @@ let loc3 = mk_var ~srt:(snd l3) (fst l3)
 let loc4 = mk_var ~srt:(snd l4) (fst l4)
 let loc5 = mk_var ~srt:(snd l5) (fst l5)
 let fld1 = mk_var ~srt:(snd f1) (fst f1)
+let fld2 = mk_var ~srt:(snd f2) (fst f2)
 let set1 = mk_var ~srt:(snd s1) (fst s1)
 
-let all_vars = [f1; s1; l1; l2; l3; l4; l5]
+let all_vars = [f1; f2; s1; l1; l2; l3; l4; l5]
 
 let alloc_id = (mk_ident "Alloc")
 
@@ -46,17 +48,17 @@ let is_reach =
   fun ((name, _) : ident) -> Str.string_match re name 0
 *)
 
-let f x = mk_select fld1 x
+let f x = mk_read fld1 x
+let g x = mk_read fld2 x
 let reachwo = mk_reachwo fld1
 let reach = mk_reach fld1
 
-let update_axioms () =
-  let new_fld1 = mk_store fld1 loc1 loc2 in
-  let new_f x = mk_select new_fld1 x in
+let write_axioms () =
+  let new_fld1 = mk_write fld1 loc1 loc2 in
   let f_upd1 = 
-    mk_or [mk_eq loc3 loc1; mk_eq (f loc3) (new_f loc3)]
+    mk_or [mk_neq new_fld1 fld2; mk_eq loc3 loc1; mk_eq (f loc3) (g loc3)]
   in
-  let f_upd2 = mk_eq (new_f loc1) loc2 in
+  let f_upd2 = mk_or [mk_neq new_fld1 fld2; mk_eq (g loc1) loc2] in
   let reachwo_upd =
     let r = reachwo in
     let new_reachwo u v w =

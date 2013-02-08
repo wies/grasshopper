@@ -116,12 +116,15 @@ let declare session sign =
   let write_decl sym (arg_sorts, res_sort) = 
     match sym with
     (* Skip inbuilt symbols *)
-    | Select | Store | Eq -> ()
+    | Read 
+    | Write 
+    | Eq -> ()
     | _ ->
 	let arg_sorts_str = String.concat " " (List.map (fun srt -> string_of_sort srt) arg_sorts) in
 	writeln session ("(declare-fun " ^ str_of_symbol sym ^ " (" ^ arg_sorts_str ^ ") " ^ string_of_sort res_sort ^ ")")
   in
-  SymbolMap.iter write_decl sign
+  SymbolMap.iter write_decl sign;
+  writeln session ""
 
 let assert_form session f =
   session.assert_count <- session.assert_count + 1;
@@ -135,7 +138,7 @@ let assert_form session f =
     Format.fprintf (Format.formatter_of_out_channel chan) "@[<8>%a@]@?" pr_form cf);
   writeln session ")\n"
     
-let assert_form session f = Util.measure (assert_form session) f
+(*let assert_form session f = Util.measure (assert_form session) f*)
     
 let assert_forms session fs =
   List.iter (fun f -> assert_form session f) fs

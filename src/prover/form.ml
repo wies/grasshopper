@@ -13,7 +13,7 @@ type arity = sort list * sort
 
 type symbol =
   (* function symbols *)
-  | Null | Select | Store | EntPnt
+  | Null | Read | Write | EntPnt
   | Empty | Union | Inter | Diff
   (* predicate symbols *)
   | Eq
@@ -92,8 +92,8 @@ let str_of_ident (name, n) =
 let str_of_symbol = function
   (* function symbols *)
   | Null -> "null"
-  | Select -> "select"
-  | Store -> "store"
+  | Read -> "select"
+  | Write -> "store"
   | EntPnt -> "ep"
   | Empty -> "{}"
   | Union -> "+"
@@ -107,7 +107,7 @@ let str_of_symbol = function
   (* free symbols *)
   | FreeSym id -> str_of_ident id
 
-let pr_ident ppf (name, n) = fprintf ppf "%s_%d" name n
+let pr_ident ppf id = fprintf ppf "%s" (str_of_ident id)
 
 let pr_sym ppf sym = fprintf ppf "%s" (str_of_symbol sym)
 

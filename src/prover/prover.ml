@@ -19,7 +19,7 @@ let dump_model model =
 let mk_solver f = 
   let f_inst =
     if !Config.instantiate
-    then Util.measure_call "instantiate" Reduction.reduce f 
+    then (*Util.measure_call "instantiate"*) Reduction.reduce f 
     else
       begin
         let rec normalize acc = function

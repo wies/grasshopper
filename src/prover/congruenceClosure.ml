@@ -175,7 +175,7 @@ class dag = fun expr ->
       end
   in
   let rec convert_exp expr = match expr with
-    | Var (v, _) as var -> create_and_add var (FreeSym v) []
+    | Var (v, _) -> failwith "UIF: term not ground" (* create_and_add var (FreeSym v) []*)
     | App (c, [], _) as cst -> create_and_add cst c []
     | App (f, args, _) as appl ->
       let node_args = (List.map convert_exp args) in
@@ -208,8 +208,8 @@ class dag = fun expr ->
 
     method add_constr eq = match eq with
       | Atom (App (Eq, [e1; e2], _)) ->
-        let n1 = self#get_node e1 in
-        let n2 = self#get_node e2 in
+	  let n1 = self#get_node e1 in
+          let n2 = self#get_node e2 in
           n1#merge n2
       | _ -> failwith "UIF: 'add_constr' only for Eq"
 
