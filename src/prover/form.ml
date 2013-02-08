@@ -52,6 +52,11 @@ module IdMap = Map.Make(struct
     let compare = compare
   end)
 
+module IdSrtSet = Set.Make(struct
+    type t = ident * sort
+    let compare = compare
+  end)
+
 module TermSet = Set.Make(struct
     type t = term
     let compare = compare
@@ -196,6 +201,11 @@ let string_of_sort s = pr_sort0 str_formatter s; flush_str_formatter ()
 let string_of_term t = pr_term str_formatter t; flush_str_formatter ()
 let string_of_form f = pr_form str_formatter f; flush_str_formatter ()
 
+let print_forms ch fs = 
+  List.iter (fun f -> print_form ch f;  output_string ch "\n") fs
+  
+
+
 (*
 
 let string_of_term t = 
@@ -217,139 +227,8 @@ let rec string_of_form f = match f with
     | Not f -> "~ " ^ (string_of_form f)
     | Comment (c, f) -> string_of_form f
     | Pred (p, ts) -> (str_of_ident p) ^ "(" ^ (String.concat ", " (List.map string_of_term ts)) ^ ")"
-    | BoolConst b -> if b then "true" else "false" 
+    | BoolConst b -> if b then "true" else "false"   
 
-let print_form out_ch =
-  let print = output_string out_ch in
-  let print_list indent delim p = function
-    | [] -> ()
-    | x :: xs ->
-	p "" "" x;
-	List.iter (p indent delim) xs 
-  in
-  let rec pt indent delim = function
-    | Const id 
-    | Var id -> 
-	print (indent ^ delim ^ str_of_ident id)
-    | FunApp (id, ts) ->
-	print (indent ^ delim ^ str_of_ident id ^ "(");
-	print_list "" ", " pt ts;
-	print ")"
-  in
-  let rec pf indent delim = function
-    | And fs ->
-	print indent;
-	print delim;
-	print "( ";
-	print_list (indent ^ "  ") "& " (fun indent delim f -> pf indent delim f; print "\n") fs;
-	print (indent ^ "  )");
-    | Or fs ->
-	print indent;
-	print delim;
-	print "( ";
-	print_list (indent ^ "  ") "| " (fun indent delim f -> pf indent delim f; print "\n") fs;
-	print (indent ^ "  )");
-    | Not (Eq (s, t)) ->
-	print indent;
-	print delim;
-	print_list "" " ~= " pt [s;t]
-    | Not f ->
-	print (indent ^ delim ^ "~");  
-	print_list (indent ^ " ") "" pf [f]
-    | Comment (c, f) ->
-	pf indent delim f
-    | Pred (p, ts) ->
-	print (indent ^ delim ^ str_of_ident p ^ "(");
-	print_list "" ", " pt ts;
-	print ")";
-    | Eq (s, t) ->
-	print indent;
-	print delim;
-	print_list "" " = " pt [s;t]
-    | BoolConst b ->
-	print indent;
-	print delim;
-	if b then print "True" else print "False" 
-  in function
-    | And fs 
-    | Comment (_, And fs) ->
-	print "  ";
-	print_list "" "& " (fun indent delim f -> pf indent delim f; print "\n") fs;
-    | Or fs 
-    | Comment (_, Or fs) ->
-	print "  ";
-	print_list "" "| " (fun indent delim f -> pf indent delim f; print "\n") fs;
-    | f -> pf "" "" f; print "\n"
-  
-
-let print_smtlib_term out_ch t =
-  let print = output_string out_ch in
-  let print_list fn xs = List.iter (fun x -> fn x; print " ") xs in
-  let rec smt_term = function
-    | Const id 
-    | Var id -> print (str_of_ident id)
-    | FunApp (id, ts) ->
-	print "(";
-	print (str_of_ident id);
-	print " ";
-	print_list smt_term ts;
-	print ")"
-  in
-    smt_term t
-
-let print_smtlib_form_generic before_f after_f out_ch f =
-  let print = output_string out_ch in
-  let print_list fn xs = List.iter (fun x -> fn x; print " ") xs in
-  let rec smt_form = function
-  | And fs -> 
-      print "(and ";
-      print_list smt_form fs;
-      print ")"
-  | Or fs -> 
-      print "(or ";
-      print_list smt_form fs;
-      print ")"
-  | Not f -> 
-      print "(not ";
-      smt_form f;
-      print ")";
-  | Comment (c, f) ->
-      smt_form f
-  | Pred (id, ts) -> 
-      if (ts = []) then
-        print (" " ^ (str_of_ident id))
-      else
-        begin
-          print "(";
-          print (str_of_ident id);
-          print " ";
-          print_list (print_smtlib_term out_ch) ts;
-          print ")"
-        end
-  | Eq (s, t) -> 
-      print "(= ";
-      print_list (print_smtlib_term out_ch) [s; t];
-      print ")"
-  | BoolConst b -> if b then print " true" else print " false"
-  in 
-  before_f out_ch f;
-  smt_form f;
-  after_f out_ch f
-
-let print_smtlib_form out_ch f =
-  let before_quantify out_ch f =
-    let print = output_string out_ch in
-    let vars = fv f in
-    if not (IdSet.is_empty vars) then print "(forall (";
-    IdSet.iter (fun id -> print ("(" ^ str_of_ident id ^ " " ^ sort_str ^ ") ")) vars;
-    if not (IdSet.is_empty vars) then print ")"
-  in
-  let after_quantify out_ch f =
-    let print = output_string out_ch in
-    let vars = fv f in
-    if not (IdSet.is_empty vars) then print ")"
-  in
-    print_smtlib_form_generic before_quantify after_quantify out_ch f
 
 let print_smtlib_form_with_triggers out_ch f =
   let vars = fv f in
@@ -396,12 +275,5 @@ let print_smtlib_form_with_triggers out_ch f =
   in
     print_smtlib_form_generic before_quantify after_quantify out_ch f
       
-
-let print_forms ch = function
-  | f :: fs -> 
-      print_form ch f;
-      List.iter (fun f -> output_string ch ";\n"; print_form ch f) fs;
-  | [] -> ()
-
 *)
 

@@ -218,13 +218,25 @@ let fv f =
 	List.fold_left (fvt bv) vars ts
   in fold_terms_with_bound fvt IdSet.empty f
 
+(** Computes the set of free variables of formula f together with their sorts *)
+let sorted_free_vars f = 
+  let rec fvt bv vars = function
+    | Var (id, Some srt) -> 
+	if IdSet.mem id bv 
+	then vars 
+	else IdSrtSet.add (id, srt) vars
+    | App (_, ts, _) ->
+	List.fold_left (fvt bv) vars ts
+    | _ -> vars
+  in fold_terms_with_bound fvt IdSrtSet.empty f
+
 (** Computes the set of ground terms appearing in f
  * free variables are treated as implicitly universally quantified *)
 let ground_terms f =
   let rec gt bv terms t = 
     match t with
     | Var (id, _) -> terms, false
-    | App (_, ts, _) ->
+    | App (_, ts, srt) ->
 	let terms1, is_ground = 
 	  List.fold_left 
 	    (fun (terms, is_ground) t ->
@@ -232,9 +244,9 @@ let ground_terms f =
 	      terms_t, is_ground && is_ground_t)
 	    (terms, true) ts
 	in
-	if is_ground 
-	then TermSet.add t terms, true 
-	else terms, false
+	if is_ground && srt <> Some Bool
+	then TermSet.add t terms1, true 
+	else terms1, is_ground
   in 
   fold_terms_with_bound 
     (fun bv acc t -> fst (gt bv acc t)) 
@@ -242,9 +254,10 @@ let ground_terms f =
   
 let vars_in_fun_terms f =
   let rec fvt vars = function
-    | Var (id, _) -> IdSet.add id vars
+    | Var (id, Some srt) -> IdSrtSet.add (id, srt) vars
     | App (_, ts, _) ->
 	List.fold_left fvt vars ts
+    | _ -> vars
   in
   let rec ct vars t = 
     match t with
@@ -252,7 +265,7 @@ let vars_in_fun_terms f =
 	List.fold_left ct vars ts
     | App _ -> fvt vars t
     | _ -> vars
-  in fold_terms ct IdSet.empty f
+  in fold_terms ct IdSrtSet.empty f
      
 (** Extracts the signature of f *)
 let sign f : signature =

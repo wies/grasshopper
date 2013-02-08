@@ -19,7 +19,7 @@ let dump_model model =
 let mk_solver f = 
   let f_inst =
     if !Config.instantiate
-    then Util.measure_call "instantiate" InstGen.instantiate [f]
+    then Util.measure_call "instantiate" Reduction.reduce f 
     else
       begin
         let rec normalize acc = function
@@ -50,8 +50,7 @@ let mk_solver f =
   let result = Util.measure_call "prove" prove () in
   (result, session)
 
-let check_sat f0 =
-  let f = Reduction.reduce f0 in
+let check_sat f =
   let (result, session) = mk_solver f in
   (match result with
   | Some true ->
