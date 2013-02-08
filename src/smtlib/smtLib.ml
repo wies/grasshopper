@@ -131,7 +131,8 @@ let assert_form session f =
        print_endline ")"; *)
   write session "(assert ";
   let cf = mk_comment ("_" ^ string_of_int session.assert_count) f in
-  writefn session (fun chan -> print_smtlib_form chan cf);
+  writefn session (fun chan -> 
+    Format.fprintf (Format.formatter_of_out_channel chan) "@[<8>%a@]@?" pr_form cf);
   writeln session ")\n"
     
 let assert_form session f = Util.measure (assert_form session) f

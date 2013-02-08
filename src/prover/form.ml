@@ -168,15 +168,16 @@ let rec pr_form ppf = function
       let cmnts = extract_comments a in
       (match cmnts with
       |	"" -> fprintf ppf "%a" pr_quantifier (b, vs, f)
-      |	c -> fprintf ppf "@[<2>(!%a@ :named@ %s)@]" pr_quantifier (b, vs, f) c)
+      |	c -> fprintf ppf "@[<2>(!%a@ @[:named@ %s@])@]" pr_quantifier (b, vs, f) c)
   | Atom t -> fprintf ppf "%a" pr_term t
   | BoolOp (And, []) -> fprintf ppf "%s" "true"
   | BoolOp (Or, []) -> fprintf ppf "%s" "false"
-  | BoolOp (op, fs) -> fprintf ppf "@[<2>(%a@ %a)@]" pr_boolop op pr_forms fs
+  | BoolOp (Or, fs) -> fprintf ppf "@[<4>(%a@ %a)@]" pr_boolop Or pr_forms fs
+  | BoolOp (op, fs) -> fprintf ppf "@[<5>(%a@ %a)@]" pr_boolop op pr_forms fs
 
 and pr_quantifier ppf = function
   | (_, [], f) -> fprintf ppf "%a" pr_form f
-  | (b, vs, f) -> fprintf ppf "@[<2>(%a@ @[<1>(%a)@]@ %a)" pr_binder b pr_vars vs pr_form f
+  | (b, vs, f) -> fprintf ppf "@[<8>(%a@ @[<1>(%a)@]@ %a)@]" pr_binder b pr_vars vs pr_form f
 
 
 and pr_forms ppf = function
