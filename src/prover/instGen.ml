@@ -128,7 +128,7 @@ let instantiate_with_terms local fs axioms gterms_f =
   in
   let reps_f, defs_f, rep_map_f = choose_rep_terms classes in
   let instances_f = generate_instances local axioms reps_f rep_map_f in
-  defs_f @ fs, instances_f
+  defs_f, instances_f
 
 (*
 let get_ground_terms f =
