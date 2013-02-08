@@ -1,36 +1,31 @@
+open Util
 open Form
 open FormUtil
 open InstGen
+
+let open_axiom openCond = function
+  | Binder (b, vs, f, a) -> 
+      Binder (b, List.filter (neg (openCond f)) vs, f, a)
+  | f -> f
+
+let openFld f = function (_, Fld _) -> true | _ -> false
+
+let filter_terms_by_sort ts srt = TermSet.filter (fun t -> sort_of t = Some srt) ts
+
+let openFunVars f =
+  let fvars = vars_in_fun_terms f in
+  fun v -> IdSrtSet.mem v fvars
 
 (** Adds instantiated theory axioms for graph reachability to formula f
  ** assumes that f is typed *)
 let reduce_reach fs =
   let gts = ground_terms (mk_and fs) in
   (* instantiate the variables of sort fld in all reachability axioms *)
-  let open_axiom = function
-    | Binder (b, vs, f, a) ->
-	Binder (b, List.filter (function (_, Fld _) -> false | _ -> true) vs, f, a)
-    | f -> f
-  in
-  let basic_pt_flds = 
-    TermSet.filter 
-      (function 
-	| App (FreeSym _, _, Some (Fld Loc)) -> true 
-	| _ -> false
-      )
-      gts
-  in
-  let reachwo_ax = List.map open_axiom (Axioms.reachwo_axioms ()) in
+  let basic_pt_flds = filter_terms_by_sort gts (Fld Loc) in
+  let reachwo_ax = List.map (open_axiom openFld) (Axioms.reachwo_axioms ()) in
   let defs, reachwo_ax1 = instantiate_with_terms false fs reachwo_ax basic_pt_flds in
   (* generate local instances of all axioms in which variables occur below function symbols *)
-  let open_axiom2 = function
-    | Binder (b, vs, f, a) ->
-	let fvars = vars_in_fun_terms f in
-	let vs' = List.filter (fun v -> not (IdSrtSet.mem v fvars)) vs in
-	Binder (b, vs', f, a)
-    | f -> f
-  in
-  let reachwo_ax2 = List.map open_axiom2 reachwo_ax1 in
+  let reachwo_ax2 = List.map (open_axiom openFunVars) reachwo_ax1 in
   let defs2, instances = instantiate_with_terms true fs reachwo_ax2 gts in
   defs @ defs2 @ fs, instances
 

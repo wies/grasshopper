@@ -46,7 +46,7 @@ let generate_instances useLocalInst axioms terms rep_map =
 	| _ -> terms
       in fold_terms tt [] axiom
     in
-    let is_local = 
+    let is_local () = 
       List.for_all 
 	(fun (vs, fn) ->
 	  TermSet.exists 
@@ -61,7 +61,7 @@ let generate_instances useLocalInst axioms terms rep_map =
 	    ground_terms)
 	fun_terms
     in
-    if not useLocalInst || is_local 
+    if not useLocalInst || is_local ()
     then ((*print_endline "\nSubstituting in:"; 
 	  print_form stdout axiom;
 	  print_endline "\nwith substitution:";
