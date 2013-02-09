@@ -37,8 +37,8 @@ let kwchar = idchar | '_' | ':'
     ] @ 
     (* term constructors *)
     List.map (fun sym -> str_of_symbol sym, SYMBOL(sym))
-      [Null; Read; Write; EntPnt; Empty; Union; Inter; Diff;
-       ReachWO; Elem; SubsetEq])
+      [Null; Read; Write; EntPnt; Empty; SetEnum; Union; Inter; Diff;
+       ReachWO; Elem; SubsetEq; Frame])
 }
  
 rule token = parse

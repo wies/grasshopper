@@ -14,10 +14,11 @@ type arity = sort list * sort
 type symbol =
   (* function symbols *)
   | Null | Read | Write | EntPnt
-  | Empty | Union | Inter | Diff
+  | Empty | SetEnum | Union | Inter | Diff
   (* predicate symbols *)
   | Eq
   | ReachWO
+  | Frame
   | Elem | SubsetEq 
   (* free constants, functions, and predicates *)
   | FreeSym of ident
@@ -101,15 +102,17 @@ let str_of_symbol = function
       then "store"
       else "write"
   | EntPnt -> "ep"
-  | Empty -> "{}"
-  | Union -> "+"
-  | Inter -> "&"
-  | Diff -> "-"
+  | Empty -> "emptyset"
+  | SetEnum -> "setenum"
+  | Union -> "union"
+  | Inter -> "inter"
+  | Diff -> "diff"
   (* predicate symbols *)
   | Eq -> "="
   | ReachWO -> "ReachWO"
-  | Elem -> ":"
-  | SubsetEq -> "<="
+  | Elem -> "elem"
+  | SubsetEq -> "subseteq"
+  | Frame -> "frame"
   (* free symbols *)
   | FreeSym id -> str_of_ident id
 
