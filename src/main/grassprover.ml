@@ -38,14 +38,16 @@ let process_input () =
   (*
   let sl = parse_input (fun lexbuf -> ParseSl.main LexSl.token lexbuf) in
   let _ = Debug.msg ("parsed: " ^ (Sl.to_string sl) ^ "\n") in*)
-  let fld = mk_free_const ~srt:(Fld Loc) (fresh_ident "f") in
+  let fld1 = mk_free_const ~srt:(Fld Loc) (fresh_ident "f") in
+  let fld2 = mk_free_const ~srt:(Fld Loc) (fresh_ident "g") in
   let loc1 = mk_free_const ~srt:Loc (fresh_ident "x") in
   let loc2 = mk_free_const ~srt:Loc (fresh_ident "y") in
   let loc3 = mk_free_const ~srt:Loc (fresh_ident "z") in
   let form = 
     mk_and 
-      [mk_eq (mk_read fld loc3) loc1;
-       mk_reachwo fld loc1 loc2 loc3] 
+      [mk_eq (mk_write fld1 loc1 loc2) fld2;
+       mk_eq (mk_read fld1 loc3) loc1;
+       mk_reachwo fld1 loc1 loc2 loc3] 
   in
   let _ = if!Debug.verbose then
     print_forms stdout [form] 

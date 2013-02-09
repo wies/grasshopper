@@ -92,8 +92,14 @@ let str_of_ident (name, n) =
 let str_of_symbol = function
   (* function symbols *)
   | Null -> "null"
-  | Read -> "select"
-  | Write -> "store"
+  | Read -> 
+      if !Config.encode_fields_as_arrays 
+      then "select"
+      else "read"
+  | Write -> 
+      if !Config.encode_fields_as_arrays 
+      then "store"
+      else "write"
   | EntPnt -> "ep"
   | Empty -> "{}"
   | Union -> "+"

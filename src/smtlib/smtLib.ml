@@ -40,7 +40,10 @@ let read session =
 let declare_sorts session =
   writeln session ("(declare-sort " ^ loc_sort_string ^ " 0)");
   writeln session ("(declare-sort " ^ set_sort_string ^ " 1)");
-  writeln session ("(define-sort " ^ fld_sort_string ^ " (X) (Array Loc X))")
+  if !Config.encode_fields_as_arrays then
+    writeln session ("(define-sort " ^ fld_sort_string ^ " (X) (Array Loc X))")
+  else 
+    writeln session ("(declare-sort " ^ fld_sort_string ^ " 1)")
 
 let start smt_cmd replay_file produce_models produce_interpolants = 
   let in_chan, out_chan = Unix.open_process smt_cmd in
@@ -70,7 +73,10 @@ let start smt_cmd replay_file produce_models produce_interpolants =
     begin
   *)
   writeln session "(set-option :mbqi true)";
-  writeln session "(set-logic AUFLIA)";
+  (* writeln session "(set-option :mbqi-max-iterations 1000000)"; *)
+  if !Config.encode_fields_as_arrays
+  then writeln session "(set-logic AUFLIA)"
+  else writeln session "(set-logic UF)";
   (*end;*)
   declare_sorts session;
   session
@@ -117,7 +123,7 @@ let declare session sign =
     match sym with
     (* Skip inbuilt symbols *)
     | Read 
-    | Write 
+    | Write when !Config.encode_fields_as_arrays -> () 
     | Eq -> ()
     | _ ->
 	let arg_sorts_str = String.concat " " (List.map (fun srt -> string_of_sort srt) arg_sorts) in

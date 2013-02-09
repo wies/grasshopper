@@ -51,8 +51,8 @@ let generate_instances useLocalInst axioms terms rep_map =
                   match t with 
                   | Var (v, _) when not (IdSet.mem v bv) -> 
                       let rep_class = TermMap.find (IdMap.find v subst_map) rep_map in
-                      true, Some rep_class :: vs
-                  | _ -> has_var, None :: vs
+                      true, rep_class :: vs
+                  | _ -> has_var, (TermSet.singleton t) :: vs
                 ) ts (false, [])
             in
             let new_terms = 
@@ -72,10 +72,8 @@ let generate_instances useLocalInst axioms terms rep_map =
 	    (function 
 	      | App (fn2, ts, _) when fn = fn2 -> 
 		  List.for_all2 
-		    (fun rep_class_opt t ->
-                      match rep_class_opt with
-                      | None -> true
-                      | Some rep_class -> TermSet.mem t rep_class
+		    (fun rep_class t ->
+                      TermSet.mem t rep_class
                     ) rep_classes ts
               |	t -> false)
             ground_terms)
