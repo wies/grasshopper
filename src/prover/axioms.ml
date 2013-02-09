@@ -2,14 +2,14 @@ open Form
 open FormUtil
 open Config
 
-let l1 = fresh_ident "x", Loc
-let l2 = fresh_ident "y", Loc
-let l3 = fresh_ident "z", Loc
-let l4 = fresh_ident "u", Loc
-let l5 = fresh_ident "v", Loc
-let f1 = fresh_ident "f", Fld Loc
-let f2 = fresh_ident "g", Fld Loc
-let s1 = fresh_ident "X", Set Loc 
+let l1 = fresh_ident "?x", Loc
+let l2 = fresh_ident "?y", Loc
+let l3 = fresh_ident "?z", Loc
+let l4 = fresh_ident "?u", Loc
+let l5 = fresh_ident "?v", Loc
+let f1 = fresh_ident "?f", Fld Loc
+let f2 = fresh_ident "?g", Fld Loc
+let s1 = fresh_ident "?X", Set Loc 
 
 let loc1 = mk_var ~srt:(snd l1) (fst l1)
 let loc2 = mk_var ~srt:(snd l2) (fst l2)
