@@ -59,6 +59,8 @@ let mk_const ?srt sym = App (sym, [], srt)
 
 let mk_var ?srt id =  Var (id, srt)
 
+let mk_free_app ?srt id ts = App (FreeSym id, ts, srt)
+
 let mk_app ?srt sym ts = App (sym, ts, srt)
 
 let mk_atom sym ts = Atom (mk_app ~srt:Bool sym ts)
@@ -104,6 +106,7 @@ let mk_subseteq s t = mk_atom SubsetEq [s; t]
 
 let mk_true = BoolOp (And, [])
 let mk_false = BoolOp (Or, [])
+let mk_bool b = if b then mk_true else mk_false
 
 let mk_and = function
   | [f] -> f

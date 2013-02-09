@@ -1,4 +1,5 @@
 open Form
+open FormUtil
 open Axioms
 open Config
 
@@ -8,10 +9,10 @@ type stmnt =
   | New of ident
   | Dispose of ident
   | Assume of form
-  | Label of string
 
 type path = stmnt list
 
+(*
 let add_jp_terms pf_a pf_b =
   let consts f =
     IdMap.fold 
@@ -33,15 +34,16 @@ let add_jp_terms pf_a pf_b =
     let new_cs = IdSet.remove c cs in
     let new_acc = 
       IdSet.fold (fun fn acc ->
-	IdSet.fold 
-	  (fun c1 acc ->
-	    let eq = mk_eq (jp fn (mk_const c) (mk_const c1)) null in
-	    mk_or [eq; mk_not eq] :: acc)
-	  new_cs acc)
-	shared_funs acc
+        IdSet.fold 
+          (fun c1 acc ->
+            let eq = mk_eq (jp fn (mk_const c) (mk_const c1)) null in
+            mk_or [eq; mk_not eq] :: acc)
+          new_cs acc)
+        shared_funs acc
     in jpt new_acc new_cs
   in 
   pf_a @ jpt [] shared_consts, pf_b
+*)
 
 let ssa_partial ident_map path =
   let subst_ident id ident_map =
@@ -59,48 +61,72 @@ let ssa_partial ident_map path =
     let name, m = subst_ident id ident_map in
     let new_id = (name, m + 1) in
     let new_ident_map = 
-      (if !with_jp_axioms then IdMap.add (jp_id id) (jp_id new_id) else (fun m -> m))
-	(IdMap.add (reach_id id) (reach_id new_id)
-	   (IdMap.add id new_id ident_map))
+       (*(if !with_jp_axioms then IdMap.add (jp_id id) (jp_id new_id) else (fun m -> m)*)
+           (*(IdMap.add (reach_id id) (reach_id new_id)*)
+           (IdMap.add id new_id ident_map)
     in
     new_id, new_ident_map
   in
-  let rec pf segs fs ident_map = function
-    | [] -> (List.rev (List.rev fs :: segs), ident_map)
+  let rec pf acc ident_map = function
+    | [] -> (List.rev acc, ident_map)
     | st :: stmnts -> match st with
       | Assume f ->
-	  pf segs (subst_id ident_map f :: fs) ident_map stmnts
+          pf (subst_id ident_map f :: acc) ident_map stmnts
       | VarUpdate (id, t) ->
-	  let t1 = subst_id_term ident_map t in
-	  let id1, ident_map1 = fresh_ident id ident_map in
-	  pf segs (mk_eq (mk_const id1) t1 :: fs) ident_map1 stmnts
+          let t1 = subst_id_term ident_map t in
+          let id1, ident_map1 = fresh_ident id ident_map in
+            pf (mk_eq (mk_free_const id1) t1 :: acc) ident_map1 stmnts
       | FunUpdate (id0, ind, upd) ->
-	  let ind1 = subst_id_term ident_map ind in
-	  let upd1 = subst_id_term ident_map upd in
-	  let id = subst_ident id0 ident_map in
-	  let id1, ident_map1 = fresh_fct_ident id0 ident_map in
-	  let axioms = update_axioms id id1 ind1 upd1 in
-	  pf segs (List.rev_append axioms fs) ident_map1 stmnts
-      |	New id ->
-	  let id1, ident_map1 = fresh_ident id ident_map in
-	  let alloc = subst_ident alloc_id ident_map1 in
-	  let alloc1, ident_map2 = fresh_ident alloc_id ident_map1 in
-	  let axioms = alloc_update_axioms id1 alloc alloc1 in
-	  pf segs (List.rev_append axioms fs) ident_map2 stmnts
-      |	Dispose id ->
-      let id1 = (subst_ident id ident_map) in
-	  let alloc = subst_ident alloc_id ident_map in
-	  let alloc1, ident_map = fresh_ident alloc_id ident_map in
-	  let axioms = alloc_dispose_axioms id1 alloc alloc1 in
-	  pf segs (List.rev_append axioms fs) ident_map stmnts
-      |	Label _ ->
-	  pf (List.rev fs :: segs) [] ident_map stmnts
+          (*let ind1 = subst_id_term ident_map ind in*)
+          let upd1 = subst_id_term ident_map upd in
+          let id = subst_ident id0 ident_map in
+          let id1, ident_map1 = fresh_fct_ident id0 ident_map in
+          let f =
+            mk_eq
+              (mk_free_const id1)
+              (mk_write ind (mk_free_const id) upd1)
+          in
+            pf (f :: acc) ident_map1 stmnts
+          (*let axioms = update_axioms id id1 ind1 upd1 in
+          pf (List.rev_append axioms acc) ident_map1 stmnts*)
+      | New id ->
+          let id1, ident_map1 = fresh_ident id ident_map in
+          let alloc = subst_ident alloc_id ident_map1 in
+          let alloc1, ident_map2 = fresh_ident alloc_id ident_map1 in
+          let tmp = FormUtil.fresh_ident "tmpSet" in
+          let sglt = mk_singleton tmp id1 in
+          let f =
+            mk_eq
+              (mk_free_const alloc1)
+              (mk_union [mk_free_const alloc; mk_free_const tmp])
+          in
+            pf (f :: sglt :: acc) ident_map2 stmnts
+          (*
+          let axioms = alloc_update_axioms id1 alloc alloc1 in
+            pf (List.rev_append axioms acc) ident_map2 stmnts *)
+      | Dispose id ->
+          let id1 = (subst_ident id ident_map) in
+          let alloc = subst_ident alloc_id ident_map in
+          let alloc1, ident_map = fresh_ident alloc_id ident_map in
+          let tmp = FormUtil.fresh_ident "tmpSet" in
+          let sglt = mk_singleton tmp id1 in
+          let f =
+            mk_eq
+              (mk_free_const alloc1)
+              (mk_diff (mk_free_const alloc) (mk_free_const tmp))
+          in
+            pf (f :: sglt :: acc) ident_map stmnts
+          (*
+          let axioms = alloc_dispose_axioms id1 alloc alloc1 in
+            pf (List.rev_append axioms acc) ident_map stmnts
+          *)
   in
-    pf [] [] ident_map path
+    pf [] ident_map path
 
 
 let ssa_form path = fst (ssa_partial IdMap.empty path)
 
+(*
 let path_form path =
   let pf_a, pf_b =
     match ssa_form path with
@@ -114,4 +140,4 @@ let path_form path =
   match add_axioms [pf_a; pf_b] with
   | [a; b] -> (a, b)
   | _ -> failwith "add_axioms did not return two elements"
-    
+*)  

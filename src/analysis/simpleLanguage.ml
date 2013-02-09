@@ -1,4 +1,5 @@
 open Form
+open FormUtil
 open Axioms
 
 type expr =
@@ -150,19 +151,16 @@ let to_stmnt s = match s with
 
 let convert stmnt subst =
   let (cstr, subst) = Stmnt.ssa_partial subst [(to_stmnt stmnt)] in
-    (Form.smk_and (List.flatten cstr), subst)
+    (smk_and cstr, subst)
 
 let latest_alloc subst =
   if IdMap.mem alloc_id subst
   then IdMap.find alloc_id subst
   else alloc_id
 
-let to_lolli heap sl =
-  Sl.to_lolli heap sl
+let to_lolli = Sl.to_grass
 
-let to_lolli_negated heap sl =
-  Sl.to_lolli_negated heap sl
-
+let to_lolli_negated = Sl.to_grass_negated
 
 let unify_subst subst1 subst2 =
   let cstr_for id1 id2 =
@@ -173,8 +171,8 @@ let unify_subst subst1 subst2 =
     in
     let mk_axioms2 args =
       mk_eq
-        (mk_app id1 args)
-        (mk_app id2 args)
+        (mk_free_app id1 args)
+        (mk_free_app id2 args)
     in
     let (ax, cstr) =
       (* is a predicate or a cst ? *)
@@ -286,12 +284,26 @@ let check_entailment what pre_sl stack post_sl =
     | Some false -> ()
     | None -> failwith ("cannot prove assertion (unk) for " ^ what)
 
+(* Checks whether the frame exists *)
+let is_frame_defined pre_sl pathf post_sl subst =
+  let pre = Sl.to_lolli pre_heap pre_sl in
+  let post = Form.subst_id subst (Sl.to_lolli_not_contained post_heap post_sl) in
+  let query = mk_frame_query pre pathf post subst in
+    match Prover.satisfiable query with
+    | Some b -> not b
+    | None -> failwith "is_frame_defined: Prover returned None"
+
+let is_frame_defined_path pre_sl path post_sl =
+  let pathf, subst = ssa_partial IdMap.empty path in
+    is_frame_defined pre_sl pathf post_sl subst
+
 (* checks is a frame exists (non-tight entailment) *)
 let check_if_frame_exists pre stack sl =
   let subst = DecisionStack.get_subst stack in
   let pathf = DecisionStack.get_form stack in
-    Frame.is_frame_defined pre pathf sl subst
+    is_frame_defined pre pathf sl subst
 
+(*
 let compute_frames pre_sl stack post_sl =
   Debug.msg ("compute frames: precondition " ^ (Sl.to_string pre_sl) ^ "\n");
   Debug.msg ("compute frames: postcondition " ^ (Sl.to_string post_sl) ^ "\n");
@@ -304,6 +316,7 @@ let compute_frames pre_sl stack post_sl =
   let query = Frame.mk_frame_query pre path post subst in
   let frames = Frame.infer_frame_loop subst query in
     frames
+*)
 
 (* ... *)
 let check_procedure proceduresMap name =
@@ -410,6 +423,12 @@ let check_procedure proceduresMap name =
       ) :: (Axioms.ep_axioms fp1 (Axioms.fun_of_reach r1))
   in
 
+  let last_alloc subst = 
+    if IdMap.mem alloc_id subst
+    then IdMap.find alloc_id subst
+    else alloc_id
+  in
+
   (* assume pre,stack |= sl_1 * F  for some frame F
    * then we want to replace sl_1 by sl_2 (e.g. method call)
    * we need to:
@@ -425,12 +444,12 @@ let check_procedure proceduresMap name =
       begin
         (* Sl.pts + Sl.prev_pts *)
         let subst = DecisionStack.get_subst stack in
-        let alloc1 = Frame.last_alloc subst in
+        let alloc1 = last_alloc subst in
         let fp = fresh_ident "footprint" in
         let fp2 = fresh_ident "footprint" in
         let sl_1f = Form.subst_id subst (Sl.to_lolli fp sl_1) in
         let sl_2f = Form.subst_id subst2 (Sl.to_lolli fp2 sl_2) in
-        let alloc2 = Frame.last_alloc subst2 in
+        let alloc2 = last_alloc subst2 in
         let get_pts pts subst = try IdMap.find pts subst with Not_found -> pts in
         let get_next = get_pts Sl.pts in
         let get_prev = get_pts Sl.prev_pts in

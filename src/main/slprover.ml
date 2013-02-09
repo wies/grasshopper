@@ -1,5 +1,6 @@
 open Form
-open Stmnt
+open FormUtil
+(*open Stmnt*)
 open Axioms
 open Util
 open Logging
@@ -42,13 +43,13 @@ let parse_input parse_fct =
   let file = List.hd !input_file in
     parse_given_input parse_fct file
 
-let heap = Form.fresh_ident "D"
+let heap = fresh_ident "D"
 
 let compute_sl_sat () =
   (*print_endline "parsing";*)
   let sl = parse_input (fun lexbuf -> ParseSl.main LexSl.token lexbuf) in
   let _ = Debug.msg ("parsed: " ^ (Sl.to_string sl) ^ "\n") in
-  let form = Sl.to_lolli_with_axioms heap sl in
+  let form = Sl.to_grass(*_with_axioms*) heap sl in
   let _ = if !Debug.verbose then
     begin
       print_endline "converted: ";
@@ -56,7 +57,7 @@ let compute_sl_sat () =
     end
   in
   (*print_endline "to prover";*)
-  let res = Prover.satisfiable form in
+  let res = Prover.check_sat form in
     Printf.fprintf stdout "accumulated time: %.2fs\n" !Util.measured_time;
     match res with
     | Some true -> print_endline "sat"
@@ -77,6 +78,8 @@ let compute_sl_entails () =
 
 (* A |= B * frame *)
 let compute_sl_frame () =
+  failwith "TODO compute_sl_frame"
+  (*
   let pre_sl  = parse_given_input (fun lexbuf -> ParseSl.main LexSl.token lexbuf) (List.nth !input_file 0) in
   let post_sl = parse_given_input (fun lexbuf -> ParseSl.main LexSl.token lexbuf) (List.nth !input_file 1) in
   let res = Frame.infer_frame pre_sl [] post_sl in
@@ -86,6 +89,7 @@ let compute_sl_frame () =
       print_endline "frames:";
       List.iter (fun frame -> print_endline ("  " ^ (Sl.to_string frame))) frames
     | None -> print_endline "Error not entailed!"
+  *)
 
 let _ =
   try
@@ -93,7 +97,7 @@ let _ =
     input_file := List.rev !input_file;
     if !input_file = [] then cmd_line_error "input file missing" else
       begin
-        Config.default_opts_for_sl ();
+        (*Config.default_opts_for_sl ();*)
         match !mode with
         | SlSat -> compute_sl_sat ()
         | SlEntails -> compute_sl_entails ()

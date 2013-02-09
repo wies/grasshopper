@@ -1,4 +1,5 @@
 open Form
+open FormUtil
 open Axioms
 open Stmnt
 
@@ -16,22 +17,22 @@ let same_heap_axioms subst =
     then IdMap.find alloc_id subst
     else alloc_id
   in
-  let a_x = mk_pred pre_heap [var1] in
-  let b_x = mk_pred post_heap [var1] in
-    [ Comment ("same_heap_content_pre" , mk_equiv a_x (mk_pred first_alloc [var1]));
-      Comment ("same_heap_content_post", mk_equiv b_x (mk_pred last_alloc [var1])) ]
+  (*
+    [ Comment ("same_heap_content_pre" , mk_eq (mk_free_const pre_heap) (mk_free_const first_alloc));
+      Comment ("same_heap_content_post", mk_eq (mk_free_const post_heap) (mk_free_const last_alloc)) ]
+  *)
+    [ mk_eq (mk_free_const pre_heap) (mk_free_const first_alloc);
+      mk_eq (mk_free_const post_heap) (mk_free_const last_alloc) ]
 
 let mk_entailment_query pre_sl path post_sl =
-  let pre = Sl.to_lolli pre_heap pre_sl in
+  let pre = Sl.to_grass pre_heap pre_sl in
 
   let pathf, subst = ssa_partial IdMap.empty path in
-  assert (List.length pathf = 1);
-  let pathf = List.hd pathf in
 
-  let post = Form.subst_id subst (Sl.to_lolli_negated post_heap post_sl) in
+  let post = subst_id subst (Sl.to_grass_negated post_heap post_sl) in
   
   (* query *)
-  let query = smk_and ( (Sl.make_axioms (Form.mk_and (pre :: post :: pathf))) ::
+  let query = smk_and ( (*Sl.make_axioms*) (mk_and (pre :: post :: pathf)) ::
                         (same_heap_axioms subst) )
   in
   let _ = if !Debug.verbose then
@@ -46,4 +47,4 @@ let mk_entailment_query pre_sl path post_sl =
 let check_entailment pre_sl path post_sl =
   let mk_query () = mk_entailment_query pre_sl path post_sl in
   let query = Util.measure_call "translation" mk_query () in
-    Prover.satisfiable query
+    Prover.check_sat query

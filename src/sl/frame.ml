@@ -1,4 +1,5 @@
 open Form
+open FormUtil
 open Axioms
 open Stmnt
 open Entails
@@ -19,11 +20,13 @@ let implies_heap_content subst =
    *)
   let first_alloc = alloc_id in
   let last_alloc = last_alloc subst in
-  let a_x = mk_pred pre_heap [var1] in
-  let b_x = mk_pred post_heap [var1] in
     (* here the alloc/free in the path are part of the LHS *)
+    (*
     [ Comment ("same_heap_content_pre" , mk_equiv (mk_pred first_alloc [var1]) a_x);
       Comment ("implies_heap_content_post", mk_implies b_x (mk_pred last_alloc [var1])) ]
+    *)
+    [ mk_eq (mk_free_const pre_heap) (mk_free_const first_alloc);
+      mk_subseteq (mk_free_const post_heap) (mk_free_const last_alloc) ]
 
 (* map: int -> id list *)
 let get_constants model =
@@ -320,26 +323,9 @@ let mk_frame_query pre pathf post subst =
 let infer_frame pre_sl path post_sl =
   let pre = Sl.to_lolli pre_heap pre_sl in
   let pathf, subst = ssa_partial IdMap.empty path in
-  assert (List.length pathf = 1);
-  let pathf = List.hd pathf in
   let post = Form.subst_id subst (Sl.to_lolli post_heap post_sl) in
   let query = mk_frame_query pre pathf post subst in
     infer_frame_loop subst query
-
-(* Checks whether the frame exists *)
-let is_frame_defined pre_sl pathf post_sl subst =
-  let pre = Sl.to_lolli pre_heap pre_sl in
-  let post = Form.subst_id subst (Sl.to_lolli_not_contained post_heap post_sl) in
-  let query = mk_frame_query pre pathf post subst in
-    match Prover.satisfiable query with
-    | Some b -> not b
-    | None -> failwith "is_frame_defined: Prover returned None"
-
-let is_frame_defined_path pre_sl path post_sl =
-  let pathf, subst = ssa_partial IdMap.empty path in
-  assert (List.length pathf = 1);
-  let pathf = List.hd pathf in
-    is_frame_defined pre_sl pathf post_sl subst
 
 (* TODO the normal for with disjunctions! *)
 let combine_frames_with_f sll frames =
