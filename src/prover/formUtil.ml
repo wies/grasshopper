@@ -94,6 +94,12 @@ let mk_reach fld t1 t2 = mk_reachwo fld t1 t2 t2
 
 let mk_empty srt = mk_app ?srt:srt Empty []
 
+let mk_setenum ts = 
+  let srt = match sort_ofs ts with
+  | Some esrt -> Set esrt
+  | None -> None
+  in mk_app ?srt:srt SetEnum ts
+
 let mk_inter sets = mk_app ?srt:(sort_ofs sets) Inter sets
 
 let mk_union sets = mk_app ?srt:(sort_ofs sets) Union sets
@@ -103,6 +109,8 @@ let mk_diff s t = mk_app ?srt:(sort_of s) Diff [s; t]
 let mk_elem e s = mk_atom Elem [e; s]
 
 let mk_subseteq s t = mk_atom SubsetEq [s; t]
+
+let mk_frame x x' a a' f f' = mk_atom Frame [x; x'; a; a'; f; f']
 
 let mk_true = BoolOp (And, [])
 let mk_false = BoolOp (Or, [])
