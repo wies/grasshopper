@@ -46,6 +46,7 @@ module DecisionStack =
   struct
 
     type subst = ident IdMap.t
+    type signatures = arity IdMap.t
 
     let subst_to_string subst =
       String.concat "\n"
@@ -55,7 +56,7 @@ module DecisionStack =
           )
           (IdMap.bindings subst) )
 
-    type kind = Step of form * subst
+    type kind = Step of form * subst * signatures
               | Branch of form
               | Axiom of form
               (*TODO a cut thing (drop everything before?? for calls, loops, ...) *)
@@ -71,7 +72,7 @@ module DecisionStack =
       | _ -> false
 
     let kind_to_string k = match k with
-      | Step (f, _) -> "Step: " ^ (string_of_form f)
+      | Step (f, _, _) -> "Step: " ^ (string_of_form f)
       | Branch f -> "Branch: " ^ (string_of_form f)
       | Axiom f -> "Axiom: " ^ (string_of_form f)
 
@@ -82,7 +83,7 @@ module DecisionStack =
     let to_string stack =
       String.concat "\n" (List.map kind_to_string stack)
 
-    let step stack f s = (Step (f, s)) :: stack
+    let step stack f s t = (Step (f, s, t)) :: stack
 
     let axiom stack f = (Axiom f) :: stack
 
@@ -105,7 +106,7 @@ module DecisionStack =
 
     let get_form stack =
       let get k = match k with
-        | Step (f, _) -> f
+        | Step (f, _, _) -> f
         | Branch f -> f
         | Axiom f -> f
       in
@@ -123,7 +124,14 @@ module DecisionStack =
     let get_subst stack =
       try 
         match List.find is_step stack with
-        | Step (m, s) -> s
+        | Step (_, s, _) -> s
+        | _ -> failwith "is_step ?!?"
+      with Not_found -> IdMap.empty
+    
+    let get_sign stack =
+      try 
+        match List.find is_step stack with
+        | Step (_, _, s) -> s
         | _ -> failwith "is_step ?!?"
       with Not_found -> IdMap.empty
 
@@ -162,32 +170,23 @@ let to_lolli = Sl.to_grass
 
 let to_lolli_negated = Sl.to_grass_negated
 
-let unify_subst subst1 subst2 =
-  let cstr_for id1 id2 =
-    let mk_axioms args =
-      mk_equiv
-        (mk_pred id1 args)
-        (mk_pred id2 args)
+let unify_subst sig1 sig2 subst1 subst2 =
+  let cstr_for (argsT, tpe)(*signature*) id1 id2 =
+    let args = List.map (fun t -> (fresh_ident "v", t)) argsT in
+    let argsTerm = List.map (fun (id, t) -> mk_var ~srt:t id) args in
+    let f = match tpe with
+      | Bool ->
+        mk_equiv
+          (mk_pred id1 argsTerm)
+          (mk_pred id2 argsTerm)
+      | Fld Loc ->
+        failwith "TODO: also reach"
+      | _ ->
+        mk_eq
+          (mk_free_app id1 argsTerm)
+          (mk_free_app id2 argsTerm)
     in
-    let mk_axioms2 args =
-      mk_eq
-        (mk_free_app id1 args)
-        (mk_free_app id2 args)
-    in
-    let (ax, cstr) =
-      (* is a predicate or a cst ? *)
-      if Axioms.is_reach id1 then
-        ([mk_axioms [var1; var2; var3]], [])
-      else if Axioms.is_jp id1 then
-        ([mk_axioms [var1; var2]], [])
-      else if fst id1 = fst Axioms.alloc_id then
-        ([mk_axioms [var1]], [])
-      else if fst id1 = fst Sl.pts ||
-              fst id1 = fst Sl.prev_pts then
-        ([mk_axioms2 [var1]], [])
-      else (* constants *)
-        ([], [mk_eq (mk_const id1) (mk_const id2)])
-    in
+    let (ax, cstr) = if args <> [] then ([mk_forall args f], []) else ([], [f]) in
     let v1 = snd id1 in
     let v2 = snd id2 in
       if v1 = v2 then (id1, [], [], [], [])
@@ -196,20 +195,35 @@ let unify_subst subst1 subst2 =
   in
   let keys = IdMap.fold (fun t _ acc -> IdSet.add t acc) subst1 IdSet.empty in
   let keys = IdMap.fold (fun t _ acc -> IdSet.add t acc) subst2 keys in
-  let keys = IdSet.remove (Axioms.reach_id Sl.prev_pts) keys in
+  (*let keys = IdSet.remove (Axioms.reach_id Sl.prev_pts) keys in TODO why removed ?? *)
+  let signatures =
+    IdMap.fold
+      (fun id sign acc ->
+        if IdMap.mem id acc then
+          begin
+            assert (sign = IdMap.find id acc);
+            acc
+          end
+        else IdMap.add id sign acc
+      )
+      sig1
+      sig2
+  in
   let get subst id = try IdMap.find id subst with Not_found -> id in
     IdSet.fold
-      (fun id (as1, cs1, as2, cs2, s) ->
+      (fun id (as1, cs1, as2, cs2, s, si) ->
         (* take the most recent version, if does not exists then ok. *)
+        let sign = IdMap.find id signatures in
         let id1 = get subst1 id in
         let id2 = get subst2 id in
-        let (id3, a1, c1, a2, c2) = cstr_for id1 id2 in
+        let (id3, a1, c1, a2, c2) = cstr_for sign id1 id2 in
           ( a1 @ as1, c1 @ cs1,
             a2 @ as2, c2 @ cs2,
-            IdMap.add id id3 s )
+            IdMap.add id id3 s,
+            si )
       )
       keys
-      ([], [], [], [], IdMap.empty)
+      ([], [], [], [], IdMap.empty, signatures)
 
 (* Returns a subst that unifies the two branches of an if
  * i.e. if something is changed in at least one branch then
@@ -235,7 +249,10 @@ let unify stack branch1 branch2 =
   (* substitutions *)
   let s1 = DecisionStack.get_subst branch1 in
   let s2 = DecisionStack.get_subst branch2 in
-  let (as1, cs1, as2, cs2, s3) = unify_subst s1 s2 in
+  (* signatures *)
+  let sig1 = DecisionStack.get_sign branch1 in
+  let sig2 = DecisionStack.get_sign branch2 in
+  let (as1, cs1, as2, cs2, s3, sig3) = unify_subst sig1 sig2 s1 s2 in
   (* put things together *)
   let all_axioms =
     (List.map (fun a -> mk_implies c1 a) as1) @
@@ -246,13 +263,13 @@ let unify stack branch1 branch2 =
   let b1 = smk_and (c1 :: cs1 @ stp1) in
   let b2 = smk_and (c2 :: cs2 @ stp2) in
   let both_branches = mk_or [b1; b2] in
-    DecisionStack.step stack_with_axioms both_branches s3
+    DecisionStack.step stack_with_axioms both_branches s3 sig3
   
-let add_to_stack stack subst cstr =
+let add_to_stack stack sign subst cstr =
   let (ax, fs) = Axioms.extract_axioms (Sl.get_clauses cstr) in
     List.fold_left
       DecisionStack.guard_and_add
-      (DecisionStack.step stack (smk_and fs) subst)
+      (DecisionStack.step stack (smk_and fs) subst sign)
       ax
 
 let check_entailment what pre_sl stack post_sl =
@@ -546,14 +563,21 @@ let check_procedure proceduresMap name =
   let rec check pre stmnt =
     let rec traverse stack stmnt = match stmnt with
       | FunUpdate (p, _, Term _) when p = Sl.prev_pts ->
+        failwith "TODO copy from Stmnt";
         let (c, s) = convert stmnt (DecisionStack.get_subst stack) in
         let clauses = Sl.get_clauses c in
         let reach_free = List.filter (fun c -> IdMap.for_all (fun id _ -> not (Axioms.is_reach id)) (Form.sign c)) clauses in
           add_to_stack stack s (Form.mk_and reach_free)
-      | VarUpdate (_, Term _) | FunUpdate (_, _, Term _) | Dispose _ ->
+      | VarUpdate (_, Term _) ->
+        failwith "TODO copy from Stmnt"
+      | FunUpdate (_, _, Term _) ->
+        failwith "TODO copy from Stmnt"
+      | Dispose _ ->
+        failwith "TODO copy from Stmnt";
         let (c, s) = convert stmnt (DecisionStack.get_subst stack) in
           add_to_stack stack s c
       | New v ->
+        failwith "TODO copy from Stmnt";
         let (c, s) = convert stmnt (DecisionStack.get_subst stack) in
         (* add a skolem cst v |-> _ *)
         let v2 = IdMap.find v s in

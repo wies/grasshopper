@@ -53,15 +53,6 @@ let g x = mk_read fld2 x
 let reachwo = mk_reachwo fld1
 let reach = mk_reach fld1
 
-(* TODO not the best way ... *)
-let mk_singleton set x =
-  mk_forall
-    [l1]
-    (mk_equiv
-      (mk_elem loc1 (mk_free_const set))
-      (mk_eq loc1 (mk_free_const x))
-    )
-
 let write_axioms () =
   let new_fld1 = mk_write fld1 loc1 loc2 in
   let f_upd1 = 

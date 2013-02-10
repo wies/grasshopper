@@ -184,7 +184,7 @@ let to_form set_fct domain f =
     | Emp -> (FormUtil.mk_true, empty domain, IdSet.empty)
     | PtsTo (h, id1, id2) ->
         ( FormUtil.mk_eq (FormUtil.mk_read (to_field h) (cst id1)) (cst id2),
-          Axioms.mk_singleton domain id1,
+          FormUtil.mk_eq (cst domain) (FormUtil.mk_setenum [cst id1]),
           IdSet.empty
         )
     | List (id1, id2) ->
@@ -315,7 +315,7 @@ let skolemize f =
       | Some id -> id
       | None -> FormUtil.fresh_ident skolemCst
     in
-    let term = FormUtil.mk_app ?srt:(Some tpe) (Form.FreeSym id) (List.map mk_v u_vars) in
+    let term = FormUtil.mk_free_app ?srt:(Some tpe) id (List.map mk_v u_vars) in
       top := (id, srts, tpe) :: !top;
       term
   in
