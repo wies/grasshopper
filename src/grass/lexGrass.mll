@@ -29,6 +29,7 @@ let kwchar = idchar | '_' | ':'
       "true", BOOL_VAL(true);
       "false", BOOL_VAL(false);
       (* commands *)
+      "assert", ASSERT;
       "check-sat", CHECK_SAT_CMD;
       "get-model", GET_MODEL_CMD;
       "exit", EXIT_CMD;
@@ -44,7 +45,7 @@ let kwchar = idchar | '_' | ':'
 rule token = parse
   [' ' '\t' '\n'] { token lexbuf }
 | "//" [^ '\n']* {token lexbuf }
-| '=' { Symbol(Eq) }
+| '=' { SYMBOL(Eq) }
 | '!' { BANG }
 | '(' { LPAREN }
 | ')' { RPAREN }

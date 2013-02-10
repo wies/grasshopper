@@ -96,7 +96,7 @@ let mk_empty srt = mk_app ?srt:srt Empty []
 
 let mk_setenum ts = 
   let srt = match sort_ofs ts with
-  | Some esrt -> Set esrt
+  | Some esrt -> Some (Set esrt)
   | None -> None
   in mk_app ?srt:srt SetEnum ts
 
