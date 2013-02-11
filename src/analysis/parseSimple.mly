@@ -92,8 +92,8 @@ stmnt:
 | NEW TIDENT SEMICOLON { New (mk_ident $2) }
 | DISPOSE TIDENT SEMICOLON { Dispose (mk_ident $2) }
 | pterm COLONEQ rhs SEMICOLON { match $1 with
-                                | Form.Const id -> VarUpdate (id, $3)
-                                | Form.FunApp (id, [arg]) -> FunUpdate (id, arg, $3)
+                                | Form.App (Form.FreeSym id, [], _) -> VarUpdate (id, $3)
+                                | Form.App (Form.Read, [fld; Form.App (Form.FreeSym id, [], _)], _) -> FunUpdate (id, fld, $3)
                                 | _ -> failwith "pterm rule returned something strange"
                               }
 | ASSUME sl_form SEMICOLON { Assume $2 }
@@ -101,7 +101,7 @@ stmnt:
 | IF LPAREN expr RPAREN stmnt ELSE stmnt { Ite ($3, $5, $7) }
 | WHILE LPAREN expr RPAREN sl_form LBRACKET path RBRACKET { While ($3, $5, Block $7) }
 | RETURN pterm SEMICOLON { Return $2 }
-| call SEMICOLON { VarUpdate (Form.mk_ident "no_return", $1) }
+| call SEMICOLON { VarUpdate (FormUtil.mk_ident "no_return", $1) }
 | LBRACKET path RBRACKET { Block $2 }
 ;
 
@@ -119,24 +119,24 @@ argsCall:
 ;
 
 pterm:
-| TIDENT DOT NEXT { Form.mk_app pts [Form.mk_const (mk_ident $1)] }
-| TIDENT DOT PREV { Form.mk_app prev_pts [Form.mk_const (mk_ident $1)] }
-| TIDENT { Form.mk_const (mk_ident $1) }
+| TIDENT DOT NEXT { FormUtil.mk_read fpts (FormUtil.mk_free_const (mk_ident $1)) }
+| TIDENT DOT PREV { FormUtil.mk_read fprev_pts (FormUtil.mk_free_const (mk_ident $1)) }
+| TIDENT { FormUtil.mk_free_const (mk_ident $1) }
 | LPAREN pterm RPAREN { $2 }
 ;
 
 expr:
 | LPAREN expr RPAREN { $2 }
-| NOT expr { Form.mk_not $2 }
-| expr AND expr { Form.mk_and [$1; $3] }
-| expr OR expr { Form.mk_or [$1; $3] }
+| NOT expr { FormUtil.mk_not $2 }
+| expr AND expr { FormUtil.mk_and [$1; $3] }
+| expr OR expr { FormUtil.mk_or [$1; $3] }
 | atom { $1 }
 ;
 
 atom:
-| TRUE { Form.mk_true }
-| FALSE { Form.mk_false }
-| pterm EQ pterm { Form.mk_eq $1 $3 }
-| pterm NEQ pterm { Form.mk_not (Form.mk_eq $1 $3) }
-| PIDENT args { Form.mk_pred (mk_ident $1) (List.map (fun t -> Form.Const t) $2) }
+| TRUE { FormUtil.mk_true }
+| FALSE { FormUtil.mk_false }
+| pterm EQ pterm { FormUtil.mk_eq $1 $3 }
+| pterm NEQ pterm { FormUtil.mk_not (FormUtil.mk_eq $1 $3) }
+| PIDENT args { FormUtil.mk_pred (mk_ident $1) (List.map (fun t -> FormUtil.mk_free_const t) $2) }
 ;

@@ -34,7 +34,6 @@ let vc_gen file =
     List.iter (fun p -> check_procedure procMap p.name) procs
 
 let _ =
-  Config.default_opts_for_sl ();
   try
     Arg.parse cmd_options (fun s -> input_file := s) usage_message;
     if !input_file = ""

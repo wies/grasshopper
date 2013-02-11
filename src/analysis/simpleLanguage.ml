@@ -167,8 +167,8 @@ let latest_alloc subst =
   else alloc_id
 
 let to_lolli = Sl.to_grass
-
 let to_lolli_negated = Sl.to_grass_negated
+let to_lolli_not_contained = Sl.to_grass_not_contained
 
 let unify_subst sig1 sig2 subst1 subst2 =
   let cstr_for (argsT, tpe)(*signature*) id1 id2 =
@@ -195,7 +195,7 @@ let unify_subst sig1 sig2 subst1 subst2 =
   in
   let keys = IdMap.fold (fun t _ acc -> IdSet.add t acc) subst1 IdSet.empty in
   let keys = IdMap.fold (fun t _ acc -> IdSet.add t acc) subst2 keys in
-  (*let keys = IdSet.remove (Axioms.reach_id Sl.prev_pts) keys in TODO why removed ?? *)
+  (*let keys = IdSet.remove (reach_id Sl.prev_pts) keys in TODO why removed ?? *)
   let signatures =
     IdMap.fold
       (fun id sign acc ->
@@ -265,8 +265,8 @@ let unify stack branch1 branch2 =
   let both_branches = mk_or [b1; b2] in
     DecisionStack.step stack_with_axioms both_branches s3 sig3
   
-let add_to_stack stack sign subst cstr =
-  let (ax, fs) = Axioms.extract_axioms (Sl.get_clauses cstr) in
+let add_to_stack stack subst sign cstr =
+  let (ax, fs) = extract_axioms (Sl.get_clauses cstr) in
     List.fold_left
       DecisionStack.guard_and_add
       (DecisionStack.step stack (smk_and fs) subst sign)
@@ -285,8 +285,8 @@ let check_entailment what pre_sl stack post_sl =
   let post_neg = subst_id subst (to_lolli_negated Entails.post_heap post_sl) in
   let heap_content = Entails.same_heap_axioms subst in
   let wo_axioms = pre :: pathf @ [post_neg] in
-  let axioms = Sl.make_axioms (mk_and wo_axioms) in
-  let query = smk_and (axioms :: heap_content (*@ wo_axioms*)) in
+  (*let axioms = Sl.make_axioms (mk_and wo_axioms) in*)
+  let query = smk_and (*axioms ::*) (heap_content @ wo_axioms) in
   let _ = if !Debug.verbose then
     begin
       print_endline "query wo axioms: ";
@@ -295,7 +295,7 @@ let check_entailment what pre_sl stack post_sl =
       print_form stdout query*)
     end
   in
-  let sat = Prover.satisfiable query in
+  let sat = Prover.check_sat query in
     match sat with
     | Some true -> failwith ("cannot prove assertion (sat) for " ^ what) (*TODO model*)
     | Some false -> ()
@@ -303,16 +303,20 @@ let check_entailment what pre_sl stack post_sl =
 
 (* Checks whether the frame exists *)
 let is_frame_defined pre_sl pathf post_sl subst =
-  let pre = Sl.to_lolli pre_heap pre_sl in
-  let post = Form.subst_id subst (Sl.to_lolli_not_contained post_heap post_sl) in
-  let query = mk_frame_query pre pathf post subst in
-    match Prover.satisfiable query with
+  let pre = to_lolli Entails.pre_heap pre_sl in
+  let post = subst_id subst (to_lolli_not_contained Entails.post_heap post_sl) in
+  let query = smk_and ( (mk_and (pre :: post :: pathf)) ::
+                        (Entails.same_heap_axioms subst) )
+  in
+    match Prover.check_sat query with
     | Some b -> not b
     | None -> failwith "is_frame_defined: Prover returned None"
 
+(*
 let is_frame_defined_path pre_sl path post_sl =
   let pathf, subst = ssa_partial IdMap.empty path in
     is_frame_defined pre_sl pathf post_sl subst
+*)
 
 (* checks is a frame exists (non-tight entailment) *)
 let check_if_frame_exists pre stack sl =
@@ -366,7 +370,7 @@ let check_procedure proceduresMap name =
         m.args
         args
     in
-      Sl.subst_id(*with_fresh_local m*) subst m.precondition
+      Sl.subst_id subst m.precondition
   in
   let get_post name args return =
     let m = get name in
@@ -378,66 +382,52 @@ let check_procedure proceduresMap name =
         m.args
         args
     in
-      Sl.subst_id(*with_fresh_local m*) subst m.postcondition
+      Sl.subst_id subst m.postcondition
   in
 
+  let tpe1 = Some (Set Loc) in
+  let tpe2 = Some (Fld Loc) in
+  let mk_set d = mk_free_const ?srt:tpe1 d in
+  let mk_pts p = mk_free_const ?srt:tpe2 p in
+
   let replacement_alloc alloc1 fp1 alloc2 fp2 =
-    let mk_pred d = Form.mk_pred d [Axioms.var1] in
-    let a1 = mk_pred alloc1 in
-    let a2 = mk_pred alloc2 in
-    let f1 = mk_pred fp1 in
-    let f2 = mk_pred fp2 in
-    let nf1a1 = Form.mk_and [Form.mk_not f1; a1] in
-    [mk_not (SSet.mem alloc2 null);
-     Sl.mk_forall
-        (Form.mk_and [
-          (*Form.mk_implies (mk_pred fp1) (mk_pred alloc1);*)
-          Form.mk_implies f2 a2;
-          Form.mk_implies nf1a1 a2;
-          Form.mk_implies a2 (Form.mk_or [f2; nf1a1])
-        ])]
-          (*
-          Form.mk_implies (Form.mk_and [Form.mk_not (mk_pred fp1); Form.mk_not (mk_pred fp2)]) (Form.mk_equiv (mk_pred alloc2) (mk_pred alloc1))
-          Form.mk_and [mk_pred fp1; Form.mk_equiv (mk_pred alloc2) (mk_pred fp2)]
-          Form.mk_and [Form.mk_not (mk_pred fp1); Form.mk_equiv (mk_pred alloc2) (mk_pred alloc1)]
-          *)
+    let a1 = mk_set alloc1 in
+    let a2 = mk_set alloc2 in
+    let f1 = mk_set fp1 in
+    let f2 = mk_set fp2 in
+    let nf1a1 = mk_diff a1 f1 in
+      [ mk_not (mk_elem mk_null a2);
+        mk_subseteq f2 a2;
+        mk_subseteq nf1a1 a2;
+        mk_subseteq a2 (mk_union [f2; nf1a1])
+      ]
   in
 
   let replacement_pts fp1 pts1 pts2 =
-    let mk_pred d = Form.mk_pred d [Axioms.var1] in
-    let mk_app d v = Form.mk_app d v in
-      Sl.mk_forall
-        (Form.mk_implies
-          (Form.mk_not (mk_pred fp1))
-          (Form.mk_eq (mk_app pts1 [Axioms.var1]) (mk_app pts2 [Axioms.var1]))
+      mk_forall [l1]
+        (mk_implies
+          (mk_not (mk_elem loc1 (mk_set fp1)))
+          (mk_eq (mk_read pts1 loc1) (mk_read pts2 loc1))
         )
   in
 
   let replacement_reach fp1 r1 r2 =
-    let mk_pred d = Form.mk_pred d [Axioms.var1] in
-    let ep v = Axioms.ep fp1 v in
-    let reach1 x y z = Form.mk_pred r1 [x; y; z] in
-    let reach2 x y z = Form.mk_pred r2 [x; y; z] in
-      (Sl.mk_forall
-        (Form.mk_implies
-          (reach1 Axioms.var1 Axioms.var2 (ep Axioms.var1))
-          (Form.mk_equiv 
-             (reach1 Axioms.var1 Axioms.var2 var3)
-             (reach2 Axioms.var1 Axioms.var2 var3))
+    let ep v = mk_ep r1 (mk_set fp1) v in
+    let reach1 x y z = mk_reachwo r1 x y z in
+    let reach2 x y z = mk_reachwo r2 x y z in
+      (mk_forall [l1;l2;l3]
+        (mk_implies
+          (reach1 loc1 loc2 (ep loc1))
+          (mk_equiv 
+             (reach1 loc1 loc2 loc3)
+             (reach2 loc1 loc2 loc3))
         )
-      )(* :: (Sl.mk_forall
-        (Form.mk_implies
-          (Form.mk_not (mk_pred fp1))
-          (Form.mk_equiv (reach1 Axioms.var1 (ep Axioms.var1) Axioms.var2)
-                         (reach2 Axioms.var1 (ep Axioms.var1) Axioms.var2))
+      ) :: (mk_forall [l1;l2;l3]
+        (mk_implies
+          (mk_and [mk_not (mk_elem loc1 (mk_set fp1)); mk_eq loc1 (ep loc1)])
+          (mk_equiv (reach1 loc1 loc2 loc3) (reach2 loc1 loc2 loc3))
         )
-      )*) :: (Sl.mk_forall
-        (Form.mk_implies
-          (mk_and [Form.mk_not (mk_pred fp1); Form.mk_eq Axioms.var1 (ep Axioms.var1)])
-          (Form.mk_equiv (reach1 Axioms.var1 Axioms.var2 Axioms.var3)
-                         (reach2 Axioms.var1 Axioms.var2 Axioms.var3))
-        )
-      ) :: (Axioms.ep_axioms fp1 (Axioms.fun_of_reach r1))
+      ) :: [] (*:: (ep_axioms fp1 (fun_of_reach r1)))*)
   in
 
   let last_alloc subst = 
@@ -453,7 +443,7 @@ let check_procedure proceduresMap name =
    * 2) push sl_1 (not tight) -> the heap predicate give the footprint of sl_1
    * 3) push sl_2 and use the footprint of sl_1 to update the predicates like alloc
    *)
-  let sl_replacement pre stack sl_1 subst2 sl_2 =
+  let sl_replacement pre stack sl_1 subst2 sig2 sl_2 =
     Debug.msg ("sl_replacement: " ^ (Sl.to_string sl_1) ^ " by " ^ (Sl.to_string sl_2) ^ "\n");
     if not (check_if_frame_exists pre stack sl_1) then
       failwith "sl_replacement: precondition is not respected"
@@ -464,50 +454,56 @@ let check_procedure proceduresMap name =
         let alloc1 = last_alloc subst in
         let fp = fresh_ident "footprint" in
         let fp2 = fresh_ident "footprint" in
-        let sl_1f = Form.subst_id subst (Sl.to_lolli fp sl_1) in
-        let sl_2f = Form.subst_id subst2 (Sl.to_lolli fp2 sl_2) in
+        let sl_1f = subst_id subst (to_lolli fp sl_1) in
+        let sl_2f = subst_id subst2 (to_lolli fp2 sl_2) in
         let alloc2 = last_alloc subst2 in
-        let get_pts pts subst = try IdMap.find pts subst with Not_found -> pts in
+        let get_pts pts subst = mk_pts (try IdMap.find pts subst with Not_found -> pts) in
         let get_next = get_pts Sl.pts in
         let get_prev = get_pts Sl.prev_pts in
-        let get_reach subst = try IdMap.find (Axioms.reach_id Sl.pts) subst with Not_found -> (Axioms.reach_id Sl.pts) in
-        let included = Sl.mk_forall (SSet.included fp alloc1) in
-	let pts2_reach_axioms = List.map Sl.mk_forall (Axioms.reach_axioms (get_next subst2)) in
-        let preserve = Sl.mk_forall 
-            (Form.mk_implies (mk_and [SSet.mem alloc1 Axioms.var1; SSet.mem fp2 Axioms.var1])
-            (SSet.mem fp Axioms.var1)) 
+        let included = mk_subseteq (mk_set fp) (mk_set alloc1) in
+        (*let pts2_reach_axioms = List.map Sl.mk_forall (reach_axioms (get_next subst2)) in*)
+        let preserve =
+            (mk_subseteq
+              (mk_inter [mk_set alloc1; mk_set fp2])
+              (mk_set fp)) 
         in
         let has_prev = IdMap.mem Sl.prev_pts subst2 in
         let axioms =
           included :: preserve ::
           (replacement_pts fp (get_next subst) (get_next subst2)) ::
-	  pts2_reach_axioms @
+          (*pts2_reach_axioms @*)
           (if has_prev then [replacement_pts fp (get_prev subst) (get_prev subst2)] else []) @
           (replacement_alloc alloc1 fp alloc2 fp2) @
-          (replacement_reach fp (get_reach subst) (get_reach subst2))
+          (replacement_reach fp (get_next subst) (get_next subst2)) @
+          (if has_prev then replacement_reach fp (get_prev subst) (get_prev subst2) else [])
         in
-          add_to_stack stack subst2 (Form.smk_and (sl_1f :: sl_2f :: axioms))
+          add_to_stack stack subst2 sig2 (smk_and (sl_1f :: sl_2f :: axioms))
       end
   in
   
-  let increase1 subst id =
+  let increase1 (subst, sign) id =
     let (name, version) =
       try IdMap.find id subst
       with Not_found -> id
     in
-      IdMap.add id (name, version + 1) subst
+    let tpe = 
+      try IdMap.find id sign
+      with Not_found -> failwith ("no type for " ^ (str_of_ident id))
+    in
+      IdMap.add id (name, version + 1) subst,
+      IdMap.add (name, version + 1) tpe sign
   in
-  let increase subst ids =
-    List.fold_left increase1 subst ids
+  let increase subst sign ids =
+    List.fold_left increase1 (subst, sign) ids
   in
 
   let sl_stuff_to_increase pre subst sl1 sl2 =
-    let always = [Sl.pts; Axioms.reach_id Sl.pts; Axioms.alloc_id] in
+    let always = [Sl.pts; (*reach_id Sl.pts;*) alloc_id] in
       if  Sl.has_prev pre ||
           Sl.has_prev sl1 ||
           Sl.has_prev sl2 ||
           IdMap.mem Sl.prev_pts subst then
-        Sl.prev_pts :: Axioms.reach_id Sl.prev_pts :: always
+        Sl.prev_pts :: (*reach_id Sl.prev_pts ::*) always
       else
         always
   in
@@ -516,16 +512,17 @@ let check_procedure proceduresMap name =
     let args_id =
       List.map
         (fun f -> match f with
-          | Term (Form.Const id) -> id
+          | Term (App ((FreeSym id), [], _)) -> id
           | _ -> failwith "for the moment, the arguments of call should be constants"
         ) args
     in
     Debug.msg ("procedure_call: " ^ (str_of_ident m) ^ "(" ^ (String.concat ", " (List.map str_of_ident args_id))^ ")\n");
     let subst = DecisionStack.get_subst stack in
+    let sig1 = DecisionStack.get_sign stack in
     let m_pre = get_pre m args_id in
     let m_post = get_post m args_id id in
-    let subst2 = increase subst (sl_stuff_to_increase pre subst m_pre m_post) in 
-      sl_replacement pre stack m_pre subst2 m_post
+    let (subst2, sig2) = increase subst sig1 (sl_stuff_to_increase pre subst m_pre m_post) in 
+      sl_replacement pre stack m_pre subst2 sig2 m_post
   in
 
   let loop_that_dont_change_heap pre stack cond invariant body =
@@ -535,11 +532,12 @@ let check_procedure proceduresMap name =
       begin
         let assigned = IdSet.elements (assigned body) in
         let subst = DecisionStack.get_subst stack in
-        let subst2 = increase subst (assigned) in
+        let sig1 = DecisionStack.get_sign stack in
+        let (subst2, sig2) = increase subst sig1 (assigned) in
         let fp = fresh_ident "footprint" in
-        let sl_f = Form.subst_id subst2 (Sl.to_lolli fp invariant) in
-        let notC = subst_id subst2 (Form.Not cond) in
-          add_to_stack stack subst2 (Form.smk_and [notC; sl_f])
+        let sl_f = subst_id subst2 (to_lolli fp invariant) in
+        let notC = subst_id subst2 (mk_not cond) in
+          add_to_stack stack subst2 sig2 (smk_and [notC; sl_f])
       end
   in
 
@@ -548,11 +546,12 @@ let check_procedure proceduresMap name =
       begin
         (* pre/post *)
         let subst = DecisionStack.get_subst stack in
+        let sig1 = DecisionStack.get_sign stack in
         let assigned = IdSet.elements (assigned body) in
-        let subst2 = increase subst (assigned @ (sl_stuff_to_increase pre subst invariant invariant)) in
-        let stack2 = sl_replacement pre stack invariant subst2 invariant in
-        let notC = subst_id subst2 (Form.Not cond) in
-          add_to_stack stack2 subst2 notC
+        let subst2, sig2 = increase subst sig1 (assigned @ (sl_stuff_to_increase pre subst invariant invariant)) in
+        let stack2 = sl_replacement pre stack invariant subst2 sig2 invariant in
+        let notC = subst_id subst2 (mk_not cond) in
+          add_to_stack stack2 subst2 sig2 notC
       end
     else
       loop_that_dont_change_heap pre stack cond invariant body
@@ -560,54 +559,95 @@ let check_procedure proceduresMap name =
   
   let proc = get name in
 
+  let subst_ident id ident_map =
+    try IdMap.find id ident_map
+    with Not_found -> id
+  in
+  let fresh_ident id ident_map sig_map default_type =
+    let name, m = subst_ident id ident_map in
+    let new_id = (name, m + 1) in
+    let new_ident_map = IdMap.add id new_id ident_map in
+    let tpe = try IdMap.find id sig_map with Not_found -> default_type in
+    let new_sig_map = IdMap.add new_id tpe sig_map in
+      new_id, new_ident_map, new_sig_map
+  in
+
   let rec check pre stmnt =
     let rec traverse stack stmnt = match stmnt with
-      | FunUpdate (p, _, Term _) when p = Sl.prev_pts ->
-        failwith "TODO copy from Stmnt";
-        let (c, s) = convert stmnt (DecisionStack.get_subst stack) in
-        let clauses = Sl.get_clauses c in
-        let reach_free = List.filter (fun c -> IdMap.for_all (fun id _ -> not (Axioms.is_reach id)) (Form.sign c)) clauses in
-          add_to_stack stack s (Form.mk_and reach_free)
-      | VarUpdate (_, Term _) ->
-        failwith "TODO copy from Stmnt"
-      | FunUpdate (_, _, Term _) ->
-        failwith "TODO copy from Stmnt"
-      | Dispose _ ->
-        failwith "TODO copy from Stmnt";
-        let (c, s) = convert stmnt (DecisionStack.get_subst stack) in
-          add_to_stack stack s c
-      | New v ->
-        failwith "TODO copy from Stmnt";
-        let (c, s) = convert stmnt (DecisionStack.get_subst stack) in
-        (* add a skolem cst v |-> _ *)
-        let v2 = IdMap.find v s in
-        let skolem_pts = Form.mk_eq (Form.mk_app Sl.pts [Form.mk_const v2]) (Form.mk_const (fresh_ident "_")) in
-        let not_null = Form.mk_not (Form.mk_eq Axioms.null (Form.mk_const v2)) in
-        let c = Form.smk_and [not_null; skolem_pts; c] in
-          add_to_stack stack s c
-      | Return (Form.Const t) -> 
+      | FunUpdate (id0, ind, Term upd) ->
+        let ident_map = DecisionStack.get_subst stack in
+        let sig_map = DecisionStack.get_sign stack in
+        let upd1 = subst_id_term ident_map upd in
+        let id = subst_ident id0 ident_map in
+        let id1, ident_map1, sig_map1 = fresh_ident id0 ident_map sig_map ([], Fld Loc) in
+        let f =
+          mk_eq
+            (mk_free_const id1)
+            (mk_write ind (mk_free_const id) upd1)
+        in
+          add_to_stack stack ident_map1 sig_map1 f
+      | VarUpdate (id, Term t) ->
+        let ident_map = DecisionStack.get_subst stack in
+        let sig_map = DecisionStack.get_sign stack in
+        let t1 = subst_id_term ident_map t in
+        let id1, ident_map1, sig_map1 = fresh_ident id ident_map sig_map ([], Loc) in
+        let f = mk_eq (mk_free_const id1) t1 in
+          add_to_stack stack ident_map1 sig_map1 f
+      | Dispose id ->
+        let ident_map = DecisionStack.get_subst stack in
+        let sig_map = DecisionStack.get_sign stack in
+        let id1 = (subst_ident id ident_map) in
+        let alloc = subst_ident alloc_id ident_map in
+        let alloc1, ident_map1, sig_map1 = fresh_ident alloc_id ident_map sig_map ([], Set Loc) in
+        let f =
+          mk_eq
+            (mk_free_const alloc1)
+            (mk_diff (mk_free_const alloc) (mk_setenum [mk_free_const id1]))
+        in
+          add_to_stack stack ident_map1 sig_map1 f
+      | New id ->
+        let ident_map = DecisionStack.get_subst stack in
+        let sig_map = DecisionStack.get_sign stack in
+        let id1, ident_map1, sig_map1 = fresh_ident id ident_map sig_map ([], Loc) in
+        let alloc = subst_ident alloc_id ident_map1 in
+        let alloc1, ident_map2, sig_map2 = fresh_ident alloc_id ident_map1 sig_map1 ([], Set Loc) in
+        let f =
+          mk_eq
+            (mk_free_const alloc1)
+            (mk_union [mk_free_const alloc; mk_setenum [mk_free_const id1]])
+        in
+        (* add a skolem cst v |-> _, TODO is it really needed ? *)
+        let curr_pts = mk_free_const (try IdMap.find Sl.pts ident_map2 with Not_found -> Sl.pts) in
+        let skolem_pts = mk_eq (mk_read curr_pts (mk_free_const id1)) (mk_free_const (FormUtil.fresh_ident "_")) in
+        let not_null = mk_not (mk_eq mk_null (mk_free_const id1)) in
+        let c = smk_and [not_null; skolem_pts; f] in
+          add_to_stack stack ident_map2 sig_map2 c
+      | Return (App (FreeSym t, [], tpe) ) -> 
         let post = proc.postcondition in
         let subst = DecisionStack.get_subst stack in
+        let sign = DecisionStack.get_sign stack in
         let newT = try IdMap.find t subst with Not_found -> t in
         let subst = IdMap.add (mk_ident "returned") newT subst in
-        let stackWithReturn = DecisionStack.step stack (Form.BoolConst true) subst in
+        let stackWithReturn = DecisionStack.step stack mk_true subst sign in
           (*check postcond and assume false !*)
           check_entailment ("return " ^ (str_of_ident newT)) pre stackWithReturn post;
-          DecisionStack.step stack (Form.BoolConst false) IdMap.empty
+          DecisionStack.step stack (mk_false) IdMap.empty IdMap.empty
       | Return t -> failwith "TODO: return expect an id for the moment"
       | Assume f ->
         (*sll to lolli*)
         let subst = DecisionStack.get_subst stack in
+        let sig_map = DecisionStack.get_sign stack in
         let cur_alloc = latest_alloc subst in
         let c = subst_id subst (to_lolli cur_alloc f) in
-          add_to_stack stack subst c
+          add_to_stack stack subst sig_map c
       | Assert f ->
         check_entailment ("assertion " ^ (Sl.to_string f)) pre stack f;
         stack
       | Assume2 f ->
         let subst = DecisionStack.get_subst stack in
+        let sig_map = DecisionStack.get_sign stack in
         let f2 = subst_id subst f in
-          add_to_stack stack subst f2
+          add_to_stack stack subst sig_map f2
       | Ite (cond, caseTrue, caseFalse) ->
         let subst = DecisionStack.get_subst stack in
         let c = subst_id subst cond in
@@ -618,21 +658,21 @@ let check_procedure proceduresMap name =
             branch
         in
         let sT = mk_branch c caseTrue in
-        let sF = mk_branch (Not c) caseFalse in
+        let sF = mk_branch (mk_not c) caseFalse in
           unify stack sT sF
       | Block stmnts -> 
         List.fold_left traverse stack stmnts
       | While (cond, invariant, body) ->
         (* check the loop body *)
-        let _ = check invariant (Block [Assume2 cond; body; Assert invariant; Assume2 (BoolConst false)]) in
+        let _ = check invariant (Block [Assume2 cond; body; Assert invariant; Assume2 (mk_false)]) in
           while_pre_post pre stack cond invariant body
       | VarUpdate (id, Call (m, args)) -> 
         procedure_call pre stack m args id
         (* goal: (post[returned \mapsto id'] @ frame, subst2) *)
       | FunUpdate (id, ptr, Call (m, args)) -> 
-        let ret_id = fresh_ident "_returned" in
+        let ret_id = FormUtil.fresh_ident "_returned" in
         let stack2 = procedure_call pre stack m args ret_id in
-        let t2 = VarUpdate (id, Term (Form.Const ret_id)) in
+        let t2 = VarUpdate (id, Term (mk_free_const ret_id)) in
           traverse stack2 t2
     in
     (* check the body *)
