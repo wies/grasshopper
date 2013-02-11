@@ -30,9 +30,9 @@ let kwchar = idchar | '_' | ':'
       "false", BOOL_VAL(false);
       (* commands *)
       "assert", ASSERT;
-      "check-sat", CHECK_SAT_CMD;
-      "get-model", GET_MODEL_CMD;
-      "exit", EXIT_CMD;
+      "check-sat", CHECK_SAT;
+      "get-model", GET_MODEL;
+      "exit", EXIT;
       (* other *)
       ":named", NAMED;
     ] @ 
