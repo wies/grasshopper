@@ -1,18 +1,14 @@
 {
 open Form
 open ParseGrass
-}
 
-let digitchar = ['0'-'9']
-let idchar = ['a'-'z' 'A'-'Z' '?' '$']
-let kwchar = idchar | '_' | ':'
-
-{ let keyword_table = 
-    List.iter (fun (kwd, tok) -> Hashtbl.add keyword_table kwd tok)
+let keyword_table = Hashtbl.create 32
+let _ =
+  List.iter (fun (kwd, tok) -> Hashtbl.add keyword_table kwd tok)
     (["set-logic", SET_LOGIC;
       "set-option", SET_OPTION;
       (* declarations and definitions *)
-      "declare_sort", DECLARE_SORT;
+      "declare-sort", DECLARE_SORT;
       "declare-fun", DECLARE_FUN;
       (* sorts *)
       bool_sort_string, BOOL_SORT;
@@ -41,6 +37,10 @@ let kwchar = idchar | '_' | ':'
       [Null; Read; Write; EntPnt; Empty; SetEnum; Union; Inter; Diff;
        ReachWO; Elem; SubsetEq; Frame])
 }
+
+let digitchar = ['0'-'9']
+let idchar = ['a'-'z' 'A'-'Z' '?' '$']
+let kwchar = idchar | '_' | ':' | '-'
  
 rule token = parse
   [' ' '\t' '\n'] { token lexbuf }
@@ -50,7 +50,7 @@ rule token = parse
 | '(' { LPAREN }
 | ')' { RPAREN }
 | ('-'? digitchar*) as num { INT_VAL(int_of_string num) }
-| idchar* as name '_' digitchar* as num { IDENT(name, int_of_string num) }
+| idchar* as name '_' (digitchar* as num) { print_endline num; IDENT(name, int_of_string num) }
 | kwchar* as kw
     { try
         Hashtbl.find keyword_table kw
