@@ -10,6 +10,15 @@ let pts = mk_ident "sl_next"
 let prev_pts = mk_ident "sl_prev"
 
 let to_field f = FormUtil.mk_free_const ?srt:(Some (Form.Fld Form.Loc)) f
+
+let mk_loc_set d =
+  let tpe = Some (Form.Set Form.Loc) in
+    FormUtil.mk_free_const ?srt:tpe d
+
+let mk_loc d =
+  let tpe = Some (Form.Loc) in
+    FormUtil.mk_free_const ?srt:tpe d
+
 let fpts = to_field pts
 let fprev_pts = to_field prev_pts
 
@@ -152,9 +161,9 @@ let mk_forall = FormUtil.mk_forall
 
 let cst = FormUtil.mk_free_const
 let reachWoT a b c = FormUtil.mk_reachwo (fpts) a b c
-let reachWo a b c = reachWoT (cst a) (cst b) (cst c)
+let reachWo a b c = reachWoT (mk_loc a) (mk_loc b) (mk_loc c)
 let reach a b = reachWo a b b
-let mk_domain d v = FormUtil.mk_elem v (cst d)
+let mk_domain d v = FormUtil.mk_elem v (mk_loc_set d)
 
 let one_and_rest lst =
   let rec process acc1 acc2 lst = match lst with
@@ -176,15 +185,15 @@ let to_form set_fct domain f =
   (*let v = Axioms.var1 in
   let v2 = Axioms.var2 in*)
   let empty_t domain = FormUtil.mk_eq (FormUtil.mk_empty (Some (Form.Set Form.Loc))) domain in
-  let empty domain = empty_t (cst domain) in
+  let empty domain = empty_t (mk_loc_set domain) in
   let rec process_sep pol domain f = match f with
     | BoolConst b -> (FormUtil.mk_bool b, empty domain, IdSet.empty)
-    | Not (Eq (id1, id2)) -> (FormUtil.mk_neq (cst id1) (cst id2), empty domain, IdSet.empty)
-    | Eq (id1, id2) -> (FormUtil.mk_eq (cst id1) (cst id2), empty domain, IdSet.empty)
+    | Not (Eq (id1, id2)) -> (FormUtil.mk_neq (cst id1) (cst id2), empty domain, IdSet.empty) (*TODO are id1, id2 always locations ? *)
+    | Eq (id1, id2) -> (FormUtil.mk_eq (cst id1) (cst id2), empty domain, IdSet.empty) (*TODO are id1, id2 always locations ? *)
     | Emp -> (FormUtil.mk_true, empty domain, IdSet.empty)
     | PtsTo (h, id1, id2) ->
-        ( FormUtil.mk_eq (FormUtil.mk_read (to_field h) (cst id1)) (cst id2),
-          FormUtil.mk_eq (cst domain) (FormUtil.mk_setenum [cst id1]),
+        ( FormUtil.mk_eq (FormUtil.mk_read (to_field h) (mk_loc id1)) (mk_loc id2),
+          FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_setenum [mk_loc id1]),
           IdSet.empty
         )
     | List (id1, id2) ->
@@ -192,33 +201,36 @@ let to_form set_fct domain f =
           mk_forall [Axioms.l1] (
             FormUtil.mk_equiv (
               FormUtil.smk_and [
-                reachWoT (cst id1) Axioms.loc1 (cst id2);
-                FormUtil.mk_neq Axioms.loc1 (cst id2)
+                reachWoT (mk_loc id1) Axioms.loc1 (mk_loc id2);
+                FormUtil.mk_neq Axioms.loc1 (mk_loc id2)
               ]; )
             (mk_domain domain Axioms.loc1) ),
           IdSet.empty
         )
     | DList (x1, x2, y1, y2) ->
-      failwith "TODO"
-      (*
       let part1 = reach x1 y1 in
-      let part2 = mk_forall (Form.mk_equiv  (mk_domain domain v)
-                                            (Form.mk_and [reachWoT (cst x1) v (cst y1); Form.mk_neq v (cst y1)])) in
-      let part3 = mk_forall (Form.mk_implies (Form.mk_and [ mk_domain domain v;
-                                                            mk_domain domain v2;
-                                                            Form.mk_eq (Form.mk_app pts [v]) v2])
-                                             (Form.mk_eq (Form.mk_app prev_pts [v2]) v)) in
-      let part4 = Form.mk_or [
-                    Form.mk_and [ Form.mk_eq (cst x1) (cst y1); Form.mk_eq (cst x2) (cst y2)];
-                    Form.mk_and [ Form.mk_eq (Form.mk_app prev_pts [cst x1]) (cst x2);
-                                  Form.mk_eq (Form.mk_app pts [cst y2]) (cst y1);
-                                  mk_domain domain (cst y2)] ]
+      let part2 =
+        mk_forall [Axioms.l1]
+          (FormUtil.mk_equiv (mk_domain domain Axioms.loc1)
+                             (FormUtil.mk_and [ reachWoT (mk_loc x1) Axioms.loc1 (mk_loc y1);
+                                                FormUtil.mk_neq Axioms.loc1 (mk_loc y1)])) in
+      let part3 =
+        mk_forall []
+          (FormUtil.mk_implies (FormUtil.mk_and [ mk_domain domain Axioms.loc1;
+                                                  mk_domain domain Axioms.loc2;
+                                                  FormUtil.mk_eq (FormUtil.mk_read fpts Axioms.loc1) Axioms.loc2])
+                               (FormUtil.mk_eq (FormUtil.mk_read fprev_pts Axioms.loc2) Axioms.loc1)) in
+      let part4 =
+        FormUtil.mk_or [
+          FormUtil.mk_and [ FormUtil.mk_eq (mk_loc x1) (mk_loc y1); FormUtil.mk_eq (mk_loc x2) (mk_loc y2)];
+          FormUtil.mk_and [ FormUtil.mk_eq (FormUtil.mk_read fprev_pts (mk_loc x1)) (mk_loc x2);
+                            FormUtil.mk_eq (FormUtil.mk_read fpts (mk_loc y2)) (mk_loc y1);
+                            mk_domain domain (mk_loc y2)] ]
       in
-        ( Form.mk_and ((if pol then [part3] else []) @ [part1;  part4]),
+        ( FormUtil.mk_and ((if pol then [part3] else []) @ [part1;  part4]),
           part2,
           IdSet.singleton domain
         )
-      *)
     | SepConj forms ->
       let ds = List.map (fun _ -> fd "sep" domain) forms in
       let translated = List.map2 (process_sep pol) ds forms in
@@ -228,9 +240,9 @@ let to_form set_fct domain f =
           ([], [], IdSet.empty)
           translated 
       in
-      let dsc = List.map cst ds in
+      let dsc = List.map mk_loc_set ds in
       let separation =
-        (FormUtil.mk_eq (cst domain) (FormUtil.mk_union dsc)) ::
+        (FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_union dsc)) ::
         (Util.flat_map (fun d1 -> List.map (fun d2 -> empty_t (FormUtil.mk_inter [d1; d2])) dsc) dsc)
       in
       let heap_part = FormUtil.smk_and (separation @ translated_2) in
@@ -270,7 +282,7 @@ let to_form set_fct domain f =
       in
         (FormUtil.mk_and (
           (if not pol then [dll_axiom] else []) @
-          [str; set_fct (cst d') (cst domain)]),
+          [str; set_fct (mk_loc_set d') (mk_loc_set domain)]),
          heap)
   in
     process_bool true (fresh_existentials f)

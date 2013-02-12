@@ -385,10 +385,10 @@ let check_procedure proceduresMap name =
       Sl.subst_id subst m.postcondition
   in
 
-  let tpe1 = Some (Set Loc) in
-  let tpe2 = Some (Fld Loc) in
-  let mk_set d = mk_free_const ?srt:tpe1 d in
-  let mk_pts p = mk_free_const ?srt:tpe2 p in
+  (* aliases *)
+  let mk_set = Sl.mk_loc_set in
+  let mk_loc_set = Sl.mk_loc_set in
+  let mk_loc = Sl.mk_loc in
 
   let replacement_alloc alloc1 fp1 alloc2 fp2 =
     let a1 = mk_set alloc1 in
@@ -427,7 +427,7 @@ let check_procedure proceduresMap name =
           (mk_and [mk_not (mk_elem loc1 (mk_set fp1)); mk_eq loc1 (ep loc1)])
           (mk_equiv (reach1 loc1 loc2 loc3) (reach2 loc1 loc2 loc3))
         )
-      ) :: [] (*:: (ep_axioms fp1 (fun_of_reach r1)))*)
+      ) :: []
   in
 
   let last_alloc subst = 
@@ -457,9 +457,11 @@ let check_procedure proceduresMap name =
         let sl_1f = subst_id subst (to_lolli fp sl_1) in
         let sl_2f = subst_id subst2 (to_lolli fp2 sl_2) in
         let alloc2 = last_alloc subst2 in
-        let get_pts pts subst = mk_pts (try IdMap.find pts subst with Not_found -> pts) in
+        let get_pts pts subst = Sl.to_field (try IdMap.find pts subst with Not_found -> pts) in
         let get_next = get_pts Sl.pts in
         let get_prev = get_pts Sl.prev_pts in
+        let has_prev = IdMap.mem Sl.prev_pts subst2 in
+        (* TODO this will become part of the reduction
         let included = mk_subseteq (mk_set fp) (mk_set alloc1) in
         (*let pts2_reach_axioms = List.map Sl.mk_forall (reach_axioms (get_next subst2)) in*)
         let preserve =
@@ -467,7 +469,6 @@ let check_procedure proceduresMap name =
               (mk_inter [mk_set alloc1; mk_set fp2])
               (mk_set fp)) 
         in
-        let has_prev = IdMap.mem Sl.prev_pts subst2 in
         let axioms =
           included :: preserve ::
           (replacement_pts fp (get_next subst) (get_next subst2)) ::
@@ -477,7 +478,18 @@ let check_procedure proceduresMap name =
           (replacement_reach fp (get_next subst) (get_next subst2)) @
           (if has_prev then replacement_reach fp (get_prev subst) (get_prev subst2) else [])
         in
-          add_to_stack stack subst2 sig2 (smk_and (sl_1f :: sl_2f :: axioms))
+        *)
+        let frame find_ptr =
+          mk_frame
+            (mk_set fp) (mk_set fp2)
+            (mk_set alloc1) (mk_set alloc2)
+            (find_ptr subst) (find_ptr subst2)
+        in
+        let frames =
+          (frame get_next) ::
+          (if has_prev then [frame get_prev] else [])
+        in
+          add_to_stack stack subst2 sig2 (smk_and (sl_1f :: sl_2f :: frames))
       end
   in
   
@@ -582,8 +594,8 @@ let check_procedure proceduresMap name =
         let id1, ident_map1, sig_map1 = fresh_ident id0 ident_map sig_map ([], Fld Loc) in
         let f =
           mk_eq
-            (mk_free_const id1)
-            (mk_write ind (mk_free_const id) upd1)
+            (mk_free_const id1) (*TODO type*)
+            (mk_write ind (mk_free_const id) upd1) (*TODO type*)
         in
           add_to_stack stack ident_map1 sig_map1 f
       | VarUpdate (id, Term t) ->
@@ -591,7 +603,7 @@ let check_procedure proceduresMap name =
         let sig_map = DecisionStack.get_sign stack in
         let t1 = subst_id_term ident_map t in
         let id1, ident_map1, sig_map1 = fresh_ident id ident_map sig_map ([], Loc) in
-        let f = mk_eq (mk_free_const id1) t1 in
+        let f = mk_eq (mk_loc id1) t1 in (*TODO always a loc ?*)
           add_to_stack stack ident_map1 sig_map1 f
       | Dispose id ->
         let ident_map = DecisionStack.get_subst stack in
@@ -601,8 +613,8 @@ let check_procedure proceduresMap name =
         let alloc1, ident_map1, sig_map1 = fresh_ident alloc_id ident_map sig_map ([], Set Loc) in
         let f =
           mk_eq
-            (mk_free_const alloc1)
-            (mk_diff (mk_free_const alloc) (mk_setenum [mk_free_const id1]))
+            (mk_loc_set alloc1)
+            (mk_diff (mk_loc_set alloc) (mk_setenum [mk_loc id1]))
         in
           add_to_stack stack ident_map1 sig_map1 f
       | New id ->
@@ -613,13 +625,13 @@ let check_procedure proceduresMap name =
         let alloc1, ident_map2, sig_map2 = fresh_ident alloc_id ident_map1 sig_map1 ([], Set Loc) in
         let f =
           mk_eq
-            (mk_free_const alloc1)
-            (mk_union [mk_free_const alloc; mk_setenum [mk_free_const id1]])
+            (mk_loc_set alloc1)
+            (mk_union [mk_loc_set alloc; mk_setenum [mk_loc id1]])
         in
         (* add a skolem cst v |-> _, TODO is it really needed ? *)
-        let curr_pts = mk_free_const (try IdMap.find Sl.pts ident_map2 with Not_found -> Sl.pts) in
-        let skolem_pts = mk_eq (mk_read curr_pts (mk_free_const id1)) (mk_free_const (FormUtil.fresh_ident "_")) in
-        let not_null = mk_not (mk_eq mk_null (mk_free_const id1)) in
+        let curr_pts = Sl.to_field (try IdMap.find Sl.pts ident_map2 with Not_found -> Sl.pts) in
+        let skolem_pts = mk_eq (mk_read curr_pts (mk_loc id1)) (mk_loc (FormUtil.fresh_ident "_")) in
+        let not_null = mk_not (mk_eq mk_null (mk_loc id1)) in
         let c = smk_and [not_null; skolem_pts; f] in
           add_to_stack stack ident_map2 sig_map2 c
       | Return (App (FreeSym t, [], tpe) ) -> 
