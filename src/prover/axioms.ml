@@ -127,7 +127,6 @@ let alloc_dispose_axioms id alloc new_alloc =
 *)
 
 (* entry point axioms: when entering a part of the heap, used for SL*)
-
 let ep_axioms () =
   let ep = mk_ep fld1 set1 loc1 in
   let in_set1 v = mk_elem v set1 in

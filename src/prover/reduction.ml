@@ -106,34 +106,6 @@ let reduce_sets =
   in
   fun f -> elim_sets f
   
-let open_axioms openCond axioms = 
-  let open_axiom = function
-  | Binder (b, vs, f, a) -> 
-      Binder (b, List.filter (~~ (openCond f)) vs, f, a)
-  | f -> f
-  in List.map open_axiom axioms
-
-let isFld f = function (_, Fld _) -> true | _ -> false
-
-let isFunVar f =
-  let fvars = vars_in_fun_terms f in
-  fun v -> IdSrtSet.mem v fvars
-
-
-(** Adds instantiated theory axioms for graph reachability to formula f
- ** assumes that f is typed *)
-let reduce_reach fs =
-  let gts = TermSet.add mk_null (ground_terms (mk_and fs)) in
-  (* instantiate the variables of sort fld in all reachability axioms *)
-  let basic_pt_flds = TermSet.filter (has_sort (Fld Loc) &&& is_free_const) gts in
-  let reachwo_ax = open_axioms isFld (Axioms.reachwo_axioms ()) in
-  let reachwo_ax1 = instantiate_with_terms false fs reachwo_ax basic_pt_flds in
-  (* generate local instances of all axioms in which variables occur below function symbols *)
-  let reachwo_ax2 = instantiate_with_terms true fs (open_axioms isFunVar reachwo_ax1) gts in
-  (* generate instances of all update axioms *)
-  let write_ax = open_axioms isFunVar (Axioms.write_axioms ()) in
-  let write_ax1 = instantiate_with_terms true fs write_ax gts in
-  fs, write_ax1 @ reachwo_ax2
 
 (* transforms a frame element into a set of constraints. *)
 let reduce_frame x x' a a' f f' =
@@ -185,8 +157,66 @@ let reduce_frame x x' a a' f f' =
   in
     axioms
 
+let open_axioms openCond axioms = 
+  let open_axiom = function
+  | Binder (b, vs, f, a) -> 
+      Binder (b, List.filter (~~ (openCond f)) vs, f, a)
+  | f -> f
+  in List.map open_axiom axioms
+
+let isFld f = function (_, Fld _) -> true | _ -> false
+
+let isFunVar f =
+  let fvars = vars_in_fun_terms f in
+  fun v -> IdSrtSet.mem v fvars
+
+let isTrue f v = true
+
+
+(** Adds instantiated theory axioms for the entry point function to formula f
+ ** assumes that f is typed and that all frame predicates have been reduced *)
+let reduce_ep fs =
+  let gts = TermSet.add mk_null (ground_terms (mk_and fs)) in
+  (* generate ep terms *)
+  let rec get_ep_terms eps = function
+    | App (EntPnt, ts, _) as t -> List.fold_left get_ep_terms (TermSet.add t eps) ts
+    | App (_, ts, _) -> List.fold_left get_ep_terms eps ts
+    | _ -> eps
+  in
+  let ep_terms_free = fold_terms get_ep_terms TermSet.empty (mk_and fs) in
+  let gts_eps = 
+    TermSet.fold 
+      (fun t eps ->
+	match t with
+	| App (EntPnt, [fld; set; loc], srt) -> 
+	    TermSet.fold (fun t eps -> TermSet.add (App (EntPnt, [fld; set; t], srt)) eps) gts eps
+	| _ -> eps
+      )
+      ep_terms_free gts
+  in 
+  (* instantiate the variables of sort Fld and Set in all ep axioms *)
+  let ep_ax = open_axioms isTrue (Axioms.ep_axioms ()) in
+  let ep_ax1 = instantiate_with_terms true fs ep_ax gts_eps in
+  fs, ep_ax1
+
+(** Adds instantiated theory axioms for graph reachability to formula f
+ ** assumes that f is typed *)
+let reduce_reach fs =
+  let gts = TermSet.add mk_null (ground_terms (mk_and fs)) in
+  (* instantiate the variables of sort Fld in all reachability axioms *)
+  let basic_pt_flds = TermSet.filter (has_sort (Fld Loc) &&& is_free_const) gts in
+  let reachwo_ax = open_axioms isFld (Axioms.reachwo_axioms ()) in
+  let reachwo_ax1 = instantiate_with_terms false fs reachwo_ax basic_pt_flds in
+  (* generate local instances of all axioms in which variables occur below function symbols *)
+  let reachwo_ax2 = instantiate_with_terms true fs (open_axioms isFunVar reachwo_ax1) gts in
+  (* generate instances of all update axioms *)
+  let write_ax = open_axioms isFunVar (Axioms.write_axioms ()) in
+  let write_ax1 = instantiate_with_terms true fs write_ax gts in
+  fs, write_ax1 @ reachwo_ax2
+
+
 (** Reduces the given formula to the target theory fragment, as specified by the configuration 
- ** assumed that f is typed *)
+ ** assumes that f is typed *)
 let reduce f = 
   let rec split_ands acc = function
     | BoolOp(And, fs) :: gs -> split_ands acc (fs @ gs)
@@ -199,4 +229,4 @@ let reduce f =
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
   let fs3 = List.map reduce_sets fs2 in
   let fs4, reach_axioms = reduce_reach fs3 in
-  fs4 @ reach_axioms
+  rev_concat [fs4; reach_axioms]
