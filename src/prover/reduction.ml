@@ -170,7 +170,6 @@ let reduce_frame x x' a a' f f' =
   in
     axioms
 
-
 (** Reduces the given formula to the target theory fragment, as specified by the configuration *)
 let reduce f = 
   let rec split_ands acc = function

@@ -1,4 +1,9 @@
+
 let verbose = ref false
+
+let set_debug () =
+  verbose := true;
+  Printexc.record_backtrace true
 
 (** always print this message *)
 let amsg s = print_string s; flush_all ()

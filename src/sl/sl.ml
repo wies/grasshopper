@@ -199,12 +199,11 @@ let to_form set_fct domain f =
     | List (id1, id2) ->
         ( reach id1 id2,
           mk_forall [Axioms.l1] (
-            FormUtil.mk_iff (
-              FormUtil.smk_and [
+            FormUtil.mk_iff
+              (FormUtil.smk_and [
                 reachWoT (mk_loc id1) Axioms.loc1 (mk_loc id2);
-                FormUtil.mk_neq Axioms.loc1 (mk_loc id2)
-              ]; )
-            (mk_domain domain Axioms.loc1) ),
+                FormUtil.mk_neq Axioms.loc1 (mk_loc id2) ] )
+              (mk_domain domain Axioms.loc1) ),
           IdSet.empty
         )
     | DList (x1, x2, y1, y2) ->
@@ -286,8 +285,6 @@ let to_form set_fct domain f =
          heap)
   in
     process_bool true (fresh_existentials f)
-
-let nnf = FormUtil.nnf
 
 (* assumes NNF *)
 let skolemize f =
@@ -410,38 +407,26 @@ let rec get_clauses f = match f with
   (*| Form.Comment (c, f) -> List.map (fun x -> Form.Comment (c,x)) (get_clauses f)*)
   | other -> [other]
 
-(*
-let make_axioms f =
-  let ax = List.flatten (Axioms.make_axioms [[f]]) in
-  let clauses = List.flatten (List.map get_clauses ax) in
-  let reach_free =
-    List.filter
-      (fun c -> IdMap.for_all (fun id _ -> not (Axioms.is_reach id) || fst (Axioms.fun_of_reach id) <> (fst prev_pts)) (Form.sign c))
-      clauses
+let post_process f =
+  let _ = if !Debug.verbose then
+    begin
+      print_endline "Sl.to_grass(raw): ";
+      Form.print_form stdout f;
+      print_newline ()
+    end
   in
-    Form.smk_and (f :: reach_free)
-*)
+    positive_with_top_Lvl_axioms (
+      skolemize (
+        FormUtil.nnf f ) )
 
 let to_grass domain f =
   let (pointers, separations) = to_form FormUtil.mk_eq domain f in
-    positive_with_top_Lvl_axioms (FormUtil.smk_and [pointers; separations])
-
-(*
-let to_grass_with_axioms domain f =
-  let f2 = to_grass domain f in
-    make_axioms f2
-*)
+    post_process (FormUtil.smk_and [pointers; separations])
 
 let to_grass_not_contained domain f = (* different structure or larger footprint *)
   let (pointers, separations) = to_form FormUtil.mk_subseteq domain (mk_not f) in
-    positive_with_top_Lvl_axioms (skolemize (nnf (FormUtil.smk_and [pointers; separations])))
+    post_process (FormUtil.smk_and [pointers; separations])
 
 let to_grass_negated domain f =
   let (pointers, separations) = to_form FormUtil.mk_eq domain (mk_not f) in
-    positive_with_top_Lvl_axioms (skolemize (nnf (FormUtil.smk_and [pointers; separations])))
-
-(*
-let to_grass_negated_with_axioms domain f =
-  let f2 = to_grass_negated domain f in
-    make_axioms f2
-*)
+    post_process (FormUtil.smk_and [pointers; separations])

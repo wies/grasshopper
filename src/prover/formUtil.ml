@@ -133,6 +133,7 @@ let mk_or = function
 
 let mk_not = function
   | BoolOp (op, []) -> BoolOp (dualize_op op, [])
+  | BoolOp (Not, [f]) -> f
   | f -> BoolOp (Not, [f])
 
 let mk_neq s t = mk_not (mk_eq s t)
@@ -160,10 +161,8 @@ let smk_op op fs =
 	      | [f] -> f
 	      | fs -> BoolOp (op, fs)
             end
-	| BoolOp (op', fs0) :: fs1 -> 
-	    if op = op' 
-	    then mkop1 (fs0 @ fs1) acc
-	    else BoolOp (op', [])
+	| BoolOp (op', fs0) :: fs1 when op = op' -> 
+	    mkop1 (fs0 @ fs1) acc
 	| f :: fs1 -> mkop1 fs1 (FormSet.add f acc)
       in mkop1 fs FormSet.empty
 

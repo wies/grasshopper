@@ -14,7 +14,7 @@ type mode =
 let mode = ref SlSat
 
 let cmd_options =
-  [("-v", Arg.Set Debug.verbose, "Display verbose messages");
+  [("-v", Arg.Unit Debug.set_debug, "Display verbose messages");
    ("-noreach", Arg.Clear Config.with_reach_axioms, "Do not add axioms for reachability predicates");
    ("-m", Arg.Set_string Prover.model_file, "Produce model");
    ("-alloc", Arg.Set Config.with_alloc_axioms, "Add axioms for alloc predicate");
@@ -48,7 +48,7 @@ let compute_sl_sat () =
   (*print_endline "parsing";*)
   let sl = parse_input (fun lexbuf -> ParseSl.main LexSl.token lexbuf) in
   let _ = Debug.msg ("parsed: " ^ (Sl.to_string sl) ^ "\n") in
-  let form = Sl.to_grass(*_with_axioms*) heap sl in
+  let form = Sl.to_grass heap sl in
   let _ = if !Debug.verbose then
     begin
       print_endline "converted: ";
@@ -95,15 +95,18 @@ let _ =
     input_file := List.rev !input_file;
     if !input_file = [] then cmd_line_error "input file missing" else
       begin
-        (*Config.default_opts_for_sl ();*)
-        match !mode with
-        | SlSat -> compute_sl_sat ()
-        | SlEntails -> compute_sl_entails ()
-        | SlFrame -> compute_sl_frame ()
+        Printexc.print (fun () ->
+          match !mode with
+          | SlSat -> compute_sl_sat ()
+          | SlEntails -> compute_sl_entails ()
+          | SlFrame -> compute_sl_frame ()
+        ) ()
       end
   with  
   | Sys_error s -> output_string stderr (s ^ "\n")
-  | Failure s -> output_string stderr (s ^ "\n")
+  | Failure s ->
+      let bs = if !Debug.verbose then Printexc.get_backtrace () else "" in
+        output_string stderr (s ^ "\n" ^ bs)
   | Parsing.Parse_error -> print_endline "parse error"
 	
     
