@@ -24,10 +24,10 @@ let choose_rep_terms classes =
   let list_to_set cl =
     List.fold_left (fun acc t -> TermSet.add t acc) TermSet.empty cl
   in
-  List.fold_left (fun (reps, defs, new_classes) cl ->
+  List.fold_left (fun (reps, new_classes) cl ->
     let cl_rep : term = find_rep cl in
-    (cl_rep :: reps, defs, TermMap.add cl_rep (list_to_set cl) new_classes))
-    ([], [], TermMap.empty) classes
+    (cl_rep :: reps, TermMap.add cl_rep (list_to_set cl) new_classes))
+    ([], TermMap.empty) classes
 
 let generate_instances useLocalInst axioms terms rep_map = 
   let ground_terms = 
@@ -148,9 +148,9 @@ let instantiate_with_terms local fs axioms inst_terms =
           print_newline ();
           num + 1) 1 classes)
   in
-  let reps_f, defs_f, rep_map_f = choose_rep_terms classes in
+  let reps_f, rep_map_f = choose_rep_terms classes in
   let instances_f = generate_instances local axioms reps_f rep_map_f in
-  defs_f, instances_f
+  instances_f
 
 (*
 let get_ground_terms f =
@@ -194,6 +194,6 @@ let get_ground_terms f =
 
 let instantiate fs =
   let gterms_f = ground_terms (mk_and fs) in
-  let defs, instances = instantiate_with_terms true fs fs gterms_f in
-  defs @ fs @ instances
+  let instances = instantiate_with_terms true fs fs gterms_f in
+  fs @ instances
 

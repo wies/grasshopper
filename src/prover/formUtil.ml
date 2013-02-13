@@ -39,6 +39,11 @@ let rec sort_ofs = function
       |	None -> sort_ofs ts
       |	s -> s
 
+let element_sort_of_set s =
+  match sort_of s with
+  | Some (Set srt) -> srt
+  | _ -> failwith "untyped or illtyped set expression"
+
 let has_sort srt t = 
   match sort_of t with
   | Some srt' -> srt = srt'
