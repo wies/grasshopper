@@ -379,46 +379,6 @@ let check_procedure proceduresMap name =
   let mk_loc_set = Sl.mk_loc_set in
   let mk_loc = Sl.mk_loc in
 
-  let replacement_alloc alloc1 fp1 alloc2 fp2 =
-    let a1 = mk_set alloc1 in
-    let a2 = mk_set alloc2 in
-    let f1 = mk_set fp1 in
-    let f2 = mk_set fp2 in
-    let nf1a1 = mk_diff a1 f1 in
-      [ mk_not (mk_elem mk_null a2);
-        mk_subseteq f2 a2;
-        mk_subseteq nf1a1 a2;
-        mk_subseteq a2 (mk_union [f2; nf1a1])
-      ]
-  in
-
-  let replacement_pts fp1 pts1 pts2 =
-      mk_forall [l1]
-        (mk_implies
-          (mk_not (mk_elem loc1 (mk_set fp1)))
-          (mk_eq (mk_read pts1 loc1) (mk_read pts2 loc1))
-        )
-  in
-
-  let replacement_reach fp1 r1 r2 =
-    let ep v = mk_ep r1 (mk_set fp1) v in
-    let reach1 x y z = mk_reachwo r1 x y z in
-    let reach2 x y z = mk_reachwo r2 x y z in
-      (mk_forall [l1;l2;l3]
-        (mk_implies
-          (reach1 loc1 loc2 (ep loc1))
-          (mk_iff 
-             (reach1 loc1 loc2 loc3)
-             (reach2 loc1 loc2 loc3))
-        )
-      ) :: (mk_forall [l1;l2;l3]
-        (mk_implies
-          (mk_and [mk_not (mk_elem loc1 (mk_set fp1)); mk_eq loc1 (ep loc1)])
-          (mk_iff (reach1 loc1 loc2 loc3) (reach2 loc1 loc2 loc3))
-        )
-      ) :: []
-  in
-
   let last_alloc subst = 
     if IdMap.mem alloc_id subst
     then IdMap.find alloc_id subst
@@ -450,24 +410,6 @@ let check_procedure proceduresMap name =
         let get_next = get_pts Sl.pts in
         let get_prev = get_pts Sl.prev_pts in
         let has_prev = IdMap.mem Sl.prev_pts subst2 in
-        (* TODO this will become part of the reduction
-        let included = mk_subseteq (mk_set fp) (mk_set alloc1) in
-        (*let pts2_reach_axioms = List.map Sl.mk_forall (reach_axioms (get_next subst2)) in*)
-        let preserve =
-            (mk_subseteq
-              (mk_inter [mk_set alloc1; mk_set fp2])
-              (mk_set fp)) 
-        in
-        let axioms =
-          included :: preserve ::
-          (replacement_pts fp (get_next subst) (get_next subst2)) ::
-          (*pts2_reach_axioms @*)
-          (if has_prev then [replacement_pts fp (get_prev subst) (get_prev subst2)] else []) @
-          (replacement_alloc alloc1 fp alloc2 fp2) @
-          (replacement_reach fp (get_next subst) (get_next subst2)) @
-          (if has_prev then replacement_reach fp (get_prev subst) (get_prev subst2) else [])
-        in
-        *)
         let frame find_ptr =
           mk_frame
             (mk_set fp) (mk_set fp2)

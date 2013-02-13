@@ -120,6 +120,56 @@ let reduce_reach fs =
   let defs3, write_ax1 = instantiate_with_terms true fs write_ax gts in
   defs @ defs2 @ defs3 @ fs, write_ax1 @ reachwo_ax2
 
+(* transforms a frame element into a set of constraints. *)
+let reduce_frame x x' a a' f f' =
+  let replacement_alloc =
+    let nxa = mk_diff a x in
+      [ mk_not (mk_elem mk_null a');
+        mk_subseteq x' a';
+        mk_subseteq nxa a';
+        mk_subseteq a' (mk_union [x'; nxa])
+      ]
+  in
+
+  let replacement_pts =
+      mk_forall [Axioms.l1]
+        (mk_implies
+          (mk_not (mk_elem Axioms.loc1 x))
+          (mk_eq (mk_read f Axioms.loc1) (mk_read f' Axioms.loc1))
+        )
+  in
+
+  (*TODO this requires the addition of the EP terms!!! *)
+  let replacement_reach =
+    let ep v = mk_ep f x v in
+    let reach1 x y z = mk_reachwo f  x y z in
+    let reach2 x y z = mk_reachwo f' x y z in
+    let open Axioms in
+      (mk_forall [l1;l2;l3]
+        (mk_implies
+          (reach1 loc1 loc2 (ep loc1))
+          (mk_iff 
+             (reach1 loc1 loc2 loc3)
+             (reach2 loc1 loc2 loc3))
+        )
+      ) :: (mk_forall [l1;l2;l3]
+        (mk_implies
+          (mk_and [mk_not (mk_elem loc1 x); mk_eq loc1 (ep loc1)])
+          (mk_iff (reach1 loc1 loc2 loc3) (reach2 loc1 loc2 loc3))
+        )
+      ) :: []
+  in
+
+  let included = mk_subseteq x a in
+  let preserve = mk_subseteq (mk_inter [a; x']) x in
+  let axioms =
+    included :: preserve ::
+    replacement_pts ::
+    replacement_alloc @
+    replacement_reach
+  in
+    axioms
+
 
 (** Reduces the given formula to the target theory fragment, as specified by the configuration *)
 let reduce f = 
