@@ -199,7 +199,7 @@ let to_form set_fct domain f =
     | List (id1, id2) ->
         ( reach id1 id2,
           mk_forall [Axioms.l1] (
-            FormUtil.mk_equiv (
+            FormUtil.mk_iff (
               FormUtil.smk_and [
                 reachWoT (mk_loc id1) Axioms.loc1 (mk_loc id2);
                 FormUtil.mk_neq Axioms.loc1 (mk_loc id2)
@@ -211,7 +211,7 @@ let to_form set_fct domain f =
       let part1 = reach x1 y1 in
       let part2 =
         mk_forall [Axioms.l1]
-          (FormUtil.mk_equiv (mk_domain domain Axioms.loc1)
+          (FormUtil.mk_iff (mk_domain domain Axioms.loc1)
                              (FormUtil.mk_and [ reachWoT (mk_loc x1) Axioms.loc1 (mk_loc y1);
                                                 FormUtil.mk_neq Axioms.loc1 (mk_loc y1)])) in
       let part3 =

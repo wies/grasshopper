@@ -57,6 +57,8 @@ let mk_ident name = (name, 0)
 let mk_free_const ?srt id = App (FreeSym id, [], srt)
 let mk_const ?srt sym = App (sym, [], srt)
 
+let mk_fresh_var ?srt name = Var (fresh_ident ("?" ^ name), srt)
+
 let mk_var ?srt id =  Var (id, srt)
 
 let mk_free_app ?srt id ts = App (FreeSym id, ts, srt)
@@ -206,7 +208,7 @@ let rec cnf =
 let mk_implies a b =
   smk_or [nnf (mk_not a); b]
 
-let mk_equiv a b =
+let mk_iff a b =
   smk_or [smk_and [a; b]; smk_and [nnf (mk_not a); nnf (mk_not b)]]
 
 (** Fold all terms appearing in the formula f using fold function fn and initial value init *)

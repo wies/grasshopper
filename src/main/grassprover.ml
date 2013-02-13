@@ -67,7 +67,6 @@ let repl input_file =
   in
   let lexbuf = Lexing.from_channel ch in 
   let rec loop context =
-    print_endline "Parse command";
     ParseError.input := input;
     ParseError.buffer := Some lexbuf;
     let next_cmnd = ParseGrass.main LexGrass.token lexbuf in

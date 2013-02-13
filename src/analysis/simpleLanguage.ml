@@ -176,7 +176,7 @@ let unify_subst sig1 sig2 subst1 subst2 =
     let argsTerm = List.map (fun (id, t) -> mk_var ~srt:t id) args in
     let f = match tpe with
       | Bool ->
-        mk_equiv
+        mk_iff
           (mk_pred id1 argsTerm)
           (mk_pred id2 argsTerm)
       | Fld Loc ->
@@ -418,14 +418,14 @@ let check_procedure proceduresMap name =
       (mk_forall [l1;l2;l3]
         (mk_implies
           (reach1 loc1 loc2 (ep loc1))
-          (mk_equiv 
+          (mk_iff 
              (reach1 loc1 loc2 loc3)
              (reach2 loc1 loc2 loc3))
         )
       ) :: (mk_forall [l1;l2;l3]
         (mk_implies
           (mk_and [mk_not (mk_elem loc1 (mk_set fp1)); mk_eq loc1 (ep loc1)])
-          (mk_equiv (reach1 loc1 loc2 loc3) (reach2 loc1 loc2 loc3))
+          (mk_iff (reach1 loc1 loc2 loc3) (reach2 loc1 loc2 loc3))
         )
       ) :: []
   in

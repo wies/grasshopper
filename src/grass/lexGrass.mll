@@ -50,7 +50,7 @@ rule token = parse
 | '(' { LPAREN }
 | ')' { RPAREN }
 | ('-'? digitchar*) as num { INT_VAL(int_of_string num) }
-| idchar* as name '_' (digitchar* as num) { print_endline num; IDENT(name, int_of_string num) }
+| idchar* as name '_' (digitchar* as num) { IDENT(name, int_of_string num) }
 | kwchar* as kw
     { try
         Hashtbl.find keyword_table kw
