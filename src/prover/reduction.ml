@@ -3,20 +3,6 @@ open Form
 open FormUtil
 open InstGen
 
-let open_axioms openCond axioms = 
-  let open_axiom = function
-  | Binder (b, vs, f, a) -> 
-      Binder (b, List.filter (~~ (openCond f)) vs, f, a)
-  | f -> f
-  in List.map open_axiom axioms
-
-let isFld f = function (_, Fld _) -> true | _ -> false
-
-let isFunVar f =
-  let fvars = vars_in_fun_terms f in
-  fun v -> IdSrtSet.mem v fvars
-
-
 (** Skolemization 
  ** assumes that f is in negation normal form *)
 let skolemize f =
@@ -40,7 +26,7 @@ let skolemize f =
     | f -> f
   in sk IdMap.empty f
 
-(** Reduce all set constraints to first-order logic 
+(** Reduce all set constraints to constraints over unary predicates
  ** assumes that f is in negation normal form *)
 let reduce_sets =
   let e = fresh_ident "?e" in
@@ -105,6 +91,19 @@ let reduce_sets =
     let f1 = elim_neq f in
     elim_sets f1
   
+let open_axioms openCond axioms = 
+  let open_axiom = function
+  | Binder (b, vs, f, a) -> 
+      Binder (b, List.filter (~~ (openCond f)) vs, f, a)
+  | f -> f
+  in List.map open_axiom axioms
+
+let isFld f = function (_, Fld _) -> true | _ -> false
+
+let isFunVar f =
+  let fvars = vars_in_fun_terms f in
+  fun v -> IdSrtSet.mem v fvars
+
 
 (** Adds instantiated theory axioms for graph reachability to formula f
  ** assumes that f is typed *)
