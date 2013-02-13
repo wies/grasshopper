@@ -149,17 +149,6 @@ module DecisionStack =
         (get_form stack)
 
   end
-      
-let to_stmnt s = match s with
-  | VarUpdate (id, Term t) -> Stmnt.VarUpdate (id, t)
-  | FunUpdate (id, ptr, Term t) -> Stmnt.FunUpdate (id, ptr, t)
-  | New id -> Stmnt.New id
-  | Dispose id -> Stmnt.Dispose id
-  | _ -> failwith("cannot convert")
-
-let convert stmnt subst =
-  let (cstr, subst) = Stmnt.ssa_partial subst [(to_stmnt stmnt)] in
-    (smk_and cstr, subst)
 
 let latest_alloc subst =
   if IdMap.mem alloc_id subst

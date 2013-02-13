@@ -1,6 +1,5 @@
 open Form
 open FormUtil
-(*open Stmnt*)
 open Axioms
 open Util
 open Logging
@@ -68,8 +67,7 @@ let compute_sl_sat () =
 let compute_sl_entails () =
   let pre_sl  = parse_given_input (fun lexbuf -> ParseSl.main LexSl.token lexbuf) (List.nth !input_file 0) in
   let post_sl = parse_given_input (fun lexbuf -> ParseSl.main LexSl.token lexbuf) (List.nth !input_file 1) in
-  (*let path_wo_label = List.filter (function Label _ -> false | _ -> true) path in*)
-  let res = Entails.check_entailment pre_sl [](*path_wo_label*) post_sl in
+  let res = Entails.check_entailment pre_sl post_sl in
     Util.print_measures ();
     match res with
     | Some true -> print_endline "not entailed"
