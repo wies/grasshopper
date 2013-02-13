@@ -21,8 +21,8 @@ let same_heap_axioms subst =
     [ Comment ("same_heap_content_pre" , mk_eq (mk_free_const pre_heap) (mk_free_const first_alloc));
       Comment ("same_heap_content_post", mk_eq (mk_free_const post_heap) (mk_free_const last_alloc)) ]
   *)
-    [ mk_eq (mk_free_const pre_heap) (mk_free_const first_alloc);
-      mk_eq (mk_free_const post_heap) (mk_free_const last_alloc) ]
+    [ mk_eq (Sl.mk_loc_set pre_heap) (Sl.mk_loc_set first_alloc);
+      mk_eq (Sl.mk_loc_set post_heap) (Sl.mk_loc_set last_alloc) ]
 
 let mk_entailment_query1 pre_sl pathf post_sl subst =
   let pre = Sl.to_grass pre_heap pre_sl in

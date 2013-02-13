@@ -188,8 +188,8 @@ let to_form set_fct domain f =
   let empty domain = empty_t (mk_loc_set domain) in
   let rec process_sep pol domain f = match f with
     | BoolConst b -> (FormUtil.mk_bool b, empty domain, IdSet.empty)
-    | Not (Eq (id1, id2)) -> (FormUtil.mk_neq (cst id1) (cst id2), empty domain, IdSet.empty) (*TODO are id1, id2 always locations ? *)
-    | Eq (id1, id2) -> (FormUtil.mk_eq (cst id1) (cst id2), empty domain, IdSet.empty) (*TODO are id1, id2 always locations ? *)
+    | Not (Eq (id1, id2)) -> (FormUtil.mk_neq (mk_loc id1) (mk_loc id2), empty domain, IdSet.empty) (*TODO are id1, id2 always locations ? *)
+    | Eq (id1, id2) -> (FormUtil.mk_eq (mk_loc id1) (mk_loc id2), empty domain, IdSet.empty) (*TODO are id1, id2 always locations ? *)
     | Emp -> (FormUtil.mk_true, empty domain, IdSet.empty)
     | PtsTo (h, id1, id2) ->
         ( FormUtil.mk_eq (FormUtil.mk_read (to_field h) (mk_loc id1)) (mk_loc id2),
@@ -214,7 +214,7 @@ let to_form set_fct domain f =
                              (FormUtil.mk_and [ reachWoT (mk_loc x1) Axioms.loc1 (mk_loc y1);
                                                 FormUtil.mk_neq Axioms.loc1 (mk_loc y1)])) in
       let part3 =
-        mk_forall []
+        mk_forall [Axioms.l1; Axioms.l2]
           (FormUtil.mk_implies (FormUtil.mk_and [ mk_domain domain Axioms.loc1;
                                                   mk_domain domain Axioms.loc2;
                                                   FormUtil.mk_eq (FormUtil.mk_read fpts Axioms.loc1) Axioms.loc2])
@@ -242,7 +242,7 @@ let to_form set_fct domain f =
       let dsc = List.map mk_loc_set ds in
       let separation =
         (FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_union dsc)) ::
-        (Util.flat_map (fun d1 -> List.map (fun d2 -> empty_t (FormUtil.mk_inter [d1; d2])) dsc) dsc)
+        (Util.flat_map (fun d1 -> Util.flat_map (fun d2 -> if d1 <> d2 then [empty_t (FormUtil.mk_inter [d1; d2])] else []) dsc) dsc)
       in
       let heap_part = FormUtil.smk_and (separation @ translated_2) in
       let struct_part = FormUtil.smk_and translated_1 in
