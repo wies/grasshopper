@@ -17,7 +17,8 @@ let isFunVar f =
   fun v -> IdSrtSet.mem v fvars
 
 
-(* Skolemization *)
+(** Skolemization 
+ ** assumes that f is in negation normal form *)
 let skolemize f =
   let rec sk vs = function
     | BoolOp (op, fs) -> BoolOp (op, List.map (sk vs) fs)
@@ -39,7 +40,8 @@ let skolemize f =
     | f -> f
   in sk IdMap.empty f
 
-(* Reduce all set constraints to first-order logic *)
+(** Reduce all set constraints to first-order logic 
+ ** assumes that f is in negation normal form *)
 let reduce_sets =
   let e = fresh_ident "?e" in
   let get_base_sort s =
