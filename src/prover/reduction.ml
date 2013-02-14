@@ -196,12 +196,11 @@ let reduce_ep fs =
   (* instantiate the variables of sort Fld and Set in all ep axioms *)
   let ep_ax = open_axioms isFunVar (Axioms.ep_axioms ()) in
   let ep_ax1 = instantiate_with_terms true fs ep_ax gts_eps in
-  fs, ep_ax1
+  fs, ep_ax1, gts_eps
 
 (** Adds instantiated theory axioms for graph reachability to formula f
  ** assumes that f is typed *)
-let reduce_reach fs =
-  let gts = TermSet.add mk_null (ground_terms (mk_and fs)) in
+let reduce_reach fs gts =
   (* instantiate the variables of sort Fld in all reachability axioms *)
   let basic_pt_flds = TermSet.filter (has_sort (Fld Loc) &&& is_free_const) gts in
   let reachwo_ax = open_axioms isFld (Axioms.reachwo_axioms ()) in
@@ -211,7 +210,7 @@ let reduce_reach fs =
   (* generate instances of all update axioms *)
   let write_ax = open_axioms isFunVar (Axioms.write_axioms ()) in
   let write_ax1 = instantiate_with_terms true fs write_ax gts in
-  fs, write_ax1 @ reachwo_ax2
+  fs, rev_concat [write_ax1; reachwo_ax2]
 
 
 (** Reduces the given formula to the target theory fragment, as specified by the configuration 
@@ -226,6 +225,7 @@ let reduce f =
   let fs1 = split_ands [] [f1] in
   let fs2 = List.map reduce_exists fs1 in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
-  let fs3 = List.map reduce_sets fs2 in
-  let fs4, reach_axioms = reduce_reach fs3 in
-  rev_concat [fs4; reach_axioms]
+  let fs3, ep_axioms, gts = reduce_ep fs2 in
+  let fs4 = List.map reduce_sets fs3 in
+  let fs5, reach_axioms = reduce_reach fs4 gts in
+  rev_concat [fs4; ep_axioms; reach_axioms]
