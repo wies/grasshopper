@@ -313,21 +313,6 @@ let check_if_frame_exists pre stack sl =
   let pathf = DecisionStack.get_form stack in
     is_frame_defined pre pathf sl subst
 
-(*
-let compute_frames pre_sl stack post_sl =
-  Debug.msg ("compute frames: precondition " ^ (Sl.to_string pre_sl) ^ "\n");
-  Debug.msg ("compute frames: postcondition " ^ (Sl.to_string post_sl) ^ "\n");
-  Debug.msg ("compute frames: stack\n" ^ (DecisionStack.to_string stack) ^ "\n");
-  Debug.msg ("compute frames: subst\n" ^ (DecisionStack.subst_to_string (DecisionStack.get_subst stack)) ^ "\n");
-  let subst = DecisionStack.get_subst stack in
-  let pre = to_lolli Entails.pre_heap pre_sl in
-  let path = DecisionStack.get_form stack in
-  let post = subst_id subst (to_lolli Entails.post_heap post_sl) in
-  let query = Frame.mk_frame_query pre path post subst in
-  let frames = Frame.infer_frame_loop subst query in
-    frames
-*)
-
 (* ... *)
 let check_procedure proceduresMap name =
   print_endline ("checking: " ^ (str_of_ident name));
@@ -523,10 +508,14 @@ let check_procedure proceduresMap name =
         let upd1 = subst_id_term ident_map upd in
         let id = subst_ident id0 ident_map in
         let id1, ident_map1, sig_map1 = fresh_ident id0 ident_map sig_map ([], Fld Loc) in
+        let tpe = match IdMap.find id1 sig_map1 with
+          | ([], t) -> Some t
+          | _ -> failwith "expected a value type, not a function"
+        in
         let f =
           mk_eq
-            (mk_free_const id1) (*TODO type*)
-            (mk_write ind (mk_free_const id) upd1) (*TODO type*)
+            (mk_free_const ?srt:tpe id1)
+            (mk_write ind (mk_free_const ?srt:tpe id) upd1)
         in
           add_to_stack stack ident_map1 sig_map1 f
       | VarUpdate (id, Term t) ->

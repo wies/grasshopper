@@ -6,7 +6,7 @@ open Logging
 let input_file = ref ""
 
 let cmd_options =
-  [("-v", Arg.Set Debug.verbose, "Display verbose messages");
+  [("-v", Arg.Unit Debug.set_debug, "Display verbose messages");
    ("-m", Arg.Set_string Prover.model_file, "Produce model");
    ("-noalloc", Arg.Clear Config.with_alloc_axioms, "Omit axioms for alloc predicate");
    ("-nonull", Arg.Clear Config.with_null_axioms, "Omit axioms for null");
@@ -41,6 +41,8 @@ let _ =
     else vc_gen !input_file
   with  
   | Sys_error s -> output_string stderr (s ^ "\n")
-  | Failure s -> output_string stderr (s ^ "\n")
+  | Failure s ->
+      let bs = if !Debug.verbose then Printexc.get_backtrace () else "" in
+        output_string stderr (s ^ "\n" ^ bs)
   | Parsing.Parse_error -> print_endline "parse error"
 	

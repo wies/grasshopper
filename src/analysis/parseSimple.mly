@@ -119,9 +119,9 @@ argsCall:
 ;
 
 pterm:
-| TIDENT DOT NEXT { FormUtil.mk_read fpts (FormUtil.mk_free_const (mk_ident $1)) }
-| TIDENT DOT PREV { FormUtil.mk_read fprev_pts (FormUtil.mk_free_const (mk_ident $1)) }
-| TIDENT { FormUtil.mk_free_const (mk_ident $1) }
+| TIDENT DOT NEXT { FormUtil.mk_read fpts (mk_loc (mk_ident $1)) }
+| TIDENT DOT PREV { FormUtil.mk_read fprev_pts (mk_loc (mk_ident $1)) }
+| TIDENT { mk_loc (mk_ident $1) }
 | LPAREN pterm RPAREN { $2 }
 ;
 
