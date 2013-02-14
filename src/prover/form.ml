@@ -182,7 +182,7 @@ let rec pr_form ppf = function
       let cmnts = extract_comments a in
       (match cmnts with
       |	"" -> fprintf ppf "%a" pr_quantifier (b, vs, f)
-      |	c -> fprintf ppf "@[<2>(!%a@ @[:named@ %s@])@]" pr_quantifier (b, vs, f) c)
+      |	c -> fprintf ppf "@[<2>(! %a@ @[:named@ %s@])@]" pr_quantifier (b, vs, f) c)
   | Atom t -> fprintf ppf "%a" pr_term t
   | BoolOp (And, []) -> fprintf ppf "%s" "true"
   | BoolOp (Or, []) -> fprintf ppf "%s" "false"
