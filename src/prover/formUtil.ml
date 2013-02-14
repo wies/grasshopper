@@ -168,6 +168,8 @@ let smk_op op fs =
             end
 	| BoolOp (op', fs0) :: fs1 when op = op' -> 
 	    mkop1 (fs0 @ fs1) acc
+	| BoolOp (And, []) :: fs1 when op = Or -> mk_true
+	| BoolOp (Or, []) :: fs1 when op = And -> mk_false
 	| f :: fs1 -> mkop1 fs1 (FormSet.add f acc)
       in mkop1 fs FormSet.empty
 

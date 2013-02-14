@@ -275,13 +275,12 @@ let check_entailment what pre_sl stack post_sl =
   let heap_content = Entails.same_heap_axioms subst in
   let wo_axioms = pre :: pathf @ [post_neg] in
   (*let axioms = Sl.make_axioms (mk_and wo_axioms) in*)
-  let query = smk_and (*axioms ::*) (heap_content @ wo_axioms) in
+  let query = nnf (smk_and (*axioms ::*) (heap_content @ wo_axioms)) in
   let _ = if !Debug.verbose then
     begin
       print_endline "query wo axioms: ";
-      print_form stdout (mk_and (wo_axioms @ heap_content))(*;
-      print_endline "query: ";
-      print_form stdout query*)
+      print_form stdout (mk_and (wo_axioms @ heap_content));
+      print_newline()
     end
   in
   let sat = Prover.check_sat query in
@@ -294,8 +293,8 @@ let check_entailment what pre_sl stack post_sl =
 let is_frame_defined pre_sl pathf post_sl subst =
   let pre = to_lolli Entails.pre_heap pre_sl in
   let post = subst_id subst (to_lolli_not_contained Entails.post_heap post_sl) in
-  let query = smk_and ( (mk_and (pre :: post :: pathf)) ::
-                        (Entails.same_heap_axioms subst) )
+  let query = nnf (smk_and ( (mk_and (pre :: post :: pathf)) ::
+                           (Entails.same_heap_axioms subst) ) )
   in
     match Prover.check_sat query with
     | Some b -> not b
