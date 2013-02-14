@@ -170,7 +170,6 @@ let isFunVar f =
   let fvars = vars_in_fun_terms f in
   fun v -> IdSrtSet.mem v fvars
 
-let isTrue f v = true
 
 
 (** Adds instantiated theory axioms for the entry point function to formula f
@@ -195,7 +194,7 @@ let reduce_ep fs =
       ep_terms_free gts
   in 
   (* instantiate the variables of sort Fld and Set in all ep axioms *)
-  let ep_ax = open_axioms isTrue (Axioms.ep_axioms ()) in
+  let ep_ax = open_axioms isFunVar (Axioms.ep_axioms ()) in
   let ep_ax1 = instantiate_with_terms true fs ep_ax gts_eps in
   fs, ep_ax1
 
