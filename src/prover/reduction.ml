@@ -232,6 +232,7 @@ let reduce f =
     | f :: gs -> split_ands (f :: acc) gs
     | [] -> List.rev acc
   in
+  let f = smk_and (f :: (Axioms.null_axioms ()) @ (Axioms.alloc_axioms ())) in
   let f1 = nnf f in
   let fs1 = split_ands [] [f1] in
   let fs2 = reduce_frame fs1 in
