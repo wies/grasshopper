@@ -138,5 +138,5 @@ atom:
 | FALSE { FormUtil.mk_false }
 | pterm EQ pterm { FormUtil.mk_eq $1 $3 }
 | pterm NEQ pterm { FormUtil.mk_not (FormUtil.mk_eq $1 $3) }
-| PIDENT args { FormUtil.mk_pred (mk_ident $1) (List.map (fun t -> FormUtil.mk_free_const t) $2) }
+| PIDENT args { FormUtil.mk_pred (mk_ident $1) (List.map (fun t -> (*FormUtil.mk_free_const*) mk_loc t) $2) }
 ;

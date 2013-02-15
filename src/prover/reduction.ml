@@ -108,7 +108,7 @@ let reduce_sets =
   
 
 (* transforms a frame element into a set of constraints. *)
-let reduce_frame x x' a a' f f' =
+let expand_frame x x' a a' f f' =
   let replacement_alloc =
     let nxa = mk_diff a x in
       [ mk_not (mk_elem mk_null a');
@@ -155,7 +155,18 @@ let reduce_frame x x' a a' f f' =
     replacement_alloc @
     replacement_reach
   in
-    axioms
+    mk_and axioms
+
+let reduce_frame fs =
+  let rec process f = match f with
+    | Atom (App (Frame, [x;x';a;a';f;f'], _)) -> expand_frame x x' a a' f f'
+    | Atom t -> Atom t
+    | BoolOp (op, fs) -> BoolOp (op, List.map process fs)
+    | Binder (b, vs, f, a) -> Binder (b, vs, process f, a)
+  in
+    List.map process fs
+  
+
 
 let open_axioms openCond axioms = 
   let open_axiom = function
@@ -223,7 +234,8 @@ let reduce f =
   in
   let f1 = nnf f in
   let fs1 = split_ands [] [f1] in
-  let fs2 = List.map reduce_exists fs1 in
+  let fs2 = reduce_frame fs1 in
+  let fs2 = List.map reduce_exists fs2 in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
   let fs3, ep_axioms, gts = reduce_ep fs2 in
   let fs4 = List.map reduce_sets fs3 in

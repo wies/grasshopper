@@ -27,13 +27,26 @@ type procedure = {
   body: stmnt
 }
 
-let rec assigned stmnt = match stmnt with
-  | Assume _ | Assume2 _ | Assert _ | Return _ -> IdSet.empty
-  | VarUpdate (t, _) | FunUpdate (t, _, _) | New t -> IdSet.singleton t
+let rec assigned_loc stmnt = match stmnt with
+  | Assume _ | Assume2 _ | Assert _ | Return _  | FunUpdate (_, _, _) -> IdSet.empty
+  | VarUpdate (t, _) | New t -> IdSet.singleton t
   | Dispose _ -> IdSet.empty
-  | Block lst -> List.fold_left (fun acc s -> IdSet.union acc (assigned s)) IdSet.empty lst
-  | While (_, _, s) -> assigned s
-  | Ite (_, s1, s2) -> IdSet.union (assigned s1) (assigned s2)
+  | Block lst -> List.fold_left (fun acc s -> IdSet.union acc (assigned_loc s)) IdSet.empty lst
+  | While (_, _, s) -> assigned_loc s
+  | Ite (_, s1, s2) -> IdSet.union (assigned_loc s1) (assigned_loc s2)
+
+let rec assigned_fld stmnt = match stmnt with
+  | Assume _ | Assume2 _ | Assert _ | Return _ -> IdSet.empty
+  | FunUpdate (t, _, _) -> IdSet.singleton t
+  | Dispose _ | New _ | VarUpdate _  -> IdSet.empty
+  | Block lst -> List.fold_left (fun acc s -> IdSet.union acc (assigned_fld s)) IdSet.empty lst
+  | While (_, _, s) -> assigned_fld s
+  | Ite (_, s1, s2) -> IdSet.union (assigned_fld s1) (assigned_fld s2)
+
+let assigned stmnt =
+  let locs = assigned_loc stmnt in
+  let flds = assigned_fld stmnt in
+    [IdSet.elements locs, Loc; IdSet.elements flds, Fld Loc]
 
 let rec change_heap stmnt = match stmnt with
   | Assume _ | Assume2 _ | Assert _ | Return _ | VarUpdate _ -> false
@@ -46,7 +59,7 @@ module DecisionStack =
   struct
 
     type subst = ident IdMap.t
-    type signatures = arity IdMap.t
+    type signatures = sort IdMap.t
 
     let subst_to_string subst =
       String.concat "\n"
@@ -160,27 +173,31 @@ let to_lolli_negated = Sl.to_grass_negated
 let to_lolli_not_contained = Sl.to_grass_not_contained
 
 let unify_subst sig1 sig2 subst1 subst2 =
-  let cstr_for (argsT, tpe)(*signature*) id1 id2 =
-    let args = List.map (fun t -> (fresh_ident "v", t)) argsT in
-    let argsTerm = List.map (fun (id, t) -> mk_var ~srt:t id) args in
+  let cstr_for tpe id1 id2 =
     let f = match tpe with
       | Bool ->
+        failwith "TODO: args of pred ?"
+        (*
         mk_iff
           (mk_pred id1 argsTerm)
           (mk_pred id2 argsTerm)
+        *)
       | Fld Loc ->
+        (*
+        let args = List.map (fun t -> (fresh_ident "v", t)) argsT in
+        let argsTerm = List.map (fun (id, t) -> mk_var ~srt:t id) args in
+        *)
         failwith "TODO: also reach"
-      | _ ->
-        mk_eq
-          (mk_free_app id1 argsTerm)
-          (mk_free_app id2 argsTerm)
+      | t ->
+        [mk_eq
+          (mk_free_const ?srt:(Some t) id1)
+          (mk_free_const ?srt:(Some t) id2)]
     in
-    let (ax, cstr) = if args <> [] then ([mk_forall args f], []) else ([], [f]) in
     let v1 = snd id1 in
     let v2 = snd id2 in
-      if v1 = v2 then (id1, [], [], [], [])
-      else if v1 < v2 then (id2, ax, cstr, [], [])
-      else (id1, [], [], ax, cstr)
+      if v1 = v2 then (id1, [], [])
+      else if v1 < v2 then (id2, f, [])
+      else (id1, [], f)
   in
   let keys = IdMap.fold (fun t _ acc -> IdSet.add t acc) subst1 IdSet.empty in
   let keys = IdMap.fold (fun t _ acc -> IdSet.add t acc) subst2 keys in
@@ -200,19 +217,18 @@ let unify_subst sig1 sig2 subst1 subst2 =
   in
   let get subst id = try IdMap.find id subst with Not_found -> id in
     IdSet.fold
-      (fun id (as1, cs1, as2, cs2, s, si) ->
+      (fun id (cs1, cs2, s, si) ->
         (* take the most recent version, if does not exists then ok. *)
         let sign = IdMap.find id signatures in
         let id1 = get subst1 id in
         let id2 = get subst2 id in
-        let (id3, a1, c1, a2, c2) = cstr_for sign id1 id2 in
-          ( a1 @ as1, c1 @ cs1,
-            a2 @ as2, c2 @ cs2,
+        let (id3, c1, c2) = cstr_for sign id1 id2 in
+          ( c1 @ cs1, c2 @ cs2,
             IdMap.add id id3 s,
             si )
       )
       keys
-      ([], [], [], [], IdMap.empty, signatures)
+      ([], [], IdMap.empty, signatures)
 
 (* Returns a subst that unifies the two branches of an if
  * i.e. if something is changed in at least one branch then
@@ -241,11 +257,11 @@ let unify stack branch1 branch2 =
   (* signatures *)
   let sig1 = DecisionStack.get_sign branch1 in
   let sig2 = DecisionStack.get_sign branch2 in
-  let (as1, cs1, as2, cs2, s3, sig3) = unify_subst sig1 sig2 s1 s2 in
+  let ((*as1,*) cs1, (*as2,*) cs2, s3, sig3) = unify_subst sig1 sig2 s1 s2 in
   (* put things together *)
   let all_axioms =
-    (List.map (fun a -> mk_implies c1 a) as1) @
-    (List.map (fun a -> mk_implies c2 a) as2) @
+    (*(List.map (fun a -> mk_implies c1 a) as1) @
+    (List.map (fun a -> mk_implies c2 a) as2) @*)
     ax1 @ ax2
   in
   let stack_with_axioms = List.fold_left DecisionStack.axiom stack all_axioms in
@@ -308,6 +324,7 @@ let is_frame_defined_path pre_sl path post_sl =
 
 (* checks is a frame exists (non-tight entailment) *)
 let check_if_frame_exists pre stack sl =
+  Debug.msg ("checking the existance of a frame.\n");
   let subst = DecisionStack.get_subst stack in
   let pathf = DecisionStack.get_form stack in
     is_frame_defined pre pathf sl subst
@@ -408,31 +425,36 @@ let check_procedure proceduresMap name =
       end
   in
   
-  let increase1 (subst, sign) id =
+  let increase1 (subst, sign) id t =
     let (name, version) =
       try IdMap.find id subst
       with Not_found -> id
     in
     let tpe = 
       try IdMap.find id sign
-      with Not_found -> failwith ("no type for " ^ (str_of_ident id))
+      with Not_found -> t
     in
       IdMap.add id (name, version + 1) subst,
       IdMap.add (name, version + 1) tpe sign
   in
-  let increase subst sign ids =
-    List.fold_left increase1 (subst, sign) ids
+  let increase subst sign ids_t =
+    List.fold_left
+      (fun acc (ids, t) ->
+        List.fold_left (fun acc i -> increase1 acc i t) acc ids)
+      (subst, sign)
+      ids_t
   in
 
   let sl_stuff_to_increase pre subst sl1 sl2 =
-    let always = [Sl.pts; (*reach_id Sl.pts;*) alloc_id] in
-      if  Sl.has_prev pre ||
-          Sl.has_prev sl1 ||
-          Sl.has_prev sl2 ||
-          IdMap.mem Sl.prev_pts subst then
-        Sl.prev_pts :: (*reach_id Sl.prev_pts ::*) always
+    let pts = if  Sl.has_prev pre ||
+                  Sl.has_prev sl1 ||
+                  Sl.has_prev sl2 ||
+                  IdMap.mem Sl.prev_pts subst then
+        [Sl.pts; Sl.prev_pts]
       else
-        always
+        [Sl.pts]
+    in
+      [pts, Fld Loc; [alloc_id], Set Loc]
   in
 
   let procedure_call pre stack m args id =
@@ -457,10 +479,9 @@ let check_procedure proceduresMap name =
       failwith "sl_replacement: precondition is not respected"
     else
       begin
-        let assigned = IdSet.elements (assigned body) in
         let subst = DecisionStack.get_subst stack in
         let sig1 = DecisionStack.get_sign stack in
-        let (subst2, sig2) = increase subst sig1 (assigned) in
+        let (subst2, sig2) = increase subst sig1 (assigned body) in
         let fp = fresh_ident "footprint" in
         let sl_f = subst_id subst2 (to_lolli fp invariant) in
         let notC = subst_id subst2 (mk_not cond) in
@@ -474,7 +495,7 @@ let check_procedure proceduresMap name =
         (* pre/post *)
         let subst = DecisionStack.get_subst stack in
         let sig1 = DecisionStack.get_sign stack in
-        let assigned = IdSet.elements (assigned body) in
+        let assigned = assigned body in
         let subst2, sig2 = increase subst sig1 (assigned @ (sl_stuff_to_increase pre subst invariant invariant)) in
         let stack2 = sl_replacement pre stack invariant subst2 sig2 invariant in
         let notC = subst_id subst2 (mk_not cond) in
@@ -495,7 +516,7 @@ let check_procedure proceduresMap name =
     let new_id = (name, m + 1) in
     let new_ident_map = IdMap.add id new_id ident_map in
     let tpe = try IdMap.find id sig_map with Not_found -> default_type in
-    let new_sig_map = IdMap.add new_id tpe sig_map in
+    let new_sig_map = IdMap.add id tpe (IdMap.add new_id tpe sig_map) in
       new_id, new_ident_map, new_sig_map
   in
 
@@ -508,11 +529,8 @@ let check_procedure proceduresMap name =
         let sig_map = DecisionStack.get_sign stack in
         let upd1 = subst_id_term ident_map upd in
         let id = subst_ident id0 ident_map in
-        let id1, ident_map1, sig_map1 = fresh_ident id0 ident_map sig_map ([], Fld Loc) in
-        let tpe = match IdMap.find id1 sig_map1 with
-          | ([], t) -> Some t
-          | _ -> failwith "expected a value type, not a function"
-        in
+        let id1, ident_map1, sig_map1 = fresh_ident id0 ident_map sig_map (Fld Loc) in
+        let tpe = Some (IdMap.find id1 sig_map1) in
         let f =
           mk_eq
             (mk_free_const ?srt:tpe id1)
@@ -523,7 +541,7 @@ let check_procedure proceduresMap name =
         let ident_map = DecisionStack.get_subst stack in
         let sig_map = DecisionStack.get_sign stack in
         let t1 = subst_id_term ident_map t in
-        let id1, ident_map1, sig_map1 = fresh_ident id ident_map sig_map ([], Loc) in
+        let id1, ident_map1, sig_map1 = fresh_ident id ident_map sig_map Loc in
         let f = mk_eq (mk_loc id1) t1 in (*TODO always a loc ?*)
           add_to_stack stack ident_map1 sig_map1 f
       | Dispose id ->
@@ -531,7 +549,7 @@ let check_procedure proceduresMap name =
         let sig_map = DecisionStack.get_sign stack in
         let id1 = (subst_ident id ident_map) in
         let alloc = subst_ident alloc_id ident_map in
-        let alloc1, ident_map1, sig_map1 = fresh_ident alloc_id ident_map sig_map ([], Set Loc) in
+        let alloc1, ident_map1, sig_map1 = fresh_ident alloc_id ident_map sig_map (Set Loc) in
         let f =
           mk_eq
             (mk_loc_set alloc1)
@@ -541,9 +559,9 @@ let check_procedure proceduresMap name =
       | New id ->
         let ident_map = DecisionStack.get_subst stack in
         let sig_map = DecisionStack.get_sign stack in
-        let id1, ident_map1, sig_map1 = fresh_ident id ident_map sig_map ([], Loc) in
+        let id1, ident_map1, sig_map1 = fresh_ident id ident_map sig_map Loc in
         let alloc = subst_ident alloc_id ident_map1 in
-        let alloc1, ident_map2, sig_map2 = fresh_ident alloc_id ident_map1 sig_map1 ([], Set Loc) in
+        let alloc1, ident_map2, sig_map2 = fresh_ident alloc_id ident_map1 sig_map1 (Set Loc) in
         let f =
           mk_eq
             (mk_loc_set alloc1)
@@ -597,7 +615,9 @@ let check_procedure proceduresMap name =
         List.fold_left traverse stack stmnts
       | While (cond, invariant, body) ->
         (* check the loop body *)
+        Debug.msg ("checking loop body.\n");
         let _ = check invariant (Block [Assume2 cond; body; Assert invariant; Assume2 (mk_false)]) in
+          Debug.msg ("loop: pre, post, and frame.\n");
           while_pre_post pre stack cond invariant body
       | VarUpdate (id, Call (m, args)) -> 
         procedure_call pre stack m args id
