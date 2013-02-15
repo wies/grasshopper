@@ -44,6 +44,7 @@ rule token = parse
 | "true" { TRUE }
 | "false" { FALSE }
 | "emp" { EMP }
+| "null" { NULL }
 | tident as name { TIDENT(name) }
 | pident as name { PIDENT(name) }
 | eof { EOF }

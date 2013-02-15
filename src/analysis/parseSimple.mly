@@ -12,7 +12,7 @@ let parse_error = ParseError.parse_error
 %token LPAREN RPAREN LBRACKET RBRACKET
 %token SEMICOLON DOT
 %token EQ NEQ
-%token PTS BPTS LS DLS TRUE FALSE EMP
+%token PTS BPTS LS DLS TRUE FALSE EMP NULL
 %token COLONEQ
 %token ASSUME ASSERT NEW NEXT PREV DISPOSE RETURN
 %token SEP AND OR NOT COMMA
@@ -56,6 +56,7 @@ procedure:
 ;
 
 term:
+| NULL { mk_ident "null" }
 | TIDENT { mk_ident $1 }
 | LPAREN term RPAREN { $2 }
 ;
@@ -122,6 +123,7 @@ pterm:
 | TIDENT DOT NEXT { FormUtil.mk_read fpts (mk_loc (mk_ident $1)) }
 | TIDENT DOT PREV { FormUtil.mk_read fprev_pts (mk_loc (mk_ident $1)) }
 | TIDENT { mk_loc (mk_ident $1) }
+| NULL { FormUtil.mk_null }
 | LPAREN pterm RPAREN { $2 }
 ;
 

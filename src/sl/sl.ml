@@ -16,8 +16,8 @@ let mk_loc_set d =
     FormUtil.mk_free_const ?srt:tpe d
 
 let mk_loc d =
-  let tpe = Some (Form.Loc) in
-    FormUtil.mk_free_const ?srt:tpe d
+  if (fst d = "null") then FormUtil.mk_null
+  else FormUtil.mk_free_const ?srt:(Some (Form.Loc)) d
 
 let fpts = to_field pts
 let fprev_pts = to_field prev_pts
