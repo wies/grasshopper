@@ -49,6 +49,7 @@ let declare_sorts session =
 let start = 
   let get_replay_chan name =
     if !Debug.verbose then
+      (* these files should probably go into the tmp directory *)
       let replay_file =  name ^ ".smt" in
       Some (open_out replay_file)
     else None
