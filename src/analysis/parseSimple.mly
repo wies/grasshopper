@@ -93,7 +93,7 @@ stmnt:
 | DISPOSE TIDENT SEMICOLON { Dispose (mk_ident $2) }
 | pterm COLONEQ rhs SEMICOLON { match $1 with
                                 | Form.App (Form.FreeSym id, [], _) -> VarUpdate (id, $3)
-                                | Form.App (Form.Read, [fld; Form.App (Form.FreeSym id, [], _)], _) -> FunUpdate (id, fld, $3)
+                                | Form.App (Form.Read, [Form.App (Form.FreeSym id, [], _); ind], _) -> FunUpdate (id, ind, $3)
                                 | _ -> failwith "pterm rule returned something strange"
                               }
 | ASSUME sl_form SEMICOLON { Assume $2 }

@@ -279,7 +279,7 @@ let check_entailment what pre_sl stack post_sl =
   let _ = if !Debug.verbose then
     begin
       print_endline "query wo axioms: ";
-      print_form stdout (mk_and (wo_axioms @ heap_content));
+      print_form stdout (smk_and (wo_axioms @ heap_content));
       print_newline()
     end
   in
@@ -514,7 +514,7 @@ let check_procedure proceduresMap name =
         let f =
           mk_eq
             (mk_free_const ?srt:tpe id1)
-            (mk_write ind (mk_free_const ?srt:tpe id) upd1)
+            (mk_write (mk_free_const ?srt:tpe id) ind upd1)
         in
           add_to_stack stack ident_map1 sig_map1 f
       | VarUpdate (id, Term t) ->
