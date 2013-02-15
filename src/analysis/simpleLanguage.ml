@@ -182,9 +182,9 @@ let latest_alloc subst =
   then IdMap.find alloc_id subst
   else alloc_id
 
-let to_lolli = Sl.to_grass
-let to_lolli_negated = Sl.to_grass_negated
-let to_lolli_not_contained = Sl.to_grass_not_contained
+let to_lolli h f subst = Sl.to_grass h (Sl.subst_id subst f)
+let to_lolli_negated h f subst = Sl.to_grass_negated h (Sl.subst_id subst f)
+let to_lolli_not_contained h f subst = Sl.to_grass_not_contained h (Sl.subst_id subst f)
 
 let unify_subst sig1 sig2 subst1 subst2 =
   let cstr_for tpe id1 id2 =
@@ -197,11 +197,19 @@ let unify_subst sig1 sig2 subst1 subst2 =
           (mk_pred id2 argsTerm)
         *)
       | Fld Loc ->
-        (*
-        let args = List.map (fun t -> (fresh_ident "v", t)) argsT in
-        let argsTerm = List.map (fun (id, t) -> mk_var ~srt:t id) args in
-        *)
-        failwith "TODO: also reach"
+        let f1 = Sl.to_field id1 in
+        let f2 = Sl.to_field id2 in
+        let same_read =
+          mk_forall [Axioms.l1]
+             (mk_eq  (mk_read f1 Axioms.loc1)
+                     (mk_read f2 Axioms.loc1))
+        in
+        let same_reach =
+            mk_forall [Axioms.l1; Axioms.l2; Axioms.l3]
+             (mk_iff (mk_reachwo f1 Axioms.loc1 Axioms.loc2 Axioms.loc3)
+                     (mk_reachwo f2 Axioms.loc1 Axioms.loc2 Axioms.loc3))
+        in
+          [ same_read; same_reach ]
       | t ->
         [mk_eq
           (mk_free_const ?srt:(Some t) id1)
@@ -299,9 +307,9 @@ let check_entailment what pre_sl stack post_sl =
   Debug.msg ("checking entailment: stack\n" ^ (DecisionStack.to_string stack) ^ "\n");
   Debug.msg ("checking entailment: subst\n" ^ (DecisionStack.subst_to_string (DecisionStack.get_subst stack)) ^ "\n");
   let subst = DecisionStack.get_subst stack in
-  let pre = to_lolli Entails.pre_heap pre_sl in
+  let pre = to_lolli Entails.pre_heap pre_sl IdMap.empty in
   let pathf = DecisionStack.get_form stack in
-  let post_neg = subst_id subst (to_lolli_negated Entails.post_heap post_sl) in
+  let post_neg = to_lolli_negated Entails.post_heap post_sl subst in
   let heap_content = Entails.same_heap_axioms subst in
   let wo_axioms = pre :: pathf @ [post_neg] in
   (*let axioms = Sl.make_axioms (mk_and wo_axioms) in*)
@@ -321,8 +329,8 @@ let check_entailment what pre_sl stack post_sl =
 
 (* Checks whether the frame exists *)
 let is_frame_defined pre_sl pathf post_sl subst =
-  let pre = to_lolli Entails.pre_heap pre_sl in
-  let post = subst_id subst (to_lolli_not_contained Entails.post_heap post_sl) in
+  let pre = to_lolli Entails.pre_heap pre_sl IdMap.empty in
+  let post = to_lolli_not_contained Entails.post_heap post_sl IdMap.empty in
   let query = nnf (smk_and ( (mk_and (pre :: post :: pathf)) ::
                            (Entails.same_heap_axioms subst) ) )
   in
@@ -418,8 +426,8 @@ let check_procedure proceduresMap name =
         let alloc1 = last_alloc subst in
         let fp = fresh_ident "footprint" in
         let fp2 = fresh_ident "footprint" in
-        let sl_1f = subst_id subst (to_lolli fp sl_1) in
-        let sl_2f = subst_id subst2 (to_lolli fp2 sl_2) in
+        let sl_1f = to_lolli fp sl_1 subst in
+        let sl_2f = to_lolli fp2 sl_2 subst2 in
         let alloc2 = last_alloc subst2 in
         let get_pts pts subst = Sl.to_field (try IdMap.find pts subst with Not_found -> pts) in
         let get_next = get_pts Sl.pts in
@@ -497,7 +505,7 @@ let check_procedure proceduresMap name =
         let sig1 = DecisionStack.get_sign stack in
         let (subst2, sig2) = increase subst sig1 (assigned body) in
         let fp = fresh_ident "footprint" in
-        let sl_f = subst_id subst2 (to_lolli fp invariant) in
+        let sl_f = to_lolli fp invariant subst2 in
         let notC = subst_id subst2 (mk_not cond) in
           add_to_stack stack subst2 sig2 (smk_and [notC; sl_f])
       end
@@ -597,13 +605,23 @@ let check_procedure proceduresMap name =
           (*check postcond and assume false !*)
           check_entailment (proc_name ^ "_return_" ^ (str_of_ident newT)) pre stackWithReturn post;
           DecisionStack.step stack (mk_false) IdMap.empty IdMap.empty
+      | Return (App (Null, [], tpe) ) -> 
+        let post = proc.postcondition in
+        let subst = DecisionStack.get_subst stack in
+        let sign = DecisionStack.get_sign stack in
+        let newT = mk_ident "null" in
+        let subst = IdMap.add (mk_ident "returned") newT subst in
+        let stackWithReturn = DecisionStack.step stack mk_true subst sign in
+          (*check postcond and assume false !*)
+          check_entailment (proc_name ^ "_return_" ^ (str_of_ident newT)) pre stackWithReturn post;
+          DecisionStack.step stack (mk_false) IdMap.empty IdMap.empty
       | Return t -> failwith "TODO: return expect an id for the moment"
       | Assume f ->
         (*sll to lolli*)
         let subst = DecisionStack.get_subst stack in
         let sig_map = DecisionStack.get_sign stack in
         let cur_alloc = latest_alloc subst in
-        let c = subst_id subst (to_lolli cur_alloc f) in
+        let c = to_lolli cur_alloc f subst in
           add_to_stack stack subst sig_map c
       | Assert f ->
         check_entailment (proc_name ^ "_return_" ^ "assertion_" ^ (Sl.to_string f)) pre stack f;

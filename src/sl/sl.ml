@@ -159,7 +159,7 @@ let rec has_prev f = match f with
 let mk_exists = FormUtil.mk_exists
 let mk_forall = FormUtil.mk_forall
 
-let cst = FormUtil.mk_free_const
+(*let cst = FormUtil.mk_free_const*)
 let reachWoT a b c = FormUtil.mk_reachwo (fpts) a b c
 let reachWo a b c = reachWoT (mk_loc a) (mk_loc b) (mk_loc c)
 let reach a b = reachWo a b b
