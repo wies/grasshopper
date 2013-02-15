@@ -24,7 +24,7 @@ let all_vars = [f1; f2; s1; l1; l2; l3; l4; l5]
 
 let alloc_id = (mk_ident "Alloc")
 
-let alloc_set = mk_var ~srt:(Set Loc) alloc_id
+let alloc_set = mk_free_const ~srt:(Set Loc) alloc_id
 
 let mk_axiom name f =
   let fvars = fv f in
