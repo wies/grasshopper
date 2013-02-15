@@ -10,13 +10,13 @@ The code written by us is released under a BSD license, see file
 LICENSE. 
 
 Required:
-- OCaml, version >= 3.12.1
+- OCaml, version >= 3.12
 - Z3, version >= 3.2
 
 Instalation instructions: 
 - Untar the distribution
 - Type 
-  ./build.sh
+     ./build.sh
   This will produce native code compiled executables.
 - To run GRASShopper execute, e.g.
      ./analyzer.native tests/sl/reverse

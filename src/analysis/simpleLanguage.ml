@@ -283,7 +283,7 @@ let check_entailment what pre_sl stack post_sl =
       print_newline()
     end
   in
-  let sat = Prover.check_sat query in
+  let sat = Prover.check_sat ~session_name:what query in
     match sat with
     | Some true -> failwith ("cannot prove assertion (sat) for " ^ what) (*TODO model*)
     | Some false -> ()
@@ -499,6 +499,8 @@ let check_procedure proceduresMap name =
       new_id, new_ident_map, new_sig_map
   in
 
+  let proc_name = str_of_ident proc.name in
+
   let rec check pre stmnt =
     let rec traverse stack stmnt = match stmnt with
       | FunUpdate (id0, ind, Term upd) ->
@@ -561,7 +563,7 @@ let check_procedure proceduresMap name =
         let subst = IdMap.add (mk_ident "returned") newT subst in
         let stackWithReturn = DecisionStack.step stack mk_true subst sign in
           (*check postcond and assume false !*)
-          check_entailment ("return " ^ (str_of_ident newT)) pre stackWithReturn post;
+          check_entailment (proc_name ^ "_return_" ^ (str_of_ident newT)) pre stackWithReturn post;
           DecisionStack.step stack (mk_false) IdMap.empty IdMap.empty
       | Return t -> failwith "TODO: return expect an id for the moment"
       | Assume f ->
@@ -572,7 +574,7 @@ let check_procedure proceduresMap name =
         let c = subst_id subst (to_lolli cur_alloc f) in
           add_to_stack stack subst sig_map c
       | Assert f ->
-        check_entailment ("assertion " ^ (Sl.to_string f)) pre stack f;
+        check_entailment (proc_name ^ "_return_" ^ "assertion_" ^ (Sl.to_string f)) pre stack f;
         stack
       | Assume2 f ->
         let subst = DecisionStack.get_subst stack in
@@ -610,6 +612,6 @@ let check_procedure proceduresMap name =
     let final_stack = traverse DecisionStack.empty stmnt in
     (* check for postcondition (void methods) *)
     let post = proc.postcondition in
-      check_entailment "endOfMethod" pre final_stack post
+      check_entailment (proc_name ^ "_endOfMethod") pre final_stack post
   in
     check proc.precondition proc.body

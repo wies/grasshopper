@@ -4,7 +4,8 @@ open ParseSmtLibAux
 
 (* Todo: add proper error handling *)
 
-type session = { init: bool;
+type session = { name: string;
+                 init: bool;
 		 in_chan: in_channel;
 		 out_chan: out_channel;
 		 replay_chan: out_channel option;
@@ -45,17 +46,20 @@ let declare_sorts session =
   else 
     writeln session ("(declare-sort " ^ fld_sort_string ^ " 1)")
 
-let start smt_cmd replay_file produce_models produce_interpolants = 
-  let in_chan, out_chan = Unix.open_process smt_cmd in
-  let replay_chan = 
-    match replay_file with
-    | Some filename -> Some (open_out filename)
-    | None -> None
+let start = 
+  let get_replay_chan name =
+    if !Debug.verbose then
+      let replay_file =  name ^ ".smt" in
+      Some (open_out replay_file)
+    else None
   in
-  let session = { init = true; 
+  fun session_name smt_cmd produce_models produce_interpolants ->
+  let in_chan, out_chan = Unix.open_process smt_cmd in
+  let session = { name = session_name;
+                  init = true; 
 		  in_chan = in_chan; 
 		  out_chan = out_chan;
-		  replay_chan = replay_chan;
+		  replay_chan = get_replay_chan session_name;
 		  assert_count = 0;
                   sat_checked = false;
 		  stack_height = 0 }
@@ -81,21 +85,11 @@ let start smt_cmd replay_file produce_models produce_interpolants =
   declare_sorts session;
   session
 
-let start_z3 =
-  let cnt = ref 0 in
-  let replay_file () =
-    if !Debug.verbose then
-      begin
-        cnt := !cnt + 1;
-        Some ("z3_" ^ (string_of_int !cnt) ^ ".in")
-      end
-    else None
-  in
-    (fun () -> start "z3 -smt2 -ini:z3.ini -in" (replay_file ()) true false)
+let start_z3 session_name = start session_name "z3 -smt2 -ini:z3.ini -in" true false
     
 (*let start_z3 replay_file = start "z3 -smt2 -ini:z3.ini -in" replay_file true false*)
       
-let start_mathsat replay_file = start "mathsat -verbosity=0 -interpolation=true" replay_file false true
+let start_mathsat session_name = start session_name "mathsat -verbosity=0 -interpolation=true" false true
     
 let quit session = 
   writeln session "(exit)";

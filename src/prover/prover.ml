@@ -16,7 +16,7 @@ let dump_model model =
   end
 
 
-let mk_solver f = 
+let mk_solver name f = 
   let f_inst =
     if !Config.instantiate
     then (*Util.measure_call "instantiate"*) Reduction.reduce f 
@@ -32,7 +32,7 @@ let mk_solver f =
           axioms_f @ ground_f
       end
   in
-  let session = SmtLib.start_z3 () in
+  let session = SmtLib.start_z3 name in
   let prove () =
     Debug.msg "sending to prover\n";
 
@@ -50,8 +50,8 @@ let mk_solver f =
   let result = Util.measure_call "prove" prove () in
   (result, session)
 
-let check_sat f =
-  let (result, session) = mk_solver f in
+let check_sat ?(session_name="form") f =
+  let (result, session) = mk_solver session_name f in
   (match result with
   | Some true ->
       if !model_file <> "" then
@@ -136,7 +136,7 @@ module ModelGenerator =
         ignore (SmtLib.quit generator);
         failwith "cannot solve ?!"
 
-    let initial_query f = try_get_model (mk_solver f)
+    let initial_query name f = try_get_model (mk_solver name f)
 
     let add_blocking_clause generator clause =
       (*TODO sanity checks: no qantifiers, ... *)
