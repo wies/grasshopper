@@ -1,6 +1,7 @@
 open Form
 open FormUtil
 open Axioms
+open Entails
 
 type expr =
   | Term of term
@@ -54,6 +55,19 @@ let rec change_heap stmnt = match stmnt with
   | Block lst -> List.exists change_heap lst
   | While (_, _, s) -> change_heap s
   | Ite (_, s1, s2) -> (change_heap s1) || (change_heap s2)
+
+
+let alloc_id = (mk_ident "Alloc")
+
+let alloc_set = mk_free_const ~srt:(Set Loc) alloc_id
+
+let null_axioms () =
+  let nll = mk_eq (f mk_null) mk_null in
+  if !Config.with_null_axioms then [mk_axiom "null" nll] else []
+
+let alloc_axioms () = 
+  let alc = mk_not (mk_elem mk_null alloc_set) in
+  if !Config.with_alloc_axioms then [mk_axiom "alloc_init" alc] else []
 
 module DecisionStack =
   struct
@@ -629,7 +643,20 @@ let check_procedure proceduresMap name =
           traverse stack2 t2
     in
     (* check the body *)
-    let final_stack = traverse DecisionStack.empty stmnt in
+    let to_map lst =
+      List.fold_left
+        (fun acc (k,v) -> IdMap.add k v acc)
+        IdMap.empty
+        lst
+    in
+    let init_stack =
+      DecisionStack.step
+        DecisionStack.empty
+        (smk_and ((null_axioms ()) @ (alloc_axioms ())))
+        IdMap.empty
+        (to_map [(alloc_id, Set Loc);(Sl.pts, Fld Loc);(Sl.prev_pts, Fld Loc)])
+    in
+    let final_stack = traverse init_stack stmnt in
     (* check for postcondition (void methods) *)
     let post = proc.postcondition in
       check_entailment (proc_name ^ "_endOfMethod") pre final_stack post

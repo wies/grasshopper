@@ -1,7 +1,11 @@
 open Form
 open FormUtil
 open Axioms
-open Stmnt
+
+
+let alloc_id = (mk_ident "Alloc")
+
+let alloc_set = mk_free_const ~srt:(Set Loc) alloc_id
 
 (* static declaration of the heaps *)
 let pre_heap_id = "A"

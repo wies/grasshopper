@@ -22,10 +22,6 @@ let set1 = mk_var ~srt:(snd s1) (fst s1)
 
 let all_vars = [f1; f2; s1; l1; l2; l3; l4; l5]
 
-let alloc_id = (mk_ident "Alloc")
-
-let alloc_set = mk_free_const ~srt:(Set Loc) alloc_id
-
 let mk_axiom name f =
   let fvars = fv f in
   let bvars = List.filter (fun v -> IdSet.mem (fst v) fvars) all_vars in
@@ -102,14 +98,6 @@ let reachwo_axioms () =
      mk_axiom "trans1" trn1; 
      mk_axiom "trans2" trn2]
   else []
-
-let null_axioms () =
-  let nll = mk_eq (f mk_null) mk_null in
-  if !with_null_axioms then [mk_axiom "null" nll] else []
-
-let alloc_axioms () = 
-  let alc = mk_not (mk_elem mk_null alloc_set) in
-  if !with_alloc_axioms then [mk_axiom "alloc_init" alc] else []
 
 (* the following two axioms should be redundant 
 
