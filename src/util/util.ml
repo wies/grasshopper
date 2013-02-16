@@ -45,6 +45,13 @@ let rec partial_map f = function
       |	Some y -> y :: partial_map f xs
       |	None -> partial_map f xs
 
+(** Like List.fold_left2 but ignores the tail of the longer list instead of throwing an exception *)
+let rec fold_left2 fn init xs ys =
+  match xs, ys with
+  | [], _ 
+  | _, [] -> init
+  | x :: xs1, y :: ys1 -> fold_left2 fn (fn init x y) xs1 ys1
+
 (** Tail-recursive concatenation of lists *)
 let rev_concat lists = List.fold_left (List.fold_left (fun acc f -> f :: acc)) [] lists
 

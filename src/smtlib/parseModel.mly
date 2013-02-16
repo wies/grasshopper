@@ -7,7 +7,9 @@ let process_definition m def =
   let sym = fst def in
   match snd def with
      | (arity, _) :: _ ->
-	 List.fold_right (fun (_, defs) -> Model.add_def sym defs) (snd def) 
+	 List.fold_right 
+	   (fun (_, defs) -> Model.add_def sym defs) 
+	   (snd def) 
 	   (Model.add_decl sym arity m)
      | [] -> m
 

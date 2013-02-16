@@ -81,6 +81,11 @@ module FormSet = Set.Make(struct
     let compare = compare
   end)
 
+module SymbolSet = Set.Make(struct
+    type t = symbol
+    let compare = compare
+  end)
+
 module SymbolMap = Map.Make(struct
     type t = symbol
     let compare = compare

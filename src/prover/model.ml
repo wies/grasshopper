@@ -95,6 +95,33 @@ let to_clauses model =
 	     
 let to_form model = Clauses.to_form (to_clauses model)
 
+let eval_term model t = 
+  let const_map = const_map model in 
+  let apply sym args = 
+    let defs = 
+      try SymbolMap.find sym model.interp 
+      with Not_found -> 
+	try
+	  let rep_sym = SymbolMap.find sym const_map in
+	  SymbolMap.find rep_sym model.interp 
+	with Not_found -> []
+    in
+    try 
+      let def = List.find (fun def -> def.input = args) defs in
+      def.output 
+    with Not_found -> begin
+      match args with
+      | [] -> failwith ("Model.class_of_term: constant " ^ str_of_symbol sym ^ " is undefined")
+      | _ -> failwith ("Model.class_of_term: function " ^ str_of_symbol sym ^ " is not totally defined")
+    end
+  in 
+  let rec eval = function
+    | Var _ -> failwith "Model.class_of_term: term is not ground"
+    | App (sym, ts, _) ->
+	let args = List.map eval ts in
+	apply sym args
+  in try Some (eval t) with _ ->  None
+
 let print_model model =
   print_form stdout (to_form model)
     
@@ -122,18 +149,43 @@ let print_model2 model =
     
 let output_graphviz chan model =
   let const_map = const_map model in 
+  let colors = ["blue"; "red"; "green"; "orange"; "darkviolet"] in
+  let flds = 
+    let read_flds = 
+      List.fold_left 
+	(fun flds def -> match def.input with
+	| [fld; _] -> SymbolSet.add fld flds
+	| _ -> flds)
+	SymbolSet.empty (defs_of Read model)
+    in
+    List.fold_left 
+      (fun flds def -> match def.input with
+      | [fld; _; _; _] -> SymbolSet.add fld flds
+      | _ -> flds)
+      read_flds (defs_of ReachWO model)
+  in
+  let fld_colors =
+    Util.fold_left2 (fun acc fld color -> (fld, color)::acc) [] (SymbolSet.elements flds) colors
+  in
+  let get_label fld =
+    let fld_sym = SymbolMap.find fld const_map in
+    let color =
+      try List.assoc fld fld_colors with Not_found -> "black"
+    in
+    Printf.sprintf "label=\"%s\", fontcolor=%s, color=%s" (str_of_symbol fld_sym) color color
+  in
   let output_flds () = 
     List.iter 
       (fun def ->
 	match def.input with
 	| [fld; i] ->
-	    let fld_sym = SymbolMap.find fld const_map in
-	    Printf.fprintf chan "\"%s\" -> \"%s\" [label = \"%s\"]\n" 
-	      (str_of_symbol i) (str_of_symbol def.output) (str_of_symbol fld_sym) 
+	    let label = get_label fld in
+	    Printf.fprintf chan "\"%s\" -> \"%s\" [%s]\n" 
+	      (str_of_symbol i) (str_of_symbol def.output) label
 	| _ -> ()) 
       (defs_of Read model)
   in
-  let output_reach () = 
+  let output_reach fld_colors = 
     let defs  = 
       Util.filter_map 
 	(fun def -> def.output = BoolConst true) 
@@ -141,7 +193,7 @@ let output_graphviz chan model =
 	(defs_of ReachWO model)
     in
     let grouped_defs = 
-      List.fold_left 
+      List.fold_left
 	(fun groups (fld, def) -> 
 	  let fld_defs = try SymbolMap.find fld groups with Not_found -> [] in
 	  SymbolMap.add fld (def :: fld_defs) groups
@@ -149,6 +201,7 @@ let output_graphviz chan model =
 	SymbolMap.empty defs
     in
     let process_fld fld defs =
+      let label = get_label fld in
       let reach = 
 	List.fold_left (fun acc -> function 
 	  | [i11; i21; _] when i11 <> i21 ->
@@ -164,11 +217,13 @@ let output_graphviz chan model =
 	      else acc
 	  | _ -> acc) SymbolMap.empty defs
       in
-      let fld_sym = SymbolMap.find fld const_map in
       SymbolMap.iter 
 	(fun i o -> 
-	  Printf.fprintf chan "\"%s\" -> \"%s\" [label = \"%s\", style=dashed]\n" 
-	    (str_of_symbol i) (str_of_symbol o) (str_of_symbol fld_sym)
+	  match eval_term model (mk_read (mk_const fld) (mk_const i)) with
+	  | Some o' when o = o' -> ()
+	  | _ ->
+	      Printf.fprintf chan "\"%s\" -> \"%s\" [%s, style=dashed]\n" 
+		(str_of_symbol i) (str_of_symbol o) label
 	) 
 	reach
     in
@@ -182,30 +237,42 @@ let output_graphviz chan model =
 	  Printf.fprintf chan "\"%s\" -> \"%s\"\n" (str_of_symbol sym) (str_of_symbol (List.hd defs).output)
       | _ -> ()) model.interp
   in
-  output_string chan "digraph Model {\n";
-  output_vars ();
-  output_reach ();
-  output_flds ();
-  output_string chan "}\n"
+  let output_sets () =
+    let print_set sym defs =
+      match decl_of sym model with
+      |	([Loc], Bool) ->
+	  let inset = filter_map (fun def -> def.output = BoolConst true ) (fun def -> List.hd def.input) defs in
+	  let setrep = String.concat ", " (List.map str_of_symbol inset) in
+	  output_string chan "      <TR>\n";
+	  Printf.fprintf chan "        <TD>%s</TD><TD>%s</TD>\n" (str_of_symbol sym) ("{" ^ setrep ^ "}");
+	  output_string chan "      </TR>\n"
+      |	_ -> ()	
+    in 
+    (* table header *)
+    output_string chan "{ rank = sink; Legend [shape=none, margin=0, label=<\n";
+    output_string chan "    <TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\" CELLPADDING=\"4\">\n";
+    output_string chan "      <TR>\n";
+    output_string chan "        <TD COLSPAN=\"2\"><B>Sets</B></TD>\n";
+    output_string chan "      </TR>\n";
+    (* print sets *)
+    SymbolMap.iter print_set model.interp;
+    (* table footer *)
+    output_string chan "</TABLE>\n";
+    output_string chan ">];\n";
+    output_string chan "}\n";
+
+  in
+  let output_graph () =
+    output_string chan "digraph Model {\n";
+    output_vars ();
+    output_reach ();
+    output_flds ();
+    output_sets ();
+    output_string chan "}\n"
+  in
+  output_graph ()
     
-let eval_term model t = 
-  let apply id args = 
-    let defs = try SymbolMap.find id model.interp with Not_found -> [] in
-    try 
-      let def = List.find (fun def -> def.input = args) defs in
-      def.output 
-    with Not_found -> begin
-      match args with
-      | [] -> failwith ("Model.class_of_term: constant " ^ str_of_symbol id ^ " is undefined")
-      | _ -> failwith ("Model.class_of_term: function " ^ str_of_symbol id ^ " is not totally defined")
-    end
-  in 
-  let rec eval = function
-    | Var _ -> failwith "Model.class_of_term: term is not ground"
-    | App (sym, ts, _) ->
-	let args = List.map eval ts in
-	apply sym args
-  in try Some (eval t) with _ -> None
+
       
 (* 
 let prune m terms =
