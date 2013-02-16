@@ -179,9 +179,9 @@ let latest_alloc subst =
   then IdMap.find alloc_id subst
   else alloc_id
 
-let to_lolli h f subst = Sl.to_grass h (Sl.subst_id subst f)
-let to_lolli_negated h f subst = Sl.to_grass_negated h (Sl.subst_id subst f)
-let to_lolli_not_contained h f subst = Sl.to_grass_not_contained h (Sl.subst_id subst f)
+let to_lolli h f subst = subst_id subst (Sl.to_grass h (Sl.subst_id subst f))
+let to_lolli_negated h f subst = subst_id subst (Sl.to_grass_negated h (Sl.subst_id subst f))
+let to_lolli_not_contained h f subst = subst_id subst (Sl.to_grass_not_contained h (Sl.subst_id subst f))
 
 let unify_subst sig1 sig2 subst1 subst2 =
   let cstr_for tpe id1 id2 =
