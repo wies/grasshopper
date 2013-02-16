@@ -6,8 +6,8 @@ module IdSet = Form.IdSet
 let ident_to_string = Form.str_of_ident
 
 (* the next pointer *)
-let pts = mk_ident "sl_next"
-let prev_pts = mk_ident "sl_prev"
+let pts = mk_ident "next"
+let prev_pts = mk_ident "prev"
 
 let to_field f = FormUtil.mk_free_const ?srt:(Some (Form.Fld Form.Loc)) f
 
