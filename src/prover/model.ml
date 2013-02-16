@@ -241,10 +241,16 @@ let output_graphviz chan model =
     let print_set sym defs =
       match decl_of sym model with
       |	([Loc], Bool) ->
-	  let inset = filter_map (fun def -> def.output = BoolConst true ) (fun def -> List.hd def.input) defs in
-	  let setrep = String.concat ", " (List.map str_of_symbol inset) in
+	  let in_set, not_in_set = 
+	    partition_map 
+	      (fun def -> def.output = BoolConst true ) 
+	      (fun def -> List.hd def.input) 
+	      defs 
+	  in
+	  let in_set_rep = String.concat ", " (List.map str_of_symbol in_set) in
+	  let not_in_set_rep = String.concat ", " (List.map str_of_symbol not_in_set) in
 	  output_string chan "      <TR>\n";
-	  Printf.fprintf chan "        <TD>%s</TD><TD>%s</TD>\n" (str_of_symbol sym) ("{" ^ setrep ^ "}");
+	  Printf.fprintf chan "        <TD>%s</TD><TD>%s</TD><TD>%s</TD>\n" (str_of_symbol sym) in_set_rep not_in_set_rep;
 	  output_string chan "      </TR>\n"
       |	_ -> ()	
     in 
@@ -252,7 +258,7 @@ let output_graphviz chan model =
     output_string chan "{ rank = sink; Legend [shape=none, margin=0, label=<\n";
     output_string chan "    <TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\" CELLPADDING=\"4\">\n";
     output_string chan "      <TR>\n";
-    output_string chan "        <TD COLSPAN=\"2\"><B>Sets</B></TD>\n";
+    output_string chan "        <TD><B>Set</B></TD><TD><B>contains</B></TD><TD><B>excludes</B></TD>\n";
     output_string chan "      </TR>\n";
     (* print sets *)
     SymbolMap.iter print_set model.interp;

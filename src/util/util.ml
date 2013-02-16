@@ -36,6 +36,10 @@ let generate_list (f : int -> 'a) (n : int) : 'a list =
 let filter_map p f xs =
   List.fold_right (fun x ys -> if p x then f x :: ys else ys) xs []
 
+(** Composition of [List.map] and [List.partition] *)
+let partition_map p f xs =
+  List.fold_right (fun x (ys1, ys2) -> if p x then (f x :: ys1, ys2) else (ys1, f x :: ys2)) xs ([], [])
+
 let flat_map f ls = List.flatten (List.map f ls)
 
 let rec partial_map f = function
