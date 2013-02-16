@@ -327,7 +327,7 @@ let check_entailment what pre_sl stack post_sl =
 (* Checks whether the frame exists *)
 let is_frame_defined pre_sl pathf post_sl subst =
   let pre = to_lolli Entails.pre_heap pre_sl IdMap.empty in
-  let post = to_lolli_not_contained Entails.post_heap post_sl IdMap.empty in
+  let post = to_lolli_not_contained Entails.post_heap post_sl subst in
   let query = nnf (smk_and ( (mk_and (pre :: post :: pathf)) ::
                            (Entails.same_heap_axioms subst) ) )
   in
@@ -335,11 +335,6 @@ let is_frame_defined pre_sl pathf post_sl subst =
     | Some b -> not b
     | None -> failwith "is_frame_defined: Prover returned None"
 
-(*
-let is_frame_defined_path pre_sl path post_sl =
-  let pathf, subst = ssa_partial IdMap.empty path in
-    is_frame_defined pre_sl pathf post_sl subst
-*)
 
 (* checks is a frame exists (non-tight entailment) *)
 let check_if_frame_exists pre stack sl =
@@ -481,6 +476,7 @@ let check_procedure proceduresMap name =
       List.map
         (fun f -> match f with
           | Term (App ((FreeSym id), [], _)) -> id
+          | Term (App (Null, [], _)) -> mk_ident "null" (*TODO !!*)
           | _ -> failwith "for the moment, the arguments of call should be constants"
         ) args
     in
@@ -547,13 +543,14 @@ let check_procedure proceduresMap name =
         let ident_map = DecisionStack.get_subst stack in
         let sig_map = DecisionStack.get_sign stack in
         let upd1 = subst_id_term ident_map upd in
+        let ind1 = subst_id_term ident_map ind in
         let id = subst_ident id0 ident_map in
         let id1, ident_map1, sig_map1 = fresh_ident id0 ident_map sig_map (Fld Loc) in
         let tpe = Some (IdMap.find id1 sig_map1) in
         let f =
           mk_eq
             (mk_free_const ?srt:tpe id1)
-            (mk_write (mk_free_const ?srt:tpe id) ind upd1)
+            (mk_write (mk_free_const ?srt:tpe id) ind1 upd1)
         in
           add_to_stack stack ident_map1 sig_map1 f
       | VarUpdate (id, Term t) ->
@@ -582,9 +579,12 @@ let check_procedure proceduresMap name =
         let alloc = subst_ident alloc_id ident_map1 in
         let alloc1, ident_map2, sig_map2 = fresh_ident alloc_id ident_map1 sig_map1 (Set Loc) in
         let f =
-          mk_eq
-            (mk_loc_set alloc1)
-            (mk_union [mk_loc_set alloc; mk_setenum [mk_loc id1]])
+          mk_and [
+            mk_eq
+              (mk_loc_set alloc1)
+              (mk_union [mk_loc_set alloc; mk_setenum [mk_loc id1]]);
+            mk_not (mk_elem (mk_loc id1) (mk_loc_set alloc))
+          ]
         in
         (* add a skolem cst v |-> _, TODO is it really needed ? *)
         let curr_pts = Sl.to_field (try IdMap.find Sl.pts ident_map2 with Not_found -> Sl.pts) in
