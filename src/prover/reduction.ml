@@ -7,7 +7,7 @@ open InstGen
  ** assumes that f is in negation normal form *)
 let skolemize f =
   let rec sk vs = function
-    | BoolOp (op, fs) -> BoolOp (op, List.map (sk vs) fs)
+    | BoolOp (op, fs) -> smk_op op (List.map (sk vs) fs)
     | Binder (Forall, bvs, f, a) ->
 	let vs1 = 
 	  List.fold_left 
@@ -214,14 +214,18 @@ let reduce_ep fs =
 let reduce_reach fs gts =
   (* instantiate the variables of sort Fld in all reachability axioms *)
   let basic_pt_flds = TermSet.filter (has_sort (Fld Loc) &&& is_free_const) gts in
-  let reachwo_ax = open_axioms isFld (Axioms.reachwo_axioms ()) in
-  let reachwo_ax1 = instantiate_with_terms false fs reachwo_ax basic_pt_flds in
+  let null_ax = open_axioms isFld (Axioms.null_axioms ()) in
+  let null_ax1 = instantiate_with_terms false fs null_ax basic_pt_flds in
+  let fs1 = null_ax1 @ fs in
+  let gts1 = TermSet.union gts (ground_terms (smk_and null_ax1)) in
+  let reach_ax = open_axioms isFld (Axioms.reachwo_axioms ()) in
+  let reach_ax1 = instantiate_with_terms false fs1 reach_ax basic_pt_flds in
   (* generate local instances of all axioms in which variables occur below function symbols *)
-  let reachwo_ax2 = instantiate_with_terms true fs (open_axioms isFunVar reachwo_ax1) gts in
+  let reach_ax2 = instantiate_with_terms true fs1 (open_axioms isFunVar reach_ax1) gts1 in
   (* generate instances of all update axioms *)
   let write_ax = open_axioms isFunVar (Axioms.write_axioms ()) in
-  let write_ax1 = instantiate_with_terms true fs write_ax gts in
-  fs, rev_concat [write_ax1; reachwo_ax2]
+  let write_ax1 = instantiate_with_terms true fs1 write_ax gts1 in
+  fs1, rev_concat [write_ax1; reach_ax2]
 
 
 (** Reduces the given formula to the target theory fragment, as specified by the configuration 
@@ -240,4 +244,4 @@ let reduce f =
   let fs3, ep_axioms, gts = reduce_ep fs2 in
   let fs4 = List.map reduce_sets fs3 in
   let fs5, reach_axioms = reduce_reach fs4 gts in
-  rev_concat [fs4; ep_axioms; reach_axioms]
+  rev_concat [fs5; ep_axioms; reach_axioms]

@@ -3,7 +3,7 @@ open Form
 open ParseSmtLibAux
 open Axioms
 
-(*let parse_error = ParseError.parse_error*)
+let parse_error = ParseError.parse_error
 %}
 
 %token <int> NUM

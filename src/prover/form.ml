@@ -12,6 +12,8 @@ type sort =
 type arity = sort list * sort
 
 type symbol =
+  (* boolean constants *)
+  | BoolConst of bool
   (* function symbols *)
   | Null | Read | Write | EntPnt
   | Empty | SetEnum | Union | Inter | Diff
@@ -22,6 +24,12 @@ type symbol =
   | Elem | SubsetEq 
   (* free constants, functions, and predicates *)
   | FreeSym of ident
+
+let symbols = 
+  [BoolConst true; BoolConst false; 
+   Null; Read; Write; EntPnt;
+   Empty; SetEnum; Union; Inter; Diff;
+   Eq; ReachWO; Frame; Elem; SubsetEq]
 
 (* Terms and formulas *)
 
@@ -92,6 +100,7 @@ let str_of_ident (name, n) =
 
 let str_of_symbol = function
   (* function symbols *)
+  | BoolConst b -> Printf.sprintf "%b" b
   | Null -> "null"
   | Read -> 
       if !Config.encode_fields_as_arrays 

@@ -2,12 +2,9 @@ open Util
 open Form
 open FormUtil
 
-type output_sort = 
-    Int of int 
-  | Bool of bool
-	
-type def = { input : int list;
-	     output : output_sort}
+
+type def = { input : symbol list;
+	     output : symbol}
 
 type interpretation = def list SymbolMap.t
 
@@ -25,7 +22,16 @@ let add_def sym (i, o) model =
     with Not_found -> []
   in
   {model with interp = SymbolMap.add sym ({input=i; output=o} :: defs) model.interp}
-    
+
+let add_decl sym arity model =
+  {model with sign = SymbolMap.add sym arity model.sign}
+
+let decl_of sym model = SymbolMap.find sym model.sign
+
+let defs_of sym model = 
+  try SymbolMap.find sym model.interp with Not_found -> [] 
+
+
 let filter_defs p model =
   SymbolMap.fold 
     (fun id defs fmodel ->
@@ -46,37 +52,32 @@ let const_map m =
       (fun id defs acc ->
 	match defs with
 	| [def] when def.input = [] -> 
-	    (match def.output with
-	    | Int o -> IntMap.add o id acc
-	    | _ -> acc)
+	    SymbolMap.add def.output id acc
 	| _ -> acc)
-      m.interp IntMap.empty
+      m.interp SymbolMap.empty
   in
   SymbolMap.fold 
     (fun id defs acc ->
       List.fold_left (fun acc def ->
 	List.fold_left (fun acc i ->
-	  if IntMap.mem i acc then acc
-	  else IntMap.add i (FreeSym (fresh_ident "c")) acc)
+	  if SymbolMap.mem i acc then acc
+	  else SymbolMap.add i (FreeSym (fresh_ident "c")) acc)
 	  acc def.input)
 	acc defs)
     m.interp consts
     
 let to_clauses model =
   let const_map = const_map model in 
-  let mk_rep n = mk_const (IntMap.find n const_map) in
-  let constants = IntMap.fold (fun n _ acc -> mk_rep n :: acc) const_map [] in
+  let mk_rep n = mk_const (SymbolMap.find n const_map) in
+  let constants = SymbolMap.fold (fun n _ acc -> mk_rep n :: acc) const_map [] in
   let form_of_def sym def = 
     match def.output with
-    | Bool b -> 
+    | BoolConst b -> 
 	let a = mk_atom sym (List.map mk_rep def.input) in
 	if b then a else mk_not a
-    | Int out ->
-	let rhs = mk_rep out in
-	let lhs =
-	  match def.input with
-	  | [] -> mk_const sym
-	  | reps -> mk_app sym (List.map mk_rep reps)
+    | o ->
+	let rhs = mk_rep o in
+	let lhs = mk_app sym (List.map mk_rep def.input)
 	in mk_eq lhs rhs
   in
   let def_forms =
@@ -103,22 +104,18 @@ let print_model2 model =
       print_string (str_of_symbol sym ^ " = ");
       match defs with
       | [def] when List.length def.input = 0 -> 
-	  (match def.output with
-	  | Int out -> Printf.printf " -> %d\n" out
-	  | Bool out -> Printf.printf " -> %b\n" out)
+	  Printf.printf " -> %s\n" (str_of_symbol def.output)
       | _ ->
 	  print_string "\n  [";
 	  List.iter (fun def -> 
 	    begin
 	      match def.input with
 	      | is -> 
-		  Printf.printf "(%d" (List.hd is);
-		  List.iter (Printf.printf ", %d") (List.tl is);
+		  Printf.printf "(%s" (str_of_symbol (List.hd is));
+		  List.iter (fun i -> Printf.printf ", %s" (str_of_symbol i)) (List.tl is);
 		  print_string ")"
 	    end;
-	    (match def.output with
-	    | Int out -> Printf.printf " -> %d" out
-	    | Bool out -> Printf.printf " -> %b" out);
+	    Printf.printf " -> %s" (str_of_symbol def.output);
 	    print_string "\n   ")
 	    defs;
 	  print_string "]\n") model.interp
@@ -126,35 +123,30 @@ let print_model2 model =
 let output_graphviz chan model =
   let const_map = const_map model in 
   let output_flds () = 
-    SymbolMap.iter 
-      (fun sym defs ->
-	List.iter 
-	  (fun def ->
-	    match def.input with
-	    | [i] ->
-		(match def.output with
-		| Int o -> Printf.fprintf chan "%d -> %d [label = \"%s\"]\n" i o (str_of_symbol sym) 
-		| _ -> ())
-	    | _ -> ())
-	  defs) 
-      model.interp	
+    List.iter 
+      (fun def ->
+	match def.input with
+	| [fld; i] ->
+	    let fld_sym = SymbolMap.find fld const_map in
+	    Printf.fprintf chan "\"%s\" -> \"%s\" [label = \"%s\"]\n" 
+	      (str_of_symbol i) (str_of_symbol def.output) (str_of_symbol fld_sym) 
+	| _ -> ()) 
+      (defs_of Read model)
   in
   let output_reach () = 
     let defs  = 
-      try 
-	Util.filter_map 
-	  (fun def -> def.output = Bool true) 
-	  (fun def -> (List.hd def.input, List.tl def.input))
-	  (SymbolMap.find ReachWO model.interp)
-      with Not_found -> []
+      Util.filter_map 
+	(fun def -> def.output = BoolConst true) 
+	(fun def -> (List.hd def.input, List.tl def.input))
+	(defs_of ReachWO model)
     in
     let grouped_defs = 
       List.fold_left 
 	(fun groups (fld, def) -> 
-	  let fld_defs = try IntMap.find fld groups with Not_found -> [] in
-	  IntMap.add fld (def :: fld_defs) groups
+	  let fld_defs = try SymbolMap.find fld groups with Not_found -> [] in
+	  SymbolMap.add fld (def :: fld_defs) groups
 	)
-	IntMap.empty defs
+	SymbolMap.empty defs
     in
     let process_fld fld defs =
       let reach = 
@@ -168,29 +160,26 @@ let output_graphviz chan model =
 			  i11 = i13 && i23 = i21 && i33 = i32 
 		      | _ -> false) defs
 		  | _ -> true) defs)
-	      then IntMap.add i11 i21 acc
+	      then SymbolMap.add i11 i21 acc
 	      else acc
-	  | _ -> acc) IntMap.empty defs
+	  | _ -> acc) SymbolMap.empty defs
       in
-      let fld_sym = IntMap.find fld const_map in
-      IntMap.iter 
+      let fld_sym = SymbolMap.find fld const_map in
+      SymbolMap.iter 
 	(fun i o -> 
-	  Printf.fprintf chan "%d -> %d [label = \"%s\", style=dashed]\n" 
-	    i o (str_of_symbol fld_sym)
+	  Printf.fprintf chan "\"%s\" -> \"%s\" [label = \"%s\", style=dashed]\n" 
+	    (str_of_symbol i) (str_of_symbol o) (str_of_symbol fld_sym)
 	) 
 	reach
     in
-    IntMap.iter process_fld grouped_defs
+    SymbolMap.iter process_fld grouped_defs
   in
   let output_vars () = 
     SymbolMap.iter (fun sym defs ->
-      match defs with
-      | [def] when List.length def.input = 0 ->
-	  (match def.output with
-	  | Int o -> 
-	      Printf.fprintf chan "%s [shape=box]\n" (str_of_symbol sym);
-	      Printf.fprintf chan "%s -> %d\n" (str_of_symbol sym) o 
-	  | _ -> ())
+      match decl_of sym model with
+      |	([], Loc) ->
+	  Printf.fprintf chan "\"%s\" [shape=box]\n" (str_of_symbol sym);
+	  Printf.fprintf chan "\"%s\" -> \"%s\"\n" (str_of_symbol sym) (str_of_symbol (List.hd defs).output)
       | _ -> ()) model.interp
   in
   output_string chan "digraph Model {\n";
@@ -204,9 +193,7 @@ let eval_term model t =
     let defs = try SymbolMap.find id model.interp with Not_found -> [] in
     try 
       let def = List.find (fun def -> def.input = args) defs in
-      match def.output with
-      | Int out -> out
-      | Bool b -> failwith "expected Int"
+      def.output 
     with Not_found -> begin
       match args with
       | [] -> failwith ("Model.class_of_term: constant " ^ str_of_symbol id ^ " is undefined")
@@ -220,6 +207,7 @@ let eval_term model t =
 	apply sym args
   in try Some (eval t) with _ -> None
       
+(* 
 let prune m terms =
   fold (fun sym def sm -> 
     let keep_def = 
@@ -248,3 +236,4 @@ let prune m terms =
     in
     if keep_def then add_def sym (def.input, def.output) sm else sm)
     m empty
+*)

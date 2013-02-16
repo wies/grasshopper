@@ -61,8 +61,8 @@ let write_axioms () =
       mk_or [mk_and [r u v w; r u v loc1];
 	     mk_and [mk_not (mk_eq loc1 w); r u loc1 w; r loc2 v loc1; r loc2 v w]]
     in
-    mk_and [mk_or [mk_not (mk_reachwo new_fld1 loc3 loc4 loc5); new_reachwo loc3 loc4 loc5];
-	    mk_or [mk_reachwo new_fld1 loc3 loc4 loc5; mk_not (new_reachwo loc3 loc4 loc5)]]
+    smk_and [smk_or [mk_not (mk_reachwo new_fld1 loc3 loc4 loc5); new_reachwo loc3 loc4 loc5];
+	    smk_or [mk_reachwo new_fld1 loc3 loc4 loc5; mk_not (new_reachwo loc3 loc4 loc5)]]
   in
   (if not !encode_fields_as_arrays then [mk_axiom "upd1" f_upd1; mk_axiom "upd2" f_upd2] else []) @ 
   (if !with_reach_axioms then [mk_axiom "reachwo_upd" reachwo_upd] else [])
@@ -73,10 +73,8 @@ let reachwo_axioms () =
   let reac = mk_or [mk_not (reachwo loc1 loc2 loc3); 
 		    reachwo loc1 loc2 loc2] in 
   let step = mk_or [reachwo loc1 (f loc1) loc2; mk_eq loc1 loc2] in
-  (* let ufld = mk_or [mk_not (reachwo loc1 loc2 loc3); mk_eq loc1 loc2; reachwo (af loc1) loc2 loc3] in *)
   let cycl = mk_or [mk_not (mk_eq (f loc1) loc1); 
 		    mk_not (reachwo loc1 loc2 loc2); mk_eq loc1 loc2] in
-  (* let cycl2 = mk_or [mk_not (reachwo loc1 loc2 loc3); mk_not (reachwo loc2 loc1 loc3); mk_not (reachwo loc1 loc3 loc3); mk_eq loc1 loc2; mk_eq loc1 loc3] in *)
   let sndw = mk_or [mk_not (reachwo loc1 loc2 loc1); mk_eq loc1 loc2] in
   let lin1 = mk_or [mk_not (reachwo loc1 loc2 loc2); reachwo loc1 loc3 loc2; reachwo loc1 loc2 loc3] in
   let lin2  = mk_or [mk_not (reachwo loc1 loc2 loc3); mk_not (reachwo loc1 loc4 loc5); 
@@ -99,20 +97,11 @@ let reachwo_axioms () =
      mk_axiom "trans2" trn2]
   else []
 
-(* the following two axioms should be redundant 
 
-let alloc_update_axioms id alloc new_alloc =
-  let x = mk_const id in
-  let in_alloc x = mk_elem x alloc_set in
-  let mk_new_alloc x = mk_pred new_alloc [x] in
-  [mk_not (mk_alloc x); 
-   mk_new_alloc x;
-   mk_or [mk_eq x var1; mk_not (mk_alloc var1); mk_new_alloc var1];
-   mk_or [mk_eq x var1; mk_not (mk_new_alloc var1); mk_alloc var1]]
+let null_axioms () =
+  let nll = mk_eq (f mk_null) mk_null in
+  if !Config.with_null_axioms then [mk_axiom "null" nll] else []
 
-let alloc_dispose_axioms id alloc new_alloc =
-  alloc_update_axioms id new_alloc alloc
-*)
 
 (* entry point axioms: when entering a part of the heap, used for SL*)
 let ep_axioms () =
@@ -130,62 +119,3 @@ let ep_axioms () =
 let extract_axioms fs =
   List.partition (fun f -> IdSet.empty <> fv f) fs
 
-(*
-let get_eps f =
-  IdMap.fold 
-    (fun id decl acc ->
-      if (not decl.is_pred) && decl.arity = 1 && is_ep id then IdSet.add (fun_of_ep id) acc
-      else acc)
-    (sign f) IdSet.empty
-(*******)
-
-
-
-
-let unary_funs f =
-  IdMap.fold 
-    (fun id decl acc ->
-      if (not decl.is_pred) then
-        begin
-          if decl.arity = 1 && not (is_ep id) then IdSet.add id acc
-          else if decl.arity = 2 && is_jp id then IdSet.add (fun_of_jp id) acc
-          else acc
-        end
-      else if decl.is_pred && decl.arity = 3 && is_reach id then IdSet.add (fun_of_reach id) acc
-      else acc)
-    (sign f) IdSet.empty
-
-
-let make_axioms fs =
-  let unaries = List.map (fun f -> unary_funs (mk_and f)) fs in
-  let init_funs = List.map (fun set -> IdSet.filter (fun (_, n) -> n = 0) set) unaries in
-  let _, rev_already_declared =
-    List.fold_left
-      (fun (lhs, acc) uns -> (IdSet.union lhs uns, (IdSet.filter (fun id -> IdSet.mem id lhs) uns) :: acc) )
-      (IdSet.empty, [])
-      unaries
-  in
-  let already_declared = List.rev rev_already_declared in
-  let all_init = List.map2 IdSet.union init_funs already_declared in
-  let axioms =
-    List.map2
-      (fun unary init ->
-        IdSet.fold (fun id acc -> reach_axioms id @ acc) init [] @
-        IdSet.fold (fun id acc -> null_axioms id @ fun_axioms id @ acc) unary []
-      )
-      unaries
-      all_init
-  in
-  (alloc_axioms () @ List.hd axioms) :: (List.tl axioms)
-
-let add_axioms fs =
-  let axioms = make_axioms fs in
-    List.map2 (@) axioms fs
-*)
-
-(*
-let skolemize fresh_const axiom =
-  let vars = fv axiom in
-  let subst_map = IdSet.fold (fun v acc -> IdMap.add v (fresh_const ()) acc ) vars IdMap.empty in
-    subst subst_map axiom
-*)

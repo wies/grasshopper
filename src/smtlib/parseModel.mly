@@ -2,11 +2,19 @@
 open Form
 
 let parse_error = ParseError.parse_error
+
+let process_definition m def =
+  let sym = fst def in
+  match snd def with
+     | (arity, _) :: _ ->
+	 List.fold_right (fun (_, defs) -> Model.add_def sym defs) (snd def) 
+	   (Model.add_decl sym arity m)
+     | [] -> m
+
 %}
 
-%token <string * int> IDENT
-%token <int> ELEM
-%token <bool> BOOL
+%token <Form.symbol> SYMBOL
+%token <Form.sort * Form.symbol> VAL
 %token LBRACE RBRACE ARROW ELSE
 %token UNSPEC
 %token EOF
@@ -16,14 +24,13 @@ let parse_error = ParseError.parse_error
 
    
 main:
-  definition main { List.fold_right (Model.add_def (fst $1)) (snd $1) $2 }
-| definition EOF {List.fold_right (Model.add_def (fst $1)) (snd $1) Model.empty}
+  definition main { process_definition $2 $1 }
+| definition EOF { process_definition Model.empty $1 }
 ;
 
 definition:
-  IDENT ARROW ELEM { (FreeSym $1, [([], Model.Int $3)]) }
-| IDENT ARROW BOOL { (FreeSym $1, [([], Model.Bool $3)]) }
-| IDENT ARROW LBRACE mappings RBRACE { (FreeSym $1, $4) }
+  SYMBOL ARROW VAL { ($1, [(([], fst $3), ([], snd $3))]) }
+| SYMBOL ARROW LBRACE mappings RBRACE { ($1, $4) }
 ; 
 
 mappings:
@@ -33,12 +40,11 @@ mappings:
 ;
 
 mapping:
-  args ARROW BOOL { ($1, Model.Bool $3) }
-| args ARROW ELEM { ($1, Model.Int $3) }
+| args ARROW VAL { ((fst $1, fst $3), (snd $1, snd $3)) }
 ;
 
 args:
-  ELEM args { $1 :: $2 }
-| ELEM { [$1] }
+  VAL args { (fst $1 :: fst $2, snd $1 :: snd $2) }
+| VAL { ([fst $1], [snd $1]) }
 ;
 
