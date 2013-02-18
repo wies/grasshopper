@@ -3,18 +3,18 @@ filter(x)
 requires lseg(x, null)
 ensures lseg(x, null)
 {
-    prev := null;
+    prv := null;
     curr := x;
-    while (curr ~= null) (lseg(x,prev) * prev |-> curr * lseg(curr,null)) || 
-                         (prev = null * lseg(x,curr) * lseg(curr,null)) 
+    while (curr ~= null) (lseg(x,prv) * prv |-> curr * lseg(curr,null)) || 
+                         (prv = null * lseg(x,curr) * lseg(curr,null)) 
     {
       if (Random) {
-        if (prev ~= null) {
-          prev.next := curr.next;
+        if (prv ~= null) {
+          prv.next := curr.next;
         } else {}
         free curr;
       } else {
-        prev := curr;
+        prv := curr;
       }
       curr := curr.next;
     }
