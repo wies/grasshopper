@@ -4,15 +4,6 @@ open FormUtil
 open Axioms
 
   
-let congr_classes fs gterms inst_terms =
-  let cc_graph = new CongruenceClosure.dag (TermSet.elements gterms) in
-  List.iter
-    (fun f -> match f with
-    | Atom (App (Eq, _, _)) -> cc_graph#add_constr f
-    | _ -> () )
-    fs;
-  List.filter (fun cc -> List.exists (fun t -> TermSet.mem t inst_terms) cc) cc_graph#get_cc
-
 let choose_rep_terms classes =
   let find_rep cl = 
     try List.find (function App (_, [], _) -> true | _ -> false) cl
@@ -137,8 +128,7 @@ let generate_instances useLocalInst axioms terms rep_map =
   epr_axioms @ rev_concat (List.rev_map gen partitioned_axioms)
   
 
-let instantiate_with_terms local fs axioms inst_terms =
-  let classes = congr_classes fs (ground_terms (smk_and fs)) inst_terms in
+let instantiate_with_terms local axioms classes =
   let _ = 
     if !Debug.verbose then
       ignore
@@ -190,10 +180,10 @@ let get_ground_terms f =
             g1 g1
       end
     else g1
-*)
 
-let instantiate fs =
+let instantiate fs classes =
   let gterms_f = ground_terms (mk_and fs) in
-  let instances = instantiate_with_terms true fs fs gterms_f in
+  let instances = instantiate_with_terms true fs gterms_f in
   fs @ instances
 
+*)

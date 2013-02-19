@@ -104,7 +104,7 @@ let reduce_sets =
     | BoolOp (op, fs) -> BoolOp (op, List.map elim_sets fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, elim_sets f, a)
   in
-  fun f -> elim_sets f
+  fun fs gts -> List.map elim_sets fs, TermSet.fold (fun t gts1 -> TermSet.add (abstract_set_consts t) gts1) gts TermSet.empty
   
 
 (* transforms a frame element into a set of constraints. *)
@@ -187,6 +187,7 @@ let isFunVar f =
  ** assumes that f is typed and that all frame predicates have been reduced *)
 let reduce_ep fs =
   let gts = TermSet.add mk_null (ground_terms (mk_and fs)) in
+  let loc_gts = TermSet.filter (has_sort Loc) gts in
   (* generate ep terms *)
   let rec get_ep_terms eps = function
     | App (EntPnt, ts, _) as t -> List.fold_left get_ep_terms (TermSet.add t eps) ts
@@ -199,14 +200,15 @@ let reduce_ep fs =
       (fun t eps ->
 	match t with
 	| App (EntPnt, [fld; set; loc], srt) -> 
-	    TermSet.fold (fun t eps -> TermSet.add (App (EntPnt, [fld; set; t], srt)) eps) gts eps
+	    TermSet.fold (fun t eps -> TermSet.add (App (EntPnt, [fld; set; t], srt)) eps) loc_gts eps
 	| _ -> eps
       )
       ep_terms_free gts
   in 
   (* instantiate the variables of sort Fld and Set in all ep axioms *)
+  let classes = CongruenceClosure.congr_classes fs gts_eps in
   let ep_ax = open_axioms isFunVar (Axioms.ep_axioms ()) in
-  let ep_ax1 = instantiate_with_terms true fs ep_ax gts_eps in
+  let ep_ax1 = instantiate_with_terms true ep_ax classes in
   fs, ep_ax1, gts_eps
 
 (** Adds instantiated theory axioms for graph reachability to formula f
@@ -214,17 +216,28 @@ let reduce_ep fs =
 let reduce_reach fs gts =
   (* instantiate the variables of sort Fld in all reachability axioms *)
   let basic_pt_flds = TermSet.filter (has_sort (Fld Loc) &&& is_free_const) gts in
+  let classes =  CongruenceClosure.congr_classes fs gts in
+  (* let _ = List.iter (List.iter (fun t -> print_endline (string_of_term t))) classes in *)
   let null_ax = open_axioms isFld (Axioms.null_axioms ()) in
-  let null_ax1 = instantiate_with_terms false fs null_ax basic_pt_flds in
+  let null_ax1 = instantiate_with_terms false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
   let fs1 = null_ax1 @ fs in
-  let gts1 = TermSet.union gts (ground_terms (smk_and null_ax1)) in
+  (*let gts1 = TermSet.union gts (ground_terms (smk_and null_ax1)) in
+  let classes1 = CongruenceClosure.congr_classes fs1 gts1 in*)
+  let non_updated_flds = 
+    TermSet.filter 
+      (fun t -> List.for_all 
+	  (function 
+	    | (App (Write, _, _)) -> false 
+	    | _ -> true) (CongruenceClosure.class_of t classes))
+      basic_pt_flds
+  in
   let reach_ax = open_axioms isFld (Axioms.reachwo_axioms ()) in
-  let reach_ax1 = instantiate_with_terms false fs1 reach_ax basic_pt_flds in
+  let reach_ax1 = instantiate_with_terms false reach_ax (CongruenceClosure.restrict_classes classes non_updated_flds) in
   (* generate local instances of all axioms in which variables occur below function symbols *)
-  let reach_ax2 = instantiate_with_terms true fs1 (open_axioms isFunVar reach_ax1) gts1 in
+  let reach_ax2 = instantiate_with_terms true (open_axioms isFunVar reach_ax1) classes in
   (* generate instances of all update axioms *)
   let write_ax = open_axioms isFunVar (Axioms.write_axioms ()) in
-  let write_ax1 = instantiate_with_terms true fs1 write_ax gts1 in
+  let write_ax1 = instantiate_with_terms true write_ax classes in
   fs1, rev_concat [write_ax1; reach_ax2]
 
 
@@ -242,6 +255,6 @@ let reduce f =
   let fs2 = List.map reduce_exists fs2 in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
   let fs3, ep_axioms, gts = reduce_ep fs2 in
-  let fs4 = List.map reduce_sets fs3 in
-  let fs5, reach_axioms = reduce_reach fs4 gts in
-  rev_concat [fs5; ep_axioms; reach_axioms]
+  let fs4, gts1 = reduce_sets (fs3 @ ep_axioms) gts in
+  let fs5, reach_axioms = reduce_reach fs4 gts1 in
+  rev_concat [fs5; reach_axioms]

@@ -242,3 +242,16 @@ class dag = fun expr ->
 
   end
 
+let congr_classes fs gterms =
+  let cc_graph = new dag (TermSet.elements gterms) in
+  List.iter
+    (fun f -> match f with
+    | Atom (App (Eq, _, _)) -> cc_graph#add_constr f
+    | _ -> () )
+    fs;
+  cc_graph#get_cc
+
+let class_of t classes = List.find (List.mem t) classes
+
+let restrict_classes classes ts =
+  List.filter (fun cc -> List.exists (fun t -> TermSet.mem t ts) cc) classes
