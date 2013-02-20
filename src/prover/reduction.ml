@@ -223,16 +223,16 @@ let reduce_reach fs gts =
   let fs1 = null_ax1 @ fs in
   (*let gts1 = TermSet.union gts (ground_terms (smk_and null_ax1)) in
   let classes1 = CongruenceClosure.congr_classes fs1 gts1 in*)
-  let non_updated_flds = 
+  (*let non_updated_flds = 
     TermSet.filter 
       (fun t -> List.for_all 
 	  (function 
 	    | (App (Write, _, _)) -> false 
 	    | _ -> true) (CongruenceClosure.class_of t classes))
       basic_pt_flds
-  in
+  in*)
   let reach_ax = open_axioms isFld (Axioms.reachwo_axioms ()) in
-  let reach_ax1 = instantiate_with_terms false reach_ax (CongruenceClosure.restrict_classes classes non_updated_flds) in
+  let reach_ax1 = instantiate_with_terms false reach_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
   (* generate local instances of all axioms in which variables occur below function symbols *)
   let reach_ax2 = instantiate_with_terms true (open_axioms isFunVar reach_ax1) classes in
   (* generate instances of all update axioms *)
