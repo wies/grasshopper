@@ -240,12 +240,17 @@ let to_form set_fct domain f =
           translated 
       in
       let dsc = List.map mk_loc_set ds in
-      let separation =
-        (FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_union dsc)) ::
-        (Util.flat_map (fun d1 -> Util.flat_map (fun d2 -> if d1 <> d2 then [empty_t (FormUtil.mk_inter [d1; d2])] else []) dsc) dsc)
+      let separation1 = FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_union dsc) in
+      let separation2 =
+        Util.flat_map
+          (fun d1 ->
+            Util.flat_map
+              (fun d2 -> if d1 <> d2 then [empty_t (FormUtil.mk_inter [d1; d2])] else [])
+              dsc)
+          dsc
       in
-      let heap_part = FormUtil.smk_and (separation @ translated_2) in
-      let struct_part = FormUtil.smk_and translated_1 in
+      let heap_part = FormUtil.smk_and (separation1 :: translated_2) in
+      let struct_part = FormUtil.smk_and (separation2 @ translated_1) in
         (struct_part, heap_part, domains)
     | other -> failwith ("process_sep does not expect " ^ (to_string other))
   in

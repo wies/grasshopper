@@ -126,7 +126,6 @@ let expand_frame x x' a a' f f' =
         )
   in
 
-  (*TODO this requires the addition of the EP terms!!! *)
   let replacement_reach =
     let ep v = mk_ep f x v in
     let reach1 x y z = mk_reachwo f  x y z in
