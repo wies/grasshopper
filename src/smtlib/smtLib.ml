@@ -68,6 +68,9 @@ let start =
   writeln session "(set-option :print-success false)";
   if produce_models then begin
     writeln session "(set-option :produce-models true)";
+    writeln session "(set-option :MODEL_V2 true)";
+    writeln session "(set-option :MODEL_PARTIAL true)";
+    writeln session "(set-option :MODEL_HIDE_UNUSED_PARTITIONS true)"
     (*writeln session "(set-option :produce-unsat-cores true)"*)
   end;
   if produce_interpolants then writeln session "(set-option :produce-interpolants true)";
@@ -86,7 +89,7 @@ let start =
   declare_sorts session;
   session
 
-let start_z3 session_name = start session_name "z3 -smt2 -ini:z3.ini -in" true false
+let start_z3 session_name = start session_name "z3 -smt2 -in" true false
     
 (*let start_z3 replay_file = start "z3 -smt2 -ini:z3.ini -in" replay_file true false*)
       
