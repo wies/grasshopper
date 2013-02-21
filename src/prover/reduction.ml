@@ -215,6 +215,41 @@ let reduce_ep fs =
 let reduce_reach fs gts =
   (* instantiate the variables of sort Fld in all reachability axioms *)
   let basic_pt_flds = TermSet.filter (has_sort (Fld Loc) &&& is_free_const) gts in
+  (* propagate read terms *)
+  let gts = 
+    let writes = 
+      TermSet.fold 
+	(fun t acc -> match t with
+	|  App (Write, fld :: _, _) as fld' -> (fld, fld') :: acc
+	| _ -> acc
+	)
+	gts []
+    in
+    let reads =
+      TermSet.fold
+	(fun t acc -> match t with
+	|  App (Read, [fld; arg], _) -> (fld, arg) :: acc
+	| _ -> acc
+	)
+	gts []
+    in
+    let rec propagate gts reads =
+      let new_reads, new_gts = 
+	List.fold_left 
+	  (fun (new_reads, new_gts) (fld, arg) ->
+	    try 
+	      let fld' = List.assoc fld writes in 
+	      (*let _ = print_endline ("adding term " ^ string_of_term (mk_read fld' arg)) in*)
+	      (fld', arg) :: new_reads, TermSet.add (mk_read fld' arg) new_gts
+	    with Not_found -> new_reads, new_gts
+	  )
+	  ([], gts) reads
+      in
+      match new_reads with
+      |	[] -> new_gts 
+      |	_ -> propagate new_gts new_reads
+    in propagate gts reads
+  in
   let classes =  CongruenceClosure.congr_classes fs gts in
   (* let _ = List.iter (List.iter (fun t -> print_endline (string_of_term t))) classes in *)
   let null_ax = open_axioms isFld (Axioms.null_axioms ()) in

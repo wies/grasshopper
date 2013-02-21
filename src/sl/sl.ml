@@ -198,12 +198,13 @@ let to_form set_fct domain f =
         )
     | List (id1, id2) ->
         ( reach id1 id2,
-          mk_forall [Axioms.l1] (
-            FormUtil.mk_iff
-              (FormUtil.smk_and [
+          FormUtil.mk_comment ("def_of_" ^ Form.str_of_ident domain) 
+	    (mk_forall [Axioms.l1] (
+             FormUtil.mk_iff
+               (FormUtil.smk_and [
                 reachWoT (mk_loc id1) Axioms.loc1 (mk_loc id2);
                 FormUtil.mk_neq Axioms.loc1 (mk_loc id2) ] )
-              (mk_domain domain Axioms.loc1) ),
+               (mk_domain domain Axioms.loc1) )),
           IdSet.empty
         )
     | DList (x1, x2, y1, y2) ->

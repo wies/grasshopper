@@ -70,15 +70,15 @@ let generate_instances useLocalInst axioms terms rep_map =
             ground_terms)
         fun_terms
     in
+    (*print_endline "\nSubstituting in:"; 
+    print_form stdout axiom;
+    print_endline "\nwith substitution:";
+    IdMap.iter (fun id t -> print_endline (str_of_ident id ^ " -> " ^ string_of_term t)) subst_map;*)
     if not useLocalInst || is_local ()
-    then ((*print_endline "\nSubstituting in:"; 
-	  print_form stdout axiom;
-	  print_endline "\nwith substitution:";
-	  IdMap.iter (fun id t -> print_endline (str_of_ident id ^ " -> " ^ string_of_term t)) subst_map;
-	  print_endline "\nResult:";
+    then ((*print_endline "\nResult:";
 	  print_form stdout (subst subst_map axiom);*)
 	  subst subst_map axiom :: acc)
-    else acc
+    else ((*print_endline "non local instance";*) acc)
   in
   let partitioned_axioms = 
     let add_class acc vars cl = 
