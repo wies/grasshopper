@@ -103,9 +103,10 @@ let reduce_exists =
 
 let factorize_axioms fs =
   let rec extract f axioms = match f with
-    | Binder (Forall, _ :: _, _, _) -> 
+    | Binder (Forall, (_ :: _ as vs), f1, a) -> 
         let p = mk_atom (FreeSym (fresh_ident "Axiom")) [] in
-	p, mk_or [mk_not p; f] :: axioms
+        let fact_axiom = annotate (mk_or [mk_not p; Binder (Forall, vs, f1, [])]) a in
+	p, fact_axiom :: axioms
     | BoolOp (op, fs) -> 
 	let fs1, axioms = 
 	  List.fold_right 
@@ -183,66 +184,64 @@ let reduce_sets_to_predicates =
   fun fs gts -> List.map elim_sets fs, TermSet.fold (fun t gts1 -> TermSet.add (abstract_set_consts t) gts1) gts TermSet.empty
   
 
-(* transforms a frame element into a set of constraints. *)
-let expand_frame x x' a a' f f' =
-  let replacement_alloc =
-    let nxa = mk_diff a x in
+(** Reduce all frame predicates to constraints over sets and entry points. *)
+let reduce_frame fs =
+  let expand_frame x x' a a' f f' =
+    let replacement_alloc =
+      let nxa = mk_diff a x in
       [ mk_not (mk_elem mk_null a');
         mk_subseteq x' a';
         mk_subseteq nxa a';
         mk_subseteq a' (mk_union [x'; nxa])
       ]
-  in
+    in
 
-  let replacement_pts =
+    let replacement_pts =
       mk_forall [Axioms.l1]
         (mk_implies
-          (mk_not (mk_elem Axioms.loc1 x))
-          (mk_eq (mk_read f Axioms.loc1) (mk_read f' Axioms.loc1))
+           (mk_not (mk_elem Axioms.loc1 x))
+           (mk_eq (mk_read f Axioms.loc1) (mk_read f' Axioms.loc1))
         )
-  in
+    in
 
-  let replacement_reach =
-    let ep v = mk_ep f x v in
-    let reach1 x y z = mk_reachwo f  x y z in
-    let reach2 x y z = mk_reachwo f' x y z in
-    let open Axioms in
+    let replacement_reach =
+      let ep v = mk_ep f x v in
+      let reach1 x y z = mk_reachwo f  x y z in
+      let reach2 x y z = mk_reachwo f' x y z in
+      let open Axioms in
       (mk_forall [l1;l2;l3]
-        (mk_implies
-          (reach1 loc1 loc2 (ep loc1))
-          (mk_iff 
-             (reach1 loc1 loc2 loc3)
-             (reach2 loc1 loc2 loc3))
-        )
+         (mk_implies
+            (reach1 loc1 loc2 (ep loc1))
+            (mk_iff 
+               (reach1 loc1 loc2 loc3)
+               (reach2 loc1 loc2 loc3))
+         )
       ) :: (mk_forall [l1;l2;l3]
-        (mk_implies
-          (mk_and [mk_not (mk_elem loc1 x); mk_eq loc1 (ep loc1)])
-          (mk_iff (reach1 loc1 loc2 loc3) (reach2 loc1 loc2 loc3))
-        )
-      ) :: []
-  in
-
-  let included = mk_subseteq x a in
-  let preserve = mk_subseteq (mk_inter [a; x']) x in
-  let axioms =
-    included :: preserve ::
-    replacement_pts ::
-    replacement_alloc @
-    replacement_reach
-  in
+              (mk_implies
+                 (mk_and [mk_not (mk_elem loc1 x); mk_eq loc1 (ep loc1)])
+                 (mk_iff (reach1 loc1 loc2 loc3) (reach2 loc1 loc2 loc3))
+              )
+           ) :: []
+    in
+    
+    let included = mk_subseteq x a in
+    let preserve = mk_subseteq (mk_inter [a; x']) x in
+    let axioms =
+      included :: preserve ::
+      replacement_pts ::
+      replacement_alloc @
+      replacement_reach
+    in
     mk_and axioms
-
-let reduce_frame fs =
+  in
   let rec process f = match f with
     | Atom (App (Frame, [x;x';a;a';f;f'], _)) -> expand_frame x x' a a' f f'
     | Atom t -> Atom t
     | BoolOp (op, fs) -> BoolOp (op, List.map process fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, process f, a)
   in
-    List.map process fs
+  List.map process fs
   
-
-
 let open_axioms openCond axioms = 
   let rec open_axiom = function
   | Binder (b, vs, f, a) -> 
@@ -257,9 +256,12 @@ let isFunVar f =
   let fvars = vars_in_fun_terms f in
   fun v -> IdSrtSet.mem v fvars
 
+
+(** Reduce all set constraints by adding appropriate instances of the axioms of set operations.
+ ** assumes that f is typed and in negation normal form *)
 let reduce_sets_with_axioms fs gts =
-  (* todo: flatten unions, intersections, and enumerations *)
   let rec simplify_term = function
+    (* todo: flatten unions, intersections, and enumerations *)
     | App (SubsetEq, [t1; t2], _) -> 
         let s = mk_free_const ?srt:(sort_of t1) (fresh_ident "S") in
         App (Eq, [t1; mk_union [t2; s]], Some Bool)
@@ -357,6 +359,12 @@ let reduce_reach fs gts =
   in
   let classes1 = CongruenceClosure.congr_classes fs1 gts1 in
   (* instantiate the variables of sort Fld in all reachability axioms *)
+  let basic_reach_flds = 
+    fold_terms (fun flds -> function
+      | App (ReachWO, fld :: _, _) -> TermSet.add fld flds
+      | _ -> flds)
+      TermSet.empty (smk_and fs1)
+  in
   (*let non_updated_flds = 
     TermSet.filter 
       (fun t -> List.for_all 
@@ -366,7 +374,7 @@ let reduce_reach fs gts =
       basic_pt_flds
   in*)
   let reach_ax = open_axioms isFld (Axioms.reachwo_axioms ()) in
-  let reach_ax1 = instantiate_with_terms false reach_ax (CongruenceClosure.restrict_classes classes1 basic_pt_flds) in
+  let reach_ax1 = instantiate_with_terms false reach_ax (CongruenceClosure.restrict_classes classes1 basic_reach_flds) in
   (* generate local instances of all axioms in which variables occur below function symbols *)
   let reach_ax2 = instantiate_with_terms true (open_axioms isFunVar reach_ax1) classes1 in
   (* generate instances of all update axioms *)

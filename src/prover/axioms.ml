@@ -66,8 +66,8 @@ let write_axioms () =
     smk_and [smk_or [mk_not (mk_reachwo new_fld1 loc3 loc4 loc5); new_reachwo loc3 loc4 loc5];
 	    smk_or [mk_reachwo new_fld1 loc3 loc4 loc5; mk_not (new_reachwo loc3 loc4 loc5)]]
   in
-  (if not !encode_fields_as_arrays then [mk_axiom "upd1" f_upd1; mk_axiom "upd2" f_upd2] else []) @ 
-  (if !with_reach_axioms then [mk_axiom "reachwo_upd" reachwo_upd] else [])
+  (if not !encode_fields_as_arrays then [mk_axiom "read_write1" f_upd1; mk_axiom "read_write2" f_upd2] else []) @ 
+  (if !with_reach_axioms then [mk_axiom "reachwo_write" reachwo_upd] else [])
 
 let reachwo_axioms () = 
   (* axioms *)
@@ -102,7 +102,7 @@ let reachwo_axioms () =
 
 let null_axioms () =
   let nll = mk_eq (f mk_null) mk_null in
-  if !Config.with_null_axioms then [mk_axiom "null" nll] else []
+  if !Config.with_null_axioms then [mk_axiom "read_null" nll] else []
 
 
 (* entry point axioms: when entering a part of the heap, used for SL*)
@@ -113,10 +113,10 @@ let ep_axioms () =
   let ep2 = mk_or [mk_not (reach loc1 loc2); mk_not (in_set1 loc2); in_set1 ep] in
   let ep3 = mk_or [in_set1 ep; mk_eq loc1 ep] in
   let ep4 = mk_implies (mk_and [reach loc1 loc2; in_set1 loc2]) (reachwo loc1 ep loc2) in
-    [mk_axiom "entrypoint1" ep1; 
-     mk_axiom "entrypoint2" ep2; 
-     mk_axiom "entrypoint3" ep3; 
-     mk_axiom "entrypoint4" ep4]
+    [mk_axiom "entry-point1" ep1; 
+     mk_axiom "entry-point2" ep2; 
+     mk_axiom "entry-point3" ep3; 
+     mk_axiom "entry-point4" ep4]
 
 (* set axioms *)
 

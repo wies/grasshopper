@@ -156,9 +156,6 @@ let rec has_prev f = match f with
 
 (* translation to grass/grass *)
 
-let mk_exists = FormUtil.mk_exists
-let mk_forall = FormUtil.mk_forall
-
 (*let cst = FormUtil.mk_free_const*)
 let reachWoT a b c = FormUtil.mk_reachwo (fpts) a b c
 let reachWo a b c = reachWoT (mk_loc a) (mk_loc b) (mk_loc c)
@@ -198,24 +195,23 @@ let to_form set_fct domain f =
         )
     | List (id1, id2) ->
         ( reach id1 id2,
-          FormUtil.mk_comment ("def_of_" ^ Form.str_of_ident domain) 
-	    (mk_forall [Axioms.l1] (
-             FormUtil.mk_iff
+          Axioms.mk_axiom ("def_of_" ^ Form.str_of_ident domain) 
+	    (FormUtil.mk_iff
                (FormUtil.smk_and [
                 reachWoT (mk_loc id1) Axioms.loc1 (mk_loc id2);
                 FormUtil.mk_neq Axioms.loc1 (mk_loc id2) ] )
-               (mk_domain domain Axioms.loc1) )),
+               (mk_domain domain Axioms.loc1) ),
           IdSet.empty
         )
     | DList (x1, x2, y1, y2) ->
       let part1 = reach x1 y1 in
       let part2 =
-        mk_forall [Axioms.l1]
+        Axioms.mk_axiom ("def_of_" ^ Form.str_of_ident domain) 
           (FormUtil.mk_iff (mk_domain domain Axioms.loc1)
                              (FormUtil.mk_and [ reachWoT (mk_loc x1) Axioms.loc1 (mk_loc y1);
                                                 FormUtil.mk_neq Axioms.loc1 (mk_loc y1)])) in
       let part3 =
-        mk_forall [Axioms.l1; Axioms.l2]
+        Axioms.mk_axiom ("dll_" ^ Form.str_of_ident domain)
           (FormUtil.mk_implies (FormUtil.mk_and [ mk_domain domain Axioms.loc1;
                                                   mk_domain domain Axioms.loc2;
                                                   FormUtil.mk_eq (FormUtil.mk_read fpts Axioms.loc1) Axioms.loc2])
@@ -279,8 +275,7 @@ let to_form set_fct domain f =
             domains
             FormUtil.mk_false
         in
-          mk_forall
-            [Axioms.l1 ; Axioms.l2]
+          Axioms.mk_axiom ("dll_" ^ (Form.str_of_ident domain))
             (FormUtil.mk_implies
               (FormUtil.mk_and [in_domain; FormUtil.mk_eq (FormUtil.mk_read fpts Axioms.loc1) Axioms.loc2])
               (FormUtil.mk_eq (FormUtil.mk_read fprev_pts Axioms.loc2) Axioms.loc1))

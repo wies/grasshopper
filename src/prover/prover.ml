@@ -20,17 +20,7 @@ let start_session name f =
   let f_inst =
     if !Config.instantiate
     then (*Util.measure_call "instantiate"*) Reduction.reduce f 
-    else
-      begin
-        let rec normalize acc = function
-          | BoolOp(And, fs) :: gs -> normalize acc (fs @ gs)
-          | f :: gs -> normalize (f :: acc) gs
-          | [] -> List.rev acc
-        in
-        let normalized_fs = normalize [] [f] in
-        let axioms_f, ground_f = extract_axioms normalized_fs in
-          axioms_f @ ground_f
-      end
+    else [f]
   in
   let session = SmtLib.start name in
   let prove () =
