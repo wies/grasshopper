@@ -421,9 +421,9 @@ let post_process f =
       print_newline ()
     end
   in
-    positive_with_top_Lvl_axioms (
-      skolemize (
-        FormUtil.nnf f ) )
+    (*positive_with_top_Lvl_axioms (
+      skolemize ( *)
+        FormUtil.nnf f (* ) ) *)
 
 let to_grass domain f =
   let (pointers, separations) = to_form FormUtil.mk_eq domain f in
