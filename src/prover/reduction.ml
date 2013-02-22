@@ -213,10 +213,15 @@ let reduce_ep fs =
 (** Adds instantiated theory axioms for graph reachability to formula f
  ** assumes that f is typed *)
 let reduce_reach fs gts =
-  (* instantiate the variables of sort Fld in all reachability axioms *)
   let basic_pt_flds = TermSet.filter (has_sort (Fld Loc) &&& is_free_const) gts in
+  (* instantiate null axioms *)
+  let classes =  CongruenceClosure.congr_classes fs gts in
+  (* let _ = List.iter (List.iter (fun t -> print_endline (string_of_term t))) classes in *)
+  let null_ax = open_axioms isFld (Axioms.null_axioms ()) in
+  let null_ax1 = instantiate_with_terms false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
+  let fs1 = null_ax1 @ fs in
   (* propagate read terms *)
-  let gts = 
+  let gts1 = 
     let writes = 
       TermSet.fold 
 	(fun t acc -> match t with
@@ -248,13 +253,10 @@ let reduce_reach fs gts =
       match new_reads with
       |	[] -> new_gts 
       |	_ -> propagate new_gts new_reads
-    in propagate gts reads
+    in propagate (TermSet.union gts (ground_terms (smk_and null_ax1))) reads
   in
-  let classes =  CongruenceClosure.congr_classes fs gts in
-  (* let _ = List.iter (List.iter (fun t -> print_endline (string_of_term t))) classes in *)
-  let null_ax = open_axioms isFld (Axioms.null_axioms ()) in
-  let null_ax1 = instantiate_with_terms false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
-  let fs1 = null_ax1 @ fs in
+  let classes1 = CongruenceClosure.congr_classes fs1 gts1 in
+  (* instantiate the variables of sort Fld in all reachability axioms *)
   (*let gts1 = TermSet.union gts (ground_terms (smk_and null_ax1)) in
   let classes1 = CongruenceClosure.congr_classes fs1 gts1 in*)
   (*let non_updated_flds = 
@@ -266,12 +268,12 @@ let reduce_reach fs gts =
       basic_pt_flds
   in*)
   let reach_ax = open_axioms isFld (Axioms.reachwo_axioms ()) in
-  let reach_ax1 = instantiate_with_terms false reach_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
+  let reach_ax1 = instantiate_with_terms false reach_ax (CongruenceClosure.restrict_classes classes1 basic_pt_flds) in
   (* generate local instances of all axioms in which variables occur below function symbols *)
-  let reach_ax2 = instantiate_with_terms true (open_axioms isFunVar reach_ax1) classes in
+  let reach_ax2 = instantiate_with_terms true (open_axioms isFunVar reach_ax1) classes1 in
   (* generate instances of all update axioms *)
   let write_ax = open_axioms isFunVar (Axioms.write_axioms ()) in
-  let write_ax1 = instantiate_with_terms true write_ax classes in
+  let write_ax1 = instantiate_with_terms true write_ax classes1 in
   fs1, rev_concat [write_ax1; reach_ax2]
 
 
