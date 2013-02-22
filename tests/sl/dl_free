@@ -2,10 +2,10 @@ dl_free(lst)
 requires dlseg(lst, a, null, b)
 ensures emp
 {
-    prev := a;
-    while(lst ~= null) dlseg(lst, prev, null, b) {
-        prev := lst;
+    prv := a;
+    while(lst ~= null) dlseg(lst, prv, null, b) {
+        prv := lst;
         lst := lst.next; 
-        free prev;
+        free prv;
     }
 }

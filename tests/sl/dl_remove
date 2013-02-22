@@ -10,21 +10,21 @@ ensures dlseg(a, null, null, b)
        b := null;
     } else {
         curr := a;
-        prev := null;
-        while ( Random && curr.next ~= null ) curr ~= null * dlseg(a, null, curr, prev) * dlseg(curr, prev, null, b) {
-            prev := curr;
+        prv := null;
+        while ( Random && curr.next ~= null ) curr ~= null * dlseg(a, null, curr, prv) * dlseg(curr, prv, null, b) {
+            prv := curr;
             curr := curr.next;
         }
         tmp := curr.next;
-        if (prev ~= null) {
-            prev.next := curr.next;
+        if (prv ~= null) {
+            prv.next := curr.next;
         } else {
             a := tmp;
         }
         if (tmp ~= null) {
-            tmp.back := prev;
+            tmp.back := prv;
         } else {
-            b := prev;
+            b := prv;
         }
         free curr;
     }

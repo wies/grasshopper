@@ -3,25 +3,25 @@ filter()
 requires dlseg(a, null, null, b)
 ensures dlseg(a, null, null, b)
 {
-    prev := null;
+    prv := null;
     curr := a;
-    while (curr ~= null) dlseg(a,null,curr,prev) * dlseg(curr,prev,null,b)
+    while (curr ~= null) dlseg(a,null,curr,prv) * dlseg(curr,prv,null,b)
     {
       if (Random) {
         tmp := curr.next;
-        if (prev ~= null) {
-            prev.next := curr.next;
+        if (prv ~= null) {
+            prv.next := curr.next;
         } else {
             a := tmp;
         }
         if (tmp ~= null) {
-            tmp.back := prev;
+            tmp.back := prv;
         } else {
-            b := prev;
+            b := prv;
         }
         free curr;
       } else {
-        prev := curr;
+        prv := curr;
       }
       curr := curr.next;
     }

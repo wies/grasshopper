@@ -3,11 +3,11 @@ requires dlseg(start, null, null, end)
 ensures dlseg(end, null, null, start)
 {
     curr := start;
-    prev := null;
-    while(curr ~= null) dlseg(curr, prev, null, end) * dlseg(prev, curr, null, start) {
+    prv := null;
+    while(curr ~= null) dlseg(curr, prv, null, end) * dlseg(prv, curr, null, start) {
         tmp := curr;
-        tmp.next := prev;
-        prev.back := tmp;
-        prev := tmp;
+        tmp.next := prv;
+        prv.back := tmp;
+        prv := tmp;
     }
 }
