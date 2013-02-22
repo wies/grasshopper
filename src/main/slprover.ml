@@ -76,8 +76,6 @@ let compute_sl_entails () =
 
 (* A |= B * frame *)
 let compute_sl_frame () =
-  failwith "TODO compute_sl_frame"
-  (*
   let pre_sl  = parse_given_input (fun lexbuf -> ParseSl.main LexSl.token lexbuf) (List.nth !input_file 0) in
   let post_sl = parse_given_input (fun lexbuf -> ParseSl.main LexSl.token lexbuf) (List.nth !input_file 1) in
   let res = Frame.infer_frame pre_sl post_sl in
@@ -87,7 +85,6 @@ let compute_sl_frame () =
       print_endline "frames:";
       List.iter (fun frame -> print_endline ("  " ^ (Sl.to_string frame))) frames
     | None -> print_endline "Error not entailed!"
-  *)
 
 let _ =
   try

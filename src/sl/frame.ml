@@ -31,10 +31,12 @@ let mk_different lst =
   in
     different lst
 
-let get_repr c_map s = match SymbolMap.find s c_map with
+let sym_to_id s = match s with
   | FreeSym v -> v
   | Null -> mk_ident "null"
-  | _ -> failwith "unexpected symbol"
+  | _ -> failwith ("unexpected symbol: " ^ (str_of_symbol s))
+
+let get_repr c_map s = sym_to_id (SymbolMap.find s c_map)
 
 (*the succ fct (on repr ids) *)
 let succ model =
@@ -151,8 +153,21 @@ let make_frame heap_a heap_b (model: Model.model) =
   let c_map = Model.const_map model in
 
   (* pure part *)
-  let csts = get_constants model in
-  let eqClasses = snd (List.split (Util.IntMap.bindings csts)) in
+  let csts = Model.consts model in
+  let eqClasses =
+    SymbolSet.fold
+      (fun sym acc ->
+        let t = match Model.eval_term model (mk_const sym) with
+          | Some t -> t
+          | None -> failwith "symbol not defined"
+        in
+        let old = try SymbolMap.find t acc with Not_found -> [] in
+          SymbolMap.add t ((sym_to_id sym) :: old) acc
+      )
+      csts
+      SymbolMap.empty
+  in
+  let eqClasses = snd (List.split (SymbolMap.bindings eqClasses)) in
   let representatives = List.map List.hd eqClasses in
   let same = List.flatten (List.map mk_same eqClasses) in
   let pure = Sl.And ((mk_different representatives) @ same) in
@@ -162,13 +177,13 @@ let make_frame heap_a heap_b (model: Model.model) =
 
   (* get the repr var for the nodes in heap_a but not in heap_b *)
   (*let vars_a = vars_in heap_a in*)
-  let vars_a = get_in_set heap_a in
-  let vars_b = get_in_set heap_b in
-  let diff = IdSet.diff vars_a vars_b in
+  let vars_a = get_in_set model heap_a in
+  let vars_b = get_in_set model heap_b in
+  let diff = SymbolSet.diff vars_a vars_b in
   (* get spatial term for a variable *)
   let succ = succ model in
   let get_spatial var = 
-    let term = Form.mk_read Sl.pts (Sl.mk_loc var) in
+    let term = mk_read (Sl.to_field Sl.pts) (Sl.mk_loc var) in
       match Model.eval_term model term with
       | Some r ->
         let var2 = get_repr c_map r in
@@ -179,7 +194,11 @@ let make_frame heap_a heap_b (model: Model.model) =
           | Some var2 -> Sl.List (var, var2)
           | None -> failwith "existential successor" (* Sl.PtsTo (var, fresh_ident "_") *)
   in
-  let spatial = List.map get_spatial (IdSet.elements diff) in
+  let spatial =
+    List.map
+      (fun s -> get_spatial (sym_to_id s) )
+      (SymbolSet.elements diff)
+  in
   let spatial2 = match spatial with
     | [] -> Sl.Emp
     | [x] -> x
@@ -191,11 +210,9 @@ let make_frame heap_a heap_b (model: Model.model) =
 
 
 let infer_frame_loop query =
-  let initial = Prover.ModelGenerator.initial_query query in
+  let initial = Prover.ModelGenerator.initial_query "frame" query in
     match initial with
     | Some (session, _) ->
-      let nodes = TermSet.elements (ground_terms query) in
-      let eq_cls = Prover.ModelGenerator.get_eq_classes session nodes in
       let rec loop acc gen = match gen with
         | Some (generator, model) ->
           (*
@@ -234,7 +251,7 @@ let infer_frame_loop query =
 
 
 let mk_frame_query pre post =
-  let query = FormUtil.smk_and [same_heap_axioms; pre; post] in
+  let query = smk_and [implies_heap_content; pre; post] in
   let _ = if !Debug.verbose then
     begin
       print_endline "frame query: ";
@@ -244,7 +261,7 @@ let mk_frame_query pre post =
     query
 
 let infer_frame pre_sl post_sl =
-  let pre = Sl.to_lolli pre_heap pre_sl in
-  let post = Sl.to_lolli post_heap post_sl in
+  let pre = Sl.to_grass pre_heap pre_sl in
+  let post = Sl.to_grass post_heap post_sl in
   let query = mk_frame_query pre post in
     infer_frame_loop query

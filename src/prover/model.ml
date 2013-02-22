@@ -45,6 +45,14 @@ let fold f model init =
     (fun id defs acc ->
       List.fold_left (fun acc def -> f id def acc) acc defs)
     model.interp init
+
+let consts model =
+  SymbolMap.fold 
+    (fun id defs acc ->
+      match defs with
+      | [def] when def.input = [] -> SymbolSet.add id acc
+      | _ -> acc)
+    model.interp SymbolSet.empty
     
 let const_map m =
   let consts = 
