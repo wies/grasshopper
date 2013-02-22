@@ -143,9 +143,14 @@ let mk_not = function
 
 let mk_neq s t = mk_not (mk_eq s t)
 
-let mk_binder ?(ann=[]) b bv f = Binder (b, bv, f, ann)
-let mk_forall ?(ann=[]) bv f = Binder (Forall, bv, f, ann) 
-let mk_exists ?(ann=[]) bv f = Binder (Exists, bv, f, ann) 
+let mk_binder ?(ann=[]) b bv f = 
+  match bv, ann with 
+  | [], [] -> f
+  | _ -> Binder (b, bv, f, ann)
+let mk_forall ?(ann=[]) bv f = mk_binder ~ann:ann Forall bv f 
+let mk_exists ?(ann=[]) bv f = mk_binder ~ann:ann Exists bv f 
+  
+
 
 let annotate f ann = 
   match f with

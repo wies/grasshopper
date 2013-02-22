@@ -25,11 +25,60 @@ let skolemize f =
 	annotate (subst sm (sk vs f)) a
     | f -> f
   in sk IdMap.empty f
-
+    
+(** Propagate existentially quantified variables upward in the formula
+ ** assume that f is in negation normal form *)
+let propagate_exists f =
+  let rec merge sm zs xs ys ys2 =
+    match xs, ys with
+    | (x, srt1) :: xs1, (y, srt2) :: ys1 ->
+        if srt1 = srt2
+        then merge (IdMap.add x (mk_var ~srt:srt1 y) sm) zs xs1 (ys2 @ ys) []
+        else merge sm ((x, srt1) :: zs) xs ys1 ((y, srt2) :: ys2)
+    | [], _ -> sm, ys @ zs
+    | _, [] -> 
+        if ys2 = [] then sm, xs @ zs
+        else merge sm (List.hd xs :: zs) (List.tl xs) ys2 []
+  in
+  let rec prop = function
+    | BoolOp (Or, fs) ->
+        let fs1, vs = 
+          List.fold_right (fun f (fs2, vs2) ->
+            let f1, vs1 = prop f in
+            let sm, vs = merge IdMap.empty [] vs1 vs2 [] in
+            subst sm f1 :: fs2, vs) 
+            fs ([], [])
+        in BoolOp (Or, fs1), vs
+    | BoolOp (And, fs) ->
+        let fs1, vss = List.split (List.map prop fs) in
+        BoolOp (And, fs1), List.concat vss
+    | Binder (Exists, vs, f, a) -> 
+        let vars = fv f in
+        let vs0 = List.filter (fun (v, _) -> IdSet.mem v vars) vs in
+        let sm, vs1 = 
+          List.fold_left 
+            (fun (sm, vs1) (v, srt) -> 
+              let v1 = fresh_ident (name v) in
+              IdMap.add v (mk_var ~srt:srt v1) sm, (v1, srt) :: vs1)
+            (IdMap.empty, []) vs0
+        in
+        let f1 = subst sm f in
+        (match a with 
+        | [] -> f1, vs1
+        | _ -> Binder (Exists, [], f1, a), vs1)
+    | Binder (Forall, vs, f, a) ->
+        let f1, vs1 = prop f in
+        (match vs with
+        | [] -> Binder (Forall, vs, f1, a), vs1
+        | _ -> Binder (Forall, vs, mk_exists vs1 f1, a), [])
+    | f -> f, []
+  in
+  let f1, vs = prop f in 
+  mk_exists vs f1
 
 (** Eliminate all implicit and explicit existential quantifiers using skolemization
  ** assumes that f is typed and in negation normal form *)
-let reduce_exists f =
+let reduce_exists =
   let e = fresh_ident "?e" in
   let rec elim_neq = function
     | BoolOp (Not, [Atom (App (Eq, [s1; s2], _))]) as f ->
@@ -47,8 +96,35 @@ let reduce_exists f =
     | Binder (b, vs, f, a) -> Binder (b, vs, elim_neq f, a)
     | f -> f
   in
-  let f1 = elim_neq f in
-  skolemize f1
+  fun f -> 
+    let f1 = elim_neq f in
+    let f2 = propagate_exists f1 in
+    skolemize f2
+
+let extract_axioms fs =
+  let rec extract f axioms = match f with
+    | Binder (Forall, _ :: _, _, _) -> 
+        let p = mk_atom (FreeSym (fresh_ident "Axiom")) [] in
+	p, mk_or [mk_not p; f] :: axioms
+    | BoolOp (op, fs) -> 
+	let fs1, axioms = 
+	  List.fold_right 
+	    (fun f (fs1, axioms) ->
+	      let f1, axioms1 = extract f axioms in 
+	      f1 :: fs1, axioms1)
+	    fs ([], axioms)
+	in 
+	BoolOp (op, fs1), axioms
+    | f -> f, axioms
+  in
+  let process (axioms, fs1) f = match f with
+    | Binder (Forall, _, _, _) -> f :: fs1, axioms
+    | _ -> 
+        let f1, axioms1 = extract f axioms in
+        f1 :: fs1, axioms1
+  in 
+  let fs1, axioms = List.fold_left process ([], []) fs in
+  axioms @ fs1
 
 (** Reduce all set constraints to constraints over unary predicates
  ** assumes that f is typed and in negation normal form *)
@@ -168,9 +244,10 @@ let reduce_frame fs =
 
 
 let open_axioms openCond axioms = 
-  let open_axiom = function
+  let rec open_axiom = function
   | Binder (b, vs, f, a) -> 
       Binder (b, List.filter (~~ (openCond f)) vs, f, a)
+  | BoolOp (op, fs) -> BoolOp (op, List.map open_axiom fs)
   | f -> f
   in List.map open_axiom axioms
 
@@ -184,7 +261,7 @@ let reduce_sets_with_axioms fs gts =
   (* todo: flatten unions, intersections, and enumerations *)
   let rec simplify_term = function
     | App (SubsetEq, [t1; t2], _) -> 
-        let s = mk_free_const ?srt:(sort_of t1) (fresh_ident "X") in
+        let s = mk_free_const ?srt:(sort_of t1) (fresh_ident "S") in
         App (Eq, [t1; mk_union [t2; s]], Some Bool)
     | t -> t
   in
@@ -295,8 +372,12 @@ let reduce_reach fs gts =
   (* generate instances of all update axioms *)
   let write_ax = open_axioms isFunVar (Axioms.write_axioms ()) in
   let write_ax1 = instantiate_with_terms true write_ax classes1 in
-  fs1, rev_concat [write_ax1; reach_ax2]
+  fs1, rev_concat [write_ax1; reach_ax2], gts1
 
+let reduce_remaining fs gts =
+  let classes = CongruenceClosure.congr_classes fs gts in
+  let fs1 = open_axioms isFunVar fs in
+  instantiate_with_terms true fs1 classes
 
 (** Reduces the given formula to the target theory fragment, as specified by the configuration 
  ** assumes that f is typed *)
@@ -310,8 +391,10 @@ let reduce f =
   let fs1 = split_ands [] [f1] in
   let fs2 = reduce_frame fs1 in
   let fs2 = List.map reduce_exists fs2 in
+  let fs21 = extract_axioms fs2 in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
-  let fs3, ep_axioms, gts = reduce_ep fs2 in
+  let fs3, ep_axioms, gts = reduce_ep fs21 in
   let fs4, gts1 = reduce_sets (fs3 @ ep_axioms) gts in
-  let fs5, reach_axioms = reduce_reach fs4 gts1 in
-  rev_concat [fs5; reach_axioms]
+  let fs5, reach_axioms, gts2 = reduce_reach fs4 gts1 in
+  let fs6 = reduce_remaining fs5 gts in
+  rev_concat [fs6; reach_axioms]
