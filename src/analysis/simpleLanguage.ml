@@ -193,20 +193,6 @@ let unify_subst sig1 sig2 subst1 subst2 =
           (mk_pred id1 argsTerm)
           (mk_pred id2 argsTerm)
         *)
-      | Fld Loc ->
-        let f1 = Sl.to_field id1 in
-        let f2 = Sl.to_field id2 in
-        let same_read =
-          mk_forall [Axioms.l1]
-             (mk_eq  (mk_read f1 Axioms.loc1)
-                     (mk_read f2 Axioms.loc1))
-        in
-        let same_reach =
-            mk_forall [Axioms.l1; Axioms.l2; Axioms.l3]
-             (mk_iff (mk_reachwo f1 Axioms.loc1 Axioms.loc2 Axioms.loc3)
-                     (mk_reachwo f2 Axioms.loc1 Axioms.loc2 Axioms.loc3))
-        in
-          [ same_read; same_reach ]
       | t ->
         [mk_eq
           (mk_free_const ?srt:(Some t) id1)

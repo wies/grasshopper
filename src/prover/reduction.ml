@@ -257,8 +257,6 @@ let reduce_reach fs gts =
   in
   let classes1 = CongruenceClosure.congr_classes fs1 gts1 in
   (* instantiate the variables of sort Fld in all reachability axioms *)
-  (*let gts1 = TermSet.union gts (ground_terms (smk_and null_ax1)) in
-  let classes1 = CongruenceClosure.congr_classes fs1 gts1 in*)
   (*let non_updated_flds = 
     TermSet.filter 
       (fun t -> List.for_all 

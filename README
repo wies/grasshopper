@@ -1,4 +1,4 @@
-GRASShopper preliminary version of 4 February 2013.
+GRASShopper preliminary version of Feb 21, 2013.
 
 This is a preliminary distribution.
 Please let us know if you are planing to use it.
@@ -11,9 +11,9 @@ LICENSE.
 
 Required:
 - OCaml, version >= 3.12
-- Z3, version >= 3.2
+- Z3, version >= 3.2 (tested with versions 3.2 and 4.3.2)
 
-Instalation instructions: 
+Installation instructions: 
 - Untar the distribution
 - Type 
      ./build.sh
