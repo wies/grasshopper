@@ -53,7 +53,7 @@ let z3 =
       let number = int_of_string (Str.matched_group 1 version_string) in
       let subnumber = int_of_string (Str.matched_group 2 version_string) in
       let _ = Unix.close_process_in in_chan in
-      List.find (fun v -> v.number <= number && v.subnumber <= subnumber) z3_versions
+      List.find (fun v -> v.number < number || (v.number = number && v.subnumber <= subnumber)) z3_versions
     with _ -> log logger WARN (fun () -> "No supported version of Z3 found.", []);
       z3_v3	
   in 
