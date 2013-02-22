@@ -101,7 +101,7 @@ let reduce_exists =
     let f2 = propagate_exists f1 in
     skolemize f2
 
-let extract_axioms fs =
+let factorize_axioms fs =
   let rec extract f axioms = match f with
     | Binder (Forall, _ :: _, _, _) -> 
         let p = mk_atom (FreeSym (fresh_ident "Axiom")) [] in
@@ -391,7 +391,7 @@ let reduce f =
   let fs1 = split_ands [] [f1] in
   let fs2 = reduce_frame fs1 in
   let fs2 = List.map reduce_exists fs2 in
-  let fs21 = extract_axioms fs2 in
+  let fs21 = factorize_axioms fs2 in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
   let fs3, ep_axioms, gts = reduce_ep fs21 in
   let fs4, gts1 = reduce_sets (fs3 @ ep_axioms) gts in
