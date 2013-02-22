@@ -10,6 +10,7 @@ let cmd_options =
    ("-m", Arg.Set_string Prover.model_file, "Produce model");
    ("-noalloc", Arg.Clear Config.with_alloc_axioms, "Omit axioms for alloc predicate");
    ("-nonull", Arg.Clear Config.with_null_axioms, "Omit axioms for null");
+   ("-keepsets", Arg.Set Config.keep_sets, "Keep sets in reduction");
    ("-z3q", Arg.Clear Config.instantiate, "Let z3 deal with quantifiers.")
   ]
 

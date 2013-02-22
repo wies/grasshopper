@@ -2,6 +2,7 @@
 let with_reach_axioms = ref true
 let with_alloc_axioms = ref true
 let with_null_axioms = ref true
+let keep_sets = ref false
 let encode_fields_as_arrays = ref false
 
 (*tell whether we are instantiating the axioms or relying on z3.*)

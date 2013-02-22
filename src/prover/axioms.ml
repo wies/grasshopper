@@ -10,6 +10,7 @@ let l5 = fresh_ident "?v", Loc
 let f1 = fresh_ident "?f", Fld Loc
 let f2 = fresh_ident "?g", Fld Loc
 let s1 = fresh_ident "?X", Set Loc 
+let s2 = fresh_ident "?Y", Set Loc 
 
 let loc1 = mk_var ~srt:(snd l1) (fst l1)
 let loc2 = mk_var ~srt:(snd l2) (fst l2)
@@ -19,6 +20,7 @@ let loc5 = mk_var ~srt:(snd l5) (fst l5)
 let fld1 = mk_var ~srt:(snd f1) (fst f1)
 let fld2 = mk_var ~srt:(snd f2) (fst f2)
 let set1 = mk_var ~srt:(snd s1) (fst s1)
+let set2 = mk_var ~srt:(snd s1) (fst s2)
 
 let all_vars = [f1; f2; s1; l1; l2; l3; l4; l5]
 
@@ -115,6 +117,34 @@ let ep_axioms () =
      mk_axiom "entrypoint2" ep2; 
      mk_axiom "entrypoint3" ep3; 
      mk_axiom "entrypoint4" ep4]
+
+(* set axioms *)
+
+let set_axioms () =
+  let empty = 
+    mk_not (mk_elem loc1 (mk_empty (Some (Set Loc))))
+  in
+  let union = 
+    mk_iff (mk_elem loc1 (mk_union [set1; set2])) 
+      (mk_or [mk_elem loc1 set1; mk_elem loc1 set2])
+  in
+  let inter =
+    mk_iff (mk_elem loc1 (mk_inter [set1; set2])) 
+      (mk_and [mk_elem loc1 set1; mk_elem loc1 set2])
+  in
+  let diff =
+    mk_iff (mk_elem loc1 (mk_diff set1 set2)) 
+      (mk_and [mk_elem loc1 set1; mk_not (mk_elem loc1 set2)])
+  in
+  let setenum =
+    mk_iff (mk_elem loc1 (mk_setenum [loc2])) 
+      (mk_eq loc1 loc2)
+  in
+  [mk_axiom "empty" empty;
+   mk_axiom "union" union;
+   mk_axiom "inter" inter;
+   mk_axiom "diff" diff;
+   mk_axiom "enum" setenum]
 
 let extract_axioms fs =
   List.partition (fun f -> IdSet.empty <> fv f) fs

@@ -52,7 +52,7 @@ let reduce_exists f =
 
 (** Reduce all set constraints to constraints over unary predicates
  ** assumes that f is typed and in negation normal form *)
-let reduce_sets =
+let reduce_sets_to_predicates =
   let e = fresh_ident "?e" in
   let encode_set_exp srt e s =
     let rec ese = function
@@ -180,7 +180,30 @@ let isFunVar f =
   let fvars = vars_in_fun_terms f in
   fun v -> IdSrtSet.mem v fvars
 
+let reduce_sets_with_axioms fs gts =
+  (* todo: flatten unions, intersections, and enumerations *)
+  let rec simplify_term = function
+    | App (SubsetEq, [t1; t2], _) -> 
+        let s = mk_free_const ?srt:(sort_of t1) (fresh_ident "X") in
+        App (Eq, [t1; mk_union [t2; s]], Some Bool)
+    | t -> t
+  in
+  let rec simplify = function
+    | BoolOp (op, fs) -> BoolOp (op, List.map simplify fs)
+    | Binder (b, vs, f, a) -> Binder (b, vs, simplify f, a)
+    | Atom t -> Atom (simplify_term t)
+  in
+  let fs1 = List.map simplify fs in
+  let gts1 = TermSet.union gts (ground_terms (mk_and fs1)) in
+  let classes = CongruenceClosure.congr_classes fs1 gts1 in
+  let set_ax = open_axioms isFunVar (Axioms.set_axioms ()) in
+  let set_ax1 = instantiate_with_terms true set_ax classes in
+  rev_concat [fs1; set_ax1], gts1
 
+let reduce_sets fs gts =
+  if !Config.keep_sets 
+  then reduce_sets_with_axioms fs gts 
+  else reduce_sets_to_predicates fs gts
 
 (** Adds instantiated theory axioms for the entry point function to formula f
  ** assumes that f is typed and that all frame predicates have been reduced *)
