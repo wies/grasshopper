@@ -39,7 +39,7 @@ let _ =
 }
 
 let digitchar = ['0'-'9']
-let idchar = ['a'-'z' 'A'-'Z' '?' '$']
+let idchar = ['a'-'z' 'A'-'Z' '?' '$' '.']
 let kwchar = idchar | '_' | ':' | '-'
  
 rule token = parse

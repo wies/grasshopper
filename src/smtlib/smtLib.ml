@@ -1,9 +1,97 @@
+open Logger
 open Form
 open FormUtil
 open ParseSmtLibAux
 
+let logger = Logging.smtlib_log
+
 (* Todo: add proper error handling *)
 
+(** Solvers *)
+
+type solver_version = 
+    { number : int;
+      subnumber : int;
+      smt_options : (string * bool) list;
+      args : string
+    }
+
+type solver = 
+    { name : string;
+      cmnd : string;
+      version : solver_version
+    }
+      
+
+let z3_v3 = { number = 3;
+	      subnumber = 2;
+	      smt_options = [":mbqi", true;
+			 ":MODEL_V2", true;
+			 ":MODEL_PARTIAL", true;
+			 ":MODEL_HIDE_UNUSED_PARTITIONS", true];
+	      args = "-smt2 -in"
+	    }
+
+let z3_v4 = { number = 4;
+	      subnumber = 3;
+	      smt_options = [":smt.mbqi", true;
+			     ":model.v2", true;
+			     ":model.partial", true];
+	      args = "-smt2 -in"
+	    }
+
+let z3_versions = [z3_v4; z3_v3]
+
+let z3 = 
+  let cmnd = "z3" in
+  let version = 
+    try 
+      let in_chan = Unix.open_process_in (cmnd ^ " -version") in
+      let version_regexp = Str.regexp "^Z3[^0-9]*\\([0-9]*\\).\\([0-9]*\\)" in
+      let version_string = input_line in_chan in
+      ignore (Str.string_match version_regexp version_string 0);
+      let number = int_of_string (Str.matched_group 1 version_string) in
+      let subnumber = int_of_string (Str.matched_group 2 version_string) in
+      let _ = Unix.close_process_in in_chan in
+      List.find (fun v -> v.number <= number && v.subnumber <= subnumber) z3_versions
+    with _ -> log logger WARN (fun () -> "No supported version of Z3 found.", []);
+      z3_v3	
+  in 
+  { name = "Z3";
+    cmnd = cmnd;
+    version = version }
+
+let cvc4_v1 = {	number = 1;
+		subnumber = 0;
+		smt_options = [];
+		args = "--lang=smt2";
+	      } 
+
+let cvc4 = 
+  { name = "CVC4";
+    cmnd = "cvc4";
+    version = cvc4_v1 }
+
+let mathsat_v5 = { number = 5;
+		 subnumber = 1;
+		 smt_options = [":produce-interpolants", true];
+		 args = "-verbosity=0 -interpolation=true";
+	       }
+
+let mathsat = 
+  { name = "MathSAT";
+    cmnd = "mathsat";
+    version = mathsat_v5
+   }
+ 
+let solvers = [z3; cvc4; mathsat]
+
+let selected_solver = ref z3
+
+let selected_interpolator = ref mathsat
+
+(** SMT-LIB2 Sessions *)
+   
 type session = { name: string;
                  init: bool;
 		 in_chan: in_channel;
@@ -46,7 +134,7 @@ let declare_sorts session =
   else 
     writeln session ("(declare-sort " ^ fld_sort_string ^ " 1)")
 
-let start = 
+let start_with_solver = 
   let get_replay_chan name =
     if !Debug.verbose then
       (* these files should probably go into the tmp directory *)
@@ -54,7 +142,8 @@ let start =
       Some (open_out replay_file)
     else None
   in
-  fun session_name smt_cmd produce_models produce_interpolants ->
+  fun session_name solver produce_models produce_interpolants ->
+  let smt_cmd = solver.cmnd ^ " " ^ solver.version.args in
   let in_chan, out_chan = Unix.open_process smt_cmd in
   let session = { name = session_name;
                   init = true; 
@@ -68,20 +157,18 @@ let start =
   writeln session "(set-option :print-success false)";
   if produce_models then begin
     writeln session "(set-option :produce-models true)";
-    writeln session "(set-option :MODEL_V2 true)";
-    writeln session "(set-option :MODEL_PARTIAL true)";
-    writeln session "(set-option :MODEL_HIDE_UNUSED_PARTITIONS true)"
     (*writeln session "(set-option :produce-unsat-cores true)"*)
   end;
   if produce_interpolants then writeln session "(set-option :produce-interpolants true)";
+  List.iter 
+    (fun (opt, b) -> writeln session (Printf.sprintf "(set-option %s %b)" opt b))
+    solver.version.smt_options;
   (*
   if false && !Config.instantiate then
     writeln session "(set-logic QF_UF)"
   else
     begin
   *)
-  writeln session "(set-option :mbqi true)";
-  (* writeln session "(set-option :mbqi-max-iterations 1000000)"; *)
   if !Config.encode_fields_as_arrays
   then writeln session "(set-logic AUFLIA)"
   else writeln session "(set-logic UF)";
@@ -89,11 +176,9 @@ let start =
   declare_sorts session;
   session
 
-let start_z3 session_name = start session_name "z3 -smt2 -in" true false
+let start session_name = start_with_solver session_name !selected_solver true false
     
-(*let start_z3 replay_file = start "z3 -smt2 -ini:z3.ini -in" replay_file true false*)
-      
-let start_mathsat session_name = start session_name "mathsat -verbosity=0 -interpolation=true" false true
+let start_interpolation session_name = start_with_solver session_name !selected_interpolator false true
     
 let quit session = 
   writeln session "(exit)";
