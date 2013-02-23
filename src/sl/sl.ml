@@ -275,13 +275,13 @@ let to_form set_fct domain f =
             domains
             FormUtil.mk_false
         in
-          Axioms.mk_axiom ("dll_" ^ (Form.str_of_ident domain))
+        Axioms.mk_axiom ("dll_" ^ (Form.str_of_ident domain))
             (FormUtil.mk_implies
               (FormUtil.mk_and [in_domain; FormUtil.mk_eq (FormUtil.mk_read fpts Axioms.loc1) Axioms.loc2])
               (FormUtil.mk_eq (FormUtil.mk_read fprev_pts Axioms.loc2) Axioms.loc1))
       in
         (FormUtil.mk_and (
-          (if not pol then [dll_axiom] else []) @
+          (if not (IdSet.is_empty domains) && not pol then [dll_axiom] else []) @
           [str; set_fct (mk_loc_set d') (mk_loc_set domain)]),
          heap)
   in
