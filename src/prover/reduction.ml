@@ -327,7 +327,7 @@ let reduce_reach fs gts =
     let writes = 
       TermSet.fold 
 	(fun t acc -> match t with
-	|  App (Write, fld :: _, _) as fld' -> (fld, fld') :: acc
+	|  App (Write, fld :: _, _) as fld' -> (fld, fld') :: (fld', fld) :: acc
 	| _ -> acc
 	)
 	gts []
@@ -347,7 +347,11 @@ let reduce_reach fs gts =
 	    try 
 	      let fld' = List.assoc fld writes in 
 	      (*let _ = print_endline ("adding term " ^ string_of_term (mk_read fld' arg)) in*)
-	      (fld', arg) :: new_reads, TermSet.add (mk_read fld' arg) new_gts
+              let t = mk_read fld' arg in
+              let new_reads1 = 
+                if TermSet.mem t new_gts then new_reads else (fld', arg) :: new_reads
+              in
+	      new_reads1, TermSet.add t new_gts
 	    with Not_found -> new_reads, new_gts
 	  )
 	  ([], gts) reads
@@ -383,6 +387,7 @@ let reduce_reach fs gts =
   fs1, rev_concat [write_ax1; reach_ax2], gts1
 
 let reduce_remaining fs gts =
+  (* generate local instances of all remaining axioms in which variables occur below function symbols *)
   let classes = CongruenceClosure.congr_classes fs gts in
   let fs1 = open_axioms isFunVar fs in
   instantiate_with_terms true fs1 classes
