@@ -243,12 +243,14 @@ let reduce_frame fs =
   List.map process fs
   
 let open_axioms openCond axioms = 
-  let rec open_axiom = function
-  | Binder (b, vs, f, a) -> 
-      Binder (b, List.filter (~~ (openCond f)) vs, f, a)
-  | BoolOp (op, fs) -> BoolOp (op, List.map open_axiom fs)
-  | f -> f
-  in List.map open_axiom axioms
+  if !Config.instantiate then
+    let rec open_axiom = function
+      | Binder (b, vs, f, a) -> 
+          Binder (b, List.filter (~~ (openCond f)) vs, f, a)
+      | BoolOp (op, fs) -> BoolOp (op, List.map open_axiom fs)
+      | f -> f
+    in List.map open_axiom axioms
+  else axioms
 
 let isFld f = function (_, Fld _) -> true | _ -> false
 

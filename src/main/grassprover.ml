@@ -6,20 +6,12 @@ open Logging
 
 let input_file = ref None
 
-let cmd_options =
-  [("-v", Arg.Set Debug.verbose, "Display verbose messages");
-   ("-noreach", Arg.Clear Config.with_reach_axioms, "Do not add axioms for reachability predicates");
-   ("-m", Arg.Set_string Prover.model_file, "Produce model");
-   ("-alloc", Arg.Set Config.with_alloc_axioms, "Add axioms for alloc predicate");
-   ("-z3q", Arg.Clear Config.instantiate, "Let z3 deal with quantifiers.")
-  ]
-
 let usage_message =
   "Usage:\n  " ^ Sys.argv.(0) ^ 
   " [-v] [-noreach] [-nojoin] <input file>\n"
 
 let cmd_line_error msg =
-  Arg.usage cmd_options usage_message;
+  Arg.usage Config.cmd_options usage_message;
   failwith ("Command line option error: " ^ msg)
 
 (*
@@ -93,7 +85,7 @@ let _ =
       Printexc.print_backtrace stderr
   in
   try
-    Arg.parse cmd_options (fun s -> input_file := Some s) usage_message;
+    Arg.parse Config.cmd_options (fun s -> input_file := Some s) usage_message;
     repl !input_file
   with  
   | Sys_error s

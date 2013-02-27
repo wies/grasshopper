@@ -20,9 +20,9 @@ let loc5 = mk_var ~srt:(snd l5) (fst l5)
 let fld1 = mk_var ~srt:(snd f1) (fst f1)
 let fld2 = mk_var ~srt:(snd f2) (fst f2)
 let set1 = mk_var ~srt:(snd s1) (fst s1)
-let set2 = mk_var ~srt:(snd s1) (fst s2)
+let set2 = mk_var ~srt:(snd s2) (fst s2)
 
-let all_vars = [f1; f2; s1; l1; l2; l3; l4; l5]
+let all_vars = [f1; f2; s1; s2; l1; l2; l3; l4; l5]
 
 let mk_axiom name f =
   let fvars = fv f in

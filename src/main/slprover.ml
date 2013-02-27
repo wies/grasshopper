@@ -14,18 +14,13 @@ type mode =
 let mode = ref SlSat
 
 let cmd_options =
-  [("-v", Arg.Unit Debug.set_debug, "Display verbose messages");
-   ("-noreach", Arg.Clear Config.with_reach_axioms, "Do not add axioms for reachability predicates");
-   ("-m", Arg.Set_string Prover.model_file, "Produce model");
-   ("-alloc", Arg.Set Config.with_alloc_axioms, "Add axioms for alloc predicate");
-   ("-entails", Arg.Unit (fun () -> mode := SlEntails), "check entailment");
-   ("-frame", Arg.Unit (fun () -> mode := SlFrame), "frame inference");
-   ("-z3q", Arg.Clear Config.instantiate, "Let z3 deal with quantifiers.")
-  ]
+   ("-entails", Arg.Unit (fun () -> mode := SlEntails), "check entailment") ::
+   ("-frame", Arg.Unit (fun () -> mode := SlFrame), "frame inference") ::
+   Config.cmd_options
 
 let usage_message =
   "Usage:\n  " ^ Sys.argv.(0) ^ 
-  " [-v] [-noreach] [-nojoin] <input file>\n"
+  " [-v] [...] <input file>\n"
 
 let cmd_line_error msg =
   Arg.usage cmd_options usage_message;

@@ -3,13 +3,12 @@ open FormUtil
 open Util
 open Axioms
 
-let model_file = ref ""
-
 let inst_num = ref 0
 
-let dump_model model =
-  if !model_file <> "" then begin
-    let model_chan = open_out !model_file in
+let dump_model session =
+  if !Config.model_file <> "" then begin
+    let model = unopt (SmtLib.get_model session) in
+    let model_chan = open_out !Config.model_file in
     Model.print_model2 model;
     Model.output_graphviz model_chan model;
     close_out model_chan;
@@ -17,11 +16,7 @@ let dump_model model =
 
 
 let start_session name f = 
-  let f_inst =
-    if !Config.instantiate
-    then (*Util.measure_call "instantiate"*) Reduction.reduce f 
-    else [f]
-  in
+  let f_inst = Reduction.reduce f in
   let session = SmtLib.start name in
   let prove () =
     Debug.msg "sending to prover\n";
@@ -43,10 +38,7 @@ let start_session name f =
 let check_sat ?(session_name="form") f =
   let (result, session) = start_session session_name f in
   (match result with
-  | Some true ->
-      if !model_file <> "" then
-	let model = SmtLib.get_model session in
-	dump_model (unopt model)
+  | Some true -> dump_model session
   | _ -> ());
   ignore (SmtLib.quit session);
   result

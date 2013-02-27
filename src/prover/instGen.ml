@@ -129,18 +129,21 @@ let generate_instances useLocalInst axioms terms rep_map =
   
 
 let instantiate_with_terms local axioms classes =
-  let _ = 
-    if !Debug.verbose then
-      ignore
-        (List.fold_left (fun num cl ->
-          print_string ("Class " ^ string_of_int num ^ ": ");
-          List.iter (fun t -> print_string (string_of_term t ^ ", ")) cl; 
-          print_newline ();
-          num + 1) 1 classes)
-  in
-  let reps_f, rep_map_f = choose_rep_terms classes in
-  let instances_f = generate_instances local axioms reps_f rep_map_f in
-  instances_f
+    if !Config.instantiate then
+      let _ = 
+        if !Debug.verbose then
+          ignore
+            (List.fold_left (fun num cl ->
+              print_string ("Class " ^ string_of_int num ^ ": ");
+              List.iter (fun t -> print_string (string_of_term t ^ ", ")) cl; 
+              print_newline ();
+              num + 1) 1 classes)
+      in
+      let reps_f, rep_map_f = choose_rep_terms classes in
+      let instances_f = generate_instances local axioms reps_f rep_map_f in
+      instances_f
+    else
+      axioms
 
 (*
 let get_ground_terms f =
