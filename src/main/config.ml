@@ -2,7 +2,7 @@
 let with_reach_axioms = ref true
 let with_alloc_axioms = ref true
 let with_null_axioms = ref true
-let keep_sets = ref false
+let keep_sets = ref true
 let encode_fields_as_arrays = ref false
 
 (* tell whether we are instantiating the axioms or relying on the prover. *)
@@ -20,7 +20,8 @@ let cmd_options =
    ("-noalloc", Arg.Clear with_alloc_axioms, "Omit axioms for alloc predicate");
    ("-nonull", Arg.Clear with_null_axioms, "Omit axioms for null");
    ("-m", Arg.Set_string model_file, "Produce model");
-   ("-keepsets", Arg.Set keep_sets, "Keep sets in reduction");
+   ("-elimsets", Arg.Clear keep_sets, "Eliminate sets in FOL reduction");
+   ("-usearrays", Arg.Set encode_fields_as_arrays, "Use arrays to encode fields");
    ("-noinst", Arg.Clear instantiate, "Let the prover deal with the quantifiers.");
    ("-dumponly", Arg.Set dump_only, "Just dump the VCs but don't solve them.");
    ("-smtsolver", Arg.Set_string smtsolver, "Choose SMT solver (Z3, CVC4, MathSAT)")
