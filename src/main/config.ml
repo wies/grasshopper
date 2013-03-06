@@ -12,14 +12,16 @@ let model_file = ref ""
 (* just dump the queries don't solve. *)
 let dump_only = ref false
 
+let smtsolver = ref "Z3"
 
 let cmd_options =
   [("-v", Arg.Unit Debug.set_debug, "Display verbose messages");
-   ("-noreach", Arg.Clear with_reach_axioms, "Do not add axioms for reachability predicates");
+   ("-noreach", Arg.Clear with_reach_axioms, "Omit axioms for reachability predicates");
    ("-noalloc", Arg.Clear with_alloc_axioms, "Omit axioms for alloc predicate");
    ("-nonull", Arg.Clear with_null_axioms, "Omit axioms for null");
    ("-m", Arg.Set_string model_file, "Produce model");
    ("-keepsets", Arg.Set keep_sets, "Keep sets in reduction");
    ("-noinst", Arg.Clear instantiate, "Let the prover deal with the quantifiers.");
-   ("-dumponly", Arg.Set dump_only, "just dump the VCs, don't solve.")
+   ("-dumponly", Arg.Set dump_only, "Just dump the VCs but don't solve them.");
+   ("-smtsolver", Arg.Set_string smtsolver, "Choose SMT solver (Z3, CVC4, MathSAT)")
   ]

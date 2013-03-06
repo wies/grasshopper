@@ -90,6 +90,11 @@ let selected_solver = ref z3
 
 let selected_interpolator = ref mathsat
 
+let select_solver name = 
+  try
+    selected_solver := List.find (fun s -> s.name = name) solvers
+  with Not_found -> failwith ("Unsupported SMT solver '" ^ name ^ "'")
+
 (** SMT-LIB2 Sessions *)
    
 type session = { name: string;
