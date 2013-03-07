@@ -1,0 +1,22 @@
+#!/bin/bash
+
+TESTS="
+traverse tests/sl/traverse pass
+free tests/sl/free pass
+copy tests/sl/copy pass
+reverse tests/sl/reverse pass
+concat tests/sl/concat pass
+filter tests/sl/filter pass
+remove tests/sl/remove pass
+insert tests/sl/insert pass
+recursive_traverse tests/sl/rec_traverse pass
+recursive_free tests/sl/rec_free pass
+recursive_copy tests/sl/rec_copy pass
+recursive_reverse tests/sl/rec_reverse pass
+recursive_concat tests/sl/rec_concat pass
+recursive_filter tests/sl/rec_filter pass
+recursive_remove tests/sl/rec_remove pass
+recursive_insert tests/sl/rec_insert pass
+"
+
+time ./run-tests $TESTS

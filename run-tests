@@ -1,0 +1,41 @@
+#!/bin/bash
+
+ensure_verifies()
+{
+  # Function. Parameter 1 is the return code
+  # Para. 2 is text to display on failure.
+  if [ "${1}" -ne "0" ]; then
+    echo "*** ERROR: Benchmark ${2} expected to verify, but did not verify."
+    exit -1
+  else
+    echo "Passed Benchmark ${2}."
+  fi
+}
+
+ensure_fails()
+{
+  # Function. Parameter 1 is the return code
+  # Para. 2 is text to display on failure.
+  if [ "${1}" -ne "1" ]; then
+    echo "*** SOUNDNESS ERROR ***************************************"
+    echo "*** SOUNDNESS ERROR: Benchmark ${2} expected to fail, but verified!"
+    echo "*** SOUNDNESS ERROR ***************************************"
+    exit -1
+  else
+    echo "PASSED Benchmark ${2}."
+  fi
+}
+
+while (( "$#" )); do
+    #echo $2
+    ./analyzer.native $2
+    if [ $3 == "pass" ]; then
+        ensure_verifies $? $1
+    else
+        ensure_fails $? $1
+    fi
+    shift
+    shift
+    shift
+done
+echo "All tests passed."
