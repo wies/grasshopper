@@ -171,7 +171,7 @@ let one_and_rest lst =
 
 let fresh_existentials f =
   let fct id =
-    if (fst id) = "_" then FormUtil.fresh_ident "_"
+    if (fst id) = "_" then FormUtil.fresh_ident "unamed_const"
     else id
   in
     map_id fct f
