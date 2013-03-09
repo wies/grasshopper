@@ -275,7 +275,8 @@ let to_form set_fct domain f =
             domains
             FormUtil.mk_false
         in
-        Axioms.mk_axiom ("dll_" ^ (Form.str_of_ident domain))
+        let ax_name = "dll_" ^ Form.str_of_ident (FormUtil.fresh_ident (Form.str_of_ident domain)) in
+        Axioms.mk_axiom ax_name
             (FormUtil.mk_implies
               (FormUtil.mk_and [in_domain; FormUtil.mk_eq (FormUtil.mk_read fpts Axioms.loc1) Axioms.loc2])
               (FormUtil.mk_eq (FormUtil.mk_read fprev_pts Axioms.loc2) Axioms.loc1))

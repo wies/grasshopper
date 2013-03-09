@@ -8,12 +8,12 @@ module IdMap = Form.IdMap
 module IdSet = Form.IdSet
 
 
-let implies_heap_content =
+let implies_heap_content preh posth =
   (* heap axiom: B(x) => A(x)
    * if we have a path then we must compare
    * A(x) with first_alloc(x) and
    * B(x) with last_alloc(x) *)
-    mk_subseteq (Sl.mk_loc_set post_heap) (Sl.mk_loc_set pre_heap) 
+    mk_subseteq (Sl.mk_loc_set preh) (Sl.mk_loc_set posth) 
 
 (* all equal *)
 let mk_same lst =
@@ -209,7 +209,7 @@ let make_frame heap_a heap_b (model: Model.model) =
     ((*frame,*) spatial2, pure)
 
 
-let infer_frame_loop query =
+let infer_frame_loop query preh posth =
   let initial = Prover.ModelGenerator.initial_query "frame" query in
     match initial with
     | Some (session, _) ->
@@ -223,7 +223,7 @@ let infer_frame_loop query =
               Model.print_model model
             end;
           *)
-          let spatial, pure = make_frame pre_heap post_heap model in
+          let spatial, pure = make_frame preh posth model in
           let blocking = Model.to_form model in
             Debug.msg ("blocking terms are " ^ (Form.string_of_form blocking) ^ "\n");
             loop ((spatial, pure) :: acc) (Prover.ModelGenerator.add_blocking_clause generator blocking)
@@ -250,8 +250,8 @@ let infer_frame_loop query =
     | None -> None
 
 
-let mk_frame_query pre post =
-  let query = smk_and [implies_heap_content; pre; post] in
+let mk_frame_query pre post preh posth =
+  let query = smk_and [implies_heap_content preh posth; pre; post] in
   let _ = if !Debug.verbose then
     begin
       print_endline "frame query: ";
@@ -261,7 +261,9 @@ let mk_frame_query pre post =
     query
 
 let infer_frame pre_sl post_sl =
-  let pre = Sl.to_grass pre_heap pre_sl in
-  let post = Sl.to_grass post_heap post_sl in
-  let query = mk_frame_query pre post in
-    infer_frame_loop query
+  let preh = pre_heap () in
+  let posth = post_heap () in
+  let pre = Sl.to_grass preh pre_sl in
+  let post = Sl.to_grass posth post_sl in
+  let query = mk_frame_query pre post preh posth in
+    infer_frame_loop query preh posth
