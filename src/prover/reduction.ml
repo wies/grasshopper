@@ -85,13 +85,13 @@ let reduce_exists =
 	(match sort_of s1 with
 	| Some (Set srt) ->
 	    let ve = mk_var ~srt:srt e in
-	    mk_exists [(e, srt)] (mk_or [mk_and [mk_elem ve s1; mk_not (mk_elem ve s2)];
-					 mk_and [mk_elem ve s2; mk_not (mk_elem ve s1)]])
+	    mk_exists [(e, srt)] (mk_or [mk_and [smk_elem ve s1; mk_not (smk_elem ve s2)];
+					 mk_and [smk_elem ve s2; mk_not (smk_elem ve s1)]])
 	| _ -> f)
     | BoolOp (Not, [Atom (App (SubsetEq, [s1; s2], _))]) ->
 	let srt = element_sort_of_set s1 in
 	let ve = mk_var ~srt:srt e in
-	mk_exists [(e, srt)] (mk_and [mk_elem ve s1; mk_not (mk_elem ve s2)])
+	mk_exists [(e, srt)] (mk_and [smk_elem ve s1; mk_not (smk_elem ve s2)])
     | BoolOp (op, fs) -> BoolOp (op, List.map elim_neq fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, elim_neq f, a)
     | f -> f
@@ -189,7 +189,7 @@ let reduce_frame fs =
   let expand_frame x x' a a' f f' =
     let replacement_alloc =
       let nxa = mk_diff a x in
-      [ mk_not (mk_elem mk_null a');
+      [ mk_not (smk_elem mk_null a');
         mk_subseteq x' a';
         mk_subseteq nxa a';
         mk_subseteq a' (mk_union [x'; nxa])
@@ -199,7 +199,7 @@ let reduce_frame fs =
     let replacement_pts =
       mk_forall [Axioms.l1]
         (mk_implies
-           (mk_not (mk_elem Axioms.loc1 x))
+           (mk_not (smk_elem Axioms.loc1 x))
            (mk_eq (mk_read f Axioms.loc1) (mk_read f' Axioms.loc1))
         )
     in
@@ -218,7 +218,7 @@ let reduce_frame fs =
          )
       ) :: (mk_forall [l1;l2;l3]
               (mk_implies
-                 (mk_and [mk_not (mk_elem loc1 x); mk_eq loc1 (ep loc1)])
+                 (mk_and [mk_not (smk_elem loc1 x); mk_eq loc1 (ep loc1)])
                  (mk_iff (reach1 loc1 loc2 loc3) (reach2 loc1 loc2 loc3))
               )
            ) :: []

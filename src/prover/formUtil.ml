@@ -57,6 +57,10 @@ let eq_name id1 id2 = name id1 = name id2
 
 (** Smart constructors *)
 
+let mk_true = BoolOp (And, [])
+let mk_false = BoolOp (Or, [])
+let mk_bool b = if b then mk_true else mk_false
+
 let mk_ident name = (name, 0)
 
 let mk_free_const ?srt id = App (FreeSym id, [], srt)
@@ -115,6 +119,10 @@ let mk_diff s t = mk_app ?srt:(sort_of s) Diff [s; t]
 
 let mk_elem e s = mk_atom Elem [e; s]
 
+let smk_elem e = function
+  | App (Empty, _, _) -> mk_false
+  | s -> mk_elem e s
+
 let mk_subseteq s t = mk_atom SubsetEq [s; t]
 
 (* 'a' is the set allocated objects
@@ -124,9 +132,6 @@ let mk_subseteq s t = mk_atom SubsetEq [s; t]
  *)
 let mk_frame x x' a a' f f' = mk_atom Frame [x; x'; a; a'; f; f']
 
-let mk_true = BoolOp (And, [])
-let mk_false = BoolOp (Or, [])
-let mk_bool b = if b then mk_true else mk_false
 
 let mk_and = function
   | [f] -> f
