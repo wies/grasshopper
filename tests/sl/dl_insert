@@ -7,17 +7,17 @@ ensures (a = null * dlseg(elt, null, null, elt)) || dlseg(a, null, null, b)
         return elt;
     } else {
         curr := a;
-        prev := null;
-        while ( Random && curr.next ~= null ) curr ~= null * dlseg(a, null, curr, prev) * dlseg(curr, prev, null, b) {
-            prev := curr;
+        prv := null;
+        while ( Random && curr.next ~= null ) curr ~= null * dlseg(a, null, curr, prv) * dlseg(curr, prv, null, b) {
+            prv := curr;
             curr := curr.next;
         }
         elt.next := curr;
         curr.back := elt;
-        if (prev ~= null) {
-          prev.next := elt;
+        if (prv ~= null) {
+          prv.next := elt;
         } else {}
-        elt.back := prev;
+        elt.back := prv;
         return a;
     }
 }

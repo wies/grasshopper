@@ -7,7 +7,9 @@ ensures dlseg(end, null, null, start)
     while(curr ~= null) dlseg(curr, prv, null, end) * dlseg(prv, curr, null, start) {
         tmp := curr;
         tmp.next := prv;
-        prv.back := tmp;
+        if (prv ~= null) {
+            prv.back := tmp;
+        } else {}          
         prv := tmp;
     }
 }

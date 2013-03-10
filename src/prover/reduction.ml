@@ -326,42 +326,47 @@ let reduce_reach fs gts =
   let fs1 = null_ax1 @ fs in
   (* propagate read terms *)
   let gts1 = 
-    let writes = 
-      TermSet.fold 
-	(fun t acc -> match t with
-	|  App (Write, fld :: _, _) as fld' -> (fld, fld') :: (fld', fld) :: acc
-	| _ -> acc
-	)
-	gts []
-    in
-    let reads =
-      TermSet.fold
-	(fun t acc -> match t with
-	|  App (Read, [fld; arg], _) -> (fld, arg) :: acc
-	| _ -> acc
-	)
-	gts []
-    in
-    let rec propagate gts reads =
-      let new_reads, new_gts = 
-	List.fold_left 
-	  (fun (new_reads, new_gts) (fld, arg) ->
-	    try 
-	      let fld' = List.assoc fld writes in 
-	      (*let _ = print_endline ("adding term " ^ string_of_term (mk_read fld' arg)) in*)
-              let t = mk_read fld' arg in
-              let new_reads1 = 
-                if TermSet.mem t new_gts then new_reads else (fld', arg) :: new_reads
-              in
-	      new_reads1, TermSet.add t new_gts
-	    with Not_found -> new_reads, new_gts
-	  )
-	  ([], gts) reads
+    let fld_partition, fld_map, fields = 
+      let max, fld_map, fields = 
+        TermSet.fold (fun t (n, fld_map, fields) -> match t with
+          | App (_, _, Some (Fld _)) as fld -> 
+              n+1, TermMap.add fld n fld_map, TermSet.add fld fields
+          | _ -> n, fld_map, fields)
+          gts (0, TermMap.empty, TermSet.empty)
       in
-      match new_reads with
-      |	[] -> new_gts 
-      |	_ -> propagate new_gts new_reads
-    in propagate (TermSet.union gts (ground_terms (smk_and null_ax1))) reads
+      let rec collect_eq partition = function
+        | BoolOp (Not, f) -> partition
+        | BoolOp (op, fs) -> List.fold_left collect_eq partition fs
+        | Atom (App (Eq, [App (_, _, Some (Fld _)) as fld1; fld2], _)) ->
+            Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
+        | Binder (_, _, f, _) -> collect_eq partition f
+        | f -> partition
+      in
+      let fld_partition0 = List.fold_left collect_eq (Puf.create max) fs1 in
+      TermSet.fold (fun t partition -> 
+        match t with
+        | App (Write, fld1 :: _, _) as fld2 -> 
+            Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
+        | _ -> partition)
+        gts fld_partition0,
+      fld_map,
+      fields
+    in
+    let partition_of fld =
+      let p = Puf.find fld_partition (TermMap.find fld fld_map) in
+      let res = TermSet.filter (fun fld1 -> Puf.find fld_partition (TermMap.find fld1 fld_map) = p) fields in
+      (*print_endline ("partition of " ^ string_of_term fld);*)
+      res
+    in
+    (*let _ = print_endline "All terms: "; TermSet.iter (fun t -> print_endline (string_of_term t)) gts in*)
+    TermSet.fold
+      (fun t gts1 -> match t with
+      |  App (Read, [fld; arg], _) -> 
+          (*let _ = print_endline ("Processing " ^ string_of_term t) in*)
+          TermSet.fold (fun fld1 gts1 -> 
+            TermSet.add (mk_read fld1 arg) gts1) (partition_of fld) gts1
+      | _ -> gts1)
+      gts (TermSet.union gts (ground_terms (smk_and null_ax1)))
   in
   let classes1 = CongruenceClosure.congr_classes fs1 gts1 in
   (* instantiate the variables of sort Fld in all reachability axioms *)
@@ -411,5 +416,5 @@ let reduce f =
   let fs3, ep_axioms, gts = reduce_ep fs21 in
   let fs4, gts1 = reduce_sets (fs3 @ ep_axioms) gts in
   let fs5, reach_axioms, gts2 = reduce_reach fs4 gts1 in
-  let fs6 = reduce_remaining fs5 gts in
+  let fs6 = reduce_remaining fs5 gts2 in
   rev_concat [fs6; reach_axioms]
