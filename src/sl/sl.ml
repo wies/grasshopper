@@ -181,74 +181,104 @@ let to_form set_fct domain f =
   let fd why d = FormUtil.fresh_ident ( why ^ "_" ^(fst d)) in
   (*let v = Axioms.var1 in
   let v2 = Axioms.var2 in*)
-  let empty_t domain = FormUtil.mk_eq (FormUtil.mk_empty (Some (Form.Set Form.Loc))) domain in
+  let emptyset = FormUtil.mk_empty (Some (Form.Set Form.Loc)) in
+  let empty_t domain = FormUtil.mk_eq emptyset domain in
   let empty domain = empty_t (mk_loc_set domain) in
-  let rec process_sep pol domain f = match f with
-    | BoolConst b -> (FormUtil.mk_bool b, empty domain, IdSet.empty)
-    | Not (Eq (id1, id2)) -> (FormUtil.mk_neq (mk_loc id1) (mk_loc id2), empty domain, IdSet.empty) (*TODO are id1, id2 always locations ? *)
-    | Eq (id1, id2) -> (FormUtil.mk_eq (mk_loc id1) (mk_loc id2), empty domain, IdSet.empty) (*TODO are id1, id2 always locations ? *)
-    | Emp -> (FormUtil.mk_true, empty domain, IdSet.empty)
+
+  let rec process_sep pol d f = 
+    match f with
+    | BoolConst b -> 
+        let domain = FormUtil.fresh_ident (fst d) in
+        ([FormUtil.mk_bool b, mk_loc_set domain, IdSet.empty], empty domain)
+    | Not (Eq (id1, id2)) -> 
+        let domain = FormUtil.fresh_ident (fst d) in
+        ([FormUtil.mk_neq (mk_loc id1) (mk_loc id2), mk_loc_set domain, IdSet.empty], empty domain) (*TODO are id1, id2 always locations ? *)
+    | Eq (id1, id2) -> 
+        let domain = FormUtil.fresh_ident (fst d) in
+        ([FormUtil.mk_eq (mk_loc id1) (mk_loc id2), mk_loc_set domain, IdSet.empty], empty domain) (*TODO are id1, id2 always locations ? *)
+    | Emp -> 
+        let domain = FormUtil.fresh_ident (fst d) in
+        ([FormUtil.mk_true, mk_loc_set domain, IdSet.empty], empty domain)
     | PtsTo (h, id1, id2) ->
-        ( FormUtil.mk_eq (FormUtil.mk_read (to_field h) (mk_loc id1)) (mk_loc id2),
-          FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_setenum [mk_loc id1]),
-          IdSet.empty
+        let domain = FormUtil.fresh_ident (fst d) in
+        ([FormUtil.mk_eq (FormUtil.mk_read (to_field h) (mk_loc id1)) (mk_loc id2),
+          mk_loc_set domain, IdSet.empty],
+         FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_setenum [mk_loc id1])
         )
     | List (id1, id2) ->
-        ( reach id1 id2,
+        let domain = FormUtil.fresh_ident (fst d) in
+        ( [reach id1 id2, mk_loc_set domain, IdSet.empty],
           Axioms.mk_axiom ("def_of_" ^ Form.str_of_ident domain) 
 	    (FormUtil.mk_iff
                (FormUtil.smk_and [
                 reachWoT (mk_loc id1) Axioms.loc1 (mk_loc id2);
                 FormUtil.mk_neq Axioms.loc1 (mk_loc id2) ] )
-               (mk_domain domain Axioms.loc1) ),
-          IdSet.empty
+               (mk_domain domain Axioms.loc1))         
         )
     | DList (x1, x2, y1, y2) ->
-      let part1 = reach x1 y1 in
-      let part2 =
-        Axioms.mk_axiom ("def_of_" ^ Form.str_of_ident domain) 
-          (FormUtil.mk_iff (mk_domain domain Axioms.loc1)
-                             (FormUtil.mk_and [ reachWoT (mk_loc x1) Axioms.loc1 (mk_loc y1);
-                                                FormUtil.mk_neq Axioms.loc1 (mk_loc y1)])) in
-      let part3 =
-        Axioms.mk_axiom ("dll_" ^ Form.str_of_ident domain)
-          (FormUtil.mk_implies (FormUtil.mk_and [ mk_domain domain Axioms.loc1;
-                                                  mk_domain domain Axioms.loc2;
-                                                  FormUtil.mk_eq (FormUtil.mk_read fpts Axioms.loc1) Axioms.loc2])
-                               (FormUtil.mk_eq (FormUtil.mk_read fprev_pts Axioms.loc2) Axioms.loc1)) in
-      let part4 =
-        FormUtil.mk_or [
+        let domain = FormUtil.fresh_ident (fst d) in
+        let part1 = reach x1 y1 in
+        let part2 =
+          Axioms.mk_axiom ("def_of_" ^ Form.str_of_ident domain) 
+            (FormUtil.mk_iff (mk_domain domain Axioms.loc1)
+               (FormUtil.mk_and [ reachWoT (mk_loc x1) Axioms.loc1 (mk_loc y1);
+                                  FormUtil.mk_neq Axioms.loc1 (mk_loc y1)])) in
+        let part3 =
+          Axioms.mk_axiom ("dll_" ^ Form.str_of_ident domain)
+            (FormUtil.mk_implies (FormUtil.mk_and [ mk_domain domain Axioms.loc1;
+                                                    mk_domain domain Axioms.loc2;
+                                                    FormUtil.mk_eq (FormUtil.mk_read fpts Axioms.loc1) Axioms.loc2])
+               (FormUtil.mk_eq (FormUtil.mk_read fprev_pts Axioms.loc2) Axioms.loc1)) in
+        let part4 =
+          FormUtil.mk_or [
           FormUtil.mk_and [ FormUtil.mk_eq (mk_loc x1) (mk_loc y1); FormUtil.mk_eq (mk_loc x2) (mk_loc y2)];
           FormUtil.mk_and [ FormUtil.mk_eq (FormUtil.mk_read fprev_pts (mk_loc x1)) (mk_loc x2);
                             FormUtil.mk_eq (FormUtil.mk_read fpts (mk_loc y2)) (mk_loc y1);
                             mk_domain domain (mk_loc y2)] ]
-      in
-        ( FormUtil.mk_and ((if pol then [part3] else []) @ [part1;  part4]),
-          part2,
-          IdSet.singleton domain
-        )
+        in
+        ( [FormUtil.mk_and ((if pol then [part3] else []) @ [part1;  part4]), mk_loc_set domain, IdSet.singleton domain],
+          part2          
+         )
     | SepConj forms ->
-      let ds = List.map (fun _ -> fd "sep" domain) forms in
-      let translated = List.map2 (process_sep pol) ds forms in
-      let (translated_1, translated_2, domains) = 
-        List.fold_left
-          (fun (ts_1, ts_2, ds) (t_1, t_2, domains) -> (t_1 :: ts_1, t_2 :: ts_2, IdSet.union domains ds))
-          ([], [], IdSet.empty)
-          translated 
+      (*let ds = List.map (fun _ -> fd "sep" domain) forms in*)
+        let translated = List.map (process_sep pol (fd "sep" d)) forms in
+      let translated_1, translated_2 = List.split translated in
+      let translated_product = 
+        match translated_1 with
+        | [] -> []
+        | ts :: tss ->
+            List.fold_left 
+              (fun acc ts1  -> Util.flat_map (fun ts2 ->  List.map (fun t -> t :: ts2) ts1) acc)
+              [ts] tss
       in
-      let dsc = List.map mk_loc_set ds in
-      let separation1 = FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_union dsc) in
-      let separation2 =
-        Util.flat_map
-          (fun d1 ->
-            Util.flat_map
-              (fun d2 -> if d1 <> d2 then [empty_t (FormUtil.mk_inter [d1; d2])] else [])
-              dsc)
-          dsc
-      in
-      let heap_part = FormUtil.smk_and (separation1 :: translated_2) in
-      let struct_part = FormUtil.smk_and (separation2 @ translated_1) in
-        (struct_part, heap_part, domains)
+      let process (otranslated_1, translated_2) translated =
+        let domain = FormUtil.fresh_ident (fst d) in
+        let translated_1, dsc, domains = 
+          List.fold_right
+            (fun (t_1, d, odomains) (ts_1, dsc, domains) -> 
+              (t_1 :: ts_1, d :: dsc, IdSet.union domains odomains))
+            translated ([], [], IdSet.empty)
+            
+        in
+        (*let dsc = List.map mk_loc_set ds in*)
+        let separation1 = FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_union dsc) in
+        let separation2 =
+          Util.flat_map
+            (fun d1 ->
+              Util.flat_map
+                (fun d2 -> if d1 <> d2 then [empty_t (FormUtil.mk_inter [d1; d2])] else [])
+                dsc)
+            dsc
+        in
+        let heap_part = separation1 :: translated_2 in
+        let struct_part = FormUtil.smk_and (separation2 @ translated_1) in
+        ((struct_part, mk_loc_set domain, domains) :: otranslated_1, heap_part)
+      in 
+      let struct_part, heap_part = List.fold_left process ([], translated_2) translated_product in
+      struct_part, FormUtil.smk_and heap_part
+    | Or forms ->
+        let translated_1, translated_2 = List.split (List.map (process_sep pol d) forms) in
+        List.concat translated_1, FormUtil.smk_and translated_2
     | other -> failwith ("process_sep does not expect " ^ (to_string other))
   in
 
@@ -266,143 +296,29 @@ let to_form set_fct domain f =
         (FormUtil.mk_not structure, heap)
     | sep ->
       let d' = fd "leaf" domain in
-      let (str, heap, domains) = process_sep pol d' sep in
-      let dll_axiom = 
-        let in_domain =
-          IdSet.fold
-            (fun domain acc ->
-              FormUtil.smk_or [acc; FormUtil.mk_and[ mk_domain domain Axioms.loc1; mk_domain domain Axioms.loc2]])
-            domains
-            FormUtil.mk_false
-        in
-        let ax_name = "dll_" ^ Form.str_of_ident (FormUtil.fresh_ident (Form.str_of_ident domain)) in
-        Axioms.mk_axiom ax_name
+      let struct_part, heap_part = process_sep pol d' sep in
+      let process (str, d, domains) =
+        let dll_axiom = 
+          let in_domain =
+            IdSet.fold
+              (fun domain acc ->
+                FormUtil.smk_or [acc; FormUtil.mk_and[ mk_domain domain Axioms.loc1; mk_domain domain Axioms.loc2]])
+              domains
+              FormUtil.mk_false
+          in
+          let ax_name = "dll_" ^ Form.str_of_ident (FormUtil.fresh_ident (Form.str_of_ident domain)) in
+          Axioms.mk_axiom ax_name
             (FormUtil.mk_implies
-              (FormUtil.mk_and [in_domain; FormUtil.mk_eq (FormUtil.mk_read fpts Axioms.loc1) Axioms.loc2])
-              (FormUtil.mk_eq (FormUtil.mk_read fprev_pts Axioms.loc2) Axioms.loc1))
-      in
+               (FormUtil.mk_and [in_domain; FormUtil.mk_eq (FormUtil.mk_read fpts Axioms.loc1) Axioms.loc2])
+               (FormUtil.mk_eq (FormUtil.mk_read fprev_pts Axioms.loc2) Axioms.loc1))
+        in
         (FormUtil.mk_and (
-          (if not (IdSet.is_empty domains) && not pol then [dll_axiom] else []) @
-          [str; set_fct (mk_loc_set d') (mk_loc_set domain)]),
-         heap)
+         (if not (IdSet.is_empty domains) && not pol then [dll_axiom] else []) @
+         [str; set_fct d (mk_loc_set domain)])) 
+      in
+      FormUtil.smk_or (List.map process struct_part), heap_part
   in
     process_bool true (fresh_existentials f)
-
-(* assumes NNF *)
-let skolemize f =
-  let stack = ref [] in
-  let top = ref [] in
-  let available = ref [] in
-
-  let push () =
-    stack := !top :: !stack;
-    top := []
-  in
-  let pop () =
-    available := !top @ !available;
-    top := List.hd !stack;
-    stack := List.tl !stack
-  in
-
-  let has_candidate args_tpe tpe =
-    let rec find acc lst = match lst with
-      | ((id, args, ret) as x) :: xs ->
-        if List.for_all2 (=) args args_tpe && ret = tpe then
-           begin
-             available := acc @ xs;
-             Some id
-           end
-        else
-          find (x :: acc) xs
-      | [] -> None
-    in
-      find [] !available
-  in
-
-  let fresh u_vars tpe = 
-    let mk_v (id, srt) = FormUtil.mk_var ?srt:(Some srt) id in
-    let srts = List.map snd u_vars in
-    let id = match has_candidate srts tpe with
-      | Some id -> id
-      | None -> FormUtil.fresh_ident skolemCst
-    in
-    let term = FormUtil.mk_free_app ?srt:(Some tpe) id (List.map mk_v u_vars) in
-      top := (id, srts, tpe) :: !top;
-      term
-  in
-
-  let rec process u_vars subst f = match f with
-    | Form.Atom a -> Form.Atom (FormUtil.subst_term subst a)
-    | Form.BoolOp (Form.Or, fs) -> 
-      let forms2 =
-        List.map
-          (fun f ->
-            push ();
-            let f2 = process u_vars subst f in
-              pop ();
-              f2)
-          fs
-      in
-        Form.BoolOp (Form.Or, forms2)
-    | Form.BoolOp (other, fs) -> 
-      let forms2 = List.map (process u_vars subst) fs in
-        Form.BoolOp (other, forms2)
-    | Form.Binder (Form.Forall, vs, f2, an) -> 
-      let f3 = process (vs @ u_vars) subst f2 in
-        Form.Binder (Form.Forall, vs, f3, an)
-    | Form.Binder (Form.Exists, vs, f2, an) -> 
-      let new_terms = List.map (fun (id, tp) -> fresh u_vars tp) vs in
-      let subst2 =
-        List.fold_left2
-          (fun acc (v, _) t -> IdMap.add v t acc)
-          subst
-          vs
-          new_terms
-      in
-      let f3 = process u_vars subst2 f2 in
-        (*do not throw away the annotations *)
-        if an = [] then f3
-        else Form.Binder (Form.Exists, [], f3, an)
-
-  in
-    process [] IdMap.empty f
-
-(* pull the axioms at the top level.
- * assumes: nnf, skolemized
- *)
-let positive_with_top_Lvl_axioms f =
-(*let equisat_with_topLvl_axioms f =
-  let fresh () = Form.mk_pred (FormUtil.fresh_ident "equisat") [] in*)
-  let fresh () = FormUtil.mk_pred (FormUtil.fresh_ident "positive") [] in
-  let rec process f = match f with
-    | (Form.Atom _) as a -> (a, [])
-    | (Form.BoolOp (Form.Not, [Form.Atom _])) as n -> (n, [])
-    | Form.BoolOp (Form.Not, _) -> failwith "positive_with_top_Lvl_axioms: formula not in NNF"
-    | Form.BoolOp (bop, fs) -> 
-      let forms2, accs = List.split (List.map process fs) in
-        (Form.BoolOp (bop, forms2), List.flatten accs)
-    | Form.Binder (bdr, [], f2, an) -> (*annotations only*)
-      let (f3, acc) = process f2 in
-        (Form.Binder (bdr, [], f3, an), acc)
-    | Form.Binder (Form.Exists, vs, f2, an) -> failwith "f has not been skolemized"
-    | Form.Binder (Form.Forall, vs, f2, an) -> 
-      let p = fresh () in
-      let part1 = FormUtil.mk_implies (FormUtil.mk_not p) f2 in
-      (*let part2 = Form.mk_or [skolemize (nnf (Form.mk_not f)); p] in*)
-        (p, [part1](*; part2]*))
-  in
-  let top_level f = match f with
-    | Form.Atom _ -> (f, [])
-    | Form.Binder _ -> (f, [])
-    | other -> process other
-  in
-  let clauses = match f with
-    | Form.BoolOp (Form.And, fs) -> fs
-    | other -> [other]
-  in
-  let (f2s, accs) = List.split (List.map top_level clauses) in
-    FormUtil.smk_and (f2s  @ (List.flatten accs))
-
 
 let rec get_clauses f = match f with
   | Form.BoolOp (Form.And, lst) ->  List.flatten (List.map get_clauses lst)
@@ -417,9 +333,7 @@ let post_process f =
       print_newline ()
     end
   in
-    (*positive_with_top_Lvl_axioms (
-      skolemize ( *)
-        FormUtil.nnf f (* ) ) *)
+  FormUtil.nnf f 
 
 let to_grass domain f =
   let (pointers, separations) = to_form FormUtil.mk_eq domain f in
