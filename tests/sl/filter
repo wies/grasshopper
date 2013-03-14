@@ -5,8 +5,8 @@ ensures lseg(x, null)
 {
     prv := null;
     curr := x;
-    while (curr ~= null) (lseg(x,prv) * prv |-> curr * lseg(curr,null)) || 
-                         (prv = null * x = curr * lseg(curr,null)) 
+    while (curr ~= null) 
+    ((lseg(x,prv) * prv |-> curr || prv = null * x = curr) * lseg(curr,null))
     {
       if (Random) {
         if (prv ~= null) {

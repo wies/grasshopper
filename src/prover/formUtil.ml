@@ -235,6 +235,14 @@ let fold_terms fn init f =
     | Binder (_, _, f, _) -> ft acc f
   in ft init f
 
+(** Apply the function fn to all terms appearing in f *)
+let map_terms fn f =
+  let rec mt = function
+    | Atom t -> Atom (fn t)
+    | BoolOp (op, fs) -> BoolOp (op, List.map mt fs)
+    | Binder (b, vs, f, a) -> Binder (b, vs, mt f, a)
+  in mt f
+
 (** Like fold_terms except that fn takes the set of bound variables of the given context as additional argument *)
 let fold_terms_with_bound fn init f =
   let rec ft bv acc = function
@@ -387,6 +395,17 @@ let subst_id subst_map f =
     | Atom t -> Atom (subt t)
     | Binder (b, vs, f, a) -> Binder (b, vs, sub f, a)
   in sub f
+
+(** Substitutes all constants in form f according to substitution map subst_map. *)
+let subst_consts subst_map f =
+  let sub_id id t =
+    try IdMap.find id subst_map with Not_found -> t
+  in
+  let rec sub = function
+    | (App (FreeSym id, [], srt) as t) -> sub_id id t 
+    | App (sym, ts, srt) -> App (sym, List.map sub ts, srt)
+    | t -> t
+  in map_terms sub f
 
 (** Substitutes all variables in term t according to substitution map subst_map. *)
 let subst_term subst_map t =

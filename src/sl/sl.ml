@@ -249,7 +249,7 @@ let to_form set_fct domain f =
         | ts :: tss ->
             List.fold_left 
               (fun acc ts1  -> Util.flat_map (fun ts2 ->  List.map (fun t -> t :: ts2) ts1) acc)
-              [ts] tss
+              (List.map (fun t -> [t]) ts) tss
       in
       let process (otranslated_1, translated_2) translated =
         let domain = FormUtil.fresh_ident (fst d) in
@@ -263,12 +263,10 @@ let to_form set_fct domain f =
         (*let dsc = List.map mk_loc_set ds in*)
         let separation1 = FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_union dsc) in
         let separation2 =
-          Util.flat_map
-            (fun d1 ->
-              Util.flat_map
-                (fun d2 -> if d1 <> d2 then [empty_t (FormUtil.mk_inter [d1; d2])] else [])
-                dsc)
-            dsc
+          let rec pw_disj acc = function
+            | d1 :: dcs -> pw_disj (List.map (fun d2 -> empty_t (FormUtil.mk_inter [d2; d1])) dcs @ acc) dcs
+            | [] -> acc
+          in pw_disj [] dsc
         in
         let heap_part = separation1 :: translated_2 in
         let struct_part = FormUtil.smk_and (separation2 @ translated_1) in

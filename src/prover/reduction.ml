@@ -262,12 +262,25 @@ let isFunVar f =
 (** Reduce all set constraints by adding appropriate instances of the axioms of set operations.
  ** assumes that f is typed and in negation normal form *)
 let reduce_sets_with_axioms fs gts =
+  let split ts = List.fold_left (fun (ts1, ts2) t -> (ts2, t :: ts1)) ([], []) ts in
+  let rec unflatten = function
+    | App (Union, [t], _) 
+    | App (Inter, [t], _) -> unflatten t
+    | App (Union, [], srt) -> mk_empty srt
+    | App (Union, ts, srt) ->
+        let ts1, ts2 = split ts in
+        App (Union, [unflatten (mk_union ts1); unflatten (mk_union ts2)], srt)
+    | App (sym, ts, srt) -> App (sym, List.map unflatten ts, srt)
+    | t -> t
+  in
   let rec simplify_term = function
     (* todo: flatten unions, intersections, and enumerations *)
     | App (SubsetEq, [t1; t2], _) -> 
-        let s = mk_free_const ?srt:(sort_of t1) (fresh_ident "S") in
-        App (Eq, [t1; mk_union [t2; s]], Some Bool)
-    | t -> t
+        let t11 = unflatten t1 in
+        let t21 = unflatten t2 in
+        let s = mk_free_const ?srt:(sort_of t11) (fresh_ident "S") in
+        App (Eq, [t11; mk_union [t21; s]], Some Bool)
+    | t -> unflatten t
   in
   let rec simplify = function
     | BoolOp (op, fs) -> BoolOp (op, List.map simplify fs)
@@ -275,6 +288,7 @@ let reduce_sets_with_axioms fs gts =
     | Atom t -> Atom (simplify_term t)
   in
   let fs1 = List.map simplify fs in
+  let gts = TermSet.fold (fun t gts1 -> TermSet.add (unflatten t) gts1) gts TermSet.empty in
   let gts1 = TermSet.union gts (ground_terms (mk_and fs1)) in
   let classes = CongruenceClosure.congr_classes fs1 gts1 in
   let set_ax = open_axioms isFunVar (Axioms.set_axioms ()) in
@@ -391,7 +405,7 @@ let reduce_reach fs gts =
   (* generate instances of all update axioms *)
   let write_ax = open_axioms isFunVar (Axioms.write_axioms ()) in
   let write_ax1 = instantiate_with_terms true write_ax classes1 in
-  fs1, rev_concat [write_ax1; reach_ax2], gts1
+  fs1, rev_concat [reach_ax2; write_ax1], gts1
 
 let reduce_remaining fs gts =
   (* generate local instances of all remaining axioms in which variables occur below function symbols *)
@@ -411,7 +425,7 @@ let reduce f =
   let fs1 = split_ands [] [f1] in
   let fs2 = reduce_frame fs1 in
   let fs2 = List.map reduce_exists fs2 in
-  let fs21 = factorize_axioms fs2 in
+  let fs21 = (* Simplify.simplify *) (factorize_axioms fs2) in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
   let fs3, ep_axioms, gts = reduce_ep fs21 in
   let fs4, gts1 = reduce_sets (fs3 @ ep_axioms) gts in
