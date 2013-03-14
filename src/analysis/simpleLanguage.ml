@@ -606,7 +606,7 @@ let check_procedure proceduresMap name =
         let c = to_grass cur_alloc f subst in
           add_to_stack stack subst sig_map c
       | Assert f ->
-        check_entailment (proc_name ^ "_return_" ^ "assertion_" ^ (Sl.to_string f)) pre stack f;
+        check_entailment (proc_name ^ "_return_" ^ "assertion") pre stack f;
         stack
       | Assume2 f ->
         let subst = DecisionStack.get_subst stack in
