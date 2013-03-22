@@ -17,6 +17,9 @@ recursive_concat tests/sl/rec_concat pass
 recursive_filter tests/sl/rec_filter pass
 recursive_remove tests/sl/rec_remove pass
 recursive_insert tests/sl/rec_insert pass
+dl_concat tests/sl/dl_concat pass
+dl_free tests/sl/dl_free pass
+dl_traverse tests/sl/dl_traverse pass
 "
 
 time ./run-tests $TESTS

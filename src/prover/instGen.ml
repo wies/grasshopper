@@ -31,101 +31,78 @@ let generate_instances useLocalInst axioms terms rep_map =
   in
   (*let _ = print_endline "Candidate axioms for instantiation:" in
     let _ = print_forms stdout axioms in*)
-  let instantiate subst_map acc axiom =
+  let instantiate acc f =
+    let fvars =
+      let fvars0 = sorted_free_vars f in
+      if useLocalInst 
+      then IdSrtSet.inter fvars0 (vars_in_fun_terms f)
+      else fvars0
+    in
     let fun_terms = 
       let rec tt bv terms t =
         match t with  
-        | App (fn, ts, Some srt) when srt <> Bool -> 
-	    let has_var, vs = 
-              List.fold_right 
-                (fun t (has_var, vs) ->
-                  match t with 
-                  | Var (v, _) when not (IdSet.mem v bv) -> 
-                      let rep_class = TermMap.find (IdMap.find v subst_map) rep_map in
-                      true, rep_class :: vs
-                  | _ -> has_var, (TermSet.singleton t) :: vs
-                ) ts (false, [])
-            in
-            let new_terms = 
-              if has_var 
-              then ((vs, fn) :: terms)
-              else terms
-            in List.fold_left (tt bv) new_terms ts
+        | App (_, _, Some srt) when srt <> Bool -> 
+            let vs = IdSet.diff (fvt IdSet.empty t) bv in
+            if IdSet.is_empty vs
+            then terms 
+            else (vs, t) :: terms
         | App (fn, ts, _) -> List.fold_left (tt bv) terms ts
         | _ -> terms
-      in fold_terms_with_bound tt [] axiom
+      in fold_terms_with_bound tt [] f
     in
-    let is_local () = 
+    let is_local subst_map = 
       List.for_all 
-        (fun (rep_classes, fn) ->
-          (* let _ = print_endline ("Symbol: " ^ str_of_symbol fn) in *)
-	  TermSet.exists 
-	    (function 
-	      | App (fn2, ts, _) when fn = fn2 -> 
-		  List.for_all2 
-		    (fun rep_class t ->
-                      TermSet.mem t rep_class
-                    ) rep_classes ts
-              |	t -> false)
-            ground_terms)
+        (fun (_, t) ->
+          match t with
+          | App (fn1, ts1, _) ->
+              TermSet.exists
+                (function
+                  | App (fn2, ts2, _) when fn1 = fn2 ->
+                      List.for_all2
+                        (fun t1 t2 ->
+                          let t1_rep =
+                            match t1 with
+                            | Var (v, _) ->
+                                (try TermMap.find (IdMap.find v subst_map) rep_map
+                                with Not_found -> TermSet.singleton t2)
+                            | _ -> 
+                                try TermMap.find t1 rep_map
+                                with Not_found -> TermSet.singleton t1
+                          in TermSet.mem t2 t1_rep
+                        ) ts1 ts2
+                  | t -> false)
+                ground_terms
+          | _ -> true) 
         fun_terms
     in
-    (*print_endline "\nSubstituting in:"; 
-    print_form stdout axiom;
-    print_endline "\nwith substitution:";
-    IdMap.iter (fun id t -> print_endline (str_of_ident id ^ " -> " ^ string_of_term t)) subst_map;*)
-    if not useLocalInst || is_local ()
-    then ((*print_endline "\nResult:";
-	  print_form stdout (subst subst_map axiom);*)
-	  subst subst_map axiom :: acc)
-    else ((*print_endline "non local instance";*) acc)
-  in
-  let partitioned_axioms = 
-    let add_class acc vars cl = 
-      match cl with
-      | [] -> acc
-      | _ -> (vars, cl) :: acc
-    in
-    let fv_axioms = 
-      List.map 
-        (fun f -> 
-          let fvars = sorted_free_vars f in
-          if useLocalInst 
-          then IdSrtSet.inter fvars (vars_in_fun_terms f), f
-          else fvars, f) axioms 
-    in
-    let sorted = 
-      List.sort 
-        (fun (vars1, _) (vars2, _) -> IdSrtSet.compare vars1 vars2) 
-        fv_axioms 
-    in
-    let classes, vars, cl = 
-      List.fold_left 
-        (fun (acc, lvars, cl) (vars, f) ->
-          if lvars = vars then (acc, lvars, f :: cl)
-          else (add_class acc lvars cl, vars, [f]))
-        ([], IdSrtSet.empty, []) sorted
-    in add_class classes vars cl	  
-  in
-  let gen (vars, axioms) =
-    (* let vars = IdSet.elements (fv (mk_and axioms)) in *)
+    (*let _ = print_endline "Axiom:" in
+    let _ = print_forms stdout [f] in
+    let _ = print_endline "fun_terms:" in
+    let _ = List.iter (fun (_, t) -> print_term stdout t; print_string ", ") fun_terms in*)
     let subst_maps = 
-      IdSrtSet.fold (fun (v, srt) subst_maps ->
-        let new_subst_maps = 
+      IdSrtSet.fold 
+        (fun (v, srt) subst_maps ->
           List.fold_left 
             (fun acc t -> match t with
             | App (_, _, Some srt2) 
             | Var (_, Some srt2) when srt2 = srt ->
-                List.fold_left (fun acc sub -> (IdMap.add v t sub) :: acc) acc subst_maps
+                let new_subst_maps = 
+                  List.fold_left 
+                    (fun acc sub ->
+                      let new_sub = IdMap.add v t sub in
+                      if not useLocalInst || is_local new_sub 
+                      then new_sub :: acc
+                      else acc
+                    ) acc subst_maps
+                in
+                new_subst_maps
             | _ -> acc)
             [] terms
-        in new_subst_maps)
-        vars [IdMap.empty]
-    in List.fold_left 
-      (fun instances subst_map -> List.fold_left (instantiate subst_map) instances axioms)
-      [] subst_maps
+        ) fvars [IdMap.empty]
+    in
+    List.fold_left (fun acc subst_map -> subst subst_map f :: acc) acc subst_maps
   in
-  epr_axioms @ rev_concat (List.rev_map gen partitioned_axioms)
+  List.fold_left instantiate epr_axioms axioms
   
 
 let instantiate_with_terms local axioms classes =
@@ -145,48 +122,3 @@ let instantiate_with_terms local axioms classes =
     else
       axioms
 
-(*
-let get_ground_terms f =
-  let g1 = ground_terms f in
-  let unary_arg t = match t with
-    | FunApp (id, [arg]) when is_unary id -> Some (id, arg)
-    | _ -> None
-  in
-  let unaries = IdSet.filter is_unary (funs_only f) in
-  let mk_unaries t = match unary_arg t with
-    | Some (id, arg) ->
-      IdSet.fold
-        (fun id acc -> TermSet.add (mk_app id [arg]) acc)
-        (IdSet.filter (fun id2 -> fst id = fst id2) unaries)
-        TermSet.empty
-    | None -> TermSet.empty
-  in
-  let g1 =
-    TermSet.fold
-      (fun t acc -> TermSet.union (mk_unaries t) acc)
-      g1 g1
-  in
-    if !Config.sl_mode then
-      begin
-        let eps = Axioms.get_eps f in
-        let mk_eps t =
-	  (*match t with
-	  | Const _ ->*)
-	  IdSet.fold
-            (fun ep acc -> TermSet.add (Axioms.ep ep t) acc)
-            eps
-            TermSet.empty
-          (*| _ -> TermSet.empty*)
-        in
-          TermSet.fold
-            (fun t acc -> TermSet.union (mk_eps t) acc)
-            g1 g1
-      end
-    else g1
-
-let instantiate fs classes =
-  let gterms_f = ground_terms (mk_and fs) in
-  let instances = instantiate_with_terms true fs gterms_f in
-  fs @ instances
-
-*)

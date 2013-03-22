@@ -313,7 +313,7 @@ let check_entailment what pre_sl stack post_sl =
     | None -> failwith ("cannot prove assertion (unk) for " ^ what)
 
 (* Checks whether the frame exists *)
-let is_frame_defined pre_sl pathf post_sl subst =
+let is_frame_defined name pre_sl pathf post_sl subst =
   let preh = Entails.pre_heap () in
   let posth = Entails.post_heap () in
   let pre = to_grass preh pre_sl IdMap.empty in
@@ -321,17 +321,17 @@ let is_frame_defined pre_sl pathf post_sl subst =
   let query = nnf (smk_and ( (mk_and (pre :: post :: pathf)) ::
                            (Entails.same_heap_axioms subst preh posth) ) )
   in
-    match Prover.check_sat query with
+    match Prover.check_sat ~session_name:(name ^ "_frame") query with
     | Some b -> not b
     | None -> failwith "is_frame_defined: Prover returned None"
 
 
 (* checks is a frame exists (non-tight entailment) *)
-let check_if_frame_exists pre stack sl =
+let check_if_frame_exists name pre stack sl =
   Debug.msg ("checking the existance of a frame.\n");
   let subst = DecisionStack.get_subst stack in
   let pathf = DecisionStack.get_form stack in
-    is_frame_defined pre pathf sl subst
+    is_frame_defined name pre pathf sl subst
 
 (* ... *)
 let check_procedure proceduresMap name =
@@ -399,7 +399,7 @@ let check_procedure proceduresMap name =
    *)
   let sl_replacement pre stack sl_1 subst2 sig2 sl_2 =
     Debug.msg ("sl_replacement: " ^ (Sl.to_string sl_1) ^ " by " ^ (Sl.to_string sl_2) ^ "\n");
-    if not (check_if_frame_exists pre stack sl_1) then
+    if not (check_if_frame_exists (str_of_ident name) pre stack sl_1) then
       failwith "sl_replacement: precondition is not respected"
     else
       begin
@@ -480,7 +480,7 @@ let check_procedure proceduresMap name =
   in
 
   let loop_that_dont_change_heap pre stack cond invariant body =
-    if not (check_if_frame_exists pre stack invariant) then
+    if not (check_if_frame_exists (str_of_ident name) pre stack invariant) then
       failwith "sl_replacement: precondition is not respected"
     else
       begin
