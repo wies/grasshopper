@@ -328,7 +328,7 @@ let is_frame_defined name pre_sl pathf post_sl subst =
 
 (* checks is a frame exists (non-tight entailment) *)
 let check_if_frame_exists name pre stack sl =
-  Debug.msg ("checking the existance of a frame.\n");
+  Debug.msg ("checking the existence of a frame.\n");
   let subst = DecisionStack.get_subst stack in
   let pathf = DecisionStack.get_form stack in
     is_frame_defined name pre pathf sl subst

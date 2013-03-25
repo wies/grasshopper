@@ -2,15 +2,19 @@ copy()
 requires dlseg(a, null, null, b) * c = null * d = null
 ensures dlseg(a, null, null, b) * dlseg(c, null, null, d)
 {
-    curr := lst;
-    while(curr ~= null) dlseg(c, null, null, d) {
+    curr := a;
+    old_curr := null;
+    while(curr ~= null) dlseg(a, null, old_curr, curr) * dlseg(curr, old_curr, null, b) * dlseg(c, null, null, d) {
+        old_curr := curr;
         old_d := d;
         new d;
         d.next := null;
         d.back := old_d;
         if (old_d ~= null) {
           old_d.next := d;
-        } else {}
+        } else {
+          c := d;
+        }
         curr := curr.next;
     }
 }
