@@ -51,12 +51,14 @@ let g x = mk_read fld2 x
 let reachwo = mk_reachwo fld1
 let reach = mk_reach fld1
 
-let write_axioms () =
+let write_axioms fld1 loc1 loc2 =
   let new_fld1 = mk_write fld1 loc1 loc2 in
+  let f x = mk_read fld1 x in
+  let g x = mk_read new_fld1 x in
   let f_upd1 = 
-    mk_or [mk_neq new_fld1 fld2; mk_eq loc3 loc1; mk_eq (f loc3) (g loc3)]
+    mk_or [mk_eq loc3 loc1; mk_eq (f loc3) (g loc3)]
   in
-  let f_upd2 = mk_or [mk_neq new_fld1 fld2; mk_eq (g loc1) loc2] in
+  let f_upd2 = mk_eq (g loc1) loc2 in
   let reachwo_upd =
     let r = reachwo in
     let new_reachwo u v w =

@@ -1,4 +1,4 @@
-GRASShopper preliminary version of Feb 21, 2013.
+GRASShopper preliminary version of Mar 26, 2013.
 
 This is a preliminary distribution.
 Please let us know if you are planing to use it.
@@ -7,12 +7,13 @@ Please let us know if you are planing to use it.
     Damien Zufferey (zufferey@ist.ac.at)
 
 The code written by us is released under a BSD license, see file
-LICENSE. GRASShopper uses a union-find data structures that is written
+LICENSE. GRASShopper uses a union-find data structure that is written
 by Jean-Christophe Filliatre and released under a LGPL license.
 
 Required:
 - OCaml, version >= 3.12
-- Z3, version >= 3.2 (tested with versions 3.2, 4.0, and 4.3.2)
+- Z3, version >= 3.2 (tested with versions 3.2, 4.0, and 4.3.2), or
+- CVC4, version >= 1.0
 
 Installation instructions: 
 - Untar the distribution
@@ -21,4 +22,4 @@ Installation instructions:
   This will produce native code compiled executables.
 - To run GRASShopper execute, e.g.
      ./analyzer.native tests/sl/reverse
-  The analyzer expects the Z3 executable in the path.
+  The analyzer expects the Z3 (respectively, CVC4) executable in the path.

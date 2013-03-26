@@ -384,6 +384,26 @@ let reduce_reach fs gts =
       gts (TermSet.union gts (ground_terms (smk_and null_ax1)))
   in
   let classes1 = CongruenceClosure.congr_classes fs1 gts1 in
+  (* generate instances of all write axioms *)
+  let write_terms = 
+    let rec ft acc = function
+      | App (Write, ts, _) as t -> 
+          let new_acc = List.fold_left ft acc ts in
+          TermSet.add t new_acc
+      | App (_, ts, _) -> List.fold_left ft acc ts
+      | _ -> acc
+    in
+    List.fold_left (fold_terms ft) TermSet.empty fs1
+  in
+  let write_ax = 
+    TermSet.fold (fun t write_ax ->
+      match t with
+      | App (Write, [fld; loc1; loc2], _) ->
+          open_axioms isFunVar (Axioms.write_axioms fld loc1 loc2) @ write_ax
+      | _ -> write_ax) write_terms []
+  in
+  let write_ax1 = instantiate_with_terms true write_ax classes1 in
+  let classes2 = CongruenceClosure.congr_classes (fs1 @ write_ax1) gts1 in
   (* instantiate the variables of sort Fld in all reachability axioms *)
   let basic_reach_flds = 
     fold_terms (fun flds -> function
@@ -400,13 +420,10 @@ let reduce_reach fs gts =
       basic_pt_flds
   in*)
   let reach_ax = open_axioms isFld (Axioms.reachwo_axioms ()) in
-  let reach_ax1 = instantiate_with_terms false reach_ax (CongruenceClosure.restrict_classes classes1 basic_reach_flds) in
+  let reach_ax1 = instantiate_with_terms false reach_ax (CongruenceClosure.restrict_classes classes2 basic_reach_flds) in
   (* generate local instances of all axioms in which variables occur below function symbols *)
-  let reach_ax2 = instantiate_with_terms true (open_axioms isFunVar reach_ax1) classes1 in
-  (* generate instances of all update axioms *)
-  let write_ax = open_axioms isFunVar (Axioms.write_axioms ()) in
-  let write_ax1 = instantiate_with_terms true write_ax classes1 in
-  fs1, rev_concat [reach_ax2; write_ax1], gts1
+  let reach_ax2 = instantiate_with_terms true (open_axioms isFunVar reach_ax1) classes2 in
+  rev_concat [fs1; reach_ax2; write_ax1], gts1
 
 let reduce_remaining fs gts =
   (* generate local instances of all remaining axioms in which variables occur below function symbols *)
@@ -430,6 +447,24 @@ let reduce f =
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
   let fs3, ep_axioms, gts = reduce_ep fs21 in
   let fs4, gts1 = reduce_sets (fs3 @ ep_axioms) gts in
-  let fs5, reach_axioms, gts2 = reduce_reach fs4 gts1 in
+  let fs5, gts2 = reduce_reach fs4 gts1 in
   let fs6 = reduce_remaining fs5 gts2 in
-  rev_concat [fs6; reach_axioms]
+  (* the following is a (probably stupid) heuristic to sort the formulas for improving the running time *)
+  let fs7 = 
+    (* ground formulas come before axioms and formulas with many disjuncts come before formulas with fewer disjuncts *)
+    let cmp f1 f2 =
+      let vs1 = fold_terms fvt IdSet.empty f1 in
+      let vs2 = fold_terms fvt IdSet.empty f2 in
+      let c = compare (IdSet.cardinal vs1 > 0) (IdSet.cardinal vs2 > 0) in
+      if c = 0 
+      then (match f1, f2 with 
+      | Binder (_, [], BoolOp (Or, fs1), _), Binder (_, [], BoolOp (Or, fs2), _) -> 
+          compare (List.length fs2) (List.length fs1)
+      | Binder (_, [], BoolOp (Or, _), _), _ -> -1 
+      | _, Binder (_, [], BoolOp (Or, _), _) -> 1
+      | _, _ -> 0)
+      else c
+    in
+    List.stable_sort cmp fs6
+  in
+  fs7
