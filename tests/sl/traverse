@@ -1,23 +1,26 @@
-
-traverse1(lst)
-requires lseg(lst, null)
-ensures lseg(lst, null)
+procedure traverse1(lst)
+    requires lseg(lst, null);
+    ensures lseg(lst, null);
 {
     curr := lst;
-    while(curr ~= null) emp {
+    while(curr ~= null) 
+        invariant lseg(lst, curr) * lseg(curr, null);
+    {
         curr := curr.next; 
     }
 }
 
-traverse2(lst)
-requires lseg(lst, null)
-ensures lseg(lst, null)
+procedure traverse2(lst)
+    requires lseg(lst, null);
+    ensures lseg(lst, null);
 {
     if (lst = null) {
     } else {
         curr := lst;
-        while(curr.next ~= null) emp {
-          curr := curr.next; 
+        while(curr.next ~= null) 
+            invariant lseg(lst, curr) * lseg(curr, null);
+        {
+            curr := curr.next; 
         }
     }
 }

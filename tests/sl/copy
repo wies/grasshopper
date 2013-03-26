@@ -1,10 +1,12 @@
-copy(lst)
-requires lseg(lst, null)
-ensures lseg(lst, null) * lseg(returned, null)
+procedure copy(lst)
+    requires lseg(lst, null);
+    ensures lseg(lst, null) * lseg(returned, null);
 {
     curr := lst;
     cp := null;
-    while(curr ~= null) lseg(lst, curr) * lseg(curr, null) * lseg(cp, null) {
+    while(curr ~= null) 
+        invariant lseg(lst, curr) * lseg(curr, null) * lseg(cp, null);
+    {
         old_cp := cp;
         new cp;
         cp.next := old_cp;

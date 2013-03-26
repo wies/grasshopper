@@ -1,6 +1,6 @@
-insert(lst, elt)
-requires dlseg(a, null, null, b) * elt |-> null
-ensures (a = null * dlseg(elt, null, null, elt)) || dlseg(a, null, null, b)
+procedure dl_insert(lst, elt)
+    requires dlseg(a, null, null, b) * elt |-> null;
+    ensures (a = null * dlseg(elt, null, null, elt)) || dlseg(a, null, null, b);
 {
     if (a = null) {
         elt.back := null;
@@ -8,7 +8,9 @@ ensures (a = null * dlseg(elt, null, null, elt)) || dlseg(a, null, null, b)
     } else {
         curr := a;
         prv := null;
-        while ( Random && curr.next ~= null ) curr ~= null * dlseg(a, null, curr, prv) * dlseg(curr, prv, null, b) {
+        while ( Random && curr.next ~= null ) 
+            invariant curr ~= null * dlseg(a, null, curr, prv) * dlseg(curr, prv, null, b);
+        {
             prv := curr;
             curr := curr.next;
         }

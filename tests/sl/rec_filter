@@ -1,7 +1,6 @@
-
-filter(x)
-requires lseg(x, null)
-ensures lseg(returned, null)
+procedure filter(x)
+    requires lseg(x, null);
+    ensures lseg(returned, null);
 {
     if (x = null) return x;
     else if (Random) {

@@ -1,7 +1,6 @@
-
-find_last(a)
-requires a ~= null * lseg(a, null)
-ensures lseg(a, returned) * returned |-> null
+procedure find_last(a)
+    requires a ~= null * lseg(a, null);
+    ensures lseg(a, returned) * returned |-> null;
 {
     n := a.next;
     if (n ~= null) {
@@ -12,9 +11,9 @@ ensures lseg(a, returned) * returned |-> null
     }
 }
 
-concat(a, b)
-requires a ~= null * lseg(a, null) * lseg(b, null)
-ensures lseg(a, b) * lseg(b, null)
+procedure rec_concat(a, b)
+    requires a ~= null * lseg(a, null) * lseg(b, null);
+    ensures lseg(a, b) * lseg(b, null);
 {
     l := find_last(a);
     l.next := b;

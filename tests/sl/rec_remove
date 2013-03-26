@@ -1,6 +1,6 @@
-remove(lst)
-requires lseg(lst, null)
-ensures lseg(returned, null)
+procedure rec_remove(lst)
+    requires lseg(lst, null);
+    ensures lseg(returned, null);
 {
     if (lst = null)
         return null;
@@ -10,7 +10,7 @@ ensures lseg(returned, null)
         return n;
     } else {
         n1 := lst.next;
-        n2 := remove(n1);
+        n2 := rec_remove(n1);
         lst.next := n2;
         return lst;
     }

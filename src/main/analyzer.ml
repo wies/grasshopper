@@ -33,9 +33,9 @@ let _ =
     then cmd_line_error "input file missing"
     else vc_gen !input_file
   with  
-  | Sys_error s -> output_string stderr (s ^ "\n")
+  | Sys_error s -> output_string stderr (s ^ "\n"); exit 1
   | Failure s ->
       let bs = if !Debug.verbose then Printexc.get_backtrace () else "" in
-        output_string stderr (s ^ "\n" ^ bs)
-  | Parsing.Parse_error -> print_endline "parse error"
+        output_string stderr (s ^ "\n" ^ bs); exit 1
+  | Parsing.Parse_error -> print_endline "parse error"; exit 1
 	

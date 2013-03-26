@@ -1,11 +1,12 @@
-
-concat(a, b)
-requires a ~= null * lseg(a, null) * lseg(b, null)
-ensures lseg(a, b) * lseg(b, null)
+procedure concat(a, b)
+    requires a ~= null * lseg(a, null) * lseg(b, null);
+    ensures lseg(a, b) * lseg(b, null);
 {
     curr := a;
-    while(curr.next ~= null) curr ~= null * lseg(a, curr) * lseg(curr, null) {
-      curr := curr.next; 
+    while(curr.next ~= null) 
+        invariant curr ~= null * lseg(a, curr) * lseg(curr, null);
+    {
+        curr := curr.next; 
     }
     curr.next := b;
 }

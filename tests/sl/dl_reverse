@@ -1,10 +1,12 @@
-dl_reverse(lst)
-requires dlseg(start, null, null, end)
-ensures dlseg(prv, null, null, start)
+procedure dl_reverse(lst)
+    requires dlseg(start, null, null, end);
+    ensures dlseg(prv, null, null, start);
 {
     curr := start;
     prv := null;
-    while (curr ~= null) dlseg(curr, prv, null, end) * dlseg(prv, curr, null, start) {
+    while (curr ~= null) 
+        invariant dlseg(curr, prv, null, end) * dlseg(prv, curr, null, start);
+    {
         tmp := curr;
         curr := curr.next;
         tmp.next := prv;

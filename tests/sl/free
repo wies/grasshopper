@@ -1,8 +1,10 @@
-free_(lst)
-requires lseg(lst, null)
-ensures emp
+procedure free_(lst)
+    requires lseg(lst, null);
+    ensures emp;
 {
-    while(lst ~= null) lseg(lst, null) {
+    while(lst ~= null) 
+        invariant lseg(lst, null);
+    {
         curr := lst;
         lst := lst.next; 
         free curr;

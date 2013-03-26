@@ -30,8 +30,10 @@ rule token = parse
 | "lseg" { LS }
 | "dlseg" { DLS }
 | "assume" { ASSUME }
+| "procedure" { PROCEDURE }
 | "requires" { REQUIRES }
 | "ensures" { ENSURES }
+| "invariant" { INVARIANT }
 | "return" { RETURN }
 | "assert" { ASSERT }
 | "next" { NEXT }

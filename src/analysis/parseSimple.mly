@@ -17,7 +17,7 @@ let parse_error = ParseError.parse_error
 %token ASSUME ASSERT NEW NEXT PREV DISPOSE RETURN
 %token SEP AND OR NOT COMMA
 %token IF ELSE WHILE
-%token REQUIRES ENSURES
+%token PROCEDURE REQUIRES ENSURES INVARIANT
 %token EOF
 
 %left OR
@@ -48,12 +48,19 @@ main:
 ;
 
 procedure:
-  TIDENT LPAREN args RPAREN REQUIRES sl_form ENSURES sl_form LBRACKET path RBRACKET { { name = mk_ident $1;
-                                                                                        args = $3;
-                                                                                        precondition = $6;
-                                                                                        postcondition = $8;
-                                                                                        body = Block $10} }
+  PROCEDURE TIDENT LPAREN args RPAREN proc_contract LBRACKET block RBRACKET 
+  { { name = mk_ident $2;
+      args = $4;
+      precondition = fst $6;
+      postcondition = snd $6;
+      body = Block $8} 
+  }
 ;
+
+proc_contract:
+| REQUIRES sl_form SEMICOLON proc_contract { (mk_sep $2 (fst $4), snd $4) }
+| ENSURES sl_form SEMICOLON proc_contract { (fst $4, mk_sep $2 (snd $4)) }
+| /* empty */ { (mk_emp, mk_emp) }
 
 term:
 | NULL { mk_ident "null" }
@@ -84,8 +91,8 @@ args:
 | /* empty */ { [] }
 ;
 
-path:
-  stmnt path { $1 :: $2 }
+block:
+  stmnt block { $1 :: $2 }
 | /* empty */ { [] }
 ;
 
@@ -100,11 +107,15 @@ stmnt:
 | ASSUME sl_form SEMICOLON { Assume $2 }
 | ASSERT sl_form SEMICOLON { Assert $2 }
 | IF LPAREN expr RPAREN stmnt ELSE stmnt { Ite ($3, $5, $7) }
-| WHILE LPAREN expr RPAREN sl_form LBRACKET path RBRACKET { While ($3, $5, Block $7) }
+| WHILE LPAREN expr RPAREN loop_contract LBRACKET block RBRACKET { While ($3, $5, Block $7) }
 | RETURN pterm SEMICOLON { Return $2 }
 | call SEMICOLON { VarUpdate (FormUtil.mk_ident "no_return", $1) }
-| LBRACKET path RBRACKET { Block $2 }
+| LBRACKET block RBRACKET { Block $2 }
 ;
+
+loop_contract:
+  INVARIANT sl_form SEMICOLON loop_contract { mk_sep $2 $4 }
+| /* empty */ { mk_emp }
 
 rhs:
   pterm { Term $1 }

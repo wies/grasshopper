@@ -1,7 +1,6 @@
-
-insert(lst, elt)
-requires lseg(lst, null) * elt |-> null
-ensures lseg(returned, null)
+procedure rec_insert(lst, elt)
+    requires lseg(lst, null) * elt |-> null;
+    ensures lseg(returned, null);
 {
     if (lst = null)
         return elt;
@@ -10,7 +9,7 @@ ensures lseg(returned, null)
         return elt;
     } else {
         n1 := lst.next;
-        n2 := insert(n1, elt);
+        n2 := rec_insert(n1, elt);
         lst.next := n2;
         return lst;
     }

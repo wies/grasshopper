@@ -1,7 +1,6 @@
-
-traverse(lst)
-requires lseg(lst, null)
-ensures lseg(lst, null)
+procedure traverse(lst)
+    requires lseg(lst, null);
+    ensures lseg(lst, null);
 {
     if (lst ~= null) {
       n := lst.next;

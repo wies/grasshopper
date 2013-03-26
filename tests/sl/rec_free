@@ -1,6 +1,6 @@
-rec_free(lst)
-requires lseg(lst, null)
-ensures emp
+procedure rec_free(lst)
+    requires lseg(lst, null);
+    ensures emp;
 {
     if (lst ~= null) {
       n := lst.next;

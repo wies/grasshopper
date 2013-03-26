@@ -1,10 +1,12 @@
-reverse(lst)
-requires lseg(lst, null)
-ensures lseg(returned, null)
+procedure reverse(lst)
+    requires lseg(lst, null);
+    ensures lseg(returned, null);
 {
     curr := lst;
     rev := null;
-    while(curr ~= null) lseg(rev, null) * lseg(curr, null) {
+    while (curr ~= null) 
+        invariant lseg(rev, null) * lseg(curr, null);
+    {
         tmp := curr;
         curr := curr.next;
         tmp.next := rev;

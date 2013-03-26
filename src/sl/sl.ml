@@ -46,7 +46,7 @@ module SlMap = Map.Make(struct
     let compare = compare
   end)
 
-
+let mk_emp = Emp
 let mk_true = BoolConst true
 let mk_false = BoolConst false
 let mk_eq a b = Eq (a, b)
@@ -57,7 +57,14 @@ let mk_ls a b = List (a, b)
 let mk_dls a b c d = DList (a, b, c, d)
 let mk_and a b = And [a; b]
 let mk_or a b = Or [a; b]
-let mk_sep a b = SepConj [a; b]
+let mk_sep a b = 
+  match (a, b) with
+  | (Emp, _) -> b
+  | (_, Emp) -> a
+  | (SepConj aa, SepConj bb) -> SepConj (aa @ bb)
+  | (a, SepConj bb) -> SepConj (a :: bb)
+  | (SepConj aa, b) -> SepConj (aa @ [b]) 
+  | _ -> SepConj [a; b]
 
 let rec to_string f = match f with
   | Not (Eq (e1, e2)) -> (ident_to_string e1) ^ " ~= " ^ (ident_to_string e2)
@@ -154,7 +161,7 @@ let rec has_prev f = match f with
   | SepConj lst | And lst | Or lst -> 
     List.exists has_prev lst
 
-(* translation to grass/grass *)
+(* translation to grass *)
 
 (*let cst = FormUtil.mk_free_const*)
 let reachWoT a b c = FormUtil.mk_reachwo (fpts) a b c
@@ -176,7 +183,7 @@ let fresh_existentials f =
   in
     map_id fct f
 
-(* translation that keep the heap separation separated from the pointer structure *)
+(* translation that keeps the heap separated from the pointer structure *)
 let to_form set_fct domain f =
   let fd why d = FormUtil.fresh_ident ( why ^ "_" ^(fst d)) in
   (*let v = Axioms.var1 in
@@ -189,7 +196,7 @@ let to_form set_fct domain f =
     match f with
     | BoolConst b -> 
         let domain = FormUtil.fresh_ident (fst d) in
-        ([FormUtil.mk_bool b, mk_loc_set domain, IdSet.empty], empty domain)
+        ([FormUtil.mk_bool b, mk_loc_set domain, IdSet.empty], FormUtil.mk_true)
     | Not (Eq (id1, id2)) -> 
         let domain = FormUtil.fresh_ident (fst d) in
         ([FormUtil.mk_neq (mk_loc id1) (mk_loc id2), mk_loc_set domain, IdSet.empty], empty domain) (*TODO are id1, id2 always locations ? *)

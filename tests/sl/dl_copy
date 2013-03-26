@@ -1,10 +1,14 @@
-dl_copy()
-requires dlseg(a, null, null, b) * c = null * d = null
-ensures dlseg(a, null, null, b) * dlseg(c, null, null, d)
+procedure dl_copy()
+    requires dlseg(a, null, null, b) * c = null * d = null;
+    ensures dlseg(a, null, null, b) * dlseg(c, null, null, d);
 {
     curr := a;
     old_curr := null;
-    while(curr ~= null) dlseg(a, null, curr, old_curr) * dlseg(curr, old_curr, null, b) * dlseg(c, null, null, d) {
+    while(curr ~= null) 
+        invariant dlseg(a, null, curr, old_curr);
+        invariant dlseg(curr, old_curr, null, b);
+        invariant dlseg(c, null, null, d);
+    {
         old_curr := curr;
         old_d := d;
         new d;
