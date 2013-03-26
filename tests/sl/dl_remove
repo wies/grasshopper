@@ -1,5 +1,5 @@
 
-remove()
+dl_remove()
 requires dlseg(a, null, null, b)
 ensures dlseg(a, null, null, b)
 {

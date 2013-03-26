@@ -375,7 +375,8 @@ let reduce_reach fs gts =
     (*let _ = print_endline "All terms: "; TermSet.iter (fun t -> print_endline (string_of_term t)) gts in*)
     TermSet.fold
       (fun t gts1 -> match t with
-      |  App (Read, [fld; arg], _) -> 
+      | App (Read, [fld; arg], _) 
+      | App (Write, [fld; arg; _], _) -> 
           (*let _ = print_endline ("Processing " ^ string_of_term t) in*)
           TermSet.fold (fun fld1 gts1 -> 
             TermSet.add (mk_read fld1 arg) gts1) (partition_of fld) gts1

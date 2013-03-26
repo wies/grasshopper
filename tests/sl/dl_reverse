@@ -1,15 +1,14 @@
 dl_reverse(lst)
 requires dlseg(start, null, null, end)
-ensures dlseg(end, null, null, start)
+ensures dlseg(prv, null, null, start)
 {
     curr := start;
     prv := null;
-    while(curr ~= null) dlseg(curr, prv, null, end) * dlseg(prv, curr, null, start) {
+    while (curr ~= null) dlseg(curr, prv, null, end) * dlseg(prv, curr, null, start) {
         tmp := curr;
+        curr := curr.next;
         tmp.next := prv;
-        if (prv ~= null) {
-            prv.back := tmp;
-        } else {}          
         prv := tmp;
+        prv.back := curr;
     }
 }

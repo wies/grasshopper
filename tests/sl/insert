@@ -1,5 +1,5 @@
 
-insert(lst, elt)
+dl_insert(lst, elt)
 requires lseg(lst, null) * elt |-> null
 ensures lseg(returned, null)
 {

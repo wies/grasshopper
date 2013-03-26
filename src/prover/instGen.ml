@@ -75,10 +75,6 @@ let generate_instances useLocalInst axioms terms rep_map =
           | _ -> true) 
         fun_terms
     in
-    (*let _ = print_endline "Axiom:" in
-    let _ = print_forms stdout [f] in
-    let _ = print_endline "fun_terms:" in
-    let _ = List.iter (fun (_, t) -> print_term stdout t; print_string ", ") fun_terms in*)
     let subst_maps = 
       IdSrtSet.fold 
         (fun (v, srt) subst_maps ->
@@ -100,6 +96,25 @@ let generate_instances useLocalInst axioms terms rep_map =
             [] terms
         ) fvars [IdMap.empty]
     in
+    (*
+    let print_subst_map sm =
+      IdMap.iter (fun v t -> Printf.printf "%s -> %s, " (str_of_ident v) (string_of_term t)) sm;
+      print_newline ()
+    in
+    let _ = match f with
+    | Binder (_, _, _, [Comment "read_write2"]) ->
+        begin
+          print_endline "Axiom:";
+          print_forms stdout [f];
+          print_endline "fun_terms:";
+          List.iter (fun (_, t) -> print_term stdout t; print_string ", ") fun_terms;
+          print_endline "\nground_terms:";
+          TermSet.iter (fun t -> print_term stdout t; print_string ", ") ground_terms;
+          print_endline "\nsubst_maps:";
+          List.iter print_subst_map subst_maps
+        end
+    | _ -> ()
+    in *)
     List.fold_left (fun acc subst_map -> subst subst_map f :: acc) acc subst_maps
   in
   List.fold_left instantiate epr_axioms axioms
