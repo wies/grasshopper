@@ -1,10 +1,10 @@
 procedure dl_copy()
-    requires dlseg(a, null, null, b) * c = null * d = null;
+    requires dlseg(a, null, null, b) * c == null * d == null;
     ensures dlseg(a, null, null, b) * dlseg(c, null, null, d);
 {
     curr := a;
     old_curr := null;
-    while(curr ~= null) 
+    while (curr != null) 
         invariant dlseg(a, null, curr, old_curr);
         invariant dlseg(curr, old_curr, null, b);
         invariant dlseg(c, null, null, d);
@@ -14,7 +14,7 @@ procedure dl_copy()
         new d;
         d.next := null;
         d.back := old_d;
-        if (old_d ~= null) {
+        if (old_d != null) {
           old_d.next := d;
         } else {
           c := d;

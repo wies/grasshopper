@@ -107,6 +107,7 @@ stmnt:
 | ASSUME sl_form SEMICOLON { Assume $2 }
 | ASSERT sl_form SEMICOLON { Assert $2 }
 | IF LPAREN expr RPAREN stmnt ELSE stmnt { Ite ($3, $5, $7) }
+| IF LPAREN expr RPAREN stmnt { Ite ($3, $5, Block []) }
 | WHILE LPAREN expr RPAREN loop_contract LBRACKET block RBRACKET { While ($3, $5, Block $7) }
 | RETURN pterm SEMICOLON { Return $2 }
 | call SEMICOLON { VarUpdate (FormUtil.mk_ident "no_return", $1) }

@@ -3,7 +3,7 @@ procedure dl_free(lst)
     ensures emp;
 {
     prv := a;
-    while (lst ~= null) 
+    while (lst != null) 
         invariant dlseg(lst, prv, null, b);
     {
         prv := lst;

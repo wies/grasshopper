@@ -3,7 +3,7 @@ procedure dl_traverse(lst)
     ensures dlseg(lst, a, null, b);
 {
     curr := lst;
-    while(curr ~= null) 
+    while(curr != null) 
         invariant emp;
     {
         curr := curr.next; 
@@ -15,7 +15,7 @@ procedure dl_traverse_backward(lst)
     ensures dlseg(lst, a, null, b);
 {
     curr := b;
-    while(curr ~= lst) 
+    while(curr != lst) 
         invariant emp;
     {
         curr := curr.back; 

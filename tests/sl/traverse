@@ -3,7 +3,7 @@ procedure traverse1(lst)
     ensures lseg(lst, null);
 {
     curr := lst;
-    while(curr ~= null) 
+    while(curr != null) 
         invariant lseg(lst, curr) * lseg(curr, null);
     {
         curr := curr.next; 
@@ -14,10 +14,10 @@ procedure traverse2(lst)
     requires lseg(lst, null);
     ensures lseg(lst, null);
 {
-    if (lst = null) {
+    if (lst == null) {
     } else {
         curr := lst;
-        while(curr.next ~= null) 
+        while(curr.next != null) 
             invariant lseg(lst, curr) * lseg(curr, null);
         {
             curr := curr.next; 

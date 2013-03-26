@@ -4,7 +4,7 @@ procedure copy(lst)
 {
     curr := lst;
     cp := null;
-    while(curr ~= null) 
+    while(curr != null) 
         invariant lseg(lst, curr) * lseg(curr, null) * lseg(cp, null);
     {
         old_cp := cp;

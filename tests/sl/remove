@@ -2,17 +2,17 @@ procedure remove(lst)
     requires lseg(lst, null);
     ensures lseg(returned, null);
 {
-    if (lst = null)
+    if (lst == null)
         return null;
     else {
         curr := lst;
-        while ( Random && curr.next ~= null) 
-            invariant curr ~= null * lseg(lst, curr) * lseg(curr, null);
+        while ( Random && curr.next != null) 
+            invariant curr != null * lseg(lst, curr) * lseg(curr, null);
         {
             curr := curr.next;
         }
         tmp := curr.next;
-        if (tmp = null) {
+        if (tmp == null) {
         } else {
             curr.next := tmp.next;
             free tmp;

@@ -8,7 +8,7 @@ ensure_verifies()
     echo "*** ERROR: Benchmark ${2} expected to verify, but did not verify."
     exit -1
   else
-    echo "Passed Benchmark ${2}."
+    echo "Passed benchmark ${2}."
   fi
 }
 
@@ -22,17 +22,18 @@ ensure_fails()
     echo "*** SOUNDNESS ERROR ***************************************"
     exit -1
   else
-    echo "PASSED Benchmark ${2}."
+    echo "Passed benchmark ${2}."
   fi
 }
 
 while (( "$#" )); do
     #echo $2
     ./analyzer.native $2
+    res=$?
     if [ $3 == "pass" ]; then
-        ensure_verifies $? $1
+        ensure_verifies $res $1
     else
-        ensure_fails $? $1
+        ensure_fails $res $1
     fi
     shift
     shift

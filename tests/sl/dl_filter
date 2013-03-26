@@ -4,17 +4,17 @@ procedure dl_filter()
 {
     prv := null;
     curr := a;
-    while (curr ~= null) 
+    while (curr != null) 
       invariant dlseg(a,null,curr,prv) * dlseg(curr,prv,null,b);
     {
       if (Random) {
         tmp := curr.next;
-        if (prv ~= null) {
+        if (prv != null) {
             prv.next := curr.next;
         } else {
             a := tmp;
         }
-        if (tmp ~= null) {
+        if (tmp != null) {
             tmp.back := prv;
         } else {
             b := prv;

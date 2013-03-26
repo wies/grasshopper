@@ -2,9 +2,9 @@ procedure rec_free(lst)
     requires lseg(lst, null);
     ensures emp;
 {
-    if (lst ~= null) {
+    if (lst != null) {
       n := lst.next;
       free lst;
       rec_free(n);
-    } else {}
+    }
 }

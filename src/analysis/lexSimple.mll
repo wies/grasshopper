@@ -11,11 +11,11 @@ let pident = ucidchar (lcidchar | ucidchar | digitchar)*
 rule token = parse
   [' ' '\t' '\n'] { token lexbuf }
 | "//" [^ '\n']* {token lexbuf }
-| '=' { EQ }
-| "~=" { NEQ }
+| "==" { EQ }
+| "!=" { NEQ }
 | "||" { OR }
 | "&&" { AND }
-| '~' { NOT }
+| '!' { NOT }
 | '(' { LPAREN }
 | ')' { RPAREN }
 | '{' { LBRACKET }

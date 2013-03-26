@@ -2,7 +2,7 @@ procedure rev1(curr, rev)
     requires lseg(rev, null) * lseg(curr, null);
     ensures lseg(returned, null);
 {
-    if (curr = null) {
+    if (curr == null) {
         return rev;
     } else {
         tmp := curr.next;

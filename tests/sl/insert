@@ -2,12 +2,12 @@ procedure insert(lst, elt)
     requires lseg(lst, null) * elt |-> null;
     ensures lseg(returned, null);
 {
-    if (lst = null)
+    if (lst == null)
         return elt;
     else {
         curr := lst;
-        while ( Random && curr.next ~= null ) 
-            invariant curr ~= null * lseg(lst, curr) * lseg(curr, null);
+        while ( Random && curr.next != null ) 
+            invariant curr != null * lseg(lst, curr) * lseg(curr, null);
         {
             curr := curr.next;
         }

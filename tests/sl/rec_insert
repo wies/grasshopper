@@ -2,7 +2,7 @@ procedure rec_insert(lst, elt)
     requires lseg(lst, null) * elt |-> null;
     ensures lseg(returned, null);
 {
-    if (lst = null)
+    if (lst == null)
         return elt;
     else if (Random) {
         elt.next := lst;

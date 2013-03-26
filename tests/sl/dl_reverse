@@ -4,7 +4,7 @@ procedure dl_reverse(lst)
 {
     curr := start;
     prv := null;
-    while (curr ~= null) 
+    while (curr != null) 
         invariant dlseg(curr, prv, null, end) * dlseg(prv, curr, null, start);
     {
         tmp := curr;

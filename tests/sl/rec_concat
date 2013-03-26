@@ -1,9 +1,9 @@
 procedure find_last(a)
-    requires a ~= null * lseg(a, null);
+    requires a != null * lseg(a, null);
     ensures lseg(a, returned) * returned |-> null;
 {
     n := a.next;
-    if (n ~= null) {
+    if (n != null) {
         n2 := find_last(n);
         return n2;
     } else {
@@ -12,7 +12,7 @@ procedure find_last(a)
 }
 
 procedure rec_concat(a, b)
-    requires a ~= null * lseg(a, null) * lseg(b, null);
+    requires a != null * lseg(a, null) * lseg(b, null);
     ensures lseg(a, b) * lseg(b, null);
 {
     l := find_last(a);

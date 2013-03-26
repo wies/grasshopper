@@ -4,7 +4,7 @@ procedure reverse(lst)
 {
     curr := lst;
     rev := null;
-    while (curr ~= null) 
+    while (curr != null) 
         invariant lseg(rev, null) * lseg(curr, null);
     {
         tmp := curr;
