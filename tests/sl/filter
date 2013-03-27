@@ -1,4 +1,4 @@
-procedure filter(x)
+method filter(x)
     requires lseg(x, null);
     ensures lseg(x, null);
 {

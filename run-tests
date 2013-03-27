@@ -28,7 +28,7 @@ ensure_fails()
 
 while (( "$#" )); do
     #echo $2
-    ./analyzer.native $2
+    ./analyzer.native $2 $OPTIONS
     res=$?
     if [ $3 == "pass" ]; then
         ensure_verifies $res $1

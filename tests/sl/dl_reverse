@@ -1,4 +1,4 @@
-procedure dl_reverse(lst)
+method dl_reverse(lst)
     requires dlseg(start, null, null, end);
     ensures dlseg(prv, null, null, start);
 {

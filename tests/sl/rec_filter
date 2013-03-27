@@ -1,4 +1,4 @@
-procedure rec_filter(x)
+method rec_filter(x)
     requires lseg(x, null);
     ensures lseg(returned, null);
 {

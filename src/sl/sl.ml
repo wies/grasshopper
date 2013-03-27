@@ -22,8 +22,6 @@ let mk_loc d =
 let fpts = to_field pts
 let fprev_pts = to_field prev_pts
 
-let skolemCst = "SkolemCst"
-
 type form =
   | Emp
   | Eq of ident * ident

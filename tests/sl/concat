@@ -1,4 +1,4 @@
-procedure concat(a, b)
+method concat(a, b)
     requires a != null * lseg(a, null) * lseg(b, null);
     ensures lseg(a, b) * lseg(b, null);
 {

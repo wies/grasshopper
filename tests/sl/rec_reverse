@@ -1,4 +1,4 @@
-procedure rev1(curr, rev)
+method rev1(curr, rev)
     requires lseg(rev, null) * lseg(curr, null);
     ensures lseg(returned, null);
 {
@@ -12,7 +12,7 @@ procedure rev1(curr, rev)
     }
 }
 
-procedure rec_reverse(lst)
+method rec_reverse(lst)
     requires lseg(lst, null);
     ensures lseg(returned, null);
 {

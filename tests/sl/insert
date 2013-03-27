@@ -1,4 +1,4 @@
-procedure insert(lst, elt)
+method insert(lst, elt)
     requires lseg(lst, null) * elt |-> null;
     ensures lseg(returned, null);
 {

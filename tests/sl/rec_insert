@@ -1,4 +1,4 @@
-procedure rec_insert(lst, elt)
+method rec_insert(lst, elt)
     requires lseg(lst, null) * elt |-> null;
     ensures lseg(returned, null);
 {

@@ -1,4 +1,4 @@
-procedure dl_remove()
+method dl_remove()
     requires dlseg(a, null, null, b);
     ensures dlseg(a, null, null, b);
 {

@@ -1,4 +1,4 @@
-procedure dl_filter(a, b)
+method dl_filter(a, b)
     requires dlseg(a, null, null, b);
     ensures dlseg(a, null, null, b);
 {

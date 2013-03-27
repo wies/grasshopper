@@ -13,8 +13,8 @@ type stmnt =
   | New of ident
   | Dispose of ident
   | Assume of Sl.form
-  | Assume2 of form
-  | Assert of Sl.form
+  | AssumeGrass of form
+  | Assert of Sl.form * string option
   | Block of stmnt list
   | While of form * Sl.form * stmnt
   | Ite of form * stmnt * stmnt
@@ -29,7 +29,7 @@ type procedure = {
 }
 
 let rec assigned_loc stmnt = match stmnt with
-  | Assume _ | Assume2 _ | Assert _ | Return _  | FunUpdate (_, _, _) -> IdSet.empty
+  | Assume _ | AssumeGrass _ | Assert _ | Return _  | FunUpdate (_, _, _) -> IdSet.empty
   | VarUpdate (t, _) | New t -> IdSet.singleton t
   | Dispose _ -> IdSet.empty
   | Block lst -> List.fold_left (fun acc s -> IdSet.union acc (assigned_loc s)) IdSet.empty lst
@@ -37,7 +37,7 @@ let rec assigned_loc stmnt = match stmnt with
   | Ite (_, s1, s2) -> IdSet.union (assigned_loc s1) (assigned_loc s2)
 
 let rec assigned_fld stmnt = match stmnt with
-  | Assume _ | Assume2 _ | Assert _ | Return _ -> IdSet.empty
+  | Assume _ | AssumeGrass _ | Assert _ | Return _ -> IdSet.empty
   | FunUpdate (t, _, _) -> IdSet.singleton t
   | Dispose _ | New _ | VarUpdate _  -> IdSet.empty
   | Block lst -> List.fold_left (fun acc s -> IdSet.union acc (assigned_fld s)) IdSet.empty lst
@@ -50,7 +50,7 @@ let assigned stmnt =
     [IdSet.elements locs, Loc; IdSet.elements flds, Fld Loc]
 
 let rec change_heap stmnt = match stmnt with
-  | Assume _ | Assume2 _ | Assert _ | Return _ | VarUpdate _ -> false
+  | Assume _ | AssumeGrass _ | Assert _ | Return _ | VarUpdate _ -> false
   | FunUpdate _ | New _ | Dispose _ -> true
   | Block lst -> List.exists change_heap lst
   | While (_, _, s) -> change_heap s
@@ -303,14 +303,17 @@ let check_entailment what pre_sl stack post_sl =
     begin
       print_endline "query wo axioms: ";
       print_form stdout (smk_and (wo_axioms @ heap_content));
-      print_newline()
+      print_newline ()
     end
   in
-  let sat = Prover.check_sat ~session_name:what query in
-    match sat with
-    | Some true -> failwith ("cannot prove assertion (sat) for " ^ what) (*TODO model*)
-    | Some false -> ()
-    | None -> failwith ("cannot prove assertion (unk) for " ^ what)
+  let sat = 
+    if query = mk_false then (Debug.msg "Assertion holds trivially\n"; Some false)
+    else Prover.check_sat ~session_name:what query 
+  in
+  match sat with
+  | Some true -> failwith ("cannot prove assertion (sat) for " ^ what) (*TODO model*)
+  | Some false -> ()
+  | None -> failwith ("cannot prove assertion (unk) for " ^ what)
 
 (* Checks whether the frame exists *)
 let is_frame_defined name pre_sl pathf post_sl subst =
@@ -321,7 +324,7 @@ let is_frame_defined name pre_sl pathf post_sl subst =
   let query = nnf (smk_and ( (mk_and (pre :: post :: pathf)) ::
                            (Entails.same_heap_axioms subst preh posth) ) )
   in
-    match Prover.check_sat ~session_name:(name ^ "_frame") query with
+    match Prover.check_sat ~session_name:name query with
     | Some b -> not b
     | None -> failwith "is_frame_defined: Prover returned None"
 
@@ -397,10 +400,11 @@ let check_procedure proceduresMap name =
    * 2) push sl_1 (not tight) -> the heap predicate give the footprint of sl_1
    * 3) push sl_2 and use the footprint of sl_1 to update the predicates like alloc
    *)
-  let sl_replacement pre stack sl_1 subst2 sig2 sl_2 =
+  let sl_replacement msg pre stack sl_1 subst2 sig2 sl_2 =
     Debug.msg ("sl_replacement: " ^ (Sl.to_string sl_1) ^ " by " ^ (Sl.to_string sl_2) ^ "\n");
-    if not (check_if_frame_exists (str_of_ident name) pre stack sl_1) then
-      failwith "sl_replacement: precondition is not respected"
+    let cmt = str_of_ident name ^ "_" ^ Str.global_replace (Str.regexp "  ") "_" msg in
+    if not (check_if_frame_exists cmt pre stack sl_1) then
+      failwith (msg ^ " may not hold in " ^ (str_of_ident name))
     else
       begin
         (* Sl.pts + Sl.prev_pts *)
@@ -476,12 +480,12 @@ let check_procedure proceduresMap name =
     let m_pre = get_pre m args_id in
     let m_post = get_post m args_id id in
     let (subst2, sig2) = increase subst sig1 (sl_stuff_to_increase pre subst m_pre m_post) in 
-      sl_replacement pre stack m_pre subst2 sig2 m_post
+      sl_replacement ("precondition of " ^ (str_of_ident m)) pre stack m_pre subst2 sig2 m_post
   in
 
   let loop_that_dont_change_heap pre stack cond invariant body =
-    if not (check_if_frame_exists (str_of_ident name) pre stack invariant) then
-      failwith "sl_replacement: precondition is not respected"
+    if not (check_if_frame_exists (str_of_ident name ^ "_invariant") pre stack invariant) then
+      failwith ("loop invariant of loop in " ^ str_of_ident name ^ " may not hold initially")
     else
       begin
         let subst = DecisionStack.get_subst stack in
@@ -502,7 +506,7 @@ let check_procedure proceduresMap name =
         let sig1 = DecisionStack.get_sign stack in
         let assigned = assigned body in
         let subst2, sig2 = increase subst sig1 (assigned @ (sl_stuff_to_increase pre subst invariant invariant)) in
-        let stack2 = sl_replacement pre stack invariant subst2 sig2 invariant in
+        let stack2 = sl_replacement "invariant" pre stack invariant subst2 sig2 invariant in
         let notC = subst_id subst2 (mk_not cond) in
           add_to_stack stack2 subst2 sig2 notC
       end
@@ -596,7 +600,7 @@ let check_procedure proceduresMap name =
         let subst = IdMap.add (mk_ident "returned") newT subst in
         let stackWithReturn = DecisionStack.step stack mk_true subst sign in
           (*check postcond and assume false !*)
-          check_entailment (proc_name ^ "_return_" ^ (str_of_ident newT)) pre stackWithReturn post;
+          check_entailment (proc_name ^ "_postcondition_return_" ^ (str_of_ident newT)) pre stackWithReturn post;
           DecisionStack.step stack (mk_false) IdMap.empty IdMap.empty
       | Assume f ->
         (*sll to grass*)
@@ -605,10 +609,14 @@ let check_procedure proceduresMap name =
         let cur_alloc = latest_alloc subst in
         let c = to_grass cur_alloc f subst in
           add_to_stack stack subst sig_map c
-      | Assert f ->
-        check_entailment (proc_name ^ "_return_" ^ "assertion") pre stack f;
-        stack
-      | Assume2 f ->
+      | Assert (f, cmt_opt) ->
+          let cmt = match cmt_opt with
+          | Some cmt -> cmt
+          | None -> "assert"
+          in
+          check_entailment (proc_name ^ "_" ^ cmt) pre stack f;
+          stack
+      | AssumeGrass f ->
         let subst = DecisionStack.get_subst stack in
         let sig_map = DecisionStack.get_sign stack in
         let f2 = subst_id subst f in
@@ -630,7 +638,7 @@ let check_procedure proceduresMap name =
       | While (cond, invariant, body) ->
         (* check the loop body *)
         Debug.msg ("checking loop body.\n");
-        let _ = check invariant (Block [Assume2 cond; body; Assert invariant; Assume2 (mk_false)]) in
+          let _ = check invariant (Block [AssumeGrass cond; body; Assert (invariant, Some "invariant_inductive"); AssumeGrass (mk_false)]) in
           Debug.msg ("loop: pre, post, and frame.\n");
           while_pre_post pre stack cond invariant body
       | VarUpdate (id, Call (m, args)) -> 
@@ -659,6 +667,6 @@ let check_procedure proceduresMap name =
     let final_stack = traverse init_stack stmnt in
     (* check for postcondition (void methods) *)
     let post = proc.postcondition in
-      check_entailment (proc_name ^ "_endOfMethod") pre final_stack post
+      check_entailment (proc_name ^ "_postcondition") pre final_stack post
   in
-    check proc.precondition proc.body
+  check proc.precondition proc.body

@@ -28,4 +28,4 @@ dl_remove tests/sl/dl_remove pass
 dl_insert tests/sl/dl_insert pass
 "
 
-time ./run-tests $TESTS
+OPTIONS=$@ time ./run-tests $TESTS

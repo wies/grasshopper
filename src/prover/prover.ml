@@ -19,7 +19,7 @@ let start_session name f =
   let f_inst = Reduction.reduce f in
   let session = SmtLib.start name in
   let prove () =
-    Debug.msg "sending to prover\n";
+    Debug.msg "sending to prover...\n";
 
     let signature = sign (mk_and f_inst) in
     SmtLib.declare session signature;
@@ -34,7 +34,7 @@ let start_session name f =
       else
         Some false
     in
-      Debug.msg "prover came back\n";
+      Debug.msg "prover done\n";
       result
   in
   let result = Util.measure_call "prove" prove () in
@@ -53,6 +53,8 @@ let check_sat ?(session_name="form") f =
  * further queries are only adding blocking clauses.
  * also at each step we need to return the model if sat, none if unsat, error otherwise.
  *)
+
+
 module ModelGenerator =
   struct
     type t = SmtLib.session
@@ -132,4 +134,5 @@ module ModelGenerator =
         try_get_model (result, generator)
 
   end
+
 

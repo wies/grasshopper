@@ -1,4 +1,4 @@
-procedure dl_copy()
+method dl_copy()
     requires dlseg(a, null, null, b) * c == null * d == null;
     ensures dlseg(a, null, null, b) * dlseg(c, null, null, d);
 {

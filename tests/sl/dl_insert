@@ -1,4 +1,4 @@
-procedure dl_insert(lst, elt)
+method dl_insert(lst, elt)
     requires dlseg(a, null, null, b) * elt |-> null;
     ensures (a == null * dlseg(elt, null, null, elt)) || dlseg(a, null, null, b);
 {

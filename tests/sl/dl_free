@@ -1,4 +1,4 @@
-procedure dl_free(lst)
+method dl_free(lst)
     requires dlseg(lst, a, null, b);
     ensures emp;
 {

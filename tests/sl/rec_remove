@@ -1,4 +1,4 @@
-procedure rec_remove(lst)
+method rec_remove(lst)
     requires lseg(lst, null);
     ensures lseg(returned, null);
 {

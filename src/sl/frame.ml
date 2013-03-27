@@ -209,6 +209,7 @@ let make_frame heap_a heap_b (model: Model.model) =
     ((*frame,*) spatial2, pure)
 
 
+
 let infer_frame_loop query preh posth =
   let initial = Prover.ModelGenerator.initial_query "frame" query in
     match initial with
@@ -267,3 +268,4 @@ let infer_frame pre_sl post_sl =
   let post = Sl.to_grass posth post_sl in
   let query = mk_frame_query pre post preh posth in
     infer_frame_loop query preh posth
+

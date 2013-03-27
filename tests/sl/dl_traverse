@@ -1,4 +1,4 @@
-procedure dl_traverse(lst)
+method dl_traverse(lst)
     requires dlseg(lst, a, null, b);
     ensures dlseg(lst, a, null, b);
 {
@@ -10,7 +10,7 @@ procedure dl_traverse(lst)
     }
 }
 
-procedure dl_traverse_backward(lst)
+method dl_traverse_backward(lst)
     requires dlseg(lst, a, null, b);
     ensures dlseg(lst, a, null, b);
 {

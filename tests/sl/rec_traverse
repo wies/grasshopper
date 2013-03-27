@@ -1,4 +1,4 @@
-procedure traverse(lst)
+method traverse(lst)
     requires lseg(lst, null);
     ensures lseg(lst, null);
 {

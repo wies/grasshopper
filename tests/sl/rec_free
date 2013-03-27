@@ -1,4 +1,4 @@
-procedure rec_free(lst)
+method rec_free(lst)
     requires lseg(lst, null);
     ensures emp;
 {

@@ -1,4 +1,4 @@
-procedure find_last(a)
+method find_last(a)
     requires a != null * lseg(a, null);
     ensures lseg(a, returned) * returned |-> null;
 {
@@ -11,7 +11,7 @@ procedure find_last(a)
     }
 }
 
-procedure rec_concat(a, b)
+method rec_concat(a, b)
     requires a != null * lseg(a, null) * lseg(b, null);
     ensures lseg(a, b) * lseg(b, null);
 {

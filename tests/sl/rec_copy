@@ -1,4 +1,4 @@
-procedure copy1(curr, cp)
+method copy1(curr, cp)
     requires lseg(cp, null) * lseg(curr, null);
     ensures  lseg(returned, null) * lseg(curr, null);
 {
@@ -14,7 +14,7 @@ procedure copy1(curr, cp)
     }
 }
 
-procedure rec_copy(lst)
+method rec_copy(lst)
     requires lseg(lst, null);
     ensures lseg(lst, null) * lseg(returned, null);
 {
