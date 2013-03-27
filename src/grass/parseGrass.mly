@@ -93,7 +93,7 @@ form:
       | _ -> failwith ("Parse error: expected two arguments for " ^ (str_of_symbol $2)))
   | SubsetEq ->
       (match $3 with 
-      | [s; t] -> mk_eq s t
+      | [s; t] -> mk_subseteq s t
       | _ -> failwith ("Parse error: expected two arguments for " ^ (str_of_symbol $2)))
   | ReachWO ->
       (match $3 with 
