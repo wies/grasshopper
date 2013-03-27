@@ -402,7 +402,7 @@ let check_procedure proceduresMap name =
    *)
   let sl_replacement msg pre stack sl_1 subst2 sig2 sl_2 =
     Debug.msg ("sl_replacement: " ^ (Sl.to_string sl_1) ^ " by " ^ (Sl.to_string sl_2) ^ "\n");
-    let cmt = str_of_ident name ^ "_" ^ Str.global_replace (Str.regexp "  ") "_" msg in
+    let cmt = str_of_ident name ^ "_" ^ Str.global_replace (Str.regexp " ") "_" msg in
     if not (check_if_frame_exists cmt pre stack sl_1) then
       failwith (msg ^ " may not hold in " ^ (str_of_ident name))
     else

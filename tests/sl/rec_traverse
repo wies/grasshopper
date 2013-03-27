@@ -1,9 +1,9 @@
-method traverse(lst)
+method rec_traverse(lst)
     requires lseg(lst, null);
     ensures lseg(lst, null);
 {
     if (lst != null) {
       n := lst.next;
-      traverse(n);
+      rec_traverse(n);
     }
 }
