@@ -1,4 +1,4 @@
-procedure dl_filter()
+procedure dl_filter(a, b)
     requires dlseg(a, null, null, b);
     ensures dlseg(a, null, null, b);
 {
@@ -7,7 +7,7 @@ procedure dl_filter()
     while (curr != null) 
       invariant dlseg(a,null,curr,prv) * dlseg(curr,prv,null,b);
     {
-      if (Random) {
+      if (Nondet) {
         tmp := curr.next;
         if (prv != null) {
             prv.next := curr.next;

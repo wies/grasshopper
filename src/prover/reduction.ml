@@ -451,19 +451,15 @@ let reduce f =
   let fs6 = reduce_remaining fs5 gts2 in
   (* the following is a (probably stupid) heuristic to sort the formulas for improving the running time *)
   let fs7 = 
-    (* ground formulas come before axioms and formulas with many disjuncts come before formulas with fewer disjuncts *)
+    (* sort by decreasing number of disjuncts in formula *)
     let cmp f1 f2 =
-      let vs1 = fold_terms fvt IdSet.empty f1 in
-      let vs2 = fold_terms fvt IdSet.empty f2 in
-      let c = compare (IdSet.cardinal vs1 > 0) (IdSet.cardinal vs2 > 0) in
-      if c = 0 
-      then (match f1, f2 with 
-      | Binder (_, [], BoolOp (Or, fs1), _), Binder (_, [], BoolOp (Or, fs2), _) -> 
-          compare (List.length fs2) (List.length fs1)
-      | Binder (_, [], BoolOp (Or, _), _), _ -> -1 
-      | _, Binder (_, [], BoolOp (Or, _), _) -> 1
-      | _, _ -> 0)
-      else c
+      let rec count_disjuncts acc = function
+        | BoolOp (Or, fs) -> List.fold_left count_disjuncts (acc + List.length fs) fs
+        | BoolOp (_, fs) -> List.fold_left count_disjuncts acc fs
+        | Binder (_, _, f, _) -> count_disjuncts acc f
+        | Atom _ -> acc
+      in
+      compare (count_disjuncts 0 f2) (count_disjuncts 0 f1)
     in
     List.stable_sort cmp fs6
   in
