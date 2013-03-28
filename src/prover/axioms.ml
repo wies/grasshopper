@@ -51,7 +51,7 @@ let g x = mk_read fld2 x
 let reachwo = mk_reachwo fld1
 let reach = mk_reach fld1
 
-let write_axioms fld1 loc1 loc2 =
+let read_write_axioms fld1 loc1 loc2 =
   let new_fld1 = mk_write fld1 loc1 loc2 in
   let f x = mk_read fld1 x in
   let g x = mk_read new_fld1 x in
@@ -59,6 +59,10 @@ let write_axioms fld1 loc1 loc2 =
     mk_or [mk_eq loc3 loc1; mk_eq (f loc3) (g loc3)]
   in
   let f_upd2 = mk_eq (g loc1) loc2 in
+  if not !encode_fields_as_arrays then [mk_axiom "read_write1" f_upd1; mk_axiom "read_write2" f_upd2] else []
+  
+let reachwo_write_axioms fld1 loc1 loc2 =
+  let new_fld1 = mk_write fld1 loc1 loc2 in
   let reachwo_upd =
     let r = mk_reachwo fld1 in
     let new_reachwo u v w =
@@ -66,10 +70,9 @@ let write_axioms fld1 loc1 loc2 =
 	     mk_and [mk_not (mk_eq loc1 w); r u loc1 w; r loc2 v loc1; r loc2 v w]]
     in
     smk_and [smk_or [mk_not (mk_reachwo new_fld1 loc3 loc4 loc5); new_reachwo loc3 loc4 loc5];
-	    smk_or [mk_reachwo new_fld1 loc3 loc4 loc5; mk_not (new_reachwo loc3 loc4 loc5)]]
+	     smk_or [mk_reachwo new_fld1 loc3 loc4 loc5; mk_not (new_reachwo loc3 loc4 loc5)]]
   in
-  (if not !encode_fields_as_arrays then [mk_axiom "read_write1" f_upd1; mk_axiom "read_write2" f_upd2] else []) @ 
-  (if !with_reach_axioms then [mk_axiom "reachwo_write" reachwo_upd] else [])
+  if !with_reach_axioms then [mk_axiom "reachwo_write" reachwo_upd] else []
 
 let reachwo_axioms () = 
   (* axioms *)
@@ -98,9 +101,9 @@ let reachwo_axioms () =
      mk_axiom "linear1" lin1;
      mk_axiom "linear2" lin2;
      mk_axiom "trans1" trn1; 
-     mk_axiom "trans2" trn2]
+     mk_axiom "trans2" trn2;]
   else []
-
+ 
 
 let null_axioms () =
   let nll = mk_eq (f mk_null) mk_null in

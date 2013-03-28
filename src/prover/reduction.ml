@@ -339,39 +339,39 @@ let reduce_reach fs gts =
   let null_ax1 = instantiate_with_terms false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
   let fs1 = null_ax1 @ fs in
   (* propagate read terms *)
+  let fld_partition, fld_map, fields = 
+    let max, fld_map, fields = 
+      TermSet.fold (fun t (n, fld_map, fields) -> match t with
+      | App (_, _, Some (Fld _)) as fld -> 
+          n+1, TermMap.add fld n fld_map, TermSet.add fld fields
+      | _ -> n, fld_map, fields)
+        gts (0, TermMap.empty, TermSet.empty)
+    in
+    let rec collect_eq partition = function
+      | BoolOp (Not, f) -> partition
+      | BoolOp (op, fs) -> List.fold_left collect_eq partition fs
+      | Atom (App (Eq, [App (_, _, Some (Fld _)) as fld1; fld2], _)) ->
+          Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
+      | Binder (_, _, f, _) -> collect_eq partition f
+      | f -> partition
+    in
+    let fld_partition0 = List.fold_left collect_eq (Puf.create max) fs1 in
+    TermSet.fold (fun t partition -> 
+      match t with
+      | App (Write, fld1 :: _, _) as fld2 -> 
+          Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
+      | _ -> partition)
+      gts fld_partition0,
+    fld_map,
+    fields
+  in
+  let partition_of fld =
+    let p = Puf.find fld_partition (TermMap.find fld fld_map) in
+    let res = TermSet.filter (fun fld1 -> Puf.find fld_partition (TermMap.find fld1 fld_map) = p) fields in
+    (*print_endline ("partition of " ^ string_of_term fld);*)
+    res
+  in
   let gts1 = 
-    let fld_partition, fld_map, fields = 
-      let max, fld_map, fields = 
-        TermSet.fold (fun t (n, fld_map, fields) -> match t with
-          | App (_, _, Some (Fld _)) as fld -> 
-              n+1, TermMap.add fld n fld_map, TermSet.add fld fields
-          | _ -> n, fld_map, fields)
-          gts (0, TermMap.empty, TermSet.empty)
-      in
-      let rec collect_eq partition = function
-        | BoolOp (Not, f) -> partition
-        | BoolOp (op, fs) -> List.fold_left collect_eq partition fs
-        | Atom (App (Eq, [App (_, _, Some (Fld _)) as fld1; fld2], _)) ->
-            Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
-        | Binder (_, _, f, _) -> collect_eq partition f
-        | f -> partition
-      in
-      let fld_partition0 = List.fold_left collect_eq (Puf.create max) fs1 in
-      TermSet.fold (fun t partition -> 
-        match t with
-        | App (Write, fld1 :: _, _) as fld2 -> 
-            Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
-        | _ -> partition)
-        gts fld_partition0,
-      fld_map,
-      fields
-    in
-    let partition_of fld =
-      let p = Puf.find fld_partition (TermMap.find fld fld_map) in
-      let res = TermSet.filter (fun fld1 -> Puf.find fld_partition (TermMap.find fld1 fld_map) = p) fields in
-      (*print_endline ("partition of " ^ string_of_term fld);*)
-      res
-    in
     (*let _ = print_endline "All terms: "; TermSet.iter (fun t -> print_endline (string_of_term t)) gts in*)
     TermSet.fold
       (fun t gts1 -> match t with
@@ -395,35 +395,44 @@ let reduce_reach fs gts =
     in
     List.fold_left (fold_terms ft) TermSet.empty fs1
   in
-  let write_ax = 
+  let read_write_ax = 
     TermSet.fold (fun t write_ax ->
       match t with
       | App (Write, [fld; loc1; loc2], _) ->
-          open_axioms isFunVar (Axioms.write_axioms fld loc1 loc2) @ write_ax
+          open_axioms isFunVar (Axioms.read_write_axioms fld loc1 loc2) @ write_ax
       | _ -> write_ax) write_terms []
   in
-  let write_ax1 = instantiate_with_terms true write_ax classes1 in
-  let classes2 = CongruenceClosure.congr_classes (fs1 @ write_ax1) gts1 in
+  let read_write_ax1 = instantiate_with_terms true read_write_ax classes1 in
+  let classes2 = CongruenceClosure.congr_classes (fs1 @ read_write_ax1) gts1 in
   (* instantiate the variables of sort Fld in all reachability axioms *)
   let basic_reach_flds = 
     fold_terms (fun flds -> function
-      | App (ReachWO, fld :: _, _) -> TermSet.add fld flds
+      | App (ReachWO, fld :: _, _) -> TermSet.union (partition_of fld) flds
       | _ -> flds)
       TermSet.empty (smk_and fs1)
   in
-  (*let non_updated_flds = 
+  let reachwo_write_ax = 
+    TermSet.fold (fun t write_ax ->
+      match t with
+      | App (Write, [fld; loc1; loc2], _) ->
+          if TermSet.mem fld basic_reach_flds 
+          then open_axioms isFunVar (Axioms.reachwo_write_axioms fld loc1 loc2) @ write_ax
+          else write_ax
+      | _ -> write_ax) write_terms []
+  in
+  let non_updated_flds = 
     TermSet.filter 
       (fun t -> List.for_all 
 	  (function 
 	    | (App (Write, _, _)) -> false 
 	    | _ -> true) (CongruenceClosure.class_of t classes))
-      basic_pt_flds
-  in*)
+      basic_reach_flds
+  in
   let reach_ax = open_axioms isFld (Axioms.reachwo_axioms ()) in
-  let reach_ax1 = instantiate_with_terms false reach_ax (CongruenceClosure.restrict_classes classes2 basic_reach_flds) in
+  let reach_ax1 = instantiate_with_terms false reach_ax (CongruenceClosure.restrict_classes classes2 non_updated_flds) in
   (* generate local instances of all axioms in which variables occur below function symbols *)
   let reach_ax2 = instantiate_with_terms true (open_axioms isFunVar reach_ax1) classes2 in
-  rev_concat [fs1; reach_ax2; write_ax1], gts1
+  rev_concat [fs1; reach_ax2; read_write_ax1; reachwo_write_ax], gts1
 
 let reduce_remaining fs gts =
   (* generate local instances of all remaining axioms in which variables occur below function symbols *)

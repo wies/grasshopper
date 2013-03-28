@@ -19,7 +19,6 @@ recursive_remove tests/sl/rec_remove pass
 recursive_insert tests/sl/rec_insert pass
 dl_traverse tests/sl/dl_traverse pass
 dl_free tests/sl/dl_free pass
-dl_concat tests/sl/dl_concat pass
 dl_copy tests/sl/dl_copy pass
 dl_reverse tests/sl/dl_reverse pass
 dl_concat tests/sl/dl_concat pass

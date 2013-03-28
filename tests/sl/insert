@@ -6,7 +6,7 @@ method insert(lst, elt)
         return elt;
     else {
         curr := lst;
-        while ( Random && curr.next != null ) 
+        while ( Nondet && curr.next != null ) 
             invariant curr != null * lseg(lst, curr) * lseg(curr, null);
         {
             curr := curr.next;
