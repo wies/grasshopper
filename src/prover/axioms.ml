@@ -60,7 +60,7 @@ let write_axioms fld1 loc1 loc2 =
   in
   let f_upd2 = mk_eq (g loc1) loc2 in
   let reachwo_upd =
-    let r = reachwo in
+    let r = mk_reachwo fld1 in
     let new_reachwo u v w =
       mk_or [mk_and [r u v w; r u v loc1];
 	     mk_and [mk_not (mk_eq loc1 w); r u loc1 w; r loc2 v loc1; r loc2 v w]]
