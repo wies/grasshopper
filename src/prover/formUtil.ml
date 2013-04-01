@@ -80,6 +80,14 @@ let mk_pred id ts = mk_atom (FreeSym id) ts
 
 let mk_eq s t = mk_atom Eq [s; t]
 
+let mk_lt s t = mk_atom Lt [s; t]
+
+let mk_gt s t = mk_atom Gt [s; t]
+
+let mk_leq s t = mk_atom LtEq [s; t]
+
+let mk_geq s t = mk_atom GtEq [s; t]
+
 let mk_null = mk_app ~srt:Loc Null []
 
 let mk_read fld ind = 
@@ -371,20 +379,23 @@ let proper_funs f =
   in collect_from_terms fts IdSet.empty f
 *)
 
+let map_id_term fct t =
+  let rec sub = function
+    | Var (id, srt) -> Var (fct id, srt)
+    | App (sym, ts, srt) -> 
+	let sym1 = match sym with
+	| FreeSym id -> FreeSym (fct id)
+	| _ -> sym
+	in
+	App (sym1, List.map sub ts, srt)
+  in sub t
+
 (* Substitutes all identifiers in term t according to substitution map subst_map *)
 let subst_id_term subst_map t =
   let sub_id id =
     try IdMap.find id subst_map with Not_found -> id
   in
-  let rec sub = function
-    | Var (id, srt) -> Var (sub_id id, srt)
-    | App (sym, ts, srt) -> 
-	let sym1 = match sym with
-	| FreeSym id -> FreeSym (sub_id id)
-	| _ -> sym
-	in
-	App (sym1, List.map sub ts, srt)
-  in sub t
+    map_id_term sub_id t
 
 (** Substitutes all identifiers in formula f according to substitution map subst_map.
  ** Not capture avoiding. *)

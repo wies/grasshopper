@@ -11,6 +11,14 @@ let prev_pts = mk_ident "prev"
 
 let to_field f = FormUtil.mk_free_const ?srt:(Some (Form.Fld Form.Loc)) f
 
+let fpts = to_field pts
+let fprev_pts = to_field prev_pts
+
+(* data pointer *)
+let data = mk_ident "data"
+let fdata = FormUtil.mk_free_const ?srt:(Some (Form.Fld Form.Int)) data
+let get_data l = FormUtil.mk_read fdata l
+
 let mk_loc_set d =
   let tpe = Some (Form.Set Form.Loc) in
     FormUtil.mk_free_const ?srt:tpe d
@@ -19,17 +27,17 @@ let mk_loc d =
   if (fst d = "null") then FormUtil.mk_null
   else FormUtil.mk_free_const ?srt:(Some (Form.Loc)) d
 
-let fpts = to_field pts
-let fprev_pts = to_field prev_pts
 
 type form =
   | Emp
-  | Eq of ident * ident
+  | Eq of ident * ident (* TODO shove this into Pure *)
+  | Pure of Form.form
   | PtsTo of ident * ident * ident
   | List of ident * ident
+  | SList of ident * ident
   | DList of ident * ident * ident * ident
   | SepConj of form list
-  | BoolConst of bool
+  | BoolConst of bool (* TODO shove this into Pure *)
   | Not of form
   | And of form list
   | Or of form list
@@ -48,10 +56,12 @@ let mk_emp = Emp
 let mk_true = BoolConst true
 let mk_false = BoolConst false
 let mk_eq a b = Eq (a, b)
+let mk_pure p = Pure p
 let mk_not a = Not a
 let mk_pts a b = PtsTo (pts, a, b)
 let mk_prev_pts a b = PtsTo (prev_pts, a, b)
 let mk_ls a b = List (a, b)
+let mk_sls a b = SList (a, b)
 let mk_dls a b c d = DList (a, b, c, d)
 let mk_and a b = And [a; b]
 let mk_or a b = Or [a; b]
@@ -67,6 +77,7 @@ let mk_sep a b =
 let rec to_string f = match f with
   | Not (Eq (e1, e2)) -> (ident_to_string e1) ^ " ~= " ^ (ident_to_string e2)
   | Eq (e1, e2) -> (ident_to_string e1) ^ " = " ^ (ident_to_string e2)
+  | Pure p -> Form.string_of_form p
   | Not t -> "~(" ^ (to_string t) ^")"
   | And lst -> "(" ^ (String.concat ") && (" (List.map to_string lst)) ^ ")"
   | Or lst ->  "(" ^ (String.concat ") || (" (List.map to_string lst)) ^ ")"
@@ -76,11 +87,13 @@ let rec to_string f = match f with
   | PtsTo (h, a, b) when h = prev_pts -> (Form.str_of_ident a) ^ " |<- " ^ (Form.str_of_ident b)
   | PtsTo (h, a, b) -> (Form.str_of_ident a) ^ " |"^(ident_to_string h)^"> " ^ (Form.str_of_ident b)
   | List (a, b) -> "lseg(" ^ (Form.str_of_ident a) ^ ", " ^ (Form.str_of_ident b) ^ ")"
+  | SList (a, b) -> "slseg(" ^ (Form.str_of_ident a) ^ ", " ^ (Form.str_of_ident b) ^ ")"
   | DList (a, b, c, d) -> "dlseg(" ^ (String.concat ", " (List.map ident_to_string [a;b;c;d])) ^ ")"
   | SepConj lst -> "(" ^ (String.concat ") * (" (List.map to_string lst)) ^ ")"
 
+(*
 let rec ids f = match f with
-  | Eq (a, b) | PtsTo (_, a, b) | List (a, b) -> 
+  | Eq (a, b) | PtsTo (_, a, b) | List (a, b) | SList (a, b) -> 
     IdSet.add a (IdSet.singleton b)
   | DList (a, b, c, d) -> List.fold_right IdSet.add [a; b; c] (IdSet.singleton d)
   | Not t -> ids t
@@ -90,9 +103,12 @@ let rec ids f = match f with
       IdSet.empty
       lst
   | BoolConst _ | Emp -> IdSet.empty
+  | Pure p -> failwith "TODO"
+*)
 
 let rec normalize f = match f with
   | Eq (e1, e2) -> if e1 = e2 then BoolConst true else Eq (e1, e2)
+  | Pure p -> Pure p
   | Not t -> 
     begin
       match normalize t with
@@ -131,10 +147,12 @@ let rec normalize f = match f with
   | Emp -> Emp
   | PtsTo (h, a, b) -> PtsTo (h, a, b)
   | List (a, b) -> if a = b then Emp else List (a, b)
+  | SList (a, b) -> if a = b then Emp else SList (a, b)
   | DList (a, b, c, d) -> DList (a, b, c, d) (* TODO can we do better ?? *)
 
 let rec map_id fct f = match f with
   | Eq (e1, e2) -> Eq (fct e1, fct e2)
+  | Pure p -> FormUtil.map_id fct p
   | Not t ->  Not (map_id fct t)
   | And lst -> And (List.map (map_id fct) lst)
   | Or lst -> Or (List.map (map_id fct) lst)
@@ -142,6 +160,7 @@ let rec map_id fct f = match f with
   | Emp -> Emp
   | PtsTo (h, a, b) -> PtsTo (h, fct a, fct b)
   | List (a, b) -> List (fct a, fct b)
+  | SList (a, b) -> SList (fct a, fct b)
   | DList (a, b, c, d) -> DList (fct a, fct b, fct c, fct d)
   | SepConj lst -> SepConj (List.map (map_id fct) lst)
 
@@ -153,7 +172,7 @@ let subst_id subst f =
 
 let rec has_prev f = match f with
   | Not t -> has_prev t
-  | Eq _ | BoolConst _ | List _ | Emp -> false
+  | Eq _ | BoolConst _ | List _ | SList _ | Emp | Pure _ -> false
   | PtsTo (h, a, b) -> h = prev_pts
   | DList _ -> true
   | SepConj lst | And lst | Or lst -> 
@@ -195,6 +214,9 @@ let to_form set_fct domain f =
     | BoolConst b -> 
         let domain = FormUtil.fresh_ident (fst d) in
         ([FormUtil.mk_bool b, mk_loc_set domain, IdSet.empty], FormUtil.mk_true)
+    | Pure p -> 
+        let domain = FormUtil.fresh_ident (fst d) in
+        ([p, mk_loc_set domain, IdSet.empty], FormUtil.mk_true)
     | Not (Eq (id1, id2)) -> 
         let domain = FormUtil.fresh_ident (fst d) in
         ([FormUtil.mk_neq (mk_loc id1) (mk_loc id2), mk_loc_set domain, IdSet.empty], empty domain) (*TODO are id1, id2 always locations ? *)
@@ -220,6 +242,26 @@ let to_form set_fct domain f =
                 FormUtil.mk_neq Axioms.loc1 (mk_loc id2) ] )
                (mk_domain domain Axioms.loc1))         
         )
+    | SList (id1, id2) ->
+        let domain = FormUtil.fresh_ident (fst d) in
+        let part1 = FormUtil.mk_and [FormUtil.mk_neq (mk_loc id1) (mk_loc id2); reach id1 id2] in
+        let part2 = 
+          Axioms.mk_axiom ("sls_" ^ Form.str_of_ident domain)
+            (FormUtil.mk_implies
+              (FormUtil.mk_and [mk_domain domain Axioms.loc1;
+                                mk_domain domain Axioms.loc2;
+                                reachWoT Axioms.loc1 Axioms.loc2 Axioms.loc2])
+              (FormUtil.mk_leq (get_data Axioms.loc1) (get_data Axioms.loc2)))
+        in
+        let part3 =
+          Axioms.mk_axiom ("def_of_" ^ Form.str_of_ident domain) 
+	    (FormUtil.mk_iff
+               (FormUtil.smk_and [
+                reachWoT (mk_loc id1) Axioms.loc1 (mk_loc id2);
+                FormUtil.mk_neq Axioms.loc1 (mk_loc id2) ] )
+               (mk_domain domain Axioms.loc1))         
+        in
+          ([FormUtil.mk_and [part1; part2], mk_loc_set domain, IdSet.singleton domain], part3)
     | DList (x1, x2, y1, y2) ->
         let domain = FormUtil.fresh_ident (fst d) in
         let part1 = reach x1 y1 in

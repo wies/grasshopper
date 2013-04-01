@@ -23,6 +23,7 @@ rule token = parse
 | "|->" { PTS }
 | "|<-" { BPTS }
 | "lseg" { LS }
+| "slseg" { SLS }
 | "dlseg" { DLS }
 | "true" { TRUE }
 | "false" { FALSE }

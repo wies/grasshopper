@@ -1,7 +1,6 @@
 open Form
 open FormUtil
 open Axioms
-open Stmnt
 open Entails
 
 module IdMap = Form.IdMap

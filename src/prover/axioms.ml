@@ -11,6 +11,8 @@ let f1 = fresh_ident "?f", Fld Loc
 let f2 = fresh_ident "?g", Fld Loc
 let s1 = fresh_ident "?X", Set Loc 
 let s2 = fresh_ident "?Y", Set Loc 
+let i1 = fresh_ident "?m", Int
+let i2 = fresh_ident "?n", Int
 
 let loc1 = mk_var ~srt:(snd l1) (fst l1)
 let loc2 = mk_var ~srt:(snd l2) (fst l2)
@@ -21,8 +23,10 @@ let fld1 = mk_var ~srt:(snd f1) (fst f1)
 let fld2 = mk_var ~srt:(snd f2) (fst f2)
 let set1 = mk_var ~srt:(snd s1) (fst s1)
 let set2 = mk_var ~srt:(snd s2) (fst s2)
+let int1 = mk_var ~srt:(snd i1) (fst i1)
+let int2 = mk_var ~srt:(snd i2) (fst i2)
 
-let all_vars = [f1; f2; s1; s2; l1; l2; l3; l4; l5]
+let all_vars = [f1; f2; s1; s2; l1; l2; l3; l4; l5; i1; i2]
 
 let mk_axiom name f =
   let fvars = fv f in

@@ -1,6 +1,5 @@
 %{
 open Sl
-open Stmnt
 open SimpleLanguage
 
 let parse_error = ParseError.parse_error
@@ -11,8 +10,8 @@ let parse_error = ParseError.parse_error
 %token <string> PIDENT
 %token LPAREN RPAREN LBRACKET RBRACKET
 %token SEMICOLON DOT
-%token EQ NEQ
-%token PTS BPTS LS DLS TRUE FALSE EMP NULL
+%token EQ NEQ LEQ GEQ LT GT
+%token PTS BPTS LS SLS DLS TRUE FALSE EMP NULL
 %token COLONEQ
 %token ASSUME ASSERT NEW NEXT PREV DISPOSE RETURN
 %token SEP AND OR NOT COMMA
@@ -74,9 +73,14 @@ sl_form:
 | EMP { Emp }
 | term EQ term { mk_eq $1 $3 }
 | term NEQ term { mk_not (mk_eq $1 $3) }
+| term LT term { mk_pure (FormUtil.mk_lt (get_data (mk_loc $1)) (get_data (mk_loc $3))) } /* TODO */
+| term GT term { mk_pure (FormUtil.mk_gt (get_data (mk_loc $1)) (get_data (mk_loc $3))) } /* TODO */
+| term LEQ term { mk_pure (FormUtil.mk_leq (get_data (mk_loc $1)) (get_data (mk_loc $3))) } /* TODO */
+| term GEQ term { mk_pure (FormUtil.mk_geq (get_data (mk_loc $1)) (get_data (mk_loc $3))) } /* TODO */
 | term PTS term { mk_pts $1 $3 }
 | term BPTS term { mk_prev_pts $1 $3 }
 | LS LPAREN term COMMA term RPAREN { mk_ls $3 $5 }
+| SLS LPAREN term COMMA term RPAREN { mk_sls $3 $5 }
 | DLS LPAREN term COMMA term COMMA term COMMA term RPAREN { mk_dls $3 $5 $7 $9 }
 | NOT sl_form { mk_not $2 }
 | sl_form AND sl_form { mk_and $1 $3 }
@@ -152,5 +156,9 @@ atom:
 | FALSE { FormUtil.mk_false }
 | pterm EQ pterm { FormUtil.mk_eq $1 $3 }
 | pterm NEQ pterm { FormUtil.mk_not (FormUtil.mk_eq $1 $3) }
+| pterm LT pterm { FormUtil.mk_lt $1 $3 }
+| pterm GT pterm { FormUtil.mk_gt $1 $3 }
+| pterm LEQ pterm { FormUtil.mk_leq $1 $3 }
+| pterm GEQ pterm { FormUtil.mk_geq $1 $3 }
 | PIDENT args { FormUtil.mk_pred (mk_ident $1) (List.map (fun t -> (*FormUtil.mk_free_const*) mk_loc t) $2) }
 ;

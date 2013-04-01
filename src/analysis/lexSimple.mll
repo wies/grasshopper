@@ -13,6 +13,10 @@ rule token = parse
 | "//" [^ '\n']* {token lexbuf }
 | "==" { EQ }
 | "!=" { NEQ }
+| "<=" { LEQ }
+| ">=" { GEQ }
+| "<" { LT }
+| ">" { GT }
 | "||" { OR }
 | "&&" { AND }
 | '!' { NOT }
@@ -28,6 +32,7 @@ rule token = parse
 | "|->" { PTS }
 | "|<-" { BPTS }
 | "lseg" { LS }
+| "slseg" { SLS }
 | "dlseg" { DLS }
 | "assume" { ASSUME }
 | "method" { PROCEDURE }
