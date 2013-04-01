@@ -5,20 +5,23 @@ open Util
 type ident = string * int
 
 type sort =
-  | Bool | Loc 
+  | Bool | Loc | Int
   | Set of sort 
   | Fld of sort
 
 type arity = sort list * sort
 
 type symbol =
-  (* boolean constants *)
+  (* interpreted constant symbols *)
   | BoolConst of bool
-  (* function symbols *)
+  | IntConst of int
+  (* interpreted function symbols *)
   | Null | Read | Write | EntPnt
+  | UMinus | Plus | Minus | Mult 
   | Empty | SetEnum | Union | Inter | Diff
-  (* predicate symbols *)
+  (* interpreted predicate symbols *)
   | Eq
+  | LtEq | GtEq | Lt | Gt
   | ReachWO
   | Frame
   | Elem | SubsetEq 
@@ -28,8 +31,10 @@ type symbol =
 let symbols = 
   [BoolConst true; BoolConst false; 
    Null; Read; Write; EntPnt;
+   UMinus; Plus; Minus; Mult;
    Empty; SetEnum; Union; Inter; Diff;
-   Eq; ReachWO; Frame; Elem; SubsetEq]
+   Eq; LtEq; GtEq; Lt; Gt;
+   ReachWO; Frame; Elem; SubsetEq]
 
 (* Terms and formulas *)
 
@@ -106,6 +111,7 @@ let str_of_ident (name, n) =
 let str_of_symbol = function
   (* function symbols *)
   | BoolConst b -> Printf.sprintf "%b" b
+  | IntConst i -> string_of_int i
   | Null -> "null"
   | Read -> 
       if !Config.encode_fields_as_arrays 
@@ -116,6 +122,10 @@ let str_of_symbol = function
       then "store"
       else "write"
   | EntPnt -> "ep"
+  | UMinus -> "-"
+  | Plus -> "+"
+  | Minus -> "-"
+  | Mult -> "*"
   | Empty -> "emptyset"
   | SetEnum -> "setenum"
   | Union -> "union"
@@ -123,6 +133,10 @@ let str_of_symbol = function
   | Diff -> "diff"
   (* predicate symbols *)
   | Eq -> "="
+  | LtEq -> "<="
+  | GtEq -> ">="
+  | Lt -> "<"
+  | Gt -> ">"
   | ReachWO -> "ReachWO"
   | Elem -> "elem"
   | SubsetEq -> "subseteq"
@@ -164,6 +178,7 @@ let loc_sort_string = "Loc"
 let fld_sort_string = "Fld"
 let set_sort_string = "Set"
 let bool_sort_string = "Bool"
+let int_sort_string = "Int"
 
 let rec pr_sort0 ppf srt = match srt with
   | Loc | Bool -> fprintf ppf "%a" pr_sort srt
@@ -172,6 +187,7 @@ let rec pr_sort0 ppf srt = match srt with
 and pr_sort ppf = function
   | Loc -> fprintf ppf "%s" loc_sort_string
   | Bool -> fprintf ppf "%s" bool_sort_string
+  | Int -> fprintf ppf "%s" int_sort_string
   | Fld s -> fprintf ppf "@[<4>%s@ %a@]" fld_sort_string pr_sort0 s
   | Set s -> fprintf ppf "@[<4>%s@ %a@]" set_sort_string pr_sort0 s
 		
