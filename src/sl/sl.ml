@@ -107,8 +107,8 @@ let rec ids f = match f with
 *)
 
 let rec normalize f = match f with
-  | Eq (e1, e2) -> if e1 = e2 then BoolConst true else Eq (e1, e2)
-  | Pure p -> Pure p
+  | Eq (e1, e2) -> if e1 = e2 then mk_true else Eq (e1, e2)
+  | Pure p -> Pure (FormUtil.nnf p)
   | Not t -> 
     begin
       match normalize t with
@@ -180,7 +180,6 @@ let rec has_prev f = match f with
 
 (* translation to grass *)
 
-(*let cst = FormUtil.mk_free_const*)
 let reachWoT a b c = FormUtil.mk_reachwo (fpts) a b c
 let reachWo a b c = reachWoT (mk_loc a) (mk_loc b) (mk_loc c)
 let reach a b = reachWo a b b
@@ -244,7 +243,7 @@ let to_form set_fct domain f =
         )
     | SList (id1, id2) ->
         let domain = FormUtil.fresh_ident (fst d) in
-        let part1 = FormUtil.mk_and [FormUtil.mk_neq (mk_loc id1) (mk_loc id2); reach id1 id2] in
+        let part1 = reach id1 id2 in
         let part2 = 
           Axioms.mk_axiom ("sls_" ^ Form.str_of_ident domain)
             (FormUtil.mk_implies
