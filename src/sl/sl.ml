@@ -152,7 +152,7 @@ let rec normalize f = match f with
 
 let rec map_id fct f = match f with
   | Eq (e1, e2) -> Eq (fct e1, fct e2)
-  | Pure p -> FormUtil.map_id fct p
+  | Pure p -> Pure (FormUtil.map_id fct p)
   | Not t ->  Not (map_id fct t)
   | And lst -> And (List.map (map_id fct) lst)
   | Or lst -> Or (List.map (map_id fct) lst)

@@ -390,6 +390,13 @@ let map_id_term fct t =
 	App (sym1, List.map sub ts, srt)
   in sub t
 
+let map_id fct f =
+  let rec sub = function 
+    | BoolOp (op, fs) -> BoolOp (op, List.map sub fs)
+    | Atom t -> Atom (map_id_term fct t)
+    | Binder (b, vs, f, a) -> Binder (b, vs, sub f, a)
+  in sub f
+
 (* Substitutes all identifiers in term t according to substitution map subst_map *)
 let subst_id_term subst_map t =
   let sub_id id =
