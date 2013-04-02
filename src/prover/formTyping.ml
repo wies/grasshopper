@@ -13,6 +13,15 @@ type my_sort =
   | TStar of my_sort (* repeated args *)
   | TFun of my_sort list * my_sort
 
+let rec my_sort_to_string t = match t with
+  | TBool -> "bool"
+  | TLoc -> "loc"
+  | TInt -> "Int"
+  | TSet s -> "Set("^(my_sort_to_string s)^")"
+  | TFld s -> "Fld("^(my_sort_to_string s)^")"
+  | TStar s -> (my_sort_to_string s)^"*"
+  | TFun (args, ret) -> String.concat " -> " (List.map my_sort_to_string (args @ [ret]))
+
 module TpeMap = Map.Make(struct
     type t = my_sort
     let compare = compare
@@ -33,6 +42,19 @@ let subst map tpe =
     | TStar t -> sub (TStar (process t))
     | TFun (args, ret) -> sub (TFun (List.map process args, process ret))
     | other -> sub other
+  in
+    process tpe
+
+let subst_td map tpe =
+  let sub t =
+    try IdMap.find t map with Not_found -> t
+  in
+  let rec process t = match sub t with
+    | TSet t -> TSet (process t)
+    | TFld t -> TFld (process t)
+    | TStar t -> TStar (process t)
+    | TFun (args, ret) -> TFun (List.map process args, process ret)
+    | other -> other
   in
     process tpe
 
@@ -172,59 +194,24 @@ let equations f =
   let (env, eqs) process_form IdMap.empty f in
     (env, eqs)
 
-(* TODO solve the equations using unification *)
+(* solve the equations using unification *)
 let unify eqs =
-  failwith "TODO"
-  let process subst (t1,t2) = match (t1,t2) with
-    | (x, y) when x = y -> subst
+  let update_subst subst t1 t2 =
+    IdMap.add t1 t2 subst
+  in
+  let process map (t1,t2) = match (subst_td map t1, subst_td map t2) with
+    | (x, y) when x = y -> map 
     | (TVar _ as x, y) | (y, TVar _ as x) ->
-    | (TSet t3, TSet t4) -> process subst (t3, t4)
-    | (TFld t3, TFld t4) -> process subst (t3, t4)
-    | (TStar )
-    | (TFun )
+      assert (not (TpeSet.mem x (type_var y)));
+      update_subst map x y
+    | (TSet t3, TSet t4) -> process map (t3, t4)
+    | (TFld t3, TFld t4) -> process map (t3, t4)
+    | (TStar t3, TStar t4) | (TStar t3, t4) | (t4, TStar t3) -> process map (t3, t4)
+    | (TFun (a1, r1), TFun (a2, r2)) ->
+    | (t1, t2) -> failwith ("ill-typed: " ^ (my_sort_to_string t1) ^ " = " ^ (my_sort_to_string t2) )
   in
-  (*
-  let all_tpes =
-    List.fold_left
-      (fun acc (t1,t2) -> TpeSet.add t1 (TpeSet.add t2 acc) ) 
-      TpeSet.empty
-      eqs
-  in
-  let tpe_to_int, int_to_tpe, max =
-    TpeSet.fold
-      (fun t (to_int, from_int, idx) ->
-        if TpeMap.mem t to_int then
-          (to_int, from_int, idx)
-        else
-          ( TpeMap.add t idx to_int,
-            IntMap.add idx t from_int,
-            idx + 1 )
-      )
-      all_tpes
-      (TpeMap.empty, IntMap.empty, 0)
-  in
-  let puf =
-    List.fold_left
-      (fun acc (a,b) -> Puf.union acc (TpeMap.find a to_int, TpeMap.find b to_int))
-      (Puf.create max)
-      eqs
-  in
-  let cc = Array.make max [] in
-    TpeSet.iter
-      (fun t ->
-        let i = Puf.find puf t in
-          cc(i) <- t :: cc(i) )
-      all_tpes;
-  let mgu =
-    Array.fold_left
-      (fun acc eq_cls ->
-        failwith "TODO"
-      )
-      TpeMap.empty
-      cc
-  in
+  let mgu = List.fold_left process TpeMap.empty eqs in
     mgu
-  *)
 
 let fill_type env mgu f =
   failwith "TODO"
