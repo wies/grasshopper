@@ -42,6 +42,14 @@ let partition_map p f xs =
 
 let flat_map f ls = List.flatten (List.map f ls)
 
+let find_index elt ls =
+  let rec traverse i lst = match lst with
+    | x :: xs when elt = x -> i
+    | _ :: xs -> traverse (i+1) xs
+    | [] -> -1
+  in
+    traverse 0 ls
+
 let rec partial_map f = function
   | [] -> []
   | x :: xs -> 

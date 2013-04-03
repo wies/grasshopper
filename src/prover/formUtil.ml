@@ -358,6 +358,41 @@ let sign f : signature =
   in 
   fold_terms signt SymbolMap.empty f
 
+(** Extracts the signature of f *)
+let overloaded_sign f : (arity list SymbolMap.t) =
+  let add_to_sign sym tpe decls =
+    let old = try SymbolMap.find sym decls with Not_found -> [] in
+      if List.mem tpe old then decls
+      else SymbolMap.add sym (tpe :: old) decls
+  in
+  let fail t = 
+    let t_str = string_of_term t in
+    let f_str = string_of_form f in
+    let msg =
+      "tried to extract signature from untyped term:\n" ^
+      "  " ^ t_str ^ "\nin formula\n" ^ f_str
+    in
+    failwith msg
+    in
+  let rec signt (decls : arity list SymbolMap.t) t = match t with
+    | Var _ -> decls
+    | App (sym, args, res_srt_opt) ->
+	let res_srt = 
+	  match res_srt_opt with
+	  | Some srt -> srt
+	  | None -> fail t
+	in
+	let arg_srts = 
+	  List.map
+	    (function 
+	      |	Var (_, Some srt) 
+	      | App (_, _, Some srt) -> srt 
+	      | t -> fail t
+	    )
+	    args
+	in List.fold_left signt (add_to_sign sym (arg_srts, res_srt) decls) args
+  in 
+  fold_terms signt SymbolMap.empty f
 
 (*
 let funs_in_term t =

@@ -16,13 +16,29 @@ let dump_model session =
 
 
 let start_session name f = 
+  let f = FormTyping.typing f in
   let f_inst = Reduction.reduce f in
-  let session = SmtLib.start name in
-  let prove () =
+  let signature = overloaded_sign (mk_and f_inst) in
+  let all_tpe =
+    SymbolMap.fold
+      (fun _ lst acc ->
+        List.fold_left
+          (fun acc (args, ret) -> List.fold_right SrtSet.add (ret :: args) acc)
+          acc
+          lst
+      )
+      signature
+      SrtSet.empty
+  in
+  let has_int = SrtSet.mem Int all_tpe in
+  let session = SmtLib.start name has_int in
+  let prove session =
     Debug.msg "sending to prover...\n";
-
+    (*
     let signature = sign (mk_and f_inst) in
     SmtLib.declare session signature;
+    *)
+    let session = SmtLib.declare_overloaded session signature in
     Debug.msg "  signature done\n";
 
     SmtLib.assert_forms session f_inst;
@@ -35,10 +51,9 @@ let start_session name f =
         Some false
     in
       Debug.msg "prover done\n";
-      result
+      (result, session)
   in
-  let result = Util.measure_call "prove" prove () in
-  (result, session)
+  Util.measure_call "prove" prove session
 
 let check_sat ?(session_name="form") f =
   let (result, session) = start_session session_name f in

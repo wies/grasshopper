@@ -18,14 +18,14 @@ let implies_heap_content preh posth =
 let mk_same lst =
   let repr = List.hd lst in
     List.fold_left
-      (fun acc v -> (Sl.Eq (v, repr)) :: acc )
+      (fun acc v -> (Sl.mk_eq v repr) :: acc )
       []
       (List.tl lst)
 
 (* all different *)
 let mk_different lst =
   let rec different reprs = match reprs with
-    | v :: vs -> (List.map (fun v2 -> Sl.Not (Sl.Eq (v, v2))) vs) @ (different vs)
+    | v :: vs -> (List.map (fun v2 -> Sl.mk_not (Sl.mk_eq v v2)) vs) @ (different vs)
     | [] -> []
   in
     different lst

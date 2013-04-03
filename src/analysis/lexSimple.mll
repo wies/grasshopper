@@ -43,6 +43,7 @@ rule token = parse
 | "assert" { ASSERT }
 | "next" { NEXT }
 | "back" { PREV }
+| "data" { DATA }
 | "new" { NEW }
 | "free" { DISPOSE }
 | "if" { IF }

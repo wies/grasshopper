@@ -13,7 +13,7 @@ let parse_error = ParseError.parse_error
 %token EQ NEQ LEQ GEQ LT GT
 %token PTS BPTS LS SLS DLS TRUE FALSE EMP NULL
 %token COLONEQ
-%token ASSUME ASSERT NEW NEXT PREV DISPOSE RETURN
+%token ASSUME ASSERT NEW NEXT PREV DATA DISPOSE RETURN
 %token SEP AND OR NOT COMMA
 %token IF ELSE WHILE
 %token PROCEDURE REQUIRES ENSURES INVARIANT
@@ -68,20 +68,23 @@ term:
 ;
 
 sl_form:
+/* pure part */
 | TRUE { mk_true }
 | FALSE { mk_false }
+| pterm EQ pterm { mk_pure (FormUtil.mk_eq $1 $3) }
+| pterm NEQ pterm { mk_pure (FormUtil.mk_neq $1 $3) }
+| pterm LT pterm { mk_pure (FormUtil.mk_lt $1 $3) }
+| pterm GT pterm { mk_pure (FormUtil.mk_gt $1 $3) }
+| pterm LEQ pterm { mk_pure (FormUtil.mk_leq $1 $3) }
+| pterm GEQ pterm { mk_pure (FormUtil.mk_geq $1 $3) }
+/* spatial part */
 | EMP { Emp }
-| term EQ term { mk_eq $1 $3 }
-| term NEQ term { mk_not (mk_eq $1 $3) }
-| term LT term { mk_pure (FormUtil.mk_lt (get_data (mk_loc $1)) (get_data (mk_loc $3))) } /* TODO */
-| term GT term { mk_pure (FormUtil.mk_gt (get_data (mk_loc $1)) (get_data (mk_loc $3))) } /* TODO */
-| term LEQ term { mk_pure (FormUtil.mk_leq (get_data (mk_loc $1)) (get_data (mk_loc $3))) } /* TODO */
-| term GEQ term { mk_pure (FormUtil.mk_geq (get_data (mk_loc $1)) (get_data (mk_loc $3))) } /* TODO */
 | term PTS term { mk_pts $1 $3 }
 | term BPTS term { mk_prev_pts $1 $3 }
 | LS LPAREN term COMMA term RPAREN { mk_ls $3 $5 }
 | SLS LPAREN term COMMA term RPAREN { mk_sls $3 $5 }
 | DLS LPAREN term COMMA term COMMA term COMMA term RPAREN { mk_dls $3 $5 $7 $9 }
+/* boolean structure */
 | NOT sl_form { mk_not $2 }
 | sl_form AND sl_form { mk_and $1 $3 }
 | sl_form OR sl_form { mk_or $1 $3 }
@@ -136,9 +139,10 @@ argsCall:
 ;
 
 pterm:
-| TIDENT DOT NEXT { FormUtil.mk_read fpts (mk_loc (mk_ident $1)) }
-| TIDENT DOT PREV { FormUtil.mk_read fprev_pts (mk_loc (mk_ident $1)) }
-| TIDENT { mk_loc (mk_ident $1) }
+| pterm DOT NEXT { FormUtil.mk_read fpts $1 }
+| pterm DOT PREV { FormUtil.mk_read fprev_pts $1 }
+| pterm DOT DATA { FormUtil.mk_read fdata $1 }
+| TIDENT { mk_const (mk_ident $1) }
 | NULL { FormUtil.mk_null }
 | LPAREN pterm RPAREN { $2 }
 ;
@@ -160,5 +164,5 @@ atom:
 | pterm GT pterm { FormUtil.mk_gt $1 $3 }
 | pterm LEQ pterm { FormUtil.mk_leq $1 $3 }
 | pterm GEQ pterm { FormUtil.mk_geq $1 $3 }
-| PIDENT args { FormUtil.mk_pred (mk_ident $1) (List.map (fun t -> (*FormUtil.mk_free_const*) mk_loc t) $2) }
+| PIDENT args { FormUtil.mk_pred (mk_ident $1) (List.map (fun t -> mk_const t) $2) }
 ;

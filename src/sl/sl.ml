@@ -27,17 +27,18 @@ let mk_loc d =
   if (fst d = "null") then FormUtil.mk_null
   else FormUtil.mk_free_const ?srt:(Some (Form.Loc)) d
 
+let mk_const d =
+  if (fst d = "null") then FormUtil.mk_null
+  else FormUtil.mk_free_const d
 
 type form =
   | Emp
-  | Eq of ident * ident (* TODO shove this into Pure *)
   | Pure of Form.form
   | PtsTo of ident * ident * ident
   | List of ident * ident
   | SList of ident * ident
   | DList of ident * ident * ident * ident
   | SepConj of form list
-  | BoolConst of bool (* TODO shove this into Pure *)
   | Not of form
   | And of form list
   | Or of form list
@@ -53,10 +54,10 @@ module SlMap = Map.Make(struct
   end)
 
 let mk_emp = Emp
-let mk_true = BoolConst true
-let mk_false = BoolConst false
-let mk_eq a b = Eq (a, b)
 let mk_pure p = Pure p
+let mk_true = mk_pure FormUtil.mk_true
+let mk_false = mk_pure FormUtil.mk_false
+let mk_eq a b = mk_pure (FormUtil.mk_eq (mk_const a) (mk_const b))
 let mk_not a = Not a
 let mk_pts a b = PtsTo (pts, a, b)
 let mk_prev_pts a b = PtsTo (prev_pts, a, b)
@@ -75,13 +76,10 @@ let mk_sep a b =
   | _ -> SepConj [a; b]
 
 let rec to_string f = match f with
-  | Not (Eq (e1, e2)) -> (ident_to_string e1) ^ " ~= " ^ (ident_to_string e2)
-  | Eq (e1, e2) -> (ident_to_string e1) ^ " = " ^ (ident_to_string e2)
   | Pure p -> Form.string_of_form p
   | Not t -> "~(" ^ (to_string t) ^")"
   | And lst -> "(" ^ (String.concat ") && (" (List.map to_string lst)) ^ ")"
   | Or lst ->  "(" ^ (String.concat ") || (" (List.map to_string lst)) ^ ")"
-  | BoolConst b -> string_of_bool b
   | Emp -> "emp"
   | PtsTo (h, a, b) when h = pts -> (Form.str_of_ident a) ^ " |-> " ^ (Form.str_of_ident b)
   | PtsTo (h, a, b) when h = prev_pts -> (Form.str_of_ident a) ^ " |<- " ^ (Form.str_of_ident b)
@@ -107,12 +105,11 @@ let rec ids f = match f with
 *)
 
 let rec normalize f = match f with
-  | Eq (e1, e2) -> if e1 = e2 then mk_true else Eq (e1, e2)
   | Pure p -> Pure (FormUtil.nnf p)
   | Not t -> 
     begin
       match normalize t with
-      | BoolConst b -> BoolConst (not b)
+      | Pure b -> Pure (FormUtil.nnf (FormUtil.mk_not b))
       | t2 -> Not t2
     end
   | And lst -> 
@@ -122,9 +119,9 @@ let rec normalize f = match f with
         SlSet.empty
         lst
     in
-    let sub_forms = SlSet.remove (BoolConst true) sub_forms in
-      if (SlSet.mem (BoolConst false) sub_forms) then BoolConst false
-      else if (SlSet.cardinal sub_forms = 0) then BoolConst true
+    let sub_forms = SlSet.remove mk_true sub_forms in
+      if (SlSet.mem mk_false sub_forms) then mk_false
+      else if (SlSet.cardinal sub_forms = 0) then mk_true
       else if (SlSet.cardinal sub_forms = 1) then SlSet.choose sub_forms
       else And (SlSet.elements sub_forms)
   | Or lst ->  
@@ -134,16 +131,15 @@ let rec normalize f = match f with
         SlSet.empty
         lst
     in
-    let sub_forms = SlSet.remove (BoolConst false) sub_forms in
-      if (SlSet.mem (BoolConst true) sub_forms) then BoolConst true
-      else if (SlSet.cardinal sub_forms = 0) then BoolConst false
+    let sub_forms = SlSet.remove mk_false sub_forms in
+      if (SlSet.mem mk_true sub_forms) then mk_true
+      else if (SlSet.cardinal sub_forms = 0) then mk_false
       else if (SlSet.cardinal sub_forms = 1) then SlSet.choose sub_forms
       else Or (SlSet.elements sub_forms)
   | SepConj lst -> 
     let lst2 = List.map normalize lst in
     let lst3 = List.filter (fun x -> x <> Emp) lst2 in
       SepConj lst3
-  | BoolConst b -> BoolConst b
   | Emp -> Emp
   | PtsTo (h, a, b) -> PtsTo (h, a, b)
   | List (a, b) -> if a = b then Emp else List (a, b)
@@ -151,12 +147,10 @@ let rec normalize f = match f with
   | DList (a, b, c, d) -> DList (a, b, c, d) (* TODO can we do better ?? *)
 
 let rec map_id fct f = match f with
-  | Eq (e1, e2) -> Eq (fct e1, fct e2)
   | Pure p -> Pure (FormUtil.map_id fct p)
   | Not t ->  Not (map_id fct t)
   | And lst -> And (List.map (map_id fct) lst)
   | Or lst -> Or (List.map (map_id fct) lst)
-  | BoolConst b -> BoolConst b
   | Emp -> Emp
   | PtsTo (h, a, b) -> PtsTo (h, fct a, fct b)
   | List (a, b) -> List (fct a, fct b)
@@ -172,7 +166,7 @@ let subst_id subst f =
 
 let rec has_prev f = match f with
   | Not t -> has_prev t
-  | Eq _ | BoolConst _ | List _ | SList _ | Emp | Pure _ -> false
+  | List _ | SList _ | Emp | Pure _ -> false
   | PtsTo (h, a, b) -> h = prev_pts
   | DList _ -> true
   | SepConj lst | And lst | Or lst -> 
@@ -210,18 +204,9 @@ let to_form set_fct domain f =
 
   let rec process_sep pol d f = 
     match f with
-    | BoolConst b -> 
-        let domain = FormUtil.fresh_ident (fst d) in
-        ([FormUtil.mk_bool b, mk_loc_set domain, IdSet.empty], FormUtil.mk_true)
     | Pure p -> 
         let domain = FormUtil.fresh_ident (fst d) in
-        ([p, mk_loc_set domain, IdSet.empty], FormUtil.mk_true)
-    | Not (Eq (id1, id2)) -> 
-        let domain = FormUtil.fresh_ident (fst d) in
-        ([FormUtil.mk_neq (mk_loc id1) (mk_loc id2), mk_loc_set domain, IdSet.empty], empty domain) (*TODO are id1, id2 always locations ? *)
-    | Eq (id1, id2) -> 
-        let domain = FormUtil.fresh_ident (fst d) in
-        ([FormUtil.mk_eq (mk_loc id1) (mk_loc id2), mk_loc_set domain, IdSet.empty], empty domain) (*TODO are id1, id2 always locations ? *)
+        ([p, mk_loc_set domain, IdSet.empty], empty domain)
     | Emp -> 
         let domain = FormUtil.fresh_ident (fst d) in
         ([FormUtil.mk_true, mk_loc_set domain, IdSet.empty], empty domain)
@@ -235,7 +220,7 @@ let to_form set_fct domain f =
         let domain = FormUtil.fresh_ident (fst d) in
         ( [reach id1 id2, mk_loc_set domain, IdSet.empty],
           Axioms.mk_axiom ("def_of_" ^ Form.str_of_ident domain) 
-	    (FormUtil.mk_iff
+            (FormUtil.mk_iff
                (FormUtil.smk_and [
                 reachWoT (mk_loc id1) Axioms.loc1 (mk_loc id2);
                 FormUtil.mk_neq Axioms.loc1 (mk_loc id2) ] )
@@ -254,7 +239,7 @@ let to_form set_fct domain f =
         in
         let part3 =
           Axioms.mk_axiom ("def_of_" ^ Form.str_of_ident domain) 
-	    (FormUtil.mk_iff
+            (FormUtil.mk_iff
                (FormUtil.smk_and [
                 reachWoT (mk_loc id1) Axioms.loc1 (mk_loc id2);
                 FormUtil.mk_neq Axioms.loc1 (mk_loc id2) ] )
@@ -362,7 +347,7 @@ let to_form set_fct domain f =
       in
       FormUtil.smk_or (List.map process struct_part), heap_part
   in
-    process_bool true (fresh_existentials f)
+    process_bool true (normalize (fresh_existentials f))
 
 let rec get_clauses f = match f with
   | Form.BoolOp (Form.And, lst) ->  List.flatten (List.map get_clauses lst)
@@ -377,7 +362,7 @@ let post_process f =
       print_newline ()
     end
   in
-  FormUtil.nnf f 
+  FormUtil.nnf (FormTyping.typing f)
 
 let to_grass domain f =
   let (pointers, separations) = to_form FormUtil.mk_eq domain f in

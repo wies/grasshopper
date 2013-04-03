@@ -539,7 +539,7 @@ let check_procedure proceduresMap name =
         let upd1 = subst_id_term ident_map upd in
         let ind1 = subst_id_term ident_map ind in
         let id = subst_ident id0 ident_map in
-        let id1, ident_map1, sig_map1 = fresh_ident id0 ident_map sig_map (Fld Loc) in
+        let id1, ident_map1, sig_map1 = fresh_ident id0 ident_map sig_map (Fld Loc) in (*TODO type*)
         let tpe = Some (IdMap.find id1 sig_map1) in
         let f =
           mk_eq
@@ -551,7 +551,7 @@ let check_procedure proceduresMap name =
         let ident_map = DecisionStack.get_subst stack in
         let sig_map = DecisionStack.get_sign stack in
         let t1 = subst_id_term ident_map t in
-        let id1, ident_map1, sig_map1 = fresh_ident id ident_map sig_map Loc in
+        let id1, ident_map1, sig_map1 = fresh_ident id ident_map sig_map Loc in (*TODO type*)
         let f = mk_eq (mk_loc id1) t1 in (*TODO always a loc ?*)
           add_to_stack stack ident_map1 sig_map1 f
       | Dispose id ->
@@ -662,7 +662,7 @@ let check_procedure proceduresMap name =
         DecisionStack.empty
         (smk_and (alloc_axioms ()))
         IdMap.empty
-        (to_map [(alloc_id, Set Loc);(Sl.pts, Fld Loc);(Sl.prev_pts, Fld Loc)])
+        (to_map [(alloc_id, Set Loc);(Sl.pts, Fld Loc);(Sl.prev_pts, Fld Loc)])(*TODO data ?*)
     in
     let final_stack = traverse init_stack stmnt in
     (* check for postcondition (void methods) *)

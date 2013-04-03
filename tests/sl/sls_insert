@@ -1,0 +1,19 @@
+method insert(lst, elt)
+    requires slseg(lst, null) * elt |-> null;
+    ensures slseg(returned, null);
+{
+    if (lst == null || lst.data > elt.data) {
+        elt.next := lst;
+        return elt;
+    } else {
+        curr := lst;
+        while ( curr.next.data <= elt.data && curr.next != null ) 
+            invariant curr != null * curr.data <= elt.data * slseg(lst, curr) * slseg(curr, null);
+        {
+            curr := curr.next;
+        }
+        elt.next := curr.next;
+        curr.next := elt;
+        return lst;
+    }
+}

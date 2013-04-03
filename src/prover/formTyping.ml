@@ -199,7 +199,7 @@ let preprocess f =
           | [] -> ret_t
           | xs -> TFun (args_t, ret_t)
         in
-          ( (sym, new_sym) :: a,
+          ( (new_sym, sym) :: a,
             (new_sym, t) :: b,
             App (new_sym, args, srt_opt) )
       end

@@ -71,6 +71,11 @@ module IdSrtSet = Set.Make(struct
     let compare = compare
   end)
 
+module SrtSet = Set.Make(struct
+    type t = sort
+    let compare = compare
+  end)
+
 module TermSet = Set.Make(struct
     type t = term
     let compare = compare
@@ -181,7 +186,7 @@ let bool_sort_string = "Bool"
 let int_sort_string = "Int"
 
 let rec pr_sort0 ppf srt = match srt with
-  | Loc | Bool -> fprintf ppf "%a" pr_sort srt
+  | Loc | Bool | Int -> fprintf ppf "%a" pr_sort srt
   | _ -> fprintf ppf "@[<1>(%a)@]" pr_sort srt
 
 and pr_sort ppf = function
