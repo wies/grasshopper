@@ -176,7 +176,9 @@ let rec has_prev f = match f with
 
 let reachWoT a b c = FormUtil.mk_reachwo (fpts) a b c
 let reachWo a b c = reachWoT (mk_loc a) (mk_loc b) (mk_loc c)
-let reach a b = reachWo a b b
+let btwnT a b c = FormUtil.mk_btwn (fpts) a b c
+let btwn a b c = btwnT (mk_loc a) (mk_loc b) (mk_loc c)
+let reach a b = if !Config.use_btwn then btwn a b b else reachWo a b b
 let mk_domain d v = FormUtil.mk_elem v (mk_loc_set d)
 
 let one_and_rest lst =
@@ -201,7 +203,15 @@ let to_form set_fct domain f =
   let emptyset = FormUtil.mk_empty (Some (Form.Set Form.Loc)) in
   let empty_t domain = FormUtil.mk_eq emptyset domain in
   let empty domain = empty_t (mk_loc_set domain) in
-
+  let list_set_def id1 id2 domain =
+    FormUtil.mk_iff
+      (FormUtil.smk_and 
+         [if !Config.use_btwn 
+          then btwnT (mk_loc id1) Axioms.loc1 (mk_loc id2)
+          else reachWoT (mk_loc id1) Axioms.loc1 (mk_loc id2);
+          FormUtil.mk_neq Axioms.loc1 (mk_loc id2)])
+      (mk_domain domain Axioms.loc1)
+  in
   let rec process_sep pol d f = 
     match f with
     | Pure p -> 
@@ -219,12 +229,9 @@ let to_form set_fct domain f =
     | List (id1, id2) ->
         let domain = FormUtil.fresh_ident (fst d) in
         ( [reach id1 id2, mk_loc_set domain, IdSet.empty],
-          Axioms.mk_axiom ("def_of_" ^ Form.str_of_ident domain) 
-            (FormUtil.mk_iff
-               (FormUtil.smk_and [
-                reachWoT (mk_loc id1) Axioms.loc1 (mk_loc id2);
-                FormUtil.mk_neq Axioms.loc1 (mk_loc id2) ] )
-               (mk_domain domain Axioms.loc1))         
+          Axioms.mk_axiom 
+            ("def_of_" ^ Form.str_of_ident domain) 
+            (list_set_def id1 id2 domain)    
         )
     | SList (id1, id2) ->
         let domain = FormUtil.fresh_ident (fst d) in
@@ -238,22 +245,19 @@ let to_form set_fct domain f =
               (FormUtil.mk_leq (get_data Axioms.loc1) (get_data Axioms.loc2)))
         in
         let part3 =
-          Axioms.mk_axiom ("def_of_" ^ Form.str_of_ident domain) 
-            (FormUtil.mk_iff
-               (FormUtil.smk_and [
-                reachWoT (mk_loc id1) Axioms.loc1 (mk_loc id2);
-                FormUtil.mk_neq Axioms.loc1 (mk_loc id2) ] )
-               (mk_domain domain Axioms.loc1))         
+          Axioms.mk_axiom 
+            ("def_of_" ^ Form.str_of_ident domain) 
+            (list_set_def id1 id2 domain)
         in
           ([FormUtil.mk_and [part1; part2], mk_loc_set domain, IdSet.singleton domain], part3)
     | DList (x1, x2, y1, y2) ->
         let domain = FormUtil.fresh_ident (fst d) in
         let part1 = reach x1 y1 in
         let part2 =
-          Axioms.mk_axiom ("def_of_" ^ Form.str_of_ident domain) 
-            (FormUtil.mk_iff (mk_domain domain Axioms.loc1)
-               (FormUtil.mk_and [ reachWoT (mk_loc x1) Axioms.loc1 (mk_loc y1);
-                                  FormUtil.mk_neq Axioms.loc1 (mk_loc y1)])) in
+          Axioms.mk_axiom 
+            ("def_of_" ^ Form.str_of_ident domain) 
+            (list_set_def x1 y1 domain)
+        in
         let part3 =
           Axioms.mk_axiom ("dll_" ^ Form.str_of_ident domain)
             (FormUtil.mk_implies (FormUtil.mk_and [ mk_domain domain Axioms.loc1;

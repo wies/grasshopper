@@ -108,8 +108,13 @@ let mk_ep fld set t = mk_app ~srt:Loc EntPnt [fld; set; t]
 
 let mk_reachwo fld t1 t2 t3 =
   mk_atom ReachWO [fld; t1; t2; t3]
+
+let mk_btwn fld t1 t2 t3 =
+  mk_atom Btwn [fld; t1; t2; t3]
   
-let mk_reach fld t1 t2 = mk_reachwo fld t1 t2 t2
+let mk_reach fld t1 t2 = 
+  if !Config.use_btwn then mk_btwn fld t1 t2 t2
+  else mk_reachwo fld t1 t2 t2
 
 let mk_empty srt = mk_app ?srt:srt Empty []
 

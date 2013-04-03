@@ -206,22 +206,29 @@ let reduce_frame fs =
 
     let replacement_reach =
       let ep v = mk_ep f x v in
-      let reach1 x y z = mk_reachwo f  x y z in
-      let reach2 x y z = mk_reachwo f' x y z in
+      let reachwo_f = Axioms.reachwo_Fld f in
+      let reach_f x y z = 
+        if !Config.use_btwn 
+        then mk_btwn f x z y
+        else mk_reachwo f x y z 
+      in
+      let reach_f' x y z = 
+        if !Config.use_btwn 
+        then mk_btwn f' x z y
+        else mk_reachwo f' x y z 
+      in
       let open Axioms in
-      (mk_forall [l1;l2;l3]
+      [mk_axiom "reach_frame1"
          (mk_implies
-            (reach1 loc1 loc2 (ep loc1))
+            (reachwo_f loc1 loc2 (ep loc1))
             (mk_iff 
-               (reach1 loc1 loc2 loc3)
-               (reach2 loc1 loc2 loc3))
-         )
-      ) :: (mk_forall [l1;l2;l3]
-              (mk_implies
-                 (mk_and [mk_not (smk_elem loc1 x); mk_eq loc1 (ep loc1)])
-                 (mk_iff (reach1 loc1 loc2 loc3) (reach2 loc1 loc2 loc3))
-              )
-           ) :: []
+               (reach_f loc1 loc2 loc3)
+               (reach_f' loc1 loc2 loc3)));
+       mk_axiom "reach_frame2"
+         (mk_implies
+            (mk_and [mk_not (smk_elem loc1 x); mk_eq loc1 (ep loc1)])
+            (mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)))
+     ]
     in
     
     let included = mk_subseteq x a in
@@ -235,7 +242,8 @@ let reduce_frame fs =
     mk_and axioms
   in
   let rec process f = match f with
-    | Atom (App (Frame, [x;x';a;a';f;f'], _)) -> expand_frame x x' a a' f f'
+    | Atom (App (Frame, [x;x';a;a';f;f'], _)) -> 
+        expand_frame x x' a a' f f'
     | Atom t -> Atom t
     | BoolOp (op, fs) -> BoolOp (op, List.map process fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, process f, a)
@@ -407,16 +415,17 @@ let reduce_reach fs gts =
   (* instantiate the variables of sort Fld in all reachability axioms *)
   let basic_reach_flds = 
     fold_terms (fun flds -> function
-      | App (ReachWO, fld :: _, _) -> TermSet.union (partition_of fld) flds
+      | App (ReachWO, fld :: _, _) 
+      | App (Btwn, fld :: _, _) -> TermSet.union (partition_of fld) flds
       | _ -> flds)
       TermSet.empty (smk_and fs1)
   in
-  let reachwo_write_ax = 
+  let reach_write_ax = 
     TermSet.fold (fun t write_ax ->
       match t with
       | App (Write, [fld; loc1; loc2], _) ->
           if TermSet.mem fld basic_reach_flds 
-          then open_axioms isFunVar (Axioms.reachwo_write_axioms fld loc1 loc2) @ write_ax
+          then open_axioms isFunVar (Axioms.reach_write_axioms fld loc1 loc2) @ write_ax
           else write_ax
       | _ -> write_ax) write_terms []
   in
@@ -428,11 +437,11 @@ let reduce_reach fs gts =
 	    | _ -> true) (CongruenceClosure.class_of t classes))
       basic_reach_flds
   in
-  let reach_ax = open_axioms isFld (Axioms.reachwo_axioms ()) in
+  let reach_ax = open_axioms isFld (Axioms.reach_axioms ()) in
   let reach_ax1 = instantiate_with_terms false reach_ax (CongruenceClosure.restrict_classes classes2 non_updated_flds) in
   (* generate local instances of all axioms in which variables occur below function symbols *)
   let reach_ax2 = instantiate_with_terms true (open_axioms isFunVar reach_ax1) classes2 in
-  rev_concat [fs1; reach_ax2; read_write_ax1; reachwo_write_ax], gts1
+  rev_concat [fs1; reach_ax2; read_write_ax1; reach_write_ax], gts1
 
 let reduce_remaining fs gts =
   (* generate local instances of all remaining axioms in which variables occur below function symbols *)

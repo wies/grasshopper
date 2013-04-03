@@ -4,6 +4,7 @@ let with_alloc_axioms = ref true
 let with_null_axioms = ref true
 let keep_sets = ref true
 let encode_fields_as_arrays = ref false
+let use_btwn = ref true
 
 (* tell whether we are instantiating the axioms or relying on the prover. *)
 let instantiate = ref true
@@ -22,6 +23,7 @@ let cmd_options =
    ("-m", Arg.Set_string model_file, "Produce model");
    ("-elimsets", Arg.Clear keep_sets, "Eliminate sets in FOL reduction");
    ("-usearrays", Arg.Set encode_fields_as_arrays, "Use arrays to encode fields");
+   ("-usereachwo", Arg.Clear use_btwn, "Use ReachWo predicate instead of Btwn for reachability");
    ("-noinst", Arg.Clear instantiate, "Let the prover deal with the quantifiers.");
    ("-dumponly", Arg.Set dump_only, "Just dump the VCs but don't solve them.");
    ("-smtsolver", Arg.Set_string smtsolver, "Choose SMT solver (Z3, CVC4, MathSAT)")

@@ -150,6 +150,7 @@ let symbol_types =
      (Lt, TFun ([TInt; TInt], TBool));
      (Gt, TFun ([TInt; TInt], TBool));
      (ReachWO, TFun ([TFld TLoc; TLoc; TLoc; TLoc], TBool));
+     (Btwn, TFun ([TFld TLoc; TLoc; TLoc; TLoc], TBool));
      (Frame, TFun ([TSet TLoc; TSet TLoc; TSet TLoc; TSet TLoc; TFld TLoc; TFld TLoc], TBool));
      (Elem, TFun ([param1; TSet param1], TBool));
      (SubsetEq, TFun ([TSet param1; TSet param1], TBool))

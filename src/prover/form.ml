@@ -22,7 +22,7 @@ type symbol =
   (* interpreted predicate symbols *)
   | Eq
   | LtEq | GtEq | Lt | Gt
-  | ReachWO
+  | ReachWO | Btwn
   | Frame
   | Elem | SubsetEq 
   (* free constants, functions, and predicates *)
@@ -34,7 +34,7 @@ let symbols =
    UMinus; Plus; Minus; Mult;
    Empty; SetEnum; Union; Inter; Diff;
    Eq; LtEq; GtEq; Lt; Gt;
-   ReachWO; Frame; Elem; SubsetEq]
+   ReachWO; Btwn; Frame; Elem; SubsetEq]
 
 (* Terms and formulas *)
 
@@ -143,6 +143,7 @@ let str_of_symbol = function
   | Lt -> "<"
   | Gt -> ">"
   | ReachWO -> "ReachWO"
+  | Btwn -> "Btwn"
   | Elem -> "elem"
   | SubsetEq -> "subseteq"
   | Frame -> "frame"
