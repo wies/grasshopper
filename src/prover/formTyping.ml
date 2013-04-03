@@ -19,8 +19,24 @@ let rec my_sort_to_string t = match t with
   | TInt -> "Int"
   | TSet s -> "Set("^(my_sort_to_string s)^")"
   | TFld s -> "Fld("^(my_sort_to_string s)^")"
+  | TVar i -> "V"^(string_of_int i)
   | TStar s -> (my_sort_to_string s)^"*"
   | TFun (args, ret) -> String.concat " -> " (List.map my_sort_to_string (args @ [ret]))
+
+let rec to_my_sort t = match t with
+  | Bool  -> TBool
+  | Loc   -> TLoc
+  | Int   -> TInt
+  | Set s -> TSet (to_my_sort s)
+  | Fld s -> TFld (to_my_sort s)
+
+let rec to_sort s = match s with
+  | TBool -> Bool
+  | TLoc -> Loc
+  | TInt -> Int
+  | TSet s -> Set (to_sort s)
+  | TFld s -> Fld (to_sort s)
+  | TStar _ | TFun _ | TVar _ -> failwith ("cannot convert '" ^(my_sort_to_string s)^"' to basic sort.")
 
 module TpeMap = Map.Make(struct
     type t = my_sort
@@ -32,9 +48,10 @@ module TpeSet = Set.Make(struct
     let compare = compare
   end)
 
+(* bottom-up *)
 let subst map tpe =
   let sub t =
-    try IdMap.find t map with Not_found -> t
+    try TpeMap.find t map with Not_found -> t
   in
   let rec process t = match t with
     | TSet t -> sub (TSet (process t))
@@ -45,9 +62,10 @@ let subst map tpe =
   in
     process tpe
 
+(* top-down *)
 let subst_td map tpe =
   let sub t =
-    try IdMap.find t map with Not_found -> t
+    try TpeMap.find t map with Not_found -> t
   in
   let rec process t = match sub t with
     | TSet t -> TSet (process t)
@@ -58,7 +76,7 @@ let subst_td map tpe =
   in
     process tpe
 
-let args_type tpe args = match t with
+let args_type tpe args = match tpe with
   | TFun (ts, _) ->
     let rec process t a = match (t, a) with
       | ([TStar tpe], y::ys) -> tpe :: (process t ys)
@@ -66,6 +84,7 @@ let args_type tpe args = match t with
       | (x::xs, y::ys) -> x :: (process xs ys)
       | ([], []) | ([TStar _], []) -> []
       | ([], _) -> failwith "too many arguments"
+      | (_, []) -> failwith "not enough arguments"
     in
       process ts args
   | other ->
@@ -98,7 +117,7 @@ let fresh_type t =
   let vars = type_var t in
   let map =
     TpeSet.fold
-      (fun v acc -> TpeMap.add v (fresh_type ()) acc)
+      (fun v acc -> TpeMap.add v (fresh_param ()) acc)
       vars
       TpeMap.empty
   in
@@ -130,93 +149,154 @@ let symbol_types =
      (GtEq, TFun ([TInt; TInt], TBool));
      (Lt, TFun ([TInt; TInt], TBool));
      (Gt, TFun ([TInt; TInt], TBool));
-     (ReachWO, TFun ([TFun TLoc; TLoc; TLoc; TLoc], TBool));
+     (ReachWO, TFun ([TFld TLoc; TLoc; TLoc; TLoc], TBool));
      (Frame, TFun ([TSet TLoc; TSet TLoc; TSet TLoc; TSet TLoc; TFld TLoc; TFld TLoc], TBool));
      (Elem, TFun ([param1; TSet param1], TBool));
-     (SubsetEq, ([TSet param1; TSet param1], TBool))
+     (SubsetEq, TFun ([TSet param1; TSet param1], TBool))
     ]
 
+(*********************************************************)
 
-(* typing equations *)
-let equations f =
-  let get_type env sym args =
-    try (env, IdMap.find sym env)
-    with Not_found ->
+(* Due to polymorphism we need to uniquely identify symbols.
+ * Thus we will replace everything by free symbols and keep track of what is what.
+ *)
+let preprocess f =
+  let symbolify_list fct lst =
+    let rec process lst = match lst with
+      | x :: xs ->
+        let (a1,b1,c1) = fct x in
+        let (a2,b2,c2) = process xs in
+          (a1 @ a2, b1 @ b2, c1 :: c2)
+      | [] -> ([], [], [])
+    in
+      process lst
+  in
+  let rec symbolify f = match f with
+    | Var _ as v -> ([], [], v)
+    | App (sym, ts, srt_opt) ->
       begin
-        let args_t = List.map (fun _ -> fresh_param ()) args in
-        let ret_t = fresh_param () in
-        let t = if args <> [] then TFun (args_t, ret_t) else ret_t in
-          (IdMap.add sym t env, t)
+        let (a, b, args) = symbolify_list symbolify ts in
+        let new_sym, tpe = match sym with 
+          | BoolConst _ -> (sym, TBool)
+          | IntConst _ -> (sym, TInt)
+          | FreeSym _ -> (sym, fresh_param ())
+          | sym ->
+            let tpe = fresh_type (SymbolMap.find sym symbol_types) in
+              if not (TpeSet.is_empty (type_var tpe)) then
+                begin
+                  let id = FormUtil.fresh_ident "typing" in
+                    (FreeSym id, tpe)
+                end
+              else
+                (sym, tpe)
+        in
+        let args_t = args_type tpe args in
+        let ret_t = match srt_opt with
+          | Some s -> to_my_sort s
+          | None -> return_type tpe
+        in
+        let t = match args_t with
+          | [] -> ret_t
+          | xs -> TFun (args_t, ret_t)
+        in
+          ( (sym, new_sym) :: a,
+            (new_sym, t) :: b,
+            App (new_sym, args, srt_opt) )
       end
   in
-  let rec deal_with_the_args env tpe args ret_opt =
+  let rec symbolify2 f = match f with
+    | Atom t -> 
+      let (a, b, c) = symbolify t in
+        (a, b, Atom c)
+    | BoolOp (op, lst) ->
+      let (a, b, lst2) = symbolify_list symbolify2 lst in
+        (a, b, BoolOp (op, lst2))
+    | Binder (bnd, vars, form, annot) ->
+      let (a, b, c) = symbolify2 form in
+        (a, b, Binder (bnd, vars, c, annot))
+  in
+  let (defs, defs_t, f) = symbolify2 f in
+  let map_d = List.fold_left (fun acc (k,v) -> SymbolMap.add k v acc) SymbolMap.empty defs in
+  let map_t = List.fold_left (fun acc (k,v) -> SymbolMap.add k v acc) SymbolMap.empty defs_t in
+    (map_d, map_t, f)
+
+(* typing equations *)
+let equations env f =
+  let rec deal_with_the_args tpe args ret_opt =
     let init_eqs = match ret_opt with
-      | Some t -> [(return_type tpe, t)]
+      | Some t -> [(return_type tpe, to_my_sort t)]
       | None -> []
     in
     let ats = args_type tpe args in
-      List.fold_left2
-        (fun (env, eqs) t arg ->
-          let (tpe, env, eq) = process_term env arg in
-            (env, (t, tpe) :: eq @ eqs)
+    let args_eqs =
+      List.map2
+        (fun t arg ->
+          let (tpe, eq) = process_term arg in
+            (t, tpe) :: eq
         )
-        (env, init_eqs) 
         ats
         args
-  and process_term env t = match t with
-    | Var (id, Some (tpe)) -> (tpe, env, [])
+    in
+      init_eqs @ (List.flatten args_eqs)
+  and process_term t = match t with
+    | Var (id, Some (tpe)) -> (to_my_sort tpe, [])
     | Var (id, None) -> failwith "the Var should be typed (for the moment)."
-    | App (BoolConst b, [], srt_opt) -> (TBool, env, [])
-    | App (IntConst i, [], srt_opt) -> (TInt, env, [])
-    | App (FreeSym id, ts, srt_opt) ->
-      let (env, tpe) = get_type env sym ts in
-      let (env, eqs) = deal_with_the_args env tpe ts srt_opt in
-        (return_type tpe, env, eqs)
     | App (sym, ts, srt_opt) ->
-      let tpe = SymbolMap.find sym symbol_types in
-      let (env, eqs) = deal_with_the_args env tpe ts srt_opt in
-        (return_type tpe, env, eqs)
+      let tpe = SymbolMap.find sym env in
+      let eqs = deal_with_the_args tpe ts srt_opt in
+        (return_type tpe, eqs)
   in
-  let rec process_form env f = match f with
-    | Atom t ->
-      let (tpe, env, eqs) = process_term env t in
-        (env, (tpe, TBool) :: eqs)
-    | BoolOp (_, lst) -> 
-      List.fold_left
-        (fun (env, acc) f ->
-          let (env, eqs) = process_form env f in
-            (env, eqs @ acc))
-        (env, [])
-        lst
-    | Binder (_, vars, form, _) ->
-       process_form env form
+  let rec process_form f = match f with
+    | Atom t -> 
+      let (t, eqs) = process_term t in
+        (t, TBool) :: eqs
+    | BoolOp (_, lst) -> Util.flat_map process_form lst
+    | Binder (_, _, form, _) -> process_form form
   in
-  let (env, eqs) process_form IdMap.empty f in
-    (env, eqs)
+  let eqs = process_form f in
+    eqs
 
 (* solve the equations using unification *)
 let unify eqs =
   let update_subst subst t1 t2 =
-    IdMap.add t1 t2 subst
+    TpeMap.add t1 t2 subst
   in
-  let process map (t1,t2) = match (subst_td map t1, subst_td map t2) with
+  let rec process map t1 t2 = match (subst_td map t1, subst_td map t2) with
     | (x, y) when x = y -> map 
-    | (TVar _ as x, y) | (y, TVar _ as x) ->
+    | ((TVar _ as x), y) | (y, (TVar _ as x)) ->
       assert (not (TpeSet.mem x (type_var y)));
       update_subst map x y
-    | (TSet t3, TSet t4) -> process map (t3, t4)
-    | (TFld t3, TFld t4) -> process map (t3, t4)
-    | (TStar t3, TStar t4) | (TStar t3, t4) | (t4, TStar t3) -> process map (t3, t4)
+    | (TSet t3, TSet t4) -> process map t3 t4
+    | (TFld t3, TFld t4) -> process map t3 t4
+    | (TStar t3, TStar t4) | (TStar t3, t4) | (t4, TStar t3) -> process map t3 t4
     | (TFun (a1, r1), TFun (a2, r2)) ->
-    | (t1, t2) -> failwith ("ill-typed: " ^ (my_sort_to_string t1) ^ " = " ^ (my_sort_to_string t2) )
+      List.fold_left2 process (process map r1 r2) a1 a2
+    | (t1, t2) -> failwith ("ill-typed: " ^ (my_sort_to_string t1) ^ " = " ^ (my_sort_to_string t2))
   in
-  let mgu = List.fold_left process TpeMap.empty eqs in
+  let mgu = List.fold_left (fun acc (t1, t2) -> process acc t1 t2) TpeMap.empty eqs in
     mgu
 
-let fill_type env mgu f =
-  failwith "TODO"
+let fill_type defs env mgu f =
+  let env = SymbolMap.map (subst_td mgu) env in
+  let compare t srt_opt = match srt_opt with
+    | Some t2 -> assert (t = t2); t
+    | None -> t
+  in
+  let rec fill_term t = match t with
+    | Var _ as v -> v
+    | App (sym, ts, srt_opt) ->
+      begin
+        let ts = List.map fill_term ts in
+        let orignal_sym = SymbolMap.find sym defs in
+        let srt = SymbolMap.find sym env in
+        let ret = to_sort (return_type srt) in
+          App (orignal_sym, ts, Some (compare ret srt_opt))
+      end
+  in
+    FormUtil.map_terms fill_term f
 
 let typing f =
-  let (env, eqs) = equations f in
+  let (defs, env, f) = preprocess f in
+  let eqs = equations env f in
   let mgu = unify eqs in
-    fill_type env mgu f
+    fill_type defs env mgu f
