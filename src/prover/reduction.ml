@@ -33,9 +33,9 @@ let propagate_exists f =
     match xs, ys with
     | (x, srt1) :: xs1, (y, srt2) :: ys1 ->
         if srt1 = srt2
-        then merge (IdMap.add x (mk_var ~srt:srt1 y) sm) zs xs1 (ys2 @ ys) []
-        else merge sm ((x, srt1) :: zs) xs ys1 ((y, srt2) :: ys2)
-    | [], _ -> sm, ys @ zs
+        then merge (IdMap.add x (mk_var ~srt:srt1 y) sm) ((y, srt2) :: zs) xs1 (ys2 @ ys1) []
+        else merge sm zs xs ys1 ((y, srt2) :: ys2)
+    | [], _ -> sm, ys @ ys2 @ zs
     | _, [] -> 
         if ys2 = [] then sm, xs @ zs
         else merge sm (List.hd xs :: zs) (List.tl xs) ys2 []
@@ -46,6 +46,13 @@ let propagate_exists f =
           List.fold_right (fun f (fs2, vs2) ->
             let f1, vs1 = prop f in
             let sm, vs = merge IdMap.empty [] vs1 vs2 [] in
+            (*print_forms stdout [f1];
+            List.iter (fun id -> Printf.printf "%s, " (str_of_ident (fst id))) vs1;
+            print_newline ();
+            List.iter (fun id -> Printf.printf "%s, " (str_of_ident (fst id))) vs2;
+            print_newline ();
+            IdMap.iter (fun id t -> Printf.printf "%s -> %s, " (str_of_ident id) (string_of_term t)) sm;
+            print_newline ();*)
             subst sm f1 :: fs2, vs) 
             fs ([], [])
         in BoolOp (Or, fs1), vs
@@ -99,6 +106,10 @@ let reduce_exists =
   fun f -> 
     let f1 = elim_neq f in
     let f2 = propagate_exists f1 in
+    (*let _ = print_endline "Befor propagation: " in
+    let _ = print_forms stdout [f1] in
+    let _ = print_endline "After propagation: " in
+    let _ = print_forms stdout [f2] in*)
     skolemize f2
 
 let factorize_axioms fs =
