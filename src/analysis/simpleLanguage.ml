@@ -259,6 +259,8 @@ let unify_subst sig1 sig2 subst1 subst2 =
  * creates a fresh id and add some equality constraints.
  *)
 let unify stack branch1 branch2 =
+  Debug.msg ("unify, branch1\n" ^ (DecisionStack.subst_to_string (DecisionStack.get_subst branch1)) ^ "\n");
+  Debug.msg ("unify, branch2\n" ^ (DecisionStack.subst_to_string (DecisionStack.get_subst branch2)) ^ "\n");
   (* assumes the axioms have already been guarded. *)
   let ax1 = DecisionStack.axioms branch1 in
   let ax2 = DecisionStack.axioms branch2 in
@@ -281,13 +283,9 @@ let unify stack branch1 branch2 =
   (* signatures *)
   let sig1 = DecisionStack.get_sign branch1 in
   let sig2 = DecisionStack.get_sign branch2 in
-  let ((*as1,*) cs1, (*as2,*) cs2, s3, sig3) = unify_subst sig1 sig2 s1 s2 in
+  let (cs1, cs2, s3, sig3) = unify_subst sig1 sig2 s1 s2 in
   (* put things together *)
-  let all_axioms =
-    (*(List.map (fun a -> mk_implies c1 a) as1) @
-    (List.map (fun a -> mk_implies c2 a) as2) @*)
-    ax1 @ ax2
-  in
+  let all_axioms = ax1 @ ax2 in
   let stack_with_axioms = List.fold_left DecisionStack.axiom stack all_axioms in
   let b1 = smk_and (c1 :: cs1 @ stp1) in
   let b2 = smk_and (c2 :: cs2 @ stp2) in
@@ -650,7 +648,9 @@ let check_procedure proceduresMap name =
           let s1 = DecisionStack.push stack cond in
           let s2 = traverse s1 stmnt in
           let (branch, _) = DecisionStack.pop s2 in
-            branch
+            if DecisionStack.steps branch = [] (* if empty replace by assume true so we have the subst and signature *)
+            then add_to_stack branch subst (DecisionStack.get_sign stack) mk_true
+            else branch
         in
         let sT = mk_branch c caseTrue in
         let sF = mk_branch (mk_not c) caseFalse in
