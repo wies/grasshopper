@@ -4,7 +4,7 @@ method remove(lst, value)
 {
     prv := null;
     curr := lst;
-    while ( curr != null && curr.data < value) 
+    while (curr != null && curr.data < value) 
         invariant prv == null * curr == lst * slseg(curr, null)
                || slseg(lst, prv) * prv |-> curr * slseg(curr, null) * (curr == null || prv.data <= curr.data);
     {
