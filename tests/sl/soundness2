@@ -1,0 +1,12 @@
+method soudness_check2(x)
+    requires lseg(x, null);
+    ensures lseg(x, null);
+{
+    curr := x;
+    while (curr != null) 
+       invariant lseg(x, curr) * lseg(curr, null);
+    {
+       assert !true;
+       curr := curr.next;
+    }
+}
