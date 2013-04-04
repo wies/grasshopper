@@ -178,7 +178,8 @@ let reachWoT a b c = FormUtil.mk_reachwo (fpts) a b c
 let reachWo a b c = reachWoT (mk_loc a) (mk_loc b) (mk_loc c)
 let btwnT a b c = FormUtil.mk_btwn (fpts) a b c
 let btwn a b c = btwnT (mk_loc a) (mk_loc b) (mk_loc c)
-let reach a b = if !Config.use_btwn then btwn a b b else reachWo a b b
+let reachT a b = if !Config.use_btwn then btwnT a b b else reachWoT a b b
+let reach a b = reachT (mk_loc a) (mk_loc b) 
 let mk_domain d v = FormUtil.mk_elem v (mk_loc_set d)
 
 let one_and_rest lst =
@@ -241,7 +242,7 @@ let to_form set_fct domain f =
             (FormUtil.mk_implies
               (FormUtil.mk_and [mk_domain domain Axioms.loc1;
                                 mk_domain domain Axioms.loc2;
-                                reachWoT Axioms.loc1 Axioms.loc2 Axioms.loc2])
+                                reachT Axioms.loc1 Axioms.loc2])
               (FormUtil.mk_leq (get_data Axioms.loc1) (get_data Axioms.loc2)))
         in
         let part3 =
