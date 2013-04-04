@@ -105,7 +105,7 @@ type session = { name: string;
 		 mutable assert_count: int;
 		 mutable sat_checked: bool;
 		 stack_height: int;
-                 signatures: (arity list SymbolMap.t) option 
+                 signature: (arity list SymbolMap.t) option 
 	       } 
 
 exception SmtLib_error of session * string
@@ -160,7 +160,7 @@ let start_with_solver =
 		  assert_count = 0;
                   sat_checked = false;
 		  stack_height = 0;
-                  signatures = None }
+                  signature = None }
   in
   writeln session "(set-option :print-success false)";
   if produce_models then begin
@@ -205,57 +205,43 @@ let push session =
 
 let is_interpreted sym = match sym with
   | Read | Write -> !Config.encode_fields_as_arrays
-  | Eq | Gt | Lt | GtEq | LtEq -> true
+  | Eq | Gt | Lt | GtEq | LtEq 
+  | Plus | Minus | Mult | UMinus -> true
   | _ -> false
 
-let declare session sign =
-  let write_decl sym (arg_sorts, res_sort) = 
-    if not (is_interpreted sym) then
-      begin
-	let arg_sorts_str = String.concat " " (List.map (fun srt -> string_of_sort srt) arg_sorts) in
-	writeln session ("(declare-fun " ^ str_of_symbol sym ^ " (" ^ arg_sorts_str ^ ") " ^ string_of_sort res_sort ^ ")")
-      end
+let string_of_symbol sym (arg_sorts, res_sort) =
+  let overld_sorts = List.fold_right 
+      (fun srt acc ->
+        match srt with
+        | Fld srt1 -> string_of_sort srt1 :: acc
+        | _ -> acc) (arg_sorts @ [res_sort]) []
   in
-  SymbolMap.iter write_decl sign;
-  writeln session ""
+  String.concat "_" (str_of_symbol sym :: overld_sorts)
 
-(* TODO overloaded version *)
-let declare_overloaded session sign =
-  let declare_simple sym (arg_sorts, res_sort) =
+let declare session sign =
+  let declare sym (arg_sorts, res_sort) =
     let arg_sorts_str = String.concat " " (List.map (fun srt -> string_of_sort srt) arg_sorts) in
-    writeln session ("(declare-fun " ^ str_of_symbol sym ^ " (" ^ arg_sorts_str ^ ") " ^ string_of_sort res_sort ^ ")")
+    let sym_str = string_of_symbol sym (arg_sorts, res_sort) in
+    writeln session ("(declare-fun " ^ sym_str ^ " (" ^ arg_sorts_str ^ ") " ^ string_of_sort res_sort ^ ")")
   in
-  let declare_overld sym i (arg_sorts, res_sort) =
-    let arg_sorts_str = String.concat " " (List.map (fun srt -> string_of_sort srt) arg_sorts) in
-    writeln session ("(declare-fun " ^ str_of_symbol sym ^ "_t" ^ (string_of_int i) ^" (" ^ arg_sorts_str ^ ") " ^ string_of_sort res_sort ^ ")")
-  in
-  let write_decl sym choices = 
+  let write_decl sym overloaded_variants = 
     if not (is_interpreted sym) then
       begin
-        match choices with
-        | [] -> failwith "symbol without signature"
-        | x :: [] -> declare_simple sym x
-        | xs -> ignore (List.fold_left (fun i x -> declare_overld sym i x; i+1) 0 xs)
+        match overloaded_variants with
+        | [] -> failwith ("missing sort for symbol " ^ str_of_symbol sym)
+        | _ -> List.iter (declare sym) overloaded_variants
       end
   in
   SymbolMap.iter write_decl sign;
   writeln session "";
-  { session with signatures = Some sign }
+  { session with signature = Some sign }
 
-(* TODO overloaded *)
-let overload signs f =
+
+let disambiguate_overloaded_symbols signs f =
   let osym sym sign =
-    if is_interpreted sym then
-      sym
-    else
-      let alternatives = SymbolMap.find sym signs in
-        match alternatives with
-        | [] -> failwith "symbol without signature"
-        | x :: [] -> sym
-        | xs ->
-          let idx = Util.find_index sign xs in
-          let str = (str_of_symbol sym) ^ "_t" ^ (string_of_int idx) in
-            FreeSym (mk_ident str)
+    if is_interpreted sym 
+    then sym
+    else FreeSym (mk_ident (string_of_symbol sym sign))
   in
   let rec over t = match t with
     | Var _ as v -> v
@@ -264,7 +250,7 @@ let overload signs f =
       let args_srt = List.map sort_of ts in
         App (osym sym (List.map Util.unopt args_srt, Util.unopt srt), ts, srt)
   in
-    map_terms over f
+  map_terms over f
 
 let assert_form session f =
   session.assert_count <- session.assert_count + 1;
@@ -274,7 +260,11 @@ let assert_form session f =
        print_endline ")"; *)
   write session "(assert ";
   let cf = mk_comment ("_" ^ string_of_int session.assert_count) f in
-  let cf = if session.signatures = None then cf else overload (Util.unopt session.signatures) cf in
+  let cf = 
+    match session.signature with
+    | None -> failwith "tried to assert formula before declaring symbols"
+    | Some sign -> disambiguate_overloaded_symbols sign cf 
+  in
   writefn session (fun chan -> 
     Format.fprintf (Format.formatter_of_out_channel chan) "@[<8>%a@]@?" pr_form cf);
   writeln session ")\n"

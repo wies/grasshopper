@@ -39,7 +39,7 @@ let start_session name f =
     let signature = sign (mk_and f_inst) in
     SmtLib.declare session signature;
     *)
-    let session = SmtLib.declare_overloaded session signature in
+    let session = SmtLib.declare session signature in
     Debug.msg "  signature done\n";
 
     SmtLib.assert_forms session f_inst;
