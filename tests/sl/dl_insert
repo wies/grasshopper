@@ -18,6 +18,11 @@ method dl_insert(lst, elt)
         curr.back := elt;
         if (prv != null) {
           prv.next := elt;
+        } else {
+          a := elt;
+        }
+        if (b == prv) {
+          b := elt;
         }
         elt.back := prv;
         return a;

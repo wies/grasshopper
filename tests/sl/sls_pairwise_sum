@@ -10,12 +10,8 @@ method pairwise_sum(x, y)
         invariant slseg(x, curr_x) * slseg(curr_x, null);
         invariant slseg(y, curr_y) * slseg(curr_y, null);
         invariant slseg(z, last_z) * (last_z == null * z == null || last_z |-> null);
+        invariant last_z == null || curr_x == null || curr_y == null || last_z.data <= curr_x.data + curr_y.data;
     {
-        //if (last_z != null) {
-        //   assert slseg(x, curr_x) * slseg(curr_x, null) * slseg(y, curr_y) * slseg(curr_y, null) *
-        //          slseg(z, last_z) * last_z |-> null
-        //        * (last_z.data <= curr_x.data + curr_y.data);
-        //}
         tmp := last_z;
         new last_z;
         last_z.next := null;
