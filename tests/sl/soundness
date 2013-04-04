@@ -1,0 +1,8 @@
+method soudness_check0(x)
+    requires lseg(x, null);
+    ensures lseg(x,null);
+{
+    assert false;
+}
+
+
