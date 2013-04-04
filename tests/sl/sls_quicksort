@@ -5,7 +5,7 @@ method predecessor(start, end)
 {
     curr := start;
     while (curr.next != end)
-        invariant lseg(start, curr) * lseg(curr, end);
+        invariant lseg(start, curr) * lseg(curr, end) * curr != end;
     {
         curr := curr.next;
     }
@@ -14,10 +14,11 @@ method predecessor(start, end)
 
 method split(lst, pivot)
     requires lseg(lst, pivot) * pivot |-> x * lst != pivot;
-    ensures llseg(lst, pivot, pivot) * ulseg(pivot, x, pivot);
+    ensures llseg(returned, pivot, pivot) * ulseg(pivot, x, pivot);
 {
+    last := predecessor(lst, pivot);
     start := lst;
-    end := predecessor(lst, pivot);
+    end := last;
     while (start != end)
         invariant llseg(lst, start, pivot) * lseg(start, end) * ulseg(end, pivot, pivot);
     {
@@ -31,7 +32,15 @@ method split(lst, pivot)
             end.data := tmp;
         }
     }
-    ...
+    if (start != last) {
+       last.next := pivot.next;
+       pivot.next := start;
+    } else {}
+    if (start == lst) {
+       return pivot;
+    } else {
+       return start;
+    }
 }
 
 method quicksort(lst)
