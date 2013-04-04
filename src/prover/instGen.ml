@@ -123,7 +123,7 @@ let generate_instances useLocalInst axioms terms rep_map =
 let instantiate_with_terms local axioms classes =
     if !Config.instantiate then
       let _ = 
-        if !Debug.verbose then
+        if false && !Debug.verbose then
           ignore
             (List.fold_left (fun num cl ->
               print_string ("Class " ^ string_of_int num ^ ": ");

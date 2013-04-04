@@ -19,7 +19,7 @@ method dl_insert(lst, elt)
         if (prv != null) {
           prv.next := elt;
         } else {
-          a := elt;
+          // update a := elt missing
         }
         elt.back := prv;
         return a;
