@@ -1,0 +1,48 @@
+
+method predecessor(start, end)
+    requires lseg(start, end) * start != end;
+    ensures lseg(start, returned) * returned |-> end;
+{
+    curr := start;
+    while (curr.next != end)
+        invariant lseg(start, curr) * lseg(curr, end);
+    {
+        curr := curr.next;
+    }
+    return curr;
+}
+
+method split(lst, pivot)
+    requires lseg(lst, pivot) * pivot |-> x * lst != pivot;
+    ensures llseg(lst, pivot, pivot) * ulseg(pivot, x, pivot);
+{
+    start := lst;
+    end := predecessor(lst, pivot);
+    while (start != end)
+        invariant llseg(lst, start, pivot) * lseg(start, end) * ulseg(end, pivot, pivot);
+    {
+        if (start.data <= pivot.data) {
+            start := start.next;
+        } else if (end.data > pivot.data) {
+            end := predecessor(end);
+        } else {
+            tmp := start.data;
+            start.data := end.data;
+            end.data := tmp;
+        }
+    }
+    ...
+}
+
+method quicksort(lst)
+    requires lseg(lst, end);
+    ensures slseg(lst, end);
+{
+    if (lst == null || lst.next == end) {
+    } else {
+        pivot := predecessor(lst, end);
+        split(lst, pivot);
+        quicksort(lst, pivot);
+        quicksort(pivot, end);
+    }
+}

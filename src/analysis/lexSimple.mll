@@ -37,6 +37,8 @@ rule token = parse
 | "|<-" { BPTS }
 | "lseg" { LS }
 | "slseg" { SLS }
+| "ulseg" { ULS }
+| "llseg" { LLS }
 | "dlseg" { DLS }
 | "assume" { ASSUME }
 | "method" { PROCEDURE }

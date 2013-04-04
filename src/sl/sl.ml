@@ -37,6 +37,8 @@ type form =
   | PtsTo of ident * ident * ident
   | List of ident * ident
   | SList of ident * ident
+  | UList of ident * ident * ident
+  | LList of ident * ident * ident
   | DList of ident * ident * ident * ident
   | SepConj of form list
   | Not of form
@@ -63,6 +65,8 @@ let mk_pts a b = PtsTo (pts, a, b)
 let mk_prev_pts a b = PtsTo (prev_pts, a, b)
 let mk_ls a b = List (a, b)
 let mk_sls a b = SList (a, b)
+let mk_uls a b c = UList (a, b, c)
+let mk_lls a b c = LList (a, b, c)
 let mk_dls a b c d = DList (a, b, c, d)
 let mk_and a b = And [a; b]
 let mk_or a b = Or [a; b]
@@ -86,65 +90,11 @@ let rec to_string f = match f with
   | PtsTo (h, a, b) -> (Form.str_of_ident a) ^ " |"^(ident_to_string h)^"> " ^ (Form.str_of_ident b)
   | List (a, b) -> "lseg(" ^ (Form.str_of_ident a) ^ ", " ^ (Form.str_of_ident b) ^ ")"
   | SList (a, b) -> "slseg(" ^ (Form.str_of_ident a) ^ ", " ^ (Form.str_of_ident b) ^ ")"
+  | UList (a, b, c) -> "ulseg(" ^ (Form.str_of_ident a) ^ ", " ^ (Form.str_of_ident b) ^ ", " ^ (Form.str_of_ident c) ^ ")"
+  | LList (a, b, c) -> "llseg(" ^ (Form.str_of_ident a) ^ ", " ^ (Form.str_of_ident b) ^ ", " ^ (Form.str_of_ident c) ^ ")"
   | DList (a, b, c, d) -> "dlseg(" ^ (String.concat ", " (List.map ident_to_string [a;b;c;d])) ^ ")"
   | SepConj lst -> "(" ^ (String.concat ") * (" (List.map to_string lst)) ^ ")"
 
-(*
-let rec ids f = match f with
-  | Eq (a, b) | PtsTo (_, a, b) | List (a, b) | SList (a, b) -> 
-    IdSet.add a (IdSet.singleton b)
-  | DList (a, b, c, d) -> List.fold_right IdSet.add [a; b; c] (IdSet.singleton d)
-  | Not t -> ids t
-  | And lst | Or lst | SepConj lst -> 
-    List.fold_left
-      (fun acc f2 -> IdSet.union acc (ids f2))
-      IdSet.empty
-      lst
-  | BoolConst _ | Emp -> IdSet.empty
-  | Pure p -> failwith "TODO"
-*)
-
-let rec normalize f = match f with
-  | Pure p -> Pure (FormUtil.nnf p)
-  | Not t -> 
-    begin
-      match normalize t with
-      | Pure b -> Pure (FormUtil.nnf (FormUtil.mk_not b))
-      | t2 -> Not t2
-    end
-  | And lst -> 
-    let sub_forms =
-      List.fold_left
-        (fun acc t -> SlSet.add (normalize t) acc)
-        SlSet.empty
-        lst
-    in
-    let sub_forms = SlSet.remove mk_true sub_forms in
-      if (SlSet.mem mk_false sub_forms) then mk_false
-      else if (SlSet.cardinal sub_forms = 0) then mk_true
-      else if (SlSet.cardinal sub_forms = 1) then SlSet.choose sub_forms
-      else And (SlSet.elements sub_forms)
-  | Or lst ->  
-    let sub_forms =
-      List.fold_left
-        (fun acc t -> SlSet.add (normalize t) acc)
-        SlSet.empty
-        lst
-    in
-    let sub_forms = SlSet.remove mk_false sub_forms in
-      if (SlSet.mem mk_true sub_forms) then mk_true
-      else if (SlSet.cardinal sub_forms = 0) then mk_false
-      else if (SlSet.cardinal sub_forms = 1) then SlSet.choose sub_forms
-      else Or (SlSet.elements sub_forms)
-  | SepConj lst -> 
-    let lst2 = List.map normalize lst in
-    let lst3 = List.filter (fun x -> x <> Emp) lst2 in
-      SepConj lst3
-  | Emp -> Emp
-  | PtsTo (h, a, b) -> PtsTo (h, a, b)
-  | List (a, b) -> if a = b then Emp else List (a, b)
-  | SList (a, b) -> if a = b then Emp else SList (a, b)
-  | DList (a, b, c, d) -> DList (a, b, c, d) (* TODO can we do better ?? *)
 
 let rec map_id fct f = match f with
   | Pure p -> Pure (FormUtil.map_id fct p)
@@ -155,6 +105,8 @@ let rec map_id fct f = match f with
   | PtsTo (h, a, b) -> PtsTo (h, fct a, fct b)
   | List (a, b) -> List (fct a, fct b)
   | SList (a, b) -> SList (fct a, fct b)
+  | UList (a, b, c) -> UList (fct a, fct b, fct c)
+  | LList (a, b, c) -> LList (fct a, fct b, fct c)
   | DList (a, b, c, d) -> DList (fct a, fct b, fct c, fct d)
   | SepConj lst -> SepConj (List.map (map_id fct) lst)
 
@@ -166,7 +118,7 @@ let subst_id subst f =
 
 let rec has_prev f = match f with
   | Not t -> has_prev t
-  | List _ | SList _ | Emp | Pure _ -> false
+  | List _ | SList _ | UList _ | LList _ | Emp | Pure _ -> false
   | PtsTo (h, a, b) -> h = prev_pts
   | DList _ -> true
   | SepConj lst | And lst | Or lst -> 
@@ -250,7 +202,37 @@ let to_form set_fct domain f =
             ("def_of_" ^ Form.str_of_ident domain) 
             (list_set_def id1 id2 domain)
         in
-          ([FormUtil.mk_and [part1; part2], mk_loc_set domain, IdSet.singleton domain], part3)
+          ([FormUtil.mk_and [part1; part2], mk_loc_set domain, IdSet.empty], part3)
+    | UList (id1, id2, id3) ->
+        let domain = FormUtil.fresh_ident (fst d) in
+        let part1 = reach id1 id2 in
+        let part2 = 
+          Axioms.mk_axiom ("uls_" ^ Form.str_of_ident domain)
+            (FormUtil.mk_implies
+              (FormUtil.mk_and [mk_domain domain Axioms.loc1])
+              (FormUtil.mk_geq (get_data Axioms.loc1) (get_data (mk_loc id3))))
+        in
+        let part3 =
+          Axioms.mk_axiom 
+            ("def_of_" ^ Form.str_of_ident domain) 
+            (list_set_def id1 id2 domain)
+        in
+          ([FormUtil.mk_and [part1; part2], mk_loc_set domain, IdSet.empty], part3)
+    | LList (id1, id2, id3) ->
+        let domain = FormUtil.fresh_ident (fst d) in
+        let part1 = reach id1 id2 in
+        let part2 = 
+          Axioms.mk_axiom ("lls_" ^ Form.str_of_ident domain)
+            (FormUtil.mk_implies
+              (FormUtil.mk_and [mk_domain domain Axioms.loc1])
+              (FormUtil.mk_leq (get_data Axioms.loc1) (get_data (mk_loc id3))))
+        in
+        let part3 =
+          Axioms.mk_axiom 
+            ("def_of_" ^ Form.str_of_ident domain) 
+            (list_set_def id1 id2 domain)
+        in
+          ([FormUtil.mk_and [part1; part2], mk_loc_set domain, IdSet.empty], part3)
     | DList (x1, x2, y1, y2) ->
         let domain = FormUtil.fresh_ident (fst d) in
         let part1 = reach x1 y1 in
@@ -352,7 +334,7 @@ let to_form set_fct domain f =
       in
       FormUtil.smk_or (List.map process struct_part), heap_part
   in
-    process_bool true (normalize (fresh_existentials f))
+    process_bool true (fresh_existentials f)
 
 let rec get_clauses f = match f with
   | Form.BoolOp (Form.And, lst) ->  List.flatten (List.map get_clauses lst)

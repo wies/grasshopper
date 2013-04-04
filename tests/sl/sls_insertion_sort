@@ -1,0 +1,26 @@
+method insertion_sort(lst)
+    requires lseg(lst, null);
+    ensures slseg(lst, null);
+{
+    srt := lst;
+    x := lst;
+    while (srt != null)
+        invariant (slseg(lst, srt) && llseg(lst, srt, srt)) * lseg(srt, null);
+    {
+        curr := srt.next;
+        min := srt;
+        while (curr != null)
+            invariant (ulseg(srt, curr, min) * lseg(curr, null) * min.data >= x.data) && ulseg(srt, null, x);
+        {
+            if (curr.data < min.data) {
+                min := curr;
+            }
+            curr := curr.next;
+        }
+        tmp := min.data;
+        min.data := srt.data;
+        srt.data := tmp;
+        x := srt;
+        srt := srt.next;
+    }
+}

@@ -13,7 +13,7 @@ let parse_error = ParseError.parse_error
 %token SEMICOLON DOT
 %token PLUS MINUS DIV
 %token EQ NEQ LEQ GEQ LT GT
-%token PTS BPTS LS SLS DLS TRUE FALSE EMP NULL
+%token PTS BPTS LS SLS ULS LLS DLS TRUE FALSE EMP NULL
 %token COLONEQ
 %token ASSUME ASSERT NEW NEXT PREV DATA DISPOSE RETURN
 %token SEP AND OR NOT COMMA
@@ -85,6 +85,8 @@ sl_form:
 | term BPTS term { mk_prev_pts $1 $3 }
 | LS LPAREN term COMMA term RPAREN { mk_ls $3 $5 }
 | SLS LPAREN term COMMA term RPAREN { mk_sls $3 $5 }
+| ULS LPAREN term COMMA term COMMA term RPAREN { mk_uls $3 $5 $7 }
+| LLS LPAREN term COMMA term COMMA term RPAREN { mk_lls $3 $5 $7 }
 | DLS LPAREN term COMMA term COMMA term COMMA term RPAREN { mk_dls $3 $5 $7 $9 }
 /* boolean structure */
 | NOT sl_form { mk_not $2 }
