@@ -500,6 +500,17 @@ let subst subst_map f =
 	in Binder (b, vs1, sub sm2 f, List.map (suba sm2) a)
   in sub subst_map f
 
+(** make all comments unique *)
+let unique_comments f =
+  let rec uc = function 
+    | BoolOp (op, fs) -> BoolOp (op, List.map uc fs)
+    | Binder (b, vs, f, anns) ->
+        let anns1 = List.map (function Comment c -> Comment (str_of_ident (fresh_ident c))) anns in
+        Binder (b, vs, uc f, anns1)
+    | f -> f
+  in
+  uc f
+
 module Clauses = struct
 
   type clause = form list

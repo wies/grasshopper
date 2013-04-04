@@ -276,40 +276,40 @@ let to_form set_fct domain f =
           part2          
          )
     | SepConj forms ->
-      (*let ds = List.map (fun _ -> fd "sep" domain) forms in*)
+        (*let ds = List.map (fun _ -> fd "sep" domain) forms in*)
         let translated = List.map (process_sep pol (fd "sep" d)) forms in
-      let translated_1, translated_2 = List.split translated in
-      let translated_product = 
-        match translated_1 with
-        | [] -> []
-        | ts :: tss ->
-            List.fold_left 
-              (fun acc ts1  -> Util.flat_map (fun ts2 ->  List.map (fun t -> t :: ts2) ts1) acc)
-              (List.map (fun t -> [t]) ts) tss
-      in
-      let process (otranslated_1, translated_2) translated =
-        let domain = FormUtil.fresh_ident (fst d) in
-        let translated_1, dsc, domains = 
-          List.fold_right
-            (fun (t_1, d, odomains) (ts_1, dsc, domains) -> 
-              (t_1 :: ts_1, d :: dsc, IdSet.union domains odomains))
-            translated ([], [], IdSet.empty)
-            
+        let translated_1, translated_2 = List.split translated in
+        let translated_product = 
+          match translated_1 with
+          | [] -> []
+          | ts :: tss ->
+              List.fold_left 
+                (fun acc ts1  -> Util.flat_map (fun ts2 ->  List.map (fun t -> t :: ts2) ts1) acc)
+                (List.map (fun t -> [t]) ts) tss
         in
-        (*let dsc = List.map mk_loc_set ds in*)
-        let separation1 = FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_union dsc) in
-        let separation2 =
-          let rec pw_disj acc = function
-            | d1 :: dcs -> pw_disj (List.map (fun d2 -> empty_t (FormUtil.mk_inter [d2; d1])) dcs @ acc) dcs
-            | [] -> acc
-          in pw_disj [] dsc
-        in
-        let heap_part = separation1 :: translated_2 in
-        let struct_part = FormUtil.smk_and (separation2 @ translated_1) in
-        ((struct_part, mk_loc_set domain, domains) :: otranslated_1, heap_part)
-      in 
-      let struct_part, heap_part = List.fold_left process ([], translated_2) translated_product in
-      struct_part, FormUtil.smk_and heap_part
+        let process (otranslated_1, translated_2) translated =
+          let domain = FormUtil.fresh_ident (fst d) in
+          let translated_1, dsc, domains = 
+            List.fold_right
+              (fun (t_1, d, odomains) (ts_1, dsc, domains) -> 
+                (t_1 :: ts_1, d :: dsc, IdSet.union domains odomains))
+              translated ([], [], IdSet.empty)
+              
+          in
+          (*let dsc = List.map mk_loc_set ds in*)
+          let separation1 = FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_union dsc) in
+          let separation2 =
+            let rec pw_disj acc = function
+              | d1 :: dcs -> pw_disj (List.map (fun d2 -> empty_t (FormUtil.mk_inter [d2; d1])) dcs @ acc) dcs
+              | [] -> acc
+            in pw_disj [] dsc
+          in
+          let heap_part = separation1 :: translated_2 in
+          let struct_part = FormUtil.smk_and (separation2 @ translated_1) in
+          ((struct_part, mk_loc_set domain, domains) :: otranslated_1, heap_part)
+        in 
+        let struct_part, heap_part = List.fold_left process ([], translated_2) translated_product in
+        struct_part, FormUtil.smk_and heap_part
     | Or forms ->
         let translated_1, translated_2 = List.split (List.map (process_sep pol d) forms) in
         List.concat translated_1, FormUtil.smk_and translated_2
@@ -340,7 +340,7 @@ let to_form set_fct domain f =
               domains
               FormUtil.mk_false
           in
-          let ax_name = "dll_" ^ Form.str_of_ident (FormUtil.fresh_ident (Form.str_of_ident domain)) in
+          let ax_name = "dll_" ^ Form.str_of_ident domain in
           Axioms.mk_axiom ax_name
             (FormUtil.mk_implies
                (FormUtil.mk_and [in_domain; FormUtil.mk_eq (FormUtil.mk_read fpts Axioms.loc1) Axioms.loc2])

@@ -18,6 +18,7 @@ let dump_model session =
 let start_session name f = 
   let f = FormTyping.typing f in
   let f_inst = Reduction.reduce f in
+  let f_inst = List.rev (List.rev_map unique_comments f_inst) in
   let signature = overloaded_sign (mk_and f_inst) in
   let all_tpe =
     SymbolMap.fold
