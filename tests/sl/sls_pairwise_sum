@@ -9,7 +9,7 @@ method pairwise_sum(x, y)
     while (curr_x != null && curr_y != null) 
         invariant slseg(x, curr_x) * slseg(curr_x, null);
         invariant slseg(y, curr_x) * slseg(curr_y, null);
-        invariant slseg(z, last_z) * (last_z == null || last_z |-> null);
+        invariant slseg(z, last_z) * (last_z == null * z == null || last_z |-> null);
     {
         tmp := last_z;
         new last_z;
