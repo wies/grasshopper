@@ -61,6 +61,8 @@ let mk_true = BoolOp (And, [])
 let mk_false = BoolOp (Or, [])
 let mk_bool b = if b then mk_true else mk_false
 
+let mk_int i = App (IntConst i, [], Some Int)
+
 let mk_ident name = (name, 0)
 
 let mk_free_const ?srt id = App (FreeSym id, [], srt)
@@ -81,12 +83,15 @@ let mk_pred id ts = mk_atom (FreeSym id) ts
 let mk_eq s t = mk_atom Eq [s; t]
 
 let mk_lt s t = mk_atom Lt [s; t]
-
 let mk_gt s t = mk_atom Gt [s; t]
-
 let mk_leq s t = mk_atom LtEq [s; t]
-
 let mk_geq s t = mk_atom GtEq [s; t]
+
+let mk_plus s t = mk_app ~srt:Int Plus [s; t]
+let mk_minus s t = mk_app ~srt:Int Minus [s; t]
+let mk_uminus s = mk_app ~srt:Int UMinus [s]
+let mk_mult s t = mk_app ~srt:Int Mult [s; t]
+let mk_div s t = mk_app ~srt:Int Div [s; t]
 
 let mk_null = mk_app ~srt:Loc Null []
 

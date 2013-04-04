@@ -205,8 +205,8 @@ let push session =
 
 let is_interpreted sym = match sym with
   | Read | Write -> !Config.encode_fields_as_arrays
-  | Eq | Gt | Lt | GtEq | LtEq 
-  | Plus | Minus | Mult | UMinus -> true
+  | Eq | Gt | Lt | GtEq | LtEq | IntConst _ | BoolConst _
+  | Plus | Minus | Mult | Div | UMinus -> true
   | _ -> false
 
 let string_of_symbol sym (arg_sorts, res_sort) =

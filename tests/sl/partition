@@ -1,7 +1,7 @@
 
-partition(x, y, z)
-requires lseg(x, null) * y = null * z = null
-ensures lseg(y, null) * lseg(z, null)
+method partition(x, y, z)
+requires lseg(x, null) * y == null * z == null;
+ensures lseg(y, null) * lseg(z, null);
 {
     new y_last;
     new z_last;
@@ -9,15 +9,17 @@ ensures lseg(y, null) * lseg(z, null)
     z := z_last;
     y.next := x;
     z.next := x;
-    while (x ~= null) lseg(x,null) * lseg(y,y_last) * lseg(z,z_last) * y_last |-> x * z_last |-> x {
-      if (Random) {
-        z_last.next := x.next;
-        y_last := x;
-      } else {
-        y_last.next := x.next;
-        z_last := x;
-      }
-      x := x.next;
+    while (x != null)
+        invariant lseg(x,null) * lseg(y,y_last) * lseg(z,z_last) * y_last |-> x * z_last |-> x;
+    {
+        if (Random) {
+            z_last.next := x.next;
+            y_last := x;
+        } else {
+            y_last.next := x.next;
+            z_last := x;
+        }
+        x := x.next;
     }
     curr_y := y;
     curr_z := z;

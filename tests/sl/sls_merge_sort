@@ -1,0 +1,71 @@
+method merge(a, b)
+    requires slseg(a, null) * slseg(b,null);
+    ensures slseg(returned, null);
+{
+    if (a == null) {
+        return b;
+    } else if (b == null) {
+        return a;
+    } else if (a.data < b.data) {
+        a2 := a.next;
+        res := merge(a2, b);
+        a.next := res;
+        return a;
+    } else {
+        b2 := b.next;
+        res := merge(a, b2);
+        b.next := res;
+        return b;
+    }
+}
+
+method length(x)
+    requires lseg(x, null);
+    ensures lseg(x, null);
+{
+    i := 0;
+    curr := x;
+    while (curr != null)
+        invariant lseg(x,curr) * lseg(curr, null);
+    {
+        curr := curr.next;
+        i := i+1;
+    }
+    return i;
+}
+
+method take(x, n, y)
+    requires lseg(x, null) * y == null;
+    ensures lseg(x, null) * lseg(y, null);
+{
+    y := x;
+    while (y != null && n > 1)
+        invariant lseg(x, y) * lseg(y, null);
+    {
+        y := y.next;
+        n := n-1;
+    }
+    if (y != null) {
+        tmp := y;
+        y := y.next;
+        tmp.next := null;
+    }
+}
+
+method merge_sort(lst)
+    requires lseg(lst, null);
+    ensures slseg(returned, null);
+{
+    if (lst == null || lst.next == null) {
+        return lst;
+    } else {
+        n := length(lst);
+        n2 := n / 2;
+        lst2 := null;
+        take(lst, n2, lst2);
+        a := merge_sort(lst);
+        b := merge_sort(lst2);
+        merged := merge(a, b);
+        return merged;
+    }
+}

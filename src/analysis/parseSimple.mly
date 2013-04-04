@@ -8,8 +8,10 @@ let parse_error = ParseError.parse_error
 
 %token <string> TIDENT
 %token <string> PIDENT
+%token <int> INT
 %token LPAREN RPAREN LBRACKET RBRACKET
 %token SEMICOLON DOT
+%token PLUS MINUS DIV
 %token EQ NEQ LEQ GEQ LT GT
 %token PTS BPTS LS SLS DLS TRUE FALSE EMP NULL
 %token COLONEQ
@@ -142,8 +144,14 @@ pterm:
 | pterm DOT NEXT { FormUtil.mk_read fpts $1 }
 | pterm DOT PREV { FormUtil.mk_read fprev_pts $1 }
 | pterm DOT DATA { FormUtil.mk_read fdata $1 }
+| pterm PLUS pterm { FormUtil.mk_plus $1 $3 }
+| pterm MINUS pterm { FormUtil.mk_minus $1 $3 }
+| pterm SEP pterm { FormUtil.mk_mult $1 $3 }
+| pterm DIV pterm { FormUtil.mk_div $1 $3 }
+| MINUS pterm { FormUtil.mk_uminus $2 }
 | TIDENT { mk_const (mk_ident $1) }
 | NULL { FormUtil.mk_null }
+| INT { FormUtil.mk_int $1 }
 | LPAREN pterm RPAREN { $2 }
 ;
 

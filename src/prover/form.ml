@@ -17,7 +17,7 @@ type symbol =
   | IntConst of int
   (* interpreted function symbols *)
   | Null | Read | Write | EntPnt
-  | UMinus | Plus | Minus | Mult 
+  | UMinus | Plus | Minus | Mult | Div 
   | Empty | SetEnum | Union | Inter | Diff
   (* interpreted predicate symbols *)
   | Eq
@@ -131,6 +131,7 @@ let str_of_symbol = function
   | Plus -> "+"
   | Minus -> "-"
   | Mult -> "*"
+  | Div -> "div"
   | Empty -> "emptyset"
   | SetEnum -> "setenum"
   | Union -> "union"

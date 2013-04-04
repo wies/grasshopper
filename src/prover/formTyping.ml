@@ -30,13 +30,27 @@ let rec to_my_sort t = match t with
   | Set s -> TSet (to_my_sort s)
   | Fld s -> TFld (to_my_sort s)
 
-let rec to_sort s = match s with
-  | TBool -> Bool
-  | TLoc -> Loc
-  | TInt -> Int
-  | TSet s -> Set (to_sort s)
-  | TFld s -> Fld (to_sort s)
-  | TStar _ | TFun _ | TVar _ -> failwith ("cannot convert '" ^(my_sort_to_string s)^"' to basic sort.")
+let to_sort ?what s =
+  let rec process s = 
+    match s with
+    | TBool -> Bool
+    | TLoc -> Loc
+    | TInt -> Int
+    | TSet s -> Set (process s)
+    | TFld s -> Fld (process s)
+    | TVar _ ->
+      Debug.amsg ("converting " ^(my_sort_to_string s)^ " to Loc.\n");
+      Loc
+    | TStar _ | TFun _ -> failwith ("cannot convert '" ^(my_sort_to_string s)^"' to basic sort")
+  in
+  try
+    process s
+  with Failure f ->
+    begin
+      match what with
+      | Some t -> failwith (f ^ " in  "^t)
+      | None -> failwith f
+    end
 
 module TpeMap = Map.Make(struct
     type t = my_sort
@@ -139,6 +153,7 @@ let symbol_types =
      (Plus, TFun ([TStar TInt], TInt));
      (Minus, TFun ([TInt; TInt], TInt) );
      (Mult, TFun ([TStar TInt], TInt));
+     (Div, TFun ([TInt; TInt], TInt));
      (Empty, TSet param1);
      (SetEnum, TFun ([TStar param1], TSet param1));
      (Union, TFun ([TStar (TSet param1)], TSet param1));
@@ -290,7 +305,7 @@ let fill_type defs env mgu f =
         let ts = List.map fill_term ts in
         let orignal_sym = SymbolMap.find sym defs in
         let srt = SymbolMap.find sym env in
-        let ret = to_sort (return_type srt) in
+        let ret = to_sort (return_type srt) ~what:(str_of_symbol orignal_sym) in
           App (orignal_sym, ts, Some (compare ret srt_opt))
       end
   in

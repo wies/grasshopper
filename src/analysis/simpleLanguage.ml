@@ -28,9 +28,17 @@ type procedure = {
   body: stmnt
 }
 
-let rec assigned_loc stmnt = match stmnt with
+let rec assigned_all stmnt = match stmnt with
   | Assume _ | AssumeGrass _ | Assert _ | Return _  | FunUpdate (_, _, _) -> IdSet.empty
-  | VarUpdate (t, _) | New t -> IdSet.singleton t
+  | VarUpdate (t, _) -> IdSet.singleton t
+  | Dispose _ | New _ -> IdSet.empty
+  | Block lst -> List.fold_left (fun acc s -> IdSet.union acc (assigned_all s)) IdSet.empty lst
+  | While (_, _, s) -> assigned_all s
+  | Ite (_, s1, s2) -> IdSet.union (assigned_all s1) (assigned_all s2)
+
+let rec assigned_loc stmnt = match stmnt with
+  | Assume _ | AssumeGrass _ | Assert _ | Return _  | FunUpdate (_, _, _) | VarUpdate (_, _) -> IdSet.empty
+  | New t -> IdSet.singleton t
   | Dispose _ -> IdSet.empty
   | Block lst -> List.fold_left (fun acc s -> IdSet.union acc (assigned_loc s)) IdSet.empty lst
   | While (_, _, s) -> assigned_loc s
@@ -46,8 +54,11 @@ let rec assigned_fld stmnt = match stmnt with
 
 let assigned stmnt =
   let locs = assigned_loc stmnt in
+  let all  = assigned_all stmnt in
   let flds = assigned_fld stmnt in
-    [IdSet.elements locs, Loc; IdSet.elements flds, Fld Loc]
+    [ IdSet.elements all, None;
+      IdSet.elements locs, Some Loc;
+      IdSet.elements flds, None ]
 
 let rec change_heap stmnt = match stmnt with
   | Assume _ | AssumeGrass _ | Assert _ | Return _ | VarUpdate _ -> false
@@ -70,7 +81,7 @@ module DecisionStack =
   struct
 
     type subst = ident IdMap.t
-    type signatures = sort IdMap.t
+    type signatures = (sort option) IdMap.t
 
     let subst_to_string subst =
       String.concat "\n"
@@ -186,7 +197,7 @@ let to_grass_not_contained h f subst = subst_id subst (Sl.to_grass_not_contained
 let unify_subst sig1 sig2 subst1 subst2 =
   let cstr_for tpe id1 id2 =
     let f = match tpe with
-      | Bool ->
+      | Some (Bool) ->
         failwith "TODO: args of pred ?"
         (*
         mk_iff
@@ -195,8 +206,8 @@ let unify_subst sig1 sig2 subst1 subst2 =
         *)
       | t ->
         [mk_eq
-          (mk_free_const ?srt:(Some t) id1)
-          (mk_free_const ?srt:(Some t) id2)]
+          (mk_free_const ?srt:t id1)
+          (mk_free_const ?srt:t id2)]
     in
     let v1 = snd id1 in
     let v2 = snd id2 in
@@ -221,10 +232,18 @@ let unify_subst sig1 sig2 subst1 subst2 =
       sig2
   in
   let get subst id = try IdMap.find id subst with Not_found -> id in
+  let get_tpe sign id =
+    try IdMap.find id signatures
+    with Not_found ->
+      begin
+        Debug.amsg ("no type for: " ^ (str_of_ident id) ^ "\n");
+        None
+      end
+  in
     IdSet.fold
       (fun id (cs1, cs2, s, si) ->
         (* take the most recent version, if does not exists then ok. *)
-        let sign = IdMap.find id signatures in
+        let sign = get_tpe signatures id in
         let id1 = get subst1 id in
         let id2 = get subst2 id in
         let (id3, c1, c2) = cstr_for sign id1 id2 in
@@ -339,7 +358,10 @@ let check_if_frame_exists name pre stack sl =
 (* ... *)
 let check_procedure proceduresMap name =
   print_endline ("checking: " ^ (str_of_ident name));
-  let get name = IdMap.find name proceduresMap in
+  let get name = 
+    try IdMap.find name proceduresMap
+    with Not_found -> failwith ("ERROR: method "^(str_of_ident name)^" not found.")
+  in
   (*
   let fresh_local () = fresh_ident "_" in
   let subst_with_fresh_local m subst form =
@@ -462,7 +484,7 @@ let check_procedure proceduresMap name =
       else
         [Sl.pts]
     in
-      [pts, Fld Loc; [alloc_id], Set Loc]
+      [pts, Some (Fld Loc); [alloc_id], Some (Set Loc)]
   in
 
   let procedure_call pre stack m args id =
@@ -539,8 +561,8 @@ let check_procedure proceduresMap name =
         let upd1 = subst_id_term ident_map upd in
         let ind1 = subst_id_term ident_map ind in
         let id = subst_ident id0 ident_map in
-        let id1, ident_map1, sig_map1 = fresh_ident id0 ident_map sig_map (Fld Loc) in (*TODO type*)
-        let tpe = Some (IdMap.find id1 sig_map1) in
+        let id1, ident_map1, sig_map1 = fresh_ident id0 ident_map sig_map None in
+        let tpe = IdMap.find id1 sig_map1 in
         let f =
           mk_eq
             (mk_free_const ?srt:tpe id1)
@@ -551,15 +573,15 @@ let check_procedure proceduresMap name =
         let ident_map = DecisionStack.get_subst stack in
         let sig_map = DecisionStack.get_sign stack in
         let t1 = subst_id_term ident_map t in
-        let id1, ident_map1, sig_map1 = fresh_ident id ident_map sig_map Loc in (*TODO type*)
-        let f = mk_eq (mk_loc id1) t1 in (*TODO always a loc ?*)
+        let id1, ident_map1, sig_map1 = fresh_ident id ident_map sig_map None in
+        let f = mk_eq (mk_free_const id1) t1 in
           add_to_stack stack ident_map1 sig_map1 f
       | Dispose id ->
         let ident_map = DecisionStack.get_subst stack in
         let sig_map = DecisionStack.get_sign stack in
         let id1 = (subst_ident id ident_map) in
         let alloc = subst_ident alloc_id ident_map in
-        let alloc1, ident_map1, sig_map1 = fresh_ident alloc_id ident_map sig_map (Set Loc) in
+        let alloc1, ident_map1, sig_map1 = fresh_ident alloc_id ident_map sig_map (Some (Set Loc)) in
         let f =
           mk_eq
             (mk_loc_set alloc1)
@@ -569,9 +591,9 @@ let check_procedure proceduresMap name =
       | New id ->
         let ident_map = DecisionStack.get_subst stack in
         let sig_map = DecisionStack.get_sign stack in
-        let id1, ident_map1, sig_map1 = fresh_ident id ident_map sig_map Loc in
+        let id1, ident_map1, sig_map1 = fresh_ident id ident_map sig_map (Some Loc) in
         let alloc = subst_ident alloc_id ident_map1 in
-        let alloc1, ident_map2, sig_map2 = fresh_ident alloc_id ident_map1 sig_map1 (Set Loc) in
+        let alloc1, ident_map2, sig_map2 = fresh_ident alloc_id ident_map1 sig_map1 (Some (Set Loc)) in
         let f =
           mk_and [
             mk_eq
@@ -662,7 +684,7 @@ let check_procedure proceduresMap name =
         DecisionStack.empty
         (smk_and (alloc_axioms ()))
         IdMap.empty
-        (to_map [(alloc_id, Set Loc);(Sl.pts, Fld Loc);(Sl.prev_pts, Fld Loc)])(*TODO data ?*)
+        (to_map [(alloc_id, Some (Set Loc));(Sl.pts, Some (Fld Loc));(Sl.prev_pts, Some (Fld Loc));(Sl.data, Some (Fld Int))])
     in
     let final_stack = traverse init_stack stmnt in
     (* check for postcondition (void methods) *)

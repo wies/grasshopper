@@ -7,6 +7,7 @@ let lcidchar = ['a'-'z''_']
 let ucidchar = ['A'-'Z']
 let tident = lcidchar (lcidchar | ucidchar | digitchar)*
 let pident = ucidchar (lcidchar | ucidchar | digitchar)*
+let literal = digitchar+
 
 rule token = parse
   [' ' '\t' '\n'] { token lexbuf }
@@ -20,6 +21,9 @@ rule token = parse
 | "||" { OR }
 | "&&" { AND }
 | '!' { NOT }
+| '+' { PLUS }
+| '-' { MINUS }
+| '/' { DIV }
 | '(' { LPAREN }
 | ')' { RPAREN }
 | '{' { LBRACKET }
@@ -55,4 +59,5 @@ rule token = parse
 | "null" { NULL }
 | tident as name { TIDENT(name) }
 | pident as name { PIDENT(name) }
+| literal as lit { INT (int_of_string lit) }
 | eof { EOF }
