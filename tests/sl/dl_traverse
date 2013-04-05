@@ -3,21 +3,12 @@ method dl_traverse(lst)
     ensures dlseg(lst, a, null, b);
 {
     curr := lst;
+    prv := a;
     while(curr != null) 
-        invariant emp;
+        invariant dlseg(lst, a, curr, prv) * dlseg(curr, prv, null, b);
     {
+        prv := curr;
         curr := curr.next; 
     }
 }
 
-method dl_traverse_backward(lst)
-    requires dlseg(lst, a, null, b);
-    ensures dlseg(lst, a, null, b);
-{
-    curr := b;
-    while(curr != lst) 
-        invariant emp;
-    {
-        curr := curr.back; 
-    }
-}

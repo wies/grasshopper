@@ -15,6 +15,7 @@ type stmnt =
   | Assume of Sl.form
   | AssumeGrass of form
   | Assert of Sl.form * string option
+  | AssertGrass of form * string option
   | Block of stmnt list
   | While of form * Sl.form * stmnt
   | Ite of form * stmnt * stmnt
@@ -28,8 +29,52 @@ type procedure = {
   body: stmnt
 }
 
+let alloc_id = (mk_ident "Alloc")
+
+let alloc_set = mk_free_const ~srt:(Set Loc) alloc_id
+
+let rec desugar stmnt = 
+  let rec derefs acc = function
+  | App (Read, [fld; loc], _) ->
+      derefs (derefs (TermSet.add loc acc) fld) loc
+  | App (_, ts, _) -> List.fold_left derefs acc ts
+  | _ -> acc
+  in
+  let rec derefs_expr acc = function
+  | Term t -> derefs acc t
+  | Call (_, es) -> List.fold_left derefs_expr acc es
+  in
+  let assert_alloc ds =
+    TermSet.fold 
+      (fun loc acc -> 
+        AssertGrass (mk_elem loc alloc_set, Some "alloc_check") :: acc
+      )
+      ds [] 
+  in
+  match stmnt with
+  | VarUpdate (_, e) ->
+      let ds = derefs_expr TermSet.empty e in
+      Block (assert_alloc ds @ [stmnt])
+  | FunUpdate (_, t, e) -> 
+      let ds = derefs_expr (derefs TermSet.empty t) e in
+      Block (assert_alloc ds @ [stmnt])
+  | Block stmnts ->
+      Block (List.map desugar stmnts)
+  | While (cond, inv, s) -> 
+      let s1 = desugar s in
+      While (cond, inv, s1)
+  | Ite (cond, is, es) ->
+      let is1 = desugar is in
+      let es1 = desugar es in
+      Ite (cond, is1, es1)
+  | Return t ->
+      let ds = derefs TermSet.empty t in
+      Block (assert_alloc ds @ [stmnt])
+  | _ -> stmnt
+
+
 let rec assigned_all stmnt = match stmnt with
-  | Assume _ | AssumeGrass _ | Assert _ | Return _  | FunUpdate (_, _, _) -> IdSet.empty
+  | Assume _ | AssumeGrass _ | Assert _ | AssertGrass _ | Return _  | FunUpdate (_, _, _) -> IdSet.empty
   | VarUpdate (t, _) -> IdSet.singleton t
   | Dispose _ | New _ -> IdSet.empty
   | Block lst -> List.fold_left (fun acc s -> IdSet.union acc (assigned_all s)) IdSet.empty lst
@@ -37,7 +82,7 @@ let rec assigned_all stmnt = match stmnt with
   | Ite (_, s1, s2) -> IdSet.union (assigned_all s1) (assigned_all s2)
 
 let rec assigned_loc stmnt = match stmnt with
-  | Assume _ | AssumeGrass _ | Assert _ | Return _  | FunUpdate (_, _, _) | VarUpdate (_, _) -> IdSet.empty
+  | Assume _ | AssumeGrass _ | Assert _ | AssertGrass _ | Return _  | FunUpdate (_, _, _) | VarUpdate (_, _) -> IdSet.empty
   | New t -> IdSet.singleton t
   | Dispose _ -> IdSet.empty
   | Block lst -> List.fold_left (fun acc s -> IdSet.union acc (assigned_loc s)) IdSet.empty lst
@@ -45,7 +90,7 @@ let rec assigned_loc stmnt = match stmnt with
   | Ite (_, s1, s2) -> IdSet.union (assigned_loc s1) (assigned_loc s2)
 
 let rec assigned_fld stmnt = match stmnt with
-  | Assume _ | AssumeGrass _ | Assert _ | Return _ -> IdSet.empty
+  | Assume _ | AssumeGrass _ | Assert _ | AssertGrass _ | Return _ -> IdSet.empty
   | FunUpdate (t, _, _) -> IdSet.singleton t
   | Dispose _ | New _ | VarUpdate _  -> IdSet.empty
   | Block lst -> List.fold_left (fun acc s -> IdSet.union acc (assigned_fld s)) IdSet.empty lst
@@ -61,16 +106,11 @@ let assigned stmnt =
       IdSet.elements flds, None ]
 
 let rec change_heap stmnt = match stmnt with
-  | Assume _ | AssumeGrass _ | Assert _ | Return _ | VarUpdate _ -> false
+  | Assume _ | AssumeGrass _ | Assert _ | AssertGrass _ | Return _ | VarUpdate _ -> false
   | FunUpdate _ | New _ | Dispose _ -> true
   | Block lst -> List.exists change_heap lst
   | While (_, _, s) -> change_heap s
   | Ite (_, s1, s2) -> (change_heap s1) || (change_heap s2)
-
-
-let alloc_id = (mk_ident "Alloc")
-
-let alloc_set = mk_free_const ~srt:(Set Loc) alloc_id
 
 
 let alloc_axioms () = 
@@ -301,11 +341,11 @@ let add_to_stack stack subst sign cstr =
 
 let check_entailment what pre_sl stack post_sl =
   (* TODO less copy-paste with Entails *)
-  Debug.msg ("checking entailment: " ^ what ^ "\n");
-  Debug.msg ("checking entailment: precondition " ^ (Sl.to_string pre_sl) ^ "\n");
-  Debug.msg ("checking entailment: postcondition " ^ (Sl.to_string post_sl) ^ "\n");
-  Debug.msg ("checking entailment: stack\n" ^ (DecisionStack.to_string stack) ^ "\n");
-  Debug.msg ("checking entailment: subst\n" ^ (DecisionStack.subst_to_string (DecisionStack.get_subst stack)) ^ "\n");
+  Debug.msg ("checking VC: " ^ what ^ "\n");
+  Debug.msg ("precondition: " ^ (Sl.to_string pre_sl) ^ "\n");
+  Debug.msg ("postcondition: " ^ (Sl.to_string post_sl) ^ "\n");
+  Debug.msg ("stack:\n" ^ (DecisionStack.to_string stack) ^ "\n");
+  Debug.msg ("subst:\n" ^ (DecisionStack.subst_to_string (DecisionStack.get_subst stack)) ^ "\n");
   let subst = DecisionStack.get_subst stack in
   let preh = Entails.pre_heap () in
   let posth = Entails.post_heap () in
@@ -314,8 +354,7 @@ let check_entailment what pre_sl stack post_sl =
   let post_neg = to_grass_negated posth post_sl subst in
   let heap_content = Entails.same_heap_axioms subst preh posth in
   let wo_axioms = pre :: pathf @ [post_neg] in
-  (*let axioms = Sl.make_axioms (mk_and wo_axioms) in*)
-  let query = nnf (smk_and (*axioms ::*) (heap_content @ wo_axioms)) in
+  let query = nnf (smk_and (heap_content @ wo_axioms)) in
   let _ = if !Debug.verbose then
     begin
       print_endline "query wo axioms: ";
@@ -331,6 +370,39 @@ let check_entailment what pre_sl stack post_sl =
   | Some true -> failwith ("cannot prove assertion (sat) for " ^ what) (*TODO model*)
   | Some false -> ()
   | None -> failwith ("cannot prove assertion (unk) for " ^ what)
+
+let check_grass_entailment what pre_sl stack post_grass =
+  (* TODO less copy-paste with Entails *)
+  Debug.msg ("checking VC: " ^ what ^ "\n");
+  Debug.msg ("precondition: " ^ (Sl.to_string pre_sl) ^ "\n");
+  Debug.msg ("postcondition: " ^ (string_of_form post_grass) ^ "\n");
+  Debug.msg ("stack:\n" ^ (DecisionStack.to_string stack) ^ "\n");
+  Debug.msg ("subst:\n" ^ (DecisionStack.subst_to_string (DecisionStack.get_subst stack)) ^ "\n");
+  let subst = DecisionStack.get_subst stack in
+  let preh = Entails.pre_heap () in
+  let posth = Entails.post_heap () in
+  let pre = to_grass preh pre_sl IdMap.empty in
+  let pathf = DecisionStack.get_form stack in
+  let post_neg = subst_id subst (mk_not post_grass) in
+  let heap_content = Entails.same_heap_axioms subst preh posth in
+  let wo_axioms = pre :: pathf @ [post_neg] in
+  let query = nnf (smk_and (heap_content @ wo_axioms)) in
+  let _ = if !Debug.verbose then
+    begin
+      print_endline "query wo axioms: ";
+      print_form stdout (smk_and (wo_axioms @ heap_content));
+      print_newline ()
+    end
+  in
+  let sat = 
+    if query = mk_false then (Debug.msg "Assertion holds trivially\n"; Some false)
+    else Prover.check_sat ~session_name:what query 
+  in
+  match sat with
+  | Some true -> failwith ("cannot prove assertion (sat) for " ^ what) (*TODO model*)
+  | Some false -> ()
+  | None -> failwith ("cannot prove assertion (unk) for " ^ what)
+
 
 (* Checks whether the frame exists *)
 let is_frame_defined name pre_sl pathf post_sl subst =
@@ -636,6 +708,13 @@ let check_procedure proceduresMap name =
           in
           check_entailment (proc_name ^ "_" ^ cmt) pre stack f;
           stack
+      | AssertGrass (f, cmt_opt) ->
+          let cmt = match cmt_opt with
+          | Some cmt -> cmt
+          | None -> "assert"
+          in
+          check_grass_entailment (proc_name ^ "_" ^ cmt) pre stack f;
+          stack
       | AssumeGrass f ->
         let subst = DecisionStack.get_subst stack in
         let sig_map = DecisionStack.get_sign stack in
@@ -691,4 +770,4 @@ let check_procedure proceduresMap name =
     let post = proc.postcondition in
       check_entailment (proc_name ^ "_postcondition") pre final_stack post
   in
-  check proc.precondition proc.body
+  check proc.precondition (desugar proc.body)

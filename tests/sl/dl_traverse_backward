@@ -1,0 +1,13 @@
+method dl_traverse_backward(lst)
+    requires dlseg(lst, a, null, b);
+    ensures dlseg(lst, a, null, b);
+{
+    curr := b;
+    nxt := null;
+    while (curr != a) 
+        invariant dlseg(lst, a, nxt, curr) * dlseg(nxt, curr, null, b);
+    {
+        nxt := curr;
+        curr := curr.back; 
+    }
+}

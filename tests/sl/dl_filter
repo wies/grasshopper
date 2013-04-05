@@ -6,23 +6,23 @@ method dl_filter(a, b)
     curr := a;
     while (curr != null) 
       invariant dlseg(a,null,curr,prv) * dlseg(curr,prv,null,b);
-    {
+    { 
+      old_curr := curr;
+      curr := curr.next;
       if (Nondet) {
-        tmp := curr.next;
         if (prv != null) {
-            prv.next := curr.next;
+            prv.next := curr;
         } else {
-            a := tmp;
+            a := curr;
         }
-        if (tmp != null) {
-            tmp.back := prv;
+        if (curr != null) {
+            curr.back := prv;
         } else {
             b := prv;
         }
-        free curr;
+        free old_curr;
       } else {
-        prv := curr;
+        prv := old_curr;
       }
-      curr := curr.next;
     }
 }

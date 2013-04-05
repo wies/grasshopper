@@ -7,17 +7,17 @@ method filter(x)
     while (curr != null) 
       invariant ((lseg(x,prv) * prv |-> curr || prv == null * x == curr) * lseg(curr,null));
     {
-      old_curr := curr;
-      curr := curr.next;
       if (Random) {
         if (prv != null) {
-          prv.next := old_curr.next;
+          prv.next := curr.next;
         } else {
-          x := old_curr.next;
+          x := curr.next;
         }
-        free old_curr;
+        free curr;
       } else {
-        prv := old_curr;
+        prv := curr;
       }
+      // possible access to freed location
+      curr := curr.next;
     }
 }
