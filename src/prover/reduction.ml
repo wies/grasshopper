@@ -295,7 +295,7 @@ let reduce_sets_with_axioms fs gts =
         let t11 = unflatten t1 in
         let t21 = unflatten t2 in
         let s = mk_free_const ?srt:(sort_of t11) (fresh_ident "S") in
-        App (Eq, [t11; mk_union [t21; s]], Some Bool)
+        App (Eq, [t21; mk_union [t11; s]], Some Bool)
     | t -> unflatten t
   in
   let rec simplify = function
@@ -479,7 +479,7 @@ let reduce f =
   let fs3, ep_axioms, gts = reduce_ep fs21 in
   let fs4, gts1 = reduce_sets (fs3 @ ep_axioms) gts in
   let fs5, gts2 = reduce_reach fs4 gts1 in
-  let fs6 = reduce_remaining fs5 gts2 in
+  let fs6 = (* reduce_remaining *) fs5 (* gts2 *) in
   (* the following is a (probably stupid) heuristic to sort the formulas for improving the running time *)
   let fs7 = 
     (* sort by decreasing number of disjuncts in formula *)
