@@ -13,7 +13,7 @@ let parse_error = ParseError.parse_error
 %token SEMICOLON DOT
 %token PLUS MINUS DIV
 %token EQ NEQ LEQ GEQ LT GT
-%token PTS BPTS LS SLS ULS LLS DLS TRUE FALSE EMP NULL
+%token PTS BPTS TRUE FALSE EMP NULL
 %token COLONEQ
 %token ASSUME ASSERT NEW NEXT PREV DATA DISPOSE RETURN
 %token SEP AND OR NOT COMMA
@@ -66,7 +66,7 @@ proc_contract:
 term:
 | NULL { mk_ident "null" }
 | TIDENT { mk_ident $1 }
-| LPAREN term RPAREN { $2 }
+/*| LPAREN term RPAREN { $2 }*/
 ;
 
 sl_form:
@@ -83,11 +83,7 @@ sl_form:
 | EMP { mk_emp }
 | term PTS term { mk_pts $1 $3 }
 | term BPTS term { mk_prev_pts $1 $3 }
-| LS LPAREN term COMMA term RPAREN { mk_ls $3 $5 }
-| SLS LPAREN term COMMA term RPAREN { mk_sls $3 $5 }
-| ULS LPAREN term COMMA term COMMA term RPAREN { mk_uls $3 $5 $7 }
-| LLS LPAREN term COMMA term COMMA term RPAREN { mk_lls $3 $5 $7 }
-| DLS LPAREN term COMMA term COMMA term COMMA term RPAREN { mk_dls $3 $5 $7 $9 }
+| TIDENT LPAREN argst RPAREN { mk_spatial_pred $1 $3 }
 /* boolean structure */
 | NOT sl_form { mk_not $2 }
 | sl_form AND sl_form { mk_and $1 $3 }
@@ -99,6 +95,12 @@ sl_form:
 args:
   TIDENT { [mk_ident $1] }
 | TIDENT COMMA args { (mk_ident $1) :: $3 }
+| /* empty */ { [] }
+;
+
+argst:
+| term { [$1] }
+| term COMMA argst { $1 :: $3 }
 | /* empty */ { [] }
 ;
 

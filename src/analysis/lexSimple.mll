@@ -35,11 +35,6 @@ rule token = parse
 | '*' { SEP }
 | "|->" { PTS }
 | "|<-" { BPTS }
-| "lseg" { LS }
-| "slseg" { SLS }
-| "ulseg" { ULS }
-| "llseg" { LLS }
-| "dlseg" { DLS }
 | "assume" { ASSUME }
 | "method" { PROCEDURE }
 | "requires" { REQUIRES }

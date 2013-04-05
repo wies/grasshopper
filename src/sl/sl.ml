@@ -40,23 +40,28 @@ type symbol =
   | LList
   | DList
 
-let arity s = match s with
-  | Emp -> 0
-  | PtsTo -> 3
-  | List  -> 2
-  | SList -> 2
-  | UList -> 3
-  | LList -> 3
-  | DList -> 4
+let sym_defs =
+  [
+    (Emp,   0, "emp"  );
+    (PtsTo, 3, "ptsTo");
+    (List , 2, "lseg" );
+    (SList, 2, "slseg");
+    (UList, 3, "ulseg");
+    (LList, 3, "llseg");
+    (DList, 4, "dlseg")
+  ]
 
-let symbol_to_string s = match s with
-  | Emp -> "emp"
-  | PtsTo -> "|->"
-  | List  -> "lseg"
-  | SList -> "slseg"
-  | UList -> "ulseg"
-  | LList -> "llseg"
-  | DList -> "dlseg"
+let arity s =
+  try let (_, a, _) = List.find (fun (sym, _, _) -> s = sym) sym_defs in a
+  with Not_found -> failwith "arity: unknown symbol"
+
+let symbol_to_string s = 
+  try let (_, _, str) = List.find (fun (sym, _, _) -> s = sym) sym_defs in str
+  with Not_found -> failwith "symbol_to_string: unknown symbol"
+
+let find_symbol s =
+  try let (sym, _, _) = List.find (fun (_, _, str) -> s = str) sym_defs in Some sym
+  with Not_found -> None
 
 type form =
   | Pure of Form.form
@@ -101,6 +106,16 @@ let mk_sep a b =
   | (SepConj aa, b) -> SepConj (aa @ [b]) 
   | _ -> SepConj [a; b]
 let mk_sep_lst args = List.fold_left mk_sep mk_emp args
+
+let mk_spatial_pred name args =
+  match find_symbol name with
+  | Some s ->
+    if List.length args = arity s then
+      mk_spatial s args
+    else
+      failwith (name ^ " expect " ^(string_of_int (arity s))^
+                " found (" ^(String.concat ", " (List.map ident_to_string args))^ ")")
+  | None -> failwith ("unknown spatial predicate " ^ name)
 
 let rec to_string f = match f with
   | Pure p -> Form.string_of_form p
