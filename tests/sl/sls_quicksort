@@ -1,15 +1,18 @@
 
 method predecessor(start, end)
-    requires lseg(start, end) * start != end;
-    ensures lseg(start, returned) * returned |-> end;
+    requires lseg(start, end) * start != end * (end |-> x || end == null);
+    ensures lseg(start, returned) * returned |-> end * (end |-> x || end == null);
 {
-    curr := start;
-    while (curr.next != end)
-        invariant lseg(start, curr) * lseg(curr, end) * curr != end;
+    prv := start;
+    curr := start.next;
+    while (curr != end)
+        invariant lseg(start, prv) * prv |-> curr * lseg(curr, end) * (end |-> x || end == null);
     {
+        prv := curr;
         curr := curr.next;
     }
-    return curr;
+    assert lseg(start, prv) * prv |-> curr * lseg(curr, end) * (end |-> x || end == null) * curr == end;
+    return prv;
 }
 
 method split(lst, pivot)
@@ -25,7 +28,7 @@ method split(lst, pivot)
         if (start.data <= pivot.data) {
             start := start.next;
         } else if (end.data > pivot.data) {
-            end := predecessor(end);
+            end := predecessor(start, end);
         } else {
             tmp := start.data;
             start.data := end.data;
@@ -43,11 +46,11 @@ method split(lst, pivot)
     }
 }
 
-method quicksort(lst)
-    requires lseg(lst, end);
-    ensures slseg(lst, end);
+method quicksort(lst, end)
+    requires lseg(lst, end) * (end |-> x || end == null);
+    ensures slseg(lst, end) * (end |-> x || end == null);
 {
-    if (lst == null || lst.next == end) {
+    if (lst == end || lst.next == end) {
     } else {
         pivot := predecessor(lst, end);
         split(lst, pivot);

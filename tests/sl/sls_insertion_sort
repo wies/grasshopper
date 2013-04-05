@@ -5,12 +5,12 @@ method insertion_sort(lst)
     srt := lst;
     x := lst;
     while (srt != null)
-        invariant (slseg(lst, srt) && llseg(lst, srt, srt)) * lseg(srt, null);
+        invariant lslseg(lst, srt, srt) * ulseg(srt, null, srt);
     {
         curr := srt.next;
         min := srt;
         while (curr != null)
-            invariant (ulseg(srt, curr, min) * lseg(curr, null) * min.data >= x.data) && ulseg(srt, null, x);
+            invariant ulseg(srt, min, min) * ulseg(min, curr, min) * ulseg(curr, null, srt) * min != null * min.data >= srt.data;
         {
             if (curr.data < min.data) {
                 min := curr;
