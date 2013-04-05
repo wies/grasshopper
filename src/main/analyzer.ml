@@ -1,5 +1,4 @@
 open SimpleLanguage
-open VcGen
 open Sl
 open Util
 open Logging
@@ -24,7 +23,7 @@ let parse_input parse_fct file =
 let vc_gen file =
   let procs = parse_input (fun lexbuf -> ParseSimple.main LexSimple.token lexbuf) file in
   let procMap = List.fold_left (fun acc m -> IdMap.add m.name m acc) IdMap.empty procs in
-    List.iter (fun p -> check_procedure procMap p.name) procs
+    List.iter (fun p -> VcGen.check_procedure procMap p.name) procs
 
 let _ =
   try

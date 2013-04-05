@@ -40,29 +40,6 @@ type symbol =
   | LList
   | DList
 
-let sym_defs =
-  [
-    (Emp,   0, "emp"  );
-    (PtsTo, 3, "ptsTo");
-    (List , 2, "lseg" );
-    (SList, 2, "slseg");
-    (UList, 3, "ulseg");
-    (LList, 3, "llseg");
-    (DList, 4, "dlseg")
-  ]
-
-let arity s =
-  try let (_, a, _) = List.find (fun (sym, _, _) -> s = sym) sym_defs in a
-  with Not_found -> failwith "arity: unknown symbol"
-
-let symbol_to_string s = 
-  try let (_, _, str) = List.find (fun (sym, _, _) -> s = sym) sym_defs in str
-  with Not_found -> failwith "symbol_to_string: unknown symbol"
-
-let find_symbol s =
-  try let (sym, _, _) = List.find (fun (_, _, str) -> s = str) sym_defs in Some sym
-  with Not_found -> None
-
 type form =
   | Pure of Form.form
   | Spatial of symbol * ident list
@@ -71,11 +48,215 @@ type form =
   | And of form list
   | Or of form list
 
+type symbol_def =
+  { sym: symbol;
+    sname: string;
+    arity: int;
+    structure: ident (*domain*) -> ident list (*args*) -> Form.form;
+    heap: ident (*domain*) -> ident list (*args*) -> Form.form;
+  }
+
+(* auxiliary functions *)
+let reachWoT a b c = FormUtil.mk_reachwo (fpts) a b c
+let reachWo a b c = reachWoT (mk_loc a) (mk_loc b) (mk_loc c)
+let btwnT a b c = FormUtil.mk_btwn (fpts) a b c
+let btwn a b c = btwnT (mk_loc a) (mk_loc b) (mk_loc c)
+let reachT a b = if !Config.use_btwn then btwnT a b b else reachWoT a b b
+let reach a b = reachT (mk_loc a) (mk_loc b) 
+let mk_domain d v = FormUtil.mk_elem v (mk_loc_set d)
+let emptyset = FormUtil.mk_empty (Some (Form.Set Form.Loc))
+let empty_t domain = FormUtil.mk_eq emptyset domain
+let empty domain = empty_t (mk_loc_set domain)
+let list_set_def id1 id2 domain =
+  FormUtil.mk_iff
+    (FormUtil.smk_and 
+       [if !Config.use_btwn 
+        then btwnT (mk_loc id1) Axioms.loc1 (mk_loc id2)
+        else reachWoT (mk_loc id1) Axioms.loc1 (mk_loc id2);
+        FormUtil.mk_neq Axioms.loc1 (mk_loc id2)])
+    (mk_domain domain Axioms.loc1)
+
+(* the symbols *)
+
+let emp   =
+  { sym = Emp;
+    sname = "emp";
+    arity = 0;
+    structure = (fun _ _ -> FormUtil.mk_true);
+    heap = (fun domain _ -> empty domain)
+  }
+
+let ptsTo =
+  { sym = PtsTo ;
+    sname = "ptsTo";
+    arity = 3;
+    structure = (fun _ args -> match args with
+        | [h; id1; id2] -> FormUtil.mk_eq (FormUtil.mk_read (to_field h) (mk_loc id1)) (mk_loc id2)
+        | _ -> failwith "wrong number of arguments");
+    heap = (fun domain args ->  match args with
+        | [_; id1; _] -> FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_setenum [mk_loc id1])
+        | _ -> failwith "wrong number of arguments");
+  }
+
+let lseg  =
+  { sym = List ;
+    sname = "lseg";
+    arity = 2;
+    structure = (fun _ args -> match args with
+        | [id1; id2] ->  reach id1 id2
+        | _ -> failwith "wrong number of arguments");
+    heap = (fun domain args ->  match args with
+        | [id1; id2] ->
+            Axioms.mk_axiom 
+              ("def_of_" ^ Form.str_of_ident domain) 
+              (list_set_def id1 id2 domain)    
+        | _ -> failwith "wrong number of arguments");
+  }
+
+let slseg =
+  { sym = SList ;
+    sname = "slseg";
+    arity = 2;
+    structure = (fun domain args -> match args with
+        | [id1; id2] -> 
+            let part1 = reach id1 id2 in
+            let part2 = 
+              Axioms.mk_axiom ("sls_" ^ Form.str_of_ident domain)
+                (FormUtil.mk_implies
+                  (FormUtil.mk_and [mk_domain domain Axioms.loc1;
+                                    mk_domain domain Axioms.loc2;
+                                    reachT Axioms.loc1 Axioms.loc2])
+                  (FormUtil.mk_leq (get_data Axioms.loc1) (get_data Axioms.loc2)))
+            in
+              FormUtil.mk_and [part1; part2]
+        | _ -> failwith "wrong number of arguments");
+    heap = (fun domain args ->  match args with
+        | [id1; id2] ->
+            Axioms.mk_axiom 
+              ("def_of_" ^ Form.str_of_ident domain) 
+              (list_set_def id1 id2 domain)    
+        | _ -> failwith "wrong number of arguments");
+  }
+
+let ulseg =
+  { sym = UList ;
+    sname = "ulseg";
+    arity = 3;
+    structure = (fun domain args -> match args with
+        | [id1; id2; id3] -> 
+            let part1 = reach id1 id2 in
+            let part2 = 
+              Axioms.mk_axiom ("uls_" ^ Form.str_of_ident domain)
+                (FormUtil.mk_implies
+                  (FormUtil.mk_and [mk_domain domain Axioms.loc1])
+                  (FormUtil.mk_geq (get_data Axioms.loc1) (get_data (mk_loc id3))))
+            in
+              FormUtil.mk_and [part1; part2]
+        | _ -> failwith "wrong number of arguments");
+    heap = (fun domain args ->  match args with
+        | [id1; id2; _] ->
+            Axioms.mk_axiom 
+              ("def_of_" ^ Form.str_of_ident domain) 
+              (list_set_def id1 id2 domain)    
+        | _ -> failwith "wrong number of arguments");
+  }
+
+let llseg =
+  { sym = LList ;
+    sname = "llseg";
+    arity = 3;
+    structure = (fun domain args -> match args with
+        | [id1; id2; id3] -> 
+            let part1 = reach id1 id2 in
+            let part2 = 
+              Axioms.mk_axiom ("lls_" ^ Form.str_of_ident domain)
+                (FormUtil.mk_implies
+                  (FormUtil.mk_and [mk_domain domain Axioms.loc1])
+                  (FormUtil.mk_leq (get_data Axioms.loc1) (get_data (mk_loc id3))))
+            in
+              FormUtil.mk_and [part1; part2]
+        | _ -> failwith "wrong number of arguments");
+    heap = (fun domain args ->  match args with
+        | [id1; id2; _] ->
+            Axioms.mk_axiom 
+              ("def_of_" ^ Form.str_of_ident domain) 
+              (list_set_def id1 id2 domain)    
+        | _ -> failwith "wrong number of arguments");
+  }
+
+let dlseg =
+  { sym = DList ;
+    sname = "dlseg";
+    arity = 4;
+    structure = (fun domain args -> match args with
+        | [x1; x2; y1; y2] -> 
+            let part1 = reach x1 y1 in
+            let part2 =
+              Axioms.mk_axiom ("dll_" ^ Form.str_of_ident domain)
+                (FormUtil.mk_implies (FormUtil.mk_and [ mk_domain domain Axioms.loc1;
+                                                        mk_domain domain Axioms.loc2;
+                                                        FormUtil.mk_eq (FormUtil.mk_read fpts Axioms.loc1) Axioms.loc2])
+                   (FormUtil.mk_eq (FormUtil.mk_read fprev_pts Axioms.loc2) Axioms.loc1)) in
+            let part3 =
+              FormUtil.mk_or [
+              FormUtil.mk_and [ FormUtil.mk_eq (mk_loc x1) (mk_loc y1); FormUtil.mk_eq (mk_loc x2) (mk_loc y2)];
+              FormUtil.mk_and [ FormUtil.mk_eq (FormUtil.mk_read fprev_pts (mk_loc x1)) (mk_loc x2);
+                                FormUtil.mk_eq (FormUtil.mk_read fpts (mk_loc y2)) (mk_loc y1);
+                                mk_domain domain (mk_loc y2)] ]
+            in
+              FormUtil.mk_and [part1; part2; part3]
+        | _ -> failwith "wrong number of arguments");
+    heap = (fun domain args ->  match args with
+        | [id1; _; id2; _] ->
+            Axioms.mk_axiom 
+              ("def_of_" ^ Form.str_of_ident domain) 
+              (list_set_def id1 id2 domain)    
+        | _ -> failwith "wrong number of arguments");
+  }
+
+
+let symbols = [ emp; ptsTo; lseg; slseg; ulseg; llseg; dlseg ]
+
+let find_def s = 
+  try List.find (fun d -> s = d.sym) symbols
+  with Not_found -> failwith "find_def: unknown symbol"
+
+let arity s =
+  try (List.find (fun d -> s = d.sym) symbols).arity
+  with Not_found -> failwith "arity: unknown symbol"
+
+let symbol_to_string s = 
+  try (List.find (fun d -> s = d.sym) symbols).sname
+  with Not_found -> failwith "symbol_to_string: unknown symbol"
+
+let find_symbol s =
+  try Some (List.find (fun d -> s = d.sname) symbols).sym
+  with Not_found -> None
+
 module SlSet = Set.Make(struct
     type t = form
     let compare = compare
   end)
 
+
+let reachWoT a b c = FormUtil.mk_reachwo (fpts) a b c
+let reachWo a b c = reachWoT (mk_loc a) (mk_loc b) (mk_loc c)
+let btwnT a b c = FormUtil.mk_btwn (fpts) a b c
+let btwn a b c = btwnT (mk_loc a) (mk_loc b) (mk_loc c)
+let reachT a b = if !Config.use_btwn then btwnT a b b else reachWoT a b b
+let reach a b = reachT (mk_loc a) (mk_loc b) 
+let mk_domain d v = FormUtil.mk_elem v (mk_loc_set d)
+let emptyset = FormUtil.mk_empty (Some (Form.Set Form.Loc))
+let empty_t domain = FormUtil.mk_eq emptyset domain
+let empty domain = empty_t (mk_loc_set domain)
+let list_set_def id1 id2 domain =
+  FormUtil.mk_iff
+    (FormUtil.smk_and 
+       [if !Config.use_btwn 
+        then btwnT (mk_loc id1) Axioms.loc1 (mk_loc id2)
+        else reachWoT (mk_loc id1) Axioms.loc1 (mk_loc id2);
+        FormUtil.mk_neq Axioms.loc1 (mk_loc id2)])
+    (mk_domain domain Axioms.loc1)
 module SlMap = Map.Make(struct
     type t = form
     let compare = compare
@@ -154,14 +335,6 @@ let rec has_prev f = match f with
 
 (* translation to grass *)
 
-let reachWoT a b c = FormUtil.mk_reachwo (fpts) a b c
-let reachWo a b c = reachWoT (mk_loc a) (mk_loc b) (mk_loc c)
-let btwnT a b c = FormUtil.mk_btwn (fpts) a b c
-let btwn a b c = btwnT (mk_loc a) (mk_loc b) (mk_loc c)
-let reachT a b = if !Config.use_btwn then btwnT a b b else reachWoT a b b
-let reach a b = reachT (mk_loc a) (mk_loc b) 
-let mk_domain d v = FormUtil.mk_elem v (mk_loc_set d)
-
 let one_and_rest lst =
   let rec process acc1 acc2 lst = match lst with
     | x :: xs -> process ((x, acc2 @ xs) :: acc1) (x :: acc2) xs
@@ -175,73 +348,6 @@ let fresh_existentials f =
     else id
   in
     map_id fct f
-
-let emptyset = FormUtil.mk_empty (Some (Form.Set Form.Loc))
-let empty_t domain = FormUtil.mk_eq emptyset domain
-let empty domain = empty_t (mk_loc_set domain)
-let list_set_def id1 id2 domain =
-  FormUtil.mk_iff
-    (FormUtil.smk_and 
-       [if !Config.use_btwn 
-        then btwnT (mk_loc id1) Axioms.loc1 (mk_loc id2)
-        else reachWoT (mk_loc id1) Axioms.loc1 (mk_loc id2);
-        FormUtil.mk_neq Axioms.loc1 (mk_loc id2)])
-    (mk_domain domain Axioms.loc1)
-
-let struct_part domain sym args =
-  assert (List.length args = arity sym);
-  match (sym, args) with
-  | (Emp, []) -> FormUtil.mk_true
-  | (PtsTo, [h; id1; id2]) -> FormUtil.mk_eq (FormUtil.mk_read (to_field h) (mk_loc id1)) (mk_loc id2)
-  | (List, [id1; id2]) -> reach id1 id2
-  | (SList, [id1; id2]) ->
-    let part1 = reach id1 id2 in
-    let part2 = 
-      Axioms.mk_axiom ("sls_" ^ Form.str_of_ident domain)
-        (FormUtil.mk_implies
-          (FormUtil.mk_and [mk_domain domain Axioms.loc1;
-                            mk_domain domain Axioms.loc2;
-                            reachT Axioms.loc1 Axioms.loc2])
-          (FormUtil.mk_leq (get_data Axioms.loc1) (get_data Axioms.loc2)))
-    in
-      FormUtil.mk_and [part1; part2]
-  | (UList, [id1; id2; id3]) ->
-    let part1 = reach id1 id2 in
-    let part2 = 
-      Axioms.mk_axiom ("uls_" ^ Form.str_of_ident domain)
-        (FormUtil.mk_implies
-          (FormUtil.mk_and [mk_domain domain Axioms.loc1])
-          (FormUtil.mk_geq (get_data Axioms.loc1) (get_data (mk_loc id3))))
-    in
-      FormUtil.mk_and [part1; part2]
-  | (LList, [id1; id2; id3]) ->
-    let part1 = reach id1 id2 in
-    let part2 = 
-      Axioms.mk_axiom ("lls_" ^ Form.str_of_ident domain)
-        (FormUtil.mk_implies
-          (FormUtil.mk_and [mk_domain domain Axioms.loc1])
-          (FormUtil.mk_leq (get_data Axioms.loc1) (get_data (mk_loc id3))))
-    in
-      FormUtil.mk_and [part1; part2]
-  | (sym, args) ->
-    failwith ("struct_part not expecting " ^(symbol_to_string sym) ^
-               (String.concat "," (List.map ident_to_string args)))
-
-let heap_part domain sym args =
-  assert (List.length args = arity sym);
-  match (sym, args) with
-  | (Emp, []) -> empty domain
-  | (PtsTo, [h; id1; id2]) ->
-    FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_setenum [mk_loc id1])
-  | (List, [id1; id2]) | (SList, [id1; id2]) 
-  | (UList, [id1; id2; _]) | (LList, [id1; id2; _])
-  | (DList, [id1; _; id2; _]) ->
-    Axioms.mk_axiom 
-      ("def_of_" ^ Form.str_of_ident domain) 
-      (list_set_def id1 id2 domain)    
-  | (sym, args) ->
-    failwith ("heap_part not expecting " ^(symbol_to_string sym) ^
-               (String.concat "," (List.map ident_to_string args)))
 
 (* translation that keeps the heap separated from the pointer structure *)
 let to_form set_fct domain f =
@@ -269,12 +375,16 @@ let to_form set_fct domain f =
                             mk_domain domain (mk_loc y2)] ]
         in
         ( [FormUtil.mk_and ((if pol then [part3] else []) @ [part1;  part4]), mk_loc_set domain, IdSet.singleton domain],
-          heap_part domain DList  [x1; x2; y1; y2]
+          dlseg.heap domain [x1; x2; y1; y2]
          )
     | Spatial (sym, args) -> 
         let domain = FormUtil.fresh_ident (fst d) in
-        ([struct_part domain sym args, mk_loc_set domain, IdSet.empty],
-        heap_part domain sym args)
+        let def = find_def sym in
+          assert (List.length args = def.arity);
+          ( [ def.structure domain args,
+              mk_loc_set domain,
+              IdSet.empty],
+             def.heap domain args )
     | SepConj forms ->
         (*let ds = List.map (fun _ -> fd "sep" domain) forms in*)
         let translated = List.map (process_sep pol (fd "sep" d)) forms in
