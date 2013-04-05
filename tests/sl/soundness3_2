@@ -3,7 +3,7 @@ method insert(lst, elt)
     ensures lseg(lst, null);
 {
     if (lst == null) {
-      lst := e; 
+      lst := elt; 
       return lst;
     } else {
         curr := lst;
