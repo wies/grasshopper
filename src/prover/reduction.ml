@@ -201,9 +201,9 @@ let reduce_frame fs =
     let frame = mk_diff a x in
     let replacement_alloc =
       [ mk_not (smk_elem mk_null a'); (* null is still not allocated *)
-        mk_subseteq x a; (* everything in x is allocated before *)
-        mk_eq a' (mk_union [x'; frame]); (* a' is frame + x' *)
-        mk_eq (mk_inter [x'; frame]) (mk_empty (Some (Set Loc))) (* everything added to a' is fresh *)
+        mk_subseteq x a; (* everything in x was allocated before *)
+        mk_eq a' (mk_union [x'; frame]); (* new alloc is frame + x' *)
+        mk_eq (mk_inter [x'; frame]) (mk_empty (Some (Set Loc))) (* everything added to alloc is fresh *)
       ]
     in
 
