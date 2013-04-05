@@ -1,4 +1,5 @@
 open SimpleLanguage
+open VcGen
 open Sl
 open Util
 open Logging

@@ -80,7 +80,7 @@ sl_form:
 | pterm LEQ pterm { mk_pure (FormUtil.mk_leq $1 $3) }
 | pterm GEQ pterm { mk_pure (FormUtil.mk_geq $1 $3) }
 /* spatial part */
-| EMP { Emp }
+| EMP { mk_emp }
 | term PTS term { mk_pts $1 $3 }
 | term BPTS term { mk_prev_pts $1 $3 }
 | LS LPAREN term COMMA term RPAREN { mk_ls $3 $5 }

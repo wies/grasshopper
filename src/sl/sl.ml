@@ -31,15 +31,36 @@ let mk_const d =
   if (fst d = "null") then FormUtil.mk_null
   else FormUtil.mk_free_const d
 
-type form =
+type symbol =
   | Emp
+  | PtsTo
+  | List 
+  | SList
+  | UList
+  | LList
+  | DList
+
+let arity s = match s with
+  | Emp -> 0
+  | PtsTo -> 3
+  | List  -> 2
+  | SList -> 2
+  | UList -> 3
+  | LList -> 3
+  | DList -> 4
+
+let symbol_to_string s = match s with
+  | Emp -> "emp"
+  | PtsTo -> "|->"
+  | List  -> "lseg"
+  | SList -> "slseg"
+  | UList -> "ulseg"
+  | LList -> "llseg"
+  | DList -> "dlseg"
+
+type form =
   | Pure of Form.form
-  | PtsTo of ident * ident * ident
-  | List of ident * ident
-  | SList of ident * ident
-  | UList of ident * ident * ident
-  | LList of ident * ident * ident
-  | DList of ident * ident * ident * ident
+  | Spatial of symbol * ident list
   | SepConj of form list
   | Not of form
   | And of form list
@@ -55,44 +76,41 @@ module SlMap = Map.Make(struct
     let compare = compare
   end)
 
-let mk_emp = Emp
 let mk_pure p = Pure p
 let mk_true = mk_pure FormUtil.mk_true
 let mk_false = mk_pure FormUtil.mk_false
 let mk_eq a b = mk_pure (FormUtil.mk_eq (mk_const a) (mk_const b))
 let mk_not a = Not a
-let mk_pts a b = PtsTo (pts, a, b)
-let mk_prev_pts a b = PtsTo (prev_pts, a, b)
-let mk_ls a b = List (a, b)
-let mk_sls a b = SList (a, b)
-let mk_uls a b c = UList (a, b, c)
-let mk_lls a b c = LList (a, b, c)
-let mk_dls a b c d = DList (a, b, c, d)
+let mk_spatial s args = Spatial (s, args)
+let mk_emp = mk_spatial Emp []
+let mk_pts a b = mk_spatial PtsTo [pts; a; b]
+let mk_prev_pts a b = mk_spatial PtsTo [prev_pts; a; b]
+let mk_ls a b = mk_spatial List [a; b]
+let mk_sls a b = mk_spatial SList [a; b]
+let mk_uls a b c = mk_spatial UList [a; b; c]
+let mk_lls a b c = mk_spatial LList [a; b; c]
+let mk_dls a b c d = mk_spatial DList [a; b; c; d]
 let mk_and a b = And [a; b]
 let mk_or a b = Or [a; b]
 let mk_sep a b = 
   match (a, b) with
-  | (Emp, _) -> b
-  | (_, Emp) -> a
+  | (Spatial (Emp, []), _) -> b
+  | (_, Spatial (Emp, [])) -> a
   | (SepConj aa, SepConj bb) -> SepConj (aa @ bb)
   | (a, SepConj bb) -> SepConj (a :: bb)
   | (SepConj aa, b) -> SepConj (aa @ [b]) 
   | _ -> SepConj [a; b]
+let mk_sep_lst args = List.fold_left mk_sep mk_emp args
 
 let rec to_string f = match f with
   | Pure p -> Form.string_of_form p
   | Not t -> "~(" ^ (to_string t) ^")"
   | And lst -> "(" ^ (String.concat ") && (" (List.map to_string lst)) ^ ")"
   | Or lst ->  "(" ^ (String.concat ") || (" (List.map to_string lst)) ^ ")"
-  | Emp -> "emp"
-  | PtsTo (h, a, b) when h = pts -> (Form.str_of_ident a) ^ " |-> " ^ (Form.str_of_ident b)
-  | PtsTo (h, a, b) when h = prev_pts -> (Form.str_of_ident a) ^ " |<- " ^ (Form.str_of_ident b)
-  | PtsTo (h, a, b) -> (Form.str_of_ident a) ^ " |"^(ident_to_string h)^"> " ^ (Form.str_of_ident b)
-  | List (a, b) -> "lseg(" ^ (Form.str_of_ident a) ^ ", " ^ (Form.str_of_ident b) ^ ")"
-  | SList (a, b) -> "slseg(" ^ (Form.str_of_ident a) ^ ", " ^ (Form.str_of_ident b) ^ ")"
-  | UList (a, b, c) -> "ulseg(" ^ (Form.str_of_ident a) ^ ", " ^ (Form.str_of_ident b) ^ ", " ^ (Form.str_of_ident c) ^ ")"
-  | LList (a, b, c) -> "llseg(" ^ (Form.str_of_ident a) ^ ", " ^ (Form.str_of_ident b) ^ ", " ^ (Form.str_of_ident c) ^ ")"
-  | DList (a, b, c, d) -> "dlseg(" ^ (String.concat ", " (List.map ident_to_string [a;b;c;d])) ^ ")"
+  | Spatial (PtsTo, [h; a; b]) when h = pts -> (Form.str_of_ident a) ^ " |-> " ^ (Form.str_of_ident b)
+  | Spatial (PtsTo, [h; a; b]) when h = prev_pts -> (Form.str_of_ident a) ^ " |<- " ^ (Form.str_of_ident b)
+  | Spatial (s, []) -> symbol_to_string s
+  | Spatial (s, args) -> (symbol_to_string s) ^ "(" ^ (String.concat ", " (List.map ident_to_string args)) ^ ")"
   | SepConj lst -> "(" ^ (String.concat ") * (" (List.map to_string lst)) ^ ")"
 
 
@@ -101,13 +119,8 @@ let rec map_id fct f = match f with
   | Not t ->  Not (map_id fct t)
   | And lst -> And (List.map (map_id fct) lst)
   | Or lst -> Or (List.map (map_id fct) lst)
-  | Emp -> Emp
-  | PtsTo (h, a, b) -> PtsTo (h, fct a, fct b)
-  | List (a, b) -> List (fct a, fct b)
-  | SList (a, b) -> SList (fct a, fct b)
-  | UList (a, b, c) -> UList (fct a, fct b, fct c)
-  | LList (a, b, c) -> LList (fct a, fct b, fct c)
-  | DList (a, b, c, d) -> DList (fct a, fct b, fct c, fct d)
+  | Spatial (PtsTo, h :: args) -> mk_spatial PtsTo (h :: List.map fct args) (* TODO do we really need to skip h ? *)
+  | Spatial (s, args) -> mk_spatial s (List.map fct args)
   | SepConj lst -> SepConj (List.map (map_id fct) lst)
 
 let subst_id subst f =
@@ -118,9 +131,9 @@ let subst_id subst f =
 
 let rec has_prev f = match f with
   | Not t -> has_prev t
-  | List _ | SList _ | UList _ | LList _ | Emp | Pure _ -> false
-  | PtsTo (h, a, b) -> h = prev_pts
-  | DList _ -> true
+  | Spatial (DList, _) -> true
+  | Spatial (PtsTo, h :: _) -> h = prev_pts
+  | Pure _ | Spatial _ -> false
   | SepConj lst | And lst | Or lst -> 
     List.exists has_prev lst
 
@@ -170,23 +183,23 @@ let to_form set_fct domain f =
     | Pure p -> 
         let domain = FormUtil.fresh_ident (fst d) in
         ([p, mk_loc_set domain, IdSet.empty], empty domain)
-    | Emp -> 
+    | Spatial (Emp, []) -> 
         let domain = FormUtil.fresh_ident (fst d) in
         ([FormUtil.mk_true, mk_loc_set domain, IdSet.empty], empty domain)
-    | PtsTo (h, id1, id2) ->
+    | Spatial (PtsTo, [h; id1; id2]) ->
         let domain = FormUtil.fresh_ident (fst d) in
         ([FormUtil.mk_eq (FormUtil.mk_read (to_field h) (mk_loc id1)) (mk_loc id2),
           mk_loc_set domain, IdSet.empty],
          FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_setenum [mk_loc id1])
         )
-    | List (id1, id2) ->
+    | Spatial (List, [id1; id2]) ->
         let domain = FormUtil.fresh_ident (fst d) in
         ( [reach id1 id2, mk_loc_set domain, IdSet.empty],
           Axioms.mk_axiom 
             ("def_of_" ^ Form.str_of_ident domain) 
             (list_set_def id1 id2 domain)    
         )
-    | SList (id1, id2) ->
+    | Spatial (SList, [id1; id2]) ->
         let domain = FormUtil.fresh_ident (fst d) in
         let part1 = reach id1 id2 in
         let part2 = 
@@ -203,7 +216,7 @@ let to_form set_fct domain f =
             (list_set_def id1 id2 domain)
         in
           ([FormUtil.mk_and [part1; part2], mk_loc_set domain, IdSet.empty], part3)
-    | UList (id1, id2, id3) ->
+    | Spatial (UList, [id1; id2; id3]) ->
         let domain = FormUtil.fresh_ident (fst d) in
         let part1 = reach id1 id2 in
         let part2 = 
@@ -218,7 +231,7 @@ let to_form set_fct domain f =
             (list_set_def id1 id2 domain)
         in
           ([FormUtil.mk_and [part1; part2], mk_loc_set domain, IdSet.empty], part3)
-    | LList (id1, id2, id3) ->
+    | Spatial (LList, [id1; id2; id3]) ->
         let domain = FormUtil.fresh_ident (fst d) in
         let part1 = reach id1 id2 in
         let part2 = 
@@ -233,7 +246,7 @@ let to_form set_fct domain f =
             (list_set_def id1 id2 domain)
         in
           ([FormUtil.mk_and [part1; part2], mk_loc_set domain, IdSet.empty], part3)
-    | DList (x1, x2, y1, y2) ->
+    | Spatial (DList, [x1; x2; y1; y2]) ->
         let domain = FormUtil.fresh_ident (fst d) in
         let part1 = reach x1 y1 in
         let part2 =

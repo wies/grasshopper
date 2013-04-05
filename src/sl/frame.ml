@@ -186,11 +186,11 @@ let make_frame heap_a heap_b (model: Model.model) =
       match Model.eval_term model term with
       | Some r ->
         let var2 = get_repr c_map r in
-          Sl.PtsTo (Sl.pts, var, var2)
+          Sl.mk_pts var var2
       | None ->
           (* no pts_to -> look for the successor in reach *)
           match succ var with
-          | Some var2 -> Sl.List (var, var2)
+          | Some var2 -> Sl.mk_ls var var2
           | None -> failwith "existential successor" (* Sl.PtsTo (var, fresh_ident "_") *)
   in
   let spatial =
@@ -199,11 +199,11 @@ let make_frame heap_a heap_b (model: Model.model) =
       (SymbolSet.elements diff)
   in
   let spatial2 = match spatial with
-    | [] -> Sl.Emp
+    | [] -> Sl.mk_emp
     | [x] -> x
-    | xs -> Sl.SepConj xs
+    | xs -> Sl.mk_sep_lst xs
   in
-  let frame = Sl.SepConj [spatial2; pure] in
+  let frame = Sl.mk_sep spatial2 pure in
     Debug.msg ("frame is " ^ (Sl.to_string frame) ^ "\n");
     ((*frame,*) spatial2, pure)
 

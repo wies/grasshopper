@@ -39,7 +39,7 @@ term:
 form:
 | TRUE { mk_true }
 | FALSE { mk_false }
-| EMP { Emp }
+| EMP { mk_emp }
 | term EQ term { mk_eq $1 $3 }
 | term NEQ term { mk_not (mk_eq $1 $3) }
 | term PTS term { mk_pts $1 $3 }
