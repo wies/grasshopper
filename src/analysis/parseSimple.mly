@@ -36,9 +36,6 @@ let parse_error = ParseError.parse_error
 %nonassoc ASSUME ASSERT
 %nonassoc NEW DISPOSE
 
-%token <string> TIDENT
-%token <string> PIDENT
-
 %start main
 %type <SimpleLanguage.procedure list> main
 %%

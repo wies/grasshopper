@@ -361,8 +361,9 @@ let check_procedure proceduresMap name =
       end
   in
 
+  (* TODO try to fix this ... *)
   let while_pre_post pre stack cond invariant body =
-    if (change_heap body) then
+    if true || (change_heap body) then
       begin
         (* pre/post *)
         let subst = DecisionStack.get_subst stack in

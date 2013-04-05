@@ -10,13 +10,18 @@ method insertion_sort(lst)
         curr := srt.next;
         min := srt;
         while (curr != null)
-            invariant ulseg(srt, min, min) * ulseg(min, curr, min) * ulseg(curr, null, srt) * min != null * min.data >= srt.data;
+            invariant ulseg(srt, min, min);
+            invariant ulseg(min, curr, min);
+            invariant ulseg(curr, null, srt);
+            invariant min != null;
+            invariant min.data >= srt.data;
         {
             if (curr.data < min.data) {
                 min := curr;
             }
             curr := curr.next;
         }
+        assert ulseg(srt, min, min) * ulseg(min, null, min) * min != null * min.data >= srt.data;
         tmp := min.data;
         min.data := srt.data;
         srt.data := tmp;

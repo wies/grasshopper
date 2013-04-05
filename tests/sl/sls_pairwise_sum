@@ -9,7 +9,7 @@ method pairwise_sum(x, y)
     while (curr_x != null && curr_y != null) 
         invariant (lslseg(x, curr_x, curr_x) * slseg(curr_x, null) * curr_x != null) || (curr_x == null * slseg(x, null));
         invariant (lslseg(y, curr_y, curr_y) * slseg(curr_y, null) * curr_y != null) || (curr_y == null * slseg(y, null));
-        invariant (lslseg(z, last_z, last_z) * last_z != null * last_z |-> null) || (last_z == null * z == null);
+        invariant (lslseg(z, last_z, last_z) * last_z |-> null) || (last_z == null * z == null);
         invariant last_z == null || curr_x == null || curr_y == null || last_z.data <= curr_x.data + curr_y.data;
     {
         tmp := last_z;

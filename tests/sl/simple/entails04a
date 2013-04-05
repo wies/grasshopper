@@ -1,0 +1,1 @@
+ulseg(srt, min, min) * ulseg(min, curr, min) * ulseg(curr, null, srt) * min ~= null * curr = null * min.data >= srt.data
