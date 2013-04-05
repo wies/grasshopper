@@ -1,0 +1,23 @@
+method insert(lst, elt)
+    requires lseg(lst, null) * elt |-> null;
+    ensures lseg(lst, null);
+{
+    if (lst == null) {
+      lst := e; 
+      return lst;
+    } else {
+        prv := null;
+        curr := lst;
+        while ( Random && curr != null ) 
+            invariant ((lseg(lst,prv) * prv |-> curr || prv == null * lst == curr) * lseg(curr,null));
+        {
+            prv := curr;
+            curr := curr.next;
+        }
+        elt.next := curr;
+        if (prv != null) {
+           prv.next := elt;
+        }
+        return lst;
+    }
+}
