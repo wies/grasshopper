@@ -198,19 +198,19 @@ let reduce_sets_to_predicates =
 (** Reduce all frame predicates to constraints over sets and entry points. *)
 let reduce_frame fs =
   let expand_frame x x' a a' f f' =
-    let nxa = mk_diff a x in
+    let frame = mk_diff a x in
     let replacement_alloc =
-      [ mk_not (smk_elem mk_null a');
-        (* mk_subseteq x' a';
-        mk_subseteq nxa a'; *)
-        mk_eq a' (mk_union [x'; nxa])
+      [ mk_not (smk_elem mk_null a'); (* null is still not allocated *)
+        mk_subseteq x a; (* everything in x is allocated before *)
+        mk_eq a' (mk_union [x'; frame]); (* a' is frame + x' *)
+        mk_eq (mk_inter [x'; frame]) (mk_empty (Some (Set Loc))) (* everything added to a' is fresh *)
       ]
     in
 
     let replacement_pts =
       mk_forall [Axioms.l1]
         (mk_implies
-           (mk_not (smk_elem Axioms.loc1 nxa))
+           (mk_not (smk_elem Axioms.loc1 frame))
            (mk_eq (mk_read f Axioms.loc1) (mk_read f' Axioms.loc1))
         )
     in
@@ -242,10 +242,7 @@ let reduce_frame fs =
      ]
     in
     
-    let included = mk_subseteq x a in
-    let preserve = mk_subseteq (mk_inter [a; x']) x in
     let axioms =
-      included :: preserve ::
       replacement_pts ::
       replacement_alloc @
       replacement_reach
