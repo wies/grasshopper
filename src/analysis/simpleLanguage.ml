@@ -58,6 +58,8 @@ let rec desugar stmnt =
   | FunUpdate (_, t, e) -> 
       let ds = derefs_expr (derefs TermSet.empty t) e in
       Block (assert_alloc ds @ [stmnt])
+  | Dispose id ->
+      Block (assert_alloc (TermSet.singleton (mk_free_const ~srt:Loc id)) @ [stmnt])
   | Block stmnts ->
       Block (List.map desugar stmnts)
   | While (cond, inv, s) -> 

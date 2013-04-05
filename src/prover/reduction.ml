@@ -385,7 +385,10 @@ let reduce_reach fs gts =
     fields
   in
   let partition_of fld =
-    let p = Puf.find fld_partition (TermMap.find fld fld_map) in
+    let p = 
+      try Puf.find fld_partition (TermMap.find fld fld_map) 
+      with Not_found -> failwith ("did not find field " ^ (string_of_term fld)) 
+    in
     let res = TermSet.filter (fun fld1 -> Puf.find fld_partition (TermMap.find fld1 fld_map) = p) fields in
     (*print_endline ("partition of " ^ string_of_term fld);*)
     res
@@ -426,6 +429,8 @@ let reduce_reach fs gts =
   (* instantiate the variables of sort Fld in all reachability axioms *)
   let basic_reach_flds = 
     fold_terms (fun flds -> function
+      | App (ReachWO, Var _ :: _, _)
+      | App (Btwn, Var _ :: _, _) -> flds
       | App (ReachWO, fld :: _, _) 
       | App (Btwn, fld :: _, _) -> TermSet.union (partition_of fld) flds
       | _ -> flds)

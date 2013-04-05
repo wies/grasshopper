@@ -4,7 +4,7 @@ method dl_traverse(lst)
 {
     curr := lst;
     prv := a;
-    while(curr != null) 
+    while (curr != null) 
         invariant dlseg(lst, a, curr, prv) * dlseg(curr, prv, null, b);
     {
         prv := curr;
