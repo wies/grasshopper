@@ -17,6 +17,8 @@ method pairwise_sum(x, y)
         invariant lslseg(z, last_z, last_z) * last_z |-> null;
         invariant last_z.data <= curr_x.data + curr_y.data;
     {
+        curr_x := curr_x.next;
+        curr_y := curr_y.next;
         tmp := last_z;
         new last_z;
         last_z.next := null;
@@ -26,8 +28,6 @@ method pairwise_sum(x, y)
         } else {
             tmp.next := last_z;
         }
-        curr_x := curr_x.next;
-        curr_y := curr_y.next;
     }
     return z;
 }
