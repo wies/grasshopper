@@ -9,7 +9,7 @@ let parse_error = ParseError.parse_error
 %token <string> PIDENT
 %token LPAREN RPAREN
 %token EQ NEQ
-%token PTS BPTS LS SLS DLS TRUE FALSE EMP
+%token PTS BPTS LS DLS TRUE FALSE EMP
 %token SEP AND OR NOT
 %token COMMA EOF
 
@@ -44,7 +44,6 @@ form:
 | term NEQ term { mk_not (mk_eq $1 $3) }
 | term PTS term { mk_pts $1 $3 }
 | term BPTS term { mk_prev_pts $1 $3 }
-| SLS LPAREN term COMMA term RPAREN { mk_sls $3 $5 }
 | LS LPAREN term COMMA term RPAREN { mk_ls $3 $5 }
 | DLS LPAREN term COMMA term COMMA term COMMA term RPAREN { mk_dls $3 $5 $7 $9 }
 | NOT form { mk_not $2 }

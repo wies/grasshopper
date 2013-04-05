@@ -4,7 +4,7 @@ method traverse1(lst)
 {
     curr := lst;
     while(curr != null) 
-        invariant slseg(lst, curr) * slseg(curr, null);
+        invariant (curr != null * lslseg(lst, curr, curr) * slseg(curr, null)) || (curr == null * slseg(lst, curr));
     {
         curr := curr.next; 
     }
