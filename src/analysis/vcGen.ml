@@ -269,7 +269,7 @@ let check_procedure proceduresMap name =
       failwith (msg ^ " may not hold in " ^ (str_of_ident name))
     else
       begin
-        (* Sl.pts + Sl.prev_pts *)
+        (* Sl.pts + Sl.prev_pts + TODO other pointers ? *)
         let subst = DecisionStack.get_subst stack in
         let alloc1 = last_alloc subst in
         let fp = fresh_ident "footprint" in
@@ -316,6 +316,7 @@ let check_procedure proceduresMap name =
   in
 
   let sl_stuff_to_increase pre subst sl1 sl2 =
+    (* TODO other pointers *)
     let pts = if  Sl.has_prev pre ||
                   Sl.has_prev sl1 ||
                   Sl.has_prev sl2 ||

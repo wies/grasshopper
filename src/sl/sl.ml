@@ -161,99 +161,85 @@ let fresh_existentials f =
   in
     map_id fct f
 
+let emptyset = FormUtil.mk_empty (Some (Form.Set Form.Loc))
+let empty_t domain = FormUtil.mk_eq emptyset domain
+let empty domain = empty_t (mk_loc_set domain)
+let list_set_def id1 id2 domain =
+  FormUtil.mk_iff
+    (FormUtil.smk_and 
+       [if !Config.use_btwn 
+        then btwnT (mk_loc id1) Axioms.loc1 (mk_loc id2)
+        else reachWoT (mk_loc id1) Axioms.loc1 (mk_loc id2);
+        FormUtil.mk_neq Axioms.loc1 (mk_loc id2)])
+    (mk_domain domain Axioms.loc1)
+
+let struct_part domain sym args =
+  assert (List.length args = arity sym);
+  match (sym, args) with
+  | (Emp, []) -> FormUtil.mk_true
+  | (PtsTo, [h; id1; id2]) -> FormUtil.mk_eq (FormUtil.mk_read (to_field h) (mk_loc id1)) (mk_loc id2)
+  | (List, [id1; id2]) -> reach id1 id2
+  | (SList, [id1; id2]) ->
+    let part1 = reach id1 id2 in
+    let part2 = 
+      Axioms.mk_axiom ("sls_" ^ Form.str_of_ident domain)
+        (FormUtil.mk_implies
+          (FormUtil.mk_and [mk_domain domain Axioms.loc1;
+                            mk_domain domain Axioms.loc2;
+                            reachT Axioms.loc1 Axioms.loc2])
+          (FormUtil.mk_leq (get_data Axioms.loc1) (get_data Axioms.loc2)))
+    in
+      FormUtil.mk_and [part1; part2]
+  | (UList, [id1; id2; id3]) ->
+    let part1 = reach id1 id2 in
+    let part2 = 
+      Axioms.mk_axiom ("uls_" ^ Form.str_of_ident domain)
+        (FormUtil.mk_implies
+          (FormUtil.mk_and [mk_domain domain Axioms.loc1])
+          (FormUtil.mk_geq (get_data Axioms.loc1) (get_data (mk_loc id3))))
+    in
+      FormUtil.mk_and [part1; part2]
+  | (LList, [id1; id2; id3]) ->
+    let part1 = reach id1 id2 in
+    let part2 = 
+      Axioms.mk_axiom ("lls_" ^ Form.str_of_ident domain)
+        (FormUtil.mk_implies
+          (FormUtil.mk_and [mk_domain domain Axioms.loc1])
+          (FormUtil.mk_leq (get_data Axioms.loc1) (get_data (mk_loc id3))))
+    in
+      FormUtil.mk_and [part1; part2]
+  | (sym, args) ->
+    failwith ("struct_part not expecting " ^(symbol_to_string sym) ^
+               (String.concat "," (List.map ident_to_string args)))
+
+let heap_part domain sym args =
+  assert (List.length args = arity sym);
+  match (sym, args) with
+  | (Emp, []) -> empty domain
+  | (PtsTo, [h; id1; id2]) ->
+    FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_setenum [mk_loc id1])
+  | (List, [id1; id2]) | (SList, [id1; id2]) 
+  | (UList, [id1; id2; _]) | (LList, [id1; id2; _])
+  | (DList, [id1; _; id2; _]) ->
+    Axioms.mk_axiom 
+      ("def_of_" ^ Form.str_of_ident domain) 
+      (list_set_def id1 id2 domain)    
+  | (sym, args) ->
+    failwith ("heap_part not expecting " ^(symbol_to_string sym) ^
+               (String.concat "," (List.map ident_to_string args)))
+
 (* translation that keeps the heap separated from the pointer structure *)
 let to_form set_fct domain f =
   let fd why d = FormUtil.fresh_ident ( why ^ "_" ^(fst d)) in
-  (*let v = Axioms.var1 in
-  let v2 = Axioms.var2 in*)
-  let emptyset = FormUtil.mk_empty (Some (Form.Set Form.Loc)) in
-  let empty_t domain = FormUtil.mk_eq emptyset domain in
-  let empty domain = empty_t (mk_loc_set domain) in
-  let list_set_def id1 id2 domain =
-    FormUtil.mk_iff
-      (FormUtil.smk_and 
-         [if !Config.use_btwn 
-          then btwnT (mk_loc id1) Axioms.loc1 (mk_loc id2)
-          else reachWoT (mk_loc id1) Axioms.loc1 (mk_loc id2);
-          FormUtil.mk_neq Axioms.loc1 (mk_loc id2)])
-      (mk_domain domain Axioms.loc1)
-  in
   let rec process_sep pol d f = 
     match f with
     | Pure p -> 
         let domain = FormUtil.fresh_ident (fst d) in
-        ([p, mk_loc_set domain, IdSet.empty], empty domain)
-    | Spatial (Emp, []) -> 
-        let domain = FormUtil.fresh_ident (fst d) in
-        ([FormUtil.mk_true, mk_loc_set domain, IdSet.empty], empty domain)
-    | Spatial (PtsTo, [h; id1; id2]) ->
-        let domain = FormUtil.fresh_ident (fst d) in
-        ([FormUtil.mk_eq (FormUtil.mk_read (to_field h) (mk_loc id1)) (mk_loc id2),
-          mk_loc_set domain, IdSet.empty],
-         FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_setenum [mk_loc id1])
-        )
-    | Spatial (List, [id1; id2]) ->
-        let domain = FormUtil.fresh_ident (fst d) in
-        ( [reach id1 id2, mk_loc_set domain, IdSet.empty],
-          Axioms.mk_axiom 
-            ("def_of_" ^ Form.str_of_ident domain) 
-            (list_set_def id1 id2 domain)    
-        )
-    | Spatial (SList, [id1; id2]) ->
-        let domain = FormUtil.fresh_ident (fst d) in
-        let part1 = reach id1 id2 in
-        let part2 = 
-          Axioms.mk_axiom ("sls_" ^ Form.str_of_ident domain)
-            (FormUtil.mk_implies
-              (FormUtil.mk_and [mk_domain domain Axioms.loc1;
-                                mk_domain domain Axioms.loc2;
-                                reachT Axioms.loc1 Axioms.loc2])
-              (FormUtil.mk_leq (get_data Axioms.loc1) (get_data Axioms.loc2)))
-        in
-        let part3 =
-          Axioms.mk_axiom 
-            ("def_of_" ^ Form.str_of_ident domain) 
-            (list_set_def id1 id2 domain)
-        in
-          ([FormUtil.mk_and [part1; part2], mk_loc_set domain, IdSet.empty], part3)
-    | Spatial (UList, [id1; id2; id3]) ->
-        let domain = FormUtil.fresh_ident (fst d) in
-        let part1 = reach id1 id2 in
-        let part2 = 
-          Axioms.mk_axiom ("uls_" ^ Form.str_of_ident domain)
-            (FormUtil.mk_implies
-              (FormUtil.mk_and [mk_domain domain Axioms.loc1])
-              (FormUtil.mk_geq (get_data Axioms.loc1) (get_data (mk_loc id3))))
-        in
-        let part3 =
-          Axioms.mk_axiom 
-            ("def_of_" ^ Form.str_of_ident domain) 
-            (list_set_def id1 id2 domain)
-        in
-          ([FormUtil.mk_and [part1; part2], mk_loc_set domain, IdSet.empty], part3)
-    | Spatial (LList, [id1; id2; id3]) ->
-        let domain = FormUtil.fresh_ident (fst d) in
-        let part1 = reach id1 id2 in
-        let part2 = 
-          Axioms.mk_axiom ("lls_" ^ Form.str_of_ident domain)
-            (FormUtil.mk_implies
-              (FormUtil.mk_and [mk_domain domain Axioms.loc1])
-              (FormUtil.mk_leq (get_data Axioms.loc1) (get_data (mk_loc id3))))
-        in
-        let part3 =
-          Axioms.mk_axiom 
-            ("def_of_" ^ Form.str_of_ident domain) 
-            (list_set_def id1 id2 domain)
-        in
-          ([FormUtil.mk_and [part1; part2], mk_loc_set domain, IdSet.empty], part3)
+        ([p, mk_loc_set domain, IdSet.empty],
+         empty domain)
     | Spatial (DList, [x1; x2; y1; y2]) ->
         let domain = FormUtil.fresh_ident (fst d) in
         let part1 = reach x1 y1 in
-        let part2 =
-          Axioms.mk_axiom 
-            ("def_of_" ^ Form.str_of_ident domain) 
-            (list_set_def x1 y1 domain)
-        in
         let part3 =
           Axioms.mk_axiom ("dll_" ^ Form.str_of_ident domain)
             (FormUtil.mk_implies (FormUtil.mk_and [ mk_domain domain Axioms.loc1;
@@ -268,8 +254,12 @@ let to_form set_fct domain f =
                             mk_domain domain (mk_loc y2)] ]
         in
         ( [FormUtil.mk_and ((if pol then [part3] else []) @ [part1;  part4]), mk_loc_set domain, IdSet.singleton domain],
-          part2          
+          heap_part domain DList  [x1; x2; y1; y2]
          )
+    | Spatial (sym, args) -> 
+        let domain = FormUtil.fresh_ident (fst d) in
+        ([struct_part domain sym args, mk_loc_set domain, IdSet.empty],
+        heap_part domain sym args)
     | SepConj forms ->
         (*let ds = List.map (fun _ -> fd "sep" domain) forms in*)
         let translated = List.map (process_sep pol (fd "sep" d)) forms in
