@@ -245,7 +245,7 @@ let reduce_frame fs =
     let included = mk_subseteq x a in
     let preserve = mk_subseteq (mk_inter [a; x']) x in
     let axioms =
-      included :: (*preserve ::*)
+      included :: preserve ::
       replacement_pts ::
       replacement_alloc @
       replacement_reach
