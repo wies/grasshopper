@@ -2,20 +2,20 @@ method pairwise_sum(x, y)
     requires slseg(x, null) * slseg(y, null);
     ensures slseg(x, null) * slseg(y, null) * slseg(returned, null);
 {
+    if (x == null || y == null) {
+      return null;
+    }
     curr_x := x;
-    prv_x := x;
     curr_y := y;
-    prv_y := y;
-    z := null;
-    last_z := null;
-    while (curr_x != null && curr_y != null) 
-        //invariant (lslseg(x, curr_x, prv_x) * slseg(curr_x, null) * curr_x != null * prv_x.data <= curr_x.data) || (curr_x == null * slseg(x, null));
-        //invariant (lslseg(y, curr_y, prv_y) * slseg(curr_y, null) * curr_y != null * prv_y.data <= curr_y.data) || (curr_y == null * slseg(y, null));
-        invariant lslseg(x, curr_x, prv_x) * slseg(curr_x, null);
-        invariant lslseg(y, curr_y, prv_y) * slseg(curr_y, null);
-        //invariant (lslseg(z, last_z, last_z) * last_z != null * curr_x != null * curr_y != null * last_z |-> null * last_z.data <= prv_x.data + prv_y.data) || (last_z == null * z == null);
-        invariant (lslseg(z, last_z, last_z) * last_z |-> null) || (last_z == null * z == null);
-        invariant last_z == null || curr_x == null || curr_y == null || last_z.data <= curr_x.data + curr_y.data;
+    new z;
+    last_z := z;
+    z.data := curr_x.data + curr_y.data;
+    z.next := null;
+    while (curr_x.next != null && curr_y.next != null) 
+        invariant curr_x != null * lslseg(x, curr_x, curr_x) * slseg(curr_x, null);
+        invariant curr_y != null * lslseg(y, curr_y, curr_y) * slseg(curr_y, null);
+        invariant lslseg(z, last_z, last_z) * last_z |-> null;
+        invariant last_z.data <= curr_x.data + curr_y.data;
     {
         tmp := last_z;
         new last_z;
@@ -26,9 +26,7 @@ method pairwise_sum(x, y)
         } else {
             tmp.next := last_z;
         }
-        prv_x := curr_x;
         curr_x := curr_x.next;
-        prv_y := curr_y;
         curr_y := curr_y.next;
     }
     return z;
