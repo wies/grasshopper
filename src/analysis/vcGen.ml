@@ -288,6 +288,7 @@ let check_procedure proceduresMap name =
             (find_ptr subst) (find_ptr subst2)
         in
         let frames =
+          (* TODO data field ?? *)
           (frame get_next) ::
           (if has_prev then [frame get_prev] else [])
         in
@@ -325,7 +326,14 @@ let check_procedure proceduresMap name =
       else
         [Sl.pts]
     in
-      [pts, Some (Fld Loc); [alloc_id], Some (Set Loc)]
+    let data = if Sl.has_data pre ||
+                  Sl.has_data sl1 ||
+                  Sl.has_data sl2 ||
+                  IdMap.mem Sl.data subst 
+      then [Sl.data]
+      else []
+    in
+      [pts, Some (Fld Loc); [alloc_id], Some (Set Loc); data, Some (Fld Int)]
   in
 
   let procedure_call pre stack m args id =
@@ -356,14 +364,15 @@ let check_procedure proceduresMap name =
         let (subst2, sig2) = increase subst sig1 (assigned body) in
         let fp = fresh_ident "footprint" in
         let sl_f = to_grass fp invariant subst2 in
+        let sub = mk_subseteq (mk_loc_set fp) (mk_loc_set (last_alloc subst)) in
         let notC = subst_id subst2 (mk_not cond) in
-          add_to_stack stack subst2 sig2 (smk_and [notC; sl_f])
+          add_to_stack stack subst2 sig2 (smk_and [notC; sub; sl_f])
       end
   in
 
   (* TODO try to fix this ... *)
   let while_pre_post pre stack cond invariant body =
-    if true || (change_heap body) then
+    if (change_heap body) then
       begin
         (* pre/post *)
         let subst = DecisionStack.get_subst stack in

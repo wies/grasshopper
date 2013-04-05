@@ -364,7 +364,6 @@ let rec map_id fct f = match f with
   | Not t ->  Not (map_id fct t)
   | And lst -> And (List.map (map_id fct) lst)
   | Or lst -> Or (List.map (map_id fct) lst)
-  | Spatial (p, h :: args) when p.sym = ptsTo.sym -> mk_spatial ptsTo (h :: List.map fct args) (* TODO do we really need to skip h ? *)
   | Spatial (s, args) -> mk_spatial s (List.map fct args)
   | SepConj lst -> SepConj (List.map (map_id fct) lst)
 
@@ -381,6 +380,17 @@ let rec has_prev f = match f with
   | Pure _ | Spatial _ -> false
   | SepConj lst | And lst | Or lst -> 
     List.exists has_prev lst
+
+let rec has_data f = match f with
+  | Not t -> has_data t
+  | Spatial (d, _) when d.sym = slseg.sym ||
+                        d.sym = llseg.sym ||
+                        d.sym = ulseg.sym ||
+                        d.sym = lslseg.sym ||
+                        d.sym = uslseg.sym -> true
+  | Pure _ | Spatial _ -> false
+  | SepConj lst | And lst | Or lst -> 
+    List.exists has_data lst
 
 (* translation to grass *)
 

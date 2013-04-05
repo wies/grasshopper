@@ -208,7 +208,7 @@ let reduce_frame fs =
     in
 
     let replacement_pts =
-      mk_forall [Axioms.l1]
+      Axioms.mk_axiom "pts_frame"
         (mk_implies
            (mk_not (smk_elem Axioms.loc1 frame))
            (mk_eq (mk_read f Axioms.loc1) (mk_read f' Axioms.loc1))
