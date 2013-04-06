@@ -495,7 +495,7 @@ let reduce f =
   let fs3, ep_axioms, gts = reduce_ep fs21 in
   let fs4, gts1 = reduce_sets (fs3 @ ep_axioms) gts in
   let fs5, gts2 = reduce_reach fs4 gts1 in
-  let fs6 = (* reduce_remaining *) fs5 (* gts2 *) in
+  let fs6 = reduce_remaining fs5 gts2 in
   (* the following is a (probably stupid) heuristic to sort the formulas for improving the running time *)
   let fs7 = 
     (* sort by decreasing number of disjuncts in formula *)
