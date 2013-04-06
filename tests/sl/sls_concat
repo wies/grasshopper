@@ -1,4 +1,4 @@
-method concat(a, b)
+method concat(a, b, x)
     requires lslseg(a, null, x) * uslseg(b, null, x);
     ensures slseg(returned, null);
 {
@@ -7,7 +7,7 @@ method concat(a, b)
     } else {
         curr := a;
         while(curr.next != null) 
-            invariant curr != null * lslseg(a, curr, curr) * lslseg(curr, null, x);
+            invariant curr != null * lslseg(a, curr, curr.data) * lslseg(curr, null, x);
         {
             curr := curr.next; 
         }

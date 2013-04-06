@@ -11,9 +11,9 @@ method copy(lst)
         cp.data := curr.data;
         cp.next := null;
         while(curr.next != null) 
-            invariant lslseg(lst, curr, curr);
+            invariant lslseg(lst, curr, curr.data);
             invariant slseg(curr, null);
-            invariant lslseg(head, cp, curr);
+            invariant lslseg(head, cp, curr.data);
             invariant cp |-> null;
             invariant cp.data == curr.data;
             invariant curr != null;

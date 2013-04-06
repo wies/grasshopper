@@ -27,32 +27,25 @@ let mk_loc d =
   if (fst d = "null") then FormUtil.mk_null
   else FormUtil.mk_free_const ?srt:(Some (Form.Loc)) d
 
-let mk_const d =
-  if (fst d = "null") then FormUtil.mk_null
-  else FormUtil.mk_free_const d
-
 type symbol =
   { sym: string;
     arity: int;
-    structure: ident (*domain*) -> ident list (*args*) -> Form.form;
-    heap: ident (*domain*) -> ident list (*args*) -> Form.form;
+    structure: ident (*domain*) -> Form.term list (*args*) -> Form.form;
+    heap: ident (*domain*) -> Form.term list (*args*) -> Form.form;
   }
 
 type form =
   | Pure of Form.form
-  | Spatial of symbol * ident list
+  | Spatial of symbol * Form.term list
   | SepConj of form list
   | Not of form
   | And of form list
   | Or of form list
 
 (* auxiliary functions *)
-let reachWoT a b c = FormUtil.mk_reachwo (fpts) a b c
-let reachWo a b c = reachWoT (mk_loc a) (mk_loc b) (mk_loc c)
-let btwnT a b c = FormUtil.mk_btwn (fpts) a b c
-let btwn a b c = btwnT (mk_loc a) (mk_loc b) (mk_loc c)
-let reachT a b = if !Config.use_btwn then btwnT a b b else reachWoT a b b
-let reach a b = reachT (mk_loc a) (mk_loc b) 
+let reachWo a b c = FormUtil.mk_reachwo (fpts) a b c
+let btwn a b c = FormUtil.mk_btwn (fpts) a b c
+let reach a b = if !Config.use_btwn then btwn a b b else reachWo a b b
 let mk_domain d v = FormUtil.mk_elem v (mk_loc_set d)
 let emptyset = FormUtil.mk_empty (Some (Form.Set Form.Loc))
 let empty_t domain = FormUtil.mk_eq emptyset domain
@@ -61,10 +54,27 @@ let list_set_def id1 id2 domain =
   FormUtil.mk_iff
     (FormUtil.smk_and 
        [if !Config.use_btwn 
-        then btwnT (mk_loc id1) Axioms.loc1 (mk_loc id2)
-        else reachWoT (mk_loc id1) Axioms.loc1 (mk_loc id2);
-        FormUtil.mk_neq Axioms.loc1 (mk_loc id2)])
+        then btwn id1 Axioms.loc1 id2
+        else reachWo id1 Axioms.loc1 id2;
+        FormUtil.mk_neq Axioms.loc1 id2])
     (mk_domain domain Axioms.loc1)
+
+let upper_bound domain id3 =
+  (FormUtil.mk_implies
+    (FormUtil.mk_and [mk_domain domain Axioms.loc1])
+    (FormUtil.mk_leq (get_data Axioms.loc1) id3))
+
+let lower_bound domain id3 =
+  (FormUtil.mk_implies
+    (FormUtil.mk_and [mk_domain domain Axioms.loc1])
+    (FormUtil.mk_geq (get_data Axioms.loc1) id3))
+
+let sorted domain =
+  (FormUtil.mk_implies
+    (FormUtil.mk_and [mk_domain domain Axioms.loc1;
+                      mk_domain domain Axioms.loc2;
+                      reach Axioms.loc1 Axioms.loc2])
+    (FormUtil.mk_leq (get_data Axioms.loc1) (get_data Axioms.loc2)))
 
 (* the symbols *)
 
@@ -79,10 +89,10 @@ let ptsTo =
   { sym = "ptsTo";
     arity = 3;
     structure = (fun _ args -> match args with
-        | [h; id1; id2] -> FormUtil.mk_eq (FormUtil.mk_read (to_field h) (mk_loc id1)) (mk_loc id2)
+        | [h; id1; id2] -> FormUtil.mk_eq (FormUtil.mk_read h id1) id2
         | _ -> failwith "wrong number of arguments");
     heap = (fun domain args ->  match args with
-        | [_; id1; _] -> FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_setenum [mk_loc id1])
+        | [_; id1; _] -> FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_setenum [id1])
         | _ -> failwith "wrong number of arguments");
   }
 
@@ -107,12 +117,9 @@ let slseg =
         | [id1; id2] -> 
             let part1 = reach id1 id2 in
             let part2 = 
-              Axioms.mk_axiom ("sls_" ^ Form.str_of_ident domain)
-                (FormUtil.mk_implies
-                  (FormUtil.mk_and [mk_domain domain Axioms.loc1;
-                                    mk_domain domain Axioms.loc2;
-                                    reachT Axioms.loc1 Axioms.loc2])
-                  (FormUtil.mk_leq (get_data Axioms.loc1) (get_data Axioms.loc2)))
+              Axioms.mk_axiom
+                ("sls_" ^ Form.str_of_ident domain)
+                (sorted domain)
             in
               FormUtil.mk_and [part1; part2]
         | _ -> failwith "wrong number of arguments");
@@ -135,7 +142,7 @@ let rslseg =
                 (FormUtil.mk_implies
                   (FormUtil.mk_and [mk_domain domain Axioms.loc1;
                                     mk_domain domain Axioms.loc2;
-                                    reachT Axioms.loc1 Axioms.loc2])
+                                    reach Axioms.loc1 Axioms.loc2])
                   (FormUtil.mk_geq (get_data Axioms.loc1) (get_data Axioms.loc2)))
             in
               FormUtil.mk_and [part1; part2]
@@ -155,10 +162,9 @@ let ulseg =
         | [id1; id2; id3] -> 
             let part1 = reach id1 id2 in
             let part2 = 
-              Axioms.mk_axiom ("uls_" ^ Form.str_of_ident domain)
-                (FormUtil.mk_implies
-                  (FormUtil.mk_and [mk_domain domain Axioms.loc1])
-                  (FormUtil.mk_geq (get_data Axioms.loc1) (get_data (mk_loc id3))))
+              Axioms.mk_axiom
+                ("uls_" ^ Form.str_of_ident domain)
+                (lower_bound domain id3)
             in
               FormUtil.mk_and [part1; part2]
         | _ -> failwith "wrong number of arguments");
@@ -177,10 +183,9 @@ let llseg =
         | [id1; id2; id3] -> 
             let part1 = reach id1 id2 in
             let part2 = 
-              Axioms.mk_axiom ("lls_" ^ Form.str_of_ident domain)
-                (FormUtil.mk_implies
-                  (FormUtil.mk_and [mk_domain domain Axioms.loc1])
-                  (FormUtil.mk_leq (get_data Axioms.loc1) (get_data (mk_loc id3))))
+              Axioms.mk_axiom
+                ("lls_" ^ Form.str_of_ident domain)
+                (upper_bound domain id3)
             in
               FormUtil.mk_and [part1; part2]
         | _ -> failwith "wrong number of arguments");
@@ -199,18 +204,14 @@ let uslseg =
         | [id1; id2; id3] -> 
             let part1 = reach id1 id2 in
             let part2 = 
-              Axioms.mk_axiom ("usls_bound_" ^ Form.str_of_ident domain)
-                (FormUtil.mk_implies
-                  (FormUtil.mk_and [mk_domain domain Axioms.loc1])
-                  (FormUtil.mk_geq (get_data Axioms.loc1) (get_data (mk_loc id3))))
+              Axioms.mk_axiom
+                ("usls_bound_" ^ Form.str_of_ident domain)
+                (lower_bound domain id3)
             in
             let part3 =
-              Axioms.mk_axiom ("usls_sort_" ^ Form.str_of_ident domain)
-                (FormUtil.mk_implies
-                  (FormUtil.mk_and [mk_domain domain Axioms.loc1;
-                                    mk_domain domain Axioms.loc2;
-                                    reachT Axioms.loc1 Axioms.loc2])
-                  (FormUtil.mk_leq (get_data Axioms.loc1) (get_data Axioms.loc2)))
+              Axioms.mk_axiom
+                ("usls_sort_" ^ Form.str_of_ident domain)
+                (sorted domain)
             in
               FormUtil.mk_and [part1; part2; part3]
         | _ -> failwith "wrong number of arguments");
@@ -230,17 +231,11 @@ let lslseg =
             let part1 = reach id1 id2 in
             let part2 = 
               Axioms.mk_axiom ("lsls_bound_" ^ Form.str_of_ident domain)
-                (FormUtil.mk_implies
-                  (FormUtil.mk_and [mk_domain domain Axioms.loc1])
-                  (FormUtil.mk_leq (get_data Axioms.loc1) (get_data (mk_loc id3))))
+                (upper_bound domain id3)
             in
             let part3 =
               Axioms.mk_axiom ("lsls_sort_" ^ Form.str_of_ident domain)
-                (FormUtil.mk_implies
-                  (FormUtil.mk_and [mk_domain domain Axioms.loc1;
-                                    mk_domain domain Axioms.loc2;
-                                    reachT Axioms.loc1 Axioms.loc2])
-                  (FormUtil.mk_leq (get_data Axioms.loc1) (get_data Axioms.loc2)))
+                (sorted domain)
             in
               FormUtil.mk_and [part1; part2; part3]
         | _ -> failwith "wrong number of arguments");
@@ -266,10 +261,10 @@ let dlseg =
                    (FormUtil.mk_eq (FormUtil.mk_read fprev_pts Axioms.loc2) Axioms.loc1)) in
             let part3 =
               FormUtil.mk_or [
-              FormUtil.mk_and [ FormUtil.mk_eq (mk_loc x1) (mk_loc y1); FormUtil.mk_eq (mk_loc x2) (mk_loc y2)];
-              FormUtil.mk_and [ FormUtil.mk_eq (FormUtil.mk_read fprev_pts (mk_loc x1)) (mk_loc x2);
-                                FormUtil.mk_eq (FormUtil.mk_read fpts (mk_loc y2)) (mk_loc y1);
-                                mk_domain domain (mk_loc y2)] ]
+              FormUtil.mk_and [ FormUtil.mk_eq x1 y1; FormUtil.mk_eq x2 y2];
+              FormUtil.mk_and [ FormUtil.mk_eq (FormUtil.mk_read fprev_pts x1) x2;
+                                FormUtil.mk_eq (FormUtil.mk_read fpts y2) y1;
+                                mk_domain domain y2] ]
             in
               FormUtil.mk_and [part1; part2; part3]
         | _ -> failwith "wrong number of arguments");
@@ -281,6 +276,57 @@ let dlseg =
         | _ -> failwith "wrong number of arguments");
   }
 
+let blseg =
+  { sym = "blseg";
+    arity = 4;
+    structure = (fun domain args -> match args with
+        | [id1; id2; id3; id4] -> 
+            let part1 = reach id1 id2 in
+            let part2 = 
+              Axioms.mk_axiom ("bsls_upper_bound_" ^ Form.str_of_ident domain)
+                (upper_bound domain id4)
+            in
+            let part4 = 
+              Axioms.mk_axiom ("bsls_lower_bound_" ^ Form.str_of_ident domain)
+                (lower_bound domain id3)
+            in
+              FormUtil.mk_and [part1; part2; part4]
+        | _ -> failwith "wrong number of arguments");
+    heap = (fun domain args ->  match args with
+        | [id1; id2; _; _] ->
+            Axioms.mk_axiom 
+              ("def_of_" ^ Form.str_of_ident domain) 
+              (list_set_def id1 id2 domain)    
+        | _ -> failwith "wrong number of arguments");
+  }
+
+let bslseg =
+  { sym = "bslseg";
+    arity = 4;
+    structure = (fun domain args -> match args with
+        | [id1; id2; id3; id4] -> 
+            let part1 = reach id1 id2 in
+            let part2 = 
+              Axioms.mk_axiom ("bsls_upper_bound_" ^ Form.str_of_ident domain)
+                (upper_bound domain id4)
+            in
+            let part3 =
+              Axioms.mk_axiom ("lsls_sort_" ^ Form.str_of_ident domain)
+                (sorted domain)
+            in
+            let part4 = 
+              Axioms.mk_axiom ("bsls_lower_bound_" ^ Form.str_of_ident domain)
+                (lower_bound domain id3)
+            in
+              FormUtil.mk_and [part1; part2; part3; part4]
+        | _ -> failwith "wrong number of arguments");
+    heap = (fun domain args ->  match args with
+        | [id1; id2; _; _] ->
+            Axioms.mk_axiom 
+              ("def_of_" ^ Form.str_of_ident domain) 
+              (list_set_def id1 id2 domain)    
+        | _ -> failwith "wrong number of arguments");
+  }
 
 let symbols =
   [ emp;
@@ -292,7 +338,10 @@ let symbols =
     llseg;
     uslseg;
     lslseg;
-    dlseg ]
+    dlseg;
+    blseg;
+    bslseg
+  ]
 
 let find_def s = 
   try List.find (fun d -> s = d.sym) symbols
@@ -315,25 +364,6 @@ module SlSet = Set.Make(struct
     let compare = compare
   end)
 
-
-let reachWoT a b c = FormUtil.mk_reachwo (fpts) a b c
-let reachWo a b c = reachWoT (mk_loc a) (mk_loc b) (mk_loc c)
-let btwnT a b c = FormUtil.mk_btwn (fpts) a b c
-let btwn a b c = btwnT (mk_loc a) (mk_loc b) (mk_loc c)
-let reachT a b = if !Config.use_btwn then btwnT a b b else reachWoT a b b
-let reach a b = reachT (mk_loc a) (mk_loc b) 
-let mk_domain d v = FormUtil.mk_elem v (mk_loc_set d)
-let emptyset = FormUtil.mk_empty (Some (Form.Set Form.Loc))
-let empty_t domain = FormUtil.mk_eq emptyset domain
-let empty domain = empty_t (mk_loc_set domain)
-let list_set_def id1 id2 domain =
-  FormUtil.mk_iff
-    (FormUtil.smk_and 
-       [if !Config.use_btwn 
-        then btwnT (mk_loc id1) Axioms.loc1 (mk_loc id2)
-        else reachWoT (mk_loc id1) Axioms.loc1 (mk_loc id2);
-        FormUtil.mk_neq Axioms.loc1 (mk_loc id2)])
-    (mk_domain domain Axioms.loc1)
 module SlMap = Map.Make(struct
     type t = form
     let compare = compare
@@ -342,12 +372,12 @@ module SlMap = Map.Make(struct
 let mk_pure p = Pure p
 let mk_true = mk_pure FormUtil.mk_true
 let mk_false = mk_pure FormUtil.mk_false
-let mk_eq a b = mk_pure (FormUtil.mk_eq (mk_const a) (mk_const b))
+let mk_eq a b = mk_pure (FormUtil.mk_eq a b)
 let mk_not a = Not a
 let mk_spatial s args = Spatial (s, args)
 let mk_emp = mk_spatial emp []
-let mk_pts a b = mk_spatial ptsTo [pts; a; b]
-let mk_prev_pts a b = mk_spatial ptsTo [prev_pts; a; b]
+let mk_pts a b = mk_spatial ptsTo [fpts; a; b]
+let mk_prev_pts a b = mk_spatial ptsTo [fprev_pts; a; b]
 let mk_ls a b = mk_spatial lseg [a; b]
 let mk_dls a b c d = mk_spatial dlseg [a; b; c; d]
 let mk_and a b = And [a; b]
@@ -369,7 +399,7 @@ let mk_spatial_pred name args =
       mk_spatial s args
     else
       failwith (name ^ " expect " ^(string_of_int (s.arity))^
-                " found (" ^(String.concat ", " (List.map ident_to_string args))^ ")")
+                " found (" ^(String.concat ", " (List.map Form.string_of_term args))^ ")")
   | None -> failwith ("unknown spatial predicate " ^ name)
 
 let rec to_string f = match f with
@@ -377,10 +407,10 @@ let rec to_string f = match f with
   | Not t -> "~(" ^ (to_string t) ^")"
   | And lst -> "(" ^ (String.concat ") && (" (List.map to_string lst)) ^ ")"
   | Or lst ->  "(" ^ (String.concat ") || (" (List.map to_string lst)) ^ ")"
-  | Spatial (p, [h; a; b]) when p.sym = ptsTo.sym && h = pts -> (Form.str_of_ident a) ^ " |-> " ^ (Form.str_of_ident b)
-  | Spatial (p, [h; a; b]) when p.sym = ptsTo.sym && h = prev_pts -> (Form.str_of_ident a) ^ " |<- " ^ (Form.str_of_ident b)
+  | Spatial (p, [h; a; b]) when p.sym = ptsTo.sym && h = fpts -> (Form.string_of_term a) ^ " |-> " ^ (Form.string_of_term b)
+  | Spatial (p, [h; a; b]) when p.sym = ptsTo.sym && h = fprev_pts -> (Form.string_of_term a) ^ " |<- " ^ (Form.string_of_term b)
   | Spatial (s, []) -> s.sym
-  | Spatial (s, args) -> s.sym ^ "(" ^ (String.concat ", " (List.map ident_to_string args)) ^ ")"
+  | Spatial (s, args) -> s.sym ^ "(" ^ (String.concat ", " (List.map Form.string_of_term args)) ^ ")"
   | SepConj lst -> "(" ^ (String.concat ") * (" (List.map to_string lst)) ^ ")"
 
 
@@ -389,7 +419,7 @@ let rec map_id fct f = match f with
   | Not t ->  Not (map_id fct t)
   | And lst -> And (List.map (map_id fct) lst)
   | Or lst -> Or (List.map (map_id fct) lst)
-  | Spatial (s, args) -> mk_spatial s (List.map fct args)
+  | Spatial (s, args) -> mk_spatial s (List.map (FormUtil.map_id_term fct) args)
   | SepConj lst -> SepConj (List.map (map_id fct) lst)
 
 let subst_id subst f =
@@ -398,10 +428,21 @@ let subst_id subst f =
   in
     map_id get f
 
+let subst_consts subst f =
+  let rec map f = match f with
+    | Pure p -> Pure (FormUtil.subst_consts subst p)
+    | Not t ->  Not (map t)
+    | And lst -> And (List.map map lst)
+    | Or lst -> Or (List.map map lst)
+    | Spatial (s, args) -> mk_spatial s (List.map (FormUtil.subst_consts_term subst) args)
+    | SepConj lst -> SepConj (List.map map lst)
+  in
+    map f
+
 let rec has_prev f = match f with
   | Not t -> has_prev t
   | Spatial (d, _) when d.sym = dlseg.sym -> true
-  | Spatial (p, h :: _) -> p.sym = ptsTo.sym && h = prev_pts
+  | Spatial (p, h :: _) -> p.sym = ptsTo.sym && h = fprev_pts
   | Pure _ | Spatial _ -> false
   | SepConj lst | And lst | Or lst -> 
     List.exists has_prev lst
@@ -453,10 +494,10 @@ let to_form set_fct domain f =
                (FormUtil.mk_eq (FormUtil.mk_read fprev_pts Axioms.loc2) Axioms.loc1)) in
         let part4 =
           FormUtil.mk_or [
-          FormUtil.mk_and [ FormUtil.mk_eq (mk_loc x1) (mk_loc y1); FormUtil.mk_eq (mk_loc x2) (mk_loc y2)];
-          FormUtil.mk_and [ FormUtil.mk_eq (FormUtil.mk_read fprev_pts (mk_loc x1)) (mk_loc x2);
-                            FormUtil.mk_eq (FormUtil.mk_read fpts (mk_loc y2)) (mk_loc y1);
-                            mk_domain domain (mk_loc y2)] ]
+          FormUtil.mk_and [ FormUtil.mk_eq x1 y1; FormUtil.mk_eq x2 y2];
+          FormUtil.mk_and [ FormUtil.mk_eq (FormUtil.mk_read fprev_pts x1) x2;
+                            FormUtil.mk_eq (FormUtil.mk_read fpts y2) y1;
+                            mk_domain domain y2] ]
         in
         ( [FormUtil.mk_and ((if pol then [part3] else []) @ [part1;  part4]), mk_loc_set domain, IdSet.singleton domain],
           dlseg.heap domain [x1; x2; y1; y2]

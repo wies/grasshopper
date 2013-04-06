@@ -8,7 +8,7 @@ method sls_insert(lst, elt)
     } else {
         curr := lst;
         while (curr.next != null && curr.next.data <= elt.data) 
-            invariant curr != null * lslseg(lst, curr, curr) * slseg(curr, null) * curr.data <= elt.data;
+            invariant curr != null * lslseg(lst, curr, curr.data) * slseg(curr, null) * curr.data <= elt.data;
         {
             curr := curr.next;
         }

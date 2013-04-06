@@ -1,12 +1,12 @@
 
 method predecessor(start, end)
-    requires lseg(start, end) * start != end * (end |-> x || end == null);
-    ensures lseg(start, returned) * returned |-> end * (end |-> x || end == null);
+    requires lseg(start, end) * start != end;
+    ensures lseg(start, returned) * returned |-> end;
 {
     prv := start;
     curr := start.next;
     while (curr != end)
-        invariant lseg(start, prv) * prv |-> curr * lseg(curr, end) * (end |-> x || end == null);
+        invariant lseg(start, prv) * lseg(curr, end) * prv |-> curr;
     {
         prv := curr;
         curr := curr.next;
@@ -14,16 +14,29 @@ method predecessor(start, end)
     return prv;
 }
 
-method split(lst, pivot)
-    requires lseg(lst, pivot) * pivot |-> x * lst != pivot;
-    ensures llseg(returned, pivot, pivot) * ulseg(pivot, x, pivot);
+method quicksort(lst, end, lb, ub)
+    requires blseg(lst, end, lb, ub);
+    ensures bslseg(lst, end, lb, ub);
+{
+    if (lst == end || lst.next == end) {
+    } else {
+        middle := split(lst, end);
+        quicksort(lst, middle, lb, middle);
+        quicksort(middle, end, middle, ub);
+    }
+}
+
+method split(lst, tsl)
+    requires lseg(lst, tsl) * lst != tsl;
+    ensures llseg(lst, returned, returned) * ulseg(returned, tsl, returned);
 {
     last := predecessor(lst, pivot);
     start := lst;
     end := last;
     while (start != end)
-        invariant llseg(lst, start, pivot) * lseg(start, end) * ulseg(end, pivot, pivot) * end != pivot; 
+        invariant llseg(lst, start, pivot) * lseg(start, end) * ulseg(end, last, pivot) * last |-> pivot * pivot |-> x; 
     {
+        tmp := 0; //for the typer ...
         if (start.data <= pivot.data) {
             start := start.next;
         } else if (end.data > pivot.data) {
@@ -34,26 +47,14 @@ method split(lst, pivot)
             end.data := tmp;
         }
     }
-    if (start != last) {
-       last.next := pivot.next;
-       pivot.next := start;
-    } else {}
-    if (start == lst) {
-       return pivot;
+    if (start == last) {
+        return lst;
+    } else if (start == lst) {
+        return pivot;
     } else {
-       return start;
-    }
-}
-
-method quicksort(lst, end)
-    requires lseg(lst, end) * (end |-> x || end == null);
-    ensures slseg(lst, end) * (end |-> x || end == null);
-{
-    if (lst == end || lst.next == end) {
-    } else {
-        pivot := predecessor(lst, end);
-        split(lst, pivot);
-        quicksort(lst, pivot);
-        quicksort(pivot, end);
+        last.next := pivot.next;
+        pivot.next := start.next;
+        start.next := pivot;
+        return lst;
     }
 }

@@ -5,7 +5,7 @@ method reverse(lst)
     curr := lst;
     rev := null;
     while (curr != null) 
-        invariant (rev == null * slseg(curr, null)) || (rslseg(rev, null) * uslseg(curr, null, rev));
+        invariant (rev == null * slseg(curr, null)) || (rslseg(rev, null) * uslseg(curr, null, rev.data));
     {
         tmp := curr;
         curr := curr.next;

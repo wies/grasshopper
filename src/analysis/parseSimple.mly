@@ -46,7 +46,7 @@ main:
 ;
 
 procedure:
-  PROCEDURE TIDENT LPAREN args RPAREN proc_contract LBRACKET block RBRACKET 
+  PROCEDURE TIDENT LPAREN argsId RPAREN proc_contract LBRACKET block RBRACKET 
   { { name = mk_ident $2;
       args = $4;
       precondition = fst $6;
@@ -60,10 +60,10 @@ proc_contract:
 | ENSURES sl_form SEMICOLON proc_contract { (fst $4, mk_sep $2 (snd $4)) }
 | /* empty */ { (mk_emp, mk_emp) }
 
-term:
-| NULL { mk_ident "null" }
-| TIDENT { mk_ident $1 }
-/*| LPAREN term RPAREN { $2 }*/
+argsId:
+  TIDENT { [mk_ident $1] }
+| TIDENT COMMA argsId { (mk_ident $1) :: $3 }
+| /* empty */ { [] }
 ;
 
 sl_form:
@@ -78,9 +78,9 @@ sl_form:
 | pterm GEQ pterm { mk_pure (FormUtil.mk_geq $1 $3) }
 /* spatial part */
 | EMP { mk_emp }
-| term PTS term { mk_pts $1 $3 }
-| term BPTS term { mk_prev_pts $1 $3 }
-| TIDENT LPAREN argst RPAREN { mk_spatial_pred $1 $3 }
+| pterm PTS pterm { mk_pts $1 $3 }
+| pterm BPTS pterm { mk_prev_pts $1 $3 }
+| TIDENT LPAREN args RPAREN { mk_spatial_pred $1 $3 }
 /* boolean structure */
 | NOT sl_form { mk_not $2 }
 | sl_form AND sl_form { mk_and $1 $3 }
@@ -90,14 +90,8 @@ sl_form:
 ;
 
 args:
-  TIDENT { [mk_ident $1] }
-| TIDENT COMMA args { (mk_ident $1) :: $3 }
-| /* empty */ { [] }
-;
-
-argst:
-| term { [$1] }
-| term COMMA argst { $1 :: $3 }
+  pterm { [$1] }
+| pterm COMMA args { $1 :: $3 }
 | /* empty */ { [] }
 ;
 
@@ -108,7 +102,7 @@ block:
 
 stmnt:
 | NEW TIDENT SEMICOLON { New (mk_ident $2) }
-| DISPOSE TIDENT SEMICOLON { Dispose (mk_ident $2) }
+| DISPOSE pterm SEMICOLON { Dispose $2 }
 | pterm COLONEQ rhs SEMICOLON { match $1 with
                                 | Form.App (Form.FreeSym id, [], _) -> VarUpdate (id, $3)
                                 | Form.App (Form.Read, [Form.App (Form.FreeSym id, [], _); ind], _) -> FunUpdate (id, ind, $3)
@@ -147,10 +141,10 @@ pterm:
 | pterm DOT DATA { FormUtil.mk_read fdata $1 }
 | pterm PLUS pterm { FormUtil.mk_plus $1 $3 }
 | pterm MINUS pterm { FormUtil.mk_minus $1 $3 }
-| pterm SEP pterm { FormUtil.mk_mult $1 $3 }
+/*| pterm SEP pterm { FormUtil.mk_mult $1 $3 }*/
 | pterm DIV pterm { FormUtil.mk_div $1 $3 }
 | MINUS pterm { FormUtil.mk_uminus $2 }
-| TIDENT { mk_const (mk_ident $1) }
+| TIDENT { FormUtil.mk_free_const (mk_ident $1) }
 | NULL { FormUtil.mk_null }
 | INT { FormUtil.mk_int $1 }
 | LPAREN pterm RPAREN { $2 }
@@ -173,5 +167,5 @@ atom:
 | pterm GT pterm { FormUtil.mk_gt $1 $3 }
 | pterm LEQ pterm { FormUtil.mk_leq $1 $3 }
 | pterm GEQ pterm { FormUtil.mk_geq $1 $3 }
-| PIDENT args { FormUtil.mk_pred (mk_ident $1) (List.map (fun t -> mk_const t) $2) }
+| PIDENT args { FormUtil.mk_pred (mk_ident $1) $2 }
 ;

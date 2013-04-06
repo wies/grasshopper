@@ -460,7 +460,7 @@ let subst_id subst_map f =
   in sub f
 
 (** Substitutes all constants in form f according to substitution map subst_map. *)
-let subst_consts subst_map f =
+let subst_consts_term subst_map f =
   let sub_id id t =
     try IdMap.find id subst_map with Not_found -> t
   in
@@ -468,7 +468,10 @@ let subst_consts subst_map f =
     | (App (FreeSym id, [], srt) as t) -> sub_id id t 
     | App (sym, ts, srt) -> App (sym, List.map sub ts, srt)
     | t -> t
-  in map_terms sub f
+  in
+    sub f
+let subst_consts subst_map f =
+  map_terms (subst_consts_term subst_map) f
 
 (** Substitutes all variables in term t according to substitution map subst_map. *)
 let subst_term subst_map t =

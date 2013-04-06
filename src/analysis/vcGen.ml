@@ -202,23 +202,6 @@ let check_procedure proceduresMap name =
     try IdMap.find name proceduresMap
     with Not_found -> failwith ("ERROR: method "^(str_of_ident name)^" not found.")
   in
-  (*
-  let fresh_local () = fresh_ident "_" in
-  let subst_with_fresh_local m subst form =
-    let non_args =
-      IdSet.filter
-        (fun id -> not (List.mem id m.args))
-        (Sl.ids form)
-    in
-    let subst2 =
-      IdSet.fold
-        (fun id acc -> IdMap.add id (fresh_local ()) acc)
-        non_args
-        subst
-    in
-      Sl.subst_id subst2 form 
-  in
-  *)
   let get_pre name args =
     let m = get name in
     let subst =
@@ -229,7 +212,7 @@ let check_procedure proceduresMap name =
         m.args
         args
     in
-      Sl.subst_id subst m.precondition
+      Sl.subst_consts subst m.precondition
   in
   let get_post name args return =
     let m = get name in
@@ -241,7 +224,7 @@ let check_procedure proceduresMap name =
         m.args
         args
     in
-      Sl.subst_id subst m.postcondition
+      Sl.subst_consts subst m.postcondition
   in
 
   (* aliases *)
@@ -338,20 +321,19 @@ let check_procedure proceduresMap name =
       [pts, Some (Fld Loc); [alloc_id], Some (Set Loc); data, Some (Fld Int)]
   in
 
-  let procedure_call pre stack m args id =
-    let args_id =
+  let procedure_call pre stack m args ret =
+    let args =
       List.map
         (fun f -> match f with
-          | Term (App ((FreeSym id), [], _)) -> id
-          | Term (App (Null, [], _)) -> mk_ident "null" (*TODO !!*)
+          | Term t -> t
           | _ -> failwith "for the moment, the arguments of call should be constants"
         ) args
     in
-    Debug.msg ("procedure_call: " ^ (str_of_ident m) ^ "(" ^ (String.concat ", " (List.map str_of_ident args_id))^ ")\n");
+    Debug.msg ("procedure_call: " ^ (str_of_ident m) ^ "(" ^ (String.concat ", " (List.map string_of_term args))^ ")\n");
     let subst = DecisionStack.get_subst stack in
     let sig1 = DecisionStack.get_sign stack in
-    let m_pre = get_pre m args_id in
-    let m_post = get_post m args_id id in
+    let m_pre = get_pre m args in
+    let m_post = get_post m args ret in
     let (subst2, sig2) = increase subst sig1 (sl_stuff_to_increase pre subst m_pre m_post) in 
       sl_replacement ("precondition of " ^ (str_of_ident m)) pre stack m_pre subst2 sig2 m_post
   in
@@ -431,13 +413,13 @@ let check_procedure proceduresMap name =
       | Dispose id ->
         let ident_map = DecisionStack.get_subst stack in
         let sig_map = DecisionStack.get_sign stack in
-        let id1 = (subst_ident id ident_map) in
+        let id1 = subst_id_term ident_map id in
         let alloc = subst_ident alloc_id ident_map in
         let alloc1, ident_map1, sig_map1 = fresh_ident alloc_id ident_map sig_map (Some (Set Loc)) in
         let f =
           mk_eq
             (mk_loc_set alloc1)
-            (mk_diff (mk_loc_set alloc) (mk_setenum [mk_loc id1]))
+            (mk_diff (mk_loc_set alloc) (mk_setenum [id1]))
         in
           add_to_stack stack ident_map1 sig_map1 f
       | New id ->
@@ -461,20 +443,10 @@ let check_procedure proceduresMap name =
         let c = smk_and [not_null; (*skolem_pts;*) f] in
           add_to_stack stack ident_map2 sig_map2 c
       | Return t -> 
-        let subst = DecisionStack.get_subst stack in
-        let newT = 
-          match t with 
-          | App (FreeSym t1, [], _) -> 
-              (try IdMap.find t1 subst with Not_found -> t1)
-          | App (Null, [], _) -> mk_ident "null"
-          | _ -> failwith "TODO: return expects an id for the moment"
-        in
-        let post = proc.postcondition in
-        let sign = DecisionStack.get_sign stack in
-        let subst = IdMap.add (mk_ident "returned") newT subst in
-        let stackWithReturn = DecisionStack.step stack mk_true subst sign in
+        let ret = IdMap.add (mk_ident "returned") t IdMap.empty in
+        let post = Sl.subst_consts ret proc.postcondition in
           (*check postcond and assume false !*)
-          check_entailment (proc_name ^ "_postcondition_return_" ^ (str_of_ident newT)) pre stackWithReturn post;
+          check_entailment (proc_name ^ "_postcondition_return_" ^ (string_of_term t)) pre stack post;
           DecisionStack.step stack (mk_false) IdMap.empty IdMap.empty
       | Assume f ->
         (*sll to grass*)
@@ -525,12 +497,12 @@ let check_procedure proceduresMap name =
           Debug.msg ("loop: pre, post, and frame.\n");
           while_pre_post pre stack cond invariant body
       | VarUpdate (id, Call (m, args)) -> 
-        procedure_call pre stack m args id
+        procedure_call pre stack m args (mk_free_const id)
         (* goal: (post[returned \mapsto id'] @ frame, subst2) *)
       | FunUpdate (id, ptr, Call (m, args)) -> 
-        let ret_id = FormUtil.fresh_ident "_returned" in
+        let ret_id = mk_free_const (FormUtil.fresh_ident "_returned") in
         let stack2 = procedure_call pre stack m args ret_id in
-        let t2 = VarUpdate (id, Term (mk_free_const ret_id)) in
+        let t2 = FunUpdate (id, ptr, Term ret_id) in
           traverse stack2 t2
     in
     (* check the body *)

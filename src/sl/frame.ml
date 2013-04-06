@@ -18,14 +18,14 @@ let implies_heap_content preh posth =
 let mk_same lst =
   let repr = List.hd lst in
     List.fold_left
-      (fun acc v -> (Sl.mk_eq v repr) :: acc )
+      (fun acc v -> (Sl.mk_eq (FormUtil.mk_free_const v) (FormUtil.mk_free_const repr)) :: acc )
       []
       (List.tl lst)
 
 (* all different *)
 let mk_different lst =
   let rec different reprs = match reprs with
-    | v :: vs -> (List.map (fun v2 -> Sl.mk_not (Sl.mk_eq v v2)) vs) @ (different vs)
+    | v :: vs -> (List.map (fun v2 -> Sl.mk_not (Sl.mk_eq (FormUtil.mk_free_const v) (FormUtil.mk_free_const v2))) vs) @ (different vs)
     | [] -> []
   in
     different lst
@@ -182,15 +182,15 @@ let make_frame heap_a heap_b (model: Model.model) =
   (* get spatial term for a variable *)
   let succ = succ model in
   let get_spatial var = 
-    let term = mk_read (Sl.to_field Sl.pts) (Sl.mk_loc var) in
+    let term = mk_read Sl.fpts (Sl.mk_loc var) in
       match Model.eval_term model term with
       | Some r ->
         let var2 = get_repr c_map r in
-          Sl.mk_pts var var2
+          Sl.mk_pts (Sl.mk_loc var) (Sl.mk_loc var2)
       | None ->
           (* no pts_to -> look for the successor in reach *)
           match succ var with
-          | Some var2 -> Sl.mk_ls var var2
+          | Some var2 -> Sl.mk_ls (Sl.mk_loc var) (Sl.mk_loc var2)
           | None -> failwith "existential successor" (* Sl.PtsTo (var, fresh_ident "_") *)
   in
   let spatial =

@@ -11,7 +11,7 @@ type stmnt =
   | VarUpdate of ident * expr 
   | FunUpdate of ident * term * expr
   | New of ident
-  | Dispose of ident
+  | Dispose of term
   | Assume of Sl.form
   | AssumeGrass of form
   | Assert of Sl.form * string option
@@ -59,7 +59,7 @@ let rec desugar stmnt =
       let ds = derefs_expr (derefs TermSet.empty t) e in
       Block (assert_alloc ds @ [stmnt])
   | Dispose id ->
-      Block (assert_alloc (TermSet.singleton (mk_free_const ~srt:Loc id)) @ [stmnt])
+      Block (assert_alloc (TermSet.singleton id) @ [stmnt])
   | Block stmnts ->
       Block (List.map desugar stmnts)
   | While (cond, inv, s) -> 

@@ -34,30 +34,24 @@ main:
   form EOF { $1 }
 ;
 
-term:
-| NULL { mk_ident "null" }
-| TIDENT { mk_ident $1 }
-/*| LPAREN term RPAREN { $2 }*/
-;
-
 pterm:
 | pterm DOT NEXT { FormUtil.mk_read fpts $1 }
 | pterm DOT PREV { FormUtil.mk_read fprev_pts $1 }
 | pterm DOT DATA { FormUtil.mk_read fdata $1 }
 | pterm PLUS pterm { FormUtil.mk_plus $1 $3 }
 | pterm MINUS pterm { FormUtil.mk_minus $1 $3 }
-| pterm SEP pterm { FormUtil.mk_mult $1 $3 }
+/*| pterm SEP pterm { FormUtil.mk_mult $1 $3 }*/
 | pterm DIV pterm { FormUtil.mk_div $1 $3 }
 | MINUS pterm { FormUtil.mk_uminus $2 }
-| TIDENT { mk_const (mk_ident $1) }
+| TIDENT { FormUtil.mk_free_const (mk_ident $1) }
 | NULL { FormUtil.mk_null }
 | INT { FormUtil.mk_int $1 }
 | LPAREN pterm RPAREN { $2 }
 ;
 
 argst:
-| term { [$1] }
-| term COMMA argst { $1 :: $3 }
+| pterm { [$1] }
+| pterm COMMA argst { $1 :: $3 }
 | /* empty */ { [] }
 ;
 
@@ -73,8 +67,8 @@ form:
 | pterm GEQ pterm { mk_pure (FormUtil.mk_geq $1 $3) }
 /* spatial part */
 | EMP { mk_emp }
-| term PTS term { mk_pts $1 $3 }
-| term BPTS term { mk_prev_pts $1 $3 }
+| pterm PTS pterm { mk_pts $1 $3 }
+| pterm BPTS pterm { mk_prev_pts $1 $3 }
 | TIDENT LPAREN argst RPAREN { mk_spatial_pred $1 $3 }
 /* boolean structure */
 | NOT form { mk_not $2 }

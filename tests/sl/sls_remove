@@ -6,7 +6,7 @@ method remove(lst, value)
     curr := lst;
     while (curr != null && curr.data < value) 
         invariant prv == null * curr == lst * slseg(curr, null)
-               || lslseg(lst, prv, prv) * prv |-> curr * slseg(curr, null) * (curr == null || prv.data <= curr.data);
+               || lslseg(lst, prv, prv.data) * prv |-> curr * slseg(curr, null) * (curr == null || prv.data <= curr.data);
     {
         prv := curr;
         curr := curr.next;

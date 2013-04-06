@@ -25,6 +25,14 @@ dl_concat tests/sl/dl_concat pass
 dl_filter tests/sl/dl_filter pass
 dl_remove tests/sl/dl_remove pass
 dl_insert tests/sl/dl_insert pass
+sls_traverse tests/sl/sls_traverse pass
+sls_free tests/sl/sls_free pass
+sls_copy tests/sl/sls_copy pass
+sls_reverse tests/sl/sls_reverse pass
+sls_concat tests/sl/sls_concat pass
+sls_filter tests/sl/sls_filter pass
+sls_remove tests/sl/sls_remove pass
+sls_insert tests/sl/sls_insert pass
 "
 #dl_traverse_backward tests/sl/dl_traverse_backward pass
 
