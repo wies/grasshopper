@@ -1,48 +1,34 @@
-method merge1(a, b)
+method merge(a, b)
     requires slseg(a, null) * slseg(b, null);
     ensures slseg(returned, null);
 {
-    r := null;
+    head := null;
     if (a == null) {
         return b;
     } else if (b == null) {
         return a;
     } else if (a.data <= b.data) {
-        r := a;
+        head := a;
         a := a.next;
     } else {
-        r := b;
+        head := b;
         b := b.next;
     }
+    last := head;
     while (a != null || b != null)
-        invariant ... ;
+        invariant (last |-> a || last |-> b) * lslseg(head, last, last) * uslseg(a, null, last) * uslseg(b, null, last);
     {
         if (a == null || (b != null && a.data > b.data)) {
+            last.next := b;
+            last := b;
+            b := b.next;
         } else {
+            last.next := a;
+            last := a;
+            a := a.next;
         }
     }
-    return r;
-}
-
-method merge(a, b)
-    requires slseg(a, null) * slseg(b, null);
-    ensures (uslseg(returned, null, a) * a != null) || (uslseg(returned, null, b) * b != null) || (emp * a == null * b == null);
-{
-    if (a == null) {
-        return b;
-    } else if (b == null) {
-        return a;
-    } else if (a.data < b.data) {
-        a2 := a.next;
-        res := merge(a2, b);
-        a.next := res;
-        return a;
-    } else {
-        b2 := b.next;
-        res := merge(a, b2);
-        b.next := res;
-        return b;
-    }
+    return head;
 }
 
 method length(x)
@@ -89,8 +75,11 @@ method merge_sort(lst)
         n2 := n / 2;
         lst2 := null;
         take(lst, n2, lst2);
+        //assert lseg(lst, null) * lseg(lst2, null);
         a := merge_sort(lst);
+        //assert slseg(a, null) * lseg(lst2, null);
         b := merge_sort(lst2);
+        //assert slseg(a, null) * slseg(b, null);
         merged := merge(a, b);
         return merged;
     }
