@@ -5,6 +5,8 @@ open ParseSmtLibAux
 
 let logger = Logging.smtlib_log
 
+let num_of_sat_queries = ref 0
+
 (* Todo: add proper error handling *)
 
 (** Solvers *)
@@ -276,6 +278,7 @@ let assert_forms session fs =
 
     
 let is_sat session = 
+  incr num_of_sat_queries;
   writeln session "(check-sat)";
   match read session with
   | SmtSat -> 

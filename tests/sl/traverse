@@ -10,17 +10,17 @@ method traverse1(lst)
     }
 }
 
-method traverse2(lst)
-    requires lseg(lst, null);
-    ensures lseg(lst, null);
-{
-    if (lst == null) {
-    } else {
-        curr := lst;
-        while(curr.next != null) 
-            invariant lseg(lst, curr) * lseg(curr, null);
-        {
-            curr := curr.next; 
-        }
-    }
-}
+//method traverse2(lst)
+//    requires lseg(lst, null);
+//    ensures lseg(lst, null);
+//{
+//    if (lst == null) {
+//    } else {
+//        curr := lst;
+//        while(curr.next != null) 
+//            invariant lseg(lst, curr) * lseg(curr, null);
+//        {
+//            curr := curr.next; 
+//        }
+//    }
+//}
