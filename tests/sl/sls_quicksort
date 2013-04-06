@@ -6,7 +6,7 @@ method predecessor(start, end, lb, ub)
     prv := start;
     curr := start.next;
     while (curr != end)
-        invariant blseg(start, prv, lb, ub) * blseg(curr, end, lb, ub) * prv |-> curr;
+        invariant blseg(start, prv, lb, ub) * blseg(curr, end, lb, ub) * prv |-> curr * prv.data >= lb * prv.data <= ub;
     {
         prv := curr;
         curr := curr.next;
@@ -26,13 +26,21 @@ method split(lst, tsl, lb, ub)
         start := lst;
         end := last;
         while (start != end)
-            invariant blseg(lst, start, lb, pivot.data) * lseg(start, end) * blseg(end, last, pivot.data, ub) * last |-> pivot * pivot |-> tsl; 
+            invariant blseg(lst, start, lb, pivot.data);
+            invariant blseg(start, end, lb, ub);
+            invariant blseg(end, last, pivot.data, ub);
+            invariant last |-> pivot;
+            invariant last.data >= lb;
+            invariant last.data <= ub;
+            invariant pivot |-> tsl; 
+            invariant pivot.data >= lb;
+            invariant pivot.data <= ub;
         {
             tmp := 0; //for the typer ...
             if (start.data <= pivot.data) {
                 start := start.next;
             } else if (end.data > pivot.data) {
-                end := predecessor(start, end);
+                end := predecessor(start, end, lb, ub);
             } else {
                 tmp := start.data;
                 start.data := end.data;
