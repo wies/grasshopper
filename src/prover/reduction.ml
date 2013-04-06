@@ -310,8 +310,8 @@ let reduce_sets_with_axioms fs gts =
     | App (SubsetEq, [t1; t2], _) -> 
         let t11 = unflatten t1 in
         let t21 = unflatten t2 in
-        let s = mk_free_const ?srt:(sort_of t11) (fresh_ident "S") in
-        App (Eq, [t21; mk_union [t11; s]], Some Bool)
+        (*let s = mk_free_const ?srt:(sort_of t11) (fresh_ident "S") in*)
+        App (Eq, [t21; mk_union [t11; t21]], Some Bool)
     | t -> unflatten t
   in
   let rec simplify = function
