@@ -1,0 +1,12 @@
+method free_(lst)
+    requires slseg(lst, null);
+    ensures emp;
+{
+    while(lst != null) 
+        invariant slseg(lst, null);
+    {
+        curr := lst;
+        lst := lst.next; 
+        free curr;
+    }
+}

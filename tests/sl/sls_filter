@@ -1,0 +1,25 @@
+method filter(x)
+    requires slseg(x, null);
+    ensures slseg(x, null);
+{
+    prv := null;
+    curr := x;
+    while (curr != null) 
+      invariant (lslseg(x, prv, prv) * prv |-> curr * uslseg(curr, null, prv) * curr != null)
+             || (prv == null * x == curr * slseg(curr, null))
+             || (slseg(x, prv) * prv |-> null * curr == null);
+    {
+      old_curr := curr;
+      curr := curr.next;
+      if (NonDet) {
+        if (prv != null) {
+          prv.next := curr;
+        } else {
+          x := curr;
+        }
+        free old_curr;
+      } else {
+        prv := old_curr;
+      }
+    }
+}

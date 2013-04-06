@@ -124,6 +124,30 @@ let slseg =
         | _ -> failwith "wrong number of arguments");
   }
 
+let rslseg =
+  { sym = "rslseg";
+    arity = 2;
+    structure = (fun domain args -> match args with
+        | [id1; id2] -> 
+            let part1 = reach id1 id2 in
+            let part2 = 
+              Axioms.mk_axiom ("rsls_" ^ Form.str_of_ident domain)
+                (FormUtil.mk_implies
+                  (FormUtil.mk_and [mk_domain domain Axioms.loc1;
+                                    mk_domain domain Axioms.loc2;
+                                    reachT Axioms.loc1 Axioms.loc2])
+                  (FormUtil.mk_geq (get_data Axioms.loc1) (get_data Axioms.loc2)))
+            in
+              FormUtil.mk_and [part1; part2]
+        | _ -> failwith "wrong number of arguments");
+    heap = (fun domain args ->  match args with
+        | [id1; id2] ->
+            Axioms.mk_axiom 
+              ("def_of_" ^ Form.str_of_ident domain) 
+              (list_set_def id1 id2 domain)    
+        | _ -> failwith "wrong number of arguments");
+  }
+
 let ulseg =
   { sym = "ulseg";
     arity = 3;
@@ -263,6 +287,7 @@ let symbols =
     ptsTo;
     lseg;
     slseg;
+    rslseg;
     ulseg;
     llseg;
     uslseg;

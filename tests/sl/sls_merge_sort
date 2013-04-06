@@ -1,6 +1,32 @@
-method merge(a, b)
-    requires slseg(a, null) * slseg(b,null);
+method merge1(a, b)
+    requires slseg(a, null) * slseg(b, null);
     ensures slseg(returned, null);
+{
+    r := null;
+    if (a == null) {
+        return b;
+    } else if (b == null) {
+        return a;
+    } else if (a.data <= b.data) {
+        r := a;
+        a := a.next;
+    } else {
+        r := b;
+        b := b.next;
+    }
+    while (a != null || b != null)
+        invariant ... ;
+    {
+        if (a == null || (b != null && a.data > b.data)) {
+        } else {
+        }
+    }
+    return r;
+}
+
+method merge(a, b)
+    requires slseg(a, null) * slseg(b, null);
+    ensures (uslseg(returned, null, a) * a != null) || (uslseg(returned, null, b) * b != null) || (emp * a == null * b == null);
 {
     if (a == null) {
         return b;

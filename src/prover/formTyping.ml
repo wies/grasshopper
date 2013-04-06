@@ -166,7 +166,7 @@ let symbol_types =
      (Gt, TFun ([TInt; TInt], TBool));
      (ReachWO, TFun ([TFld TLoc; TLoc; TLoc; TLoc], TBool));
      (Btwn, TFun ([TFld TLoc; TLoc; TLoc; TLoc], TBool));
-     (Frame, TFun ([TSet TLoc; TSet TLoc; TSet TLoc; TSet TLoc; TFld TLoc; TFld TLoc], TBool));
+     (Frame, TFun ([TSet TLoc; TSet TLoc; TSet TLoc; TSet TLoc; TFld param1; TFld param1], TBool));
      (Elem, TFun ([param1; TSet param1], TBool));
      (SubsetEq, TFun ([TSet param1; TSet param1], TBool))
     ]
@@ -232,9 +232,18 @@ let preprocess f =
         (a, b, Binder (bnd, vars, c, annot))
   in
   let (defs, defs_t, f) = symbolify2 f in
-  let map_d = List.fold_left (fun acc (k,v) -> SymbolMap.add k v acc) SymbolMap.empty defs in
-  let map_t = List.fold_left (fun acc (k,v) -> SymbolMap.add k v acc) SymbolMap.empty defs_t in
-    (map_d, map_t, f)
+    if false && !Debug.verbose then
+      begin
+        print_endline "symbols defs:";
+        List.iter (fun (s1, s2) -> print_endline ("  " ^(str_of_symbol s1) ^ " -> " ^ (str_of_symbol s2)) ) defs;
+        print_endline "symbols types:";
+        List.iter (fun (s, t) -> print_endline ("  " ^(str_of_symbol s) ^ " -> " ^ (my_sort_to_string t)) ) defs_t;
+        print_endline "processed formula:";
+        print_endline (string_of_form f)
+      end;
+    let map_d = List.fold_left (fun acc (k,v) -> SymbolMap.add k v acc) SymbolMap.empty defs in
+    let map_t = List.fold_left (fun acc (k,v) -> SymbolMap.add k v acc) SymbolMap.empty defs_t in
+      (map_d, map_t, f)
 
 (* typing equations *)
 let equations env f =
@@ -270,6 +279,16 @@ let equations env f =
     | Binder (_, _, form, _) -> process_form form
   in
   let eqs = process_form f in
+    if false && !Debug.verbose then
+      begin
+        print_endline "eqs:";
+        List.iter
+          (fun (t1, t2) ->
+            if t1 <> t2 then
+              print_endline ("  " ^(my_sort_to_string t1) ^ " = " ^ (my_sort_to_string t2)) 
+          )
+          eqs
+      end;
     eqs
 
 (* solve the equations using unification *)

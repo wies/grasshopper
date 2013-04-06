@@ -145,7 +145,7 @@ let mk_subseteq s t = mk_atom SubsetEq [s; t]
 
 (* 'a' is the set allocated objects
  * 'x' is the footprint of the SL formula
- * 'f' is the next field
+ * 'f' is the a field
  * (un)primed corresponds to before/after
  *)
 let mk_frame x x' a a' f f' = mk_atom Frame [x; x'; a; a'; f; f']

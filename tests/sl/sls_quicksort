@@ -11,7 +11,6 @@ method predecessor(start, end)
         prv := curr;
         curr := curr.next;
     }
-    assert lseg(start, prv) * prv |-> curr * lseg(curr, end) * (end |-> x || end == null) * curr == end;
     return prv;
 }
 
@@ -23,7 +22,7 @@ method split(lst, pivot)
     start := lst;
     end := last;
     while (start != end)
-        invariant llseg(lst, start, pivot) * lseg(start, end) * ulseg(end, pivot, pivot);
+        invariant llseg(lst, start, pivot) * lseg(start, end) * ulseg(end, pivot, pivot) * end != pivot; 
     {
         if (start.data <= pivot.data) {
             start := start.next;

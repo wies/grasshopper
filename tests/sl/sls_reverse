@@ -1,0 +1,16 @@
+method reverse(lst)
+    requires slseg(lst, null);
+    ensures rslseg(returned, null);
+{
+    curr := lst;
+    rev := null;
+    while (curr != null) 
+        invariant (rev == null * slseg(curr, null)) || (rslseg(rev, null) * uslseg(curr, null, rev));
+    {
+        tmp := curr;
+        curr := curr.next;
+        tmp.next := rev;
+        rev := tmp;
+    }
+    return rev;
+}

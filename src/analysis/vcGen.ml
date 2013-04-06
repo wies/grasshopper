@@ -269,7 +269,7 @@ let check_procedure proceduresMap name =
       failwith (msg ^ " may not hold in " ^ (str_of_ident name))
     else
       begin
-        (* Sl.pts + Sl.prev_pts + TODO other pointers ? *)
+        (* Sl.pts + Sl.prev_pts + Sl.data TODO other pointers ? *)
         let subst = DecisionStack.get_subst stack in
         let alloc1 = last_alloc subst in
         let fp = fresh_ident "footprint" in
@@ -277,10 +277,12 @@ let check_procedure proceduresMap name =
         let sl_1f = to_grass fp sl_1 subst in
         let sl_2f = to_grass fp2 sl_2 subst2 in
         let alloc2 = last_alloc subst2 in
-        let get_pts pts subst = Sl.to_field (try IdMap.find pts subst with Not_found -> pts) in
+        let get_pts pts subst = mk_free_const (try IdMap.find pts subst with Not_found -> pts) in
         let get_next = get_pts Sl.pts in
         let get_prev = get_pts Sl.prev_pts in
+        let get_data = get_pts Sl.data in
         let has_prev = IdMap.mem Sl.prev_pts subst2 in
+        let has_data = IdMap.mem Sl.data subst2 in
         let frame find_ptr =
           mk_frame
             (mk_set fp) (mk_set fp2)
@@ -288,9 +290,9 @@ let check_procedure proceduresMap name =
             (find_ptr subst) (find_ptr subst2)
         in
         let frames =
-          (* TODO data field ?? *)
           (frame get_next) ::
-          (if has_prev then [frame get_prev] else [])
+          (if has_prev then [frame get_prev] else []) @
+          (if has_data then [frame get_data] else [])
         in
           add_to_stack stack subst2 sig2 (smk_and (sl_1f :: sl_2f :: frames))
       end
@@ -370,7 +372,6 @@ let check_procedure proceduresMap name =
       end
   in
 
-  (* TODO try to fix this ... *)
   let while_pre_post pre stack cond invariant body =
     if (change_heap body) then
       begin
@@ -453,11 +454,11 @@ let check_procedure proceduresMap name =
             mk_not (mk_elem (mk_loc id1) (mk_loc_set alloc))
           ]
         in
-        (* add a skolem cst v |-> _, TODO is it really needed ? *)
+        (* add a skolem cst v |-> _, TODO is it really needed ?
         let curr_pts = Sl.to_field (try IdMap.find Sl.pts ident_map2 with Not_found -> Sl.pts) in
-        let skolem_pts = mk_eq (mk_read curr_pts (mk_loc id1)) (mk_loc (FormUtil.fresh_ident "default_successor")) in
+        let skolem_pts = mk_eq (mk_read curr_pts (mk_loc id1)) (mk_loc (FormUtil.fresh_ident "default_successor")) in *)
         let not_null = mk_not (mk_eq mk_null (mk_loc id1)) in
-        let c = smk_and [not_null; skolem_pts; f] in
+        let c = smk_and [not_null; (*skolem_pts;*) f] in
           add_to_stack stack ident_map2 sig_map2 c
       | Return t -> 
         let subst = DecisionStack.get_subst stack in

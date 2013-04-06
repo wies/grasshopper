@@ -199,55 +199,71 @@ let reduce_sets_to_predicates =
 let reduce_frame fs =
   let expand_frame x x' a a' f f' =
     let frame = mk_diff a x in
-    let replacement_alloc =
-      [ mk_not (smk_elem mk_null a'); (* null is still not allocated *)
-        mk_subseteq x a; (* everything in x was allocated before *)
-        mk_eq a' (mk_union [x'; frame]); (* new alloc is frame + x' *)
-        mk_eq (mk_inter [x'; frame]) (mk_empty (Some (Set Loc))) (* everything added to alloc is fresh *)
-      ]
+    let reduce_graph () =
+      let replacement_alloc =
+        [ mk_not (smk_elem mk_null a'); (* null is still not allocated *)
+          mk_subseteq x a; (* everything in x was allocated before *)
+          mk_eq a' (mk_union [x'; frame]); (* new alloc is frame + x' *)
+          mk_eq (mk_inter [x'; frame]) (mk_empty (Some (Set Loc))) (* everything added to alloc is fresh *)
+        ]
+      in
+     
+      let replacement_pts =
+        Axioms.mk_axiom "pts_frame"
+          (mk_implies
+             (mk_not (smk_elem Axioms.loc1 frame))
+             (mk_eq (mk_read f Axioms.loc1) (mk_read f' Axioms.loc1))
+          )
+      in
+     
+      let replacement_reach =
+        let ep v = mk_ep f x v in
+        let reachwo_f = Axioms.reachwo_Fld f in
+        let reach_f x y z = 
+          if !Config.use_btwn 
+          then mk_btwn f x z y
+          else mk_reachwo f x y z 
+        in
+        let reach_f' x y z = 
+          if !Config.use_btwn 
+          then mk_btwn f' x z y
+          else mk_reachwo f' x y z 
+        in
+        let open Axioms in
+        [mk_axiom "reach_frame1"
+           (mk_implies
+              (reachwo_f loc1 loc2 (ep loc1))
+              (mk_iff 
+                 (reach_f loc1 loc2 loc3)
+                 (reach_f' loc1 loc2 loc3)));
+         mk_axiom "reach_frame2"
+           (mk_implies
+              (mk_and [mk_not (smk_elem loc1 x); mk_eq loc1 (ep loc1)])
+              (mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)))
+       ]
+      in
+      
+      let axioms =
+        replacement_pts ::
+        replacement_alloc @
+        replacement_reach
+      in
+      mk_and axioms
     in
-
-    let replacement_pts =
-      Axioms.mk_axiom "pts_frame"
+    let reduce_data () =
+      Axioms.mk_axiom "data_frame"
         (mk_implies
            (mk_not (smk_elem Axioms.loc1 frame))
            (mk_eq (mk_read f Axioms.loc1) (mk_read f' Axioms.loc1))
         )
     in
-
-    let replacement_reach =
-      let ep v = mk_ep f x v in
-      let reachwo_f = Axioms.reachwo_Fld f in
-      let reach_f x y z = 
-        if !Config.use_btwn 
-        then mk_btwn f x z y
-        else mk_reachwo f x y z 
-      in
-      let reach_f' x y z = 
-        if !Config.use_btwn 
-        then mk_btwn f' x z y
-        else mk_reachwo f' x y z 
-      in
-      let open Axioms in
-      [mk_axiom "reach_frame1"
-         (mk_implies
-            (reachwo_f loc1 loc2 (ep loc1))
-            (mk_iff 
-               (reach_f loc1 loc2 loc3)
-               (reach_f' loc1 loc2 loc3)));
-       mk_axiom "reach_frame2"
-         (mk_implies
-            (mk_and [mk_not (smk_elem loc1 x); mk_eq loc1 (ep loc1)])
-            (mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)))
-     ]
-    in
-    
-    let axioms =
-      replacement_pts ::
-      replacement_alloc @
-      replacement_reach
-    in
-    mk_and axioms
+      match sort_of f with
+      | Some (Fld Loc) -> reduce_graph ()
+      | Some (Fld Int) -> reduce_data ()
+      | None ->
+        Debug.amsg "reduce_frame: type not given, assuming Fld Loc\n";
+        reduce_graph ()
+      | Some other -> failwith ("reduce_frame did not expect f with type " ^ (string_of_sort other))
   in
   let rec process f = match f with
     | Atom (App (Frame, [x;x';a;a';f;f'], _)) -> 
