@@ -11,7 +11,7 @@ let parse_error = ParseError.parse_error
 %token <int> INT
 %token LPAREN RPAREN LBRACKET RBRACKET
 %token SEMICOLON DOT
-%token PLUS MINUS DIV
+%token PLUS MINUS DIV MULT
 %token EQ NEQ LEQ GEQ LT GT
 %token PTS BPTS TRUE FALSE EMP NULL
 %token COLONEQ
@@ -141,7 +141,7 @@ pterm:
 | pterm DOT DATA { FormUtil.mk_read fdata $1 }
 | pterm PLUS pterm { FormUtil.mk_plus $1 $3 }
 | pterm MINUS pterm { FormUtil.mk_minus $1 $3 }
-/*| pterm SEP pterm { FormUtil.mk_mult $1 $3 }*/
+| pterm MULT pterm { FormUtil.mk_mult $1 $3 }
 | pterm DIV pterm { FormUtil.mk_div $1 $3 }
 | MINUS pterm { FormUtil.mk_uminus $2 }
 | TIDENT { FormUtil.mk_free_const (mk_ident $1) }

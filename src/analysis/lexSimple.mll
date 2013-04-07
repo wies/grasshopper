@@ -24,6 +24,7 @@ rule token = parse
 | '+' { PLUS }
 | '-' { MINUS }
 | '/' { DIV }
+| "(*)" { MULT }
 | '(' { LPAREN }
 | ')' { RPAREN }
 | '{' { LBRACKET }
