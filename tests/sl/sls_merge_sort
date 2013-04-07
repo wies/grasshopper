@@ -16,7 +16,7 @@ method merge(a, b)
     }
     last := head;
     while (a != null || b != null)
-        invariant (last |-> a || last |-> b) * lslseg(head, last, last) * uslseg(a, null, last) * uslseg(b, null, last);
+        invariant (last |-> a || last |-> b) * lslseg(head, last, last.data) * uslseg(a, null, last.data) * uslseg(b, null, last.data);
     {
         if (a == null || (b != null && a.data > b.data)) {
             last.next := b;
