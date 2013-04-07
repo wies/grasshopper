@@ -108,7 +108,9 @@ let assigned stmnt =
       IdSet.elements flds, None ]
 
 let rec change_heap stmnt = match stmnt with
-  | Assume _ | AssumeGrass _ | Assert _ | AssertGrass _ | Return _ | VarUpdate _ -> false
+  | VarUpdate (_, Call _) -> true
+  | VarUpdate (_, Term _) -> false
+  | Assume _ | AssumeGrass _ | Assert _ | AssertGrass _ | Return _ -> false
   | FunUpdate _ | New _ | Dispose _ -> true
   | Block lst -> List.exists change_heap lst
   | While (_, _, s) -> change_heap s
