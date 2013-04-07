@@ -449,12 +449,14 @@ let rec has_prev f = match f with
 
 let rec has_data f = match f with
   | Not t -> has_data t
-  | Spatial (d, _) when d.sym = slseg.sym ||
+  | Spatial (d, _) ->   d.sym = slseg.sym ||
+                        d.sym = blseg.sym ||
+                        d.sym = bslseg.sym ||
                         d.sym = llseg.sym ||
                         d.sym = ulseg.sym ||
                         d.sym = lslseg.sym ||
-                        d.sym = uslseg.sym -> true
-  | Pure _ | Spatial _ -> false
+                        d.sym = uslseg.sym
+  | Pure _ -> false
   | SepConj lst | And lst | Or lst -> 
     List.exists has_data lst
 

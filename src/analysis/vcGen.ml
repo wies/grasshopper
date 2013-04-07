@@ -436,9 +436,6 @@ let check_procedure proceduresMap name =
             mk_not (mk_elem (mk_loc id1) (mk_loc_set alloc))
           ]
         in
-        (* add a skolem cst v |-> _, TODO is it really needed ?
-        let curr_pts = Sl.to_field (try IdMap.find Sl.pts ident_map2 with Not_found -> Sl.pts) in
-        let skolem_pts = mk_eq (mk_read curr_pts (mk_loc id1)) (mk_loc (FormUtil.fresh_ident "default_successor")) in *)
         let not_null = mk_not (mk_eq mk_null (mk_loc id1)) in
         let c = smk_and [not_null; (*skolem_pts;*) f] in
           add_to_stack stack ident_map2 sig_map2 c

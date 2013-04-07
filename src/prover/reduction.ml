@@ -257,6 +257,7 @@ let reduce_frame fs =
            (mk_eq (mk_read f Axioms.loc1) (mk_read f' Axioms.loc1))
         )
     in
+      (*Debug.amsg ("expanding frame for " ^ (string_of_term f) ^ "\n");*)
       match sort_of f with
       | Some (Fld Loc) -> reduce_graph ()
       | Some (Fld Int) -> reduce_data ()
@@ -268,6 +269,7 @@ let reduce_frame fs =
   let rec process f = match f with
     | Atom (App (Frame, [x;x';a;a';f;f'], _)) -> 
         expand_frame x x' a a' f f'
+    | Atom (App (Frame, _, _)) -> failwith "frame with wrong arity"
     | Atom t -> Atom t
     | BoolOp (op, fs) -> BoolOp (op, List.map process fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, process f, a)
@@ -495,7 +497,7 @@ let reduce f =
   let fs3, ep_axioms, gts = reduce_ep fs21 in
   let fs4, gts1 = reduce_sets (fs3 @ ep_axioms) gts in
   let fs5, gts2 = reduce_reach fs4 gts1 in
-  let fs6 = reduce_remaining fs5 gts2 in
+  let fs6 = fs5 (*reduce_remaining fs5 gts2*) in
   (* the following is a (probably stupid) heuristic to sort the formulas for improving the running time *)
   let fs7 = 
     (* sort by decreasing number of disjuncts in formula *)
