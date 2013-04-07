@@ -1,0 +1,30 @@
+method double(lst)
+    requires slseg(lst, null);
+    ensures slseg(lst, null) * slseg(returned, null);
+{
+    if (lst == null) {
+        return null;
+    } else {
+        curr := lst;
+        new head;
+        cp := head;
+        cp.data := 2 (*) curr.data;
+        cp.next := null;
+        while(curr.next != null) 
+            invariant lslseg(lst, curr, curr.data);
+            invariant slseg(curr, null);
+            invariant lslseg(head, cp, 2 (*) curr.data);
+            invariant cp |-> null;
+            invariant cp.data == 2 (*) curr.data;
+            invariant curr != null;
+        {
+            old_cp := cp;
+            new cp;
+            old_cp.next := cp;
+            curr := curr.next;
+            cp.data := 2 (*) curr.data;
+            cp.next := null;
+        }
+        return head;
+    }
+}
