@@ -114,7 +114,12 @@ let generate_instances useLocalInst axioms terms rep_map =
           List.iter print_subst_map subst_maps
         end
     | _ -> ()
-    in *)
+    in
+    if subst_maps == [] then 
+      begin
+        print_endline "Dropping axiom: ";
+        print_forms stdout [f];
+      end;*)
     List.fold_left (fun acc subst_map -> subst subst_map f :: acc) acc subst_maps
   in
   List.fold_left instantiate epr_axioms axioms
@@ -123,7 +128,7 @@ let generate_instances useLocalInst axioms terms rep_map =
 let instantiate_with_terms local axioms classes =
     if !Config.instantiate then
       let _ = 
-        if false && !Debug.verbose then
+        if  !Debug.verbose then
           ignore
             (List.fold_left (fun num cl ->
               print_string ("Class " ^ string_of_int num ^ ": ");
