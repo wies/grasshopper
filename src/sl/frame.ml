@@ -12,20 +12,20 @@ let implies_heap_content preh posth =
    * if we have a path then we must compare
    * A(x) with first_alloc(x) and
    * B(x) with last_alloc(x) *)
-    mk_subseteq (Sl.mk_loc_set preh) (Sl.mk_loc_set posth) 
+    mk_subseteq (SlUtil.mk_loc_set preh) (SlUtil.mk_loc_set posth) 
 
 (* all equal *)
 let mk_same lst =
   let repr = List.hd lst in
     List.fold_left
-      (fun acc v -> (Sl.mk_eq (FormUtil.mk_free_const v) (FormUtil.mk_free_const repr)) :: acc )
+      (fun acc v -> (SlUtil.mk_eq (FormUtil.mk_free_const v) (FormUtil.mk_free_const repr)) :: acc )
       []
       (List.tl lst)
 
 (* all different *)
 let mk_different lst =
   let rec different reprs = match reprs with
-    | v :: vs -> (List.map (fun v2 -> Sl.mk_not (Sl.mk_eq (FormUtil.mk_free_const v) (FormUtil.mk_free_const v2))) vs) @ (different vs)
+    | v :: vs -> (List.map (fun v2 -> SlUtil.mk_not (SlUtil.mk_eq (FormUtil.mk_free_const v) (FormUtil.mk_free_const v2))) vs) @ (different vs)
     | [] -> []
   in
     different lst
@@ -74,7 +74,7 @@ let succ model =
   in
     (fun v ->
       Debug.msg ("make_frame: looking for successor of " ^ (str_of_ident v) ^ "\n");
-      match Model.eval_term model (Sl.mk_loc v) with
+      match Model.eval_term model (SlUtil.mk_loc v) with
       | Some vc ->
         let candidates = SymbolSet.remove vc (reachable_from vc) in
         let pruned =
@@ -182,15 +182,15 @@ let make_frame heap_a heap_b (model: Model.model) =
   (* get spatial term for a variable *)
   let succ = succ model in
   let get_spatial var = 
-    let term = mk_read Sl.fpts (Sl.mk_loc var) in
+    let term = mk_read Sl.fpts (SlUtil.mk_loc var) in
       match Model.eval_term model term with
       | Some r ->
         let var2 = get_repr c_map r in
-          Sl.mk_pts (Sl.mk_loc var) (Sl.mk_loc var2)
+          SlUtil.mk_pts (SlUtil.mk_loc var) (SlUtil.mk_loc var2)
       | None ->
           (* no pts_to -> look for the successor in reach *)
           match succ var with
-          | Some var2 -> Sl.mk_ls (Sl.mk_loc var) (Sl.mk_loc var2)
+          | Some var2 -> SlUtil.mk_ls (SlUtil.mk_loc var) (SlUtil.mk_loc var2)
           | None -> failwith "existential successor" (* Sl.PtsTo (var, fresh_ident "_") *)
   in
   let spatial =
@@ -199,11 +199,11 @@ let make_frame heap_a heap_b (model: Model.model) =
       (SymbolSet.elements diff)
   in
   let spatial2 = match spatial with
-    | [] -> Sl.mk_emp
+    | [] -> SlUtil.mk_emp
     | [x] -> x
-    | xs -> Sl.mk_sep_lst xs
+    | xs -> SlUtil.mk_sep_lst xs
   in
-  let frame = Sl.mk_sep spatial2 pure in
+  let frame = SlUtil.mk_sep spatial2 pure in
     Debug.msg ("frame is " ^ (Sl.to_string frame) ^ "\n");
     ((*frame,*) spatial2, pure)
 
@@ -242,7 +242,7 @@ let infer_frame_loop query preh posth =
               acc
           in
             List.map
-              (fun (spatial, pures) -> Sl.mk_sep spatial (Sl.Or pures) )
+              (fun (spatial, pures) -> SlUtil.mk_sep spatial (Sl.Or pures) )
               (Sl.SlMap.bindings by_spatial)
 
       in
@@ -263,8 +263,8 @@ let mk_frame_query pre post preh posth =
 let infer_frame pre_sl post_sl =
   let preh = pre_heap () in
   let posth = post_heap () in
-  let pre = Sl.to_grass preh pre_sl in
-  let post = Sl.to_grass posth post_sl in
+  let pre = ToGrass.to_grass preh pre_sl in
+  let post = ToGrass.to_grass posth post_sl in
   let query = mk_frame_query pre post preh posth in
     infer_frame_loop query preh posth
 

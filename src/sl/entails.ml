@@ -21,20 +21,18 @@ let same_heap_axioms subst preh posth =
     then IdMap.find alloc_id subst
     else alloc_id
   in
-  (*
-    [ Comment ("same_heap_content_pre" , mk_eq (mk_free_const pre_heap) (mk_free_const first_alloc));
-      Comment ("same_heap_content_post", mk_eq (mk_free_const post_heap) (mk_free_const last_alloc)) ]
-  *)
-    [ mk_eq (Sl.mk_loc_set preh) (Sl.mk_loc_set first_alloc);
-      mk_eq (Sl.mk_loc_set posth) (Sl.mk_loc_set last_alloc) ]
+    (* "same_heap_content_pre"  *)
+    [ mk_eq (SlUtil.mk_loc_set preh) (SlUtil.mk_loc_set first_alloc);
+    (* "same_heap_content_post" *)
+      mk_eq (SlUtil.mk_loc_set posth) (SlUtil.mk_loc_set last_alloc) ]
 
 let mk_entailment_query1 pre_sl pathf post_sl subst =
   let preh = pre_heap () in
   let posth = post_heap () in
-  let pre = Sl.to_grass preh pre_sl in
-  let post = subst_id subst (Sl.to_grass_negated posth post_sl) in
+  let pre = ToGrass.to_grass preh pre_sl in
+  let post = subst_id subst (ToGrass.to_grass_negated posth post_sl) in
   (* query *)
-  let query = smk_and ( (*Sl.make_axioms*) (mk_and [pre; post; pathf]) ::
+  let query = smk_and ( (*SlUtil.make_axioms*) (mk_and [pre; post; pathf]) ::
                         (same_heap_axioms subst preh posth) )
   in
   let _ = if !Debug.verbose then

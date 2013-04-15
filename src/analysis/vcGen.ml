@@ -103,7 +103,7 @@ let unify stack branch1 branch2 =
     DecisionStack.step stack_with_axioms both_branches s3 sig3
   
 let add_to_stack stack subst sign cstr =
-  let (ax, fs) = extract_axioms (Sl.get_clauses cstr) in
+  let (ax, fs) = extract_axioms (SlUtil.get_clauses cstr) in
     List.fold_left
       DecisionStack.guard_and_add
       (DecisionStack.step stack (smk_and fs) subst sign)
@@ -212,7 +212,7 @@ let check_procedure proceduresMap name =
         m.args
         args
     in
-      Sl.subst_consts subst m.precondition
+      SlUtil.subst_consts subst m.precondition
   in
   let get_post name args return =
     let m = get name in
@@ -224,13 +224,13 @@ let check_procedure proceduresMap name =
         m.args
         args
     in
-      Sl.subst_consts subst m.postcondition
+      SlUtil.subst_consts subst m.postcondition
   in
 
   (* aliases *)
-  let mk_set = Sl.mk_loc_set in
-  let mk_loc_set = Sl.mk_loc_set in
-  let mk_loc = Sl.mk_loc in
+  let mk_set = SlUtil.mk_loc_set in
+  let mk_loc_set = SlUtil.mk_loc_set in
+  let mk_loc = SlUtil.mk_loc in
 
   let last_alloc subst = 
     if IdMap.mem alloc_id subst
@@ -252,7 +252,6 @@ let check_procedure proceduresMap name =
       failwith (msg ^ " may not hold in " ^ (str_of_ident name))
     else
       begin
-        (* Sl.pts + Sl.prev_pts + Sl.data TODO other pointers ? *)
         let subst = DecisionStack.get_subst stack in
         let alloc1 = last_alloc subst in
         let fp = fresh_ident "footprint" in
@@ -260,23 +259,20 @@ let check_procedure proceduresMap name =
         let sl_1f = to_grass fp sl_1 subst in
         let sl_2f = to_grass fp2 sl_2 subst2 in
         let alloc2 = last_alloc subst2 in
-        let get_pts pts subst = mk_free_const (try IdMap.find pts subst with Not_found -> pts) in
-        let get_next = get_pts Sl.pts in
-        let get_prev = get_pts Sl.prev_pts in
-        let get_data = get_pts Sl.data in
-        let has_prev = IdMap.mem Sl.prev_pts subst2 in
-        let has_data = IdMap.mem Sl.data subst2 in
+        let get_pts pts subst = FormUtil.subst_id_term subst pts in
+        let flds =
+          Util.remove_duplicates (
+          (Symbols.get_fields pre) @
+          (Symbols.get_fields sl_1) @
+          (Symbols.get_fields sl_2) )
+        in
         let frame find_ptr =
           mk_frame
             (mk_set fp) (mk_set fp2)
             (mk_set alloc1) (mk_set alloc2)
             (find_ptr subst) (find_ptr subst2)
         in
-        let frames =
-          (frame get_next) ::
-          (if has_prev then [frame get_prev] else []) @
-          (if has_data then [frame get_data] else [])
-        in
+        let frames = List.map (fun t -> frame (get_pts t)) flds in
           add_to_stack stack subst2 sig2 (smk_and (sl_1f :: sl_2f :: frames))
       end
   in
@@ -302,23 +298,21 @@ let check_procedure proceduresMap name =
   in
 
   let sl_stuff_to_increase pre subst sl1 sl2 =
-    (* TODO other pointers *)
-    let pts = if  Sl.has_prev pre ||
-                  Sl.has_prev sl1 ||
-                  Sl.has_prev sl2 ||
-                  IdMap.mem Sl.prev_pts subst then
-        [Sl.pts; Sl.prev_pts]
-      else
-        [Sl.pts]
+    let fld_terms =
+      Util.remove_duplicates (
+      (Symbols.get_fields pre) @
+      (Symbols.get_fields sl1) @
+      (Symbols.get_fields sl2) )
     in
-    let data = if Sl.has_data pre ||
-                  Sl.has_data sl1 ||
-                  Sl.has_data sl2 ||
-                  IdMap.mem Sl.data subst 
-      then [Sl.data]
-      else []
+    let flds =
+      List.map
+        (fun t -> match t with
+          | App (FreeSym id, [], srt) -> ([id], srt)
+          | _ -> failwith "expected App (FreeSym _, _, _)"
+        )
+        fld_terms
     in
-      [pts, Some (Fld Loc); [alloc_id], Some (Set Loc); data, Some (Fld Int)]
+      ([alloc_id], Some (Set Loc)) :: flds
   in
 
   let procedure_call pre stack m args ret =
@@ -441,7 +435,7 @@ let check_procedure proceduresMap name =
           add_to_stack stack ident_map2 sig_map2 c
       | Return t -> 
         let ret = IdMap.add (mk_ident "returned") t IdMap.empty in
-        let post = Sl.subst_consts ret proc.postcondition in
+        let post = SlUtil.subst_consts ret proc.postcondition in
           (*check postcond and assume false !*)
           check_entailment (proc_name ^ "_postcondition_return_" ^ (string_of_term t)) pre stack post;
           DecisionStack.step stack (mk_false) IdMap.empty IdMap.empty

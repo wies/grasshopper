@@ -1,5 +1,5 @@
 {
-open ParseSl
+open ParseDef
 }
 
 let digitchar = ['0'-'9']
@@ -12,33 +12,42 @@ let literal = digitchar+
 rule token = parse
   [' ' '\t' '\n'] { token lexbuf }
 | "//" [^ '\n']* {token lexbuf }
-| '=' { EQ }
-| "~=" { NEQ }
+| "==" { EQ }
+| "!=" { NEQ }
 | "<=" { LEQ }
 | ">=" { GEQ }
 | "<" { LT }
 | ">" { GT }
 | "||" { OR }
 | "&&" { AND }
-| '~' { NOT }
+| "==>" { IMPLIES }
+| "<=>" { EQUIV }
+| '!' { NOT }
 | '.' { DOT }
 | '(' { LPAREN }
 | ')' { RPAREN }
+| '{' { LCBRK }
+| '}' { RCBRK }
 | ',' { COMMA }
-| '*' { SEP }
-| "(*)" { MULT }
+| "*" { MULT }
 | '+' { PLUS }
 | '-' { MINUS }
 | '/' { DIV }
-| "|->" { PTS }
-| "|<-" { BPTS }
+| "in" { IN }
+| "btwn" { BTWN }
+| "reachWO" { REACHWO }
+| "reach" { REACH }
+| "forall" { FORALL }
+| "exits" { EXISTS }
 | "true" { TRUE }
 | "false" { FALSE }
-| "next" { NEXT }
-| "back" { PREV }
-| "data" { DATA }
-| "emp" { EMP }
 | "null" { NULL }
+| ':' { COLON }
+| "set" { SET_T }
+| "fld" { FLD_T }
+| "loc" { LOC_T }
+| "int" { INT_T }
+| "bool" { BOOL_T }
 | tident as name { TIDENT(name) }
 | pident as name { PIDENT(name) }
 | literal as lit { INT (int_of_string lit) }

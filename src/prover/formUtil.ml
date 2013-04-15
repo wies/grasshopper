@@ -127,7 +127,10 @@ let mk_setenum ts =
   let srt = match sort_ofs ts with
   | Some esrt -> Some (Set esrt)
   | None -> None
-  in mk_app ?srt:srt SetEnum ts
+  in
+    match ts with
+    | [] -> mk_empty srt
+    | _ -> mk_app ?srt:srt SetEnum ts
 
 let mk_inter sets = mk_app ?srt:(sort_ofs sets) Inter sets
 

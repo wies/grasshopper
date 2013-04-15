@@ -126,7 +126,7 @@ let latest_alloc subst =
   then IdMap.find alloc_id subst
   else alloc_id
 
-let to_grass h f subst = subst_id subst (Sl.to_grass h (Sl.subst_id subst f))
-let to_grass_negated h f subst = subst_id subst (Sl.to_grass_negated h (Sl.subst_id subst f))
-let to_grass_not_contained h f subst = subst_id subst (Sl.to_grass_not_contained h (Sl.subst_id subst f))
+let to_grass h f subst = subst_id subst (ToGrass.to_grass h (SlUtil.subst_id subst f))
+let to_grass_negated h f subst = subst_id subst (ToGrass.to_grass_negated h (SlUtil.subst_id subst f))
+let to_grass_not_contained h f subst = subst_id subst (ToGrass.to_grass_not_contained h (SlUtil.subst_id subst f))
 

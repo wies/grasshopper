@@ -1,5 +1,6 @@
 %{
 open Sl
+open SlUtil
 
 let parse_error = ParseError.parse_error
 
@@ -13,7 +14,7 @@ let parse_error = ParseError.parse_error
 %token PTS BPTS TRUE FALSE EMP
 %token NEXT PREV DATA NULL
 %token SEP AND OR NOT
-%token PLUS MINUS DIV
+%token PLUS MINUS DIV MULT
 %token COMMA EOF DOT
 
 %left OR
@@ -40,7 +41,7 @@ pterm:
 | pterm DOT DATA { FormUtil.mk_read fdata $1 }
 | pterm PLUS pterm { FormUtil.mk_plus $1 $3 }
 | pterm MINUS pterm { FormUtil.mk_minus $1 $3 }
-/*| pterm SEP pterm { FormUtil.mk_mult $1 $3 }*/
+| pterm MULT pterm { FormUtil.mk_mult $1 $3 }
 | pterm DIV pterm { FormUtil.mk_div $1 $3 }
 | MINUS pterm { FormUtil.mk_uminus $2 }
 | TIDENT { FormUtil.mk_free_const (mk_ident $1) }

@@ -1,5 +1,6 @@
 %{
 open Sl
+open SlUtil
 open SimpleLanguage
 
 let parse_error = ParseError.parse_error
