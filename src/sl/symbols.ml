@@ -9,8 +9,9 @@ let fields = Hashtbl.create 15
 
 let rec get_field f = match f with
   | Not t -> get_field t
-  | Spatial (d, _) ->
+  | Spatial (d, args) ->
     begin
+      (*TODO substitution with the arguments*)
       try Hashtbl.find fields d.sym
       with Not_found -> IdSrtSet.empty
     end
@@ -45,16 +46,19 @@ let bound_id_to_var form =
   let rec process f = match f with
     | Atom t -> Atom t
     | BoolOp (b, lst) -> BoolOp(b, List.map process lst)
-    | Binder (b, args, f, annot) ->
-      let f2 = process f in
+    | Binder (b, args, inner, annot) ->
+      let inner = process inner in
+      let args1 = List.map (fun ((name,version), srt) -> (("?"^name,version), srt) ) args in
       let map =
-        List.fold_left
-          (fun acc (id, srt) -> IdMap.add id (FormUtil.mk_var id ~srt:srt) acc)
+        List.fold_left2
+          (fun acc (id, srt) (id2, _) -> IdMap.add id (FormUtil.mk_var id2 ~srt:srt) acc)
           IdMap.empty
           args
+          args1
       in
-      let f3 = FormUtil.subst_consts map f2 in
-        Binder(b, args, f3, annot)
+      let inner = FormUtil.subst_consts map inner in
+      let f2 = Binder(b, args1, inner, annot) in
+        f2
   in
     process form
 
@@ -69,7 +73,10 @@ let apply args f = match args with
           args
           terms
       in
-        FormUtil.subst_consts map f
+      let f2 = FormUtil.subst_consts map f in
+        print_endline ("f:  " ^ (string_of_form f));
+        print_endline ("f2: " ^ (string_of_form f2));
+        f2
     )
   | _ -> failwith "expected first argument of type Set Loc (convention)."
 
@@ -128,7 +135,7 @@ let symbol_to_string s = match find_symbol s with
 let predefined =
   [
     "emp(domain: set loc){ true, domain == {} }";
-    "ptsTo(domain: set loc, f: fld loc, x: loc, y: loc){ next(x) == y, domain == {x} }";
+    "ptsTo(domain: set loc, ptr: fld loc, x: loc, y: loc){ ptr(x) == y, domain == {x} }";
     "lseg(domain: set loc, x: loc, y: loc){ reach(x, y), forall l1: loc. l1 in domain <=> (btwn(x, l1, y) && l1 != y) }";
     "slseg(domain: set loc, x: loc, y: loc){ reach(x, y) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach( l1, l2)) ==> data(l1) <= data(l2), forall l1: loc. l1 in domain <=> (btwn(x, l1, y) && l1 != y) }";
     "rslseg(domain: set loc, x: loc, y: loc){ reach(x, y) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach( l1, l2)) ==> data(l1) >= data(l2), forall l1: loc.  l1 in domain <=> (btwn(x, l1, y) && l1 != y) }";
