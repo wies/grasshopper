@@ -39,7 +39,7 @@ let to_sort ?what s =
     | TSet s -> Set (process s)
     | TFld s -> Fld (process s)
     | TVar _ ->
-      Debug.amsg ("converting " ^(my_sort_to_string s)^ " to Loc.\n");
+      Debug.msg ("converting " ^(my_sort_to_string s)^ " to Loc.\n");
       Loc
     | TStar _ | TFun _ -> failwith ("cannot convert '" ^(my_sort_to_string s)^"' to basic sort")
   in
