@@ -261,10 +261,11 @@ let check_procedure proceduresMap name =
         let alloc2 = last_alloc subst2 in
         let get_pts pts subst = FormUtil.subst_id_term subst pts in
         let flds =
-          Util.remove_duplicates (
-          (Symbols.get_fields pre) @
-          (Symbols.get_fields sl_1) @
-          (Symbols.get_fields sl_2) )
+          TermSet.union
+            (Symbols.get_fields pre)
+            (TermSet.union
+              (Symbols.get_fields sl_1)
+              (Symbols.get_fields sl_2) )
         in
         let frame find_ptr =
           mk_frame
@@ -272,7 +273,7 @@ let check_procedure proceduresMap name =
             (mk_set alloc1) (mk_set alloc2)
             (find_ptr subst) (find_ptr subst2)
         in
-        let frames = List.map (fun t -> frame (get_pts t)) flds in
+        let frames = List.map (fun t -> frame (get_pts t)) (TermSet.elements flds) in
           add_to_stack stack subst2 sig2 (smk_and (sl_1f :: sl_2f :: frames))
       end
   in
@@ -299,10 +300,11 @@ let check_procedure proceduresMap name =
 
   let sl_stuff_to_increase pre subst sl1 sl2 =
     let fld_terms =
-      Util.remove_duplicates (
-      (Symbols.get_fields pre) @
-      (Symbols.get_fields sl1) @
-      (Symbols.get_fields sl2) )
+      TermSet.union
+        (Symbols.get_fields pre)
+        (TermSet.union
+          (Symbols.get_fields sl1)
+          (Symbols.get_fields sl2) )
     in
     let flds =
       List.map
@@ -310,7 +312,7 @@ let check_procedure proceduresMap name =
           | App (FreeSym id, [], srt) -> ([id], srt)
           | _ -> failwith "expected App (FreeSym _, _, _)"
         )
-        fld_terms
+        (TermSet.elements fld_terms)
     in
       ([alloc_id], Some (Set Loc)) :: flds
   in

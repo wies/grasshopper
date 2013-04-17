@@ -5,40 +5,42 @@ let symbols = Hashtbl.create 15
 
 (* part to know what symbol has what field *)
 
-let fields = Hashtbl.create 15
+let fields: (string, (ident list * IdSrtSet.t) list) Hashtbl.t = Hashtbl.create 15
 
-let rec get_field f = match f with
-  | Not t -> get_field t
+let rec get_fields f = match f with
+  | Not t -> get_fields t
   | Spatial (d, args) ->
     begin
-      (*TODO substitution with the arguments*)
-      try Hashtbl.find fields d.sym
-      with Not_found -> IdSrtSet.empty
+      let flds = try Hashtbl.find fields d.sym with Not_found -> [] in
+        List.fold_left
+          (fun acc (params, set) ->
+            let map =
+              List.fold_left2
+                (fun acc id1 id2 -> IdMap.add id1 id2 acc)
+                IdMap.empty
+                params
+                args
+            in
+            let set2 =
+              IdSrtSet.fold
+                (fun (id, srt) acc ->
+                  let id2 =
+                    try IdMap.find id map
+                    with Not_found -> FormUtil.mk_free_const id ~srt:srt
+                  in
+                    TermSet.add id2 acc
+                )
+                set
+                TermSet.empty
+            in
+              TermSet.union acc set2
+          )
+          TermSet.empty
+          flds
     end
-  | Pure _ -> IdSrtSet.empty
+  | Pure _ -> TermSet.empty
   | SepConj lst | And lst | Or lst -> 
-    List.fold_left (fun acc f -> IdSrtSet.union acc (get_field f)) IdSrtSet.empty lst
-
-let rec get_fields f = 
-  let flds = get_field f in
-    IdSrtSet.fold
-      (fun (f, t) acc -> (FormUtil.mk_free_const f ~srt:t) :: acc)
-      flds
-      []
-
-let get_fields_loc f =
-  let flds = get_field f in
-    IdSrtSet.fold
-      (fun (f, t) acc -> if t = Form.Fld Form.Loc then f::acc else acc)
-      flds
-      []
-
-let get_fields_data f =
-  let flds = get_field f in
-    IdSrtSet.fold
-      (fun (f, t) acc -> if t = Form.Fld Form.Int then f::acc else acc)
-      flds
-      []
+    List.fold_left (fun acc f -> TermSet.union acc (get_fields f)) TermSet.empty lst
 
 (* constructing the symbols from the input *)
 
@@ -74,8 +76,6 @@ let apply args f = match args with
           terms
       in
       let f2 = FormUtil.subst_consts map f in
-        print_endline ("f:  " ^ (string_of_form f));
-        print_endline ("f2: " ^ (string_of_form f2));
         f2
     )
   | _ -> failwith "expected first argument of type Set Loc (convention)."
@@ -100,8 +100,8 @@ let get_flds name args f =
       sign
       IdSrtSet.empty
   in
-  let old = try Hashtbl.find fields name with Not_found -> IdSrtSet.empty in
-    Hashtbl.add fields name (IdSrtSet.union flds old)
+  let old = try Hashtbl.find fields name with Not_found -> [] in
+    Hashtbl.add fields name ((List.map fst (List.tl args), flds) :: old)
 
 let parsed_to_symbol (name, args, structure, heap) =
   get_flds name args structure;
