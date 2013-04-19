@@ -36,7 +36,7 @@ let symbols =
    Eq; LtEq; GtEq; Lt; Gt;
    ReachWO; Btwn; Frame; Elem; SubsetEq]
 
-(* Terms and formulas *)
+(** Terms and formulas *)
 
 type term = 
   | Var of ident * sort option
