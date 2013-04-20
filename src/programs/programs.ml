@@ -3,6 +3,10 @@ open FormUtil
 open Axioms
 open Entails
 
+let alloc_id = (mk_ident "Alloc")
+
+let alloc_set = mk_free_const ~srt:(Set Loc) alloc_id
+
 (** Commands *)
 
 (** Assignment, x_1,...,x_n := e_1,...,e_n *)
@@ -47,8 +51,8 @@ and return_command = {
     return_args : term list;
 }
 
-(** Atomic commands *)
-type atomic_command =
+(** Basic commands *)
+type basic_command =
   | Assign of assign_command
   | New of new_command
   | Dispose of dispose_command
@@ -80,10 +84,10 @@ type loop_command = {
 
 (** Compound commands *)
 and command =
-  | Loop of loop_command * program_point option
-  | Choice of command list * program_point option
-  | Seq of command_list * program_point option
-  | Atom of atomic_command * program point option
+  | Loop of loop_command * program_point
+  | Choice of command list * program_point 
+  | Seq of command list * program_point
+  | Basic of basic_command * program_point
 
 (** Concrete or ghost variable. *)
 type var_decl = {
@@ -96,9 +100,9 @@ type var_decl = {
 (** Procedure declaration *)
 type proc_decl = {
     proc_name : ident; (** procedure name *)
-    proc_formals : var_decl list;  (** formal parameter list *)
-    proc_returns : var_decl list; (** return parameter list *)
-    proc_locals : var_decl list; (** all local variables *)
+    proc_formals : ident list;  (** formal parameter list *)
+    proc_returns : ident list; (** return parameter list *)
+    proc_locals : var_decl IdMap.t; (** all local variables *)
     proc_precond : Sl.form; (** precondition *)
     proc_postcond : Sl.form; (** postcondition *)
     proc_body : command; (* procedure body *)
@@ -112,8 +116,27 @@ type struct_decl = {
 
 (** Program *)
 type program = {
-    prog_globals : var_decl list; (** global variables *)
-    prog_structs : struct_decl list; (** structs *)
-    prog_procs : proc_decl list; (** procedures *)
+    prog_globals : var_decl IdMap.t; (** global variables *)
+    prog_structs : struct_decl IdMap.t; (** structs *)
+    prog_procs : proc_decl IdMap.t; (** procedures *)
   } 
+
+
+let procs prog = IdMap.fold (fun _ proc procs -> proc :: procs) prog.prog_procs []
+
+let prog_point = function
+  | Loop (_, pp) | Choice (_, pp) | Seq (_, pp) | Basic (_, pp) -> pp
+
+let rec modifies c = (prog_point c).pp_modifies
+and basic_modifies procs = function
+  | Assign ac -> id_set_of_list ac.assign_lhs
+  | New nc -> IdSet.add alloc_id (IdSet.singleton nc.new_lhs)
+  | Dispose _ -> IdSet.singleton alloc_id
+  | AssumeSL _ 
+  | Assume _
+  | AssertSL _
+  | Assert _
+  | Return _ -> IdSet.empty
+  | Call cc -> proc_modifies (IdMap.find cc.call_name procs)
+and proc_modifies proc = modifies proc.proc_body
 

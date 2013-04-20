@@ -6,6 +6,11 @@ let form_set_of_list fs =
     (fun acc f -> FormSet.add f acc) 
     FormSet.empty fs
 
+let id_set_of_list ids =
+  List.fold_left 
+    (fun acc id -> IdSet.add id acc) 
+    IdSet.empty ids
+
 let fresh_ident =
   let used_names = Hashtbl.create 0 in
   fun (name : string) ->
