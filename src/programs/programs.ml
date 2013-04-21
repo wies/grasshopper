@@ -124,11 +124,13 @@ type program = {
 
 let procs prog = IdMap.fold (fun _ proc procs -> proc :: procs) prog.prog_procs []
 
+let find_proc prog name = IdMap.find name prog.prog_procs
+
 let prog_point = function
   | Loop (_, pp) | Choice (_, pp) | Seq (_, pp) | Basic (_, pp) -> pp
 
 let rec modifies c = (prog_point c).pp_modifies
-and basic_modifies procs = function
+and basic_modifies prog = function
   | Assign ac -> id_set_of_list ac.assign_lhs
   | New nc -> IdSet.add alloc_id (IdSet.singleton nc.new_lhs)
   | Dispose _ -> IdSet.singleton alloc_id
@@ -137,6 +139,6 @@ and basic_modifies procs = function
   | AssertSL _
   | Assert _
   | Return _ -> IdSet.empty
-  | Call cc -> proc_modifies (IdMap.find cc.call_name procs)
+  | Call cc -> proc_modifies (find_proc prog cc.call_name)
 and proc_modifies proc = modifies proc.proc_body
 
