@@ -182,7 +182,6 @@ let mk_forall ?(ann=[]) bv f = mk_binder ~ann:ann Forall bv f
 let mk_exists ?(ann=[]) bv f = mk_binder ~ann:ann Exists bv f 
   
 
-
 let annotate f ann = 
   match f with
   | Binder (b, vs, f1, ann1) -> Binder (b, vs, f1, ann @ ann1)

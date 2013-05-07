@@ -18,7 +18,7 @@ let fresh_existentials f =
     map_id fct f
 
 (* translation that keeps the heap separated from the pointer structure *)
-let to_form set_fct domain f =
+let to_form pred_to_form set_fct domain f =
   let fd why d = FormUtil.fresh_ident ( why ^ "_" ^(fst d)) in
   let rec process_sep pol d f = 
     match f with
@@ -26,7 +26,7 @@ let to_form set_fct domain f =
         let domain = FormUtil.fresh_ident (fst d) in
         ([p, mk_loc_set domain, IdSet.empty],
          empty domain)
-    | Spatial (s, [x1; x2; y1; y2]) when s.sym = "dlseg" ->
+    | Atom (Pred s, [x1; x2; y1; y2]) when s = ("dlseg", 0) ->
         let domain = FormUtil.fresh_ident (fst d) in
         let part1 = reach x1 y1 in
         let part3 =
@@ -45,13 +45,22 @@ let to_form set_fct domain f =
         ( [FormUtil.mk_and ((if pol then [part3] else []) @ [part1;  part4]), mk_loc_set domain, IdSet.singleton domain],
           (get_symbol "dlseg").heap (mk_loc_set domain) [x1; x2; y1; y2]
          )
-    | Spatial (sym, args) -> 
+    | Atom (Emp, _) ->
         let domain = FormUtil.fresh_ident (fst d) in
-          assert (List.length args = sym.arity);
+        [FormUtil.mk_true, mk_loc_set domain, IdSet.empty], empty domain
+    | Atom (Cell, [t]) ->
+        let domain = FormUtil.fresh_ident (fst d) in
+        [FormUtil.mk_true, mk_loc_set domain, IdSet.empty], 
+        FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_setenum [t])
+    | Atom (Pred p, args) -> 
+        let domain = mk_loc_set (FormUtil.fresh_ident (fst d)) in
+        let structure, footprint = pred_to_form p args domain in
+        [structure, domain, IdSet.empty], footprint
+          (*assert (List.length args = sym.arity);
           ( [ sym.structure (mk_loc_set domain) args,
               mk_loc_set domain,
               IdSet.empty],
-             sym.heap (mk_loc_set domain) args )
+             sym.heap (mk_loc_set domain) args )*)
     | SepConj forms ->
         (*let ds = List.map (fun _ -> fd "sep" domain) forms in*)
         let translated = List.map (process_sep pol (fd "sep" d)) forms in
@@ -142,13 +151,13 @@ let post_process f =
   FormUtil.nnf (FormTyping.typing f)
 
 let to_grass domain f =
-  let (pointers, separations) = to_form FormUtil.mk_eq domain f in
+  let (pointers, separations) = to_form Symbols.pred_to_form FormUtil.mk_eq domain f in
     post_process (FormUtil.smk_and [pointers; separations])
 
 let to_grass_not_contained domain f = (* different structure or larger footprint *)
-  let (pointers, separations) = to_form FormUtil.mk_subseteq domain (mk_not f) in
+  let (pointers, separations) = to_form Symbols.pred_to_form FormUtil.mk_subseteq domain (mk_not f) in
     post_process (FormUtil.smk_and [pointers; separations])
 
 let to_grass_negated domain f =
-  let (pointers, separations) = to_form FormUtil.mk_eq domain (mk_not f) in
+  let (pointers, separations) = to_form Symbols.pred_to_form FormUtil.mk_eq domain (mk_not f) in
     post_process (FormUtil.smk_and [pointers; separations])

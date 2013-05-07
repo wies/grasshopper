@@ -79,8 +79,8 @@ sl_form:
 | pterm GEQ pterm { mk_pure (FormUtil.mk_geq $1 $3) }
 /* spatial part */
 | EMP { mk_emp }
-| pterm PTS pterm { mk_pts $1 $3 }
-| pterm BPTS pterm { mk_prev_pts $1 $3 }
+| pterm PTS pterm { mk_pts fpts $1 $3 }
+| pterm BPTS pterm { mk_pts fprev_pts $1 $3 }
 | TIDENT LPAREN args RPAREN { mk_spatial_pred $1 $3 }
 /* boolean structure */
 | NOT sl_form { mk_not $2 }

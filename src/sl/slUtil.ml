@@ -47,29 +47,31 @@ let mk_true = mk_pure FormUtil.mk_true
 let mk_false = mk_pure FormUtil.mk_false
 let mk_eq a b = mk_pure (FormUtil.mk_eq a b)
 let mk_not a = Not a
-let mk_spatial s args = Spatial (s, args)
-let mk_emp = mk_spatial (get_symbol "emp") []
-let mk_pts a b = mk_spatial (get_symbol "ptsTo") [fpts; a; b]
-let mk_prev_pts a b = mk_spatial (get_symbol "ptsTo") [fprev_pts; a; b]
-let mk_ls a b = mk_spatial (get_symbol "lseg") [a; b]
-let mk_dls a b c d = mk_spatial (get_symbol "dlseg") [a; b; c; d]
 let mk_and a b = And [a; b]
 let mk_or a b = Or [a; b]
 let mk_sep a b = 
   match (a, b) with
-  | (Spatial (e, []), _) when e.sym = "emp" -> b
-  | (_, Spatial (e, [])) when e.sym = "emp" -> a
+  | (Atom (Emp, []), _) -> b
+  | (_, Atom (Emp, [])) -> a
   | (SepConj aa, SepConj bb) -> SepConj (aa @ bb)
   | (a, SepConj bb) -> SepConj (a :: bb)
   | (SepConj aa, b) -> SepConj (aa @ [b]) 
   | _ -> SepConj [a; b]
+let mk_pred s args = Atom (s, args)
+let mk_emp = mk_pred Emp []
+let mk_cell a = mk_pred Cell [a]
+let mk_pts f a b = 
+  mk_sep (mk_eq (FormUtil.mk_read f a) b) (mk_cell a)
 let mk_sep_lst args = List.fold_left mk_sep mk_emp args
+(*let mk_prev_pts a b = mk_pred (get_symbol "ptsTo") [fprev_pts; a; b]*)
+(*let mk_ls a b = mk_pred (get_symbol "lseg") [a; b]*)
+(*let mk_dls a b c d = mk_pred (get_symbol "dlseg") [a; b; c; d]*)
 
 let mk_spatial_pred name args =
   match find_symbol name with
   | Some s ->
     if List.length args = s.arity then
-      mk_spatial s args
+      mk_pred (Pred (name, 0)) args
     else
       failwith (name ^ " expect " ^(string_of_int (s.arity))^
                 " found (" ^(String.concat ", " (List.map Form.string_of_term args))^ ")")
@@ -81,7 +83,7 @@ let rec map_id fct f = match f with
   | Not t ->  Not (map_id fct t)
   | And lst -> And (List.map (map_id fct) lst)
   | Or lst -> Or (List.map (map_id fct) lst)
-  | Spatial (s, args) -> mk_spatial s (List.map (FormUtil.map_id_term fct) args)
+  | Atom (s, args) -> mk_pred s (List.map (FormUtil.map_id_term fct) args)
   | SepConj lst -> SepConj (List.map (map_id fct) lst)
 
 let subst_id subst f =
@@ -96,7 +98,7 @@ let subst_consts subst f =
     | Not t ->  Not (map t)
     | And lst -> And (List.map map lst)
     | Or lst -> Or (List.map map lst)
-    | Spatial (s, args) -> mk_spatial s (List.map (FormUtil.subst_consts_term subst) args)
+    | Atom (s, args) -> mk_pred s (List.map (FormUtil.subst_consts_term subst) args)
     | SepConj lst -> SepConj (List.map map lst)
   in
     map f

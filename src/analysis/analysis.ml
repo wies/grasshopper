@@ -42,9 +42,12 @@ let annotate_modifies prog =
     let has_new, procs1 =
       List.fold_left 
         (fun (has_new, procs1) proc ->
-          let has_new1, body1 = pm prog proc.proc_body in
-          let proc1 = {proc with proc_body = body1} in
-          has_new || has_new1, proc1 :: procs1)
+          match proc.proc_body with
+          | Some body ->
+              let has_new1, body1 = pm prog body in
+              let proc1 = {proc with proc_body = Some body1} in
+              (has_new || has_new1, proc1 :: procs1)
+          | None -> (has_new, proc :: procs1))
         (false, []) procs
     in 
     let procs2 = 
@@ -57,6 +60,7 @@ let annotate_modifies prog =
   in
   pm_prog prog
 
+(*
 let short_circuit_eval prog =
   let rec sce new_locals = function
     | Choice (cs, pp) ->
@@ -78,3 +82,4 @@ let short_circuit_eval prog =
         in
         new_locals, Seq (cs1, pp)
   in
+*)

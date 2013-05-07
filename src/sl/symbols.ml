@@ -1,6 +1,13 @@
 open Form
 open Sl
 
+type symbol = 
+    { sym: string;
+      arity: int;
+      structure: Form.term (*domain*) -> Form.term list (*args*) -> Form.form;
+      heap: Form.term (*domain*) -> Form.term list (*args*) -> Form.form;
+    }
+
 let symbols = Hashtbl.create 15
 
 (* part to know what symbol has what field *)
@@ -9,9 +16,9 @@ let fields: (string, (ident list * IdSrtSet.t) list) Hashtbl.t = Hashtbl.create 
 
 let rec get_fields f = match f with
   | Not t -> get_fields t
-  | Spatial (d, args) ->
+  | Atom (Pred p, args) ->
     begin
-      let flds = try Hashtbl.find fields d.sym with Not_found -> [] in
+      let flds = try Hashtbl.find fields (Form.str_of_ident p) with Not_found -> [] in
         List.fold_left
           (fun acc (params, set) ->
             let map =
@@ -38,6 +45,8 @@ let rec get_fields f = match f with
           TermSet.empty
           flds
     end
+  | Atom (Emp, _)
+  | Atom (Cell, _)
   | Pure _ -> TermSet.empty
   | SepConj lst | And lst | Or lst -> 
     List.fold_left (fun acc f -> TermSet.union acc (get_fields f)) TermSet.empty lst
@@ -46,7 +55,7 @@ let rec get_fields f = match f with
 
 let bound_id_to_var form =
   let rec process f = match f with
-    | Atom t -> Atom t
+    | Form.Atom t -> Form.Atom t
     | BoolOp (b, lst) -> BoolOp(b, List.map process lst)
     | Binder (b, args, inner, annot) ->
       let inner = process inner in
@@ -129,6 +138,10 @@ let arity s = match find_symbol s with
 let symbol_to_string s = match find_symbol s with
   | Some s -> Some s.sym
   | None -> None
+
+let pred_to_form p args domain =
+  let pdef = get_symbol (str_of_ident p) in
+  pdef.structure domain args, pdef.heap domain args
 
 (* the predefined symbols *)
 

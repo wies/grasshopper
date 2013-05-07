@@ -2,11 +2,12 @@ open Form
 open Util
 
 (* TODO try to fill in the types of partially typed formula.
- * use some kind of most general unifer (simple backtrack-free version should be enough)
+ * use some kind of most general unifier (simple backtrack-free version should be enough)
  *)
 
 type my_sort =
   | TBool | TLoc | TInt
+  | TFree of ident
   | TSet of my_sort 
   | TFld of my_sort
   | TVar of int
@@ -17,6 +18,7 @@ let rec my_sort_to_string t = match t with
   | TBool -> "bool"
   | TLoc -> "loc"
   | TInt -> "Int"
+  | TFree id -> str_of_ident id
   | TSet s -> "Set("^(my_sort_to_string s)^")"
   | TFld s -> "Fld("^(my_sort_to_string s)^")"
   | TVar i -> "V"^(string_of_int i)
@@ -27,6 +29,7 @@ let rec to_my_sort t = match t with
   | Bool  -> TBool
   | Loc   -> TLoc
   | Int   -> TInt
+  | FreeSrt id -> TFree id
   | Set s -> TSet (to_my_sort s)
   | Fld s -> TFld (to_my_sort s)
 
@@ -36,6 +39,7 @@ let to_sort ?what s =
     | TBool -> Bool
     | TLoc -> Loc
     | TInt -> Int
+    | TFree id -> FreeSrt id
     | TSet s -> Set (process s)
     | TFld s -> Fld (process s)
     | TVar _ ->

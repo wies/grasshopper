@@ -5,6 +5,10 @@ module IntMap = Map.Make(struct
     let compare = compare
   end)
 
+module StringMap = Map.Make(struct
+    type t = string
+    let compare = compare
+  end)
 
 (** Utility functions on option types *)
 

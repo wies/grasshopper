@@ -1,0 +1,31 @@
+struct Node {
+  var next: Node;
+}
+
+procedure filter(x: Node)
+  requires lseg(x, null);
+  ensures lseg(x, null);
+{
+  var prv: Node, curr: Node;
+  prv := null;
+  curr := x;
+  while (curr != null) 
+    invariant lseg(x, prv) &*& prv |-> Node &*& prv.next == curr || prv == null &*& x == curr;
+    invariant lseg(curr, null);
+  {
+    var old_curr: Node;
+    old_curr := curr;
+    curr := curr.next;
+    var nondet: bool;
+    if (nondet) {
+      if (prv != null) {
+        prv.next := old_curr.next;
+      } else {
+        x := old_curr.next;
+      }
+      free old_curr;
+    } else {
+      prv := old_curr;
+    }
+  }
+}

@@ -8,6 +8,7 @@ type sort =
   | Bool | Loc | Int
   | Set of sort 
   | Fld of sort
+  | FreeSrt of ident
 
 type arity = sort list * sort
 
@@ -189,12 +190,14 @@ let int_sort_string = "Int"
 
 let rec pr_sort0 ppf srt = match srt with
   | Loc | Bool | Int -> fprintf ppf "%a" pr_sort srt
+  | FreeSrt id -> pr_ident ppf id
   | _ -> fprintf ppf "@[<1>(%a)@]" pr_sort srt
 
 and pr_sort ppf = function
   | Loc -> fprintf ppf "%s" loc_sort_string
   | Bool -> fprintf ppf "%s" bool_sort_string
   | Int -> fprintf ppf "%s" int_sort_string
+  | FreeSrt id -> pr_ident ppf id
   | Fld s -> fprintf ppf "@[<4>%s@ %a@]" fld_sort_string pr_sort0 s
   | Set s -> fprintf ppf "@[<4>%s@ %a@]" set_sort_string pr_sort0 s
 		
