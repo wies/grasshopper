@@ -26,8 +26,8 @@ type expr =
 (** Specification formulas *)
 
 type spec_form =
-  | SL of Sl.form
-  | FOL of form
+  | SL of Sl.form 
+  | FOL of form 
 
 (** Commands *)
 
@@ -41,7 +41,6 @@ type assign_command = {
 type new_command = {
     new_lhs : ident;
     new_sort : sort;
-    new_type : ident; (** original type *)
   }
 
 (** Deallocation, free x *)
@@ -50,14 +49,16 @@ type dispose_command = {
   }
      
 (** Assume or assert of pure formula *)
-type form_command = {
-    fc_form : spec_form;
-    fc_msg : string option;
+type spec = {
+    spec_form : spec_form;
+    spec_free : bool;
+    spec_msg : string option;
+    spec_pos : source_position;
   } 
 
 (** Procedure call, x_1,..., x_n := p(e_1,...,e_m) *)
 type call_command = {
-    call_res : ident list; (** x_1,...,x_n *)
+    call_lhs : ident list; (** x_1,...,x_n *)
     call_name : ident; (** p *)
     call_args : expr list; (** e_1,...,e_m *)
   } 
@@ -73,8 +74,8 @@ type basic_command =
   | Assign of assign_command
   | New of new_command
   | Dispose of dispose_command
-  | Assume of form_command
-  | Assert of form_command
+  | Assume of spec
+  | Assert of spec
   | Call of call_command
   | Return of return_command
 
@@ -86,7 +87,7 @@ type program_point = {
 
 (** Loop *)
 type loop_command = {
-    loop_inv : spec_form list;
+    loop_inv : spec list;
     loop_prebody : command;
     loop_test : form;
     loop_postbody : command;
@@ -99,12 +100,31 @@ and command =
   | Seq of command list * program_point
   | Basic of basic_command * program_point
 
+let mk_pp pos = { pp_pos = pos; pp_modifies = IdSet.empty }
+
+let mk_basic c pos = Basic (c, mk_pp pos)
+let mk_assign lhs rhs pos = 
+  let ac = { assign_lhs = lhs; assign_rhs = rhs } in
+  mk_basic (Assign ac) pos
+let mk_new lhs srt pos = 
+  let nc = { new_lhs = lhs; new_sort = srt } in
+  mk_basic (New nc) pos
+let mk_dispose t pos =
+  let dc = { dispose_loc = t } in
+  mk_basic (Dispose dc) pos
+let mk_assume sf pos =
+  mk_basic (Assume sf) pos
+let mk_assert sf pos =
+  mk_basic (Assert sf) pos
+let mk_call lhs name args pos =
+  let cc = {call_lhs = lhs; call_name = name; call_args = args} in
+  mk_basic (Call cc) pos
+
 (** Variable declaration *)
 type var_decl = {
     var_name : ident; (** variable name *)
     var_orig_name : string; (** original name *)
     var_sort : sort; (** variable type *)
-    var_type : ident option; (** original type *)
     var_is_ghost : bool; (** whether the variable is ghost *)
     var_is_aux : bool; (** whether the variable is an auxiliary variable *)
     var_pos : source_position; (** position of declaration *)
@@ -116,8 +136,8 @@ type proc_decl = {
     proc_formals : ident list;  (** formal parameter list *)
     proc_returns : ident list; (** return parameter list *)
     proc_locals : var_decl IdMap.t; (** all local variables *)
-    proc_precond : spec_form list; (** precondition *)
-    proc_postcond : spec_form list; (** postcondition *)
+    proc_precond : spec list; (** precondition *)
+    proc_postcond : spec list; (** postcondition *)
     proc_body : command option; (* procedure body *)
     proc_pos : source_position; (** position of declaration *)
   }
@@ -133,7 +153,8 @@ type pred_decl = {
 
 (** Program *)
 type program = {
-    prog_globals : var_decl IdMap.t; (** global variables *)
+    prog_axioms : spec list; (** background axioms *)
+    prog_vars : var_decl IdMap.t; (** global variables *)
     prog_preds : pred_decl IdMap.t; (** predicates *)
     prog_procs : proc_decl IdMap.t; (** procedures *)
   } 
@@ -149,7 +170,8 @@ let dummy_position =
   }
 
 let empty_prog = 
-  { prog_globals = IdMap.empty;
+  { prog_axioms = [];
+    prog_vars = IdMap.empty;
     prog_preds = IdMap.empty;
     prog_procs = IdMap.empty 
   }
@@ -183,8 +205,8 @@ let mk_loop_cmd loop pos =
   Loop (loop, mk_ppoint pos)
 
 
-let declare_global prog global =
-  { prog with prog_globals = IdMap.add global.var_name global prog.prog_globals }
+let declare_global prog var =
+  { prog with prog_vars = IdMap.add var.var_name var prog.prog_vars }
 
 let declare_pred prog pred =
   {prog with prog_preds = IdMap.add pred.pred_name pred prog.prog_preds}
@@ -198,7 +220,7 @@ let find_proc prog name = IdMap.find name prog.prog_procs
 
 let find_pred prog name = IdMap.find name prog.prog_preds
 
-let find_global prog name = IdMap.find name prog.prog_globals
+let find_global prog name = IdMap.find name prog.prog_vars
 
 (** Auxiliary functions for commands *)
 

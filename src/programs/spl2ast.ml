@@ -1,5 +1,7 @@
 open Form
 open Programs
+open Sl
+open Form
 open SplSyntax
 
 
@@ -85,13 +87,9 @@ let resolve_names cus =
                     StructType id
                 | ty -> ty
                 in
-                let fdecl = 
-                  { fdecl with 
-                    v_name = id; 
-                    v_type = FieldType (decl.s_name, res_type) 
-                  }
-                in
-                IdMap.add id fdecl fields, IdMap.add id fdecl globals, tbl
+                let fdecl = { fdecl with v_name = id; v_type = res_type } in
+                let gfdecl = { fdecl with v_type = FieldType (decl.s_name, res_type) } in
+                IdMap.add id fdecl fields, IdMap.add id gfdecl globals, tbl
               )
               decl.s_fields (IdMap.empty, globals, tbl)
           in
@@ -123,19 +121,19 @@ let resolve_names cus =
             let id = lookup_id init_id tbl pos in
             check_field id globals pos;
             Dot (re e, id, pos)
-        | Call (init_id, args, pos) ->
+        | ProcCall (init_id, args, pos) ->
             let id = lookup_id init_id tbl pos in
             let args1 = List.map re args in
             (try 
               check_proc id procs0 pos;
-              Call (id, args1, pos)
+              ProcCall (id, args1, pos)
             with ProgError.Prog_error _ ->
               check_pred id preds0 pos;
-              Pred (id, args1, pos))
-        | Pred (init_id, args, pos) ->
+              PredApp (id, args1, pos))
+        | PredApp (init_id, args, pos) ->
             let id = lookup_id init_id tbl pos in
             check_pred id preds0 pos;
-            Pred (id, List.map re args, pos)              
+            PredApp (id, List.map re args, pos)              
         | UnaryOp (op, e, pos) ->
             UnaryOp (op, re e, pos)
         | BinaryOp (e1, op, e2, pos) ->
@@ -264,7 +262,7 @@ let flatten_exprs cus =
       | Dot (e, id, pos) ->
           let e1, aux1, locals1 = flatten_expr aux locals e in
           Dot (e1, id, pos), aux1, locals1
-      | Call (id, args, pos) ->
+      | ProcCall (id, args, pos) ->
           let pdecl = IdMap.find id cu.proc_decls in
           let res_type = 
             match pdecl.p_returns with
@@ -283,9 +281,9 @@ let flatten_exprs cus =
               ) args ([], aux, locals)
           in
           let aux_var = Ident (aux_id, pos) in
-          let call = Assign ([aux_var], [Call (id, args1, pos)], pos) in
+          let call = Assign ([aux_var], [ProcCall (id, args1, pos)], pos) in
           aux_var, (aux1 @ [call]), locals1 
-      | Pred (init_id, args, pos) as e->
+      | PredApp (init_id, args, pos) as e->
           List.iter check_side_effects args;
           e, aux, locals
       | UnaryOp (op, e, pos) ->
@@ -373,9 +371,267 @@ let flatten_exprs cus =
   let cus = List.map fe cus in
   cus
 
+type cexpr =
+  | SL_form of Sl.form
+  | FOL_form of Form.form
+  | FOL_term of Form.term * typ
+
+(*
+let rec compatible_types ty1 ty2 =
+  match ty1, ty2 with
+  | StructType _, NullType
+  | NullType, StructType _ 
+  | IntType, IntType
+  | BoolType, BoolType -> true
+  | StructType id1, StructType id2 when id1 = id2 -> true
+  | FieldType (id1, ty1), FieldType (ty2 -> compatible_types ty1 ty2
+  | _, _ -> false*)
+
 let convert cus =
   let convert_cu cu prog =
+    let find_var_decl locals id =
+      try IdMap.find id locals 
+      with Not_found -> IdMap.find id cu.var_decls
+    in
+    let field_type pos id fld_id =
+      let decl = IdMap.find id cu.struct_decls in
+      try 
+        let fdecl = IdMap.find fld_id decl.s_fields in
+        fdecl.v_type
+      with Not_found ->
+        ProgError.error pos ("Struct " ^ fst id ^ " does not have a field named " ^ fst fld_id ^ ".")
+    in
+    let rec convert_type = function
+      | NullType -> Loc
+      | StructType id -> Loc
+      | FieldType (id, typ) -> Fld (convert_type typ) 
+      | IntType -> Int
+      | BoolType -> Bool
+    in
+    let convert_var_decl decl = 
+      { var_name = decl.v_name;
+        var_orig_name = fst decl.v_name;
+        var_sort = convert_type decl.v_type;
+        var_is_ghost = decl.v_ghost;
+        var_is_aux = decl.v_aux;
+        var_pos = decl.v_pos;
+      }
+    in 
+    let ty_str = function
+      | NullType | StructType _ -> "expression of a struct type"
+      | IntType -> "expression of type int"
+      | BoolType -> "expression of type bool"
+      | FieldType _ -> "field"
+    in
+    let type_error pos expected found =
+      ProgError.type_error pos ("Expected an " ^ expected ^ "\n            but found an " ^ found ^ ".")
+    in
+    let rec convert_expr locals = function
+      | Null _ -> FOL_term (FormUtil.mk_null, NullType)
+      | Emp _ -> SL_form SlUtil.mk_emp
+      | IntVal (i, _) -> FOL_term (FormUtil.mk_int i, IntType)
+      | BoolVal (b, _) -> FOL_form (FormUtil.mk_bool b)
+      | Dot (e, fld_id, pos) -> 
+          let t, ty = extract_term locals NullType e in
+          (match ty with
+          | StructType id ->
+              let res_ty = field_type pos id fld_id in
+              let res_srt = convert_type res_ty in
+              let fld = FormUtil.mk_free_const ~srt:(Fld res_srt) fld_id in
+              FOL_term (FormUtil.mk_read fld t, res_ty)
+          | NullType -> ProgError.error pos "Cannot dereference null."
+          | ty -> failwith "unexpected type")
+      | PredApp (id, es, pos) ->
+          let decl = IdMap.find id cu.pred_decls in
+          let tys = List.map (fun p -> (IdMap.find p decl.pr_locals).v_type) decl.pr_formals in
+          let ts = 
+            try List.map2 (extract_term locals) tys es
+            with Invalid_argument _ -> 
+              ProgError.error pos 
+                (Printf.sprintf "Predicate %s expects %d arguments" (fst id) (List.length tys))
+          in SL_form (SlUtil.mk_pred (Pred id) (List.map fst ts))
+      | BinaryOp (e1, OpEq, e2, _) ->
+          (match convert_expr locals e1 with
+          | FOL_form _ 
+          | FOL_term (_, BoolType) ->
+              let f1 = extract_fol_form locals e1 in
+              let f2 = extract_fol_form locals e2 in
+              FOL_form (FormUtil.mk_iff f1 f2)
+          | FOL_term (t1, ty1) ->
+              let t2, _ = extract_term locals ty1 e2 in
+              FOL_form (FormUtil.mk_eq t1 t2)
+          | SL_form _ -> 
+              ProgError.error (pos_of_expr e1) 
+                "Operator == is not defined for SL expressions")
+      | BinaryOp (e1, OpNeq, e2, pos) ->
+          convert_expr locals (UnaryOp (OpNot, BinaryOp (e1, OpEq, e2, pos), pos))
+      | BinaryOp (e1, (OpMinus as op), e2, _)
+      | BinaryOp (e1, (OpPlus as op), e2, _)
+      | BinaryOp (e1, (OpMult as op), e2, _)
+      | BinaryOp (e1, (OpDiv as op), e2, _) ->
+          let mk_app =
+            match op with
+            | OpMinus -> FormUtil.mk_minus
+            | OpPlus -> FormUtil.mk_plus
+            | OpMult -> FormUtil.mk_mult
+            | OpDiv -> FormUtil.mk_div
+            | _ -> failwith "unexpected operator"
+          in
+          let t1, _ = extract_term locals IntType e1 in
+          let t2, _ = extract_term locals IntType e2 in
+          FOL_term (mk_app t1 t2, IntType)
+      | BinaryOp (e1, (OpGt as op), e2, _)
+      | BinaryOp (e1, (OpLt as op), e2, _)
+      | BinaryOp (e1, (OpGeq as op), e2, _)
+      | BinaryOp (e1, (OpLeq as op), e2, _) ->
+          let mk_form =
+            match op with
+            | OpGt -> FormUtil.mk_gt
+            | OpLt -> FormUtil.mk_lt
+            | OpGeq -> FormUtil.mk_geq
+            | OpLeq -> FormUtil.mk_leq
+            | _ -> failwith "unexpected operator"
+          in
+          let t1, _ = extract_term locals IntType e1 in
+          let t2, _ = extract_term locals IntType e2 in
+          FOL_form (mk_form t1 t2)
+      | BinaryOp (e1, (OpAnd as op), e2, _)
+      | BinaryOp (e1, (OpOr as op), e2, _) ->
+          (try
+            let mk_form = 
+              match op with
+              | OpAnd -> FormUtil.mk_and
+              | OpOr -> FormUtil.mk_or           
+              | _ -> failwith "unexpected operator"
+            in
+            let f1 = extract_fol_form locals e1 in
+            let f2 = extract_fol_form locals e2 in
+            FOL_form (mk_form [f1; f2])
+          with ProgError.Prog_error _ ->
+            let mk_form = 
+              match op with
+              | OpAnd -> SlUtil.mk_and
+              | OpOr -> SlUtil.mk_or
+              | _ -> failwith "unexpected operator"
+            in
+            let f1 = extract_sl_form locals e1 in
+            let f2 = extract_sl_form locals e2 in
+            SL_form (mk_form f1 f2))
+      | BinaryOp (e1, OpSep, e2, _) ->
+          let f1 = extract_sl_form locals e1 in
+          let f2 = extract_sl_form locals e2 in
+          SL_form (SlUtil.mk_sep f1 f2)
+      | UnaryOp (OpPlus, e, _) ->
+          let t, _ = extract_term locals IntType e in 
+          FOL_term (t, IntType)
+      | UnaryOp (OpMinus, e, _) ->
+          let t, _ = extract_term locals IntType e in
+          FOL_term (FormUtil.mk_uminus t, IntType)
+      | UnaryOp (OpNot, e, _) ->
+          (try
+            let f = extract_fol_form locals e in
+            FOL_form (FormUtil.mk_not f)
+          with ProgError.Prog_error _ ->
+            let f = extract_sl_form locals e in
+            SL_form (SlUtil.mk_not f))
+      | Ident (id, pos) ->
+          let decl = find_var_decl locals id in
+          let srt = convert_type decl.v_type in
+          FOL_term (FormUtil.mk_free_const ~srt:srt decl.v_name, decl.v_type)
+      | _ -> failwith "convert_expr: unexpected expression"
+    and extract_sl_form locals e =
+      match convert_expr locals e with
+      | SL_form f -> f
+      | FOL_form f -> Pure f
+      | FOL_term (t, StructType _)
+      | FOL_term (t, NullType) -> SlUtil.mk_cell t 
+      | FOL_term (t, ty) ->
+         type_error (pos_of_expr e) "expression of type bool" (ty_str ty)
+    and extract_fol_form locals e =
+      match convert_expr locals e with
+      | SL_form _ ->
+          type_error (pos_of_expr e) "expression of type bool" "SL expression"
+      | FOL_form f -> f
+      | FOL_term (t, BoolType) -> Form.Atom t
+      | FOL_term (t, ty) -> type_error (pos_of_expr e) "expression of type bool" (ty_str ty)
+    and extract_term locals ty e =
+      match convert_expr locals e with
+      | SL_form _ -> type_error (pos_of_expr e) (ty_str ty) "SL expression"
+      | FOL_form (BoolOp (And, [])) -> Form.App (BoolConst true, [], Some Bool), BoolType
+      | FOL_form (BoolOp (Or, [])) -> Form.App (BoolConst false, [], Some Bool), BoolType
+      | FOL_form (Atom t) -> t, BoolType
+      | FOL_form _ -> type_error (pos_of_expr e) (ty_str ty) "formula"
+      | FOL_term (t, tty) ->
+          match ty, tty with
+          | NullType, StructType _
+          | StructType _, NullType -> t, tty
+          | ty, tty when ty = tty -> t, tty
+          | _ -> type_error (pos_of_expr e) (ty_str ty) (ty_str tty)
+    in
+    let rec convert_stmt proc = function
+      | _ -> failwith "unexpected statement"
+    in
+    let prog =
+      IdMap.fold
+        (fun id decl prog -> declare_global prog (convert_var_decl decl))
+        cu.var_decls prog
+    in
+    let prog =
+      IdMap.fold 
+        (fun id decl prog ->
+          let pred_decl = 
+            { pred_name = id;
+              pred_formals = decl.pr_formals;
+              pred_locals = IdMap.map convert_var_decl decl.pr_locals;
+              pred_body = extract_sl_form decl.pr_locals decl.pr_body;
+              pred_pos = decl.pr_pos;
+            } 
+          in
+         declare_pred prog pred_decl
+        )
+        cu.pred_decls prog
+    in
+    let convert_spec_form locals e msg =
+      let f = extract_sl_form locals e in
+      { spec_form = SL f;
+        spec_free = false;
+        spec_msg = msg;
+        spec_pos = pos_of_expr e;
+      }
+    in
+    let convert_contract locals contract =
+      List.fold_right 
+        (function 
+          | Requires e -> fun (pre, post) -> 
+              convert_spec_form locals e None :: pre, post
+          | Ensures e -> fun (pre, post) ->
+              pre, convert_spec_form locals e None :: post)
+        contract ([], [])
+    in
+    let prog =
+      IdMap.fold
+        (fun id decl prog ->
+          let pre, post = convert_contract decl.p_locals decl.p_contracts in
+          let proc_decl =
+            { proc_name = id;
+              proc_formals = decl.p_formals;
+              proc_returns = decl.p_returns;
+              proc_locals = IdMap.map convert_var_decl decl.p_locals;
+              proc_precond = pre;
+              proc_postcond = post;
+              proc_body = convert_stmt decl decl.p_body;
+              proc_pos = decl.p_pos;
+           } 
+          in
+          declare_proc prog proc_decl
+        )
+        cu.proc_decls prog
+    in
     prog
   in
   List.fold_right convert_cu cus empty_prog
 
+let to_ir cus =
+  let cus1 = resolve_names cus in
+  let cus2 = flatten_exprs cus1 in
+  convert cus2

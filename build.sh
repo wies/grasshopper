@@ -12,6 +12,23 @@ ocb()
     $OCAMLBUILD $FLAGS $*
 }
 
+distro()
+{
+    test -s grasshopper && echo "Directory grasshopper already exists. Aboarding." && exit 0
+
+    REPO=`svn info | grep URL | awk '{print $2}'`
+    DATE=`date +%Y-%m-%d`
+
+    svn export $REPO grasshopper
+
+    RMDATE=`date +%B\ %d,\ %Y`
+
+    cat README | sed s/\$DATE/"$RMDATE"/ > grasshopper/README
+
+    tar -czvf grasshopper-$DATE.tar.gz grasshopper
+    rm -rf grasshopper
+}
+
 rule() {
     case $1 in
     clean)  ocb -clean;;
@@ -20,6 +37,7 @@ rule() {
     all)    ocb ${TARGET//" "/".native "} ${TARGET//" "/".byte "} ;;
     prof)   ocb $TARGET1.p.native ;;
     depend) echo "Not needed.";;
+    distro) distro ;;
     *)      echo "Unknown action $1";;
     esac;
 }

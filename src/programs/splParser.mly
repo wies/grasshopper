@@ -273,7 +273,7 @@ alloc:
 | NEW IDENT { New (($2, 0), mk_position 1 2) }
 
 proc_call:
-| IDENT LPAREN expr_list_opt RPAREN { Call (($1, 0), $3, mk_position 1 4) }
+| IDENT LPAREN expr_list_opt RPAREN { ProcCall (($1, 0), $3, mk_position 1 4) }
 
 
 unary_expr:
@@ -282,7 +282,6 @@ unary_expr:
 | IDENT { Ident (($1, 0), mk_position 1 1) }
 | PLUS unary_expr { UnaryOp (OpPlus, $2, mk_position 1 2) }
 | MINUS unary_expr { UnaryOp (OpMinus, $2, mk_position 1 2) }
-| PIPE unary_expr PIPE { UnaryOp (OpDomain, $2, mk_position 1 3) }
 | unary_expr_not_plus_minus { $1 }
 ;
 

@@ -15,6 +15,7 @@ type typ =
   | FieldType of ident * typ
   | IntType
   | BoolType
+  | NullType
   (*| ArrayType of typ*)
 
 type var_decl_id =
@@ -24,7 +25,7 @@ type var_decl_id =
 type op = 
   | OpMinus | OpPlus | OpMult | OpDiv 
   | OpEq | OpNeq | OpGt | OpLt | OpGeq | OpLeq
-  | OpDomain | OpPts | OpSep 
+  | OpPts | OpSep 
   | OpAnd | OpOr | OpNot 
 
 type compilation_unit =
@@ -116,13 +117,27 @@ and expr =
   | BoolVal of bool * pos
   | New of ident * pos
   | Dot of expr * ident * pos
-  | Call of ident * exprs * pos
-  | Pred of ident * exprs * pos
+  | ProcCall of ident * exprs * pos
+  | PredApp of ident * exprs * pos
   | UnaryOp of op * expr * pos
   | BinaryOp of expr * op * expr * pos
   | Ident of ident * pos
 
 and exprs = expr list
+
+let pos_of_expr = function
+  | Null p 
+  | Emp p 
+  | IntVal (_, p) 
+  | BoolVal (_, p)
+  | New (_, p)
+  | Dot (_, _, p)
+  | ProcCall (_, _, p)
+  | PredApp (_, _, p)
+  | UnaryOp (_, _, p)
+  | BinaryOp (_, _, _, p)
+  | Ident (_, p) -> p
+  
 
 let compilation_unit pkg ims decls =
   let check_uniqueness id pos (vdecls, pdecls, prdecls, sdecls) =
