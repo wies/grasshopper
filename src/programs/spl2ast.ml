@@ -208,7 +208,16 @@ let resolve_names cus =
               decl.p_contracts
           in
           let body, locals, _ = resolve_stmt locals0 tbl decl.p_body in
-          let decl1 = { decl with p_locals = locals; p_contracts = contracts; p_body = body } in
+          let formals = List.map (fun id -> lookup_id id tbl decl.p_pos) decl.p_formals in
+          let returns = List.map (fun id -> lookup_id id tbl decl.p_pos) decl.p_returns in
+          
+          let decl1 = 
+            { decl with 
+              p_formals = formals;
+              p_returns = returns;
+              p_locals = locals; 
+              p_contracts = contracts; 
+              p_body = body } in
           IdMap.add decl.p_name decl1 procs
         )
         procs0 IdMap.empty 
@@ -218,7 +227,8 @@ let resolve_names cus =
         (fun _ decl preds ->
           let locals, tbl = declare_vars decl.pr_locals structs (SymbolTbl.push tbl) in
           let body = resolve_expr locals tbl decl.pr_body in
-          let decl1 = { decl with pr_locals = locals; pr_body = body } in
+          let formals = List.map (fun id -> lookup_id id tbl decl.pr_pos) decl.pr_formals in
+          let decl1 = { decl with pr_formals = formals; pr_locals = locals; pr_body = body } in
           IdMap.add decl.pr_name decl1 preds
         )
         preds0 IdMap.empty 
