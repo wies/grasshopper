@@ -157,14 +157,16 @@ let resolve_names cus =
             ([], locals, SymbolTbl.push tbl) stmts0
         in Block (List.rev stmts, pos), locals, tbl
       | LocalVars (vars, pos) ->
-          let locals, tbl = List.fold_right 
-              (fun decl (locals, tbl) ->
+          let ids, locals, tbl = List.fold_right 
+              (fun decl (ids, locals, tbl) ->
                 let decl, tbl = declare_var structs decl tbl in
-                IdMap.add decl.v_name decl locals, tbl
+                Ident (decl.v_name, decl.v_pos) :: ids, 
+                IdMap.add decl.v_name decl locals, 
+                tbl
               )
-              vars (locals, tbl)
+              vars ([], locals, tbl)
           in
-          Skip pos, locals, tbl
+          Havoc (ids, pos), locals, tbl
       | Assume (e, pos) ->
           Assume (resolve_expr locals tbl e, pos), locals, tbl
       | Assert (e, pos) ->
@@ -175,6 +177,9 @@ let resolve_names cus =
           Assign (lhs1, rhs1, pos), locals, tbl
       | Dispose (e, pos) -> 
           Dispose (resolve_expr locals tbl e, pos), locals, tbl
+      | Havoc (es, pos) ->
+          let es1 = List.map (resolve_expr locals tbl) es in
+          Havoc (es1, pos), locals, tbl
       | If (cond, t, e, pos) ->
           let t1, locals, _ = resolve_stmt locals tbl t in
           let e1, locals, _ = resolve_stmt locals tbl e in
@@ -343,6 +348,16 @@ let flatten_exprs cus =
       | Dispose (e, pos) -> 
           let e1, aux, locals1 = flatten_expr [] locals e in
           mk_block pos (aux @ [Dispose (e1, pos)]), locals
+      | Havoc (es, pos) -> 
+          let es1, aux1, locals1 = 
+            List.fold_right 
+              (fun e (es, aux, locals) ->
+                let e1, aux1, locals1 = flatten_expr aux locals e in
+                e1 :: es, aux1, locals1
+              ) 
+              es ([], [], locals)
+          in 
+          mk_block pos (aux1 @ [Havoc (es1, pos)]), locals          
       | If (cond, t, e, pos) ->
           let cond1, aux, locals1 = flatten_expr [] locals cond in
           let t1, locals2 = flatten locals1 t in
@@ -680,6 +695,16 @@ let convert cus =
       | Dispose (e, pos) ->
           let t, _ = extract_term proc.p_locals NullType e in
           mk_dispose_cmd t pos
+      | Havoc (es, pos) ->
+          let ids = 
+            List.map 
+              (function 
+                | Ident (id, _) -> id 
+                | e -> ProgError.error (pos_of_expr e) "Only variables can be havoced."
+              )
+              es
+          in 
+          mk_havoc_cmd ids pos
       | If (c, t, e, pos) ->
           let cond = extract_fol_form proc.p_locals c in
           let t_cmd = convert_stmt proc t in

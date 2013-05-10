@@ -37,6 +37,11 @@ type assign_command = {
     assign_rhs : term list; (** assigned values *)
   }
 
+(** Havoc, havoc x_1, ..., x_n *)
+type havoc_command = {
+    havoc_args : ident list;
+  } 
+
 (** Allocation, x := new T *)
 type new_command = {
     new_lhs : ident;
@@ -72,6 +77,7 @@ and return_command =
 (** Basic commands *)
 type basic_command =
   | Assign of assign_command
+  | Havoc of havoc_command
   | New of new_command
   | Dispose of dispose_command
   | Assume of spec
@@ -186,6 +192,10 @@ let mk_assign_cmd lhs rhs pos =
   let ac = { assign_lhs = lhs; assign_rhs = rhs } in
   mk_basic_cmd (Assign ac) pos
 
+let mk_havoc_cmd args pos = 
+  let hc = { havoc_args = args } in
+  mk_basic_cmd (Havoc hc) pos
+
 let mk_new_cmd lhs srt pos = 
   let nc = { new_lhs = lhs; new_sort = srt } in
   mk_basic_cmd (New nc) pos
@@ -248,6 +258,7 @@ let prog_point = function
 let rec modifies c = (prog_point c).pp_modifies
 and basic_modifies prog = function
   | Assign ac -> id_set_of_list ac.assign_lhs
+  | Havoc hc -> id_set_of_list hc.havoc_args
   | New nc -> IdSet.add alloc_id (IdSet.singleton nc.new_lhs)
   | Dispose _ -> IdSet.singleton alloc_id
   | Assume _

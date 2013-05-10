@@ -98,6 +98,7 @@ and stmt =
   | Assume of expr * pos
   | Assert of expr * pos
   | Assign of exprs * exprs * pos
+  | Havoc of exprs * pos
   | Dispose of expr * pos
   | If of expr * stmt * stmt * pos
   | Loop of loop_contracts * stmt * expr * stmt * pos
@@ -146,6 +147,7 @@ let pos_of_stmt = function
   | Assert (_, pos)
   | Assign (_, _, pos)
   | Dispose (_, pos)
+  | Havoc (_, pos)
   | If (_, _, _, pos)
   | Loop (_, _, _, _, pos)
   | Return (_, pos) -> pos
