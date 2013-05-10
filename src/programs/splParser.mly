@@ -100,7 +100,7 @@ proc_header:
       p_returns = returns; 
       p_locals = locals;
       p_contracts = $7;
-      p_body = Skip; 
+      p_body = Skip dummy_position; 
       p_pos = mk_position 2 2;
     }
   in 
@@ -118,7 +118,7 @@ proc_contract:
 | ENSURES expr SEMICOLON { Ensures $2 }
 
 proc_impl:
-| SEMICOLON { Skip }
+| SEMICOLON { Skip (mk_position 1 1)}
 | LBRACE block RBRACE { Block ($2, mk_position 1 3) }
 ;
 
@@ -239,11 +239,11 @@ stmt:
 }
 /* if-then 
 | IF LPAREN expr RPAREN stmt  { 
-  If ($3, $5, Skip, mk_position 1 6)
+  If ($3, $5, Skip dummy_position, mk_position 1 6)
 }*/
 /* while loop */
 | WHILE LPAREN expr RPAREN loop_contracts stmt {
-  Loop ($5, Skip, $3, $6, mk_position 1 6)
+  Loop ($5, Skip dummy_position, $3, $6, mk_position 1 6)
 } 
 /* return */
 | RETURN expr_opt SEMICOLON { 

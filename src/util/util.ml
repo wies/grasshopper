@@ -44,6 +44,10 @@ let filter_map p f xs =
 let partition_map p f xs =
   List.fold_right (fun x (ys1, ys2) -> if p x then (f x :: ys1, ys2) else (ys1, f x :: ys2)) xs ([], [])
 
+(** Composition of [List.split] and [List.map] *)
+let map_split f xs =
+  List.fold_right (fun x (ys, zs) -> let y, z = f x in y :: ys, z :: zs) xs ([], [])
+
 let flat_map f ls = List.flatten (List.map f ls)
 
 let find_index elt ls =

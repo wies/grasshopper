@@ -92,7 +92,7 @@ and struc =
 and structs = struc IdMap.t
 
 and stmt =
-  | Skip
+  | Skip of pos
   | Block of stmts * pos
   | LocalVars of var list * pos
   | Assume of expr * pos
@@ -138,6 +138,17 @@ let pos_of_expr = function
   | BinaryOp (_, _, _, p)
   | Ident (_, p) -> p
   
+let pos_of_stmt = function
+  | Skip pos
+  | Block (_, pos)
+  | LocalVars (_, pos)
+  | Assume (_, pos)
+  | Assert (_, pos)
+  | Assign (_, _, pos)
+  | Dispose (_, pos)
+  | If (_, _, _, pos)
+  | Loop (_, _, _, _, pos)
+  | Return (_, pos) -> pos
 
 let compilation_unit pkg ims decls =
   let check_uniqueness id pos (vdecls, pdecls, prdecls, sdecls) =
@@ -180,7 +191,7 @@ let var_decl vname vtype vghost vpos =
 
 
 let mk_block pos = function
-  | [] -> Skip
+  | [] -> Skip pos
   | [stmt] -> stmt
   | stmts -> Block (stmts, pos)
 

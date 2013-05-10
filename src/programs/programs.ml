@@ -34,7 +34,7 @@ type spec_form =
 (** Assignment, x_1,...,x_n := e_1,...,e_n *)
 type assign_command = {
     assign_lhs : ident list; (** name of the assigned variables *)
-    assign_rhs : expr list; (** assigned values *)
+    assign_rhs : term list; (** assigned values *)
   }
 
 (** Allocation, x := new T *)
@@ -60,7 +60,7 @@ type spec = {
 type call_command = {
     call_lhs : ident list; (** x_1,...,x_n *)
     call_name : ident; (** p *)
-    call_args : expr list; (** e_1,...,e_m *)
+    call_args : term list; (** e_1,...,e_m *)
   } 
 
 (** Return from procedure *)
@@ -99,26 +99,6 @@ and command =
   | Choice of command list * program_point
   | Seq of command list * program_point
   | Basic of basic_command * program_point
-
-let mk_pp pos = { pp_pos = pos; pp_modifies = IdSet.empty }
-
-let mk_basic c pos = Basic (c, mk_pp pos)
-let mk_assign lhs rhs pos = 
-  let ac = { assign_lhs = lhs; assign_rhs = rhs } in
-  mk_basic (Assign ac) pos
-let mk_new lhs srt pos = 
-  let nc = { new_lhs = lhs; new_sort = srt } in
-  mk_basic (New nc) pos
-let mk_dispose t pos =
-  let dc = { dispose_loc = t } in
-  mk_basic (Dispose dc) pos
-let mk_assume sf pos =
-  mk_basic (Assume sf) pos
-let mk_assert sf pos =
-  mk_basic (Assert sf) pos
-let mk_call lhs name args pos =
-  let cc = {call_lhs = lhs; call_name = name; call_args = args} in
-  mk_basic (Call cc) pos
 
 (** Variable declaration *)
 type var_decl = {
@@ -190,8 +170,39 @@ let dummy_proc name =
 let mk_ppoint pos =
   { pp_pos = pos; pp_modifies = IdSet.empty }
 
+let mk_spec_form f free msg pos =
+  { spec_form = f;
+    spec_free = free;
+    spec_msg = msg;
+    spec_pos = pos;
+  }
+
 let mk_basic_cmd bcmd pos =
   Basic (bcmd, mk_ppoint pos)
+
+let mk_pp pos = { pp_pos = pos; pp_modifies = IdSet.empty }
+
+let mk_assign_cmd lhs rhs pos = 
+  let ac = { assign_lhs = lhs; assign_rhs = rhs } in
+  mk_basic_cmd (Assign ac) pos
+
+let mk_new_cmd lhs srt pos = 
+  let nc = { new_lhs = lhs; new_sort = srt } in
+  mk_basic_cmd (New nc) pos
+
+let mk_dispose_cmd t pos =
+  let dc = { dispose_loc = t } in
+  mk_basic_cmd (Dispose dc) pos
+
+let mk_assume_cmd sf pos =
+  mk_basic_cmd (Assume sf) pos
+
+let mk_assert_cmd sf pos =
+  mk_basic_cmd (Assert sf) pos
+
+let mk_call_cmd lhs name args pos =
+  let cc = {call_lhs = lhs; call_name = name; call_args = args} in
+  mk_basic_cmd (Call cc) pos
 
 let mk_seq_cmd cmds pos =
   match cmds with
@@ -201,7 +212,14 @@ let mk_seq_cmd cmds pos =
 let mk_choice_cmd cmds pos =
   Choice (cmds, mk_ppoint pos)
 
-let mk_loop_cmd loop pos =
+let mk_loop_cmd inv preb cond postb pos =
+  let loop = 
+    { loop_inv = inv;
+      loop_prebody = preb;
+      loop_test = cond;
+      loop_postbody = postb;
+    } 
+  in
   Loop (loop, mk_ppoint pos)
 
 

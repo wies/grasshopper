@@ -146,7 +146,7 @@ let resolve_names cus =
       re e
     in
     let rec resolve_stmt locals tbl = function
-      | Skip -> Skip, locals, tbl
+      | Skip pos -> Skip pos, locals, tbl
       | Block (stmts0, pos) ->
         let stmts, locals, _ = 
           List.fold_left
@@ -164,7 +164,7 @@ let resolve_names cus =
               )
               vars (locals, tbl)
           in
-          Skip, locals, tbl
+          Skip pos, locals, tbl
       | Assume (e, pos) ->
           Assume (resolve_expr locals tbl e, pos), locals, tbl
       | Assert (e, pos) ->
@@ -306,7 +306,7 @@ let flatten_exprs cus =
       | e -> e, aux, locals
     in
     let rec flatten locals = function
-      | Skip -> Skip, locals
+      | Skip pos -> Skip pos, locals
       | Block (stmts0, pos) ->
         let stmts, locals = 
           List.fold_left
@@ -428,7 +428,8 @@ let convert cus =
       }
     in 
     let ty_str = function
-      | NullType | StructType _ -> "expression of a struct type"
+      | NullType -> "expression of a struct type"
+      | StructType id -> "expression of type " ^ (fst id)
       | IntType -> "expression of type int"
       | BoolType -> "expression of type bool"
       | FieldType _ -> "field"
@@ -458,7 +459,7 @@ let convert cus =
             try List.map2 (extract_term locals) tys es
             with Invalid_argument _ -> 
               ProgError.error pos 
-                (Printf.sprintf "Predicate %s expects %d arguments" (fst id) (List.length tys))
+                (Printf.sprintf "Predicate %s expects %d argument(s)" (fst id) (List.length tys))
           in SL_form (SlUtil.mk_pred (Pred id) (List.map fst ts))
       | BinaryOp (e1, OpEq, e2, _) ->
           (match convert_expr locals e1 with
@@ -527,6 +528,16 @@ let convert cus =
             let f1 = extract_sl_form locals e1 in
             let f2 = extract_sl_form locals e2 in
             SL_form (mk_form f1 f2))
+      | BinaryOp (e1, OpPts, e2, _) ->
+          let fld, ind, ty = 
+            match convert_expr locals e1 with
+            | FOL_term (App (Read, [fld; ind], _), ty) -> fld, ind, ty
+            | _ -> 
+                ProgError.error (pos_of_expr e1) 
+                  "Expected field access on left-hand-side of points-to predicate."
+          in
+          let t2, _ = extract_term locals ty e2 in
+          SL_form (SlUtil.mk_pts fld ind t2)
       | BinaryOp (e1, OpSep, e2, _) ->
           let f1 = extract_sl_form locals e1 in
           let f2 = extract_sl_form locals e2 in
@@ -578,7 +589,118 @@ let convert cus =
           | ty, tty when ty = tty -> t, tty
           | _ -> type_error (pos_of_expr e) (ty_str ty) (ty_str tty)
     in
-    let rec convert_stmt proc = function
+    let convert_spec_form locals e msg =
+      let f = extract_sl_form locals e in
+      mk_spec_form (SL f) false msg (pos_of_expr e)
+    in
+    let convert_loop_contract locals contract =
+      List.map
+        (function Invariant e -> 
+          let pos = pos_of_expr e in
+          let msg = Printf.sprintf "invariant %d %d" pos.sp_start_line pos.sp_start_col in
+          convert_spec_form locals e (Some msg)
+        )
+        contract
+    in
+    let rec convert_stmt proc = 
+      let convert_lhs es tys = 
+        let ts = List.map2 (extract_term proc.p_locals) tys es in
+        match ts with
+        | [App (Read, [App (FreeSym fld, [], _); ind], _), _] -> [fld], Some ind
+        | _ -> 
+            let ids = 
+              List.map 
+                (function 
+                  | Ident (id, _) -> id
+                  | e -> 
+                      ProgError.error (pos_of_expr e) 
+                        "Only variables are allowed on left-hand-side of simultaneous assignments."
+                ) es                
+            in ids, None
+      in
+      function
+      | Skip pos -> mk_seq_cmd [] pos
+      | Block (stmts, pos) ->
+          let cmds = List.map (convert_stmt proc) stmts in
+          mk_seq_cmd cmds pos
+      | Assume (e, pos) ->
+          let msg = Printf.sprintf "assume %d %d" pos.sp_start_line pos.sp_start_col in
+          let sf = convert_spec_form proc.p_locals e (Some msg) in
+          mk_assume_cmd sf pos
+      | Assert (e, pos) ->
+          let msg = Printf.sprintf "assert %d %d" pos.sp_start_line pos.sp_start_col in
+          let sf = convert_spec_form proc.p_locals e (Some msg) in
+          mk_assert_cmd sf pos
+      | Assign (lhs, [ProcCall (id, es, cpos)], pos) ->
+          let decl = IdMap.find id cu.proc_decls in
+          let formal_tys = List.map (fun p -> (IdMap.find p decl.p_locals).v_type) decl.p_formals in
+          let return_tys = List.map (fun p -> (IdMap.find p decl.p_locals).v_type) decl.p_returns in
+          let args = 
+            try List.map2 (fun ty e -> fst (extract_term proc.p_locals ty e)) formal_tys es
+            with Invalid_argument _ -> 
+              ProgError.error cpos 
+                (Printf.sprintf "Procedure %s expects %d argument(s)." 
+                   (fst id) (List.length formal_tys))
+          in 
+          let lhs_ids, _ = 
+            try convert_lhs lhs return_tys
+            with Invalid_argument _ ->
+              ProgError.error pos
+              (Printf.sprintf "Procedure %s has %d return value(s)." 
+                 (fst id) (List.length return_tys))
+          in
+          mk_call_cmd lhs_ids id args cpos
+      | Assign ([lhs], [New (id, npos)], pos) ->
+          let lhs_ids, _ = convert_lhs [lhs] [StructType id] in
+          let lhs_id = List.hd lhs_ids in
+          let new_cmd = mk_new_cmd lhs_id Loc npos in
+          new_cmd
+      | Assign (lhs, rhs, pos) ->
+          let rhs_ts, rhs_tys = 
+            Util.map_split (fun e ->
+              match convert_expr proc.p_locals e with
+              | SL_form _ -> ProgError.error (pos_of_expr e) "SL formulas cannot be assigned."
+              | FOL_term (t, ty) -> t, ty
+              | FOL_form _ -> failwith "formula should have been flattened")
+              rhs
+          in
+          let lhs_ids, ind_opt =
+            try convert_lhs lhs rhs_tys
+            with Invalid_argument _ -> 
+              ProgError.error pos 
+                (Printf.sprintf "Tried to assign %d value(s) to %d variable(s)." 
+                   (List.length rhs) (List.length lhs))
+          in
+          (match ind_opt with
+          | Some t -> 
+              let fld_srt = convert_type (List.hd rhs_tys) in
+              let fld = FormUtil.mk_free_const ~srt:fld_srt (List.hd lhs_ids) in
+              mk_assign_cmd lhs_ids [FormUtil.mk_write fld t (List.hd rhs_ts)] pos
+          | None -> mk_assign_cmd lhs_ids rhs_ts pos)
+      | Dispose (e, pos) ->
+          let t, _ = extract_term proc.p_locals NullType e in
+          mk_dispose_cmd t pos
+      | If (c, t, e, pos) ->
+          let cond = extract_fol_form proc.p_locals c in
+          let t_cmd = convert_stmt proc t in
+          let e_cmd = convert_stmt proc e in
+          let t_msg = Printf.sprintf "then %d %d" pos.sp_start_line pos.sp_start_col in
+          let t_cond = mk_spec_form (FOL cond) true (Some t_msg) (pos_of_expr c) in
+          let e_msg = Printf.sprintf "else %d %d" pos.sp_start_line pos.sp_start_col in
+          let e_cond = 
+            mk_spec_form (FOL (FormUtil.mk_not cond)) true (Some e_msg) (pos_of_expr c) 
+          in
+          let t_assume = mk_assume_cmd t_cond (pos_of_expr c) in
+          let e_assume = mk_assume_cmd e_cond (pos_of_expr c) in
+          let t_block = mk_seq_cmd [t_assume; t_cmd] (pos_of_stmt t) in
+          let e_block = mk_seq_cmd [e_assume; e_cmd] (pos_of_stmt e) in
+          mk_choice_cmd [t_block; e_block] pos
+      | Loop (contract, preb, cond, postb, pos) ->
+          let preb_cmd = convert_stmt proc preb in
+          let cond = extract_fol_form proc.p_locals cond in
+          let invs = convert_loop_contract proc.p_locals contract in
+          let postb_cmd = convert_stmt proc postb in
+          mk_loop_cmd invs preb_cmd cond postb_cmd pos
       | _ -> failwith "unexpected statement"
     in
     let prog =
@@ -593,21 +715,13 @@ let convert cus =
             { pred_name = id;
               pred_formals = decl.pr_formals;
               pred_locals = IdMap.map convert_var_decl decl.pr_locals;
-              pred_body = extract_sl_form decl.pr_locals decl.pr_body;
+              pred_body = extract_sl_form decl.pr_locals decl.pr_body ;
               pred_pos = decl.pr_pos;
             } 
           in
          declare_pred prog pred_decl
         )
         cu.pred_decls prog
-    in
-    let convert_spec_form locals e msg =
-      let f = extract_sl_form locals e in
-      { spec_form = SL f;
-        spec_free = false;
-        spec_msg = msg;
-        spec_pos = pos_of_expr e;
-      }
     in
     let convert_contract locals contract =
       List.fold_right 
@@ -629,7 +743,7 @@ let convert cus =
               proc_locals = IdMap.map convert_var_decl decl.p_locals;
               proc_precond = pre;
               proc_postcond = post;
-              proc_body = convert_stmt decl decl.p_body;
+              proc_body = Some (convert_stmt decl decl.p_body);
               proc_pos = decl.p_pos;
            } 
           in
