@@ -246,7 +246,7 @@ stmt:
   Loop ($5, Skip dummy_position, $3, $6, mk_position 1 6)
 } 
 /* return */
-| RETURN expr_opt SEMICOLON { 
+| RETURN expr_list SEMICOLON { 
   Return ($2, mk_position 1 3)
 }
 ;
@@ -330,11 +330,6 @@ or_expr:
 
 expr:
 | or_expr { $1 } 
-;
-
-expr_opt:
-| expr { Some $1 } 
-| /* empty */ { None }
 ;
 
 expr_list_opt:

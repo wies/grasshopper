@@ -14,19 +14,23 @@ let resolve_names cus =
   in 
   let check_struct id structs pos =
     if not (IdMap.mem id structs) then
-      ProgError.error pos ("Identifier " ^ FormUtil.name id ^ " does not refer to a struct.")
+      ProgError.error pos 
+        ("Identifier " ^ FormUtil.name id ^ " does not refer to a struct.")
   in
   let check_proc id procs pos =
     if not (IdMap.mem id procs) then
-      ProgError.error pos ("Identifier " ^ FormUtil.name id ^ " does not refer to a procedure or predicate.")
+      ProgError.error pos 
+        ("Identifier " ^ FormUtil.name id ^ " does not refer to a procedure or predicate.")
   in
   let check_pred id preds pos =
     if not (IdMap.mem id preds) then
-      ProgError.error pos ("Identifier " ^ FormUtil.name id ^ " does not refer to a procedure or predicate.")
+      ProgError.error pos 
+        ("Identifier " ^ FormUtil.name id ^ " does not refer to a procedure or predicate.")
   in
   let check_field id globals pos =
     let error () = 
-      ProgError.error pos ("Identifier " ^ FormUtil.name id ^ " does not refer to a struct field.")
+      ProgError.error pos 
+        ("Identifier " ^ FormUtil.name id ^ " does not refer to a struct field.")
     in
     try 
       let decl = IdMap.find id globals in
@@ -196,8 +200,8 @@ let resolve_names cus =
           let cond1 = resolve_expr locals tbl cond in
           let postb1, locals, _ = resolve_stmt locals tbl postb in
           Loop (inv1, preb1, cond1, postb1, pos), locals, tbl
-      | Return (ret_opt, pos) ->
-          Return (Util.optmap (resolve_expr locals tbl) ret_opt, pos), locals, tbl
+      | Return (es, pos) ->
+          Return (List.map (resolve_expr locals tbl) es, pos), locals, tbl
     in
     (* declare and resolve local variables *)
     let procs =
@@ -285,7 +289,8 @@ let flatten_exprs cus =
                 let rdecl = IdMap.find res pdecl.p_locals in
                 rdecl.v_type
             | _ ->
-                ProgError.error pos ("Procedure " ^ fst pdecl.p_name ^ " has more than one return value")
+                ProgError.error pos 
+                  ("Procedure " ^ fst pdecl.p_name ^ " has more than one return value")
           in
           let aux_id, locals1 = decl_aux_var "tmp" res_type pos locals in
           let args1, aux1, locals1 = 
@@ -373,15 +378,16 @@ let flatten_exprs cus =
           let cond1, aux, locals2 = flatten_expr [] locals1 cond in
           let postb1, locals3 = flatten locals2 postb in
           Loop (inv, mk_block pos ([preb1] @ aux), cond1, postb1, pos), locals
-      | Return (ret_opt, pos) ->
-          let ret_opt1, aux, locals1 =
-            match ret_opt with
-            | Some e -> 
-                let e1, aux, locals1 = flatten_expr [] locals e in
-                Some e1, aux, locals1
-            | None -> None, [], locals
-          in
-          mk_block pos (aux @ [Return (ret_opt1, pos)]), locals1
+      | Return (es, pos) ->
+          let es1, aux1, locals1 = 
+            List.fold_right 
+              (fun e (es, aux, locals) ->
+                let e1, aux1, locals1 = flatten_expr aux locals e in
+                e1 :: es, aux1, locals1
+              ) 
+              es ([], [], locals)
+          in 
+          mk_block pos (aux1 @ [Return (es1, pos)]), locals1
     in
     let procs =
       IdMap.fold
@@ -424,7 +430,8 @@ let convert cus =
         let fdecl = IdMap.find fld_id decl.s_fields in
         fdecl.v_type
       with Not_found ->
-        ProgError.error pos ("Struct " ^ fst id ^ " does not have a field named " ^ fst fld_id ^ ".")
+        ProgError.error pos 
+          ("Struct " ^ fst id ^ " does not have a field named " ^ fst fld_id ^ ".")
     in
     let rec convert_type = function
       | NullType -> Loc
@@ -450,7 +457,8 @@ let convert cus =
       | FieldType _ -> "field"
     in
     let type_error pos expected found =
-      ProgError.type_error pos ("Expected an " ^ expected ^ "\n            but found an " ^ found ^ ".")
+      ProgError.type_error pos
+        ("Expected an " ^ expected ^ "\n            but found an " ^ found ^ ".")
     in
     let rec convert_expr locals = function
       | Null _ -> FOL_term (FormUtil.mk_null, NullType)
@@ -726,6 +734,16 @@ let convert cus =
           let invs = convert_loop_contract proc.p_locals contract in
           let postb_cmd = convert_stmt proc postb in
           mk_loop_cmd invs preb_cmd cond postb_cmd pos
+      | Return (es, pos) ->
+          let return_tys = List.map (fun p -> (IdMap.find p proc.p_locals).v_type) proc.p_returns in
+          let ts = 
+            try List.map2 (fun ty e -> fst (extract_term proc.p_locals ty e)) return_tys es
+            with Invalid_argument _ -> 
+              ProgError.error pos 
+                (Printf.sprintf "Procedure %s returns %d values(s), found %d." 
+                   (fst proc.p_name) (List.length return_tys) (List.length es))
+          in
+          mk_return_cmd ts pos
       | _ -> failwith "unexpected statement"
     in
     let prog =

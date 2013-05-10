@@ -102,7 +102,7 @@ and stmt =
   | Dispose of expr * pos
   | If of expr * stmt * stmt * pos
   | Loop of loop_contracts * stmt * expr * stmt * pos
-  | Return of expr option * pos
+  | Return of exprs * pos
 
 and stmts = stmt list
 

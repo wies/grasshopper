@@ -19,7 +19,7 @@ procedure filter(x: Node)
   {
     var old_curr: Node;
     old_curr := curr;
-    curr := curr.next;
+    curr := curr.next; 
     var nondet: bool;
     if (nondet) {
       if (prv != null) {

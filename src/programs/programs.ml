@@ -71,7 +71,7 @@ type call_command = {
 (** Return from procedure *)
 and return_command = 
     {
-     return_args : expr list;
+     return_args : term list;
    }
 
 (** Basic commands *)
@@ -209,6 +209,10 @@ let mk_assume_cmd sf pos =
 
 let mk_assert_cmd sf pos =
   mk_basic_cmd (Assert sf) pos
+
+let mk_return_cmd args pos = 
+  let rc = { return_args = args } in
+  mk_basic_cmd (Return rc) pos
 
 let mk_call_cmd lhs name args pos =
   let cc = {call_lhs = lhs; call_name = name; call_args = args} in
