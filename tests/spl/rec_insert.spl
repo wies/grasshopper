@@ -1,0 +1,28 @@
+struct Node {
+  var next: Node;
+}
+
+predicate lseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& lseg(x.next, y)
+}
+
+procedure rec_insert(lst: Node, elt: Node) returns (res: Node)
+  requires lseg(lst, null) &*& elt.next |-> null;
+  ensures lseg(res, null);
+{
+  if (lst == null)
+    return elt;
+  else {
+    var nondet: bool;
+    if (nondet) {
+      elt.next := lst;
+      return elt;
+    } else {
+      var n1: Node, n2: Node;
+      n1 := lst.next;
+      n2 := rec_insert(n1, elt);
+      lst.next := n2;
+      return lst;
+    }
+  }
+}

@@ -332,6 +332,24 @@ let flatten_exprs cus =
       | (Assert (e, pos) as stmt) ->
           check_side_effects e;
           stmt, locals
+      | Assign (lhs, [ProcCall (id, args, cpos)], pos) ->
+          let args1, aux1, locals1 = 
+            List.fold_right 
+              (fun e (es, aux, locals) ->
+                let e1, aux1, locals1 = flatten_expr aux locals e in
+                e1 :: es, aux1, locals1
+              ) 
+              args ([], [], locals)
+          in 
+          let lhs1, aux2, locals2 = 
+            List.fold_right 
+              (fun e (es, aux, locals) ->
+                let e1, aux1, locals1 = flatten_expr aux locals e in
+                e1 :: es, aux1, locals1
+              ) 
+              lhs ([], aux1, locals1)
+          in 
+          mk_block pos (aux2 @ [Assign (lhs1, [ProcCall (id, args1, cpos)], pos)]), locals1
       | Assign (lhs, rhs, pos) ->
           let rhs1, aux1, locals1 = 
             List.fold_right 
@@ -798,7 +816,7 @@ let convert cus =
   in
   List.fold_right convert_cu cus empty_prog
 
-let to_ir cus =
+let to_program cus =
   let cus1 = resolve_names cus in
   let cus2 = flatten_exprs cus1 in
   convert cus2
