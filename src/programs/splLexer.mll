@@ -20,6 +20,7 @@ let _ =
       ("false", BOOLVAL(false));
       ("free", DISPOSE);
       ("ghost", GHOST);
+      ("havoc", HAVOC);
       ("if", IF);
       ("int", INT);
       ("invariant", INVARIANT);

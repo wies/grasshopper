@@ -28,7 +28,7 @@ let mk_position s e =
 %token EQ NEQ LEQ GEQ LT GT
 %token PTS EMP NULL
 %token SEP AND OR NOT COMMA
-%token ASSUME ASSERT CALL NEW DISPOSE RETURN
+%token ASSUME ASSERT CALL DISPOSE HAVOC NEW RETURN
 %token IF ELSE WHILE
 %token GHOST VAR STRUCT PROCEDURE PREDICATE
 %token RETURNS REQUIRES ENSURES INVARIANT
@@ -225,6 +225,10 @@ stmt:
 | expr_list COLONEQ expr_list SEMICOLON {
   Assign ($1, $3, mk_position 1 4)
 }
+/* havoc */
+| HAVOC expr_list_opt SEMICOLON { 
+  Havoc ($2, mk_position 1 3)
+}
 /* assume */
 | ASSUME expr SEMICOLON {
   Assume ($2, mk_position 1 3)
@@ -246,7 +250,7 @@ stmt:
   Loop ($5, Skip dummy_position, $3, $6, mk_position 1 6)
 } 
 /* return */
-| RETURN expr_list SEMICOLON { 
+| RETURN expr_list_opt SEMICOLON { 
   Return ($2, mk_position 1 3)
 }
 ;
