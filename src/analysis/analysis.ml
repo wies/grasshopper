@@ -1,4 +1,5 @@
 open Form
+open FormUtil
 open Programs
 
 (** coarse-grained frame inference *)
@@ -60,26 +61,92 @@ let annotate_modifies prog =
   in
   pm_prog prog
 
-(*
-let short_circuit_eval prog =
-  let rec sce new_locals = function
-    | Choice (cs, pp) ->
-        let new_locals, cs1 = 
-          List.fold_right 
-            (fun c (new_locals, cs1) ->
-              let new_locals1, c1 = sce new_locals c in
-              new_locals1, c1 :: cs1)
-            cs (new_locals, [])
+let elim_return prog =
+  let elim returns posts = function
+    | (Return rc, pp) ->
+        let rt_assign = 
+          mk_assign_cmd returns rc.return_args pp.pp_pos 
         in
-        new_locals, Choice (cs1, pp)
-    | Seq (cs, pp) ->
-        let new_locals, cs1 = 
-          List.fold_right 
-            (fun c (new_locals, cs1) ->
-              let new_locals1, c1 = sce new_locals c in
-              new_locals1, c1 :: cs1)
-            cs (new_locals, [])
+        let fls = 
+          mk_spec_form 
+            (FOL mk_false) true (Some "return") pp.pp_pos 
         in
-        new_locals, Seq (cs1, pp)
+        let rt_false = mk_assume_cmd fls pp.pp_pos in
+        let rt_postcond = 
+          List.map (fun sf -> mk_assert_cmd sf pp.pp_pos) posts
+        in
+        Seq (rt_assign :: rt_postcond @ [rt_false], pp)
+    | (c, pp) -> Basic (c, pp)
   in
-*)
+  let elim_proc proc =
+    let posts = 
+      Util.filter_map 
+        (fun sf -> sf.spec_free)
+        (fun sf ->
+          match sf.spec_form with
+          | FOL _ -> sf
+          | SL _ -> failwith "elim_return: Found SL formula that should have been desugared.")
+        proc.proc_postcond
+    in
+    let body = 
+      Util.optmap (map_basic (elim proc.proc_returns posts)) 
+        proc.proc_body 
+    in
+    { proc with proc_body = body }
+  in
+  { prog with prog_procs = IdMap.map elim_proc prog.prog_procs }
+
+
+let vcgen prog =
+  let vcp acc proc =
+    let rec vcs acc pre = function
+      | Loop _ -> 
+          failwith "vcgen: loop should have been desugared"
+      | Choice (cs, pp) ->
+          let acc1, traces = 
+            List.fold_left (fun (acc, traces) c ->
+              let acc1, trace = vcs acc pre c in
+              acc1, trace :: traces)
+              (acc, []) cs
+          in acc1, [mk_or (List.rev_map mk_and traces)]
+      | Seq (cs, pp) -> 
+          let acc1, trace, _ = 
+            List.fold_right (fun c (acc, trace, pre) ->
+              let acc1, c_trace = vcs acc pre c in
+              acc1, trace @ c_trace, pre @ c_trace)
+              cs (acc, [], pre)
+          in
+          acc1, trace
+      | Basic (bc, pp) ->
+          match bc with
+          | Assume s ->
+              (match s.spec_form, s.spec_msg with
+              | FOL f, None -> acc, [f]
+              | FOL f, Some msg -> acc, [mk_comment msg f]
+              | _ -> 
+                  failwith "vcgen: found SL formula that should have been desugared")
+          | Assert s ->
+              let f, msg =
+                (match s.spec_form, s.spec_msg with
+                | FOL f, None -> 
+                    let msg = 
+                      Printf.sprintf "assert_%d_%d" 
+                        s.spec_pos.sp_start_line s.spec_pos.sp_start_col
+                    in
+                    mk_not f, msg
+                | FOL f, Some msg -> mk_not f, msg
+                | _ ->
+                    failwith "vcgen: found SL formula that should have been desugared")
+              in
+              let vc_name = str_of_ident proc.proc_name ^ "_" ^ msg in
+              let vc = pre @ [f] in
+              (vc_name, vc) :: acc, []
+          | _ -> 
+              failwith "vcgen: found unexpected basic command that should have been desugared"
+    in
+    match proc.proc_body with
+    | Some body -> fst (vcs acc [] body)
+    | None -> acc
+  in
+  IdMap.fold (fun _ proc acc -> vcp acc proc) prog.prog_procs
+

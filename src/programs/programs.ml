@@ -274,3 +274,36 @@ and proc_modifies proc =
   | Some cmd -> modifies cmd
   | None -> IdSet.empty
 
+let rec fold_basic f acc = function
+  | Loop (lc, pp) ->
+      let lpre, acc = fold_basic f acc lc.loop_prebody in
+      let lpost, acc = fold_basic f acc lc.loop_postbody in
+      let lc1 = 
+        { lc with 
+          loop_prebody = lpre;
+          loop_postbody = lpost;
+        }
+      in
+      Loop (lc1, pp), acc
+  | Choice (cs, pp) ->
+      let cs1, acc = 
+        List.fold_right (fun c (cs1, acc) ->
+          let c1, acc = fold_basic f acc c in
+          c1 :: cs1, acc)
+          cs ([], acc)
+      in
+      Choice (cs1, pp), acc
+  | Seq (cs, pp) ->
+      let cs1, acc =
+        List.fold_right (fun c (cs1, acc) ->
+          let c1, acc = fold_basic f acc c in
+          c1 :: cs1, acc)
+          cs ([], acc)
+      in 
+      Seq (cs1, pp), acc
+  | Basic (bc, pp) ->
+      f (bc, pp) acc
+
+let map_basic f c =
+  let c1, _ = fold_basic (fun c _ -> f c, ()) () c in
+  c1
