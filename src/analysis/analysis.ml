@@ -99,6 +99,8 @@ let compile_to_fol prog =
   in
   { prog with prog_procs = IdMap.map compile_proc prog.prog_procs }
 
+(** Eliminate all new and dispose commands.
+ ** Assumes that alloc sets have been introduced *)
 let elim_new_dispose prog =
   let elim = function
     | (New nc, pp) ->
