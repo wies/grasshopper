@@ -2,6 +2,7 @@ open Form
 open FormUtil
 open Programs
 
+
 (** coarse-grained frame inference *)
 let annotate_modifies prog =
   let rec pm prog = function
@@ -61,6 +62,43 @@ let annotate_modifies prog =
   in
   pm_prog prog
 
+let alloc_id = mk_ident "Alloc"
+
+let alloc_set = mk_free_const ~srt:(Set Loc) alloc_id
+
+let frame_id = mk_ident "Frame"
+
+let frame_set = mk_free_const ~srt:(Set Loc) frame_id
+
+let compile_to_fol prog =
+  let compile_proc proc =
+    let alloc_decl = 
+      { var_name = alloc_id;
+        var_orig_name = name alloc_id;
+        var_sort = Set Loc;
+        var_is_ghost = true;
+        var_is_aux = true;
+        var_pos = proc.proc_pos;
+      }
+    in
+    let frame_decl = 
+      { alloc_decl with 
+        var_name = frame_id; 
+        var_orig_name = name frame_id; 
+      }
+    in
+    let locals1 = IdMap.add alloc_decl.var_name alloc_decl proc.proc_locals in
+    let locals2 = IdMap.add frame_decl.var_name frame_decl locals1 in
+    let returns = alloc_id :: frame_id :: proc.proc_returns in
+    let formals = alloc_id :: frame_id :: proc.proc_returns in
+    { proc with
+      proc_formals = formals;
+      proc_returns = returns;
+      proc_locals = locals2;
+    } 
+  in
+  { prog with prog_procs = IdMap.map compile_proc prog.prog_procs }
+
 let elim_return prog =
   let elim returns posts = function
     | (Return rc, pp) ->
@@ -96,6 +134,127 @@ let elim_return prog =
   in
   { prog with prog_procs = IdMap.map elim_proc prog.prog_procs }
 
+(** Eliminate assignment and havoc commands (via SSA computation) 
+ ** Assumes that:
+ ** - all procedure calls and loops have been eliminated 
+ ** - the only remaining basic commands are assume/assert/assign/havoc. *)
+let elim_assign prog =
+  let subst_spec sm sf =
+    match sf.spec_form with
+    | FOL f -> { sf with spec_form = FOL (subst_id sm f) }
+    | SL _ -> failwith "elim_assign: found SL formula that should have been desugared."
+  in
+  let elim_proc proc =
+    let fresh_decl id pos =
+      let decl = find_var prog proc id in
+      let id1 = fresh_ident (name id) in
+      let decl1 = 
+        { decl with 
+          var_name = id1;
+          var_is_aux = true;
+          var_pos = pos;
+        }
+      in decl1
+    in
+    let fresh sm locals pos ids =
+      List.fold_left (fun (sm, locals) id ->
+        let decl = fresh_decl id pos in
+        IdMap.add id decl.var_name sm, 
+        IdMap.add decl.var_name decl locals)
+        (sm, locals) ids
+    in
+    let rec elim sm locals = function
+      | Loop _ as c -> sm, locals, c
+      | Seq (cs, pp) ->
+          let sm, locals, cs1 = 
+            List.fold_right 
+              (fun c (sm, locals, cs1) ->
+                let sm, locals, c1 = elim sm locals c in
+                sm, locals, c1 :: cs1)
+              cs (sm, locals, [])
+          in
+          sm, locals, Seq (cs1, pp)
+      | Choice (cs, pp) ->
+          let sms, locals, cs1 =
+            List.fold_right  
+              (fun c (sms, locals, cs1) ->
+                let sm1, locals, c1 = elim sm locals c in
+                sm1 :: sms, locals, c1 :: cs1)
+              cs ([], locals, [])
+          in
+          let sm_join = 
+            List.fold_left 
+              (fun sm1 sm -> 
+                IdMap.merge 
+                  (fun x -> function 
+                    | None -> (function 
+                        | None -> None
+                        | Some z -> Some z)
+                    | Some y -> (function
+                        | None -> Some y
+                        | Some z -> Some y)
+                  )
+                  sm1 sm
+              )
+              IdMap.empty sms
+          in
+          let cs2 =
+            List.fold_right2 (fun sm_c c cs2 ->
+              let pp = prog_point c in
+              let eqs = 
+                IdSet.fold 
+                  (fun x eqs ->
+                    let x_join = IdMap.find x sm_join in
+                    let x_c = IdMap.find x sm_c in
+                    if x_join  = x_c then eqs
+                    else 
+                      let x_decl = find_var prog proc x in
+                      let x_srt = x_decl.var_sort in
+                      let xc = mk_free_const ~srt:x_srt x_c in
+                      let xj = mk_free_const ~srt:x_srt x_join in
+                      mk_eq xj xc :: eqs
+                  )
+                  pp.pp_modifies []
+              in 
+              let sf = mk_spec_form (FOL (mk_and eqs)) false (Some "join") pp.pp_pos in
+              Seq ([c; mk_assume_cmd sf pp.pp_pos], pp) :: cs2)
+              sms cs1 []
+          in
+          sm_join, locals, Choice (cs2, pp)
+      | Basic (bc, pp) ->
+          match bc with
+          | Assume sf -> 
+              sm, locals, Basic (Assume (subst_spec sm sf), pp)
+          | Assert sf ->
+              sm, locals, Basic (Assert (subst_spec sm sf), pp)
+          | Havoc hc ->
+              let sm1, locals = fresh sm locals pp.pp_pos hc.havoc_args in
+              sm1, locals, Seq ([], pp)
+          | Assign ac ->
+              let sm1, locals = fresh sm locals pp.pp_pos ac.assign_lhs in
+              let eqs =
+                List.map2 
+                  (fun x e ->
+                    let x_decl = find_var prog proc x in
+                    let x1 = mk_free_const ~srt:x_decl.var_sort (IdMap.find x sm1) in
+                    let e1 = subst_id_term sm e in
+                    mk_eq x1 e1)
+                  ac.assign_lhs ac.assign_rhs
+              in
+              let sf = mk_spec_form  (FOL (mk_and eqs)) false (Some "assign") pp.pp_pos in
+              sm1, locals, mk_assume_cmd sf pp.pp_pos
+          | _ -> sm, locals, Basic (bc, pp)
+    in
+    let locals, body =
+      match proc.proc_body with
+      | None -> proc.proc_locals, None
+      | Some body -> 
+          let _, locals, body1 = elim IdMap.empty proc.proc_locals body in
+          locals, Some body1
+    in
+    { proc with proc_locals = locals; proc_body = body }
+  in
+  { prog with prog_procs = IdMap.map elim_proc prog.prog_procs }
 
 let vcgen prog =
   let vcp acc proc =

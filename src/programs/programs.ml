@@ -3,10 +3,6 @@ open FormUtil
 open Axioms
 open Entails
 
-let alloc_id = (mk_ident "Alloc")
-
-let alloc_set = mk_free_const ~srt:(Set Loc) alloc_id
-
 (** Source position *)
 
 type source_position = {
@@ -173,8 +169,40 @@ let dummy_proc name =
     proc_pos = dummy_position;
   }
 
+let declare_global prog var =
+  { prog with prog_vars = IdMap.add var.var_name var prog.prog_vars }
+
+let declare_pred prog pred =
+  {prog with prog_preds = IdMap.add pred.pred_name pred prog.prog_preds}
+
+let declare_proc prog proc =
+  {prog with prog_procs = IdMap.add proc.proc_name proc prog.prog_procs}
+
+
+let procs prog = IdMap.fold (fun _ proc procs -> proc :: procs) prog.prog_procs []
+
+let find_proc prog name = IdMap.find name prog.prog_procs
+
+let find_pred prog name = IdMap.find name prog.prog_preds
+
+let find_global prog name = IdMap.find name prog.prog_vars
+
+let find_var prog proc name =
+  try IdMap.find name proc.proc_locals 
+  with Not_found -> IdMap.find name prog.prog_vars
+
+(** Auxiliary functions for commands *)
+
 let mk_ppoint pos =
   { pp_pos = pos; pp_modifies = IdSet.empty }
+
+let mk_fresh_var_decl decl pos =
+  let id = fresh_ident (name decl.var_name) in
+  { decl with 
+    var_name = id;
+    var_orig_name = name id; 
+    var_pos = pos;
+  }
 
 let mk_spec_form f free msg pos =
   { spec_form = f;
@@ -235,26 +263,6 @@ let mk_loop_cmd inv preb cond postb pos =
     } 
   in
   Loop (loop, mk_ppoint pos)
-
-
-let declare_global prog var =
-  { prog with prog_vars = IdMap.add var.var_name var prog.prog_vars }
-
-let declare_pred prog pred =
-  {prog with prog_preds = IdMap.add pred.pred_name pred prog.prog_preds}
-
-let declare_proc prog proc =
-  {prog with prog_procs = IdMap.add proc.proc_name proc prog.prog_procs}
-
-let procs prog = IdMap.fold (fun _ proc procs -> proc :: procs) prog.prog_procs []
-
-let find_proc prog name = IdMap.find name prog.prog_procs
-
-let find_pred prog name = IdMap.find name prog.prog_preds
-
-let find_global prog name = IdMap.find name prog.prog_vars
-
-(** Auxiliary functions for commands *)
 
 let prog_point = function
   | Loop (_, pp) | Choice (_, pp) | Seq (_, pp) | Basic (_, pp) -> pp
