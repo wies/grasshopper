@@ -99,6 +99,36 @@ let compile_to_fol prog =
   in
   { prog with prog_procs = IdMap.map compile_proc prog.prog_procs }
 
+let elim_new_dispose prog =
+  let elim = function
+    | (New nc, pp) ->
+        let havoc = mk_havoc_cmd [nc.new_lhs] pp.pp_pos in
+        let arg = mk_free_const ~srt:nc.new_sort nc.new_lhs in
+        let aux =
+          match nc.new_sort with
+          | Loc ->          
+              let new_loc = mk_and [mk_not (mk_elem arg alloc_set); mk_neq arg mk_null] in
+              let sf = mk_spec_form (FOL new_loc) false (Some "new") pp.pp_pos in
+              let assume_fresh = mk_assume_cmd sf pp.pp_pos in
+              let assign_alloc = mk_assign_cmd [alloc_id] [mk_union [alloc_set; mk_setenum [arg]]] pp.pp_pos in
+              [assume_fresh; assign_alloc]
+          | _ -> []
+        in
+        Seq (havoc :: aux, pp)
+    | (Dispose dc, pp) ->
+        let arg = dc.dispose_arg in
+        let arg_in_alloc = FOL (mk_elem arg alloc_set) in
+        let sf = mk_spec_form arg_in_alloc false (Some "check_dispose") pp.pp_pos in
+        let check_dispose = mk_assert_cmd sf pp.pp_pos in
+        let assign_alloc = mk_assign_cmd [alloc_id] [mk_diff alloc_set (mk_setenum [arg])] pp.pp_pos in
+        Seq ([check_dispose; assign_alloc], pp)
+    | (c, pp) -> Basic (c, pp)
+  in
+  let elim_proc proc = { proc with proc_body = Util.optmap (map_basic elim) proc.proc_body } in
+  { prog with prog_procs = IdMap.map elim_proc prog.prog_procs }
+
+(** Eliminate all return commands.
+ ** Assumes that all SL formulas have been desugared. *)
 let elim_return prog =
   let elim returns posts = function
     | (Return rc, pp) ->
@@ -136,9 +166,10 @@ let elim_return prog =
 
 (** Eliminate assignment and havoc commands (via SSA computation) 
  ** Assumes that:
- ** - all procedure calls and loops have been eliminated 
+ ** - all SL formulas have been desugared
+ ** - all loops have been eliminated 
  ** - the only remaining basic commands are assume/assert/assign/havoc. *)
-let elim_assign prog =
+let elim_assign_havoc prog =
   let subst_spec sm sf =
     match sf.spec_form with
     | FOL f -> { sf with spec_form = FOL (subst_id sm f) }

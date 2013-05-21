@@ -46,7 +46,7 @@ type new_command = {
 
 (** Deallocation, free x *)
 type dispose_command = {
-    dispose_loc : term;
+    dispose_arg : term;
   }
      
 (** Assume or assert of pure formula *)
@@ -229,7 +229,7 @@ let mk_new_cmd lhs srt pos =
   mk_basic_cmd (New nc) pos
 
 let mk_dispose_cmd t pos =
-  let dc = { dispose_loc = t } in
+  let dc = { dispose_arg = t } in
   mk_basic_cmd (Dispose dc) pos
 
 let mk_assume_cmd sf pos =
