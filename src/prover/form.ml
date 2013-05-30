@@ -248,12 +248,108 @@ and pr_forms ppf = function
   | [t] -> fprintf ppf "%a" pr_form t
   | t :: ts -> fprintf ppf "%a@ %a" pr_form t pr_forms ts
 
-let print_term out_ch t = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_term t
-let print_form out_ch f = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_form f
 
 let print_smtlib_sort out_ch s = pr_sort (formatter_of_out_channel out_ch) s
 let print_smtlib_term out_ch t = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_term t
-let print_smtlib_form out_ch f =  fprintf (formatter_of_out_channel out_ch) "%a@?" pr_form f
+let print_smtlib_form out_ch f =  fprintf (formatter_of_out_channel out_ch) "@[<8>%a@]@?" pr_form f
+
+
+let print_term out_ch t = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_term t
+let print_form out_ch f = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_form f
+
+(** Infix Notation *)
+
+let rec pr_sort ppf = function
+  | Loc -> fprintf ppf "%s" loc_sort_string
+  | Bool -> fprintf ppf "%s" bool_sort_string
+  | Int -> fprintf ppf "%s" int_sort_string
+  | FreeSrt id -> pr_ident ppf id
+  | Fld s -> fprintf ppf "%s<@[%a@]>" fld_sort_string pr_sort s
+  | Set s -> fprintf ppf "%s<@[%a@]>" set_sort_string pr_sort s
+		
+let pr_var ppf (x, srt) =
+  fprintf ppf "@[%a: %a@]" pr_ident x pr_sort srt
+
+let rec pr_vars ppf = function
+  | [] -> ()
+  | [v] -> pr_var ppf v
+  | v :: vs -> fprintf ppf "%a,@ %a" pr_var v pr_vars vs 
+
+let rec pr_term0 ppf t =
+  match t with
+  | App (sym, _, _) ->
+      (match sym with
+      | Diff | Union | Inter | Plus | Minus | Mult | Div -> 
+          fprintf ppf "(%a)" pr_term t
+      | _ -> pr_term ppf t)
+  | _ -> pr_term ppf t
+
+and pr_term ppf = function
+  | Var (id, _) -> fprintf ppf "%a" pr_ident id
+  | App (Empty, _, _) -> fprintf ppf "{}"
+  | App (sym, [], _) -> fprintf ppf "%a" pr_sym sym
+  | App (Read, [fld; t], _) -> fprintf ppf "%a.%a" pr_term t pr_term fld
+  | App (Write, [fld; t1; t2], _) -> fprintf ppf "%a[%a :=@ %a]" pr_term fld pr_term t1 pr_term t2
+  | App (Minus, [t1; t2], _) -> fprintf ppf "%a -@ @[<2>%a@]" pr_term0 t1 pr_term0 t2
+  | App (Plus, [t1; t2], _) -> fprintf ppf "%a +@ @[<2>%a@]" pr_term0 t1 pr_term0 t2
+  | App (Mult, [t1; t2], _) -> fprintf ppf "%a *@ @[<2>%a@]" pr_term0 t1 pr_term0 t2
+  | App (Div, [t1; t2], _) -> fprintf ppf "%a /@ @[<2>%a@]" pr_term0 t1 pr_term0 t2
+  | App (Diff, [t1; t2], _) -> fprintf ppf "%a --@ @[<2>%a@]" pr_term0 t1 pr_term0 t2
+  | App (Eq, [t1; t2], _) -> fprintf ppf "@[%a@] ==@ @[<2>%a@]" pr_term t1 pr_term t2
+  | App (SubsetEq, [t1; t2], _)
+  | App (LtEq, [t1; t2], _) -> fprintf ppf "%a <=@ @[<2>%a@]" pr_term t1 pr_term t2
+  | App (GtEq, [t1; t2], _) -> fprintf ppf "%a >=@ @[<2>%a@]" pr_term t1 pr_term t2
+  | App (Lt, [t1; t2], _) -> fprintf ppf "%a <@ @[<2>%a@]" pr_term t1 pr_term t2
+  | App (Gt, [t1; t2], _) -> fprintf ppf "%a >@ @[<2>%a@]" pr_term t1 pr_term t2
+  | App (Elem, [t1; t2], _) -> fprintf ppf "@[%a@] in@ @[<2>%a@]" pr_term t1 pr_term t2
+  | App (SetEnum, ts, _) -> fprintf ppf "{@[%a@]}" pr_term_list ts
+  | App (sym, ts, _) -> fprintf ppf "%a(@[%a@])" pr_sym sym pr_term_list ts
+
+and pr_term_list ppf = function
+  | [] -> ()
+  | [t] -> pr_term ppf t
+  | t :: ts -> fprintf ppf "%a,@ %a" pr_term t pr_term_list ts
+
+let rec pr_form ppf = function
+  | Binder (b, vs, f, a) -> 
+      let cmnts = extract_comments a in
+      (match cmnts with
+      |	"" -> fprintf ppf "%a" pr_quantifier (b, vs, f)
+      |	c -> fprintf ppf "@[<3>(%a@ /* %s */)@]" pr_quantifier (b, vs, f) c)
+  | BoolOp (And, fs) -> pr_ands ppf fs
+  | BoolOp (Or, fs) -> pr_ors ppf fs
+  | BoolOp (Not, [f]) -> pr_not ppf f
+  | BoolOp (_, _) -> ()
+  | Atom t -> fprintf ppf "%a" pr_term t
+
+and pr_ands ppf = function
+  | [] -> fprintf ppf "%s" "true"
+  | [f] -> fprintf ppf "@[<2>%a@]" pr_form f
+  | (BoolOp (Or, _) as f) :: fs -> fprintf ppf "(@[<2>%a@]) &&@ %a" pr_form f pr_ands fs
+  | f :: fs -> fprintf ppf "@[<2>%a@] &&@ %a" pr_form f pr_ands fs
+
+and pr_ors ppf = function
+  | [] -> fprintf ppf "%s" "true"
+  | [f] -> fprintf ppf "@[<2>%a@]" pr_form f
+  | f :: fs -> fprintf ppf "@[<2>%a@] ||@ %a" pr_form f pr_ors fs
+
+and pr_not ppf = function
+  | Atom (App (Eq, [t1; t2], _)) ->
+      fprintf ppf "@[%a@]@ !=@ @[<2>%a@]" pr_term t1 pr_term t2
+  | Atom (App (Elem, [t1; t2], _)) ->
+      fprintf ppf "@[%a@]@ !in@ @[<2>%a@]" pr_term t1 pr_term t2
+  | f -> fprintf ppf "!(@[%a@])" pr_form f
+
+and pr_quantifier ppf = function
+  | (_, [], f) -> fprintf ppf "%a" pr_form f
+  | (b, vs, f) -> fprintf ppf "@[<8>%a@ @[%a@]@ ::@ %a@]" pr_binder b pr_vars vs pr_form f
+
+
+and pr_forms ppf = function
+  | [] -> ()
+  | [t] -> fprintf ppf "%a" pr_form t
+  | t :: ts -> fprintf ppf "%a@ %a" pr_form t pr_forms ts
+
 
 let string_of_sort s = pr_sort0 str_formatter s; flush_str_formatter ()
 let string_of_term t = pr_term str_formatter t; flush_str_formatter ()

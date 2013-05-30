@@ -33,7 +33,7 @@
   (setq font-lock-doc-face 'CadetBlue)
 ))
 
-(defconst spl-mode-font-lock-keywords
+(defconst ghp-mode-font-lock-keywords
   (list
    '("\\(//[^\n]*\\)" 1 
      font-lock-comment-face)
@@ -44,7 +44,7 @@
    '("\\<\\(check\\|free ensures\\|free requires\\|ensures\\|invariant\\|requires\\)\\>"
          1 font-lock-spec-face)
 
-   '("\\<\\(Frame\\|Btwn\\|in\\!diff\\|f\\(ree\\|orall\\)\\|havoc\\|inter\\|new\\|e\\(xists\\|mptyset\\)\\|old\\|union\\)\\>"
+   '("\\<\\(Frame\\|Btwn\\|diff\\|f\\(ree\\|orall\\)\\|havoc\\|in\\(ter\\|\\)\\|new\\|e\\(xists\\|mptyset\\)\\|old\\|union\\)\\>"
          1 font-lock-builtin-face)
 
    '("\\<\\(false\\|true\\|null\\)\\>"
@@ -61,44 +61,44 @@
    ))
 
 
-(defvar spl-mode-syntax-table nil
-  "Syntax table in use in spl-mode buffers.")
+(defvar ghp-mode-syntax-table nil
+  "Syntax table in use in ghp-mode buffers.")
 
-(if spl-mode-syntax-table
+(if ghp-mode-syntax-table
     ()
-  (setq spl-mode-syntax-table (make-syntax-table))
-  (modify-syntax-entry ?/ ". 14b" spl-mode-syntax-table)
-  (modify-syntax-entry ?* ". 23b" spl-mode-syntax-table)
-  (modify-syntax-entry ?\n ">" spl-mode-syntax-table)
-  (modify-syntax-entry ?\f ">" spl-mode-syntax-table)
-  (modify-syntax-entry ?' "w" spl-mode-syntax-table)
-  (modify-syntax-entry ?_ "w" spl-mode-syntax-table)
-  (modify-syntax-entry ?@ "w" spl-mode-syntax-table)
-  (modify-syntax-entry ?$ "w" spl-mode-syntax-table)
+  (setq ghp-mode-syntax-table (make-syntax-table))
+  (modify-syntax-entry ?/ ". 14b" ghp-mode-syntax-table)
+  (modify-syntax-entry ?* ". 23b" ghp-mode-syntax-table)
+  (modify-syntax-entry ?\n ">" ghp-mode-syntax-table)
+  (modify-syntax-entry ?\f ">" ghp-mode-syntax-table)
+  (modify-syntax-entry ?' "w" ghp-mode-syntax-table)
+  (modify-syntax-entry ?_ "w" ghp-mode-syntax-table)
+  (modify-syntax-entry ?@ "w" ghp-mode-syntax-table)
+  (modify-syntax-entry ?$ "w" ghp-mode-syntax-table)
 )
 
 (setq font-lock-defaults-alist
-      (cons (cons 'spl-mode 
-                  '(spl-mode-font-lock-keywords
+      (cons (cons 'ghp-mode 
+                  '(ghp-mode-font-lock-keywords
                     nil nil nil backward-paragraph
                     (font-lock-comment-start-regexp . "/[*]")))
             font-lock-defaults-alist))
 
-(defun spl-mode ()
-  "Major mode for editing SPL files"
+(defun ghp-mode ()
+  "Major mode for editing GHP files"
 
   (interactive)
 
   (kill-all-local-variables)
 
   (setq mode-name "GHP")
-  (setq major-mode 'spl-mode)
-  (set-syntax-table spl-mode-syntax-table)
-  (run-hooks 'spl-mode-hook))
+  (setq major-mode 'ghp-mode)
+  (set-syntax-table ghp-mode-syntax-table)
+  (run-hooks 'ghp-mode-hook))
 
 
 (or (assoc "\\.ghp$" auto-mode-alist)
-    (setq auto-mode-alist (cons '("\\.ghp$" . spl-mode)
+    (setq auto-mode-alist (cons '("\\.ghp$" . ghp-mode)
 				auto-mode-alist)))
 
-(provide 'spl-mode)
+(provide 'ghp-mode)

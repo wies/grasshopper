@@ -515,23 +515,25 @@ and pr_seq ppf = function
   | c :: cs -> fprintf ppf "%a@\n%a" pr_cmd c pr_seq cs
 
 let pr_spec_kind ppf = function
-  | Free -> fprintf ppf "free "
-  | Checked -> fprintf ppf "check "
+  | Free -> fprintf ppf "@<0>%s" "free "
+  | Checked -> fprintf ppf "@<0>%s" "check "
   | Frecked -> ()
 
 let rec pr_precond ppf = function
   | [] -> ()
   | sf :: sfs -> 
-      fprintf ppf "%arequires @[<2>%a@];@\n%a" 
+      fprintf ppf "%a@<0>%s @[<2>%a@];@\n%a"
         pr_spec_kind sf.spec_kind
+        "requires"
         pr_spec_form sf 
         pr_precond sfs 
 
 let rec pr_postcond ppf = function
   | [] -> ()
   | sf :: sfs -> 
-      fprintf ppf "%aensures @[<2>%a@];@\n%a" 
+      fprintf ppf "%a@<0>%s @[<2>%a@];@\n%a" 
         pr_spec_kind sf.spec_kind
+        "ensures"
         pr_spec_form sf 
         pr_postcond sfs 
 
@@ -540,7 +542,7 @@ let pr_ghost ppf = function
   | false -> ()
 
 let pr_id_srt ghost ppf (id, srt) =
-  fprintf ppf "%a%a:@ %a" 
+  fprintf ppf "%a%a: %a" 
     pr_ghost ghost
     pr_ident id 
     pr_sort srt

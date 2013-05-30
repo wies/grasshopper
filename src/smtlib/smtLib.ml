@@ -267,8 +267,7 @@ let assert_form session f =
     | None -> failwith "tried to assert formula before declaring symbols"
     | Some sign -> disambiguate_overloaded_symbols sign cf 
   in
-  writefn session (fun chan -> 
-    Format.fprintf (Format.formatter_of_out_channel chan) "@[<8>%a@]@?" pr_form cf);
+  writefn session (fun chan -> print_smtlib_form chan cf);
   writeln session ")\n"
     
 (*let assert_form session f = Util.measure (assert_form session) f*)
