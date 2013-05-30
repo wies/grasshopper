@@ -630,16 +630,15 @@ let convert cus =
           | ty, tty when ty = tty -> t, tty
           | _ -> type_error (pos_of_expr e) (ty_str ty) (ty_str tty)
     in
-    let convert_spec_form locals e msg =
+    let convert_spec_form locals e name msg =
       let f = extract_sl_form locals e in
-      mk_spec_form (SL f) false msg (pos_of_expr e)
+      mk_spec_form (SL f) name msg (pos_of_expr e)
     in
     let convert_loop_contract locals contract =
       List.map
         (function Invariant e -> 
-          let pos = pos_of_expr e in
-          let msg = Printf.sprintf "invariant %d %d" pos.sp_start_line pos.sp_start_col in
-          convert_spec_form locals e (Some msg)
+          (*let pos = pos_of_expr e in*)
+          convert_spec_form locals e "invariant" None
         )
         contract
     in
@@ -665,12 +664,10 @@ let convert cus =
           let cmds = List.map (convert_stmt proc) stmts in
           mk_seq_cmd cmds pos
       | Assume (e, pos) ->
-          let msg = Printf.sprintf "assume %d %d" pos.sp_start_line pos.sp_start_col in
-          let sf = convert_spec_form proc.p_locals e (Some msg) in
+          let sf = convert_spec_form proc.p_locals e "assume" None in
           mk_assume_cmd sf pos
       | Assert (e, pos) ->
-          let msg = Printf.sprintf "assert %d %d" pos.sp_start_line pos.sp_start_col in
-          let sf = convert_spec_form proc.p_locals e (Some msg) in
+          let sf = convert_spec_form proc.p_locals e "assert" None in
           mk_assert_cmd sf pos
       | Assign (lhs, [ProcCall (id, es, cpos)], pos) ->
           let decl = IdMap.find id cu.proc_decls in
@@ -735,12 +732,8 @@ let convert cus =
           let cond = extract_fol_form proc.p_locals c in
           let t_cmd = convert_stmt proc t in
           let e_cmd = convert_stmt proc e in
-          let t_msg = Printf.sprintf "then %d %d" pos.sp_start_line pos.sp_start_col in
-          let t_cond = mk_spec_form (FOL cond) true (Some t_msg) (pos_of_expr c) in
-          let e_msg = Printf.sprintf "else %d %d" pos.sp_start_line pos.sp_start_col in
-          let e_cond = 
-            mk_spec_form (FOL (FormUtil.mk_not cond)) true (Some e_msg) (pos_of_expr c) 
-          in
+          let t_cond = mk_spec_form (FOL cond) "then" None (pos_of_expr c) in
+          let e_cond = mk_spec_form (FOL (FormUtil.mk_not cond)) "else" None (pos_of_expr c) in
           let t_assume = mk_assume_cmd t_cond (pos_of_expr c) in
           let e_assume = mk_assume_cmd e_cond (pos_of_expr c) in
           let t_block = mk_seq_cmd [t_assume; t_cmd] (pos_of_stmt t) in
@@ -784,19 +777,29 @@ let convert cus =
         )
         cu.pred_decls prog
     in
-    let convert_contract locals contract =
+    let convert_contract proc_name locals contract =
       List.fold_right 
         (function 
           | Requires e -> fun (pre, post) -> 
-              convert_spec_form locals e None :: pre, post
+              let mk_msg caller pos =
+                 Printf.sprintf 
+                  "A precondition for this call of %s might not hold.\nRelated location: %s" 
+                  (str_of_ident proc_name) (string_of_src_pos pos)
+              in
+              convert_spec_form locals e "precondition" (Some mk_msg) :: pre, post
           | Ensures e -> fun (pre, post) ->
-              pre, convert_spec_form locals e None :: post)
+              let mk_msg caller pos =
+                 Printf.sprintf 
+                  "A postcondition of %s might not hold.\nRelated location: %s" 
+                  (str_of_ident proc_name) (string_of_src_pos pos)
+              in
+              pre, convert_spec_form locals e "postcondition" (Some mk_msg) :: post)
         contract ([], [])
     in
     let prog =
       IdMap.fold
         (fun id decl prog ->
-          let pre, post = convert_contract decl.p_locals decl.p_contracts in
+          let pre, post = convert_contract decl.p_name decl.p_locals decl.p_contracts in
           let proc_decl =
             { proc_name = id;
               proc_formals = decl.p_formals;

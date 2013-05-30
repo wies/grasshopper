@@ -156,7 +156,7 @@ let mk_subseteq s t = mk_atom SubsetEq [s; t]
  * 'f' is the a field
  * (un)primed corresponds to before/after
  *)
-let mk_frame x x' a a' f f' = mk_atom Frame [x; x'; a; a'; f; f']
+let mk_frame x x' a f f' = mk_atom Frame [x; x'; a; f; f']
 
 
 let mk_and = function

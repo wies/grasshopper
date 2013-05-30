@@ -51,7 +51,7 @@ let rec to_string f = match f with
   | Or lst ->  "(" ^ (String.concat ") || (" (List.map to_string lst)) ^ ")"
   | Atom (Emp, _) -> "emp"
   | Atom (Cell, [t]) -> 
-      "|" ^ Form.string_of_term t ^ "|" 
+     Form.string_of_term t
   | Atom (Cell, _) -> failwith "Sl.to_string: expected one argument for Cell"
   | Atom (Pred p, ts) ->
       Form.str_of_ident p ^ "(" ^ String.concat ", " (List.map Form.string_of_term ts) ^ ")"

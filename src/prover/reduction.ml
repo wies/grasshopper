@@ -197,16 +197,9 @@ let reduce_sets_to_predicates =
 
 (** Reduce all frame predicates to constraints over sets and entry points. *)
 let reduce_frame fs =
-  let expand_frame x x' a a' f f' =
+  let expand_frame x x' a f f' =
     let frame = mk_diff a x in
     let reduce_graph () =
-      let replacement_alloc =
-        [ mk_not (smk_elem mk_null a'); (* null is still not allocated *)
-          mk_subseteq x a; (* everything in x was allocated before *)
-          mk_eq a' (mk_union [x'; frame]); (* new alloc is frame + x' *)
-          mk_eq (mk_inter [x'; frame]) (mk_empty (Some (Set Loc))) (* everything added to alloc is fresh *)
-        ]
-      in
      
       let replacement_pts =
         Axioms.mk_axiom "pts_frame"
@@ -245,7 +238,6 @@ let reduce_frame fs =
       
       let axioms =
         replacement_pts ::
-        replacement_alloc @
         replacement_reach
       in
       mk_and axioms
@@ -267,8 +259,8 @@ let reduce_frame fs =
       | Some other -> failwith ("reduce_frame did not expect f with type " ^ (string_of_sort other))
   in
   let rec process f = match f with
-    | Atom (App (Frame, [x;x';a;a';f;f'], _)) -> 
-        expand_frame x x' a a' f f'
+    | Atom (App (Frame, [x;x';a;f;f'], _)) -> 
+        expand_frame x x' a f f'
     | Atom (App (Frame, _, _)) -> failwith "frame with wrong arity"
     | Atom t -> Atom t
     | BoolOp (op, fs) -> BoolOp (op, List.map process fs)

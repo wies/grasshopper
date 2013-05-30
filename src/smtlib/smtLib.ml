@@ -147,7 +147,7 @@ let start_with_solver =
     if !Debug.verbose then
       (* these files should probably go into the tmp directory *)
       let with_version = fresh_ident name in
-      let replay_file =  (str_of_ident with_version) ^ ".smt" in
+      let replay_file =  (str_of_ident with_version) ^ ".smt2" in
       Some (open_out replay_file)
     else None
   in

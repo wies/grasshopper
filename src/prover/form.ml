@@ -146,16 +146,20 @@ let str_of_symbol = function
   | Gt -> ">"
   | ReachWO -> "ReachWO"
   | Btwn -> "Btwn"
-  | Elem -> "elem"
-  | SubsetEq -> "subseteq"
-  | Frame -> "frame"
+  | Elem -> "Elem"
+  | SubsetEq -> "Subseteq"
+  | Frame -> "Frame"
   (* free symbols *)
   | FreeSym id -> str_of_ident id
 
 let pr_ident ppf id = fprintf ppf "%s" (str_of_ident id)
 
-let pr_sym ppf sym = fprintf ppf "%s" (str_of_symbol sym)
+let rec pr_ident_list ppf = function
+  | [] -> ()
+  | [id] -> pr_ident ppf id
+  | id :: ids -> fprintf ppf "%a,@ %a" pr_ident id pr_ident_list ids
 
+let pr_sym ppf sym = fprintf ppf "%s" (str_of_symbol sym)
 
 let rec pr_term ppf = function
   | Var (id, _) -> fprintf ppf "%a" pr_ident id
@@ -166,6 +170,11 @@ and pr_terms ppf = function
   | [] -> ()
   | [t] -> fprintf ppf "%a" pr_term t
   | t :: ts -> fprintf ppf "%a@ %a" pr_term t pr_terms ts
+
+let rec pr_term_list ppf = function
+  | [] -> ()
+  | [t] -> pr_term ppf t
+  | t :: ts -> fprintf ppf "%a,@ %a" pr_term t pr_term_list ts
       
 let pr_binder ppf b =
   let b_str = match b with

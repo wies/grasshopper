@@ -101,7 +101,7 @@ form:
       | _ -> failwith ("Parse error: expected 4 arguments for " ^ (str_of_symbol $2)))
   | Frame ->
       (match $3 with 
-      | [x; x'; a; a'; f; f'] -> mk_frame x x' a a' f f'
+      | [x; x'; a; f; f'] -> mk_frame x x' a f f'
       | _ -> failwith ("Parse error: expected 6 arguments for " ^ (str_of_symbol $2)))
   | sym -> failwith ("Expected predicate symbol but found " ^ (str_of_symbol sym))
 } 

@@ -49,11 +49,16 @@ type dispose_command = {
     dispose_arg : term;
   }
      
+type spec_kind =
+  | Free | Checked | Frecked
+
 (** Assume or assert of pure formula *)
 type spec = {
     spec_form : spec_form;
-    spec_free : bool;
-    spec_msg : string option;
+    spec_form_negated : form option;
+    spec_kind : spec_kind;
+    spec_name : string;
+    spec_msg : (ident -> source_position -> string) option;
     spec_pos : source_position;
   } 
 
@@ -65,10 +70,9 @@ type call_command = {
   } 
 
 (** Return from procedure *)
-and return_command = 
-    {
-     return_args : term list;
-   }
+and return_command = {
+    return_args : term list;
+  }
 
 (** Basic commands *)
 type basic_command =
@@ -141,7 +145,7 @@ type program = {
     prog_procs : proc_decl IdMap.t; (** procedures *)
   } 
 
-(** Auxiliary functions for programs *)
+(** Auxiliary functions for programs and declarations *)
 
 let dummy_position = 
   { sp_file = "";
@@ -173,10 +177,10 @@ let declare_global prog var =
   { prog with prog_vars = IdMap.add var.var_name var prog.prog_vars }
 
 let declare_pred prog pred =
-  {prog with prog_preds = IdMap.add pred.pred_name pred prog.prog_preds}
+  { prog with prog_preds = IdMap.add pred.pred_name pred prog.prog_preds }
 
 let declare_proc prog proc =
-  {prog with prog_procs = IdMap.add proc.proc_name proc prog.prog_procs}
+  { prog with prog_procs = IdMap.add proc.proc_name proc prog.prog_procs }
 
 
 let procs prog = IdMap.fold (fun _ proc procs -> proc :: procs) prog.prog_procs []
@@ -191,11 +195,6 @@ let find_var prog proc name =
   try IdMap.find name proc.proc_locals 
   with Not_found -> IdMap.find name prog.prog_vars
 
-(** Auxiliary functions for commands *)
-
-let mk_ppoint pos =
-  { pp_pos = pos; pp_modifies = IdSet.empty }
-
 let mk_fresh_var_decl decl pos =
   let id = fresh_ident (name decl.var_name) in
   { decl with 
@@ -204,12 +203,130 @@ let mk_fresh_var_decl decl pos =
     var_pos = pos;
   }
 
-let mk_spec_form f free msg pos =
+(** Auxiliary functions for specifications *)
+
+let mk_ppoint pos =
+  { pp_pos = pos; pp_modifies = IdSet.empty }
+
+let mk_spec_form f name msg pos =
   { spec_form = f;
-    spec_free = free;
+    spec_form_negated = None;
+    spec_kind = Frecked;
+    spec_name = name;
     spec_msg = msg;
     spec_pos = pos;
   }
+
+let mk_free_spec_form f name msg pos =
+  { spec_form = f;
+    spec_form_negated = None;
+    spec_kind = Free;
+    spec_name = name;
+    spec_msg = msg;
+    spec_pos = pos;
+  } 
+
+let mk_checked_spec_form f name msg pos =
+  { spec_form = f;
+    spec_form_negated = None;
+    spec_kind = Checked;
+    spec_name = name;
+    spec_msg = msg;
+    spec_pos = pos;
+  } 
+
+let is_checked_spec sf =
+  match sf.spec_kind with
+  | Free -> false
+  | Checked | Frecked -> true
+
+let is_free_spec sf =
+  match sf.spec_kind with
+  | Free | Frecked -> true
+  | Checked -> false
+
+let is_sl_spec sf =
+  match sf.spec_form with
+  | SL _ -> true
+  | FOL _ -> false
+
+let subst_id_spec sm sf =
+  match sf.spec_form with
+  | FOL f -> 
+      { sf with 
+        spec_form = FOL (subst_id sm f);
+        spec_form_negated = Util.optmap (subst_id sm) sf.spec_form_negated            
+      }
+  | SL _ -> failwith "elim_assign: found SL formula that should have been desugared."
+  
+let subst_spec sm sf =
+  match sf.spec_form with
+  | FOL f -> 
+      { sf with 
+        spec_form = FOL (subst_consts sm f);
+        spec_form_negated = Util.optmap (subst_consts sm) sf.spec_form_negated            
+      }
+  | SL _ -> failwith "elim_assign: found SL formula that should have been desugared."
+  
+      
+let old_prefix = "$old_"
+
+let oldify (name, num) = (old_prefix ^ name, num)
+
+let oldify_term vars t =
+  let subst_map = 
+    IdSet.fold (fun var subst_map ->
+      IdMap.add var (oldify var) subst_map)
+      vars IdMap.empty
+  in subst_id_term subst_map t
+
+let oldify_form vars f =
+  let subst_map = 
+    IdSet.fold (fun var subst_map ->
+      IdMap.add var (oldify var) subst_map)
+      vars IdMap.empty
+  in subst_id subst_map f
+
+let unoldify =
+  let old_name = Str.regexp (old_prefix ^ "\\(*\\)") in
+  fun (name, num) ->
+    if Str.string_match old_name name 0 
+    then (Str.matched_group 1 name, num)
+    else (name, num)
+    
+let unoldify_term t = 
+  map_id_term unoldify t
+
+let unoldify_form f =
+  map_id unoldify f
+
+let merge_src_positions pos1 pos2 =
+  let start_line, start_col =
+    if pos1.sp_start_line < pos2.sp_start_line 
+    then pos1.sp_start_line, pos1.sp_start_col
+    else if pos2.sp_start_line < pos1.sp_start_line
+    then pos2.sp_start_line, pos2.sp_start_col
+    else if pos1.sp_start_col < pos2.sp_start_col
+    then pos1.sp_start_line, pos1.sp_start_col
+    else pos2.sp_start_line, pos2.sp_start_col
+  in
+  let end_line, end_col =
+    if pos1.sp_end_line > pos2.sp_end_line 
+    then pos1.sp_end_line, pos1.sp_end_col
+    else if pos2.sp_end_line > pos1.sp_end_line
+    then pos2.sp_end_line, pos2.sp_end_col
+    else if pos1.sp_end_col > pos2.sp_end_col
+    then pos1.sp_end_line, pos1.sp_end_col
+    else pos2.sp_end_line, pos2.sp_end_col
+  in
+  { pos1 with
+    sp_start_line = start_line;
+    sp_start_col = start_col;
+    sp_end_line = end_line;
+    sp_end_col = end_col;
+  }
+
+(** Auxiliary functions for commands *)
 
 let mk_basic_cmd bcmd pos =
   Basic (bcmd, mk_ppoint pos)
@@ -247,9 +364,15 @@ let mk_call_cmd lhs name args pos =
   mk_basic_cmd (Call cc) pos
 
 let mk_seq_cmd cmds pos =
-  match cmds with
+  let cmds1 = 
+    List.fold_right (function
+      | Seq (cs, _) -> fun acc -> cs @ acc
+      | c -> fun acc -> c :: acc)
+      cmds []
+  in
+  match cmds1 with
   | [cmd] -> cmd
-  | _ -> Seq (cmds, mk_ppoint pos)
+  | _ -> Seq (cmds1, mk_ppoint pos)
 
 let mk_choice_cmd cmds pos =
   Choice (cmds, mk_ppoint pos)
@@ -276,16 +399,16 @@ and basic_modifies prog = function
   | Assume _
   | Assert _
   | Return _ -> IdSet.empty
-  | Call cc -> proc_modifies (find_proc prog cc.call_name)
-and proc_modifies proc = 
+  | Call cc -> proc_modifies prog (find_proc prog cc.call_name)
+and proc_modifies prog proc = 
   match proc.proc_body with
-  | Some cmd -> modifies cmd
+  | Some cmd -> IdSet.filter (fun id -> IdMap.mem id prog.prog_vars) (modifies cmd)
   | None -> IdSet.empty
 
-let rec fold_basic f acc = function
+let rec fold_basic_cmds f acc = function
   | Loop (lc, pp) ->
-      let lpre, acc = fold_basic f acc lc.loop_prebody in
-      let lpost, acc = fold_basic f acc lc.loop_postbody in
+      let lpre, acc = fold_basic_cmds f acc lc.loop_prebody in
+      let lpost, acc = fold_basic_cmds f acc lc.loop_postbody in
       let lc1 = 
         { lc with 
           loop_prebody = lpre;
@@ -296,7 +419,7 @@ let rec fold_basic f acc = function
   | Choice (cs, pp) ->
       let cs1, acc = 
         List.fold_right (fun c (cs1, acc) ->
-          let c1, acc = fold_basic f acc c in
+          let c1, acc = fold_basic_cmds f acc c in
           c1 :: cs1, acc)
           cs ([], acc)
       in
@@ -304,7 +427,7 @@ let rec fold_basic f acc = function
   | Seq (cs, pp) ->
       let cs1, acc =
         List.fold_right (fun c (cs1, acc) ->
-          let c1, acc = fold_basic f acc c in
+          let c1, acc = fold_basic_cmds f acc c in
           c1 :: cs1, acc)
           cs ([], acc)
       in 
@@ -312,6 +435,167 @@ let rec fold_basic f acc = function
   | Basic (bc, pp) ->
       f (bc, pp) acc
 
-let map_basic f c =
-  let c1, _ = fold_basic (fun c _ -> f c, ()) () c in
+let map_basic_cmds f c =
+  let c1, _ = fold_basic_cmds (fun c _ -> f c, ()) () c in
   c1
+
+(** Pretty printing *)
+
+let string_of_src_pos pos =
+  if pos.sp_end_line = pos.sp_start_line 
+  then 
+    Printf.sprintf "File \"%s\", line %d, characters %d-%d" 
+      pos.sp_file pos.sp_start_line pos.sp_start_col pos.sp_end_col
+  else 
+    Printf.sprintf "File \"%s\", line %d, character %d - line %d, character %d" 
+      pos.sp_file pos.sp_start_line pos.sp_start_col pos.sp_end_line pos.sp_end_col
+
+open Format
+
+
+
+let pr_spec_form ppf sf =
+  match sf.spec_form with
+  | SL f -> fprintf ppf "%s" (Sl.to_string f)
+  | FOL f -> pr_form ppf f
+
+let pr_basic_cmd ppf = function
+  | Assign ac -> 
+      fprintf ppf "@[<2>%a@ :=@ %a@]" 
+        pr_ident_list ac.assign_lhs 
+        pr_term_list ac.assign_rhs
+  | Havoc hc -> 
+      fprintf ppf "@[<2>havoc@ %a@]" pr_ident_list hc.havoc_args
+  | New nc -> 
+      fprintf ppf "@[<2>%a@ :=@ new@ %a@]" 
+        pr_ident nc.new_lhs 
+        pr_sort nc.new_sort
+  | Dispose dc -> 
+      fprintf ppf "@[<2>free@ %a@]" pr_term dc.dispose_arg
+  | Assume sf ->
+      fprintf ppf "@[<2>assume %a@]" pr_spec_form sf
+  | Assert sf ->
+      fprintf ppf "@[<2>assert %a@]" pr_spec_form sf
+  | Return rc -> 
+      fprintf ppf "@[<2>return@ %a@]" pr_term_list rc.return_args
+  | Call cc -> 
+      fprintf ppf "@[<2>%a@ := @ %a(%a)@]" 
+        pr_ident_list cc.call_lhs 
+        pr_ident cc.call_name 
+        pr_term_list cc.call_args
+
+let rec pr_invs ppf = function
+  | [] -> ()
+  | [sf] -> fprintf ppf "invariant@ @[<2>%a@];" pr_spec_form sf
+  | sf :: sfs -> fprintf ppf "@<0>%s@[<2>@ %a@];@\n%a" "invariant" pr_spec_form sf pr_invs sfs 
+
+let rec pr_cmd ppf = function
+  | Loop (lc, _) ->
+      fprintf ppf "%awhile@ (%a)@ @,@[<2>@ @ %a@]@\n%a" 
+        pr_cmd lc.loop_prebody 
+        pr_form lc.loop_test 
+        pr_invs lc.loop_inv 
+        pr_cmd lc.loop_postbody
+  | Choice (cs, _) ->
+      fprintf ppf "@<-3>%s@ %a" "choose" pr_choice cs
+  | Seq ([], _) -> ()
+  | Seq (cs, _) ->
+      fprintf ppf "{@[<1>@\n%a@]@\n}" pr_seq cs
+  | Basic (bc, _) ->
+      fprintf ppf "%a;" pr_basic_cmd bc
+
+and pr_choice ppf = function
+  | [] -> ()
+  | [c] -> pr_cmd ppf c
+  | c :: cs -> fprintf ppf "%a@ @<-3>%s@ %a" pr_cmd c "or" pr_choice cs
+
+and pr_seq ppf = function
+  | [] -> ()
+  | [c] -> pr_cmd ppf c
+  | c :: cs -> fprintf ppf "%a@\n%a" pr_cmd c pr_seq cs
+
+let pr_spec_kind ppf = function
+  | Free -> fprintf ppf "free "
+  | Checked -> fprintf ppf "check "
+  | Frecked -> ()
+
+let rec pr_precond ppf = function
+  | [] -> ()
+  | sf :: sfs -> 
+      fprintf ppf "%arequires @[<2>%a@];@\n%a" 
+        pr_spec_kind sf.spec_kind
+        pr_spec_form sf 
+        pr_precond sfs 
+
+let rec pr_postcond ppf = function
+  | [] -> ()
+  | sf :: sfs -> 
+      fprintf ppf "%aensures @[<2>%a@];@\n%a" 
+        pr_spec_kind sf.spec_kind
+        pr_spec_form sf 
+        pr_postcond sfs 
+
+let pr_ghost ppf = function
+  | true -> fprintf ppf "ghost "
+  | false -> ()
+
+let pr_id_srt ghost ppf (id, srt) =
+  fprintf ppf "%a%a:@ %a" 
+    pr_ghost ghost
+    pr_ident id 
+    pr_sort srt
+
+let rec pr_id_srt_list ppf = function
+  | [] -> ()
+  | [ghost, is] -> pr_id_srt ghost ppf is
+  | (ghost, is) :: iss -> 
+      fprintf ppf "%a,@ @,%a" 
+        (pr_id_srt ghost) is 
+        pr_id_srt_list iss
+
+let pr_body ppf = function
+  | None -> ()
+  | Some (Seq _ as c) -> pr_cmd ppf c 
+  | Some c -> pr_cmd ppf (Seq ([c], mk_pp dummy_position))
+
+let pr_var_decl ppf (id, decl) =
+  fprintf ppf "%avar@ @[<2>%a@];@\n@\n" 
+    pr_ghost decl.var_is_ghost
+    (pr_id_srt false) (id, decl.var_sort)
+
+let rec pr_var_decls ppf = function
+  | [] -> ()
+  | decl :: decls -> fprintf ppf "%a%a" pr_var_decl decl pr_var_decls decls
+
+let pr_proc ppf proc =
+  let add_srts = List.map (fun id -> 
+    let decl = IdMap.find id proc.proc_locals in
+    (decl.var_is_ghost, (id, decl.var_sort)))
+  in
+  let locals = IdMap.fold (fun id decl locals ->
+    if List.mem id (proc.proc_returns @ proc.proc_formals) 
+    then locals
+    else (decl.var_is_ghost, (id, decl.var_sort)) :: locals) proc.proc_locals []
+  in
+  fprintf ppf "procedure@ %a(@[<0>%a@])@ @,returns (@[<0>%a@])@ @,locals (@[<0>%a@])@\n%a%a%a@\n"
+    pr_ident proc.proc_name
+    pr_id_srt_list (add_srts proc.proc_formals)
+    pr_id_srt_list (add_srts proc.proc_returns)
+    pr_id_srt_list locals
+    pr_precond proc.proc_precond
+    pr_postcond proc.proc_postcond
+    pr_body proc.proc_body
+
+let rec pr_procs ppf = function
+  | [] -> ()
+  | proc :: procs ->
+      fprintf ppf "%a@\n%a" pr_proc proc pr_procs procs
+
+let pr_prog ppf prog =
+  fprintf ppf "%a%a" 
+    pr_var_decls (IdMap.bindings prog.prog_vars)
+    pr_procs (List.map snd (IdMap.bindings prog.prog_procs))
+
+let print_prog out_ch prog = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_prog prog
+
+let print_cmd out_ch cmd = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_cmd cmd

@@ -115,7 +115,7 @@ let get_flds name args f =
 let parsed_to_symbol (name, args, structure, heap) =
   get_flds name args structure;
   get_flds name args heap;
-  let f1 = FormUtil.mk_comment ("strucure_of_"^name) (bound_id_to_var structure) in
+  let f1 = FormUtil.mk_comment ("structure_of_"^name) (bound_id_to_var structure) in
   let f2 = FormUtil.mk_comment ("heap_of_"^name) (bound_id_to_var heap) in
   let a = (List.length args) - 1 in
     assert(a >= 0);

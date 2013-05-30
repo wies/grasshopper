@@ -154,6 +154,10 @@ let to_grass domain f =
   let (pointers, separations) = to_form Symbols.pred_to_form FormUtil.mk_eq domain f in
     post_process (FormUtil.smk_and [pointers; separations])
 
+let to_grass_contained domain f = (* different structure or larger footprint *)
+  let (pointers, separations) = to_form Symbols.pred_to_form FormUtil.mk_subseteq domain f in
+    post_process (FormUtil.smk_and [pointers; separations])
+
 let to_grass_not_contained domain f = (* different structure or larger footprint *)
   let (pointers, separations) = to_form Symbols.pred_to_form FormUtil.mk_subseteq domain (mk_not f) in
     post_process (FormUtil.smk_and [pointers; separations])

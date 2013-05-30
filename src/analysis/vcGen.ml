@@ -268,14 +268,25 @@ let check_procedure proceduresMap name =
               (Symbols.get_fields sl_1)
               (Symbols.get_fields sl_2) )
         in
+        let replacement_alloc x x' a a' =
+          let frame = mk_diff a x in
+          [ mk_not (smk_elem mk_null a'); (* null is still not allocated *)
+            mk_subseteq x a; (* everything in x was allocated before *)
+            mk_eq a' (mk_union [x'; frame]); (* new alloc is frame + x' *)
+            mk_eq (mk_inter [x'; frame]) (mk_empty (Some (Set Loc))) (* everything added to alloc is fresh *)
+        ]
+        in
         let frame find_ptr =
           mk_frame
             (mk_set fp) (mk_set fp2)
-            (mk_set alloc1) (mk_set alloc2)
+            (mk_set alloc1) 
             (find_ptr subst) (find_ptr subst2)
         in
-        let frames = List.map (fun t -> frame (get_pts t)) (TermSet.elements flds) in
-          add_to_stack stack subst2 sig2 (smk_and (sl_1f :: sl_2f :: frames))
+        let frames = 
+          replacement_alloc (mk_set fp) (mk_set fp2) (mk_set alloc1) (mk_set alloc2) @
+          List.map (fun t -> frame (get_pts t)) (TermSet.elements flds) 
+        in
+        add_to_stack stack subst2 sig2 (smk_and (sl_1f :: sl_2f :: frames))
       end
   in
   

@@ -22,8 +22,10 @@ let parse_input parse_fct file =
 
 let vc_gen file =
   let cu = parse_input (fun lexbuf -> SplParser.main SplLexer.token lexbuf) file in
-  let _ = Spl2ast.to_program [cu] in
-  ()
+  let prog = Spl2ast.to_program [cu] in
+  let prog1 = Analysis.simplify prog in
+  Programs.print_prog stdout prog1
+
 
 let current_time () =
   let ptime = Unix.times () in
