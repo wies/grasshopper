@@ -225,7 +225,7 @@ let extract_comments smt ann =
       ann 
   in
   if smt 
-  then String.map (function ' ' -> '_' | c -> c) (String.concat "_" (List.rev cmnts))
+  then Str.global_replace (Str.regexp " ") "_" (String.concat "_" (List.rev cmnts))
   else String.concat "; " (List.rev cmnts)
 
 let rec pr_form ppf = function

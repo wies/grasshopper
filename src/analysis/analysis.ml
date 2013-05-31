@@ -532,8 +532,7 @@ let vcgen prog proc =
               | _ -> failwith "vcgen: found SL formula that should have been desugared"
             in
             let vc_name = 
-              String.map 
-                (function ' ' -> '_' | c -> c)
+              Str.global_replace (Str.regexp " ") "_"
                 (str_of_ident proc.proc_name ^ "_" ^ name)
             in
             let vc_msg = 

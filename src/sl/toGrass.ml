@@ -21,7 +21,7 @@ let fresh_existentials f =
 
 (* translation that keeps the heap separated from the pointer structure *)
 let to_form pred_to_form set_fct domain f =
-  let fd why d = FormUtil.fresh_ident (why ^ "_" ^(fst d)) in
+  let fd why d = FormUtil.fresh_ident ("?" ^ why ^ "_" ^(fst d)) in
   let rec process_sep pol d f = 
     match f with
     | Pure p -> 
