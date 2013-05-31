@@ -38,22 +38,22 @@
    '("\\(//[^\n]*\\)" 1 
      font-lock-comment-face)
 
-   '("\\<\\(ass\\(ert\\|ume\\)\\|choose\\|ghost\\|locals\\|pr\\(ocedure\\|edicate\\)\\|or\\|return\\(s\\|\\)\\|struct\\|var\\|while\\)\\>"
-         1 font-lock-keyword-face)
-
-   '("\\<\\(check\\|free ensures\\|free requires\\|ensures\\|invariant\\|requires\\)\\>"
+   '("\\<\\(check\\|forall\\|free ensures\\|free requires\\|e\\(xists\\|nsures\\)\\|ghost\\|invariant\\|old\\|requires\\)\\>"
          1 font-lock-spec-face)
 
-   '("\\<\\(Frame\\|Btwn\\|diff\\|f\\(ree\\|orall\\)\\|havoc\\|in\\(ter\\|\\)\\|new\\|e\\(xists\\|mptyset\\)\\|old\\|union\\)\\>"
+   '("\\<\\(ass\\(ert\\|ume\\)\\|c\\(all\\|hoose\\)\\|free\\|havoc\\|locals\\|new\\|pr\\(ocedure\\|edicate\\)\\|or\\|return\\(s\\|\\)\\|var\\|while\\)\\>"
+         1 font-lock-keyword-face)
+
+   '("\\<\\(\\)\\>"
          1 font-lock-builtin-face)
 
-   '("\\<\\(false\\|true\\|null\\)\\>"
+   '("\\<\\(Frame\\|Btwn\\|false\\|in\\|null\\|true\\|Univ\\)\\>"
          1 font-lock-constant-face)
 
    '("\\(\\<[a-zA-Z_][a-zA-Z0-9_']*[ \t]*\\>\\)(" 1
      font-lock-function-name-face)
 
-   '(":[ \t]*\\(\\<[a-zA-Z_][a-zA-Z0-9_']*\\>\\)" 1
+   '("[^:]:[ \t]*\\(\\<[a-zA-Z_][a-zA-Z0-9_']*\\>\\)" 1
      font-lock-type-face)
 
    '("\\(\\<[a-zA-Z_][a-zA-Z0-9_']*[ \t]*\\>\\):[^:=]" 1
@@ -85,7 +85,7 @@
             font-lock-defaults-alist))
 
 (defun ghp-mode ()
-  "Major mode for editing GHP files"
+  "Major mode for editing Grasshopper program files"
 
   (interactive)
 

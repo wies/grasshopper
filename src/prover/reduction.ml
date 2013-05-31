@@ -197,7 +197,7 @@ let reduce_sets_to_predicates =
 
 (** Reduce all frame predicates to constraints over sets and entry points. *)
 let reduce_frame fs =
-  let expand_frame x x' a f f' =
+  let expand_frame x a f f' =
     let frame = mk_diff a x in
     let reduce_graph () =
      
@@ -259,8 +259,8 @@ let reduce_frame fs =
       | Some other -> failwith ("reduce_frame did not expect f with type " ^ (string_of_sort other))
   in
   let rec process f = match f with
-    | Atom (App (Frame, [x;x';a;f;f'], _)) -> 
-        expand_frame x x' a f f'
+    | Atom (App (Frame, [x;a;f;f'], _)) -> 
+        expand_frame x a f f'
     | Atom (App (Frame, _, _)) -> failwith "frame with wrong arity"
     | Atom t -> Atom t
     | BoolOp (op, fs) -> BoolOp (op, List.map process fs)
@@ -476,7 +476,10 @@ let reduce_remaining fs gts =
  ** assumes that f is typed *)
 let reduce f = 
   let rec split_ands acc = function
-    | BoolOp(And, fs) :: gs -> split_ands acc (fs @ gs)
+    | BoolOp(And, fs) :: gs -> 
+        split_ands acc (fs @ gs)
+    | Binder(_, [], BoolOp(And, fs), a) :: gs ->
+        split_ands acc (List.map (fun f -> annotate f a) fs @ gs)
     | f :: gs -> split_ands (f :: acc) gs
     | [] -> List.rev acc
   in
@@ -484,7 +487,7 @@ let reduce f =
   let fs1 = split_ands [] [f1] in
   let fs2 = reduce_frame fs1 in
   let fs2 = List.map reduce_exists fs2 in
-  let fs21 = (* Simplify.simplify *) (factorize_axioms fs2) in
+  let fs21 = factorize_axioms (split_ands [] fs2) in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
   let fs3, ep_axioms, gts = reduce_ep fs21 in
   let fs4, gts1 = reduce_sets (fs3 @ ep_axioms) gts in

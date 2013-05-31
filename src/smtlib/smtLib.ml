@@ -144,7 +144,7 @@ let declare_sorts session =
 
 let start_with_solver = 
   let get_replay_chan name =
-    if !Debug.verbose then
+    if !Config.dump_smt_queries then
       (* these files should probably go into the tmp directory *)
       let with_version = fresh_ident name in
       let replay_file =  (str_of_ident with_version) ^ ".smt2" in

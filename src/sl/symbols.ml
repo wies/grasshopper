@@ -174,6 +174,26 @@ let _ =
     )
     predefined
 
+
+(*
+let upper_bound domain id3 =
+  (FormUtil.mk_implies
+    (FormUtil.mk_and [mk_domain domain Axioms.loc1])
+    (FormUtil.mk_leq (get_data Axioms.loc1) id3))
+
+let lower_bound domain id3 =
+  (FormUtil.mk_implies
+    (FormUtil.mk_and [mk_domain domain Axioms.loc1])
+    (FormUtil.mk_geq (get_data Axioms.loc1) id3))
+
+let sorted domain =
+  (FormUtil.mk_implies
+    (FormUtil.mk_and [mk_domain domain Axioms.loc1;
+                      mk_domain domain Axioms.loc2;
+                      reach Axioms.loc1 Axioms.loc2])
+    (FormUtil.mk_leq (get_data Axioms.loc1) (get_data Axioms.loc2)))
+*)
+
 (*
 let emp   =
   { sym = "emp";

@@ -6,29 +6,36 @@ let keep_sets = ref true
 let encode_fields_as_arrays = ref false
 let use_btwn = ref true
 
-(* tell whether we are instantiating the axioms or relying on the prover. *)
+(* Flag that controls whether we are instantiating the axioms or relying on the prover. *)
 let instantiate = ref true
-(* where to save the model *)
+(* File name where counterexample model is saved. *)
 let model_file = ref ""
-(* just dump the queries don't solve. *)
-let dump_only = ref false
+(* Flag that controls whether the generated VCs are dumped to files. *)
+let dump_smt_queries = ref false
+(* Flag that controls whether the generated VCs are checked. *)
+let verify = ref true
 
-(* print statistics *)
+let dump_ghp = ref (-1)
+
+(* Flag that controls whether statistics are printed. *)
 let print_stats = ref false
 
+(* The SMT solver that is used for checking VCs. *)
 let smtsolver = ref "Z3"
 
 let cmd_options =
   [("-v", Arg.Unit Debug.set_debug, "Display verbose messages");
+   ("-dumpghp", Arg.Set_int dump_ghp, "Dump intermediate representation after specified simplification stage");
+   ("-noverify", Arg.Clear verify, "Do not check the generated VCs");
    ("-stats", Arg.Set print_stats, "Print statistics");
+   ("-model", Arg.Set_string model_file, "Produce counterexample model for the first failing VC");
    ("-noreach", Arg.Clear with_reach_axioms, "Omit axioms for reachability predicates");
    ("-noalloc", Arg.Clear with_alloc_axioms, "Omit axioms for alloc predicate");
    ("-nonull", Arg.Clear with_null_axioms, "Omit axioms for null");
-   ("-m", Arg.Set_string model_file, "Produce model");
    ("-elimsets", Arg.Clear keep_sets, "Eliminate sets in FOL reduction");
    ("-usearrays", Arg.Set encode_fields_as_arrays, "Use arrays to encode fields");
    ("-usereachwo", Arg.Clear use_btwn, "Use ReachWo predicate instead of Btwn for reachability");
-   ("-noinst", Arg.Clear instantiate, "Let the prover deal with the quantifiers");
-   ("-dumponly", Arg.Set dump_only, "Just dump the VCs but don't solve them");
+   ("-noinst", Arg.Clear instantiate, "Let the prover deal with the quantifiers without prior instantiation");
+   ("-dumpvcs", Arg.Set dump_smt_queries, "Dump SMT-LIB 2 files for the generated VCs");
    ("-smtsolver", Arg.Set_string smtsolver, "Choose SMT solver (Z3, CVC4, MathSAT)")
   ]

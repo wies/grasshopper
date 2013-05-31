@@ -278,7 +278,7 @@ let check_procedure proceduresMap name =
         in
         let frame find_ptr =
           mk_frame
-            (mk_set fp) (mk_set fp2)
+            (mk_set fp)
             (mk_set alloc1) 
             (find_ptr subst) (find_ptr subst2)
         in

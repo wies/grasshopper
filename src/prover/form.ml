@@ -218,17 +218,19 @@ let rec pr_vars ppf = function
   | [v] -> fprintf ppf "%a" pr_var v
   | v :: vs -> fprintf ppf "%a@ %a" pr_var v pr_vars vs
 
-let extract_comments ann =
+let extract_comments smt ann =
   let cmnts = Util.filter_map 
       (function Comment _ -> true (*| _ -> false*)) 
       (function Comment c -> c (*| _ -> ""*)) 
       ann 
   in
-  String.concat "_" (List.rev cmnts)
+  if smt 
+  then String.map (function ' ' -> '_' | c -> c) (String.concat "_" (List.rev cmnts))
+  else String.concat "; " (List.rev cmnts)
 
 let rec pr_form ppf = function
   | Binder (b, vs, f, a) -> 
-      let cmnts = extract_comments a in
+      let cmnts = extract_comments true a in
       (match cmnts with
       |	"" -> fprintf ppf "%a" pr_quantifier (b, vs, f)
       |	c -> fprintf ppf "@[<3>(! %a@ @[:named@ %s@])@]" pr_quantifier (b, vs, f) c)
@@ -295,6 +297,8 @@ and pr_term ppf = function
   | App (Mult, [t1; t2], _) -> fprintf ppf "%a *@ @[<2>%a@]" pr_term0 t1 pr_term0 t2
   | App (Div, [t1; t2], _) -> fprintf ppf "%a /@ @[<2>%a@]" pr_term0 t1 pr_term0 t2
   | App (Diff, [t1; t2], _) -> fprintf ppf "%a --@ @[<2>%a@]" pr_term0 t1 pr_term0 t2
+  | App (Inter, ss, _) -> pr_inter ppf ss
+  | App (Union, ss, _) -> pr_union ppf ss
   | App (Eq, [t1; t2], _) -> fprintf ppf "@[%a@] ==@ @[<2>%a@]" pr_term t1 pr_term t2
   | App (SubsetEq, [t1; t2], _)
   | App (LtEq, [t1; t2], _) -> fprintf ppf "%a <=@ @[<2>%a@]" pr_term t1 pr_term t2
@@ -310,12 +314,31 @@ and pr_term_list ppf = function
   | [t] -> pr_term ppf t
   | t :: ts -> fprintf ppf "%a,@ %a" pr_term t pr_term_list ts
 
+and pr_inter ppf = function
+  | [] -> fprintf ppf "Univ"
+  | [s] -> pr_term ppf s
+  | App (Inter, ss1, _) :: ss2 -> 
+      pr_inter ppf (ss1 @ ss2)
+  | (App (Union, _, _) as s) :: ss 
+  | (App (Diff, _, _) as s) :: ss -> 
+      fprintf ppf "(@[<2>%a@]) **@ %a" pr_term s pr_inter ss
+  | s :: ss -> 
+      fprintf ppf "@[<2>%a@] **@ %a" pr_term s pr_inter ss
+
+and pr_union ppf = function
+  | [] -> fprintf ppf "{}"
+  | [s] -> pr_term ppf s
+  | (App (Diff, _, _) as s) :: ss -> 
+      fprintf ppf "(@[<2>%a@]) ++@ %a" pr_term s pr_union ss
+  | s :: ss -> 
+      fprintf ppf "@[<2>%a@] ++@ %a" pr_term s pr_union ss
+
 let rec pr_form ppf = function
   | Binder (b, vs, f, a) -> 
-      let cmnts = extract_comments a in
+      let cmnts = extract_comments false a in
       (match cmnts with
       |	"" -> fprintf ppf "%a" pr_quantifier (b, vs, f)
-      |	c -> fprintf ppf "@[<3>(%a@ /* %s */)@]" pr_quantifier (b, vs, f) c)
+      |	c -> fprintf ppf "@[(%a@ /* %s */)@]" pr_quantifier (b, vs, f) c)
   | BoolOp (And, fs) -> pr_ands ppf fs
   | BoolOp (Or, fs) -> pr_ors ppf fs
   | BoolOp (Not, [f]) -> pr_not ppf f
@@ -329,7 +352,7 @@ and pr_ands ppf = function
   | f :: fs -> fprintf ppf "@[<2>%a@] &&@ %a" pr_form f pr_ands fs
 
 and pr_ors ppf = function
-  | [] -> fprintf ppf "%s" "true"
+  | [] -> fprintf ppf "%s" "false"
   | [f] -> fprintf ppf "@[<2>%a@]" pr_form f
   | f :: fs -> fprintf ppf "@[<2>%a@] ||@ %a" pr_form f pr_ors fs
 
@@ -338,11 +361,13 @@ and pr_not ppf = function
       fprintf ppf "@[%a@]@ !=@ @[<2>%a@]" pr_term t1 pr_term t2
   | Atom (App (Elem, [t1; t2], _)) ->
       fprintf ppf "@[%a@]@ !in@ @[<2>%a@]" pr_term t1 pr_term t2
+  | Atom (App (_, [], _)) as f -> 
+      fprintf ppf "!@[%a@]" pr_form f
   | f -> fprintf ppf "!(@[%a@])" pr_form f
 
 and pr_quantifier ppf = function
   | (_, [], f) -> fprintf ppf "%a" pr_form f
-  | (b, vs, f) -> fprintf ppf "@[<8>%a@ @[%a@]@ ::@ %a@]" pr_binder b pr_vars vs pr_form f
+  | (b, vs, f) -> fprintf ppf "@[<2>%a @[%a@] ::@ %a@]" pr_binder b pr_vars vs pr_form f
 
 
 and pr_forms ppf = function

@@ -203,6 +203,9 @@ let mk_fresh_var_decl decl pos =
     var_pos = pos;
   }
 
+let iter_procs prog fn =
+  IdMap.iter (fun _ proc -> fn prog proc) prog.prog_procs
+
 (** Auxiliary functions for specifications *)
 
 let mk_ppoint pos =
@@ -269,6 +272,7 @@ let subst_spec sm sf =
   | SL _ -> failwith "elim_assign: found SL formula that should have been desugared."
   
       
+let old_id = fresh_ident "old"
 let old_prefix = "$old_"
 
 let oldify (name, num) = (old_prefix ^ name, num)
@@ -287,8 +291,34 @@ let oldify_form vars f =
       vars IdMap.empty
   in subst_id subst_map f
 
+let oldify_spec vars sf =
+  let old_form =
+    match sf.spec_form with
+    | FOL f -> FOL (oldify_form vars f)
+    | SL f -> SL f (* todo: oldification for SL formulas *)
+  in 
+  let old_form_negated = Util.optmap (oldify_form vars) sf.spec_form_negated in
+  { sf with 
+    spec_form = old_form;
+    spec_form_negated = old_form_negated 
+  }
+
+let old_to_fun f =
+  let rec o2f = function
+    | App (FreeSym (name, num as id), [], srt) ->
+        let old_name = Str.regexp (Str.quote old_prefix ^ "\\(.*\\)") in
+        if Str.string_match old_name name 0 
+        then
+          let id1 = (Str.matched_group 1 name, num) in
+          App (FreeSym old_id, [App (FreeSym id1, [], srt)], srt)
+        else App (FreeSym id, [], srt)
+    | App (sym, ts, srt) -> 
+        App (sym, List.map o2f ts, srt)
+    | t -> t
+  in map_terms o2f f
+
 let unoldify =
-  let old_name = Str.regexp (old_prefix ^ "\\(*\\)") in
+  let old_name = Str.regexp (Str.quote old_prefix ^ "\\(.*\\)") in
   fun (name, num) ->
     if Str.string_match old_name name 0 
     then (Str.matched_group 1 name, num)
@@ -299,6 +329,18 @@ let unoldify_term t =
 
 let unoldify_form f =
   map_id unoldify f
+
+let unoldify_spec sf =
+  let unold_form =
+    match sf.spec_form with
+    | FOL f -> FOL (unoldify_form f)
+    | SL f -> SL f (* todo: unoldification for SL formulas *)
+  in 
+  let unold_form_negated = Util.optmap unoldify_form sf.spec_form_negated in
+  { sf with 
+    spec_form = unold_form;
+    spec_form_negated = unold_form_negated 
+  }
 
 let merge_src_positions pos1 pos2 =
   let start_line, start_col =
@@ -457,7 +499,7 @@ open Format
 let pr_spec_form ppf sf =
   match sf.spec_form with
   | SL f -> fprintf ppf "%s" (Sl.to_string f)
-  | FOL f -> pr_form ppf f
+  | FOL f -> pr_form ppf (old_to_fun f)
 
 let pr_basic_cmd ppf = function
   | Assign ac -> 
@@ -473,13 +515,17 @@ let pr_basic_cmd ppf = function
   | Dispose dc -> 
       fprintf ppf "@[<2>free@ %a@]" pr_term dc.dispose_arg
   | Assume sf ->
-      fprintf ppf "@[<2>assume %a@]" pr_spec_form sf
+      fprintf ppf "/* %s */@\n@[<2>assume@ %a@]" 
+        sf.spec_name
+        pr_spec_form sf
   | Assert sf ->
-      fprintf ppf "@[<2>assert %a@]" pr_spec_form sf
+      fprintf ppf "/* %s */@\n@[<2>assert@ %a@]" 
+        sf.spec_name
+        pr_spec_form sf
   | Return rc -> 
       fprintf ppf "@[<2>return@ %a@]" pr_term_list rc.return_args
   | Call cc -> 
-      fprintf ppf "@[<2>%a@ := @ %a(%a)@]" 
+      fprintf ppf "@[<2>%a@ :=@ @[call@ %a(@[%a@])@]@]" 
         pr_ident_list cc.call_lhs 
         pr_ident cc.call_name 
         pr_term_list cc.call_args
@@ -522,18 +568,18 @@ let pr_spec_kind ppf = function
 let rec pr_precond ppf = function
   | [] -> ()
   | sf :: sfs -> 
-      fprintf ppf "%a@<0>%s @[<2>%a@];@\n%a"
+      fprintf ppf "/* %s */@\n@[<2>%arequires@ %a@];@\n%a"
+        sf.spec_name
         pr_spec_kind sf.spec_kind
-        "requires"
         pr_spec_form sf 
         pr_precond sfs 
 
 let rec pr_postcond ppf = function
   | [] -> ()
   | sf :: sfs -> 
-      fprintf ppf "%a@<0>%s @[<2>%a@];@\n%a" 
+      fprintf ppf "/* %s */@\n@[<2>%aensures@ %a@];@\n%a"
+        sf.spec_name
         pr_spec_kind sf.spec_kind
-        "ensures"
         pr_spec_form sf 
         pr_postcond sfs 
 

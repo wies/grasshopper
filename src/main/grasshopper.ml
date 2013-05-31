@@ -24,8 +24,8 @@ let vc_gen file =
   let cu = parse_input (fun lexbuf -> SplParser.main SplLexer.token lexbuf) file in
   let prog = Spl2ast.to_program [cu] in
   let prog1 = Analysis.simplify prog in
-  Programs.print_prog stdout prog1
-
+  if !Config.verify then Programs.iter_procs prog1 Analysis.check_proc
+    
 
 let current_time () =
   let ptime = Unix.times () in

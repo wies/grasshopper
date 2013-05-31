@@ -4,28 +4,30 @@ open SlUtil
 
 (* translation to grass *)
 let one_and_rest lst =
-  let rec process acc1 acc2 lst = match lst with
+  let rec process acc1 acc2 lst = 
+    match lst with
     | x :: xs -> process ((x, acc2 @ xs) :: acc1) (x :: acc2) xs
     | [] -> acc1
   in
-    process [] [] lst
+  process [] [] lst
 
 let fresh_existentials f =
   let fct id =
-    if (fst id) = "_" then FormUtil.fresh_ident "unamed_const"
+    if fst id = "_" 
+    then FormUtil.fresh_ident "unamed_const"
     else id
   in
     map_id fct f
 
 (* translation that keeps the heap separated from the pointer structure *)
 let to_form pred_to_form set_fct domain f =
-  let fd why d = FormUtil.fresh_ident ( why ^ "_" ^(fst d)) in
+  let fd why d = FormUtil.fresh_ident (why ^ "_" ^(fst d)) in
   let rec process_sep pol d f = 
     match f with
     | Pure p -> 
         let domain = FormUtil.fresh_ident (fst d) in
-        ([p, mk_loc_set domain, IdSet.empty],
-         empty domain)
+        ([p, mk_loc_set_var domain], empty_var domain)
+(* The following optimization for doubly-linked lists is deprecated
     | Atom (Pred s, [x1; x2; y1; y2]) when s = ("dlseg", 0) ->
         let domain = FormUtil.fresh_ident (fst d) in
         let part1 = reach x1 y1 in
@@ -44,23 +46,18 @@ let to_form pred_to_form set_fct domain f =
         in
         ( [FormUtil.mk_and ((if pol then [part3] else []) @ [part1;  part4]), mk_loc_set domain, IdSet.singleton domain],
           (get_symbol "dlseg").heap (mk_loc_set domain) [x1; x2; y1; y2]
-         )
+         ) *)
     | Atom (Emp, _) ->
         let domain = FormUtil.fresh_ident (fst d) in
-        [FormUtil.mk_true, mk_loc_set domain, IdSet.empty], empty domain
+        [FormUtil.mk_true, mk_loc_set_var domain], empty_var domain
     | Atom (Cell, [t]) ->
         let domain = FormUtil.fresh_ident (fst d) in
-        [FormUtil.mk_true, mk_loc_set domain, IdSet.empty], 
-        FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_setenum [t])
+        [FormUtil.mk_true, mk_loc_set_var domain], 
+        FormUtil.mk_eq (mk_loc_set_var domain) (FormUtil.mk_setenum [t])
     | Atom (Pred p, args) -> 
-        let domain = mk_loc_set (FormUtil.fresh_ident (fst d)) in
+        let domain = mk_loc_set_var (FormUtil.fresh_ident (fst d)) in
         let structure, footprint = pred_to_form p args domain in
-        [structure, domain, IdSet.empty], footprint
-          (*assert (List.length args = sym.arity);
-          ( [ sym.structure (mk_loc_set domain) args,
-              mk_loc_set domain,
-              IdSet.empty],
-             sym.heap (mk_loc_set domain) args )*)
+        [structure, domain], footprint
     | SepConj forms ->
         (*let ds = List.map (fun _ -> fd "sep" domain) forms in*)
         let translated = List.map (process_sep pol (fd "sep" d)) forms in
@@ -75,15 +72,9 @@ let to_form pred_to_form set_fct domain f =
         in
         let process (otranslated_1, translated_2) translated =
           let domain = FormUtil.fresh_ident (fst d) in
-          let translated_1, dsc, domains = 
-            List.fold_right
-              (fun (t_1, d, odomains) (ts_1, dsc, domains) -> 
-                (t_1 :: ts_1, d :: dsc, IdSet.union domains odomains))
-              translated ([], [], IdSet.empty)
-              
-          in
+          let translated_1, dsc = List.split translated in
           (*let dsc = List.map mk_loc_set ds in*)
-          let separation1 = FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_union dsc) in
+          let separation1 = FormUtil.mk_eq (mk_loc_set_var domain) (FormUtil.mk_union dsc) in
           let separation2 =
             let rec pw_disj acc = function
               | d1 :: dcs -> pw_disj (List.map (fun d2 -> empty_t (FormUtil.mk_inter [d2; d1])) dcs @ acc) dcs
@@ -92,7 +83,7 @@ let to_form pred_to_form set_fct domain f =
           in
           let heap_part = separation1 :: translated_2 in
           let struct_part = FormUtil.smk_and (separation2 @ translated_1) in
-          ((struct_part, mk_loc_set domain, domains) :: otranslated_1, heap_part)
+          ((struct_part, mk_loc_set_var domain) :: otranslated_1, heap_part)
         in 
         let struct_part, heap_part = List.fold_left process ([], translated_2) translated_product in
         struct_part, FormUtil.smk_and heap_part
@@ -117,7 +108,8 @@ let to_form pred_to_form set_fct domain f =
     | sep ->
       let d' = fd "leaf" domain in
       let struct_part, heap_part = process_sep pol d' sep in
-      let process (str, d, domains) =
+      let process (str, d) =
+        (* The following optimization for doubly-linked lists is deprecated
         let dll_axiom = 
           let in_domain =
             IdSet.fold
@@ -131,14 +123,12 @@ let to_form pred_to_form set_fct domain f =
             (FormUtil.mk_implies
                (FormUtil.mk_and [in_domain; FormUtil.mk_eq (FormUtil.mk_read fpts Axioms.loc1) Axioms.loc2])
                (FormUtil.mk_eq (FormUtil.mk_read fprev_pts Axioms.loc2) Axioms.loc1))
-        in
-        (FormUtil.mk_and (
-         (if not (IdSet.is_empty domains) && not pol then [dll_axiom] else []) @
-         [str; set_fct d (mk_loc_set domain)])) 
+        in *)
+        FormUtil.mk_and [str; set_fct d (mk_loc_set domain)]
       in
       FormUtil.smk_or (List.map process struct_part), heap_part
   in
-    process_bool true (fresh_existentials f)
+  process_bool true (fresh_existentials f)
 
 let post_process f =
   let _ = if !Debug.verbose then
@@ -148,13 +138,14 @@ let post_process f =
       print_newline ()
     end
   in
-  FormUtil.nnf (FormTyping.typing f)
+  let aux_sets = List.map (fun v -> (v, Form.Set Form.Loc)) (IdSet.elements (FormUtil.fv f)) in
+  FormUtil.mk_exists aux_sets (FormUtil.nnf (FormTyping.typing f))
 
 let to_grass domain f =
   let (pointers, separations) = to_form Symbols.pred_to_form FormUtil.mk_eq domain f in
     post_process (FormUtil.smk_and [pointers; separations])
 
-let to_grass_contained domain f = (* different structure or larger footprint *)
+let to_grass_contained domain f = (* same structure and footprint not larger *)
   let (pointers, separations) = to_form Symbols.pred_to_form FormUtil.mk_subseteq domain f in
     post_process (FormUtil.smk_and [pointers; separations])
 

@@ -5,6 +5,10 @@ let mk_loc_set d =
   let tpe = Some (Form.Set Form.Loc) in
     FormUtil.mk_free_const ?srt:tpe d
 
+let mk_loc_set_var d =
+  let tpe = Some (Form.Set Form.Loc) in
+    FormUtil.mk_var ?srt:tpe d
+
 let mk_loc d =
   if (fst d = "null") then FormUtil.mk_null
   else FormUtil.mk_free_const ?srt:(Some (Form.Loc)) d
@@ -13,9 +17,11 @@ let reachWo a b c = FormUtil.mk_reachwo (fpts) a b c
 let btwn a b c = FormUtil.mk_btwn (fpts) a b c
 let reach a b = if !Config.use_btwn then btwn a b b else reachWo a b b
 let mk_domain d v = FormUtil.mk_elem v (mk_loc_set d)
+let mk_domain_var d v = FormUtil.mk_elem v (mk_loc_set_var d)
 let emptyset = FormUtil.mk_empty (Some (Form.Set Form.Loc))
 let empty_t domain = FormUtil.mk_eq emptyset domain
 let empty domain = empty_t (mk_loc_set domain)
+let empty_var domain = empty_t (mk_loc_set_var domain)
 let list_set_def id1 id2 domain =
   FormUtil.mk_iff
     (FormUtil.smk_and 
@@ -24,23 +30,6 @@ let list_set_def id1 id2 domain =
         else reachWo id1 Axioms.loc1 id2;
         FormUtil.mk_neq Axioms.loc1 id2])
     (mk_domain domain Axioms.loc1)
-
-let upper_bound domain id3 =
-  (FormUtil.mk_implies
-    (FormUtil.mk_and [mk_domain domain Axioms.loc1])
-    (FormUtil.mk_leq (get_data Axioms.loc1) id3))
-
-let lower_bound domain id3 =
-  (FormUtil.mk_implies
-    (FormUtil.mk_and [mk_domain domain Axioms.loc1])
-    (FormUtil.mk_geq (get_data Axioms.loc1) id3))
-
-let sorted domain =
-  (FormUtil.mk_implies
-    (FormUtil.mk_and [mk_domain domain Axioms.loc1;
-                      mk_domain domain Axioms.loc2;
-                      reach Axioms.loc1 Axioms.loc2])
-    (FormUtil.mk_leq (get_data Axioms.loc1) (get_data Axioms.loc2)))
 
 let mk_pure p = Pure p
 let mk_true = mk_pure FormUtil.mk_true

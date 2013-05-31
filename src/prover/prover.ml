@@ -45,14 +45,9 @@ let start_session name f =
     SmtLib.assert_forms session f_inst;
     Debug.msg "  f_inst done\n";
 
-    let result =
-      if not !Config.dump_only then
-        SmtLib.is_sat session
-      else
-        Some false
-    in
-      Debug.msg "prover done\n";
-      (result, session)
+    let result = SmtLib.is_sat session in
+    Debug.msg "prover done\n";
+    (result, session)
   in
   Util.measure_call "prove" prove session
 

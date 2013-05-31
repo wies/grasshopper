@@ -4,6 +4,7 @@ open Programs
 
 
 (** Coarse-grained frame inference *)
+(* Todo: the fixed point loop is brain damaged - rather use a top. sort of the call graph *)
 let annotate_modifies prog =
   let rec pm prog = function
     | Loop (lc, pp) ->
@@ -82,9 +83,11 @@ let frame_id = mk_ident "AllocCaller"
 
 let frame_set = mk_free_const ~srt:(Set Loc) frame_id
 
+(** Tramslate SL specification to FOL specifications. 
+ ** Assumes that loops have been transformed to tail-recursive procedures. *)
 let elim_sl prog =
   let compile_proc proc =
-    (** add auxiliary set variables *)
+    (* add auxiliary set variables *)
     let locals =
       List.fold_left (fun locals id ->
         let decl = 
@@ -118,18 +121,22 @@ let elim_sl prog =
     (* compile SL precondition *)
     let sl_precond, other_precond = List.partition is_sl_spec proc.proc_precond in
     let precond, footprint =
-      let f, name, msg, pos = convert_sl_form sl_precond "precondition" in
+      let name = "precondition of " ^ str_of_ident proc.proc_name in
+      let f, name, msg, pos = convert_sl_form sl_precond name in
       let f_in_frame = ToGrass.to_grass_contained frame_id f in
       let f_notin_frame = ToGrass.to_grass_not_contained frame_id f in
       let f_eq_init_alloc = ToGrass.to_grass init_alloc_id f in
       let precond = mk_checked_spec_form (FOL f_in_frame) name msg pos in
-      { precond with spec_form_negated = Some f_notin_frame },
-      mk_free_spec_form (FOL f_eq_init_alloc) "footprint" None pos
+      let fp_name = "initial footprint of " ^ str_of_ident proc.proc_name in
+      { precond with spec_form_negated = Some f_notin_frame },      
+      mk_free_spec_form (FOL f_eq_init_alloc) fp_name None pos
+     
     in
     (* compile SL postcondition *)
     let sl_postcond, other_postcond = List.partition is_sl_spec proc.proc_postcond in
     let postcond =
-      let f, name, msg, pos = convert_sl_form sl_postcond "postcondition" in
+      let name = "postcondition of " ^ str_of_ident proc.proc_name in
+      let f, name, msg, pos = convert_sl_form sl_postcond name in
       let f_eq_alloc = ToGrass.to_grass alloc_id f in
       let f_neq_alloc = ToGrass.to_grass_negated alloc_id f in
       let postcond = mk_spec_form (FOL f_eq_alloc) name msg pos in
@@ -138,7 +145,8 @@ let elim_sl prog =
     (* generate frame condition *) 
     let framecond = 
       let frame_wo_alloc = mk_diff frame_set init_alloc_set in
-      let mk_framecond f = mk_free_spec_form (FOL f) "framecondition" None postcond.spec_pos in
+      let name = "framecondition of " ^ (str_of_ident proc.proc_name) in
+      let mk_framecond f = mk_free_spec_form (FOL f) name None postcond.spec_pos in
       (* null in not allocated *)
       mk_framecond (mk_not (smk_elem mk_null alloc_set)) ::
       (* initial footprint is contained in frame *)
@@ -153,7 +161,7 @@ let elim_sl prog =
         | Fld _ as srt -> 
             let frame_axiom = 
               mk_frame 
-                init_alloc_set alloc_set 
+                init_alloc_set 
                 frame_set
                 (mk_free_const ~srt:srt old_var)
                 (mk_free_const ~srt:srt var)
@@ -162,7 +170,7 @@ let elim_sl prog =
         | _ -> frames)
         (proc_modifies prog proc) []
     in
-    (** update all procedure calls and return commands in body *)
+    (* update all procedure calls and return commands in body *)
     let rec compile_stmt = function
       | (Call cc, pp) ->
           let assign_alloc =
@@ -195,7 +203,7 @@ let elim_sl prog =
       proc_returns = returns;
       proc_locals = locals;
       proc_precond = precond :: other_precond;
-      proc_postcond = footprint :: postcond :: framecond @ other_postcond;
+      proc_postcond = (oldify_spec (proc_modifies prog proc) footprint) :: postcond :: framecond @ other_postcond;
       proc_body = body;
     } 
   in
@@ -223,7 +231,7 @@ let elim_new_dispose prog =
         let arg = dc.dispose_arg in
         let arg_in_alloc = FOL (mk_elem arg alloc_set) in
         let mk_msg callee pos = "Potential double-free." in
-        let sf = mk_spec_form arg_in_alloc "check_dispose" (Some mk_msg) pp.pp_pos in
+        let sf = mk_spec_form arg_in_alloc "check safe free" (Some mk_msg) pp.pp_pos in
         let check_dispose = mk_assert_cmd sf pp.pp_pos in
         let assign_alloc = mk_assign_cmd [alloc_id] [mk_diff alloc_set (mk_setenum [arg])] pp.pp_pos in
         Seq ([check_dispose; assign_alloc], pp)
@@ -255,24 +263,25 @@ let elim_return prog =
           is_checked_spec
           (fun sf ->
             match sf.spec_form with
-            | FOL _ -> sf
+            | FOL _ -> oldify_spec (id_set_of_list proc.proc_formals) sf
             | SL _ -> failwith "elim_return: Found SL formula that should have been desugared.")
           proc.proc_postcond
       in fun pos -> List.map (fun sf -> mk_assert_cmd sf pos) posts
     in
     let body = 
-      (** add final check of postcondition at the end of procedure body *)
+      (* add final check of postcondition at the end of procedure body *)
       let body1 = 
-        let return_pos = 
-          { sp_file = proc.proc_pos.sp_file;
-            sp_start_line = proc.proc_pos.sp_end_line;
-            sp_start_col = proc.proc_pos.sp_end_col;
-            sp_end_line = proc.proc_pos.sp_end_line;
-            sp_end_col = proc.proc_pos.sp_end_col;
-          } 
-        in
         Util.optmap 
           (fun body -> 
+            let pos = (prog_point body).pp_pos in
+            let return_pos = 
+              { sp_file = pos.sp_file;
+                sp_start_line = pos.sp_end_line;
+                sp_start_col = pos.sp_end_col;
+                sp_end_line = pos.sp_end_line;
+                sp_end_col = pos.sp_end_col;
+              } 
+            in
             mk_seq_cmd (body :: mk_postcond_check return_pos) (prog_point body).pp_pos) 
           proc.proc_body
       in
@@ -283,50 +292,13 @@ let elim_return prog =
   in
   { prog with prog_procs = IdMap.map elim_proc prog.prog_procs }
 
-(** Eliminate all procedure calls.
- ** Assumes that SL formulas have been desugared *)
-let elim_proc_calls prog = 
-  let elim = function
-    | (Call cc, pp) ->
-        let callee_decl = find_proc prog cc.call_name in
-        let subst_pre = List.fold_left2 
-            (fun sm id arg -> IdMap.add id arg sm) 
-            IdMap.empty callee_decl.proc_formals cc.call_args
-        in
-        let assert_precond =
-          Util.filter_map is_checked_spec 
-            (fun sf -> mk_assert_cmd (subst_spec subst_pre sf) pp.pp_pos)
-            callee_decl.proc_precond
-        in
-        let havoc_mods =
-          let mods = IdSet.elements (proc_modifies prog callee_decl) in
-          mk_havoc_cmd (cc.call_lhs @ mods) pp.pp_pos
-        in
-        let subst_post = List.fold_left2
-            (fun sm id rtn_id -> IdMap.add id rtn_id sm)
-            IdMap.empty callee_decl.proc_returns cc.call_lhs
-        in
-        let assume_postcond =
-           Util.filter_map is_free_spec 
-            (fun sf -> 
-              let sf1 = subst_id_spec subst_post (subst_spec subst_pre sf) in
-              mk_assume_cmd sf1 pp.pp_pos)
-            callee_decl.proc_postcond
-        in
-        Seq (assert_precond @ [havoc_mods] @ assume_postcond, pp)
-    | (c, pp) -> Basic (c, pp)
-  in
-  let elim_proc proc = 
-    { proc with proc_body = Util.optmap (map_basic_cmds elim) proc.proc_body }
-  in
-  { prog with prog_procs = IdMap.map elim_proc prog.prog_procs }
 
-(** Eliminate assignment and havoc commands (via SSA computation) 
+(** Eliminate all state (via SSA computation) 
  ** Assumes that:
  ** - all SL formulas have been desugared
  ** - all loops have been eliminated 
- ** - the only remaining basic commands are assume/assert/assign/havoc. *)
-let elim_assign_havoc prog =
+ ** - the only remaining basic commands are assume/assert/assign/havoc/call. *)
+let elim_state prog =
   let elim_proc proc =
     let fresh_decl id pos =
       let decl = find_var prog proc id in
@@ -347,7 +319,9 @@ let elim_assign_havoc prog =
         (sm, locals) ids
     in
     let rec elim sm locals = function
-      | Loop _ as c -> sm, locals, c
+      | Loop _ as c -> 
+          (* ignore loops - they should have been desugared by now *)
+          sm, locals, c
       | Seq (cs, pp) ->
           let sm, locals, cs1 = 
             List.fold_left 
@@ -358,6 +332,7 @@ let elim_assign_havoc prog =
           in
           sm, locals, Seq (List.rev cs1, pp)
       | Choice (cs, pp) ->
+          (* bring commands cs into SSA form *)
           let sms, locals, cs1 =
             List.fold_right  
               (fun c (sms, locals, cs1) ->
@@ -365,6 +340,7 @@ let elim_assign_havoc prog =
                 sm1 :: sms, locals, c1 :: cs1)
               cs ([], locals, [])
           in
+          (* compute joined substitution map *)
           let sm_join = 
             List.fold_left 
               (fun sm1 sm -> 
@@ -381,14 +357,16 @@ let elim_assign_havoc prog =
               )
               IdMap.empty sms
           in
+          (* add missing equalities to commands cs according to joined substitution map *)
           let cs2 =
             List.fold_right2 (fun sm_c c cs2 ->
-              let pp = prog_point c in
               let eqs = 
                 IdSet.fold 
                   (fun x eqs ->
                     let x_join = IdMap.find x sm_join in
-                    let x_c = IdMap.find x sm_c in
+                    let x_c = 
+                      try IdMap.find x sm_c with Not_found -> x
+                    in
                     if x_join  = x_c then eqs
                     else 
                       let x_decl = find_var prog proc x in
@@ -409,7 +387,8 @@ let elim_assign_havoc prog =
           | Assume sf -> 
               sm, locals, Basic (Assume (subst_id_spec sm sf), pp)
           | Assert sf ->
-              sm, locals, Basic (Assert (subst_id_spec sm sf), pp)
+              let sf1 = unoldify_spec (subst_id_spec sm sf) in
+              sm, locals, Basic (Assert sf1, pp)
           | Havoc hc ->
               let sm1, locals = fresh sm locals pp.pp_pos hc.havoc_args in
               sm1, locals, Seq ([], pp)
@@ -426,6 +405,65 @@ let elim_assign_havoc prog =
               in
               let sf = mk_spec_form  (FOL (mk_and eqs)) "assign" None pp.pp_pos in
               sm1, locals, mk_assume_cmd sf pp.pp_pos
+          | Call cc ->
+              let to_term_subst sm locals =
+                IdMap.fold (fun id1 id2 sm -> 
+                  let decl = IdMap.find id2 locals in
+                  IdMap.add id1 (mk_free_const ~srt:decl.var_sort id2) sm)
+                  sm IdMap.empty
+              in
+              let callee_decl = find_proc prog cc.call_name in
+              (* update actual arguments of call *)
+              let args1 = List.map (subst_id_term sm) cc.call_args in
+              (* compute substitution for precondition *)
+              let subst_pre = 
+                List.fold_left2 
+                  (fun sm id arg -> IdMap.add id arg sm) 
+                  (to_term_subst sm locals) 
+                  callee_decl.proc_formals args1
+              in
+              (* assert updated precondition *)
+              let assert_precond =
+                Util.filter_map is_checked_spec 
+                  (fun sf -> mk_assert_cmd (subst_spec subst_pre sf) pp.pp_pos)
+                  callee_decl.proc_precond
+              in
+              (* compute mod set and final substitution *)
+              let mods = cc.call_lhs @ IdSet.elements (proc_modifies prog callee_decl) in
+              let sm1, locals = fresh sm locals pp.pp_pos mods in
+              (* compute substitution for postcondition *)
+              let subst_post = 
+                let subst_wo_old_mods = 
+                  List.fold_left2
+                    (fun sm id rtn_id -> 
+                      let decl = IdMap.find rtn_id locals in
+                      IdMap.add id (mk_free_const ~srt:decl.var_sort rtn_id) sm)
+                    subst_pre
+                    callee_decl.proc_returns 
+                    (List.map (fun id -> IdMap.find id sm1) cc.call_lhs)
+                in
+                let subst_wo_old =
+                  List.fold_left (fun sm id -> 
+                    IdMap.add id (IdMap.find id (to_term_subst sm1 locals)) sm)
+                    subst_wo_old_mods
+                    mods
+                in
+                List.fold_left 
+                  (fun subst_post id ->
+                    let decl = IdMap.find (IdMap.find id sm1) locals in
+                    let old_id = try IdMap.find id sm with Not_found -> id in
+                    IdMap.add (oldify id) (mk_free_const ~srt:decl.var_sort old_id) subst_post)
+                  subst_wo_old mods
+              in
+              (* assume updated postcondition *)
+              let assume_postcond =
+                Util.filter_map is_free_spec 
+                  (fun sf -> 
+                    let sf1 = subst_spec subst_post sf in
+                    mk_assume_cmd sf1 pp.pp_pos)
+                  callee_decl.proc_postcond
+              in
+              sm1, locals, Seq (assert_precond @ assume_postcond, pp)
           | _ -> sm, locals, Basic (bc, pp)
     in
     let locals, body =
@@ -439,69 +477,84 @@ let elim_assign_havoc prog =
   in
   { prog with prog_procs = IdMap.map elim_proc prog.prog_procs }
 
-let vcgen prog =
-  let vcp acc proc =
-    let rec vcs acc pre = function
-      | Loop _ -> 
-          failwith "vcgen: loop should have been desugared"
-      | Choice (cs, pp) ->
-          let acc1, traces = 
-            List.fold_left (fun (acc, traces) c ->
-              let acc1, trace = vcs acc pre c in
-              acc1, trace :: traces)
-              (acc, []) cs
-          in acc1, [mk_or (List.rev_map mk_and traces)]
-      | Seq (cs, pp) -> 
-          let acc1, trace, _ = 
-            List.fold_right (fun c (acc, trace, pre) ->
-              let acc1, c_trace = vcs acc pre c in
-              acc1, trace @ c_trace, pre @ c_trace)
-              cs (acc, [], pre)
-          in
-          acc1, trace
-      | Basic (bc, pp) ->
-          match bc with
-          | Assume s ->
-              let name = 
-                Printf.sprintf "%s_%d_%d" 
-                  s.spec_name s.spec_pos.sp_start_line s.spec_pos.sp_start_col
-              in
-              (match s.spec_form with
+let simplify prog =
+  let dump_if n prog = 
+    if !Config.dump_ghp == n then print_prog stdout prog else ()
+  in
+  dump_if 0 prog;
+  let prog = annotate_modifies prog in
+  let prog = elim_sl prog in
+  dump_if 1 prog;
+  let prog = elim_return prog in
+  let prog = annotate_modifies prog in
+  let prog = elim_state prog in
+  dump_if 2 prog;
+  prog
+
+let vcgen prog proc =
+  let rec vcs acc pre = function
+    | Loop _ -> 
+        failwith "vcgen: loop should have been desugared"
+    | Choice (cs, pp) ->
+        let acc1, traces = 
+          List.fold_left (fun (acc, traces) c ->
+            let acc1, trace = vcs acc pre c in
+            acc1, trace :: traces)
+            (acc, []) cs
+        in acc1, [mk_or (List.rev_map mk_and traces)]
+    | Seq (cs, pp) -> 
+        let acc1, trace, _ = 
+          List.fold_left (fun (acc, trace, pre) c ->
+            let acc1, c_trace = vcs acc pre c in
+            acc1, trace @ c_trace, pre @ c_trace)
+            (acc, [], pre) cs 
+        in
+        acc1, trace
+    | Basic (bc, pp) ->
+        match bc with
+        | Assume s ->
+            let name = 
+              Printf.sprintf "%s_%d_%d" 
+                s.spec_name pp.pp_pos.sp_start_line pp.pp_pos.sp_start_col
+            in
+            (match s.spec_form with
               | FOL f -> acc, [mk_comment name f]
               | _ -> failwith "vcgen: found SL formula that should have been desugared")
-          | Assert s ->
-              let name = 
-                Printf.sprintf "%s_%d_%d" 
-                  s.spec_name s.spec_pos.sp_start_line s.spec_pos.sp_start_col
-              in
-              let f =
-                match s.spec_form_negated, s.spec_form with
-                | Some f, _ -> unoldify_form f
-                | None, FOL f -> unoldify_form (mk_not f)
-                | _ -> failwith "vcgen: found SL formula that should have been desugared"
-              in
-              let vc_name = str_of_ident proc.proc_name ^ "_" ^ name in
-              let vc_msg = 
-                match s.spec_msg with
-                | None -> "Assertion violation."
-                | Some msg -> msg proc.proc_name s.spec_pos
-              in
-              let vc = pre @ [mk_comment name f] in
-              (vc_name, vc_msg, vc) :: acc, []
-          | _ -> 
-              failwith "vcgen: found unexpected basic command that should have been desugared"
-    in
-    match proc.proc_body with
-    | Some body -> fst (vcs acc [] body)
-    | None -> acc
+        | Assert s ->
+            let name = 
+              Printf.sprintf "%s_%d_%d" 
+                s.spec_name pp.pp_pos.sp_start_line pp.pp_pos.sp_start_col
+            in
+            let f =
+              match s.spec_form_negated, s.spec_form with
+              | Some f, _ -> unoldify_form f
+              | None, FOL f -> unoldify_form (mk_not f)
+              | _ -> failwith "vcgen: found SL formula that should have been desugared"
+            in
+            let vc_name = 
+              String.map 
+                (function ' ' -> '_' | c -> c)
+                (str_of_ident proc.proc_name ^ "_" ^ name)
+            in
+            let vc_msg = 
+              match s.spec_msg with
+              | None -> ("Possible assertion violation.", pp.pp_pos)
+              | Some msg -> (msg proc.proc_name s.spec_pos, pp.pp_pos)
+            in
+            let vc = pre @ [mk_comment name f] in
+            (vc_name, vc_msg, smk_and vc) :: acc, []
+        | _ -> 
+            failwith "vcgen: found unexpected basic command that should have been desugared"
   in
-  IdMap.fold (fun _ proc acc -> vcp acc proc) prog.prog_procs
+  match proc.proc_body with
+  | Some body -> fst (vcs [] [] body)
+  | None -> []
 
-let simplify prog =
-  let prog1 = annotate_modifies prog in
-  let prog2 = elim_sl prog1 in
-  let prog3 = elim_proc_calls prog2 in
-  let prog4 = elim_return prog3 in
-  let prog5 = annotate_modifies prog4 in
-  let prog6 = elim_assign_havoc prog5 in
-  prog6
+let check_vc (vc_name, (vc_msg, pp), vc) =
+  match Prover.check_sat ~session_name:vc_name vc with
+  | Some false -> ()
+  | _ -> ProgError.error pp vc_msg
+
+let check_proc prog proc =
+  let vcs = vcgen prog proc in
+  List.iter check_vc vcs
