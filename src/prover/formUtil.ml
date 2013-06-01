@@ -277,14 +277,14 @@ let fold_terms_with_bound fn init f =
 	ft (List.fold_left (fun bv (x, _) -> IdSet.add x bv) bv vs) acc f
   in ft IdSet.empty init f
 
-(** Computes the set of free variables of term t *)
+(** Computes the set of free variables occuring in term t *)
 let fvt vars t =
   let rec fvt1 vars = function
   | Var (id, _) -> IdSet.add id vars
   | App (_, ts, _) -> List.fold_left fvt1 vars ts
   in fvt1 vars t
 
-(** Computes the set of free variables of formula f *)
+(** Computes the set of free variables occuring in formula f *)
 let fv f = 
   let rec fvt bv vars = function
     | Var (id, _) -> 
@@ -306,6 +306,22 @@ let sorted_free_vars f =
 	List.fold_left (fvt bv) vars ts
     | _ -> vars
   in fold_terms_with_bound fvt IdSrtSet.empty f
+
+(** Computes the set of free constants occuring in term t.
+ ** Takes accumulator as additional argument. *)
+let free_consts_term_acc consts t =
+  let rec fct vars = function
+  | Var _ -> consts
+  | App (FreeSym id, [], _) -> IdSet.add id consts
+  | App (_, ts, _) -> List.fold_left fct consts ts
+  in fct consts t
+
+(** Computes the set of free constants occuring in term t. *)
+let free_consts_term t = free_consts_term_acc IdSet.empty t
+
+(** Computes the set of free constants occuring in formula f *)
+let free_consts f =
+  fold_terms free_consts_term_acc IdSet.empty f
 
 (** Computes the set of ground terms appearing in f
  * free variables are treated as implicitly universally quantified *)

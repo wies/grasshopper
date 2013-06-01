@@ -17,7 +17,7 @@ let fresh_existentials f =
     then FormUtil.fresh_ident "unamed_const"
     else id
   in
-    map_id fct f
+  map_id fct f
 
 (* translation that keeps the heap separated from the pointer structure *)
 let to_form pred_to_form set_fct domain f =

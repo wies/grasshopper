@@ -2,42 +2,57 @@ open Form
 open FormUtil
 open Programs
 
-
-(** Coarse-grained frame inference *)
-(* Todo: the fixed point loop is brain damaged - rather use a top. sort of the call graph *)
-let annotate_modifies prog =
+(** Infer sets of accessed and modified variables *)
+(* Todo: the fix-point loop is brain damaged - rather use a top. sort of the call graph *)
+let infer_accesses prog =
   let rec pm prog = function
     | Loop (lc, pp) ->
         let has_new1, prebody1 = pm prog lc.loop_prebody in
         let has_new2, postbody1 = pm prog lc.loop_postbody in
-        let lc1 = {lc with loop_prebody = prebody1; loop_postbody = postbody1} in
+        let lc1 = 
+          { lc with 
+            loop_prebody = prebody1; 
+            loop_postbody = postbody1 
+          } 
+        in
         let mods = IdSet.union (modifies prebody1) (modifies postbody1) in
-        let pp1 = {pp with pp_modifies = mods} in
+        let accs = IdSet.union (accesses prebody1) (accesses postbody1) in
+        let pp1 = {pp with pp_modifies = mods; pp_accesses = accs} in
         has_new1 || has_new2, Loop (lc1, pp1)
     | Choice (cs, pp) ->
-        let has_new, mods, cs1 = 
+        let has_new, mods, accs, cs1 = 
           List.fold_right 
-            (fun c (has_new, mods, cs1) ->
+            (fun c (has_new, mods, accs, cs1) ->
               let has_new1, c1 = pm prog c in
-              has_new1 || has_new, IdSet.union (modifies c1) mods, c1 :: cs1)
-            cs (false, IdSet.empty, [])
+              has_new1 || has_new, 
+              IdSet.union (modifies c1) mods, 
+              IdSet.union (accesses c1) accs, 
+              c1 :: cs1)
+            cs (false, IdSet.empty, IdSet.empty, [])
         in
-        let pp1 = {pp with pp_modifies = mods} in
+        let pp1 = {pp with pp_modifies = mods; pp_accesses = accs} in
         has_new, Choice (cs1, pp1)
     | Seq (cs, pp) ->
-        let has_new, mods, cs1 = 
+        let has_new, mods, accs, cs1 = 
           List.fold_right 
-            (fun c (has_new, mods, cs1) ->
+            (fun c (has_new, mods, accs, cs1) ->
               let has_new1, c1 = pm prog c in
-              has_new1 || has_new, IdSet.union (modifies c1) mods, c1 :: cs1)
-            cs (false, IdSet.empty, [])
+              has_new1 || has_new, 
+              IdSet.union (modifies c1) mods, 
+              IdSet.union (accesses c1) accs, 
+              c1 :: cs1)
+            cs (false, IdSet.empty, IdSet.empty, [])
         in
-        let pp1 = {pp with pp_modifies = mods} in
+        let pp1 = {pp with pp_modifies = mods; pp_accesses = accs} in
         has_new, Seq (cs1, pp1)
     | Basic (ac, pp) ->
-        let mods = basic_modifies prog ac in
-        let has_new = IdSet.subset mods pp.pp_modifies in
-        let pp1 = {pp with pp_modifies = mods} in
+        let mods = modifies_basic_cmd prog ac in
+        let accs = accesses_basic_cmd prog ac in
+        let has_new = 
+          not (IdSet.subset mods pp.pp_modifies) ||  
+          not (IdSet.subset accs pp.pp_accesses)
+        in
+        let pp1 = {pp with pp_modifies = mods; pp_accesses = accs} in
         has_new, Basic (ac, pp1)
   in
   let rec pm_prog prog = 
@@ -63,27 +78,62 @@ let annotate_modifies prog =
   in
   pm_prog prog
 
-let alloc_id = mk_ident "Alloc"
 
+(** Transform loops into tail recursive procedures. *)
+let elim_loops (prog : program) =
+  let rec elim prog = function
+    | Seq (cs, pp) ->
+       let prog1, cs1 =
+         List.fold_right 
+           (fun c (prog, cs1) ->
+             let prog1, c1 = elim prog c in
+             prog1, c1 :: cs1)
+           cs (prog, [])
+       in 
+       prog1, Seq (cs1, pp)
+    | Choice (cs, pp) ->
+       let prog1, cs1 =
+         List.fold_right 
+           (fun c (prog, cs1) ->
+             let prog1, c1 = elim prog c in
+             prog1, c1 :: cs1)
+           cs (prog, [])
+       in 
+       prog1, Choice (cs1, pp)
+    | Basic _ as c -> prog, c
+    | Loop (lc, pp) as c -> prog, c (* todo *)
+  in
+  let elim_proc prog proc =
+    let prog1, body1 =
+      match proc.proc_body with
+      | Some body -> 
+          let prog1, body1 = elim prog body in
+          prog1, Some body1
+      | None -> prog, None
+    in 
+    let proc1 = { proc with proc_body = body1 } in
+    declare_proc prog proc1
+  in
+  fold_procs elim_proc prog prog
+
+
+(** Auxiliary variables for desugaring SL specifications *)
+let alloc_id = mk_ident "Alloc"
 let alloc_set = mk_free_const ~srt:(Set Loc) alloc_id
 
 let init_alloc_id = mk_ident "InitAlloc"
-
 let init_alloc_set = mk_free_const ~srt:(Set Loc) init_alloc_id
 
 let alloc_callee_id = mk_ident "PostAllocCallee"
-
 let alloc_callee_set = mk_free_const ~srt:(Set Loc) alloc_callee_id
 
 let init_alloc_callee_id = mk_ident "InitAllocCallee"
-
 let init_alloc_callee_set = mk_free_const ~srt:(Set Loc) init_alloc_callee_id
 
 let frame_id = mk_ident "AllocCaller"
-
 let frame_set = mk_free_const ~srt:(Set Loc) frame_id
 
-(** Tramslate SL specification to FOL specifications. 
+(** Desugare SL specification to FOL specifications. 
  ** Assumes that loops have been transformed to tail-recursive procedures. *)
 let elim_sl prog =
   let compile_proc proc =
@@ -212,7 +262,7 @@ let elim_sl prog =
   { prog with prog_procs = IdMap.map compile_proc prog.prog_procs }
 
 (** Eliminate all new and dispose commands.
- ** Assumes that alloc sets have been introduced *)
+ ** Assumes that alloc sets have been introduced. *)
 let elim_new_dispose prog =
   let elim = function
     | (New nc, pp) ->
@@ -297,8 +347,8 @@ let elim_return prog =
 
 (** Eliminate all state (via SSA computation) 
  ** Assumes that:
- ** - all SL formulas have been desugared
  ** - all loops have been eliminated 
+ ** - all SL formulas have been desugared
  ** - the only remaining basic commands are assume/assert/assign/havoc/call. *)
 let elim_state prog =
   let elim_proc proc =
@@ -479,20 +529,23 @@ let elim_state prog =
   in
   { prog with prog_procs = IdMap.map elim_proc prog.prog_procs }
 
+(** Simplify the given program by applying all transformation steps. *)
 let simplify prog =
   let dump_if n prog = 
     if !Config.dump_ghp == n then print_prog stdout prog else ()
   in
   dump_if 0 prog;
-  let prog = annotate_modifies prog in
+  let prog = infer_accesses prog in
   let prog = elim_sl prog in
   dump_if 1 prog;
   let prog = elim_return prog in
-  let prog = annotate_modifies prog in
+  let prog = infer_accesses prog in
   let prog = elim_state prog in
   dump_if 2 prog;
   prog
 
+(** Generate verification conditions for given procedure. 
+ ** Assumes that proc has been transformed into SSA form. *)
 let vcgen prog proc =
   let rec vcs acc pre = function
     | Loop _ -> 
@@ -551,11 +604,12 @@ let vcgen prog proc =
   | Some body -> fst (vcs [] [] body)
   | None -> []
 
-let check_vc (vc_name, (vc_msg, pp), vc) =
-  match Prover.check_sat ~session_name:vc_name vc with
-  | Some false -> ()
-  | _ -> ProgError.error pp vc_msg
-
+(** Generate verification conditions for given procedure and check them. *)
 let check_proc prog proc =
+  let check_vc (vc_name, (vc_msg, pp), vc) =
+    match Prover.check_sat ~session_name:vc_name vc with
+    | Some false -> ()
+    | _ -> ProgError.error pp vc_msg
+  in
   let vcs = vcgen prog proc in
   List.iter check_vc vcs

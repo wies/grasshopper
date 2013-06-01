@@ -83,14 +83,25 @@ let subst_id subst f =
 
 let subst_consts subst f =
   let rec map f = match f with
-    | Pure p -> Pure (FormUtil.subst_consts subst p)
-    | Not t ->  Not (map t)
-    | And lst -> And (List.map map lst)
-    | Or lst -> Or (List.map map lst)
-    | Atom (s, args) -> mk_pred s (List.map (FormUtil.subst_consts_term subst) args)
-    | SepConj lst -> SepConj (List.map map lst)
+    | Pure g -> Pure (FormUtil.subst_consts subst g)
+    | Not f ->  Not (map f)
+    | And fs -> And (List.map map fs)
+    | Or fs -> Or (List.map map fs)
+    | Atom (p, args) -> mk_pred p (List.map (FormUtil.subst_consts_term subst) args)
+    | SepConj fs -> SepConj (List.map map fs)
   in
     map f
+
+let free_consts_sl f =
+  let rec fc acc = function
+    | Pure g -> IdSet.union acc (FormUtil.free_consts g)
+    | Not f -> fc acc f
+    | Or fs 
+    | And fs 
+    | SepConj fs -> List.fold_left fc acc fs
+    | Atom (p, args) -> List.fold_left FormUtil.free_consts_term_acc acc args
+  in fc IdSet.empty f
+
 
 let rec get_clauses f = match f with
   | Form.BoolOp (Form.And, lst) ->  List.flatten (List.map get_clauses lst)

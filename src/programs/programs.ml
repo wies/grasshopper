@@ -13,12 +13,6 @@ type source_position = {
     sp_end_col : int;
   }
 
-(** Expressions *)
-
-type expr = 
-  | FormExpr of form
-  | TermExpr of term
-
 (** Specification formulas *)
 
 type spec_form =
@@ -87,16 +81,17 @@ type basic_command =
 
 (** Program point *)
 type program_point = {
-    pp_pos : source_position;
-    pp_modifies : IdSet.t;
+    pp_pos : source_position; (** the source position of the program fragment *)
+    pp_modifies : IdSet.t; (** the set of modified variables of the program fragment *)
+    pp_accesses : IdSet.t; (** the set of accessed variables of the program fragment *)
   }
 
 (** Loop *)
 type loop_command = {
-    loop_inv : spec list;
-    loop_prebody : command;
-    loop_test : form;
-    loop_postbody : command;
+    loop_inv : spec list; (** the loop invariant *)
+    loop_prebody : command; (** the command executed before each test of the loop condition *)
+    loop_test : form; (** the loop condition *)
+    loop_postbody : command; (** the actual loop body *)
   }
 
 (** Compound commands *)
@@ -203,13 +198,16 @@ let mk_fresh_var_decl decl pos =
     var_pos = pos;
   }
 
-let iter_procs prog fn =
+let fold_procs fn init prog =
+  IdMap.fold (fun _ proc acc -> fn acc proc) prog.prog_procs init
+
+let map_procs fn prog =
+  { prog with prog_procs = IdMap.map fn prog.prog_procs }
+
+let iter_procs fn prog =
   IdMap.iter (fun _ proc -> fn prog proc) prog.prog_procs
 
 (** Auxiliary functions for specifications *)
-
-let mk_ppoint pos =
-  { pp_pos = pos; pp_modifies = IdSet.empty }
 
 let mk_spec_form f name msg pos =
   { spec_form = f;
@@ -237,6 +235,11 @@ let mk_checked_spec_form f name msg pos =
     spec_msg = msg;
     spec_pos = pos;
   } 
+
+let fold_spec_form fol_fn sl_fn sf =
+  match sf.spec_form with
+  | FOL f -> fol_fn f
+  | SL f -> sl_fn f
 
 let is_checked_spec sf =
   match sf.spec_kind with
@@ -342,6 +345,9 @@ let unoldify_spec sf =
     spec_form_negated = unold_form_negated 
   }
 
+
+(** Auxiliary functions for commands *)
+
 let merge_src_positions pos1 pos2 =
   let start_line, start_col =
     if pos1.sp_start_line < pos2.sp_start_line 
@@ -368,12 +374,14 @@ let merge_src_positions pos1 pos2 =
     sp_end_col = end_col;
   }
 
-(** Auxiliary functions for commands *)
+let mk_ppoint pos = 
+  { pp_pos = pos; 
+    pp_modifies = IdSet.empty;
+    pp_accesses = IdSet.empty;
+  }
 
 let mk_basic_cmd bcmd pos =
   Basic (bcmd, mk_ppoint pos)
-
-let mk_pp pos = { pp_pos = pos; pp_modifies = IdSet.empty }
 
 let mk_assign_cmd lhs rhs pos = 
   let ac = { assign_lhs = lhs; assign_rhs = rhs } in
@@ -432,20 +440,39 @@ let mk_loop_cmd inv preb cond postb pos =
 let prog_point = function
   | Loop (_, pp) | Choice (_, pp) | Seq (_, pp) | Basic (_, pp) -> pp
 
-let rec modifies c = (prog_point c).pp_modifies
-and basic_modifies prog = function
+let modifies c = (prog_point c).pp_modifies
+let proc_modifies prog proc = 
+  match proc.proc_body with
+  | Some cmd -> IdSet.filter (fun id -> IdMap.mem id prog.prog_vars) (modifies cmd)
+  | None -> IdSet.empty
+let modifies_basic_cmd prog = function
   | Assign ac -> id_set_of_list ac.assign_lhs
   | Havoc hc -> id_set_of_list hc.havoc_args
-  | New nc -> IdSet.add alloc_id (IdSet.singleton nc.new_lhs)
-  | Dispose _ -> IdSet.singleton alloc_id
+  | New nc -> IdSet.singleton nc.new_lhs
+  | Dispose _ 
   | Assume _
   | Assert _
   | Return _ -> IdSet.empty
   | Call cc -> proc_modifies prog (find_proc prog cc.call_name)
-and proc_modifies prog proc = 
+
+let accesses c = (prog_point c).pp_accesses
+let accesses_proc prog proc = 
   match proc.proc_body with
-  | Some cmd -> IdSet.filter (fun id -> IdMap.mem id prog.prog_vars) (modifies cmd)
+  | Some cmd -> IdSet.filter (fun id -> IdMap.mem id prog.prog_vars) (accesses cmd)
   | None -> IdSet.empty
+let accesses_basic_cmd prog = function
+  | Assign ac -> 
+      let rhs_accesses = 
+        List.fold_left free_consts_term_acc IdSet.empty ac.assign_rhs 
+      in
+      IdSet.union (id_set_of_list ac.assign_lhs) rhs_accesses
+  | Havoc hc -> id_set_of_list hc.havoc_args
+  | New nc -> IdSet.singleton nc.new_lhs
+  | Dispose dc -> free_consts_term dc.dispose_arg
+  | Assume sf
+  | Assert sf -> fold_spec_form free_consts SlUtil.free_consts_sl sf
+  | Return rc -> List.fold_left free_consts_term_acc IdSet.empty rc.return_args
+  | Call cc -> accesses_proc prog (find_proc prog cc.call_name)
 
 let rec fold_basic_cmds f acc = function
   | Loop (lc, pp) ->
@@ -481,7 +508,10 @@ let map_basic_cmds f c =
   let c1, _ = fold_basic_cmds (fun c _ -> f c, ()) () c in
   c1
 
+
 (** Pretty printing *)
+
+open Format
 
 let string_of_src_pos pos =
   if pos.sp_end_line = pos.sp_start_line 
@@ -491,10 +521,6 @@ let string_of_src_pos pos =
   else 
     Printf.sprintf "File \"%s\", line %d, character %d - line %d, character %d" 
       pos.sp_file pos.sp_start_line pos.sp_start_col pos.sp_end_line pos.sp_end_col
-
-open Format
-
-
 
 let pr_spec_form ppf sf =
   match sf.spec_form with
@@ -604,7 +630,7 @@ let rec pr_id_srt_list ppf = function
 let pr_body ppf = function
   | None -> ()
   | Some (Seq _ as c) -> pr_cmd ppf c 
-  | Some c -> pr_cmd ppf (Seq ([c], mk_pp dummy_position))
+  | Some c -> pr_cmd ppf (Seq ([c], mk_ppoint dummy_position))
 
 let pr_var_decl ppf (id, decl) =
   fprintf ppf "%avar@ @[<2>%a@];@\n@\n" 
