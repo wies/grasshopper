@@ -53,5 +53,5 @@ let _ =
       let bs = if !Debug.verbose then Printexc.get_backtrace () else "" in
         output_string stderr (s ^ "\n" ^ bs); exit 1
   | Parsing.Parse_error -> print_endline "parse error"; exit 1
-  | ProgError.Prog_error _ as e -> print_endline (ProgError.to_string e)
+  | ProgError.Prog_error _ as e -> output_string stderr (ProgError.to_string e ^ "\n")
 	

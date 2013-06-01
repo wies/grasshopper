@@ -12,12 +12,12 @@ let one_and_rest lst =
   process [] [] lst
 
 let fresh_existentials f =
-  let fct id =
+  let fct id t =
     if fst id = "_" 
-    then FormUtil.fresh_ident "unamed_const"
-    else id
+    then FormUtil.mk_var ?srt:(FormUtil.sort_of t) (FormUtil.fresh_ident "?_")
+    else t
   in
-  map_id fct f
+ subst_consts_fun fct f
 
 (* translation that keeps the heap separated from the pointer structure *)
 let to_form pred_to_form set_fct domain f =

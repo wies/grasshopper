@@ -428,14 +428,6 @@ let overloaded_sign f : (arity list SymbolMap.t) =
   fold_terms signt SymbolMap.empty f
 
 (*
-let funs_in_term t =
-  let rec fts funs = function
-    | Var _ -> funs
-    | FunApp (sym, ts) ->
-	let arity = List.length ts in
-	List.fold_left fts (FunSymbolMap.add sym arity funs) ts
-  in fts FunSymbolMap.empty t
-
 let proper_funs f =
   let rec fts funs = function
     | Var _  -> funs
@@ -482,19 +474,30 @@ let subst_id subst_map f =
     | Binder (b, vs, f, a) -> Binder (b, vs, sub f, a)
   in sub f
 
-(** Substitutes all constants in form f according to substitution map subst_map. *)
-let subst_consts_term subst_map f =
-  let sub_id id t =
-    try IdMap.find id subst_map with Not_found -> t
-  in
+(** Substitutes all constants in term t according to substitution function subst_fun. *)
+let subst_consts_fun_term subst_fun t =
   let rec sub = function
-    | (App (FreeSym id, [], srt) as t) -> sub_id id t 
+    | (App (FreeSym id, [], srt) as t) -> subst_fun id t 
     | App (sym, ts, srt) -> App (sym, List.map sub ts, srt)
     | t -> t
   in
-    sub f
+  sub t
+
+(** Substitutes all constants in formula f according to substitution function subst_fun. *)
+let subst_consts_fun subst_fun f =
+  map_terms (subst_consts_fun_term subst_fun) f
+
+(** Substitutes all constants in term t according to substitution map subst_map. *)
+let subst_consts_term subst_map t =
+  let sub_id id t =
+    try IdMap.find id subst_map with Not_found -> t
+  in
+  subst_consts_fun_term sub_id t
+
+(** Substitutes all constants in formula f according to substitution map subst_map. *)
 let subst_consts subst_map f =
   map_terms (subst_consts_term subst_map) f
+
 
 (** Substitutes all variables in term t according to substitution map subst_map. *)
 let subst_term subst_map t =
@@ -531,7 +534,7 @@ let subst subst_map f =
 	in Binder (b, vs1, sub sm2 f, List.map (suba sm2) a)
   in sub subst_map f
 
-(** make all comments unique *)
+(** Make all comments in formula f unique *)
 let unique_comments f =
   let rec uc = function 
     | BoolOp (op, fs) -> BoolOp (op, List.map uc fs)

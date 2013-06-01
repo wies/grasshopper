@@ -113,7 +113,11 @@ let reduce_exists =
     skolemize f2
 
 let factorize_axioms fs =
-  let rec extract f axioms = match f with
+  let rec extract f axioms = 
+    match f with
+    | Binder (b, [], g, a) ->
+        let g1, axioms = extract g axioms in
+        Binder (b, [], g1, a), axioms
     | Binder (Forall, (_ :: _ as vs), f1, a) -> 
         let p = mk_atom (FreeSym (fresh_ident "Axiom")) [] in
         let fact_axiom = annotate (mk_or [mk_not p; Binder (Forall, vs, f1, [])]) a in

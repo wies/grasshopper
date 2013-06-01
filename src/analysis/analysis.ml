@@ -9,16 +9,8 @@ let infer_accesses prog =
     | Loop (lc, pp) ->
         let has_new1, prebody1 = pm prog lc.loop_prebody in
         let has_new2, postbody1 = pm prog lc.loop_postbody in
-        let lc1 = 
-          { lc with 
-            loop_prebody = prebody1; 
-            loop_postbody = postbody1 
-          } 
-        in
-        let mods = IdSet.union (modifies prebody1) (modifies postbody1) in
-        let accs = IdSet.union (accesses prebody1) (accesses postbody1) in
-        let pp1 = {pp with pp_modifies = mods; pp_accesses = accs} in
-        has_new1 || has_new2, Loop (lc1, pp1)
+        has_new1 || has_new2, 
+        mk_loop_cmd lc.loop_inv prebody1 lc.loop_test postbody1 pp.pp_pos
     | Choice (cs, pp) ->
         let has_new, mods, accs, cs1 = 
           List.fold_right 
@@ -45,15 +37,17 @@ let infer_accesses prog =
         in
         let pp1 = {pp with pp_modifies = mods; pp_accesses = accs} in
         has_new, Seq (cs1, pp1)
-    | Basic (ac, pp) ->
-        let mods = modifies_basic_cmd prog ac in
-        let accs = accesses_basic_cmd prog ac in
+    | Basic (Call cc, pp) ->
+        let callee = find_proc prog cc.call_name in
+        let mods = modifies_proc prog callee in
+        let accs = accesses_proc prog callee in
         let has_new = 
           not (IdSet.subset mods pp.pp_modifies) ||  
           not (IdSet.subset accs pp.pp_accesses)
         in
         let pp1 = {pp with pp_modifies = mods; pp_accesses = accs} in
-        has_new, Basic (ac, pp1)
+        has_new, Basic (Call cc, pp1)
+    | c ->  false, c
   in
   let rec pm_prog prog = 
     let procs = procs prog in
@@ -74,45 +68,130 @@ let infer_accesses prog =
       IdMap.empty procs1
     in
     let prog1 = {prog with prog_procs = procs2} in
-    if has_new then prog1 else pm_prog prog1
+    if has_new then pm_prog prog1 else prog1 
   in
   pm_prog prog
 
 
 (** Transform loops into tail recursive procedures. *)
 let elim_loops (prog : program) =
-  let rec elim prog = function
+  let rec elim prog proc = function
+    | Loop (lc, pp) -> 
+        let proc_name = 
+          fresh_ident ((str_of_ident proc.proc_name) ^ "_Loop") 
+        in
+        let locals = 
+          IdMap.filter 
+            (fun id _ -> IdSet.mem id pp.pp_accesses)
+            proc.proc_locals
+        in
+        let returns, return_decls = 
+          IdMap.fold 
+            (fun id decl (returns, decls) -> id :: returns, decl :: decls)
+            locals ([], [])
+        in
+        let subst_formals, formals, locals =
+          List.fold_right
+            (fun decl (sm, ids, locals) -> 
+              let init_id = fresh_ident (FormUtil.name decl.var_name ^ "_init") in
+              let init_decl = { decl with var_name = init_id } in
+              IdMap.add decl.var_name init_id sm, 
+              init_id :: ids,
+              IdMap.add init_id init_decl locals
+            )
+            return_decls (IdMap.empty, [], locals)
+        in            
+        let ids_to_terms ids =
+          List.map (fun id ->
+            let decl = IdMap.find id locals in
+            mk_free_const ~srt:decl.var_sort id) ids
+        in
+        let loop_call pos = 
+          let pp_call = 
+            { pp_pos = pos; 
+              pp_modifies = pp.pp_modifies; 
+              pp_accesses = pp.pp_accesses;
+            }
+          in
+          let call = mk_call_cmd returns proc_name (ids_to_terms returns) pos in
+          update_ppoint pp_call call
+        in
+        let loop_end_pos = end_pos pp.pp_pos in
+        let loop_start_pos = start_pos pp.pp_pos in
+        let body =
+          let prog, prebody = elim prog proc lc.loop_prebody in
+          let prog, postbody = elim prog proc lc.loop_postbody in
+          let init_returns = 
+            mk_assign_cmd returns (ids_to_terms formals) loop_start_pos 
+          in
+          let else_cmd = 
+            mk_return_cmd (ids_to_terms returns) loop_end_pos
+          in
+          let then_cmd = 
+            mk_seq_cmd
+              [ postbody;
+                 loop_call loop_end_pos
+              ] 
+              pp.pp_pos
+          in
+          mk_seq_cmd 
+            [ init_returns;
+              prebody;
+              mk_ite 
+                lc.loop_test dummy_position 
+                then_cmd else_cmd pp.pp_pos
+            ]
+            pp.pp_pos
+        in
+        let loop_exit =
+          let name = "loop exit condition of " ^ (str_of_ident proc_name) in
+          mk_free_spec_form (FOL (mk_not lc.loop_test)) name None loop_end_pos
+        in
+        let loop_proc = 
+          { proc_name = proc_name;
+            proc_formals = formals;
+            proc_returns = returns;
+            proc_locals = locals;
+            proc_precond = List.map (subst_id_spec subst_formals) lc.loop_inv;
+            proc_postcond = loop_exit :: lc.loop_inv;
+            proc_body = Some body;
+            proc_pos = pp.pp_pos;
+          } 
+        in
+        let call_loop =
+          loop_call pp.pp_pos
+        in
+        declare_proc prog loop_proc, call_loop
     | Seq (cs, pp) ->
        let prog1, cs1 =
          List.fold_right 
            (fun c (prog, cs1) ->
-             let prog1, c1 = elim prog c in
+             let prog1, c1 = elim prog proc c in
              prog1, c1 :: cs1)
            cs (prog, [])
        in 
-       prog1, Seq (cs1, pp)
+       prog1, mk_seq_cmd cs1 pp.pp_pos
     | Choice (cs, pp) ->
        let prog1, cs1 =
          List.fold_right 
            (fun c (prog, cs1) ->
-             let prog1, c1 = elim prog c in
+             let prog1, c1 = elim prog proc c in
              prog1, c1 :: cs1)
            cs (prog, [])
        in 
-       prog1, Choice (cs1, pp)
+       prog1, mk_choice_cmd cs1 pp.pp_pos
     | Basic _ as c -> prog, c
-    | Loop (lc, pp) as c -> prog, c (* todo *)
   in
   let elim_proc prog proc =
     let prog1, body1 =
       match proc.proc_body with
       | Some body -> 
-          let prog1, body1 = elim prog body in
+          let prog1, body1 = elim prog proc body in
           prog1, Some body1
       | None -> prog, None
     in 
     let proc1 = { proc with proc_body = body1 } in
-    declare_proc prog proc1
+    declare_proc prog1 proc1
   in
   fold_procs elim_proc prog prog
 
@@ -121,13 +200,13 @@ let elim_loops (prog : program) =
 let alloc_id = mk_ident "Alloc"
 let alloc_set = mk_free_const ~srt:(Set Loc) alloc_id
 
-let init_alloc_id = mk_ident "InitAlloc"
+let init_alloc_id = mk_ident "Alloc_init"
 let init_alloc_set = mk_free_const ~srt:(Set Loc) init_alloc_id
 
-let alloc_callee_id = mk_ident "PostAllocCallee"
+let alloc_callee_id = mk_ident "AllocCallee"
 let alloc_callee_set = mk_free_const ~srt:(Set Loc) alloc_callee_id
 
-let init_alloc_callee_id = mk_ident "InitAllocCallee"
+let init_alloc_callee_id = mk_ident "AllocCallee_init"
 let init_alloc_callee_set = mk_free_const ~srt:(Set Loc) init_alloc_callee_id
 
 let frame_id = mk_ident "AllocCaller"
@@ -178,11 +257,11 @@ let elim_sl prog =
       let f_eq_init_alloc = ToGrass.to_grass init_alloc_id f in
       let precond = mk_checked_spec_form (FOL f_in_frame) name msg pos in
       let fp_name = "initial footprint of " ^ str_of_ident proc.proc_name in
-      { precond with spec_form_negated = Some f_notin_frame },      
-      mk_free_spec_form (FOL (mk_and [mk_not (mk_elem mk_null init_alloc_set);
-                                     f_eq_init_alloc]))
-        fp_name None pos
-     
+      let footprint_form = 
+        FOL (mk_and [mk_not (mk_elem mk_null init_alloc_set); f_eq_init_alloc])
+      in
+      { precond with spec_form_negated = Some f_notin_frame }, 
+      mk_free_spec_form footprint_form fp_name None pos
     in
     (* compile SL postcondition *)
     let sl_postcond, other_postcond = List.partition is_sl_spec proc.proc_postcond in
@@ -203,7 +282,7 @@ let elim_sl prog =
       mk_framecond (mk_not (smk_elem mk_null alloc_set)) ::
       (* initial footprint is contained in frame *)
       mk_framecond (mk_subseteq init_alloc_set frame_set) ::
-      (* final footprint is disjiont from frame w/o alloc *)
+      (* final footprint is disjoint from frame w/o alloc *)
       mk_framecond (mk_eq (mk_inter [alloc_set; frame_wo_alloc]) (mk_empty (Some (Set Loc)))) ::
       (* frame axioms for modified fields *)
       IdSet.fold (fun var frames ->
@@ -220,7 +299,7 @@ let elim_sl prog =
             in 
             mk_framecond frame_axiom :: frames
         | _ -> frames)
-        (proc_modifies prog proc) []
+        (modifies_proc prog proc) []
     in
     (* update all procedure calls and return commands in body *)
     let rec compile_stmt = function
@@ -243,19 +322,24 @@ let elim_sl prog =
           Basic (Return rc1, pp)
       | (c, pp) -> Basic (c, pp)
     in
-    let body = Util.optmap 
+    let body = 
+      Util.optmap 
         (fun body ->
           let body1 = map_basic_cmds compile_stmt body in
           let assume_footprint = mk_assume_cmd footprint footprint.spec_pos in
           let assign_alloc = mk_assign_cmd [alloc_id] [init_alloc_set] footprint.spec_pos in
           mk_seq_cmd [assume_footprint; assign_alloc; body1] (prog_point body).pp_pos
-        ) proc.proc_body in
+        ) proc.proc_body 
+    in
+    let old_footprint = 
+      oldify_spec (modifies_proc prog proc) footprint
+    in
     { proc with
       proc_formals = formals;
       proc_returns = returns;
       proc_locals = locals;
       proc_precond = precond :: other_precond;
-      proc_postcond = (oldify_spec (proc_modifies prog proc) footprint) :: postcond :: framecond @ other_postcond;
+      proc_postcond = old_footprint :: postcond :: framecond @ other_postcond;
       proc_body = body;
     } 
   in
@@ -305,7 +389,7 @@ let elim_return prog =
         in
         let rt_false = mk_assume_cmd fls pp.pp_pos in
         let rt_postcond = mk_postcond_check pp.pp_pos in
-        Seq (rt_assign :: rt_postcond @ [rt_false], pp)
+        mk_seq_cmd (rt_assign :: rt_postcond @ [rt_false]) pp.pp_pos
     | (c, pp) -> Basic (c, pp)
   in
   let elim_proc proc =
@@ -433,7 +517,7 @@ let elim_state prog =
               Seq ([c; mk_assume_cmd sf pp.pp_pos], pp) :: cs2)
               sms cs1 []
           in
-          sm_join, locals, Choice (cs2, pp)
+          sm_join, locals, mk_choice_cmd cs2 pp.pp_pos
       | Basic (bc, pp) ->
           match bc with
           | Assume sf -> 
@@ -481,16 +565,22 @@ let elim_state prog =
                   callee_decl.proc_precond
               in
               (* compute mod set and final substitution *)
-              let mods = cc.call_lhs @ IdSet.elements (proc_modifies prog callee_decl) in
+              let mods = cc.call_lhs @ IdSet.elements (modifies_proc prog callee_decl) in
               let sm1, locals = fresh sm locals pp.pp_pos mods in
               (* compute substitution for postcondition *)
               let subst_post = 
+                let subst_wo_old_mods_formals =
+                  List.fold_left 
+                    (fun sm id ->
+                      IdMap.add (oldify id) (IdMap.find id subst_pre) sm)
+                    subst_pre callee_decl.proc_formals
+                in
                 let subst_wo_old_mods = 
                   List.fold_left2
                     (fun sm id rtn_id -> 
                       let decl = IdMap.find rtn_id locals in
                       IdMap.add id (mk_free_const ~srt:decl.var_sort rtn_id) sm)
-                    subst_pre
+                    subst_wo_old_mods_formals
                     callee_decl.proc_returns 
                     (List.map (fun id -> IdMap.find id sm1) cc.call_lhs)
                 in
@@ -511,11 +601,12 @@ let elim_state prog =
               let assume_postcond =
                 Util.filter_map is_free_spec 
                   (fun sf -> 
-                    let sf1 = subst_spec subst_post sf in
+                    let old_sf = oldify_spec (id_set_of_list callee_decl.proc_formals) sf in
+                    let sf1 = subst_spec subst_post old_sf in
                     mk_assume_cmd sf1 pp.pp_pos)
                   callee_decl.proc_postcond
               in
-              sm1, locals, Seq (assert_precond @ assume_postcond, pp)
+              sm1, locals, mk_seq_cmd (assert_precond @ assume_postcond) pp.pp_pos
           | _ -> sm, locals, Basic (bc, pp)
     in
     let locals, body =
@@ -532,16 +623,19 @@ let elim_state prog =
 (** Simplify the given program by applying all transformation steps. *)
 let simplify prog =
   let dump_if n prog = 
-    if !Config.dump_ghp == n then print_prog stdout prog else ()
+    if !Config.dump_ghp == n 
+    then print_prog stdout prog 
+    else ()
   in
   dump_if 0 prog;
   let prog = infer_accesses prog in
-  let prog = elim_sl prog in
+  let prog = elim_loops prog in
   dump_if 1 prog;
-  let prog = elim_return prog in
-  let prog = infer_accesses prog in
-  let prog = elim_state prog in
+  let prog = elim_sl prog in
   dump_if 2 prog;
+  let prog = elim_return prog in
+  let prog = elim_state prog in
+  dump_if 3 prog;
   prog
 
 (** Generate verification conditions for given procedure. 

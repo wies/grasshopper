@@ -263,7 +263,11 @@ let subst_id_spec sm sf =
         spec_form = FOL (subst_id sm f);
         spec_form_negated = Util.optmap (subst_id sm) sf.spec_form_negated            
       }
-  | SL _ -> failwith "elim_assign: found SL formula that should have been desugared."
+  | SL f -> 
+      { sf with 
+        spec_form = SL (SlUtil.subst_id sm f);
+        spec_form_negated = Util.optmap (subst_id sm) sf.spec_form_negated 
+      }
   
 let subst_spec sm sf =
   match sf.spec_form with
@@ -346,7 +350,7 @@ let unoldify_spec sf =
   }
 
 
-(** Auxiliary functions for commands *)
+(** Auxiliary functions for program points *)
 
 let merge_src_positions pos1 pos2 =
   let start_line, start_col =
@@ -374,14 +378,102 @@ let merge_src_positions pos1 pos2 =
     sp_end_col = end_col;
   }
 
+let start_pos pos = 
+  { pos with
+    sp_end_line = pos.sp_start_line;
+    sp_end_col = pos.sp_start_col;
+  }
+
+let end_pos pos = 
+  { pos with
+    sp_start_line = pos.sp_end_line;
+    sp_start_col = pos.sp_end_col;
+  }
+
 let mk_ppoint pos = 
   { pp_pos = pos; 
     pp_modifies = IdSet.empty;
     pp_accesses = IdSet.empty;
   }
 
+let update_ppoint pp = function
+  | Loop (lc, _) -> Loop (lc, pp)
+  | Choice (cs, _) -> Choice (cs, pp)
+  | Seq (cs, _) -> Seq (cs, pp)
+  | Basic (bc, _) -> Basic (bc, pp)
+
+let prog_point = function
+  | Loop (_, pp) | Choice (_, pp) | Seq (_, pp) | Basic (_, pp) -> pp
+
+let source_pos c = (prog_point c).pp_pos
+
+
+(** Auxiliary functions for commands *)
+
+let modifies c = (prog_point c).pp_modifies
+
+let modifies_proc prog proc = 
+  match proc.proc_body with
+  | Some cmd -> IdSet.filter (fun id -> IdMap.mem id prog.prog_vars) (modifies cmd)
+  | None -> IdSet.empty
+
+let modifies_basic_cmd = function
+  | Assign ac -> id_set_of_list ac.assign_lhs
+  | Havoc hc -> id_set_of_list hc.havoc_args
+  | New nc -> IdSet.singleton nc.new_lhs
+  | Dispose _ 
+  | Assume _
+  | Assert _
+  | Return _ 
+  | Call _ -> IdSet.empty
+
+let accesses c = (prog_point c).pp_accesses
+
+let accesses_spec_form_acc acc sf =
+  IdSet.union acc 
+    (match sf.spec_form with
+    | FOL f -> free_consts f
+    | SL f -> SlUtil.free_consts_sl f)
+
+let accesses_spec_form sf = 
+  accesses_spec_form_acc IdSet.empty sf
+
+let accesses_proc prog proc = 
+  let body_accs =
+    match proc.proc_body with
+    | Some cmd -> accesses cmd
+    | None -> IdSet.empty
+  in
+  IdSet.filter 
+    (fun id -> IdMap.mem id prog.prog_vars)
+    (List.fold_left accesses_spec_form_acc body_accs
+       (proc.proc_precond @ proc.proc_postcond))
+
+let accesses_basic_cmd = function
+  | Assign ac -> 
+      let rhs_accesses = 
+        List.fold_left free_consts_term_acc IdSet.empty ac.assign_rhs 
+      in
+      IdSet.union (id_set_of_list ac.assign_lhs) rhs_accesses
+  | Havoc hc -> id_set_of_list hc.havoc_args
+  | New nc -> IdSet.singleton nc.new_lhs
+  | Dispose dc -> free_consts_term dc.dispose_arg
+  | Assume sf
+  | Assert sf -> accesses_spec_form sf
+  | Return rc -> List.fold_left free_consts_term_acc IdSet.empty rc.return_args
+  | Call cc -> 
+      List.fold_left free_consts_term_acc IdSet.empty cc.call_args
+
+(** Smart constructors for commands *)
+
 let mk_basic_cmd bcmd pos =
-  Basic (bcmd, mk_ppoint pos)
+  let pp = mk_ppoint pos in
+  Basic (bcmd, 
+         { pp with 
+           pp_modifies = modifies_basic_cmd bcmd;
+           pp_accesses = accesses_basic_cmd bcmd; 
+         }
+        )
 
 let mk_assign_cmd lhs rhs pos = 
   let ac = { assign_lhs = lhs; assign_rhs = rhs } in
@@ -409,23 +501,75 @@ let mk_return_cmd args pos =
   let rc = { return_args = args } in
   mk_basic_cmd (Return rc) pos
 
-let mk_call_cmd lhs name args pos =
+let mk_call_cmd ?(prog=None) lhs name args pos =
   let cc = {call_lhs = lhs; call_name = name; call_args = args} in
-  mk_basic_cmd (Call cc) pos
+  let accs = accesses_basic_cmd (Call cc) in
+  let pp = mk_ppoint pos in
+  match prog with
+  | None -> Basic (Call cc, { pp with pp_accesses = accs }) 
+  | Some prog -> 
+      let proc = find_proc prog name in
+      let mods = modifies_proc prog proc in
+      let accs = IdSet.union (accesses_proc prog proc) accs in
+      let pp1 = 
+        { pp with 
+          pp_modifies = mods;
+          pp_accesses = accs;
+        }
+      in
+      Basic (Call cc, pp1)
 
 let mk_seq_cmd cmds pos =
-  let cmds1 = 
+  let cmds1, mods, accs = 
     List.fold_right (function
-      | Seq (cs, _) -> fun acc -> cs @ acc
-      | c -> fun acc -> c :: acc)
-      cmds []
+      | Seq (cs, _) -> fun (cmds1, mods, accs) -> 
+          List.fold_right (fun c (cmds1, mods, accs) ->
+            c :: cmds1, 
+            IdSet.union (modifies c) mods, 
+            IdSet.union (accesses c) accs)
+            cs (cmds1, mods, accs)
+      | c -> fun (cmds1, mods, accs) -> 
+          c :: cmds1, 
+          IdSet.union (modifies c) mods, 
+          IdSet.union (accesses c) accs)
+      cmds ([], IdSet.empty, IdSet.empty)
+  in
+  let pp = mk_ppoint pos in
+  let pp1 = 
+    { pp with
+      pp_modifies = mods;
+      pp_accesses = accs;
+    } 
   in
   match cmds1 with
   | [cmd] -> cmd
-  | _ -> Seq (cmds1, mk_ppoint pos)
+  | _ -> Seq (cmds1, pp1)
 
 let mk_choice_cmd cmds pos =
-  Choice (cmds, mk_ppoint pos)
+  let cmds1, mods, accs = 
+    List.fold_right (function
+      | Choice (cs, _) -> fun (cmds1, mods, accs) -> 
+          List.fold_right (fun c (cmds1, mods, accs) ->
+            c :: cmds1, 
+            IdSet.union (modifies c) mods, 
+            IdSet.union (accesses c) accs)
+            cs (cmds1, mods, accs)
+      | c -> fun (cmds1, mods, accs) -> 
+          c :: cmds1, 
+          IdSet.union (modifies c) mods, 
+          IdSet.union (accesses c) accs)
+      cmds ([], IdSet.empty, IdSet.empty)
+  in
+  let pp = mk_ppoint pos in
+  let pp1 = 
+    { pp with
+      pp_modifies = mods;
+      pp_accesses = accs;
+    } 
+  in
+  match cmds1 with
+  | [cmd] -> cmd
+  | _ -> Choice (cmds, pp1)
 
 let mk_loop_cmd inv preb cond postb pos =
   let loop = 
@@ -435,56 +579,35 @@ let mk_loop_cmd inv preb cond postb pos =
       loop_postbody = postb;
     } 
   in
-  Loop (loop, mk_ppoint pos)
+  let pp = mk_ppoint pos in
+  let mods = IdSet.union (modifies preb) (modifies postb) in
+  let accs = 
+    IdSet.union
+      (IdSet.union (accesses preb) (accesses postb))
+      (List.fold_left (accesses_spec_form_acc) (free_consts cond) inv)
+  in
+  let pp1 = 
+    { pp with
+      pp_modifies = mods;
+      pp_accesses = accs;
+    } 
+  in
+  Loop (loop, pp1)
 
-let prog_point = function
-  | Loop (_, pp) | Choice (_, pp) | Seq (_, pp) | Basic (_, pp) -> pp
-
-let modifies c = (prog_point c).pp_modifies
-let proc_modifies prog proc = 
-  match proc.proc_body with
-  | Some cmd -> IdSet.filter (fun id -> IdMap.mem id prog.prog_vars) (modifies cmd)
-  | None -> IdSet.empty
-let modifies_basic_cmd prog = function
-  | Assign ac -> id_set_of_list ac.assign_lhs
-  | Havoc hc -> id_set_of_list hc.havoc_args
-  | New nc -> IdSet.singleton nc.new_lhs
-  | Dispose _ 
-  | Assume _
-  | Assert _
-  | Return _ -> IdSet.empty
-  | Call cc -> proc_modifies prog (find_proc prog cc.call_name)
-
-let accesses c = (prog_point c).pp_accesses
-let accesses_proc prog proc = 
-  match proc.proc_body with
-  | Some cmd -> IdSet.filter (fun id -> IdMap.mem id prog.prog_vars) (accesses cmd)
-  | None -> IdSet.empty
-let accesses_basic_cmd prog = function
-  | Assign ac -> 
-      let rhs_accesses = 
-        List.fold_left free_consts_term_acc IdSet.empty ac.assign_rhs 
-      in
-      IdSet.union (id_set_of_list ac.assign_lhs) rhs_accesses
-  | Havoc hc -> id_set_of_list hc.havoc_args
-  | New nc -> IdSet.singleton nc.new_lhs
-  | Dispose dc -> free_consts_term dc.dispose_arg
-  | Assume sf
-  | Assert sf -> fold_spec_form free_consts SlUtil.free_consts_sl sf
-  | Return rc -> List.fold_left free_consts_term_acc IdSet.empty rc.return_args
-  | Call cc -> accesses_proc prog (find_proc prog cc.call_name)
+let mk_ite cond cond_pos then_cmd else_cmd pos =
+  let t_cond = mk_spec_form (FOL cond) "if then" None cond_pos in
+  let e_cond = mk_spec_form (FOL (mk_not cond)) "if else" None cond_pos in
+  let t_assume = mk_assume_cmd t_cond cond_pos in
+  let e_assume = mk_assume_cmd e_cond cond_pos in
+  let t_block = mk_seq_cmd [t_assume; then_cmd] (source_pos then_cmd) in
+  let e_block = mk_seq_cmd [e_assume; else_cmd] (source_pos else_cmd) in
+  mk_choice_cmd [t_block; e_block] pos
 
 let rec fold_basic_cmds f acc = function
   | Loop (lc, pp) ->
       let lpre, acc = fold_basic_cmds f acc lc.loop_prebody in
       let lpost, acc = fold_basic_cmds f acc lc.loop_postbody in
-      let lc1 = 
-        { lc with 
-          loop_prebody = lpre;
-          loop_postbody = lpost;
-        }
-      in
-      Loop (lc1, pp), acc
+      mk_loop_cmd lc.loop_inv lpre lc.loop_test lpost pp.pp_pos, acc
   | Choice (cs, pp) ->
       let cs1, acc = 
         List.fold_right (fun c (cs1, acc) ->
@@ -492,7 +615,7 @@ let rec fold_basic_cmds f acc = function
           c1 :: cs1, acc)
           cs ([], acc)
       in
-      Choice (cs1, pp), acc
+      mk_choice_cmd cs1 pp.pp_pos, acc
   | Seq (cs, pp) ->
       let cs1, acc =
         List.fold_right (fun c (cs1, acc) ->
@@ -500,7 +623,7 @@ let rec fold_basic_cmds f acc = function
           c1 :: cs1, acc)
           cs ([], acc)
       in 
-      Seq (cs1, pp), acc
+      mk_seq_cmd cs1 pp.pp_pos, acc
   | Basic (bc, pp) ->
       f (bc, pp) acc
 
@@ -651,7 +774,7 @@ let pr_proc ppf proc =
     then locals
     else (decl.var_is_ghost, (id, decl.var_sort)) :: locals) proc.proc_locals []
   in
-  fprintf ppf "procedure@ %a(@[<0>%a@])@ @,returns (@[<0>%a@])@ @,locals (@[<0>%a@])@\n%a%a%a@\n"
+  fprintf ppf "@[<2>procedure@ %a(@[<0>%a@])@]@ @,returns (@[<0>%a@])@ @,locals (@[<0>%a@])@\n%a%a%a@\n"
     pr_ident proc.proc_name
     pr_id_srt_list (add_srts proc.proc_formals)
     pr_id_srt_list (add_srts proc.proc_returns)

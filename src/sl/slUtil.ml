@@ -81,13 +81,27 @@ let subst_id subst f =
   in
     map_id get f
 
+let subst_consts_fun subst f =
+  let rec map f = 
+    match f with
+    | Pure g -> Pure (FormUtil.subst_consts_fun subst g)
+    | Not f ->  Not (map f)
+    | And fs -> And (List.map map fs)
+    | Or fs -> Or (List.map map fs)
+    | Atom (p, args) -> 
+        mk_pred p (List.map (FormUtil.subst_consts_fun_term subst) args)
+    | SepConj fs -> SepConj (List.map map fs)
+  in
+  map f
+
 let subst_consts subst f =
   let rec map f = match f with
     | Pure g -> Pure (FormUtil.subst_consts subst g)
     | Not f ->  Not (map f)
     | And fs -> And (List.map map fs)
     | Or fs -> Or (List.map map fs)
-    | Atom (p, args) -> mk_pred p (List.map (FormUtil.subst_consts_term subst) args)
+    | Atom (p, args) -> 
+        mk_pred p (List.map (FormUtil.subst_consts_term subst) args)
     | SepConj fs -> SepConj (List.map map fs)
   in
     map f

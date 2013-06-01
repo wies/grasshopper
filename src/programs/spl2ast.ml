@@ -732,13 +732,7 @@ let convert cus =
           let cond = extract_fol_form proc.p_locals c in
           let t_cmd = convert_stmt proc t in
           let e_cmd = convert_stmt proc e in
-          let t_cond = mk_spec_form (FOL cond) "if then" None (pos_of_expr c) in
-          let e_cond = mk_spec_form (FOL (FormUtil.mk_not cond)) "if else" None (pos_of_expr c) in
-          let t_assume = mk_assume_cmd t_cond (pos_of_expr c) in
-          let e_assume = mk_assume_cmd e_cond (pos_of_expr c) in
-          let t_block = mk_seq_cmd [t_assume; t_cmd] (pos_of_stmt t) in
-          let e_block = mk_seq_cmd [e_assume; e_cmd] (pos_of_stmt e) in
-          mk_choice_cmd [t_block; e_block] pos
+          mk_ite cond (pos_of_expr c) t_cmd e_cmd pos
       | Loop (contract, preb, cond, postb, pos) ->
           let preb_cmd = convert_stmt proc preb in
           let cond = extract_fol_form proc.p_locals cond in
