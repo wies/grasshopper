@@ -129,7 +129,9 @@ let elim_sl prog =
       let precond = mk_checked_spec_form (FOL f_in_frame) name msg pos in
       let fp_name = "initial footprint of " ^ str_of_ident proc.proc_name in
       { precond with spec_form_negated = Some f_notin_frame },      
-      mk_free_spec_form (FOL f_eq_init_alloc) fp_name None pos
+      mk_free_spec_form (FOL (mk_and [mk_not (mk_elem mk_null init_alloc_set);
+                                     f_eq_init_alloc]))
+        fp_name None pos
      
     in
     (* compile SL postcondition *)
