@@ -78,7 +78,7 @@ let elim_loops (prog : program) =
   let rec elim prog proc = function
     | Loop (lc, pp) -> 
         let proc_name = 
-          fresh_ident ((str_of_ident proc.proc_name) ^ "_Loop") 
+          fresh_ident ((str_of_ident proc.proc_name) ^ "_loop") 
         in
         let locals = 
           IdMap.filter 
@@ -127,14 +127,10 @@ let elim_loops (prog : program) =
           let else_cmd = 
             mk_return_cmd (ids_to_terms returns) loop_end_pos
           in
-          let fls = 
-            mk_spec_form (FOL mk_false) "return after tail-recursive call" None pp.pp_pos 
-          in
           let then_cmd = 
             mk_seq_cmd
               [ postbody;
-                loop_call loop_end_pos;
-                mk_assume_cmd fls loop_end_pos
+                loop_call loop_end_pos
               ] 
               pp.pp_pos
           in
@@ -151,13 +147,17 @@ let elim_loops (prog : program) =
           let name = "loop exit condition of " ^ (str_of_ident proc_name) in
           mk_free_spec_form (FOL (mk_not lc.loop_test)) name None loop_end_pos
         in
+        let postcond =
+          loop_exit :: 
+          List.map (fun sf -> { sf with spec_kind = Free }) lc.loop_inv
+        in
         let loop_proc = 
           { proc_name = proc_name;
             proc_formals = formals;
             proc_returns = returns;
             proc_locals = locals;
             proc_precond = List.map (subst_id_spec subst_formals) lc.loop_inv;
-            proc_postcond = loop_exit :: lc.loop_inv;
+            proc_postcond = postcond;
             proc_body = Some body;
             proc_pos = pp.pp_pos;
           } 
@@ -324,6 +324,21 @@ let elim_sl prog =
       | (Return rc, pp) ->
           let rc1 = { return_args = init_alloc_set :: alloc_set :: rc.return_args } in
           Basic (Return rc1, pp)
+      | (Assume sf, pp) ->
+          (match sf.spec_form with
+          | SL f ->
+              let f1 = ToGrass.to_grass alloc_id f in
+              let sf1 = mk_spec_form (FOL f1) sf.spec_name sf.spec_msg sf.spec_pos in
+              mk_assume_cmd sf1 pp.pp_pos
+          | FOL f -> Basic (Assume sf, pp))
+      | (Assert sf, pp) ->
+          (match sf.spec_form with
+          | SL f ->
+              let f1 = ToGrass.to_grass alloc_id f in
+              let f1_negated = ToGrass.to_grass_negated alloc_id f in
+              let sf1 = mk_spec_form (FOL f1) sf.spec_name sf.spec_msg sf.spec_pos in
+              mk_assert_cmd { sf1 with spec_form_negated = Some f1_negated } pp.pp_pos
+          | FOL f -> Basic (Assert sf, pp))
       | (c, pp) -> Basic (c, pp)
     in
     let body = 
@@ -349,6 +364,54 @@ let elim_sl prog =
   in
   { prog with prog_procs = IdMap.map compile_proc prog.prog_procs }
 
+(** Annotate safety checks for heap accesses *)
+let annotate_heap_checks prog =
+  let rec derefs acc = function
+    | App (Read, [fld; loc], _) ->
+        derefs (derefs (TermSet.add loc acc) fld) loc
+    | App (Write, fld :: loc :: ts, _) ->
+        List.fold_left derefs (TermSet.add loc acc) (fld :: loc :: ts)
+    | App (_, ts, _) -> 
+        List.fold_left derefs acc ts
+    | _ -> acc
+  in
+  let mk_term_checks pos acc t =
+    let locs = derefs TermSet.empty t in
+    TermSet.fold 
+      (fun t acc ->
+        let t_in_alloc = FOL (mk_elem t alloc_set) in
+        let mk_msg callee pos = "A heap access might be unsafe (null or dangling reference)." in
+        let sf = mk_spec_form t_in_alloc "check heap access" (Some mk_msg) pos in
+        let check_access = mk_assert_cmd sf pos in
+        check_access :: acc)
+      locs acc
+  in
+  let ann_term_checks ts cmd =
+    let checks = List.fold_left (mk_term_checks (source_pos cmd)) [] ts in
+    mk_seq_cmd (checks @ [cmd]) (source_pos cmd)
+  in
+  let annotate = function
+    | (Assign ac, pp) ->
+        ann_term_checks ac.assign_rhs (Basic (Assign ac, pp))
+    | (Dispose dc, pp) ->
+        let arg = dc.dispose_arg in
+        let arg_in_alloc = FOL (mk_elem arg alloc_set) in
+        let mk_msg callee pos = "This deallocation might be unsafe." in
+        let sf = mk_spec_form arg_in_alloc "check free" (Some mk_msg) pp.pp_pos in
+        let check_dispose = mk_assert_cmd sf pp.pp_pos in
+        let arg_checks = mk_term_checks pp.pp_pos [check_dispose] arg in
+        mk_seq_cmd (arg_checks @ [Basic (Dispose dc, pp)]) pp.pp_pos
+    | (Call cc, pp) ->
+        ann_term_checks cc.call_args (Basic (Call cc, pp))
+    | (Return rc, pp) ->
+        ann_term_checks rc.return_args (Basic (Return rc, pp))
+    | (bc, pp) -> Basic (bc, pp)
+  in
+  let annotate_proc proc = 
+    { proc with proc_body = Util.optmap (map_basic_cmds annotate) proc.proc_body } 
+  in
+  { prog with prog_procs = IdMap.map annotate_proc prog.prog_procs }
+
 (** Eliminate all new and dispose commands.
  ** Assumes that alloc sets have been introduced. *)
 let elim_new_dispose prog =
@@ -366,19 +429,18 @@ let elim_new_dispose prog =
               [assume_fresh; assign_alloc]
           | _ -> []
         in
-        Seq (havoc :: aux, pp)
+        mk_seq_cmd (havoc :: aux) pp.pp_pos
     | (Dispose dc, pp) ->
         let arg = dc.dispose_arg in
-        let arg_in_alloc = FOL (mk_elem arg alloc_set) in
-        let mk_msg callee pos = "Potential double-free." in
-        let sf = mk_spec_form arg_in_alloc "check safe free" (Some mk_msg) pp.pp_pos in
-        let check_dispose = mk_assert_cmd sf pp.pp_pos in
-        let assign_alloc = mk_assign_cmd [alloc_id] [mk_diff alloc_set (mk_setenum [arg])] pp.pp_pos in
-        Seq ([check_dispose; assign_alloc], pp)
+        let assign_alloc = 
+          mk_assign_cmd [alloc_id] [mk_diff alloc_set (mk_setenum [arg])] pp.pp_pos 
+        in
+        assign_alloc
     | (c, pp) -> Basic (c, pp)
   in
   let elim_proc proc = { proc with proc_body = Util.optmap (map_basic_cmds elim) proc.proc_body } in
   { prog with prog_procs = IdMap.map elim_proc prog.prog_procs }
+
 
 (** Eliminate all return commands.
  ** Assumes that all SL formulas have been desugared. *)
@@ -636,6 +698,8 @@ let simplify prog =
   let prog = elim_loops prog in
   dump_if 1 prog;
   let prog = elim_sl prog in
+  let prog = annotate_heap_checks prog in
+  let prog = elim_new_dispose prog in
   dump_if 2 prog;
   let prog = elim_return prog in
   let prog = elim_state prog in
@@ -699,7 +763,7 @@ let vcgen prog proc =
             failwith "vcgen: found unexpected basic command that should have been desugared"
   in
   match proc.proc_body with
-  | Some body -> fst (vcs [] [] body)
+  | Some body -> List.rev (fst (vcs [] [] body))
   | None -> []
 
 (** Generate verification conditions for given procedure and check them. *)

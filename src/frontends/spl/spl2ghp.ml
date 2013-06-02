@@ -634,11 +634,21 @@ let convert cus =
       let f = extract_sl_form locals e in
       mk_spec_form (SL f) name msg (pos_of_expr e)
     in
-    let convert_loop_contract locals contract =
+    let convert_loop_contract proc_name locals contract =
       List.map
         (function Invariant e -> 
+          let msg caller pos =
+            if caller = proc_name then
+              Printf.sprintf 
+                "An invariant might not hold before entering a loop in procedure %s.\n\n%s:\nRelated location: This is the loop invariant that might not hold initially." 
+                (str_of_ident proc_name) (string_of_src_pos pos)
+            else 
+              Printf.sprintf 
+                "An invariant might not be maintained by a loop in procedure %s.\n\n%s:\nRelated location: This is the loop invariant that might not be maintained." 
+                (str_of_ident proc_name) (string_of_src_pos pos)
+          in
           (*let pos = pos_of_expr e in*)
-          convert_spec_form locals e "invariant" None
+          convert_spec_form locals e "invariant" (Some msg)
         )
         contract
     in
@@ -736,7 +746,7 @@ let convert cus =
       | Loop (contract, preb, cond, postb, pos) ->
           let preb_cmd = convert_stmt proc preb in
           let cond = extract_fol_form proc.p_locals cond in
-          let invs = convert_loop_contract proc.p_locals contract in
+          let invs = convert_loop_contract proc.p_name proc.p_locals contract in
           let postb_cmd = convert_stmt proc postb in
           mk_loop_cmd invs preb_cmd cond postb_cmd pos
       | Return (es, pos) ->
@@ -786,7 +796,7 @@ let convert cus =
           | Ensures e -> fun (pre, post) ->
               let mk_msg caller pos =
                  Printf.sprintf 
-                  "A postcondition of %s might not hold at this return point.\n\n%s:\nRelated location: This is the postcondition that might not hold." 
+                  "A postcondition of procedure %s might not hold at this return point.\n\n%s:\nRelated location: This is the postcondition that might not hold." 
                   (str_of_ident proc_name) (string_of_src_pos pos)
               in
               let name = "postcondition of " ^ str_of_ident proc_name in
