@@ -4,7 +4,7 @@ open Form
 
 type idents = ident list
 
-type pos = Programs.source_position
+type pos = Prog.source_position
 
 type name = string
 

@@ -1,5 +1,5 @@
 %{
-open Programs
+open Prog
 open Form
 open SplSyntax
 open Lexing

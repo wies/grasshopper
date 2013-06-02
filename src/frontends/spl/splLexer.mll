@@ -1,5 +1,5 @@
 {
-open Programs
+open Prog
 open SplParser
 open Lexing
 

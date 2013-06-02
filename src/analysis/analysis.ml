@@ -1,6 +1,6 @@
 open Form
 open FormUtil
-open Programs
+open Prog
 
 (** Infer sets of accessed and modified variables *)
 (* Todo: the fix-point loop is brain damaged - rather use a top. sort of the call graph *)
