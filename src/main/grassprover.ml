@@ -61,7 +61,7 @@ let repl input_file =
   let rec loop context =
     ParseError.input := input;
     ParseError.buffer := Some lexbuf;
-    let next_cmnd = ParseGrass.main LexGrass.token lexbuf in
+    let next_cmnd = GrassParser.main GrassLexer.token lexbuf in
     match next_cmnd with
     | Grass.Skip 
     | Grass.DeclareFun _ -> loop context

@@ -1,6 +1,6 @@
 {
 open Form
-open ParseGrass
+open GrassParser
 
 let keyword_table = Hashtbl.create 32
 let _ =
