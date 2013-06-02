@@ -128,7 +128,7 @@ type pred_decl = {
     pred_name : ident; (** predicate name *)
     pred_formals : ident list; (** formal parameter list *)
     pred_locals : var_decl IdMap.t; (** local variables *)
-    pred_body : Sl.form; (** predicate body *)
+    pred_body : spec; (** predicate body *)
     pred_pos : source_position; (** position of declaration *)
   } 
 
@@ -774,7 +774,7 @@ let pr_proc ppf proc =
     then locals
     else (decl.var_is_ghost, (id, decl.var_sort)) :: locals) proc.proc_locals []
   in
-  fprintf ppf "@[<2>procedure@ %a(@[<0>%a@])@]@ @,returns (@[<0>%a@])@ @,locals (@[<0>%a@])@\n%a%a%a@\n"
+  fprintf ppf "@[<2>procedure@ %a(@[<0>%a@])@]@ @,returns (@[<0>%a@])@ @,locals (@[%a@])@\n%a%a%a@\n"
     pr_ident proc.proc_name
     pr_id_srt_list (add_srts proc.proc_formals)
     pr_id_srt_list (add_srts proc.proc_returns)
@@ -788,9 +788,25 @@ let rec pr_procs ppf = function
   | proc :: procs ->
       fprintf ppf "%a@\n%a" pr_proc proc pr_procs procs
 
+let pr_pred ppf pred =
+  let add_srts = List.map (fun id -> 
+    let decl = IdMap.find id pred.pred_locals in
+    (decl.var_is_ghost, (id, decl.var_sort)))
+  in
+  fprintf ppf "@[<2>predicate@ %a(@[<0>%a@])@]@ {@[<1>@\n%a@]@\n}@\n@\n"
+    pr_ident pred.pred_name
+    pr_id_srt_list (add_srts pred.pred_formals)
+    pr_spec_form pred.pred_body
+
+let rec pr_preds ppf = function
+  | [] -> ()
+  | pred :: preds ->
+      fprintf ppf "%a@\n%a" pr_pred pred pr_preds preds
+
 let pr_prog ppf prog =
-  fprintf ppf "%a%a" 
+  fprintf ppf "%a%a%a" 
     pr_var_decls (IdMap.bindings prog.prog_vars)
+    pr_preds (List.map snd (IdMap.bindings prog.prog_preds))
     pr_procs (List.map snd (IdMap.bindings prog.prog_procs))
 
 let print_prog out_ch prog = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_prog prog

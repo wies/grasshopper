@@ -127,10 +127,14 @@ let elim_loops (prog : program) =
           let else_cmd = 
             mk_return_cmd (ids_to_terms returns) loop_end_pos
           in
+          let fls = 
+            mk_spec_form (FOL mk_false) "return after tail-recursive call" None pp.pp_pos 
+          in
           let then_cmd = 
             mk_seq_cmd
               [ postbody;
-                 loop_call loop_end_pos
+                loop_call loop_end_pos;
+                mk_assume_cmd fls loop_end_pos
               ] 
               pp.pp_pos
           in

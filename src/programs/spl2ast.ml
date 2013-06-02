@@ -759,11 +759,12 @@ let convert cus =
     let prog =
       IdMap.fold 
         (fun id decl prog ->
+          let body = extract_sl_form decl.pr_locals decl.pr_body in
           let pred_decl = 
             { pred_name = id;
               pred_formals = decl.pr_formals;
               pred_locals = IdMap.map convert_var_decl decl.pr_locals;
-              pred_body = extract_sl_form decl.pr_locals decl.pr_body ;
+              pred_body = mk_spec_form (SL body) (str_of_ident id) None (pos_of_expr decl.pr_body);
               pred_pos = decl.pr_pos;
             } 
           in
