@@ -44,21 +44,45 @@ module SlMap = Map.Make(struct
     let compare = compare
   end)
 
-let rec to_string f = match f with
-  | Pure p -> Form.string_of_form p
-  | Not t -> "~(" ^ (to_string t) ^")"
-  | And lst -> "(" ^ (String.concat ") && (" (List.map to_string lst)) ^ ")"
-  | Or lst ->  "(" ^ (String.concat ") || (" (List.map to_string lst)) ^ ")"
-  | Atom (Emp, _) -> "emp"
-  | Atom (Cell, [t]) -> 
-     Form.string_of_term t
-  | Atom (Cell, _) -> failwith "Sl.to_string: expected one argument for Cell"
+(** Pretty printing *)
+
+open Format
+
+let rec pr_form ppf = function
+  | Pure p -> Form.pr_form ppf p
+  | Not f -> pr_not ppf f
+  | And fs -> pr_ands ppf fs
+  | Or fs -> pr_ors ppf fs
+  | SepConj fs -> pr_seps ppf fs
+  | Atom (Emp, _) -> fprintf ppf "emp"
+  | Atom (Cell, [t]) -> fprintf ppf "cell(@[%a@])" Form.pr_term t
+  | Atom (Cell, _) -> ()
   | Atom (Pred p, ts) ->
-      Form.str_of_ident p ^ "(" ^ String.concat ", " (List.map Form.string_of_term ts) ^ ")"
-  (*
-  | Spatial (p, [h; a; b]) when p.sym = "ptsTo" && h = fpts -> (Form.string_of_term a) ^ " |-> " ^ (Form.string_of_term b)
-  | Spatial (p, [h; a; b]) when p.sym = "ptsTo" && h = fprev_pts -> (Form.string_of_term a) ^ " |<- " ^ (Form.string_of_term b)
-  | Spatial (s, []) -> s.sym
-  | Spatial (s, args) -> s.sym ^ "(" ^ (String.concat ", " (List.map Form.string_of_term args)) ^ ")"*)
-  | SepConj fs -> "(" ^ (String.concat ") &*& (" (List.map to_string fs)) ^ ")"
+      fprintf ppf "%a(@[%a@])" Form.pr_ident p Form.pr_term_list ts
+
+and pr_seps ppf = function
+  | [] -> fprintf ppf "%s" "emp"
+  | [f] -> fprintf ppf "@[<2>%a@]" pr_form f
+  | (Or _ as f) :: fs 
+  | (And _ as f) :: fs -> fprintf ppf "(@[<2>%a@]) &*&@ %a" pr_form f pr_seps fs
+  | f :: fs -> fprintf ppf "@[<2>%a@] &*&@ %a" pr_form f pr_seps fs
+
+and pr_ands ppf = function
+  | [] -> fprintf ppf "%s" "true"
+  | [f] -> fprintf ppf "@[<2>%a@]" pr_form f
+  | (Or _ as f) :: fs -> fprintf ppf "(@[<2>%a@]) &&@ %a" pr_form f pr_ands fs
+  | f :: fs -> fprintf ppf "@[<2>%a@] &&@ %a" pr_form f pr_ands fs
+
+and pr_ors ppf = function
+  | [] -> fprintf ppf "%s" "false"
+  | [f] -> fprintf ppf "@[<2>%a@]" pr_form f
+  | f :: fs -> fprintf ppf "@[<2>%a@] ||@ %a" pr_form f pr_ors fs
+
+and pr_not ppf = function
+  | (Atom (Emp, _) as f)
+  | (Atom (Pred _, _) as f) -> fprintf ppf "!@[<2>%a@]" pr_form f
+  | f -> fprintf ppf "!(@[<3>%a@])" pr_form f
+
+let string_of_form f = pr_form str_formatter f; flush_str_formatter ()
+
 

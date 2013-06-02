@@ -298,11 +298,18 @@ let oldify_form vars f =
       vars IdMap.empty
   in subst_id subst_map f
 
+let oldify_sl_form vars f =
+  let subst_map = 
+    IdSet.fold (fun var subst_map ->
+      IdMap.add var (oldify var) subst_map)
+      vars IdMap.empty
+  in SlUtil.subst_id subst_map f
+
 let oldify_spec vars sf =
   let old_form =
     match sf.spec_form with
     | FOL f -> FOL (oldify_form vars f)
-    | SL f -> SL f (* todo: oldification for SL formulas *)
+    | SL f -> SL (oldify_sl_form vars f)
   in 
   let old_form_negated = Util.optmap (oldify_form vars) sf.spec_form_negated in
   { sf with 
@@ -647,8 +654,8 @@ let string_of_src_pos pos =
 
 let pr_spec_form ppf sf =
   match sf.spec_form with
-  | SL f -> fprintf ppf "%s" (Sl.to_string f)
-  | FOL f -> pr_form ppf (old_to_fun f)
+  | SL f -> Sl.pr_form ppf f
+  | FOL f -> Form.pr_form ppf (old_to_fun f)
 
 let pr_basic_cmd ppf = function
   | Assign ac -> 

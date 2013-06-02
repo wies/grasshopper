@@ -90,7 +90,7 @@ let to_form pred_to_form set_fct domain f =
     | Or forms ->
         let translated_1, translated_2 = List.split (List.map (process_sep pol d) forms) in
         List.concat translated_1, FormUtil.smk_and translated_2
-    | other -> failwith ("process_sep does not expect " ^ (to_string other))
+    | other -> failwith ("process_sep does not expect " ^ (string_of_form other))
   in
 
   let rec process_bool pol f = match f with

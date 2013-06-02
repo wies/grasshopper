@@ -42,7 +42,7 @@ let heap = fresh_ident "D"
 let compute_sl_sat () =
   (*print_endline "parsing";*)
   let sl = parse_input (fun lexbuf -> ParseSl.main LexSl.token lexbuf) in
-  let _ = Debug.msg ("parsed: " ^ (Sl.to_string sl) ^ "\n") in
+  let _ = Debug.msg ("parsed: " ^ (Sl.string_of_form sl) ^ "\n") in
   let form = ToGrass.to_grass heap sl in
   let _ = if !Debug.verbose then
     begin
@@ -78,7 +78,7 @@ let compute_sl_frame () =
     match res with
     | Some frames ->
       print_endline "frames:";
-      List.iter (fun frame -> print_endline ("  " ^ (Sl.to_string frame))) frames
+      List.iter (fun frame -> print_endline ("  " ^ (Sl.string_of_form frame))) frames
     | None -> print_endline "Error not entailed!"
 
 let _ =

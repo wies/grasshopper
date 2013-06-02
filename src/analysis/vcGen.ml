@@ -113,8 +113,8 @@ let add_to_stack stack subst sign cstr =
 let check_entailment what pre_sl stack post_sl =
   (* TODO less copy-paste with Entails *)
   Debug.msg ("checking VC: " ^ what ^ "\n");
-  Debug.msg ("precondition: " ^ (Sl.to_string pre_sl) ^ "\n");
-  Debug.msg ("postcondition: " ^ (Sl.to_string post_sl) ^ "\n");
+  Debug.msg ("precondition: " ^ (Sl.string_of_form pre_sl) ^ "\n");
+  Debug.msg ("postcondition: " ^ (Sl.string_of_form post_sl) ^ "\n");
   Debug.msg ("stack:\n" ^ (DecisionStack.to_string stack) ^ "\n");
   Debug.msg ("subst:\n" ^ (DecisionStack.subst_to_string (DecisionStack.get_subst stack)) ^ "\n");
   let subst = DecisionStack.get_subst stack in
@@ -145,7 +145,7 @@ let check_entailment what pre_sl stack post_sl =
 let check_grass_entailment what pre_sl stack post_grass =
   (* TODO less copy-paste with Entails *)
   Debug.msg ("checking VC: " ^ what ^ "\n");
-  Debug.msg ("precondition: " ^ (Sl.to_string pre_sl) ^ "\n");
+  Debug.msg ("precondition: " ^ (Sl.string_of_form pre_sl) ^ "\n");
   Debug.msg ("postcondition: " ^ (string_of_form post_grass) ^ "\n");
   Debug.msg ("stack:\n" ^ (DecisionStack.to_string stack) ^ "\n");
   Debug.msg ("subst:\n" ^ (DecisionStack.subst_to_string (DecisionStack.get_subst stack)) ^ "\n");
@@ -247,7 +247,7 @@ let check_procedure proceduresMap name =
    * 3) push sl_2 and use the footprint of sl_1 to update the predicates like alloc
    *)
   let sl_replacement msg pre stack sl_1 subst2 sig2 sl_2 =
-    Debug.msg ("sl_replacement: " ^ (Sl.to_string sl_1) ^ " by " ^ (Sl.to_string sl_2) ^ "\n");
+    Debug.msg ("sl_replacement: " ^ (Sl.string_of_form sl_1) ^ " by " ^ (Sl.string_of_form sl_2) ^ "\n");
     let cmt = str_of_ident name ^ "_" ^ Str.global_replace (Str.regexp " ") "_" msg in
     if not (check_if_frame_exists cmt pre stack sl_1) then
       failwith (msg ^ " may not hold in " ^ (str_of_ident name))
