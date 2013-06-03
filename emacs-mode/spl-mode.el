@@ -38,16 +38,16 @@
    '("\\(//[^\n]*\\)" 1 
      font-lock-comment-face)
 
-   '("\\<\\(if\\|else\\|pr\\(ocedure\\|edicate\\)\\|return\\(s\\|\\)\\|struct\\|var\\|while\\)\\>"
+   '("\\<\\(if\\|else\\|free\\|pr\\(ocedure\\|edicate\\)\\|return\\(s\\|\\)\\|struct\\|var\\|while\\)\\>"
          1 font-lock-keyword-face)
 
    '("\\<\\(ass\\(ert\\|ume\\)\\|ensures\\|invariant\\|requires\\)\\>"
          1 font-lock-spec-face)
 
-   '("\\<\\(f\\(ree\\|orall\\)\\|havoc\\|new\\|exists\\|old\\)\\>"
+   '("\\<\\(forall\\|havoc\\|new\\|exists\\|old\\)\\>"
          1 font-lock-builtin-face)
 
-   '("\\<\\(false\\|true\\|null\\)\\>"
+   '("\\<\\(emp\\|false\\|null\\|true\\)\\>"
          1 font-lock-constant-face)
 
    '("\\(\\<[a-zA-Z_][a-zA-Z0-9_']*[ \t]*\\>\\)(" 1

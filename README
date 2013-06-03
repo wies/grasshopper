@@ -8,7 +8,7 @@ Please let us know if you are planing to use it.
 
 The code written by us is released under a BSD license, see file
 LICENSE. GRASShopper uses a union-find data structure that is written
-by Jean-Christophe Filliatre and released under a LGPL license.
+by Jean-Christophe Filliatre and is released under an LGPL license.
 
 Required:
 - OCaml, version >= 3.12

@@ -146,7 +146,7 @@ var_decls:
 ;
 
 var_decl_list:
-| COMMA var_decl var_decls { $2 :: $3 }
+| COMMA var_decl var_decl_list { $2 :: $3 }
 | /* empty */ { [] }
 ;
 
@@ -211,6 +211,18 @@ block:
 ;
 
 stmt:
+| stmt_wo_trailing_substmt { $1 }
+| if_then_stmt { $1 }
+| if_then_else_stmt { $1 }
+| while_stmt { $1 }
+
+stmt_no_short_if:
+| stmt_wo_trailing_substmt { $1 }
+| if_then_else_stmt_no_short_if  { $1 }
+| while_stmt_no_short_if  { $1 }
+
+
+stmt_wo_trailing_substmt:
 /* variable declaration */
 | VAR var_decls SEMICOLON { LocalVars ($2, mk_position 1 3) }
 /* nested block */
@@ -221,8 +233,12 @@ stmt:
 | DISPOSE expr SEMICOLON { 
   Dispose ($2, mk_position 1 3)
 }
+/* procedure call */
+| proc_call SEMICOLON {
+  Assign ([], [$1], mk_position 1 1)
+}
 /* assignment */
-| expr_list COLONEQ expr_list SEMICOLON {
+| assign_lhs_list COLONEQ expr_list SEMICOLON {
   Assign ($1, $3, mk_position 1 4)
 }
 /* havoc */
@@ -237,23 +253,49 @@ stmt:
 | ASSERT expr SEMICOLON { 
   Assert ($2, mk_position 1 3)
 }
-/* if-then-else */
-| IF LPAREN expr RPAREN stmt ELSE stmt { 
-  If ($3, $5, $7, mk_position 1 7)
-}
-/* if-then 
-| IF LPAREN expr RPAREN stmt  { 
-  If ($3, $5, Skip dummy_position, mk_position 1 6)
-}*/
-/* while loop */
-| WHILE LPAREN expr RPAREN loop_contracts stmt {
-  Loop ($5, Skip dummy_position, $3, $6, mk_position 1 6)
-} 
 /* return */
 | RETURN expr_list_opt SEMICOLON { 
   Return ($2, mk_position 1 3)
 }
 ;
+
+assign_lhs_list:
+| assign_lhs COMMA assign_lhs_list { $1 :: $3 }
+| assign_lhs { [$1] }
+;
+
+assign_lhs:
+| ident { $1 }
+| field_access { $1 }
+;
+
+if_then_stmt:
+| IF LPAREN expr RPAREN stmt  { 
+  If ($3, $5, Skip dummy_position, mk_position 1 6)
+}
+;
+
+if_then_else_stmt:
+| IF LPAREN expr RPAREN stmt_no_short_if ELSE stmt { 
+  If ($3, $5, $7, mk_position 1 7)
+}
+;
+
+if_then_else_stmt_no_short_if:
+| IF LPAREN expr RPAREN stmt_no_short_if ELSE stmt_no_short_if { 
+  If ($3, $5, $7, mk_position 1 7)
+}
+;
+
+while_stmt:
+| WHILE LPAREN expr RPAREN loop_contracts stmt {
+  Loop ($5, Skip dummy_position, $3, $6, mk_position 1 6)
+} 
+
+while_stmt_no_short_if:
+| WHILE LPAREN expr RPAREN loop_contracts stmt_no_short_if {
+  Loop ($5, Skip dummy_position, $3, $6, mk_position 1 6)
+} 
 
 loop_contracts:
 | loop_contract loop_contracts { $1 :: $2 }
@@ -279,11 +321,16 @@ alloc:
 proc_call:
 | IDENT LPAREN expr_list_opt RPAREN { ProcCall (($1, 0), $3, mk_position 1 4) }
 
+ident: 
+| IDENT { Ident (($1, 0), mk_position 1 1) }
+
+field_access:
+| unary_expr DOT IDENT { Dot ($1, ($3, 0), mk_position 1 3) }
 
 unary_expr:
 | primary { $1 }
-| unary_expr DOT IDENT { Dot ($1, ($3, 0), mk_position 1 3) }
-| IDENT { Ident (($1, 0), mk_position 1 1) }
+| ident { $1 }
+| field_access { $1 }
 | PLUS unary_expr { UnaryOp (OpPlus, $2, mk_position 1 2) }
 | MINUS unary_expr { UnaryOp (OpMinus, $2, mk_position 1 2) }
 | unary_expr_not_plus_minus { $1 }

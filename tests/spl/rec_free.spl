@@ -1,0 +1,19 @@
+struct Node {
+  var next: Node;
+}
+
+predicate lseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& lseg(x.next, y)
+}
+
+procedure rec_free(lst: Node)
+  requires lseg(lst, null);
+  ensures emp;
+{
+  if (lst != null) {
+    var n: Node;
+    n := lst.next;
+    free(lst);
+    rec_free(n);
+  }
+}

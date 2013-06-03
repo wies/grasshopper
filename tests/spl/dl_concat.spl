@@ -1,0 +1,27 @@
+struct Node {
+  var next: Node;
+  var prev: Node;
+}
+
+predicate dlseg(x: Node, u: Node, y: Node, v: Node) {
+  x == y && u == v || 
+  x != y &*& x.prev == u &*& x &*& dlseg(x.next, x, y, v)
+}
+
+
+procedure dl_concat(start1: Node, end1: Node, start2: Node, end2: Node) 
+returns (start: Node, end: Node)
+  requires dlseg(start1, null, null, end1);
+  requires dlseg(start2, null, null, end2);
+  ensures dlseg(start, null, null, end);
+{
+  if (start2 == null) {
+    return start1, end1;
+  } else if (start1 == null) {
+    return start2, end2;
+  } else {
+    end1.next := start2;
+    start2.prev := end1;
+    return start1, end2;
+  }
+}
