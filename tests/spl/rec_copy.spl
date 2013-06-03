@@ -1,0 +1,31 @@
+struct Node {
+  var next: Node;
+}
+
+predicate lseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& lseg(x.next, y)
+}
+
+procedure copy1(curr: Node, cp: Node) returns (res: Node)
+  requires lseg(cp, null) &*& lseg(curr, null);
+  ensures  lseg(res, null) &*& lseg(curr, null);
+{
+  if (curr == null) {
+    return cp;
+  } else {
+    var old_cp: Node, n: Node;
+    old_cp := cp;
+    cp := new Node;
+    cp.next := old_cp;
+    n := curr.next;
+    res := copy1(n, cp);
+    return res;
+  }
+}
+
+procedure rec_copy(lst: Node) returns (res: Node)
+  requires lseg(lst, null);
+  ensures lseg(lst, null) &*& lseg(res, null);
+{
+  return copy1(lst, null);
+}
