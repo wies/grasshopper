@@ -239,23 +239,33 @@ let elim_sl prog =
     let returns = init_alloc_id :: alloc_id :: proc.proc_returns in
     let formals = frame_id :: proc.proc_formals in
     let convert_sl_form sfs name =
-      let fs, aux = 
-        List.fold_right (fun sf (fs, aux) -> 
+      let fs, aux, kind = 
+        List.fold_right (fun sf (fs, aux, kind) -> 
+          let new_kind = 
+            match kind with
+            | Free -> sf.spec_kind
+            | k -> k
+          in
           match sf.spec_form, aux with
-          | SL f, None -> f :: fs, Some (sf.spec_name, sf.spec_msg, sf.spec_pos)
+          | SL f, None -> 
+              f :: fs, 
+              Some (sf.spec_name, sf.spec_msg, sf.spec_pos),
+              new_kind
           | SL f, Some (_, _, p) -> 
-              f :: fs, Some (sf.spec_name, sf.spec_msg, merge_src_positions p sf.spec_pos)
-          | _ -> fs, aux)
-          sfs ([], None)
+              f :: fs, 
+              Some (sf.spec_name, sf.spec_msg, merge_src_positions p sf.spec_pos),
+              new_kind
+          | _ -> fs, aux, kind)
+          sfs ([], None, Free)
       in
       let name, msg, pos = Util.safe_unopt (name, None, dummy_position) aux in
-      SlUtil.mk_sep_lst fs, name, msg, pos
+      SlUtil.mk_sep_lst fs, kind, name, msg, pos
     in
     (* compile SL precondition *)
     let sl_precond, other_precond = List.partition is_sl_spec proc.proc_precond in
     let precond, footprint =
       let name = "precondition of " ^ str_of_ident proc.proc_name in
-      let f, name, msg, pos = convert_sl_form sl_precond name in
+      let f, _, name, msg, pos = convert_sl_form sl_precond name in
       let f_in_frame = ToGrass.to_grass_contained frame_id f in
       let f_notin_frame = ToGrass.to_grass_not_contained frame_id f in
       let f_eq_init_alloc = ToGrass.to_grass init_alloc_id f in
@@ -271,11 +281,14 @@ let elim_sl prog =
     let sl_postcond, other_postcond = List.partition is_sl_spec proc.proc_postcond in
     let postcond =
       let name = "postcondition of " ^ str_of_ident proc.proc_name in
-      let f, name, msg, pos = convert_sl_form sl_postcond name in
+      let f, kind, name, msg, pos = convert_sl_form sl_postcond name in
       let f_eq_alloc = ToGrass.to_grass alloc_id f in
       let f_neq_alloc = ToGrass.to_grass_negated alloc_id f in
       let postcond = mk_spec_form (FOL f_eq_alloc) name msg pos in
-      { postcond with spec_form_negated = Some f_neq_alloc }
+      { postcond with 
+        spec_kind = kind;
+        spec_form_negated = Some f_neq_alloc;
+      }
     in
     (* generate frame condition *) 
     let framecond = 

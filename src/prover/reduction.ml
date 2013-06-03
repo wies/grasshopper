@@ -112,6 +112,8 @@ let reduce_exists =
     let _ = print_forms stdout [f2] in*)
     skolemize f2
 
+(** Hoist all universally quantified subformulas to top level.
+ ** Assumes that formulas fs are in negation normal form *)
 let factorize_axioms fs =
   let rec extract f axioms = 
     match f with
@@ -125,16 +127,17 @@ let factorize_axioms fs =
     | BoolOp (op, fs) -> 
 	let fs1, axioms = 
 	  List.fold_right 
-	    (fun f (fs1, axioms) ->
-	      let f1, axioms1 = extract f axioms in 
+	    (fun f (fs1, axioms) ->	      
+              let f1, axioms1 = extract f axioms in 
 	      f1 :: fs1, axioms1)
 	    fs ([], axioms)
 	in 
 	BoolOp (op, fs1), axioms
     | f -> f, axioms
   in
-  let process (axioms, fs1) f = match f with
-    | Binder (Forall, _, _, _) -> f :: fs1, axioms
+  let process (axioms, fs1) f = 
+    match f with
+    | Binder (Forall, _ :: _, _, _) -> f :: fs1, axioms
     | _ -> 
         let f1, axioms1 = extract f axioms in
         f1 :: fs1, axioms1
@@ -491,10 +494,10 @@ let reduce f =
   let fs1 = split_ands [] [f1] in
   let fs2 = reduce_frame fs1 in
   let fs2 = List.map reduce_exists fs2 in
-  let fs21 = factorize_axioms (split_ands [] fs2) in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
-  let fs3, ep_axioms, gts = reduce_ep fs21 in
-  let fs4, gts1 = reduce_sets (fs3 @ ep_axioms) gts in
+  let fs3, ep_axioms, gts = reduce_ep fs2 in
+  let fs31 = factorize_axioms (split_ands [] fs3) in
+  let fs4, gts1 = reduce_sets (fs31 @ ep_axioms) gts in
   let fs5, gts2 = reduce_reach fs4 gts1 in
   let fs6 = fs5 (*reduce_remaining fs5 gts2*) in
   (* the following is a (probably stupid) heuristic to sort the formulas for improving the running time *)
