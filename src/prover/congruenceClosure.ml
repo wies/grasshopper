@@ -208,9 +208,10 @@ class dag = fun expr ->
 
     method add_constr eq = match eq with
       | Atom (App (Eq, [e1; e2], _)) ->
-	  let n1 = self#get_node e1 in
-          let n2 = self#get_node e2 in
-          n1#merge n2
+          if FormUtil.sort_of e1 <> Some Bool then 
+	    let n1 = self#get_node e1 in
+            let n2 = self#get_node e2 in
+            n1#merge n2
       | _ -> failwith "UIF: 'add_constr' only for Eq"
 
     (** Gets a list of list of equal expressions (connected components). *)
@@ -244,11 +245,15 @@ class dag = fun expr ->
 
 let congr_classes fs gterms =
   let cc_graph = new dag (TermSet.elements gterms) in
-  List.iter
-    (fun f -> match f with
-    | Atom (App (Eq, _, _)) -> cc_graph#add_constr f
-    | _ -> () )
-    fs;
+  let rec add = function
+    | Binder (_, [], f, _) :: fs -> add (f :: fs)
+    | BoolOp (And, fs1) :: fs -> add (fs1 @ fs)
+    | (Atom (App (Eq, _, _)) as f) :: fs -> 
+        cc_graph#add_constr f; add fs
+    | _ :: fs -> add fs
+    | [] -> ()
+  in
+  add fs;
   cc_graph#get_cc
 
 let class_of t classes = List.find (List.mem t) classes

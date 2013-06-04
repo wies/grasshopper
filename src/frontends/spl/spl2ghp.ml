@@ -274,13 +274,13 @@ let flatten_exprs cus =
   let fe cu =
     let rec flatten_expr aux locals = function
       | New (id, pos) as e ->
-          let aux_id, locals1 = decl_aux_var "tmp" (StructType id) pos locals in
+          let aux_id, locals = decl_aux_var "tmp" (StructType id) pos locals in
           let aux_var = Ident (aux_id, pos) in
           let alloc = Assign ([aux_var], [e], pos) in
-          aux_var, alloc :: aux, locals1
+          aux_var, alloc :: aux, locals
       | Dot (e, id, pos) ->
-          let e1, aux1, locals1 = flatten_expr aux locals e in
-          Dot (e1, id, pos), aux1, locals1
+          let e1, aux1, locals = flatten_expr aux locals e in
+          Dot (e1, id, pos), aux1, locals
       | ProcCall (id, args, pos) ->
           let pdecl = IdMap.find id cu.proc_decls in
           let res_type = 
@@ -292,27 +292,27 @@ let flatten_exprs cus =
                 ProgError.error pos 
                   ("Procedure " ^ fst pdecl.p_name ^ " has more than one return value")
           in
-          let aux_id, locals1 = decl_aux_var "tmp" res_type pos locals in
-          let args1, aux1, locals1 = 
+          let aux_id, locals = decl_aux_var "tmp" res_type pos locals in
+          let args1, aux1, locals = 
             List.fold_right 
-              (fun arg (args1, aux1, locals1) ->
-                let arg1, aux1, locals1 = flatten_expr aux1 locals1 arg in
-                arg1 :: args1, aux1, locals1
+              (fun arg (args1, aux1, locals) ->
+                let arg1, aux1, locals = flatten_expr aux1 locals arg in
+                arg1 :: args1, aux1, locals
               ) args ([], aux, locals)
           in
           let aux_var = Ident (aux_id, pos) in
           let call = Assign ([aux_var], [ProcCall (id, args1, pos)], pos) in
-          aux_var, (aux1 @ [call]), locals1 
+          aux_var, (aux1 @ [call]), locals
       | PredApp (init_id, args, pos) as e->
           List.iter check_side_effects args;
           e, aux, locals
       | UnaryOp (op, e, pos) ->
-          let e1, aux1, locals1 = flatten_expr aux locals e in
-          UnaryOp (op, e1, pos), aux1, locals1
+          let e1, aux1, locals = flatten_expr aux locals e in
+          UnaryOp (op, e1, pos), aux1, locals
       | BinaryOp (e1, op, e2, pos) ->
-          let e21, aux1, locals1 = flatten_expr aux locals e2 in
-          let e11, aux2, locals2 = flatten_expr aux1 locals1 e1 in
-          BinaryOp (e11, op, e21, pos), aux2, locals2
+          let e21, aux1, locals = flatten_expr aux locals e2 in
+          let e11, aux2, locals = flatten_expr aux1 locals e1 in
+          BinaryOp (e11, op, e21, pos), aux2, locals
       | e -> e, aux, locals
     in
     let rec flatten locals returns = function
@@ -333,91 +333,91 @@ let flatten_exprs cus =
           check_side_effects e;
           stmt, locals
       | Assign (lhs, [ProcCall (id, args, cpos)], pos) ->
-          let args1, aux1, locals1 = 
+          let args1, aux1, locals = 
             List.fold_right 
               (fun e (es, aux, locals) ->
-                let e1, aux1, locals1 = flatten_expr aux locals e in
-                e1 :: es, aux1, locals1
+                let e1, aux1, locals = flatten_expr aux locals e in
+                e1 :: es, aux1, locals
               ) 
               args ([], [], locals)
           in 
-          let lhs1, aux2, locals2 = 
+          let lhs1, aux2, locals = 
             List.fold_right 
               (fun e (es, aux, locals) ->
-                let e1, aux1, locals1 = flatten_expr aux locals e in
-                e1 :: es, aux1, locals1
+                let e1, aux1, locals = flatten_expr aux locals e in
+                e1 :: es, aux1, locals
               ) 
-              lhs ([], aux1, locals1)
+              lhs ([], aux1, locals)
           in 
-          mk_block pos (aux2 @ [Assign (lhs1, [ProcCall (id, args1, cpos)], pos)]), locals1
+          mk_block pos (aux2 @ [Assign (lhs1, [ProcCall (id, args1, cpos)], pos)]), locals
       | Assign (lhs, rhs, pos) ->
-          let rhs1, aux1, locals1 = 
+          let rhs1, aux1, locals = 
             List.fold_right 
               (fun e (es, aux, locals) ->
-                let e1, aux1, locals1 = flatten_expr aux locals e in
-                e1 :: es, aux1, locals1
+                let e1, aux1, locals = flatten_expr aux locals e in
+                e1 :: es, aux1, locals
               ) 
               rhs ([], [], locals)
           in 
-          let lhs1, aux2, locals2 = 
+          let lhs1, aux2, locals = 
             List.fold_right 
               (fun e (es, aux, locals) ->
-                let e1, aux1, locals1 = flatten_expr aux locals e in
-                e1 :: es, aux1, locals1
+                let e1, aux1, locals = flatten_expr aux locals e in
+                e1 :: es, aux1, locals
               ) 
-              lhs ([], aux1, locals1)
+              lhs ([], aux1, locals)
           in 
-          mk_block pos (aux2 @ [Assign (lhs1, rhs1, pos)]), locals1
+          mk_block pos (aux2 @ [Assign (lhs1, rhs1, pos)]), locals
       | Dispose (e, pos) -> 
-          let e1, aux, locals1 = flatten_expr [] locals e in
+          let e1, aux, locals = flatten_expr [] locals e in
           mk_block pos (aux @ [Dispose (e1, pos)]), locals
       | Havoc (es, pos) -> 
-          let es1, aux1, locals1 = 
+          let es1, aux1, locals = 
             List.fold_right 
               (fun e (es, aux, locals) ->
                 let e1, aux1, locals1 = flatten_expr aux locals e in
-                e1 :: es, aux1, locals1
+                e1 :: es, aux1, locals
               ) 
               es ([], [], locals)
           in 
           mk_block pos (aux1 @ [Havoc (es1, pos)]), locals          
       | If (cond, t, e, pos) ->
-          let cond1, aux, locals1 = flatten_expr [] locals cond in
-          let t1, locals2 = flatten locals1 returns t in
-          let e1, locals3 = flatten locals2 returns e in
-          mk_block pos (aux @ [If (cond1, t1, e1, pos)]), locals3
+          let cond1, aux, locals = flatten_expr [] locals cond in
+          let t1, locals = flatten locals returns t in
+          let e1, locals = flatten locals returns e in
+          mk_block pos (aux @ [If (cond1, t1, e1, pos)]), locals
       | Loop (inv, preb, cond, postb, pos) ->
           let _ = 
             List.iter 
               (function Invariant e -> check_side_effects e)
               inv
           in
-          let preb1, locals1 = flatten locals returns preb in
-          let cond1, aux, locals2 = flatten_expr [] locals1 cond in
-          let postb1, locals3 = flatten locals2 returns postb in
+          let preb1, locals = flatten locals returns preb in
+          let cond1, aux, locals2 = flatten_expr [] locals cond in
+          let postb1, locals = flatten locals returns postb in
           Loop (inv, mk_block pos ([preb1] @ aux), cond1, postb1, pos), locals
       | Return ([ProcCall (id, args, cpos)], pos) ->
-          let args1, aux1, locals1 = 
+          let args1, aux1, locals = 
             List.fold_right 
               (fun e (es, aux, locals) ->
-                let e1, aux1, locals1 = flatten_expr aux locals e in
-                e1 :: es, aux1, locals1
+                let e1, aux1, locals = flatten_expr aux locals e in
+                e1 :: es, aux1, locals
               ) 
               args ([], [], locals)
           in 
           let rts = List.map (fun id -> Ident (id, cpos)) returns in
           Block ([Assign (rts, [ProcCall (id, args1, cpos)], pos); 
-                  Return (rts, pos)], pos), locals1
+                  Return (rts, pos)], pos), locals
       | Return (es, pos) ->
-          let es1, aux1, locals1 = 
+          let es1, aux1, locals = 
             List.fold_right 
               (fun e (es, aux, locals) ->
-                let e1, aux1, locals1 = flatten_expr aux locals e in
-                e1 :: es, aux1, locals1
+                let e1, aux1, locals = flatten_expr aux locals e in
+                e1 :: es, aux1, locals
               ) 
               es ([], [], locals)
           in 
-          mk_block pos (aux1 @ [Return (es1, pos)]), locals1
+          mk_block pos (aux1 @ [Return (es1, pos)]), locals
     in
     let procs =
       IdMap.fold

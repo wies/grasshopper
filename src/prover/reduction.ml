@@ -442,13 +442,24 @@ let reduce_reach fs gts =
   let classes2 = CongruenceClosure.congr_classes (fs1 @ read_write_ax1) gts1 in
   (* instantiate the variables of sort Fld in all reachability axioms *)
   let basic_reach_flds = 
-    fold_terms (fun flds -> function
-      | App (ReachWO, Var _ :: _, _)
-      | App (Btwn, Var _ :: _, _) -> flds
-      | App (ReachWO, fld :: _, _) 
-      | App (Btwn, fld :: _, _) -> TermSet.union (partition_of fld) flds
-      | _ -> flds)
-      TermSet.empty (smk_and fs1)
+    let basic0 =
+      fold_terms (fun flds -> function
+        | App (ReachWO, Var _ :: _, _)
+        | App (Btwn, Var _ :: _, _) -> flds
+        | App (ReachWO, fld :: _, _) 
+        | App (Btwn, fld :: _, _) -> TermSet.union (partition_of fld) flds
+        | _ -> flds)
+        TermSet.empty (smk_and fs1)
+    in
+    let rec filter_writes basic = function
+      (*| Binder (_, [], f, _) -> filter_writes basic f
+      | BoolOp (And, fs) -> List.fold_left filter_writes basic fs
+      | Atom (App (Eq, [App (Write, _, _); fld], _))
+      | Atom (App (Eq, [fld; App (Write, _, _)], _)) ->
+          TermSet.remove fld basic*)
+      | _ -> basic
+    in
+    List.fold_left filter_writes basic0 fs1
   in
   let reach_write_ax = 
     TermSet.fold (fun t write_ax ->

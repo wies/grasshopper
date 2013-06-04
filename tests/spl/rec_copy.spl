@@ -6,7 +6,7 @@ predicate lseg(x: Node, y: Node) {
   x == y || x != y &*& x &*& lseg(x.next, y)
 }
 
-procedure copy1(curr: Node, cp: Node) returns (res: Node)
+procedure rec_copy_loop(curr: Node, cp: Node) returns (res: Node)
   requires lseg(cp, null) &*& lseg(curr, null);
   ensures  lseg(res, null) &*& lseg(curr, null);
 {
@@ -18,7 +18,7 @@ procedure copy1(curr: Node, cp: Node) returns (res: Node)
     cp := new Node;
     cp.next := old_cp;
     n := curr.next;
-    return copy1(n, cp);
+    return rec_copy_loop(n, cp);
   }
 }
 
@@ -26,5 +26,5 @@ procedure rec_copy(lst: Node) returns (res: Node)
   requires lseg(lst, null);
   ensures lseg(lst, null) &*& lseg(res, null);
 {
-  return copy1(lst, null);
+  return rec_copy_loop(lst, null);
 }

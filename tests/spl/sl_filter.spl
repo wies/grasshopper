@@ -6,15 +6,16 @@ predicate lseg(x: Node, y: Node) {
   x == y || x != y &*& x &*& lseg(x.next, y)
 }
 
-procedure filter(x: Node)
+procedure filter(x: Node) returns (res: Node)
   requires lseg(x, null);
-  ensures lseg(x, null);
+  ensures lseg(res, null);
 {
   var prv: Node, curr: Node;
   prv := null;
   curr := x;
+  res := x;
   while (curr != null) 
-    invariant lseg(x, prv) &*& prv.next |-> curr || prv == null &*& x == curr;
+    invariant lseg(res, prv) &*& prv.next |-> curr || prv == null &*& res == curr;
     invariant lseg(curr, null);
   {
     var old_curr: Node;
@@ -25,9 +26,9 @@ procedure filter(x: Node)
       if (prv != null) {
         prv.next := old_curr.next;
       } else {
-        x := old_curr.next;
+        res := old_curr.next;
       }
-      free(old_curr);
+      free old_curr;
     } else {
       prv := old_curr;
     }
