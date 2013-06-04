@@ -1,0 +1,26 @@
+struct Node {
+  var next: Node;
+}
+
+predicate lseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& lseg(x.next, y)
+}
+
+procedure rec_filter(x: Node) returns (res: Node)
+  requires lseg(x, null);
+  ensures lseg(res, null);
+{
+  var n1: Node, n2: Node;
+  var nondet: bool;
+  if (x == null) return x;
+  else if (nondet) {
+    n1 := x.next;
+    n2 := rec_filter(n1);
+    x.next := n2;
+    return x;
+  } else {
+    n1 := x.next;
+    free(x);
+    return rec_filter(n1);
+  }
+}

@@ -27,7 +27,7 @@ procedure filter(x: Node)
       } else {
         x := old_curr.next;
       }
-      free old_curr;
+      free(old_curr);
     } else {
       prv := old_curr;
     }

@@ -18,8 +18,7 @@ procedure copy1(curr: Node, cp: Node) returns (res: Node)
     cp := new Node;
     cp.next := old_cp;
     n := curr.next;
-    res := copy1(n, cp);
-    return res;
+    return copy1(n, cp);
   }
 }
 

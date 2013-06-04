@@ -1,0 +1,29 @@
+struct Node {
+  var next: Node;
+}
+
+predicate lseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& lseg(x.next, y)
+}
+
+procedure insert(lst: Node, elt: Node) returns (res: Node)
+  requires lseg(lst, null) &*& elt.next |-> null;
+  ensures lseg(res, null);
+{
+  if (lst == null)
+    return elt;
+  else {
+    var nondet: bool;
+    var curr: Node;
+    curr := lst;
+    while (nondet && curr.next != null) 
+      invariant curr != null &*& lseg(lst, curr) &*& lseg(curr, null);
+    {
+      havoc nondet;
+      curr := curr.next;
+    }
+    elt.next := curr.next;
+    curr.next := elt;
+    return lst;
+  }
+}

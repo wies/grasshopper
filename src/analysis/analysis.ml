@@ -100,12 +100,12 @@ let elim_loops (prog : program) =
               IdMap.add init_id init_decl locals
             )
             return_decls (IdMap.empty, [], locals)
-        in            
-        let ids_to_terms ids =
-          List.map (fun id ->
-            let decl = IdMap.find id locals in
-            mk_free_const ~srt:decl.var_sort id) ids
+        in    
+        let id_to_term id =
+          let decl = IdMap.find id locals in
+          mk_free_const ~srt:decl.var_sort id
         in
+        let ids_to_terms ids = List.map id_to_term ids in
         let loop_call pos = 
           let pp_call = 
             { pp_pos = pos; 
@@ -143,13 +143,31 @@ let elim_loops (prog : program) =
             ]
             pp.pp_pos
         in
+        (* loop exit condition *)
         let loop_exit =
           let name = "loop exit condition of " ^ (str_of_ident proc_name) in
           mk_free_spec_form (FOL (mk_not lc.loop_test)) name None loop_end_pos
         in
+        (* frame conditions for non-modified locals *)          
+        let framecond =
+          List.fold_left2 
+            (fun frames id init_id ->
+              if IdSet.mem id pp.pp_modifies 
+              then frames
+              else 
+                let f = mk_eq (id_to_term id) (id_to_term init_id) in
+                mk_free_spec_form (FOL f) 
+                  ("framecondition of " ^ str_of_ident proc_name) 
+                  None pp.pp_pos :: frames
+            )
+            [] returns formals
+        in
         let postcond =
           loop_exit :: 
+          (* invariant *)
           List.map (fun sf -> { sf with spec_kind = Free }) lc.loop_inv
+          (* framecondition *)
+          @ framecond
         in
         let loop_proc = 
           { proc_name = proc_name;

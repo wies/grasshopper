@@ -1,0 +1,18 @@
+struct Node {
+  var next: Node;
+}
+
+predicate lseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& lseg(x.next, y)
+}
+
+procedure rec_traverse(lst: Node)
+  requires lseg(lst, null);
+  ensures lseg(lst, null);
+{
+  if (lst != null) {
+    var n: Node;
+    n := lst.next;
+    rec_traverse(n);
+  }
+}

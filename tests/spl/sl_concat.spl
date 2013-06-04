@@ -1,0 +1,26 @@
+struct Node {
+  var next: Node;
+}
+
+predicate lseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& lseg(x.next, y)
+}
+
+procedure concat(a: Node, b: Node) returns (res: Node)
+  requires lseg(a, null) &*& lseg(b, null);
+  ensures lseg(res, null);
+{
+  if (a == null) {
+    return b;
+  } else {
+    var curr: Node;
+    curr := a;
+    while (curr.next != null) 
+      invariant curr != null &*& lseg(a, curr) &*& lseg(curr, null);
+    {
+      curr := curr.next; 
+    }
+    curr.next := b;
+    return a;
+  }
+}
