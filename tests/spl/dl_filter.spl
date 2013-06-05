@@ -1,0 +1,41 @@
+struct Node {
+  var next: Node;
+  var prev: Node;
+}
+
+predicate dlseg(x: Node, u: Node, y: Node, v: Node) {
+  x == y && u == v || 
+  x != y &*& x.prev == u &*& x &*& dlseg(x.next, x, y, v)
+}
+
+procedure dl_filter(a: Node, b: Node) returns (c: Node, d: Node)
+    requires dlseg(a, null, null, b);
+    ensures dlseg(c, null, null, d);
+{
+  var prv: Node, curr: Node;
+  c, d := a, b;
+  prv := null;
+  curr := c;
+  while (curr != null) 
+    invariant dlseg(c, null, curr, prv) &*& dlseg(curr, prv, null, d);
+  { 
+    var nondet: bool, old_curr: Node;
+    old_curr := curr;
+    curr := curr.next;
+    if (nondet) {
+      if (prv != null) {
+        prv.next := curr;
+      } else {
+        c := curr;
+      }
+      if (curr != null) {
+        curr.prev := prv;
+      } else {
+        d := prv;
+      }
+      free old_curr;
+    } else {
+      prv := old_curr;
+    }
+  }
+}

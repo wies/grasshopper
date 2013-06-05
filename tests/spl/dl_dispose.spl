@@ -1,0 +1,24 @@
+struct Node {
+  var next: Node;
+  var prev: Node;
+}
+
+predicate dlseg(x: Node, u: Node, y: Node, v: Node) {
+  x == y && u == v || 
+  x != y &*& x.prev == u &*& x &*& dlseg(x.next, x, y, v)
+}
+
+procedure dl_dispose(a: Node, b: Node)
+    requires dlseg(a, null, null, b);
+    ensures emp;
+{
+  var prv: Node;
+  prv := null;
+  while (a != null) 
+    invariant dlseg(a, prv, null, b);
+  {
+    prv := a;
+    a := a.next; 
+    free prv;
+  }
+}

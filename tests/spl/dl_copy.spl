@@ -1,0 +1,37 @@
+struct Node {
+  var next: Node;
+  var prev: Node;
+}
+
+predicate dlseg(x: Node, u: Node, y: Node, v: Node) {
+  x == y && u == v || 
+  x != y &*& x.prev == u &*& x &*& dlseg(x.next, x, y, v)
+}
+
+procedure dl_copy(a: Node, b: Node) returns (c: Node, d: Node)
+    requires dlseg(a, null, null, b);
+    ensures dlseg(a, null, null, b) &*& dlseg(c, null, null, d);
+{
+  c, d := null, null;
+  var curr: Node, old_curr: Node;
+  curr := a;
+  old_curr := null;
+  while (curr != null) 
+    invariant dlseg(a, null, curr, old_curr);
+    invariant dlseg(curr, old_curr, null, b);
+    invariant dlseg(c, null, null, d);
+  {
+    var old_d: Node;
+    old_curr := curr;
+    old_d := d;
+    d := new Node;
+    d.next := null;
+    d.prev := old_d;
+    if (old_d != null) {
+      old_d.next := d;
+    } else {
+      c := d;
+    }
+    curr := curr.next;
+  }
+}
