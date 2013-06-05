@@ -95,9 +95,9 @@ form:
       (match $3 with 
       | [s; t] -> mk_subseteq s t
       | _ -> failwith ("Parse error: expected two arguments for " ^ (str_of_symbol $2)))
-  | ReachWO ->
+  | Btwn ->
       (match $3 with 
-      | [f; s; t; u] -> mk_reachwo f s t u
+      | [f; s; t; u] -> mk_btwn f s t u
       | _ -> failwith ("Parse error: expected 4 arguments for " ^ (str_of_symbol $2)))
   | Frame ->
       (match $3 with 

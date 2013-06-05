@@ -46,9 +46,9 @@ method length(x)
     return i;
 }
 
-method take(x, n, y)
-    requires lseg(x, null) * y == null;
-    ensures lseg(x, null) * lseg(y, null);
+method take(x, n)
+    requires lseg(x, null);
+    ensures lseg(x, null) * lseg(returned, null);
 {
     y := x;
     while (y != null && n > 1)
@@ -62,6 +62,7 @@ method take(x, n, y)
         y := y.next;
         tmp.next := null;
     }
+    return y;
 }
 
 method merge_sort(lst)
@@ -73,8 +74,7 @@ method merge_sort(lst)
     } else {
         n := length(lst);
         n2 := n / 2;
-        lst2 := null;
-        take(lst, n2, lst2);
+        lst2 := take(lst, n2);
         //assert lseg(lst, null) * lseg(lst2, null);
         a := merge_sort(lst);
         //assert slseg(a, null) * lseg(lst2, null);

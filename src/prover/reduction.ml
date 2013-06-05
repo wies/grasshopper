@@ -219,16 +219,8 @@ let reduce_frame fs =
       let replacement_reach =
         let ep v = mk_ep f x v in
         let reachwo_f = Axioms.reachwo_Fld f in
-        let reach_f x y z = 
-          if !Config.use_btwn 
-          then mk_btwn f x z y
-          else mk_reachwo f x y z 
-        in
-        let reach_f' x y z = 
-          if !Config.use_btwn 
-          then mk_btwn f' x z y
-          else mk_reachwo f' x y z 
-        in
+        let reach_f x y z = mk_btwn f x z y in
+        let reach_f' x y z = mk_btwn f' x z y in
         let open Axioms in
         [mk_axiom "reach_frame1"
            (mk_implies
@@ -337,7 +329,16 @@ let reduce_sets fs gts =
  ** assumes that f is typed and that all frame predicates have been reduced *)
 let reduce_ep fs =
   let gts = TermSet.add mk_null (ground_terms (mk_and fs)) in
-  let loc_gts = TermSet.filter (has_sort Loc) gts in
+  let loc_gts = 
+    List.fold_left 
+      (fold_terms 
+         (fun acc -> function
+           | App (Btwn, [fld; x; y; z], _) -> 
+               if TermSet.mem x gts then TermSet.add x acc else acc
+           | _ -> acc))
+      TermSet.empty fs
+    (*TermSet.filter (has_sort Loc) gts*)
+  in
   (* generate ep terms *)
   let rec get_ep_terms eps = function
     | App (EntPnt, ts, _) as t -> List.fold_left get_ep_terms (TermSet.add t eps) ts
@@ -443,9 +444,7 @@ let reduce_reach fs gts =
   (* instantiate the variables of sort Fld in all reachability axioms *)
   let basic_reach_flds = 
     fold_terms (fun flds -> function
-      | App (ReachWO, Var _ :: _, _)
       | App (Btwn, Var _ :: _, _) -> flds
-      | App (ReachWO, fld :: _, _) 
       | App (Btwn, fld :: _, _) -> TermSet.union (partition_of fld) flds
       | _ -> flds)
       TermSet.empty (smk_and fs1)
@@ -499,7 +498,7 @@ let reduce f =
   let fs31 = factorize_axioms (split_ands [] fs3) in
   let fs4, gts1 = reduce_sets (fs31 @ ep_axioms) gts in
   let fs5, gts2 = reduce_reach fs4 gts1 in
-  let fs6 = fs5 (*reduce_remaining fs5 gts2*) in
+  let fs6 = reduce_remaining fs5 gts2 in
   (* the following is a (probably stupid) heuristic to sort the formulas for improving the running time *)
   let fs7 = 
     (* sort by decreasing number of disjuncts in formula *)

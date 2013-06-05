@@ -180,15 +180,27 @@ let declare_proc prog proc =
 
 let procs prog = IdMap.fold (fun _ proc procs -> proc :: procs) prog.prog_procs []
 
-let find_proc prog name = IdMap.find name prog.prog_procs
+let find_proc prog name =
+  try IdMap.find name prog.prog_procs 
+  with Not_found -> 
+    failwith ("find_proc: Could not find procedure " ^ (str_of_ident name))
 
-let find_pred prog name = IdMap.find name prog.prog_preds
+let find_pred prog name =
+  try IdMap.find name prog.prog_preds
+  with Not_found -> 
+    failwith ("find_proc: Could not find predicate " ^ (str_of_ident name))
 
-let find_global prog name = IdMap.find name prog.prog_vars
+let find_global prog name = 
+  try IdMap.find name prog.prog_vars
+  with Not_found -> 
+    failwith ("find_proc: Could not find global variable " ^ (str_of_ident name))
 
 let find_var prog proc name =
-  try IdMap.find name proc.proc_locals 
-  with Not_found -> IdMap.find name prog.prog_vars
+  try
+    try IdMap.find name proc.proc_locals 
+    with Not_found -> IdMap.find name prog.prog_vars
+  with Not_found ->
+    failwith ("find_proc: Could not find variable " ^ (str_of_ident name))
 
 let mk_fresh_var_decl decl pos =
   let id = fresh_ident (name decl.var_name) in

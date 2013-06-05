@@ -36,12 +36,10 @@ let mk_axiom name f =
 let f x = mk_read fld1 x
 let g x = mk_read fld2 x
 
-let reachwo_Fld f u v w= 
-  if !use_btwn
-  then mk_or [mk_btwn f u v w; mk_and [mk_reach f u v; mk_not (mk_reach f u w)]]
-  else mk_reachwo f u v w
+let reachwo_Fld f u v w = 
+  mk_or [mk_btwn f u v w; mk_and [mk_reach f u v; mk_not (mk_reach f u w)]]
   
-let reachwo = mk_reachwo fld1
+(*let reachwo = mk_reachwo fld1*)
 let btwn = mk_btwn fld1
 let reach = mk_reach fld1
 
@@ -57,6 +55,7 @@ let read_write_axioms fld1 loc1 loc2 =
   
 let reach_write_axioms fld1 loc1 loc2 =
   let new_fld1 = mk_write fld1 loc1 loc2 in
+  (* deprecated
   let reachwo_write =
     let r = mk_reachwo fld1 in
     let new_reachwo u v w =
@@ -65,7 +64,7 @@ let reach_write_axioms fld1 loc1 loc2 =
     in
     smk_and [smk_or [mk_not (mk_reachwo new_fld1 loc3 loc4 loc5); new_reachwo loc3 loc4 loc5];
 	     smk_or [mk_reachwo new_fld1 loc3 loc4 loc5; mk_not (new_reachwo loc3 loc4 loc5)]]
-  in
+  in*)
   let btwn_write =
     let b = mk_btwn fld1 in
     let reachwo u v w = reachwo_Fld fld1 u v w in
@@ -77,16 +76,13 @@ let reach_write_axioms fld1 loc1 loc2 =
     smk_and [smk_or [mk_not (mk_btwn new_fld1 loc3 loc4 loc5); new_btwn loc3 loc4 loc5];
 	     smk_or [mk_btwn new_fld1 loc3 loc4 loc5; mk_not (new_btwn loc3 loc4 loc5)]]
   in
-  if !with_reach_axioms then 
-    if !use_btwn then
-      [mk_axiom "btwn_write" btwn_write]
-    else 
-      [mk_axiom "reachwo_write" reachwo_write] 
+  if !with_reach_axioms 
+  then [mk_axiom "btwn_write" btwn_write]
   else []
 
 let reach_axioms () = 
-  (* reachwo axioms *)
-  let refl = reachwo loc1 loc1 loc2 in
+  (* reachwo axioms (depricated) *)
+  (*let refl = reachwo loc1 loc1 loc2 in
   let reac = mk_or [mk_not (reachwo loc1 loc2 loc3); 
 		    reachwo loc1 loc2 loc2] in 
   let step = mk_or [reachwo loc1 (f loc1) loc2; mk_eq loc1 loc2] in
@@ -100,7 +96,7 @@ let reach_axioms () =
   let trn1 = mk_or [mk_not (reachwo loc1 loc2 loc3); mk_not (reachwo loc2 loc4 loc3); 
 		    reachwo loc1 loc4 loc3] in
   let trn2 = mk_or [mk_not (reachwo loc1 loc2 loc3); mk_not (reachwo loc2 loc4 loc3); 
-		    mk_not (reachwo loc2 loc3 loc3); reachwo loc1 loc2 loc4] in
+		    mk_not (reachwo loc2 loc3 loc3); reachwo loc1 loc2 loc4] in*)
   (* btwn axioms *)
   let btwn_refl = btwn loc1 loc1 loc1 in
   let btwn_step = btwn loc1 (f loc1) (f loc1) in
@@ -116,29 +112,17 @@ let reach_axioms () =
                          mk_and [btwn loc1 loc4 loc3; btwn loc4 loc2 loc3]] in
   (**)
   if !with_reach_axioms then
-    if !use_btwn then 
-      [mk_axiom "btwn_refl" btwn_refl; 
-       mk_axiom "btwn_step" btwn_step; 
-       mk_axiom "btwn_cycl" btwn_cycl; 
-       mk_axiom "btwn_reach" btwn_reac;
-       mk_axiom "btwn_sndw" btwn_sndw; 
-       mk_axiom "btwn_ord1" btwn_ord1;
-       mk_axiom "btwn_ord2" btwn_ord2;
-       mk_axiom "btwn_trn1" btwn_trn1; 
-       mk_axiom "btwn_trn2" btwn_trn2;
-       mk_axiom "btwn_trn3" btwn_trn3]
-    else
-      [mk_axiom "refl" refl; 
-       mk_axiom "step" step; 
-       mk_axiom "cycl" cycl; 
-       mk_axiom "reach" reac;
-       mk_axiom "sndw" sndw; 
-       mk_axiom "linear1" lin1;
-       mk_axiom "linear2" lin2;
-       mk_axiom "trans1" trn1; 
-       mk_axiom "trans2" trn2;]
+    [mk_axiom "btwn_refl" btwn_refl; 
+     mk_axiom "btwn_step" btwn_step; 
+     mk_axiom "btwn_cycl" btwn_cycl; 
+     mk_axiom "btwn_reach" btwn_reac;
+     mk_axiom "btwn_sndw" btwn_sndw; 
+     mk_axiom "btwn_ord1" btwn_ord1;
+     mk_axiom "btwn_ord2" btwn_ord2;
+     mk_axiom "btwn_trn1" btwn_trn1; 
+     mk_axiom "btwn_trn2" btwn_trn2;
+     mk_axiom "btwn_trn3" btwn_trn3]
   else []
- 
 
 let null_axioms () =
   let nll = mk_eq (f mk_null) mk_null in
@@ -153,9 +137,8 @@ let ep_axioms () =
   let ep2 = mk_or [mk_not (reach loc1 loc2); mk_not (in_set1 loc2); in_set1 ep] in
   let ep3 = mk_or [in_set1 ep; mk_eq loc1 ep] in
   let ep4 = 
-    if !use_btwn 
-    then mk_implies (mk_and [reach loc1 loc2; in_set1 loc2]) (btwn loc1 ep loc2)
-    else mk_implies (mk_and [reach loc1 loc2; in_set1 loc2]) (reachwo loc1 ep loc2) 
+    mk_implies (mk_and [reach loc1 loc2; in_set1 loc2]) (btwn loc1 ep loc2)
+    (*else mk_implies (mk_and [reach loc1 loc2; in_set1 loc2]) (reachwo loc1 ep loc2) *)
   in
   [mk_axiom "entry-point1" ep1; 
    mk_axiom "entry-point2" ep2; 

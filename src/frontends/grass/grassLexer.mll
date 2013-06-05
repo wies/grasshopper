@@ -35,7 +35,7 @@ let _ =
     (* term constructors *)
     List.map (fun sym -> str_of_symbol sym, SYMBOL(sym))
       [Null; Read; Write; EntPnt; Empty; SetEnum; Union; Inter; Diff;
-       ReachWO; Elem; SubsetEq; Frame])
+       Btwn; Elem; SubsetEq; Frame])
 }
 
 let digitchar = ['0'-'9']

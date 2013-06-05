@@ -1,0 +1,57 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+predicate lslseg(x: Node, y: Node, ub: int) {
+  x == y || x != y &*& x &*& x.data <= ub &*& lslseg(x.next, y, ub)
+}
+
+predicate uslseg(x: Node, y: Node, lb: int) {
+  x == y || x != y &*& x &*& lb <= x.data &*& uslseg(x.next, y, x.data)
+}
+
+predicate ulseg(x: Node, y: Node, lb: int) {
+  x == y || x != y &*& x &*& lb <= x.data &*& ulseg(x.next, y, x.data)
+}
+
+predicate slseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& ulseg(x.next, y, x.data)
+}
+
+predicate lseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& lseg(x.next, y)
+}
+
+procedure insertion_sort(lst: Node) 
+  requires lseg(lst, null);
+  ensures slseg(lst, null);
+{
+  var prv: Node, srt: Node;
+  prv := null;
+  srt := lst;
+  while (srt != null)
+    invariant prv == null &*& srt == lst &*& lseg(lst, null) || lslseg(lst, srt, prv.data) &*& ulseg(srt, null, prv.data);
+  {
+    var curr: Node, min: Node;
+    curr := srt.next;
+    min := srt;
+    while (curr != null)
+      invariant prv == null &*& lseg(curr, null) || ulseg(curr, null, prv.data) &*& prv.data <= min.data;
+      invariant ulseg(srt, min, min.data);
+      invariant ulseg(min, curr, min.data);
+      invariant min != null;
+    {
+      if (curr.data < min.data) {
+        min := curr;
+      }
+      curr := curr.next;
+    }
+    var tmp: int;
+    tmp := min.data;
+    min.data := srt.data;
+    srt.data := tmp;
+    prv := srt;
+    srt := srt.next;
+  }
+}

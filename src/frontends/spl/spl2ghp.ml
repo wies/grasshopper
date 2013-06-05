@@ -721,7 +721,8 @@ let convert cus =
               match convert_expr proc.p_locals e with
               | SL_form _ -> ProgError.error (pos_of_expr e) "SL formulas cannot be assigned."
               | FOL_term (t, ty) -> t, ty
-              | FOL_form _ -> failwith "formula should have been flattened")
+              | FOL_form f -> 
+                  extract_term proc.p_locals BoolType e)
               rhs
           in
           let lhs_ids, ind_opt =

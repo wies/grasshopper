@@ -13,9 +13,8 @@ let mk_loc d =
   if (fst d = "null") then FormUtil.mk_null
   else FormUtil.mk_free_const ?srt:(Some (Form.Loc)) d
 
-let reachWo a b c = FormUtil.mk_reachwo (fpts) a b c
 let btwn a b c = FormUtil.mk_btwn (fpts) a b c
-let reach a b = if !Config.use_btwn then btwn a b b else reachWo a b b
+let reach a b = btwn a b b
 let mk_domain d v = FormUtil.mk_elem v (mk_loc_set d)
 let mk_domain_var d v = FormUtil.mk_elem v (mk_loc_set_var d)
 let emptyset = FormUtil.mk_empty (Some (Form.Set Form.Loc))
@@ -25,9 +24,7 @@ let empty_var domain = empty_t (mk_loc_set_var domain)
 let list_set_def id1 id2 domain =
   FormUtil.mk_iff
     (FormUtil.smk_and 
-       [if !Config.use_btwn 
-        then btwn id1 Axioms.loc1 id2
-        else reachWo id1 Axioms.loc1 id2;
+       [btwn id1 Axioms.loc1 id2;
         FormUtil.mk_neq Axioms.loc1 id2])
     (mk_domain domain Axioms.loc1)
 

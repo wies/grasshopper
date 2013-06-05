@@ -168,7 +168,6 @@ let symbol_types =
      (GtEq, TFun ([TInt; TInt], TBool));
      (Lt, TFun ([TInt; TInt], TBool));
      (Gt, TFun ([TInt; TInt], TBool));
-     (ReachWO, TFun ([TFld TLoc; TLoc; TLoc; TLoc], TBool));
      (Btwn, TFun ([TFld TLoc; TLoc; TLoc; TLoc], TBool));
      (Frame, TFun ([TSet TLoc; TSet TLoc; TFld param1; TFld param1], TBool));
      (Elem, TFun ([param1; TSet param1], TBool));

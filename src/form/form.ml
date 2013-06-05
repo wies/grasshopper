@@ -23,8 +23,7 @@ type symbol =
   (* interpreted predicate symbols *)
   | Eq
   | LtEq | GtEq | Lt | Gt
-  | ReachWO | Btwn
-  | Frame
+  | Btwn | Frame
   | Elem | SubsetEq 
   (* free constants, functions, and predicates *)
   | FreeSym of ident
@@ -35,7 +34,7 @@ let symbols =
    UMinus; Plus; Minus; Mult;
    Empty; SetEnum; Union; Inter; Diff;
    Eq; LtEq; GtEq; Lt; Gt;
-   ReachWO; Btwn; Frame; Elem; SubsetEq]
+   Btwn; Frame; Elem; SubsetEq]
 
 (** Terms and formulas *)
 
@@ -144,7 +143,6 @@ let str_of_symbol = function
   | GtEq -> ">="
   | Lt -> "<"
   | Gt -> ">"
-  | ReachWO -> "ReachWO"
   | Btwn -> "Btwn"
   | Elem -> "Elem"
   | SubsetEq -> "Subseteq"
@@ -337,7 +335,7 @@ let rec pr_form ppf = function
   | Binder (b, vs, f, a) -> 
       let cmnts = extract_comments false a in
       (match cmnts with
-      |	"" -> fprintf ppf "%a" pr_quantifier (b, vs, f)
+      |	"" -> fprintf ppf "@[(%a)@]" pr_quantifier (b, vs, f)
       |	c -> fprintf ppf "@[(%a@ /* %s */)@]" pr_quantifier (b, vs, f) c)
   | BoolOp (And, fs) -> pr_ands ppf fs
   | BoolOp (Or, fs) -> pr_ors ppf fs

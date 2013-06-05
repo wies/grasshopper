@@ -170,7 +170,7 @@ let output_graphviz chan model =
       (fun flds def -> match def.input with
       | [fld; _; _; _] -> SymbolSet.add fld flds
       | _ -> flds)
-      read_flds (defs_of ReachWO model)
+      read_flds (defs_of Btwn model)
   in
   let fld_colors =
     Util.fold_left2 (fun acc fld color -> (fld, color)::acc) [] (SymbolSet.elements flds) colors
@@ -198,7 +198,7 @@ let output_graphviz chan model =
       Util.filter_map 
 	(fun def -> def.output = BoolConst true) 
 	(fun def -> (List.hd def.input, List.tl def.input))
-	(defs_of ReachWO model)
+	(defs_of Btwn model)
     in
     let grouped_defs = 
       List.fold_left

@@ -38,7 +38,7 @@ let process_input () =
     mk_and 
       [mk_eq (mk_write fld1 loc1 loc2) fld2;
        mk_eq (mk_read fld1 loc3) loc1;
-       mk_reachwo fld1 loc1 loc2 loc3] 
+       mk_btwn fld1 loc1 loc2 loc3] 
   in
   let _ = if!Debug.verbose then
     print_forms stdout [form] 

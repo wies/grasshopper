@@ -1,0 +1,49 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+predicate ulseg(x: Node, y: Node, lb: int) {
+  x == y || x != y &*& x &*& lb <= x.data &*& ulseg(x.next, y, x.data)
+}
+
+predicate lslseg(x: Node, y: Node, ub: int) {
+  x == y || x != y &*& x &*& x.data <= ub &*& lslseg(x.next, y, ub)
+}
+
+predicate slseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& ulseg(x.next, y, x.data)
+}
+
+procedure double_all(lst: Node) returns (res: Node)
+  requires slseg(lst, null);
+  ensures slseg(lst, null) &*& slseg(res, null);
+{
+  if (lst == null) {
+    return null;
+  } else {
+    var curr: Node, cp: Node;
+    curr := lst;
+    res := new Node;
+    cp := res;
+    cp.data := 2 * curr.data;
+    cp.next := null;
+    while(curr.next != null) 
+      invariant lslseg(lst, curr, curr.data);
+      invariant slseg(curr, null);
+      invariant lslseg(res, cp, 2 * curr.data);
+      invariant cp.next |-> null;
+      invariant cp.data == 2 * curr.data;
+      invariant curr != null;
+    {
+      var old_cp: Node;
+      old_cp := cp;
+      cp := new Node;
+      old_cp.next := cp;
+      curr := curr.next;
+      cp.data := 2 * curr.data;
+      cp.next := null;
+    }
+    return res;
+  }
+}

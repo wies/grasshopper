@@ -1,0 +1,101 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+predicate lslseg(x: Node, y: Node, ub: int) {
+  x == y || x != y &*& x &*& x.data <= ub &*& lslseg(x.next, y, ub)
+}
+
+predicate uslseg(x: Node, y: Node, lb: int) {
+  x == y || x != y &*& x &*& lb <= x.data &*& uslseg(x.next, y, x.data)
+}
+
+predicate ulseg(x: Node, y: Node, lb: int) {
+  x == y || x != y &*& x &*& lb <= x.data &*& ulseg(x.next, y, x.data)
+}
+
+predicate slseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& ulseg(x.next, y, x.data)
+}
+
+predicate lseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& lseg(x.next, y)
+}
+
+procedure merge(a: Node, b: Node) returns (res: Node)
+  requires slseg(a, null) &*& slseg(b, null);
+  ensures slseg(res, null);
+{
+  res := null;
+  if (a == null) {
+    return b;
+  } else if (b == null) {
+    return a;
+  } else if (a.data <= b.data) {
+    res := a;
+    a := a.next;
+  } else {
+    res := b;
+    b := b.next;
+  }
+  
+  var last: Node;
+  last := res;
+
+  while (a != null || b != null)
+    invariant (last.next |-> a || last.next |-> b);
+    invariant lslseg(res, last, last.data) &*& uslseg(a, null, last.data) &*& uslseg(b, null, last.data);
+  {
+    if (a == null || b != null && a.data > b.data) {
+      last.next := b;
+      last := b;
+      b := b.next;
+    } else {
+      last.next := a;
+      last := a;
+      a := a.next;
+    }
+  }
+
+  return res;
+}
+
+procedure split(x: Node) returns (y: Node, z: Node)
+  requires lseg(x, null);
+  ensures lseg(y, null) &*& lseg(z, null);
+{
+  y, z := x, x;
+
+  var curr: Node;
+  curr := x;
+  while (curr != null)
+    invariant lseg(y, z) &*& lseg(z, curr) &*& lseg(curr, null);
+  {
+    z := z.next;
+    curr := curr.next;
+    if (curr != null) {
+      curr := curr.next;
+    }
+  }
+  if (z != null) {
+    var tmp: Node;
+    tmp := z;
+    z := z.next;
+    tmp.next := null;
+  }
+}
+
+
+procedure merge_sort(lst: Node) returns (res: Node)
+  requires lseg(lst, null);
+  ensures slseg(res, null);
+{
+  var lst1: Node, lst2: Node;
+  lst1, lst2 := split(lst);
+  var a: Node;
+  a := merge_sort(lst1);
+  var b: Node;
+  b := merge_sort(lst2);
+  return merge(a, b);
+}

@@ -118,7 +118,7 @@ let elim_loops (prog : program) =
         in
         let loop_end_pos = end_pos pp.pp_pos in
         let loop_start_pos = start_pos pp.pp_pos in
-        let body =
+        let body, prog =
           let prog, prebody = elim prog proc lc.loop_prebody in
           let prog, postbody = elim prog proc lc.loop_postbody in
           let init_returns = 
@@ -141,7 +141,8 @@ let elim_loops (prog : program) =
                 lc.loop_test dummy_position 
                 then_cmd else_cmd pp.pp_pos
             ]
-            pp.pp_pos
+            pp.pp_pos,
+          prog
         in
         (* loop exit condition *)
         let loop_exit =
