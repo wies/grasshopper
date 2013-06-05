@@ -37,7 +37,8 @@ sls_concat tests/spl/sls_concat.spl pass
 sls_filter tests/spl/sls_filter.spl pass
 sls_remove tests/spl/sls_remove.spl pass
 sls_insert tests/spl/sls_insert.spl pass
+sls_insertion_sort tests/spl/sls_insertion_sort.spl pass
 "
 #dl_traverse_backward tests/spl/dl_traverse_backward.spl pass
 
-OPTIONS=$@ time ./run-tests $TESTS
+OPTIONS=$@ time -f "Accumulated time: %Us." ./run-tests $TESTS

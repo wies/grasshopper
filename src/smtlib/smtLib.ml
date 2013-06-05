@@ -261,11 +261,10 @@ let assert_form session f =
        print_smtlib_form stdout f;
        print_endline ")"; *)
   write session "(assert ";
-  let cf = mk_comment ("_" ^ string_of_int session.assert_count) f in
   let cf = 
     match session.signature with
     | None -> failwith "tried to assert formula before declaring symbols"
-    | Some sign -> disambiguate_overloaded_symbols sign cf 
+    | Some sign -> disambiguate_overloaded_symbols sign f 
   in
   writefn session (fun chan -> print_smtlib_form chan cf);
   writeln session ")\n"

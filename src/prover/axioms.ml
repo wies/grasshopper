@@ -167,11 +167,11 @@ let set_axioms () =
     mk_iff (mk_elem loc1 (mk_setenum [loc2])) 
       (mk_eq loc1 loc2)
   in
-  [mk_axiom "empty" empty;
-   mk_axiom "union" union;
-   mk_axiom "inter" inter;
-   mk_axiom "diff" diff;
-   mk_axiom "enum" setenum]
+  [mk_axiom "def of empty" empty;
+   mk_axiom "def of union" union;
+   mk_axiom "def of inter" inter;
+   mk_axiom "def of diff" diff;
+   mk_axiom "def of enum" setenum]
 
 let extract_axioms fs =
   List.partition (fun f -> IdSet.empty <> fv f) fs

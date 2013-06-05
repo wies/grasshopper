@@ -27,9 +27,13 @@ Installation Instructions
 -------------------------
 - Untar the distribution
 
-- Type 
+- In the grasshopper directory, run 
      ./build.sh
-  This will produce native code compiled executables.
+  to produce native code compiled executables.
+
+- Optional: run
+     ./regression-tests
+  to check whether the build succeeded.
 
 -------------------------
 Usage
