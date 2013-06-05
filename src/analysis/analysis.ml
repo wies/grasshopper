@@ -412,7 +412,7 @@ let annotate_heap_checks prog =
     TermSet.fold 
       (fun t acc ->
         let t_in_alloc = FOL (mk_elem t alloc_set) in
-        let mk_msg callee pos = "A heap access might be unsafe (null or dangling reference)." in
+        let mk_msg callee pos = "Possible heap access through null or dangling reference." in
         let sf = mk_spec_form t_in_alloc "check heap access" (Some mk_msg) pos in
         let check_access = mk_assert_cmd sf pos in
         check_access :: acc)

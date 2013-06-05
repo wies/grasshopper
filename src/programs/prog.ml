@@ -658,10 +658,10 @@ open Format
 let string_of_src_pos pos =
   if pos.sp_end_line = pos.sp_start_line 
   then 
-    Printf.sprintf "File \"%s\", line %d, characters %d-%d" 
+    Printf.sprintf "File \"%s\", line %d, columns %d-%d" 
       pos.sp_file pos.sp_start_line pos.sp_start_col pos.sp_end_col
   else 
-    Printf.sprintf "File \"%s\", line %d, character %d - line %d, character %d" 
+    Printf.sprintf "File \"%s\", line %d, column %d to line %d, column %d" 
       pos.sp_file pos.sp_start_line pos.sp_start_col pos.sp_end_line pos.sp_end_col
 
 let pr_spec_form ppf sf =

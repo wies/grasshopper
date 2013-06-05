@@ -3,32 +3,34 @@
 ensure_verifies()
 {
   # Function. Parameter 1 is the return code
-  # Para. 2 is text to display on failure.
+  # Para. 2 is the name of the benchmark.
   if [ "${1}" -ne "0" ]; then
+    echo -e "\rFailed benchmark ${2}.    "
     echo "*** ERROR: Benchmark ${2} expected to verify, but did not verify."
     exit -1
   else
-    echo "Passed benchmark ${2}."
+    echo -e "\rPassed benchmark ${2}.    "
   fi
 }
 
 ensure_fails()
 {
   # Function. Parameter 1 is the return code
-  # Para. 2 is text to display on failure.
+  # Para. 2 is the name of the benchmark.
   if [ "${1}" -ne "1" ]; then
+    echo -e "\rFailed benchmark ${2}.    "
     echo "*** SOUNDNESS ERROR ***************************************"
     echo "*** SOUNDNESS ERROR: Benchmark ${2} expected to fail, but verified!"
     echo "*** SOUNDNESS ERROR ***************************************"
     exit -1
   else
-    echo "Passed benchmark ${2}."
+    echo -e "\rPassed benchmark ${2}.    "
   fi
 }
 
 while (( "$#" )); do
-    #echo $2
-    ./analyzer.native $2 $OPTIONS
+    echo -ne "Checking benchmark ${1}..."
+    ./grasshopper.native $2 $OPTIONS 2> /dev/null
     res=$?
     if [ $3 == "pass" ]; then
         ensure_verifies $res $1

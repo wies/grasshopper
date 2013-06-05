@@ -1,0 +1,34 @@
+struct Node {
+  var next: Node;
+}
+
+predicate lseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& lseg(x.next, y)
+}
+
+procedure soundness2(x: Node) returns (y: Node)
+  requires lseg(x, null);
+  ensures lseg(y, null);
+{
+  var curr: Node, prv: Node;
+  y := x;
+  prv := null;
+  curr := y;
+  while (curr != null) 
+    invariant ((lseg(y, prv) &*& prv.next |-> curr || prv == null &*& y == curr) &*& lseg(curr, null));
+  {
+    var nondet: bool;
+    if (nondet) {
+      if (prv != null) {
+        prv.next := curr.next;
+      } else {
+        y := curr.next;
+      }
+      free curr;
+    } else {
+      prv := curr;
+    }
+    // possible access to freed location
+    curr := curr.next;
+  }
+}

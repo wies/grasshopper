@@ -1,0 +1,14 @@
+struct Node {}
+
+predicate lseg(x: Node, y: Node) {
+  true
+}
+
+procedure soudness_check0(x: Node)
+  requires lseg(x, null);
+  ensures lseg(x, null);
+{
+  assert false;
+}
+
+
