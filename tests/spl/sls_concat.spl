@@ -1,0 +1,39 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+predicate uslseg(x: Node, y: Node, lb: int) {
+  x == y || x != y &*& x &*& lb <= x.data &*& uslseg(x.next, y, x.data)
+}
+
+predicate slseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& uslseg(x.next, y, x.data)
+}
+
+predicate llseg(x: Node, y: Node, ub: int) {
+  x == y || x != y &*& x &*& x.data <= ub &*& llseg(x.next, y, ub)
+}
+
+predicate lslseg(x: Node, y: Node, ub: int) {
+  slseg(x, y) && llseg(x, y, ub)
+}
+
+procedure concat(a: Node, b: Node, x: int) returns (res: Node)
+  requires lslseg(a, null, x) &*& uslseg(b, null, x);
+  ensures slseg(res, null);
+{
+  if (a == null) {
+    return b;
+  } else {
+    var curr: Node;
+    curr := a;
+    while(curr.next != null) 
+      invariant curr != null &*& lslseg(a, curr, curr.data) &*& lslseg(curr, null, x);
+    {
+      curr := curr.next; 
+    }
+    curr.next := b;
+    return a;
+  }
+}

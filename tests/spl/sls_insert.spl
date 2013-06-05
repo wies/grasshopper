@@ -1,0 +1,44 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+predicate uslseg(x: Node, y: Node, lb: int) {
+  x == y || x != y &*& x &*& lb <= x.data &*& uslseg(x.next, y, x.data)
+}
+
+predicate slseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& uslseg(x.next, y, x.data)
+}
+
+predicate llseg(x: Node, y: Node, ub: int) {
+  x == y || x != y &*& x &*& x.data <= ub &*& llseg(x.next, y, ub)
+}
+
+predicate lslseg(x: Node, y: Node, ub: int) {
+  slseg(x, y) && llseg(x, y, ub)
+}
+
+procedure sls_insert(lst: Node, elt: Node) returns (res: Node)
+  requires slseg(lst, null) &*& elt.next |-> null;
+  ensures slseg(res, null);
+{
+  if (lst == null || lst.data > elt.data) {
+    elt.next := lst;
+    return elt;
+  } else {
+    var curr: Node;
+    curr := lst;
+    while (curr.next != null && curr.next.data <= elt.data) 
+      invariant curr != null;
+      invariant lslseg(lst, curr, curr.data);
+      invariant slseg(curr, null);
+      invariant curr.data <= elt.data;
+    {
+      curr := curr.next;
+    }
+    elt.next := curr.next;
+    curr.next := elt;
+    return lst;
+  }
+}

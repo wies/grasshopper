@@ -1,0 +1,29 @@
+struct Node {
+  var next: Node;
+  var prev: Node;
+}
+
+predicate dlseg(x: Node, u: Node, y: Node, v: Node) {
+  x == y && u == v || 
+  x != y &*& x.prev == u &*& x &*& dlseg(x.next, x, y, v)
+}
+
+procedure dl_reverse(start: Node, end: Node) 
+  requires dlseg(start, null, null, end);
+  ensures dlseg(end, null, null, start);
+{
+  var curr: Node, prv: Node;
+  curr := start;
+  prv := null;
+  while (curr != null) 
+    invariant dlseg(curr, prv, null, end);
+    invariant dlseg(prv, curr, null, start);
+  {
+    var tmp: Node;
+    tmp := curr;
+    curr := curr.next;
+    tmp.next := prv;
+    prv := tmp;
+    prv.prev := curr;
+  }
+}

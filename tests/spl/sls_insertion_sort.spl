@@ -3,24 +3,28 @@ struct Node {
   var data: int;
 }
 
-predicate lslseg(x: Node, y: Node, ub: int) {
-  x == y || x != y &*& x &*& x.data <= ub &*& lslseg(x.next, y, ub)
-}
-
 predicate uslseg(x: Node, y: Node, lb: int) {
   x == y || x != y &*& x &*& lb <= x.data &*& uslseg(x.next, y, x.data)
 }
 
 predicate ulseg(x: Node, y: Node, lb: int) {
-  x == y || x != y &*& x &*& lb <= x.data &*& ulseg(x.next, y, x.data)
+  x == y || x != y &*& x &*& lb <= x.data &*& ulseg(x.next, y, lb)
+}
+
+predicate llseg(x: Node, y: Node, ub: int) {
+  x == y || x != y &*& x &*& x.data <= ub &*& llseg(x.next, y, ub)
 }
 
 predicate slseg(x: Node, y: Node) {
-  x == y || x != y &*& x &*& ulseg(x.next, y, x.data)
+  x == y || x != y &*& x &*& uslseg(x.next, y, x.data)
 }
 
 predicate lseg(x: Node, y: Node) {
   x == y || x != y &*& x &*& lseg(x.next, y)
+}
+
+predicate lslseg(x: Node, y: Node, ub: int) {
+  slseg(x, y) && llseg(x, y, ub)
 }
 
 procedure insertion_sort(lst: Node) 

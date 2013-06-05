@@ -1,0 +1,28 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+predicate uslseg(x: Node, y: Node, lb: int) {
+  x == y || x != y &*& x &*& lb <= x.data &*& uslseg(x.next, y, x.data)
+}
+
+predicate slseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& uslseg(x.next, y, x.data)
+}
+
+procedure sls_dispose(lst: Node)
+  requires slseg(lst, null);
+  ensures emp;
+{
+  var curr: Node;
+  curr := lst;
+  while (curr != null) 
+    invariant slseg(curr, null);
+  {
+    var tmp: Node;
+    tmp := curr;
+    curr := curr.next; 
+    free tmp;
+  }
+}

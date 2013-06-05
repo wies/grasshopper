@@ -1,0 +1,34 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+predicate uslseg(x: Node, y: Node, lb: int) {
+  x == y || x != y &*& x &*& lb <= x.data &*& uslseg(x.next, y, x.data)
+}
+
+predicate slseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& uslseg(x.next, y, x.data)
+}
+
+predicate llseg(x: Node, y: Node, ub: int) {
+  x == y || x != y &*& x &*& x.data <= ub &*& llseg(x.next, y, ub)
+}
+
+predicate lslseg(x: Node, y: Node, ub: int) {
+  slseg(x, y) && llseg(x, y, ub)
+}
+
+procedure sls_traverse(lst: Node)
+  requires slseg(lst, null);
+  ensures slseg(lst, null);
+{
+  var curr: Node;
+  curr := lst;
+  while (curr != null) 
+    invariant (curr != null &*& lslseg(lst, curr, curr.data) &*& slseg(curr, null)) || (curr == null &*& slseg(lst, curr));
+  {
+    curr := curr.next; 
+  }
+}
+

@@ -1,0 +1,46 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+predicate uslseg(x: Node, y: Node, lb: int) {
+  x == y || x != y &*& x &*& lb <= x.data &*& uslseg(x.next, y, x.data)
+}
+
+predicate slseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& uslseg(x.next, y, x.data)
+}
+
+predicate llseg(x: Node, y: Node, ub: int) {
+  x == y || x != y &*& x &*& x.data <= ub &*& llseg(x.next, y, ub)
+}
+
+predicate lslseg(x: Node, y: Node, ub: int) {
+  slseg(x, y) && llseg(x, y, ub)
+}
+
+procedure remove(lst: Node, value: int) returns (res: Node)
+  requires slseg(lst, null);
+  ensures slseg(res, null);
+{
+  var curr: Node, prv: Node;
+  prv := null;
+  curr := lst;
+  while (curr != null && curr.data < value) 
+    invariant prv == null &*& curr == lst &*& slseg(curr, null) ||
+                lslseg(lst, prv, prv.data) &*& prv.next |-> curr &*& slseg(curr, null) &*&
+                  (curr == null || prv.data <= curr.data);
+  {
+    prv := curr;
+    curr := curr.next;
+  }
+  if (curr != null && curr.data == value) {
+    if (prv == null) {
+      lst := curr.next;
+    } else {
+      prv.next := curr.next;
+    }
+    free curr;
+  }
+  return lst;
+}

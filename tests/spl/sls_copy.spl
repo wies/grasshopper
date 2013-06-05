@@ -19,7 +19,7 @@ predicate lslseg(x: Node, y: Node, ub: int) {
   slseg(x, y) && llseg(x, y, ub)
 }
 
-procedure sls_double_all(lst: Node) returns (res: Node)
+procedure copy(lst: Node) returns (res: Node)
   requires slseg(lst, null);
   ensures slseg(lst, null) &*& slseg(res, null);
 {
@@ -30,14 +30,14 @@ procedure sls_double_all(lst: Node) returns (res: Node)
     curr := lst;
     res := new Node;
     cp := res;
-    cp.data := 2 * curr.data;
+    cp.data := curr.data;
     cp.next := null;
-    while(curr.next != null) 
+    while (curr.next != null) 
       invariant lslseg(lst, curr, curr.data);
       invariant slseg(curr, null);
-      invariant lslseg(res, cp, 2 * curr.data);
+      invariant lslseg(res, cp, curr.data);
       invariant cp.next |-> null;
-      invariant cp.data == 2 * curr.data;
+      invariant cp.data == curr.data;
       invariant curr != null;
     {
       var old_cp: Node;
@@ -45,7 +45,7 @@ procedure sls_double_all(lst: Node) returns (res: Node)
       cp := new Node;
       old_cp.next := cp;
       curr := curr.next;
-      cp.data := 2 * curr.data;
+      cp.data := curr.data;
       cp.next := null;
     }
     return res;

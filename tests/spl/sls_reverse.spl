@@ -1,0 +1,38 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+predicate uslseg(x: Node, y: Node, lb: int) {
+  x == y || x != y &*& x &*& lb <= x.data &*& uslseg(x.next, y, x.data)
+}
+
+predicate slseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& uslseg(x.next, y, x.data)
+}
+
+predicate lrslseg(x: Node, y: Node, ub: int) {
+  x == y || x != y &*& x &*& x.data <= ub &*& lrslseg(x.next, y, x.data)
+}
+
+predicate rslseg(x: Node, y: Node) {
+  x == y || x != y &*& x &*& lrslseg(x.next, y, x.data)
+}
+
+procedure reverse(lst: Node) returns (rev: Node)
+  requires slseg(lst, null);
+  ensures rslseg(rev, null);
+{
+  var curr: Node;
+  curr := lst;
+  rev := null;
+  while (curr != null) 
+    invariant (rev == null &*& slseg(curr, null)) || (rslseg(rev, null) &*& uslseg(curr, null, rev.data));
+  {
+    var tmp: Node;
+    tmp := curr;
+    curr := curr.next;
+    tmp.next := rev;
+    rev := tmp;
+  }
+}
