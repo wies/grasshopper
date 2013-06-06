@@ -163,7 +163,8 @@ let elim_loops (prog : program) =
             mk_assign_cmd returns (ids_to_terms formals) loop_start_pos 
           in
           let else_cmd = 
-            mk_return_cmd (ids_to_terms returns) loop_end_pos
+            (*mk_return_cmd (ids_to_terms returns) loop_end_pos*)
+            mk_seq_cmd [] loop_end_pos
           in
           let then_cmd = 
             mk_seq_cmd
@@ -328,7 +329,7 @@ let frame_id = mk_ident "AllocCaller"
 let frame_set = mk_free_const ~srt:(Set Loc) frame_id
 
 let pred_struct (name, num) = (name ^ "_struct", num)
-let pred_domain (name, num) = (name ^ "_dom", num)
+let pred_domain (name, num) = (name ^ "_domain", num)
 
 (** Desugare SL specification to FOL specifications. 
  ** Assumes that loops have been transformed to tail-recursive procedures. *)
@@ -343,11 +344,12 @@ let elim_sl prog =
     }
   in
   let compile_pred =
-    let dom_id = mk_ident "Domain" in
+    let dom_id = mk_ident "Dom" in
     let dom_set = mk_free_const ~srt:(Set Loc) dom_id in
     fun acc pred ->
       match pred.pred_body.spec_form with
       | SL f ->
+          (try
           let dom_decl = mk_set_decl dom_id pred.pred_pos in
           let args = 
             List.map (fun id ->
@@ -376,6 +378,7 @@ let elim_sl prog =
           in
           IdMap.add pred_dom.pred_name pred_dom
             (IdMap.add pred_str.pred_name pred_str acc)
+         with Not_found -> acc)
       | FOL _ -> acc
   in
   let pred_to_form p args dom =

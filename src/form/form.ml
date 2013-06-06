@@ -109,6 +109,9 @@ type subst_map = term IdMap.t
 
 open Format
 
+let str_of_ident0 (name, n) =
+  Printf.sprintf "%s_%d" name n
+
 let str_of_ident (name, n) =
   if n = 0 then name else
   Printf.sprintf "%s_%d" name n
@@ -314,6 +317,8 @@ and pr_term_list ppf = function
 
 and pr_inter ppf = function
   | [] -> fprintf ppf "Univ"
+  | [App (Diff, _, _) as s] -> 
+      fprintf ppf "(@[%a@])" pr_term s
   | [s] -> pr_term ppf s
   | App (Inter, ss1, _) :: ss2 -> 
       pr_inter ppf (ss1 @ ss2)
@@ -325,6 +330,8 @@ and pr_inter ppf = function
 
 and pr_union ppf = function
   | [] -> fprintf ppf "{}"
+  | [App (Diff, _, _) as s] -> 
+      fprintf ppf "(@[%a@])" pr_term s
   | [s] -> pr_term ppf s
   | (App (Diff, _, _) as s) :: ss -> 
       fprintf ppf "(@[<2>%a@]) ++@ %a" pr_term s pr_union ss
