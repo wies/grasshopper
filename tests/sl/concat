@@ -1,13 +1,13 @@
 method concat(a, b)
-    requires lseg(a, null) * lseg(b, null);
-    ensures lseg(returned, b) * lseg(b, null);
+    requires lseg(next, a, null) * lseg(next, b, null);
+    ensures lseg(next, returned, b) * lseg(next, b, null);
 {
     if (a == null) {
         return b;
     } else {
         curr := a;
         while(curr.next != null) 
-            invariant curr != null * lseg(a, curr) * lseg(curr, null);
+            invariant curr != null * lseg(next, a, curr) * lseg(next, curr, null);
         {
             curr := curr.next; 
         }

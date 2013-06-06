@@ -1,6 +1,6 @@
 method merge(a, b)
-    requires slseg(a, null) * slseg(b, null);
-    ensures slseg(returned, null);
+    requires slseg(next, data, a, null) * slseg(next, data, b, null);
+    ensures slseg(next, data, returned, null);
 {
     head := null;
     if (a == null) {
@@ -16,7 +16,7 @@ method merge(a, b)
     }
     last := head;
     while (a != null || b != null)
-        invariant (last |-> a || last |-> b) * lslseg(head, last, last.data) * uslseg(a, null, last.data) * uslseg(b, null, last.data);
+        invariant (last |-> a || last |-> b) * lslseg(next, data, head, last, last.data) * uslseg(next, data, a, null, last.data) * uslseg(next, data, b, null, last.data);
     {
         if (a == null || (b != null && a.data > b.data)) {
             last.next := b;
@@ -32,13 +32,13 @@ method merge(a, b)
 }
 
 method length(x)
-    requires lseg(x, null);
-    ensures lseg(x, null);
+    requires lseg(next, x, null);
+    ensures lseg(next, x, null);
 {
     i := 0;
     curr := x;
     while (curr != null)
-        invariant lseg(x,curr) * lseg(curr, null);
+        invariant lseg(next, x,curr) * lseg(next, curr, null);
     {
         curr := curr.next;
         i := i+1;
@@ -47,12 +47,12 @@ method length(x)
 }
 
 method take(x, n)
-    requires lseg(x, null);
-    ensures lseg(x, null) * lseg(returned, null);
+    requires lseg(next, x, null);
+    ensures lseg(next, x, null) * lseg(next, returned, null);
 {
     y := x;
     while (y != null && n > 1)
-        invariant lseg(x, y) * lseg(y, null);
+        invariant lseg(next, x, y) * lseg(next, y, null);
     {
         y := y.next;
         n := n-1;
@@ -66,8 +66,8 @@ method take(x, n)
 }
 
 method merge_sort(lst)
-    requires lseg(lst, null);
-    ensures slseg(returned, null);
+    requires lseg(next, lst, null);
+    ensures slseg(next, data, returned, null);
 {
     if (lst == null || lst.next == null) {
         return lst;
@@ -75,11 +75,11 @@ method merge_sort(lst)
         n := length(lst);
         n2 := n / 2;
         lst2 := take(lst, n2);
-        //assert lseg(lst, null) * lseg(lst2, null);
+        //assert lseg(next, lst, null) * lseg(next, lst2, null);
         a := merge_sort(lst);
-        //assert slseg(a, null) * lseg(lst2, null);
+        //assert slseg(next, data, a, null) * lseg(next, lst2, null);
         b := merge_sort(lst2);
-        //assert slseg(a, null) * slseg(b, null);
+        //assert slseg(next, data, a, null) * slseg(next, data, b, null);
         merged := merge(a, b);
         return merged;
     }

@@ -1,6 +1,6 @@
 method rec_filter(x)
-    requires lseg(x, null);
-    ensures lseg(returned, null);
+    requires lseg(next, x, null);
+    ensures lseg(next, returned, null);
 {
     if (x == null) return x;
     else if (Random) {

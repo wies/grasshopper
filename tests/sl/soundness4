@@ -1,15 +1,15 @@
 method pairwise_sum(x, y)
-    requires slseg(x, null) * slseg(y, null);
-    ensures slseg(x, null) * slseg(y, null) * slseg(returned, null);
+    requires slseg(next, data, x, null) * slseg(next, data, y, null);
+    ensures slseg(next, data, x, null) * slseg(next, data, y, null) * slseg(next, data, returned, null);
 {
     curr_x := x;
     curr_y := y;
     z := null;
     last_z := null;
     while (curr_x != null && curr_y != null) 
-        invariant slseg(x, curr_x) * slseg(curr_x, null);
-        invariant slseg(y, curr_y) * slseg(curr_y, null);
-        invariant slseg(z, last_z) * (last_z == null * z == null || last_z |-> null);
+        invariant slseg(next, data, x, curr_x) * slseg(next, data, curr_x, null);
+        invariant slseg(next, data, y, curr_y) * slseg(next, data, curr_y, null);
+        invariant slseg(next, data, z, last_z) * (last_z == null * z == null || last_z |-> null);
         // missing conjunct in loop invariant
         // invariant last_z == null || curr_x == null || curr_y == null || last_z.data <= curr_x.data + curr_y.data;
     {

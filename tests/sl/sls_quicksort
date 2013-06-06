@@ -1,12 +1,12 @@
 
 method predecessor(start, end, lb, ub)
-    requires blseg(start, end, lb, ub) * start != end;
-    ensures blseg(start, returned, lb, ub) * returned |-> end * returned.data >= lb * returned.data <= ub;
+    requires blseg(next, data, start, end, lb, ub) * start != end;
+    ensures blseg(next, data, start, returned, lb, ub) * returned |-> end * returned.data >= lb * returned.data <= ub;
 {
     prv := start;
     curr := start.next;
     while (curr != end)
-        invariant blseg(start, prv, lb, ub) * blseg(curr, end, lb, ub) * prv |-> curr * prv.data >= lb * prv.data <= ub;
+        invariant blseg(next, data, start, prv, lb, ub) * blseg(next, data, curr, end, lb, ub) * prv |-> curr * prv.data >= lb * prv.data <= ub;
     {
         prv := curr;
         curr := curr.next;
@@ -15,8 +15,8 @@ method predecessor(start, end, lb, ub)
 }
 
 method split(lst, tsl, lb, ub)
-    requires blseg(lst, tsl, lb, ub) * lst != tsl;
-    ensures blseg(lst, returned, lb, returned.data) * blseg(returned, tsl, returned.data, ub) * returned != tsl;
+    requires blseg(next, data, lst, tsl, lb, ub) * lst != tsl;
+    ensures blseg(next, data, lst, returned, lb, returned.data) * blseg(next, data, returned, tsl, returned.data, ub) * returned != tsl;
 {
     pivot := predecessor(lst, tsl, lb, ub);
     if (lst == pivot) {
@@ -26,9 +26,9 @@ method split(lst, tsl, lb, ub)
         start := lst;
         end := last;
         while (start != end)
-            invariant blseg(lst, start, lb, pivot.data);
-            invariant blseg(start, end, lb, ub);
-            invariant blseg(end, last, pivot.data, ub);
+            invariant blseg(next, data, lst, start, lb, pivot.data);
+            invariant blseg(next, data, start, end, lb, ub);
+            invariant blseg(next, data, end, last, pivot.data, ub);
             invariant last |-> pivot;
             invariant last.data >= lb;
             invariant last.data <= ub;
@@ -61,8 +61,8 @@ method split(lst, tsl, lb, ub)
 }
 
 method quicksort(lst, end, lb, ub)
-    requires blseg(lst, end, lb, ub);
-    ensures bslseg(lst, end, lb, ub);
+    requires blseg(next, data, lst, end, lb, ub);
+    ensures bslseg(next, data, lst, end, lb, ub);
 {
     if (lst == end || lst.next == end) {
     } else {

@@ -1,6 +1,6 @@
 method insert(lst, elt)
-    requires lseg(lst, null) * elt |-> null;
-    ensures lseg(lst, null);
+    requires lseg(next, lst, null) * elt |-> null;
+    ensures lseg(next, lst, null);
 {
     if (lst == null) {
       lst := elt; 
@@ -8,7 +8,7 @@ method insert(lst, elt)
     } else {
         curr := lst;
         while ( Random && curr.next != null ) 
-            invariant curr != null * lseg(lst, curr) * lseg(curr, null);
+            invariant curr != null * lseg(next, lst, curr) * lseg(next, curr, null);
         {
             curr := curr.next;
         }

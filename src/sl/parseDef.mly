@@ -80,8 +80,8 @@ form:
 | LPAREN form RPAREN { $2 }
 | TRUE { mk_true }
 | FALSE { mk_false }
-| BTWN LPAREN term COMMA term COMMA term RPAREN { mk_btwn Sl.fpts $3 $5 $7 }
-| REACH LPAREN term COMMA term RPAREN { mk_reach Sl.fpts $3 $5 }
+| BTWN LPAREN term COMMA term COMMA term COMMA term RPAREN { mk_btwn $3 $5 $7 $9 }
+| REACH LPAREN term COMMA term COMMA term RPAREN { mk_reach $3 $5 $7 }
 | term f_binop term { $2 $1 $3 }
 | NOT form { mk_not $2 }
 | form OR  form { mk_or  [$1; $3] }

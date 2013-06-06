@@ -1,13 +1,13 @@
 method insert(lst, elt)
-    requires lseg(lst, null) * elt |-> null;
-    ensures lseg(returned, null);
+    requires lseg(next, lst, null) * elt |-> null;
+    ensures lseg(next, returned, null);
 {
     if (lst == null)
         return elt;
     else {
         curr := lst;
         while ( Nondet && curr.next != null ) 
-            invariant curr != null * lseg(lst, curr) * lseg(curr, null);
+            invariant curr != null * lseg(next, lst, curr) * lseg(next, curr, null);
         {
             curr := curr.next;
         }

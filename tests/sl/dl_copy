@@ -1,19 +1,19 @@
 method dl_copy()
-    requires dlseg(a, null, null, b) * c == null * d == null;
-    ensures dlseg(a, null, null, b) * dlseg(c, null, null, d);
+    requires dlseg(next, prev, a, null, null, b) * c == null * d == null;
+    ensures dlseg(next, prev, a, null, null, b) * dlseg(next, prev, c, null, null, d);
 {
     curr := a;
     old_curr := null;
     while (curr != null) 
-        invariant dlseg(a, null, curr, old_curr);
-        invariant dlseg(curr, old_curr, null, b);
-        invariant dlseg(c, null, null, d);
+        invariant dlseg(next, prev, a, null, curr, old_curr);
+        invariant dlseg(next, prev, curr, old_curr, null, b);
+        invariant dlseg(next, prev, c, null, null, d);
     {
         old_curr := curr;
         old_d := d;
         new d;
         d.next := null;
-        d.back := old_d;
+        d.prev := old_d;
         if (old_d != null) {
           old_d.next := d;
         } else {

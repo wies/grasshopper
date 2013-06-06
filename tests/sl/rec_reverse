@@ -1,6 +1,6 @@
 method rev1(curr, rev)
-    requires lseg(rev, null) * lseg(curr, null);
-    ensures lseg(returned, null);
+    requires lseg(next, rev, null) * lseg(next, curr, null);
+    ensures lseg(next, returned, null);
 {
     if (curr == null) {
         return rev;
@@ -13,8 +13,8 @@ method rev1(curr, rev)
 }
 
 method rec_reverse(lst)
-    requires lseg(lst, null);
-    ensures lseg(returned, null);
+    requires lseg(next, lst, null);
+    ensures lseg(next, returned, null);
 {
     r := rev1(lst, null);
     return r;

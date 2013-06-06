@@ -1,6 +1,6 @@
 method copy1(curr, cp)
-    requires lseg(cp, null) * lseg(curr, null);
-    ensures  lseg(returned, null) * lseg(curr, null);
+    requires lseg(next, cp, null) * lseg(next, curr, null);
+    ensures  lseg(next, returned, null) * lseg(next, curr, null);
 {
     if (curr == null) {
         return cp;
@@ -15,8 +15,8 @@ method copy1(curr, cp)
 }
 
 method rec_copy(lst)
-    requires lseg(lst, null);
-    ensures lseg(lst, null) * lseg(returned, null);
+    requires lseg(next, lst, null);
+    ensures lseg(next, lst, null) * lseg(next, returned, null);
 {
     cp := copy1(lst, null);
     return cp;

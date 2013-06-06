@@ -1,27 +1,27 @@
 method dl_insert(lst, elt)
-    requires dlseg(a, null, null, b) * elt |-> null;
-    ensures (a == null * dlseg(elt, null, null, elt)) || dlseg(a, null, null, b);
+    requires dlseg(next, prev, a, null, null, b) * elt |-> null;
+    ensures (a == null * dlseg(next, prev, elt, null, null, elt)) || dlseg(next, prev, a, null, null, b);
 {
     if (a == null) {
-        elt.back := null;
+        elt.prev := null;
         return elt;
     } else {
         curr := a;
         prv := null;
         while ( Random && curr.next != null ) 
-            invariant curr != null * dlseg(a, null, curr, prv) * dlseg(curr, prv, null, b);
+            invariant curr != null * dlseg(next, prev, a, null, curr, prv) * dlseg(next, prev, curr, prv, null, b);
         {
             prv := curr;
             curr := curr.next;
         }
         elt.next := curr;
-        curr.back := elt;
+        curr.prev := elt;
         if (prv != null) {
           prv.next := elt;
         } else {
           a := elt;
         }
-        elt.back := prv;
+        elt.prev := prv;
         return a;
     }
 }

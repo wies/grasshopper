@@ -1,11 +1,11 @@
 method dl_filter(a, b)
-    requires dlseg(a, null, null, b);
-    ensures dlseg(a, null, null, b);
+    requires dlseg(next, prev, a, null, null, b);
+    ensures dlseg(next, prev, a, null, null, b);
 {
     prv := null;
     curr := a;
     while (curr != null) 
-      invariant dlseg(a,null,curr,prv) * dlseg(curr,prv,null,b);
+      invariant dlseg(next, prev, a,null,curr,prv) * dlseg(next, prev, curr,prv,null,b);
     { 
       old_curr := curr;
       curr := curr.next;
@@ -16,7 +16,7 @@ method dl_filter(a, b)
             a := curr;
         }
         if (curr != null) {
-            curr.back := prv;
+            curr.prev := prv;
         } else {
             b := prv;
         }

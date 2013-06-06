@@ -1,4 +1,6 @@
-struct Node {}
+struct Node {
+  var next: Node;
+}
 
 predicate lseg(x: Node, y: Node) {
   true

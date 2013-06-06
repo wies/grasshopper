@@ -1,10 +1,10 @@
 method traverse1(lst)
-    requires slseg(lst, null);
-    ensures slseg(lst, null);
+    requires slseg(next, data, lst, null);
+    ensures slseg(next, data, lst, null);
 {
     curr := lst;
     while(curr != null) 
-        invariant (curr != null * lslseg(lst, curr, curr.data) * slseg(curr, null)) || (curr == null * slseg(lst, curr));
+        invariant (curr != null * lslseg(next, data, lst, curr, curr.data) * slseg(next, data, curr, null)) || (curr == null * slseg(next, data, lst, curr));
     {
         curr := curr.next; 
     }

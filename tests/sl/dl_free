@@ -1,10 +1,10 @@
 method dl_free(lst)
-    requires dlseg(lst, a, null, b);
+    requires dlseg(next, prev, lst, a, null, b);
     ensures emp;
 {
     prv := a;
     while (lst != null) 
-        invariant dlseg(lst, prv, null, b);
+        invariant dlseg(next, prev, lst, prv, null, b);
     {
         prv := lst;
         lst := lst.next; 

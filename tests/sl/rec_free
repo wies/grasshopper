@@ -1,5 +1,5 @@
 method rec_free(lst)
-    requires lseg(lst, null);
+    requires lseg(next, lst, null);
     ensures emp;
 {
     if (lst != null) {

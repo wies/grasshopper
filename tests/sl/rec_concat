@@ -1,6 +1,6 @@
 method find_last(a)
-    requires a != null * lseg(a, null);
-    ensures lseg(a, returned) * returned |-> null;
+    requires a != null * lseg(next, a, null);
+    ensures lseg(next, a, returned) * returned |-> null;
 {
     n := a.next;
     if (n != null) {
@@ -12,8 +12,8 @@ method find_last(a)
 }
 
 method rec_concat(a, b)
-    requires a != null * lseg(a, null) * lseg(b, null);
-    ensures lseg(a, b) * lseg(b, null);
+    requires a != null * lseg(next, a, null) * lseg(next, b, null);
+    ensures lseg(next, a, b) * lseg(next, b, null);
 {
     l := find_last(a);
     l.next := b;

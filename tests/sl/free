@@ -1,9 +1,9 @@
 method free_(lst)
-    requires lseg(lst, null);
+    requires lseg(next, lst, null);
     ensures emp;
 {
     while(lst != null) 
-        invariant lseg(lst, null);
+        invariant lseg(next, lst, null);
     {
         curr := lst;
         lst := lst.next; 

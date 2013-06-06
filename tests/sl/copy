@@ -1,11 +1,11 @@
 method copy(lst)
-    requires lseg(lst, null);
-    ensures lseg(lst, null) * lseg(returned, null);
+    requires lseg(next, lst, null);
+    ensures lseg(next, lst, null) * lseg(next, returned, null);
 {
     curr := lst;
     cp := null;
     while(curr != null) 
-        invariant lseg(lst, curr) * lseg(curr, null) * lseg(cp, null);
+        invariant lseg(next, lst, curr) * lseg(next, curr, null) * lseg(next, cp, null);
     {
         old_cp := cp;
         new cp;

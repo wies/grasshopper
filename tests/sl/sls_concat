@@ -1,13 +1,13 @@
 method concat(a, b, x)
-    requires lslseg(a, null, x) * uslseg(b, null, x);
-    ensures slseg(returned, null);
+    requires lslseg(next, data, a, null, x) * uslseg(next, data, b, null, x);
+    ensures slseg(next, data, returned, null);
 {
     if (a == null) {
         return b;
     } else {
         curr := a;
         while(curr.next != null) 
-            invariant curr != null * lslseg(a, curr, curr.data) * lslseg(curr, null, x);
+            invariant curr != null * lslseg(next, data, a, curr, curr.data) * lslseg(next, data, curr, null, x);
         {
             curr := curr.next; 
         }

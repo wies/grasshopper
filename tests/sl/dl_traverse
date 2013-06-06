@@ -1,11 +1,11 @@
 method dl_traverse(lst)
-    requires dlseg(lst, a, null, b);
-    ensures dlseg(lst, a, null, b);
+    requires dlseg(next, prev, lst, a, null, b);
+    ensures dlseg(next, prev, lst, a, null, b);
 {
     curr := lst;
     prv := a;
     while (curr != null) 
-        invariant dlseg(lst, a, curr, prv) * dlseg(curr, prv, null, b);
+        invariant dlseg(next, prev, lst, a, curr, prv) * dlseg(next, prev, curr, prv, null, b);
     {
         prv := curr;
         curr := curr.next; 

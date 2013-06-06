@@ -1,6 +1,6 @@
 method rec_insert(lst, elt)
-    requires lseg(lst, null) * elt |-> null;
-    ensures lseg(returned, null);
+    requires lseg(next, lst, null) * elt |-> null;
+    ensures lseg(next, returned, null);
 {
     if (lst == null)
         return elt;

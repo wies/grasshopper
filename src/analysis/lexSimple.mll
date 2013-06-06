@@ -44,7 +44,7 @@ rule token = parse
 | "return" { RETURN }
 | "assert" { ASSERT }
 | "next" { NEXT }
-| "back" { PREV }
+| "prev" { PREV }
 | "data" { DATA }
 | "new" { NEW }
 | "free" { DISPOSE }

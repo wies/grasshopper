@@ -1,6 +1,6 @@
 method double(lst)
-    requires slseg(lst, null);
-    ensures slseg(lst, null) * slseg(returned, null);
+    requires slseg(next, data, lst, null);
+    ensures slseg(next, data, lst, null) * slseg(next, data, returned, null);
 {
     if (lst == null) {
         return null;
@@ -11,9 +11,9 @@ method double(lst)
         cp.data := 2 (*) curr.data;
         cp.next := null;
         while(curr.next != null) 
-            invariant lslseg(lst, curr, curr.data);
-            invariant slseg(curr, null);
-            invariant lslseg(head, cp, 2 (*) curr.data);
+            invariant lslseg(next, data, lst, curr, curr.data);
+            invariant slseg(next, data, curr, null);
+            invariant lslseg(next, data, head, cp, 2 (*) curr.data);
             invariant cp |-> null;
             invariant cp.data == 2 (*) curr.data;
             invariant curr != null;

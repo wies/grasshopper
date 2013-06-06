@@ -1,11 +1,11 @@
 method reverse(lst)
-    requires lseg(lst, null);
-    ensures lseg(returned, null);
+    requires lseg(next, lst, null);
+    ensures lseg(next, returned, null);
 {
     curr := lst;
     rev := null;
     while (curr != null) 
-        invariant lseg(rev, null) * lseg(curr, null);
+        invariant lseg(next, rev, null) * lseg(next, curr, null);
     {
         tmp := curr;
         curr := curr.next;

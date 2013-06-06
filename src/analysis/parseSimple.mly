@@ -146,6 +146,9 @@ pterm:
 | pterm DIV pterm { FormUtil.mk_div $1 $3 }
 | MINUS pterm { FormUtil.mk_uminus $2 }
 | TIDENT { FormUtil.mk_free_const (mk_ident $1) }
+| NEXT { fpts }
+| PREV { fprev_pts }
+| DATA { fdata }
 | NULL { FormUtil.mk_null }
 | INT { FormUtil.mk_int $1 }
 | LPAREN pterm RPAREN { $2 }

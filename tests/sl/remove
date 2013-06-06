@@ -1,13 +1,13 @@
 method remove(lst)
-    requires lseg(lst, null);
-    ensures lseg(returned, null);
+    requires lseg(next, lst, null);
+    ensures lseg(next, returned, null);
 {
     if (lst == null)
         return null;
     else {
         curr := lst;
         while ( Random && curr.next != null) 
-            invariant curr != null * lseg(lst, curr) * lseg(curr, null);
+            invariant curr != null * lseg(next, lst, curr) * lseg(next, curr, null);
         {
             curr := curr.next;
         }

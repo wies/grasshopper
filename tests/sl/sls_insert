@@ -1,6 +1,6 @@
 method sls_insert(lst, elt)
-    requires slseg(lst, null) * elt |-> null;
-    ensures slseg(returned, null);
+    requires slseg(next, data, lst, null) * elt |-> null;
+    ensures slseg(next, data, returned, null);
 {
     if (lst == null || lst.data > elt.data) {
         elt.next := lst;
@@ -8,7 +8,7 @@ method sls_insert(lst, elt)
     } else {
         curr := lst;
         while (curr.next != null && curr.next.data <= elt.data) 
-            invariant curr != null * lslseg(lst, curr, curr.data) * slseg(curr, null) * curr.data <= elt.data;
+            invariant curr != null * lslseg(next, data, lst, curr, curr.data) * slseg(next, data, curr, null) * curr.data <= elt.data;
         {
             curr := curr.next;
         }

@@ -1,6 +1,6 @@
 method dl_remove()
-    requires dlseg(a, null, null, b);
-    ensures dlseg(a, null, null, b);
+    requires dlseg(next, prev, a, null, null, b);
+    ensures dlseg(next, prev, a, null, null, b);
 {
     if (a == null) {
     } else if (a == b) {
@@ -11,7 +11,7 @@ method dl_remove()
         curr := a;
         prv := null;
         while ( Random && curr.next != null ) 
-            invariant curr != null * dlseg(a, null, curr, prv) * dlseg(curr, prv, null, b);
+            invariant curr != null * dlseg(next, prev, a, null, curr, prv) * dlseg(next, prev, curr, prv, null, b);
         {
             prv := curr;
             curr := curr.next;
@@ -23,7 +23,7 @@ method dl_remove()
             a := tmp;
         }
         if (tmp != null) {
-            tmp.back := prv;
+            tmp.prev := prv;
         } else {
             b := prv;
         }

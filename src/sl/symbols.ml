@@ -147,18 +147,42 @@ let pred_to_form p args domain =
 
 let predefined =
   [
-    "emp(domain: set loc){ true, domain == {} }";
-    "ptsTo(domain: set loc, ptr: fld loc, x: loc, y: loc){ ptr(x) == y, domain == {x} }";
-    "lseg(domain: set loc, x: loc, y: loc){ reach(x, y), forall l1: loc. l1 in domain <=> (btwn(x, l1, y) && l1 != y) }";
-    "slseg(domain: set loc, x: loc, y: loc){ reach(x, y) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach( l1, l2)) ==> data(l1) <= data(l2), forall l1: loc. l1 in domain <=> (btwn(x, l1, y) && l1 != y) }";
-    "rslseg(domain: set loc, x: loc, y: loc){ reach(x, y) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach( l1, l2)) ==> data(l1) >= data(l2), forall l1: loc.  l1 in domain <=> (btwn(x, l1, y) && l1 != y) }";
-    "ulseg(domain: set loc, x: loc, y: loc, v: int){ reach(x, y) && forall l1: loc. l1 in domain ==> data(l1) >= v, forall l1: loc. l1 in domain <=> (btwn(x, l1, y) && l1 != y) }";
-    "llseg(domain: set loc, x: loc, y: loc, v: int){ reach(x, y) && forall l1: loc. l1 in domain ==> data(l1) <= v, forall l1: loc. l1 in domain <=> (btwn(x, l1, y) && l1 != y) }";
-    "uslseg(domain: set loc, x: loc, y: loc, v: int){ reach(x, y) && (forall l1: loc. l1 in domain ==> data(l1) >= v) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach( l1, l2)) ==> data(l1) <= data(l2), forall l1: loc. l1 in domain <=> (btwn(x, l1, y) && l1 != y) }";
-    "lslseg(domain: set loc, x: loc, y: loc, v: int){ reach(x, y) && (forall l1: loc. l1 in domain ==> data(l1) <= v) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach( l1, l2)) ==> data(l1) <= data(l2), forall l1: loc. l1 in domain <=> (btwn(x, l1, y) && l1 != y) }";
-    "blseg(domain: set loc, x: loc, y: loc, v: int, w: int){ reach(x, y) && forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w), forall l1: loc. l1 in domain <=> (btwn(x, l1, y) && l1 != y) }";
-    "bslseg(domain: set loc, x: loc, y: loc, v: int, w: int){ reach(x, y) && (forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w)) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach( l1, l2)) ==> data(l1) <= data(l2), forall l1: loc. l1 in domain <=> (btwn(x, l1, y) && l1 != y) }";
-    "dlseg(domain: set loc, x1: loc, x2: loc, y1: loc, y2: loc){ reach(x1, y1) && ((x1 == y1 && x2 == y2) || (prev(x1) == x2 && next(y2) == y1 && y2 in domain)) && forall l1: loc, l2: loc. (next(l1) == l2 && l1 in domain && l2 in domain) ==> prev(l2) == l1,  forall l1: loc. l1 in domain <=> (btwn(x1, l1, y1) && l1 != y1) }"
+    "emp(domain: set loc){" ^
+        " true," ^
+        "domain == {} }";
+    "ptsTo(domain: set loc, ptr: fld loc, x: loc, y: loc){ " ^
+        "ptr(x) == y, " ^
+        "domain == {x} }";
+    "lseg(domain: set loc, next: fld loc, x: loc, y: loc){ " ^
+        "reach(next, x, y), " ^
+        "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
+    "slseg(domain: set loc, next: fld loc, data: fld int, x: loc, y: loc){ " ^
+        "reach(next, x, y) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach(next, l1, l2)) ==> data(l1) <= data(l2), " ^
+        "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
+    "rslseg(domain: set loc, next: fld loc, data: fld int, x: loc, y: loc){ " ^
+        "reach(next, x, y) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach(next, l1, l2)) ==> data(l1) >= data(l2), " ^
+        "forall l1: loc.  l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
+    "ulseg(domain: set loc, next: fld loc, data: fld int, x: loc, y: loc, v: int){ " ^
+        "reach(next, x, y) && forall l1: loc. l1 in domain ==> data(l1) >= v, " ^
+        " forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
+    "llseg(domain: set loc, next: fld loc, data: fld int, x: loc, y: loc, v: int){ " ^
+        "reach(next, x, y) && forall l1: loc. l1 in domain ==> data(l1) <= v, " ^
+        "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
+    "uslseg(domain: set loc, next: fld loc, data: fld int, x: loc, y: loc, v: int){ " ^
+        "reach(next, x, y) && (forall l1: loc. l1 in domain ==> data(l1) >= v) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach(next, l1, l2)) ==> data(l1) <= data(l2),"^
+        "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
+    "lslseg(domain: set loc, next: fld loc, data: fld int, x: loc, y: loc, v: int){" ^
+        "reach(next, x, y) && (forall l1: loc. l1 in domain ==> data(l1) <= v) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach(next, l1, l2)) ==> data(l1) <= data(l2),"^
+        "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
+    "blseg(domain: set loc, next: fld loc, data: fld int, x: loc, y: loc, v: int, w: int){" ^
+        "reach(next, x, y) && forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w)," ^
+        "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
+    "bslseg(domain: set loc, next: fld loc, data: fld int, x: loc, y: loc, v: int, w: int){" ^
+        "reach(next, x, y) && (forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w)) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach(next, l1, l2)) ==> data(l1) <= data(l2)," ^
+        "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
+    "dlseg(domain: set loc, next: fld loc, prev: fld loc, x1: loc, x2: loc, y1: loc, y2: loc){" ^
+        "reach(next, x1, y1) && ((x1 == y1 && x2 == y2) || (prev(x1) == x2 && next(y2) == y1 && y2 in domain)) && forall l1: loc, l2: loc. (next(l1) == l2 && l1 in domain && l2 in domain) ==> prev(l2) == l1," ^
+        "forall l1: loc. l1 in domain <=> (btwn(next, x1, l1, y1) && l1 != y1) }"
   ]
 
 (* add the predefined symbols *)
@@ -173,290 +197,3 @@ let _ =
         List.iter (fun s -> Hashtbl.add symbols s.sym s) syms
     )
     predefined
-
-
-(*
-let upper_bound domain id3 =
-  (FormUtil.mk_implies
-    (FormUtil.mk_and [mk_domain domain Axioms.loc1])
-    (FormUtil.mk_leq (get_data Axioms.loc1) id3))
-
-let lower_bound domain id3 =
-  (FormUtil.mk_implies
-    (FormUtil.mk_and [mk_domain domain Axioms.loc1])
-    (FormUtil.mk_geq (get_data Axioms.loc1) id3))
-
-let sorted domain =
-  (FormUtil.mk_implies
-    (FormUtil.mk_and [mk_domain domain Axioms.loc1;
-                      mk_domain domain Axioms.loc2;
-                      reach Axioms.loc1 Axioms.loc2])
-    (FormUtil.mk_leq (get_data Axioms.loc1) (get_data Axioms.loc2)))
-*)
-
-(*
-let emp   =
-  { sym = "emp";
-    arity = 0;
-    structure = (fun _ _ -> FormUtil.mk_true);
-    heap = (fun domain _ -> empty domain)
-  }
-
-let ptsTo =
-  { sym = "ptsTo";
-    arity = 3;
-    structure = (fun _ args -> match args with
-        | [h; id1; id2] -> FormUtil.mk_eq (FormUtil.mk_read h id1) id2
-        | _ -> failwith "wrong number of arguments");
-    heap = (fun domain args ->  match args with
-        | [_; id1; _] -> FormUtil.mk_eq (mk_loc_set domain) (FormUtil.mk_setenum [id1])
-        | _ -> failwith "wrong number of arguments");
-  }
-
-let lseg  =
-  { sym = "lseg";
-    arity = 2;
-    structure = (fun _ args -> match args with
-        | [id1; id2] ->  reach id1 id2
-        | _ -> failwith "wrong number of arguments");
-    heap = (fun domain args ->  match args with
-        | [id1; id2] ->
-            Axioms.mk_axiom 
-              ("def_of_" ^ Form.str_of_ident domain) 
-              (list_set_def id1 id2 domain)    
-        | _ -> failwith "wrong number of arguments");
-  }
-
-let slseg =
-  { sym = "slseg";
-    arity = 2;
-    structure = (fun domain args -> match args with
-        | [id1; id2] -> 
-            let part1 = reach id1 id2 in
-            let part2 = 
-              Axioms.mk_axiom
-                ("sls_" ^ Form.str_of_ident domain)
-                (sorted domain)
-            in
-              FormUtil.mk_and [part1; part2]
-        | _ -> failwith "wrong number of arguments");
-    heap = (fun domain args ->  match args with
-        | [id1; id2] ->
-            Axioms.mk_axiom 
-              ("def_of_" ^ Form.str_of_ident domain) 
-              (list_set_def id1 id2 domain)    
-        | _ -> failwith "wrong number of arguments");
-  }
-
-let rslseg =
-  { sym = "rslseg";
-    arity = 2;
-    structure = (fun domain args -> match args with
-        | [id1; id2] -> 
-            let part1 = reach id1 id2 in
-            let part2 = 
-              Axioms.mk_axiom ("rsls_" ^ Form.str_of_ident domain)
-                (FormUtil.mk_implies
-                  (FormUtil.mk_and [mk_domain domain Axioms.loc1;
-                                    mk_domain domain Axioms.loc2;
-                                    reach Axioms.loc1 Axioms.loc2])
-                  (FormUtil.mk_geq (get_data Axioms.loc1) (get_data Axioms.loc2)))
-            in
-              FormUtil.mk_and [part1; part2]
-        | _ -> failwith "wrong number of arguments");
-    heap = (fun domain args ->  match args with
-        | [id1; id2] ->
-            Axioms.mk_axiom 
-              ("def_of_" ^ Form.str_of_ident domain) 
-              (list_set_def id1 id2 domain)    
-        | _ -> failwith "wrong number of arguments");
-  }
-
-let ulseg =
-  { sym = "ulseg";
-    arity = 3;
-    structure = (fun domain args -> match args with
-        | [id1; id2; id3] -> 
-            let part1 = reach id1 id2 in
-            let part2 = 
-              Axioms.mk_axiom
-                ("uls_" ^ Form.str_of_ident domain)
-                (lower_bound domain id3)
-            in
-              FormUtil.mk_and [part1; part2]
-        | _ -> failwith "wrong number of arguments");
-    heap = (fun domain args ->  match args with
-        | [id1; id2; _] ->
-            Axioms.mk_axiom 
-              ("def_of_" ^ Form.str_of_ident domain) 
-              (list_set_def id1 id2 domain)    
-        | _ -> failwith "wrong number of arguments");
-  }
-
-let llseg =
-  { sym = "llseg";
-    arity = 3;
-    structure = (fun domain args -> match args with
-        | [id1; id2; id3] -> 
-            let part1 = reach id1 id2 in
-            let part2 = 
-              Axioms.mk_axiom
-                ("lls_" ^ Form.str_of_ident domain)
-                (upper_bound domain id3)
-            in
-              FormUtil.mk_and [part1; part2]
-        | _ -> failwith "wrong number of arguments");
-    heap = (fun domain args ->  match args with
-        | [id1; id2; _] ->
-            Axioms.mk_axiom 
-              ("def_of_" ^ Form.str_of_ident domain) 
-              (list_set_def id1 id2 domain)    
-        | _ -> failwith "wrong number of arguments");
-  }
-
-let uslseg =
-  { sym = "uslseg";
-    arity = 3;
-    structure = (fun domain args -> match args with
-        | [id1; id2; id3] -> 
-            let part1 = reach id1 id2 in
-            let part2 = 
-              Axioms.mk_axiom
-                ("usls_bound_" ^ Form.str_of_ident domain)
-                (lower_bound domain id3)
-            in
-            let part3 =
-              Axioms.mk_axiom
-                ("usls_sort_" ^ Form.str_of_ident domain)
-                (sorted domain)
-            in
-              FormUtil.mk_and [part1; part2; part3]
-        | _ -> failwith "wrong number of arguments");
-    heap = (fun domain args ->  match args with
-        | [id1; id2; _] ->
-            Axioms.mk_axiom 
-              ("def_of_" ^ Form.str_of_ident domain) 
-              (list_set_def id1 id2 domain)    
-        | _ -> failwith "wrong number of arguments");
-  }
-
-let lslseg =
-  { sym = "lslseg";
-    arity = 3;
-    structure = (fun domain args -> match args with
-        | [id1; id2; id3] -> 
-            let part1 = reach id1 id2 in
-            let part2 = 
-              Axioms.mk_axiom ("lsls_bound_" ^ Form.str_of_ident domain)
-                (upper_bound domain id3)
-            in
-            let part3 =
-              Axioms.mk_axiom ("lsls_sort_" ^ Form.str_of_ident domain)
-                (sorted domain)
-            in
-              FormUtil.mk_and [part1; part2; part3]
-        | _ -> failwith "wrong number of arguments");
-    heap = (fun domain args ->  match args with
-        | [id1; id2; _] ->
-            Axioms.mk_axiom 
-              ("def_of_" ^ Form.str_of_ident domain) 
-              (list_set_def id1 id2 domain)    
-        | _ -> failwith "wrong number of arguments");
-  }
-
-let dlseg =
-  { sym = "dlseg";
-    arity = 4;
-    structure = (fun domain args -> match args with
-        | [x1; x2; y1; y2] -> 
-            let part1 = reach x1 y1 in
-            let part2 =
-              Axioms.mk_axiom ("dll_" ^ Form.str_of_ident domain)
-                (FormUtil.mk_implies (FormUtil.mk_and [ mk_domain domain Axioms.loc1;
-                                                        mk_domain domain Axioms.loc2;
-                                                        FormUtil.mk_eq (FormUtil.mk_read fpts Axioms.loc1) Axioms.loc2])
-                   (FormUtil.mk_eq (FormUtil.mk_read fprev_pts Axioms.loc2) Axioms.loc1)) in
-            let part3 =
-              FormUtil.mk_or [
-              FormUtil.mk_and [ FormUtil.mk_eq x1 y1; FormUtil.mk_eq x2 y2];
-              FormUtil.mk_and [ FormUtil.mk_eq (FormUtil.mk_read fprev_pts x1) x2;
-                                FormUtil.mk_eq (FormUtil.mk_read fpts y2) y1;
-                                mk_domain domain y2] ]
-            in
-              FormUtil.mk_and [part1; part2; part3]
-        | _ -> failwith "wrong number of arguments");
-    heap = (fun domain args ->  match args with
-        | [id1; _; id2; _] ->
-            Axioms.mk_axiom 
-              ("def_of_" ^ Form.str_of_ident domain) 
-              (list_set_def id1 id2 domain)    
-        | _ -> failwith "wrong number of arguments");
-  }
-
-let blseg =
-  { sym = "blseg";
-    arity = 4;
-    structure = (fun domain args -> match args with
-        | [id1; id2; id3; id4] -> 
-            let part1 = reach id1 id2 in
-            let part2 = 
-              Axioms.mk_axiom ("bsls_upper_bound_" ^ Form.str_of_ident domain)
-                (upper_bound domain id4)
-            in
-            let part4 = 
-              Axioms.mk_axiom ("bsls_lower_bound_" ^ Form.str_of_ident domain)
-                (lower_bound domain id3)
-            in
-              FormUtil.mk_and [part1; part2; part4]
-        | _ -> failwith "wrong number of arguments");
-    heap = (fun domain args ->  match args with
-        | [id1; id2; _; _] ->
-            Axioms.mk_axiom 
-              ("def_of_" ^ Form.str_of_ident domain) 
-              (list_set_def id1 id2 domain)    
-        | _ -> failwith "wrong number of arguments");
-  }
-
-let bslseg =
-  { sym = "bslseg";
-    arity = 4;
-    structure = (fun domain args -> match args with
-        | [id1; id2; id3; id4] -> 
-            let part1 = reach id1 id2 in
-            let part2 = 
-              Axioms.mk_axiom ("bsls_upper_bound_" ^ Form.str_of_ident domain)
-                (upper_bound domain id4)
-            in
-            let part3 =
-              Axioms.mk_axiom ("lsls_sort_" ^ Form.str_of_ident domain)
-                (sorted domain)
-            in
-            let part4 = 
-              Axioms.mk_axiom ("bsls_lower_bound_" ^ Form.str_of_ident domain)
-                (lower_bound domain id3)
-            in
-              FormUtil.mk_and [part1; part2; part3; part4]
-        | _ -> failwith "wrong number of arguments");
-    heap = (fun domain args ->  match args with
-        | [id1; id2; _; _] ->
-            Axioms.mk_axiom 
-              ("def_of_" ^ Form.str_of_ident domain) 
-              (list_set_def id1 id2 domain)    
-        | _ -> failwith "wrong number of arguments");
-  }
-
-let symbols =
-  [ emp;
-    ptsTo;
-    lseg;
-    slseg;
-    rslseg;
-    ulseg;
-    llseg;
-    uslseg;
-    lslseg;
-    dlseg;
-    blseg;
-    bslseg
-  ]
-*)

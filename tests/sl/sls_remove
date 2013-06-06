@@ -1,12 +1,12 @@
 method remove(lst, value)
-    requires slseg(lst, null);
-    ensures slseg(returned, null);
+    requires slseg(next, data, lst, null);
+    ensures slseg(next, data, returned, null);
 {
     prv := null;
     curr := lst;
     while (curr != null && curr.data < value) 
-        invariant prv == null * curr == lst * slseg(curr, null)
-               || lslseg(lst, prv, prv.data) * prv |-> curr * slseg(curr, null) * (curr == null || prv.data <= curr.data);
+        invariant prv == null * curr == lst * slseg(next, data, curr, null)
+               || lslseg(next, data, lst, prv, prv.data) * prv |-> curr * slseg(next, data, curr, null) * (curr == null || prv.data <= curr.data);
     {
         prv := curr;
         curr := curr.next;

@@ -1,24 +1,24 @@
 method traverse1(lst)
-    requires lseg(lst, null);
-    ensures lseg(lst, null);
+    requires lseg(next, lst, null);
+    ensures lseg(next, lst, null);
 {
     curr := lst;
     while(curr != null) 
-        invariant lseg(lst, curr) * lseg(curr, null);
+        invariant lseg(next, lst, curr) * lseg(next, curr, null);
     {
         curr := curr.next; 
     }
 }
 
 method traverse2(lst)
-    requires lseg(lst, null);
-    ensures lseg(lst, null);
+    requires lseg(next, lst, null);
+    ensures lseg(next, lst, null);
 {
     if (lst == null) {
     } else {
         curr := lst;
         while(curr.next != null) 
-            invariant lseg(lst, curr) * lseg(curr, null);
+            invariant lseg(next, lst, curr) * lseg(next, curr, null);
         {
             curr := curr.next; 
         }

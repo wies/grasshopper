@@ -1,12 +1,12 @@
 method filter(x)
-    requires slseg(x, null);
-    ensures slseg(x, null);
+    requires slseg(next, data, x, null);
+    ensures slseg(next, data, x, null);
 {
     prv := null;
     curr := x;
     while (curr != null) 
-      invariant (lslseg(x, prv, prv.data) * prv |-> curr * uslseg(curr, null, prv.data))
-             || (prv == null * x == curr * slseg(curr, null));
+      invariant (lslseg(next, data, x, prv, prv.data) * prv |-> curr * uslseg(next, data, curr, null, prv.data))
+             || (prv == null * x == curr * slseg(next, data, curr, null));
     {
       old_curr := curr;
       curr := curr.next;

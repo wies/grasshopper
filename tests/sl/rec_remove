@@ -1,6 +1,6 @@
 method rec_remove(lst)
-    requires lseg(lst, null);
-    ensures lseg(returned, null);
+    requires lseg(next, lst, null);
+    ensures lseg(next, returned, null);
 {
     if (lst == null)
         return null;
