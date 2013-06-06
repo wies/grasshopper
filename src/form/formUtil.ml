@@ -306,7 +306,7 @@ let sorted_free_vars f =
 (** Computes the set of free constants occuring in term t.
  ** Takes accumulator as additional argument. *)
 let free_consts_term_acc consts t =
-  let rec fct vars = function
+  let rec fct consts = function
   | Var _ -> consts
   | App (FreeSym id, [], _) -> IdSet.add id consts
   | App (_, ts, _) -> List.fold_left fct consts ts

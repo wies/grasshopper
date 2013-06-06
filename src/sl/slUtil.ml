@@ -111,6 +111,7 @@ let subst_preds subst f =
     | Not f -> Not (map f)
     | And fs -> And (List.map map fs)
     | Or fs -> Or (List.map map fs)
+    | SepConj fs -> SepConj (List.map map fs)
     | Atom (Pred p, args) -> 
         subst p args
     | f -> f

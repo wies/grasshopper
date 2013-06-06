@@ -88,6 +88,9 @@ and pr_not ppf = function
   | (Atom (Pred _, _) as f) -> fprintf ppf "!@[<2>%a@]" pr_form f
   | f -> fprintf ppf "!(@[<3>%a@])" pr_form f
 
+let print_form out_ch f = 
+  fprintf (formatter_of_out_channel out_ch) "%a@\n@?" pr_form f
+
 let string_of_form f = pr_form str_formatter f; flush_str_formatter ()
 
 

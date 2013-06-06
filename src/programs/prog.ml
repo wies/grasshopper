@@ -222,6 +222,12 @@ let map_procs fn prog =
 let iter_procs fn prog =
   IdMap.iter (fun _ proc -> fn prog proc) prog.prog_procs
 
+let fold_preds fn init prog =
+  IdMap.fold (fun _ pred acc -> fn acc pred) prog.prog_preds init
+
+let map_preds fn prog =
+  { prog with prog_preds = IdMap.map fn prog.prog_preds }
+
 (** Auxiliary functions for specifications *)
 
 let mk_spec_form f name msg pos =

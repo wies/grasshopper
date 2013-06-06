@@ -258,23 +258,22 @@ let elim_loops (prog : program) =
 
 (** Eliminate global dependencies of predicates *)
 let elim_global_deps prog =
-  let elim_spec =
+  let elim_spec sf = 
     let subst_preds_sl f =
       let sf p args =
         let decl = find_pred prog p in
         let accs = decl.pred_accesses in
         let tas = 
-          IdSet.fold (fun id tas ->
+          List.map (fun id ->
             let decl = find_global prog id in
-            mk_free_const ~srt:decl.var_sort id :: tas)
-            accs []
+            mk_free_const ~srt:decl.var_sort id)
+            (IdSet.elements accs)
         in SlUtil.mk_pred p (tas @ args)
       in SL (SlUtil.subst_preds sf f)
     in
     let subst_preds_fol f = FOL f (* todo *) in
-    fun sf ->
-      let f1 = fold_spec_form subst_preds_fol subst_preds_sl sf in
-      { sf with spec_form = f1 }
+    let f1 = fold_spec_form subst_preds_fol subst_preds_sl sf in
+    { sf with spec_form = f1 }
   in
   let elim_stmt = function
     | (Assert sf, pp) ->
@@ -283,12 +282,33 @@ let elim_global_deps prog =
         mk_assume_cmd (elim_spec sf) pp.pp_pos
     | (bc, pp) -> Basic (bc, pp)
   in
-  let elim_proc prog proc =
+  let elim_proc proc =
+    let precond1 = List.map elim_spec proc.proc_precond in
+    let postcond1 = List.map elim_spec proc.proc_postcond in
     let body1 = Util.optmap (map_basic_cmds elim_stmt) proc.proc_body in
-    let proc1 = { proc with proc_body = body1 } in
-    declare_proc prog proc1
+    { proc with 
+      proc_body = body1;
+      proc_precond = precond1;
+      proc_postcond = postcond1;
+    } 
   in
-  fold_procs elim_proc prog prog
+  let elim_pred pred =
+    let body1 = elim_spec pred.pred_body in
+    let formals1 = IdSet.elements pred.pred_accesses @ pred.pred_formals in
+    let locals1 = 
+      IdSet.fold 
+        (fun id locals -> IdMap.add id (find_global prog id) locals) 
+        pred.pred_accesses pred.pred_locals
+    in
+    { pred with 
+      pred_body = body1; 
+      pred_formals = formals1; 
+      pred_locals = locals1; 
+      pred_accesses = IdSet.empty;
+    } 
+  in
+  let prog1 = map_procs elim_proc prog in
+  map_preds elim_pred prog1
 
 
 (** Auxiliary variables for desugaring SL specifications *)
@@ -800,6 +820,7 @@ let simplify prog =
   dump_if 0 prog;
   let prog = infer_accesses prog in
   let prog = elim_loops prog in
+  let prog = elim_global_deps prog in
   dump_if 1 prog;
   let prog = elim_sl prog in
   let prog = annotate_heap_checks prog in

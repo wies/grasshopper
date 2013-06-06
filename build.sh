@@ -17,15 +17,12 @@ distro()
     test -s grasshopper && echo "Directory grasshopper already exists. Aboarding." && exit 0
 
     REPO=`svn info | grep URL | awk '{print $2}'`
-    DATE=`date +%Y-%m-%d`
-
     svn export $REPO grasshopper
 
     RMDATE=`date +%B\ %d,\ %Y`
-
     cat README | sed s/\$DATE/"$RMDATE"/ > grasshopper/README
 
-    tar -czvf grasshopper-$DATE.tar.gz grasshopper
+    tar -czvf grasshopper.tar.gz grasshopper
     rm -rf grasshopper
 }
 
