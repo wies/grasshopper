@@ -513,7 +513,7 @@ let convert cus =
             with Invalid_argument _ -> 
               ProgError.error pos 
                 (Printf.sprintf "Predicate %s expects %d argument(s)" (fst id) (List.length tys))
-          in SL_form (SlUtil.mk_pred (Pred id) (List.map fst ts))
+          in SL_form (SlUtil.mk_pred id (List.map fst ts))
       | BinaryOp (e1, OpEq, e2, _) ->
           (match convert_expr locals e1 with
           | FOL_form _ 

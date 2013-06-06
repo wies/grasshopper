@@ -43,10 +43,11 @@ let mk_sep a b =
   | (a, SepConj bb) -> SepConj (a :: bb)
   | (SepConj aa, b) -> SepConj (aa @ [b]) 
   | _ -> SepConj [a; b]
-let mk_pred s args = Atom (s, args)
-let mk_emp = mk_pred Emp []
-let mk_cell t = mk_pred Region [FormUtil.mk_setenum [t]]
-let mk_region r = mk_pred Region [r]
+let mk_atom s args = Atom (s, args)
+let mk_emp = mk_atom Emp []
+let mk_cell t = mk_atom Region [FormUtil.mk_setenum [t]]
+let mk_region r = mk_atom Region [r]
+let mk_pred p ts = mk_atom (Pred p) ts
 let mk_pts f a b = 
   mk_sep (mk_eq (FormUtil.mk_read f a) b) (mk_cell a)
 let mk_sep_lst args = List.fold_left mk_sep mk_emp args
@@ -58,7 +59,7 @@ let mk_spatial_pred name args =
   match find_symbol name with
   | Some s ->
     if List.length args = s.arity then
-      mk_pred (Pred (name, 0)) args
+      mk_atom (Pred (name, 0)) args
     else
       failwith (name ^ " expect " ^(string_of_int (s.arity))^
                 " found (" ^(String.concat ", " (List.map Form.string_of_term args))^ ")")
@@ -70,7 +71,7 @@ let rec map_id fct f = match f with
   | Not t ->  Not (map_id fct t)
   | And lst -> And (List.map (map_id fct) lst)
   | Or lst -> Or (List.map (map_id fct) lst)
-  | Atom (s, args) -> mk_pred s (List.map (FormUtil.map_id_term fct) args)
+  | Atom (s, args) -> mk_atom s (List.map (FormUtil.map_id_term fct) args)
   | SepConj lst -> SepConj (List.map (map_id fct) lst)
 
 let subst_id subst f =
@@ -87,7 +88,7 @@ let subst_consts_fun subst f =
     | And fs -> And (List.map map fs)
     | Or fs -> Or (List.map map fs)
     | Atom (p, args) -> 
-        mk_pred p (List.map (FormUtil.subst_consts_fun_term subst) args)
+        mk_atom p (List.map (FormUtil.subst_consts_fun_term subst) args)
     | SepConj fs -> SepConj (List.map map fs)
   in
   map f
@@ -99,10 +100,21 @@ let subst_consts subst f =
     | And fs -> And (List.map map fs)
     | Or fs -> Or (List.map map fs)
     | Atom (p, args) -> 
-        mk_pred p (List.map (FormUtil.subst_consts_term subst) args)
+        mk_atom p (List.map (FormUtil.subst_consts_term subst) args)
     | SepConj fs -> SepConj (List.map map fs)
   in
   map f
+
+let subst_preds subst f =
+  let rec map f =
+    match f with
+    | Not f -> Not (map f)
+    | And fs -> And (List.map map fs)
+    | Or fs -> Or (List.map map fs)
+    | Atom (Pred p, args) -> 
+        subst p args
+    | f -> f
+  in map f
 
 let free_consts f =
   let rec fc acc = function
