@@ -43,7 +43,7 @@ let compute_sl_sat () =
   (*print_endline "parsing";*)
   let sl = parse_input (fun lexbuf -> ParseSl.main LexSl.token lexbuf) in
   let _ = Debug.msg ("parsed: " ^ (Sl.string_of_form sl) ^ "\n") in
-  let form = ToGrass.to_grass heap sl in
+  let form = ToGrass.to_grass Symbols.pred_to_form heap sl in
   let _ = if !Debug.verbose then
     begin
       print_endline "converted: ";

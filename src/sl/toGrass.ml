@@ -141,18 +141,18 @@ let post_process f =
   let aux_sets = List.map (fun v -> (v, Form.Set Form.Loc)) (IdSet.elements (FormUtil.fv f)) in
   FormUtil.mk_exists aux_sets (FormUtil.nnf (FormTyping.typing f))
 
-let to_grass domain f =
-  let (pointers, separations) = to_form Symbols.pred_to_form FormUtil.mk_eq domain f in
+let to_grass pred_to_form domain f =
+  let (pointers, separations) = to_form pred_to_form FormUtil.mk_eq domain f in
     post_process (FormUtil.smk_and [pointers; separations])
 
-let to_grass_contained domain f = (* same structure and footprint not larger *)
-  let (pointers, separations) = to_form Symbols.pred_to_form FormUtil.mk_subseteq domain f in
+let to_grass_contained pred_to_form domain f = (* same structure and footprint not larger *)
+  let (pointers, separations) = to_form pred_to_form FormUtil.mk_subseteq domain f in
     post_process (FormUtil.smk_and [pointers; separations])
 
-let to_grass_not_contained domain f = (* different structure or larger footprint *)
-  let (pointers, separations) = to_form Symbols.pred_to_form FormUtil.mk_subseteq domain (mk_not f) in
+let to_grass_not_contained pred_to_form domain f = (* different structure or larger footprint *)
+  let (pointers, separations) = to_form pred_to_form FormUtil.mk_subseteq domain (mk_not f) in
     post_process (FormUtil.smk_and [pointers; separations])
 
-let to_grass_negated domain f =
-  let (pointers, separations) = to_form Symbols.pred_to_form FormUtil.mk_eq domain (mk_not f) in
+let to_grass_negated pred_to_form domain f =
+  let (pointers, separations) = to_form pred_to_form FormUtil.mk_eq domain (mk_not f) in
     post_process (FormUtil.smk_and [pointers; separations])

@@ -29,8 +29,8 @@ let same_heap_axioms subst preh posth =
 let mk_entailment_query1 pre_sl pathf post_sl subst =
   let preh = pre_heap () in
   let posth = post_heap () in
-  let pre = ToGrass.to_grass preh pre_sl in
-  let post = subst_id subst (ToGrass.to_grass_negated posth post_sl) in
+  let pre = ToGrass.to_grass Symbols.pred_to_form preh pre_sl in
+  let post = subst_id subst (ToGrass.to_grass_negated Symbols.pred_to_form posth post_sl) in
   (* query *)
   let query = smk_and ( (*SlUtil.make_axioms*) (mk_and [pre; post; pathf]) ::
                         (same_heap_axioms subst preh posth) )

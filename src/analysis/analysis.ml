@@ -327,23 +327,65 @@ let init_alloc_callee_set = mk_free_const ~srt:(Set Loc) init_alloc_callee_id
 let frame_id = mk_ident "AllocCaller"
 let frame_set = mk_free_const ~srt:(Set Loc) frame_id
 
+let pred_struct (name, num) = (name ^ "_struct", num)
+let pred_domain (name, num) = (name ^ "_dom", num)
+
 (** Desugare SL specification to FOL specifications. 
  ** Assumes that loops have been transformed to tail-recursive procedures. *)
 let elim_sl prog =
+  let mk_set_decl id pos =
+    { var_name = id;
+      var_orig_name = name id;
+      var_sort = Set Loc;
+      var_is_ghost = true;
+      var_is_aux = true;
+      var_pos = pos;
+    }
+  in
+  let compile_pred =
+    let dom_id = mk_ident "Domain" in
+    let dom_set = mk_free_const ~srt:(Set Loc) dom_id in
+    fun acc pred ->
+      match pred.pred_body.spec_form with
+      | SL f ->
+          let dom_decl = mk_set_decl dom_id pred.pred_pos in
+          let args = 
+            List.map (fun id ->
+              let decl = IdMap.find id pred.pred_locals in
+              mk_free_const ~srt:decl.var_sort id) 
+              pred.pred_formals
+          in
+          let formals = dom_id :: pred.pred_formals in
+          let locals = IdMap.add dom_id dom_decl pred.pred_locals in
+          let str_body, dom_body = 
+            Symbols.pred_to_form pred.pred_name args dom_set in
+          let pred_str =
+            { pred_name = pred_struct pred.pred_name;
+              pred_formals = formals;
+              pred_locals = locals;
+              pred_body = { pred.pred_body with spec_form = FOL str_body };
+              pred_pos = pred.pred_pos;
+              pred_accesses = IdSet.empty;
+            }
+          in
+          let pred_dom = 
+            { pred_str with 
+              pred_body = { pred.pred_body with spec_form = FOL dom_body } 
+            }
+          in
+          IdMap.add pred_dom.pred_name pred_dom
+            (IdMap.add pred_str.pred_name pred_str acc)
+      | FOL _ -> acc
+  in
+  let pred_to_form p args dom =
+    FormUtil.mk_pred (pred_struct p) (dom :: args),
+    FormUtil.mk_pred (pred_domain p) (dom :: args)
+  in
   let compile_proc proc =
     (* add auxiliary set variables *)
     let locals =
-      List.fold_left (fun locals id ->
-        let decl = 
-          { var_name = id;
-            var_orig_name = name id;
-            var_sort = Set Loc;
-            var_is_ghost = true;
-            var_is_aux = true;
-            var_pos = proc.proc_pos;
-          }
-        in
-        IdMap.add id decl locals)
+      List.fold_left 
+        (fun locals id -> IdMap.add id (mk_set_decl id proc.proc_pos) locals)
         proc.proc_locals 
         [alloc_id; init_alloc_id; frame_id; alloc_callee_id; init_alloc_callee_id]
     in
@@ -377,9 +419,9 @@ let elim_sl prog =
     let precond, footprint =
       let name = "precondition of " ^ str_of_ident proc.proc_name in
       let f, _, name, msg, pos = convert_sl_form sl_precond name in
-      let f_in_frame = ToGrass.to_grass_contained frame_id f in
-      let f_notin_frame = ToGrass.to_grass_not_contained frame_id f in
-      let f_eq_init_alloc = ToGrass.to_grass init_alloc_id f in
+      let f_in_frame = ToGrass.to_grass_contained pred_to_form frame_id f in
+      let f_notin_frame = ToGrass.to_grass_not_contained pred_to_form frame_id f in
+      let f_eq_init_alloc = ToGrass.to_grass pred_to_form init_alloc_id f in
       let precond = mk_checked_spec_form (FOL f_in_frame) name msg pos in
       let fp_name = "initial footprint of " ^ str_of_ident proc.proc_name in
       let footprint_form = 
@@ -393,8 +435,8 @@ let elim_sl prog =
     let postcond =
       let name = "postcondition of " ^ str_of_ident proc.proc_name in
       let f, kind, name, msg, pos = convert_sl_form sl_postcond name in
-      let f_eq_alloc = ToGrass.to_grass alloc_id f in
-      let f_neq_alloc = ToGrass.to_grass_negated alloc_id f in
+      let f_eq_alloc = ToGrass.to_grass pred_to_form alloc_id f in
+      let f_neq_alloc = ToGrass.to_grass_negated pred_to_form alloc_id f in
       let postcond = mk_spec_form (FOL f_eq_alloc) name msg pos in
       { postcond with 
         spec_kind = kind;
@@ -451,15 +493,15 @@ let elim_sl prog =
       | (Assume sf, pp) ->
           (match sf.spec_form with
           | SL f ->
-              let f1 = ToGrass.to_grass alloc_id f in
+              let f1 = ToGrass.to_grass pred_to_form alloc_id f in
               let sf1 = mk_spec_form (FOL f1) sf.spec_name sf.spec_msg sf.spec_pos in
               mk_assume_cmd sf1 pp.pp_pos
           | FOL f -> Basic (Assume sf, pp))
       | (Assert sf, pp) ->
           (match sf.spec_form with
           | SL f ->
-              let f1 = ToGrass.to_grass alloc_id f in
-              let f1_negated = ToGrass.to_grass_negated alloc_id f in
+              let f1 = ToGrass.to_grass pred_to_form alloc_id f in
+              let f1_negated = ToGrass.to_grass_negated pred_to_form alloc_id f in
               let sf1 = mk_spec_form (FOL f1) sf.spec_name sf.spec_msg sf.spec_pos in
               mk_assert_cmd { sf1 with spec_form_negated = Some f1_negated } pp.pp_pos
           | FOL f -> Basic (Assert sf, pp))
@@ -486,6 +528,8 @@ let elim_sl prog =
       proc_body = body;
     } 
   in
+  let preds = (*fold_preds compile_pred IdMap.empty prog*) prog.prog_preds in
+  let prog = { prog with prog_preds = preds } in
   { prog with prog_procs = IdMap.map compile_proc prog.prog_procs }
 
 (** Annotate safety checks for heap accesses *)
