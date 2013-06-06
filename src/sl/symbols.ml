@@ -46,7 +46,7 @@ let rec get_fields f = match f with
           flds
     end
   | Atom (Emp, _)
-  | Atom (Cell, _)
+  | Atom (Region, _)
   | Pure _ -> TermSet.empty
   | SepConj lst | And lst | Or lst -> 
     List.fold_left (fun acc f -> TermSet.union acc (get_fields f)) TermSet.empty lst

@@ -50,10 +50,10 @@ let to_form pred_to_form set_fct domain f =
     | Atom (Emp, _) ->
         let domain = FormUtil.fresh_ident (fst d) in
         [FormUtil.mk_true, mk_loc_set_var domain], empty_var domain
-    | Atom (Cell, [t]) ->
+    | Atom (Region, [t]) ->
         let domain = FormUtil.fresh_ident (fst d) in
         [FormUtil.mk_true, mk_loc_set_var domain], 
-        FormUtil.mk_eq (mk_loc_set_var domain) (FormUtil.mk_setenum [t])
+        FormUtil.mk_eq (mk_loc_set_var domain) t
     | Atom (Pred p, args) -> 
         let domain = mk_loc_set_var (FormUtil.fresh_ident (fst d)) in
         let structure, footprint = pred_to_form p args domain in

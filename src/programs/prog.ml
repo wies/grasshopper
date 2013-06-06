@@ -130,6 +130,7 @@ type pred_decl = {
     pred_locals : var_decl IdMap.t; (** local variables *)
     pred_body : spec; (** predicate body *)
     pred_pos : source_position; (** position of declaration *)
+    pred_accesses : IdSet.t; (** accessed variables *)
   } 
 
 (** Program *)
@@ -179,6 +180,8 @@ let declare_proc prog proc =
 
 
 let procs prog = IdMap.fold (fun _ proc procs -> proc :: procs) prog.prog_procs []
+
+let preds prog = IdMap.fold (fun _ pred preds -> pred :: preds) prog.prog_preds []
 
 let find_proc prog name =
   try IdMap.find name prog.prog_procs 
@@ -452,7 +455,7 @@ let accesses_spec_form_acc acc sf =
   IdSet.union acc 
     (match sf.spec_form with
     | FOL f -> free_consts f
-    | SL f -> SlUtil.free_consts_sl f)
+    | SL f -> SlUtil.free_consts f)
 
 let accesses_spec_form sf = 
   accesses_spec_form_acc IdSet.empty sf
@@ -467,6 +470,9 @@ let accesses_proc prog proc =
     (fun id -> IdMap.mem id prog.prog_vars)
     (List.fold_left accesses_spec_form_acc body_accs
        (proc.proc_precond @ proc.proc_postcond))
+
+let accesses_pred pred =
+  pred.pred_accesses
 
 let accesses_basic_cmd = function
   | Assign ac -> 

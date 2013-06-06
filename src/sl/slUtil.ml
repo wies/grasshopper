@@ -45,7 +45,8 @@ let mk_sep a b =
   | _ -> SepConj [a; b]
 let mk_pred s args = Atom (s, args)
 let mk_emp = mk_pred Emp []
-let mk_cell a = mk_pred Cell [a]
+let mk_cell t = mk_pred Region [FormUtil.mk_setenum [t]]
+let mk_region r = mk_pred Region [r]
 let mk_pts f a b = 
   mk_sep (mk_eq (FormUtil.mk_read f a) b) (mk_cell a)
 let mk_sep_lst args = List.fold_left mk_sep mk_emp args
@@ -101,9 +102,9 @@ let subst_consts subst f =
         mk_pred p (List.map (FormUtil.subst_consts_term subst) args)
     | SepConj fs -> SepConj (List.map map fs)
   in
-    map f
+  map f
 
-let free_consts_sl f =
+let free_consts f =
   let rec fc acc = function
     | Pure g -> IdSet.union acc (FormUtil.free_consts g)
     | Not f -> fc acc f
@@ -112,6 +113,18 @@ let free_consts_sl f =
     | SepConj fs -> List.fold_left fc acc fs
     | Atom (p, args) -> List.fold_left FormUtil.free_consts_term_acc acc args
   in fc IdSet.empty f
+
+let preds f =
+  let rec p acc = function
+    | Not f -> p acc f
+    | Or fs 
+    | And fs 
+    | SepConj fs -> 
+        List.fold_left p acc fs
+    | Atom (Pred pred, _) -> 
+        IdSet.add pred acc 
+    | _ -> acc
+  in p IdSet.empty f
 
 
 let rec get_clauses f = match f with

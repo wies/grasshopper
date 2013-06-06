@@ -21,7 +21,7 @@ let get_data l = FormUtil.mk_read fdata l
 
 type pred_symbol =
   | Emp
-  | Cell
+  | Region
   | Pred of ident
 
 
@@ -55,8 +55,13 @@ let rec pr_form ppf = function
   | Or fs -> pr_ors ppf fs
   | SepConj fs -> pr_seps ppf fs
   | Atom (Emp, _) -> fprintf ppf "emp"
-  | Atom (Cell, [t]) -> fprintf ppf "cell(@[%a@])" Form.pr_term t
-  | Atom (Cell, _) -> ()
+  | Atom (Region, [r]) -> 
+      (match r with
+      | Form.App (Form.SetEnum, [t], _) ->
+          fprintf ppf "cell(@[%a@])" Form.pr_term t
+      | _ ->
+          fprintf ppf "region(@[%a@])" Form.pr_term r)
+  | Atom (Region, _) -> ()
   | Atom (Pred p, ts) ->
       fprintf ppf "%a(@[%a@])" Form.pr_ident p Form.pr_term_list ts
 

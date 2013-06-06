@@ -49,6 +49,27 @@ let infer_accesses prog =
         has_new, Basic (Call cc, pp1)
     | c ->  false, c
   in
+  let pm_pred prog pred =
+    let accs_preds, body_accs =
+      match pred.pred_body.spec_form with
+      | SL f -> 
+          let accs_preds = SlUtil.preds f in
+          let accs = SlUtil.free_consts f in
+          accs_preds, accs
+      | FOL f -> IdSet.empty, free_consts f
+    in
+    let accs = 
+      IdSet.fold (fun p -> 
+        let opred = find_pred prog p in
+        IdSet.union opred.pred_accesses)
+        accs_preds body_accs
+    in
+    let global_accs = 
+      IdSet.filter (fun id -> IdMap.mem id prog.prog_vars) accs
+    in
+    not (IdSet.subset global_accs pred.pred_accesses),
+    { pred with pred_accesses = global_accs }
+  in
   let rec pm_prog prog = 
     let procs = procs prog in
     let has_new, procs1 =
@@ -67,7 +88,24 @@ let infer_accesses prog =
       (fun procs2 proc -> IdMap.add proc.proc_name proc procs2) 
       IdMap.empty procs1
     in
-    let prog1 = {prog with prog_procs = procs2} in
+    let preds = preds prog in
+    let has_new, preds1 = 
+      List.fold_left 
+        (fun (has_new, preds1) pred ->
+          let has_new1, pred1 = pm_pred prog pred in
+          (has_new || has_new1, pred1 :: preds1))
+        (has_new, []) preds
+    in
+    let preds2 = 
+      List.fold_left 
+      (fun preds2 pred -> IdMap.add pred.pred_name pred preds2)
+      IdMap.empty preds1
+    in
+    let prog1 = 
+      { prog with 
+        prog_procs = procs2;
+        prog_preds = preds2 
+      } in
     if has_new then pm_prog prog1 else prog1 
   in
   pm_prog prog
