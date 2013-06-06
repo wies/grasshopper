@@ -370,6 +370,7 @@ let elim_sl prog =
           in
           let pred_dom = 
             { pred_str with 
+              pred_name = pred_domain pred.pred_name;
               pred_body = { pred.pred_body with spec_form = FOL dom_body } 
             }
           in
@@ -853,6 +854,19 @@ let elim_state prog =
     { proc with proc_locals = locals; proc_body = body }
   in
   { prog with prog_procs = IdMap.map elim_proc prog.prog_procs }
+
+(** Generate predicate instances *)
+let add_pred_insts prog f =
+  let pred_apps = 
+    let collect acc = function
+      | App (FreeSym p, ts, _) as t -> 
+          if IdMap.mem p prog.prog_preds 
+          then TermSet.add t acc
+          else acc
+      | _ -> acc
+    in FormUtil.fold_terms collect TermSet.empty f 
+  in
+  f
 
 (** Simplify the given program by applying all transformation steps. *)
 let simplify prog =

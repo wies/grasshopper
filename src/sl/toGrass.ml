@@ -139,7 +139,7 @@ let post_process f =
     end
   in
   let aux_sets = List.map (fun v -> (v, Form.Set Form.Loc)) (IdSet.elements (FormUtil.fv f)) in
-  FormUtil.mk_exists aux_sets (FormUtil.nnf (FormTyping.typing f))
+  FormUtil.mk_exists aux_sets (FormUtil.nnf ((*FormTyping.typing*) f))
 
 let to_grass pred_to_form domain f =
   let (pointers, separations) = to_form pred_to_form FormUtil.mk_eq domain f in

@@ -3,7 +3,7 @@ struct Node {
 }
 
 predicate lseg(x: Node, y: Node) {
-  true
+  x == y || x != y &*& x &*& lseg(x.next, y)
 }
 
 procedure soudness_check0(x: Node)
