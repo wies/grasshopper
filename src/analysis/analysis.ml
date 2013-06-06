@@ -528,7 +528,7 @@ let elim_sl prog =
       proc_body = body;
     } 
   in
-  let preds = (*fold_preds compile_pred IdMap.empty prog*) prog.prog_preds in
+  let preds = fold_preds compile_pred IdMap.empty prog in
   let prog = { prog with prog_preds = preds } in
   { prog with prog_procs = IdMap.map compile_proc prog.prog_procs }
 
