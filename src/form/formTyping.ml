@@ -190,6 +190,12 @@ let preprocess f =
     in
       process lst
   in
+  let mk_tpe args ret_opt =
+    let params = List.map (fun _ -> fresh_param ()) args in
+    let ret = match ret_opt with Some t -> to_my_sort t | None -> fresh_param () in
+    if (args <> []) then TFun (params, ret)
+    else ret
+  in
   let rec symbolify f = match f with
     | Var _ as v -> ([], [], v)
     | App (sym, ts, srt_opt) ->
@@ -198,7 +204,7 @@ let preprocess f =
         let new_sym, tpe = match sym with 
           | BoolConst _ -> (sym, TBool)
           | IntConst _ -> (sym, TInt)
-          | FreeSym _ -> (sym, fresh_param ())
+          | FreeSym _ -> (sym, mk_tpe args srt_opt)
           | sym ->
             let tpe = fresh_type (SymbolMap.find sym symbol_types) in
               if not (TpeSet.is_empty (type_var tpe)) then

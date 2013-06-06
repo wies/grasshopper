@@ -135,7 +135,7 @@ let check_entailment what pre_sl stack post_sl =
   in
   let sat = 
     if query = mk_false then (Debug.msg "Assertion holds trivially\n"; Some false)
-    else Prover.check_sat ~session_name:what query 
+    else Prover.check_sat ~session_name:what (FormTyping.typing query)
   in
   match sat with
   | Some true -> failwith ("cannot prove assertion (sat) for " ^ what) (*TODO model*)
@@ -167,7 +167,7 @@ let check_grass_entailment what pre_sl stack post_grass =
   in
   let sat = 
     if query = mk_false then (Debug.msg "Assertion holds trivially\n"; Some false)
-    else Prover.check_sat ~session_name:what query 
+    else Prover.check_sat ~session_name:what (FormTyping.typing query)
   in
   match sat with
   | Some true -> failwith ("cannot prove assertion (sat) for " ^ what) (*TODO model*)
@@ -184,7 +184,7 @@ let is_frame_defined name pre_sl pathf post_sl subst =
   let query = nnf (smk_and ( (mk_and (pre :: post :: pathf)) ::
                            (Entails.same_heap_axioms subst preh posth) ) )
   in
-    match Prover.check_sat ~session_name:name query with
+    match Prover.check_sat ~session_name:name (FormTyping.typing query) with
     | Some b -> not b
     | None -> failwith "is_frame_defined: Prover returned None"
 
