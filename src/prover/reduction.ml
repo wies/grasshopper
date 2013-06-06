@@ -3,86 +3,6 @@ open Form
 open FormUtil
 open InstGen
 
-(** Skolemization 
- ** assumes that f is in negation normal form *)
-let skolemize f =
-  let rec sk vs = function
-    | BoolOp (op, fs) -> smk_op op (List.map (sk vs) fs)
-    | Binder (Forall, bvs, f, a) ->
-	let vs1 = 
-	  List.fold_left 
-	    (fun vs1 (id, srt) -> IdMap.add id srt vs1) vs bvs 
-	in
-	Binder (Forall, bvs, sk vs1 f, a)
-    | Binder (Exists, bvs, f, a) ->
-	let ts = IdMap.fold (fun id srt ts -> mk_var ~srt:srt id :: ts) vs [] in
-	let sm = List.fold_left 
-	    (fun sm (id, srt) -> 
-	      let sk_fn = FreeSym (fresh_ident ("sk_" ^ (str_of_ident id))) in
-	      IdMap.add id (mk_app ~srt:srt sk_fn ts) sm) 
-	    IdMap.empty bvs
-	in 
-	annotate (subst sm (sk vs f)) a
-    | f -> f
-  in sk IdMap.empty f
-    
-(** Propagate existentially quantified variables upward in the formula
- ** assume that f is in negation normal form *)
-let propagate_exists f =
-  let rec merge sm zs xs ys ys2 =
-    match xs, ys with
-    | (x, srt1) :: xs1, (y, srt2) :: ys1 ->
-        if srt1 = srt2
-        then merge (IdMap.add x (mk_var ~srt:srt1 y) sm) ((y, srt2) :: zs) xs1 (ys2 @ ys1) []
-        else merge sm zs xs ys1 ((y, srt2) :: ys2)
-    | [], _ -> sm, ys @ ys2 @ zs
-    | _, [] -> 
-        if ys2 = [] then sm, xs @ zs
-        else merge sm (List.hd xs :: zs) (List.tl xs) ys2 []
-  in
-  let rec prop = function
-    | BoolOp (Or, fs) ->
-        let fs1, vs = 
-          List.fold_right (fun f (fs2, vs2) ->
-            let f1, vs1 = prop f in
-            let sm, vs = merge IdMap.empty [] vs1 vs2 [] in
-            (*print_forms stdout [f1];
-            List.iter (fun id -> Printf.printf "%s, " (str_of_ident (fst id))) vs1;
-            print_newline ();
-            List.iter (fun id -> Printf.printf "%s, " (str_of_ident (fst id))) vs2;
-            print_newline ();
-            IdMap.iter (fun id t -> Printf.printf "%s -> %s, " (str_of_ident id) (string_of_term t)) sm;
-            print_newline ();*)
-            subst sm f1 :: fs2, vs) 
-            fs ([], [])
-        in BoolOp (Or, fs1), vs
-    | BoolOp (And, fs) ->
-        let fs1, vss = List.split (List.map prop fs) in
-        BoolOp (And, fs1), List.concat vss
-    | Binder (Exists, vs, f, a) -> 
-        let vars = fv f in
-        let vs0 = List.filter (fun (v, _) -> IdSet.mem v vars) vs in
-        let sm, vs1 = 
-          List.fold_left 
-            (fun (sm, vs1) (v, srt) -> 
-              let v1 = fresh_ident (name v) in
-              IdMap.add v (mk_var ~srt:srt v1) sm, (v1, srt) :: vs1)
-            (IdMap.empty, []) vs0
-        in
-        let f1 = subst sm f in
-        (match a with 
-        | [] -> f1, vs1
-        | _ -> Binder (Exists, [], f1, a), vs1)
-    | Binder (Forall, vs, f, a) ->
-        let f1, vs1 = prop f in
-        (match vs with
-        | [] -> Binder (Forall, vs, f1, a), vs1
-        | _ -> Binder (Forall, vs, mk_exists vs1 f1, a), [])
-    | f -> f, []
-  in
-  let f1, vs = prop f in 
-  mk_exists vs f1
-
 (** Eliminate all implicit and explicit existential quantifiers using skolemization
  ** assumes that f is typed and in negation normal form *)
 let reduce_exists =
@@ -105,12 +25,11 @@ let reduce_exists =
   in
   fun f -> 
     let f1 = elim_neq f in
-    let f2 = propagate_exists f1 in
     (*let _ = print_endline "Befor propagation: " in
     let _ = print_forms stdout [f1] in
     let _ = print_endline "After propagation: " in
     let _ = print_forms stdout [f2] in*)
-    skolemize f2
+    skolemize f1
 
 (** Hoist all universally quantified subformulas to top level.
  ** Assumes that formulas fs are in negation normal form *)

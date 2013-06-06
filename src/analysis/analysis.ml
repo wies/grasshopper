@@ -866,7 +866,27 @@ let add_pred_insts prog f =
       | _ -> acc
     in FormUtil.fold_terms collect TermSet.empty f 
   in
-  f
+  let instances = 
+    TermSet.fold (fun t instances ->
+      match t with
+      | App (FreeSym p, ts, _) ->
+          let decl = find_pred prog p in
+          let sm = 
+            List.fold_left2 
+              (fun sm id t -> IdMap.add id t sm)
+              IdMap.empty decl.pred_formals ts
+          in
+          let body = match decl.pred_body.spec_form with
+          | FOL f -> subst_consts sm f
+          | SL f -> failwith "SL formula should have been desugared"
+          in
+          mk_implies (mk_pred p ts) (body) ::
+          mk_implies (mk_not (mk_pred p ts)) (mk_not body) ::
+          instances
+      | _ -> instances)
+      pred_apps []
+  in
+  smk_and (f :: instances)
 
 (** Simplify the given program by applying all transformation steps. *)
 let simplify prog =
@@ -952,7 +972,8 @@ let vcgen prog proc =
 (** Generate verification conditions for given procedure and check them. *)
 let check_proc prog proc =
   let check_vc (vc_name, (vc_msg, pp), vc) =
-    match Prover.check_sat ~session_name:vc_name vc with
+    let vc_and_preds = add_pred_insts prog (skolemize (nnf vc)) in
+    match Prover.check_sat ~session_name:vc_name vc_and_preds with
     | Some false -> ()
     | _ -> ProgError.error pp vc_msg
   in
