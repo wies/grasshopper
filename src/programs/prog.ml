@@ -127,6 +127,7 @@ type proc_decl = {
 type pred_decl = {
     pred_name : ident; (** predicate name *)
     pred_formals : ident list; (** formal parameter list *)
+    pred_returns : ident list; (** return parameter list *)
     pred_locals : var_decl IdMap.t; (** local variables *)
     pred_body : spec; (** predicate body *)
     pred_pos : source_position; (** position of declaration *)
@@ -830,10 +831,18 @@ let pr_pred ppf pred =
     let decl = IdMap.find id pred.pred_locals in
     (decl.var_is_ghost, (id, decl.var_sort)))
   in
-  fprintf ppf "@[<2>predicate@ %a(@[<0>%a@])@]@ {@[<1>@\n%a@]@\n}@\n@\n"
-    pr_ident pred.pred_name
-    pr_id_srt_list (add_srts pred.pred_formals)
-    pr_spec_form pred.pred_body
+  match pred.pred_returns with
+  | [] ->
+      fprintf ppf "@[<2>predicate@ %a(@[<0>%a@])@]@ {@[<1>@\n%a@]@\n}@\n@\n"
+        pr_ident pred.pred_name
+        pr_id_srt_list (add_srts pred.pred_formals)
+        pr_spec_form pred.pred_body
+  | _ ->
+      fprintf ppf "@[<2>function@ %a(@[<0>%a@])@]@ @,returns (@[<0>%a@])@ {@[<1>@\n%a@]@\n}@\n@\n"
+        pr_ident pred.pred_name
+        pr_id_srt_list (add_srts pred.pred_formals)
+        pr_id_srt_list (add_srts pred.pred_returns)
+        pr_spec_form pred.pred_body
 
 let rec pr_preds ppf = function
   | [] -> ()

@@ -38,10 +38,10 @@
    '("\\(//[^\n]*\\)" 1 
      font-lock-comment-face)
 
-   '("\\<\\(check\\|forall\\|free ensures\\|free requires\\|e\\(xists\\|nsures\\)\\|ghost\\|invariant\\|old\\|requires\\)\\>"
+   '("\\<\\(check\\|for\\(all\\|\\)\\|free ensures\\|free requires\\|e\\(xists\\|nsures\\)\\|ghost\\|invariant\\|old\\|requires\\|witness\\)\\>"
          1 font-lock-spec-face)
 
-   '("\\<\\(ass\\(ert\\|ume\\)\\|c\\(all\\|hoose\\)\\|free\\|havoc\\|locals\\|new\\|pr\\(ocedure\\|edicate\\)\\|or\\|return\\(s\\|\\)\\|var\\|while\\)\\>"
+   '("\\<\\(ass\\(ert\\|ume\\)\\|c\\(all\\|hoose\\)\\|f\\(unction\\|ree\\)\\|havoc\\|locals\\|new\\|pr\\(ocedure\\|edicate\\)\\|or\\|return\\(s\\|\\)\\|var\\|while\\)\\>"
          1 font-lock-keyword-face)
 
    '("\\<\\(\\)\\>"

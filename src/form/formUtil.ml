@@ -70,6 +70,7 @@ let mk_int i = App (IntConst i, [], Some Int)
 
 let mk_ident name = (name, 0)
 
+let mk_free_fun ?srt id args = App (FreeSym id, args, srt)
 let mk_free_const ?srt id = App (FreeSym id, [], srt)
 let mk_const ?srt sym = App (sym, [], srt)
 

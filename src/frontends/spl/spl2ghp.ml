@@ -786,6 +786,7 @@ let convert cus =
           let pred_decl = 
             { pred_name = id;
               pred_formals = decl.pr_formals;
+              pred_returns = [];
               pred_locals = IdMap.map convert_var_decl decl.pr_locals;
               pred_body = mk_spec_form (SL body) (str_of_ident id) None (pos_of_expr decl.pr_body);
               pred_pos = decl.pr_pos;

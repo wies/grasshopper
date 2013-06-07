@@ -357,14 +357,15 @@ let elim_sl prog =
               mk_free_const ~srt:decl.var_sort id) 
               pred.pred_formals
           in
-          let formals = dom_id :: pred.pred_formals in
+          let formals = pred.pred_formals in
           let locals = IdMap.add dom_id dom_decl pred.pred_locals in
           let str_body, dom_body = 
             Symbols.pred_to_form pred.pred_name args dom_set in
           let pred_str =
             { pred_name = pred_struct pred.pred_name;
-              pred_formals = formals;
+              pred_formals = formals @ [dom_id];
               pred_locals = locals;
+              pred_returns = [];
               pred_body = { pred.pred_body with spec_form = FOL str_body };
               pred_pos = pred.pred_pos;
               pred_accesses = IdSet.empty;
@@ -373,6 +374,8 @@ let elim_sl prog =
           let pred_dom = 
             { pred_str with 
               pred_name = pred_domain pred.pred_name;
+              pred_formals = pred.pred_formals;
+              pred_returns = [dom_id];
               pred_body = { pred.pred_body with spec_form = FOL dom_body } 
             }
           in
@@ -382,8 +385,8 @@ let elim_sl prog =
       | FOL _ -> acc
   in
   let pred_to_form p args dom =
-    FormUtil.mk_pred (pred_struct p) (dom :: args),
-    FormUtil.mk_pred (pred_domain p) (dom :: args)
+    FormUtil.mk_pred (pred_struct p) (args @ [dom]),
+    FormUtil.mk_eq dom (mk_free_fun ~srt:(Set Loc) (pred_domain p) args)
   in
   let compile_proc proc =
     (* add auxiliary set variables *)
@@ -861,35 +864,63 @@ let elim_state prog =
 (** Generate predicate instances *)
 let add_pred_insts prog f =
   let pos, neg = 
+    let rec collect_term (pos, neg) = function
+      | App (FreeSym p, ts, _) as t ->
+          let pos, neg = List.fold_left collect_term (pos, neg) ts in
+          if IdMap.mem p prog.prog_preds 
+          then (TermSet.add t pos, neg)
+          else (pos, neg)
+      | App (_, ts, _) -> 
+          List.fold_left collect_term (pos, neg) ts
+      | _ -> pos, neg
+    in
     let rec collect (pos, neg) = function
       | Binder (_, [], f, _) -> collect (pos, neg) f
       | BoolOp (And, fs)
       | BoolOp (Or, fs) ->
           List.fold_left collect (pos, neg) fs
-      | BoolOp (Not, [Atom (App (FreeSym p, ts, _) as t)]) ->
+      | BoolOp (Not, [Atom (App (FreeSym p, _, _) as t)]) ->
           if IdMap.mem p prog.prog_preds 
           then (pos, TermSet.add t neg)
           else (pos, neg)
-      | Atom (App (FreeSym p, ts, _) as t) -> 
+      | Atom (App (FreeSym p, _, _) as t) -> 
           if IdMap.mem p prog.prog_preds 
           then (TermSet.add t pos, neg)
           else (pos, neg)
+      | BoolOp (Not, [Atom (App (Eq, [App (FreeSym p, _, _); _], _) as t)])
+      | BoolOp (Not, [Atom (App (Eq, [_; App (FreeSym p, _, _)], _) as t)]) ->
+          if IdMap.mem p prog.prog_preds 
+          then (pos, TermSet.add t neg)
+          else (pos, neg)
+      | BoolOp (Not, [Atom t])
+      | Atom t -> collect_term (pos, neg) t
       | _ -> pos, neg
     in collect (TermSet.empty, TermSet.empty) f 
   in
   let mk_instance pos p ts =
-    let decl = find_pred prog p in
+    let pred = find_pred prog p in
     let sm = 
       List.fold_left2 
         (fun sm id t -> IdMap.add id t sm)
-        IdMap.empty decl.pred_formals ts
+        IdMap.empty (pred.pred_formals) ts
     in
-    let body = match decl.pred_body.spec_form with
+    let sm =
+      match pred.pred_returns with
+      | [] -> sm
+      | [id] -> 
+          let var = IdMap.find id pred.pred_locals in
+          IdMap.add id (mk_free_fun ~srt:var.var_sort p ts) sm
+      | _ -> failwith "Functions may only have a single return value."
+    in
+    let body = match pred.pred_body.spec_form with
     | FOL f -> subst_consts sm f
     | SL f -> failwith "SL formula should have been desugared"
     in
     if pos
-    then mk_implies (mk_pred p ts) (body)
+    then 
+      match pred.pred_returns with
+      | [] -> mk_implies (mk_pred p ts) (body)
+      | _ -> body
     else mk_implies (mk_not (mk_pred p ts)) (mk_not body)
   in
   let pos_instances = 
