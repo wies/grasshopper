@@ -860,36 +860,53 @@ let elim_state prog =
 
 (** Generate predicate instances *)
 let add_pred_insts prog f =
-  let pred_apps = 
-    let collect acc = function
-      | App (FreeSym p, ts, _) as t -> 
+  let pos, neg = 
+    let rec collect (pos, neg) = function
+      | Binder (_, [], f, _) -> collect (pos, neg) f
+      | BoolOp (And, fs)
+      | BoolOp (Or, fs) ->
+          List.fold_left collect (pos, neg) fs
+      | BoolOp (Not, [Atom (App (FreeSym p, ts, _) as t)]) ->
           if IdMap.mem p prog.prog_preds 
-          then TermSet.add t acc
-          else acc
-      | _ -> acc
-    in FormUtil.fold_terms collect TermSet.empty f 
+          then (pos, TermSet.add t neg)
+          else (pos, neg)
+      | Atom (App (FreeSym p, ts, _) as t) -> 
+          if IdMap.mem p prog.prog_preds 
+          then (TermSet.add t pos, neg)
+          else (pos, neg)
+      | _ -> pos, neg
+    in collect (TermSet.empty, TermSet.empty) f 
   in
-  let instances = 
+  let mk_instance pos p ts =
+    let decl = find_pred prog p in
+    let sm = 
+      List.fold_left2 
+        (fun sm id t -> IdMap.add id t sm)
+        IdMap.empty decl.pred_formals ts
+    in
+    let body = match decl.pred_body.spec_form with
+    | FOL f -> subst_consts sm f
+    | SL f -> failwith "SL formula should have been desugared"
+    in
+    if pos
+    then mk_implies (mk_pred p ts) (body)
+    else mk_implies (mk_not (mk_pred p ts)) (mk_not body)
+  in
+  let pos_instances = 
     TermSet.fold (fun t instances ->
       match t with
-      | App (FreeSym p, ts, _) ->
-          let decl = find_pred prog p in
-          let sm = 
-            List.fold_left2 
-              (fun sm id t -> IdMap.add id t sm)
-              IdMap.empty decl.pred_formals ts
-          in
-          let body = match decl.pred_body.spec_form with
-          | FOL f -> subst_consts sm f
-          | SL f -> failwith "SL formula should have been desugared"
-          in
-          mk_implies (mk_pred p ts) (body) ::
-          mk_implies (mk_not (mk_pred p ts)) (mk_not body) ::
-          instances
+      | App (FreeSym p, ts, _) -> mk_instance true p ts :: instances
       | _ -> instances)
-      pred_apps []
+      pos []
   in
-  smk_and (f :: instances)
+  let neg_instances = 
+    TermSet.fold (fun t instances ->
+      match t with
+      | App (FreeSym p, ts, _) -> mk_instance false p ts :: instances
+      | _ -> instances)
+      neg []
+  in
+  smk_and (f :: pos_instances @ neg_instances)
 
 (** Simplify the given program by applying all transformation steps. *)
 let simplify prog =
