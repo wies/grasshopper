@@ -476,7 +476,9 @@ let elim_sl prog =
             in 
             mk_framecond frame_axiom :: frames
         | _ -> frames)
-        (modifies_proc prog proc) []
+        (modifies_proc prog proc) [] (*@
+      (* frame axioms for predicates *)
+      TermSet.fold (fun var frames ->*)
     in
     (* update all procedure calls and return commands in body *)
     let rec compile_stmt = function

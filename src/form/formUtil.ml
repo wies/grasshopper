@@ -603,7 +603,7 @@ let skolemize f =
 	let ts = IdMap.fold (fun id srt ts -> mk_var ~srt:srt id :: ts) vs [] in
 	let sm = List.fold_left 
 	    (fun sm (id, srt) -> 
-	      let sk_fn = FreeSym (fresh_ident ("sk_" ^ (str_of_ident0 id))) in
+	      let sk_fn = FreeSym (fresh_ident ("sk_" ^ (name id))) in
 	      IdMap.add id (mk_app ~srt:srt sk_fn ts) sm) 
 	    IdMap.empty bvs
 	in 
