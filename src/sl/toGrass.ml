@@ -25,8 +25,7 @@ let to_form pred_to_form set_fct domain f =
   let rec process_sep pol d f = 
     match f with
     | Pure p -> 
-        let domain = FormUtil.fresh_ident (fst d) in
-        ([p, mk_loc_set_var domain], empty_var domain)
+        ([p, FormUtil.mk_empty (Some (Form.Set Form.Loc))], FormUtil.mk_true)
 (* The following optimization for doubly-linked lists is deprecated
     | Atom (Pred s, [x1; x2; y1; y2]) when s = ("dlseg", 0) ->
         let domain = FormUtil.fresh_ident (fst d) in
@@ -48,8 +47,7 @@ let to_form pred_to_form set_fct domain f =
           (get_symbol "dlseg").heap (mk_loc_set domain) [x1; x2; y1; y2]
          ) *)
     | Atom (Emp, _) ->
-        let domain = FormUtil.fresh_ident (fst d) in
-        [FormUtil.mk_true, mk_loc_set_var domain], empty_var domain
+        [FormUtil.mk_true, FormUtil.mk_empty (Some (Form.Set Form.Loc))], FormUtil.mk_true
     | Atom (Region, [t]) ->
         let domain = FormUtil.fresh_ident (fst d) in
         [FormUtil.mk_true, mk_loc_set_var domain], 
@@ -77,8 +75,11 @@ let to_form pred_to_form set_fct domain f =
           let separation1 = FormUtil.mk_eq (mk_loc_set_var domain) (FormUtil.mk_union dsc) in
           let separation2 =
             let rec pw_disj acc = function
-              | d1 :: dcs -> pw_disj (List.map (fun d2 -> empty_t (FormUtil.mk_inter [d2; d1])) dcs @ acc) dcs
+              | _ :: [] 
               | [] -> acc
+              | d1 :: dcs -> 
+                 (*pw_disj (empty_t (FormUtil.mk_inter [d1; FormUtil.mk_union dcs]) :: acc) dcs *)
+                 pw_disj (List.map (fun d2 -> empty_t (FormUtil.mk_inter [d2; d1])) dcs @ acc) dcs
             in pw_disj [] dsc
           in
           let heap_part = separation1 :: translated_2 in

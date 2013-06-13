@@ -48,6 +48,7 @@ procedure copy(lst: Node) returns (res: Node)
       cp.data := curr.data;
       cp.next := null;
     }
+    //cp.next := null;
     return res;
   }
 }

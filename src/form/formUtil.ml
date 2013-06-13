@@ -134,9 +134,18 @@ let mk_setenum ts =
     | [] -> mk_empty srt
     | _ -> mk_app ?srt:srt SetEnum ts
 
-let mk_inter sets = mk_app ?srt:(sort_ofs sets) Inter sets
+let mk_inter sets = 
+  if List.exists (function App (Empty, [], _) -> true | _ -> false) sets
+  then mk_empty (sort_ofs sets)
+  else mk_app ?srt:(sort_ofs sets) Inter sets
 
-let mk_union sets = mk_app ?srt:(sort_ofs sets) Union sets
+let mk_union sets = 
+  let sets1 =
+    List.filter 
+      (function App (Empty, [], _) -> false | _ -> true) 
+      sets
+  in
+  mk_app ?srt:(sort_ofs sets) Union sets1
 
 let mk_diff s t = mk_app ?srt:(sort_of s) Diff [s; t]
 

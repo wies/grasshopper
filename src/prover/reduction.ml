@@ -291,6 +291,8 @@ let reduce_reach fs gts =
   let null_ax = open_axioms isFld (Axioms.null_axioms ()) in
   let null_ax1 = instantiate_with_terms false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
   let fs1 = null_ax1 @ fs in
+  let gts = TermSet.union (ground_terms (smk_and null_ax1)) gts in
+  let classes = CongruenceClosure.congr_classes fs1 gts in
   (* propagate read terms *)
   let fld_partition, fld_map, fields = 
     let max, fld_map, fields = 
@@ -417,7 +419,7 @@ let reduce f =
   let fs31 = factorize_axioms (split_ands [] fs3) in
   let fs4, gts1 = reduce_sets (fs31 @ ep_axioms) gts in
   let fs5, gts2 = reduce_reach fs4 gts1 in
-  let fs6 = reduce_remaining fs5 gts2 in
+  let fs6 = (*Simplify.simplify*) (reduce_remaining fs5 gts2) in
   (* the following is a (probably stupid) heuristic to sort the formulas for improving the running time *)
   let fs7 = 
     (* sort by decreasing number of disjuncts in formula *)
