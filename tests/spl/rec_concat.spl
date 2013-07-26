@@ -3,7 +3,7 @@ struct Node {
 }
 
 predicate lseg(x: Node, y: Node) {
-  x == y || x != y &*& x &*& lseg(x.next, y)
+  x == y || x != y &*& acc(x) &*& lseg(x.next, y)
 }
 
 procedure find_last(a: Node) returns (l : Node)
@@ -21,9 +21,9 @@ procedure find_last(a: Node) returns (l : Node)
     }
 }
 
-procedure rec_concat(a: Node, b: Node)
+procedure rec_concat(a: Node, b: Node, c: Node)
   requires a != null &*& lseg(a, null) &*& lseg(b, null);
-  ensures lseg(a, b) &*& lseg(b, null);
+  ensures lseg(a, null);
 {
   var l: Node;
   l := find_last(a);

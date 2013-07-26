@@ -5,7 +5,7 @@ struct Node {
 
 predicate dlseg(x: Node, u: Node, y: Node, v: Node) {
   x == y && u == v || 
-  x != y &*& x.prev == u &*& x &*& dlseg(x.next, x, y, v)
+  x != y &*& x.prev == u &*& acc(x) &*& dlseg(x.next, x, y, v)
 }
 
 procedure dl_insert(a: Node, b: Node, elt: Node) returns (c: Node, d: Node)

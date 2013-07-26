@@ -58,7 +58,7 @@ let rec pr_form ppf = function
   | Atom (Region, [r]) -> 
       (match r with
       | Form.App (Form.SetEnum, [t], _) ->
-          fprintf ppf "cell(@[%a@])" Form.pr_term t
+          fprintf ppf "acc(@[%a@])" Form.pr_term t
       | _ ->
           fprintf ppf "region(@[%a@])" Form.pr_term r)
   | Atom (Region, _) -> ()

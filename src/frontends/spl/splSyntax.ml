@@ -120,6 +120,7 @@ and expr =
   | Dot of expr * ident * pos
   | ProcCall of ident * exprs * pos
   | PredApp of ident * exprs * pos
+  | Access of expr * pos
   | UnaryOp of op * expr * pos
   | BinaryOp of expr * op * expr * pos
   | Ident of ident * pos
@@ -133,6 +134,7 @@ let pos_of_expr = function
   | BoolVal (_, p)
   | New (_, p)
   | Dot (_, _, p)
+  | Access (_, p)
   | ProcCall (_, _, p)
   | PredApp (_, _, p)
   | UnaryOp (_, _, p)

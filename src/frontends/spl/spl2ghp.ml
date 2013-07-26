@@ -125,6 +125,8 @@ let resolve_names cus =
             let id = lookup_id init_id tbl pos in
             check_field id globals pos;
             Dot (re e, id, pos)
+        | ProcCall (("acc", _), [arg], pos) ->
+            Access (re arg, pos)
         | ProcCall (init_id, args, pos) ->
             let id = lookup_id init_id tbl pos in
             let args1 = List.map re args in
@@ -303,6 +305,9 @@ let flatten_exprs cus =
           let aux_var = Ident (aux_id, pos) in
           let call = Assign ([aux_var], [ProcCall (id, args1, pos)], pos) in
           aux_var, (aux1 @ [call]), locals
+      | Access (arg, pos) as e ->
+          check_side_effects [arg];
+          e, aux, locals
       | PredApp (init_id, args, pos) as e->
           List.iter check_side_effects args;
           e, aux, locals
@@ -505,6 +510,13 @@ let convert cus =
               FOL_term (FormUtil.mk_read fld t, res_ty)
           | NullType -> ProgError.error pos "Cannot dereference null."
           | ty -> failwith "unexpected type")
+      | Access (e, pos) ->
+          let t, ty = extract_term locals NullType e in
+          (match ty with
+          | StructType id ->
+              SL_form (SlUtil.mk_cell t)
+          | NullType -> ProgError.error pos "Cannot access null."
+          | ty -> failwith "unexpected type")
       | PredApp (id, es, pos) ->
           let decl = IdMap.find id cu.pred_decls in
           let tys = List.map (fun p -> (IdMap.find p decl.pr_locals).v_type) decl.pr_formals in
@@ -617,8 +629,6 @@ let convert cus =
       match convert_expr locals e with
       | SL_form f -> f
       | FOL_form f -> Pure f
-      | FOL_term (t, StructType _)
-      | FOL_term (t, NullType) -> SlUtil.mk_cell t 
       | FOL_term (t, ty) ->
          type_error (pos_of_expr e) "expression of type bool" (ty_str ty)
     and extract_fol_form locals e =

@@ -712,7 +712,7 @@ let pr_basic_cmd ppf = function
             pr_ident cc.call_name 
             pr_term_list cc.call_args
       | _ ->
-          fprintf ppf "@[<2>%a@ :=@ @[call@ %a(@[%a@])@]@]" 
+          fprintf ppf "@[<2>call@ %a@ :=@ @[%a(@[%a@])@]@]" 
             pr_ident_list cc.call_lhs 
             pr_ident cc.call_name 
             pr_term_list cc.call_args

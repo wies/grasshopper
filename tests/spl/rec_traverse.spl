@@ -3,7 +3,7 @@ struct Node {
 }
 
 predicate lseg(x: Node, y: Node) {
-  x == y || x != y &*& x &*& lseg(x.next, y)
+  x == y || x != y &*& acc(x) &*& lseg(x.next, y)
 }
 
 procedure rec_traverse(lst: Node)
