@@ -246,21 +246,35 @@ let output_graphviz chan model =
       | _ -> ()) model.interp
   in
   let output_sets () =
-    let print_set sym defs =
-      match decl_of sym model with
-      |	([Loc], Bool) ->
-	  let in_set, not_in_set = 
-	    partition_map 
-	      (fun def -> def.output = BoolConst true ) 
-	      (fun def -> List.hd def.input) 
-	      defs 
-	  in
-	  let in_set_rep = String.concat ", " (List.map str_of_symbol in_set) in
-	  let not_in_set_rep = String.concat ", " (List.map str_of_symbol not_in_set) in
-	  output_string chan "      <TR>\n";
-	  Printf.fprintf chan "        <TD>%s</TD><TD>%s</TD><TD>%s</TD>\n" (str_of_symbol sym) in_set_rep not_in_set_rep;
-	  output_string chan "      </TR>\n"
-      |	_ -> ()	
+    let print_sets () =
+      (*TODO adapt for Elem*)
+      let defs = defs_of Elem model in
+      let csts = consts model in
+      let sets =
+        SymbolSet.filter
+          (fun sym -> match decl_of sym model with ([], Set _) -> true | _ -> false)
+          csts
+      in
+        SymbolSet.iter
+          (fun set ->
+            let set_value = Util.unopt (eval_term model (mk_const set)) in
+            let set_defs = List.filter (fun def -> List.nth def.input 1 = set_value) defs in
+            let in_set, not_in_set =
+              List.partition
+                (fun def -> match def.output with
+                              BoolConst b -> b
+                            | _ -> failwith "expected BoolConst _")
+                set_defs
+            in
+            let in_set = List.map (fun d -> List.hd d.input) in_set in
+            let not_in_set = List.map (fun d -> List.hd d.input) not_in_set in
+            let in_set_rep = String.concat ", " (List.map str_of_symbol in_set) in
+            let not_in_set_rep = String.concat ", " (List.map str_of_symbol not_in_set) in
+              output_string chan "      <TR>\n";
+              Printf.fprintf chan "        <TD>%s</TD><TD>%s</TD><TD>%s</TD>\n" (str_of_symbol set) in_set_rep not_in_set_rep;
+              output_string chan "      </TR>\n"
+          )
+          sets
     in 
     (* table header *)
     output_string chan "{ rank = sink; Legend [shape=none, margin=0, label=<\n";
@@ -269,7 +283,7 @@ let output_graphviz chan model =
     output_string chan "        <TD><B>Set</B></TD><TD><B>contains</B></TD><TD><B>excludes</B></TD>\n";
     output_string chan "      </TR>\n";
     (* print sets *)
-    SymbolMap.iter print_set model.interp;
+    print_sets ();
     (* table footer *)
     output_string chan "</TABLE>\n";
     output_string chan ">];\n";
