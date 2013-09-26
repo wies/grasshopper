@@ -211,19 +211,13 @@ let is_interpreted sym = match sym with
   | Plus | Minus | Mult | Div | UMinus -> true
   | _ -> false
 
-let string_of_symbol sym (arg_sorts, res_sort) =
-  let overld_sorts = List.fold_right 
-      (fun srt acc ->
-        match srt with
-        | Fld srt1 -> string_of_sort srt1 :: acc
-        | _ -> acc) (arg_sorts @ [res_sort]) []
-  in
-  String.concat "_" (str_of_symbol sym :: overld_sorts)
+let string_of_symbol sym idx =
+  (str_of_symbol sym) ^ "$" ^ (string_of_int idx)
 
 let declare session sign =
-  let declare sym (arg_sorts, res_sort) =
+  let declare sym idx (arg_sorts, res_sort) =
     let arg_sorts_str = String.concat " " (List.map (fun srt -> string_of_sort srt) arg_sorts) in
-    let sym_str = string_of_symbol sym (arg_sorts, res_sort) in
+    let sym_str = string_of_symbol sym idx in
     writeln session ("(declare-fun " ^ sym_str ^ " (" ^ arg_sorts_str ^ ") " ^ string_of_sort res_sort ^ ")")
   in
   let write_decl sym overloaded_variants = 
@@ -231,14 +225,34 @@ let declare session sign =
       begin
         match overloaded_variants with
         | [] -> failwith ("missing sort for symbol " ^ str_of_symbol sym)
-        | _ -> List.iter (declare sym) overloaded_variants
+        | _ -> Util.iteri (declare sym) overloaded_variants
       end
   in
   SymbolMap.iter write_decl sign;
   writeln session "";
   { session with signature = Some sign }
 
+let disambiguate_overloaded_symbols signs f =
+  let osym sym sign =
+    if is_interpreted sym 
+    then sym
+    else
+      begin
+        let versions = SymbolMap.find sym signs in
+        let version = Util.find_index sign versions in
+          FreeSym (mk_ident (string_of_symbol sym version))
+      end
+  in
+  let rec over t = match t with
+    | Var _ as v -> v
+    | App (sym, ts, srt) ->
+      let ts = List.map over ts in
+      let args_srt = List.map sort_of ts in
+        App (osym sym (List.map Util.unopt args_srt, Util.unopt srt), ts, srt)
+  in
+  map_terms over f
 
+(*
 let disambiguate_overloaded_symbols signs f =
   let osym sym sign =
     if is_interpreted sym 
@@ -253,6 +267,7 @@ let disambiguate_overloaded_symbols signs f =
         App (osym sym (List.map Util.unopt args_srt, Util.unopt srt), ts, srt)
   in
   map_terms over f
+*)
 
 let assert_form session f =
   session.assert_count <- session.assert_count + 1;

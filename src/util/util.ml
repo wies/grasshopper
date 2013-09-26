@@ -75,6 +75,12 @@ let rec fold_left2 fn init xs ys =
 (** Tail-recursive concatenation of lists *)
 let rev_concat lists = List.fold_left (List.fold_left (fun acc f -> f :: acc)) [] lists
 
+let iteri fct lst =
+  let rec iter idx lst = match lst with
+    | x::xs -> fct idx x; iter (idx+1) xs
+    | [] -> ()
+  in
+    iter 0 lst
 
 (** Boolean operators on predicates *)
 

@@ -24,8 +24,12 @@ let to_sort id = Hashtbl.find sort_tbl id
 }
 
 let digitchar = ['0'-'9']
-let identchar = ['a'-'z' 'A'-'Z' '_' '!' '?' '$']
-let ident = identchar (identchar | digitchar)*
+let identchar = ['a'-'z' 'A'-'Z' '?']
+let identchar2 = '_'? identchar
+let ident = identchar2 (identchar2 | digitchar)*
+
+let permissive_identchar = ['a'-'z' 'A'-'Z' '_' '!' '?' '$']
+let permissive_ident = permissive_identchar (permissive_identchar | digitchar)*
 
 rule token = parse
   [' ' '\t' '\n'] { token lexbuf }
@@ -37,8 +41,13 @@ rule token = parse
 | "false" { VAL(Bool, BoolConst false) }
 | "#unspecified" { UNSPEC }
 | (ident as srt) "!val!" (digitchar+ as num) { VAL(to_sort srt, FreeSym (srt ^ "!" ^ num,0)) }
-| ident as name '_' (digitchar+ as num) { SYMBOL(to_symbol (name, int_of_string num)) }
-| ident as name '_' (digitchar+ as num) "!" digitchar+ { SYMBOL(to_symbol (name, int_of_string num)) }
-| ident as name "!" digitchar+ { SYMBOL(to_symbol (name, 0)) }
-| ident as name { SYMBOL(to_symbol (name, 0)) }
+| ident as name (('_' digitchar+)? as num) ('$' digitchar+)? ("!" digitchar+)?
+    { (* simple version: drop the $x which indcates the type *)
+      let version = match num with
+        | "" -> 0
+        | v -> int_of_string (String.sub v 1 ((String.length v) -1))
+      in
+        SYMBOL(to_symbol (name, version))
+    }
+| permissive_ident as id { failwith ("model lexing error: " ^ id) }
 | eof { EOF }
