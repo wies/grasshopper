@@ -1,2 +1,0 @@
-//unsat
-a ~= b * lseg(a, b) * a |-> c

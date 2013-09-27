@@ -10,47 +10,6 @@ type symbol =
 
 let symbols = Hashtbl.create 15
 
-(* part to know what symbol has what field *)
-
-let fields: (string, (ident list * IdSrtSet.t) list) Hashtbl.t = Hashtbl.create 15
-
-let rec get_fields f = match f with
-  | Not t -> get_fields t
-  | Atom (Pred p, args) ->
-    begin
-      let flds = try Hashtbl.find fields (Form.str_of_ident p) with Not_found -> [] in
-        List.fold_left
-          (fun acc (params, set) ->
-            let map =
-              List.fold_left2
-                (fun acc id1 id2 -> IdMap.add id1 id2 acc)
-                IdMap.empty
-                params
-                args
-            in
-            let set2 =
-              IdSrtSet.fold
-                (fun (id, srt) acc ->
-                  let id2 =
-                    try IdMap.find id map
-                    with Not_found -> FormUtil.mk_free_const id ~srt:srt
-                  in
-                    TermSet.add id2 acc
-                )
-                set
-                TermSet.empty
-            in
-              TermSet.union acc set2
-          )
-          TermSet.empty
-          flds
-    end
-  | Atom (Emp, _)
-  | Atom (Region, _)
-  | Pure _ -> TermSet.empty
-  | SepConj lst | And lst | Or lst -> 
-    List.fold_left (fun acc f -> TermSet.union acc (get_fields f)) TermSet.empty lst
-
 (* constructing the symbols from the input *)
 
 let bound_id_to_var form =
@@ -89,32 +48,7 @@ let apply args f = match args with
     )
   | _ -> failwith "expected first argument of type Set Loc (convention)."
 
-let get_flds name args f =
-  let csts = List.map (fun (id, srt) -> FormUtil.mk_free_const id ~srt:srt) args in
-  let arg_cstr = List.map (fun c -> FormUtil.mk_eq c c) csts in
-  let f2 = FormUtil.mk_and (f :: arg_cstr) in
-  let typed = FormTyping.typing f2 in (* this last catches the typing errors *)
-  let sign = FormUtil.overloaded_sign typed in
-  let flds =
-    SymbolMap.fold
-      (fun k v acc ->
-        List.fold_left
-          (fun acc t -> match (k, t) with
-            | (FreeSym id, ([], (Fld _ as t))) -> IdSrtSet.add (id, t) acc
-            | _ -> acc
-          )
-          acc
-          v
-      )
-      sign
-      IdSrtSet.empty
-  in
-  let old = try Hashtbl.find fields name with Not_found -> [] in
-    Hashtbl.add fields name ((List.map fst (List.tl args), flds) :: old)
-
 let parsed_to_symbol (name, args, structure, heap) =
-  get_flds name args structure;
-  get_flds name args heap;
   let f1 = FormUtil.mk_comment ("structure of " ^ name) (FormTyping.typing (bound_id_to_var structure)) in
   let f2 = FormUtil.mk_comment ("domain of " ^ name) (FormTyping.typing (bound_id_to_var heap)) in
   let a = (List.length args) - 1 in

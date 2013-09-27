@@ -1,1 +1,0 @@
-lseg(start, prv) * prv |-> curr * lseg(curr, end) * (end |-> x || end = null)

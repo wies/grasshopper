@@ -1,7 +1,0 @@
-//entailed: free c gives an error an error and false implies anything
-path07(a)
-requires a |-> b
-ensures emp
-{
-  free c;
-}

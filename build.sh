@@ -3,7 +3,7 @@
 set -e
 
 DIRS="-Is src/util,src/form,src/smtlib,src/programs,src/frontends/spl,src/prover,src/frontends/grass,src/sl,src/analysis,src/main"
-TARGET="src/main/grassprover src/main/slprover src/main/analyzer src/main/grasshopper "
+TARGET="src/main/grassprover src/main/grasshopper "
 FLAGS="-cflag -g -lflag -g -libs unix,str $DIRS"
 OCAMLBUILD=ocamlbuild
 

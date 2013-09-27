@@ -1,7 +1,0 @@
-//entailed
-//TODO is recondition empty ??
-path12()
-requires x |-> y && lseg(y, z)
-ensures lseg(x, z)
-{
-}

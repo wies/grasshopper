@@ -451,6 +451,7 @@ let elim_sl prog =
       }
     in
     (* generate frame condition *) 
+    (* TODO DZ: genealize Frame to list of pairs of ptr, neeed if we want those self-framing predicates *)
     let framecond = 
       let frame_wo_alloc = mk_diff frame_set init_alloc_set in
       let name = "framecondition of " ^ (str_of_ident proc.proc_name) in

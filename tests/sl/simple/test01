@@ -1,2 +1,0 @@
-//sat
-rear |-> top_front * lseg(top_front, back)

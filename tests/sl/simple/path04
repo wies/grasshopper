@@ -1,8 +1,0 @@
-//entailed ?
-path04(a, b)
-requires a |-> b * b |-> a
-ensures  a |-> b * b|-> c * c |-> _
-{
-  new c;
-  b.next := c;
-}

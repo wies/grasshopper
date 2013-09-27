@@ -1,9 +1,0 @@
-//not entailed: we need to add "new a" (see path05)
-path01(b)
-requires emp
-ensures returned |-> b
-{
-  //new a;
-  a.next := b;
-  return a;
-}

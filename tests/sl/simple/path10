@@ -1,6 +1,0 @@
-//entailed
-path10(a)
-requires a ~= c * a |-> b * lseg(b, c)
-ensures lseg(a, c)
-{
-}

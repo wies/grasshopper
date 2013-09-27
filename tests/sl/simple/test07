@@ -1,2 +1,0 @@
-//sat
-lseg(a, b) * lseg(a, c)
