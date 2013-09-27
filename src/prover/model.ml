@@ -239,8 +239,8 @@ let output_graphviz chan model =
   in
   let output_vars () = 
     SymbolMap.iter (fun sym defs ->
-      let decl = decl_of sym model in
       (*
+      let decl = decl_of sym model in
       print_endline ((str_of_symbol sym) ^ " -> " ^
         (String.concat "," (List.map string_of_sort (fst decl))) ^
         ", " ^ (string_of_sort (snd decl)));

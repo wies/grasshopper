@@ -163,7 +163,10 @@ let mk_subseteq s t = mk_atom SubsetEq [s; t]
  * (un)primed corresponds to before/after
  *)
 let mk_frame x a f f' = mk_atom Frame [x; a; f; f']
-
+(* generalized version taking more than one pointer at the time *)
+let mk_frame_lst x a lst =
+  assert ((List.length lst) mod 2 = 0);
+  mk_atom Frame (x :: a :: lst)
 
 let mk_and = function
   | [f] -> f

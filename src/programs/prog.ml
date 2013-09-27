@@ -183,6 +183,8 @@ let procs prog = IdMap.fold (fun _ proc procs -> proc :: procs) prog.prog_procs 
 
 let preds prog = IdMap.fold (fun _ pred preds -> pred :: preds) prog.prog_preds []
 
+let vars  prog = IdMap.fold (fun _ var  vars  -> var  :: vars ) prog.prog_vars  []
+
 let find_proc prog name =
   try IdMap.find name prog.prog_procs 
   with Not_found -> 

@@ -451,7 +451,6 @@ let elim_sl prog =
       }
     in
     (* generate frame condition *) 
-    (* TODO DZ: genealize Frame to list of pairs of ptr, neeed if we want those self-framing predicates *)
     let framecond = 
       let frame_wo_alloc = mk_diff frame_set init_alloc_set in
       let name = "framecondition of " ^ (str_of_ident proc.proc_name) in
@@ -462,24 +461,40 @@ let elim_sl prog =
       mk_framecond (mk_subseteq init_alloc_set frame_set) ::
       (* final footprint is disjoint from frame w/o alloc *)
       mk_framecond (mk_eq (mk_inter [alloc_set; frame_wo_alloc]) (mk_empty (Some (Set Loc)))) ::
-      (* frame axioms for modified fields *)
-      IdSet.fold (fun var frames ->
-        let decl = find_global prog var in
-        let old_var = oldify var in
-        match decl.var_sort with
-        | Fld _ as srt -> 
-            let frame_axiom = 
-              mk_frame 
-                init_alloc_set 
-                frame_set
-                (mk_free_const ~srt:srt old_var)
-                (mk_free_const ~srt:srt var)
-            in 
-            mk_framecond frame_axiom :: frames
-        | _ -> frames)
-        (modifies_proc prog proc) [] (*@
-      (* frame axioms for predicates *)
-      TermSet.fold (fun var frames ->*)
+      (* frame axioms for modified fields
+       * in this version the frame contains all the pairs of fields both unprimed and primed
+       *)
+      let all_fields =
+        List.fold_left
+          (fun acc var ->
+            match var.var_sort with
+            | Fld _ -> IdSet.add var.var_name acc 
+            | _ -> acc
+          )
+          IdSet.empty
+          (vars prog)
+      in
+      let mod_fields =
+        IdSet.inter
+          all_fields 
+          (modifies_proc prog proc)
+      in
+      let fields_for_frame =
+        IdSet.fold
+          (fun var frames ->
+            let old_var = 
+              if IdSet.mem var mod_fields then oldify var
+              else var
+            in
+            let srt = (find_global prog var).var_sort in
+              (mk_free_const ~srt:srt old_var) ::
+              (mk_free_const ~srt:srt var) ::
+              frames
+          )
+          all_fields
+          []
+      in
+        mk_framecond (mk_frame_lst init_alloc_set frame_set fields_for_frame) :: []
     in
     (* update all procedure calls and return commands in body *)
     let rec compile_stmt = function

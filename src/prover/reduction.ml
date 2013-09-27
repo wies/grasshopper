@@ -176,10 +176,69 @@ let reduce_frame fs =
         reduce_graph ()
       | Some other -> failwith ("reduce_frame did not expect f with type " ^ (string_of_sort other))
   in
+  let expand_frame2 x a flds =
+    let frame = mk_diff a x in
+    (* data in the frame are not changed *)
+    let reduce_data f f' =
+      Axioms.mk_axiom "data_frame"
+        (mk_implies
+           (smk_elem Axioms.loc1 frame)
+           (mk_eq (mk_read f Axioms.loc1) (mk_read f' Axioms.loc1))
+        )
+    in
+    (* parts of the field in the frame are not changed *)
+    let reduce_graph f f' =
+     
+      let replacement_pts =
+        Axioms.mk_axiom "pts_frame"
+          (mk_implies
+             (smk_elem Axioms.loc1 frame)
+             (mk_eq (mk_read f Axioms.loc1) (mk_read f' Axioms.loc1))
+          )
+      in
+     
+      let replacement_reach =
+        let ep v = mk_ep f x v in
+        let reachwo_f = Axioms.reachwo_Fld f in
+        let reach_f x y z = mk_btwn f x z y in
+        let reach_f' x y z = mk_btwn f' x z y in
+        let open Axioms in
+        [mk_axiom "reach_frame1"
+           (mk_implies
+              (reachwo_f loc1 loc2 (ep loc1))
+              (mk_iff 
+                 (reach_f loc1 loc2 loc3)
+                 (reach_f' loc1 loc2 loc3)));
+         mk_axiom "reach_frame2"
+           (mk_implies
+              (mk_and [mk_not (smk_elem loc1 x); mk_eq loc1 (ep loc1)])
+              (mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)))
+       ]
+      in
+      
+      let axioms =
+        replacement_pts ::
+        replacement_reach
+      in
+      mk_and axioms
+    in
+    (*TODO a version that generate self framing axioms for the predicate which are not in the footprint *)
+    let self_framing_datastructure () =
+      failwith "TODO"
+    in
+      (*todo what to call and when*)
+      failwith "TODO"
+  in
   let rec process f = match f with
-    | Atom (App (Frame, [x;a;f;f'], _)) -> 
-        expand_frame x a f f'
-    | Atom (App (Frame, _, _)) -> failwith "frame with wrong arity"
+    | Atom (App (Frame, x :: a :: lst, _)) ->
+      (*TODO this emulates the old version*)
+      let rec process_frame lst = match lst with
+        | f :: f' :: rest ->
+          if f <> f' then (expand_frame x a f f') :: (process_frame rest)
+          else process_frame rest
+        | [] -> []
+        | _ -> failwith "frame with wrong arity"
+      in mk_and (process_frame lst)
     | Atom t -> Atom t
     | BoolOp (op, fs) -> BoolOp (op, List.map process fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, process f, a)
