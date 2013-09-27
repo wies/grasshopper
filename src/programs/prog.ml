@@ -1,7 +1,6 @@
 open Form
 open FormUtil
 open Axioms
-open Entails
 
 (** Source position *)
 

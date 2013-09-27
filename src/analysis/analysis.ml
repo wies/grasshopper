@@ -456,7 +456,7 @@ let elim_sl prog =
       let frame_wo_alloc = mk_diff frame_set init_alloc_set in
       let name = "framecondition of " ^ (str_of_ident proc.proc_name) in
       let mk_framecond f = mk_free_spec_form (FOL f) name None postcond.spec_pos in
-      (* null in not allocated *)
+      (* null is not allocated *)
       mk_framecond (mk_not (smk_elem mk_null alloc_set)) ::
       (* initial footprint is contained in frame *)
       mk_framecond (mk_subseteq init_alloc_set frame_set) ::
