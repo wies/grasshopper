@@ -11,7 +11,7 @@ let _ = List.iter (fun sym -> Hashtbl.add symbol_tbl (str_of_symbol sym, 0) sym)
 let _ = List.iter (fun (id, srt) -> Hashtbl.add sort_tbl id srt) 
     [bool_sort_string, Bool;
      loc_sort_string, Loc;
-     loc_sort_string, Int;
+     int_sort_string, Int;
      fld_sort_string, Fld Loc;
      set_sort_string, Set Loc]
 
