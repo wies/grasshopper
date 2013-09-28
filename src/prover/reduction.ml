@@ -176,57 +176,25 @@ let reduce_frame fs =
         reduce_graph ()
       | Some other -> failwith ("reduce_frame did not expect f with type " ^ (string_of_sort other))
   in
+  (* gather the SL->GRASS predicates *)
+  let suffix_s = Str.regexp ".*_struct$" in
+  let suffix_d = Str.regexp ".*_domain$" in
+  let pred_end_with s t = match t with
+    | App (FreeSym id, _, _) -> Str.string_match s (str_of_ident id) 0
+    | _ -> false
+  in
+  let gts = ground_terms (mk_and fs) in
+  let structs = TermSet.filter (pred_end_with suffix_s) gts in
+  let domains = TermSet.filter (pred_end_with suffix_d) gts in
+  (*TODO pair the domains and the structure, extract the args *)
+  (* the self framing predicates *)
   let expand_frame2 x a flds =
     let frame = mk_diff a x in
-    (* data in the frame are not changed *)
-    let reduce_data f f' =
-      Axioms.mk_axiom "data_frame"
-        (mk_implies
-           (smk_elem Axioms.loc1 frame)
-           (mk_eq (mk_read f Axioms.loc1) (mk_read f' Axioms.loc1))
-        )
-    in
-    (* parts of the field in the frame are not changed *)
-    let reduce_graph f f' =
-     
-      let replacement_pts =
-        Axioms.mk_axiom "pts_frame"
-          (mk_implies
-             (smk_elem Axioms.loc1 frame)
-             (mk_eq (mk_read f Axioms.loc1) (mk_read f' Axioms.loc1))
-          )
-      in
-     
-      let replacement_reach =
-        let ep v = mk_ep f x v in
-        let reachwo_f = Axioms.reachwo_Fld f in
-        let reach_f x y z = mk_btwn f x z y in
-        let reach_f' x y z = mk_btwn f' x z y in
-        let open Axioms in
-        [mk_axiom "reach_frame1"
-           (mk_implies
-              (reachwo_f loc1 loc2 (ep loc1))
-              (mk_iff 
-                 (reach_f loc1 loc2 loc3)
-                 (reach_f' loc1 loc2 loc3)));
-         mk_axiom "reach_frame2"
-           (mk_implies
-              (mk_and [mk_not (smk_elem loc1 x); mk_eq loc1 (ep loc1)])
-              (mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)))
-       ]
-      in
-      
-      let axioms =
-        replacement_pts ::
-        replacement_reach
-      in
-      mk_and axioms
-    in
-    (*TODO a version that generate self framing axioms for the predicate which are not in the footprint *)
-    let self_framing_datastructure () =
-      failwith "TODO"
-    in
-      (*todo what to call and when*)
+    let prev, post = List.fold_left (fun (acc1, acc2) x -> (acc2, x::acc1)) ([],[]) flds in
+    let paired = List.combine prev post in
+    let changed, unchanged = List.partition (fun (a,b) -> a <> b) paired in
+    (*todo get the domains/struct which have a changed field*)
+    (*todo what to call and when*)
       failwith "TODO"
   in
   let rec process f = match f with
