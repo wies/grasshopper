@@ -22,6 +22,9 @@ let print_stats = ref false
 (* The SMT solver that is used for checking VCs. *)
 let smtsolver = ref "Z3"
 
+(* Some experimental features, mostly for testing purpose *)
+let experimental = ref false
+
 let cmd_options =
   [("-v", Arg.Unit Debug.set_debug, "Display verbose messages");
    ("-dumpghp", Arg.Set_int dump_ghp, "Dump intermediate representation after specified simplification stage");
@@ -35,5 +38,6 @@ let cmd_options =
    ("-usearrays", Arg.Set encode_fields_as_arrays, "Use arrays to encode fields");
    ("-noinst", Arg.Clear instantiate, "Let the prover deal with the quantifiers without prior instantiation");
    ("-dumpvcs", Arg.Set dump_smt_queries, "Dump SMT-LIB 2 files for the generated VCs");
-   ("-smtsolver", Arg.Set_string smtsolver, "Choose SMT solver (Z3, CVC4, MathSAT)")
+   ("-smtsolver", Arg.Set_string smtsolver, "Choose SMT solver (Z3, CVC4, MathSAT)");
+   ("-x", Arg.Set experimental, "enable some experimental feature")
   ]

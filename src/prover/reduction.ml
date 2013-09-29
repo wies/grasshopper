@@ -229,19 +229,19 @@ let reduce_frame fs =
         affected
     in
     let self_frame (id, args_before, args_after, fp) =
-      let fp = match fp with
-        | Some fp -> fp
-        | None -> Axioms.set1
-      in
       let id_s = mk_ident (id ^ "_struct") in
       let id_d = mk_ident (id ^ "_domain") in
-      let b_s = mk_pred id_s (args_before @ [fp]) in
       let b_d = mk_free_app ~srt:(Set Loc) id_d args_before in
-      let a_s = mk_pred id_s (args_after @ [fp]) in
       let a_d = mk_free_app ~srt:(Set Loc) id_d args_after in
+      let fp = match fp with
+        | Some fp -> fp
+        | None -> b_d
+      in
+      let b_s = mk_pred id_s (args_before @ [fp]) in
+      let a_s = mk_pred id_s (args_after @ [fp]) in
       let cond = mk_eq (mk_inter [fp; x]) (mk_empty (Some (Set Loc))) in
       let consequences = smk_and [mk_eq b_d a_d; mk_iff b_s a_s] in
-        Axioms.mk_axiom "self framing" (mk_implies cond consequences)
+        mk_comment "self framing" (mk_implies cond consequences)
     in
       smk_and (List.map self_frame pred_before_after)
   in
@@ -258,7 +258,10 @@ let reduce_frame fs =
       let reach_frame = mk_and (process_frame lst) in
       let pred_frame = expand_frame2 x a lst in
         (*print_endline ("self_framing: " ^ (string_of_form pred_frame));*)
-        reach_frame
+        if !Config.experimental then
+          smk_and [reach_frame; pred_frame]
+        else
+          reach_frame
     | Atom t -> Atom t
     | BoolOp (op, fs) -> BoolOp (op, List.map process fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, process f, a)
