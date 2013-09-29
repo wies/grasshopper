@@ -184,18 +184,66 @@ let reduce_frame fs =
     | _ -> false
   in
   let gts = ground_terms (mk_and fs) in
-  let structs = TermSet.filter (pred_end_with suffix_s) gts in
+  (*let structs = TermSet.filter (pred_end_with suffix_s) gts in*)
   let domains = TermSet.filter (pred_end_with suffix_d) gts in
-  (*TODO pair the domains and the structure, extract the args *)
+  (*TermSet.iter (fun t -> print_endline (string_of_term t)) structs;*)
+  (*extract the args, struct have an extra domain arg *)
+  let pred_name id =
+    let s = str_of_ident id in
+      String.sub s 0 (String.length s - 7)
+  in
+  let decompose t = match t with
+    | App (FreeSym id, args, _) ->
+      if pred_end_with suffix_s t then
+        let r_args = List.rev args in
+          (pred_name id, List.rev (List.tl r_args), Some (List.hd r_args))
+      else if pred_end_with suffix_d t then
+        (pred_name id, args, None)
+      else failwith "pred is not struct or domain"
+    | _ -> failwith "expected pred"
+  in
+  (*let d_struct = List.map decompose (TermSet.elements structs) in*)
+  let d_domain = List.map decompose (TermSet.elements domains) in
   (* the self framing predicates *)
   let expand_frame2 x a flds =
-    let frame = mk_diff a x in
     let prev, post = List.fold_left (fun (acc1, acc2) x -> (acc2, x::acc1)) ([],[]) flds in
     let paired = List.combine prev post in
     let changed, unchanged = List.partition (fun (a,b) -> a <> b) paired in
     (*todo get the domains/struct which have a changed field*)
-    (*todo what to call and when*)
-      failwith "TODO"
+    let affected =
+      List.filter
+        (fun (_, args, _) ->
+          List.exists
+            (fun a -> List.exists (fun c -> (fst c) = a) changed)
+            args)
+        d_domain
+    in
+    let pred_before_after =
+      List.map
+        (fun (id, args, fp) ->
+          ( id,
+            args,
+            List.map (fun a -> try List.assoc a paired with Not_found -> a) args,
+            fp )
+        )
+        affected
+    in
+    let self_frame (id, args_before, args_after, fp) =
+      let fp = match fp with
+        | Some fp -> fp
+        | None -> Axioms.set1
+      in
+      let id_s = mk_ident (id ^ "_struct") in
+      let id_d = mk_ident (id ^ "_domain") in
+      let b_s = mk_pred id_s (args_before @ [fp]) in
+      let b_d = mk_free_app ~srt:(Set Loc) id_d args_before in
+      let a_s = mk_pred id_s (args_after @ [fp]) in
+      let a_d = mk_free_app ~srt:(Set Loc) id_d args_after in
+      let cond = mk_eq (mk_inter [fp; x]) (mk_empty (Some (Set Loc))) in
+      let consequences = smk_and [mk_eq b_d a_d; mk_iff b_s a_s] in
+        Axioms.mk_axiom "self framing" (mk_implies cond consequences)
+    in
+      smk_and (List.map self_frame pred_before_after)
   in
   let rec process f = match f with
     | Atom (App (Frame, x :: a :: lst, _)) ->
@@ -206,12 +254,16 @@ let reduce_frame fs =
           else process_frame rest
         | [] -> []
         | _ -> failwith "frame with wrong arity"
-      in mk_and (process_frame lst)
+      in
+      let reach_frame = mk_and (process_frame lst) in
+      let pred_frame = expand_frame2 x a lst in
+        (*print_endline ("self_framing: " ^ (string_of_form pred_frame));*)
+        reach_frame
     | Atom t -> Atom t
     | BoolOp (op, fs) -> BoolOp (op, List.map process fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, process f, a)
   in
-  List.map process fs
+    List.map process fs
   
 let open_axioms openCond axioms = 
   if !Config.instantiate then
