@@ -371,7 +371,7 @@ let unoldify_spec sf =
   let unold_form =
     match sf.spec_form with
     | FOL f -> FOL (unoldify_form f)
-    | SL f -> SL f (* todo: unoldification for SL formulas *)
+    | SL f -> SL f (* TODO: unoldification for SL formulas *)
   in 
   let unold_form_negated = Util.optmap unoldify_form sf.spec_form_negated in
   { sf with 

@@ -98,8 +98,8 @@ let infer_accesses prog =
     in
     let preds2 = 
       List.fold_left 
-      (fun preds2 pred -> IdMap.add pred.pred_name pred preds2)
-      IdMap.empty preds1
+        (fun preds2 pred -> IdMap.add pred.pred_name pred preds2)
+        IdMap.empty preds1
     in
     let prog1 = 
       { prog with 

@@ -187,7 +187,7 @@ let reduce_frame fs =
   (*let structs = TermSet.filter (pred_end_with suffix_s) gts in*)
   let domains = TermSet.filter (pred_end_with suffix_d) gts in
   (*TermSet.iter (fun t -> print_endline (string_of_term t)) structs;*)
-  (*extract the args, struct have an extra domain arg *)
+  (*extract the args, struct has an extra domain arg *)
   let pred_name id =
     let s = str_of_ident id in
       String.sub s 0 (String.length s - 7)
@@ -286,7 +286,7 @@ let isFunVar f =
 
 
 (** Reduce all set constraints by adding appropriate instances of the axioms of set operations.
- ** assumes that f is typed and in negation normal form *)
+ ** Assumes that f is typed and in negation normal form *)
 let reduce_sets_with_axioms fs gts =
   let split ts = List.fold_left (fun (ts1, ts2) t -> (ts2, t :: ts1)) ([], []) ts in
   let rec unflatten = function
@@ -327,7 +327,7 @@ let reduce_sets fs gts =
   else reduce_sets_to_predicates fs gts
 
 (** Adds instantiated theory axioms for the entry point function to formula f
- ** assumes that f is typed and that all frame predicates have been reduced *)
+ ** Assumes that f is typed and that all frame predicates have been reduced *)
 let reduce_ep fs =
   let gts = TermSet.add mk_null (ground_terms (mk_and fs)) in
   let loc_gts = 
@@ -363,8 +363,8 @@ let reduce_ep fs =
   let ep_ax1 = instantiate_with_terms true ep_ax classes in
   fs, ep_ax1, gts_eps
 
-(** Adds instantiated theory axioms for graph reachability to formula f
- ** assumes that f is typed *)
+(** Adds instantiated theory axioms for graph reachability to formula f.
+ ** Assumes that f is typed *)
 let reduce_reach fs gts =
   let basic_pt_flds = TermSet.filter (has_sort (Fld Loc) &&& is_free_const) gts in
   (* instantiate null axioms *)
@@ -481,8 +481,8 @@ let reduce_remaining fs gts =
   let fs1 = open_axioms isFunVar fs in
   instantiate_with_terms true fs1 classes
 
-(** Reduces the given formula to the target theory fragment, as specified by the configuration 
- ** assumes that f is typed *)
+(** Reduces the given formula to the target theory fragment, as specified by the configuration.
+ ** Assumes that f is typed *)
 let reduce f = 
   let rec split_ands acc = function
     | BoolOp(And, fs) :: gs -> 
@@ -497,7 +497,7 @@ let reduce f =
   let fs2 = reduce_frame fs1 in
   let fs2 = List.map reduce_exists fs2 in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
-  let fs3, ep_axioms, gts = reduce_ep fs2 in
+  let fs3, ep_axioms, gts = reduce_ep fs2 (*fs2, [], TermSet.empty*) in
   let fs31 = factorize_axioms (split_ands [] fs3) in
   let fs4, gts1 = reduce_sets (fs31 @ ep_axioms) gts in
   let fs5, gts2 = reduce_reach fs4 gts1 in

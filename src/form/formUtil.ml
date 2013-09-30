@@ -1,3 +1,5 @@
+(** Utility functions for manipulating first-order logic formulas *)
+
 open Form
 open Util
 
@@ -60,7 +62,7 @@ let is_free_const = function
 
 let eq_name id1 id2 = name id1 = name id2
 
-(** Smart constructors *)
+(** {6 Smart constructors} *)
 
 let mk_true = BoolOp (And, [])
 let mk_false = BoolOp (Or, [])
@@ -157,16 +159,18 @@ let smk_elem e = function
 
 let mk_subseteq s t = mk_atom SubsetEq [s; t]
 
-(* 'a' is the set allocated objects
- * 'x' is the footprint of the SL formula
- * 'f' is the a field
- * (un)primed corresponds to before/after
+(* @param a the set allocated objects
+ * @param x the footprint of the SL formula
+ * @param f the field in the pre-state
+ * @param f' the field in the post-state
  *)
 let mk_frame x a f f' = mk_atom Frame [x; a; f; f']
-(* generalized version taking more than one pointer at the time *)
+
+(* generalized version of {!mk_frame} taking a list of fields *)
 let mk_frame_lst x a lst =
   assert ((List.length lst) mod 2 = 0);
   mk_atom Frame (x :: a :: lst)
+
 
 let mk_and = function
   | [f] -> f
@@ -220,6 +224,8 @@ let smk_op op fs =
 let smk_and fs = smk_op And fs
 let smk_or fs = smk_op Or fs
 
+(** {6 Normal form computation} *)
+
 (** compute negation normal form of a formula *)
 let rec nnf = function
   | BoolOp (Not, [BoolOp (Not, [f])]) -> nnf f
@@ -261,7 +267,10 @@ let mk_implies a b =
 let mk_iff a b =
   smk_or [smk_and [a; b]; smk_and [nnf (mk_not a); nnf (mk_not b)]]
 
-(** Fold all terms appearing in the formula f using fold function fn and initial value init *)
+
+(** {6 Generic formula manipulation} *)
+
+(** Fold all terms appearing in the formula [f] using catamorphism [fn] and initial value [init] *)
 let fold_terms fn init f =
   let rec ft acc = function
     | Atom t -> fn acc t
@@ -269,7 +278,7 @@ let fold_terms fn init f =
     | Binder (_, _, f, _) -> ft acc f
   in ft init f
 
-(** Apply the function fn to all terms appearing in f *)
+(** Apply the function fn to all terms appearing in [f] *)
 let map_terms fn f =
   let rec mt = function
     | Atom t -> Atom (fn t)
@@ -277,7 +286,7 @@ let map_terms fn f =
     | Binder (b, vs, f, a) -> Binder (b, vs, mt f, a)
   in mt f
 
-(** Like fold_terms except that fn takes the set of bound variables of the given context as additional argument *)
+(** Like {!fold_terms} except that [fn] takes the set of bound variables of the given context as additional argument *)
 let fold_terms_with_bound fn init f =
   let rec ft bv acc = function
     | Atom t -> fn bv acc t
@@ -286,14 +295,14 @@ let fold_terms_with_bound fn init f =
 	ft (List.fold_left (fun bv (x, _) -> IdSet.add x bv) bv vs) acc f
   in ft IdSet.empty init f
 
-(** Computes the set of free variables occuring in term t *)
+(** Computes the set of free variables occuring in term [t] *)
 let fvt vars t =
   let rec fvt1 vars = function
   | Var (id, _) -> IdSet.add id vars
   | App (_, ts, _) -> List.fold_left fvt1 vars ts
   in fvt1 vars t
 
-(** Computes the set of free variables occuring in formula f *)
+(** Computes the set of free variables occuring in formula [f] *)
 let fv f = 
   let rec fvt bv vars = function
     | Var (id, _) -> 
@@ -304,7 +313,7 @@ let fv f =
 	List.fold_left (fvt bv) vars ts
   in fold_terms_with_bound fvt IdSet.empty f
 
-(** Computes the set of free variables of formula f together with their sorts *)
+(** Computes the set of free variables of formula [f] together with their sorts *)
 let sorted_free_vars f = 
   let rec fvt bv vars = function
     | Var (id, Some srt) -> 
@@ -316,7 +325,7 @@ let sorted_free_vars f =
     | _ -> vars
   in fold_terms_with_bound fvt IdSrtSet.empty f
 
-(** Computes the set of free constants occuring in term t.
+(** Computes the set of free constants occuring in term [t].
  ** Takes accumulator as additional argument. *)
 let free_consts_term_acc consts t =
   let rec fct consts = function
@@ -325,14 +334,14 @@ let free_consts_term_acc consts t =
   | App (_, ts, _) -> List.fold_left fct consts ts
   in fct consts t
 
-(** Computes the set of free constants occuring in term t. *)
+(** Computes the set of free constants occuring in term [t]. *)
 let free_consts_term t = free_consts_term_acc IdSet.empty t
 
-(** Computes the set of free constants occuring in formula f *)
+(** Computes the set of free constants occuring in formula [f]. *)
 let free_consts f =
   fold_terms free_consts_term_acc IdSet.empty f
 
-(** Computes the set of ground terms appearing in f
+(** Computes the set of ground terms appearing in [f]
  * free variables are treated as implicitly universally quantified *)
 let ground_terms f =
   let rec gt bv terms t = 
@@ -369,7 +378,7 @@ let vars_in_fun_terms f =
     | _ -> vars
   in fold_terms ct IdSrtSet.empty f
      
-(** Extracts the signature of f *)
+(** Extracts the signature of formula [f] *)
 let sign f : signature =
   let fail t = 
     let t_str = string_of_term t in
@@ -400,7 +409,7 @@ let sign f : signature =
   in 
   fold_terms signt SymbolMap.empty f
 
-(** Extracts the signature of f *)
+(** Extracts the signature of formula [f] *)
 let overloaded_sign f : (arity list SymbolMap.t) =
   let add_to_sign sym tpe decls =
     let old = try SymbolMap.find sym decls with Not_found -> [] in
@@ -466,14 +475,14 @@ let map_id fct f =
     | Binder (b, vs, f, a) -> Binder (b, vs, sub f, a)
   in sub f
 
-(* Substitutes all identifiers in term t according to substitution map subst_map *)
+(** Substitutes all identifiers in term [t] according to substitution map [subst_map] *)
 let subst_id_term subst_map t =
   let sub_id id =
     try IdMap.find id subst_map with Not_found -> id
   in
     map_id_term sub_id t
 
-(** Substitutes all identifiers in formula f according to substitution map subst_map.
+(** Substitutes all identifiers in formula [f] according to substitution map [subst_map].
  ** Not capture avoiding. *)
 let subst_id subst_map f =
   let subt = subst_id_term subst_map in
@@ -483,7 +492,7 @@ let subst_id subst_map f =
     | Binder (b, vs, f, a) -> Binder (b, vs, sub f, a)
   in sub f
 
-(** Substitutes all constants in term t according to substitution function subst_fun. *)
+(** Substitutes all constants in term [t] according to substitution function [subst_fun]. *)
 let subst_consts_fun_term subst_fun t =
   let rec sub = function
     | (App (FreeSym id, [], srt) as t) -> subst_fun id t 
@@ -492,23 +501,23 @@ let subst_consts_fun_term subst_fun t =
   in
   sub t
 
-(** Substitutes all constants in formula f according to substitution function subst_fun. *)
+(** Substitutes all constants in formula [f] according to substitution function [subst_fun]. *)
 let subst_consts_fun subst_fun f =
   map_terms (subst_consts_fun_term subst_fun) f
 
-(** Substitutes all constants in term t according to substitution map subst_map. *)
+(** Substitutes all constants in term [t] according to substitution map [subst_map]. *)
 let subst_consts_term subst_map t =
   let sub_id id t =
     try IdMap.find id subst_map with Not_found -> t
   in
   subst_consts_fun_term sub_id t
 
-(** Substitutes all constants in formula f according to substitution map subst_map. *)
+(** Substitutes all constants in formula [f] according to substitution map [subst_map]. *)
 let subst_consts subst_map f =
   map_terms (subst_consts_term subst_map) f
 
 
-(** Substitutes all variables in term t according to substitution map subst_map. *)
+(** Substitutes all variables in term [t] according to substitution map [subst_map]. *)
 let subst_term subst_map t =
   let sub_id id t =
     try IdMap.find id subst_map with Not_found -> t
@@ -518,7 +527,7 @@ let subst_term subst_map t =
     | App (sym, ts, srt) -> App (sym, List.map sub ts, srt)
   in sub t
 
-(** Substitutes all free variables in formula f according to substitution map subst_map.
+(** Substitutes all free variables in formula [f] according to substitution map [subst_map].
  ** Capture avoiding. *)
 let subst subst_map f =
   let suba sm = function
@@ -543,8 +552,8 @@ let subst subst_map f =
 	in Binder (b, vs1, sub sm2 f, List.map (suba sm2) a)
   in sub subst_map f
 
-(** Propagate existentially quantified variables upward in the formula
- ** assume that f is in negation normal form *)
+(** Propagate existentially quantified variables upward in the formula [f].
+ ** Assumes that [f] is in negation normal form. *)
 let propagate_exists f =
   let rec merge sm zs xs ys ys2 =
     match xs, ys with
@@ -563,13 +572,6 @@ let propagate_exists f =
           List.fold_right (fun f (fs2, vs2) ->
             let f1, vs1 = prop f in
             let sm, vs = merge IdMap.empty [] vs1 vs2 [] in
-            (*print_forms stdout [f1];
-            List.iter (fun id -> Printf.printf "%s, " (str_of_ident (fst id))) vs1;
-            print_newline ();
-            List.iter (fun id -> Printf.printf "%s, " (str_of_ident (fst id))) vs2;
-            print_newline ();
-            IdMap.iter (fun id t -> Printf.printf "%s -> %s, " (str_of_ident id) (string_of_term t)) sm;
-            print_newline ();*)
             subst sm f1 :: fs2, vs) 
             fs ([], [])
         in BoolOp (Or, fs1), vs
@@ -600,8 +602,8 @@ let propagate_exists f =
   let f1, vs = prop f in 
   mk_exists vs f1
 
-(** Skolemization 
- ** assumes that f is in negation normal form *)
+(** Skolemize formula [f]. 
+ ** Assumes that [f] is in negation normal form. *)
 let skolemize f =
   let rec sk vs = function
     | BoolOp (op, fs) -> smk_op op (List.map (sk vs) fs)
@@ -625,7 +627,7 @@ let skolemize f =
   let f1 = propagate_exists f in
   sk IdMap.empty f1
 
-(** Make all comments in formula f unique *)
+(** Make all comments in formula [f] unique *)
 let unique_comments f =
   let rec uc = function 
     | BoolOp (op, fs) -> BoolOp (op, List.map uc fs)
@@ -641,7 +643,7 @@ module Clauses = struct
   type clause = form list
   type clauses = clause list
        
-  (** convert a formula into a set of clauses *)
+  (** convert formula [f] into a set of clauses *)
   let from_form f : clauses = 
     let nf = cnf (nnf f) in
     let to_clause = function
@@ -652,7 +654,7 @@ module Clauses = struct
     | BoolOp (And, fs) -> List.map to_clause fs
     | f -> [to_clause f]
 	  
-  (** convert a set of clauses into a formula *)
+  (** convert the set of clauses [cs] into a formula *)
   let to_form cs = smk_and (List.map smk_or cs)
 
 end

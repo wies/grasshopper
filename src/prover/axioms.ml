@@ -149,6 +149,7 @@ let ep_axioms () =
 
 let set_axioms () =
   let empty = 
+    (* don't use the smart constructor smk_elem for membership here *)
     mk_not (mk_elem loc1 (mk_empty (Some (Set Loc))))
   in
   let union = 

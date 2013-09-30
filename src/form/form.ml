@@ -1,14 +1,16 @@
+(** Abstract syntax tree for formulas in sorted first-order logic *)
+
 open Util
 
-(** Sorts and symbols *)
+(** {6 Sorts and symbols} *)
 
 type ident = string * int
 
 type sort =
-  | Bool | Loc | Int
-  | Set of sort 
-  | Fld of sort
-  | FreeSrt of ident
+  | Bool | Loc | Int (** basic sorts *)
+  | Set of sort (** sets *)
+  | Fld of sort (** fields *)
+  | FreeSrt of ident (** uninterpreted sorts *)
 
 type arity = sort list * sort
 
@@ -25,7 +27,7 @@ type symbol =
   | LtEq | GtEq | Lt | Gt
   | Btwn | Frame
   | Elem | SubsetEq 
-  (* free constants, functions, and predicates *)
+  (* uninterpreted constants, functions, and predicates *)
   | FreeSym of ident
 
 let symbols = 
@@ -36,7 +38,7 @@ let symbols =
    Eq; LtEq; GtEq; Lt; Gt;
    Btwn; Frame; Elem; SubsetEq]
 
-(** Terms and formulas *)
+(** {6 Terms and formulas} *)
 
 type term = 
   | Var of ident * sort option
@@ -105,7 +107,9 @@ type signature = arity SymbolMap.t
 
 type subst_map = term IdMap.t
 
-(** Pretty printing *)
+(** {6 Pretty printing} *)
+
+(** {5 SMT-LIB 2 Notation} **)
 
 open Format
 
@@ -150,7 +154,7 @@ let str_of_symbol = function
   | Elem -> "Elem"
   | SubsetEq -> "Subseteq"
   | Frame -> "Frame"
-  (* free symbols *)
+  (* uninterpreted symbols *)
   | FreeSym id -> str_of_ident id
 
 let pr_ident ppf id = fprintf ppf "%s" (str_of_ident id)
@@ -256,11 +260,13 @@ let print_smtlib_sort out_ch s = pr_sort (formatter_of_out_channel out_ch) s
 let print_smtlib_term out_ch t = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_term t
 let print_smtlib_form out_ch f =  fprintf (formatter_of_out_channel out_ch) "@[<8>%a@]@?" pr_form f
 
-
+(** Print term [t] to out channel [out_chan]. *)
 let print_term out_ch t = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_term t
+
+(** Print formula [f] to out channel [out_chan]. *)
 let print_form out_ch f = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_form f
 
-(** Infix Notation *)
+(** {5 Infix Notation} *)
 
 let rec pr_sort ppf = function
   | Loc -> fprintf ppf "%s" loc_sort_string
@@ -388,5 +394,3 @@ let string_of_form f = pr_form str_formatter f; flush_str_formatter ()
 let print_forms ch fs = 
   List.iter (fun f -> print_form ch f;  output_string ch "\n") fs
   
-
-
