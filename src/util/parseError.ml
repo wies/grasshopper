@@ -19,3 +19,12 @@ let parse_error s = match !input with
       output_string stderr ("Parse error:\n" ^ init ^ marker ^ rest ^ "\n")
   | _ -> output_string stderr ("Parse error in uninitialized parse state1.\n"))
 | _ -> output_string stderr ("Parse error in uninitialized parse state.\n")
+
+let parse_buf_exn rule lexer lexbuf =
+  try
+    rule lexer lexbuf
+  with exn ->
+    begin
+      parse_error "";
+      exit 1
+    end

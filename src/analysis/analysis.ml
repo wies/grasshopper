@@ -1044,7 +1044,9 @@ let check_proc prog proc =
     let vc_and_preds = add_pred_insts prog (skolemize (nnf vc)) in
     match Prover.check_sat ~session_name:vc_name vc_and_preds with
     | Some false -> ()
-    | _ -> ProgError.error pp vc_msg
+    | _ ->
+      if !Config.robust then ProgError.print_error pp vc_msg
+      else ProgError.error pp vc_msg
   in
   let vcs = vcgen prog proc in
   List.iter check_vc vcs

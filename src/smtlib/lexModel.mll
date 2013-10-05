@@ -32,13 +32,15 @@ let permissive_identchar = ['a'-'z' 'A'-'Z' '_' '!' '?' '$']
 let permissive_ident = permissive_identchar (permissive_identchar | digitchar)*
 
 rule token = parse
-  [' ' '\t' '\n'] { token lexbuf }
+  [' ' '\012' '\t' '\r' '\n'] { token lexbuf }
 | '{' { LBRACE }
 | '}' { RBRACE }
 | "->" { ARROW }
 | "else" { ELSE }
 | "true" { VAL(Bool, BoolConst true) }
 | "false" { VAL(Bool, BoolConst false) }
+| ['0'-'9']+ as lxm { VAL(Int, IntConst (int_of_string lxm)) }
+| "(- " (['0'-'9']+ as lxm) ')' { VAL(Int, IntConst (-1 * (int_of_string lxm))) }
 | "#unspecified" { UNSPEC }
 | (ident as srt) "!val!" (digitchar+ as num) { VAL(to_sort srt, FreeSym (srt ^ "!" ^ num,0)) }
 | ident as name (('_' digitchar+)? as num) ('$' digitchar+)? ("!" digitchar+)?
@@ -49,5 +51,4 @@ rule token = parse
       in
         SYMBOL(to_symbol (name, version))
     }
-| permissive_ident as id { failwith ("model lexing error: " ^ id) }
 | eof { EOF }

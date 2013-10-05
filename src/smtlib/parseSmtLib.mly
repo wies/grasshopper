@@ -38,7 +38,7 @@ rmodel:
     { ParseError.input := Some $1;
       let buff = Lexing.from_string $1 in
       ParseError.buffer := Some buff;
-      ParseModel.main LexModel.token buff }
+      ParseError.parse_buf_exn ParseModel.main LexModel.token buff }
 ;
 
 

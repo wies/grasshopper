@@ -13,6 +13,8 @@ let model_file = ref ""
 let dump_smt_queries = ref false
 (* Flag that controls whether the generated VCs are checked. *)
 let verify = ref true
+(* Flag that controls whether to stop after the 1st VCs that cannot be checked. *)
+let robust = ref false
 
 let dump_ghp = ref (-1)
 
@@ -29,6 +31,7 @@ let cmd_options =
   [("-v", Arg.Unit Debug.set_debug, "Display verbose messages");
    ("-dumpghp", Arg.Set_int dump_ghp, "Dump intermediate representation after specified simplification stage");
    ("-noverify", Arg.Clear verify, "Do not check the generated VCs");
+   ("-robust", Arg.Set robust, "Do not check the generated VCs");
    ("-stats", Arg.Set print_stats, "Print statistics");
    ("-model", Arg.Set_string model_file, "Produce counterexample model for the first failing VC");
    ("-noreach", Arg.Clear with_reach_axioms, "Omit axioms for reachability predicates");
