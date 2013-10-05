@@ -91,6 +91,13 @@ let (&&&) f g x = f x && g x
 let (|||) f g x = f x || g x
 
 
+(** Helper function for strings - returns true if the first string starts with the second string *)
+let string_starts_with s t =
+  let s_len = String.length s
+  and t_len = String.length t
+  in if (s_len>=t_len) && ((String.sub s 0 t_len)=t) then true
+    else false
+
 (* the following is stripped from module BatSubstring in OCaml Batteries included *)
 
 type t = string * int * int (* string, offset, length *)

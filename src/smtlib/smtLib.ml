@@ -140,7 +140,11 @@ let declare_sorts session =
   if !Config.encode_fields_as_arrays then
     writeln session ("(define-sort " ^ fld_sort_string ^ " (X) (Array Loc X))")
   else 
-    writeln session ("(declare-sort " ^ fld_sort_string ^ " 1)")
+    (*writeln session ("(declare-sort " ^ fld_sort_string ^ " 1)")*)
+    begin
+      writeln session ("(declare-sort " ^ fld_sort_string ^ loc_sort_string ^ " 0)");
+      writeln session ("(declare-sort " ^ fld_sort_string ^ int_sort_string ^ " 0)")
+    end
 
 let start_with_solver = 
   let get_replay_chan name =
@@ -174,7 +178,7 @@ let start_with_solver =
     (fun (opt, b) -> writeln session (Printf.sprintf "(set-option %s %b)" opt b))
     solver.version.smt_options;
   if has_int || !Config.encode_fields_as_arrays
-  then writeln session "(set-logic AUFLIA)" (*TODO aslo for Int*)
+  then writeln session "(set-logic AUFLIA)"
   else writeln session "(set-logic UF)";
   (*end;*)
   declare_sorts session;

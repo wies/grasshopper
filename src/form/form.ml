@@ -212,7 +212,8 @@ and pr_sort ppf = function
   | Bool -> fprintf ppf "%s" bool_sort_string
   | Int -> fprintf ppf "%s" int_sort_string
   | FreeSrt id -> pr_ident ppf id
-  | Fld s -> fprintf ppf "@[<4>%s@ %a@]" fld_sort_string pr_sort0 s
+  (*| Fld s -> fprintf ppf "@[<4>%s@ %a@]" fld_sort_string pr_sort0 s*)
+  | Fld s -> fprintf ppf "@[<4>%s%a@]" fld_sort_string pr_sort0 s
   | Set s -> fprintf ppf "@[<4>%s@ %a@]" set_sort_string pr_sort0 s
 		
 let pr_var ppf (x, srt) =
@@ -259,6 +260,8 @@ and pr_forms ppf = function
 let print_smtlib_sort out_ch s = pr_sort (formatter_of_out_channel out_ch) s
 let print_smtlib_term out_ch t = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_term t
 let print_smtlib_form out_ch f =  fprintf (formatter_of_out_channel out_ch) "@[<8>%a@]@?" pr_form f
+
+let string_of_smtlib_sort s = pr_sort str_formatter s; flush_str_formatter ()
 
 (** Print term [t] to out channel [out_chan]. *)
 let print_term out_ch t = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_term t

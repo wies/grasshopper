@@ -26,7 +26,9 @@ let add_def sym (i, o) model =
 let add_decl sym arity model =
   {model with sign = SymbolMap.add sym arity model.sign}
 
-let decl_of sym model = SymbolMap.find sym model.sign
+let decl_of sym model =
+  try SymbolMap.find sym model.sign
+  with Not_found -> failwith ("cannot find declaration of " ^ (str_of_symbol sym))
 
 let defs_of sym model = 
   try SymbolMap.find sym model.interp with Not_found -> [] 
@@ -73,7 +75,43 @@ let const_map m =
 	  acc def.input)
 	acc defs)
     m.interp consts
+
+let values_aux tpe m =
+  let add = match tpe with
+    | Some Bool ->
+      (fun sym set -> match sym with
+        | BoolConst _ -> SymbolSet.add sym set
+        | _ -> set )
+    | Some Int ->
+      (fun sym set -> match sym with
+        | IntConst _ -> SymbolSet.add sym set
+        | _ -> set )
+    | Some tpe ->
+      let str = string_of_smtlib_sort tpe in
+        (fun sym set ->
+          if Util.string_starts_with (str_of_symbol sym) str
+          then SymbolSet.add sym set
+          else set
+        )
+    | None -> SymbolSet.add
+  in
+    SymbolMap.fold
+      (fun id defs acc ->
+        List.fold_left
+          (fun acc def ->
+            List.fold_left
+              (fun a b -> add b a)
+              (add def.output acc )
+              def.input
+          )
+          acc
+          defs
+      )
+      m.interp SymbolSet.empty
     
+let values m = values_aux None m
+let values_of_tpe t m = values_aux (Some t) m
+
 let to_clauses model =
   let const_map = const_map model in 
   let mk_rep n = mk_const (SymbolMap.find n const_map) in
@@ -183,10 +221,11 @@ let output_graphviz chan model =
     Printf.sprintf "label=\"%s\", fontcolor=%s, color=%s" (str_of_symbol fld_sym) color color
   in
   let output_flds () = 
+    let flds = values_of_tpe (Fld Loc) model in
     List.iter 
       (fun def ->
 	match def.input with
-	| [fld; i] ->
+	| [fld; i] when SymbolSet.mem fld flds ->
 	    let label = get_label fld in
 	    Printf.fprintf chan "\"%s\" -> \"%s\" [%s]\n" 
 	      (str_of_symbol i) (str_of_symbol def.output) label
@@ -237,6 +276,33 @@ let output_graphviz chan model =
     in
     SymbolMap.iter process_fld grouped_defs
   in
+  let output_locs () =
+    let read = defs_of Read model in
+    let eval fld loc =
+      try Some (List.find (fun def -> def.input = [fld; loc]) read).output
+      with Not_found -> None
+    in
+    let locs = values_of_tpe Loc model in
+    let data_field = values_of_tpe (Fld Int) model in
+      SymbolSet.iter
+        (fun loc ->
+          Printf.fprintf chan "  \"%s\" [shape=none, margin=0, label=<\n" (str_of_symbol loc);
+          output_string chan "    <TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\" CELLPADDING=\"4\">\n";
+          Printf.fprintf chan "      <TR><TD><B>%s</B></TD></TR>\n" (str_of_symbol loc);
+          SymbolSet.iter
+            (fun fld ->
+              let rep = SymbolMap.find fld const_map in
+              let fld_str = str_of_symbol rep in
+                match eval fld loc with
+                | Some v -> Printf.fprintf chan "      <TR><TD><B>%s = %s</B></TD></TR>\n" fld_str (str_of_symbol v)
+                | None -> ()
+            )
+            data_field;
+          output_string chan "</TABLE>\n";
+          output_string chan ">];\n"
+        )
+        locs
+  in
   let output_vars () = 
     SymbolMap.iter (fun sym defs ->
       (*
@@ -247,13 +313,12 @@ let output_graphviz chan model =
       *)
       match decl_of sym model with
       |	([], Loc) ->
-	  Printf.fprintf chan "\"%s\" [shape=box]\n" (str_of_symbol sym);
+	  (*Printf.fprintf chan "\"%s\" [shape=box]\n" (str_of_symbol sym);*)
 	  Printf.fprintf chan "\"%s\" -> \"%s\"\n" (str_of_symbol sym) (str_of_symbol (List.hd defs).output)
       | _ -> ()) model.interp
   in
   let output_sets () =
     let print_sets () =
-      (*TODO adapt for Elem*)
       let defs = defs_of Elem model in
       let csts = consts model in
       let sets =
@@ -298,10 +363,12 @@ let output_graphviz chan model =
   in
   let output_graph () =
     output_string chan "digraph Model {\n";
+    output_locs ();
     output_vars ();
     output_reach ();
     output_flds ();
     output_sets ();
+    (* ... output predicates ... *)
     output_string chan "}\n"
   in
   output_graph ()
