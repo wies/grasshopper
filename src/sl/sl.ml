@@ -1,3 +1,4 @@
+(** Abstract syntax tree for separation logic formulas *)
 
 type ident = Form.ident
 let mk_ident = FormUtil.mk_ident
@@ -5,29 +6,15 @@ module IdMap = Form.IdMap
 module IdSet = Form.IdSet
 let ident_to_string = Form.str_of_ident
 
-(* the next pointer *)
-let pts = mk_ident "next"
-let prev_pts = mk_ident "prev"
-
 let to_field f = FormUtil.mk_free_const ~srt:(Form.Fld Form.Loc) f
-
-let fpts = to_field pts
-let fprev_pts = to_field prev_pts
-
-(* data pointer *)
-let data = mk_ident "data"
-let fdata = FormUtil.mk_free_const ~srt:(Form.Fld Form.Int) data
-let get_data l = FormUtil.mk_read fdata l
 
 type pred_symbol =
   | Emp
   | Region
   | Pred of ident
 
-
 type form =
   | Pure of Form.form
-  (*| Spatial of symbol * Form.term list*)
   | Atom of pred_symbol * Form.term list
   | SepConj of form list
   | Not of form

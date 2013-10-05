@@ -3,8 +3,8 @@ open Form
 open FormUtil
 open InstGen
 
-(** Eliminate all implicit and explicit existential quantifiers using skolemization
- ** assumes that f is typed and in negation normal form *)
+(** Eliminate all implicit and explicit existential quantifiers using skolemization.
+ ** Assumes that [f] is typed and in negation normal form. *)
 let reduce_exists =
   let e = fresh_ident "?e" in
   let rec elim_neq = function
@@ -32,7 +32,7 @@ let reduce_exists =
     skolemize f1
 
 (** Hoist all universally quantified subformulas to top level.
- ** Assumes that formulas fs are in negation normal form *)
+ ** Assumes that formulas [fs] are in negation normal form *)
 let factorize_axioms fs =
   let rec extract f axioms = 
     match f with
@@ -64,8 +64,8 @@ let factorize_axioms fs =
   let fs1, axioms = List.fold_left process ([], []) fs in
   axioms @ fs1
 
-(** Reduce all set constraints to constraints over unary predicates
- ** assumes that f is typed and in negation normal form *)
+(** Reduce all set constraints to constraints over unary predicates.
+ ** Assumes that [f] is typed and in negation normal form *)
 let reduce_sets_to_predicates =
   let e = fresh_ident "?e" in
   let encode_set_exp srt e s =

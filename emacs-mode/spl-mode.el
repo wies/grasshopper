@@ -41,13 +41,13 @@
    '("\\<\\(if\\|else\\|free\\|pr\\(ocedure\\|edicate\\)\\|return\\(s\\|\\)\\|struct\\|var\\|while\\)\\>"
          1 font-lock-keyword-face)
 
-   '("\\<\\(ass\\(ert\\|ume\\)\\|ensures\\|invariant\\|requires\\)\\>"
+   '("\\<\\(ass\\(ert\\|ume\\)\\|ensures\\|i\\(mplicit\\|nvariant\\)\\|requires\\|ghost\\)\\>"
          1 font-lock-spec-face)
 
    '("\\<\\(forall\\|havoc\\|new\\|exists\\|old\\)\\>"
          1 font-lock-builtin-face)
 
-   '("\\<\\(emp\\|false\\|null\\|true\\)\\>"
+   '("\\<\\(emp\\|false\\|in\\|null\\|true\\)\\>"
          1 font-lock-constant-face)
 
    '("\\(\\<[a-zA-Z_][a-zA-Z0-9_']*[ \t]*\\>\\)(" 1

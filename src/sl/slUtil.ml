@@ -1,3 +1,5 @@
+(** Utility functions for manipulating SL formulas *)
+
 open Sl
 open Symbols
 
@@ -13,20 +15,12 @@ let mk_loc d =
   if (fst d = "null") then FormUtil.mk_null
   else FormUtil.mk_free_const ?srt:(Some (Form.Loc)) d
 
-let btwn a b c = FormUtil.mk_btwn (fpts) a b c
-let reach a b = btwn a b b
 let mk_domain d v = FormUtil.mk_elem v (mk_loc_set d)
 let mk_domain_var d v = FormUtil.mk_elem v (mk_loc_set_var d)
 let emptyset = FormUtil.mk_empty (Some (Form.Set Form.Loc))
 let empty_t domain = FormUtil.mk_eq emptyset domain
 let empty domain = empty_t (mk_loc_set domain)
 let empty_var domain = empty_t (mk_loc_set_var domain)
-let list_set_def id1 id2 domain =
-  FormUtil.mk_iff
-    (FormUtil.smk_and 
-       [btwn id1 Axioms.loc1 id2;
-        FormUtil.mk_neq Axioms.loc1 id2])
-    (mk_domain domain Axioms.loc1)
 
 let mk_pure p = Pure p
 let mk_true = mk_pure FormUtil.mk_true
