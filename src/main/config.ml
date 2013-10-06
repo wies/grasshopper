@@ -31,7 +31,7 @@ let cmd_options =
   [("-v", Arg.Unit Debug.set_debug, "Display verbose messages");
    ("-dumpghp", Arg.Set_int dump_ghp, "Dump intermediate representation after specified simplification stage");
    ("-noverify", Arg.Clear verify, "Do not check the generated VCs");
-   ("-robust", Arg.Set robust, "Do not check the generated VCs");
+   ("-robust", Arg.Set robust, "Continues even if some VCs cannot be checked");
    ("-stats", Arg.Set print_stats, "Print statistics");
    ("-model", Arg.Set_string model_file, "Produce counterexample model for the first failing VC");
    ("-noreach", Arg.Clear with_reach_axioms, "Omit axioms for reachability predicates");

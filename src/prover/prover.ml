@@ -14,8 +14,7 @@ let dump_model session =
     close_out model_chan;
   end
 
-
-let start_session name f = 
+let print_query name f =
   let f_inst = Reduction.reduce f in
   let f_inst = List.rev (List.rev_map unique_comments f_inst) in
   let signature = overloaded_sign (mk_and f_inst) in
@@ -32,23 +31,24 @@ let start_session name f =
   in
   let has_int = SrtSet.mem Int all_tpe in
   let session = SmtLib.start name has_int in
-  let prove session =
     Debug.msg "sending to prover...\n";
-    (*
-    let signature = sign (mk_and f_inst) in
-    SmtLib.declare session signature;
-    *)
     let session = SmtLib.declare session signature in
-    Debug.msg "  signature done\n";
+      SmtLib.assert_forms session f_inst;
+      session
 
-    SmtLib.assert_forms session f_inst;
-    Debug.msg "  f_inst done\n";
 
+let start_session name f = 
+  let session = print_query name f in
+  let prove session =
     let result = SmtLib.is_sat session in
     Debug.msg "prover done\n";
     (result, session)
   in
-  Util.measure_call "prove" prove session
+    Util.measure_call "prove" prove session
+
+let dump_query ?(session_name="form") f =
+  let session = print_query session_name f in
+    ignore (SmtLib.quit session)
 
 let check_sat ?(session_name="form") f =
   let (result, session) = start_session session_name f in

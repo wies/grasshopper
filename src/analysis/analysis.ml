@@ -1117,11 +1117,14 @@ let vcgen prog proc =
 let check_proc prog proc =
   let check_vc (vc_name, (vc_msg, pp), vc) =
     let vc_and_preds = add_pred_insts prog (skolemize (nnf vc)) in
-    match Prover.check_sat ~session_name:vc_name vc_and_preds with
-    | Some false -> ()
-    | _ ->
-      if !Config.robust then ProgError.print_error pp vc_msg
-      else ProgError.error pp vc_msg
+      if !Config.verify then
+        match Prover.check_sat ~session_name:vc_name vc_and_preds with
+        | Some false -> ()
+        | _ ->
+          if !Config.robust then ProgError.print_error pp vc_msg
+          else ProgError.error pp vc_msg
+      else
+        Prover.dump_query ~session_name:vc_name vc_and_preds
   in
   let vcs = vcgen prog proc in
   List.iter check_vc vcs
