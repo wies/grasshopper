@@ -361,6 +361,35 @@ let output_graphviz chan model =
     output_string chan "}\n";
 
   in
+  (* functions and pred *)
+  let output_freesyms () =
+    let find_rep s = match s with
+      | BoolConst _ | IntConst _ -> str_of_symbol s
+      | _ ->
+        let rep = try SymbolMap.find s const_map with Not_found -> s in
+          str_of_symbol rep
+    in
+    let string_of_def sym def =
+      let rin = List.map find_rep def.input in
+      let rout = find_rep def.output in
+        (str_of_symbol sym) ^ "(" ^ (String.concat ", " rin) ^ ") = " ^ rout
+    in
+    output_string chan "{ rank = sink; Uninterpreted [shape=none, margin=0, label=<\n";
+    output_string chan "    <TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\" CELLPADDING=\"4\">\n";
+    output_string chan "      <TR><TD><B>pred/fun</B></TD></TR>\n";
+    SymbolMap.iter
+      (fun sym (args, _) -> match sym with
+        | FreeSym (id, _) when args <> [] && id <> "k" ->
+          List.iter
+            (fun def -> Printf.fprintf chan "      <TR><TD>%s</TD></TR>" (string_of_def sym def))
+            (defs_of sym model)
+        | _ -> ()
+      )
+      model.sign;
+    output_string chan "</TABLE>\n";
+    output_string chan ">];\n";
+    output_string chan "}\n";
+  in
   let output_graph () =
     output_string chan "digraph Model {\n";
     output_locs ();
@@ -368,7 +397,7 @@ let output_graphviz chan model =
     output_reach ();
     output_flds ();
     output_sets ();
-    (* ... output predicates ... *)
+    output_freesyms ();
     output_string chan "}\n"
   in
   output_graph ()
