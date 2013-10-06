@@ -195,23 +195,18 @@ let print_model2 model =
     
 let output_graphviz chan model =
   let const_map = const_map model in 
-  let colors = ["blue"; "red"; "green"; "orange"; "darkviolet"] in
-  let flds = 
-    let read_flds = 
-      List.fold_left 
-	(fun flds def -> match def.input with
-	| [fld; _] -> SymbolSet.add fld flds
-	| _ -> flds)
-	SymbolSet.empty (defs_of Read model)
-    in
-    List.fold_left 
-      (fun flds def -> match def.input with
-      | [fld; _; _; _] -> SymbolSet.add fld flds
-      | _ -> flds)
-      read_flds (defs_of Btwn model)
+  let find_rep s = match s with
+    | BoolConst _ | IntConst _ -> s
+    | _ -> try SymbolMap.find s const_map with Not_found -> s
   in
+  let colors1 = ["blue"; "red"; "green"; "orange"; "darkviolet"] in
+  let colors2 = ["blueviolet"; "crimson"; "olivedrab"; "orangered"; "purple"] in
+  let flds = values_of_tpe (Fld Loc) model in
   let fld_colors =
-    Util.fold_left2 (fun acc fld color -> (fld, color)::acc) [] (SymbolSet.elements flds) colors
+    Util.fold_left2 (fun acc fld color -> (fld, color)::acc) [] (SymbolSet.elements flds) colors1
+  in
+  let ep_colors =
+    Util.fold_left2 (fun acc fld color -> (fld, color)::acc) [] (SymbolSet.elements flds) colors2
   in
   let get_label fld =
     let fld_sym = SymbolMap.find fld const_map in
@@ -221,7 +216,6 @@ let output_graphviz chan model =
     Printf.sprintf "label=\"%s\", fontcolor=%s, color=%s" (str_of_symbol fld_sym) color color
   in
   let output_flds () = 
-    let flds = values_of_tpe (Fld Loc) model in
     List.iter 
       (fun def ->
 	match def.input with
@@ -232,7 +226,7 @@ let output_graphviz chan model =
 	| _ -> ()) 
       (defs_of Read model)
   in
-  let output_reach fld_colors = 
+  let output_reach () = 
     let defs  = 
       Util.filter_map 
 	(fun def -> def.output = BoolConst true) 
@@ -276,6 +270,24 @@ let output_graphviz chan model =
     in
     SymbolMap.iter process_fld grouped_defs
   in
+  let output_eps () =
+    List.iter
+      (fun def ->
+        let fld = List.hd def.input in
+        let color = try List.assoc fld ep_colors with Not_found -> "black" in
+        let label =
+          let fld = find_rep fld in
+          let set = find_rep (List.nth def.input 1) in
+            "ep(" ^ (str_of_symbol fld) ^ ", " ^ (str_of_symbol set) ^ ")"
+        in
+        let i = List.nth def.input 2 in
+        let o = def.output in
+	  Printf.fprintf chan
+            "\"%s\" -> \"%s\" [label=\"%s\", fontcolor=%s, color=%s, style=dotted]\n"
+            (str_of_symbol i) (str_of_symbol o) label color color
+      )
+      (defs_of EntPnt model)
+  in
   let output_locs () =
     let read = defs_of Read model in
     let eval fld loc =
@@ -291,8 +303,7 @@ let output_graphviz chan model =
           Printf.fprintf chan "      <TR><TD><B>%s</B></TD></TR>\n" (str_of_symbol loc);
           SymbolSet.iter
             (fun fld ->
-              let rep = SymbolMap.find fld const_map in
-              let fld_str = str_of_symbol rep in
+              let fld_str = str_of_symbol (find_rep fld) in
                 match eval fld loc with
                 | Some v -> Printf.fprintf chan "      <TR><TD><B>%s = %s</B></TD></TR>\n" fld_str (str_of_symbol v)
                 | None -> ()
@@ -363,15 +374,9 @@ let output_graphviz chan model =
   in
   (* functions and pred *)
   let output_freesyms () =
-    let find_rep s = match s with
-      | BoolConst _ | IntConst _ -> str_of_symbol s
-      | _ ->
-        let rep = try SymbolMap.find s const_map with Not_found -> s in
-          str_of_symbol rep
-    in
     let string_of_def sym def =
-      let rin = List.map find_rep def.input in
-      let rout = find_rep def.output in
+      let rin = List.map (fun x -> str_of_symbol (find_rep x)) def.input in
+      let rout = str_of_symbol (find_rep def.output) in
         (str_of_symbol sym) ^ "(" ^ (String.concat ", " rin) ^ ") = " ^ rout
     in
     output_string chan "{ rank = sink; Uninterpreted [shape=none, margin=0, label=<\n";
@@ -395,6 +400,7 @@ let output_graphviz chan model =
     output_locs ();
     output_vars ();
     output_reach ();
+    output_eps ();
     output_flds ();
     output_sets ();
     output_freesyms ();
