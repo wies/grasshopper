@@ -192,6 +192,8 @@ let mk_not = function
 
 let mk_neq s t = mk_not (mk_eq s t)
 
+let mk_strict_subset s t = mk_and [mk_subseteq s t; mk_neq s t]
+
 let rec mk_binder ?(ann=[]) b bv f = 
   match bv, ann with 
   | [], [] -> f

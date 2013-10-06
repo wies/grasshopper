@@ -1,0 +1,18 @@
+struct Node {}
+
+procedure set_test1 (X: set<Node>) {
+  var Y: set<Node>;
+  assume X == Y ++ X;
+  assert Y <= X;
+}
+
+procedure set_test2 (X: set<Node>) {
+  var Y: set<Node>;
+  Y := X ++ {};
+  assert Y == X;
+}
+
+procedure set_test3 (X: set<Node>, x: Node) {
+  assume x in X;
+  assert X != {};
+}

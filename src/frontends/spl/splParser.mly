@@ -22,17 +22,18 @@ let mk_position s e =
 %token <string> IDENT
 %token <int> INTVAL
 %token <bool> BOOLVAL
-%token LPAREN RPAREN LBRACE RBRACE
+%token LPAREN RPAREN LBRACE RBRACE 
 %token COLON COLONEQ SEMICOLON DOT PIPE
 %token UMINUS PLUS MINUS DIV TIMES
-%token EQ NEQ LEQ GEQ LT GT
+%token EMPTYSET UNION INTER DIFF
+%token EQ NEQ LEQ GEQ LT GT IN
 %token PTS EMP NULL
 %token SEP AND OR NOT COMMA
 %token ASSUME ASSERT CALL DISPOSE HAVOC NEW RETURN
 %token IF ELSE WHILE
-%token GHOST VAR STRUCT PROCEDURE PREDICATE
+%token GHOST IMPLICIT VAR STRUCT PROCEDURE PREDICATE
 %token RETURNS REQUIRES ENSURES INVARIANT
-%token INT BOOL
+%token INT BOOL SET
 %token EOF
 
 %nonassoc COLONEQ 
@@ -49,6 +50,7 @@ let mk_position s e =
 %nonassoc EQ NEQ 
 %nonassoc PTS LS
 %left PLUS MINUS
+%left UNION INTER DIFF
 %left TIMES DIV
 %nonassoc LPAREN
 
@@ -155,7 +157,8 @@ var_decl:
   let decl = 
     { v_name = ($2, 0);
       v_type = $4;
-      v_ghost = $1;
+      v_ghost = snd $1;
+      v_implicit = fst $1;
       v_aux = false;
       v_pos = mk_position 2 2;
     } 
@@ -165,13 +168,15 @@ var_decl:
 ;
 
 var_modifier:
-| GHOST { true }
-| /* empty */ { false }
+| IMPLICIT GHOST { true, true }
+| GHOST { false, true }
+| /* empty */ { false, false }
 ; 
 
 var_type:
 | INT { IntType }
 | BOOL { BoolType }
+| SET LT var_type GT { SetType $3 }
 | IDENT { StructType ($1, 0) }
 ;
 
@@ -194,7 +199,13 @@ struct_decl:
     } 
   in
   decl
-} 
+}
+| STRUCT IDENT EMPTYSET {
+  { s_name = ($2, 0);
+    s_fields = IdMap.empty;
+    s_pos = mk_position 2 2;
+  }
+}  
 ;
 
 field_decls:
@@ -331,6 +342,7 @@ unary_expr:
 | primary { $1 }
 | ident { $1 }
 | field_access { $1 }
+| EMPTYSET { Emptyset (mk_position 1 1)}
 | PLUS unary_expr { UnaryOp (OpPlus, $2, mk_position 1 2) }
 | MINUS unary_expr { UnaryOp (OpMinus, $2, mk_position 1 2) }
 | unary_expr_not_plus_minus { $1 }
@@ -340,15 +352,21 @@ unary_expr_not_plus_minus:
 | NOT unary_expr  { UnaryOp (OpNot, $2, mk_position 1 2) }
 ;
 
+diff_expr:
+| unary_expr { $1 }
+| diff_expr DIFF unary_expr { BinaryOp ($1, OpDiff, $3, mk_position 1 3) }
+
 mult_expr:
-| unary_expr  { $1 }
-| mult_expr TIMES unary_expr { BinaryOp ($1, OpMult, $3, mk_position 1 3) }
-| mult_expr DIV unary_expr { BinaryOp ($1, OpDiv, $3, mk_position 1 3) }
+| diff_expr  { $1 }
+| mult_expr TIMES diff_expr { BinaryOp ($1, OpMult, $3, mk_position 1 3) }
+| mult_expr DIV diff_expr { BinaryOp ($1, OpDiv, $3, mk_position 1 3) }
+| mult_expr INTER diff_expr { BinaryOp ($1, OpInt, $3, mk_position 1 3) }
 
 add_expr:
 | mult_expr { $1 }
-| add_expr PLUS add_expr { BinaryOp ($1, OpPlus, $3, mk_position 1 3) }
-| add_expr MINUS add_expr { BinaryOp ($1, OpMinus, $3, mk_position 1 3) }
+| add_expr PLUS mult_expr { BinaryOp ($1, OpPlus, $3, mk_position 1 3) }
+| add_expr MINUS mult_expr { BinaryOp ($1, OpMinus, $3, mk_position 1 3) }
+| add_expr UNION mult_expr { BinaryOp ($1, OpUn, $3, mk_position 1 3) }
 
 pts_expr:
 | add_expr { $1 }
@@ -361,6 +379,7 @@ rel_expr:
 | rel_expr GT pts_expr { BinaryOp ($1, OpGt, $3, mk_position 1 3) }
 | rel_expr LEQ pts_expr { BinaryOp ($1, OpLeq, $3, mk_position 1 3) }
 | rel_expr GEQ pts_expr { BinaryOp ($1, OpGeq, $3, mk_position 1 3) }
+| rel_expr IN pts_expr { BinaryOp ($1, OpIn, $3, mk_position 1 3) }
 
 eq_expr:
 | rel_expr { $1 }

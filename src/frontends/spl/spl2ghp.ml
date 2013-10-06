@@ -263,6 +263,7 @@ let flatten_exprs cus =
       { v_name = aux_id;
         v_type = vtype;
         v_ghost = false;
+        v_implicit = false;
         v_aux = true;
         v_pos = pos;
       }
@@ -472,15 +473,17 @@ let convert cus =
       | NullType -> Loc
       | StructType id -> Loc
       | FieldType (id, typ) -> Fld (convert_type typ) 
+      | SetType typ -> Set (convert_type typ)
       | IntType -> Int
       | BoolType -> Bool
+      | UniversalType -> failwith "cannot convert universal type"
     in
     let convert_var_decl decl = 
       { var_name = decl.v_name;
         var_orig_name = fst decl.v_name;
         var_sort = convert_type decl.v_type;
         var_is_ghost = decl.v_ghost;
-        var_is_implicit = false;
+        var_is_implicit = decl.v_implicit;
         var_is_aux = decl.v_aux;
         var_pos = decl.v_pos;
       }
@@ -488,9 +491,11 @@ let convert cus =
     let ty_str = function
       | NullType -> "expression of a struct type"
       | StructType id -> "expression of type " ^ (fst id)
+      | SetType _ -> "expression of type set"
       | IntType -> "expression of type int"
       | BoolType -> "expression of type bool"
       | FieldType _ -> "field"
+      | UniversalType -> "expression of some type"
     in
     let type_error pos expected found =
       ProgError.type_error pos
@@ -499,6 +504,7 @@ let convert cus =
     let rec convert_expr locals = function
       | Null _ -> FOL_term (FormUtil.mk_null, NullType)
       | Emp _ -> SL_form SlUtil.mk_emp
+      | Emptyset _ -> FOL_term (FormUtil.mk_empty None, SetType UniversalType)
       | IntVal (i, _) -> FOL_term (FormUtil.mk_int i, IntType)
       | BoolVal (b, _) -> FOL_form (FormUtil.mk_bool b)
       | Dot (e, fld_id, pos) -> 
@@ -540,6 +546,19 @@ let convert cus =
           | SL_form _ -> 
               ProgError.error (pos_of_expr e1) 
                 "Operator == is not defined for SL expressions")
+      | BinaryOp (e1, (OpDiff as op), e2, _)
+      | BinaryOp (e1, (OpUn as op), e2, _)      
+      | BinaryOp (e1, (OpInt as op), e2, _) ->
+          let mk_app =
+            match op with
+            | OpDiff -> FormUtil.mk_diff
+            | OpUn -> (fun t1 t2 -> FormUtil.mk_union [t1; t2])
+            | OpInt -> (fun t1 t2 -> FormUtil.mk_inter [t1; t2])
+            | _ -> failwith "unexpected operator"
+          in
+          let t1, ty1 = extract_term locals (SetType UniversalType) e1 in
+          let t2, ty2 = extract_term locals ty1 e2 in
+          FOL_term (mk_app t1 t2, ty2)
       | BinaryOp (e1, OpNeq, e2, pos) ->
           convert_expr locals (UnaryOp (OpNot, BinaryOp (e1, OpEq, e2, pos), pos))
       | BinaryOp (e1, (OpMinus as op), e2, _)
@@ -561,7 +580,7 @@ let convert cus =
       | BinaryOp (e1, (OpLt as op), e2, _)
       | BinaryOp (e1, (OpGeq as op), e2, _)
       | BinaryOp (e1, (OpLeq as op), e2, _) ->
-          let mk_form =
+          let mk_int_form =
             match op with
             | OpGt -> FormUtil.mk_gt
             | OpLt -> FormUtil.mk_lt
@@ -569,9 +588,26 @@ let convert cus =
             | OpLeq -> FormUtil.mk_leq
             | _ -> failwith "unexpected operator"
           in
-          let t1, _ = extract_term locals IntType e1 in
-          let t2, _ = extract_term locals IntType e2 in
-          FOL_form (mk_form t1 t2)
+          let mk_set_form =
+            match op with
+            | OpGt -> (fun s t -> FormUtil.mk_strict_subset t s)
+            | OpLt -> FormUtil.mk_strict_subset
+            | OpGeq -> (fun s t -> FormUtil.mk_subseteq t s)
+            | OpLeq -> FormUtil.mk_subseteq
+            | _ -> failwith "unexpected operator"
+          in
+          (try
+            let t1, _ = extract_term locals IntType e1 in
+            let t2, _ = extract_term locals IntType e2 in            
+            FOL_form (mk_int_form t1 t2)
+          with _ ->
+            let t1, ty1 = extract_term locals (SetType UniversalType) e1 in
+            let t2, _ = extract_term locals ty1 e2 in            
+            FOL_form (mk_set_form t1 t2))
+      | BinaryOp (e1, OpIn, e2, _) ->
+          let t1, ty1 = extract_term locals UniversalType e1 in
+          let t2, _ = extract_term locals (SetType ty1) e2 in
+          FOL_form (FormUtil.mk_elem t1 t2)
       | BinaryOp (e1, (OpAnd as op), e2, _)
       | BinaryOp (e1, (OpOr as op), e2, _) ->
           (try
@@ -647,11 +683,16 @@ let convert cus =
       | FOL_form (Atom t) -> t, BoolType
       | FOL_form _ -> type_error (pos_of_expr e) (ty_str ty) "formula"
       | FOL_term (t, tty) ->
-          match ty, tty with
-          | NullType, StructType _
-          | StructType _, NullType -> t, tty
-          | ty, tty when ty = tty -> t, tty
-          | _ -> type_error (pos_of_expr e) (ty_str ty) (ty_str tty)
+          let rec match_types ty1 ty2 = 
+            match ty1, ty2 with
+            | NullType, StructType _
+            | StructType _, NullType -> ty2
+            | UniversalType, _ -> ty2
+            | _, UniversalType -> ty1
+            | SetType ty1, SetType ty2 -> SetType (match_types ty1 ty2)
+            | ty, tty when ty = tty -> ty2
+            | _ -> type_error (pos_of_expr e) (ty_str ty) (ty_str tty)
+          in t, match_types ty tty
     in
     let convert_spec_form locals e name msg =
       let f = extract_sl_form locals e in

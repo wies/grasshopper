@@ -22,8 +22,10 @@ let _ =
       ("ghost", GHOST);
       ("havoc", HAVOC);
       ("if", IF);
+      ("in", IN);
       ("int", INT);
       ("invariant", INVARIANT);
+      ("implicit", IMPLICIT);
       ("new", NEW);
       ("null", NULL);
       ("predicate", PREDICATE);
@@ -32,6 +34,7 @@ let _ =
       ("return", RETURN);
       ("returns", RETURNS);
       ("struct", STRUCT);
+      ("set", SET);
       ("true", BOOLVAL(true));
       ("var", VAR);
       ("while", WHILE);
@@ -47,6 +50,7 @@ rule token = parse
   [' ' '\t'] { token lexbuf }
 | '\n' { Lexing.new_line lexbuf; token lexbuf }
 | "//" [^ '\n']* { token lexbuf }
+| "{}" { EMPTYSET }
 | "==" { EQ }
 | "!=" { NEQ }
 | "<=" { LEQ }
@@ -56,6 +60,9 @@ rule token = parse
 | "||" { OR }
 | "&&" { AND }
 | '!' { NOT }
+| "++" { UNION }
+| "--" { DIFF }
+| "**" { INTER }
 | '+' { PLUS }
 | '-' { MINUS }
 | '/' { DIV }

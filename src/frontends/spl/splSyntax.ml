@@ -13,9 +13,11 @@ type names = name list
 type typ =
   | StructType of ident
   | FieldType of ident * typ
+  | SetType of typ
   | IntType
   | BoolType
   | NullType
+  | UniversalType
   (*| ArrayType of typ*)
 
 type var_decl_id =
@@ -23,8 +25,9 @@ type var_decl_id =
   | ArrayDecl of var_decl_id
 
 type op = 
+  | OpDiff | OpUn | OpInt 
   | OpMinus | OpPlus | OpMult | OpDiv 
-  | OpEq | OpNeq | OpGt | OpLt | OpGeq | OpLeq
+  | OpEq | OpNeq | OpGt | OpLt | OpGeq | OpLeq | OpIn
   | OpPts | OpSep 
   | OpAnd | OpOr | OpNot 
 
@@ -71,6 +74,7 @@ and var =
     { v_name : ident;
       v_type : typ; 
       v_ghost : bool;
+      v_implicit : bool;
       v_aux : bool;
       v_pos : pos;
     }
@@ -114,6 +118,7 @@ and loop_contract =
 and expr =
   | Null of pos
   | Emp of pos
+  | Emptyset of pos
   | IntVal of int * pos
   | BoolVal of bool * pos
   | New of ident * pos
@@ -130,6 +135,7 @@ and exprs = expr list
 let pos_of_expr = function
   | Null p 
   | Emp p 
+  | Emptyset p
   | IntVal (_, p) 
   | BoolVal (_, p)
   | New (_, p)
@@ -190,8 +196,8 @@ let proc_decl hdr body =
 let struct_decl sname sfields pos =
   { s_name = sname;  s_fields = sfields; s_pos = pos }
 
-let var_decl vname vtype vghost vpos =
-  { v_name = vname; v_type = vtype; v_ghost = vghost; v_aux = false; v_pos = vpos } 
+let var_decl vname vtype vghost vimpl vpos =
+  { v_name = vname; v_type = vtype; v_ghost = vghost; v_implicit = vimpl; v_aux = false; v_pos = vpos } 
 
 
 let mk_block pos = function
