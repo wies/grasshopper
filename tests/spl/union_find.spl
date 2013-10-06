@@ -2,7 +2,7 @@ struct Node {
   var next: Node;
 }
 
-predicate lseg(x: Node, y: Node, implicit X: set<Node>) {
+predicate lseg(x: Node, y: Node, X: set<Node>) {
   x == y && X == {} ||
   x != y &*& x in X &*& acc(x) &*& lseg(x.next, y, X -- {x})
 }

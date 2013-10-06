@@ -118,7 +118,7 @@ and loop_contract =
 and expr =
   | Null of pos
   | Emp of pos
-  | Emptyset of pos
+  | Setenum of typ * exprs * pos
   | IntVal of int * pos
   | BoolVal of bool * pos
   | New of ident * pos
@@ -135,7 +135,7 @@ and exprs = expr list
 let pos_of_expr = function
   | Null p 
   | Emp p 
-  | Emptyset p
+  | Setenum (_, _, p)
   | IntVal (_, p) 
   | BoolVal (_, p)
   | New (_, p)

@@ -504,7 +504,17 @@ let convert cus =
     let rec convert_expr locals = function
       | Null _ -> FOL_term (FormUtil.mk_null, NullType)
       | Emp _ -> SL_form SlUtil.mk_emp
-      | Emptyset _ -> FOL_term (FormUtil.mk_empty None, SetType UniversalType)
+      | Setenum (ty, es, pos) ->
+          let ts, ty = 
+            List.fold_right (fun e (ts, ty) ->
+              let t, ty = extract_term locals ty e in
+              t :: ts, ty)
+              es ([], ty)
+          in
+          let elem_ty =  convert_type ty in
+          (match es with
+          | [] -> FOL_term (FormUtil.mk_empty (Some (Set elem_ty)), SetType ty)
+          | _ -> FOL_term (FormUtil.mk_setenum ts, SetType ty))
       | IntVal (i, _) -> FOL_term (FormUtil.mk_int i, IntType)
       | BoolVal (b, _) -> FOL_form (FormUtil.mk_bool b)
       | Dot (e, fld_id, pos) -> 

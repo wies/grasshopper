@@ -25,7 +25,7 @@ let mk_position s e =
 %token LPAREN RPAREN LBRACE RBRACE 
 %token COLON COLONEQ SEMICOLON DOT PIPE
 %token UMINUS PLUS MINUS DIV TIMES
-%token EMPTYSET UNION INTER DIFF
+%token UNION INTER DIFF
 %token EQ NEQ LEQ GEQ LT GT IN
 %token PTS EMP NULL
 %token SEP AND OR NOT COMMA
@@ -199,12 +199,6 @@ struct_decl:
     } 
   in
   decl
-}
-| STRUCT IDENT EMPTYSET {
-  { s_name = ($2, 0);
-    s_fields = IdMap.empty;
-    s_pos = mk_position 2 2;
-  }
 }  
 ;
 
@@ -328,21 +322,26 @@ primary:
 
 alloc:
 | NEW IDENT { New (($2, 0), mk_position 1 2) }
+;
 
 proc_call:
+| SET LT var_type GT LPAREN RPAREN { Setenum ($3, [], mk_position 1 6) }
+| SET LPAREN expr_list RPAREN { Setenum (UniversalType, $3, mk_position 1 4) }
 | IDENT LPAREN expr_list_opt RPAREN { ProcCall (($1, 0), $3, mk_position 1 4) }
+;
 
 ident: 
 | IDENT { Ident (($1, 0), mk_position 1 1) }
+;
 
 field_access:
 | unary_expr DOT IDENT { Dot ($1, ($3, 0), mk_position 1 3) }
+;
 
 unary_expr:
 | primary { $1 }
 | ident { $1 }
 | field_access { $1 }
-| EMPTYSET { Emptyset (mk_position 1 1)}
 | PLUS unary_expr { UnaryOp (OpPlus, $2, mk_position 1 2) }
 | MINUS unary_expr { UnaryOp (OpMinus, $2, mk_position 1 2) }
 | unary_expr_not_plus_minus { $1 }
