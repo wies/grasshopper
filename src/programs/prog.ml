@@ -43,7 +43,7 @@ type dispose_command = {
   }
      
 type spec_kind =
-  | Free | Checked | Frecked
+  | Free | Checked
 
 (** Assume or assert of pure formula *)
 type spec = {
@@ -106,6 +106,7 @@ type var_decl = {
     var_orig_name : string; (** original name *)
     var_sort : sort; (** variable type *)
     var_is_ghost : bool; (** whether the variable is ghost *)
+    var_is_implicit : bool; (** whether the variable is implicit *)
     var_is_aux : bool; (** whether the variable is an auxiliary variable *)
     var_pos : source_position; (** position of declaration *)
   }
@@ -235,7 +236,7 @@ let map_preds fn prog =
 let mk_spec_form f name msg pos =
   { spec_form = f;
     spec_form_negated = None;
-    spec_kind = Frecked;
+    spec_kind = Checked;
     spec_name = name;
     spec_msg = msg;
     spec_pos = pos;
@@ -250,15 +251,6 @@ let mk_free_spec_form f name msg pos =
     spec_pos = pos;
   } 
 
-let mk_checked_spec_form f name msg pos =
-  { spec_form = f;
-    spec_form_negated = None;
-    spec_kind = Checked;
-    spec_name = name;
-    spec_msg = msg;
-    spec_pos = pos;
-  } 
-
 let fold_spec_form fol_fn sl_fn sf =
   match sf.spec_form with
   | FOL f -> fol_fn f
@@ -267,17 +259,22 @@ let fold_spec_form fol_fn sl_fn sf =
 let is_checked_spec sf =
   match sf.spec_kind with
   | Free -> false
-  | Checked | Frecked -> true
+  | Checked -> true
 
 let is_free_spec sf =
   match sf.spec_kind with
-  | Free | Frecked -> true
+  | Free -> true
   | Checked -> false
 
 let is_sl_spec sf =
   match sf.spec_form with
   | SL _ -> true
   | FOL _ -> false
+
+let form_of_spec sf =
+  match sf.spec_form with
+  | FOL f -> f
+  | SL _ -> failwith "expected FOL specification in Prog.form_of_spec"
 
 let subst_id_spec sm sf =
   match sf.spec_form with
@@ -750,8 +747,7 @@ and pr_seq ppf = function
 
 let pr_spec_kind ppf = function
   | Free -> fprintf ppf "@<0>%s" "free "
-  | Checked -> fprintf ppf "@<0>%s" "check "
-  | Frecked -> ()
+  | Checked -> ()
 
 let rec pr_precond ppf = function
   | [] -> ()
@@ -775,18 +771,23 @@ let pr_ghost ppf = function
   | true -> fprintf ppf "ghost "
   | false -> ()
 
-let pr_id_srt ghost ppf (id, srt) =
-  fprintf ppf "%a%a: %a" 
+let pr_implicit ppf = function
+  | true -> fprintf ppf "implicit "
+  | false -> ()
+
+let pr_id_srt implicit ghost ppf (id, srt) =
+  fprintf ppf "%a%a%a: %a" 
+    pr_implicit implicit
     pr_ghost ghost
     pr_ident id 
     pr_sort srt
 
 let rec pr_id_srt_list ppf = function
   | [] -> ()
-  | [ghost, is] -> pr_id_srt ghost ppf is
-  | (ghost, is) :: iss -> 
+  | [implicit, ghost, is] -> pr_id_srt implicit ghost ppf is
+  | (implicit, ghost, is) :: iss -> 
       fprintf ppf "%a,@ @,%a" 
-        (pr_id_srt ghost) is 
+        (pr_id_srt implicit ghost) is 
         pr_id_srt_list iss
 
 let pr_body ppf = function
@@ -797,7 +798,7 @@ let pr_body ppf = function
 let pr_var_decl ppf (id, decl) =
   fprintf ppf "%avar@ @[<2>%a@];@\n@\n" 
     pr_ghost decl.var_is_ghost
-    (pr_id_srt false) (id, decl.var_sort)
+    (pr_id_srt false false) (id, decl.var_sort)
 
 let rec pr_var_decls ppf = function
   | [] -> ()
@@ -806,12 +807,12 @@ let rec pr_var_decls ppf = function
 let pr_proc ppf proc =
   let add_srts = List.map (fun id -> 
     let decl = IdMap.find id proc.proc_locals in
-    (decl.var_is_ghost, (id, decl.var_sort)))
+    (decl.var_is_implicit, decl.var_is_ghost, (id, decl.var_sort)))
   in
   let locals = IdMap.fold (fun id decl locals ->
     if List.mem id (proc.proc_returns @ proc.proc_formals) 
     then locals
-    else (decl.var_is_ghost, (id, decl.var_sort)) :: locals) proc.proc_locals []
+    else (decl.var_is_implicit, decl.var_is_ghost, (id, decl.var_sort)) :: locals) proc.proc_locals []
   in
   fprintf ppf "@[<2>procedure@ %a(@[<0>%a@])@]@ @,returns (@[<0>%a@])@ @,locals (@[%a@])@\n%a%a%a@\n"
     pr_ident proc.proc_name
@@ -830,7 +831,7 @@ let rec pr_procs ppf = function
 let pr_pred ppf pred =
   let add_srts = List.map (fun id -> 
     let decl = IdMap.find id pred.pred_locals in
-    (decl.var_is_ghost, (id, decl.var_sort)))
+    (decl.var_is_implicit, decl.var_is_ghost, (id, decl.var_sort)))
   in
   match pred.pred_returns with
   | [] ->

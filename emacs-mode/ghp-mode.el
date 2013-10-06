@@ -38,7 +38,7 @@
    '("\\(//[^\n]*\\)" 1 
      font-lock-comment-face)
 
-   '("\\<\\(check\\|for\\(all\\|\\)\\|free ensures\\|free requires\\|e\\(xists\\|nsures\\)\\|ghost\\|invariant\\|old\\|requires\\|witness\\)\\>"
+   '("\\<\\(check\\|for\\(all\\|\\)\\|free ensures\\|free requires\\|e\\(xists\\|nsures\\)\\|ghost\\|i\\(mplicit\\|nvariant\\)\\|old\\|requires\\|witness\\)\\>"
          1 font-lock-spec-face)
 
    '("\\<\\(ass\\(ert\\|ume\\)\\|c\\(all\\|hoose\\)\\|f\\(unction\\|ree\\)\\|havoc\\|locals\\|new\\|pr\\(ocedure\\|edicate\\)\\|or\\|return\\(s\\|\\)\\|var\\|while\\)\\>"

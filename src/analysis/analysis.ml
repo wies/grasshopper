@@ -313,16 +313,19 @@ let elim_global_deps prog =
 
 
 (** Auxiliary variables for desugaring SL specifications *)
-let alloc_id = mk_ident "Alloc"
+let alloc_id = fresh_ident "Alloc"
 let alloc_set = mk_free_const ~srt:(Set Loc) alloc_id
 
-let init_alloc_id = mk_ident "Alloc_init"
+let init_alloc_id = fresh_ident "Alloc_init"
 let init_alloc_set = mk_free_const ~srt:(Set Loc) init_alloc_id
 
-let alloc_callee_id = mk_ident "AllocCallee"
-let alloc_callee_set = mk_free_const ~srt:(Set Loc) alloc_callee_id
+let final_alloc_id = fresh_ident "Alloc_final"
+let final_alloc_set = mk_free_const ~srt:(Set Loc) final_alloc_id
 
-let init_alloc_callee_id = mk_ident "AllocCallee_init"
+let final_alloc_callee_id = fresh_ident "AllocCallee_final"
+let final_alloc_callee_set = mk_free_const ~srt:(Set Loc) final_alloc_callee_id
+
+let init_alloc_callee_id = fresh_ident "AllocCallee_init"
 let init_alloc_callee_set = mk_free_const ~srt:(Set Loc) init_alloc_callee_id
 
 let frame_id = mk_ident "AllocCaller"
@@ -339,6 +342,7 @@ let elim_sl prog =
       var_orig_name = name id;
       var_sort = Set Loc;
       var_is_ghost = true;
+      var_is_implicit = false;
       var_is_aux = true;
       var_pos = pos;
     }
@@ -390,14 +394,20 @@ let elim_sl prog =
   in
   let compile_proc proc =
     (* add auxiliary set variables *)
+    let new_locals = 
+      let alloc_decl = mk_set_decl alloc_id proc.proc_pos in
+      (alloc_id, { alloc_decl with var_is_implicit = true }) ::
+      List.map (fun id -> (id, mk_set_decl id proc.proc_pos)) 
+        [init_alloc_id; final_alloc_id; frame_id; final_alloc_callee_id; init_alloc_callee_id]
+    in
     let locals =
       List.fold_left 
-        (fun locals id -> IdMap.add id (mk_set_decl id proc.proc_pos) locals)
+        (fun locals (id, decl) -> IdMap.add id decl locals)
         proc.proc_locals 
-        [alloc_id; init_alloc_id; frame_id; alloc_callee_id; init_alloc_callee_id]
+        new_locals
     in
-    let returns = init_alloc_id :: alloc_id :: proc.proc_returns in
-    let formals = frame_id :: proc.proc_formals in
+    let returns = proc.proc_returns @ [init_alloc_id; final_alloc_id] in
+    let formals = proc.proc_formals @ [frame_id; alloc_id] in
     let convert_sl_form sfs name =
       let fs, aux, kind = 
         List.fold_right (fun sf (fs, aux, kind) -> 
@@ -423,44 +433,46 @@ let elim_sl prog =
     in
     (* compile SL precondition *)
     let sl_precond, other_precond = List.partition is_sl_spec proc.proc_precond in
-    let precond, footprint =
+    let precond, free_precond =
       let name = "precondition of " ^ str_of_ident proc.proc_name in
       let f, _, name, msg, pos = convert_sl_form sl_precond name in
-      let f_in_frame = ToGrass.to_grass_contained pred_to_form frame_id f in
       let f_notin_frame = ToGrass.to_grass_not_contained pred_to_form frame_id f in
-      let f_eq_init_alloc = ToGrass.to_grass pred_to_form init_alloc_id f in
-      let precond = mk_checked_spec_form (FOL f_in_frame) name msg pos in
+      let f_eq_init_alloc = 
+        mk_and [ToGrass.to_grass pred_to_form alloc_id f; mk_subseteq alloc_set frame_set] in
+      let precond = mk_spec_form (FOL f_eq_init_alloc) name msg pos in
       let fp_name = "initial footprint of " ^ str_of_ident proc.proc_name in
-      let footprint_form = 
-        FOL (mk_and [mk_not (mk_elem mk_null init_alloc_set); f_eq_init_alloc])
+      let free_precond = 
+        FOL (mk_not (mk_elem mk_null alloc_set))
       in
       { precond with spec_form_negated = Some f_notin_frame }, 
-      mk_free_spec_form footprint_form fp_name None pos
+      mk_free_spec_form free_precond fp_name None pos
     in
     (* compile SL postcondition *)
     let sl_postcond, other_postcond = List.partition is_sl_spec proc.proc_postcond in
-    let postcond =
+    let postcond, post_pos =
       let name = "postcondition of " ^ str_of_ident proc.proc_name in
       let f, kind, name, msg, pos = convert_sl_form sl_postcond name in
-      let f_eq_alloc = ToGrass.to_grass pred_to_form alloc_id f in
-      let f_neq_alloc = ToGrass.to_grass_negated pred_to_form alloc_id f in
-      let postcond = mk_spec_form (FOL f_eq_alloc) name msg pos in
-      { postcond with 
+      
+      let f_eq_final_alloc = ToGrass.to_grass pred_to_form final_alloc_id f in
+      let f_neq_final_alloc = ToGrass.to_grass_negated pred_to_form final_alloc_id f in
+      let final_alloc_postcond = mk_spec_form (FOL f_eq_final_alloc) name msg pos in
+      let init_alloc_postcond = 
+        mk_free_spec_form (FOL (mk_eq init_alloc_set (oldify_term (IdSet.singleton alloc_id) alloc_set))) name msg pos
+      in
+      [{ final_alloc_postcond with 
         spec_kind = kind;
-        spec_form_negated = Some f_neq_alloc;
-      }
+        spec_form_negated = Some f_neq_final_alloc;
+      }; init_alloc_postcond], pos
     in
     (* generate frame condition *) 
     let framecond = 
       let frame_wo_alloc = mk_diff frame_set init_alloc_set in
       let name = "framecondition of " ^ (str_of_ident proc.proc_name) in
-      let mk_framecond f = mk_free_spec_form (FOL f) name None postcond.spec_pos in
+      let mk_framecond f = mk_free_spec_form (FOL f) name None post_pos in
       (* null is not allocated *)
-      mk_framecond (mk_not (smk_elem mk_null alloc_set)) ::
-      (* initial footprint is contained in frame *)
-      mk_framecond (mk_subseteq init_alloc_set frame_set) ::
+      mk_framecond (mk_not (smk_elem mk_null final_alloc_set)) ::
       (* final footprint is disjoint from frame w/o alloc *)
-      mk_framecond (mk_eq (mk_inter [alloc_set; frame_wo_alloc]) (mk_empty (Some (Set Loc)))) ::
+      mk_framecond (mk_eq (mk_inter [final_alloc_set; frame_wo_alloc]) (mk_empty (Some (Set Loc)))) ::
       (* frame axioms for modified fields
        * in this version the frame contains all the pairs of fields both unprimed and primed
        *)
@@ -501,19 +513,19 @@ let elim_sl prog =
       | (Call cc, pp) ->
           let assign_alloc =
             let new_alloc_set =
-              mk_union [alloc_callee_set; (mk_diff alloc_set init_alloc_callee_set)]
+              mk_union [final_alloc_callee_set; (mk_diff alloc_set init_alloc_callee_set)]
             in
             mk_assign_cmd [alloc_id] [new_alloc_set] pp.pp_pos
           in
           let cc1 = 
             { cc with 
-              call_lhs = init_alloc_callee_id :: alloc_callee_id :: cc.call_lhs;
-              call_args = alloc_set :: cc.call_args;
+              call_lhs = cc.call_lhs @ [init_alloc_callee_id; final_alloc_callee_id];
+              call_args = cc.call_args @ [alloc_set];
             } 
           in
           mk_seq_cmd [Basic (Call cc1, pp); assign_alloc] pp.pp_pos
       | (Return rc, pp) ->
-          let rc1 = { return_args = init_alloc_set :: alloc_set :: rc.return_args } in
+          let rc1 = { return_args = rc.return_args @ [init_alloc_set; alloc_set] } in
           Basic (Return rc1, pp)
       | (Assume sf, pp) ->
           (match sf.spec_form with
@@ -536,20 +548,20 @@ let elim_sl prog =
       Util.optmap 
         (fun body ->
           let body1 = map_basic_cmds compile_stmt body in
-          let assume_footprint = mk_assume_cmd footprint footprint.spec_pos in
-          let assign_alloc = mk_assign_cmd [alloc_id] [init_alloc_set] footprint.spec_pos in
-          mk_seq_cmd [assume_footprint; assign_alloc; body1] (prog_point body).pp_pos
+          let assign_init_alloc = mk_assign_cmd [init_alloc_id] [alloc_set] free_precond.spec_pos in
+          let assign_final_alloc = mk_assign_cmd [final_alloc_id] [alloc_set] free_precond.spec_pos in
+          mk_seq_cmd [assign_init_alloc; body1; assign_final_alloc] (prog_point body).pp_pos
         ) proc.proc_body 
     in
-    let old_footprint = 
+    (*let old_footprint = 
       oldify_spec (modifies_proc prog proc) footprint
-    in
+    in*)
     { proc with
       proc_formals = formals;
       proc_returns = returns;
       proc_locals = locals;
-      proc_precond = precond :: other_precond;
-      proc_postcond = old_footprint :: postcond :: framecond @ other_postcond;
+      proc_precond = precond :: free_precond :: other_precond;
+      proc_postcond = postcond @ framecond @ other_postcond;
       proc_body = body;
     } 
   in
@@ -701,6 +713,7 @@ let elim_state prog =
       let decl1 = 
         { decl with 
           var_name = id1;
+          var_is_implicit = false;
           var_is_aux = true;
           var_pos = pos;
         }
@@ -801,27 +814,88 @@ let elim_state prog =
               let sf = mk_spec_form  (FOL (mk_and eqs)) "assign" None pp.pp_pos in
               sm1, locals, mk_assume_cmd sf pp.pp_pos
           | Call cc ->
-              let to_term_subst sm locals =
+              let to_term_subst_merge sm locals term_subst =
                 IdMap.fold (fun id1 id2 sm -> 
                   let decl = IdMap.find id2 locals in
                   IdMap.add id1 (mk_free_const ~srt:decl.var_sort id2) sm)
-                  sm IdMap.empty
+                  sm term_subst
               in
+              let to_term_subst sm locals = to_term_subst_merge sm locals IdMap.empty in
               let callee_decl = find_proc prog cc.call_name in
               (* update actual arguments of call *)
               let args1 = List.map (subst_id_term sm) cc.call_args in
               (* compute substitution for precondition *)
-              let subst_pre = 
+              let implicit_formals, explicit_formals =
+                List.partition 
+                  (fun id -> (IdMap.find id callee_decl.proc_locals).var_is_implicit) 
+                  callee_decl.proc_formals
+              in
+              let subst_pre_explicit = 
                 List.fold_left2 
                   (fun sm id arg -> IdMap.add id arg sm) 
                   (to_term_subst sm locals) 
-                  callee_decl.proc_formals args1
+                  explicit_formals args1
+              in
+              let subst_implicits, locals = fresh IdMap.empty locals pp.pp_pos implicit_formals in
+              let subst_pre = 
+                to_term_subst_merge subst_implicits locals subst_pre_explicit
               in
               (* assert updated precondition *)
-              let assert_precond =
-                Util.filter_map is_checked_spec 
-                  (fun sf -> mk_assert_cmd (subst_spec subst_pre sf) pp.pp_pos)
-                  callee_decl.proc_precond
+              let assert_precond, assume_precond_implicits =
+                let checked_preconds =
+                  Util.filter_map is_checked_spec 
+                    (fun sf -> subst_spec subst_pre sf)
+                    callee_decl.proc_precond
+                in
+                let implicits = List.map (fun id -> IdMap.find id subst_implicits) implicit_formals in
+                let implicitss = id_set_of_list implicits in
+                let preconds_wo_implicits, preconds_w_implicits =
+                  List.partition 
+                    (fun sf -> IdSet.is_empty (IdSet.inter (free_consts (form_of_spec sf)) implicitss)) 
+                    checked_preconds
+                in
+                let assume_precond_implicits = 
+                  List.map (fun sf -> mk_assume_cmd sf pp.pp_pos) preconds_w_implicits
+                in
+                let preconds_w_implicits =
+                  let fs, fs_neg, aux = 
+                    List.fold_left (fun (fs, fs_neg, aux) sf ->
+                      let new_fs_neg = 
+                        match sf.spec_form_negated with
+                        | Some f_neg -> f_neg :: fs_neg
+                        | None -> fs_neg
+                      in
+                      let new_aux =
+                        match aux with
+                        | Some (_, _, p) ->
+                            Some (sf.spec_name, sf.spec_msg, merge_src_positions p sf.spec_pos)
+                        | None -> Some (sf.spec_name, sf.spec_msg, sf.spec_pos)
+                      in
+                      form_of_spec sf :: fs, new_fs_neg, new_aux)
+                      ([], [], None) preconds_w_implicits
+                  in
+                  List.map 
+                    (fun (name, msg, pos) ->
+                      let implicits_w_sorts, implicits_var_subst =
+                        List.fold_left 
+                          (fun (implicits_w_sorts, implicits_var_subst) id ->
+                            let decl = IdMap.find id locals in
+                            (id, decl.var_sort) :: implicits_w_sorts,
+                            IdMap.add id (mk_var ~srt:decl.var_sort id) implicits_var_subst) 
+                          ([], IdMap.empty) implicits
+                      in
+                      let f_pos = mk_exists implicits_w_sorts (subst_consts implicits_var_subst (mk_and fs)) in
+                      let f_neg = 
+                        match fs_neg with
+                        | [] -> None
+                        | _ -> Some (smk_or fs_neg) 
+                      in
+                      let sf = mk_spec_form (FOL f_pos) name msg pos in
+                      { sf with spec_form_negated = f_neg })
+                    (Util.list_of_opt aux)
+                in
+                List.map (fun sf -> mk_assert_cmd sf pp.pp_pos) (preconds_wo_implicits @ preconds_w_implicits),
+                assume_precond_implicits
               in
               (* compute mod set and final substitution *)
               let mods = cc.call_lhs @ IdSet.elements (modifies_proc prog callee_decl) in
@@ -858,14 +932,14 @@ let elim_state prog =
               in
               (* assume updated postcondition *)
               let assume_postcond =
-                Util.filter_map is_free_spec 
+                List.map
                   (fun sf -> 
                     let old_sf = oldify_spec (id_set_of_list callee_decl.proc_formals) sf in
                     let sf1 = subst_spec subst_post old_sf in
                     mk_assume_cmd sf1 pp.pp_pos)
                   callee_decl.proc_postcond
               in
-              sm1, locals, mk_seq_cmd (assert_precond @ assume_postcond) pp.pp_pos
+              sm1, locals, mk_seq_cmd (assert_precond @ assume_precond_implicits @ assume_postcond) pp.pp_pos
           | _ -> sm, locals, Basic (bc, pp)
     in
     let locals, body =
@@ -873,7 +947,8 @@ let elim_state prog =
       | None -> proc.proc_locals, None
       | Some body -> 
           let _, locals, body1 = elim IdMap.empty proc.proc_locals body in
-          locals, Some body1
+          let preconds = List.map (fun sf -> mk_assume_cmd sf sf.spec_pos) proc.proc_precond in
+          locals, Some (mk_seq_cmd (preconds @ [body1]) (prog_point body).pp_pos)
     in
     { proc with proc_locals = locals; proc_body = body }
   in

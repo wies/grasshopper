@@ -480,6 +480,7 @@ let convert cus =
         var_orig_name = fst decl.v_name;
         var_sort = convert_type decl.v_type;
         var_is_ghost = decl.v_ghost;
+        var_is_implicit = false;
         var_is_aux = decl.v_aux;
         var_pos = decl.v_pos;
       }

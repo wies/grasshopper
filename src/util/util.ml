@@ -12,6 +12,9 @@ module StringMap = Map.Make(struct
 
 (** Utility functions on option types *)
 
+let list_of_opt = function
+  | Some x -> [x]
+  | None -> []
 
 let unopt = function
   | Some x -> x
