@@ -385,7 +385,10 @@ let elim_sl prog =
           in
           IdMap.add pred_dom.pred_name pred_dom
             (IdMap.add pred_str.pred_name pred_str acc)
-         with Not_found -> acc)
+         with Not_found -> 
+           (*ProgError.error pred.pred_pos 
+             ("Unable to translate predicate " ^ (str_of_ident pred.pred_name)))*)
+           acc)
       | FOL _ -> acc
   in
   let pred_to_form p args dom =
@@ -429,7 +432,7 @@ let elim_sl prog =
           sfs ([], None, Free)
       in
       let name, msg, pos = Util.safe_unopt (name, None, dummy_position) aux in
-      SlUtil.mk_sep_lst fs, kind, name, msg, pos
+      SlUtil.mk_sep_star_lst fs, kind, name, msg, pos
     in
     (* compile SL precondition *)
     let sl_precond, other_precond = List.partition is_sl_spec proc.proc_precond in
@@ -707,7 +710,7 @@ let elim_return prog =
  ** - the only remaining basic commands are assume/assert/assign/havoc/call. *)
 let elim_state prog =
   let elim_proc proc =
-    let fresh_decl id pos =
+    let fresh_decl proc id pos =
       let decl = find_var prog proc id in
       let id1 = fresh_ident (name id) in
       let decl1 = 
@@ -719,9 +722,9 @@ let elim_state prog =
         }
       in decl1
     in
-    let fresh sm locals pos ids =
+    let fresh proc sm locals pos ids =
       List.fold_left (fun (sm, locals) id ->
-        let decl = fresh_decl id pos in
+        let decl = fresh_decl proc id pos in
         IdMap.add id decl.var_name sm, 
         IdMap.add decl.var_name decl locals)
         (sm, locals) ids
@@ -798,10 +801,10 @@ let elim_state prog =
               let sf1 = unoldify_spec (subst_id_spec sm sf) in
               sm, locals, Basic (Assert sf1, pp)
           | Havoc hc ->
-              let sm1, locals = fresh sm locals pp.pp_pos hc.havoc_args in
+              let sm1, locals = fresh proc sm locals pp.pp_pos hc.havoc_args in
               sm1, locals, Seq ([], pp)
           | Assign ac ->
-              let sm1, locals = fresh sm locals pp.pp_pos ac.assign_lhs in
+              let sm1, locals = fresh proc sm locals pp.pp_pos ac.assign_lhs in
               let eqs =
                 List.map2 
                   (fun x e ->
@@ -836,7 +839,9 @@ let elim_state prog =
                   (to_term_subst sm locals) 
                   explicit_formals args1
               in
-              let subst_implicits, locals = fresh IdMap.empty locals pp.pp_pos implicit_formals in
+              let subst_implicits, locals = 
+                fresh callee_decl IdMap.empty locals pp.pp_pos implicit_formals 
+              in
               let subst_pre = 
                 to_term_subst_merge subst_implicits locals subst_pre_explicit
               in
@@ -899,7 +904,7 @@ let elim_state prog =
               in
               (* compute mod set and final substitution *)
               let mods = cc.call_lhs @ IdSet.elements (modifies_proc prog callee_decl) in
-              let sm1, locals = fresh sm locals pp.pp_pos mods in
+              let sm1, locals = fresh proc sm locals pp.pp_pos mods in
               (* compute substitution for postcondition *)
               let subst_post = 
                 let subst_wo_old_mods_formals =

@@ -28,7 +28,7 @@ type op =
   | OpDiff | OpUn | OpInt 
   | OpMinus | OpPlus | OpMult | OpDiv 
   | OpEq | OpNeq | OpGt | OpLt | OpGeq | OpLeq | OpIn
-  | OpPts | OpSep 
+  | OpPts | OpSepStar | OpSepPlus
   | OpAnd | OpOr | OpNot 
 
 type compilation_unit =
@@ -125,6 +125,7 @@ and expr =
   | Dot of expr * ident * pos
   | ProcCall of ident * exprs * pos
   | PredApp of ident * exprs * pos
+  | Forall of ident * expr * expr * pos
   | Access of expr * pos
   | UnaryOp of op * expr * pos
   | BinaryOp of expr * op * expr * pos
@@ -135,12 +136,13 @@ and exprs = expr list
 let pos_of_expr = function
   | Null p 
   | Emp p 
-  | Setenum (_, _, p)
   | IntVal (_, p) 
   | BoolVal (_, p)
+  | Setenum (_, _, p)
   | New (_, p)
   | Dot (_, _, p)
   | Access (_, p)
+  | Forall (_, _, _, p)
   | ProcCall (_, _, p)
   | PredApp (_, _, p)
   | UnaryOp (_, _, p)

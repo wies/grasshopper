@@ -56,7 +56,8 @@ let to_form pred_to_form set_fct domain f =
         let domain = mk_loc_set_var (FormUtil.fresh_ident (fst d)) in
         let structure, footprint = pred_to_form p args domain in
         [structure, domain], footprint
-    | SepConj forms ->
+    | (SepStar forms as f)
+    | (SepPlus forms as f) ->
         (*let ds = List.map (fun _ -> fd "sep" domain) forms in*)
         let translated = List.map (process_sep pol (fd "sep" d)) forms in
         let translated_1, translated_2 = List.split translated in
@@ -83,7 +84,12 @@ let to_form pred_to_form set_fct domain f =
             in pw_disj [] dsc
           in
           let heap_part = separation1 :: translated_2 in
-          let struct_part = FormUtil.smk_and (separation2 @ translated_1) in
+          let struct_part = 
+            match f with
+            | SepStar _ -> FormUtil.smk_and (separation2 @ translated_1) 
+            | SepPlus _ -> FormUtil.smk_and translated_1
+            | _ -> failwith "impossible"
+          in
           ((struct_part, mk_loc_set_var domain) :: otranslated_1, heap_part)
         in 
         let struct_part, heap_part = List.fold_left process ([], translated_2) translated_product in

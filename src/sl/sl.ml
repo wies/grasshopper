@@ -16,7 +16,8 @@ type pred_symbol =
 type form =
   | Pure of Form.form
   | Atom of pred_symbol * Form.term list
-  | SepConj of form list
+  | SepStar of form list
+  | SepPlus of form list
   | Not of form
   | And of form list
   | Or of form list
@@ -40,24 +41,32 @@ let rec pr_form ppf = function
   | Not f -> pr_not ppf f
   | And fs -> pr_ands ppf fs
   | Or fs -> pr_ors ppf fs
-  | SepConj fs -> pr_seps ppf fs
+  | SepStar fs -> pr_sep_star ppf fs
+  | SepPlus fs -> pr_sep_plus ppf fs
   | Atom (Emp, _) -> fprintf ppf "emp"
   | Atom (Region, [r]) -> 
       (match r with
       | Form.App (Form.SetEnum, [t], _) ->
           fprintf ppf "acc(@[%a@])" Form.pr_term t
       | _ ->
-          fprintf ppf "region(@[%a@])" Form.pr_term r)
+          fprintf ppf "acc(@[%a@])" Form.pr_term r)
   | Atom (Region, _) -> ()
   | Atom (Pred p, ts) ->
       fprintf ppf "%a(@[%a@])" Form.pr_ident p Form.pr_term_list ts
 
-and pr_seps ppf = function
+and pr_sep_star ppf = function
   | [] -> fprintf ppf "%s" "emp"
   | [f] -> fprintf ppf "@[<2>%a@]" pr_form f
   | (Or _ as f) :: fs 
-  | (And _ as f) :: fs -> fprintf ppf "(@[<2>%a@]) &*&@ %a" pr_form f pr_seps fs
-  | f :: fs -> fprintf ppf "@[<2>%a@] &*&@ %a" pr_form f pr_seps fs
+  | (And _ as f) :: fs -> fprintf ppf "(@[<2>%a@]) &*&@ %a" pr_form f pr_sep_star fs
+  | f :: fs -> fprintf ppf "@[<2>%a@] &*&@ %a" pr_form f pr_sep_star fs
+
+and pr_sep_plus ppf = function
+  | [] -> fprintf ppf "%s" "emp"
+  | [f] -> fprintf ppf "@[<2>%a@]" pr_form f
+  | (Or _ as f) :: fs 
+  | (And _ as f) :: fs -> fprintf ppf "(@[<2>%a@]) &+&@ %a" pr_form f pr_sep_plus fs
+  | f :: fs -> fprintf ppf "@[<2>%a@] &+&@ %a" pr_form f pr_sep_plus fs
 
 and pr_ands ppf = function
   | [] -> fprintf ppf "%s" "true"

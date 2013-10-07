@@ -90,6 +90,9 @@ let predefined =
     "lseg(domain: set loc, next: fld loc, x: loc, y: loc){ " ^
         "reach(next, x, y), " ^
         "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
+    "lseg_set(domain: set loc, next: fld loc, x: loc, y: loc, s: set loc){ " ^
+        "reach(next, x, y), " ^
+        "s == domain && (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
     "slseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc){ " ^
         "reach(next, x, y) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach(next, l1, l2)) ==> data(l1) <= data(l2), " ^
         "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";

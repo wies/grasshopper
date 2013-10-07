@@ -3,6 +3,7 @@ open Form
 open FormUtil
 open InstGen
 
+
 (** Eliminate all implicit and explicit existential quantifiers using skolemization.
  ** Assumes that [f] is typed and in negation normal form. *)
 let reduce_exists =
@@ -25,11 +26,38 @@ let reduce_exists =
   in
   fun f -> 
     let f1 = elim_neq f in
-    (*let _ = print_endline "Befor propagation: " in
+    (*let _ = print_endline "Before propagation: " in
     let _ = print_forms stdout [f1] in
     let _ = print_endline "After propagation: " in
     let _ = print_forms stdout [f2] in*)
     skolemize f1
+
+let massage_field_reads fs = 
+  let reach_flds = 
+    fold_terms (fun flds -> function
+      | App (Btwn, Var _ :: _, _) -> flds
+      | App (Btwn, fld :: _, _) -> TermSet.add fld flds
+      | _ -> flds)
+      TermSet.empty (mk_and fs)
+  in
+  let rec massage = function 
+  | BoolOp (And as op, fs)
+  | BoolOp (Or as op, fs) -> BoolOp (op, List.map massage fs)
+  | Binder (b, vs, f, a) -> Binder (b, vs, massage f, a)
+  | Atom (App (Eq, [App (Read, [fld; Var _ as arg], Some Loc); App (FreeSym _, [], _) as t], _))
+  | Atom (App (Eq, [App (FreeSym _, [], _) as t; App (Read, [fld; Var _ as arg], Some Loc)], _)) 
+    when TermSet.mem fld reach_flds ->
+      let f1 = 
+        mk_and [mk_btwn fld arg t t;
+                mk_forall [Axioms.l1]
+                  (mk_or [mk_eq Axioms.loc1 arg; mk_eq Axioms.loc1 t; 
+                          mk_not (mk_btwn fld arg Axioms.loc1 t)])]
+      in
+      f1
+  | f -> f
+  in List.map massage fs
+    
+
 
 (** Hoist all universally quantified subformulas to top level.
  ** Assumes that formulas [fs] are in negation normal form *)
@@ -330,15 +358,16 @@ let reduce_sets fs gts =
  ** Assumes that f is typed and that all frame predicates have been reduced *)
 let reduce_ep fs =
   let gts = TermSet.add mk_null (ground_terms (mk_and fs)) in
+  let rec collect acc = function
+    | App (Btwn, [fld; x; _; _], _)
+    | App (Read, [fld; x], Some Loc) ->
+        if TermSet.mem x gts then TermSet.add x acc else acc
+    | App (_, ts, _) -> List.fold_left collect acc ts
+    | _ -> acc
+  in
   let loc_gts = 
-    List.fold_left 
-      (fold_terms 
-         (fun acc -> function
-           | App (Btwn, [fld; x; y; z], _) -> 
-               if TermSet.mem x gts then TermSet.add x acc else acc
-           | _ -> acc))
-      TermSet.empty fs
-    (*TermSet.filter (has_sort Loc) gts*)
+    List.fold_left (fold_terms collect) TermSet.empty fs
+    (* TermSet.filter (has_sort Loc) gts *)
   in
   (* generate ep terms *)
   let rec get_ep_terms eps = function
@@ -494,7 +523,8 @@ let reduce f =
   in
   let f1 = nnf f in
   let fs1 = split_ands [] [f1] in
-  let fs2 = reduce_frame fs1 in
+  let fs11 = massage_field_reads fs1 in
+  let fs2 = reduce_frame fs11 in
   let fs2 = List.map reduce_exists fs2 in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
   let fs3, ep_axioms, gts = reduce_ep fs2 (*fs2, [], TermSet.empty*) in

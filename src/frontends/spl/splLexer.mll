@@ -18,6 +18,7 @@ let _ =
       ("emp", EMP);
       ("ensures", ENSURES);
       ("false", BOOLVAL(false));
+      ("forall", FORALL);
       ("free", DISPOSE);
       ("ghost", GHOST);
       ("havoc", HAVOC);
@@ -71,11 +72,13 @@ rule token = parse
 | '{' { LBRACE }
 | '}' { RBRACE }
 | ":=" { COLONEQ }
+|  "::" { COLONCOLON }
 | ':' { COLON }
 | ';' { SEMICOLON }
 | ',' { COMMA }
 | '.' { DOT }
-| "&*&" { SEP }
+| "&*&" { SEPSTAR }
+| "&+&" { SEPPLUS }
 | "|->" { PTS }
 | '|' { PIPE }
 | ident as kw

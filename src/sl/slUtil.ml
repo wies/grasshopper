@@ -29,22 +29,29 @@ let mk_eq a b = mk_pure (FormUtil.mk_eq a b)
 let mk_not a = Not a
 let mk_and a b = And [a; b]
 let mk_or a b = Or [a; b]
-let mk_sep a b = 
+let mk_sep_star a b = 
   match (a, b) with
   | (Atom (Emp, []), _) -> b
   | (_, Atom (Emp, [])) -> a
-  | (SepConj aa, SepConj bb) -> SepConj (aa @ bb)
-  | (a, SepConj bb) -> SepConj (a :: bb)
-  | (SepConj aa, b) -> SepConj (aa @ [b]) 
-  | _ -> SepConj [a; b]
+  | (SepStar aa, SepStar bb) -> SepStar (aa @ bb)
+  | (a, SepStar bb) -> SepStar (a :: bb)
+  | (SepStar aa, b) -> SepStar (aa @ [b]) 
+  | _ -> SepStar [a; b]
+let mk_sep_plus a b =
+  match (a, b) with
+  | (Atom (Emp, []), _) -> b
+  | (_, Atom (Emp, [])) -> a
+  | (SepPlus aa, SepPlus bb) -> SepPlus (aa @ bb)
+  | (SepPlus aa, b) -> SepPlus (aa @ [b]) 
+  | _ -> SepPlus [a; b]
 let mk_atom s args = Atom (s, args)
 let mk_emp = mk_atom Emp []
 let mk_cell t = mk_atom Region [FormUtil.mk_setenum [t]]
 let mk_region r = mk_atom Region [r]
 let mk_pred p ts = mk_atom (Pred p) ts
 let mk_pts f a b = 
-  mk_sep (mk_eq (FormUtil.mk_read f a) b) (mk_cell a)
-let mk_sep_lst args = List.fold_left mk_sep mk_emp args
+  mk_sep_star (mk_eq (FormUtil.mk_read f a) b) (mk_cell a)
+let mk_sep_star_lst args = List.fold_left mk_sep_star mk_emp args
 (*let mk_prev_pts a b = mk_pred (get_symbol "ptsTo") [fprev_pts; a; b]*)
 (*let mk_ls a b = mk_pred (get_symbol "lseg") [a; b]*)
 (*let mk_dls a b c d = mk_pred (get_symbol "dlseg") [a; b; c; d]*)
@@ -66,7 +73,8 @@ let rec map_id fct f = match f with
   | And lst -> And (List.map (map_id fct) lst)
   | Or lst -> Or (List.map (map_id fct) lst)
   | Atom (s, args) -> mk_atom s (List.map (FormUtil.map_id_term fct) args)
-  | SepConj lst -> SepConj (List.map (map_id fct) lst)
+  | SepStar lst -> SepStar (List.map (map_id fct) lst)
+  | SepPlus lst -> SepPlus (List.map (map_id fct) lst)
 
 let subst_id subst f =
   let get id =
@@ -83,7 +91,8 @@ let subst_consts_fun subst f =
     | Or fs -> Or (List.map map fs)
     | Atom (p, args) -> 
         mk_atom p (List.map (FormUtil.subst_consts_fun_term subst) args)
-    | SepConj fs -> SepConj (List.map map fs)
+    | SepStar fs -> SepStar (List.map map fs)
+    | SepPlus fs -> SepPlus (List.map map fs)
   in
   map f
 
@@ -95,7 +104,8 @@ let subst_consts subst f =
     | Or fs -> Or (List.map map fs)
     | Atom (p, args) -> 
         mk_atom p (List.map (FormUtil.subst_consts_term subst) args)
-    | SepConj fs -> SepConj (List.map map fs)
+    | SepStar fs -> SepStar (List.map map fs)
+    | SepPlus fs -> SepPlus (List.map map fs)
   in
   map f
 
@@ -105,7 +115,8 @@ let subst_preds subst f =
     | Not f -> Not (map f)
     | And fs -> And (List.map map fs)
     | Or fs -> Or (List.map map fs)
-    | SepConj fs -> SepConj (List.map map fs)
+    | SepStar fs -> SepStar (List.map map fs)
+    | SepPlus fs -> SepPlus (List.map map fs)
     | Atom (Pred p, args) -> 
         subst p args
     | f -> f
@@ -117,7 +128,8 @@ let free_consts f =
     | Not f -> fc acc f
     | Or fs 
     | And fs 
-    | SepConj fs -> List.fold_left fc acc fs
+    | SepStar fs 
+    | SepPlus fs -> List.fold_left fc acc fs
     | Atom (p, args) -> List.fold_left FormUtil.free_consts_term_acc acc args
   in fc IdSet.empty f
 
@@ -126,8 +138,8 @@ let preds f =
     | Not f -> p acc f
     | Or fs 
     | And fs 
-    | SepConj fs -> 
-        List.fold_left p acc fs
+    | SepStar fs 
+    | SepPlus fs -> List.fold_left p acc fs
     | Atom (Pred pred, _) -> 
         IdSet.add pred acc 
     | _ -> acc

@@ -116,7 +116,10 @@ let resolve_names cus =
         cu.pred_decls (IdMap.empty, tbl)
     in
     let resolve_expr locals tbl e = 
-      let rec re = function
+      let rec re tbl = function
+        | Setenum (ty, args, pos) ->
+            let args1 = List.map (re tbl) args in
+            Setenum (ty, args1, pos)
         | New (init_id, pos) ->
             let id = lookup_id init_id tbl pos in
             check_struct id structs pos;
@@ -124,12 +127,17 @@ let resolve_names cus =
         | Dot (e, init_id, pos) ->
             let id = lookup_id init_id tbl pos in
             check_field id globals pos;
-            Dot (re e, id, pos)
+            Dot (re tbl e, id, pos)
+        | Forall (init_id, e, f, pos) ->
+            let e1 = re tbl e in
+            let id, tbl1 = declare_name pos init_id tbl in
+            let f1 = re tbl1 f in
+            Forall (id, e1, f1, pos)
         | ProcCall (("acc", _), [arg], pos) ->
-            Access (re arg, pos)
+            Access (re tbl arg, pos)
         | ProcCall (init_id, args, pos) ->
             let id = lookup_id init_id tbl pos in
-            let args1 = List.map re args in
+            let args1 = List.map (re tbl) args in
             (try 
               check_proc id procs0 pos;
               ProcCall (id, args1, pos)
@@ -139,17 +147,17 @@ let resolve_names cus =
         | PredApp (init_id, args, pos) ->
             let id = lookup_id init_id tbl pos in
             check_pred id preds0 pos;
-            PredApp (id, List.map re args, pos)              
+            PredApp (id, List.map (re tbl) args, pos)              
         | UnaryOp (op, e, pos) ->
-            UnaryOp (op, re e, pos)
+            UnaryOp (op, re tbl e, pos)
         | BinaryOp (e1, op, e2, pos) ->
-            BinaryOp (re e1, op, re e2, pos)
+            BinaryOp (re tbl e1, op, re tbl e2, pos)
         | Ident (init_id, pos) ->
             let id = lookup_id init_id tbl pos in
             Ident (id, pos)
         | e -> e
       in
-      re e
+      re tbl e
     in
     let rec resolve_stmt locals tbl = function
       | Skip pos -> Skip pos, locals, tbl
@@ -276,6 +284,9 @@ let flatten_exprs cus =
   in
   let fe cu =
     let rec flatten_expr aux locals = function
+      | Setenum (ty, args, pos) as e ->
+          List.iter check_side_effects args;
+          e, aux, locals
       | New (id, pos) as e ->
           let aux_id, locals = decl_aux_var "tmp" (StructType id) pos locals in
           let aux_var = Ident (aux_id, pos) in
@@ -284,6 +295,10 @@ let flatten_exprs cus =
       | Dot (e, id, pos) ->
           let e1, aux1, locals = flatten_expr aux locals e in
           Dot (e1, id, pos), aux1, locals
+      | Forall (id, s, f, pos) as e ->
+          check_side_effects s;
+          check_side_effects f;
+          e, aux, locals
       | ProcCall (id, args, pos) ->
           let pdecl = IdMap.find id cu.proc_decls in
           let res_type = 
@@ -458,7 +473,9 @@ let convert cus =
   let convert_cu cu prog =
     let find_var_decl locals id =
       try IdMap.find id locals 
-      with Not_found -> IdMap.find id cu.var_decls
+      with Not_found -> 
+        try IdMap.find id cu.var_decls
+        with Not_found -> failwith ("Unable to find identifier " ^ (str_of_ident id))
     in
     let field_type pos id fld_id =
       let decl = IdMap.find id cu.struct_decls in
@@ -528,12 +545,26 @@ let convert cus =
           | NullType -> ProgError.error pos "Cannot dereference null."
           | ty -> failwith "unexpected type")
       | Access (e, pos) ->
-          let t, ty = extract_term locals NullType e in
+          let t, ty = extract_term locals UniversalType e in
           (match ty with
           | StructType id ->
               SL_form (SlUtil.mk_cell t)
+          | SetType (StructType _) ->
+              SL_form (SlUtil.mk_region t)
           | NullType -> ProgError.error pos "Cannot access null."
           | ty -> failwith "unexpected type")
+      | Forall (id, e, f, pos) ->
+          let e1, ty = extract_term locals (SetType UniversalType) e in
+          (match ty with
+          | SetType elem_ty ->
+              let decl = var_decl id elem_ty false false pos in
+              let locals1 = IdMap.add id decl locals in
+              let elem_ty = convert_type elem_ty in
+              let v_id = FormUtil.mk_var ~srt:elem_ty id in
+              let f1 = FormUtil.mk_implies (FormUtil.mk_elem v_id e1) (extract_fol_form locals1 f) in
+              let f2 = FormUtil.subst_consts (IdMap.add id v_id IdMap.empty) f1 in
+              FOL_form (FormUtil.mk_forall [(id, elem_ty)] f2)
+          | _ -> failwith "unexpected type")
       | PredApp (id, es, pos) ->
           let decl = IdMap.find id cu.pred_decls in
           let tys = List.map (fun p -> (IdMap.find p decl.pr_locals).v_type) decl.pr_formals in
@@ -650,10 +681,14 @@ let convert cus =
           in
           let t2, _ = extract_term locals ty e2 in
           SL_form (SlUtil.mk_pts fld ind t2)
-      | BinaryOp (e1, OpSep, e2, _) ->
+      | BinaryOp (e1, OpSepStar, e2, _) ->
           let f1 = extract_sl_form locals e1 in
           let f2 = extract_sl_form locals e2 in
-          SL_form (SlUtil.mk_sep f1 f2)
+          SL_form (SlUtil.mk_sep_star f1 f2)
+      | BinaryOp (e1, OpSepPlus, e2, _) ->
+          let f1 = extract_sl_form locals e1 in
+          let f2 = extract_sl_form locals e2 in
+          SL_form (SlUtil.mk_sep_plus f1 f2)
       | UnaryOp (OpPlus, e, _) ->
           let t, _ = extract_term locals IntType e in 
           FOL_term (t, IntType)
@@ -755,7 +790,8 @@ let convert cus =
           mk_assert_cmd sf pos
       | Assign (lhs, [ProcCall (id, es, cpos)], pos) ->
           let decl = IdMap.find id cu.proc_decls in
-          let formal_tys = List.map (fun p -> (IdMap.find p decl.p_locals).v_type) decl.p_formals in
+          let formals = List.filter (fun p -> not (IdMap.find p decl.p_locals).v_implicit) decl.p_formals in
+          let formal_tys = List.map (fun p -> (IdMap.find p decl.p_locals).v_type) formals in
           let return_tys = List.map (fun p -> (IdMap.find p decl.p_locals).v_type) decl.p_returns in
           let args = 
             try List.map2 (fun ty e -> fst (extract_term proc.p_locals ty e)) formal_tys es
