@@ -916,6 +916,11 @@ let convert cus =
               pre, convert_spec_form locals e name (Some mk_msg) :: post)
         contract ([], [])
     in
+    let convert_body decl =
+      match decl.p_body with
+      | Skip _ -> None
+      | _ -> Some (convert_stmt decl decl.p_body)
+    in
     let prog =
       IdMap.fold
         (fun id decl prog ->
@@ -927,7 +932,7 @@ let convert cus =
               proc_locals = IdMap.map convert_var_decl decl.p_locals;
               proc_precond = pre;
               proc_postcond = post;
-              proc_body = Some (convert_stmt decl decl.p_body);
+              proc_body = convert_body decl;
               proc_pos = decl.p_pos;
            } 
           in

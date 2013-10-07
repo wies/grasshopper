@@ -16,12 +16,12 @@ predicate bslseg(x: Node, y: Node, lb: int, ub: int) {
 procedure predecessor(start: Node, end: Node, ghost lb: int, ghost ub: int, ghost edata: int) returns (prv: Node)
     requires blseg(start, end, lb, ub) &*&
              start != end &*&
-             acc(end) &*& end.data == edata;
+             end.data |-> edata;
     ensures blseg(start, prv, lb, ub) &*&
             acc(prv) &*& prv.next == end &*&
             prv != end &*&
             prv.data >= lb &*& prv.data <= ub &*&
-            acc(end) &*& end.data == edata;
+            end.data |-> edata;
 {
     var prv: Node;
     prv := start;
@@ -51,7 +51,7 @@ procedure quicksort(lst: Node, tsl: Node, ghost lb: int, ghost ub: int, ghost ts
             invariant blseg(lst, start, lb, pivot.data);
             invariant blseg(start, end, lb, ub);
             invariant blseg(end, pivot, pivot.data, ub);
-            invariant acc(pivot) &*& pivot.next == tsl; 
+            invariant pivot.next |-> tsl; 
             invariant pivot.data >= lb;
             invariant pivot.data <= ub;
         {

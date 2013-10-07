@@ -6,12 +6,17 @@ predicate lseg(x: Node, y: Node) {
   x == y || x != y &*& acc(x) &*& lseg(x.next, y)
 }
 
+procedure rec_reverse(lst: Node) returns (res: Node)
+  requires lseg(lst, null);
+  ensures lseg(res, null);
+
+
 procedure rec_copy_loop(curr: Node, cp: Node) returns (res: Node)
   requires lseg(cp, null) &*& lseg(curr, null);
-  ensures  lseg(res, null) &*& lseg(curr, null);
+  ensures lseg(res, null) &*& lseg(curr, null);
 {
   if (curr == null) {
-    return cp;
+    return rec_reverse(cp);
   } else {
     var old_cp: Node, n: Node;
     old_cp := cp;

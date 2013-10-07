@@ -7,7 +7,7 @@ predicate lseg_set(x: Node, y: Node, X: set<Node>) {
   x != y &*& x in X &*& acc(x) &*& lseg_set(x.next, y, X -- set(x))
 }
 
-function root(x: Node, implicit ghost X: set<Node) returns (res: Loc) 
+function rep(x: Node, implicit ghost X: set<Node) returns (res: Loc) 
   requires lseg_set(x, null, X);
   requires x != null;
   ensures res.next == null && res in X;
@@ -15,7 +15,7 @@ function root(x: Node, implicit ghost X: set<Node) returns (res: Loc)
   if (x.next == null) { 
     return x;
   } else {
-    return root(x.next);
+    return rep(x.next);
   }
 }
 
@@ -24,12 +24,12 @@ returns (res: Node)
   requires lseg_set(x, null, X);
   ensures acc(X);
   ensures (forall z in X -- res :: z.next == res);
-  ensures res.next == null &*& res == root(x);
+  ensures res.next == null &*& res == rep(x);
 {
   var n: Node;
   n := x.next;
   if (n != null) {
-    res := find(n, root_x);
+    res := find(n);
     x.next := res;
   } else {
     res := x;
@@ -40,10 +40,10 @@ procedure union(x: Node, y: Node,
                 implicit ghost X: set<Node>, implicit ghost Y: set<Node>)
   requires lseg_set(x, null, X) &+& lseg_set(y, null, Y);
   ensures acc(X) &+& acc(Y);
-  ensures forall z in X -- Y -- root(x) :: z.next == root(x);
-  ensures forall z in Y -- root(y) :: z.next == root(y);
-  ensures root(y).next == null;
-  ensures root(x) == root(y) || root(x).next == root(y);
+  ensures forall z in X -- Y -- rep(x) :: z.next == rep(x);
+  ensures forall z in Y -- rep(y) :: z.next == rep(y);
+  ensures rep(y).next == null;
+  ensures rep(x) == rep(y) || rep(x).next == rep(y);
 {
   var t: Node;
   var s: Node;

@@ -80,6 +80,7 @@ declarations:
 
 
 proc_decl:
+| proc_header { proc_decl $1 (Skip dummy_position) }
 | proc_header proc_impl {
   proc_decl $1 $2
 } 
@@ -122,7 +123,6 @@ proc_contract:
 ;
 
 proc_impl:
-| SEMICOLON { Skip (mk_position 1 1)}
 | LBRACE block RBRACE { Block ($2, mk_position 1 3) }
 ;
 

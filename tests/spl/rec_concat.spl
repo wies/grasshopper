@@ -6,19 +6,19 @@ predicate lseg(x: Node, y: Node) {
   x == y || x != y &*& acc(x) &*& lseg(x.next, y)
 }
 
-procedure find_last(a: Node) returns (l : Node)
-    requires a != null &*& lseg(a, null);
-    ensures lseg(a, l) &*& l.next |-> null;
+procedure find_last(a: Node) returns (l: Node)
+  requires a != null &*& lseg(a, null);
+  ensures lseg(a, l) &*& l.next |-> null;
 {
-    var n: Node;
-    n := a.next;
-    if (n != null) {
-      var n2: Node;
-      n2 := find_last(n);
-      return n2;
-    } else {
-      return a;
-    }
+  var n: Node;
+  n := a.next;
+  if (n != null) {
+    var n2: Node;
+    n2 := find_last(n);
+    return n2;
+  } else {
+    return a;
+  }
 }
 
 procedure rec_concat(a: Node, b: Node, c: Node)
