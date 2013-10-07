@@ -10,7 +10,7 @@ predicate lseg_set(x: Node, y: Node, X: set<Node>) {
 procedure find(x: Node, ghost root_x: Node, implicit ghost X: set<Node>) 
 returns (res: Node)
   requires lseg_set(x, root_x, X);
-  requires root_x.next |-> null; // acc(root_x) &*& x.next == null
+  requires root_x.next |-> null;
   ensures acc(X);
   ensures (forall z in X :: z.next == root_x);
   ensures root_x.next |-> null &*& res == root_x;
@@ -31,13 +31,12 @@ procedure union(x: Node, y: Node,
   requires lseg_set(x, root_x, X) &+& lseg_set(y, root_y, Y);
   requires root_x.next |-> null &+& root_y.next |-> null;
   ensures acc(X) &+& acc(Y);
-  ensures forall z in X -- Y :: z.next == root_x;
+  ensures forall z in X -- Y :: z.next == root_x; // this is also OK: forall z in X :: z.next == root_x;
   ensures forall z in Y :: z.next == root_y;
   ensures root_y.next |-> null &+& acc(root_x);
   ensures root_x == root_y || root_x.next == root_y;
 {
-  var t: Node;
-  var s: Node;
+  var t: Node, s: Node;
   t := find(x, root_x);
   s := find(y, root_y);
   if (t != s) {

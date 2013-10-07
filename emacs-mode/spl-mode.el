@@ -44,10 +44,10 @@
    '("\\<\\(ass\\(ert\\|ume\\)\\|ensures\\|i\\(mplicit\\|nvariant\\)\\|requires\\|ghost\\)\\>"
          1 font-lock-spec-face)
 
-   '("\\<\\(forall\\|havoc\\|new\\|exists\\|old\\)\\>"
+   '("\\<\\(havoc\\|new\\|old\\)\\>"
          1 font-lock-builtin-face)
 
-   '("\\<\\(emp\\|false\\|in\\|null\\|true\\)\\>"
+   '("\\<\\(forall\\|exists\\|emp\\|false\\|in\\|null\\|true\\)\\>"
          1 font-lock-constant-face)
 
    '("\\(\\<[a-zA-Z_][a-zA-Z0-9_']*[ \t]*\\>\\)(" 1
