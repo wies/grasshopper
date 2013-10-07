@@ -36,9 +36,9 @@ procedure predecessor(start: Node, end: Node, ghost lb: int, ghost ub: int, ghos
     return prv;
 }
 
-procedure quicksort(lst: Node, tsl: Node, ghost lb: int, ghost ub: int) //returns (lst: Node)
-    requires blseg(lst, tsl, lb, ub) &*& acc(tsl);
-    ensures bslseg(lst, tsl, lb, ub) &*& acc(tsl);
+procedure quicksort(lst: Node, tsl: Node, ghost lb: int, ghost ub: int, ghost tsldata: int) //returns (lst: Node)
+    requires blseg(lst, tsl, lb, ub) &*& acc(tsl) &*& tsl.data == tsldata;
+    ensures bslseg(lst, tsl, lb, ub) &*& acc(tsl) &*& tsl.data == tsldata;
 {
     if (lst == tsl || lst.next == tsl) {
       return ;
@@ -71,10 +71,9 @@ procedure quicksort(lst: Node, tsl: Node, ghost lb: int, ghost ub: int) //return
         pivot.data := end.data;
         end.data := tmp2;
         pivot := end;
-        //pivot := split(lst, end, lb, ub);
         tmp2 := pivot.data;
-        quicksort(lst, pivot, lb, tmp2);
-        quicksort(pivot.next, tsl, tmp2, ub);
+        quicksort(lst, pivot, lb, tmp2, tmp2);
+        quicksort(pivot.next, tsl, tmp2, ub, tsldata);
         return ;
     }
 }

@@ -94,10 +94,12 @@ let predefined =
         "reach(next, x, y), " ^
         "s == domain && (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
     "slseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc){ " ^
-        "reach(next, x, y) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach(next, l1, l2)) ==> data(l1) <= data(l2), " ^
+        "reach(next, x, y) &&"^
+        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2), " ^
         "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
     "rslseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc){ " ^
-        "reach(next, x, y) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach(next, l1, l2)) ==> data(l1) >= data(l2), " ^
+        "reach(next, x, y) &&"^
+        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) >= data(l2), " ^
         "forall l1: loc.  l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
     "ulseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int){ " ^
         "reach(next, x, y) && forall l1: loc. l1 in domain ==> data(l1) >= v, " ^
@@ -106,10 +108,14 @@ let predefined =
         "reach(next, x, y) && forall l1: loc. l1 in domain ==> data(l1) <= v, " ^
         "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
     "uslseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int){ " ^
-        "reach(next, x, y) && (forall l1: loc. l1 in domain ==> data(l1) >= v) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach(next, l1, l2)) ==> data(l1) <= data(l2),"^
+        "reach(next, x, y) &&"^
+        " (forall l1: loc. l1 in domain ==> data(l1) >= v) &&"^
+        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2),"^
         "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
     "lslseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int){" ^
-        "reach(next, x, y) && (forall l1: loc. l1 in domain ==> data(l1) <= v) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach(next, l1, l2)) ==> data(l1) <= data(l2),"^
+        "reach(next, x, y) &&"^
+        " (forall l1: loc. l1 in domain ==> data(l1) <= v) &&"^
+        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2),"^
         "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
     "blseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, w: int){" ^
         "reach(next, x, y) && forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w)," ^
@@ -117,7 +123,7 @@ let predefined =
     "bslseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, w: int){" ^
         "reach(next, x, y) &&"^
         " (forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w)) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach(next, l1, l2)) ==> data(l1) <= data(l2)," ^
+        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2)," ^
         "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
     "dlseg(domain: set loc, next: fld loc, prev: fld loc, x1: loc, x2: loc, y1: loc, y2: loc){" ^
         "reach(next, x1, y1) &&" ^
@@ -132,7 +138,7 @@ let predefined =
         " forall l1: loc. l1 in domain ==> (data(l1) >= lb && data(l1) <= ub)," ^
         "forall l1: loc. l1 in domain <=> (btwn(next, x1, l1, y1) && l1 != y1) }";
     "bsdlseg(domain: set loc, data: fld int, next: fld loc, prev: fld loc, x1: loc, x2: loc, y1: loc, y2: loc, lb: int, ub:int){" ^
-        "reach(next, x1, y1) && ((x1 == y1 && x2 == y2) || (prev(x1) == x2 && next(y2) == y1 && y2 in domain)) && (forall l1: loc, l2: loc. (next(l1) == l2 && l1 in domain && l2 in domain) ==> prev(l2) == l1) && (forall l1: loc. l1 in domain ==> (data(l1) >= lb && data(l1) <= ub)) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach(next, l1, l2)) ==> data(l1) <= data(l2)," ^
+        "reach(next, x1, y1) && ((x1 == y1 && x2 == y2) || (prev(x1) == x2 && next(y2) == y1 && y2 in domain)) && (forall l1: loc, l2: loc. (next(l1) == l2 && l1 in domain && l2 in domain) ==> prev(l2) == l1) && (forall l1: loc. l1 in domain ==> (data(l1) >= lb && data(l1) <= ub)) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2)," ^
         "forall l1: loc. l1 in domain <=> (btwn(next, x1, l1, y1) && l1 != y1) }"
   ]
 
