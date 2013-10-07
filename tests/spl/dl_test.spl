@@ -1,0 +1,17 @@
+struct Node {
+  var next: Node;
+  var prev: Node;
+}
+
+predicate dlseg(x: Node, u: Node, y: Node, v: Node) {
+  x == y && u == v || 
+  x != y &*& x.prev == u &*& acc(x) &*& dlseg(x.next, x, y, v)
+}
+
+
+procedure dl_test(a: Node, b: Node, c: Node, d: Node) 
+  requires dlseg(a, null, b, c);
+  requires dlseg(b, c, null, d);
+  ensures dlseg(a, null, null, d);
+{
+}

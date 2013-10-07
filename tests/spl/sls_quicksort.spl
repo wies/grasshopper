@@ -15,44 +15,38 @@ predicate bslseg(x: Node, y: Node, lb: int, ub: int) {
 
 procedure predecessor(start: Node, end: Node, lb: int, ub: int) returns (prv: Node)
     requires blseg(start, end, lb, ub) &*& start != end;
-    ensures blseg(start, prv, lb, ub) &*& acc(prv) &*& prv.next == end &*& prv.data >= lb &*& prv.data <= ub;
+    ensures blseg(start, prv, lb, ub) &*&
+            acc(prv) &*& prv.next == end &*&
+            prv != end &*&
+            prv.data >= lb &*& prv.data <= ub;
 {
     var prv: Node;
     prv := start;
-    var curr: Node;
-    curr := start.next;
-    while (curr != end)
+    while (prv.next != end)
         invariant blseg(start, prv, lb, ub);
-        invariant blseg(curr, end, lb, ub);
-        invariant acc(prv) &*& prv.next == curr;
+        invariant blseg(prv, end, lb, ub);
+        invariant prv != end;
         invariant prv.data >= lb &*& prv.data <= ub;
     {
-        prv := curr;
-        curr := curr.next;
+        prv := prv.next;
     }
     return prv;
 }
 
-procedure split(lst: Node, tsl: Node, lb: int, ub: int) returns (returned: Node)
-    requires blseg(lst, tsl, lb, ub) &*& lst != tsl;
-    ensures blseg(lst, returned, lb, returned.data) &*& blseg(returned, tsl, returned.data, ub) &*& returned != tsl;
+procedure quicksort(lst: Node, tsl: Node, lb: int, ub: int) //returns (lst: Node)
+    requires blseg(lst, tsl, lb, ub);
+    ensures bslseg(lst, tsl, lb, ub);
 {
-    var pivot: Node;
-    pivot := predecessor(lst, tsl, lb, ub);
-    if (lst == pivot) {
-        return lst;
+    if (lst == tsl || lst.next == tsl) {
     } else {
-        var last: Node, start: Node, end: Node;
-        last := predecessor(lst, pivot, lb, ub);
+        var pivot: Node, start: Node, end: Node;
+        pivot := predecessor(lst, tsl, lb, ub);
+        end := pivot;
         start := lst;
-        end := last;
         while (start != end)
             invariant blseg(lst, start, lb, pivot.data);
             invariant blseg(start, end, lb, ub);
-            invariant blseg(end, last, pivot.data, ub);
-            invariant acc(last) &*& last.next == pivot;
-            invariant last.data >= lb;
-            invariant last.data <= ub;
+            invariant blseg(end, pivot, pivot.data, ub);
             invariant acc(pivot) &*& pivot.next == tsl; 
             invariant pivot.data >= lb;
             invariant pivot.data <= ub;
@@ -68,28 +62,13 @@ procedure split(lst: Node, tsl: Node, lb: int, ub: int) returns (returned: Node)
                 end.data := tmp;
             }
         }
-        if (start == last) {
-            return lst;
-        } else if (start == lst) {
-            return pivot;
-        } else {
-            last.next := pivot.next;
-            pivot.next := start.next;
-            start.next := pivot;
-            return lst;
-        }
-    }
-}
-
-procedure quicksort(lst: Node, end: Node, lb: int, ub: int) //returns (lst: Node)
-    requires blseg(lst, end, lb, ub);
-    ensures bslseg(lst, end, lb, ub);
-{
-    if (lst == end || lst.next == end) {
-    } else {
-        var middle: Node;
-        middle := split(lst, end, lb, ub);
-        quicksort(lst, middle, lb, middle.data);
-        quicksort(middle, end, middle.data, ub);
+        var tmp2: int;
+        tmp2 := pivot.data;
+        pivot.data := end.data;
+        end.data := tmp2;
+        pivot := end;
+        //pivot := split(lst, end, lb, ub);
+        quicksort(lst, pivot, lb, pivot.data);
+        quicksort(pivot.next, tsl, pivot.data, ub);
     }
 }
