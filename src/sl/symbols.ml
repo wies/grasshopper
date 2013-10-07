@@ -115,7 +115,9 @@ let predefined =
         "reach(next, x, y) && forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w)," ^
         "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
     "bslseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, w: int){" ^
-        "reach(next, x, y) && (forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w)) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach(next, l1, l2)) ==> data(l1) <= data(l2)," ^
+        "reach(next, x, y) &&"^
+        " (forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w)) &&"^
+        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && reach(next, l1, l2)) ==> data(l1) <= data(l2)," ^
         "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
     "dlseg(domain: set loc, next: fld loc, prev: fld loc, x1: loc, x2: loc, y1: loc, y2: loc){" ^
         "reach(next, x1, y1) &&" ^

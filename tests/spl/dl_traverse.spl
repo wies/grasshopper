@@ -22,20 +22,3 @@ procedure dl_traverse(lst: Node, ghost a: Node, ghost b: Node)
     curr := curr.next; 
   }
 }
-
-procedure dl_traverse2(lst: Node, tsl: Node)
-  requires dlseg(lst, null, null, tsl);
-  ensures dlseg(lst, null, null, tsl);
-{
-  var curr: Node, nxt: Node;
-  curr := tsl;
-  nxt := null;
-  while (curr != null) 
-    invariant dlseg(lst, null, nxt, curr);
-    invariant dlseg(nxt, curr, null, tsl);
-  {
-    nxt := curr;
-    curr := curr.prev; 
-  }
-}
-
