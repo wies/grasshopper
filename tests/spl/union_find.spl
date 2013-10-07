@@ -11,7 +11,8 @@ procedure find(x: Node, ghost root_x: Node, implicit ghost X: set<Node>)
 returns (res: Node)
   requires lseg_set(x, root_x, X);
   requires root_x.next |-> null; // acc(root_x) &*& x.next == null
-  ensures acc(X) &*& (forall z in X :: z.next == root_x);
+  ensures acc(X);
+  ensures (forall z in X :: z.next == root_x);
   ensures root_x.next |-> null &*& res == root_x;
 {
   var n: Node;
