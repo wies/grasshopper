@@ -390,6 +390,20 @@ let vars_in_fun_terms f =
     | App _ -> fvt vars t
     | _ -> vars
   in fold_terms ct IdSrtSet.empty f
+
+let fun_terms_with_vars f =
+  let rec process acc t = match t with
+    | App (_, ts, Some Bool) ->
+      (* skip predicates *)
+      List.fold_left process acc ts
+    | App (_, ts, _) ->
+      let acc = List.fold_left process acc ts in
+        if not (IdSet.is_empty (fvt IdSet.empty t))
+        then TermSet.add t acc
+        else acc
+    | Var _ -> acc
+  in
+    fold_terms process TermSet.empty f
      
 (** Extracts the signature of formula [f] *)
 let sign f : signature =

@@ -7,6 +7,7 @@ let encode_fields_as_arrays = ref false
 
 (* Flag that controls whether we are instantiating the axioms or relying on the prover. *)
 let instantiate = ref true
+let stratify = ref true
 (* File name where counterexample model is saved. *)
 let model_file = ref ""
 (* Flag that controls whether the generated VCs are dumped to files. *)
@@ -40,6 +41,7 @@ let cmd_options =
    ("-elimsets", Arg.Clear keep_sets, "Eliminate sets in FOL reduction");
    ("-usearrays", Arg.Set encode_fields_as_arrays, "Use arrays to encode fields");
    ("-noinst", Arg.Clear instantiate, "Let the prover deal with the quantifiers without prior instantiation");
+   ("-nostratify", Arg.Clear stratify, "Also instantiate the stratified parts");
    ("-dumpvcs", Arg.Set dump_smt_queries, "Dump SMT-LIB 2 files for the generated VCs");
    ("-smtsolver", Arg.Set_string smtsolver, "Choose SMT solver (Z3, CVC4, MathSAT)");
    ("-x", Arg.Set experimental, "enable some experimental feature")

@@ -78,6 +78,11 @@ module SrtSet = Set.Make(struct
     let compare = compare
   end)
 
+module SrtMap = Map.Make(struct
+    type t = sort
+    let compare = compare
+  end)
+
 module TermSet = Set.Make(struct
     type t = term
     let compare = compare
