@@ -38,6 +38,8 @@ sls_filter tests/spl/sls_filter.spl pass
 sls_remove tests/spl/sls_remove.spl pass
 sls_insert tests/spl/sls_insert.spl pass
 sls_insertion_sort tests/spl/sls_insertion_sort.spl pass
+sls_merge_sort tests/spl/sls_merge_sort.spl pass
+sls_quicksort tests/spl/sls_quicksort.spl pass
 "
 #dl_traverse_backward tests/spl/dl_traverse_backward.spl pass
 

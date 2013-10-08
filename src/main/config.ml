@@ -4,6 +4,7 @@ let with_alloc_axioms = ref true
 let with_null_axioms = ref true
 let keep_sets = ref true
 let encode_fields_as_arrays = ref false
+let with_ep = ref true
 
 (* Flag that controls whether we are instantiating the axioms or relying on the prover. *)
 let instantiate = ref true
@@ -25,6 +26,11 @@ let print_stats = ref false
 (* The SMT solver that is used for checking VCs. *)
 let smtsolver = ref "Z3"
 
+(* optmisation: oldify fields only if modified *)
+let optFieldMod = ref true
+(* optmisation: self-framing clause for SL predicates *)
+let optSelfFrame = ref true
+
 (* Some experimental features, mostly for testing purpose *)
 let experimental = ref false
 
@@ -38,11 +44,14 @@ let cmd_options =
    ("-noreach", Arg.Clear with_reach_axioms, "Omit axioms for reachability predicates");
    ("-noalloc", Arg.Clear with_alloc_axioms, "Omit axioms for alloc predicate");
    ("-nonull", Arg.Clear with_null_axioms, "Omit axioms for null");
+   ("-noep", Arg.Clear with_ep, "Omit EP");
    ("-elimsets", Arg.Clear keep_sets, "Eliminate sets in FOL reduction");
    ("-usearrays", Arg.Set encode_fields_as_arrays, "Use arrays to encode fields");
    ("-noinst", Arg.Clear instantiate, "Let the prover deal with the quantifiers without prior instantiation");
    ("-nostratify", Arg.Clear stratify, "Also instantiate the stratified parts");
    ("-dumpvcs", Arg.Set dump_smt_queries, "Dump SMT-LIB 2 files for the generated VCs");
    ("-smtsolver", Arg.Set_string smtsolver, "Choose SMT solver (Z3, CVC4, MathSAT)");
+   ("-noOptFieldMod", Arg.Clear optFieldMod, "remove optimisation of field according to mod set");
+   ("-noOptSelfFrame", Arg.Clear optSelfFrame, "remove optimisation of self-framing clauses for SL predicates");
    ("-x", Arg.Set experimental, "enable some experimental feature")
   ]

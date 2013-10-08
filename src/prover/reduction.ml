@@ -286,7 +286,7 @@ let reduce_frame fs =
       let reach_frame = mk_and (process_frame lst) in
       let pred_frame = expand_frame2 x a lst in
         (*print_endline ("self_framing: " ^ (string_of_form pred_frame));*)
-        if !Config.experimental then
+        if !Config.optSelfFrame then
           smk_and [reach_frame; pred_frame]
         else
           reach_frame
@@ -366,8 +366,10 @@ let reduce_ep fs =
     | _ -> acc
   in
   let loc_gts = 
-    List.fold_left (fold_terms collect) TermSet.empty fs
-    (* TermSet.filter (has_sort Loc) gts *)
+    if !Config.with_ep then
+      List.fold_left (fold_terms collect) TermSet.empty fs
+      (* TermSet.filter (has_sort Loc) gts *)
+    else TermSet.empty
   in
   (* generate ep terms *)
   let rec get_ep_terms eps = function

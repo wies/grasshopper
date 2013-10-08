@@ -498,7 +498,7 @@ let elim_sl prog =
         IdSet.fold
           (fun var frames ->
             let old_var = 
-              if IdSet.mem var mod_fields then oldify var
+              if not !Config.optFieldMod || IdSet.mem var mod_fields then oldify var
               else var
             in
             let srt = (find_global prog var).var_sort in
