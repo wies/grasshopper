@@ -1,0 +1,120 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+predicate slseg(x: Node, y: Node) {
+  x == y || x != y &*& acc(x) &*& uslseg(x.next, y, x.data)
+}
+
+predicate lseg(x: Node, y: Node) {
+  x == y || x != y &*& acc(x) &*& lseg(x.next, y)
+}
+
+predicate llseg(x: Node, y: Node, ub: int) {
+  x == y || x != y &*& acc(x) &*& x.data <= ub &*& llseg(x.next, y, ub)
+}
+
+
+predicate lslseg(x: Node, y: Node, ub: int) {
+  slseg(x, y) && llseg(x, y, ub)
+}
+
+predicate uslseg(x: Node, y: Node, lb: int) {
+  x == y || x != y &*& acc(x) &*& lb <= x.data &*& uslseg(x.next, y, x.data)
+}
+
+
+
+procedure merge(a: Node, b: Node) returns (res: Node)
+  requires slseg(a, null) &*& slseg(b, null);
+  ensures slseg(res, null);
+{
+  res := null;
+  if (a == null) {
+    return b;
+  } else if (b == null) {
+    return a;
+  } else if (a.data <= b.data) {
+    res := a;
+    a := a.next;
+  } else {
+    res := b;
+    b := b.next;
+  }
+  
+  var last: Node;
+  last := res;
+
+  while (a != null || b != null)
+    invariant (last.next |-> a || last.next |-> b);
+    invariant lslseg(res, last, last.data) &*& uslseg(a, null, last.data) &*& uslseg(b, null, last.data);
+  {
+    if (a == null || b != null && a.data > b.data) {
+      last.next := b;
+      last := b;
+      b := b.next;
+    } else {
+      last.next := a;
+      last := a;
+      a := a.next;
+    }
+  }
+
+  return res;
+}
+
+procedure pull_strands(lst: Node) returns (sorted: Node, rest: Node)
+  requires lseg(lst, null) &*& lst != null;
+  ensures slseg(sorted, null) &*& lseg(rest, null);
+{
+  var sorted: Node, sorted_tail: Node, rest: Node, curr: Node, prv: Node;
+  rest := lst.next;
+  curr := rest;
+  prv := null;
+  sorted := lst;
+  sorted_tail := sorted;
+  sorted_tail.next := null;
+  while (curr != null)
+    invariant lseg(curr, null);
+    invariant lseg(rest, prv) &*& prv.next |-> curr || prv == null &*& rest == curr;
+    invariant lslseg(sorted, sorted_tail, sorted_tail.data);
+    invariant sorted_tail.next |-> null;
+  {
+    if (curr.data >= sorted_tail.data) {
+      var old_curr: Node;
+      old_curr := curr;
+      curr := curr.next; 
+      sorted_tail.next := old_curr;
+      sorted_tail := old_curr;
+      old_curr.next := null;
+      if (rest == old_curr) {
+        rest := curr;
+      }
+      if (prv != null) {
+        prv.next := curr;
+      }
+    } else {
+      prv := curr;
+      curr := curr.next;
+    }
+  }
+  return sorted, rest;
+}
+
+procedure strand_sort(lst: Node) returns (res: Node)
+  requires lseg(lst, null);
+  ensures slseg(res, null);
+{
+  var sorted: Node;
+  sorted := null;
+  while (lst != null)
+    invariant lseg(lst, null);
+    invariant slseg(sorted, null);
+  {
+    var new_sorted: Node;
+    new_sorted, lst := pull_strands(lst);
+    sorted := merge(sorted, new_sorted);
+  }
+  return sorted;
+}
