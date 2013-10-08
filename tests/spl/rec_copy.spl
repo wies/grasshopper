@@ -6,9 +6,28 @@ predicate lseg(x: Node, y: Node) {
   x == y || x != y &*& acc(x) &*& lseg(x.next, y)
 }
 
+
+procedure rec_reverse_loop(lst: Node, acc: Node) returns (res: Node)
+  requires lseg(lst, null) &*& lseg(acc, null);
+  ensures lseg(res, null);
+{
+  if (lst == null) {
+    return acc;
+  } else {
+    var old_lst : Node;
+    old_lst := lst;
+    lst := lst.next;
+    old_lst.next := acc;
+    return rec_reverse_loop(lst, old_lst);
+  }
+}
+
 procedure rec_reverse(lst: Node) returns (res: Node)
   requires lseg(lst, null);
   ensures lseg(res, null);
+{
+  return rec_reverse_loop(lst, null);
+}
 
 
 procedure rec_copy_loop(curr: Node, cp: Node) returns (res: Node)
