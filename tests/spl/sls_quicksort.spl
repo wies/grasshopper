@@ -76,9 +76,9 @@ procedure split(lst: Node, tsl: Node, lb: int, ub: int, ghost tsldata: int) retu
 
 
 procedure quicksort(lst: Node, tsl: Node, ghost lb: int, ghost ub: int, ghost tsldata: int)
-    requires blseg(lst, tsl, lb, ub) &*& acc(tsl) &*&
+    requires blseg(lst, tsl, lb, ub) &*& 
              (tsl.data |-> tsldata || tsl == null);
-    ensures bslseg(lst, tsl, lb, ub) &*& acc(tsl) &*&
+    ensures bslseg(lst, tsl, lb, ub) &*& 
             (tsl.data |-> tsldata || tsl == null);
 {
     if (lst != tsl && lst.next != tsl) {
