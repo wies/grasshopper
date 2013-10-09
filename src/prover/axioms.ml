@@ -145,10 +145,12 @@ let ep_axioms () =
     mk_implies (mk_and [reach loc1 loc2; in_set1 loc2]) (btwn loc1 ep loc2)
     (*else mk_implies (mk_and [reach loc1 loc2; in_set1 loc2]) (reachwo loc1 ep loc2) *)
   in
-  [mk_axiom "entry-point1" ep1; 
-   mk_axiom "entry-point2" ep2; 
-   mk_axiom "entry-point3" ep3; 
-   mk_axiom "entry-point4" ep4]
+  if !Config.with_ep then
+    [mk_axiom "entry-point1" ep1; 
+     mk_axiom "entry-point2" ep2; 
+     mk_axiom "entry-point3" ep3; 
+     mk_axiom "entry-point4" ep4]
+  else []
 
 (* set axioms *)
 

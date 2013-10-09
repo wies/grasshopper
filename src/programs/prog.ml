@@ -438,10 +438,15 @@ let source_pos c = (prog_point c).pp_pos
 (** Auxiliary functions for commands *)
 
 let modifies c = (prog_point c).pp_modifies
+let accesses c = (prog_point c).pp_accesses
 
 let modifies_proc prog proc = 
   match proc.proc_body with
-  | Some cmd -> IdSet.filter (fun id -> IdMap.mem id prog.prog_vars) (modifies cmd)
+  | Some cmd ->
+    IdSet.filter
+      (fun id -> IdMap.mem id prog.prog_vars)
+      (if !Config.optFieldMod then (modifies cmd)
+       else(IdSet.union (accesses cmd) (modifies cmd)))
   | None -> IdSet.empty
 
 let modifies_basic_cmd = function
@@ -453,8 +458,6 @@ let modifies_basic_cmd = function
   | Assert _
   | Return _ 
   | Call _ -> IdSet.empty
-
-let accesses c = (prog_point c).pp_accesses
 
 let accesses_spec_form_acc acc sf =
   IdSet.union acc 

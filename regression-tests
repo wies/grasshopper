@@ -40,6 +40,8 @@ sls_insert tests/spl/sls_insert.spl pass
 sls_insertion_sort tests/spl/sls_insertion_sort.spl pass
 sls_merge_sort tests/spl/sls_merge_sort.spl pass
 sls_quicksort tests/spl/sls_quicksort.spl pass
+sls_strand_sort tests/spl/sls_strand_sort.spl pass
+union_find tests/spl/union_find.spl pass
 "
 #dl_traverse_backward tests/spl/dl_traverse_backward.spl pass
 
