@@ -30,8 +30,10 @@ ensure_fails()
 
 while (( "$#" )); do
     echo -ne "Checking benchmark ${1}..."
+    ulimit -St 60
     ./grasshopper.native $2 $OPTIONS 2> /dev/null
     res=$?
+    ulimit -St unlimited
     if [ $3 == "pass" ]; then
         ensure_verifies $res $1
     else

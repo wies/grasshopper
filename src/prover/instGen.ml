@@ -20,6 +20,7 @@ let choose_rep_terms classes =
     (cl_rep :: reps, TermMap.add cl_rep (list_to_set cl) new_classes))
     ([], TermMap.empty) classes
 
+(*
 (* returns a DAG of type dependencies. *)
 let stratify_types axioms =
   (* 1: build a weighted graph of dependencies.
@@ -167,7 +168,23 @@ let stratify_types axioms =
       )
       unweighted
       intra_cc_edges
-
+*)
+let stratify_types axioms =
+  let edges = [
+    (Fld Loc, Loc);
+    (Fld Int, Int);
+    (Loc, Int);
+    (Loc, Set Loc);
+    (Int, Set Int)
+    ]
+  in
+    List.fold_left
+      (fun acc (a, b) ->
+        let old = try SrtMap.find a acc with Not_found -> SrtSet.empty in
+          SrtMap.add a (SrtSet.add b old) acc
+      )
+      SrtMap.empty
+      edges
 
 let generate_instances useLocalInst axioms terms rep_map type_graph = 
   let ground_terms = 
@@ -178,18 +195,28 @@ let generate_instances useLocalInst axioms terms rep_map type_graph =
     if SrtMap.mem v acc then acc
     else
       try
-        let s = SrtMap.find v acc in
-          SrtSet.fold close_graph s acc
+        let s = SrtMap.find v type_graph in
+        let acc = SrtSet.fold close_graph s acc in
+        let succ = SrtSet.fold (fun s set -> SrtSet.union set (SrtMap.find s acc) ) s s in
+          SrtMap.add v succ acc
       with Not_found -> SrtMap.add v SrtSet.empty acc
   in
   let closed_type_graph =
     SrtMap.fold (fun k _ acc -> close_graph k acc) type_graph SrtMap.empty
   in
+  (*
+  print_endline "YYY";
+  SrtMap.iter (fun k v -> print_endline ((string_of_sort k) ^" -> "^ (String.concat " " (List.map string_of_sort (SrtSet.elements v))))) closed_type_graph;
+  *)
   let can_reach a b =
     try SrtSet.mem b (SrtMap.find a closed_type_graph)
     with Not_found -> false
   in
-  let is_stratified t1 t2 = t1 <> t2 && not (can_reach t2 t1) in
+  let is_stratified t1 t2 =
+    let res = t1 <> t2 && not (can_reach t2 t1) in
+      (*print_endline ("is_stratified("^(string_of_sort t1)^","^(string_of_sort t2)^") = "^(string_of_bool res));*)
+      res
+  in
   (* *)
   let epr_axioms, axioms = 
     List.partition 
@@ -230,6 +257,12 @@ let generate_instances useLocalInst axioms terms rep_map type_graph =
           (fun_terms_with_vars f)
           IdMap.empty
       in
+        (*
+        print_endline "XXX";
+        IdMap.iter (fun k v -> print_endline ((str_of_ident k) ^ " -> " ^ (String.concat "," (List.map string_of_sort v)))) gen_map;
+        print_endline "ZZZ";
+        IdSrtSet.iter (fun (id, srt) -> print_endline ((str_of_ident id)^", "^(string_of_sort srt))) fvars;
+        *)
         if !Config.stratify && useLocalInst then
           IdSrtSet.filter
             (fun (id, srt) ->
