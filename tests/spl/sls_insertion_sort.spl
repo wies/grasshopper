@@ -36,7 +36,7 @@ procedure insertion_sort(lst: Node)
   srt := lst;
   while (srt != null)
     invariant (prv == null &*& srt == lst &*& lseg(lst, null))
-           || (lslseg(lst, srt, prv.data) &*& ulseg(srt, null, prv.data));
+           || (lslseg(lst, prv, prv.data) &*& prv.next |-> srt &*& ulseg(srt, null, prv.data));
   {
     var curr: Node, min: Node;
     curr := srt.next;
