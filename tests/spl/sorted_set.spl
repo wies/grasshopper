@@ -1,0 +1,70 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+predicate bslseg_content(x: Node, y: Node, lb: int, ub: int, c: set<int>) {
+    x == y &*&
+    c == set<int>()
+  || 
+    x != y &*&
+    acc(x) &*&
+    x.data in c &*&
+    lb <= x.data &*&
+    x.data <= ub &*&
+    bslseg_content(x.next, y, x.data, ub, c -- set(x.data))
+}
+
+procedure sls_trv(lst: Node, val: int,
+                  ghost lb: int, ghost ub: int,
+                  ghost content: set<int>)
+  requires bslseg_content(lst, null, lb, ub, content);
+  ensures bslseg_content(lst, null, lb, ub, content);
+{
+  var curr: Node;
+  curr := lst;
+  var c1: set<int>, c2: set<int>;
+  c1 := content;
+  c2 := set<int>();
+
+  while (curr != null) 
+    invariant (curr != null &*& bslseg_content(lst, curr, lb, curr.data, c2) &*& bslseg_content(curr, null, curr.data, ub, c1))
+           || (curr == null &*& bslseg_content(lst, curr, lb, ub, c2) &*& c1 == set<int>());
+    invariant content == c1 ++ c2;
+  {
+    c2 := c2 ++ set(curr.data);
+    c1 := c1 ++ set(curr.data);
+    curr := curr.next; 
+  }
+}
+
+//  procedure sls_mem(lst: Node, val: int,
+//                    ghost lb: int, ghost ub: int,
+//                    ghost content: set<int>)
+//    returns (res: bool)
+//    requires bslseg_content(lst, null, lb, ub, content);
+//    ensures bslseg_content(lst, null, lb, ub, content);
+//    ensures (res && val in content) || (!res && !(val in content));
+//  {
+//    if (lst == null) {
+//      return false;
+//    }
+
+//    var curr: Node;
+//    curr := lst;
+//    var c1: set<int>, c2: set<int>;
+//    c1 := content;
+//    c2 := set<int>();
+
+//    while (curr != null && curr.data < val) 
+//      invariant (curr != null &*& bslseg_content(lst, curr, lb, curr.data, c2) &*& bslseg_content(curr, null, curr.data, ub, c1))
+//             || (curr == null &*& bslseg_content(lst, curr, lb, ub, c2) &*& c1 == set<int>());
+//      invariant content == c1 ++ c2;
+//    {
+//      c2 := c2 ++ set(curr.data);
+//      c1 := c1 ++ set(curr.data);
+//      curr := curr.next; 
+//    }
+//    if (curr != null && curr.data == val) return true;
+//    else return false;
+//  }

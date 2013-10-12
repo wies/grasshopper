@@ -181,13 +181,7 @@ let print_model2 model =
       | _ ->
 	  print_string "\n  [";
 	  List.iter (fun def -> 
-	    begin
-	      match def.input with
-	      | is -> 
-		  Printf.printf "(%s" (str_of_symbol (List.hd is));
-		  List.iter (fun i -> Printf.printf ", %s" (str_of_symbol i)) (List.tl is);
-		  print_string ")"
-	    end;
+		Printf.printf "(%s)" (String.concat ", " (List.map str_of_symbol def.input));
 	    Printf.printf " -> %s" (str_of_symbol def.output);
 	    print_string "\n   ")
 	    defs;

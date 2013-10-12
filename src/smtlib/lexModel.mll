@@ -12,10 +12,11 @@ let _ = List.iter (fun (id, srt) -> Hashtbl.add sort_tbl id srt)
     [bool_sort_string, Bool;
      loc_sort_string, Loc;
      int_sort_string, Int;
-     (*fld_sort_string, Fld Loc;*)
      fld_sort_string^loc_sort_string, Fld Loc;
      fld_sort_string^int_sort_string, Fld Int;
-     set_sort_string, Set Loc]
+     set_sort_string^loc_sort_string, Set Loc;
+     set_sort_string^int_sort_string, Set Int
+    ]
 
 let to_symbol id =
   try Hashtbl.find symbol_tbl id 

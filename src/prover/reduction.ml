@@ -256,6 +256,7 @@ let reduce_frame fs =
         )
         affected
     in
+    (*TODO universal quantification ?*)
     let self_frame (id, args_before, args_after, fp) =
       let id_s = mk_ident (id ^ "_struct") in
       let id_d = mk_ident (id ^ "_domain") in
@@ -275,7 +276,7 @@ let reduce_frame fs =
   in
   let rec process f = match f with
     | Atom (App (Frame, x :: a :: lst, _)) ->
-      (*TODO this emulates the old version*)
+      (*this emulates the old version*)
       let rec process_frame lst = match lst with
         | f :: f' :: rest ->
           if f <> f' then (expand_frame x a f f') :: (process_frame rest)

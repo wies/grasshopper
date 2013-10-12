@@ -34,8 +34,9 @@ let mk_axiom name f =
   mk_forall ~ann:[Comment name] bvars f 
 
 let mk_axiom2 f =
-  let fvars = fv f in
-  let bvars = List.filter (fun v -> IdSet.mem (fst v) fvars) all_vars in
+  let fvars = sorted_free_vars f in
+  let bvars = IdSrtSet.elements fvars
+            (*List.filter (fun v -> IdSet.mem (fst v) fvars) all_vars*) in
   mk_forall bvars f 
 
 let f x = mk_read fld1 x

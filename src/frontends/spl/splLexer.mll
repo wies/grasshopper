@@ -72,7 +72,7 @@ rule token = parse
 | '{' { LBRACE }
 | '}' { RBRACE }
 | ":=" { COLONEQ }
-|  "::" { COLONCOLON }
+| "::" { COLONCOLON }
 | ':' { COLON }
 | ';' { SEMICOLON }
 | ',' { COMMA }

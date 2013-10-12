@@ -49,8 +49,19 @@ let apply args f = match args with
   | _ -> failwith "expected first argument of type Set Loc (convention)."
 
 let parsed_to_symbol (name, args, structure, heap) =
-  let f1 = FormUtil.mk_comment ("structure of " ^ name) (FormTyping.typing (bound_id_to_var structure)) in
-  let f2 = FormUtil.mk_comment ("domain of " ^ name) (FormTyping.typing (bound_id_to_var heap)) in
+  let arg_tpe =
+    List.fold_left
+      (fun acc (id, tpe) -> IdMap.add id (FormUtil.mk_free_const ~srt:tpe id) acc)
+      IdMap.empty
+      args
+  in
+  let fill_types f =
+    let f = bound_id_to_var f in
+    let f = FormUtil.subst_consts arg_tpe f in
+      FormTyping.typing f
+  in
+  let f1 = FormUtil.mk_comment ("structure of " ^ name) (fill_types structure) in
+  let f2 = FormUtil.mk_comment ("domain of " ^ name) (fill_types heap) in
   let a = (List.length args) - 1 in
     assert(a >= 0);
     { sym = name;
@@ -79,7 +90,7 @@ let pred_to_form p args domain =
 
 (* the predefined symbols *)
 
-let predefined =
+let without_fp =
   [
     "emp(domain: set loc){" ^
         " true," ^
@@ -90,9 +101,6 @@ let predefined =
     "lseg(domain: set loc, next: fld loc, x: loc, y: loc){ " ^
         "reach(next, x, y), " ^
         "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
-    "lseg_set(domain: set loc, next: fld loc, x: loc, y: loc, s: set loc){ " ^
-        "reach(next, x, y), " ^
-        "s == domain && (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
     "slseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc){ " ^
         "reach(next, x, y) &&"^
         " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2), " ^
@@ -141,6 +149,79 @@ let predefined =
         "reach(next, x1, y1) && ((x1 == y1 && x2 == y2) || (prev(x1) == x2 && next(y2) == y1 && y2 in domain)) && (forall l1: loc, l2: loc. (next(l1) == l2 && l1 in domain && l2 in domain) ==> prev(l2) == l1) && (forall l1: loc. l1 in domain ==> (data(l1) >= lb && data(l1) <= ub)) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2)," ^
         "forall l1: loc. l1 in domain <=> (btwn(next, x1, l1, y1) && l1 != y1) }"
   ]
+
+let with_fp =
+  [
+    "lseg_set(domain: set loc, next: fld loc, x: loc, y: loc, s: set loc){ " ^
+        "reach(next, x, y), " ^
+        "s == domain && (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
+    "slseg_set(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, s: set loc){ " ^
+        "reach(next, x, y) &&"^
+        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2), " ^
+        "s == domain && (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
+    "rslseg_set(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, s: set loc){ " ^
+        "reach(next, x, y) &&"^
+        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) >= data(l2), " ^
+        "s == domain && (forall l1: loc.  l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
+    "uslseg_set(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, s: set loc){ " ^
+        "reach(next, x, y) &&"^
+        " (forall l1: loc. l1 in domain ==> data(l1) >= v) &&"^
+        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2),"^
+        "s == domain && (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
+    "lslseg_set(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, s: set loc){" ^
+        "reach(next, x, y) &&"^
+        " (forall l1: loc. l1 in domain ==> data(l1) <= v) &&"^
+        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2),"^
+        "s == domain && (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
+    "bslseg_set(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, w: int, s: set loc){" ^
+        "reach(next, x, y) &&"^
+        " (forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w)) &&"^
+        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2)," ^
+        "s == domain && (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }"
+  ]
+
+let with_content =
+  [
+    "slseg_content(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, s: set int){ " ^
+        "reach(next, x, y) &&"^
+        " (forall l1: loc. l1 in domain <=> data(l1) in s) &&"^
+        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2), " ^
+        " (forall l1: loc. data(l1) in s <=> (btwn(next, x, l1, y) && l1 != y)) &&"^
+        " (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
+    "rslseg_content(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, s: set int){ " ^
+        "reach(next, x, y) &&"^
+        " (forall l1: loc. l1 in domain <=> data(l1) in s) &&"^
+        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) >= data(l2), " ^
+        " (forall l1: loc.  l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
+    "uslseg_content(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, s: set int){ " ^
+        "reach(next, x, y) &&"^
+        " (forall l1: loc. l1 in domain ==> data(l1) >= v) &&"^
+        " (forall l1: loc. l1 in domain <=> data(l1) in s) &&"^
+        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2),"^
+        " (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
+    "lslseg_content(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, s: set int){" ^
+        "reach(next, x, y) &&"^
+        " (forall l1: loc. l1 in domain ==> data(l1) <= v) &&"^
+        " (forall l1: loc. l1 in domain <=> data(l1) in s) &&"^
+        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2),"^
+        " (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
+    "bslseg_content(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, w: int, s: set int){" ^
+        "reach(next, x, y) &&"^
+        " (forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w)) &&"^
+        " (forall l1: loc. l1 in domain <=> data(l1) in s) &&"^
+        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2)," ^
+        " (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }"
+  ]
+
+let misc = [
+    "sorted_set(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, w: int, s: set loc){" ^
+        "reach(next, x, y) &&"^
+        " (forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w)) &&"^
+        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y) && l1 != l2) ==> data(l1) < data(l2)," ^
+        "s == domain && (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }"
+  ]
+
+let predefined = without_fp @ with_fp @ with_content @ misc
 
 (* add the predefined symbols *)
 let _ =

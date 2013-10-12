@@ -219,7 +219,8 @@ and pr_sort ppf = function
   | FreeSrt id -> pr_ident ppf id
   (*| Fld s -> fprintf ppf "@[<4>%s@ %a@]" fld_sort_string pr_sort0 s*)
   | Fld s -> fprintf ppf "@[<4>%s%a@]" fld_sort_string pr_sort0 s
-  | Set s -> fprintf ppf "@[<4>%s@ %a@]" set_sort_string pr_sort0 s
+  (*| Set s -> fprintf ppf "@[<4>%s@ %a@]" set_sort_string pr_sort0 s*)
+  | Set s -> fprintf ppf "@[<4>%s%a@]" set_sort_string pr_sort0 s
 		
 let pr_var ppf (x, srt) =
   fprintf ppf "@[<1>(%a@ %a)@]" pr_ident x pr_sort0 srt

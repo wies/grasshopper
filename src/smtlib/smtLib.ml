@@ -136,7 +136,9 @@ let read session =
 
 let declare_sorts session =
   writeln session ("(declare-sort " ^ loc_sort_string ^ " 0)");
-  writeln session ("(declare-sort " ^ set_sort_string ^ " 1)");
+  (*writeln session ("(declare-sort " ^ set_sort_string ^ " 1)");*)
+  writeln session ("(declare-sort " ^ set_sort_string ^ loc_sort_string ^ " 0)");
+  writeln session ("(declare-sort " ^ set_sort_string ^ int_sort_string ^ " 0)");
   if !Config.encode_fields_as_arrays then
     writeln session ("(define-sort " ^ fld_sort_string ^ " (X) (Array Loc X))")
   else 
