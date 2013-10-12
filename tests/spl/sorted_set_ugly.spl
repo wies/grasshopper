@@ -19,16 +19,21 @@ procedure traverse(lst: Node, ghost lb: int, ghost ub: int, ghost content: set<N
   requires sorted_set(lst, null, lb, ub, content);
   ensures sorted_set(lst, null, lb, ub, content);
 {
+  if (lst == null) {
+    return ;
+  }
+
   var curr: Node;
   curr := lst;
   var c1: set<Node>, c2: set<Node>;
   c1 := content;
   c2 := set<Node>();
 
-  while (curr != null) 
+  while (curr.next != null) 
     invariant (curr != null &*& sorted_set(lst, curr, lb, curr.data, c2) &*& sorted_set(curr, null, curr.data, ub, c1))
            || (curr == null &*& sorted_set(lst, curr, lb, ub, c2) &*& c1 == set<Node>());
     invariant content == c1 ++ c2;
+    invariant curr.data <= ub && lb <= curr.data;
   {
     c2 := c2 ++ set<Node>(curr);
     c1 := c1 -- set<Node>(curr);
@@ -53,11 +58,11 @@ procedure mem(lst: Node, val: Node,
   c1 := content;
   c2 := set<Node>();
 
-  //while (curr != null && curr.data < val.data) 
-  while (curr != null && curr != val) 
-    invariant sorted_set(lst, curr, lb, curr.data-1, c2)
-          &*& sorted_set(curr, null, curr.data, ub, c1)
+  while (curr.next != null && curr != val && curr.data <= val.data) 
+    invariant (sorted_set(lst, curr, lb, curr.data, c2)
+          &*& sorted_set(curr, null, curr.data, ub, c1))
           &+& acc(val);
+    invariant curr.data <= ub && lb <= curr.data;
     invariant content == c1 ++ c2;
     invariant !(val in c2);
   {
@@ -87,17 +92,20 @@ procedure insert(lst: Node, elt: Node,
     c2 := set<Node>();
     while (curr.next != null && curr.next.data <= elt.data) 
       invariant curr != null;
-      invariant sorted_set(lst, curr, lb, curr.data, c1);
-      invariant sorted_set(curr, null, curr.data, ub, c2);
+      invariant sorted_set(lst, curr, lb, curr.data, c2);
+      invariant sorted_set(curr, null, curr.data, ub, c1);
       invariant curr.data <= elt.data;
+      invariant curr.data <= ub && lb <= curr.data;
       invariant content == c1 ++ c2;
     {
       curr := curr.next;
       c2 := c2 ++ set(curr);
       c1 := c1 -- set(curr);
     }
-    elt.next := curr.next;
-    curr.next := elt;
+    if (curr != elt) {
+      elt.next := curr.next;
+      curr.next := elt;
+    }
     return lst;
   }
 }
@@ -120,18 +128,26 @@ procedure remove(lst: Node, value: Node,
   c1 := content;
   c2 := set<Node>();
 
-  while (curr != null && curr.data < value.data) 
-    invariant sorted_set(lst, prv, lb, prv.data, c1)
-          &*& sorted_set(curr, null, curr.data, ub, c2)
+  while (curr.next != null && curr.data <= value.data) 
+    invariant (sorted_set(lst, prv, lb, prv.data, c2)
+          &*& sorted_set(curr, null, curr.data, ub, c1))
           &+& acc(value);
     invariant prv.next |-> curr;
     invariant content == c1 ++ c2;
+    invariant prv.data <= ub && lb <= prv.data;
+    invariant curr.data <= ub && lb <= curr.data;
     invariant !(value in c2);
   {
-    c2 := c2 ++ set(curr);
-    c1 := c1 -- set(curr);
-    prv := curr;
-    curr := curr.next;
+    if (curr == value) {
+      c1 := c1 -- set(curr);
+      prv := curr.next;
+      curr := prv.next;
+    } else {
+      c2 := c2 ++ set(curr);
+      c1 := c1 -- set(curr);
+      prv := curr;
+      curr := curr.next;
+    }
   }
 
   if (curr != null && curr == value) {

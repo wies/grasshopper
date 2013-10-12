@@ -217,7 +217,7 @@ let misc = [
     "sorted_set(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, w: int, s: set loc){" ^
         "reach(next, x, y) &&"^
         " (forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w)) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y) && l1 != l2) ==> data(l1) < data(l2)," ^
+        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2)," ^
         "s == domain && (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }"
   ]
 
