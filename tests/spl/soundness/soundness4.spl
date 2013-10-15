@@ -19,6 +19,8 @@ predicate lslseg(x: Node, y: Node, ub: int) {
   slseg(x, y) && llseg(x, y, ub)
 }
 
+//loop was underconstrained:
+//  forgot the constraints that link the last elements
 
 procedure sls_pairwise_sum(x: Node, y: Node) returns (z: Node)
   requires slseg(x, null) &*& slseg(y, null);

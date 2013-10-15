@@ -6,6 +6,9 @@ predicate lseg(x: Node, y: Node) {
   x == y || x != y &*& acc(x) &*& lseg(x.next, y)
 }
 
+// filtering a SLL
+// null-dereference, forgot to move to the next before the free.
+
 procedure soundness2(x: Node) returns (y: Node)
   requires lseg(x, null);
   ensures lseg(y, null);

@@ -12,6 +12,7 @@ predicate bslseg(x: Node, y: Node, lb: int, ub: int) {
   x == y || x != y &*& acc(x) &*& lb <= x.data &*& x.data <= ub &*& bslseg(x.next, y, x.data, ub)
 }
 
+//quicksort: the postcondition of split was too weak and gave a panhandle list.
 
 procedure predecessor(start: Node, end: Node, ghost lb: int, ghost ub: int) returns (prv: Node)
     requires blseg(start, end, lb, ub);
