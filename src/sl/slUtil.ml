@@ -133,18 +133,26 @@ let free_consts f =
     | Atom (p, args) -> List.fold_left FormUtil.free_consts_term_acc acc args
   in fc IdSet.empty f
 
-let preds f =
-  let rec p acc = function
-    | Not f -> p acc f
-    | Or fs 
-    | And fs 
-    | SepStar fs 
-    | SepPlus fs -> List.fold_left p acc fs
-    | Atom (Pred pred, _) -> 
-        IdSet.add pred acc 
-    | _ -> acc
-  in p IdSet.empty f
+let rec fold_atoms fct acc f = match f with
+  | Not f -> fold_atoms fct acc f
+  | Or fs 
+  | And fs 
+  | SepStar fs 
+  | SepPlus fs -> List.fold_left (fold_atoms fct) acc fs
+  | Atom _ -> fct acc f
+  | _ -> acc
 
+let preds f =
+  let p acc = function
+    | Atom (Pred pred, _) -> IdSet.add pred acc 
+    | _ -> acc
+  in fold_atoms p IdSet.empty f
+
+let preds_full f =
+  let p acc = function
+    | Atom (Pred _, _) as a -> SlSet.add a acc 
+    | _ -> acc
+  in fold_atoms p SlSet.empty f
 
 let rec get_clauses f = match f with
   | Form.BoolOp (Form.And, lst) ->  List.flatten (List.map get_clauses lst)
