@@ -1,86 +1,12 @@
 open Form
 open FormUtil
 open Prog
-
-(** Auxiliary variables for desugaring SL specifications *)
-let alloc_id = fresh_ident "Alloc"
-let alloc_set = mk_free_const ~srt:(Set Loc) alloc_id
-
-let init_alloc_id = fresh_ident "Alloc_init"
-let init_alloc_set = mk_free_const ~srt:(Set Loc) init_alloc_id
-
-let final_alloc_id = fresh_ident "Alloc_final"
-let final_alloc_set = mk_free_const ~srt:(Set Loc) final_alloc_id
-
-let final_alloc_callee_id = fresh_ident "AllocCallee_final"
-let final_alloc_callee_set = mk_free_const ~srt:(Set Loc) final_alloc_callee_id
-
-let init_alloc_callee_id = fresh_ident "AllocCallee_init"
-let init_alloc_callee_set = mk_free_const ~srt:(Set Loc) init_alloc_callee_id
-
-let frame_id = mk_ident "AllocCaller"
-let frame_set = mk_free_const ~srt:(Set Loc) frame_id
-
-let pred_struct (name, num) = (name ^ "_struct", num)
-let pred_domain (name, num) = (name ^ "_domain", num)
+open AuxNames
+open Reachify
 
 (** Desugare SL specification to FOL specifications. 
  ** Assumes that loops have been transformed to tail-recursive procedures. *)
 let elim_sl prog =
-  let mk_set_decl id pos =
-    { var_name = id;
-      var_orig_name = name id;
-      var_sort = Set Loc;
-      var_is_ghost = true;
-      var_is_implicit = false;
-      var_is_aux = true;
-      var_pos = pos;
-    }
-  in
-  let compile_pred =
-    let dom_id = mk_ident "Dom" in
-    let dom_set = mk_free_const ~srt:(Set Loc) dom_id in
-    fun acc pred ->
-      match pred.pred_body.spec_form with
-      | SL f ->
-          (try
-          let dom_decl = mk_set_decl dom_id pred.pred_pos in
-          let args = 
-            List.map (fun id ->
-              let decl = IdMap.find id pred.pred_locals in
-              mk_free_const ~srt:decl.var_sort id) 
-              pred.pred_formals
-          in
-          let formals = pred.pred_formals in
-          let locals = IdMap.add dom_id dom_decl pred.pred_locals in
-          let str_body, dom_body = 
-            Symbols.pred_to_form pred.pred_name args dom_set in
-          let pred_str =
-            { pred_name = pred_struct pred.pred_name;
-              pred_formals = formals @ [dom_id];
-              pred_locals = locals;
-              pred_returns = [];
-              pred_body = { pred.pred_body with spec_form = FOL str_body };
-              pred_pos = pred.pred_pos;
-              pred_accesses = IdSet.empty;
-            }
-          in
-          let pred_dom = 
-            { pred_str with 
-              pred_name = pred_domain pred.pred_name;
-              pred_formals = pred.pred_formals;
-              pred_returns = [dom_id];
-              pred_body = { pred.pred_body with spec_form = FOL dom_body } 
-            }
-          in
-          IdMap.add pred_dom.pred_name pred_dom
-            (IdMap.add pred_str.pred_name pred_str acc)
-         with Not_found -> 
-           (*ProgError.error pred.pred_pos 
-             ("Unable to translate predicate " ^ (str_of_ident pred.pred_name)))*)
-           acc)
-      | FOL _ -> acc
-  in
   let pred_to_form p args dom =
     FormUtil.mk_pred (pred_struct p) (args @ [dom]),
     FormUtil.mk_eq dom (mk_free_fun ~srt:(Set Loc) (pred_domain p) args)
