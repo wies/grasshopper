@@ -7,10 +7,6 @@ open Reachify
 (** Desugare SL specification to FOL specifications. 
  ** Assumes that loops have been transformed to tail-recursive procedures. *)
 let elim_sl prog =
-  let pred_to_form p args dom =
-    FormUtil.mk_pred (pred_struct p) (args @ [dom]),
-    FormUtil.mk_eq dom (mk_free_fun ~srt:(Set Loc) (pred_domain p) args)
-  in
   let compile_proc proc =
     (* add auxiliary set variables *)
     let new_locals = 

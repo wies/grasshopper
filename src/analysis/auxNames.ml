@@ -33,3 +33,7 @@ let mk_set_decl id pos =
     var_is_aux = true;
     var_pos = pos;
   }
+  
+let pred_to_form p args dom =
+  mk_pred (pred_struct p) (args @ [dom]),
+  mk_eq dom (mk_free_fun ~srt:(Set Loc) (pred_domain p) args)
