@@ -6,7 +6,7 @@ open Prog
 exception Compile_pred_failure of string
 
 let dom_id = fresh_ident "Dom"
-let dom_set = mk_free_const ~srt:(Set Loc) dom_id
+let dom_set = mk_loc_set dom_id
 
 let compile_pred pred =
   match pred.pred_body.spec_form with
@@ -118,7 +118,7 @@ let verify_generalization pred_sl pred_dom pred_str =
   (* induction proof *)
   (* base case *)
   begin
-    let sl_base = ToGrass.to_grass pred_to_form dom_id base in
+    let sl_base = ToGrass.to_grass pred_to_form dom_set base in
     let base_query = smk_and [sl_base; fol_neg] in
     let base_res =
       Prover.check_sat
@@ -129,7 +129,7 @@ let verify_generalization pred_sl pred_dom pred_str =
   end;
   (* induction step *)
   begin
-    let sl_step = ToGrass.to_grass pred_to_form dom_id step in
+    let sl_step = ToGrass.to_grass pred_to_form dom_set step in
     let step_query = smk_and [sl_step; fol_neg] in
     let step_res =
       Prover.check_sat
@@ -142,7 +142,7 @@ let verify_generalization pred_sl pred_dom pred_str =
   (* induction proof *)
   (* base case *)
   begin
-    let sl_base = ToGrass.to_grass_negated pred_to_form dom_id base in
+    let sl_base = ToGrass.to_grass_negated pred_to_form dom_set base in
     let emp = mk_eq dom_set (mk_empty (Some (Set Loc))) in
     let base_query = smk_and [emp; sl_base; fol_pos] in
     let base_res =
@@ -154,9 +154,9 @@ let verify_generalization pred_sl pred_dom pred_str =
   end;
   (* induction step *)
   begin
-    let sl_step = ToGrass.to_grass_negated pred_to_form dom_id step in
+    let sl_step = ToGrass.to_grass_negated pred_to_form dom_set step in
     let ind_hyp_1 = (* the rest is fine *)
-      let dom1 = fresh_ident (name dom_id) in
+      let dom1 = mk_loc_set (fresh_ident (name dom_id)) in
       let call = inductive_call pred_sl step in
       let sl = ToGrass.to_grass pred_to_form dom1 call in
       let args = match call with
@@ -165,7 +165,7 @@ let verify_generalization pred_sl pred_dom pred_str =
       in
       let map = List.fold_left2
         (fun acc a b -> IdMap.add a b acc)
-        (IdMap.add dom_id (mk_free_const ~srt:(Set Loc) dom1) IdMap.empty)
+          (IdMap.add dom_id dom1 IdMap.empty)
         pred_sl.pred_formals
         args
       in
@@ -180,7 +180,7 @@ let verify_generalization pred_sl pred_dom pred_str =
         mk_and [sl;fol]
     in
     let ind_hyp_2 = (* exclude the base case *)
-      ToGrass.to_grass_negated pred_to_form dom_id base
+      ToGrass.to_grass_negated pred_to_form dom_set base
     in
     let step_query = smk_and [sl_step; fol_pos; ind_hyp_1; ind_hyp_2] in
     (*

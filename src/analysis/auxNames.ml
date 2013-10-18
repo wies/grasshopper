@@ -4,22 +4,16 @@ open Prog
 
 (** Auxiliary variables for desugaring SL specifications *)
 let alloc_id = fresh_ident "Alloc"
-let alloc_set = mk_free_const ~srt:(Set Loc) alloc_id
+let alloc_set = mk_loc_set alloc_id
 
-let init_alloc_id = fresh_ident "Alloc_init"
-let init_alloc_set = mk_free_const ~srt:(Set Loc) init_alloc_id
+let footprint_id = fresh_ident "FP"
+let footprint_set = mk_loc_set footprint_id
 
-let final_alloc_id = fresh_ident "Alloc_final"
-let final_alloc_set = mk_free_const ~srt:(Set Loc) final_alloc_id
+let footprint_caller_id = fresh_ident "FP_Caller"
+let footprint_caller_set = mk_loc_set footprint_caller_id
 
-let final_alloc_callee_id = fresh_ident "AllocCallee_final"
-let final_alloc_callee_set = mk_free_const ~srt:(Set Loc) final_alloc_callee_id
-
-let init_alloc_callee_id = fresh_ident "AllocCallee_init"
-let init_alloc_callee_set = mk_free_const ~srt:(Set Loc) init_alloc_callee_id
-
-let frame_id = mk_ident "AllocCaller"
-let frame_set = mk_free_const ~srt:(Set Loc) frame_id
+let final_footprint_caller_id = fresh_ident "FP_Caller_final"
+let final_footprint_caller_set = mk_loc_set final_footprint_caller_id
 
 let pred_struct (name, num) = (name ^ "_struct", num)
 let pred_domain (name, num) = (name ^ "_domain", num)

@@ -370,9 +370,9 @@ let elim_state prog =
               sm1, locals, mk_assume_cmd sf pp.pp_pos
           | Call cc ->
               let to_term_subst_merge sm locals term_subst =
-                IdMap.fold (fun id1 id2 sm -> 
+                IdMap.fold (fun id1 id2 term_subst -> 
                   let decl = IdMap.find id2 locals in
-                  IdMap.add id1 (mk_free_const ~srt:decl.var_sort id2) sm)
+                  IdMap.add id1 (mk_free_const ~srt:decl.var_sort id2) term_subst)
                   sm term_subst
               in
               let to_term_subst sm locals = to_term_subst_merge sm locals IdMap.empty in
@@ -456,16 +456,19 @@ let elim_state prog =
                 assume_precond_implicits
               in
               (* compute mod set and final substitution *)
-              let mods = cc.call_lhs @ IdSet.elements (modifies_proc prog callee_decl) in
+              let global_mods = IdSet.elements (modifies_proc prog callee_decl) in
+              let mods = cc.call_lhs @ global_mods in
               let sm1, locals = fresh proc sm locals pp.pp_pos mods in
               (* compute substitution for postcondition *)
               let subst_post = 
+                (* substitute formal parameters to actual parameters *)
                 let subst_wo_old_mods_formals =
                   List.fold_left 
                     (fun sm id ->
                       IdMap.add (oldify id) (IdMap.find id subst_pre) sm)
                     subst_pre callee_decl.proc_formals
                 in
+                (* substitute formal return parameters to actual return parameters *)
                 let subst_wo_old_mods = 
                   List.fold_left2
                     (fun sm id rtn_id -> 
@@ -475,18 +478,19 @@ let elim_state prog =
                     callee_decl.proc_returns 
                     (List.map (fun id -> IdMap.find id sm1) cc.call_lhs)
                 in
+                (* I currently have no idea what this was supposed to do. Is this redundant? *)
                 let subst_wo_old =
                   List.fold_left (fun sm id -> 
                     IdMap.add id (IdMap.find id (to_term_subst sm1 locals)) sm)
                     subst_wo_old_mods
                     mods
                 in
-                List.fold_left 
-                  (fun subst_post id ->
-                    let decl = IdMap.find (IdMap.find id sm1) locals in
+                (* substitute old versions of global variables *)
+                IdMap.fold 
+                  (fun id decl subst_post ->
                     let old_id = try IdMap.find id sm with Not_found -> id in
                     IdMap.add (oldify id) (mk_free_const ~srt:decl.var_sort old_id) subst_post)
-                  subst_wo_old mods
+                   prog.prog_vars subst_wo_old
               in
               (* assume updated postcondition *)
               let assume_postcond =

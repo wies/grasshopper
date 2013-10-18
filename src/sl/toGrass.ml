@@ -1,8 +1,10 @@
+(* Translate SL formulas to GRASS formulas *)
+
 open Sl
 open Symbols
 open SlUtil
 
-(* translation to grass *)
+
 let one_and_rest lst =
   let rec process acc1 acc2 lst = 
     match lst with
@@ -21,45 +23,25 @@ let fresh_existentials f =
 
 (* translation that keeps the heap separated from the pointer structure *)
 let to_form pred_to_form set_fct domain f =
-  let fd why d = FormUtil.fresh_ident ("?" ^ why ^ "_" ^(fst d)) in
+  let fresh_dom d = FormUtil.fresh_ident ("?" ^ fst d) in
   let rec process_sep pol d f = 
     match f with
     | Pure p -> 
         ([p, FormUtil.mk_empty (Some (Form.Set Form.Loc))], FormUtil.mk_true)
-(* The following optimization for doubly-linked lists is deprecated
-    | Atom (Pred s, [x1; x2; y1; y2]) when s = ("dlseg", 0) ->
-        let domain = FormUtil.fresh_ident (fst d) in
-        let part1 = reach x1 y1 in
-        let part3 =
-          Axioms.mk_axiom ("dll_" ^ Form.str_of_ident domain)
-            (FormUtil.mk_implies (FormUtil.mk_and [ mk_domain domain Axioms.loc1;
-                                                    mk_domain domain Axioms.loc2;
-                                                    FormUtil.mk_eq (FormUtil.mk_read fpts Axioms.loc1) Axioms.loc2])
-               (FormUtil.mk_eq (FormUtil.mk_read fprev_pts Axioms.loc2) Axioms.loc1)) in
-        let part4 =
-          FormUtil.mk_or [
-          FormUtil.mk_and [ FormUtil.mk_eq x1 y1; FormUtil.mk_eq x2 y2];
-          FormUtil.mk_and [ FormUtil.mk_eq (FormUtil.mk_read fprev_pts x1) x2;
-                            FormUtil.mk_eq (FormUtil.mk_read fpts y2) y1;
-                            mk_domain domain y2] ]
-        in
-        ( [FormUtil.mk_and ((if pol then [part3] else []) @ [part1;  part4]), mk_loc_set domain, IdSet.singleton domain],
-          (get_symbol "dlseg").heap (mk_loc_set domain) [x1; x2; y1; y2]
-         ) *)
     | Atom (Emp, _) ->
         [FormUtil.mk_true, FormUtil.mk_empty (Some (Form.Set Form.Loc))], FormUtil.mk_true
     | Atom (Region, [t]) ->
-        let domain = FormUtil.fresh_ident (fst d) in
+        let domain = fresh_dom d in
         [FormUtil.mk_true, mk_loc_set_var domain], 
         FormUtil.mk_eq (mk_loc_set_var domain) t
     | Atom (Pred p, args) -> 
-        let domain = mk_loc_set_var (FormUtil.fresh_ident (fst d)) in
+        let domain = mk_loc_set_var (fresh_dom d) in
         let structure, footprint = pred_to_form p args domain in
         [structure, domain], footprint
     | (SepStar forms as f)
     | (SepPlus forms as f) ->
         (*let ds = List.map (fun _ -> fd "sep" domain) forms in*)
-        let translated = List.map (process_sep pol (fd "sep" d)) forms in
+        let translated = List.map (process_sep pol (FormUtil.fresh_ident (fst d))) forms in
         let translated_1, translated_2 = List.split translated in
         let translated_product = 
           match translated_1 with
@@ -70,7 +52,7 @@ let to_form pred_to_form set_fct domain f =
                 (List.map (fun t -> [t]) ts) tss
         in
         let process (otranslated_1, translated_2) translated =
-          let domain = FormUtil.fresh_ident (fst d) in
+          let domain = fresh_dom d in
           let translated_1, dsc = List.split translated in
           (*let dsc = List.map mk_loc_set ds in*)
           let separation1 = FormUtil.mk_eq (mk_loc_set_var domain) (FormUtil.mk_union dsc) in
@@ -113,25 +95,9 @@ let to_form pred_to_form set_fct domain f =
       let (structure, heap) = process_bool (not pol) form in
         (FormUtil.mk_not structure, heap)
     | sep ->
-      let d' = fd "leaf" domain in
+      let d' = FormUtil.fresh_ident "X" in
       let struct_part, heap_part = process_sep pol d' sep in
-      let process (str, d) =
-        (* The following optimization for doubly-linked lists is deprecated
-        let dll_axiom = 
-          let in_domain =
-            IdSet.fold
-              (fun domain acc ->
-                FormUtil.smk_or [acc; FormUtil.mk_and[ mk_domain domain Axioms.loc1; mk_domain domain Axioms.loc2]])
-              domains
-              FormUtil.mk_false
-          in
-          let ax_name = "dll_" ^ Form.str_of_ident domain in
-          Axioms.mk_axiom ax_name
-            (FormUtil.mk_implies
-               (FormUtil.mk_and [in_domain; FormUtil.mk_eq (FormUtil.mk_read fpts Axioms.loc1) Axioms.loc2])
-               (FormUtil.mk_eq (FormUtil.mk_read fprev_pts Axioms.loc2) Axioms.loc1))
-        in *)
-        FormUtil.mk_and [str; set_fct d (mk_loc_set domain)]
+      let process (str, d) = FormUtil.mk_and [str; set_fct d domain]
       in
       FormUtil.smk_or (List.map process struct_part), heap_part
   in

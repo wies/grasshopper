@@ -453,11 +453,11 @@ let modifies_basic_cmd = function
   | Assign ac -> id_set_of_list ac.assign_lhs
   | Havoc hc -> id_set_of_list hc.havoc_args
   | New nc -> IdSet.singleton nc.new_lhs
+  | Call cc -> id_set_of_list cc.call_lhs
   | Dispose _ 
   | Assume _
   | Assert _
-  | Return _ 
-  | Call _ -> IdSet.empty
+  | Return _ -> IdSet.empty
 
 let accesses_spec_form_acc acc sf =
   IdSet.union acc 
@@ -537,12 +537,13 @@ let mk_return_cmd args pos =
 let mk_call_cmd ?(prog=None) lhs name args pos =
   let cc = {call_lhs = lhs; call_name = name; call_args = args} in
   let accs = accesses_basic_cmd (Call cc) in
+  let mods = modifies_basic_cmd (Call cc) in
   let pp = mk_ppoint pos in
   match prog with
-  | None -> Basic (Call cc, { pp with pp_accesses = accs }) 
+  | None -> Basic (Call cc, { pp with pp_accesses = accs; pp_modifies = mods }) 
   | Some prog -> 
       let proc = find_proc prog name in
-      let mods = modifies_proc prog proc in
+      let mods = IdSet.union (modifies_proc prog proc) mods in
       let accs = IdSet.union (accesses_proc prog proc) accs in
       let pp1 = 
         { pp with 

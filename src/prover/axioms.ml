@@ -132,7 +132,7 @@ let reach_axioms () =
 
 let null_axioms () =
   let nll = mk_eq (f mk_null) mk_null in
-  if !Config.with_null_axioms then [mk_axiom "read_null" nll] else []
+  [mk_axiom "read_null" nll]
 
 
 (* entry point axioms: when entering a part of the heap, used for SL*)

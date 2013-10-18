@@ -132,6 +132,8 @@ let mk_reach fld t1 t2 =
   
 let mk_empty srt = mk_app ?srt:srt Empty []
 
+let mk_loc_set id = mk_free_const ~srt:(Set Loc) id
+
 let mk_setenum ts = 
   let srt = match sort_ofs ts with
   | Some esrt -> Some (Set esrt)

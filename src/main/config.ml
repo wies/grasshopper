@@ -1,7 +1,5 @@
 (* for the axioms generation *)
 let with_reach_axioms = ref true
-let with_alloc_axioms = ref true
-let with_null_axioms = ref true
 let keep_sets = ref true
 let encode_fields_as_arrays = ref false
 let with_ep = ref true
@@ -42,9 +40,7 @@ let cmd_options =
    ("-stats", Arg.Set print_stats, "Print statistics");
    ("-model", Arg.Set_string model_file, "Produce counterexample model for the first failing VC");
    ("-noreach", Arg.Clear with_reach_axioms, "Omit axioms for reachability predicates");
-   ("-noalloc", Arg.Clear with_alloc_axioms, "Omit axioms for alloc predicate");
-   ("-nonull", Arg.Clear with_null_axioms, "Omit axioms for null");
-   ("-noep", Arg.Clear with_ep, "Omit EP");
+   ("-noep", Arg.Clear with_ep, "Omit entry points");
    ("-elimsets", Arg.Clear keep_sets, "Eliminate sets in FOL reduction");
    ("-usearrays", Arg.Set encode_fields_as_arrays, "Use arrays to encode fields");
    ("-noinst", Arg.Clear instantiate, "Let the prover deal with the quantifiers without prior instantiation");
