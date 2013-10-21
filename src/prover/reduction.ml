@@ -1,3 +1,5 @@
+(** Reduction from GRASS to EPR + Stratified Sorts *)
+
 open Util
 open Form
 open FormUtil
@@ -274,28 +276,42 @@ let reduce_frame fs =
     in
       smk_and (List.map self_frame pred_before_after)
   in
-  let rec process f = match f with
+  let rec process f fields = match f with
     | Atom (App (Frame, x :: a :: lst, _)) ->
       (*this emulates the old version*)
-      let rec process_frame lst = match lst with
+      let rec process_frame (frames, fields) = function
         | f :: f' :: rest ->
-          if f <> f' then (expand_frame x a f f') :: (process_frame rest)
-          else process_frame rest
-        | [] -> []
+          if f <> f' 
+          then process_frame ((expand_frame x a f f') :: frames, (f, f') :: fields) rest
+          else process_frame (frames, fields) rest
+        | [] -> frames, fields
         | _ -> failwith "frame with wrong arity"
       in
-      let reach_frame = mk_and (process_frame lst) in
+      let frames, fields1 = process_frame ([], fields) lst in
+      let reach_frame = mk_and frames in
       let pred_frame = expand_frame2 x a lst in
         (*print_endline ("self_framing: " ^ (string_of_form pred_frame));*)
-        if !Config.optSelfFrame then
-          smk_and [reach_frame; pred_frame]
-        else
-          reach_frame
-    | Atom t -> Atom t
-    | BoolOp (op, fs) -> BoolOp (op, List.map process fs)
-    | Binder (b, vs, f, a) -> Binder (b, vs, process f, a)
+        if !Config.optSelfFrame 
+        then smk_and [reach_frame; pred_frame], fields1
+        else reach_frame, fields1
+    | BoolOp (op, fs) -> 
+        let fs1, fields1 = 
+          List.fold_right (fun f (fs1, fields1) ->
+            let f1, fields1 = process f fields1 in
+            f1 :: fs1, fields1)
+            fs ([], fields)
+        in
+        BoolOp (op, fs1), fields1
+    | Binder (b, vs, f, a) ->
+        let f1, fields1 = process f fields in
+        Binder (b, vs, f1, a), fields1
+    | _ -> f, fields        
   in
-    List.map process fs
+  List.fold_right  
+    (fun f (fs1, fields1) ->
+      let f1, fields1 = process f fields1 in
+      f1 :: fs1, fields1)
+    fs ([], [])
   
 let open_axioms openCond axioms = 
   if !Config.instantiate then
@@ -395,19 +411,7 @@ let reduce_ep fs =
   let ep_ax1 = instantiate_with_terms true ep_ax classes in
   fs, ep_ax1, gts_eps
 
-(** Adds instantiated theory axioms for graph reachability to formula f.
- ** Assumes that f is typed *)
-let reduce_reach fs gts =
-  let basic_pt_flds = TermSet.filter (has_sort (Fld Loc) &&& is_free_const) gts in
-  (* instantiate null axioms *)
-  let classes =  CongruenceClosure.congr_classes fs gts in
-  (* let _ = List.iter (List.iter (fun t -> print_endline (string_of_term t))) classes in *)
-  let null_ax = open_axioms isFld (Axioms.null_axioms ()) in
-  let null_ax1 = instantiate_with_terms false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
-  let fs1 = null_ax1 @ fs in
-  let gts = TermSet.union (ground_terms (smk_and null_ax1)) gts in
-  let classes = CongruenceClosure.congr_classes fs1 gts in
-  (* propagate read terms *)
+let propagate_field_reads fs gts framed_fields =
   let fld_partition, fld_map, fields = 
     let max, fld_map, fields = 
       TermSet.fold (fun t (n, fld_map, fields) -> match t with
@@ -424,15 +428,25 @@ let reduce_reach fs gts =
       | Binder (_, _, f, _) -> collect_eq partition f
       | f -> partition
     in
-    let fld_partition0 = List.fold_left collect_eq (Puf.create max) fs1 in
-    TermSet.fold (fun t partition -> 
-      match t with
-      | App (Write, fld1 :: _, _) as fld2 -> 
-          Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
-      | _ -> partition)
-      gts fld_partition0,
-    fld_map,
-    fields
+    let fld_partition0 = List.fold_left collect_eq (Puf.create max) fs in
+    let fld_partition1 =
+      TermSet.fold (fun t partition -> 
+        match t with
+        | App (Write, fld1 :: _, _) as fld2 -> 
+            Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
+        | _ -> partition)
+      gts fld_partition0
+    in
+    let fld_partition =
+      List.fold_left 
+        (fun partition (fld1, fld2) ->
+          match range_sort_of_field fld1 with
+          | Int when !Config.stratify -> partition
+          | _ -> 
+              Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map))
+        fld_partition1 framed_fields
+    in
+    fld_partition, fld_map, fields
   in
   let partition_of fld =
     let p = 
@@ -440,21 +454,33 @@ let reduce_reach fs gts =
       with Not_found -> failwith ("did not find field " ^ (string_of_term fld)) 
     in
     let res = TermSet.filter (fun fld1 -> Puf.find fld_partition (TermMap.find fld1 fld_map) = p) fields in
-    (*print_endline ("partition of " ^ string_of_term fld);*)
+    (* print_endline ("partition of " ^ string_of_term fld); *)
     res
   in
-  let gts1 = 
-    (*let _ = print_endline "All terms: "; TermSet.iter (fun t -> print_endline (string_of_term t)) gts in*)
-    TermSet.fold
-      (fun t gts1 -> match t with
-      | App (Read, [fld; arg], _) 
-      | App (Write, [fld; arg; _], _) -> 
-          (*let _ = print_endline ("Processing " ^ string_of_term t) in*)
-          TermSet.fold (fun fld1 gts1 -> 
-            TermSet.add (mk_read fld1 arg) gts1) (partition_of fld) gts1
-      | _ -> gts1)
-      gts (TermSet.union gts (ground_terms (smk_and null_ax1)))
-  in
+  TermSet.fold
+    (fun t gts1 -> match t with
+    | App (Read, [fld; arg], _) 
+    | App (Write, [fld; arg; _], _) -> 
+        TermSet.fold (fun fld1 gts1 -> 
+          TermSet.add (mk_read fld1 arg) gts1) (partition_of fld) gts1
+    | _ -> gts1)
+    gts gts,
+  partition_of
+
+
+(** Adds instantiated theory axioms for graph reachability to formula f.
+ ** Assumes that f is typed *)
+let reduce_reach fs gts framed_fields =
+  let basic_pt_flds = TermSet.filter (has_sort (Fld Loc) &&& is_free_const) gts in
+  (* instantiate null axioms *)
+  let classes =  CongruenceClosure.congr_classes fs gts in
+  (* let _ = List.iter (List.iter (fun t -> print_endline (string_of_term t))) classes in *)
+  let null_ax = open_axioms isFld (Axioms.null_axioms ()) in
+  let null_ax1 = instantiate_with_terms false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
+  let fs1 = null_ax1 @ fs in
+  let gts = TermSet.union (ground_terms (smk_and null_ax1)) gts in
+  (* propagate read terms *)
+  let gts1, partition_of = propagate_field_reads fs1 gts framed_fields in
   let classes1 = CongruenceClosure.congr_classes fs1 gts1 in
   (* generate instances of all write axioms *)
   let write_terms = 
@@ -527,13 +553,13 @@ let reduce f =
   let f1 = nnf f in
   let fs1 = split_ands [] [f1] in
   let fs11 = massage_field_reads fs1 in
-  let fs2 = reduce_frame fs11 in
+  let fs2, framed_fields = reduce_frame fs11 in
   let fs2 = List.map reduce_exists fs2 in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
   let fs3, ep_axioms, gts = reduce_ep fs2 (*fs2, [], TermSet.empty*) in
   let fs31 = factorize_axioms (split_ands [] fs3) in
   let fs4, gts1 = reduce_sets (fs31 @ ep_axioms) gts in
-  let fs5, gts2 = reduce_reach fs4 gts1 in
+  let fs5, gts2 = reduce_reach fs4 gts1 framed_fields in
   let fs6 = (*Simplify.simplify*) (reduce_remaining fs5 gts2) in
   (* the following is a (probably stupid) heuristic to sort the formulas for improving the running time *)
   let fs7 = 

@@ -51,6 +51,11 @@ let rec sort_ofs = function
       |	None -> sort_ofs ts
       |	s -> s
 
+let range_sort_of_field f =
+  match sort_of f with
+  | Some (Fld srt) -> srt
+  | _ -> failwith "untyped or illtyped field expression"
+
 let element_sort_of_set s =
   match sort_of s with
   | Some (Set srt) -> srt

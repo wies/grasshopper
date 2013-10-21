@@ -9,6 +9,12 @@ open Reachify
 (** Desugare SL specification to FOL specifications. 
  ** Assumes that loops have been transformed to tail-recursive procedures. *)
 let elim_sl prog =
+  let preds = fold_preds compile_pred_acc_new IdMap.empty prog in
+  let globals =
+    let alloc_decl = mk_set_decl alloc_id dummy_position in
+    IdMap.add alloc_id alloc_decl prog.prog_vars
+  in
+  let prog = { prog with prog_preds = preds; prog_vars = globals } in  
   let compile_proc proc =
     (* add auxiliary set variables *)
     let new_locals = 
@@ -141,18 +147,7 @@ let elim_sl prog =
     (* update all procedure calls and return commands in body *)
     let rec compile_stmt = function
       | (Call cc, pp) ->
-          let cc1 = 
-            { cc with 
-              call_lhs = cc.call_lhs @ [footprint_id];
-              call_args = cc.call_args @ [footprint_set];
-            } 
-          in
-          let pp1 = 
-            { pp with 
-              pp_modifies = IdSet.add footprint_id pp.pp_modifies; 
-              pp_accesses = IdSet.add footprint_id pp.pp_accesses }
-          in
-          Basic (Call cc1, pp1)
+          mk_call_cmd ~prog:(Some prog) (cc.call_lhs @ [footprint_id]) cc.call_name (cc.call_args @ [footprint_set]) pp.pp_pos
       | (Return rc, pp) ->
           let rc1 = { return_args = rc.return_args @ [mk_union [footprint_caller_set; footprint_set]] } in
           Basic (Return rc1, pp)
@@ -202,8 +197,6 @@ let elim_sl prog =
       proc_body = body;
     } 
   in
-  let preds = fold_preds compile_pred_acc_new IdMap.empty prog in
-  let prog = { prog with prog_preds = preds } in
   { prog with prog_procs = IdMap.map compile_proc prog.prog_procs }
 
 (** Annotate safety checks for heap accesses *)
@@ -249,16 +242,10 @@ let annotate_heap_checks prog =
         ann_term_checks rc.return_args (Basic (Return rc, pp))
     | (bc, pp) -> Basic (bc, pp)
   in
-  let globals =
-    let alloc_decl = mk_set_decl alloc_id dummy_position in
-    IdMap.add alloc_id alloc_decl prog.prog_vars
-  in
   let annotate_proc proc = 
     { proc with proc_body = Util.optmap (map_basic_cmds annotate) proc.proc_body } 
   in
-  { prog with 
-    prog_vars = globals;
-    prog_procs = IdMap.map annotate_proc prog.prog_procs; }
+  { prog with prog_procs = IdMap.map annotate_proc prog.prog_procs; }
 
 (** Eliminate all new and dispose commands.
  ** Assumes that footprint sets have been introduced. *)

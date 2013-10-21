@@ -29,5 +29,7 @@ procedure quicksort(x: Node, y: Node, ghost lb: int, ghost ub: int)
     pivot := split(x, y, lb, ub);
     quicksort(x, pivot, lb, pivot.data);
     quicksort(pivot.next, y, pivot.data, ub);
+  } else {
+    
   }
 }
