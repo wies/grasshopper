@@ -6,7 +6,7 @@ let input_file = ref ""
 
 let usage_message =
   "Usage:\n  " ^ Sys.argv.(0) ^ 
-  " [-v] [-noinst] <input file>\n"
+  " <input file> [options]\n"
 
 let cmd_line_error msg =
   Arg.usage Config.cmd_options usage_message;
