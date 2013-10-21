@@ -1,3 +1,5 @@
+(** SMT-LIB 2 interface *)
+
 open Logger
 open Form
 open FormUtil
@@ -137,8 +139,13 @@ let read session =
 let declare_sorts session =
   writeln session ("(declare-sort " ^ loc_sort_string ^ " 0)");
   (*writeln session ("(declare-sort " ^ set_sort_string ^ " 1)");*)
-  writeln session ("(declare-sort " ^ set_sort_string ^ loc_sort_string ^ " 0)");
-  writeln session ("(declare-sort " ^ set_sort_string ^ int_sort_string ^ " 0)");
+  if !Config.backend_solver_has_set_theory then begin
+    writeln session ("(define-sort " ^ set_sort_string ^ loc_sort_string ^ " (Set " ^ loc_sort_string ^ "))");
+    writeln session ("(define-sort " ^ set_sort_string ^ int_sort_string ^ " (Set " ^ int_sort_string ^ "))")
+  end else begin
+    writeln session ("(declare-sort " ^ set_sort_string ^ loc_sort_string ^ " 0)");
+    writeln session ("(declare-sort " ^ set_sort_string ^ int_sort_string ^ " 0)")
+  end;
   if !Config.encode_fields_as_arrays then
     writeln session ("(define-sort " ^ fld_sort_string ^ " (X) (Array Loc X))")
   else 
@@ -213,6 +220,8 @@ let push session =
 
 let is_interpreted sym = match sym with
   | Read | Write -> !Config.encode_fields_as_arrays
+  | Empty | SetEnum | Union | Inter | Diff | Elem | SubsetEq ->
+      !Config.backend_solver_has_set_theory
   | Eq | Gt | Lt | GtEq | LtEq | IntConst _ | BoolConst _
   | Plus | Minus | Mult | Div | UMinus -> true
   | _ -> false

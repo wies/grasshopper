@@ -1,3 +1,5 @@
+(** Translation of program with SL specifications to a pure GRASS program *)
+
 open Form
 open FormUtil
 open Prog
@@ -100,7 +102,7 @@ let elim_sl prog =
       mk_framecond final_footprint_caller_postcond ::
       (* null is not allocated *)
       mk_framecond (mk_and [mk_subseteq final_footprint_caller_set alloc_set; 
-                            mk_not (smk_elem mk_null final_footprint_caller_set)]) ::
+                            mk_not (smk_elem mk_null alloc_set)]) ::
       (* frame axioms for modified fields
        * in this version the frame contains all the pairs of fields both unprimed and primed
        *)

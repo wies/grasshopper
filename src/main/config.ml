@@ -3,6 +3,7 @@ let with_reach_axioms = ref true
 let keep_sets = ref true
 let encode_fields_as_arrays = ref false
 let with_ep = ref true
+let backend_solver_has_set_theory = ref false
 
 (* Flag that controls whether we are instantiating the axioms or relying on the prover. *)
 let instantiate = ref true
@@ -42,7 +43,8 @@ let cmd_options =
    ("-noreach", Arg.Clear with_reach_axioms, "Omit axioms for reachability predicates");
    ("-noep", Arg.Clear with_ep, "Omit entry points");
    ("-elimsets", Arg.Clear keep_sets, "Eliminate sets in FOL reduction");
-   ("-usearrays", Arg.Set encode_fields_as_arrays, "Use arrays to encode fields");
+   ("-smtsets", Arg.Set backend_solver_has_set_theory, "Use set theory of SMT solver to encode sets");
+   ("-smtarrays", Arg.Set encode_fields_as_arrays, "Use array theory of SMT solver to encode fields");
    ("-noinst", Arg.Clear instantiate, "Let the prover deal with the quantifiers without prior instantiation");
    ("-nostratify", Arg.Clear stratify, "Also instantiate the stratified parts");
    ("-dumpvcs", Arg.Set dump_smt_queries, "Dump SMT-LIB 2 files for the generated VCs");

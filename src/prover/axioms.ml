@@ -176,12 +176,13 @@ let set_axioms () =
     mk_iff (mk_elem loc1 (mk_setenum [loc2])) 
       (mk_eq loc1 loc2)
   in
-  [mk_axiom "def of empty" empty;
-   mk_axiom "def of union" union;
-   mk_axiom "def of inter" inter;
-   mk_axiom "def of diff" diff;
-   mk_axiom "def of enum" setenum]
-
+  if !Config.backend_solver_has_set_theory then []
+  else [mk_axiom "def of empty" empty;
+        mk_axiom "def of union" union;
+        mk_axiom "def of inter" inter;
+        mk_axiom "def of diff" diff;
+        mk_axiom "def of enum" setenum]
+      
 let extract_axioms fs =
   List.partition (fun f -> IdSet.empty <> fv f) fs
 

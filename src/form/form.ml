@@ -147,8 +147,8 @@ let str_of_symbol = function
   | Empty -> "emptyset"
   | SetEnum -> "setenum"
   | Union -> "union"
-  | Inter -> "inter"
-  | Diff -> "diff"
+  | Inter -> "intersection"
+  | Diff -> "setminus"
   (* predicate symbols *)
   | Eq -> "="
   | LtEq -> "<="
@@ -156,8 +156,8 @@ let str_of_symbol = function
   | Lt -> "<"
   | Gt -> ">"
   | Btwn -> "Btwn"
-  | Elem -> "Elem"
-  | SubsetEq -> "Subseteq"
+  | Elem -> "in"
+  | SubsetEq -> "subseteq"
   | Frame -> "Frame"
   (* uninterpreted symbols *)
   | FreeSym id -> str_of_ident id
