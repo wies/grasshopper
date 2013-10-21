@@ -127,6 +127,7 @@ and expr =
   | PredApp of ident * exprs * pos
   | Forall of ident * expr * expr * pos
   | Access of expr * pos
+  | BtwnPred of expr * expr * expr * expr * pos
   | UnaryOp of op * expr * pos
   | BinaryOp of expr * op * expr * pos
   | Ident of ident * pos
@@ -142,6 +143,7 @@ let pos_of_expr = function
   | New (_, p)
   | Dot (_, _, p)
   | Access (_, p)
+  | BtwnPred (_, _, _, _, p)
   | Forall (_, _, _, p)
   | ProcCall (_, _, p)
   | PredApp (_, _, p)

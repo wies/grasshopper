@@ -4,6 +4,8 @@ open Sl
 open Form
 open SplSyntax
 
+let pred_arg_mismatch_error pos name expected =
+    ProgError.error pos (Printf.sprintf "Predicate %s expects %d argument(s)" name expected)
 
 let resolve_names cus =
   let lookup_id init_id tbl pos =
@@ -135,6 +137,12 @@ let resolve_names cus =
             Forall (id, e1, f1, pos)
         | ProcCall (("acc", _), [arg], pos) ->
             Access (re tbl arg, pos)
+        | ProcCall (("Btwn", _), args, pos) ->
+            let args1 = List.map (re tbl) args in
+            (match args1 with
+            | [fld; x; y; z] ->
+                BtwnPred (fld, x, y, z, pos)
+            | _ -> pred_arg_mismatch_error pos "Btwn" 4)
         | ProcCall (init_id, args, pos) ->
             let id = lookup_id init_id tbl pos in
             let args1 = List.map (re tbl) args in
@@ -323,6 +331,9 @@ let flatten_exprs cus =
           aux_var, (aux1 @ [call]), locals
       | Access (arg, pos) as e ->
           check_side_effects [arg];
+          e, aux, locals
+      | BtwnPred (fld, x, y, z, pos) as e ->
+          check_side_effects [fld; x; y; z];
           e, aux, locals
       | PredApp (init_id, args, pos) as e->
           List.iter check_side_effects args;
@@ -553,6 +564,15 @@ let convert cus =
               SL_form (SlUtil.mk_region t)
           | NullType -> ProgError.error pos "Cannot access null."
           | ty -> failwith "unexpected type")
+      | BtwnPred (fld, x, y, z, pos) ->
+          let tfld, fld_ty = extract_term locals UniversalType fld in
+          (match fld_ty with
+          | FieldType (id, StructType id1) when id = id1 ->
+              let tx, _ = extract_term locals (StructType id) x in
+              let ty, _ = extract_term locals (StructType id) y in
+              let tz, _ = extract_term locals (StructType id) z in
+              FOL_form (FormUtil.mk_btwn tfld tx ty tz)
+          | _ -> type_error (pos_of_expr fld) "reference field" (ty_str fld_ty))
       | Forall (id, e, f, pos) ->
           let e1, ty = extract_term locals (SetType UniversalType) e in
           (match ty with
@@ -571,8 +591,7 @@ let convert cus =
           let ts = 
             try List.map2 (extract_term locals) tys es
             with Invalid_argument _ -> 
-              ProgError.error pos 
-                (Printf.sprintf "Predicate %s expects %d argument(s)" (fst id) (List.length tys))
+              pred_arg_mismatch_error pos (fst id) (List.length tys)
           in SL_form (SlUtil.mk_pred id (List.map fst ts))
       | BinaryOp (e1, OpEq, e2, _) ->
           (match convert_expr locals e1 with

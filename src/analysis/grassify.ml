@@ -134,7 +134,7 @@ let elim_sl prog =
           all_fields
           []
       in
-      mk_framecond (mk_frame_lst init_footprint_set footprint_caller_set fields_for_frame) :: []
+      mk_framecond (mk_frame_lst init_footprint_set init_alloc_set fields_for_frame) :: []
     in
     (* update all procedure calls and return commands in body *)
     let rec compile_stmt = function

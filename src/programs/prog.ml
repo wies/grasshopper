@@ -447,7 +447,8 @@ let modifies_proc prog proc =
       (fun id -> IdMap.mem id prog.prog_vars)
       (if !Config.optFieldMod then (modifies cmd)
        else(IdSet.union (accesses cmd) (modifies cmd)))
-  | None -> IdSet.empty
+  | None -> 
+      IdMap.fold (fun id _ acc -> IdSet.add id acc) prog.prog_vars IdSet.empty
 
 let modifies_basic_cmd = function
   | Assign ac -> id_set_of_list ac.assign_lhs
