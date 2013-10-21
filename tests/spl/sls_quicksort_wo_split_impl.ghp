@@ -1,0 +1,90 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+
+predicate blseg(x: Node, y: Node, lb: int, ub: int) {
+  x == y || x != y &*& acc(x) &*& lb <= x.data &*& x.data <= ub &*& blseg(x.next, y, lb, ub)
+}
+
+predicate bslseg(x: Node, y: Node, lb: int, ub: int) {
+  x == y || x != y &*& acc(x) &*& lb <= x.data &*& x.data <= ub &*& bslseg(x.next, y, x.data, ub)
+}
+
+
+procedure predecessor(start: Node, end: Node, ghost lb: int, ghost ub: int, ghost edata: int, ghost enext: Node) returns (prv: Node)
+    requires blseg(start, end, lb, ub);
+    requires start != end;
+    requires (end.data |-> edata &*& end.next == enext) || end == null;
+    ensures blseg(start, prv, lb, ub);
+    ensures acc(prv) &*& prv.next == end;
+    ensures prv != end;
+    ensures prv.data >= lb &*& prv.data <= ub;
+    ensures (end.data |-> edata &*& end.next == enext) || end == null;
+{
+    var prv: Node;
+    prv := start;
+    while (prv.next != end)
+        invariant blseg(start, prv, lb, ub);
+        invariant blseg(prv, end, lb, ub);
+        invariant prv != end;
+        invariant prv.data >= lb &*& prv.data <= ub;
+    {
+        prv := prv.next;
+    }
+    return prv;
+}
+
+procedure split(lst: Node, tsl: Node, lb: int, ub: int, ghost tsldata: int, ghost tslnext: Node) returns (res: Node)
+    requires blseg(lst, tsl, lb, ub) &*& lst != tsl;
+    requires (tsl.data |-> tsldata &*& tsl.next == tslnext) || tsl == null;
+    ensures  blseg(lst, res, lb, res.data);
+    ensures  blseg(res, tsl, res.data, ub) &*& res != tsl;
+    ensures  res.data >= lb &*& res.data <= ub;
+    ensures  (tsl.data |-> tsldata &*& tsl.next == tslnext) || tsl == null;
+{
+    var pivot: Node, start: Node, end: Node;
+    pivot := predecessor(lst, tsl, lb, ub, tsldata, tslnext);
+    end := pivot;
+    start := lst;
+    while (start != end)
+        invariant blseg(lst, start, lb, pivot.data);
+        invariant blseg(start, end, lb, ub);
+        invariant blseg(end, pivot, pivot.data, ub);
+        invariant pivot.next |-> tsl; 
+        invariant pivot.data >= lb;
+        invariant pivot.data <= ub;
+    {
+        if (start.data <= pivot.data) {
+            start := start.next;
+        } else if (end.data > pivot.data) {
+            end := predecessor(start, end, lb, ub, end.data, end.next);
+        } else {
+            var tmp: int;
+            tmp := start.data;
+            start.data := end.data;
+            end.data := tmp;
+        }
+    }
+    var tmp2: int;
+    tmp2 := pivot.data;
+    pivot.data := end.data;
+    end.data := tmp2;
+    return end;
+}
+
+
+procedure quicksort(lst: Node, tsl: Node, ghost lb: int, ghost ub: int, ghost tsldata: int, ghost tslnext: Node)
+    requires blseg(lst, tsl, lb, ub);
+    requires (tsl.data |-> tsldata &*& tsl.next == tslnext) || tsl == null;
+    ensures  bslseg(lst, tsl, lb, ub);
+    ensures  (tsl.data |-> tsldata &*& tsl.next == tslnext) || tsl == null;
+{
+    if (lst != tsl && lst.next != tsl) {
+      var pivot: Node;
+      pivot := split(lst, tsl, lb, ub, tsldata, tslnext);
+      quicksort(lst, pivot, lb, pivot.data, pivot.data, pivot.next);
+      quicksort(pivot.next, tsl, pivot.data, ub, tsldata, tslnext);
+    }
+}
