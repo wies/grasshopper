@@ -9,7 +9,11 @@ open Reachify
 (** Desugare SL specification to FOL specifications. 
  ** Assumes that loops have been transformed to tail-recursive procedures. *)
 let elim_sl prog =
-  let preds = fold_preds compile_pred_acc_new IdMap.empty prog in
+  let preds =
+    if !Config.predefPreds
+    then fold_preds compile_pred_acc IdMap.empty prog
+    else fold_preds compile_pred_acc_new IdMap.empty prog
+  in
   let globals =
     let alloc_decl = mk_set_decl alloc_id dummy_position in
     IdMap.add alloc_id alloc_decl prog.prog_vars

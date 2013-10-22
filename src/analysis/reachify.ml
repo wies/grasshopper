@@ -8,6 +8,7 @@ exception Compile_pred_failure of string
 let dom_id = fresh_ident "Dom"
 let dom_set = mk_loc_set dom_id
 
+(* fallback version that goes looking into the repository of predefined structures *)
 let compile_pred pred =
   match pred.pred_body.spec_form with
   | SL f ->
@@ -143,7 +144,7 @@ let verify_generalization pred_sl pred_dom pred_str =
   (* base case *)
   begin
     let sl_base = ToGrass.to_grass_negated pred_to_form dom_set base in
-    let emp = mk_eq dom_set (mk_empty (Some (Set Loc))) in
+    let emp = mk_eq dom_set (mk_empty (Some (Set Loc))) in (* TODO DZ: most certainly not correct *)
     let base_query = smk_and [emp; sl_base; fol_pos] in
     let base_res =
       Prover.check_sat
@@ -235,9 +236,52 @@ let compile_pred_new pred = match pred.pred_body.spec_form with
           | x :: _ -> x
           | [] -> raise (Compile_pred_failure "could not find the end of the segment")
       in
-      (* TODO additional constraints on data, etc *)
+      (* additional interpreted predicates *)
+      let unary_predicates =
+        (* terms where the only argument that changes between calls is ind_var *)
+        let base_args_call_args = List.combine pred.pred_formals ind_step_args in
+        let constant_args =
+          List.filter
+            (fun (id, term) -> match term with
+              | App (FreeSym id2, [], _) -> id == id2
+              | _ -> false )
+            base_args_call_args
+        in
+        let ind_id =
+          let set = (free_consts_term ind_var) in
+            if IdSet.cardinal set <> 1 then
+              raise (Compile_pred_failure "could not find id of the term used in the induction");
+            IdSet.choose set
+        in
+        let allowed = 
+          List.fold_left
+            (fun acc id -> IdSet.add id acc)
+            (IdSet.singleton ind_id)
+            (fst (List.split constant_args))
+        in
+        let rec get_pure_conjuncts f = match f with
+          | Sl.And lst | Sl.SepStar lst | Sl.SepPlus lst -> Util.flat_map get_pure_conjuncts lst
+          | Sl.Pure f -> [f]
+          | _ -> []
+        in
+        let pure_conjuncts = get_pure_conjuncts induction_step in
+        let unary =
+          List.filter
+            (fun f ->
+              let fc = free_consts f in
+                IdSet.is_empty (IdSet.diff fc allowed))
+            pure_conjuncts
+        in
+        let srt = (IdMap.find ind_id pred.pred_locals).var_sort in
+        if srt <> Loc then 
+          raise (Compile_pred_failure "expected induction in type Loc");
+        let var = mk_var ~srt:srt ind_id in
+        let pred = subst_consts (IdMap.add ind_id var IdMap.empty) (smk_and unary) in
+          mk_forall [(ind_id, srt)] pred
+      in
+      (* TODO additional constraints on data, binary preds, etc *)
       let additional_cstr =
-        []
+        [unary_predicates]
       in
       (* make the body of the new preds *)
       let str_body =

@@ -16,6 +16,8 @@ let dump_smt_queries = ref false
 let verify = ref true
 (* Flag that controls whether to stop after the 1st VCs that cannot be checked. *)
 let robust = ref false
+(* Flag that controls whether predefined predicates only are used (heuristic to infer them is default) *)
+let predefPreds = ref true
 
 let dump_ghp = ref (-1)
 
@@ -49,6 +51,8 @@ let cmd_options =
    ("-nostratify", Arg.Clear stratify, " Instantiate quantifiers that satisfy stratified sort restrictions");
    ("-noOptFieldMod", Arg.Clear optFieldMod, " Disable mod set analysis optimization for fields");
    ("-noOptSelfFrame", Arg.Clear optSelfFrame, " Disable generation of self-framing clauses for SL predicates");
+   ("-predefPreds", Arg.Set predefPreds, " Disable heuritics to translate SL pred to GRASS");
+   ("-heuristicTranslation", Arg.Clear predefPreds, " Enable heuritics to translate SL pred to GRASS");
    ("-stats", Arg.Set print_stats, " Print statistics");
    ("-x", Arg.Set experimental, " Enable some experimental feature");
    ("-v", Arg.Unit Debug.set_debug, " Display verbose messages");
