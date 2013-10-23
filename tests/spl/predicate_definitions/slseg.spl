@@ -1,0 +1,13 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+predicate uslseg(x: Node, y: Node, lb: int) {
+  x == y || x != y &*& acc(x) &*& lb <= x.data &*& uslseg(x.next, y, x.data)
+}
+
+predicate slseg(x: Node, y: Node) {
+  x == y || x != y &*& acc(x) &*& uslseg(x.next, y, x.data)
+}
+

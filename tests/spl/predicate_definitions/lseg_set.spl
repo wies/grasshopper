@@ -1,0 +1,9 @@
+struct Node {
+  var next: Node;
+}
+
+predicate lseg_set(x: Node, y: Node, X: set<Node>) {
+  x == y && X == set<Node>() ||
+  x != y &*& x in X &*& acc(x) &*& lseg_set(x.next, y, X -- set(x))
+}
+

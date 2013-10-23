@@ -1,0 +1,10 @@
+struct Node {
+  var next: Node;
+  var prev: Node;
+  var data: int;
+}
+
+predicate bdlseg(x: Node, u: Node, y: Node, v: Node, lb: int, ub: int) {
+  x == y && u == v || 
+  x != y &*& x.prev == u &*& acc(x) &*& bdlseg(x.next, x, y, v, lb, ub) &*& lb <= x.data &*& x.data <= ub
+}

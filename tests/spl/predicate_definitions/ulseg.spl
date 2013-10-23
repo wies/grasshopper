@@ -1,0 +1,8 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+predicate ulseg(x: Node, y: Node, lb: int) {
+  x == y || x != y &*& acc(x) &*& lb <= x.data &*& ulseg(x.next, y, lb)
+}

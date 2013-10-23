@@ -115,6 +115,26 @@ let verify_generalization pred_sl pred_dom pred_str =
   let base, step = base_case_ind_step pred_sl sl_spec in
   let fol_pos = smk_and [dom_spec; str_spec] in
   let fol_neg = smk_and [dom_spec; mk_not str_spec] in
+  (* induction hyp *)
+  let dom1 = mk_loc_set (fresh_ident (name dom_id)) in
+  let mk_fol args =
+    let map = List.fold_left2
+      (fun acc a b -> IdMap.add a b acc)
+        (IdMap.add dom_id dom1 IdMap.empty)
+      pred_sl.pred_formals
+      args
+    in
+      subst_consts map fol_pos 
+  in
+  let call = inductive_call pred_sl step in
+  let induc_hyp_fol =
+    let args = match call with
+      | Sl.Atom (Sl.Pred id, args) -> args
+      | _ -> assert false
+    in
+      mk_fol args
+  in
+  let induc_hyp_sl = ToGrass.to_grass pred_to_form dom1 call in
   (* SOUNDNESS: inductive def ⇒ generalization *)
   (* induction proof *)
   (* base case *)
@@ -131,7 +151,7 @@ let verify_generalization pred_sl pred_dom pred_str =
   (* induction step *)
   begin
     let sl_step = ToGrass.to_grass pred_to_form dom_set step in
-    let step_query = smk_and [sl_step; fol_neg] in
+    let step_query = smk_and [sl_step; induc_hyp_fol; fol_neg] in
     let step_res =
       Prover.check_sat
         ~session_name:("pred_gen_indc_step_1_"^(str_of_ident pred_sl.pred_name))
@@ -157,20 +177,6 @@ let verify_generalization pred_sl pred_dom pred_str =
   begin
     let sl_step = ToGrass.to_grass_negated pred_to_form dom_set step in
     let ind_hyp_1 = (* the rest is fine *)
-      let dom1 = mk_loc_set (fresh_ident (name dom_id)) in
-      let call = inductive_call pred_sl step in
-      let sl = ToGrass.to_grass pred_to_form dom1 call in
-      let args = match call with
-        | Sl.Atom (Sl.Pred id, args) -> args
-        | _ -> assert false
-      in
-      let map = List.fold_left2
-        (fun acc a b -> IdMap.add a b acc)
-          (IdMap.add dom_id dom1 IdMap.empty)
-        pred_sl.pred_formals
-        args
-      in
-      let fol = subst_consts map fol_pos in
     (*
     IdMap.iter (fun k v -> print_endline ((str_of_ident k)^" -> "^(string_of_term v))) map;
     print_smtlib_form stdout fol_pos;
@@ -178,7 +184,7 @@ let verify_generalization pred_sl pred_dom pred_str =
     print_smtlib_form stdout fol;
     print_newline ();
     *)
-        mk_and [sl;fol]
+        mk_and [induc_hyp_sl;induc_hyp_fol]
     in
     let ind_hyp_2 = (* exclude the base case *)
       ToGrass.to_grass_negated pred_to_form dom_set base
@@ -277,7 +283,7 @@ let compile_pred_new pred = match pred.pred_body.spec_form with
           raise (Compile_pred_failure "expected induction in type Loc");
         let var = mk_var ~srt:srt ind_id in
         let pred = subst_consts (IdMap.add ind_id var IdMap.empty) (smk_and unary) in
-          mk_forall [(ind_id, srt)] pred
+          mk_forall [(ind_id, srt)] (mk_implies (mk_elem var dom_set) pred)
       in
       (* TODO additional constraints on data, binary preds, etc *)
       let additional_cstr =

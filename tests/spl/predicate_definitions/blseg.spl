@@ -1,0 +1,9 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+
+predicate blseg(x: Node, y: Node, lb: int, ub: int) {
+  x == y || x != y &*& acc(x) &*& lb <= x.data &*& x.data <= ub &*& blseg(x.next, y, lb, ub)
+}
