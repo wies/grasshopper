@@ -69,7 +69,7 @@ let elim_sl prog =
       let precond = mk_spec_form (FOL f_eq_init_footprint) name msg pos in
       let fp_name = "initial footprint of " ^ str_of_ident proc.proc_name in
       let free_precond = 
-        FOL (mk_and [mk_subseteq footprint_caller_set alloc_set; mk_not (mk_elem mk_null footprint_set)])
+        FOL (mk_and [mk_subseteq footprint_caller_set alloc_set; mk_not (mk_elem mk_null alloc_set)])
       in
       { precond with spec_form_negated = Some f_notin_frame }, 
       mk_free_spec_form free_precond fp_name None pos

@@ -313,11 +313,11 @@ let reduce_frame fs =
       f1 :: fs1, fields1)
     fs ([], [])
   
-let open_axioms openCond axioms = 
+let open_axioms open_cond axioms = 
   if !Config.instantiate then
     let rec open_axiom = function
       | Binder (b, vs, f, a) -> 
-          Binder (b, List.filter (~~ (openCond f)) vs, f, a)
+          Binder (b, List.filter (~~ (open_cond f)) vs, f, a)
       | BoolOp (op, fs) -> BoolOp (op, List.map open_axiom fs)
       | f -> f
     in List.map open_axiom axioms

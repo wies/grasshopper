@@ -51,8 +51,8 @@ let cmd_options =
    ("-nostratify", Arg.Clear stratify, " Instantiate quantifiers that satisfy stratified sort restrictions");
    ("-noOptFieldMod", Arg.Clear optFieldMod, " Disable mod set analysis optimization for fields");
    ("-noOptSelfFrame", Arg.Clear optSelfFrame, " Disable generation of self-framing clauses for SL predicates");
-   ("-predefPreds", Arg.Set predefPreds, " Disable heuritics to translate SL pred to GRASS");
-   ("-heuristicTranslation", Arg.Clear predefPreds, " Enable heuritics to translate SL pred to GRASS");
+   ("-predefPreds", Arg.Set predefPreds, " Disable heuristics to translate SL predicates to GRASS");
+   ("-heuristicTranslation", Arg.Clear predefPreds, " Enable heuristics to translate SL predicates to GRASS");
    ("-stats", Arg.Set print_stats, " Print statistics");
    ("-x", Arg.Set experimental, " Enable some experimental feature");
    ("-v", Arg.Unit Debug.set_debug, " Display verbose messages");
