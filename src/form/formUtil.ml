@@ -246,7 +246,7 @@ let smk_or fs = smk_op Or fs
 
 (** {6 Normal form computation} *)
 
-(** compute negation normal form of a formula *)
+(** Compute negation normal form of a formula *)
 let rec nnf = function
   | BoolOp (Not, [BoolOp (Not, [f])]) -> nnf f
   | BoolOp (Not, [BoolOp (op, fs)]) -> 
@@ -257,8 +257,8 @@ let rec nnf = function
   | Binder (b, vs, f, a) -> Binder (b, vs, nnf f, a)
   | f -> f
   
-(** compute conjunctive normal form of a formula *)
-(* Todo: avoid exponential blowup *)
+(** Compute conjunctive normal form of a formula *)
+(* Todo: avoid exponential blow-up *)
 let rec cnf = 
   let rec cnf_and acc = function
     | [] -> mk_and acc
@@ -635,6 +635,20 @@ let propagate_exists f =
   in
   let f1, vs = prop f in 
   mk_exists vs f1
+
+(** Convert universal quantifiers into existentials where possible. *)
+(** Assumes that [f] is in negation normal form. *)
+(*
+let convert_foralls f =
+  let rec cf = function
+    | Binder (Forall, bvs, BoolOp (And, fs), a) ->
+        let fs1 = List.map (fun f -> cf (Binder (Forall, bvs, f, a))) fs in
+        mk_and fs1
+    | Binder (Exists, bvs, BoolOp (Or, fs), a) ->
+        
+  in
+  cf f
+*)
 
 (** Skolemize formula [f]. 
  ** Assumes that [f] is in negation normal form. *)
