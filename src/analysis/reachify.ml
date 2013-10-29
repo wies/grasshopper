@@ -73,6 +73,17 @@ let base_case_ind_step pred f =
       end
     | _ -> raise (Compile_pred_failure "cannot identify base case and induction step.")
 
+let has_inductive_call pred f =
+  let preds = SlUtil.preds_full f in
+  let candidates =
+    Sl.SlSet.filter
+      (fun p -> match p with
+        | Sl.Atom (Sl.Pred id, _) -> id = pred.pred_name
+        | _ -> false )
+      preds
+  in
+    Sl.SlSet.cardinal candidates > 0
+
 let inductive_call pred f =
   let preds = SlUtil.preds_full f in
   let candidates =
@@ -204,126 +215,239 @@ let verify_generalization pred_sl pred_dom pred_str =
     if step_res <> Some false then raise (Compile_pred_failure "pred_gen_step_2")
   end
 
+type inductive_definition_case = {
+    idc_pred: pred_decl;
+    idc_switch: form;
+    idc_pure_part: form list;
+    idc_footprint: term list;
+    idc_induction_term: (term list) option; (* just the args *)
+    idc_other_term: (ident * (term list)) option
+  }
+
+(* TODO better strucutre of the cases:
+ * - there is a switch predicates (x=y, x≠y)
+ * - footprint
+ * - pure part
+ * - inductive call
+ * - call to other predicates
+ * - ...
+ *)
+let isolate_cases pred f =
+  let rec decompose case = match case with
+    | Sl.SepStar lst ->
+      List.fold_left
+        (fun (a1,b1,c1) (a2,b2,c2) -> (a1 @ a2, b1 @ b2, c1 @ c2) )
+        ([],[],[])
+        (List.map decompose lst)
+    | Sl.And lst ->
+      List.fold_left
+        (fun (pure,sep,preds) (p,s,pr) ->
+          if sep = [] && preds = [] then (p@pure,s@sep,pr@preds)
+          else if s = [] && preds = [] then (p@pure,s@sep,pr@preds)
+          else raise (Compile_pred_failure "partial support for Sl.And")
+        )
+        ([],[],[])
+        (List.map decompose lst)
+    | Sl.Pure f -> ([f],[],[])
+    | Sl.Atom (Sl.Region, args) -> ([],args,[])
+    | Sl.Atom (Sl.Emp, []) -> ([],[],[])
+    | Sl.Atom (Sl.Pred p, args) -> ([],[],[(p, args)])
+    | other -> raise (Compile_pred_failure ("do not support '"^(Sl.string_of_form other)^"' for the moment"))
+  in
+  let find_switches cases =
+    (*simple version that works if every cases have the same switches*)
+    let pures =
+      List.map
+        (fun (a,_,_) ->
+          List.fold_left
+            (fun acc t -> match t with
+              | BoolOp (Not, [t]) -> FormSet.add t acc
+              | t -> FormSet.add t acc
+            )
+            FormSet.empty
+            a
+        )
+        cases
+    in
+    let common =
+      List.fold_left
+        FormSet.inter
+        (List.hd pures)
+        (List.tl pures)
+    in
+      common
+  in
+  let make_case switches (pures, footprint, preds) =
+    let switch, pures =
+      List.partition
+        (fun f ->
+          let f2 = match f with
+            | BoolOp (Not, [t]) -> t
+            | t -> t
+          in
+            FormSet.mem f2 switches
+        )
+        pures 
+    in
+    let ind_term, other_term = match preds with
+      | [(id, args)] ->
+        if id = pred.pred_name
+        then (Some args, None)
+        else (None, Some (id, args))
+      | [] -> (None, None)
+      | _ -> raise (Compile_pred_failure "nested data structure or tree-like structure or ... not yet supported.")
+    in
+      { idc_pred = pred;
+        idc_switch = smk_and switch;
+        idc_pure_part = pures;
+        idc_footprint = footprint;
+        idc_induction_term = ind_term;
+        idc_other_term = other_term }
+  in
+    match f with
+    | Sl.Or cases ->
+      let cases = List.map decompose cases in
+      let switches = find_switches cases in
+        List.map (make_case switches) cases
+    | _ -> raise (Compile_pred_failure "cannot identify base case and induction step.")
+
+let compile_recursive pred f =
+  (* TODO adapt to the new inductive_definition_case record *)
+  let base_case, induction_step = base_case_ind_step pred f in
+  let ind_step_args =
+    match inductive_call pred induction_step with
+    | Sl.Atom (Sl.Pred id, args) -> args
+    | _ -> assert false
+  in
+  (* field over which the induction is made *)
+  let ind_fld, ind_var =
+    let candidates =
+      List.filter
+        (fun t -> match t with
+          | App (Read, [fld; x], _) -> sort_of fld = Some (Fld Loc)
+          | _ -> false)
+        ind_step_args
+    in
+      match candidates with
+      | [App (Read, [fld; x], _)] -> fld, x
+      | _ -> raise (Compile_pred_failure "...")
+  in
+  (* find the end of the segment *)
+  let end_of_segment =
+    (* TODO what about the rest ? *)
+    let rec process f = match f with
+      | Sl.And lst | Sl.SepStar lst | Sl.SepPlus lst -> Util.flat_map process lst
+      | Sl.Pure (Atom (App (Eq, [x;y], _))) ->
+        if x = ind_var then [y] 
+        else if y = ind_var then [x]
+        else []
+      | _ -> []
+    in
+    let candidates = process base_case in
+      match candidates with
+      | x :: _ -> x
+      | [] -> raise (Compile_pred_failure "could not find the end of the segment")
+  in
+  (* additional interpreted predicates *)
+  let unary_predicates =
+    (* terms where the only argument that changes between calls is ind_var *)
+    let base_args_call_args = List.combine pred.pred_formals ind_step_args in
+    let constant_args =
+      List.filter
+        (fun (id, term) -> match term with
+          | App (FreeSym id2, [], _) -> id == id2
+          | _ -> false )
+        base_args_call_args
+    in
+    let ind_id =
+      let set = (free_consts_term ind_var) in
+        if IdSet.cardinal set <> 1 then
+          raise (Compile_pred_failure "could not find id of the term used in the induction");
+        IdSet.choose set
+    in
+    let allowed = 
+      List.fold_left
+        (fun acc id -> IdSet.add id acc)
+        (IdSet.singleton ind_id)
+        (fst (List.split constant_args))
+    in
+    let rec get_pure_conjuncts f = match f with
+      | Sl.And lst | Sl.SepStar lst | Sl.SepPlus lst -> Util.flat_map get_pure_conjuncts lst
+      | Sl.Pure f -> [f]
+      | _ -> []
+    in
+    let pure_conjuncts = get_pure_conjuncts induction_step in
+    let unary =
+      List.filter
+        (fun f ->
+          let fc = free_consts f in
+            IdSet.is_empty (IdSet.diff fc allowed))
+        pure_conjuncts
+    in
+    let srt = (IdMap.find ind_id pred.pred_locals).var_sort in
+    if srt <> Loc then 
+      raise (Compile_pred_failure "expected induction in type Loc");
+    let var = mk_var ~srt:srt ind_id in
+    let pred = subst_consts (IdMap.add ind_id var IdMap.empty) (smk_and unary) in
+      mk_forall [(ind_id, srt)] (mk_implies (mk_elem var dom_set) pred)
+  in
+  (* TODO binary preds
+   * - reach(x, y, end_of_segment)
+   * - pred(x.field_1, y.field_2)
+   * - check monotonicity, how ?
+   *)
+  let binary_predicates =
+    "TODO"
+  in
+  let additional_cstr =
+    [unary_predicates]
+  in
+  (* make the body of the new preds *)
+  let str_body =
+    Axioms.mk_axiom
+      ("str_of_"^(str_of_ident pred.pred_name))
+      (mk_and ((mk_reach ind_fld ind_var end_of_segment) :: additional_cstr))
+  in
+  let dom_body =
+    Axioms.mk_axiom
+      ("dom_of_"^(str_of_ident pred.pred_name))
+      (mk_iff (mk_and [(mk_btwn ind_fld ind_var Axioms.loc1 end_of_segment);
+                       (mk_neq Axioms.loc1 end_of_segment)])
+              (mk_elem Axioms.loc1 dom_set))
+  in
+  (* package the new preds *)
+  let dom_decl = mk_set_decl dom_id pred.pred_pos in
+  let pred_str =
+    { pred_name = pred_struct pred.pred_name;
+      pred_formals = pred.pred_formals @ [dom_id];
+      pred_locals = IdMap.add dom_id dom_decl pred.pred_locals;
+      pred_returns = [];
+      pred_body = { pred.pred_body with spec_form = FOL str_body };
+      pred_pos = pred.pred_pos;
+      pred_accesses = IdSet.empty;
+    }
+  in
+  let pred_dom = 
+    { pred_str with 
+      pred_name = pred_domain pred.pred_name;
+      pred_formals = pred.pred_formals;
+      pred_returns = [dom_id];
+      pred_body = { pred.pred_body with spec_form = FOL dom_body } 
+    }
+  in
+    verify_generalization pred pred_dom pred_str;
+    [pred_str; pred_dom]
+
+let compile_nonrecursive pred f =
+  raise (Compile_pred_failure "compile_nonrecursive TODO")
+
 let compile_pred_new pred = match pred.pred_body.spec_form with
   | SL f ->
     (try
-      let base_case, induction_step = base_case_ind_step pred f in
-      let ind_step_args =
-        match inductive_call pred induction_step with
-        | Sl.Atom (Sl.Pred id, args) -> args
-        | _ -> assert false
-      in
-      (* field over which the induction is made *)
-      let ind_fld, ind_var =
-        let candidates =
-          List.filter
-            (fun t -> match t with
-              | App (Read, [fld; x], _) -> sort_of fld = Some (Fld Loc)
-              | _ -> false)
-            ind_step_args
-        in
-          match candidates with
-          | [App (Read, [fld; x], _)] -> fld, x
-          | _ -> raise (Compile_pred_failure "...")
-      in
-      (* find the end of the segment *)
-      let end_of_segment =
-        (* TODO what about the rest ? *)
-        let rec process f = match f with
-          | Sl.And lst | Sl.SepStar lst | Sl.SepPlus lst -> Util.flat_map process lst
-          | Sl.Pure (Atom (App (Eq, [x;y], _))) ->
-            if x = ind_var then [y] 
-            else if y = ind_var then [x]
-            else []
-          | _ -> []
-        in
-        let candidates = process base_case in
-          match candidates with
-          | x :: _ -> x
-          | [] -> raise (Compile_pred_failure "could not find the end of the segment")
-      in
-      (* additional interpreted predicates *)
-      let unary_predicates =
-        (* terms where the only argument that changes between calls is ind_var *)
-        let base_args_call_args = List.combine pred.pred_formals ind_step_args in
-        let constant_args =
-          List.filter
-            (fun (id, term) -> match term with
-              | App (FreeSym id2, [], _) -> id == id2
-              | _ -> false )
-            base_args_call_args
-        in
-        let ind_id =
-          let set = (free_consts_term ind_var) in
-            if IdSet.cardinal set <> 1 then
-              raise (Compile_pred_failure "could not find id of the term used in the induction");
-            IdSet.choose set
-        in
-        let allowed = 
-          List.fold_left
-            (fun acc id -> IdSet.add id acc)
-            (IdSet.singleton ind_id)
-            (fst (List.split constant_args))
-        in
-        let rec get_pure_conjuncts f = match f with
-          | Sl.And lst | Sl.SepStar lst | Sl.SepPlus lst -> Util.flat_map get_pure_conjuncts lst
-          | Sl.Pure f -> [f]
-          | _ -> []
-        in
-        let pure_conjuncts = get_pure_conjuncts induction_step in
-        let unary =
-          List.filter
-            (fun f ->
-              let fc = free_consts f in
-                IdSet.is_empty (IdSet.diff fc allowed))
-            pure_conjuncts
-        in
-        let srt = (IdMap.find ind_id pred.pred_locals).var_sort in
-        if srt <> Loc then 
-          raise (Compile_pred_failure "expected induction in type Loc");
-        let var = mk_var ~srt:srt ind_id in
-        let pred = subst_consts (IdMap.add ind_id var IdMap.empty) (smk_and unary) in
-          mk_forall [(ind_id, srt)] (mk_implies (mk_elem var dom_set) pred)
-      in
-      (* TODO additional constraints on data, binary preds, etc *)
-      let additional_cstr =
-        [unary_predicates]
-      in
-      (* make the body of the new preds *)
-      let str_body =
-        Axioms.mk_axiom
-          ("str_of_"^(str_of_ident pred.pred_name))
-          (mk_and ((mk_reach ind_fld ind_var end_of_segment) :: additional_cstr))
-      in
-      let dom_body =
-        Axioms.mk_axiom
-          ("dom_of_"^(str_of_ident pred.pred_name))
-          (mk_iff (mk_and [(mk_btwn ind_fld ind_var Axioms.loc1 end_of_segment);
-                           (mk_neq Axioms.loc1 end_of_segment)])
-                  (mk_elem Axioms.loc1 dom_set))
-      in
-      (* package the new preds *)
-      let dom_decl = mk_set_decl dom_id pred.pred_pos in
-      let pred_str =
-        { pred_name = pred_struct pred.pred_name;
-          pred_formals = pred.pred_formals @ [dom_id];
-          pred_locals = IdMap.add dom_id dom_decl pred.pred_locals;
-          pred_returns = [];
-          pred_body = { pred.pred_body with spec_form = FOL str_body };
-          pred_pos = pred.pred_pos;
-          pred_accesses = IdSet.empty;
-        }
-      in
-      let pred_dom = 
-        { pred_str with 
-          pred_name = pred_domain pred.pred_name;
-          pred_formals = pred.pred_formals;
-          pred_returns = [dom_id];
-          pred_body = { pred.pred_body with spec_form = FOL dom_body } 
-        }
-      in
-        verify_generalization pred pred_dom pred_str;
-        [pred_str; pred_dom]
+      if has_inductive_call pred f then
+        compile_recursive pred f
+      else
+        compile_nonrecursive pred f
     with Compile_pred_failure cause ->
       begin
         Debug.msg ("Compile_pred_failure: " ^ cause ^ "\n");
