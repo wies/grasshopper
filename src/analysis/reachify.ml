@@ -218,19 +218,18 @@ let verify_generalization pred_sl pred_dom pred_str =
 type inductive_definition_case = {
     idc_pred: pred_decl;
     idc_switch: form;
-    idc_pure_part: form list;
+    idc_pure: form list;
     idc_footprint: term list;
     idc_induction_term: (term list) option; (* just the args *)
     idc_other_term: (ident * (term list)) option
   }
 
-(* TODO better strucutre of the cases:
+(* better strucutre of the cases:
  * - there is a switch predicates (x=y, x≠y)
  * - footprint
  * - pure part
  * - inductive call
  * - call to other predicates
- * - ...
  *)
 let isolate_cases pred f =
   let rec decompose case = match case with
@@ -299,7 +298,7 @@ let isolate_cases pred f =
     in
       { idc_pred = pred;
         idc_switch = smk_and switch;
-        idc_pure_part = pures;
+        idc_pure = pures;
         idc_footprint = footprint;
         idc_induction_term = ind_term;
         idc_other_term = other_term }
@@ -309,15 +308,29 @@ let isolate_cases pred f =
       let cases = List.map decompose cases in
       let switches = find_switches cases in
         List.map (make_case switches) cases
-    | _ -> raise (Compile_pred_failure "cannot identify base case and induction step.")
+    | _ -> raise (Compile_pred_failure "cannot identify the different cases.")
 
 let compile_recursive pred f =
-  (* TODO adapt to the new inductive_definition_case record *)
-  let base_case, induction_step = base_case_ind_step pred f in
-  let ind_step_args =
-    match inductive_call pred induction_step with
-    | Sl.Atom (Sl.Pred id, args) -> args
-    | _ -> assert false
+  let cases = isolate_cases pred f in
+  let base_case, induction_step =
+    let base, ind =
+      List.partition
+        (fun c -> c.idc_induction_term = None && c.idc_other_term = None)
+        cases
+    in
+    let base =
+      if List.length base = 1 then List.hd base
+      else raise (Compile_pred_failure "cannot identify base case.")
+    in
+    let ind =
+      if List.length ind = 1 then List.hd ind
+      else raise (Compile_pred_failure "cannot identify induction step.")
+    in
+      base, ind
+  in
+  let ind_step_args = match induction_step.idc_induction_term with
+    | Some args -> args
+    | None -> raise (Compile_pred_failure "cannot identify induction parameters.")
   in
   (* field over which the induction is made *)
   let ind_fld, ind_var =
@@ -332,76 +345,124 @@ let compile_recursive pred f =
       | [App (Read, [fld; x], _)] -> fld, x
       | _ -> raise (Compile_pred_failure "...")
   in
+  let ind_id =
+    let set = (free_consts_term ind_var) in
+      if IdSet.cardinal set <> 1 then
+        raise (Compile_pred_failure "could not find id of the term used in the induction");
+      IdSet.choose set
+  in
   (* find the end of the segment *)
   let end_of_segment =
+    if (base_case.idc_footprint <> []) then
+      raise (Compile_pred_failure "base case has non-empty footprint.");
     (* TODO what about the rest ? *)
     let rec process f = match f with
-      | Sl.And lst | Sl.SepStar lst | Sl.SepPlus lst -> Util.flat_map process lst
-      | Sl.Pure (Atom (App (Eq, [x;y], _))) ->
+      | Atom (App (Eq, [x;y], _)) ->
         if x = ind_var then [y] 
         else if y = ind_var then [x]
         else []
       | _ -> []
     in
-    let candidates = process base_case in
+    let candidates =
+      Util.flat_map
+        process
+        (base_case.idc_switch :: base_case.idc_pure)
+    in
       match candidates with
       | x :: _ -> x
       | [] -> raise (Compile_pred_failure "could not find the end of the segment")
   in
+  (* how arguments changes during the induction *)
+  let base_args_call_args = List.combine pred.pred_formals ind_step_args in
+  let constant_args =
+    List.filter
+      (fun (id, term) -> match term with
+        | App (FreeSym id2, [], _) -> id == id2
+        | _ -> false )
+      base_args_call_args
+  in
+  let lagging_args =
+    List.filter
+      (fun (id, term) -> match term with
+        | App (FreeSym id2, [], _) -> id2 <> id
+        | App (Read, [fld; App (FreeSym id2, [], _)], _) -> id2 = ind_id && fld <> ind_fld
+        | _ -> false )
+      base_args_call_args
+  in
   (* additional interpreted predicates *)
   let unary_predicates =
-    (* terms where the only argument that changes between calls is ind_var *)
-    let base_args_call_args = List.combine pred.pred_formals ind_step_args in
-    let constant_args =
-      List.filter
-        (fun (id, term) -> match term with
-          | App (FreeSym id2, [], _) -> id == id2
-          | _ -> false )
-        base_args_call_args
-    in
-    let ind_id =
-      let set = (free_consts_term ind_var) in
-        if IdSet.cardinal set <> 1 then
-          raise (Compile_pred_failure "could not find id of the term used in the induction");
-        IdSet.choose set
-    in
     let allowed = 
       List.fold_left
         (fun acc id -> IdSet.add id acc)
         (IdSet.singleton ind_id)
         (fst (List.split constant_args))
     in
-    let rec get_pure_conjuncts f = match f with
-      | Sl.And lst | Sl.SepStar lst | Sl.SepPlus lst -> Util.flat_map get_pure_conjuncts lst
-      | Sl.Pure f -> [f]
-      | _ -> []
-    in
-    let pure_conjuncts = get_pure_conjuncts induction_step in
     let unary =
       List.filter
         (fun f ->
           let fc = free_consts f in
             IdSet.is_empty (IdSet.diff fc allowed))
-        pure_conjuncts
+        induction_step.idc_pure
     in
     let srt = (IdMap.find ind_id pred.pred_locals).var_sort in
     if srt <> Loc then 
       raise (Compile_pred_failure "expected induction in type Loc");
     let var = mk_var ~srt:srt ind_id in
-    let pred = subst_consts (IdMap.add ind_id var IdMap.empty) (smk_and unary) in
-      mk_forall [(ind_id, srt)] (mk_implies (mk_elem var dom_set) pred)
+      if unary = [] then []
+      else
+        let pred = subst_consts (IdMap.add ind_id var IdMap.empty) (smk_and unary) in
+          [mk_forall [(ind_id, srt)] (mk_implies (mk_elem var dom_set) pred)]
   in
   (* TODO binary preds
    * - reach(x, y, end_of_segment)
    * - pred(x.field_1, y.field_2)
    * - check monotonicity, how ?
    *)
-  let binary_predicates =
-    "TODO"
+  let binary_predicates = match lagging_args with
+    | [(id, prev)] ->
+      begin
+        let allowed = 
+          List.fold_left
+            (fun acc id -> IdSet.add id acc)
+            (IdSet.add id (IdSet.singleton ind_id))
+            (fst (List.split constant_args))
+        in
+        let with_id =
+          List.filter
+            (fun f ->
+              let fc = free_consts f in
+                (IdSet.mem id fc) && (IdSet.is_empty (IdSet.diff fc allowed)))
+            induction_step.idc_pure
+        in
+        (* match id to the lagging stuff *)
+        let var1 = Axioms.loc1 in
+        let var2 = Axioms.loc2 in
+        let term_for_lagging = match prev with
+          | App (FreeSym _, [], Some Loc) -> var1
+          | App (Read, [fld; App (FreeSym _, [], Some Loc)], srt) -> App (Read, [fld; var1], srt)
+          | _ -> raise (Compile_pred_failure "expected const or read of type Loc")
+        in
+        let map =
+          IdMap.add
+            id term_for_lagging
+            (IdMap.add
+              ind_id var2
+              IdMap.empty)
+        in
+        let bound = List.map (subst_consts map) with_id in
+          if bound = [] then []
+          else
+            let guard = mk_and [mk_btwn ind_fld var1 var2 end_of_segment;
+                                mk_elem var1 dom_set;
+                                mk_elem var2 dom_set]
+            in
+            let pred = smk_and bound in
+              [Axioms.mk_axiom2 (mk_implies guard pred)]
+      end
+    | [] -> []
+    | _ -> raise (Compile_pred_failure "too many lagging arguments");
   in
-  let additional_cstr =
-    [unary_predicates]
-  in
+  let additional_cstr = unary_predicates @ binary_predicates in
   (* make the body of the new preds *)
   let str_body =
     Axioms.mk_axiom
