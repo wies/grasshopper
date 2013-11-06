@@ -171,8 +171,8 @@ let smk_elem e = function
 
 let mk_subseteq s t = mk_atom SubsetEq [s; t]
 
-(* @param a the set allocated objects
- * @param x the footprint of the SL formula
+(* @param a the set of allocated locations
+ * @param x the footprint in the pre-state
  * @param f the field in the pre-state
  * @param f' the field in the post-state
  *)
@@ -254,7 +254,7 @@ let rec nnf = function
   | BoolOp (Not, [Binder (b, xs, f, a)]) -> 
       Binder (dualize_binder b, xs, nnf (mk_not f), a)
   | BoolOp (op, fs) -> smk_op op (List.map nnf fs)
-  | Binder (b, vs, f, a) -> Binder (b, vs, nnf f, a)
+  | Binder (b, vs, f, a) -> mk_binder ~ann:a b vs (nnf f)
   | f -> f
   
 (** Compute conjunctive normal form of a formula *)
@@ -315,14 +315,18 @@ let fold_terms_with_bound fn init f =
 	ft (List.fold_left (fun bv (x, _) -> IdSet.add x bv) bv vs) acc f
   in ft IdSet.empty init f
 
-(** Computes the set of free variables occuring in term [t] *)
+(** Computes the set of identifiers of free variables occuring in term [t]
+ ** union the accumulated set of identifiers [vars]. *)
 let fvt vars t =
   let rec fvt1 vars = function
   | Var (id, _) -> IdSet.add id vars
   | App (_, ts, _) -> List.fold_left fvt1 vars ts
   in fvt1 vars t
 
-(** Computes the set of free variables occuring in formula [f] *)
+(** Computes the set of free variables occuring in term [t]. *)
+let fv_term t = fvt IdSet.empty t
+
+(** Computes the set of free variables occuring in formula [f]. *)
 let fv f = 
   let rec fvt bv vars = function
     | Var (id, _) -> 
@@ -333,7 +337,7 @@ let fv f =
 	List.fold_left (fvt bv) vars ts
   in fold_terms_with_bound fvt IdSet.empty f
 
-(** Computes the set of free variables of formula [f] together with their sorts *)
+(** Computes the set of free variables of formula [f] together with their sorts. *)
 let sorted_free_vars f = 
   let rec fvt bv vars = function
     | Var (id, Some srt) -> 
@@ -361,8 +365,8 @@ let free_consts_term t = free_consts_term_acc IdSet.empty t
 let free_consts f =
   fold_terms free_consts_term_acc IdSet.empty f
 
-(** Computes the set of ground terms appearing in [f]
- * free variables are treated as implicitly universally quantified *)
+(** Computes the set of ground terms appearing in [f].
+ ** Free variables are treated as implicitly universally quantified *)
 let ground_terms f =
   let rec gt bv terms t = 
     match t with
@@ -412,7 +416,7 @@ let fun_terms_with_vars f =
   in
     fold_terms process TermSet.empty f
      
-(** Extracts the signature of formula [f] *)
+(** Extracts the signature of formula [f]. *)
 let sign f : signature =
   let fail t = 
     let t_str = string_of_term t in
@@ -443,7 +447,7 @@ let sign f : signature =
   in 
   fold_terms signt SymbolMap.empty f
 
-(** Extracts the signature of formula [f] *)
+(** Extracts the signature of formula [f]. *)
 let overloaded_sign f : (arity list SymbolMap.t) =
   let add_to_sign sym tpe decls =
     let old = try SymbolMap.find sym decls with Not_found -> [] in
@@ -478,18 +482,6 @@ let overloaded_sign f : (arity list SymbolMap.t) =
 	in List.fold_left signt (add_to_sign sym (arg_srts, res_srt) decls) args
   in 
   fold_terms signt SymbolMap.empty f
-
-(*
-let proper_funs f =
-  let rec fts funs = function
-    | Var _  -> funs
-    | FunApp (id, ts) ->
-	let funs1 = match ts with
-	| [] -> funs
-	| _ -> FunSymbolSet.add funs
-	List.fold_left fts (IdSet.add id funs) ts
-  in collect_from_terms fts IdSet.empty f
-*)
 
 let map_id_term fct t =
   let rec sub = function
@@ -636,19 +628,57 @@ let propagate_exists f =
   let f1, vs = prop f in 
   mk_exists vs f1
 
-(** Convert universal quantifiers into existentials where possible. *)
+(** Convert universal quantifiers in formula [f] into existentials where possible. *)
 (** Assumes that [f] is in negation normal form. *)
-(*
-let convert_foralls f =
-  let rec cf = function
+let foralls_to_exists f =
+  let rec find_defs bvs defs fs =
+    let rec find nodefs defs gs = function
+      | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; t], _))]) :: fs 
+        when IdSet.mem x nodefs && 
+          IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
+          find (IdSet.remove x nodefs) (mk_eq xt t :: defs) gs fs
+      | BoolOp (Not, [Atom (App (Eq, [t; Var (x, srt) as xt], _))]) :: fs 
+        when IdSet.mem x nodefs && 
+          IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
+          find (IdSet.remove x nodefs) (mk_eq xt t :: defs) gs fs
+      | BoolOp (Or, fs1) :: fs ->
+          find nodefs defs gs (fs1 @ fs)
+      | f :: fs ->
+          find nodefs defs (f :: gs) fs
+      | [] ->
+          if IdSet.subset bvs nodefs 
+          then nodefs, defs, gs
+          else find_defs nodefs defs gs
+    in find bvs defs [] fs
+  in
+  let rec distribute_and bvs gs = function
+    | BoolOp (And, fs) :: gs1 ->
+        let fs1 = List.map (fun f -> mk_or (List.rev_append gs (f :: gs1))) fs in
+        cf (mk_forall bvs (mk_and fs1))
+    | g :: gs1 -> distribute_and bvs (g :: gs) gs1
+    | [] -> mk_forall bvs (mk_or (List.rev gs))
+  and cf = function
     | Binder (Forall, bvs, BoolOp (And, fs), a) ->
         let fs1 = List.map (fun f -> cf (Binder (Forall, bvs, f, a))) fs in
         mk_and fs1
-    | Binder (Exists, bvs, BoolOp (Or, fs), a) ->
-        
+    | Binder (Forall, bvs, BoolOp (Or, fs), a) ->
+        let bvs_set = id_set_of_list (List.map fst bvs) in
+        let nodefs, defs, gs = find_defs bvs_set [] fs in
+        let ubvs, ebvs = List.partition (fun (x, _) -> IdSet.mem x nodefs) bvs in
+        (match ebvs with
+        | [] -> distribute_and bvs [] gs
+        | _ ->
+          let g = cf (mk_forall ubvs (mk_or gs)) in
+          Binder (Exists, bvs, mk_and (defs @ [g]), a))
+    | Binder (Exists, bvs, f, a) ->
+        mk_exists ~ann:a bvs (cf f)
+    | BoolOp (And as op, fs)
+    | BoolOp (Or as op, fs) ->
+        let fs1 = List.map cf fs in
+        BoolOp (op, fs1)
+    | f -> f
   in
   cf f
-*)
 
 (** Skolemize formula [f]. 
  ** Assumes that [f] is in negation normal form. *)

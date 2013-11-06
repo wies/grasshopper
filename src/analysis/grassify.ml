@@ -68,15 +68,16 @@ let elim_sl prog =
     let precond, free_precond =
       let name = "precondition of " ^ str_of_ident proc.proc_name in
       let f, _, name, msg, pos = convert_sl_form sl_precond name in
-      let f_notin_frame = ToGrass.to_grass_not_contained pred_to_form footprint_caller_set f in
-      let f_eq_init_footprint = 
-        mk_and [ToGrass.to_grass pred_to_form footprint_set f; mk_subseteq footprint_set footprint_caller_set] in
+      let f_eq_init_footprint =  
+        propagate_exists (mk_and [ToGrass.to_grass pred_to_form footprint_set f; 
+                                  mk_subseteq footprint_set footprint_caller_set])
+      in
       let precond = mk_spec_form (FOL f_eq_init_footprint) name msg pos in
       let fp_name = "initial footprint of " ^ str_of_ident proc.proc_name in
       let free_precond = 
         FOL (mk_and [mk_subseteq footprint_caller_set alloc_set; mk_not (mk_elem mk_null alloc_set)])
       in
-      { precond with spec_form_negated = Some f_notin_frame }, 
+      precond,
       mk_free_spec_form free_precond fp_name None pos
     in
     (* translate SL postcondition *)
@@ -94,14 +95,12 @@ let elim_sl prog =
       let f_eq_final_footprint = 
         ToGrass.to_grass pred_to_form final_footprint_set f 
       in
-      let f_neq_final_footprint = ToGrass.to_grass_negated pred_to_form final_footprint_set f in
       let final_footprint_postcond = mk_spec_form (FOL f_eq_final_footprint) name msg pos in
       (*let init_footprint_postcond = 
         mk_free_spec_form (FOL (mk_eq init_footprint_set (oldify_term (IdSet.singleton footprint_id) footprint_set))) name msg pos
       in*)
       [{ final_footprint_postcond with 
         spec_kind = kind;
-        spec_form_negated = Some f_neq_final_footprint;
        }], pos
     in
     (* generate frame condition by applying the frame rule *) 
@@ -171,9 +170,8 @@ let elim_sl prog =
           (match sf.spec_form with
           | SL f ->
               let f1 = ToGrass.to_grass pred_to_form footprint_set f in
-              let f1_negated = ToGrass.to_grass_negated pred_to_form footprint_set f in
               let sf1 = mk_spec_form (FOL f1) sf.spec_name sf.spec_msg sf.spec_pos in
-              mk_assert_cmd { sf1 with spec_form_negated = Some f1_negated } pp.pp_pos
+              mk_assert_cmd sf1 pp.pp_pos
           | FOL f -> Basic (Assert sf, pp))
       | (c, pp) -> Basic (c, pp)
     in

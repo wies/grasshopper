@@ -5,7 +5,7 @@ open Simplify
 open Grassify
 
 (** Infer sets of accessed and modified variables *)
-(* Todo: the implementation of the fix-point loop is brain damaged - rather use a top. sort of the call graph *)
+(* TODO: the implementation of the fix-point loop is brain damaged - rather use a top. sort of the call graph *)
 let infer_accesses prog =
   let rec pm prog = function
     | Loop (lc, pp) ->
@@ -159,11 +159,11 @@ let add_pred_insts prog f =
           if IdMap.mem p prog.prog_preds 
           then (TermSet.add t pos, neg)
           else (pos, neg)
-      | BoolOp (Not, [Atom (App (Eq, [App (FreeSym p, _, _); _], _) as t)])
+      (*| BoolOp (Not, [Atom (App (Eq, [App (FreeSym p, _, _); _], _) as t)])
       | BoolOp (Not, [Atom (App (Eq, [_; App (FreeSym p, _, _)], _) as t)]) ->
           if IdMap.mem p prog.prog_preds 
           then (pos, TermSet.add t neg)
-          else (pos, neg)
+          else (pos, neg)*)
       | BoolOp (Not, [Atom t])
       | Atom t -> collect_term (pos, neg) t
       | _ -> pos, neg
@@ -248,9 +248,8 @@ let vcgen prog proc =
                 s.spec_name pp.pp_pos.sp_start_line pp.pp_pos.sp_start_col
             in
             let f =
-              match s.spec_form_negated, s.spec_form with
-              | Some f, _ -> unoldify_form f
-              | None, FOL f -> unoldify_form (mk_not f)
+              match s.spec_form with
+              | FOL f -> unoldify_form (mk_not f)
               | _ -> failwith "vcgen: found SL formula that should have been desugared"
             in
             let vc_name = 
@@ -274,13 +273,14 @@ let vcgen prog proc =
 (** Generate verification conditions for given procedure and check them. *)
 let check_proc prog proc =
   let check_vc (vc_name, (vc_msg, pp), vc) =
-    let vc_and_preds = add_pred_insts prog (skolemize (nnf vc)) in
+    let vc = skolemize (foralls_to_exists (propagate_exists (nnf vc))) in
+    let vc_and_preds = add_pred_insts prog vc in
       if !Config.verify then
         match Prover.check_sat ~session_name:vc_name vc_and_preds with
         | Some false -> ()
         | _ ->
           if !Config.robust then ProgError.print_error pp vc_msg
-          else ProgError.error pp vc_msg
+          else (*print_form stdout vc_and_preds;*) ProgError.error pp vc_msg
       else
         Prover.dump_query ~session_name:vc_name vc_and_preds
   in

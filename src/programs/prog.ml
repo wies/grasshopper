@@ -48,7 +48,6 @@ type spec_kind =
 (** Assume or assert of pure formula *)
 type spec = {
     spec_form : spec_form;
-    spec_form_negated : form option;
     spec_kind : spec_kind;
     spec_name : string;
     spec_msg : (ident -> source_position -> string) option;
@@ -235,7 +234,6 @@ let map_preds fn prog =
 
 let mk_spec_form f name msg pos =
   { spec_form = f;
-    spec_form_negated = None;
     spec_kind = Checked;
     spec_name = name;
     spec_msg = msg;
@@ -244,7 +242,6 @@ let mk_spec_form f name msg pos =
 
 let mk_free_spec_form f name msg pos =
   { spec_form = f;
-    spec_form_negated = None;
     spec_kind = Free;
     spec_name = name;
     spec_msg = msg;
@@ -280,13 +277,11 @@ let subst_id_spec sm sf =
   match sf.spec_form with
   | FOL f -> 
       { sf with 
-        spec_form = FOL (subst_id sm f);
-        spec_form_negated = Util.optmap (subst_id sm) sf.spec_form_negated            
+        spec_form = FOL (subst_id sm f);      
       }
   | SL f -> 
       { sf with 
         spec_form = SL (SlUtil.subst_id sm f);
-        spec_form_negated = Util.optmap (subst_id sm) sf.spec_form_negated 
       }
   
 let subst_spec sm sf =
@@ -294,7 +289,6 @@ let subst_spec sm sf =
   | FOL f -> 
       { sf with 
         spec_form = FOL (subst_consts sm f);
-        spec_form_negated = Util.optmap (subst_consts sm) sf.spec_form_negated            
       }
   | SL _ -> failwith "elim_assign: found SL formula that should have been desugared."
   
@@ -331,10 +325,8 @@ let oldify_spec vars sf =
     | FOL f -> FOL (oldify_form vars f)
     | SL f -> SL (oldify_sl_form vars f)
   in 
-  let old_form_negated = Util.optmap (oldify_form vars) sf.spec_form_negated in
   { sf with 
     spec_form = old_form;
-    spec_form_negated = old_form_negated 
   }
 
 let old_to_fun f =
@@ -370,10 +362,8 @@ let unoldify_spec sf =
     | FOL f -> FOL (unoldify_form f)
     | SL f -> SL f (* TODO: unoldification for SL formulas *)
   in 
-  let unold_form_negated = Util.optmap unoldify_form sf.spec_form_negated in
   { sf with 
     spec_form = unold_form;
-    spec_form_negated = unold_form_negated 
   }
 
 

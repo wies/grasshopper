@@ -3,7 +3,6 @@ struct Node {
   var data: int;
 }
 
-
 predicate blseg(x: Node, y: Node, lb: int, ub: int) {
   x == y || x != y &*& acc(x) &*& lb <= x.data &*& x.data <= ub &*& blseg(x.next, y, lb, ub)
 }
@@ -14,15 +13,15 @@ predicate bslseg(x: Node, y: Node, lb: int, ub: int) {
 
 procedure split(x: Node, y: Node, lb: int, ub: int) returns (pivot: Node)
   requires blseg(x, y, lb, ub) &*& x != y;
-  ensures  blseg(x, pivot, lb, pivot.data);
-  ensures  blseg(pivot, y, pivot.data, ub) &*& pivot != y;
-  ensures  pivot.data >= lb &*& pivot.data <= ub;
-  ensures  Btwn(next, x, pivot, y);
+  ensures blseg(x, pivot, lb, pivot.data);
+  ensures blseg(pivot, y, pivot.data, ub) &*& pivot != y;
+  ensures pivot.data >= lb &*& pivot.data <= ub;
+  ensures Btwn(next, x, pivot, y);
 
 
 procedure quicksort(x: Node, y: Node, ghost lb: int, ghost ub: int)
   requires blseg(x, y, lb, ub);
-  ensures  bslseg(x, y, lb, ub);
+  ensures bslseg(x, y, lb, ub);
 {
   if (x != y && x.next != y) {
     var pivot: Node;
@@ -30,6 +29,6 @@ procedure quicksort(x: Node, y: Node, ghost lb: int, ghost ub: int)
     quicksort(x, pivot, lb, pivot.data);
     quicksort(pivot.next, y, pivot.data, ub);
   } else {
-    
+    assume false;
   }
 }

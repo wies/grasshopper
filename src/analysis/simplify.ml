@@ -416,21 +416,16 @@ let elim_state prog =
                 in
                 (* skolemize implicits *)
                 let preconds_w_implicits =
-                  let fs, fs_neg, aux = 
-                    List.fold_left (fun (fs, fs_neg, aux) sf ->
-                      let new_fs_neg = 
-                        match sf.spec_form_negated with
-                        | Some f_neg -> f_neg :: fs_neg
-                        | None -> fs_neg
-                      in
+                  let fs, aux = 
+                    List.fold_left (fun (fs, aux) sf ->
                       let new_aux =
                         match aux with
                         | Some (_, _, p) ->
                             Some (sf.spec_name, sf.spec_msg, merge_src_positions p sf.spec_pos)
                         | None -> Some (sf.spec_name, sf.spec_msg, sf.spec_pos)
                       in
-                      form_of_spec sf :: fs, new_fs_neg, new_aux)
-                      ([], [], None) preconds_w_implicits
+                      form_of_spec sf :: fs, new_aux)
+                      ([], None) preconds_w_implicits
                   in
                   List.map 
                     (fun (name, msg, pos) ->
@@ -443,13 +438,7 @@ let elim_state prog =
                           ([], IdMap.empty) implicits
                       in
                       let f_pos = mk_exists implicits_w_sorts (subst_consts implicits_var_subst (mk_and fs)) in
-                      let f_neg = 
-                        match fs_neg with
-                        | [] -> None
-                        | _ -> Some (smk_or fs_neg) 
-                      in
-                      let sf = mk_spec_form (FOL f_pos) name msg pos in
-                      { sf with spec_form_negated = f_neg })
+                      mk_spec_form (FOL f_pos) name msg pos)
                     (Util.list_of_opt aux)
                 in
                 List.map (fun sf -> mk_assert_cmd sf pp.pp_pos) (preconds_wo_implicits @ preconds_w_implicits),

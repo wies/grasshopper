@@ -19,8 +19,7 @@ Required
 
 - CVC4, version >= 1.0
 
-GRASShopper has been tested exclusively on Linux systems, but should
-also run on Mac OS.
+GRASShopper has been tested on Linux and Mac OS.
 
 -------------------------
 Installation Instructions 
