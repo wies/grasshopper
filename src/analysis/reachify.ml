@@ -8,33 +8,136 @@ exception Compile_pred_failure of string
 let dom_id = fresh_ident "Dom"
 let dom_set = mk_loc_set dom_id
 
-(* split the SL def into a base case and an induction step. *)
-let base_case_ind_step pred f =
-  let recurse frm =
-    let prds = SlUtil.preds frm in
-      IdSet.mem pred.pred_name prds
+let get_cases pred = match pred.pred_body.spec_form with
+  | SL (Sl.Or cases) -> cases
+  | SL case -> [case]
+  | FOL _ -> raise (Compile_pred_failure "expected SL")
+
+type inductive_definition_case = {
+    idc_pred: pred_decl;
+    idc_switch: form;
+    idc_pure: form list;
+    idc_footprint: term list;
+    idc_induction_term: (term list) option; (* just the args *)
+    idc_other_term: (ident * (term list)) option;
+    idc_other: Sl.form option
+  }
+
+(* TODO better structure of the cases (once again)
+ * preprocessing:
+ *   -flatten the expr
+ *   -rewrite the SL part to make the footpring explicit as a set
+ * generalization
+ *   -idendify the cursor and express things in term of the cursor
+ *   -switches involves the cursor and constant param
+ *   -derived params as cursor+offset(+field)
+ *   -sets are projection of the backbone + base
+ * TODO this is an orthogonal view that focuses on the arguments rather than the cases itself
+ *)
+
+
+(* better strucutre of the cases:
+ * - there is a switch predicates (x=y, x≠y)
+ * - footprint
+ * - pure part
+ * - inductive call
+ * - call to other predicates
+ * - TODO rest
+ *)
+let isolate_cases pred =
+  let rec decompose case = match case with
+    | Sl.SepStar lst ->
+      List.fold_left
+        (fun (a1,b1,c1) (a2,b2,c2) -> (a1 @ a2, b1 @ b2, c1 @ c2) )
+        ([],[],[])
+        (List.map decompose lst)
+    | Sl.And lst ->
+      List.fold_left
+        (fun (pure,sep,preds) (p,s,pr) ->
+          if sep = [] && preds = [] then (p@pure,s@sep,pr@preds)
+          else if s = [] && preds = [] then (p@pure,s@sep,pr@preds)
+          else raise (Compile_pred_failure "partial support for Sl.And")
+        )
+        ([],[],[])
+        (List.map decompose lst)
+    | Sl.Pure f -> ([f],[],[])
+    | Sl.Atom (Sl.Region, args) -> ([],args,[])
+    | Sl.Atom (Sl.Emp, []) -> ([],[],[])
+    | Sl.Atom (Sl.Pred p, args) -> ([],[],[(p, args)])
+    | other -> raise (Compile_pred_failure ("do not support '"^(Sl.string_of_form other)^"' for the moment"))
   in
-    match f with
+  let find_switches cases =
+    (*simple version that works if every cases have the same switches*)
+    let pures =
+      List.map
+        (fun (a,_,_) ->
+          List.fold_left
+            (fun acc t -> match t with
+              | BoolOp (Not, [t]) -> FormSet.add t acc
+              | t -> FormSet.add t acc
+            )
+            FormSet.empty
+            a
+        )
+        cases
+    in
+    let common =
+      List.fold_left
+        FormSet.inter
+        (List.hd pures)
+        (List.tl pures)
+    in
+      common
+  in
+  let make_case switches (pures, footprint, preds) =
+    let switch, pures =
+      List.partition
+        (fun f ->
+          let f2 = match f with
+            | BoolOp (Not, [t]) -> t
+            | t -> t
+          in
+            FormSet.mem f2 switches
+        )
+        pures 
+    in
+    let ind_term, other_term = match preds with
+      | [(id, args)] ->
+        if id = pred.pred_name
+        then (Some args, None)
+        else (None, Some (id, args))
+      | [] -> (None, None)
+      | _ -> raise (Compile_pred_failure "nested data structure or tree-like structure or ... not yet supported.")
+    in
+      { idc_pred = pred;
+        idc_switch = smk_and switch;
+        idc_pure = pures;
+        idc_footprint = footprint;
+        idc_induction_term = ind_term;
+        idc_other_term = other_term;
+        idc_other = None (*TODO*) }
+  in
+  let cases = get_cases pred in
+  let cases = List.map decompose cases in
+  let switches = find_switches cases in
+    List.map (make_case switches) cases
+
+
+let has_inductive_call pred f =
+  let prds = SlUtil.preds f in
+    IdSet.mem pred.pred_name prds
+
+(* split the SL def into a base case and an induction step. *)
+let base_case_ind_step pred f = match f with
     | Sl.Or [a;b] ->
       begin
-        match (recurse a, recurse b) with
+        match (has_inductive_call pred a, has_inductive_call pred b) with
         | (true, true) -> raise (Compile_pred_failure "2 induction steps ?")
         | (true, false) -> b, a
         | (false, true) -> a, b
         | (false, false) -> raise (Compile_pred_failure "2 base cases ?")
       end
-    | _ -> raise (Compile_pred_failure "cannot identify base case and induction step.")
-
-let has_inductive_call pred f =
-  let preds = SlUtil.preds_full f in
-  let candidates =
-    Sl.SlSet.filter
-      (fun p -> match p with
-        | Sl.Atom (Sl.Pred id, _) -> id = pred.pred_name
-        | _ -> false )
-      preds
-  in
-    Sl.SlSet.cardinal candidates > 0
+    | _ -> raise (Compile_pred_failure "more than 2 cases.")
 
 let inductive_call pred f =
   let preds = SlUtil.preds_full f in
@@ -55,7 +158,6 @@ let inductive_call pred f =
 
 (* verify/prove the generalization is correct *)
 let verify_generalization pred_sl pred_dom pred_str =
-  (* TODO generalize to pred def using others preds *)
   if !Debug.verbose then
     begin
       print_endline "verifying the generalisation of inductive definition:";
@@ -76,6 +178,13 @@ let verify_generalization pred_sl pred_dom pred_str =
   let str_spec = match pred_str.pred_body.spec_form with
     | FOL f -> f    | _ -> assert false
   in
+  (* TODO generalize to pred def using others preds
+   * when doing the induction on the other:
+   *  assuming the other is correct and base case is empty we only need to do the 'last step'
+   *    the sanity checks should ensures that what the translation is always correct if the other pred is correct
+   * when using only other:
+   *  assuming the other are correct, then we are fine
+   *)
   let base, step = base_case_ind_step pred_sl sl_spec in
   let fol_pos = smk_and [dom_spec; str_spec] in
   let fol_neg = smk_and [dom_spec; mk_not str_spec] in
@@ -225,106 +334,14 @@ let compile_pred_acc acc pred =
 
 
 
-type inductive_definition_case = {
-    idc_pred: pred_decl;
-    idc_switch: form;
-    idc_pure: form list;
-    idc_footprint: term list;
-    idc_induction_term: (term list) option; (* just the args *)
-    idc_other_term: (ident * (term list)) option;
-    idc_other: Sl.form option
-  }
-
-(* better strucutre of the cases:
- * - there is a switch predicates (x=y, x≠y)
- * - footprint
- * - pure part
- * - inductive call
- * - call to other predicates
- *)
-let isolate_cases pred f =
-  let rec decompose case = match case with
-    | Sl.SepStar lst ->
-      List.fold_left
-        (fun (a1,b1,c1) (a2,b2,c2) -> (a1 @ a2, b1 @ b2, c1 @ c2) )
-        ([],[],[])
-        (List.map decompose lst)
-    | Sl.And lst ->
-      List.fold_left
-        (fun (pure,sep,preds) (p,s,pr) ->
-          if sep = [] && preds = [] then (p@pure,s@sep,pr@preds)
-          else if s = [] && preds = [] then (p@pure,s@sep,pr@preds)
-          else raise (Compile_pred_failure "partial support for Sl.And")
-        )
-        ([],[],[])
-        (List.map decompose lst)
-    | Sl.Pure f -> ([f],[],[])
-    | Sl.Atom (Sl.Region, args) -> ([],args,[])
-    | Sl.Atom (Sl.Emp, []) -> ([],[],[])
-    | Sl.Atom (Sl.Pred p, args) -> ([],[],[(p, args)])
-    | other -> raise (Compile_pred_failure ("do not support '"^(Sl.string_of_form other)^"' for the moment"))
-  in
-  let find_switches cases =
-    (*simple version that works if every cases have the same switches*)
-    let pures =
-      List.map
-        (fun (a,_,_) ->
-          List.fold_left
-            (fun acc t -> match t with
-              | BoolOp (Not, [t]) -> FormSet.add t acc
-              | t -> FormSet.add t acc
-            )
-            FormSet.empty
-            a
-        )
-        cases
-    in
-    let common =
-      List.fold_left
-        FormSet.inter
-        (List.hd pures)
-        (List.tl pures)
-    in
-      common
-  in
-  let make_case switches (pures, footprint, preds) =
-    let switch, pures =
-      List.partition
-        (fun f ->
-          let f2 = match f with
-            | BoolOp (Not, [t]) -> t
-            | t -> t
-          in
-            FormSet.mem f2 switches
-        )
-        pures 
-    in
-    let ind_term, other_term = match preds with
-      | [(id, args)] ->
-        if id = pred.pred_name
-        then (Some args, None)
-        else (None, Some (id, args))
-      | [] -> (None, None)
-      | _ -> raise (Compile_pred_failure "nested data structure or tree-like structure or ... not yet supported.")
-    in
-      { idc_pred = pred;
-        idc_switch = smk_and switch;
-        idc_pure = pures;
-        idc_footprint = footprint;
-        idc_induction_term = ind_term;
-        idc_other_term = other_term;
-        idc_other = None (*TODO*) }
-  in
-    match f with
-    | Sl.Or cases ->
-      let cases = List.map decompose cases in
-      let switches = find_switches cases in
-        List.map (make_case switches) cases
-    | _ -> raise (Compile_pred_failure "cannot identify the different cases.")
-
 
 let compile_preds preds =
-  let preds_map = List.fold_left (fun acc p -> IdMap.add p.pred_name p acc) IdMap.empty preds in
+  (* additional 'output' parameters *)
+  let preds_map =
+    List.fold_left
+      (fun acc p -> IdMap.add p.pred_name p acc)
+      IdMap.empty preds
+  in
   let already_fol, sl_spec =
     List.partition
       (fun p -> match p.pred_body.spec_form with
@@ -335,7 +352,7 @@ let compile_preds preds =
   let cases_index =
     List.fold_left
       (fun acc pred -> match pred.pred_body.spec_form with
-        | SL f -> IdMap.add pred.pred_name (isolate_cases pred f) acc
+        | SL _ -> IdMap.add pred.pred_name (isolate_cases pred) acc
         | FOL _ -> acc )
       IdMap.empty
       sl_spec
@@ -621,6 +638,10 @@ let compile_preds preds =
       | _ -> raise (Compile_pred_failure "expected other predicate")
     in
     let _ = (* TODO sanitiy check to make sure we can apply the generalisation *)
+      (* existing args in the call must be the same,
+         new args must be derived
+         same preds on common args
+       *)
         "TODO"
     in
     let base_aux = get_base_case id_aux in
