@@ -61,6 +61,16 @@ let find_index elt ls =
   in
     traverse 0 ls
 
+(* find an element x s.t. p(x) and chech the other element do not satisfy p.
+ * raise Not_found / Failure "not unique"
+ *)
+let find_unique p xs =
+  let canditates = List.filter p xs in
+    match canditates with
+    | [x] -> x
+    | [] -> raise Not_found
+    | _ -> raise (Failure "not unique")
+
 let rec partial_map f = function
   | [] -> []
   | x :: xs -> 

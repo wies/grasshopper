@@ -291,7 +291,7 @@ let subst_spec sm sf =
         spec_form = FOL (subst_consts sm f);
       }
   | SL _ -> failwith "elim_assign: found SL formula that should have been desugared."
-  
+
       
 let old_id = fresh_ident "old"
 let old_prefix = "$old_"
@@ -656,6 +656,37 @@ let map_basic_cmds f c =
   let c1, _ = fold_basic_cmds (fun c _ -> f c, ()) () c in
   c1
 
+(** Auxiliary function for predicate *)
+
+let subst_id_var_decl map vd =
+  let try_subst id = try IdMap.find id map with Not_found -> id in
+    { vd with var_name = try_subst vd.var_name }
+
+let subst_id_pred map pred =
+  let try_subst id = try IdMap.find id map with Not_found -> id in
+  let name = try_subst pred.pred_name in
+  let formals = List.map try_subst pred.pred_formals in
+  let returns = List.map try_subst pred.pred_returns in
+  let locals =
+    IdMap.fold
+      (fun k v acc -> IdMap.add (try_subst k) (subst_id_var_decl map v) acc)
+      pred.pred_locals
+      IdMap.empty
+  in
+  let body = subst_id_spec map pred.pred_body in
+  let accesses =
+    IdSet.fold
+      (fun id acc -> IdSet.add (try_subst id) acc)
+      pred.pred_accesses
+      IdSet.empty
+  in
+    { pred with
+      pred_name = name;
+      pred_formals = formals;
+      pred_returns = returns;
+      pred_locals = locals;
+      pred_body = body;
+      pred_accesses = accesses }
 
 (** Pretty printing *)
 

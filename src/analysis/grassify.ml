@@ -12,12 +12,7 @@ let elim_sl prog =
   let preds =
     if !Config.predefPreds
     then fold_preds compile_pred_acc IdMap.empty prog
-    else
-      begin
-        let all_preds = fold_preds (fun xs x -> x::xs) [] prog in
-          compile_preds all_preds
-        (*fold_preds compile_pred_acc_new IdMap.empty prog*)
-      end
+    else compile_preds (preds prog)
   in
   let globals =
     let alloc_decl = mk_set_decl alloc_id dummy_position in

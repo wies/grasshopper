@@ -23,6 +23,24 @@ type inductive_definition_case = {
     idc_other: Sl.form option
   }
 
+(* methods to 'classify the cases' *)
+let is_base_case c =
+  c.idc_induction_term = None &&
+  c.idc_other_term = None &&
+  c.idc_other = None
+
+let is_ind_step c = c.idc_induction_term <> None 
+
+let is_aux_step c =
+  c.idc_induction_term = None &&
+  c.idc_other_term <> None
+
+(*TODO this one does not make much sense*)
+let use_other c =
+  c.idc_induction_term = None &&
+  ( c.idc_other_term <> None ||
+    c.idc_other <> None )
+
 (* TODO better structure of the cases (once again)
  * preprocessing:
  *   -flatten the expr
@@ -34,6 +52,67 @@ type inductive_definition_case = {
  *   -sets are projection of the backbone + base
  * TODO this is an orthogonal view that focuses on the arguments rather than the cases itself
  *)
+
+type role =
+    (*cursor (traverse the backbone)*)
+    Cursor of ident (*field*) * ident (*end*)
+    (*nothing*)
+  | Constant
+    (*derived needs step and initial value*)
+  | Derived of ident option (*init*) * int (*offset*) * (ident option) (*field*)
+    (*set needs a base and a projection of the backbone*)
+  | SetPart of term (* base *) * (ident option) (* field in projection *) * bool (*disjoint*)
+
+type inductive_definition_parameter = ident * int (*position*) * role
+
+(* When a pred call an other pred try to make the arguments matches and return the corresponding substitution
+ * caller and callee are list of cases
+ *)
+let aux_substitution caller callee =
+  let aux_step = Util.find_unique is_aux_step caller in
+  let ind_step = Util.find_unique is_ind_step callee in
+  let aux_args =
+    let (id, args) = Util.unopt aux_step.idc_other_term in
+      assert(id = aux_step.idc_pred.pred_name);
+      args
+  in
+  let ind_args = Util.unopt ind_step.idc_induction_term in
+  let rec get_diff (t1, t2) = match (t1, t2) with
+    | (Var (i1, s1), Var (i2, s2))
+    | (App (FreeSym i1, [], s1), App (FreeSym i2, [], s2)) ->
+      if s1 <> s2 then raise (Compile_pred_failure "get_diff has different type");
+      if (i1 = i2) then [] else [(i1,i2)]
+    | (App (sym1,arg1,srt1), App (sym2,arg2,srt2)) ->
+      if sym1 <> sym2 || srt1 <> srt2 then
+        raise (Compile_pred_failure "get_diff: terms too far away");
+      Util.flat_map get_diff (List.combine arg1 arg2)
+    | _ -> raise (Compile_pred_failure "get_diff: terms too far away")
+  in
+  let subst_pair = Util.flat_map get_diff (List.combine aux_args ind_args) in
+  let map =
+    List.fold_left
+      (fun acc (id1, id2) ->
+        if IdMap.mem id1 acc then
+          begin
+            if IdMap.find id2 acc <> id1 then
+              raise (Compile_pred_failure "unify_aux, substitution is not unique.")
+            else acc
+          end
+        else IdMap.add id2 id1 acc
+      )
+      IdMap.empty
+      subst_pair
+  in
+    map
+
+(* TODO explicit FP
+    no top level negation,
+    partial sl to fol translation,
+    remove the acc,
+    add FP to the pred formals
+ *)
+
+(* TODO flattening -> easier to assign roles *)
 
 
 (* better strucutre of the cases:
@@ -358,38 +437,20 @@ let compile_preds preds =
       sl_spec
   in
   (* ... *)
-  let is_base_case c =
-    c.idc_induction_term = None &&
-    c.idc_other_term = None &&
-    c.idc_other = None
-  in
-  let is_ind_step c = c.idc_induction_term <> None in
-  let is_aux_step c =
-    c.idc_induction_term = None &&
-    c.idc_other_term <> None
-  in
-  let use_other c =
-    c.idc_induction_term = None &&
-    ( c.idc_other_term <> None ||
-      c.idc_other <> None )
-  in
   let get_base_case id =
     let cases = IdMap.find id cases_index in
-    let candidates = List.filter is_base_case cases in
-      if List.length candidates = 1 then List.hd candidates
-      else raise (Compile_pred_failure "cannot identify base case.")
+      try Util.find_unique is_base_case cases
+      with _ -> raise (Compile_pred_failure "cannot identify base case.")
   in
   let get_ind_step id =
     let cases = IdMap.find id cases_index in
-    let candidates = List.filter is_ind_step cases in
-      if List.length candidates = 1 then List.hd candidates
-      else raise (Compile_pred_failure "cannot identify induction step.")
+      try Util.find_unique is_ind_step cases
+      with _ -> raise (Compile_pred_failure "cannot identify induction step.")
   in
   let get_aux_step id =
     let cases = IdMap.find id cases_index in
-    let candidates = List.filter is_aux_step cases in
-      if List.length candidates = 1 then List.hd candidates
-      else raise (Compile_pred_failure "cannot identify induction step.")
+      try Util.find_unique is_aux_step cases
+      with _ -> raise (Compile_pred_failure "cannot identify aux step.")
   in
   (* ... *)
   let simple_pred id = (* blseg *)
