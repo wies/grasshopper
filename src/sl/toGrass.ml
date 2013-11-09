@@ -104,7 +104,7 @@ let to_form pred_to_form set_fct domain f =
   process_bool true (fresh_existentials f)
 
 let post_process f =
-  let _ = if !Debug.verbose then
+  let _ = if Debug.is_debug () then
     begin
       print_endline "Sl.to_grass(raw): ";
       Form.print_form stdout f;

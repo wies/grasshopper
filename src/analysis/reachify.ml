@@ -237,7 +237,7 @@ let inductive_call pred f =
 
 (* verify/prove the generalization is correct *)
 let verify_generalization pred_sl pred_dom pred_str =
-  if !Debug.verbose then
+  if Debug.is_info () then
     begin
       print_endline "verifying the generalisation of inductive definition:";
       print_endline "  original def:";
@@ -394,7 +394,7 @@ let compile_pred pred =
         in
           (try verify_generalization pred pred_dom pred_str
            with Compile_pred_failure why ->
-             Debug.amsg ( "cannot prove that predefined translation of '" ^
+             Debug.warn ( "cannot prove that predefined translation of '" ^
                           (str_of_ident pred.pred_name) ^
                           "' is correct: " ^ why ^ "\n"));
           [pred_dom; pred_str]
@@ -718,6 +718,7 @@ let compile_preds preds =
       compile_pred pred
   in
   let compile id =
+    Debug.info ("  translating SL definition to GRASS: " ^ (str_of_ident id) ^ "\n");
     try
       if simple_pred id then compile_simple_pred id
       else if use_aux_induction_pred id then compile_use_aux id
@@ -725,8 +726,8 @@ let compile_preds preds =
       else predefined id
     with Compile_pred_failure why ->
       begin
-        Debug.msg ("cannot translate '" ^ (str_of_ident id) ^ "': " ^ why ^ "\n");
-        Debug.msg ("reverting to predefined\n");
+        Debug.notice ("cannot translate '" ^ (str_of_ident id) ^ "': " ^ why ^ "\n");
+        Debug.notice ("reverting to predefined\n");
         predefined id
       end
   in

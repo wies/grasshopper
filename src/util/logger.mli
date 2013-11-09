@@ -40,6 +40,9 @@ system for applications.
 type log
 type level = NONE | FATAL | ERROR | WARN | NOTICE | INFO | DEBUG
 
+val int_of_level : level -> int
+val level_of_int : int -> level
+
 val make_log : string -> log
     (** [make_log name] returns a new logger. *)
 

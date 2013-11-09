@@ -134,7 +134,7 @@ let stratify_types axioms =
   in
   let sequencify lst =
     if List.length lst > 1 then
-      Debug.msg "TODO ordering of types for stratification!";
+      Debug.debug "TODO ordering of types for stratification!";
     snd (
       List.split (
         List.stable_sort compare (
@@ -214,7 +214,7 @@ let generate_instances useLocalInst axioms terms rep_map type_graph =
   in
   let is_stratified t1 t2 =
     let res = t1 <> t2 && not (can_reach t2 t1) in
-      (*Debug.msg ("is_stratified("^(string_of_sort t1)^","^(string_of_sort t2)^") = "^(string_of_bool res)^"\n");*)
+      Debug.debug ("is_stratified("^(string_of_sort t1)^","^(string_of_sort t2)^") = "^(string_of_bool res)^"\n");
       res
   in
   (* *)
@@ -278,7 +278,7 @@ let generate_instances useLocalInst axioms terms rep_map type_graph =
             fvars
         else fvars
     in
-    let _ = if !Debug.verbose then
+    let _ = if Debug.is_debug () then
       begin
         print_endline "--------------------";
         print_endline (string_of_form f);
@@ -379,7 +379,7 @@ let generate_instances useLocalInst axioms terms rep_map type_graph =
 let instantiate_with_terms local axioms classes =
     if !Config.instantiate then
       let _ = 
-        if  !Debug.verbose then
+        if Debug.is_debug () then
           ignore
             (List.fold_left (fun num cl ->
               print_string ("Class " ^ string_of_int num ^ ": ");
@@ -388,7 +388,7 @@ let instantiate_with_terms local axioms classes =
               num + 1) 1 classes)
       in
       let type_graph = stratify_types axioms in
-      let _ = if (!Debug.verbose) then
+      let _ = if Debug.is_debug () then
           begin
             print_endline "type stratification constraints:";
             SrtMap.iter

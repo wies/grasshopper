@@ -40,7 +40,7 @@ let process_input () =
        mk_eq (mk_read fld1 loc3) loc1;
        mk_btwn fld1 loc1 loc2 loc3] 
   in
-  let _ = if!Debug.verbose then
+  let _ = if Debug.is_debug () then
     print_forms stdout [form] 
   in
   (*print_endline "to prover";*)
@@ -81,7 +81,7 @@ let repl input_file =
 let _ =
   let print_exception s =
     output_string stderr (s ^ "\n");
-    if !Debug.verbose then
+    if Debug.is_debug () then
       Printexc.print_backtrace stderr
   in
   try

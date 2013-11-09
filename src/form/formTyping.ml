@@ -43,7 +43,7 @@ let to_sort ?what s =
     | TSet s -> Set (process s)
     | TFld s -> Fld (process s)
     | TVar _ ->
-      Debug.msg ("converting " ^(my_sort_to_string s)^ " to Loc.\n");
+      Debug.notice ("converting " ^(my_sort_to_string s)^ " to Loc.\n");
       Loc
     | TStar _ | TFun _ -> failwith ("cannot convert '" ^(my_sort_to_string s)^"' to basic sort")
   in
@@ -241,7 +241,7 @@ let preprocess f =
         (a, b, Binder (bnd, vars, c, annot))
   in
   let (defs, defs_t, f) = symbolify2 f in
-    if false && !Debug.verbose then
+    if false && Debug.is_debug () then
       begin
         print_endline "symbols defs:";
         List.iter (fun (s1, s2) -> print_endline ("  " ^(str_of_symbol s1) ^ " -> " ^ (str_of_symbol s2)) ) defs;
@@ -288,7 +288,7 @@ let equations env f =
     | Binder (_, _, form, _) -> process_form form
   in
   let eqs = process_form f in
-    if false && !Debug.verbose then
+    if false && Debug.is_debug () then
       begin
         print_endline "eqs:";
         List.iter

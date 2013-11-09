@@ -55,5 +55,6 @@ let cmd_options =
    ("-heuristicTranslation", Arg.Clear predefPreds, " Enable heuristics to translate SL predicates to GRASS");
    ("-stats", Arg.Set print_stats, " Print statistics");
    ("-x", Arg.Set experimental, " Enable some experimental feature");
-   ("-v", Arg.Unit Debug.set_debug, " Display verbose messages");
+   ("-v", Arg.Unit Debug.more_verbose, " Display more messages");
+   ("-q", Arg.Unit Debug.less_verbose, " Display less messages");
   ]

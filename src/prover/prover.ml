@@ -31,7 +31,7 @@ let print_query name f =
   in
   let has_int = SrtSet.mem Int all_tpe in
   let session = SmtLib.start name has_int in
-    Debug.msg "sending to prover...\n";
+    Debug.debug "sending to prover...\n";
     let session = SmtLib.declare session signature in
       SmtLib.assert_forms session f_inst;
       session
@@ -41,7 +41,7 @@ let start_session name f =
   let session = print_query name f in
   let prove session =
     let result = SmtLib.is_sat session in
-    Debug.msg "prover done\n";
+    Debug.debug "prover done\n";
     (result, session)
   in
     Util.measure_call "prove" prove session
