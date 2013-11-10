@@ -1,0 +1,137 @@
+struct Point {
+  var x: int;
+  var y: int;
+}
+
+struct Node {
+  var NW: Node;
+  var NE: Node;
+  var SW: Node;
+  var SE: Node;
+  var data: Point;
+}
+
+struct LstNode {
+  var next: LstNode;
+  var data: Point;
+}
+
+predicate quadtree(tree: Node, content: set<Point>) {
+    tree == null &*&
+    content == set<Point>()
+  ||
+    tree != null &*&
+    acc(tree) &*&
+    acc(tree.data) &*&
+    quadtree(tree.NW, nw_content) &*&
+    quadtree(tree.NE, ne_content) &*&
+    quadtree(tree.SW, sw_content) &*&
+    quadtree(tree.SE, se_content) &*&
+    content == nw_content ++ ne_content ++ sw_content ++ se_content ++ set(tree.data) &*&
+    (tree.NW == null || tree.NW.data.x <  tree.data.x && tree.NW.data.y >= tree.data.y) &*&
+    (tree.NE == null || tree.NE.data.x >= tree.data.x && tree.NE.data.y >= tree.data.y) &*&
+    (tree.SW == null || tree.SW.data.x <  tree.data.x && tree.SW.data.y <  tree.data.y) &*&
+    (tree.SE == null || tree.SE.data.x >= tree.data.x && tree.SE.data.y <  tree.data.y) 
+}
+
+predicate point_list(x: LstNode, content: set<Point>) {
+    x == null &*&
+    content == set<Point>()
+  ||
+    x != null &*&
+    acc(x) &*&
+    acc(x.data) &*&
+    x.data in content &*&
+    point_list(x.next, content -- set(x.data))
+}
+
+//point quad tree, not region quad tree
+
+procedure insert(tree: Node, p: Point) returns (res: Tree)
+    requires quadtree(tree, content) &*& acc(p);
+    ensures quadtree(res, content ++ set(p)) &*& acc(p);
+{
+    if (tree == null) {
+        tree := new Node;
+        tree.data := new Point;
+        tree.data.x := p.x;
+        tree.data.y := p.y;
+        tree.NW := null;
+        tree.NE := null;
+        tree.SW := null;
+        tree.SE := null;
+        return tree;
+    } else if (p.x = tree.data.x && p.y = tree.data) {
+        return tree;
+    } else if (p.x < tree.data.x && p.y >= tree.data) {
+        tree.NW := insert(tree.NW, p);
+        return tree;
+    } else if (p.x >= tree.data.x && p.y >= tree.data) {
+        tree.NE := insert(tree.NE, p);
+        return tree;
+    } else if (p.x < tree.data.x && p.y < tree.data) {
+        tree.SW := insert(tree.SW, p);
+        return tree;
+    } else { //if (p.x >= tree.data.x && p.y < tree.data)
+        tree.SE := insert(tree.SE, p);
+        return tree;
+    }
+}
+
+//no deletion or balancing for quadtree
+
+procedure concat(l1: LstNode, l2: LstNode,
+                 implicit ghost c1: set<Point>, implicit ghost c2: set<Point>)
+    returns (res: LstNode)
+    requires point_list(l1, c1) &*& point_list(l2, c2);
+    ensures  point_list(res, c1 ++ c2);
+
+procedure query(tree:Node, lower_left: Point, upper_right: Point) returns (lst: LstNode)
+    requires quadtree(tree, content) &*& acc(lower_left) &*& acc(upper_right);
+    ensures  quadtree(tree, content) &*& acc(lower_left) &*& acc(upper_right);
+    ensures  point_list(lst, res);
+    ensures  (forall p in res :: p in content &&
+                                 p.x >= lower_left.x && p.y >= lower_left.y &&
+                                 p.x <= upper_right.x && p.y <= upper_right.y);
+    ensures  (forall p in content :: (p.x >= lower_left.x && p.y >= lower_left.y &&
+                                      p.x <= upper_right.x && p.y <= upper_right.y) => p in res);
+{
+    var acc : LstNode;
+    acc := null;
+   
+    if (tree == null) {
+        return null;
+    }
+
+    if (lower_left.x >= tree.data.x && lower_left.y < tree.data.y) {
+        acc := concat(acc, query(tree.NW, lower_left, upper_right));
+    }
+    
+    if (lower_left.x >= tree.data.x && upper_right.y >= tree.data.y) {
+        acc := concat(acc, query(tree.NE, lower_left, upper_right));
+    }
+    
+    if (upper_right.x < tree.data.x && lower_left.y < tree.data.y) {
+        acc := concat(acc, query(tree.SW, lower_left, upper_right));
+    }
+    
+    if (upper_right.x < tree.data.x && upper_right.y >= tree.data.y) {
+        acc := concat(acc, query(tree.SE, lower_left, upper_right));
+    }
+    
+    if (lower_left.x >= tree.data.x &&
+        lower_left.y >= tree.data.y &&
+        upper_right.x <= tree.data.x &&
+        upper_right.y <= tree.data.y) {
+        var n: LstNode;
+        n := new LstNode;
+        n.data := new Point;
+        n.data.x := tree.data.x;
+        n.data.y := tree.data.y;
+        n.next := acc;
+        acc := n;
+    }
+
+    return acc;
+}
+

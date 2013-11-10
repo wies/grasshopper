@@ -32,6 +32,7 @@ predicate aatree(x: Node, content: set<int>) {
     (x.left == null || x.right == null || x.level > 1)
 }
 
+//TODO what are the invariant for unbalanced trees ??
 
 //pseudocode from wikipedia
 

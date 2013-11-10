@@ -1,0 +1,6 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var data: int;
+}
+

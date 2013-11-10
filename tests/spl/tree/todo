@@ -1,7 +1,20 @@
-binary search tree
+Priority:
+    bst memory
+    skew heap memory
+    set as sorted list functional correctness
+    set as BST functional correctness
+    set as AAT functional correctness
+    skew heap
+    AVL tree without balanced property
+    RB tree without balanced property
+    quad tree
+
+search tree / sets
+    binary search tree
     red-black tree
     AVL tree
     AA tree
+proving functional correctness of search tree requires reasoning about map (array property fragment ?)
 
 heap:
     binary heap
@@ -16,3 +29,5 @@ space partition tree:
 
 B-tree
 2-3 tree
+
+think about the GRASS invariants for the more complex data structures

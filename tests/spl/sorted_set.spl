@@ -3,23 +3,24 @@ struct Node {
   var data: int;
 }
 
-predicate bslseg_content(x: Node, y: Node, lb: int, ub: int, c: set<int>) {
+predicate sorted_set_list(x: Node, y: Node, lb: int, ub: int, c: set<int>) {
     x == y &*&
     c == set<int>()
   || 
     x != y &*&
     acc(x) &*&
     x.data in c &*&
-    lb <= x.data &*&
-    x.data <= ub &*&
-    bslseg_content(x.next, y, x.data, ub, c -- set(x.data))
+    lb < x.data &*&
+    x.data < ub &*&
+    sorted_set_list(x.next, y, x.data, ub, c -- set(x.data))
 }
 
-procedure sls_trv(lst: Node, val: int,
-                  ghost lb: int, ghost ub: int,
-                  ghost content: set<int>)
-  requires bslseg_content(lst, null, lb, ub, content);
-  ensures bslseg_content(lst, null, lb, ub, content);
+
+procedure traverse(lst: Node, val: int,
+                   ghost lb: int, ghost ub: int,
+                   implicit ghost content: set<int>)
+  requires sorted_set_list(lst, null, lb, ub, content);
+  ensures sorted_set_list(lst, null, lb, ub, content);
 {
   var curr: Node;
   curr := lst;
@@ -28,8 +29,8 @@ procedure sls_trv(lst: Node, val: int,
   c2 := set<int>();
 
   while (curr != null) 
-    invariant (curr != null &*& bslseg_content(lst, curr, lb, curr.data, c2) &*& bslseg_content(curr, null, curr.data, ub, c1))
-           || (curr == null &*& bslseg_content(lst, curr, lb, ub, c2) &*& c1 == set<int>());
+    invariant (curr != null &*& sorted_set_list(lst, curr, lb, curr.data, c2) &*& sorted_set_list(curr, null, curr.data-1, ub, c1))
+           || (curr == null &*& sorted_set_list(lst, curr, lb, ub, c2) &*& c1 == set<int>());
     invariant content == c1 ++ c2;
   {
     c2 := c2 ++ set(curr.data);
@@ -38,33 +39,181 @@ procedure sls_trv(lst: Node, val: int,
   }
 }
 
-//  procedure sls_mem(lst: Node, val: int,
-//                    ghost lb: int, ghost ub: int,
-//                    ghost content: set<int>)
-//    returns (res: bool)
-//    requires bslseg_content(lst, null, lb, ub, content);
-//    ensures bslseg_content(lst, null, lb, ub, content);
-//    ensures (res && val in content) || (!res && !(val in content));
-//  {
-//    if (lst == null) {
-//      return false;
-//    }
 
-//    var curr: Node;
-//    curr := lst;
-//    var c1: set<int>, c2: set<int>;
-//    c1 := content;
-//    c2 := set<int>();
+procedure contains(lst: Node, val: int,
+                   ghost lb: int, ghost ub: int,
+                   implicit ghost content: set<int>)
+  returns (res: bool)
+  requires sorted_set_list(lst, null, lb, ub, content);
+  ensures sorted_set_list(lst, null, lb, ub, content);
+  ensures (res && val in content) || (!res && !(val in content));
+{
+  var curr: Node;
+  curr := lst;
+  var c1: set<int>, c2: set<int>;
+  c1 := content;
+  c2 := set<int>();
 
-//    while (curr != null && curr.data < val) 
-//      invariant (curr != null &*& bslseg_content(lst, curr, lb, curr.data, c2) &*& bslseg_content(curr, null, curr.data, ub, c1))
-//             || (curr == null &*& bslseg_content(lst, curr, lb, ub, c2) &*& c1 == set<int>());
-//      invariant content == c1 ++ c2;
-//    {
-//      c2 := c2 ++ set(curr.data);
-//      c1 := c1 ++ set(curr.data);
-//      curr := curr.next; 
-//    }
-//    if (curr != null && curr.data == val) return true;
-//    else return false;
-//  }
+  while (curr != null && curr.data < val) 
+    invariant (sorted_set_list(lst, curr, lb, curr.data, c2) &*&
+               sorted_set_list(curr, null, curr.data-1, ub, c1) )
+    invariant content == c1 ++ c2;
+  {
+    c2 := c2 ++ set(curr.data);
+    c1 := c1 ++ set(curr.data);
+    curr := curr.next; 
+  }
+  if (curr != null && curr.data == val) return true;
+  else return false;
+}
+
+
+procedure insert( lst: Node, val: int,
+                  ghost lb: int, ghost ub: int,
+                  implicit ghost content: set<int>)
+  returns (res: Node)
+  requires sorted_set_list(lst, null, lb, ub, content);
+  requires val >= lb &*& val <= ub;
+  ensures sorted_set_list(res, null, lb, ub, content ++ set(val));
+{
+  var curr: Node, prev: Node;
+  curr := lst;
+  prev := null;
+  var c1: set<int>, c2: set<int>;
+  c1 := content;
+  c2 := set<int>();
+
+  while (curr != null && curr.data < val)
+    invariant  prev == null
+           || (prev.next |-> curr &*& prev.data < curr.data &*&
+               sorted_set_list(lst, prev, lb, prev.data, c2)); 
+    invariant sorted_set_list(curr, null, prev.data, ub, c1);
+    invariant content == c1 ++ c2;
+  {
+    c2 := c2 ++ set(curr.data);
+    c1 := c1 ++ set(curr.data);
+    prev := curr;
+    curr := curr.next; 
+  }
+
+  var n: Node;
+
+  if (curr != null && curr.data == val) {
+    n := curr;
+  } else {
+    n := new Node;
+    n.next := curr;
+    n.data := val;
+  }
+
+  if (pred != null) {
+    pred.next := n;
+    return lst;
+  } else {
+    return n;
+  }
+
+}
+
+
+procedure delete( lst: Node, val: int,
+                  ghost lb: int, ghost ub: int,
+                  implicit ghost content: set<int>)
+  returns (res: Node)
+  requires sorted_set_list(lst, null, lb, ub, content);
+  ensures sorted_set_list(res, null, lb, ub, content -- set(val));
+{
+    var curr: Node, prev: Node;
+    curr := lst;
+    prev := null;
+    var c1: set<int>, c2: set<int>;
+    c1 := content;
+    c2 := set<int>();
+
+    while (curr != null && curr.data < val)
+        invariant (prev == null &*& sorted_set_list(curr, null, curr.data, ub, c2))
+               || (prev.next |-> curr &*& prev.data < curr.data &*&
+                   sorted_set_list(lst, prev, lb, prev.data - 1, c2) &*&
+                   sorted_set_list(curr, null, curr.data, ub, c1));
+        invariant content == c1 ++ c2;
+    {
+        c2 := c2 ++ set(curr.data);
+        c1 := c1 ++ set(curr.data);
+        prev := curr;
+        curr := curr.next; 
+    }
+
+    if (curr != null && curr.data == val) {
+        var n: Node;
+        n := curr;
+        curr := curr.next;
+        free n;
+        if (prev != null) {
+            prev.next := curr;
+            return lst;
+        } else {
+            return curr;
+        }
+    } else {
+        return lst;
+    }
+
+}
+
+
+procedure union(lst1: Node, lst2: Node,
+                ghost lb: int, ghost ub: int,
+                implicit ghost content1: set<int>,
+                implicit ghost content2: set<int>)
+  returns (res: Node)
+  requires sorted_set_list(lst1, null, lb, ub, content1);
+  requires sorted_set_list(lst2, null, lb, ub, content2);
+  ensures sorted_set_list(res, null, lb, ub, content1 ++ content2);
+{
+    if (lst1 == null) {
+        return lst2;
+    } else if (lst2 == null) {
+        return lst1;
+    } else if (lst1.data < lst2.data) {
+        lst1.next := union(lst1.next, lst2);
+        return lst1;
+    } else if (lst1.data > lst2.data) {
+        lst2.next := union(lst1, lst2.next);
+        return lst2;
+    } else { //lst1.data == lst2.data
+        var n: Node;
+        n := lst1.next;
+        free lst1 ;
+        return union(n, lst2);
+    }
+}
+
+procedure difference(lst1: Node, lst2: Node,
+                ghost lb1: int, ghost ub1: int,
+                ghost lb2: int, ghost ub2: int,
+                implicit ghost content1: set<int>,
+                implicit ghost content2: set<int>)
+  returns (res: Node)
+  requires sorted_set_list(lst1, null, lb1, ub1, content1);
+  requires sorted_set_list(lst2, null, lb2, ub2, content2);
+  ensures sorted_set_list(lst2, null, lb2, ub2, content2);
+  ensures sorted_set_list(res, null, lb1, ub1, content1 -- content2);
+{
+    if (lst1 == null) {
+        return lst1;
+    } else if (lst2 == null) {
+        return lst1;
+    } else if (lst1.data < lst2.data) {
+        lst1.next := difference(lst1.next, lst2);
+        return lst1;
+    } else if (lst1.data > lst2.data) {
+        lst1.next := difference(lst1, lst2.next);
+        return lst1;
+    } else { //lst1.data == lst2.data
+        var n: Node;
+        n := lst1.next;
+        free lst1 ;
+        return difference(n, lst2.next);
+    }
+}
+

@@ -1,0 +1,61 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var data: int;
+}
+
+predicate skew_heap_only(x: Node) {
+    x == null
+  ||
+    x != null &*&
+    acc(x) &*&
+    skew_heap_only(x.left) &*&
+    skew_heap_only(x.right)
+}
+
+procedure union(h1: Node, h2: Node) returns (res: Node)
+    requires skew_heap_only(h1) &*& skew_heap_only(h2);
+    ensures skew_heap_only(res);
+{
+    if (h1 == null) {
+        return h2;
+    } else if (h2 == null) {
+        return h1;
+    } else if (h1.data <= h2.data) {
+        var u : Node;
+        u := union(h2, h1.right);
+        h1.right := h1.left;
+        h1.left := u;
+        return h1;
+    } else {
+        var u : Node;
+        u := union(h1, h2.right);
+        h2.right := h2.left;
+        h2.left := u;
+        return h2;
+    }
+}
+
+procedure insert(h: Node, value: int) returns (res: Node)
+    requires skew_heap_only(h);
+    ensures skew_heap_only(res);
+{
+    var n: Node;
+    n := new Node;
+    n.left := null;
+    n.right := null;
+    n.data := value;
+    returns union(h, n);
+}
+
+procedure extractMin(h: Node) returns (min: int, rest: Node)
+    requires skew_heap_only(h) &*& h != null;
+    ensures  skew_heap_only(rest);
+{
+    var d : int;
+    d := h.data;
+    var hp: Node;
+    hp := union(h.left, h.right);
+    free h;
+    return d, hp;
+}
