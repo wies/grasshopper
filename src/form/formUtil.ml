@@ -131,6 +131,9 @@ let mk_write fld ind upd =
 
 let mk_ep fld set t = mk_app ~srt:Loc EntPnt [fld; set; t]
 
+let mk_btwn_term fld t1 t2 t3 =
+  mk_app ~srt:Bool Btwn [fld; t1; t2; t3]
+
 let mk_btwn fld t1 t2 t3 =
   mk_atom Btwn [fld; t1; t2; t3]
   
@@ -181,12 +184,6 @@ let mk_frame_term x a f f' = mk_app ~srt:Bool Frame [x; a; f; f']
  * @param f' the field in the post-state
  *)
 let mk_frame x a f f' = mk_atom Frame [x; a; f; f']
-
-(* generalized version of {!mk_frame} taking a list of fields *)
-let mk_frame_lst x a lst =
-  assert ((List.length lst) mod 2 = 0);
-  mk_atom Frame (x :: a :: lst)
-
 
 let mk_and = function
   | [f] -> f
@@ -371,7 +368,7 @@ let free_consts f =
 
 (** Computes the set of ground terms appearing in [f].
  ** Free variables are treated as implicitly universally quantified *)
-let ground_terms f =
+let ground_terms ?(include_atoms=false) f =
   let rec gt bv terms t = 
     match t with
     | Var (id, _) -> terms, false
@@ -383,7 +380,7 @@ let ground_terms f =
 	      terms_t, is_ground && is_ground_t)
 	    (terms, true) ts
 	in
-	if is_ground && srt <> Some Bool
+	if is_ground && (not include_atoms || srt <> Some Bool)
 	then TermSet.add t terms1, true 
 	else terms1, is_ground
   in 

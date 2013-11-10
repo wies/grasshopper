@@ -318,13 +318,39 @@ let reduce_frame fs =
   
 let open_axioms open_cond axioms = 
   if !Config.instantiate then
-    let rec open_axiom = function
+    let rec open_axiom generators = function
       | Binder (b, vs, f, a) -> 
-          Binder (b, List.filter (~~ (open_cond f)) vs, f, a)
-      | BoolOp (op, fs) -> BoolOp (op, List.map open_axiom fs)
-      | f -> f
-    in List.map open_axiom axioms
-  else axioms
+          (* extract term generators *)
+          let generators1, a1, gen_vs =
+            List.fold_right 
+              (fun ann (generators, a1, gen_vs) ->
+                match ann with
+                | TermGenerator (bvs, fvs, g, t) ->
+                    let gen = (bvs, fvs, g, t) in
+                    let gen_vs1 = 
+                      List.fold_left 
+                        (fun acc (x, _) -> IdSet.add x acc) 
+                        gen_vs bvs 
+                    in
+                    gen :: generators, a1, gen_vs1
+                | _ -> generators, ann :: a1, gen_vs
+              ) a (generators, [], IdSet.empty)
+          in
+          let open_generators (x, _) = IdSet.mem x gen_vs in
+          let vs1 = List.filter (~~ (open_cond f ||| open_generators)) vs in
+          Binder (b, vs1, f, a1), generators1
+      | BoolOp (op, fs) -> 
+          let fs1, generators1 = 
+            List.fold_right open_axioms fs ([], generators)
+          in
+          BoolOp (op, fs1), generators1
+      | f -> f, generators
+    and open_axioms f (fs1, generators) =
+        let f1, generators1 = open_axiom generators f in
+        f1 :: fs1, generators1
+    in
+    List.fold_right open_axioms axioms ([], [])
+  else axioms, []
 
 let isFld f = function (_, Fld _) -> true | _ -> false
 
@@ -365,7 +391,7 @@ let reduce_sets_with_axioms fs gts =
   let gts = TermSet.fold (fun t gts1 -> TermSet.add (unflatten t) gts1) gts TermSet.empty in
   let gts1 = TermSet.union gts (ground_terms (mk_and fs1)) in
   let classes = CongruenceClosure.congr_classes fs1 gts1 in
-  let set_ax = open_axioms isFunVar (Axioms.set_axioms ()) in
+  let set_ax, _ = open_axioms isFunVar (Axioms.set_axioms ()) in
   let set_ax1 = instantiate_with_terms true set_ax classes in
   rev_concat [fs1; set_ax1], gts1
 
@@ -377,10 +403,10 @@ let reduce_sets fs gts =
 (** Adds instantiated theory axioms for the entry point function to formula f
  ** Assumes that f is typed and that all frame predicates have been reduced *)
 let reduce_ep fs =
-  let gts = TermSet.add mk_null (ground_terms (mk_and fs)) in
+  let gts = TermSet.add mk_null (ground_terms ~include_atoms:true (mk_and fs)) in
   let rec collect acc = function
     | App (Btwn, [fld; x; _; _], _)
-    | App (Read, [fld; x], Some Loc) ->
+    (*| App (Read, [fld; x], Some Loc)*) ->
         if TermSet.mem x gts then TermSet.add x acc else acc
     | App (_, ts, _) -> List.fold_left collect acc ts
     | _ -> acc
@@ -403,16 +429,37 @@ let reduce_ep fs =
       (fun t eps ->
 	match t with
 	| App (EntPnt, [fld; set; loc], srt) -> 
-	    TermSet.fold (fun t eps -> TermSet.add (App (EntPnt, [fld; set; t], srt)) eps) loc_gts eps
+	    TermSet.fold 
+              (fun t eps -> TermSet.add (App (EntPnt, [fld; set; t], srt)) eps) 
+              loc_gts eps
 	| _ -> eps
       )
       ep_terms_free gts
   in 
   (* instantiate the variables of sort Fld and Set in all ep axioms *)
   let classes = CongruenceClosure.congr_classes fs gts_eps in
-  let ep_ax = open_axioms isFunVar (Axioms.ep_axioms ()) in
+  let ep_ax, _ = open_axioms isFunVar (Axioms.ep_axioms ()) in
   let ep_ax1 = instantiate_with_terms true ep_ax classes in
+  print_endline "===============================================";
+  TermSet.iter (fun t -> print_term stdout t; print_newline ())
+   (TermSet.filter (function App (EntPnt, _, _) -> true | _ -> false) gts_eps);
+  print_endline "===============================================";
   fs, ep_ax1, gts_eps
+
+(** Adds instantiated theory axioms for the entry point function to formula f
+ ** Assumes that f is typed and that all frame predicates have been reduced *)
+let reduce_ep fs =
+  let gts = TermSet.add mk_null (ground_terms (mk_and fs)) in
+  let ep_ax, generators = open_axioms isFunVar (Axioms.ep_axioms ()) in
+  let gts_eps = InstGen.generate_terms generators gts in
+  let classes = CongruenceClosure.congr_classes fs gts_eps in
+  let ep_ax1 = instantiate_with_terms true ep_ax classes in
+  (*print_endline "===============================================";
+  TermSet.iter (fun t -> print_term stdout t; print_newline ())
+   (TermSet.filter (function App (EntPnt, _, _) -> true | _ -> false) gts_eps);
+  print_endline "===============================================";*)
+  fs, ep_ax1, gts_eps
+ 
 
 let propagate_field_reads fs gts framed_fields =
   let fld_partition, fld_map, fields = 
@@ -478,7 +525,7 @@ let reduce_reach fs gts framed_fields =
   (* instantiate null axioms *)
   let classes =  CongruenceClosure.congr_classes fs gts in
   (* let _ = List.iter (List.iter (fun t -> print_endline (string_of_term t))) classes in *)
-  let null_ax = open_axioms isFld (Axioms.null_axioms ()) in
+  let null_ax, _ = open_axioms isFld (Axioms.null_axioms ()) in
   let null_ax1 = instantiate_with_terms false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
   let fs1 = null_ax1 @ fs in
   let gts = TermSet.union (ground_terms (smk_and null_ax1)) gts in
@@ -500,7 +547,7 @@ let reduce_reach fs gts framed_fields =
     TermSet.fold (fun t write_ax ->
       match t with
       | App (Write, [fld; loc1; loc2], _) ->
-          open_axioms isFunVar (Axioms.read_write_axioms fld loc1 loc2) @ write_ax
+          fst (open_axioms isFunVar (Axioms.read_write_axioms fld loc1 loc2)) @ write_ax
       | _ -> write_ax) write_terms []
   in
   let read_write_ax1 = instantiate_with_terms true read_write_ax classes1 in
@@ -518,7 +565,7 @@ let reduce_reach fs gts framed_fields =
       match t with
       | App (Write, [fld; loc1; loc2], _) ->
           if TermSet.mem fld basic_reach_flds 
-          then open_axioms isFunVar (Axioms.reach_write_axioms fld loc1 loc2) @ write_ax
+          then fst (open_axioms isFunVar (Axioms.reach_write_axioms fld loc1 loc2)) @ write_ax
           else write_ax
       | _ -> write_ax) write_terms []
   in
@@ -530,16 +577,16 @@ let reduce_reach fs gts framed_fields =
 	    | _ -> true) (CongruenceClosure.class_of t classes))
       basic_reach_flds
   in
-  let reach_ax = open_axioms isFld (Axioms.reach_axioms ()) in
+  let reach_ax, _ = open_axioms isFld (Axioms.reach_axioms ()) in
   let reach_ax1 = instantiate_with_terms false reach_ax (CongruenceClosure.restrict_classes classes2 non_updated_flds) in
   (* generate local instances of all axioms in which variables occur below function symbols *)
-  let reach_ax2 = instantiate_with_terms true (open_axioms isFunVar reach_ax1) classes2 in
+  let reach_ax2 = instantiate_with_terms true (fst (open_axioms isFunVar reach_ax1)) classes2 in
   rev_concat [fs1; reach_ax2; read_write_ax1; reach_write_ax], gts1
 
 let reduce_remaining fs gts =
   (* generate local instances of all remaining axioms in which variables occur below function symbols *)
   let classes = CongruenceClosure.congr_classes fs gts in
-  let fs1 = open_axioms isFunVar fs in
+  let fs1, _ = open_axioms isFunVar fs in
   instantiate_with_terms true fs1 classes
 
 (** Reduces the given formula to the target theory fragment, as specified by the configuration.
@@ -556,11 +603,11 @@ let reduce f =
   let f1 = nnf f in
   let fs1 = split_ands [] [f1] in
   let fs11 = massage_field_reads fs1 in
-  let fs2, framed_fields = reduce_frame fs11 in
-  let fs2 = List.map reduce_exists fs2 in
+  let fs2 = List.map reduce_exists fs11 in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
-  let fs3, ep_axioms, gts = reduce_ep fs2 (*fs2, [], TermSet.empty*) in
-  let fs31 = factorize_axioms (split_ands [] fs3) in
+  let fs2, ep_axioms, gts = reduce_ep fs2 in
+  let fs2, framed_fields = reduce_frame fs2 in
+  let fs31 = factorize_axioms (split_ands [] fs2) in
   let fs4, gts1 = reduce_sets (fs31 @ ep_axioms) gts in
   let fs5, gts2 = reduce_reach fs4 gts1 framed_fields in
   let fs6 = (*Simplify.simplify*) (reduce_remaining fs5 gts2) in

@@ -48,13 +48,14 @@ let generate_terms generators ground_terms =
     let candidates = terms_by_sort srt sort_to_terms in
     let rec mt sm t1 t2 =
       match t1, t2 with 
-      | App (sym1, ts1, _), App (sym2, ts2, _) when sym1 = sym2 ->
+      | App (sym1, ts1, srt1), App (sym2, ts2, srt2) 
+        when sym1 = sym2 && srt1 = srt2 ->
           List.fold_left2 (fun sm_opt t1 t2 -> 
             match sm_opt with 
             | None -> None
             | Some sm -> mt sm t1 t2)
             (Some sm) ts1 ts2
-      | Var (x, _), t2 ->
+      | Var (x, srt1), t2 when srt1 = sort_of t2 ->
           if IdMap.mem x sm then
             if IdMap.find x sm = t2 then Some sm
             else None
@@ -72,9 +73,9 @@ let generate_terms generators ground_terms =
     | FilterTrue -> true
     | FilterNotOccurs sym -> 
         let rec hasSym = function
-          | App (sym1, _, _) when sym1 = sym -> true
-          | App (_, ts, _) -> List.exists hasSym ts
-          | _ -> false
+          | App (sym1, _, _) when sym1 = sym -> false
+          | App (_, ts, _) -> List.for_all hasSym ts
+          | _ -> true
         in hasSym t
   in
   let rec generate sort_to_terms new_terms old_terms = function
@@ -86,7 +87,8 @@ let generate_terms generators ground_terms =
                 (fun new_subst_maps sm ->
                   let matches = find_matches sort_to_terms (subst_term sm t) sm in
                   Util.filter_map 
-                    (fun (t_matched, _) -> filter_term filter t_matched)
+                    (fun (t_matched, _) -> 
+                      filter_term filter t_matched)
                     (fun (_, sm) -> sm) matches @ new_subst_maps
                 ) [] subst_maps 
             in
@@ -102,7 +104,8 @@ let generate_terms generators ground_terms =
         generate sort_to_terms1 new_terms1 old_terms generators1
     | [] -> 
         if new_terms <> old_terms 
-        then generate sort_to_terms new_terms old_terms generators
+        then 
+          generate sort_to_terms new_terms new_terms generators
         else new_terms
   in
   generate sort_to_terms new_terms ground_terms generators
