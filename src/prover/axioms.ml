@@ -28,10 +28,14 @@ let int2 = mk_var ~srt:(snd i2) (fst i2)
 
 let all_vars = [f1; f2; s1; s2; l1; l2; l3; l4; l5; i1; i2]
 
-let mk_axiom name f =
+let mk_axiom ?(gen=[]) name f =
   let fvars = fv f in
   let bvars = List.filter (fun v -> IdSet.mem (fst v) fvars) all_vars in
-  mk_forall ~ann:[Comment name] bvars f 
+  let annots = 
+    Comment name :: 
+    List.map (fun (bvs, fvs, m, g) -> TermGenerator (bvs, fvs, m, g)) gen 
+  in
+  mk_forall ~ann:annots bvars f 
 
 let mk_axiom2 f =
   let fvars = sorted_free_vars f in
@@ -57,7 +61,9 @@ let read_write_axioms fld1 loc1 loc2 =
     mk_or [mk_eq loc3 loc1; mk_eq (f loc3) (g loc3)]
   in
   let f_upd2 = mk_eq (g loc1) loc2 in
-  if not !encode_fields_as_arrays then [mk_axiom "read_write1" f_upd1; mk_axiom "read_write2" f_upd2] else []
+  if not !encode_fields_as_arrays 
+  then [mk_axiom "read_write1" f_upd1; mk_axiom "read_write2" f_upd2] 
+  else []
   
 let reach_write_axioms fld1 loc1 loc2 =
   let new_fld1 = mk_write fld1 loc1 loc2 in
@@ -106,16 +112,28 @@ let reach_axioms () =
   (* btwn axioms *)
   let btwn_refl = btwn loc1 loc1 loc1 in
   let btwn_step = btwn loc1 (f loc1) (f loc1) in
-  let btwn_reac = mk_or [mk_not (reach loc1 loc2); mk_eq loc1 loc2; btwn loc1 (f loc1) loc2] in
-  let btwn_cycl = mk_or [mk_neq (f loc1) loc1; mk_not (reach loc1 loc2); mk_eq loc1 loc2] in
+  let btwn_reac = mk_or [mk_not (reach loc1 loc2); 
+                         mk_eq loc1 loc2; btwn loc1 (f loc1) loc2] 
+  in
+  let btwn_cycl = mk_or [mk_neq (f loc1) loc1; mk_not (reach loc1 loc2); 
+                         mk_eq loc1 loc2] 
+  in
   let btwn_sndw = mk_or [mk_not (btwn loc1 loc2 loc1); mk_eq loc1 loc2] in
-  let btwn_ord1 = mk_or [mk_not (reach loc1 loc2); mk_not (reach loc1 loc3); btwn loc1 loc2 loc3; btwn loc1 loc3 loc2] in
-  let btwn_ord2 = mk_or [mk_not (btwn loc1 loc2 loc3); mk_and [reach loc1 loc2; reach loc2 loc3]] in
-  let btwn_trn1 = mk_or [mk_not (reach loc1 loc2); mk_not (reach loc2 loc3); reach loc1 loc3] in
+  let btwn_ord1 = mk_or [mk_not (reach loc1 loc2); mk_not (reach loc1 loc3); 
+                         btwn loc1 loc2 loc3; btwn loc1 loc3 loc2] 
+  in
+  let btwn_ord2 = mk_or [mk_not (btwn loc1 loc2 loc3); 
+                         mk_and [reach loc1 loc2; reach loc2 loc3]] 
+  in
+  let btwn_trn1 = mk_or [mk_not (reach loc1 loc2); mk_not (reach loc2 loc3); 
+                         reach loc1 loc3] 
+  in
   let btwn_trn2 = mk_or [mk_not (btwn loc1 loc2 loc3); mk_not (btwn loc2 loc4 loc3);
-                         mk_and [btwn loc1 loc2 loc4; btwn loc1 loc4 loc3]] in
+                         mk_and [btwn loc1 loc2 loc4; btwn loc1 loc4 loc3]]
+  in
   let btwn_trn3 = mk_or [mk_not (btwn loc1 loc2 loc3); mk_not (btwn loc1 loc4 loc2);
-                         mk_and [btwn loc1 loc4 loc3; btwn loc4 loc2 loc3]] in
+                         mk_and [btwn loc1 loc4 loc3; btwn loc4 loc2 loc3]] 
+  in
   (**)
   if !with_reach_axioms then
     [mk_axiom "btwn_refl" btwn_refl; 
@@ -135,7 +153,8 @@ let null_axioms () =
   [mk_axiom "read_null" nll]
 
 
-(* entry point axioms: when entering a part of the heap, used for SL*)
+(** Entry point axioms *)
+
 let ep_axioms () =
   let ep = mk_ep fld1 set1 loc1 in
   let in_set1 v = mk_elem v set1 in
@@ -146,18 +165,25 @@ let ep_axioms () =
     mk_implies (mk_and [reach loc1 loc2; in_set1 loc2]) (btwn loc1 ep loc2)
     (*else mk_implies (mk_and [reach loc1 loc2; in_set1 loc2]) (reachwo loc1 ep loc2) *)
   in
+  let ep_generator = 
+    [s1; f1; l1],
+    [s2; f2],
+    [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
+     Match (loc1, FilterNotOccurs EntPnt)], 
+    mk_ep fld1 set1 loc1
+  in
   if !Config.with_ep then
     [mk_axiom "entry-point1" ep1; 
-     mk_axiom "entry-point2" ep2; 
+     mk_axiom ~gen:[ep_generator] "entry-point2" ep2; 
      mk_axiom "entry-point3" ep3; 
      mk_axiom "entry-point4" ep4]
   else []
 
-(* set axioms *)
+(** Set axioms *)
 
 let set_axioms () =
   let empty = 
-    (* don't use the smart constructor smk_elem for membership here *)
+    (* don't use the smart constructor smk_elem for set membership here *)
     mk_not (mk_elem loc1 (mk_empty (Some (Set Loc))))
   in
   let union = 

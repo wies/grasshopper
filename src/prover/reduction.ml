@@ -274,26 +274,17 @@ let reduce_frame fs =
       let consequences = smk_and [mk_eq b_d a_d; mk_iff b_s a_s] in
         mk_comment "self framing" (mk_implies cond consequences)
     in
-      smk_and (List.map self_frame pred_before_after)
+    smk_and (List.map self_frame pred_before_after), paired
   in
   let rec process f fields = match f with
-    | Atom (App (Frame, x :: a :: lst, _)) ->
-      (*this emulates the old version*)
-      let rec process_frame (frames, fields) = function
-        | f :: f' :: rest ->
-          if f <> f' 
-          then process_frame ((expand_frame x a f f') :: frames, (f, f') :: fields) rest
-          else process_frame (frames, fields) rest
-        | [] -> frames, fields
-        | _ -> failwith "frame with wrong arity"
-      in
-      let frames, fields1 = process_frame ([], fields) lst in
-      let reach_frame = mk_and frames in
-      let pred_frame = expand_frame2 x a lst in
-        (*print_endline ("self_framing: " ^ (string_of_form pred_frame));*)
-        if !Config.optSelfFrame 
-        then smk_and [reach_frame; pred_frame], fields1
-        else reach_frame, fields1
+    | Atom (App (Frame, [x; a; f; f'], _)) when f <> f' ->
+        let fields1 = 
+          try 
+            let _, flds = TermMap.find x fields in
+            TermMap.add x (a, f :: f' :: flds) fields
+          with Not_found -> fields
+        in
+        expand_frame x a f f', fields1
     | BoolOp (op, fs) -> 
         let fs1, fields1 = 
           List.fold_right (fun f (fs1, fields1) ->
@@ -307,11 +298,23 @@ let reduce_frame fs =
         Binder (b, vs, f1, a), fields1
     | _ -> f, fields        
   in
-  List.fold_right  
-    (fun f (fs1, fields1) ->
-      let f1, fields1 = process f fields1 in
-      f1 :: fs1, fields1)
-    fs ([], [])
+  let reach_frames, fields =
+    List.fold_right  
+      (fun f (fs1, fields1) ->
+        let f1, fields1 = process f fields1 in
+        f1 :: fs1, fields1)
+      fs ([], TermMap.empty)
+  in
+  let pred_frames, framed_fields =
+    TermMap.fold 
+      (fun x (a, flds) (pred_frames, framed_fields) ->
+        let pred_frame, paired_flds = expand_frame2 x a flds in
+        (if !Config.optSelfFrame then (pred_frame :: pred_frames)
+        else pred_frames),
+        paired_flds @ framed_fields
+      ) fields ([], [])
+  in
+  reach_frames @ pred_frames, framed_fields
   
 let open_axioms open_cond axioms = 
   if !Config.instantiate then

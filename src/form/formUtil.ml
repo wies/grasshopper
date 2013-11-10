@@ -44,6 +44,8 @@ let sort_of = function
   | Var (_, s) 
   | App (_, _, s) -> s
 
+let unsafe_sort_of t = Util.unopt (sort_of t)
+
 let rec sort_ofs = function
   | [] -> None
   | t :: ts -> 
@@ -170,6 +172,8 @@ let smk_elem e = function
   | s -> mk_elem e s
 
 let mk_subseteq s t = mk_atom SubsetEq [s; t]
+
+let mk_frame_term x a f f' = mk_app ~srt:Bool Frame [x; a; f; f']
 
 (* @param a the set of allocated locations
  * @param x the footprint in the pre-state
@@ -556,26 +560,38 @@ let subst_term subst_map t =
 (** Substitutes all free variables in formula [f] according to substitution map [subst_map].
  ** Capture avoiding. *)
 let subst subst_map f =
-  let suba sm = function
+  let rename_vars vs sm =
+    let not_bound id _ = not (List.mem_assoc id vs) in
+    let sm1 = IdMap.filter not_bound sm in 
+    let occuring = IdMap.fold (fun _ t acc -> fvt acc t) sm IdSet.empty in
+    let vs1, sm2 = 
+      List.fold_right 
+	(fun (x, srt) (vs1, sm2) ->
+	  if IdSet.mem x occuring 
+	  then 
+	    let x1 = fresh_ident (name x) in
+	    (x1, srt) :: vs1, IdMap.add x (Var (x1, Some srt)) sm2
+	  else (x, srt) :: vs1, sm2)
+	vs ([], sm1)
+    in vs1, sm2
+  in
+  let suba bvs1 sm = function
     | Comment c -> Comment c
+    | TermGenerator (bvs, fvs, guards, gen_term) -> 
+        let fvs1, sm1 = rename_vars fvs sm in
+        let guards1 = 
+          List.map 
+            (function Match (t, f) -> Match (subst_term sm1 t, f))
+            guards
+        in
+        TermGenerator (bvs1, fvs1, guards1, subst_term sm1 gen_term)
   in
   let rec sub sm = function 
     | BoolOp (op, fs) -> BoolOp (op, List.map (sub sm) fs)
     | Atom t -> Atom (subst_term sm t)
     | Binder (b, vs, f, a) ->
-	let not_bound id _ = not (List.mem_assoc id vs) in
-	let sm1 = IdMap.filter not_bound sm in 
-	let occuring = IdMap.fold (fun _ t acc -> fvt acc t) sm IdSet.empty in
-	let vs1, sm2 = 
-	  List.fold_right 
-	    (fun (x, srt) (vs1, sm2) ->
-	      if IdSet.mem x occuring 
-	      then 
-		let x1 = fresh_ident (name x) in
-		(x1, srt) :: vs1, IdMap.add x (Var (x1, Some srt)) sm2
-	      else (x, srt) :: vs1, sm2)
-	    vs ([], sm1)
-	in Binder (b, vs1, sub sm2 f, List.map (suba sm2) a)
+        let vs1, sm1 = rename_vars vs sm in
+        Binder (b, vs1, sub sm1 f, List.map (suba vs1 sm1) a)
   in sub subst_map f
 
 (** Propagate existentially quantified variables upward in the formula [f].
@@ -710,7 +726,7 @@ let unique_comments f =
   let rec uc = function 
     | BoolOp (op, fs) -> BoolOp (op, List.map uc fs)
     | Binder (b, vs, f, anns) ->
-        let anns1 = List.map (function Comment c -> Comment (str_of_ident (fresh_ident c))) anns in
+        let anns1 = List.map (function Comment c -> Comment (str_of_ident (fresh_ident c)) | a -> a) anns in
         Binder (b, vs, uc f, anns1)
     | f -> f
   in

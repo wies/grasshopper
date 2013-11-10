@@ -40,15 +40,25 @@ let symbols =
 
 (** {6 Terms and formulas} *)
 
+type sorted_ident = ident * sort
+
 type term = 
   | Var of ident * sort option
   | App of symbol * term list * sort option
 
-type boolOp =
-  | And | Or | Not
+type filter =
+  | FilterTrue
+  | FilterNotOccurs of symbol
 
+type guard =
+  | Match of term * filter
+  
 type annot =
   | Comment of string
+  | TermGenerator of sorted_ident list * sorted_ident list * guard list * term
+
+type boolOp =
+  | And | Or | Not
 
 type binder =
   | Forall | Exists
@@ -232,8 +242,8 @@ let rec pr_vars ppf = function
 
 let extract_comments smt ann =
   let cmnts = Util.filter_map 
-      (function Comment _ -> true (*| _ -> false*)) 
-      (function Comment c -> c (*| _ -> ""*)) 
+      (function Comment _ -> true | _ -> false) 
+      (function Comment c -> c | _ -> "") 
       ann 
   in
   if smt 

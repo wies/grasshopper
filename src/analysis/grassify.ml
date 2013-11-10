@@ -130,7 +130,7 @@ let elim_sl prog =
           all_fields 
           (modifies_proc prog proc)
       in
-      let fields_for_frame =
+      let frame_preds =
         IdSet.fold
           (fun var frames ->
             let old_var = 
@@ -138,14 +138,15 @@ let elim_sl prog =
               else var
             in
             let srt = (find_global prog var).var_sort in
-              (mk_free_const ~srt:srt old_var) ::
-              (mk_free_const ~srt:srt var) ::
-              frames
+            mk_framecond (mk_frame init_footprint_set init_alloc_set 
+                             (mk_free_const ~srt:srt old_var)
+                             (mk_free_const ~srt:srt var)) ::
+            frames
           )
           all_fields
           []
       in
-      mk_framecond (mk_frame_lst init_footprint_set init_alloc_set fields_for_frame) :: []
+      frame_preds
     in
     (* update all procedure calls and return commands in body *)
     let rec compile_stmt = function

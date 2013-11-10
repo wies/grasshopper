@@ -20,6 +20,93 @@ let choose_rep_terms classes =
     (cl_rep :: reps, TermMap.add cl_rep (list_to_set cl) new_classes))
     ([], TermMap.empty) classes
 
+let generate_terms generators ground_terms =
+  let terms_by_sort srt sort_to_terms =
+    try SrtMap.find srt sort_to_terms
+    with Not_found -> TermSet.empty
+  in
+  let rec add_to_term_maps (sort_to_terms, new_terms) t =
+    match t with
+    | App (sym, ts, Some srt) ->
+        let sort_terms = terms_by_sort srt sort_to_terms in     
+        if TermSet.mem t sort_terms 
+        then sort_to_terms, new_terms
+        else 
+          List.fold_left add_to_term_maps 
+            (SrtMap.add srt (TermSet.add t sort_terms) sort_to_terms,
+            TermSet.add t new_terms)
+            ts
+    | App _ -> failwith "InstGen.generate_terms: sorted term expected"
+    | Var _ -> failwith "InstGen.generate_terms: ground term expected"
+  in
+  let sort_to_terms, new_terms =
+    TermSet.fold (fun t acc -> add_to_term_maps acc t)
+      ground_terms (SrtMap.empty, TermSet.empty)
+  in
+  let find_matches sort_to_terms t1 sm =
+    let srt = unsafe_sort_of t1 in
+    let candidates = terms_by_sort srt sort_to_terms in
+    let rec mt sm t1 t2 =
+      match t1, t2 with 
+      | App (sym1, ts1, _), App (sym2, ts2, _) when sym1 = sym2 ->
+          List.fold_left2 (fun sm_opt t1 t2 -> 
+            match sm_opt with 
+            | None -> None
+            | Some sm -> mt sm t1 t2)
+            (Some sm) ts1 ts2
+      | Var (x, _), t2 ->
+          if IdMap.mem x sm then
+            if IdMap.find x sm = t2 then Some sm
+            else None
+          else Some (IdMap.add x t2 sm)
+      | _, _ -> None
+    in
+    TermSet.fold (fun t2 subst_maps ->
+      match mt sm t1 t2 with
+      | None -> subst_maps
+      | Some sm -> (t2, sm) :: subst_maps)
+      candidates []
+  in
+  let filter_term filter t = 
+    match filter with
+    | FilterTrue -> true
+    | FilterNotOccurs sym -> 
+        let rec hasSym = function
+          | App (sym1, _, _) when sym1 = sym -> true
+          | App (_, ts, _) -> List.exists hasSym ts
+          | _ -> false
+        in hasSym t
+  in
+  let rec generate sort_to_terms new_terms old_terms = function
+    | (bvs, fvs, guards, gen_term) :: generators1 ->
+        let subst_maps =
+          List.fold_left (fun subst_maps -> function Match (t, filter) -> 
+            let new_subst_maps =
+              List.fold_left 
+                (fun new_subst_maps sm ->
+                  let matches = find_matches sort_to_terms (subst_term sm t) sm in
+                  Util.filter_map 
+                    (fun (t_matched, _) -> filter_term filter t_matched)
+                    (fun (_, sm) -> sm) matches @ new_subst_maps
+                ) [] subst_maps 
+            in
+            new_subst_maps)
+            [IdMap.empty] guards
+        in
+        let sort_to_terms1, new_terms1 =
+          List.fold_left (fun acc sm ->
+            let t = subst_term sm gen_term in
+            add_to_term_maps acc t)
+            (sort_to_terms, new_terms) subst_maps
+        in
+        generate sort_to_terms1 new_terms1 old_terms generators1
+    | [] -> 
+        if new_terms <> old_terms 
+        then generate sort_to_terms new_terms old_terms generators
+        else new_terms
+  in
+  generate sort_to_terms new_terms ground_terms generators
+
 (*
 (* returns a DAG of type dependencies. *)
 let stratify_types axioms =
@@ -190,7 +277,7 @@ let generate_instances useLocalInst axioms terms rep_map type_graph =
   let ground_terms = 
     TermMap.fold (fun _ -> TermSet.union) rep_map TermSet.empty 
   in
-  (* stratification: can a var of type t1 by used to generate a term of type t2 *)
+  (* stratification: can a var of type t1 be used to generate a term of type t2 *)
   let rec close_graph v acc =
     if SrtMap.mem v acc then acc
     else
