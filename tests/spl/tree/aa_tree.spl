@@ -1,0 +1,168 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var data: int;
+  var level: int;
+}
+
+
+predicate aatree(x: Node, content: set<int>) {
+    x == null &*& content = set<int>()
+  ||
+    //strucuture
+    x != null &*&
+    acc(x) &*&
+    aatree(x.left, l_content) &*&
+    aatree(x.right, r_content) &*&
+    //content
+    x.data in content &*&
+    (forall l in l_content :: l < x.data) &*&
+    (forall r in r_content :: r > x.data) &*&
+    content = l_content ++ r_content ++ set(x.data) &*&
+    //AA tree invariants
+    //  The level of every leaf node is one
+    (x.left == null && x.right == null && x.level == 1) &*&
+    //  The level of every left child is exactly one less than that of its parent
+    (x.left == null || x.left.level + 1 == x.level) &*&
+    //  The level of every right child is equal to or one less than that of its parent
+    (x.right == null || x.right.level + 1 == x.level || x.right.level == x.level) &*&
+    //  The level of every right grandchild is strictly less than that of its grandparent
+    (x.right == null || x.right.right == null || x.right.right.level < x.level) &*&
+    //  Every node of level greater than one has two children
+    (x.left == null || x.right == null || x.level > 1)
+}
+
+
+//pseudocode from wikipedia
+
+procedure skew(tree: Node) returns (res: Node)
+    requires: T, a node representing an AA tree that needs to be rebalanced.
+    ensures aatree(res);
+{
+    if (tree == null) {
+        return null;
+    } else if (tree.left == null) {
+        return tree;
+    } else if (tree.left.level == tree.level) {
+        //Swap the pointers of horizontal left links.
+        var l: Node;
+        l := tree.left;
+        tree.left := l.right;
+        l.right := tree;
+        return l;
+    } else {
+        return tree;
+    }
+}
+
+procedure split(tree: Node) returns (res: Node)
+    requires: T, a node representing an AA tree that needs to be rebalanced.
+    ensures aatree(res);
+{
+    if (tree == null) {
+        return null;
+    } else if (tree.right == null || tree.right.right == null) {
+        return T
+    } else if (tree.level == tree.right.right.level) {
+        //We have two horizontal right links.  Take the middle node, elevate it, and return it.
+        var r: Node;
+        r := tree;
+        tree.right := r.left;
+        r.left := tree;
+        r.level := r.level + 1;
+        return r;
+    } else {
+        return tree;
+    }
+}
+
+procedure insert(tree: Node, value: int) returns (res: Node)
+    input: X, the value to be inserted, and T, the root of the tree to insert it into.
+    output: A balanced version T including X.
+{
+    //Do the normal binary tree insertion procedure. Set the result of the
+    //recursive call to the correct child in case a new node was created or the
+    //root of the subtree changes.
+    if (tree == null) {
+        //Create a new leaf node with X.
+        var n: Node;
+        n := new Node;
+        n.left := null;
+        n.right := null;
+        n.level := 1;
+        n.data := value;
+        return n;
+    } else if (value < tree.data) {
+        tree.left := insert(tree.left, valur);
+    } else if (value > tree.data) {
+        tree.right := insert(tree.right, value);
+    }
+    //Note that the case of X == value(T) is unspecified. As given, an insert
+    //will have no effect. The implementor may desire different behavior.
+
+    //Perform skew and then split. The conditionals that determine whether or
+    //not a rotation will occur or not are inside of the procedures, as given
+    //above.
+    tree := skew(tree);
+    tree := split(tree);
+
+    return tree;
+}
+
+procedure delete(tree: Node, value: int) returns (res: Node)
+    requires: X, the value to delete, and T, the root of the tree from which it should be deleted.
+    ensures: T, balanced, without the value X.
+{
+    if (tree == null) {
+        return tree;
+    } else if (value > tree.data) {
+        tree.right := delete(tree.right, value);
+    } else if (value < tree.data) {
+        tree.left := delete(tree.left, value);
+    } else {
+        //If we're a leaf, easy, otherwise reduce to leaf case. 
+        if (tree.left == null && tree.right == null) { 
+            free tree;
+            return null;
+        } else if (tree.left == null) {
+            var succ: int;
+            succ := get_min(tree.right);
+            tree.right := delete(tree.right, succ)
+            tree.data := succ;
+        } else {
+            var pred: int;
+            pred := get_max(tree.left);
+            tree.left := delete(tree.left, pred);
+            tree.data := pred;
+        }
+    }
+
+    //Rebalance the tree. Decrease the level of all nodes in this level if
+    //necessary, and then skew and split all nodes in the new level.
+    tree := decrease_level(tree);
+    tree := skew(tree);
+    tree.right := skew(tree.right);
+    tree.rightr.right := skew(t.right.right);
+    tree := split(tree);
+    tree.right := split(tree.right);
+    return tree;
+}
+
+procedure decrease_level(tree: Node)
+    requires: T, a tree for which we want to remove links that skip levels.
+    ensures: T with its level decreased.
+{
+    var should_be: int;
+    if (tree.left.level < tree.right.level) {
+        should_be := tree.left.level + 1;
+    } else {
+        should_be := tree.right.level + 1;
+    }
+    if (should_be < tree.level) then
+        tree.level := should_be;
+        if (should_be < tree.right.level) {
+            tree.right.level := should_be;
+        }
+     }
+}
+

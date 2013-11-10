@@ -1,0 +1,109 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var data: int;
+}
+
+predicate bstree(x: Node, content: set<int>) {
+    x == null &*& content = set<int>()
+  ||
+    //strucuture
+    x != null &*&
+    acc(x) &*&
+    bstree(x.left, l_content) &*&
+    bstree(x.right, r_content) &*&
+    //content
+    x.data in content &*&
+    (forall l in l_content :: l < x.data) &*&
+    (forall r in r_content :: r > x.data) &*&
+    content = l_content ++ r_content ++ set(x.data)
+}
+
+procedure create() returns (res: Node)
+  ensures bstree(res, set<int>());
+{
+    return null;
+}
+
+procedure insert(tree: Node, value: int, implicit ghost content: set<int>) returns (res: Node)
+  requires bstree(tree, content);
+  ensures bstree(res, content ++ set(value));
+{
+    if (tree == null) {
+        var t: Node;
+        t := new Node;
+        t.left := null;
+        t.right := null;
+        t.data := value;
+        return t;
+    }
+    if (tree.data > value) {
+        tree.left := insert(tree.left, value);
+    } else if (tree.data < value) {
+        tree.right := insert(tree.right, value);
+    }
+    return tree;
+}
+
+procedure extract_max(tree: Node, implicit ghost content: set<int>) returns (others: Node, max: Node)
+  requires bstree(tree, content) &*& tree != null;
+  ensures  bstree(others, content1) &*& acc(max);
+  ensures  content == content1 ++ set(max.data);
+  ensures  (forall v in content1 :: max.data > v);
+{
+    if (tree.right != null) {
+        var c, m: Node;
+        c, m := extract_max(tree.right); 
+        tree.right := c;
+        return tree, m;
+    } else {
+        return tree.left, tree;
+    }
+}
+
+procedure remove(tree: Node, value: int, implicit ghost content: set<int>) returns (res: Node)
+  requires bstree(tree, content);
+  ensures bstree(res, content -- set(value));
+{
+    if (tree == null) {
+        return null;
+    } else if (tree.data == value) {
+        if (tree.left == null && tree.right == null) {
+            free(tree);
+            return null;
+        } else if (tree.left != null && tree.right == null) {
+            res := tree.left;
+            free(tree);
+            return res;
+        } else if (tree.left == null && tree.right != null) {
+            res := tree.right;
+            free(tree);
+            return res;
+        } else {
+            val l, m: Node;
+            l, m := extract_max(tree.left);
+            m.left := l;
+            m.right := tree.right;
+            free(tree);
+            return m;
+        }
+    } else if (tree.data > value) {
+        tree.left := remove(tree.left, value);
+        return tree;
+    } else {
+        tree.right := remove(tree.right, value);
+        return tree;
+    }
+}
+
+
+procedure destroy(tree: Node, implicit ghost content: set<int>)
+  requires bstree(tree, content);
+  ensures emp;
+{
+    if (tree != null) {
+        destroy(tree.left);
+        destroy(tree.right);
+    }
+}
+

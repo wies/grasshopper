@@ -1,0 +1,301 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+  var balance: int;
+}
+
+//TODO invariant of the AVL tree
+
+//code from http://www.blackbam.at/blackbams-blog/2012/05/04/avl-tree-implementation-in-java/
+
+procedure insert(tree: Node, value: int) returns (res: Node)
+    requires
+    ensures
+{
+    // If node to compare is null, the node is inserted. If the root is null, it is the root of the tree.
+    if(tree == null) {
+        return value;
+    } else {
+        // If compare node is smaller, continue with the left node
+        if(value.data < tree.data) {
+            if(tree.left == null) {
+                //TODO alloc
+                tree.left := value;
+                value.parent := tree;
+
+                // Node is inserted now, continue checking the balance
+                return recursiveBalance(tree);
+            } else {
+                insert(tree.left, value);
+            }
+
+        } else if(value.data > tree.data) {
+            if(tree.right == null) {
+                //TODO alloc
+                tree.right := value;
+                value.parent := tree;
+
+                // Node is inserted now, continue checking the balance
+                return recursiveBalance(tree);
+            } else {
+                insert(tree.right, value);
+            }
+        } else {
+            // do nothing: This node already exists
+        }
+    }
+}
+
+/**
+ * Check the balance for each node recursivly and call required methods for balancing the tree until the root is reached.
+ * @param cur : The node to check the balance for, usually you start with the parent of a leaf.
+ */
+public void recursiveBalance(cur: Node) returns (res: Node)
+    requires
+    ensures
+{
+    // we do not use the balance in this class, but the store it anyway
+    setBalance(cur);
+
+    // check the balance
+    if(cur.balance == -2) {
+        if(height(cur.left.left) >= height(cur.left.right)) {
+            cur := rotateRight(cur);
+        } else {
+            cur := doubleRotateLeftRight(cur);
+        }
+    } else if(cur.balance == 2) {
+        if(height(cur.right.right) >= height(cur.right.left)) {
+            cur := rotateLeft(cur);
+        } else {
+            cur := doubleRotateRightLeft(cur);
+        }
+    }
+
+    // we did not reach the root yet
+    if(cur.parent != null) {
+        recursiveBalance(cur.parent);
+    } else {
+        returns cur;
+    }
+}
+
+procedure remove(tree: Node, value: int)
+    requires
+    ensures
+{
+    if(tree == null) {
+        return null;
+    } else {
+        if(tree.data > value)  {
+            remove(tree.left, value);
+        } else if(tree.data < value) {
+            remove(tree.right, value);
+        } else if(tree.data == value) {
+            removeFoundNode(tree);
+        }
+    }
+}
+
+//tree The node to be removed
+procedure removeFoundNode(tree: Node) returns (res: Node)
+    requires
+    ensures
+{
+    var r: Node;
+    // at least one child of tree, tree will be removed directly
+    if(tree.left == null || tree.right == null) {
+        // the root is deleted
+        if(tree.parent == null) {
+            free tree;
+            return null;
+        }
+        r := tree;
+    } else {
+        // tree has two children --> will be replaced by successor
+        r := successor(tree);
+        tree.data := r.data;
+    }
+
+    var p: Node;
+    if(r.left != null) {
+        p := r.left;
+    } else {
+        p := r.right;
+    }
+
+    if(p != null) {
+        p.parent := r.parent;
+    }
+
+    if(r.parent == null) {
+        return p;
+    } else {
+        if(r == r.parent.left) {
+            r.parent.left := p;
+        } else {
+            r.parent.right := p;
+        }
+        // balancing must be done until the root is reached.
+        return recursiveBalance(r.parent);
+    }
+}
+
+/**
+ * Left rotation using the given node.
+ * @param n The node for the rotation.
+ * @return The root of the rotated tree.
+ */
+procedure rotateLeft(n: Node) returns (res: Node)
+    requires
+    ensures
+{
+    var v: Node;
+    v := n.right;
+    v.parent := n.parent;
+
+    n.right := v.left;
+
+    if(n.right != null) {
+        n.right.parent := n;
+    }
+
+    v.left := n;
+    n.parent := v;
+
+    if(v.parent != null) {
+        if(v.parent.right == n) {
+            v.parent.right := v;
+        } else if(v.parent.left == n) {
+            v.parent.left := v;
+        }
+    }
+
+    setBalance(n);
+    setBalance(v);
+
+    return v;
+}
+
+/**
+ * Right rotation using the given node.
+ * @param n The node for the rotation
+ * @return The root of the new rotated tree.
+ */
+procedure rotateRight(n: Node) return (res: Node)
+    requires
+    ensures
+{
+    var v: Node;
+    v := n.left;
+    v.parent := n.parent;
+
+    n.left := v.right;
+
+    if(n.left != null) {
+        n.left.parent := n;
+    }
+
+    v.right := n;
+    n.parent := v;
+
+
+    if(v.parent != null) {
+        if(v.parent.right == n) {
+            v.parent.right := v;
+        } else if(v.parent.left == n) {
+            v.parent.left := v;
+        }
+    }
+
+    setBalance(n);
+    setBalance(v);
+
+    return v;
+}
+
+/**
+ * @param u The node for the rotation.
+ * @return The root after the double rotation.
+ */
+procedure doubleRotateLeftRight(u: Node) returns (res: Node)
+    requires
+    ensures
+{
+    u.left := rotateLeft(u.left);
+    return rotateRight(u);
+}
+
+/**
+ * @param u The node for the rotation.
+ * @return The root after the double rotation.
+ */
+procedure doubleRotateRightLeft(AvlNode u) returns (res: Node)
+    requires
+    ensures
+{
+    u.right := rotateRight(u.right);
+    return rotateLeft(u);
+}
+
+/***************************** Helper Functions ************************************/
+
+/**
+ * Returns the successor of a given node in the tree (search recursivly).
+ * @param q The predecessor.
+ * @return The successor of node q.
+ */
+procedure successor(q: Node) returns (res: Node)
+    requires
+    ensures
+{
+    if(q.right != null) {
+        var r: Node;
+        r = q.right;
+        while(r.left != null) {
+            r = r.left;
+        }
+        return r;
+    } else {
+        var p: Node;
+        p := q.parent;
+        while(p != null && q == p.right) {
+            q := p;
+            p := q.parent;
+        }
+        return p;
+    }
+}
+
+/**
+ * Calculating the "height" of a node.
+ * @param cur
+ * @return The height of a node (-1, if node is not existent eg. NULL).
+ */
+procedure height(cur: Node) returns (res: int)
+    requires
+    ensures
+{
+    if(cur == null) {
+        return -1;
+    }
+    if(cur.left == null && cur.right == null) {
+        return 0;
+    } else if(cur.left == null) {
+        return 1 + height(cur.right);
+    } else if(cur.right == null) {
+        return 1 + height(cur.left);
+    } else {
+        return 1 + maximum(height(cur.left), height(cur.right));
+    }
+}
+
+procedure setBalance(cur: Node)
+    requires
+    ensures
+{
+    cur.balance := height(cur.right) - height(cur.left);
+}
+

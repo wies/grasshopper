@@ -1,0 +1,205 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+  var red: bool; //false is black
+}
+
+predicate rbtree(x: Node, content: set<int>) {
+    x == null &*& content = set<int>()
+  ||
+    //strucuture
+    x != null &*&
+    acc(x) &*&
+    (x.left == null || x.left.parent == null) &*&
+    (x.right == null || x.right.parent == null) &*&
+    rbtree(x.left, l_content) &*&
+    rbtree(x.right, r_content) &*&
+    //RB tree invariant
+    (x.parent != null || !x.red) &*& //root is black
+    (!x.red || x.left == null || !x.left.red ) &*& //red node has 2 black children
+    (!x.red || x.right == null || !x.right.red ) &*& //red node has 2 black children
+    //TODO every path from the root to a leaf has the same number of black node
+    //content
+    x.data in content &*&
+    (forall l in l_content :: l < x.data) &*&
+    (forall r in r_content :: r > x.data) &*&
+    content = l_content ++ r_content ++ set(x.data)
+}
+
+create
+insert
+remove
+destroy
+
+//code from wikipedia
+
+procedure grandparent(n: Node) returns (res: Node)
+    requires 
+    ensures
+{
+    if ((n != null) && (n->parent != null))
+        return n->parent->parent;
+    else
+        return null;
+}
+
+procedure uncle(n: Node) returns (res: Node)
+    requires 
+    ensures
+{
+    var g: Node;
+    g := grandparent(n);
+    if (g == null)
+        return null; // No grandparent means no uncle
+    if (n.parent == g.left)
+        return g.right;
+    else
+        return g.left;
+}
+
+
+void insert(struct node *n)
+{
+    if (n->parent == null)
+        n->color = BLACK;
+    else if (n->parent->color == BLACK)
+        return; /* Tree is still valid */
+    else {
+        struct node *u = uncle(n),
+        struct node *g = grandparent(n);
+
+        if ((u != null) && (u->color == RED)) {
+            n->parent->color = BLACK;
+            u->color = BLACK;
+            g->color = RED;
+            insert(g);
+        } else {
+            if ((n == n->parent->right) && (n->parent == g->left)) {
+                rotate_left(n->parent);
+
+                /*
+                 * rotate_left can be the below because of already having *g =  grandparent(n) 
+                 *
+                 * struct node *saved_p=g->left, *saved_left_n=n->left;
+                 * g->left=n; 
+                 * n->left=saved_p;
+                 * saved_p->right=saved_left_n;
+                 * 
+                 * and modify the parent's nodes properly
+                 */
+
+                n = n->left; 
+
+            } else if ((n == n->parent->left) && (n->parent == g->right)) {
+                rotate_right(n->parent);
+
+                /*
+                 * rotate_right can be the below to take advantage of already having *g =  grandparent(n) 
+                 *
+                 * struct node *saved_p=g->right, *saved_right_n=n->right;
+                 * g->right=n; 
+                 * n->right=saved_p;
+                 * saved_p->left=saved_right_n;
+                 * 
+                 */
+
+                n = n->right; 
+            }
+            n->parent->color = BLACK;
+            g->color = RED;
+            if (n == n->parent->left)
+                rotate_right(g);
+            else
+                rotate_left(g);
+        }
+    }
+}
+
+
+
+
+struct node *sibling(struct node *n)
+{
+    if (n == n->parent->left)
+        return n->parent->right;
+    else
+        return n->parent->left;
+}
+
+//this is the case that requires fixing things up ...
+
+void delete_one_child(struct node *n)
+{
+    /*
+     * Precondition: n has at most one non-null child.
+     */
+    struct node *child = is_leaf(n->right) ? n->left : n->right;
+
+    replace_node(n, child);
+    if (n->color == BLACK) {
+        if (child->color == RED)
+            child->color = BLACK;
+        else
+            delete(child);
+    }
+    free(n);
+}
+
+void delete(struct node *n)
+{
+    if (n->parent == null)
+        return;
+
+    struct node *s = sibling(n);
+
+    if (s->color == RED) {
+        n->parent->color = RED;
+        s->color = BLACK;
+        if (n == n->parent->left)
+            rotate_left(n->parent);
+        else
+            rotate_right(n->parent);
+    }
+    
+    if ((n->parent->color == BLACK) &&
+            (s->color == BLACK) &&
+            (s->left->color == BLACK) &&
+            (s->right->color == BLACK)) {
+        s->color = RED;
+        delete(n->parent);
+    } else if ((n->parent->color == RED) &&
+            (s->color == BLACK) &&
+            (s->left->color == BLACK) &&
+            (s->right->color == BLACK)) {
+        s->color = RED;
+        n->parent->color = BLACK;
+    } else {
+        /* the following statements just force the red to be on the left of the left of the parent,
+           or right of the right, so case six will rotate correctly. */
+        if ((n == n->parent->left) &&
+                (s->right->color == BLACK) &&
+                (s->left->color == RED)) { /* this last test is trivial too due to cases 2-4. */
+            s->color = RED;
+            s->left->color = BLACK;
+            rotate_right(s);
+        } else if ((n == n->parent->right) &&
+                (s->left->color == BLACK) &&
+                (s->right->color == RED)) {/* this last test is trivial too due to cases 2-4. */
+            s->color = RED;
+            s->right->color = BLACK;
+            rotate_left(s);
+        }
+        s->color = n->parent->color;
+        n->parent->color = BLACK;
+
+        if (n == n->parent->left) {
+            s->right->color = BLACK;
+            rotate_left(n->parent);
+        } else {
+            s->left->color = BLACK;
+            rotate_right(n->parent);
+        }
+    }
+}
