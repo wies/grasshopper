@@ -45,11 +45,11 @@ let without_fp = [
       mk_true,
       [di, mk_eq d empty_loc] );
     ( mk_ident "lseg",
-      [df; af; nextf; xf; yf],
+      [df; nextf; xf; yf],
       mk_reach next x y,
       [di, mk_forall [l1f] (mk_iff (mk_elem l1 d) (mk_and [(mk_btwn next x l1 y); (mk_neq l1 y)]))]);
     ( mk_ident "tree",
-      [df; af; leftf; parentf; rightf; xf; yf],
+      [df; leftf; parentf; rightf; xf; yf],
       mk_or [mk_eq x mk_null;
              mk_and [mk_neq x mk_null; 
                      mk_eq (mk_read parent x) y;
@@ -69,18 +69,32 @@ let without_fp = [
                        (mk_sequent
                           [mk_elem l1 d; mk_eq l1 l2; mk_eq (mk_read left l1) (mk_read right l2)]
                           [mk_eq mk_null (mk_read left l1)]);
-                     mk_forall ~ann:([Comment "left_leaf"]) [l1f]
+                     (*mk_forall ~ann:([Comment "left_leaf"]) [l1f]
                        (mk_sequent
                           [mk_elem l1 d] 
                           [mk_elem (mk_read left l1) a; mk_eq (mk_read left l1) mk_null]);
                      mk_forall ~ann:([Comment "right_leaf"]) [l1f]
                        (mk_sequent
                           [mk_elem l1 d] 
-                          [mk_elem (mk_read right l1) a; mk_eq (mk_read right l1) mk_null]);                   ] 
+                          [mk_elem (mk_read right l1) a; mk_eq (mk_read right l1) mk_null]); *)                  ] 
            ],
       [di, mk_or [mk_and [mk_eq x mk_null; mk_eq d empty_loc]; 
-                  mk_and [mk_neq x mk_null; mk_forall [l1f] 
-                            (mk_iff (mk_elem l1 d) (mk_and [mk_elem l1 a; mk_reach parent l1 x]))]]]
+                  mk_and [mk_neq x mk_null;
+                          mk_forall ~ann:[Comment "in_tree_domain"] [l1f] 
+                            (mk_sequent [mk_elem l1 d] [mk_reach parent l1 x]);
+                          mk_forall ~ann:[Comment "in_tree_domain"] [l1f; l2f] 
+                            (mk_sequent 
+                               [mk_elem l1 d; mk_elem l2 d; mk_reach parent l1 l2]
+                               [mk_btwn parent l1 (mk_read left l2) l2; 
+                                mk_btwn parent l1 (mk_read right l2) l2]);
+                          mk_forall ~ann:[Comment "not_in_tree_domain"] [l1f]
+                            (mk_or [mk_eq (mk_ep d parent l1) l1; 
+                                    mk_reach parent l1 (mk_read left (mk_ep d parent l1));
+                                    mk_reach parent l1 (mk_read right (mk_ep d parent l1))])
+                            
+                        ]
+                ]
+     ]
      ) (* end of "tree" *)
   ]
 

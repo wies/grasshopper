@@ -323,6 +323,9 @@ let reduce_frame fs =
 let open_axioms open_cond axioms = 
   if !Config.instantiate then
     let rec open_axiom generators = function
+      | Binder (b, [], f, a) ->
+          let f1, generators1 = open_axiom generators f in
+          Binder (b, [], f1, a), generators1
       | Binder (b, vs, f, a) -> 
           (* extract term generators *)
           let generators1, a1, gen_vs =
