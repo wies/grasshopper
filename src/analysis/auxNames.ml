@@ -15,9 +15,6 @@ let footprint_caller_set = mk_loc_set footprint_caller_id
 let final_footprint_caller_id = fresh_ident "FP_Caller_final"
 let final_footprint_caller_set = mk_loc_set final_footprint_caller_id
 
-let pred_struct (name, num) = (name ^ "_struct", num)
-let pred_domain (name, num) = (name ^ "_domain", num)
-
 let mk_set_decl id pos =
   { var_name = id;
     var_orig_name = name id;
@@ -28,6 +25,20 @@ let mk_set_decl id pos =
     var_pos = pos;
   }
   
+
 let pred_to_form p args dom =
-  mk_pred (pred_struct p) (args @ [dom]),
-  mk_eq dom (mk_free_fun ~srt:(Set Loc) (pred_domain p) args)
+  let def = Symbols.get_symbol p in
+  let structure = mk_pred (Symbols.pred_struct p) (dom :: args) in
+  let paired = List.combine def.Symbols.parameters (dom :: args) in
+  let mk_output id =
+    let args =
+      List.map snd (
+        List.filter (fun ((i,_), _) -> i <> id) paired)
+    in
+    let ((_, srt), t) = List.find (fun ((i,_), _) -> i = id) paired in
+      mk_eq t (mk_free_fun ~srt:srt (Symbols.pred_naming p id) args)
+  in
+  let outputs = List.map (fun (id, _) -> mk_output id) def.Symbols.outputs in
+    structure, outputs
+
+

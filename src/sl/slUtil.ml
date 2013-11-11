@@ -56,6 +56,7 @@ let mk_sep_star_lst args = List.fold_left mk_sep_star mk_emp args
 (*let mk_ls a b = mk_pred (get_symbol "lseg") [a; b]*)
 (*let mk_dls a b c d = mk_pred (get_symbol "dlseg") [a; b; c; d]*)
 
+(*
 let mk_spatial_pred name args =
   match find_symbol name with
   | Some s ->
@@ -65,7 +66,7 @@ let mk_spatial_pred name args =
       failwith (name ^ " expect " ^(string_of_int (s.arity))^
                 " found (" ^(String.concat ", " (List.map Form.string_of_term args))^ ")")
   | None -> failwith ("unknown spatial predicate " ^ name)
-
+*)
 
 let rec map_id fct f = match f with
   | Pure p -> Pure (FormUtil.map_id fct p)

@@ -1,237 +1,72 @@
 open Form
 open Sl
 
-type symbol = 
-    { sym: string;
-      arity: int;
-      structure: Form.term (*domain*) -> Form.term list (*args*) -> Form.form;
-      heap: Form.term (*domain*) -> Form.term list (*args*) -> Form.form;
+(* by convention domain should be the first arg *)
+
+type symbol =
+    { sym_name: ident;
+      parameters: (ident * sort) list;
+      structure: Form.form;
+      outputs: (ident * Form.form) list;
     }
 
 let symbols = Hashtbl.create 15
 
-(* constructing the symbols from the input *)
+let get_symbol (s: ident) = Hashtbl.find symbols s
 
-let bound_id_to_var form =
-  let rec process f = match f with
-    | Form.Atom t -> Form.Atom t
-    | BoolOp (b, lst) -> BoolOp(b, List.map process lst)
-    | Binder (b, args, inner, annot) ->
-      let inner = process inner in
-      let args1 = List.map (fun ((name,version), srt) -> (("?"^name,version), srt) ) args in
-      let map =
-        List.fold_left2
-          (fun acc (id, srt) (id2, _) -> IdMap.add id (FormUtil.mk_var id2 ~srt:srt) acc)
-          IdMap.empty
-          args
-          args1
-      in
-      let inner = FormUtil.subst_consts map inner in
-      let f2 = Binder(b, args1, inner, annot) in
-        f2
+let pred_struct (name, num) = (name ^ "_struct", num)
+(*let pred_domain (name, num) = (name ^ "_domain", num)*)
+let pred_naming (name, num) (p, _) = (name ^ "_" ^ p, num)
+
+let make_output_fct sym id =
+  let args =
+    List.map
+      (fun (i, s) -> FormUtil.mk_free_const ~srt:s i)
+      (List.filter (fun (i, _) -> i <> id) sym.parameters)
   in
-    process form
+  let srt = snd (List.find (fun (i,_) -> i = id) sym.parameters) in
+    FormUtil.mk_free_fun ~srt:srt (pred_naming sym.sym_name id) args
 
-let apply args f = match args with
-  | (id, Set Loc) :: args ->
-    (fun domain terms ->
-      assert(List.length args = List.length terms);
-      let map =
-        List.fold_left2
-          (fun acc (id, _) term -> IdMap.add id term acc)
-          (IdMap.add id domain IdMap.empty)
-          args
-          terms
-      in
-      let f2 = FormUtil.subst_consts map f in
-        f2
-    )
-  | _ -> failwith "expected first argument of type Set Loc (convention)."
-
-let parsed_to_symbol (name, args, structure, heap) =
-  let arg_tpe =
-    List.fold_left
-      (fun acc (id, tpe) -> IdMap.add id (FormUtil.mk_free_const ~srt:tpe id) acc)
+let pred_to_form p args =
+  let def = get_symbol p in
+  let map_id =
+    List.fold_left2
+      (fun acc (id1, srt1) (id2, srt2) ->
+        assert (srt1 = srt2);
+        IdMap.add id1 id2 acc)
       IdMap.empty
+      def.parameters
       args
   in
-  let fill_types f =
-    let f = bound_id_to_var f in
-    let f = FormUtil.subst_consts arg_tpe f in
-      FormTyping.typing f
+  let map_const =
+    List.fold_left2
+      (fun acc (id1, srt1) (id2, srt2) ->
+        IdMap.add id1 (FormUtil.mk_free_const ~srt:srt2 id2) acc)
+      IdMap.empty
+      def.parameters
+      args
   in
-  let f1 = FormUtil.mk_comment ("structure of " ^ name) (fill_types structure) in
-  let f2 = FormUtil.mk_comment ("domain of " ^ name) (fill_types heap) in
-  let a = (List.length args) - 1 in
-    assert(a >= 0);
-    { sym = name;
-      arity = a;
-      structure = apply args f1;
-      heap = apply args f2
-    }
+  let map_output id =
+    IdMap.add
+      id
+      (make_output_fct def id)
+      map_const
+  in
+  let o id = FormUtil.subst (map_output id) in
+    (FormUtil.subst map_const def.structure,
+     List.map (fun (id, f) -> (IdMap.find id map_id, o id f)) def.outputs)
 
-let get_symbol s = Hashtbl.find symbols s
-
-let find_symbol s =
-  try Some (Hashtbl.find symbols s)
-  with Not_found -> None
-
-let arity s = match find_symbol s with
-  | Some s -> Some s.arity
-  | None -> None
-
-let symbol_to_string s = match find_symbol s with
-  | Some s -> Some s.sym
-  | None -> None
-
-let pred_to_form p args domain =
-  let pdef = get_symbol (str_of_ident p) in
-  pdef.structure domain args, pdef.heap domain args
-
-(* the predefined symbols *)
-
-let without_fp =
-  [
-    "emp(domain: set loc){" ^
-        " true," ^
-        "domain == {} }";
-    "ptsTo(domain: set loc, ptr: fld loc, x: loc, y: loc){ " ^
-        "ptr(x) == y, " ^
-        "domain == {x} }";
-    "lseg(domain: set loc, next: fld loc, x: loc, y: loc){ " ^
-        "reach(next, x, y), " ^
-        "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
-    "slseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc){ " ^
-        "reach(next, x, y) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2), " ^
-        "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
-    "rslseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc){ " ^
-        "reach(next, x, y) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) >= data(l2), " ^
-        "forall l1: loc.  l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
-    "ulseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int){ " ^
-        "reach(next, x, y) && forall l1: loc. l1 in domain ==> data(l1) >= v, " ^
-        " forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
-    "llseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int){ " ^
-        "reach(next, x, y) && forall l1: loc. l1 in domain ==> data(l1) <= v, " ^
-        "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
-    "uslseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int){ " ^
-        "reach(next, x, y) &&"^
-        " (forall l1: loc. l1 in domain ==> data(l1) >= v) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2),"^
-        "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
-    "lslseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int){" ^
-        "reach(next, x, y) &&"^
-        " (forall l1: loc. l1 in domain ==> data(l1) <= v) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2),"^
-        "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
-    "blseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, w: int){" ^
-        "reach(next, x, y) && forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w)," ^
-        "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
-    "bslseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, w: int){" ^
-        "reach(next, x, y) &&"^
-        " (forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w)) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2)," ^
-        "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
-    "dlseg(domain: set loc, next: fld loc, prev: fld loc, x1: loc, x2: loc, y1: loc, y2: loc){" ^
-        "reach(next, x1, y1) &&" ^
-        " ((x1 == y1 && x2 == y2) || (prev(x1) == x2 && next(y2) == y1 && y2 in domain)) &&" ^
-        " forall l1: loc, l2: loc. (next(l1) == l2 && l1 in domain && l2 in domain) ==> prev(l2) == l1," ^
-        "forall l1: loc. l1 in domain <=> (btwn(next, x1, l1, y1) && l1 != y1) }";
-    "bdlseg(domain: set loc, data: fld int, next: fld loc, prev: fld loc, x1: loc, x2: loc, y1: loc, y2: loc, lb: int, ub:int){" ^
-        "reach(next, x1, y1) &&" ^ 
-        " ((x1 == y1 && x2 == y2) || (prev(x1) == x2 && next(y2) == y1 && y2 in domain)) &&"^
-        (*" (forall l1: loc, l2: loc. (next(l1) == l2 && l1 in domain && l2 in domain) ==> prev(l2) == l1) &&"^*)
-        " (forall l1: loc, l2: loc. (l1 in domain && l2 in domain) ==> (next(l1) == l2 <=> prev(l2) == l1)) &&"^
-        " forall l1: loc. l1 in domain ==> (data(l1) >= lb && data(l1) <= ub)," ^
-        "forall l1: loc. l1 in domain <=> (btwn(next, x1, l1, y1) && l1 != y1) }";
-    "bsdlseg(domain: set loc, data: fld int, next: fld loc, prev: fld loc, x1: loc, x2: loc, y1: loc, y2: loc, lb: int, ub:int){" ^
-        "reach(next, x1, y1) && ((x1 == y1 && x2 == y2) || (prev(x1) == x2 && next(y2) == y1 && y2 in domain)) && (forall l1: loc, l2: loc. (next(l1) == l2 && l1 in domain && l2 in domain) ==> prev(l2) == l1) && (forall l1: loc. l1 in domain ==> (data(l1) >= lb && data(l1) <= ub)) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2)," ^
-        "forall l1: loc. l1 in domain <=> (btwn(next, x1, l1, y1) && l1 != y1) }"
-  ]
-
-let with_fp =
-  [
-    "lseg_set(domain: set loc, next: fld loc, x: loc, y: loc, s: set loc){ " ^
-        "reach(next, x, y), " ^
-        "s == domain && (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
-    "slseg_set(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, s: set loc){ " ^
-        "reach(next, x, y) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2), " ^
-        "s == domain && (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
-    "rslseg_set(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, s: set loc){ " ^
-        "reach(next, x, y) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) >= data(l2), " ^
-        "s == domain && (forall l1: loc.  l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
-    "uslseg_set(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, s: set loc){ " ^
-        "reach(next, x, y) &&"^
-        " (forall l1: loc. l1 in domain ==> data(l1) >= v) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2),"^
-        "s == domain && (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
-    "lslseg_set(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, s: set loc){" ^
-        "reach(next, x, y) &&"^
-        " (forall l1: loc. l1 in domain ==> data(l1) <= v) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2),"^
-        "s == domain && (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
-    "bslseg_set(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, w: int, s: set loc){" ^
-        "reach(next, x, y) &&"^
-        " (forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w)) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2)," ^
-        "s == domain && (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }"
-  ]
-
-let with_content =
-  [
-    "slseg_content(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, s: set int){ " ^
-        "reach(next, x, y) &&"^
-        " (forall l1: loc. l1 in domain <=> data(l1) in s) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2), " ^
-        " (forall l1: loc. data(l1) in s <=> (btwn(next, x, l1, y) && l1 != y)) &&"^
-        " (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
-    "rslseg_content(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, s: set int){ " ^
-        "reach(next, x, y) &&"^
-        " (forall l1: loc. l1 in domain <=> data(l1) in s) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) >= data(l2), " ^
-        " (forall l1: loc.  l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
-    "uslseg_content(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, s: set int){ " ^
-        "reach(next, x, y) &&"^
-        " (forall l1: loc. l1 in domain ==> data(l1) >= v) &&"^
-        " (forall l1: loc. l1 in domain <=> data(l1) in s) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2),"^
-        " (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
-    "lslseg_content(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, s: set int){" ^
-        "reach(next, x, y) &&"^
-        " (forall l1: loc. l1 in domain ==> data(l1) <= v) &&"^
-        " (forall l1: loc. l1 in domain <=> data(l1) in s) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2),"^
-        " (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }";
-    "bslseg_content(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, w: int, s: set int){" ^
-        "reach(next, x, y) &&"^
-        " (forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w)) &&"^
-        " (forall l1: loc. l1 in domain <=> data(l1) in s) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2)," ^
-        " (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }"
-  ]
-
-let misc = [
-    "sorted_set(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, w: int, s: set loc){" ^
-        "reach(next, x, y) &&"^
-        " (forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w)) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2)," ^
-        "s == domain && (forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y)) }"
-  ]
-
-let predefined = without_fp @ with_fp @ with_content @ misc
-
-(* add the predefined symbols *)
+(* add othe predefined symbols*)
 let _ =
   List.iter
-    (fun str ->
-      ParseError.input := Some str;
-      let lexbuf = Lexing.from_string str in
-      ParseError.buffer := Some lexbuf;
-      let parsed = ParseDef.main LexDef.token lexbuf in
-      let syms = List.map parsed_to_symbol parsed in
-        List.iter (fun s -> Hashtbl.add symbols s.sym s) syms
+    (fun (id, params, strct, out) ->
+      Hashtbl.add
+        symbols
+        id
+        { sym_name = id;
+          parameters = params;
+          structure = strct;
+          outputs = out
+        }
     )
-    predefined
+    Predefined.symbols

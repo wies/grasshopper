@@ -5,7 +5,7 @@ open Prog
 
 exception Compile_pred_failure of string
 
-let dom_id = fresh_ident "Dom"
+let dom_id = fresh_ident "domain"
 let dom_set = mk_loc_set dom_id
 
 let get_cases pred = match pred.pred_body.spec_form with
@@ -364,19 +364,21 @@ let compile_pred pred =
   | SL f ->
       (try 
         let dom_decl = mk_set_decl dom_id pred.pred_pos in
-        let args = 
-          List.map (fun id ->
-            let decl = IdMap.find id pred.pred_locals in
-            mk_free_const ~srt:decl.var_sort id) 
-            pred.pred_formals
-        in
         let formals = pred.pred_formals in
         let locals = IdMap.add dom_id dom_decl pred.pred_locals in
-        let str_body, dom_body = 
-          Symbols.pred_to_form pred.pred_name args dom_set in
+        let args = 
+          (dom_id, Set Loc) ::
+          (List.map (fun id ->
+            let decl = IdMap.find id pred.pred_locals in
+              id, decl.var_sort) 
+            pred.pred_formals)
+        in
+        let str_body, outputs =
+          Symbols.pred_to_form pred.pred_name args
+        in
         let pred_str =
-          { pred_name = pred_struct pred.pred_name;
-            pred_formals = formals @ [dom_id];
+          { pred_name = Symbols.pred_struct pred.pred_name;
+            pred_formals = dom_id :: formals;
             pred_locals = locals;
             pred_returns = [];
             pred_body = { pred.pred_body with spec_form = FOL str_body };
@@ -384,24 +386,30 @@ let compile_pred pred =
             pred_accesses = IdSet.empty;
           }
         in
-        let pred_dom = 
-          { pred_str with 
-            pred_name = pred_domain pred.pred_name;
-            pred_formals = pred.pred_formals;
-            pred_returns = [dom_id];
-            pred_body = { pred.pred_body with spec_form = FOL dom_body } 
-          }
+        let pred_outputs =
+          List.map
+            (fun (id, form) ->
+              let formals = List.filter (fun i -> i <> id) (dom_id :: formals) in
+              { pred_str with 
+                  pred_name = Symbols.pred_naming pred.pred_name id;
+                  pred_formals = formals;
+                  pred_returns = [id];
+                  pred_body = { pred.pred_body with spec_form = FOL form } 
+              }
+            )
+            outputs
         in
+          (*
           (try verify_generalization pred pred_dom pred_str
            with Compile_pred_failure why ->
              Debug.warn ( "cannot prove that predefined translation of '" ^
                           (str_of_ident pred.pred_name) ^
                           "' is correct: " ^ why ^ "\n"));
-          [pred_dom; pred_str]
+          *)
+          pred_str :: pred_outputs
      with Not_found -> 
-       (*ProgError.error pred.pred_pos 
-         ("Unable to translate predicate " ^ (str_of_ident pred.pred_name)))*)
-       [])
+       ProgError.error pred.pred_pos 
+         ("Unable to translate predicate " ^ (str_of_ident pred.pred_name)))
   | FOL _ -> [pred]
 
 let compile_pred_acc acc pred =
@@ -409,8 +417,6 @@ let compile_pred_acc acc pred =
     (fun acc p -> IdMap.add p.pred_name p acc)
     acc
     (compile_pred pred)
-
-
 
 
 
@@ -658,8 +664,8 @@ let compile_preds preds =
     (* package the new preds *)
     let dom_decl = mk_set_decl dom_id pred.pred_pos in
     let pred_str =
-      { pred_name = pred_struct pred.pred_name;
-        pred_formals = pred.pred_formals @ [dom_id];
+      { pred_name = Symbols.pred_struct pred.pred_name;
+        pred_formals = dom_id :: pred.pred_formals;
         pred_locals = IdMap.add dom_id dom_decl pred.pred_locals;
         pred_returns = [];
         pred_body = { pred.pred_body with spec_form = FOL str_body };
@@ -669,7 +675,7 @@ let compile_preds preds =
     in
     let pred_dom = 
       { pred_str with 
-        pred_name = pred_domain pred.pred_name;
+        pred_name = Symbols.pred_naming pred.pred_name dom_id;
         pred_formals = pred.pred_formals;
         pred_returns = [dom_id];
         pred_body = { pred.pred_body with spec_form = FOL dom_body } 

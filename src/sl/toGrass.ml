@@ -37,7 +37,7 @@ let to_form pred_to_form set_fct domain f =
     | Atom (Pred p, args) -> 
         let domain = mk_loc_set_var (fresh_dom d) in
         let structure, footprint = pred_to_form p args domain in
-        [structure, domain], footprint
+        [structure, domain], FormUtil.smk_and footprint
     | (SepStar forms as f)
     | (SepPlus forms as f) ->
         (*let ds = List.map (fun _ -> fd "sep" domain) forms in*)
