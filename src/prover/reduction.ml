@@ -148,7 +148,11 @@ let reduce_sets_to_predicates =
     | BoolOp (op, fs) -> BoolOp (op, List.map elim_sets fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, elim_sets f, a)
   in
-  fun fs gts -> List.map elim_sets fs, TermSet.fold (fun t gts1 -> TermSet.add (abstract_set_consts t) gts1) gts TermSet.empty
+  fun fs gts -> 
+    List.map elim_sets fs, 
+    TermSet.fold 
+      (fun t gts1 -> TermSet.add (abstract_set_consts t) gts1) 
+      gts TermSet.empty
   
 
 (** Reduce all frame predicates to constraints over sets and entry points. *)
@@ -400,55 +404,17 @@ let reduce_sets fs gts =
   then reduce_sets_with_axioms fs gts 
   else reduce_sets_to_predicates fs gts
 
-(** Adds instantiated theory axioms for the entry point function to formula f
- ** Assumes that f is typed and that all frame predicates have been reduced *)
-let reduce_ep fs =
-  let gts = TermSet.add mk_null (ground_terms ~include_atoms:true (mk_and fs)) in
-  let rec collect acc = function
-    | App (Btwn, [fld; x; _; _], _)
-    (*| App (Read, [fld; x], Some Loc)*) ->
-        if TermSet.mem x gts then TermSet.add x acc else acc
-    | App (_, ts, _) -> List.fold_left collect acc ts
-    | _ -> acc
-  in
-  let loc_gts = 
-    if !Config.with_ep then
-      List.fold_left (fold_terms collect) TermSet.empty fs
-      (* TermSet.filter (has_sort Loc) gts *)
-    else TermSet.empty
-  in
-  (* generate ep terms *)
-  let rec get_ep_terms eps = function
-    | App (EntPnt, ts, _) as t -> List.fold_left get_ep_terms (TermSet.add t eps) ts
-    | App (_, ts, _) -> List.fold_left get_ep_terms eps ts
-    | _ -> eps
-  in
-  let ep_terms_free = fold_terms get_ep_terms TermSet.empty (mk_and fs) in
-  let gts_eps = 
-    TermSet.fold 
-      (fun t eps ->
-	match t with
-	| App (EntPnt, [fld; set; loc], srt) -> 
-	    TermSet.fold 
-              (fun t eps -> TermSet.add (App (EntPnt, [fld; set; t], srt)) eps) 
-              loc_gts eps
-	| _ -> eps
-      )
-      ep_terms_free gts
-  in 
-  (* instantiate the variables of sort Fld and Set in all ep axioms *)
-  let classes = CongruenceClosure.congr_classes fs gts_eps in
-  let ep_ax, _ = open_axioms isFunVar (Axioms.ep_axioms ()) in
-  let ep_ax1 = instantiate_with_terms true ep_ax classes in
+
+let print_terms terms =
   print_endline "===============================================";
   TermSet.iter (fun t -> print_term stdout t; print_newline ())
-   (TermSet.filter (function App (EntPnt, _, _) -> true | _ -> false) gts_eps);
-  print_endline "===============================================";
-  fs, ep_ax1, gts_eps
+    terms;
+  print_endline "==============================================="
+  
 
 (** Adds instantiated theory axioms for the entry point function to formula f
  ** Assumes that f is typed and that all frame predicates have been reduced *)
-let reduce_ep fs =
+let instantiate_ep fs =
   let gts = TermSet.add mk_null (ground_terms (mk_and fs)) in
   let ep_ax, generators = open_axioms isFunVar (Axioms.ep_axioms ()) in
   let gts_eps = InstGen.generate_terms generators gts in
@@ -531,26 +497,20 @@ let reduce_reach fs gts framed_fields =
   let gts = TermSet.union (ground_terms (smk_and null_ax1)) gts in
   (* propagate read terms *)
   let gts1, partition_of = propagate_field_reads fs1 gts framed_fields in
-  let classes1 = CongruenceClosure.congr_classes fs1 gts1 in
-  (* generate instances of all write axioms *)
-  let write_terms = 
-    let rec ft acc = function
-      | App (Write, ts, _) as t -> 
-          let new_acc = List.fold_left ft acc ts in
-          TermSet.add t new_acc
-      | App (_, ts, _) -> List.fold_left ft acc ts
-      | _ -> acc
-    in
-    List.fold_left (fold_terms ft) TermSet.empty fs1
-  in
+  (* generate instances of all read over write axioms *)
   let read_write_ax = 
     TermSet.fold (fun t write_ax ->
       match t with
       | App (Write, [fld; loc1; loc2], _) ->
           fst (open_axioms isFunVar (Axioms.read_write_axioms fld loc1 loc2)) @ write_ax
-      | _ -> write_ax) write_terms []
+      | _ -> write_ax) gts1 []
   in
+  (*let read_write_ax2, generators = open_axioms isFunVar (Axioms.read_write_axioms_closed ()) in
+  let gts1 = generate_terms generators gts in
+  let _ = print_terms gts1 in*)
+  let classes1 = CongruenceClosure.congr_classes fs1 gts1 in
   let read_write_ax1 = instantiate_with_terms true read_write_ax classes1 in
+  (*print_forms stdout read_write_ax1;*)
   let classes2 = CongruenceClosure.congr_classes (fs1 @ read_write_ax1) gts1 in
   (* instantiate the variables of sort Fld in all reachability axioms *)
   let basic_reach_flds = 
@@ -567,7 +527,7 @@ let reduce_reach fs gts framed_fields =
           if TermSet.mem fld basic_reach_flds 
           then fst (open_axioms isFunVar (Axioms.reach_write_axioms fld loc1 loc2)) @ write_ax
           else write_ax
-      | _ -> write_ax) write_terms []
+      | _ -> write_ax) gts1 []
   in
   let non_updated_flds = 
     TermSet.filter 
@@ -605,7 +565,7 @@ let reduce f =
   let fs11 = massage_field_reads fs1 in
   let fs2 = List.map reduce_exists fs11 in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
-  let fs2, ep_axioms, gts = reduce_ep fs2 in
+  let fs2, ep_axioms, gts = instantiate_ep fs2 in
   let fs2, framed_fields = reduce_frame fs2 in
   let fs31 = factorize_axioms (split_ands [] fs2) in
   let fs4, gts1 = reduce_sets (fs31 @ ep_axioms) gts in

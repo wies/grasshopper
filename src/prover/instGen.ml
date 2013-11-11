@@ -89,7 +89,11 @@ let generate_terms generators ground_terms =
                   Util.filter_map 
                     (fun (t_matched, _) -> 
                       filter_term filter t_matched)
-                    (fun (_, sm) -> sm) matches @ new_subst_maps
+                    (fun (t_matched, sm) -> 
+                      (*print_string "Matched term: "; 
+                      print_term stdout t_matched; 
+                      print_newline ();*)
+                      sm) matches @ new_subst_maps
                 ) [] subst_maps 
             in
             new_subst_maps)
@@ -98,6 +102,9 @@ let generate_terms generators ground_terms =
         let sort_to_terms1, new_terms1 =
           List.fold_left (fun acc sm ->
             let t = subst_term sm gen_term in
+            (*print_string "Generated term: "; 
+            print_term stdout t; 
+            print_newline ();*)
             add_to_term_maps acc t)
             (sort_to_terms, new_terms) subst_maps
         in

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+PASSED=1
+
 ensure_verifies()
 {
   # Function. Parameter 1 is the return code
@@ -7,7 +9,7 @@ ensure_verifies()
   if [ "${1}" -ne "0" ]; then
     echo -e "\rFailed benchmark ${2}.    "
     echo "*** ERROR: Benchmark ${2} expected to verify, but did not verify."
-    #exit -1
+    PASSED=0
   else
     echo -e "\rPassed benchmark ${2}.    "
   fi
@@ -22,7 +24,7 @@ ensure_fails()
     echo "*** SOUNDNESS ERROR ***************************************"
     echo "*** SOUNDNESS ERROR: Benchmark ${2} expected to fail, but verified!"
     echo "*** SOUNDNESS ERROR ***************************************"
-    exit -1
+    PASSED=0
   else
     echo -e "\rPassed benchmark ${2}.    "
   fi
@@ -43,4 +45,8 @@ while (( "$#" )); do
     shift
     shift
 done
-echo "All tests passed."
+if [ $PASSED == 1 ]; then
+    echo "All tests passed."
+else
+    echo "There were failing test cases."
+fi

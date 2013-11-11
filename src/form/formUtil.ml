@@ -285,6 +285,9 @@ let rec cnf =
 let mk_implies a b =
   smk_or [nnf (mk_not a); b]
 
+let mk_sequent antecedent succedent =
+  smk_or (List.map mk_not antecedent @ succedent)
+
 let mk_iff a b =
   smk_or [smk_and [a; b]; smk_and [nnf (mk_not a); nnf (mk_not b)]]
 

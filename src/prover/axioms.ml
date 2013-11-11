@@ -64,9 +64,28 @@ let read_write_axioms fld1 loc1 loc2 =
   in
   let f_upd2 = mk_eq (g loc1) loc2 in
   if not !encode_fields_as_arrays 
-  then [mk_axiom "read_write1" f_upd1; mk_axiom "read_write2" f_upd2] 
+  then [mk_axiom "read_write1" f_upd1; 
+        mk_axiom "read_write2" f_upd2]
   else []
   
+let read_write_axioms_closed () =
+  let new_fld1 = mk_write fld1 loc1 loc2 in
+  let f x = mk_read fld1 x in
+  let g x = mk_read new_fld1 x in
+  let f_upd1 = 
+    mk_or [mk_eq loc3 loc1; mk_eq (f loc3) (g loc3)]
+  in
+  let f_upd2 = mk_eq (g loc1) loc2 in
+  let generator = 
+    [f1; l1; l2],
+    [],
+    [Match (new_fld1, FilterTrue)],
+    g loc1
+  in      
+  if not !encode_fields_as_arrays 
+  then [mk_axiom "read_write1" f_upd1; mk_axiom ~gen:[generator] "read_write2" f_upd2]
+  else []
+
 let reach_write_axioms fld1 loc1 loc2 =
   let new_fld1 = mk_write fld1 loc1 loc2 in
   (* deprecated

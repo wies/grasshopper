@@ -5,17 +5,36 @@ let di = mk_ident "domain"
 let df = di, Set Loc
 let d = mk_var ~srt:(snd df) (fst df)
 
+let af = mk_ident "Alloc", Set Loc
+let a = mk_var ~srt:(snd af) (fst af)
+
 let xf = mk_ident "x", Loc
 let x = mk_var ~srt:(snd xf) (fst xf)
 
 let yf = mk_ident "y", Loc
 let y = mk_var ~srt:(snd yf) (fst yf)
 
-let nextf = mk_ident "next", Fld Loc
-let next = mk_var ~srt:(snd nextf) (fst nextf)
+let mk_loc_field name = 
+  let fieldf = mk_ident name, Fld Loc in
+  let field = mk_var ~srt:(snd fieldf) (fst fieldf) in
+  fieldf, field
+
+let nextf, next = mk_loc_field "next"
+
+let leftf, left = mk_loc_field "left"
+
+let rightf, right = mk_loc_field "right"
+
+let parentf, parent = mk_loc_field "parent"
 
 let l1f = mk_ident "l1", Loc
 let l1 = mk_var ~srt:(snd l1f) (fst l1f)
+
+let l2f = mk_ident "l2", Loc
+let l2 = mk_var ~srt:(snd l2f) (fst l2f)
+
+let l3f = mk_ident "l3", Loc
+let l3 = mk_var ~srt:(snd l3f) (fst l3f)
 
 let empty_loc = mk_empty (Some (Set Loc))
 
@@ -25,14 +44,44 @@ let without_fp = [
       [df],
       mk_true,
       [di, mk_eq d empty_loc] );
-    ( mk_ident "ptsTo",
-      [df; nextf; xf; yf],
-      mk_eq (mk_read next x) y,
-      [di, mk_eq d (mk_setenum [x])]);
     ( mk_ident "lseg",
-      [df; nextf; xf; yf],
+      [df; af; nextf; xf; yf],
       mk_reach next x y,
       [di, mk_forall [l1f] (mk_iff (mk_elem l1 d) (mk_and [(mk_btwn next x l1 y); (mk_neq l1 y)]))]);
+    ( mk_ident "tree",
+      [df; af; leftf; parentf; rightf; xf; yf],
+      mk_or [mk_eq x mk_null;
+             mk_and [mk_neq x mk_null; 
+                     mk_eq (mk_read parent x) y;
+                     mk_forall ~ann:([Comment "parent_left_or_right_equal"]) [l1f; l2f; l3f] 
+                       (mk_sequent 
+                          [mk_eq l2 l3; mk_elem l1 d; mk_elem l2 d; mk_eq (mk_read parent l1) l2] 
+                          [mk_eq l1 x; mk_eq (mk_read left l2) l1; mk_eq (mk_read right l3) l1]);
+                     mk_forall ~ann:([Comment "left_parent_equal"]) [l1f; l2f] 
+                       (mk_sequent 
+                          [mk_elem l1 d; mk_elem l2 d; mk_eq (mk_read left l1) l2]
+                          [mk_eq l2 mk_null; mk_eq (mk_read parent l2) l1]);
+                     mk_forall ~ann:([Comment "right_parent_equal"]) [l1f; l2f] 
+                       (mk_sequent
+                          [mk_elem l1 d; mk_elem l2 d; mk_eq (mk_read right l1) l2]
+                          [mk_eq l2 mk_null; mk_eq (mk_read parent l2) l1]);
+                     mk_forall ~ann:([Comment "left_right_distinct"]) [l1f; l2f]
+                       (mk_sequent
+                          [mk_elem l1 d; mk_eq l1 l2; mk_eq (mk_read left l1) (mk_read right l2)]
+                          [mk_eq mk_null (mk_read left l1)]);
+                     mk_forall ~ann:([Comment "left_leaf"]) [l1f]
+                       (mk_sequent
+                          [mk_elem l1 d] 
+                          [mk_elem (mk_read left l1) a; mk_eq (mk_read left l1) mk_null]);
+                     mk_forall ~ann:([Comment "right_leaf"]) [l1f]
+                       (mk_sequent
+                          [mk_elem l1 d] 
+                          [mk_elem (mk_read right l1) a; mk_eq (mk_read right l1) mk_null]);                   ] 
+           ],
+      [di, mk_or [mk_and [mk_eq x mk_null; mk_eq d empty_loc]; 
+                  mk_and [mk_neq x mk_null; mk_forall [l1f] 
+                            (mk_iff (mk_elem l1 d) (mk_and [mk_elem l1 a; mk_reach parent l1 x]))]]]
+     ) (* end of "tree" *)
   ]
 
 let with_fp = []

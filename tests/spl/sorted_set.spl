@@ -24,7 +24,7 @@ procedure traverse(lst: Node, val: int,
 {
   var curr: Node;
   curr := lst;
-  var c1: set<int>, c2: set<int>;
+  ghost var c1: set<int>, c2: set<int>;
   c1 := content;
   c2 := set<int>();
 
