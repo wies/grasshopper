@@ -154,11 +154,12 @@ let elim_global_deps prog =
     let subst_preds_sl f =
       let sf p args =
         let decl = find_pred prog p in
-        let accs = decl.pred_accesses in
+        let accs = IdSet.add alloc_id decl.pred_accesses in
         let tas = 
-          List.map (fun id ->
-            let decl = find_global prog id in
-            mk_free_const ~srt:decl.var_sort id)
+          List.map 
+            (fun id ->
+              let decl = find_global prog id in
+              mk_free_const ~srt:decl.var_sort id)
             (IdSet.elements accs)
         in SlUtil.mk_pred p (tas @ args)
       in SL (SlUtil.subst_preds sf f)
@@ -186,11 +187,12 @@ let elim_global_deps prog =
   in
   let elim_pred pred =
     let body1 = elim_spec pred.pred_body in
-    let formals1 = IdSet.elements pred.pred_accesses @ pred.pred_formals in
+    let accesses = IdSet.add alloc_id pred.pred_accesses in
+    let formals1 = IdSet.elements accesses @ pred.pred_formals in
     let locals1 = 
       IdSet.fold 
         (fun id locals -> IdMap.add id (find_global prog id) locals) 
-        pred.pred_accesses pred.pred_locals
+        accesses pred.pred_locals
     in
     { pred with 
       pred_body = body1; 

@@ -3,9 +3,6 @@ open FormUtil
 open Prog
 
 (** Auxiliary variables for desugaring SL specifications *)
-let alloc_id = fresh_ident "Alloc"
-let alloc_set = mk_loc_set alloc_id
-
 let footprint_id = fresh_ident "FP"
 let footprint_set = mk_loc_set footprint_id
 
@@ -14,17 +11,6 @@ let footprint_caller_set = mk_loc_set footprint_caller_id
 
 let final_footprint_caller_id = fresh_ident "FP_Caller_final"
 let final_footprint_caller_set = mk_loc_set final_footprint_caller_id
-
-let mk_set_decl id pos =
-  { var_name = id;
-    var_orig_name = name id;
-    var_sort = Set Loc;
-    var_is_ghost = true;
-    var_is_implicit = false;
-    var_is_aux = true;
-    var_pos = pos;
-  }
-  
 
 let pred_to_form p args dom =
   let def = Symbols.get_symbol p in

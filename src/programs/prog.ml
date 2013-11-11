@@ -2,6 +2,11 @@ open Form
 open FormUtil
 open Axioms
 
+(** Alloc set *)
+
+let alloc_id = fresh_ident "Alloc"
+let alloc_set = mk_loc_set alloc_id
+
 (** Source position *)
 
 type source_position = {
@@ -151,9 +156,21 @@ let dummy_position =
     sp_end_col = 0 
   }
 
+let mk_loc_set_decl id pos =
+  { var_name = id;
+    var_orig_name = name id;
+    var_sort = Set Loc;
+    var_is_ghost = true;
+    var_is_implicit = false;
+    var_is_aux = true;
+    var_pos = pos;
+  }
+
+let alloc_decl = mk_loc_set_decl alloc_id dummy_position
+
 let empty_prog = 
   { prog_axioms = [];
-    prog_vars = IdMap.empty;
+    prog_vars = IdMap.add alloc_id alloc_decl IdMap.empty;
     prog_preds = IdMap.empty;
     prog_procs = IdMap.empty 
   }

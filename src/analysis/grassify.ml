@@ -14,17 +14,13 @@ let elim_sl prog =
     then fold_preds compile_pred_acc IdMap.empty prog
     else compile_preds (preds prog)
   in
-  let globals =
-    let alloc_decl = mk_set_decl alloc_id dummy_position in
-    IdMap.add alloc_id alloc_decl prog.prog_vars
-  in
-  let prog = { prog with prog_preds = preds; prog_vars = globals } in  
+  let prog = { prog with prog_preds = preds; } in  
   let compile_proc proc =
     (* add auxiliary set variables *)
     let new_locals = 
-      let footprint_decl = mk_set_decl footprint_id proc.proc_pos in
+      let footprint_decl = mk_loc_set_decl footprint_id proc.proc_pos in
       (footprint_id, { footprint_decl with var_is_implicit = true }) ::
-      List.map (fun id -> (id, mk_set_decl id proc.proc_pos)) 
+      List.map (fun id -> (id, mk_loc_set_decl id proc.proc_pos)) 
         [footprint_caller_id; final_footprint_caller_id]
     in
     let locals =
@@ -151,7 +147,11 @@ let elim_sl prog =
     (* update all procedure calls and return commands in body *)
     let rec compile_stmt = function
       | (Call cc, pp) ->
-          mk_call_cmd ~prog:(Some prog) (cc.call_lhs @ [footprint_id]) cc.call_name (cc.call_args @ [footprint_set]) pp.pp_pos
+          mk_call_cmd ~prog:(Some prog) 
+            (cc.call_lhs @ [footprint_id]) 
+            cc.call_name 
+            (cc.call_args @ [footprint_set]) 
+            pp.pp_pos
       | (Return rc, pp) ->
           let rc1 = { return_args = rc.return_args @ [mk_union [footprint_caller_set; footprint_set]] } in
           Basic (Return rc1, pp)
@@ -180,12 +180,20 @@ let elim_sl prog =
             let new_footprint_caller_set =
               mk_diff footprint_caller_set footprint_set
             in
-            mk_assign_cmd [footprint_caller_id] [new_footprint_caller_set] body_pp.pp_pos
+            mk_assign_cmd 
+              [footprint_caller_id] 
+              [new_footprint_caller_set] 
+              body_pp.pp_pos
           in
           let assign_final_footprint_caller =
-            mk_assign_cmd [final_footprint_caller_id] [mk_union [footprint_caller_set; footprint_set]] body_pp.pp_pos
+            mk_assign_cmd 
+              [final_footprint_caller_id] 
+              [mk_union [footprint_caller_set; footprint_set]] 
+              body_pp.pp_pos
           in
-          mk_seq_cmd [assign_init_footprint_caller; body1; assign_final_footprint_caller] body_pp.pp_pos
+          mk_seq_cmd 
+            [assign_init_footprint_caller; body1; assign_final_footprint_caller]
+            body_pp.pp_pos
         ) proc.proc_body 
     in
     (*let old_footprint = 
@@ -235,7 +243,9 @@ let annotate_heap_checks prog =
         let arg = dc.dispose_arg in
         let arg_in_footprint = FOL (mk_elem arg footprint_set) in
         let mk_msg callee pos = "This deallocation might be unsafe." in
-        let sf = mk_spec_form arg_in_footprint "check free" (Some mk_msg) pp.pp_pos in
+        let sf = 
+          mk_spec_form arg_in_footprint "check free" (Some mk_msg) pp.pp_pos 
+        in
         let check_dispose = mk_assert_cmd sf pp.pp_pos in
         let arg_checks = mk_term_checks pp.pp_pos [check_dispose] arg in
         mk_seq_cmd (arg_checks @ [Basic (Dispose dc, pp)]) pp.pp_pos
@@ -263,8 +273,18 @@ let elim_new_dispose prog =
               let new_loc = mk_and [mk_not (mk_elem arg alloc_set); mk_neq arg mk_null] in
               let sf = mk_spec_form (FOL new_loc) "new" None pp.pp_pos in
               let assume_fresh = mk_assume_cmd sf pp.pp_pos in
-              let assign_alloc = mk_assign_cmd [alloc_id] [mk_union [alloc_set; mk_setenum [arg]]] pp.pp_pos in
-              let assign_footprint = mk_assign_cmd [footprint_id] [mk_union [footprint_set; mk_setenum [arg]]] pp.pp_pos in
+              let assign_alloc = 
+                mk_assign_cmd 
+                  [alloc_id] 
+                  [mk_union [alloc_set; mk_setenum [arg]]] 
+                  pp.pp_pos 
+              in
+              let assign_footprint = 
+                mk_assign_cmd 
+                  [footprint_id] 
+                  [mk_union [footprint_set; mk_setenum [arg]]] 
+                  pp.pp_pos 
+              in
               [assume_fresh; assign_alloc; assign_footprint]
           | _ -> []
         in
@@ -272,13 +292,21 @@ let elim_new_dispose prog =
     | (Dispose dc, pp) ->
         let arg = dc.dispose_arg in
         let assign_alloc = 
-          mk_assign_cmd [alloc_id] [mk_diff alloc_set (mk_setenum [arg])] pp.pp_pos 
+          mk_assign_cmd 
+            [alloc_id] 
+            [mk_diff alloc_set (mk_setenum [arg])] 
+            pp.pp_pos 
         in
         let assign_footprint = 
-          mk_assign_cmd [footprint_id] [mk_diff footprint_set (mk_setenum [arg])] pp.pp_pos 
+          mk_assign_cmd 
+            [footprint_id] 
+            [mk_diff footprint_set (mk_setenum [arg])] 
+            pp.pp_pos 
         in
         mk_seq_cmd [assign_alloc; assign_footprint] pp.pp_pos
     | (c, pp) -> Basic (c, pp)
   in
-  let elim_proc proc = { proc with proc_body = Util.optmap (map_basic_cmds elim) proc.proc_body } in
+  let elim_proc proc = 
+    { proc with proc_body = Util.optmap (map_basic_cmds elim) proc.proc_body } 
+  in
   { prog with prog_procs = IdMap.map elim_proc prog.prog_procs }

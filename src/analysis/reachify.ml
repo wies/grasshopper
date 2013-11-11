@@ -363,7 +363,7 @@ let compile_pred pred =
   match pred.pred_body.spec_form with
   | SL f ->
       (try 
-        let dom_decl = mk_set_decl dom_id pred.pred_pos in
+        let dom_decl = mk_loc_set_decl dom_id pred.pred_pos in
         let formals = pred.pred_formals in
         let locals = IdMap.add dom_id dom_decl pred.pred_locals in
         let args = 
@@ -662,7 +662,7 @@ let compile_preds preds =
                   (mk_elem Axioms.loc1 dom_set)))
     in
     (* package the new preds *)
-    let dom_decl = mk_set_decl dom_id pred.pred_pos in
+    let dom_decl = mk_loc_set_decl dom_id pred.pred_pos in
     let pred_str =
       { pred_name = Symbols.pred_struct pred.pred_name;
         pred_formals = dom_id :: pred.pred_formals;
@@ -698,7 +698,7 @@ let compile_preds preds =
      *   -only difference is the binary pred (first step) -> get the other induct step but remove the 1st pred
      *)
     let pred = IdMap.find id preds_map in
-    let base = get_base_case id in
+    (* let base = get_base_case id in*)
     let step = get_aux_step id in
     let id_aux = match step.idc_other_term with
       | Some (id, _) -> id
