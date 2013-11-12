@@ -908,6 +908,7 @@ let convert cus =
               pred_body = mk_spec_form (SL body) (str_of_ident id) None (pos_of_expr decl.pr_body);
               pred_pos = decl.pr_pos;
               pred_accesses = IdSet.empty;
+              pred_is_free = false
             } 
           in
          declare_pred prog pred_decl

@@ -8,6 +8,7 @@ type symbol =
       parameters: (ident * sort) list;
       structure: Form.form;
       outputs: (ident * Form.form) list;
+      pos_only: Form.form option
     }
 
 let symbols = Hashtbl.create 15
@@ -66,7 +67,8 @@ let _ =
         { sym_name = id;
           parameters = params;
           structure = strct;
-          outputs = out
+          outputs = out;
+          pos_only = None
         }
     )
     Predefined.symbols

@@ -1,42 +1,42 @@
 open Form
 open FormUtil
 
-let di = mk_ident "domain"
-let df = di, Set Loc
-let d = mk_var ~srt:(snd df) (fst df)
+let mk_formal_and_var name tpe =
+  let i = mk_ident name in
+  let f = i, tpe in
+  let v = mk_var ~srt:tpe i in
+    i, f, v
 
-let af = mk_ident "Alloc", Set Loc
-let a = mk_var ~srt:(snd af) (fst af)
+let mk_loc name = mk_formal_and_var name Loc
+let mk_int name = mk_formal_and_var name Int
+let mk_loc_field name = mk_formal_and_var name (Fld Loc)
+let mk_int_field name = mk_formal_and_var name (Fld Int)
 
-let xf = mk_ident "x", Loc
-let x = mk_var ~srt:(snd xf) (fst xf)
+let di, df, d = mk_formal_and_var "domain" (Set Loc)
 
-let yf = mk_ident "y", Loc
-let y = mk_var ~srt:(snd yf) (fst yf)
+let _, xf, x = mk_loc "x"
+let _, yf, y = mk_loc "y"
 
-let mk_loc_field name = 
-  let fieldf = mk_ident name, Fld Loc in
-  let field = mk_var ~srt:(snd fieldf) (fst fieldf) in
-  fieldf, field
+let _, lbf, lb = mk_int "lb"
+let _, ubf, ub = mk_int "ub"
 
-let nextf, next = mk_loc_field "next"
+let _, nextf, next = mk_loc_field "next"
+let _, leftf, left = mk_loc_field "left"
+let _, rightf, right = mk_loc_field "right"
+let _, parentf, parent = mk_loc_field "parent"
 
-let leftf, left = mk_loc_field "left"
+let _, dataf, data = mk_int_field "data"
 
-let rightf, right = mk_loc_field "right"
-
-let parentf, parent = mk_loc_field "parent"
-
-let l1f = mk_ident "l1", Loc
-let l1 = mk_var ~srt:(snd l1f) (fst l1f)
-
-let l2f = mk_ident "l2", Loc
-let l2 = mk_var ~srt:(snd l2f) (fst l2f)
-
-let l3f = mk_ident "l3", Loc
-let l3 = mk_var ~srt:(snd l3f) (fst l3f)
+let _, l1f, l1 = mk_loc "l1"
+let _, l2f, l2 = mk_loc "l2"
+let _, l3f, l3 = mk_loc "l3"
 
 let empty_loc = mk_empty (Some (Set Loc))
+
+(* short hand*)
+let l1_in_domain = mk_elem l1 d
+let l2_in_domain = mk_elem l2 d
+let l1_in_lst_fp = mk_and [mk_btwn next x l1 y; mk_neq l1 y]
 
 (* the predefined symbols *)
 let without_fp = [
@@ -47,7 +47,29 @@ let without_fp = [
     ( mk_ident "lseg",
       [df; nextf; xf; yf],
       mk_reach next x y,
-      [di, mk_forall [l1f] (mk_iff (mk_elem l1 d) (mk_and [(mk_btwn next x l1 y); (mk_neq l1 y)]))]);
+      [di, mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+    ( mk_ident "slseg",
+      [df; nextf; dataf; xf; yf],
+      mk_and [mk_reach next x y;
+              mk_forall [l1f; l2f] (mk_implies (mk_and [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y])
+                                               (mk_leq (mk_read data l1) (mk_read data l2)))],
+      [di, mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+    ( mk_ident "rslseg",
+      [df; nextf; dataf; xf; yf],
+      mk_and [mk_reach next x y;
+              mk_forall [l1f; l2f] (mk_implies (mk_and [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y])
+                                               (mk_leq (mk_read data l2) (mk_read data l1)))],
+      [di, mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+    ( mk_ident "ulseg",
+      [df; nextf; xf; yf; lbf],
+      mk_and [mk_reach next x y;
+              mk_forall [l1f] (mk_implies (l1_in_domain) (mk_leq lb (mk_read data l1)))],
+      [di, mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+    ( mk_ident "llseg",
+      [df; nextf; xf; yf; ubf],
+      mk_and [mk_reach next x y;
+              mk_forall [l1f] (mk_implies (l1_in_domain) (mk_leq (mk_read data l1) ub))],
+      [di, mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
     ( mk_ident "tree",
       [df; leftf; parentf; rightf; xf; yf],
       mk_or [mk_eq x mk_null;
@@ -105,29 +127,6 @@ let misc = []
 (*
 let without_fp =
   [
-    "emp(domain: set loc){" ^
-        " true," ^
-        "domain == {} }";
-    "ptsTo(domain: set loc, ptr: fld loc, x: loc, y: loc){ " ^
-        "ptr(x) == y, " ^
-        "domain == {x} }";
-    "lseg(domain: set loc, next: fld loc, x: loc, y: loc){ " ^
-        "reach(next, x, y), " ^
-        "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
-    "slseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc){ " ^
-        "reach(next, x, y) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2), " ^
-        "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
-    "rslseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc){ " ^
-        "reach(next, x, y) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) >= data(l2), " ^
-        "forall l1: loc.  l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
-    "ulseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int){ " ^
-        "reach(next, x, y) && forall l1: loc. l1 in domain ==> data(l1) >= v, " ^
-        " forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
-    "llseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int){ " ^
-        "reach(next, x, y) && forall l1: loc. l1 in domain ==> data(l1) <= v, " ^
-        "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
     "uslseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int){ " ^
         "reach(next, x, y) &&"^
         " (forall l1: loc. l1 in domain ==> data(l1) >= v) &&"^

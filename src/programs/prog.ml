@@ -136,6 +136,7 @@ type pred_decl = {
     pred_body : spec; (** predicate body *)
     pred_pos : source_position; (** position of declaration *)
     pred_accesses : IdSet.t; (** accessed variables *)
+    pred_is_free : bool; (** assume when occurs positively *)
   } 
 
 (** Program *)

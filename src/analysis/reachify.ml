@@ -384,6 +384,7 @@ let compile_pred pred =
             pred_body = { pred.pred_body with spec_form = FOL str_body };
             pred_pos = pred.pred_pos;
             pred_accesses = IdSet.empty;
+            pred_is_free = false;
           }
         in
         let pred_outputs =
@@ -671,6 +672,7 @@ let compile_preds preds =
         pred_body = { pred.pred_body with spec_form = FOL str_body };
         pred_pos = pred.pred_pos;
         pred_accesses = IdSet.empty;
+        pred_is_free = false;
       }
     in
     let pred_dom = 
