@@ -71,7 +71,8 @@ let factorize_axioms fs =
         Binder (b, [], g1, a), axioms
     | Binder (Forall, (_ :: _ as vs), f1, a) -> 
         let p = mk_atom (FreeSym (fresh_ident "Axiom")) [] in
-        let fact_axiom = annotate (mk_or [mk_not p; Binder (Forall, vs, f1, [])]) a in
+        let comments, other_annots = List.partition (function Comment _ -> true | _ -> false) a in 
+        let fact_axiom = annotate (mk_or [mk_not p; Binder (Forall, vs, f1, other_annots)]) comments in
 	p, fact_axiom :: axioms
     | BoolOp (op, fs) -> 
 	let fs1, axioms = 
@@ -546,10 +547,19 @@ let reduce_reach fs gts framed_fields =
   let reach_ax2 = instantiate_with_terms true (fst (open_axioms isFunVar reach_ax1)) classes2 in
   rev_concat [fs1; reach_ax2; read_write_ax1; reach_write_ax], gts1
 
-let reduce_remaining fs gts =
+let rec hasGenerators = function
+  | BoolOp (op, fs) -> List.exists hasGenerators fs
+  | Binder (_, _, f, a) as f1 ->
+      let has = List.exists (function TermGenerator _ -> true | _ -> false) a in
+      if has then (print_form stdout f1; print_newline (); true)
+      else hasGenerators f 
+  | Atom _ -> false
+
+let instantiate_user_def_axioms fs gts =
   (* generate local instances of all remaining axioms in which variables occur below function symbols *)
-  let classes = CongruenceClosure.congr_classes fs gts in
-  let fs1, _ = open_axioms isFunVar fs in
+  let fs1, generators = open_axioms isFunVar fs in
+  let gts1 = generate_terms generators gts in
+  let classes = CongruenceClosure.congr_classes fs1 gts1 in
   instantiate_with_terms true fs1 classes
 
 (** Reduces the given formula to the target theory fragment, as specified by the configuration.
@@ -573,9 +583,9 @@ let reduce f =
   let fs31 = factorize_axioms (split_ands [] fs2) in
   let fs4, gts1 = reduce_sets (fs31 @ ep_axioms) gts in
   let fs5, gts2 = reduce_reach fs4 gts1 framed_fields in
-  let fs6 = (*Simplify.simplify*) (reduce_remaining fs5 gts2) in
   (* the following is a (probably stupid) heuristic to sort the formulas for improving the running time *)
-  let fs7 = 
+  let fs5 = instantiate_user_def_axioms fs5 gts2 in
+  let fs6 = 
     (* sort by decreasing number of disjuncts in formula *)
     let cmp f1 f2 =
       let rec count_disjuncts acc = function
@@ -586,6 +596,6 @@ let reduce f =
       in
       compare (count_disjuncts 0 f2) (count_disjuncts 0 f1)
     in
-    List.stable_sort cmp fs6
+    List.stable_sort cmp fs5
   in
-  fs7
+  fs6

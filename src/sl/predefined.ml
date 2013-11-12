@@ -109,10 +109,19 @@ let without_fp = [
                                [mk_elem l1 d; mk_elem l2 d; mk_reach parent l1 l2]
                                [mk_btwn parent l1 (mk_read left l2) l2; 
                                 mk_btwn parent l1 (mk_read right l2) l2]);
-                          mk_forall ~ann:[Comment "not_in_tree_domain"] [l1f]
-                            (mk_or [mk_eq (mk_ep d parent l1) l1; 
-                                    mk_reach parent l1 (mk_read left (mk_ep d parent l1));
-                                    mk_reach parent l1 (mk_read right (mk_ep d parent l1))])
+                          let ep_generator =
+                            TermGenerator 
+                              ([l1f],
+                               [],
+                               [Match (l1, FilterNotOccurs EntPnt)],
+                               mk_ep d parent l1)
+                          in
+                          mk_forall ~ann:[ep_generator; Comment "not_in_tree_domain"] [l1f; l2f]
+                            (mk_sequent 
+                               [mk_eq l2 (mk_ep d parent l1)]
+                               [mk_eq (mk_ep d parent l1) l1; 
+                                mk_reach parent l1 (mk_read left l2);
+                                mk_reach parent l1 (mk_read right l2)])
                             
                         ]
                 ]
