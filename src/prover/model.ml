@@ -325,7 +325,6 @@ let output_graphviz chan model =
   let output_sets () =
     let print_sets () =
       let defs = defs_of Elem model in
-      let csts = consts model in
       let sets =
         SymbolMap.fold
           (fun sym defs acc -> 

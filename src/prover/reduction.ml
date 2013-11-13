@@ -376,10 +376,8 @@ let propagate_field_reads fs gts framed_fields =
     let rec collect_eq partition = function
       | BoolOp (Not, f) -> partition
       | BoolOp (op, fs) -> List.fold_left collect_eq partition fs
-      | Atom (App (Eq, [App (_, _, Some (Fld _)) as fld1; fld2], _)) as t ->
-          (try
-            Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
-          with Not_found -> print_form stdout t; print_newline (); raise Not_found)
+      | Atom (App (Eq, [App (_, _, Some (Fld _)) as fld1; fld2], _)) ->
+          Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
       | Binder (_, _, f, _) -> collect_eq partition f
       | f -> partition
     in
@@ -502,6 +500,12 @@ let instantiate_user_def_axioms fs gts =
 (** Reduces the given formula to the target theory fragment, as specified by the configuration.
  ** Assumes that f is typed *)
 let reduce f = 
+  let _ =
+    TermSet.iter (function
+      | App (Eq, [App (_, _, Some (Fld _)); App (Null, [], _)], _) as t -> 
+          print_string "Type error: "; print_term stdout t; print_newline ()
+      | _ -> ()) (ground_terms f)
+  in
   let rec split_ands acc = function
     | BoolOp(And, fs) :: gs -> 
         split_ands acc (fs @ gs)

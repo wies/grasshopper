@@ -30,8 +30,9 @@ returns (new_root: Node)
   }
   if (root.data > value) {
     root.left := insert(root.left, value, root);
+    return root;
   } else if (root.data < value) {
     root.right := insert(root.right, value, root);
+    return root;
   }
-  return root;
 }

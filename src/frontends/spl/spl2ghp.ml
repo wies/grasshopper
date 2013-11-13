@@ -374,14 +374,27 @@ let flatten_exprs cus =
               args ([], [], locals)
           in 
           let lhs1, aux2, locals = 
-            List.fold_right 
-              (fun e (es, aux, locals) ->
-                let e1, aux1, locals = flatten_expr aux locals e in
-                e1 :: es, aux1, locals
-              ) 
-              lhs ([], aux1, locals)
+            match lhs with
+            | [Dot (e, id, opos)] ->
+                let decl = IdMap.find id cu.var_decls in
+                let res_ty = 
+                  match decl.v_type with
+                  | FieldType (_, ty) -> ty
+                  | ty -> ty
+                in
+                let aux_id, locals = decl_aux_var "tmp" res_ty opos locals in
+                let aux_var = Ident (aux_id, pos) in
+                let assign_aux = Assign ([Dot (e, id, opos)], [aux_var], pos) in
+                [aux_var], [assign_aux], locals
+            | _ ->
+                List.fold_right 
+                  (fun e (es, aux, locals) ->
+                    let e1, aux1, locals = flatten_expr aux locals e in
+                    e1 :: es, aux1, locals
+                  ) 
+                  lhs ([], aux1, locals)
           in 
-          mk_block pos (aux2 @ [Assign (lhs1, [ProcCall (id, args1, cpos)], pos)]), locals
+          mk_block pos ([Assign (lhs1, [ProcCall (id, args1, cpos)], pos)] @ aux2), locals
       | Assign (lhs, rhs, pos) ->
           let rhs1, aux1, locals = 
             List.fold_right 

@@ -81,11 +81,11 @@ let without_fp = [
                           [mk_eq l1 x; mk_eq (mk_read left l2) l1; mk_eq (mk_read right l3) l1]);
                      mk_forall ~ann:([Comment "left_parent_equal"]) [l1f; l2f] 
                        (mk_sequent 
-                          [mk_elem l1 d; mk_elem l2 d; mk_eq (mk_read left l1) l2]
+                          [mk_elem l1 d; mk_eq (mk_read left l1) l2]
                           [mk_eq l2 mk_null; mk_eq (mk_read parent l2) l1]);
                      mk_forall ~ann:([Comment "right_parent_equal"]) [l1f; l2f] 
                        (mk_sequent
-                          [mk_elem l1 d; mk_elem l2 d; mk_eq (mk_read right l1) l2]
+                          [mk_elem l1 d; mk_eq (mk_read right l1) l2]
                           [mk_eq l2 mk_null; mk_eq (mk_read parent l2) l1]);
                      mk_forall ~ann:([Comment "left_right_distinct"]) [l1f; l2f]
                        (mk_sequent
