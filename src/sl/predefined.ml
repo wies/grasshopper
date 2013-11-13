@@ -102,26 +102,29 @@ let without_fp = [
            ],
       [di, mk_or [mk_and [mk_eq x mk_null; mk_eq d empty_loc]; 
                   mk_and [mk_neq x mk_null;
-                          mk_forall ~ann:[Comment "in_tree_domain"] [l1f] 
+                          mk_forall ~ann:[Comment "in_tree_domain1"] [l1f] 
                             (mk_sequent [mk_elem l1 d] [mk_reach parent l1 x]);
-                          mk_forall ~ann:[Comment "in_tree_domain"] [l1f; l2f] 
+                          mk_forall ~ann:[Comment "in_tree_domain2"] [l1f; l2f] 
                             (mk_sequent 
-                               [mk_elem l1 d; mk_elem l2 d; mk_reach parent l1 l2]
-                               [mk_btwn parent l1 (mk_read left l2) l2; 
+                               [mk_elem l1 d; mk_btwn parent l1 l2 x]
+                               [mk_eq l1 l2;
+                                mk_btwn parent l1 (mk_read left l2) l2; 
                                 mk_btwn parent l1 (mk_read right l2) l2]);
                           let ep_generator =
                             TermGenerator 
                               ([l1f],
                                [],
                                [Match (l1, FilterNotOccurs EntPnt)],
-                               mk_ep d parent l1)
+                               mk_ep parent d l1)
                           in
                           mk_forall ~ann:[ep_generator; Comment "not_in_tree_domain"] [l1f; l2f]
                             (mk_sequent 
-                               [mk_eq l2 (mk_ep d parent l1)]
-                               [mk_eq (mk_ep d parent l1) l1; 
-                                mk_reach parent l1 (mk_read left l2);
-                                mk_reach parent l1 (mk_read right l2)])
+                               [mk_eq l2 (mk_ep parent d l1)]
+                               [mk_and [mk_neq l2 l1; 
+                                        mk_not (mk_reach parent l1 (mk_read left l2));
+                                        mk_not (mk_reach parent l1 (mk_read right l2))];
+                                mk_elem l1 d]
+                            )
                             
                         ]
                 ]

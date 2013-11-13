@@ -444,20 +444,19 @@ let generate_instances useLocalInst axioms terms rep_map type_graph =
             [] terms
         ) fvars [IdMap.empty]
     in
-    (*
     let print_subst_map sm =
       IdMap.iter (fun v t -> Printf.printf "%s -> %s, " (str_of_ident v) (string_of_term t)) sm;
       print_newline ()
     in
     let _ = match f with
-    | Binder (_, _, _, [Comment "read_write2"]) ->
+    | Binder (_, _, _, [Comment "in_tree_domain2"]) ->
         begin
           print_endline "Axiom:";
           print_forms stdout [f];
           print_endline "fun_terms:";
           List.iter (fun (_, t) -> print_term stdout t; print_string ", ") fun_terms;
           print_endline "\nground_terms:";
-          TermSet.iter (fun t -> print_term stdout t; print_string ", ") ground_terms;
+          TermSet.iter (fun t -> print_term stdout t; print_newline ()) ground_terms;
           print_endline "\nsubst_maps:";
           List.iter print_subst_map subst_maps
         end
@@ -467,7 +466,7 @@ let generate_instances useLocalInst axioms terms rep_map type_graph =
       begin
         print_endline "Dropping axiom: ";
         print_forms stdout [f];
-      end;*)
+      end;
     List.fold_left (fun acc subst_map -> Axioms.mk_axiom2 (subst subst_map f) :: acc) acc subst_maps
   in
   List.fold_left instantiate epr_axioms axioms

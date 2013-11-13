@@ -59,8 +59,6 @@ let massage_field_reads fs =
   | f -> f
   in List.map massage fs
     
-
-
 (** Hoist all universally quantified subformulas to top level.
  ** Assumes that formulas [fs] are in negation normal form *)
 let factorize_axioms fs =
@@ -95,66 +93,6 @@ let factorize_axioms fs =
   let fs1, axioms = List.fold_left process ([], []) fs in
   axioms @ fs1
 
-(** Reduce all set constraints to constraints over unary predicates.
- ** Assumes that [f] is typed and in negation normal form *)
-let reduce_sets_to_predicates =
-  let e = fresh_ident "?e" in
-  let encode_set_exp srt e s =
-    let rec ese = function
-      |	App (Empty, [], _) -> mk_false
-      |	App (FreeSym id, [], _) -> mk_pred id [e]
-      |	App (Union, sets, _) -> mk_or (List.map ese sets)
-      |	App (Inter, sets, _) -> mk_and (List.map ese sets)
-      |	App (Diff, [s1; s2], _) -> mk_and [ese s1; mk_not (ese s2)]
-      |	App (SetEnum, ts, _) -> mk_or (List.map (mk_eq e) ts)
-      |	Var _ -> failwith "encode_set_exp: tried to eliminate quantified set variable"
-      |	_ -> failwith "encode_set_exp: tried to encode non-set expression"
-    in ese s
-  in
-  let mk_ep id = mk_free_app ~srt:Loc ((str_of_symbol EntPnt ^ "_" ^ str_of_ident id), 0) in
-  let rec abstract_set_consts = function
-    | App (EntPnt, [fld; set; loc], srt) ->
-	(match set with
-	| App (FreeSym id, [], _) ->
-	    mk_ep id [abstract_set_consts fld; abstract_set_consts loc]
-	| App (Empty, [], _) -> abstract_set_consts loc
-	| _ -> failwith "abstract_set_consts: tried to abstract non-flat set expression")
-    (* | App (FreeSym id, ts) -> *)
-    | App (sym, ts, srt) -> App (sym, List.map abstract_set_consts ts, srt)
-    | t -> t
-  in
-  let rec elim_sets = function
-    | Atom (App (Elem, [e; s], _)) ->
-	let srt = element_sort_of_set s in
-	encode_set_exp srt (abstract_set_consts e) s
-    | Atom (App (Eq, [s1; s2], _)) ->
-	(match sort_of s1 with
-	  | Some (Set srt) ->
-	      let ve = mk_var ~srt:srt e in
-	      let es1 = encode_set_exp srt ve s1 in
-	      let es2 = encode_set_exp srt ve s2 in
-	      mk_forall [(e, srt)] (mk_iff es1 es2)
-	  | _ -> 
-	      let s11 = abstract_set_consts s1 in
-	      let s21 = abstract_set_consts s2 in
-	      mk_eq s11 s21
-	)
-    | Atom (App (SubsetEq, [s1; s2], _)) ->
-	let srt = element_sort_of_set s1 in
-	let ve = mk_var ~srt:srt e in
-	let es1 = encode_set_exp srt ve s1 in
-	let es2 = encode_set_exp srt ve s2 in
-	mk_forall [(e, srt)] (mk_implies es1 es2)
-    | Atom t -> Atom (abstract_set_consts t)
-    | BoolOp (op, fs) -> BoolOp (op, List.map elim_sets fs)
-    | Binder (b, vs, f, a) -> Binder (b, vs, elim_sets f, a)
-  in
-  fun fs gts -> 
-    List.map elim_sets fs, 
-    TermSet.fold 
-      (fun t gts1 -> TermSet.add (abstract_set_consts t) gts1) 
-      gts TermSet.empty
-  
 
 (** Reduce all frame predicates to constraints over sets and entry points. *)
 let reduce_frame fs =
@@ -369,7 +307,7 @@ let isFunVar f =
 
 (** Reduce all set constraints by adding appropriate instances of the axioms of set operations.
  ** Assumes that f is typed and in negation normal form *)
-let reduce_sets_with_axioms fs gts =
+let reduce_sets fs gts =
   let split ts = List.fold_left (fun (ts1, ts2) t -> (ts2, t :: ts1)) ([], []) ts in
   let rec unflatten = function
     | App (Union, [t], _) 
@@ -396,17 +334,12 @@ let reduce_sets_with_axioms fs gts =
     | Atom t -> Atom (simplify_term t)
   in
   let fs1 = List.map simplify fs in
-  let gts = TermSet.fold (fun t gts1 -> TermSet.add (unflatten t) gts1) gts TermSet.empty in
-  let gts1 = TermSet.union gts (ground_terms (mk_and fs1)) in
+  (*let gts = TermSet.fold (fun t gts1 -> TermSet.add (unflatten t) gts1) gts TermSet.empty in*)
+  let gts1 = ground_terms (mk_and fs1) in
+  (*let set_ax, _ = open_axioms isFunVar (Axioms.set_axioms ()) in
   let classes = CongruenceClosure.congr_classes fs1 gts1 in
-  let set_ax, _ = open_axioms isFunVar (Axioms.set_axioms ()) in
-  let set_ax1 = instantiate_with_terms true set_ax classes in
-  rev_concat [fs1; set_ax1], gts1
-
-let reduce_sets fs gts =
-  if !Config.keep_sets 
-  then reduce_sets_with_axioms fs gts 
-  else reduce_sets_to_predicates fs gts
+  let set_ax1 = instantiate_with_terms true set_ax classes in*)
+  rev_concat [fs1; Axioms.set_axioms ()], gts1
 
 
 let print_terms terms =
@@ -420,15 +353,15 @@ let print_terms terms =
  ** Assumes that f is typed and that all frame predicates have been reduced *)
 let instantiate_ep fs =
   let gts = TermSet.add mk_null (ground_terms (mk_and fs)) in
-  let ep_ax, generators = open_axioms isFunVar (Axioms.ep_axioms ()) in
+  (*let ep_ax, generators = open_axioms isFunVar (Axioms.ep_axioms ()) in
   let gts_eps = InstGen.generate_terms generators gts in
   let classes = CongruenceClosure.congr_classes fs gts_eps in
-  let ep_ax1 = instantiate_with_terms true ep_ax classes in
+  let ep_ax1 = instantiate_with_terms true ep_ax classes in *)
   (*print_endline "===============================================";
   TermSet.iter (fun t -> print_term stdout t; print_newline ())
    (TermSet.filter (function App (EntPnt, _, _) -> true | _ -> false) gts_eps);
   print_endline "===============================================";*)
-  fs, ep_ax1, gts_eps
+  rev_concat [fs; (Axioms.ep_axioms ())], gts
  
 
 let propagate_field_reads fs gts framed_fields =
@@ -487,14 +420,10 @@ let propagate_field_reads fs gts framed_fields =
     gts gts,
   partition_of
 
-
-(** Adds instantiated theory axioms for graph reachability to formula f.
- ** Assumes that f is typed *)
-let reduce_reach fs gts framed_fields =
+let reduce_read_write fs gts framed_fields =
   let basic_pt_flds = TermSet.filter (has_sort (Fld Loc) &&& is_free_const) gts in
   (* instantiate null axioms *)
   let classes =  CongruenceClosure.congr_classes fs gts in
-  (* let _ = List.iter (List.iter (fun t -> print_endline (string_of_term t))) classes in *)
   let null_ax, _ = open_axioms isFld (Axioms.null_axioms ()) in
   let null_ax1 = instantiate_with_terms false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
   let fs1 = null_ax1 @ fs in
@@ -514,15 +443,21 @@ let reduce_reach fs gts framed_fields =
   let _ = print_terms gts1 in*)
   let classes1 = CongruenceClosure.congr_classes fs1 gts1 in
   let read_write_ax1 = instantiate_with_terms true read_write_ax classes1 in
-  (*print_forms stdout read_write_ax1;*)
-  let classes2 = CongruenceClosure.congr_classes (fs1 @ read_write_ax1) gts1 in
+  let gts1 = TermSet.union gts1 (ground_terms (mk_and read_write_ax1)) in
+  let gts1, partition_of = propagate_field_reads (fs1 @ read_write_ax) gts1 framed_fields in
+  fs1 @ read_write_ax, gts1, partition_of
+
+(** Adds instantiated theory axioms for graph reachability to formula f.
+ ** Assumes that f is typed *)
+let reduce_reach fs gts partition_of =
+  let classes = CongruenceClosure.congr_classes fs gts in
   (* instantiate the variables of sort Fld in all reachability axioms *)
   let basic_reach_flds = 
     fold_terms (fun flds -> function
       | App (Btwn, Var _ :: _, _) -> flds
       | App (Btwn, fld :: _, _) -> TermSet.union (partition_of fld) flds
       | _ -> flds)
-      TermSet.empty (smk_and fs1)
+      TermSet.empty (smk_and fs)
   in
   let reach_write_ax = 
     TermSet.fold (fun t write_ax ->
@@ -531,7 +466,7 @@ let reduce_reach fs gts framed_fields =
           if TermSet.mem fld basic_reach_flds 
           then fst (open_axioms isFunVar (Axioms.reach_write_axioms fld loc1 loc2)) @ write_ax
           else write_ax
-      | _ -> write_ax) gts1 []
+      | _ -> write_ax) gts []
   in
   let non_updated_flds = 
     TermSet.filter 
@@ -542,10 +477,10 @@ let reduce_reach fs gts framed_fields =
       basic_reach_flds
   in
   let reach_ax, _ = open_axioms isFld (Axioms.reach_axioms ()) in
-  let reach_ax1 = instantiate_with_terms false reach_ax (CongruenceClosure.restrict_classes classes2 non_updated_flds) in
+  let reach_ax1 = instantiate_with_terms false reach_ax (CongruenceClosure.restrict_classes classes non_updated_flds) in
   (* generate local instances of all axioms in which variables occur below function symbols *)
-  let reach_ax2 = instantiate_with_terms true (fst (open_axioms isFunVar reach_ax1)) classes2 in
-  rev_concat [fs1; reach_ax2; read_write_ax1; reach_write_ax], gts1
+  let reach_ax2 = instantiate_with_terms true (fst (open_axioms isFunVar reach_ax1)) classes in
+  rev_concat [fs; reach_ax2; reach_write_ax], gts
 
 let rec hasGenerators = function
   | BoolOp (op, fs) -> List.exists hasGenerators fs
@@ -560,7 +495,7 @@ let instantiate_user_def_axioms fs gts =
   let fs1, generators = open_axioms isFunVar fs in
   let gts1 = generate_terms generators gts in
   let classes = CongruenceClosure.congr_classes fs1 gts1 in
-  instantiate_with_terms true fs1 classes
+  instantiate_with_terms true fs1 classes, gts1
 
 (** Reduces the given formula to the target theory fragment, as specified by the configuration.
  ** Assumes that f is typed *)
@@ -578,13 +513,14 @@ let reduce f =
   let fs11 = massage_field_reads fs1 in
   let fs2 = List.map reduce_exists fs11 in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
-  let fs2, ep_axioms, gts = instantiate_ep fs2 in
+  let fs2, gts = instantiate_ep fs2 in
   let fs2, framed_fields = reduce_frame fs2 in
   let fs31 = factorize_axioms (split_ands [] fs2) in
-  let fs4, gts1 = reduce_sets (fs31 @ ep_axioms) gts in
-  let fs5, gts2 = reduce_reach fs4 gts1 framed_fields in
+  let fs4, gts1 = reduce_sets fs31 gts in
+  let fs5, gts2, partition_of = reduce_read_write fs4 gts1 framed_fields in
+  let fs5, gts2 = instantiate_user_def_axioms fs5 gts2 in
+  let fs5, gts2 = reduce_reach fs5 gts2 partition_of in
   (* the following is a (probably stupid) heuristic to sort the formulas for improving the running time *)
-  let fs5 = instantiate_user_def_axioms fs5 gts2 in
   let fs6 = 
     (* sort by decreasing number of disjuncts in formula *)
     let cmp f1 f2 =

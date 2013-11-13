@@ -327,28 +327,30 @@ let output_graphviz chan model =
       let defs = defs_of Elem model in
       let csts = consts model in
       let sets =
-        SymbolSet.filter
-          (fun sym -> match decl_of sym model with ([], Set _) -> true | _ -> false)
-          csts
+        SymbolMap.fold
+          (fun sym defs acc -> 
+            List.fold_left (fun acc def ->
+              match decl_of sym model with 
+              | (_, Set _) -> SymbolSet.add def.output acc
+              | _ -> acc) acc defs)
+          model.interp SymbolSet.empty
       in
         SymbolSet.iter
           (fun set ->
-            let set_value = Util.unopt (eval_term model (mk_const set)) in
-            let set_defs = List.filter (fun def -> List.nth def.input 1 = set_value) defs in
-            let in_set, not_in_set =
-              List.partition
+            (*let set_value = Util.unopt (eval_term model (mk_const set)) in*)
+            let set_defs = List.filter (fun def -> List.nth def.input 1 = set) defs in
+            let in_set =
+              List.filter
                 (fun def -> match def.output with
                               BoolConst b -> b
                             | _ -> failwith "expected BoolConst _")
                 set_defs
             in
             let in_set = List.map (fun d -> List.hd d.input) in_set in
-            let not_in_set = List.map (fun d -> List.hd d.input) not_in_set in
             let in_set_rep = String.concat ", " (List.map str_of_symbol in_set) in
-            let not_in_set_rep = String.concat ", " (List.map str_of_symbol not_in_set) in
-              output_string chan "      <TR>\n";
-              Printf.fprintf chan "        <TD>%s</TD><TD>%s</TD><TD>%s</TD>\n" (str_of_symbol set) in_set_rep not_in_set_rep;
-              output_string chan "      </TR>\n"
+            output_string chan "      <TR>\n";
+            Printf.fprintf chan "        <TD>%s = {%s}</TD>\n" (str_of_symbol (find_rep set)) in_set_rep;
+            output_string chan "      </TR>\n"
           )
           sets
     in 
@@ -356,7 +358,7 @@ let output_graphviz chan model =
     output_string chan "{ rank = sink; Legend [shape=none, margin=0, label=<\n";
     output_string chan "    <TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\" CELLPADDING=\"4\">\n";
     output_string chan "      <TR>\n";
-    output_string chan "        <TD><B>Set</B></TD><TD><B>contains</B></TD><TD><B>excludes</B></TD>\n";
+    output_string chan "        <TD><B>sets</B></TD>\n";
     output_string chan "      </TR>\n";
     (* print sets *)
     print_sets ();
@@ -375,7 +377,7 @@ let output_graphviz chan model =
     in
     output_string chan "{ rank = sink; Uninterpreted [shape=none, margin=0, label=<\n";
     output_string chan "    <TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\" CELLPADDING=\"4\">\n";
-    output_string chan "      <TR><TD><B>pred/fun</B></TD></TR>\n";
+    output_string chan "      <TR><TD><B>predicates/functions</B></TD></TR>\n";
     SymbolMap.iter
       (fun sym (args, _) -> match sym with
         | FreeSym (id, _) when args <> [] && id <> "k" ->
