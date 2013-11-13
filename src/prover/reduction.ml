@@ -376,8 +376,10 @@ let propagate_field_reads fs gts framed_fields =
     let rec collect_eq partition = function
       | BoolOp (Not, f) -> partition
       | BoolOp (op, fs) -> List.fold_left collect_eq partition fs
-      | Atom (App (Eq, [App (_, _, Some (Fld _)) as fld1; fld2], _)) ->
-          Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
+      | Atom (App (Eq, [App (_, _, Some (Fld _)) as fld1; fld2], _)) as t ->
+          (try
+            Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
+          with Not_found -> print_form stdout t; print_newline (); raise Not_found)
       | Binder (_, _, f, _) -> collect_eq partition f
       | f -> partition
     in
