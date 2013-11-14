@@ -1,0 +1,26 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+}
+
+predicate tree(x: Node, y: Node) {
+    x == null
+  ||
+    x != null &*&
+    x.parent |-> y &*&
+    tree(x.left, x) &*&
+    tree(x.right, x)
+}
+
+procedure traverse(root: Node, p: Node) 
+  requires tree(root, p);
+  ensures  tree(root, p);
+{
+  if (root != null) {
+    traverse(root.left, root);
+    traverse(root.right, root);
+  }
+}
+

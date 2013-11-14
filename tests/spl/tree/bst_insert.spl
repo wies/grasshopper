@@ -1,0 +1,39 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+}
+
+predicate tree(x: Node, y: Node) {
+    x == null
+  ||
+    x != null &*&
+    x.parent |-> y &*&
+    tree(x.left, x) &*&
+    tree(x.right, x)
+}
+
+procedure insert(root: Node, value: int, p: Node)
+returns (new_root: Node)
+  requires tree(root, p);
+  ensures tree(new_root, p);
+{
+  if (root == null) {
+    var t: Node;
+    t := new Node;
+    t.left := null;
+    t.right := null;
+    t.parent := p;
+    t.data := value;
+    return t;
+  } else { 
+    if (root.data > value) {
+      root.left := insert(root.left, value, root);
+      return root;
+    } else if (root.data < value) {
+      root.right := insert(root.right, value, root);
+      return root;
+    }
+  }
+}

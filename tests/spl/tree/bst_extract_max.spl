@@ -1,0 +1,33 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+}
+
+predicate tree(x: Node, y: Node) {
+    x == null
+  ||
+    x != null &*&
+    x.parent |-> y &*&
+    tree(x.left, x) &*&
+    tree(x.right, x)
+}
+
+procedure extract_max(root: Node, p: Node) returns (others: Node, max: Node)
+  requires tree(root, p) &*& root != null;
+  ensures  tree(others, p) &*& acc(max);
+{
+    if (root.right != null) {
+        var c: Node, m: Node;
+        c, m := extract_max(root.right, root); 
+        root.right := c;
+        return root, m;
+    } else {
+      if (root.left != null) {
+        root.left.parent := root;
+      }
+      return root.left, root;
+    }
+}
+
