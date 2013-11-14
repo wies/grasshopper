@@ -414,6 +414,6 @@ let print_forms ch fs =
   List.iter (fun f -> print_form ch f;  output_string ch "\n") fs
   
 let print_subst_map subst_map =
-  print_string "[ ";
+  print_string " [";
   IdMap.iter (fun id t -> Printf.printf "  %s -> %s\n" (str_of_ident id) (string_of_term t)) subst_map;
   print_endline "]"

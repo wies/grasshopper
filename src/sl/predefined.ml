@@ -14,6 +14,8 @@ let mk_int_field name = mk_formal_and_var name (Fld Int)
 
 let di, df, d = mk_formal_and_var "domain" (Set Loc)
 
+let si, sf, s = mk_formal_and_var "S" (Set Loc)
+
 let _, xf, x = mk_loc "x"
 let _, yf, y = mk_loc "y"
 
@@ -77,7 +79,7 @@ let without_fp = [
                      mk_eq (mk_read parent x) y;
                      mk_forall ~ann:([Comment "parent_left_or_right_equal"]) [l1f; l2f; l3f] 
                        (mk_sequent 
-                          [mk_eq l2 l3; mk_elem l1 d; mk_elem l2 d; mk_eq (mk_read parent l1) l2] 
+                          [mk_eq l2 l3; mk_elem l1 d; mk_eq l1 x; mk_eq (mk_read parent l1) l2] 
                           [mk_eq l1 x; mk_eq (mk_read left l2) l1; mk_eq (mk_read right l3) l1]);
                      mk_forall ~ann:([Comment "left_parent_equal"]) [l1f; l2f] 
                        (mk_sequent 
@@ -102,30 +104,43 @@ let without_fp = [
            ],
       [di, mk_or [mk_and [mk_eq x mk_null; mk_eq d empty_loc]; 
                   mk_and [mk_neq x mk_null;
-                          mk_forall ~ann:[Comment "in_tree_domain1"] [l1f] 
+                          mk_not (mk_elem y d);                  
+                          mk_forall ~ann:[Comment "in tree domain1"] [l1f] 
                             (mk_sequent [mk_elem l1 d] [mk_reach parent l1 x]);
-                          mk_forall ~ann:[Comment "in_tree_domain2"] [l1f; l2f] 
+                          mk_forall ~ann:[Comment "in tree domain2"] [l1f; l2f] 
                             (mk_sequent 
                                [mk_elem l1 d; mk_btwn parent l1 l2 x]
                                [mk_eq l1 l2;
                                 mk_btwn parent l1 (mk_read left l2) l2; 
                                 mk_btwn parent l1 (mk_read right l2) l2]);
-                          let ep_generator =
-                            TermGenerator 
+                          (let ep_generator =
+                            [TermGenerator 
                               ([l1f],
-                               [],
-                               [Match (l1, FilterNotOccurs EntPnt)],
-                               mk_ep parent d l1)
+                               [sf],
+                               [Match (mk_elem_term l1 s, FilterNotOccurs EntPnt)],
+                               mk_read left (mk_ep parent d l1));
+                             TermGenerator 
+                              ([l1f],
+                               [sf],
+                               [Match (mk_elem_term l1 s, FilterNotOccurs EntPnt)],
+                               mk_read right (mk_ep parent d l1))
+                           ] 
                           in
-                          mk_forall ~ann:[ep_generator; Comment "not_in_tree_domain"] [l1f; l2f]
+                          mk_forall ~ann:(Comment "not in tree domain1" :: ep_generator) [l1f; l2f]
                             (mk_sequent 
                                [mk_eq l2 (mk_ep parent d l1)]
-                               [mk_and [mk_neq l2 l1; 
+                               [mk_and [mk_neq l2 l1;
+                                        mk_btwn parent l1 l2 x;
                                         mk_not (mk_reach parent l1 (mk_read left l2));
                                         mk_not (mk_reach parent l1 (mk_read right l2))];
-                                mk_elem l1 d]
-                            )
-                            
+                                mk_elem l1 d;
+                                mk_not (mk_reach parent l1 x)]
+                            ));
+                          (*mk_forall ~ann:[Comment "not in tree domain2"] [l1f; l2f]
+                            (mk_sequent 
+                               [mk_btwn parent l1 l2 x; mk_or [mk_btwn parent l1 (mk_read left l2) l2;
+                                                               mk_btwn parent l1 (mk_read right l2) l2]]
+                               [mk_elem l1 d])*)
                         ]
                 ]
      ]

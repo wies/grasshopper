@@ -168,6 +168,7 @@ let mk_union sets =
 
 let mk_diff s t = mk_app ?srt:(sort_of s) Diff [s; t]
 
+let mk_elem_term e s = mk_app ~srt:Bool Elem [e; s]
 let mk_elem e s = mk_atom Elem [e; s]
 
 let smk_elem e = function

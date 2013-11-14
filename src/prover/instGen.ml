@@ -332,7 +332,7 @@ let generate_instances useLocalInst axioms terms rep_map type_graph =
       else fvars0
     in
     (* filter out what is stratified *)
-    let fvars =
+    (*let fvars =
       let merge_map k a b = match (a,b) with
         | (Some a, Some b) -> Some (a @ b)
         | (Some a, None) -> Some a
@@ -374,7 +374,7 @@ let generate_instances useLocalInst axioms terms rep_map type_graph =
             )
             fvars
         else fvars
-    in
+    in*)
     let _ = if Debug.is_debug () then
       begin
         print_endline "--------------------";
@@ -444,30 +444,28 @@ let generate_instances useLocalInst axioms terms rep_map type_graph =
             [] terms
         ) fvars [IdMap.empty]
     in
-    (*let print_subst_map sm =
-      IdMap.iter (fun v t -> Printf.printf "%s -> %s, " (str_of_ident v) (string_of_term t)) sm;
-      print_newline ()
-    in
-    let _ = match f with
-    | Binder (_, _, _, [Comment "in_tree_domain2"]) ->
+    (*let _ = match f with
+    | Binder (_, _, _, [Comment "entry-point1"]) ->
         begin
           print_endline "Axiom:";
           print_forms stdout [f];
           print_endline "fun_terms:";
           List.iter (fun (_, t) -> print_term stdout t; print_string ", ") fun_terms;
+          print_endline "fvars: ";
+          IdSrtSet.iter (fun (id, _) -> Printf.printf "%s, " (str_of_ident id)) fvars;
           print_endline "\nground_terms:";
           TermSet.iter (fun t -> print_term stdout t; print_newline ()) ground_terms;
           print_endline "\nsubst_maps:";
           List.iter print_subst_map subst_maps
         end
     | _ -> ()
-    in
-    if subst_maps == [] then 
+    in*)
+    (*if subst_maps == [] then 
       begin
         print_endline "Dropping axiom: ";
         print_forms stdout [f];
       end;*)
-    List.fold_left (fun acc subst_map -> Axioms.mk_axiom2 (subst subst_map f) :: acc) acc subst_maps
+    List.fold_left (fun acc subst_map -> (*Axioms.mk_axiom2*) (subst subst_map f) :: acc) acc subst_maps
   in
   List.fold_left instantiate epr_axioms axioms
   

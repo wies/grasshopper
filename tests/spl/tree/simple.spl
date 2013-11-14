@@ -24,7 +24,7 @@ returns (new_root: Node)
     t := new Node;
     t.left := null;
     t.right := null;
-    t.parent := p;
+    //t.parent := p;
     t.data := value;
     return t;
   }
@@ -35,4 +35,33 @@ returns (new_root: Node)
     root.right := insert(root.right, value, root);
     return root;
   }
+}
+
+
+procedure extract_max(root: Node, p: Node) returns (others: Node, max: Node)
+  requires tree(root, p) &*& root != null;
+  ensures  tree(others, p) &*& acc(max);
+{
+    if (root.right != null) {
+        var c: Node, m: Node;
+        c, m := extract_max(root.right, p); 
+        root.right := c;
+        if (c != null) {
+          c.parent := root;
+        }
+        return root, m;
+    } else {
+        return root.left, root;
+    }
+}
+
+procedure destroy(root: Node, p: Node)
+  requires tree(root, p);
+  ensures emp;
+{
+    if (root != null) {
+        free root;
+        destroy(root.left, root);
+        destroy(root.right, root);
+    }
 }
