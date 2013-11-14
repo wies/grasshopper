@@ -74,7 +74,7 @@ let without_fp = [
       [di, mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
     ( mk_ident "tree",
       [df; leftf; parentf; rightf; xf; yf],
-      mk_and [mk_forall [l1f] (mk_reach parent l1 mk_null);
+      mk_and [(*mk_forall [l1f] (mk_reach parent l1 mk_null);*)
               mk_or [mk_eq x mk_null; mk_eq (mk_read parent x) y];
               mk_forall ~ann:([Comment "parent_left_or_right_equal"]) [l1f; l2f; l3f] 
                 (mk_sequent 
