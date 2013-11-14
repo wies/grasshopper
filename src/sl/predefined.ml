@@ -75,8 +75,7 @@ let without_fp = [
     ( mk_ident "tree",
       [df; leftf; parentf; rightf; xf; yf],
       mk_and [mk_forall [l1f] (mk_reach parent l1 mk_null);
-              mk_neq x mk_null; 
-              mk_eq (mk_read parent x) y;
+              mk_or [mk_eq x mk_null; mk_eq (mk_read parent x) y];
               mk_forall ~ann:([Comment "parent_left_or_right_equal"]) [l1f; l2f; l3f] 
                 (mk_sequent 
                    [mk_eq l2 l3; mk_elem l1 d; mk_eq (mk_read parent l1) l2] 
@@ -124,12 +123,12 @@ let without_fp = [
                           (let ep_generator =
                             [TermGenerator 
                               ([l1f],
-                               [sf],
+                               [],
                                [Match (l1, FilterNotOccurs EntPnt)],
                                mk_read left (mk_ep parent d l1));
                              TermGenerator 
                               ([l1f],
-                               [sf],
+                               [],
                                [Match (mk_elem_term l1 s, FilterNotOccurs EntPnt)],
                                mk_read right (mk_ep parent d l1))
                            ] 
