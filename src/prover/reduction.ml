@@ -445,7 +445,7 @@ let reduce_read_write fs gts framed_fields =
   let read_write_ax1 = instantiate_with_terms true read_write_ax classes1 in
   let gts1 = TermSet.union gts1 (ground_terms (mk_and read_write_ax1)) in
   let gts1, partition_of = propagate_field_reads (fs1 @ read_write_ax) gts1 framed_fields in
-  fs1 @ read_write_ax, gts1, partition_of
+  rev_concat [read_write_ax; fs1], gts1, partition_of
 
 (** Adds instantiated theory axioms for graph reachability to formula f.
  ** Assumes that f is typed *)

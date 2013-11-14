@@ -74,34 +74,42 @@ let without_fp = [
       [di, mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
     ( mk_ident "tree",
       [df; leftf; parentf; rightf; xf; yf],
-      mk_or [mk_eq x mk_null;
-             mk_and [mk_neq x mk_null; 
-                     mk_eq (mk_read parent x) y;
-                     mk_forall ~ann:([Comment "parent_left_or_right_equal"]) [l1f; l2f; l3f] 
-                       (mk_sequent 
-                          [mk_eq l2 l3; mk_elem l1 d; mk_eq l1 x; mk_eq (mk_read parent l1) l2] 
-                          [mk_eq l1 x; mk_eq (mk_read left l2) l1; mk_eq (mk_read right l3) l1]);
-                     mk_forall ~ann:([Comment "left_parent_equal"]) [l1f; l2f] 
-                       (mk_sequent 
-                          [mk_elem l1 d; mk_eq (mk_read left l1) l2]
-                          [mk_eq l2 mk_null; mk_eq (mk_read parent l2) l1]);
-                     mk_forall ~ann:([Comment "right_parent_equal"]) [l1f; l2f] 
-                       (mk_sequent
-                          [mk_elem l1 d; mk_eq (mk_read right l1) l2]
-                          [mk_eq l2 mk_null; mk_eq (mk_read parent l2) l1]);
-                     mk_forall ~ann:([Comment "left_right_distinct"]) [l1f; l2f]
-                       (mk_sequent
-                          [mk_elem l1 d; mk_eq l1 l2; mk_eq (mk_read left l1) (mk_read right l2)]
-                          [mk_eq mk_null (mk_read left l1)]);
-                     (*mk_forall ~ann:([Comment "left_leaf"]) [l1f]
-                       (mk_sequent
-                          [mk_elem l1 d] 
-                          [mk_elem (mk_read left l1) a; mk_eq (mk_read left l1) mk_null]);
-                     mk_forall ~ann:([Comment "right_leaf"]) [l1f]
-                       (mk_sequent
-                          [mk_elem l1 d] 
-                          [mk_elem (mk_read right l1) a; mk_eq (mk_read right l1) mk_null]); *)                  ] 
-           ],
+      mk_and [mk_forall [l1f] (mk_reach parent l1 mk_null);
+              mk_neq x mk_null; 
+              mk_eq (mk_read parent x) y;
+              mk_forall ~ann:([Comment "parent_left_or_right_equal"]) [l1f; l2f; l3f] 
+                (mk_sequent 
+                   [mk_eq l2 l3; mk_elem l1 d; mk_eq (mk_read parent l1) l2] 
+                   [mk_eq l1 x; mk_eq (mk_read left l2) l1; mk_eq (mk_read right l3) l1]);
+              (let left_parent_generator =
+                [TermGenerator 
+                   ([l1f],
+                    [],
+                    [Match (mk_read left l1, FilterTrue)],
+                    mk_read parent (mk_read left l1));
+               ]
+              in
+              mk_forall ~ann:(Comment "left_parent_equal" :: left_parent_generator) [l1f; l2f] 
+                (mk_sequent 
+                   [mk_elem l1 d; mk_eq (mk_read left l1) l2]
+                   [mk_eq l2 mk_null; mk_eq (mk_read parent l2) l1]));
+              (let right_parent_generator =
+                [TermGenerator 
+                   ([l1f],
+                    [],
+                    [Match (mk_read right l1, FilterTrue)],
+                    mk_read parent (mk_read right l1));
+               ]
+              in
+              mk_forall ~ann:(Comment "right_parent_equal" :: right_parent_generator) [l1f; l2f] 
+                (mk_sequent
+                   [mk_elem l1 d; mk_eq (mk_read right l1) l2]
+                   [mk_eq l2 mk_null; mk_eq (mk_read parent l2) l1]));
+              mk_forall ~ann:([Comment "left_right_distinct"]) [l1f; l2f]
+                (mk_sequent
+                   [mk_elem l1 d; mk_eq l1 l2; mk_eq (mk_read left l1) (mk_read right l2)]
+                   [mk_eq mk_null (mk_read left l1)]);
+            ],
       [di, mk_or [mk_and [mk_eq x mk_null; mk_eq d empty_loc]; 
                   mk_and [mk_neq x mk_null;
                           mk_not (mk_elem y d);                  
@@ -117,7 +125,7 @@ let without_fp = [
                             [TermGenerator 
                               ([l1f],
                                [sf],
-                               [Match (mk_elem_term l1 s, FilterNotOccurs EntPnt)],
+                               [Match (l1, FilterNotOccurs EntPnt)],
                                mk_read left (mk_ep parent d l1));
                              TermGenerator 
                               ([l1f],
@@ -126,7 +134,7 @@ let without_fp = [
                                mk_read right (mk_ep parent d l1))
                            ] 
                           in
-                          mk_forall ~ann:(Comment "not in tree domain1" :: ep_generator) [l1f; l2f]
+                          mk_forall ~ann:(Comment "not in tree domain" :: ep_generator) [l1f; l2f]
                             (mk_sequent 
                                [mk_eq l2 (mk_ep parent d l1)]
                                [mk_and [mk_neq l2 l1;
