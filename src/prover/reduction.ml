@@ -500,7 +500,6 @@ let instantiate_user_def_axioms fs gts =
 (** Reduces the given formula to the target theory fragment, as specified by the configuration.
  ** Assumes that f is typed *)
 let reduce f = 
-  let _ = print_form stdout f; print_newline () in
   let _ =
     TermSet.iter (function
       | App (Eq, [App (_, _, Some (Fld _)); App (Null, [], _)], _) as t -> 
