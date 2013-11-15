@@ -33,7 +33,9 @@ let make_output_fct sym id =
   let args =
     List.map
       (fun (i, s) -> FormUtil.mk_var ~srt:s i)
-      (List.filter (fun (i, _) -> i <> id) sym.parameters)
+      (List.filter
+        (fun (i, _) -> List.for_all (fun (i2,_) -> i <> i2) sym.outputs)
+        sym.parameters)
   in
   let srt = snd (List.find (fun (i,_) -> i = id) sym.parameters) in
     FormUtil.mk_free_fun ~srt:srt (pred_naming sym.sym_name id) args
