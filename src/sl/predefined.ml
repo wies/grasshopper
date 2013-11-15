@@ -117,11 +117,11 @@ let without_fp = [
     ( mk_ident "tree",
       [df; leftf; parentf; rightf; xf],
       mk_true,
-      [di, mk_forall [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq l1 mk_null]))]);
+      [di, mk_forall ~ann:([Comment "tree_footprint"]) [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq l1 mk_null]))]);
     ( mk_ident "treeFP",
       [df; leftf; parentf; rightf; xf; sf],
       mk_true,
-      [di, mk_forall [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq l1 mk_null]));
+      [di, mk_forall ~ann:([Comment "tree_footprint"]) [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq l1 mk_null]));
        (*si, mk_forall [l1f] (mk_iff (mk_elem l1 s) (mk_and [mk_btwn parent l1 x x; mk_neq l1 mk_null]))]);*)
        si, mk_eq d s ]);
     (*
