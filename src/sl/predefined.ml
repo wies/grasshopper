@@ -49,29 +49,36 @@ let without_fp = [
     ( mk_ident "lseg",
       [df; nextf; xf; yf],
       mk_reach next x y,
-      [di, mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+      [di, mk_forall ~ann:[Comment "lseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
     ( mk_ident "slseg",
-      [df; nextf; dataf; xf; yf],
+      [df; dataf; nextf; xf; yf],
       mk_and [mk_reach next x y;
               mk_forall [l1f; l2f] (mk_implies (mk_and [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y])
                                                (mk_leq (mk_read data l1) (mk_read data l2)))],
-      [di, mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+      [di, mk_forall ~ann:[Comment "slseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
     ( mk_ident "rslseg",
-      [df; nextf; dataf; xf; yf],
+      [df; dataf; nextf; xf; yf],
       mk_and [mk_reach next x y;
               mk_forall [l1f; l2f] (mk_implies (mk_and [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y])
                                                (mk_leq (mk_read data l2) (mk_read data l1)))],
-      [di, mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+      [di, mk_forall ~ann:[Comment "rslseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
     ( mk_ident "ulseg",
-      [df; nextf; xf; yf; lbf],
+      [df; dataf; nextf; xf; yf; lbf],
       mk_and [mk_reach next x y;
               mk_forall [l1f] (mk_implies (l1_in_domain) (mk_leq lb (mk_read data l1)))],
-      [di, mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+      [di, mk_forall ~ann:[Comment "ulseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
     ( mk_ident "llseg",
-      [df; nextf; xf; yf; ubf],
+      [df; dataf; nextf; xf; yf; ubf],
       mk_and [mk_reach next x y;
               mk_forall [l1f] (mk_implies (l1_in_domain) (mk_leq (mk_read data l1) ub))],
-      [di, mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+      [di, mk_forall ~ann:[Comment "llseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+    ( mk_ident "uslseg",
+      [df; dataf; nextf; xf; yf; lbf],
+      mk_and [mk_reach next x y;
+              mk_forall [l1f] (mk_implies (l1_in_domain) (mk_leq lb (mk_read data l1)));
+              mk_forall [l1f; l2f] (mk_implies (mk_and [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y])
+                                               (mk_leq (mk_read data l2) (mk_read data l1)))],
+      [di, mk_forall ~ann:[Comment "uslseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
     ( mk_ident "treeNodes",
       [df; leftf; parentf; rightf; sf],
       mk_and [(*mk_forall [l1f] (mk_reach parent l1 mk_null);*)
@@ -212,31 +219,32 @@ let with_content = []
 let misc = []
 
 (*
-let without_fp =
-  [
-    "uslseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int){ " ^
-        "reach(next, x, y) &&"^
-        " (forall l1: loc. l1 in domain ==> data(l1) >= v) &&"^
-        " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2),"^
-        "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
     "lslseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int){" ^
         "reach(next, x, y) &&"^
         " (forall l1: loc. l1 in domain ==> data(l1) <= v) &&"^
         " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2),"^
         "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
+*)
+(*
     "blseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, w: int){" ^
         "reach(next, x, y) && forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w)," ^
         "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
+*)
+(*
     "bslseg(domain: set loc, data: fld int, next: fld loc, x: loc, y: loc, v: int, w: int){" ^
         "reach(next, x, y) &&"^
         " (forall l1: loc. l1 in domain ==> (data(l1) >= v && data(l1) <= w)) &&"^
         " forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2)," ^
         "forall l1: loc. l1 in domain <=> (btwn(next, x, l1, y) && l1 != y) }";
+*)
+(*
     "dlseg(domain: set loc, next: fld loc, prev: fld loc, x1: loc, x2: loc, y1: loc, y2: loc){" ^
         "reach(next, x1, y1) &&" ^
         " ((x1 == y1 && x2 == y2) || (prev(x1) == x2 && next(y2) == y1 && y2 in domain)) &&" ^
         " forall l1: loc, l2: loc. (next(l1) == l2 && l1 in domain && l2 in domain) ==> prev(l2) == l1," ^
         "forall l1: loc. l1 in domain <=> (btwn(next, x1, l1, y1) && l1 != y1) }";
+*)
+(*
     "bdlseg(domain: set loc, data: fld int, next: fld loc, prev: fld loc, x1: loc, x2: loc, y1: loc, y2: loc, lb: int, ub:int){" ^
         "reach(next, x1, y1) &&" ^ 
         " ((x1 == y1 && x2 == y2) || (prev(x1) == x2 && next(y2) == y1 && y2 in domain)) &&"^
@@ -244,11 +252,14 @@ let without_fp =
         " (forall l1: loc, l2: loc. (l1 in domain && l2 in domain) ==> (next(l1) == l2 <=> prev(l2) == l1)) &&"^
         " forall l1: loc. l1 in domain ==> (data(l1) >= lb && data(l1) <= ub)," ^
         "forall l1: loc. l1 in domain <=> (btwn(next, x1, l1, y1) && l1 != y1) }";
+*)
+(*
     "bsdlseg(domain: set loc, data: fld int, next: fld loc, prev: fld loc, x1: loc, x2: loc, y1: loc, y2: loc, lb: int, ub:int){" ^
         "reach(next, x1, y1) && ((x1 == y1 && x2 == y2) || (prev(x1) == x2 && next(y2) == y1 && y2 in domain)) && (forall l1: loc, l2: loc. (next(l1) == l2 && l1 in domain && l2 in domain) ==> prev(l2) == l1) && (forall l1: loc. l1 in domain ==> (data(l1) >= lb && data(l1) <= ub)) && forall l1: loc, l2: loc. (l1 in domain && l2 in domain && btwn(next, l1, l2, y)) ==> data(l1) <= data(l2)," ^
         "forall l1: loc. l1 in domain <=> (btwn(next, x1, l1, y1) && l1 != y1) }"
-  ]
+*)
 
+(*
 let with_fp =
   [
     "lseg_set(domain: set loc, next: fld loc, x: loc, y: loc, s: set loc){ " ^

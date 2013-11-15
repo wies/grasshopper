@@ -211,8 +211,8 @@ let reduce_frame fs =
         | Some fp -> fp
         | None -> b_d
       in
-      let b_s = mk_pred id_s (args_before @ [fp]) in
-      let a_s = mk_pred id_s (args_after @ [fp]) in
+      let b_s = mk_pred id_s (fp :: args_before) in
+      let a_s = mk_pred id_s (fp :: args_after) in
       let cond = mk_eq (mk_inter [fp; x]) (mk_empty (Some (Set Loc))) in
       let consequences = smk_and [mk_eq b_d a_d; mk_iff b_s a_s] in
         mk_comment "self framing" (mk_implies cond consequences)
@@ -258,7 +258,7 @@ let reduce_frame fs =
         paired_flds @ framed_fields
       ) fields ([], [])
   in
-  reach_frames @ pred_frames, framed_fields
+  reach_frames (*@ pred_frames*), framed_fields
   
 let open_axioms open_cond axioms = 
   if !Config.instantiate then
