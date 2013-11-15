@@ -93,7 +93,7 @@ let without_fp = [
                    [mk_eq l1 l2; mk_elem l1 s; mk_eq l2 mk_null]);
               mk_forall ~ann:[Comment "reach_via_left_right"] [l1f; l2f]
                 (mk_sequent 
-                   [mk_reach parent l1 l2; mk_elem l1 d; mk_elem l2 d]
+                   [mk_reach parent l1 l2; mk_elem l1 s; mk_elem l2 s]
                    [mk_eq l1 l2;
                     mk_btwn parent l1 (mk_read left l2) l2;
                     mk_btwn parent l1 (mk_read right l2) l2])
