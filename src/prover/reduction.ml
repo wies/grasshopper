@@ -222,10 +222,11 @@ let reduce_frame fs =
   let rec process f fields = match f with
     | Atom (App (Frame, [x; a; f; f'], _)) when f <> f' ->
         let fields1 = 
-          try 
-            let _, flds = TermMap.find x fields in
-            TermMap.add x (a, f :: f' :: flds) fields
-          with Not_found -> fields
+          let _, flds = 
+            try TermMap.find x fields
+            with Not_found -> a, []
+          in
+          TermMap.add x (a, f :: f' :: flds) fields
         in
         expand_frame x a f f', fields1
     | BoolOp (op, fs) -> 
@@ -444,7 +445,7 @@ let reduce_read_write fs gts framed_fields =
   let classes1 = CongruenceClosure.congr_classes fs1 gts1 in
   let read_write_ax1 = instantiate_with_terms true read_write_ax classes1 in
   let gts1 = TermSet.union gts1 (ground_terms (mk_and read_write_ax1)) in
-  let gts1, partition_of = propagate_field_reads (fs1 @ read_write_ax) gts1 framed_fields in
+  let gts1, partition_of = propagate_field_reads (fs1 @ read_write_ax1) gts1 framed_fields in
   rev_concat [read_write_ax; fs1], gts1, partition_of
 
 (** Adds instantiated theory axioms for graph reachability to formula f.
