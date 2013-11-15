@@ -45,7 +45,10 @@ let resolve_names cus =
     let name = FormUtil.name init_id in
     if SymbolTbl.declared_in_current tbl name then
       ProgError.error pos ("Redeclaration of identifier " ^ name ^ ".");
-    let id = FormUtil.fresh_ident name in
+    let id = 
+      if init_id = Prog.alloc_id then alloc_id
+      else FormUtil.fresh_ident name 
+    in
     (id, SymbolTbl.add tbl name id)
   in
   let declare_var structs decl tbl =
@@ -511,7 +514,7 @@ let convert cus =
           ("Struct " ^ fst id ^ " does not have a field named " ^ fst fld_id ^ ".")
     in
     let rec convert_type = function
-      | NullType -> Loc
+      | LocType -> Loc
       | StructType id -> Loc
       | FieldType (id, typ) -> Fld (convert_type typ) 
       | SetType typ -> Set (convert_type typ)
@@ -530,7 +533,7 @@ let convert cus =
       }
     in 
     let ty_str = function
-      | NullType -> "expression of a struct type"
+      | LocType -> "expression of a struct type"
       | StructType id -> "expression of type " ^ (fst id)
       | SetType _ -> "expression of type set"
       | IntType -> "expression of type int"
@@ -543,7 +546,7 @@ let convert cus =
         ("Expected an " ^ expected ^ "\n            but found an " ^ found ^ ".")
     in
     let rec convert_expr locals = function
-      | Null _ -> FOL_term (FormUtil.mk_null, NullType)
+      | Null _ -> FOL_term (FormUtil.mk_null, LocType)
       | Emp _ -> SL_form SlUtil.mk_emp
       | Setenum (ty, es, pos) ->
           let ts, ty = 
@@ -559,14 +562,14 @@ let convert cus =
       | IntVal (i, _) -> FOL_term (FormUtil.mk_int i, IntType)
       | BoolVal (b, _) -> FOL_form (FormUtil.mk_bool b)
       | Dot (e, fld_id, pos) -> 
-          let t, ty = extract_term locals NullType e in
+          let t, ty = extract_term locals LocType e in
           (match ty with
           | StructType id ->
               let res_ty = field_type pos id fld_id in
               let res_srt = convert_type res_ty in
               let fld = FormUtil.mk_free_const ~srt:(Fld res_srt) fld_id in
               FOL_term (FormUtil.mk_read fld t, res_ty)
-          | NullType -> ProgError.error pos "Cannot dereference null."
+          | LocType -> ProgError.error pos "Cannot dereference null."
           | ty -> failwith "unexpected type")
       | Access (e, pos) ->
           let t, ty = extract_term locals UniversalType e in
@@ -575,7 +578,7 @@ let convert cus =
               SL_form (SlUtil.mk_cell t)
           | SetType (StructType _) ->
               SL_form (SlUtil.mk_region t)
-          | NullType -> ProgError.error pos "Cannot access null."
+          | LocType -> ProgError.error pos "Cannot access null."
           | ty -> failwith "unexpected type")
       | BtwnPred (fld, x, y, z, pos) ->
           let tfld, fld_ty = extract_term locals UniversalType fld in
@@ -762,8 +765,8 @@ let convert cus =
       | FOL_term (t, tty) ->
           let rec match_types ty1 ty2 = 
             match ty1, ty2 with
-            | NullType, StructType _
-            | StructType _, NullType -> ty2
+            | LocType, StructType _
+            | StructType _, LocType -> ty2
             | UniversalType, _ -> ty2
             | _, UniversalType -> ty1
             | SetType ty1, SetType ty2 -> SetType (match_types ty1 ty2)
@@ -869,7 +872,7 @@ let convert cus =
               mk_assign_cmd lhs_ids [FormUtil.mk_write fld t (List.hd rhs_ts)] pos
           | None -> mk_assign_cmd lhs_ids rhs_ts pos)
       | Dispose (e, pos) ->
-          let t, _ = extract_term proc.p_locals NullType e in
+          let t, _ = extract_term proc.p_locals LocType e in
           mk_dispose_cmd t pos
       | Havoc (es, pos) ->
           let ids = 

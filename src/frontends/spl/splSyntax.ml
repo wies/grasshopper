@@ -16,7 +16,7 @@ type typ =
   | SetType of typ
   | IntType
   | BoolType
-  | NullType
+  | LocType
   | UniversalType
   (*| ArrayType of typ*)
 
@@ -164,7 +164,17 @@ let pos_of_stmt = function
   | Loop (_, _, _, _, pos)
   | Return (_, pos) -> pos
 
+let proc_decl hdr body =
+  { hdr with p_body = body }
+
+let struct_decl sname sfields pos =
+  { s_name = sname;  s_fields = sfields; s_pos = pos }
+
+let var_decl vname vtype vghost vimpl vpos =
+  { v_name = vname; v_type = vtype; v_ghost = vghost; v_implicit = vimpl; v_aux = false; v_pos = vpos } 
+
 let compilation_unit pkg ims decls =
+  let alloc_decl = VarDecl (var_decl Prog.alloc_id (SetType LocType) true false Prog.dummy_position) in
   let check_uniqueness id pos (vdecls, pdecls, prdecls, sdecls) =
     if IdMap.mem id vdecls || IdMap.mem id sdecls || IdMap.mem id pdecls || IdMap.mem id prdecls
     then ProgError.error pos ("redeclaration of identifier " ^ (fst id) ^ ".");
@@ -184,7 +194,7 @@ let compilation_unit pkg ims decls =
           check_uniqueness decl.s_name decl.s_pos decls;
           vdecls, pdecls, prdecls, IdMap.add decl.s_name decl sdecls)
       (IdMap.empty, IdMap.empty, IdMap.empty, IdMap.empty)
-      decls
+      (alloc_decl :: decls)
   in
   { package = pkg; 
     imports = ims; 
@@ -193,15 +203,6 @@ let compilation_unit pkg ims decls =
     proc_decls = pdecls;
     pred_decls = prdecls;
   }
-
-let proc_decl hdr body =
-  { hdr with p_body = body }
-
-let struct_decl sname sfields pos =
-  { s_name = sname;  s_fields = sfields; s_pos = pos }
-
-let var_decl vname vtype vghost vimpl vpos =
-  { v_name = vname; v_type = vtype; v_ghost = vghost; v_implicit = vimpl; v_aux = false; v_pos = vpos } 
 
 
 let mk_block pos = function
