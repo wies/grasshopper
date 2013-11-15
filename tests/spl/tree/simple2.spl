@@ -109,5 +109,7 @@ procedure destroy(root: Node, ghost treeNode: set<Node>, implicit ghost X: set<N
         free root;
         
         return treeNode;
+    } else {
+      return treeNode;
     }
 }
