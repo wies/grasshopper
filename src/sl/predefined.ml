@@ -100,12 +100,14 @@ let without_fp = [
             ],
       [di, mk_eq d empty_loc]);
     ( mk_ident "tree",
-      [df; leftf; parentf; rightf; xf],
-      mk_true,
+      [df; leftf; parentf; rightf; xf; yf],
+      mk_or [ mk_eq x mk_null;
+              mk_eq (mk_read parent x) y],
       [di, mk_forall ~ann:([Comment "tree_footprint"]) [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq l1 mk_null]))]);
     ( mk_ident "treeFP",
-      [df; leftf; parentf; rightf; xf; sf],
-      mk_true,
+      [df; leftf; parentf; rightf; xf; yf; sf],
+      mk_or [ mk_eq x mk_null;
+              mk_eq (mk_read parent x) y],
       [di, mk_forall ~ann:([Comment "tree_footprint"]) [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq x mk_null]));
        si, mk_forall [l1f] (mk_iff (mk_elem l1 s) (mk_and [mk_btwn parent l1 x x; mk_neq x mk_null]))]);
     (*
