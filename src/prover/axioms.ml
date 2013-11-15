@@ -12,6 +12,7 @@ let f2 = fresh_ident "?g", Fld Loc
 let f3 = fresh_ident "?h", Fld Loc
 let s1 = fresh_ident "?X", Set Loc 
 let s2 = fresh_ident "?Y", Set Loc 
+let s3 = fresh_ident "?Z", Set Loc 
 let i1 = fresh_ident "?m", Int
 let i2 = fresh_ident "?n", Int
 
@@ -25,6 +26,7 @@ let fld2 = mk_var ~srt:(snd f2) (fst f2)
 let fld3 = mk_var ~srt:(snd f3) (fst f3)
 let set1 = mk_var ~srt:(snd s1) (fst s1)
 let set2 = mk_var ~srt:(snd s2) (fst s2)
+let set3 = mk_var ~srt:(snd s3) (fst s3)
 let int1 = mk_var ~srt:(snd i1) (fst i1)
 let int2 = mk_var ~srt:(snd i2) (fst i2)
 
@@ -187,16 +189,22 @@ let ep_axioms () =
     (*else mk_implies (mk_and [reach loc1 loc2; in_set1 loc2]) (reachwo loc1 ep loc2) *)
   in
   let ep_generator = 
-    [s1; f1; l1],
-    [s2; f2; f3; l3; l4],
-    [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-     Match (mk_btwn_term fld3 loc1 loc3 loc4, FilterTrue);
-     Match (loc1, FilterNotOccurs EntPnt)], 
-    mk_ep fld1 set1 loc1
+    [([s1; f1; l1],
+     [s2; f2; f3; l3; l4],
+     [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
+      Match (mk_btwn_term fld3 loc1 loc3 loc4, FilterTrue);
+      Match (loc1, FilterNotOccurs EntPnt)], 
+     mk_ep fld1 set1 loc1);
+     ([s1; f1; l1],
+     [s2; s3; f2],
+     [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
+      Match (mk_elem_term loc1 set3, FilterTrue);
+      Match (loc1, FilterNotOccurs EntPnt)], 
+     mk_ep fld1 set1 loc1)]
   in
   if !Config.with_ep then
     [mk_axiom "entry-point1" ep1; 
-     mk_axiom ~gen:[ep_generator] "entry-point2" ep2; 
+     mk_axiom ~gen:ep_generator "entry-point2" ep2; 
      mk_axiom "entry-point3" ep3; 
      mk_axiom "entry-point4" ep4]
   else []
