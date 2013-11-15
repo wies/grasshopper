@@ -85,6 +85,16 @@ let rec fold_left2 fn init xs ys =
   | _, [] -> init
   | x :: xs1, y :: ys1 -> fold_left2 fn (fn init x y) xs1 ys1
 
+(** Like List.fold_left2 but ignores the tail of the longer list instead of throwing an exception *)
+let rec for_all2 fn xs ys =
+  match xs, ys with
+  | [], [] -> true
+  | [], _ 
+  | _, [] -> false
+  | x :: xs1, y :: ys1 -> 
+      fn x y && for_all2 fn xs1 ys1
+
+
 (** Tail-recursive concatenation of lists *)
 let rev_concat lists = List.fold_left (List.fold_left (fun acc f -> f :: acc)) [] lists
 

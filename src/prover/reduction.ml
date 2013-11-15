@@ -336,7 +336,7 @@ let reduce_sets fs gts =
   in
   let fs1 = List.map simplify fs in
   (*let gts = TermSet.fold (fun t gts1 -> TermSet.add (unflatten t) gts1) gts TermSet.empty in*)
-  let gts1 = ground_terms (mk_and fs1) in
+  let gts1 = TermSet.union gts (ground_terms (mk_and fs1)) in
   (*let set_ax, _ = open_axioms isFunVar (Axioms.set_axioms ()) in
   let classes = CongruenceClosure.congr_classes fs1 gts1 in
   let set_ax1 = instantiate_with_terms true set_ax classes in*)
@@ -501,12 +501,6 @@ let instantiate_user_def_axioms fs gts =
 (** Reduces the given formula to the target theory fragment, as specified by the configuration.
  ** Assumes that f is typed *)
 let reduce f = 
-  let _ =
-    TermSet.iter (function
-      | App (Eq, [App (_, _, Some (Fld _)); App (Null, [], _)], _) as t -> 
-          print_string "Type error: "; print_term stdout t; print_newline ()
-      | _ -> ()) (ground_terms f)
-  in
   let rec split_ands acc = function
     | BoolOp(And, fs) :: gs -> 
         split_ands acc (fs @ gs)

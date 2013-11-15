@@ -405,8 +405,8 @@ let generate_instances useLocalInst axioms terms rep_map type_graph =
           | App (fn1, ts1, _) ->
               TermSet.exists
                 (function
-                  | App (fn2, ts2, _) when fn1 = fn2 ->
-                      List.for_all2
+                  | App (fn2, ts2, _) as s when fn1 = fn2 ->
+                      Util.for_all2
                         (fun t1 t2 ->
                           let t1_rep =
                             match t1 with
