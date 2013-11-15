@@ -19,7 +19,9 @@ let pred_to_form p args dom =
   let mk_output id =
     let args =
       List.map snd (
-        List.filter (fun ((i,_), _) -> i <> id) paired)
+        List.filter
+          (fun ((i,_), _) -> List.for_all (fun (i2, _) -> i <> i2) def.Symbols.outputs)
+          paired)
     in
     let ((_, srt), t) = List.find (fun ((i,_), _) -> i = id) paired in
       mk_eq t (mk_free_fun ~srt:srt (Symbols.pred_naming p id) args)

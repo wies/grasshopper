@@ -387,13 +387,17 @@ let compile_pred pred =
             pred_is_free = false;
           }
         in
+        let formals_output =
+          List.filter
+            (fun i -> List.for_all (fun (i2, _) -> i <> i2) outputs)
+            (dom_id :: formals)
+        in
         let pred_outputs =
           List.map
             (fun (id, form) ->
-              let formals = List.filter (fun i -> i <> id) (dom_id :: formals) in
               { pred_str with 
                   pred_name = Symbols.pred_naming pred.pred_name id;
-                  pred_formals = formals;
+                  pred_formals = formals_output;
                   pred_returns = [id];
                   pred_body = { pred.pred_body with spec_form = FOL form } 
               }
