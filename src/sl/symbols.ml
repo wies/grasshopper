@@ -81,7 +81,7 @@ let pred_to_form p args =
       end;
     (renamed_struct, renamed_outputs)
 
-(* add othe predefined symbols*)
+(* add other predefined symbols*)
 let _ =
   List.iter
     (fun (id, params, strct, out) ->

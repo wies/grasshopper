@@ -96,14 +96,14 @@ procedure destroy(root: Node, ghost treeNode: set<Node>, implicit ghost X: set<N
         if (c != null) {
           c.parent := null;
         }
-        treeNode := destroy(root.left, treeNode);
+        treeNode := destroy(c, treeNode);
 
         c := root.right;
         root.right := null;
         if (c != null) {
           c.parent := null;
         }
-        treeNode := destroy(root.right, treeNode);
+        treeNode := destroy(c, treeNode);
 
         treeNode := treeNode -- set(root);
         free root;

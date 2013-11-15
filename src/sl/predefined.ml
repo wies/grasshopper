@@ -108,10 +108,10 @@ let without_fp = [
                 (mk_sequent
                    [mk_elem l1 s; mk_eq l1 l2; mk_eq (mk_read left l1) (mk_read right l2)]
                    [mk_eq mk_null (mk_read left l1)]);
-              mk_forall ~ann:([Comment "parent_outside_null"]) [l1f]
-                (mk_implies
-                    (mk_or [mk_not (mk_elem l1 s); mk_not (mk_elem (mk_read parent l1) s)])
-                    (mk_eq (mk_read parent l1) mk_null));
+              mk_forall ~ann:([Comment "parent_outside_null"]) [l1f; l2f]
+                (mk_sequent
+                   [mk_reach parent l1 l2]
+                   [mk_eq l1 l2; mk_elem l1 s; mk_eq l2 mk_null]);
             ],
       [di, mk_eq d empty_loc]);
     ( mk_ident "tree",
