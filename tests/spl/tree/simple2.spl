@@ -37,6 +37,7 @@ procedure insert(root: Node, value: int, ghost p: Node, ghost treeNode: set<Node
   requires treeFP(root, p, X);
   requires treeNodes(treeNode);
   requires X -- treeNode == set<Node>();
+  requires p in treeNode || p == null;
   ensures treeFP(new_root, p, new_X);
   ensures new_root != null;
   ensures treeNodes(new_treeNode);
@@ -45,11 +46,11 @@ procedure insert(root: Node, value: int, ghost p: Node, ghost treeNode: set<Node
   if (root == null) {
     var t: Node;
     t := new Node;
-    assume(!(t in treeNode));
+    assume(acc(t) &*& !(t in treeNode));
     new_treeNode := treeNode ++ set(t);
     t.left := null;
     t.right := null;
-    t.parent := null;
+    t.parent := p;
     t.data := value;
     return t, new_treeNode, set(t);
   } else {
