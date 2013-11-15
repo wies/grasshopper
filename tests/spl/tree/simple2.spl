@@ -1,0 +1,113 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+}
+
+//  predicate tree(x: Node) {
+//      x == null
+//    ||
+//      x != null &*&
+//      acc(x) &*&
+//      x.parent == x.parent &*&
+//      tree(x.left) &*&
+//      tree(x.right)
+//  }
+
+predicate treeNodes(X: set<Node>) {
+  (forall n in X :: n.left == n.left) &&
+  (forall n in X :: n.right == n.right) &&
+  (forall n in X :: n.parent == n.parent)
+}
+
+predicate treeFP(x: Node, X: set<Node>) {
+    x == null && X == set<Node>()
+  ||
+    x != null &*&
+    acc(x) &*&
+    x.parent == x.parent &*&
+    treeFP(x.left, X) &*&
+    treeFP(x.right, X) //TODO X
+}
+
+//  procedure insert(root: Node, value: int, ghost treeNode: set<Node>)
+//    returns (new_root: Node, ghost new_treeNode: set<Node>)
+//    requires tree(root) &*& treeNodes(treeNode);
+//    ensures tree(new_root) &*& new_root != null &*& treeNodes(new_treeNode);
+//  {
+//    if (root == null) {
+//      var t: Node;
+//      t := new Node;
+//      t.left := null;
+//      t.right := null;
+//      t.parent := null;//XXX
+//      t.data := value;
+//      new_treeNode := treeNode ++ set(t);
+//      return t, new_treeNode;
+//    }
+//    if (root.data > value) {
+//      var c: Node;
+//      c, new_treeNode := insert(root.left, value, treeNode);
+//      root.left := c;
+//      c.parent := root;
+//      return root, new_treeNode;
+//    } else if (root.data < value) {
+//      var c: Node;
+//      c, new_treeNode := insert(root.right, value, treeNode);
+//      root.right := c;
+//      c.parent := root;
+//      return root, new_treeNode;
+//    }
+//  }
+
+
+//  procedure extract_max(root: Node, p: Node) returns (others: Node, max: Node)
+//    requires tree(root, p) &*& root != null;
+//    ensures  tree(others, p) &*& acc(max);
+//  {
+//      if (root.right != null) {
+//          var c: Node, m: Node;
+//          c, m := extract_max(root.right, p); 
+//          root.right := c;
+//          if (c != null) {
+//            c.parent := root;
+//          }
+//          return root, m;
+//      } else {
+//          return root.left, root;
+//      }
+//  }
+
+procedure destroy(root: Node, ghost treeNode: set<Node>, implicit ghost X: set<Node>)
+  returns (ghost new_treeNode: set<Node>)
+  requires treeFP(root, X);
+  requires root.parent == null;
+  requires treeNodes(treeNode);
+  requires X -- treeNode == set<Node>();
+  ensures treeNodes(new_treeNode);
+  ensures new_treeNode == treeNode -- X;
+{
+    if (root != null) {
+        var c: Node;
+        
+        c := root.left;
+        root.left := null;
+        if (c != null) {
+          c.parent := null;
+        }
+        treeNode := destroy(root.left, treeNode);
+
+        c := root.right;
+        root.right := null;
+        if (c != null) {
+          c.parent := null;
+        }
+        treeNode := destroy(root.right, treeNode);
+
+        treeNode := treeNode -- set(root);
+        free root;
+        
+        return treeNode;
+    }
+}

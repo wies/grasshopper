@@ -14,6 +14,16 @@ type symbol =
 let symbols = Hashtbl.create 15
 
 let get_symbol (s: ident) = Hashtbl.find symbols s
+let put_symbol sym = Hashtbl.replace symbols sym.sym_name sym
+
+let subst_id map_id s =
+  let try_sub id = try IdMap.find id map_id with Not_found -> id in
+    { sym_name = try_sub s.sym_name;
+      parameters = List.map (fun (i, s) -> (try_sub i, s)) s.parameters;
+      structure = FormUtil.subst_id map_id s.structure;
+      outputs = List.map (fun (i,f) -> (try_sub i, FormUtil.subst_id map_id f)) s.outputs;
+      pos_only = Util.optmap (FormUtil.subst_id map_id) s.pos_only
+    }
 
 let pred_struct (name, num) = (name ^ "_struct", num)
 (*let pred_domain (name, num) = (name ^ "_domain", num)*)
@@ -22,7 +32,7 @@ let pred_naming (name, num) (p, _) = (name ^ "_" ^ p, num)
 let make_output_fct sym id =
   let args =
     List.map
-      (fun (i, s) -> FormUtil.mk_free_const ~srt:s i)
+      (fun (i, s) -> FormUtil.mk_var ~srt:s i)
       (List.filter (fun (i, _) -> i <> id) sym.parameters)
   in
   let srt = snd (List.find (fun (i,_) -> i = id) sym.parameters) in
@@ -33,29 +43,43 @@ let pred_to_form p args =
   let map_id =
     List.fold_left2
       (fun acc (id1, srt1) (id2, srt2) ->
-        assert (srt1 = srt2);
+        if srt1 <> srt2 then
+          begin
+            let pr i s  = (str_of_ident i) ^":" ^ (string_of_sort s) in
+              failwith ("uncompatible types: " ^ (pr id1 srt1) ^ " vs " ^ (pr id2 srt2))
+          end;
+        (*print_endline ((str_of_ident id1)^" -> "^(str_of_ident id2));*)
         IdMap.add id1 id2 acc)
       IdMap.empty
       def.parameters
       args
   in
-  let map_const =
-    List.fold_left2
-      (fun acc (id1, srt1) (id2, srt2) ->
-        IdMap.add id1 (FormUtil.mk_free_const ~srt:srt2 id2) acc)
-      IdMap.empty
-      def.parameters
-      args
+  let def2 = subst_id map_id def in
+  put_symbol def2;
+  let rec var_to_const t = match t with
+    | App (sym, args, sort) -> App (sym, List.map var_to_const args, sort)
+    | Var (id, sort) ->
+      if List.for_all (fun (i,_) -> i <> id) args then t
+      else FormUtil.mk_free_const ?srt:sort id
   in
-  let map_output id =
-    IdMap.add
-      id
-      (make_output_fct def id)
-      map_const
+  let var_to_cst = FormUtil.map_terms var_to_const in
+  let make_output (id, f) =
+    let out_term = make_output_fct def2 id in
+    let map = IdMap.add id out_term IdMap.empty in
+      (id, var_to_cst (FormUtil.subst map f))
   in
-  let o id = FormUtil.subst (map_output id) in
-    (FormUtil.subst map_const def.structure,
-     List.map (fun (id, f) -> (IdMap.find id map_id, o id f)) def.outputs)
+  let renamed_struct = var_to_cst def2.structure in
+  let renamed_outputs = List.map make_output def2.outputs in
+    if Debug.is_info () then
+      begin
+        print_endline ("renamed_struct: " ^ (Form.string_of_form renamed_struct));
+        print_endline "renamed_outputs: ";
+        List.iter
+          (fun (id, r) ->
+            print_endline ("  " ^ (str_of_ident id) ^ " ->\n" ^ (Form.string_of_form r)))
+          renamed_outputs
+      end;
+    (renamed_struct, renamed_outputs)
 
 (* add othe predefined symbols*)
 let _ =

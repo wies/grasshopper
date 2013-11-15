@@ -72,6 +72,59 @@ let without_fp = [
       mk_and [mk_reach next x y;
               mk_forall [l1f] (mk_implies (l1_in_domain) (mk_leq (mk_read data l1) ub))],
       [di, mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+    ( mk_ident "treeNodes",
+      [df; leftf; parentf; rightf; sf],
+      mk_and [(*mk_forall [l1f] (mk_reach parent l1 mk_null);*)
+              (*mk_or [mk_eq x mk_null; mk_eq (mk_read parent x) y];*)
+              mk_forall ~ann:([Comment "parent_left_or_right_equal"]) [l1f; l2f; l3f] 
+                (mk_sequent 
+                   [mk_eq l2 l3; mk_elem l1 s; mk_eq (mk_read parent l1) l2] 
+                   [mk_eq l2 mk_null; mk_eq (mk_read left l2) l1; mk_eq (mk_read right l3) l1]);
+              (let left_parent_generator =
+                [TermGenerator 
+                   ([l1f],
+                    [],
+                    [Match (mk_read left l1, FilterTrue)],
+                    mk_read parent (mk_read left l1));
+               ]
+              in
+              mk_forall ~ann:(Comment "left_parent_equal" :: left_parent_generator) [l1f; l2f] 
+                (mk_sequent 
+                   [mk_elem l1 s; mk_eq (mk_read left l1) l2]
+                   [mk_eq l2 mk_null; mk_eq (mk_read parent l2) l1]));
+              (let right_parent_generator =
+                [TermGenerator 
+                   ([l1f],
+                    [],
+                    [Match (mk_read right l1, FilterTrue)],
+                    mk_read parent (mk_read right l1));
+               ]
+              in
+              mk_forall ~ann:(Comment "right_parent_equal" :: right_parent_generator) [l1f; l2f] 
+                (mk_sequent
+                   [mk_elem l1 s; mk_eq (mk_read right l1) l2]
+                   [mk_eq l2 mk_null; mk_eq (mk_read parent l2) l1]));
+              mk_forall ~ann:([Comment "left_right_distinct"]) [l1f; l2f]
+                (mk_sequent
+                   [mk_elem l1 s; mk_eq l1 l2; mk_eq (mk_read left l1) (mk_read right l2)]
+                   [mk_eq mk_null (mk_read left l1)]);
+              mk_forall ~ann:([Comment "parent_outside_null"]) [l1f]
+                (mk_implies
+                    (mk_or [mk_not (mk_elem l1 s); mk_not (mk_elem (mk_read parent l1) s)])
+                    (mk_eq (mk_read parent l1) mk_null));
+            ],
+      [di, mk_eq d empty_loc]);
+    ( mk_ident "tree",
+      [df; leftf; parentf; rightf; xf],
+      mk_true,
+      [di, mk_forall [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq l1 mk_null]))]);
+    ( mk_ident "treeFP",
+      [df; leftf; parentf; rightf; xf; sf],
+      mk_true,
+      [di, mk_forall [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq l1 mk_null]));
+       (*si, mk_forall [l1f] (mk_iff (mk_elem l1 s) (mk_and [mk_btwn parent l1 x x; mk_neq l1 mk_null]))]);*)
+       si, mk_eq d s ]);
+    (*
     ( mk_ident "tree",
       [df; leftf; parentf; rightf; xf; yf],
       mk_and [(*mk_forall [l1f] (mk_reach parent l1 mk_null);*)
@@ -152,6 +205,7 @@ let without_fp = [
                 ]
      ]
      ) (* end of "tree" *)
+     *)
   ]
 
 let with_fp = []
