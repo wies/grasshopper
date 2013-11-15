@@ -87,8 +87,14 @@ let without_fp = [
                 (mk_sequent
                    [mk_elem l1 d; mk_eq l1 l2; mk_eq (mk_read left l1) (mk_read right l2)]
                    [mk_eq mk_null (mk_read left l1)]);
+              mk_forall ~ann:[Comment "reach_via_left_right"] [l1f; l2f]
+                (mk_sequent 
+                   [mk_reach parent l1 l2; mk_elem l1 d; mk_elem l2 d]
+                   [mk_eq l1 l2;
+                    mk_btwn parent l1 (mk_read left l2) l2;
+                    mk_btwn parent l1 (mk_read right l2) l2])
             ],
-      [di, mk_forall ~ann:([Comment "tree_footprint"]) [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq l1 mk_null]))]);
+      [di, mk_forall ~ann:([Comment "tree_footprint"]) [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq x mk_null]))]);
     ( mk_ident "treeAllocInvariant",
       [df; parentf; sf],
       mk_and [

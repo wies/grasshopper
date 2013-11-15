@@ -46,13 +46,13 @@ returns (new_root: Node)
 
 procedure extract_max(root: Node, p: Node) returns (others: Node, max: Node)
   requires tree(root, p) &*& root != null;
-  ensures treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
   ensures  tree(others, p) &*& acc(max);
-  ensures treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
 {
     if (root.right != null) {
         var c: Node, m: Node;
-        c, m := extract_max(root.right, p); 
+        c, m := extract_max(root.right, root); 
         root.right := c;
         if (c != null) {
           c.parent := root;
@@ -63,15 +63,29 @@ procedure extract_max(root: Node, p: Node) returns (others: Node, max: Node)
     }
 }
 
-procedure destroy(root: Node, p: Node)
-  requires tree(root, p);
+procedure destroy(root: Node)
+  requires tree(root, null);
   requires treeAllocInvariant(Alloc);
   ensures emp;
   ensures treeAllocInvariant(Alloc);
 {
-    if (root != null) {
-        destroy(root.left, root);
-        destroy(root.right, root);
-        free root;
-    }
+   if (root != null) {
+       var c: Node;
+       
+       c := root.left;
+       root.left := null;
+       if (c != null) {
+         c.parent := null;
+       }
+       destroy(c);
+
+       c := root.right;
+       root.right := null;
+       if (c != null) {
+         c.parent := null;
+       }
+       destroy(c);
+
+       free root;
+   }
 }
