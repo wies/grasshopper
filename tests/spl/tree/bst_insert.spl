@@ -14,9 +14,16 @@ predicate tree(x: Node, y: Node) {
     tree(x.right, x)
 }
 
+predicate treeAllocInvariant(X: set<Node>) {
+  (forall n in X :: n.parent == n.parent)
+}
+
 procedure insert(root: Node, value: int, p: Node)
 returns (new_root: Node)
   requires tree(root, p);
+  requires p == null || p in Alloc;
+  requires treeAllocInvariant(Alloc);
+  ensures treeAllocInvariant(Alloc);
   ensures tree(new_root, p);
 {
   if (root == null) {
@@ -35,5 +42,6 @@ returns (new_root: Node)
       root.right := insert(root.right, value, root);
       return root;
     }
+    return root;
   }
 }

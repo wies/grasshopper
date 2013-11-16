@@ -14,13 +14,21 @@ predicate tree(x: Node, y: Node) {
     tree(x.right, x)
 }
 
+predicate treeAllocInvariant(X: set<Node>) {
+  (forall n in X :: n.parent == n.parent)
+}
+
 procedure destroy(root: Node, p: Node)
   requires tree(root, p);
+  requires treeAllocInvariant(Alloc);
+  ensures treeAllocInvariant(Alloc);
   ensures emp;
 {
     if (root != null) {
         destroy(root.left, root);
         destroy(root.right, root);
+        root.parent := null;
         free root;
     }
 }
+
