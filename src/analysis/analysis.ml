@@ -129,7 +129,6 @@ let simplify prog =
   let prog = elim_sl prog in
   let prog = annotate_heap_checks prog in
   let prog = elim_new_dispose prog in
-  let prog = infer_accesses prog in
   dump_if 2 prog;
   Debug.info "eliminating return, eliminating state\n";
   let prog = elim_return prog in

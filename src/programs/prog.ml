@@ -461,9 +461,9 @@ let modifies_proc prog proc =
 let modifies_basic_cmd = function
   | Assign ac -> id_set_of_list ac.assign_lhs
   | Havoc hc -> id_set_of_list hc.havoc_args
-  | New nc -> IdSet.singleton nc.new_lhs
+  | New nc -> IdSet.add alloc_id (IdSet.singleton nc.new_lhs)
   | Call cc -> id_set_of_list cc.call_lhs
-  | Dispose _ 
+  | Dispose _ -> IdSet.singleton alloc_id
   | Assume _
   | Assert _
   | Return _ -> IdSet.empty
