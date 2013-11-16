@@ -14,9 +14,16 @@ predicate tree(x: Node, y: Node) {
     tree(x.right, x)
 }
 
+predicate treeAllocInvariant(X: set<Node>) {
+  (forall n in X :: n.parent == n.parent)
+}
 procedure extract_max(root: Node, p: Node) returns (others: Node, max: Node)
+  requires p in Alloc || p == null;
   requires tree(root, p) &*& root != null;
-  ensures  tree(others, p) &*& acc(max);
+  requires treeAllocInvariant(Alloc);
+  ensures  tree(others, p);
+  ensures  acc(max) &*& max.left == null &*& max.right == null &*& max.parent == null;
+  ensures  treeAllocInvariant(Alloc);
 {
     if (root.right != null) {
         var c: Node, m: Node;
@@ -24,10 +31,14 @@ procedure extract_max(root: Node, p: Node) returns (others: Node, max: Node)
         root.right := c;
         return root, m;
     } else {
-      if (root.left != null) {
-        root.left.parent := root;
-      }
-      return root.left, root;
+        var c: Node;
+        c := root.left;
+        root.left := null;
+        root.parent := null;
+        if (c != null) {
+          c.parent := p;
+        }
+        return c, root;
     }
 }
 
