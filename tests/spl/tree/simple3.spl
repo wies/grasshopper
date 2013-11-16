@@ -21,7 +21,7 @@ predicate treeAllocInvariant(X: set<Node>) {
 procedure insert(root: Node, value: int, p: Node)
 returns (new_root: Node)
   requires tree(root, p);
-  ensures treeAllocInvariant(Alloc);
+  requires treeAllocInvariant(Alloc);
   ensures tree(new_root, p);
   ensures treeAllocInvariant(Alloc);
 {
@@ -45,21 +45,27 @@ returns (new_root: Node)
 
 
 procedure extract_max(root: Node, p: Node) returns (others: Node, max: Node)
+  requires p in Alloc || p == null;
   requires tree(root, p) &*& root != null;
-  ensures  treeAllocInvariant(Alloc);
-  ensures  tree(others, p) &*& acc(max);
+  requires treeAllocInvariant(Alloc);
+  ensures  tree(others, p);
+  ensures  acc(max) &*& max.left == null &*& max.right == null &*& max.parent == null;
   ensures  treeAllocInvariant(Alloc);
 {
     if (root.right != null) {
         var c: Node, m: Node;
         c, m := extract_max(root.right, root); 
         root.right := c;
-        if (c != null) {
-          c.parent := root;
-        }
         return root, m;
     } else {
-        return root.left, root;
+        var c: Node;
+        c := root.left;
+        root.left := null;
+        root.parent := null;
+        if (c != null) {
+          c.parent := p;
+        }
+        return c, root;
     }
 }
 

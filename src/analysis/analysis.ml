@@ -278,6 +278,8 @@ let check_proc prog proc =
   let check_vc (vc_name, (vc_msg, pp), vc) =
     let vc = skolemize (foralls_to_exists (propagate_exists (nnf vc))) in
     let vc_and_preds = add_pred_insts prog vc in
+      Debug.info ("VC: " ^ vc_name ^ "\n");
+      Debug.debug ((string_of_form vc_and_preds) ^ "\n");
       if !Config.verify then
         match Prover.check_sat ~session_name:vc_name vc_and_preds with
         | Some false -> ()
