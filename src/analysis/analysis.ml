@@ -226,7 +226,7 @@ let vcgen prog proc =
             let acc1, trace = vcs acc pre c in
             acc1, trace :: traces)
             (acc, []) cs
-        in acc1, [mk_or (List.rev_map mk_and traces)]
+        in acc1, [smk_or (List.rev_map smk_and traces)]
     | Seq (cs, pp) -> 
         let acc1, trace, _ = 
           List.fold_left (fun (acc, trace, pre) c ->

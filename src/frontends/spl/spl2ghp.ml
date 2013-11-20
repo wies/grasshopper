@@ -511,7 +511,7 @@ let convert cus =
         fdecl.v_type
       with Not_found ->
         ProgError.error pos 
-          ("Struct " ^ fst id ^ " does not have a field named " ^ fst fld_id ^ ".")
+          ("Struct " ^ fst id ^ " does not have a field named " ^ fst fld_id)
     in
     let rec convert_type = function
       | LocType -> Loc
@@ -543,7 +543,7 @@ let convert cus =
     in
     let type_error pos expected found =
       ProgError.type_error pos
-        ("Expected an " ^ expected ^ "\n            but found an " ^ found ^ ".")
+        ("Expected an " ^ expected ^ "\n            but found an " ^ found)
     in
     let rec convert_expr locals = function
       | Null _ -> FOL_term (FormUtil.mk_null, LocType)
@@ -569,7 +569,7 @@ let convert cus =
               let res_srt = convert_type res_ty in
               let fld = FormUtil.mk_free_const ~srt:(Fld res_srt) fld_id in
               FOL_term (FormUtil.mk_read fld t, res_ty)
-          | LocType -> ProgError.error pos "Cannot dereference null."
+          | LocType -> ProgError.error pos "Cannot dereference null"
           | ty -> failwith "unexpected type")
       | Access (e, pos) ->
           let t, ty = extract_term locals UniversalType e in
@@ -578,7 +578,7 @@ let convert cus =
               SL_form (SlUtil.mk_cell t)
           | SetType (StructType _) ->
               SL_form (SlUtil.mk_region t)
-          | LocType -> ProgError.error pos "Cannot access null."
+          | LocType -> ProgError.error pos "Cannot access null"
           | ty -> failwith "unexpected type")
       | BtwnPred (fld, x, y, z, pos) ->
           let tfld, fld_ty = extract_term locals UniversalType fld in
@@ -712,7 +712,7 @@ let convert cus =
             | FOL_term (App (Read, [fld; ind], _), ty) -> fld, ind, ty
             | _ -> 
                 ProgError.error (pos_of_expr e1) 
-                  "Expected field access on left-hand-side of points-to predicate."
+                  "Expected field access on left-hand-side of points-to predicate"
           in
           let t2, _ = extract_term locals ty e2 in
           SL_form (SlUtil.mk_pts fld ind t2)
@@ -784,12 +784,14 @@ let convert cus =
           let msg caller pos =
             if caller = proc_name then
               Printf.sprintf 
-                "An invariant might not hold before entering a loop in procedure %s.\n\n%s:\nRelated location: This is the loop invariant that might not hold initially." 
-                (str_of_ident proc_name) (string_of_src_pos pos)
+                "An invariant might not hold before entering a loop in procedure %s\n\n%s"
+                (str_of_ident proc_name)
+                (ProgError.error_to_string pos "Related location: This is the loop invariant that might not hold initially") 
             else 
               Printf.sprintf 
-                "An invariant might not be maintained by a loop in procedure %s.\n\n%s:\nRelated location: This is the loop invariant that might not be maintained." 
-                (str_of_ident proc_name) (string_of_src_pos pos)
+                "An invariant might not be maintained by a loop in procedure %s\n\n%s"
+                (str_of_ident proc_name)
+                (ProgError.error_to_string pos "Related location: This is the loop invariant that might not be maintained")
           in
           (*let pos = pos_of_expr e in*)
           convert_spec_form locals e "invariant" (Some msg)
@@ -808,7 +810,7 @@ let convert cus =
                   | Ident (id, _) -> id
                   | e -> 
                       ProgError.error (pos_of_expr e) 
-                        "Only variables are allowed on left-hand-side of simultaneous assignments."
+                        "Only variables are allowed on left-hand-side of simultaneous assignments"
                 ) es                
             in ids, None
       in
@@ -832,14 +834,14 @@ let convert cus =
             try List.map2 (fun ty e -> fst (extract_term proc.p_locals ty e)) formal_tys es
             with Invalid_argument _ -> 
               ProgError.error cpos 
-                (Printf.sprintf "Procedure %s expects %d argument(s)." 
+                (Printf.sprintf "Procedure %s expects %d argument(s)" 
                    (fst id) (List.length formal_tys))
           in 
           let lhs_ids, _ = 
             try convert_lhs lhs return_tys
             with Invalid_argument _ ->
               ProgError.error pos
-              (Printf.sprintf "Procedure %s has %d return value(s)." 
+              (Printf.sprintf "Procedure %s has %d return value(s)" 
                  (fst id) (List.length return_tys))
           in
           mk_call_cmd lhs_ids id args cpos
@@ -852,7 +854,7 @@ let convert cus =
           let rhs_ts, rhs_tys = 
             Util.map_split (fun e ->
               match convert_expr proc.p_locals e with
-              | SL_form _ -> ProgError.error (pos_of_expr e) "SL formulas cannot be assigned."
+              | SL_form _ -> ProgError.error (pos_of_expr e) "SL formulas cannot be assigned"
               | FOL_term (t, ty) -> t, ty
               | FOL_form f -> 
                   extract_term proc.p_locals BoolType e)
@@ -862,7 +864,7 @@ let convert cus =
             try convert_lhs lhs rhs_tys
             with Invalid_argument _ -> 
               ProgError.error pos 
-                (Printf.sprintf "Tried to assign %d value(s) to %d variable(s)." 
+                (Printf.sprintf "Tried to assign %d value(s) to %d variable(s)" 
                    (List.length rhs) (List.length lhs))
           in
           (match ind_opt with
@@ -879,7 +881,7 @@ let convert cus =
             List.map 
               (function 
                 | Ident (id, _) -> id 
-                | e -> ProgError.error (pos_of_expr e) "Only variables can be havoced."
+                | e -> ProgError.error (pos_of_expr e) "Only variables can be havoced"
               )
               es
           in 
@@ -901,7 +903,7 @@ let convert cus =
             try List.map2 (fun ty e -> fst (extract_term proc.p_locals ty e)) return_tys es
             with Invalid_argument _ -> 
               ProgError.error pos 
-                (Printf.sprintf "Procedure %s returns %d values(s), found %d." 
+                (Printf.sprintf "Procedure %s returns %d values(s), found %d" 
                    (fst proc.p_name) (List.length return_tys) (List.length es))
           in
           mk_return_cmd ts pos
@@ -937,16 +939,18 @@ let convert cus =
           | Requires e -> fun (pre, post) -> 
               let mk_msg caller pos =
                  Printf.sprintf 
-                  "A precondition for this call of %s might not hold.\n\n%s:\nRelated location: This is the precondition that might not hold." 
-                  (str_of_ident proc_name) (string_of_src_pos pos)
+                  "A precondition for this call of %s might not hold\n\n%s"
+                  (str_of_ident proc_name)
+                  (ProgError.error_to_string pos "Related location: This is the precondition that might not hold")
               in
               let name = "precondition of " ^ str_of_ident proc_name in
               convert_spec_form locals e name (Some mk_msg) :: pre, post
           | Ensures e -> fun (pre, post) ->
               let mk_msg caller pos =
                  Printf.sprintf 
-                  "A postcondition of procedure %s might not hold at this return point.\n\n%s:\nRelated location: This is the postcondition that might not hold." 
-                  (str_of_ident proc_name) (string_of_src_pos pos)
+                  "A postcondition of procedure %s might not hold at this return point\n\n%s"
+                  (str_of_ident proc_name)
+                  (ProgError.error_to_string pos "Related location: This is the postcondition that might not hold")
               in
               let name = "postcondition of " ^ str_of_ident proc_name in
               pre, convert_spec_form locals e name (Some mk_msg) :: post)

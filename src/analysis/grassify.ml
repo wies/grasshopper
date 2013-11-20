@@ -226,7 +226,7 @@ let annotate_heap_checks prog =
     TermSet.fold 
       (fun t acc ->
         let t_in_footprint = FOL (mk_elem t footprint_set) in
-        let mk_msg callee pos = "Possible heap access through null or dangling reference." in
+        let mk_msg callee pos = "Possible heap access through null or dangling reference" in
         let sf = mk_spec_form t_in_footprint "check heap access" (Some mk_msg) pos in
         let check_access = mk_assert_cmd sf pos in
         check_access :: acc)
@@ -242,7 +242,7 @@ let annotate_heap_checks prog =
     | (Dispose dc, pp) ->
         let arg = dc.dispose_arg in
         let arg_in_footprint = FOL (mk_elem arg footprint_set) in
-        let mk_msg callee pos = "This deallocation might be unsafe." in
+        let mk_msg callee pos = "This deallocation might be unsafe" in
         let sf = 
           mk_spec_form arg_in_footprint "check free" (Some mk_msg) pp.pp_pos 
         in

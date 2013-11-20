@@ -1,4 +1,4 @@
-(* for the axioms generation *)
+(* Flags controlling the axioms generation *)
 let with_reach_axioms = ref true
 let keep_sets = ref true
 let encode_fields_as_arrays = ref false
@@ -14,10 +14,12 @@ let model_file = ref ""
 let dump_smt_queries = ref false
 (* Flag that controls whether the generated VCs are checked. *)
 let verify = ref true
-(* Flag that controls whether to stop after the 1st VCs that cannot be checked. *)
+(* Flag that controls whether to stop after the first VC that cannot be proved. *)
 let robust = ref false
 (* Flag that controls whether predefined predicates only are used (heuristic to infer them is default) *)
 let predefPreds = ref true
+(* Flag that enables error messages compatible with emacs' flymake-mode *)
+let flymake_mode = ref false
 
 let dump_ghp = ref (-1)
 
@@ -37,6 +39,7 @@ let experimental = ref false
 
 let cmd_options =
   [("-model", Arg.Set_string model_file, "<file>  Produce counterexample model for the first failing verification condition");
+   ("-flymake", Arg.Set flymake_mode, " Print error messages that are compatible with Emacs' flymake-mode");
    ("-dumpghp", Arg.Set_int dump_ghp, "<num>  Print intermediate program after specified simplification stage (num=0,1,2,3)");
    ("-dumpvcs", Arg.Set dump_smt_queries, " Generate SMT-LIB 2 files for all verification conditions");
    ("-noverify", Arg.Clear verify, " Do not check the generated verification conditions");

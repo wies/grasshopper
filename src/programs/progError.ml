@@ -10,8 +10,13 @@ let type_error pos msg = raise (Prog_error (pos, "Type Error: " ^ msg))
 
 let error pos msg = raise (Prog_error (pos, "Error: " ^ msg))
 
+let error_to_string pos msg = 
+  if !Config.flymake_mode 
+  then Printf.sprintf "%s:%s" (flymake_string_of_src_pos pos) msg
+  else Printf.sprintf "%s:\n%s" (string_of_src_pos pos) msg
+
 let to_string = function
-  | Prog_error (pos, msg) -> Printf.sprintf "%s:\n%s" (string_of_src_pos pos) msg
+  | Prog_error (pos, msg) -> error_to_string pos msg      
   | e -> raise (Invalid_argument "ProgError.to_string: expected a program error exception")
 
 let print_error pos msg = print_endline (to_string (Prog_error (pos, msg)))

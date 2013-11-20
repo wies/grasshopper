@@ -101,4 +101,38 @@
     (setq auto-mode-alist (cons '("\\.spl$" . spl-mode)
 				auto-mode-alist)))
 
+(require 'compile)
+(defun spl-errors ()
+  (make-local-variable 'compilation-error-regexp-alist)
+  (setq compilation-error-regexp-alist
+        '("^File \"\\([_[:alnum:]-/]*.spl\\)\", line \\([[:digit:]]+\\), columns \\([[:digit:]]+\\)-.*\n\\(.*\\)$"
+          1 2 3 4))
+  (make-local-variable 'compile-command)
+  (let ((grasshopper "grasshopper "))
+    (setq compile-command (concat grasshopper buffer-file-name))))
+
+(require 'flymake)
+(defun flymake-spl-init ()
+  (flymake-simple-make-init-impl
+   'flymake-create-temp-with-folder-structure nil nil
+   buffer-file-name
+   'flymake-get-spl-cmdline))
+
+(defun flymake-get-spl-cmdline (source base-dir)
+    (list "grasshopper" (list "-flymake" source)))
+
+(add-hook 'spl-mode-hook
+          '(lambda ()
+             (add-to-list 'flymake-allowed-file-name-masks '(".+\\.spl$" flymake-spl-init))))
+
 (provide 'spl-mode)
+
+(add-hook 'spl-mode-hook
+          '(lambda ()
+             (add-to-list 'flymake-err-line-patterns
+             '("^\\(.+\\):\\([[:digit:]]+\\):\\([[:digit:]]+\\):\\(.*\\)$"
+               1 2 3 4))))
+
+(add-hook 'spl-mode-hook 'spl-errors)
+(add-hook 'spl-mode-hook
+          (lambda () (local-set-key (kbd "C-c C-c") 'compile)))
