@@ -251,6 +251,11 @@ let without_fp = [
      ) (* end of "tree" *)
      *)
   ]
+
+let sorted = 
+  mk_forall ~ann:[Comment "sortedness"] [l1f; l2f]
+    (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y]
+                [mk_leq (mk_read data l1) (mk_read data l2)])
   
 let lists = [
     ( mk_ident "lseg",
@@ -260,8 +265,8 @@ let lists = [
     ( mk_ident "slseg",
       [df; dataf; nextf; xf; yf],
       mk_and [mk_reach next x y;
-              mk_forall [l1f; l2f] (mk_implies (mk_and [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y])
-                                               (mk_leq (mk_read data l1) (mk_read data l2)))],
+              sorted
+             ],
       [di, mk_forall ~ann:[Comment "slseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
     ( mk_ident "rslseg",
       [df; dataf; nextf; xf; yf],
@@ -283,16 +288,21 @@ let lists = [
       [df; dataf; nextf; xf; yf; lbf],
       mk_and [mk_reach next x y;
               mk_forall [l1f] (mk_implies (l1_in_domain) (mk_leq lb (mk_read data l1)));
-              mk_forall [l1f; l2f] (mk_implies (mk_and [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y])
-                                               (mk_leq (mk_read data l2) (mk_read data l1)))],
+              sorted],
       [di, mk_forall ~ann:[Comment "uslseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
     ( mk_ident "lslseg",
       [df; dataf; nextf; xf; yf; ubf],
       mk_and [mk_reach next x y;
               mk_forall [l1f] (mk_implies (l1_in_domain) (mk_leq (mk_read data l1) ub));
+              sorted],
+      [di, mk_forall ~ann:[Comment "lslseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+    ( mk_ident "lrslseg",
+      [df; dataf; nextf; xf; yf; ubf],
+      mk_and [mk_reach next x y;
+              mk_forall [l1f] (mk_implies (l1_in_domain) (mk_leq (mk_read data l1) ub));
               mk_forall [l1f; l2f] (mk_implies (mk_and [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y])
                                                (mk_leq (mk_read data l2) (mk_read data l1)))],
-      [di, mk_forall ~ann:[Comment "lslseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+      [di, mk_forall ~ann:[Comment "lrslseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
     ( mk_ident "blseg",
       [df; dataf; nextf; xf; yf; lbf; ubf],
       mk_and [mk_reach next x y;
@@ -304,8 +314,7 @@ let lists = [
       mk_and [mk_reach next x y;
               mk_forall [l1f] (mk_implies (l1_in_domain) (mk_and [mk_leq (mk_read data l1) ub;
                                                                   mk_leq lb (mk_read data l1)]));
-              mk_forall [l1f; l2f] (mk_implies (mk_and [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y])
-                                               (mk_leq (mk_read data l2) (mk_read data l1)))],
+              sorted],
       [di, mk_forall ~ann:[Comment "bslseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
     ( mk_ident "dlseg",
       [df; nextf; prevf; x1f; x2f; y1f; y2f],
@@ -321,8 +330,16 @@ let lists = [
   ]
 
 
-let with_fp = []
+let with_fp = [
+    ( mk_ident "lseg_set",
+      [df; nextf; xf; yf; sf],
+      mk_reach next x y,
+      [di, mk_forall ~ann:[Comment "lseg_set_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp);
+       si, mk_forall ~ann:[Comment "lseg_Set"] [l1f] (mk_iff (mk_elem l1 s) l1_in_lst_fp)])
+  ]
+
 let with_content = []
+
 let misc = []
 
 (*
