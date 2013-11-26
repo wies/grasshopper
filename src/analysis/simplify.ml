@@ -23,12 +23,13 @@ let elim_loops (prog : program) =
           List.fold_right
             (fun decl (sm, ids, locals) -> 
               let init_id = fresh_ident (FormUtil.name decl.var_name ^ "_init") in
-              let init_decl = { decl with var_name = init_id } in
+              let local_decl = { decl with var_is_implicit = false } in
+              let init_decl = { local_decl with var_name = init_id } in
               IdMap.add decl.var_name init_id sm, 
               init_id :: ids,
-              IdMap.add init_id init_decl locals
+              IdMap.add decl.var_name local_decl (IdMap.add init_id init_decl locals)
             )
-            return_decls (IdMap.empty, [], locals)
+            return_decls (IdMap.empty, [], IdMap.empty)
         in    
         let id_to_term id =
           let decl = IdMap.find id locals in
