@@ -65,11 +65,13 @@ let pred_to_form p args =
       else FormUtil.mk_free_const ?srt:sort id
   in
   let var_to_cst = FormUtil.map_terms var_to_const in
-  let make_output (id, f) =
-    let out_term = make_output_fct def2 id in
-    let map = IdMap.add id out_term IdMap.empty in
-      (id, var_to_cst (FormUtil.subst map f))
+  let output_map =
+    List.fold_left
+      (fun acc (id, _) -> IdMap.add id (make_output_fct def2 id) acc)
+      IdMap.empty
+      def2.outputs
   in
+  let make_output (id, f) = (id, var_to_cst (FormUtil.subst output_map f)) in
   let renamed_struct = var_to_cst def2.structure in
   let renamed_outputs = List.map make_output def2.outputs in
     if Debug.is_info () then

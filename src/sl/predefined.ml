@@ -365,10 +365,17 @@ let with_content = [
                  [Match (v, FilterNotOccurs witness_sym)],
                  mk_witness v c)
            in
+           let generator3 =
+             TermGenerator 
+               ( [vf],
+                 [],
+                 [Match (v, FilterNotOccurs witness_sym)],
+                 mk_read data (mk_witness v c))
+           in
              mk_and [
                mk_forall ~ann:[Comment "lseg_content_1"; generator1] [l1f]
                  (mk_iff (mk_elem (mk_read data l1) c) l1_in_lst_fp);
-               mk_forall ~ann:[Comment "lseg_content_2"; generator2] [vf]
+               mk_forall ~ann:[Comment "lseg_content_2"; generator2; generator3] [vf]
                  (mk_and [mk_implies (mk_elem v c) (mk_elem (mk_witness v c) d);
                           mk_eq v (mk_read data (mk_witness v c))])
              ]
