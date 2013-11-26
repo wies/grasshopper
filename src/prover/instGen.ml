@@ -7,17 +7,12 @@ open Axioms
 let choose_rep_terms classes =
   let find_rep cl = 
     try List.find (function App (_, [], _) -> true | _ -> false) cl
-    with Not_found -> 
-      match cl with
-      |	t :: _ -> t
-      |	[] -> raise Not_found
+    with Not_found -> List.hd cl
   in
-  let list_to_set cl =
-    List.fold_left (fun acc t -> TermSet.add t acc) TermSet.empty cl
-  in
-  List.fold_left (fun (reps, new_classes) cl ->
+  List.fold_left (fun (reps, rep_map) cl ->
     let cl_rep : term = find_rep cl in
-    (cl_rep :: reps, TermMap.add cl_rep (list_to_set cl) new_classes))
+    (cl_rep :: reps, 
+     List.fold_left (fun rep_map t -> TermMap.add t cl_rep rep_map) rep_map cl))
     ([], TermMap.empty) classes
 
 let generate_terms generators ground_terms =
@@ -285,7 +280,7 @@ let stratify_types axioms =
 
 let generate_instances useLocalInst axioms terms rep_map type_graph = 
   let ground_terms = 
-    TermMap.fold (fun _ -> TermSet.union) rep_map TermSet.empty 
+    TermMap.fold (fun t _ acc -> TermSet.add t acc) rep_map TermSet.empty 
   in
   (* stratification: can a var of type t1 be used to generate a term of type t2 *)
   let rec close_graph v acc =
@@ -386,46 +381,65 @@ let generate_instances useLocalInst axioms terms rep_map type_graph =
         print_endline "--------------------"
       end
     in
-    let fun_terms = 
-      let rec tt bv terms t =
+    (* collect all terms in which free variables appear below function symbols *)
+    let fun_terms, fun_vs = 
+      if not useLocalInst then [], IdSet.empty else
+      let rec tt bv (fun_terms, fun_vs) t =
         match t with  
         | App (_, _, Some srt) when srt <> Bool -> 
             let vs = IdSet.diff (fvt IdSet.empty t) bv in
             if IdSet.is_empty vs
-            then terms 
-            else (vs, t) :: terms
-        | App (fn, ts, _) -> List.fold_left (tt bv) terms ts
-        | _ -> terms
-      in fold_terms_with_bound tt [] f
+            then fun_terms, fun_vs
+            else t :: fun_terms, IdSet.union vs fun_vs
+        | App (fn, ts, _) -> List.fold_left (tt bv) (fun_terms, fun_vs) ts
+        | _ -> fun_terms, fun_vs
+      in fold_terms_with_bound tt ([], IdSet.empty) f
     in
-    let is_local subst_map = 
-      List.for_all 
-        (fun (_, t) ->
-          match t with
-          | App (fn1, ts1, _) ->
-              TermSet.exists
-                (function
-                  | App (fn2, ts2, _) when fn1 = fn2 ->
-                      Util.for_all2
-                        (fun t1 t2 ->
-                          let t1_rep =
-                            match t1 with
-                            | Var (v, _) ->
-                                (try TermMap.find (IdMap.find v subst_map) rep_map
-                                with Not_found -> TermSet.singleton t2)
-                            | _ -> 
-                                try TermMap.find t1 rep_map
-                                with Not_found -> TermSet.singleton t1
-                          in TermSet.mem t2 t1_rep
-                        ) ts1 ts2
-                  | t -> false)
-                ground_terms
-          | _ -> true) 
-        fun_terms
+    (* generate substitution maps for variables that appear below function symbols *)
+    let proto_subst_maps =
+      let find_rep t = TermMap.find t rep_map in
+      let add_subst_map sm subst_maps =
+        if List.mem sm subst_maps then subst_maps else sm :: subst_maps
+      in
+      let find_matches t1 sm subst_maps =
+        let candidates = ground_terms in
+        let rec mt sm t1 t2 =
+          match t1, t2 with 
+          | App (sym1, ts1, srt1), App (sym2, ts2, srt2) 
+            when sym1 = sym2 && srt1 = srt2 ->
+              begin
+                try List.fold_left2 (fun sm_opt t1 t2 -> 
+                  match sm_opt with 
+                  | None -> None
+                  | Some sm -> mt sm t1 t2)
+                    (Some sm) ts1 ts2
+                with Invalid_argument _ -> None
+              end
+          | Var (x, srt1), t2 when srt1 = sort_of t2 ->
+              if IdMap.mem x sm then
+                if IdMap.find x sm = find_rep t2 then Some sm
+                else None
+              else Some (IdMap.add x (find_rep t2) sm)
+          | _, _ -> None
+        in
+        TermSet.fold (fun t2 subst_maps ->
+          match mt sm t1 t2 with
+          | None -> subst_maps
+          | Some sm1 -> add_subst_map sm1 subst_maps)
+          candidates subst_maps
+      in
+      List.fold_left 
+        (fun subst_maps t ->
+          List.fold_left 
+            (fun subst_maps1 sm -> find_matches t sm subst_maps1)
+            [] subst_maps)
+        [IdMap.empty] fun_terms        
     in
+    (* complete substitution maps for remaining variables *)
     let subst_maps = 
       IdSrtSet.fold 
         (fun (v, srt) subst_maps ->
+          if IdSet.mem v fun_vs then subst_maps else
           List.fold_left 
             (fun acc t -> match t with
             | App (_, _, Some srt2) 
@@ -434,37 +448,33 @@ let generate_instances useLocalInst axioms terms rep_map type_graph =
                   List.fold_left 
                     (fun acc sub ->
                       let new_sub = IdMap.add v t sub in
-                      if not useLocalInst || is_local new_sub 
-                      then new_sub :: acc
-                      else acc
+                      new_sub :: acc
                     ) acc subst_maps
                 in
                 new_subst_maps
             | _ -> acc)
             [] terms
-        ) fvars [IdMap.empty]
+        ) fvars proto_subst_maps
     in
     (*let _ = match f with
-    | Binder (_, _, _, [Comment "entry-point1"]) ->
+    | Binder (_, _, _, [Comment "read_write2"]) ->
         begin
           print_endline "Axiom:";
           print_forms stdout [f];
           print_endline "fun_terms:";
-          List.iter (fun (_, t) -> print_term stdout t; print_string ", ") fun_terms;
-          print_endline "fvars: ";
+          List.iter (fun t -> print_term stdout t; print_string ", ") fun_terms;
+          print_endline "\nfvars: ";
           IdSrtSet.iter (fun (id, _) -> Printf.printf "%s, " (str_of_ident id)) fvars;
           print_endline "\nground_terms:";
           TermSet.iter (fun t -> print_term stdout t; print_newline ()) ground_terms;
+          print_endline "\nproto_subst_maps:";
+          List.iter print_subst_map proto_subst_maps;
           print_endline "\nsubst_maps:";
           List.iter print_subst_map subst_maps
         end
     | _ -> ()
     in*)
-    (*if subst_maps == [] then 
-      begin
-        print_endline "Dropping axiom: ";
-        print_forms stdout [f];
-      end;*)
+    (* generate instances of axiom *)
     List.fold_left (fun acc subst_map -> (*Axioms.mk_axiom2*) (subst subst_map f) :: acc) acc subst_maps
   in
   List.fold_left instantiate epr_axioms axioms

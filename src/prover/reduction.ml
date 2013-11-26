@@ -432,21 +432,23 @@ let reduce_read_write fs gts framed_fields =
   (* propagate read terms *)
   let gts1, partition_of = propagate_field_reads fs1 gts framed_fields in
   (* generate instances of all read over write axioms *)
-  let read_write_ax = 
-    TermSet.fold (fun t write_ax ->
-      match t with
-      | App (Write, [fld; loc1; loc2], _) ->
-          fst (open_axioms isFunVar (Axioms.read_write_axioms fld loc1 loc2)) @ write_ax
-      | _ -> write_ax) gts1 []
+  let read_write_ax, generators = 
+    let generators_and_axioms =
+      TermSet.fold (fun t acc ->
+        match t with
+        | App (Write, [fld; _; _], _) ->
+            open_axioms isFunVar (Axioms.read_write_axioms_closed fld) :: acc
+        | _ -> acc) gts1 []
+    in
+    let axioms, generators = List.split generators_and_axioms in
+   Util.rev_concat axioms,  Util.rev_concat generators
   in
-  (*let read_write_ax2, generators = open_axioms isFunVar (Axioms.read_write_axioms_closed ()) in
-  let gts1 = generate_terms generators gts in
-  let _ = print_terms gts1 in*)
+  let gts1 = generate_terms generators gts1 in
   let classes1 = CongruenceClosure.congr_classes fs1 gts1 in
   let read_write_ax1 = instantiate_with_terms true read_write_ax classes1 in
   let gts1 = TermSet.union gts1 (ground_terms (mk_and read_write_ax1)) in
   let gts1, partition_of = propagate_field_reads (fs1 @ read_write_ax1) gts1 framed_fields in
-  rev_concat [read_write_ax; fs1], gts1, partition_of
+  rev_concat [read_write_ax1; fs1], gts1, partition_of
 
 (** Adds instantiated theory axioms for graph reachability to formula f.
  ** Assumes that f is typed *)

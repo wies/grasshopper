@@ -30,21 +30,17 @@ let set3 = mk_var ~srt:(snd s3) (fst s3)
 let int1 = mk_var ~srt:(snd i1) (fst i1)
 let int2 = mk_var ~srt:(snd i2) (fst i2)
 
-let all_vars = [f1; f2; s1; s2; l1; l2; l3; l4; l5; i1; i2]
-
 let mk_axiom ?(gen=[]) name f =
-  let fvars = fv f in
-  let bvars = List.filter (fun v -> IdSet.mem (fst v) fvars) all_vars in
+  let bvars = sorted_free_vars f in
   let annots = 
     Comment name :: 
     List.map (fun (bvs, fvs, m, g) -> TermGenerator (bvs, fvs, m, g)) gen 
   in
-  mk_forall ~ann:annots bvars f 
+  mk_forall ~ann:annots (IdSrtSet.elements bvars) f 
 
 let mk_axiom2 f =
   let fvars = sorted_free_vars f in
-  let bvars = IdSrtSet.elements fvars
-            (*List.filter (fun v -> IdSet.mem (fst v) fvars) all_vars*) in
+  let bvars = IdSrtSet.elements fvars in
   mk_forall bvars f 
 
 let f x = mk_read fld1 x
@@ -70,16 +66,23 @@ let read_write_axioms fld1 loc1 loc2 =
         mk_axiom "read_write2" f_upd2]
   else []
   
-let read_write_axioms_closed () =
-  let new_fld1 = mk_write fld1 loc1 loc2 in
+let read_write_axioms_closed fld1 =
+  let res_srt = 
+    match sort_of fld1 with
+    | Some (Fld srt) -> srt
+    | _ -> failwith "expected field in read_write_axioms"
+  in
+  let d = fresh_ident "?d" in
+  let dvar = mk_var ~srt:res_srt d in
+  let new_fld1 = mk_write fld1 loc1 dvar in
   let f x = mk_read fld1 x in
   let g x = mk_read new_fld1 x in
   let f_upd1 = 
-    mk_or [mk_eq loc3 loc1; mk_eq (f loc3) (g loc3)]
+    mk_or [mk_eq loc2 loc1; mk_eq (f loc2) (g loc2)]
   in
-  let f_upd2 = mk_eq (g loc1) loc2 in
+  let f_upd2 = mk_eq (g loc1) dvar in
   let generator = 
-    [f1; l1; l2],
+    [l1; (d, res_srt)],
     [],
     [Match (new_fld1, FilterTrue)],
     g loc1
@@ -195,12 +198,12 @@ let ep_axioms () =
       Match (mk_btwn_term fld3 loc1 loc3 loc4, FilterTrue);
       Match (loc1, FilterNotOccurs EntPnt)], 
      mk_ep fld1 set1 loc1);
-     ([s1; f1; l1],
+     (*([s1; f1; l1],
      [s2; s3; f2],
      [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
       Match (mk_elem_term loc1 set3, FilterTrue);
       Match (loc1, FilterNotOccurs EntPnt)], 
-     mk_ep fld1 set1 loc1)]
+     mk_ep fld1 set1 loc1)*)]
   in
   if !Config.with_ep then
     [mk_axiom "entry-point1" ep1; 
