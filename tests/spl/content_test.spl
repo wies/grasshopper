@@ -1,0 +1,38 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+predicate lseg_cnt(x: Node, y: Node, Content: set<int>) {
+    x == y &*&
+    Content == set<int>()
+  ||
+    x != y &*&
+    acc(x) &*&
+    Content == set(x.data) ++ Content &*& //TODO Content1
+    lseg_cnt(x.next, y, Content)
+}
+
+procedure traverse(lst: Node, ghost content: set<int>)
+  requires lseg_cnt(lst, null, content);
+  ensures lseg_cnt(lst, null, content);
+{
+  var curr: Node;
+  curr := lst;
+  var c1: set<int>;
+  var c2: set<int>;
+  c1 := content;
+  c2 := set<int>();
+
+  while (curr != null) 
+    invariant lseg_cnt(lst, curr, c1) &*& lseg_cnt(curr, null, c2);
+    invariant content == c1 ++ c2;
+  {
+    var old_c1: set<int>;
+    old_c1 := c1;
+    havoc c1;
+    assume(c1 == old_c1 || c1 == old_c1 -- set(curr.data)); //TODO we need angelic non-determinism!
+    c2 := c2 ++ set(curr.data);
+    curr := curr.next; 
+  }
+}

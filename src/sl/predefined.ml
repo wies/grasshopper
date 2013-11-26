@@ -16,6 +16,8 @@ let di, df, d = mk_formal_and_var "domain" (Set Loc)
 
 let si, sf, s = mk_formal_and_var "S" (Set Loc)
 
+let ci, cf, c = mk_formal_and_var "Content" (Set Int)
+
 let _, xf, x = mk_loc "x"
 let _, yf, y = mk_loc "y"
 let _, x1f, x1 = mk_loc "x1"
@@ -37,6 +39,8 @@ let _, dataf, data = mk_int_field "data"
 let _, l1f, l1 = mk_loc "l1"
 let _, l2f, l2 = mk_loc "l2"
 let _, l3f, l3 = mk_loc "l3"
+
+let _, vf, v = mk_int "v"
 
 let empty_loc = mk_empty (Some (Set Loc))
 
@@ -338,7 +342,38 @@ let with_fp = [
        si, mk_forall ~ann:[Comment "lseg_Set"] [l1f] (mk_iff (mk_elem l1 s) l1_in_lst_fp)])
   ]
 
-let with_content = []
+let witness_sym = FreeSym (mk_ident "witness")
+
+let mk_witness elt set = mk_app ~srt:Loc witness_sym [elt; set] 
+
+let with_content = [
+    ( mk_ident "lseg_cnt",
+      [df; dataf; nextf; xf; yf; cf],
+      mk_reach next x y,
+      [di, mk_forall ~ann:[Comment "lseg_cnt_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp);
+       ci, let generator1 =
+             TermGenerator 
+               ( [l1f],
+                 [],
+                 [Match (l1, FilterNotOccurs witness_sym)],
+                 mk_read data l1)
+           in
+           let generator2 =
+             TermGenerator 
+               ( [vf],
+                 [],
+                 [Match (v, FilterNotOccurs witness_sym)],
+                 mk_witness v c)
+           in
+             mk_and [
+               mk_forall ~ann:[Comment "lseg_content_1"; generator1] [l1f]
+                 (mk_iff (mk_elem (mk_read data l1) c) l1_in_lst_fp);
+               mk_forall ~ann:[Comment "lseg_content_2"; generator2] [vf]
+                 (mk_and [mk_implies (mk_elem v c) (mk_elem (mk_witness v c) d);
+                          mk_eq v (mk_read data (mk_witness v c))])
+             ]
+      ])
+  ]
 
 let misc = []
 

@@ -187,7 +187,9 @@ class dag = fun expr ->
   object (self)
     val nodes: (term, node) Hashtbl.t = table1
     val node_to_expr: (node, term) Hashtbl.t = table2
-    method get_node expr = Hashtbl.find nodes expr
+    method get_node expr =
+      try Hashtbl.find nodes expr
+      with Not_found -> failwith ("CC: cannot find " ^ (string_of_term expr))
     method get_expr n = Hashtbl.find node_to_expr n
     method get_nodes = Hashtbl.copy nodes
 
