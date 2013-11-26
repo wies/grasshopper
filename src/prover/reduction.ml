@@ -489,9 +489,7 @@ let instantiate_user_def_axioms fs gts =
   (* generate local instances of all remaining axioms in which variables occur below function symbols *)
   let fs1, generators = open_axioms isFunVar fs in
   let gts1 = generate_terms generators gts in
-  (*TermSet.iter (fun t -> print_endline (string_of_term t)) gts1;
-  List.iter (fun t -> print_endline (string_of_form t)) fs1;*)
-  let classes = CongruenceClosure.congr_classes fs1 gts1 in
+  let classes = CongruenceClosure.congr_classes fs gts1 in
   instantiate_with_terms true fs1 classes, gts1
 
 (** Reduces the given formula to the target theory fragment, as specified by the configuration.
