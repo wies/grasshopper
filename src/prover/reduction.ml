@@ -219,35 +219,27 @@ let reduce_frame fs =
     in
     smk_and (List.map self_frame pred_before_after), paired
   in
-  let rec process f fields = match f with
-    | Atom (App (Frame, [x; a; f; f'], _)) when f <> f' ->
+  let rec process f (frame_axioms, fields) = match f with
+    | Atom (App (Frame, [x; a; fld; fld'], _)) when fld <> fld' ->
         let fields1 = 
           let _, flds = 
             try TermMap.find x fields
             with Not_found -> a, []
           in
-          TermMap.add x (a, f :: f' :: flds) fields
+          TermMap.add x (a, fld :: fld' :: flds) fields
         in
-        expand_frame x a f f', fields1
+        mk_implies f (expand_frame x a fld fld') :: frame_axioms, fields1
     | BoolOp (op, fs) -> 
-        let fs1, fields1 = 
-          List.fold_right (fun f (fs1, fields1) ->
-            let f1, fields1 = process f fields1 in
-            f1 :: fs1, fields1)
-            fs ([], fields)
-        in
-        BoolOp (op, fs1), fields1
+        List.fold_left (fun acc f -> process f acc)
+          (frame_axioms, fields) fs
     | Binder (b, vs, f, a) ->
-        let f1, fields1 = process f fields in
-        Binder (b, vs, f1, a), fields1
-    | _ -> f, fields        
+        process f (frame_axioms, fields)
+    | _ -> (frame_axioms, fields)        
   in
-  let reach_frames, fields =
-    List.fold_right  
-      (fun f (fs1, fields1) ->
-        let f1, fields1 = process f fields1 in
-        f1 :: fs1, fields1)
-      fs ([], TermMap.empty)
+  let frame_axioms, fields =
+    List.fold_left
+      (fun acc f -> process f acc)
+      ([], TermMap.empty) fs
   in
   let pred_frames, framed_fields =
     TermMap.fold 
@@ -258,7 +250,7 @@ let reduce_frame fs =
         paired_flds @ framed_fields
       ) fields ([], [])
   in
-  reach_frames (*@ pred_frames*), framed_fields
+  List.rev_append frame_axioms fs (*@ pred_frames*), framed_fields
   
 let open_axioms open_cond axioms = 
   if !Config.instantiate then
@@ -512,19 +504,19 @@ let reduce f =
     | [] -> List.rev acc
   in
   let f1 = nnf f in
-  let fs1 = split_ands [] [f1] in
-  let fs11 = massage_field_reads fs1 in
-  let fs2 = List.map reduce_exists fs11 in
+  let fs = split_ands [] [f1] in
+  let fs = massage_field_reads fs in
+  let fs = List.map reduce_exists fs in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
-  let fs2, gts = instantiate_ep fs2 in
-  let fs2, framed_fields = reduce_frame fs2 in
-  let fs31 = factorize_axioms (split_ands [] fs2) in
-  let fs4, gts1 = reduce_sets fs31 gts in
-  let fs5, gts2, partition_of = reduce_read_write fs4 gts1 framed_fields in
-  let fs5, gts2 = instantiate_user_def_axioms fs5 gts2 in
-  let fs5, gts2 = reduce_reach fs5 gts2 partition_of in
+  let fs, gts = instantiate_ep fs in
+  let fs, framed_fields = reduce_frame fs in
+  let fs = factorize_axioms (split_ands [] fs) in
+  let fs, gts = reduce_sets fs gts in
+  let fs, gts, partition_of = reduce_read_write fs gts framed_fields in
+  let fs, gts = instantiate_user_def_axioms fs gts in
+  let fs, gts = reduce_reach fs gts partition_of in
   (* the following is a (probably stupid) heuristic to sort the formulas for improving the running time *)
-  let fs6 = 
+  let fs = 
     (* sort by decreasing number of disjuncts in formula *)
     let cmp f1 f2 =
       let rec count_disjuncts acc = function
@@ -535,6 +527,6 @@ let reduce f =
       in
       compare (count_disjuncts 0 f2) (count_disjuncts 0 f1)
     in
-    List.stable_sort cmp fs5
+    List.stable_sort cmp fs
   in
-  fs6
+  fs
