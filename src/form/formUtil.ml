@@ -100,6 +100,9 @@ let mk_atom sym ts = Atom (mk_app ~srt:Bool sym ts)
 
 let mk_pred id ts = mk_atom (FreeSym id) ts
 
+let mk_eq_term s t =
+  mk_app ~srt:Bool Eq [s; t]
+
 let mk_eq s t = mk_atom Eq [s; t]
 
 let mk_lt s t = mk_atom Lt [s; t]

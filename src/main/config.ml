@@ -32,7 +32,7 @@ let smtsolver = ref "Z3"
 (* optmisation: oldify fields only if modified *)
 let optFieldMod = ref true
 (* optmisation: self-framing clause for SL predicates *)
-let optSelfFrame = ref true
+let optSelfFrame = ref false
 
 (* Some experimental features, mostly for testing purpose *)
 let experimental = ref false

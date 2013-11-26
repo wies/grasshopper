@@ -217,7 +217,7 @@ let reduce_frame fs =
       let consequences = smk_and [mk_eq b_d a_d; mk_iff b_s a_s] in
         mk_comment "self framing" (mk_implies cond consequences)
     in
-    smk_and (List.map self_frame pred_before_after), paired
+    smk_and (List.map self_frame pred_before_after)
   in
   let rec process f (frame_axioms, fields) = match f with
     | Atom (App (Frame, [x; a; fld; fld'], _)) when fld <> fld' ->
@@ -241,16 +241,14 @@ let reduce_frame fs =
       (fun acc f -> process f acc)
       ([], TermMap.empty) fs
   in
-  let pred_frames, framed_fields =
-    TermMap.fold 
-      (fun x (a, flds) (pred_frames, framed_fields) ->
-        let pred_frame, paired_flds = expand_frame2 x a flds in
-        (if !Config.optSelfFrame then (pred_frame :: pred_frames)
-        else pred_frames),
-        paired_flds @ framed_fields
-      ) fields ([], [])
+  let pred_frames = 
+    if !Config.optSelfFrame then 
+      TermMap.fold 
+        (fun x (a, flds) pred_frames -> expand_frame2 x a flds :: pred_frames)
+        fields []
+    else []
   in
-  List.rev_append frame_axioms fs (*@ pred_frames*), framed_fields
+  Util.rev_concat [pred_frames; frame_axioms; fs] 
   
 let open_axioms open_cond axioms = 
   if !Config.instantiate then
@@ -346,18 +344,87 @@ let print_terms terms =
  ** Assumes that f is typed and that all frame predicates have been reduced *)
 let instantiate_ep fs =
   let gts = TermSet.add mk_null (ground_terms (mk_and fs)) in
-  (*let ep_ax, generators = open_axioms isFunVar (Axioms.ep_axioms ()) in
-  let gts_eps = InstGen.generate_terms generators gts in
-  let classes = CongruenceClosure.congr_classes fs gts_eps in
-  let ep_ax1 = instantiate_with_terms true ep_ax classes in *)
-  (*print_endline "===============================================";
-  TermSet.iter (fun t -> print_term stdout t; print_newline ())
-   (TermSet.filter (function App (EntPnt, _, _) -> true | _ -> false) gts_eps);
-  print_endline "===============================================";*)
-  rev_concat [fs; (Axioms.ep_axioms ())], gts
+  List.rev_append (Axioms.ep_axioms ()) fs, gts
  
+let reduce_read_write fs gts =
+  let basic_pt_flds = TermSet.filter (has_sort (Fld Loc) &&& is_free_const) gts in
+  (* instantiate null axioms *)
+  let classes =  CongruenceClosure.congr_classes fs gts in
+  let null_ax, _ = open_axioms isFld (Axioms.null_axioms ()) in
+  let null_ax1 = instantiate_with_terms false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
+  let fs1 = null_ax1 @ fs in
+  let gts = TermSet.union (ground_terms (smk_and null_ax1)) gts in
+  let field_sorts = TermSet.fold (fun t srts ->
+    match sort_of t with
+    | Some (Fld srt) -> SrtSet.add srt srts
+    | _ -> srts)
+      gts SrtSet.empty
+  in
+  (* propagate read terms *)
+  let read_propagators =
+    SrtSet.fold (fun srt propagators ->
+      let f1 = fresh_ident "?f", Fld srt in
+      let fld1 = mk_var ~srt:(snd f1) (fst f1) in
+      let f2 = fresh_ident "?g", Fld srt in
+      let fld2 = mk_var ~srt:(snd f2) (fst f2) in
+      let d = fresh_ident "?d" in
+      let d1 = d, srt in
+      let dvar = mk_var ~srt:srt d in
+      let l1 = Axioms.l1 in
+      let loc1 = Axioms.loc1 in
+      let l2 = Axioms.l2 in
+      let loc2 = Axioms.loc2 in
+      let s1 = Axioms.s1 in
+      let set1 = Axioms.set1 in
+      let s2 = Axioms.s2 in
+      let set2 = Axioms.set2 in
+      (* f = g, x.f -> x.g *)
+      ([],
+       [f1; f2; l1],
+       [Match (mk_eq_term fld1 fld2, FilterTrue);
+        Match (mk_read fld1 loc1, FilterTrue)],
+       mk_read fld2 loc1) ::
+      (* f = g, x.g -> x.f *)
+      ([],
+       [f1; f2; l1],
+       [Match (mk_eq_term fld1 fld2, FilterTrue);
+        Match (mk_read fld1 loc1, FilterTrue)],
+       mk_read fld2 loc1) :: 
+      (* f [x := d], y.(f [x := d]) -> y.f *)
+      ([],
+       [f1; l1; l2; d1],
+       [Match (mk_write fld1 loc1 dvar, FilterTrue);
+        Match (mk_read (mk_write fld1 loc1 dvar) loc2, FilterTrue)],
+       mk_read fld1 loc2) ::
+      (* Frame (x, a, f, g), y.g -> y.f *)
+      ([],
+       [f1; f2; s1; s2; l1],
+       [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
+        Match (mk_read fld2 loc1, FilterTrue)],
+       mk_read fld1 loc1) ::
+      propagators)
+      field_sorts []
+  in
+  (* generate instances of all read over write axioms *)
+  let read_write_ax, generators = 
+    let generators_and_axioms =
+      TermSet.fold (fun t acc ->
+        match t with
+        | App (Write, [fld; _; _], _) ->
+            open_axioms isFunVar (Axioms.read_write_axioms_closed fld) :: acc
+        | _ -> acc) gts []
+    in
+    let axioms, generators = List.split generators_and_axioms in
+   Util.rev_concat axioms,  Util.rev_concat generators
+  in
+  let gts = generate_terms (read_propagators @ generators) gts in
+  let classes1 = CongruenceClosure.congr_classes fs1 gts in
+  let read_write_ax1 = instantiate_with_terms true read_write_ax classes1 in
+  let gts = TermSet.union gts (ground_terms (mk_and read_write_ax1)) in
+  rev_concat [read_write_ax1; fs1], gts
 
-let propagate_field_reads fs gts framed_fields =
+
+let field_partitions fs gts =
   let fld_partition, fld_map, fields = 
     let max, fld_map, fields = 
       TermSet.fold (fun t (n, fld_map, fields) -> match t with
@@ -375,22 +442,14 @@ let propagate_field_reads fs gts framed_fields =
       | f -> partition
     in
     let fld_partition0 = List.fold_left collect_eq (Puf.create max) fs in
-    let fld_partition1 =
+    let fld_partition =
       TermSet.fold (fun t partition -> 
         match t with
-        | App (Write, fld1 :: _, _) as fld2 -> 
+        | App (Write, fld1 :: _, _) as fld2 
+        | App (Frame, [_; _; fld1; fld2], _) -> 
             Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
         | _ -> partition)
       gts fld_partition0
-    in
-    let fld_partition =
-      List.fold_left 
-        (fun partition (fld1, fld2) ->
-          match range_sort_of_field fld1 with
-          | Int when !Config.stratify -> partition
-          | _ -> 
-              Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map))
-        fld_partition1 framed_fields
     in
     fld_partition, fld_map, fields
   in
@@ -403,54 +462,18 @@ let propagate_field_reads fs gts framed_fields =
     (* print_endline ("partition of " ^ string_of_term fld); *)
     res
   in
-  TermSet.fold
-    (fun t gts1 -> match t with
-    | App (Read, [fld; arg], _) 
-    | App (Write, [fld; arg; _], _) -> 
-        TermSet.fold (fun fld1 gts1 -> 
-          TermSet.add (mk_read fld1 arg) gts1) (partition_of fld) gts1
-    | _ -> gts1)
-    gts gts,
   partition_of
 
-let reduce_read_write fs gts framed_fields =
-  let basic_pt_flds = TermSet.filter (has_sort (Fld Loc) &&& is_free_const) gts in
-  (* instantiate null axioms *)
-  let classes =  CongruenceClosure.congr_classes fs gts in
-  let null_ax, _ = open_axioms isFld (Axioms.null_axioms ()) in
-  let null_ax1 = instantiate_with_terms false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
-  let fs1 = null_ax1 @ fs in
-  let gts = TermSet.union (ground_terms (smk_and null_ax1)) gts in
-  (* propagate read terms *)
-  let gts1, partition_of = propagate_field_reads fs1 gts framed_fields in
-  (* generate instances of all read over write axioms *)
-  let read_write_ax, generators = 
-    let generators_and_axioms =
-      TermSet.fold (fun t acc ->
-        match t with
-        | App (Write, [fld; _; _], _) ->
-            open_axioms isFunVar (Axioms.read_write_axioms_closed fld) :: acc
-        | _ -> acc) gts1 []
-    in
-    let axioms, generators = List.split generators_and_axioms in
-   Util.rev_concat axioms,  Util.rev_concat generators
-  in
-  let gts1 = generate_terms generators gts1 in
-  let classes1 = CongruenceClosure.congr_classes fs1 gts1 in
-  let read_write_ax1 = instantiate_with_terms true read_write_ax classes1 in
-  let gts1 = TermSet.union gts1 (ground_terms (mk_and read_write_ax1)) in
-  let gts1, partition_of = propagate_field_reads (fs1 @ read_write_ax1) gts1 framed_fields in
-  rev_concat [read_write_ax1; fs1], gts1, partition_of
 
 (** Adds instantiated theory axioms for graph reachability to formula f.
  ** Assumes that f is typed *)
-let reduce_reach fs gts partition_of =
+let reduce_reach fs gts =
+  let partition_of = field_partitions fs gts in
   let classes = CongruenceClosure.congr_classes fs gts in
   (* instantiate the variables of sort Fld in all reachability axioms *)
-  let basic_reach_flds = 
+  let btwn_flds = 
     fold_terms (fun flds -> function
-      | App (Btwn, Var _ :: _, _) -> flds
-      | App (Btwn, fld :: _, _) -> TermSet.union (partition_of fld) flds
+      | App (Btwn, (App (_, _, _) as fld) :: _, _) -> TermSet.union (partition_of fld) flds
       | _ -> flds)
       TermSet.empty (smk_and fs)
   in
@@ -458,7 +481,7 @@ let reduce_reach fs gts partition_of =
     TermSet.fold (fun t write_ax ->
       match t with
       | App (Write, [fld; loc1; loc2], _) ->
-          if TermSet.mem fld basic_reach_flds 
+          if TermSet.mem fld btwn_flds 
           then fst (open_axioms isFunVar (Axioms.reach_write_axioms fld loc1 loc2)) @ write_ax
           else write_ax
       | _ -> write_ax) gts []
@@ -469,21 +492,13 @@ let reduce_reach fs gts partition_of =
 	  (function 
 	    | (App (Write, _, _)) -> false 
 	    | _ -> true) (CongruenceClosure.class_of t classes))
-      basic_reach_flds
+      btwn_flds
   in
   let reach_ax, _ = open_axioms isFld (Axioms.reach_axioms ()) in
   let reach_ax1 = instantiate_with_terms false reach_ax (CongruenceClosure.restrict_classes classes non_updated_flds) in
   (* generate local instances of all axioms in which variables occur below function symbols *)
   let reach_ax2 = instantiate_with_terms true (fst (open_axioms isFunVar reach_ax1)) classes in
   rev_concat [fs; reach_ax2; reach_write_ax], gts
-
-let rec hasGenerators = function
-  | BoolOp (op, fs) -> List.exists hasGenerators fs
-  | Binder (_, _, f, a) as f1 ->
-      let has = List.exists (function TermGenerator _ -> true | _ -> false) a in
-      if has then (print_form stdout f1; print_newline (); true)
-      else hasGenerators f 
-  | Atom _ -> false
 
 let instantiate_user_def_axioms fs gts =
   (* generate local instances of all remaining axioms in which variables occur below function symbols *)
@@ -509,12 +524,12 @@ let reduce f =
   let fs = List.map reduce_exists fs in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
   let fs, gts = instantiate_ep fs in
-  let fs, framed_fields = reduce_frame fs in
+  let fs = reduce_frame fs in
   let fs = factorize_axioms (split_ands [] fs) in
   let fs, gts = reduce_sets fs gts in
-  let fs, gts, partition_of = reduce_read_write fs gts framed_fields in
+  let fs, gts = reduce_read_write fs gts in
   let fs, gts = instantiate_user_def_axioms fs gts in
-  let fs, gts = reduce_reach fs gts partition_of in
+  let fs, gts = reduce_reach fs gts in
   (* the following is a (probably stupid) heuristic to sort the formulas for improving the running time *)
   let fs = 
     (* sort by decreasing number of disjuncts in formula *)

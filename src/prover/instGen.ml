@@ -457,7 +457,7 @@ let generate_instances useLocalInst axioms terms rep_map type_graph =
         ) fvars proto_subst_maps
     in
     (*let _ = match f with
-    | Binder (_, _, _, [Comment "read_write2"]) ->
+    | Binder (_, _, _, [Comment "entry-point1"]) ->
         begin
           print_endline "Axiom:";
           print_forms stdout [f];

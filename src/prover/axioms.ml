@@ -73,6 +73,7 @@ let read_write_axioms_closed fld1 =
     | _ -> failwith "expected field in read_write_axioms"
   in
   let d = fresh_ident "?d" in
+  let d1 = d, res_srt in
   let dvar = mk_var ~srt:res_srt d in
   let new_fld1 = mk_write fld1 loc1 dvar in
   let f x = mk_read fld1 x in
@@ -81,14 +82,14 @@ let read_write_axioms_closed fld1 =
     mk_or [mk_eq loc2 loc1; mk_eq (f loc2) (g loc2)]
   in
   let f_upd2 = mk_eq (g loc1) dvar in
-  let generator = 
-    [l1; (d, res_srt)],
+  let generator2 = 
+    [l1; d1],
     [],
     [Match (new_fld1, FilterTrue)],
     g loc1
   in      
   if not !encode_fields_as_arrays 
-  then [mk_axiom "read_write1" f_upd1; mk_axiom ~gen:[generator] "read_write2" f_upd2]
+  then [mk_axiom "read_write1" f_upd1; mk_axiom ~gen:[generator2] "read_write2" f_upd2]
   else []
 
 let reach_write_axioms fld1 loc1 loc2 =
