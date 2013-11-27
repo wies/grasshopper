@@ -216,32 +216,40 @@ let ep_axioms () =
 (** Set axioms *)
 
 let set_axioms () =
-  let empty = 
-    (* don't use the smart constructor smk_elem for set membership here *)
-    mk_not (mk_elem loc1 (mk_empty (Some (Set Loc))))
+  let mk_set_axioms t =
+    let elt1 = mk_var ~srt:t (mk_ident "x") in
+    let elt2 = mk_var ~srt:t (mk_ident "y") in
+    let set1 = mk_var ~srt:(Set t) (mk_ident "X") in
+    let set2 = mk_var ~srt:(Set t) (mk_ident "Y") in
+    let empty = 
+      (* don't use the smart constructor smk_elem for set membership here *)
+      mk_not (mk_elem elt1 (mk_empty (Some (Set t))))
+    in
+    let union = 
+      mk_iff (mk_elem elt1 (mk_union [set1; set2])) 
+        (mk_or [mk_elem elt1 set1; mk_elem elt1 set2])
+    in
+    let inter =
+      mk_iff (mk_elem elt1 (mk_inter [set1; set2])) 
+        (mk_and [mk_elem elt1 set1; mk_elem elt1 set2])
+    in
+    let diff =
+      mk_iff (mk_elem elt1 (mk_diff set1 set2)) 
+        (mk_and [mk_elem elt1 set1; mk_not (mk_elem elt1 set2)])
+    in
+    let setenum =
+      mk_iff (mk_elem elt1 (mk_setenum [elt2])) 
+        (mk_eq elt1 elt2)
+    in
+    let ssrt = string_of_sort t in
+    if !Config.backend_solver_has_set_theory then []
+    else [mk_axiom ("def of empty" ^ ssrt) empty;
+          mk_axiom ("def of union" ^ ssrt) union;
+          mk_axiom ("def of inter" ^ ssrt) inter;
+          mk_axiom ("def of diff" ^ ssrt) diff;
+          mk_axiom ("def of enum" ^ ssrt) setenum]
   in
-  let union = 
-    mk_iff (mk_elem loc1 (mk_union [set1; set2])) 
-      (mk_or [mk_elem loc1 set1; mk_elem loc1 set2])
-  in
-  let inter =
-    mk_iff (mk_elem loc1 (mk_inter [set1; set2])) 
-      (mk_and [mk_elem loc1 set1; mk_elem loc1 set2])
-  in
-  let diff =
-    mk_iff (mk_elem loc1 (mk_diff set1 set2)) 
-      (mk_and [mk_elem loc1 set1; mk_not (mk_elem loc1 set2)])
-  in
-  let setenum =
-    mk_iff (mk_elem loc1 (mk_setenum [loc2])) 
-      (mk_eq loc1 loc2)
-  in
-  if !Config.backend_solver_has_set_theory then []
-  else [mk_axiom "def of empty" empty;
-        mk_axiom "def of union" union;
-        mk_axiom "def of inter" inter;
-        mk_axiom "def of diff" diff;
-        mk_axiom "def of enum" setenum]
+    Util.flat_map mk_set_axioms [Loc; Int]
       
 let extract_axioms fs =
   List.partition (fun f -> IdSet.empty <> fv f) fs
