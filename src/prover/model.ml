@@ -308,7 +308,7 @@ let output_graphviz chan model =
         )
         locs
   in
-  let output_vars () = 
+  let output_loc_vars () = 
     SymbolMap.iter (fun sym defs ->
       (*
       let decl = decl_of sym model in
@@ -321,6 +321,43 @@ let output_graphviz chan model =
 	  (*Printf.fprintf chan "\"%s\" [shape=box]\n" (str_of_symbol sym);*)
 	  Printf.fprintf chan "\"%s\" -> \"%s\"\n" (str_of_symbol sym) (str_of_symbol (List.hd defs).output)
       | _ -> ()) model.interp
+  in
+  let l = ref 0 in
+  let print_table_header title =
+    l := !l + 1;
+    output_string chan ("{ rank = sink; Legend"^(string_of_int !l)^" [shape=none, margin=0, label=<\n");
+    output_string chan "    <TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\" CELLPADDING=\"4\">\n";
+    output_string chan "      <TR>\n";
+    output_string chan ("        <TD><B>"^title^"</B></TD>\n");
+    output_string chan "      </TR>\n";
+  in
+  let print_table_footer () =
+    output_string chan "</TABLE>\n";
+    output_string chan ">];\n";
+    output_string chan "}\n";
+  in
+  let output_int_vars () = 
+   let has_int =
+     SymbolMap.exists (fun sym defs ->
+        match decl_of sym model with
+        | ([], Int) -> true
+        | _ -> false) model.interp
+  in
+    let print_ints () =
+      SymbolMap.iter (fun sym defs ->
+        match decl_of sym model with
+        | ([], Int) ->
+            let str = str_of_symbol sym in
+            let value = str_of_symbol (List.hd defs).output in
+            Printf.fprintf chan "        <TR><TD>%s = %s</TD></TR>\n" str value
+        | _ -> ()) model.interp
+    in
+    if has_int then
+      begin
+        print_table_header "ints";
+        print_ints ();
+        print_table_footer ()
+      end
   in
   let output_sets () =
     let print_sets () =
@@ -347,25 +384,13 @@ let output_graphviz chan model =
             in
             let in_set = List.map (fun d -> List.hd d.input) in_set in
             let in_set_rep = String.concat ", " (List.map str_of_symbol in_set) in
-            output_string chan "      <TR>\n";
-            Printf.fprintf chan "        <TD>%s = {%s}</TD>\n" (str_of_symbol (find_rep set)) in_set_rep;
-            output_string chan "      </TR>\n"
+            Printf.fprintf chan "        <TR><TD>%s = {%s}</TD></TR>\n" (str_of_symbol (find_rep set)) in_set_rep
           )
           sets
     in 
-    (* table header *)
-    output_string chan "{ rank = sink; Legend [shape=none, margin=0, label=<\n";
-    output_string chan "    <TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\" CELLPADDING=\"4\">\n";
-    output_string chan "      <TR>\n";
-    output_string chan "        <TD><B>sets</B></TD>\n";
-    output_string chan "      </TR>\n";
-    (* print sets *)
+    print_table_header "sets";
     print_sets ();
-    (* table footer *)
-    output_string chan "</TABLE>\n";
-    output_string chan ">];\n";
-    output_string chan "}\n";
-
+    print_table_footer ()
   in
   (* functions and pred *)
   let output_freesyms () =
@@ -374,30 +399,27 @@ let output_graphviz chan model =
       let rout = str_of_symbol (find_rep def.output) in
         (str_of_symbol sym) ^ "(" ^ (String.concat ", " rin) ^ ") = " ^ rout
     in
-    output_string chan "{ rank = sink; Uninterpreted [shape=none, margin=0, label=<\n";
-    output_string chan "    <TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\" CELLPADDING=\"4\">\n";
-    output_string chan "      <TR><TD><B>predicates/functions</B></TD></TR>\n";
+    print_table_header "predicates/functions";
     SymbolMap.iter
       (fun sym (args, _) -> match sym with
         | FreeSym (id, _) when args <> [] && id <> "k" ->
           List.iter
-            (fun def -> Printf.fprintf chan "      <TR><TD>%s</TD></TR>" (string_of_def sym def))
+            (fun def -> Printf.fprintf chan "      <TR><TD>%s</TD></TR>\n" (string_of_def sym def))
             (defs_of sym model)
         | _ -> ()
       )
       model.sign;
-    output_string chan "</TABLE>\n";
-    output_string chan ">];\n";
-    output_string chan "}\n";
+    print_table_footer ()
   in
   let output_graph () =
     output_string chan "digraph Model {\n";
     output_locs ();
-    output_vars ();
+    output_loc_vars ();
     output_reach ();
     output_eps ();
     output_flds ();
     output_sets ();
+    output_int_vars ();
     output_freesyms ();
     output_string chan "}\n"
   in
