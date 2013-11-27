@@ -31,8 +31,8 @@ let generate_terms generators ground_terms =
             (SrtMap.add srt (TermSet.add t sort_terms) sort_to_terms,
             TermSet.add t new_terms)
             ts
-    | App _ -> failwith "InstGen.generate_terms: sorted term expected"
-    | Var _ -> failwith "InstGen.generate_terms: ground term expected"
+    | App _ -> failwith ("InstGen.generate_terms: sorted term expected, found " ^ (string_of_term t))
+    | Var _ -> failwith ("InstGen.generate_terms: ground term expected, found "  ^ (string_of_term t))
   in
   let sort_to_terms, new_terms =
     TermSet.fold (fun t acc -> add_to_term_maps acc t)

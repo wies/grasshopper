@@ -528,10 +528,18 @@ let subst_id_term subst_map t =
  ** Not capture avoiding. *)
 let subst_id subst_map f =
   let subt = subst_id_term subst_map in
+  let subg g = match g with
+    | Match (t, f) -> Match (subt t, f)
+  in
+  let suba a = match a with
+    | Comment c -> Comment c
+    | TermGenerator (bvs, fvs, guards, gen_term) -> 
+      TermGenerator (bvs, fvs, List.map subg guards, subt gen_term)
+  in
   let rec sub = function 
     | BoolOp (op, fs) -> BoolOp (op, List.map sub fs)
     | Atom t -> Atom (subt t)
-    | Binder (b, vs, f, a) -> Binder (b, vs, sub f, a)
+    | Binder (b, vs, f, a) -> Binder (b, vs, sub f, List.map suba a)
   in sub f
 
 (** Substitutes all constants in term [t] according to substitution function [subst_fun]. *)
