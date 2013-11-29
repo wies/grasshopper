@@ -1,0 +1,44 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+predicate sorted_set(x: Node, y: Node, lb: int, ub: int, c: set<int>) {
+    x == y &*&
+    c == set<int>()
+  || 
+    x != y &*&
+    acc(x) &*&
+    x.data in c &*&
+    lb <= x.data &*&
+    x.data < ub &*&
+    sorted_set(x.next, y, x.data + 1, ub, c -- set(x.data))
+}
+
+procedure contains(lst: Node, val: int,
+                   ghost lb: int, ghost ub: int,
+                   implicit ghost content: set<int>)
+  returns (res: bool)
+  requires sorted_set(lst, null, lb, ub, content);
+  ensures sorted_set(lst, null, lb, ub, content);
+  ensures (res && val in content) || (!res && !(val in content));
+{
+  var curr: Node;
+  curr := lst;
+  var c1: set<int>, c2: set<int>;
+  c1 := content;
+  c2 := set<int>();
+
+  //TODO we have a soundness bug here! (encoding of sorted_set ??)
+  while (curr != null && curr.data < val) 
+    invariant (sorted_set(lst, curr, lb, curr.data, c2) &*&
+               sorted_set(curr, null, curr.data-1, ub, c1) );
+    invariant content == c1 ++ c2;
+  {
+    c2 := c2 ++ set(curr.data);
+    c1 := c1 ++ set(curr.data);
+    curr := curr.next; 
+  }
+  if (curr != null && curr.data == val) return true;
+  else return false;
+}

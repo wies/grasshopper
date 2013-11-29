@@ -1,0 +1,40 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+predicate sorted_set(x: Node, y: Node, lb: int, ub: int, c: set<int>) {
+    x == y &*&
+    c == set<int>()
+  || 
+    x != y &*&
+    acc(x) &*&
+    x.data in c &*&
+    lb <= x.data &*&
+    x.data < ub &*&
+    sorted_set(x.next, y, x.data + 1, ub, c -- set(x.data))
+}
+
+
+procedure traverse(lst: Node, val: int,
+                   ghost lb: int, ghost ub: int,
+                   implicit ghost content: set<int>)
+  requires sorted_set(lst, null, lb, ub, content);
+  ensures sorted_set(lst, null, lb, ub, content);
+{
+  var curr: Node;
+  curr := lst;
+  var c1: set<int>, c2: set<int>;
+  c1 := content;
+  c2 := set<int>();
+
+  while (curr != null) 
+    invariant (curr != null &*& sorted_set(lst, curr, lb, curr.data, c2) &*& sorted_set(curr, null, curr.data, ub, c1))
+           || (curr == null &*& sorted_set(lst, curr, lb, ub, c1) &*& c2 == set<int>());
+    invariant content == c1 ++ c2;
+  {
+    c1 := c1 -- set(curr.data);
+    c2 := c2 ++ set(curr.data);
+    curr := curr.next; 
+  }
+}

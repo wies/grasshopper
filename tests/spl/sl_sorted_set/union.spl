@@ -1,0 +1,55 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+predicate sorted_set(x: Node, y: Node, lb: int, ub: int, c: set<int>) {
+    x == y &*&
+    c == set<int>()
+  || 
+    x != y &*&
+    acc(x) &*&
+    x.data in c &*&
+    lb <= x.data &*&
+    x.data < ub &*&
+    sorted_set(x.next, y, x.data + 1, ub, c -- set(x.data))
+}
+
+procedure union(lst1: Node, lst2: Node,
+                ghost lb: int, ghost ub: int,
+                implicit ghost content1: set<int>,
+                implicit ghost content2: set<int>)
+  returns (res: Node)
+  requires sorted_set(lst1, null, lb, ub, content1);
+  requires sorted_set(lst2, null, lb, ub, content2);
+  ensures sorted_set(res, null, lb, ub, content1 ++ content2);
+{
+    if (lst1 == null) {
+        return lst2;
+    } else if (lst2 == null) {
+        return lst1;
+    } else if (lst1.data < lst2.data) {
+        var min: int;
+        if (lst1.next.data < lst2.data) {
+            min := lst1.next.data;
+        } else {
+            min := lst2.data;
+        }
+        lst1.next := union(lst1.next, lst2, min, ub);
+        return lst1;
+    } else if (lst1.data > lst2.data) {
+        var min: int;
+        if (lst1.next.data < lst2.data) {
+            min := lst1.next.data;
+        } else {
+            min := lst2.data;
+        }
+        lst2.next := union(lst1, lst2.next, min, ub);
+        return lst2;
+    } else { //lst1.data == lst2.data
+        var n: Node;
+        n := lst1.next;
+        free(lst1);
+        return union(n, lst2.next, lb, ub);
+    }
+}

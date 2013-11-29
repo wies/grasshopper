@@ -1,0 +1,46 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+predicate sorted_set(x: Node, y: Node, lb: int, ub: int, c: set<int>) {
+    x == y &*&
+    c == set<int>()
+  || 
+    x != y &*&
+    acc(x) &*&
+    x.data in c &*&
+    lb <= x.data &*&
+    x.data < ub &*&
+    sorted_set(x.next, y, x.data + 1, ub, c -- set(x.data))
+}
+
+
+procedure difference(lst1: Node, lst2: Node,
+                ghost lb1: int, ghost ub1: int,
+                ghost lb2: int, ghost ub2: int,
+                implicit ghost content1: set<int>,
+                implicit ghost content2: set<int>)
+  returns (res: Node)
+  requires sorted_set(lst1, null, lb1, ub1, content1);
+  requires sorted_set(lst2, null, lb2, ub2, content2);
+  ensures sorted_set(lst2, null, lb2, ub2, content2);
+  ensures sorted_set(res, null, lb1, ub1, content1 -- content2);
+{
+    if (lst1 == null) {
+        return lst1;
+    } else if (lst2 == null) {
+        return lst1;
+    } else if (lst1.data < lst2.data) {
+        lst1.next := difference(lst1.next, lst2, lst1.next.data, ub1, lb2, ub2);
+        return lst1;
+    } else if (lst1.data > lst2.data) {
+        lst1.next := difference(lst1, lst2.next, lb1, ub1, lst2.next.data, ub2);
+        return lst1;
+    } else { //lst1.data == lst2.data
+        var n: Node;
+        n := lst1.next;
+        free lst1 ;
+        return difference(n, lst2.next, n.data, ub1, lst2.next.data, ub2);
+    }
+}
