@@ -360,15 +360,6 @@ let generator2 =
      [Match (v, FilterNotOccurs witness_sym)],
      mk_witness v c)
 
-(*
-let generator3 =
- TermGenerator 
-   ( [vf],
-     [],
-     [Match (v, FilterNotOccurs witness_sym)],
-     mk_read data (mk_witness v c))
-*)
-
 let with_content = [
     ( mk_ident "lseg_cnt",
       [df; dataf; nextf; xf; yf; cf],

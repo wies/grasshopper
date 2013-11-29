@@ -32,7 +32,7 @@ rule() {
     native) ocb ${TARGET//" "/".native "} ;;
     byte)   ocb ${TARGET//" "/".byte "} ;;
     all)    ocb ${TARGET//" "/".native "} ${TARGET//" "/".byte "} ;;
-    prof)   ocb $TARGET1.p.native ;;
+    prof)   ocb ${TARGET//" "/".p.native "} ;;
     depend) echo "Not needed.";;
     distro) distro ;;
     *)      echo "Unknown action $1";;
