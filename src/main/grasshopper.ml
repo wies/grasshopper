@@ -37,7 +37,9 @@ let print_stats start_time =
     let total_time = end_time -. start_time in
     print_endline "Statistics: ";
     Printf.printf "  running time for analysis: %.2fs\n" total_time;
-    Printf.printf "  # VCs: %d\n" !SmtLib.num_of_sat_queries
+    Printf.printf "  # VCs: %d\n" !SmtLib.num_of_sat_queries;
+    Printf.printf "  measured time: %.2fs\n" !Util.measured_time;
+    Printf.printf "  # measured calls: %.2d\n" !Util.measured_calls
 
 let _ =
   let start_time = current_time () in

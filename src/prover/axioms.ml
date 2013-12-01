@@ -94,16 +94,6 @@ let read_write_axioms_closed fld1 =
 
 let reach_write_axioms fld1 loc1 loc2 =
   let new_fld1 = mk_write fld1 loc1 loc2 in
-  (* deprecated
-  let reachwo_write =
-    let r = mk_reachwo fld1 in
-    let new_reachwo u v w =
-      mk_or [mk_and [r u v w; r u v loc1];
-	     mk_and [mk_neq loc1 w; r u loc1 w; r loc2 v loc1; r loc2 v w]]
-    in
-    smk_and [smk_or [mk_not (mk_reachwo new_fld1 loc3 loc4 loc5); new_reachwo loc3 loc4 loc5];
-	     smk_or [mk_reachwo new_fld1 loc3 loc4 loc5; mk_not (new_reachwo loc3 loc4 loc5)]]
-  in*)
   let btwn_write =
     let b = mk_btwn fld1 in
     let reachwo u v w = reachwo_Fld fld1 u v w in
@@ -120,22 +110,6 @@ let reach_write_axioms fld1 loc1 loc2 =
   else []
 
 let reach_axioms () = 
-  (* reachwo axioms (depricated) *)
-  (*let refl = reachwo loc1 loc1 loc2 in
-  let reac = mk_or [mk_not (reachwo loc1 loc2 loc3); 
-		    reachwo loc1 loc2 loc2] in 
-  let step = mk_or [reachwo loc1 (f loc1) loc2; mk_eq loc1 loc2] in
-  let cycl = mk_or [mk_not (mk_eq (f loc1) loc1); 
-		    mk_not (reachwo loc1 loc2 loc2); mk_eq loc1 loc2] in
-  let sndw = mk_or [mk_not (reachwo loc1 loc2 loc1); mk_eq loc1 loc2] in
-  let lin1 = mk_or [mk_not (reachwo loc1 loc2 loc2); reachwo loc1 loc3 loc2; reachwo loc1 loc2 loc3] in
-  let lin2  = mk_or [mk_not (reachwo loc1 loc2 loc3); mk_not (reachwo loc1 loc4 loc5); 
-		    mk_and [reachwo loc1 loc4 loc3; reachwo loc4 loc2 loc3]; 
-		    mk_and [reachwo loc1 loc2 loc5; reachwo loc2 loc4 loc5]] in
-  let trn1 = mk_or [mk_not (reachwo loc1 loc2 loc3); mk_not (reachwo loc2 loc4 loc3); 
-		    reachwo loc1 loc4 loc3] in
-  let trn2 = mk_or [mk_not (reachwo loc1 loc2 loc3); mk_not (reachwo loc2 loc4 loc3); 
-		    mk_not (reachwo loc2 loc3 loc3); reachwo loc1 loc2 loc4] in*)
   (* btwn axioms *)
   let btwn_refl = btwn loc1 loc1 loc1 in
   let btwn_step = btwn loc1 (f loc1) (f loc1) in

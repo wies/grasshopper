@@ -21,7 +21,7 @@ procedure find_last(a: Node) returns (l: Node)
   }
 }
 
-procedure rec_concat(a: Node, b: Node, c: Node)
+procedure rec_concat(a: Node, b: Node)
   requires a != null &*& lseg(a, null) &*& lseg(b, null);
   ensures lseg(a, null);
 {

@@ -28,10 +28,6 @@ let reduce_exists =
   in
   fun f -> 
     let f1 = elim_neq f in
-    (*let _ = print_endline "Before propagation: " in
-    let _ = print_forms stdout [f1] in
-    let _ = print_endline "After propagation: " in
-    let _ = print_forms stdout [f2] in*)
     skolemize f1
 
 let massage_field_reads fs = 
@@ -60,7 +56,7 @@ let massage_field_reads fs =
   in List.map massage fs
     
 (** Hoist all universally quantified subformulas to top level.
- ** Assumes that formulas [fs] are in negation normal form *)
+ ** Assumes that formulas [fs] are in negation normal form. *)
 let factorize_axioms fs =
   let rec extract f axioms = 
     match f with
@@ -94,7 +90,7 @@ let factorize_axioms fs =
   axioms @ fs1
 
 
-(** Reduce all frame predicates to constraints over sets and entry points. *)
+(** Add axioms for frame predicates. *)
 let reduce_frame fs =
   let expand_frame x a f f' =
     let frame = mk_diff a x in
@@ -296,9 +292,9 @@ let isFunVar f =
   fun v -> IdSrtSet.mem v fvars
 
 
-(** Reduce all set constraints by adding appropriate instances of the axioms of set operations.
- ** Assumes that f is typed and in negation normal form *)
-let reduce_sets fs gts =
+(** Simplifies set constraints and adds axioms for set operations.
+ ** Assumes that f is typed and in negation normal form. *)
+let reduce_sets fs =
   let split ts = List.fold_left (fun (ts1, ts2) t -> (ts2, t :: ts1)) ([], []) ts in
   let rec unflatten = function
     | App (Union, [t], _) 
@@ -325,12 +321,7 @@ let reduce_sets fs gts =
     | Atom t -> Atom (simplify_term t)
   in
   let fs1 = List.map simplify fs in
-  (*let gts = TermSet.fold (fun t gts1 -> TermSet.add (unflatten t) gts1) gts TermSet.empty in*)
-  let gts1 = TermSet.union gts (ground_terms (mk_and fs1)) in
-  (*let set_ax, _ = open_axioms isFunVar (Axioms.set_axioms ()) in
-  let classes = CongruenceClosure.congr_classes fs1 gts1 in
-  let set_ax1 = instantiate_with_terms true set_ax classes in*)
-  rev_concat [fs1; Axioms.set_axioms ()], gts1
+  rev_concat [fs1; Axioms.set_axioms ()]
 
 
 let print_terms terms =
@@ -340,13 +331,13 @@ let print_terms terms =
   print_endline "==============================================="
   
 
-(** Adds instantiated theory axioms for the entry point function to formula f
- ** Assumes that f is typed and that all frame predicates have been reduced *)
+(** Adds theory axioms for the entry point function to formula f.
+ ** Assumes that f is typed and that all frame predicates have been reduced. *)
 let instantiate_ep fs =
-  let gts = TermSet.add mk_null (ground_terms (mk_and fs)) in
-  List.rev_append (Axioms.ep_axioms ()) fs, gts
+  List.rev_append (Axioms.ep_axioms ()) fs
  
-let reduce_read_write fs gts =
+let reduce_read_write fs =
+  let gts = ground_terms (smk_and fs) in
   let basic_pt_flds = TermSet.filter (has_sort (Fld Loc) &&& is_free_const) gts in
   (* instantiate null axioms *)
   let classes =  CongruenceClosure.congr_classes fs gts in
@@ -415,7 +406,7 @@ let reduce_read_write fs gts =
         | _ -> acc) gts []
     in
     let axioms, generators = List.split generators_and_axioms in
-   Util.rev_concat axioms,  Util.rev_concat generators
+    Util.rev_concat axioms,  Util.rev_concat generators
   in
   let gts = generate_terms (read_propagators @ generators) gts in
   let classes1 = CongruenceClosure.congr_classes fs1 gts in
@@ -459,14 +450,13 @@ let field_partitions fs gts =
       with Not_found -> failwith ("did not find field " ^ (string_of_term fld)) 
     in
     let res = TermSet.filter (fun fld1 -> Puf.find fld_partition (TermMap.find fld1 fld_map) = p) fields in
-    (* print_endline ("partition of " ^ string_of_term fld); *)
     res
   in
   partition_of
 
 
 (** Adds instantiated theory axioms for graph reachability to formula f.
- ** Assumes that f is typed *)
+ ** Assumes that f is typed. *)
 let reduce_reach fs gts =
   let partition_of = field_partitions fs gts in
   let classes = CongruenceClosure.congr_classes fs gts in
@@ -482,7 +472,7 @@ let reduce_reach fs gts =
       match t with
       | App (Write, [fld; loc1; loc2], _) ->
           if TermSet.mem fld btwn_flds 
-          then fst (open_axioms isFunVar (Axioms.reach_write_axioms fld loc1 loc2)) @ write_ax
+          then Axioms.reach_write_axioms fld loc1 loc2 @ write_ax
           else write_ax
       | _ -> write_ax) gts []
   in
@@ -496,9 +486,7 @@ let reduce_reach fs gts =
   in
   let reach_ax, _ = open_axioms isFld (Axioms.reach_axioms ()) in
   let reach_ax1 = instantiate_with_terms false reach_ax (CongruenceClosure.restrict_classes classes non_updated_flds) in
-  (* generate local instances of all axioms in which variables occur below function symbols *)
-  let reach_ax2 = instantiate_with_terms true (fst (open_axioms isFunVar reach_ax1)) classes in
-  rev_concat [fs; reach_ax2; reach_write_ax], gts
+  rev_concat [reach_ax1; reach_write_ax; fs], gts
 
 let instantiate_user_def_axioms fs gts =
   (* generate local instances of all remaining axioms in which variables occur below function symbols *)
@@ -508,7 +496,7 @@ let instantiate_user_def_axioms fs gts =
   instantiate_with_terms true fs1 classes, gts1
 
 (** Reduces the given formula to the target theory fragment, as specified by the configuration.
- ** Assumes that f is typed *)
+ ** Assumes that f is typed. *)
 let reduce f = 
   let rec split_ands acc = function
     | BoolOp(And, fs) :: gs -> 
@@ -523,15 +511,15 @@ let reduce f =
   let fs = massage_field_reads fs in
   let fs = List.map reduce_exists fs in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
-  let fs, gts = instantiate_ep fs in
+  let fs = instantiate_ep fs in
   let fs = reduce_frame fs in
   let fs = factorize_axioms (split_ands [] fs) in
-  let fs, gts = reduce_sets fs gts in
-  let fs, gts = reduce_read_write fs gts in
-  let fs, gts = instantiate_user_def_axioms fs gts in
+  let fs = reduce_sets fs in
+  let fs, gts = reduce_read_write fs in
   let fs, gts = reduce_reach fs gts in
+  let fs, gts = instantiate_user_def_axioms fs gts in
   (* the following is a (probably stupid) heuristic to sort the formulas for improving the running time *)
-  let fs = 
+  (*let _ = 
     (* sort by decreasing number of disjuncts in formula *)
     let cmp f1 f2 =
       let rec count_disjuncts acc = function
@@ -543,5 +531,5 @@ let reduce f =
       compare (count_disjuncts 0 f2) (count_disjuncts 0 f1)
     in
     List.stable_sort cmp fs
-  in
+  in*)
   fs

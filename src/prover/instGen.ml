@@ -112,6 +112,8 @@ let generate_terms generators ground_terms =
   in
   generate sort_to_terms new_terms ground_terms generators
 
+let generate_terms generators = measure (generate_terms generators)
+
 (*
 (* returns a DAG of type dependencies. *)
 let stratify_types axioms =

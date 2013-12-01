@@ -1,5 +1,9 @@
+;;; package --- Summary
 ;;; spl-mode.el -- Emacs SPL mode
 
+;;; Commentary:
+
+;;; Code:
 
 (require 'font-lock)
 (if (<= 20 emacs-major-version)
@@ -32,6 +36,7 @@
   (setq font-lock-stop-face 'Stop)
   (setq font-lock-doc-face 'CadetBlue)
 ))
+
 
 (defconst spl-mode-font-lock-keywords
   (list
@@ -77,24 +82,21 @@
   (modify-syntax-entry ?$ "w" spl-mode-syntax-table)
 )
 
-(setq font-lock-defaults-alist
-      (cons (cons 'spl-mode 
-                  '(spl-mode-font-lock-keywords
-                    nil nil nil backward-paragraph
-                    (font-lock-comment-start-regexp . "/[*]")))
-            font-lock-defaults-alist))
+;(setq font-lock-defaults
+;      (cons (cons 'spl-mode 
+;                  '(spl-mode-font-lock-keywords
+;                    nil nil nil backward-paragraph
+;                    (font-lock-comment-start-regexp . "/[*]")))
+;            font-lock-defaults))
 
-(defun spl-mode ()
-  "Major mode for editing SPL files"
-
-  (interactive)
-
-  (kill-all-local-variables)
-
-  (setq mode-name "SPL")
-  (setq major-mode 'spl-mode)
-  (set-syntax-table spl-mode-syntax-table)
-  (run-hooks 'spl-mode-hook))
+;(require 'cc-mode)
+(define-derived-mode spl-mode c-mode "SPL"
+  "Major mode for editing SPL files."
+  :syntax-table spl-mode-syntax-table
+  (setq-local comment-start "// ")
+  (setq-local font-lock-defaults '(spl-mode-font-lock-keywords))
+  ;(setq-local indent-line-function 'c-indent-line)
+)
 
 
 (or (assoc "\\.spl$" auto-mode-alist)
@@ -119,13 +121,11 @@
    'flymake-get-spl-cmdline))
 
 (defun flymake-get-spl-cmdline (source base-dir)
-    (list "grasshopper" (list "-flymake" source)))
+    (list "grasshopper" (list "-robust" "-flymake" source)))
 
 (add-hook 'spl-mode-hook
           '(lambda ()
              (add-to-list 'flymake-allowed-file-name-masks '(".+\\.spl$" flymake-spl-init))))
-
-(provide 'spl-mode)
 
 (add-hook 'spl-mode-hook
           '(lambda ()
@@ -136,3 +136,20 @@
 (add-hook 'spl-mode-hook 'spl-errors)
 (add-hook 'spl-mode-hook
           (lambda () (local-set-key (kbd "C-c C-c") 'compile)))
+
+(require 'flycheck)
+(flycheck-define-checker spl-reporter
+  "An SPL checker based on Grasshopper."
+  :command ("grasshopper" "-robust" "-flymake" source)
+  :error-patterns
+  ((error line-start (file-name) ":" line ":" column ":" (message) line-end))
+  :modes (spl-mode))
+(add-hook 'spl-mode-hook (lambda ()
+                          (setq flycheck-highlighting-mode 'symbols)
+                          (flycheck-select-checker 'spl-reporter)
+                          (flycheck-mode)))
+
+(provide 'spl-mode)
+
+;;; spl-mode.el ends here
+

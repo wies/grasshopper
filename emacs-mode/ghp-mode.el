@@ -77,12 +77,12 @@
   (modify-syntax-entry ?$ "w" ghp-mode-syntax-table)
 )
 
-(setq font-lock-defaults-alist
+(setq font-lock-defaults
       (cons (cons 'ghp-mode 
                   '(ghp-mode-font-lock-keywords
                     nil nil nil backward-paragraph
                     (font-lock-comment-start-regexp . "/[*]")))
-            font-lock-defaults-alist))
+            font-lock-defaults))
 
 (defun ghp-mode ()
   "Major mode for editing Grasshopper program files"
