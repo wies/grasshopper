@@ -357,7 +357,8 @@ let generator2 =
  TermGenerator 
    ( [vf],
      [],
-     [Match (v, FilterNotOccurs witness_sym)],
+     [Match (v, FilterNotOccurs witness_sym);
+      Match (v, FilterNotOccurs Read)],
      mk_witness v c)
 
 let with_content = [
