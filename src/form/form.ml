@@ -179,10 +179,33 @@ let rec pr_ident_list ppf = function
   | [id] -> pr_ident ppf id
   | id :: ids -> fprintf ppf "%a,@ %a" pr_ident id pr_ident_list ids
 
+let loc_sort_string = "Loc"
+let fld_sort_string = "Fld"
+let set_sort_string = "Set"
+let bool_sort_string = "Bool"
+let int_sort_string = "Int"
+
+let rec pr_sort0 ppf srt = match srt with
+  | Loc | Bool | Int -> fprintf ppf "%a" pr_sort srt
+  | FreeSrt id -> pr_ident ppf id
+  | _ ->fprintf ppf "@[<1>%a@]" pr_sort srt
+  (*| _ -> fprintf ppf "@[<1>(%a)@]" pr_sort srt*)
+
+and pr_sort ppf = function
+  | Loc -> fprintf ppf "%s" loc_sort_string
+  | Bool -> fprintf ppf "%s" bool_sort_string
+  | Int -> fprintf ppf "%s" int_sort_string
+  | FreeSrt id -> pr_ident ppf id
+  (*| Fld s -> fprintf ppf "@[<4>%s@ %a@]" fld_sort_string pr_sort0 s*)
+  | Fld s -> fprintf ppf "@[<4>%s%a@]" fld_sort_string pr_sort0 s
+  (*| Set s -> fprintf ppf "@[<4>%s@ %a@]" set_sort_string pr_sort0 s*)
+  | Set s -> fprintf ppf "@[<4>%s%a@]" set_sort_string pr_sort0 s
+
 let pr_sym ppf sym = fprintf ppf "%s" (str_of_symbol sym)
 
 let rec pr_term ppf = function
   | Var (id, _) -> fprintf ppf "%a" pr_ident id
+  | App (Empty as sym, [], Some srt) -> fprintf ppf "(as@ %a@ %a)" pr_sym sym pr_sort0 srt
   | App (sym, [], _) -> fprintf ppf "%a" pr_sym sym
   | App (sym, ts, _) -> fprintf ppf "@[<2>(%a@ %a)@]" pr_sym sym pr_terms ts
 
@@ -211,27 +234,6 @@ let pr_boolop ppf op =
   in 
   fprintf ppf "%s" op_str
 
-let loc_sort_string = "Loc"
-let fld_sort_string = "Fld"
-let set_sort_string = "Set"
-let bool_sort_string = "Bool"
-let int_sort_string = "Int"
-
-let rec pr_sort0 ppf srt = match srt with
-  | Loc | Bool | Int -> fprintf ppf "%a" pr_sort srt
-  | FreeSrt id -> pr_ident ppf id
-  | _ -> fprintf ppf "@[<1>(%a)@]" pr_sort srt
-
-and pr_sort ppf = function
-  | Loc -> fprintf ppf "%s" loc_sort_string
-  | Bool -> fprintf ppf "%s" bool_sort_string
-  | Int -> fprintf ppf "%s" int_sort_string
-  | FreeSrt id -> pr_ident ppf id
-  (*| Fld s -> fprintf ppf "@[<4>%s@ %a@]" fld_sort_string pr_sort0 s*)
-  | Fld s -> fprintf ppf "@[<4>%s%a@]" fld_sort_string pr_sort0 s
-  (*| Set s -> fprintf ppf "@[<4>%s@ %a@]" set_sort_string pr_sort0 s*)
-  | Set s -> fprintf ppf "@[<4>%s%a@]" set_sort_string pr_sort0 s
-		
 let pr_var ppf (x, srt) =
   fprintf ppf "@[<1>(%a@ %a)@]" pr_ident x pr_sort0 srt
 
@@ -262,9 +264,29 @@ let rec pr_form ppf = function
   | BoolOp (Or, fs) -> fprintf ppf "@[<4>(%a@ %a)@]" pr_boolop Or pr_forms fs
   | BoolOp (op, fs) -> fprintf ppf "@[<5>(%a@ %a)@]" pr_boolop op pr_forms fs
 
-and pr_quantifier ppf = function
+and pr_quantifier ppf = 
+  let rec is_pattern below_app = function
+    | App (_, ts, _) -> List.exists (is_pattern true) ts
+    | Var _ -> below_app
+  in
+  let rec find_patterns acc = function
+    | BoolOp (_, fs) ->
+        List.fold_left find_patterns acc fs
+    | Binder (_, _, f, _) -> find_patterns acc f
+    | Atom (App (_, ts, _)) ->
+        let pts = List.filter (is_pattern false) ts in
+        List.fold_left (fun acc t -> TermSet.add t acc) acc pts
+    | Atom _ -> acc
+  in
+  function
   | (_, [], f) -> fprintf ppf "%a" pr_form f
-  | (b, vs, f) -> fprintf ppf "@[<8>(%a@ @[<1>(%a)@]@ %a)@]" pr_binder b pr_vars vs pr_form f
+  | (b, vs, f) -> 
+      let patterns = find_patterns TermSet.empty f in
+      if TermSet.is_empty patterns
+      then fprintf ppf "@[<8>(%a@ @[<1>(%a)@]@ %a)@]" pr_binder b pr_vars vs pr_form f
+      else 
+        fprintf ppf "@[<8>(%a@ @[<1>(%a)@]@ @[<3>(! %a@ @[:pattern@ (%a)@])@])@]" 
+          pr_binder b pr_vars vs pr_form f pr_terms (TermSet.elements patterns)
 
 
 and pr_forms ppf = function

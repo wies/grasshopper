@@ -117,13 +117,13 @@ exception SmtLib_error of session * string
 let fail session msg = raise (SmtLib_error (session, "SmtLib: " ^ msg))
       
 let write session cmd =
-  output_string session.out_chan cmd;
+  if !Config.verify then output_string session.out_chan cmd;
   match session.replay_chan with
   | Some chan -> output_string chan cmd; flush chan
   | None -> ()	
 
 let writefn session fn =
-  fn session.out_chan;
+  if !Config.verify then fn session.out_chan;
   match session.replay_chan with
   | Some chan -> fn chan; flush chan
   | None -> ()
@@ -132,16 +132,19 @@ let writeln session cmd =
   write session (cmd ^ "\n")  
    
 let read session = 
-  flush session.out_chan;
-  let lexbuf = Lexing.from_channel session.in_chan in
-  ParseSmtLib.main LexSmtLib.token lexbuf
+  if !Config.verify then begin
+    flush session.out_chan;
+    let lexbuf = Lexing.from_channel session.in_chan in
+    ParseSmtLib.main LexSmtLib.token lexbuf
+  end
+  else SmtUnsat
 
 let declare_sorts session =
   writeln session ("(declare-sort " ^ loc_sort_string ^ " 0)");
   (*writeln session ("(declare-sort " ^ set_sort_string ^ " 1)");*)
   if !Config.backend_solver_has_set_theory then begin
-    writeln session ("(define-sort " ^ set_sort_string ^ loc_sort_string ^ " (Set " ^ loc_sort_string ^ "))");
-    writeln session ("(define-sort " ^ set_sort_string ^ int_sort_string ^ " (Set " ^ int_sort_string ^ "))")
+    writeln session ("(define-sort " ^ set_sort_string ^ loc_sort_string ^ " () (Set " ^ loc_sort_string ^ "))");
+    writeln session ("(define-sort " ^ set_sort_string ^ int_sort_string ^ " () (Set " ^ int_sort_string ^ "))")
   end else begin
     writeln session ("(declare-sort " ^ set_sort_string ^ loc_sort_string ^ " 0)");
     writeln session ("(declare-sort " ^ set_sort_string ^ int_sort_string ^ " 0)")
@@ -186,9 +189,12 @@ let start_with_solver =
   List.iter 
     (fun (opt, b) -> writeln session (Printf.sprintf "(set-option %s %b)" opt b))
     solver.version.smt_options;
-  if has_int || !Config.encode_fields_as_arrays
-  then writeln session "(set-logic AUFLIA)"
-  else writeln session "(set-logic UF)";
+  let logic_str = 
+    (if (has_int || !Config.encode_fields_as_arrays)
+     then "AUFLIA" 
+     else "UF") ^
+    if !Config.backend_solver_has_set_theory then "_SETS" else ""
+  in writeln session ("(set-logic " ^ logic_str ^ ")");
   (*end;*)
   declare_sorts session;
   session
@@ -253,7 +259,10 @@ let disambiguate_overloaded_symbols signs f =
     then sym
     else
       begin
-        let versions = SymbolMap.find sym signs in
+        let versions = 
+          try SymbolMap.find sym signs 
+          with Not_found -> print_endline (str_of_symbol sym); raise Not_found
+        in
         let version = Util.find_index sign versions in
           FreeSym (mk_ident (string_of_symbol sym version))
       end

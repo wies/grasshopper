@@ -46,10 +46,6 @@ let start_session name f =
   in
     Util.measure_call "prove" prove session
 
-let dump_query ?(session_name="form") f =
-  let session = print_query session_name f in
-    ignore (SmtLib.quit session)
-
 let check_sat ?(session_name="form") f =
   let (result, session) = start_session session_name f in
   (match result with
