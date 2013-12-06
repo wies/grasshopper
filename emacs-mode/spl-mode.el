@@ -137,17 +137,17 @@
 (add-hook 'spl-mode-hook
           (lambda () (local-set-key (kbd "C-c C-c") 'compile)))
 
-(require 'flycheck)
-(flycheck-define-checker spl-reporter
-  "An SPL checker based on Grasshopper."
-  :command ("grasshopper" "-robust" "-flymake" source)
-  :error-patterns
-  ((error line-start (file-name) ":" line ":" column ":" (message) line-end))
-  :modes (spl-mode))
-(add-hook 'spl-mode-hook (lambda ()
-                          (setq flycheck-highlighting-mode 'symbols)
-                          (flycheck-select-checker 'spl-reporter)
-                          (flycheck-mode)))
+(when (require 'flyckeck nil :noerror)
+  (flycheck-define-checker spl-reporter
+    "An SPL checker based on Grasshopper."
+    :command ("grasshopper" "-robust" "-flymake" source)
+    :error-patterns
+    ((error line-start (file-name) ":" line ":" column ":" (message) line-end))
+    :modes (spl-mode))
+  (add-hook 'spl-mode-hook (lambda ()
+                             (setq flycheck-highlighting-mode 'symbols)
+                             (flycheck-select-checker 'spl-reporter)
+                             (flycheck-mode))))
 
 (provide 'spl-mode)
 
