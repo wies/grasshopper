@@ -120,17 +120,17 @@ let simplify prog =
     else ()
   in
   dump_if 0 prog;
-  Debug.info "infering accesses, eliminating loops, eliminating global dependencies\n";
+  Debug.info (fun () -> "infering accesses, eliminating loops, eliminating global dependencies\n");
   let prog = infer_accesses prog in
   let prog = elim_loops prog in
   let prog = elim_global_deps prog in
   dump_if 1 prog;
-  Debug.info "eliminating SL, heap access checks, eliminating new/dispose\n";
+  Debug.info (fun () -> "eliminating SL, heap access checks, eliminating new/dispose\n");
   let prog = elim_sl prog in
   let prog = annotate_heap_checks prog in
   let prog = elim_new_dispose prog in
   dump_if 2 prog;
-  Debug.info "eliminating return, eliminating state\n";
+  Debug.info (fun () -> "eliminating return, eliminating state\n");
   let prog = elim_return prog in
   let prog = elim_state prog in
   dump_if 3 prog;
@@ -278,8 +278,8 @@ let check_proc prog proc =
   let check_vc (vc_name, (vc_msg, pp), vc) =
     let vc = skolemize (foralls_to_exists (propagate_exists (nnf vc))) in
     let vc_and_preds = add_pred_insts prog vc in
-    Debug.info ("VC: " ^ vc_name ^ "\n");
-    Debug.debug ((string_of_form vc_and_preds) ^ "\n");
+    Debug.info (fun () -> "VC: " ^ vc_name ^ "\n");
+    Debug.debug (fun () -> (string_of_form vc_and_preds) ^ "\n");
     match Prover.check_sat ~session_name:vc_name vc_and_preds with
     | Some false -> ()
     | _ ->

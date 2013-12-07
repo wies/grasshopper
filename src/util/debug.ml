@@ -45,14 +45,14 @@ let less_verbose () =
 let amsg s =
   print_string s; flush_all ()
 
-let debug  s = if show DEBUG  then amsg s
-let info   s = if show INFO   then amsg s
-let notice s = if show NOTICE then amsg s
-let warn   s = if show WARN   then amsg s
-let error  s = if show ERROR  then amsg s
+let debug  s = if show DEBUG  then amsg (s ())
+let info   s = if show INFO   then amsg (s ())
+let notice s = if show NOTICE then amsg (s ())
+let warn   s = if show WARN   then amsg (s ())
+let error  s = if show ERROR  then amsg (s ())
 
 let phase s fn x =
-  debug (s ^ "..."); 
+  debug (fun () -> s () ^ "..."); 
   let res = fn x in
-  debug "done.\n";
+  debug (fun () -> "done.\n");
   res

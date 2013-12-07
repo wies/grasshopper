@@ -332,7 +332,7 @@ let generate_instances useLocalInst axioms terms egraph type_graph =
   in
   let is_stratified t1 t2 =
     let res = t1 <> t2 && not (can_reach t2 t1) in
-      Debug.debug ("is_stratified("^(string_of_sort t1)^","^(string_of_sort t2)^") = "^(string_of_bool res)^"\n");
+      Debug.debug (fun () -> "is_stratified("^(string_of_sort t1)^","^(string_of_sort t2)^") = "^(string_of_bool res)^"\n");
       res
   in
   (* *)

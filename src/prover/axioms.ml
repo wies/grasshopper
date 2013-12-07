@@ -217,11 +217,11 @@ let set_axioms () =
     in
     let ssrt = string_of_sort t in
     if !Config.backend_solver_has_set_theory then []
-    else [mk_axiom ("def of empty" ^ ssrt) empty;
+    else [mk_axiom ("def of emptyset" ^ ssrt) empty;
           mk_axiom ("def of union" ^ ssrt) union;
           mk_axiom ("def of inter" ^ ssrt) inter;
-          mk_axiom ("def of diff" ^ ssrt) diff;
-          mk_axiom ("def of enum" ^ ssrt) setenum]
+          mk_axiom ("def of setminus" ^ ssrt) diff;
+          mk_axiom ("def of setenum" ^ ssrt) setenum]
   in
     Util.flat_map mk_set_axioms [Loc; Int]
       

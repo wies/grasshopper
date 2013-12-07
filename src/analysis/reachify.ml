@@ -730,7 +730,7 @@ let compile_preds preds =
       compile_pred pred
   in
   let compile id =
-    Debug.info ("  translating SL definition to GRASS: " ^ (str_of_ident id) ^ "\n");
+    Debug.info (fun () -> "  translating SL definition to GRASS: " ^ (str_of_ident id) ^ "\n");
     try
       if simple_pred id then compile_simple_pred id
       else if use_aux_induction_pred id then compile_use_aux id
@@ -738,8 +738,8 @@ let compile_preds preds =
       else predefined id
     with Compile_pred_failure why ->
       begin
-        Debug.notice ("cannot translate '" ^ (str_of_ident id) ^ "': " ^ why ^ "\n");
-        Debug.notice ("reverting to predefined\n");
+        Debug.notice (fun () -> "cannot translate '" ^ (str_of_ident id) ^ "': " ^ why ^ "\n");
+        Debug.notice (fun () -> "reverting to predefined\n");
         predefined id
       end
   in

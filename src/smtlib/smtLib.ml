@@ -38,9 +38,12 @@ let z3_v3 = { number = 3;
 
 let z3_v4 = { number = 4;
 	      subnumber = 3;
-	      smt_options = [":smt.mbqi", true;
-			     ":model.v2", true;
-			     ":model.partial", true];
+	      smt_options = 
+              (if not !Config.instantiate then [(":auto-config", false)] else []) @
+              [":smt.mbqi", true;
+               ":smt.ematching", true;
+               ":model.v2", true;
+	       ":model.partial", true];
 	      args = "-smt2 -in"
 	    }
 
@@ -102,7 +105,6 @@ let select_solver name =
 (** SMT-LIB2 Sessions *)
    
 type session = { name: string;
-                 init: bool;
 		 in_chan: in_channel;
 		 out_chan: out_channel;
 		 replay_chan: out_channel option;
@@ -171,7 +173,6 @@ let start_with_solver =
   let smt_cmd = solver.cmnd ^ " " ^ solver.version.args in
   let in_chan, out_chan = Unix.open_process smt_cmd in
   let session = { name = session_name;
-                  init = true; 
 		  in_chan = in_chan; 
 		  out_chan = out_chan;
 		  replay_chan = get_replay_chan session_name;
@@ -210,8 +211,7 @@ let quit session =
   (match session.replay_chan with
   | Some chan -> close_out chan
   | None -> ());
-  ignore (Unix.close_process (session.in_chan, session.out_chan));
-  { session with init = false }
+  ignore (Unix.close_process (session.in_chan, session.out_chan))
     
 let pop session = 
   if session.stack_height <= 0 then fail session "pop on empty stack" else
@@ -258,14 +258,14 @@ let disambiguate_overloaded_symbols signs f =
     if is_interpreted sym 
     then sym
     else
-      begin
-        let versions = 
-          try SymbolMap.find sym signs 
-          with Not_found -> print_endline (str_of_symbol sym); raise Not_found
-        in
+      let versions = 
+        try SymbolMap.find sym signs 
+        with Not_found -> [] 
+      in
+      try
         let version = Util.find_index sign versions in
-          FreeSym (mk_ident (string_of_symbol sym version))
-      end
+        FreeSym (mk_ident (string_of_symbol sym version))
+      with Not_found -> sym
   in
   let rec over t = match t with
     | Var _ as v -> v
@@ -275,23 +275,6 @@ let disambiguate_overloaded_symbols signs f =
         App (osym sym (List.map Util.unopt args_srt, Util.unopt srt), ts, srt)
   in
   map_terms over f
-
-(*
-let disambiguate_overloaded_symbols signs f =
-  let osym sym sign =
-    if is_interpreted sym 
-    then sym
-    else FreeSym (mk_ident (string_of_symbol sym sign))
-  in
-  let rec over t = match t with
-    | Var _ as v -> v
-    | App (sym, ts, srt) ->
-      let ts = List.map over ts in
-      let args_srt = List.map sort_of ts in
-        App (osym sym (List.map Util.unopt args_srt, Util.unopt srt), ts, srt)
-  in
-  map_terms over f
-*)
 
 let assert_form session f =
   session.assert_count <- session.assert_count + 1;

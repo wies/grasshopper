@@ -18,7 +18,7 @@ let print_query name f =
   let f_inst = Reduction.reduce f in
   let f_inst = List.rev (List.rev_map unique_comments f_inst) in
   let signature = overloaded_sign (mk_and f_inst) in
-  let all_tpe =
+  let all_srts =
     SymbolMap.fold
       (fun _ lst acc ->
         List.fold_left
@@ -29,29 +29,37 @@ let print_query name f =
       signature
       SrtSet.empty
   in
-  let has_int = SrtSet.mem Int all_tpe in
+  let has_int = 
+    let rec int_srt = function
+      | Int -> true
+      | Set srt | Fld srt -> int_srt srt
+      | _ -> false
+    in
+    SrtSet.exists int_srt all_srts
+  in
+  let _ = Debug.debug (fun () -> string_of_form (mk_and f_inst)) in
   let session = SmtLib.start name has_int in
-    Debug.debug "sending to prover...\n";
+    Debug.debug (fun () -> "sending to prover...\n");
     let session = SmtLib.declare session signature in
-      SmtLib.assert_forms session f_inst;
-      session
+    SmtLib.assert_forms session f_inst;
+    session
 
 
 let start_session name f = 
   let session = print_query name f in
   let prove session =
     let result = SmtLib.is_sat session in
-    Debug.debug "prover done\n";
+    Debug.debug (fun () -> "prover done\n");
     (result, session)
   in
     Util.measure_call "prove" prove session
 
 let check_sat ?(session_name="form") f =
-  let (result, session) = start_session session_name f in
+  let result, session = start_session session_name f in
   (match result with
   | Some true -> dump_model session
   | _ -> ());
-  ignore (SmtLib.quit session);
+  SmtLib.quit session;
   result
 
 (* An incremental version for the frame inference.

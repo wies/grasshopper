@@ -495,6 +495,16 @@ let instantiate_user_def_axioms fs gts =
   let classes = CongruenceClosure.congr_classes fs gts1 in
   instantiate_with_terms true fs1 classes, gts1
 
+let add_terms fs gts =
+  if !Config.instantiate then fs else
+  let gts_fs = ground_terms (mk_and fs) in
+  let extra_gts = TermSet.diff gts gts_fs in
+  TermSet.fold (fun t acc ->
+    let srt = unsafe_sort_of t in
+    let c = mk_free_const ~srt:srt (fresh_ident "t") in
+    mk_eq t c :: acc)
+    extra_gts fs
+
 (** Reduces the given formula to the target theory fragment, as specified by the configuration.
  ** Assumes that f is typed. *)
 let reduce f = 
@@ -518,6 +528,7 @@ let reduce f =
   let fs, gts = reduce_read_write fs in
   let fs, gts = reduce_reach fs gts in
   let fs, gts = instantiate_user_def_axioms fs gts in
+  let fs = add_terms fs gts in
   (* the following is a (probably stupid) heuristic to sort the formulas for improving the running time *)
   (*let _ = 
     (* sort by decreasing number of disjuncts in formula *)
