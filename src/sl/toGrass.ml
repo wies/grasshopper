@@ -28,9 +28,7 @@ let to_form pred_to_form domain f =
         [FormUtil.mk_true, domain], 
         FormUtil.mk_eq domain t
     | Atom (Pred p, args) -> 
-        (*TODO generalize the renaming of output parameters beyond the domain
-         * 
-         *)
+        (*let domain = fresh_dom d in*) 
         let domain = fresh_dom d in
         let structure, outputs = pred_to_form p args domain in
         [structure, domain], FormUtil.smk_and outputs 
