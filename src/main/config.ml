@@ -10,6 +10,8 @@ let instantiate = ref true
 let stratify = ref true
 (* File name where counterexample model is saved. *)
 let model_file = ref ""
+(* Dump unsat cores *)
+let unsat_cores = ref false
 (* Flag that controls whether the generated VCs are dumped to files. *)
 let dump_smt_queries = ref false
 (* Flag that controls whether the generated VCs are checked. *)
@@ -42,6 +44,7 @@ let cmd_options =
    ("-flymake", Arg.Set flymake_mode, " Print error messages that are compatible with Emacs' flymake-mode");
    ("-dumpghp", Arg.Set_int dump_ghp, "<num>  Print intermediate program after specified simplification stage (num=0,1,2,3)");
    ("-dumpvcs", Arg.Set dump_smt_queries, " Generate SMT-LIB 2 files for all verification conditions");
+   ("-core", Arg.Set unsat_cores, " Produce unsat cores with every unsat SMT query");
    ("-noverify", Arg.Clear verify, " Do not check the generated verification conditions");
    ("-robust", Arg.Set robust, " Continue even if some verification condition cannot be checked");
    ("-smtsolver", Arg.Set_string smtsolver, " Choose SMT solver (Z3, CVC4, MathSAT)");

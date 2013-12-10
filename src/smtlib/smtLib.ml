@@ -109,9 +109,10 @@ type session = { name: string;
 		 out_chan: out_channel;
 		 replay_chan: out_channel option;
 		 mutable assert_count: int;
-		 mutable sat_checked: bool;
+		 mutable sat_checked: bool option;
 		 stack_height: int;
-                 signature: (arity list SymbolMap.t) option 
+                 signature: (arity list SymbolMap.t) option;
+                 named_clauses: (string, form) Hashtbl.t option
 	       } 
 
 exception SmtLib_error of session * string
@@ -169,27 +170,31 @@ let start_with_solver =
       Some (open_out replay_file)
     else None
   in
-  fun session_name solver produce_models produce_interpolants has_int ->
+  fun session_name solver produce_models produce_unsat_cores produce_interpolants has_int ->
   let smt_cmd = solver.cmnd ^ " " ^ solver.version.args in
   let in_chan, out_chan = Unix.open_process smt_cmd in
+  let names_tbl: (string, form) Hashtbl.t option =
+    if produce_unsat_cores then Some (Hashtbl.create 0) else None
+  in
   let session = { name = session_name;
 		  in_chan = in_chan; 
 		  out_chan = out_chan;
 		  replay_chan = get_replay_chan session_name;
 		  assert_count = 0;
-                  sat_checked = false;
+                  sat_checked = None;
 		  stack_height = 0;
-                  signature = None }
+                  signature = None;
+                  named_clauses = names_tbl }
   in
   writeln session "(set-option :print-success false)";
-  if produce_models then begin
+  if produce_models then 
     writeln session "(set-option :produce-models true)";
-    (*writeln session "(set-option :produce-unsat-cores true)"*)
-  end;
   if produce_interpolants then writeln session "(set-option :produce-interpolants true)";
   List.iter 
     (fun (opt, b) -> writeln session (Printf.sprintf "(set-option %s %b)" opt b))
     solver.version.smt_options;
+  if produce_unsat_cores then
+    writeln session "(set-option :produce-unsat-cores true)";
   let logic_str = 
     (if (has_int || !Config.encode_fields_as_arrays)
      then "AUFLIA" 
@@ -200,9 +205,23 @@ let start_with_solver =
   declare_sorts session;
   session
 
-let start session_name has_int = start_with_solver session_name !selected_solver true false has_int
+let start session_name has_int =
+  start_with_solver
+    session_name
+    !selected_solver
+    (!Config.model_file <> "")
+    !Config.unsat_cores
+    false
+    has_int
     
-let start_interpolation session_name = start_with_solver session_name !selected_interpolator false true false
+let start_interpolation session_name =
+  start_with_solver
+    session_name
+    !selected_interpolator
+    false
+    false
+    true
+    false
     
 let quit session = 
   writeln session "(exit)";
@@ -277,11 +296,18 @@ let disambiguate_overloaded_symbols signs f =
   map_terms over f
 
 let assert_form session f =
+  let _ = match f with
+    | Binder (_, _, _, ann) ->
+      begin
+        let name = extract_comments true ann in
+          match session.named_clauses with
+          | Some tbl -> Hashtbl.add tbl name f
+          | None -> ()
+      end
+    | _ -> ()
+  in
   session.assert_count <- session.assert_count + 1;
-  session.sat_checked <- false;
-    (* print_string "(assert ";
-       print_smtlib_form stdout f;
-       print_endline ")"; *)
+  session.sat_checked <- None;
   write session "(assert ";
   let cf = 
     match session.signature with
@@ -302,11 +328,13 @@ let is_sat session =
   writeln session "(check-sat)";
   match read session with
   | SmtSat -> 
-    session.sat_checked <- true;
+    session.sat_checked <- Some true;
     Some true
-  | SmtUnsat -> Some false
+  | SmtUnsat ->
+    session.sat_checked <- Some false;
+    Some false
   | SmtUnknown ->
-    session.sat_checked <- true;
+    session.sat_checked <- Some true;
     None
   | SmtError e -> fail session e
   | _ -> fail session "unexpected response of prover"
@@ -319,11 +347,37 @@ let get_model session =
     | SmtError e -> fail session e
     | _ -> None
   in
-    if session.sat_checked then gm ()
+    if session.sat_checked = Some true then gm ()
     else
       match is_sat session with
       | Some true | None -> gm ()
       | Some false -> None
+
+let get_unsat_core session =
+  let resolve_names names =
+    let find_name tbl n =
+      try [Hashtbl.find tbl n]
+      with Not_found ->
+        try [Hashtbl.find tbl (n ^ "_0")]
+        with Not_found ->
+          Debug.info (fun () -> "cannot find clause '"^n^"' for unsat core\n"); []
+    in
+    match session.named_clauses with
+      | Some tbl -> Some (Util.flat_map (find_name tbl) names)
+      | None -> None
+  in
+  let gc () =
+    writeln session "(get-unsat-core)";
+    match read session with
+    | SmtCore c -> resolve_names c
+    | SmtError e -> fail session e
+    | _ -> None
+  in
+    if session.sat_checked = Some false then gc ()
+    else
+      match is_sat session with
+      | Some false -> gc ()
+      | Some true | None -> None
 	  
 let get_interpolant session groups =
   match is_sat session with

@@ -21,6 +21,7 @@ main:
 | UNSAT { SmtUnsat }
 | UNKNOWN { SmtUnknown }
 | rmodel { SmtModel $1 }
+| rcore  { SmtCore  $1 }
 | rerror { SmtError $1 }
 ;
     
@@ -41,5 +42,11 @@ rmodel:
       ParseError.parse_buf_exn ParseModel.main LexModel.token buff }
 ;
 
+names:
+  IDENT names { (str_of_ident $1) :: $2 }
+|   { [] }
+;
 
-
+rcore:
+  LPAREN names RPAREN { $2 }
+;

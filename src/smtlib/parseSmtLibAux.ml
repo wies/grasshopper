@@ -7,6 +7,7 @@ type smtlib_answer =
   | SmtUnknown
   | SmtForm of form
   | SmtModel of Model.model
+  | SmtCore of string list
   | SmtError of string
 
 let form_defs : (ident, form) Hashtbl.t = Hashtbl.create 0

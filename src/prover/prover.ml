@@ -14,6 +14,19 @@ let dump_model session =
     close_out model_chan;
   end
 
+let dump_core session =
+  if !Config.unsat_cores then
+    begin
+      let core = unopt (SmtLib.get_unsat_core session) in
+      let core_file = session.SmtLib.name ^ ".core" in
+      let core_chan = open_out core_file in
+        List.iter
+          (fun f ->
+            print_smtlib_form core_chan f;
+            output_string core_chan "\n\n")
+          core
+    end
+
 let print_query name f =
   let f_inst = Reduction.reduce f in
   let f_inst = List.rev (List.rev_map unique_comments f_inst) in
@@ -58,95 +71,8 @@ let check_sat ?(session_name="form") f =
   let result, session = start_session session_name f in
   (match result with
   | Some true -> dump_model session
+  | Some false -> dump_core session
   | _ -> ());
   SmtLib.quit session;
   result
-
-(* An incremental version for the frame inference.
- * we can assume that the first query contains all the ground terms.
- * further queries are only adding blocking clauses.
- * also at each step we need to return the model if sat, none if unsat, error otherwise.
- *)
-
-
-module ModelGenerator =
-  struct
-    type t = SmtLib.session
-
-    let get_eq_classes_raw session terms =
-      let terms_idx, max =
-        List.fold_left
-          ( fun (acc, i) t -> (TermMap.add t i acc, i+1))
-          (TermMap.empty, 0)
-          terms
-      in
-      let rec process uf terms = match terms with
-        | x :: xs ->
-          let id1 = TermMap.find x terms_idx in
-            List.fold_left
-              (fun acc y ->
-                let id2 = TermMap.find y terms_idx in
-                  if Puf.find uf id1 = Puf.find uf id2 then uf
-                  else
-                    begin
-                      let s2 = SmtLib.push session in
-                      SmtLib.assert_form s2 (mk_not (mk_eq x y));
-                      let res = match SmtLib.is_sat s2 with
-                        | Some true -> uf
-                        | Some false -> Puf.union uf id1 id2
-                        | None ->
-                          ignore (SmtLib.quit s2);
-                          failwith "cannot solve ?! (get_eq_classes)"
-                      in
-                        ignore (SmtLib.pop s2);
-                        res
-                    end
-              )
-              uf
-              xs
-        | [] -> uf
-      in
-      let uf = process (Puf.create max) terms in
-        (uf, terms_idx)
-
-    let get_eq_classes session terms =
-      let (uf, terms_idx) = get_eq_classes_raw session terms in
-        (fun v -> Puf.find uf (TermMap.find v terms_idx) )
-    
-    let get_eq_classes_lst session terms =
-      let (uf, terms_idx) = get_eq_classes_raw session terms in
-      let max = (*TermMap.cardinal terms_idx *)
-	TermMap.fold (fun _ _ acc -> acc + 1) terms_idx 0
-      in
-      let classes = Array.make max [] in
-        List.iter
-          (fun (t, i) ->
-            let c = Puf.find uf i in
-              classes.(c) <- t :: classes.(c)
-          )
-          (TermMap.bindings terms_idx);
-        List.filter (fun x -> x <> []) (Array.to_list classes)
-
-    let try_get_model (result, generator) = 
-      match result with
-      | Some true ->
-        let model = SmtLib.get_model generator in
-        Some (generator, unopt model)
-      | Some false ->
-        ignore (SmtLib.quit generator);
-        None
-      | None ->
-        ignore (SmtLib.quit generator);
-        failwith "cannot solve ?!"
-
-    let initial_query name f = try_get_model (start_session name f)
-
-    let add_blocking_clause generator clause =
-      (*TODO sanity checks: no qantifiers, ... *)
-      SmtLib.assert_forms generator [(mk_not clause)];
-      let result = SmtLib.is_sat generator in
-        try_get_model (result, generator)
-
-  end
-
 
