@@ -144,7 +144,6 @@ let read session =
 
 let declare_sorts session =
   writeln session ("(declare-sort " ^ loc_sort_string ^ " 0)");
-  (*writeln session ("(declare-sort " ^ set_sort_string ^ " 1)");*)
   if !Config.backend_solver_has_set_theory then begin
     writeln session ("(define-sort " ^ set_sort_string ^ loc_sort_string ^ " () (Set " ^ loc_sort_string ^ "))");
     writeln session ("(define-sort " ^ set_sort_string ^ int_sort_string ^ " () (Set " ^ int_sort_string ^ "))")
@@ -155,7 +154,6 @@ let declare_sorts session =
   if !Config.encode_fields_as_arrays then
     writeln session ("(define-sort " ^ fld_sort_string ^ " (X) (Array Loc X))")
   else 
-    (*writeln session ("(declare-sort " ^ fld_sort_string ^ " 1)")*)
     begin
       writeln session ("(declare-sort " ^ fld_sort_string ^ loc_sort_string ^ " 0)");
       writeln session ("(declare-sort " ^ fld_sort_string ^ int_sort_string ^ " 0)")

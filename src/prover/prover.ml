@@ -18,13 +18,15 @@ let dump_core session =
   if !Config.unsat_cores then
     begin
       let core = unopt (SmtLib.get_unsat_core session) in
-      let core_file = session.SmtLib.name ^ ".core" in
-      let core_chan = open_out core_file in
-        List.iter
-          (fun f ->
-            print_smtlib_form core_chan f;
-            output_string core_chan "\n\n")
-          core
+      let core_name = session.SmtLib.name ^ ".core" in
+      let config = !Config.dump_smt_queries in
+      Config.dump_smt_queries := true;
+      let s = SmtLib.start core_name true in
+      let signature = overloaded_sign (mk_and core) in
+      let s = SmtLib.declare s signature in
+      SmtLib.assert_forms s core;
+      SmtLib.quit s;
+      Config.dump_smt_queries := config
     end
 
 let print_query name f =
