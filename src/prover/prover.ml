@@ -31,6 +31,7 @@ let dump_core session =
 
 let print_query name f =
   let f_inst = Reduction.reduce f in
+  let f_inst = List.rev (List.rev_map comment_uncommented f_inst) in
   let f_inst = List.rev (List.rev_map unique_comments f_inst) in
   let signature = overloaded_sign (mk_and f_inst) in
   let all_srts =

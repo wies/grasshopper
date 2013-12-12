@@ -752,6 +752,13 @@ let unique_comments f =
   in
   uc f
 
+let comment_uncommented f = match f with
+  | Binder (_, _, _, anns) ->
+    if List.exists (fun a -> match a with Comment _ -> true | _ -> false) anns
+    then f
+    else mk_comment "unnamed" f
+  | f -> mk_comment "unnamed" f
+
 module Clauses = struct
 
   type clause = form list
