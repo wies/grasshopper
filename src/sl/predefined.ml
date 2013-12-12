@@ -381,7 +381,7 @@ let with_content = [
                 (mk_implies (l1_in_domain) (mk_and [mk_lt (mk_read data l1) ub;
                                                     mk_leq lb (mk_read data l1)]));
               mk_forall ~ann:[Comment "strict_sortedness"] [l1f; l2f]
-                (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y]
+                (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y; mk_neq l1 l2]
                             [mk_lt (mk_read data l1) (mk_read data l2)])
              ],
       [di, mk_forall ~ann:[Comment "sorted_set_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp);
