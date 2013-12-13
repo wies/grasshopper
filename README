@@ -4,7 +4,7 @@ This is a preliminary distribution.
 Please let us know if you are planing to use it.
 
 (c) Thomas Wies (wies@cs.nyu.edu)
-    Damien Zufferey (zufferey@ist.ac.at)
+    Damien Zufferey (zufferey@csail.mit.edu)
 
 The code written by us is released under a BSD license, see file
 LICENSE. GRASShopper uses a union-find data structure that is written
