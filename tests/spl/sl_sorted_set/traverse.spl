@@ -35,6 +35,7 @@ procedure traverse(lst: Node, val: int,
            || (curr == null &*& sorted_set(lst, curr, lb, ub, c2) &*& c1 == set<int>());
     invariant content == c1 ++ c2;
     invariant lb < ub;
+    invariant curr == null || (curr.data >= lb && curr.data < ub);
   {
     c1 := c1 -- set(curr.data);
     c2 := c2 ++ set(curr.data);
