@@ -140,21 +140,34 @@ let read session =
   end
   else SmtUnsat
 
+let set_option session opt_name opt_value =
+  writeln session (Printf.sprintf "(set-option %s %b)" opt_name opt_value)
+
+let set_logic session logic =
+  writeln session ("(set-logic " ^ logic ^ ")")
+
+let declare_fun session sym_name arg_sorts res_sort =
+  let arg_sorts_str = String.concat " " (List.map (fun srt -> string_of_sort srt) arg_sorts) in
+  writeln session ("(declare-fun " ^ sym_name ^ " (" ^ arg_sorts_str ^ ") " ^ string_of_sort res_sort ^ ")")
+
+let declare_sort session sort_name num_of_params =
+  writeln session (Printf.sprintf "(declare-sort %s %d)" sort_name num_of_params)
+    
 let declare_sorts session =
-  writeln session ("(declare-sort " ^ loc_sort_string ^ " 0)");
+  declare_sort session loc_sort_string 0;
   if !Config.backend_solver_has_set_theory then begin
     writeln session ("(define-sort " ^ set_sort_string ^ loc_sort_string ^ " () (Set " ^ loc_sort_string ^ "))");
     writeln session ("(define-sort " ^ set_sort_string ^ int_sort_string ^ " () (Set " ^ int_sort_string ^ "))")
   end else begin
-    writeln session ("(declare-sort " ^ set_sort_string ^ loc_sort_string ^ " 0)");
-    writeln session ("(declare-sort " ^ set_sort_string ^ int_sort_string ^ " 0)")
+    declare_sort session (set_sort_string ^ loc_sort_string) 0;
+    declare_sort session (set_sort_string ^ int_sort_string) 0
   end;
   if !Config.encode_fields_as_arrays then
     writeln session ("(define-sort " ^ fld_sort_string ^ " (X) (Array Loc X))")
   else 
     begin
-      writeln session ("(declare-sort " ^ fld_sort_string ^ loc_sort_string ^ " 0)");
-      writeln session ("(declare-sort " ^ fld_sort_string ^ int_sort_string ^ " 0)")
+      declare_sort session (fld_sort_string ^ loc_sort_string) 0;
+      declare_sort session (fld_sort_string ^ int_sort_string) 0
     end
 
 let start_with_solver = 
@@ -182,18 +195,18 @@ let start_with_solver =
                   signature = None;
                   named_clauses = names_tbl }
   in
-  writeln session "(set-option :print-success false)";
+  set_option session ":print-success" false;
   if produce_models then 
-    writeln session "(set-option :produce-models true)";
+    set_option session  ":produce-models" true;
   List.iter 
-    (fun (opt, b) -> writeln session (Printf.sprintf "(set-option %s %b)" opt b))
+    (fun (opt, b) -> set_option session opt b)
     solver.version.smt_options;
   if produce_unsat_cores then
-    writeln session "(set-option :produce-unsat-cores true)";
+    set_option session ":produce-unsat-cores" true;
   let logic_str = 
     "AUFLIA" ^
     if !Config.backend_solver_has_set_theory then "_SETS" else ""
-  in writeln session ("(set-logic " ^ logic_str ^ ")");
+  in set_logic session logic_str;
   (*end;*)
   declare_sorts session;
   session
@@ -237,10 +250,9 @@ let string_of_symbol sym idx =
   (str_of_symbol sym) ^ "$" ^ (string_of_int idx)
 
 let declare session sign =
-  let declare sym idx (arg_sorts, res_sort) =
-    let arg_sorts_str = String.concat " " (List.map (fun srt -> string_of_sort srt) arg_sorts) in
+  let declare sym idx (arg_sorts, res_sort) = 
     let sym_str = string_of_symbol sym idx in
-    writeln session ("(declare-fun " ^ sym_str ^ " (" ^ arg_sorts_str ^ ") " ^ string_of_sort res_sort ^ ")")
+    declare_fun session sym_str arg_sorts res_sort
   in
   let write_decl sym overloaded_variants = 
     if not (is_interpreted sym) then
