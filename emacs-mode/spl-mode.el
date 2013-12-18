@@ -140,9 +140,10 @@
 (when (require 'flycheck nil :noerror)
   (flycheck-define-checker spl-reporter
     "An SPL checker based on Grasshopper."
-    :command ("grasshopper" "-robust" "-flymake" source)
+    :command ("grasshopper" "-robust" "-flycheck" source)
     :error-patterns
-    ((error line-start (file-name) ":" line ":" column "-" end-column ":" (message) line-end))
+    ((warning line-start (file-name) ":" line ":" column (optional "-" end-column) ":Related Location:" (message) line-end)
+     (error line-start (file-name) ":" line ":" column (optional "-" end-column) ":" (message) line-end))
     ;((error line-start (file-name) ":" line ":" column ":" (message) line-end))
     :modes (spl-mode))
   (add-hook 'spl-mode-hook (lambda ()

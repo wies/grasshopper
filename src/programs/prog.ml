@@ -720,7 +720,15 @@ let string_of_src_pos pos =
       pos.sp_file pos.sp_start_line pos.sp_start_col pos.sp_end_line pos.sp_end_col
 
 let flycheck_string_of_src_pos pos =
-  Printf.sprintf "%s:%d:%d-%d" pos.sp_file pos.sp_start_line pos.sp_start_col pos.sp_end_col
+  if pos.sp_start_line <> pos.sp_end_line 
+  then Printf.sprintf "%s:%d:%d" pos.sp_file pos.sp_start_line pos.sp_start_col
+  else 
+    let end_col = 
+      if pos.sp_start_col = pos.sp_end_col 
+      then pos.sp_start_col + 1 
+      else pos.sp_end_col
+    in
+    Printf.sprintf "%s:%d:%d-%d" pos.sp_file pos.sp_start_line pos.sp_start_col end_col
 
 let pr_spec_form ppf sf =
   match sf.spec_form with

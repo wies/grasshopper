@@ -196,9 +196,9 @@ and pr_sort ppf = function
   | Bool -> fprintf ppf "%s" bool_sort_string
   | Int -> fprintf ppf "%s" int_sort_string
   | FreeSrt id -> pr_ident ppf id
-  (*| Fld s -> fprintf ppf "@[<4>%s@ %a@]" fld_sort_string pr_sort0 s*)
+  (*| Fld s -> fprintf ppf "@[<4>(%s@ %a)@]" fld_sort_string pr_sort0 s*)
   | Fld s -> fprintf ppf "@[<4>%s%a@]" fld_sort_string pr_sort0 s
-  (*| Set s -> fprintf ppf "@[<4>%s@ %a@]" set_sort_string pr_sort0 s*)
+  (*| Set s -> fprintf ppf "@[<4>(%s@ %a)@]" set_sort_string pr_sort0 s*)
   | Set s -> fprintf ppf "@[<4>%s%a@]" set_sort_string pr_sort0 s
 
 let pr_sym ppf sym = fprintf ppf "%s" (str_of_symbol sym)
