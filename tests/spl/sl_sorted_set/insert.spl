@@ -20,7 +20,7 @@ procedure insert( lst: Node, val: int,
                   implicit ghost content: set<int>)
   returns (res: Node)
   requires sorted_set(lst, null, lb, ub, content);
-  requires val >= lb &*& val <= ub;
+  requires val >= lb &*& val < ub;
   ensures sorted_set(res, null, lb, ub, content ++ set(val));
 {
   var curr: Node, prev: Node;
@@ -31,14 +31,22 @@ procedure insert( lst: Node, val: int,
   c2 := set<int>();
 
   while (curr != null && curr.data < val)
-    invariant  prev == null
-           || (prev.next |-> curr &*& prev.data < curr.data &*&
-               sorted_set(lst, prev, lb, prev.data, c2)); 
-    invariant sorted_set(curr, null, prev.data, ub, c1);
+    invariant (prev == null &*&
+               sorted_set(curr, null, curr.data, ub, c1) &*&
+               lst == curr &*&
+               c2 == set<int>())
+           || (prev.next |-> curr &*& prev.data in c2 &*&
+               sorted_set(lst, prev, lb, prev.data, c2 -- set(prev.data)) &*&
+               sorted_set(curr, null, curr.data, ub, c1));
+    invariant lb < ub;
+    invariant !(val in c2);
     invariant content == c1 ++ c2;
+    invariant curr == null || (curr.data >= lb && curr.data < ub);
+    invariant prev == null || (prev.data >= lb && prev.data < ub);
+    invariant prev == null || curr == null || prev.data < curr.data;
   {
+    c1 := c1 -- set(curr.data);
     c2 := c2 ++ set(curr.data);
-    c1 := c1 ++ set(curr.data);
     prev := curr;
     curr := curr.next; 
   }
