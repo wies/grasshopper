@@ -80,10 +80,10 @@ let cvc4 =
     version = cvc4_v1 }
 
 let mathsat_v5 = { number = 5;
-		 subnumber = 1;
-		 smt_options = [":produce-interpolants", true];
-		 args = "-verbosity=0 -interpolation=true";
-	       }
+		   subnumber = 1;
+		   smt_options = [];
+		   args = "-verbosity=0";
+	         }
 
 let mathsat = 
   { name = "MathSAT";
@@ -94,8 +94,6 @@ let mathsat =
 let solvers = [z3; cvc4; mathsat]
 
 let selected_solver = ref z3
-
-let selected_interpolator = ref mathsat
 
 let select_solver name = 
   try
@@ -113,7 +111,7 @@ type session = { name: string;
 		 stack_height: int;
                  signature: (arity list SymbolMap.t) option;
                  named_clauses: (string, form) Hashtbl.t option
-	       } 
+	       }
 
 exception SmtLib_error of session * string
     
@@ -168,7 +166,7 @@ let start_with_solver =
       Some (open_out replay_file)
     else None
   in
-  fun session_name solver produce_models produce_unsat_cores produce_interpolants has_int ->
+  fun session_name solver produce_models produce_unsat_cores ->
   let smt_cmd = solver.cmnd ^ " " ^ solver.version.args in
   let in_chan, out_chan = Unix.open_process smt_cmd in
   let names_tbl: (string, form) Hashtbl.t option =
@@ -187,40 +185,26 @@ let start_with_solver =
   writeln session "(set-option :print-success false)";
   if produce_models then 
     writeln session "(set-option :produce-models true)";
-  if produce_interpolants then writeln session "(set-option :produce-interpolants true)";
   List.iter 
     (fun (opt, b) -> writeln session (Printf.sprintf "(set-option %s %b)" opt b))
     solver.version.smt_options;
   if produce_unsat_cores then
     writeln session "(set-option :produce-unsat-cores true)";
   let logic_str = 
-    (if (has_int || !Config.encode_fields_as_arrays)
-     then "AUFLIA" 
-     else "UF") ^
+    "AUFLIA" ^
     if !Config.backend_solver_has_set_theory then "_SETS" else ""
   in writeln session ("(set-logic " ^ logic_str ^ ")");
   (*end;*)
   declare_sorts session;
   session
 
-let start session_name has_int =
+let start session_name =
   start_with_solver
     session_name
     !selected_solver
     (!Config.model_file <> "")
     !Config.unsat_cores
-    false
-    has_int
-    
-let start_interpolation session_name =
-  start_with_solver
-    session_name
-    !selected_interpolator
-    false
-    false
-    true
-    false
-    
+        
 let quit session = 
   writeln session "(exit)";
   close_out session.out_chan;
@@ -377,21 +361,3 @@ let get_unsat_core session =
       | Some false -> gc ()
       | Some true | None -> None
 	  
-let get_interpolant session groups =
-  match is_sat session with
-  | Some true | None -> None
-  | Some false ->
-      begin
-	let a = String.concat " " (List.map string_of_int groups) in
-	writeln session ("(get-interpolant (" ^ a ^ "))");
-	match read session with
-	| SmtError e -> fail session e
-	| SmtForm f -> Some f
-	| _ -> None
-      end
-
-
-
-  
-
-

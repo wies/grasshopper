@@ -141,6 +141,9 @@ let generate_terms generators ground_terms =
   in
   generate sort_to_terms new_terms ground_terms generators
 
+
+
+
 (*
 (* returns a DAG of type dependencies. *)
 let stratify_types axioms =
@@ -476,7 +479,7 @@ let generate_instances useLocalInst axioms terms egraph type_graph =
           else ematches [Var (v, Some srt)] terms subst_maps)
         fvars proto_subst_maps         
     in
-    let subst_maps = measure subst_maps () in
+    let subst_maps = (*measure*) subst_maps () in
     (*let _ = match f with
     | Binder (_, _, _, [Comment _ (*"entry-point1"*)]) ->
         begin

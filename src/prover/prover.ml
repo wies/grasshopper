@@ -21,7 +21,7 @@ let dump_core session =
       let core_name = session.SmtLib.name ^ ".core" in
       let config = !Config.dump_smt_queries in
       Config.dump_smt_queries := true;
-      let s = SmtLib.start core_name true in
+      let s = SmtLib.start core_name in
       let signature = overloaded_sign (mk_and core) in
       let s = SmtLib.declare s signature in
       SmtLib.assert_forms s core;
@@ -34,27 +34,7 @@ let print_query name f =
   let f_inst = List.rev (List.rev_map comment_uncommented f_inst) in
   let f_inst = List.rev (List.rev_map unique_comments f_inst) in
   let signature = overloaded_sign (mk_and f_inst) in
-  let all_srts =
-    SymbolMap.fold
-      (fun _ lst acc ->
-        List.fold_left
-          (fun acc (args, ret) -> List.fold_right SrtSet.add (ret :: args) acc)
-          acc
-          lst
-      )
-      signature
-      SrtSet.empty
-  in
-  let has_int = 
-    let rec int_srt = function
-      | Int -> true
-      | Set srt | Fld srt -> int_srt srt
-      | _ -> false
-    in
-    SrtSet.exists int_srt all_srts
-  in
-  let _ = Debug.debug (fun () -> string_of_form (mk_and f_inst)) in
-  let session = SmtLib.start name has_int in
+  let session = SmtLib.start name in
     Debug.debug (fun () -> "sending to prover...\n");
     let session = SmtLib.declare session signature in
     SmtLib.assert_forms session f_inst;

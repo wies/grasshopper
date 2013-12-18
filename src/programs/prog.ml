@@ -719,7 +719,7 @@ let string_of_src_pos pos =
     Printf.sprintf "File \"%s\", line %d, column %d to line %d, column %d" 
       pos.sp_file pos.sp_start_line pos.sp_start_col pos.sp_end_line pos.sp_end_col
 
-let flymake_string_of_src_pos pos =
+let flycheck_string_of_src_pos pos =
   Printf.sprintf "%s:%d:%d-%d" pos.sp_file pos.sp_start_line pos.sp_start_col pos.sp_end_col
 
 let pr_spec_form ppf sf =

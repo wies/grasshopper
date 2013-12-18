@@ -8,6 +8,7 @@ let backend_solver_has_set_theory = ref false
 (* Flag that controls whether we are instantiating the axioms or relying on the prover. *)
 let instantiate = ref true
 let stratify = ref true
+let split_vcs = ref false
 (* File name where counterexample model is saved. *)
 let model_file = ref ""
 (* Dump unsat cores *)
@@ -20,8 +21,8 @@ let verify = ref true
 let robust = ref false
 (* Flag that controls whether predefined predicates only are used (heuristic to infer them is default) *)
 let predefPreds = ref true
-(* Flag that enables error messages compatible with emacs' flymake-mode *)
-let flymake_mode = ref false
+(* Flag that enables error messages for on-the-fly checking *)
+let flycheck_mode = ref false
 
 let dump_ghp = ref (-1)
 
@@ -41,9 +42,10 @@ let experimental = ref false
 
 let cmd_options =
   [("-model", Arg.Set_string model_file, "<file>  Produce counterexample model for the first failing verification condition");
-   ("-flymake", Arg.Set flymake_mode, " Print error messages that are compatible with Emacs' flymake-mode");
+   ("-flycheck", Arg.Set flycheck_mode, " Print error messages for on-the-fly checking");
    ("-dumpghp", Arg.Set_int dump_ghp, "<num>  Print intermediate program after specified simplification stage (num=0,1,2,3)");
    ("-dumpvcs", Arg.Set dump_smt_queries, " Generate SMT-LIB 2 files for all verification conditions");
+   ("-splitvcs", Arg.Clear split_vcs, " Split verification conditions");
    ("-core", Arg.Set unsat_cores, " Produce unsat cores with every unsat SMT query");
    ("-noverify", Arg.Clear verify, " Do not check the generated verification conditions");
    ("-robust", Arg.Set robust, " Continue even if some verification condition cannot be checked");
