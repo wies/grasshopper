@@ -30,7 +30,7 @@ procedure union(lst1: Node, lst2: Node,
         return lst1;
     } else if (lst1.data < lst2.data) {
         var min: int;
-        if (lst1.next.data < lst2.data) {
+        if (lst1.next != null && lst1.next.data < lst2.data) {
             min := lst1.next.data;
         } else {
             min := lst2.data;
@@ -39,10 +39,10 @@ procedure union(lst1: Node, lst2: Node,
         return lst1;
     } else if (lst1.data > lst2.data) {
         var min: int;
-        if (lst1.next.data < lst2.data) {
-            min := lst1.next.data;
+        if (lst2.next != null && lst2.next.data < lst1.data) {
+            min := lst2.next.data;
         } else {
-            min := lst2.data;
+            min := lst1.data;
         }
         lst2.next := union(lst1, lst2.next, min, ub);
         return lst2;
