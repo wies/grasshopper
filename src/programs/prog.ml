@@ -720,7 +720,7 @@ let string_of_src_pos pos =
       pos.sp_file pos.sp_start_line pos.sp_start_col pos.sp_end_line pos.sp_end_col
 
 let flymake_string_of_src_pos pos =
-  Printf.sprintf "%s:%d:%d" pos.sp_file pos.sp_start_line pos.sp_start_col
+  Printf.sprintf "%s:%d:%d-%d" pos.sp_file pos.sp_start_line pos.sp_start_col pos.sp_end_col
 
 let pr_spec_form ppf sf =
   match sf.spec_form with
