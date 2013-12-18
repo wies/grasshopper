@@ -137,8 +137,7 @@
 (add-hook 'spl-mode-hook
           (lambda () (local-set-key (kbd "C-c C-c") 'compile)))
 
-;(require 'flyckeck nil :noerror)
-(when (load "flycheck")
+(when (require 'flycheck nil :noerror)
   (flycheck-define-checker spl-reporter
     "An SPL checker based on Grasshopper."
     :command ("grasshopper" "-robust" "-flymake" source)
