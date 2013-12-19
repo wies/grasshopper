@@ -43,13 +43,13 @@
    '("\\(//[^\n]*\\)" 1 
      font-lock-comment-face)
 
-   '("\\<\\(if\\|else\\|free\\|pr\\(ocedure\\|edicate\\)\\|return\\(s\\|\\)\\|struct\\|var\\|while\\)\\>"
+   '("\\<\\(if\\|else\\|free\\|new\\|pr\\(ocedure\\|edicate\\)\\|return\\(s\\|\\)\\|struct\\|var\\|while\\)\\>"
          1 font-lock-keyword-face)
 
-   '("\\<\\(ass\\(ert\\|ume\\)\\|ensures\\|i\\(mplicit\\|nvariant\\)\\|requires\\|ghost\\)\\>"
+   '("\\<\\(ass\\(ert\\|ume\\)\\|ensures\\|havoc\\|i\\(mplicit\\|nvariant\\)\\|requires\\|ghost\\)\\>"
          1 font-lock-spec-face)
 
-   '("\\<\\(havoc\\|new\\|old\\)\\>"
+   '("\\<\\(old\\)\\>"
          1 font-lock-builtin-face)
 
    '("\\<\\(forall\\|exists\\|emp\\|false\\|in\\|null\\|true\\)\\>"
@@ -59,6 +59,12 @@
      font-lock-function-name-face)
 
    '(":[ \t]*\\(\\<[a-zA-Z_][a-zA-Z0-9_']*\\>\\)" 1
+     font-lock-type-face)
+
+   '("new[ \t]+\\(\\<[a-zA-Z_][a-zA-Z0-9_']*\\>\\)" 1
+     font-lock-type-face)
+
+   '("struct[ \t]+\\(\\<[a-zA-Z_][a-zA-Z0-9_']*\\>\\)" 1
      font-lock-type-face)
 
    '("\\(\\<[a-zA-Z_][a-zA-Z0-9_']*[ \t]*\\>\\):[^:=]" 1
@@ -82,21 +88,31 @@
   (modify-syntax-entry ?$ "w" spl-mode-syntax-table)
 )
 
-;(setq font-lock-defaults
-;      (cons (cons 'spl-mode 
-;                  '(spl-mode-font-lock-keywords
-;                    nil nil nil backward-paragraph
-;                    (font-lock-comment-start-regexp . "/[*]")))
-;            font-lock-defaults))
-
-;(require 'cc-mode)
-(define-derived-mode spl-mode c-mode "SPL"
-  "Major mode for editing SPL files."
-  :syntax-table spl-mode-syntax-table
-  (setq-local comment-start "// ")
-  (setq-local font-lock-defaults '(spl-mode-font-lock-keywords))
-  ;(setq-local indent-line-function 'c-indent-line)
-)
+(if (> 23 emacs-major-version)
+    (define-derived-mode spl-mode fundamental-mode "SPL"
+      "Major mode for editing Grasshopper program files."
+      :syntax-table spl-mode-syntax-table
+      (setq-local comment-start "// ")
+      (setq-local font-lock-defaults '(spl-mode-font-lock-keywords))
+     ;(setq-local indent-line-function 'c-indent-line)
+      )
+  (setq font-lock-defaults-alist
+        (cons (cons 'spl-mode 
+                    '(spl-mode-font-lock-keywords
+                      nil nil nil backward-paragraph
+                      (font-lock-comment-start-regexp . "/[*]")))
+              font-lock-defaults))
+  (defun spl-mode ()
+    "Major mode for editing Grasshopper program files"
+    
+    (interactive)
+    
+    (kill-all-local-variables)
+    
+    (setq mode-name "SPL")
+    (setq major-mode 'spl-mode)
+    (set-syntax-table spl-mode-syntax-table)
+    (run-hooks 'spl-mode-hook)))
 
 
 (or (assoc "\\.spl$" auto-mode-alist)
