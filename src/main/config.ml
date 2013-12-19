@@ -45,7 +45,7 @@ let cmd_options =
    ("-flycheck", Arg.Set flycheck_mode, " Print error messages for on-the-fly checking");
    ("-dumpghp", Arg.Set_int dump_ghp, "<num>  Print intermediate program after specified simplification stage (num=0,1,2,3)");
    ("-dumpvcs", Arg.Set dump_smt_queries, " Generate SMT-LIB 2 files for all verification conditions");
-   ("-splitvcs", Arg.Clear split_vcs, " Split verification conditions");
+   ("-splitvcs", Arg.Set split_vcs, " Split verification conditions");
    ("-core", Arg.Set unsat_cores, " Produce unsat cores with every unsat SMT query");
    ("-noverify", Arg.Clear verify, " Do not check the generated verification conditions");
    ("-robust", Arg.Set robust, " Continue even if some verification condition cannot be checked");

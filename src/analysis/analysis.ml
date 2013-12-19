@@ -273,40 +273,51 @@ let vcgen prog proc =
   | Some body -> List.rev (fst (vcs [] [] body))
   | None -> []
 
-let split_vc f =
+let split_vc prog vc_name f =
   let rec split vcs = function
     | BoolOp(And, fs) :: fs1 -> 
         split vcs (fs @ fs1)
     | BoolOp(Or, fs) :: fs1 ->
-        let vcs1 = List.fold_left (fun vcs1 f -> split vcs [f] @ vcs1) [] fs in
-        split vcs1 fs1
+        let fsa, fsb = List.fold_right (fun f (fsa, fsb) -> (fsb, f :: fsa)) fs ([], []) in
+        let f1 = match fsa with
+        | [] -> smk_or fsb
+        | fsa -> 
+            begin
+              let vc = smk_and (vcs @ smk_or fsa :: fs1) in
+              match Prover.check_sat ~session_name:vc_name (add_pred_insts prog vc) with
+              | Some false -> smk_or fsb
+              | _ -> smk_or fsa
+            end
+        in
+        split vcs (f1 :: fs1)
+    | Binder (b, [], Binder (_, [], f, a2), a1) :: fs1 ->
+        split vcs (Binder (b, [], f, a1 @ a2) :: fs1)
     | Binder (b, [], BoolOp(And as op, fs), a) :: fs1
     | Binder (b, [], BoolOp(Or as op, fs), a) :: fs1 ->
         let f1 = BoolOp(op, List.map (fun f -> Binder (b, [], f, a)) fs) in
         split vcs (f1 :: fs1)
-    | f :: fs1 -> split (List.rev_map (fun vc -> f :: vc) vcs) fs1
-    | [] -> vcs
+    | f :: fs1 -> split (f :: vcs) fs1
+    | [] -> smk_and vcs
   in 
-  if !Config.split_vcs then
-    let vcs = split [[]] [f] in
-    List.rev_map (fun vc -> smk_and (List.rev vc)) vcs
-  else [f]
+  let min_vc = split [] [f] in
+  ignore (Prover.check_sat ~session_name:vc_name (add_pred_insts prog min_vc))
 
 (** Generate verification conditions for given procedure and check them. *)
 let check_proc prog proc =
   let check_vc (vc_name, (vc_msg, pp), vc) =
     let vc = skolemize (foralls_to_exists (propagate_exists (nnf vc))) in
-    let vcs = split_vc vc in
     let check_one vc =
       let vc_and_preds = add_pred_insts prog vc in
-    Debug.info (fun () -> "VC: " ^ vc_name ^ "\n");
-    Debug.debug (fun () -> (string_of_form vc_and_preds) ^ "\n");
-    match Prover.check_sat ~session_name:vc_name vc_and_preds with
-    | Some false -> ()
-    | _ ->
-        if !Config.robust then ProgError.print_error pp vc_msg
-        else (*print_form stdout vc_and_preds;*) ProgError.error pp vc_msg
-    in List.iter check_one vcs
+      Debug.info (fun () -> "VC: " ^ vc_name ^ "\n");
+      Debug.debug (fun () -> (string_of_form vc_and_preds) ^ "\n");
+      match Prover.check_sat ~session_name:vc_name vc_and_preds with
+      | Some false -> ()
+      | _ ->
+          if !Config.split_vcs && !Config.model_file <> "" 
+          then split_vc prog vc_name vc;
+          if !Config.robust then ProgError.print_error pp vc_msg
+          else (*print_form stdout vc_and_preds;*) ProgError.error pp vc_msg
+    in check_one vc
   in
   let vcs = vcgen prog proc in
   List.iter check_vc vcs
