@@ -247,44 +247,45 @@ let reduce_frame fs =
   Util.rev_concat [pred_frames; frame_axioms; fs] 
   
 let open_axioms open_cond axioms = 
-  if !Config.instantiate then
-    let rec open_axiom generators = function
-      | Binder (b, [], f, a) ->
-          let f1, generators1 = open_axiom generators f in
-          Binder (b, [], f1, a), generators1
-      | Binder (b, vs, f, a) -> 
-          (* extract term generators *)
-          let generators1, a1, gen_vs =
-            List.fold_right 
-              (fun ann (generators, a1, gen_vs) ->
-                match ann with
-                | TermGenerator (bvs, fvs, g, t) ->
-                    let gen = (bvs, fvs, g, t) in
-                    let gen_vs1 = 
-                      List.fold_left 
-                        (fun acc (x, _) -> IdSet.add x acc) 
-                        gen_vs bvs 
-                    in
-                    gen :: generators, a1, gen_vs1
-                | _ -> generators, ann :: a1, gen_vs
-              ) a (generators, [], IdSet.empty)
-          in
-          let open_generators (x, _) = IdSet.mem x gen_vs in
-          let vs1 = List.filter (~~ (open_cond f ||| open_generators)) vs in
-          Binder (b, vs1, f, a1), generators1
-      | BoolOp (op, fs) -> 
-          let fs1, generators1 = 
-            List.fold_right open_axioms fs ([], generators)
-          in
-          BoolOp (op, fs1), generators1
-      | f -> f, generators
-    and open_axioms f (fs1, generators) =
+  let rec open_axiom generators = function
+    | Binder (b, [], f, a) ->
         let f1, generators1 = open_axiom generators f in
-        f1 :: fs1, generators1
-    in
-    List.fold_right open_axioms axioms ([], [])
-  else axioms, []
-
+        Binder (b, [], f1, a), generators1
+    | Binder (b, vs, f, a) -> 
+        (* extract term generators *)
+        let generators1, a1, gen_vs =
+          List.fold_right 
+            (fun ann (generators, a1, gen_vs) ->
+              match ann with
+              | TermGenerator (bvs, fvs, g, t) ->
+                  let gen = (bvs, fvs, g, t) in
+                  let gen_vs1 = 
+                    List.fold_left 
+                      (fun acc (x, _) -> IdSet.add x acc) 
+                      gen_vs bvs 
+                  in
+                  gen :: generators, a1, gen_vs1
+              | _ -> generators, ann :: a1, gen_vs
+            ) a (generators, [], IdSet.empty)
+        in
+        let open_generators (x, _) = IdSet.mem x gen_vs in
+        let vs1 = List.filter (~~ (open_cond f ||| open_generators)) vs in
+        if !Config.instantiate then
+          Binder (b, vs1, f, a1), generators1
+        else 
+          Binder (b, vs, f, a1), generators1
+    | BoolOp (op, fs) -> 
+        let fs1, generators1 = 
+          List.fold_right open_axioms fs ([], generators)
+        in
+        BoolOp (op, fs1), generators1
+    | f -> f, generators
+  and open_axioms f (fs1, generators) =
+    let f1, generators1 = open_axiom generators f in
+    f1 :: fs1, generators1
+  in
+  List.fold_right open_axioms axioms ([], [])
+    
 let isFld f = function (_, Fld _) -> true | _ -> false
 
 let isFunVar f =
@@ -392,6 +393,12 @@ let reduce_read_write fs =
        [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
         Match (mk_read fld2 loc1, FilterTrue)],
        mk_read fld1 loc1) ::
+      (* Frame (x, a, f, g), y.f -> y.g *)
+      ([],
+       [f1; f2; s1; s2; l1],
+       [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
+        Match (mk_read fld1 loc1, FilterTrue)],
+       mk_read fld2 loc1) ::
       propagators)
       field_sorts []
   in
