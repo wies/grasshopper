@@ -324,13 +324,6 @@ let reduce_sets fs =
   rev_concat [fs1; Axioms.set_axioms ()]
 
 
-let print_terms terms =
-  print_endline "===============================================";
-  TermSet.iter (fun t -> print_term stdout t; print_newline ())
-    terms;
-  print_endline "==============================================="
-  
-
 (** Adds theory axioms for the entry point function to formula f.
  ** Assumes that f is typed and that all frame predicates have been reduced. *)
 let instantiate_ep fs =
@@ -531,10 +524,13 @@ let reduce f =
   let fs = reduce_frame fs in
   let fs = factorize_axioms (split_ands [] fs) in
   let fs = reduce_sets fs in
+  (*TypeStrat.init fs;*)
+  TypeStrat.default ();
   let fs, read_propagators, gts = reduce_read_write fs in
   let fs, gts = reduce_reach fs gts in
   let fs, gts = instantiate_user_def_axioms read_propagators fs gts in
   let fs = add_terms fs gts in
+  TypeStrat.reset ();
   (* the following is a (probably stupid) heuristic to sort the formulas for improving the running time *)
   (*let _ = 
     (* sort by decreasing number of disjuncts in formula *)
