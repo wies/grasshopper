@@ -137,7 +137,7 @@
    'flymake-get-spl-cmdline))
 
 (defun flymake-get-spl-cmdline (source base-dir)
-    (list "grasshopper" (list "-robust" "-flymake" source)))
+    (list "grasshopper" (list "-robust" "-flycheck" source)))
 
 (add-hook 'spl-mode-hook
           '(lambda ()
@@ -146,8 +146,8 @@
 (add-hook 'spl-mode-hook
           '(lambda ()
              (add-to-list 'flymake-err-line-patterns
-             '("^\\(.+\\):\\([[:digit:]]+\\):\\([[:digit:]]+\\):\\(.*\\)$"
-               1 2 3 4))))
+             '("^\\(.+\\):\\([[:digit:]]+\\):\\([[:digit:]]+\\)-\\([[:digit:]]+\\):\\(.*\\)$"
+               1 2 3 5))))
 
 (add-hook 'spl-mode-hook 'spl-errors)
 (add-hook 'spl-mode-hook
