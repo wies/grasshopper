@@ -17,6 +17,8 @@ let di, df, d = mk_formal_and_var "domain" (Set Loc)
 let si, sf, s = mk_formal_and_var "S" (Set Loc)
 
 let ci, cf, c = mk_formal_and_var "Content" (Set Int)
+let isi, isf, is = mk_formal_and_var "I" (Set Int)
+
 
 let _, xf, x = mk_loc "x"
 let _, yf, y = mk_loc "y"
@@ -346,6 +348,7 @@ let witness_sym = FreeSym (mk_ident "witness")
 
 let mk_witness elt set = mk_app ~srt:Loc witness_sym [elt; set] 
 
+
 let generator1 =
  TermGenerator 
    ( [l1f],
@@ -361,39 +364,53 @@ let generator2 =
       Match (v, FilterNotOccurs Read)],
      mk_witness v c)
 
+let generator1 =
+  TermGenerator
+    ( [l1f],
+      [],
+      [Match (mk_read data l1, FilterNotOccurs witness_sym)],
+      mk_witness (mk_read data l1) c)
+
+let generator2 =
+  TermGenerator
+    ( [vf],
+      [isf],
+      [Match (mk_elem_term v is, FilterNotOccurs witness_sym)],
+      mk_read data (mk_witness v c))
+
 let with_content = [
-    ( mk_ident "lseg_cnt",
-      [df; dataf; nextf; xf; yf; cf],
-      mk_reach next x y,
-      [di, mk_forall ~ann:[Comment "lseg_cnt_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp);
-       ci, mk_and [
-               mk_forall ~ann:[Comment "lseg_content_1"; generator1] [l1f]
-                 (mk_iff (mk_elem (mk_read data l1) c) l1_in_lst_fp);
-               mk_forall ~ann:[Comment "lseg_content_2"; generator2] [vf]
-                 (mk_and [mk_implies (mk_elem v c) (mk_elem (mk_witness v c) d);
-                          mk_eq v (mk_read data (mk_witness v c))])
+  ( mk_ident "lseg_cnt",
+    [df; dataf; nextf; xf; yf; cf],
+    mk_reach next x y,
+    [di, mk_forall ~ann:[Comment "lseg_cnt_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp);
+     ci, mk_and [mk_forall ~ann:[Comment "lseg_content_1"; generator1] [l1f]
+                   (mk_iff (mk_elem (mk_read data l1) c) l1_in_lst_fp);
+                 mk_forall ~ann:[Comment "lseg_content_2"; generator2] [vf]
+                   (mk_and [mk_implies (mk_elem v c) (mk_elem (mk_witness v c) d);
+                            mk_eq v (mk_read data (mk_witness v c))])
+               ]
+   ]);
+  ( mk_ident "sorted_set",
+    [df; dataf; nextf; xf; yf; lbf; ubf; cf],
+    mk_and [mk_reach next x y;
+            mk_forall ~ann:[Comment "bounded"] [l1f]
+              (mk_implies (l1_in_domain) (mk_and [mk_lt (mk_read data l1) ub;
+                                                  mk_leq lb (mk_read data l1)]));
+            mk_forall ~ann:[Comment "strict_sortedness"] [l1f; l2f]
+              (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y; mk_neq l1 l2]
+                 [mk_lt (mk_read data l1) (mk_read data l2)])
+          ],
+    [di, mk_forall ~ann:[Comment "sorted_set_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp);
+     ci, mk_and [
+     mk_forall ~ann:[Comment "sorted_set_1"] [l1f]
+       (mk_implies l1_in_lst_fp (mk_elem (mk_read data l1) c));
+     mk_forall ~ann:[Comment "sorted_set_2"; generator2] [vf]
+       (mk_and [mk_implies (mk_elem v c) (mk_and [mk_elem (mk_witness v c) d; mk_eq v (mk_read data (mk_witness v c))]);
+                mk_implies (mk_not (mk_elem v c)) (mk_eq (mk_witness v c) mk_null)
+              ])
              ]
-      ]);
-    ( mk_ident "sorted_set",
-      [df; dataf; nextf; xf; yf; lbf; ubf; cf],
-      mk_and [mk_reach next x y;
-              mk_forall ~ann:[Comment "bounded"] [l1f]
-                (mk_implies (l1_in_domain) (mk_and [mk_lt (mk_read data l1) ub;
-                                                    mk_leq lb (mk_read data l1)]));
-              mk_forall ~ann:[Comment "strict_sortedness"] [l1f; l2f]
-                (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y; mk_neq l1 l2]
-                            [mk_lt (mk_read data l1) (mk_read data l2)])
-             ],
-      [di, mk_forall ~ann:[Comment "sorted_set_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp);
-       ci, mk_and [
-               mk_forall ~ann:[Comment "sorted_set_1"; generator1] [l1f]
-                 (mk_iff (mk_elem (mk_read data l1) c) l1_in_lst_fp);
-               mk_forall ~ann:[Comment "sorted_set_2"; generator2] [vf]
-                 (mk_and [mk_implies (mk_elem v c) (mk_elem (mk_witness v c) d);
-                          mk_eq v (mk_read data (mk_witness v c))])
-             ]
-      ])
-  ]
+   ])
+]
 
 let misc = []
 

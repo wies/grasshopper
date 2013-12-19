@@ -387,6 +387,12 @@ let reduce_read_write fs =
        [Match (mk_write fld1 loc1 dvar, FilterTrue);
         Match (mk_read (mk_write fld1 loc1 dvar) loc2, FilterTrue)],
        mk_read fld1 loc2) ::
+      (* f [x := d], y.f -> y.(f [x := d]) *)
+      ([],
+       [f1; l1; l2; d1],
+       [Match (mk_write fld1 loc1 dvar, FilterTrue);
+        Match (mk_read fld1 loc2, FilterTrue)],
+       mk_read (mk_write fld1 loc1 dvar) loc2) ::
       (* Frame (x, a, f, g), y.g -> y.f *)
       ([],
        [f1; f2; s1; s2; l1],
@@ -397,22 +403,21 @@ let reduce_read_write fs =
       field_sorts []
   in
   (* generate instances of all read over write axioms *)
-  let read_write_ax, generators = 
+  let read_write_ax = 
     let generators_and_axioms =
       TermSet.fold (fun t acc ->
         match t with
         | App (Write, [fld; _; _], _) ->
-            open_axioms isFunVar (Axioms.read_write_axioms_closed fld) :: acc
+            Axioms.read_write_axioms_closed fld @ acc
         | _ -> acc) gts []
     in
-    let axioms, generators = List.split generators_and_axioms in
-    Util.rev_concat axioms,  Util.rev_concat generators
+    generators_and_axioms 
   in
-  let gts = generate_terms (read_propagators @ generators) gts in
+  (*let gts = generate_terms (read_propagators @ generators) gts in
   let classes1 = CongruenceClosure.congr_classes fs1 gts in
   let read_write_ax1 = instantiate_with_terms true read_write_ax classes1 in
-  let gts = TermSet.union gts (ground_terms (mk_and read_write_ax1)) in
-  rev_concat [read_write_ax1; fs1], gts
+  let gts = TermSet.union gts (ground_terms (mk_and read_write_ax1)) in*)
+  rev_concat [read_write_ax; fs1], read_propagators, gts
 
 
 let field_partitions fs gts =
@@ -488,10 +493,11 @@ let reduce_reach fs gts =
   let reach_ax1 = instantiate_with_terms false reach_ax (CongruenceClosure.restrict_classes classes non_updated_flds) in
   rev_concat [reach_ax1; reach_write_ax; fs], gts
 
-let instantiate_user_def_axioms fs gts =
+let instantiate_user_def_axioms read_propagators fs gts =
   (* generate local instances of all remaining axioms in which variables occur below function symbols *)
   let fs1, generators = open_axioms isFunVar fs in
-  let gts1 = generate_terms generators gts in
+  let gts1 = generate_terms (read_propagators @ generators) gts in
+  (*let _ = print_terms gts1 in*)
   let classes = CongruenceClosure.congr_classes fs gts1 in
   instantiate_with_terms true fs1 classes, gts1
 
@@ -525,9 +531,9 @@ let reduce f =
   let fs = reduce_frame fs in
   let fs = factorize_axioms (split_ands [] fs) in
   let fs = reduce_sets fs in
-  let fs, gts = reduce_read_write fs in
+  let fs, read_propagators, gts = reduce_read_write fs in
   let fs, gts = reduce_reach fs gts in
-  let fs, gts = instantiate_user_def_axioms fs gts in
+  let fs, gts = instantiate_user_def_axioms read_propagators fs gts in
   let fs = add_terms fs gts in
   (* the following is a (probably stupid) heuristic to sort the formulas for improving the running time *)
   (*let _ = 
