@@ -88,8 +88,8 @@
   (modify-syntax-entry ?$ "w" spl-mode-syntax-table)
 )
 
-(if (> 23 emacs-major-version)
-    (define-derived-mode spl-mode fundamental-mode "SPL"
+(if (< 23 emacs-major-version)
+    (define-derived-mode spl-mode c-mode "SPL"
       "Major mode for editing Grasshopper program files."
       :syntax-table spl-mode-syntax-table
       (setq-local comment-start "// ")
