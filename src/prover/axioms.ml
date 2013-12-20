@@ -173,12 +173,12 @@ let ep_axioms () =
       Match (mk_btwn_term fld3 loc1 loc3 loc4, FilterTrue);
       Match (loc1, FilterNotOccurs EntPnt)], 
      mk_ep fld1 set1 loc1);
-     (*([s1; f1; l1],
+     ([s1; f1; l1],
      [s2; s3; f2],
      [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
       Match (mk_elem_term loc1 set3, FilterTrue);
       Match (loc1, FilterNotOccurs EntPnt)], 
-     mk_ep fld1 set1 loc1)*)]
+     mk_ep fld1 set1 loc1)]
   in
   if !Config.with_ep then
     [mk_axiom "entry-point1" ep1; 
