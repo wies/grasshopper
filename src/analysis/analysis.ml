@@ -304,8 +304,8 @@ let split_vc prog vc_name f =
 
 (** Generate verification conditions for given procedure and check them. *)
 let check_proc prog proc =
-  let check_vc (vc_name, (vc_msg, pp), vc) =
-    let vc = skolemize (foralls_to_exists (propagate_exists (nnf vc))) in
+  let check_vc (vc_name, (vc_msg, pp), vc0) =
+    let vc = skolemize (propagate_exists (foralls_to_exists (nnf vc0))) in
     let check_one vc =
       let vc_and_preds = add_pred_insts prog vc in
       Debug.info (fun () -> "VC: " ^ vc_name ^ "\n");
