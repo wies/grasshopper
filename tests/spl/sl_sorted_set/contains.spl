@@ -3,25 +3,29 @@ struct Node {
   var data: int;
 }
 
-predicate sorted_set(x: Node, y: Node, lb: int, ub: int, c: set<int>) {
+predicate sorted_set_lb(x: Node, y: Node, lb: int, c: set<int>) {
     x == y &*&
     c == set<int>()
   || 
     x != y &*&
     acc(x) &*&
     x.data in c &*&
-    lb <= x.data &*&
-    x.data < ub &*&
-    sorted_set(x.next, y, x.data + 1, ub, c -- set(x.data))
+    lb < x.data &*&
+    sorted_set_lb(x.next, y, x.data, c -- set(x.data))
+}
+
+predicate sorted_set(x: Node, y: Node, c: set<int>) {
+    x == y &*&
+    c == set<int>()
+  || 
+  sorted_set_lb(x, y, x.data - 1, c)
 }
 
 procedure contains(lst: Node, val: int,
-                   ghost lb: int, ghost ub: int,
                    implicit ghost content: set<int>)
   returns (res: bool)
-  requires sorted_set(lst, null, lb, ub, content);
-  requires lb < ub;
-  ensures sorted_set(lst, null, lb, ub, content);
+  requires sorted_set(lst, null, content);
+  ensures sorted_set(lst, null, content);
   ensures (res && val in content) || (!res && !(val in content));
 {
   var curr: Node;
@@ -30,18 +34,24 @@ procedure contains(lst: Node, val: int,
   c1 := content;
   c2 := set<int>();
 
+  var prev: Node;
+  prev := null;
+
   while (curr != null && curr.data < val) 
-    //the case split is needed because of curr.data
-    invariant (curr != null &*& sorted_set(lst, curr, lb, curr.data, c2) &*& sorted_set(curr, null, curr.data, ub, c1))
-           || (curr == null &*& sorted_set(lst, curr, lb, ub, c2) &*& c1 == set<int>());
+    invariant prev == null && curr == lst && c2 == set<int>() || 
+                (val > prev.data && 
+                prev != curr && 
+                prev.next == curr && 
+                Btwn(next,lst,prev,curr)) &*&
+                sorted_set(lst, curr, c2);
+    invariant sorted_set(curr, null, c1);
     invariant content == c1 ++ c2;
-    invariant lb < ub;
-    invariant !(val in c2);
-    invariant curr == null || (curr.data >= lb && curr.data < ub);
+    invariant prev == null || curr == null || prev.data < curr.data;
   {
     c1 := c1 -- set(curr.data);
     c2 := c2 ++ set(curr.data);
-    curr := curr.next; 
+    prev := curr;
+    curr := curr.next;
   }
   if (curr != null && curr.data == val) return true;
   else return false;

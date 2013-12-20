@@ -3,25 +3,29 @@ struct Node {
   var data: int;
 }
 
-predicate sorted_set(x: Node, y: Node, lb: int, ub: int, c: set<int>) {
+predicate sorted_set_lb(x: Node, y: Node, lb: int, c: set<int>) {
     x == y &*&
     c == set<int>()
   || 
     x != y &*&
     acc(x) &*&
     x.data in c &*&
-    lb <= x.data &*&
-    x.data < ub &*&
-    sorted_set(x.next, y, x.data + 1, ub, c -- set(x.data))
+    lb < x.data &*&
+    sorted_set_lb(x.next, y, x.data, c -- set(x.data))
+}
+
+predicate sorted_set(x: Node, y: Node, c: set<int>) {
+    x == y &*&
+    c == set<int>()
+  || 
+  sorted_set_lb(x, y, x.data - 1, c)
 }
 
 procedure insert( lst: Node, val: int,
-                  ghost lb: int, ghost ub: int,
                   implicit ghost content: set<int>)
   returns (res: Node)
-  requires sorted_set(lst, null, lb, ub, content);
-  requires val >= lb &*& val < ub;
-  ensures sorted_set(res, null, lb, ub, content ++ set(val));
+  requires sorted_set(lst, null, content);
+  ensures sorted_set(res, null, content ++ set(val));
 {
   var curr: Node, prev: Node;
   curr := lst;
@@ -31,12 +35,14 @@ procedure insert( lst: Node, val: int,
   c2 := set<int>();
 
   while (curr != null && curr.data < val)
-    invariant prev == null && curr == lst || val > prev.data && prev != curr && prev.next == curr && Btwn(next,lst,prev,curr);
-    invariant sorted_set(lst, curr, lb, prev.data + 1, c2);
-    invariant sorted_set(curr, null, curr.data, ub, c1);
-    invariant lb < ub;
+    invariant prev == null && curr == lst && c2 == set<int>() || 
+                (val > prev.data && 
+                prev != curr && 
+                prev.next == curr && 
+                Btwn(next,lst,prev,curr)) &*&
+                sorted_set(lst, curr, c2);
+    invariant sorted_set(curr, null, c1);
     invariant content == c1 ++ c2;
-    invariant curr == null || (curr.data >= lb && curr.data < ub);
     invariant prev == null || curr == null || prev.data < curr.data;
   {
     c1 := c1 -- set(curr.data);
