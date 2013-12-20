@@ -170,7 +170,7 @@ let ep_axioms () =
     [([s1; f1; l1],
      [s2; f2; f3; l3; l4],
      [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-     (* Match (mk_btwn_term fld3 loc1 loc3 loc4, FilterTrue);*)
+      Match (mk_btwn_term fld3 loc1 loc3 loc4, FilterTrue);
       Match (loc1, FilterNotOccurs EntPnt)], 
      mk_ep fld1 set1 loc1);
      (*([s1; f1; l1],
