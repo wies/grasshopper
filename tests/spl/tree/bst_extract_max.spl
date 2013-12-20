@@ -17,6 +17,7 @@ predicate tree(x: Node, y: Node) {
 predicate treeAllocInvariant(X: set<Node>) {
   (forall n in X :: n.parent == n.parent)
 }
+
 procedure extract_max(root: Node, p: Node) returns (others: Node, max: Node)
   requires p in Alloc || p == null;
   requires tree(root, p) &*& root != null;
