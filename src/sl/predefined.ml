@@ -360,8 +360,7 @@ let generator2 =
  TermGenerator 
    ( [vf],
      [],
-     [Match (v, FilterNotOccurs witness_sym);
-      Match (v, FilterNotOccurs Read)],
+     [Match (v, FilterNotOccurs witness_sym)],
      mk_witness v c)
 
 let generator1 =
@@ -369,7 +368,7 @@ let generator1 =
     ( [l1f],
       [],
       [Match (mk_read data l1, FilterNotOccurs witness_sym)],
-      mk_witness (mk_read data l1) c)
+      mk_read data (mk_witness (mk_read data l1) c))
 
 let generator2 =
   TermGenerator
@@ -440,7 +439,7 @@ let with_content = [
      ci, mk_and [
      mk_forall ~ann:[Comment "sorted_set_1"] [l1f]
        (mk_implies l1_in_lst_fp (mk_elem (mk_read data l1) c));
-     mk_forall ~ann:[Comment "sorted_set_2"; generator2] [vf]
+     mk_forall ~ann:[Comment "sorted_set_2"; generator1; generator2] [vf]
        (mk_and [mk_implies (mk_elem v c) (mk_and [mk_elem (mk_witness v c) d; mk_eq v (mk_read data (mk_witness v c))]);
                 mk_implies (mk_not (mk_elem v c)) (mk_eq (mk_witness v c) mk_null)
               ])
