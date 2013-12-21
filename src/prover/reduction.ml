@@ -66,7 +66,7 @@ let factorize_axioms fs =
     | Binder (Forall, (_ :: _ as vs), f1, a) -> 
         let p = mk_atom (FreeSym (fresh_ident "Axiom")) [] in
         let comments, other_annots = List.partition (function Comment _ -> true | _ -> false) a in 
-        let fact_axiom = annotate (mk_or [mk_not p; Binder (Forall, vs, f1, other_annots)]) comments in
+        let fact_axiom = annotate (mk_implies p (Binder (Forall, vs, f1, other_annots))) comments in
 	p, fact_axiom :: axioms
     | BoolOp (op, fs) -> 
 	let fs1, axioms = 

@@ -17,8 +17,22 @@ let dump_model session =
 let dump_core session =
   if !Config.unsat_cores then
     begin
-      let core = unopt (SmtLib.get_unsat_core session) in
       let core_name = session.SmtLib.name ^ ".core" in
+      (*repeat in a fixed point in order to get a smaller core*)
+      let rec minimize core =
+        Debug.info (fun () -> "minimizing core " ^ (string_of_int (List.length core)) ^ "\n");
+        let s = SmtLib.start core_name in
+        let signature = overloaded_sign (mk_and core) in
+        let s = SmtLib.declare s signature in
+        SmtLib.assert_forms s core;
+        let core2 = unopt (SmtLib.get_unsat_core s) in
+        SmtLib.quit s;
+        if List.length core2 < List.length core
+        then minimize core2
+        else core
+      in
+      let core = unopt (SmtLib.get_unsat_core session) in
+      let core = minimize core in
       let config = !Config.dump_smt_queries in
       Config.dump_smt_queries := true;
       let s = SmtLib.start core_name in
