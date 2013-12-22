@@ -51,6 +51,8 @@ rule token = parse
   [' ' '\t'] { token lexbuf }
 | '\n' { Lexing.new_line lexbuf; token lexbuf }
 | "//" [^ '\n']* { token lexbuf }
+| "==>" { IMPLIES }
+| "<=>" { IFF }
 | "==" { EQ }
 | "!=" { NEQ }
 | "<=" { LEQ }
@@ -59,6 +61,7 @@ rule token = parse
 | ">" { GT }
 | "||" { OR }
 | "&&" { AND }
+| "!in" { NOTIN }
 | '!' { NOT }
 | "++" { UNION }
 | "--" { DIFF }

@@ -26,9 +26,9 @@ let mk_position s e =
 %token COLON COLONEQ COLONCOLON SEMICOLON DOT PIPE
 %token UMINUS PLUS MINUS DIV TIMES
 %token UNION INTER DIFF
-%token EQ NEQ LEQ GEQ LT GT IN
+%token EQ NEQ LEQ GEQ LT GT IN NOTIN
 %token PTS EMP NULL
-%token SEPSTAR SEPPLUS AND OR NOT COMMA
+%token SEPSTAR SEPPLUS AND OR IMPLIES IFF NOT COMMA
 %token FORALL
 %token ASSUME ASSERT CALL DISPOSE HAVOC NEW RETURN
 %token IF ELSE WHILE
@@ -44,9 +44,11 @@ let mk_position s e =
 %left SEMICOLON
 %left OR
 %left AND
+%right IMPLIES
 %left SEP
 %left DOT
 %right NOT
+%nonassoc IFF
 %nonassoc LT GT LEQ GEQ
 %nonassoc EQ NEQ 
 %nonassoc PTS LS
@@ -390,12 +392,13 @@ rel_expr:
 | rel_expr LEQ pts_expr { BinaryOp ($1, OpLeq, $3, mk_position 1 3) }
 | rel_expr GEQ pts_expr { BinaryOp ($1, OpGeq, $3, mk_position 1 3) }
 | rel_expr IN pts_expr { BinaryOp ($1, OpIn, $3, mk_position 1 3) }
+| rel_expr NOTIN pts_expr { UnaryOp (OpNot, BinaryOp ($1, OpIn, $3, mk_position 1 3), mk_position 1 3) }
 ;
 
 eq_expr:
 | rel_expr { $1 }
-| eq_expr EQ rel_expr { BinaryOp ($1, OpEq, $3, mk_position 1 3) }
-| eq_expr NEQ rel_expr { BinaryOp ($1, OpNeq, $3, mk_position 1 3) }
+| eq_expr EQ eq_expr { BinaryOp ($1, OpEq, $3, mk_position 1 3) }
+| eq_expr NEQ eq_expr { BinaryOp ($1, OpNeq, $3, mk_position 1 3) }
 ;
 
 sep_star_expr:
@@ -418,9 +421,19 @@ or_expr:
 | or_expr OR and_expr { BinaryOp ($1, OpOr, $3, mk_position 1 3) }
 ;
 
-quant_expr: 
+impl_expr:
 | or_expr { $1 }
-| FORALL IDENT IN quant_expr COLONCOLON or_expr { Forall (($2, 0), $4, $6, mk_position 1 6) }
+| or_expr IMPLIES impl_expr { BinaryOp ($1, OpImpl, $3, mk_position 1 3) }
+;
+
+iff_expr:
+| impl_expr { $1 }
+| iff_expr IFF iff_expr { BinaryOp ($1, OpEq, $3, mk_position 1 3) }
+;
+
+quant_expr: 
+| iff_expr { $1 }
+| FORALL IDENT IN quant_expr COLONCOLON iff_expr { Forall (($2, 0), $4, $6, mk_position 1 6) }
 ;
 
 expr:

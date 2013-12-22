@@ -685,17 +685,19 @@ let convert cus =
           let t2, _ = extract_term locals (SetType ty1) e2 in
           FOL_form (FormUtil.mk_elem t1 t2)
       | BinaryOp (e1, (OpAnd as op), e2, _)
-      | BinaryOp (e1, (OpOr as op), e2, _) ->
+      | BinaryOp (e1, (OpOr as op), e2, _)
+      | BinaryOp (e1, (OpImpl as op), e2, _) ->
           (try
             let mk_form = 
               match op with
-              | OpAnd -> FormUtil.mk_and
-              | OpOr -> FormUtil.mk_or           
+              | OpAnd -> fun f1 f2 -> FormUtil.mk_and [f1; f2]
+              | OpOr -> fun f1 f2 -> FormUtil.mk_or [f1; f2]
+              | OpImpl -> FormUtil.mk_implies           
               | _ -> failwith "unexpected operator"
             in
             let f1 = extract_fol_form locals e1 in
             let f2 = extract_fol_form locals e2 in
-            FOL_form (mk_form [f1; f2])
+            FOL_form (mk_form f1 f2)
           with ProgError.Prog_error _ ->
             let mk_form = 
               match op with

@@ -26,7 +26,7 @@ procedure contains(lst: Node, val: int,
   returns (res: bool)
   requires sorted_set(lst, null, content);
   ensures sorted_set(lst, null, content);
-  ensures (res && val in content) || (!res && !(val in content));
+  ensures res == val in content;
 {
   var curr: Node;
   curr := lst;

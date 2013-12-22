@@ -29,7 +29,7 @@ type op =
   | OpMinus | OpPlus | OpMult | OpDiv 
   | OpEq | OpNeq | OpGt | OpLt | OpGeq | OpLeq | OpIn
   | OpPts | OpSepStar | OpSepPlus
-  | OpAnd | OpOr | OpNot 
+  | OpAnd | OpOr | OpImpl | OpNot 
 
 type compilation_unit =
     { package : name option;
