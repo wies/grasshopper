@@ -58,7 +58,7 @@ let cmd_options =
    ("-noinst", Arg.Clear instantiate, " Let the SMT solver deal with the quantifiers without prior instantiation");
    ("-nostratify", Arg.Clear stratify, " Instantiate quantifiers that satisfy stratified sort restrictions");
    ("-noOptFieldMod", Arg.Clear optFieldMod, " Disable mod set analysis optimization for fields");
-   ("-noOptSelfFrame", Arg.Clear optSelfFrame, " Disable generation of self-framing clauses for SL predicates");
+   ("-optSelfFrame", Arg.Set optSelfFrame, " enable generation of self-framing clauses for SL predicates");
    ("-predefPreds", Arg.Set predefPreds, " Disable heuristics to translate SL predicates to GRASS");
    ("-heuristicTranslation", Arg.Clear predefPreds, " Enable heuristics to translate SL predicates to GRASS");
    ("-stats", Arg.Set print_stats, " Print statistics");

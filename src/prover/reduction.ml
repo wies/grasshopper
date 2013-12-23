@@ -145,76 +145,6 @@ let reduce_frame fs =
         reduce_graph ()
       | Some other -> failwith ("reduce_frame did not expect f with type " ^ (string_of_sort other))
   in
-  (* gather the SL->GRASS predicates *)
-  let suffix_s = Str.regexp ".*_struct$" in
-  let suffix_d = Str.regexp ".*_domain$" in
-  let pred_end_with s t = match t with
-    | App (FreeSym id, _, _) -> Str.string_match s (str_of_ident id) 0
-    | _ -> false
-  in
-  let gts = ground_terms (mk_and fs) in
-  (*let structs = TermSet.filter (pred_end_with suffix_s) gts in*)
-  let domains = TermSet.filter (pred_end_with suffix_d) gts in
-  (*TermSet.iter (fun t -> print_endline (string_of_term t)) structs;*)
-  (*extract the args, struct has an extra domain arg *)
-  let pred_name id =
-    let s = str_of_ident id in
-      String.sub s 0 (String.length s - 7)
-  in
-  let decompose t = match t with
-    | App (FreeSym id, args, _) ->
-      if pred_end_with suffix_s t then
-        let r_args = List.rev args in
-          (pred_name id, List.rev (List.tl r_args), Some (List.hd r_args))
-      else if pred_end_with suffix_d t then
-        (pred_name id, args, None)
-      else failwith "pred is not struct or domain"
-    | _ -> failwith "expected pred"
-  in
-  (*let d_struct = List.map decompose (TermSet.elements structs) in*)
-  let d_domain = List.map decompose (TermSet.elements domains) in
-  (* the self framing predicates *)
-  let expand_frame2 x a flds =
-    let prev, post = List.fold_left (fun (acc1, acc2) x -> (acc2, x::acc1)) ([],[]) flds in
-    let paired = List.combine prev post in
-    let changed, unchanged = List.partition (fun (a,b) -> a <> b) paired in
-    (*todo get the domains/struct which have a changed field*)
-    let affected =
-      List.filter
-        (fun (_, args, _) ->
-          List.exists
-            (fun a -> List.exists (fun c -> (fst c) = a) changed)
-            args)
-        d_domain
-    in
-    let pred_before_after =
-      List.map
-        (fun (id, args, fp) ->
-          ( id,
-            args,
-            List.map (fun a -> try List.assoc a paired with Not_found -> a) args,
-            fp )
-        )
-        affected
-    in
-    (*TODO universal quantification ?*)
-    let self_frame (id, args_before, args_after, fp) =
-      let id_s = mk_ident (id ^ "_struct") in
-      let id_d = mk_ident (id ^ "_domain") in
-      let b_d = mk_free_app ~srt:(Set Loc) id_d args_before in
-      let a_d = mk_free_app ~srt:(Set Loc) id_d args_after in
-      let fp = match fp with
-        | Some fp -> fp
-        | None -> b_d
-      in
-      let b_s = mk_pred id_s (fp :: args_before) in
-      let a_s = mk_pred id_s (fp :: args_after) in
-      let cond = mk_eq (mk_inter [fp; x]) (mk_empty (Some (Set Loc))) in
-      let consequences = smk_and [mk_eq b_d a_d; mk_iff b_s a_s] in
-        mk_comment "self framing" (mk_implies cond consequences)
-    in
-    smk_and (List.map self_frame pred_before_after)
-  in
   let rec process f (frame_axioms, fields) = match f with
     | Atom (App (Frame, [x; a; fld; fld'], _)) when fld <> fld' ->
         let fields1 = 
@@ -237,14 +167,7 @@ let reduce_frame fs =
       (fun acc f -> process f acc)
       ([], TermMap.empty) fs
   in
-  let pred_frames = 
-    if !Config.optSelfFrame then 
-      TermMap.fold 
-        (fun x (a, flds) pred_frames -> expand_frame2 x a flds :: pred_frames)
-        fields []
-    else []
-  in
-  Util.rev_concat [pred_frames; frame_axioms; fs] 
+  Util.rev_concat [frame_axioms; fs] 
   
 let open_axioms open_cond axioms = 
   let rec open_axiom generators = function

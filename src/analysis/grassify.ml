@@ -9,6 +9,26 @@ open Reachify
 (** Desugare SL specification to FOL specifications. 
  ** Assumes that loops have been transformed to tail-recursive procedures. *)
 let elim_sl prog =
+  (* keep the original names around to generate the self framing predicates *)
+  let original_preds_id = List.map (fun p -> p.pred_name) (preds prog) in
+  let original_preds_with_args =
+    let formula = Util.flat_map (fun p -> p.proc_precond @ p.proc_postcond) (procs prog) in
+    let preds_set =
+      List.fold_left
+        (fun acc s -> match s.spec_form with FOL _ -> acc | SL f -> Sl.SlSet.union acc (SlUtil.preds_full f))
+        Sl.SlSet.empty
+        formula
+    in
+      Sl.SlSet.fold
+        (fun p acc -> match p with
+          | Sl.Atom (Sl.Pred id, args) ->
+            let old = try IdMap.find id acc with Not_found -> [] in
+              IdMap.add id (args :: old) acc
+          | _ -> failwith "expected Sl.Pred")
+        preds_set
+        IdMap.empty
+  in
+  (* transform the preds from SL to GRASS *)
   let preds =
     if !Config.predefPreds
     then fold_preds compile_pred_acc IdMap.empty prog
@@ -142,7 +162,74 @@ let elim_sl prog =
           all_fields
           []
       in
-      frame_preds
+      let mk_self_framing def =
+        (* args occuring in the rest of the program *)
+        let args_at_pos idx =
+          let args =
+            try IdMap.find def.Symbols.sym_name original_preds_with_args
+            with Not_found -> []
+          in
+          let lst = List.map (fun l -> List.nth l idx) args in
+            List.fold_left (fun acc t -> TermSet.add t acc) TermSet.empty lst
+        in
+        let fld_at_pos idx =
+          let args = args_at_pos idx in
+            TermSet.fold
+              (fun t acc -> match t with
+                | App (FreeSym id, [], Some (Fld _)) -> t :: acc
+                | _ -> acc) 
+              args
+              []
+        in
+        (* generate args for the pred:
+           -add domain (universally quantified set)
+           -pick the fields from the set of field seen in the rest of the program
+           -for the other arguments use universally quantified variables *)
+        let dom = mk_var ~srt:(Set Loc) (mk_ident "dom") in
+        let rec mk_ags idx lst = match lst with
+          | (id, tpe) :: xs ->
+            begin
+              let sub = mk_ags (idx + 1) xs in
+              let top = match tpe with
+                | Fld _ -> fld_at_pos idx
+                | tpe -> [mk_var ~srt:tpe (fresh_ident "?a")]
+              in
+                Util.flat_map (fun lst -> List.map (fun t -> t :: lst) top) sub
+            end
+          | [] -> [[]]
+        in
+        let all_args = List.map (fun lst -> dom :: lst) (mk_ags 0 (List.tl def.Symbols.parameters)) in
+        (* make the self framing axioms *)
+        let mk_sf args =
+          let oldified_args = List.map (fun t -> match t with App (FreeSym id, [], s) when IdSet.mem id mod_fields -> App (FreeSym (oldify id), [], s) | _ -> t) args in
+          let dom = List.hd args in
+          let in_frame = mk_eq (mk_inter [dom; init_footprint_set]) (mk_empty (Some (Set Loc))) in
+          let preds_old, dom_old = pred_to_form (def.Symbols.sym_name) (List.tl oldified_args) dom in
+          let preds_new, dom_new = pred_to_form (def.Symbols.sym_name) (List.tl args) dom in
+          let qf = mk_implies (smk_and (in_frame :: preds_old :: dom_old)) (smk_and (preds_new :: dom_new)) in
+          let q = mk_comment "self_framing" (Axioms.mk_axiom2 qf) in
+            mk_framecond q
+        in
+          List.map mk_sf all_args
+      in
+      let self_framing =
+        (* collect SL definition of the predicates *)
+        let defs = List.map Symbols.get_symbol original_preds_id in
+        (* filter out the preds with empty footprint (treeAllocInvariant) *)
+        let defs =
+          List.filter 
+            (fun def ->
+              let dom_out = snd (List.hd def.Symbols.outputs) in
+                not (TermSet.mem (mk_empty (Some (Set Loc))) (ground_terms dom_out)))
+            defs
+        in
+        let sfa = Util.flat_map mk_self_framing defs in
+          if !Config.optSelfFrame then
+            sfa
+          else
+            []
+      in
+      frame_preds @ self_framing
     in
     (* update all procedure calls and return commands in body *)
     let rec compile_stmt = function
