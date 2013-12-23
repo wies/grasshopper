@@ -223,9 +223,8 @@ let elim_sl prog =
                 not (TermSet.mem (mk_empty (Some (Set Loc))) (ground_terms dom_out)))
             defs
         in
-        let sfa = Util.flat_map mk_self_framing defs in
           if !Config.optSelfFrame then
-            sfa
+            Util.flat_map mk_self_framing defs
           else
             []
       in
