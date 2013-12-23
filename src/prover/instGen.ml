@@ -21,9 +21,9 @@ let choose_rep_terms classes =
   let reps, rep_map =
     List.fold_left (fun (reps, rep_map) cl ->
       let cl_rep : term = find_rep cl in
-      (cl_rep :: reps, 
+      (TermSet.add cl_rep reps, 
        List.fold_left (fun rep_map t -> TermMap.add t cl_rep rep_map) rep_map cl))
-      ([], TermMap.empty) classes
+      (TermSet.empty, TermMap.empty) classes
   in
   let egraph = 
     List.fold_left (fun egraph -> 
@@ -44,32 +44,62 @@ let choose_rep_terms classes =
       EGraph.empty (List.concat classes)
   in reps, egraph
 
-let generate_terms generators ground_terms =
-  let terms_by_sort srt sort_to_terms =
-    try SrtMap.find srt sort_to_terms
-    with Not_found -> TermSet.empty
+let ematch t rep_terms egraph subst_maps =
+  let rec ematches ts1 ts2s subst_maps =
+    TermListSet.fold 
+      (fun ts2 out_subst_maps ->
+        try 
+          let out_subst_maps1 =
+            List.fold_left2 
+              (fun subst_maps1 t1 t2 -> 
+                match subst_maps with 
+                | [] -> []
+                | _ -> ematch t1 t2 subst_maps1)
+              subst_maps ts1 ts2
+          in 
+          List.rev_append out_subst_maps1 out_subst_maps
+        with Invalid_argument _ -> out_subst_maps)
+      ts2s []
+  and ematch t1 t2 subst_maps =
+    match t1 with 
+    | App (sym1, ts1, srt1) when srt1 = sort_of t2 ->
+        begin
+          try
+            let ts2s = EGraph.find (t2, sym1) egraph in
+            ematches ts1 ts2s subst_maps
+          with Not_found -> []
+        end
+    | Var (x, srt1) when srt1 = sort_of t2 ->
+        List.fold_left 
+          (fun out_subst_maps sm ->
+            if IdMap.mem x sm then
+              if IdMap.find x sm = t2 
+              then sm :: out_subst_maps
+              else out_subst_maps
+            else IdMap.add x t2 sm :: out_subst_maps)
+          [] subst_maps
+    | _ -> []
   in
-  let rec add_to_term_maps (sort_to_terms, new_terms) t =
+  let terms = 
+    TermSet.fold 
+      (fun t terms -> TermListSet.add [t] terms) 
+      rep_terms TermListSet.empty 
+  in
+  ematches [t] terms subst_maps
+
+let generate_terms generators ground_terms =
+  let rec add_terms new_terms t =
+    if TermSet.mem t new_terms then new_terms else
     match t with
-    | App (sym, ts, Some srt) ->
-        let sort_terms = terms_by_sort srt sort_to_terms in     
-        if TermSet.mem t sort_terms 
-        then sort_to_terms, new_terms
-        else 
-          List.fold_left add_to_term_maps 
-            (SrtMap.add srt (TermSet.add t sort_terms) sort_to_terms,
-            TermSet.add t new_terms)
-            ts
-    | App _ -> failwith ("InstGen.generate_terms: sorted term expected, found " ^ (string_of_term t))
+    | App (sym, ts, _) ->
+        List.fold_left add_terms (TermSet.add t new_terms) ts
     | Var _ -> failwith ("InstGen.generate_terms: ground term expected, found "  ^ (string_of_term t))
   in
-  let sort_to_terms, new_terms =
-    TermSet.fold (fun t acc -> add_to_term_maps acc t)
-      ground_terms (SrtMap.empty, TermSet.empty)
+  let new_terms =
+    TermSet.fold (fun t acc -> add_terms acc t)
+      ground_terms TermSet.empty
   in
-  let find_matches sort_to_terms t1 sm =
-    let srt = unsafe_sort_of t1 in
-    let candidates = terms_by_sort srt sort_to_terms in
+  let find_matches candidates t1 sm =
     let rec mt sm t1 t2 =
       match t1, t2 with 
       | App (sym1, ts1, srt1), App (sym2, ts2, srt2) 
@@ -102,14 +132,14 @@ let generate_terms generators ground_terms =
           | _ -> true
         in hasSym t
   in
-  let rec generate sort_to_terms new_terms old_terms = function
+  let rec generate new_terms old_terms = function
     | (bvs, fvs, guards, gen_term) :: generators1 ->
         let subst_maps =
           List.fold_left (fun subst_maps -> function Match (t, filter) -> 
             let new_subst_maps =
               List.fold_left 
                 (fun new_subst_maps sm ->
-                  let matches = find_matches sort_to_terms (subst_term sm t) sm in
+                  let matches = find_matches new_terms (subst_term sm t) sm in
                   Util.filter_map 
                     (fun (t_matched, _) -> 
                       filter_term filter t_matched)
@@ -123,26 +153,26 @@ let generate_terms generators ground_terms =
             new_subst_maps)
             [IdMap.empty] guards
         in
-        let sort_to_terms1, new_terms1 =
+        let new_terms1 =
           List.fold_left (fun acc sm ->
             let t = subst_term sm gen_term in
             (*print_string "Generated term: "; 
             print_term stdout t; 
             print_newline ();*)
-            add_to_term_maps acc t)
-            (sort_to_terms, new_terms) subst_maps
+            add_terms acc t)
+            new_terms subst_maps
         in
-        generate sort_to_terms1 new_terms1 old_terms generators1
+        generate new_terms1 old_terms generators1
     | [] -> 
         if new_terms <> old_terms 
         then 
-          generate sort_to_terms new_terms new_terms generators
+          generate new_terms new_terms generators
         else new_terms
   in
-  generate sort_to_terms new_terms ground_terms generators
+  generate new_terms ground_terms generators
 
 
-let generate_instances useLocalInst axioms terms egraph type_graph = 
+let generate_instances useLocalInst axioms rep_terms egraph type_graph = 
   (* stratification: can a var of type t1 be used to generate a term of type t2 *)
   let closed_type_graph = TypeStrat.transitive_closure type_graph in
   let can_reach a b =
@@ -241,49 +271,10 @@ let generate_instances useLocalInst axioms terms egraph type_graph =
     in
     (* generate substitution maps *)
     let subst_maps () =
-      let add_subst_map subst_maps sm =
-        if List.mem sm subst_maps then subst_maps else sm :: subst_maps
-      in
-      let rec ematches ts1 ts2s subst_maps =
-        TermListSet.fold 
-          (fun ts2 out_subst_maps ->
-            try 
-              let out_subst_maps1 =
-                List.fold_left2 
-                  (fun subst_maps1 t1 t2 -> 
-                    match subst_maps with 
-                    | [] -> []
-                    | _ -> ematch t1 t2 subst_maps1)
-                  subst_maps ts1 ts2
-              in 
-              List.fold_left add_subst_map out_subst_maps out_subst_maps1
-            with Invalid_argument _ -> out_subst_maps)
-          ts2s []
-      and ematch t1 t2 subst_maps =
-        match t1 with 
-        | App (sym1, ts1, srt1) when srt1 = sort_of t2 ->
-            begin
-              try
-                let ts2s = EGraph.find (t2, sym1) egraph in
-                ematches ts1 ts2s subst_maps
-              with Not_found -> []
-            end
-        | Var (x, srt1) when srt1 = sort_of t2 ->
-            List.fold_left 
-              (fun out_subst_maps sm ->
-                if IdMap.mem x sm then
-                  if IdMap.find x sm = t2 
-                  then sm :: out_subst_maps
-                  else out_subst_maps
-                else IdMap.add x t2 sm :: out_subst_maps)
-              [] subst_maps
-        | _ -> []
-      in
-      let terms = List.fold_left (fun terms t -> TermListSet.add [t] terms) TermListSet.empty terms in
       (* generate substitution maps for variables that appear below function symbols *)
       let proto_subst_maps =
         TermSet.fold
-          (fun t subst_maps -> ematches [t] terms subst_maps)
+          (fun t subst_maps -> ematch t rep_terms egraph subst_maps)
           fun_terms [IdMap.empty]
       in
       (* complete substitution maps for remaining variables *)
@@ -291,7 +282,7 @@ let generate_instances useLocalInst axioms terms egraph type_graph =
         (fun (v, srt) subst_maps -> 
           if IdSet.mem v fun_vs 
           then subst_maps
-          else ematches [Var (v, Some srt)] terms subst_maps)
+          else ematch (Var (v, Some srt)) rep_terms egraph subst_maps)
         fvars proto_subst_maps         
     in
     let subst_maps = (*measure*) subst_maps () in
@@ -305,7 +296,7 @@ let generate_instances useLocalInst axioms terms egraph type_graph =
           print_endline "\nfvars: ";
           IdSrtSet.iter (fun (id, _) -> Printf.printf "%s, " (str_of_ident id)) fvars;
           print_endline "\nrep_terms:";
-          List.iter (fun t -> print_term stdout t; print_newline ()) terms;
+          TermSet.iter (fun t -> print_term stdout t; print_newline ()) terms;
           print_endline "\nground_terms:";
           TermSet.iter (fun t -> print_term stdout t; print_newline ()) ground_terms;
           print_endline "\nsubst_maps:";
