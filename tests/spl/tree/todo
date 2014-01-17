@@ -1,7 +1,9 @@
-Priority:
+Done:
+    set as sorted list functional correctness
     bst memory
     skew heap memory
-    set as sorted list functional correctness
+
+Priority:
     set as BST functional correctness
     set as AAT functional correctness
     skew heap
@@ -29,5 +31,3 @@ space partition tree:
 
 B-tree
 2-3 tree
-
-think about the GRASS invariants for the more complex data structures
