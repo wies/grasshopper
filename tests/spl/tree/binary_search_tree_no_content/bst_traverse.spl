@@ -16,8 +16,14 @@ predicate stree(x: Node, y: Node) {
     (x.right == null || (x.right != null && x.right.data > x.data)) 
 }
 
+predicate treeAllocInvariant(X: set<Node>) {
+  (forall n in X :: n.parent == n.parent)
+}
+
 procedure traverse(root: Node, p: Node) 
   requires stree(root, p);
+  requires treeAllocInvariant(Alloc);
+  ensures treeAllocInvariant(Alloc);
   ensures  stree(root, p);
 {
   if (root != null) {
