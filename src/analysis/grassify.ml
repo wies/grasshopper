@@ -149,10 +149,7 @@ let elim_sl prog =
       let frame_preds =
         IdSet.fold
           (fun var frames ->
-            let old_var = 
-              if IdSet.mem var mod_fields then oldify var
-              else var
-            in
+            let old_var = oldify var in
             let srt = (find_global prog var).var_sort in
             mk_framecond (mk_frame init_footprint_set init_alloc_set 
                              (mk_free_const ~srt:srt old_var)
