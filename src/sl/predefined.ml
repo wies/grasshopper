@@ -50,6 +50,36 @@ let empty_loc = mk_empty (Some (Set Loc))
 let l1_in_domain = mk_elem l1 d
 let l2_in_domain = mk_elem l2 d
 let l1_in_lst_fp = mk_and [mk_btwn next x l1 y; mk_neq l1 y]
+let _sorted next y (* data domain are fixed *) = 
+  mk_forall ~ann:[Comment "sortedness"] [l1f; l2f]
+    (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y]
+                [mk_leq (mk_read data l1) (mk_read data l2)])
+(* stuff for trees *)
+let parent_generator child =
+  TermGenerator ( [l1f], [],
+                  [Match (mk_read child l1, FilterTrue)],
+                  mk_read parent (mk_read child l1))
+let parent_equal child =
+  mk_forall ~ann:[Comment ((string_of_term child)^"_parent_equal"); parent_generator child] [l1f; l2f] 
+    (mk_sequent [mk_elem l1 d; mk_eq (mk_read child l1) l2]
+                [mk_eq l2 mk_null; mk_eq (mk_read parent l2) l1])
+let parent_left_or_right_equal =
+  mk_forall ~ann:([Comment "parent_left_or_right_equal"]) [l1f; l2f; l3f] 
+    (mk_sequent 
+       [mk_eq l2 l3; mk_elem l1 d; mk_eq (mk_read parent l1) l2] 
+       [mk_eq l1 x; mk_eq (mk_read left l2) l1; mk_eq (mk_read right l3) l1])
+let left_right_distinct =
+  mk_forall ~ann:([Comment "left_right_distinct"]) [l1f; l2f]
+    (mk_sequent
+       [mk_elem l1 d; mk_eq l1 l2; mk_eq (mk_read left l1) (mk_read right l2)]
+       [mk_eq mk_null (mk_read left l1)])
+let reach_via_left_right =
+  mk_forall ~ann:[Comment "reach_via_left_right"] [l1f; l2f]
+    (mk_sequent 
+       [mk_reach parent l1 l2; mk_elem l1 d; mk_elem l2 d]
+       [mk_eq l1 l2;
+        mk_btwn parent l1 (mk_read left l2) l2;
+        mk_btwn parent l1 (mk_read right l2) l2])
 
 (* the predefined symbols *)
 let without_fp = [
@@ -61,44 +91,61 @@ let without_fp = [
       [df; leftf; parentf; rightf; xf; yf],
       mk_and [(*mk_forall [l1f] (mk_reach parent l1 mk_null);*)
               mk_or [mk_eq x mk_null; mk_eq (mk_read parent x) y];
-              mk_forall ~ann:([Comment "parent_left_or_right_equal"]) [l1f; l2f; l3f] 
-                (mk_sequent 
-                   [mk_eq l2 l3; mk_elem l1 d; mk_eq (mk_read parent l1) l2] 
-                   [mk_eq l1 x; mk_eq (mk_read left l2) l1; mk_eq (mk_read right l3) l1]);
-              (let left_parent_generator =
-                [TermGenerator 
-                   ([l1f],
-                    [],
-                    [Match (mk_read left l1, FilterTrue)],
-                    mk_read parent (mk_read left l1));
-               ]
-              in
-              mk_forall ~ann:(Comment "left_parent_equal" :: left_parent_generator) [l1f; l2f] 
-                (mk_sequent 
-                   [mk_elem l1 d; mk_eq (mk_read left l1) l2]
-                   [mk_eq l2 mk_null; mk_eq (mk_read parent l2) l1]));
-              (let right_parent_generator =
-                [TermGenerator 
-                   ([l1f],
-                    [],
-                    [Match (mk_read right l1, FilterTrue)],
-                    mk_read parent (mk_read right l1));
-               ]
-              in
-              mk_forall ~ann:(Comment "right_parent_equal" :: right_parent_generator) [l1f; l2f] 
-                (mk_sequent
-                   [mk_elem l1 d; mk_eq (mk_read right l1) l2]
-                   [mk_eq l2 mk_null; mk_eq (mk_read parent l2) l1]));
-              mk_forall ~ann:([Comment "left_right_distinct"]) [l1f; l2f]
-                (mk_sequent
-                   [mk_elem l1 d; mk_eq l1 l2; mk_eq (mk_read left l1) (mk_read right l2)]
-                   [mk_eq mk_null (mk_read left l1)]);
-              mk_forall ~ann:[Comment "reach_via_left_right"] [l1f; l2f]
-                (mk_sequent 
-                   [mk_reach parent l1 l2; mk_elem l1 d; mk_elem l2 d]
-                   [mk_eq l1 l2;
-                    mk_btwn parent l1 (mk_read left l2) l2;
-                    mk_btwn parent l1 (mk_read right l2) l2])
+              parent_left_or_right_equal;
+              parent_equal left;
+              parent_equal right;
+              left_right_distinct;
+              reach_via_left_right
+            ],
+      [di, mk_forall ~ann:([Comment "tree_footprint"]) [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq x mk_null]))]);
+    ( mk_ident "heap",
+      [df; dataf; leftf; parentf; rightf; xf; yf],
+      mk_and [(*mk_forall [l1f] (mk_reach parent l1 mk_null);*)
+              mk_or [mk_eq x mk_null; mk_eq (mk_read parent x) y];
+              parent_left_or_right_equal;
+              parent_equal left;
+              parent_equal right;
+              left_right_distinct;
+              reach_via_left_right;
+              _sorted parent y (*children are smaller than parent*)
+            ],
+      [di, mk_forall ~ann:([Comment "tree_footprint"]) [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq x mk_null]))]);
+    ( mk_ident "stree",
+      [df; dataf; leftf; parentf; rightf; xf; yf],
+      mk_and [(*mk_forall [l1f] (mk_reach parent l1 mk_null);*)
+              mk_or [mk_eq x mk_null; mk_eq (mk_read parent x) y];
+              parent_left_or_right_equal;
+              parent_equal left;
+              parent_equal right;
+              left_right_distinct;
+              reach_via_left_right;
+              (*left is smaller, right is bigger*)
+              mk_forall ~ann:[Comment "sortedness_left"] [l1f; l2f]
+                (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn parent l1 (mk_read left l2) l2]
+                            [mk_lt (mk_read data l1) (mk_read data l2)]);
+              mk_forall ~ann:[Comment "sortedness_right"] [l1f; l2f]
+                (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn parent l1 (mk_read right l2) l2]
+                            [mk_gt (mk_read data l1) (mk_read data l2)]);
+            ],
+      [di, mk_forall ~ann:([Comment "tree_footprint"]) [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq x mk_null]))]);
+    ( mk_ident "bstree",
+      [df; dataf; leftf; parentf; rightf; xf; yf; lbf; ubf],
+      mk_and [(*mk_forall [l1f] (mk_reach parent l1 mk_null);*)
+              mk_or [mk_eq x mk_null; mk_eq (mk_read parent x) y];
+              parent_left_or_right_equal;
+              parent_equal left;
+              parent_equal right;
+              left_right_distinct;
+              reach_via_left_right;
+              (*left is smaller, right is bigger*)
+              mk_forall ~ann:[Comment "sortedness_left"] [l1f; l2f]
+                (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn parent l1 (mk_read left l2) l2]
+                            [mk_lt (mk_read data l1) (mk_read data l2)]);
+              mk_forall ~ann:[Comment "sortedness_right"] [l1f; l2f]
+                (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn parent l1 (mk_read right l2) l2]
+                            [mk_gt (mk_read data l1) (mk_read data l2)]);
+              mk_forall [l1f] (mk_implies (l1_in_domain) (mk_and [mk_leq (mk_read data l1) ub;
+                                                                  mk_leq lb (mk_read data l1)]));
             ],
       [di, mk_forall ~ann:([Comment "tree_footprint"]) [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq x mk_null]))]);
     ( mk_ident "treeAllocInvariant",
@@ -258,10 +305,7 @@ let without_fp = [
      *)
   ]
 
-let sorted = 
-  mk_forall ~ann:[Comment "sortedness"] [l1f; l2f]
-    (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y]
-                [mk_leq (mk_read data l1) (mk_read data l2)])
+let sorted = _sorted next y
   
 let lists = [
     ( mk_ident "lseg",

@@ -5,6 +5,17 @@ struct Node {
   var data: int;
 }
 
+predicate stree(x: Node, y: Node) {
+    x == null
+  ||
+    x != null &*&
+    x.parent |-> y &*&
+    stree(x.left, x) &*&
+    stree(x.right, x) &*&
+    (x.left == null || (x.left != null && x.left.data < x.data)) &*&
+    (x.right == null || (x.right != null && x.right.data > x.data)) 
+}
+
 predicate tree(x: Node, y: Node) {
     x == null
   ||

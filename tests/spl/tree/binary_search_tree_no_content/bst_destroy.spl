@@ -5,13 +5,15 @@ struct Node {
   var data: int;
 }
 
-predicate tree(x: Node, y: Node) {
+predicate stree(x: Node, y: Node) {
     x == null
   ||
     x != null &*&
     x.parent |-> y &*&
-    tree(x.left, x) &*&
-    tree(x.right, x)
+    stree(x.left, x) &*&
+    stree(x.right, x) &*&
+    (x.left == null || (x.left != null && x.left.data < x.data)) &*&
+    (x.right == null || (x.right != null && x.right.data > x.data)) 
 }
 
 predicate treeAllocInvariant(X: set<Node>) {
@@ -19,7 +21,7 @@ predicate treeAllocInvariant(X: set<Node>) {
 }
 
 procedure destroy(root: Node, p: Node)
-  requires tree(root, p);
+  requires stree(root, p);
   requires treeAllocInvariant(Alloc);
   ensures treeAllocInvariant(Alloc);
   ensures emp;
