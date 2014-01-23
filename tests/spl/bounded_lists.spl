@@ -1,0 +1,19 @@
+struct Node {
+  var next: Node;
+  var data: int;
+}
+
+predicate ulseg(x: Node, y: Node, lb: int) {
+  x == y || x != y &*& acc(x) &*& lb <= x.data &*& ulseg(x.next, y, lb)
+}
+
+procedure test1(x: Node, y: Node) 
+  requires x.next |-> y &*& x.data == 2;
+  ensures ulseg(x,y,0);
+{}
+
+procedure test2(x: Node, y: Node) 
+  requires ulseg(x,y,2);
+  ensures ulseg(x,y,0);
+{}
+
