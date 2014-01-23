@@ -91,11 +91,58 @@ let factorize_axioms fs =
 
 
 (** Add axioms for frame predicates. *)
+let field_partitions fs gts =
+  let fld_partition, fld_map, fields = 
+    let max, fld_map, fields = 
+      TermSet.fold (fun t (n, fld_map, fields) -> match t with
+      | App (_, _, Some (Fld _)) as fld -> 
+          n+1, TermMap.add fld n fld_map, TermSet.add fld fields
+      | _ -> n, fld_map, fields)
+        gts (0, TermMap.empty, TermSet.empty)
+    in
+    let rec collect_eq partition = function
+      | BoolOp (Not, f) -> partition
+      | BoolOp (op, fs) -> List.fold_left collect_eq partition fs
+      | Atom (App (Eq, [App (_, _, Some (Fld _)) as fld1; fld2], _)) ->
+          Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
+      | Binder (_, _, f, _) -> collect_eq partition f
+      | f -> partition
+    in
+    let fld_partition0 = List.fold_left collect_eq (Puf.create max) fs in
+    let fld_partition =
+      TermSet.fold (fun t partition -> 
+        match t with
+        | App (Write, fld1 :: _, _) as fld2 
+        | App (Frame, [_; _; fld1; fld2], _) -> 
+            Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
+        | _ -> partition)
+      gts fld_partition0
+    in
+    fld_partition, fld_map, fields
+  in
+  let partition_of fld =
+    let p = 
+      try Puf.find fld_partition (TermMap.find fld fld_map) 
+      with Not_found -> failwith ("did not find field " ^ (string_of_term fld)) 
+    in
+    let res = TermSet.filter (fun fld1 -> Puf.find fld_partition (TermMap.find fld1 fld_map) = p) fields in
+    res
+  in
+  partition_of
+
+let btwn_fields fs gts =
+  let partition_of = field_partitions fs gts in
+  fold_terms (fun flds -> function
+    | App (Btwn, (App (_, _, _) as fld) :: _, _) -> 
+        TermSet.union (partition_of fld) flds
+    | _ -> flds)
+    TermSet.empty (smk_and fs)  
+
 let reduce_frame fs =
+  let btwn_flds = btwn_fields fs (ground_terms (smk_and fs)) in
   let expand_frame x a f f' =
     let frame = mk_diff a x in
     let reduce_graph () =
-     
       let replacement_pts =
         Axioms.mk_axiom "pts_frame"
           (mk_implies
@@ -110,17 +157,19 @@ let reduce_frame fs =
         let reach_f x y z = mk_btwn f x z y in
         let reach_f' x y z = mk_btwn f' x z y in
         let open Axioms in
-        [mk_axiom "reach_frame1"
-           (mk_implies
-              (reachwo_f loc1 loc2 (ep loc1))
-              (mk_iff 
-                 (reach_f loc1 loc2 loc3)
-                 (reach_f' loc1 loc2 loc3)));
-         mk_axiom "reach_frame2"
-           (mk_implies
-              (mk_and [mk_not (smk_elem loc1 x); mk_eq loc1 (ep loc1)])
-              (mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)))
-       ]
+        if TermSet.mem f' btwn_flds then
+          [mk_axiom "reach_frame1"
+             (mk_implies
+                (reachwo_f loc1 loc2 (ep loc1))
+                (mk_iff 
+                   (reach_f loc1 loc2 loc3)
+                   (reach_f' loc1 loc2 loc3)));
+           mk_axiom "reach_frame2"
+             (mk_implies
+                (mk_and [mk_not (smk_elem loc1 x); mk_eq loc1 (ep loc1)])
+                (mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)))
+         ]
+        else []
       in
       
       let axioms =
@@ -343,58 +392,15 @@ let reduce_read_write fs =
   rev_concat [read_write_ax; fs1], read_propagators, gts
 
 
-let field_partitions fs gts =
-  let fld_partition, fld_map, fields = 
-    let max, fld_map, fields = 
-      TermSet.fold (fun t (n, fld_map, fields) -> match t with
-      | App (_, _, Some (Fld _)) as fld -> 
-          n+1, TermMap.add fld n fld_map, TermSet.add fld fields
-      | _ -> n, fld_map, fields)
-        gts (0, TermMap.empty, TermSet.empty)
-    in
-    let rec collect_eq partition = function
-      | BoolOp (Not, f) -> partition
-      | BoolOp (op, fs) -> List.fold_left collect_eq partition fs
-      | Atom (App (Eq, [App (_, _, Some (Fld _)) as fld1; fld2], _)) ->
-          Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
-      | Binder (_, _, f, _) -> collect_eq partition f
-      | f -> partition
-    in
-    let fld_partition0 = List.fold_left collect_eq (Puf.create max) fs in
-    let fld_partition =
-      TermSet.fold (fun t partition -> 
-        match t with
-        | App (Write, fld1 :: _, _) as fld2 
-        | App (Frame, [_; _; fld1; fld2], _) -> 
-            Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
-        | _ -> partition)
-      gts fld_partition0
-    in
-    fld_partition, fld_map, fields
-  in
-  let partition_of fld =
-    let p = 
-      try Puf.find fld_partition (TermMap.find fld fld_map) 
-      with Not_found -> failwith ("did not find field " ^ (string_of_term fld)) 
-    in
-    let res = TermSet.filter (fun fld1 -> Puf.find fld_partition (TermMap.find fld1 fld_map) = p) fields in
-    res
-  in
-  partition_of
 
 
 (** Adds instantiated theory axioms for graph reachability to formula f.
  ** Assumes that f is typed. *)
 let reduce_reach fs gts =
-  let partition_of = field_partitions fs gts in
   let classes = CongruenceClosure.congr_classes fs gts in
   (* instantiate the variables of sort Fld in all reachability axioms *)
-  let btwn_flds = 
-    fold_terms (fun flds -> function
-      | App (Btwn, (App (_, _, _) as fld) :: _, _) -> TermSet.union (partition_of fld) flds
-      | _ -> flds)
-      TermSet.empty (smk_and fs)
-  in
+  let btwn_flds = btwn_fields fs gts in
+  (*let _ = TermSet.iter (print_term stdout) btwn_flds in*)
   let reach_write_ax = 
     TermSet.fold (fun t write_ax ->
       match t with
