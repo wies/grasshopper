@@ -59,19 +59,27 @@ let parent_generator child =
   TermGenerator ( [l1f], [],
                   [Match (mk_read child l1, FilterTrue)],
                   mk_read parent (mk_read child l1))
+let left_generator =
+  TermGenerator ( [l1f], [],
+                   [Match (mk_read right l1, FilterTrue)],
+                  mk_read left l1)
+let right_generator =
+  TermGenerator ( [l1f], [],
+                  [Match (mk_read left l1, FilterTrue)],
+                  mk_read right l1)
 let parent_equal child =
-  mk_forall ~ann:[Comment ((string_of_term child)^"_parent_equal"); parent_generator child] [l1f; l2f] 
-    (mk_sequent [mk_elem l1 d; mk_eq (mk_read child l1) l2]
-                [mk_eq l2 mk_null; mk_eq (mk_read parent l2) l1])
+  mk_forall ~ann:[Comment ((string_of_term child)^"_parent_equal"); parent_generator child] [l1f] 
+    (mk_sequent [mk_elem l1 d]
+                [mk_eq (mk_read child l1) mk_null; mk_eq (mk_read parent (mk_read child l1)) l1])
 let parent_left_or_right_equal =
-  mk_forall ~ann:([Comment "parent_left_or_right_equal"]) [l1f; l2f; l3f] 
+  mk_forall ~ann:(Comment "parent_left_or_right_equal" :: [left_generator; right_generator]) [l1f; l2f] 
     (mk_sequent 
-       [mk_eq l2 l3; mk_elem l1 d; mk_eq (mk_read parent l1) l2] 
-       [mk_eq l1 x; mk_eq (mk_read left l2) l1; mk_eq (mk_read right l3) l1])
+       [mk_elem l1 d; mk_eq (mk_read parent l1) l2] 
+       [mk_eq l1 x; mk_eq (mk_read left l2) l1; mk_eq (mk_read right l2) l1])
 let left_right_distinct =
-  mk_forall ~ann:([Comment "left_right_distinct"]) [l1f; l2f]
+  mk_forall ~ann:([Comment "left_right_distinct"]) [l1f]
     (mk_sequent
-       [mk_elem l1 d; mk_eq l1 l2; mk_eq (mk_read left l1) (mk_read right l2)]
+       [mk_elem l1 d; mk_eq (mk_read left l1) (mk_read right l1)]
        [mk_eq mk_null (mk_read left l1)])
 let reach_via_left_right =
   mk_forall ~ann:[Comment "reach_via_left_right"] [l1f; l2f]

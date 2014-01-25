@@ -451,10 +451,15 @@ let accesses c = (prog_point c).pp_accesses
 let modifies_proc prog proc = 
   match proc.proc_body with
   | Some cmd ->
-    IdSet.filter
-      (fun id -> IdMap.mem id prog.prog_vars)
-      (if !Config.optFieldMod then (modifies cmd)
-       else(IdSet.union (accesses cmd) (modifies cmd)))
+      if !Config.optFieldMod 
+      then 
+        IdSet.filter 
+          (fun id -> IdMap.mem id prog.prog_vars) 
+          (modifies cmd)
+       else 
+        IdMap.fold 
+          (fun id _ mods -> IdSet.add id mods) 
+          prog.prog_vars IdSet.empty
   | None -> 
       IdMap.fold (fun id _ acc -> IdSet.add id acc) prog.prog_vars IdSet.empty
 
