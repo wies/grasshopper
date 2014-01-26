@@ -99,7 +99,7 @@ let without_fp = [
       [df; leftf; parentf; rightf; xf; yf],
       mk_and [(*mk_forall [l1f] (mk_reach parent l1 mk_null);*)
               mk_or [mk_eq x mk_null; mk_eq (mk_read parent x) y];
-              parent_left_or_right_equal;
+              (*parent_left_or_right_equal;*)
               parent_equal left;
               parent_equal right;
               left_right_distinct;
@@ -110,7 +110,7 @@ let without_fp = [
       [df; dataf; leftf; parentf; rightf; xf; yf],
       mk_and [(*mk_forall [l1f] (mk_reach parent l1 mk_null);*)
               mk_or [mk_eq x mk_null; mk_eq (mk_read parent x) y];
-              parent_left_or_right_equal;
+              (*parent_left_or_right_equal;*)
               parent_equal left;
               parent_equal right;
               left_right_distinct;
@@ -122,7 +122,7 @@ let without_fp = [
       [df; dataf; leftf; parentf; rightf; xf; yf],
       mk_and [(*mk_forall [l1f] (mk_reach parent l1 mk_null);*)
               mk_or [mk_eq x mk_null; mk_eq (mk_read parent x) y];
-              parent_left_or_right_equal;
+              (*parent_left_or_right_equal;*)
               parent_equal left;
               parent_equal right;
               left_right_distinct;
@@ -140,7 +140,7 @@ let without_fp = [
       [df; dataf; leftf; parentf; rightf; xf; yf; lbf; ubf],
       mk_and [(*mk_forall [l1f] (mk_reach parent l1 mk_null);*)
               mk_or [mk_eq x mk_null; mk_eq (mk_read parent x) y];
-              parent_left_or_right_equal;
+              (*parent_left_or_right_equal;*)
               parent_equal left;
               parent_equal right;
               left_right_distinct;

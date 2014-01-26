@@ -5,7 +5,7 @@ struct Node {
 }
 
 predicate bstree(x: Node, content: set<int>) {
-    x == null &*& content = set<int>()
+    x == null &*& content == set<int>()
   ||
     //strucuture
     x != null &*&
@@ -16,7 +16,7 @@ predicate bstree(x: Node, content: set<int>) {
     x.data in content &*&
     (forall l in l_content :: l < x.data) &*&
     (forall r in r_content :: r > x.data) &*&
-    content = l_content ++ r_content ++ set(x.data)
+    content == l_content ++ r_content ++ set(x.data)
 }
 
 procedure create() returns (res: Node)
@@ -52,7 +52,7 @@ procedure extract_max(tree: Node, implicit ghost content: set<int>) returns (oth
   ensures  (forall v in content1 :: max.data > v);
 {
     if (tree.right != null) {
-        var c, m: Node;
+      var c: Node, m: Node;
         c, m := extract_max(tree.right); 
         tree.right := c;
         return tree, m;
@@ -80,7 +80,7 @@ procedure remove(tree: Node, value: int, implicit ghost content: set<int>) retur
             free(tree);
             return res;
         } else {
-            val l, m: Node;
+          var l: Node, m: Node;
             l, m := extract_max(tree.left);
             m.left := l;
             m.right := tree.right;
