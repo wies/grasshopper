@@ -118,6 +118,19 @@ let without_fp = [
               _sorted parent y (*children are smaller than parent*)
             ],
       [di, mk_forall ~ann:([Comment "tree_footprint"]) [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq x mk_null]))]);
+    ( mk_ident "bheap",
+      [df; dataf; leftf; parentf; rightf; xf; yf; ubf],
+      mk_and [(*mk_forall [l1f] (mk_reach parent l1 mk_null);*)
+              mk_or [mk_eq x mk_null; mk_eq (mk_read parent x) y];
+              (*parent_left_or_right_equal;*)
+              parent_equal left;
+              parent_equal right;
+              left_right_distinct;
+              reach_via_left_right;
+              mk_forall [l1f] (mk_implies (l1_in_domain) (mk_leq (mk_read data l1) ub));
+              _sorted parent y (*children are smaller than parent*)
+            ],
+      [di, mk_forall ~ann:([Comment "tree_footprint"]) [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq x mk_null]))]);
     ( mk_ident "stree",
       [df; dataf; leftf; parentf; rightf; xf; yf],
       mk_and [(*mk_forall [l1f] (mk_reach parent l1 mk_null);*)
