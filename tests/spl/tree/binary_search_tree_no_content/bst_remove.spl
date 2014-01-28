@@ -5,15 +5,15 @@ struct Node {
   var data: int;
 }
 
-predicate stree(x: Node, y: Node) {
+predicate bstree(x: Node, y: Node, lb: int, ub: int) {
     x == null
   ||
     x != null &*&
     x.parent |-> y &*&
-    stree(x.left, x) &*&
-    stree(x.right, x) &*&
-    (x.left == null || (x.left != null && x.left.data < x.data)) &*&
-    (x.right == null || (x.right != null && x.right.data > x.data)) 
+    lb <= x.data &*&
+    x.data <= ub &*&
+    bstree(x.left, x, lb, x.data - 1) &*&
+    bstree(x.right, x, x.data + 1, ub)
 }
 
 predicate tree(x: Node, y: Node) {
@@ -29,18 +29,23 @@ predicate treeAllocInvariant(X: set<Node>) {
   (forall n in X :: n.parent == n.parent)
 }
 
-procedure extract_max(root: Node, p: Node) returns (others: Node, max: Node)
+procedure extract_max(root: Node, ghost p: Node,
+                      ghost lb: int, ghost ub: int)
+returns (others: Node, max: Node)
   requires p in Alloc || p == null;
-  requires tree(root, p) &*& root != null;
+  requires bstree(root, p, lb, ub) &*& root != null;
   requires treeAllocInvariant(Alloc);
-  ensures  tree(others, p);
-  ensures  acc(max) &*& max.left == null &*& max.right == null &*& max.parent == null;
+  ensures  bstree(others, p, lb, max.data-1) &*& acc(max);
+  ensures  max.left == null && max.right == null && max.parent == null && max.data <= ub && lb <= max.data;
   ensures  treeAllocInvariant(Alloc);
 
-procedure remove(root: Node, value: int, p: Node) returns (res: Node)
-  requires tree(root, p);
+
+procedure remove(root: Node, value: int, p: Node,
+                 ghost lb: int, ghost ub: int)
+returns (res: Node)
+  requires bstree(root, p, lb, ub);
   requires treeAllocInvariant(Alloc);
-  ensures tree(res, p);
+  ensures bstree(res, p, lb, ub);
   ensures treeAllocInvariant(Alloc);
 {
     if (root == null) {
@@ -64,31 +69,23 @@ procedure remove(root: Node, value: int, p: Node) returns (res: Node)
             return res;
         } else {
             var l: Node, m: Node;
-            l, m := extract_max(root.left, root);
+            l, m := extract_max(root.left, root, lb, value - 1);
             m.left := l;
             if (l != null) {       
               l.parent := m;
             }
             m.right := root.right;
-            if (root.right != null) {
-              root.right.parent := m;
-            }
+            m.right.parent := m;
             root.parent := null;
             free(root);
             m.parent := p;
             return m;
         }
     } else if (root.data > value) {
-        root.left := remove(root.left, value, root);
-        //if (root.left != null) {
-        //  root.left.parent := root;
-        //}
+        root.left := remove(root.left, value, root, lb, root.data - 1);
         return root;
     } else {
-        root.right := remove(root.right, value, root);
-        //if (root.right != null) {
-        //  root.right.parent := root;
-        //}
+        root.right := remove(root.right, value, root, root.data + 1, ub);
         return root;
     }
 }

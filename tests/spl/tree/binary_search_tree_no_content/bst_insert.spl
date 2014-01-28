@@ -40,10 +40,10 @@ returns (new_root: Node)
     return t;
   } else { 
     if (root.data > value) {
-      root.left := insert(root.left, value, root, lb, root.data);
+      root.left := insert(root.left, value, root, lb, root.data-1);
       return root;
     } else if (root.data < value) {
-      root.right := insert(root.right, value, root, root.data, ub);
+      root.right := insert(root.right, value, root, root.data+1, ub);
       return root;
     }
     return root;
