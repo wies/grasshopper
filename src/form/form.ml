@@ -339,21 +339,21 @@ and pr_term ppf = function
   | App (Empty, _, _) -> fprintf ppf "{}"
   | App (sym, [], _) -> fprintf ppf "%a" pr_sym sym
   | App (Read, [fld; t], _) -> fprintf ppf "%a.%a" pr_term t pr_term fld
-  | App (Write, [fld; t1; t2], _) -> fprintf ppf "%a[%a :=@ %a]" pr_term fld pr_term t1 pr_term t2
-  | App (Minus, [t1; t2], _) -> fprintf ppf "%a -@ @[<2>%a@]" pr_term0 t1 pr_term0 t2
-  | App (Plus, [t1; t2], _) -> fprintf ppf "%a +@ @[<2>%a@]" pr_term0 t1 pr_term0 t2
-  | App (Mult, [t1; t2], _) -> fprintf ppf "%a *@ @[<2>%a@]" pr_term0 t1 pr_term0 t2
-  | App (Div, [t1; t2], _) -> fprintf ppf "%a /@ @[<2>%a@]" pr_term0 t1 pr_term0 t2
-  | App (Diff, [t1; t2], _) -> fprintf ppf "%a --@ @[<2>%a@]" pr_term0 t1 pr_term0 t2
+  | App (Write, [fld; t1; t2], _) -> fprintf ppf "%a[%a := %a]" pr_term fld pr_term t1 pr_term t2
+  | App (Minus, [t1; t2], _) -> fprintf ppf "%a - @[<2>%a@]" pr_term0 t1 pr_term0 t2
+  | App (Plus, [t1; t2], _) -> fprintf ppf "%a + @[<2>%a@]" pr_term0 t1 pr_term0 t2
+  | App (Mult, [t1; t2], _) -> fprintf ppf "%a * @[<2>%a@]" pr_term0 t1 pr_term0 t2
+  | App (Div, [t1; t2], _) -> fprintf ppf "%a / @[<2>%a@]" pr_term0 t1 pr_term0 t2
+  | App (Diff, [t1; t2], _) -> fprintf ppf "%a -- @[<2>%a@]" pr_term0 t1 pr_term0 t2
   | App (Inter, ss, _) -> pr_inter ppf ss
   | App (Union, ss, _) -> pr_union ppf ss
-  | App (Eq, [t1; t2], _) -> fprintf ppf "@[%a@] ==@ @[<2>%a@]" pr_term t1 pr_term t2
+  | App (Eq, [t1; t2], _) -> fprintf ppf "@[%a@] == @[<2>%a@]" pr_term t1 pr_term t2
   | App (SubsetEq, [t1; t2], _)
-  | App (LtEq, [t1; t2], _) -> fprintf ppf "%a <=@ @[<2>%a@]" pr_term t1 pr_term t2
-  | App (GtEq, [t1; t2], _) -> fprintf ppf "%a >=@ @[<2>%a@]" pr_term t1 pr_term t2
-  | App (Lt, [t1; t2], _) -> fprintf ppf "%a <@ @[<2>%a@]" pr_term t1 pr_term t2
-  | App (Gt, [t1; t2], _) -> fprintf ppf "%a >@ @[<2>%a@]" pr_term t1 pr_term t2
-  | App (Elem, [t1; t2], _) -> fprintf ppf "@[%a@] in@ @[<2>%a@]" pr_term t1 pr_term t2
+  | App (LtEq, [t1; t2], _) -> fprintf ppf "%a <= @[<2>%a@]" pr_term t1 pr_term t2
+  | App (GtEq, [t1; t2], _) -> fprintf ppf "%a >= @[<2>%a@]" pr_term t1 pr_term t2
+  | App (Lt, [t1; t2], _) -> fprintf ppf "%a < @[<2>%a@]" pr_term t1 pr_term t2
+  | App (Gt, [t1; t2], _) -> fprintf ppf "%a > @[<2>%a@]" pr_term t1 pr_term t2
+  | App (Elem, [t1; t2], _) -> fprintf ppf "@[%a@] in @[<2>%a@]" pr_term t1 pr_term t2
   | App (SetEnum, ts, _) -> fprintf ppf "{@[%a@]}" pr_term_list ts
   | App (sym, ts, _) -> fprintf ppf "%a(@[%a@])" pr_sym sym pr_term_list ts
 
@@ -371,9 +371,9 @@ and pr_inter ppf = function
       pr_inter ppf (ss1 @ ss2)
   | (App (Union, _, _) as s) :: ss 
   | (App (Diff, _, _) as s) :: ss -> 
-      fprintf ppf "(@[<2>%a@]) **@ %a" pr_term s pr_inter ss
+      fprintf ppf "(@[<2>%a@]) ** %a" pr_term s pr_inter ss
   | s :: ss -> 
-      fprintf ppf "@[<2>%a@] **@ %a" pr_term s pr_inter ss
+      fprintf ppf "@[<2>%a@] ** %a" pr_term s pr_inter ss
 
 and pr_union ppf = function
   | [] -> fprintf ppf "{}"
@@ -381,9 +381,9 @@ and pr_union ppf = function
       fprintf ppf "(@[%a@])" pr_term s
   | [s] -> pr_term ppf s
   | (App (Diff, _, _) as s) :: ss -> 
-      fprintf ppf "(@[<2>%a@]) ++@ %a" pr_term s pr_union ss
+      fprintf ppf "(@[<2>%a@]) ++ %a" pr_term s pr_union ss
   | s :: ss -> 
-      fprintf ppf "@[<2>%a@] ++@ %a" pr_term s pr_union ss
+      fprintf ppf "@[<2>%a@] ++ %a" pr_term s pr_union ss
 
 let rec pr_form ppf = function
   | Binder (b, vs, f, a) -> 

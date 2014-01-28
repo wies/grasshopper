@@ -16,11 +16,46 @@ predicate bstree(x: Node, y: Node, lb: int, ub: int) {
     bstree(x.right, x, x.data + 1, ub)
 }
 
+predicate tree(x: Node, y: Node) {
+    x == null
+  ||
+    x != null &*&
+    x.parent |-> y &*&
+    tree(x.left, x) &*&
+    tree(x.right, x)
+}
+
 predicate treeAllocInvariant(X: set<Node>) {
   (forall n in X :: n.parent == n.parent)
 }
 
-procedure extract_max(root: Node, ghost p: Node,
+procedure extract_max(root: Node, ghost p: Node)
+returns (others: Node, max: Node)
+  requires p in Alloc || p == null;
+  requires tree(root, p) &*& root != null;
+  requires treeAllocInvariant(Alloc);
+  ensures  tree(others, p) &*& acc(max);
+  ensures  max.left == null && max.right == null && max.parent == null;
+  ensures  treeAllocInvariant(Alloc);
+{
+    if (root.right != null) {
+        var c: Node, m: Node;
+        c, m := extract_max(root.right, root); 
+        root.right := c;
+        return root, m;
+    } else {
+        var c: Node;
+        c := root.left;
+        root.left := null;
+        root.parent := null;
+        if (c != null) {
+          c.parent := p;
+        }
+        return c, root;
+    }
+}
+
+procedure extract_max_2(root: Node, ghost p: Node,
                       ghost lb: int, ghost ub: int)
 returns (others: Node, max: Node)
   requires p in Alloc || p == null;
@@ -32,7 +67,7 @@ returns (others: Node, max: Node)
 {
     if (root.right != null) {
         var c: Node, m: Node;
-        c, m := extract_max(root.right, root, root.data + 1, ub); 
+        c, m := extract_max_2(root.right, root, root.data + 1, ub); 
         root.right := c;
         return root, m;
     } else {

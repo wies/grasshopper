@@ -426,7 +426,15 @@ let instantiate_user_def_axioms read_propagators fs gts =
   (* generate local instances of all remaining axioms in which variables occur below function symbols *)
   let fs1, generators = open_axioms isFunVar fs in
   let gts1 = generate_terms (read_propagators @ generators) gts in
-  (*let _ = print_terms gts1 in*)
+  let _ =
+    if Debug.is_debug () then
+      begin
+        print_endline "ground terms:";
+        TermSet.iter (fun t -> print_endline ("  " ^ (string_of_term t))) gts;
+        print_endline "generated terms:";
+        TermSet.iter (fun t -> print_endline ("  " ^ (string_of_term t))) (TermSet.diff gts1 gts)
+      end
+  in
   let classes = CongruenceClosure.congr_classes fs gts1 in
   instantiate_with_terms true fs1 classes, gts1
 
