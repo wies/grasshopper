@@ -5,30 +5,31 @@ struct Node {
   var data: int;
 }
 
-predicate stree(x: Node, y: Node) {
+predicate bstree(x: Node, y: Node, lb: int, ub: int) {
     x == null
   ||
     x != null &*&
     x.parent |-> y &*&
-    stree(x.left, x) &*&
-    stree(x.right, x) &*&
-    (x.left == null || (x.left != null && x.left.data < x.data)) &*&
-    (x.right == null || (x.right != null && x.right.data > x.data)) 
+    lb <= x.data &*&
+    x.data <= ub &*&
+    bstree(x.left, x, lb, x.data - 1) &*&
+    bstree(x.right, x, x.data + 1, ub)
 }
 
 predicate treeAllocInvariant(X: set<Node>) {
   (forall n in X :: n.parent == n.parent)
 }
 
-procedure destroy(root: Node, p: Node)
-  requires stree(root, p);
+procedure destroy(root: Node, p: Node,
+                  ghost lb: int, ghost ub: int)
+  requires bstree(root, p, lb, ub);
   requires treeAllocInvariant(Alloc);
   ensures treeAllocInvariant(Alloc);
   ensures emp;
 {
     if (root != null) {
-        destroy(root.left, root);
-        destroy(root.right, root);
+        destroy(root.left, root, lb, ub);
+        destroy(root.right, root, lb, ub);
         root.parent := null;
         free root;
     }

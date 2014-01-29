@@ -16,15 +16,6 @@ predicate bstree(x: Node, y: Node, lb: int, ub: int) {
     bstree(x.right, x, x.data + 1, ub)
 }
 
-predicate tree(x: Node, y: Node) {
-    x == null
-  ||
-    x != null &*&
-    x.parent |-> y &*&
-    tree(x.left, x) &*&
-    tree(x.right, x)
-}
-
 predicate treeAllocInvariant(X: set<Node>) {
   (forall n in X :: n.parent == n.parent)
 }
