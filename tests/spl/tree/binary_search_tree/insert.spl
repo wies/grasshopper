@@ -1,0 +1,52 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+}
+
+predicate bstree_cnt(x: Node, y: Node, lb: int, ub: int, content: set<int>) {
+    x == null
+  ||
+    x != null &*&
+    x.parent |-> y &*&
+    lb <= x.data &*&
+    x.data <= ub &*&
+    bstree_cnt(x.left, x, lb, x.data - 1, content) &*&  //TODO content
+    bstree_cnt(x.right, x, x.data + 1, ub, content)     //TODO content
+}
+
+predicate treeAllocInvariant(X: set<Node>) {
+  (forall n in X :: n.parent == n.parent)
+}
+
+procedure insert(root: Node, value: int, p: Node,
+                 ghost lb: int, ghost ub: int,
+                 implicit ghost content: set<int>)
+returns (new_root: Node)
+  requires bstree_cnt(root, p, lb, ub, content);
+  requires p == null || p in Alloc;
+  requires lb <= value && value <= ub;
+  requires treeAllocInvariant(Alloc);
+  ensures treeAllocInvariant(Alloc);
+  ensures bstree_cnt(new_root, p, lb, ub, content ++ set(value));
+{
+  if (root == null) {
+    var t: Node;
+    t := new Node;
+    t.left := null;
+    t.right := null;
+    t.parent := p;
+    t.data := value;
+    return t;
+  } else { 
+    if (root.data > value) {
+      root.left := insert(root.left, value, root, lb, root.data-1);
+      return root;
+    } else if (root.data < value) {
+      root.right := insert(root.right, value, root, root.data+1, ub);
+      return root;
+    }
+    return root;
+  }
+}
