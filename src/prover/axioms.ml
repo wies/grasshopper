@@ -13,6 +13,7 @@ let f3 = fresh_ident "?h", Fld Loc
 let s1 = fresh_ident "?X", Set Loc 
 let s2 = fresh_ident "?Y", Set Loc 
 let s3 = fresh_ident "?Z", Set Loc 
+let is1 = fresh_ident "?N", Set Int 
 let i1 = fresh_ident "?m", Int
 let i2 = fresh_ident "?n", Int
 
@@ -27,6 +28,7 @@ let fld3 = mk_var ~srt:(snd f3) (fst f3)
 let set1 = mk_var ~srt:(snd s1) (fst s1)
 let set2 = mk_var ~srt:(snd s2) (fst s2)
 let set3 = mk_var ~srt:(snd s3) (fst s3)
+let intset1 = mk_var ~srt:(snd is1) (fst is1)
 let int1 = mk_var ~srt:(snd i1) (fst i1)
 let int2 = mk_var ~srt:(snd i2) (fst i2)
 
@@ -178,7 +180,13 @@ let ep_axioms () =
      [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
       Match (mk_elem_term loc1 set3, FilterTrue);
       Match (loc1, FilterNotOccurs EntPnt)], 
-     mk_ep fld1 set1 loc1)]
+     mk_ep fld1 set1 loc1);
+     ([s1; f1],
+     [s2; is1; f2; i1],
+     [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
+      Match (Predefined.mk_witness int1 intset1, FilterNotOccurs EntPnt)], 
+      mk_ep fld1 set1 (Predefined.mk_witness int1 intset1))
+   ]
   in
   if !Config.with_ep then
     [mk_axiom "entry-point1" ep1; 
