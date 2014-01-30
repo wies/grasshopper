@@ -30,7 +30,23 @@ returns (others: Node, max: Node)
   ensures  bstree_cnt(others, p, lb, max.data-1, content -- set(max.data)) &*& acc(max);
   ensures  max.left == null && max.right == null && max.parent == null && max.data <= ub && lb <= max.data;
   ensures  treeAllocInvariant(Alloc);
-
+{
+    if (root.right != null) {
+        var c: Node, m: Node;
+        c, m := extract_max(root.right, root, root.data + 1, ub); 
+        root.right := c;
+        return root, m;
+    } else {
+        var c: Node;
+        c := root.left;
+        root.left := null;
+        root.parent := null;
+        if (c != null) {
+          c.parent := p;
+        }
+        return c, root;
+    }
+}
 
 procedure remove(root: Node, value: int, p: Node,
                  ghost lb: int, ghost ub: int,

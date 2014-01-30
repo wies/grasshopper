@@ -26,7 +26,7 @@ procedure destroy(root: Node, p: Node,
   requires bstree_cnt(root, p, lb, ub, content);
   requires treeAllocInvariant(Alloc);
   ensures treeAllocInvariant(Alloc);
-  ensures emp;
+  ensures bstree_cnt(null, null, lb, ub, set<int>());
 {
     if (root != null) {
         destroy(root.left, root, lb, ub);
