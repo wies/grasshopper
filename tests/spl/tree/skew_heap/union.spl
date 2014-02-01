@@ -1,0 +1,50 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+}
+
+predicate heap_cnt(x: Node, y: Node, content: set<int>) {
+    x == null &*&
+    content == set<int>()
+  ||
+    x != null &*&
+    x.parent |-> y &*&
+    x.data in content &*&
+    heap_cnt(x.left, x, content) &*& //TODO content
+    heap_cnt(x.right, x, content) &*& //TODO content
+    (x.left == null || (x.left != null && x.left.data <= x.data)) &*&
+    (x.right == null || (x.right != null && x.right.data <= x.data)) 
+}
+
+predicate treeAllocInvariant(X: set<Node>) {
+  (forall n in X :: n.parent == n.parent)
+}
+
+procedure union(h1: Node, h2: Node,
+                implicit ghost content1: set<int>,
+                implicit ghost content2: set<int>)
+    returns (res: Node)
+    requires heap_cnt(h1, null, content1) &*& heap_cnt(h2, null, content2);
+    requires treeAllocInvariant(Alloc);
+    ensures treeAllocInvariant(Alloc);
+    ensures heap_cnt(res, null, content1 ++ content2);
+{
+    if (h1 == null) {
+        return h2;
+    } else if (h2 == null) {
+        return h1;
+    } else if (h1.data >= h2.data) {
+        var u: Node, r: Node;
+        r := h1.right;
+        h1.right := h1.left;
+        if (r != null) { r.parent := null; }
+        u := union(h2, r);
+        h1.left := u;
+        if (u != null) { u.parent := h1; }
+        return h1;
+    } else {
+        return union(h2, h1);
+    }
+}

@@ -2,9 +2,9 @@ Done:
     set as sorted list functional correctness
     bst memory
     skew heap memory
+    set as BST functional correctness
 
 Priority:
-    set as BST functional correctness
     set as AAT functional correctness
     skew heap
     AVL tree without balanced property
@@ -29,5 +29,3 @@ space partition tree:
     oct tree
     k-d tree
 
-B-tree
-2-3 tree
