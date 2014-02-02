@@ -69,6 +69,12 @@ let witness_generator2 =
       [isf],
       [Match (mk_elem_term v is, FilterNotOccurs witness_sym)],
       mk_read data (mk_witness v c))
+let witness_generator3 =
+  TermGenerator
+    ( [vf],
+      [isf],
+      [Match (v, FilterNotOccurs witness_sym)],
+      mk_read data (mk_witness v c))
 (* stuff for trees *)
 let parent_generator child =
   TermGenerator ( [l1f], [],
@@ -121,11 +127,11 @@ let tree_with_content = [
        ci, mk_and [
                     mk_forall ~ann:[Comment "tree_content_1"] [l1f]
                         (mk_implies l1_in_domain (mk_elem (mk_read data l1) c));
-                    mk_forall ~ann:[Comment "tree_content_2"; witness_generator1; witness_generator2] [vf]
+                    mk_forall ~ann:[Comment "tree_content_2"; witness_generator3] [vf]
                         (mk_implies (mk_not (mk_elem v c)) (mk_eq (mk_witness v c) mk_null));
-                    mk_forall ~ann:[Comment "tree_content_3"; witness_generator1; witness_generator2] [vf]
+                    mk_forall ~ann:[Comment "tree_content_3"] [vf]
                         (mk_implies (mk_elem v c) (mk_eq v (mk_read data (mk_witness v c))));
-                    mk_forall ~ann:[Comment "tree_content_4"; witness_generator1; witness_generator2] [vf]
+                    mk_forall ~ann:[Comment "tree_content_4"] [vf]
                         (mk_implies (mk_elem v c) (mk_elem (mk_witness v c) d))
                ]
       ]);
