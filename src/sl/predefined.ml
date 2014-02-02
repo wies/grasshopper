@@ -101,6 +101,32 @@ let reach_via_left_right =
 
 
 let tree_with_content = [
+    ( mk_ident "stree",
+      [df; dataf; leftf; parentf; rightf; xf; yf; cf],
+      mk_and [(*mk_forall [l1f] (mk_reach parent l1 mk_null);*)
+              mk_or [mk_eq x mk_null; mk_eq (mk_read parent x) y];
+              parent_equal left;
+              parent_equal right;
+              left_right_distinct;
+              reach_via_left_right;
+              (*left is smaller, right is bigger*)
+              mk_forall ~ann:[Comment "sortedness_left"] [l1f; l2f]
+                (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn parent l1 (mk_read left l2) l2]
+                            [mk_lt (mk_read data l1) (mk_read data l2)]);
+              mk_forall ~ann:[Comment "sortedness_right"] [l1f; l2f]
+                (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn parent l1 (mk_read right l2) l2]
+                            [mk_gt (mk_read data l1) (mk_read data l2)]);
+            ],
+      [di, mk_forall ~ann:([Comment "tree_footprint"]) [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq x mk_null]));
+       ci, mk_and [
+                    mk_forall ~ann:[Comment "tree_content_1"] [l1f]
+                        (mk_implies l1_in_domain (mk_elem (mk_read data l1) c));
+                    mk_forall ~ann:[Comment "tree_content_2"; witness_generator1; witness_generator2] [vf]
+                        (mk_and [mk_implies (mk_elem v c) (mk_and [mk_elem (mk_witness v c) d; mk_eq v (mk_read data (mk_witness v c))]);
+                                 mk_implies (mk_not (mk_elem v c)) (mk_eq (mk_witness v c) mk_null)
+                        ])
+               ]
+      ]);
     ( mk_ident "bstree_cnt",
       [df; dataf; leftf; parentf; rightf; xf; yf; lbf; ubf; cf],
       mk_and [(*mk_forall [l1f] (mk_reach parent l1 mk_null);*)

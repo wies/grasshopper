@@ -1,0 +1,34 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+}
+
+predicate stree(x: Node, y: Node, content: set<int>) {
+    x == null &*&
+    content == set<int>()
+  ||
+    x != null &*&
+    x.parent |-> y &*&
+    x.data in content &*&
+    stree(x.left, x, content) &*&  //TODO content
+    stree(x.right, x, content)     //TODO content
+}
+
+predicate treeAllocInvariant(X: set<Node>) {
+  (forall n in X :: n.parent == n.parent)
+}
+
+procedure traverse(root: Node, p: Node,
+                   implicit ghost content: set<int>)
+  requires stree(root, p, content);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  stree(root, p, content);
+{
+  if (root != null) {
+    traverse(root.left, root);
+    //traverse(root.right, root);
+  }
+}

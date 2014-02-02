@@ -25,11 +25,12 @@ predicate treeAllocInvariant(X: set<Node>) {
 procedure union(h1: Node, h2: Node,
                 implicit ghost content1: set<int>,
                 implicit ghost content2: set<int>)
-    returns (res: Node)
+    returns (res: Node, ghost res_content: set<int>)
     requires heap_cnt(h1, null, content1) &*& heap_cnt(h2, null, content2);
     requires treeAllocInvariant(Alloc);
     ensures treeAllocInvariant(Alloc);
-    ensures heap_cnt(res, null, content1 ++ content2);
+    ensures res_content == content1 ++ content2;
+    ensures heap_cnt(res, null, res_content);
 
 
 procedure extractMax(h: Node,
@@ -50,7 +51,8 @@ returns (max: int, rest: Node, ghost remaining: set<int>)
     h.right := null;
     if (l != null) { l.parent := null; }
     if (r != null) { r.parent := null; }
-    hp := union(l, r);
+    var rem: set<int>;
+    hp, rem := union(l, r);
     free h;
-    return d, hp;
+    return d, hp, rem;
 }

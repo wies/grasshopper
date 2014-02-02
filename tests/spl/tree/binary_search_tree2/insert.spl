@@ -1,0 +1,50 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+}
+
+predicate stree(x: Node, y: Node, content: set<int>) {
+    x == null &*&
+    content == set<int>()
+  ||
+    x != null &*&
+    x.parent |-> y &*&
+    x.data in content &*&
+    stree(x.left, x, content) &*&  //TODO content
+    stree(x.right, x, content)     //TODO content
+}
+
+predicate treeAllocInvariant(X: set<Node>) {
+  (forall n in X :: n.parent == n.parent)
+}
+
+procedure insert(root: Node, value: int, p: Node,
+                 implicit ghost content: set<int>)
+returns (new_root: Node)
+  requires stree(root, p, content);
+  requires p == null || p in Alloc;
+  requires treeAllocInvariant(Alloc);
+  ensures treeAllocInvariant(Alloc);
+  ensures stree(new_root, p, content ++ set(value));
+{
+  if (root == null) {
+    var t: Node;
+    t := new Node;
+    t.left := null;
+    t.right := null;
+    t.parent := p;
+    t.data := value;
+    return t;
+  } else { 
+    if (root.data > value) {
+      root.left := insert(root.left, value, root);
+      return root;
+    } else if (root.data < value) {
+      root.right := insert(root.right, value, root);
+      return root;
+    }
+    return root;
+  }
+}

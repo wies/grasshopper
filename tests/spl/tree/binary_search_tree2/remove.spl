@@ -1,0 +1,98 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+}
+
+predicate stree(x: Node, y: Node, content: set<int>) {
+    x == null &*&
+    content == set<int>()
+  ||
+    x != null &*&
+    x.parent |-> y &*&
+    x.data in content &*&
+    stree(x.left, x, content) &*&  //TODO content
+    stree(x.right, x, content)     //TODO content
+}
+
+predicate treeAllocInvariant(X: set<Node>) {
+  (forall n in X :: n.parent == n.parent)
+}
+
+procedure extract_max(root: Node, ghost p: Node,
+                      implicit ghost content: set<int>)
+returns (others: Node, max: Node)
+  requires p in Alloc || p == null;
+  requires stree(root, p, content) &*& root != null;
+  requires treeAllocInvariant(Alloc);
+  ensures  stree(others, p, content -- set(max.data)) &*& acc(max);
+  ensures  max.left == null && max.right == null && max.parent == null;
+  ensures  treeAllocInvariant(Alloc);
+{
+    if (root.right != null) {
+        var c: Node, m: Node;
+        c, m := extract_max(root.right, root); 
+        root.right := c;
+        return root, m;
+    } else {
+        var c: Node;
+        c := root.left;
+        root.left := null;
+        root.parent := null;
+        if (c != null) {
+          c.parent := p;
+        }
+        return c, root;
+    }
+}
+
+procedure remove(root: Node, value: int, p: Node,
+                 implicit ghost content: set<int>)
+returns (res: Node)
+  requires stree(root, p, content);
+  requires treeAllocInvariant(Alloc);
+  ensures stree(res, p, content -- set(value));
+  ensures treeAllocInvariant(Alloc);
+{
+    if (root == null) {
+        return null;
+    } else if (root.data == value) {
+        if (root.left == null && root.right == null) {
+            root.parent := null;
+            free(root);
+            return null;
+        } else if (root.left != null && root.right == null) {
+            res := root.left;
+            root.parent := null;
+            free(root);
+            res.parent := p;
+            return res;
+        } else if (root.left == null && root.right != null) {
+            res := root.right;
+            root.parent := null;
+            free(root);
+            res.parent := p;
+            return res;
+        } else {
+            var l: Node, m: Node;
+            l, m := extract_max(root.left, root);
+            m.left := l;
+            if (l != null) {       
+              l.parent := m;
+            }
+            m.right := root.right;
+            m.right.parent := m;
+            root.parent := null;
+            free(root);
+            m.parent := p;
+            return m;
+        }
+    } else if (root.data > value) {
+        root.left := remove(root.left, value, root);
+        return root;
+    } else {
+        root.right := remove(root.right, value, root);
+        return root;
+    }
+}
