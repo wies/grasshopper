@@ -28,7 +28,9 @@ procedure traverse(root: Node, p: Node,
   ensures  stree(root, p, content);
 {
   if (root != null) {
-    traverse(root.left, root);
+    var l: Node;
+    l := root.left;
+    traverse(l, root);
     //traverse(root.right, root);
   }
 }
