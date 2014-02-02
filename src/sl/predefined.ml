@@ -56,7 +56,7 @@ let _sorted next y (* data domain are fixed *) =
                 [mk_leq (mk_read data l1) (mk_read data l2)])
 (* for content *)
 let witness_sym = FreeSym (mk_ident "witness")
-let mk_witness elt set = mk_app ~srt:Loc witness_sym [elt; set] 
+let mk_witness elt set = mk_app ~srt:Loc witness_sym [data; elt; set] 
 let witness_generator1 =
   TermGenerator
     ( [l1f],
@@ -122,9 +122,11 @@ let tree_with_content = [
                     mk_forall ~ann:[Comment "tree_content_1"] [l1f]
                         (mk_implies l1_in_domain (mk_elem (mk_read data l1) c));
                     mk_forall ~ann:[Comment "tree_content_2"; witness_generator1; witness_generator2] [vf]
-                        (mk_and [mk_implies (mk_elem v c) (mk_and [mk_elem (mk_witness v c) d; mk_eq v (mk_read data (mk_witness v c))]);
-                                 mk_implies (mk_not (mk_elem v c)) (mk_eq (mk_witness v c) mk_null)
-                        ])
+                        (mk_implies (mk_not (mk_elem v c)) (mk_eq (mk_witness v c) mk_null));
+                    mk_forall ~ann:[Comment "tree_content_3"; witness_generator1; witness_generator2] [vf]
+                        (mk_implies (mk_elem v c) (mk_eq v (mk_read data (mk_witness v c))));
+                    mk_forall ~ann:[Comment "tree_content_4"; witness_generator1; witness_generator2] [vf]
+                        (mk_implies (mk_elem v c) (mk_elem (mk_witness v c) d))
                ]
       ]);
     ( mk_ident "bstree_cnt",
