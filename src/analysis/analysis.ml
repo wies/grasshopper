@@ -138,40 +138,6 @@ let simplify prog =
 
 (** Generate predicate instances *)
 let add_pred_insts prog f =
-  let pos, neg = 
-    let rec collect_term (pos, neg) = function
-      | App (FreeSym p, ts, _) as t ->
-          let pos, neg = List.fold_left collect_term (pos, neg) ts in
-          if IdMap.mem p prog.prog_preds 
-          then (TermSet.add t pos, neg)
-          else (pos, neg)
-      | App (_, ts, _) -> 
-          List.fold_left collect_term (pos, neg) ts
-      | _ -> pos, neg
-    in
-    let rec collect (pos, neg) = function
-      | Binder (_, [], f, _) -> collect (pos, neg) f
-      | BoolOp (And, fs)
-      | BoolOp (Or, fs) ->
-          List.fold_left collect (pos, neg) fs
-      | BoolOp (Not, [Atom (App (FreeSym p, _, _) as t)]) ->
-          if IdMap.mem p prog.prog_preds 
-          then (pos, TermSet.add t neg)
-          else (pos, neg)
-      | Atom (App (FreeSym p, _, _) as t) -> 
-          if IdMap.mem p prog.prog_preds 
-          then (TermSet.add t pos, neg)
-          else (pos, neg)
-      (*| BoolOp (Not, [Atom (App (Eq, [App (FreeSym p, _, _); _], _) as t)])
-      | BoolOp (Not, [Atom (App (Eq, [_; App (FreeSym p, _, _)], _) as t)]) ->
-          if IdMap.mem p prog.prog_preds 
-          then (pos, TermSet.add t neg)
-          else (pos, neg)*)
-      | BoolOp (Not, [Atom t])
-      | Atom t -> collect_term (pos, neg) t
-      | _ -> pos, neg
-    in collect (TermSet.empty, TermSet.empty) f 
-  in
   let mk_instance pos p ts =
     let pred = find_pred prog p in
     let sm = 
@@ -196,23 +162,59 @@ let add_pred_insts prog f =
       match pred.pred_returns with
       | [] -> mk_implies (mk_pred p ts) (body)
       | _ -> body
-    else mk_implies (mk_not (mk_pred p ts)) (mk_not body)
+    else mk_not body
+  in
+  let pos_preds = 
+    let rec collect_term pos = function
+      | App (FreeSym p, ts, _) as t ->
+          let pos = List.fold_left collect_term pos ts in
+          if IdMap.mem p prog.prog_preds 
+          then TermSet.add t pos
+          else pos
+      | App (_, ts, _) -> 
+          List.fold_left collect_term pos ts
+      | _ -> pos
+    in
+    let rec collect pos = function
+      | Binder (_, [], f, _) -> collect pos f
+      | BoolOp (And, fs)
+      | BoolOp (Or, fs) ->
+          List.fold_left collect pos fs
+      (*| BoolOp (Not, [Atom (App (FreeSym p, _, _) as t)]) ->
+          if IdMap.mem p prog.prog_preds 
+          then (pos, TermSet.add t neg)
+          else (pos, neg)*)
+      | Atom (App (FreeSym p, _, _) as t) -> 
+          if IdMap.mem p prog.prog_preds 
+          then TermSet.add t pos
+          else pos
+      | BoolOp (Not, [Atom t])
+      | Atom t -> collect_term pos t
+      | _ -> pos
+    in collect TermSet.empty f 
   in
   let pos_instances = 
     TermSet.fold (fun t instances ->
       match t with
       | App (FreeSym p, ts, _) -> mk_instance true p ts :: instances
       | _ -> instances)
-      pos []
+      pos_preds []
   in
-  let neg_instances = 
-    TermSet.fold (fun t instances ->
-      match t with
-      | App (FreeSym p, ts, _) -> mk_instance false p ts :: instances
-      | _ -> instances)
-      neg []
+  let f_inst = 
+    let rec inst_neg_preds = function
+      | Binder (b, [], f, a) -> 
+          Binder (b, [], inst_neg_preds f, a)
+      | BoolOp (And as op, fs)
+      | BoolOp (Or as op, fs) ->
+          let fs_inst = List.map inst_neg_preds fs in
+          BoolOp (op, fs_inst)
+      | BoolOp (Not, [Atom (App (FreeSym p, ts, _))]) 
+        when IdMap.mem p prog.prog_preds ->
+          mk_instance false p ts
+      | f -> f
+    in inst_neg_preds f
   in
-  smk_and (f :: pos_instances @ neg_instances)
+  smk_and (f_inst :: pos_instances)
 
 (** Generate verification conditions for given procedure. 
  ** Assumes that proc has been transformed into SSA form. *)

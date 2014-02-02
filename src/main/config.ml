@@ -37,8 +37,6 @@ let optFieldMod = ref true
 (* optmisation: self-framing clause for SL predicates *)
 let optSelfFrame = ref false
 
-(* Some experimental features, mostly for testing purpose *)
-let experimental = ref false
 
 let cmd_options =
   [("-model", Arg.Set_string model_file, "<file>  Produce counterexample model for the first failing verification condition");
@@ -62,7 +60,6 @@ let cmd_options =
    ("-predefPreds", Arg.Set predefPreds, " Disable heuristics to translate SL predicates to GRASS");
    ("-heuristicTranslation", Arg.Clear predefPreds, " Enable heuristics to translate SL predicates to GRASS");
    ("-stats", Arg.Set print_stats, " Print statistics");
-   ("-x", Arg.Set experimental, " Enable some experimental feature");
    ("-v", Arg.Unit Debug.more_verbose, " Display more messages");
    ("-q", Arg.Unit Debug.less_verbose, " Display less messages");
   ]
