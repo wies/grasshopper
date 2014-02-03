@@ -30,8 +30,7 @@ procedure traverse(root: Node, p: Node,
   if (root != null) {
     var l: Node;
     l := root.left;
-    //if (l != null ) { l.left := l.left; }
     traverse(l, root);
-    //traverse(root.right, root);
+    traverse(root.right, root);
   }
 }

@@ -166,6 +166,7 @@ let declare_sorts session =
     writeln session ("(define-sort " ^ fld_sort_string ^ " (X) (Array Loc X))")
   else 
     begin
+      declare_sort session (fld_sort_string ^ bool_sort_string) 0;
       declare_sort session (fld_sort_string ^ loc_sort_string) 0;
       declare_sort session (fld_sort_string ^ int_sort_string) 0
     end

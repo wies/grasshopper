@@ -1,0 +1,265 @@
+//left leaning red-black tree:
+//http://www.cs.princeton.edu/~rs/talks/LLRB/LLRB.pdf
+
+struct Node {
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+  var red: bool; //false is black
+}
+
+predicate tree(x: Node, y: Node) {
+    x == null
+  ||
+    x != null &*&
+    x.parent |-> y &*&
+    tree(x.left, x) &*&
+    tree(x.right, x)
+}
+
+predicate treeAllocInvariant(X: set<Node>) {
+  (forall n in X :: n.parent == n.parent)
+}
+
+
+
+procedure insert(root: Node, key: int) returns (res: Node)
+  requires tree(root, null);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  tree(res, null);
+{
+    root := insert1(root, key, null);
+    root.red := false;
+    return root;
+}
+
+procedure insert1(h: Node, key: int, ghost p: Node) returns (res: Node)
+  requires tree(h, p);
+  requires p == null || p in Alloc;
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  tree(res, p);
+{
+    if (h == null) {
+        var res: Node;
+        res := new Node;
+        res.left := null;
+        res.right := null;
+        res.parent := p;
+        res.data := key;
+        res.red := true;
+        return res;
+    } else {
+        if (isRed(h.left, h) && isRed(h.right, h)) {
+            colorFlip(h, p);
+        }
+
+        if (key == h.data) {
+        } else if (key < h.data) {
+            h.left := insert1(h.left, key, h);
+        } else {
+            h.right := insert1(h.right, key, h);
+        }
+
+        if (isRed(h.right, h) && !isRed(h.left, h)) {
+            h := rotateLeft(h, p);
+        }
+        if (isRed(h.left, h) && isRed(h.left.left, h.left)) {
+            h := rotateRight(h, p);
+        }
+        return h;
+    }
+}
+
+procedure moveRedLeft(h: Node, ghost p: Node) returns (res: Node)
+  requires tree(h, p);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  tree(res, p);
+{
+    colorFlip(h, p);
+    if (isRed(h.right.left, h.right)) {
+        h.right := rotateRight(h.right, h);
+        h := rotateLeft(h, p);
+        colorFlip(h, p);
+    }
+    return h;
+}
+
+procedure moveRedRight(h: Node, ghost p: Node) returns (res: Node)
+  requires tree(h, p);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  tree(res, p);
+{
+    colorFlip(h, p);
+    if (isRed(h.left.left, h.left))
+    {
+        h := rotateRight(h, p);
+        colorFlip(h, p);
+    }
+    return h;
+}
+
+procedure delete(root: Node, key: int) returns (res: Node)
+  requires tree(root, null);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  tree(res, null);
+{
+    if (root != null) {
+        root := delete1(root, key, null);
+        if (root != null) {
+            root.red := false; //TODO that did not trigger an error when there was no null check
+        }
+    }
+    return root;
+}
+
+procedure delete1(h: Node, key: int, ghost p: Node) returns (res: Node)
+  requires h != null;
+  requires tree(h, p);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  tree(res, p);
+{
+    if (key < h.data) {
+        if (!isRed(h.left, h)) {
+            if (!isRed(h.left.left, h.left)) {
+                h := moveRedLeft(h, p);
+            }
+        }
+        h.left := delete1(h.left, key, h);
+    } else {
+        if (isRed(h.left, h)) {
+            h := rotateRight(h, p);
+        }
+        if (key == h.data && h.right == null) {
+            h.parent := null;
+            free(h);
+            return null;
+        }
+
+        if (!isRed(h.right, h)) {
+            if (!isRed(h.right.left, h.right)) {
+                h := moveRedRight(h, p);
+            }
+        }
+
+        if (key == h.data) {
+            h.data := min(h.right, h);
+            h.right := deleteMin(h.right, h);
+        } else {
+            h.right := delete1(h.right, key, h);
+        }
+    }
+    return fixUp(h, p);
+}
+
+procedure min(h: Node, ghost p: Node) returns (res: int)
+  requires tree(h, p);
+  requires h != null;
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  tree(h, p);
+{
+     if (h.left != null) {
+         return min(h.left, h);
+     } else {
+         return h.data;
+     }
+}
+
+procedure deleteMin(h: Node, ghost p: Node) returns (res: Node)
+  requires tree(h, p);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  tree(res, p);
+{
+    if (h.left == null) {
+        h.parent := null;
+        free(h);
+        return null;
+    }
+    if (!isRed(h.left, h) && !isRed(h.left.left, h.left)) {
+        h := moveRedLeft(h, p);
+    }
+    h.left := deleteMin(h.left, h);
+    return fixUp(h, p);
+}
+
+procedure rotateLeft(h: Node, ghost p: Node) returns (res: Node)
+  requires tree(h, p);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  tree(res, p);
+{
+    var x: Node;
+    x := h.right;
+    h.right := x.left;
+    x.left := h;
+    x.red := h.red;
+    h.red := true;
+    return x;
+}
+
+procedure rotateRight(h: Node, ghost p: Node) returns (res: Node)
+  requires tree(h, p);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  tree(res, p);
+{
+    var x: Node;
+    x := h.left;
+    h.left := x.right;
+    x.right := h;
+    x.red := h.red;
+    h.red := true;
+    return x;
+}
+
+procedure isRed(h: Node, ghost p: Node) returns (res: bool)
+  requires tree(h, p);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  tree(h, p);
+  ensures  res == ((h != null) && h.red);
+{
+    if (h != null) {
+        return h.red;
+    } else {
+        return false;
+    }
+}
+
+procedure colorFlip(h: Node, ghost p: Node)
+  requires h != null && h.left != null && h.right != null;
+  requires tree(h, p);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  tree(h, p);
+{
+    if (h.red) h.red := false; else h.red := true;
+    if (h.left.red) h.left.red := false; else h.left.red := true;
+    if (h.right.red) h.right.red := false; else h.right.red := true;
+}
+
+procedure fixUp(h: Node, ghost p: Node) returns (res: Node)
+  requires tree(h, p);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  tree(res, p);
+{
+    if (isRed(h.right, h)) {
+        h := rotateLeft(h, p);
+    }
+    if (h.left != null && isRed(h.left, h) && isRed(h.left.left, h.left)) {
+        h := rotateRight(h, p);
+    }
+    if (isRed(h.left, h) && isRed(h.right, h)) {
+        colorFlip(h, p);
+    }
+    return h;
+}

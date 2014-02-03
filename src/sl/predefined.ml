@@ -88,6 +88,10 @@ let right_generator =
   TermGenerator ( [l1f], [],
                   [Match (mk_read left l1, FilterTrue)],
                   mk_read right l1)
+let data_generator =
+  TermGenerator ( [l1f], [],
+                  [Match (mk_read left l1, FilterTrue)],
+                  mk_read data l1)
 let parent_equal child =
   mk_forall ~ann:[Comment ((string_of_term child)^"_parent_equal"); parent_generator child] [l1f] 
     (mk_sequent [mk_elem l1 d]
@@ -116,7 +120,7 @@ let tree_with_content = [
               left_right_distinct;
               reach_via_left_right;
               (*left is smaller, right is bigger*)
-              mk_forall ~ann:[Comment "sortedness_left"] [l1f; l2f]
+              mk_forall ~ann:[Comment "sortedness_left"; data_generator] [l1f; l2f]
                 (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn parent l1 (mk_read left l2) l2]
                             [mk_lt (mk_read data l1) (mk_read data l2)]);
               mk_forall ~ann:[Comment "sortedness_right"] [l1f; l2f]
@@ -125,6 +129,8 @@ let tree_with_content = [
             ],
       [di, mk_forall ~ann:([Comment "tree_footprint"]) [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq x mk_null]));
        ci, mk_and [
+                    mk_forall ~ann:[Comment "tree_content_0"] [l1f]
+                        (mk_implies l1_in_domain (mk_eq l1 (mk_witness (mk_read data l1) c)));
                     mk_forall ~ann:[Comment "tree_content_1"] [l1f]
                         (mk_implies l1_in_domain (mk_elem (mk_read data l1) c));
                     mk_forall ~ann:[Comment "tree_content_2"; witness_generator3] [vf]

@@ -189,6 +189,7 @@ let reduce_frame fs =
       match sort_of f with
       | Some (Fld Loc) -> reduce_graph ()
       | Some (Fld Int) -> reduce_data ()
+      | Some (Fld Bool) -> reduce_data ()
       | None ->
         Debug.amsg "reduce_frame: type not given, assuming Fld Loc\n";
         reduce_graph ()

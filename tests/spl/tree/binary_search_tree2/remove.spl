@@ -28,6 +28,7 @@ returns (others: Node, max: Node)
   requires treeAllocInvariant(Alloc);
   ensures  stree(others, p, content -- set(max.data)) &*& acc(max);
   ensures  max.left == null && max.right == null && max.parent == null;
+  ensures  (forall z in (content -- set(max.data)) :: z < max.data);
   ensures  treeAllocInvariant(Alloc);
 {
     if (root.right != null) {
