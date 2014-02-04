@@ -72,10 +72,10 @@ let tree_structure = [
 
 let tree_sorted = [
     (*left is smaller, right is bigger*)
-    mk_forall ~ann:[Comment "sortedness_left"] [l1f; l2f]
+    mk_forall ~ann:[Comment "sorted_left"; data_generator] [l1f; l2f]
       (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn parent l1 (mk_read left l2) l2]
                   [mk_lt (mk_read data l1) (mk_read data l2)]);
-    mk_forall ~ann:[Comment "sortedness_right"] [l1f; l2f]
+    mk_forall ~ann:[Comment "sorted_right"] [l1f; l2f]
       (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn parent l1 (mk_read right l2) l2]
                   [mk_gt (mk_read data l1) (mk_read data l2)])
   ]

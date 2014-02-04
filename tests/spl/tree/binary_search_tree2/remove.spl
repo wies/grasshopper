@@ -26,7 +26,7 @@ returns (others: Node, max: Node)
   requires stree(root, p, content) &*& root != null;
   requires treeAllocInvariant(Alloc);
   ensures  stree(others, p, content -- set(max.data)) &*& acc(max);
-  ensures  max.right == null && max.parent == null;
+  ensures  max.right == null && max.parent == null && max.data in content;
   ensures  (forall z in (content -- set(max.data)) :: z < max.data);
   ensures  treeAllocInvariant(Alloc);
 {

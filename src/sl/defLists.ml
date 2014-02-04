@@ -95,7 +95,7 @@ let with_content = [
   ( mk_ident "sorted_set_lb",
     [df; dataf; nextf; xf; yf; lbf; cf],
     mk_and [mk_reach next x y;
-            lower_bound
+            lower_bound;
             mk_forall ~ann:[Comment "strict_sortedness"] [l1f; l2f]
               (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y; mk_neq l1 l2]
                  [mk_lt (mk_read data l1) (mk_read data l2)])
