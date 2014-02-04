@@ -184,8 +184,8 @@ let ep_axioms () =
      ([s1; f1],
      [s2; is1; f2; i1],
      [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-      Match (Predefined.mk_witness int1 intset1, FilterNotOccurs EntPnt)], 
-      mk_ep fld1 set1 (Predefined.mk_witness int1 intset1))
+      Match (DefHelpers.mk_witness int1 intset1, FilterNotOccurs EntPnt)], 
+      mk_ep fld1 set1 (DefHelpers.mk_witness int1 intset1))
    ]
   in
   if !Config.with_ep then
