@@ -384,6 +384,28 @@ let with_content = [
                 mk_implies (mk_not (mk_elem v c)) (mk_eq (mk_witness v c) mk_null)
               ])
              ]
+   ]);
+  ( mk_ident "sorted_set2",
+    [df; dataf; nextf; parentf; xf; yf; cf],
+    mk_and [mk_reach next x y;
+            mk_forall ~ann:[Comment "strict_sortedness"] [l1f; l2f]
+              (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y; mk_neq l1 l2]
+                          [mk_lt (mk_read data l1) (mk_read data l2)]);
+            mk_forall [l1f]
+              (mk_implies l1_in_domain (mk_btwn parent l1 mk_null mk_null));
+            mk_forall [l1f; l2f]
+              (mk_sequent [l1_in_domain; mk_not (mk_eq l2 l1); mk_not (mk_eq l2 mk_null)]
+                          [mk_not (mk_btwn parent l1 l2 mk_null)]);
+          ],
+    [di, mk_forall ~ann:[Comment "sorted_set_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp);
+     ci, mk_and [
+     mk_forall ~ann:[Comment "sorted_set_1"] [l1f]
+       (mk_implies l1_in_lst_fp (mk_elem (mk_read data l1) c));
+     mk_forall ~ann:[Comment "sorted_set_2"; witness_generator1; witness_generator2] [vf]
+       (mk_and [mk_implies (mk_elem v c) (mk_and [mk_elem (mk_witness v c) d; mk_eq v (mk_read data (mk_witness v c))]);
+                mk_implies (mk_not (mk_elem v c)) (mk_eq (mk_witness v c) mk_null)
+              ])
+             ]
    ])
 ]
 

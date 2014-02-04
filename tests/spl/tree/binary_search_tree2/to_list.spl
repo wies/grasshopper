@@ -1,0 +1,82 @@
+struct Node { //union between tree and list
+  var next: Node;
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+}
+
+//same as sorted_set but forces parent to be null
+predicate sorted_set2(x: Node, y: Node, c: set<int>) {
+    x == y &*&
+    c == set<int>()
+  || 
+    x != y &*&
+    x.parent == null &*&
+    x.data == x.data &*&
+    x.next == x.next
+    //sorted_set_lb(x, y, x.data - 1, c) TODO
+}
+
+predicate stree(x: Node, y: Node, content: set<int>) {
+    x == null &*&
+    content == set<int>()
+  ||
+    x != null &*&
+    x.parent |-> y &*&
+    x.data in content &*&
+    stree(x.left, x, content) &*&  //TODO content
+    stree(x.right, x, content)     //TODO content
+}
+
+predicate treeAllocInvariant(X: set<Node>) {
+  (forall n in X :: n.parent == n.parent)
+}
+
+//TODO concat would be more efficient
+procedure union(lst1: Node, lst2: Node,
+                implicit ghost content1: set<int>,
+                implicit ghost content2: set<int>)
+  returns (res: Node)
+  requires sorted_set2(lst1, null, content1);
+  requires sorted_set2(lst2, null, content2);
+  ensures sorted_set2(res, null, content1 ++ content2);
+{
+    if (lst1 == null) {
+        return lst2;
+    } else if (lst2 == null) {
+        return lst1;
+    } else if (lst1.data < lst2.data) {
+        lst1.next := union(lst1.next, lst2);
+        return lst1;
+    } else if (lst1.data > lst2.data) {
+        lst2.next := union(lst1, lst2.next);
+        return lst2;
+    } else { //lst1.data == lst2.data
+        var n: Node;
+        n := lst1.next;
+        free(lst1);
+        return union(n, lst2);
+    }
+}
+
+procedure toList(t: Node, ghost p: Node, implicit ghost content: set<int>)
+returns (res: Node)
+  requires stree(t, p, content);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures sorted_set2(res, null, content);
+{
+    if (t == null) {
+        return null;
+    } else {
+        var l: Node, r: Node;
+        r := toList(t.right, t);
+        l := toList(t.left, t);
+        t.right := null;
+        t.left := null;
+        t.parent := null;
+        t.next := r;
+        return union(l, t);
+    }
+}
