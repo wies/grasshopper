@@ -161,12 +161,16 @@ let tree_with_content = [
             ],
       [di, mk_forall ~ann:([Comment "tree_footprint"]) [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq x mk_null]));
        ci, mk_and [
+                    mk_forall ~ann:[Comment "tree_content_0"] [l1f]
+                        (mk_implies l1_in_domain (mk_eq l1 (mk_witness (mk_read data l1) c)));
                     mk_forall ~ann:[Comment "tree_content_1"] [l1f]
                         (mk_implies l1_in_domain (mk_elem (mk_read data l1) c));
-                    mk_forall ~ann:[Comment "tree_content_2"; (*witness_generator1;*) witness_generator2] [vf]
-                        (mk_and [mk_implies (mk_elem v c) (mk_and [mk_elem (mk_witness v c) d; mk_eq v (mk_read data (mk_witness v c))]);
-                                 mk_implies (mk_not (mk_elem v c)) (mk_eq (mk_witness v c) mk_null)
-                        ])
+                    mk_forall ~ann:[Comment "tree_content_2"; witness_generator3] [vf]
+                        (mk_implies (mk_not (mk_elem v c)) (mk_eq (mk_witness v c) mk_null));
+                    mk_forall ~ann:[Comment "tree_content_3"] [vf]
+                        (mk_implies (mk_elem v c) (mk_eq v (mk_read data (mk_witness v c))));
+                    mk_forall ~ann:[Comment "tree_content_4"] [vf]
+                        (mk_implies (mk_elem v c) (mk_elem (mk_witness v c) d))
                ]
       ]);
     ( mk_ident "heap_cnt",

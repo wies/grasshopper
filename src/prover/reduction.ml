@@ -4,6 +4,7 @@ open Util
 open Form
 open FormUtil
 open InstGen
+open SimplifyForm
 
 
 (** Eliminate all implicit and explicit existential quantifiers using skolemization.
@@ -462,6 +463,10 @@ let reduce f =
   in
   let f1 = nnf f in
   let fs = split_ands [] [f1] in
+  (* formula rewriting that helps with the solving *)
+  let fs = simplify_sets fs in
+  let fs = pull_eq_up fs in
+  (* *)
   let fs = massage_field_reads fs in
   let fs = List.map reduce_exists fs in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)

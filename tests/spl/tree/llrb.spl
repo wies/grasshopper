@@ -9,6 +9,12 @@ struct Node {
   var red: bool; //false is black
 }
 
+//RB tree invariants:
+//-No path from the root to the bottom contains two consecutive red links.
+//-The number of black links on every such path is the same
+//additional LLRB tree invariant:
+//-requiring that 3-nodes always lean to the left (and that 4-nodes are balanced)
+
 predicate tree(x: Node, y: Node) {
     x == null
   ||

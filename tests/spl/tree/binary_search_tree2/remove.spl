@@ -23,11 +23,10 @@ predicate treeAllocInvariant(X: set<Node>) {
 procedure extract_max(root: Node, ghost p: Node,
                       implicit ghost content: set<int>)
 returns (others: Node, max: Node)
-  requires p in Alloc || p == null;
   requires stree(root, p, content) &*& root != null;
   requires treeAllocInvariant(Alloc);
   ensures  stree(others, p, content -- set(max.data)) &*& acc(max);
-  ensures  max.left == null && max.right == null && max.parent == null;
+  ensures  max.right == null && max.parent == null;
   ensures  (forall z in (content -- set(max.data)) :: z < max.data);
   ensures  treeAllocInvariant(Alloc);
 {
@@ -39,7 +38,6 @@ returns (others: Node, max: Node)
     } else {
         var c: Node;
         c := root.left;
-        root.left := null;
         root.parent := null;
         if (c != null) {
           c.parent := p;
