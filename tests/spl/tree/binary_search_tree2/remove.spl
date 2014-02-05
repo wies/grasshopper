@@ -46,7 +46,7 @@ returns (others: Node, max: Node)
     }
 }
 
-procedure remove(root: Node, value: int, p: Node,
+procedure remove(root: Node, value: int, ghost p: Node,
                  implicit ghost content: set<int>)
 returns (res: Node)
   requires stree(root, p, content);

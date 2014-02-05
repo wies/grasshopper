@@ -169,22 +169,28 @@ let ep_axioms () =
     (*else mk_implies (mk_and [reach loc1 loc2; in_set1 loc2]) (reachwo loc1 ep loc2) *)
   in
   let ep_generator = 
+    let parent_filter =
+      Match (fld1, FilterGeneric (function (App (FreeSym (p, _), _, _)) when p = "parent" -> false | _ -> true))
+    in
     [([s1; f1; l1],
      [s2; f2; f3; l3; l4],
      [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
       Match (mk_btwn_term fld3 loc1 loc3 loc4, FilterTrue);
-      Match (loc1, FilterNotOccurs EntPnt)], 
+      Match (loc1, FilterNotOccurs EntPnt);
+      parent_filter], 
      mk_ep fld1 set1 loc1);
      ([s1; f1; l1],
      [s2; s3; f2],
      [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
       Match (mk_elem_term loc1 set3, FilterTrue);
-      Match (loc1, FilterNotOccurs EntPnt)], 
+      Match (loc1, FilterNotOccurs EntPnt);
+      parent_filter], 
      mk_ep fld1 set1 loc1);
      ([s1; f1],
      [s2; is1; f2; i1],
      [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-      Match (DefHelpers.mk_witness int1 intset1, FilterNotOccurs EntPnt)], 
+      Match (DefHelpers.mk_witness int1 intset1, FilterNotOccurs EntPnt);
+      parent_filter], 
       mk_ep fld1 set1 (DefHelpers.mk_witness int1 intset1))
    ]
   in

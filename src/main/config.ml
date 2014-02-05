@@ -1,3 +1,9 @@
+(* Name of procedure that is to be checked *)
+let procedure = ref ""
+
+(* File name where counterexample model is saved. *)
+let model_file = ref ""
+
 (* Flags controlling the axioms generation *)
 let with_reach_axioms = ref true
 let keep_sets = ref true
@@ -9,8 +15,6 @@ let backend_solver_has_set_theory = ref false
 let instantiate = ref true
 let stratify = ref true
 let split_vcs = ref false
-(* File name where counterexample model is saved. *)
-let model_file = ref ""
 (* Dump unsat cores *)
 let unsat_cores = ref false
 (* Flag that controls whether the generated VCs are dumped to files. *)
@@ -39,7 +43,8 @@ let optSelfFrame = ref false
 
 
 let cmd_options =
-  [("-model", Arg.Set_string model_file, "<file>  Produce counterexample model for the first failing verification condition");
+  [("-procedure", Arg.Set_string procedure, "<string>  Only check the specified procedure");
+   ("-model", Arg.Set_string model_file, "<file>  Produce counterexample model for the first failing verification condition");
    ("-flycheck", Arg.Set flycheck_mode, " Print error messages for on-the-fly checking");
    ("-dumpghp", Arg.Set_int dump_ghp, "<num>  Print intermediate program after specified simplification stage (num=0,1,2,3)");
    ("-dumpvcs", Arg.Set dump_smt_queries, " Generate SMT-LIB 2 files for all verification conditions");

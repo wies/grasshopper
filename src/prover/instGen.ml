@@ -131,6 +131,7 @@ let generate_terms generators ground_terms =
           | App (_, ts, _) -> List.for_all hasSym ts
           | _ -> true
         in hasSym t
+    | FilterGeneric fn -> fn t
   in
   let rec generate new_terms old_terms = function
     | (bvs, fvs, guards, gen_term) :: generators1 ->

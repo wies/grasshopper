@@ -49,6 +49,7 @@ type term =
 type filter =
   | FilterTrue
   | FilterNotOccurs of symbol
+  | FilterGeneric of (term -> bool)
 
 type guard =
   | Match of term * filter

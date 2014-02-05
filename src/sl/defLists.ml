@@ -76,6 +76,12 @@ let lists = [
                       mk_and [mk_eq (mk_read next y2) y1;
                               mk_eq (mk_read prev x1) x2;
                               mk_elem y2 d]];
+              (*mk_forall [l1f]
+                (mk_sequent [mk_elem l1 d; mk_elem (mk_read prev l1) d]
+                   [mk_reach next (mk_read prev l1) l1]);
+              mk_forall [l1f; l2f]
+                        (mk_sequent [mk_elem l1 d; mk_elem l2 d; mk_btwn next (mk_read prev l1) l2 l1]
+                           [mk_eq l2 l1; mk_eq l2 (mk_read prev l1)]);*)
               mk_forall [l1f;l2f]
                         (mk_sequent [mk_eq (mk_read next l1) l2; mk_elem l1 d; mk_elem l2 d]
                         [mk_eq (mk_read prev l2) l1])],

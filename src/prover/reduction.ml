@@ -159,12 +159,19 @@ let reduce_frame fs =
         let reach_f' x y z = mk_btwn f' x z y in
         let open Axioms in
         if TermSet.mem f' btwn_flds then
+          match f' with
+          | App (FreeSym (p, _), _, _) when p = "parent" ->
+              [mk_axiom "reach_frame"
+                 (mk_sequent
+                    [smk_elem loc1 frame]
+                    [mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)])]
+          | _ ->
           [mk_axiom "reach_frame1"
-             (mk_implies
-                (reachwo_f loc1 loc2 (ep loc1))
-                (mk_iff 
+             (mk_sequent
+                [reachwo_f loc1 loc2 (ep loc1)]
+                [(mk_iff 
                    (reach_f loc1 loc2 loc3)
-                   (reach_f' loc1 loc2 loc3)));
+                   (reach_f' loc1 loc2 loc3))]);
            mk_axiom "reach_frame2"
              (mk_implies
                 (mk_and [mk_not (smk_elem loc1 x); mk_eq loc1 (ep loc1)])

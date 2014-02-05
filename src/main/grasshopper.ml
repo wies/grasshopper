@@ -24,7 +24,13 @@ let vc_gen file =
   let cu = parse_input (fun lexbuf -> SplParser.main SplLexer.token lexbuf) file in
   let prog = Spl2ghp.to_program [cu] in
   let prog1 = Analysis.simplify prog in
-    Prog.iter_procs Analysis.check_proc prog1
+  if !Config.procedure = "" 
+  then Prog.iter_procs Analysis.check_proc prog1
+  else 
+    try
+      let proc = Prog.find_proc prog1 (!Config.procedure, 0) in
+      Analysis.check_proc prog1 proc
+    with Not_found -> failwith ("Could not find a procedure named " ^ !Config.procedure)
     
 
 let current_time () =
