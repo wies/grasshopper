@@ -129,6 +129,10 @@ let mk_read fld ind =
          "Expected sort (Fld X) for some sort X.")
   in mk_app ?srt:srt Read [fld; ind]
 
+let mk_read_form fld ind = match sort_of fld with
+  | Some (Fld Bool) -> mk_atom Read [fld; ind]
+  | _ -> failwith "mk_read_form requries a Fld Bool"
+
 let mk_write fld ind upd =
   mk_app ?srt:(sort_of fld) Write [fld; ind; upd]
 

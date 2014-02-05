@@ -9,7 +9,7 @@ let parent_generator child =
                   mk_read parent (mk_read child l1))
 let left_generator =
   TermGenerator ( [l1f], [],
-                   [Match (mk_read right l1, FilterTrue)],
+                  [Match (mk_read right l1, FilterTrue)],
                   mk_read left l1)
 let right_generator =
   TermGenerator ( [l1f], [],
@@ -25,10 +25,10 @@ let parent_equal child =
   (*mk_forall ~ann:[Comment ((string_of_term child)^"_parent_equal"); parent_generator child] [l1f] 
     (mk_sequent [mk_elem l1 d]
                 [mk_eq (mk_read child l1) mk_null; mk_eq (mk_read parent (mk_read child l1)) l1])*)
-  mk_and [mk_forall ~ann:[Comment ((string_of_term child)^"_parent_equal")] [l1f]
+  mk_and [mk_forall ~ann:[Comment ((string_of_term child)^"_parent_equal_1")] [l1f]
             (mk_sequent [mk_elem l1 d]
-               [mk_eq (mk_read child l1) mk_null; mk_reach parent (mk_read child l1) l1]);
-          mk_forall ~ann:[Comment ((string_of_term child)^"_parent_equal")] [l1f; l2f]
+               [mk_eq (mk_read child l1) mk_null; mk_and [mk_reach parent (mk_read child l1) l1; mk_neq (mk_read child l1) l1]]);
+          mk_forall ~ann:[Comment ((string_of_term child)^"_parent_equal_2")] [l1f; l2f]
             (mk_sequent [mk_elem l1 d; mk_btwn parent (mk_read child l1) l2 l1]
                [mk_eq l2 l1; mk_eq l2 (mk_read child l1)])]
 
@@ -87,6 +87,24 @@ let tree_sorted = [
                   [mk_gt (mk_read data l1) (mk_read data l2)])
   ]
 
+(*color for red-black tree*)
+let _, redf, red = mk_formal_and_var "red" (Fld Bool)
+let tree_llrb = [
+    mk_forall ~ann:[Comment "root_is_black"] [l1f]
+      (mk_sequent [l1_in_domain; mk_eq (mk_read parent l1) mk_null]
+                  [mk_not (mk_read_form red l1)]);
+    mk_forall ~ann:[Comment "red_children_has_black_left_child"] [l1f]
+      (mk_sequent [l1_in_domain; mk_read_form red l1]
+                  [mk_not (mk_read_form red (mk_read left l1)); mk_eq (mk_read left l1) mk_null]);
+    mk_forall ~ann:[Comment "red_children_has_black_right_child"] [l1f]
+      (mk_sequent [l1_in_domain; mk_read_form red l1]
+                  [mk_not (mk_read_form red (mk_read left l1)); mk_eq (mk_read right l1) mk_null]);
+    mk_forall ~ann:[Comment "left_leaning"] [l1f]
+      (mk_sequent [l1_in_domain; mk_read_form red (mk_read right l1); mk_neq (mk_read right l1) mk_null]
+                  [mk_and [mk_neq (mk_read left l1) mk_null; (mk_read_form red (mk_read left l1))]]);
+    (* TODO #black nodes on any path between the root and a leaf is the same*)
+  ]
+
 (* definitions *)
 let trees = [
     ( mk_ident "treeAllocInvariant",
@@ -129,4 +147,8 @@ let trees = [
       [df; dataf; leftf; parentf; rightf; xf; yf; cf],
       mk_and ((_sorted parent y (*children are smaller than parent*)) :: tree_structure),
       [tree_fp; tree_content ]);
+    ( mk_ident "llrb",
+      [df; leftf; parentf; redf; rightf; xf; yf],
+      mk_and (tree_llrb @ tree_structure),
+      [tree_fp]);
   ]

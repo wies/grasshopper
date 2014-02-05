@@ -45,9 +45,6 @@ let mk_axiom2 f =
   let bvars = IdSrtSet.elements fvars in
   mk_forall bvars f 
 
-let f x = mk_read fld1 x
-let g x = mk_read fld2 x
-
 let reachwo_Fld f u v w = 
   mk_or [mk_btwn f u v w; mk_and [mk_reach f u v; mk_not (mk_reach f u w)]]
   
@@ -111,6 +108,9 @@ let reach_write_axioms fld1 loc1 loc2 =
   then [mk_axiom "btwn_write" btwn_write]
   else []
 
+let f x = mk_read fld1 x
+let g x = mk_read fld2 x
+
 let reach_axioms () = 
   (* btwn axioms *)
   let btwn_refl = btwn loc1 loc1 loc1 in
@@ -170,7 +170,7 @@ let ep_axioms () =
   in
   let ep_generator = 
     let parent_filter =
-      Match (fld1, FilterGeneric (function (App (FreeSym (p, _), _, _)) when p = "parent" -> false | _ -> true))
+      Match (fld1, FilterGeneric (function (App (FreeSym (p, _), _, _)) when p = (fst DefHelpers.parenti) -> false | _ -> true))
     in
     [([s1; f1; l1],
      [s2; f2; f3; l3; l4],

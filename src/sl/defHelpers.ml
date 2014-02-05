@@ -34,7 +34,7 @@ let _, nextf, next = mk_loc_field "next"
 let _, prevf, prev = mk_loc_field "prev"
 let _, leftf, left = mk_loc_field "left"
 let _, rightf, right = mk_loc_field "right"
-let _, parentf, parent = mk_loc_field "parent"
+let parenti, parentf, parent = mk_loc_field "parent"
 
 let _, dataf, data = mk_int_field "data"
 

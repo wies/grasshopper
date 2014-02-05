@@ -14,6 +14,7 @@ let _ = List.iter (fun (id, srt) -> Hashtbl.add sort_tbl id srt)
      int_sort_string, Int;
      fld_sort_string^loc_sort_string, Fld Loc;
      fld_sort_string^int_sort_string, Fld Int;
+     fld_sort_string^bool_sort_string, Fld Bool;
      set_sort_string^loc_sort_string, Set Loc;
      set_sort_string^int_sort_string, Set Int
     ]

@@ -14,26 +14,25 @@ struct Node {
 //-The number of black links on every such path is the same
 //additional LLRB tree invariant:
 //-requiring that 3-nodes always lean to the left (and that 4-nodes are balanced)
-//  predicate llrb_tree(x: Node, y: Node) {
-//      x == null
-//    ||
-//      x != null &*&
-//      x.parent |-> y &*&
-//      tree(x.left, x) &*&
-//      tree(x.right, x) &*&
-//      //RB tree invariant
-//      (x.parent != null || !(x.red)) &*& //root is black
-//      (!(x.red) || x.left == null || !(x.left.red) ) &*& //red node has 2 black children
-//      (!(x.red) || x.right == null || !(x.right.red) ) &*& //red node has 2 black children
-//      (x.right == null || !(x.right.red) || (x.left != null && x.left.red)) //left leaning: red right child => red left child
-//      //TODO every path from the root to a leaf has the same number of black node
-//  }
 
 predicate tree(x: Node, y: Node) {
     x == null
   ||
     x != null &*&
     x.parent |-> y &*&
+    tree(x.left, x) &*&
+    tree(x.right, x)
+}
+
+predicate llrb(x: Node, y: Node) {
+    x == null
+  ||
+    x != null &*&
+    x.parent |-> y &*&
+    (x.parent != null || !(x.red)) &*&                                          //root is black
+    (!(x.red) || x.left == null || !(x.left.red)) &*&                           //red node has left black child
+    (!(x.red) || x.right == null || !(x.right.red)) &*&                         //red node has right black child
+    (x.right == null || !(x.right.red) || (x.left != null && x.left.red)) &*&   //left leaning: red right child => red left child
     tree(x.left, x) &*&
     tree(x.right, x)
 }

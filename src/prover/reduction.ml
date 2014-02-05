@@ -139,8 +139,10 @@ let btwn_fields fs gts =
     | _ -> flds)
     TermSet.empty (smk_and fs)  
 
+let btwn_fields_in_fs fs = btwn_fields fs (ground_terms (smk_and fs))
+
 let reduce_frame fs =
-  let btwn_flds = btwn_fields fs (ground_terms (smk_and fs)) in
+  let btwn_flds = btwn_fields_in_fs fs in
   let expand_frame x a f f' =
     let frame = mk_diff a x in
     let reduce_graph () =
@@ -308,7 +310,18 @@ let reduce_sets fs =
 (** Adds theory axioms for the entry point function to formula f.
  ** Assumes that f is typed and that all frame predicates have been reduced. *)
 let instantiate_ep fs =
-  List.rev_append (Axioms.ep_axioms ()) fs
+  let gts = ground_terms (smk_and fs) in
+  let flds = btwn_fields fs gts in
+  let flds =
+    TermSet.filter 
+      (fun t -> match t with | App (FreeSym (p, _), _, _) -> p <> "parent" | _ -> true)
+      flds
+  in
+  let classes =  CongruenceClosure.congr_classes fs gts in
+  let ep_ax, _ = open_axioms isFld (Axioms.ep_axioms ()) in
+  let ep_ax = instantiate_with_terms false ep_ax (CongruenceClosure.restrict_classes classes flds) in
+    List.rev_append ep_ax fs
+  (*List.rev_append (Axioms.ep_axioms ()) fs*)
  
 let reduce_read_write fs =
   let gts = ground_terms (smk_and fs) in
@@ -472,16 +485,16 @@ let reduce f =
   (* *)
   let fs = massage_field_reads fs in
   let fs = List.map reduce_exists fs in
+  (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
   (* formula rewriting that helps with the solving *)
   let fs = simplify_sets fs in
   let fs = pull_eq_up fs in
-  (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
+  (*TypeStrat.init fs;*)
+  TypeStrat.default ();
   let fs = instantiate_ep fs in
   let fs = reduce_frame fs in
   let fs = factorize_axioms (split_ands [] fs) in
   let fs = reduce_sets fs in
-  (*TypeStrat.init fs;*)
-  TypeStrat.default ();
   let fs, read_propagators, gts = reduce_read_write fs in
   let fs, gts = reduce_reach fs gts in
   let fs, gts = instantiate_user_def_axioms read_propagators fs gts in
