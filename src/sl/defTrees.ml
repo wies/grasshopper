@@ -33,10 +33,10 @@ let left_right_distinct =
 let reach_via_left_right =
   mk_forall ~ann:[Comment "reach_via_left_right"] [l1f; l2f]
     (mk_sequent 
-       [mk_reach parent l1 l2; mk_elem l1 d; mk_elem l2 d]
-       [mk_eq l1 l2;
-        mk_btwn parent l1 (mk_read left l2) l2;
-        mk_btwn parent l1 (mk_read right l2) l2])
+       [mk_reach parent l2 l1; mk_elem l2 d; mk_elem l1 d]
+       [mk_eq l2 l1;
+        mk_btwn parent l2 (mk_read left l1) l1;
+        mk_btwn parent l2 (mk_read right l1) l1])
 
 let tree_fp = (di, mk_forall ~ann:([Comment "tree_footprint"]) [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq x mk_null])))
 
