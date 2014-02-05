@@ -318,9 +318,18 @@ let instantiate_ep fs =
       flds
   in
   let classes =  CongruenceClosure.congr_classes fs gts in
-  let ep_ax, _ = open_axioms isFld (Axioms.ep_axioms ()) in
+  (*List.iter (fun f -> print_form stdout f; print_newline ()) (Axioms.ep_axioms ());*)
+  let ep_ax, generators = open_axioms isFld (Axioms.ep_axioms ()) in
+  let generators = List.map (fun (a,b,c,d)-> TermGenerator(a, b, c, d)) generators in
+  (*print_endline "---";
+  List.iter (fun f -> print_form stdout f; print_newline ()) ep_ax;*)
   let ep_ax = instantiate_with_terms false ep_ax (CongruenceClosure.restrict_classes classes flds) in
-    List.rev_append ep_ax fs
+  (*print_endline "---";
+  List.iter (fun f -> print_form stdout f; print_newline ()) ep_ax;*)
+    match ep_ax with
+    | Binder(b, vs, f, ann) :: xs -> Binder(b, vs, f, ann @ generators):: xs @ fs
+    | [] -> fs
+    | _ -> failwith "don't know where to put the generators"
   (*List.rev_append (Axioms.ep_axioms ()) fs*)
  
 let reduce_read_write fs =
