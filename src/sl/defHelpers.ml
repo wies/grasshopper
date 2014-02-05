@@ -78,5 +78,11 @@ let witness_generator2 =
 let witness_generator3 =
   TermGenerator
     ( [vf], [isf],
-      [Match (v, FilterNotOccurs witness_sym)],
+      [Match (v, FilterNotOccurs witness_sym);
+       (*Match (v, FilterNotOccurs Read)*)],
       mk_read data (mk_witness v c))
+let witness_generator4 =
+  TermGenerator
+    ( [vf], [isf],
+      [Match (v, FilterNotOccurs witness_sym)],
+      mk_witness v c)

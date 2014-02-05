@@ -22,9 +22,16 @@ let data_generator =
 
 (* shorthands for strucutral constraints *)
 let parent_equal child =
-  mk_forall ~ann:[Comment ((string_of_term child)^"_parent_equal"); parent_generator child] [l1f] 
+  (*mk_forall ~ann:[Comment ((string_of_term child)^"_parent_equal"); parent_generator child] [l1f] 
     (mk_sequent [mk_elem l1 d]
-                [mk_eq (mk_read child l1) mk_null; mk_eq (mk_read parent (mk_read child l1)) l1])
+                [mk_eq (mk_read child l1) mk_null; mk_eq (mk_read parent (mk_read child l1)) l1])*)
+  mk_and [mk_forall ~ann:[Comment ((string_of_term child)^"_parent_equal")] [l1f]
+            (mk_sequent [mk_elem l1 d]
+               [mk_eq (mk_read child l1) mk_null; mk_reach parent (mk_read child l1) l1]);
+          mk_forall ~ann:[Comment ((string_of_term child)^"_parent_equal")] [l1f; l2f]
+            (mk_sequent [mk_elem l1 d; mk_btwn parent (mk_read child l1) l2 l1]
+               [mk_eq l2 l1; mk_eq l2 (mk_read child l1)])]
+
 let left_right_distinct =
   mk_forall ~ann:([Comment "left_right_distinct"; left_generator; right_generator]) [l1f]
     (mk_sequent
