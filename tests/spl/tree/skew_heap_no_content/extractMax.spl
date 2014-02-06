@@ -28,10 +28,10 @@ procedure union(h1: Node, h2: Node)
     ensures heap(res, null);
 
 
-procedure extractMax(h: Node) returns (min: int, rest: Node)
+procedure extractMax(h: Node) returns (max: int, rest: Node)
     requires heap(h, null) &*& h != null;
     requires treeAllocInvariant(Alloc);
-    ensures treeAllocInvariant(Alloc);
+    ensures  treeAllocInvariant(Alloc);
     ensures  heap(rest, null);
 {
     var d : int;
