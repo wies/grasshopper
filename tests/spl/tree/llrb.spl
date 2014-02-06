@@ -15,6 +15,15 @@ struct Node {
 //additional LLRB tree invariant:
 //-requiring that 3-nodes always lean to the left (and that 4-nodes are balanced)
 
+//  moveRedLeft
+//  rotateRight
+//  moveRedRight
+//  min
+//  deleteMin
+//  fixUp
+//  rotateLeft
+//  colorFlip
+
 predicate tree(x: Node, y: Node) {
     x == null
   ||
@@ -148,6 +157,8 @@ procedure insert1(h: Node, key: int, ghost p: Node) returns (res: Node)
     }
 }
 
+// Assuming that h is red and both h.left and h.left.left are black,
+// make h.left or one of its children red.
 procedure moveRedLeft(h: Node, ghost p: Node) returns (res: Node)
   requires h != null && h.left != null && !(h.left.red) && (h.left.left == null || !(h.left.left.red));
   requires tree(h, p);
@@ -165,6 +176,8 @@ procedure moveRedLeft(h: Node, ghost p: Node) returns (res: Node)
     return h;
 }
 
+// Assuming that h is red and both h.right and h.right.left are black,
+// make h.right or one of its children red.
 procedure moveRedRight(h: Node, ghost p: Node) returns (res: Node)
   requires tree(h, p);
   requires treeAllocInvariant(Alloc);
@@ -213,42 +226,57 @@ procedure min(h: Node, ghost p: Node) returns (res: int)
 //      return fixUp(h, p);
 //  }
 
-procedure rotateLeft(h: Node, ghost p: Node) returns (res: Node)
+// Make a right-leaning 3-node lean to the left.
+procedure rotateLeft(h: Node, ghost p: Node, implicit ghost c: bool) returns (res: Node)
   requires tree(h, p);
+  requires h != null && h.right != null && h.right.red && c == h.red;
   requires treeAllocInvariant(Alloc);
   ensures  treeAllocInvariant(Alloc);
   ensures  tree(res, p);
+  ensures  res.left != null && res != null && res.left.red && c == res.red;
 {
     var x: Node;
     x := h.right;
     h.right := x.left;
+    if (h.right != null) h.right.parent := h;
     x.left := h;
+    if (x.left != null) x.left.parent := x;
     x.red := h.red;
     h.red := true;
+    x.parent := p;
     return x;
 }
 
-procedure rotateRight(h: Node, ghost p: Node) returns (res: Node)
+// Make a left-leaning 3-node lean to the right.
+// or there are two left node on the left -> balanced 4 node
+procedure rotateRight(h: Node, ghost p: Node, implicit ghost c: bool) returns (res: Node)
   requires tree(h, p);
+  requires h != null && h.left != null && h.left.red && c == h.red;
   requires treeAllocInvariant(Alloc);
   ensures  treeAllocInvariant(Alloc);
   ensures  tree(res, p);
+  ensures  res != null && res.right != null && res.right.red && c == res.red;
 {
     var x: Node;
     x := h.left;
     h.left := x.right;
+    if (h.left != null) h.left.parent := h;
     x.right := h;
+    if (x.right != null) x.right.parent := x;
     x.red := h.red;
     h.red := true;
+    x.parent := p;
     return x;
 }
 
-procedure isRed(h: Node, ghost p: Node) returns (res: bool)
+procedure isRed(h: Node, ghost p: Node, implicit ghost c: bool) returns (res: bool)
   requires tree(h, p);
+  requires c == ((h != null) && h.red);
   requires treeAllocInvariant(Alloc);
   ensures  treeAllocInvariant(Alloc);
   ensures  tree(h, p);
   ensures  res == ((h != null) && h.red);
+  ensures  res == c;
 {
     if (h != null) {
         return h.red;
@@ -257,12 +285,18 @@ procedure isRed(h: Node, ghost p: Node) returns (res: bool)
     }
 }
 
-procedure colorFlip(h: Node, ghost p: Node)
-  requires h != null && h.left != null && h.right != null;
+procedure colorFlip(h: Node, ghost p: Node,
+                    implicit ghost l: bool,
+                    implicit ghost c: bool,
+                    implicit ghost r: bool)
+  requires h != null && h.left != null && h.right != null &&
+           h.red == c && h.left.red == l && h.right.red == r;
   requires tree(h, p);
   requires treeAllocInvariant(Alloc);
   ensures  treeAllocInvariant(Alloc);
   ensures  tree(h, p);
+  requires h != null && h.left != null && h.right != null &&
+           h.red != c && h.left.red != l && h.right.red != r;
 {
     if (h.red) h.red := false; else h.red := true;
     if (h.left.red) h.left.red := false; else h.left.red := true;
