@@ -74,6 +74,7 @@ returns (res: Node)
             res.parent := p;
             return res;
         } else {
+            root.parent := null;
             var l: Node, m: Node;
             l, m := extract_max(root.left, root);
             m.left := l;
@@ -82,7 +83,6 @@ returns (res: Node)
             }
             m.right := root.right;
             m.right.parent := m;
-            root.parent := null;
             free(root);
             m.parent := p;
             return m;
