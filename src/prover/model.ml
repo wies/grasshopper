@@ -289,7 +289,7 @@ let output_graphviz chan model =
       with Not_found -> None
     in
     let locs = values_of_tpe Loc model in
-    let data_field = values_of_tpe (Fld Int) model in
+    let data_field = SymbolSet.union (values_of_tpe (Fld Int) model) (values_of_tpe (Fld Bool) model) in
       SymbolSet.iter
         (fun loc ->
           Printf.fprintf chan "  \"%s\" [shape=none, margin=0, label=<\n" (str_of_symbol loc);

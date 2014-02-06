@@ -89,16 +89,20 @@ let tree_sorted = [
 
 (*color for red-black tree*)
 let _, redf, red = mk_formal_and_var "red" (Fld Bool)
-let tree_llrb = [
+let tree_rb_top = [
     mk_forall ~ann:[Comment "root_is_black"] [l1f]
       (mk_sequent [l1_in_domain; mk_eq (mk_read parent l1) mk_null]
                   [mk_not (mk_read_form red l1)]);
+  ]
+let tree_rb = [
     mk_forall ~ann:[Comment "red_children_has_black_left_child"] [l1f]
       (mk_sequent [l1_in_domain; mk_read_form red l1]
                   [mk_not (mk_read_form red (mk_read left l1)); mk_eq (mk_read left l1) mk_null]);
     mk_forall ~ann:[Comment "red_children_has_black_right_child"] [l1f]
       (mk_sequent [l1_in_domain; mk_read_form red l1]
                   [mk_not (mk_read_form red (mk_read left l1)); mk_eq (mk_read right l1) mk_null]);
+  ]
+let tree_llrb = [
     mk_forall ~ann:[Comment "left_leaning"] [l1f]
       (mk_sequent [l1_in_domain; mk_read_form red (mk_read right l1); mk_neq (mk_read right l1) mk_null]
                   [mk_and [mk_neq (mk_read left l1) mk_null; (mk_read_form red (mk_read left l1))]]);
@@ -147,8 +151,12 @@ let trees = [
       [df; dataf; leftf; parentf; rightf; xf; yf; cf],
       mk_and ((_sorted parent y (*children are smaller than parent*)) :: tree_structure),
       [tree_fp; tree_content ]);
+    ( mk_ident "rb",
+      [df; leftf; parentf; redf; rightf; xf; yf],
+      mk_and (tree_rb @ tree_structure),
+      [tree_fp]);
     ( mk_ident "llrb",
       [df; leftf; parentf; redf; rightf; xf; yf],
-      mk_and (tree_llrb @ tree_structure),
+      mk_and (tree_rb @ tree_llrb @ tree_structure),
       [tree_fp]);
   ]

@@ -38,10 +38,21 @@ predicate llrb(x: Node, y: Node) {
   ||
     x != null &*&
     x.parent |-> y &*&
-    (x.parent != null || !(x.red)) &*&                                          //root is black
+    //  (x.parent != null || !(x.red)) &*&                                          //root is black
     (!(x.red) || x.left == null || !(x.left.red)) &*&                           //red node has left black child
     (!(x.red) || x.right == null || !(x.right.red)) &*&                         //red node has right black child
     (x.right == null || !(x.right.red) || (x.left != null && x.left.red)) &*&   //left leaning: red right child => red left child
+    tree(x.left, x) &*&
+    tree(x.right, x)
+}
+
+predicate rb(x: Node, y: Node) {
+    x == null
+  ||
+    x != null &*&
+    x.parent |-> y &*&
+    (!(x.red) || x.left == null || !(x.left.red)) &*&                           //red node has left black child
+    (!(x.red) || x.right == null || !(x.right.red)) &*&                         //red node has right black child
     tree(x.left, x) &*&
     tree(x.right, x)
 }
@@ -250,11 +261,11 @@ procedure rotateLeft(h: Node, ghost p: Node, implicit ghost c: bool) returns (re
 // Make a left-leaning 3-node lean to the right.
 // or there are two left node on the left -> balanced 4 node
 procedure rotateRight(h: Node, ghost p: Node, implicit ghost c: bool) returns (res: Node)
-  requires tree(h, p);
+  requires h.parent |-> p &*& llrb(h.left, h) &*& llrb(h.right, h);
   requires h != null && h.left != null && h.left.red && c == h.red;
   requires treeAllocInvariant(Alloc);
   ensures  treeAllocInvariant(Alloc);
-  ensures  tree(res, p);
+  ensures  llrb(res, p);
   ensures  res != null && res.right != null && res.right.red && c == res.red;
 {
     var x: Node;
@@ -283,21 +294,22 @@ procedure isRed(h: Node, ghost p: Node) returns (res: bool)
     }
 }
 
-//  procedure isRed(h: Node, ghost p: Node, implicit ghost c: bool) returns (res: bool)
-//    requires tree(h, p);
-//    requires c == ((h != null) && h.red);
-//    requires treeAllocInvariant(Alloc);
-//    ensures  treeAllocInvariant(Alloc);
-//    ensures  tree(h, p);
-//    ensures  res == ((h != null) && h.red);
-//    ensures  res == c;
-//  {
-//      if (h != null) {
-//          return h.red;
-//      } else {
-//          return false;
-//      }
-//  }
+//TODO this is buggy for the moment
+procedure isRed1(h: Node, ghost p: Node, implicit ghost c: bool) returns (res: bool)
+  requires tree(h, p);
+  requires c == ((h != null) && h.red);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  tree(h, p);
+  ensures  res == ((h != null) && h.red);
+  ensures  res == c;
+{
+    if (h != null) {
+        return h.red;
+    } else {
+        return false;
+    }
+}
 
 
 procedure colorFlip(h: Node, ghost p: Node,
