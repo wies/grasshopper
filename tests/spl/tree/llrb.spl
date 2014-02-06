@@ -269,14 +269,12 @@ procedure rotateRight(h: Node, ghost p: Node, implicit ghost c: bool) returns (r
     return x;
 }
 
-procedure isRed(h: Node, ghost p: Node, implicit ghost c: bool) returns (res: bool)
+procedure isRed(h: Node, ghost p: Node) returns (res: bool)
   requires tree(h, p);
-  requires c == ((h != null) && h.red);
   requires treeAllocInvariant(Alloc);
   ensures  treeAllocInvariant(Alloc);
   ensures  tree(h, p);
   ensures  res == ((h != null) && h.red);
-  ensures  res == c;
 {
     if (h != null) {
         return h.red;
@@ -284,6 +282,23 @@ procedure isRed(h: Node, ghost p: Node, implicit ghost c: bool) returns (res: bo
         return false;
     }
 }
+
+//  procedure isRed(h: Node, ghost p: Node, implicit ghost c: bool) returns (res: bool)
+//    requires tree(h, p);
+//    requires c == ((h != null) && h.red);
+//    requires treeAllocInvariant(Alloc);
+//    ensures  treeAllocInvariant(Alloc);
+//    ensures  tree(h, p);
+//    ensures  res == ((h != null) && h.red);
+//    ensures  res == c;
+//  {
+//      if (h != null) {
+//          return h.red;
+//      } else {
+//          return false;
+//      }
+//  }
+
 
 procedure colorFlip(h: Node, ghost p: Node,
                     implicit ghost l: bool,
