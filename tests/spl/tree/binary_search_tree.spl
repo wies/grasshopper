@@ -173,3 +173,37 @@ returns (res: Node)
         return root;
     }
 }
+
+procedure rotate_left(h: Node, ghost p: Node, implicit ghost content: set<int>) returns (res: Node)
+  requires stree(h, p, content);
+  requires h != null && h.right != null;
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  stree(res, p, content);
+{
+    var x: Node;
+    x := h.right;
+    h.right := x.left;
+    if (h.right != null) h.right.parent := h;
+    x.left := h;
+    if (x.left != null) x.left.parent := x;
+    x.parent := p;
+    return x;
+}
+
+procedure rotate_right(h: Node, ghost p: Node, implicit ghost content: set<int>) returns (res: Node)
+  requires stree(h, p, content);
+  requires h != null && h.left != null;
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  stree(res, p, content);
+{
+    var x: Node;
+    x := h.left;
+    h.left := x.right;
+    if (h.left != null) h.left.parent := h;
+    x.right := h;
+    if (x.right != null) x.right.parent := x;
+    x.parent := p;
+    return x;
+}

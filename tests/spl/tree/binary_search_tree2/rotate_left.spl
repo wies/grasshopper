@@ -1,0 +1,38 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+}
+
+predicate stree(x: Node, y: Node, content: set<int>) {
+    x == null &*&
+    content == set<int>()
+  ||
+    x != null &*&
+    x.parent |-> y &*&
+    x.data in content &*&
+    stree(x.left, x, content) &*&  //TODO content
+    stree(x.right, x, content)     //TODO content
+}
+
+predicate treeAllocInvariant(X: set<Node>) {
+  (forall n in X :: n.parent == n.parent)
+}
+
+procedure rotate_left(h: Node, ghost p: Node, implicit ghost content: set<int>) returns (res: Node)
+  requires stree(h, p, content);
+  requires h != null && h.right != null;
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  stree(res, p, content);
+{
+    var x: Node;
+    x := h.right;
+    h.right := x.left;
+    if (h.right != null) h.right.parent := h;
+    x.left := h;
+    if (x.left != null) x.left.parent := x;
+    x.parent := p;
+    return x;
+}
