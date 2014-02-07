@@ -1,0 +1,59 @@
+struct Node {
+  var parent: Node;
+}
+
+predicate tree_set(root: Node, p: Node, X: set<Node>) {
+    root.parent == root.parent
+    //TODO ...
+}
+
+predicate treeAllocInvariant(X: set<Node>) {
+  (forall n in X :: n.parent == n.parent)
+}
+
+procedure find(x: Node, ghost root_x: Node, implicit ghost X: set<Node>) 
+returns (res: Node)
+  requires tree_set(root_x, null, X);
+  requires x in X;
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  tree_set(root_x, null, X);
+  ensures res == root_x;
+{
+  var n: Node;
+  n := x.parent;
+  if (n != null) {
+    res := find(n, root_x);
+    x.parent := res;
+  } else {
+    res := x;
+  }
+}
+
+procedure union(x: Node, y: Node, 
+                ghost root_x: Node, ghost root_y: Node,
+                implicit ghost X: set<Node>, implicit ghost Y: set<Node>)
+  requires tree_set(root_x, null, X) &+& tree_set(root_y, null, Y);
+  requires x in X && y in Y;
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  tree_set(root_x, null, X ++ Y) || tree_set(root_y, null, X ++ Y);
+{
+  var t: Node, s: Node;
+  t := find(x, root_x);
+  s := find(y, root_y);
+  if (t != s) {
+    t.parent := s;
+  }
+}
+
+procedure create() returns (res: Node)
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  tree_set(res, null, set(res));
+{
+    var n: Node;
+    n := new Node;
+    n.parent := null;
+    return n;
+}

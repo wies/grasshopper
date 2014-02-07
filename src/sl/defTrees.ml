@@ -159,4 +159,9 @@ let trees = [
       [df; leftf; parentf; redf; rightf; xf; yf],
       mk_and (tree_rb @ tree_llrb @ tree_structure),
       [tree_fp]);
+    ( mk_ident "tree_set",
+      [df; parentf; xf; yf; sf],
+      mk_and [ mk_or [mk_eq x mk_null; mk_eq (mk_read parent x) y];
+             ],
+      [tree_fp; (si, mk_eq s d)]);
   ]

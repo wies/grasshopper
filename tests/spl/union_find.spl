@@ -43,3 +43,12 @@ procedure union(x: Node, y: Node,
     t.next := s;
   }
 }
+
+procedure create() returns (res: Node)
+  ensures  lseg_set(res, null, set(res));
+{
+    var n: Node;
+    n := new Node;
+    n.next := null;
+    return n;
+}
