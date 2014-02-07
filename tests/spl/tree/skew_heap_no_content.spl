@@ -44,3 +44,38 @@ procedure union(h1: Node, h2: Node)
         return union(h2, h1);
     }
 }
+
+procedure extractMax(h: Node) returns (max: int, rest: Node)
+    requires heap(h, null) &*& h != null;
+    requires treeAllocInvariant(Alloc);
+    ensures  treeAllocInvariant(Alloc);
+    ensures  heap(rest, null);
+{
+    var d : int;
+    d := h.data;
+    var hp: Node, r: Node, l: Node;
+    l := h.left;
+    r := h.right;
+    h.left := null;
+    h.right := null;
+    if (l != null) { l.parent := null; }
+    if (r != null) { r.parent := null; }
+    hp := union(l, r);
+    free h;
+    return d, hp;
+}
+
+procedure insert(h: Node, value: int) returns (res: Node)
+    requires heap(h, null);
+    requires treeAllocInvariant(Alloc);
+    ensures treeAllocInvariant(Alloc);
+    ensures heap(res, null);
+{
+    var n: Node;
+    n := new Node;
+    n.left := null;
+    n.right := null;
+    n.parent := null;
+    n.data := value;
+    return union(h, n);
+}

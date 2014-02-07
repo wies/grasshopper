@@ -1,0 +1,67 @@
+#!/bin/bash
+
+PASSED=1
+
+ensure_verifies()
+{
+  # Function. Parameter 1 is the return code
+  # Para. 2 is the name of the benchmark.
+  if [ "${1}" -ne "0" ]; then
+    echo -e "\rFailed benchmark ${2}.    "
+    echo "*** ERROR: Benchmark ${2} expected to verify, but did not verify."
+    PASSED=0
+  else
+    echo -ne "\rPassed benchmark ${2}.    "
+  fi
+}
+
+ensure_fails()
+{
+  # Function. Parameter 1 is the return code
+  # Para. 2 is the name of the benchmark.
+  if [ "${1}" -ne "1" ]; then
+    echo -e "\rFailed benchmark ${2}.    "
+    echo "*** SOUNDNESS ERROR ***************************************"
+    echo "*** SOUNDNESS ERROR: Benchmark ${2} expected to fail, but verified!"
+    echo "*** SOUNDNESS ERROR ***************************************"
+    PASSED=0
+  else
+    echo -ne "\rPassed benchmark ${2}.    "
+  fi
+}
+
+run_test()
+{
+    echo -ne "Checking benchmark ${1}..."
+    ulimit -St 600
+    ./grasshopper.native $2 -procedure $3 $OPTIONS 2> /dev/null
+    res=$?
+    ulimit -St unlimited
+    if [ $4 == "pass" ]; then
+        ensure_verifies $res $1
+    else
+        ensure_fails $res $1
+    fi
+}
+
+while (( "$#" )); do
+    # UNIX timestamp concatenated with nanoseconds
+    T="$(date +%s%N)"
+    run_test ${1} ${2} ${3} ${4}
+    # Time interval in nanoseconds
+    T="$(($(date +%s%N)-T))"
+    # Seconds
+    S="$((T/1000000000))"
+    # Milliseconds
+    M="$((T/1000000))"
+    printf "%02d:%02d.%03d\n" "$((S/60%60))" "$((S%60))" "${M}"
+    shift
+    shift
+    shift
+    shift
+done
+if [ $PASSED == 1 ]; then
+    echo "All tests passed."
+else
+    echo "There were failing test cases."
+fi
