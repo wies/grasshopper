@@ -20,7 +20,7 @@ sorted-set_union        tests/spl/sl_sorted_set/union.spl      union        pass
 
 TESTS3="
 bst_contains            tests/spl/tree/binary_search_tree.spl  contains         pass
-bst_destroy             tests/spl/tree/binary_search_tree.spl  destroyr         pass
+bst_destroy             tests/spl/tree/binary_search_tree.spl  destroy          pass
 bst_extract_max         tests/spl/tree/binary_search_tree.spl  extract_max      pass
 bst_insert              tests/spl/tree/binary_search_tree.spl  insert           pass
 bst_travers             tests/spl/tree/binary_search_tree.spl  traverse         pass

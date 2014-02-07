@@ -37,7 +37,7 @@ procedure union(x: Node, y: Node,
   requires x in X && y in Y;
   requires treeAllocInvariant(Alloc);
   ensures  treeAllocInvariant(Alloc);
-  ensures  tree_set(root_x, null, X ++ Y) || tree_set(root_y, null, X ++ Y);
+  ensures  tree_set(root_y, null, X ++ Y);
 {
   var t: Node, s: Node;
   t := find(x, root_x);

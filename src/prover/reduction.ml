@@ -154,7 +154,7 @@ let reduce_frame fs =
           )
       in
      
-      let replacement_reach =
+      let axioms (*add reach*) =
         let ep v = mk_ep f x v in
         let reachwo_f = Axioms.reachwo_Fld f in
         let reach_f x y z = mk_btwn f x z y in
@@ -168,23 +168,19 @@ let reduce_frame fs =
                     [smk_elem loc1 frame]
                     [mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)])]
           | _ ->
-          [mk_axiom "reach_frame1"
-             (mk_sequent
-                [reachwo_f loc1 loc2 (ep loc1)]
-                [(mk_iff 
-                   (reach_f loc1 loc2 loc3)
-                   (reach_f' loc1 loc2 loc3))]);
-           mk_axiom "reach_frame2"
-             (mk_implies
-                (mk_and [mk_not (smk_elem loc1 x); mk_eq loc1 (ep loc1)])
-                (mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)))
-         ]
-        else []
-      in
-      
-      let axioms =
-        replacement_pts ::
-        replacement_reach
+              [replacement_pts;
+               mk_axiom "reach_frame1"
+                 (mk_sequent
+                    [reachwo_f loc1 loc2 (ep loc1)]
+                    [(mk_iff 
+                       (reach_f loc1 loc2 loc3)
+                       (reach_f' loc1 loc2 loc3))]);
+               mk_axiom "reach_frame2"
+                 (mk_implies
+                    (mk_and [mk_not (smk_elem loc1 x); mk_eq loc1 (ep loc1)])
+                    (mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)))
+              ]
+        else [replacement_pts]
       in
       mk_and axioms
     in
