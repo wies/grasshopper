@@ -4,7 +4,7 @@ open FormUtil
 
 (* pull out '=' below disj when on of the variable is occuring in a single branch of the disj
  * Assumes that [f] is typed and in NNF, return a formula in NNF *)
-(* TODO inefficient, lots of redundent computation *)
+(* TODO inefficient implementation, lots of redundent computation *)
 let pull_eq_up fs =
   (* phrase this as a rewrite rule ?? *)
   (* identifies the constants/ground terms that are only in one disjunct
@@ -77,6 +77,20 @@ let rec simplify_sets fs =
         if List.exists (function App (Empty, [], _) -> true | _ -> false) ts1
         then mk_empty srt
         else App (Inter, ts1, srt)
+    | App (Diff, [s1; s2], srt) ->
+      let s1' = simp s1 in
+      let s2' = simp s2 in
+        if s1' = s2' then mk_empty srt
+        else
+          begin
+            match (s1', s2') with
+            | (App (Empty, _, _), _) | (_, App (Empty, _, _)) -> s1'
+            | (App (SetEnum, ts1, _), App (SetEnum, ts2, _)) ->
+              let ts = List.filter (fun t -> not (List.mem t ts2)) ts1 in
+                mk_setenum ts
+            | _ -> mk_diff s1' s2'
+          end
+    (*| App (SetEnum, ts, srt) -> ...*)
     | App (sym, ts, srt) -> 
         App (sym, List.map simp ts, srt)
     | t -> t

@@ -70,7 +70,6 @@ let tree_content =
            ]*)
 
 let tree_structure = [
-    mk_or [mk_eq x mk_null; mk_eq (mk_read parent x) y];
     parent_equal left;
     parent_equal right;
     left_right_distinct;
@@ -89,25 +88,81 @@ let tree_sorted = [
 
 (*color for red-black tree*)
 let _, redf, red = mk_formal_and_var "red" (Fld Bool)
+let _, colorf, color = mk_formal_and_var "color" (Fld Int)
+let red_generator =
+  TermGenerator ( [l1f], [],
+                  [Match (mk_read left l1, FilterTrue)],
+                  mk_read red l1)
+let color_generator =
+  TermGenerator ( [l1f], [],
+                  [Match (mk_read left l1, FilterTrue)],
+                  mk_read color l1)
+(*
 let tree_rb_top = [
     mk_forall ~ann:[Comment "root_is_black"] [l1f]
       (mk_sequent [l1_in_domain; mk_eq (mk_read parent l1) mk_null]
                   [mk_not (mk_read_form red l1)]);
   ]
+*)
 let tree_rb = [
-    mk_forall ~ann:[Comment "red_children_has_black_left_child"] [l1f]
+    mk_forall ~ann:[Comment "red_node_has_black_left_child"; red_generator] [l1f]
       (mk_sequent [l1_in_domain; mk_read_form red l1]
                   [mk_not (mk_read_form red (mk_read left l1)); mk_eq (mk_read left l1) mk_null]);
-    mk_forall ~ann:[Comment "red_children_has_black_right_child"] [l1f]
+    mk_forall ~ann:[Comment "red_node_has_black_right_child"] [l1f]
       (mk_sequent [l1_in_domain; mk_read_form red l1]
                   [mk_not (mk_read_form red (mk_read left l1)); mk_eq (mk_read right l1) mk_null]);
+    mk_forall ~ann:[Comment "black_node_number_of_child_1"] [l1f] (*implied by the invariant on number of black nodes on a path*)
+      (mk_sequent [l1_in_domain; mk_not (mk_read_form red l1)]
+                  [mk_and [mk_eq (mk_read left l1) mk_null; mk_eq (mk_read right l1) mk_null]; (*no child*)
+                   mk_and [mk_neq (mk_read left l1) mk_null; mk_read_form red (mk_read left l1)]; (*red child on the left*)
+                   mk_and [mk_neq (mk_read left l1) mk_null; mk_neq (mk_read left l1) mk_null;
+                           mk_not (mk_read_form red (mk_read left l1));
+                           mk_not (mk_read_form red (mk_read right l1))]; (* two black child *)
+                   ]);
+    (* TODO #black nodes on any path between the root and a leaf is the same*)
   ]
-let tree_llrb = [
+let tree_llrb_2_3_4 = [
     mk_forall ~ann:[Comment "left_leaning"] [l1f]
       (mk_sequent [l1_in_domain; mk_read_form red (mk_read right l1); mk_neq (mk_read right l1) mk_null]
                   [mk_and [mk_neq (mk_read left l1) mk_null; (mk_read_form red (mk_read left l1))]]);
+  ]
+let tree_llrb_2_3 = [
+    mk_forall ~ann:[Comment "2_3_nodes_only"] [l1f]
+      (mk_sequent [l1_in_domain; mk_neq (mk_read right l1) mk_null]
+                  [mk_not (mk_read_form red (mk_read right l1))]);
+  ]
+
+let is_red l = mk_eq (mk_read color l) (FormUtil.mk_int 1)
+let is_black l = mk_eq (mk_read color l) (FormUtil.mk_int 0)
+let tree_rb_int = [
+    mk_forall ~ann:[Comment "red_node_has_black_left_child"; color_generator] [l1f]
+      (mk_sequent [l1_in_domain; is_red l1]
+                  [is_black (mk_read left l1); mk_eq (mk_read left l1) mk_null]);
+    mk_forall ~ann:[Comment "red_node_has_black_right_child"] [l1f]
+      (mk_sequent [l1_in_domain; is_red l1]
+                  [is_black (mk_read left l1); mk_eq (mk_read right l1) mk_null]);
+    mk_forall ~ann:[Comment "black_node_number_of_child_1"] [l1f] (*implied by the invariant on number of black nodes on a path*)
+      (mk_sequent [l1_in_domain; is_black l1] (*need is black ?*)
+                  [mk_and [mk_eq (mk_read left l1) mk_null; mk_eq (mk_read right l1) mk_null]; (*no child*)
+                   mk_and [mk_neq (mk_read left l1) mk_null; is_red (mk_read left l1)]; (*red child on the left*)
+                   mk_and [mk_neq (mk_read left l1) mk_null; mk_neq (mk_read left l1) mk_null;
+                           is_black (mk_read left l1);
+                           is_black (mk_read right l1)]; (* two black child *)
+                   ]);
     (* TODO #black nodes on any path between the root and a leaf is the same*)
   ]
+let tree_llrb_2_3_4_int = [
+    mk_forall ~ann:[Comment "left_leaning"] [l1f]
+      (mk_sequent [l1_in_domain; is_red (mk_read right l1); mk_neq (mk_read right l1) mk_null]
+                  [mk_and [mk_neq (mk_read left l1) mk_null; is_red (mk_read left l1)]]);
+  ]
+let tree_llrb_2_3_int = [
+    mk_forall ~ann:[Comment "2_3_nodes_only"] [l1f]
+      (mk_sequent [l1_in_domain; mk_neq (mk_read right l1) mk_null]
+                  [is_black (mk_read right l1)]);
+  ]
+
+let fpi, fpf, fp = mk_formal_and_var "fp" (Set Loc)
 
 (* definitions *)
 let trees = [
@@ -119,30 +174,37 @@ let trees = [
               mk_forall ~ann:([Comment "parent_outside_null"]) [l1f; l2f]
                 (mk_sequent
                    [mk_reach parent l1 l2]
-                   [mk_eq l1 l2; mk_and [mk_elem l1 s; mk_elem l2 s]; mk_eq l2 mk_null])],
+                   [mk_eq l1 l2; mk_and [mk_elem l1 s; mk_elem l2 s]; mk_eq l2 mk_null]);
+              ],
       [di, mk_eq d empty_loc]);
+    (*( mk_ident "accTree",
+      [df; parentf; xf],
+      mk_and [],
+      [di, mk_eq d (mk_enum [x])]);*)
     ( mk_ident "tree",
       [df; leftf; parentf; rightf; xf; yf],
       mk_and tree_structure,
       [tree_fp]);
     ( mk_ident "heap",
-      [df; dataf; leftf; parentf; rightf; xf; yf],
-      mk_and ((_sorted parent y (*children are smaller than parent*)) :: tree_structure),
+      [df; dataf; leftf; parentf; rightf; xf],
+      mk_and ((_sorted parent mk_null (*children are smaller than parent*)) :: tree_structure),
       [tree_fp]);
+    (*
     ( mk_ident "bheap",
       [df; dataf; leftf; parentf; rightf; xf; yf; ubf],
       mk_and ((_sorted parent y (*children are smaller than parent*)) ::
               upper_bound ::
               tree_structure),
       [tree_fp]);
+    *)
     ( mk_ident "bstree",
       [df; dataf; leftf; parentf; rightf; xf; yf; lbf; ubf],
       mk_and (bounded :: tree_sorted @ tree_structure),
       [tree_fp]);
     ( mk_ident "stree",
-      [df; dataf; leftf; parentf; rightf; xf; yf; cf],
+      [df; dataf; leftf; parentf; rightf; xf; cf],
       mk_and (tree_sorted @ tree_structure),
-      [tree_fp; tree_content ]);
+      [tree_fp; tree_content]);
     ( mk_ident "bstree_cnt",
       [df; dataf; leftf; parentf; rightf; xf; yf; lbf; ubf; cf],
       mk_and (bounded :: tree_sorted @ tree_structure),
@@ -151,17 +213,42 @@ let trees = [
       [df; dataf; leftf; parentf; rightf; xf; yf; cf],
       mk_and ((_sorted parent y (*children are smaller than parent*)) :: tree_structure),
       [tree_fp; tree_content ]);
+    ( mk_ident "tree_set",
+      [df; parentf; xf; sf],
+      mk_and [mk_eq (mk_read parent x) mk_null],
+      [tree_fp; (si, mk_eq s d)]);
     ( mk_ident "rb",
       [df; leftf; parentf; redf; rightf; xf; yf],
       mk_and (tree_rb @ tree_structure),
       [tree_fp]);
     ( mk_ident "llrb",
       [df; leftf; parentf; redf; rightf; xf; yf],
-      mk_and (tree_rb @ tree_llrb @ tree_structure),
+      mk_and (tree_rb @ tree_llrb_2_3_4 @ tree_structure),
       [tree_fp]);
-    ( mk_ident "tree_set",
-      [df; parentf; xf; yf; sf],
-      mk_and [ mk_or [mk_eq x mk_null; mk_eq (mk_read parent x) y];
-             ],
-      [tree_fp; (si, mk_eq s d)]);
+    ( mk_ident "llrb23",
+      [df; leftf; parentf; redf; rightf; xf; yf],
+      mk_and (tree_rb @ tree_llrb_2_3 @ tree_structure),
+      [tree_fp]);
+    ( mk_ident "rb_int",
+      [df; colorf; leftf; parentf; rightf; xf; yf],
+      mk_and (tree_rb_int @ tree_structure),
+      [tree_fp]);
+    ( mk_ident "llrb_int",
+      [df; colorf; leftf; parentf; rightf; xf; yf],
+      mk_and (tree_rb_int @ tree_llrb_2_3_4_int @ tree_structure),
+      [tree_fp]);
+    ( mk_ident "llrb23_int",
+      [df; colorf; leftf; parentf; rightf; xf; yf],
+      mk_and (tree_rb_int @ tree_llrb_2_3_int @ tree_structure),
+      [tree_fp]);
+    ( mk_ident "stree2",
+      [df; dataf; leftf; nextf; parentf; rightf; xf; cf],
+      mk_and (
+            (mk_forall ~ann:[Comment "tree_next_reaches_null"] [l1f]
+              (mk_sequent [l1_in_domain]
+                          [mk_btwn next l1 mk_null mk_null])) ::
+            (mk_forall ~ann:[Comment "tree_next_nothing_between"] [l1f; l2f]
+              (mk_sequent [l1_in_domain; mk_not (mk_eq l2 l1); mk_not (mk_eq l2 mk_null)]
+                          [mk_not (mk_btwn next l1 l2 mk_null)])) :: tree_sorted @ tree_structure),
+      [tree_fp; tree_content]);
   ]

@@ -120,16 +120,22 @@ let with_content = [
      list_content
    ]);
   ( mk_ident "sorted_set2",
-    [df; dataf; nextf; parentf; xf; yf; cf],
+    [df; dataf; leftf; nextf; parentf; rightf; xf; yf; cf],
     mk_and [mk_reach next x y;
             mk_forall ~ann:[Comment "strict_sortedness"] [l1f; l2f]
               (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y; mk_neq l1 l2]
                           [mk_lt (mk_read data l1) (mk_read data l2)]);
-            mk_forall [l1f]
-              (mk_implies l1_in_domain (mk_btwn parent l1 mk_null mk_null));
-            mk_forall [l1f; l2f]
+            mk_forall ~ann:[Comment "sorted_set_parent_reach_null"] [l1f]
+              (mk_implies l1_in_domain (mk_btwn parent l1 mk_null mk_null)); (* parent points to null *)
+            mk_forall ~ann:[Comment "sorted_set_parent_nothing_between"] [l1f; l2f]
               (mk_sequent [l1_in_domain; mk_not (mk_eq l2 l1); mk_not (mk_eq l2 mk_null)]
                           [mk_not (mk_btwn parent l1 l2 mk_null)]);
+            mk_forall ~ann:[Comment "reach_via_left_right"] [l1f; l2f]
+              (mk_sequent 
+                 [mk_reach parent l2 l1; mk_elem l2 d; mk_elem l1 d]
+                 [mk_eq l2 l1;
+                  mk_btwn parent l2 (mk_read left l1) l1;
+                  mk_btwn parent l2 (mk_read right l1) l1])
           ],
     [di, mk_forall ~ann:[Comment "sorted_set_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp);
      list_content

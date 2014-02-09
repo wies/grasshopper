@@ -23,7 +23,7 @@ bst_contains            tests/spl/tree/binary_search_tree.spl  contains         
 bst_destroy             tests/spl/tree/binary_search_tree.spl  destroy          pass
 bst_extract_max         tests/spl/tree/binary_search_tree.spl  extract_max      pass
 bst_insert              tests/spl/tree/binary_search_tree.spl  insert           pass
-bst_travers             tests/spl/tree/binary_search_tree.spl  traverse         pass
+bst_traverse            tests/spl/tree/binary_search_tree.spl  traverse         pass
 bst_remove              tests/spl/tree/binary_search_tree.spl  remove           pass
 bst_rotate_left         tests/spl/tree/binary_search_tree.spl  rotate_left      pass
 bst_rotate_right        tests/spl/tree/binary_search_tree.spl  rotate_right     pass

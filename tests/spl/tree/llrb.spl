@@ -15,33 +15,11 @@ struct Node {
 //additional LLRB tree invariant:
 //-requiring that 3-nodes always lean to the left (and that 4-nodes are balanced)
 
-//  moveRedLeft
-//  rotateRight
-//  moveRedRight
-//  min
-//  deleteMin
-//  fixUp
-//  rotateLeft
-//  colorFlip
-
 predicate tree(x: Node, y: Node) {
     x == null
   ||
     x != null &*&
     x.parent |-> y &*&
-    tree(x.left, x) &*&
-    tree(x.right, x)
-}
-
-predicate llrb(x: Node, y: Node) {
-    x == null
-  ||
-    x != null &*&
-    x.parent |-> y &*&
-    //  (x.parent != null || !(x.red)) &*&                                          //root is black
-    (!(x.red) || x.left == null || !(x.left.red)) &*&                           //red node has left black child
-    (!(x.red) || x.right == null || !(x.right.red)) &*&                         //red node has right black child
-    (x.right == null || !(x.right.red) || (x.left != null && x.left.red)) &*&   //left leaning: red right child => red left child
     tree(x.left, x) &*&
     tree(x.right, x)
 }
@@ -57,72 +35,162 @@ predicate rb(x: Node, y: Node) {
     tree(x.right, x)
 }
 
+predicate llrb(x: Node, y: Node) {
+    x == null
+  ||
+    x != null &*&
+    x.parent |-> y &*&
+    (!(x.red) || x.left == null || !(x.left.red)) &*&                           //red node has left black child
+    (!(x.red) || x.right == null || !(x.right.red)) &*&                         //red node has right black child
+    (x.right == null || !(x.right.red) || (x.left != null && x.left.red)) &*&   //left leaning: red right child => red left child
+    tree(x.left, x) &*&
+    tree(x.right, x)
+}
+
+predicate llrb23(x: Node, y: Node) {
+    x == null
+  ||
+    x != null &*&
+    x.parent |-> y &*&
+    (!(x.red) || x.left == null || !(x.left.red)) &*&                           //red node has left black child
+    (!(x.red) || x.right == null || !(x.right.red)) &*&                         //red node has right black child
+    (x.right == null || !(x.right.red)) &*&                                     //left leaning 2-3 nodes
+    tree(x.left, x) &*&
+    tree(x.right, x)
+}
+
 predicate treeAllocInvariant(X: set<Node>) {
   (forall n in X :: n.parent == n.parent)
 }
 
 
-//  procedure delete(root: Node, key: int) returns (res: Node)
-//    requires tree(root, null);
-//    requires treeAllocInvariant(Alloc);
-//    ensures  treeAllocInvariant(Alloc);
-//    ensures  tree(res, null);
-//  {
-//      if (root != null) {
-//          root := delete1(root, key, null);
-//          if (root != null) {
-//              root.red := false;
-//          }
-//      }
-//      return root;
-//  }
-
-//  //it seems that delete is assuming the node is in the tree
-//  procedure delete1(h: Node, key: int, ghost p: Node) returns (res: Node)
-//    requires h != null;
-//    requires tree(h, p);
-//    requires treeAllocInvariant(Alloc);
-//    ensures  treeAllocInvariant(Alloc);
-//    ensures  tree(res, p);
-//  {
-//      if (key < h.data) {
-//          if (!isRed(h.left, h) && h.left != null) { //BUG,check added: "new(); add(x); delete(x);" throw a null pointer exn
-//              if (!isRed(h.left.left, h.left)) {
-//                  h := moveRedLeft(h, p);
-//              }
-//          }
-//          h.left := delete1(h.left, key, h);
-//      } else {
-//          if (isRed(h.left, h)) {
-//              h := rotateRight(h, p);
-//          }
-//          if (key == h.data && h.right == null) {
-//              h.parent := null;
-//              free(h);
-//              return null; //TODO !!???!
-//          }
-
-//          if (!isRed(h.right, h)) {
-//              if (!isRed(h.right.left, h.right)) {
-//                  h := moveRedRight(h, p);
-//              }
-//          }
-
-//          if (key == h.data) {
-//              h.data := min(h.right, h);
-//              h.right := deleteMin(h.right, h);
-//          } else {
-//              h.right := delete1(h.right, key, h);
-//          }
-//      }
-//      return fixUp(h, p);
-//  }
-
-procedure insert(root: Node, key: int) returns (res: Node)
-  requires tree(root, null);
+procedure colorFlip(h: Node, ghost p: Node,
+                    implicit ghost l: bool,
+                    implicit ghost c: bool,
+                    implicit ghost r: bool)
+  requires h != null && h.left != null && h.right != null &&
+           h.red == c && h.left.red == l && h.right.red == r;
+  requires h.parent |-> p &*& llrb(h.left, h) &*& llrb(h.right, h);
   requires treeAllocInvariant(Alloc);
   ensures  treeAllocInvariant(Alloc);
-  ensures  tree(res, null);
+  ensures  tree(h, p);
+  requires h != null && h.left != null && h.right != null &&
+           h.red != c && h.left.red != l && h.right.red != r;
+{
+    if (h.red) h.red := false; else h.red := true;
+    if (h.left.red) h.left.red := false; else h.left.red := true;
+    if (h.right.red) h.right.red := false; else h.right.red := true;
+}
+
+procedure delete(root: Node, key: int) returns (res: Node)
+  requires llrb(root, null);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  llrb(res, null) &*& (res == null || !(res.red));
+{
+    if (root != null) {
+        root := delete1(root, key, null);
+        if (root != null) { //BUG, this check was added
+            root.red := false;
+        }
+    }
+    return root;
+}
+
+//rb-tree principle: only red nodes are rotated
+//additional properties: 2 blacks on the left => red ?
+
+//it seems that delete is assuming the node is in the tree
+procedure delete1(h: Node, key: int, ghost p: Node) returns (res: Node)
+  requires h != null;
+  requires llrb(h, p);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  llrb(res, p);
+{
+    if (key < h.data) {
+        if (!isRed(h.left, h) && h.left != null) { //BUG,check added: "new(); add(x); delete(x);" throw a null pointer exn
+            if (!isRed(h.left.left, h.left)) {
+                //does the two tests implies that h is red ?
+                h := moveRedLeft(h, p);
+            }
+        }
+        h.left := delete1(h.left, key, h);
+    } else {
+        if (isRed(h.left, h)) {
+            h := rotateRight(h, p);
+        }
+        if (key == h.data && h.right == null) {
+            h.parent := null;
+            free(h);
+            return null; //TODO what about the left ??
+        }
+
+        if (!isRed(h.right, h)) {
+            if (!isRed(h.right.left, h.right)) {
+                h := moveRedRight(h, p);//assume h to be red ?
+            }
+        }
+
+        if (key == h.data) {
+            h.data := min(h.right, h); //why memory safe ?
+            h.right := deleteMin(h.right, h);
+        } else {
+            h.right := delete1(h.right, key, h);
+        }
+    }
+    return fixUp(h, p);
+}
+
+//!?!? that might actually be the method which is wrong
+//works only on 2-3 trees ?!?
+//h needs to be black or red ??
+procedure deleteMin(h: Node, ghost p: Node) returns (res: Node)
+  requires llrb(h, p);
+  requires h != null; 
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  llrb(res, p);
+{
+    if (h.left == null) {
+        h.parent := null;
+        free(h);
+        return null;
+    }
+    if (!isRed(h.left, h) && !isRed(h.left.left, h.left)) {
+        h := moveRedLeft(h, p);//assume h to be red ?!
+    }
+    h.left := deleteMin(h.left, h);
+    return fixUp(h, p);
+}
+
+//TODO some other invariant about the coloring
+procedure fixUp(h: Node, ghost p: Node) returns (res: Node)
+  requires h.parent |-> p &*& llrb(h.left, h) &*& llrb(h.right, h);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  llrb(res, p);
+{
+    if (isRed(h.right, h)) {
+        h := rotateLeft(h, p);
+    }
+    //if (h.left != null && isRed(h.left, h)) {  //TODO that left ≠ null is redundant
+    if (isRed(h.left, h)) {
+        if (isRed(h.left.left, h.left)) {
+            h := rotateRight(h, p);
+        }
+    }
+    if (isRed(h.left, h) && isRed(h.right, h)) {
+        colorFlip(h, p);//4-node, push it up
+    }
+    return h;
+}
+
+procedure insert(root: Node, key: int) returns (res: Node)
+  requires llrb(root, null);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  llrb(res, null) &*& res != null &*& !(res.red);
 {
     root := insert1(root, key, null);
     root.red := false;
@@ -130,11 +198,11 @@ procedure insert(root: Node, key: int) returns (res: Node)
 }
 
 procedure insert1(h: Node, key: int, ghost p: Node) returns (res: Node)
-  requires tree(h, p);
+  requires llrb(h, p);
   requires p == null || p in Alloc;
   requires treeAllocInvariant(Alloc);
   ensures  treeAllocInvariant(Alloc);
-  ensures  tree(res, p);
+  ensures  llrb(res, p);
   ensures  res != null;
 {
     if (h == null) {
@@ -148,143 +216,35 @@ procedure insert1(h: Node, key: int, ghost p: Node) returns (res: Node)
         return res;
     } else {
         if (isRed(h.left, h) && isRed(h.right, h)) {
-            colorFlip(h, p);
+            colorFlip(h, p); //4-nodes, push it up
         }
-
+        //either a 3 node or a 2 node
         if (key == h.data) {
+            //already in the set
         } else if (key < h.data) {
             h.left := insert1(h.left, key, h);
         } else {
             h.right := insert1(h.right, key, h);
         }
+        //what do we know about the colors ?
+        //a llrb on the left and on the right ? relation between left, right and h ?
+        //...
 
-        if (isRed(h.right, h) && !isRed(h.left, h)) {
-            h := rotateLeft(h, p);
+        if (isRed(h.right, h) && !isRed(h.left, h)) { //right leaning 3-nodes
+            h := rotateLeft(h, p); //after the call, left leaning 3-nodes
         }
-        if (isRed(h.left, h) && isRed(h.left.left, h.left)) {
+        if (isRed(h.left, h) && isRed(h.left.left, h.left)) { //2 red nodes on the left
             h := rotateRight(h, p);
         }
         return h;
     }
 }
 
-// Assuming that h is red and both h.left and h.left.left are black,
-// make h.left or one of its children red.
-procedure moveRedLeft(h: Node, ghost p: Node) returns (res: Node)
-  requires h != null && h.left != null && !(h.left.red) && (h.left.left == null || !(h.left.left.red));
-  requires tree(h, p);
-  requires treeAllocInvariant(Alloc);
-  ensures  treeAllocInvariant(Alloc);
-  ensures  tree(res, p);
-  ensures  h.left != null && h.right != null;
-{
-    colorFlip(h, p);
-    if (isRed(h.right.left, h.right)) {
-        h.right := rotateRight(h.right, h);
-        h := rotateLeft(h, p);
-        colorFlip(h, p);
-    }
-    return h;
-}
-
-// Assuming that h is red and both h.right and h.right.left are black,
-// make h.right or one of its children red.
-procedure moveRedRight(h: Node, ghost p: Node) returns (res: Node)
-  requires tree(h, p);
-  requires treeAllocInvariant(Alloc);
-  ensures  treeAllocInvariant(Alloc);
-  ensures  tree(res, p);
-{
-    colorFlip(h, p);
-    if (isRed(h.left.left, h.left))
-    {
-        h := rotateRight(h, p);
-        colorFlip(h, p);
-    }
-    return h;
-}
-
-procedure min(h: Node, ghost p: Node) returns (res: int)
-  requires tree(h, p);
-  requires h != null;
-  requires treeAllocInvariant(Alloc);
-  ensures  treeAllocInvariant(Alloc);
-  ensures  tree(h, p);
-{
-     if (h.left != null) {
-         return min(h.left, h);
-     } else {
-         return h.data;
-     }
-}
-
-//  procedure deleteMin(h: Node, ghost p: Node) returns (res: Node)
-//    requires tree(h, p);
-//    requires h != null;
-//    requires treeAllocInvariant(Alloc);
-//    ensures  treeAllocInvariant(Alloc);
-//    ensures  tree(res, p);
-//  {
-//      if (h.left == null) {
-//          h.parent := null;
-//          free(h);
-//          return null; //TODO what about the right ?? is that because of the left leaning ?
-//      }
-//      if (!isRed(h.left, h) && !isRed(h.left.left, h.left)) {
-//          h := moveRedLeft(h, p);
-//      }
-//      h.left := deleteMin(h.left, h);
-//      return fixUp(h, p);
-//  }
-
-// Make a right-leaning 3-node lean to the left.
-procedure rotateLeft(h: Node, ghost p: Node, implicit ghost c: bool) returns (res: Node)
-  requires tree(h, p);
-  requires h != null && h.right != null && h.right.red && c == h.red;
-  requires treeAllocInvariant(Alloc);
-  ensures  treeAllocInvariant(Alloc);
-  ensures  tree(res, p);
-  ensures  res.left != null && res != null && res.left.red && c == res.red;
-{
-    var x: Node;
-    x := h.right;
-    h.right := x.left;
-    if (h.right != null) h.right.parent := h;
-    x.left := h;
-    if (x.left != null) x.left.parent := x;
-    x.red := h.red;
-    h.red := true;
-    x.parent := p;
-    return x;
-}
-
-// Make a left-leaning 3-node lean to the right.
-// or there are two left node on the left -> balanced 4 node
-procedure rotateRight(h: Node, ghost p: Node, implicit ghost c: bool) returns (res: Node)
-  requires h.parent |-> p &*& llrb(h.left, h) &*& llrb(h.right, h);
-  requires h != null && h.left != null && h.left.red && c == h.red;
-  requires treeAllocInvariant(Alloc);
-  ensures  treeAllocInvariant(Alloc);
-  ensures  llrb(res, p);
-  ensures  res != null && res.right != null && res.right.red && c == res.red;
-{
-    var x: Node;
-    x := h.left;
-    h.left := x.right;
-    if (h.left != null) h.left.parent := h;
-    x.right := h;
-    if (x.right != null) x.right.parent := x;
-    x.red := h.red;
-    h.red := true;
-    x.parent := p;
-    return x;
-}
-
 procedure isRed(h: Node, ghost p: Node) returns (res: bool)
-  requires tree(h, p);
+  requires tree(h, p); //TODO something stronger ?
   requires treeAllocInvariant(Alloc);
   ensures  treeAllocInvariant(Alloc);
-  ensures  tree(h, p);
+  ensures  tree(h, p); //TODO something stronger ?
   ensures  res == ((h != null) && h.red);
 {
     if (h != null) {
@@ -311,42 +271,124 @@ procedure isRed1(h: Node, ghost p: Node, implicit ghost c: bool) returns (res: b
     }
 }
 
-
-procedure colorFlip(h: Node, ghost p: Node,
-                    implicit ghost l: bool,
-                    implicit ghost c: bool,
-                    implicit ghost r: bool)
-  requires h != null && h.left != null && h.right != null &&
-           h.red == c && h.left.red == l && h.right.red == r;
-  requires tree(h, p);
+procedure min(h: Node, ghost p: Node) returns (res: int)
+  requires tree(h, p); //TODO stronger (cst field optimization saves us)
+  requires h != null;
   requires treeAllocInvariant(Alloc);
   ensures  treeAllocInvariant(Alloc);
-  ensures  tree(h, p);
-  requires h != null && h.left != null && h.right != null &&
-           h.red != c && h.left.red != l && h.right.red != r;
+  ensures  tree(h, p); //TODO stronger (cst field optimization saves us)
 {
-    if (h.red) h.red := false; else h.red := true;
-    if (h.left.red) h.left.red := false; else h.left.red := true;
-    if (h.right.red) h.right.red := false; else h.right.red := true;
+     if (h.left != null) {
+         return min(h.left, h);
+     } else {
+         return h.data;
+     }
 }
 
-procedure fixUp(h: Node, ghost p: Node) returns (res: Node)
-  requires h != null;
-  requires tree(h, p);
+// Assuming that h is red and both h.left and h.left.left are black,
+// make h.left or one of its children red.
+procedure moveRedLeft(h: Node, ghost p: Node) returns (res: Node)
+  requires h != null && h.red && h.left != null && !(h.left.red) && (h.left.left == null || !(h.left.left.red));
+  requires llrb(h, p);
   requires treeAllocInvariant(Alloc);
   ensures  treeAllocInvariant(Alloc);
-  ensures  tree(res, p);
+  ensures  llrb(res, p);
+  ensures  res.left != null && res.right != null;
 {
-    if (isRed(h.right, h)) {
+    colorFlip(h, p);//make it a 4 node
+    if (isRed(h.right.left, h.right)) {
+        h.right := rotateRight(h.right, h);
         h := rotateLeft(h, p);
-    }
-    if (h.left != null && isRed(h.left, h)) {  //TODO that left ≠ null seems redundant (when we have the llrb invariant)
-        if (isRed(h.left.left, h.left)) {
-            h := rotateRight(h, p);
-        }
-    }
-    if (isRed(h.left, h) && isRed(h.right, h)) {
         colorFlip(h, p);
     }
     return h;
+}
+
+// Assuming that h is red and both h.right and h.right.left are black, (DZ implies that left is black)
+// make h.right or one of its children red.  (DZ returns a black 4-node or a red 2-node)
+procedure moveRedRight(h: Node, ghost p: Node) returns (res: Node)
+  requires h != null && h.red && h.right != null && !(h.right.red) && (h.right.left != null || !(h.right.left.red));
+  requires llrb(h, p);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  llrb(res, p);
+{
+    colorFlip(h, p);
+    if (isRed(h.left.left, h.left))
+    {
+        h := rotateRight(h, p);
+        colorFlip(h, p);
+    }
+    return h;
+}
+
+// Make a right-leaning 3-node lean to the left.
+// in case of a 4-node, returns two red nodes in a row on the left side
+// what about the coloring -> h.red + h.left.red + h.right.red < 3
+procedure rotateLeft(h: Node, ghost p: Node, implicit ghost c: bool) returns (res: Node)
+  requires h.parent |-> p &*& llrb(h.left, h) &*& llrb(h.right, h);
+  requires h.right != null && h.right.red && c == h.red;
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  llrb(res, p); //TODO not quite a llrb
+  ensures  res.left != null && res.left.red && c == res.red;
+{
+    var x: Node;
+    x := h.right;
+    h.right := x.left;
+    if (h.right != null) h.right.parent := h;
+    x.left := h;
+    if (x.left != null) x.left.parent := x;
+    x.red := h.red;
+    h.red := true;
+    x.parent := p;
+    return x;
+}
+
+// Make a left-leaning 3-node lean to the right.
+// or there are two left node on the left -> balanced 4 node
+procedure rotateRight(h: Node, ghost p: Node, implicit ghost c: bool) returns (res: Node)
+  requires h != null && h.left != null && h.left.red && c == h.red;
+  requires h.parent |-> p &*& llrb(h.left, h) &*& llrb(h.right, h);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  res.parent |-> p &*& llrb(res.left, res) &*& llrb(res.right, res);
+  //ensures  llrb(res, p);
+  ensures  res.right != null && res.right.red && c == res.red;
+{
+    var x: Node;
+    x := h.left;
+    h.left := x.right;
+    if (h.left != null) h.left.parent := h;
+    x.right := h;
+    if (x.right != null) x.right.parent := x;
+    x.red := h.red;
+    h.red := true;
+    x.parent := p;
+    return x;
+}
+
+//balancing a 4-node
+procedure rotateRight1(h: Node, ghost p: Node) returns (res: Node)
+  requires  h != null && h.parent == p && h.left.parent == h && !(h.red) &&
+            h.left != null && h.left.red &&
+            h.left.left != null && h.left.left.red &&
+            (h.right == null || !(h.right.red)) &&
+            (h.left.right == null || !(h.left.right.red));
+  requires acc(h) &*& acc(h.left) &*& llrb(h.left.left, h.left) &*& llrb(h.left.right, h.left) &*& llrb(h.right, h);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  llrb(res, p);
+  ensures  res.right != null && res.right.red && res.left != null && res.left.red;
+{
+    var x: Node;
+    x := h.left;
+    h.left := x.right;
+    if (h.left != null) h.left.parent := h;
+    x.right := h;
+    if (x.right != null) x.right.parent := x;
+    x.red := h.red;
+    h.red := true;
+    x.parent := p;
+    return x;
 }

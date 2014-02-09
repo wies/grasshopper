@@ -71,6 +71,7 @@ let read_write_axioms_closed fld1 =
     | Some (Fld srt) -> srt
     | _ -> failwith "expected field in read_write_axioms"
   in
+  let srt_string = string_of_sort res_srt in
   let d = fresh_ident "?d" in
   let d1 = d, res_srt in
   let dvar = mk_var ~srt:res_srt d in
@@ -88,7 +89,8 @@ let read_write_axioms_closed fld1 =
     g loc1
   in      
   if not !encode_fields_as_arrays 
-  then [mk_axiom "read_write1" f_upd1; mk_axiom ~gen:[generator2] "read_write2" f_upd2]
+  then [mk_axiom ("read_write_"^(srt_string)^"_1") f_upd1;
+        mk_axiom ~gen:[generator2] ("read_write_"^(srt_string)^"_2") f_upd2]
   else []
 
 let reach_write_axioms fld1 loc1 loc2 =

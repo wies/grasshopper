@@ -5,15 +5,14 @@ struct Node {
   var data: int;
 }
 
-predicate heap(x: Node, y: Node) {
+predicate heap(x: Node) {
     x == null
   ||
     x != null &*&
-    x.parent |-> y &*&
-    heap(x.left, x) &*&
-    heap(x.right, x) &*&
-    (x.left == null || (x.left != null && x.left.data <= x.data)) &*&
-    (x.right == null || (x.right != null && x.right.data <= x.data)) 
+    heap(x.left) &*&
+    heap(x.right) &*&
+    (x.left == null || (x.left != null && x.left.parent == x && x.left.data <= x.data)) &*&
+    (x.right == null || (x.right != null && x.right.parent == x && x.right.data <= x.data)) 
 }
 
 predicate treeAllocInvariant(X: set<Node>) {
@@ -22,10 +21,10 @@ predicate treeAllocInvariant(X: set<Node>) {
 
 procedure union(h1: Node, h2: Node)
     returns (res: Node)
-    requires heap(h1, null) &*& heap(h2, null);
+    requires heap(h1) &*& heap(h2);
     requires treeAllocInvariant(Alloc);
     ensures treeAllocInvariant(Alloc);
-    ensures heap(res, null);
+    ensures heap(res);
 {
     if (h1 == null) {
         return h2;
@@ -46,10 +45,10 @@ procedure union(h1: Node, h2: Node)
 }
 
 procedure extractMax(h: Node) returns (max: int, rest: Node)
-    requires heap(h, null) &*& h != null;
+    requires heap(h) &*& h != null;
     requires treeAllocInvariant(Alloc);
     ensures  treeAllocInvariant(Alloc);
-    ensures  heap(rest, null);
+    ensures  heap(rest);
 {
     var d : int;
     d := h.data;
@@ -61,15 +60,17 @@ procedure extractMax(h: Node) returns (max: int, rest: Node)
     if (l != null) { l.parent := null; }
     if (r != null) { r.parent := null; }
     hp := union(l, r);
+    if (hp != null) { hp.parent := null; }
+    h.parent := null;
     free h;
     return d, hp;
 }
 
 procedure insert(h: Node, value: int) returns (res: Node)
-    requires heap(h, null);
+    requires heap(h);
     requires treeAllocInvariant(Alloc);
     ensures treeAllocInvariant(Alloc);
-    ensures heap(res, null);
+    ensures heap(res);
 {
     var n: Node;
     n := new Node;

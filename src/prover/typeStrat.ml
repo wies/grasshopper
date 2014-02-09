@@ -178,8 +178,10 @@ let stratify_types axioms =
 
 let default_type_stratification =
   let edges = [
+    (Fld Bool, Bool);
     (Fld Loc, Loc);
     (Fld Int, Int);
+    (Bool, Loc);
     (Loc, Int);
     (Loc, Set Loc);
     (Int, Set Int)
