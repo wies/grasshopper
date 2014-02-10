@@ -22,6 +22,16 @@ Required
 GRASShopper has been tested on Linux, Mac OS, and Windows/Cygwin.
 
 -------------------------
+CAV 2014
+-------------------------
+
+To rerun the experiments for our CAV submission, simply execute
+
+./xp_cav14.sh 
+
+The script will compile the tool and run the experiments.
+
+-------------------------
 Installation Instructions 
 -------------------------
 - Untar the distribution
