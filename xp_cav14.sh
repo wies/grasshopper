@@ -35,6 +35,22 @@ skew-heap_union         tests/spl/tree/skew_heap_no_content.spl  union          
 skew-heap_extractMax    tests/spl/tree/skew_heap_no_content.spl  extractMax      pass
 "
 
+TESTS5="
+bst_destroy             tests/spl/tree/binary_search_tree_shape_only.spl  destroy          pass
+bst_extract_max         tests/spl/tree/binary_search_tree_shape_only.spl  extract_max      pass
+bst_insert              tests/spl/tree/binary_search_tree_shape_only.spl  insert           pass
+bst_traverse            tests/spl/tree/binary_search_tree_shape_only.spl  traverse         pass
+bst_remove              tests/spl/tree/binary_search_tree_shape_only.spl  remove           pass
+"
+
+TESTS6="
+bst_destroy             tests/spl/tree/binary_search_tree_no_content.spl  destroy          pass
+bst_extract_max         tests/spl/tree/binary_search_tree_no_content.spl  extract_max      pass
+bst_insert              tests/spl/tree/binary_search_tree_no_content.spl  insert           pass
+bst_traverse            tests/spl/tree/binary_search_tree_no_content.spl  traverse         pass
+bst_remove              tests/spl/tree/binary_search_tree_no_content.spl  remove           pass
+"
+
 echo "building Grasshopper"
 ./build.sh
 
@@ -49,3 +65,9 @@ OPTIONS=$@ time -f "Accumulated time: %Us." ./run-tests-methods $TESTS3
 
 echo "skew heap (memory safety, tree-shape)"
 OPTIONS=$@ time -f "Accumulated time: %Us." ./run-tests-methods $TESTS4
+
+echo "set implemented as binary search tree (tree shape only)"
+OPTIONS=$@ time -f "Accumulated time: %Us." ./run-tests-methods $TESTS5
+
+echo "set implemented as binary search tree (sortedness, no content)"
+OPTIONS=$@ time -f "Accumulated time: %Us." ./run-tests-methods $TESTS6

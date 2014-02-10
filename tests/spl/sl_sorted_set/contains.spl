@@ -21,31 +21,23 @@ predicate sorted_set(x: Node, y: Node, c: set<int>) {
   sorted_set_lb(x, y, x.data - 1, c)
 }
 
-procedure contains(lst: Node, val: int,
-                   implicit ghost content: set<int>)
+procedure contains(lst: Node, val: int, implicit ghost content: set<int>)
   returns (res: bool)
   requires sorted_set(lst, null, content);
-  ensures sorted_set(lst, null, content);
-  ensures res == val in content;
+  ensures (res == val in content) &*& sorted_set(lst, null, content);
 {
   var curr: Node;
   curr := lst;
   var c1: set<int>, c2: set<int>;
   c1 := content;
   c2 := set<int>();
-
   var prev: Node;
   prev := null;
-
   while (curr != null && curr.data < val) 
     invariant prev == null && curr == lst && c2 == set<int>() || 
-                (val > prev.data && 
-                prev != curr && 
-                prev.next == curr && 
-                Btwn(next,lst,prev,curr)) &*&
-                sorted_set(lst, curr, c2);
-    invariant sorted_set(curr, null, c1);
-    invariant content == c1 ++ c2;
+                (val > prev.data && prev != curr && prev.next == curr && 
+                Btwn(next,lst,prev,curr)) &*& sorted_set(lst, curr, c2);
+    invariant sorted_set(curr, null, c1) &*& content == c1 ++ c2;
     invariant prev == null || curr == null || prev.data < curr.data;
   {
     c1 := c1 -- set(curr.data);

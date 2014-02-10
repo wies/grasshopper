@@ -22,11 +22,9 @@ predicate sorted_set(x: Node, y: Node, c: set<int>) {
 }
 
 procedure union(lst1: Node, lst2: Node,
-                implicit ghost content1: set<int>,
-                implicit ghost content2: set<int>)
+                implicit ghost content1: set<int>, implicit ghost content2: set<int>)
   returns (res: Node)
-  requires sorted_set(lst1, null, content1);
-  requires sorted_set(lst2, null, content2);
+  requires sorted_set(lst1, null, content1) &*& sorted_set(lst2, null, content2);
   ensures sorted_set(res, null, content1 ++ content2);
 {
     if (lst1 == null) {

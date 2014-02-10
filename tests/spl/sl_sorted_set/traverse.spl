@@ -32,15 +32,11 @@ procedure traverse(lst: Node, implicit ghost content: set<int>)
   c2 := set<int>();
   var prev: Node;
   prev := null;
-
   while (curr != null) 
     invariant prev == null && curr == lst && c2 == set<int>() || 
-                (prev != curr && 
-                prev.next == curr && 
-                Btwn(next,lst,prev,curr)) &*&
-                sorted_set(lst, curr, c2);
-    invariant sorted_set(curr, null, c1);
-    invariant content == c1 ++ c2;
+                (prev != curr && prev.next == curr && 
+                Btwn(next,lst,prev,curr)) &*& sorted_set(lst, curr, c2);
+    invariant sorted_set(curr, null, c1) &*& content == c1 ++ c2;
     invariant prev == null || curr == null || prev.data < curr.data;
   {
     c1 := c1 -- set(curr.data);

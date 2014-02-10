@@ -37,37 +37,8 @@ let left_right_distinct =
     (mk_sequent
        [mk_elem l1 d; mk_eq (mk_read left l1) (mk_read right l1)]
        [mk_eq mk_null (mk_read left l1)])
-let reach_via_left_right =
-  mk_forall ~ann:[Comment "reach_via_left_right"] [l1f; l2f]
-    (mk_sequent 
-       [mk_reach parent l2 l1; mk_elem l2 d; mk_elem l1 d]
-       [mk_eq l2 l1;
-        mk_btwn parent l2 (mk_read left l1) l1;
-        mk_btwn parent l2 (mk_read right l1) l1])
 
 let tree_fp = (di, mk_forall ~ann:([Comment "tree_footprint"]) [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn parent l1 x x; mk_neq x mk_null])))
-
-let tree_content =
-   (ci, mk_and [
-                mk_forall ~ann:[Comment "tree_content_0"] [l1f]
-                    (mk_implies l1_in_domain (mk_eq l1 (mk_witness (mk_read data l1) c)));
-                mk_forall ~ann:[Comment "tree_content_1"] [l1f]
-                    (mk_implies l1_in_domain (mk_elem (mk_read data l1) c));
-                mk_forall ~ann:[Comment "tree_content_2"; witness_generator3] [vf]
-                    (mk_implies (mk_not (mk_elem v c)) (mk_eq (mk_witness v c) mk_null));
-                mk_forall ~ann:[Comment "tree_content_3"] [vf]
-                    (mk_implies (mk_elem v c) (mk_eq v (mk_read data (mk_witness v c))));
-                mk_forall ~ann:[Comment "tree_content_4"] [vf]
-                    (mk_implies (mk_elem v c) (mk_elem (mk_witness v c) d))
-           ])
-   (*ci, mk_and [
-                mk_forall ~ann:[Comment "tree_content_1"] [l1f]
-                    (mk_implies l1_in_domain (mk_elem (mk_read data l1) c));
-                mk_forall ~ann:[Comment "tree_content_2"; witness_generator1; witness_generator2] [vf]
-                    (mk_and [mk_implies (mk_elem v c) (mk_and [mk_elem (mk_witness v c) d; mk_eq v (mk_read data (mk_witness v c))]);
-                             mk_implies (mk_not (mk_elem v c)) (mk_eq (mk_witness v c) mk_null)
-                    ])
-           ]*)
 
 let tree_structure = [
     parent_equal left;
@@ -182,7 +153,7 @@ let trees = [
       mk_and [],
       [di, mk_eq d (mk_enum [x])]);*)
     ( mk_ident "tree",
-      [df; leftf; parentf; rightf; xf; yf],
+      [df; leftf; parentf; rightf; xf],
       mk_and tree_structure,
       [tree_fp]);
     ( mk_ident "heap",
@@ -198,57 +169,55 @@ let trees = [
       [tree_fp]);
     *)
     ( mk_ident "bstree",
-      [df; dataf; leftf; parentf; rightf; xf; yf; lbf; ubf],
+      [df; dataf; leftf; parentf; rightf; xf; lbf; ubf],
       mk_and (bounded :: tree_sorted @ tree_structure),
       [tree_fp]);
     ( mk_ident "stree",
       [df; dataf; leftf; parentf; rightf; xf; cf],
       mk_and (tree_sorted @ tree_structure),
-      [tree_fp; tree_content]);
+      [tree_fp; set_content]);
     ( mk_ident "bstree_cnt",
-      [df; dataf; leftf; parentf; rightf; xf; yf; lbf; ubf; cf],
+      [df; dataf; leftf; parentf; rightf; xf; lbf; ubf; cf],
       mk_and (bounded :: tree_sorted @ tree_structure),
-      [tree_fp; tree_content ]);
+      [tree_fp; set_content ]);
     ( mk_ident "heap_cnt",
-      [df; dataf; leftf; parentf; rightf; xf; yf; cf],
-      mk_and ((_sorted parent y (*children are smaller than parent*)) :: tree_structure),
-      [tree_fp; tree_content ]);
+      [df; dataf; leftf; parentf; rightf; xf; cf],
+      mk_and ((_sorted parent mk_null (*children are smaller than parent*)) :: tree_structure),
+      [tree_fp; content ]);
     ( mk_ident "tree_set",
       [df; parentf; xf; sf],
       mk_and [mk_eq (mk_read parent x) mk_null],
       [tree_fp; (si, mk_eq s d)]);
     ( mk_ident "rb",
-      [df; leftf; parentf; redf; rightf; xf; yf],
+      [df; leftf; parentf; redf; rightf; xf],
       mk_and (tree_rb @ tree_structure),
       [tree_fp]);
     ( mk_ident "llrb",
-      [df; leftf; parentf; redf; rightf; xf; yf],
+      [df; leftf; parentf; redf; rightf; xf],
       mk_and (tree_rb @ tree_llrb_2_3_4 @ tree_structure),
       [tree_fp]);
     ( mk_ident "llrb23",
-      [df; leftf; parentf; redf; rightf; xf; yf],
+      [df; leftf; parentf; redf; rightf; xf],
       mk_and (tree_rb @ tree_llrb_2_3 @ tree_structure),
       [tree_fp]);
     ( mk_ident "rb_int",
-      [df; colorf; leftf; parentf; rightf; xf; yf],
+      [df; colorf; leftf; parentf; rightf; xf],
       mk_and (tree_rb_int @ tree_structure),
       [tree_fp]);
     ( mk_ident "llrb_int",
-      [df; colorf; leftf; parentf; rightf; xf; yf],
+      [df; colorf; leftf; parentf; rightf; xf],
       mk_and (tree_rb_int @ tree_llrb_2_3_4_int @ tree_structure),
       [tree_fp]);
     ( mk_ident "llrb23_int",
-      [df; colorf; leftf; parentf; rightf; xf; yf],
+      [df; colorf; leftf; parentf; rightf; xf],
       mk_and (tree_rb_int @ tree_llrb_2_3_int @ tree_structure),
       [tree_fp]);
     ( mk_ident "stree2",
       [df; dataf; leftf; nextf; parentf; rightf; xf; cf],
-      mk_and (
-            (mk_forall ~ann:[Comment "tree_next_reaches_null"] [l1f]
-              (mk_sequent [l1_in_domain]
-                          [mk_btwn next l1 mk_null mk_null])) ::
-            (mk_forall ~ann:[Comment "tree_next_nothing_between"] [l1f; l2f]
-              (mk_sequent [l1_in_domain; mk_not (mk_eq l2 l1); mk_not (mk_eq l2 mk_null)]
-                          [mk_not (mk_btwn next l1 l2 mk_null)])) :: tree_sorted @ tree_structure),
-      [tree_fp; tree_content]);
+      mk_and ((to_null next) @ tree_sorted @ tree_structure),
+      [tree_fp; set_content]);
+    ( mk_ident "stree2_b",
+      [df; dataf; leftf; nextf; parentf; rightf; xf; lbf; ubf; cf],
+      mk_and (bounded :: (to_null next) @ tree_sorted @ tree_structure),
+      [tree_fp; set_content]);
   ]

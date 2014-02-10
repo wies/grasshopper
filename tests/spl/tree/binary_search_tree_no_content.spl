@@ -1,0 +1,154 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+}
+
+predicate bstree(x: Node, lb: int, ub: int) {
+    x == null
+  ||
+    x != null &*&
+    x.parent |-> x.parent &*&
+    lb <= x.data &*&
+    x.data <= ub &*&
+    bstree(x.left, lb, x.data - 1) &*&
+    bstree(x.right, x.data + 1, ub)
+}
+
+predicate treeAllocInvariant(X: set<Node>) {
+  (forall n in X :: n.parent == n.parent)
+}
+
+procedure destroy(root: Node,
+                  ghost lb: int, ghost ub: int)
+  requires bstree(root, lb, ub);
+  requires treeAllocInvariant(Alloc);
+  ensures treeAllocInvariant(Alloc);
+  ensures emp;
+{
+    if (root != null) {
+        destroy(root.left, lb, ub);
+        destroy(root.right, lb, ub);
+        root.parent := null;
+        free root;
+    }
+}
+
+procedure extract_max(root: Node, ghost lb: int, ghost ub: int)
+returns (others: Node, max: Node)
+  requires bstree(root, lb, ub) &*& root != null;
+  requires treeAllocInvariant(Alloc);
+  ensures  bstree(others, lb, max.data-1) &*& acc(max);
+  ensures  max.right == null && max.parent == null && max.data <= ub && lb <= max.data;
+  ensures  treeAllocInvariant(Alloc);
+{
+    if (root.right != null) {
+        var c: Node, m: Node;
+        c, m := extract_max(root.right, root.data + 1, ub); 
+        root.right := c;
+        if (c != null) {c.parent := root;}
+        return root, m;
+    } else {
+        var c: Node;
+        c := root.left;
+        root.parent := null;
+        return c, root;
+    }
+}
+
+procedure insert(root: Node, value: int,
+                 ghost lb: int, ghost ub: int)
+returns (new_root: Node)
+  requires bstree(root, lb, ub);
+  requires lb <= value && value <= ub;
+  requires treeAllocInvariant(Alloc);
+  ensures treeAllocInvariant(Alloc);
+  ensures bstree(new_root, lb, ub);
+{
+  if (root == null) {
+    var t: Node;
+    t := new Node;
+    t.left := null;
+    t.right := null;
+    t.data := value;
+    return t;
+  } else { 
+    var n: Node;
+    if (root.data > value) {
+      n := insert(root.left, value, lb, root.data-1);
+      root.left := n;
+      if (n != null) {n.parent := root;}
+      return root;
+    } else if (root.data < value) {
+      n := insert(root.right, value, root.data+1, ub);
+      root.right := n;
+      if (n != null) {n.parent := root;}
+      return root;
+    }
+    return root;
+  }
+}
+
+procedure remove(root: Node, value: int,
+                 ghost lb: int, ghost ub: int)
+returns (res: Node)
+  requires bstree(root, lb, ub);
+  requires treeAllocInvariant(Alloc);
+  ensures bstree(res, lb, ub);
+  ensures treeAllocInvariant(Alloc);
+{
+    if (root == null) {
+        return null;
+    } else if (root.data == value) {
+        if (root.left == null && root.right == null) {
+            root.parent := null;
+            free(root);
+            return null;
+        } else if (root.left != null && root.right == null) {
+            res := root.left;
+            root.parent := null;
+            res.parent := null;
+            free(root);
+            return res;
+        } else if (root.left == null && root.right != null) {
+            res := root.right;
+            root.parent := null;
+            res.parent := null;
+            free(root);
+            return res;
+        } else {
+            root.parent := null;
+            var l: Node, m: Node;
+            l, m := extract_max(root.left, lb, value - 1);
+            m.left := l;
+            if (l != null) { l.parent := m; }
+            m.right := root.right;
+            m.right.parent := m;
+            free(root);
+            return m;
+        }
+    } else if (root.data > value) {
+        root.left := remove(root.left, value, lb, root.data - 1);
+        if (root.left != null) {root.left.parent := root;}
+        return root;
+    } else {
+        root.right := remove(root.right, value, root.data + 1, ub);
+        if (root.right != null) {root.right.parent := root;}
+        return root;
+    }
+}
+
+procedure traverse(root: Node, ghost lb: int, ghost ub: int) 
+  requires bstree(root, lb, ub);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  bstree(root, lb, ub);
+{
+    if (root != null) {
+        traverse(root.left, lb, root.data - 1);
+        if (root.left != null) {root.left.parent := root;}
+        traverse(root.right, root.data + 1, ub);
+        if (root.right != null) {root.right.parent := root;}
+    }
+}

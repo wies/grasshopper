@@ -19,12 +19,9 @@ predicate treeAllocInvariant(X: set<Node>) {
   (forall n in X :: n.parent == n.parent)
 }
 
-procedure union(h1: Node, h2: Node)
-    returns (res: Node)
-    requires heap(h1) &*& heap(h2);
-    requires treeAllocInvariant(Alloc);
-    ensures treeAllocInvariant(Alloc);
-    ensures heap(res);
+procedure union(h1: Node, h2: Node) returns (res: Node)
+    requires heap(h1) &*& heap(h2) &*& treeAllocInvariant(Alloc);
+    ensures heap(res) &*& treeAllocInvariant(Alloc);
 {
     if (h1 == null) {
         return h2;
@@ -45,32 +42,26 @@ procedure union(h1: Node, h2: Node)
 }
 
 procedure extractMax(h: Node) returns (max: int, rest: Node)
-    requires heap(h) &*& h != null;
-    requires treeAllocInvariant(Alloc);
-    ensures  treeAllocInvariant(Alloc);
-    ensures  heap(rest);
+    requires heap(h) &*& h != null &*& treeAllocInvariant(Alloc);
+    ensures  heap(rest) &*& treeAllocInvariant(Alloc);
 {
     var d : int;
     d := h.data;
     var hp: Node, r: Node, l: Node;
     l := h.left;
     r := h.right;
-    h.left := null;
-    h.right := null;
+    h.parent := null;
+    free h;
     if (l != null) { l.parent := null; }
     if (r != null) { r.parent := null; }
     hp := union(l, r);
     if (hp != null) { hp.parent := null; }
-    h.parent := null;
-    free h;
     return d, hp;
 }
 
 procedure insert(h: Node, value: int) returns (res: Node)
-    requires heap(h);
-    requires treeAllocInvariant(Alloc);
-    ensures treeAllocInvariant(Alloc);
-    ensures heap(res);
+    requires heap(h) &*& treeAllocInvariant(Alloc);
+    ensures heap(res) &*& treeAllocInvariant(Alloc);
 {
     var n: Node;
     n := new Node;

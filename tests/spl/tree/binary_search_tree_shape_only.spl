@@ -1,0 +1,148 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+}
+
+predicate tree(x: Node) {
+    x == null
+  ||
+    x != null &*&
+    x.parent |-> x.parent &*&
+    tree(x.left) &*&
+    tree(x.right)
+}
+
+predicate treeAllocInvariant(X: set<Node>) {
+  (forall n in X :: n.parent == n.parent)
+}
+
+procedure destroy(root: Node)
+  requires tree(root);
+  requires treeAllocInvariant(Alloc);
+  ensures treeAllocInvariant(Alloc);
+  ensures emp;
+{
+    if (root != null) {
+        destroy(root.left);
+        destroy(root.right);
+        root.parent := null;
+        free root;
+    }
+}
+
+procedure extract_max(root: Node)
+returns (others: Node, max: Node)
+  requires tree(root) &*& root != null;
+  requires treeAllocInvariant(Alloc);
+  ensures  tree(others) &*& acc(max);
+  ensures  max.right == null && max.parent == null;
+  ensures  treeAllocInvariant(Alloc);
+{
+    if (root.right != null) {
+        var c: Node, m: Node;
+        c, m := extract_max(root.right); 
+        root.right := c;
+        if (c != null) {c.parent := root;}
+        return root, m;
+    } else {
+        var c: Node;
+        c := root.left;
+        root.parent := null;
+        return c, root;
+    }
+}
+
+procedure insert(root: Node, value: int)
+returns (new_root: Node)
+  requires tree(root);
+  requires treeAllocInvariant(Alloc);
+  ensures treeAllocInvariant(Alloc);
+  ensures tree(new_root);
+{
+  if (root == null) {
+    var t: Node;
+    t := new Node;
+    t.left := null;
+    t.right := null;
+    t.data := value;
+    return t;
+  } else { 
+    var n: Node;
+    if (root.data > value) {
+      n := insert(root.left, value);
+      root.left := n;
+      if (n != null) {n.parent := root;}
+      return root;
+    } else if (root.data < value) {
+      n := insert(root.right, value);
+      root.right := n;
+      if (n != null) {n.parent := root;}
+      return root;
+    }
+    return root;
+  }
+}
+
+procedure remove(root: Node, value: int)
+returns (res: Node)
+  requires tree(root);
+  requires treeAllocInvariant(Alloc);
+  ensures tree(res);
+  ensures treeAllocInvariant(Alloc);
+{
+    if (root == null) {
+        return null;
+    } else if (root.data == value) {
+        if (root.left == null && root.right == null) {
+            root.parent := null;
+            free(root);
+            return null;
+        } else if (root.left != null && root.right == null) {
+            res := root.left;
+            root.parent := null;
+            res.parent := null;
+            free(root);
+            return res;
+        } else if (root.left == null && root.right != null) {
+            res := root.right;
+            root.parent := null;
+            res.parent := null;
+            free(root);
+            return res;
+        } else {
+            root.parent := null;
+            var l: Node, m: Node;
+            l, m := extract_max(root.left);
+            m.left := l;
+            if (l != null) { l.parent := m; }
+            m.right := root.right;
+            m.right.parent := m;
+            free(root);
+            return m;
+        }
+    } else if (root.data > value) {
+        root.left := remove(root.left, value);
+        if (root.left != null) {root.left.parent := root;}
+        return root;
+    } else {
+        root.right := remove(root.right, value);
+        if (root.right != null) {root.right.parent := root;}
+        return root;
+    }
+}
+
+procedure traverse(root: Node) 
+  requires tree(root);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures  tree(root);
+{
+    if (root != null) {
+        traverse(root.left);
+        if (root.left != null) {root.left.parent := root;}
+        traverse(root.right);
+        if (root.right != null) {root.right.parent := root;}
+    }
+}

@@ -1,0 +1,18 @@
+Thomas Wies (wies@cs.nyu.edu)
+Damien Zufferey (zufferey@csail.mit.edu)
+
+-------------------------
+Required
+-------------------------
+- OCaml, version >= 3.12
+- Z3, version >= 3.2, or
+GRASShopper has been tested on Linux, Mac OS, and Windows/Cygwin.
+
+-------------------------
+Instructions 
+-------------------------
+Let us know if you have any problem.
+Run the xp_cav14.sh script
+The script will compile GRASShopper and run the tests.
+The tests input files are located in the tests/spl folder.
+Please look inside the script for the exact list of tests.

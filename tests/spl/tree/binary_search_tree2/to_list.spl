@@ -20,6 +20,19 @@ predicate sorted_set2(x: Node, y: Node, c: set<int>) {
     //sorted_set_lb(x, y, x.data - 1, c) TODO
 }
 
+predicate sorted_set2_lb(x: Node, y: Node, lb: int, c: set<int>) {
+    x == y &*&
+    c == set<int>()
+  || 
+    x != y &*&
+    x.parent == null &*&
+    x.data >= lb &*&
+    x.next == x.next &*&
+    x.right == x.right &*&
+    x.left == x.left &*&
+    sorted_set2_lb(x.next, y, x.data + 1, c)
+}
+
 predicate stree2(x: Node, content: set<int>) {
     x == null &*&
     content == set<int>()
@@ -32,11 +45,24 @@ predicate stree2(x: Node, content: set<int>) {
     stree2(x.right, content)     //TODO content
 }
 
+predicate stree2_b(x: Node, lb: int, ub: int, content: set<int>) {
+    x == null &*&
+    content == set<int>()
+  ||
+    x != null &*&
+    x.parent == x.parent &*&
+    x.next == null &*&
+    x.data in content &*&
+    x.data <= ub &*&
+    lb <= x.data &*&
+    stree2_b(x.left, lb, ub, content) &*&  //TODO content
+    stree2_b(x.right, lb, ub, content)     //TODO content
+}
+
 predicate treeAllocInvariant(X: set<Node>) {
   (forall n in X :: n.parent == n.parent)
 }
 
-//TODO concat would be more efficient
 procedure union(lst1: Node, lst2: Node,
                 implicit ghost content1: set<int>,
                 implicit ghost content2: set<int>)
@@ -65,6 +91,58 @@ procedure union(lst1: Node, lst2: Node,
     }
 }
 
+procedure insertL( lst: Node, val: int,
+                  implicit ghost content: set<int>)
+  returns (res: Node)
+  requires sorted_set2(lst, null, content);
+  requires treeAllocInvariant(Alloc);
+  ensures  treeAllocInvariant(Alloc);
+  ensures sorted_set2(res, null, content ++ set(val));
+{
+  var curr: Node, prev: Node;
+  curr := lst;
+  prev := null;
+  var c1: set<int>, c2: set<int>;
+  c1 := content;
+  c2 := set<int>();
+
+  while (curr != null && curr.data < val)
+    invariant prev == null && curr == lst && c2 == set<int>() || 
+                (val > prev.data && 
+                prev != curr && 
+                prev.next == curr && 
+                Btwn(next,lst,prev,curr)) &*&
+                sorted_set2(lst, curr, c2);
+    invariant sorted_set2(curr, null, c1);
+    invariant content == c1 ++ c2;
+    invariant prev == null || curr == null || prev.data < curr.data;
+  {
+    c1 := c1 -- set(curr.data);
+    c2 := c2 ++ set(curr.data);
+    prev := curr;
+    curr := curr.next; 
+  }
+
+  var n: Node;
+
+  if (curr != null && curr.data == val) {
+    return lst;
+  }
+
+  n := new Node;
+  n.next := curr;
+  n.data := val;
+
+  if (prev != null) {
+    prev.next := n;
+    return lst;
+  } else {
+    return n;
+  }
+
+}
+
+//this goes through, but it is extremely slow
 procedure toList(t: Node, implicit ghost content: set<int>)
 returns (res: Node)
   requires stree2(t, content);
@@ -76,16 +154,88 @@ returns (res: Node)
         return null;
     } else {
         t.parent := null;
-        var l: Node, r: Node;
+        var l: Node, r: Node, u: Node, d: int;
         r := t.right;
         l := t.left;
-        t.right := null;
-        t.left := null;
+        d := t.data;
         if (r != null) { r.parent := null; }
         if (l != null) { l.parent := null; }
+        free(t);
         r := toList(r);
         l := toList(l);
-        t.next := r;
-        return union(l, t);
+        u := union(l, r);
+        return insertL(u, d);
     }
 }
+
+//TODO needs bound!!
+procedure toListRec(t: Node, l: Node, ghost lb: int, ghost bnd: int,
+                    implicit ghost contentT: set<int>, implicit ghost contentL: set<int>)
+returns (res: Node)
+  requires lb <= bnd &*& stree2_b(t, lb, bnd, contentT);
+  requires sorted_set2_lb(l, null, bnd + 1, contentL) &*& treeAllocInvariant(Alloc);
+  ensures  sorted_set2_lb(res, null, lb, contentT ++ contentL) &*& treeAllocInvariant(Alloc);
+{
+    if (t == null) {
+        return l;
+    } else {
+        var lft: Node;
+        lft := t.left;
+        if (lft != null) lft.parent := null;
+        if (t.right != null) t.right.parent := null;
+        l := toListRec(t.right, l, t.data, bnd);
+        //t.left := null;
+        //t.right := null;
+        t.next := l;
+        return toListRec(lft, t, lb, t.data -1);
+    }
+}
+
+
+procedure insert(root: Node, value: int, implicit ghost content: set<int>)
+returns (new_root: Node)
+  requires stree2(root, content) &*& treeAllocInvariant(Alloc);
+  ensures stree2(new_root, content ++ set(value)) &*& treeAllocInvariant(Alloc);
+{
+  if (root == null) {
+    var t: Node;
+    t := new Node;
+    t.left := null;
+    t.right := null;
+    t.data := value;
+    t.next := null;
+    return t;
+  } else { 
+    var n: Node;
+    if (root.data > value) {
+      n := insert(root.left, value);
+      root.left := n;
+      if (n != null) {n.parent := root;}
+      return root;
+    } else if (root.data < value) {
+      n := insert(root.right, value);
+      root.right := n;
+      if (n != null) {n.parent := root;}
+      return root;
+    }
+    return root;
+  }
+}
+
+procedure toTree(t: Node, implicit ghost content: set<int>)
+returns (res: Node)
+  requires sorted_set2(t, null, content) &*& treeAllocInvariant(Alloc);
+  ensures  stree2(res, content) &*& treeAllocInvariant(Alloc);
+{
+    if (t == null) {
+        return null;
+    } else {
+        var n: Node, d: int;
+        n := t.next;
+        d := t.data;
+        free(t);
+        n := toTree(n);
+        return insert(n, d);
+    }
+}
+

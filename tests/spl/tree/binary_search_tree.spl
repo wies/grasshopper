@@ -22,36 +22,31 @@ predicate treeAllocInvariant(X: set<Node>) {
   (forall n in X :: n.parent == n.parent)
 }
 
-procedure contains(root: Node, val: int,
-                   implicit ghost content: set<int>)
+procedure contains(root: Node, val: int, implicit ghost content: set<int>)
   returns (res: bool)
-  requires stree(root, content);
-  requires treeAllocInvariant(Alloc);
-  ensures  stree(root, content);
-  ensures  treeAllocInvariant(Alloc);
+  requires stree(root, content) &*& treeAllocInvariant(Alloc);
+  ensures  stree(root, content) &*& treeAllocInvariant(Alloc);
   ensures  res == val in content;
 {
-  if (root == null) {
-    return false;
-  } else { 
-    if (val == root.data) {
-      return true;
-    } else if (val < root.data) {
-      res := contains(root.left, val);
-      if (root.left != null) {root.left.parent := root;}
-      return res;
-    } else {
-      res := contains(root.right, val);
-      if (root.right != null) {root.right.parent := root;}
-      return res;
+    if (root == null) {
+        return false;
+    } else { 
+        if (val == root.data) {
+            return true;
+        } else if (val < root.data) {
+            res := contains(root.left, val);
+            if (root.left != null) {root.left.parent := root;}
+            return res;
+        } else {
+            res := contains(root.right, val);
+            if (root.right != null) {root.right.parent := root;}
+            return res;
+        }
     }
-  }
 }
 
-procedure destroy(root: Node,
-                  implicit ghost content: set<int>)
-  requires stree(root, content);
-  requires treeAllocInvariant(Alloc);
+procedure destroy(root: Node, implicit ghost content: set<int>)
+  requires stree(root, content) &*& treeAllocInvariant(Alloc);
   ensures treeAllocInvariant(Alloc);
 {
     if (root != null) {
@@ -63,10 +58,8 @@ procedure destroy(root: Node,
 }
 
 procedure traverse(root: Node, implicit ghost content: set<int>)
-  requires stree(root, content);
-  requires treeAllocInvariant(Alloc);
-  ensures  treeAllocInvariant(Alloc);
-  ensures  stree(root, content);
+  requires stree(root, content) &*& treeAllocInvariant(Alloc);
+  ensures  stree(root, content) &*& treeAllocInvariant(Alloc);
 {
     if (root != null) {
         traverse(root.left);
@@ -76,11 +69,9 @@ procedure traverse(root: Node, implicit ghost content: set<int>)
     }
 }
 
-procedure extract_max(root: Node,
-                      implicit ghost content: set<int>)
+procedure extract_max(root: Node, implicit ghost content: set<int>)
 returns (others: Node, max: Node)
-  requires stree(root, content) &*& root != null;
-  requires treeAllocInvariant(Alloc);
+  requires stree(root, content) &*& root != null &*& treeAllocInvariant(Alloc);
   ensures  stree(others, content -- set(max.data)) &*& acc(max);
   ensures  max.right == null && max.parent == null && max.data in content;
   ensures  (forall z in (content -- set(max.data)) :: z < max.data);
@@ -100,13 +91,10 @@ returns (others: Node, max: Node)
     }
 }
 
-procedure insert(root: Node, value: int,
-                 implicit ghost content: set<int>)
+procedure insert(root: Node, value: int, implicit ghost content: set<int>)
 returns (new_root: Node)
-  requires stree(root, content);
-  requires treeAllocInvariant(Alloc);
-  ensures treeAllocInvariant(Alloc);
-  ensures stree(new_root, content ++ set(value));
+  requires stree(root, content) &*& treeAllocInvariant(Alloc);
+  ensures  stree(new_root, content ++ set(value)) &*& treeAllocInvariant(Alloc);
 {
   if (root == null) {
     var t: Node;
@@ -132,13 +120,10 @@ returns (new_root: Node)
   }
 }
 
-procedure remove(root: Node, value: int,
-                 implicit ghost content: set<int>)
+procedure remove(root: Node, value: int, implicit ghost content: set<int>)
 returns (res: Node)
-  requires stree(root, content);
-  requires treeAllocInvariant(Alloc);
-  ensures stree(res, content -- set(value));
-  ensures treeAllocInvariant(Alloc);
+  requires stree(root, content) &*& treeAllocInvariant(Alloc);
+  ensures stree(res, content -- set(value)) &*& treeAllocInvariant(Alloc);
 {
     if (root == null) {
         return null;
@@ -182,11 +167,9 @@ returns (res: Node)
 }
 
 procedure rotate_left(h: Node, implicit ghost content: set<int>) returns (res: Node)
-  requires stree(h, content);
+  requires stree(h, content) &*& treeAllocInvariant(Alloc);
   requires h != null && h.right != null;
-  requires treeAllocInvariant(Alloc);
-  ensures  treeAllocInvariant(Alloc);
-  ensures  stree(res, content);
+  ensures  stree(res, content) &*& treeAllocInvariant(Alloc);
 {
     var x: Node;
     x := h.right;
@@ -199,11 +182,9 @@ procedure rotate_left(h: Node, implicit ghost content: set<int>) returns (res: N
 }
 
 procedure rotate_right(h: Node, implicit ghost content: set<int>) returns (res: Node)
-  requires stree(h, content);
+  requires stree(h, content) &*& treeAllocInvariant(Alloc);
   requires h != null && h.left != null;
-  requires treeAllocInvariant(Alloc);
-  ensures  treeAllocInvariant(Alloc);
-  ensures  stree(res, content);
+  ensures  stree(res, content) &*& treeAllocInvariant(Alloc);
 {
     var x: Node;
     x := h.left;
