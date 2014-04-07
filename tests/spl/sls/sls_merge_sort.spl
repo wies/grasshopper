@@ -3,16 +3,16 @@ struct Node {
   var data: int;
 }
 
+predicate lseg(x: Node, y: Node) {
+  x == y || x != y &*& acc(x) &*& lseg(x.next, y)
+}
+
 predicate uslseg(x: Node, y: Node, lb: int) {
   x == y || x != y &*& acc(x) &*& lb <= x.data &*& uslseg(x.next, y, x.data)
 }
 
 predicate slseg(x: Node, y: Node) {
   x == y || x != y &*& acc(x) &*& uslseg(x.next, y, x.data)
-}
-
-predicate lseg(x: Node, y: Node) {
-  x == y || x != y &*& acc(x) &*& lseg(x.next, y)
 }
 
 predicate llseg(x: Node, y: Node, ub: int) {
@@ -45,7 +45,9 @@ procedure merge(a: Node, b: Node) returns (res: Node)
 
   while (a != null || b != null)
     invariant (last.next |-> a || last.next |-> b);
-    invariant lslseg(res, last, last.data) &*& uslseg(a, null, last.data) &*& uslseg(b, null, last.data);
+    invariant lslseg(res, last, last.data);
+    invariant uslseg(a, null, last.data);
+    invariant uslseg(b, null, last.data);
   {
     if (a == null || b != null && a.data > b.data) {
       last.next := b;
@@ -57,7 +59,6 @@ procedure merge(a: Node, b: Node) returns (res: Node)
       a := a.next;
     }
   }
-
   return res;
 }
 
@@ -87,16 +88,16 @@ procedure split(x: Node) returns (y: Node, z: Node)
 }
 
 
-procedure merge_sort(lst: Node) returns (res: Node)
-  requires lseg(lst, null);
+procedure _merge_sort(x: Node) returns (res: Node)
+  requires lseg(x, null);
   ensures slseg(res, null);
 {
-  //lst.next := lst;
-  var lst1: Node, lst2: Node;
-  lst1, lst2 := split(lst);
+  var x1: Node, x2: Node;
+  //x.next := x;
+  x1, x2 := split(x);
   var res1: Node;
-  res1 := merge_sort(lst1);
+  res1 := _merge_sort(x1);
   var res2: Node;
-  res2 := merge_sort(lst2);
+  res2 := _merge_sort(x2);
   return merge(res1, res2);
 }

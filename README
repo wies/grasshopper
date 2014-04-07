@@ -78,3 +78,9 @@ your site-lisp directory and add the following lines to your .emacs file:
 
 To use the flymake mode with SPL programs, you need to put the
 GRASShopper executable in the path and rename it to "grasshopper".
+
+Optional: if you are using emacs 24.1 or newer, you may use the
+flycheck mode as a replacement for flymake mode. In this case, also
+copy the file flycheck.el into your site-lisp directory. We are using
+a slightly modified version of the original flycheck mode by Sebastian
+Wiesner.
