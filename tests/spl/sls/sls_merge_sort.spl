@@ -91,11 +91,12 @@ procedure merge_sort(lst: Node) returns (res: Node)
   requires lseg(lst, null);
   ensures slseg(res, null);
 {
+  //lst.next := lst;
   var lst1: Node, lst2: Node;
   lst1, lst2 := split(lst);
-  var a: Node;
-  a := merge_sort(lst1);
-  var b: Node;
-  b := merge_sort(lst2);
-  return merge(a, b);
+  var res1: Node;
+  res1 := merge_sort(lst1);
+  var res2: Node;
+  res2 := merge_sort(lst2);
+  return merge(res1, res2);
 }
