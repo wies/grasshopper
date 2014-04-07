@@ -16,7 +16,7 @@ procedure split(x: Node, y: Node, lb: int, ub: int) returns (pivot: Node)
   ensures  blseg(x, pivot, lb, pivot.data);
   ensures  blseg(pivot, y, pivot.data, ub) &*& pivot != y;
   ensures  lb <= pivot.data &*& pivot.data <= ub;
-  ensures  Btwn(next, x, pivot, y);
+//ensures  Btwn(next, x, pivot, y);
 {
   var curr: Node;
   curr := x.next;
