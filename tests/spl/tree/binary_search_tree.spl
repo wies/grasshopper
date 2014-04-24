@@ -10,12 +10,14 @@ predicate stree(x: Node, content: set<int>) {
     content == set<int>()
   ||
     x != null &*&
-    x.data in content &*&
+    acc(x) &*&
     x.parent == x.parent &*&
-    x.left == x.left &*&
-    x.right == x.right &*&
-    stree(x.left, content) &*&  //TODO content
-    stree(x.right, content)     //TODO content
+    (exists l_content: set<int>, r_content: set<int> :: 
+      (forall d in l_content :: d < x.data) &*&
+      (forall d in r_content :: d > x.data) &*&
+      content == l_content ++ r_content ++ set<int>(x.data) &*&
+      stree(x.left, l_content) &*&
+      stree(x.right, r_content))
 }
 
 predicate treeAllocInvariant(X: set<Node>) {

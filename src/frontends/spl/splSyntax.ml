@@ -31,6 +31,9 @@ type op =
   | OpPts | OpSepStar | OpSepPlus
   | OpAnd | OpOr | OpImpl | OpNot 
 
+type quantifier_kind =
+  | Forall | Exists
+
 type compilation_unit =
     { package : name option;
       imports : names;
@@ -125,7 +128,8 @@ and expr =
   | Dot of expr * ident * pos
   | ProcCall of ident * exprs * pos
   | PredApp of ident * exprs * pos
-  | Forall of ident * expr * expr * pos
+  | Quant of quantifier_kind * var list * expr * pos
+  | GuardedQuant of quantifier_kind * ident * expr * expr * pos
   | Access of expr * pos
   | BtwnPred of expr * expr * expr * expr * pos
   | UnaryOp of op * expr * pos
@@ -144,7 +148,8 @@ let pos_of_expr = function
   | Dot (_, _, p)
   | Access (_, p)
   | BtwnPred (_, _, _, _, p)
-  | Forall (_, _, _, p)
+  | Quant (_, _, _, p)
+  | GuardedQuant (_, _, _, _, p)
   | ProcCall (_, _, p)
   | PredApp (_, _, p)
   | UnaryOp (_, _, p)

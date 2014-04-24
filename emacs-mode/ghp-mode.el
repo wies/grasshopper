@@ -77,24 +77,33 @@
   (modify-syntax-entry ?$ "w" ghp-mode-syntax-table)
 )
 
-(setq font-lock-defaults
-      (cons (cons 'ghp-mode 
-                  '(ghp-mode-font-lock-keywords
-                    nil nil nil backward-paragraph
-                    (font-lock-comment-start-regexp . "/[*]")))
-            font-lock-defaults))
+(if (< 23 emacs-major-version)
+    (define-derived-mode ghp-mode c-mode "GHP"
+      "Major mode for editing Grasshopper program files."
+      :syntax-table ghp-mode-syntax-table
+      (setq-local comment-start "// ")
+      (setq-local font-lock-defaults '(ghp-mode-font-lock-keywords))
+     ;(setq-local indent-line-function 'c-indent-line)
+      )
+  (setq font-lock-defaults-alist
+        (cons (cons 'ghp-mode 
+                    '(ghp-mode-font-lock-keywords
+                      nil nil nil backward-paragraph
+                      (font-lock-comment-start-regexp . "/[*]")))
+              font-lock-defaults))
+  (defun ghp-mode ()
+    "Major mode for editing Grasshopper program files"
+    
+    (interactive)
+    
+    (kill-all-local-variables)
+    
+    (setq mode-name "GHP")
+    (setq major-mode 'ghp-mode)
+    (set-syntax-table ghp-mode-syntax-table)
+    (run-hooks 'ghp-mode-hook)))
 
-(defun ghp-mode ()
-  "Major mode for editing Grasshopper program files"
 
-  (interactive)
-
-  (kill-all-local-variables)
-
-  (setq mode-name "GHP")
-  (setq major-mode 'ghp-mode)
-  (set-syntax-table ghp-mode-syntax-table)
-  (run-hooks 'ghp-mode-hook))
 
 
 (or (assoc "\\.ghp$" auto-mode-alist)

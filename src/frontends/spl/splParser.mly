@@ -29,7 +29,7 @@ let mk_position s e =
 %token EQ NEQ LEQ GEQ LT GT IN NOTIN
 %token PTS EMP NULL
 %token SEPSTAR SEPPLUS AND OR IMPLIES IFF NOT COMMA
-%token FORALL
+%token <SplSyntax.quantifier_kind> QUANT
 %token ASSUME ASSERT CALL DISPOSE HAVOC NEW RETURN
 %token IF ELSE WHILE
 %token GHOST IMPLICIT VAR STRUCT PROCEDURE PREDICATE
@@ -433,7 +433,19 @@ iff_expr:
 
 quant_expr: 
 | iff_expr { $1 }
-| FORALL IDENT IN quant_expr COLONCOLON iff_expr { Forall (($2, 0), $4, $6, mk_position 1 6) }
+| QUANT IDENT IN quant_expr COLONCOLON iff_expr { GuardedQuant ($1, ($2, 0), $4, $6, mk_position 1 6) }
+| QUANT IDENT COLON var_type var_decl_list COLONCOLON iff_expr { 
+  let decl = 
+    { v_name = ($2, 0);
+      v_type = $4;
+      v_ghost = false;
+      v_implicit = false;
+      v_aux = false;
+      v_pos = mk_position 2 2;
+    } 
+  in
+  Quant ($1, decl :: $5, $7, mk_position 1 7) 
+}
 ;
 
 expr:

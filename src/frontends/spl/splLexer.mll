@@ -18,7 +18,8 @@ let _ =
       ("emp", EMP);
       ("ensures", ENSURES);
       ("false", BOOLVAL(false));
-      ("forall", FORALL);
+      ("forall", QUANT(SplSyntax.Forall));
+      ("exists", QUANT(SplSyntax.Exists));
       ("free", DISPOSE);
       ("ghost", GHOST);
       ("havoc", HAVOC);

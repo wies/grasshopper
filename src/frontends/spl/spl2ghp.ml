@@ -133,11 +133,21 @@ let resolve_names cus =
             let id = lookup_id init_id tbl pos in
             check_field id globals pos;
             Dot (re tbl e, id, pos)
-        | Forall (init_id, e, f, pos) ->
+        | GuardedQuant (q, init_id, e, f, pos) ->
             let e1 = re tbl e in
             let id, tbl1 = declare_name pos init_id tbl in
             let f1 = re tbl1 f in
-            Forall (id, e1, f1, pos)
+            GuardedQuant (q, id, e1, f1, pos)
+        | Quant (q, vars, f, pos) ->
+            let decls, tbl1 = List.fold_right 
+              (fun decl (decls, tbl) ->
+                 let decl, tbl1 = declare_var structs decl tbl in
+                 decl :: decls, tbl1
+              ) 
+              vars ([], tbl)
+            in
+            let f1 = re tbl1 f in
+            Quant (q, vars, f1, pos)
         | ProcCall (("acc", _), [arg], pos) ->
             Access (re tbl arg, pos)
         | ProcCall (("Btwn", _), args, pos) ->
@@ -306,7 +316,10 @@ let flatten_exprs cus =
       | Dot (e, id, pos) ->
           let e1, aux1, locals = flatten_expr aux locals e in
           Dot (e1, id, pos), aux1, locals
-      | Forall (id, s, f, pos) as e ->
+      | Quant (q, _, f, pos) as e ->
+          check_side_effects f;
+          e, aux, locals
+      | GuardedQuant (q, id, s, f, pos) as e ->
           check_side_effects s;
           check_side_effects f;
           e, aux, locals
@@ -589,7 +602,32 @@ let convert cus =
               let tz, _ = extract_term locals (StructType id) z in
               FOL_form (FormUtil.mk_btwn tfld tx ty tz)
           | _ -> type_error (pos_of_expr fld) "reference field" (ty_str fld_ty))
-      | Forall (id, e, f, pos) ->
+      | Quant (q, decls, f, pos) ->
+          (
+          let vars, locals1 = 
+             List.fold_right (fun decl (vars, locals1) ->
+               let id = decl.v_name in
+               let ty = decl.v_type in
+               (id, convert_type ty) :: vars, IdMap.add id decl locals1)
+               decls ([], locals)
+          in
+          try
+            let f1 = extract_fol_form locals1 f in
+            let mk_quant = match q with
+	    | Forall -> FormUtil.mk_forall
+            | Exists -> FormUtil.mk_exists
+            in
+            let subst = 
+              List.fold_right (fun (id, ty) subst -> 
+                IdMap.add id (FormUtil.mk_var ~srt:ty id) subst)
+                vars IdMap.empty
+            in
+            let f2 = FormUtil.subst_consts subst f1 in
+            FOL_form (mk_quant vars f2)
+          with _ -> 
+            let f1 = extract_sl_form locals1 f in
+            SL_form f1 (* FIXME *))
+      | GuardedQuant (q, id, e, f, pos) ->
           let e1, ty = extract_term locals (SetType UniversalType) e in
           (match ty with
           | SetType elem_ty ->
@@ -597,9 +635,17 @@ let convert cus =
               let locals1 = IdMap.add id decl locals in
               let elem_ty = convert_type elem_ty in
               let v_id = FormUtil.mk_var ~srt:elem_ty id in
-              let f1 = FormUtil.mk_implies (FormUtil.mk_elem v_id e1) (extract_fol_form locals1 f) in
+	      let mk_guard = match q with
+	      | Forall -> FormUtil.mk_implies
+              | Exists -> fun f g -> FormUtil.mk_and [f; g] 
+	      in
+              let mk_quant = match q with
+	      | Forall -> FormUtil.mk_forall
+              | Exists -> FormUtil.mk_exists
+              in
+              let f1 = mk_guard (FormUtil.mk_elem v_id e1) (extract_fol_form locals1 f) in
               let f2 = FormUtil.subst_consts (IdMap.add id v_id IdMap.empty) f1 in
-              FOL_form (FormUtil.mk_forall [(id, elem_ty)] f2)
+              FOL_form (mk_quant [(id, elem_ty)] f2)
           | _ -> failwith "unexpected type")
       | PredApp (id, es, pos) ->
           let decl = IdMap.find id cu.pred_decls in
