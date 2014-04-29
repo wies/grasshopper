@@ -94,7 +94,7 @@
       :syntax-table spl-mode-syntax-table
       (setq-local comment-start "// ")
       (setq-local font-lock-defaults '(spl-mode-font-lock-keywords))
-     ;(setq-local indent-line-function 'c-indent-line)
+      (setq-local indent-line-function nil) ;'c-indent-line)
       )
   (setq font-lock-defaults-alist
         (cons (cons 'spl-mode 
