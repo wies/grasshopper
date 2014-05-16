@@ -1,0 +1,123 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+}
+
+//  predicate bst(x: Node, pr: Node, content: set<int>) {
+//      x == null &*&
+//      content == set<int>()
+//    ||
+//      x != null &*&
+//      acc(x) &*&
+//      x.parent == pr &*&
+//      (exists l_content: set<int>, r_content: set<int> :: 
+//        (forall d in l_content :: d < x.data) &*&
+//        (forall d in r_content :: d > x.data) &*&
+//        content == l_content ++ r_content ++ set<int>(x.data) &*&
+//        bst(x.left, x, l_content) &*&
+//        bst(x.right, x, r_content))
+//  }
+
+predicate tree(x: Node) {
+    x == null
+  ||
+    x != null &*&
+    acc(x) &*&
+    x.parent == x.parent &*&
+    tree(x.left) &*&
+    tree(x.right)
+}
+
+predicate stree(x: Node, content: set<int>) {
+    x == null &*&
+    content == set<int>()
+  ||
+    x != null &*&
+    acc(x) &*&
+    x.parent == x.parent &*&
+    (exists l_content: set<int>, r_content: set<int> :: 
+      (forall d in l_content :: d < x.data) &*&
+      (forall d in r_content :: d > x.data) &*&
+      content == l_content ++ r_content ++ set<int>(x.data) &*&
+      stree(x.left, l_content) &*&
+      stree(x.right, r_content))
+}
+
+predicate treeAllocInvariant(X: set<Node>) {
+  (forall n in X :: n.parent == n.parent)
+}
+
+procedure remove(root: Node, value: int, implicit ghost content: set<int>)
+returns (res: Node)
+  requires stree(root, content) &*& treeAllocInvariant(Alloc) &*& (root == null || root.parent == null);
+  ensures stree(res, content -- set(value)) &*& treeAllocInvariant(Alloc);
+{
+    //find the node to remove
+    var cur: Node;
+    cur := root;
+    while(cur != null && cur.data != value)
+        invariant tree(cur);
+    {
+        if (cur.data > value) {
+            cur := cur.left;
+        } else {
+            cur := cur.right;
+        }
+    }
+    if (cur == null) {
+        return null;
+        //return root;
+    } else {
+        //find the node to replace
+        var m: Node;
+        m := cur.left;
+        while(m != null && m.right != null)
+            invariant tree(m) &*& (Btwn(parent, m, cur, cur) || m == null);
+        {
+            m := m.right;
+        }
+        //
+        if(m == null) {
+            if (cur.right == null) {
+                if (cur.parent != null) {
+                    if(cur.parent.left == cur){
+                        cur.parent.left := null;
+                    } else {
+                        cur.parent.right := null;
+                    }
+                }
+            } else {
+                m := cur.right;
+                m.parent := cur.parent;
+                if (cur.parent != null) {
+                    if(cur.parent.left == cur){
+                        cur.parent.left := m;
+                    } else {
+                        cur.parent.right := m;
+                    }
+                }
+            }
+        } else {
+            m.parent := cur.parent;
+            if (cur.parent != null) {
+                if(cur.parent.left == cur){
+                    cur.parent.left := m;
+                } else {
+                    cur.parent.right := m;
+                }
+                m.right := cur.right;
+                if (m.right != null) {m.right.parent := m;}
+            }
+        }
+        cur.parent := null;
+        if(cur == root) {
+            free(cur);
+            return m;
+        } else {
+            free(cur);
+            return root;
+        }
+    } 
+}
