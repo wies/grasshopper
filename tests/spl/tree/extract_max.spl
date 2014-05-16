@@ -1,0 +1,47 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+}
+
+predicate bst(x: Node, pr: Node, content: set<int>) {
+    x == null &*&
+    content == set<int>()
+  ||
+    x != null &*&
+    acc(x) &*&
+    x.parent == pr &*&
+    (exists l_content: set<int>, r_content: set<int> :: 
+      (forall d in l_content :: d < x.data) &*&
+      (forall d in r_content :: d > x.data) &*&
+      content == l_content ++ r_content ++ set<int>(x.data) &*&
+      bst(x.left, x, l_content) &*&
+      bst(x.right, x, r_content))
+}
+
+predicate treeAllocInvariant(X: set<Node>) {
+  (forall n in X :: n.parent == n.parent)
+}
+
+procedure extract_max(root: Node, ghost pr: Node, implicit ghost content: set<int>)
+returns (new_root: Node, max: Node)
+  requires bst(root, pr, content) &*& root != null &*& treeAllocInvariant(Alloc);
+  ensures  bst(new_root, pr, content -- set(max.data)) &*& acc(max);
+  ensures  max.right == null && max.parent == null && max.data in content;
+  ensures  (forall z in (content -- set(max.data)) :: z < max.data);
+  ensures  treeAllocInvariant(Alloc);
+{
+    var c: Node;
+    var m: Node;
+    if (root.right != null) {
+        c, m := extract_max(root.right, root);
+        root.right := c;
+        return root, m;
+    } else {
+        c := root.left;
+        root.parent := null;
+        if (c != null) c.parent := pr;
+        return c, root;
+    }
+}

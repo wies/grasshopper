@@ -176,6 +176,10 @@ let trees = [
       [df; dataf; leftf; parentf; rightf; xf; cf],
       mk_and (tree_sorted @ tree_structure),
       [tree_fp; set_content]);
+    ( mk_ident "bst",
+      [df; dataf; leftf; parentf; rightf; xf; yf; cf],
+      mk_and ((mk_or [mk_eq x mk_null; mk_eq (mk_read parent x) y]) :: tree_sorted @ tree_structure),
+      [tree_fp; set_content]);
     ( mk_ident "bstree_cnt",
       [df; dataf; leftf; parentf; rightf; xf; lbf; ubf; cf],
       mk_and (bounded :: tree_sorted @ tree_structure),
