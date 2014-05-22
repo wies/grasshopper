@@ -94,19 +94,19 @@
       :syntax-table spl-mode-syntax-table
       (setq-local comment-start "// ")
       (setq-local font-lock-defaults '(spl-mode-font-lock-keywords))
-      (setq-local indent-line-function nil) ;'c-indent-line)
+      ;(setq-local indent-line-function nil) 'c-indent-line)
       )
   (setq font-lock-defaults-alist
         (cons (cons 'spl-mode 
                     '(spl-mode-font-lock-keywords
                       nil nil nil backward-paragraph
                       (font-lock-comment-start-regexp . "/[*]")))
-              font-lock-defaults))
+              font-lock-defaults-alist))
   (defun spl-mode ()
     "Major mode for editing Grasshopper program files"
     
     (interactive)
-    
+
     (kill-all-local-variables)
     
     (setq mode-name "SPL")

@@ -63,12 +63,23 @@ let to_form pred_to_form domain f =
             match f with
             | SepStar _ -> FormUtil.smk_and (separation2 @ translated_1) 
             | SepPlus _ -> FormUtil.smk_and translated_1
-            | _ -> failwith "impossible"
+            | _ -> failwith "impossible" (* for completeness of pattern matching *)
           in
           ((struct_part, domain) :: otranslated_1, heap_part)
         in 
         let struct_part, heap_part = List.fold_left process ([], translated_2) translated_product in
         struct_part, FormUtil.smk_and heap_part
+    | SepWand (f1, f2) ->
+        let f1_structs, f1_defs = process_sep pol (FormUtil.fresh_ident (fst d)) f1 in
+        let f2_structs, f2_defs = process_sep pol (FormUtil.fresh_ident (fst d)) f2 in
+        let f1_struct, f1_dom, f2_struct, f2_dom =
+          match f1_structs, f2_structs with
+          | [f1_struct, f1_dom], [f2_struct, f2_dom] -> f1_struct, f1_dom, f2_struct, f2_dom
+          | _ -> failwith "process_sep: translation of disjunction below magic wand is not implemented."
+        in
+        let domain = fresh_dom d in
+        [FormUtil.mk_and [f1_struct; f2_struct; empty_t (FormUtil.mk_inter [f1_dom; domain])], domain],
+        FormUtil.smk_and [f1_defs; f2_defs; FormUtil.mk_eq f2_dom (FormUtil.mk_union [f1_dom; domain])]
     | Or forms ->
         let translated_1, translated_2 = List.split (List.map (process_sep pol d) forms) in
         List.concat translated_1, FormUtil.smk_and translated_2

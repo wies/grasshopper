@@ -28,7 +28,7 @@ let mk_position s e =
 %token UNION INTER DIFF
 %token EQ NEQ LEQ GEQ LT GT IN NOTIN
 %token PTS EMP NULL
-%token SEPSTAR SEPPLUS AND OR IMPLIES IFF NOT COMMA
+%token SEPSTAR SEPPLUS SEPWAND SEPINCL AND OR IMPLIES IFF NOT COMMA
 %token <SplSyntax.quantifier_kind> QUANT
 %token ASSUME ASSERT CALL DISPOSE HAVOC NEW RETURN
 %token IF ELSE WHILE
@@ -44,10 +44,11 @@ let mk_position s e =
 %left SEMICOLON
 %left OR
 %left AND
-%right IMPLIES
+%right IMPLIES SEPWAND
 %left SEP
 %left DOT
 %right NOT
+%nonassoc SEPINCL
 %nonassoc IFF
 %nonassoc LT GT LEQ GEQ
 %nonassoc EQ NEQ 
@@ -411,9 +412,19 @@ sep_plus_expr:
 | sep_plus_expr SEPPLUS sep_star_expr { BinaryOp ($1, OpSepPlus, $3, mk_position 1 3) }
 ;
 
-and_expr:
+sep_wand_expr:
 | sep_plus_expr { $1 }
-| and_expr AND sep_plus_expr { BinaryOp ($1, OpAnd, $3, mk_position 1 3) }
+| sep_plus_expr SEPWAND sep_wand_expr { BinaryOp ($1, OpSepWand, $3, mk_position 1 3) }
+;
+
+sep_incl_expr:
+| sep_wand_expr { $1 }
+| sep_wand_expr SEPINCL sep_incl_expr { BinaryOp ($1, OpSepPlus, BinaryOp ($1, OpSepWand, $3, mk_position 1 3), mk_position 1 3) }
+;
+
+and_expr:
+| sep_incl_expr { $1 }
+| and_expr AND sep_incl_expr { BinaryOp ($1, OpAnd, $3, mk_position 1 3) }
 ;
 
 or_expr:

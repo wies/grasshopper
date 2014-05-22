@@ -64,6 +64,8 @@ rule token = parse
 | "&&" { AND }
 | "!in" { NOTIN }
 | '!' { NOT }
+| "-**" { SEPINCL }
+| "--*" { SEPWAND }
 | "++" { UNION }
 | "--" { DIFF }
 | "**" { INTER }

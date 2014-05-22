@@ -90,7 +90,7 @@
                     '(ghp-mode-font-lock-keywords
                       nil nil nil backward-paragraph
                       (font-lock-comment-start-regexp . "/[*]")))
-              font-lock-defaults))
+              font-lock-defaults-alist))
   (defun ghp-mode ()
     "Major mode for editing Grasshopper program files"
     
@@ -102,8 +102,6 @@
     (setq major-mode 'ghp-mode)
     (set-syntax-table ghp-mode-syntax-table)
     (run-hooks 'ghp-mode-hook)))
-
-
 
 
 (or (assoc "\\.ghp$" auto-mode-alist)

@@ -44,6 +44,7 @@ let mk_sep_plus a b =
   | (SepPlus aa, SepPlus bb) -> SepPlus (aa @ bb)
   | (SepPlus aa, b) -> SepPlus (aa @ [b]) 
   | _ -> SepPlus [a; b]
+let mk_sep_wand a b = SepWand (a, b)
 let mk_atom s args = Atom (s, args)
 let mk_emp = mk_atom Emp []
 let mk_cell t = mk_atom Region [FormUtil.mk_setenum [t]]
@@ -76,6 +77,7 @@ let rec map_id fct f = match f with
   | Atom (s, args) -> mk_atom s (List.map (FormUtil.map_id_term fct) args)
   | SepStar lst -> SepStar (List.map (map_id fct) lst)
   | SepPlus lst -> SepPlus (List.map (map_id fct) lst)
+  | SepWand (f1, f2) -> SepWand (map_id fct f1, map_id fct f2)
 
 let subst_id subst f =
   let get id =
@@ -94,6 +96,7 @@ let subst_consts_fun subst f =
         mk_atom p (List.map (FormUtil.subst_consts_fun_term subst) args)
     | SepStar fs -> SepStar (List.map map fs)
     | SepPlus fs -> SepPlus (List.map map fs)
+    | SepWand (f1, f2) -> SepWand (map f1, f2)
   in
   map f
 
@@ -107,6 +110,7 @@ let subst_consts subst f =
         mk_atom p (List.map (FormUtil.subst_consts_term subst) args)
     | SepStar fs -> SepStar (List.map map fs)
     | SepPlus fs -> SepPlus (List.map map fs)
+    | SepWand (f1, f2) -> SepWand (map f1, map f2)
   in
   map f
 
@@ -118,6 +122,7 @@ let subst_preds subst f =
     | Or fs -> Or (List.map map fs)
     | SepStar fs -> SepStar (List.map map fs)
     | SepPlus fs -> SepPlus (List.map map fs)
+    | SepWand (f1, f2) -> SepWand (map f1, map f2)
     | Atom (Pred p, args) -> 
         subst p args
     | f -> f
@@ -131,6 +136,7 @@ let free_consts f =
     | And fs 
     | SepStar fs 
     | SepPlus fs -> List.fold_left fc acc fs
+    | SepWand (f1, f2) -> fc (fc acc f1) f2
     | Atom (p, args) -> List.fold_left FormUtil.free_consts_term_acc acc args
   in fc IdSet.empty f
 
@@ -140,6 +146,7 @@ let rec fold_atoms fct acc f = match f with
   | And fs 
   | SepStar fs 
   | SepPlus fs -> List.fold_left (fold_atoms fct) acc fs
+  | SepWand (f1, f2) -> fold_atoms fct (fold_atoms fct acc f1) f2
   | Atom _ -> fct acc f
   | _ -> acc
 

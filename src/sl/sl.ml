@@ -18,6 +18,7 @@ type form =
   | Atom of pred_symbol * Form.term list
   | SepStar of form list
   | SepPlus of form list
+  | SepWand of form * form
   | Not of form
   | And of form list
   | Or of form list
@@ -43,6 +44,8 @@ let rec pr_form ppf = function
   | Or fs -> pr_ors ppf fs
   | SepStar fs -> pr_sep_star ppf fs
   | SepPlus fs -> pr_sep_plus ppf fs
+  | SepWand (f1, f2) -> 
+      fprintf ppf "@[<2>%a@] --*@ %a" pr_form f1 pr_form f2
   | Atom (Emp, _) -> fprintf ppf "emp"
   | Atom (Region, [r]) -> 
       (match r with

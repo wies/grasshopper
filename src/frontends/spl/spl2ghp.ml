@@ -764,14 +764,18 @@ let convert cus =
           in
           let t2, _ = extract_term locals ty e2 in
           SL_form (SlUtil.mk_pts fld ind t2)
-      | BinaryOp (e1, OpSepStar, e2, _) ->
+      | BinaryOp (e1, (OpSepStar as op), e2, _)
+      | BinaryOp (e1, (OpSepPlus as op), e2, _)
+      | BinaryOp (e1, (OpSepWand as op), e2, _) ->
+          let mk_op = function
+            | OpSepStar -> SlUtil.mk_sep_star
+            | OpSepPlus -> SlUtil.mk_sep_plus
+            | OpSepWand -> SlUtil.mk_sep_wand
+            | _ -> failwith "unexpected operator"
+          in
           let f1 = extract_sl_form locals e1 in
           let f2 = extract_sl_form locals e2 in
-          SL_form (SlUtil.mk_sep_star f1 f2)
-      | BinaryOp (e1, OpSepPlus, e2, _) ->
-          let f1 = extract_sl_form locals e1 in
-          let f2 = extract_sl_form locals e2 in
-          SL_form (SlUtil.mk_sep_plus f1 f2)
+          SL_form (mk_op op f1 f2)
       | UnaryOp (OpPlus, e, _) ->
           let t, _ = extract_term locals IntType e in 
           FOL_term (t, IntType)

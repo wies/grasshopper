@@ -54,7 +54,7 @@ while (( "$#" )); do
     S="$((T/1000000000))"
     # Milliseconds
     M="$((T/1000000))"
-    printf "%02d:%02d.%03d\n" "$((S/60%60))" "$((S%60))" "${M}"
+    printf "\r\t\t\t\t\t%02d:%02d (%04dms)\n" "$((S/60%60))" "$((S%60))" "${M}"
     shift
     shift
     shift
