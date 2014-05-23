@@ -1,0 +1,56 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+}
+
+predicate stree(x: Node, content: set<int>) {
+    x == null &*&
+    content == set<int>()
+  ||
+    x != null &*&
+    acc(x) &*&
+    x.parent == x.parent &*&
+    (exists l_content: set<int>, r_content: set<int> :: 
+      (forall d in l_content :: d < x.data) &*&
+      (forall d in r_content :: d > x.data) &*&
+      content == l_content ++ r_content ++ set<int>(x.data) &*&
+      stree(x.left, l_content) &*&
+      stree(x.right, r_content))
+}
+
+predicate treeAllocInvariant(X: set<Node>) {
+  (forall n in X :: n.parent == n.parent)
+}
+
+procedure contains(root: Node, val: int, implicit ghost content: set<int>)
+  returns (res: bool)
+  requires stree(root, content) &*& treeAllocInvariant(Alloc);
+  ensures  stree(root, content) &*& treeAllocInvariant(Alloc);
+  ensures  res == val in content;
+{
+    var curr: Node;
+    curr := root;
+
+    var found: bool;
+    found := false;
+
+    while (!found && curr != null) 
+      invariant (exists content1: set<int> :: 
+                   (stree(curr, content1) -** stree(root, content))
+                   &*& val in content == val in content1);
+      invariant curr == null || found == (curr.data == val);
+    {
+        if (curr.data < val) {
+          curr := curr.left;
+        } else if (curr.data > val) {
+          curr := curr.right;
+        } else {
+          found := true;
+        }
+    }
+
+    return found;
+}
+

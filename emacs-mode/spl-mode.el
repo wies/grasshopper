@@ -58,7 +58,10 @@
    '("\\(\\<[a-zA-Z_][a-zA-Z0-9_']*[ \t]*\\>\\)(" 1
      font-lock-function-name-face)
 
-   '(":[ \t]*\\(\\<[a-zA-Z_][a-zA-Z0-9_']*\\>\\)" 1
+   '("[^:]:[ \t]*\\(\\<[a-zA-Z_][a-zA-Z0-9_']*\\>\\)" 1
+     font-lock-type-face)
+
+   '("<[ \t]*\\(\\<[a-zA-Z_][a-zA-Z0-9_']*\\>\\)[ \t]*>" 1
      font-lock-type-face)
 
    '("new[ \t]+\\(\\<[a-zA-Z_][a-zA-Z0-9_']*\\>\\)" 1
@@ -66,6 +69,9 @@
 
    '("struct[ \t]+\\(\\<[a-zA-Z_][a-zA-Z0-9_']*\\>\\)" 1
      font-lock-type-face)
+
+   '("\\<\\(forall\\|exists\\)[ \t]*\\([a-zA-Z_][a-zA-Z0-9_']*\\)\\>" 2
+     font-lock-variable-name-face)
 
    '("\\(\\<[a-zA-Z_][a-zA-Z0-9_']*[ \t]*\\>\\):[^:=]" 1
      font-lock-variable-name-face)
