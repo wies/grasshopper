@@ -308,6 +308,7 @@ let print_term out_ch t = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_te
 (** Print formula [f] to out channel [out_chan]. *)
 let print_form out_ch f = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_form f
 
+
 (** {5 Infix Notation} *)
 
 let rec pr_sort ppf = function

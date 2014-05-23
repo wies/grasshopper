@@ -12,7 +12,7 @@ let mk_loc_set_var d =
     FormUtil.mk_var ?srt:tpe d
 
 let mk_loc d =
-  if (fst d = "null") then FormUtil.mk_null
+  if fst d = "null" then FormUtil.mk_null
   else FormUtil.mk_free_const ?srt:(Some (Form.Loc)) d
 
 let mk_domain d v = FormUtil.mk_elem v (mk_loc_set d)
@@ -48,33 +48,21 @@ let mk_pred p ts = mk_atom (Pred p) ts
 let mk_pts f a b = 
   mk_sep_star (mk_eq (FormUtil.mk_read f a) b) (mk_cell a)
 let mk_sep_star_lst args = List.fold_left mk_sep_star mk_emp args
-(*let mk_prev_pts a b = mk_pred (get_symbol "ptsTo") [fprev_pts; a; b]*)
-(*let mk_ls a b = mk_pred (get_symbol "lseg") [a; b]*)
-(*let mk_dls a b c d = mk_pred (get_symbol "dlseg") [a; b; c; d]*)
-
-(*
-let mk_spatial_pred name args =
-  match find_symbol name with
-  | Some s ->
-    if List.length args = s.arity then
-      mk_atom (Pred (name, 0)) args
-    else
-      failwith (name ^ " expect " ^(string_of_int (s.arity))^
-                " found (" ^(String.concat ", " (List.map Form.string_of_term args))^ ")")
-  | None -> failwith ("unknown spatial predicate " ^ name)
-*)
+let mk_exists vs f = Binder (Form.Exists, vs, f)
+let mk_forall vs f = Binder (Form.Forall, vs, f)
 
 let rec map_id fct f = match f with
   | Pure p -> Pure (FormUtil.map_id fct p)
   | Atom (s, args) -> mk_atom s (List.map (FormUtil.map_id_term fct) args)
   | BoolOp (op, fs) -> BoolOp (op, List.map (map_id fct) fs)
   | SepOp (op, f1, f2) -> SepOp (op, map_id fct f1, map_id fct f2)
+  | Binder (b, vs, f) -> Binder (b, vs, map_id fct f)
 
 let subst_id subst f =
   let get id =
     try IdMap.find id subst with Not_found -> id
   in
-    map_id get f
+  map_id get f
 
 let subst_consts_fun subst f =
   let rec map f = 
@@ -84,6 +72,7 @@ let subst_consts_fun subst f =
         mk_atom p (List.map (FormUtil.subst_consts_fun_term subst) args)
     | BoolOp (op, fs) -> BoolOp (op, List.map map fs)
     | SepOp (op, f1, f2) -> SepOp (op, map f1, map f2)
+    | Binder (b, vs, f) -> Binder (b, vs, map f)
   in
   map f
 
@@ -94,6 +83,7 @@ let subst_consts subst f =
         mk_atom p (List.map (FormUtil.subst_consts_term subst) args)
     | BoolOp (op, fs) -> BoolOp (op, List.map map fs)
     | SepOp (op, f1, f2) -> SepOp (op, map f1, map f2)
+    | Binder (b, vs, f) -> Binder (b, vs, map f)
   in
   map f
 
@@ -104,18 +94,22 @@ let subst_preds subst f =
         subst p args
     | BoolOp (op, fs) -> BoolOp (op, List.map map fs)
     | SepOp (op, f1, f2) -> SepOp (op, map f1, map f2)
+    | Binder (b, vs, f) -> Binder (b, vs, map f)
     | f -> f
   in map f
 
 let free_consts f =
   let rec fc acc = function
     | Pure g -> IdSet.union acc (FormUtil.free_consts g)
+    | Atom (p, args) -> List.fold_left FormUtil.free_consts_term_acc acc args
     | BoolOp (op, fs) -> List.fold_left fc acc fs
     | SepOp (_, f1, f2) ->  fc (fc acc f1) f2
-    | Atom (p, args) -> List.fold_left FormUtil.free_consts_term_acc acc args
+    | Binder (b, vs, f) -> fc acc f
   in fc IdSet.empty f
 
-let rec fold_atoms fct acc f = match f with
+let rec fold_atoms fct acc f = 
+  match f with
+  | Binder (b, vs, f) -> fold_atoms fct acc f
   | BoolOp (op, fs) -> List.fold_left (fold_atoms fct) acc fs
   | SepOp (_, f1, f2) -> fold_atoms fct (fold_atoms fct acc f1) f2
   | Atom _ -> fct acc f

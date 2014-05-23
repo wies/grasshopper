@@ -1,6 +1,10 @@
 (** Abstract syntax tree for separation logic formulas *)
 
 type ident = Form.ident
+type sort = Form.sort
+type bool_op = Form.bool_op
+type binder = Form.binder
+
 let mk_ident = FormUtil.mk_ident
 module IdMap = Form.IdMap
 module IdSet = Form.IdSet
@@ -20,8 +24,8 @@ type form =
   | Pure of Form.form
   | Atom of pred_symbol * Form.term list
   | SepOp of sep_op * form * form
-  | BoolOp of Form.bool_op * form list
-  
+  | BoolOp of bool_op * form list
+  | Binder of binder * (ident * sort) list * form
 
 module SlSet = Set.Make(struct
     type t = form
@@ -56,6 +60,8 @@ let rec pr_form ppf = function
   | Atom (Region, _) -> ()
   | Atom (Pred p, ts) ->
       fprintf ppf "%a(@[%a@])" Form.pr_ident p Form.pr_term_list ts
+  | Binder (b, vs, f) ->
+      fprintf ppf "@[(%a)@]" pr_quantifier (b, vs, f)
 
 and pr_sep_star ppf = function
   | [] -> fprintf ppf "%s" "emp"
@@ -63,7 +69,8 @@ and pr_sep_star ppf = function
   | (BoolOp (Form.Or, _) as f) :: fs 
   | (BoolOp (Form.And, _) as f) :: fs
   | (SepOp (SepPlus, _, _) as f) :: fs
-  | (SepOp (SepStar, _, _) as f) :: fs -> fprintf ppf "(@[<2>%a@]) &*&@ %a" pr_form f pr_sep_star fs
+  | (SepOp (SepStar, _, _) as f) :: fs
+  | (Binder _ as f) :: fs -> fprintf ppf "(@[<2>%a@]) &*&@ %a" pr_form f pr_sep_star fs
   | f :: fs -> fprintf ppf "@[<2>%a@] &*&@ %a" pr_form f pr_sep_star fs
 
 and pr_sep_plus ppf = function
@@ -71,24 +78,31 @@ and pr_sep_plus ppf = function
   | [f] -> fprintf ppf "@[<2>%a@]" pr_form f
   | (BoolOp (Form.Or, _) as f) :: fs 
   | (BoolOp (Form.And, _) as f) :: fs
-  | (SepOp (SepStar, _, _) as f) :: fs -> fprintf ppf "(@[<2>%a@]) &+&@ %a" pr_form f pr_sep_plus fs
+  | (SepOp (SepStar, _, _) as f) :: fs
+  | (Binder _ as f) :: fs -> fprintf ppf "(@[<2>%a@]) &+&@ %a" pr_form f pr_sep_plus fs
   | f :: fs -> fprintf ppf "@[<2>%a@] &+&@ %a" pr_form f pr_sep_plus fs
 
 and pr_ands ppf = function
   | [] -> fprintf ppf "%s" "true"
   | [f] -> fprintf ppf "@[<2>%a@]" pr_form f
-  | (BoolOp (Form.Or, _) as f) :: fs -> fprintf ppf "(@[<2>%a@]) &&@ %a" pr_form f pr_ands fs
+  | (BoolOp (Form.Or, _) as f) :: fs
+  | (Binder _ as f) :: fs -> fprintf ppf "(@[<2>%a@]) &&@ %a" pr_form f pr_ands fs
   | f :: fs -> fprintf ppf "@[<2>%a@] &&@ %a" pr_form f pr_ands fs
 
 and pr_ors ppf = function
   | [] -> fprintf ppf "%s" "false"
   | [f] -> fprintf ppf "@[<2>%a@]" pr_form f
+  | (Binder _ as f) :: fs -> fprintf ppf "(@[<2>%a@]) &&@ %a" pr_form f pr_ors fs
   | f :: fs -> fprintf ppf "@[<2>%a@] ||@ %a" pr_form f pr_ors fs
 
 and pr_not ppf = function
   | (Atom (Emp, _) as f)
   | (Atom (Pred _, _) as f) -> fprintf ppf "!@[<2>%a@]" pr_form f
   | f -> fprintf ppf "!(@[<3>%a@])" pr_form f
+
+and pr_quantifier ppf = function
+  | (_, [], f) -> fprintf ppf "%a" pr_form f
+  | (b, vs, f) -> fprintf ppf "@[<2>%a @[%a@] ::@ %a@]" Form.pr_binder b Form.pr_vars vs pr_form f
 
 let print_form out_ch f = 
   fprintf (formatter_of_out_channel out_ch) "%a@\n@?" pr_form f

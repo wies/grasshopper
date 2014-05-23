@@ -56,44 +56,9 @@ let to_form pred_to_form domain f =
         in
         let structs, defs = List.fold_left process ([], [f1_defs; f2_defs]) structs_product in
         structs, FormUtil.smk_and defs
-       (*
-        let translated = List.map (process_sep pol (FormUtil.fresh_ident (fst d))) forms in
-        let translated_1, translated_2 = List.split translated in
-        let translated_product = 
-          match translated_1 with
-          | [] -> []
-          | ts :: tss ->
-              List.fold_left 
-                (fun acc ts1  -> Util.flat_map (fun ts2 ->  List.map (fun t -> t :: ts2) ts1) acc)
-                (List.map (fun t -> [t]) ts) tss
-        in
-        let process (otranslated_1, translated_2) translated =
-          let domain = fresh_dom d in
-          let translated_1, dsc = List.split translated in
-          let separation1 = FormUtil.mk_eq domain (FormUtil.mk_union dsc) in
-          let separation2 =
-            let rec pw_disj acc = function
-              | _ :: [] 
-              | [] -> acc
-              | d1 :: dcs -> 
-                 (*pw_disj (empty_t (FormUtil.mk_inter [d1; FormUtil.mk_union dcs]) :: acc) dcs *)
-                 pw_disj (List.map (fun d2 -> empty_t (FormUtil.mk_inter [d2; d1])) dcs @ acc) dcs
-            in pw_disj [] dsc
-          in
-          let heap_part = separation1 :: translated_2 in
-          let struct_part = 
-            match f with
-            | SepStar _ -> FormUtil.smk_and (separation2 @ translated_1) 
-            | SepPlus _ -> FormUtil.smk_and translated_1
-            | _ -> failwith "impossible" (* for completeness of pattern matching *)
-          in
-          ((struct_part, domain) :: otranslated_1, heap_part)
-        in 
-        let struct_part, heap_part = List.fold_left process ([], translated_2) translated_product in
-        struct_part, FormUtil.smk_and heap_part*)
     | BoolOp(Or, forms) ->
-        let translated_1, translated_2 = List.split (List.map (process_sep pol d) forms) in
-        List.concat translated_1, FormUtil.smk_and translated_2
+        let structs, defs = List.split (List.map (process_sep pol d) forms) in
+        List.concat structs, FormUtil.smk_and defs
     | other -> failwith ("process_sep does not expect " ^ (string_of_form other))
   in
 

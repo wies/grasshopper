@@ -603,7 +603,6 @@ let convert cus =
               FOL_form (FormUtil.mk_btwn tfld tx ty tz)
           | _ -> type_error (pos_of_expr fld) "reference field" (ty_str fld_ty))
       | Quant (q, decls, f, pos) ->
-          (
           let vars, locals1 = 
              List.fold_right (fun decl (vars, locals1) ->
                let id = decl.v_name in
@@ -611,22 +610,27 @@ let convert cus =
                (id, convert_type ty) :: vars, IdMap.add id decl locals1)
                decls ([], locals)
           in
-          try
-            let f1 = extract_fol_form locals1 f in
+          let subst = 
+            List.fold_right (fun (id, ty) subst -> 
+              IdMap.add id (FormUtil.mk_var ~srt:ty id) subst)
+              vars IdMap.empty
+          in            
+          (try
             let mk_quant = match q with
 	    | Forall -> FormUtil.mk_forall
             | Exists -> FormUtil.mk_exists
             in
-            let subst = 
-              List.fold_right (fun (id, ty) subst -> 
-                IdMap.add id (FormUtil.mk_var ~srt:ty id) subst)
-                vars IdMap.empty
-            in
+            let f1 = extract_fol_form locals1 f in
             let f2 = FormUtil.subst_consts subst f1 in
             FOL_form (mk_quant vars f2)
           with _ -> 
+            let mk_quant = match q with
+            | Forall -> SlUtil.mk_forall 
+            | Exists -> SlUtil.mk_exists
+            in
             let f1 = extract_sl_form locals1 f in
-            SL_form f1 (* FIXME *))
+            let f2 = SlUtil.subst_consts subst f1 in
+            SL_form (mk_quant vars f2))
       | GuardedQuant (q, id, e, f, pos) ->
           let e1, ty = extract_term locals (SetType UniversalType) e in
           (match ty with
