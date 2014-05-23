@@ -9,7 +9,7 @@ let dom_id = fresh_ident "domain"
 let dom_set = mk_loc_set dom_id
 
 let get_cases pred = match pred.pred_body.spec_form with
-  | SL (Sl.Or cases) -> cases
+  | SL (Sl.BoolOp (Or, cases)) -> cases
   | SL case -> [case]
   | FOL _ -> raise (Compile_pred_failure "expected SL")
 
@@ -125,12 +125,13 @@ let aux_substitution caller callee =
  *)
 let isolate_cases pred =
   let rec decompose case = match case with
-    | Sl.SepStar lst ->
+    | Sl.SepOp (Sl.SepStar, f1, f2) ->
+      let lst = [f1; f2] in
       List.fold_left
         (fun (a1,b1,c1) (a2,b2,c2) -> (a1 @ a2, b1 @ b2, c1 @ c2) )
         ([],[],[])
         (List.map decompose lst)
-    | Sl.And lst ->
+    | Sl.BoolOp (And, lst) ->
       List.fold_left
         (fun (pure,sep,preds) (p,s,pr) ->
           if sep = [] && preds = [] then (p@pure,s@sep,pr@preds)
@@ -208,7 +209,7 @@ let has_inductive_call pred f =
 
 (* split the SL def into a base case and an induction step. *)
 let base_case_ind_step pred f = match f with
-    | Sl.Or [a;b] ->
+    | Sl.BoolOp (Or, [a;b]) ->
       begin
         match (has_inductive_call pred a, has_inductive_call pred b) with
         | (true, true) -> raise (Compile_pred_failure "2 induction steps ?")

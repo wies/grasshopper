@@ -1,5 +1,6 @@
 (* Translate SL formulas to GRASS formulas *)
 
+open Form
 open Sl
 open Symbols
 open SlUtil
@@ -32,9 +33,30 @@ let to_form pred_to_form domain f =
         let domain = fresh_dom d in
         let structure, outputs = pred_to_form p args domain in
         [structure, domain], FormUtil.smk_and outputs 
-    | (SepStar forms as f)
-    | (SepPlus forms as f) ->
-        (*let ds = List.map (fun _ -> fd "sep" domain) forms in*)
+    | SepOp (op, f1, f2) ->
+        let p = process_sep pol (FormUtil.fresh_ident (fst d)) in
+        let f1_structs, f1_defs = p f1 in
+        let f2_structs, f2_defs = p f2 in
+        let structs_product = 
+          List.fold_left (fun acc s1 -> List.map (fun s2 -> (s1, s2)) f2_structs @ acc) [] f1_structs
+        in
+        let process (structs, defs) ((f1_struct, f1_dom), (f2_struct, f2_dom)) =
+           let domain = fresh_dom d in
+           let aux_struct = match op with
+           | SepPlus -> []
+           | SepStar -> [empty_t (FormUtil.mk_inter [f1_dom; f2_dom])]
+           | SepWand -> [empty_t (FormUtil.mk_inter [f1_dom; domain])]
+           in
+           let dom_def = match op with
+           | SepStar 
+           | SepPlus -> FormUtil.mk_eq domain (FormUtil.mk_union [f1_dom; f2_dom])
+           | SepWand ->  FormUtil.mk_eq f2_dom (FormUtil.mk_union [f1_dom; domain])
+           in
+           (FormUtil.smk_and (f1_struct :: f2_struct :: aux_struct), domain) :: structs, dom_def :: defs
+        in
+        let structs, defs = List.fold_left process ([], [f1_defs; f2_defs]) structs_product in
+        structs, FormUtil.smk_and defs
+       (*
         let translated = List.map (process_sep pol (FormUtil.fresh_ident (fst d))) forms in
         let translated_1, translated_2 = List.split translated in
         let translated_product = 
@@ -68,35 +90,24 @@ let to_form pred_to_form domain f =
           ((struct_part, domain) :: otranslated_1, heap_part)
         in 
         let struct_part, heap_part = List.fold_left process ([], translated_2) translated_product in
-        struct_part, FormUtil.smk_and heap_part
-    | SepWand (f1, f2) ->
-        let f1_structs, f1_defs = process_sep pol (FormUtil.fresh_ident (fst d)) f1 in
-        let f2_structs, f2_defs = process_sep pol (FormUtil.fresh_ident (fst d)) f2 in
-        let f1_struct, f1_dom, f2_struct, f2_dom =
-          match f1_structs, f2_structs with
-          | [f1_struct, f1_dom], [f2_struct, f2_dom] -> f1_struct, f1_dom, f2_struct, f2_dom
-          | _ -> failwith "process_sep: translation of disjunction below magic wand is not implemented."
-        in
-        let domain = fresh_dom d in
-        [FormUtil.mk_and [f1_struct; f2_struct; empty_t (FormUtil.mk_inter [f1_dom; domain])], domain],
-        FormUtil.smk_and [f1_defs; f2_defs; FormUtil.mk_eq f2_dom (FormUtil.mk_union [f1_dom; domain])]
-    | Or forms ->
+        struct_part, FormUtil.smk_and heap_part*)
+    | BoolOp(Or, forms) ->
         let translated_1, translated_2 = List.split (List.map (process_sep pol d) forms) in
         List.concat translated_1, FormUtil.smk_and translated_2
     | other -> failwith ("process_sep does not expect " ^ (string_of_form other))
   in
 
   let rec process_bool pol f = match f with
-    | And forms ->
+    | BoolOp(And, forms) ->
       let translated = List.map (process_bool pol) forms in
       let (translated_1, translated_2) = List.split translated in
         (FormUtil.smk_and translated_1, FormUtil.smk_and translated_2)
-    | Or forms ->
+    | BoolOp(Or, forms) ->
       let translated = List.map (process_bool pol) forms in
       let (translated_1, translated_2) = List.split translated in
         (FormUtil.smk_or translated_1, FormUtil.smk_and translated_2)
-    | Not form ->
-      let (structure, heap) = process_bool (not pol) form in
+    | BoolOp(Not, fs) ->
+      let (structure, heap) = process_bool (not pol) (List.hd fs) in
         (FormUtil.mk_not structure, heap)
     | sep ->
       let d' = FormUtil.fresh_ident "X" in

@@ -26,25 +26,20 @@ let mk_pure p = Pure p
 let mk_true = mk_pure FormUtil.mk_true
 let mk_false = mk_pure FormUtil.mk_false
 let mk_eq a b = mk_pure (FormUtil.mk_eq a b)
-let mk_not a = Not a
-let mk_and a b = And [a; b]
-let mk_or a b = Or [a; b]
+let mk_not a = BoolOp(Form.Not, [a])
+let mk_and a b = BoolOp (Form.And, [a; b])
+let mk_or a b = BoolOp (Form.Or, [a; b])
 let mk_sep_star a b = 
   match (a, b) with
-  | (Atom (Emp, []), _) -> b
-  | (_, Atom (Emp, [])) -> a
-  | (SepStar aa, SepStar bb) -> SepStar (aa @ bb)
-  | (a, SepStar bb) -> SepStar (a :: bb)
-  | (SepStar aa, b) -> SepStar (aa @ [b]) 
-  | _ -> SepStar [a; b]
+  | Atom (Emp, []), _ -> b
+  | _, Atom (Emp, []) -> a
+  | _, _ -> SepOp (SepStar, a, b)
 let mk_sep_plus a b =
   match (a, b) with
-  | (Atom (Emp, []), _) -> b
-  | (_, Atom (Emp, [])) -> a
-  | (SepPlus aa, SepPlus bb) -> SepPlus (aa @ bb)
-  | (SepPlus aa, b) -> SepPlus (aa @ [b]) 
-  | _ -> SepPlus [a; b]
-let mk_sep_wand a b = SepWand (a, b)
+  | Atom (Emp, []), _ -> b
+  | _, Atom (Emp, []) -> a
+  | _, _ -> SepOp (SepPlus, a, b)
+let mk_sep_wand a b = SepOp (SepWand, a, b)
 let mk_atom s args = Atom (s, args)
 let mk_emp = mk_atom Emp []
 let mk_cell t = mk_atom Region [FormUtil.mk_setenum [t]]
@@ -71,13 +66,9 @@ let mk_spatial_pred name args =
 
 let rec map_id fct f = match f with
   | Pure p -> Pure (FormUtil.map_id fct p)
-  | Not t ->  Not (map_id fct t)
-  | And lst -> And (List.map (map_id fct) lst)
-  | Or lst -> Or (List.map (map_id fct) lst)
   | Atom (s, args) -> mk_atom s (List.map (FormUtil.map_id_term fct) args)
-  | SepStar lst -> SepStar (List.map (map_id fct) lst)
-  | SepPlus lst -> SepPlus (List.map (map_id fct) lst)
-  | SepWand (f1, f2) -> SepWand (map_id fct f1, map_id fct f2)
+  | BoolOp (op, fs) -> BoolOp (op, List.map (map_id fct) fs)
+  | SepOp (op, f1, f2) -> SepOp (op, map_id fct f1, map_id fct f2)
 
 let subst_id subst f =
   let get id =
@@ -89,64 +80,44 @@ let subst_consts_fun subst f =
   let rec map f = 
     match f with
     | Pure g -> Pure (FormUtil.subst_consts_fun subst g)
-    | Not f ->  Not (map f)
-    | And fs -> And (List.map map fs)
-    | Or fs -> Or (List.map map fs)
     | Atom (p, args) -> 
         mk_atom p (List.map (FormUtil.subst_consts_fun_term subst) args)
-    | SepStar fs -> SepStar (List.map map fs)
-    | SepPlus fs -> SepPlus (List.map map fs)
-    | SepWand (f1, f2) -> SepWand (map f1, f2)
+    | BoolOp (op, fs) -> BoolOp (op, List.map map fs)
+    | SepOp (op, f1, f2) -> SepOp (op, map f1, map f2)
   in
   map f
 
 let subst_consts subst f =
   let rec map f = match f with
     | Pure g -> Pure (FormUtil.subst_consts subst g)
-    | Not f ->  Not (map f)
-    | And fs -> And (List.map map fs)
-    | Or fs -> Or (List.map map fs)
     | Atom (p, args) -> 
         mk_atom p (List.map (FormUtil.subst_consts_term subst) args)
-    | SepStar fs -> SepStar (List.map map fs)
-    | SepPlus fs -> SepPlus (List.map map fs)
-    | SepWand (f1, f2) -> SepWand (map f1, map f2)
+    | BoolOp (op, fs) -> BoolOp (op, List.map map fs)
+    | SepOp (op, f1, f2) -> SepOp (op, map f1, map f2)
   in
   map f
 
 let subst_preds subst f =
   let rec map f =
     match f with
-    | Not f -> Not (map f)
-    | And fs -> And (List.map map fs)
-    | Or fs -> Or (List.map map fs)
-    | SepStar fs -> SepStar (List.map map fs)
-    | SepPlus fs -> SepPlus (List.map map fs)
-    | SepWand (f1, f2) -> SepWand (map f1, map f2)
     | Atom (Pred p, args) -> 
         subst p args
+    | BoolOp (op, fs) -> BoolOp (op, List.map map fs)
+    | SepOp (op, f1, f2) -> SepOp (op, map f1, map f2)
     | f -> f
   in map f
 
 let free_consts f =
   let rec fc acc = function
     | Pure g -> IdSet.union acc (FormUtil.free_consts g)
-    | Not f -> fc acc f
-    | Or fs 
-    | And fs 
-    | SepStar fs 
-    | SepPlus fs -> List.fold_left fc acc fs
-    | SepWand (f1, f2) -> fc (fc acc f1) f2
+    | BoolOp (op, fs) -> List.fold_left fc acc fs
+    | SepOp (_, f1, f2) ->  fc (fc acc f1) f2
     | Atom (p, args) -> List.fold_left FormUtil.free_consts_term_acc acc args
   in fc IdSet.empty f
 
 let rec fold_atoms fct acc f = match f with
-  | Not f -> fold_atoms fct acc f
-  | Or fs 
-  | And fs 
-  | SepStar fs 
-  | SepPlus fs -> List.fold_left (fold_atoms fct) acc fs
-  | SepWand (f1, f2) -> fold_atoms fct (fold_atoms fct acc f1) f2
+  | BoolOp (op, fs) -> List.fold_left (fold_atoms fct) acc fs
+  | SepOp (_, f1, f2) -> fold_atoms fct (fold_atoms fct acc f1) f2
   | Atom _ -> fct acc f
   | _ -> acc
 

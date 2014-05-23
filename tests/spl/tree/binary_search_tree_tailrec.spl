@@ -53,4 +53,3 @@ procedure contains(root: Node, val: int, implicit ghost content: set<int>)
 
     return found;
 }
-

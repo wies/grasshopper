@@ -58,7 +58,7 @@ type annot =
   | Comment of string
   | TermGenerator of sorted_ident list * sorted_ident list * guard list * term
 
-type boolOp =
+type bool_op =
   | And | Or | Not
 
 type binder =
@@ -66,7 +66,7 @@ type binder =
 
 type form =
   | Atom of term
-  | BoolOp of boolOp * form list
+  | BoolOp of bool_op * form list
   | Binder of binder * (ident * sort) list * form * annot list
 
 module IdSet = Set.Make(struct

@@ -11,7 +11,7 @@ let parse_error = ParseError.parse_error
 %token DECLARE_SORT, DECLARE_FUN
 %token BOOL_SORT, LOC_SORT, FLD_SORT, SET_SORT
 %token <Form.binder> BINDER
-%token <Form.boolOp> BOOLOP
+%token <Form.bool_op> BOOLOP
 %token <bool> BOOL_VAL
 %token <int> INT_VAL
 %token ASSERT, CHECK_SAT, GET_MODEL, EXIT
