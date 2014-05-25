@@ -1,0 +1,41 @@
+struct Node {
+  var left: Node;
+  var right: Node;
+  var parent: Node;
+  var data: int;
+}
+
+predicate tree(x: Node) {
+    x == null
+  ||
+    x != null &*&
+    x.parent |-> x.parent &*&
+    tree(x.left) &*&
+    tree(x.right)
+}
+
+predicate treeAllocInvariant(X: set<Node>) {
+  (forall n in X :: n.parent == n.parent)
+}
+
+procedure contains(root: Node, val: int, implicit ghost content: set<int>)
+  returns (res: bool)
+  requires tree(root) &*& treeAllocInvariant(Alloc);
+  ensures  tree(root) &*& treeAllocInvariant(Alloc);
+{
+    var curr: Node;
+    curr := root;
+
+    while (curr != null && curr.data != val) 
+      invariant ((tree(curr) -** tree(root)) &*& (curr == null || Btwn(parent, curr, root, root)));
+    {
+        if (curr.data < val) {
+          curr := curr.left;
+        } else if (curr.data > val) {
+          curr := curr.right;
+        }
+    }
+
+    if (curr != null) return true;
+    else return false;
+}
