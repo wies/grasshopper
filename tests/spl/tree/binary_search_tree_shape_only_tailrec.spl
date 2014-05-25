@@ -27,7 +27,7 @@ procedure contains(root: Node, val: int, implicit ghost content: set<int>)
     curr := root;
 
     while (curr != null && curr.data != val) 
-      invariant ((tree(curr) -** tree(root)) &*& (curr == null || Btwn(parent, curr, root, root)));
+      invariant tree(curr) -** tree(root);
     {
         if (curr.data < val) {
           curr := curr.left;
