@@ -132,3 +132,64 @@ let rec get_clauses f = match f with
   (*| Form.Comment (c, f) -> List.map (fun x -> Form.Comment (c,x)) (get_clauses f)*)
   | other -> [other]
 
+let prenex_form f = 
+  let combine acc bvs f =
+    let acc_vs = 
+      List.fold_left 
+        (fun vs (_, srt_vs') -> 
+          let vs' = List.rev_map fst srt_vs' in
+          IdSet.union (FormUtil.id_set_of_list vs') vs) 
+        IdSet.empty acc 
+    in
+    let bvs1, f1 = List.fold_right 
+        (fun (b, vs) (bvs1, f1) -> 
+          let vs1, subst = 
+            List.fold_right 
+              (fun (v, srt) (vs1, subst) ->
+                if IdSet.mem v acc_vs then
+                  let v' = FormUtil.fresh_ident (FormUtil.name v) in
+                  (v', srt) :: vs1, IdMap.add v v' subst
+                else (v, srt) :: vs1, subst
+              )
+              vs ([], IdMap.empty)
+          in
+          (b, vs1) :: bvs1, subst_id subst f1
+        )
+        bvs ([], f)
+    in 
+    bvs1 @ acc, f1
+  in
+  let dualize bvs =
+    List.map (fun (b, vs) -> (FormUtil.dualize_binder b, vs)) bvs
+  in
+  let rec pf = function
+    | BoolOp (op, fs) -> 
+        let bvs1, fs1 = pf_fs fs in
+        let bvs2 = match op with
+        | Form.Not -> dualize bvs1 
+        | _ -> bvs1 
+        in
+        bvs2, BoolOp (op, fs1)
+    | SepOp (op, f1, f2) ->
+        let bvs1, f1 = pf f1 in
+        let bvs2, f2 = pf f2 in
+        let bvs, f22 = combine bvs1 bvs2 f2 in
+        bvs, SepOp (op, f1, f22)
+    | Binder (b, vs, f) -> 
+        let bvs1, f1 = pf f in
+        let bvs2 = match bvs1 with
+        | (b', vs') :: bvs' when b = b' -> (b, vs @ vs') :: bvs'
+        | _ -> (b, vs) :: bvs1
+        in
+        bvs2, f1
+    | f -> [], f
+  and pf_fs fs =
+    List.fold_right 
+      (fun f (bvs2, fs2) ->
+        let bvs1, f1 = pf f in
+        let new_bvs2, f2 = combine bvs2 bvs1 f1 in
+        new_bvs2, f2 :: fs2)
+      fs ([], [])
+  in
+  let bvs, f1 = pf f in
+  List.fold_right (fun (b, vs) f -> Binder (b, vs, f)) bvs f1

@@ -5,16 +5,6 @@ open Sl
 open Symbols
 open SlUtil
 
-(*
-let fresh_existentials f =
-  let fct id t =
-    if fst id = "_" 
-    then FormUtil.mk_var ?srt:(FormUtil.sort_of t) (FormUtil.fresh_ident "?_")
-    else t
-  in
-  subst_consts_fun fct f
-*)
-
 (* translation that keeps the heap separated from the pointer structure *)
 let to_form pred_to_form domain f =
   let fresh_dom d = mk_loc_set_var (FormUtil.fresh_ident ("?" ^ fst d)) in
@@ -50,7 +40,7 @@ let to_form pred_to_form domain f =
            let dom_def = match op with
            | SepStar 
            | SepPlus -> FormUtil.mk_eq domain (FormUtil.mk_union [f1_dom; f2_dom])
-           | SepWand ->  FormUtil.mk_eq f2_dom (FormUtil.mk_union [f1_dom; domain])
+           | SepWand ->  FormUtil.mk_eq domain (FormUtil.mk_diff f2_dom f1_dom)
            in
            (FormUtil.smk_and (f1_struct :: f2_struct :: aux_struct), domain) :: structs, dom_def :: defs
         in
@@ -63,17 +53,19 @@ let to_form pred_to_form domain f =
   in
 
   let rec process_bool pol f = match f with
-    | BoolOp(And, forms) ->
+    | BoolOp (And, forms) ->
       let translated = List.map (process_bool pol) forms in
       let (translated_1, translated_2) = List.split translated in
         (FormUtil.smk_and translated_1, FormUtil.smk_and translated_2)
-    | BoolOp(Or, forms) ->
+    | BoolOp (Or, forms) ->
       let translated = List.map (process_bool pol) forms in
       let (translated_1, translated_2) = List.split translated in
         (FormUtil.smk_or translated_1, FormUtil.smk_and translated_2)
-    | BoolOp(Not, fs) ->
+    | BoolOp (Not, fs) ->
       let (structure, heap) = process_bool (not pol) (List.hd fs) in
         (FormUtil.mk_not structure, heap)
+    | Binder (Exists, vs, f) -> process_bool pol f
+    | Binder (Forall, vs, f) -> failwith "Universal quantification in SL formulas is currently unsupported."
     | sep ->
       let d' = FormUtil.fresh_ident "X" in
       let struct_part, heap_part = process_sep pol d' sep in
@@ -81,7 +73,6 @@ let to_form pred_to_form domain f =
       in
       FormUtil.smk_or (List.map process struct_part), heap_part
   in
-  (*process_bool true (fresh_existentials f)*)
   process_bool true f
 
 let post_process f =
@@ -92,13 +83,15 @@ let post_process f =
       print_newline ()
     end
   in
-  let aux_sets = Form.IdSrtSet.elements (FormUtil.sorted_free_vars f) in
-  FormUtil.mk_exists aux_sets (FormUtil.nnf f)
+  let aux_vars = Form.IdSrtSet.elements (FormUtil.sorted_free_vars f) in
+  FormUtil.mk_exists aux_vars (FormUtil.nnf f)
 
 let to_grass pred_to_form domain f =
-  let (pointers, separations) = to_form pred_to_form domain f in
-    post_process (FormUtil.smk_and [pointers; separations])
+  let structs, defs = to_form pred_to_form domain (prenex_form f) in
+  post_process (FormUtil.smk_and [structs; defs])
+
 
 let to_grass_negated pred_to_form domain f =
-  let (pointers, separations) = to_form pred_to_form domain (mk_not f) in
-    post_process (FormUtil.smk_and [pointers; separations])
+  let f1 = prenex_form (mk_not f) in
+  let structs, defs = to_form pred_to_form domain f1 in
+  post_process (FormUtil.smk_and [structs; defs])

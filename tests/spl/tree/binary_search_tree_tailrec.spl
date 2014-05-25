@@ -33,23 +33,18 @@ procedure contains(root: Node, val: int, implicit ghost content: set<int>)
     var curr: Node;
     curr := root;
 
-    var found: bool;
-    found := false;
-
-    while (!found && curr != null) 
+    while (curr != null && curr.data != val) 
       invariant (exists content1: set<int> :: 
                    (stree(curr, content1) -** stree(root, content))
-                   &*& val in content == val in content1);
-      invariant curr == null || found == (curr.data == val);
+                 &*& (val in content == val in content1 && Btwn(parent, curr, root, root)));
     {
         if (curr.data < val) {
           curr := curr.left;
         } else if (curr.data > val) {
           curr := curr.right;
-        } else {
-          found := true;
         }
     }
 
-    return found;
+    if (curr != null) return true;
+    else return false;
 }
