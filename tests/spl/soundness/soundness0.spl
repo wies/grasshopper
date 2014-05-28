@@ -6,7 +6,7 @@ predicate lseg(x: Node, y: Node) {
   x == y || x != y &*& acc(x) &*& lseg(x.next, y)
 }
 
-procedure soudness_check0(x: Node)
+procedure soundness0(x: Node)
   requires lseg(x, null);
   ensures lseg(x, null);
 {

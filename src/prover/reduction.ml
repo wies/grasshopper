@@ -300,7 +300,18 @@ let reduce_sets fs =
     | Atom t -> Atom (simplify_term t)
   in
   let fs1 = List.map simplify fs in
-  rev_concat [fs1; Axioms.set_axioms ()]
+  let elem_srts = 
+    let set_srts =
+      List.fold_left 
+        (fun acc f -> SrtSet.union (sorts f) acc)
+        SrtSet.empty fs1
+    in
+    SrtSet.fold (fun set_srt acc -> 
+      match set_srt with 
+      | Set srt -> srt :: acc
+      | _ -> acc) set_srts []
+  in
+  rev_concat [fs1; Axioms.set_axioms elem_srts]
 
 
 (** Adds theory axioms for the entry point function to formula f.

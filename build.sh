@@ -26,6 +26,37 @@ distro()
     rm -rf grasshopper
 }
 
+smtlib()
+{
+    test -s *.smt2 && echo "Remove existing SMT-LIB files to proceed. Aboarding." && exit 0
+    
+    echo "Generating uninstantiated benchmarks..."
+    ./regression-tests -noverify -noinst -dumpvcs -flycheck > /dev/null
+    rm soundness*.smt2
+
+    echo "Post processing..."
+    for file in *.smt2 
+    do
+        sed -i -e '/set-option/d' -e 's/unknown/unsat/'  $file
+        LOGIC=`grep 'set-logic' $file | sed 's/(set-logic \([^)]*\))/\1/'`
+        test -s $LOGIC || mkdir -p smt-lib/$LOGIC/grasshopper/uninstantiated
+        mv $file smt-lib/$LOGIC/grasshopper/uninstantiated
+    done
+
+    echo "Generating instantiated benchmarks..."
+    ./regression-tests -noverify -dumpvcs -flycheck > /dev/null
+    rm soundness*.smt2
+
+    echo "Post processing..."
+    for file in *.smt2 
+    do
+        sed -i -e '/set-option/d' -e 's/unknown/unsat/'  $file
+        LOGIC=`grep 'set-logic' $file | sed 's/(set-logic \([^)]*\))/\1/'`
+        test -s $LOGIC || mkdir -p smt-lib/$LOGIC/grasshopper/instantiated
+        mv $file smt-lib/$LOGIC/grasshopper/instantiated
+    done
+}
+
 rule() {
     case $1 in
     clean)  ocb -clean;;
@@ -35,6 +66,7 @@ rule() {
     prof)   ocb ${TARGET//" "/".p.native "} ;;
     depend) echo "Not needed.";;
     distro) distro ;;
+    smt-lib) smtlib ;;
     *)      echo "Unknown action $1";;
     esac;
 }

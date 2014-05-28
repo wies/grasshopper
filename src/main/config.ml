@@ -19,6 +19,8 @@ let split_vcs = ref false
 let unsat_cores = ref false
 (* Flag that controls whether the generated VCs are dumped to files. *)
 let dump_smt_queries = ref false
+(* Flag that controls whether the generated VCs use named assertions. *)
+let named_assertions = true
 (* Flag that controls whether the generated VCs are checked. *)
 let verify = ref true
 (* Flag that controls whether to stop after the first VC that cannot be proved. *)

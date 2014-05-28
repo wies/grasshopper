@@ -103,6 +103,7 @@ let select_solver name =
 (** SMT-LIB2 Sessions *)
    
 type session = { name: string;
+                 sat_means: string;
 		 in_chan: in_channel;
 		 out_chan: out_channel;
 		 replay_chan: out_channel option;
@@ -153,14 +154,15 @@ let declare_fun session sym_name arg_sorts res_sort =
 let declare_sort session sort_name num_of_params =
   writeln session (Printf.sprintf "(declare-sort %s %d)" sort_name num_of_params)
     
-let declare_sorts session =
+let declare_sorts has_int session =
   declare_sort session loc_sort_string 0;
   if !Config.backend_solver_has_set_theory then begin
     writeln session ("(define-sort " ^ set_sort_string ^ loc_sort_string ^ " () (Set " ^ loc_sort_string ^ "))");
-    writeln session ("(define-sort " ^ set_sort_string ^ int_sort_string ^ " () (Set " ^ int_sort_string ^ "))")
+    if has_int then 
+      writeln session ("(define-sort " ^ set_sort_string ^ int_sort_string ^ " () (Set " ^ int_sort_string ^ "))")
   end else begin
     declare_sort session (set_sort_string ^ loc_sort_string) 0;
-    declare_sort session (set_sort_string ^ int_sort_string) 0
+    if has_int then declare_sort session (set_sort_string ^ int_sort_string) 0
   end;
   if !Config.encode_fields_as_arrays then
     writeln session ("(define-sort " ^ fld_sort_string ^ " (X) (Array Loc X))")
@@ -168,7 +170,7 @@ let declare_sorts session =
     begin
       declare_sort session (fld_sort_string ^ bool_sort_string) 0;
       declare_sort session (fld_sort_string ^ loc_sort_string) 0;
-      declare_sort session (fld_sort_string ^ int_sort_string) 0
+      if has_int then declare_sort session (fld_sort_string ^ int_sort_string) 0
     end
 
 let start_with_solver = 
@@ -180,13 +182,14 @@ let start_with_solver =
       Some (open_out replay_file)
     else None
   in
-  fun session_name solver produce_models produce_unsat_cores ->
+  fun session_name sat_means solver produce_models produce_unsat_cores ->
   let smt_cmd = solver.cmnd ^ " " ^ solver.version.args in
   let in_chan, out_chan = Unix.open_process smt_cmd in
   let names_tbl: (string, form) Hashtbl.t option =
     if produce_unsat_cores then Some (Hashtbl.create 0) else None
   in
   let session = { name = session_name;
+                  sat_means = sat_means;
 		  in_chan = in_chan; 
 		  out_chan = out_chan;
 		  replay_chan = get_replay_chan session_name;
@@ -204,17 +207,49 @@ let start_with_solver =
     solver.version.smt_options;
   if produce_unsat_cores then
     set_option session ":produce-unsat-cores" true;
-  let logic_str = 
-    "AUFLIA" ^
-    if !Config.backend_solver_has_set_theory then "_SETS" else ""
-  in set_logic session logic_str;
-  (*end;*)
-  declare_sorts session;
   session
 
-let start session_name =
+
+let init_session session sign =
+  let has_int = 
+    let rec hi = function
+      | Int -> true
+      | Set srt
+      | Fld srt -> hi srt
+      | _ -> false
+    in
+    SymbolMap.exists 
+      (fun _ variants -> 
+        List.exists (fun (arg_srts, res_srt) -> List.exists hi (res_srt :: arg_srts))
+          variants)
+      sign
+  in
+  let logic_str = 
+    if !Config.encode_fields_as_arrays then "A" else "" ^
+    "UF" ^
+    if has_int then "LIA" else "" ^
+    if !Config.backend_solver_has_set_theory then "_SETS" else ""
+  in set_logic session logic_str;
+  if !Config.dump_smt_queries then begin
+    writeln session ("(set-info :source |
+  GRASShopper benchmarks.
+  Authors: Ruzica Piskac, Thomas Wies, and Damien Zufferey
+  URL: http://cs.nyu.edu/wies/software/grasshopper
+  See also: GRASShopper - Complete Heap Verification with Mixed Specifications. In TACAS 2014, pages 124-139.
+
+  If this benchmark is satisfiable, GRASShopper reports the following error message:\n  " ^ session.sat_means ^ "
+  |)");
+    writeln session ("(set-info :smt-lib-version 2.0)");
+    writeln session ("(set-info :category \"crafted\")");
+    writeln session ("(set-info :status \"unknown\")");
+  end;
+  writeln session "";
+  declare_sorts has_int session
+
+let start session_name sat_means =
   start_with_solver
     session_name
+    sat_means
     !selected_solver
     (!Config.model_file <> "")
     !Config.unsat_cores
@@ -263,6 +298,7 @@ let declare session sign =
         | _ -> Util.iteri (declare sym) overloaded_variants
       end
   in
+  init_session session sign;
   SymbolMap.iter write_decl sign;
   writeln session "";
   { session with signature = Some sign }

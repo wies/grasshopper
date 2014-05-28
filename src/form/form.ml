@@ -245,7 +245,7 @@ let rec pr_vars ppf = function
 
 let extract_comments smt ann =
   let cmnts = Util.filter_map 
-      (function Comment _ -> true | _ -> false) 
+      (function Comment _ -> Config.named_assertions && true | _ -> false) 
       (function Comment c -> c | _ -> "") 
       ann 
   in
@@ -283,7 +283,7 @@ and pr_quantifier ppf =
   | (_, [], f) -> fprintf ppf "%a" pr_form f
   | (b, vs, f) -> 
       let patterns = find_patterns TermSet.empty f in
-      if !Config.instantiate || TermSet.is_empty patterns
+      if true || !Config.instantiate || TermSet.is_empty patterns
       then fprintf ppf "@[<8>(%a@ @[<1>(%a)@]@ %a)@]" pr_binder b pr_vars vs pr_form f
       else 
         fprintf ppf "@[<8>(%a@ @[<1>(%a)@]@ @[<3>(! %a@ @[:pattern@ (%a)@])@])@]" 

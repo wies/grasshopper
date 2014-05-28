@@ -205,7 +205,7 @@ let ep_axioms () =
 
 (** Set axioms *)
 
-let set_axioms () =
+let set_axioms elem_srts =
   let mk_set_axioms t =
     let elt1 = mk_var ~srt:t (mk_ident "x") in
     let elt2 = mk_var ~srt:t (mk_ident "y") in
@@ -239,7 +239,7 @@ let set_axioms () =
           mk_axiom ("def of setminus" ^ ssrt) diff;
           mk_axiom ("def of setenum" ^ ssrt) setenum]
   in
-    Util.flat_map mk_set_axioms [Loc; Int]
+  Util.flat_map mk_set_axioms elem_srts
       
 let extract_axioms fs =
   List.partition (fun f -> IdSet.empty <> fv f) fs

@@ -313,7 +313,10 @@ let check_proc prog proc =
       let vc_and_preds = add_pred_insts prog vc in
       Debug.info (fun () -> "VC: " ^ vc_name ^ "\n");
       Debug.debug (fun () -> (string_of_form vc_and_preds) ^ "\n");
-      match Prover.check_sat ~session_name:vc_name vc_and_preds with
+      let sat_means = 
+        Str.global_replace (Str.regexp "\n\n") "\n  " (ProgError.error_to_string pp vc_msg)
+      in
+      match Prover.check_sat ~session_name:vc_name ~sat_means:sat_means vc_and_preds with
       | Some false -> ()
       | _ ->
           if !Config.split_vcs && !Config.model_file <> "" 
