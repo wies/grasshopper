@@ -2,10 +2,10 @@ struct Node {
   var left: Node;
   var right: Node;
   var parent: Node;
-  var data: int;
+  var data: Int;
 }
 
-predicate bstree_cnt(x: Node, y: Node, lb: int, ub: int, content: set<int>) {
+predicate bstree_cnt(x: Node, y: Node, lb: Int, ub: Int, content: Set<Int>) {
     x == null
   ||
     x != null &*&
@@ -16,18 +16,18 @@ predicate bstree_cnt(x: Node, y: Node, lb: int, ub: int, content: set<int>) {
     bstree_cnt(x.right, x, x.data + 1, ub, content)     //TODO content
 }
 
-predicate treeAllocInvariant(X: set<Node>) {
+predicate treeAllocInvariant(X: Set<Node>) {
   (forall n in X :: n.parent == n.parent)
 }
 
 procedure extract_max(root: Node, ghost p: Node,
-                      ghost lb: int, ghost ub: int,
-                      implicit ghost content: set<int>)
+                      ghost lb: Int, ghost ub: Int,
+                      implicit ghost content: Set<Int>)
 returns (others: Node, max: Node)
   requires p in Alloc || p == null;
   requires bstree_cnt(root, p, lb, ub, content) &*& root != null;
   requires treeAllocInvariant(Alloc);
-  ensures  bstree_cnt(others, p, lb, max.data-1, content -- set(max.data)) &*& acc(max);
+  ensures  bstree_cnt(others, p, lb, max.data-1, content -- Set(max.data)) &*& acc(max);
   ensures  max.left == null && max.right == null && max.parent == null && max.data <= ub && lb <= max.data;
   ensures  treeAllocInvariant(Alloc);
 {

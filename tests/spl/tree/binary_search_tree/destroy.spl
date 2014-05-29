@@ -2,10 +2,10 @@ struct Node {
   var left: Node;
   var right: Node;
   var parent: Node;
-  var data: int;
+  var data: Int;
 }
 
-predicate bstree_cnt(x: Node, y: Node, lb: int, ub: int, content: set<int>) {
+predicate bstree_cnt(x: Node, y: Node, lb: Int, ub: Int, content: Set<Int>) {
     x == null
   ||
     x != null &*&
@@ -16,17 +16,17 @@ predicate bstree_cnt(x: Node, y: Node, lb: int, ub: int, content: set<int>) {
     bstree_cnt(x.right, x, x.data + 1, ub, content)     //TODO content
 }
 
-predicate treeAllocInvariant(X: set<Node>) {
+predicate treeAllocInvariant(X: Set<Node>) {
   (forall n in X :: n.parent == n.parent)
 }
 
 procedure destroy(root: Node, p: Node,
-                  ghost lb: int, ghost ub: int,
-                  implicit ghost content: set<int>)
+                  ghost lb: Int, ghost ub: Int,
+                  implicit ghost content: Set<Int>)
   requires bstree_cnt(root, p, lb, ub, content);
   requires treeAllocInvariant(Alloc);
   ensures treeAllocInvariant(Alloc);
-  ensures bstree_cnt(null, null, lb, ub, set<int>());
+  ensures bstree_cnt(null, null, lb, ub, Set<Int>());
 {
     if (root != null) {
         destroy(root.left, root, lb, ub);

@@ -2,10 +2,10 @@ struct Node {
   var left: Node;
   var right: Node;
   var parent: Node;
-  var data: int;
+  var data: Int;
 }
 
-predicate bstree_cnt(x: Node, y: Node, lb: int, ub: int, content: set<int>) {
+predicate bstree_cnt(x: Node, y: Node, lb: Int, ub: Int, content: Set<Int>) {
     x == null
   ||
     x != null &*&
@@ -16,14 +16,14 @@ predicate bstree_cnt(x: Node, y: Node, lb: int, ub: int, content: set<int>) {
     bstree_cnt(x.right, x, x.data + 1, ub, content)     //TODO content
 }
 
-predicate treeAllocInvariant(X: set<Node>) {
+predicate treeAllocInvariant(X: Set<Node>) {
   (forall n in X :: n.parent == n.parent)
 }
 
-procedure contains(root: Node, val: int, p: Node,
-                   ghost lb: int, ghost ub: int,
-                   implicit ghost content: set<int>)
-  returns (res: bool)
+procedure contains(root: Node, val: Int, p: Node,
+                   ghost lb: Int, ghost ub: Int,
+                   implicit ghost content: Set<Int>)
+  returns (res: Bool)
   requires bstree_cnt(root, p, lb, ub, content);
   requires treeAllocInvariant(Alloc);
   ensures  treeAllocInvariant(Alloc);

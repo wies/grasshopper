@@ -2,12 +2,12 @@ struct Node {
   var left: Node;
   var right: Node;
   var parent: Node;
-  var data: int;
+  var data: Int;
 }
 
-predicate heap_cnt(x: Node, y: Node, content: set<int>) {
+predicate heap_cnt(x: Node, y: Node, content: Set<Int>) {
     x == null &*&
-    content == set<int>()
+    content == Set<Int>()
   ||
     x != null &*&
     x.parent |-> y &*&
@@ -18,14 +18,14 @@ predicate heap_cnt(x: Node, y: Node, content: set<int>) {
     (x.right == null || (x.right != null && x.right.data <= x.data)) 
 }
 
-predicate treeAllocInvariant(X: set<Node>) {
+predicate treeAllocInvariant(X: Set<Node>) {
   (forall n in X :: n.parent == n.parent)
 }
 
 procedure union(h1: Node, h2: Node,
-                implicit ghost content1: set<int>,
-                implicit ghost content2: set<int>)
-    returns (res: Node, ghost res_content: set<int>)
+                implicit ghost content1: Set<Int>,
+                implicit ghost content2: Set<Int>)
+    returns (res: Node, ghost res_content: Set<Int>)
     requires heap_cnt(h1, null, content1) &*& heap_cnt(h2, null, content2);
     requires treeAllocInvariant(Alloc);
     ensures treeAllocInvariant(Alloc);
@@ -34,15 +34,15 @@ procedure union(h1: Node, h2: Node,
 
 
 procedure extractMax(h: Node,
-                     implicit ghost content: set<int>)
-returns (max: int, rest: Node, ghost remaining: set<int>)
+                     implicit ghost content: Set<Int>)
+returns (max: Int, rest: Node, ghost remaining: Set<Int>)
     requires heap_cnt(h, null, content) &*& h != null;
     requires treeAllocInvariant(Alloc);
     ensures  treeAllocInvariant(Alloc);
     ensures  heap_cnt(rest, null, remaining);
-    ensures  content == set(max) ++ remaining;
+    ensures  content == Set(max) ++ remaining;
 {
-    var d : int;
+    var d : Int;
     d := h.data;
     var hp: Node, r: Node, l: Node;
     l := h.left;
@@ -51,7 +51,7 @@ returns (max: int, rest: Node, ghost remaining: set<int>)
     h.right := null;
     if (l != null) { l.parent := null; }
     if (r != null) { r.parent := null; }
-    var rem: set<int>;
+    var rem: Set<Int>;
     hp, rem := union(l, r);
     free h;
     return d, hp, rem;
