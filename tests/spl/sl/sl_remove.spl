@@ -13,7 +13,7 @@ procedure remove(lst: Node) returns (res: Node)
   if (lst == null)
     return null;
   else {
-    var nondet: bool, curr: Node;
+    var nondet: Bool, curr: Node;
     curr := lst;
     while (nondet && curr.next != null) 
       invariant curr != null;

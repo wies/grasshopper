@@ -1,19 +1,19 @@
 struct Node {
   var next: Node;
-  var data: int;
+  var data: Int;
 }
 
-predicate blseg(x: Node, y: Node, lb: int, ub: int) {
+predicate blseg(x: Node, y: Node, lb: Int, ub: Int) {
   x == y || 
   x != y &*& acc(x) &*& lb <= x.data &*& x.data <= ub &*& blseg(x.next, y, lb, ub)
 }
 
-predicate bslseg(x: Node, y: Node, lb: int, ub: int) {
+predicate bslseg(x: Node, y: Node, lb: Int, ub: Int) {
   x == y || 
   x != y &*& acc(x) &*& lb <= x.data &*& x.data <= ub &*& bslseg(x.next, y, x.data, ub)
 }
 
-procedure split(x: Node, y: Node, lb: int, ub: int) returns (pivot: Node)
+procedure split(x: Node, y: Node, lb: Int, ub: Int) returns (pivot: Node)
   requires blseg(x, y, lb, ub) &*& x != y;
   ensures  blseg(x, pivot, lb, pivot.data);
   ensures  blseg(pivot, y, pivot.data, ub) &*& pivot != y;
@@ -33,7 +33,7 @@ procedure split(x: Node, y: Node, lb: int, ub: int) returns (pivot: Node)
     invariant Btwn(next, pivot, curr, y);
   {
     if (curr.data < pivot.data) {
-      var tmp: int;
+      var tmp: Int;
       tmp := curr.data;
       curr.data := pivot.next.data;
       pivot.next.data := pivot.data;
@@ -44,7 +44,7 @@ procedure split(x: Node, y: Node, lb: int, ub: int) returns (pivot: Node)
   }
 }
 
-procedure quicksort(x: Node, y: Node, ghost lb: int, ghost ub: int)
+procedure quicksort(x: Node, y: Node, ghost lb: Int, ghost ub: Int)
   requires blseg(x, y, lb, ub);
   ensures  bslseg(x, y, lb, ub);
 {

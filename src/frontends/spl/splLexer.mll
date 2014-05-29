@@ -13,7 +13,7 @@ let _ =
   List.iter (fun (kwd, tok) -> Hashtbl.add keyword_table kwd tok)
     ([("assert", ASSERT);
       ("assume", ASSUME);
-      ("bool", BOOL);
+      ("Bool", BOOL);
       ("else", ELSE);
       ("emp", EMP);
       ("ensures", ENSURES);
@@ -25,7 +25,7 @@ let _ =
       ("havoc", HAVOC);
       ("if", IF);
       ("in", IN);
-      ("int", INT);
+      ("Int", INT);
       ("invariant", INVARIANT);
       ("implicit", IMPLICIT);
       ("new", NEW);
@@ -36,7 +36,7 @@ let _ =
       ("return", RETURN);
       ("returns", RETURNS);
       ("struct", STRUCT);
-      ("set", SET);
+      ("Set", SET);
       ("true", BOOLVAL(true));
       ("var", VAR);
       ("while", WHILE);

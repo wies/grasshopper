@@ -1,44 +1,44 @@
 struct Node {
   var next: Node;
-  var data: int;
+  var data: Int;
 }
 
-predicate sorted_set(x: Node, y: Node, lb: int, ub: int, c: set<int>) {
+predicate sorted_set(x: Node, y: Node, lb: Int, ub: Int, c: Set<Int>) {
     x == y &*&
-    c == set<int>()
+    c == Set<Int>()
   || 
     x != y &*&
     acc(x) &*&
     x.data in c &*&
     lb <= x.data &*&
     x.data < ub &*&
-    sorted_set(x.next, y, x.data + 1, ub, c -- set(x.data))
+    sorted_set(x.next, y, x.data + 1, ub, c -- Set(x.data))
 }
 
 
-procedure traverse(lst: Node, val: int,
-                   ghost lb: int, ghost ub: int,
-                   implicit ghost content: set<int>)
+procedure traverse(lst: Node, val: Int,
+                   ghost lb: Int, ghost ub: Int,
+                   implicit ghost content: Set<Int>)
   requires sorted_set(lst, null, lb, ub, content);
   requires lb < ub;
   ensures sorted_set(lst, null, lb, ub, content);
 {
   var curr: Node;
   curr := lst;
-  var c1: set<int>, c2: set<int>;
+  var c1: Set<Int>, c2: Set<Int>;
   c1 := content;
-  c2 := set<int>();
+  c2 := Set<Int>();
 
   while (curr != null) 
     //the case split is needed because of curr.data
     invariant (curr != null &*& sorted_set(lst, curr, lb, curr.data, c2) &*& sorted_set(curr, null, curr.data, ub, c1))
-           || (curr == null &*& sorted_set(lst, curr, lb, ub, c2) &*& c1 == set<int>());
+           || (curr == null &*& sorted_set(lst, curr, lb, ub, c2) &*& c1 == Set<Int>());
     invariant content == c1 ++ c2;
     invariant lb < ub;
     invariant curr == null || (curr.data >= lb && curr.data < ub);
   {
-    c1 := c1 ++ set(curr.data); //BUG here: should be --
-    c2 := c2 ++ set(curr.data);
+    c1 := c1 ++ Set(curr.data); //BUG here: should be --
+    c2 := c2 ++ Set(curr.data);
     curr := curr.next; 
   }
 }

@@ -1,17 +1,17 @@
 struct Node {
   var next: Node;
-  var data: int;
+  var data: Int;
 }
 
-predicate uslseg(x: Node, y: Node, lb: int) {
+predicate uslseg(x: Node, y: Node, lb: Int) {
   x == y || x != y &*& acc(x) &*& lb <= x.data &*& uslseg(x.next, y, x.data)
 }
 
-predicate ulseg(x: Node, y: Node, lb: int) {
+predicate ulseg(x: Node, y: Node, lb: Int) {
   x == y || x != y &*& acc(x) &*& lb <= x.data &*& ulseg(x.next, y, lb)
 }
 
-predicate llseg(x: Node, y: Node, ub: int) {
+predicate llseg(x: Node, y: Node, ub: Int) {
   x == y || x != y &*& acc(x) &*& x.data <= ub &*& llseg(x.next, y, ub)
 }
 
@@ -23,7 +23,7 @@ predicate lseg(x: Node, y: Node) {
   x == y || x != y &*& acc(x) &*& lseg(x.next, y)
 }
 
-predicate lslseg(x: Node, y: Node, ub: int) {
+predicate lslseg(x: Node, y: Node, ub: Int) {
   slseg(x, y) && llseg(x, y, ub)
 }
 
@@ -53,7 +53,7 @@ procedure insertion_sort(lst: Node)
       }
       curr := curr.next;
     }
-    var tmp: int;
+    var tmp: Int;
     tmp := min.data;
     min.data := srt.data;
     srt.data := tmp;

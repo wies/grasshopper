@@ -2,12 +2,12 @@ struct Node {
   var next: Node;
 }
 
-predicate lseg_set(x: Node, y: Node, X: set<Node>) {
-  x == y && X == set<Node>() ||
-  x != y &*& x in X &*& acc(x) &*& lseg_set(x.next, y, X -- set(x))
+predicate lseg_set(x: Node, y: Node, X: Set<Node>) {
+  x == y && X == Set<Node>() ||
+  x != y &*& x in X &*& acc(x) &*& lseg_set(x.next, y, X -- Set(x))
 }
 
-procedure find(x: Node, ghost root_x: Node, implicit ghost X: set<Node>) 
+procedure find(x: Node, ghost root_x: Node, implicit ghost X: Set<Node>) 
 returns (res: Node)
   requires lseg_set(x, root_x, X) &*& root_x.next |-> null;
   ensures acc(X) &*& root_x.next |-> null &*& res == root_x;
@@ -24,7 +24,7 @@ returns (res: Node)
 }
 
 procedure union(x: Node, y: Node,  ghost root_x: Node, ghost root_y: Node,
-                implicit ghost X: set<Node>, implicit ghost Y: set<Node>)
+                implicit ghost X: Set<Node>, implicit ghost Y: Set<Node>)
   requires lseg_set(x, root_x, X) &+& lseg_set(y, root_y, Y);
   requires root_x.next |-> null &+& root_y.next |-> null;
   ensures acc(X) &+& acc(Y);
@@ -42,7 +42,7 @@ procedure union(x: Node, y: Node,  ghost root_x: Node, ghost root_y: Node,
 }
 
 procedure create() returns (res: Node)
-  ensures  lseg_set(res, null, set(res));
+  ensures  lseg_set(res, null, Set(res));
 {
     var n: Node;
     n := new Node;

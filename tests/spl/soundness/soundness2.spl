@@ -20,7 +20,7 @@ procedure soundness2(x: Node) returns (y: Node)
   while (curr != null) 
     invariant ((lseg(y, prv) &*& prv.next |-> curr || prv == null &*& y == curr) &*& lseg(curr, null));
   {
-    var nondet: bool;
+    var nondet: Bool;
     if (nondet) {
       if (prv != null) {
         prv.next := curr.next;

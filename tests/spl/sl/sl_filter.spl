@@ -21,7 +21,7 @@ procedure filter(x: Node) returns (res: Node)
     var old_curr: Node;
     old_curr := curr;
     curr := curr.next; 
-    var nondet: bool;
+    var nondet: Bool;
     if (nondet) {
       if (prv != null) {
         prv.next := old_curr.next;

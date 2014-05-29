@@ -2,7 +2,7 @@ struct Node {
   var left: Node;
   var right: Node;
   var parent: Node;
-  var data: int;
+  var data: Int;
 }
 
 predicate tree(x: Node) {
@@ -14,12 +14,12 @@ predicate tree(x: Node) {
     tree(x.right)
 }
 
-predicate treeAllocInvariant(X: set<Node>) {
+predicate treeAllocInvariant(X: Set<Node>) {
   (forall n in X :: n.parent == n.parent)
 }
 
-procedure contains(root: Node, val: int)
-  returns (res: bool)
+procedure contains(root: Node, val: Int)
+  returns (res: Bool)
   requires tree(root) &*& treeAllocInvariant(Alloc);
   ensures  tree(root) &*& treeAllocInvariant(Alloc);
 {
@@ -41,7 +41,7 @@ procedure contains(root: Node, val: int)
     else return false;
 }
 
-procedure remove(root: Node, val: int) returns (new_root: Node)
+procedure remove(root: Node, val: Int) returns (new_root: Node)
   requires tree(root) &*& treeAllocInvariant(Alloc);
   ensures  tree(new_root) &*& treeAllocInvariant(Alloc);
 {
@@ -127,7 +127,7 @@ procedure remove(root: Node, val: int) returns (new_root: Node)
     }
 }
 
-procedure remove_alt(root: Node, val: int) returns (new_root: Node)
+procedure remove_alt(root: Node, val: Int) returns (new_root: Node)
   requires tree(root) &*& treeAllocInvariant(Alloc);
   ensures  tree(new_root) &*& treeAllocInvariant(Alloc);
 {

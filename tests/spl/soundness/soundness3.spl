@@ -23,7 +23,7 @@ procedure soundness3(a: Node, b: Node, elt: Node) returns (c: Node, d: Node)
     c, d := a, b;
     curr := c;
     prv := null;
-    var nondet: bool;
+    var nondet: Bool;
     while (nondet && curr.next != null) 
       invariant curr != null &*& dlseg(c, null, curr, prv) &*& dlseg(curr, prv, null, d);
     {

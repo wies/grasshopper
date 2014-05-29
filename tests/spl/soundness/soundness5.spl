@@ -1,20 +1,20 @@
 struct Node {
   var next: Node;
-  var data: int;
+  var data: Int;
 }
 
 
-predicate blseg(x: Node, y: Node, lb: int, ub: int) {
+predicate blseg(x: Node, y: Node, lb: Int, ub: Int) {
   x == y || x != y &*& acc(x) &*& lb <= x.data &*& x.data <= ub &*& blseg(x.next, y, lb, ub)
 }
 
-predicate bslseg(x: Node, y: Node, lb: int, ub: int) {
+predicate bslseg(x: Node, y: Node, lb: Int, ub: Int) {
   x == y || x != y &*& acc(x) &*& lb <= x.data &*& x.data <= ub &*& bslseg(x.next, y, x.data, ub)
 }
 
 //quicksort: the postcondition of split was too weak and gave a panhandle list.
 
-procedure predecessor(start: Node, end: Node, ghost lb: int, ghost ub: int) returns (prv: Node)
+procedure predecessor(start: Node, end: Node, ghost lb: Int, ghost ub: Int) returns (prv: Node)
     requires blseg(start, end, lb, ub);
     requires start != end;
     ensures blseg(start, prv, lb, ub);
@@ -35,7 +35,7 @@ procedure predecessor(start: Node, end: Node, ghost lb: int, ghost ub: int) retu
     return prv;
 }
 
-procedure split(lst: Node, tsl: Node, lb: int, ub: int) returns (res: Node)
+procedure split(lst: Node, tsl: Node, lb: Int, ub: Int) returns (res: Node)
     requires blseg(lst, tsl, lb, ub) &*& lst != tsl;
     ensures  blseg(lst, res, lb, res.data);
     ensures  blseg(res, tsl, res.data, ub) &*& res != tsl;
@@ -58,13 +58,13 @@ procedure split(lst: Node, tsl: Node, lb: int, ub: int) returns (res: Node)
         } else if (end.data > pivot.data) {
             end := predecessor(start, end, lb, ub);
         } else {
-            var tmp: int;
+            var tmp: Int;
             tmp := start.data;
             start.data := end.data;
             end.data := tmp;
         }
     }
-    var tmp2: int;
+    var tmp2: Int;
     tmp2 := pivot.data;
     pivot.data := end.data;
     end.data := tmp2;
@@ -72,7 +72,7 @@ procedure split(lst: Node, tsl: Node, lb: int, ub: int) returns (res: Node)
 }
 
 
-procedure quicksort(lst: Node, tsl: Node, ghost lb: int, ghost ub: int)
+procedure quicksort(lst: Node, tsl: Node, ghost lb: Int, ghost ub: Int)
     requires blseg(lst, tsl, lb, ub);
     ensures  bslseg(lst, tsl, lb, ub);
 {

@@ -2,12 +2,12 @@ struct Node {
   var next: Node;
 }
 
-predicate lseg_set(x: Node, y: Node, X: set<Node>) {
-  x == y && X == set<Node>() ||
-  x != y &*& x in X &*& acc(x) &*& lseg_set(x.next, y, X -- set(x))
+predicate lseg_set(x: Node, y: Node, X: Set<Node>) {
+  x == y && X == Set<Node>() ||
+  x != y &*& x in X &*& acc(x) &*& lseg_set(x.next, y, X -- Set(x))
 }
 
-function rep(x: Node, implicit ghost X: set<Node) returns (res: Loc) 
+function rep(x: Node, implicit ghost X: Set<Node) returns (res: Loc) 
   requires lseg_set(x, null, X);
   requires x != null;
   ensures res.next == null && res in X;
@@ -19,7 +19,7 @@ function rep(x: Node, implicit ghost X: set<Node) returns (res: Loc)
   }
 }
 
-procedure find(x: Node, implicit ghost X: set<Node>) 
+procedure find(x: Node, implicit ghost X: Set<Node>) 
 returns (res: Node)
   requires lseg_set(x, null, X);
   ensures acc(X);
@@ -37,7 +37,7 @@ returns (res: Node)
 }
 
 procedure union(x: Node, y: Node, 
-                implicit ghost X: set<Node>, implicit ghost Y: set<Node>)
+                implicit ghost X: Set<Node>, implicit ghost Y: Set<Node>)
   requires lseg_set(x, null, X) &+& lseg_set(y, null, Y);
   ensures acc(X) &+& acc(Y);
   ensures forall z in X -- Y -- rep(x) :: z.next == rep(x);

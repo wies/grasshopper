@@ -1,28 +1,28 @@
 struct Node {
   var next: Node;
-  var data: int;
+  var data: Int;
 }
 
-predicate sorted_set_lb(x: Node, y: Node, lb: int, c: set<int>) {
+predicate sorted_set_lb(x: Node, y: Node, lb: Int, c: Set<Int>) {
     x == y &*&
-    c == set<int>()
+    c == Set<Int>()
   || 
     x != y &*&
     acc(x) &*&
     x.data in c &*&
     lb < x.data &*&
-    sorted_set_lb(x.next, y, x.data, c -- set(x.data))
+    sorted_set_lb(x.next, y, x.data, c -- Set(x.data))
 }
 
-predicate sorted_set(x: Node, y: Node, c: set<int>) {
+predicate sorted_set(x: Node, y: Node, c: Set<Int>) {
     x == y &*&
-    c == set<int>()
+    c == Set<Int>()
   || 
   sorted_set_lb(x, y, x.data - 1, c)
 }
 
 procedure union(lst1: Node, lst2: Node,
-                implicit ghost content1: set<int>, implicit ghost content2: set<int>)
+                implicit ghost content1: Set<Int>, implicit ghost content2: Set<Int>)
   returns (res: Node)
   requires sorted_set(lst1, null, content1) &*& sorted_set(lst2, null, content2);
   ensures sorted_set(res, null, content1 ++ content2);

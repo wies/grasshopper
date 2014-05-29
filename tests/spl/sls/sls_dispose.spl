@@ -1,9 +1,9 @@
 struct Node {
   var next: Node;
-  var data: int;
+  var data: Int;
 }
 
-predicate uslseg(x: Node, y: Node, lb: int) {
+predicate uslseg(x: Node, y: Node, lb: Int) {
   x == y || x != y &*& acc(x) &*& lb <= x.data &*& uslseg(x.next, y, x.data)
 }
 

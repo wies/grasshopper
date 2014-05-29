@@ -23,7 +23,7 @@ procedure dl_remove(a: Node, b: Node) returns (c: Node, d: Node)
     curr := c;
     prv := null;
     
-    var nondet: bool;
+    var nondet: Bool;
     while (nondet && curr.next != null) 
       invariant curr != null;
       invariant dlseg(c, null, curr, prv);

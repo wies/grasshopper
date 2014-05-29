@@ -1,22 +1,22 @@
 struct Node {
   var next: Node;
   var prev: Node;
-  var data: int;
+  var data: Int;
 }
 
-predicate bdlseg(x: Node, u: Node, y: Node, v: Node, lb: int, ub: int) {
+predicate bdlseg(x: Node, u: Node, y: Node, v: Node, lb: Int, ub: Int) {
   x == y && u == v || 
   x != y &*& x.prev == u &*& acc(x) &*& bdlseg(x.next, x, y, v, lb, ub) &*& lb <= x.data &*& x.data <= ub
 }
 
-predicate bsdlseg(x: Node, u: Node, y: Node, v: Node, lb: int, ub: int) {
+predicate bsdlseg(x: Node, u: Node, y: Node, v: Node, lb: Int, ub: Int) {
   x == y && u == v || 
   x != y &*& x.prev == u &*& acc(x) &*& bsdlseg(x.next, x, y, v, x.data, ub) &*& lb <= x.data &*& x.data <= ub
 }
 
 procedure quicksort(lst: Node, tsl: Node,
                     ghost before: Node, ghost after: Node,
-                    ghost lb: int, ghost ub: int)
+                    ghost lb: Int, ghost ub: Int)
     requires bdlseg(lst, before, after, tsl, lb, ub) &*& tsl.next == after;
     ensures bsdlseg(lst, before, after, tsl, lb, ub);
 {
@@ -38,13 +38,13 @@ procedure quicksort(lst: Node, tsl: Node,
             } else if (end.data > pivot.data) {
                 end := end.prev;
             } else {
-                var tmp: int;
+                var tmp: Int;
                 tmp := start.data;
                 start.data := end.data;
                 end.data := tmp;
             }
         }
-        var tmp2: int;
+        var tmp2: Int;
         tmp2 := pivot.data;
         pivot.data := end.data;
         end.data := tmp2;

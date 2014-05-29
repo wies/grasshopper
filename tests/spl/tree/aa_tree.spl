@@ -1,13 +1,13 @@
 struct Node {
   var left: Node;
   var right: Node;
-  var data: int;
-  var level: int;
+  var data: Int;
+  var level: Int;
 }
 
 
-predicate aatree(x: Node, content: set<int>) {
-    x == null &*& content = set<int>()
+predicate aatree(x: Node, content: Set<Int>) {
+    x == null &*& content = Set<Int>()
   ||
     //strucuture
     x != null &*&
@@ -18,7 +18,7 @@ predicate aatree(x: Node, content: set<int>) {
     x.data in content &*&
     (forall l in l_content :: l < x.data) &*&
     (forall r in r_content :: r > x.data) &*&
-    content = l_content ++ r_content ++ set(x.data) &*&
+    content = l_content ++ r_content ++ Set(x.data) &*&
     //AA tree invariants
     //  The level of every leaf node is one
     (x.left == null && x.right == null && x.level == 1) &*&
@@ -77,7 +77,7 @@ procedure split(tree: Node) returns (res: Node)
     }
 }
 
-procedure insert(tree: Node, value: int) returns (res: Node)
+procedure insert(tree: Node, value: Int) returns (res: Node)
     input: X, the value to be inserted, and T, the root of the tree to insert it into.
     output: A balanced version T including X.
 {
@@ -110,7 +110,7 @@ procedure insert(tree: Node, value: int) returns (res: Node)
     return tree;
 }
 
-procedure delete(tree: Node, value: int) returns (res: Node)
+procedure delete(tree: Node, value: Int) returns (res: Node)
     requires: X, the value to delete, and T, the root of the tree from which it should be deleted.
     ensures: T, balanced, without the value X.
 {
@@ -126,12 +126,12 @@ procedure delete(tree: Node, value: int) returns (res: Node)
             free tree;
             return null;
         } else if (tree.left == null) {
-            var succ: int;
+            var succ: Int;
             succ := get_min(tree.right);
             tree.right := delete(tree.right, succ)
             tree.data := succ;
         } else {
-            var pred: int;
+            var pred: Int;
             pred := get_max(tree.left);
             tree.left := delete(tree.left, pred);
             tree.data := pred;
@@ -153,7 +153,7 @@ procedure decrease_level(tree: Node)
     requires: T, a tree for which we want to remove links that skip levels.
     ensures: T with its level decreased.
 {
-    var should_be: int;
+    var should_be: Int;
     if (tree.left.level < tree.right.level) {
         should_be := tree.left.level + 1;
     } else {

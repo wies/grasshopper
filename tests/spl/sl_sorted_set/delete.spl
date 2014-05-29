@@ -1,46 +1,46 @@
 struct Node {
   var next: Node;
-  var data: int;
+  var data: Int;
 }
 
-predicate sorted_set_lb(x: Node, y: Node, lb: int, c: set<int>) {
+predicate sorted_set_lb(x: Node, y: Node, lb: Int, c: Set<Int>) {
     x == y &*&
-    c == set<int>()
+    c == Set<Int>()
   || 
     x != y &*&
     acc(x) &*&
     x.data in c &*&
     lb < x.data &*&
-    sorted_set_lb(x.next, y, x.data, c -- set(x.data))
+    sorted_set_lb(x.next, y, x.data, c -- Set(x.data))
 }
 
-predicate sorted_set(x: Node, y: Node, c: set<int>) {
+predicate sorted_set(x: Node, y: Node, c: Set<Int>) {
     x == y &*&
-    c == set<int>()
+    c == Set<Int>()
   || 
   sorted_set_lb(x, y, x.data - 1, c)
 }
 
-procedure delete( lst: Node, val: int, implicit ghost content: set<int>)
+procedure delete( lst: Node, val: Int, implicit ghost content: Set<Int>)
   returns (res: Node)
   requires sorted_set(lst, null, content);
-  ensures sorted_set(res, null, content -- set(val));
+  ensures sorted_set(res, null, content -- Set(val));
 {
     var curr: Node, prev: Node;
     curr := lst;
     prev := null;
-    var c1: set<int>, c2: set<int>;
+    var c1: Set<Int>, c2: Set<Int>;
     c1 := content;
-    c2 := set<int>();
+    c2 := Set<Int>();
     while (curr != null && curr.data < val)
-      invariant prev == null && curr == lst && c2 == set<int>() || 
+      invariant prev == null && curr == lst && c2 == Set<Int>() || 
                   (val > prev.data && prev != curr && prev.next == curr && 
                   Btwn(next,lst,prev,curr)) &*& sorted_set(lst, curr, c2);
       invariant sorted_set(curr, null, c1) &*& content == c1 ++ c2;
       invariant prev == null || curr == null || prev.data < curr.data;
     {
-        c1 := c1 -- set(curr.data);
-        c2 := c2 ++ set(curr.data);
+        c1 := c1 -- Set(curr.data);
+        c2 := c2 ++ Set(curr.data);
         prev := curr;
         curr := curr.next; 
     }

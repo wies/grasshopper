@@ -1,9 +1,9 @@
 struct Node {
   var next: Node;
-  var data: int;
+  var data: Int;
 }
 
-predicate uslseg(x: Node, y: Node, lb: int) {
+predicate uslseg(x: Node, y: Node, lb: Int) {
   x == y || x != y &*& acc(x) &*& lb <= x.data &*& uslseg(x.next, y, x.data)
 }
 
@@ -11,7 +11,7 @@ predicate slseg(x: Node, y: Node) {
   x == y || x != y &*& acc(x) &*& uslseg(x.next, y, x.data)
 }
 
-predicate lrslseg(x: Node, y: Node, ub: int) {
+predicate lrslseg(x: Node, y: Node, ub: Int) {
   x == y || x != y &*& acc(x) &*& x.data <= ub &*& lrslseg(x.next, y, x.data)
 }
 

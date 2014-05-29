@@ -2,10 +2,10 @@ struct Node {
   var left: Node;
   var right: Node;
   var parent: Node;
-  var data: int;
+  var data: Int;
 }
 
-predicate bstree(x: Node, lb: int, ub: int) {
+predicate bstree(x: Node, lb: Int, ub: Int) {
     x == null
   ||
     x != null &*&
@@ -16,12 +16,12 @@ predicate bstree(x: Node, lb: int, ub: int) {
     bstree(x.right, x.data + 1, ub)
 }
 
-predicate treeAllocInvariant(X: set<Node>) {
+predicate treeAllocInvariant(X: Set<Node>) {
   (forall n in X :: n.parent == n.parent)
 }
 
 procedure destroy(root: Node,
-                  ghost lb: int, ghost ub: int)
+                  ghost lb: Int, ghost ub: Int)
   requires bstree(root, lb, ub);
   requires treeAllocInvariant(Alloc);
   ensures treeAllocInvariant(Alloc);
@@ -35,7 +35,7 @@ procedure destroy(root: Node,
     }
 }
 
-procedure extract_max(root: Node, ghost lb: int, ghost ub: int)
+procedure extract_max(root: Node, ghost lb: Int, ghost ub: Int)
 returns (others: Node, max: Node)
   requires bstree(root, lb, ub) &*& root != null;
   requires treeAllocInvariant(Alloc);
@@ -57,8 +57,8 @@ returns (others: Node, max: Node)
     }
 }
 
-procedure insert(root: Node, value: int,
-                 ghost lb: int, ghost ub: int)
+procedure insert(root: Node, value: Int,
+                 ghost lb: Int, ghost ub: Int)
 returns (new_root: Node)
   requires bstree(root, lb, ub);
   requires lb <= value && value <= ub;
@@ -90,8 +90,8 @@ returns (new_root: Node)
   }
 }
 
-procedure remove(root: Node, value: int,
-                 ghost lb: int, ghost ub: int)
+procedure remove(root: Node, value: Int,
+                 ghost lb: Int, ghost ub: Int)
 returns (res: Node)
   requires bstree(root, lb, ub);
   requires treeAllocInvariant(Alloc);
@@ -139,7 +139,7 @@ returns (res: Node)
     }
 }
 
-procedure traverse(root: Node, ghost lb: int, ghost ub: int) 
+procedure traverse(root: Node, ghost lb: Int, ghost ub: Int) 
   requires bstree(root, lb, ub);
   requires treeAllocInvariant(Alloc);
   ensures  treeAllocInvariant(Alloc);

@@ -1,6 +1,6 @@
 struct Point {
-  var x: int;
-  var y: int;
+  var x: Int;
+  var y: Int;
 }
 
 struct Node {
@@ -16,9 +16,9 @@ struct LstNode {
   var data: Point;
 }
 
-predicate quadtree(tree: Node, content: set<Point>) {
+predicate quadtree(tree: Node, content: Set<Point>) {
     tree == null &*&
-    content == set<Point>()
+    content == Set<Point>()
   ||
     tree != null &*&
     acc(tree) &*&
@@ -27,29 +27,29 @@ predicate quadtree(tree: Node, content: set<Point>) {
     quadtree(tree.NE, ne_content) &*&
     quadtree(tree.SW, sw_content) &*&
     quadtree(tree.SE, se_content) &*&
-    content == nw_content ++ ne_content ++ sw_content ++ se_content ++ set(tree.data) &*&
+    content == nw_content ++ ne_content ++ sw_content ++ se_content ++ Set(tree.data) &*&
     (tree.NW == null || tree.NW.data.x <  tree.data.x && tree.NW.data.y >= tree.data.y) &*&
     (tree.NE == null || tree.NE.data.x >= tree.data.x && tree.NE.data.y >= tree.data.y) &*&
     (tree.SW == null || tree.SW.data.x <  tree.data.x && tree.SW.data.y <  tree.data.y) &*&
     (tree.SE == null || tree.SE.data.x >= tree.data.x && tree.SE.data.y <  tree.data.y) 
 }
 
-predicate point_list(x: LstNode, content: set<Point>) {
+predicate point_list(x: LstNode, content: Set<Point>) {
     x == null &*&
-    content == set<Point>()
+    content == Set<Point>()
   ||
     x != null &*&
     acc(x) &*&
     acc(x.data) &*&
     x.data in content &*&
-    point_list(x.next, content -- set(x.data))
+    point_list(x.next, content -- Set(x.data))
 }
 
 //point quad tree, not region quad tree
 
 procedure insert(tree: Node, p: Point) returns (res: Tree)
     requires quadtree(tree, content) &*& acc(p);
-    ensures quadtree(res, content ++ set(p)) &*& acc(p);
+    ensures quadtree(res, content ++ Set(p)) &*& acc(p);
 {
     if (tree == null) {
         tree := new Node;
@@ -81,7 +81,7 @@ procedure insert(tree: Node, p: Point) returns (res: Tree)
 //no deletion or balancing for quadtree
 
 procedure concat(l1: LstNode, l2: LstNode,
-                 implicit ghost c1: set<Point>, implicit ghost c2: set<Point>)
+                 implicit ghost c1: Set<Point>, implicit ghost c2: Set<Point>)
     returns (res: LstNode)
     requires point_list(l1, c1) &*& point_list(l2, c2);
     ensures  point_list(res, c1 ++ c2);

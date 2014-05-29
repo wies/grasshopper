@@ -10,7 +10,7 @@ procedure rec_remove(lst: Node) returns (res: Node)
   requires lseg(lst, null);
   ensures lseg(res, null);
 {
-  var nondet: bool;
+  var nondet: Bool;
   if (lst == null)
     return null;
   else if (nondet) {

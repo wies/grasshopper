@@ -2,7 +2,7 @@ struct Node {
   var left: Node;
   var right: Node;
   var parent: Node;
-  var data: int;
+  var data: Int;
 }
 
 predicate tree(x: Node) {
@@ -14,7 +14,7 @@ predicate tree(x: Node) {
     tree(x.right)
 }
 
-predicate treeAllocInvariant(X: set<Node>) {
+predicate treeAllocInvariant(X: Set<Node>) {
   (forall n in X :: n.parent == n.parent)
 }
 
@@ -54,7 +54,7 @@ returns (others: Node, max: Node)
     }
 }
 
-procedure insert(root: Node, value: int)
+procedure insert(root: Node, value: Int)
 returns (new_root: Node)
   requires tree(root);
   requires treeAllocInvariant(Alloc);
@@ -85,7 +85,7 @@ returns (new_root: Node)
   }
 }
 
-procedure remove(root: Node, value: int)
+procedure remove(root: Node, value: Int)
 returns (res: Node)
   requires tree(root);
   requires treeAllocInvariant(Alloc);

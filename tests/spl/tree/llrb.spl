@@ -5,8 +5,8 @@ struct Node {
   var left: Node;
   var right: Node;
   var parent: Node;
-  var data: int;
-  var red: bool; //false is black
+  var data: Int;
+  var red: Bool; //false is black
 }
 
 //RB tree invariants:
@@ -59,15 +59,15 @@ predicate llrb23(x: Node, y: Node) {
     tree(x.right, x)
 }
 
-predicate treeAllocInvariant(X: set<Node>) {
+predicate treeAllocInvariant(X: Set<Node>) {
   (forall n in X :: n.parent == n.parent)
 }
 
 
 procedure colorFlip(h: Node, ghost p: Node,
-                    implicit ghost l: bool,
-                    implicit ghost c: bool,
-                    implicit ghost r: bool)
+                    implicit ghost l: Bool,
+                    implicit ghost c: Bool,
+                    implicit ghost r: Bool)
   requires h != null && h.left != null && h.right != null &&
            h.red == c && h.left.red == l && h.right.red == r;
   requires h.parent |-> p &*& llrb(h.left, h) &*& llrb(h.right, h);
@@ -82,7 +82,7 @@ procedure colorFlip(h: Node, ghost p: Node,
     if (h.right.red) h.right.red := false; else h.right.red := true;
 }
 
-procedure delete(root: Node, key: int) returns (res: Node)
+procedure delete(root: Node, key: Int) returns (res: Node)
   requires llrb(root, null);
   requires treeAllocInvariant(Alloc);
   ensures  treeAllocInvariant(Alloc);
@@ -101,7 +101,7 @@ procedure delete(root: Node, key: int) returns (res: Node)
 //additional properties: 2 blacks on the left => red ?
 
 //it seems that delete is assuming the node is in the tree
-procedure delete1(h: Node, key: int, ghost p: Node) returns (res: Node)
+procedure delete1(h: Node, key: Int, ghost p: Node) returns (res: Node)
   requires h != null;
   requires llrb(h, p);
   requires treeAllocInvariant(Alloc);
@@ -186,7 +186,7 @@ procedure fixUp(h: Node, ghost p: Node) returns (res: Node)
     return h;
 }
 
-procedure insert(root: Node, key: int) returns (res: Node)
+procedure insert(root: Node, key: Int) returns (res: Node)
   requires llrb(root, null);
   requires treeAllocInvariant(Alloc);
   ensures  treeAllocInvariant(Alloc);
@@ -197,7 +197,7 @@ procedure insert(root: Node, key: int) returns (res: Node)
     return root;
 }
 
-procedure insert1(h: Node, key: int, ghost p: Node) returns (res: Node)
+procedure insert1(h: Node, key: Int, ghost p: Node) returns (res: Node)
   requires llrb(h, p);
   requires p == null || p in Alloc;
   requires treeAllocInvariant(Alloc);
@@ -240,7 +240,7 @@ procedure insert1(h: Node, key: int, ghost p: Node) returns (res: Node)
     }
 }
 
-procedure isRed(h: Node, ghost p: Node) returns (res: bool)
+procedure isRed(h: Node, ghost p: Node) returns (res: Bool)
   requires tree(h, p); //TODO something stronger ?
   requires treeAllocInvariant(Alloc);
   ensures  treeAllocInvariant(Alloc);
@@ -255,7 +255,7 @@ procedure isRed(h: Node, ghost p: Node) returns (res: bool)
 }
 
 //TODO this is buggy for the moment
-procedure isRed1(h: Node, ghost p: Node, implicit ghost c: bool) returns (res: bool)
+procedure isRed1(h: Node, ghost p: Node, implicit ghost c: Bool) returns (res: Bool)
   requires tree(h, p);
   requires c == ((h != null) && h.red);
   requires treeAllocInvariant(Alloc);
@@ -271,7 +271,7 @@ procedure isRed1(h: Node, ghost p: Node, implicit ghost c: bool) returns (res: b
     }
 }
 
-procedure min(h: Node, ghost p: Node) returns (res: int)
+procedure min(h: Node, ghost p: Node) returns (res: Int)
   requires tree(h, p); //TODO stronger (cst field optimization saves us)
   requires h != null;
   requires treeAllocInvariant(Alloc);
@@ -325,7 +325,7 @@ procedure moveRedRight(h: Node, ghost p: Node) returns (res: Node)
 // Make a right-leaning 3-node lean to the left.
 // in case of a 4-node, returns two red nodes in a row on the left side
 // what about the coloring -> h.red + h.left.red + h.right.red < 3
-procedure rotateLeft(h: Node, ghost p: Node, implicit ghost c: bool) returns (res: Node)
+procedure rotateLeft(h: Node, ghost p: Node, implicit ghost c: Bool) returns (res: Node)
   requires h.parent |-> p &*& llrb(h.left, h) &*& llrb(h.right, h);
   requires h.right != null && h.right.red && c == h.red;
   requires treeAllocInvariant(Alloc);
@@ -347,7 +347,7 @@ procedure rotateLeft(h: Node, ghost p: Node, implicit ghost c: bool) returns (re
 
 // Make a left-leaning 3-node lean to the right.
 // or there are two left node on the left -> balanced 4 node
-procedure rotateRight(h: Node, ghost p: Node, implicit ghost c: bool) returns (res: Node)
+procedure rotateRight(h: Node, ghost p: Node, implicit ghost c: Bool) returns (res: Node)
   requires h != null && h.left != null && h.left.red && c == h.red;
   requires h.parent |-> p &*& llrb(h.left, h) &*& llrb(h.right, h);
   requires treeAllocInvariant(Alloc);

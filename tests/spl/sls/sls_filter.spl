@@ -1,9 +1,9 @@
 struct Node {
   var next: Node;
-  var data: int;
+  var data: Int;
 }
 
-predicate uslseg(x: Node, y: Node, lb: int) {
+predicate uslseg(x: Node, y: Node, lb: Int) {
   x == y || x != y &*& acc(x) &*& lb <= x.data &*& uslseg(x.next, y, x.data)
 }
 
@@ -11,11 +11,11 @@ predicate slseg(x: Node, y: Node) {
   x == y || x != y &*& acc(x) &*& uslseg(x.next, y, x.data)
 }
 
-predicate llseg(x: Node, y: Node, ub: int) {
+predicate llseg(x: Node, y: Node, ub: Int) {
   x == y || x != y &*& acc(x) &*& x.data <= ub &*& llseg(x.next, y, ub)
 }
 
-predicate lslseg(x: Node, y: Node, ub: int) {
+predicate lslseg(x: Node, y: Node, ub: Int) {
   slseg(x, y) && llseg(x, y, ub)
 }
 
@@ -34,7 +34,7 @@ procedure filter (x: Node) returns (res: Node)
     var old_curr: Node;
     old_curr := curr;
     curr := curr.next;
-    var nondet: bool;
+    var nondet: Bool;
     if (nondet) {
       if (prv != null) {
         prv.next := curr;

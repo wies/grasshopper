@@ -2,15 +2,15 @@ struct Node {
   var left: Node;
   var right: Node;
   var parent: Node;
-  var data: int;
-  var balance: int;
+  var data: Int;
+  var balance: Int;
 }
 
 //TODO invariant of the AVL tree
 
 //code from http://www.blackbam.at/blackbams-blog/2012/05/04/avl-tree-implementation-in-java/
 
-procedure insert(tree: Node, value: int) returns (res: Node)
+procedure insert(tree: Node, value: Int) returns (res: Node)
     requires
     ensures
 {
@@ -82,7 +82,7 @@ public void recursiveBalance(cur: Node) returns (res: Node)
     }
 }
 
-procedure remove(tree: Node, value: int)
+procedure remove(tree: Node, value: Int)
     requires
     ensures
 {
@@ -274,7 +274,7 @@ procedure successor(q: Node) returns (res: Node)
  * @param cur
  * @return The height of a node (-1, if node is not existent eg. NULL).
  */
-procedure height(cur: Node) returns (res: int)
+procedure height(cur: Node) returns (res: Int)
     requires
     ensures
 {

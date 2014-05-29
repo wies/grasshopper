@@ -13,7 +13,7 @@ procedure rec_insert(lst: Node, elt: Node) returns (res: Node)
   if (lst == null)
     return elt;
   else {
-    var nondet: bool;
+    var nondet: Bool;
     if (nondet) {
       elt.next := lst;
       return elt;

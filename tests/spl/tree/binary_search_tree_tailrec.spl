@@ -2,30 +2,30 @@ struct Node {
   var left: Node;
   var right: Node;
   var parent: Node;
-  var data: int;
+  var data: Int;
 }
 
-predicate stree(x: Node, content: set<int>) {
+predicate stree(x: Node, content: Set<Int>) {
     x == null &*&
-    content == set<int>()
+    content == Set<Int>()
   ||
     x != null &*&
     acc(x) &*&
     x.parent == x.parent &*&
-    (exists l_content: set<int>, r_content: set<int> :: 
+    (exists l_content: Set<Int>, r_content: Set<Int> :: 
       (forall d in l_content :: d < x.data) &*&
       (forall d in r_content :: d > x.data) &*&
-      content == l_content ++ r_content ++ set<int>(x.data) &*&
+      content == l_content ++ r_content ++ Set<Int>(x.data) &*&
       stree(x.left, l_content) &*&
       stree(x.right, r_content))
 }
 
-predicate treeAllocInvariant(X: set<Node>) {
+predicate treeAllocInvariant(X: Set<Node>) {
   (forall n in X :: n.parent == n.parent)
 }
 
-procedure contains(root: Node, val: int, implicit ghost content: set<int>)
-  returns (res: bool)
+procedure contains(root: Node, val: Int, implicit ghost content: Set<Int>)
+  returns (res: Bool)
   requires stree(root, content) &*& treeAllocInvariant(Alloc);
   ensures  stree(root, content) &*& treeAllocInvariant(Alloc);
   ensures  res == val in content;
@@ -34,7 +34,7 @@ procedure contains(root: Node, val: int, implicit ghost content: set<int>)
     curr := root;
 
     while (curr != null && curr.data != val) 
-      invariant (exists content1: set<int> :: 
+      invariant (exists content1: Set<Int> :: 
                    (stree(curr, content1) -** stree(root, content))
                  &*& (val in content == val in content1));
       invariant treeAllocInvariant(Alloc);

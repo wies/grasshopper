@@ -11,7 +11,7 @@ procedure rec_filter(x: Node) returns (res: Node)
   ensures lseg(res, null);
 {
   var n1: Node, n2: Node;
-  var nondet: bool;
+  var nondet: Bool;
   if (x == null) return x;
   else if (nondet) {
     n1 := x.next;

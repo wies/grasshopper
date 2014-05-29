@@ -19,7 +19,7 @@ procedure dl_filter(a: Node, b: Node) returns (c: Node, d: Node)
   while (curr != null) 
     invariant dlseg(c, null, curr, prv) &*& dlseg(curr, prv, null, d);
   { 
-    var nondet: bool, old_curr: Node;
+    var nondet: Bool, old_curr: Node;
     old_curr := curr;
     curr := curr.next;
     if (nondet) {
