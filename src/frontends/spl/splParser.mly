@@ -45,10 +45,9 @@ let mk_position s e =
 %left OR
 %left AND
 %right IMPLIES SEPWAND
-%left SEP
+%left SEP SEPINCL
 %left DOT
 %right NOT
-%nonassoc SEPINCL
 %nonassoc IFF
 %nonassoc LT GT LEQ GEQ
 %nonassoc EQ NEQ 
@@ -419,7 +418,7 @@ sep_wand_expr:
 
 sep_incl_expr:
 | sep_wand_expr { $1 }
-| sep_wand_expr SEPINCL sep_incl_expr { BinaryOp ($1, OpSepPlus, BinaryOp ($1, OpSepWand, $3, mk_position 1 3), mk_position 1 3) }
+| sep_incl_expr SEPINCL sep_wand_expr { BinaryOp ($1, OpSepIncl, $3, mk_position 1 3) }
 ;
 
 and_expr:

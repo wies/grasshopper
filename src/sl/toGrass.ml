@@ -36,11 +36,13 @@ let to_form pred_to_form domain f =
            | SepPlus -> []
            | SepStar -> [empty_t (FormUtil.mk_inter [f1_dom; f2_dom])]
            | SepWand -> [empty_t (FormUtil.mk_inter [f1_dom; domain]); FormUtil.mk_subseteq f1_dom f2_dom]
+           | SepIncl -> [FormUtil.mk_subseteq f1_dom f2_dom]
            in
            let dom_def = match op with
            | SepStar 
            | SepPlus -> FormUtil.mk_eq domain (FormUtil.mk_union [f1_dom; f2_dom])
            | SepWand -> FormUtil.mk_eq domain (FormUtil.mk_diff f2_dom f1_dom)
+           | SepIncl -> FormUtil.mk_eq domain f2_dom
            in
            (FormUtil.smk_and (f1_struct :: f2_struct :: aux_struct), domain) :: structs, dom_def :: defs
         in

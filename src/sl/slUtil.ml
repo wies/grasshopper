@@ -40,6 +40,7 @@ let mk_sep_plus a b =
   | _, Atom (Emp, []) -> a
   | _, _ -> SepOp (SepPlus, a, b)
 let mk_sep_wand a b = SepOp (SepWand, a, b)
+let mk_sep_incl a b = SepOp (SepIncl, a, b)
 let mk_atom s args = Atom (s, args)
 let mk_emp = mk_atom Emp []
 let mk_cell t = mk_atom Region [FormUtil.mk_setenum [t]]

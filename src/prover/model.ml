@@ -213,7 +213,7 @@ let output_graphviz chan model =
     List.iter 
       (fun def ->
 	match def.input with
-	| [fld; i] when SymbolSet.mem fld flds ->
+	| [fld; i] when SymbolSet.mem fld flds && SymbolMap.find i const_map <> Null ->
 	    let label = get_label fld in
 	    Printf.fprintf chan "\"%s\" -> \"%s\" [%s]\n" 
 	      (str_of_symbol i) (str_of_symbol def.output) label

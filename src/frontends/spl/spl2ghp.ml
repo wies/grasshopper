@@ -770,11 +770,13 @@ let convert cus =
           SL_form (SlUtil.mk_pts fld ind t2)
       | BinaryOp (e1, (OpSepStar as op), e2, _)
       | BinaryOp (e1, (OpSepPlus as op), e2, _)
+      | BinaryOp (e1, (OpSepIncl as op), e2, _)
       | BinaryOp (e1, (OpSepWand as op), e2, _) ->
           let mk_op = function
             | OpSepStar -> SlUtil.mk_sep_star
             | OpSepPlus -> SlUtil.mk_sep_plus
             | OpSepWand -> SlUtil.mk_sep_wand
+            | OpSepIncl -> SlUtil.mk_sep_incl
             | _ -> failwith "unexpected operator"
           in
           let f1 = extract_sl_form locals e1 in
