@@ -38,6 +38,7 @@ procedure contains(root: Node, val: Int, implicit ghost content: Set<Int>)
                    (stree(curr, content1) -** stree(root, content))
                  &*& (val in content == val in content1));
       invariant treeAllocInvariant(Alloc);
+      invariant treeAllocInvariant(Alloc);
     {
         if (curr.data < val) {
           curr := curr.left;
