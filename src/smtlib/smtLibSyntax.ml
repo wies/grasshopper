@@ -22,17 +22,17 @@ type annotation
 type binder = Exists | Forall | Lambda
 
 type term =
-  | Var of ident * sort
-  | App of symbol * term list * sort
-  | Binder of binder * (ident * sort) list * form * sort
-  | Annot of annotation
+  | Var of ident * sort * pos
+  | App of symbol * term list * sort * pos
+  | Binder of binder * (ident * sort) list * form * sort * pos
+  | Annot of annotation * pos
 
 type command =
-  | DeclareSort of ident * int
-  | DefineSort of ident * sort
-  | DeclareFun of ident * sort
-  | DefineFun of ident * term
-  | Assert of term
-  | Model of command list
+  | DeclareSort of ident * int * pos
+  | DefineSort of ident * sort * pos
+  | DeclareFun of ident * sort * pos
+  | DefineFun of ident * term * pos
+  | Assert of term * pos 
+  | Model of command list * pos
 
 
