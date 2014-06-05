@@ -1,9 +1,9 @@
-(** SMT-LIB 2 interface *)
+(** SMT-LIB v2 solver interface *)
 
 open Logger
+open SmtLibSyntax
 open Form
 open FormUtil
-open ParseSmtLibAux
 
 let logger = Logging.smtlib_log
 
@@ -100,7 +100,7 @@ let select_solver name =
     selected_solver := List.find (fun s -> s.name = name) solvers
   with Not_found -> failwith ("Unsupported SMT solver '" ^ name ^ "'")
 
-(** SMT-LIB2 Sessions *)
+(** Sessions *)
    
 type session = { name: string;
                  sat_means: string;
@@ -137,9 +137,10 @@ let read session =
   if !Config.verify then begin
     flush session.out_chan;
     let lexbuf = Lexing.from_channel session.in_chan in
-    ParseSmtLib.main LexSmtLib.token lexbuf
+    SmtLibLexer.set_file_name lexbuf session.name; 
+    SmtLibParser.output SmtLibLexer.token lexbuf
   end
-  else SmtUnsat
+  else Unsat
 
 let set_option session opt_name opt_value =
   writeln session (Printf.sprintf "(set-option %s %b)" opt_name opt_value)
@@ -199,7 +200,6 @@ let start_with_solver =
                   signature = None;
                   named_clauses = names_tbl }
   in
-  set_option session ":print-success" false;
   if produce_models then 
     set_option session  ":produce-models" true;
   List.iter 
@@ -358,31 +358,31 @@ let is_sat session =
   incr num_of_sat_queries;
   writeln session "(check-sat)";
   match read session with
-  | SmtSat -> 
+  | Sat -> 
     session.sat_checked <- Some true;
     Some true
-  | SmtUnsat ->
+  | Unsat ->
     session.sat_checked <- Some false;
     Some false
-  | SmtUnknown ->
+  | Unknown ->
     session.sat_checked <- Some true;
     None
-  | SmtError e -> fail session e
+  | Error e -> fail session e
   | _ -> fail session "unexpected response of prover"
 	
 let get_model session = 
   let gm () =
     writeln session "(get-model)";
     match read session with
-    | SmtModel m -> Some m
-    | SmtError e -> fail session e
+    | Model m -> Some m
+    | Error e -> fail session e
     | _ -> None
   in
-    if session.sat_checked = Some true then gm ()
-    else
-      match is_sat session with
-      | Some true | None -> gm ()
-      | Some false -> None
+  if session.sat_checked = Some true then gm ()
+  else
+    match is_sat session with
+    | Some true | None -> gm ()
+    | Some false -> None
 
 let get_unsat_core session =
   let resolve_names names =
@@ -391,7 +391,7 @@ let get_unsat_core session =
       with Not_found ->
         try [Hashtbl.find tbl (n ^ "_0")]
         with Not_found ->
-          Debug.info (fun () -> "cannot find clause '"^n^"' for unsat core\n"); []
+          Debug.info (fun () -> "cannot find clause '" ^ n ^ "' for unsat core\n"); []
     in
     match session.named_clauses with
       | Some tbl -> Some (Util.flat_map (find_name tbl) names)
@@ -400,8 +400,8 @@ let get_unsat_core session =
   let gc () =
     writeln session "(get-unsat-core)";
     match read session with
-    | SmtCore c -> resolve_names c
-    | SmtError e -> fail session e
+    | UnsatCore c -> resolve_names c
+    | Error e -> fail session e
     | _ -> None
   in
     if session.sat_checked = Some false then gc ()

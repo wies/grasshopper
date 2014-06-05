@@ -29,7 +29,7 @@ let vizmodel file =
 let _ =
   try
     Arg.parse Config.cmd_options (fun s -> input_file := s) usage_message;
-    SmtLib.select_solver (String.uppercase !Config.smtsolver);
+    SmtLibSolver.select_solver (String.uppercase !Config.smtsolver);
     if !input_file = ""
     then cmd_line_error "input file missing"
     else vizmodel !input_file

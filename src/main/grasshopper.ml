@@ -43,7 +43,7 @@ let print_stats start_time =
     let total_time = end_time -. start_time in
     print_endline "Statistics: ";
     Printf.printf "  running time for analysis: %.2fs\n" total_time;
-    Printf.printf "  # VCs: %d\n" !SmtLib.num_of_sat_queries;
+    Printf.printf "  # VCs: %d\n" !SmtLibSolver.num_of_sat_queries;
     Printf.printf "  measured time: %.2fs\n" !Util.measured_time;
     Printf.printf "  # measured calls: %.2d\n" !Util.measured_calls
 
@@ -51,7 +51,7 @@ let _ =
   let start_time = current_time () in
   try
     Arg.parse Config.cmd_options (fun s -> input_file := s) usage_message;
-    SmtLib.select_solver (String.uppercase !Config.smtsolver);
+    SmtLibSolver.select_solver (String.uppercase !Config.smtsolver);
     if !input_file = ""
     then cmd_line_error "input file missing"
     else (vc_gen !input_file; print_stats start_time)
