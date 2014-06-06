@@ -1,7 +1,7 @@
 ;;; flycheck.el --- On-the-fly syntax checking (Flymake done right) -*- lexical-binding: t; -*-
 
 ;; Copyright (c) 2012, 2013 Sebastian Wiesner <lunaryorn@gmail.com>
-;; Modifications Copyright (c) 2014 Thomas Wies
+;; Modifications Copyright (c) 2014 Thomas Wies <wies@cs.nyu.edu>
 ;;
 ;; Author: Sebastian Wiesner <lunaryorn@gmail.com>
 ;; URL: https://github.com/flycheck/flycheck

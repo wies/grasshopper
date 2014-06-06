@@ -1,4 +1,4 @@
-(** Utility functions for manipulating first-order logic formulas *)
+(** Utility functions for manipulating GRASS formulas *)
 
 open Form
 open Util

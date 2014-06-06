@@ -1,4 +1,4 @@
-(** Abstract syntax tree for formulas in sorted first-order logic *)
+(** Abstract syntax tree for GRASS formulas (a sorted first-order logic) *)
 
 open Util
 

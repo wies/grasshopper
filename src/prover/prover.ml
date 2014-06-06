@@ -7,8 +7,7 @@ let inst_num = ref 0
 
 let dump_model session =
   if !Config.model_file <> "" then begin
-    let _model = unopt (SmtLibSolver.get_model session) in
-    let model = Model.empty in
+    let model = unopt (SmtLibSolver.get_model session) in
     let model_chan = open_out !Config.model_file in
     (*Model.print_model2 model;*)
     Model.output_graphviz model_chan model;

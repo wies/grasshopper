@@ -1,3 +1,5 @@
+(** Models of GRASS formulas *)
+
 open Util
 open Form
 open FormUtil
@@ -73,6 +75,8 @@ let fun_write funv args res =
   | v -> ValueMap.empty, v
   in 
   MapVal (ValueMap.add args res old_m, old_d)
+
+
 
 let get_base_value = function
   | BaseVal v -> v

@@ -39,6 +39,7 @@ output:
 | rmodel { Model $1 }
 | rcore  { UnsatCore $1 }
 | rerror { Error $1 }
+| error { ProgError.syntax_error (mk_position 1 1) }
 ;
     
 rerror:
@@ -62,17 +63,14 @@ cmnd:
 | DECLARE_SORT IDENT INT { 
   mk_declare_sort ~pos:(mk_position 1 3) $2 $3 
 }
-| DECLARE_FUN IDENT LPAREN sort_list RPAREN sort { 
-  mk_declare_fun ~pos:(mk_position 1 6) $2 (FunSort ($4, $6))
+| DECLARE_FUN IDENT LPAREN sort_list_opt RPAREN sort { 
+  mk_declare_fun ~pos:(mk_position 1 6) $2 $4 $6
 }
 | DEFINE_SORT IDENT LPAREN ident_list_opt RPAREN sort {
   mk_define_sort ~pos:(mk_position 1 6) $2 $4 $6
 }
-| DEFINE_FUN IDENT LPAREN ident_sort_list_opt RPAREN term {
-  let def = match $4 with
-  | [] -> $6
-  | _ -> mk_binder ~pos:(mk_position 3 6) Lambda $4 $6
-  in mk_define_fun ~pos:(mk_position 1 6) $2 def
+| DEFINE_FUN IDENT LPAREN ident_sort_list_opt RPAREN sort term {
+  mk_define_fun ~pos:(mk_position 1 7) $2 $4 $6 $7
 }
 | ASSERT term { 
   mk_assert ~pos:(mk_position 1 2) $2
@@ -80,9 +78,15 @@ cmnd:
 ;
 
 cmnd_list:
-| cmnd cmnd_list { $1 :: $2 }
-| cmnd { [$1] }
+| LPAREN cmnd RPAREN cmnd_list { $2 :: $4 }
+| LPAREN cmnd RPAREN { [$2] }
+| term cmnd_list { mk_assert ~pos:(mk_position 1 1) $1 :: $2 }
+| term { [mk_assert ~pos:(mk_position 1 1) $1] }
 ;
+
+sort_list_opt:
+| sort_list { $1 }
+| /* empty */ { [] }
 
 sort_list:
 | sort sort_list { $1 :: $2 }

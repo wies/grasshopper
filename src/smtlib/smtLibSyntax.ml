@@ -6,7 +6,6 @@ type pos = Prog.source_position
 
 type sort = 
   | IntSort | BoolSort
-  | FunSort of sort list * sort
   | FreeSort of ident * sort list
 
 type symbol =
@@ -20,7 +19,7 @@ type symbol =
 type annotation =
   | Name of ident
 
-type binder = Exists | Forall | Lambda
+type binder = Exists | Forall
 
 type term =
   | App of symbol * term list * pos option
@@ -30,8 +29,8 @@ type term =
 type command =
   | DeclareSort of ident * int * pos option
   | DefineSort of ident * ident list * sort * pos option
-  | DeclareFun of ident * sort * pos option
-  | DefineFun of ident * term * pos option
+  | DeclareFun of ident * sort list * sort * pos option
+  | DefineFun of ident * (ident * sort) list * sort * term * pos option
   | Assert of term * pos option
 
 type response =
@@ -42,7 +41,7 @@ type response =
   | UnsatCore of string list
   | Error of string
 
-(** constructor functions *)
+(** Constructor functions *)
 
 let mk_const ?pos sym = App (sym, [], pos)
 
@@ -54,10 +53,26 @@ let mk_annot ?pos t a = Annot (t, a, pos)
 
 let mk_declare_sort ?pos id arity = DeclareSort (id, arity, pos)
 
-let mk_declare_fun ?pos id srt = DeclareFun (id, srt, pos)
+let mk_declare_fun ?pos id arg_srts res_srt = DeclareFun (id, arg_srts, res_srt, pos)
 
 let mk_define_sort ?pos id args srt = DefineSort (id, args, srt, pos)
 
-let mk_define_fun ?pos id t = DefineFun (id, t, pos)
+let mk_define_fun ?pos id args res_srt t = DefineFun (id, args, res_srt, t, pos)
 
 let mk_assert ?pos t = Assert (t, pos)
+
+(** Utility functions *)
+
+let idents_in_term t =
+  let rec iot acc = function
+    | App (sym, ts, _) -> 
+        let acc1 = match sym with
+        | Ident id -> Form.IdSet.add id acc
+        | _ -> acc
+        in
+        List.fold_left iot acc1 ts
+    | Binder (_, vs, t, _) ->
+        let acc1 = List.fold_left (fun acc1 (id, _) -> Form.IdSet.add id acc1) acc vs in
+        iot acc1 t
+    | Annot (t, _, _) -> iot acc t
+  in iot Form.IdSet.empty t

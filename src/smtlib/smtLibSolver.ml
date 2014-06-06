@@ -40,10 +40,10 @@ let z3_v4 = { number = 4;
 	      subnumber = 3;
 	      smt_options = 
               (if not !Config.instantiate then [(":auto-config", false)] else []) @
-              [":smt.mbqi", true;
+              [(*":smt.mbqi", true;
                ":smt.ematching", true;
                ":model.v2", true;
-	       ":model.partial", true];
+	       ":model.partial", true*)];
 	      args = "-smt2 -in"
 	    }
 
@@ -370,11 +370,69 @@ let is_sat session =
   | Error e -> fail session e
   | _ -> fail session "unexpected response of prover"
 	
+
+let convert_model smtModel =
+  let rec convert_sort = function
+    | IntSort -> Int
+    | BoolSort -> Bool
+    | FreeSort ((name, num), srts) ->
+        let csrts = List.map convert_sort srts in
+        match name with
+        | "Loc" -> Loc
+        | "FldLoc" -> Fld Loc
+        | "FldInt" -> Fld Int
+        | "SetLoc" -> Set Loc
+        | "SetInt" -> Set Int
+        | "Set" -> Set (List.hd csrts)
+        | "Fld" -> Fld (List.hd csrts)
+        | _ -> FreeSrt (name, num)
+  in
+  let to_val (id, _) =
+    let z3_val_re = Str.regexp "\\([^!]*\\)!val!\\([0-9]*\\)" in
+    if Str.string_match z3_val_re id 0 then
+      let srt = convert_sort (FreeSort ((Str.matched_group 1 id, 0), [])) in
+      let index = int_of_string (Str.matched_group 2 id) in
+      Some (srt, index)
+    else None
+  in
+  let model0 = Model.empty in
+  (* declare cardinalities of uninterpreted sorts *)
+  let model1 =
+    let idents =
+      List.fold_left (fun idents -> function
+        | DefineFun (_, _, _, t, _) 
+        | Assert (t, _) -> IdSet.union idents (idents_in_term t)
+        | _ -> idents) IdSet.empty smtModel
+    in
+    let cards = 
+      IdSet.fold 
+        (fun id cards ->
+          match to_val id with
+          | Some (Loc as srt, index) -> 
+              let card = try SortMap.find srt cards with Not_found -> 0 in
+              SortMap.add srt (max card (index + 1)) cards
+          | _ -> cards
+        )
+        idents SortMap.empty
+    in
+    SortMap.fold (fun srt card model -> Model.add_card model srt card) cards model0
+  in
+  (* declare all symbols *)
+  let model2 =
+    List.fold_right 
+      (fun cmd model ->
+        match cmd with
+        | DefineFun (id, args, res_srt, def, _) -> model
+        | _ -> model)
+      smtModel model1 
+  in
+  model2
+
 let get_model session = 
   let gm () =
     writeln session "(get-model)";
     match read session with
-    | Model m -> Some m
+    | Model m -> Some (convert_model m)
     | Error e -> fail session e
     | _ -> None
   in
