@@ -370,8 +370,9 @@ let is_sat session =
   | Error e -> fail session e
   | _ -> fail session "unexpected response of prover"
 	
-
+(** Covert SMT-LIB model to GRASS model *)
 let convert_model smtModel =
+  (* convert SMT-LIB sort back to GRASS sort *)
   let rec convert_sort = function
     | IntSort -> Int
     | BoolSort -> Bool
@@ -387,6 +388,7 @@ let convert_model smtModel =
         | "Fld" -> Fld (List.hd csrts)
         | _ -> FreeSrt (name, num)
   in
+  (* detect Z3/CVC4 identifiers that represent values of uninterpreted sorts *)
   let to_val (id, _) =
     let z3_val_re = Str.regexp "\\([^!]*\\)!val!\\([0-9]*\\)" in
     if Str.string_match z3_val_re id 0 then
@@ -395,6 +397,7 @@ let convert_model smtModel =
       Some (srt, index)
     else None
   in
+  (* start model construction *)
   let model0 = Model.empty in
   (* declare cardinalities of uninterpreted sorts *)
   let model1 =
@@ -417,7 +420,7 @@ let convert_model smtModel =
     in
     SortMap.fold (fun srt card model -> Model.add_card model srt card) cards model0
   in
-  (* declare all symbols *)
+  (* define all symbols *)
   let model2 =
     List.fold_right 
       (fun cmd model ->
