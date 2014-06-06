@@ -84,12 +84,12 @@ module IdSrtSet = Set.Make(struct
     let compare = compare
   end)
 
-module SrtSet = Set.Make(struct
+module SortSet = Set.Make(struct
     type t = sort
     let compare = compare
   end)
 
-module SrtMap = Map.Make(struct
+module SortMap = Map.Make(struct
     type t = sort
     let compare = compare
   end)

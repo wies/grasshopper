@@ -371,16 +371,16 @@ let sorted_free_vars f =
 
 let sorts f =
   let rec s acc = function
-    | Var (_, Some srt) -> SrtSet.add srt acc
+    | Var (_, Some srt) -> SortSet.add srt acc
     | App (_, ts, srt_opt) ->
         let acc1 = match srt_opt with
-        | Some srt -> SrtSet.add srt acc
+        | Some srt -> SortSet.add srt acc
         | None -> acc
         in
         List.fold_left s acc1 ts
     | _ -> acc
   in
-  fold_terms s SrtSet.empty f
+  fold_terms s SortSet.empty f
 
 (** Computes the set of free constants occuring in term [t].
  ** Takes accumulator as additional argument. *)

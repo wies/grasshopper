@@ -10,7 +10,7 @@ let dump_model session =
     let _model = unopt (SmtLibSolver.get_model session) in
     let model = Model.empty in
     let model_chan = open_out !Config.model_file in
-    Model.print_model2 model;
+    (*Model.print_model2 model;*)
     Model.output_graphviz model_chan model;
     close_out model_chan;
   end

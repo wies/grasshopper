@@ -17,12 +17,12 @@ let parse_input file =
   ParseError.input := Some input;
   let lexbuf = Lexing.from_string input in
   ParseError.buffer := Some lexbuf;
-  ParseError.parse_buf_exn ParseModel.main LexModel.token lexbuf
+  ParseError.parse_buf_exn SmtLibParser.output SmtLibLexer.token lexbuf
 
 let vizmodel file =
   let model = parse_input file in
   let model_chan = open_out !Config.model_file in
-  Model.print_model2 model;
+  (* Model.print_model2 model;*)
   Model.output_graphviz model_chan model;
   close_out model_chan  
 

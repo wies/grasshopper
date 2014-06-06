@@ -303,10 +303,10 @@ let reduce_sets fs =
   let elem_srts = 
     let set_srts =
       List.fold_left 
-        (fun acc f -> SrtSet.union (sorts f) acc)
-        SrtSet.empty fs1
+        (fun acc f -> SortSet.union (sorts f) acc)
+        SortSet.empty fs1
     in
-    SrtSet.fold (fun set_srt acc -> 
+    SortSet.fold (fun set_srt acc -> 
       match set_srt with 
       | Set srt -> srt :: acc
       | _ -> acc) set_srts []
@@ -350,13 +350,13 @@ let reduce_read_write fs =
   let gts = TermSet.union (ground_terms (smk_and null_ax1)) gts in
   let field_sorts = TermSet.fold (fun t srts ->
     match sort_of t with
-    | Some (Fld srt) -> SrtSet.add srt srts
+    | Some (Fld srt) -> SortSet.add srt srts
     | _ -> srts)
-      gts SrtSet.empty
+      gts SortSet.empty
   in
   (* propagate read terms *)
   let read_propagators =
-    SrtSet.fold (fun srt propagators ->
+    SortSet.fold (fun srt propagators ->
       let f1 = fresh_ident "?f", Fld srt in
       let fld1 = mk_var ~srt:(snd f1) (fst f1) in
       let f2 = fresh_ident "?g", Fld srt in

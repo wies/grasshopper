@@ -177,7 +177,7 @@ let generate_instances useLocalInst axioms rep_terms egraph type_graph =
   (* stratification: can a var of type t1 be used to generate a term of type t2 *)
   let closed_type_graph = TypeStrat.transitive_closure type_graph in
   let can_reach a b =
-    try SrtSet.mem b (SrtMap.find a closed_type_graph)
+    try SortSet.mem b (SortMap.find a closed_type_graph)
     with Not_found -> false
   in
   let is_stratified t1 t2 =

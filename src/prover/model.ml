@@ -2,191 +2,201 @@ open Util
 open Form
 open FormUtil
 
+exception Undefined
 
-type def = { input : symbol list;
-	     output : symbol}
+type base_value =
+  | I of int
+  | B of bool
 
-type interpretation = def list SymbolMap.t
+module ValueMap = 
+  Map.Make(struct
+    type t = base_value list
+    let compare = compare
+  end)
 
-type model = {sign: signature; interp: interpretation}
+module ValueSet = 
+  Set.Make(struct
+    type t = base_value
+    let compare = compare
+  end)
 
-let empty : model = {sign = SymbolMap.empty; interp = SymbolMap.empty}
+type value =
+  | BaseVal of base_value
+  | MapVal of base_value ValueMap.t * value
+  | SetVal of ValueSet.t
+  | TermVal of (ident * sort) list * term
+  | Undef
 
-let get_sig m = m.sign
+let value_of_int i = BaseVal (I i)
 
-let get_interp m = m.interp
+let value_of_bool b = BaseVal (B b)
 
-let add_def sym (i, o) model = 
-  let defs = 
-    try SymbolMap.find sym model.interp
-    with Not_found -> []
-  in
-  {model with interp = SymbolMap.add sym ({input=i; output=o} :: defs) model.interp}
+let value_of_set s = SetVal s
 
-let add_decl sym arity model =
-  {model with sign = SymbolMap.add sym arity model.sign}
+let equal v1 v2 =
+  match v1, v2 with
+  | SetVal s1, SetVal s2 ->
+      ValueSet.equal s1 s2
+  | _, _ -> v1 = v2
 
-let decl_of sym model =
-  try SymbolMap.find sym model.sign
-  with Not_found -> failwith ("cannot find declaration of " ^ (str_of_symbol sym))
+type interpretation = value SymbolMap.t
 
-let defs_of sym model = 
-  try SymbolMap.find sym model.interp with Not_found -> [] 
+type model =
+  { sign: signature; 
+    card: int SortMap.t;
+    intp: interpretation }
 
+let empty : model = 
+  { sign = SymbolMap.empty;
+    card = SortMap.empty;
+    intp = SymbolMap.empty }
 
-let filter_defs p model =
-  SymbolMap.fold 
-    (fun id defs fmodel ->
-      match List.filter (p id) defs with
-      | [] -> fmodel
-      | fdefs -> SymbolMap.add id defs fmodel)
-    model.interp SymbolMap.empty
+let get_sign m = m.sign
 
-let fold f model init = 
-  SymbolMap.fold 
-    (fun id defs acc ->
-      List.fold_left (fun acc def -> f id def acc) acc defs)
-    model.interp init
+let get_intp m = m.intp
 
-let consts model =
-  SymbolMap.fold 
-    (fun id defs acc ->
-      match defs with
-      | [def] when def.input = [] -> SymbolSet.add id acc
-      | _ -> acc)
-    model.interp SymbolSet.empty
-    
-let const_map m =
-  let consts = 
-    SymbolMap.fold 
-      (fun id defs acc ->
-	match defs with
-	| [def] when def.input = [] -> 
-	    SymbolMap.add def.output id acc
-	| _ -> acc)
-      m.interp SymbolMap.empty
-  in
-  SymbolMap.fold 
-    (fun id defs acc ->
-      List.fold_left (fun acc def ->
-	List.fold_left (fun acc i ->
-	  if SymbolMap.mem i acc then acc
-	  else SymbolMap.add i (FreeSym (fresh_ident "c")) acc)
-	  acc def.input)
-	acc defs)
-    m.interp consts
+let add_card model srt card = 
+  { model with card = SortMap.add srt card model.card }
 
-let values_aux tpe m =
-  let add = match tpe with
-    | Some Bool ->
-      (fun sym set -> match sym with
-        | BoolConst _ -> SymbolSet.add sym set
-        | _ -> set )
-    | Some Int ->
-      (fun sym set -> match sym with
-        | IntConst _ -> SymbolSet.add sym set
-        | _ -> set )
-    | Some tpe ->
-      let str = string_of_smtlib_sort tpe in
-        (fun sym set ->
-          if Util.string_starts_with (str_of_symbol sym) str
-          then SymbolSet.add sym set
-          else set
-        )
-    | None -> SymbolSet.add
-  in
-    SymbolMap.fold
-      (fun id defs acc ->
-        List.fold_left
-          (fun acc def ->
-            List.fold_left
-              (fun a b -> add b a)
-              (add def.output acc )
-              def.input
-          )
-          acc
-          defs
-      )
-      m.interp SymbolSet.empty
-    
-let values m = values_aux None m
-let values_of_tpe t m = values_aux (Some t) m
+let add_decl model sym sort =
+  { sign = SymbolMap.add sym sort model.sign;
+    card = model.card;
+    intp = SymbolMap.add sym Undef model.intp
+  }
 
-let to_clauses model =
-  let const_map = const_map model in 
-  let mk_rep n = mk_const (SymbolMap.find n const_map) in
-  let constants = SymbolMap.fold (fun n _ acc -> mk_rep n :: acc) const_map [] in
-  let form_of_def sym def = 
-    match def.output with
-    | BoolConst b -> 
-	let a = mk_atom sym (List.map mk_rep def.input) in
-	if b then a else mk_not a
-    | o ->
-	let rhs = mk_rep o in
-	let lhs = mk_app sym (List.map mk_rep def.input)
-	in mk_eq lhs rhs
-  in
-  let def_forms =
-    SymbolMap.fold 
-      (fun id defs acc ->
-	List.fold_left (fun acc def -> form_of_def id def :: acc) acc defs)
-      model.interp []
-  in
-  let diseqs = List.fold_left (fun acc c1 -> 
-    List.fold_left (fun acc c2 ->
-      if c1 = c2 then acc else [mk_not (mk_eq c1 c2)] :: acc) acc constants) 
-      [] constants
-  in
-  diseqs @ List.map (fun f -> [f]) def_forms
-	     
-let to_form model = Clauses.to_form (to_clauses model)
+let add_interp model sym def =
+  { model with intp = SymbolMap.add sym def model.intp }
 
-let eval_term model t = 
-  let const_map = const_map model in 
-  let apply sym args = 
-    let defs = 
-      try SymbolMap.find sym model.interp 
-      with Not_found -> 
-	try
-	  let rep_sym = SymbolMap.find sym const_map in
-	  SymbolMap.find rep_sym model.interp 
-	with Not_found -> []
-    in
-    try 
-      let def = List.find (fun def -> def.input = args) defs in
-      def.output 
-    with Not_found -> begin
-      match args with
-      | [] -> failwith ("Model.class_of_term: constant " ^ str_of_symbol sym ^ " is undefined")
-      | _ -> failwith ("Model.class_of_term: function " ^ str_of_symbol sym ^ " is not totally defined")
-    end
+let fun_write funv args res =
+  let old_m, old_d = match funv with
+  | MapVal (m, d) -> m, d
+  | v -> ValueMap.empty, v
   in 
-  let rec eval = function
-    | Var _ -> failwith "Model.class_of_term: term is not ground"
-    | App (sym, ts, _) ->
-	let args = List.map eval ts in
-	apply sym args
-  in try Some (eval t) with _ ->  None
+  MapVal (ValueMap.add args res old_m, old_d)
 
-let print_model model =
-  print_form stdout (to_form model)
-    
-let print_model2 model =
-  SymbolMap.iter
-    (fun sym defs ->
-      print_string (str_of_symbol sym ^ " = ");
-      match defs with
-      | [def] when List.length def.input = 0 -> 
-	  Printf.printf " -> %s\n" (str_of_symbol def.output)
-      | _ ->
-	  print_string "\n  [";
-	  List.iter (fun def -> 
-		Printf.printf "(%s)" (String.concat ", " (List.map str_of_symbol def.input));
-	    Printf.printf " -> %s" (str_of_symbol def.output);
-	    print_string "\n   ")
-	    defs;
-	  print_string "]\n") model.interp
-    
+let get_base_value = function
+  | BaseVal v -> v
+  | _ -> raise Undefined
+
+let interp model sym = 
+  try SymbolMap.find sym model.intp 
+  with Not_found -> raise Undefined
+
+let interp_base model sym =
+  get_base_value (interp model sym)
+
+let rec eval model = function
+  | Var (id, _) -> interp model (FreeSym id)
+  | App (IntConst i, [], _) -> value_of_int i
+  | App (BoolConst b, [], _) -> value_of_bool b
+  | App (Read, [fld; ind], _) -> 
+      fun_read model (eval model fld) [eval_base model ind]
+  | App (Write, [fld; ind; upd], _) ->
+      let indv = eval_base model ind in
+      let updv = eval_base model upd in
+      let fldv = eval model fld in
+      fun_write fldv [indv] updv 
+  | App (EntPnt, [fld; loc], _) -> raise Undefined (* todo *)
+  | App (UMinus, [t], _) ->
+      value_of_int (-(eval_int model t))
+  | App (Plus as intop, [t1; t2], _)
+  | App (Minus as intop, [t1; t2], _)
+  | App (Mult as intop, [t1; t2], _)
+  | App (Div as intop, [t1; t2], _) ->
+      let f = match intop with
+      | Plus -> (+)
+      | Minus -> (-)
+      | Mult -> ( * )
+      | Div -> (/)
+      | _ -> failwith "impossible"
+      in value_of_int (f (eval_int model t1) (eval_int model t2))
+  | App (Empty, [], _) -> value_of_set ValueSet.empty
+  | App (SetEnum, ts, _) ->
+      let s = 
+        List.fold_left 
+          (fun res t -> ValueSet.add (eval_base model t) res) 
+          ValueSet.empty ts
+      in value_of_set s
+  | App (Union, ts, _) ->
+      let s = 
+        List.fold_left
+          (fun res t -> ValueSet.union res (eval_set model t)) 
+          ValueSet.empty ts
+      in value_of_set s
+  | App (Diff, [t1; t2], _) ->
+      let s = 
+        ValueSet.diff (eval_set model t1) (eval_set model t2)
+      in value_of_set s
+  | App (Eq, [t1; t2], _) ->
+      value_of_bool (equal (eval model t1) (eval model t2))
+  | App (LtEq as rel, [t1; t2], _)
+  | App (GtEq as rel, [t1; t2], _)
+  | App (Lt as rel, [t1; t2], _)
+  | App (Gt as rel, [t1; t2], _) ->
+      let r = match rel with
+      | LtEq -> (<=) | GtEq -> (>=) | Lt -> (<) | Gt -> (>)
+      | _ -> failwith "impossible"
+      in 
+      value_of_bool (r (eval_int model t1) (eval_int model t2))
+  | App (Elem, [e; s], _) ->
+      let ev = eval_base model e in
+      let sv = eval_set model s in
+      value_of_bool (ValueSet.mem ev sv)
+  | App (SubsetEq, [s1; s2], _) ->
+      let s1v = eval_set model s1 in
+      let s2v = eval_set model s2 in
+      value_of_bool (ValueSet.subset s1v s2v)
+  | App (sym, [], _) -> 
+      interp model sym
+  | App (sym, ts, _) ->
+      let args = List.map (eval_base model) ts in
+      fun_read model (interp model sym) args
+      
+and fun_read model funv args =
+  let rec fr = function
+    | MapVal (m, d) ->
+        (try BaseVal (ValueMap.find args m) with Not_found -> fr d)
+    | TermVal (ids, t) ->
+        let model1 = 
+          List.fold_left2 
+            (fun model1 (id, srt) arg -> 
+              let m1 = add_decl model1 (FreeSym id) ([], srt) in
+              add_interp m1 (FreeSym id) (BaseVal arg))
+            model ids args
+        in eval model1 t
+    | v -> v
+  in
+  fr funv
+
+and eval_base model t =
+  get_base_value (eval model t)
+
+and eval_int model t =
+  match eval_base model t with
+  | I i -> i
+  | _ -> raise Undefined
+
+and eval_bool model t =
+  match eval_base model t with
+  | B b -> b
+  | _ -> raise Undefined
+
+and eval_set model t =
+  match eval model t with
+  | SetVal s -> s
+  | _ -> raise Undefined
+
+
+let symbols_of_sort model srt =
+  SymbolMap.fold 
+    (fun id osrt acc ->
+      if srt = osrt then SymbolSet.add id acc
+      else acc)
+    model.sign SymbolSet.empty
+       
+let output_graphviz chan model = ()
+ 
+(*
 let output_graphviz chan model =
   let const_map = const_map model in 
   let find_rep s = match s with
@@ -427,33 +437,4 @@ let output_graphviz chan model =
     
 
       
-(* 
-let prune m terms =
-  fold (fun sym def sm -> 
-    let keep_def = 
-      match def.input, def.output with
-      | _ :: _ as inputs, Int _ -> 
-	  TermSet.exists (function 
-	    | App (sym', ts, _) when sym = sym' -> 
-		List.fold_left2 
-		  (fun acc t i -> acc && 
-		    (match eval_term m t with
-		    | Some i' -> i = i'
-		    | None -> false))
-		  true ts inputs
-	    | _ -> false) terms
-      | _ :: _ as inputs, Bool _ ->
-	  List.for_all 
-	    (fun i -> 
-	      TermSet.exists 
-		(fun t -> 
-		  match eval_term m t with
-		  | Some i' -> i = i'
-		  | None -> false)
-		terms)
-	    inputs
-      | _ -> true
-    in
-    if keep_def then add_def sym (def.input, def.output) sm else sm)
-    m empty
 *)
