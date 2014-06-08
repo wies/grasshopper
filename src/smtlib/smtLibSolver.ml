@@ -418,7 +418,9 @@ let convert_model smtModel =
         )
         idents SortMap.empty
     in
-    SortMap.fold (fun srt card model -> Model.add_card model srt card) cards model0
+    SortMap.fold 
+      (fun srt card model -> Model.add_card model srt card) 
+      cards model0
   in
   (* define all symbols *)
   let model2 =
