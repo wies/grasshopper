@@ -12,6 +12,12 @@ type base_value =
 
 module ValueMap = 
   Map.Make(struct
+    type t = base_value
+    let compare = compare
+  end)
+
+module ValueListMap = 
+  Map.Make(struct
     type t = base_value list
     let compare = compare
   end)
@@ -24,7 +30,7 @@ module ValueSet =
 
 type value =
   | BaseVal of base_value
-  | MapVal of base_value ValueMap.t * value
+  | MapVal of base_value ValueListMap.t * value
   | SetVal of ValueSet.t
   | TermVal of (ident * sort) list * term
   | Undef
@@ -35,23 +41,33 @@ let value_of_bool b = BaseVal (B b)
 
 let value_of_set s = SetVal s
 
+let set_of_value = function
+  | SetVal s -> s
+  | _ -> raise Undefined
+
 let equal v1 v2 =
   match v1, v2 with
   | SetVal s1, SetVal s2 ->
       ValueSet.equal s1 s2
   | _, _ -> v1 = v2
 
-type interpretation = value SymbolMap.t
+type valuation = base_value SymbolMap.t
+
+type interpretation = value ValueMap.t
 
 type model =
   { sign: signature; 
     card: int SortMap.t;
-    intp: interpretation }
+    vals: valuation;
+    intp: interpretation;
+  }
 
 let empty : model = 
   { sign = SymbolMap.empty;
     card = SortMap.empty;
-    intp = SymbolMap.empty }
+    vals = SymbolMap.empty;
+    intp = ValueMap.empty
+  }
 
 let get_sign m = m.sign
 
@@ -61,36 +77,36 @@ let add_card model srt card =
   { model with card = SortMap.add srt card model.card }
 
 let add_decl model sym sort =
-  { sign = SymbolMap.add sym sort model.sign;
-    card = model.card;
-    intp = SymbolMap.add sym Undef model.intp
-  }
+  { model with sign = SymbolMap.add sym sort model.sign }
 
-let add_interp model sym def =
-  { model with intp = SymbolMap.add sym def model.intp }
+let add_val model sym bval =
+  { model with vals = SymbolMap.add sym bval model.vals }
+
+let add_interp model bval def =
+  { model with intp = ValueMap.add bval def model.intp }
 
 let fun_write funv args res =
   let old_m, old_d = match funv with
   | MapVal (m, d) -> m, d
-  | v -> ValueMap.empty, v
+  | v -> ValueListMap.empty, v
   in 
-  MapVal (ValueMap.add args res old_m, old_d)
-
+  MapVal (ValueListMap.add args res old_m, old_d)
 
 
 let get_base_value = function
   | BaseVal v -> v
   | _ -> raise Undefined
 
-let interp model sym = 
-  try SymbolMap.find sym model.intp 
+let interp_symbol model sym = 
+  try SymbolMap.find sym model.vals 
   with Not_found -> raise Undefined
 
-let interp_base model sym =
-  get_base_value (interp model sym)
+let interp_value model bval =
+  try ValueMap.find bval model.intp
+  with Not_found -> raise Undefined
 
 let rec eval model = function
-  | Var (id, _) -> interp model (FreeSym id)
+  | Var (id, _) -> BaseVal (interp_symbol model (FreeSym id))
   | App (IntConst i, [], _) -> value_of_int i
   | App (BoolConst b, [], _) -> value_of_bool b
   | App (Read, [fld; ind], _) -> 
@@ -151,24 +167,30 @@ let rec eval model = function
       let s2v = eval_set model s2 in
       value_of_bool (ValueSet.subset s1v s2v)
   | App (sym, [], _) -> 
-      interp model sym
+      BaseVal (interp_symbol model sym)
   | App (sym, ts, _) ->
       let args = List.map (eval_base model) ts in
-      fun_read model (interp model sym) args
+      fun_read model (BaseVal (interp_symbol model sym)) args
       
 and fun_read model funv args =
-  let rec fr = function
-    | MapVal (m, d) ->
-        (try BaseVal (ValueMap.find args m) with Not_found -> fr d)
+  let default = function
     | TermVal (ids, t) ->
         let model1 = 
           List.fold_left2 
             (fun model1 (id, srt) arg -> 
               let m1 = add_decl model1 (FreeSym id) ([], srt) in
-              add_interp m1 (FreeSym id) (BaseVal arg))
+              add_val m1 (FreeSym id) arg)
             model ids args
         in eval model1 t
     | v -> v
+  in
+  let rec fr = function
+    | MapVal (m, d) ->
+        (try BaseVal (ValueListMap.find args m) with Not_found -> default d)
+    | BaseVal (I i) ->
+        (try fr (interp_value model (I i))
+        with Not_found -> raise Undefined)
+    | v -> raise Undefined
   in
   fr funv
 
@@ -188,6 +210,8 @@ and eval_bool model t =
 and eval_set model t =
   match eval model t with
   | SetVal s -> s
+  | BaseVal (I i) -> 
+      set_of_value (interp_value model (I i))
   | _ -> raise Undefined
 
 

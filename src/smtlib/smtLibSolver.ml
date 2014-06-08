@@ -372,7 +372,7 @@ let is_sat session =
 	
 (** Covert SMT-LIB model to GRASS model *)
 let convert_model smtModel =
-  (* convert SMT-LIB sort back to GRASS sort *)
+  (* convert SMT-LIB sort to GRASS sort *)
   let rec convert_sort = function
     | IntSort -> Int
     | BoolSort -> Bool
