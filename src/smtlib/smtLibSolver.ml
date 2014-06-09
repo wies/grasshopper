@@ -397,6 +397,18 @@ let convert_model smtModel =
       Some (srt, index)
     else None
   in
+  (* remove suffix from overloaded identifiers *)
+  let normalize_ident =
+    let name_re = Str.regexp "\\([^\\$]*\\)\\$[0-9]*" in
+    let num_re = Str.regexp "\\(.*\\)_\\([0-9]+\\)$" in
+    fun ((name, num) as id) -> 
+      if Str.string_match name_re name 0 then
+        let nname = Str.matched_group 1 name in
+        if Str.string_match num_re nname 0 then
+          (Str.matched_group 1 nname, Str.matched_group 2 nname)
+        else (nname, 0)
+      else id
+  in
   (* start model construction *)
   let model0 = Model.empty in
   (* declare cardinalities of uninterpreted sorts *)
@@ -427,7 +439,16 @@ let convert_model smtModel =
     List.fold_right 
       (fun cmd model ->
         match cmd with
-        | DefineFun (id, args, res_srt, def, _) -> model
+        | DefineFun (id, args, res_srt, def, _) -> 
+            let cres_srt = convert_sort res_srt in
+            let arg_srts = List.map (fun (_, srt) -> convert_sort srt) args in
+            match normalize_ident id with
+            | elem when elem = str_of_symbol Elem ->
+                
+                model
+            | id ->
+                let model1 = Model.add_decl (FreeSym id) (arg_srts, cres_srt) in
+                model1
         | _ -> model)
       smtModel model1 
   in

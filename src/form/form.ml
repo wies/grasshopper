@@ -94,6 +94,11 @@ module SortMap = Map.Make(struct
     let compare = compare
   end)
 
+module SortListMap = Map.Make(struct
+    type t = sort list
+    let compare = compare
+  end)
+
 module TermSet = Set.Make(struct
     type t = term
     let compare = compare

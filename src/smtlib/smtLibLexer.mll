@@ -67,8 +67,6 @@ rule token = parse
 | '(' { LPAREN }
 | ')' { RPAREN }
 | ('-'? digitchar*) as num { INT(int_of_string num) }
-| ident as name '_' (digitchar* as num) '$' digitchar* { IDENT(name, int_of_string num) }
-| ident as name '$' digitchar* { IDENT(name, 0) }
 | ident as name '_' (digitchar* as num) { IDENT(name, int_of_string num) }
 | ident as kw
     { try

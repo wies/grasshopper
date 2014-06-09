@@ -31,7 +31,6 @@ module ValueSet =
 type value =
   | BaseVal of base_value
   | MapVal of base_value ValueListMap.t * value
-  | SetVal of ValueSet.t
   | TermVal of (ident * sort) list * term
   | Undef
 
@@ -39,39 +38,35 @@ let value_of_int i = BaseVal (I i)
 
 let value_of_bool b = BaseVal (B b)
 
-let value_of_set s = SetVal s
-
-let set_of_value = function
-  | SetVal s -> s
-  | _ -> raise Undefined
-
+(*
 let equal v1 v2 =
   match v1, v2 with
   | SetVal s1, SetVal s2 ->
       ValueSet.equal s1 s2
   | _, _ -> v1 = v2
+*)
 
-type valuation = base_value SymbolMap.t
+type interpretation = (value SortListMap.t) SymbolMap.t
 
-type interpretation = value ValueMap.t
+type set_interpretation = (ValueSet.t ValueMap.t) SortMap.t
 
 type model =
   { sign: signature; 
-    card: int SortMap.t;
-    vals: valuation;
-    intp: interpretation;
+    mutable card: int SortMap.t;
+    mutable intp: interpretation;
+    mutable sets: set_interpretation;
   }
 
 let empty : model = 
   { sign = SymbolMap.empty;
     card = SortMap.empty;
-    vals = SymbolMap.empty;
-    intp = ValueMap.empty
+    intp = SymbolMap.empty;
+    sets = SortMap.empty
   }
 
-let get_sign m = m.sign
+let get_sign model = model.sign
 
-let get_intp m = m.intp
+let get_arity model sym = SymbolMap.find sym m
 
 let add_card model srt card = 
   { model with card = SortMap.add srt card model.card }
@@ -79,44 +74,79 @@ let add_card model srt card =
 let add_decl model sym sort =
   { model with sign = SymbolMap.add sym sort model.sign }
 
-let add_val model sym bval =
-  { model with vals = SymbolMap.add sym bval model.vals }
+let add_interp model sym srts def =
+  let old_srt_map = 
+    try SymbolListMap.find sym model.intp 
+    with Not_found -> SymbolMap.empty
+  in
+  let new_srt_map = SortListMap.add srts def old_srt_map in
+  { model with intp = ValueMap.add sym new_srt_map model.intp }
 
-let add_interp model bval def =
-  { model with intp = ValueMap.add bval def model.intp }
+let add_set model srt bval set =
+  let old_bval_map = 
+    try SortMap.find srt model.sets
+    with Not_found -> ValueMap.empty
+  in
+  let new_val_map = ValueMap.add bval set old_bval_map in
+  { model with vals = SortMap.add srt new_val_map model.vals }
 
+(*
 let fun_write funv args res =
   let old_m, old_d = match funv with
   | MapVal (m, d) -> m, d
   | v -> ValueListMap.empty, v
   in 
   MapVal (ValueListMap.add args res old_m, old_d)
-
+*)
 
 let get_base_value = function
   | BaseVal v -> v
   | _ -> raise Undefined
 
-let interp_symbol model sym = 
-  try SymbolMap.find sym model.vals 
+let interp_set model srt bval =
+  try ValueMap.find bval (SortMap.find srts model.sets)
   with Not_found -> raise Undefined
 
-let interp_value model bval =
-  try ValueMap.find bval model.intp
-  with Not_found -> raise Undefined
+
+let extend_interp model sym srts args =
+  let _, res_srt = get_arity model sym in
+  let card = SortMap.find res_srt model.card in
+  let sym_intp = SymbolMap.find sym model.intp in
+  let old_value = SortListMap.find srts srts_intp in
+  let new_value = 
+    match old_value with
+    | MapVal (m, d) ->
+        MapVal (ValueMap.add args card m, d)
+    | _ -> raise Undefined
+  in
+  let new_intp =
+    match sym, args with
+    | Write, [fld, ind, upd] ->
+        
+        SortMap.add sym (SortListMap.add srts new_value) model.intp;
+    | _ ->
+        SortMap.add sym (SortListMap.add srts new_value) model.intp;
+  in
+  model.card <- SortMap.add res_srt (card + 1) model.card;
+  model.intp <- new_intp
+  card
+      
 
 let rec eval model = function
-  | Var (id, _) -> BaseVal (interp_symbol model (FreeSym id))
-  | App (IntConst i, [], _) -> value_of_int i
-  | App (BoolConst b, [], _) -> value_of_bool b
-  | App (Read, [fld; ind], _) -> 
-      fun_read model (eval model fld) [eval_base model ind]
+  | Var (id, Some srt) -> 
+      interp_symbol model (FreeSym id) [] []
+  | App (IntConst i, [], _) -> 
+      value_of_int i
+  | App (BoolConst b, [], _) -> 
+      value_of_bool b
+(*  | App (Read, [fld; ind], Some srt) -> 
+      let psrts = sort_parameters srt in
+      fun_read model Read [eval_base model fld; eval_base model ind]
   | App (Write, [fld; ind; upd], _) ->
       let indv = eval_base model ind in
       let updv = eval_base model upd in
       let fldv = eval model fld in
-      fun_write fldv [indv] updv 
-  | App (EntPnt, [fld; loc], _) -> raise Undefined (* todo *)
+      fun_write fldv [indv] updv *)
   | App (UMinus, [t], _) ->
       value_of_int (-(eval_int model t))
   | App (Plus as intop, [t1; t2], _)
@@ -169,10 +199,15 @@ let rec eval model = function
   | App (sym, [], _) -> 
       BaseVal (interp_symbol model sym)
   | App (sym, ts, _) ->
+      let args = 
       let args = List.map (eval_base model) ts in
-      fun_read model (BaseVal (interp_symbol model sym)) args
+      fun_app model (BaseVal (interp_symbol model sym)) args
+
+and interp_symbol model sym srts args = 
+  try SortListMap.find srts (SymbolMap.find sym model.intp)
+  with Not_found -> raise Undefined
       
-and fun_read model funv args =
+and fun_app model funv args =
   let default = function
     | TermVal (ids, t) ->
         let model1 = 

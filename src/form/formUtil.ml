@@ -68,6 +68,11 @@ let has_sort srt t =
   | Some srt' -> srt = srt'
   | None -> false
 
+let sort_parameters = function
+  | Fld srt
+  | Set srt -> [srt]
+  | _ -> []
+
 let is_free_const = function
   | App (FreeSym _, [], _) -> true
   | _ -> false
