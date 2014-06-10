@@ -382,6 +382,7 @@ let convert_model smtModel =
         | "Loc" -> Loc
         | "FldLoc" -> Fld Loc
         | "FldInt" -> Fld Int
+        | "FldBool" -> Fld Bool
         | "SetLoc" -> Set Loc
         | "SetInt" -> Set Int
         | "Set" -> Set (List.hd csrts)
@@ -399,7 +400,7 @@ let convert_model smtModel =
   in
   (* remove suffix from overloaded identifiers *)
   let normalize_ident =
-    let name_re = Str.regexp "\\([^\\$]*\\)\\$[0-9]*" in
+    let name_re = Str.regexp "\\([^\\$]*\\)\\$[0-9]+$" in
     let num_re = Str.regexp "\\(.*\\)_\\([0-9]+\\)$" in
     fun ((name, num) as id) -> 
       if Str.string_match name_re name 0 then
@@ -537,7 +538,7 @@ let convert_model smtModel =
         | _ -> model)
       model1 smtModel 
   in
-  model2
+  Model.finalize_values model2
 
 let get_model session = 
   let gm () =

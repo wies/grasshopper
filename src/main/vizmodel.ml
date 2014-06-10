@@ -17,7 +17,11 @@ let parse_input file =
   ParseError.input := Some input;
   let lexbuf = Lexing.from_string input in
   ParseError.buffer := Some lexbuf;
-  ParseError.parse_buf_exn SmtLibParser.output SmtLibLexer.token lexbuf
+  let input = ParseError.parse_buf_exn SmtLibParser.output SmtLibLexer.token lexbuf in
+  match input with
+  | SmtLibSyntax.Model cmds -> SmtLibSolver.convert_model cmds
+  | _ -> failwith "Input file does not contain an SMT-LIB model"
+    
 
 let vizmodel file =
   let model = parse_input file in

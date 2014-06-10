@@ -35,7 +35,7 @@ let optmap f = function
 let generate_list (f : int -> 'a) (n : int) : 'a list = 
   let rec mk_tl n acc = 
     if n <= 0 then acc 
-    else mk_tl (n - 1) (f n :: acc) 
+    else mk_tl (n - 1) (f (n - 1) :: acc) 
   in mk_tl n []
 
 
