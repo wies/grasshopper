@@ -68,22 +68,26 @@ let has_sort srt t =
   | Some srt' -> srt = srt'
   | None -> false
 
-let sort_parameters = function
-  | Fld srt
-  | Set srt -> [srt]
-  | _ -> []
-
 let is_free_const = function
   | App (FreeSym _, [], _) -> true
   | _ -> false
 
 let eq_name id1 id2 = name id1 = name id2
 
+let symbol_of_ident =
+  let symbol_map = List.map (fun sym -> (str_of_symbol sym, sym)) symbols in
+  fun ((name, _) as id) ->
+  try List.assoc name symbol_map
+  with Not_found -> FreeSym id
+ 
+
 (** {6 Smart constructors} *)
 
 let mk_true = BoolOp (And, [])
 let mk_false = BoolOp (Or, [])
 let mk_bool b = if b then mk_true else mk_false
+
+let mk_bool_term b = App (BoolConst b, [], Some Bool)
 
 let mk_int i = App (IntConst i, [], Some Int)
 

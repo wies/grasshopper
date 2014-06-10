@@ -14,7 +14,7 @@ type symbol =
   | Ident of ident
   | Minus | Plus | Mult | Div
   | Eq | Gt | Lt | Geq | Leq
-  | And | Or | Impl | Not
+  | And | Or | Impl | Not | Ite
 
 type annotation =
   | Name of ident

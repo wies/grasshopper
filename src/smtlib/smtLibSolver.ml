@@ -405,13 +405,13 @@ let convert_model smtModel =
       if Str.string_match name_re name 0 then
         let nname = Str.matched_group 1 name in
         if Str.string_match num_re nname 0 then
-          (Str.matched_group 1 nname, Str.matched_group 2 nname)
+          (Str.matched_group 1 nname, int_of_string (Str.matched_group 2 nname))
         else (nname, 0)
       else id
   in
   (* start model construction *)
   let model0 = Model.empty in
-  (* declare cardinalities of uninterpreted sorts *)
+  (* declare cardinalities of GRASS sorts *)
   let model1 =
     let idents =
       List.fold_left (fun idents -> function
@@ -423,6 +423,8 @@ let convert_model smtModel =
       IdSet.fold 
         (fun id cards ->
           match to_val id with
+          | Some (Fld _ as srt, index)
+          | Some (Set _ as srt, index)
           | Some (Loc as srt, index) -> 
               let card = try SortMap.find srt cards with Not_found -> 0 in
               SortMap.add srt (max card (index + 1)) cards
@@ -435,22 +437,105 @@ let convert_model smtModel =
       cards model0
   in
   (* define all symbols *)
+  let process_def model sym arity args def =
+    let fail pos_opt = 
+      let pos = match pos_opt with
+      | Some pos -> pos
+      | None -> Prog.dummy_position
+      in
+      let msg = 
+        ProgError.error_to_string pos
+          "Encountered unexpected definition during model conversion" 
+      in failwith msg
+    in
+    let arg_vals pos arg_map = 
+      try
+        List.map (fun (x, _) -> IdMap.find x arg_map) args 
+      with Not_found -> fail pos
+    in
+    let add_val pos model arg_map v =
+      if IdMap.is_empty arg_map 
+      then Model.add_default_val model sym arity v
+      else Model.add_def model sym arity (arg_vals pos arg_map) v
+    in
+    let add_term pos model arg_map t =
+      if IdMap.is_empty arg_map 
+      then Model.add_default_term model sym arity args t
+      else fail pos
+    in
+    let rec convert_term = function
+      | SmtLibSyntax.App (SmtLibSyntax.BoolConst b, [], _) -> 
+          mk_bool_term b
+      | SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _) -> 
+          mk_int i
+      | SmtLibSyntax.App (Ident id, ts, pos) ->
+          let cts = List.map convert_term ts in
+          let id = normalize_ident id in
+          let sym = symbol_of_ident id in
+          let ts_srts = List.map unsafe_sort_of cts in
+          let res_srt = 
+            match Model.get_result_sort model sym ts_srts with
+            | Some res_srt -> res_srt
+            | None -> 
+                try List.assoc id args
+                with Not_found -> fail pos
+          in
+          mk_app ~srt:res_srt sym cts
+      | SmtLibSyntax.Annot (t, _, _) ->
+          convert_term t
+      | SmtLibSyntax.App (_, _, pos)
+      | SmtLibSyntax.Binder (_, _, _, pos) -> fail pos
+    in
+    let rec pcond arg_map = function
+      | SmtLibSyntax.App 
+          (SmtLibSyntax.Eq, [SmtLibSyntax.App (Ident id1, [], _); 
+                             SmtLibSyntax.App (Ident id2, [], _)], pos) ->
+          (match to_val id1, to_val id2 with
+          | Some (_, index), None ->
+              IdMap.add id2 (Model.value_of_int index) arg_map
+          | None, Some (_, index) ->
+              IdMap.add id1 (Model.value_of_int index) arg_map
+          | _ -> fail pos)
+      | SmtLibSyntax.App (SmtLibSyntax.And, conds, _) ->
+          List.fold_left pcond arg_map conds
+      | SmtLibSyntax.Annot (def, _, _) -> 
+          pcond arg_map def
+      | SmtLibSyntax.App (_, _, pos) 
+      | SmtLibSyntax.Binder (_, _, _, pos) -> fail pos
+    in 
+    let rec p model arg_map = function
+      | SmtLibSyntax.App (Ident id, [], pos) ->
+          (match to_val id with
+          | Some (_, index) -> 
+              add_val pos model arg_map (Model.value_of_int index)
+          | _ -> fail pos)
+      | SmtLibSyntax.App (SmtLibSyntax.BoolConst b, [], pos) ->
+          add_val pos model arg_map (Model.value_of_bool b)
+      | SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], pos) -> 
+          add_val pos model arg_map (Model.value_of_int i)
+      | SmtLibSyntax.App (SmtLibSyntax.Ite, [cond; t; e], _) ->
+          let arg_map1 = pcond arg_map cond in
+          let model1 = p model arg_map e in
+          p model1 arg_map1 t
+      | SmtLibSyntax.App (_, _, pos) as t->
+          add_term pos model arg_map (convert_term t)
+      | SmtLibSyntax.Annot (def, _, _) -> 
+          p model arg_map def
+      | SmtLibSyntax.Binder (_, _, _, pos) -> fail pos
+    in p model IdMap.empty def
+  in
   let model2 =
-    List.fold_right 
-      (fun cmd model ->
+    List.fold_left 
+      (fun model cmd ->
         match cmd with
         | DefineFun (id, args, res_srt, def, _) -> 
             let cres_srt = convert_sort res_srt in
-            let arg_srts = List.map (fun (_, srt) -> convert_sort srt) args in
-            match normalize_ident id with
-            | elem when elem = str_of_symbol Elem ->
-                
-                model
-            | id ->
-                let model1 = Model.add_decl (FreeSym id) (arg_srts, cres_srt) in
-                model1
+            let cargs = List.map (fun (x, srt) -> x, convert_sort srt) args in
+            let carg_srts = List.map snd cargs in
+            let sym = symbol_of_ident (normalize_ident id) in
+            process_def model sym (carg_srts, cres_srt) cargs def 
         | _ -> model)
-      smtModel model1 
+      model1 smtModel 
   in
   model2
 

@@ -6,56 +6,46 @@ open FormUtil
 
 exception Undefined
 
-type base_value =
+type value =
   | I of int
   | B of bool
 
 module ValueMap = 
   Map.Make(struct
-    type t = base_value
+    type t = value
     let compare = compare
   end)
 
 module ValueListMap = 
   Map.Make(struct
-    type t = base_value list
+    type t = value list
     let compare = compare
   end)
 
 module ValueSet = 
   Set.Make(struct
-    type t = base_value
+    type t = value
     let compare = compare
   end)
 
 module SortedValueMap =
   Map.Make(struct
-    type t = base_value * sort
+    type t = value * sort
     let compare = compare
   end)
 
 type ext_value =
-  | BaseVal of base_value
-  | MapVal of base_value ValueListMap.t * ext_value
+  | BaseVal of value
+  | MapVal of value ValueListMap.t * ext_value
   | SetVal of ValueSet.t
   | TermVal of (ident * sort) list * term
   | Undef
 
-type value = base_value * ext_value
+let value_of_int i = I i
 
-let value_of_int i = BaseVal (I i)
+let value_of_bool b = B b
 
-let value_of_bool b = BaseVal (B b)
-
-(*
-let equal v1 v2 =
-  match v1, v2 with
-  | SetVal s1, SetVal s2 ->
-      ValueSet.equal s1 s2
-  | _, _ -> v1 = v2
-*)
-
-type interpretation = (base_value ValueListMap.t * ext_value) SortedSymbolMap.t
+type interpretation = (value ValueListMap.t * ext_value) SortedSymbolMap.t
 
 type ext_interpretation = ext_value SortedValueMap.t
 
@@ -79,34 +69,56 @@ let add_card model srt card =
 let add_interp model sym arity def =
   { model with intp = SortedSymbolMap.add (sym, arity) def model.intp }
 
-(*
-let add_set model srt bval set =
-  let old_bval_map = 
-    try SortMap.find srt model.sets
-    with Not_found -> ValueMap.empty
+let add_def model sym arity args v =
+  let m, d = 
+    try SortedSymbolMap.find (sym, arity) model.intp 
+    with Not_found -> ValueListMap.empty, Undef
   in
-  let new_val_map = ValueMap.add bval set old_bval_map in
-  { model with vals = SortMap.add srt new_val_map model.vals }
-*)
+  let new_m = ValueListMap.add args v m in
+  { model with intp = SortedSymbolMap.add (sym, arity) (new_m, d) model.intp }
 
-(*
-let fun_write funv args res =
-  let old_m, old_d = match funv with
+let add_default_val model sym arity v =
+  let m, _ = 
+    try SortedSymbolMap.find (sym, arity) model.intp 
+    with Not_found -> ValueListMap.empty, Undef
+  in
+  { model with intp = SortedSymbolMap.add (sym, arity) (m, BaseVal v) model.intp }
+
+let add_default_term model sym arity args t =
+  let m, _ = 
+    try SortedSymbolMap.find (sym, arity) model.intp 
+    with Not_found -> ValueListMap.empty, Undef
+  in
+  let new_map = m, TermVal (args, t) in
+  { model with intp = SortedSymbolMap.add (sym, arity) new_map model.intp }
+
+let get_result_sort model sym arg_srts =
+  SortedSymbolMap.fold 
+    (fun (sym1, (arg_srts1, res_srt1)) _ srt_opt ->
+      if sym1 = sym && arg_srts = arg_srts1 then Some res_srt1 else srt_opt)
+    model.intp None
+      
+    
+
+let find_map_value model v srt = 
+  match SortedValueMap.find (v, Fld srt) model.vals with
   | MapVal (m, d) -> m, d
-  | v -> ValueListMap.empty, v
-  in 
-  MapVal (ValueListMap.add args res old_m, old_d)
-*)
-
-let get_base_value = function
-  | BaseVal v -> v
+  | Undef -> ValueListMap.empty, Undef
   | _ -> raise Undefined
 
-(*
-let interp_set model srt bval =
-  try ValueMap.find bval (SortMap.find srts model.sets)
-  with Not_found -> raise Undefined
-*)
+let find_set_value model v srt =
+  match SortedValueMap.find (v, Set srt) model.vals with
+  | SetVal s -> s
+  | _ -> raise Undefined
+
+let equal model v1 v2 srt =
+  v1 = v2 ||
+  let v1_val = SortedValueMap.find (v1, srt) model.vals in
+  let v2_val = SortedValueMap.find (v2, srt) model.vals in
+  match v1_val, v2_val with
+  | SetVal s1, SetVal s2 ->
+      ValueSet.equal s1 s2
+  | _, _ -> false
 
 let extend_interp model sym (arity: arity) args res =
   let _, res_srt = arity in
@@ -132,7 +144,7 @@ let extend_interp model sym (arity: arity) args res =
             
 let rec eval model = function
   | Var (id, Some srt) -> 
-      interp_symbol model (FreeSym id) [] []
+      interp_symbol model (FreeSym id) ([], srt) []
   | App (IntConst i, [], _) -> 
       I i
   | App (BoolConst b, [], _) -> 
@@ -140,7 +152,8 @@ let rec eval model = function
   | App (Read, [fld; ind], Some srt) -> 
       let fld_val = eval model fld in
       let ind_val = eval model ind in
-      interp_symbol model Read [srt] [fld_val; ind_val]
+      let arity = [Fld srt; Loc], srt in
+      interp_symbol model Read arity [fld_val; ind_val]
   | App (Write, [fld; ind; upd], Some (Fld isrt as srt)) ->
       let ind_val = eval model ind in
       let upd_val = eval model upd in
@@ -148,11 +161,9 @@ let rec eval model = function
       let arity = [srt; Loc; isrt], srt in
       (try interp_symbol model Write arity [fld_val; ind_val; upd_val]
       with Undefined ->
-        let m, d = 
-          map_of_value (SortedValueMap.find (fld_val, Fld srt) model.vals)
-        in
-        let res = MapVal (ValueListMap.add [inv_val] upd_val m, d) in
-        extend_intp model Write arity [fld_val; ind_val; upd_val] res)
+        let m, d = find_map_value model fld_val srt in
+        let res = MapVal (ValueListMap.add [ind_val] upd_val m, d) in
+        extend_interp model Write arity [fld_val; ind_val; upd_val] res)
   | App (UMinus, [t], _) ->
       I (-(eval_int model t))
   | App (Plus as intop, [t1; t2], _)
@@ -170,25 +181,39 @@ let rec eval model = function
       let arity = ([], Set srt) in
       (try interp_symbol model Empty arity []
       with Undefined ->
-        extend_intp model Empty arity [] (SetVal ValueSet.empty))
-  | App (SetEnum, ts, _) ->
-      let s = 
-        List.fold_left 
-          (fun res t -> ValueSet.add (eval_base model t) res) 
-          ValueSet.empty ts
-      in value_of_set s
-  | App (Union, ts, _) ->
-      let s = 
-        List.fold_left
-          (fun res t -> ValueSet.union res (eval_set model t)) 
-          ValueSet.empty ts
-      in value_of_set s
-  | App (Diff, [t1; t2], _) ->
-      let s = 
-        ValueSet.diff (eval_set model t1) (eval_set model t2)
-      in value_of_set s
+        extend_interp model Empty arity [] (SetVal ValueSet.empty))
+  | App (SetEnum, ts, Some (Set esrt as srt)) ->
+      let t_vals = List.map (eval model) ts in
+      let arity = [esrt], srt in
+      (try interp_symbol model SetEnum arity t_vals
+      with Undefined ->
+        let res = 
+          List.fold_left (fun s v -> ValueSet.add v s) ValueSet.empty t_vals 
+        in
+        extend_interp model SetEnum arity t_vals (SetVal res))
+  | App (Union, ts, Some (Set esrt as srt)) ->
+      let t_vals = List.map (eval model) ts in
+      let arity = [srt], srt in
+      (try interp_symbol model Union arity t_vals
+      with Undefined ->
+        let res = 
+          List.fold_left
+            (fun res v -> ValueSet.union res (find_set_value model v esrt)) 
+            ValueSet.empty t_vals
+        in extend_interp model Union arity t_vals (SetVal res))
+  | App (Diff, [t1; t2], Some (Set esrt as srt)) ->
+      let t1_val = eval model t1 in
+      let t2_val = eval model t2 in
+      let arity = [srt; srt], srt in
+      (try interp_symbol model Diff arity [t1_val; t2_val]
+      with Undefined ->
+        let res = 
+          ValueSet.diff 
+            (find_set_value model t1_val esrt)
+            (find_set_value model t2_val esrt)
+        in extend_interp model Diff arity [t1_val; t2_val] (SetVal res))
   | App (Eq, [t1; t2], Some srt) ->
-      B (equal (eval model t1 srt) (eval model t2 srt))
+      B (equal model (eval model t1) (eval model t2) srt)
   | App (LtEq as rel, [t1; t2], _)
   | App (GtEq as rel, [t1; t2], _)
   | App (Lt as rel, [t1; t2], _)
@@ -199,17 +224,22 @@ let rec eval model = function
       in 
       B (r (eval_int model t1) (eval_int model t2))
   | App (Elem, [e; s], _) ->
-      let ev = eval_base model e in
-      let sv = eval_set model s in
-      value_of_bool (ValueSet.mem ev sv)
+      let e_val = eval model e in
+      let srt = element_sort_of_set s in
+      let s_val = find_set_value model (eval model s) srt in
+      B (ValueSet.mem e_val s_val)
   | App (SubsetEq, [s1; s2], _) ->
-      let s1v = eval_set model s1 in
-      let s2v = eval_set model s2 in
-      value_of_bool (ValueSet.subset s1v s2v)
- (*| App (sym, args, Some srt) ->
-      let arg_vals = List.map (eval model) args in
-      fun_app model (BaseVal (interp_symbol model sym)) args*)
-  | _ -> raise Undefined
+      let srt = element_sort_of_set s1 in
+      let s1_val = find_set_value model (eval model s1) srt in
+      let s2_val = find_set_value model (eval model s2) srt in
+      B (ValueSet.subset s1_val s2_val)
+   | App (sym, args, Some srt) ->
+      let arg_srts, arg_vals = 
+        List.split (List.map (fun arg -> unsafe_sort_of arg, eval model arg) args)
+      in
+      let arity = arg_srts, srt in
+      interp_symbol model sym arity arg_vals 
+   | _ -> raise Undefined
 
 and interp_symbol model sym arity args = 
   try 
@@ -218,56 +248,35 @@ and interp_symbol model sym arity args =
   with Not_found -> raise Undefined
 
 and fun_app model funv args =
-        let default = function
+  let default = function
     | TermVal (ids, t) ->
         let model1 = 
           List.fold_left2 
             (fun model1 (id, srt) arg -> 
-              let m1 = add_decl model1 (FreeSym id) ([], srt) in
-              add_val m1 (FreeSym id) arg)
+              add_def model1 (FreeSym id) ([], srt) [] arg)
             model ids args
         in eval model1 t
-    | v -> v
+    | BaseVal v -> v
+    | _ -> raise Undefined
   in
   let rec fr = function
     | MapVal (m, d) ->
-        (try BaseVal (ValueListMap.find args m) with Not_found -> default d)
-    | BaseVal (I i) ->
-        (try fr (interp_value model (I i))
-        with Not_found -> raise Undefined)
-    | v -> raise Undefined
+        (try ValueListMap.find args m with Not_found -> default d)
+    | _ -> raise Undefined
   in
   fr funv
 
-(*
-and eval_base model t =
-  get_base_value (eval model t)
-
 and eval_int model t =
-  match eval_base model t with
+  match eval model t with
   | I i -> i
   | _ -> raise Undefined
 
 and eval_bool model t =
-  match eval_base model t with
+  match eval model t with
   | B b -> b
   | _ -> raise Undefined
 
-and eval_set model t =
-  match eval model t with
-  | SetVal s -> s
-  | BaseVal (I i) -> 
-      set_of_value (interp_value model (I i))
-  | _ -> raise Undefined
-*)
-
-let symbols_of_sort model srt =
-  SymbolMap.fold 
-    (fun id osrt acc ->
-      if srt = osrt then SymbolSet.add id acc
-      else acc)
-    model.sign SymbolSet.empty
-       
+    
 let output_graphviz chan model = ()
  
 (*

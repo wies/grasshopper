@@ -20,12 +20,13 @@ let _ =
       (* sorts *)
       Form.bool_sort_string, SORT(BoolSort);
       Form.int_sort_string, SORT(IntSort);
-      (* formula constructors *)
+      (* term constructors *)
       "forall", BINDER(Forall);
       "exists", BINDER(Exists);
       "and", SYMBOL(And);
       "or", SYMBOL(Or);
       "not", SYMBOL(Not);
+      "ite", SYMBOL(Ite);
       (* values *)
       "true", SYMBOL(BoolConst true);
       "false", SYMBOL(BoolConst false);
