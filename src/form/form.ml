@@ -94,8 +94,8 @@ module SortMap = Map.Make(struct
     let compare = compare
   end)
 
-module SortListMap = Map.Make(struct
-    type t = sort list
+module SortedSymbolMap = Map.Make(struct
+    type t = symbol * arity
     let compare = compare
   end)
 
