@@ -334,8 +334,10 @@ let finalize_values model =
     List.iter (fun f ->
       let fmap =
         List.fold_left (fun fmap e ->
-          let f_of_e = interp_symbol model Read ([Fld srt; Loc], srt) [f; e] in
-          ValueListMap.add [e] f_of_e fmap)
+          try
+            let f_of_e = interp_symbol model Read ([Fld srt; Loc], srt) [f; e] in
+            ValueListMap.add [e] f_of_e fmap
+          with Undefined -> fmap)
           ValueListMap.empty loc_values
       in
       model.vals <- SortedValueMap.add (f, Fld srt) (MapVal (fmap, Undef)) model.vals)
@@ -345,9 +347,6 @@ let finalize_values model =
   List.iter generate_fields [Loc; Int; Bool];
   model
 
-let output_graphviz chan model = ()
- 
-
 let output_graphviz chan model =
   (*let const_map = const_map model in 
      let find_rep s = match s with
@@ -356,10 +355,11 @@ let output_graphviz chan model =
      in*)
   let colors1 = ["blue"; "red"; "green"; "orange"; "darkviolet"] in
   let colors2 = ["blueviolet"; "crimson"; "olivedrab"; "orangered"; "purple"] in
-  let flds = get_values_of_sort model (Fld Loc) in
+  let flds = SymbolSet.elements (get_symbols_of_sort model ([], Fld Loc)) in
+  let fld_map = List.map (fun sym -> sym, interp_symbol model sym ([], Fld Loc) []) flds in
   let locs = get_values_of_sort model Loc in
   let fld_colors =
-    Util.fold_left2 (fun acc fld color -> (fld, color)::acc) [] flds colors1
+    Util.fold_left2 (fun acc fld color -> ((fld, color)::acc)) [] flds colors1
   in
   let ep_colors =
     Util.fold_left2 (fun acc fld color -> (fld, color)::acc) [] flds colors2
@@ -368,18 +368,19 @@ let output_graphviz chan model =
     let color =
       try List.assoc fld fld_colors with Not_found -> "black"
     in
-    Printf.sprintf "label=\"%s\", fontcolor=%s, color=%s" (string_of_value fld) color color
+    Printf.sprintf "label=\"%s\", fontcolor=%s, color=%s" (str_of_symbol fld) color color
   in
   let string_of_loc_value l = "Loc!" ^ string_of_value l in 
   let output_flds () = 
     List.iter 
-      (fun f ->
+      (fun fld ->
         List.iter (fun l ->
           try
             if interp_symbol model Null ([], Loc) [] = l then () else
+            let f = List.assoc fld fld_map in
             let m, d = find_map_value model f Loc in
             let r = fun_app model (MapVal (m, d)) [l] in
-	    let label = get_label f in
+	    let label = get_label fld in
 	    Printf.fprintf chan "\"%s\" -> \"%s\" [%s]\n" 
 	      (string_of_loc_value l) (string_of_loc_value r) label
           with Undefined -> ())

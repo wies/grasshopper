@@ -42,8 +42,8 @@ let z3_v4 = { number = 4;
               (if not !Config.instantiate then [(":auto-config", false)] else []) @
               [(*":smt.mbqi", true;
                ":smt.ematching", true;
-               ":model.v2", true;
-	       ":model.partial", true*)];
+               ":model.v2", true;*)
+	       ":model.partial", true];
 	      args = "-smt2 -in"
 	    }
 
@@ -505,6 +505,8 @@ let convert_model smtModel =
       | SmtLibSyntax.Binder (_, _, _, pos) -> fail pos
     in 
     let rec p model arg_map = function
+      | SmtLibSyntax.App (Ident (name, _), [], pos) when name = "#unspecified" ->
+          model
       | SmtLibSyntax.App (Ident id, [], pos) ->
           (match to_val id with
           | Some (_, index) -> 
