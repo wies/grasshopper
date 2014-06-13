@@ -145,9 +145,6 @@ let generate_terms generators ground_terms =
                     (fun (t_matched, _) -> 
                       filter_term filter t_matched)
                     (fun (t_matched, sm) -> 
-                      (*print_string "Matched term: "; 
-                      print_term stdout t_matched; 
-                      print_newline ();*)
                       sm) matches @ new_subst_maps
                 ) [] subst_maps 
             in
@@ -157,9 +154,6 @@ let generate_terms generators ground_terms =
         let new_terms1 =
           List.fold_left (fun acc sm ->
             let t = subst_term sm gen_term in
-            (*print_string "Generated term: "; 
-            print_term stdout t; 
-            print_newline ();*)
             add_terms acc t)
             new_terms subst_maps
         in

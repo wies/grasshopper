@@ -299,7 +299,13 @@ and eval_bool model t =
   | B b -> b
   | _ -> raise Undefined
 
-    
+let is_defined model sym arity args =
+  try 
+    ignore (interp_symbol model sym arity args);
+    true
+  with Undefined -> false
+
+
 let get_values_of_sort model srt =
   let card =
     try SortMap.find srt model.card 
@@ -347,6 +353,17 @@ let finalize_values model =
   List.iter generate_fields [Loc; Int; Bool];
   model
 
+let succ model fld x =
+  let arity = [Fld Loc; Loc; Loc; Loc], Bool in
+  let locs = get_values_of_sort model Loc in
+  List.fold_left (fun s y ->
+    if y != x && 
+      bool_of_value (interp_symbol model Btwn arity [fld; x; y; y]) &&
+      (s == x || bool_of_value (interp_symbol model Btwn arity [fld; x; y; s]))
+    then y else s)
+    x locs
+      
+
 let output_graphviz chan model =
   (*let const_map = const_map model in 
      let find_rep s = match s with
@@ -387,51 +404,20 @@ let output_graphviz chan model =
           locs)
       flds
   in
-  (*
   let output_reach () = 
-    let defs  = 
-      Util.filter_map 
-	(fun def -> def.output = BoolConst true) 
-	(fun def -> (List.hd def.input, List.tl def.input))
-	(defs_of Btwn model)
-    in
-    let grouped_defs = 
-      List.fold_left
-	(fun groups (fld, def) -> 
-	  let fld_defs = try SymbolMap.find fld groups with Not_found -> [] in
-	  SymbolMap.add fld (def :: fld_defs) groups
-	)
-	SymbolMap.empty defs
-    in
-    let process_fld fld defs =
-      let label = get_label fld in
-      let reach = 
-	List.fold_left (fun acc -> function 
-	  | [i11; i21; _] when i11 <> i21 ->
-	      if (List.for_all (function
-		| [i12; i22; i32] -> 
-		    i11 <> i12 || i22 = i11 || 
-		    List.exists (function
-		      | [i13; i23; i33] ->
-			  i11 = i13 && i23 = i21 && i33 = i32 
-		      | _ -> false) defs
-		  | _ -> true) defs)
-	      then SymbolMap.add i11 i21 acc
-	      else acc
-	  | _ -> acc) SymbolMap.empty defs
-      in
-      SymbolMap.iter 
-	(fun i o -> 
-	  match eval_term model (mk_read (mk_const fld) (mk_const i)) with
-	  | Some o' when o = o' -> ()
-	  | _ ->
-	      Printf.fprintf chan "\"%s\" -> \"%s\" [%s, style=dashed]\n" 
-		(str_of_symbol i) (str_of_symbol o) label
-	) 
-	reach
-    in
-    SymbolMap.iter process_fld grouped_defs
+    List.iter 
+      (fun fld ->
+        List.iter (fun l ->
+          let f = List.assoc fld fld_map in
+          let r = succ model f l in
+          if is_defined model Read ([Fld Loc; Loc], Loc) [f; l] || r == l then () else
+	  let label = get_label fld in
+	  Printf.fprintf chan "\"%s\" -> \"%s\" [%s, style=dashed]\n" 
+	    (string_of_loc_value l) (string_of_loc_value r) label)
+          locs)
+      flds
   in
+  (*
   let output_eps () =
     List.iter
       (fun def ->
@@ -578,8 +564,8 @@ let output_graphviz chan model =
     output_locs ();
     output_flds ();
     output_loc_vars ();
-    (*output_reach ();
-    output_eps ();
+    output_reach ();
+    (*output_eps ();
     output_sets ();
     output_int_vars ();
     output_freesyms ();*)

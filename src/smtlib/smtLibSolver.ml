@@ -469,6 +469,10 @@ let convert_model smtModel =
           mk_bool_term b
       | SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _) -> 
           mk_int i
+      | SmtLibSyntax.App 
+          (SmtLibSyntax.Minus,
+           [SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _)], _) ->
+             mk_int (-i)
       | SmtLibSyntax.App (Ident id, ts, pos) ->
           let cts = List.map convert_term ts in
           let id = normalize_ident id in
@@ -497,6 +501,16 @@ let convert_model smtModel =
           | None, Some (_, index) ->
               IdMap.add id1 (Model.value_of_int index) arg_map
           | _ -> fail pos)
+      | SmtLibSyntax.App
+          (SmtLibSyntax.Eq, [SmtLibSyntax.App (Ident id, [], _); 
+                             SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _)], pos) ->
+          IdMap.add id (Model.value_of_int i) arg_map
+      | SmtLibSyntax.App
+          (SmtLibSyntax.Eq, [SmtLibSyntax.App (Ident id, [], _); 
+                             SmtLibSyntax.App 
+                               (SmtLibSyntax.Minus, 
+                                [SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _)], _)], pos) ->
+          IdMap.add id (Model.value_of_int (-i)) arg_map
       | SmtLibSyntax.App (SmtLibSyntax.And, conds, _) ->
           List.fold_left pcond arg_map conds
       | SmtLibSyntax.Annot (def, _, _) -> 
@@ -516,6 +530,10 @@ let convert_model smtModel =
           add_val pos model arg_map (Model.value_of_bool b)
       | SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], pos) -> 
           add_val pos model arg_map (Model.value_of_int i)
+      | SmtLibSyntax.App 
+          (SmtLibSyntax.Minus,
+           [SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _)], pos) ->
+             add_val pos model arg_map (Model.value_of_int (-i))
       | SmtLibSyntax.App (SmtLibSyntax.Ite, [cond; t; e], _) ->
           let arg_map1 = pcond arg_map cond in
           let model1 = p model arg_map e in
