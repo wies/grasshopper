@@ -24,12 +24,12 @@ let stratify_types axioms =
   let edges =
     TermSet.fold
       (fun t acc -> match t with
-        | App (sym, ts, Some tpe) ->
+        | App (sym, ts, tpe) ->
           assert (ts <> []);
           List.fold_left
             (fun acc t2 -> 
               if not (IdSet.is_empty (fvt IdSet.empty t2))
-              then (Util.unopt (sort_of t2), tpe) :: acc
+              then (sort_of t2, tpe) :: acc
               else acc)
             acc
             ts

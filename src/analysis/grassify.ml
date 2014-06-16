@@ -152,8 +152,8 @@ let elim_sl prog =
             let old_var = oldify var in
             let srt = (find_global prog var).var_sort in
             mk_framecond (mk_frame init_footprint_set init_alloc_set 
-                             (mk_free_const ~srt:srt old_var)
-                             (mk_free_const ~srt:srt var)) ::
+                             (mk_free_const srt old_var)
+                             (mk_free_const srt var)) ::
             frames
           )
           all_fields
@@ -173,7 +173,7 @@ let elim_sl prog =
           let args = args_at_pos idx in
             TermSet.fold
               (fun t acc -> match t with
-                | App (FreeSym id, [], Some (Fld _)) -> t :: acc
+                | App (FreeSym id, [], Fld _) -> t :: acc
                 | _ -> acc) 
               args
               []
@@ -182,14 +182,14 @@ let elim_sl prog =
            -add domain (universally quantified set)
            -pick the fields from the set of field seen in the rest of the program
            -for the other arguments use universally quantified variables *)
-        let dom = mk_var ~srt:(Set Loc) (mk_ident "dom") in
+        let dom = mk_var (Set Loc) (mk_ident "dom") in
         let rec mk_ags idx lst = match lst with
           | (id, tpe) :: xs ->
             begin
               let sub = mk_ags (idx + 1) xs in
               let top = match tpe with
                 | Fld _ -> fld_at_pos idx
-                | tpe -> [mk_var ~srt:tpe (fresh_ident "?a")]
+                | tpe -> [mk_var tpe (fresh_ident "?a")]
               in
                 Util.flat_map (fun lst -> List.map (fun t -> t :: lst) top) sub
             end
@@ -200,7 +200,7 @@ let elim_sl prog =
         let mk_sf args =
           let oldified_args = List.map (fun t -> match t with App (FreeSym id, [], s) when IdSet.mem id mod_fields -> App (FreeSym (oldify id), [], s) | _ -> t) args in
           let dom = List.hd args in
-          let in_frame = mk_eq (mk_inter [dom; init_footprint_set]) (mk_empty (Some (Set Loc))) in
+          let in_frame = mk_eq (mk_inter [dom; init_footprint_set]) (mk_empty (Set Loc)) in
           let preds_old, dom_old = pred_to_form (def.Symbols.sym_name) (List.tl oldified_args) dom in
           let preds_new, dom_new = pred_to_form (def.Symbols.sym_name) (List.tl args) dom in
           let qf = mk_implies (smk_and (in_frame :: preds_old :: dom_old)) (smk_and (preds_new :: dom_new)) in
@@ -217,7 +217,7 @@ let elim_sl prog =
           List.filter 
             (fun def ->
               let dom_out = snd (List.hd def.Symbols.outputs) in
-                not (TermSet.mem (mk_empty (Some (Set Loc))) (ground_terms dom_out)))
+              not (TermSet.mem (mk_empty (Set Loc)) (ground_terms dom_out)))
             defs
         in
           if !Config.optSelfFrame then
@@ -349,7 +349,7 @@ let elim_new_dispose prog =
   let elim = function
     | (New nc, pp) ->
         let havoc = mk_havoc_cmd [nc.new_lhs] pp.pp_pos in
-        let arg = mk_free_const ~srt:nc.new_sort nc.new_lhs in
+        let arg = mk_free_const nc.new_sort nc.new_lhs in
         let aux =
           match nc.new_sort with
           | Loc ->          

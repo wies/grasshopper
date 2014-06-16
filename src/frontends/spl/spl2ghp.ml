@@ -570,7 +570,7 @@ let convert cus =
           in
           let elem_ty =  convert_type ty in
           (match es with
-          | [] -> FOL_term (FormUtil.mk_empty (Some (Set elem_ty)), SetType ty)
+          | [] -> FOL_term (FormUtil.mk_empty (Set elem_ty), SetType ty)
           | _ -> FOL_term (FormUtil.mk_setenum ts, SetType ty))
       | IntVal (i, _) -> FOL_term (FormUtil.mk_int i, IntType)
       | BoolVal (b, _) -> FOL_form (FormUtil.mk_bool b)
@@ -580,7 +580,7 @@ let convert cus =
           | StructType id ->
               let res_ty = field_type pos id fld_id in
               let res_srt = convert_type res_ty in
-              let fld = FormUtil.mk_free_const ~srt:(Fld res_srt) fld_id in
+              let fld = FormUtil.mk_free_const (Fld res_srt) fld_id in
               FOL_term (FormUtil.mk_read fld t, res_ty)
           | LocType -> ProgError.error pos "Cannot dereference null"
           | ty -> failwith "unexpected type")
@@ -611,8 +611,8 @@ let convert cus =
                decls ([], locals)
           in
           let subst = 
-            List.fold_right (fun (id, ty) subst -> 
-              IdMap.add id (FormUtil.mk_var ~srt:ty id) subst)
+            List.fold_right (fun (id, srt) subst -> 
+              IdMap.add id (FormUtil.mk_var srt id) subst)
               vars IdMap.empty
           in            
           (try
@@ -634,11 +634,11 @@ let convert cus =
       | GuardedQuant (q, id, e, f, pos) ->
           let e1, ty = extract_term locals (SetType UniversalType) e in
           (match ty with
-          | SetType elem_ty ->
-              let decl = var_decl id elem_ty false false pos in
+          | SetType elem_srt ->
+              let decl = var_decl id elem_srt false false pos in
               let locals1 = IdMap.add id decl locals in
-              let elem_ty = convert_type elem_ty in
-              let v_id = FormUtil.mk_var ~srt:elem_ty id in
+              let elem_srt = convert_type elem_srt in
+              let v_id = FormUtil.mk_var elem_srt id in
 	      let mk_guard = match q with
 	      | Forall -> FormUtil.mk_implies
               | Exists -> fun f g -> FormUtil.mk_and [f; g] 
@@ -649,7 +649,7 @@ let convert cus =
               in
               let f1 = mk_guard (FormUtil.mk_elem v_id e1) (extract_fol_form locals1 f) in
               let f2 = FormUtil.subst_consts (IdMap.add id v_id IdMap.empty) f1 in
-              FOL_form (mk_quant [(id, elem_ty)] f2)
+              FOL_form (mk_quant [(id, elem_srt)] f2)
           | _ -> failwith "unexpected type")
       | PredApp (id, es, pos) ->
           let decl = IdMap.find id cu.pred_decls in
@@ -798,7 +798,7 @@ let convert cus =
       | Ident (id, pos) ->
           let decl = find_var_decl locals id in
           let srt = convert_type decl.v_type in
-          FOL_term (FormUtil.mk_free_const ~srt:srt decl.v_name, decl.v_type)
+          FOL_term (FormUtil.mk_free_const srt decl.v_name, decl.v_type)
       | _ -> failwith "convert_expr: unexpected expression"
     and extract_sl_form locals e =
       match convert_expr locals e with
@@ -816,8 +816,8 @@ let convert cus =
     and extract_term locals ty e =
       match convert_expr locals e with
       | SL_form _ -> type_error (pos_of_expr e) (ty_str ty) "SL expression"
-      | FOL_form (BoolOp (And, [])) -> Form.App (BoolConst true, [], Some Bool), BoolType
-      | FOL_form (BoolOp (Or, [])) -> Form.App (BoolConst false, [], Some Bool), BoolType
+      | FOL_form (BoolOp (And, [])) -> Form.App (BoolConst true, [], Bool), BoolType
+      | FOL_form (BoolOp (Or, [])) -> Form.App (BoolConst false, [], Bool), BoolType
       | FOL_form (Atom t) -> t, BoolType
       | FOL_form _ -> type_error (pos_of_expr e) (ty_str ty) "formula"
       | FOL_term (t, tty) ->
@@ -928,7 +928,7 @@ let convert cus =
           (match ind_opt with
           | Some t -> 
               let fld_srt = Fld (convert_type (List.hd rhs_tys)) in
-              let fld = FormUtil.mk_free_const ~srt:fld_srt (List.hd lhs_ids) in
+              let fld = FormUtil.mk_free_const fld_srt (List.hd lhs_ids) in
               mk_assign_cmd lhs_ids [FormUtil.mk_write fld t (List.hd rhs_ts)] pos
           | None -> mk_assign_cmd lhs_ids rhs_ts pos)
       | Dispose (e, pos) ->

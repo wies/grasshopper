@@ -11,9 +11,9 @@ let to_form pred_to_form domain f =
   let rec process_sep pol d f = 
     match f with
     | Pure p -> 
-        ([p, FormUtil.mk_empty (Some (Form.Set Form.Loc))], FormUtil.mk_true)
+        ([p, FormUtil.mk_empty (Form.Set Form.Loc)], FormUtil.mk_true)
     | Atom (Emp, _) ->
-        [FormUtil.mk_true, FormUtil.mk_empty (Some (Form.Set Form.Loc))], FormUtil.mk_true
+        [FormUtil.mk_true, FormUtil.mk_empty (Form.Set Form.Loc)], FormUtil.mk_true
     | Atom (Region, [t]) ->
         let domain = fresh_dom d in
         [FormUtil.mk_true, domain], 

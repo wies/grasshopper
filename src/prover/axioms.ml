@@ -17,20 +17,20 @@ let is1 = fresh_ident "?N", Set Int
 let i1 = fresh_ident "?m", Int
 let i2 = fresh_ident "?n", Int
 
-let loc1 = mk_var ~srt:(snd l1) (fst l1)
-let loc2 = mk_var ~srt:(snd l2) (fst l2)
-let loc3 = mk_var ~srt:(snd l3) (fst l3)
-let loc4 = mk_var ~srt:(snd l4) (fst l4)
-let loc5 = mk_var ~srt:(snd l5) (fst l5)
-let fld1 = mk_var ~srt:(snd f1) (fst f1)
-let fld2 = mk_var ~srt:(snd f2) (fst f2)
-let fld3 = mk_var ~srt:(snd f3) (fst f3)
-let set1 = mk_var ~srt:(snd s1) (fst s1)
-let set2 = mk_var ~srt:(snd s2) (fst s2)
-let set3 = mk_var ~srt:(snd s3) (fst s3)
-let intset1 = mk_var ~srt:(snd is1) (fst is1)
-let int1 = mk_var ~srt:(snd i1) (fst i1)
-let int2 = mk_var ~srt:(snd i2) (fst i2)
+let loc1 = mk_var (snd l1) (fst l1)
+let loc2 = mk_var (snd l2) (fst l2)
+let loc3 = mk_var (snd l3) (fst l3)
+let loc4 = mk_var (snd l4) (fst l4)
+let loc5 = mk_var (snd l5) (fst l5)
+let fld1 = mk_var (snd f1) (fst f1)
+let fld2 = mk_var (snd f2) (fst f2)
+let fld3 = mk_var (snd f3) (fst f3)
+let set1 = mk_var (snd s1) (fst s1)
+let set2 = mk_var (snd s2) (fst s2)
+let set3 = mk_var (snd s3) (fst s3)
+let intset1 = mk_var (snd is1) (fst is1)
+let int1 = mk_var (snd i1) (fst i1)
+let int2 = mk_var (snd i2) (fst i2)
 
 let mk_axiom ?(gen=[]) name f =
   let bvars = sorted_free_vars f in
@@ -68,13 +68,13 @@ let read_write_axioms fld1 loc1 loc2 =
 let read_write_axioms_closed fld1 =
   let res_srt = 
     match sort_of fld1 with
-    | Some (Fld srt) -> srt
+    | Fld srt -> srt
     | _ -> failwith "expected field in read_write_axioms"
   in
   let srt_string = string_of_sort res_srt in
   let d = fresh_ident "?d" in
   let d1 = d, res_srt in
-  let dvar = mk_var ~srt:res_srt d in
+  let dvar = mk_var res_srt d in
   let new_fld1 = mk_write fld1 loc1 dvar in
   let f x = mk_read fld1 x in
   let g x = mk_read new_fld1 x in
@@ -207,13 +207,13 @@ let ep_axioms () =
 
 let set_axioms elem_srts =
   let mk_set_axioms t =
-    let elt1 = mk_var ~srt:t (mk_ident "x") in
-    let elt2 = mk_var ~srt:t (mk_ident "y") in
-    let set1 = mk_var ~srt:(Set t) (mk_ident "X") in
-    let set2 = mk_var ~srt:(Set t) (mk_ident "Y") in
+    let elt1 = mk_var t (mk_ident "x") in
+    let elt2 = mk_var t (mk_ident "y") in
+    let set1 = mk_var (Set t) (mk_ident "X") in
+    let set2 = mk_var (Set t) (mk_ident "Y") in
     let empty = 
       (* don't use the smart constructor smk_elem for set membership here *)
-      mk_not (mk_elem elt1 (mk_empty (Some (Set t))))
+      mk_not (mk_elem elt1 (mk_empty (Set t)))
     in
     let union = 
       mk_iff (mk_elem elt1 (mk_union [set1; set2])) 

@@ -317,7 +317,7 @@ let verify_generalization pred_sl pred_dom pred_str =
   (* base case *)
   begin
     let sl_base = ToGrass.to_grass_negated pred_to_form dom_set base in
-    let emp = mk_eq dom_set (mk_empty (Some (Set Loc))) in (* TODO DZ: most certainly not correct *)
+    let emp = mk_eq dom_set (mk_empty (Set Loc)) in (* TODO DZ: most certainly not correct *)
     let base_query = smk_and [emp; sl_base; fol_pos] in
     let base_res =
       Prover.check_sat
@@ -495,7 +495,7 @@ let compile_preds preds =
       let candidates =
         List.filter
           (fun t -> match t with
-            | App (Read, [fld; x], _) -> sort_of fld = Some (Fld Loc)
+            | App (Read, [fld; x], _) -> sort_of fld = Fld Loc
             | _ -> false)
           ind_step_args
       in
@@ -560,7 +560,7 @@ let compile_preds preds =
             | (x::xs, y::ys) ->
               let srt1 = (IdMap.find x pred.pred_locals).var_sort in
               let srt2 = (IdMap.find y p.pred_locals).var_sort in
-              let acc = IdMap.add y (mk_free_const ~srt:srt1 x) acc in
+              let acc = IdMap.add y (mk_free_const srt1 x) acc in
                 if srt1 <> srt2 then raise (Compile_pred_failure "aux arg mismatch");
                 process acc xs ys
             | _ -> acc
@@ -593,7 +593,7 @@ let compile_preds preds =
       in
       if srt <> Loc then 
         raise (Compile_pred_failure "expected induction in type Loc");
-      let var = mk_var ~srt:srt ind_id in
+      let var = mk_var srt ind_id in
         if unary = [] then []
         else
           let f = mk_implies (mk_elem var dom_set) (smk_and unary) in
@@ -625,8 +625,8 @@ let compile_preds preds =
           let var1 = Axioms.loc1 in
           let var2 = Axioms.loc2 in
           let term_for_lagging = match prev with
-            | App (FreeSym _, [], Some Loc) -> var1
-            | App (Read, [fld; App (FreeSym _, [], Some Loc)], srt) -> App (Read, [fld; var1], srt)
+            | App (FreeSym _, [], Loc) -> var1
+            | App (Read, [fld; App (FreeSym _, [], Loc)], srt) -> App (Read, [fld; var1], srt)
             | _ -> raise (Compile_pred_failure "expected const or read of type Loc")
           in
             if with_id <> [] then

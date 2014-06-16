@@ -33,7 +33,7 @@ let elim_loops (prog : program) =
         in    
         let id_to_term id =
           let decl = IdMap.find id locals in
-          mk_free_const ~srt:decl.var_sort id
+          mk_free_const decl.var_sort id
         in
         let ids_to_terms ids = List.map id_to_term ids in
         let loop_call pos = 
@@ -160,7 +160,7 @@ let elim_global_deps prog =
           List.map 
             (fun id ->
               let decl = find_global prog id in
-              mk_free_const ~srt:decl.var_sort id)
+              mk_free_const decl.var_sort id)
             (IdSet.elements accs)
         in SlUtil.mk_pred p (tas @ args)
       in SL (SlUtil.subst_preds sf f)
@@ -337,8 +337,8 @@ let elim_state prog =
                     else 
                       let x_decl = find_var prog proc x in
                       let x_srt = x_decl.var_sort in
-                      let xc = mk_free_const ~srt:x_srt x_c in
-                      let xj = mk_free_const ~srt:x_srt x_join in
+                      let xc = mk_free_const x_srt x_c in
+                      let xj = mk_free_const x_srt x_join in
                       mk_eq xj xc :: eqs
                   )
                   pp.pp_modifies []
@@ -364,7 +364,7 @@ let elim_state prog =
                 List.map2 
                   (fun x e ->
                     let x_decl = find_var prog proc x in
-                    let x1 = mk_free_const ~srt:x_decl.var_sort (IdMap.find x sm1) in
+                    let x1 = mk_free_const x_decl.var_sort (IdMap.find x sm1) in
                     let e1 = subst_id_term sm e in
                     mk_eq x1 e1)
                   ac.assign_lhs ac.assign_rhs
@@ -375,7 +375,7 @@ let elim_state prog =
               let to_term_subst_merge sm locals term_subst =
                 IdMap.fold (fun id1 id2 term_subst -> 
                   let decl = IdMap.find id2 locals in
-                  IdMap.add id1 (mk_free_const ~srt:decl.var_sort id2) term_subst)
+                  IdMap.add id1 (mk_free_const decl.var_sort id2) term_subst)
                   sm term_subst
               in
               let to_term_subst sm locals = to_term_subst_merge sm locals IdMap.empty in
@@ -437,7 +437,7 @@ let elim_state prog =
                           (fun (implicits_w_sorts, implicits_var_subst) id ->
                             let decl = IdMap.find id locals in
                             (id, decl.var_sort) :: implicits_w_sorts,
-                            IdMap.add id (mk_var ~srt:decl.var_sort id) implicits_var_subst) 
+                            IdMap.add id (mk_var decl.var_sort id) implicits_var_subst) 
                           ([], IdMap.empty) implicits
                       in
                       let f_pos = mk_exists implicits_w_sorts (subst_consts implicits_var_subst (mk_and fs)) in
@@ -465,7 +465,7 @@ let elim_state prog =
                   List.fold_left2
                     (fun sm id rtn_id -> 
                       let decl = IdMap.find rtn_id locals in
-                      IdMap.add id (mk_free_const ~srt:decl.var_sort rtn_id) sm)
+                      IdMap.add id (mk_free_const decl.var_sort rtn_id) sm)
                     subst_wo_old_mods_formals
                     callee_decl.proc_returns 
                     (List.map (fun id -> IdMap.find id sm1) cc.call_lhs)
@@ -481,7 +481,7 @@ let elim_state prog =
                 IdMap.fold 
                   (fun id decl subst_post ->
                     let old_id = try IdMap.find id sm with Not_found -> id in
-                    IdMap.add (oldify id) (mk_free_const ~srt:decl.var_sort old_id) subst_post)
+                    IdMap.add (oldify id) (mk_free_const decl.var_sort old_id) subst_post)
                    prog.prog_vars subst_wo_old
               in
               (* assume updated postcondition *)

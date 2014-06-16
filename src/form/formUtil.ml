@@ -44,29 +44,21 @@ let sort_of = function
   | Var (_, s) 
   | App (_, _, s) -> s
 
-let unsafe_sort_of t = Util.unopt (sort_of t)
-
 let rec sort_ofs = function
-  | [] -> None
-  | t :: ts -> 
-      match sort_of t with
-      |	None -> sort_ofs ts
-      |	s -> s
+  | [] -> failwith "tried to extract sort from empty list of terms"
+  | t :: ts -> sort_of t
 
 let range_sort_of_field f =
   match sort_of f with
-  | Some (Fld srt) -> srt
+  | Fld srt -> srt
   | _ -> failwith "untyped or illtyped field expression"
 
 let element_sort_of_set s =
   match sort_of s with
-  | Some (Set srt) -> srt
+  | Set srt -> srt
   | _ -> failwith "untyped or illtyped set expression"
 
-let has_sort srt t = 
-  match sort_of t with
-  | Some srt' -> srt = srt'
-  | None -> false
+let has_sort srt t = sort_of t = srt
 
 let is_free_const = function
   | App (FreeSym _, [], _) -> true
@@ -87,30 +79,30 @@ let mk_true = BoolOp (And, [])
 let mk_false = BoolOp (Or, [])
 let mk_bool b = if b then mk_true else mk_false
 
-let mk_bool_term b = App (BoolConst b, [], Some Bool)
+let mk_bool_term b = App (BoolConst b, [], Bool)
 
-let mk_int i = App (IntConst i, [], Some Int)
+let mk_int i = App (IntConst i, [], Int)
 
 let mk_ident name = (name, 0)
 
-let mk_free_fun ?srt id args = App (FreeSym id, args, srt)
-let mk_free_const ?srt id = App (FreeSym id, [], srt)
-let mk_const ?srt sym = App (sym, [], srt)
+let mk_free_fun srt id args = App (FreeSym id, args, srt)
+let mk_free_const srt id = App (FreeSym id, [], srt)
+let mk_const srt sym = App (sym, [], srt)
 
-let mk_fresh_var ?srt name = Var (fresh_ident ("?" ^ name), srt)
+let mk_fresh_var srt name = Var (fresh_ident ("?" ^ name), srt)
 
-let mk_var ?srt id =  Var (id, srt)
+let mk_var srt id =  Var (id, srt)
 
-let mk_free_app ?srt id ts = App (FreeSym id, ts, srt)
+let mk_free_app srt id ts = App (FreeSym id, ts, srt)
 
-let mk_app ?srt sym ts = App (sym, ts, srt)
+let mk_app srt sym ts = App (sym, ts, srt)
 
-let mk_atom sym ts = Atom (mk_app ~srt:Bool sym ts)
+let mk_atom sym ts = Atom (mk_app Bool sym ts)
 
 let mk_pred id ts = mk_atom (FreeSym id) ts
 
 let mk_eq_term s t =
-  mk_app ~srt:Bool Eq [s; t]
+  mk_app Bool Eq [s; t]
 
 let mk_eq s t = mk_atom Eq [s; t]
 
@@ -119,36 +111,35 @@ let mk_gt s t = mk_atom Gt [s; t]
 let mk_leq s t = mk_atom LtEq [s; t]
 let mk_geq s t = mk_atom GtEq [s; t]
 
-let mk_plus s t = mk_app ~srt:Int Plus [s; t]
-let mk_minus s t = mk_app ~srt:Int Minus [s; t]
-let mk_uminus s = mk_app ~srt:Int UMinus [s]
-let mk_mult s t = mk_app ~srt:Int Mult [s; t]
-let mk_div s t = mk_app ~srt:Int Div [s; t]
+let mk_plus s t = mk_app Int Plus [s; t]
+let mk_minus s t = mk_app Int Minus [s; t]
+let mk_uminus s = mk_app Int UMinus [s]
+let mk_mult s t = mk_app Int Mult [s; t]
+let mk_div s t = mk_app Int Div [s; t]
 
-let mk_null = mk_app ~srt:Loc Null []
+let mk_null = mk_app Loc Null []
 
 let mk_read fld ind = 
   let srt = match sort_of fld with
-  | Some (Fld s) -> Some s
-  | None -> None
-  | Some s -> 
+  | Fld s -> s
+  | s -> 
       failwith 
 	("tried to read from term" ^ 
          (string_of_term fld) ^ " which is of sort " ^ (string_of_sort s) ^ ".\n" ^
          "Expected sort (Fld X) for some sort X.")
-  in mk_app ?srt:srt Read [fld; ind]
+  in mk_app srt Read [fld; ind]
 
 let mk_read_form fld ind = match sort_of fld with
-  | Some (Fld Bool) -> mk_atom Read [fld; ind]
+  | Fld Bool -> mk_atom Read [fld; ind]
   | _ -> failwith "mk_read_form requries a Fld Bool"
 
 let mk_write fld ind upd =
-  mk_app ?srt:(sort_of fld) Write [fld; ind; upd]
+  mk_app (sort_of fld) Write [fld; ind; upd]
 
-let mk_ep fld set t = mk_app ~srt:Loc EntPnt [fld; set; t]
+let mk_ep fld set t = mk_app Loc EntPnt [fld; set; t]
 
 let mk_btwn_term fld t1 t2 t3 =
-  mk_app ~srt:Bool Btwn [fld; t1; t2; t3]
+  mk_app Bool Btwn [fld; t1; t2; t3]
 
 let mk_btwn fld t1 t2 t3 =
   mk_atom Btwn [fld; t1; t2; t3]
@@ -156,23 +147,20 @@ let mk_btwn fld t1 t2 t3 =
 let mk_reach fld t1 t2 = 
   mk_btwn fld t1 t2 t2
   
-let mk_empty srt = mk_app ?srt:srt Empty []
+let mk_empty srt = mk_app srt Empty []
 
-let mk_loc_set id = mk_free_const ~srt:(Set Loc) id
+let mk_loc_set id = mk_free_const (Set Loc) id
 
 let mk_setenum ts = 
-  let srt = match sort_ofs ts with
-  | Some esrt -> Some (Set esrt)
-  | None -> None
-  in
-    match ts with
-    | [] -> mk_empty srt
-    | _ -> mk_app ?srt:srt SetEnum ts
+  let srt = Set (sort_ofs ts) in
+  match ts with
+  | [] -> mk_empty srt
+  | _ -> mk_app srt SetEnum ts
 
 let mk_inter sets = 
   if List.exists (function App (Empty, [], _) -> true | _ -> false) sets
   then mk_empty (sort_ofs sets)
-  else mk_app ?srt:(sort_ofs sets) Inter sets
+  else mk_app (sort_ofs sets) Inter sets
 
 let mk_union sets = 
   let sets1 =
@@ -180,11 +168,11 @@ let mk_union sets =
       (function App (Empty, [], _) -> false | _ -> true) 
       sets
   in
-  mk_app ?srt:(sort_ofs sets) Union sets1
+  mk_app (sort_ofs sets) Union sets1
 
-let mk_diff s t = mk_app ?srt:(sort_of s) Diff [s; t]
+let mk_diff s t = mk_app (sort_of s) Diff [s; t]
 
-let mk_elem_term e s = mk_app ~srt:Bool Elem [e; s]
+let mk_elem_term e s = mk_app Bool Elem [e; s]
 let mk_elem e s = mk_atom Elem [e; s]
 
 let smk_elem e = function
@@ -193,7 +181,7 @@ let smk_elem e = function
 
 let mk_subseteq s t = mk_atom SubsetEq [s; t]
 
-let mk_frame_term x a f f' = mk_app ~srt:Bool Frame [x; a; f; f']
+let mk_frame_term x a f f' = mk_app Bool Frame [x; a; f; f']
 
 (* @param a the set of allocated locations
  * @param x the footprint in the pre-state
@@ -369,25 +357,20 @@ let fv f =
 (** Computes the set of free variables of formula [f] together with their sorts. *)
 let sorted_free_vars f = 
   let rec fvt bv vars = function
-    | Var (id, Some srt) -> 
+    | Var (id, srt) -> 
 	if IdSet.mem id bv 
 	then vars 
 	else IdSrtSet.add (id, srt) vars
     | App (_, ts, _) ->
 	List.fold_left (fvt bv) vars ts
-    | _ -> vars
   in fold_terms_with_bound fvt IdSrtSet.empty f
 
 let sorts f =
   let rec s acc = function
-    | Var (_, Some srt) -> SortSet.add srt acc
-    | App (_, ts, srt_opt) ->
-        let acc1 = match srt_opt with
-        | Some srt -> SortSet.add srt acc
-        | None -> acc
-        in
+    | Var (_, srt) -> SortSet.add srt acc
+    | App (_, ts, srt) ->
+        let acc1 = SortSet.add srt acc in
         List.fold_left s acc1 ts
-    | _ -> acc
   in
   fold_terms s SortSet.empty f
 
@@ -421,7 +404,7 @@ let ground_terms ?(include_atoms=false) f =
 	      terms_t, is_ground && is_ground_t)
 	    (terms, true) ts
 	in
-	if is_ground && (not include_atoms || srt <> Some Bool)
+	if is_ground && (not include_atoms || srt <> Bool)
 	then TermSet.add t terms1, true 
 	else terms1, is_ground
   in 
@@ -431,14 +414,13 @@ let ground_terms ?(include_atoms=false) f =
   
 let vars_in_fun_terms f =
   let rec fvt vars = function
-    | Var (id, Some srt) -> IdSrtSet.add (id, srt) vars
+    | Var (id, srt) -> IdSrtSet.add (id, srt) vars
     | App (_, ts, _) ->
 	List.fold_left fvt vars ts
-    | _ -> vars
   in
   let rec ct vars t = 
     match t with
-    | App (_, ts, Some Bool) -> 
+    | App (_, ts, Bool) -> 
 	List.fold_left ct vars ts
     | App _ -> fvt vars t
     | _ -> vars
@@ -446,7 +428,7 @@ let vars_in_fun_terms f =
 
 let fun_terms_with_vars f =
   let rec process acc t = match t with
-    | App (_, ts, Some Bool) ->
+    | App (_, ts, Bool) ->
       (* skip predicates *)
       List.fold_left process acc ts
     | App (_, ts, _) ->
@@ -460,29 +442,14 @@ let fun_terms_with_vars f =
      
 (** Extracts the signature of formula [f]. *)
 let sign f : signature =
-  let fail t = 
-    let t_str = string_of_term t in
-    let f_str = string_of_form f in
-    let msg =
-      "tried to extract signature from untyped term:\n" ^
-      "  " ^ t_str ^ "\nin formula\n" ^ f_str
-    in
-    failwith msg
-    in
   let rec signt (decls : signature) t = match t with
     | Var _ -> decls
-    | App (sym, args, res_srt_opt) ->
-	let res_srt = 
-	  match res_srt_opt with
-	  | Some srt -> srt
-	  | None -> fail t
-	in
+    | App (sym, args, res_srt) ->
 	let arg_srts = 
 	  List.map
 	    (function 
-	      |	Var (_, Some srt) 
-	      | App (_, _, Some srt) -> srt 
-	      | t -> fail t
+	      |	Var (_, srt) 
+	      | App (_, _, srt) -> srt 
 	    )
 	    args
 	in List.fold_left signt (SymbolMap.add sym (arg_srts, res_srt) decls) args
@@ -496,29 +463,14 @@ let overloaded_sign f : (arity list SymbolMap.t) =
       if List.mem tpe old then decls
       else SymbolMap.add sym (tpe :: old) decls
   in
-  let fail t = 
-    let t_str = string_of_term t in
-    let f_str = string_of_form f in
-    let msg =
-      "tried to extract signature from untyped term:\n" ^
-      "  " ^ t_str ^ "\nin formula\n" ^ f_str
-    in
-    failwith msg
-    in
   let rec signt (decls : arity list SymbolMap.t) t = match t with
     | Var _ -> decls
-    | App (sym, args, res_srt_opt) ->
-	let res_srt = 
-	  match res_srt_opt with
-	  | Some srt -> srt
-	  | None -> fail t
-	in
+    | App (sym, args, res_srt) ->
 	let arg_srts = 
 	  List.map
 	    (function 
-	      |	Var (_, Some srt) 
-	      | App (_, _, Some srt) -> srt 
-	      | t -> fail t
+	      |	Var (_, srt) 
+	      | App (_, _, srt) -> srt 
 	    )
 	    args
 	in List.fold_left signt (add_to_sign sym (arg_srts, res_srt) decls) args
@@ -616,7 +568,7 @@ let subst subst_map f =
 	  if IdSet.mem x occuring 
 	  then 
 	    let x1 = fresh_ident (name x) in
-	    (x1, srt) :: vs1, IdMap.add x (Var (x1, Some srt)) sm2
+	    (x1, srt) :: vs1, IdMap.add x (Var (x1, srt)) sm2
 	  else (x, srt) :: vs1, sm2)
 	vs ([], sm1)
     in vs1, sm2
@@ -647,7 +599,7 @@ let propagate_exists f =
     match xs, ys with
     | (x, srt1) :: xs1, (y, srt2) :: ys1 ->
         if srt1 = srt2
-        then merge (IdMap.add x (mk_var ~srt:srt1 y) sm) ((y, srt2) :: zs) xs1 (ys2 @ ys1) []
+        then merge (IdMap.add x (mk_var srt1 y) sm) ((y, srt2) :: zs) xs1 (ys2 @ ys1) []
         else merge sm zs xs ys1 ((y, srt2) :: ys2)
     | [], _ -> sm, ys @ ys2 @ zs
     | _, [] -> 
@@ -673,7 +625,7 @@ let propagate_exists f =
           List.fold_left 
             (fun (sm, vs1) (v, srt) -> 
               let v1 = fresh_ident (name v) in
-              IdMap.add v (mk_var ~srt:srt v1) sm, (v1, srt) :: vs1)
+              IdMap.add v (mk_var srt v1) sm, (v1, srt) :: vs1)
             (IdMap.empty, []) vs0
         in
         let f1 = subst sm f in
@@ -754,11 +706,11 @@ let skolemize f =
 	in
 	Binder (Forall, bvs, sk vs1 f, a)
     | Binder (Exists, bvs, f, a) ->
-	let ts = IdMap.fold (fun id srt ts -> mk_var ~srt:srt id :: ts) vs [] in
+	let ts = IdMap.fold (fun id srt ts -> mk_var srt id :: ts) vs [] in
 	let sm = List.fold_left 
 	    (fun sm (id, srt) -> 
 	      let sk_fn = FreeSym (fresh_ident ("sk_" ^ (name id))) in
-	      IdMap.add id (mk_app ~srt:srt sk_fn ts) sm) 
+	      IdMap.add id (mk_app srt sk_fn ts) sm) 
 	    IdMap.empty bvs
 	in 
 	annotate (subst sm (sk vs f)) a

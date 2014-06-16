@@ -150,7 +150,7 @@ let add_pred_insts prog f =
       | [] -> sm
       | [id] -> 
           let var = IdMap.find id pred.pred_locals in
-          IdMap.add id (mk_free_fun ~srt:var.var_sort p ts) sm
+          IdMap.add id (mk_free_fun var.var_sort p ts) sm
       | _ -> failwith "Functions may only have a single return value."
     in
     let body = match pred.pred_body.spec_form with

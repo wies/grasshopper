@@ -10,7 +10,7 @@ module IdMap = Form.IdMap
 module IdSet = Form.IdSet
 let ident_to_string = Form.str_of_ident
 
-let to_field f = FormUtil.mk_free_const ~srt:(Form.Fld Form.Loc) f
+let to_field f = FormUtil.mk_free_const (Form.Fld Form.Loc) f
 
 type pred_symbol =
   | Emp

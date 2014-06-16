@@ -26,7 +26,7 @@ let pred_to_form p args dom =
   in
   let mk_output id =
     let ((_, srt), t) = List.find (fun ((i,_), _) -> i = id) paired in
-      mk_eq t (mk_free_fun ~srt:srt (Symbols.pred_naming p id) in_args)
+      mk_eq t (mk_free_fun srt (Symbols.pred_naming p id) in_args)
   in
   let dom_out = List.hd def.Symbols.outputs in
   let other_out = List.tl def.Symbols.outputs in

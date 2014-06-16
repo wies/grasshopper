@@ -204,13 +204,12 @@ let generate_instances useLocalInst axioms rep_terms egraph type_graph =
         | (None, None) -> None 
       in
       let rec gen_tpe acc t = match t with
-        | App (_, ts, Some srt) ->
+      | App (_, ts, srt) ->
           List.fold_left
             (IdMap.merge merge_map)
             IdMap.empty
-            (List.map (gen_tpe (srt::acc)) ts)
-        | App (_, _, None) -> failwith "expecting typed form"
-        | Var (id, _) -> IdMap.add id acc IdMap.empty
+            (List.map (gen_tpe (srt :: acc)) ts)
+      | Var (id, _) -> IdMap.add id acc IdMap.empty
       in
       let gen_map =
         TermSet.fold
@@ -255,7 +254,7 @@ let generate_instances useLocalInst axioms rep_terms egraph type_graph =
       if not useLocalInst then TermSet.empty, IdSet.empty else
       let rec tt bv (fun_terms, fun_vs) t =
         match t with  
-        | App (_, _, Some srt) when srt <> Bool -> 
+        | App (_, _, srt) when srt <> Bool -> 
             let vs = IdSet.diff (fvt IdSet.empty t) bv in
             if IdSet.is_empty vs
             then fun_terms, fun_vs
@@ -277,7 +276,7 @@ let generate_instances useLocalInst axioms rep_terms egraph type_graph =
         (fun (v, srt) subst_maps -> 
           if IdSet.mem v fun_vs 
           then subst_maps
-          else ematch (Var (v, Some srt)) rep_terms egraph subst_maps)
+          else ematch (Var (v, srt)) rep_terms egraph subst_maps)
         fvars proto_subst_maps         
     in
     let subst_maps = (*measure*) subst_maps () in
@@ -307,7 +306,7 @@ let generate_instances useLocalInst axioms rep_terms egraph type_graph =
 let instantiate_with_terms local axioms classes =
     if !Config.instantiate then
       (* remove atoms from congruence classes *)
-      let classes = List.filter (function t :: _ -> unsafe_sort_of t <> Bool | _ -> false) classes in
+      let classes = List.filter (function t :: _ -> sort_of t <> Bool | _ -> false) classes in
       let _ = 
         if Debug.is_debug () then
           ignore

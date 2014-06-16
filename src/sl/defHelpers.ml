@@ -1,10 +1,10 @@
 open Form
 open FormUtil
 
-let mk_formal_and_var name tpe =
+let mk_formal_and_var name srt =
   let i = mk_ident name in
-  let f = i, tpe in
-  let v = mk_var ~srt:tpe i in
+  let f = i, srt in
+  let v = mk_var srt i in
     i, f, v
 
 let mk_loc name = mk_formal_and_var name Loc
@@ -44,7 +44,7 @@ let _, l3f, l3 = mk_loc "l3"
 
 let _, vf, v = mk_int "v"
 
-let empty_loc = mk_empty (Some (Set Loc))
+let empty_loc = mk_empty (Set Loc)
 
 (* short hand*)
 let l1_in_domain = mk_elem l1 d
@@ -80,7 +80,7 @@ let reach_via_left_right =
 
 (* witnesses for content *)
 let witness_sym = FreeSym (mk_ident "witness")
-let mk_witness elt set = mk_app ~srt:Loc witness_sym [data; elt; set] 
+let mk_witness elt set = mk_app Loc witness_sym [data; elt; set] 
 
 let witness_generator1 =
   TermGenerator

@@ -43,8 +43,8 @@ let symbols =
 type sorted_ident = ident * sort
 
 type term = 
-  | Var of ident * sort option
-  | App of symbol * term list * sort option
+  | Var of ident * sort
+  | App of symbol * term list * sort
 
 type filter =
   | FilterTrue
@@ -211,7 +211,7 @@ let pr_sym ppf sym = fprintf ppf "%s" (str_of_symbol sym)
 
 let rec pr_term ppf = function
   | Var (id, _) -> fprintf ppf "%a" pr_ident id
-  | App (Empty as sym, [], Some srt) -> fprintf ppf "(as@ %a@ %a)" pr_sym sym pr_sort0 srt
+  | App (Empty as sym, [], srt) -> fprintf ppf "(as@ %a@ %a)" pr_sym sym pr_sort0 srt
   | App (sym, [], _) -> fprintf ppf "%a" pr_sym sym
   | App (sym, ts, _) -> fprintf ppf "@[<2>(%a@ %a)@]" pr_sym sym pr_terms ts
 

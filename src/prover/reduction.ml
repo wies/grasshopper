@@ -14,14 +14,14 @@ let reduce_exists =
   let rec elim_neq = function
     | BoolOp (Not, [Atom (App (Eq, [s1; s2], _))]) as f ->
 	(match sort_of s1 with
-	| Some (Set srt) ->
-	    let ve = mk_var ~srt:srt e in
+	| Set srt ->
+	    let ve = mk_var srt e in
 	    mk_exists [(e, srt)] (mk_or [mk_and [smk_elem ve s1; mk_not (smk_elem ve s2)];
 					 mk_and [smk_elem ve s2; mk_not (smk_elem ve s1)]])
 	| _ -> f)
     | BoolOp (Not, [Atom (App (SubsetEq, [s1; s2], _))]) ->
 	let srt = element_sort_of_set s1 in
-	let ve = mk_var ~srt:srt e in
+	let ve = mk_var srt e in
 	mk_exists [(e, srt)] (mk_and [smk_elem ve s1; mk_not (smk_elem ve s2)])
     | BoolOp (op, fs) -> BoolOp (op, List.map elim_neq fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, elim_neq f, a)
@@ -43,8 +43,8 @@ let massage_field_reads fs =
   | BoolOp (And as op, fs)
   | BoolOp (Or as op, fs) -> BoolOp (op, List.map massage fs)
   | Binder (b, vs, f, a) -> Binder (b, vs, massage f, a)
-  | Atom (App (Eq, [App (Read, [fld; Var _ as arg], Some Loc); App (FreeSym _, [], _) as t], _))
-  | Atom (App (Eq, [App (FreeSym _, [], _) as t; App (Read, [fld; Var _ as arg], Some Loc)], _)) 
+  | Atom (App (Eq, [App (Read, [fld; Var _ as arg], Loc); App (FreeSym _, [], _) as t], _))
+  | Atom (App (Eq, [App (FreeSym _, [], _) as t; App (Read, [fld; Var _ as arg], Loc)], _)) 
     when TermSet.mem fld reach_flds ->
       let f1 = 
         mk_and [mk_btwn fld arg t t;
@@ -96,7 +96,7 @@ let field_partitions fs gts =
   let fld_partition, fld_map, fields = 
     let max, fld_map, fields = 
       TermSet.fold (fun t (n, fld_map, fields) -> match t with
-      | App (_, _, Some (Fld _)) as fld -> 
+      | App (_, _, Fld _) as fld -> 
           n+1, TermMap.add fld n fld_map, TermSet.add fld fields
       | _ -> n, fld_map, fields)
         gts (0, TermMap.empty, TermSet.empty)
@@ -104,7 +104,7 @@ let field_partitions fs gts =
     let rec collect_eq partition = function
       | BoolOp (Not, f) -> partition
       | BoolOp (op, fs) -> List.fold_left collect_eq partition fs
-      | Atom (App (Eq, [App (_, _, Some (Fld _)) as fld1; fld2], _)) ->
+      | Atom (App (Eq, [App (_, _, Fld _) as fld1; fld2], _)) ->
           Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
       | Binder (_, _, f, _) -> collect_eq partition f
       | f -> partition
@@ -193,12 +193,9 @@ let reduce_frame fs =
     in
       (*Debug.amsg ("expanding frame for " ^ (string_of_term f) ^ "\n");*)
       match sort_of f with
-      | Some (Fld Loc) -> reduce_graph ()
-      | Some (Fld Int) | Some (Fld Bool) -> reduce_data ()
-      | None ->
-        Debug.amsg "reduce_frame: type not given, assuming Fld Loc\n";
-        reduce_graph ()
-      | Some other -> failwith ("reduce_frame did not expect f with type " ^ (string_of_sort other))
+      | Fld Loc -> reduce_graph ()
+      | Fld Int | Fld Bool -> reduce_data ()
+      | other -> failwith ("reduce_frame did not expect f with type " ^ (string_of_sort other))
   in
   let rec process f (frame_axioms, fields) = match f with
     | Atom (App (Frame, [x; a; fld; fld'], _)) when fld <> fld' ->
@@ -291,7 +288,7 @@ let reduce_sets fs =
         let t11 = unflatten t1 in
         let t21 = unflatten t2 in
         (*let s = mk_free_const ?srt:(sort_of t11) (fresh_ident "S") in*)
-        App (Eq, [t21; mk_union [t11; t21]], Some Bool)
+        App (Eq, [t21; mk_union [t11; t21]], Bool)
     | t -> unflatten t
   in
   let rec simplify = function
@@ -350,7 +347,7 @@ let reduce_read_write fs =
   let gts = TermSet.union (ground_terms (smk_and null_ax1)) gts in
   let field_sorts = TermSet.fold (fun t srts ->
     match sort_of t with
-    | Some (Fld srt) -> SortSet.add srt srts
+    | Fld srt -> SortSet.add srt srts
     | _ -> srts)
       gts SortSet.empty
   in
@@ -358,12 +355,12 @@ let reduce_read_write fs =
   let read_propagators =
     SortSet.fold (fun srt propagators ->
       let f1 = fresh_ident "?f", Fld srt in
-      let fld1 = mk_var ~srt:(snd f1) (fst f1) in
+      let fld1 = mk_var (snd f1) (fst f1) in
       let f2 = fresh_ident "?g", Fld srt in
-      let fld2 = mk_var ~srt:(snd f2) (fst f2) in
+      let fld2 = mk_var (snd f2) (fst f2) in
       let d = fresh_ident "?d" in
       let d1 = d, srt in
-      let dvar = mk_var ~srt:srt d in
+      let dvar = mk_var srt d in
       let l1 = Axioms.l1 in
       let loc1 = Axioms.loc1 in
       let l2 = Axioms.l2 in
@@ -480,8 +477,8 @@ let add_terms fs gts =
   let gts_fs = ground_terms (mk_and fs) in
   let extra_gts = TermSet.diff gts gts_fs in
   TermSet.fold (fun t acc ->
-    let srt = unsafe_sort_of t in
-    let c = mk_free_const ~srt:srt (fresh_ident "t") in
+    let srt = sort_of t in
+    let c = mk_free_const srt (fresh_ident "t") in
     mk_eq t c :: acc)
     extra_gts fs
 

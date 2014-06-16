@@ -4,20 +4,20 @@ open Sl
 open Symbols
 
 let mk_loc_set d =
-  let tpe = Some (Form.Set Form.Loc) in
-    FormUtil.mk_free_const ?srt:tpe d
+  let srt = Form.Set Form.Loc in
+    FormUtil.mk_free_const srt d
 
 let mk_loc_set_var d =
-  let tpe = Some (Form.Set Form.Loc) in
-    FormUtil.mk_var ?srt:tpe d
+  let srt = Form.Set Form.Loc in
+    FormUtil.mk_var srt d
 
 let mk_loc d =
   if fst d = "null" then FormUtil.mk_null
-  else FormUtil.mk_free_const ?srt:(Some (Form.Loc)) d
+  else FormUtil.mk_free_const (Form.Loc) d
 
 let mk_domain d v = FormUtil.mk_elem v (mk_loc_set d)
 let mk_domain_var d v = FormUtil.mk_elem v (mk_loc_set_var d)
-let emptyset = FormUtil.mk_empty (Some (Form.Set Form.Loc))
+let emptyset = FormUtil.mk_empty (Form.Set Form.Loc)
 let empty_t domain = FormUtil.mk_eq emptyset domain
 let empty domain = empty_t (mk_loc_set domain)
 let empty_var domain = empty_t (mk_loc_set_var domain)

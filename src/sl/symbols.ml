@@ -32,13 +32,13 @@ let pred_naming (name, num) (p, _) = (name ^ "_" ^ p, num)
 let make_output_fct sym id =
   let args =
     List.map
-      (fun (i, s) -> FormUtil.mk_var ~srt:s i)
+      (fun (i, s) -> FormUtil.mk_var s i)
       (List.filter
         (fun (i, _) -> List.for_all (fun (i2,_) -> i <> i2) sym.outputs)
         sym.parameters)
   in
   let srt = snd (List.find (fun (i,_) -> i = id) sym.parameters) in
-    FormUtil.mk_free_fun ~srt:srt (pred_naming sym.sym_name id) args
+    FormUtil.mk_free_fun srt (pred_naming sym.sym_name id) args
 
 let pred_to_form p args =
   let def = get_symbol p in
@@ -62,7 +62,7 @@ let pred_to_form p args =
     | App (sym, args, sort) -> App (sym, List.map var_to_const args, sort)
     | Var (id, sort) ->
       if List.for_all (fun (i,_) -> i <> id) args then t
-      else FormUtil.mk_free_const ?srt:sort id
+      else FormUtil.mk_free_const sort id
   in
   let var_to_cst = FormUtil.map_terms var_to_const in
   let output_map =

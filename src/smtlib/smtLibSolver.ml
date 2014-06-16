@@ -322,7 +322,7 @@ let disambiguate_overloaded_symbols signs f =
     | App (sym, ts, srt) ->
       let ts = List.map over ts in
       let args_srt = List.map sort_of ts in
-        App (osym sym (List.map Util.unopt args_srt, Util.unopt srt), ts, srt)
+        App (osym sym (args_srt, srt), ts, srt)
   in
   map_terms over f
 
@@ -477,7 +477,7 @@ let convert_model smtModel =
           let cts = List.map convert_term ts in
           let id = normalize_ident id in
           let sym = symbol_of_ident id in
-          let ts_srts = List.map unsafe_sort_of cts in
+          let ts_srts = List.map sort_of cts in
           let res_srt = 
             match Model.get_result_sort model sym ts_srts with
             | Some res_srt -> res_srt
@@ -485,7 +485,7 @@ let convert_model smtModel =
                 try List.assoc id args
                 with Not_found -> fail pos
           in
-          mk_app ~srt:res_srt sym cts
+          mk_app res_srt sym cts
       | SmtLibSyntax.Annot (t, _, _) ->
           convert_term t
       | SmtLibSyntax.App (_, _, pos)
