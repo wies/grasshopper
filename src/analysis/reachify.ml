@@ -514,11 +514,11 @@ let compile_preds preds =
       if (base_case.idc_footprint <> []) then
         raise (Compile_pred_failure "base case has non-empty footprint.");
       let rec process f = match f with
-        | Atom (App (Eq, [x;y], _)) ->
+      | Atom (App (Eq, [x;y], _), _) ->
           if x = ind_var then [y] 
           else if y = ind_var then [x]
           else []
-        | _ -> []
+      | _ -> []
       in
       let candidates =
         Util.flat_map

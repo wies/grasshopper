@@ -209,7 +209,7 @@ class dag = fun expr ->
         Buffer.contents buffer
 
     method add_constr eq = match eq with
-      | Atom (App (Eq, [e1; e2], _)) ->
+      | Atom (App (Eq, [e1; e2], _), _) ->
           if FormUtil.sort_of e1 <> Bool then 
 	    let n1 = self#get_node e1 in
             let n2 = self#get_node e2 in
@@ -250,7 +250,7 @@ let congr_classes fs gterms =
   let rec add = function
     | Binder (_, [], f, _) :: fs -> add (f :: fs)
     | BoolOp (And, fs1) :: fs -> add (fs1 @ fs)
-    | (Atom (App (Eq, _, _)) as f) :: fs -> 
+    | (Atom (App (Eq, _, _), _) as f) :: fs -> 
         cc_graph#add_constr f; add fs
     | _ :: fs -> add fs
     | [] -> ()

@@ -45,7 +45,12 @@ type response =
 
 let mk_const ?pos sym = App (sym, [], pos)
 
-let mk_app ?pos sym ts = App (sym, ts, pos)
+let mk_app ?pos sym ts = 
+  match sym, ts with
+  | Minus, [App (IntConst i, [], _)] -> 
+      App (IntConst (-i), [], pos)
+  | _, _ -> 
+      App (sym, ts, pos)
 
 let mk_binder ?pos b vs t = Binder (b, vs, t, pos)
 

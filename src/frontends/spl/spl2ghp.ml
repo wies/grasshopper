@@ -811,14 +811,14 @@ let convert cus =
       | SL_form _ ->
           type_error (pos_of_expr e) "expression of type bool" "SL expression"
       | FOL_form f -> f
-      | FOL_term (t, BoolType) -> Form.Atom t
+      | FOL_term (t, BoolType) -> Form.Atom (t, [])
       | FOL_term (t, ty) -> type_error (pos_of_expr e) "expression of type bool" (ty_str ty)
     and extract_term locals ty e =
       match convert_expr locals e with
       | SL_form _ -> type_error (pos_of_expr e) (ty_str ty) "SL expression"
       | FOL_form (BoolOp (And, [])) -> Form.App (BoolConst true, [], Bool), BoolType
       | FOL_form (BoolOp (Or, [])) -> Form.App (BoolConst false, [], Bool), BoolType
-      | FOL_form (Atom t) -> t, BoolType
+      | FOL_form (Atom (t, _)) -> t, BoolType
       | FOL_form _ -> type_error (pos_of_expr e) (ty_str ty) "formula"
       | FOL_term (t, tty) ->
           let rec match_types ty1 ty2 = 

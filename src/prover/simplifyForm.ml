@@ -11,8 +11,8 @@ let pull_eq_up fs =
    * be careful about pulling eq with literals and/or pulling more than one eq *)
   let rec find id elts = match elts with
     (* pull out at most one eq per candidate *)
-    | (Atom (App (Eq, [App (FreeSym id1, [], _); e], _)) as x) :: xs 
-    | (Atom (App (Eq, [e; App (FreeSym id1, [], _)], _)) as x) :: xs when id1 = id -> [x], xs
+    | (Atom (App (Eq, [App (FreeSym id1, [], _); e], _), _) as x) :: xs 
+    | (Atom (App (Eq, [e; App (FreeSym id1, [], _)], _), _) as x) :: xs when id1 = id -> [x], xs
     | x :: xs ->
       let y, ys = find id xs in
         y, x :: xs
@@ -98,8 +98,8 @@ let rec simplify_sets fs =
   let submap, fs1 = 
     List.fold_right (fun f (submap, fs1) -> 
       match f with
-      | Atom (App (Eq, [App (FreeSym id, [], _); App (Empty, [], srt)], _)) 
-      | Atom (App (Eq, [App (Empty, [], srt); App (FreeSym id, [], _)], _)) ->
+      | Atom (App (Eq, [App (FreeSym id, [], _); App (Empty, [], srt)], _), _) 
+      | Atom (App (Eq, [App (Empty, [], srt); App (FreeSym id, [], _)], _), _) ->
           IdMap.add id (App (Empty, [], srt)) submap, fs1
       | _ -> submap, f :: fs1) fs (IdMap.empty, [])
   in

@@ -97,14 +97,14 @@ let mk_free_app srt id ts = App (FreeSym id, ts, srt)
 
 let mk_app srt sym ts = App (sym, ts, srt)
 
-let mk_atom sym ts = Atom (mk_app Bool sym ts)
+let mk_atom ?(ann=[]) sym ts = Atom (mk_app Bool sym ts, ann)
 
 let mk_pred id ts = mk_atom (FreeSym id) ts
 
 let mk_eq_term s t =
   mk_app Bool Eq [s; t]
 
-let mk_eq s t = mk_atom Eq [s; t]
+let mk_eq ?(ann=[]) s t = mk_atom ~ann:ann Eq [s; t]
 
 let mk_lt s t = mk_atom Lt [s; t]
 let mk_gt s t = mk_atom Gt [s; t]
@@ -141,8 +141,8 @@ let mk_ep fld set t = mk_app Loc EntPnt [fld; set; t]
 let mk_btwn_term fld t1 t2 t3 =
   mk_app Bool Btwn [fld; t1; t2; t3]
 
-let mk_btwn fld t1 t2 t3 =
-  mk_atom Btwn [fld; t1; t2; t3]
+let mk_btwn ?(ann=[]) fld t1 t2 t3 =
+  mk_atom ~ann:ann Btwn [fld; t1; t2; t3]
   
 let mk_reach fld t1 t2 = 
   mk_btwn fld t1 t2 t2
@@ -173,11 +173,11 @@ let mk_union sets =
 let mk_diff s t = mk_app (sort_of s) Diff [s; t]
 
 let mk_elem_term e s = mk_app Bool Elem [e; s]
-let mk_elem e s = mk_atom Elem [e; s]
+let mk_elem ?(ann=[]) e s = mk_atom ~ann:ann Elem [e; s]
 
-let smk_elem e = function
+let smk_elem ?(ann=[]) e = function
   | App (Empty, _, _) -> mk_false
-  | s -> mk_elem e s
+  | s -> mk_elem ~ann:ann e s
 
 let mk_subseteq s t = mk_atom SubsetEq [s; t]
 
@@ -223,8 +223,12 @@ let mk_exists ?(ann=[]) bv f = mk_binder ~ann:ann Exists bv f
 
 let annotate f ann = 
   match f with
+  | Atom (t, ann1) -> Atom (t, ann @ ann1)
   | Binder (b, vs, f1, ann1) -> Binder (b, vs, f1, ann @ ann1)
-  | _ -> Binder (Forall, [], f, ann)
+  | _ -> 
+      match ann with
+      | [] -> f
+      | _ -> Binder (Forall, [], f, ann)
 
 let mk_comment c f = annotate f [Comment c]
 
@@ -302,7 +306,7 @@ let mk_iff a b =
 (** Fold all terms appearing in the formula [f] using catamorphism [fn] and initial value [init] *)
 let fold_terms fn init f =
   let rec ft acc = function
-    | Atom t -> fn acc t
+    | Atom (t, _) -> fn acc t
     | BoolOp (_, fs) ->	List.fold_left ft acc fs
     | Binder (_, _, f, _) -> ft acc f
   in ft init f
@@ -310,7 +314,7 @@ let fold_terms fn init f =
 (** Apply the function fn to all terms appearing in [f] *)
 let map_terms fn f =
   let rec mt = function
-    | Atom t -> Atom (fn t)
+    | Atom (t, a) -> Atom (fn t, a)
     | BoolOp (op, fs) -> BoolOp (op, List.map mt fs)
     | Binder (b, vs, f, a) -> 
         let a1 = 
@@ -326,7 +330,7 @@ let map_terms fn f =
 (** Like {!fold_terms} except that [fn] takes the set of bound variables of the given context as additional argument *)
 let fold_terms_with_bound fn init f =
   let rec ft bv acc = function
-    | Atom t -> fn bv acc t
+    | Atom (t, a) -> fn bv acc t
     | BoolOp (_, fs) ->	List.fold_left (ft bv) acc fs
     | Binder (_, vs, f, _) -> 
 	ft (List.fold_left (fun bv (x, _) -> IdSet.add x bv) bv vs) acc f
@@ -491,7 +495,7 @@ let map_id_term fct t =
 let map_id fct f =
   let rec sub = function 
     | BoolOp (op, fs) -> BoolOp (op, List.map sub fs)
-    | Atom t -> Atom (map_id_term fct t)
+    | Atom (t, a) -> Atom (map_id_term fct t, a)
     | Binder (b, vs, f, a) -> Binder (b, vs, sub f, a)
   in sub f
 
@@ -516,7 +520,7 @@ let subst_id subst_map f =
   in
   let rec sub = function 
     | BoolOp (op, fs) -> BoolOp (op, List.map sub fs)
-    | Atom t -> Atom (subt t)
+    | Atom (t, a) -> Atom (subt t, List.map suba a)
     | Binder (b, vs, f, a) -> Binder (b, vs, sub f, List.map suba a)
   in sub f
 
@@ -586,7 +590,7 @@ let subst subst_map f =
   in
   let rec sub sm = function 
     | BoolOp (op, fs) -> BoolOp (op, List.map (sub sm) fs)
-    | Atom t -> Atom (subst_term sm t)
+    | Atom (t, a) -> Atom (subst_term sm t, List.map (suba [] sm) a)
     | Binder (b, vs, f, a) ->
         let vs1, sm1 = rename_vars vs sm in
         Binder (b, vs1, sub sm1 f, List.map (suba vs1 sm1) a)
@@ -647,14 +651,14 @@ let propagate_exists f =
 let foralls_to_exists f =
   let rec find_defs bvs defs fs =
     let rec find nodefs defs gs = function
-      | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; t], _))]) :: fs 
+      | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; t], _), a)]) :: fs 
         when IdSet.mem x nodefs && 
           IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
-          find (IdSet.remove x nodefs) (mk_eq xt t :: defs) gs fs
-      | BoolOp (Not, [Atom (App (Eq, [t; Var (x, srt) as xt], _))]) :: fs 
+            find (IdSet.remove x nodefs) (mk_eq ~ann:a xt t :: defs) gs fs
+      | BoolOp (Not, [Atom (App (Eq, [t; Var (x, srt) as xt], _), a)]) :: fs 
         when IdSet.mem x nodefs && 
           IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
-          find (IdSet.remove x nodefs) (mk_eq xt t :: defs) gs fs
+          find (IdSet.remove x nodefs) (mk_eq ~ann:a xt t :: defs) gs fs
       | BoolOp (Or, fs1) :: fs ->
           find nodefs defs gs (fs1 @ fs)
       | f :: fs ->
@@ -731,7 +735,8 @@ let unique_comments f =
   uc f
 
 let comment_uncommented f = match f with
-  | Binder (_, _, _, anns) ->
+  | Binder (_, _, _, anns) 
+  | Atom (_, anns) ->
     if List.exists (fun a -> match a with Comment _ -> true | _ -> false) anns
     then f
     else mk_comment "unnamed" f

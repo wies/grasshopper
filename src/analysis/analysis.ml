@@ -184,12 +184,12 @@ let add_pred_insts prog f =
           if IdMap.mem p prog.prog_preds 
           then (pos, TermSet.add t neg)
           else (pos, neg)*)
-      | Atom (App (FreeSym p, _, _) as t) -> 
+      | Atom (App (FreeSym p, _, _) as t, _) -> 
           if IdMap.mem p prog.prog_preds 
           then TermSet.add t pos
           else pos
-      | BoolOp (Not, [Atom t])
-      | Atom t -> collect_term pos t
+      | BoolOp (Not, [Atom (t, _)])
+      | Atom (t, _) -> collect_term pos t
       | _ -> pos
     in collect TermSet.empty f 
   in
@@ -208,9 +208,9 @@ let add_pred_insts prog f =
       | BoolOp (Or as op, fs) ->
           let fs_inst = List.map inst_neg_preds fs in
           BoolOp (op, fs_inst)
-      | BoolOp (Not, [Atom (App (FreeSym p, ts, _))]) 
+      | BoolOp (Not, [Atom (App (FreeSym p, ts, _), a)]) 
         when IdMap.mem p prog.prog_preds ->
-          mk_instance false p ts
+          annotate (mk_instance false p ts) a
       | f -> f
     in inst_neg_preds f
   in

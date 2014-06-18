@@ -75,6 +75,7 @@ rule token = parse
       with Not_found ->
         IDENT(kw, 0)
     }
+| '"' [^'"']* as str '"' { STRING(str) }
 | eof { EOF }
 | _ { let pos = lexeme_start_p lexbuf in 
       let spos = 

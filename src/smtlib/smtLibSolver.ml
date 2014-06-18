@@ -469,10 +469,6 @@ let convert_model smtModel =
           mk_bool_term b
       | SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _) -> 
           mk_int i
-      | SmtLibSyntax.App 
-          (SmtLibSyntax.Minus,
-           [SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _)], _) ->
-             mk_int (-i)
       | SmtLibSyntax.App (Ident id, ts, pos) ->
           let cts = List.map convert_term ts in
           let id = normalize_ident id in
@@ -505,12 +501,6 @@ let convert_model smtModel =
           (SmtLibSyntax.Eq, [SmtLibSyntax.App (Ident id, [], _); 
                              SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _)], pos) ->
           IdMap.add id (Model.value_of_int i) arg_map
-      | SmtLibSyntax.App
-          (SmtLibSyntax.Eq, [SmtLibSyntax.App (Ident id, [], _); 
-                             SmtLibSyntax.App 
-                               (SmtLibSyntax.Minus, 
-                                [SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _)], _)], pos) ->
-          IdMap.add id (Model.value_of_int (-i)) arg_map
       | SmtLibSyntax.App (SmtLibSyntax.And, conds, _) ->
           List.fold_left pcond arg_map conds
       | SmtLibSyntax.Annot (def, _, _) -> 
@@ -530,16 +520,25 @@ let convert_model smtModel =
           add_val pos model arg_map (Model.value_of_bool b)
       | SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], pos) -> 
           add_val pos model arg_map (Model.value_of_int i)
-      | SmtLibSyntax.App 
-          (SmtLibSyntax.Minus,
-           [SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _)], pos) ->
-             add_val pos model arg_map (Model.value_of_int (-i))
       | SmtLibSyntax.App (SmtLibSyntax.Ite, [cond; t; e], _) ->
           let arg_map1 = pcond arg_map cond in
           let model1 = p model arg_map e in
           p model1 arg_map1 t
       | SmtLibSyntax.App (_, _, pos) as t->
-          add_term pos model arg_map (convert_term t)
+          (* Z3-specific work around *)
+          (match convert_term t with
+          | App (FreeSym (id2, _) as sym2, ts, srt) as t1 ->
+              let re = Str.regexp (str_of_symbol sym ^ "\\$[0-9]+![0-9]+") in
+              if Str.string_match re id2 0 &&
+                List.fold_left2 (fun acc (id1, _) -> function
+                  | App (FreeSym _, [App (FreeSym id2, [], _)], _)
+                  | App (FreeSym id2, [], _) -> acc && id1 = id2
+                  | _ -> false) true args ts
+              then 
+                let def = Model.get_interp model sym2 arity in
+                Model.add_interp model sym arity def
+              else add_term pos model arg_map t1
+          | t1 -> add_term pos model arg_map t1)
       | SmtLibSyntax.Annot (def, _, _) -> 
           p model arg_map def
       | SmtLibSyntax.Binder (_, _, _, pos) -> fail pos
@@ -564,7 +563,11 @@ let get_model session =
   let gm () =
     writeln session "(get-model)";
     match read session with
-    | Model m -> Some (convert_model m)
+    | Model m -> 
+        let cm = convert_model m in
+        (match session.signature with
+        | Some sign -> Some (Model.restrict_to_sign cm sign)
+        | None -> Some cm)
     | Error e -> fail session e
     | _ -> None
   in

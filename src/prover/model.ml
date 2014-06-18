@@ -81,26 +81,21 @@ let add_card model srt card =
 let add_interp model sym arity def =
   { model with intp = SortedSymbolMap.add (sym, arity) def model.intp }
 
+let get_interp model sym arity =
+  try SortedSymbolMap.find (sym, arity) model.intp
+  with Not_found -> ValueListMap.empty, Undef
+
 let add_def model sym arity args v =
-  let m, d = 
-    try SortedSymbolMap.find (sym, arity) model.intp 
-    with Not_found -> ValueListMap.empty, Undef
-  in
+  let m, d = get_interp model sym arity in
   let new_m = ValueListMap.add args v m in
   { model with intp = SortedSymbolMap.add (sym, arity) (new_m, d) model.intp }
 
 let add_default_val model sym arity v =
-  let m, _ = 
-    try SortedSymbolMap.find (sym, arity) model.intp 
-    with Not_found -> ValueListMap.empty, Undef
-  in
+  let m, _ = get_interp model sym arity in
   { model with intp = SortedSymbolMap.add (sym, arity) (m, BaseVal v) model.intp }
 
 let add_default_term model sym arity args t =
-  let m, _ = 
-    try SortedSymbolMap.find (sym, arity) model.intp 
-    with Not_found -> ValueListMap.empty, Undef
-  in
+  let m, _ = get_interp model sym arity in
   let new_map = m, TermVal (args, t) in
   { model with intp = SortedSymbolMap.add (sym, arity) new_map model.intp }
 
@@ -306,11 +301,21 @@ let is_defined model sym arity args =
 
 
 let get_values_of_sort model srt =
-  let card =
-    try SortMap.find srt model.card 
-    with Not_found -> 0
+  let vals = 
+    SortedSymbolMap.fold (fun (sym, (arg_srts, res_srt)) (m, d) vals ->
+      if res_srt = srt 
+      then 
+        let map_vals = 
+          ValueListMap.fold (fun _ v vals ->
+            ValueSet.add v vals) m vals
+        in 
+        match arg_srts, d with
+        | [], BaseVal v -> ValueSet.add v map_vals
+        | _, _ -> map_vals
+      else vals)
+      model.intp ValueSet.empty
   in
-  Util.generate_list value_of_int card
+  ValueSet.elements vals
 
 let get_symbols_of_sort model arity =
   SortedSymbolMap.fold 
@@ -352,6 +357,20 @@ let finalize_values model =
   List.iter generate_fields [Loc; Int; Bool];
   model
 
+let restrict_to_sign model sign =
+  let new_intp =
+    SortedSymbolMap.fold 
+      (fun (sym, arity) def new_intp ->
+        let arities = 
+          try SymbolMap.find sym sign 
+          with Not_found -> [] 
+        in
+        if List.mem arity arities 
+        then SortedSymbolMap.add (sym, arity) def new_intp
+        else new_intp)
+      model.intp SortedSymbolMap.empty
+  in { model with intp = new_intp }
+
 let succ model fld x =
   let arity = [Fld Loc; Loc; Loc; Loc], Bool in
   let locs = get_values_of_sort model Loc in
@@ -363,16 +382,47 @@ let succ model fld x =
     x locs
       
 
+let find_term model =
+  let vm =
+    SortedSymbolMap.fold 
+      (fun (sym, (arg_srts, res_srt)) (m, d) vm ->
+        let d_vm =
+          match arg_srts, d with
+          | [], BaseVal v -> 
+              SortedValueMap.add (v, res_srt) (sym, []) vm
+          | _, _ -> vm
+        in
+        ValueListMap.fold (fun args v vm ->
+          let vs = List.combine args arg_srts in
+          if List.mem (v, res_srt) vs then vm else
+          let el = 
+            try 
+              let sym1, vs2 = SortedValueMap.find (v, res_srt) vm in
+              if List.length vs < List.length vs2 
+              then (sym1, vs2)
+              else (sym, vs)                
+            with Not_found -> (sym, vs)
+          in
+          SortedValueMap.add (v, res_srt) el vm) m d_vm)
+      model.intp SortedValueMap.empty
+  in
+  let rec find (v, srt) =
+    match srt with 
+    | Bool -> mk_bool_term (bool_of_value v)
+    | Int -> mk_int (int_of_value v)
+    | _ ->
+        let sym, vs = SortedValueMap.find (v, srt) vm in
+        let args = List.map find vs in
+        mk_app srt sym args
+  in fun v srt -> find (v, srt)
+
+            
+
 let output_graphviz chan model =
-  (*let const_map = const_map model in 
-     let find_rep s = match s with
-     | BoolConst _ | IntConst _ -> s
-     | _ -> try SymbolMap.find s const_map with Not_found -> s
-     in*)
+  let find_term = find_term model in
   let colors1 = ["blue"; "red"; "green"; "orange"; "darkviolet"] in
   let colors2 = ["blueviolet"; "crimson"; "olivedrab"; "orangered"; "purple"] in
-  let flds = SymbolSet.elements (get_symbols_of_sort model ([], Fld Loc)) in
-  let fld_map = List.map (fun sym -> sym, interp_symbol model sym ([], Fld Loc) []) flds in
+  let flds = get_values_of_sort model (Fld Loc) in
   let locs = get_values_of_sort model Loc in
   let fld_colors =
     Util.fold_left2 (fun acc fld color -> ((fld, color)::acc)) [] flds colors1
@@ -384,7 +434,8 @@ let output_graphviz chan model =
     let color =
       try List.assoc fld fld_colors with Not_found -> "black"
     in
-    Printf.sprintf "label=\"%s\", fontcolor=%s, color=%s" (str_of_symbol fld) color color
+    let f = find_term fld (Fld Loc) in
+    Printf.sprintf "label=\"%s\", fontcolor=%s, color=%s" (string_of_term f) color color
   in
   let string_of_sorted_value srt v = 
     match srt with
@@ -393,14 +444,13 @@ let output_graphviz chan model =
   let string_of_loc_value l = string_of_sorted_value Loc l in 
   let output_flds () = 
     List.iter 
-      (fun fld ->
+      (fun f ->
         List.iter (fun l ->
           try
             if interp_symbol model Null ([], Loc) [] = l then () else
-            let f = List.assoc fld fld_map in
             let m, d = find_map_value model f Loc in
             let r = fun_app model (MapVal (m, d)) [l] in
-	    let label = get_label fld in
+	    let label = get_label f in
 	    Printf.fprintf chan "\"%s\" -> \"%s\" [%s]\n" 
 	      (string_of_loc_value l) (string_of_loc_value r) label
           with Undefined -> ())
@@ -409,37 +459,33 @@ let output_graphviz chan model =
   in
   let output_reach () = 
     List.iter 
-      (fun fld ->
+      (fun f ->
         List.iter (fun l ->
-          let f = List.assoc fld fld_map in
           let r = succ model f l in
           if is_defined model Read ([Fld Loc; Loc], Loc) [f; l] || r == l then () else
-	  let label = get_label fld in
+	  let label = get_label f in
 	  Printf.fprintf chan "\"%s\" -> \"%s\" [%s, style=dashed]\n" 
 	    (string_of_loc_value l) (string_of_loc_value r) label)
           locs)
       flds
   in
-  (*
   let output_eps () =
-    List.iter
-      (fun def ->
-        let fld = List.hd def.input in
-        let color = try List.assoc fld ep_colors with Not_found -> "black" in
-        let label =
-          let fld = find_rep fld in
-          let set = find_rep (List.nth def.input 1) in
-            "ep(" ^ (str_of_symbol fld) ^ ", " ^ (str_of_symbol set) ^ ")"
-        in
-        let i = List.nth def.input 2 in
-        let o = def.output in
-	  Printf.fprintf chan
-            "\"%s\" -> \"%s\" [label=\"%s\", fontcolor=%s, color=%s, style=dotted]\n"
-            (str_of_symbol i) (str_of_symbol o) label color color
-      )
-      (defs_of EntPnt model)
+    let arg_srts = [Set Loc; Fld Loc; Loc] in
+    let m, _ = get_interp model EntPnt (arg_srts, Loc) in
+    ValueListMap.iter (function 
+      | [s; f; l] -> fun v ->
+          let fld = find_term f (Fld Loc) in
+          let set = find_term s (Set Loc) in
+          let color = try List.assoc f ep_colors with Not_found -> "black" in
+          let label =
+            "ep(" ^ (string_of_term fld) ^ ", " ^ (string_of_term set) ^ ")"
+            in
+	    Printf.fprintf chan
+              "\"%s\" -> \"%s\" [label=\"%s\", fontcolor=%s, color=%s, style=dotted]\n"
+              (string_of_loc_value l) (string_of_loc_value v) label color color
+      | _ -> fun v -> ()) 
+      m
   in
-   *)
   let output_locs () =
     let output_data_fields loc srt =
       SymbolSet.iter
@@ -486,41 +532,34 @@ let output_graphviz chan model =
     output_string chan ">];\n";
     output_string chan "}\n";
   in
-  (*
   let output_int_vars () = 
-   let has_int =
-     SymbolMap.exists (fun sym defs ->
-        match decl_of sym model with
-        | ([], Int) -> true
-        | _ -> false) model.interp
-  in
+    let ints = get_symbols_of_sort model ([], Int) in
     let print_ints () =
-      SymbolMap.iter (fun sym defs ->
-        match decl_of sym model with
-        | ([], Int) ->
-            let str = str_of_symbol sym in
-            let value = str_of_symbol (List.hd defs).output in
-            Printf.fprintf chan "        <tr><td>%s = %s</td></tr>\n" str value
-        | _ -> ()) model.interp
+      SymbolSet.iter 
+        (fun sym ->
+          let str = str_of_symbol sym in
+          let value = interp_symbol model sym ([], Int) [] in
+          Printf.fprintf chan "        <tr><td>%s = %s</td></tr>\n" 
+            str (string_of_value value)
+        ) ints
     in
-    if has_int then
+    if not (SymbolSet.is_empty ints) then
       begin
         print_table_header "ints";
         print_ints ();
         print_table_footer ()
       end
   in
-  *)
   let output_sets () =
     let print_sets srt =
-      let sets = get_symbols_of_sort model ([], Set srt) in
-      SymbolSet.iter
+      let sets = get_values_of_sort model (Set srt) in
+      List.iter
         (fun set ->
-          let s = interp_symbol model set ([], Set srt) [] in
-          let s = find_set_value model s Loc in
+          let set_t = find_term set (Set srt) in
+          let s = find_set_value model set Loc in
           let vals = List.map (fun e ->  string_of_sorted_value srt e) (ValueSet.elements s) in
           let set_rep = String.concat ", " vals in
-          Printf.fprintf chan "        <tr><td>%s = {%s}</td></tr>\n" (str_of_symbol set) set_rep
+          Printf.fprintf chan "        <tr><td>%s = {%s}</td></tr>\n" (string_of_term set_t) set_rep
         )
         sets
     in 
@@ -530,36 +569,35 @@ let output_graphviz chan model =
     print_table_footer ()
   in
   (* functions and pred *)
-  (*
   let output_freesyms () =
-    let string_of_def sym def =
-      let rin = List.map (fun x -> str_of_symbol (find_rep x)) def.input in
-      let rout = str_of_symbol (find_rep def.output) in
-        (str_of_symbol sym) ^ "(" ^ (String.concat ", " rin) ^ ") = " ^ rout
-    in
-    print_table_header "predicates/functions";
-    SymbolMap.iter
-      (fun sym (args, _) -> match sym with
-        | FreeSym (id, _) when args <> [] && id <> "k" ->
-          List.iter
-            (fun def -> Printf.fprintf chan "      <tr><td>%s</td></tr>\n" (string_of_def sym def))
-            (defs_of sym model)
-        | _ -> ()
-      )
-      model.sign;
+    print_table_header "predicates and functions";
+    SortedSymbolMap.iter 
+      (function
+        | ((FreeSym _ as sym), ((_ :: _, _) as arity)) -> fun _ ->
+            let m, _ = get_interp model sym arity in
+            ValueListMap.iter 
+              (fun vs v ->
+                let args = List.map2 find_term vs (fst arity) in
+                let t1 = mk_app (snd arity) sym args in
+                let t2 = find_term v (snd arity) in
+                if t1 <> t2 then
+                  Printf.fprintf chan "      <tr><td>%s == %s</td></tr>\n"
+                    (string_of_term t1) (string_of_term t2)
+              ) m
+        | _ -> fun _ -> ()
+      ) model.intp;
     print_table_footer ()
   in
-   *)
   let output_graph () =
     output_string chan "digraph Model {\n";
     output_locs ();
     output_flds ();
     output_loc_vars ();
     output_reach ();
-    (*output_eps ();*)
+    output_eps ();
     output_sets ();
-    (*output_int_vars ();
-    output_freesyms ();*)
+    output_int_vars ();
+    output_freesyms ();
     output_string chan "}\n"
   in
   output_graph ()

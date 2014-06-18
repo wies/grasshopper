@@ -65,7 +65,7 @@ type binder =
   | Forall | Exists
 
 type form =
-  | Atom of term
+  | Atom of term * annot list
   | BoolOp of bool_op * form list
   | Binder of binder * (ident * sort) list * form * annot list
 
@@ -264,7 +264,11 @@ let rec pr_form ppf = function
       (match cmnts with
       |	"" -> fprintf ppf "%a" pr_quantifier (b, vs, f)
       |	c -> fprintf ppf "@[<3>(! %a@ @[:named@ %s@])@]" pr_quantifier (b, vs, f) c)
-  | Atom t -> fprintf ppf "%a" pr_term t
+  | Atom (t, a) -> 
+      let cmnts = extract_comments true a in
+      (match cmnts with
+      | "" -> fprintf ppf "%a" pr_term t
+      | c -> fprintf ppf "@[<3>(! %a@ @[:named@ %s@])@]" pr_term t c)
   | BoolOp (And, []) -> fprintf ppf "%s" "true"
   | BoolOp (Or, []) -> fprintf ppf "%s" "false"
   | BoolOp (Or, fs) -> fprintf ppf "@[<4>(%a@ %a)@]" pr_boolop Or pr_forms fs
@@ -279,7 +283,7 @@ and pr_quantifier ppf =
     | BoolOp (_, fs) ->
         List.fold_left find_patterns acc fs
     | Binder (_, _, f, _) -> find_patterns acc f
-    | Atom (App (_, ts, _)) ->
+    | Atom (App (_, ts, _), _) ->
         let pts = List.filter (is_pattern false) ts in
         List.fold_left (fun acc t -> TermSet.add t acc) acc pts
     | Atom _ -> acc
@@ -402,7 +406,11 @@ let rec pr_form ppf = function
   | BoolOp (Or, fs) -> pr_ors ppf fs
   | BoolOp (Not, [f]) -> pr_not ppf f
   | BoolOp (_, _) -> ()
-  | Atom t -> fprintf ppf "%a" pr_term t
+  | Atom (t, a) -> 
+      let cmnts = extract_comments false a in
+      (match cmnts with
+      |	"" -> fprintf ppf "@[(%a)@]" pr_term t
+      |	c -> fprintf ppf "@[(%a@ /* %s */)@]" pr_term t c)
 
 and pr_ands ppf = function
   | [] -> fprintf ppf "%s" "true"
@@ -416,11 +424,11 @@ and pr_ors ppf = function
   | f :: fs -> fprintf ppf "@[<2>%a@] ||@ %a" pr_form f pr_ors fs
 
 and pr_not ppf = function
-  | Atom (App (Eq, [t1; t2], _)) ->
+  | Atom (App (Eq, [t1; t2], _), _) ->
       fprintf ppf "@[%a@]@ !=@ @[<2>%a@]" pr_term t1 pr_term t2
-  | Atom (App (Elem, [t1; t2], _)) ->
+  | Atom (App (Elem, [t1; t2], _), _) ->
       fprintf ppf "@[%a@]@ !in@ @[<2>%a@]" pr_term t1 pr_term t2
-  | Atom (App (_, [], _)) as f -> 
+  | Atom (App (_, [], _), _) as f -> 
       fprintf ppf "!@[%a@]" pr_form f
   | f -> fprintf ppf "!(@[%a@])" pr_form f
 
@@ -436,8 +444,18 @@ and pr_forms ppf = function
 
 
 let string_of_sort s = pr_sort0 str_formatter s; flush_str_formatter ()
-let string_of_term t = pr_term str_formatter t; flush_str_formatter ()
-let string_of_form f = pr_form str_formatter f; flush_str_formatter ()
+
+let string_of_term t = 
+  let margin = pp_get_margin str_formatter () in
+  pp_set_margin str_formatter 9999;
+  pr_term str_formatter t; 
+  let res = flush_str_formatter () in
+  pp_set_margin str_formatter margin;
+  res
+
+let string_of_form f = 
+  pr_form str_formatter f; 
+  flush_str_formatter ()
 
 let print_forms ch fs = 
   List.iter (fun f -> print_form ch f;  output_string ch "\n") fs

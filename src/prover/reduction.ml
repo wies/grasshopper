@@ -12,17 +12,17 @@ open SimplifyForm
 let reduce_exists =
   let e = fresh_ident "?e" in
   let rec elim_neq = function
-    | BoolOp (Not, [Atom (App (Eq, [s1; s2], _))]) as f ->
+    | BoolOp (Not, [Atom (App (Eq, [s1; s2], _), a)]) as f ->
 	(match sort_of s1 with
 	| Set srt ->
 	    let ve = mk_var srt e in
-	    mk_exists [(e, srt)] (mk_or [mk_and [smk_elem ve s1; mk_not (smk_elem ve s2)];
-					 mk_and [smk_elem ve s2; mk_not (smk_elem ve s1)]])
+	    mk_exists [(e, srt)] (mk_or [mk_and [smk_elem ~ann:a ve s1; mk_not (smk_elem ~ann:a ve s2)];
+					 mk_and [smk_elem ~ann:a ve s2; mk_not (smk_elem ~ann:a ve s1)]])
 	| _ -> f)
-    | BoolOp (Not, [Atom (App (SubsetEq, [s1; s2], _))]) ->
+    | BoolOp (Not, [Atom (App (SubsetEq, [s1; s2], _), a)]) ->
 	let srt = element_sort_of_set s1 in
 	let ve = mk_var srt e in
-	mk_exists [(e, srt)] (mk_and [smk_elem ve s1; mk_not (smk_elem ve s2)])
+	mk_exists [(e, srt)] (mk_and [smk_elem ~ann:a ve s1; mk_not (smk_elem ~ann:a ve s2)])
     | BoolOp (op, fs) -> BoolOp (op, List.map elim_neq fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, elim_neq f, a)
     | f -> f
@@ -43,11 +43,11 @@ let massage_field_reads fs =
   | BoolOp (And as op, fs)
   | BoolOp (Or as op, fs) -> BoolOp (op, List.map massage fs)
   | Binder (b, vs, f, a) -> Binder (b, vs, massage f, a)
-  | Atom (App (Eq, [App (Read, [fld; Var _ as arg], Loc); App (FreeSym _, [], _) as t], _))
-  | Atom (App (Eq, [App (FreeSym _, [], _) as t; App (Read, [fld; Var _ as arg], Loc)], _)) 
+  | Atom (App (Eq, [App (Read, [fld; Var _ as arg], Loc); App (FreeSym _, [], _) as t], _), a)
+  | Atom (App (Eq, [App (FreeSym _, [], _) as t; App (Read, [fld; Var _ as arg], Loc)], _), a) 
     when TermSet.mem fld reach_flds ->
       let f1 = 
-        mk_and [mk_btwn fld arg t t;
+        mk_and [mk_btwn ~ann:a fld arg t t;
                 mk_forall [Axioms.l1]
                   (mk_or [mk_eq Axioms.loc1 arg; mk_eq Axioms.loc1 t; 
                           mk_not (mk_btwn fld arg Axioms.loc1 t)])]
@@ -104,7 +104,7 @@ let field_partitions fs gts =
     let rec collect_eq partition = function
       | BoolOp (Not, f) -> partition
       | BoolOp (op, fs) -> List.fold_left collect_eq partition fs
-      | Atom (App (Eq, [App (_, _, Fld _) as fld1; fld2], _)) ->
+      | Atom (App (Eq, [App (_, _, Fld _) as fld1; fld2], _), _) ->
           Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
       | Binder (_, _, f, _) -> collect_eq partition f
       | f -> partition
@@ -198,7 +198,7 @@ let reduce_frame fs =
       | other -> failwith ("reduce_frame did not expect f with type " ^ (string_of_sort other))
   in
   let rec process f (frame_axioms, fields) = match f with
-    | Atom (App (Frame, [x; a; fld; fld'], _)) when fld <> fld' ->
+    | Atom (App (Frame, [x; a; fld; fld'], _), ann) when fld <> fld' ->
         let fields1 = 
           let _, flds = 
             try TermMap.find x fields
@@ -206,7 +206,7 @@ let reduce_frame fs =
           in
           TermMap.add x (a, fld :: fld' :: flds) fields
         in
-        mk_implies f (expand_frame x a fld fld') :: frame_axioms, fields1
+        mk_implies f (annotate (expand_frame x a fld fld') ann) :: frame_axioms, fields1
     | BoolOp (op, fs) -> 
         List.fold_left (fun acc f -> process f acc)
           (frame_axioms, fields) fs
@@ -294,7 +294,7 @@ let reduce_sets fs =
   let rec simplify = function
     | BoolOp (op, fs) -> BoolOp (op, List.map simplify fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, simplify f, a)
-    | Atom t -> Atom (simplify_term t)
+    | Atom (t, a) -> Atom (simplify_term t, a)
   in
   let fs1 = List.map simplify fs in
   let elem_srts = 
