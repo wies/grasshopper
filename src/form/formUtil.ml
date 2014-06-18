@@ -725,12 +725,14 @@ let skolemize f =
 
 (** Make all comments in formula [f] unique *)
 let unique_comments f =
+  let mk_unique anns =
+    List.map (function Comment c -> Comment (str_of_ident (fresh_ident c)) | a -> a) anns
+  in
   let rec uc = function 
     | BoolOp (op, fs) -> BoolOp (op, List.map uc fs)
     | Binder (b, vs, f, anns) ->
-        let anns1 = List.map (function Comment c -> Comment (str_of_ident (fresh_ident c)) | a -> a) anns in
-        Binder (b, vs, uc f, anns1)
-    | f -> f
+        Binder (b, vs, uc f, mk_unique anns)
+    | Atom (t, anns) -> Atom (t, mk_unique anns)
   in
   uc f
 

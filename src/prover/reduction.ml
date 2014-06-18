@@ -16,13 +16,13 @@ let reduce_exists =
 	(match sort_of s1 with
 	| Set srt ->
 	    let ve = mk_var srt e in
-	    mk_exists [(e, srt)] (mk_or [mk_and [smk_elem ~ann:a ve s1; mk_not (smk_elem ~ann:a ve s2)];
-					 mk_and [smk_elem ~ann:a ve s2; mk_not (smk_elem ~ann:a ve s1)]])
+	    mk_exists [(e, srt)] (annotate (mk_or [mk_and [smk_elem ve s1; mk_not (smk_elem ve s2)];
+					           mk_and [smk_elem ve s2; mk_not (smk_elem ve s1)]]) a)
 	| _ -> f)
     | BoolOp (Not, [Atom (App (SubsetEq, [s1; s2], _), a)]) ->
 	let srt = element_sort_of_set s1 in
 	let ve = mk_var srt e in
-	mk_exists [(e, srt)] (mk_and [smk_elem ~ann:a ve s1; mk_not (smk_elem ~ann:a ve s2)])
+	mk_exists [(e, srt)] (annotate (mk_and [smk_elem ve s1; mk_not (smk_elem ve s2)]) a)
     | BoolOp (op, fs) -> BoolOp (op, List.map elim_neq fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, elim_neq f, a)
     | f -> f
@@ -47,10 +47,11 @@ let massage_field_reads fs =
   | Atom (App (Eq, [App (FreeSym _, [], _) as t; App (Read, [fld; Var _ as arg], Loc)], _), a) 
     when TermSet.mem fld reach_flds ->
       let f1 = 
-        mk_and [mk_btwn ~ann:a fld arg t t;
+        annotate
+          (mk_and [mk_btwn fld arg t t;
                 mk_forall [Axioms.l1]
                   (mk_or [mk_eq Axioms.loc1 arg; mk_eq Axioms.loc1 t; 
-                          mk_not (mk_btwn fld arg Axioms.loc1 t)])]
+                          mk_not (mk_btwn fld arg Axioms.loc1 t)])]) a
       in
       f1
   | f -> f
