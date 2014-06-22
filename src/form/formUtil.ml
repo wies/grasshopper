@@ -3,6 +3,14 @@
 open Form
 open Util
 
+let dummy_position = 
+  { sp_file = "";
+    sp_start_line = 0;
+    sp_start_col = 0;
+    sp_end_line = 0;
+    sp_end_col = 0 
+  }
+
 let form_set_of_list fs =
   List.fold_left 
     (fun acc f -> FormSet.add f acc) 
@@ -232,6 +240,8 @@ let annotate f ann =
 
 let mk_comment c f = annotate f [Comment c]
 
+let mk_srcpos pos f = annotate f [SrcPos pos]
+
 let smk_op op fs =
   match op with
   | Not -> mk_not (List.hd fs)
@@ -261,8 +271,10 @@ let rec nnf = function
   | BoolOp (Not, [BoolOp (Not, [f])]) -> nnf f
   | BoolOp (Not, [BoolOp (op, fs)]) -> 
       smk_op (dualize_op op) (List.map (fun f -> nnf (mk_not f)) fs)
-  | BoolOp (Not, [Binder (b, xs, f, a)]) -> 
-      Binder (dualize_binder b, xs, nnf (mk_not f), a)
+  | BoolOp (Not, [Binder (b, [], f, a)]) ->
+      Binder (b, [], nnf (mk_not f), a)
+  | BoolOp (Not, [Binder (b, vs, f, a)]) -> 
+      Binder (dualize_binder b, vs, nnf (mk_not f), a)
   | BoolOp (op, fs) -> smk_op op (List.map nnf fs)
   | Binder (b, vs, f, a) -> mk_binder ~ann:a b vs (nnf f)
   | f -> f
@@ -514,9 +526,9 @@ let subst_id subst_map f =
     | Match (t, f) -> Match (subt t, f)
   in
   let suba a = match a with
-    | Comment c -> Comment c
     | TermGenerator (bvs, fvs, guards, gen_term) -> 
       TermGenerator (bvs, fvs, List.map subg guards, subt gen_term)
+    | a -> a
   in
   let rec sub = function 
     | BoolOp (op, fs) -> BoolOp (op, List.map sub fs)
@@ -578,7 +590,6 @@ let subst subst_map f =
     in vs1, sm2
   in
   let suba bvs1 sm = function
-    | Comment c -> Comment c
     | TermGenerator (bvs, fvs, guards, gen_term) -> 
         let fvs1, sm1 = rename_vars fvs sm in
         let guards1 = 
@@ -587,6 +598,7 @@ let subst subst_map f =
             guards
         in
         TermGenerator (bvs1, fvs1, guards1, subst_term sm1 gen_term)
+    | a -> a
   in
   let rec sub sm = function 
     | BoolOp (op, fs) -> BoolOp (op, List.map (sub sm) fs)
@@ -661,6 +673,8 @@ let foralls_to_exists f =
           find (IdSet.remove x nodefs) (mk_eq ~ann:a xt t :: defs) gs fs
       | BoolOp (Or, fs1) :: fs ->
           find nodefs defs gs (fs1 @ fs)
+      | Binder (_, [], f, _) :: fs ->
+          find nodefs defs gs (f :: fs)
       | f :: fs ->
           find nodefs defs (f :: gs) fs
       | [] ->

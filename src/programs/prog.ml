@@ -7,16 +7,6 @@ open Axioms
 let alloc_id = fresh_ident "Alloc"
 let alloc_set = mk_loc_set alloc_id
 
-(** Source position *)
-
-type source_position = {
-    sp_file : string;
-    sp_start_line : int;
-    sp_start_col : int;
-    sp_end_line : int;
-    sp_end_col : int;
-  }
-
 (** Specification formulas *)
 
 type spec_form =
@@ -148,14 +138,6 @@ type program = {
   } 
 
 (** Auxiliary functions for programs and declarations *)
-
-let dummy_position = 
-  { sp_file = "";
-    sp_start_line = 0;
-    sp_start_col = 0;
-    sp_end_line = 0;
-    sp_end_col = 0 
-  }
 
 let mk_loc_set_decl id pos =
   { var_name = id;

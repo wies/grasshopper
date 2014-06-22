@@ -4,6 +4,7 @@ type ident = Form.ident
 type sort = Form.sort
 type bool_op = Form.bool_op
 type binder = Form.binder
+type source_position = Form.source_position
 
 let mk_ident = FormUtil.mk_ident
 module IdMap = Form.IdMap
@@ -21,11 +22,11 @@ type sep_op =
   | SepStar | SepPlus | SepWand | SepIncl
   
 type form =
-  | Pure of Form.form
-  | Atom of pred_symbol * Form.term list
-  | SepOp of sep_op * form * form
-  | BoolOp of bool_op * form list
-  | Binder of binder * (ident * sort) list * form
+  | Pure of Form.form * source_position option
+  | Atom of pred_symbol * Form.term list * source_position option
+  | SepOp of sep_op * form * form * source_position option
+  | BoolOp of bool_op * form list * source_position option
+  | Binder of binder * (ident * sort) list * form * source_position option
 
 module SlSet = Set.Make(struct
     type t = form
@@ -42,54 +43,54 @@ module SlMap = Map.Make(struct
 open Format
 
 let rec pr_form ppf = function
-  | Pure p -> Form.pr_form ppf p
-  | BoolOp (Form.Not, fs) -> pr_not ppf (List.hd fs)
-  | BoolOp (Form.And, fs) -> pr_ands ppf fs
-  | BoolOp (Form.Or, fs) -> pr_ors ppf fs
-  | SepOp (SepStar, f1, f2) -> pr_sep_star ppf [f1; f2]
-  | SepOp (SepPlus, f1, f2) -> pr_sep_plus ppf [f1; f2]
-  | SepOp (SepWand, f1, f2) -> 
+  | Pure (p, _) -> Form.pr_form ppf p
+  | BoolOp (Form.Not, fs, _) -> pr_not ppf (List.hd fs)
+  | BoolOp (Form.And, fs, _) -> pr_ands ppf fs
+  | BoolOp (Form.Or, fs, _) -> pr_ors ppf fs
+  | SepOp (SepStar, f1, f2, _) -> pr_sep_star ppf [f1; f2]
+  | SepOp (SepPlus, f1, f2, _) -> pr_sep_plus ppf [f1; f2]
+  | SepOp (SepWand, f1, f2, _) -> 
       fprintf ppf "@[<2>%a@] --*@ %a" pr_form f1 pr_form f2
-  | SepOp (SepIncl, f1, f2) -> 
+  | SepOp (SepIncl, f1, f2, _) -> 
       fprintf ppf "@[<2>%a@] -**@ %a" pr_form f1 pr_form f2
-  | Atom (Emp, _) -> fprintf ppf "emp"
-  | Atom (Region, [r]) -> 
+  | Atom (Emp, _, _) -> fprintf ppf "emp"
+  | Atom (Region, [r], _) -> 
       (match r with
       | Form.App (Form.SetEnum, [t], _) ->
           fprintf ppf "acc(@[%a@])" Form.pr_term t
       | _ ->
           fprintf ppf "acc(@[%a@])" Form.pr_term r)
-  | Atom (Region, _) -> ()
-  | Atom (Pred p, ts) ->
+  | Atom (Region, _, _) -> ()
+  | Atom (Pred p, ts, _) ->
       fprintf ppf "%a(@[%a@])" Form.pr_ident p Form.pr_term_list ts
-  | Binder (b, vs, f) ->
+  | Binder (b, vs, f, _) ->
       fprintf ppf "@[(%a)@]" pr_quantifier (b, vs, f)
 
 and pr_sep_star ppf = function
   | [] -> fprintf ppf "%s" "emp"
   | [f] -> fprintf ppf "@[<2>%a@]" pr_form f
-  | (BoolOp (Form.Or, _) as f) :: fs 
-  | (BoolOp (Form.And, _) as f) :: fs
-  | (SepOp (SepPlus, _, _) as f) :: fs
-  | (SepOp (SepWand, _, _) as f) :: fs
-  | (SepOp (SepIncl, _, _) as f) :: fs
+  | (BoolOp (Form.Or, _, _) as f) :: fs 
+  | (BoolOp (Form.And, _, _) as f) :: fs
+  | (SepOp (SepPlus, _, _, _) as f) :: fs
+  | (SepOp (SepWand, _, _, _) as f) :: fs
+  | (SepOp (SepIncl, _, _, _) as f) :: fs
   | (Binder _ as f) :: fs -> fprintf ppf "(@[<2>%a@]) &*&@ %a" pr_form f pr_sep_star fs
   | f :: fs -> fprintf ppf "@[<2>%a@] &*&@ %a" pr_form f pr_sep_star fs
 
 and pr_sep_plus ppf = function
   | [] -> fprintf ppf "%s" "emp"
   | [f] -> fprintf ppf "@[<2>%a@]" pr_form f
-  | (BoolOp (Form.Or, _) as f) :: fs 
-  | (BoolOp (Form.And, _) as f) :: fs
-  | (SepOp (SepWand, _, _) as f) :: fs
-  | (SepOp (SepIncl, _, _) as f) :: fs
+  | (BoolOp (Form.Or, _, _) as f) :: fs 
+  | (BoolOp (Form.And, _, _) as f) :: fs
+  | (SepOp (SepWand, _, _, _) as f) :: fs
+  | (SepOp (SepIncl, _, _, _) as f) :: fs
   | (Binder _ as f) :: fs -> fprintf ppf "(@[<2>%a@]) &+&@ %a" pr_form f pr_sep_plus fs
   | f :: fs -> fprintf ppf "@[<2>%a@] &+&@ %a" pr_form f pr_sep_plus fs
 
 and pr_ands ppf = function
   | [] -> fprintf ppf "%s" "true"
   | [f] -> fprintf ppf "@[<2>%a@]" pr_form f
-  | (BoolOp (Form.Or, _) as f) :: fs
+  | (BoolOp (Form.Or, _, _) as f) :: fs
   | (Binder _ as f) :: fs -> fprintf ppf "(@[<2>%a@]) &&@ %a" pr_form f pr_ands fs
   | f :: fs -> fprintf ppf "@[<2>%a@] &&@ %a" pr_form f pr_ands fs
 
@@ -100,8 +101,8 @@ and pr_ors ppf = function
   | f :: fs -> fprintf ppf "@[<2>%a@] ||@ %a" pr_form f pr_ors fs
 
 and pr_not ppf = function
-  | (Atom (Emp, _) as f)
-  | (Atom (Pred _, _) as f) -> fprintf ppf "!@[<2>%a@]" pr_form f
+  | (Atom (Emp, _, _) as f)
+  | (Atom (Pred _, _, _) as f) -> fprintf ppf "!@[<2>%a@]" pr_form f
   | f -> fprintf ppf "!(@[<3>%a@])" pr_form f
 
 and pr_quantifier ppf = function

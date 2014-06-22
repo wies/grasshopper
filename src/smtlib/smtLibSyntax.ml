@@ -2,7 +2,7 @@
 
 type ident = Form.ident
 
-type pos = Prog.source_position
+type pos = Form.source_position
 
 type sort = 
   | IntSort | BoolSort

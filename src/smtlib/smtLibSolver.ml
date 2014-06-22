@@ -442,7 +442,7 @@ let convert_model smtModel =
     let fail pos_opt = 
       let pos = match pos_opt with
       | Some pos -> pos
-      | None -> Prog.dummy_position
+      | None -> dummy_position
       in
       let msg = 
         ProgError.error_to_string pos

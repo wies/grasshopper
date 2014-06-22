@@ -1,5 +1,5 @@
 {
-open Prog
+open Form
 open Lexing
 open SmtLibSyntax
 open SmtLibParser

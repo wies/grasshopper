@@ -4,7 +4,7 @@ open Form
 
 type idents = ident list
 
-type pos = Prog.source_position
+type pos = source_position
 
 type name = string
 
@@ -179,7 +179,7 @@ let var_decl vname vtype vghost vimpl vpos =
   { v_name = vname; v_type = vtype; v_ghost = vghost; v_implicit = vimpl; v_aux = false; v_pos = vpos } 
 
 let compilation_unit pkg ims decls =
-  let alloc_decl = VarDecl (var_decl Prog.alloc_id (SetType LocType) true false Prog.dummy_position) in
+  let alloc_decl = VarDecl (var_decl Prog.alloc_id (SetType LocType) true false FormUtil.dummy_position) in
   let check_uniqueness id pos (vdecls, pdecls, prdecls, sdecls) =
     if IdMap.mem id vdecls || IdMap.mem id sdecls || IdMap.mem id pdecls || IdMap.mem id prdecls
     then ProgError.error pos ("redeclaration of identifier " ^ (fst id) ^ ".");

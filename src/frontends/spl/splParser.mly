@@ -82,7 +82,7 @@ declarations:
 
 
 proc_decl:
-| proc_header { proc_decl $1 (Skip dummy_position) }
+| proc_header { proc_decl $1 (Skip FormUtil.dummy_position) }
 | proc_header proc_impl {
   proc_decl $1 $2
 } 
@@ -106,7 +106,7 @@ proc_header:
       p_returns = returns; 
       p_locals = locals;
       p_contracts = $7;
-      p_body = Skip dummy_position; 
+      p_body = Skip FormUtil.dummy_position; 
       p_pos = mk_position 2 2;
     }
   in 
@@ -282,7 +282,7 @@ assign_lhs:
 
 if_then_stmt:
 | IF LPAREN expr RPAREN stmt  { 
-  If ($3, $5, Skip dummy_position, mk_position 1 6)
+  If ($3, $5, Skip FormUtil.dummy_position, mk_position 1 6)
 }
 ;
 
@@ -300,13 +300,13 @@ if_then_else_stmt_no_short_if:
 
 while_stmt:
 | WHILE LPAREN expr RPAREN loop_contracts stmt {
-  Loop ($5, Skip dummy_position, $3, $6, mk_position 1 6)
+  Loop ($5, Skip FormUtil.dummy_position, $3, $6, mk_position 1 6)
 } 
 ;
 
 while_stmt_no_short_if:
 | WHILE LPAREN expr RPAREN loop_contracts stmt_no_short_if {
-  Loop ($5, Skip dummy_position, $3, $6, mk_position 1 6)
+  Loop ($5, Skip FormUtil.dummy_position, $3, $6, mk_position 1 6)
 } 
 ;
 

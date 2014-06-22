@@ -573,7 +573,7 @@ let convert cus =
           | [] -> FOL_term (FormUtil.mk_empty (Set elem_ty), SetType ty)
           | _ -> FOL_term (FormUtil.mk_setenum ts, SetType ty))
       | IntVal (i, _) -> FOL_term (FormUtil.mk_int i, IntType)
-      | BoolVal (b, _) -> FOL_form (FormUtil.mk_bool b)
+      | BoolVal (b, pos) -> FOL_form (FormUtil.mk_srcpos pos (FormUtil.mk_bool b))
       | Dot (e, fld_id, pos) -> 
           let t, ty = extract_term locals LocType e in
           (match ty with
@@ -588,9 +588,9 @@ let convert cus =
           let t, ty = extract_term locals UniversalType e in
           (match ty with
           | StructType id ->
-              SL_form (SlUtil.mk_cell t)
+              SL_form (SlUtil.mk_cell ~pos:pos t)
           | SetType (StructType _) ->
-              SL_form (SlUtil.mk_region t)
+              SL_form (SlUtil.mk_region ~pos:pos t)
           | LocType -> ProgError.error pos "Cannot access null"
           | ty -> failwith "unexpected type")
       | BtwnPred (fld, x, y, z, pos) ->
@@ -600,7 +600,7 @@ let convert cus =
               let tx, _ = extract_term locals (StructType id) x in
               let ty, _ = extract_term locals (StructType id) y in
               let tz, _ = extract_term locals (StructType id) z in
-              FOL_form (FormUtil.mk_btwn tfld tx ty tz)
+              FOL_form (FormUtil.mk_srcpos pos (FormUtil.mk_btwn tfld tx ty tz))
           | _ -> type_error (pos_of_expr fld) "reference field" (ty_str fld_ty))
       | Quant (q, decls, f, pos) ->
           let vars, locals1 = 
@@ -622,7 +622,7 @@ let convert cus =
             in
             let f1 = extract_fol_form locals1 f in
             let f2 = FormUtil.subst_consts subst f1 in
-            FOL_form (mk_quant vars f2)
+            FOL_form (FormUtil.mk_srcpos pos (mk_quant vars f2))
           with _ -> 
             let mk_quant = match q with
             | Forall -> SlUtil.mk_forall 
@@ -630,7 +630,7 @@ let convert cus =
             in
             let f1 = extract_sl_form locals1 f in
             let f2 = SlUtil.subst_consts subst f1 in
-            SL_form (mk_quant vars f2))
+            SL_form (mk_quant ~pos:pos vars f2))
       | GuardedQuant (q, id, e, f, pos) ->
           let e1, ty = extract_term locals (SetType UniversalType) e in
           (match ty with
@@ -649,7 +649,7 @@ let convert cus =
               in
               let f1 = mk_guard (FormUtil.mk_elem v_id e1) (extract_fol_form locals1 f) in
               let f2 = FormUtil.subst_consts (IdMap.add id v_id IdMap.empty) f1 in
-              FOL_form (mk_quant [(id, elem_srt)] f2)
+              FOL_form (FormUtil.mk_srcpos pos (mk_quant [(id, elem_srt)] f2))
           | _ -> failwith "unexpected type")
       | PredApp (id, es, pos) ->
           let decl = IdMap.find id cu.pred_decls in
@@ -658,17 +658,17 @@ let convert cus =
             try List.map2 (extract_term locals) tys es
             with Invalid_argument _ -> 
               pred_arg_mismatch_error pos (fst id) (List.length tys)
-          in SL_form (SlUtil.mk_pred id (List.map fst ts))
-      | BinaryOp (e1, OpEq, e2, _) ->
+          in SL_form (SlUtil.mk_pred ~pos:pos id (List.map fst ts))
+      | BinaryOp (e1, OpEq, e2, pos) ->
           (match convert_expr locals e1 with
           | FOL_form _ 
           | FOL_term (_, BoolType) ->
               let f1 = extract_fol_form locals e1 in
               let f2 = extract_fol_form locals e2 in
-              FOL_form (FormUtil.mk_iff f1 f2)
+              FOL_form (FormUtil.mk_srcpos pos (FormUtil.mk_iff f1 f2))
           | FOL_term (t1, ty1) ->
               let t2, _ = extract_term locals ty1 e2 in
-              FOL_form (FormUtil.mk_eq t1 t2)
+              FOL_form (FormUtil.mk_srcpos pos (FormUtil.mk_eq t1 t2))
           | SL_form _ -> 
               ProgError.error (pos_of_expr e1) 
                 "Operator == is not defined for SL expressions")
@@ -702,10 +702,10 @@ let convert cus =
           let t1, _ = extract_term locals IntType e1 in
           let t2, _ = extract_term locals IntType e2 in
           FOL_term (mk_app t1 t2, IntType)
-      | BinaryOp (e1, (OpGt as op), e2, _)
-      | BinaryOp (e1, (OpLt as op), e2, _)
-      | BinaryOp (e1, (OpGeq as op), e2, _)
-      | BinaryOp (e1, (OpLeq as op), e2, _) ->
+      | BinaryOp (e1, (OpGt as op), e2, pos)
+      | BinaryOp (e1, (OpLt as op), e2, pos)
+      | BinaryOp (e1, (OpGeq as op), e2, pos)
+      | BinaryOp (e1, (OpLeq as op), e2, pos) ->
           let mk_int_form =
             match op with
             | OpGt -> FormUtil.mk_gt
@@ -725,15 +725,15 @@ let convert cus =
           (try
             let t1, _ = extract_term locals IntType e1 in
             let t2, _ = extract_term locals IntType e2 in            
-            FOL_form (mk_int_form t1 t2)
+            FOL_form (FormUtil.mk_srcpos pos (mk_int_form t1 t2))
           with _ ->
             let t1, ty1 = extract_term locals (SetType UniversalType) e1 in
             let t2, _ = extract_term locals ty1 e2 in            
-            FOL_form (mk_set_form t1 t2))
-      | BinaryOp (e1, OpIn, e2, _) ->
+            FOL_form (FormUtil.mk_srcpos pos (mk_set_form t1 t2)))
+      | BinaryOp (e1, OpIn, e2, pos) ->
           let t1, ty1 = extract_term locals UniversalType e1 in
           let t2, _ = extract_term locals (SetType ty1) e2 in
-          FOL_form (FormUtil.mk_elem t1 t2)
+          FOL_form (FormUtil.mk_srcpos pos (FormUtil.mk_elem t1 t2))
       | BinaryOp (e1, (OpAnd as op), e2, _)
       | BinaryOp (e1, (OpOr as op), e2, _)
       | BinaryOp (e1, (OpImpl as op), e2, _) ->
@@ -758,7 +758,7 @@ let convert cus =
             let f1 = extract_sl_form locals e1 in
             let f2 = extract_sl_form locals e2 in
             SL_form (mk_form f1 f2))
-      | BinaryOp (e1, OpPts, e2, _) ->
+      | BinaryOp (e1, OpPts, e2, pos) ->
           let fld, ind, ty = 
             match convert_expr locals e1 with
             | FOL_term (App (Read, [fld; ind], _), ty) -> fld, ind, ty
@@ -767,11 +767,11 @@ let convert cus =
                   "Expected field access on left-hand-side of points-to predicate"
           in
           let t2, _ = extract_term locals ty e2 in
-          SL_form (SlUtil.mk_pts fld ind t2)
-      | BinaryOp (e1, (OpSepStar as op), e2, _)
-      | BinaryOp (e1, (OpSepPlus as op), e2, _)
-      | BinaryOp (e1, (OpSepIncl as op), e2, _)
-      | BinaryOp (e1, (OpSepWand as op), e2, _) ->
+          SL_form (SlUtil.mk_pts ~pos:pos fld ind t2)
+      | BinaryOp (e1, (OpSepStar as op), e2, pos)
+      | BinaryOp (e1, (OpSepPlus as op), e2, pos)
+      | BinaryOp (e1, (OpSepIncl as op), e2, pos)
+      | BinaryOp (e1, (OpSepWand as op), e2, pos) ->
           let mk_op = function
             | OpSepStar -> SlUtil.mk_sep_star
             | OpSepPlus -> SlUtil.mk_sep_plus
@@ -781,20 +781,20 @@ let convert cus =
           in
           let f1 = extract_sl_form locals e1 in
           let f2 = extract_sl_form locals e2 in
-          SL_form (mk_op op f1 f2)
+          SL_form (mk_op ~pos:pos op f1 f2)
       | UnaryOp (OpPlus, e, _) ->
           let t, _ = extract_term locals IntType e in 
           FOL_term (t, IntType)
       | UnaryOp (OpMinus, e, _) ->
           let t, _ = extract_term locals IntType e in
           FOL_term (FormUtil.mk_uminus t, IntType)
-      | UnaryOp (OpNot, e, _) ->
+      | UnaryOp (OpNot, e, pos) ->
           (try
             let f = extract_fol_form locals e in
             FOL_form (FormUtil.mk_not f)
           with ProgError.Prog_error _ ->
             let f = extract_sl_form locals e in
-            SL_form (SlUtil.mk_not f))
+            SL_form (SlUtil.mk_not ~pos:pos f))
       | Ident (id, pos) ->
           let decl = find_var_decl locals id in
           let srt = convert_type decl.v_type in
@@ -803,7 +803,7 @@ let convert cus =
     and extract_sl_form locals e =
       match convert_expr locals e with
       | SL_form f -> f
-      | FOL_form f -> Pure f
+      | FOL_form f -> Pure (f, Some (pos_of_expr e))
       | FOL_term (t, ty) ->
          type_error (pos_of_expr e) "expression of type bool" (ty_str ty)
     and extract_fol_form locals e =
@@ -816,8 +816,12 @@ let convert cus =
     and extract_term locals ty e =
       match convert_expr locals e with
       | SL_form _ -> type_error (pos_of_expr e) (ty_str ty) "SL expression"
-      | FOL_form (BoolOp (And, [])) -> Form.App (BoolConst true, [], Bool), BoolType
-      | FOL_form (BoolOp (Or, [])) -> Form.App (BoolConst false, [], Bool), BoolType
+      | FOL_form (BoolOp (And, [])) 
+      | FOL_form (Binder (_, [], BoolOp (And, []), _)) -> 
+          Form.App (BoolConst true, [], Bool), BoolType
+      | FOL_form (BoolOp (Or, []))
+      | FOL_form (Binder (_, [], BoolOp (Or, []), _)) -> 
+          Form.App (BoolConst false, [], Bool), BoolType
       | FOL_form (Atom (t, _)) -> t, BoolType
       | FOL_form _ -> type_error (pos_of_expr e) (ty_str ty) "formula"
       | FOL_term (t, tty) ->

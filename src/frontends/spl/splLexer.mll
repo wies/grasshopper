@@ -1,4 +1,5 @@
 {
+open Form
 open Prog
 open SplParser
 open Lexing

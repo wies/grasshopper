@@ -16,8 +16,8 @@ let reduce_exists =
 	(match sort_of s1 with
 	| Set srt ->
 	    let ve = mk_var srt e in
-	    mk_exists [(e, srt)] (annotate (mk_or [mk_and [smk_elem ve s1; mk_not (smk_elem ve s2)];
-					           mk_and [smk_elem ve s2; mk_not (smk_elem ve s1)]]) a)
+	    mk_exists [(e, srt)] (mk_or [mk_and [smk_elem ~ann:a ve s1; mk_not (smk_elem ~ann:a ve s2)];
+					 mk_and [smk_elem ~ann:a ve s2; mk_not (smk_elem ~ann:a ve s1)]])
 	| _ -> f)
     | BoolOp (Not, [Atom (App (SubsetEq, [s1; s2], _), a)]) ->
 	let srt = element_sort_of_set s1 in

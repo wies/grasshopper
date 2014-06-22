@@ -2,6 +2,17 @@
 
 open Util
 
+(** {6 Source position} *)
+
+type source_position = {
+    sp_file : string;
+    sp_start_line : int;
+    sp_start_col : int;
+    sp_end_line : int;
+    sp_end_col : int;
+  }
+
+
 (** {6 Sorts and symbols} *)
 
 type ident = string * int
@@ -56,6 +67,7 @@ type guard =
   
 type annot =
   | Comment of string
+  | SrcPos of source_position
   | TermGenerator of sorted_ident list * sorted_ident list * guard list * term
 
 type bool_op =

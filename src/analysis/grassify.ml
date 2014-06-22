@@ -21,10 +21,10 @@ let elim_sl prog =
     in
       Sl.SlSet.fold
         (fun p acc -> match p with
-          | Sl.Atom (Sl.Pred id, args) ->
+        | Sl.Atom (Sl.Pred id, args, _) ->
             let old = try IdMap.find id acc with Not_found -> [] in
-              IdMap.add id (args :: old) acc
-          | _ -> failwith "expected Sl.Pred")
+            IdMap.add id (args :: old) acc
+        | _ -> failwith "expected Sl.Pred")
         preds_set
         IdMap.empty
   in

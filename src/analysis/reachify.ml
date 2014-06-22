@@ -9,7 +9,7 @@ let dom_id = fresh_ident "domain"
 let dom_set = mk_loc_set dom_id
 
 let get_cases pred = match pred.pred_body.spec_form with
-  | SL (Sl.BoolOp (Or, cases)) -> cases
+  | SL (Sl.BoolOp (Or, cases, _)) -> cases
   | SL case -> [case]
   | FOL _ -> raise (Compile_pred_failure "expected SL")
 
@@ -125,13 +125,13 @@ let aux_substitution caller callee =
  *)
 let isolate_cases pred =
   let rec decompose case = match case with
-    | Sl.SepOp (Sl.SepStar, f1, f2) ->
+    | Sl.SepOp (Sl.SepStar, f1, f2, _) ->
       let lst = [f1; f2] in
       List.fold_left
         (fun (a1,b1,c1) (a2,b2,c2) -> (a1 @ a2, b1 @ b2, c1 @ c2) )
         ([],[],[])
         (List.map decompose lst)
-    | Sl.BoolOp (And, lst) ->
+    | Sl.BoolOp (And, lst, _) ->
       List.fold_left
         (fun (pure,sep,preds) (p,s,pr) ->
           if sep = [] && preds = [] then (p@pure,s@sep,pr@preds)
@@ -140,10 +140,10 @@ let isolate_cases pred =
         )
         ([],[],[])
         (List.map decompose lst)
-    | Sl.Pure f -> ([f],[],[])
-    | Sl.Atom (Sl.Region, args) -> ([],args,[])
-    | Sl.Atom (Sl.Emp, []) -> ([],[],[])
-    | Sl.Atom (Sl.Pred p, args) -> ([],[],[(p, args)])
+    | Sl.Pure (f, _) -> ([f],[],[])
+    | Sl.Atom (Sl.Region, args, _) -> ([],args,[])
+    | Sl.Atom (Sl.Emp, [], _) -> ([],[],[])
+    | Sl.Atom (Sl.Pred p, args, _) -> ([],[],[(p, args)])
     | other -> raise (Compile_pred_failure ("do not support '"^(Sl.string_of_form other)^"' for the moment"))
   in
   let find_switches cases =
@@ -209,7 +209,7 @@ let has_inductive_call pred f =
 
 (* split the SL def into a base case and an induction step. *)
 let base_case_ind_step pred f = match f with
-    | Sl.BoolOp (Or, [a;b]) ->
+    | Sl.BoolOp (Or, [a;b], _) ->
       begin
         match (has_inductive_call pred a, has_inductive_call pred b) with
         | (true, true) -> raise (Compile_pred_failure "2 induction steps ?")
@@ -224,7 +224,7 @@ let inductive_call pred f =
   let candidates =
     Sl.SlSet.filter
       (fun p -> match p with
-        | Sl.Atom (Sl.Pred id, _) -> id = pred.pred_name
+        | Sl.Atom (Sl.Pred id, _, _) -> id = pred.pred_name
         | _ -> false )
       preds
   in
@@ -282,7 +282,7 @@ let verify_generalization pred_sl pred_dom pred_str =
   let call = inductive_call pred_sl step in
   let induc_hyp_fol =
     let args = match call with
-      | Sl.Atom (Sl.Pred id, args) -> args
+      | Sl.Atom (Sl.Pred id, args, _) -> args
       | _ -> assert false
     in
       mk_fol args

@@ -1,3 +1,4 @@
+open Form
 open Prog
 
 exception Prog_error of source_position * string
