@@ -173,7 +173,7 @@ let str_of_symbol = function
   | Mult -> "*"
   | Div -> "div"
   | Empty -> "emptyset"
-  | SetEnum -> "setenum"
+  | SetEnum -> "singleton"
   | Union -> "union"
   | Inter -> "intersection"
   | Diff -> "setminus"
@@ -184,8 +184,8 @@ let str_of_symbol = function
   | Lt -> "<"
   | Gt -> ">"
   | Btwn -> "Btwn"
-  | Elem -> "in"
-  | SubsetEq -> "subseteq"
+  | Elem -> "member"
+  | SubsetEq -> "subset"
   | Frame -> "Frame"
   (* uninterpreted symbols *)
   | FreeSym id -> str_of_ident id
