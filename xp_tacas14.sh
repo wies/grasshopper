@@ -1,5 +1,7 @@
 #!/bin/bash
 
+source osx_gnu.sh
+
 TESTS1="
 sl_traverse tests/spl/sl/sl_traverse.spl pass
 sl_dispose  tests/spl/sl/sl_dispose.spl pass

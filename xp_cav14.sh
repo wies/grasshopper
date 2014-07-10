@@ -1,5 +1,7 @@
 #!/bin/bash
 
+source osx_gnu.sh
+
 TESTS1="
 union-find_list_find    tests/spl/union_find.spl               find         pass
 union-find_list_union   tests/spl/union_find.spl               union        pass

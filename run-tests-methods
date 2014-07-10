@@ -1,5 +1,7 @@
 #!/bin/bash
 
+source osx_gnu.sh
+
 PASSED=1
 
 ensure_verifies()

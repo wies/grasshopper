@@ -1,5 +1,7 @@
 #!/bin/bash
 
+source osx_gnu.sh
+
 set -e
 
 DIRS="-Is src/util,src/form,src/smtlib,src/programs,src/frontends/spl,src/prover,src/sl,src/analysis,src/main"

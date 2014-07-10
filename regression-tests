@@ -1,5 +1,7 @@
 #!/bin/bash
 
+source osx_gnu.sh
+
 TESTS="
 soudness0               tests/spl/soundness/soundness0.spl      fail
 soudness1               tests/spl/soundness/soundness1.spl      fail
