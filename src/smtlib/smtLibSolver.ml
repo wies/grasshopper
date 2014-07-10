@@ -225,10 +225,10 @@ let init_session session sign =
       sign
   in
   let logic_str = 
-    if !Config.encode_fields_as_arrays then "A" else "" ^
+    (if !Config.encode_fields_as_arrays then "A" else "") ^
     "UF" ^
-    if has_int then "LIA" else "" ^
-    if !Config.backend_solver_has_set_theory then "FS" else ""
+    (if has_int then "LIA" else "") ^
+    (if !Config.backend_solver_has_set_theory then "FS" else "")
   in set_logic session logic_str;
   if !Config.dump_smt_queries then begin
     writeln session ("(set-info :source |
