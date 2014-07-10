@@ -229,7 +229,7 @@ let mk_forall ?(ann=[]) bv f = mk_binder ~ann:ann Forall bv f
 let mk_exists ?(ann=[]) bv f = mk_binder ~ann:ann Exists bv f 
   
 
-let annotate f ann = 
+let annotate f ann =
   match f with
   | Atom (t, ann1) -> Atom (t, ann @ ann1)
   | Binder (b, vs, f1, ann1) -> Binder (b, vs, f1, ann @ ann1)
@@ -239,6 +239,8 @@ let annotate f ann =
       | _ -> Binder (Forall, [], f, ann)
 
 let mk_comment c f = annotate f [Comment c]
+
+let mk_name n f = annotate f [Name (fresh_ident n)]
 
 let mk_srcpos pos f = annotate f [SrcPos pos]
 
@@ -737,10 +739,10 @@ let skolemize f =
   let f1 = propagate_exists f in
   sk IdMap.empty f1
 
-(** Make all comments in formula [f] unique *)
-let unique_comments f =
+(** Make all names in formula [f] unique *)
+let unique_names f =
   let mk_unique anns =
-    List.map (function Comment c -> Comment (str_of_ident (fresh_ident c)) | a -> a) anns
+    List.map (function Name (n, _) -> Name (fresh_ident n) | a -> a) anns
   in
   let rec uc = function 
     | BoolOp (op, fs) -> BoolOp (op, List.map uc fs)
@@ -750,13 +752,13 @@ let unique_comments f =
   in
   uc f
 
-let comment_uncommented f = match f with
+let name_unnamed f = match f with
   | Binder (_, _, _, anns) 
   | Atom (_, anns) ->
-    if List.exists (fun a -> match a with Comment _ -> true | _ -> false) anns
+    if List.exists (fun a -> match a with Name _ -> true | _ -> false) anns
     then f
-    else mk_comment "unnamed" f
-  | f -> mk_comment "unnamed" f
+    else mk_name "unnamed" f
+  | f -> mk_name "unnamed" f
 
 module Clauses = struct
 

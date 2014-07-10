@@ -8,8 +8,8 @@ predicate dlseg(x: Node, u: Node, y: Node, v: Node) {
   x != y &*& x.prev == u &*& acc(x) &*& dlseg(x.next, x, y, v)
 }
 
-//insertion into a DLL.
-//bug is that the method might not return the head of the list when elt is inserted at the beginning.
+// Insertion into a doubly-linked list.
+// The bug is that the procedure might not return the head of the list when elt is inserted before a.
 
 procedure soundness3(a: Node, b: Node, elt: Node) returns (c: Node, d: Node)
     requires dlseg(a, null, null, b) &*& elt.next |-> null;

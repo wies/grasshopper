@@ -120,17 +120,17 @@ let simplify prog =
     else ()
   in
   dump_if 0 prog;
-  Debug.info (fun () -> "infering accesses, eliminating loops, eliminating global dependencies\n");
+  Debug.info (fun () -> "Inferring accesses, eliminating loops and global dependencies.\n");
   let prog = infer_accesses prog in
   let prog = elim_loops prog in
   let prog = elim_global_deps prog in
   dump_if 1 prog;
-  Debug.info (fun () -> "eliminating SL, heap access checks, eliminating new/dispose\n");
+  Debug.info (fun () -> "Eliminating SL, adding heap access checks, and eliminating new/dispose.\n");
   let prog = elim_sl prog in
   let prog = annotate_heap_checks prog in
   let prog = elim_new_dispose prog in
   dump_if 2 prog;
-  Debug.info (fun () -> "eliminating return, eliminating state\n");
+  Debug.info (fun () -> "Eliminating return statements and transforming to SSA form.\n");
   let prog = elim_return prog in
   let prog = elim_state prog in
   dump_if 3 prog;
@@ -160,7 +160,7 @@ let add_pred_insts prog f =
     if pos
     then 
       match pred.pred_returns with
-      | [] -> mk_implies (mk_pred p ts) (body)
+      | [] -> mk_implies (mk_pred p ts) body
       | _ -> body
     else mk_not body
   in
@@ -216,6 +216,41 @@ let add_pred_insts prog f =
   in
   smk_and (f_inst :: pos_instances)
 
+let add_labels vc =
+  let rec get_comment = function
+    | Comment c :: _ -> Some c
+    | _ :: annots -> get_comment annots
+    | [] -> None
+  in
+  let process_annot c (ltop, annots) ann =
+    match ann, c with
+    | SrcPos pos, Some c -> 
+        let lbl = fresh_ident "Label" in
+        IdMap.add lbl (pos, "Related Location: " ^ c) ltop, 
+        Label lbl :: ann :: annots
+    | _ -> ltop, ann :: annots
+  in
+  let rec al f ltop = 
+    match f with
+    | BoolOp (op, fs) -> 
+        let ltop1, fs1 = 
+          List.fold_right (fun f (ltop, fs1) -> 
+            let ltop1, f1 = al f ltop in
+            ltop1, f1 :: fs1) fs (ltop, [])
+        in
+        ltop1, BoolOp (op, fs1)
+    | Binder (b, vs, f, annots) ->
+        let c = get_comment annots in
+        let ltop1, f1 = al f ltop in
+        let ltop2, annots1 = List.fold_left (process_annot c) (ltop1, []) annots in
+        ltop2, Binder (b, vs, f1, annots1)
+    | Atom (t, annots) -> 
+        let c = get_comment annots in
+        let ltop1, annots1 = List.fold_left (process_annot c) (ltop, []) annots in
+        ltop1, Atom (t, annots1)
+  in
+  al vc IdMap.empty
+
 (** Generate verification conditions for given procedure. 
  ** Assumes that proc has been transformed into SSA form. *)
 let vcgen prog proc =
@@ -245,28 +280,44 @@ let vcgen prog proc =
                 s.spec_name pp.pp_pos.sp_start_line pp.pp_pos.sp_start_col
             in
             (match s.spec_form with
-              | FOL f -> acc, [mk_comment name f]
+              | FOL f -> acc, [mk_name name f]
               | _ -> failwith "vcgen: found SL formula that should have been desugared")
         | Assert s ->
+            let rec annotate_aux_msg msg = 
+              let annotate annot = 
+                if List.exists (function SrcPos _ -> true | _ -> false) annot
+                then Comment msg :: annot
+                else annot
+              in
+              function
+                | BoolOp (op, fs) -> 
+                    BoolOp (op, List.map (annotate_aux_msg msg) fs)
+                | Binder (b, vs, f, annot) ->
+                    Binder (b, vs, annotate_aux_msg msg f, annotate annot)
+                | Atom (t, annot) -> Atom (t, annotate annot)
+            in
             let name = 
               Printf.sprintf "%s_%d_%d" 
                 s.spec_name pp.pp_pos.sp_start_line pp.pp_pos.sp_start_col
             in
+            let vc_msg, vc_aux_msg = 
+              match s.spec_msg with
+              | None -> 
+                  "Possible assertion violation.", 
+                  "This is the assertion that might be violated"
+              | Some msg -> msg proc.proc_name
+            in 
+            let vc_msg = (vc_msg, pp.pp_pos) in
             let f =
               match s.spec_form with
-              | FOL f -> unoldify_form (mk_not f)
+              | FOL f -> annotate_aux_msg vc_aux_msg (unoldify_form (mk_not f))
               | _ -> failwith "vcgen: found SL formula that should have been desugared"
             in
             let vc_name = 
               Str.global_replace (Str.regexp " ") "_"
                 (str_of_ident proc.proc_name ^ "_" ^ name)
             in
-            let vc_msg = 
-              match s.spec_msg with
-              | None -> ("Possible assertion violation.", pp.pp_pos)
-              | Some msg -> (msg proc.proc_name s.spec_pos, pp.pp_pos)
-            in
-            let vc = pre @ [mk_comment name f] in
+            let vc = pre @ [mk_name name f] in
             (vc_name, vc_msg, smk_and vc) :: acc, []
         | _ -> 
             failwith "vcgen: found unexpected basic command that should have been desugared"
@@ -307,7 +358,8 @@ let split_vc prog vc_name f =
 (** Generate verification conditions for given procedure and check them. *)
 let check_proc prog proc =
   let check_vc (vc_name, (vc_msg, pp), vc0) =
-    let vc = skolemize (propagate_exists (foralls_to_exists (nnf vc0))) in
+    let vc1 = skolemize (propagate_exists (foralls_to_exists (nnf vc0))) in
+    let labels, vc = add_labels vc1 in
     (*let _ = print_form stdout vc in*)
     let check_one vc =
       let vc_and_preds = add_pred_insts prog vc in
@@ -316,9 +368,18 @@ let check_proc prog proc =
       let sat_means = 
         Str.global_replace (Str.regexp "\n\n") "\n  " (ProgError.error_to_string pp vc_msg)
       in
-      match Prover.check_sat ~session_name:vc_name ~sat_means:sat_means vc_and_preds with
-      | Some false -> ()
-      | _ ->
+      match Prover.get_model ~session_name:vc_name ~sat_means:sat_means vc_and_preds with
+      | None -> ()
+      | Some model ->
+          let vc_msg = 
+            IdMap.fold 
+              (fun id (pos, msg) vc_msg ->
+                let p = mk_free_const Bool id in
+                match Model.eval_bool_opt model p with
+                | Some true -> vc_msg ^ "\n\n" ^ ProgError.error_to_string pos msg
+                | _ -> vc_msg
+              ) labels vc_msg
+          in
           if !Config.split_vcs && !Config.model_file <> "" 
           then split_vc prog vc_name vc;
           if !Config.robust then ProgError.print_error pp vc_msg

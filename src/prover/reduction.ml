@@ -67,8 +67,8 @@ let factorize_axioms fs =
         Binder (b, [], g1, a), axioms
     | Binder (Forall, (_ :: _ as vs), f1, a) -> 
         let p = mk_atom (FreeSym (fresh_ident "Axiom")) [] in
-        let comments, other_annots = List.partition (function Comment _ -> true | _ -> false) a in 
-        let fact_axiom = annotate (mk_implies p (Binder (Forall, vs, f1, other_annots))) comments in
+        let names, other_annots = List.partition (function Name _ -> true | _ -> false) a in 
+        let fact_axiom = annotate (mk_implies p (Binder (Forall, vs, f1, other_annots))) names in
 	p, fact_axiom :: axioms
     | BoolOp (op, fs) -> 
 	let fs1, axioms = 
@@ -196,7 +196,7 @@ let reduce_frame fs =
       match sort_of f with
       | Fld Loc -> reduce_graph ()
       | Fld Int | Fld Bool -> reduce_data ()
-      | other -> failwith ("reduce_frame did not expect f with type " ^ (string_of_sort other))
+      | other -> failwith ("reduce_frame did not expect field of type " ^ (string_of_sort other))
   in
   let rec process f (frame_axioms, fields) = match f with
     | Atom (App (Frame, [x; a; fld; fld'], _), ann) when fld <> fld' ->
@@ -483,6 +483,30 @@ let add_terms fs gts =
     mk_eq t c :: acc)
     extra_gts fs
 
+let encode_labels fs =
+  let rec get_label = function
+    | Label id :: _ -> Some id
+    | _ :: annots -> get_label annots
+    | [] -> None
+  in
+  let mk_label annots f = 
+    match get_label annots with
+    | None -> f
+    | Some id -> 
+        let p = mk_pred id [] in
+        mk_and [p; mk_or [mk_not p; f]]
+  in
+  let rec el = function
+    | Binder (b, vs, f, annots) ->
+        let f1 = el f in
+        mk_label annots (Binder (b, vs, f1, annots))
+    | (BoolOp (Not, [Atom (_, annots)]) as f)
+    | (Atom (_, annots) as f) ->
+        mk_label annots f
+    | BoolOp (op, fs) ->
+        BoolOp (op, List.map el fs)
+  in List.rev_map el fs
+
 (** Reduces the given formula to the target theory fragment, as specified by the configuration.
  ** Assumes that f is typed. *)
 let reduce f = 
@@ -513,6 +537,7 @@ let reduce f =
   let fs, gts = reduce_reach fs gts in
   let fs, gts = instantiate_user_def_axioms read_propagators fs gts in
   let fs = add_terms fs gts in
+  let fs = encode_labels fs in
   TypeStrat.reset ();
   (* the following is a (probably stupid) heuristic to sort the formulas for improving the running time *)
   (*let _ = 

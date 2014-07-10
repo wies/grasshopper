@@ -89,7 +89,7 @@ let post_process f =
   let _ = if Debug.is_debug () then
     begin
       print_endline "Sl.to_grass(raw): ";
-      Form.print_form stdout f;
+      print_endline (Form.string_of_form f);
       print_newline ()
     end
   in

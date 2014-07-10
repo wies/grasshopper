@@ -45,8 +45,8 @@ let dump_core session =
 
 let print_query name sat_means f =
   let f_inst = Reduction.reduce f in
-  let f_inst = List.rev (List.rev_map comment_uncommented f_inst) in
-  let f_inst = List.rev (List.rev_map unique_comments f_inst) in
+  let f_inst = List.rev (List.rev_map name_unnamed f_inst) in
+  let f_inst = List.rev (List.rev_map unique_names f_inst) in
   let signature = overloaded_sign (mk_and f_inst) in
   let session = SmtLibSolver.start name sat_means in
     Debug.debug (fun () -> "sending to prover...\n");
@@ -73,3 +73,17 @@ let check_sat ?(session_name="form") ?(sat_means="sat") f =
   SmtLibSolver.quit session;
   result
 
+let get_model ?(session_name="form") ?(sat_means="sat") f =
+  let result, session = start_session session_name sat_means f in
+  let model = 
+    match result with
+    | Some true ->
+        dump_model session;
+        SmtLibSolver.get_model session
+    | Some false -> 
+        dump_core session;
+        None
+    | None -> failwith "Unexpexted solver result"
+  in
+  SmtLibSolver.quit session;
+  model

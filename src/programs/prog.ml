@@ -45,7 +45,7 @@ type spec = {
     spec_form : spec_form;
     spec_kind : spec_kind;
     spec_name : string;
-    spec_msg : (ident -> source_position -> string) option;
+    spec_msg : (ident -> (string * string)) option;
     spec_pos : source_position;
   } 
 
@@ -625,8 +625,16 @@ let mk_loop_cmd inv preb cond postb pos =
   Loop (loop, pp1)
 
 let mk_ite cond cond_pos then_cmd else_cmd pos =
-  let t_cond = mk_spec_form (FOL cond) "if then" None cond_pos in
-  let e_cond = mk_spec_form (FOL (mk_not cond)) "if else" None cond_pos in
+  let t_cond = 
+    mk_spec_form 
+      (FOL (mk_srcpos cond_pos (mk_comment "The 'then' branch of this conditional has been taken" cond))) 
+      "if_then" None cond_pos 
+  in
+  let e_cond = 
+    mk_spec_form 
+      (FOL (mk_not (mk_srcpos cond_pos (mk_comment "The 'else' branch of this conditional has been taken" cond)))) 
+      "if_else" None cond_pos 
+  in
   let t_assume = mk_assume_cmd t_cond cond_pos in
   let e_assume = mk_assume_cmd e_cond cond_pos in
   let t_block = mk_seq_cmd [t_assume; then_cmd] (source_pos then_cmd) in
@@ -696,15 +704,6 @@ let subst_id_pred map pred =
 (** Pretty printing *)
 
 open Format
-
-let string_of_src_pos pos =
-  if pos.sp_end_line = pos.sp_start_line 
-  then 
-    Printf.sprintf "File \"%s\", line %d, columns %d-%d" 
-      pos.sp_file pos.sp_start_line pos.sp_start_col pos.sp_end_col
-  else 
-    Printf.sprintf "File \"%s\", line %d, column %d to line %d, column %d" 
-      pos.sp_file pos.sp_start_line pos.sp_start_col pos.sp_end_line pos.sp_end_col
 
 let flycheck_string_of_src_pos pos =
   if pos.sp_start_line <> pos.sp_end_line 

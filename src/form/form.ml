@@ -68,6 +68,8 @@ type guard =
 type annot =
   | Comment of string
   | SrcPos of source_position
+  | Label of ident
+  | Name of ident
   | TermGenerator of sorted_ident list * sorted_ident list * guard list * term
 
 type bool_op =
@@ -145,6 +147,15 @@ type subst_map = term IdMap.t
 (** {5 SMT-LIB 2 Notation} **)
 
 open Format
+
+let string_of_src_pos pos =
+  if pos.sp_end_line = pos.sp_start_line 
+  then 
+    Printf.sprintf "File \"%s\", line %d, columns %d-%d" 
+      pos.sp_file pos.sp_start_line pos.sp_start_col pos.sp_end_col
+  else 
+    Printf.sprintf "File \"%s\", line %d, column %d to line %d, column %d" 
+      pos.sp_file pos.sp_start_line pos.sp_start_col pos.sp_end_line pos.sp_end_col
 
 let str_of_ident0 (name, n) =
   Printf.sprintf "%s_%d" name n
@@ -260,27 +271,32 @@ let rec pr_vars ppf = function
   | [v] -> fprintf ppf "%a" pr_var v
   | v :: vs -> fprintf ppf "%a@ %a" pr_var v pr_vars vs
 
-let extract_comments smt ann =
-  let cmnts = Util.filter_map 
-      (function Comment _ -> Config.named_assertions && true | _ -> false) 
-      (function Comment c -> c | _ -> "") 
+let extract_name smt ann =
+  let names = Util.filter_map 
+      (function Name _ -> Config.named_assertions && true | _ -> false) 
+      (function Name id -> str_of_ident id | _ -> "")
       ann 
   in
   if smt 
-  then Str.global_replace (Str.regexp " ") "_" (String.concat "_" (List.rev cmnts))
-  else String.concat "; " (List.rev cmnts)
+  then Str.global_replace (Str.regexp " ") "_" (String.concat "_" (List.rev names))
+  else String.concat "; " (List.rev names)
+
+let rec extract_src_pos = function
+  | SrcPos pos :: _ -> Some pos
+  | _ :: ann -> extract_src_pos ann
+  | [] -> None  
 
 let rec pr_form ppf = function
   | Binder (b, vs, f, a) -> 
-      let cmnts = extract_comments true a in
-      (match cmnts with
+      let name = extract_name true a in
+      (match name with
       |	"" -> fprintf ppf "%a" pr_quantifier (b, vs, f)
-      |	c -> fprintf ppf "@[<3>(! %a@ @[:named@ %s@])@]" pr_quantifier (b, vs, f) c)
+      |	n -> fprintf ppf "@[<3>(! %a@ @[:named@ %s@])@]" pr_quantifier (b, vs, f) n)
   | Atom (t, a) -> 
-      let cmnts = extract_comments true a in
-      (match cmnts with
+      let name = extract_name true a in
+      (match name with
       | "" -> fprintf ppf "%a" pr_term t
-      | c -> fprintf ppf "@[<3>(! %a@ @[:named@ %s@])@]" pr_term t c)
+      | n -> fprintf ppf "@[<3>(! %a@ @[:named@ %s@])@]" pr_term t n)
   | BoolOp (And, []) -> fprintf ppf "%s" "true"
   | BoolOp (Or, []) -> fprintf ppf "%s" "false"
   | BoolOp (Or, fs) -> fprintf ppf "@[<4>(%a@ %a)@]" pr_boolop Or pr_forms fs
@@ -410,19 +426,25 @@ and pr_union ppf = function
 
 let rec pr_form ppf = function
   | Binder (b, vs, f, a) -> 
-      let cmnts = extract_comments false a in
-      (match cmnts with
-      |	"" -> fprintf ppf "@[(%a)@]" pr_quantifier (b, vs, f)
-      |	c -> fprintf ppf "@[(%a@ /* %s */)@]" pr_quantifier (b, vs, f) c)
+      let name = extract_name false a in
+      let pos = extract_src_pos a in
+      (match name, pos with
+      |	"", None -> fprintf ppf "@[(%a)@]" pr_quantifier (b, vs, f)
+      | "", Some pos -> fprintf ppf "@[(%a@ /* %s */)@]" pr_quantifier (b, vs, f) (string_of_src_pos pos)
+      | n, Some pos -> fprintf ppf "@[(%a@ /* %s: %s */)@]" pr_quantifier (b, vs, f) (string_of_src_pos pos) n
+      |	n, None -> fprintf ppf "@[(%a@ /* %s */)@]" pr_quantifier (b, vs, f) n)
   | BoolOp (And, fs) -> pr_ands ppf fs
   | BoolOp (Or, fs) -> pr_ors ppf fs
   | BoolOp (Not, [f]) -> pr_not ppf f
   | BoolOp (_, _) -> ()
   | Atom (t, a) -> 
-      let cmnts = extract_comments false a in
-      (match cmnts with
-      |	"" -> fprintf ppf "@[(%a)@]" pr_term t
-      |	c -> fprintf ppf "@[(%a@ /* %s */)@]" pr_term t c)
+      let name = extract_name false a in
+      let pos = extract_src_pos a in
+      (match name, pos with
+      |	"", None -> fprintf ppf "@[(%a)@]" pr_term t
+      | "", Some pos -> fprintf ppf "@[(%a@ /* %s */)@]" pr_term t (string_of_src_pos pos)
+      | n, Some pos -> fprintf ppf "@[(%a@ /* %s: %s */)@]" pr_term t (string_of_src_pos pos) n
+      |	n, None -> fprintf ppf "@[(%a@ /* %s */)@]" pr_term t n)
 
 and pr_ands ppf = function
   | [] -> fprintf ppf "%s" "true"

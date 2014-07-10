@@ -8,59 +8,59 @@ let lists = [
     ( mk_ident "lseg",
       [df; nextf; xf; yf],
       mk_reach next x y,
-      [di, mk_forall ~ann:[Comment "lseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+      [di, mk_name "lseg_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp))]);
     ( mk_ident "slseg",
       [df; dataf; nextf; xf; yf],
       mk_and [mk_reach next x y;
               sorted
              ],
-      [di, mk_forall ~ann:[Comment "slseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+      [di, mk_name "slseg_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp))]);
     ( mk_ident "rslseg",
       [df; dataf; nextf; xf; yf],
       mk_and [mk_reach next x y;
               mk_forall [l1f; l2f] (mk_implies (mk_and [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y])
                                                (mk_leq (mk_read data l2) (mk_read data l1)))],
-      [di, mk_forall ~ann:[Comment "rslseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+      [di, mk_name "rslseg_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp))]);
     ( mk_ident "ulseg",
       [df; dataf; nextf; xf; yf; lbf],
       mk_and [mk_reach next x y;
               lower_bound],
-      [di, mk_forall ~ann:[Comment "ulseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+      [di, mk_name "ulseg_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp))]);
     ( mk_ident "llseg",
       [df; dataf; nextf; xf; yf; ubf],
       mk_and [mk_reach next x y;
               upper_bound],
-      [di, mk_forall ~ann:[Comment "llseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+      [di, mk_name "llseg_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp))]);
     ( mk_ident "uslseg",
       [df; dataf; nextf; xf; yf; lbf],
       mk_and [mk_reach next x y;
               lower_bound;
               sorted],
-      [di, mk_forall ~ann:[Comment "uslseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+      [di, mk_name "uslseg_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp))]);
     ( mk_ident "lslseg",
       [df; dataf; nextf; xf; yf; ubf],
       mk_and [mk_reach next x y;
               upper_bound;
               sorted],
-      [di, mk_forall ~ann:[Comment "lslseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+      [di, mk_name "lslseg_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp))]);
     ( mk_ident "lrslseg",
       [df; dataf; nextf; xf; yf; ubf],
       mk_and [mk_reach next x y;
               upper_bound;
               mk_forall [l1f; l2f] (mk_implies (mk_and [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y])
                                                (mk_leq (mk_read data l2) (mk_read data l1)))],
-      [di, mk_forall ~ann:[Comment "lrslseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+      [di, mk_name "lrslseg_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp))]);
     ( mk_ident "blseg",
       [df; dataf; nextf; xf; yf; lbf; ubf],
       mk_and [mk_reach next x y;
               bounded],
-      [di, mk_forall ~ann:[Comment "blseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+      [di, mk_name "blseg_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp))]);
     ( mk_ident "bslseg",
       [df; dataf; nextf; xf; yf; lbf; ubf],
       mk_and [mk_reach next x y;
               bounded;
               sorted],
-      [di, mk_forall ~ann:[Comment "bslseg_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp)]);
+      [di, mk_name "bslseg_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp))]);
     ( mk_ident "dlseg",
       [df; nextf; prevf; x1f; x2f; y1f; y2f],
       mk_and [mk_reach next x1 y1;
@@ -77,7 +77,7 @@ let lists = [
               mk_forall [l1f;l2f]
                         (mk_sequent [mk_eq (mk_read next l1) l2; mk_elem l1 d; mk_elem l2 d]
                         [mk_eq (mk_read prev l2) l1])],
-      [di, mk_forall ~ann:[Comment "dlseg_footprint"] [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn next x1 l1 y1; mk_neq l1 y1]))]);
+      [di, mk_name "dlseg_footprint" (mk_forall [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn next x1 l1 y1; mk_neq l1 y1])))]);
   ]
 
 
@@ -85,8 +85,8 @@ let with_fp = [
     ( mk_ident "lseg_set",
       [df; nextf; xf; yf; sf],
       mk_reach next x y,
-      [di, mk_forall ~ann:[Comment "lseg_set_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp);
-       si, mk_forall ~ann:[Comment "lseg_Set"] [l1f] (mk_iff (mk_elem l1 s) l1_in_lst_fp)])
+      [di, mk_name "lseg_set_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp));
+       si, mk_name "lseg_set" (mk_forall [l1f] (mk_iff (mk_elem l1 s) l1_in_lst_fp))])
   ]
 
 let with_content = [
@@ -94,51 +94,57 @@ let with_content = [
     [df; dataf; nextf; xf; yf; lbf; cf],
     mk_and [mk_reach next x y;
             lower_bound;
-            mk_forall ~ann:[Comment "strict_sortedness"] [l1f; l2f]
-              (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y; mk_neq l1 l2]
-                 [mk_lt (mk_read data l1) (mk_read data l2)])
+            mk_name "strict_sortedness" 
+              (mk_forall [l1f; l2f]
+                 (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y; mk_neq l1 l2]
+                    [mk_lt (mk_read data l1) (mk_read data l2)]))
           ],
-    [di, mk_forall ~ann:[Comment "sorted_set_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp);
+    [di, mk_name "sorted_set_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp));
      set_content
    ]);
   ( mk_ident "sorted_set",
     [df; dataf; nextf; xf; yf; cf],
     mk_and [mk_reach next x y;
-            mk_forall ~ann:[Comment "strict_sortedness"] [l1f; l2f]
-              (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y; mk_neq l1 l2]
-                 [mk_lt (mk_read data l1) (mk_read data l2)])
+            mk_name "strict_sortedness"
+              (mk_forall [l1f; l2f]
+                 (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y; mk_neq l1 l2]
+                    [mk_lt (mk_read data l1) (mk_read data l2)]))
           ],
-    [di, mk_forall ~ann:[Comment "sorted_set_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp);
+    [di, mk_name "sorted_set_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp));
      set_content
    ]);
   (* soted list that can be mixed with trees *)
   ( mk_ident "sorted_set2",
     [df; dataf; leftf; nextf; parentf; rightf; xf; yf; cf],
     mk_and ([mk_reach next x y;
-            mk_forall ~ann:[Comment "strict_sortedness"] [l1f; l2f]
-              (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y; mk_neq l1 l2]
-                          [mk_lt (mk_read data l1) (mk_read data l2)]);
-            mk_forall ~ann:[Comment "sorted_set_parent_no_one_reach"] [l1f; l2f]
-              (mk_sequent [l1_in_domain; mk_neq l1 l2]
-                          [mk_not (mk_btwn parent l2 l1 l1)]);
-            reach_via_left_right
+             mk_name "strict_sortedness"
+               (mk_forall [l1f; l2f]
+                  (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y; mk_neq l1 l2]
+                     [mk_lt (mk_read data l1) (mk_read data l2)]));
+             mk_name "sorted_set_parent_no_one_reach" 
+               (mk_forall [l1f; l2f]
+                  (mk_sequent [l1_in_domain; mk_neq l1 l2]
+                     [mk_not (mk_btwn parent l2 l1 l1)]));
+             reach_via_left_right
           ] @ (to_null parent)),
-    [di, mk_forall ~ann:[Comment "sorted_set_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp);
+    [di, mk_name "sorted_set_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp));
      set_content
    ]);
   ( mk_ident "sorted_set2_lb",
     [df; dataf; leftf; nextf; parentf; rightf; xf; yf; lbf; cf],
     mk_and ([mk_reach next x y;
             lower_bound;
-            mk_forall ~ann:[Comment "strict_sortedness"] [l1f; l2f]
-              (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y; mk_neq l1 l2]
-                          [mk_lt (mk_read data l1) (mk_read data l2)]);
-            mk_forall ~ann:[Comment "sorted_set_parent_no_one_reach"] [l1f; l2f]
-              (mk_sequent [l1_in_domain; mk_neq l1 l2]
-                          [mk_not (mk_btwn parent l2 l1 l1)]);
-            reach_via_left_right
+             mk_name "strict_sortedness"
+               (mk_forall [l1f; l2f]
+                  (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y; mk_neq l1 l2]
+                     [mk_lt (mk_read data l1) (mk_read data l2)]));
+             mk_name "sorted_set_parent_no_one_reach"
+               (mk_forall [l1f; l2f]
+                  (mk_sequent [l1_in_domain; mk_neq l1 l2]
+                     [mk_not (mk_btwn parent l2 l1 l1)]));
+             reach_via_left_right
           ] @ (to_null parent)),
-    [di, mk_forall ~ann:[Comment "sorted_set_footprint"] [l1f] (mk_iff l1_in_domain l1_in_lst_fp);
+    [di, mk_name "sorted_set_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp));
      set_content
    ])
 ]

@@ -143,7 +143,7 @@
    'flymake-get-spl-cmdline))
 
 (defun flymake-get-spl-cmdline (source base-dir)
-    (list "grasshopper" (list "-robust" "-flycheck" source)))
+    (list "grasshopper" (list "-lint" source)))
 
 (add-hook 'spl-mode-hook
           '(lambda ()
@@ -162,7 +162,7 @@
 (when (require 'flycheck nil :noerror)
   (flycheck-define-checker spl-reporter
     "An SPL checker based on Grasshopper."
-    :command ("grasshopper" "-robust" "-flycheck" source)
+    :command ("grasshopper" "-lint" source)
     :error-patterns
     ((warning line-start (file-name) ":" line ":" column (optional "-" end-column) ":Related Location:" (message) line-end)
      (error line-start (file-name) ":" line ":" column (optional "-" end-column) ":" (message) line-end))

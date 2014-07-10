@@ -811,7 +811,7 @@ let convert cus =
       | SL_form _ ->
           type_error (pos_of_expr e) "expression of type bool" "SL expression"
       | FOL_form f -> f
-      | FOL_term (t, BoolType) -> Form.Atom (t, [])
+      | FOL_term (t, BoolType) -> Form.Atom (t, [SrcPos (pos_of_expr e)])
       | FOL_term (t, ty) -> type_error (pos_of_expr e) "expression of type bool" (ty_str ty)
     and extract_term locals ty e =
       match convert_expr locals e with
@@ -843,17 +843,17 @@ let convert cus =
     let convert_loop_contract proc_name locals contract =
       List.map
         (function Invariant e -> 
-          let msg caller pos =
+          let msg caller =
             if caller = proc_name then
-              Printf.sprintf 
-                "An invariant might not hold before entering a loop in procedure %s\n\n%s"
-                (str_of_ident proc_name)
-                (ProgError.error_to_string pos "Related location: This is the loop invariant that might not hold initially") 
+              (Printf.sprintf 
+                "An invariant might not hold before entering a loop in procedure %s"
+                (str_of_ident proc_name),
+                "This is the loop invariant that might not hold initially")
             else 
-              Printf.sprintf 
-                "An invariant might not be maintained by a loop in procedure %s\n\n%s"
-                (str_of_ident proc_name)
-                (ProgError.error_to_string pos "Related location: This is the loop invariant that might not be maintained")
+              (Printf.sprintf 
+                 "An invariant might not be maintained by a loop in procedure %s"
+                 (str_of_ident proc_name),
+               "This is the loop invariant that might not be maintained")
           in
           (*let pos = pos_of_expr e in*)
           convert_spec_form locals e "invariant" (Some msg)
@@ -999,21 +999,21 @@ let convert cus =
       List.fold_right 
         (function 
           | Requires e -> fun (pre, post) -> 
-              let mk_msg caller pos =
+              let mk_msg caller =
                  Printf.sprintf 
-                  "A precondition for this call of %s might not hold\n\n%s"
-                  (str_of_ident proc_name)
-                  (ProgError.error_to_string pos "Related location: This is the precondition that might not hold")
+                  "A precondition for this call of %s might not hold"
+                  (str_of_ident proc_name),
+                "Related location: This is the precondition that might not hold"
               in
               let name = "precondition of " ^ str_of_ident proc_name in
               convert_spec_form locals e name (Some mk_msg) :: pre, post
           | Ensures e -> fun (pre, post) ->
-              let mk_msg caller pos =
+              let mk_msg caller =
                  Printf.sprintf 
-                  "A postcondition of procedure %s might not hold at this return point\n\n%s"
-                  (str_of_ident proc_name)
-                  (ProgError.error_to_string pos "Related location: This is the postcondition that might not hold")
-              in
+                  "A postcondition of procedure %s might not hold at this return point"
+                  (str_of_ident proc_name),
+                "Related location: This is the postcondition that might not hold"
+              in 
               let name = "postcondition of " ^ str_of_ident proc_name in
               pre, convert_spec_form locals e name (Some mk_msg) :: post)
         contract ([], [])

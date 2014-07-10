@@ -293,6 +293,14 @@ and eval_bool model t =
   | B b -> b
   | _ -> raise Undefined
 
+let eval_bool_opt model t =
+  try Some (eval_bool model t) 
+  with Undefined -> None
+
+let eval_int_opt model t =
+  try Some (eval_int model t)
+  with Undefined -> None
+
 let is_defined model sym arity args =
   try 
     ignore (interp_symbol model sym arity args);

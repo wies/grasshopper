@@ -52,9 +52,10 @@ let l2_in_domain = mk_elem l2 d
 let l1_in_lst_fp = mk_and [mk_btwn next x l1 y; mk_neq l1 y]
 
 let _sorted next y (* data domain are fixed *) = 
-  mk_forall ~ann:[Comment "sortedness"] [l1f; l2f]
-    (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y]
-                [mk_leq (mk_read data l1) (mk_read data l2)])
+  mk_name "sortedness"
+    (mk_forall [l1f; l2f]
+       (mk_sequent [l1_in_domain; l2_in_domain; mk_btwn next l1 l2 y]
+          [mk_leq (mk_read data l1) (mk_read data l2)]))
 
 let upper_bound = mk_forall [l1f] (mk_implies (l1_in_domain) (mk_leq (mk_read data l1) ub))
 let lower_bound = mk_forall [l1f] (mk_implies (l1_in_domain) (mk_leq lb (mk_read data l1)))
@@ -62,21 +63,24 @@ let bounded = mk_forall [l1f] (mk_implies (l1_in_domain) (mk_and [mk_leq (mk_rea
                                                                   mk_leq lb (mk_read data l1)]))
 
 let to_null fld = [
-    (mk_forall ~ann:[Comment ((string_of_term fld)^"_reaches_null")] [l1f]
-      (mk_sequent [l1_in_domain]
-                  [mk_btwn fld l1 mk_null mk_null]));
-    (mk_forall ~ann:[Comment ((string_of_term fld)^"_nothing_between")] [l1f; l2f]
-      (mk_sequent [l1_in_domain; mk_btwn fld l1 l2 l2]
-                  [mk_eq l2 l1; mk_eq l2 mk_null]))
+  mk_name (string_of_term fld ^ "_reaches_null")
+    ((mk_forall [l1f]
+        (mk_sequent [l1_in_domain]
+           [mk_btwn fld l1 mk_null mk_null])));
+  mk_name (string_of_term fld ^ "_nothing_between")
+    ((mk_forall [l1f; l2f]
+        (mk_sequent [l1_in_domain; mk_btwn fld l1 l2 l2]
+           [mk_eq l2 l1; mk_eq l2 mk_null])))
   ]
             
 let reach_via_left_right =
-    mk_forall ~ann:[Comment "reach_via_left_right"] [l1f; l2f]
-      (mk_sequent 
-         [mk_reach parent l2 l1; mk_elem l2 d; mk_elem l1 d]
-         [mk_eq l2 l1;
-          mk_btwn parent l2 (mk_read left l1) l1;
-          mk_btwn parent l2 (mk_read right l1) l1])
+  mk_name "reach_via_left_right"
+    (mk_forall [l1f; l2f]
+       (mk_sequent 
+          [mk_reach parent l2 l1; mk_elem l2 d; mk_elem l1 d]
+          [mk_eq l2 l1;
+           mk_btwn parent l2 (mk_read left l1) l1;
+           mk_btwn parent l2 (mk_read right l1) l1]))
 
 (* witnesses for content *)
 let witness_sym = FreeSym (mk_ident "witness")
@@ -106,25 +110,34 @@ let witness_generator4 =
       mk_witness v c)
 
 let content =
-   (ci, mk_and [mk_forall ~ann:[Comment "content_1"] [l1f]
-                    (mk_implies l1_in_domain (mk_elem (mk_read data l1) c));
-                mk_forall ~ann:[Comment "content_2"; witness_generator3] [vf]
-                    (mk_implies (mk_not (mk_elem v c)) (mk_eq (mk_witness v c) mk_null));
-                mk_forall ~ann:[Comment "content_3"] [vf]
-                    (mk_implies (mk_elem v c) (mk_eq v (mk_read data (mk_witness v c))));
-                mk_forall ~ann:[Comment "content_4"] [vf]
-                    (mk_implies (mk_elem v c) (mk_elem (mk_witness v c) d))
-           ])
+   (ci, mk_and [
+    mk_name "content1"
+      (mk_forall [l1f] (mk_implies l1_in_domain (mk_elem (mk_read data l1) c)));
+    mk_name "content2"
+      (mk_forall ~ann:[witness_generator3] [vf]
+         (mk_implies (mk_not (mk_elem v c)) (mk_eq (mk_witness v c) mk_null)));
+    mk_name "content3"
+      (mk_forall [vf] 
+         (mk_implies (mk_elem v c) (mk_eq v (mk_read data (mk_witness v c)))));
+    mk_name "content4"
+      (mk_forall [vf]
+         (mk_implies (mk_elem v c) (mk_elem (mk_witness v c) d)))
+  ])
 
 let set_content =
-   (ci, mk_and [mk_forall ~ann:[Comment "content_0"] [l1f]
-                    (mk_implies l1_in_domain (mk_eq l1 (mk_witness (mk_read data l1) c)));
-                mk_forall ~ann:[Comment "content_1"] [l1f]
-                    (mk_implies l1_in_domain (mk_elem (mk_read data l1) c));
-                mk_forall ~ann:[Comment "content_2"; witness_generator3] [vf]
-                    (mk_implies (mk_not (mk_elem v c)) (mk_eq (mk_witness v c) mk_null));
-                mk_forall ~ann:[Comment "content_3"] [vf]
-                    (mk_implies (mk_elem v c) (mk_eq v (mk_read data (mk_witness v c))));
-                mk_forall ~ann:[Comment "content_4"] [vf]
-                    (mk_implies (mk_elem v c) (mk_elem (mk_witness v c) d))
-           ])
+   (ci, mk_and [
+    mk_name "content0"
+      (mk_forall [l1f]
+         (mk_implies l1_in_domain (mk_eq l1 (mk_witness (mk_read data l1) c))));
+    mk_name "content1"
+      (mk_forall [l1f] (mk_implies l1_in_domain (mk_elem (mk_read data l1) c)));
+    mk_name "content2"
+      (mk_forall ~ann:[witness_generator3] [vf]
+         (mk_implies (mk_not (mk_elem v c)) (mk_eq (mk_witness v c) mk_null)));
+    mk_name "content3"
+      (mk_forall [vf]
+         (mk_implies (mk_elem v c) (mk_eq v (mk_read data (mk_witness v c)))));
+    mk_name "content4"
+      (mk_forall [vf]
+         (mk_implies (mk_elem v c) (mk_elem (mk_witness v c) d)))
+  ])

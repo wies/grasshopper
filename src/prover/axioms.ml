@@ -35,7 +35,7 @@ let int2 = mk_var (snd i2) (fst i2)
 let mk_axiom ?(gen=[]) name f =
   let bvars = sorted_free_vars f in
   let annots = 
-    Comment name :: 
+    Name (name, 0) :: 
     List.map (fun (bvs, fvs, m, g) -> TermGenerator (bvs, fvs, m, g)) gen 
   in
   mk_forall ~ann:annots (IdSrtSet.elements bvars) f 

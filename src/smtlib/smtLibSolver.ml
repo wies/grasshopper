@@ -330,7 +330,7 @@ let assert_form session f =
   let _ = match f with
     | Binder (_, _, _, ann) ->
       begin
-        let name = extract_comments true ann in
+        let name = extract_name true ann in
           match session.named_clauses with
           | Some tbl -> Hashtbl.add tbl name f
           | None -> ()

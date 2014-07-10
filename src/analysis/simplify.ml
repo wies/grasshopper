@@ -153,7 +153,7 @@ let elim_loops (prog : program) =
 let elim_global_deps prog =
   let elim_spec sf = 
     let subst_preds_sl f =
-      let sf p args =
+      let sf p args pos =
         let decl = find_pred prog p in
         let accs = decl.pred_accesses in
         let tas = 
@@ -162,7 +162,7 @@ let elim_global_deps prog =
               let decl = find_global prog id in
               mk_free_const decl.var_sort id)
             (IdSet.elements accs)
-        in SlUtil.mk_pred p (tas @ args)
+        in SlUtil.mk_pred ?pos:pos p (tas @ args)
       in SL (SlUtil.subst_preds sf f)
     in
     let subst_preds_fol f = FOL f (* todo *) in

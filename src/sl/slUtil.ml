@@ -99,7 +99,7 @@ let subst_preds subst f =
   let rec map f =
     match f with
     | Atom (Pred p, args, pos) -> 
-        subst p args
+        subst p args pos
     | BoolOp (op, fs, pos) -> BoolOp (op, List.map map fs, pos)
     | SepOp (op, f1, f2, pos) -> SepOp (op, map f1, map f2, pos)
     | Binder (b, vs, f, pos) -> Binder (b, vs, map f, pos)
@@ -137,7 +137,6 @@ let preds_full f =
 
 let rec get_clauses f = match f with
   | Form.BoolOp (Form.And, lst) ->  List.flatten (List.map get_clauses lst)
-  (*| Form.Comment (c, f) -> List.map (fun x -> Form.Comment (c,x)) (get_clauses f)*)
   | other -> [other]
 
 let prenex_form f = 

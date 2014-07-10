@@ -180,7 +180,7 @@ let elim_sl prog =
         in
         (* generate args for the pred:
            -add domain (universally quantified set)
-           -pick the fields from the set of field seen in the rest of the program
+           -pick the fields from the set of fields seen in the rest of the program
            -for the other arguments use universally quantified variables *)
         let dom = mk_var (Set Loc) (mk_ident "dom") in
         let rec mk_ags idx lst = match lst with
@@ -204,7 +204,7 @@ let elim_sl prog =
           let preds_old, dom_old = pred_to_form (def.Symbols.sym_name) (List.tl oldified_args) dom in
           let preds_new, dom_new = pred_to_form (def.Symbols.sym_name) (List.tl args) dom in
           let qf = mk_implies (smk_and (in_frame :: preds_old :: dom_old)) (smk_and (preds_new :: dom_new)) in
-          let q = mk_comment "self_framing" (Axioms.mk_axiom2 qf) in
+          let q = mk_name "self_framing" (Axioms.mk_axiom2 qf) in
             mk_framecond q
         in
           List.map mk_sf all_args
@@ -309,7 +309,7 @@ let annotate_heap_checks prog =
     TermSet.fold 
       (fun t acc ->
         let t_in_footprint = FOL (mk_elem t footprint_set) in
-        let mk_msg callee pos = "Possible heap access through null or dangling reference" in
+        let mk_msg callee = "Possible heap access through null or dangling reference", "" in
         let sf = mk_spec_form t_in_footprint "check heap access" (Some mk_msg) pos in
         let check_access = mk_assert_cmd sf pos in
         check_access :: acc)
@@ -325,7 +325,7 @@ let annotate_heap_checks prog =
     | (Dispose dc, pp) ->
         let arg = dc.dispose_arg in
         let arg_in_footprint = FOL (mk_elem arg footprint_set) in
-        let mk_msg callee pos = "This deallocation might be unsafe" in
+        let mk_msg callee = "This deallocation might be unsafe", "" in
         let sf = 
           mk_spec_form arg_in_footprint "check free" (Some mk_msg) pp.pp_pos 
         in
