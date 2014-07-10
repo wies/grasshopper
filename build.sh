@@ -16,7 +16,7 @@ ocb()
 
 distro()
 {
-    test -s grasshopper && echo "Directory grasshopper already exists. Aboarding." && exit 0
+    test -s grasshopper && echo "Directory grasshopper already exists. Aborting." && exit 0
 
     REPO=`svn info | grep URL | awk '{print $2}'`
     svn export $REPO grasshopper
@@ -30,32 +30,34 @@ distro()
 
 smtlib()
 {
-    test -s *.smt2 && echo "Remove existing SMT-LIB files to proceed. Aboarding." && exit 0
+    ls *.smt2 2>/dev/null && echo "Remove existing SMT-LIB files to proceed. Aborting." && exit 0
     
-    echo "Generating uninstantiated benchmarks..."
-    ./regression-tests -noverify -noinst -dumpvcs -flycheck > /dev/null
-    rm soundness*.smt2
-
-    echo "Post processing..."
-    for file in *.smt2 
-    do
-        sed -i -e '/set-option/d' -e 's/unknown/unsat/'  $file
-        LOGIC=`grep 'set-logic' $file | sed 's/(set-logic \([^)]*\))/\1/'`
-        test -s $LOGIC || mkdir -p smt-lib/$LOGIC/grasshopper/uninstantiated
-        mv $file smt-lib/$LOGIC/grasshopper/uninstantiated
-    done
-
-    echo "Generating instantiated benchmarks..."
-    ./regression-tests -noverify -dumpvcs -flycheck > /dev/null
-    rm soundness*.smt2
-
-    echo "Post processing..."
-    for file in *.smt2 
-    do
-        sed -i -e '/set-option/d' -e 's/unknown/unsat/'  $file
-        LOGIC=`grep 'set-logic' $file | sed 's/(set-logic \([^)]*\))/\1/'`
-        test -s $LOGIC || mkdir -p smt-lib/$LOGIC/grasshopper/instantiated
-        mv $file smt-lib/$LOGIC/grasshopper/instantiated
+    for sets in "" "-smtsets"; do 
+      echo "Generating uninstantiated$sets benchmarks..."
+      ./regression-tests $sets -noverify -noinst -dumpvcs -flycheck > /dev/null
+      rm soundness*.smt2
+  
+      echo "Post processing..."
+      for file in *.smt2 
+      do
+          sed -i -e '/set-option/d' -e 's/unknown/unsat/'  $file
+          LOGIC=`grep 'set-logic' $file | sed 's/(set-logic \([^)]*\))/\1/'`
+          test -s $LOGIC || mkdir -p smt-lib/$LOGIC/grasshopper/uninstantiated
+          mv $file smt-lib/$LOGIC/grasshopper/uninstantiated
+      done
+  
+      echo "Generating instantiated$sets benchmarks..."
+      ./regression-tests $sets -noverify -dumpvcs -flycheck > /dev/null
+      rm soundness*.smt2
+  
+      echo "Post processing..."
+      for file in *.smt2 
+      do
+          sed -i -e '/set-option/d' -e 's/unknown/unsat/'  $file
+          LOGIC=`grep 'set-logic' $file | sed 's/(set-logic \([^)]*\))/\1/'`
+          test -s $LOGIC || mkdir -p smt-lib/$LOGIC/grasshopper/instantiated
+          mv $file smt-lib/$LOGIC/grasshopper/instantiated
+      done
     done
 }
 
