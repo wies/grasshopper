@@ -359,7 +359,7 @@ let verify_generalization pred_sl pred_dom pred_str =
 
 
 
-(* fallback version that goes looking into the repository of predefined structures *)
+(* fallback version that goes looking into the repository of predefined predicates *)
 let compile_pred pred =
   match pred.pred_body.spec_form with
   | SL f ->

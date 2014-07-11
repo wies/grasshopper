@@ -86,7 +86,7 @@ let with_fp = [
       [df; nextf; xf; yf; sf],
       mk_reach next x y,
       [di, mk_name "lseg_set_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp));
-       si, mk_name "lseg_set" (mk_forall [l1f] (mk_iff (mk_elem l1 s) l1_in_lst_fp))])
+       si, mk_name "lseg_Set" (mk_forall [l1f] (mk_iff (mk_elem l1 s) l1_in_lst_fp))])
   ]
 
 let with_content = [
