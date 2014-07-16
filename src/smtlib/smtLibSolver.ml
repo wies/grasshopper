@@ -82,16 +82,27 @@ let z3 =
   { name = "Z3";
     info = version }
 
-let cvc4_v1 = {	version = 1;
-		subversion = 3;
-                has_set_theory = true;
-		smt_options = [];
-                kind = Process ("cvc4", ["--lang=smt2"]);
-	      }
+let cvc4_v1 = 
+  { version = 1;
+    subversion = 3;
+    has_set_theory = true;
+    smt_options = [];
+    kind = Process ("cvc4", ["--lang=smt2"]);
+  }
+
+let cvc4mf_v1 = 
+  { cvc4_v1 with
+    kind = Process ("cvc4", ["--lang=smt2"; "--finite-model-find"; "--mbqi=none"; "--inst-max-level=0"]);
+  }
+
 
 let cvc4 = 
   { name = "CVC4";
     info = cvc4_v1 }
+
+let cvc4mf =
+  { name = "CVC4MF";
+    info = cvc4mf_v1 }
 
 let mathsat_v5 = { version = 5;
 		   subversion = 1;
@@ -107,7 +118,7 @@ let mathsat =
 
   
  
-let available_solvers = [logger; z3; cvc4; mathsat]
+let available_solvers = [logger; z3; cvc4; cvc4mf; mathsat]
 
 let selected_solvers = ref [z3]
 
