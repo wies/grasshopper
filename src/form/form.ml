@@ -217,7 +217,7 @@ let int_sort_string = "Int"
 let rec pr_sort0 ppf srt = match srt with
   | Loc | Bool | Int -> fprintf ppf "%a" pr_sort srt
   | FreeSrt id -> pr_ident ppf id
-  | _ ->fprintf ppf "@[<1>%a@]" pr_sort srt
+  | _ -> fprintf ppf "@[<1>%a@]" pr_sort srt
   (*| _ -> fprintf ppf "@[<1>(%a)@]" pr_sort srt*)
 
 and pr_sort ppf = function

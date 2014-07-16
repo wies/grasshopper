@@ -7,7 +7,7 @@ let inst_num = ref 0
 
 let dump_model session =
   if !Config.model_file <> "" then begin
-    let model = unopt (SmtLibSolver.get_model session) in
+    let model = Opt.get (SmtLibSolver.get_model session) in
     let model_chan = open_out !Config.model_file in
     (*Model.print_model2 model;*)
     Model.output_graphviz model_chan model;
@@ -17,7 +17,7 @@ let dump_model session =
 let dump_core session =
   if !Config.unsat_cores then
     begin
-      let core_name = session.SmtLibSolver.name ^ ".core" in
+      let core_name = session.SmtLibSolver.log_file_name ^ ".core" in
       (*repeat in a fixed point in order to get a smaller core*)
       let rec minimize core =
         Debug.info (fun () -> "minimizing core " ^ (string_of_int (List.length core)) ^ "\n");
@@ -25,13 +25,13 @@ let dump_core session =
         let signature = overloaded_sign (mk_and core) in
         let s = SmtLibSolver.declare s signature in
         SmtLibSolver.assert_forms s core;
-        let core2 = unopt (SmtLibSolver.get_unsat_core s) in
+        let core2 = Opt.get (SmtLibSolver.get_unsat_core s) in
         SmtLibSolver.quit s;
         if List.length core2 < List.length core
         then minimize core2
         else core
       in
-      let core = unopt (SmtLibSolver.get_unsat_core session) in
+      let core = Opt.get (SmtLibSolver.get_unsat_core session) in
       let core = minimize core in
       let config = !Config.dump_smt_queries in
       Config.dump_smt_queries := true;
@@ -49,7 +49,7 @@ let print_query name sat_means f =
   let f_inst = List.rev (List.rev_map unique_names f_inst) in
   let signature = overloaded_sign (mk_and f_inst) in
   let session = SmtLibSolver.start name sat_means in
-    Debug.debug (fun () -> "sending to prover...\n");
+    Debug.debug (fun () -> "Sending to prover...\n");
     let session = SmtLibSolver.declare session signature in
     SmtLibSolver.assert_forms session f_inst;
     session
@@ -83,7 +83,7 @@ let get_model ?(session_name="form") ?(sat_means="sat") f =
     | Some false -> 
         dump_core session;
         None
-    | None -> failwith "Unexpexted solver result"
+    | None -> Some (Model.empty)
   in
   SmtLibSolver.quit session;
   model

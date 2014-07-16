@@ -9,7 +9,7 @@ let with_reach_axioms = ref true
 let keep_sets = ref true
 let encode_fields_as_arrays = ref false
 let with_ep = ref true
-let backend_solver_has_set_theory = ref false
+let use_set_theory = ref false
 
 (* Flag that controls whether we are instantiating the axioms or relying on the prover. *)
 let instantiate = ref true
@@ -55,7 +55,7 @@ let cmd_options =
    ("-noverify", Arg.Clear verify, " Do not check the generated verification conditions");
    ("-robust", Arg.Set robust, " Continue even if some verification condition cannot be checked");
    ("-smtsolver", Arg.Set_string smtsolver, " Choose SMT solver (Z3, CVC4, MathSAT)");
-   ("-smtsets", Arg.Set backend_solver_has_set_theory, " Use set theory of SMT solver to encode sets");
+   ("-smtsets", Arg.Set use_set_theory, " Use solver's set theory to encode sets (if supported)");
    ("-smtarrays", Arg.Set encode_fields_as_arrays, " Use array theory of SMT solver to encode fields");
    ("-noreach", Arg.Clear with_reach_axioms, " Omit axioms for reachability predicates");
    ("-noep", Arg.Clear with_ep, " Omit entry points");

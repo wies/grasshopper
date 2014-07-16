@@ -4,114 +4,144 @@ open Logger
 open SmtLibSyntax
 open Form
 open FormUtil
-
-let logger = Logging.smtlib_log
+open Unix
+open Util
 
 let num_of_sat_queries = ref 0
 
-(* Todo: add proper error handling *)
-
 (** Solvers *)
 
-type solver_version = 
-    { number : int;
-      subnumber : int;
-      smt_options : (string * bool) list;
-      args : string
+type solver_kind =
+  | Process of string * string list
+  | Logger
+
+type solver_info = 
+    { version: int;
+      subversion: int;
+      has_set_theory: bool;
+      smt_options: (string * bool) list;
+      kind: solver_kind; 
     }
 
 type solver = 
     { name : string;
-      cmnd : string;
-      version : solver_version
+      info : solver_info
     }
-      
 
-let z3_v3 = { number = 3;
-	      subnumber = 2;
+let logger_info = 
+  { version = 0;
+    subversion = 0;
+    has_set_theory = true;
+    smt_options = [];
+    kind = Logger;
+  }
+
+let logger =
+  { name = "LOGGER";
+    info = logger_info }
+
+
+let z3_v3 = { version = 3;
+	      subversion = 2;
+              has_set_theory = false;
 	      smt_options = [":mbqi", true;
 			 ":MODEL_V2", true;
 			 ":MODEL_PARTIAL", true;
 			 ":MODEL_HIDE_UNUSED_PARTITIONS", true];
-	      args = "-smt2 -in"
+              kind = Process ("z3", ["-smt2"; "-in"]);
 	    }
 
-let z3_v4 = { number = 4;
-	      subnumber = 3;
+let z3_v4 = { version = 4;
+	      subversion = 3;
+              has_set_theory = false;
 	      smt_options = 
               (if not !Config.instantiate then [(":auto-config", false)] else []) @
               [(*":smt.mbqi", true;
                ":smt.ematching", true;
                ":model.v2", true;*)
 	       ":model.partial", true];
-	      args = "-smt2 -in"
+              kind = Process ("z3", ["-smt2"; "-in"]);
 	    }
 
 let z3_versions = [z3_v4; z3_v3]
 
 let z3 = 
-  let cmnd = "z3" in
   let version = 
     try 
-      let in_chan = Unix.open_process_in (cmnd ^ " -version") in
+      let in_chan = Unix.open_process_in ("z3 -version") in
       let version_regexp = Str.regexp "^Z3[^0-9]*\\([0-9]*\\).\\([0-9]*\\)" in
       let version_string = input_line in_chan in
       ignore (Str.string_match version_regexp version_string 0);
-      let number = int_of_string (Str.matched_group 1 version_string) in
-      let subnumber = int_of_string (Str.matched_group 2 version_string) in
+      let version = int_of_string (Str.matched_group 1 version_string) in
+      let subversion = int_of_string (Str.matched_group 2 version_string) in
       let _ = Unix.close_process_in in_chan in
-      List.find (fun v -> v.number < number || (v.number = number && v.subnumber <= subnumber)) z3_versions
-    with _ -> log logger WARN (fun () -> "No supported version of Z3 found.", []);
-      z3_v3	
+      List.find (fun v -> v.version < version || (v.version = version && v.subversion <= subversion)) z3_versions
+    with _ -> Debug.warn (fun () -> "No supported version of Z3 found.");
+      z3_v3 
   in 
   { name = "Z3";
-    cmnd = cmnd;
-    version = version }
+    info = version }
 
-let cvc4_v1 = {	number = 1;
-		subnumber = 0;
+let cvc4_v1 = {	version = 1;
+		subversion = 3;
+                has_set_theory = true;
 		smt_options = [];
-		args = "--lang=smt2";
-	      } 
+                kind = Process ("cvc4", ["--lang=smt2"]);
+	      }
 
 let cvc4 = 
   { name = "CVC4";
-    cmnd = "cvc4";
-    version = cvc4_v1 }
+    info = cvc4_v1 }
 
-let mathsat_v5 = { number = 5;
-		   subnumber = 1;
+let mathsat_v5 = { version = 5;
+		   subversion = 1;
+                   has_set_theory = false;
 		   smt_options = [];
-		   args = "-verbosity=0";
+                   kind = Process ("mathsat", ["-verbosity=0"]);
 	         }
 
 let mathsat = 
   { name = "MathSAT";
-    cmnd = "mathsat";
-    version = mathsat_v5
+    info = mathsat_v5
    }
- 
-let solvers = [z3; cvc4; mathsat]
 
-let selected_solver = ref z3
+  
+ 
+let available_solvers = [logger; z3; cvc4; mathsat]
+
+let selected_solvers = ref [z3]
 
 let select_solver name = 
-  try
-    selected_solver := List.find (fun s -> s.name = name) solvers
-  with Not_found -> failwith ("Unsupported SMT solver '" ^ name ^ "'")
+  let selected = Str.split (Str.regexp "+") name in
+  selected_solvers := 
+    List.filter 
+      (fun s -> List.mem s.name selected && !Config.verify || 
+      s.info.kind = Logger && !Config.dump_smt_queries) available_solvers;
+  Debug.info (fun () ->
+    "Selected solvers: " ^
+    String.concat ", " (List.map (fun s -> s.name) !selected_solvers) ^
+   "\n")
+    
+      
+
+(** Solver State *)
+
+type solver_state = 
+    { out_chan: out_channel;
+      in_chan: Unix.file_descr option;
+      pid: int;     
+    }
 
 (** Sessions *)
    
-type session = { name: string;
+type session = { log_file_name: string;
                  sat_means: string;
-		 in_chan: in_channel;
-		 out_chan: out_channel;
-		 replay_chan: out_channel option;
 		 mutable assert_count: int;
-		 mutable sat_checked: bool option;
+		 mutable sat_checked: (solver_state option * response) option;
 		 stack_height: int;
                  signature: (arity list SymbolMap.t) option;
-                 named_clauses: (string, form) Hashtbl.t option
+                 named_clauses: (string, form) Hashtbl.t option;
+                 solvers: (solver * solver_state) list
 	       }
 
 exception SmtLib_error of session * string
@@ -119,34 +149,57 @@ exception SmtLib_error of session * string
 let fail session msg = raise (SmtLib_error (session, "SmtLib: " ^ msg))
       
 let write session cmd =
-  if !Config.verify then output_string session.out_chan cmd;
-  match session.replay_chan with
-  | Some chan -> output_string chan cmd; flush chan
-  | None -> ()	
+  List.iter 
+    (fun (_, state) -> output_string state.out_chan cmd)
+    session.solvers
 
 let writefn session fn =
-  if !Config.verify then fn session.out_chan;
-  match session.replay_chan with
-  | Some chan -> fn chan; flush chan
-  | None -> ()
+  List.iter 
+    (fun (solver, state) -> 
+      let cmd = fn solver in
+      output_string state.out_chan cmd) 
+    session.solvers
 
 let writeln session cmd = 
   write session (cmd ^ "\n")  
-   
+
+let iter_solvers session fn =
+  List.iter 
+    (fun (solver, state) -> fn solver state)
+    session.solvers
+
+let read_from_chan session chan =
+  let lexbuf = Lexing.from_channel (in_channel_of_descr chan) in
+  SmtLibLexer.set_file_name lexbuf session.log_file_name; 
+  SmtLibParser.output SmtLibLexer.token lexbuf
+
+
 let read session = 
-  if !Config.verify then begin
-    flush session.out_chan;
-    let lexbuf = Lexing.from_channel session.in_chan in
-    SmtLibLexer.set_file_name lexbuf session.name; 
-    SmtLibParser.output SmtLibLexer.token lexbuf
-  end
-  else Unsat
+  let in_descrs = 
+    Util.flat_map 
+      (fun (_, state) -> 
+        flush state.out_chan;
+        Opt.to_list state.in_chan)
+      session.solvers 
+  in
+  if in_descrs = [] then 
+    (if !Config.verify then None, Unknown else None, Unsat)
+  else
+  let ready, _, _ = Unix.select in_descrs [] [] (-1.) in
+  let in_chan = List.hd ready in
+  let result = read_from_chan session in_chan in
+  let state = 
+    snd (List.find
+           (fun (_, state) -> Opt.get_or_else false (Opt.map ((=) in_chan) state.in_chan))
+           session.solvers)
+  in
+  Some state, result
 
-let set_option session opt_name opt_value =
-  writeln session (Printf.sprintf "(set-option %s %b)" opt_name opt_value)
+let set_option chan opt_name opt_value =
+  Printf.fprintf chan "(set-option %s %b)" opt_name opt_value
 
-let set_logic session logic =
-  writeln session ("(set-logic " ^ logic ^ ")")
+let set_logic chan logic =
+  output_string chan ("(set-logic " ^ logic ^ ")")
 
 let declare_fun session sym_name arg_sorts res_sort =
   let arg_sorts_str = String.concat " " (List.map (fun srt -> string_of_sort srt) arg_sorts) in
@@ -157,16 +210,17 @@ let declare_sort session sort_name num_of_params =
     
 let declare_sorts has_int session =
   declare_sort session loc_sort_string 0;
-  if !Config.backend_solver_has_set_theory then begin
-    writeln session ("(define-sort " ^ set_sort_string ^ loc_sort_string ^ " () (Set " ^ loc_sort_string ^ "))");
-    if has_int then 
-      writeln session ("(define-sort " ^ set_sort_string ^ int_sort_string ^ " () (Set " ^ int_sort_string ^ "))")
-  end else begin
-    declare_sort session (set_sort_string ^ loc_sort_string) 0;
-    if has_int then declare_sort session (set_sort_string ^ int_sort_string) 0
-  end;
-  if !Config.encode_fields_as_arrays then
-    writeln session ("(define-sort " ^ fld_sort_string ^ " (X) (Array Loc X))")
+  writefn session (fun solver ->
+    if !Config.use_set_theory && solver.info.has_set_theory
+    then "(define-sort " ^ set_sort_string ^ loc_sort_string ^ " () (Set " ^ loc_sort_string ^ "))"
+    else "(declare-sort " ^ set_sort_string ^ loc_sort_string ^ " 0)");
+  if has_int then
+    writefn session (fun solver ->
+      if !Config.use_set_theory && solver.info.has_set_theory
+      then "(define-sort " ^ set_sort_string ^ int_sort_string ^ " () (Set " ^ int_sort_string ^ "))"
+      else "(declare-sort " ^ set_sort_string ^ int_sort_string ^ " 0)");
+  if !Config.encode_fields_as_arrays 
+  then writeln session ("(define-sort " ^ fld_sort_string ^ " (X) (Array Loc X))")
   else 
     begin
       declare_sort session (fld_sort_string ^ bool_sort_string) 0;
@@ -174,43 +228,62 @@ let declare_sorts has_int session =
       if has_int then declare_sort session (fld_sort_string ^ int_sort_string) 0
     end
 
-let start_with_solver = 
-  let get_replay_chan name =
-    if !Config.dump_smt_queries then
-      (* these files should probably go into the tmp directory *)
-      let with_version = fresh_ident name in
-      let replay_file =  (str_of_ident with_version) ^ ".smt2" in
-      Some (open_out replay_file)
-    else None
+let start_with_solver session_name sat_means solver produce_models produce_unsat_cores = 
+  let log_file_name = (str_of_ident (fresh_ident session_name)) ^ ".smt2" in
+  let start_solver solver =
+    let state =
+      match solver.info.kind with
+      | Process (cmnd, args) ->
+          let aargs = Array.of_list (cmnd :: args) in
+          let in_read, in_write = Unix.pipe () in
+          let out_read, out_write = Unix.pipe () in
+          let pid = Unix.create_process cmnd aargs out_read in_write in_write in
+          { in_chan = Some in_read;
+            out_chan = out_channel_of_descr out_write;
+            pid = pid;
+          }
+          (*let cmd = String.concat " " (cmnd :: args) in
+          let in_chan, out_chan = open_process cmd in
+          { in_chan = Some (descr_of_in_channel in_chan);
+            out_chan = out_chan;
+            pid = 0;
+          }*)
+      | Logger ->
+        (* these files should probably go into the tmp directory *)
+          { in_chan = None;
+            out_chan = open_out log_file_name;
+            pid = 0;
+          }
+    in 
+    let options = 
+      (if produce_models then [":produce-models", true] else []) @
+      solver.info.smt_options @
+      (if produce_unsat_cores then [":produce-unsat-cores", true] else [])
+    in
+    let info = { solver.info with smt_options = options } in
+    { solver with info = info },
+    state
   in
-  fun session_name sat_means solver produce_models produce_unsat_cores ->
-  let smt_cmd = solver.cmnd ^ " " ^ solver.version.args in
-  let in_chan, out_chan = Unix.open_process smt_cmd in
+  let solver_states = List.map start_solver !selected_solvers in
   let names_tbl: (string, form) Hashtbl.t option =
     if produce_unsat_cores then Some (Hashtbl.create 0) else None
   in
-  let session = { name = session_name;
-                  sat_means = sat_means;
-		  in_chan = in_chan; 
-		  out_chan = out_chan;
-		  replay_chan = get_replay_chan session_name;
-		  assert_count = 0;
-                  sat_checked = None;
-		  stack_height = 0;
-                  signature = None;
-                  named_clauses = names_tbl }
+  let session = 
+    { log_file_name = log_file_name;
+      sat_means = sat_means;
+      assert_count = 0;
+      sat_checked = None;
+      stack_height = 0;
+      signature = None;
+      named_clauses = names_tbl;
+      solvers = solver_states;
+    }
   in
-  if produce_models then 
-    set_option session  ":produce-models" true;
-  List.iter 
-    (fun (opt, b) -> set_option session opt b)
-    solver.version.smt_options;
-  if produce_unsat_cores then
-    set_option session ":produce-unsat-cores" true;
   session
 
 
 let init_session session sign =
+  (* any int types in the signature? *)
   let has_int = 
     let rec hi = function
       | Int -> true
@@ -224,12 +297,24 @@ let init_session session sign =
           variants)
       sign
   in
-  let logic_str = 
-    (if !Config.encode_fields_as_arrays then "A" else "") ^
-    "UF" ^
-    (if has_int then "LIA" else "") ^
-    (if !Config.backend_solver_has_set_theory then "FS" else "")
-  in set_logic session logic_str;
+  (* set all options *)
+  List.iter (fun (solver, state) ->
+    List.iter 
+      (fun (opt, b) -> set_option state.out_chan opt b)
+      solver.info.smt_options)
+    session.solvers;
+  (* set the logic *)
+  let set_logic solver state = 
+    let logic_str =
+      (if !Config.encode_fields_as_arrays then "A" else "") ^
+      "UF" ^
+      (if has_int then "LIA" else "") ^
+      (if solver.info.has_set_theory && !Config.use_set_theory then "FS" else "")
+    in
+    set_logic state.out_chan logic_str;
+  in
+  iter_solvers session set_logic;
+  (* write benchmark description *)
   if !Config.dump_smt_queries then begin
     writeln session ("(set-info :source |
   GRASShopper benchmarks.
@@ -238,31 +323,36 @@ let init_session session sign =
   See also: GRASShopper - Complete Heap Verification with Mixed Specifications. In TACAS 2014, pages 124-139.
 
   If this benchmark is satisfiable, GRASShopper reports the following error message:\n  " ^ session.sat_means ^ "
-  |)");
-    writeln session ("(set-info :smt-lib-version 2.0)");
-    writeln session ("(set-info :category \"crafted\")");
-    writeln session ("(set-info :status \"unknown\")");
+  |)")
   end;
-  writeln session "";
+  writeln session ("(set-info :smt-lib-version 2.0)");
+  writeln session ("(set-info :category \"crafted\")");
+  writeln session ("(set-info :status \"unknown\")");
+  (* desclare all sorts *)
   declare_sorts has_int session
 
 let start session_name sat_means =
   start_with_solver
     session_name
     sat_means
-    !selected_solver
-    (!Config.model_file <> "")
+    !selected_solvers
+    true
     !Config.unsat_cores
         
 let quit session = 
   writeln session "(exit)";
-  close_out session.out_chan;
-  close_in session.in_chan;
-  (match session.replay_chan with
-  | Some chan -> close_out chan
-  | None -> ());
-  ignore (Unix.close_process (session.in_chan, session.out_chan))
-    
+  (* clean up resources *)
+  iter_solvers session (fun solver state ->
+    flush state.out_chan;
+    (match solver.info.kind with
+    | Process _ -> 
+        (try Unix.kill state.pid Sys.sigkill 
+        with Unix.Unix_error _ -> ())
+        (*ignore (Unix.close_process (in_channel_of_descr (Opt.get state.in_chan), state.out_chan))*)
+    | _ -> ());
+    close_out state.out_chan;
+    Opt.iter close state.in_chan)
+
 let pop session = 
   if session.stack_height <= 0 then fail session "pop on empty stack" else
   writeln session "(pop 1)";
@@ -277,7 +367,7 @@ let push session =
 let is_interpreted sym = match sym with
   | Read | Write -> !Config.encode_fields_as_arrays
   | Empty | SetEnum | Union | Inter | Diff | Elem | SubsetEq ->
-      !Config.backend_solver_has_set_theory
+      !Config.use_set_theory
   | Eq | Gt | Lt | GtEq | LtEq | IntConst _ | BoolConst _
   | Plus | Minus | Mult | Div | UMinus -> true
   | _ -> false
@@ -339,14 +429,16 @@ let assert_form session f =
   in
   session.assert_count <- session.assert_count + 1;
   session.sat_checked <- None;
-  write session "(assert ";
   let cf = 
     match session.signature with
     | None -> failwith "tried to assert formula before declaring symbols"
     | Some sign -> disambiguate_overloaded_symbols sign f 
   in
-  writefn session (fun chan -> print_smtlib_form chan cf);
-  writeln session ")\n"
+  iter_solvers session
+    (fun _ state -> 
+      output_string state.out_chan "(assert ";
+      print_smtlib_form state.out_chan cf;
+      output_string state.out_chan ")\n")
     
 (*let assert_form session f = Util.measure (assert_form session) f*)
     
@@ -357,18 +449,14 @@ let assert_forms session fs =
 let is_sat session = 
   incr num_of_sat_queries;
   writeln session "(check-sat)";
-  match read session with
-  | Sat -> 
-    session.sat_checked <- Some true;
-    Some true
-  | Unsat ->
-    session.sat_checked <- Some false;
-    Some false
-  | Unknown ->
-    session.sat_checked <- Some true;
-    None
+  let response = read session in
+  session.sat_checked <- Some response;
+  match snd response with
+  | Sat -> Some true
+  | Unsat -> Some false
+  | Unknown -> None
   | Error e -> fail session e
-  | _ -> fail session "unexpected response of prover"
+  | _ -> fail session "unexpected response from prover"
 	
 (** Covert SMT-LIB model to GRASS model *)
 let convert_model smtModel =
@@ -392,7 +480,10 @@ let convert_model smtModel =
   (* detect Z3/CVC4 identifiers that represent values of uninterpreted sorts *)
   let to_val (id, _) =
     let z3_val_re = Str.regexp "\\([^!]*\\)!val!\\([0-9]*\\)" in
-    if Str.string_match z3_val_re id 0 then
+    let cvc4_val_re = Str.regexp "@uc_\\([^_]*\\)_\\([0-9]*\\)" in
+    if Str.string_match z3_val_re id 0 || 
+       Str.string_match cvc4_val_re id 0
+    then 
       let srt = convert_sort (FreeSort ((Str.matched_group 1 id, 0), [])) in
       let index = int_of_string (Str.matched_group 2 id) in
       Some (srt, index)
@@ -559,10 +650,11 @@ let convert_model smtModel =
   in
   Model.finalize_values model2
 
-let get_model session = 
-  let gm () =
-    writeln session "(get-model)";
-    match read session with
+let rec get_model session = 
+  let gm state =
+    output_string state.out_chan "(get-model)\n";
+    flush state.out_chan;
+    match read_from_chan session (Opt.get state.in_chan) with
     | Model m -> 
         let cm = convert_model m in
         (match session.signature with
@@ -571,13 +663,14 @@ let get_model session =
     | Error e -> fail session e
     | _ -> None
   in
-  if session.sat_checked = Some true then gm ()
-  else
-    match is_sat session with
-    | Some true | None -> gm ()
-    | Some false -> None
+  match session.sat_checked with
+  | None -> 
+      ignore (is_sat session);
+      get_model session
+  | Some (Some state, Sat) -> gm state
+  | _ -> None
 
-let get_unsat_core session =
+let rec get_unsat_core session =
   let resolve_names names =
     let find_name tbl n =
       try [Hashtbl.find tbl n]
@@ -590,16 +683,18 @@ let get_unsat_core session =
       | Some tbl -> Some (Util.flat_map (find_name tbl) names)
       | None -> None
   in
-  let gc () =
-    writeln session "(get-unsat-core)";
-    match read session with
+  let gc state =
+    output_string state.out_chan "(get-unsat-core)\n";
+    flush state.out_chan;
+    match read_from_chan session (Opt.get state.in_chan) with
     | UnsatCore c -> resolve_names c
     | Error e -> fail session e
     | _ -> None
   in
-    if session.sat_checked = Some false then gc ()
-    else
-      match is_sat session with
-      | Some false -> gc ()
-      | Some true | None -> None
+  match session.sat_checked with
+  | None -> 
+      ignore (is_sat session); 
+      get_unsat_core session
+  | Some (Some state, Unsat) -> gc state
+  | _ -> None
 	  

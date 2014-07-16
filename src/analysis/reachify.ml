@@ -72,11 +72,11 @@ let aux_substitution caller callee =
   let aux_step = Util.find_unique is_aux_step caller in
   let ind_step = Util.find_unique is_ind_step callee in
   let aux_args =
-    let (id, args) = Util.unopt aux_step.idc_other_term in
+    let (id, args) = Util.Opt.get aux_step.idc_other_term in
       assert(id = aux_step.idc_pred.pred_name);
       args
   in
-  let ind_args = Util.unopt ind_step.idc_induction_term in
+  let ind_args = Util.Opt.get ind_step.idc_induction_term in
   let rec get_diff (t1, t2) = match (t1, t2) with
     | (Var (i1, s1), Var (i2, s2))
     | (App (FreeSym i1, [], s1), App (FreeSym i2, [], s2)) ->

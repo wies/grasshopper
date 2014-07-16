@@ -232,7 +232,7 @@ let set_axioms elem_srts =
         (mk_eq elt1 elt2)
     in
     let ssrt = string_of_sort t in
-    if !Config.backend_solver_has_set_theory then []
+    if !Config.use_set_theory then []
     else [mk_axiom ("def of emptyset" ^ ssrt) empty;
           mk_axiom ("def of union" ^ ssrt) union;
           mk_axiom ("def of inter" ^ ssrt) inter;

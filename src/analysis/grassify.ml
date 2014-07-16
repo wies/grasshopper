@@ -71,7 +71,7 @@ let elim_sl prog =
           | _ -> fs, aux, kind)
           sfs ([], None, Free)
       in
-      let name, msg, pos = Util.safe_unopt (name, None, dummy_position) aux in
+      let name, msg, pos = Util.Opt.get_or_else (name, None, dummy_position) aux in
       SlUtil.mk_sep_star_lst fs, kind, name, msg, pos
     in
     (* translate SL precondition *)
@@ -255,7 +255,7 @@ let elim_sl prog =
       | (c, pp) -> Basic (c, pp)
     in
     let body = 
-      Util.optmap 
+      Util.Opt.map 
         (fun body ->
           let body1 = map_basic_cmds compile_stmt body in
           let body_pp = prog_point body in
@@ -339,7 +339,7 @@ let annotate_heap_checks prog =
     | (bc, pp) -> Basic (bc, pp)
   in
   let annotate_proc proc = 
-    { proc with proc_body = Util.optmap (map_basic_cmds annotate) proc.proc_body } 
+    { proc with proc_body = Util.Opt.map (map_basic_cmds annotate) proc.proc_body } 
   in
   { prog with prog_procs = IdMap.map annotate_proc prog.prog_procs; }
 
@@ -390,6 +390,6 @@ let elim_new_dispose prog =
     | (c, pp) -> Basic (c, pp)
   in
   let elim_proc proc = 
-    { proc with proc_body = Util.optmap (map_basic_cmds elim) proc.proc_body } 
+    { proc with proc_body = Util.Opt.map (map_basic_cmds elim) proc.proc_body } 
   in
   { prog with prog_procs = IdMap.map elim_proc prog.prog_procs }

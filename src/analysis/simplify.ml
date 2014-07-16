@@ -179,7 +179,7 @@ let elim_global_deps prog =
   let elim_proc proc =
     let precond1 = List.map elim_spec proc.proc_precond in
     let postcond1 = List.map elim_spec proc.proc_postcond in
-    let body1 = Util.optmap (map_basic_cmds elim_stmt) proc.proc_body in
+    let body1 = Util.Opt.map (map_basic_cmds elim_stmt) proc.proc_body in
     { proc with 
       proc_body = body1;
       proc_precond = precond1;
@@ -236,7 +236,7 @@ let elim_return prog =
     let body = 
       (* add final check of postcondition at the end of procedure body *)
       let body1 = 
-        Util.optmap 
+        Util.Opt.map 
           (fun body -> 
             let pos = (prog_point body).pp_pos in
             let return_pos = 
@@ -250,7 +250,7 @@ let elim_return prog =
             mk_seq_cmd (body :: mk_postcond_check return_pos) (prog_point body).pp_pos) 
           proc.proc_body
       in
-      Util.optmap (map_basic_cmds (elim proc.proc_returns mk_postcond_check)) body1
+      Util.Opt.map (map_basic_cmds (elim proc.proc_returns mk_postcond_check)) body1
          
     in
     { proc with proc_body = body }
@@ -442,7 +442,7 @@ let elim_state prog =
                       in
                       let f_pos = mk_exists implicits_w_sorts (subst_consts implicits_var_subst (mk_and fs)) in
                       mk_spec_form (FOL f_pos) name msg pos)
-                    (Util.list_of_opt aux)
+                    (Util.Opt.to_list aux)
                 in
                 List.map (fun sf -> mk_assert_cmd sf pp.pp_pos) (preconds_wo_implicits @ preconds_w_implicits),
                 assume_precond_implicits

@@ -12,22 +12,31 @@ module StringMap = Map.Make(struct
 
 (** Utility functions on option types *)
 
-let list_of_opt = function
-  | Some x -> [x]
-  | None -> []
+module Opt = struct
+  let to_list = function
+    | Some x -> [x]
+    | None -> []
 
-let unopt = function
-  | Some x -> x
-  | None -> failwith "Util.unopt applied to None"
+  let get = function
+    | Some x -> x
+    | None -> failwith "Util.unopt applied to None"
 
-let safe_unopt default = function
-  | Some x -> x
-  | None -> default
+  let get_or_else default = function
+    | Some x -> x
+    | None -> default
 
-let optmap f = function
-  | Some x -> Some (f x)
-  | None -> None
+  let fold f init = function
+    | Some x -> f init x
+    | None -> init
 
+  let map f = function
+    | Some x -> Some (f x)
+    | None -> None
+
+  let iter f = function
+    | Some x -> f x
+    | None -> ()
+end
 
 (** Utility functions on lists *)
 

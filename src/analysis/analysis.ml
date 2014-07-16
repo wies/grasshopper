@@ -363,7 +363,7 @@ let check_proc prog proc =
     (*let _ = print_form stdout vc in*)
     let check_one vc =
       let vc_and_preds = add_pred_insts prog vc in
-      Debug.info (fun () -> "VC: " ^ vc_name ^ "\n");
+      Debug.info (fun () -> "Checking VC: " ^ vc_name ^ ".\n");
       Debug.debug (fun () -> (string_of_form vc_and_preds) ^ "\n");
       let sat_means = 
         Str.global_replace (Str.regexp "\n\n") "\n  " (ProgError.error_to_string pp vc_msg)
@@ -383,7 +383,7 @@ let check_proc prog proc =
           if !Config.split_vcs && !Config.model_file <> "" 
           then split_vc prog vc_name vc;
           if !Config.robust then ProgError.print_error pp vc_msg
-          else (*print_form stdout vc_and_preds;*) ProgError.error pp vc_msg
+          else ProgError.error pp vc_msg
     in check_one vc
   in
   let vcs = vcgen prog proc in

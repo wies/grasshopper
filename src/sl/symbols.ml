@@ -22,7 +22,7 @@ let subst_id map_id s =
       parameters = List.map (fun (i, s) -> (try_sub i, s)) s.parameters;
       structure = FormUtil.subst_id map_id s.structure;
       outputs = List.map (fun (i,f) -> (try_sub i, FormUtil.subst_id map_id f)) s.outputs;
-      pos_only = Util.optmap (FormUtil.subst_id map_id) s.pos_only
+      pos_only = Util.Opt.map (FormUtil.subst_id map_id) s.pos_only
     }
 
 let pred_struct (name, num) = (name ^ "_struct", num)
@@ -74,7 +74,7 @@ let pred_to_form p args =
   let make_output (id, f) = (id, var_to_cst (FormUtil.subst output_map f)) in
   let renamed_struct = var_to_cst def2.structure in
   let renamed_outputs = List.map make_output def2.outputs in
-    if Debug.is_info () then
+    if Debug.is_debug () then
       begin
         print_endline ("renamed_struct: " ^ (Form.string_of_form renamed_struct));
         print_endline "renamed_outputs: ";
