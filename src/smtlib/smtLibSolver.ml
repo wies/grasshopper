@@ -139,7 +139,7 @@ let select_solver name =
 
 type solver_state = 
     { out_chan: out_channel;
-      in_chan: Unix.file_descr option;
+      in_chan: in_channel option;
       pid: int;     
     }
 
@@ -180,7 +180,7 @@ let iter_solvers session fn =
     session.solvers
 
 let read_from_chan session chan =
-  let lexbuf = Lexing.from_channel (in_channel_of_descr chan) in
+  let lexbuf = Lexing.from_channel chan in
   SmtLibLexer.set_file_name lexbuf session.log_file_name; 
   SmtLibParser.output SmtLibLexer.token lexbuf
 
@@ -190,18 +190,21 @@ let read session =
     Util.flat_map 
       (fun (_, state) -> 
         flush state.out_chan;
-        Opt.to_list state.in_chan)
+        Opt.to_list (Opt.map descr_of_in_channel state.in_chan))
       session.solvers 
   in
   if in_descrs = [] then 
     (if !Config.verify then None, Unknown else None, Unsat)
   else
   let ready, _, _ = Unix.select in_descrs [] [] (-1.) in
-  let in_chan = List.hd ready in
+  let in_descr = List.hd ready in
+  let in_chan = in_channel_of_descr in_descr in
   let result = read_from_chan session in_chan in
   let state = 
     snd (List.find
-           (fun (_, state) -> Opt.get_or_else false (Opt.map ((=) in_chan) state.in_chan))
+           (fun (_, state) -> 
+             Opt.get_or_else false 
+               (Opt.map (fun c -> descr_of_in_channel c = in_descr) state.in_chan))
            session.solvers)
   in
   Some state, result
@@ -245,20 +248,20 @@ let start_with_solver session_name sat_means solver produce_models produce_unsat
     let state =
       match solver.info.kind with
       | Process (cmnd, args) ->
-          let aargs = Array.of_list (cmnd :: args) in
+          (*let aargs = Array.of_list (cmnd :: args) in
           let in_read, in_write = Unix.pipe () in
           let out_read, out_write = Unix.pipe () in
           let pid = Unix.create_process cmnd aargs out_read in_write in_write in
           { in_chan = Some in_read;
             out_chan = out_channel_of_descr out_write;
             pid = pid;
-          }
-          (*let cmd = String.concat " " (cmnd :: args) in
+          }*)
+          let cmd = String.concat " " (cmnd :: args) in
           let in_chan, out_chan = open_process cmd in
-          { in_chan = Some (descr_of_in_channel in_chan);
+          { in_chan = Some in_chan;
             out_chan = out_chan;
             pid = 0;
-          }*)
+          }
       | Logger ->
         (* these files should probably go into the tmp directory *)
           { in_chan = None;
@@ -357,12 +360,12 @@ let quit session =
     flush state.out_chan;
     (match solver.info.kind with
     | Process _ -> 
-        (try Unix.kill state.pid Sys.sigkill 
-        with Unix.Unix_error _ -> ())
-        (*ignore (Unix.close_process (in_channel_of_descr (Opt.get state.in_chan), state.out_chan))*)
+        (*(try Unix.kill state.pid Sys.sigkill 
+        with Unix.Unix_error _ -> ())*)
+        ignore (Unix.close_process (Opt.get state.in_chan, state.out_chan))
     | _ -> ());
     close_out state.out_chan;
-    Opt.iter close state.in_chan)
+    Opt.iter close_in state.in_chan)
 
 let pop session = 
   if session.stack_height <= 0 then fail session "pop on empty stack" else

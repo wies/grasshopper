@@ -62,7 +62,8 @@ let start_session name sat_means f =
     Debug.debug (fun () -> "prover done\n");
     (result, session)
   in
-    Util.measure_call "prove" prove session
+  (*Util.measure_call "prove" prove session*)
+  prove session
 
 let check_sat ?(session_name="form") ?(sat_means="sat") f =
   let result, session = start_session session_name sat_means f in
