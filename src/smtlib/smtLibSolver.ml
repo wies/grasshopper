@@ -87,12 +87,12 @@ let cvc4_v1 =
     subversion = 3;
     has_set_theory = true;
     smt_options = [];
-    kind = Process ("cvc4", ["--lang=smt2"]);
+    kind = Process ("cvc4", ["--lang=smt2"; "--quant-cf"; "--inst-max-level=0"]);
   }
 
 let cvc4mf_v1 = 
   { cvc4_v1 with
-    kind = Process ("cvc4", ["--lang=smt2"; "--finite-model-find"; "--mbqi=none"; "--inst-max-level=0"]);
+    kind = Process ("cvc4", ["--lang=smt2"; "--finite-model-find"; "--mbqi=none"; "--inst-max-level=0"; "--fmf-inst-engine"]);
   }
 
 
@@ -248,20 +248,20 @@ let start_with_solver session_name sat_means solver produce_models produce_unsat
     let state =
       match solver.info.kind with
       | Process (cmnd, args) ->
-          (*let aargs = Array.of_list (cmnd :: args) in
+          let aargs = Array.of_list (cmnd :: args) in
           let in_read, in_write = Unix.pipe () in
           let out_read, out_write = Unix.pipe () in
           let pid = Unix.create_process cmnd aargs out_read in_write in_write in
-          { in_chan = Some in_read;
+          { in_chan = Some (in_channel_of_descr in_read);
             out_chan = out_channel_of_descr out_write;
             pid = pid;
-          }*)
-          let cmd = String.concat " " (cmnd :: args) in
+          }
+          (*let cmd = String.concat " " (cmnd :: args) in
           let in_chan, out_chan = open_process cmd in
           { in_chan = Some in_chan;
             out_chan = out_chan;
             pid = 0;
-          }
+          }*)
       | Logger ->
         (* these files should probably go into the tmp directory *)
           { in_chan = None;
@@ -360,12 +360,14 @@ let quit session =
     flush state.out_chan;
     (match solver.info.kind with
     | Process _ -> 
-        (*(try Unix.kill state.pid Sys.sigkill 
-        with Unix.Unix_error _ -> ())*)
-        ignore (Unix.close_process (Opt.get state.in_chan, state.out_chan))
+        (try Unix.kill state.pid Sys.sigkill 
+        with Unix.Unix_error _ -> ())
+        (*ignore (Unix.close_process (Opt.get state.in_chan, state.out_chan))*)
     | _ -> ());
     close_out state.out_chan;
-    Opt.iter close_in state.in_chan)
+    Opt.iter close_in state.in_chan);
+  iter_solvers session (fun solver state ->
+    if state.pid <> 0 then ignore (Unix.waitpid [] state.pid))
 
 let pop session = 
   if session.stack_height <= 0 then fail session "pop on empty stack" else
