@@ -625,14 +625,19 @@ let mk_loop_cmd inv preb cond postb pos =
   Loop (loop, pp1)
 
 let mk_ite cond cond_pos then_cmd else_cmd pos =
+  let mk_cond cmt =
+    if cond_pos = dummy_position
+    then cond
+    else mk_srcpos cond_pos (mk_comment cmt cond)
+  in
   let t_cond = 
     mk_spec_form 
-      (FOL (mk_srcpos cond_pos (mk_comment "The 'then' branch of this conditional has been taken" cond))) 
+      (FOL (mk_cond "The 'then' branch of this conditional has been taken"))
       "if_then" None cond_pos 
   in
   let e_cond = 
     mk_spec_form 
-      (FOL (mk_not (mk_srcpos cond_pos (mk_comment "The 'else' branch of this conditional has been taken" cond)))) 
+      (FOL (mk_cond "The 'else' branch of this conditional has been taken"))
       "if_else" None cond_pos 
   in
   let t_assume = mk_assume_cmd t_cond cond_pos in
