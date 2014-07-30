@@ -955,10 +955,11 @@ let convert cus =
           mk_ite cond (pos_of_expr c) t_cmd e_cmd pos
       | Loop (contract, preb, cond, postb, pos) ->
           let preb_cmd = convert_stmt proc preb in
+          let cond_pos = pos_of_expr cond in
           let cond = extract_fol_form proc.p_locals cond in
           let invs = convert_loop_contract proc.p_name proc.p_locals contract in
           let postb_cmd = convert_stmt proc postb in
-          mk_loop_cmd invs preb_cmd cond postb_cmd pos
+          mk_loop_cmd invs preb_cmd cond cond_pos postb_cmd pos
       | Return (es, pos) ->
           let return_tys = List.map (fun p -> (IdMap.find p proc.p_locals).v_type) proc.p_returns in
           let ts = 

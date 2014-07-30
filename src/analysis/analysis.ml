@@ -12,7 +12,7 @@ let infer_accesses prog =
         let has_new1, prebody1 = pm prog lc.loop_prebody in
         let has_new2, postbody1 = pm prog lc.loop_postbody in
         has_new1 || has_new2, 
-        mk_loop_cmd lc.loop_inv prebody1 lc.loop_test postbody1 pp.pp_pos
+        mk_loop_cmd lc.loop_inv prebody1 lc.loop_test lc.loop_test_pos postbody1 pp.pp_pos
     | Choice (cs, pp) ->
         let has_new, mods, accs, cs1 = 
           List.fold_right 
@@ -369,22 +369,63 @@ let check_proc prog proc =
         Str.global_replace (Str.regexp "\n\n") "\n  " (ProgError.error_to_string pp vc_msg)
       in
       match Prover.get_model ~session_name:vc_name ~sat_means:sat_means vc_and_preds with
-      | None -> ()
-      | Some model ->
-          let vc_msg = 
+      | None -> []
+      | Some model -> 
+          let error_msg = 
             IdMap.fold 
-              (fun id (pos, msg) vc_msg ->
+              (fun id (pos, msg) error_msg ->
                 let p = mk_free_const Bool id in
                 match Model.eval_bool_opt model p with
-                | Some true -> vc_msg ^ "\n\n" ^ ProgError.error_to_string pos msg
-                | _ -> vc_msg
+                | Some true -> 
+                    error_msg ^ "\n\n" ^ ProgError.error_to_string pos msg
+                | _ -> error_msg
               ) labels vc_msg
           in
-          if !Config.split_vcs && !Config.model_file <> "" 
-          then split_vc prog vc_name vc;
-          if !Config.robust then ProgError.print_error pp vc_msg
-          else ProgError.error pp vc_msg
+          [(pp, error_msg, model)]
     in check_one vc
   in
   let vcs = vcgen prog proc in
-  List.iter check_vc vcs
+  Util.flat_map check_vc vcs
+
+(** Generate a counterexample trace from a failed VC and model *)
+let get_trace prog proc (pp, model) =
+  let add pos = function
+    | prv_pos :: trace ->
+        if prv_pos = pos 
+        then prv_pos :: trace
+        else pos :: prv_pos :: trace
+    | [] -> [pos]
+  in
+  let rec gt trace = function
+    | Choice (cs, pp) :: cs1 ->
+        Util.flat_map (gt trace) (List.map (fun c -> c :: cs1) cs)
+    | Seq (cs, pp) :: cs1 -> 
+        gt trace (cs @ cs1)
+    | Basic (bc, _) :: cs1 ->
+        (match bc with
+        | Assume s ->
+            (match s.spec_name with
+            | "assign" | "if_then" | "if_else" ->
+                let f = form_of_spec s in
+                (match Model.eval_form model f with
+                | None -> 
+                    gt trace cs1
+                | Some true -> 
+                    (*print_string "Adding command: ";
+                    print_endline (Form.string_of_src_pos s.spec_pos);
+                    Prog.print_cmd stdout c;
+                    print_newline ();*)
+                    gt (add s.spec_pos trace) cs1
+                | Some false -> [])
+            | _ -> gt trace cs1)
+        | Assert s ->
+            if pp = s.spec_pos
+            then List.rev (pp :: trace)
+            else gt trace cs1
+        | _ -> gt trace cs1)
+    | _ :: cs1 -> gt trace cs1
+    | [] -> List.rev trace
+  in 
+  match gt [] (Util.Opt.to_list proc.proc_body) with
+  | _ :: trace -> trace
+  | [] -> []

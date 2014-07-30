@@ -20,16 +20,50 @@ let parse_input parse_fct file =
   SplLexer.set_file_name lexbuf file; 
   parse_fct lexbuf
 
+let print_trace prog proc (pp, model) =
+  if !Config.trace_file = "" then () else
+  begin
+    let trace = Analysis.get_trace prog proc (pp, model) in
+    (* print trace to trace file in JSON format *)
+    let trace_chan = open_out !Config.trace_file in
+    let print_pos pos =
+      Printf.fprintf trace_chan 
+        "{\"position\" = {\"line_no\": %d, \"column_no_start\": %d, \"column_no_stop\": %d}}"
+        pos.Form.sp_start_line pos.Form.sp_start_col pos.Form.sp_end_col;
+    in      
+    output_string trace_chan "[";
+    (match trace with
+    | [] -> ()
+    | [pos] -> print_pos pos
+    | first :: rest -> 
+        print_pos first;
+        List.iter (fun pos -> output_string trace_chan ",\n"; print_pos pos) rest);
+    output_string trace_chan "]\n";
+    close_out trace_chan     
+  end
+
+
 let vc_gen file =
   let cu = parse_input (fun lexbuf -> SplParser.main SplLexer.token lexbuf) file in
   let prog = Spl2ghp.to_program [cu] in
-  let prog1 = Analysis.simplify prog in
+  let simple_prog = Analysis.simplify prog in
+  let check simple_prog proc =
+    let errors = Analysis.check_proc simple_prog proc in
+    List.iter 
+      (fun (pp, error_msg, model) ->
+        print_trace simple_prog proc (pp, model);
+        if !Config.robust 
+        then ProgError.print_error pp error_msg
+        else ProgError.error pp error_msg;
+      )
+      errors
+  in
   if !Config.procedure = "" 
-  then Prog.iter_procs Analysis.check_proc prog1
+  then Prog.iter_procs check simple_prog
   else 
     try
-      let proc = Prog.find_proc prog1 (!Config.procedure, 0) in
-      Analysis.check_proc prog1 proc
+      let proc = Prog.find_proc simple_prog (!Config.procedure, 0) in
+      check simple_prog proc
     with Not_found -> failwith ("Could not find a procedure named " ^ !Config.procedure)
     
 

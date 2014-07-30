@@ -84,6 +84,7 @@ type loop_command = {
     loop_inv : spec list; (** the loop invariant *)
     loop_prebody : command; (** the command executed before each test of the loop condition *)
     loop_test : form; (** the loop condition *)
+    loop_test_pos : source_position; (** source code position of loop condition *)
     loop_postbody : command; (** the actual loop body *)
   }
 
@@ -601,11 +602,12 @@ let mk_choice_cmd cmds pos =
   | [cmd] -> cmd
   | _ -> Choice (cmds, pp1)
 
-let mk_loop_cmd inv preb cond postb pos =
+let mk_loop_cmd inv preb cond cond_pos postb pos =
   let loop = 
     { loop_inv = inv;
       loop_prebody = preb;
       loop_test = cond;
+      loop_test_pos = cond_pos;
       loop_postbody = postb;
     } 
   in
@@ -632,13 +634,13 @@ let mk_ite cond cond_pos then_cmd else_cmd pos =
   in
   let t_cond = 
     mk_spec_form 
-      (FOL (mk_cond "The 'then' branch of this conditional has been taken"))
+      (FOL (mk_cond "The 'then' branch of this conditional has been taken on the error trace"))
       "if_then" None cond_pos 
   in
   let e_cond = 
     mk_spec_form 
-      (FOL (mk_cond "The 'else' branch of this conditional has been taken"))
-      "if_else" None cond_pos 
+      (FOL (mk_not (mk_cond "The 'else' branch of this conditional has been taken on the error trace")))
+      "if_else" None cond_pos
   in
   let t_assume = mk_assume_cmd t_cond cond_pos in
   let e_assume = mk_assume_cmd e_cond cond_pos in
@@ -650,7 +652,7 @@ let rec fold_basic_cmds f acc = function
   | Loop (lc, pp) ->
       let lpre, acc = fold_basic_cmds f acc lc.loop_prebody in
       let lpost, acc = fold_basic_cmds f acc lc.loop_postbody in
-      mk_loop_cmd lc.loop_inv lpre lc.loop_test lpost pp.pp_pos, acc
+      mk_loop_cmd lc.loop_inv lpre lc.loop_test lc.loop_test_pos lpost pp.pp_pos, acc
   | Choice (cs, pp) ->
       let cs1, acc = 
         List.fold_right (fun c (cs1, acc) ->

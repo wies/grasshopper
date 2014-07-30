@@ -69,7 +69,7 @@ let elim_loops (prog : program) =
             [ init_returns;
               prebody;
               mk_ite 
-                lc.loop_test dummy_position 
+                lc.loop_test lc.loop_test_pos
                 then_cmd else_cmd pp.pp_pos
             ]
             pp.pp_pos,

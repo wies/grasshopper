@@ -120,13 +120,22 @@ let find_set_value model v srt =
 
 let equal model v1 v2 srt =
   v1 = v2 ||
-  let v1_val = SortedValueMap.find (v1, srt) model.vals in
-  let v2_val = SortedValueMap.find (v2, srt) model.vals in
-  match v1_val, v2_val with
-  | SetVal s1, SetVal s2 ->
-      ValueSet.equal s1 s2
-  | _, _ -> false
-
+  match srt with
+  | Set _ ->
+      let v1_val = 
+        try SortedValueMap.find (v1, srt) model.vals 
+        with Not_found -> raise Undefined
+      in
+      let v2_val = 
+        try SortedValueMap.find (v2, srt) model.vals
+        with Not_found -> raise Undefined
+      in
+      (match v1_val, v2_val with
+      | SetVal s1, SetVal s2 ->
+          ValueSet.equal s1 s2
+      | _, _ -> false)
+  | _ -> false
+      
 let extend_interp model sym (arity: arity) args res =
   let _, res_srt = arity in
   (* update cardinality *)
@@ -300,6 +309,29 @@ let eval_bool_opt model t =
 let eval_int_opt model t =
   try Some (eval_int model t)
   with Undefined -> None
+
+let rec eval_form model = function
+  | BoolOp (Not, [f]) ->
+      Util.Opt.map not (eval_form model f)
+  | BoolOp (And, fs) ->
+      List.fold_left 
+        (fun acc f ->
+          match acc with
+          | Some false -> Some false
+          | Some true -> eval_form model f  
+          | None -> None)
+        (Some true) fs
+  | BoolOp (Or, fs) ->
+      List.fold_left 
+        (fun acc f ->
+          match acc with
+          | Some false -> eval_form model f
+          | Some true -> Some true
+          | None -> None) 
+        (Some false) fs
+  | Atom (t, _) -> eval_bool_opt model t
+  | Binder (b, [], f, _) -> eval_form model f
+  | _ -> None
 
 let is_defined model sym arity args =
   try 
