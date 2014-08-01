@@ -243,7 +243,7 @@ let declare_sorts has_int session =
     end
 
 let start_with_solver session_name sat_means solver produce_models produce_unsat_cores = 
-  let log_file_name = (str_of_ident (fresh_ident session_name)) ^ ".smt2" in
+  let log_file_name = (string_of_ident (fresh_ident session_name)) ^ ".smt2" in
   let start_solver solver =
     let state =
       match solver.info.kind with
@@ -388,19 +388,19 @@ let is_interpreted sym = match sym with
   | Plus | Minus | Mult | Div | UMinus -> true
   | _ -> false
 
-let string_of_symbol sym idx =
-  (str_of_symbol sym) ^ "$" ^ (string_of_int idx)
+let string_of_overloaded_symbol sym idx =
+  (string_of_symbol sym) ^ "$" ^ (string_of_int idx)
 
 let declare session sign =
   let declare sym idx (arg_sorts, res_sort) = 
-    let sym_str = string_of_symbol sym idx in
+    let sym_str = string_of_overloaded_symbol sym idx in
     declare_fun session sym_str arg_sorts res_sort
   in
   let write_decl sym overloaded_variants = 
     if not (is_interpreted sym) then
       begin
         match overloaded_variants with
-        | [] -> failwith ("missing sort for symbol " ^ str_of_symbol sym)
+        | [] -> failwith ("missing sort for symbol " ^ string_of_symbol sym)
         | _ -> Util.iteri (declare sym) overloaded_variants
       end
   in
@@ -420,7 +420,7 @@ let disambiguate_overloaded_symbols signs f =
       in
       try
         let version = Util.find_index sign versions in
-        FreeSym (mk_ident (string_of_symbol sym version))
+        FreeSym (mk_ident (string_of_overloaded_symbol sym version))
       with Not_found -> sym
   in
   let rec over t = match t with
@@ -635,7 +635,7 @@ let convert_model smtModel =
           (* Z3-specific work around *)
           (match convert_term t with
           | App (FreeSym (id2, _) as sym2, ts, srt) as t1 ->
-              let re = Str.regexp (str_of_symbol sym ^ "\\$[0-9]+![0-9]+") in
+              let re = Str.regexp (string_of_symbol sym ^ "\\$[0-9]+![0-9]+") in
               if Str.string_match re id2 0 &&
                 List.fold_left2 (fun acc (id1, _) -> function
                   | App (FreeSym _, [App (FreeSym id2, [], _)], _)

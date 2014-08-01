@@ -87,4 +87,4 @@ let get_model ?(session_name="form") ?(sat_means="sat") f =
     | None -> Some (Model.empty)
   in
   SmtLibSolver.quit session;
-  model
+  Util.Opt.map Model.complete model

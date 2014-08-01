@@ -51,7 +51,7 @@ rmodel:
 ;
 
 names:
-| IDENT names { (Form.str_of_ident $1) :: $2 }
+| IDENT names { (Form.string_of_ident $1) :: $2 }
 | /* empty */ { [] }
 ;
 

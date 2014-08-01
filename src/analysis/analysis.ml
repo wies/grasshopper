@@ -315,7 +315,7 @@ let vcgen prog proc =
             in
             let vc_name = 
               Str.global_replace (Str.regexp " ") "_"
-                (str_of_ident proc.proc_name ^ "_" ^ name)
+                (string_of_ident proc.proc_name ^ "_" ^ name)
             in
             let vc = pre @ [mk_name name f] in
             (vc_name, vc_msg, smk_and vc) :: acc, []
@@ -371,15 +371,38 @@ let check_proc prog proc =
       match Prover.get_model ~session_name:vc_name ~sat_means:sat_means vc_and_preds with
       | None -> []
       | Some model -> 
-          let error_msg = 
+          (* generate error message from model *)
+          let add_msg pos msg error_msgs =
+            let filtered_msgs = 
+              List.filter 
+                (fun (pos2, _) -> not (contained_in_src_pos pos pos2))
+                error_msgs
+            in
+            (pos, msg) :: filtered_msgs
+          in
+          let error_msgs = 
             IdMap.fold 
-              (fun id (pos, msg) error_msg ->
+              (fun id (pos, msg) error_msgs ->
                 let p = mk_free_const Bool id in
                 match Model.eval_bool_opt model p with
-                | Some true -> 
-                    error_msg ^ "\n\n" ^ ProgError.error_to_string pos msg
-                | _ -> error_msg
-              ) labels vc_msg
+                | Some true ->
+                    add_msg pos msg error_msgs
+                | _ -> error_msgs
+              ) 
+              labels []
+          in
+          let sorted_error_msgs = 
+            List.sort
+              (fun (pos1, _) (pos2, _) -> compare_src_pos pos1 pos2) 
+              error_msgs 
+          in
+          let error_msg_strings = 
+            List.map 
+              (fun (pos, msg) -> ProgError.error_to_string pos msg) 
+              sorted_error_msgs
+          in
+          let error_msg =
+            String.concat "\n\n" (vc_msg :: error_msg_strings)
           in
           [(pp, error_msg, model)]
     in check_one vc
@@ -389,18 +412,32 @@ let check_proc prog proc =
 
 (** Generate a counterexample trace from a failed VC and model *)
 let get_trace prog proc (pp, model) =
-  let add pos = function
-    | prv_pos :: trace ->
+  let add (pos, state) = function
+    | (prv_pos, prv_state) :: trace ->
         if prv_pos = pos 
-        then prv_pos :: trace
-        else pos :: prv_pos :: trace
-    | [] -> [pos]
+        then (prv_pos, prv_state) :: trace
+        else (pos, state) :: (prv_pos, prv_state) :: trace
+    | [] -> [(pos, state)]
   in
-  let rec gt trace = function
+  let rec update_vmap vmap = function
+    | Atom (App (Eq, [App (FreeSym (name, num), [], _); _], _), _) ->
+        IdMap.add (name, 0) (name, num) vmap
+    | BoolOp (And, fs) ->
+        List.fold_left update_vmap vmap fs
+    | Binder (_, [], f, _) -> 
+        update_vmap vmap f
+    | _ -> vmap
+  in
+  let get_curr_state vmap model =
+    let ids = IdMap.fold (fun _ id ids -> IdSet.add id ids) vmap IdSet.empty in
+    let rmodel = Model.restrict_to_idents model ids in
+    Model.rename_free_symbols rmodel (fun (name, _) -> (name, 0))
+  in
+  let rec gt vmap trace = function
     | Choice (cs, pp) :: cs1 ->
-        Util.flat_map (gt trace) (List.map (fun c -> c :: cs1) cs)
+        Util.flat_map (gt vmap trace) (List.map (fun c -> c :: cs1) cs)
     | Seq (cs, pp) :: cs1 -> 
-        gt trace (cs @ cs1)
+        gt vmap trace (cs @ cs1)
     | Basic (bc, _) :: cs1 ->
         (match bc with
         | Assume s ->
@@ -409,23 +446,52 @@ let get_trace prog proc (pp, model) =
                 let f = form_of_spec s in
                 (match Model.eval_form model f with
                 | None -> 
-                    gt trace cs1
+                    gt vmap trace cs1
                 | Some true -> 
                     (*print_string "Adding command: ";
                     print_endline (Form.string_of_src_pos s.spec_pos);
                     Prog.print_cmd stdout c;
                     print_newline ();*)
-                    gt (add s.spec_pos trace) cs1
-                | Some false -> [])
-            | _ -> gt trace cs1)
+                    let curr_state = get_curr_state vmap model in
+                    if s.spec_name = "assign"
+                    then gt (update_vmap vmap f) (add (s.spec_pos, curr_state) trace) cs1
+                    else gt vmap (add (s.spec_pos, curr_state) trace) cs1
+                | Some false -> 
+                    (*print_string "Aboarding command: ";
+                    print_endline (Form.string_of_src_pos s.spec_pos);
+                    Prog.print_cmd stdout c;
+                    print_newline ();*)
+                    [])
+            | "join" -> 
+                gt (update_vmap vmap (form_of_spec s)) trace cs1
+            | _ -> 
+                gt vmap trace cs1)
         | Assert s ->
             if pp = s.spec_pos
-            then List.rev (pp :: trace)
-            else gt trace cs1
-        | _ -> gt trace cs1)
-    | _ :: cs1 -> gt trace cs1
+            then 
+              let curr_state = get_curr_state vmap model in
+              List.rev ((pp, curr_state) :: trace)
+            else gt vmap trace cs1
+        | _ -> gt vmap trace cs1)
+    | _ :: cs1 -> gt vmap trace cs1
     | [] -> List.rev trace
   in 
-  match gt [] (Util.Opt.to_list proc.proc_body) with
+  let init_vmap =
+    let vars = IdMap.merge (fun id v1 v2 ->
+      match v1, v2 with
+      | Some v1, _ -> Some v1
+      | _, Some v2 -> Some v2
+      | _, _ -> None) prog.prog_vars proc.proc_locals
+    in
+    IdMap.fold 
+      (fun (name, num) _ vmap -> 
+        try 
+          if snd (IdMap.find (name, 0) vmap) > num 
+          then IdMap.add (name, 0) (name, num) vmap
+          else vmap
+        with Not_found -> IdMap.add (name, 0) (name, num) vmap)
+      vars IdMap.empty
+  in
+  match gt init_vmap [] (Util.Opt.to_list proc.proc_body) with
   | _ :: trace -> trace
   | [] -> []

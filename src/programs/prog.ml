@@ -189,24 +189,24 @@ let vars  prog = IdMap.fold (fun _ var  vars  -> var  :: vars ) prog.prog_vars  
 let find_proc prog name =
   try IdMap.find name prog.prog_procs 
   with Not_found -> 
-    failwith ("find_proc: Could not find procedure " ^ (str_of_ident name))
+    failwith ("find_proc: Could not find procedure " ^ (string_of_ident name))
 
 let find_pred prog name =
   try IdMap.find name prog.prog_preds
   with Not_found -> 
-    failwith ("find_proc: Could not find predicate " ^ (str_of_ident name))
+    failwith ("find_proc: Could not find predicate " ^ (string_of_ident name))
 
 let find_global prog name = 
   try IdMap.find name prog.prog_vars
   with Not_found -> 
-    failwith ("find_proc: Could not find global variable " ^ (str_of_ident name))
+    failwith ("find_proc: Could not find global variable " ^ (string_of_ident name))
 
 let find_var prog proc name =
   try
     try IdMap.find name proc.proc_locals 
     with Not_found -> IdMap.find name prog.prog_vars
   with Not_found ->
-    failwith ("find_proc: Could not find variable " ^ (str_of_ident name))
+    failwith ("find_proc: Could not find variable " ^ (string_of_ident name))
 
 let mk_fresh_var_decl decl pos =
   let id = fresh_ident (name decl.var_name) in
@@ -369,32 +369,6 @@ let unoldify_spec sf =
 
 
 (** Auxiliary functions for program points *)
-
-let merge_src_positions pos1 pos2 =
-  let start_line, start_col =
-    if pos1.sp_start_line < pos2.sp_start_line 
-    then pos1.sp_start_line, pos1.sp_start_col
-    else if pos2.sp_start_line < pos1.sp_start_line
-    then pos2.sp_start_line, pos2.sp_start_col
-    else if pos1.sp_start_col < pos2.sp_start_col
-    then pos1.sp_start_line, pos1.sp_start_col
-    else pos2.sp_start_line, pos2.sp_start_col
-  in
-  let end_line, end_col =
-    if pos1.sp_end_line > pos2.sp_end_line 
-    then pos1.sp_end_line, pos1.sp_end_col
-    else if pos2.sp_end_line > pos1.sp_end_line
-    then pos2.sp_end_line, pos2.sp_end_col
-    else if pos1.sp_end_col > pos2.sp_end_col
-    then pos1.sp_end_line, pos1.sp_end_col
-    else pos2.sp_end_line, pos2.sp_end_col
-  in
-  { pos1 with
-    sp_start_line = start_line;
-    sp_start_col = start_col;
-    sp_end_line = end_line;
-    sp_end_col = end_col;
-  }
 
 let start_pos pos = 
   { pos with

@@ -515,7 +515,7 @@ let convert cus =
       try IdMap.find id locals 
       with Not_found -> 
         try IdMap.find id cu.var_decls
-        with Not_found -> failwith ("Unable to find identifier " ^ (str_of_ident id))
+        with Not_found -> failwith ("Unable to find identifier " ^ (string_of_ident id))
     in
     let field_type pos id fld_id =
       let decl = IdMap.find id cu.struct_decls in
@@ -847,12 +847,12 @@ let convert cus =
             if caller = proc_name then
               (Printf.sprintf 
                 "An invariant might not hold before entering a loop in procedure %s"
-                (str_of_ident proc_name),
+                (string_of_ident proc_name),
                 "This is the loop invariant that might not hold initially")
             else 
               (Printf.sprintf 
                  "An invariant might not be maintained by a loop in procedure %s"
-                 (str_of_ident proc_name),
+                 (string_of_ident proc_name),
                "This is the loop invariant that might not be maintained")
           in
           (*let pos = pos_of_expr e in*)
@@ -986,7 +986,7 @@ let convert cus =
               pred_formals = decl.pr_formals;
               pred_returns = [];
               pred_locals = IdMap.map convert_var_decl decl.pr_locals;
-              pred_body = mk_spec_form (SL body) (str_of_ident id) None (pos_of_expr decl.pr_body);
+              pred_body = mk_spec_form (SL body) (string_of_ident id) None (pos_of_expr decl.pr_body);
               pred_pos = decl.pr_pos;
               pred_accesses = IdSet.empty;
               pred_is_free = false
@@ -1003,19 +1003,19 @@ let convert cus =
               let mk_msg caller =
                  Printf.sprintf 
                   "A precondition for this call of %s might not hold"
-                  (str_of_ident proc_name),
+                  (string_of_ident proc_name),
                 "Related location: This is the precondition that might not hold"
               in
-              let name = "precondition of " ^ str_of_ident proc_name in
+              let name = "precondition of " ^ string_of_ident proc_name in
               convert_spec_form locals e name (Some mk_msg) :: pre, post
           | Ensures e -> fun (pre, post) ->
               let mk_msg caller =
                  Printf.sprintf 
                   "A postcondition of procedure %s might not hold at this return point"
-                  (str_of_ident proc_name),
+                  (string_of_ident proc_name),
                 "Related location: This is the postcondition that might not hold"
               in 
-              let name = "postcondition of " ^ str_of_ident proc_name in
+              let name = "postcondition of " ^ string_of_ident proc_name in
               pre, convert_spec_form locals e name (Some mk_msg) :: post)
         contract ([], [])
     in

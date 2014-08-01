@@ -239,8 +239,9 @@ let rec eval model = function
             (find_set_value model t1_val esrt)
             (find_set_value model t2_val esrt)
         in extend_interp model Diff arity [t1_val; t2_val] (SetVal res))
-  | App (Eq, [t1; t2], srt) ->
-      B (equal model (eval model t1) (eval model t2) srt)
+  | App (Eq, [t1; t2], _) ->
+      let res = equal model (eval model t1) (eval model t2) (sort_of t1) in
+      B res
   | App (LtEq as rel, [t1; t2], _)
   | App (GtEq as rel, [t1; t2], _)
   | App (Lt as rel, [t1; t2], _)
@@ -411,6 +412,34 @@ let restrict_to_sign model sign =
       model.intp SortedSymbolMap.empty
   in { model with intp = new_intp }
 
+let restrict_to_idents model ids =
+  let new_intp =  
+    SortedSymbolMap.fold 
+      (fun (sym, arity) def new_intp ->
+        match sym with
+        | FreeSym id when not (IdSet.mem id ids) ->
+            new_intp
+        | _ ->
+            SortedSymbolMap.add (sym, arity) def new_intp
+      )
+      model.intp SortedSymbolMap.empty
+  in { model with intp = new_intp }
+    
+
+let rename_free_symbols model fn =
+  let new_intp =
+    SortedSymbolMap.fold
+      (fun (sym, arity) def new_intp ->
+        match sym with
+        | FreeSym id -> 
+            SortedSymbolMap.add (FreeSym (fn id), arity) def new_intp
+        | _ ->
+            SortedSymbolMap.add (sym, arity) def new_intp
+      )
+      model.intp SortedSymbolMap.empty
+  in
+  { model with intp = new_intp }
+
 let succ model fld x =
   let arity = [Fld Loc; Loc; Loc; Loc], Bool in
   let locs = get_values_of_sort model Loc in
@@ -421,6 +450,22 @@ let succ model fld x =
     then y else s)
     x locs
       
+let complete model =
+  let locs = get_values_of_sort model Loc in
+  let flds = get_values_of_sort model (Fld Loc) in
+  let new_model =
+    List.fold_left 
+      (fun new_model fld ->
+        List.fold_left 
+          (fun new_model arg ->
+            let res = succ model fld arg in
+            add_def new_model Read ([Fld Loc; Loc], Loc) [fld; arg] res)
+          new_model locs)
+      model flds
+  in
+  finalize_values new_model
+    
+
 
 let find_term model =
   let vm =
@@ -457,7 +502,58 @@ let find_term model =
   in fun v srt -> find (v, srt)
 
             
+let string_of_sorted_value srt v = 
+  match srt with
+  | Int | Bool -> string_of_value v 
+  | _ -> string_of_sort srt ^ "!" ^ string_of_value v
 
+let output_json chan model =
+  let string_of_sorted_value srt v = 
+    "\"" ^ string_of_sorted_value srt v ^ "\""
+  in
+  let output_value sym srt =
+    match srt with
+    | Loc | Bool | Int -> 
+        let v = interp_symbol model sym ([], srt) [] in
+        output_string chan (string_of_sorted_value srt v)
+    | Set esrt ->
+        let set = interp_symbol model sym ([], srt) [] in
+        let s = find_set_value model set esrt in
+        let vals = List.map (fun e ->  string_of_sorted_value esrt e) (ValueSet.elements s) in
+        let set_rep = String.concat ", " vals in
+        output_string chan ("[" ^ set_rep ^ "]")
+    | Fld rsrt ->
+        let args = get_values_of_sort model Loc in
+        output_string chan "[";
+        Util.output_list chan 
+          (fun arg -> 
+            let res = interp_symbol model sym ([], srt) [arg] in
+            Printf.fprintf chan "{\"arg\": %s, \"res\": %s}" 
+              (string_of_sorted_value Loc arg) (string_of_sorted_value rsrt res)
+          )
+          ", " args;
+        output_string chan "]"
+    | _ -> ()
+  in
+  let output_symbol (sym, srt) = 
+    Printf.fprintf chan "{\"name\": \"%s\", \"type\": \"%s\", value: "
+      (string_of_symbol sym) (string_of_sort srt);
+    output_value sym srt;
+      Printf.fprintf chan "}"
+  in
+  let defs = 
+    SortedSymbolMap.fold 
+      (fun (sym, arity) _ defs ->
+        match sym, arity with
+        | (FreeSym _, ([], srt))
+        | (Null, ([], srt)) -> (sym, srt) :: defs
+        | _, _ -> defs) 
+      model.intp []
+  in
+  output_string chan "[{";
+  Util.output_list chan output_symbol ", " defs;
+  output_string chan "}]"
+  
 let output_graphviz chan model =
   let find_term = find_term model in
   let colors1 = ["blue"; "red"; "green"; "orange"; "darkviolet"] in
@@ -477,18 +573,14 @@ let output_graphviz chan model =
     let f = find_term fld (Fld Loc) in
     Printf.sprintf "label=\"%s\", fontcolor=%s, color=%s" (string_of_term f) color color
   in
-  let string_of_sorted_value srt v = 
-    match srt with
-    | Int | Bool -> string_of_value v 
-    | _ -> string_of_sort srt ^ "!" ^ string_of_value v in
   let string_of_loc_value l = string_of_sorted_value Loc l in 
   let output_flds () = 
     List.iter 
       (fun f ->
+        let m, d = find_map_value model f Loc in
         List.iter (fun l ->
           try
             if interp_symbol model Null ([], Loc) [] = l then () else
-            let m, d = find_map_value model f Loc in
             let r = fun_app model (MapVal (m, d)) [l] in
 	    let label = get_label f in
 	    Printf.fprintf chan "\"%s\" -> \"%s\" [%s]\n" 
@@ -532,7 +624,7 @@ let output_graphviz chan model =
         (fun fld ->
           try 
             let f = interp_symbol model fld ([], Fld srt) [] in
-            let fld_str = str_of_symbol fld in
+            let fld_str = string_of_symbol fld in
             let m, d = find_map_value model f srt in
             let v = fun_app model (MapVal (m, d)) [loc] in
             Printf.fprintf chan "      <tr><td><b>%s = %s</b></td></tr>\n" fld_str (string_of_value v)
@@ -554,7 +646,7 @@ let output_graphviz chan model =
   let output_loc_vars () = 
     SymbolSet.iter (fun sym ->
       let v = interp_symbol model sym ([], Loc) [] in
-      Printf.fprintf chan "\"%s\" -> \"%s\"\n" (str_of_symbol sym) (string_of_loc_value v))
+      Printf.fprintf chan "\"%s\" -> \"%s\"\n" (string_of_symbol sym) (string_of_loc_value v))
    (get_symbols_of_sort model ([], Loc))
   in
   let print_table_header = 
@@ -577,7 +669,7 @@ let output_graphviz chan model =
     let print_ints () =
       SymbolSet.iter 
         (fun sym ->
-          let str = str_of_symbol sym in
+          let str = string_of_symbol sym in
           let value = interp_symbol model sym ([], Int) [] in
           Printf.fprintf chan "        <tr><td>%s = %s</td></tr>\n" 
             str (string_of_value value)

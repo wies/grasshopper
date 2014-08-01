@@ -157,14 +157,14 @@ let string_of_src_pos pos =
     Printf.sprintf "File \"%s\", line %d, column %d to line %d, column %d" 
       pos.sp_file pos.sp_start_line pos.sp_start_col pos.sp_end_line pos.sp_end_col
 
-let str_of_ident0 (name, n) =
+let string_of_ident0 (name, n) =
   Printf.sprintf "%s_%d" name n
 
-let str_of_ident (name, n) =
+let string_of_ident (name, n) =
   if n = 0 then name else
   Printf.sprintf "%s_%d" name n
 
-let str_of_symbol = function
+let string_of_symbol = function
   (* function symbols *)
   | BoolConst b -> Printf.sprintf "%b" b
   | IntConst i -> string_of_int i
@@ -199,9 +199,9 @@ let str_of_symbol = function
   | SubsetEq -> "subset"
   | Frame -> "Frame"
   (* uninterpreted symbols *)
-  | FreeSym id -> str_of_ident id
+  | FreeSym id -> string_of_ident id
 
-let pr_ident ppf id = fprintf ppf "%s" (str_of_ident id)
+let pr_ident ppf id = fprintf ppf "%s" (string_of_ident id)
 
 let rec pr_ident_list ppf = function
   | [] -> ()
@@ -230,7 +230,7 @@ and pr_sort ppf = function
   (*| Set s -> fprintf ppf "@[<4>(%s@ %a)@]" set_sort_string pr_sort0 s*)
   | Set s -> fprintf ppf "@[<4>%s%a@]" set_sort_string pr_sort0 s
 
-let pr_sym ppf sym = fprintf ppf "%s" (str_of_symbol sym)
+let pr_sym ppf sym = fprintf ppf "%s" (string_of_symbol sym)
 
 let rec pr_term ppf = function
   | Var (id, _) -> fprintf ppf "%a" pr_ident id
@@ -274,7 +274,7 @@ let rec pr_vars ppf = function
 let extract_name smt ann =
   let names = Util.filter_map 
       (function Name _ -> Config.named_assertions && true | _ -> false) 
-      (function Name id -> str_of_ident id | _ -> "")
+      (function Name id -> string_of_ident id | _ -> "")
       ann 
   in
   if smt 
@@ -496,5 +496,5 @@ let print_forms ch fs =
   
 let print_subst_map subst_map =
   Printf.printf "[";
-  IdMap.iter (fun id t -> Printf.printf "  %s -> %s\n" (str_of_ident id) (string_of_term t)) subst_map;
+  IdMap.iter (fun id t -> Printf.printf "  %s -> %s\n" (string_of_ident id) (string_of_term t)) subst_map;
   print_endline "]"

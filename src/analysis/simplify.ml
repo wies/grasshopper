@@ -7,7 +7,7 @@ let elim_loops (prog : program) =
   let rec elim prog proc = function
     | Loop (lc, pp) -> 
         let proc_name = 
-          fresh_ident ((str_of_ident proc.proc_name) ^ "_loop") 
+          fresh_ident ((string_of_ident proc.proc_name) ^ "_loop") 
         in
         let locals = 
           IdMap.filter 
@@ -77,7 +77,7 @@ let elim_loops (prog : program) =
         in
         (* loop exit condition *)
         let loop_exit =
-          let name = "loop exit condition of " ^ (str_of_ident proc_name) in
+          let name = "loop exit condition of " ^ (string_of_ident proc_name) in
           mk_free_spec_form (FOL (mk_not lc.loop_test)) name None loop_end_pos
         in
         (* frame conditions for non-modified locals *)          
@@ -89,7 +89,7 @@ let elim_loops (prog : program) =
               else 
                 let f = mk_eq (id_to_term id) (id_to_term init_id) in
                 mk_free_spec_form (FOL f) 
-                  ("framecondition of " ^ str_of_ident proc_name) 
+                  ("framecondition of " ^ string_of_ident proc_name) 
                   None pp.pp_pos :: frames
             )
             [] returns formals

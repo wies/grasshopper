@@ -9,7 +9,7 @@ type source_position = Form.source_position
 let mk_ident = FormUtil.mk_ident
 module IdMap = Form.IdMap
 module IdSet = Form.IdSet
-let ident_to_string = Form.str_of_ident
+let ident_to_string = Form.string_of_ident
 
 let to_field f = FormUtil.mk_free_const (Form.Fld Form.Loc) f
 

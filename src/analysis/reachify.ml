@@ -296,7 +296,7 @@ let verify_generalization pred_sl pred_dom pred_str =
     let base_query = smk_and [sl_base; fol_neg] in
     let base_res =
       Prover.check_sat
-        ~session_name:("pred_gen_base_case_1_"^(str_of_ident pred_sl.pred_name))
+        ~session_name:("pred_gen_base_case_1_"^(string_of_ident pred_sl.pred_name))
         base_query
     in
     if base_res <> Some false then raise (Compile_pred_failure "pred_gen_base_1")
@@ -307,7 +307,7 @@ let verify_generalization pred_sl pred_dom pred_str =
     let step_query = smk_and [sl_step; induc_hyp_fol; fol_neg] in
     let step_res =
       Prover.check_sat
-        ~session_name:("pred_gen_indc_step_1_"^(str_of_ident pred_sl.pred_name))
+        ~session_name:("pred_gen_indc_step_1_"^(string_of_ident pred_sl.pred_name))
         step_query
     in
     if step_res <> Some false then raise (Compile_pred_failure "pred_gen_step_1")
@@ -321,7 +321,7 @@ let verify_generalization pred_sl pred_dom pred_str =
     let base_query = smk_and [emp; sl_base; fol_pos] in
     let base_res =
       Prover.check_sat
-        ~session_name:("pred_gen_base_case_2_"^(str_of_ident pred_sl.pred_name))
+        ~session_name:("pred_gen_base_case_2_"^(string_of_ident pred_sl.pred_name))
         base_query
     in
     if base_res <> Some false then raise (Compile_pred_failure "pred_gen_base_2")
@@ -331,7 +331,7 @@ let verify_generalization pred_sl pred_dom pred_str =
     let sl_step = ToGrass.to_grass_negated pred_to_form dom_set step in
     let ind_hyp_1 = (* the rest is fine *)
     (*
-    IdMap.iter (fun k v -> print_endline ((str_of_ident k)^" -> "^(string_of_term v))) map;
+    IdMap.iter (fun k v -> print_endline ((string_of_ident k)^" -> "^(string_of_term v))) map;
     print_smtlib_form stdout fol_pos;
     print_newline ();
     print_smtlib_form stdout fol;
@@ -351,7 +351,7 @@ let verify_generalization pred_sl pred_dom pred_str =
     *)
     let step_res =
       Prover.check_sat
-        ~session_name:("pred_gen_indc_step_2_"^(str_of_ident pred_sl.pred_name))
+        ~session_name:("pred_gen_indc_step_2_"^(string_of_ident pred_sl.pred_name))
         step_query
     in
     if step_res <> Some false then raise (Compile_pred_failure "pred_gen_step_2")
@@ -409,13 +409,13 @@ let compile_pred pred =
           (try verify_generalization pred pred_dom pred_str
            with Compile_pred_failure why ->
              Debug.warn ( "cannot prove that predefined translation of '" ^
-                          (str_of_ident pred.pred_name) ^
+                          (string_of_ident pred.pred_name) ^
                           "' is correct: " ^ why ^ "\n"));
           *)
           pred_str :: pred_outputs
      with Not_found -> 
        ProgError.error pred.pred_pos 
-         ("Unable to translate predicate " ^ (str_of_ident pred.pred_name)))
+         ("Unable to translate predicate " ^ (string_of_ident pred.pred_name)))
   | FOL _ -> [pred]
 
 let compile_pred_acc acc pred =
@@ -653,14 +653,14 @@ let compile_preds preds =
     (* make the body of the new preds *)
     let str_body =
       Axioms.mk_axiom
-        ("str_of_"^(str_of_ident pred.pred_name))
+        ("str_of_"^(string_of_ident pred.pred_name))
         (subst_consts
           aux_subst
           (mk_and ((mk_reach ind_fld ind_var end_of_segment) :: additional_cstr)))
     in
     let dom_body =
       Axioms.mk_axiom
-        ("dom_of_"^(str_of_ident pred.pred_name))
+        ("dom_of_"^(string_of_ident pred.pred_name))
         (subst_consts
           aux_subst
           (mk_iff (mk_and [(mk_btwn ind_fld ind_var Axioms.loc1 end_of_segment);
@@ -731,7 +731,7 @@ let compile_preds preds =
       compile_pred pred
   in
   let compile id =
-    Debug.info (fun () -> "  translating SL definition to GRASS: " ^ (str_of_ident id) ^ "\n");
+    Debug.info (fun () -> "  translating SL definition to GRASS: " ^ (string_of_ident id) ^ "\n");
     try
       if simple_pred id then compile_simple_pred id
       else if use_aux_induction_pred id then compile_use_aux id
@@ -739,7 +739,7 @@ let compile_preds preds =
       else predefined id
     with Compile_pred_failure why ->
       begin
-        Debug.notice (fun () -> "cannot translate '" ^ (str_of_ident id) ^ "': " ^ why ^ "\n");
+        Debug.notice (fun () -> "cannot translate '" ^ (string_of_ident id) ^ "': " ^ why ^ "\n");
         Debug.notice (fun () -> "reverting to predefined\n");
         predefined id
       end

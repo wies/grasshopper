@@ -47,10 +47,10 @@ let pred_to_form p args =
       (fun acc (id1, srt1) (id2, srt2) ->
         if srt1 <> srt2 then
           begin
-            let pr i s  = (str_of_ident i) ^":" ^ (string_of_sort s) in
+            let pr i s  = (string_of_ident i) ^":" ^ (string_of_sort s) in
               failwith ("uncompatible types: " ^ (pr id1 srt1) ^ " vs " ^ (pr id2 srt2))
           end;
-        (*print_endline ((str_of_ident id1)^" -> "^(str_of_ident id2));*)
+        (*print_endline ((string_of_ident id1)^" -> "^(string_of_ident id2));*)
         IdMap.add id1 id2 acc)
       IdMap.empty
       def.parameters
@@ -80,7 +80,7 @@ let pred_to_form p args =
         print_endline "renamed_outputs: ";
         List.iter
           (fun (id, r) ->
-            print_endline ("  " ^ (str_of_ident id) ^ " ->\n" ^ (Form.string_of_form r)))
+            print_endline ("  " ^ (string_of_ident id) ^ " ->\n" ^ (Form.string_of_form r)))
           renamed_outputs
       end;
     (renamed_struct, renamed_outputs)

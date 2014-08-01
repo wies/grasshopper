@@ -114,6 +114,14 @@ let iteri fct lst =
   in
     iter 0 lst
 
+(** Print a list with a given separator *)
+let output_list chan fn sep xs =
+  match xs with
+  | [one] -> fn one
+  | first :: rest -> 
+      fn first; List.iter (fun x -> output_string chan sep; fn x) rest
+  | [] -> ()
+
 (** Boolean operators on predicates *)
 
 let (~~) f x = not (f x)

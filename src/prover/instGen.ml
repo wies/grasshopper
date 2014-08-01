@@ -225,7 +225,7 @@ let generate_instances useLocalInst axioms rep_terms egraph type_graph =
                   not (List.for_all (is_stratified srt) generating)
               with Not_found ->
                 begin
-                  Debug.warn (fun () -> "BUG in stratification: " ^ (str_of_ident id) ^ "\n");
+                  Debug.warn (fun () -> "BUG in stratification: " ^ (string_of_ident id) ^ "\n");
                   true
                 end
             )
@@ -237,9 +237,9 @@ let generate_instances useLocalInst axioms rep_terms egraph type_graph =
         print_endline "--------------------";
         print_endline (string_of_form f);
         print_string "all  vars: ";
-        print_endline (String.concat ", " (List.map str_of_ident (List.map fst (IdSrtSet.elements fvars0))));
+        print_endline (String.concat ", " (List.map string_of_ident (List.map fst (IdSrtSet.elements fvars0))));
         print_string "inst vars: ";
-        print_endline (String.concat ", " (List.map str_of_ident (List.map fst (IdSrtSet.elements fvars))));
+        print_endline (String.concat ", " (List.map string_of_ident (List.map fst (IdSrtSet.elements fvars))));
         print_endline "--------------------"
       end
     in
@@ -288,7 +288,7 @@ let generate_instances useLocalInst axioms rep_terms egraph type_graph =
           print_endline "fun_terms:";
           TermSet.iter (fun t -> print_term stdout t; print_string ", ") fun_terms;
           print_endline "\nfvars: ";
-          IdSrtSet.iter (fun (id, _) -> Printf.printf "%s, " (str_of_ident id)) fvars;
+          IdSrtSet.iter (fun (id, _) -> Printf.printf "%s, " (string_of_ident id)) fvars;
           print_endline "\nrep_terms:";
           TermSet.iter (fun t -> print_term stdout t; print_newline ()) terms;
           print_endline "\nground_terms:";

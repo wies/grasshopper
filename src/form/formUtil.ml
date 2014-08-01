@@ -3,6 +3,8 @@
 open Form
 open Util
 
+(** Auxiliary functions for manipulating source positions *)
+
 let dummy_position = 
   { sp_file = "";
     sp_start_line = 0;
@@ -10,6 +12,51 @@ let dummy_position =
     sp_end_line = 0;
     sp_end_col = 0 
   }
+
+let merge_src_positions pos1 pos2 =
+  let start_line, start_col =
+    if pos1.sp_start_line < pos2.sp_start_line 
+    then pos1.sp_start_line, pos1.sp_start_col
+    else if pos2.sp_start_line < pos1.sp_start_line
+    then pos2.sp_start_line, pos2.sp_start_col
+    else if pos1.sp_start_col < pos2.sp_start_col
+    then pos1.sp_start_line, pos1.sp_start_col
+    else pos2.sp_start_line, pos2.sp_start_col
+  in
+  let end_line, end_col =
+    if pos1.sp_end_line > pos2.sp_end_line 
+    then pos1.sp_end_line, pos1.sp_end_col
+    else if pos2.sp_end_line > pos1.sp_end_line
+    then pos2.sp_end_line, pos2.sp_end_col
+    else if pos1.sp_end_col > pos2.sp_end_col
+    then pos1.sp_end_line, pos1.sp_end_col
+    else pos2.sp_end_line, pos2.sp_end_col
+  in
+  { pos1 with
+    sp_start_line = start_line;
+    sp_start_col = start_col;
+    sp_end_line = end_line;
+    sp_end_col = end_col;
+  }
+
+let starts_before_src_pos pos1 pos2 =
+  (pos1.sp_start_line < pos2.sp_start_line || 
+  pos1.sp_start_line = pos2.sp_start_line && pos1.sp_start_col <= pos2.sp_start_col)
+  
+let ends_before_src_pos pos1 pos2 =
+  (pos1.sp_end_line < pos2.sp_end_line || 
+  pos1.sp_end_line = pos2.sp_end_line && pos1.sp_end_col <= pos2.sp_end_col)
+
+let contained_in_src_pos pos1 pos2 =
+  starts_before_src_pos pos2 pos1 && ends_before_src_pos pos1 pos2    
+  
+let compare_src_pos pos1 pos2 =
+  if starts_before_src_pos pos1 pos2 then
+    if starts_before_src_pos pos2 pos1 then 0
+    else -1
+  else 1
+
+(** List to set conversion functions *)
 
 let form_set_of_list fs =
   List.fold_left 
@@ -25,6 +72,8 @@ let id_set_of_list ids =
   List.fold_left 
     (fun acc id -> IdSet.add id acc) 
     IdSet.empty ids
+
+(** Utility functions for identifiers, Boolean operators, and sorts *)
 
 let fresh_ident =
   let used_names = Hashtbl.create 0 in
@@ -75,7 +124,7 @@ let is_free_const = function
 let eq_name id1 id2 = name id1 = name id2
 
 let symbol_of_ident =
-  let symbol_map = List.map (fun sym -> (str_of_symbol sym, sym)) symbols in
+  let symbol_map = List.map (fun sym -> (string_of_symbol sym, sym)) symbols in
   fun ((name, _) as id) ->
   try List.assoc name symbol_map
   with Not_found -> FreeSym id

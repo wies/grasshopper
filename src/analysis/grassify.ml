@@ -77,14 +77,14 @@ let elim_sl prog =
     (* translate SL precondition *)
     let sl_precond, other_precond = List.partition is_sl_spec proc.proc_precond in
     let precond, free_precond =
-      let name = "precondition of " ^ str_of_ident proc.proc_name in
+      let name = "precondition of " ^ string_of_ident proc.proc_name in
       let f, _, name, msg, pos = convert_sl_form sl_precond name in
       let f_eq_init_footprint =  
         propagate_exists (mk_and [ToGrass.to_grass pred_to_form footprint_set f; 
                                   mk_subseteq footprint_set footprint_caller_set])
       in
       let precond = mk_spec_form (FOL f_eq_init_footprint) name msg pos in
-      let fp_name = "initial footprint of " ^ str_of_ident proc.proc_name in
+      let fp_name = "initial footprint of " ^ string_of_ident proc.proc_name in
       let free_precond = 
         FOL (mk_and [mk_subseteq footprint_caller_set alloc_set; mk_not (mk_elem mk_null alloc_set)])
       in
@@ -101,7 +101,7 @@ let elim_sl prog =
     in
     let sl_postcond, other_postcond = List.partition is_sl_spec proc.proc_postcond in
     let postcond, post_pos =
-      let name = "postcondition of " ^ str_of_ident proc.proc_name in
+      let name = "postcondition of " ^ string_of_ident proc.proc_name in
       let f, kind, name, msg, pos = convert_sl_form sl_postcond name in
       let f_eq_final_footprint = 
         ToGrass.to_grass pred_to_form final_footprint_set f 
@@ -116,7 +116,7 @@ let elim_sl prog =
     in
     (* generate frame condition by applying the frame rule *) 
     let framecond = 
-      let name = "framecondition of " ^ (str_of_ident proc.proc_name) in
+      let name = "framecondition of " ^ (string_of_ident proc.proc_name) in
       let mk_framecond f = mk_free_spec_form (FOL f) name None post_pos in
       (* final caller footprint is frame with final footprint *)
       let final_footprint_caller_postcond = 

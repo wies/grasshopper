@@ -26,18 +26,15 @@ let print_trace prog proc (pp, model) =
     let trace = Analysis.get_trace prog proc (pp, model) in
     (* print trace to trace file in JSON format *)
     let trace_chan = open_out !Config.trace_file in
-    let print_pos pos =
+    let print_pos (pos, state) =
       Printf.fprintf trace_chan 
-        "{\"position\" = {\"line_no\": %d, \"column_no_start\": %d, \"column_no_stop\": %d}}"
+        "{\"position\": {\"line_no\": %d, \"column_no_start\": %d, \"column_no_stop\": %d}, \"state\": "
         pos.Form.sp_start_line pos.Form.sp_start_col pos.Form.sp_end_col;
-    in      
+      Model.output_json trace_chan state;
+      output_string trace_chan "}"
+    in
     output_string trace_chan "[";
-    (match trace with
-    | [] -> ()
-    | [pos] -> print_pos pos
-    | first :: rest -> 
-        print_pos first;
-        List.iter (fun pos -> output_string trace_chan ",\n"; print_pos pos) rest);
+    Util.output_list trace_chan print_pos ",\n" trace;
     output_string trace_chan "]\n";
     close_out trace_chan     
   end
