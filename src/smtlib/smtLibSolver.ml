@@ -77,7 +77,7 @@ let z3 =
       let _ = Unix.close_process_in in_chan in
       List.find (fun v -> v.version < version || (v.version = version && v.subversion <= subversion)) z3_versions
     with _ -> Debug.warn (fun () -> "No supported version of Z3 found.");
-      z3_v3 
+      z3_v4 
   in 
   { name = "Z3";
     info = version }
@@ -91,8 +91,16 @@ let cvc4_v1 =
   }
 
 let cvc4mf_v1 = 
+  let options = 
+    ["--lang=smt2"; 
+     "--finite-model-find"; 
+     "--mbqi=none"; 
+     "--inst-max-level=0"; 
+     "--fmf-inst-engine"]
+  in
   { cvc4_v1 with
-    kind = Process ("cvc4", ["--lang=smt2"; "--finite-model-find"; "--mbqi=none"; "--inst-max-level=0"; "--fmf-inst-engine"]);
+    kind = 
+    Process ("cvc4", options);
   }
 
 
@@ -104,12 +112,13 @@ let cvc4mf =
   { name = "CVC4MF";
     info = cvc4mf_v1 }
 
-let mathsat_v5 = { version = 5;
-		   subversion = 1;
-                   has_set_theory = false;
-		   smt_options = [];
-                   kind = Process ("mathsat", ["-verbosity=0"]);
-	         }
+let mathsat_v5 = 
+  { version = 5;
+    subversion = 1;
+    has_set_theory = false;
+    smt_options = [];
+    kind = Process ("mathsat", ["-verbosity=0"]);
+  }
 
 let mathsat = 
   { name = "MathSAT";
@@ -155,6 +164,17 @@ type session = { log_file_name: string;
                  solvers: (solver * solver_state) list
 	       }
 
+let dummy_session =
+  { log_file_name = "dummy_session";
+    sat_means = "";
+    assert_count = 0;
+    sat_checked = None;
+    stack_height = 0;
+    signature = None;
+    named_clauses = None;
+    solvers = [];
+  }
+
 exception SmtLib_error of session * string
     
 let fail session msg = raise (SmtLib_error (session, "SmtLib: " ^ msg))
@@ -183,7 +203,6 @@ let read_from_chan session chan =
   let lexbuf = Lexing.from_channel chan in
   SmtLibLexer.set_file_name lexbuf session.log_file_name; 
   SmtLibParser.output SmtLibLexer.token lexbuf
-
 
 let read session = 
   let in_descrs = 
@@ -295,9 +314,8 @@ let start_with_solver session_name sat_means solver produce_models produce_unsat
   in
   session
 
-
 let init_session session sign =
-  (* any int types in the signature? *)
+  (* is int sort anywhere in the signature? *)
   let has_int = 
     let rec hi = function
       | Int -> true
@@ -400,7 +418,7 @@ let declare session sign =
     if not (is_interpreted sym) then
       begin
         match overloaded_variants with
-        | [] -> failwith ("missing sort for symbol " ^ string_of_symbol sym)
+        | [] -> fail session ("missing sort for symbol " ^ string_of_symbol sym)
         | _ -> Util.iteri (declare sym) overloaded_variants
       end
   in
@@ -447,7 +465,7 @@ let assert_form session f =
   session.sat_checked <- None;
   let cf = 
     match session.signature with
-    | None -> failwith "tried to assert formula before declaring symbols"
+    | None -> fail session "tried to assert formula before declaring symbols"
     | Some sign -> disambiguate_overloaded_symbols sign f 
   in
   iter_solvers session
@@ -475,7 +493,7 @@ let is_sat session =
   | _ -> fail session "unexpected response from prover"
 	
 (** Covert SMT-LIB model to GRASS model *)
-let convert_model smtModel =
+let convert_model session smtModel =
   (* convert SMT-LIB sort to GRASS sort *)
   let rec convert_sort = function
     | IntSort -> Int
@@ -554,7 +572,7 @@ let convert_model smtModel =
       let msg = 
         ProgError.error_to_string pos
           "Encountered unexpected definition during model conversion" 
-      in failwith msg
+      in fail session msg
     in
     let arg_vals pos arg_map = 
       try
@@ -672,7 +690,7 @@ let rec get_model session =
     flush state.out_chan;
     match read_from_chan session (Opt.get state.in_chan) with
     | Model m -> 
-        let cm = convert_model m in
+        let cm = convert_model session m in
         (match session.signature with
         | Some sign -> Some (Model.restrict_to_sign cm sign)
         | None -> Some cm)

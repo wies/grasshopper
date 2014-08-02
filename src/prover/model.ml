@@ -466,7 +466,6 @@ let complete model =
   finalize_values new_model
     
 
-
 let find_term model =
   let vm =
     SortedSymbolMap.fold 
@@ -501,6 +500,8 @@ let find_term model =
         mk_app srt sym args
   in fun v srt -> find (v, srt)
 
+
+(** Printing *)
             
 let string_of_sorted_value srt v = 
   match srt with

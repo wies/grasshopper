@@ -56,7 +56,7 @@ let compare_src_pos pos1 pos2 =
     else -1
   else 1
 
-(** List to set conversion functions *)
+(** {6 List to set conversion functions} *)
 
 let form_set_of_list fs =
   List.fold_left 
@@ -73,7 +73,7 @@ let id_set_of_list ids =
     (fun acc id -> IdSet.add id acc) 
     IdSet.empty ids
 
-(** Utility functions for identifiers, Boolean operators, and sorts *)
+(** {6 Utility functions for identifiers, Boolean operators, and sorts} *)
 
 let fresh_ident =
   let used_names = Hashtbl.create 0 in
@@ -432,6 +432,7 @@ let sorted_free_vars f =
 	List.fold_left (fvt bv) vars ts
   in fold_terms_with_bound fvt IdSrtSet.empty f
 
+(** Computes the set of all forts of the terms appearing in formula [f]. *)
 let sorts f =
   let rec s acc = function
     | Var (_, srt) -> SortSet.add srt acc
@@ -479,6 +480,7 @@ let ground_terms ?(include_atoms=false) f =
     (fun bv acc t -> fst (gt bv acc t)) 
     TermSet.empty f
   
+(** Computes the set of all free variables that appear below function symbols in formula [f]. *)
 let vars_in_fun_terms f =
   let rec fvt vars = function
     | Var (id, srt) -> IdSrtSet.add (id, srt) vars
@@ -801,6 +803,7 @@ let unique_names f =
   in
   uc f
 
+(** Give formula [f] a name if it does not already have one *)
 let name_unnamed f = match f with
   | Binder (_, _, _, anns) 
   | Atom (_, anns) ->
