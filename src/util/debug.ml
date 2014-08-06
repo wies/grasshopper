@@ -38,7 +38,7 @@ let less_verbose () =
     | FATAL ->  NONE
     | NONE ->   NONE
   in
-    set_level nlv
+  set_level nlv
 
 
 (** always print this message *)

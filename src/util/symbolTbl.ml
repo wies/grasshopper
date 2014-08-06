@@ -14,6 +14,13 @@ let add tbl name id =
 let declared_in_current tbl name =
   StringMap.mem name (List.hd tbl)
 
+let find_local tbl name =
+  match tbl with
+  | [] -> None
+  | t :: _ -> 
+      try Some (StringMap.find name t)
+      with Not_found -> None
+
 let find tbl name =
   let rec find = function
     | [] -> None

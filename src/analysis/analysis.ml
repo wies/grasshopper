@@ -419,17 +419,28 @@ let get_trace prog proc (pp, model) =
         else (pos, state) :: (prv_pos, prv_state) :: trace
     | [] -> [(pos, state)]
   in
-  let rec update_vmap vmap = function
+  let rec update_vmap (vmap, all_aux) = function
     | Atom (App (Eq, [App (FreeSym (name, num), [], _); _], _), _) ->
-        IdMap.add (name, 0) (name, num) vmap
+        let decl = find_var prog proc (name, num) in
+        IdMap.add (name, 0) (name, num) vmap,
+        decl.var_is_aux && all_aux
     | BoolOp (And, fs) ->
-        List.fold_left update_vmap vmap fs
+        List.fold_left update_vmap (vmap, all_aux) fs
     | Binder (_, [], f, _) -> 
-        update_vmap vmap f
-    | _ -> vmap
+        update_vmap (vmap, all_aux) f
+    | _ -> vmap, all_aux
   in
-  let get_curr_state vmap model =
-    let ids = IdMap.fold (fun _ id ids -> IdSet.add id ids) vmap IdSet.empty in
+  let get_curr_state pos vmap model =
+    let ids = 
+      IdMap.fold 
+        (fun _ id ids -> 
+          let decl = find_var prog proc id in
+          if decl.var_is_aux && name id <> "FP" && name id <> "Alloc" || 
+             not (contained_in_src_pos pos decl.var_scope) 
+          then ids
+          else IdSet.add id ids) 
+        vmap IdSet.empty 
+    in
     let rmodel = Model.restrict_to_idents model ids in
     Model.rename_free_symbols rmodel (fun (name, _) -> (name, 0))
   in
@@ -442,7 +453,7 @@ let get_trace prog proc (pp, model) =
         (match bc with
         | Assume s ->
             (match s.spec_name with
-            | "assign" | "if_then" | "if_else" ->
+            | "assign" | "if_then" | "if_else" | "havoc" ->
                 let f = form_of_spec s in
                 (match Model.eval_form model f with
                 | None -> 
@@ -452,24 +463,28 @@ let get_trace prog proc (pp, model) =
                     print_endline (Form.string_of_src_pos s.spec_pos);
                     Prog.print_cmd stdout c;
                     print_newline ();*)
-                    let curr_state = get_curr_state vmap model in
-                    if s.spec_name = "assign"
-                    then gt (update_vmap vmap f) (add (s.spec_pos, curr_state) trace) cs1
+                    let curr_state = get_curr_state s.spec_pos vmap model in
+                    if s.spec_name = "assign" || s.spec_name = "havoc"
+                    then 
+                      let vmap1, all_aux = update_vmap (vmap, true) f in
+                      let trace1 = 
+                        if all_aux 
+                        then trace 
+                        else add (s.spec_pos, curr_state) trace
+                      in
+                      gt vmap1 trace1 cs1
                     else gt vmap (add (s.spec_pos, curr_state) trace) cs1
                 | Some false -> 
-                    (*print_string "Aboarding command: ";
-                    print_endline (Form.string_of_src_pos s.spec_pos);
-                    Prog.print_cmd stdout c;
-                    print_newline ();*)
                     [])
             | "join" -> 
-                gt (update_vmap vmap (form_of_spec s)) trace cs1
+                let vmap1, _ = update_vmap (vmap, true) (form_of_spec s) in
+                gt vmap1 trace cs1
             | _ -> 
                 gt vmap trace cs1)
         | Assert s ->
             if pp = s.spec_pos
             then 
-              let curr_state = get_curr_state vmap model in
+              let curr_state = get_curr_state pp vmap model in
               List.rev ((pp, curr_state) :: trace)
             else gt vmap trace cs1
         | _ -> gt vmap trace cs1)

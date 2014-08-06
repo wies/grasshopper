@@ -13,6 +13,14 @@ let dummy_position =
     sp_end_col = 0 
   }
 
+let global_scope =
+  { sp_file = "";
+    sp_start_line = 0;
+    sp_start_col = 0;
+    sp_end_line = max_int; 
+    sp_end_col = max_int;
+  } 
+
 let merge_src_positions pos1 pos2 =
   let start_line, start_col =
     if pos1.sp_start_line < pos2.sp_start_line 
@@ -39,11 +47,18 @@ let merge_src_positions pos1 pos2 =
     sp_end_col = end_col;
   }
 
+let in_same_file pos1 pos2 = 
+  pos1.sp_file = "" ||
+  pos2.sp_file = "" ||
+  pos1.sp_file = pos2.sp_file
+
 let starts_before_src_pos pos1 pos2 =
+  in_same_file pos1 pos2 &&
   (pos1.sp_start_line < pos2.sp_start_line || 
-  pos1.sp_start_line = pos2.sp_start_line && pos1.sp_start_col <= pos2.sp_start_col)
+   pos1.sp_start_line = pos2.sp_start_line && pos1.sp_start_col <= pos2.sp_start_col)
   
 let ends_before_src_pos pos1 pos2 =
+  in_same_file pos1 pos2 &&
   (pos1.sp_end_line < pos2.sp_end_line || 
   pos1.sp_end_line = pos2.sp_end_line && pos1.sp_end_col <= pos2.sp_end_col)
 

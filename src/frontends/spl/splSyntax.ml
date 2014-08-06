@@ -80,6 +80,7 @@ and var =
       v_implicit : bool;
       v_aux : bool;
       v_pos : pos;
+      v_scope : pos;
     }
 
 and vars = var IdMap.t
@@ -175,11 +176,11 @@ let proc_decl hdr body =
 let struct_decl sname sfields pos =
   { s_name = sname;  s_fields = sfields; s_pos = pos }
 
-let var_decl vname vtype vghost vimpl vpos =
-  { v_name = vname; v_type = vtype; v_ghost = vghost; v_implicit = vimpl; v_aux = false; v_pos = vpos } 
+let var_decl vname vtype vghost vimpl vpos vscope =
+  { v_name = vname; v_type = vtype; v_ghost = vghost; v_implicit = vimpl; v_aux = false; v_pos = vpos; v_scope = vscope } 
 
 let compilation_unit pkg ims decls =
-  let alloc_decl = VarDecl (var_decl Prog.alloc_id (SetType LocType) true false FormUtil.dummy_position) in
+  let alloc_decl = VarDecl (var_decl Prog.alloc_id (SetType LocType) true false FormUtil.dummy_position FormUtil.global_scope) in
   let check_uniqueness id pos (vdecls, pdecls, prdecls, sdecls) =
     if IdMap.mem id vdecls || IdMap.mem id sdecls || IdMap.mem id pdecls || IdMap.mem id prdecls
     then ProgError.error pos ("redeclaration of identifier " ^ (fst id) ^ ".");

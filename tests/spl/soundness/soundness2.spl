@@ -6,8 +6,8 @@ predicate lseg(x: Node, y: Node) {
   x == y || x != y &*& acc(x) &*& lseg(x.next, y)
 }
 
-// filtering a SLL
-// null-dereference, forgot to move to the next before the free.
+// Faulty filtering of a singly-linked list:
+// the access to curr.next at the end of the loop happens after freeing curr.
 
 procedure soundness2(x: Node) returns (y: Node)
   requires lseg(x, null);

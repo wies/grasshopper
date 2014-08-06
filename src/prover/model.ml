@@ -463,8 +463,7 @@ let complete model =
           new_model locs)
       model flds
   in
-  finalize_values new_model
-    
+  new_model
 
 let find_term model =
   let vm =
@@ -512,6 +511,12 @@ let output_json chan model =
   let string_of_sorted_value srt v = 
     "\"" ^ string_of_sorted_value srt v ^ "\""
   in
+  let output_set s esrt =
+    let vals = List.map (fun e ->  string_of_sorted_value esrt e) s in
+    let set_rep = String.concat ", " vals in
+    output_string chan ("[" ^ set_rep ^ "]")
+  in
+  let null_val = eval model mk_null in
   let output_value sym srt =
     match srt with
     | Loc | Bool | Int -> 
@@ -520,28 +525,40 @@ let output_json chan model =
     | Set esrt ->
         let set = interp_symbol model sym ([], srt) [] in
         let s = find_set_value model set esrt in
-        let vals = List.map (fun e ->  string_of_sorted_value esrt e) (ValueSet.elements s) in
-        let set_rep = String.concat ", " vals in
-        output_string chan ("[" ^ set_rep ^ "]")
+        output_set (ValueSet.elements s) esrt
     | Fld rsrt ->
+        let fld = interp_symbol model sym ([], srt) [] in
         let args = get_values_of_sort model Loc in
+        let arg_res = 
+          Util.flat_map 
+            (fun arg ->
+              let res = interp_symbol model Read ([Fld rsrt; Loc], rsrt) [fld; arg] in
+              if arg = null_val || res = null_val 
+              then [] 
+              else  [(arg, res)])
+            args
+        in
         output_string chan "[";
         Util.output_list chan 
-          (fun arg -> 
-            let res = interp_symbol model sym ([], srt) [arg] in
+          (fun (arg, res) -> 
             Printf.fprintf chan "{\"arg\": %s, \"res\": %s}" 
               (string_of_sorted_value Loc arg) (string_of_sorted_value rsrt res)
           )
-          ", " args;
+          ", " arg_res;
         output_string chan "]"
     | _ -> ()
   in
-  let output_symbol (sym, srt) = 
+  let output_id ov id srt =
     Printf.fprintf chan "{\"name\": \"%s\", \"type\": \"%s\", value: "
-      (string_of_symbol sym) (string_of_sort srt);
-    output_value sym srt;
-      Printf.fprintf chan "}"
+      id (string_of_sort srt);
+    ov ();
+    Printf.fprintf chan "}"
   in
+  let output_symbol (sym, srt) = 
+    output_string chan ", ";
+    output_id (fun () -> output_value sym srt) (string_of_symbol sym) srt
+  in
+  let locs = get_values_of_sort model Loc in
   let defs = 
     SortedSymbolMap.fold 
       (fun (sym, arity) _ defs ->
@@ -551,9 +568,10 @@ let output_json chan model =
         | _, _ -> defs) 
       model.intp []
   in
-  output_string chan "[{";
-  Util.output_list chan output_symbol ", " defs;
-  output_string chan "}]"
+  output_string chan "[";
+  output_id (fun () -> output_set locs Loc) (string_of_sort Loc) (Set Loc);
+  List.iter output_symbol defs;
+  output_string chan "]"
   
 let output_graphviz chan model =
   let find_term = find_term model in

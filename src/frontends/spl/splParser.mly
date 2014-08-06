@@ -17,6 +17,22 @@ let mk_position s e =
     sp_end_col = end_pos.pos_cnum - end_pos.pos_bol;
   } 
 
+let fix_scopes stmnt =
+  let rec fs scope = function
+    | LocalVars (decls, pos) ->
+        let decls1 = 
+          List.map (fun decl -> { decl with v_scope = scope }) decls
+        in 
+        LocalVars (decls1, pos)
+    | Block (stmnts, pos) ->
+        Block (List.map (fs pos) stmnts, pos)
+    | If (cond, t, e, pos) ->
+        If (cond, fs scope t, fs scope e, pos)
+    | Loop (inv, preb, cond, postb, pos) ->
+        Loop (inv, fs scope preb, cond, fs scope postb, pos)
+    | stmnt -> stmnt
+  in fs FormUtil.global_scope stmnt
+
 %}
 
 %token <string> IDENT
@@ -125,7 +141,9 @@ proc_contract:
 ;
 
 proc_impl:
-| LBRACE block RBRACE { Block ($2, mk_position 1 3) }
+| LBRACE block RBRACE { 
+  fix_scopes (Block ($2, mk_position 1 3)) 
+}
 ;
 
 pred_decl:
@@ -165,6 +183,7 @@ var_decl:
       v_implicit = fst $1;
       v_aux = false;
       v_pos = mk_position 2 2;
+      v_scope = FormUtil.global_scope; (* scope is fixed later *)
     } 
   in
   decl
@@ -452,6 +471,7 @@ quant_expr:
       v_implicit = false;
       v_aux = false;
       v_pos = mk_position 2 2;
+      v_scope = mk_position 1 7
     } 
   in
   Quant ($1, decl :: $5, $7, mk_position 1 7) 

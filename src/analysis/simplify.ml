@@ -22,7 +22,7 @@ let elim_loops (prog : program) =
         let subst_formals, formals, locals =
           List.fold_right
             (fun decl (sm, ids, locals) -> 
-              let init_id = fresh_ident (FormUtil.name decl.var_name ^ "_init") in
+              let init_id = fresh_ident (FormUtil.name decl.var_name) in
               let local_decl = { decl with var_is_implicit = false } in
               let init_decl = { local_decl with var_name = init_id } in
               IdMap.add decl.var_name init_id sm, 
@@ -272,7 +272,7 @@ let elim_state prog =
         { decl with 
           var_name = id1;
           var_is_implicit = false;
-          var_is_aux = true;
+          (*var_is_aux = true;*)
           var_pos = pos;
         }
       in decl1
@@ -356,8 +356,19 @@ let elim_state prog =
               let sf1 = unoldify_spec (subst_id_spec sm sf) in
               sm, locals, Basic (Assert sf1, pp)
           | Havoc hc ->
-              let sm1, locals = fresh proc sm locals pp.pp_pos hc.havoc_args in
-              sm1, locals, Seq ([], pp)
+              let sm1, locals1 = fresh proc sm locals pp.pp_pos hc.havoc_args in
+              let eqs = 
+                List.map 
+                  (fun x ->
+                    let new_x = IdMap.find x sm1 in
+                    let x_decl = find_var prog proc x in
+                    let x_srt = x_decl.var_sort in
+                    let xc = mk_free_const x_srt new_x in
+                    mk_eq xc xc
+                  ) hc.havoc_args
+              in
+              let sf = mk_spec_form (FOL (mk_and eqs)) "havoc" None pp.pp_pos in
+              sm1, locals1, mk_assume_cmd sf pp.pp_pos
           | Assign ac ->
               let sm1, locals = fresh proc sm locals pp.pp_pos ac.assign_lhs in
               let eqs =

@@ -103,7 +103,8 @@ type var_decl = {
     var_is_ghost : bool; (** whether the variable is ghost *)
     var_is_implicit : bool; (** whether the variable is implicit *)
     var_is_aux : bool; (** whether the variable is an auxiliary variable *)
-    var_pos : source_position; (** position of declaration *)
+    var_pos : source_position; (** position of the variable declaration *)
+    var_scope : source_position; (** scope of the variable *)
   }
 
 (** Procedure declaration *)
@@ -138,6 +139,38 @@ type program = {
     prog_procs : proc_decl IdMap.t; (** procedures *)
   } 
 
+(** Auxiliary functions for program points *)
+
+let start_pos pos = 
+  { pos with
+    sp_end_line = pos.sp_start_line;
+    sp_end_col = pos.sp_start_col;
+  }
+
+let end_pos pos = 
+  { pos with
+    sp_start_line = pos.sp_end_line;
+    sp_start_col = pos.sp_end_col;
+  }
+
+let mk_ppoint pos = 
+  { pp_pos = pos; 
+    pp_modifies = IdSet.empty;
+    pp_accesses = IdSet.empty;
+  }
+
+let update_ppoint pp = function
+  | Loop (lc, _) -> Loop (lc, pp)
+  | Choice (cs, _) -> Choice (cs, pp)
+  | Seq (cs, _) -> Seq (cs, pp)
+  | Basic (bc, _) -> Basic (bc, pp)
+
+let prog_point = function
+  | Loop (_, pp) | Choice (_, pp) | Seq (_, pp) | Basic (_, pp) -> pp
+
+let source_pos c = (prog_point c).pp_pos
+
+
 (** Auxiliary functions for programs and declarations *)
 
 let mk_loc_set_decl id pos =
@@ -148,6 +181,7 @@ let mk_loc_set_decl id pos =
     var_is_implicit = false;
     var_is_aux = true;
     var_pos = pos;
+    var_scope = global_scope
   }
 
 let alloc_decl = mk_loc_set_decl alloc_id dummy_position
@@ -208,12 +242,11 @@ let find_var prog proc name =
   with Not_found ->
     failwith ("find_proc: Could not find variable " ^ (string_of_ident name))
 
-let mk_fresh_var_decl decl pos =
+let mk_fresh_var_decl decl =
   let id = fresh_ident (name decl.var_name) in
   { decl with 
     var_name = id;
     var_orig_name = name id; 
-    var_pos = pos;
   }
 
 let fold_procs fn init prog =
@@ -366,39 +399,6 @@ let unoldify_spec sf =
   { sf with 
     spec_form = unold_form;
   }
-
-
-(** Auxiliary functions for program points *)
-
-let start_pos pos = 
-  { pos with
-    sp_end_line = pos.sp_start_line;
-    sp_end_col = pos.sp_start_col;
-  }
-
-let end_pos pos = 
-  { pos with
-    sp_start_line = pos.sp_end_line;
-    sp_start_col = pos.sp_end_col;
-  }
-
-let mk_ppoint pos = 
-  { pp_pos = pos; 
-    pp_modifies = IdSet.empty;
-    pp_accesses = IdSet.empty;
-  }
-
-let update_ppoint pp = function
-  | Loop (lc, _) -> Loop (lc, pp)
-  | Choice (cs, _) -> Choice (cs, pp)
-  | Seq (cs, _) -> Seq (cs, pp)
-  | Basic (bc, _) -> Basic (bc, pp)
-
-let prog_point = function
-  | Loop (_, pp) | Choice (_, pp) | Seq (_, pp) | Basic (_, pp) -> pp
-
-let source_pos c = (prog_point c).pp_pos
-
 
 (** Auxiliary functions for commands *)
 

@@ -11,7 +11,7 @@ let resolve_names cus =
   let lookup_id init_id tbl pos =
     let name = FormUtil.name init_id in
     match SymbolTbl.find tbl name with
-    | Some id -> id
+    | Some (id, _) -> id
     | None -> ProgError.error pos ("Unknown identifier " ^ name ^ ".")
   in 
   let check_struct id structs pos =
@@ -41,18 +41,20 @@ let resolve_names cus =
       | _ -> error ()
     with Not_found -> error ()
   in
-  let declare_name pos init_id tbl =
+  let declare_name pos init_id scope tbl =
     let name = FormUtil.name init_id in
-    if SymbolTbl.declared_in_current tbl name then
-      ProgError.error pos ("Redeclaration of identifier " ^ name ^ ".");
-    let id = 
-      if init_id = Prog.alloc_id then alloc_id
-      else FormUtil.fresh_ident name 
-    in
-    (id, SymbolTbl.add tbl name id)
+    match SymbolTbl.find_local tbl name with
+    | Some _ -> 
+        ProgError.error pos ("Identifier " ^ name ^ " has already been declared in this scope.")
+    | None ->
+        let id = 
+          if init_id = Prog.alloc_id then alloc_id
+          else FormUtil.fresh_ident name 
+        in
+        (id, SymbolTbl.add tbl name (id, scope))
   in
   let declare_var structs decl tbl =
-    let id, tbl = declare_name decl.v_pos decl.v_name tbl in
+    let id, tbl = declare_name decl.v_pos decl.v_name decl.v_scope tbl in
         let ty = 
           match decl.v_type with
           | StructType init_id ->
@@ -75,7 +77,7 @@ let resolve_names cus =
     let structs0, tbl =
       IdMap.fold 
         (fun init_id decl (structs, tbl) ->
-          let id, tbl = declare_name decl.s_pos init_id tbl in
+          let id, tbl = declare_name decl.s_pos init_id FormUtil.global_scope tbl in
           IdMap.add id { decl with s_name = id } structs, tbl)
         cu.struct_decls (IdMap.empty, tbl)
     in
@@ -88,7 +90,7 @@ let resolve_names cus =
           let fields, globals, tbl =
             IdMap.fold 
               (fun init_id fdecl (fields, globals, tbl) ->
-                let id, tbl = declare_name fdecl.v_pos init_id tbl in
+                let id, tbl = declare_name fdecl.v_pos init_id FormUtil.global_scope tbl in
                 let res_type = match fdecl.v_type with
                 | StructType init_id ->
                     let id = lookup_id init_id tbl fdecl.v_pos in
@@ -109,14 +111,14 @@ let resolve_names cus =
     (* declare procedure names *)
     let procs0, tbl =
       IdMap.fold (fun init_id decl (procs, tbl) ->
-        let id, tbl = declare_name decl.p_pos init_id tbl in
+        let id, tbl = declare_name decl.p_pos init_id FormUtil.global_scope tbl in
         IdMap.add id { decl with p_name = id } procs, tbl)
         cu.proc_decls (IdMap.empty, tbl)
     in
     (* declare predicate names *)
     let preds0, tbl =
       IdMap.fold (fun init_id decl (preds, tbl) ->
-        let id, tbl = declare_name decl.pr_pos init_id tbl in
+        let id, tbl = declare_name decl.pr_pos init_id FormUtil.global_scope tbl in
         IdMap.add id { decl with pr_name = id } preds, tbl)
         cu.pred_decls (IdMap.empty, tbl)
     in
@@ -135,7 +137,7 @@ let resolve_names cus =
             Dot (re tbl e, id, pos)
         | GuardedQuant (q, init_id, e, f, pos) ->
             let e1 = re tbl e in
-            let id, tbl1 = declare_name pos init_id tbl in
+            let id, tbl1 = declare_name pos init_id pos tbl in
             let f1 = re tbl1 f in
             GuardedQuant (q, id, e1, f1, pos)
         | Quant (q, vars, f, pos) ->
@@ -286,7 +288,7 @@ let resolve_names cus =
 
 
 let flatten_exprs cus =
-  let decl_aux_var name vtype pos locals =
+  let decl_aux_var name vtype pos scope locals =
     let aux_id = FormUtil.fresh_ident name in
     let decl = 
       { v_name = aux_id;
@@ -295,6 +297,7 @@ let flatten_exprs cus =
         v_implicit = false;
         v_aux = true;
         v_pos = pos;
+        v_scope = scope;
       }
     in
     let locals1 = IdMap.add aux_id decl locals in
@@ -304,17 +307,17 @@ let flatten_exprs cus =
     | e -> ()
   in
   let fe cu =
-    let rec flatten_expr aux locals = function
+    let rec flatten_expr scope aux locals = function
       | Setenum (ty, args, pos) as e ->
           List.iter check_side_effects args;
           e, aux, locals
       | New (id, pos) as e ->
-          let aux_id, locals = decl_aux_var "tmp" (StructType id) pos locals in
+          let aux_id, locals = decl_aux_var "tmp" (StructType id) pos scope locals in
           let aux_var = Ident (aux_id, pos) in
           let alloc = Assign ([aux_var], [e], pos) in
           aux_var, alloc :: aux, locals
       | Dot (e, id, pos) ->
-          let e1, aux1, locals = flatten_expr aux locals e in
+          let e1, aux1, locals = flatten_expr scope aux locals e in
           Dot (e1, id, pos), aux1, locals
       | Quant (q, _, f, pos) as e ->
           check_side_effects f;
@@ -334,11 +337,11 @@ let flatten_exprs cus =
                 ProgError.error pos 
                   ("Procedure " ^ fst pdecl.p_name ^ " has more than one return value")
           in
-          let aux_id, locals = decl_aux_var "tmp" res_type pos locals in
+          let aux_id, locals = decl_aux_var "tmp" res_type pos scope locals in
           let args1, aux1, locals = 
             List.fold_right 
               (fun arg (args1, aux1, locals) ->
-                let arg1, aux1, locals = flatten_expr aux1 locals arg in
+                let arg1, aux1, locals = flatten_expr scope aux1 locals arg in
                 arg1 :: args1, aux1, locals
               ) args ([], aux, locals)
           in
@@ -355,21 +358,21 @@ let flatten_exprs cus =
           List.iter check_side_effects args;
           e, aux, locals
       | UnaryOp (op, e, pos) ->
-          let e1, aux1, locals = flatten_expr aux locals e in
+          let e1, aux1, locals = flatten_expr scope aux locals e in
           UnaryOp (op, e1, pos), aux1, locals
       | BinaryOp (e1, op, e2, pos) ->
-          let e21, aux1, locals = flatten_expr aux locals e2 in
-          let e11, aux2, locals = flatten_expr aux1 locals e1 in
+          let e21, aux1, locals = flatten_expr scope aux locals e2 in
+          let e11, aux2, locals = flatten_expr scope aux1 locals e1 in
           BinaryOp (e11, op, e21, pos), aux2, locals
       | e -> e, aux, locals
     in
-    let rec flatten locals returns = function
+    let rec flatten scope locals returns = function
       | Skip pos -> Skip pos, locals
       | Block (stmts0, pos) ->
         let stmts, locals = 
           List.fold_left
             (fun (stmts, locals) stmt0  ->
-              let stmt, locals = flatten locals returns stmt0 in
+              let stmt, locals = flatten pos locals returns stmt0 in
               stmt :: stmts, locals
             ) 
             ([], locals) stmts0
@@ -384,7 +387,7 @@ let flatten_exprs cus =
           let args1, aux1, locals = 
             List.fold_right 
               (fun e (es, aux, locals) ->
-                let e1, aux1, locals = flatten_expr aux locals e in
+                let e1, aux1, locals = flatten_expr scope aux locals e in
                 e1 :: es, aux1, locals
               ) 
               args ([], [], locals)
@@ -398,14 +401,14 @@ let flatten_exprs cus =
                   | FieldType (_, ty) -> ty
                   | ty -> ty
                 in
-                let aux_id, locals = decl_aux_var "tmp" res_ty opos locals in
+                let aux_id, locals = decl_aux_var "tmp" res_ty opos scope locals in
                 let aux_var = Ident (aux_id, pos) in
                 let assign_aux = Assign ([Dot (e, id, opos)], [aux_var], pos) in
                 [aux_var], [assign_aux], locals
             | _ ->
                 List.fold_right 
                   (fun e (es, aux, locals) ->
-                    let e1, aux1, locals = flatten_expr aux locals e in
+                    let e1, aux1, locals = flatten_expr scope aux locals e in
                     e1 :: es, aux1, locals
                   ) 
                   lhs ([], aux1, locals)
@@ -415,7 +418,7 @@ let flatten_exprs cus =
           let rhs1, aux1, locals = 
             List.fold_right 
               (fun e (es, aux, locals) ->
-                let e1, aux1, locals = flatten_expr aux locals e in
+                let e1, aux1, locals = flatten_expr scope aux locals e in
                 e1 :: es, aux1, locals
               ) 
               rhs ([], [], locals)
@@ -423,29 +426,29 @@ let flatten_exprs cus =
           let lhs1, aux2, locals = 
             List.fold_right 
               (fun e (es, aux, locals) ->
-                let e1, aux1, locals = flatten_expr aux locals e in
+                let e1, aux1, locals = flatten_expr scope aux locals e in
                 e1 :: es, aux1, locals
               ) 
               lhs ([], aux1, locals)
           in 
           mk_block pos (aux2 @ [Assign (lhs1, rhs1, pos)]), locals
       | Dispose (e, pos) -> 
-          let e1, aux, locals = flatten_expr [] locals e in
+          let e1, aux, locals = flatten_expr scope [] locals e in
           mk_block pos (aux @ [Dispose (e1, pos)]), locals
       | Havoc (es, pos) -> 
           let es1, aux1, locals = 
             List.fold_right 
               (fun e (es, aux, locals) ->
-                let e1, aux1, locals1 = flatten_expr aux locals e in
+                let e1, aux1, locals1 = flatten_expr scope aux locals e in
                 e1 :: es, aux1, locals
               ) 
               es ([], [], locals)
           in 
           mk_block pos (aux1 @ [Havoc (es1, pos)]), locals          
       | If (cond, t, e, pos) ->
-          let cond1, aux, locals = flatten_expr [] locals cond in
-          let t1, locals = flatten locals returns t in
-          let e1, locals = flatten locals returns e in
+          let cond1, aux, locals = flatten_expr scope [] locals cond in
+          let t1, locals = flatten scope locals returns t in
+          let e1, locals = flatten scope locals returns e in
           mk_block pos (aux @ [If (cond1, t1, e1, pos)]), locals
       | Loop (inv, preb, cond, postb, pos) ->
           let _ = 
@@ -453,15 +456,15 @@ let flatten_exprs cus =
               (function Invariant e -> check_side_effects e)
               inv
           in
-          let preb1, locals = flatten locals returns preb in
-          let cond1, aux, locals2 = flatten_expr [] locals cond in
-          let postb1, locals = flatten locals returns postb in
+          let preb1, locals = flatten pos locals returns preb in
+          let cond1, aux, locals2 = flatten_expr pos [] locals cond in
+          let postb1, locals = flatten pos locals returns postb in
           Loop (inv, mk_block pos ([preb1] @ aux), cond1, postb1, pos), locals
       | Return ([ProcCall (id, args, cpos)], pos) ->
           let args1, aux1, locals = 
             List.fold_right 
               (fun e (es, aux, locals) ->
-                let e1, aux1, locals = flatten_expr aux locals e in
+                let e1, aux1, locals = flatten_expr scope aux locals e in
                 e1 :: es, aux1, locals
               ) 
               args ([], [], locals)
@@ -473,7 +476,7 @@ let flatten_exprs cus =
           let es1, aux1, locals = 
             List.fold_right 
               (fun e (es, aux, locals) ->
-                let e1, aux1, locals = flatten_expr aux locals e in
+                let e1, aux1, locals = flatten_expr scope aux locals e in
                 e1 :: es, aux1, locals
               ) 
               es ([], [], locals)
@@ -483,7 +486,7 @@ let flatten_exprs cus =
     let procs =
       IdMap.fold
         (fun _ decl procs ->
-          let body, locals = flatten decl.p_locals decl.p_returns decl.p_body in
+          let body, locals = flatten decl.p_pos decl.p_locals decl.p_returns decl.p_body in
           let decl1 = { decl with p_locals = locals; p_body = body } in
           IdMap.add decl.p_name decl1 procs)
         cu.proc_decls IdMap.empty
@@ -543,6 +546,7 @@ let convert cus =
         var_is_implicit = decl.v_implicit;
         var_is_aux = decl.v_aux;
         var_pos = decl.v_pos;
+        var_scope = decl.v_scope;
       }
     in 
     let ty_str = function
@@ -635,7 +639,7 @@ let convert cus =
           let e1, ty = extract_term locals (SetType UniversalType) e in
           (match ty with
           | SetType elem_srt ->
-              let decl = var_decl id elem_srt false false pos in
+              let decl = var_decl id elem_srt false false pos pos in
               let locals1 = IdMap.add id decl locals in
               let elem_srt = convert_type elem_srt in
               let v_id = FormUtil.mk_var elem_srt id in

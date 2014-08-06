@@ -1,6 +1,5 @@
 (** SMT-LIB v2 solver interface *)
 
-open Logger
 open SmtLibSyntax
 open Form
 open FormUtil
