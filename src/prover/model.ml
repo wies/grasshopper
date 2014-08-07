@@ -549,7 +549,7 @@ let output_json chan model =
     | _ -> ()
   in
   let output_id ov id srt =
-    Printf.fprintf chan "{\"name\": \"%s\", \"type\": \"%s\", value: "
+    Printf.fprintf chan "{\"name\": \"%s\", \"type\": \"%s\", \"value\": "
       id (string_of_sort srt);
     ov ();
     Printf.fprintf chan "}"

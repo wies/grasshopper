@@ -309,7 +309,7 @@ let annotate_heap_checks prog =
     TermSet.fold 
       (fun t acc ->
         let t_in_footprint = FOL (mk_elem t footprint_set) in
-        let mk_msg callee = "Possible heap access through null or dangling reference", "" in
+        let mk_msg callee = "Possible invalid heap access", "" in
         let sf = mk_spec_form t_in_footprint "check heap access" (Some mk_msg) pos in
         let check_access = mk_assert_cmd sf pos in
         check_access :: acc)
