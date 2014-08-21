@@ -72,7 +72,7 @@ procedure remove(root: Node, val: Int) returns (new_root: Node)
 
       while (lm.right != null) 
         invariant tree(lm) -** tree(lmp) -** tree(cl) -** tree(root);
-      invariant lm != null && (cl == lm || lmp.right == lm);
+        invariant lm != null && (cl == lm || lmp.right == lm);
         invariant treeAllocInvariant(Alloc);
       {
         lmp := lm;

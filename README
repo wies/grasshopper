@@ -17,7 +17,7 @@ Required
 
 - Z3, version >= 3.2, or
 
-- CVC4, version >= 1.0
+- CVC4, version >= 1.4
 
 GRASShopper has been tested on Linux, Mac OS, and Windows/Cygwin.
 

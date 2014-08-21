@@ -228,10 +228,10 @@ let read session =
   Some state, result
 
 let set_option chan opt_name opt_value =
-  Printf.fprintf chan "(set-option %s %b)" opt_name opt_value
+  Printf.fprintf chan "(set-option %s %b)\n" opt_name opt_value
 
 let set_logic chan logic =
-  output_string chan ("(set-logic " ^ logic ^ ")")
+  output_string chan ("(set-logic " ^ logic ^ ")\n")
 
 let declare_fun session sym_name arg_sorts res_sort =
   let arg_sorts_str = String.concat " " (List.map (fun srt -> string_of_sort srt) arg_sorts) in
