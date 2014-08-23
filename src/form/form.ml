@@ -316,10 +316,29 @@ and pr_quantifier ppf =
         List.fold_left (fun acc t -> TermSet.add t acc) acc pts
     | Atom _ -> acc
   in
+  let fvt t =
+    let rec fvt1 vars = function
+      | Var (id, _) -> IdSet.add id vars
+      | App (_, ts, _) -> List.fold_left fvt1 vars ts
+    in fvt1 IdSet.empty t
+  in
   function
   | (_, [], f) -> fprintf ppf "%a" pr_form f
   | (b, vs, f) -> 
-      let patterns = find_patterns TermSet.empty f in
+      let fun_patterns = find_patterns TermSet.empty f in
+      let patterns =
+        let pvs = 
+          TermSet.fold 
+            (fun t pvs -> IdSet.union (fvt t) pvs)
+            fun_patterns IdSet.empty
+        in 
+        List.fold_left
+          (fun patterns (id, srt) ->
+            if IdSet.mem id pvs 
+            then patterns 
+            else TermSet.add (Var (id, srt)) patterns)
+          fun_patterns vs
+      in
       if true || !Config.instantiate || TermSet.is_empty patterns
       then fprintf ppf "@[<8>(%a@ @[<1>(%a)@]@ %a)@]" pr_binder b pr_vars vs pr_form f
       else 

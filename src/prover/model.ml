@@ -39,6 +39,7 @@ type ext_value =
   | MapVal of value ValueListMap.t * ext_value
   | SetVal of ValueSet.t
   | TermVal of (ident * sort) list * term
+  | FormVal of (ident * sort) list * form
   | Undef
 
 let value_of_int i = I i
@@ -91,13 +92,23 @@ let add_def model sym arity args v =
   { model with intp = SortedSymbolMap.add (sym, arity) (new_m, d) model.intp }
 
 let add_default_val model sym arity v =
-  let m, _ = get_interp model sym arity in
+  let m, d = get_interp model sym arity in
+  (match d with
+  | Undef -> ()
+  | BaseVal v1 when v = v1 -> ()
+  | _ -> failwith "Model.add_default_val: inconsistent default values in model detected");
   { model with intp = SortedSymbolMap.add (sym, arity) (m, BaseVal v) model.intp }
 
 let add_default_term model sym arity args t =
   let m, _ = get_interp model sym arity in
   let new_map = m, TermVal (args, t) in
   { model with intp = SortedSymbolMap.add (sym, arity) new_map model.intp }
+
+let add_default_form model sym arity args f =
+  let m, _ = get_interp model sym arity in
+  let new_map = m, FormVal (args, f) in
+  { model with intp = SortedSymbolMap.add (sym, arity) new_map model.intp }
+
 
 let get_result_sort model sym arg_srts =
   SortedSymbolMap.fold 

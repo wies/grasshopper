@@ -511,7 +511,8 @@ let convert_model session smtModel =
         | _ -> FreeSrt (name, num)
   in
   (* detect Z3/CVC4 identifiers that represent values of uninterpreted sorts *)
-  let to_val (id, _) =
+  let to_val (name, num) =
+    let id = name ^ "_" ^ string_of_int num in
     let z3_val_re = Str.regexp "\\([^!]*\\)!val!\\([0-9]*\\)" in
     let cvc4_val_re = Str.regexp "@uc_\\([^_]*\\)_\\([0-9]*\\)" in
     if Str.string_match z3_val_re id 0 || 
@@ -573,28 +574,30 @@ let convert_model session smtModel =
           "Encountered unexpected definition during model conversion" 
       in fail session msg
     in
-    let arg_vals pos arg_map = 
-      try
-        List.map (fun (x, _) -> IdMap.find x arg_map) args 
-      with Not_found -> fail pos
-    in
     let add_val pos model arg_map v =
-      if IdMap.is_empty arg_map 
-      then Model.add_default_val model sym arity v
-      else Model.add_def model sym arity (arg_vals pos arg_map) v
+      try
+        let arg_vals = List.map (fun (x, _) -> IdMap.find x arg_map) args in
+        Model.add_def model sym arity arg_vals v
+      with Not_found -> 
+        Model.add_default_val model sym arity v
     in
     let add_term pos model arg_map t =
       if IdMap.is_empty arg_map 
       then Model.add_default_term model sym arity args t
       else fail pos
     in
-    let rec convert_term = function
+    let add_form pos model arg_map t =
+      if IdMap.is_empty arg_map 
+      then Model.add_default_form model sym arity args t
+      else fail pos
+    in
+    let rec convert_term bvs = function
       | SmtLibSyntax.App (SmtLibSyntax.BoolConst b, [], _) -> 
           mk_bool_term b
       | SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _) -> 
           mk_int i
       | SmtLibSyntax.App (Ident id, ts, pos) ->
-          let cts = List.map convert_term ts in
+          let cts = List.map (convert_term bvs) ts in
           let id = normalize_ident id in
           let sym = symbol_of_ident id in
           let ts_srts = List.map sort_of cts in
@@ -602,14 +605,64 @@ let convert_model session smtModel =
             match Model.get_result_sort model sym ts_srts with
             | Some res_srt -> res_srt
             | None -> 
-                try List.assoc id args
-                with Not_found -> fail pos
+                try List.assoc id args with Not_found -> 
+                  try List.assoc id bvs with Not_found -> fail pos
           in
-          mk_app res_srt sym cts
+          if List.exists (fun (id2, _) -> id = id2) bvs 
+          then mk_var res_srt id
+          else mk_app res_srt sym cts
       | SmtLibSyntax.Annot (t, _, _) ->
-          convert_term t
+          convert_term bvs t
       | SmtLibSyntax.App (_, _, pos)
       | SmtLibSyntax.Binder (_, _, _, pos) -> fail pos
+    in
+    let rec convert_form bvs = function
+      | SmtLibSyntax.App (SmtLibSyntax.BoolConst b, [], _) -> 
+          mk_bool b
+      | SmtLibSyntax.App (SmtLibSyntax.And, fs, _) ->
+          let cfs = List.map (convert_form bvs) fs in
+          mk_and cfs
+      | SmtLibSyntax.App (SmtLibSyntax.Or, fs, _) ->
+          let cfs = List.map (convert_form bvs) fs in
+          mk_or cfs
+      | SmtLibSyntax.App (SmtLibSyntax.Not, [f], _) ->
+          mk_not (convert_form bvs f)
+      | SmtLibSyntax.App (SmtLibSyntax.Impl, [f1; f2], _) ->
+          mk_implies (convert_form bvs f1) (convert_form bvs f2)
+      | SmtLibSyntax.App (Ident id, ts, _) ->
+          let cts = List.map (convert_term bvs) ts in
+          let id = normalize_ident id in
+          let sym = symbol_of_ident id in
+          mk_atom sym cts
+      | SmtLibSyntax.App (SmtLibSyntax.Eq, [t1; t2], pos) -> 
+          (try 
+            let ct1, ct2 = convert_term bvs t1, convert_term bvs t2 in
+            if sort_of ct1 = Bool
+            then mk_iff (Atom (ct1, [])) (Atom (ct2, []))
+            else mk_eq ct1 ct2
+          with _ ->
+            let cf1, cf2 = convert_form bvs t1, convert_form bvs t2 in
+            mk_iff cf1 cf2)
+      | SmtLibSyntax.App (sym, [t1; t2], pos) ->
+          let mk_form = match sym with
+          | SmtLibSyntax.Gt -> mk_gt
+          | SmtLibSyntax.Lt -> mk_lt
+          | SmtLibSyntax.Geq -> mk_geq 
+          | SmtLibSyntax.Leq -> mk_leq
+          | _ -> fail pos
+          in
+          let ct1 = convert_term bvs t1 in
+          let ct2 = convert_term bvs t2 in
+          mk_form ct1 ct2
+      | SmtLibSyntax.App (_, _, pos) -> fail pos
+      | SmtLibSyntax.Binder (SmtLibSyntax.Forall, ids, f, _) ->
+          let cids = List.map (fun (id, srt) -> normalize_ident id, convert_sort srt) ids in
+          mk_forall cids (convert_form (cids @ bvs) f)
+      | SmtLibSyntax.Binder (SmtLibSyntax.Exists, ids, f, _) ->
+          let cids = List.map (fun (id, srt) -> normalize_ident id, convert_sort srt) ids in
+          mk_exists cids (convert_form (cids @ bvs) f)
+      | SmtLibSyntax.Annot (t, _, _) ->
+          convert_form bvs t
     in
     let rec pcond arg_map = function
       | SmtLibSyntax.App 
@@ -639,7 +692,7 @@ let convert_model session smtModel =
           (match to_val id with
           | Some (_, index) -> 
               add_val pos model arg_map (Model.value_of_int index)
-          | _ -> fail pos)
+          | _ -> print_endline ("Failed to match " ^ name id); fail pos)
       | SmtLibSyntax.App (SmtLibSyntax.BoolConst b, [], pos) ->
           add_val pos model arg_map (Model.value_of_bool b)
       | SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], pos) -> 
@@ -648,24 +701,38 @@ let convert_model session smtModel =
           let arg_map1 = pcond arg_map cond in
           let model1 = p model arg_map e in
           p model1 arg_map1 t
-      | SmtLibSyntax.App (_, _, pos) as t->
-          (* Z3-specific work around *)
-          (match convert_term t with
-          | App (FreeSym (id2, _) as sym2, ts, srt) as t1 ->
-              let re = Str.regexp (string_of_symbol sym ^ "\\$[0-9]+![0-9]+") in
-              if Str.string_match re id2 0 &&
-                List.fold_left2 (fun acc (id1, _) -> function
-                  | App (FreeSym _, [App (FreeSym id2, [], _)], _)
-                  | App (FreeSym id2, [], _) -> acc && id1 = id2
-                  | _ -> false) true args ts
-              then 
-                let def = Model.get_interp model sym2 arity in
-                Model.add_interp model sym arity def
-              else add_term pos model arg_map t1
-          | t1 -> add_term pos model arg_map t1)
+      | SmtLibSyntax.App (SmtLibSyntax.Eq, _, pos) as cond ->
+          let t = SmtLibSyntax.App (SmtLibSyntax.BoolConst true, [], pos) in
+          let e = SmtLibSyntax.App (SmtLibSyntax.BoolConst false, [], pos) in
+          p model arg_map (SmtLibSyntax.App (SmtLibSyntax.Ite, [cond; t; e], pos))
+      | SmtLibSyntax.App (asym, _, pos) as t ->
+          (match asym with
+          | SmtLibSyntax.And
+          | SmtLibSyntax.Or 
+          | SmtLibSyntax.Not
+          | SmtLibSyntax.Impl -> 
+              let f = convert_form [] t in
+              add_form pos model arg_map f
+          | _ ->
+              (* Z3-specific work around *)
+              (match convert_term [] t with
+              | App (FreeSym (id2, _) as sym2, ts, srt) as t1 ->
+                  let re = Str.regexp (string_of_symbol sym ^ "\\$[0-9]+![0-9]+") in
+                  if Str.string_match re id2 0 &&
+                    List.fold_left2 (fun acc (id1, _) -> function
+                      | App (FreeSym _, [App (FreeSym id2, [], _)], _)
+                      | App (FreeSym id2, [], _) -> acc && id1 = id2
+                      | _ -> false) true args ts
+                  then 
+                    let def = Model.get_interp model sym2 arity in
+                    Model.add_interp model sym arity def
+                  else add_term pos model arg_map t1
+              | t1 -> add_term pos model arg_map t1))
       | SmtLibSyntax.Annot (def, _, _) -> 
           p model arg_map def
-      | SmtLibSyntax.Binder (_, _, _, pos) -> fail pos
+      | SmtLibSyntax.Binder (_, _, _, pos) as t ->
+          let f = convert_form [] t in
+          add_form pos model arg_map f
     in p model IdMap.empty def
   in
   let model2 =

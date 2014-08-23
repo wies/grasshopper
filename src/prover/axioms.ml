@@ -81,7 +81,7 @@ let read_write_axioms_closed fld1 =
   let f_upd1 = 
     mk_or [mk_eq loc2 loc1; mk_eq (f loc2) (g loc2)]
   in
-  let f_upd2 = mk_eq (g loc1) dvar in
+  let f_upd2 = mk_or [mk_eq loc1 mk_null; mk_eq (g loc1) dvar] in
   let generator2 = 
     [l1; d1],
     [],
@@ -89,8 +89,8 @@ let read_write_axioms_closed fld1 =
     g loc1
   in      
   if not !encode_fields_as_arrays 
-  then [mk_axiom ("read_write_"^(srt_string)^"_1") f_upd1;
-        mk_axiom ~gen:[generator2] ("read_write_"^(srt_string)^"_2") f_upd2]
+  then [mk_axiom ("read_write_" ^ srt_string ^ "_1") f_upd1;
+        mk_axiom ~gen:[generator2] ("read_write_" ^ srt_string ^ "_2") f_upd2]
   else []
 
 let reach_write_axioms fld1 loc1 loc2 =
@@ -103,8 +103,8 @@ let reach_write_axioms fld1 loc1 loc2 =
              mk_and [mk_neq loc1 w; reachwo u loc1 w; b u v loc1; reachwo loc2 w loc1];
              mk_and [mk_neq loc1 w; reachwo u loc1 w; b loc2 v w; reachwo loc2 w loc1]]
     in
-    smk_and [smk_or [mk_not (mk_btwn new_fld1 loc3 loc4 loc5); new_btwn loc3 loc4 loc5];
-	     smk_or [mk_btwn new_fld1 loc3 loc4 loc5; mk_not (new_btwn loc3 loc4 loc5)]]
+    smk_and [smk_or [mk_eq loc1 mk_null; mk_not (mk_btwn new_fld1 loc3 loc4 loc5); new_btwn loc3 loc4 loc5];
+	     smk_or [mk_eq loc1 mk_null; mk_btwn new_fld1 loc3 loc4 loc5; mk_not (new_btwn loc3 loc4 loc5)]]
   in
   if !with_reach_axioms 
   then [mk_axiom "btwn_write" btwn_write]
