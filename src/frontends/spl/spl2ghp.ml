@@ -149,7 +149,7 @@ let resolve_names cus =
               vars ([], tbl)
             in
             let f1 = re tbl1 f in
-            Quant (q, vars, f1, pos)
+            Quant (q, decls, f1, pos)
         | ProcCall (("acc", _), [arg], pos) ->
             Access (re tbl arg, pos)
         | ProcCall (("Btwn", _), args, pos) ->
@@ -611,6 +611,7 @@ let convert cus =
              List.fold_right (fun decl (vars, locals1) ->
                let id = decl.v_name in
                let ty = decl.v_type in
+               print_endline (string_of_ident id);
                (id, convert_type ty) :: vars, IdMap.add id decl locals1)
                decls ([], locals)
           in
