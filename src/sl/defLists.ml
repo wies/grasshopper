@@ -9,6 +9,14 @@ let lists = [
       [df; nextf; xf; yf],
       mk_reach next x y,
       [di, mk_name "lseg_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp))]);
+    ( mk_ident "lsegf",
+      [df; nextf; xf; yf],
+      mk_reach next x y,
+      [di, mk_name "lsegf_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp))]);
+    ( mk_ident "lsegb",
+      [df; nextf; xf; yf],
+      mk_reach next x y,
+      [di, mk_name "lsegb_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp))]);
     ( mk_ident "slseg",
       [df; dataf; nextf; xf; yf],
       mk_and [mk_reach next x y;
@@ -63,20 +71,34 @@ let lists = [
       [di, mk_name "bslseg_footprint" (mk_forall [l1f] (mk_iff l1_in_domain l1_in_lst_fp))]);
     ( mk_ident "dlseg",
       [df; nextf; prevf; x1f; x2f; y1f; y2f],
-      mk_and [mk_reach next x1 y1;
-              mk_or [ mk_and [mk_eq x1 y1; mk_eq x2  y2];
-                      mk_and [mk_eq (mk_read next y2) y1;
+      mk_and [mk_or [ mk_and [mk_eq x1 y1; mk_eq x2 y2];
+                      mk_and [mk_neq x1 y1; mk_neq x2 y2;
+                              mk_elem x1 d; mk_elem y2 d;
+                              mk_neq x1 x2; mk_neq y1 y2;
+                              mk_btwn next x1 y2 y1;
+                              mk_btwn prev y2 x1 x2;
+                              mk_eq (mk_read next y2) y1;
                               mk_eq (mk_read prev x1) x2;
-                              mk_elem y2 d]];
+                              (*mk_forall [l1f]
+                                (mk_sequent [mk_btwn next y2 l1 y1] [mk_eq l1 y2; mk_eq l1 y1]);
+                              mk_forall [l1f]
+                                (mk_sequent [mk_btwn prev x1 l1 x2] [mk_eq l1 x1; mk_eq l1 x2]);*)
+                              mk_forall [l1f; l2f]
+                                (mk_sequent [mk_btwn next x1 l1 y1; mk_btwn next x1 l2 y1; mk_btwn next l1 l2 y1]
+                                   [mk_eq l2 y1; mk_and [mk_btwn prev y2 l2 l1; mk_btwn prev l2 l1 x1]]);
+                              mk_forall [l1f; l2f]
+                                (mk_sequent [mk_btwn prev y2 l1 x2; mk_btwn prev y2 l2 x2; mk_btwn prev l1 l2 x2]
+                                   [mk_eq l2 x2; mk_and [mk_btwn next x1 l2 l1; mk_btwn next l2 l1 y1]])
+                            ]];
               (*mk_forall [l1f]
                 (mk_sequent [mk_elem l1 d; mk_elem (mk_read prev l1) d]
                    [mk_reach next (mk_read prev l1) l1]);
               mk_forall [l1f; l2f]
                         (mk_sequent [mk_elem l1 d; mk_elem l2 d; mk_btwn next (mk_read prev l1) l2 l1]
                            [mk_eq l2 l1; mk_eq l2 (mk_read prev l1)]);*)
-              mk_forall [l1f;l2f]
+              (*mk_forall [l1f;l2f]
                         (mk_sequent [mk_eq (mk_read next l1) l2; mk_elem l1 d; mk_elem l2 d]
-                        [mk_eq (mk_read prev l2) l1])],
+                        [mk_eq (mk_read prev l2) l1])*)],
       [di, mk_name "dlseg_footprint" (mk_forall [l1f] (mk_iff l1_in_domain (mk_and [mk_btwn next x1 l1 y1; mk_neq l1 y1])))]);
   ]
 

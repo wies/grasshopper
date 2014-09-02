@@ -1,0 +1,80 @@
+struct Node {
+  var next: Node;
+  var prev: Node;
+  var data: Int;
+}
+
+// singly-linked list segment (over next)
+predicate lsegf(x: Node, y: Node) {
+  x == y || x != y &*& acc(x) &*& lsegf(x.next, y)
+}
+
+// singly-linked list segment (over prev)
+predicate lsegb(x: Node, y: Node) {
+  x == y || x != y &*& acc(x) &*& lsegb(x.prev, y)
+}
+
+// doubly-linked list segment (over next and prev)
+predicate dlseg(x: Node, u: Node, y: Node, v: Node) {
+  x == y && u == v || 
+  x != y &*& x.prev == u &*& acc(x) &*& dlseg(x.next, x, y, v)
+}
+
+// a doubly-linked list is a singly-linked list over both next and prev
+procedure entails1(a: Node, b: Node, c: Node, d: Node)
+  requires dlseg(a, b, c, d);
+  ensures lsegf(a, c) && lsegb(d, b);
+{
+}
+
+// bounded singly-linked list segment (over next)
+predicate blseg(x: Node, y: Node, lb: Int, ub: Int) {
+  x == y || x != y &*& acc(x) &*& lb <= x.data &*& x.data <= ub &*& blseg(x.next, y, lb, ub)
+}
+
+// lower-bouned sorted singly-linked list segment with content (over next)
+predicate sorted_set_lb(x: Node, y: Node, lb: Int, c: Set<Int>) {
+    x == y &*&
+    c == Set<Int>()
+  || 
+    x != y &*&
+    acc(x) &*&
+    x.data in c &*&
+    lb < x.data &*&
+    sorted_set_lb(x.next, y, x.data, c -- Set(x.data))
+}
+
+// sorted singly-linked list segment with content (over next)
+predicate sorted_set(x: Node, y: Node, c: Set<Int>) {
+    x == y &*&
+    c == Set<Int>()
+  || 
+  sorted_set_lb(x, y, x.data - 1, c)
+}
+
+procedure entails2(a: Node, b: Node, c: Node, C: Set<Int>, C1: Set<Int>, C2: Set<Int>)
+  requires sorted_set(a, b, C);
+  ensures sorted_set(a, b, C) &*& (a == b || a.data in C);
+{
+}
+
+procedure entails3(a: Node, b: Node, c: Node, C: Set<Int>, C1: Set<Int>, C2: Set<Int>)
+  requires sorted_set(a, c, C) && (sorted_set(a, b, C1) &*& sorted_set(b, c, C2));
+  ensures sorted_set(a, c, C) &*& C == C1 ++ C2;
+{
+}
+
+procedure entails4(a: Node, b: Node, c: Node, C1: Set<Int>, C2: Set<Int>)
+  requires sorted_set(a, b, C1) &*& sorted_set(b, c, C2) &*& acc(c) &*& b != c;
+  requires forall d in C1 :: d < c.data;
+  requires forall d in C2 :: b.data < d;
+  ensures sorted_set(a, c, C1 ++ C2) &*& acc(c);
+{
+}
+
+// invalid entailment (use option -model to generate a counterexample)
+procedure false_entails1(a: Node, b: Node, c: Node, C1: Set<Int>, C2: Set<Int>)
+  requires sorted_set(a, b, C1) &*& sorted_set(b, c, C2);
+  ensures sorted_set(a, c, C1 ++ C2);
+{
+}

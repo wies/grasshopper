@@ -58,11 +58,18 @@ let vc_gen file =
   if !Config.procedure = "" 
   then Prog.iter_procs check simple_prog
   else 
-    try
-      let proc = Prog.find_proc simple_prog (!Config.procedure, 0) in
-      check simple_prog proc
-    with Not_found -> failwith ("Could not find a procedure named " ^ !Config.procedure)
-    
+    let proc =
+      try Prog.find_proc simple_prog (!Config.procedure, 0)
+      with _ -> 
+        let available =
+          Prog.fold_procs 
+            (fun acc proc -> "\t" ^ Form.string_of_ident proc.Prog.proc_name ^ "\n" ^ acc) 
+            "" prog
+        in
+        failwith ("Could not find a procedure named " ^ !Config.procedure ^ ". Available procedures are:\n" ^ available)
+    in
+    check simple_prog proc
+
 
 let current_time () =
   let ptime = Unix.times () in
@@ -92,7 +99,7 @@ let _ =
       exit 1
   | Failure s ->
       let bs = if Debug.is_debug () then Printexc.get_backtrace () else "" in
-      output_string stderr (s ^ "\n" ^ bs); exit 1
+      output_string stderr ("Error: " ^ s ^ "\n" ^ bs); exit 1
   | Parsing.Parse_error -> 
       print_endline "parse error"; 
       exit 1

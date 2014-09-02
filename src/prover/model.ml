@@ -125,9 +125,11 @@ let find_map_value model v srt =
   | _ -> raise Undefined
 
 let find_set_value model v srt =
-  match SortedValueMap.find (v, Set srt) model.vals with
-  | SetVal s -> s
-  | _ -> raise Undefined
+  try
+    match SortedValueMap.find (v, Set srt) model.vals with
+    | SetVal s -> s
+    | _ -> raise Undefined
+  with Not_found -> raise Undefined          
 
 let equal model v1 v2 srt =
   v1 = v2 ||
@@ -180,7 +182,8 @@ let rec eval model = function
       let fld_val = eval model fld in
       let ind_val = eval model ind in
       let arity = [Fld srt; Loc], srt in
-      interp_symbol model Read arity [fld_val; ind_val]
+      let res = interp_symbol model Read arity [fld_val; ind_val] in
+      res
   | App (Write, [fld; ind; upd], (Fld isrt as srt)) ->
       let ind_val = eval model ind in
       let upd_val = eval model upd in
@@ -463,7 +466,15 @@ let succ model fld x =
       
 let complete model =
   let locs = get_values_of_sort model Loc in
-  let flds = get_values_of_sort model (Fld Loc) in
+  let loc_flds = get_values_of_sort model (Fld Loc) in
+  let flds = 
+    let null = interp_symbol model Null ([], Loc) [] in
+    List.filter (fun f ->
+      try 
+        bool_of_value 
+          (interp_symbol model Btwn ([Fld Loc; Loc; Loc; Loc], Bool) [f; null; null; null])
+      with Undefined -> false) loc_flds
+  in
   let new_model =
     List.fold_left 
       (fun new_model fld ->
@@ -488,27 +499,36 @@ let find_term model =
         in
         ValueListMap.fold (fun args v vm ->
           let vs = List.combine args arg_srts in
-          if List.mem (v, res_srt) vs then vm else
+          let vs1 = 
+            List.fold_left (fun vs1 vsrt ->
+              try snd (SortedValueMap.find vsrt vm) @ vs1
+              with Not_found -> vs1
+            ) vs vs
+          in
+          if List.mem (v, res_srt) vs1 then vm else
           let el = 
             try 
               let sym1, vs2 = SortedValueMap.find (v, res_srt) vm in
               if List.length vs < List.length vs2 
               then (sym1, vs2)
-              else (sym, vs)                
+              else (sym, vs)
             with Not_found -> (sym, vs)
           in
-          SortedValueMap.add (v, res_srt) el vm) m d_vm)
+          SortedValueMap.add (v, res_srt) el vm) 
+          m d_vm)
       model.intp SortedValueMap.empty
   in
-  let rec find (v, srt) =
+  let rec find seen (v, srt) =
     match srt with 
     | Bool -> mk_bool_term (bool_of_value v)
     | Int -> mk_int (int_of_value v)
     | _ ->
+        (* give up on cyclic definitions *)
+        if ValueSet.mem v seen then raise Not_found else
         let sym, vs = SortedValueMap.find (v, srt) vm in
-        let args = List.map find vs in
+        let args = List.map (find (ValueSet.add v seen)) vs in
         mk_app srt sym args
-  in fun v srt -> find (v, srt)
+  in fun v srt -> find ValueSet.empty (v, srt)
 
 
 (** Printing *)
@@ -534,9 +554,11 @@ let output_json chan model =
         let v = interp_symbol model sym ([], srt) [] in
         output_string chan (string_of_sorted_value srt v)
     | Set esrt ->
-        let set = interp_symbol model sym ([], srt) [] in
-        let s = find_set_value model set esrt in
-        output_set (ValueSet.elements s) esrt
+        (try
+          let set = interp_symbol model sym ([], srt) [] in
+          let s = find_set_value model set esrt in
+          output_set (ValueSet.elements s) esrt
+        with Undefined -> output_set [] esrt (* fix me *))
     | Fld rsrt ->
         let fld = interp_symbol model sym ([], srt) [] in
         let args = get_values_of_sort model Loc in
@@ -607,11 +629,10 @@ let output_graphviz chan model =
   let output_flds () = 
     List.iter 
       (fun f ->
-        let m, d = find_map_value model f Loc in
         List.iter (fun l ->
           try
             if interp_symbol model Null ([], Loc) [] = l then () else
-            let r = fun_app model (MapVal (m, d)) [l] in
+            let r = interp_symbol model Read ([Fld Loc; Loc], Loc) [f; l] in
 	    let label = get_label f in
 	    Printf.fprintf chan "\"%s\" -> \"%s\" [%s]\n" 
 	      (string_of_loc_value l) (string_of_loc_value r) label
@@ -717,11 +738,13 @@ let output_graphviz chan model =
       let sets = get_values_of_sort model (Set srt) in
       List.iter
         (fun set ->
-          let set_t = find_term set (Set srt) in
-          let s = find_set_value model set Loc in
-          let vals = List.map (fun e ->  string_of_sorted_value srt e) (ValueSet.elements s) in
-          let set_rep = String.concat ", " vals in
-          Printf.fprintf chan "        <tr><td>%s = {%s}</td></tr>\n" (string_of_term set_t) set_rep
+          try
+            let set_t = find_term set (Set srt) in
+            let s = find_set_value model set Loc in
+            let vals = List.map (fun e ->  string_of_sorted_value srt e) (ValueSet.elements s) in
+            let set_rep = String.concat ", " vals in
+            Printf.fprintf chan "        <tr><td>%s = {%s}</td></tr>\n" (string_of_term set_t) set_rep
+          with Not_found -> ()
         )
         sets
     in 
@@ -739,12 +762,14 @@ let output_graphviz chan model =
             let m, _ = get_interp model sym arity in
             ValueListMap.iter 
               (fun vs v ->
-                let args = List.map2 find_term vs (fst arity) in
-                let t1 = mk_app (snd arity) sym args in
-                let t2 = find_term v (snd arity) in
-                if t1 <> t2 then
-                  Printf.fprintf chan "      <tr><td>%s == %s</td></tr>\n"
-                    (string_of_term t1) (string_of_term t2)
+                try
+                  let args = List.map2 find_term vs (fst arity) in
+                  let t1 = mk_app (snd arity) sym args in
+                  let t2 = find_term v (snd arity) in
+                  if t1 <> t2 then
+                    Printf.fprintf chan "      <tr><td>%s == %s</td></tr>\n"
+                      (string_of_term t1) (string_of_term t2)
+                with Not_found -> ()
               ) m
         | _ -> fun _ -> ()
       ) model.intp;

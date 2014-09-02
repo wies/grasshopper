@@ -16,9 +16,40 @@ procedure dl_traverse(lst: Node, ghost a: Node, ghost b: Node)
   curr := lst;
   prv := a;
   while (curr != null) 
-    invariant dlseg(lst, a, curr, prv) &*& dlseg(curr, prv, null, b);
+    invariant dlseg(lst, a, null, b) && (dlseg(lst, a, curr, prv) &*& dlseg(curr, prv, null, b));
   {
     prv := curr;
     curr := curr.next; 
   }
 }
+
+procedure dl_traverse2(a: Node, b: Node, c: Node, d: Node)
+  requires dlseg(a, b, c, d);
+  ensures dlseg(a, b, c, d);
+{
+  var curr: Node, prv: Node;
+  curr := a;
+  prv := b;
+  while (curr != c) 
+    invariant dlseg(a, b, c, d) && (dlseg(a, b, curr, prv) &*& dlseg(curr, prv, c, d));
+  {
+    prv := curr;
+    curr := curr.next; 
+  }
+}
+
+procedure dl_traverse3(a: Node, b: Node, c: Node, d: Node)
+  requires dlseg(a, b, c, d);
+  ensures dlseg(a, b, c, d);
+{
+  var curr: Node, prv: Node;
+  curr := d;
+  prv := c;
+  while (curr != b) 
+    invariant dlseg(a, b, c, d) && (dlseg(a, b, prv, curr) &*& dlseg(prv, curr, c, d));
+  {
+    prv := curr;
+    curr := curr.prev; 
+  }
+}
+

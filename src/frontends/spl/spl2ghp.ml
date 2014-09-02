@@ -611,7 +611,6 @@ let convert cus =
              List.fold_right (fun decl (vars, locals1) ->
                let id = decl.v_name in
                let ty = decl.v_type in
-               print_endline (string_of_ident id);
                (id, convert_type ty) :: vars, IdMap.add id decl locals1)
                decls ([], locals)
           in

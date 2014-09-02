@@ -10,7 +10,7 @@ let dump_model session =
     let model = Opt.get (SmtLibSolver.get_model session) in
     let model_chan = open_out !Config.model_file in
     (*Model.print_model2 model;*)
-    Model.output_graphviz model_chan model;
+    Model.output_graphviz model_chan (Model.complete model);
     close_out model_chan;
   end
 
@@ -78,13 +78,12 @@ let get_model ?(session_name="form") ?(sat_means="sat") f =
   let result, session = start_session session_name sat_means f in
   let model = 
     match result with
-    | Some true ->
+    | Some true | None ->
         dump_model session;
         SmtLibSolver.get_model session
     | Some false -> 
         dump_core session;
         None
-    | None -> Some (Model.empty)
   in
   SmtLibSolver.quit session;
   Util.Opt.map Model.complete model

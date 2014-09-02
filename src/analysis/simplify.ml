@@ -462,6 +462,18 @@ let elim_state prog =
               let global_mods = IdSet.elements (modifies_proc prog callee_decl) in
               let mods = cc.call_lhs @ global_mods in
               let sm1, locals = fresh proc sm locals pp.pp_pos mods in
+              let mods_havoc = 
+                (* this is a work around for trace generation *)
+                let eqs = 
+                  List.map (fun id -> 
+                    let mid = IdMap.find id sm1 in
+                    let decl = IdMap.find mid locals in
+                    let vid = mk_free_const decl.var_sort mid in
+                    mk_eq vid vid) mods
+                in
+                let sf = mk_spec_form (FOL (mk_and eqs)) "havoc" None pp.pp_pos in
+                [mk_assume_cmd sf pp.pp_pos]
+              in
               (* compute substitution for postcondition *)
               let subst_post = 
                 (* substitute formal parameters to actual parameters *)
@@ -504,7 +516,7 @@ let elim_state prog =
                     mk_assume_cmd sf1 pp.pp_pos)
                   callee_decl.proc_postcond
               in
-              sm1, locals, mk_seq_cmd (assert_precond @ assume_precond_implicits @ assume_postcond) pp.pp_pos
+              sm1, locals, mk_seq_cmd (assert_precond @ assume_precond_implicits @ mods_havoc @ assume_postcond) pp.pp_pos
           | _ -> sm, locals, Basic (bc, pp)
     in
     let locals, body =

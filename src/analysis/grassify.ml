@@ -6,6 +6,46 @@ open Prog
 open AuxNames
 open Reachify
 
+(** Add tree alloc invariant -- this is a really bad hack!! *)
+let treeify prog =
+  let tree_preds_in_spec acc s = 
+    match s.spec_form with
+    | FOL f ->
+        fold_terms 
+          (fun acc -> function
+            | App (FreeSym id, _ :: _ :: p :: _, _) when id = ("tree_struct", 0) ->
+                TermSet.add p acc
+            | App (FreeSym id, _ :: _ :: _ :: p :: _, _) when id = ("stree_struct", 0) ->
+                TermSet.add p acc
+            | _ -> acc)
+          acc f
+    | SL _ -> acc
+  in
+  let add_tree_preds proc = 
+    let ps =
+      List.fold_left tree_preds_in_spec TermSet.empty 
+        (proc.proc_precond @ proc.proc_postcond)
+    in
+    let mk_tree_alloc_inv p =
+      mk_pred (mk_ident "treeAllocInvariant_struct") [mk_empty (Set Loc); p; alloc_set]
+    in 
+    let tree_invs =
+      TermSet.fold (fun p acc -> mk_tree_alloc_inv p :: acc) ps []
+    in
+    match tree_invs with
+    | [] -> proc
+    | _ ->
+        let tree_inv = 
+          mk_spec_form (FOL (mk_and tree_invs)) "tree_alloc_inv" None dummy_position
+        in
+        { proc with 
+          proc_precond = tree_inv :: proc.proc_precond; 
+          proc_postcond = tree_inv :: proc.proc_postcond;
+        }
+  in
+  map_procs add_tree_preds prog
+
+
 (** Desugare SL specification to FOL specifications. 
  ** Assumes that loops have been transformed to tail-recursive procedures. *)
 let elim_sl prog =
@@ -291,7 +331,7 @@ let elim_sl prog =
       proc_body = body;
     } 
   in
-  { prog with prog_procs = IdMap.map compile_proc prog.prog_procs }
+  treeify { prog with prog_procs = IdMap.map compile_proc prog.prog_procs }
 
 (** Annotate safety checks for heap accesses *)
 let annotate_heap_checks prog =
@@ -342,6 +382,7 @@ let annotate_heap_checks prog =
     { proc with proc_body = Util.Opt.map (map_basic_cmds annotate) proc.proc_body } 
   in
   { prog with prog_procs = IdMap.map annotate_proc prog.prog_procs; }
+
 
 (** Eliminate all new and dispose commands.
  ** Assumes that footprint sets have been introduced. *)

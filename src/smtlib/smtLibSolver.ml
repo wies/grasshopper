@@ -57,8 +57,8 @@ let z3_v4 = { version = 4;
               (if not !Config.instantiate then [(":auto-config", false)] else []) @
               [(*":smt.mbqi", true;
                ":smt.ematching", true;
-               ":model.v2", true;*)
-	       ":model.partial", true];
+               ":model.v2", true;
+	       ":model.partial", true*)];
               kind = Process ("z3", ["-smt2"; "-in"]);
 	    }
 
@@ -82,11 +82,17 @@ let z3 =
     info = version }
 
 let cvc4_v1 = 
+  let options =
+    ["--lang=smt2"; 
+     "--quant-cf"; 
+     "--inst-max-level=0"; 
+     "--simplification=none"]
+  in
   { version = 1;
     subversion = 3;
     has_set_theory = true;
     smt_options = [];
-    kind = Process ("cvc4", ["--lang=smt2"; "--quant-cf"; "--inst-max-level=0"]);
+    kind = Process ("cvc4", options);
   }
 
 let cvc4mf_v1 = 
@@ -95,7 +101,8 @@ let cvc4mf_v1 =
      "--finite-model-find"; 
      "--mbqi=none"; 
      "--inst-max-level=0"; 
-     "--fmf-inst-engine"]
+     "--fmf-inst-engine";
+     "--simplification=none"]
   in
   { cvc4_v1 with
     kind = 
@@ -611,6 +618,19 @@ let convert_model session smtModel =
           if List.exists (fun (id2, _) -> id = id2) bvs 
           then mk_var res_srt id
           else mk_app res_srt sym cts
+      | SmtLibSyntax.App (SmtLibSyntax.Plus as op, [t1; t2], _)
+      | SmtLibSyntax.App (SmtLibSyntax.Mult as op, [t1; t2], _)
+      | SmtLibSyntax.App (SmtLibSyntax.Minus as op, [t1; t2], _)
+      | SmtLibSyntax.App (SmtLibSyntax.Div as op, [t1; t2], _) ->
+          let ct1 = convert_term bvs t1 in
+          let ct2 = convert_term bvs t2 in
+          let mk_term = match op with
+          | SmtLibSyntax.Plus -> mk_plus
+          | SmtLibSyntax.Minus -> mk_minus
+          | SmtLibSyntax.Mult -> mk_mult
+          | SmtLibSyntax.Div -> mk_div
+          | _ -> failwith "unexpected match case"
+          in mk_term ct1 ct2          
       | SmtLibSyntax.Annot (t, _, _) ->
           convert_term bvs t
       | SmtLibSyntax.App (_, _, pos)
@@ -767,7 +787,8 @@ let rec get_model session =
   | None -> 
       ignore (is_sat session);
       get_model session
-  | Some (Some state, Sat) -> gm state
+  | Some (Some state, Sat) 
+  | Some (Some state, Unknown) -> gm state
   | _ -> None
 
 let rec get_unsat_core session =

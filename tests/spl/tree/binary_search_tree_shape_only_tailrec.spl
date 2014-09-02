@@ -6,12 +6,12 @@ struct Node {
 }
 
 predicate tree(x: Node) {
-    x == null
+  x == null
   ||
-    x != null &*&
-    x.parent |-> x.parent &*&
-    tree(x.left) &*&
-    tree(x.right)
+  x != null &*&
+  x.parent |-> x.parent &*&
+  tree(x.left) &*&
+  tree(x.right)
 }
 
 predicate treeAllocInvariant(X: Set<Node>) {
@@ -20,198 +20,193 @@ predicate treeAllocInvariant(X: Set<Node>) {
 
 procedure contains(root: Node, val: Int)
   returns (res: Bool)
-  requires tree(root) &*& treeAllocInvariant(Alloc);
-  ensures  tree(root) &*& treeAllocInvariant(Alloc);
+  requires tree(root);
+  ensures tree(root);
 {
-    var curr: Node;
-    curr := root;
+  var curr: Node;
+  curr := root;
 
-    while (curr != null && curr.data != val) 
-      invariant tree(curr) -** tree(root);
-      invariant treeAllocInvariant(Alloc);
-    {
-        if (curr.data < val) {
-          curr := curr.left;
-        } else if (curr.data > val) {
-          curr := curr.right;
-        }
+  while (curr != null && curr.data != val) 
+    invariant tree(curr) -** tree(root);
+  {
+    if (curr.data > val) {
+      curr := curr.left;
+    } else if (curr.data < val) {
+      curr := curr.right;
     }
+  }
 
-    if (curr != null) return true;
-    else return false;
+  if (curr != null) return true;
+  else return false;
 }
 
 procedure remove(root: Node, val: Int) returns (new_root: Node)
-  requires tree(root) &*& treeAllocInvariant(Alloc);
-  ensures  tree(new_root) &*& treeAllocInvariant(Alloc);
+  requires tree(root);
+  ensures tree(new_root);
 {
-    var curr: Node;
-    curr := root;
-    new_root := root;
+  var curr: Node;
+  curr := root;
+  new_root := root;
 
-    while (curr != null && curr.data != val) 
-      invariant tree(curr) -** tree(root);
-      invariant treeAllocInvariant(Alloc);
+  while (curr != null && curr.data != val) 
+    invariant tree(curr) -** tree(root);
+  {
+    if (curr.data > val) {
+      curr := curr.left;
+    } else if (curr.data < val) {
+      curr := curr.right;
+    }
+  }
+
+  if (curr == null) return root;
+
+  var cp: Node, cl: Node, cr: Node;
+  cp, cl, cr := curr.parent, curr.left, curr.right;
+
+  if (cl != null && cr != null) {
+    var lm: Node, lmp: Node;
+    lmp := cl;
+    lm := cl;            
+
+    while (lm.right != null) 
+      invariant tree(lm) -** tree(lmp) -** tree(cl) -** tree(root);
+      invariant lm != null && (cl == lm || lmp.right == lm);
     {
-        if (curr.data < val) {
-          curr := curr.left;
-        } else if (curr.data > val) {
-          curr := curr.right;
-        }
+      lmp := lm;
+      lm := lm.right;
     }
 
-    if (curr == null) return root;
+    if (cl != lm) {
+      var lml: Node;
+      lml := lm.left;
+      lmp.right := lml;
+      if (lml != null) lml.parent := lmp;
+      lm.left := cl;
+      cl.parent := lm;      
+    }
+    lm.parent := cp;
+    lm.right := cr;
+    cr.parent := lm;
 
-    var cp: Node, cl: Node, cr: Node;
-    cp, cl, cr := curr.parent, curr.left, curr.right;
+    curr.parent := null;
+    free curr;
 
-    if (cl != null && cr != null) {
-      var lm: Node, lmp: Node;
-      lmp := cl;
-      lm := cl;            
-
-      while (lm.right != null) 
-        invariant tree(lm) -** tree(lmp) -** tree(cl) -** tree(root);
-        invariant lm != null && (cl == lm || lmp.right == lm);
-        invariant treeAllocInvariant(Alloc);
-      {
-        lmp := lm;
-        lm := lm.right;
-      }
-
-      if (cl != lm) {
-        var lml: Node;
-        lml := lm.left;
-        lmp.right := lml;
-        if (lml != null) lml.parent := lmp;
-        lm.left := cl;
-        cl.parent := lm;      
-      }
-      lm.parent := cp;
-      lm.right := cr;
-      cr.parent := lm;
-
-      curr.parent := null;
-      free curr;
-
-      if (curr == root) {
-        return lm;
-      } else {
-        if (cp.left == curr) {
-          cp.left := lm;
-        } else {
-          cp.right := lm;
-        }
-        return root;
-      }
+    if (curr == root) {
+      return lm;
     } else {
-      curr.parent := null;
-      free curr;
-      var nc: Node;
-      if (cl != null) {
-        nc := cl;
+      if (cp.left == curr) {
+        cp.left := lm;
       } else {
-        nc := cr;
+        cp.right := lm;
       }
-      if (nc != null) nc.parent := cp;
-      if (curr == root) {
-        return nc;  
-      } else {
-        if (cp.left == curr) {
-          cp.left := nc;
-        } else {
-          cp.right := nc;
-        }
-        return root;
-      }
+      return root;
     }
+  } else {
+    curr.parent := null;
+    free curr;
+    var nc: Node;
+    if (cl != null) {
+      nc := cl;
+    } else {
+      nc := cr;
+    }
+    if (nc != null) nc.parent := cp;
+    if (curr == root) {
+      return nc;  
+    } else {
+      if (cp.left == curr) {
+        cp.left := nc;
+      } else {
+        cp.right := nc;
+      }
+      return root;
+    }
+  }
 }
 
 procedure remove_alt(root: Node, val: Int) returns (new_root: Node)
-  requires tree(root) &*& treeAllocInvariant(Alloc);
-  ensures  tree(new_root) &*& treeAllocInvariant(Alloc);
+  requires tree(root);
+  ensures tree(new_root);
 {
-    var curr: Node;
-    curr := root;
-    new_root := root;
+  var curr: Node;
+  curr := root;
+  new_root := root;
 
-    while (curr != null && curr.data != val) 
+  while (curr != null && curr.data != val) 
+    invariant tree(root);
+    invariant root == null || curr == null || Btwn(parent, curr, root, root);
+    invariant root != null || curr == null;
+  {
+    if (curr.data > val) {
+      curr := curr.left;
+    } else if (curr.data < val) {
+      curr := curr.right;
+    }
+  }
+
+  if (curr == null) return root;
+
+  var cp: Node, cl: Node, cr: Node;
+  cp, cl, cr := curr.parent, curr.left, curr.right;
+
+  if (cl != null && cr != null) {
+    var lm: Node, lmp: Node;
+    lmp := cl;
+    lm := cl;            
+
+    while (lm.right != null) 
       invariant tree(root);
-      invariant root == null || curr == null || Btwn(parent, curr, root, root);
-      invariant root != null || curr == null;
-      invariant treeAllocInvariant(Alloc);
+      invariant Btwn(parent, lm, cl, root) && Btwn(parent, lm, lmp, cl);
+      invariant lm != null && (cl == lm || lmp.right == lm);
     {
-        if (curr.data < val) {
-          curr := curr.left;
-        } else if (curr.data > val) {
-          curr := curr.right;
-        }
+      lmp := lm;
+      lm := lm.right;
     }
 
-    if (curr == null) return root;
+    if (cl != lm) {
+      var lml: Node;
+      lml := lm.left;
+      lmp.right := lml;
+      if (lml != null) lml.parent := lmp;
+      lm.left := cl;
+      cl.parent := lm;      
+    }
+    lm.parent := cp;
+    lm.right := cr;
+    cr.parent := lm;
 
-    var cp: Node, cl: Node, cr: Node;
-    cp, cl, cr := curr.parent, curr.left, curr.right;
+    curr.parent := null;
+    free curr;
 
-    if (cl != null && cr != null) {
-      var lm: Node, lmp: Node;
-      lmp := cl;
-      lm := cl;            
-
-      while (lm.right != null) 
-        invariant tree(root);
-        invariant Btwn(parent, lm, cl, root) && Btwn(parent, lm, lmp, cl);
-        invariant lm != null && (cl == lm || lmp.right == lm);
-        invariant treeAllocInvariant(Alloc);
-      {
-        lmp := lm;
-        lm := lm.right;
-      }
-
-      if (cl != lm) {
-        var lml: Node;
-        lml := lm.left;
-        lmp.right := lml;
-        if (lml != null) lml.parent := lmp;
-        lm.left := cl;
-        cl.parent := lm;      
-      }
-      lm.parent := cp;
-      lm.right := cr;
-      cr.parent := lm;
-
-      curr.parent := null;
-      free curr;
-
-      if (curr == root) {
-        return lm;
-      } else {
-        if (cp.left == curr) {
-          cp.left := lm;
-        } else {
-          cp.right := lm;
-        }
-        return root;
-      }
+    if (curr == root) {
+      return lm;
     } else {
-      curr.parent := null;
-      free curr;
-      var nc: Node;
-      if (cl != null) {
-        nc := cl;
+      if (cp.left == curr) {
+        cp.left := lm;
       } else {
-        nc := cr;
+        cp.right := lm;
       }
-      if (nc != null) nc.parent := cp;
-      if (curr == root) {
-        return nc;  
-      } else {
-        if (cp.left == curr) {
-          cp.left := nc;
-        } else {
-          cp.right := nc;
-        }
-        return root;
-      }
+      return root;
     }
+  } else {
+    curr.parent := null;
+    free curr;
+    var nc: Node;
+    if (cl != null) {
+      nc := cl;
+    } else {
+      nc := cr;
+    }
+    if (nc != null) nc.parent := cp;
+    if (curr == root) {
+      return nc;  
+    } else {
+      if (cp.left == curr) {
+        cp.left := nc;
+      } else {
+        cp.right := nc;
+      }
+      return root;
+    }
+  }
 }

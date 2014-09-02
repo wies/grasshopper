@@ -449,7 +449,7 @@ let get_trace prog proc (pp, model) =
         Util.flat_map (gt vmap trace) (List.map (fun c -> c :: cs1) cs)
     | Seq (cs, pp) :: cs1 -> 
         gt vmap trace (cs @ cs1)
-    | Basic (bc, _) :: cs1 ->
+    | Basic (bc, _)  :: cs1 ->
         (match bc with
         | Assume s ->
             (match s.spec_name with
@@ -457,6 +457,10 @@ let get_trace prog proc (pp, model) =
                 let f = form_of_spec s in
                 (match Model.eval_form model f with
                 | None -> 
+                    (*print_string "Ignoring command: ";
+                    print_endline (Form.string_of_src_pos s.spec_pos);
+                    Prog.print_cmd stdout c;
+                    print_newline ();*)
                     gt vmap trace cs1
                 | Some true -> 
                     (*print_string "Adding command: ";
@@ -475,12 +479,15 @@ let get_trace prog proc (pp, model) =
                       gt vmap1 trace1 cs1
                     else gt vmap (add (s.spec_pos, curr_state) trace) cs1
                 | Some false -> 
+                    (* print_string "Dropping trace on assume: ";
+                    print_endline (Form.string_of_src_pos s.spec_pos);
+                    Prog.print_cmd stdout c;
+                    print_newline (); *)
                     [])
             | "join" -> 
                 let vmap1, _ = update_vmap (vmap, true) (form_of_spec s) in
                 gt vmap1 trace cs1
-            | _ -> 
-                gt vmap trace cs1)
+            | _ -> gt vmap trace cs1)
         | Assert s ->
             if pp = s.spec_pos
             then 
@@ -489,7 +496,9 @@ let get_trace prog proc (pp, model) =
             else gt vmap trace cs1
         | _ -> gt vmap trace cs1)
     | _ :: cs1 -> gt vmap trace cs1
-    | [] -> List.rev trace
+    | [] -> 
+        let curr_state = get_curr_state pp vmap model in
+        List.rev ((pp, curr_state) :: trace)
   in 
   let init_vmap =
     let vars = IdMap.merge (fun id v1 v2 ->

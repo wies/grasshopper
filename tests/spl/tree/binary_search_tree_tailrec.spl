@@ -20,14 +20,10 @@ predicate stree(x: Node, content: Set<Int>) {
       stree(x.right, r_content))
 }
 
-predicate treeAllocInvariant(X: Set<Node>) {
-  (forall n in X :: n.parent == n.parent)
-}
-
 procedure contains(root: Node, val: Int, implicit ghost content: Set<Int>)
   returns (res: Bool)
-  requires stree(root, content) &*& treeAllocInvariant(Alloc);
-  ensures  stree(root, content) &*& treeAllocInvariant(Alloc);
+  requires stree(root, content);
+  ensures  stree(root, content);
   ensures  res == val in content;
 {
     var curr: Node;
@@ -37,16 +33,18 @@ procedure contains(root: Node, val: Int, implicit ghost content: Set<Int>)
       invariant (exists content1: Set<Int> :: 
                    (stree(curr, content1) -** stree(root, content))
                  &*& (val in content == val in content1));
-      invariant treeAllocInvariant(Alloc);
-      invariant treeAllocInvariant(Alloc);
     {
         if (curr.data < val) {
           curr := curr.left;
-        } else if (curr.data > val) {
+        } else if (curr.data < val) {
           curr := curr.right;
         }
     }
 
     if (curr != null) return true;
     else return false;
+}
+
+predicate treeAllocInvariant(X: Set<Node>) {
+  (forall n in X :: n.parent == n.parent)
 }
