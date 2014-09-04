@@ -34,6 +34,12 @@ module SortedValueMap =
     let compare = compare
   end)
 
+module SortedValueSet =
+  Set.Make(struct
+    type t = value * sort
+    let compare = compare
+  end)
+
 type ext_value =
   | BaseVal of value
   | MapVal of value ValueListMap.t * ext_value
@@ -508,10 +514,10 @@ let find_term model =
           if List.mem (v, res_srt) vs1 then vm else
           let el = 
             try 
-              let sym1, vs2 = SortedValueMap.find (v, res_srt) vm in
+              let sym2, vs2 = SortedValueMap.find (v, res_srt) vm in
               if List.length vs < List.length vs2 
-              then (sym1, vs2)
-              else (sym, vs)
+              then (sym, vs)
+              else (sym2, vs2)
             with Not_found -> (sym, vs)
           in
           SortedValueMap.add (v, res_srt) el vm) 
@@ -524,11 +530,11 @@ let find_term model =
     | Int -> mk_int (int_of_value v)
     | _ ->
         (* give up on cyclic definitions *)
-        if ValueSet.mem v seen then raise Not_found else
+        if SortedValueSet.mem (v, srt) seen then raise Not_found else
         let sym, vs = SortedValueMap.find (v, srt) vm in
-        let args = List.map (find (ValueSet.add v seen)) vs in
+        let args = List.map (find (SortedValueSet.add (v, srt) seen)) vs in
         mk_app srt sym args
-  in fun v srt -> find ValueSet.empty (v, srt)
+  in fun v srt -> find SortedValueSet.empty (v, srt)
 
 
 (** Printing *)
@@ -743,8 +749,8 @@ let output_graphviz chan model =
             let s = find_set_value model set Loc in
             let vals = List.map (fun e ->  string_of_sorted_value srt e) (ValueSet.elements s) in
             let set_rep = String.concat ", " vals in
-            Printf.fprintf chan "        <tr><td>%s = {%s}</td></tr>\n" (string_of_term set_t) set_rep
-          with Not_found -> ()
+            Printf.fprintf chan "        <tr><td>%s == {%s}</td></tr>\n" (string_of_term set_t) set_rep
+          with _ -> ()
         )
         sets
     in 

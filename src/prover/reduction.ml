@@ -475,8 +475,8 @@ let instantiate_user_def_axioms read_propagators fs gts =
 
 let add_terms fs gts =
   if !Config.instantiate then fs else
-  let gts_fs = ground_terms (mk_and fs) in
-  let extra_gts = (*TermSet.diff gts*) gts_fs in
+  (*let gts_fs = ground_terms (mk_and fs) in*)
+  let extra_gts = (*TermSet.diff gts gts_fs*) gts in
   let fs1, _ = 
     TermSet.fold (fun t (fs1, pmap) ->
       let srt = sort_of t in
