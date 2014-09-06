@@ -40,6 +40,58 @@ procedure contains(root: Node, val: Int)
   else return false;
 }
 
+procedure singleton(val: Int)
+  returns (root: Node)
+  requires emp;
+  ensures acc(root) -** tree(root);
+{
+  root := new Node;
+  root.left := null;
+  root.right := null;
+  root.parent := null;
+  root.data := val;
+}
+
+procedure insert(root: Node, val: Int)
+  returns (nroot: Node)
+  requires tree(root);
+  ensures tree(nroot);
+{
+  if (root == null) {
+    nroot := singleton(val);
+    return nroot;
+  }
+
+  var curr: Node;
+  curr := root;
+
+  while (curr.data > val && curr.left != null ||
+         curr.data < val && curr.right != null) 
+    invariant acc(curr) -** tree(curr) -** tree(root);
+  {
+    if (curr.data > val && curr.left != null) {
+      curr := curr.left;
+    } else if (curr.data < val && curr.right != null) {
+      curr := curr.right;
+    }
+  }
+
+  if (curr.data == val) {
+    return root;
+  } else {
+    var n: Node;
+    n := singleton(val);
+    n.parent := curr;
+    if (curr.data > val) {
+      curr.left := n;
+    } else {
+      curr.right := n;
+    }
+    return root;
+  }
+}
+
+
 procedure remove(root: Node, val: Int) returns (new_root: Node)
   requires tree(root);
   ensures tree(new_root);
