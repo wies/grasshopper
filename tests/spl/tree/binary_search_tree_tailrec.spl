@@ -20,6 +20,15 @@ predicate stree(x: Node, content: Set<Int>) {
       stree(x.right, r_content))
 }
 
+predicate tree(x: Node) {
+  x == null
+  ||
+  x != null &*&
+  x.parent |-> x.parent &*&
+  tree(x.left) &*&
+  tree(x.right)
+}
+
 procedure contains(root: Node, val: Int, implicit ghost content: Set<Int>)
   returns (res: Bool)
   requires stree(root, content);
@@ -48,7 +57,7 @@ procedure contains(root: Node, val: Int, implicit ghost content: Set<Int>)
 procedure singleton(val: Int)
   returns (root: Node)
   requires emp;
-  ensures stree(root, Set<Int>(val));
+  ensures stree(root, Set<Int>(val)) &*& root.parent == null;
 {
   root := new Node;
   root.left := null;
@@ -73,8 +82,11 @@ procedure insert(root: Node, val: Int, implicit ghost Content: Set<Int>)
   while (curr.data > val && curr.left != null ||
          curr.data < val && curr.right != null) 
     invariant exists Content1: Set<Int> :: 
-      (acc(curr) -** stree(curr, Content1) -** stree(root, Content)) &*&
-      (val in Content1 == val in Content);
+      (acc(curr) -** stree(curr, Content1) -** stree(root, Content));
+    invariant forall x: Node :: Btwn(parent, curr, x.left, x) &&
+      Btwn(parent, x, root, root) ==> x.data > val; 
+    invariant forall x: Node :: Btwn(parent, curr, x.right, x) &&
+      Btwn(parent, x, root, root) ==> x.data < val; 
   {
     if (curr.data > val && curr.left != null) {
       curr := curr.left;
@@ -87,21 +99,15 @@ procedure insert(root: Node, val: Int, implicit ghost Content: Set<Int>)
     return root;
   } else {
     var n: Node;
-    assert stree(root, Content);
-    //n := singleton(val);
-    n := new Node;
-    n.left := null;
-    n.right := null;
-    n.data := val;
+    n := singleton(val);
     n.parent := curr;
     if (curr.data > val) {
-      assert stree(root, Content);
-      assume false;
       curr.left := n;
+      return root;
     } else {
       curr.right := n;
+      return root;
     }
-    return root;
   }
 }
 

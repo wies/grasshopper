@@ -43,7 +43,7 @@ procedure contains(root: Node, val: Int)
 procedure singleton(val: Int)
   returns (root: Node)
   requires emp;
-  ensures acc(root) -** tree(root);
+  ensures (acc(root) -** tree(root)) &*& root.parent == null ;
 {
   root := new Node;
   root.left := null;
@@ -91,6 +91,13 @@ procedure insert(root: Node, val: Int)
   }
 }
 
+procedure test(root: Node)
+  returns (n: Node)
+  requires tree(root);
+  ensures tree(root) &*& tree(n);
+{
+  n := singleton(1);
+}
 
 procedure remove(root: Node, val: Int) returns (new_root: Node)
   requires tree(root);
