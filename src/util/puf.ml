@@ -24,7 +24,7 @@ module Pa = struct
     | Array of int array 
     | Diff of int * int * t
 	
-  let create n v = ref (Array (Array.create n v))
+  let create n v = ref (Array (Array.make n v))
   let init n f = ref (Array (Array.init n f))
     
   (* reroot t ensures that t becomes an Array node *)
