@@ -309,7 +309,7 @@ let elim_state prog =
           (* compute joined substitution map *)
           let sm_join = 
             List.fold_left 
-              (fun sm1 sm -> 
+              (fun sm1 sm2 -> 
                 IdMap.merge 
                   (fun x -> function 
                     | None -> (function 
@@ -317,9 +317,13 @@ let elim_state prog =
                         | Some z -> Some z)
                     | Some y -> (function
                         | None -> Some y
-                        | Some z -> Some y)
+                        | Some z -> 
+                            let old_x = 
+                              try IdMap.find x sm with Not_found -> x 
+                            in 
+                            if y = old_x then Some z else Some y)
                   )
-                  sm1 sm
+                  sm1 sm2
               )
               IdMap.empty sms
           in

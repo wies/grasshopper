@@ -103,11 +103,12 @@ procedure insert(root: Node, val: Int, implicit ghost Content: Set<Int>)
     n.parent := curr;
     if (curr.data > val) {
       curr.left := n;
-      return root;
+      //return root;
     } else {
       curr.right := n;
-      return root;
+      //return root;
     }
+    return root;
   }
 }
 
