@@ -339,7 +339,7 @@ and pr_quantifier ppf =
             else TermSet.add (Var (id, srt)) patterns)
           fun_patterns vs
       in
-      if !Config.instantiate || TermSet.is_empty patterns
+      if not !Config.smtpatterns && !Config.instantiate || TermSet.is_empty patterns
       then fprintf ppf "@[<8>(%a@ @[<1>(%a)@]@ %a)@]" pr_binder b pr_vars vs pr_form f
       else 
         fprintf ppf "@[<8>(%a@ @[<1>(%a)@]@ @[<3>(! %a@ @[:pattern@ (%a)@])@])@]" 
