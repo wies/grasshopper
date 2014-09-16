@@ -571,10 +571,12 @@ let output_json chan model =
         let arg_res = 
           Util.flat_map 
             (fun arg ->
-              let res = interp_symbol model Read ([Fld rsrt; Loc], rsrt) [fld; arg] in
-              if arg = null_val || res = null_val 
-              then [] 
-              else  [(arg, res)])
+              try
+                let res = interp_symbol model Read ([Fld rsrt; Loc], rsrt) [fld; arg] in
+                if arg = null_val || res = null_val 
+                then [] 
+                else  [(arg, res)]
+              with Undefined -> [])
             args
         in
         output_string chan "[";

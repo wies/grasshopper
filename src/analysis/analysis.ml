@@ -407,6 +407,7 @@ let check_proc prog proc =
           [(pp, error_msg, model)]
     in check_one vc
   in
+  let _ = Debug.info (fun () -> "Checking procedure " ^ string_of_ident proc.proc_name ^ "...\n") in
   let vcs = vcgen prog proc in
   Util.flat_map check_vc vcs
 

@@ -4,7 +4,7 @@ open Prog
 
 (** Transform loops into tail recursive procedures. *)
 let elim_loops (prog : program) =
-  let rec elim prog proc = function
+  let rec elim prog dep_procs proc = function
     | Loop (lc, pp) -> 
         let proc_name = 
           fresh_ident ((string_of_ident proc.proc_name) ^ "_loop") 
@@ -48,9 +48,13 @@ let elim_loops (prog : program) =
         in
         let loop_end_pos = end_pos pp.pp_pos in
         let loop_start_pos = start_pos pp.pp_pos in
-        let body, prog =
-          let prog, prebody = elim prog proc lc.loop_prebody in
-          let prog, postbody = elim prog proc lc.loop_postbody in
+        let body, prog, dep_procs2 =
+          let prog, dep_procs1, prebody = 
+            elim prog dep_procs proc lc.loop_prebody 
+          in
+          let prog, dep_procs2, postbody = 
+            elim prog dep_procs1 proc lc.loop_postbody 
+          in
           let init_returns = 
             mk_assign_cmd returns (ids_to_terms formals) loop_start_pos 
           in
@@ -73,7 +77,8 @@ let elim_loops (prog : program) =
                 then_cmd else_cmd pp.pp_pos
             ]
             pp.pp_pos,
-          prog
+          prog,
+          dep_procs2
         in
         (* loop exit condition *)
         let loop_exit =
@@ -110,41 +115,47 @@ let elim_loops (prog : program) =
             proc_postcond = postcond;
             proc_body = Some body;
             proc_pos = pp.pp_pos;
+            proc_deps = [];
           } 
         in
         let call_loop =
           loop_call pp.pp_pos
         in
-        declare_proc prog loop_proc, call_loop
+        declare_proc prog loop_proc, proc_name :: dep_procs2, call_loop
     | Seq (cs, pp) ->
-       let prog1, cs1 =
+       let prog1, dep_procs1, cs1 =
          List.fold_right 
-           (fun c (prog, cs1) ->
-             let prog1, c1 = elim prog proc c in
-             prog1, c1 :: cs1)
-           cs (prog, [])
+           (fun c (prog, dep_procs, cs1) ->
+             let prog1, dep_procs1, c1 = elim prog dep_procs proc c in
+             prog1, dep_procs1, c1 :: cs1)
+           cs (prog, dep_procs, [])
        in 
-       prog1, mk_seq_cmd cs1 pp.pp_pos
+       prog1, dep_procs1, mk_seq_cmd cs1 pp.pp_pos
     | Choice (cs, pp) ->
-       let prog1, cs1 =
+       let prog1, dep_procs1, cs1 =
          List.fold_right 
-           (fun c (prog, cs1) ->
-             let prog1, c1 = elim prog proc c in
-             prog1, c1 :: cs1)
-           cs (prog, [])
+           (fun c (prog, dep_procs, cs1) ->
+             let prog1, dep_procs1, c1 = elim prog dep_procs proc c in
+             prog1, dep_procs1, c1 :: cs1)
+           cs (prog, dep_procs, [])
        in 
-       prog1, mk_choice_cmd cs1 pp.pp_pos
-    | Basic _ as c -> prog, c
+       prog1, dep_procs1, mk_choice_cmd cs1 pp.pp_pos
+    | Basic _ as c -> prog, dep_procs, c
   in
   let elim_proc prog proc =
-    let prog1, body1 =
+    let prog1, dep_procs1, body1 =
       match proc.proc_body with
       | Some body -> 
-          let prog1, body1 = elim prog proc body in
-          prog1, Some body1
-      | None -> prog, None
+          let prog1, dep_procs1, body1 = elim prog [] proc body in
+          prog1, dep_procs1, Some body1
+      | None -> prog, [], None
     in 
-    let proc1 = { proc with proc_body = body1 } in
+    let proc1 = 
+      { proc with 
+        proc_body = body1; 
+        proc_deps = dep_procs1 @ proc.proc_deps
+      } 
+    in
     declare_proc prog1 proc1
   in
   fold_procs elim_proc prog prog

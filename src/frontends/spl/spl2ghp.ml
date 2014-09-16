@@ -1041,6 +1041,7 @@ let convert cus =
               proc_postcond = post;
               proc_body = convert_body decl;
               proc_pos = decl.p_pos;
+              proc_deps = [];
            } 
           in
           declare_proc prog proc_decl

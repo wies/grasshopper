@@ -117,6 +117,7 @@ type proc_decl = {
     proc_postcond : spec list; (** postcondition *)
     proc_body : command option; (* procedure body *)
     proc_pos : source_position; (** position of declaration *)
+    proc_deps : ident list (** names of dependant procedures *)
   }
 
 (** Predicate declaration *)
@@ -202,6 +203,7 @@ let dummy_proc name =
     proc_postcond = [];
     proc_body = None;
     proc_pos = dummy_position;
+    proc_deps = [];
   }
 
 let declare_global prog var =
@@ -218,13 +220,31 @@ let procs prog = IdMap.fold (fun _ proc procs -> proc :: procs) prog.prog_procs 
 
 let preds prog = IdMap.fold (fun _ pred preds -> pred :: preds) prog.prog_preds []
 
-let vars  prog = IdMap.fold (fun _ var  vars  -> var  :: vars ) prog.prog_vars  []
+let vars prog = IdMap.fold (fun _ var vars -> var :: vars) prog.prog_vars []
 
 let find_proc prog name =
   try IdMap.find name prog.prog_procs 
   with Not_found -> 
     failwith ("find_proc: Could not find procedure " ^ (string_of_ident name))
 
+let find_proc_with_deps prog name =
+  let rec find names procs =
+    let new_procs = 
+      Util.flat_map 
+        (fun name -> 
+          try [IdMap.find name prog.prog_procs] 
+          with Not_found -> [])
+        names
+    in
+    let new_deps =
+      Util.flat_map (fun proc -> proc.proc_deps) new_procs 
+    in
+    match new_deps with
+    | [] -> new_procs @ procs
+    | _ -> find new_deps (new_procs @ procs)
+  in
+  find [name] []
+    
 let find_pred prog name =
   try IdMap.find name prog.prog_preds
   with Not_found -> 

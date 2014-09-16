@@ -70,7 +70,7 @@ let find_index elt ls =
   in
     traverse 0 ls
 
-(* find an element x s.t. p(x) and chech the other element do not satisfy p.
+(* find an element x s.t. p(x) and check that the other elements do not satisfy p.
  * raise Not_found / Failure "not unique"
  *)
 let find_unique p xs =

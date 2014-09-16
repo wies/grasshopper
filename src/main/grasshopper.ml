@@ -58,17 +58,20 @@ let vc_gen file =
   if !Config.procedure = "" 
   then Prog.iter_procs check simple_prog
   else 
-    let proc =
-      try Prog.find_proc simple_prog (!Config.procedure, 0)
-      with _ -> 
-        let available =
-          Prog.fold_procs 
-            (fun acc proc -> "\t" ^ Form.string_of_ident proc.Prog.proc_name ^ "\n" ^ acc) 
-            "" prog
-        in
-        failwith ("Could not find a procedure named " ^ !Config.procedure ^ ". Available procedures are:\n" ^ available)
+    let procs =
+      Prog.find_proc_with_deps simple_prog (!Config.procedure, 0)
     in
-    check simple_prog proc
+    if procs = [] then begin
+      let available =
+        Prog.fold_procs 
+          (fun acc proc -> "\t" ^ Form.string_of_ident proc.Prog.proc_name ^ "\n" ^ acc) 
+          "" prog
+      in
+      failwith ("Could not find a procedure named " ^ 
+                !Config.procedure ^ 
+                ". Available procedures are:\n" ^ available)
+    end;
+    List.iter (check simple_prog) procs
 
 
 let current_time () =

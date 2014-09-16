@@ -479,14 +479,16 @@ let add_terms fs gts =
   let extra_gts = (*TermSet.diff gts gts_fs*) gts in
   let fs1, _ = 
     TermSet.fold (fun t (fs1, pmap) ->
-      let srt = sort_of t in
-      let id, pmap = 
-        try SortMap.find srt pmap, pmap
-        with Not_found ->
-          let id = fresh_ident "Psi" in
-          id, SortMap.add srt id pmap
-      in
-      mk_pred id [t] :: fs1, pmap)
+      match sort_of t with
+      | Bool -> fs1, pmap
+      | srt ->
+          let id, pmap = 
+            try SortMap.find srt pmap, pmap
+            with Not_found ->
+              let id = fresh_ident "Psi" in
+              id, SortMap.add srt id pmap
+          in
+          mk_pred id [t] :: fs1, pmap)
       extra_gts (fs, SortMap.empty)
   in fs1
 
