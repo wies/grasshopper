@@ -75,13 +75,21 @@ let read_write_axioms_closed fld1 =
   let d = fresh_ident "?d" in
   let d1 = d, res_srt in
   let dvar = mk_var res_srt d in
+  (*let g = fresh_ident "?g" in
+  let g1 = g, Fld res_srt in*)
   let new_fld1 = mk_write fld1 loc1 dvar in
   let f x = mk_read fld1 x in
   let g x = mk_read new_fld1 x in
-  let f_upd1 = 
-    mk_or [mk_eq loc2 loc1; mk_eq (f loc2) (g loc2)]
+  let f_upd1 =
+    if !Config.instantiate || !Config.smtpatterns
+    then mk_or [mk_eq loc2 loc1; mk_eq (f loc2) (g loc2)]
+    else mk_or [mk_eq loc2 loc1; mk_neq loc2 loc3; mk_eq (f loc2) (g loc3)]
   in
-  let f_upd2 = mk_or [mk_eq loc1 mk_null; mk_eq (g loc1) dvar] in
+  let f_upd2 = 
+    if !Config.instantiate || !Config.smtpatterns
+    then mk_or [mk_eq loc1 mk_null; mk_eq (g loc1) dvar]
+    else mk_or [mk_eq loc1 mk_null; mk_neq loc1 loc2; mk_eq (g loc2) dvar]
+  in
   let generator2 = 
     [l1; d1],
     [],

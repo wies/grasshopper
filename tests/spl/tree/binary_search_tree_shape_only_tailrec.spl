@@ -98,6 +98,41 @@ procedure test(root: Node)
   n := singleton(1);
 }
 
+procedure extract_max(root: Node)
+returns (new_root: Node, max: Node)
+  requires acc(root) -** tree(root);
+  ensures tree(new_root) &*& acc(max);
+  //ensures max.right == null && max.parent == null;
+{
+  var max: Node, maxp: Node;
+  max := root;
+  maxp := root;
+
+  while (max.right != null) 
+    invariant acc(max) -** tree(max) -** tree(maxp) -** tree(root);
+    invariant root == max || maxp.right == max;
+  {
+    maxp := max;
+    max := max.right;
+  }
+
+  var maxl: Node;
+  maxl := max.left;
+
+  if (root != max) {
+    maxp.right := maxl;
+    if (maxl != null) maxl.parent := maxp;
+    new_root := root;
+    assume false;
+  } else {
+    if (maxl != null) maxl.parent := root.parent;
+    new_root := maxl;
+    //assume false;
+  }
+  max.left := null;
+  max.parent := null;
+}
+
 procedure remove(root: Node, val: Int) returns (new_root: Node)
   requires tree(root);
   ensures tree(new_root);

@@ -22,12 +22,12 @@ procedure destroy(root: Node)
   requires tree(root);
   ensures emp;
 {
-    if (root != null) {
-        destroy(root.left);
-        destroy(root.right);
-        root.parent := null;
-        free root;
-    }
+  if (root != null) {
+    destroy(root.left);
+    destroy(root.right);
+    root.parent := null;
+    free root;
+  }
 }
 
 procedure extract_max(root: Node)
@@ -36,18 +36,18 @@ returns (others: Node, max: Node)
   ensures  tree(others) &*& acc(max);
   ensures  max.right == null && max.parent == null;
 {
-    if (root.right != null) {
-        var c: Node, m: Node;
-        c, m := extract_max(root.right); 
-        root.right := c;
-        if (c != null) {c.parent := root;}
-        return root, m;
-    } else {
-        var c: Node;
-        c := root.left;
-        root.parent := null;
-        return c, root;
-    }
+  if (root.right != null) {
+    var c: Node, m: Node;
+    c, m := extract_max(root.right); 
+    root.right := c;
+    if (c != null) {c.parent := root;}
+    return root, m;
+  } else {
+    var c: Node;
+    c := root.left;
+    root.parent := null;
+    return c, root;
+  }
 }
 
 procedure insert(root: Node, value: Int)
