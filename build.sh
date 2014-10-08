@@ -34,7 +34,7 @@ smtlib()
     
     for sets in "" "-smtsets"; do 
       echo "Generating uninstantiated$sets benchmarks..."
-      ./regression-tests $sets -noverify -noinst -dumpvcs -lint > /dev/null
+      ./regression-tests $sets -noverify -noinst -dumpvcs -lint -smtpatterns > /dev/null
       rm soundness*.smt2
   
       echo "Post processing..."
@@ -47,7 +47,7 @@ smtlib()
       done
   
       echo "Generating instantiated$sets benchmarks..."
-      ./regression-tests $sets -noverify -dumpvcs -lint > /dev/null
+      ./regression-tests $sets -noverify -dumpvcs -lint -smtpatterns > /dev/null
       rm soundness*.smt2
   
       echo "Post processing..."
