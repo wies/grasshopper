@@ -82,13 +82,13 @@ let read_write_axioms_closed fld1 =
   let g x = mk_read new_fld1 x in
   let f_upd1 =
     if !Config.instantiate || !Config.smtpatterns
-    then mk_or [mk_eq loc2 loc1; mk_eq (f loc2) (g loc2)]
-    else mk_or [mk_eq loc2 loc1; mk_neq loc2 loc3; mk_eq (f loc2) (g loc3)]
+    then mk_or [mk_eq loc2 loc1; mk_neq loc2 loc3; mk_eq (f loc2) (g loc3)]
+    else mk_or [mk_eq loc2 loc1; mk_eq (f loc2) (g loc2)]
   in
   let f_upd2 = 
     if !Config.instantiate || !Config.smtpatterns
-    then mk_or [mk_eq loc1 mk_null; mk_eq (g loc1) dvar]
-    else mk_or [mk_eq loc1 mk_null; mk_neq loc1 loc2; mk_eq (g loc2) dvar]
+    then mk_or [mk_eq loc1 mk_null; mk_neq loc1 loc2; mk_eq (g loc2) dvar]
+    else mk_or [mk_eq loc1 mk_null; mk_eq (g loc1) dvar]
   in
   let generator2 = 
     [l1; d1],
