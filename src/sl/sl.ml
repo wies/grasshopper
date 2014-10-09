@@ -19,7 +19,7 @@ type pred_symbol =
   | Pred of ident
 
 type sep_op =
-  | SepStar | SepPlus | SepWand | SepIncl
+  | SepStar | SepPlus | SepIncl
   
 type form =
   | Pure of Form.form * source_position option
@@ -49,8 +49,6 @@ let rec pr_form ppf = function
   | BoolOp (Form.Or, fs, _) -> pr_ors ppf fs
   | SepOp (SepStar, f1, f2, _) -> pr_sep_star ppf [f1; f2]
   | SepOp (SepPlus, f1, f2, _) -> pr_sep_plus ppf [f1; f2]
-  | SepOp (SepWand, f1, f2, _) -> 
-      fprintf ppf "@[<2>%a@] --*@ %a" pr_form f1 pr_form f2
   | SepOp (SepIncl, f1, f2, _) -> 
       fprintf ppf "@[<2>%a@] -**@ %a" pr_form f1 pr_form f2
   | Atom (Emp, _, _) -> fprintf ppf "emp"
@@ -72,7 +70,6 @@ and pr_sep_star ppf = function
   | (BoolOp (Form.Or, _, _) as f) :: fs 
   | (BoolOp (Form.And, _, _) as f) :: fs
   | (SepOp (SepPlus, _, _, _) as f) :: fs
-  | (SepOp (SepWand, _, _, _) as f) :: fs
   | (SepOp (SepIncl, _, _, _) as f) :: fs
   | (Binder _ as f) :: fs -> fprintf ppf "(@[<2>%a@]) &*&@ %a" pr_form f pr_sep_star fs
   | f :: fs -> fprintf ppf "@[<2>%a@] &*&@ %a" pr_form f pr_sep_star fs
@@ -82,7 +79,6 @@ and pr_sep_plus ppf = function
   | [f] -> fprintf ppf "@[<2>%a@]" pr_form f
   | (BoolOp (Form.Or, _, _) as f) :: fs 
   | (BoolOp (Form.And, _, _) as f) :: fs
-  | (SepOp (SepWand, _, _, _) as f) :: fs
   | (SepOp (SepIncl, _, _, _) as f) :: fs
   | (Binder _ as f) :: fs -> fprintf ppf "(@[<2>%a@]) &+&@ %a" pr_form f pr_sep_plus fs
   | f :: fs -> fprintf ppf "@[<2>%a@] &+&@ %a" pr_form f pr_sep_plus fs

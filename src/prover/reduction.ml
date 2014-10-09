@@ -49,9 +49,12 @@ let massage_field_reads fs =
       let f1 = 
         annotate
           (mk_and [mk_btwn fld arg t t;
-                mk_forall [Axioms.l1]
-                  (mk_or [mk_eq Axioms.loc1 arg; mk_eq Axioms.loc1 t; 
-                          mk_not (mk_btwn fld arg Axioms.loc1 t)])]) a
+                   mk_or [mk_neq arg t; 
+                          mk_forall [Axioms.l1]
+                            (mk_or [mk_not (mk_reach fld t Axioms.loc1); mk_eq t Axioms.loc1])];
+                   mk_forall [Axioms.l1]
+                     (mk_or [mk_eq Axioms.loc1 arg; mk_eq Axioms.loc1 t; 
+                             mk_not (mk_btwn fld arg Axioms.loc1 t)])]) a
       in
       f1
   | f -> f

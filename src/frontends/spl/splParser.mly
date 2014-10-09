@@ -44,7 +44,7 @@ let fix_scopes stmnt =
 %token UNION INTER DIFF
 %token EQ NEQ LEQ GEQ LT GT IN NOTIN
 %token PTS EMP NULL
-%token SEPSTAR SEPPLUS SEPWAND SEPINCL AND OR IMPLIES IFF NOT COMMA
+%token SEPSTAR SEPPLUS SEPINCL AND OR IMPLIES IFF NOT COMMA
 %token <SplSyntax.quantifier_kind> QUANT
 %token ASSUME ASSERT CALL DISPOSE HAVOC NEW RETURN
 %token IF ELSE WHILE
@@ -60,7 +60,7 @@ let fix_scopes stmnt =
 %left SEMICOLON
 %left OR
 %left AND
-%right IMPLIES SEPWAND
+%right IMPLIES
 %left SEP SEPINCL
 %left DOT
 %right NOT
@@ -430,14 +430,9 @@ sep_plus_expr:
 | sep_plus_expr SEPPLUS sep_star_expr { BinaryOp ($1, OpSepPlus, $3, mk_position 1 3) }
 ;
 
-sep_wand_expr:
-| sep_plus_expr { $1 }
-| sep_plus_expr SEPWAND sep_wand_expr { BinaryOp ($1, OpSepWand, $3, mk_position 1 3) }
-;
-
 sep_incl_expr:
-| sep_wand_expr { $1 }
-| sep_incl_expr SEPINCL sep_wand_expr { BinaryOp ($1, OpSepIncl, $3, mk_position 1 3) }
+| sep_plus_expr { $1 }
+| sep_incl_expr SEPINCL sep_plus_expr { BinaryOp ($1, OpSepIncl, $3, mk_position 1 3) }
 ;
 
 and_expr:

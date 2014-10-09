@@ -28,7 +28,7 @@ type op =
   | OpDiff | OpUn | OpInt 
   | OpMinus | OpPlus | OpMult | OpDiv 
   | OpEq | OpNeq | OpGt | OpLt | OpGeq | OpLeq | OpIn
-  | OpPts | OpSepStar | OpSepPlus | OpSepWand | OpSepIncl
+  | OpPts | OpSepStar | OpSepPlus | OpSepIncl
   | OpAnd | OpOr | OpImpl | OpNot 
 
 type quantifier_kind =

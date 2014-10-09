@@ -46,7 +46,6 @@ let mk_sep_plus ?pos a b =
   | Atom (Emp, [], _), _ -> b
   | _, Atom (Emp, [], _) -> a
   | _, _ -> SepOp (SepPlus, a, b, pos)
-let mk_sep_wand ?pos a b = SepOp (SepWand, a, b, pos)
 let mk_sep_incl ?pos a b = SepOp (SepIncl, a, b, pos)
 let mk_atom ?pos s args = Atom (s, args, pos)
 let mk_emp = mk_atom Emp []
