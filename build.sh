@@ -47,7 +47,7 @@ smtlib()
       done
   
       echo "Generating instantiated$sets benchmarks..."
-      ./regression-tests $sets -noverify -dumpvcs -lint -smtpatterns > /dev/null
+      ./regression-tests $sets -noverify -nostratify -dumpvcs -lint -smtpatterns > /dev/null
       rm soundness*.smt2
   
       echo "Post processing..."
