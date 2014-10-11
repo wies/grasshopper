@@ -634,7 +634,8 @@ let convert_model session smtModel =
       | SmtLibSyntax.Annot (t, _, _) ->
           convert_term bvs t
       | SmtLibSyntax.App (_, _, pos)
-      | SmtLibSyntax.Binder (_, _, _, pos) -> fail pos
+      | SmtLibSyntax.Binder (_, _, _, pos) 
+      | SmtLibSyntax.Let (_, _, pos) -> fail pos
     in
     let rec convert_form bvs = function
       | SmtLibSyntax.App (SmtLibSyntax.BoolConst b, [], _) -> 
@@ -683,6 +684,7 @@ let convert_model session smtModel =
           mk_exists cids (convert_form (cids @ bvs) f)
       | SmtLibSyntax.Annot (t, _, _) ->
           convert_form bvs t
+      | SmtLibSyntax.Let (_, _, pos) -> fail pos
     in
     let rec pcond arg_map = function
       | SmtLibSyntax.App 
@@ -703,7 +705,8 @@ let convert_model session smtModel =
       | SmtLibSyntax.Annot (def, _, _) -> 
           pcond arg_map def
       | SmtLibSyntax.App (_, _, pos) 
-      | SmtLibSyntax.Binder (_, _, _, pos) -> fail pos
+      | SmtLibSyntax.Binder (_, _, _, pos)
+      | SmtLibSyntax.Let (_, _, pos) -> fail pos
     in 
     let rec p model arg_map = function
       | SmtLibSyntax.App (Ident (name, _), [], pos) when name = "#unspecified" ->
@@ -753,6 +756,7 @@ let convert_model session smtModel =
       | SmtLibSyntax.Binder (_, _, _, pos) as t ->
           let f = convert_form [] t in
           add_form pos model arg_map f
+      | SmtLibSyntax.Let (_, _, pos) -> fail pos
     in p model IdMap.empty def
   in
   let model2 =
@@ -764,7 +768,7 @@ let convert_model session smtModel =
             let cargs = List.map (fun (x, srt) -> x, convert_sort srt) args in
             let carg_srts = List.map snd cargs in
             let sym = symbol_of_ident (normalize_ident id) in
-            process_def model sym (carg_srts, cres_srt) cargs def 
+            process_def model sym (carg_srts, cres_srt) cargs (SmtLibSyntax.unletify def) 
         | _ -> model)
       model1 smtModel 
   in

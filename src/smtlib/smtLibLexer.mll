@@ -27,6 +27,7 @@ let _ =
       "or", SYMBOL(Or);
       "not", SYMBOL(Not);
       "ite", SYMBOL(Ite);
+      "let", LET;
       (* values *)
       "true", SYMBOL(BoolConst true);
       "false", SYMBOL(BoolConst false);

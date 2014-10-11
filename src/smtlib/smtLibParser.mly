@@ -20,6 +20,7 @@ let mk_position s e =
 %token <SmtLibSyntax.symbol> SYMBOL
 %token <SmtLibSyntax.sort> SORT
 %token <SmtLibSyntax.binder> BINDER
+%token LET
 %token <SmtLibSyntax.ident> IDENT
 %token <int> INT
 %token <string> STRING
@@ -128,6 +129,9 @@ term:
 | LPAREN BINDER LPAREN ident_sort_list_opt RPAREN term RPAREN {
   mk_binder ~pos:(mk_position 1 7) $2 $4 $6
 }
+| LPAREN LET LPAREN def_list_opt RPAREN term RPAREN {
+  mk_let ~pos:(mk_position 1 7) $4 $6
+}
 | LPAREN BANG term NAMED IDENT RPAREN {
   mk_annot ~pos:(mk_position 1 6) $3 (Name $5)
 }
@@ -138,4 +142,6 @@ term_list:
 | term { [$1] }
 ;
 
-
+def_list_opt:
+| LPAREN IDENT term RPAREN def_list_opt { ($2, $3) :: $5 }
+| /* empty */ { [] }
