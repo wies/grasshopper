@@ -12,14 +12,6 @@ let cmd_line_error msg =
   Arg.usage Config.cmd_options usage_message;
   failwith ("Command line option error: " ^ msg)
 
-let parse_input parse_fct file =
-  let input = read_file file in
-  ParseError.input := Some input;
-  let lexbuf = Lexing.from_string input in
-  ParseError.buffer := Some lexbuf;
-  SplLexer.set_file_name lexbuf file; 
-  parse_fct lexbuf
-
 let print_trace prog proc (pp, model) =
   if !Config.trace_file = "" then () else
   begin
@@ -39,10 +31,37 @@ let print_trace prog proc (pp, model) =
     close_out trace_chan     
   end
 
+let parse_cu parse_fct file =
+  let input = read_file file in
+  ParseError.input := Some input;
+  let lexbuf = Lexing.from_string input in
+  ParseError.buffer := Some lexbuf;
+  SplLexer.set_file_name lexbuf file; 
+  parse_fct lexbuf
+
+let parse_spl_program file =
+  let rec parse parsed to_parse spl_prog =
+    match to_parse with
+    | file :: to_parse1 ->
+        let cu = parse_cu (fun lexbuf -> SplParser.main SplLexer.token lexbuf) file in
+        let dir = Filename.dirname file in
+        let parsed1 = StringSet.add file parsed in
+        let to_parse2 =
+          List.fold_left (fun acc incl -> 
+            (* TODO: make sure that file names are unique *)
+            let file = dir ^ Filename.dir_sep ^ incl in
+            if StringSet.mem file parsed1 then acc else file :: acc)
+            to_parse1 cu.SplSyntax.includes 
+        in
+        parse parsed1 to_parse2 (SplSyntax.merge_spl_programs spl_prog cu)
+    | [] -> spl_prog
+  in
+  parse StringSet.empty [file] SplSyntax.initial_spl_program
+
 
 let vc_gen file =
-  let cu = parse_input (fun lexbuf -> SplParser.main SplLexer.token lexbuf) file in
-  let prog = Spl2ghp.to_program [cu] in
+  let spl_prog = parse_spl_program file in
+  let prog = Spl2ghp.to_program [spl_prog] in
   let simple_prog = Analysis.simplify prog in
   let check simple_prog proc =
     let errors = Analysis.check_proc simple_prog proc in

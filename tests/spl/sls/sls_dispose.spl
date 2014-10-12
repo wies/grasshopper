@@ -1,15 +1,4 @@
-struct Node {
-  var next: Node;
-  var data: Int;
-}
-
-predicate uslseg(x: Node, y: Node, lb: Int) {
-  x == y || x != y &*& acc(x) &*& lb <= x.data &*& uslseg(x.next, y, x.data)
-}
-
-predicate slseg(x: Node, y: Node) {
-  x == y || x != y &*& acc(x) &*& uslseg(x.next, y, x.data)
-}
+include "../include/slslist.spl";
 
 procedure sls_dispose(lst: Node)
   requires slseg(lst, null);

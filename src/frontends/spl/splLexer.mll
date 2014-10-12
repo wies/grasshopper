@@ -28,6 +28,7 @@ let _ =
       ("in", IN);
       ("Int", INT);
       ("invariant", INVARIANT);
+      ("include", INCLUDE);
       ("implicit", IMPLICIT);
       ("new", NEW);
       ("null", NULL);
@@ -53,6 +54,7 @@ rule token = parse
   [' ' '\t'] { token lexbuf }
 | '\n' { Lexing.new_line lexbuf; token lexbuf }
 | "//" [^ '\n']* { token lexbuf }
+| "\"" ([^ '"']* as str) "\"" { STRINGVAL str }
 | "==>" { IMPLIES }
 | "<=>" { IFF }
 | "==" { EQ }

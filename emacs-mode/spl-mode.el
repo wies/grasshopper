@@ -43,7 +43,7 @@
    '("\\(//[^\n]*\\)" 1 
      font-lock-comment-face)
 
-   '("\\<\\(if\\|else\\|free\\|new\\|pr\\(ocedure\\|edicate\\)\\|return\\(s\\|\\)\\|struct\\|var\\|while\\)\\>"
+   '("\\<\\(i\\(f\\|nclude\\)\\|else\\|free\\|new\\|pr\\(ocedure\\|edicate\\)\\|return\\(s\\|\\)\\|struct\\|var\\|while\\)\\>"
          1 font-lock-keyword-face)
 
    '("\\<\\(ass\\(ert\\|ume\\)\\|ensures\\|havoc\\|i\\(mplicit\\|nvariant\\)\\|requires\\|ghost\\)\\>"

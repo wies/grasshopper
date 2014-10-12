@@ -34,9 +34,8 @@ type op =
 type quantifier_kind =
   | Forall | Exists
 
-type compilation_unit =
-    { package : name option;
-      imports : names;
+type spl_program =
+    { includes : names;
       var_decls : vars;
       struct_decls : structs;
       proc_decls : procs;
@@ -179,8 +178,8 @@ let struct_decl sname sfields pos =
 let var_decl vname vtype vghost vimpl vpos vscope =
   { v_name = vname; v_type = vtype; v_ghost = vghost; v_implicit = vimpl; v_aux = false; v_pos = vpos; v_scope = vscope } 
 
-let compilation_unit pkg ims decls =
-  let alloc_decl = VarDecl (var_decl Prog.alloc_id (SetType LocType) true false FormUtil.dummy_position FormUtil.global_scope) in
+
+let extend_spl_program incls decls prog =
   let check_uniqueness id pos (vdecls, pdecls, prdecls, sdecls) =
     if IdMap.mem id vdecls || IdMap.mem id sdecls || IdMap.mem id pdecls || IdMap.mem id prdecls
     then ProgError.error pos ("redeclaration of identifier " ^ (fst id) ^ ".");
@@ -199,17 +198,43 @@ let compilation_unit pkg ims decls =
       | StructDecl decl -> 
           check_uniqueness decl.s_name decl.s_pos decls;
           vdecls, pdecls, prdecls, IdMap.add decl.s_name decl sdecls)
-      (IdMap.empty, IdMap.empty, IdMap.empty, IdMap.empty)
-      (alloc_decl :: decls)
+      (prog.var_decls, prog.proc_decls, prog.pred_decls, prog.struct_decls)
+      decls
   in
-  { package = pkg; 
-    imports = ims; 
+  { includes = incls @ prog.includes; 
     var_decls = vdecls; 
     struct_decls = sdecls; 
     proc_decls = pdecls;
     pred_decls = prdecls;
   }
 
+let merge_spl_programs prog1 prog2 =
+  let vdecls =
+    IdMap.fold (fun _ decl acc -> VarDecl decl :: acc) prog1.var_decls []
+  in
+  let sdecls =
+    IdMap.fold (fun _ decl acc -> StructDecl decl :: acc) prog1.struct_decls vdecls
+  in
+  let prdecls =
+    IdMap.fold (fun _ decl acc -> PredDecl decl :: acc) prog1.pred_decls sdecls
+  in
+  let decls =
+    IdMap.fold (fun _ decl acc -> ProcDecl decl :: acc) prog1.proc_decls prdecls
+  in
+  extend_spl_program prog1.includes decls prog2
+
+let empty_spl_program =
+  { includes = [];
+    var_decls = IdMap.empty;
+    struct_decls = IdMap.empty;
+    proc_decls = IdMap.empty;
+    pred_decls = IdMap.empty;
+  }
+
+let initial_spl_program =
+  let alloc_decl = VarDecl (var_decl Prog.alloc_id (SetType LocType) true false FormUtil.dummy_position FormUtil.global_scope) in
+  extend_spl_program [] [alloc_decl] empty_spl_program
+  
 
 let mk_block pos = function
   | [] -> Skip pos

@@ -1,12 +1,4 @@
-struct Node {
-  var next: Node;
-  var prev: Node;
-}
-
-predicate dlseg(x: Node, u: Node, y: Node, v: Node) {
-  x == y && u == v || 
-  x != y &*& x.prev == u &*& acc(x) &*& dlseg(x.next, x, y, v)
-}
+include "../include/dllist.spl";
 
 // Insertion into a doubly-linked list.
 // The bug is that the procedure might not return the head of the list when elt is inserted before a.

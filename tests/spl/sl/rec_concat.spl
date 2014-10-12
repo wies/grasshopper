@@ -1,10 +1,4 @@
-struct Node {
-  var next: Node;
-}
-
-predicate lseg(x: Node, y: Node) {
-  x == y || x != y &*& acc(x) &*& lseg(x.next, y)
-}
+include "../include/sllist.spl";
 
 procedure find_last(a: Node) returns (l: Node)
   requires a != null &*& lseg(a, null);

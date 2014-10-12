@@ -38,6 +38,7 @@ let fix_scopes stmnt =
 %token <string> IDENT
 %token <int> INTVAL
 %token <bool> BOOLVAL
+%token <string> STRINGVAL
 %token LPAREN RPAREN LBRACE RBRACE 
 %token COLON COLONEQ COLONCOLON SEMICOLON DOT PIPE
 %token UMINUS PLUS MINUS DIV TIMES
@@ -48,7 +49,7 @@ let fix_scopes stmnt =
 %token <SplSyntax.quantifier_kind> QUANT
 %token ASSUME ASSERT CALL DISPOSE HAVOC NEW RETURN
 %token IF ELSE WHILE
-%token GHOST IMPLICIT VAR STRUCT PROCEDURE PREDICATE
+%token GHOST IMPLICIT VAR STRUCT PROCEDURE PREDICATE INCLUDE
 %token RETURNS REQUIRES ENSURES INVARIANT
 %token INT BOOL SET
 %token EOF
@@ -74,28 +75,32 @@ let fix_scopes stmnt =
 %nonassoc LPAREN
 
 %start main
-%type <SplSyntax.compilation_unit> main
+%type <SplSyntax.spl_program> main
 %%
 
 main:
 | declarations {
-  compilation_unit None [] $1
+  extend_spl_program (fst $1) (snd $1) empty_spl_program
 } 
 ;
 
 declarations:
-  proc_decl declarations 
-  { ProcDecl $1 :: $2 }
+| include_cmd declarations 
+  { ($1 :: fst $2, snd $2) }
+| proc_decl declarations 
+  { (fst $2, ProcDecl $1 :: snd $2) }
 |   pred_decl declarations 
-  { PredDecl $1 :: $2 }
+  { (fst $2, PredDecl $1 :: snd $2) }
 | struct_decl declarations
-  { StructDecl $1 :: $2 }
+  { (fst $2, StructDecl $1 :: snd $2) }
 | var_decl declarations
-  { VarDecl $1 :: $2 }
-| /* empty */ { [] }
+  { (fst $2, VarDecl $1 :: snd $2) }
+| /* empty */ { ([], []) }
 | error { ProgError.syntax_error (mk_position 1 1) }
 ;
 
+include_cmd:
+| INCLUDE STRINGVAL SEMICOLON { $2 }
 
 proc_decl:
 | proc_header { proc_decl $1 (Skip FormUtil.dummy_position) }

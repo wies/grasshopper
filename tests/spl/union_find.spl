@@ -1,11 +1,4 @@
-struct Node {
-  var next: Node;
-}
-
-predicate lseg_set(x: Node, y: Node, X: Set<Node>) {
-  x == y && X == Set<Node>() ||
-  x != y &*& x in X &*& acc(x) &*& lseg_set(x.next, y, X -- Set(x))
-}
+include "include/sllist.spl";
 
 procedure find(x: Node, ghost root_x: Node, implicit ghost X: Set<Node>) 
 returns (res: Node)

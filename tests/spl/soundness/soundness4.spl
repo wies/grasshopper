@@ -1,26 +1,7 @@
-struct Node {
-  var next: Node;
-  var data: Int;
-}
+include "../include/slslist.spl";
 
-predicate uslseg(x: Node, y: Node, lb: Int) {
-  x == y || x != y &*& acc(x) &*& lb <= x.data &*& uslseg(x.next, y, x.data)
-}
-
-predicate slseg(x: Node, y: Node) {
-  x == y || x != y &*& acc(x) &*& uslseg(x.next, y, x.data)
-}
-
-predicate llseg(x: Node, y: Node, ub: Int) {
-  x == y || x != y &*& acc(x) &*& x.data <= ub &*& llseg(x.next, y, ub)
-}
-
-predicate lslseg(x: Node, y: Node, ub: Int) {
-  slseg(x, y) && llseg(x, y, ub)
-}
-
-//loop was underconstrained:
-//  forgot the constraints that link the last elements
+// loop was underconstrained:
+// forgot the constraints that link the last elements
 
 procedure sls_pairwise_sum(x: Node, y: Node) returns (z: Node)
   requires slseg(x, null) &*& slseg(y, null);

@@ -251,7 +251,7 @@ procedure remove_alt(root: Node, val: Int) returns (new_root: Node)
 
     while (lm.right != null) 
       invariant tree(root);
-      invariant Btwn(parent, lm, cl, root) && Btwn(parent, lm, lmp, cl);
+      invariant Btwn(parent, lm, cl, root) && Btwn(parent, lm, lmp, cl) && Btwn(parent, lm, lmp, root);
       invariant lm != null && (cl == lm || lmp.right == lm);
     {
       lmp := lm;

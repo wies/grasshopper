@@ -1,10 +1,4 @@
-struct Node {
-  var next: Node;
-}
-
-predicate lseg(x: Node, y: Node) {
-  x == y || x != y &*& acc(x) &*& lseg(x.next, y)
-}
+include "../include/sllist.spl";
 
 procedure rec_reverse_acc(curr: Node, rev: Node) returns (res: Node)
   requires lseg(rev, null) &*& lseg(curr, null);

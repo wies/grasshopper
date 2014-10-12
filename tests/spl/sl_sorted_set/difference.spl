@@ -1,25 +1,4 @@
-struct Node {
-  var next: Node;
-  var data: Int;
-}
-
-predicate sorted_set_lb(x: Node, y: Node, lb: Int, c: Set<Int>) {
-    x == y &*&
-    c == Set<Int>()
-  || 
-    x != y &*&
-    acc(x) &*&
-    x.data in c &*&
-    lb < x.data &*&
-    sorted_set_lb(x.next, y, x.data, c -- Set(x.data))
-}
-
-predicate sorted_set(x: Node, y: Node, c: Set<Int>) {
-    x == y &*&
-    c == Set<Int>()
-  || 
-  sorted_set_lb(x, y, x.data - 1, c)
-}
+include "../include/slsset.spl";
 
 procedure difference(lst1: Node, lst2: Node,
                 implicit ghost content1: Set<Int>, implicit ghost content2: Set<Int>)

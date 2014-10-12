@@ -1,23 +1,4 @@
-struct Node {
-  var next: Node;
-  var data: Int;
-}
-
-predicate uslseg(x: Node, y: Node, lb: Int) {
-  x == y || x != y &*& acc(x) &*& lb <= x.data &*& uslseg(x.next, y, x.data)
-}
-
-predicate slseg(x: Node, y: Node) {
-  x == y || x != y &*& acc(x) &*& uslseg(x.next, y, x.data)
-}
-
-predicate llseg(x: Node, y: Node, ub: Int) {
-  x == y || x != y &*& acc(x) &*& x.data <= ub &*& llseg(x.next, y, ub)
-}
-
-predicate lslseg(x: Node, y: Node, ub: Int) {
-  slseg(x, y) && llseg(x, y, ub)
-}
+include "../include/slslist.spl";
 
 procedure sls_traverse(lst: Node)
   requires slseg(lst, null);
