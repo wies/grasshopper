@@ -1,18 +1,11 @@
-Done:
-    set as sorted list functional correctness
-    bst memory
-    skew heap memory
-    set as BST functional correctness
 
 Priority:
     set as AAT functional correctness
-    skew heap
     AVL tree without balanced property
     RB tree without balanced property
     quad tree
 
 search tree / sets
-    binary search tree
     red-black tree
     AVL tree
     AA tree
@@ -20,7 +13,6 @@ proving functional correctness of search tree requires reasoning about map (arra
 
 heap:
     binary heap
-    skew heap
     fibonacci heap
     leftist heap
 
