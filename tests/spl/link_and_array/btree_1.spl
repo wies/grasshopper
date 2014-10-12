@@ -1,0 +1,183 @@
+//  inspired by 
+//  http://opendatastructures.org/ods-java/14_2_B_Trees.html
+//  under CC-BY
+
+/** The maximum number of children of a node (an odd number) */
+var b: int;
+var B: int = b / 2;
+assume(b % 2 == 1);
+
+int n;
+BlockStore<Node> bs;
+int ri;
+
+struct Node {
+  id: int; /** This block's index */
+  keys: int[]; /** The keys stored in this block */
+  children: int[]; /** The indicies of the children of this block (if any) */
+}
+
+procedure find(x: int) returns (res: int)
+  requires  ??? ;
+  ensures   ??? ;
+{
+  var z: int;
+  var ui: int = ri;
+  while (ui >= 0) {
+    var u: Node = bs.readBlock(ui);
+    var i: int = findIt(u.keys, x);
+    if (i < 0) return u.keys[-(i+1)]; // found it
+    if (u.keys[i] != null)
+      z = u.keys[i];
+    ui = u.children[i];
+  }
+  return z;
+}
+
+procedure findIt(a: int[], x: int) returns (res: int)
+  requires  ??? ;
+  ensures   ??? ;
+{
+  var lo: int = 0;
+  var hi: int = a.length;
+  while (hi != lo) {
+    var m: int = (hi+lo)/2;
+    var cmp: int;
+    if( a[m] == null ) {
+      cmp = -1;
+    } else {
+      cmp = compare(x, a[m]);
+    }
+    if (cmp < 0)
+      hi = m;   // look in first half
+    else if (cmp > 0)
+      lo = m+1; // look in second half
+    else
+      return -m-1; // found it
+  }
+  return lo;
+}
+
+procedure addRecursive(int x, int ui) returns (res: Node)
+throws DuplicateValueException
+  requires  ??? ;
+  ensures   ??? ;
+{
+    Node u = bs.readBlock(ui);
+    int i = findIt(u.keys, x);
+    if (i < 0) throw new DuplicateValueException();
+    if (u.children[i] < 0) { // leaf node, just add it
+      u.add(x, -1);
+      bs.writeBlock(u.id, u);
+    } else {
+      Node w = addRecursive(x, u.children[i]);
+      if (w != null) {  // child was split, w is new child 
+        x = w.remove(0);
+        bs.writeBlock(w.id, w);
+        u.add(x, w.id);
+        bs.writeBlock(u.id, u);
+      }
+    }
+    return u.isFull() ? u.split() : null;
+}
+
+boolean add(int x)
+  requires  ??? ;
+  ensures   ??? ;
+{
+  var w: Node;
+  try {
+    w = addRecursive(x, ri);
+  } catch (DuplicateValueException e) {
+    return false;
+  }
+  if (w != null) {   // root was split, make new root
+    var newroot: Node = new Node();
+    x = w.remove(0);
+    bs.writeBlock(w.id, w);
+    newroot.children[0] = ri;
+    newroot.keys[0] = x;
+    newroot.children[1] = w.id;
+    ri = newroot.id;
+    bs.writeBlock(ri, newroot);
+  }
+  n = n + 1;
+  return true;
+}
+
+boolean removeRecursive(int x, int ui)
+  requires  ??? ;
+  ensures   ??? ;
+{
+  if (ui < 0) return false;  // didn't find it
+  Node u = bs.readBlock(ui);
+  int i = findIt(u.keys, x);
+  if (i < 0) { // found it
+    i = -(i+1);
+    if (u.isLeaf()) {
+      u.remove(i);
+    } else {
+      u.keys[i] = removeSmallest(u.children[i+1]);
+      checkUnderflow(u, i+1);
+    }
+    return true;  
+  } else if (removeRecursive(x, u.children[i])) {
+    checkUnderflow(u, i);
+    return true;
+  }
+  return false;
+}
+
+int removeSmallest(int ui)
+  requires  ??? ;
+  ensures   ??? ;
+{
+  Node u = bs.readBlock(ui);
+  if (u.isLeaf()) 
+    return u.remove(0);
+  int y = removeSmallest(u.children[0]);  
+  checkUnderflow(u, 0);
+  return y;
+}
+
+void checkUnderflow(Node u, int i)
+  requires  ??? ;
+  ensures   ??? ;
+{
+  if (u.children[i] < 0) return;
+  if (i == 0) 
+    checkUnderflowZero(u, i); // use u's right sibling
+  else
+    checkUnderflowNonZero(u,i);
+}
+
+void checkUnderflowNonZero(Node u, int i)
+  requires  ??? ;
+  ensures   ??? ;
+{
+  Node w = bs.readBlock(u.children[i]);  // w is child of u
+  if (w.size() < B-1) {  // underflow at w
+    Node v = bs.readBlock(u.children[i-1]); // v left of w
+    if (v.size() > B) {  // w can borrow from v
+      shiftLR(u, i-1, v, w);
+    } else { // v will absorb w
+      merge(u, i-1, v, w);
+    }
+  }
+}
+
+void checkUnderflowZero(Node u, int i)
+  requires  ??? ;
+  ensures   ??? ;
+{
+  Node w = bs.readBlock(u.children[i]); // w is child of u
+  if (w.size() < B-1) {  // underflow at w
+    Node v = bs.readBlock(u.children[i+1]); // v right of w
+    if (v.size() > B) { // w can borrow from v
+      shiftRL(u, i, v, w);
+    } else { // w will absorb w
+      merge(u, i, w, v);
+      u.children[i] = w.id;
+    }
+  }
+}

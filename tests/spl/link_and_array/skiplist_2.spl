@@ -1,0 +1,123 @@
+//  inspired by
+//  http://opendatastructures.org/versions/edition-0.1e/ods-java/4_3_SkiplistList_Efficient_.html
+//  under CC-BY
+
+var MAX: int;
+assume(MAX > 0);
+
+struct Node {
+  x: int;
+  next: Node[MAX];
+  length: int[MAX];
+}
+
+//TODO global h
+
+procedure findPred(sentinel: Node, index: int) returns (res: Node)
+  requires  ??? ;
+  ensures   ??? ;
+{
+  var r: int = h;
+  var j: int = -1;   // the index of the current node in list 0
+  while (r >= 0) {
+    while (u.next[r] != null && j + u.length[r] < index) {
+      j += u.length[r];
+      u = u.next[r];
+    }
+    r = r-1;
+  }
+  return u;
+}
+
+procedure get(sentinel: Node, index: int) returns (res: int)
+  requires index >= 0 && index < n;
+  requires  ??? ;
+  ensures   ??? ;
+{
+  return findPred(sentinel, index).next[0].x;
+}
+
+procedure set(sentinel: Node, index: int, x: int) returns (res: int)
+  requires index >= 0 && index < n;
+  requires  ??? ;
+  ensures   ??? ;
+{
+  var u: Node = findPred(sentinel, index).next[0];
+  var y: int = u.x;
+  u.x = x;
+  return y;
+}
+
+procedure add(sentinel: Node, int index: int, x: int)
+  requires index >= 0 && index <= n;
+  requires  ??? ;
+  ensures   ??? ;
+{
+  val height: int;
+  assume(height >= 0 && height < MAX);
+  var w: Node = new Node;
+  w.x = x;
+  if (w.height() > h) {
+    h = w.height();
+  }
+  add(sentinel, index, w);
+}
+
+procedure add(index: int, Node w) returns (res: Node)
+  requires  ??? ;
+  ensures   ??? ;
+{
+  var u: Node = sentinel;
+  int k = w.height();
+  var r: int = h;
+  var j: int = -1; // index of node u
+  while (r >= 0)
+  {
+    while (u.next[r] != null && j+u.length[r] < index)
+    {
+      j += u.length[r];
+      u = u.next[r];
+    }
+    u.length[r] = u.length[r] + 1;    // to account for new node in list 0
+    if (r <= k) {
+      w.next[r] = u.next[r];
+      u.next[r] = w;
+      w.length[r] = u.length[r] - (index - j);
+      u.length[r] = index - j;
+    }
+    r = r - 1;
+  }
+  n = n + 1;
+  return u;
+}
+
+procedure remove(index: int) return (res: int)
+  requires index >= 0 && index < n;
+  requires  ??? ;
+  ensures   ??? ;
+{
+  var x: int = null;
+  var u: Node = sentinel;
+  var r: int = h;
+  var j: int = -1; // index of node u
+  while (r >= 0)
+  {
+    while (u.next[r] != null && j+u.length[r] < index)
+    {
+      j += u.length[r];
+      u = u.next[r];
+    }
+    u.length[r]--;  // for the node we are removing
+    if (j + u.length[r] + 1 == index && u.next[r] != null) {
+      x = u.next[r].x;
+      u.length[r] += u.next[r].length[r];
+      u.next[r] = u.next[r].next[r];
+      if (u == sentinel && u.next[r] == null)
+        h = h - 1;
+    }
+    r = r - 1;
+  }
+  n = n - 1;
+  return x;
+}
+
