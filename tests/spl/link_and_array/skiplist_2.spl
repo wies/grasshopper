@@ -19,8 +19,12 @@ procedure findPred(sentinel: Node, index: int) returns (res: Node)
 {
   var r: int = h;
   var j: int = -1;   // the index of the current node in list 0
-  while (r >= 0) {
-    while (u.next[r] != null && j + u.length[r] < index) {
+  while (r >= 0)
+    invariant ??? ;
+  {
+    while (u.next[r] != null && j + u.length[r] < index)
+      invariant ??? ;
+    {
       j += u.length[r];
       u = u.next[r];
     }
@@ -72,8 +76,10 @@ procedure add(index: int, Node w) returns (res: Node)
   var r: int = h;
   var j: int = -1; // index of node u
   while (r >= 0)
+    invariant ??? ;
   {
     while (u.next[r] != null && j+u.length[r] < index)
+      invariant ??? ;
     {
       j += u.length[r];
       u = u.next[r];
@@ -101,8 +107,10 @@ procedure remove(index: int) return (res: int)
   var r: int = h;
   var j: int = -1; // index of node u
   while (r >= 0)
+    invariant ??? ;
   {
     while (u.next[r] != null && j+u.length[r] < index)
+      invariant ??? ;
     {
       j += u.length[r];
       u = u.next[r];

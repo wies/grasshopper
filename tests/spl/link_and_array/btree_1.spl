@@ -23,7 +23,9 @@ procedure find(x: int) returns (res: int)
 {
   var z: int;
   var ui: int = ri;
-  while (ui >= 0) {
+  while (ui >= 0)
+    invariant ??? ;
+  {
     var u: Node = bs.readBlock(ui);
     var i: int = findIt(u.keys, x);
     if (i < 0) return u.keys[-(i+1)]; // found it
@@ -40,7 +42,9 @@ procedure findIt(a: int[], x: int) returns (res: int)
 {
   var lo: int = 0;
   var hi: int = a.length;
-  while (hi != lo) {
+  while (hi != lo)
+    invariant ??? ;
+  {
     var m: int = (hi+lo)/2;
     var cmp: int;
     if( a[m] == null ) {
@@ -63,25 +67,29 @@ throws DuplicateValueException
   requires  ??? ;
   ensures   ??? ;
 {
-    Node u = bs.readBlock(ui);
-    int i = findIt(u.keys, x);
-    if (i < 0) throw new DuplicateValueException();
-    if (u.children[i] < 0) { // leaf node, just add it
-      u.add(x, -1);
+  var u: Node = bs.readBlock(ui);
+  var i: int = findIt(u.keys, x);
+  if (i < 0) throw new DuplicateValueException();
+  if (u.children[i] < 0) { // leaf node, just add it
+    u.add(x, -1);
+    bs.writeBlock(u.id, u);
+  } else {
+    var w: Node = addRecursive(x, u.children[i]);
+    if (w != null) {  // child was split, w is new child 
+      x = w.remove(0);
+      bs.writeBlock(w.id, w);
+      u.add(x, w.id);
       bs.writeBlock(u.id, u);
-    } else {
-      Node w = addRecursive(x, u.children[i]);
-      if (w != null) {  // child was split, w is new child 
-        x = w.remove(0);
-        bs.writeBlock(w.id, w);
-        u.add(x, w.id);
-        bs.writeBlock(u.id, u);
-      }
     }
-    return u.isFull() ? u.split() : null;
+  }
+  if (u.isFull()) {
+    return u.split()
+  } else {
+    return null;
+  }
 }
 
-boolean add(int x)
+procedure add(x: int) returns (res: bool)
   requires  ??? ;
   ensures   ??? ;
 {
@@ -105,13 +113,14 @@ boolean add(int x)
   return true;
 }
 
-boolean removeRecursive(int x, int ui)
+procedure removeRecursive(x: int, ui: int) returns (res: bool)
   requires  ??? ;
   ensures   ??? ;
 {
-  if (ui < 0) return false;  // didn't find it
-  Node u = bs.readBlock(ui);
-  int i = findIt(u.keys, x);
+  if (ui < 0)
+    return false;  // didn't find it
+  var u: Node = bs.readBlock(ui);
+  var i: int = findIt(u.keys, x);
   if (i < 0) { // found it
     i = -(i+1);
     if (u.isLeaf()) {
@@ -128,36 +137,37 @@ boolean removeRecursive(int x, int ui)
   return false;
 }
 
-int removeSmallest(int ui)
+procedure removeSmallest(ui: int) returns (res: int)
   requires  ??? ;
   ensures   ??? ;
 {
-  Node u = bs.readBlock(ui);
+  var u: Node = bs.readBlock(ui);
   if (u.isLeaf()) 
     return u.remove(0);
-  int y = removeSmallest(u.children[0]);  
+  var y: int = removeSmallest(u.children[0]);  
   checkUnderflow(u, 0);
   return y;
 }
 
-void checkUnderflow(Node u, int i)
+procedure checkUnderflow(u: Node, i: int)
   requires  ??? ;
   ensures   ??? ;
 {
-  if (u.children[i] < 0) return;
+  if (u.children[i] < 0)
+    return;
   if (i == 0) 
     checkUnderflowZero(u, i); // use u's right sibling
   else
     checkUnderflowNonZero(u,i);
 }
 
-void checkUnderflowNonZero(Node u, int i)
+procedure checkUnderflowNonZero(u: Node, i: int)
   requires  ??? ;
   ensures   ??? ;
 {
-  Node w = bs.readBlock(u.children[i]);  // w is child of u
+  var w: Node = bs.readBlock(u.children[i]);  // w is child of u
   if (w.size() < B-1) {  // underflow at w
-    Node v = bs.readBlock(u.children[i-1]); // v left of w
+    var v: Node = bs.readBlock(u.children[i-1]); // v left of w
     if (v.size() > B) {  // w can borrow from v
       shiftLR(u, i-1, v, w);
     } else { // v will absorb w
@@ -166,13 +176,13 @@ void checkUnderflowNonZero(Node u, int i)
   }
 }
 
-void checkUnderflowZero(Node u, int i)
+procedure checkUnderflowZero(u: Node, i: int)
   requires  ??? ;
   ensures   ??? ;
 {
-  Node w = bs.readBlock(u.children[i]); // w is child of u
+  var w: Node = bs.readBlock(u.children[i]); // w is child of u
   if (w.size() < B-1) {  // underflow at w
-    Node v = bs.readBlock(u.children[i+1]); // v right of w
+    var v: Node = bs.readBlock(u.children[i+1]); // v right of w
     if (v.size() > B) { // w can borrow from v
       shiftRL(u, i, v, w);
     } else { // w will absorb w
