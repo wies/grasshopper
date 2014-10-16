@@ -62,6 +62,55 @@ procedure findIt(a: int[], x: int) returns (res: int)
   return lo;
 }
 
+procedure split(n: Node) returns (res: Node)
+  requires  ??? ;
+  ensures   ??? ;
+{
+  var w: Node = new Node();
+  var j: int = keys.length/2;
+  var i: int;
+
+  //System.arraycopy(keys, j, w.keys, 0, keys.length-j);
+  i = 0;
+  while(i < n.keys.length-j)
+    invariant ??? ;
+  {
+    w.keys[i] = n.keys[j+i];
+    i = i + 1;
+  }
+
+  //Arrays.fill(keys, j, keys.length, null);
+  i = j;
+  while(i < n.keys.length)
+    invariant ??? ;
+  {
+    n.keys[i] = null;
+    i = i + 1;
+  }
+
+  //System.arraycopy(children, j+1, w.children, 0, children.length-j-1);
+  i = 0;
+  while(i < n.children.length-j-1)
+    invariant ??? ;
+  {
+    w.children[i] = n.children[j+1+i];
+    i = i + 1;
+  }
+
+  //Arrays.fill(children, j+1, children.length, -1);
+  i = j+1;
+  while(i < n.children.length)
+    invariant ??? ;
+  {
+    n.children[i] = null;
+    i = i + 1;
+  }
+
+  //bs.writeBlock(id, this);
+
+  return w;
+}
+
 procedure addRecursive(int x, int ui) returns (res: Node)
 throws DuplicateValueException
   requires  ??? ;
@@ -83,7 +132,7 @@ throws DuplicateValueException
     }
   }
   if (u.isFull()) {
-    return u.split()
+    return split(u)
   } else {
     return null;
   }
@@ -189,5 +238,142 @@ procedure checkUnderflowZero(u: Node, i: int)
       merge(u, i, w, v);
       u.children[i] = w.id;
     }
+  }
+}
+
+protected void shiftLR(u: Node, i: int, v: Node, w: Node)
+  requires  ??? ;
+  ensures   ??? ;
+{
+  var sw: int = w.size();
+  var sv: int = v.size();
+  var shift: int = ((sw+sv)/2) - sw;  // num. keys to shift from v to w
+
+  // make space for new keys in w
+  //System.arraycopy(w.keys, 0, w.keys, shift, sw);
+  var i: int; 
+  i = 0;
+  while (i < sw)
+    invariant ??? ;
+  {
+    w.keys[shift + i] = w.keys[i];
+    i = i + 1;
+  }
+  //System.arraycopy(w.children, 0, w.children, shift, sw+1);
+  i = 0;
+  while (i <= sw)
+    invariant ??? ;
+  {
+    w.children[shift + i] = w.children[i];
+    i = i + 1;
+  }
+
+  // move keys and children out of v and into w (and u)
+  w.keys[shift-1] = u.keys[i];
+  u.keys[i] = v.keys[sv-shift];
+
+  //System.arraycopy(v.keys, sv-shift+1, w.keys, 0, shift-1);
+  i = 0;
+  while (i < shift - 1)
+    invariant ??? ;
+  {
+    w.keys[i] = v.keys[sv-shift+1+i];
+    i = i + 1;
+  }
+
+  //Arrays.fill(v.keys, sv-shift, sv, null);
+  i = sv- shift;
+  while (i < sv)
+    invariant ??? ;
+  {
+    v.keys[i] = null;
+    i = i + 1;
+  }
+
+  //System.arraycopy(v.children, sv-shift+1, w.children, 0, shift);
+  i = 0;
+  while (i < shift)
+    invariant ??? ;
+  {
+    w.children[i] = v.children[sv-shift+1+i];
+    i = i + 1;
+  }
+
+  //Arrays.fill(v.children, sv-shift+1, sv+1, -1);
+  i = sv - shift + 1;
+  while (i <= sv)
+    invariant ??? ;
+  {
+    v.children[i] = -1;//TODO null
+    i = i + 1;
+  }
+}
+  
+protected void shiftRL(Node u, int i, Node v, Node w) {
+  var sw: int = w.size();
+  var sv: int = v.size();
+  var shift: int = ((sw+sv)/2) - sw;  // num. keys to shift from v to w
+
+  // shift keys and children from v to w
+  w.keys[sw] = u.keys[i];
+
+  var i: int;
+
+  //System.arraycopy(v.keys, 0, w.keys, sw+1, shift-1);
+  i = 0;
+  while (i < shift - 1)
+    invariant ??? ;
+  {
+    w.keys[sw + 1 + i] = v.keys[i];
+    i = i + 1;
+  }
+
+  //System.arraycopy(v.children, 0, w.children, sw+1, shift);
+  i = 0;
+  while (i < shift)
+    invariant ??? ;
+  {
+    w.children[sw + 1 + i] = v.children[i];
+    i = i + 1;
+  }
+
+  u.keys[i] = v.keys[shift-1];
+
+  // delete keys and children from v
+
+  //System.arraycopy(v.keys, shift, v.keys, 0, b-shift);
+  i = 0;
+  while (i < b-shift)
+    invariant ??? ;
+  {
+    v.keys[i] = v.keys[shift+i];
+    i = i + 1;
+  }
+
+  //Arrays.fill(v.keys, sv-shift, b, null);
+  i = sv - shift;
+  while (i < b)
+    invariant ??? ;
+  {
+    v.keys[i] = -1;//TODO null
+    i = i + 1;
+  }
+
+  //System.arraycopy(v.children, shift, v.children, 0, b-shift+1);
+  i = 0;
+  while (i < b-shift+1)
+    invariant ??? ;
+  {
+    v.children[i] = v.children[shift+i];
+    i = i + 1;
+  }
+
+  //Arrays.fill(v.children, sv-shift+1, b+1, -1);
+  i = sv - shift + 1;
+  while (i <= b)
+    invariant ??? ;
+  {
+    v.children[i] = -1;//TODO null
+    i = i + 1;
   }
 }
