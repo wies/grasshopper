@@ -10,7 +10,8 @@ let cmd_line_error msg =
   Arg.usage Config.cmd_options usage_message;
   failwith ("Command line option error: " ^ msg)
 
-let print_trace prog proc (pp, model) =
+(** Output JSON file with error trace *)
+let output_trace prog proc (pp, model) =
   if !Config.trace_file = "" then () else
   begin
     let trace = Analysis.get_trace prog proc (pp, model) in
@@ -76,7 +77,7 @@ let check_spl_program file proc =
     let errors = Analysis.check_proc simple_prog proc in
     List.iter 
       (fun (pp, error_msg, model) ->
-        print_trace simple_prog proc (pp, model);
+        output_trace simple_prog proc (pp, model);
         if !Config.robust 
         then ProgError.print_error pp error_msg
         else ProgError.error pp error_msg;
@@ -101,10 +102,12 @@ let check_spl_program file proc =
     List.iter (check simple_prog) procs
 
 
+(** Get current time *)
 let current_time () =
   let ptime = Unix.times () in
   ptime.Unix.tms_utime +. ptime.Unix.tms_cutime  
 
+(** Print statistics *)
 let print_stats start_time =
   if !Config.print_stats then
     let end_time = current_time () in
@@ -115,6 +118,7 @@ let print_stats start_time =
     Printf.printf "  measured time: %.2fs\n" !Util.measured_time;
     Printf.printf "  # measured calls: %.2d\n" !Util.measured_calls
 
+(** Main entry of Grasshopper *)
 let _ =
   let main_file = ref "" in
   let set_main_file s =
