@@ -51,7 +51,7 @@ procedure pull_strands(lst: Node) returns (sorted: Node, rest: Node)
   sorted_tail.next := null;
   while (curr != null)
     invariant lseg(curr, null);
-    invariant lseg(rest, prv) &*& prv.next |-> curr || prv == null &*& rest == curr;
+    invariant lseg(rest, prv) &*& prv.next |-> curr || prv == null && rest == curr;
     invariant lslseg(sorted, sorted_tail, sorted_tail.data);
     invariant sorted_tail.next |-> null;
   {

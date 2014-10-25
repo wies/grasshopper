@@ -176,7 +176,7 @@ let generate_instances useLocalInst axioms rep_terms egraph type_graph =
   in
   let is_stratified t1 t2 =
     let res = t1 <> Int && t1 <> t2 && not (can_reach t2 t1) in
-      Debug.debug (fun () -> "is_stratified("^(string_of_sort t1)^","^(string_of_sort t2)^") = "^(string_of_bool res)^"\n");
+      Debug.debugl 1 (fun () -> "is_stratified("^(string_of_sort t1)^","^(string_of_sort t2)^") = "^(string_of_bool res)^"\n");
       res
   in
   (* *)
@@ -232,7 +232,7 @@ let generate_instances useLocalInst axioms rep_terms egraph type_graph =
             fvars
         else fvars, IdSrtSet.empty
     in
-    let _ = if Debug.is_debug () then
+    let _ = if Debug.is_debug 1 then
       begin
         print_endline "--------------------";
         print_endline (string_of_form f);
@@ -308,7 +308,7 @@ let instantiate_with_terms local axioms classes =
       (* remove atoms from congruence classes *)
       let classes = List.filter (function t :: _ -> sort_of t <> Bool | _ -> false) classes in
       let _ = 
-        if Debug.is_debug () then
+        if Debug.is_debug 1 then
           ignore
             (List.fold_left (fun num cl ->
               print_string ("Class " ^ string_of_int num ^ ": ");

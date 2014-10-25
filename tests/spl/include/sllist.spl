@@ -1,14 +1,18 @@
-// Structure and predicate declarations for sinly-linked lists
+// Structure and predicate declarations for singly-linked lists
 
 struct Node {
   var next: Node;
 }
 
-predicate lseg(x: Node, y: Node) {
-  x == y || x != y &*& acc(x) &*& lseg(x.next, y)
+function lseg_footprint(x: Node, y: Node) returns (FP: Set<Node>) {
+  forall z: Node :: z in FP == (Btwn(next, x, z, y) && z != y)
 }
 
-predicate lseg_set(x: Node, y: Node, X: Set<Node>) {
-  x == y && X == Set<Node>() ||
-  x != y &*& x in X &*& acc(x) &*& lseg_set(x.next, y, X -- Set(x))
+predicate lseg(x: Node, y: Node, FP: Set<Node>) {
+  Btwn(next, x, y, y) && FP == lseg_footprint(x, y)
 }
+
+//predicate lseg_set(x: Node, y: Node, X: Set<Node>) {
+  //  x == y && X == Set<Node>() ||
+      //  x != y &*& x in X &*& acc(x) &*& lseg_set(x.next, y, X -- Set(x))
+      //}

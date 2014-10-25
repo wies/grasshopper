@@ -1,33 +1,4 @@
-struct Node {
-  var left: Node;
-  var right: Node;
-  var parent: Node;
-  var data: Int;
-}
-
-predicate stree(x: Node, content: Set<Int>) {
-    x == null &*&
-    content == Set<Int>()
-  ||
-    x != null &*&
-    acc(x) &*&
-    x.parent == x.parent &*&
-    (exists l_content: Set<Int>, r_content: Set<Int> :: 
-      (forall d in l_content :: d < x.data) &*&
-      (forall d in r_content :: d > x.data) &*&
-      content == l_content ++ r_content ++ Set<Int>(x.data) &*&
-      stree(x.left, l_content) &*&
-      stree(x.right, r_content))
-}
-
-predicate tree(x: Node) {
-  x == null
-  ||
-  x != null &*&
-  x.parent |-> x.parent &*&
-  tree(x.left) &*&
-  tree(x.right)
-}
+include "../include/bstree.spl";
 
 procedure contains(root: Node, val: Int, implicit ghost content: Set<Int>)
   returns (res: Bool)
@@ -112,6 +83,3 @@ procedure insert(root: Node, val: Int, implicit ghost Content: Set<Int>)
   }
 }
 
-predicate treeAllocInvariant(X: Set<Node>) {
-  (forall n in X :: n.parent == n.parent)
-}

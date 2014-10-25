@@ -164,7 +164,7 @@ let stratify_types axioms =
       unweighted
       intra_cc_edges
   in
-    if Debug.is_debug () then
+    if Debug.is_debug 1 then
       begin
         print_endline "type stratification constraints:";
         SortMap.iter

@@ -42,7 +42,7 @@ let _ =
       output_string stderr (s ^ "\n"); 
       exit 1
   | Failure s ->
-      let bs = if Debug.is_debug () then Printexc.get_backtrace () else "" in
+      let bs = if Debug.is_debug 0 then Printexc.get_backtrace () else "" in
       output_string stderr (s ^ "\n" ^ bs); exit 1
   | Parsing.Parse_error -> 
       print_endline "parse error"; 

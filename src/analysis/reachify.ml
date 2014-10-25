@@ -381,7 +381,7 @@ let compile_pred pred =
           { pred_name = Symbols.pred_struct pred.pred_name;
             pred_formals = dom_id :: formals;
             pred_locals = locals;
-            pred_returns = [];
+            pred_outputs = [];
             pred_body = { pred.pred_body with spec_form = FOL str_body };
             pred_pos = pred.pred_pos;
             pred_accesses = IdSet.empty;
@@ -399,7 +399,7 @@ let compile_pred pred =
               { pred_str with 
                   pred_name = Symbols.pred_naming pred.pred_name id;
                   pred_formals = formals_output;
-                  pred_returns = [id];
+                  pred_outputs = [id];
                   pred_body = { pred.pred_body with spec_form = FOL form } 
               }
             )
@@ -673,7 +673,7 @@ let compile_preds preds =
       { pred_name = Symbols.pred_struct pred.pred_name;
         pred_formals = dom_id :: pred.pred_formals;
         pred_locals = IdMap.add dom_id dom_decl pred.pred_locals;
-        pred_returns = [];
+        pred_outputs = [];
         pred_body = { pred.pred_body with spec_form = FOL str_body };
         pred_pos = pred.pred_pos;
         pred_accesses = IdSet.empty;
@@ -684,7 +684,7 @@ let compile_preds preds =
       { pred_str with 
         pred_name = Symbols.pred_naming pred.pred_name dom_id;
         pred_formals = pred.pred_formals;
-        pred_returns = [dom_id];
+        pred_outputs = [dom_id];
         pred_body = { pred.pred_body with spec_form = FOL dom_body } 
       }
     in

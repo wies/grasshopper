@@ -1,21 +1,4 @@
-struct Node {
-  var left: Node;
-  var right: Node;
-  var parent: Node;
-  var data: Int;
-}
-
-predicate tree(x: Node) {
-  x == null
-  ||
-  x.parent |-> x.parent &*&
-  tree(x.left) &*&
-  tree(x.right)
-}
-
-predicate treeAllocInvariant(X: Set<Node>) {
-  (forall n in X :: n.parent == n.parent)
-}
+include "../include/bstree.spl";
 
 procedure contains(root: Node, val: Int)
   returns (res: Bool)

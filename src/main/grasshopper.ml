@@ -42,15 +42,24 @@ let parse_cu parse_fct file =
 let parse_spl_program file =
   let rec parse parsed to_parse spl_prog =
     match to_parse with
-    | file :: to_parse1 ->
-        let cu = parse_cu (fun lexbuf -> SplParser.main SplLexer.token lexbuf) file in
-        let dir = Filename.dirname file in
+    | (file, pos) :: to_parse1 ->
+        let cu = 
+          try 
+            parse_cu (fun lexbuf -> SplParser.main SplLexer.token lexbuf) file 
+          with Sys_error _ ->
+            ProgError.error pos ("Could not find file " ^ file)
+        in
+        let dir = 
+          if file = !input_file 
+          then !Config.base_dir
+          else Filename.dirname file 
+        in
         let parsed1 = StringSet.add file parsed in
         let to_parse2 =
-          List.fold_left (fun acc incl -> 
+          List.fold_left (fun acc (incl, pos) -> 
             (* TODO: make sure that file names are unique *)
             let file = dir ^ Filename.dir_sep ^ incl in
-            if StringSet.mem file parsed1 then acc else file :: acc)
+            if StringSet.mem file parsed1 then acc else (file, pos) :: acc)
             to_parse1 cu.SplSyntax.includes 
         in
         parse parsed1 to_parse2 (SplSyntax.merge_spl_programs spl_prog cu)
@@ -114,13 +123,13 @@ let _ =
     SmtLibSolver.select_solver (String.uppercase !Config.smtsolver);
     if !input_file = ""
     then cmd_line_error "input file missing"
-    else (vc_gen !input_file; print_stats start_time)
+    else (vc_gen (!input_file, FormUtil.dummy_position); print_stats start_time)
   with  
   | Sys_error s -> 
-      output_string stderr (s ^ "\n"); 
-      exit 1
+      let bs = if Debug.is_debug 0 then Printexc.get_backtrace () else "" in
+      output_string stderr ("Error: " ^ s ^ "\n" ^ bs); exit 1
   | Failure s ->
-      let bs = if Debug.is_debug () then Printexc.get_backtrace () else "" in
+      let bs = if Debug.is_debug 0 then Printexc.get_backtrace () else "" in
       output_string stderr ("Error: " ^ s ^ "\n" ^ bs); exit 1
   | Parsing.Parse_error -> 
       print_endline "parse error"; 

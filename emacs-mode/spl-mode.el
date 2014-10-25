@@ -43,7 +43,7 @@
    '("\\(//[^\n]*\\)" 1 
      font-lock-comment-face)
 
-   '("\\<\\(i\\(f\\|nclude\\)\\|else\\|free\\|new\\|pr\\(ocedure\\|edicate\\)\\|return\\(s\\|\\)\\|struct\\|var\\|while\\)\\>"
+   '("\\<\\(i\\(f\\|nclude\\)\\|else\\|f\\(ree\\|unction\\)\\|new\\|outputs\\|pr\\(ocedure\\|edicate\\)\\|return\\(s\\|\\)\\|struct\\|var\\|while\\)\\>"
          1 font-lock-keyword-face)
 
    '("\\<\\(ass\\(ert\\|ume\\)\\|ensures\\|havoc\\|i\\(mplicit\\|nvariant\\)\\|requires\\|ghost\\)\\>"
@@ -100,7 +100,7 @@
       :syntax-table spl-mode-syntax-table
       (setq-local comment-start "// ")
       (setq-local font-lock-defaults '(spl-mode-font-lock-keywords))
-      ;(setq-local indent-line-function nil) 'c-indent-line)
+      (setq-local indent-line-function nil); 'c-indent-line)
       )
   (setq font-lock-defaults-alist
         (cons (cons 'spl-mode 
@@ -143,7 +143,7 @@
    'flymake-get-spl-cmdline))
 
 (defun flymake-get-spl-cmdline (source base-dir)
-    (list "grasshopper" (list "-lint" source)))
+    (list "grasshopper" (list "-lint" "-noverify" source)))
 
 (add-hook 'spl-mode-hook
           '(lambda ()
@@ -162,7 +162,7 @@
 (when (require 'flycheck nil :noerror)
   (flycheck-define-checker spl-reporter
     "An SPL checker based on Grasshopper."
-    :command ("grasshopper" "-lint" source)
+    :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) "-lint" "-noverify" source)
     :error-patterns
     ((warning line-start (file-name) ":" line ":" column (optional "-" end-column) ":Related Location:" (message) line-end)
      (error line-start (file-name) ":" line ":" column (optional "-" end-column) ":" (message) line-end))

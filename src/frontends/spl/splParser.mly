@@ -49,8 +49,8 @@ let fix_scopes stmnt =
 %token <SplSyntax.quantifier_kind> QUANT
 %token ASSUME ASSERT CALL DISPOSE HAVOC NEW RETURN
 %token IF ELSE WHILE
-%token GHOST IMPLICIT VAR STRUCT PROCEDURE PREDICATE INCLUDE
-%token RETURNS REQUIRES ENSURES INVARIANT
+%token GHOST IMPLICIT VAR STRUCT PROCEDURE PREDICATE FUNCTION INCLUDE
+%token OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token INT BOOL SET
 %token EOF
 
@@ -86,7 +86,7 @@ main:
 
 declarations:
 | include_cmd declarations 
-  { ($1 :: fst $2, snd $2) }
+  { (($1, mk_position 1 1) :: fst $2, snd $2) }
 | proc_decl declarations 
   { (fst $2, ProcDecl $1 :: snd $2) }
 |   pred_decl declarations 
@@ -161,12 +161,34 @@ pred_decl:
   let decl =
     { pr_name = ($2, 0);
       pr_formals = formals;
+      pr_outputs = [];
       pr_locals = locals;
       pr_body = $7;
       pr_pos = mk_position 2 2;
     }
   in decl
-} 
+}
+| FUNCTION IDENT LPAREN var_decls RPAREN RETURNS LPAREN var_decls RPAREN LBRACE expr RBRACE {
+  let formals, locals =
+    List.fold_right (fun decl (formals, locals) ->
+      decl.v_name :: formals, IdMap.add decl.v_name decl locals)
+      $4 ([], IdMap.empty)
+  in
+  let outputs, locals =
+    List.fold_right (fun decl (outputs, locals) ->
+      decl.v_name :: outputs, IdMap.add decl.v_name decl locals)
+      $8([], locals)
+  in
+  let decl =
+    { pr_name = ($2, 0);
+      pr_formals = formals;
+      pr_outputs = outputs;
+      pr_locals = locals;
+      pr_body = $11;
+      pr_pos = mk_position 2 2;
+    }
+  in decl
+}
 ;
 
 var_decls:

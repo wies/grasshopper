@@ -74,7 +74,7 @@ let pred_to_form p args =
   let make_output (id, f) = (id, var_to_cst (FormUtil.subst output_map f)) in
   let renamed_struct = var_to_cst def2.structure in
   let renamed_outputs = List.map make_output def2.outputs in
-    if Debug.is_debug () then
+    if Debug.is_debug 0 then
       begin
         print_endline ("renamed_struct: " ^ (Form.string_of_form renamed_struct));
         print_endline "renamed_outputs: ";

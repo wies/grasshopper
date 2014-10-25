@@ -58,7 +58,13 @@ let infer_accesses prog =
           let accs_preds = SlUtil.preds f in
           let accs = SlUtil.free_consts f in
           accs_preds, accs
-      | FOL f -> IdSet.empty, free_consts f
+      | FOL f -> 
+          let accs = free_consts f in
+          let accs_preds = 
+            IdSet.filter (fun p -> IdMap.mem p prog.prog_preds)
+              (free_symbols f)
+          in
+          accs_preds, accs
     in
     let accs = 
       IdSet.fold (fun p -> 
@@ -138,7 +144,7 @@ let simplify prog =
 
 (** Generate predicate instances *)
 let add_pred_insts prog f =
-  let mk_instance pos p ts =
+  let expand_pred pos p ts =
     let pred = find_pred prog p in
     let sm = 
       List.fold_left2 
@@ -146,7 +152,7 @@ let add_pred_insts prog f =
         IdMap.empty (pred.pred_formals) ts
     in
     let sm =
-      match pred.pred_returns with
+      match pred.pred_outputs with
       | [] -> sm
       | [id] -> 
           let var = IdMap.find id pred.pred_locals in
@@ -157,64 +163,77 @@ let add_pred_insts prog f =
     | FOL f -> subst_consts sm f
     | SL f -> failwith "SL formula should have been desugared"
     in
-    if pos
-    then 
-      match pred.pred_returns with
-      | [] -> mk_implies (mk_pred p ts) body
-      | _ -> body
-    else mk_not body
+    if pos then body
+    else nnf (mk_not body)
+  in
+  let f_inst = 
+    let rec expand_neg seen = function
+      | Binder (b, vs, f, a) -> 
+          Binder (b, vs, expand_neg seen f, a)
+      | BoolOp (And as op, fs)
+      | BoolOp (Or as op, fs) ->
+          let fs_inst = List.map (expand_neg seen) fs in
+          smk_op op fs_inst
+      | BoolOp (Not, [Atom (App (FreeSym p, ts, _), a)])
+        when IdMap.mem p prog.prog_preds && 
+          not (IdSet.mem p seen) ->
+            let pbody = expand_pred false p ts in
+            let p1 = annotate (smk_and [(*mk_not (mk_pred p ts);*) pbody]) a in
+            expand_neg (IdSet.add p seen) p1
+      | f -> f
+    in 
+    let f1 = expand_neg IdSet.empty (nnf f) in
+    (*print_endline "f1:";
+    print_form stdout (f1); print_newline (); print_newline ();
+    print_endline "foralls_to_exists f1:";
+    print_form stdout (foralls_to_exists f1); print_newline (); print_newline ();*)
+    propagate_exists (foralls_to_exists f1)
+  in
+  let vs, f, a = match f_inst with
+  | Binder (Exists, vs, f, a) -> vs, f, a
+  | _ -> [], f_inst, []
   in
   let pos_preds = 
-    let rec collect_term pos = function
-      | App (FreeSym p, ts, _) as t ->
-          let pos = List.fold_left collect_term pos ts in
-          if IdMap.mem p prog.prog_preds 
-          then TermSet.add t pos
-          else pos
-      | App (_, ts, _) -> 
-          List.fold_left collect_term pos ts
-      | _ -> pos
-    in
     let rec collect pos = function
-      | Binder (_, [], f, _) -> collect pos f
-      | BoolOp (And, fs)
-      | BoolOp (Or, fs) ->
-          List.fold_left collect pos fs
-      (*| BoolOp (Not, [Atom (App (FreeSym p, _, _) as t)]) ->
-          if IdMap.mem p prog.prog_preds 
-          then (pos, TermSet.add t neg)
-          else (pos, neg)*)
-      | Atom (App (FreeSym p, _, _) as t, _) -> 
-          if IdMap.mem p prog.prog_preds 
-          then TermSet.add t pos
-          else pos
-      | BoolOp (Not, [Atom (t, _)])
-      | Atom (t, _) -> collect_term pos t
-      | _ -> pos
-    in collect TermSet.empty f 
+      | (seen, Binder (_, [], f, _)) :: todo -> 
+          collect pos ((seen, f) :: todo)
+      | (seen, BoolOp (And, fs)) :: todo
+      | (seen, BoolOp (Or, fs)) :: todo ->
+          collect pos (List.fold_left (fun todo f -> (seen, f) :: todo) todo fs)
+      | (seen, Atom (App (FreeSym p, ts, _) as t, _)) :: todo -> 
+          let todo1 = 
+            List.fold_left (fun todo t -> (seen, Atom (t, [])) :: todo) todo ts
+          in
+          let pos1, todo2 =
+            if IdMap.mem p prog.prog_preds && not (TermSet.mem t pos) && not (IdSet.mem p seen)
+            then 
+              TermSet.add t pos, (IdSet.add p seen, expand_pred true p ts) :: todo1
+            else pos, todo1
+          in
+          collect pos1 todo2
+      | (seen, BoolOp (Not, [Atom (App (_, ts, _), _)])) :: todo
+      | (seen, Atom (App (_, ts, _), _)) :: todo -> 
+          let todo1 = 
+            List.fold_left (fun todo t -> (seen, Atom (t, [])) :: todo) todo ts
+          in
+          collect pos todo1
+      | _ :: todo -> collect pos todo
+      | [] -> pos
+    in collect TermSet.empty [(IdSet.empty, f)]
   in
   let pos_instances = 
     TermSet.fold (fun t instances ->
       match t with
-      | App (FreeSym p, ts, _) -> mk_instance true p ts :: instances
+      | App (FreeSym p, ts, srt) ->
+          let pbody = expand_pred true p ts in
+          (match srt with
+          | Bool -> mk_implies (mk_pred p ts) pbody :: instances
+          | _ -> pbody :: instances)
       | _ -> instances)
       pos_preds []
   in
-  let f_inst = 
-    let rec inst_neg_preds = function
-      | Binder (b, [], f, a) -> 
-          Binder (b, [], inst_neg_preds f, a)
-      | BoolOp (And as op, fs)
-      | BoolOp (Or as op, fs) ->
-          let fs_inst = List.map inst_neg_preds fs in
-          BoolOp (op, fs_inst)
-      | BoolOp (Not, [Atom (App (FreeSym p, ts, _), a)]) 
-        when IdMap.mem p prog.prog_preds ->
-          annotate (mk_instance false p ts) a
-      | f -> f
-    in inst_neg_preds f
-  in
-  smk_and (f_inst :: pos_instances)
+  (*print_form stdout (smk_and (f_inst :: pos_instances)); print_newline ();*)
+  mk_exists ~ann:a vs (smk_and (f :: pos_instances))
 
 let add_labels vc =
   let rec get_comment = function
@@ -357,11 +376,11 @@ let split_vc prog vc_name f =
 
 (** Generate verification conditions for given procedure and check them. *)
 let check_proc prog proc =
-  let check_vc (vc_name, (vc_msg, pp), vc0) =
-    let vc1 = skolemize (propagate_exists (foralls_to_exists (nnf vc0))) in
-    let labels, vc = add_labels vc1 in
+  let check_vc errors (vc_name, (vc_msg, pp), vc0) =
+    let labels, vc = add_labels vc0 in
     (*let _ = print_form stdout vc in*)
     let check_one vc =
+      if errors <> [] && not !Config.robust then errors else
       let vc_and_preds = add_pred_insts prog vc in
       Debug.info (fun () -> "Checking VC: " ^ vc_name ^ ".\n");
       Debug.debug (fun () -> (string_of_form vc_and_preds) ^ "\n");
@@ -369,7 +388,7 @@ let check_proc prog proc =
         Str.global_replace (Str.regexp "\n\n") "\n  " (ProgError.error_to_string pp vc_msg)
       in
       match Prover.get_model ~session_name:vc_name ~sat_means:sat_means vc_and_preds with
-      | None -> []
+      | None -> errors
       | Some model -> 
           (* generate error message from model *)
           let add_msg pos msg error_msgs =
@@ -394,7 +413,7 @@ let check_proc prog proc =
           let sorted_error_msgs = 
             List.sort
               (fun (pos1, _) (pos2, _) -> compare_src_pos pos1 pos2) 
-              error_msgs 
+              error_msgs
           in
           let error_msg_strings = 
             List.map 
@@ -404,12 +423,12 @@ let check_proc prog proc =
           let error_msg =
             String.concat "\n\n" (vc_msg :: error_msg_strings)
           in
-          [(pp, error_msg, model)]
+          (pp, error_msg, model) :: errors
     in check_one vc
   in
   let _ = Debug.info (fun () -> "Checking procedure " ^ string_of_ident proc.proc_name ^ "...\n") in
   let vcs = vcgen prog proc in
-  Util.flat_map check_vc vcs
+  List.fold_left check_vc [] vcs
 
 (** Generate a counterexample trace from a failed VC and model *)
 let get_trace prog proc (pp, model) =

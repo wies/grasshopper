@@ -22,6 +22,7 @@ let _ =
       ("forall", QUANT(SplSyntax.Forall));
       ("exists", QUANT(SplSyntax.Exists));
       ("free", DISPOSE);
+      ("function", FUNCTION);
       ("ghost", GHOST);
       ("havoc", HAVOC);
       ("if", IF);
@@ -32,6 +33,7 @@ let _ =
       ("implicit", IMPLICIT);
       ("new", NEW);
       ("null", NULL);
+      ("outputs", OUTPUTS);
       ("predicate", PREDICATE);
       ("procedure", PROCEDURE);
       ("requires", REQUIRES);

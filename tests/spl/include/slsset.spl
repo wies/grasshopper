@@ -1,25 +1,23 @@
 // structure and predicate declarations for set implementation 
 // based on sorted singly-linked lists
 
-struct Node {
-  var next: Node;
-  var data: Int;
+include "slslist.spl";
+
+function witness(v: Int, C: Set<Int>) returns (res: Node) {
+  true
 }
 
-predicate sorted_set_lb(x: Node, y: Node, lb: Int, c: Set<Int>) {
-    x == y &*&
-    c == Set<Int>()
-  || 
-    x != y &*&
-    acc(x) &*&
-    x.data in c &*&
-    lb < x.data &*&
-    sorted_set_lb(x.next, y, x.data, c -- Set(x.data))
+
+
+function content(FP: Set<Node>) returns (C: Set<Int>) {
+  (forall x in FP :: x == witness(x.data, C)) &&
+  (forall v in C :: witness(v, C) in FP) &&
+  (forall v: Int :: v !in C ==> witness(v, C) == null) &&
+  (forall v in C :: v == witness(v, C).data)
 }
 
-predicate sorted_set(x: Node, y: Node, c: Set<Int>) {
-    x == y &*&
-    c == Set<Int>()
-  || 
-  sorted_set_lb(x, y, x.data - 1, c)
+predicate sorted_set(x: Node, y: Node, C: Set<Int>, FP: Set<Node>) {
+  lseg(x, y, FP) &&
+  lseg_strictly_increasing(x, FP) &&
+  C == content(FP)
 }

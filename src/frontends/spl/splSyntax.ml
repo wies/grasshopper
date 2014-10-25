@@ -35,7 +35,7 @@ type quantifier_kind =
   | Forall | Exists
 
 type spl_program =
-    { includes : names;
+    { includes : (name * pos) list;
       var_decls : vars;
       struct_decls : structs;
       proc_decls : procs;
@@ -65,6 +65,7 @@ and procs = proc IdMap.t
 and pred =
     { pr_name : ident;
       pr_formals : idents;
+      pr_outputs : idents;
       pr_locals : vars;
       pr_body : expr; 
       pr_pos : pos;

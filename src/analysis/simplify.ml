@@ -163,22 +163,39 @@ let elim_loops (prog : program) =
 (** Eliminate global dependencies of predicates *)
 let elim_global_deps prog =
   let elim_spec sf = 
+    let get_tas p =
+      let decl = find_pred prog p in
+      let accs = decl.pred_accesses in
+      let tas = 
+        List.map 
+          (fun id ->
+            let decl = find_global prog id in
+            mk_free_const decl.var_sort id)
+          (IdSet.elements accs)
+      in
+      tas
+    in
     let subst_preds_sl f =
       let sf p args pos =
-        let decl = find_pred prog p in
-        let accs = decl.pred_accesses in
-        let tas = 
-          List.map 
-            (fun id ->
-              let decl = find_global prog id in
-              mk_free_const decl.var_sort id)
-            (IdSet.elements accs)
-        in SlUtil.mk_pred ?pos:pos p (tas @ args)
-      in SL (SlUtil.subst_preds sf f)
+        let tas = get_tas p in
+        SlUtil.mk_pred ?pos:pos p (tas @ args)
+      in SlUtil.subst_preds sf f
     in
-    let subst_preds_fol f = FOL f (* todo *) in
-    let f1 = fold_spec_form subst_preds_fol subst_preds_sl sf in
-    { sf with spec_form = f1 }
+    let subst_preds_fol f = 
+      let rec sf = function
+        | App (sym, ts, srt) ->
+            let ts1 = List.map sf ts in
+            (match sym with
+            | FreeSym id when IdMap.mem id prog.prog_preds ->
+                let tas = get_tas id in
+                App (FreeSym id, tas @ ts1, srt)
+            | _ -> 
+                App (sym, ts1, srt))
+        | Var _ as t -> t
+      in
+      map_terms sf f
+    in
+    map_spec_form subst_preds_fol subst_preds_sl sf
   in
   let elim_stmt = function
     | (Assert sf, pp) ->

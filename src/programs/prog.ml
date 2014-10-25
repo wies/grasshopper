@@ -124,7 +124,7 @@ type proc_decl = {
 type pred_decl = {
     pred_name : ident; (** predicate name *)
     pred_formals : ident list; (** formal parameter list *)
-    pred_returns : ident list; (** return parameter list *)
+    pred_outputs : ident list; (** return parameter list *)
     pred_locals : var_decl IdMap.t; (** local variables *)
     pred_body : spec; (** predicate body *)
     pred_pos : source_position; (** position of declaration *)
@@ -302,10 +302,18 @@ let mk_free_spec_form f name msg pos =
     spec_pos = pos;
   } 
 
+
 let fold_spec_form fol_fn sl_fn sf =
   match sf.spec_form with
   | FOL f -> fol_fn f
   | SL f -> sl_fn f
+
+let map_spec_form fol_fn sl_fn sf =
+  let sf1 = match sf.spec_form with
+  | FOL f -> FOL (fol_fn f)
+  | SL f -> SL (sl_fn f)
+  in
+  { sf with spec_form = sf1 }
 
 let is_checked_spec sf =
   match sf.spec_kind with
@@ -327,6 +335,7 @@ let form_of_spec sf =
   | FOL f -> f
   | SL _ -> failwith "expected FOL specification in Prog.form_of_spec"
 
+(** Substitute all occurrences of identifiers in [sf] according to substitution map [sm] *)
 let subst_id_spec sm sf =
   match sf.spec_form with
   | FOL f -> 
@@ -670,7 +679,7 @@ let map_basic_cmds f c =
   let c1, _ = fold_basic_cmds (fun c _ -> f c, ()) () c in
   c1
 
-(** Auxiliary function for predicate *)
+(** Auxiliary function for predicates *)
 
 let subst_id_var_decl map vd =
   let try_subst id = try IdMap.find id map with Not_found -> id in
@@ -680,7 +689,7 @@ let subst_id_pred map pred =
   let try_subst id = try IdMap.find id map with Not_found -> id in
   let name = try_subst pred.pred_name in
   let formals = List.map try_subst pred.pred_formals in
-  let returns = List.map try_subst pred.pred_returns in
+  let returns = List.map try_subst pred.pred_outputs in
   let locals =
     IdMap.fold
       (fun k v acc -> IdMap.add (try_subst k) (subst_id_var_decl map v) acc)
@@ -697,10 +706,11 @@ let subst_id_pred map pred =
     { pred with
       pred_name = name;
       pred_formals = formals;
-      pred_returns = returns;
+      pred_outputs = returns;
       pred_locals = locals;
       pred_body = body;
       pred_accesses = accesses }
+
 
 (** Pretty printing *)
 
@@ -875,7 +885,7 @@ let pr_pred ppf pred =
     let decl = IdMap.find id pred.pred_locals in
     (decl.var_is_implicit, decl.var_is_ghost, (id, decl.var_sort)))
   in
-  match pred.pred_returns with
+  match pred.pred_outputs with
   | [] ->
       fprintf ppf "@[<2>predicate@ %a(@[<0>%a@])@]@ {@[<1>@\n%a@]@\n}@\n@\n"
         pr_ident pred.pred_name
@@ -885,7 +895,7 @@ let pr_pred ppf pred =
       fprintf ppf "@[<2>function@ %a(@[<0>%a@])@]@ @,returns (@[<0>%a@])@ {@[<1>@\n%a@]@\n}@\n@\n"
         pr_ident pred.pred_name
         pr_id_srt_list (add_srts pred.pred_formals)
-        pr_id_srt_list (add_srts pred.pred_returns)
+        pr_id_srt_list (add_srts pred.pred_outputs)
         pr_spec_form pred.pred_body
 
 let rec pr_preds ppf = function

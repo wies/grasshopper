@@ -1,23 +1,4 @@
-struct Node {
-  var next: Node;
-  var data: Int;
-}
-
-predicate uslseg(x: Node, y: Node, lb: Int) {
-  x == y || x != y &*& acc(x) &*& lb <= x.data &*& uslseg(x.next, y, x.data)
-}
-
-predicate slseg(x: Node, y: Node) {
-  x == y || x != y &*& acc(x) &*& uslseg(x.next, y, x.data)
-}
-
-predicate lrslseg(x: Node, y: Node, ub: Int) {
-  x == y || x != y &*& acc(x) &*& x.data <= ub &*& lrslseg(x.next, y, x.data)
-}
-
-predicate rslseg(x: Node, y: Node) {
-  x == y || x != y &*& acc(x) &*& lrslseg(x.next, y, x.data)
-}
+include "../include/slslist.spl";
 
 procedure reverse(lst: Node) returns (rev: Node)
   requires slseg(lst, null);

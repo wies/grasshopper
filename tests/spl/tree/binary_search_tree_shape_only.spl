@@ -1,34 +1,4 @@
-struct Node {
-  var left: Node;
-  var right: Node;
-  var parent: Node;
-  var data: Int;
-}
-
-predicate tree(x: Node) {
-    x == null
-  ||
-    x != null &*&
-    x.parent |-> x.parent &*&
-    tree(x.left) &*&
-    tree(x.right)
-}
-
-predicate treeAllocInvariant(X: Set<Node>) {
-  (forall n in X :: n.parent == n.parent)
-}
-
-procedure destroy(root: Node)
-  requires tree(root);
-  ensures emp;
-{
-  if (root != null) {
-    destroy(root.left);
-    destroy(root.right);
-    root.parent := null;
-    free root;
-  }
-}
+include "../include/bstree.spl";
 
 procedure extract_max(root: Node)
 returns (others: Node, max: Node)

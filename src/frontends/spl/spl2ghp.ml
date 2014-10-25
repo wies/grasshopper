@@ -252,14 +252,14 @@ let resolve_names cus =
           let body, locals, _ = resolve_stmt locals0 tbl decl.p_body in
           let formals = List.map (fun id -> lookup_id id tbl decl.p_pos) decl.p_formals in
           let returns = List.map (fun id -> lookup_id id tbl decl.p_pos) decl.p_returns in
-          
           let decl1 = 
             { decl with 
               p_formals = formals;
               p_returns = returns;
               p_locals = locals; 
               p_contracts = contracts; 
-              p_body = body } in
+              p_body = body } 
+          in
           IdMap.add decl.p_name decl1 procs
         )
         procs0 IdMap.empty 
@@ -270,7 +270,15 @@ let resolve_names cus =
           let locals, tbl = declare_vars decl.pr_locals structs (SymbolTbl.push tbl) in
           let body = resolve_expr locals tbl decl.pr_body in
           let formals = List.map (fun id -> lookup_id id tbl decl.pr_pos) decl.pr_formals in
-          let decl1 = { decl with pr_formals = formals; pr_locals = locals; pr_body = body } in
+          let outputs = List.map (fun id -> lookup_id id tbl decl.pr_pos) decl.pr_outputs in
+          let decl1 = 
+            { decl with 
+              pr_formals = formals; 
+              pr_outputs = outputs; 
+              pr_locals = locals; 
+              pr_body = body 
+            } 
+          in
           IdMap.add decl.pr_name decl1 preds
         )
         preds0 IdMap.empty 
@@ -560,7 +568,7 @@ let convert cus =
     in
     let type_error pos expected found =
       ProgError.type_error pos
-        ("Expected an " ^ expected ^ "\n            but found an " ^ found)
+        ("Expected an " ^ expected ^ " but found an " ^ found)
     in
     let rec convert_expr locals = function
       | Null _ -> FOL_term (FormUtil.mk_null, LocType)
@@ -659,10 +667,18 @@ let convert cus =
           let decl = IdMap.find id cu.pred_decls in
           let tys = List.map (fun p -> (IdMap.find p decl.pr_locals).v_type) decl.pr_formals in
           let ts = 
-            try List.map2 (extract_term locals) tys es
-            with Invalid_argument _ -> 
-              pred_arg_mismatch_error pos (fst id) (List.length tys)
-          in SL_form (SlUtil.mk_pred ~pos:pos id (List.map fst ts))
+            if List.length es > List.length tys
+            then pred_arg_mismatch_error pos (fst id) (List.length tys)
+            else Util.map2 (extract_term locals) tys es
+          in 
+          (match decl.pr_outputs with
+          | [] -> SL_form (SlUtil.mk_pred ~pos:pos id (List.map fst ts))
+          | [res] ->
+              let res_decl = IdMap.find res decl.pr_locals in
+              let res_srt = convert_type res_decl.v_type in
+              let t = FormUtil.mk_free_fun res_srt id (List.map fst ts) in
+              FOL_term (t, res_decl.v_type)
+          | _ -> failwith "impossible")
       | BinaryOp (e1, OpEq, e2, pos) ->
           (match convert_expr locals e1 with
           | FOL_form _ 
@@ -757,7 +773,8 @@ let convert cus =
               match op with
               | OpAnd -> SlUtil.mk_and
               | OpOr -> SlUtil.mk_or
-              | _ -> failwith "unexpected operator"
+              | OpImpl -> SlUtil.mk_implies
+              | _ -> failwith "unexpected operator"      
             in
             let f1 = extract_sl_form locals e1 in
             let f2 = extract_sl_form locals e2 in
@@ -810,6 +827,8 @@ let convert cus =
          type_error (pos_of_expr e) "expression of type bool" (ty_str ty)
     and extract_fol_form locals e =
       match convert_expr locals e with
+      | SL_form (Atom (Pred p, ts, pos)) ->
+          FormUtil.mk_pred ~ann:[SrcPos (pos_of_expr e)] p ts
       | SL_form _ ->
           type_error (pos_of_expr e) "expression of type bool" "SL expression"
       | FOL_form f -> f
@@ -982,17 +1001,17 @@ let convert cus =
     let prog =
       IdMap.fold 
         (fun id decl prog ->
-          let body = extract_sl_form decl.pr_locals decl.pr_body in
+          let body = extract_fol_form decl.pr_locals decl.pr_body in
           let pred_decl = 
             { pred_name = id;
               pred_formals = decl.pr_formals;
-              pred_returns = [];
+              pred_outputs = decl.pr_outputs;
               pred_locals = IdMap.map convert_var_decl decl.pr_locals;
-              pred_body = mk_spec_form (SL body) (string_of_ident id) None (pos_of_expr decl.pr_body);
+              pred_body = mk_spec_form (FOL body) (string_of_ident id) None (pos_of_expr decl.pr_body);
               pred_pos = decl.pr_pos;
               pred_accesses = IdSet.empty;
               pred_is_free = false
-            } 
+            }
           in
          declare_pred prog pred_decl
         )

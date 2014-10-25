@@ -16,20 +16,21 @@ let reduce_exists =
 	(match sort_of s1 with
 	| Set srt ->
 	    let ve = mk_var srt e in
-	    mk_exists [(e, srt)] (mk_or [mk_and [smk_elem ~ann:a ve s1; mk_not (smk_elem ~ann:a ve s2)];
-					 mk_and [smk_elem ~ann:a ve s2; mk_not (smk_elem ~ann:a ve s1)]])
+	    mk_exists [(e, srt)] (smk_or [smk_and [smk_elem ~ann:a ve s1; mk_not (smk_elem ~ann:a ve s2)];
+					 smk_and [smk_elem ~ann:a ve s2; mk_not (smk_elem ~ann:a ve s1)]])
 	| _ -> f)
     | BoolOp (Not, [Atom (App (SubsetEq, [s1; s2], _), a)]) ->
 	let srt = element_sort_of_set s1 in
 	let ve = mk_var srt e in
-	mk_exists [(e, srt)] (annotate (mk_and [smk_elem ve s1; mk_not (smk_elem ve s2)]) a)
-    | BoolOp (op, fs) -> BoolOp (op, List.map elim_neq fs)
+	mk_exists [(e, srt)] (annotate (smk_and [smk_elem ve s1; mk_not (smk_elem ve s2)]) a)
+    | BoolOp (op, fs) -> smk_op op (List.map elim_neq fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, elim_neq f, a)
     | f -> f
   in
   fun f -> 
     let f1 = elim_neq f in
-    skolemize f1
+    let f2 = propagate_exists f1 in
+    skolemize f2
 
 let massage_field_reads fs = 
   let reach_flds = 
@@ -84,7 +85,7 @@ let factorize_axioms fs =
 	BoolOp (op, fs1), axioms
     | f -> f, axioms
   in
-  let process (axioms, fs1) f = 
+  let process (fs1, axioms) f = 
     match f with
     | Binder (Forall, _ :: _, _, _) -> f :: fs1, axioms
     | _ -> 
@@ -465,7 +466,7 @@ let instantiate_user_def_axioms read_propagators fs gts =
   let fs1, generators = open_axioms isFunVar fs in
   let gts1 = generate_terms (read_propagators @ generators) gts in
   let _ =
-    if Debug.is_debug () then
+    if Debug.is_debug 1 then
       begin
         print_endline "ground terms:";
         TermSet.iter (fun t -> print_endline ("  " ^ (string_of_term t))) gts;

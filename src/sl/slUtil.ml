@@ -36,6 +36,7 @@ let mk_eq ?pos a b = mk_pure ?pos:pos (FormUtil.mk_eq a b)
 let mk_not ?pos a = BoolOp(Form.Not, [a], pos)
 let mk_and ?pos a b = BoolOp (Form.And, [a; b], pos)
 let mk_or ?pos a b = BoolOp (Form.Or, [a; b], pos)
+let mk_implies ?pos a b = BoolOp (Form.Or, [BoolOp (Form.Not, [a], None); b], pos)
 let mk_sep_star ?pos a b = 
   match (a, b) with
   | Atom (Emp, [], _), _ -> b
@@ -57,6 +58,23 @@ let mk_pts ?pos f a b =
 let mk_sep_star_lst args = List.fold_left mk_sep_star mk_emp args
 let mk_exists ?pos vs f = Binder (Form.Exists, vs, f, pos)
 let mk_forall ?pos vs f = Binder (Form.Forall, vs, f, pos)
+
+let free_symbols f = 
+  let rec fsym acc = function
+    | Pure (f, _) -> IdSet.union acc (FormUtil.free_symbols f)
+    | SepOp (_, f1, f2, _) -> fsym (fsym acc f1) f2
+    | BoolOp (_, fs, _) -> List.fold_left fsym acc fs
+    | Atom (s, args, _) ->
+        let acc1 = match s with
+          | Pred id -> IdSet.add id acc
+          | _ -> acc
+        in
+        List.fold_left 
+          FormUtil.free_symbols_term_acc 
+          acc1 args
+    | Binder (b, vs, f, _) -> fsym acc f
+  in
+  fsym IdSet.empty f
 
 let rec map_id fct f = match f with
   | Pure (p, pos) -> Pure (FormUtil.map_id fct p, pos)

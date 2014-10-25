@@ -1,24 +1,4 @@
-struct Node {
-  var left: Node;
-  var right: Node;
-  var parent: Node;
-  var data: Int;
-}
-
-predicate bstree(x: Node, lb: Int, ub: Int) {
-    x == null
-  ||
-    x != null &*&
-    x.parent |-> x.parent &*&
-    lb <= x.data &*&
-    x.data <= ub &*&
-    bstree(x.left, lb, x.data - 1) &*&
-    bstree(x.right, x.data + 1, ub)
-}
-
-predicate treeAllocInvariant(X: Set<Node>) {
-  (forall n in X :: n.parent == n.parent)
-}
+include "../include/bstree.spl";
 
 procedure destroy(root: Node,
                   ghost lb: Int, ghost ub: Int)

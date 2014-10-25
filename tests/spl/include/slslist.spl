@@ -5,36 +5,75 @@ struct Node {
   var data: Int;
 }
 
-predicate lseg(x: Node, y: Node) {
-  x == y || x != y &*& acc(x) &*& lseg(x.next, y)
+function lseg_footprint(x: Node, y: Node) returns (FP: Set<Node>) {
+  forall z: Node :: z in FP == (Btwn(next, x, z, y) && z != y)
 }
 
-predicate uslseg(x: Node, y: Node, lb: Int) {
-  x == y || x != y &*& acc(x) &*& lb <= x.data &*& uslseg(x.next, y, x.data)
+predicate lseg(x: Node, y: Node, FP: Set<Node>) {
+  Btwn(next, x, y, y) && FP == lseg_footprint(x, y)
 }
 
-predicate ulseg(x: Node, y: Node, lb: Int) {
-  x == y || x != y &*& acc(x) &*& lb <= x.data &*& ulseg(x.next, y, lb)
+predicate lseg_lowerbound(lb: Int, FP: Set<Node>) {
+  forall z: Node :: z in FP ==> lb <= z.data
 }
 
-predicate slseg(x: Node, y: Node) {
-  x == y || x != y &*& acc(x) &*& uslseg(x.next, y, x.data)
+predicate lseg_upperbound(ub: Int, FP: Set<Node>) {
+  forall z: Node :: z in FP ==> z.data <= ub
 }
 
-predicate llseg(x: Node, y: Node, ub: Int) {
-  x == y || x != y &*& acc(x) &*& x.data <= ub &*& llseg(x.next, y, ub)
+predicate lseg_increasing(x: Node, FP: Set<Node>) {
+  forall y: Node, z: Node :: y in FP && z in FP && Btwn(next,x,y,z) ==> y.data <= z.data
 }
 
-predicate lslseg(x: Node, y: Node, ub: Int) {
-  slseg(x, y) && llseg(x, y, ub)
+predicate lseg_strictly_increasing(x: Node, FP: Set<Node>) {
+  forall y: Node, z: Node :: y in FP && z in FP && Btwn(next,x,y,z) ==> y.data < z.data
 }
 
-predicate blseg(x: Node, y: Node, lb: Int, ub: Int) {
-  x == y || 
-  x != y &*& acc(x) &*& lb <= x.data &*& x.data <= ub &*& blseg(x.next, y, lb, ub)
+predicate lseg_decreasing(x: Node, FP: Set<Node>) {
+  forall y: Node, z: Node :: y in FP && z in FP && Btwn(next,x,y,z) ==> z.data <= y.data
 }
 
-predicate bslseg(x: Node, y: Node, lb: Int, ub: Int) {
-  x == y || 
-  x != y &*& acc(x) &*& lb <= x.data &*& x.data <= ub &*& bslseg(x.next, y, x.data, ub)
+predicate uslseg(x: Node, y: Node, lb: Int, FP: Set<Node>) {
+  lseg(x, y, FP) &&
+  lseg_lowerbound(lb, FP) &&
+  lseg_increasing(x, FP)
+}
+
+predicate ulseg(x: Node, y: Node, lb: Int, FP: Set<Node>) {
+  lseg(x, y, FP) &&
+  lseg_lowerbound(lb, FP)
+}
+
+predicate slseg(x: Node, y: Node, FP: Set<Node>) {
+  lseg(x, y, FP) &&
+  lseg_increasing(x, FP)
+}
+
+predicate rslseg(x: Node, y: Node, FP: Set<Node>) {
+  lseg(x, y, FP) &&
+  lseg_decreasing(x, FP)
+}
+
+predicate llseg(x: Node, y: Node, ub: Int, FP: Set<Node>) {
+  lseg(x, y, FP) &&
+  lseg_upperbound(ub, FP)
+}
+
+predicate lslseg(x: Node, y: Node, ub: Int, FP: Set<Node>) {
+  lseg(x, y, FP) &&
+  lseg_upperbound(ub, FP) &&
+  lseg_increasing(x, FP)
+}
+
+predicate blseg(x: Node, y: Node, lb: Int, ub: Int, FP: Set<Node>) {
+  lseg(x, y, FP) &&
+  lseg_lowerbound(lb, FP) &&
+  lseg_upperbound(ub, FP)
+}
+
+predicate bslseg(x: Node, y: Node, lb: Int, ub: Int, FP: Set<Node>) {
+  lseg(x, y, FP) &&
+  lseg_lowerbound(lb, FP) &&
+  lseg_upperbound(ub, FP) &&
+  lseg_increasing(x, FP)
 }

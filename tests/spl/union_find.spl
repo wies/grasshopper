@@ -2,7 +2,7 @@ include "include/sllist.spl";
 
 procedure find(x: Node, ghost root_x: Node, implicit ghost X: Set<Node>) 
 returns (res: Node)
-  requires lseg_set(x, root_x, X) &*& root_x.next |-> null;
+  requires lseg(x, root_x, X) &*& root_x.next |-> null;
   ensures acc(X) &*& root_x.next |-> null &*& res == root_x;
   ensures (forall z in X :: z.next == root_x);
 {
@@ -18,7 +18,7 @@ returns (res: Node)
 
 procedure union(x: Node, y: Node,  ghost root_x: Node, ghost root_y: Node,
                 implicit ghost X: Set<Node>, implicit ghost Y: Set<Node>)
-  requires lseg_set(x, root_x, X) &+& lseg_set(y, root_y, Y);
+  requires lseg(x, root_x, X) &+& lseg(y, root_y, Y);
   requires root_x.next |-> null &+& root_y.next |-> null;
   ensures acc(X) &+& acc(Y);
   ensures forall z in X -- Y :: z.next == root_x; // this is also OK: forall z in X :: z.next == root_x;
@@ -35,7 +35,7 @@ procedure union(x: Node, y: Node,  ghost root_x: Node, ghost root_y: Node,
 }
 
 procedure create() returns (res: Node)
-  ensures  lseg_set(res, null, Set(res));
+  ensures lseg(res, null, Set(res));
 {
     var n: Node;
     n := new Node;

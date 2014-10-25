@@ -12,9 +12,12 @@ let type_error pos msg = raise (Prog_error (pos, "Type Error: " ^ msg))
 let error pos msg = raise (Prog_error (pos, "Error: " ^ msg))
 
 let error_to_string pos msg = 
-  if !Config.flycheck_mode 
-  then Printf.sprintf "%s:%s" (flycheck_string_of_src_pos pos) msg
-  else Printf.sprintf "%s:\n%s" (string_of_src_pos pos) msg
+  if pos = FormUtil.dummy_position 
+  then msg 
+  else
+    if !Config.flycheck_mode 
+    then Printf.sprintf "%s:%s" (flycheck_string_of_src_pos pos) msg
+    else Printf.sprintf "%s:\n%s" (string_of_src_pos pos) msg
 
 let to_string = function
   | Prog_error (pos, msg) -> error_to_string pos msg      

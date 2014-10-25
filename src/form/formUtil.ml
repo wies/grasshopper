@@ -171,7 +171,7 @@ let mk_app srt sym ts = App (sym, ts, srt)
 
 let mk_atom ?(ann=[]) sym ts = Atom (mk_app Bool sym ts, ann)
 
-let mk_pred id ts = mk_atom (FreeSym id) ts
+let mk_pred ?(ann=[]) id ts = mk_atom ~ann:ann (FreeSym id) ts
 
 let mk_eq_term s t =
   mk_app Bool Eq [s; t]
@@ -379,7 +379,7 @@ let mk_iff a b =
   smk_or [smk_and [a; b]; smk_and [nnf (mk_not a); nnf (mk_not b)]]
 
 
-(** {6 Generic formula manipulation} *)
+(** {6 Generic formula manipulation and substitution functions} *)
 
 (** Fold all terms appearing in the formula [f] using catamorphism [fn] and initial value [init] *)
 let fold_terms fn init f =
@@ -436,6 +436,14 @@ let fv f =
 	List.fold_left (fvt bv) vars ts
   in fold_terms_with_bound fvt IdSet.empty f
 
+let smk_binder ?(ann=[]) b bv f =
+  let fv_f = fv f in
+  let bv1 = List.filter (fun (x, _) -> IdSet.mem x fv_f) bv in
+  mk_binder ~ann:ann b bv1 f
+
+let smk_forall ?(ann=[]) bv f = smk_binder ~ann:ann Forall bv f
+let smk_exists ?(ann=[]) bv f = smk_binder ~ann:ann Exists bv f
+
 (** Computes the set of free variables of formula [f] together with their sorts. *)
 let sorted_free_vars f = 
   let rec fvt bv vars = function
@@ -447,7 +455,7 @@ let sorted_free_vars f =
 	List.fold_left (fvt bv) vars ts
   in fold_terms_with_bound fvt IdSrtSet.empty f
 
-(** Computes the set of all forts of the terms appearing in formula [f]. *)
+(** Computes the set of all sorts of the terms appearing in formula [f]. *)
 let sorts f =
   let rec s acc = function
     | Var (_, srt) -> SortSet.add srt acc
@@ -458,7 +466,7 @@ let sorts f =
   fold_terms s SortSet.empty f
 
 (** Computes the set of free constants occuring in term [t].
- ** Takes accumulator as additional argument. *)
+ ** Takes accumulator [consts] as additional argument. *)
 let free_consts_term_acc consts t =
   let rec fct consts = function
   | Var _ -> consts
@@ -472,6 +480,27 @@ let free_consts_term t = free_consts_term_acc IdSet.empty t
 (** Computes the set of free constants occuring in formula [f]. *)
 let free_consts f =
   fold_terms free_consts_term_acc IdSet.empty f
+
+(** Computes the set of free symbols occuring in term [t].
+ ** Takes accumulator [acc] as additional argument. *)
+let free_symbols_term_acc acc t =
+  let rec fst acc = function
+    | Var _ -> acc
+    | App (sym, ts, _) -> 
+        let acc1 = match sym with
+        | FreeSym id -> IdSet.add id acc
+        | _ -> acc
+        in
+        List.fold_left fst acc1 ts
+  in fst acc t
+
+(** Computes the set of free symbols occuring in term [t]. *)
+let free_symbols_term t = free_symbols_term_acc IdSet.empty t
+
+(** Computes the set of free symbols occuring in formula [f]. *)
+let free_symbols f =
+  fold_terms free_symbols_term_acc IdSet.empty f
+
 
 (** Computes the set of ground terms appearing in [f].
  ** Free variables are treated as implicitly universally quantified *)
@@ -510,6 +539,7 @@ let vars_in_fun_terms f =
     | _ -> vars
   in fold_terms ct IdSrtSet.empty f
 
+(** Compute the set of all proper terms in formula [f] that have variables occuring in them. *)
 let fun_terms_with_vars f =
   let rec process acc t = match t with
     | App (_, ts, Bool) ->
@@ -561,6 +591,7 @@ let overloaded_sign f : (arity list SymbolMap.t) =
   in 
   fold_terms signt SymbolMap.empty f
 
+(** Map all identifiers occuring in term [t] to new identifiers according to function [fct] *)
 let map_id_term fct t =
   let rec sub = function
     | Var (id, srt) -> Var (fct id, srt)
@@ -572,6 +603,7 @@ let map_id_term fct t =
 	App (sym1, List.map sub ts, srt)
   in sub t
 
+(** Map all identifiers occuring in formula [f] to new identifiers according to function [fct] *)
 let map_id fct f =
   let rec sub = function 
     | BoolOp (op, fs) -> BoolOp (op, List.map sub fs)
@@ -579,15 +611,15 @@ let map_id fct f =
     | Binder (b, vs, f, a) -> Binder (b, vs, sub f, a)
   in sub f
 
-(** Substitutes all identifiers in term [t] according to substitution map [subst_map] *)
+(** Substitutes all identifiers in term [t] with other identifiers according to substitution map [subst_map] *)
 let subst_id_term subst_map t =
   let sub_id id =
     try IdMap.find id subst_map with Not_found -> id
   in
     map_id_term sub_id t
 
-(** Substitutes all identifiers in formula [f] according to substitution map [subst_map].
- ** Not capture avoiding. *)
+(** Substitutes all identifiers in formula [f] with other identifiers according to substitution map [subst_map].
+ ** This operation is not capture avoiding. *)
 let subst_id subst_map f =
   let subt = subst_id_term subst_map in
   let subg g = match g with
@@ -604,7 +636,7 @@ let subst_id subst_map f =
     | Binder (b, vs, f, a) -> Binder (b, vs, sub f, List.map suba a)
   in sub f
 
-(** Substitutes all constants in term [t] according to substitution function [subst_fun]. *)
+(** Substitutes all constants in term [t] with other terms according to substitution function [subst_fun]. *)
 let subst_consts_fun_term subst_fun t =
   let rec sub = function
     | (App (FreeSym id, [], srt) as t) -> subst_fun id t 
@@ -613,23 +645,26 @@ let subst_consts_fun_term subst_fun t =
   in
   sub t
 
-(** Substitutes all constants in formula [f] according to substitution function [subst_fun]. *)
+(** Substitutes all constants in formula [f] with other terms according to substitution function [subst_fun]. 
+ ** This operation is not capture avoiding. *)
 let subst_consts_fun subst_fun f =
   map_terms (subst_consts_fun_term subst_fun) f
 
-(** Substitutes all constants in term [t] according to substitution map [subst_map]. *)
+(** Substitutes all constants in term [t] with other terms according to substitution map [subst_map]. *)
 let subst_consts_term subst_map t =
   let sub_id id t =
     try IdMap.find id subst_map with Not_found -> t
   in
   subst_consts_fun_term sub_id t
 
-(** Substitutes all constants in formula [f] according to substitution map [subst_map]. *)
+(** Substitutes all constants in formula [f] with other terms according to substitution map [subst_map]. 
+ ** This operation is not capture avoiding. *)
 let subst_consts subst_map f =
   map_terms (subst_consts_term subst_map) f
 
 
-(** Substitutes all variables in term [t] according to substitution map [subst_map]. *)
+(** Substitutes all variables in term [t] with terms according to substitution map [subst_map]. 
+ ** This operation is not capture avoiding. *)
 let subst_term subst_map t =
   let sub_id id t =
     try IdMap.find id subst_map with Not_found -> t
@@ -639,8 +674,23 @@ let subst_term subst_map t =
     | App (sym, ts, srt) -> App (sym, List.map sub ts, srt)
   in sub t
 
-(** Substitutes all free variables in formula [f] according to substitution map [subst_map].
- ** Capture avoiding. *)
+(** Substitute all function applications in term [t] according to function [fct]. *)
+let subst_funs_term fct t =
+   let rec sub = function
+   | App (sym, ts, srt) -> 
+       let ts1 = List.map sub ts in
+       fct sym ts1 srt
+   | Var _ as t -> t
+   in
+   sub t
+
+(** Substitute all function applications in formula [f] according to function [fct]. 
+ ** This operation is not capture avoiding. *)
+let subst_funs fct f =
+  map_terms (subst_funs_term fct) f
+
+(** Substitutes all free variables in formula [f] with terms according to substitution map [subst_map].
+ ** This operation is capture avoiding. *)
 let subst subst_map f =
   let rename_vars vs sm =
     let not_bound id _ = not (List.mem_assoc id vs) in
@@ -690,18 +740,36 @@ let propagate_exists f =
         if ys2 = [] then sm, xs @ zs
         else merge sm (List.hd xs :: zs) (List.tl xs) ys2 []
   in
-  let rec prop = function
+  let rec prop tvs = function
     | BoolOp (Or, fs) ->
         let fs1, vs = 
           List.fold_right (fun f (fs2, vs2) ->
-            let f1, vs1 = prop f in
+            let f1, vs1 = prop tvs (mk_exists tvs f) in
             let sm, vs = merge IdMap.empty [] vs1 vs2 [] in
             subst sm f1 :: fs2, vs) 
             fs ([], [])
-        in BoolOp (Or, fs1), vs
+        in 
+        BoolOp (Or, fs1), vs
     | BoolOp (And, fs) ->
-        let fs1, vss = List.split (List.map prop fs) in
-        BoolOp (And, fs1), List.concat vss
+        let fv_fs = fv (mk_and fs) in
+        let fvs, used =
+          let rec distribute (fvs, unused, used) = function
+            | f :: fs -> 
+                let fv_f = fv f in
+                let ftvs_set = IdSet.diff (IdSet.inter unused fv_f) (fv (mk_and fs)) in
+                (*print_form stdout f; print_newline();
+                print_endline "vars: ";
+                IdSet.iter (fun id -> Printf.printf "%s, " (string_of_ident id)) ftvs_set; print_newline(); print_newline();*)
+                let ftvs = List.filter (fun (x, _) -> IdSet.mem x ftvs_set) tvs in
+                distribute ((f, ftvs) :: fvs, IdSet.diff unused fv_f, IdSet.union used ftvs_set) fs
+            | [] -> fvs, used
+          in 
+          let tvs_set = List.fold_left (fun acc (x, _) -> IdSet.add x acc) IdSet.empty tvs in
+          distribute ([], tvs_set, IdSet.empty) fs 
+        in
+        let tvs1 = List.filter (fun (x, _) -> IdSet.mem x fv_fs && not (IdSet.mem x used)) tvs in
+        let fs1, vss = List.split (List.map (fun (f, ftvs) -> prop ftvs f) fvs) in
+        BoolOp (And, fs1), List.concat (tvs1 :: vss)
     | Binder (Exists, vs, f, a) -> 
         let vars = fv f in
         let vs0 = List.filter (fun (v, _) -> IdSet.mem v vars) vs in
@@ -710,21 +778,27 @@ let propagate_exists f =
             (fun (sm, vs1) (v, srt) -> 
               let v1 = fresh_ident (name v) in
               IdMap.add v (mk_var srt v1) sm, (v1, srt) :: vs1)
-            (IdMap.empty, []) vs0
+            (IdMap.empty, tvs) vs0
         in
-        let f1 = subst sm f in
+        let f1, vs2 = prop vs1 (subst sm f) in
         (match a with 
-        | [] -> f1, vs1
-        | _ -> Binder (Exists, [], f1, a), vs1)
+        | [] -> f1, vs2
+        | _ -> Binder (Exists, [], f1, a), vs2)
     | Binder (Forall, vs, f, a) ->
-        let f1, vs1 = prop f in
         (match vs with
-        | [] -> Binder (Forall, vs, f1, a), vs1
-        | _ -> Binder (Forall, vs, mk_exists vs1 f1, a), [])
-    | f -> f, []
+        | [] -> 
+            let f1, vs1 = prop tvs f in
+            Binder (Forall, vs, f1, a), vs1
+        | _ -> 
+            let f1, vs1 = prop [] f in
+            Binder (Forall, vs, mk_exists vs1 f1, a), tvs)
+    | f -> 
+        let fv_f = fv f in
+        f, List.filter (fun (x, _) -> IdSet.mem x fv_f) tvs
   in
-  let f1, vs = prop f in 
-  mk_exists vs f1
+  let f1, vs = prop [] f in 
+  let res = mk_exists vs f1 in
+  res
 
 (** Convert universal quantifiers in formula [f] into existentials where possible. *)
 (** Assumes that [f] is in negation normal form. *)
@@ -756,7 +830,7 @@ let foralls_to_exists f =
         let fs1 = List.map (fun f -> mk_or (List.rev_append gs (f :: gs1))) fs in
         cf (mk_forall bvs (mk_and fs1))
     | g :: gs1 -> distribute_and bvs (g :: gs) gs1
-    | [] -> mk_forall bvs (mk_or (List.rev gs))
+    | [] -> smk_forall bvs (mk_or (List.rev gs))
   and cf = function
     | Binder (Forall, bvs, BoolOp (And, fs), a) ->
         let fs1 = List.map (fun f -> cf (Binder (Forall, bvs, f, a))) fs in
@@ -768,8 +842,8 @@ let foralls_to_exists f =
         (match ebvs with
         | [] -> distribute_and bvs [] gs
         | _ ->
-          let g = cf (mk_forall ubvs (mk_or gs)) in
-          Binder (Exists, bvs, mk_and (defs @ [g]), a))
+            let g = cf (mk_forall ubvs (mk_or gs)) in
+            Binder (Exists, ebvs, mk_and (defs @ [g]), a))
     | Binder (Exists, bvs, f, a) ->
         mk_exists ~ann:a bvs (cf f)
     | BoolOp (And as op, fs)
