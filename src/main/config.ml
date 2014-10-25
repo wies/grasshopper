@@ -2,7 +2,7 @@
 let base_dir = ref ""
 
 (* Name of procedure that is to be checked *)
-let procedure = ref ""
+let procedure = ref None
 
 (* File name where counterexample model is saved. *)
 let model_file = ref ""
@@ -55,7 +55,7 @@ let optSelfFrame = ref false
 
 let cmd_options =
   [("-basedir", Arg.Set_string base_dir, "<string>  Base directory for resolving include directives");
-   ("-procedure", Arg.Set_string procedure, "<string>  Only check the specified procedure");
+   ("-procedure", Arg.String (fun p -> procedure := Some p), "<string>  Only check the specified procedure");
    ("-model", Arg.Set_string model_file, "<file>  Produce counterexample model for the first failing verification condition");
    ("-trace", Arg.Set_string trace_file, "<file> Produce counterexample trace for the first failing verification condition");
    ("-lint", Arg.Set flycheck_mode, " Print error messages for on-the-fly checking");

@@ -2,8 +2,6 @@ open Sl
 open Util
 open Logging
 
-let input_file = ref ""
-
 let usage_message =
   "Usage:\n  " ^ Sys.argv.(0) ^ 
   " <input file> [options]\n"
@@ -31,6 +29,7 @@ let print_trace prog proc (pp, model) =
     close_out trace_chan     
   end
 
+(** Parse compilation unit in file [file] using parsing function [parse_fct] *)
 let parse_cu parse_fct file =
   let input = read_file file in
   ParseError.input := Some input;
@@ -39,7 +38,8 @@ let parse_cu parse_fct file =
   SplLexer.set_file_name lexbuf file; 
   parse_fct lexbuf
 
-let parse_spl_program file =
+(** Parse SPL program in main file [main_file] *)
+let parse_spl_program main_file =
   let rec parse parsed to_parse spl_prog =
     match to_parse with
     | (file, pos) :: to_parse1 ->
@@ -50,7 +50,7 @@ let parse_spl_program file =
             ProgError.error pos ("Could not find file " ^ file)
         in
         let dir = 
-          if file = !input_file 
+          if file = main_file
           then !Config.base_dir
           else Filename.dirname file 
         in
@@ -65,10 +65,10 @@ let parse_spl_program file =
         parse parsed1 to_parse2 (SplSyntax.merge_spl_programs spl_prog cu)
     | [] -> spl_prog
   in
-  parse StringSet.empty [file] SplSyntax.initial_spl_program
+  parse StringSet.empty [(main_file, FormUtil.dummy_position)] SplSyntax.initial_spl_program
 
-
-let vc_gen file =
+(** Check SPL program in main file [file] and procedure [proc] *)
+let check_spl_program file proc =
   let spl_prog = parse_spl_program file in
   let prog = Spl2ghp.to_program [spl_prog] in
   let simple_prog = Analysis.simplify prog in
@@ -83,11 +83,11 @@ let vc_gen file =
       )
       errors
   in
-  if !Config.procedure = "" 
-  then Prog.iter_procs check simple_prog
-  else 
+  match proc with
+  | None -> Prog.iter_procs check simple_prog
+  | Some p ->
     let procs =
-      Prog.find_proc_with_deps simple_prog (!Config.procedure, 0)
+      Prog.find_proc_with_deps simple_prog (p, 0)
     in
     if procs = [] then begin
       let available =
@@ -95,8 +95,7 @@ let vc_gen file =
           (fun acc proc -> "\t" ^ Form.string_of_ident proc.Prog.proc_name ^ "\n" ^ acc) 
           "" prog
       in
-      failwith ("Could not find a procedure named " ^ 
-                !Config.procedure ^ 
+      failwith ("Could not find a procedure named " ^ p ^ 
                 ". Available procedures are:\n" ^ available)
     end;
     List.iter (check simple_prog) procs
@@ -117,13 +116,22 @@ let print_stats start_time =
     Printf.printf "  # measured calls: %.2d\n" !Util.measured_calls
 
 let _ =
+  let main_file = ref "" in
+  let set_main_file s =
+    main_file := s;
+    if !Config.base_dir = "" 
+    then Config.base_dir := Filename.dirname s
+  in
   let start_time = current_time () in
   try
-    Arg.parse Config.cmd_options (fun s -> input_file := s) usage_message;
+    Arg.parse Config.cmd_options set_main_file usage_message;
     SmtLibSolver.select_solver (String.uppercase !Config.smtsolver);
-    if !input_file = ""
+    if !main_file = ""
     then cmd_line_error "input file missing"
-    else (vc_gen (!input_file, FormUtil.dummy_position); print_stats start_time)
+    else begin
+      check_spl_program !main_file !Config.procedure;
+      print_stats start_time 
+    end
   with  
   | Sys_error s -> 
       let bs = if Debug.is_debug 0 then Printexc.get_backtrace () else "" in
