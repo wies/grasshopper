@@ -46,9 +46,12 @@ procedure add(sentinel: Node, x: int) returns (res: bool)
   var u: Node = sentinel;
   var r: int = h;
   var comp: int = 0;
+
   while (r >= 0)
+    invariant ??? ;
   {
     while (u.next[r] != null && (comp = compare(u.next[r].x,x)) < 0)
+      invariant ??? ;
     {
       u = u.next[r];
     }
@@ -64,13 +67,19 @@ procedure add(sentinel: Node, x: int) returns (res: bool)
   w.x = x;
 
   while (h < w.height())
+    invariant ??? ;
   {
     h = h+1;
     stack[h] = sentinel;   // increasing height of skiplist
   }
-  for (int i = 0; i < w.next.length; i++) {
+
+  var i: int = 0;
+  while(i < w.next.length)
+    invariant ??? ;
+  {
     w.next[i] = stack[i].next[i];
     stack[i].next[i] = w;
+    i = i + 1;
   }
   n = n + 1;
   return true;
@@ -85,8 +94,10 @@ procedure remove(sentinel: Node, x: int) returns (res: bool)
   int r = h;
   int comp = 0;
   while (r >= 0)
+    invariant ??? ;
   {
     while (u.next[r] != null && (comp = compare(u.next[r].x, x)) < 0)
+      invariant ??? ;
     {
       u = u.next[r];
     }

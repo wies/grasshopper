@@ -64,10 +64,10 @@ procedure add(sentinel: Node, int index: int, x: int)
   if (w.height() > h) {
     h = w.height();
   }
-  add(sentinel, index, w);
+  addAux(sentinel, index, w);
 }
 
-procedure add(index: int, Node w) returns (res: Node)
+procedure addAux(sentinel: Node, index: int, w: Node) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
