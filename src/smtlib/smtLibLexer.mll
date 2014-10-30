@@ -53,6 +53,7 @@ let ident = identchar (identchar | digitchar | ':' | '-' | '!')*
  
 rule token = parse
   [' ' '\t'] { token lexbuf }
+| "\r\n" { Lexing.new_line lexbuf; token lexbuf }
 | '\n' { Lexing.new_line lexbuf; token lexbuf }
 | ";" [^ '\n']* {token lexbuf }
 | "=>" { SYMBOL(Impl) }
