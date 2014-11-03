@@ -178,6 +178,11 @@ let resolve_names cus =
         | Ident (init_id, pos) ->
             let id = lookup_id init_id tbl pos in
             Ident (id, pos)
+        | Annot (e, GeneratorAnnot (es, ge), pos) ->
+            let es1 = List.map (re tbl) es in
+            Annot (re tbl e, GeneratorAnnot (es1, re tbl e), pos)
+        | Annot (e, ann, pos) ->
+            Annot (re tbl e, ann, pos)
         | e -> e
       in
       re tbl e
@@ -659,7 +664,12 @@ let convert cus =
 	      | Forall -> FormUtil.mk_forall
               | Exists -> FormUtil.mk_exists
               in
-              let f1 = mk_guard (FormUtil.mk_elem v_id e1) (extract_fol_form locals1 f) in
+              let f0, ann = 
+                match extract_fol_form locals1 f with
+                | Binder (_, [], f0, ann) -> f0, ann
+                | f0 -> f0, []
+              in
+              let f1 = FormUtil.annotate (mk_guard (FormUtil.mk_elem v_id e1) f0) ann in
               let f2 = FormUtil.subst_consts (IdMap.add id v_id IdMap.empty) f1 in
               FOL_form (FormUtil.mk_srcpos pos (mk_quant [(id, elem_srt)] f2))
           | _ -> failwith "unexpected type")
@@ -818,6 +828,34 @@ let convert cus =
           let decl = find_var_decl locals id in
           let srt = convert_type decl.v_type in
           FOL_term (FormUtil.mk_free_const srt decl.v_name, decl.v_type)
+      | Annot (e, CommentAnnot c, pos) ->
+          let f = extract_fol_form locals e in
+          FOL_form (FormUtil.annotate f [Comment c])
+      | Annot (e, GeneratorAnnot (es, ge), pos) ->
+          let f = extract_fol_form locals e in
+          let es1 = List.map (fun e -> fst (extract_term locals UniversalType e)) es in
+          let ge1, _ = extract_term locals UniversalType ge in
+          let gts = FormUtil.ground_terms (Atom (ge1, [])) in
+          let matches = 
+            List.map (fun e -> 
+              let ce = FormUtil.free_consts_term e in
+              let flt = 
+                TermSet.fold 
+                  (function 
+                    | App (FreeSym sym, ts, _) ->
+                        (function 
+                          | FilterTrue ->
+                              if List.exists 
+                                  (function App (FreeSym id, [], _) -> IdSet.mem id ce | _ -> false) ts
+                              then FilterNotOccurs (FreeSym sym)
+                              else FilterTrue
+                          | flt -> flt)
+                    | _ -> function flt -> flt)
+                  gts FilterTrue
+              in
+              Match (e, flt)) es1
+          in
+          FOL_form (FormUtil.annotate f [TermGenerator ([], [], matches, ge1)])
       | _ -> failwith "convert_expr: unexpected expression"
     and extract_sl_form locals e =
       match convert_expr locals e with

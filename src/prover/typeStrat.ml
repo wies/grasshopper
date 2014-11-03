@@ -28,7 +28,7 @@ let stratify_types axioms =
           assert (ts <> []);
           List.fold_left
             (fun acc t2 -> 
-              if not (IdSet.is_empty (fvt IdSet.empty t2))
+              if not (IdSet.is_empty (fv_term t2))
               then (sort_of t2, tpe) :: acc
               else acc)
             acc

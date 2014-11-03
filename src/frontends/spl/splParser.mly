@@ -43,7 +43,7 @@ let fix_scopes stmnt =
 %token COLON COLONEQ COLONCOLON SEMICOLON DOT PIPE
 %token UMINUS PLUS MINUS DIV TIMES
 %token UNION INTER DIFF
-%token EQ NEQ LEQ GEQ LT GT IN NOTIN
+%token EQ NEQ LEQ GEQ LT GT IN NOTIN AT
 %token PTS EMP NULL
 %token SEPSTAR SEPPLUS SEPINCL AND OR IMPLIES IFF NOT COMMA
 %token <SplSyntax.quantifier_kind> QUANT
@@ -52,6 +52,7 @@ let fix_scopes stmnt =
 %token GHOST IMPLICIT VAR STRUCT PROCEDURE PREDICATE FUNCTION INCLUDE
 %token OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token INT BOOL SET
+%token MATCHING YIELDS COMMENT 
 %token EOF
 
 %nonassoc COLONEQ 
@@ -177,7 +178,7 @@ pred_decl:
   let outputs, locals =
     List.fold_right (fun decl (outputs, locals) ->
       decl.v_name :: outputs, IdMap.add decl.v_name decl locals)
-      $8([], locals)
+      $8 ([], locals)
   in
   let decl =
     { pr_name = ($2, 0);
@@ -482,10 +483,14 @@ iff_expr:
 | iff_expr IFF iff_expr { BinaryOp ($1, OpEq, $3, mk_position 1 3) }
 ;
 
-quant_expr: 
+annot_expr:
 | iff_expr { $1 }
-| QUANT IDENT IN quant_expr COLONCOLON iff_expr { GuardedQuant ($1, ($2, 0), $4, $6, mk_position 1 6) }
-| QUANT IDENT COLON var_type var_decl_list COLONCOLON iff_expr { 
+| iff_expr AT LPAREN annot RPAREN { Annot ($1, $4, mk_position 1 5) }
+
+quant_expr: 
+| annot_expr { $1 }
+| QUANT IDENT IN quant_expr COLONCOLON annot_expr { GuardedQuant ($1, ($2, 0), $4, $6, mk_position 1 6) }
+| QUANT IDENT COLON var_type var_decl_list COLONCOLON annot_expr { 
   let decl = 
     { v_name = ($2, 0);
       v_type = $4;
@@ -514,3 +519,6 @@ expr_list:
 | expr { [$1] }
 ;
 
+annot:
+| MATCHING expr_list YIELDS expr { GeneratorAnnot($2, $4) }
+| COMMENT STRINGVAL { CommentAnnot ($2) }

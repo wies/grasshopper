@@ -272,6 +272,18 @@ let isFunVar f =
   let fvars = vars_in_fun_terms f in
   fun v -> IdSrtSet.mem v fvars
 
+let rec valid = function
+  | BoolOp (op, fs) ->
+      List.for_all valid fs
+  | Binder (Forall, [], f, ann) ->
+      let has_gen = List.for_all (function TermGenerator _ -> false | _ -> true) ann in
+      if not has_gen then print_form stdout f;
+      valid f && has_gen
+  | Binder (_, _, f, ann) ->
+      valid f
+  | Atom (_, ann) -> 
+      true
+
 
 (** Simplifies set constraints and adds axioms for set operations.
  ** Assumes that f is typed and in negation normal form. *)

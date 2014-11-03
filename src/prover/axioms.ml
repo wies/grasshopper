@@ -196,12 +196,12 @@ let ep_axioms () =
       Match (loc1, FilterNotOccurs EntPnt);
       parent_filter], 
      mk_ep fld1 set1 loc1);
-     ([s1; f1],
+     (*([s1; f1],
      [s2; is1; f2; i1],
      [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
       Match (DefHelpers.mk_witness int1 intset1, FilterNotOccurs EntPnt);
       parent_filter], 
-      mk_ep fld1 set1 (DefHelpers.mk_witness int1 intset1))
+      mk_ep fld1 set1 (DefHelpers.mk_witness int1 intset1))*)
    ]
   in
   if !Config.with_ep then

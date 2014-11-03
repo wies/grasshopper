@@ -15,6 +15,7 @@ let _ =
     ([("assert", ASSERT);
       ("assume", ASSUME);
       ("Bool", BOOL);
+      ("comment", COMMENT);
       ("else", ELSE);
       ("emp", EMP);
       ("ensures", ENSURES);
@@ -31,6 +32,7 @@ let _ =
       ("invariant", INVARIANT);
       ("include", INCLUDE);
       ("implicit", IMPLICIT);
+      ("matching", MATCHING);
       ("new", NEW);
       ("null", NULL);
       ("outputs", OUTPUTS);
@@ -44,6 +46,7 @@ let _ =
       ("true", BOOLVAL(true));
       ("var", VAR);
       ("while", WHILE);
+      ("yields", YIELDS);
    ])
 }
 
@@ -73,6 +76,7 @@ rule token = parse
 | "++" { UNION }
 | "--" { DIFF }
 | "**" { INTER }
+| '@' { AT }
 | '+' { PLUS }
 | '-' { MINUS }
 | '/' { DIV }

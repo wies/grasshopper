@@ -26,7 +26,7 @@ predicate lseg_increasing(x: Node, FP: Set<Node>) {
 }
 
 predicate lseg_strictly_increasing(x: Node, FP: Set<Node>) {
-  forall y: Node, z: Node :: y in FP && z in FP && Btwn(next,x,y,z) ==> y.data < z.data
+  forall y: Node, z: Node :: y in FP && z in FP && Btwn(next,x,y,z) ==> y.data < z.data || y == z
 }
 
 predicate lseg_decreasing(x: Node, FP: Set<Node>) {

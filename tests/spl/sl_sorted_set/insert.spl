@@ -1,39 +1,34 @@
 include "../include/slsset.spl";
 
-procedure insert( lst: Node, val: Int, implicit ghost content: Set<Int>)
+procedure insert(lst: Node, val: Int, implicit ghost content: Set<Int>)
   returns (res: Node)
   requires sorted_set(lst, null, content);
   ensures sorted_set(res, null, content ++ Set(val));
 {
-  var curr: Node, prev: Node;
+  var n: Node;  
+  if (lst == null || val < lst.data) {
+    n := new Node;
+    n.next := lst;
+    n.data := val;
+    return n;
+  } else if (val == lst.data) {
+    return lst;
+  }
+
+  var curr: Node;
   curr := lst;
-  prev := null;
-  var c1: Set<Int>, c2: Set<Int>;
-  c1 := content;
-  c2 := Set<Int>();
-  while (curr != null && curr.data < val)
-    invariant prev == null && curr == lst && c2 == Set<Int>() || 
-                (val > prev.data && prev != curr && prev.next == curr && 
-                Btwn(next,lst,prev,curr)) &*& sorted_set(lst, curr, c2);
-    invariant sorted_set(curr, null, c1) &*& content == c1 ++ c2;
-    invariant prev == null || curr == null || prev.data < curr.data;
+  while (curr.next != null && curr.next.data < val)
+    invariant exists C1: Set<Int> :: acc(curr) -** sorted_set(lst, curr.next, C1) -** sorted_set(lst, null, content) &*& val !in C1;
+    invariant forall x: Node :: Btwn(next, lst, x, curr) ==> x.data < val;
   {
-    c1 := c1 -- Set(curr.data);
-    c2 := c2 ++ Set(curr.data);
-    prev := curr;
     curr := curr.next; 
   }
-  var n: Node;
-  if (curr != null && curr.data == val) {
+  if (curr.next != null && curr.next.data == val) {
     return lst;
   }
   n := new Node;
-  n.next := curr;
+  n.next := curr.next;
   n.data := val;
-  if (prev != null) {
-    prev.next := n;
-    return lst;
-  } else {
-    return n;
-  }
+  curr.next := n;
+  return lst;
 }

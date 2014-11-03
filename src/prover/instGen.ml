@@ -255,7 +255,7 @@ let generate_instances useLocalInst axioms rep_terms egraph type_graph =
       let rec tt bv (fun_terms, fun_vs) t =
         match t with  
         | App (_, _, srt) when srt <> Bool -> 
-            let vs = IdSet.diff (fvt IdSet.empty t) bv in
+            let vs = IdSet.diff (fv_term t) bv in
             if IdSet.is_empty vs
             then fun_terms, fun_vs
             else TermSet.add t fun_terms, IdSet.union vs fun_vs

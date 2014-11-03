@@ -294,10 +294,11 @@ let mk_exists ?(ann=[]) bv f = mk_binder ~ann:ann Exists bv f
   
 
 let annotate f ann =
-  match f with
-  | Atom (t, ann1) -> Atom (t, ann @ ann1)
-  | Binder (b, vs, f1, ann1) -> Binder (b, vs, f1, ann @ ann1)
-  | _ -> 
+  let gen = List.filter (function TermGenerator _ -> true | _ -> false) ann in
+  match f, gen with
+  | Atom (t, ann1), [] -> Atom (t, ann @ ann1)
+  | Binder (b, vs, f1, ann1), [] -> Binder (b, vs, f1, ann @ ann1)
+  | _, _ -> 
       match ann with
       | [] -> f
       | _ -> Binder (Forall, [], f, ann)
@@ -416,14 +417,14 @@ let fold_terms_with_bound fn init f =
 
 (** Computes the set of identifiers of free variables occuring in term [t]
  ** union the accumulated set of identifiers [vars]. *)
-let fvt vars t =
+let fv_term_acc vars t =
   let rec fvt1 vars = function
   | Var (id, _) -> IdSet.add id vars
   | App (_, ts, _) -> List.fold_left fvt1 vars ts
   in fvt1 vars t
 
 (** Computes the set of free variables occuring in term [t]. *)
-let fv_term t = fvt IdSet.empty t
+let fv_term t = fv_term_acc IdSet.empty t
 
 (** Computes the set of free variables occuring in formula [f]. *)
 let fv f = 
@@ -435,6 +436,15 @@ let fv f =
     | App (_, ts, _) ->
 	List.fold_left (fvt bv) vars ts
   in fold_terms_with_bound fvt IdSet.empty f
+
+(** Computes the signature of free variables occuring in term [t]
+ ** union the accumulated variable signature [svars]. *)
+let sorted_fv_term_acc svars t =
+  let rec fvt1 svars = function
+  | Var (id, srt) -> IdMap.add id srt svars
+  | App (_, ts, _) -> List.fold_left fvt1 svars ts
+  in fvt1 svars t
+
 
 let smk_binder ?(ann=[]) b bv f =
   let fv_f = fv f in
@@ -547,28 +557,30 @@ let fun_terms_with_vars f =
       List.fold_left process acc ts
     | App (_, ts, _) ->
       let acc = List.fold_left process acc ts in
-        if not (IdSet.is_empty (fvt IdSet.empty t))
-        then TermSet.add t acc
-        else acc
+      if not (IdSet.is_empty (fv_term_acc IdSet.empty t))
+      then TermSet.add t acc
+      else acc
     | Var _ -> acc
   in
     fold_terms process TermSet.empty f
      
+(** Extract signature of term [t] with accummulator. *)
+let rec sign_term_acc (decls : signature) t = 
+  match t with
+  | Var _ -> decls
+  | App (sym, args, res_srt) ->
+      let arg_srts = 
+        List.map
+	  (function 
+	    | Var (_, srt) 
+	    | App (_, _, srt) -> srt 
+	  )
+	  args
+      in List.fold_left sign_term_acc (SymbolMap.add sym (arg_srts, res_srt) decls) args
+
 (** Extracts the signature of formula [f]. *)
 let sign f : signature =
-  let rec signt (decls : signature) t = match t with
-    | Var _ -> decls
-    | App (sym, args, res_srt) ->
-	let arg_srts = 
-	  List.map
-	    (function 
-	      |	Var (_, srt) 
-	      | App (_, _, srt) -> srt 
-	    )
-	    args
-	in List.fold_left signt (SymbolMap.add sym (arg_srts, res_srt) decls) args
-  in 
-  fold_terms signt SymbolMap.empty f
+  fold_terms sign_term_acc SymbolMap.empty f
 
 (** Extracts the signature of formula [f]. *)
 let overloaded_sign f : (arity list SymbolMap.t) =
@@ -660,7 +672,38 @@ let subst_consts_term subst_map t =
 (** Substitutes all constants in formula [f] with other terms according to substitution map [subst_map]. 
  ** This operation is not capture avoiding. *)
 let subst_consts subst_map f =
-  map_terms (subst_consts_term subst_map) f
+  let add_var (id, srt) vs =
+    if List.exists (fun (id2, srt) -> id = id2) vs 
+    then vs 
+    else (id, srt) :: vs
+  in
+  let subst_annot = function
+    | TermGenerator (bvs, fvs, guards, gen_term) -> 
+        let sign, guards1 = 
+          List.fold_right 
+            (fun m (sign, guards1) -> 
+              match m with
+              | Match (t, f) ->
+                  let t1 = subst_consts_term subst_map t in
+                  sorted_fv_term_acc sign t1, Match (t1, f) :: guards1)
+            guards (IdMap.empty, [])
+        in
+        let bvs1 = 
+          IdMap.fold 
+            (fun id srt bvs1 -> add_var (id, srt) bvs1)
+            sign bvs
+        in 
+        TermGenerator (bvs1, fvs, guards1, subst_consts_term subst_map gen_term)
+    | a -> a
+  in
+  let rec subst = function
+    | BoolOp (op, fs) -> BoolOp (op, List.map subst fs)
+    | Atom (t, a) ->
+        Atom (subst_consts_term subst_map t, List.map subst_annot a)
+    | Binder (b, vs, f, a) ->
+        Binder (b, vs, subst f, List.map subst_annot a)
+  in
+  subst f
 
 
 (** Substitutes all variables in term [t] with terms according to substitution map [subst_map]. 
@@ -695,7 +738,7 @@ let subst subst_map f =
   let rename_vars vs sm =
     let not_bound id _ = not (List.mem_assoc id vs) in
     let sm1 = IdMap.filter not_bound sm in 
-    let occuring = IdMap.fold (fun _ t acc -> fvt acc t) sm IdSet.empty in
+    let occuring = IdMap.fold (fun _ t acc -> fv_term_acc acc t) sm IdSet.empty in
     let vs1, sm2 = 
       List.fold_right 
 	(fun (x, srt) (vs1, sm2) ->

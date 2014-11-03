@@ -136,8 +136,13 @@ and expr =
   | UnaryOp of op * expr * pos
   | BinaryOp of expr * op * expr * pos
   | Ident of ident * pos
+  | Annot of expr * annotation * pos
 
 and exprs = expr list
+
+and annotation =
+  | GeneratorAnnot of exprs * expr
+  | CommentAnnot of string
 
 let pos_of_expr = function
   | Null p 
@@ -156,7 +161,8 @@ let pos_of_expr = function
   | UnaryOp (_, _, p)
   | BinaryOp (_, _, _, p)
   | Ident (_, p) -> p
-  
+  | Annot (_, _, p) -> p  
+
 let pos_of_stmt = function
   | Skip pos
   | Block (_, pos)
