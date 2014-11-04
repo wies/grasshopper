@@ -1,0 +1,35 @@
+include "../include/slsset.spl";
+
+procedure intersect(x: Node, y: Node, implicit ghost x_content: Set<Int>, implicit ghost y_content: Set<Int>)
+  returns (res: Node)
+  requires sorted_set(x, null, x_content);
+  requires sorted_set(y, null, y_content);
+  ensures sorted_set(res, null, x_content ** y_content);
+  ensures sorted_set(y, null, y_content);
+{
+  if (x == null || y == null) {
+    delete(x);
+    return null;
+  } else if (x.data < y.data) {
+    var tmp: Node;
+    tmp := x.next;
+    free x;
+    return intersect(tmp, y);
+  } else if (x.data > y.data) {
+    return intersect(x, y.next);
+  } else { 
+    x.next := intersect(x.next, y.next);
+    return x;
+  }
+}
+
+procedure delete(x: Node) 
+  requires lseg(x, null);
+  ensures emp;
+{
+  if (x == null) return;
+  var tmp: Node;
+  tmp := x.next;
+  free x;
+  delete(tmp);
+}
