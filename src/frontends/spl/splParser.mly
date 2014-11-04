@@ -485,7 +485,7 @@ iff_expr:
 
 annot_expr:
 | iff_expr { $1 }
-| iff_expr AT LPAREN annot RPAREN { Annot ($1, $4, mk_position 1 5) }
+| annot_expr AT LPAREN annot RPAREN { Annot ($1, $4, mk_position 1 5) }
 
 quant_expr: 
 | annot_expr { $1 }

@@ -1,10 +1,10 @@
 include "../include/slsset.spl";
 
 procedure union(lst1: Node, lst2: Node,
-                implicit ghost content1: Set<Int>, implicit ghost content2: Set<Int>)
+                implicit ghost C1: Set<Int>, implicit ghost C2: Set<Int>)
   returns (res: Node)
-  requires sorted_set(lst1, null, content1) &*& sorted_set(lst2, null, content2);
-  ensures sorted_set(res, null, content1 ++ content2);
+  requires sorted_set(lst1, null, C1) &*& sorted_set(lst2, null, C2);
+  ensures sorted_set(res, null, C1 ++ C2);
 {
     if (lst1 == null) {
         return lst2;

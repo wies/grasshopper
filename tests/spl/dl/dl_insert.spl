@@ -1,33 +1,34 @@
 include "../include/dllist.spl";
 
 procedure dl_insert(a: Node, b: Node, elt: Node) returns (c: Node, d: Node)
-    requires dlseg(a, null, null, b) &*& elt.next |-> null;
+    requires dlseg(a, null, null, b) &*& acc(elt);
     ensures dlseg(c, null, null, d);
 {
   if (a == null) {
     elt.prev := null;
+    elt.next := null;
     return elt, elt;
   } else {
-    var curr: Node, prv: Node;
+    var curr: Node;
     c, d := a, b;
     curr := c;
-    prv := null;
     var nondet: Bool;
     while (nondet && curr.next != null) 
-      invariant curr != null &*& dlseg(c, null, curr, prv) &*& dlseg(curr, prv, null, d);
+      invariant acc(curr) -** dlseg(c, null, null, d);
     {
-      prv := curr;
       curr := curr.next;
       havoc nondet;
     }
     elt.next := curr;
+    var prv: Node;
+    prv := curr.prev;
     curr.prev := elt;
+    elt.prev := prv;
     if (prv != null) {
       prv.next := elt;
+      return c, d;
     } else {
-      c := elt;
+      return elt, d;
     }
-    elt.prev := prv;
-    return c, d;
   }
 }

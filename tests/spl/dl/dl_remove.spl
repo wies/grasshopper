@@ -10,31 +10,29 @@ procedure dl_remove(a: Node, b: Node) returns (c: Node, d: Node)
     free a;
     return null, null;
   } else {
-    var curr: Node, prv: Node;
+    var curr: Node;
     c, d := a, b;
     curr := c;
-    prv := null;
     
     var nondet: Bool;
     while (nondet && curr.next != null) 
-      invariant curr != null;
-      invariant dlseg(c, null, curr, prv);
-      invariant dlseg(curr, prv, null, d);
+      invariant acc(curr) -** dlseg(c, null, null, d);
     {
-      prv := curr;
       curr := curr.next;
       havoc nondet;
     }
     
-    var tmp: Node;
-    tmp := curr.next;
+    var nxt: Node;
+    nxt := curr.next;
+    var prv: Node;
+    prv := curr.prev;
     if (prv != null) {
-      prv.next := curr.next;
+      prv.next := nxt;
     } else {
-      c := tmp;
+      c := nxt;
     }
-    if (tmp != null) {
-      tmp.prev := prv;
+    if (nxt != null) {
+      nxt.prev := prv;
     } else {
       d := prv;
     }

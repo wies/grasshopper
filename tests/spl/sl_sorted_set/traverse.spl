@@ -1,25 +1,17 @@
 include "../include/slsset.spl";
 
-procedure traverse(lst: Node, implicit ghost content: Set<Int>)
-  requires sorted_set(lst, null, content);
-  ensures sorted_set(lst, null, content);
+procedure traverse(lst: Node, implicit ghost C: Set<Int>)
+  requires sorted_set(lst, null, C);
+  ensures sorted_set(lst, null, C);
 {
   var curr: Node;
   curr := lst;
-  var c1: Set<Int>, c2: Set<Int>;
-  c1 := content;
-  c2 := Set<Int>();
   var prev: Node;
   prev := null;
   while (curr != null) 
-    invariant prev == null && curr == lst && c2 == Set<Int>() || 
-                (prev != curr && prev.next == curr && 
-                Btwn(next,lst,prev,curr)) &*& sorted_set(lst, curr, c2);
-    invariant sorted_set(curr, null, c1) &*& content == c1 ++ c2;
-    invariant prev == null || curr == null || prev.data < curr.data;
+    invariant (prev == null && curr == lst || prev.next |-> curr) -** 
+      sorted_set(lst, null, C);
   {
-    c1 := c1 -- Set(curr.data);
-    c2 := c2 ++ Set(curr.data);
     prev := curr;
     curr := curr.next; 
   }

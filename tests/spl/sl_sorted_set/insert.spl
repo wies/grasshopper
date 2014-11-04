@@ -1,34 +1,45 @@
 include "../include/slsset.spl";
 
-procedure insert(lst: Node, val: Int, implicit ghost content: Set<Int>)
+procedure append(val: Int, x: Node, implicit ghost C: Set<Int>) 
   returns (res: Node)
-  requires sorted_set(lst, null, content);
-  ensures sorted_set(res, null, content ++ Set(val));
+  requires sorted_set(x, null, C);
+  requires forall v in C :: val < v;
+  ensures sorted_set(res, null, C ++ Set(val));
 {
-  var n: Node;  
-  if (lst == null || val < lst.data) {
-    n := new Node;
-    n.next := lst;
-    n.data := val;
-    return n;
-  } else if (val == lst.data) {
+  res := new Node;
+  res.next := x;
+  res.data := val;
+}
+
+procedure insert(lst: Node, val: Int, implicit ghost C: Set<Int>)
+  returns (res: Node)
+  requires sorted_set(lst, null, C);
+  ensures sorted_set(res, null, C ++ Set(val));
+{
+  var curr: Node;
+  curr := lst;
+  var prev: Node;
+  prev := null;
+  
+  while (curr != null && curr.data < val)
+    invariant (prev == null && curr == lst || val > prev.data &*& prev.next |-> curr) -** 
+      sorted_set(lst, null, C);
+  {
+    prev := curr;
+    curr := curr.next;
+  }
+
+  if (curr != null && curr.data == val) {
     return lst;
   }
 
-  var curr: Node;
-  curr := lst;
-  while (curr.next != null && curr.next.data < val)
-    invariant exists C1: Set<Int> :: acc(curr) -** sorted_set(lst, curr.next, C1) -** sorted_set(lst, null, content) &*& val !in C1;
-    invariant forall x: Node :: Btwn(next, lst, x, curr) ==> x.data < val;
-  {
-    curr := curr.next; 
-  }
-  if (curr.next != null && curr.next.data == val) {
+  var n: Node;
+  n := append(val, curr);
+  
+  if (prev == null) {
+    return n;
+  } else {
+    prev.next := n;
     return lst;
   }
-  n := new Node;
-  n.next := curr.next;
-  n.data := val;
-  curr.next := n;
-  return lst;
 }

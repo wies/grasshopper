@@ -180,7 +180,7 @@ let resolve_names cus =
             Ident (id, pos)
         | Annot (e, GeneratorAnnot (es, ge), pos) ->
             let es1 = List.map (re tbl) es in
-            Annot (re tbl e, GeneratorAnnot (es1, re tbl e), pos)
+            Annot (re tbl e, GeneratorAnnot (es1, re tbl ge), pos)
         | Annot (e, ann, pos) ->
             Annot (re tbl e, ann, pos)
         | e -> e
@@ -569,7 +569,7 @@ let convert cus =
       | IntType -> "expression of type int"
       | BoolType -> "expression of type bool"
       | FieldType _ -> "field"
-      | UniversalType -> "expression of some type"
+      | UniversalType -> "expression"
     in
     let type_error pos expected found =
       ProgError.type_error pos
@@ -701,7 +701,7 @@ let convert cus =
               FOL_form (FormUtil.mk_srcpos pos (FormUtil.mk_eq t1 t2))
           | SL_form _ -> 
               ProgError.error (pos_of_expr e1) 
-                "Operator == is not defined for SL expressions")
+                "Operator == is not defined for SL formulas")
       | BinaryOp (e1, (OpDiff as op), e2, _)
       | BinaryOp (e1, (OpUn as op), e2, _)      
       | BinaryOp (e1, (OpInt as op), e2, _) ->
@@ -868,13 +868,13 @@ let convert cus =
       | SL_form (Atom (Pred p, ts, pos)) ->
           FormUtil.mk_pred ~ann:[SrcPos (pos_of_expr e)] p ts
       | SL_form _ ->
-          type_error (pos_of_expr e) "expression of type bool" "SL expression"
+          type_error (pos_of_expr e) "expression of type bool" "SL formula"
       | FOL_form f -> f
       | FOL_term (t, BoolType) -> Form.Atom (t, [SrcPos (pos_of_expr e)])
       | FOL_term (t, ty) -> type_error (pos_of_expr e) "expression of type bool" (ty_str ty)
     and extract_term locals ty e =
       match convert_expr locals e with
-      | SL_form _ -> type_error (pos_of_expr e) (ty_str ty) "SL expression"
+      | SL_form _ -> type_error (pos_of_expr e) (ty_str ty) "SL formula"
       | FOL_form (BoolOp (And, [])) 
       | FOL_form (Binder (_, [], BoolOp (And, []), _)) -> 
           Form.App (BoolConst true, [], Bool), BoolType

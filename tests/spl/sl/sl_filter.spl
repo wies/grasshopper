@@ -9,8 +9,7 @@ procedure filter(x: Node) returns (res: Node)
   curr := x;
   res := x;
   while (curr != null) 
-    invariant lseg(res, prv) &*& prv.next |-> curr || prv == null &*& res == curr;
-    invariant lseg(curr, null);
+    invariant (prv.next |-> curr || prv == null &*& res == curr) -** lseg(res, null);
   {
     var old_curr: Node;
     old_curr := curr;

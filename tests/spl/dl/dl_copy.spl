@@ -9,8 +9,8 @@ procedure dl_copy(a: Node, b: Node) returns (c: Node, d: Node)
   curr := a;
   old_curr := null;
   while (curr != null) 
-    invariant dlseg(a, null, curr, old_curr);
-    invariant dlseg(curr, old_curr, null, b);
+    invariant (curr == a && old_curr == null || old_curr.next |-> curr) -**
+      dlseg(a, null, null, b);
     invariant dlseg(c, null, null, d);
   {
     var old_d: Node;
