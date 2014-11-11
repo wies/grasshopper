@@ -87,8 +87,8 @@ let read_write_axioms_closed fld1 =
   in
   let f_upd2 = 
     if !Config.instantiate || !Config.smtpatterns
-    then mk_or [mk_eq loc1 mk_null; mk_neq loc1 loc2; mk_eq (g loc2) dvar]
-    else mk_or [mk_eq loc1 mk_null; mk_eq (g loc1) dvar]
+    then mk_or [mk_neq loc1 loc2; mk_eq (g loc2) dvar]
+    else mk_or [mk_eq (g loc1) dvar]
   in
   let generator2 = 
     [l1; d1],

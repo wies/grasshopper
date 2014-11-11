@@ -226,7 +226,7 @@ let reduce_frame fs =
   in
   Util.rev_concat [frame_axioms; fs] 
   
-let open_axioms open_cond axioms = 
+let open_axioms ?(force=false) open_cond axioms = 
   let rec open_axiom generators = function
     | Binder (b, [], f, a) ->
         let f1, generators1 = open_axiom generators f in
@@ -250,7 +250,7 @@ let open_axioms open_cond axioms =
         in
         let open_generators (x, _) = IdSet.mem x gen_vs in
         let vs1 = List.filter (~~ (open_cond f ||| open_generators)) vs in
-        if !Config.instantiate then
+        if !Config.instantiate || force then
           Binder (b, vs1, f, a1), generators1
         else 
           Binder (b, vs, f, a1), generators1
@@ -358,8 +358,9 @@ let reduce_read_write fs =
   let basic_pt_flds = TermSet.filter (has_sort (Fld Loc) &&& is_free_const) gts in
   (* instantiate null axioms *)
   let classes =  CongruenceClosure.congr_classes fs gts in
-  let null_ax, _ = open_axioms isFld (Axioms.null_axioms ()) in
-  let null_ax1 = instantiate_with_terms false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
+  let null_ax, _ = open_axioms ~force:true isFld (Axioms.null_axioms ()) in
+  (* note: not forcing the instantiation here will yield an inconsistency with the read/write axioms *)
+  let null_ax1 = instantiate_with_terms ~force:true false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
   let fs1 = null_ax1 @ fs in
   let gts = TermSet.union (ground_terms (smk_and null_ax1)) gts in
   let field_sorts = TermSet.fold (fun t srts ->
@@ -469,8 +470,8 @@ let reduce_reach fs gts =
 	    | _ -> true) (CongruenceClosure.class_of t classes))
       btwn_flds
   in
-  let reach_ax, _ = open_axioms isFld (Axioms.reach_axioms ()) in
-  let reach_ax1 = instantiate_with_terms false reach_ax (CongruenceClosure.restrict_classes classes non_updated_flds) in
+  let reach_ax, _ = open_axioms ~force:true isFld (Axioms.reach_axioms ()) in
+  let reach_ax1 = instantiate_with_terms ~force:true false reach_ax (CongruenceClosure.restrict_classes classes non_updated_flds) in
   rev_concat [reach_ax1; reach_write_ax; fs], gts
 
 let instantiate_user_def_axioms read_propagators fs gts =

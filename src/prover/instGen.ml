@@ -303,8 +303,8 @@ let generate_instances useLocalInst axioms rep_terms egraph type_graph =
   in
   List.fold_left instantiate epr_axioms axioms
   
-let instantiate_with_terms local axioms classes =
-    if !Config.instantiate then
+let instantiate_with_terms ?(force=false) local axioms classes =
+    if !Config.instantiate || force then
       (* remove atoms from congruence classes *)
       let classes = List.filter (function t :: _ -> sort_of t <> Bool | _ -> false) classes in
       let _ = 

@@ -259,7 +259,12 @@ let declare_sorts has_int session =
       then "(define-sort " ^ set_sort_string ^ int_sort_string ^ " () (Set " ^ int_sort_string ^ "))"
       else "(declare-sort " ^ set_sort_string ^ int_sort_string ^ " 0)");
   if !Config.encode_fields_as_arrays 
-  then writeln session ("(define-sort " ^ fld_sort_string ^ " (X) (Array Loc X))")
+  then 
+    begin
+      writeln session ("(define-sort " ^ fld_sort_string ^ loc_sort_string ^ " () (Array Loc Loc))");
+      writeln session ("(define-sort " ^ fld_sort_string ^ bool_sort_string ^ " () (Array Loc Bool))");
+      if has_int then writeln session ("(define-sort " ^ fld_sort_string ^ int_sort_string ^ " () (Array Loc Int))")
+    end
   else 
     begin
       declare_sort session (fld_sort_string ^ bool_sort_string) 0;
