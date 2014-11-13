@@ -48,7 +48,7 @@ let smtsolver = ref "Z3"
 let smtpatterns = ref false
 
 (* optmisation: oldify fields only if modified *)
-let optFieldMod = ref true
+let opt_field_mod = ref true
 (* optmisation: self-framing clause for SL predicates *)
 let optSelfFrame = ref false
 
@@ -74,7 +74,7 @@ let cmd_options =
    ("-nosets", Arg.Clear keep_sets, " Eliminate sets in reduction to GRASS");
    ("-noinst", Arg.Clear instantiate, " Let the SMT solver deal with the quantifiers without prior instantiation");
    ("-nostratify", Arg.Clear stratify, " Instantiate quantifiers that satisfy stratified sort restrictions");
-   ("-noOptFieldMod", Arg.Clear optFieldMod, " Disable mod set analysis optimization for fields");
+   ("-noOptFieldMod", Arg.Clear opt_field_mod, " Disable mod set analysis optimization for fields");
    ("-optSelfFrame", Arg.Set optSelfFrame, " enable generation of self-framing clauses for SL predicates");
    ("-predefPreds", Arg.Set predefPreds, " Disable heuristics to translate SL predicates to GRASS");
    ("-heuristicTranslation", Arg.Clear predefPreds, " Enable heuristics to translate SL predicates to GRASS");

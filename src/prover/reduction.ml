@@ -1,4 +1,4 @@
-(** Reduction from GRASS to EPR + Stratified Sorts *)
+(** {5 Reduction from GRASS to SMT} *)
 
 open Util
 open Form
@@ -432,7 +432,7 @@ let reduce_read_write fs =
       TermSet.fold (fun t acc ->
         match t with
         | App (Write, [fld; _; _], _) ->
-            Axioms.read_write_axioms_closed fld @ acc
+            Axioms.read_write_axioms fld @ acc
         | _ -> acc) gts []
     in
     generators_and_axioms 

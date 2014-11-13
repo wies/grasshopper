@@ -1,48 +1,88 @@
-(** Translation of program with SL specifications to a pure GRASS program *)
+(** {5 Translation of program with SL specifications to a pure GRASS program} *)
 
 open Form
 open FormUtil
 open Prog
 open AuxNames
 
-(** Add tree alloc invariant -- this is a really bad hack!! *)
-let treeify prog =
-  let tree_preds_in_spec acc s = 
-    match s.spec_form with
-    | FOL f ->
-        fold_terms 
-          (fun acc -> function
-            | App (FreeSym id, _ :: _ :: p :: _, _) when id = ("tree_struct", 0) ->
-                TermSet.add p acc
-            | App (FreeSym id, _ :: _ :: _ :: p :: _, _) when id = ("stree_struct", 0) ->
-                TermSet.add p acc
-            | _ -> acc)
-          acc f
-    | SL _ -> acc
+(** Add reachability invariants for ghost fields of sort Loc *)
+let add_ghost_field_invariants prog =
+  let ghost_loc_fields =
+    List.filter 
+      (fun decl -> decl.var_sort = Fld Loc && decl.var_is_ghost)
+      (Prog.vars prog)
   in
-  let add_tree_preds proc = 
-    let ps =
-      List.fold_left tree_preds_in_spec TermSet.empty 
-        (proc.proc_precond @ proc.proc_postcond)
-    in
-    let mk_tree_alloc_inv p =
-      mk_pred (mk_ident "treeAllocInvariant_struct") [mk_empty (Set Loc); p; alloc_set]
-    in 
-    let tree_invs =
-      TermSet.fold (fun p acc -> mk_tree_alloc_inv p :: acc) ps []
-    in
-    match tree_invs with
-    | [] -> proc
-    | _ ->
-        let tree_inv = 
-          mk_spec_form (FOL (mk_and tree_invs)) "tree_alloc_inv" None dummy_position
-        in
-        { proc with 
-          proc_precond = tree_inv :: proc.proc_precond; 
-          proc_postcond = tree_inv :: proc.proc_postcond;
+  let locals = IdMap.add alloc_id alloc_decl IdMap.empty in
+  let preds, pred_map =
+    List.fold_left (fun (preds, pred_map) decl ->
+      let open Axioms in
+      let fld = mk_free_const decl.var_sort decl.var_name in
+      let body_form =
+        mk_and 
+          [ mk_name "field_eventually_null" 
+              (mk_forall [l1] (mk_reach fld loc1 mk_null));
+            mk_name "field_nonalloc_null"
+              (mk_forall [l1; l2]
+                 (mk_sequent
+                    [mk_reach fld loc1 loc2]
+                    [mk_eq loc1 loc2; mk_and [mk_elem loc1 alloc_set; mk_elem loc2 alloc_set]; mk_eq loc2 mk_null]));
+          ]
+      in
+      let pred_id = fresh_ident "ghost_field_invariant" in
+      let name = "ghost field invariant for " ^ string_of_ident decl.var_name in
+      let body = mk_spec_form (FOL body_form) name None (decl.var_pos) in
+      let pred = 
+        { pred_name = pred_id;
+          pred_formals = [decl.var_name; alloc_id]; 
+          pred_outputs = []; 
+          pred_locals = IdMap.add decl.var_name decl locals; 
+          pred_body = body;
+          pred_pos = decl.var_pos;
+          pred_accesses = IdSet.empty;
+          pred_is_free = false;
         }
+      in
+      (pred :: preds, IdMap.add decl.var_name pred_id pred_map)) 
+      ([], IdMap.empty) 
+      ghost_loc_fields
   in
-  map_procs add_tree_preds prog
+  let add_invs proc = 
+    let all_accesses = accesses_proc prog proc in
+    let all_modifies = 
+      if !Config.opt_field_mod
+      then modifies_proc prog proc 
+      else all_accesses
+    in
+    let accessed =
+      List.filter 
+        (fun decl -> 
+          IdSet.mem alloc_id all_modifies ||
+          IdSet.mem decl.var_name all_accesses) 
+        ghost_loc_fields
+    in
+    let modified =
+      List.filter 
+        (fun decl -> 
+          IdSet.mem alloc_id all_modifies ||
+          IdSet.mem decl.var_name all_modifies) 
+        ghost_loc_fields
+    in
+    let mk_inv decl =
+      let fld = mk_free_const decl.var_sort decl.var_name in
+      let pred_id = IdMap.find decl.var_name pred_map in
+      let inv = mk_pred pred_id [fld; alloc_set] in
+      let name = "ghost field invariant for " ^ string_of_ident decl.var_name in
+      mk_spec_form (FOL inv) name None decl.var_pos
+    in 
+    let pre_invs = List.map mk_inv accessed in
+    let post_invs = List.map mk_inv modified in
+    { proc with 
+      proc_precond = pre_invs @ proc.proc_precond; 
+      proc_postcond = post_invs @ proc.proc_postcond;
+    }
+  in
+  let prog1 = List.fold_left declare_pred prog preds in
+  map_procs add_invs prog1
 
 
 (** Desugare SL specification to FOL specifications. 
@@ -248,7 +288,7 @@ let elim_sl prog =
       proc_body = body;
     } 
   in
-  treeify { prog with prog_procs = IdMap.map compile_proc prog.prog_procs }
+  add_ghost_field_invariants (map_procs compile_proc prog)
 
 (** Annotate safety checks for heap accesses *)
 let annotate_heap_checks prog =
@@ -298,7 +338,7 @@ let annotate_heap_checks prog =
   let annotate_proc proc = 
     { proc with proc_body = Util.Opt.map (map_basic_cmds annotate) proc.proc_body } 
   in
-  { prog with prog_procs = IdMap.map annotate_proc prog.prog_procs; }
+  map_procs annotate_proc prog
 
 
 (** Eliminate all new and dispose commands.

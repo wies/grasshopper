@@ -77,7 +77,11 @@ let to_form pred_to_form domain f =
         let translated = process_sep pol d' sep in
         let pos = pos_of_sl_form sep in
         let process (tr, d) = 
-          FormUtil.smk_and [tr; mk_srcpos pos (FormUtil.mk_eq d domain)]
+          let d_eq_domain = 
+            FormUtil.mk_comment "Memory footprint at error location does not match this specification" 
+              (mk_srcpos pos (FormUtil.mk_eq d domain))
+          in
+          FormUtil.smk_and [tr; d_eq_domain]
         in
         FormUtil.smk_or (List.map process translated)
   in

@@ -1063,7 +1063,7 @@ let convert cus =
                  Printf.sprintf 
                   "A precondition for this call of %s might not hold"
                   (string_of_ident proc_name),
-                "Related location: This is the precondition that might not hold"
+                "This is the precondition that might not hold"
               in
               let name = "precondition of " ^ string_of_ident proc_name in
               convert_spec_form locals e name (Some mk_msg) :: pre, post
@@ -1072,7 +1072,7 @@ let convert cus =
                  Printf.sprintf 
                   "A postcondition of procedure %s might not hold at this return point"
                   (string_of_ident proc_name),
-                "Related location: This is the postcondition that might not hold"
+                "This is the postcondition that might not hold"
               in 
               let name = "postcondition of " ^ string_of_ident proc_name in
               pre, convert_spec_form locals e name (Some mk_msg) :: post)

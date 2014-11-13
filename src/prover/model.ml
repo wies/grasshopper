@@ -1,4 +1,4 @@
-(** Models of GRASS formulas *)
+(** {5 Models of GRASS formulas} *)
 
 open Util
 open Form
@@ -653,8 +653,8 @@ let output_graphviz chan model =
       (fun f ->
         List.iter (fun l ->
           try
-            if interp_symbol model Null ([], Loc) [] = l then () else
             let r = interp_symbol model Read ([Fld Loc; Loc], Loc) [f; l] in
+            if interp_symbol model Null ([], Loc) [] = r then () else
 	    let label = get_label f in
 	    Printf.fprintf chan "\"%s\" -> \"%s\" [%s]\n" 
 	      (string_of_loc_value l) (string_of_loc_value r) label

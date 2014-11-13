@@ -315,6 +315,13 @@ let map_spec_form fol_fn sl_fn sf =
   in
   { sf with spec_form = sf1 }
 
+let map_spec_fol_form fn sf =
+  let sf1 = match sf.spec_form with
+  | FOL f -> FOL (fn f)
+  | f -> f
+  in
+  { sf with spec_form = sf1 }
+
 let is_checked_spec sf =
   match sf.spec_kind with
   | Free -> false
@@ -437,7 +444,7 @@ let accesses c = (prog_point c).pp_accesses
 let modifies_proc prog proc = 
   match proc.proc_body with
   | Some cmd ->
-      if !Config.optFieldMod 
+      if !Config.opt_field_mod 
       then 
         IdSet.filter 
           (fun id -> IdMap.mem id prog.prog_vars) 

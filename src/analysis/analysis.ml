@@ -1,10 +1,12 @@
+(** {5 Analysis and Verification of GRASS programs} *)
+
 open Form
 open FormUtil
 open Prog
 open Simplify
 open Grassify
 
-(** Infer sets of accessed and modified variables *)
+(** Infer sets of accessed and modified variables for all procedures and predicates in program [prog] *)
 (* TODO: the implementation of the fix-point loop is brain damaged - rather use a top. sort of the call graph *)
 let infer_accesses prog =
   let rec pm prog = function
@@ -118,7 +120,7 @@ let infer_accesses prog =
   in
   pm_prog prog
 
-(** Simplify the given program by applying all transformation steps. *)
+(** Simplify the given program [prog] by applying all transformation steps. *)
 let simplify prog =
   let dump_if n prog = 
     if !Config.dump_ghp == n 
@@ -142,7 +144,43 @@ let simplify prog =
   dump_if 3 prog;
   prog
 
-(** Generate predicate instances *)
+(** Add labels for trace generation and debugging to verification condition [vc] *)
+let add_labels vc =
+  let rec get_comment = function
+    | Comment c :: _ -> Some c
+    | _ :: annots -> get_comment annots
+    | [] -> None
+  in
+  let process_annot c (ltop, annots) ann =
+    match ann, c with
+    | SrcPos pos, Some c -> 
+        let lbl = fresh_ident "Label" in
+        IdMap.add lbl (pos, "Related Location: " ^ c) ltop, 
+        Label lbl :: ann :: annots
+    | _ -> ltop, ann :: annots
+  in
+  let rec al f ltop = 
+    match f with
+    | BoolOp (op, fs) -> 
+        let ltop1, fs1 = 
+          List.fold_right (fun f (ltop, fs1) -> 
+            let ltop1, f1 = al f ltop in
+            ltop1, f1 :: fs1) fs (ltop, [])
+        in
+        ltop1, BoolOp (op, fs1)
+    | Binder (b, vs, f, annots) ->
+        let c = get_comment annots in
+        let ltop1, f1 = al f ltop in
+        let ltop2, annots1 = List.fold_left (process_annot c) (ltop1, []) annots in
+        ltop2, Binder (b, vs, f1, annots1)
+    | Atom (t, annots) -> 
+        let c = get_comment annots in
+        let ltop1, annots1 = List.fold_left (process_annot c) (ltop, []) annots in
+        ltop1, Atom (t, annots1)
+  in
+  al vc IdMap.empty
+
+(** Expand predicate definitions for all predicates in formula [f] according to program [prog] *)
 let add_pred_insts prog f =
   let expand_pred pos p ts =
     let pred = find_pred prog p in
@@ -163,8 +201,7 @@ let add_pred_insts prog f =
     | FOL f -> subst_consts sm f
     | SL f -> failwith "SL formula should have been desugared"
     in
-    if pos then body
-    else nnf (mk_not body)
+    if pos then body else nnf (mk_not body)
   in
   let f_inst = 
     let rec expand_neg seen = function
@@ -178,7 +215,8 @@ let add_pred_insts prog f =
         when IdMap.mem p prog.prog_preds && 
           not (IdSet.mem p seen) ->
             let pbody = expand_pred false p ts in
-            let p1 = annotate (smk_and [(*mk_not (mk_pred p ts);*) pbody]) a in
+            let c = "Definition of predicate " ^ (string_of_ident p) in
+            let p1 = annotate (smk_and [(*mk_not (mk_pred p ts);*) pbody]) (Comment c :: a) in
             expand_neg (IdSet.add p seen) p1
       | f -> f
     in 
@@ -233,45 +271,11 @@ let add_pred_insts prog f =
       pos_preds []
   in
   (*print_form stdout (smk_and (f_inst :: pos_instances)); print_newline ();*)
-  mk_exists ~ann:a vs (smk_and (f :: pos_instances))
+  let f = mk_exists ~ann:a vs (smk_and (f :: pos_instances)) in
+  f
 
-let add_labels vc =
-  let rec get_comment = function
-    | Comment c :: _ -> Some c
-    | _ :: annots -> get_comment annots
-    | [] -> None
-  in
-  let process_annot c (ltop, annots) ann =
-    match ann, c with
-    | SrcPos pos, Some c -> 
-        let lbl = fresh_ident "Label" in
-        IdMap.add lbl (pos, "Related Location: " ^ c) ltop, 
-        Label lbl :: ann :: annots
-    | _ -> ltop, ann :: annots
-  in
-  let rec al f ltop = 
-    match f with
-    | BoolOp (op, fs) -> 
-        let ltop1, fs1 = 
-          List.fold_right (fun f (ltop, fs1) -> 
-            let ltop1, f1 = al f ltop in
-            ltop1, f1 :: fs1) fs (ltop, [])
-        in
-        ltop1, BoolOp (op, fs1)
-    | Binder (b, vs, f, annots) ->
-        let c = get_comment annots in
-        let ltop1, f1 = al f ltop in
-        let ltop2, annots1 = List.fold_left (process_annot c) (ltop1, []) annots in
-        ltop2, Binder (b, vs, f1, annots1)
-    | Atom (t, annots) -> 
-        let c = get_comment annots in
-        let ltop1, annots1 = List.fold_left (process_annot c) (ltop, []) annots in
-        ltop1, Atom (t, annots1)
-  in
-  al vc IdMap.empty
-
-(** Generate verification conditions for given procedure. 
- ** Assumes that proc has been transformed into SSA form. *)
+(** Generate verification conditions for procedure [proc] of program [prog]. 
+ ** Assumes that [proc] has been transformed into SSA form. *)
 let vcgen prog proc =
   let rec vcs acc pre = function
     | Loop _ -> 
@@ -304,7 +308,8 @@ let vcgen prog proc =
         | Assert s ->
             let rec annotate_aux_msg msg = 
               let annotate annot = 
-                if List.exists (function SrcPos _ -> true | _ -> false) annot
+                if List.exists (function SrcPos _ -> true | _ -> false) annot &&
+                  List.for_all (function Comment _ -> false | _ -> true) annot
                 then Comment msg :: annot
                 else annot
               in
@@ -345,43 +350,13 @@ let vcgen prog proc =
   | Some body -> List.rev (fst (vcs [] [] body))
   | None -> []
 
-let split_vc prog vc_name f =
-  let rec split vcs = function
-    | BoolOp(And, fs) :: fs1 -> 
-        split vcs (fs @ fs1)
-    | BoolOp(Or, fs) :: fs1 ->
-        let fsa, fsb = List.fold_right (fun f (fsa, fsb) -> (fsb, f :: fsa)) fs ([], []) in
-        let f1 = match fsa with
-        | [] -> smk_or fsb
-        | fsa -> 
-            begin
-              let vc = smk_and (vcs @ smk_or fsa :: fs1) in
-              match Prover.check_sat ~session_name:vc_name (add_pred_insts prog vc) with
-              | Some false -> smk_or fsb
-              | _ -> smk_or fsa
-            end
-        in
-        split vcs (f1 :: fs1)
-    | Binder (b, [], Binder (_, [], f, a2), a1) :: fs1 ->
-        split vcs (Binder (b, [], f, a1 @ a2) :: fs1)
-    | Binder (b, [], BoolOp(And as op, fs), a) :: fs1
-    | Binder (b, [], BoolOp(Or as op, fs), a) :: fs1 ->
-        let f1 = BoolOp(op, List.map (fun f -> Binder (b, [], f, a)) fs) in
-        split vcs (f1 :: fs1)
-    | f :: fs1 -> split (f :: vcs) fs1
-    | [] -> smk_and vcs
-  in 
-  let min_vc = split [] [f] in
-  ignore (Prover.check_sat ~session_name:vc_name (add_pred_insts prog min_vc))
-
-(** Generate verification conditions for given procedure and check them. *)
+(** Generate verification conditions for procedure [proc] of program [prog] and check them. *)
 let check_proc prog proc =
   let check_vc errors (vc_name, (vc_msg, pp), vc0) =
-    let labels, vc = add_labels vc0 in
-    (*let _ = print_form stdout vc in*)
     let check_one vc =
       if errors <> [] && not !Config.robust then errors else
       let vc_and_preds = add_pred_insts prog vc in
+      let labels, vc_and_preds = add_labels vc_and_preds in
       Debug.info (fun () -> "Checking VC: " ^ vc_name ^ ".\n");
       Debug.debug (fun () -> (string_of_form vc_and_preds) ^ "\n");
       let sat_means = 
@@ -424,13 +399,14 @@ let check_proc prog proc =
             String.concat "\n\n" (vc_msg :: error_msg_strings)
           in
           (pp, error_msg, model) :: errors
-    in check_one vc
+    in check_one vc0
   in
   let _ = Debug.info (fun () -> "Checking procedure " ^ string_of_ident proc.proc_name ^ "...\n") in
   let vcs = vcgen prog proc in
   List.fold_left check_vc [] vcs
 
-(** Generate a counterexample trace from a failed VC and model *)
+(** Generate a counterexample trace from a failed VC of procedure [proc] in [prog]. 
+  * Here [pp] is the point of failure in [proc] and [model] is the counterexample model. *)
 let get_trace prog proc (pp, model) =
   let add (pos, state) = function
     | (prv_pos, prv_state) :: trace ->

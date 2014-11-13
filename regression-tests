@@ -51,6 +51,6 @@ sorted_set_insert       tests/spl/sl_sorted_set/insert.spl      pass
 sorted_set_traverse     tests/spl/sl_sorted_set/traverse.spl    pass
 sorted_set_union        tests/spl/sl_sorted_set/union.spl       pass
 "
-#dl_traverse_backward tests/spl/dl_traverse_backward.spl pass
 
-OPTIONS=$@ time -f "Accumulated time: %Us." ./run-tests $TESTS
+
+OPTIONS=$@ time -f "Elapsed user time: %Us.\nElapsed real time: %es." ./run-tests $TESTS

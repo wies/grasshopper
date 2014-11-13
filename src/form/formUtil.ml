@@ -292,16 +292,34 @@ let rec mk_binder ?(ann=[]) b bv f =
 let mk_forall ?(ann=[]) bv f = mk_binder ~ann:ann Forall bv f 
 let mk_exists ?(ann=[]) bv f = mk_binder ~ann:ann Exists bv f 
   
-
+(** Add anntotations [ann] to formula [f]. *)
 let annotate f ann =
   let gen = List.filter (function TermGenerator _ -> true | _ -> false) ann in
   match f, gen with
   | Atom (t, ann1), [] -> Atom (t, ann @ ann1)
   | Binder (b, vs, f1, ann1), [] -> Binder (b, vs, f1, ann @ ann1)
+  | Binder (b, [], f1, ann1), _ -> Binder (b, [], f1, ann @ ann1)
   | _, _ -> 
       match ann with
       | [] -> f
       | _ -> Binder (Forall, [], f, ann)
+
+(** Filter all annotations in formula [f] according to filter [fn]. *)
+let filter_annotations fn f = 
+  let rec fa = function
+    | BoolOp (op, fs) ->
+        BoolOp (op, List.map fa fs)
+    | Atom (t, ann) ->
+        Atom (t, List.filter fn ann)
+    | Binder (b, vs, f, ann) ->
+        let f1 = fa f in
+        Binder (b, vs, f1, List.filter fn ann)
+  in fa f
+
+(** Remove all comments from formula [f]. *)
+let strip_comments f = 
+  filter_annotations 
+    (function Comment _ -> false | _ -> true) f
 
 let mk_comment c f = annotate f [Comment c]
 
@@ -846,47 +864,64 @@ let propagate_exists f =
 (** Convert universal quantifiers in formula [f] into existentials where possible. *)
 (** Assumes that [f] is in negation normal form. *)
 let foralls_to_exists f =
-  let rec find_defs bvs defs fs =
-    let rec find nodefs defs gs = function
-      | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; t], _), a)]) :: fs 
+  let rec find_defs bvs defs f =
+    let rec find nodefs defs = function
+      | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; t], _), a)])
         when IdSet.mem x nodefs && 
           IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
-            find (IdSet.remove x nodefs) (mk_eq ~ann:a xt t :: defs) gs fs
-      | BoolOp (Not, [Atom (App (Eq, [t; Var (x, srt) as xt], _), a)]) :: fs 
+            IdSet.remove x nodefs, mk_eq ~ann:a xt t :: defs, mk_false
+      | BoolOp (Not, [Atom (App (Eq, [t; Var (x, srt) as xt], _), a)])
         when IdSet.mem x nodefs && 
           IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
-          find (IdSet.remove x nodefs) (mk_eq ~ann:a xt t :: defs) gs fs
-      | BoolOp (Or, fs1) :: fs ->
-          find nodefs defs gs (fs1 @ fs)
-      | Binder (_, [], f, _) :: fs ->
-          find nodefs defs gs (f :: fs)
-      | f :: fs ->
-          find nodefs defs (f :: gs) fs
-      | [] ->
-          if IdSet.subset bvs nodefs 
-          then nodefs, defs, gs
-          else find_defs nodefs defs gs
-    in find bvs defs [] fs
+          IdSet.remove x nodefs, mk_eq ~ann:a xt t :: defs, mk_false
+      | BoolOp (Or, fs) ->
+          let nodefs, defs, gs =
+            List.fold_right 
+              (fun f (nodefs, defs, gs) -> 
+                let nodefs, defs, g = find nodefs defs f in
+                nodefs, defs, g :: gs)
+              fs (nodefs, defs, [])
+          in
+          nodefs, defs, smk_or gs
+      | Binder (b, [], f, a) ->
+          let nodefs, defs, g = find nodefs defs f in
+          nodefs, defs, Binder (b, [], g, a)
+      | f ->
+          nodefs, defs, f
+    in 
+    let nodefs, defs, g = find bvs defs f in
+    if IdSet.subset bvs nodefs 
+    then nodefs, defs, g
+    else find_defs nodefs defs g
   in
   let rec distribute_and bvs gs = function
     | BoolOp (And, fs) :: gs1 ->
         let fs1 = List.map (fun f -> mk_or (List.rev_append gs (f :: gs1))) fs in
         cf (mk_forall bvs (mk_and fs1))
+    | BoolOp (Or, gs2) :: gs1 ->
+        distribute_and bvs gs (gs2 @ gs1)
+    | [Binder (b, [], g, a)] ->
+        let g1 = distribute_and bvs gs [g] in
+        Binder (b, [], g1, a)
+    | Binder (_, [], g, a) :: gs1 ->
+        distribute_and bvs gs (g :: gs1)
     | g :: gs1 -> distribute_and bvs (g :: gs) gs1
     | [] -> smk_forall bvs (mk_or (List.rev gs))
   and cf = function
+    | Binder (b, [], f, a) ->
+        Binder (b, [], cf f, a)
     | Binder (Forall, bvs, BoolOp (And, fs), a) ->
         let fs1 = List.map (fun f -> cf (Binder (Forall, bvs, f, a))) fs in
         mk_and fs1
-    | Binder (Forall, bvs, BoolOp (Or, fs), a) ->
+    | Binder (Forall, bvs, (BoolOp (Or, fs) as f), a) ->
         let bvs_set = id_set_of_list (List.map fst bvs) in
-        let nodefs, defs, gs = find_defs bvs_set [] fs in
+        let nodefs, defs, g = find_defs bvs_set [] f in
         let ubvs, ebvs = List.partition (fun (x, _) -> IdSet.mem x nodefs) bvs in
         (match ebvs with
-        | [] -> distribute_and bvs [] gs
-        | _ ->
-            let g = cf (mk_forall ubvs (mk_or gs)) in
-            Binder (Exists, ebvs, mk_and (defs @ [g]), a))
+        | [] -> distribute_and bvs [] [g]
+        | _ -> 
+            let g1 = cf (mk_forall ubvs g) in
+            Binder (Exists, ebvs, mk_and (defs @ [g1]), a))
     | Binder (Exists, bvs, f, a) ->
         mk_exists ~ann:a bvs (cf f)
     | BoolOp (And as op, fs)

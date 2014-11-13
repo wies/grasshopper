@@ -95,14 +95,24 @@ returns (res: Node)
     }
 }
 
-procedure traverse(root: Node) 
-  requires tree(root);
-  ensures  tree(root);
+procedure traverse(root: Node, implicit ghost p: Node) 
+  requires ptree(root, p);
+  ensures ptree(root, p);
 {
-    if (root != null) {
-        traverse(root.left);
-        if (root.left != null) {root.left.parent := root;}
-        traverse(root.right);
-        if (root.right != null) {root.right.parent := root;}
-    }
+  if (root != null) {
+    traverse(root.left);
+    traverse(root.right);
+  }
+}
+
+procedure traverse2(root: Node) 
+  requires tree(root);
+  ensures tree(root);
+{
+  if (root != null) {
+    traverse2(root.left);
+    if (root.left != null) {root.left.parent := root;}
+    traverse2(root.right);
+    if (root.right != null) {root.right.parent := root;}
+  }
 }

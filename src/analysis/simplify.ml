@@ -458,7 +458,11 @@ let elim_state prog =
                     checked_preconds
                 in
                 let assume_precond_implicits = 
-                  List.map (fun sf -> mk_assume_cmd sf pp.pp_pos) preconds_w_implicits
+                  List.map 
+                    (fun sf -> 
+                      let sf1 = map_spec_fol_form strip_comments sf in
+                      mk_assume_cmd sf1 pp.pp_pos) 
+                    preconds_w_implicits
                 in
                 (* skolemize implicits *)
                 let preconds_w_implicits =
@@ -545,7 +549,8 @@ let elim_state prog =
                   (fun sf -> 
                     let old_sf = oldify_spec (id_set_of_list callee_decl.proc_formals) sf in
                     let sf1 = subst_spec subst_post old_sf in
-                    mk_assume_cmd sf1 pp.pp_pos)
+                    let sf2 = map_spec_fol_form strip_comments sf1 in
+                    mk_assume_cmd sf2 pp.pp_pos)
                   callee_decl.proc_postcond
               in
               sm1, locals, mk_seq_cmd (assert_precond @ assume_precond_implicits @ mods_havoc @ assume_postcond) pp.pp_pos
@@ -556,7 +561,13 @@ let elim_state prog =
       | None -> proc.proc_locals, None
       | Some body -> 
           let _, locals, body1 = elim IdMap.empty proc.proc_locals body in
-          let preconds = List.map (fun sf -> mk_assume_cmd sf sf.spec_pos) proc.proc_precond in
+          let preconds = 
+            List.map 
+              (fun sf -> 
+                let sf1 = map_spec_fol_form strip_comments sf in
+                mk_assume_cmd sf1 sf.spec_pos) 
+              proc.proc_precond 
+          in
           locals, Some (mk_seq_cmd (preconds @ [body1]) (prog_point body).pp_pos)
     in
     { proc with proc_locals = locals; proc_body = body }
