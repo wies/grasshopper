@@ -97,7 +97,7 @@ declarations:
 | var_decl declarations
   { (fst $2, VarDecl $1 :: snd $2) }
 | /* empty */ { ([], []) }
-| error { ProgError.syntax_error (mk_position 1 1) }
+| error { ProgError.syntax_error (mk_position 1 1) None }
 ;
 
 include_cmd:
@@ -149,6 +149,7 @@ proc_contract:
 semicolon_opt:
 | SEMICOLON {}
 | /* empty */ {}
+;
 
 proc_impl:
 | LBRACE block RBRACE { 
@@ -350,20 +351,23 @@ if_then_else_stmt_no_short_if:
 ;
 
 while_stmt:
-| WHILE LPAREN expr RPAREN loop_contracts stmt {
-  Loop ($5, Skip FormUtil.dummy_position, $3, $6, mk_position 1 6)
-} 
+| WHILE LPAREN expr RPAREN loop_contracts LBRACE block RBRACE {
+  Loop ($5, Skip FormUtil.dummy_position, $3, Block ($7, mk_position 6 8), mk_position 1 8)
+}
+| WHILE LPAREN expr RPAREN stmt {
+  Loop ([], Skip FormUtil.dummy_position, $3, $5, mk_position 1 5)
+}
 ;
 
 while_stmt_no_short_if:
-| WHILE LPAREN expr RPAREN loop_contracts stmt_no_short_if {
-  Loop ($5, Skip FormUtil.dummy_position, $3, $6, mk_position 1 6)
+| WHILE LPAREN expr RPAREN stmt_no_short_if {
+  Loop ([], Skip FormUtil.dummy_position, $3, $5, mk_position 1 5)
 } 
 ;
 
 loop_contracts:
 | loop_contract loop_contracts { $1 :: $2 }
-| /* empty */ { [] }
+| loop_contract { [$1] }
 ;
 
 loop_contract:

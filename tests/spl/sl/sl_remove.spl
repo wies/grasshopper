@@ -4,7 +4,6 @@ procedure remove(lst: Node)
   returns (res: Node)
   requires lseg(lst, null)
   ensures lseg(res, null)
-  ensures lseg(res, null)
 {
   if (lst == null)
     return null;

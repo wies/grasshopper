@@ -40,7 +40,7 @@ output:
 | rmodel { Model $1 }
 | rcore  { UnsatCore $1 }
 | rerror { Error $1 }
-| error { ProgError.syntax_error (mk_position 1 1) }
+| error { ProgError.syntax_error (mk_position 1 1) None }
 ;
     
 rerror:

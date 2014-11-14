@@ -129,27 +129,39 @@
       (if (looking-at "[ \t]*invariant")
           0
         c-basic-offset)))
+  (defun spl-lineup-statement (langelem)
+    ;; lineup loop invariants
+    (save-excursion
+      (beginning-of-line)
+      (if (and (looking-at "[ \t]*invariant")
+               (progn (goto-char (cdr langelem))
+                      (not (looking-at "[ \t]*invariant"))))
+          c-basic-offset
+        0)))
   (defun spl-lineup-topmost-intro (langelem)
     ;; lineup procedure contracts
     (save-excursion
       (beginning-of-line)
       (if (looking-at "[ \t]*\\(requires\\|ensures\\)")
-          c-basic-offset
+          (- c-basic-offset (c-langelem-col c-syntactic-element))
         0)))
   (defun spl-lineup-defun-open (langelem)
     ;; lineup block start after specs
     (save-excursion
-      (let* ((relpos (cdr langelem))
-           (curcol (progn (goto-char relpos)
-                          (current-column))))
-      (if (re-search-forward "invariant\\|ensures\\|requires" (c-point 'eol) 'move)
+      (goto-char (cdr langelem))
+      (beginning-of-line)
+      (if (looking-at "[ \t]*\\(invariant\\|ensures\\|requires\\)")
           (- 0 c-basic-offset)
-        0))))
+        0)))
   (c-set-offset 'statement-cont 'spl-lineup-statement-cont)
+  (c-set-offset 'statement 'spl-lineup-statement)
   (c-set-offset 'topmost-intro 'spl-lineup-topmost-intro)
   (c-set-offset 'defun-open 'spl-lineup-defun-open)
-  (c-set-offset 'substatement-open 0)
+  (c-set-offset 'substatement-open 'spl-lineup-defun-open)
+  (c-set-offset 'block-open 'spl-lineup-defun-open)
+  ;;(c-set-offset 'substatement-open 0)
   (c-set-offset 'knr-argdecl-intro '+)
+  (c-set-offset 'knr-argdecl 'spl-lineup-topmost-intro)
   (c-set-offset 'label '+))
 
 (add-hook 'spl-mode-hook 'spl-set-indent)
@@ -194,7 +206,8 @@
     (flycheck-compile)
     (flycheck-select-checker 'spl-reporter))
   (add-hook 'spl-mode-hook
-            (lambda () (local-set-key (kbd "C-c C-v") 'spl-verify))))
+            (lambda () 
+              (local-set-key (kbd "C-c C-v") 'spl-verify))))
 
 (provide 'spl-mode)
 

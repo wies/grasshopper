@@ -42,7 +42,12 @@ let to_form pred_to_form domain f =
            let aux_tr = 
              match op with
              | SepPlus -> []
-             | SepStar -> [mk_srcpos pos (empty_t (FormUtil.mk_inter [f1_dom; f2_dom]))]
+             | SepStar -> 
+                 let f1_and_f2_disjoint = 
+                   FormUtil.mk_comment "Specified regions are not disjoint"
+                     (empty_t (FormUtil.mk_inter [f1_dom; f2_dom]))
+                 in
+                 [mk_srcpos pos f1_and_f2_disjoint]
              | SepIncl -> [mk_srcpos pos (FormUtil.mk_subseteq f1_dom f2_dom)]
            in
            let dom_def = 

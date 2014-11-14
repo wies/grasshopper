@@ -1,15 +1,16 @@
 include "../include/sllist.spl";
 
-procedure reverse(lst: Node) returns (rev: Node)
-  requires lseg(lst, null);
-  ensures lseg(rev, null);
+procedure reverse(lst: Node) 
+  returns (rev: Node)
+  requires lseg(lst, null)
+  ensures lseg(rev, null)
 {
   var curr: Node;
   curr := lst;
   rev := null;
   while (curr != null) 
-    invariant lseg(rev, null);
-    invariant lseg(curr, null);
+    invariant lseg(rev, null)
+    invariant lseg(curr, null)
   {
     var tmp: Node;
     tmp := curr;

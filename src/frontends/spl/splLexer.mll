@@ -6,7 +6,7 @@ open Lexing
 
 (* set file name *)
 let set_file_name lexbuf name =
-lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = name }
+  lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = name }
 
 
 let keyword_table = Hashtbl.create 32
@@ -48,6 +48,18 @@ let _ =
       ("while", WHILE);
       ("yields", YIELDS);
    ])
+
+let lexical_error lexbuf msg =
+  let pos = lexeme_start_p lexbuf in 
+  let spos = 
+    { sp_file = pos.pos_fname;
+      sp_start_line = pos.pos_lnum;
+      sp_start_col = pos.pos_cnum - pos.pos_bol;
+      sp_end_line = pos.pos_lnum;
+      sp_end_col = pos.pos_cnum - pos.pos_bol;
+    } 
+  in
+  ProgError.syntax_error spos msg
 }
 
 let digitchar = ['0'-'9']
@@ -72,6 +84,7 @@ rule token = parse
 | "&&" { AND }
 | "!in" { NOTIN }
 | '!' { NOT }
+| "**-" { lexical_error lexbuf (Some "Unknown operator. Did you mean '-**'?") }
 | "-**" { SEPINCL }
 | "++" { UNION }
 | "--" { DIFF }
@@ -103,14 +116,5 @@ rule token = parse
     }
 | digits as num { INTVAL (int_of_string num) }
 | eof { EOF }
-| _ { let pos = lexeme_start_p lexbuf in 
-      let spos = 
-        { sp_file = pos.pos_fname;
-          sp_start_line = pos.pos_lnum;
-          sp_start_col = pos.pos_cnum - pos.pos_bol;
-          sp_end_line = pos.pos_lnum;
-          sp_end_col = pos.pos_cnum - pos.pos_bol;
-        } 
-      in
-      ProgError.lexical_error spos
-    }
+| '=' { lexical_error lexbuf (Some ("Unknown operator. Did you mean ':=' or '=='?")) }
+| _ { lexical_error lexbuf None }

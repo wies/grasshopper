@@ -1,10 +1,10 @@
 include "../include/bstree.spl";
 
 procedure extract_max(root: Node)
-returns (others: Node, max: Node)
+  returns (others: Node, max: Node)
   requires tree(root) &*& root != null;
-  ensures  tree(others) &*& acc(max);
-  ensures  max.right == null && max.parent == null;
+  ensures tree(others) &*& acc(max);
+  ensures max.right == null && max.parent == null;
 {
   if (root.right != null) {
     var c: Node, m: Node;
@@ -21,7 +21,7 @@ returns (others: Node, max: Node)
 }
 
 procedure insert(root: Node, value: Int)
-returns (new_root: Node)
+  returns (new_root: Node)
   requires tree(root);
   ensures tree(new_root);
 {
@@ -50,49 +50,49 @@ returns (new_root: Node)
 }
 
 procedure remove(root: Node, value: Int)
-returns (res: Node)
+  returns (res: Node)
   requires tree(root);
   ensures tree(res);
 {
-    if (root == null) {
-        return null;
-    } else if (root.data == value) {
-        if (root.left == null && root.right == null) {
-            root.parent := null;
-            free(root);
-            return null;
-        } else if (root.left != null && root.right == null) {
-            res := root.left;
-            root.parent := null;
-            res.parent := null;
-            free(root);
-            return res;
-        } else if (root.left == null && root.right != null) {
-            res := root.right;
-            root.parent := null;
-            res.parent := null;
-            free(root);
-            return res;
-        } else {
-            root.parent := null;
-            var l: Node, m: Node;
-            l, m := extract_max(root.left);
-            m.left := l;
-            if (l != null) { l.parent := m; }
-            m.right := root.right;
-            m.right.parent := m;
-            free(root);
-            return m;
-        }
-    } else if (root.data > value) {
-        root.left := remove(root.left, value);
-        if (root.left != null) {root.left.parent := root;}
-        return root;
+  if (root == null) {
+    return null;
+  } else if (root.data == value) {
+    if (root.left == null && root.right == null) {
+      root.parent := null;
+      free(root);
+      return null;
+    } else if (root.left != null && root.right == null) {
+      res := root.left;
+      root.parent := null;
+      res.parent := null;
+      free(root);
+      return res;
+    } else if (root.left == null && root.right != null) {
+      res := root.right;
+      root.parent := null;
+      res.parent := null;
+      free(root);
+      return res;
     } else {
-        root.right := remove(root.right, value);
-        if (root.right != null) {root.right.parent := root;}
-        return root;
+      root.parent := null;
+      var l: Node, m: Node;
+      l, m := extract_max(root.left);
+      m.left := l;
+      if (l != null) { l.parent := m; }
+      m.right := root.right;
+      m.right.parent := m;
+      free(root);
+      return m;
     }
+  } else if (root.data > value) {
+    root.left := remove(root.left, value);
+    if (root.left != null) {root.left.parent := root;}
+    return root;
+  } else {
+    root.right := remove(root.right, value);
+    if (root.right != null) {root.right.parent := root;}
+    return root;
+  }
 }
 
 procedure traverse(root: Node, implicit ghost p: Node) 
