@@ -1,5 +1,5 @@
 ;;; package --- Summary
-;;; spl-mode.el -- Emacs SPL mode
+;;; spl-mode.el -- Emacs mode for GRASShopper programs.
 
 ;;; Commentary:
 
@@ -43,10 +43,10 @@
    '("\\(//[^\n]*\\)" 1 
      font-lock-comment-face)
 
-   '("\\<\\(i\\(f\\|nclude\\)\\|comment\\|else\\|f\\(ree\\|unction\\)\\|matching\\|new\\|outputs\\|pr\\(ocedure\\|edicate\\)\\|return\\(s\\|\\)\\|struct\\|var\\|while\\|yields\\)\\>"
+   '("\\<\\(i\\(f\\|nclude\\)\\|comment\\|else\\|f\\(ree\\|unction\\)\\|havoc\\|matching\\|new\\|outputs\\|pr\\(ocedure\\|edicate\\)\\|return\\(s\\|\\)\\|struct\\|var\\|while\\|yields\\)\\>"
          1 font-lock-keyword-face)
 
-   '("\\<\\(ass\\(ert\\|ume\\)\\|ensures\\|havoc\\|i\\(mplicit\\|nvariant\\)\\|requires\\|ghost\\)\\>"
+   '("\\<\\(ass\\(ert\\|ume\\)\\|ensures\\|i\\(mplicit\\|nvariant\\)\\|requires\\|ghost\\)\\>"
          1 font-lock-spec-face)
 
    '("\\<\\(old\\)\\>"
@@ -100,7 +100,7 @@
       :syntax-table spl-mode-syntax-table
       (setq-local comment-start "// ")
       (setq-local font-lock-defaults '(spl-mode-font-lock-keywords))
-      (setq-local indent-line-function nil); 'c-indent-line)
+      (setq-local indent-line-function 'c-indent-line)
       )
   (setq font-lock-defaults-alist
         (cons (cons 'spl-mode 
@@ -120,58 +120,81 @@
     (set-syntax-table spl-mode-syntax-table)
     (run-hooks 'spl-mode-hook)))
 
+(defun spl-set-indent ()
+  (interactive)
+  (defun spl-lineup-statement-cont (langelem)
+    ;; lineup loop invariants
+    (save-excursion
+      (beginning-of-line)
+      (if (looking-at "[ \t]*invariant")
+          0
+        c-basic-offset)))
+  (defun spl-lineup-topmost-intro (langelem)
+    ;; lineup procedure contracts
+    (save-excursion
+      (beginning-of-line)
+      (if (looking-at "[ \t]*\\(requires\\|ensures\\)")
+          c-basic-offset
+        0)))
+  (defun spl-lineup-defun-open (langelem)
+    ;; lineup block start after specs
+    (save-excursion
+      (let* ((relpos (cdr langelem))
+           (curcol (progn (goto-char relpos)
+                          (current-column))))
+      (if (re-search-forward "invariant\\|ensures\\|requires" (c-point 'eol) 'move)
+          (- 0 c-basic-offset)
+        0))))
+  (c-set-offset 'statement-cont 'spl-lineup-statement-cont)
+  (c-set-offset 'topmost-intro 'spl-lineup-topmost-intro)
+  (c-set-offset 'defun-open 'spl-lineup-defun-open)
+  (c-set-offset 'substatement-open 0)
+  (c-set-offset 'knr-argdecl-intro '+)
+  (c-set-offset 'label '+))
+
+(add-hook 'spl-mode-hook 'spl-set-indent)
 
 (or (assoc "\\.spl$" auto-mode-alist)
     (setq auto-mode-alist (cons '("\\.spl$" . spl-mode)
 				auto-mode-alist)))
 
-(require 'compile)
-(defun spl-errors ()
-  (make-local-variable 'compilation-error-regexp-alist)
-  (setq compilation-error-regexp-alist
-        '("^File \"\\([_[:alnum:]-/]*.spl\\)\", line \\([[:digit:]]+\\), columns \\([[:digit:]]+\\)-.*\n\\(.*\\)$"
-          1 2 3 4))
-  (make-local-variable 'compile-command)
-  (let ((grasshopper "grasshopper "))
-    (setq compile-command (concat grasshopper buffer-file-name))))
-
-(require 'flymake)
-(defun flymake-spl-init ()
-  (flymake-simple-make-init-impl
-   'flymake-create-temp-with-folder-structure nil nil
-   buffer-file-name
-   'flymake-get-spl-cmdline))
-
-(defun flymake-get-spl-cmdline (source base-dir)
-    (list "grasshopper" (list "-lint" "-noverify" source)))
-
-(add-hook 'spl-mode-hook
-          '(lambda ()
-             (add-to-list 'flymake-allowed-file-name-masks '(".+\\.spl$" flymake-spl-init))))
-
-(add-hook 'spl-mode-hook
-          '(lambda ()
-             (add-to-list 'flymake-err-line-patterns
-             '("^\\(.+\\):\\([[:digit:]]+\\):\\([[:digit:]]+\\)-\\([[:digit:]]+\\):\\(.*\\)$"
-               1 2 3 5))))
-
-(add-hook 'spl-mode-hook 'spl-errors)
-(add-hook 'spl-mode-hook
-          (lambda () (local-set-key (kbd "C-c C-c") 'compile)))
-
+;; Flycheck mode specific settings
 (when (require 'flycheck nil :noerror)
+  ;; Define syntax and type checker
   (flycheck-define-checker spl-reporter
-    "An SPL checker based on Grasshopper."
+    "Syntax and Type checker for Grasshopper programs."
     :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) "-lint" "-noverify" source)
     :error-patterns
     ((warning line-start (file-name) ":" line ":" column (optional "-" end-column) ":Related Location:" (message) line-end)
      (error line-start (file-name) ":" line ":" column (optional "-" end-column) ":" (message) line-end))
     ;((error line-start (file-name) ":" line ":" column ":" (message) line-end))
     :modes (spl-mode))
+
+  ;; Register syntax checker
   (add-hook 'spl-mode-hook (lambda ()
                              (setq flycheck-highlighting-mode 'columns)
                              (flycheck-select-checker 'spl-reporter)
-                             (flycheck-mode))))
+                             (flycheck-mode)))
+
+  ;; Define checker for verifying current buffer
+  (flycheck-define-checker spl-verifier
+    "On-the-fly verifier for Grasshopper programs."
+    :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) "-lint" source)
+    :error-patterns
+    ((warning line-start (file-name) ":" line ":" column (optional "-" end-column) ":Related Location:" (message) line-end)
+     (error line-start (file-name) ":" line ":" column (optional "-" end-column) ":" (message) line-end))
+    ;((error line-start (file-name) ":" line ":" column ":" (message) line-end))
+    :modes (spl-mode))
+
+  ;; Register keyboard shortcut for verifier
+  (defun spl-verify ()
+    "Verify current buffer using GRASShopper."
+    (interactive)
+    (flycheck-select-checker 'spl-verifier)
+    (flycheck-compile)
+    (flycheck-select-checker 'spl-reporter))
+  (add-hook 'spl-mode-hook
+            (lambda () (local-set-key (kbd "C-c C-v") 'spl-verify))))
 
 (provide 'spl-mode)
 

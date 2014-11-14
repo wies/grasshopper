@@ -1,3 +1,5 @@
+(** {5 Simplifications for verification condition generation} *)
+
 open Form
 open FormUtil
 open Prog
@@ -85,7 +87,7 @@ let elim_loops (prog : program) =
           let name = "loop exit condition of " ^ (string_of_ident proc_name) in
           mk_free_spec_form (FOL (mk_not lc.loop_test)) name None loop_end_pos
         in
-        (* frame conditions for non-modified locals *)          
+        (* frame conditions for non modified locals *)          
         let framecond =
           List.fold_left2 
             (fun frames id init_id ->
@@ -286,7 +288,7 @@ let elim_return prog =
   { prog with prog_procs = IdMap.map elim_proc prog.prog_procs }
 
 
-(** Eliminate all state (via SSA computation) 
+(** Eliminate all state (via SSA computation). 
  ** Assumes that:
  ** - all loops have been eliminated 
  ** - all SL formulas have been desugared
@@ -529,7 +531,7 @@ let elim_state prog =
                     callee_decl.proc_returns 
                     (List.map (fun id -> IdMap.find id sm1) cc.call_lhs)
                 in
-                (* I currently have no idea what this was supposed to do. Is this redundant? *)
+                (* TODO: I currently have no idea what this was supposed to do. Is this redundant? *)
                 let subst_wo_old =
                   List.fold_left (fun sm id -> 
                     IdMap.add id (IdMap.find id (to_term_subst sm1 locals)) sm)

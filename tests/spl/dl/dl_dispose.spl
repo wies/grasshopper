@@ -1,8 +1,8 @@
 include "../include/dllist.spl";
 
 procedure dl_dispose(a: Node, b: Node)
-    requires dlseg(a, null, null, b);
-    ensures emp;
+  requires dlseg(a, null, null, b);
+  ensures emp;
 {
   var prv: Node;
   prv := null;

@@ -142,9 +142,13 @@ proc_contracts:
 ;
 
 proc_contract:
-| REQUIRES expr SEMICOLON { Requires $2 }
-| ENSURES expr SEMICOLON { Ensures $2 }
+| REQUIRES expr semicolon_opt { Requires $2 }
+| ENSURES expr semicolon_opt { Ensures $2 }
 ;
+
+semicolon_opt:
+| SEMICOLON {}
+| /* empty */ {}
 
 proc_impl:
 | LBRACE block RBRACE { 
@@ -363,7 +367,7 @@ loop_contracts:
 ;
 
 loop_contract:
-| INVARIANT expr SEMICOLON { Invariant $2 }
+| INVARIANT expr semicolon_opt { Invariant $2 }
 ;
 
 primary:

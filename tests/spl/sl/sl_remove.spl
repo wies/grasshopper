@@ -1,8 +1,10 @@
 include "../include/sllist.spl";
 
-procedure remove(lst: Node) returns (res: Node)
-  requires lseg(lst, null);
-  ensures lseg(res, null);
+procedure remove(lst: Node) 
+  returns (res: Node)
+  requires lseg(lst, null)
+  ensures lseg(res, null)
+  ensures lseg(res, null)
 {
   if (lst == null)
     return null;
@@ -10,17 +12,17 @@ procedure remove(lst: Node) returns (res: Node)
     var nondet: Bool, curr: Node;
     curr := lst;
     while (nondet && curr.next != null) 
-      invariant curr != null;
-      invariant lseg(lst, curr);
-      invariant lseg(curr, null);
+      invariant curr != null
+      invariant lseg(lst, curr)
+      invariant lseg(curr, null)
     {
       havoc nondet;
       curr := curr.next;
     }
+    
     var tmp: Node;
     tmp := curr.next;
-    if (tmp == null) {
-    } else {
+    if (tmp != null) {
       curr.next := tmp.next;
       free(tmp);
     }
