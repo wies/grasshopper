@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source osx_gnu.sh
+source bin/osx_gnu.sh
 
 set -e
 
