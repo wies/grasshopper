@@ -1,5 +1,5 @@
 %{
-open Form
+open Grass
 open Lexing
 open SmtLibSyntax
 
@@ -52,7 +52,7 @@ rmodel:
 ;
 
 names:
-| IDENT names { (Form.string_of_ident $1) :: $2 }
+| IDENT names { (Grass.string_of_ident $1) :: $2 }
 | /* empty */ { [] }
 ;
 

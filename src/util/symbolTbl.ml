@@ -1,6 +1,6 @@
 open Util
 
-type t = (Form.ident StringMap.t) list
+type t = (Grass.ident StringMap.t) list
 
 let empty = [StringMap.empty]
 

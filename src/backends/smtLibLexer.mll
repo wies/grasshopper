@@ -1,5 +1,5 @@
 {
-open Form
+open Grass
 open Lexing
 open SmtLibSyntax
 open SmtLibParser
@@ -18,8 +18,8 @@ let _ =
       "define-sort", DEFINE_SORT;
       "define-fun", DEFINE_FUN;
       (* sorts *)
-      Form.bool_sort_string, SORT(BoolSort);
-      Form.int_sort_string, SORT(IntSort);
+      Grass.bool_sort_string, SORT(BoolSort);
+      Grass.int_sort_string, SORT(IntSort);
       (* term constructors *)
       "forall", BINDER(Forall);
       "exists", BINDER(Exists);

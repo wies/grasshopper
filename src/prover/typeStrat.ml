@@ -1,6 +1,6 @@
 open Util
-open Form
-open FormUtil
+open Grass
+open GrassUtil
 
 let transitive_closure type_graph =
   let rec close_graph v acc =

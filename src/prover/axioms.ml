@@ -1,7 +1,7 @@
 (** {5 Axiomatization of GRASS theory } *)
 
-open Form
-open FormUtil
+open Grass
+open GrassUtil
 open Config
 
 (* some variable and short-hand declarations *)

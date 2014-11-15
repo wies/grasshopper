@@ -1,6 +1,6 @@
 (** Utility functions for manipulating GRASS formulas *)
 
-open Form
+open Grass
 open Util
 
 (** Auxiliary functions for manipulating source positions *)

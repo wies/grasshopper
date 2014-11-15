@@ -1,7 +1,7 @@
-open Form
+open Grass
 open Prog
 open Sl
-open Form
+open Grass
 open SplSyntax
 
 let pred_arg_mismatch_error pos name expected =
@@ -9,7 +9,7 @@ let pred_arg_mismatch_error pos name expected =
 
 let resolve_names cus =
   let lookup_id init_id tbl pos =
-    let name = FormUtil.name init_id in
+    let name = GrassUtil.name init_id in
     match SymbolTbl.find tbl name with
     | Some (id, _) -> id
     | None -> ProgError.error pos ("Unknown identifier " ^ name ^ ".")
@@ -17,22 +17,22 @@ let resolve_names cus =
   let check_struct id structs pos =
     if not (IdMap.mem id structs) then
       ProgError.error pos 
-        ("Identifier " ^ FormUtil.name id ^ " does not refer to a struct.")
+        ("Identifier " ^ GrassUtil.name id ^ " does not refer to a struct.")
   in
   let check_proc id procs pos =
     if not (IdMap.mem id procs) then
       ProgError.error pos 
-        ("Identifier " ^ FormUtil.name id ^ " does not refer to a procedure or predicate.")
+        ("Identifier " ^ GrassUtil.name id ^ " does not refer to a procedure or predicate.")
   in
   let check_pred id preds pos =
     if not (IdMap.mem id preds) then
       ProgError.error pos 
-        ("Identifier " ^ FormUtil.name id ^ " does not refer to a procedure or predicate.")
+        ("Identifier " ^ GrassUtil.name id ^ " does not refer to a procedure or predicate.")
   in
   let check_field id globals pos =
     let error () = 
       ProgError.error pos 
-        ("Identifier " ^ FormUtil.name id ^ " does not refer to a struct field.")
+        ("Identifier " ^ GrassUtil.name id ^ " does not refer to a struct field.")
     in
     try 
       let decl = IdMap.find id globals in
@@ -42,14 +42,14 @@ let resolve_names cus =
     with Not_found -> error ()
   in
   let declare_name pos init_id scope tbl =
-    let name = FormUtil.name init_id in
+    let name = GrassUtil.name init_id in
     match SymbolTbl.find_local tbl name with
     | Some _ -> 
         ProgError.error pos ("Identifier " ^ name ^ " has already been declared in this scope.")
     | None ->
         let id = 
           if init_id = Prog.alloc_id then alloc_id
-          else FormUtil.fresh_ident name 
+          else GrassUtil.fresh_ident name 
         in
         (id, SymbolTbl.add tbl name (id, scope))
   in
@@ -77,7 +77,7 @@ let resolve_names cus =
     let structs0, tbl =
       IdMap.fold 
         (fun init_id decl (structs, tbl) ->
-          let id, tbl = declare_name decl.s_pos init_id FormUtil.global_scope tbl in
+          let id, tbl = declare_name decl.s_pos init_id GrassUtil.global_scope tbl in
           IdMap.add id { decl with s_name = id } structs, tbl)
         cu.struct_decls (IdMap.empty, tbl)
     in
@@ -90,7 +90,7 @@ let resolve_names cus =
           let fields, globals, tbl =
             IdMap.fold 
               (fun init_id fdecl (fields, globals, tbl) ->
-                let id, tbl = declare_name fdecl.v_pos init_id FormUtil.global_scope tbl in
+                let id, tbl = declare_name fdecl.v_pos init_id GrassUtil.global_scope tbl in
                 let res_type = match fdecl.v_type with
                 | StructType init_id ->
                     let id = lookup_id init_id tbl fdecl.v_pos in
@@ -111,14 +111,14 @@ let resolve_names cus =
     (* declare procedure names *)
     let procs0, tbl =
       IdMap.fold (fun init_id decl (procs, tbl) ->
-        let id, tbl = declare_name decl.p_pos init_id FormUtil.global_scope tbl in
+        let id, tbl = declare_name decl.p_pos init_id GrassUtil.global_scope tbl in
         IdMap.add id { decl with p_name = id } procs, tbl)
         cu.proc_decls (IdMap.empty, tbl)
     in
     (* declare predicate names *)
     let preds0, tbl =
       IdMap.fold (fun init_id decl (preds, tbl) ->
-        let id, tbl = declare_name decl.pr_pos init_id FormUtil.global_scope tbl in
+        let id, tbl = declare_name decl.pr_pos init_id GrassUtil.global_scope tbl in
         IdMap.add id { decl with pr_name = id } preds, tbl)
         cu.pred_decls (IdMap.empty, tbl)
     in
@@ -302,7 +302,7 @@ let resolve_names cus =
 
 let flatten_exprs cus =
   let decl_aux_var name vtype pos scope locals =
-    let aux_id = FormUtil.fresh_ident name in
+    let aux_id = GrassUtil.fresh_ident name in
     let decl = 
       { v_name = aux_id;
         v_type = vtype;
@@ -511,8 +511,8 @@ let flatten_exprs cus =
 
 type cexpr =
   | SL_form of Sl.form
-  | FOL_form of Form.form
-  | FOL_term of Form.term * typ
+  | FOL_form of Grass.form
+  | FOL_term of Grass.term * typ
 
 (*
 let rec compatible_types ty1 ty2 =
@@ -576,7 +576,7 @@ let convert cus =
         ("Expected an " ^ expected ^ " but found an " ^ found)
     in
     let rec convert_expr locals = function
-      | Null _ -> FOL_term (FormUtil.mk_null, LocType)
+      | Null _ -> FOL_term (GrassUtil.mk_null, LocType)
       | Emp _ -> SL_form SlUtil.mk_emp
       | Setenum (ty, es, pos) ->
           let ts, ty = 
@@ -587,18 +587,18 @@ let convert cus =
           in
           let elem_ty =  convert_type ty in
           (match es with
-          | [] -> FOL_term (FormUtil.mk_empty (Set elem_ty), SetType ty)
-          | _ -> FOL_term (FormUtil.mk_setenum ts, SetType ty))
-      | IntVal (i, _) -> FOL_term (FormUtil.mk_int i, IntType)
-      | BoolVal (b, pos) -> FOL_form (FormUtil.mk_srcpos pos (FormUtil.mk_bool b))
+          | [] -> FOL_term (GrassUtil.mk_empty (Set elem_ty), SetType ty)
+          | _ -> FOL_term (GrassUtil.mk_setenum ts, SetType ty))
+      | IntVal (i, _) -> FOL_term (GrassUtil.mk_int i, IntType)
+      | BoolVal (b, pos) -> FOL_form (GrassUtil.mk_srcpos pos (GrassUtil.mk_bool b))
       | Dot (e, fld_id, pos) -> 
           let t, ty = extract_term locals LocType e in
           (match ty with
           | StructType id ->
               let res_ty = field_type pos id fld_id in
               let res_srt = convert_type res_ty in
-              let fld = FormUtil.mk_free_const (Fld res_srt) fld_id in
-              FOL_term (FormUtil.mk_read fld t, res_ty)
+              let fld = GrassUtil.mk_free_const (Fld res_srt) fld_id in
+              FOL_term (GrassUtil.mk_read fld t, res_ty)
           | LocType -> ProgError.error pos "Cannot dereference null"
           | ty -> failwith "unexpected type")
       | Access (e, pos) ->
@@ -617,7 +617,7 @@ let convert cus =
               let tx, _ = extract_term locals (StructType id) x in
               let ty, _ = extract_term locals (StructType id) y in
               let tz, _ = extract_term locals (StructType id) z in
-              FOL_form (FormUtil.mk_srcpos pos (FormUtil.mk_btwn tfld tx ty tz))
+              FOL_form (GrassUtil.mk_srcpos pos (GrassUtil.mk_btwn tfld tx ty tz))
           | _ -> type_error (pos_of_expr fld) "reference field" (ty_str fld_ty))
       | Quant (q, decls, f, pos) ->
           let vars, locals1 = 
@@ -629,17 +629,17 @@ let convert cus =
           in
           let subst = 
             List.fold_right (fun (id, srt) subst -> 
-              IdMap.add id (FormUtil.mk_var srt id) subst)
+              IdMap.add id (GrassUtil.mk_var srt id) subst)
               vars IdMap.empty
           in            
           (try
             let mk_quant = match q with
-	    | Forall -> FormUtil.mk_forall
-            | Exists -> FormUtil.mk_exists
+	    | Forall -> GrassUtil.mk_forall
+            | Exists -> GrassUtil.mk_exists
             in
             let f1 = extract_fol_form locals1 f in
-            let f2 = FormUtil.subst_consts subst f1 in
-            FOL_form (FormUtil.mk_srcpos pos (mk_quant vars f2))
+            let f2 = GrassUtil.subst_consts subst f1 in
+            FOL_form (GrassUtil.mk_srcpos pos (mk_quant vars f2))
           with _ -> 
             let mk_quant = match q with
             | Forall -> SlUtil.mk_forall 
@@ -655,23 +655,23 @@ let convert cus =
               let decl = var_decl id elem_srt false false pos pos in
               let locals1 = IdMap.add id decl locals in
               let elem_srt = convert_type elem_srt in
-              let v_id = FormUtil.mk_var elem_srt id in
+              let v_id = GrassUtil.mk_var elem_srt id in
 	      let mk_guard = match q with
-	      | Forall -> FormUtil.mk_implies
-              | Exists -> fun f g -> FormUtil.mk_and [f; g] 
+	      | Forall -> GrassUtil.mk_implies
+              | Exists -> fun f g -> GrassUtil.mk_and [f; g] 
 	      in
               let mk_quant = match q with
-	      | Forall -> FormUtil.mk_forall
-              | Exists -> FormUtil.mk_exists
+	      | Forall -> GrassUtil.mk_forall
+              | Exists -> GrassUtil.mk_exists
               in
               let f0, ann = 
                 match extract_fol_form locals1 f with
                 | Binder (_, [], f0, ann) -> f0, ann
                 | f0 -> f0, []
               in
-              let f1 = FormUtil.annotate (mk_guard (FormUtil.mk_elem v_id e1) f0) ann in
-              let f2 = FormUtil.subst_consts (IdMap.add id v_id IdMap.empty) f1 in
-              FOL_form (FormUtil.mk_srcpos pos (mk_quant [(id, elem_srt)] f2))
+              let f1 = GrassUtil.annotate (mk_guard (GrassUtil.mk_elem v_id e1) f0) ann in
+              let f2 = GrassUtil.subst_consts (IdMap.add id v_id IdMap.empty) f1 in
+              FOL_form (GrassUtil.mk_srcpos pos (mk_quant [(id, elem_srt)] f2))
           | _ -> failwith "unexpected type")
       | PredApp (id, es, pos) ->
           let decl = IdMap.find id cu.pred_decls in
@@ -686,7 +686,7 @@ let convert cus =
           | [res] ->
               let res_decl = IdMap.find res decl.pr_locals in
               let res_srt = convert_type res_decl.v_type in
-              let t = FormUtil.mk_free_fun res_srt id (List.map fst ts) in
+              let t = GrassUtil.mk_free_fun res_srt id (List.map fst ts) in
               FOL_term (t, res_decl.v_type)
           | _ -> failwith "impossible")
       | BinaryOp (e1, OpEq, e2, pos) ->
@@ -695,10 +695,10 @@ let convert cus =
           | FOL_term (_, BoolType) ->
               let f1 = extract_fol_form locals e1 in
               let f2 = extract_fol_form locals e2 in
-              FOL_form (FormUtil.mk_srcpos pos (FormUtil.mk_iff f1 f2))
+              FOL_form (GrassUtil.mk_srcpos pos (GrassUtil.mk_iff f1 f2))
           | FOL_term (t1, ty1) ->
               let t2, _ = extract_term locals ty1 e2 in
-              FOL_form (FormUtil.mk_srcpos pos (FormUtil.mk_eq t1 t2))
+              FOL_form (GrassUtil.mk_srcpos pos (GrassUtil.mk_eq t1 t2))
           | SL_form _ -> 
               ProgError.error (pos_of_expr e1) 
                 "Operator == is not defined for SL formulas")
@@ -707,9 +707,9 @@ let convert cus =
       | BinaryOp (e1, (OpInt as op), e2, _) ->
           let mk_app =
             match op with
-            | OpDiff -> FormUtil.mk_diff
-            | OpUn -> (fun t1 t2 -> FormUtil.mk_union [t1; t2])
-            | OpInt -> (fun t1 t2 -> FormUtil.mk_inter [t1; t2])
+            | OpDiff -> GrassUtil.mk_diff
+            | OpUn -> (fun t1 t2 -> GrassUtil.mk_union [t1; t2])
+            | OpInt -> (fun t1 t2 -> GrassUtil.mk_inter [t1; t2])
             | _ -> failwith "unexpected operator"
           in
           let t1, ty1 = extract_term locals (SetType UniversalType) e1 in
@@ -723,10 +723,10 @@ let convert cus =
       | BinaryOp (e1, (OpDiv as op), e2, _) ->
           let mk_app =
             match op with
-            | OpMinus -> FormUtil.mk_minus
-            | OpPlus -> FormUtil.mk_plus
-            | OpMult -> FormUtil.mk_mult
-            | OpDiv -> FormUtil.mk_div
+            | OpMinus -> GrassUtil.mk_minus
+            | OpPlus -> GrassUtil.mk_plus
+            | OpMult -> GrassUtil.mk_mult
+            | OpDiv -> GrassUtil.mk_div
             | _ -> failwith "unexpected operator"
           in
           let t1, _ = extract_term locals IntType e1 in
@@ -738,41 +738,41 @@ let convert cus =
       | BinaryOp (e1, (OpLeq as op), e2, pos) ->
           let mk_int_form =
             match op with
-            | OpGt -> FormUtil.mk_gt
-            | OpLt -> FormUtil.mk_lt
-            | OpGeq -> FormUtil.mk_geq
-            | OpLeq -> FormUtil.mk_leq
+            | OpGt -> GrassUtil.mk_gt
+            | OpLt -> GrassUtil.mk_lt
+            | OpGeq -> GrassUtil.mk_geq
+            | OpLeq -> GrassUtil.mk_leq
             | _ -> failwith "unexpected operator"
           in
           let mk_set_form =
             match op with
-            | OpGt -> (fun s t -> FormUtil.mk_strict_subset t s)
-            | OpLt -> FormUtil.mk_strict_subset
-            | OpGeq -> (fun s t -> FormUtil.mk_subseteq t s)
-            | OpLeq -> FormUtil.mk_subseteq
+            | OpGt -> (fun s t -> GrassUtil.mk_strict_subset t s)
+            | OpLt -> GrassUtil.mk_strict_subset
+            | OpGeq -> (fun s t -> GrassUtil.mk_subseteq t s)
+            | OpLeq -> GrassUtil.mk_subseteq
             | _ -> failwith "unexpected operator"
           in
           (try
             let t1, _ = extract_term locals IntType e1 in
             let t2, _ = extract_term locals IntType e2 in            
-            FOL_form (FormUtil.mk_srcpos pos (mk_int_form t1 t2))
+            FOL_form (GrassUtil.mk_srcpos pos (mk_int_form t1 t2))
           with _ ->
             let t1, ty1 = extract_term locals (SetType UniversalType) e1 in
             let t2, _ = extract_term locals ty1 e2 in            
-            FOL_form (FormUtil.mk_srcpos pos (mk_set_form t1 t2)))
+            FOL_form (GrassUtil.mk_srcpos pos (mk_set_form t1 t2)))
       | BinaryOp (e1, OpIn, e2, pos) ->
           let t1, ty1 = extract_term locals UniversalType e1 in
           let t2, _ = extract_term locals (SetType ty1) e2 in
-          FOL_form (FormUtil.mk_srcpos pos (FormUtil.mk_elem t1 t2))
+          FOL_form (GrassUtil.mk_srcpos pos (GrassUtil.mk_elem t1 t2))
       | BinaryOp (e1, (OpAnd as op), e2, _)
       | BinaryOp (e1, (OpOr as op), e2, _)
       | BinaryOp (e1, (OpImpl as op), e2, _) ->
           (try
             let mk_form = 
               match op with
-              | OpAnd -> fun f1 f2 -> FormUtil.mk_and [f1; f2]
-              | OpOr -> fun f1 f2 -> FormUtil.mk_or [f1; f2]
-              | OpImpl -> FormUtil.mk_implies           
+              | OpAnd -> fun f1 f2 -> GrassUtil.mk_and [f1; f2]
+              | OpOr -> fun f1 f2 -> GrassUtil.mk_or [f1; f2]
+              | OpImpl -> GrassUtil.mk_implies           
               | _ -> failwith "unexpected operator"
             in
             let f1 = extract_fol_form locals e1 in
@@ -816,29 +816,29 @@ let convert cus =
           FOL_term (t, IntType)
       | UnaryOp (OpMinus, e, _) ->
           let t, _ = extract_term locals IntType e in
-          FOL_term (FormUtil.mk_uminus t, IntType)
+          FOL_term (GrassUtil.mk_uminus t, IntType)
       | UnaryOp (OpNot, e, pos) ->
           (try
             let f = extract_fol_form locals e in
-            FOL_form (FormUtil.mk_not f)
+            FOL_form (GrassUtil.mk_not f)
           with ProgError.Prog_error _ ->
             let f = extract_sl_form locals e in
             SL_form (SlUtil.mk_not ~pos:pos f))
       | Ident (id, pos) ->
           let decl = find_var_decl locals id in
           let srt = convert_type decl.v_type in
-          FOL_term (FormUtil.mk_free_const srt decl.v_name, decl.v_type)
+          FOL_term (GrassUtil.mk_free_const srt decl.v_name, decl.v_type)
       | Annot (e, CommentAnnot c, pos) ->
           let f = extract_fol_form locals e in
-          FOL_form (FormUtil.annotate f [Comment c])
+          FOL_form (GrassUtil.annotate f [Comment c])
       | Annot (e, GeneratorAnnot (es, ge), pos) ->
           let f = extract_fol_form locals e in
           let es1 = List.map (fun e -> fst (extract_term locals UniversalType e)) es in
           let ge1, _ = extract_term locals UniversalType ge in
-          let gts = FormUtil.ground_terms (Atom (ge1, [])) in
+          let gts = GrassUtil.ground_terms (Atom (ge1, [])) in
           let matches = 
             List.map (fun e -> 
-              let ce = FormUtil.free_consts_term e in
+              let ce = GrassUtil.free_consts_term e in
               let flt = 
                 TermSet.fold 
                   (function 
@@ -855,7 +855,7 @@ let convert cus =
               in
               Match (e, flt)) es1
           in
-          FOL_form (FormUtil.annotate f [TermGenerator ([], [], matches, ge1)])
+          FOL_form (GrassUtil.annotate f [TermGenerator ([], [], matches, ge1)])
       | _ -> failwith "convert_expr: unexpected expression"
     and extract_sl_form locals e =
       match convert_expr locals e with
@@ -866,21 +866,21 @@ let convert cus =
     and extract_fol_form locals e =
       match convert_expr locals e with
       | SL_form (Atom (Pred p, ts, pos)) ->
-          FormUtil.mk_pred ~ann:[SrcPos (pos_of_expr e)] p ts
+          GrassUtil.mk_pred ~ann:[SrcPos (pos_of_expr e)] p ts
       | SL_form _ ->
           type_error (pos_of_expr e) "expression of type bool" "SL formula"
       | FOL_form f -> f
-      | FOL_term (t, BoolType) -> Form.Atom (t, [SrcPos (pos_of_expr e)])
+      | FOL_term (t, BoolType) -> Grass.Atom (t, [SrcPos (pos_of_expr e)])
       | FOL_term (t, ty) -> type_error (pos_of_expr e) "expression of type bool" (ty_str ty)
     and extract_term locals ty e =
       match convert_expr locals e with
       | SL_form _ -> type_error (pos_of_expr e) (ty_str ty) "SL formula"
       | FOL_form (BoolOp (And, [])) 
       | FOL_form (Binder (_, [], BoolOp (And, []), _)) -> 
-          Form.App (BoolConst true, [], Bool), BoolType
+          Grass.App (BoolConst true, [], Bool), BoolType
       | FOL_form (BoolOp (Or, []))
       | FOL_form (Binder (_, [], BoolOp (Or, []), _)) -> 
-          Form.App (BoolConst false, [], Bool), BoolType
+          Grass.App (BoolConst false, [], Bool), BoolType
       | FOL_form (Atom (t, _)) -> t, BoolType
       | FOL_form _ -> type_error (pos_of_expr e) (ty_str ty) "formula"
       | FOL_term (t, tty) ->
@@ -991,8 +991,8 @@ let convert cus =
           (match ind_opt with
           | Some t -> 
               let fld_srt = Fld (convert_type (List.hd rhs_tys)) in
-              let fld = FormUtil.mk_free_const fld_srt (List.hd lhs_ids) in
-              mk_assign_cmd lhs_ids [FormUtil.mk_write fld t (List.hd rhs_ts)] pos
+              let fld = GrassUtil.mk_free_const fld_srt (List.hd lhs_ids) in
+              mk_assign_cmd lhs_ids [GrassUtil.mk_write fld t (List.hd rhs_ts)] pos
           | None -> mk_assign_cmd lhs_ids rhs_ts pos)
       | Dispose (e, pos) ->
           let t, _ = extract_term proc.p_locals LocType e in

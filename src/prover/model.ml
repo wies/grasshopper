@@ -1,8 +1,8 @@
 (** {5 Models of GRASS formulas} *)
 
 open Util
-open Form
-open FormUtil
+open Grass
+open GrassUtil
 
 exception Undefined
 

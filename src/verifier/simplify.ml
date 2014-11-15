@@ -1,7 +1,7 @@
 (** {5 Simplifications for verification condition generation} *)
 
-open Form
-open FormUtil
+open Grass
+open GrassUtil
 open Prog
 
 (** Transform loops into tail recursive procedures. *)
@@ -24,7 +24,7 @@ let elim_loops (prog : program) =
         let subst_formals, formals, locals =
           List.fold_right
             (fun decl (sm, ids, locals) -> 
-              let init_id = fresh_ident (FormUtil.name decl.var_name) in
+              let init_id = fresh_ident (GrassUtil.name decl.var_name) in
               let local_decl = { decl with var_is_implicit = false } in
               let init_decl = { local_decl with var_name = init_id } in
               IdMap.add decl.var_name init_id sm, 

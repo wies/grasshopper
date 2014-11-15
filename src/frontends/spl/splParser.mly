@@ -1,6 +1,6 @@
 %{
 open Prog
-open Form
+open Grass
 open SplSyntax
 open Lexing
 
@@ -31,7 +31,7 @@ let fix_scopes stmnt =
     | Loop (inv, preb, cond, postb, pos) ->
         Loop (inv, fs scope preb, cond, fs scope postb, pos)
     | stmnt -> stmnt
-  in fs FormUtil.global_scope stmnt
+  in fs GrassUtil.global_scope stmnt
 
 %}
 
@@ -104,7 +104,7 @@ include_cmd:
 | INCLUDE STRINGVAL SEMICOLON { $2 }
 
 proc_decl:
-| proc_header { proc_decl $1 (Skip FormUtil.dummy_position) }
+| proc_header { proc_decl $1 (Skip GrassUtil.dummy_position) }
 | proc_header proc_impl {
   proc_decl $1 $2
 } 
@@ -128,7 +128,7 @@ proc_header:
       p_returns = returns; 
       p_locals = locals;
       p_contracts = $7;
-      p_body = Skip FormUtil.dummy_position; 
+      p_body = Skip GrassUtil.dummy_position; 
       p_pos = mk_position 2 2;
     }
   in 
@@ -216,7 +216,7 @@ var_decl:
       v_implicit = fst $1;
       v_aux = false;
       v_pos = mk_position 2 2;
-      v_scope = FormUtil.global_scope; (* scope is fixed later *)
+      v_scope = GrassUtil.global_scope; (* scope is fixed later *)
     } 
   in
   decl
@@ -334,7 +334,7 @@ assign_lhs:
 
 if_then_stmt:
 | IF LPAREN expr RPAREN stmt  { 
-  If ($3, $5, Skip FormUtil.dummy_position, mk_position 1 6)
+  If ($3, $5, Skip GrassUtil.dummy_position, mk_position 1 6)
 }
 ;
 
@@ -352,16 +352,16 @@ if_then_else_stmt_no_short_if:
 
 while_stmt:
 | WHILE LPAREN expr RPAREN loop_contracts LBRACE block RBRACE {
-  Loop ($5, Skip FormUtil.dummy_position, $3, Block ($7, mk_position 6 8), mk_position 1 8)
+  Loop ($5, Skip GrassUtil.dummy_position, $3, Block ($7, mk_position 6 8), mk_position 1 8)
 }
 | WHILE LPAREN expr RPAREN stmt {
-  Loop ([], Skip FormUtil.dummy_position, $3, $5, mk_position 1 5)
+  Loop ([], Skip GrassUtil.dummy_position, $3, $5, mk_position 1 5)
 }
 ;
 
 while_stmt_no_short_if:
 | WHILE LPAREN expr RPAREN stmt_no_short_if {
-  Loop ([], Skip FormUtil.dummy_position, $3, $5, mk_position 1 5)
+  Loop ([], Skip GrassUtil.dummy_position, $3, $5, mk_position 1 5)
 } 
 ;
 

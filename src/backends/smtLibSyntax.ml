@@ -1,10 +1,10 @@
 (** SMT-LIB v2 abstract syntax *)
-open Form
+open Grass
 
 
-type ident = Form.ident
+type ident = Grass.ident
 
-type pos = Form.source_position
+type pos = Grass.source_position
 
 type sort = 
   | IntSort | BoolSort
@@ -77,18 +77,18 @@ let idents_in_term t =
   let rec iot acc = function
     | App (sym, ts, _) -> 
         let acc1 = match sym with
-        | Ident id -> Form.IdSet.add id acc
+        | Ident id -> Grass.IdSet.add id acc
         | _ -> acc
         in
         List.fold_left iot acc1 ts
     | Binder (_, vs, t, _) ->
-        let acc1 = List.fold_left (fun acc1 (id, _) -> Form.IdSet.add id acc1) acc vs in
+        let acc1 = List.fold_left (fun acc1 (id, _) -> Grass.IdSet.add id acc1) acc vs in
         iot acc1 t
     | Let (defs, t, _) ->
         let acc1 = List.fold_left (fun acc1 (id, t) -> iot (IdSet.add id acc1) t) acc defs in
         iot acc1 t
     | Annot (t, _, _) -> iot acc t
-  in iot Form.IdSet.empty t
+  in iot Grass.IdSet.empty t
 
 (** Computes the set of identifiers of free variables occuring in term [t]
  ** union the accumulated set of identifiers [vars]. *)
@@ -131,9 +131,9 @@ let subst sm t =
     let vs1, sm2 = 
       List.fold_right 
 	(fun (x, srt) (vs1, sm2) ->
-	  if Form.IdSet.mem x occuring 
+	  if Grass.IdSet.mem x occuring 
 	  then 
-	    let x1 = FormUtil.fresh_ident (FormUtil.name x) in
+	    let x1 = GrassUtil.fresh_ident (GrassUtil.name x) in
 	    (x1, srt) :: vs1, IdMap.add x (App (Ident x1, [], None)) sm2
 	  else (x, srt) :: vs1, sm2)
 	vs ([], sm1)

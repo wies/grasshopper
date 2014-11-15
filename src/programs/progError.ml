@@ -1,4 +1,4 @@
-open Form
+open Grass
 open Prog
 
 exception Prog_error of source_position * string
@@ -15,7 +15,7 @@ let type_error pos msg = raise (Prog_error (pos, "Type Error: " ^ msg))
 let error pos msg = raise (Prog_error (pos, "Error: " ^ msg))
 
 let error_to_string pos msg = 
-  if pos = FormUtil.dummy_position 
+  if pos = GrassUtil.dummy_position 
   then msg 
   else
     if !Config.flycheck_mode 

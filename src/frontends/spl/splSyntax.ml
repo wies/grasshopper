@@ -1,6 +1,6 @@
 (** SPL abstract syntax. *)
 
-open Form
+open Grass
 
 type idents = ident list
 
@@ -239,7 +239,7 @@ let empty_spl_program =
   }
 
 let initial_spl_program =
-  let alloc_decl = VarDecl (var_decl Prog.alloc_id (SetType LocType) true false FormUtil.dummy_position FormUtil.global_scope) in
+  let alloc_decl = VarDecl (var_decl Prog.alloc_id (SetType LocType) true false GrassUtil.dummy_position GrassUtil.global_scope) in
   extend_spl_program [] [alloc_decl] empty_spl_program
   
 

@@ -1,7 +1,7 @@
 (** {5 Translation of program with SL specifications to a pure GRASS program} *)
 
-open Form
-open FormUtil
+open Grass
+open GrassUtil
 open Prog
 open AuxNames
 
@@ -148,7 +148,7 @@ let elim_sl prog =
       let name = "precondition of " ^ string_of_ident proc.proc_name in
       let f, _, name, msg, pos = convert_sl_form sl_precond name in
       let f_eq_init_footprint =  
-        propagate_exists (mk_and [ToGrass.to_grass pred_to_form footprint_set f; 
+        propagate_exists (mk_and [SlToGrass.to_grass pred_to_form footprint_set f; 
                                   mk_subseteq footprint_set footprint_caller_set])
       in
       let precond = mk_spec_form (FOL f_eq_init_footprint) name msg pos in
@@ -176,7 +176,7 @@ let elim_sl prog =
       let name = "postcondition of " ^ string_of_ident proc.proc_name in
       let f, kind, name, msg, pos = convert_sl_form sl_postcond name in
       let f_eq_final_footprint = 
-        ToGrass.to_grass pred_to_form final_footprint_set f 
+        SlToGrass.to_grass pred_to_form final_footprint_set f 
       in
       let final_footprint_postcond = mk_spec_form (FOL f_eq_final_footprint) name msg pos in
       (*let init_footprint_postcond = 
@@ -242,14 +242,14 @@ let elim_sl prog =
       | (Assume sf, pp) ->
           (match sf.spec_form with
           | SL f ->
-              let f1 = ToGrass.to_grass pred_to_form footprint_set f in
+              let f1 = SlToGrass.to_grass pred_to_form footprint_set f in
               let sf1 = mk_spec_form (FOL f1) sf.spec_name sf.spec_msg sf.spec_pos in
               mk_assume_cmd sf1 pp.pp_pos
           | FOL f -> Basic (Assume sf, pp))
       | (Assert sf, pp) ->
           (match sf.spec_form with
           | SL f ->
-              let f1 = ToGrass.to_grass pred_to_form footprint_set f in
+              let f1 = SlToGrass.to_grass pred_to_form footprint_set f in
               let sf1 = mk_spec_form (FOL f1) sf.spec_name sf.spec_msg sf.spec_pos in
               mk_assert_cmd sf1 pp.pp_pos
           | FOL f -> Basic (Assert sf, pp))

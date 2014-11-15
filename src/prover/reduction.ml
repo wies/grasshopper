@@ -1,10 +1,10 @@
 (** {5 Reduction from GRASS to SMT} *)
 
 open Util
-open Form
-open FormUtil
+open Grass
+open GrassUtil
 open InstGen
-open SimplifyForm
+open SimplifyGrass
 
 
 (** Eliminate all implicit and explicit existential quantifiers using skolemization.

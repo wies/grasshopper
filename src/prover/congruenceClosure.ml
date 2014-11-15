@@ -1,6 +1,6 @@
 (** DZ: this is a copy-pasted version from csisat, just adaped to the current types *)
 
-open Form
+open Grass
 
 (** Ordered sets represented as lists.
  * This module is inspired from the Sicstus/SWI prolog library with the same name.
@@ -210,7 +210,7 @@ class dag = fun expr ->
 
     method add_constr eq = match eq with
       | Atom (App (Eq, [e1; e2], _), _) ->
-          if FormUtil.sort_of e1 <> Bool then 
+          if GrassUtil.sort_of e1 <> Bool then 
 	    let n1 = self#get_node e1 in
             let n2 = self#get_node e2 in
             n1#merge n2

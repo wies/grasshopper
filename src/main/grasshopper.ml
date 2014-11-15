@@ -1,6 +1,4 @@
-open Sl
 open Util
-open Logging
 
 let usage_message =
   "Usage:\n  " ^ Sys.argv.(0) ^ 
@@ -14,13 +12,13 @@ let cmd_line_error msg =
 let output_trace prog proc (pp, model) =
   if !Config.trace_file = "" then () else
   begin
-    let trace = Analysis.get_trace prog proc (pp, model) in
+    let trace = Verifier.get_trace prog proc (pp, model) in
     (* print trace to trace file in JSON format *)
     let trace_chan = open_out !Config.trace_file in
     let print_pos (pos, state) =
       Printf.fprintf trace_chan 
         "{\"position\": {\"line_no\": %d, \"column_no_start\": %d, \"column_no_stop\": %d}, \"state\": "
-        pos.Form.sp_start_line pos.Form.sp_start_col pos.Form.sp_end_col;
+        pos.Grass.sp_start_line pos.Grass.sp_start_col pos.Grass.sp_end_col;
       Model.output_json trace_chan state;
       output_string trace_chan "}"
     in
@@ -66,15 +64,15 @@ let parse_spl_program main_file =
         parse parsed1 to_parse2 (SplSyntax.merge_spl_programs spl_prog cu)
     | [] -> spl_prog
   in
-  parse StringSet.empty [(main_file, FormUtil.dummy_position)] SplSyntax.initial_spl_program
+  parse StringSet.empty [(main_file, GrassUtil.dummy_position)] SplSyntax.initial_spl_program
 
 (** Check SPL program in main file [file] and procedure [proc] *)
 let check_spl_program file proc =
   let spl_prog = parse_spl_program file in
-  let prog = Spl2ghp.to_program [spl_prog] in
-  let simple_prog = Analysis.simplify prog in
+  let prog = SplTranslator.to_program [spl_prog] in
+  let simple_prog = Verifier.simplify prog in
   let check simple_prog proc =
-    let errors = Analysis.check_proc simple_prog proc in
+    let errors = Verifier.check_proc simple_prog proc in
     List.iter 
       (fun (pp, error_msg, model) ->
         output_trace simple_prog proc (pp, model);
@@ -93,7 +91,7 @@ let check_spl_program file proc =
     if procs = [] then begin
       let available =
         Prog.fold_procs 
-          (fun acc proc -> "\t" ^ Form.string_of_ident proc.Prog.proc_name ^ "\n" ^ acc) 
+          (fun acc proc -> "\t" ^ Grass.string_of_ident proc.Prog.proc_name ^ "\n" ^ acc) 
           "" prog
       in
       failwith ("Could not find a procedure named " ^ p ^ 
