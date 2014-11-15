@@ -53,4 +53,4 @@ sorted_set_union        tests/spl/sl_sorted_set/union.spl       pass
 "
 
 
-OPTIONS=$@ time -f "Elapsed user time: %Us.\nElapsed real time: %es." ./run-tests $TESTS
+OPTIONS=$@ time -f "Elapsed user time: %Us.\nElapsed real time: %es." ./bin/run-tests $TESTS
