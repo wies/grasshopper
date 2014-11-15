@@ -8,7 +8,10 @@ Please let us know if you are planing to use it.
 
 The code written by us is released under a BSD license, see file
 LICENSE. GRASShopper uses a union-find data structure that is written
-by Jean-Christophe Filliatre and is released under an LGPL license.
+by Jean-Christophe Filliatre and is released under an LGPL
+license. The Emacs mode uses a minor mode, called flycheck, for
+on-the-fly syntax checking. The original flycheck mode was written by
+Sebastian Wiesner and released under a GPL license.
 
 -------------------------
 Required
@@ -49,9 +52,9 @@ Emacs Modes
 -------------------------
 GRASShopper provides two emacs modes for GRASShopper programs:
 
-- SPL mode: this mode provides syntax highlighting for the GRASShopper
-  input programs (see tests/spl for examples), as well as on-the-fly
-  checking and error reporting via flymake.
+- SPL mode: this mode provides syntax highlighting and automatic
+  indentation for the GRASShopper input programs (see tests/spl for
+  examples).
 
 - GHP mode: this mode provides syntax highlighting for the intermediate 
   representation of programs inside GRASShopper. Such programs can be
@@ -66,11 +69,17 @@ your site-lisp directory and add the following lines to your .emacs file:
 (load "spl-mode")   
 (load "ghp-mode")
 
-To use the flymake mode with SPL programs, you need to put the
-GRASShopper executable in the path and rename it to "grasshopper".
+Optional: Flycheck minor mode
 
-Optional: if you are using emacs 24.1 or newer, you may use the
-flycheck mode as a replacement for flymake mode. In this case, also
-copy the file flycheck.el into your site-lisp directory. We are using
-a slightly modified version of the original flycheck mode by Sebastian
-Wiesner.
+If you are using Emacs 24.1 or newer, we suggest to use the
+flycheck minor mode of the SPL emacs mode. To do so, copy the file
+emacs-mode/flycheck.el into your site-lisp directory. Additionally,
+you need to put the GRASShopper executable in your path and rename it
+to "grasshopper". The mode supports on-the-fly syntax and type
+checking of SPL programs and provides keyboard shortcuts for verifying
+the program from inside buffers. See the documentation in the file
+spl-mode.el for details.
+
+Note that We are using a patched version of the original flycheck mode
+by Sebastian Wiesner. The minor mode will not work correctly with the
+original version of the flycheck mode.
