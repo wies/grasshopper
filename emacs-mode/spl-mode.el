@@ -1,7 +1,24 @@
-;;; package --- Summary
 ;;; spl-mode.el -- Emacs mode for GRASShopper programs.
 
+;; Copyright (c) 2013, 2014 Thomas Wies <wies@cs.nyu.edu>>
+;;
+;; Author: Thomas Wies
+;; URL: http://cs.nyu.edu/wies/software/grasshopper
+;; Version: 0.4
+
 ;;; Commentary:
+
+;; Major mode for editing GRASShopper programs.
+
+;; Features:
+;; - syntax highlighting
+;; - automated indentation
+;; - on-the-fly syntax and type checking
+;; - compilation mode for verification
+
+;; Keyboard shortcuts:
+;; C-c C-v -- Verify current buffer
+;; C-c C-p -- Verify enclosing procedure of position in current buffer
 
 ;;; Code:
 
@@ -12,29 +29,9 @@
 
 (cond
  ((x-display-color-p)
-  (make-face 'Firebrick)
-  (set-face-foreground 'Firebrick "Firebrick")
-  (make-face 'RosyBrown)
-  (set-face-foreground 'RosyBrown "RosyBrown")
-  (make-face 'Purple)
-  (set-face-foreground 'Purple "Purple")
-  (make-face 'MidnightBlue)
-  (set-face-foreground 'MidnightBlue "MidnightBlue")
-  (make-face 'DarkGoldenRod)
-  (set-face-foreground 'DarkGoldenRod "DarkGoldenRod")
   (make-face 'Spec)
   (set-face-foreground 'Spec "magenta4")
-  (make-face 'DarkOliveGreen)
-  (set-face-foreground 'DarkOliveGreen "DarkOliveGreen4")
-  (make-face 'CadetBlue)
-  (set-face-foreground 'CadetBlue "CadetBlue")
-  (make-face 'Stop)
-  (set-face-foreground 'Stop "White")
-  (set-face-background 'Stop "Red")
-  (setq font-lock-reference-face 'CadetBlue)
   (setq font-lock-spec-face 'Spec)
-  (setq font-lock-stop-face 'Stop)
-  (setq font-lock-doc-face 'CadetBlue)
 ))
 
 
@@ -49,10 +46,10 @@
    '("\\<\\(ass\\(ert\\|ume\\)\\|ensures\\|i\\(mplicit\\|nvariant\\)\\|requires\\|ghost\\)\\>"
          1 font-lock-spec-face)
 
-   '("\\<\\(old\\)\\>"
+   '("\\<\\(Btwn\\|forall\\|exists\\|old\\)\\>"
          1 font-lock-builtin-face)
 
-   '("\\<\\(forall\\|exists\\|emp\\|false\\|in\\|null\\|true\\)\\>"
+   '("\\<\\(emp\\|false\\|in\\|null\\|true\\)\\>"
          1 font-lock-constant-face)
 
    '("\\(\\<[a-zA-Z_][a-zA-Z0-9_']*[ \t]*\\>\\)(" 1
@@ -198,16 +195,45 @@
     ;((error line-start (file-name) ":" line ":" column ":" (message) line-end))
     :modes (spl-mode))
 
-  ;; Register keyboard shortcut for verifier
-  (defun spl-verify ()
+  ;; Define checker for verifying current procedure
+  (defvar spl-current-procedure nil)
+  (flycheck-define-checker spl-proc-verifier
+    "On-the-fly verifier for Grasshopper programs."
+    :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) 
+              "-procedure" (eval spl-current-procedure) 
+              "-lint" source)
+    :error-patterns
+    ((warning line-start (file-name) ":" line ":" column (optional "-" end-column) ":Related Location:" (message) line-end)
+     (error line-start (file-name) ":" line ":" column (optional "-" end-column) ":" (message) line-end))
+    ;((error line-start (file-name) ":" line ":" column ":" (message) line-end))
+    :modes (spl-mode))
+
+  ;; Register keyboard shortcuts for verifier
+  (defun spl-verify-buffer ()
     "Verify current buffer using GRASShopper."
     (interactive)
     (flycheck-select-checker 'spl-verifier)
     (flycheck-compile)
     (flycheck-select-checker 'spl-reporter))
+  
+  (defun spl-verify-procedure ()
+    "Verify current procedure using GRASShopper."
+    (interactive)
+    (save-excursion
+      (while (< 0 (current-column))
+        (beginning-of-defun))
+      (if (looking-at "[ \t]*procedure[ \t]+\\([^(]+\\)")
+          (let* ((proc-name (match-string 1)))
+            (progn (message "Verifying procedure %s..." proc-name)
+                   (setq spl-current-procedure proc-name)
+                   (flycheck-select-checker 'spl-proc-verifier)
+                   (flycheck-compile)
+                   (flycheck-select-checker 'spl-reporter)))
+        (message "Could not find enclosing procedure of current position."))))
   (add-hook 'spl-mode-hook
             (lambda () 
-              (local-set-key (kbd "C-c C-v") 'spl-verify))))
+              (local-set-key (kbd "C-c C-v") 'spl-verify-buffer)
+              (local-set-key (kbd "C-c C-p") 'spl-verify-procedure))))
 
 (provide 'spl-mode)
 

@@ -2,8 +2,8 @@ include "../include/bstree.spl";
 
 procedure contains(root: Node, val: Int, implicit ghost content: Set<Int>)
   returns (res: Bool)
-  requires stree(root, content)
-  ensures stree(root, content)
+  requires tree_set(root, content)
+  ensures tree_set(root, content)
   ensures res == val in content
 {
   var curr: Node;
@@ -11,7 +11,7 @@ procedure contains(root: Node, val: Int, implicit ghost content: Set<Int>)
   
   while (curr != null && curr.data != val) 
     invariant (exists content1: Set<Int> :: 
-               (stree(curr, content1) -** stree(root, content)) &*&
+               (tree_set(curr, content1) -** tree_set(root, content)) &*&
                (val in content == val in content1))
   {
     if (curr.data > val) {
@@ -28,7 +28,7 @@ procedure contains(root: Node, val: Int, implicit ghost content: Set<Int>)
 procedure singleton(val: Int)
   returns (root: Node)
   requires emp
-  ensures stree(root, Set<Int>(val)) &*& root.parent == null
+  ensures tree_set(root, Set<Int>(val)) &*& root.parent == null
 {
   root := new Node;
   root.left := null;
@@ -39,8 +39,8 @@ procedure singleton(val: Int)
 
 procedure insert(root: Node, val: Int, implicit ghost Content: Set<Int>)
   returns (nroot: Node)
-  requires stree(root, Content);
-  ensures stree(nroot, Content ++ Set<Int>(val));
+  requires tree_set(root, Content)
+  ensures tree_set(nroot, Content ++ Set<Int>(val))
 {
   if (root == null) {
     nroot := singleton(val);
@@ -53,7 +53,7 @@ procedure insert(root: Node, val: Int, implicit ghost Content: Set<Int>)
   while (curr.data > val && curr.left != null ||
          curr.data < val && curr.right != null) 
     invariant exists Content1: Set<Int> :: 
-      (acc(curr) -** stree(curr, Content1) -** stree(root, Content))
+      (acc(curr) -** tree_set(curr, Content1) -** tree_set(root, Content))
     invariant forall x: Node :: Btwn(parent, curr, x.left, x) &&
       Btwn(parent, x, root, root) ==> x.data > val 
     invariant forall x: Node :: Btwn(parent, curr, x.right, x) &&
@@ -74,10 +74,8 @@ procedure insert(root: Node, val: Int, implicit ghost Content: Set<Int>)
     n.parent := curr;
     if (curr.data > val) {
       curr.left := n;
-      //return root;
     } else {
       curr.right := n;
-      //return root;
     }
     return root;
   }

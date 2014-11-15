@@ -2,14 +2,14 @@ include "../include/bstree.spl";
 
 procedure contains(root: Node, val: Int)
   returns (res: Bool)
-  requires tree(root);
-  ensures tree(root);
+  requires tree(root)
+  ensures tree(root)
 {
   var curr: Node;
   curr := root;
 
   while (curr != null && curr.data != val) 
-    invariant tree(curr) -** tree(root);
+    invariant tree(curr) -** tree(root)
   {
     if (curr.data > val) {
       curr := curr.left;
@@ -24,8 +24,8 @@ procedure contains(root: Node, val: Int)
 
 procedure singleton(val: Int)
   returns (root: Node)
-  requires emp;
-  ensures (acc(root) -** tree(root)) &*& root.parent == null ;
+  requires emp
+  ensures (acc(root) -** tree(root)) &*& root.parent == null
 {
   root := new Node;
   root.left := null;
@@ -36,8 +36,8 @@ procedure singleton(val: Int)
 
 procedure insert(root: Node, val: Int)
   returns (nroot: Node)
-  requires tree(root);
-  ensures tree(nroot);
+  requires tree(root)
+  ensures tree(nroot)
 {
   if (root == null) {
     nroot := singleton(val);
@@ -49,7 +49,7 @@ procedure insert(root: Node, val: Int)
 
   while (curr.data > val && curr.left != null ||
          curr.data < val && curr.right != null) 
-    invariant acc(curr) -** tree(curr) -** tree(root);
+    invariant acc(curr) -** tree(curr) -** tree(root)
   {
     if (curr.data > val && curr.left != null) {
       curr := curr.left;
@@ -75,16 +75,16 @@ procedure insert(root: Node, val: Int)
 
 procedure test(root: Node)
   returns (n: Node)
-  requires tree(root);
-  ensures tree(root) &*& tree(n);
+  requires tree(root)
+  ensures tree(root) &*& tree(n)
 {
   n := singleton(1);
 }
 
 procedure extract_max(root: Node)
 returns (new_root: Node, max: Node)
-  requires acc(root) -** tree(root);
-  ensures tree(new_root) &*& acc(max);
+  requires acc(root) -** tree(root)
+  ensures tree(new_root) &*& acc(max)
   //ensures max.right == null && max.parent == null;
 {
   var max: Node, maxp: Node;
@@ -92,8 +92,8 @@ returns (new_root: Node, max: Node)
   maxp := root;
 
   while (max.right != null) 
-    invariant acc(max) -** tree(max) -** tree(maxp) -** tree(root);
-    invariant root == max || maxp.right == max;
+    invariant acc(max) -** tree(max) -** tree(maxp) -** tree(root)
+    invariant root == max || maxp.right == max
   {
     maxp := max;
     max := max.right;
@@ -117,12 +117,12 @@ returns (new_root: Node, max: Node)
 }
 
 procedure remove(root: Node, val: Int) returns (new_root: Node)
-  requires tree(root);
-  ensures tree(new_root);
+  requires tree(root)
+  ensures tree(new_root)
 {
   var curr: Node;
   curr := root;
-
+  
   while (curr != null && curr.data != val) 
     invariant tree(curr) -** tree(root);
   {
@@ -132,26 +132,26 @@ procedure remove(root: Node, val: Int) returns (new_root: Node)
       curr := curr.right;
     }
   }
-
+  
   if (curr == null) {
     return root;
   } else  {
     var cp: Node, cl: Node, cr: Node;
     cp, cl, cr := curr.parent, curr.left, curr.right;
-
+    
     if (cl != null && cr != null) {
       var lm: Node, lmp: Node;
       lmp := cl;
       lm := cl;            
-
+      
       while (lm.right != null) 
-        invariant tree(lm) -** tree(lmp) -** tree(cl) -** tree(root);
-        invariant lm != null && (cl == lm || lmp.right == lm);
+        invariant tree(lm) -** tree(lmp) -** tree(cl) -** tree(root)
+        invariant lm != null && (cl == lm || lmp.right == lm)
       {
         lmp := lm;
         lm := lm.right;
       }
-
+      
       if (cl != lm) {
         var lml: Node;
         lml := lm.left;
@@ -163,7 +163,7 @@ procedure remove(root: Node, val: Int) returns (new_root: Node)
       lm.parent := cp;
       lm.right := cr;
       cr.parent := lm;
-
+      
       curr.parent := null;
       free curr;
 
@@ -203,17 +203,17 @@ procedure remove(root: Node, val: Int) returns (new_root: Node)
 }
 
 procedure remove_alt(root: Node, val: Int) returns (new_root: Node)
-  requires tree(root);
-  ensures tree(new_root);
+  requires tree(root)
+  ensures tree(new_root)
 {
   var curr: Node;
   curr := root;
   new_root := root;
 
   while (curr != null && curr.data != val) 
-    invariant tree(root);
-    invariant root == null || curr == null || Btwn(parent, curr, root, root);
-    invariant root != null || curr == null;
+    invariant tree(root)
+    invariant root == null || curr == null || Btwn(parent, curr, root, root)
+    invariant root != null || curr == null
   {
     if (curr.data > val) {
       curr := curr.left;
@@ -233,9 +233,9 @@ procedure remove_alt(root: Node, val: Int) returns (new_root: Node)
     lm := cl;            
 
     while (lm.right != null) 
-      invariant tree(root);
-      invariant Btwn(parent, lm, cl, root) && Btwn(parent, lm, lmp, cl) && Btwn(parent, lm, lmp, root);
-      invariant lm != null && (cl == lm || lmp.right == lm);
+      invariant tree(root)
+      invariant Btwn(parent, lm, cl, root) && Btwn(parent, lm, lmp, cl) && Btwn(parent, lm, lmp, root)
+      invariant lm != null && (cl == lm || lmp.right == lm)
     {
       lmp := lm;
       lm := lm.right;

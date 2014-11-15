@@ -70,7 +70,6 @@ procedure merge_sort(x: Node) returns (res: Node)
   ensures slseg(res, null);
 {
   var x1: Node, x2: Node;
-  //x.next := x;
   x1, x2 := split(x);
   var res1: Node;
   res1 := merge_sort(x1);

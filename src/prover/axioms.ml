@@ -205,7 +205,7 @@ let ep_axioms () =
      [s2; is1; f2; i1],
      [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
       Match (DefHelpers.mk_witness int1 intset1, FilterNotOccurs EntPnt);
-      parent_filter], 
+      ], 
       mk_ep fld1 set1 (DefHelpers.mk_witness int1 intset1))*)
    ]
   in

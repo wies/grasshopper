@@ -167,6 +167,10 @@ let elim_sl prog =
       mk_union [mk_inter [alloc_set; init_footprint_set];
                 mk_diff alloc_set init_alloc_set]
     in
+    let final_alloc_set =
+      mk_union [mk_diff init_alloc_set init_footprint_caller_set;
+                final_footprint_caller_set]
+    in
     let sl_postcond, other_postcond = List.partition is_sl_spec proc.proc_postcond in
     let postcond, post_pos =
       let name = "postcondition of " ^ string_of_ident proc.proc_name in
@@ -194,7 +198,7 @@ let elim_sl prog =
       in
       mk_framecond final_footprint_caller_postcond ::
       (* null is not allocated *)
-      mk_framecond (mk_and [mk_subseteq final_footprint_caller_set alloc_set; 
+      mk_framecond (mk_and [mk_eq alloc_set final_alloc_set; 
                             mk_not (smk_elem mk_null alloc_set)]) ::
       (* frame axioms for modified fields
        * in this version the frame contains all the pairs of fields both unprimed and primed

@@ -11,7 +11,7 @@ procedure insert(lst: Node, elt: Node) returns (res: Node)
     var curr: Node;
     curr := lst;
     while (nondet && curr.next != null) 
-      invariant acc(curr) -** lseg(curr, null)
+      invariant acc(curr) -** lseg(lst, null)
     {
       havoc nondet;
       curr := curr.next;

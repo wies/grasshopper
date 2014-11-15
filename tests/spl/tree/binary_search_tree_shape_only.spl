@@ -31,6 +31,7 @@ procedure insert(root: Node, value: Int)
     t.left := null;
     t.right := null;
     t.data := value;
+    //t.parent := p;
     return t;
   } else { 
     var n: Node;
@@ -101,7 +102,7 @@ procedure traverse(root: Node, implicit ghost p: Node)
 {
   if (root != null) {
     traverse(root.left);
-    traverse(root.right);
+    traverse(root.left);
   }
 }
 
