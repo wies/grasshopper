@@ -3,8 +3,8 @@
 open Grass
 open GrassUtil
 open Prog
-open Simplify
-open Grassify
+open Simplifier
+open Grassifier
 
 (** Simplify the given program [prog] by applying all transformation steps. *)
 let simplify prog =
@@ -15,7 +15,7 @@ let simplify prog =
   in
   dump_if 0 prog;
   Debug.info (fun () -> "Inferring accesses, eliminating loops and global dependencies.\n");
-  let prog = Analysis.infer_accesses prog in
+  let prog = Analyzer.infer_accesses prog in
   let prog = elim_loops prog in
   let prog = elim_global_deps prog in
   dump_if 1 prog;
