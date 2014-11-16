@@ -39,6 +39,20 @@ let logger =
   { name = "LOGGER";
     info = logger_info }
 
+let get_version name cmd vregexp versions =
+  try
+    let in_chan = Unix.open_process_in cmd in
+    let version_regexp = Str.regexp vregexp in
+    let version_string = input_line in_chan in
+    let _ = Unix.close_process_in in_chan in
+    if Str.string_match version_regexp version_string 0 then
+      let version = int_of_string (Str.matched_group 1 version_string) in
+      let subversion = int_of_string (Str.matched_group 2 version_string) in
+      let v = List.find (fun v -> v.version < version || (v.version = version && v.subversion <= subversion)) versions in
+      Some { name = name;
+           info = v; }
+    else (print_endline "no match"; raise Not_found)
+    with Not_found -> None
 
 let z3_v3 = { version = 3;
 	      subversion = 2;
@@ -64,22 +78,8 @@ let z3_v4 = { version = 4;
 
 let z3_versions = [z3_v4; z3_v3]
 
-let z3 = 
-  let version = 
-    try 
-      let in_chan = Unix.open_process_in ("z3 -version") in
-      let version_regexp = Str.regexp "^Z3[^0-9]*\\([0-9]*\\).\\([0-9]*\\)" in
-      let version_string = input_line in_chan in
-      ignore (Str.string_match version_regexp version_string 0);
-      let version = int_of_string (Str.matched_group 1 version_string) in
-      let subversion = int_of_string (Str.matched_group 2 version_string) in
-      let _ = Unix.close_process_in in_chan in
-      List.find (fun v -> v.version < version || (v.version = version && v.subversion <= subversion)) z3_versions
-    with _ -> Debug.warn (fun () -> "No supported version of Z3 found.");
-      z3_v4 
-  in 
-  { name = "Z3";
-    info = version }
+
+let z3 = get_version "Z3" "z3 -version" "^Z3[^0-9]*\\([0-9]*\\).\\([0-9]*\\)" z3_versions
 
 let cvc4_v1 = 
   let options =
@@ -89,11 +89,13 @@ let cvc4_v1 =
      "--simplification=none"]
   in
   { version = 1;
-    subversion = 3;
+    subversion = 5;
     has_set_theory = true;
     smt_options = [];
     kind = Process ("cvc4", options);
   }
+
+let cvc4 = get_version "CVC4" "cvc4 --version" ".*CVC4[^0-9]*\\([0-9]*\\).\\([0-9]*\\)" [cvc4_v1]
 
 let cvc4mf_v1 = 
   let options = 
@@ -109,14 +111,7 @@ let cvc4mf_v1 =
     Process ("cvc4", options);
   }
 
-
-let cvc4 = 
-  { name = "CVC4";
-    info = cvc4_v1 }
-
-let cvc4mf =
-  { name = "CVC4MF";
-    info = cvc4mf_v1 }
+let cvc4mf = get_version "CVC4MF" "cvc4 --version" ".*CVC4 version \\([0-9]*\\).\\([0-9]*\\)" [cvc4mf_v1]
 
 let mathsat_v5 = 
   { version = 5;
@@ -131,11 +126,10 @@ let mathsat =
     info = mathsat_v5
    }
 
-  
- 
-let available_solvers = [logger; z3; cvc4; cvc4mf; mathsat]
+let available_solvers = 
+  logger :: Util.flat_map Util.Opt.to_list [z3; cvc4; cvc4mf]
 
-let selected_solvers = ref [z3]
+let selected_solvers = ref []
 
 let select_solver name = 
   let selected = Str.split (Str.regexp "+") name in
@@ -144,7 +138,7 @@ let select_solver name =
       (fun s -> List.mem s.name selected && !Config.verify || 
       s.info.kind = Logger && !Config.dump_smt_queries) available_solvers;
   Debug.info (fun () ->
-    "Selected solvers: " ^
+    "Selected SMT solvers: " ^
     String.concat ", " (List.map (fun s -> s.name) !selected_solvers) ^
    "\n")
     
