@@ -122,7 +122,7 @@ let generate_terms generators ground_terms =
       | Some sm -> (t2, sm) :: subst_maps)
       candidates []
   in
-  let filter_term filter t = 
+  let filter_term filter t sm = 
     match filter with
     | FilterTrue -> true
     | FilterNotOccurs sym -> 
@@ -131,7 +131,7 @@ let generate_terms generators ground_terms =
           | App (_, ts, _) -> List.for_all hasSym ts
           | _ -> true
         in hasSym t
-    | FilterGeneric fn -> fn t
+    | FilterGeneric fn -> fn sm t
   in
   let rec generate new_terms old_terms = function
     | (bvs, fvs, guards, gen_term) :: generators1 ->
@@ -142,8 +142,8 @@ let generate_terms generators ground_terms =
                 (fun new_subst_maps sm ->
                   let matches = find_matches new_terms (subst_term sm t) sm in
                   Util.filter_map 
-                    (fun (t_matched, _) -> 
-                      filter_term filter t_matched)
+                    (fun (t_matched, sm) -> 
+                      filter_term filter t_matched sm)
                     (fun (t_matched, sm) -> 
                       sm) matches @ new_subst_maps
                 ) [] subst_maps 

@@ -1,9 +1,0 @@
-struct Node {
-  var next: Node;
-  var data: Int;
-}
-
-predicate bslseg(x: Node, y: Node, lb: Int, ub: Int) {
-  x == y || x != y &*& acc(x) &*& lb <= x.data &*& x.data <= ub &*& bslseg(x.next, y, x.data, ub)
-}
-

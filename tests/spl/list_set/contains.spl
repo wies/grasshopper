@@ -2,8 +2,8 @@ include "../include/slsset.spl";
 
 procedure contains(lst: Node, val: Int, implicit ghost C: Set<Int>)
   returns (res: Bool)
-  requires sorted_set(lst, null, C);
-  ensures (res == val in C) &*& sorted_set(lst, null, C);
+  requires list_set(lst, null, C)
+  ensures (res == val in C) &*& list_set(lst, null, C)
 {
   var curr: Node;
   curr := lst;
@@ -11,7 +11,7 @@ procedure contains(lst: Node, val: Int, implicit ghost C: Set<Int>)
   prev := null;
   while (curr != null && curr.data < val) 
     invariant (prev == null && curr == lst || val > prev.data &*& prev.next |-> curr) -** 
-      sorted_set(lst, null, C);
+      list_set(lst, null, C)
   {
     prev := curr;
     curr := curr.next;

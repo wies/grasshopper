@@ -4,7 +4,8 @@ open Grass
 open GrassUtil
 open Config
 
-(* some variable and short-hand declarations *)
+(* {6 Variable and short-hand declarations} *)
+
 let l1 = fresh_ident "?x", Loc
 let l2 = fresh_ident "?y", Loc
 let l3 = fresh_ident "?z", Loc
@@ -59,7 +60,7 @@ let mk_axiom2 f =
 let extract_axioms fs =
   List.partition (fun f -> IdSet.empty <> fv f) fs
 
-(** {5 Axioms} *)
+(** {6 Axioms} *)
 
 (** Array read over write axioms *)
 let read_write_axioms fld1 =
@@ -175,31 +176,28 @@ let ep_axioms () =
   let ep3 = mk_or [in_set1 ep; mk_eq loc1 ep] in
   let ep4 = 
     mk_implies (mk_and [reach loc1 loc2; in_set1 loc2]) (btwn loc1 ep loc2)
-    (*else mk_implies (mk_and [reach loc1 loc2; in_set1 loc2]) (reachwo loc1 ep loc2) *)
   in
   let ep_generator = 
-    (*let parent_filter =
-      Match (fld1, FilterGeneric (function (App (FreeSym (p, _), _, _)) when p = (fst DefHelpers.parenti) -> false | _ -> true))
-    in*)
+    let field_filter f1 f2 sm _ =
+      try
+        match IdMap.find f1 sm, IdMap.find f2 sm with
+        | App (FreeSym (name1, _), [], _), App (FreeSym (name2, _), [], _) ->
+            name1 = name2
+        | _ -> false
+      with Not_found -> false
+    in
     [([s1; f1; l1],
-     [s2; f2; f3; l3; l4],
-     [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-      Match (mk_btwn_term fld3 loc1 loc3 loc4, FilterTrue);
-      Match (loc1, FilterNotOccurs EntPnt)], 
-     mk_ep fld1 set1 loc1);
-     (*([s1; f1; l1],
-     [s2; s3; f2; l2; l3; l4],
-     [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-      Match (mk_btwn_term fld2 loc2 loc3 loc4, FilterTrue);
-      (*Match (mk_elem_term loc1 set3, FilterTrue);*)
-      Match (loc1, FilterNotOccurs EntPnt)], 
-     mk_ep fld1 set1 loc1);*)
+      [s2; f2; f3; l3; l4],
+      [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
+       Match (mk_btwn_term fld3 loc1 loc3 loc4, FilterGeneric (field_filter (fst f1) (fst f3)));
+       Match (loc1, FilterNotOccurs EntPnt)], 
+      mk_ep fld1 set1 loc1);
      ([s1; f1; l1],
-     [s2; s3; f2; l2; l3; l4],
-     [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-      Match (mk_btwn_term fld1 loc2 loc3 loc4, FilterTrue);
-      Match (mk_elem_term loc1 set3, FilterTrue);
-      Match (loc1, FilterNotOccurs EntPnt)], 
+      [s2; s3; f2; f3; l2; l3; l4],
+      [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
+       Match (mk_btwn_term fld3 loc2 loc3 loc4, FilterGeneric (field_filter (fst f1) (fst f3)));
+       Match (mk_elem_term loc1 set3, FilterTrue);
+       Match (loc1, FilterNotOccurs EntPnt)], 
       mk_ep fld1 set1 loc1);
      (*([s1; f1],
      [s2; is1; f2; i1],

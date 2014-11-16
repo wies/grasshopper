@@ -2,8 +2,8 @@ include "../include/slsset.spl";
 
 procedure delete(lst: Node, val: Int, implicit ghost C: Set<Int>)
   returns (res: Node)
-  requires sorted_set(lst, null, C);
-  ensures sorted_set(res, null, C -- Set(val));
+  requires list_set(lst, null, C)
+  ensures list_set(res, null, C -- Set(val))
 {
   var curr: Node, prev: Node;
   curr := lst;
@@ -11,7 +11,7 @@ procedure delete(lst: Node, val: Int, implicit ghost C: Set<Int>)
   
   while (curr != null && curr.data < val)
     invariant (prev == null && curr == lst || val > prev.data &*& prev.next |-> curr) -** 
-      sorted_set(lst, null, C);
+      list_set(lst, null, C)
   {
     prev := curr;
     curr := curr.next; 

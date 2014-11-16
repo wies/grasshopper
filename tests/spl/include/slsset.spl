@@ -15,7 +15,7 @@ function content(FP: Set<Node>) returns (C: Set<Int>) {
   (forall v in C :: v == witness(v, C).data @(matching v yields witness(v, C).data))
 }
 
-predicate sorted_set(x: Node, y: Node, C: Set<Int>, FP: Set<Node>) {
+predicate list_set(x: Node, y: Node, C: Set<Int>, FP: Set<Node>) {
   lseg(x, y, FP) &&
   lseg_strictly_increasing(x, FP) &&
   C == content(FP)

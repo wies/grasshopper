@@ -1,25 +1,24 @@
 include "../include/slsset.spl";
 
-procedure union(lst1: Node, lst2: Node,
+procedure difference(lst1: Node, lst2: Node,
                 implicit ghost C1: Set<Int>, implicit ghost C2: Set<Int>)
   returns (res: Node)
-  requires sorted_set(lst1, null, C1) &*& sorted_set(lst2, null, C2);
-  ensures sorted_set(res, null, C1 ++ C2);
+  requires list_set(lst1, null, C1) &*& list_set(lst2, null, C2);
+  ensures list_set(lst2, null, C2) &*& list_set(res, null, C1 -- C2);
 {
     if (lst1 == null) {
-        return lst2;
+        return lst1;
     } else if (lst2 == null) {
         return lst1;
     } else if (lst1.data < lst2.data) {
-        lst1.next := union(lst1.next, lst2);
+        lst1.next := difference(lst1.next, lst2);
         return lst1;
     } else if (lst1.data > lst2.data) {
-        lst2.next := union(lst1, lst2.next);
-        return lst2;
+        return difference(lst1, lst2.next);
     } else { //lst1.data == lst2.data
         var n: Node;
         n := lst1.next;
-        free(lst1);
-        return union(n, lst2);
+        free lst1 ;
+        return difference(n, lst2.next);
     }
 }

@@ -1,5 +1,17 @@
 include "../include/bstree.spl";
 
+procedure destroy(root: Node)
+  requires tree(root);
+  ensures emp;
+{
+  if (root != null) {
+    destroy(root.left);
+    destroy(root.right);
+    root.parent := null;
+    free root;
+  }
+}
+
 procedure extract_max(root: Node)
   returns (others: Node, max: Node)
   requires tree(root) &*& root != null;

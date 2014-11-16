@@ -81,13 +81,13 @@ procedure test(root: Node)
   n := singleton(1);
 }
 
-procedure extract_max(root: Node)
-returns (new_root: Node, max: Node)
+procedure root_max(root: Node)
+  returns (max: Node)
   requires acc(root) -** tree(root)
-  ensures tree(new_root) &*& acc(max)
-  //ensures max.right == null && max.parent == null;
+  ensures tree(max)
+  ensures max.right == null && max.parent == null
 {
-  var max: Node, maxp: Node;
+  var maxp: Node;
   max := root;
   maxp := root;
 
@@ -105,14 +105,9 @@ returns (new_root: Node, max: Node)
   if (root != max) {
     maxp.right := maxl;
     if (maxl != null) maxl.parent := maxp;
-    new_root := root;
-    assume false;
-  } else {
-    if (maxl != null) maxl.parent := root.parent;
-    new_root := maxl;
-    //assume false;
+    root.parent := max;
+    max.left := root;
   }
-  max.left := null;
   max.parent := null;
 }
 
@@ -140,43 +135,23 @@ procedure remove(root: Node, val: Int) returns (new_root: Node)
     cp, cl, cr := curr.parent, curr.left, curr.right;
     
     if (cl != null && cr != null) {
-      var lm: Node, lmp: Node;
-      lmp := cl;
-      lm := cl;            
-      
-      while (lm.right != null) 
-        invariant tree(lm) -** tree(lmp) -** tree(cl) -** tree(root)
-        invariant lm != null && (cl == lm || lmp.right == lm)
-      {
-        lmp := lm;
-        lm := lm.right;
-      }
-      
-      if (cl != lm) {
-        var lml: Node;
-        lml := lm.left;
-        lmp.right := lml;
-        if (lml != null) lml.parent := lmp;
-        lm.left := cl;
-        cl.parent := lm;      
-      }
-      lm.parent := cp;
-      lm.right := cr;
-      cr.parent := lm;
+      cl := root_max(cl);
+      cl.parent := cp;
+      cl.right := cr;
+      cr.parent := cl;
       
       curr.parent := null;
       free curr;
 
       if (curr == root) {
-        return lm;
+        return cl;
       } else {
         if (cp.left == curr) {
-          cp.left := lm;
-          return root;
+          cp.left := cl;
         } else {
-          cp.right := lm;
-          return root;
+          cp.right := cl;
         }
+        return root;
       }
     } else {
       curr.parent := null;

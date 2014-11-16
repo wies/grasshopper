@@ -2,9 +2,9 @@ include "../include/slsset.spl";
 
 procedure append(val: Int, x: Node, implicit ghost C: Set<Int>) 
   returns (res: Node)
-  requires sorted_set(x, null, C)
+  requires list_set(x, null, C)
   requires forall v in C :: val < v
-  ensures sorted_set(res, null, C ++ Set(val))
+  ensures list_set(res, null, C ++ Set(val))
 {
   res := new Node;
   res.next := x;
@@ -13,8 +13,8 @@ procedure append(val: Int, x: Node, implicit ghost C: Set<Int>)
 
 procedure insert(lst: Node, val: Int, implicit ghost C: Set<Int>)
   returns (res: Node)
-  requires sorted_set(lst, null, C)
-  ensures sorted_set(res, null, C ++ Set(val))
+  requires list_set(lst, null, C)
+  ensures list_set(res, null, C ++ Set(val))
 {
   var curr: Node;
   curr := lst;
@@ -23,7 +23,7 @@ procedure insert(lst: Node, val: Int, implicit ghost C: Set<Int>)
   
   while (curr != null && curr.data < val)
     invariant (prev == null && curr == lst || val > prev.data &*& prev.next |-> curr) -** 
-      sorted_set(lst, null, C)
+      list_set(lst, null, C)
   {
     prev := curr;
     curr := curr.next;

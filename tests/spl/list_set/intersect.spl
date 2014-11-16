@@ -1,11 +1,12 @@
 include "../include/slsset.spl";
 
-procedure intersect(x: Node, y: Node, implicit ghost x_content: Set<Int>, implicit ghost y_content: Set<Int>)
+procedure intersect(x: Node, y: Node, implicit ghost x_content: Set<Int>, 
+                    implicit ghost y_content: Set<Int>)
   returns (res: Node)
-  requires sorted_set(x, null, x_content);
-  requires sorted_set(y, null, y_content);
-  ensures sorted_set(res, null, x_content ** y_content);
-  ensures sorted_set(y, null, y_content);
+  requires list_set(x, null, x_content)
+  requires list_set(y, null, y_content)
+  ensures list_set(res, null, x_content ** y_content)
+  ensures list_set(y, null, y_content)
 {
   if (x == null || y == null) {
     delete(x);
@@ -24,8 +25,8 @@ procedure intersect(x: Node, y: Node, implicit ghost x_content: Set<Int>, implic
 }
 
 procedure delete(x: Node) 
-  requires lseg(x, null);
-  ensures emp;
+  requires lseg(x, null)
+  ensures emp
 {
   if (x == null) return;
   var tmp: Node;

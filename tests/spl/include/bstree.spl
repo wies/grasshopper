@@ -56,9 +56,19 @@ predicate ptree(r: Node, p: Node, FP: Set<Node>) {
 
 predicate tree_sorted(FP: Set<Node>) {
   (forall x: Node, y: Node :: 
-   x in FP && y in FP && Btwn(parent, x, y.left, y) ==> x.data < y.data) &&
+   x in FP && y in FP && Btwn(parent, x, y.left, y) ==> x.data < y.data
+   @(matching x.left yields x.data)) &&
   (forall x: Node, y: Node :: 
-   x in FP && y in FP && Btwn(parent, x, y.right, y) ==> x.data > y.data)  
+   x in FP && y in FP && Btwn(parent, x, y.right, y) ==> x.data > y.data
+   @(matching x.right yields x.data))  
+}
+
+predicate upper_bound(ub: Int, FP: Set<Node>) {
+  forall z: Node :: z in FP ==> z.data <= ub
+}
+
+predicate lower_bound(lb: Int, FP: Set<Node>) {
+  forall z: Node :: z in FP ==> z.data >= lb
 }
 
 predicate bstree(r: Node, FP: Set<Node>) {
@@ -66,6 +76,11 @@ predicate bstree(r: Node, FP: Set<Node>) {
   tree_sorted(FP)
 }
 
+predicate bstree_bounded(r: Node, lb: Int, ub: Int, FP: Set<Node>) {
+  bstree(r, FP) &&
+  upper_bound(ub, FP) &&
+  lower_bound(lb, FP)
+}
 
 // Predicates for tree sets
 
@@ -84,4 +99,15 @@ function content(FP: Set<Node>) returns (C: Set<Int>) {
 predicate tree_set(r: Node, C: Set<Int>, FP: Set<Node>) {
   bstree(r, FP) &&
   C == content(FP)
+}
+
+// Predicates for heaps
+
+predicate heap_property(FP: Set<Node>) {
+  forall x: Node, y: Node :: x in FP && y in FP && Btwn(parent,x,y,y) ==> x.data <= y.data
+}
+
+predicate heap(r: Node, FP: Set<Node>) {
+  heap_property(FP) &&
+  tree(r, FP)
 }

@@ -2,9 +2,9 @@ include "../include/bstree.spl";
 
 procedure contains(root: Node, val: Int, implicit ghost content: Set<Int>)
   returns (res: Bool)
-  requires stree(root, content);
-  ensures  stree(root, content);
-  ensures  res == val in content;
+  requires tree_set(root, content)
+  ensures  tree_set(root, content)
+  ensures  res == val in content
 {
   if (root == null) {
     return false;
@@ -24,7 +24,7 @@ procedure contains(root: Node, val: Int, implicit ghost content: Set<Int>)
 }
 
 procedure destroy(root: Node, implicit ghost content: Set<Int>)
-  requires stree(root, content);
+  requires tree_set(root, content);
   ensures emp;
 {
   if (root != null) {
@@ -36,8 +36,8 @@ procedure destroy(root: Node, implicit ghost content: Set<Int>)
 }
 
 procedure traverse(root: Node, implicit ghost content: Set<Int>)
-  requires stree(root, content);
-  ensures stree(root, content);
+  requires tree_set(root, content);
+  ensures tree_set(root, content);
 {
   if (root != null) {
     traverse(root.left);
@@ -49,10 +49,10 @@ procedure traverse(root: Node, implicit ghost content: Set<Int>)
 
 procedure extract_max(root: Node, implicit ghost content: Set<Int>)
 returns (new_root: Node, max: Node)
-  requires stree(root, content) &*& root != null;
-  ensures stree(new_root, content -- Set(max.data)) &*& acc(max);
-  ensures max.right == null && max.parent == null && max.data in content;
-  ensures (forall z in (content -- Set(max.data)) :: z < max.data);
+  requires tree_set(root, content) &*& root != null
+  ensures tree_set(new_root, content -- Set(max.data)) &*& acc(max)
+  ensures max.right == null && max.parent == null && max.data in content
+  ensures (forall z in (content -- Set(max.data)) :: z < max.data)
 {
   if (root.right != null) {
     var c: Node, m: Node;
@@ -69,9 +69,9 @@ returns (new_root: Node, max: Node)
 }
 
 procedure insert(root: Node, value: Int, implicit ghost content: Set<Int>)
-returns (new_root: Node)
-  requires stree(root, content);
-  ensures  stree(new_root, content ++ Set(value));
+  returns (new_root: Node)
+  requires tree_set(root, content)
+  ensures  tree_set(new_root, content ++ Set(value))
 {
   if (root == null) {
     var t: Node;
@@ -98,9 +98,9 @@ returns (new_root: Node)
 }
 
 procedure remove(root: Node, value: Int, implicit ghost content: Set<Int>)
-returns (res: Node)
-  requires stree(root, content);
-  ensures stree(res, content -- Set(value));
+  returns (res: Node)
+  requires tree_set(root, content)
+  ensures tree_set(res, content -- Set(value))
 {
   if (root == null) {
     return null;
@@ -143,10 +143,11 @@ returns (res: Node)
   }
 }
 
-procedure rotate_left(h: Node, implicit ghost content: Set<Int>) returns (res: Node)
-  requires stree(h, content);
-  requires h != null && h.right != null;
-  ensures  stree(res, content);
+procedure rotate_left(h: Node, implicit ghost content: Set<Int>) 
+  returns (res: Node)
+  requires tree_set(h, content)
+  requires h != null && h.right != null
+  ensures  tree_set(res, content)
 {
   var x: Node;
   x := h.right;
@@ -158,10 +159,11 @@ procedure rotate_left(h: Node, implicit ghost content: Set<Int>) returns (res: N
   return x;
 }
 
-procedure rotate_right(h: Node, implicit ghost content: Set<Int>) returns (res: Node)
-  requires stree(h, content);
-  requires h != null && h.left != null;
-  ensures  stree(res, content);
+procedure rotate_right(h: Node, implicit ghost content: Set<Int>) 
+  returns (res: Node)
+  requires tree_set(h, content)
+  requires h != null && h.left != null
+  ensures  tree_set(res, content)
 {
   var x: Node;
   x := h.left;

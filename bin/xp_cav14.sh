@@ -1,23 +1,23 @@
 #!/bin/bash
 
-source osx_gnu.sh
+source bin/osx_gnu.sh
 
 TESTS1="
-union-find_list_find    tests/spl/union_find.spl               find         pass
-union-find_list_union   tests/spl/union_find.spl               union        pass
-union-find_list_create  tests/spl/union_find.spl               create       pass
-union-find_tree_find    tests/spl/tree/union_find_parent.spl   find         pass
-union-find_tree_union   tests/spl/tree/union_find_parent.spl   union        pass
-union-find_tree_create  tests/spl/tree/union_find_parent.spl   create       pass
+union-find_list_find    tests/spl/sl/union_find.spl            find         pass
+union-find_list_union   tests/spl/sl/union_find.spl            union        pass
+union-find_list_create  tests/spl/sl/union_find.spl            create       pass
+union-find_tree_find    tests/spl/tree/union_find.spl          find         pass
+union-find_tree_union   tests/spl/tree/union_find.spl          union        pass
+union-find_tree_create  tests/spl/tree/union_find.spl          create       pass
 "
 
 TESTS2="
-sorted-set_contains     tests/spl/sl_sorted_set/contains.spl   contains     pass
-sorted-set_delete       tests/spl/sl_sorted_set/delete.spl     delete       pass
-sorted-set_difference   tests/spl/sl_sorted_set/difference.spl difference   pass
-sorted-set_insert       tests/spl/sl_sorted_set/insert.spl     insert       pass
-sorted-set_traverse     tests/spl/sl_sorted_set/traverse.spl   traverse     pass
-sorted-set_union        tests/spl/sl_sorted_set/union.spl      union        pass
+sorted-set_contains     tests/spl/list_set/contains.spl   contains     pass
+sorted-set_delete       tests/spl/list_set/delete.spl     delete       pass
+sorted-set_difference   tests/spl/list_set/difference.spl difference   pass
+sorted-set_insert       tests/spl/list_set/insert.spl     insert       pass
+sorted-set_traverse     tests/spl/list_set/traverse.spl   traverse     pass
+sorted-set_union        tests/spl/list_set/union.spl      union        pass
 "
 
 TESTS3="
@@ -57,19 +57,19 @@ echo "building Grasshopper"
 ./build.sh
 
 echo "union-find: functional correctness (tree-view), path compaction (list-view)"
-OPTIONS=$@ time -f "Accumulated time: %Us." ./run-tests-methods $TESTS1
+OPTIONS=$@ time -f "Accumulated time: %Us." ./bin/run-tests-methods $TESTS1
 
 echo "set implemented as sorted list (functional correctness)"
-OPTIONS=$@ time -f "Accumulated time: %Us." ./run-tests-methods $TESTS2
+OPTIONS=$@ time -f "Accumulated time: %Us." ./bin/run-tests-methods $TESTS2
 
 echo "set implemented as binary search tree (functional correctness)"
-OPTIONS=$@ time -f "Accumulated time: %Us." ./run-tests-methods $TESTS3
+OPTIONS=$@ time -f "Accumulated time: %Us." ./bin/run-tests-methods $TESTS3
 
 echo "skew heap (memory safety, tree-shape)"
-OPTIONS=$@ time -f "Accumulated time: %Us." ./run-tests-methods $TESTS4
+OPTIONS=$@ time -f "Accumulated time: %Us." ./bin/run-tests-methods $TESTS4
 
 echo "set implemented as binary search tree (tree shape only)"
-OPTIONS=$@ time -f "Accumulated time: %Us." ./run-tests-methods $TESTS5
+OPTIONS=$@ time -f "Accumulated time: %Us." ./bin/run-tests-methods $TESTS5
 
 echo "set implemented as binary search tree (sortedness, no content)"
-OPTIONS=$@ time -f "Accumulated time: %Us." ./run-tests-methods $TESTS6
+OPTIONS=$@ time -f "Accumulated time: %Us." ./bin/run-tests-methods $TESTS6

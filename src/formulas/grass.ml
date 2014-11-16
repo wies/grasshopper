@@ -13,18 +13,48 @@ type source_position = {
   }
 
 
-(** {6 Sorts and symbols} *)
+(** {6 Identifiers, sorts, and symbols} *)
 
+(** identifiers *)
 type ident = string * int
 
+module IdSet = Set.Make(struct
+    type t = ident
+    let compare = compare
+  end)
+
+module IdMap = Map.Make(struct
+    type t = ident
+    let compare = compare
+  end)
+
+(** sorts *)
 type sort =
   | Bool | Loc | Int (** basic sorts *)
   | Set of sort (** sets *)
   | Fld of sort (** fields *)
   | FreeSrt of ident (** uninterpreted sorts *)
 
+module IdSrtSet = Set.Make(struct
+    type t = ident * sort
+    let compare = compare
+  end)
+
+module SortSet = Set.Make(struct
+    type t = sort
+    let compare = compare
+  end)
+
+module SortMap = Map.Make(struct
+    type t = sort
+    let compare = compare
+  end)
+
+type sorted_ident = ident * sort
+
 type arity = sort list * sort
 
+(** symbols *)
 type symbol =
   (* interpreted constant symbols *)
   | BoolConst of bool
@@ -49,62 +79,13 @@ let symbols =
    Eq; LtEq; GtEq; Lt; Gt;
    Btwn; Frame; Elem; SubsetEq]
 
-(** {6 Terms and formulas} *)
-
-type sorted_ident = ident * sort
-
-type term = 
-  | Var of ident * sort
-  | App of symbol * term list * sort
-
-type filter =
-  | FilterTrue
-  | FilterNotOccurs of symbol
-  | FilterGeneric of (term -> bool)
-
-type guard =
-  | Match of term * filter
-  
-type annot =
-  | Comment of string
-  | SrcPos of source_position
-  | Label of ident
-  | Name of ident
-  | TermGenerator of sorted_ident list * sorted_ident list * guard list * term
-
-type bool_op =
-  | And | Or | Not
-
-type binder =
-  | Forall | Exists
-
-type form =
-  | Atom of term * annot list
-  | BoolOp of bool_op * form list
-  | Binder of binder * (ident * sort) list * form * annot list
-
-module IdSet = Set.Make(struct
-    type t = ident
+module SymbolSet = Set.Make(struct
+    type t = symbol
     let compare = compare
   end)
 
-module IdMap = Map.Make(struct
-    type t = ident
-    let compare = compare
-  end)
-
-module IdSrtSet = Set.Make(struct
-    type t = ident * sort
-    let compare = compare
-  end)
-
-module SortSet = Set.Make(struct
-    type t = sort
-    let compare = compare
-  end)
-
-module SortMap = Map.Make(struct
-    type t = sort
+module SymbolMap = Map.Make(struct
+    type t = symbol
     let compare = compare
   end)
 
@@ -112,6 +93,17 @@ module SortedSymbolMap = Map.Make(struct
     type t = symbol * arity
     let compare = compare
   end)
+
+type signature = arity SymbolMap.t
+
+(** {6 Terms and formulas} *)
+
+(** terms *)
+type term = 
+  | Var of ident * sort
+  | App of symbol * term list * sort
+
+type subst_map = term IdMap.t
 
 module TermSet = Set.Make(struct
     type t = term
@@ -123,24 +115,42 @@ module TermMap = Map.Make(struct
     let compare = compare
   end)
 
+(** filters for term generators *)
+type filter =
+  | FilterTrue
+  | FilterNotOccurs of symbol
+  | FilterGeneric of (subst_map -> term -> bool)
+
+(** matching guards for term generators *)
+type guard =
+  | Match of term * filter
+  
+(** annotations *)
+type annot =
+  | Comment of string
+  | SrcPos of source_position
+  | Label of ident
+  | Name of ident
+  | TermGenerator of sorted_ident list * sorted_ident list * guard list * term
+
+(** Boolean operators *)
+type bool_op =
+  | And | Or | Not
+
+(** quantifiers *)
+type binder =
+  | Forall | Exists
+
+(** GRASS formulas *)
+type form =
+  | Atom of term * annot list
+  | BoolOp of bool_op * form list
+  | Binder of binder * (ident * sort) list * form * annot list
+
 module FormSet = Set.Make(struct
     type t = form
     let compare = compare
   end)
-
-module SymbolSet = Set.Make(struct
-    type t = symbol
-    let compare = compare
-  end)
-
-module SymbolMap = Map.Make(struct
-    type t = symbol
-    let compare = compare
-  end)
-
-type signature = arity SymbolMap.t
-
-type subst_map = term IdMap.t
 
 (** {6 Pretty printing} *)
 

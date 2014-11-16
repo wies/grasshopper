@@ -43,13 +43,13 @@ sls_insertion_sort      tests/spl/sls/sls_insertion_sort.spl    pass
 sls_merge_sort          tests/spl/sls/sls_merge_sort.spl        pass
 sls_quicksort           tests/spl/sls/sls_quicksort.spl         pass
 sls_strand_sort         tests/spl/sls/sls_strand_sort.spl       pass
-union_find              tests/spl/union_find.spl                pass
-sorted_set_contains     tests/spl/sl_sorted_set/contains.spl    pass
-sorted_set_delete       tests/spl/sl_sorted_set/delete.spl      pass
-sorted_set_difference   tests/spl/sl_sorted_set/difference.spl  pass
-sorted_set_insert       tests/spl/sl_sorted_set/insert.spl      pass
-sorted_set_traverse     tests/spl/sl_sorted_set/traverse.spl    pass
-sorted_set_union        tests/spl/sl_sorted_set/union.spl       pass
+union_find              tests/spl/sl/union_find.spl             pass
+list_set_contains       tests/spl/list_set/contains.spl         pass
+list_set_delete         tests/spl/list_set/delete.spl           pass
+list_set_difference     tests/spl/list_set/difference.spl       pass
+list_set_insert         tests/spl/list_set/insert.spl           pass
+list_set_traverse       tests/spl/list_set/traverse.spl         pass
+list_set_union          tests/spl/list_set/union.spl            pass
 "
 
 

@@ -1,0 +1,58 @@
+struct Node {
+  var next: Node;
+  var ghost gnext: Node;
+}
+
+function eqclass_set(r: Node) returns (X: Set<Node>) {
+  forall x: Node :: x in X == (Btwn(gnext, x, r, r) && r != null)
+}
+
+predicate next_eq_gnext(X: Set<Node>) {
+  forall x: Node, y: Node, z: Node ::
+    x in X && z in X ==>
+      Btwn(next, x, y, z) == Btwn(gnext, x, y, z)
+}
+
+predicate eqclass(r: Node, X: Set<Node>) {
+  r != null && r.next == null && r.gnext == null &&
+  X == eqclass_set(r) &&
+  next_eq_gnext(X)
+}
+
+procedure find(x: Node, ghost root_x: Node, implicit ghost X: Set<Node>) 
+  returns (res: Node)
+  requires x in X &*& eqclass(root_x, X)
+  ensures  res == root_x &*& eqclass(root_x, X)
+{
+  var n: Node;
+  n := x.next;
+  if (n != null) {
+    res := find(n, root_x);
+    x.next := res;
+    x.gnext := res;
+  } else {
+    res := x;
+  }
+}
+
+procedure union(x: Node, y: Node, ghost root_x: Node, ghost root_y: Node,
+                implicit ghost X: Set<Node>, implicit ghost Y: Set<Node>)
+  requires eqclass(root_x, X) &+& eqclass(root_y, Y)
+  requires x in X && y in Y
+  ensures eqclass(root_y, X ++ Y)
+{
+  var t: Node, s: Node;
+  t := find(x, root_x);
+  s := find(y, root_y);
+  if (t != s) {
+    t.next := s;
+    t.gnext := s;
+  }
+}
+
+procedure create() returns (res: Node)
+  ensures eqclass(res, Set(res));
+{
+  res := new Node;
+  res.next := null;
+}

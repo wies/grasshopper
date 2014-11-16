@@ -1,8 +1,0 @@
-struct Node {
-  var next: Node;
-  var data: Int;
-}
-
-predicate llseg(x: Node, y: Node, ub: Int) {
-  x == y || x != y &*& acc(x) &*& x.data <= ub &*& llseg(x.next, y, ub)
-}
