@@ -43,7 +43,7 @@ let to_form pred_to_form domain f =
              | SepPlus -> []
              | SepStar -> 
                  let f1_and_f2_disjoint = 
-                   GrassUtil.mk_comment "Specified regions are not disjoint"
+                   GrassUtil.mk_comment (ProgError.mk_error_info "Specified regions are not disjoint")
                      (empty_t (GrassUtil.mk_inter [f1_dom; f2_dom]))
                  in
                  [mk_srcpos pos f1_and_f2_disjoint]
@@ -82,7 +82,7 @@ let to_form pred_to_form domain f =
       let pos = pos_of_sl_form sep in
       let process (tr, d) = 
         let d_eq_domain = 
-          GrassUtil.mk_comment "Memory footprint at error location does not match this specification" 
+          GrassUtil.mk_comment (ProgError.mk_error_info "Memory footprint at error location does not match this specification")
             (mk_srcpos pos (GrassUtil.mk_eq d domain))
         in
         GrassUtil.smk_and [tr; d_eq_domain]

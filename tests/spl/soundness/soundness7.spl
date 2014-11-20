@@ -5,20 +5,20 @@ procedure contains(root: Node, val: Int)
   requires tree(root)
   ensures tree(root)
 {
-    var cur: Node;
-    cur := root;
-    while(cur != null && cur.data != val)
-        invariant tree(cur); //non-empty frame between loops exec
-    {
-        if (cur.data > val) {
-            cur := cur.left;
-        } else {
-            cur := cur.right;
-        }
-    }
-    if (cur == null) {
-        return false;
+  var cur: Node;
+  cur := root;
+  while (cur != null && cur.data != val)
+    invariant tree(cur) //non-empty frame between loops exec
+  {
+    if (cur.data > val) {
+      cur := cur.left;
     } else {
-        return true;
+      cur := cur.right;
     }
+  }
+  if (cur == null) {
+    return false;
+  } else {
+    return true;
+  }
 }

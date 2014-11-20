@@ -84,12 +84,15 @@ let elim_loops (prog : program) =
               ] 
               pp.pp_pos
           in
+          let else_msg = "This loop has been exited on the error trace" in
+          let then_msg = "The body of this loop has been executed on the error trace" in
           mk_seq_cmd 
             [ init_returns;
               prebody;
               mk_ite 
                 lc.loop_test lc.loop_test_pos
-                then_cmd else_cmd pp.pp_pos
+                then_cmd else_cmd 
+                then_msg else_msg pp.pp_pos
             ]
             pp.pp_pos,
           prog,

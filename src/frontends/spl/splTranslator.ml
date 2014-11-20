@@ -907,12 +907,12 @@ let convert cus =
               (Printf.sprintf 
                 "An invariant might not hold before entering a loop in procedure %s"
                 (string_of_ident proc_name),
-                "This is the loop invariant that might not hold initially")
+               ProgError.mk_error_info "This is the loop invariant that might not hold initially")
             else 
               (Printf.sprintf 
                  "An invariant might not be maintained by a loop in procedure %s"
                  (string_of_ident proc_name),
-               "This is the loop invariant that might not be maintained")
+               ProgError.mk_error_info "This is the loop invariant that might not be maintained")
           in
           (*let pos = pos_of_expr e in*)
           convert_spec_form locals e "invariant" (Some msg)
@@ -1011,7 +1011,9 @@ let convert cus =
           let cond = extract_fol_form proc.p_locals c in
           let t_cmd = convert_stmt proc t in
           let e_cmd = convert_stmt proc e in
-          mk_ite cond (pos_of_expr c) t_cmd e_cmd pos
+          let t_msg = "The 'then' branch of this conditional has been taken on the error trace" in
+          let e_msg = "The 'else' branch of this conditional has been taken on the error trace" in
+          mk_ite cond (pos_of_expr c) t_cmd e_cmd t_msg e_msg pos
       | Loop (contract, preb, cond, postb, pos) ->
           let preb_cmd = convert_stmt proc preb in
           let cond_pos = pos_of_expr cond in
@@ -1060,19 +1062,19 @@ let convert cus =
         (function 
           | Requires e -> fun (pre, post) -> 
               let mk_msg caller =
-                 Printf.sprintf 
+                Printf.sprintf 
                   "A precondition for this call of %s might not hold"
                   (string_of_ident proc_name),
-                "This is the precondition that might not hold"
+                ProgError.mk_error_info "This is the precondition that might not hold"
               in
               let name = "precondition of " ^ string_of_ident proc_name in
               convert_spec_form locals e name (Some mk_msg) :: pre, post
           | Ensures e -> fun (pre, post) ->
               let mk_msg caller =
-                 Printf.sprintf 
+                Printf.sprintf 
                   "A postcondition of procedure %s might not hold at this return point"
                   (string_of_ident proc_name),
-                "This is the postcondition that might not hold"
+                ProgError.mk_error_info "This is the postcondition that might not hold"
               in 
               let name = "postcondition of " ^ string_of_ident proc_name in
               pre, convert_spec_form locals e name (Some mk_msg) :: post)

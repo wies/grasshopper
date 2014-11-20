@@ -41,7 +41,7 @@ let add_labels vc =
     match ann, c with
     | SrcPos pos, Some c -> 
         let lbl = fresh_ident "Label" in
-        IdMap.add lbl (pos, "Related Location: " ^ c) ltop, 
+        IdMap.add lbl (pos, c) ltop, 
         Label lbl :: ann :: annots
     | _ -> ltop, ann :: annots
   in
@@ -101,7 +101,7 @@ let add_pred_insts prog f =
         when IdMap.mem p prog.prog_preds && 
           not (IdSet.mem p seen) ->
             let pbody = expand_pred false p ts in
-            let c = "Definition of predicate " ^ (string_of_ident p) in
+            let c = ProgError.mk_error_info ("Definition of predicate " ^ (string_of_ident p)) in
             let p1 = annotate (smk_and [(*mk_not (mk_pred p ts);*) pbody]) (Comment c :: a) in
             expand_neg (IdSet.add p seen) p1
       | f -> f
@@ -273,7 +273,9 @@ let check_proc prog proc =
           in
           let sorted_error_msgs = 
             List.sort
-              (fun (pos1, _) (pos2, _) -> compare_src_pos pos1 pos2) 
+              (fun (pos1, msg1) (pos2, msg2) -> 
+                let mc = compare (String.get msg1 0) (String.get msg2 0) in
+                if mc = 0 then compare_src_pos pos1 pos2 else mc) 
               error_msgs
           in
           let error_msg_strings = 

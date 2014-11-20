@@ -636,7 +636,7 @@ let mk_loop_cmd inv preb cond cond_pos postb pos =
   in
   Loop (loop, pp1)
 
-let mk_ite cond cond_pos then_cmd else_cmd pos =
+let mk_ite cond cond_pos then_cmd else_cmd then_msg else_msg pos =
   let mk_cond cmt =
     if cond_pos = dummy_position
     then cond
@@ -644,12 +644,12 @@ let mk_ite cond cond_pos then_cmd else_cmd pos =
   in
   let t_cond = 
     mk_spec_form 
-      (FOL (mk_cond "The 'then' branch of this conditional has been taken on the error trace"))
+      (FOL (mk_cond (ProgError.mk_trace_info then_msg)))
       "if_then" None cond_pos 
   in
   let e_cond = 
     mk_spec_form 
-      (FOL (mk_not (mk_cond "The 'else' branch of this conditional has been taken on the error trace")))
+      (FOL (mk_not (mk_cond (ProgError.mk_trace_info else_msg))))
       "if_else" None cond_pos
   in
   let t_assume = mk_assume_cmd t_cond cond_pos in
@@ -657,6 +657,8 @@ let mk_ite cond cond_pos then_cmd else_cmd pos =
   let t_block = mk_seq_cmd [t_assume; then_cmd] (source_pos then_cmd) in
   let e_block = mk_seq_cmd [e_assume; else_cmd] (source_pos else_cmd) in
   mk_choice_cmd [t_block; e_block] pos
+
+ 
 
 let rec fold_basic_cmds f acc = function
   | Loop (lc, pp) ->
@@ -722,17 +724,6 @@ let subst_id_pred map pred =
 (** Pretty printing *)
 
 open Format
-
-let flycheck_string_of_src_pos pos =
-  if pos.sp_start_line <> pos.sp_end_line 
-  then Printf.sprintf "%s:%d:%d" pos.sp_file pos.sp_start_line pos.sp_start_col
-  else 
-    let end_col = 
-      if pos.sp_start_col = pos.sp_end_col 
-      then pos.sp_start_col + 1 
-      else pos.sp_end_col
-    in
-    Printf.sprintf "%s:%d:%d-%d" pos.sp_file pos.sp_start_line pos.sp_start_col end_col
 
 let pr_spec_form ppf sf =
   match sf.spec_form with

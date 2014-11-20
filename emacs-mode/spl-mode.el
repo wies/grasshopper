@@ -211,8 +211,11 @@
               "-procedure" (eval spl-current-procedure) 
               "-lint" source)
     :error-patterns
-    ((warning line-start (file-name) ":" line ":" column (optional "-" end-column) ":Related Location:" (message) line-end)
+    ((info line-start (file-name) ":" line ":" column (optional "-" end-column) ":Trace Information:" (message) line-end)
+     (warning line-start (file-name) ":" line ":" column (optional "-" end-column) ":Related Location:" (message) line-end)
      (error line-start (file-name) ":" line ":" column (optional "-" end-column) ":" (message) line-end))
+    ;((warning line-start "File \"" (file-name) "\", line " line ", columns " column (optional "-" end-column) ":" line-end "Related Location: " (message) line-end)
+     ;(error line-start "File \"" (file-name) "\", line " line ", columns " column (optional "-" end-column) ":" line-end (message) line-end))
     ;((error line-start (file-name) ":" line ":" column ":" (message) line-end))
     :modes (spl-mode))
 
