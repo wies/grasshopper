@@ -1,14 +1,14 @@
 include "../include/sllist.spl";
 
 procedure traverse1(lst: Node)
-  requires lseg(lst, null);
-  ensures lseg(lst, null);
+  requires lseg(lst, null)
+  ensures lseg(lst, null)
 {
   var curr: Node;
   curr := lst;
   while (curr != null) 
-    invariant lseg(lst, curr);
-    invariant lseg(curr, null);
+    invariant lseg(lst, curr)
+    invariant lseg(curr, null)
   {
     curr := curr.next; 
   }

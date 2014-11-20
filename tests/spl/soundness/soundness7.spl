@@ -1,44 +1,9 @@
-struct Node {
-  var left: Node;
-  var right: Node;
-  var parent: Node;
-  var data: Int;
-}
+include "../include/bstree.spl";
 
-predicate tree(x: Node) {
-    x == null
-  ||
-    x != null &*&
-    acc(x) &*&
-    x.parent == x.parent &*&
-    tree(x.left) &*&
-    tree(x.right)
-}
-
-predicate stree(x: Node, content: Set<Int>) {
-    x == null &*&
-    content == Set<Int>()
-  ||
-    x != null &*&
-    acc(x) &*&
-    x.parent == x.parent &*&
-    (exists l_content: Set<Int>, r_content: Set<Int> :: 
-      (forall d in l_content :: d < x.data) &*&
-      (forall d in r_content :: d > x.data) &*&
-      content == l_content ++ r_content ++ Set<Int>(x.data) &*&
-      stree(x.left, l_content) &*&
-      stree(x.right, r_content))
-}
-
-predicate treeAllocInvariant(X: Set<Node>) {
-  (forall n in X :: n.parent == n.parent)
-}
-
-procedure contains(root: Node, val: Int, implicit ghost content: Set<Int>)
+procedure contains(root: Node, val: Int)
   returns (res: Bool)
-  requires stree(root, content) &*& treeAllocInvariant(Alloc);
-  ensures  stree(root, content) &*& treeAllocInvariant(Alloc);
-  ensures  res == val in content;
+  requires tree(root)
+  ensures tree(root)
 {
     var cur: Node;
     cur := root;

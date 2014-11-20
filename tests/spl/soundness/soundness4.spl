@@ -1,11 +1,12 @@
 include "../include/slslist.spl";
 
-// loop was underconstrained:
+// loop was underconstrained
 // forgot the constraints that link the last elements
 
-procedure sls_pairwise_sum(x: Node, y: Node) returns (z: Node)
-  requires slseg(x, null) &*& slseg(y, null);
-  ensures slseg(x, null) &*& slseg(y, null) &*& slseg(z, null);
+procedure sls_pairwise_sum(x: Node, y: Node) 
+  returns (z: Node)
+  requires slseg(x, null) &*& slseg(y, null)
+  ensures slseg(x, null) &*& slseg(y, null) &*& slseg(z, null)
 {
   if (x == null || y == null) {
     return null;
@@ -18,9 +19,9 @@ procedure sls_pairwise_sum(x: Node, y: Node) returns (z: Node)
   z.data := curr_x.data + curr_y.data;
   z.next := null;
   while (curr_x.next != null && curr_y.next != null) 
-    invariant curr_x != null &*& lslseg(x, curr_x, curr_x.data) &*& slseg(curr_x, null);
-    invariant curr_y != null &*& lslseg(y, curr_y, curr_y.data) &*& slseg(curr_y, null);
-    invariant lslseg(z, last_z, last_z.data) &*& last_z.next |-> null;
+    invariant curr_x != null &*& lslseg(x, curr_x, curr_x.data) &*& slseg(curr_x, null)
+    invariant curr_y != null &*& lslseg(y, curr_y, curr_y.data) &*& slseg(curr_y, null)
+    invariant lslseg(z, last_z, last_z.data) &*& last_z.next |-> null
     //invariant last_z.data <= curr_x.data + curr_y.data;
   {
     var tmp: Node;

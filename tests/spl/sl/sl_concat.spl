@@ -1,8 +1,9 @@
 include "../include/sllist.spl";
 
-procedure concat(a: Node, b: Node) returns (res: Node)
-  requires lseg(a, null) &*& lseg(b, null);
-  ensures lseg(res, null);
+procedure concat(a: Node, b: Node)
+  returns (res: Node)
+  requires lseg(a, null) &*& lseg(b, null)
+  ensures lseg(res, null)
 {
   if (a == null) {
     return b;
@@ -10,7 +11,7 @@ procedure concat(a: Node, b: Node) returns (res: Node)
     var curr: Node;
     curr := a;
     while (curr.next != null) 
-      invariant curr != null &*& lseg(a, curr) &*& lseg(curr, null);
+      invariant acc(curr) -** lseg(a, null)
     {
       curr := curr.next; 
     }

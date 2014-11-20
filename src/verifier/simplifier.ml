@@ -6,6 +6,18 @@ open Prog
 
 (** Transform loops into tail recursive procedures. *)
 let elim_loops (prog : program) =
+  let first_iter_id = fresh_ident "first_iter" in
+  let first_iter_decl pos = 
+    { var_name = first_iter_id;
+      var_orig_name = name first_iter_id;
+      var_sort = Bool;
+      var_is_ghost = true;
+      var_is_implicit = false; 
+      var_is_aux  = true;
+      var_pos = pos;
+      var_scope = pos;
+    }
+  in
   let rec elim prog dep_procs proc = function
     | Loop (lc, pp) -> 
         let proc_name = 
@@ -31,21 +43,22 @@ let elim_loops (prog : program) =
               init_id :: ids,
               IdMap.add decl.var_name local_decl (IdMap.add init_id init_decl locals)
             )
-            return_decls (IdMap.empty, [], IdMap.empty)
+            return_decls (IdMap.empty, [], IdMap.singleton first_iter_id (first_iter_decl pp.pp_pos))
         in    
+        let formals = first_iter_id :: formals in
         let id_to_term id =
           let decl = IdMap.find id locals in
           mk_free_const decl.var_sort id
         in
         let ids_to_terms ids = List.map id_to_term ids in
-        let loop_call pos = 
+        let loop_call first pos = 
           let pp_call = 
             { pp_pos = pos; 
               pp_modifies = pp.pp_modifies; 
               pp_accesses = pp.pp_accesses;
             }
           in
-          let call = mk_call_cmd returns proc_name (ids_to_terms returns) pos in
+          let call = mk_call_cmd returns proc_name (mk_bool_term first :: ids_to_terms returns) pos in
           update_ppoint pp_call call
         in
         let loop_end_pos = end_pos pp.pp_pos in
@@ -58,7 +71,7 @@ let elim_loops (prog : program) =
             elim prog dep_procs1 proc lc.loop_postbody 
           in
           let init_returns = 
-            mk_assign_cmd returns (ids_to_terms formals) loop_start_pos 
+            mk_assign_cmd returns (ids_to_terms (List.tl formals)) loop_start_pos 
           in
           let else_cmd = 
             (*mk_return_cmd (ids_to_terms returns) loop_end_pos*)
@@ -67,7 +80,7 @@ let elim_loops (prog : program) =
           let then_cmd = 
             mk_seq_cmd
               [ postbody;
-                loop_call loop_end_pos
+                loop_call false loop_end_pos
               ] 
               pp.pp_pos
           in
@@ -99,7 +112,21 @@ let elim_loops (prog : program) =
                   ("framecondition of " ^ string_of_ident proc_name) 
                   None pp.pp_pos :: frames
             )
-            [] returns formals
+            [] returns (List.tl formals)
+        in
+        (* additional precondition *)
+        (* TODO: find alternative to using the footprint sets since they are introduced by grassification *)
+        let precond =
+          let f = mk_or [mk_pred first_iter_id []; 
+                         mk_eq 
+                           (mk_diff Grassifier.footprint_caller_set Grassifier.footprint_set)
+                           (mk_empty (Set Loc))] 
+          in
+          let msg _ = 
+            "An invariant might not be maintained by this loop",
+            ""
+          in
+          mk_spec_form (FOL f) "invariant" (Some msg) pp.pp_pos
         in
         let postcond =
           loop_exit :: 
@@ -113,7 +140,7 @@ let elim_loops (prog : program) =
             proc_formals = formals;
             proc_returns = returns;
             proc_locals = locals;
-            proc_precond = List.map (subst_id_spec subst_formals) lc.loop_inv;
+            proc_precond = precond :: List.map (subst_id_spec subst_formals) lc.loop_inv;
             proc_postcond = postcond;
             proc_body = Some body;
             proc_pos = pp.pp_pos;
@@ -121,7 +148,7 @@ let elim_loops (prog : program) =
           } 
         in
         let call_loop =
-          loop_call pp.pp_pos
+          loop_call true loop_start_pos
         in
         declare_proc prog loop_proc, proc_name :: dep_procs2, call_loop
     | Seq (cs, pp) ->

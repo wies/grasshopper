@@ -669,7 +669,8 @@ let subst_id subst_map f =
 (** Substitutes all constants in term [t] with other terms according to substitution function [subst_fun]. *)
 let subst_consts_fun_term subst_fun t =
   let rec sub = function
-    | (App (FreeSym id, [], srt) as t) -> subst_fun id t 
+    | (App (FreeSym id, [], srt) as t) -> 
+        subst_fun id t
     | App (sym, ts, srt) -> App (sym, List.map sub ts, srt)
     | t -> t
   in
@@ -787,9 +788,10 @@ let subst subst_map f =
         Binder (b, vs1, sub sm1 f, List.map (suba vs1 sm1) a)
   in sub subst_map f
 
-(** Propagate existentially quantified variables upward in the formula [f].
+
+(** Propagate [b] quantified variables upward in the formula [f].
  ** Assumes that [f] is in negation normal form. *)
-let propagate_exists f =
+let propagate_binder b f =
   let rec merge sm zs xs ys ys2 =
     match xs, ys with
     | (x, srt1) :: xs1, (y, srt2) :: ys1 ->
@@ -801,37 +803,45 @@ let propagate_exists f =
         if ys2 = [] then sm, xs @ zs
         else merge sm (List.hd xs :: zs) (List.tl xs) ys2 []
   in
-  let rec prop tvs = function
-    | BoolOp (Or, fs) ->
-        let fs1, vs = 
-          List.fold_right (fun f (fs2, vs2) ->
-            let f1, vs1 = prop tvs (mk_exists tvs f) in
-            let sm, vs = merge IdMap.empty [] vs1 vs2 [] in
-            subst sm f1 :: fs2, vs) 
-            fs ([], [])
-        in 
-        BoolOp (Or, fs1), vs
-    | BoolOp (And, fs) ->
-        let fv_fs = fv (mk_and fs) in
-        let fvs, used =
-          let rec distribute (fvs, unused, used) = function
-            | f :: fs -> 
-                let fv_f = fv f in
-                let ftvs_set = IdSet.diff (IdSet.inter unused fv_f) (fv (mk_and fs)) in
+  let rec prop_op_same tvs op fs =
+    let fs1, vs = 
+      List.fold_right (fun f (fs2, vs2) ->
+        let f1, vs1 = prop tvs (mk_binder b tvs f) in
+        let sm, vs = merge IdMap.empty [] vs1 vs2 [] in
+        subst sm f1 :: fs2, vs) 
+        fs ([], [])
+    in 
+    BoolOp (op, fs1), vs
+  and prop_op_diff tvs op fs =
+    let fv_fs = fv (BoolOp (op, fs)) in
+    let fvs, used =
+      let rec distribute (fvs, unused, used) = function
+        | f :: fs -> 
+            let fv_f = fv f in
+            let ftvs_set = IdSet.diff (IdSet.inter unused fv_f) (fv (BoolOp (op, fs))) in
                 (*print_form stdout f; print_newline();
-                print_endline "vars: ";
-                IdSet.iter (fun id -> Printf.printf "%s, " (string_of_ident id)) ftvs_set; print_newline(); print_newline();*)
-                let ftvs = List.filter (fun (x, _) -> IdSet.mem x ftvs_set) tvs in
-                distribute ((f, ftvs) :: fvs, IdSet.diff unused fv_f, IdSet.union used ftvs_set) fs
-            | [] -> fvs, used
-          in 
-          let tvs_set = List.fold_left (fun acc (x, _) -> IdSet.add x acc) IdSet.empty tvs in
-          distribute ([], tvs_set, IdSet.empty) fs 
-        in
-        let tvs1 = List.filter (fun (x, _) -> IdSet.mem x fv_fs && not (IdSet.mem x used)) tvs in
-        let fs1, vss = List.split (List.map (fun (f, ftvs) -> prop ftvs f) fvs) in
-        BoolOp (And, fs1), List.concat (tvs1 :: vss)
-    | Binder (Exists, vs, f, a) -> 
+                   print_endline "vars: ";
+                   IdSet.iter (fun id -> Printf.printf "%s, " (string_of_ident id)) ftvs_set; print_newline(); print_newline();*)
+            let ftvs = List.filter (fun (x, _) -> IdSet.mem x ftvs_set) tvs in
+            distribute ((f, ftvs) :: fvs, IdSet.diff unused fv_f, IdSet.union used ftvs_set) fs
+        | [] -> fvs, used
+      in 
+      let tvs_set = List.fold_left (fun acc (x, _) -> IdSet.add x acc) IdSet.empty tvs in
+      distribute ([], tvs_set, IdSet.empty) fs 
+    in
+    let tvs1 = List.filter (fun (x, _) -> IdSet.mem x fv_fs && not (IdSet.mem x used)) tvs in
+    let fs1, vss = List.split (List.map (fun (f, ftvs) -> prop ftvs f) fvs) in
+    BoolOp (op, fs1), List.concat (tvs1 :: vss)
+  and prop tvs = function
+    | BoolOp (And, fs) when b = Forall ->
+        prop_op_same tvs And fs
+    | BoolOp (Or, fs) when b = Exists ->
+        prop_op_same tvs Or fs
+    | BoolOp (Or, fs) when b = Forall ->
+        prop_op_diff tvs Or fs
+    | BoolOp (And, fs) when b = Exists ->
+        prop_op_diff tvs And fs
+    | Binder (b1, vs, f, a) when b = b1 -> 
         let vars = fv f in
         let vs0 = List.filter (fun (v, _) -> IdSet.mem v vars) vs in
         let sm, vs1 = 
@@ -844,22 +854,30 @@ let propagate_exists f =
         let f1, vs2 = prop vs1 (subst sm f) in
         (match a with 
         | [] -> f1, vs2
-        | _ -> Binder (Exists, [], f1, a), vs2)
-    | Binder (Forall, vs, f, a) ->
+        | _ -> Binder (b1, [], f1, a), vs2)
+    | Binder (b1, vs, f, a) when b1 <> b ->
         (match vs with
         | [] -> 
             let f1, vs1 = prop tvs f in
-            Binder (Forall, vs, f1, a), vs1
+            Binder (b1, vs, f1, a), vs1
         | _ -> 
             let f1, vs1 = prop [] f in
-            Binder (Forall, vs, mk_exists vs1 f1, a), tvs)
+            Binder (b1, vs, mk_binder (dualize_binder b) vs1 f1, a), tvs)
     | f -> 
         let fv_f = fv f in
         f, List.filter (fun (x, _) -> IdSet.mem x fv_f) tvs
   in
   let f1, vs = prop [] f in 
-  let res = mk_exists vs f1 in
+  let res = mk_binder b vs f1 in
   res
+
+(** Propagate existentially quantified variables upward in the formula [f].
+ ** Assumes that [f] is in negation normal form. *)
+let propagate_exists f = propagate_binder Exists f
+
+(** Propagate universally quantified variables upward in the formula [f].
+ ** Assumes that [f] is in negation normal form. *)
+let propagate_forall f = propagate_binder Forall f
 
 (** Convert universal quantifiers in formula [f] into existentials where possible. *)
 (** Assumes that [f] is in negation normal form. *)
@@ -913,15 +931,18 @@ let foralls_to_exists f =
     | Binder (Forall, bvs, BoolOp (And, fs), a) ->
         let fs1 = List.map (fun f -> cf (Binder (Forall, bvs, f, a))) fs in
         mk_and fs1
-    | Binder (Forall, bvs, (BoolOp (Or, fs) as f), a) ->
-        let bvs_set = id_set_of_list (List.map fst bvs) in
-        let nodefs, defs, g = find_defs bvs_set [] f in
-        let ubvs, ebvs = List.partition (fun (x, _) -> IdSet.mem x nodefs) bvs in
-        (match ebvs with
-        | [] -> distribute_and bvs [] [g]
-        | _ -> 
-            let g1 = cf (mk_forall ubvs g) in
-            Binder (Exists, ebvs, mk_and (defs @ [g1]), a))
+    | Binder (Forall, _, BoolOp (Or, fs), _) as f ->
+        (match propagate_forall f with
+        | Binder (Forall, bvs, (BoolOp (Or, fs) as f), a) ->
+            let bvs_set = id_set_of_list (List.map fst bvs) in
+            let nodefs, defs, g = find_defs bvs_set [] f in
+            let ubvs, ebvs = List.partition (fun (x, _) -> IdSet.mem x nodefs) bvs in
+            (match ebvs with
+            | [] -> distribute_and bvs [] [g]
+            | _ -> 
+                let g1 = cf (mk_forall ubvs g) in
+                Binder (Exists, ebvs, mk_and (defs @ [g1]), a))
+        | _ -> f)
     | Binder (Exists, bvs, f, a) ->
         mk_exists ~ann:a bvs (cf f)
     | BoolOp (And as op, fs)

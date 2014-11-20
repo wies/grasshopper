@@ -57,10 +57,10 @@ predicate ptree(r: Node, p: Node, FP: Set<Node>) {
 predicate tree_sorted(FP: Set<Node>) {
   (forall x: Node, y: Node :: 
    x in FP && y in FP && Btwn(parent, x, y.left, y) ==> x.data < y.data
-   @(matching x.left yields x.data)) &&
+   @(matching y.left yields y.data)) &&
   (forall x: Node, y: Node :: 
    x in FP && y in FP && Btwn(parent, x, y.right, y) ==> x.data > y.data
-   @(matching x.right yields x.data))  
+   @(matching y.right yields y.data))  
 }
 
 predicate upper_bound(ub: Int, FP: Set<Node>) {

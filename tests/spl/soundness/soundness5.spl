@@ -1,26 +1,27 @@
-include "../include/sllist.spl";
+include "../include/slslist.spl";
 
-//quicksort: the postcondition of split was too weak and gave a panhandle list.
+// quicksort: the postcondition of split was too weak and gave a panhandle list.
 
-procedure predecessor(start: Node, end: Node, ghost lb: Int, ghost ub: Int) returns (prv: Node)
-    requires blseg(start, end, lb, ub);
-    requires start != end;
-    ensures blseg(start, prv, lb, ub);
-    ensures acc(prv) &*& prv.next == end;
-    ensures prv != end;
-    ensures prv.data >= lb &*& prv.data <= ub;
+procedure predecessor(start: Node, end: Node, ghost lb: Int, ghost ub: Int) 
+  returns (prv: Node)
+  requires blseg(start, end, lb, ub)
+  requires start != end
+  ensures blseg(start, prv, lb, ub)
+  ensures acc(prv) &*& prv.next == end
+  ensures prv != end
+  ensures prv.data >= lb &*& prv.data <= ub
 {
-    var prv: Node;
-    prv := start;
-    while (prv.next != end)
-        invariant blseg(start, prv, lb, ub);
-        invariant blseg(prv, end, lb, ub);
-        invariant prv != end;
-        invariant prv.data >= lb &*& prv.data <= ub;
-    {
-        prv := prv.next;
-    }
-    return prv;
+  var prv: Node;
+  prv := start;
+  while (prv.next != end)
+    invariant blseg(start, prv, lb, ub)
+    invariant blseg(prv, end, lb, ub)
+    invariant prv != end
+    invariant prv.data >= lb &*& prv.data <= ub
+  {
+    prv := prv.next;
+  }
+  return prv;
 }
 
 procedure split(lst: Node, tsl: Node, lb: Int, ub: Int) returns (res: Node)
