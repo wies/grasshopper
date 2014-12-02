@@ -1,5 +1,10 @@
 open Unix
 
+module IntSet = Set.Make(struct
+    type t = int
+    let compare = compare
+  end)
+
 module IntMap = Map.Make(struct
     type t = int
     let compare = compare

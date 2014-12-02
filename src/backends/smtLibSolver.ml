@@ -176,6 +176,46 @@ let dummy_session =
   }
 
 exception SmtLib_error of session * string
+
+
+(** Register signal handlers for cleaning up running processes *)
+let add_running_pid,
+    remove_running_pids =
+  let open Sys in
+  let running_pids = ref IntSet.empty in
+  let handlers = Hashtbl.create 8 in
+  let handle sig_num =
+    Debug.info (fun () -> "Aborting.\n");
+    IntSet.iter 
+      (fun pid -> kill pid sig_num) !running_pids;
+    try 
+      match Hashtbl.find handlers sig_num with
+      | Signal_handle handler -> handler sig_num
+      | Signal_ignore -> ()
+      | Signal_default -> exit 1
+    with Not_found -> exit 1
+  in
+  let add_handler sig_num = 
+    let old_handler = signal sig_num (Signal_handle handle) in
+    Hashtbl.add handlers sig_num old_handler
+  in
+  add_handler sigint;
+  let add_running_pid pid = 
+    running_pids := IntSet.add pid !running_pids
+  in
+  let remove_running_pids session =
+    let pids = 
+      List.fold_left 
+        (fun pids (solver, state) -> 
+          match solver.info.kind with
+          | Process _ -> IntSet.add state.pid pids
+          | _ -> pids)
+        IntSet.empty session.solvers
+    in
+    running_pids := IntSet.diff !running_pids pids
+  in
+  add_running_pid,
+  remove_running_pids
     
 let fail session msg = raise (SmtLib_error (session, "SmtLib: " ^ msg))
       
@@ -276,6 +316,7 @@ let start_with_solver session_name sat_means solver produce_models produce_unsat
           let in_read, in_write = Unix.pipe () in
           let out_read, out_write = Unix.pipe () in
           let pid = Unix.create_process cmnd aargs out_read in_write in_write in
+          add_running_pid pid;
           { in_chan = Some (in_channel_of_descr in_read);
             out_chan = out_channel_of_descr out_write;
             pid = pid;
@@ -390,7 +431,8 @@ let quit session =
     close_out state.out_chan;
     Opt.iter close_in state.in_chan);
   iter_solvers session (fun solver state ->
-    if state.pid <> 0 then ignore (Unix.waitpid [] state.pid))
+    if state.pid <> 0 then ignore (Unix.waitpid [] state.pid));
+  remove_running_pids session
 
 let pop session = 
   if session.stack_height <= 0 then fail session "pop on empty stack" else
