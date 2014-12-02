@@ -1,8 +1,9 @@
 include "../include/sllist.spl";
 
-procedure soudness8(lst: Node) returns (res: Node)
-  requires lseg(lst, null);
-  ensures lseg(res, null);
+procedure soudness8(lst: Node) 
+  returns (res: Node)
+  requires lseg(lst, null)
+  ensures lseg(res, null)
 {
   if (lst == null)
     return null;
@@ -10,9 +11,9 @@ procedure soudness8(lst: Node) returns (res: Node)
     var nondet: Bool, curr: Node;
     curr := lst;
     while (nondet && curr.next != null) 
-      invariant curr != null;
-      invariant lseg(lst, curr);
-      invariant lseg(curr, null);
+      invariant curr != null
+      invariant lseg(lst, curr)
+      invariant lseg(curr, null)
     {
       havoc nondet;
       curr := curr.next;

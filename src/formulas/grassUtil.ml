@@ -7,8 +7,8 @@ open Util
 
 let dummy_position = 
   { sp_file = "";
-    sp_start_line = 0;
-    sp_start_col = 0;
+    sp_start_line = max_int;
+    sp_start_col = max_int;
     sp_end_line = 0;
     sp_end_col = 0 
   }
@@ -19,9 +19,11 @@ let global_scope =
     sp_start_col = 0;
     sp_end_line = max_int; 
     sp_end_col = max_int;
-  } 
+  }
 
 let merge_src_positions pos1 pos2 =
+  assert (pos1.sp_file = "" || pos2.sp_file = "" || pos1.sp_file = pos2.sp_file);
+  let file = max pos1.sp_file pos2.sp_file in
   let start_line, start_col =
     if pos1.sp_start_line < pos2.sp_start_line 
     then pos1.sp_start_line, pos1.sp_start_col
@@ -40,7 +42,7 @@ let merge_src_positions pos1 pos2 =
     then pos1.sp_end_line, pos1.sp_end_col
     else pos2.sp_end_line, pos2.sp_end_col
   in
-  { pos1 with
+  { sp_file = file;
     sp_start_line = start_line;
     sp_start_col = start_col;
     sp_end_line = end_line;
@@ -66,6 +68,8 @@ let contained_in_src_pos pos1 pos2 =
   starts_before_src_pos pos2 pos1 && ends_before_src_pos pos1 pos2    
   
 let compare_src_pos pos1 pos2 =
+  let cf = compare pos1.sp_file pos2.sp_file in
+  if cf <> 0 then cf else
   if starts_before_src_pos pos1 pos2 then
     if starts_before_src_pos pos2 pos1 then 0
     else -1
@@ -321,7 +325,15 @@ let strip_comments f =
   filter_annotations 
     (function Comment _ -> false | _ -> true) f
 
-let mk_comment c f = annotate f [Comment c]
+let strip_error_msgs f = 
+  filter_annotations 
+    (function ErrorMsg _ -> false | _ -> true) f
+
+let mk_comment c f = 
+  annotate f [Comment c]
+
+let mk_error_msg (pos, msg) f =
+  annotate f [ErrorMsg (pos, msg)]
 
 let mk_name n f = annotate f [Name (fresh_ident n)]
 
@@ -887,11 +899,11 @@ let foralls_to_exists f =
       | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; t], _), a)])
         when IdSet.mem x nodefs && 
           IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
-            IdSet.remove x nodefs, mk_eq ~ann:a xt t :: defs, mk_false
+            IdSet.remove x nodefs, mk_eq xt t :: defs, mk_false
       | BoolOp (Not, [Atom (App (Eq, [t; Var (x, srt) as xt], _), a)])
         when IdSet.mem x nodefs && 
           IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
-          IdSet.remove x nodefs, mk_eq ~ann:a xt t :: defs, mk_false
+          IdSet.remove x nodefs, mk_eq xt t :: defs, mk_false
       | BoolOp (Or, fs) ->
           let nodefs, defs, gs =
             List.fold_right 

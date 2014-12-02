@@ -510,17 +510,15 @@ let add_terms fs gts =
   in fs1
 
 let encode_labels fs =
-  let rec get_label = function
-    | Label id :: _ -> Some id
-    | _ :: annots -> get_label annots
-    | [] -> None
-  in
   let mk_label annots f = 
-    match get_label annots with
-    | None -> f
-    | Some id -> 
-        let p = mk_pred id [] in
-        mk_and [p; mk_or [mk_not p; f]]
+    let lbls = 
+      Util.partial_map 
+        (function 
+          | Label id -> Some (mk_pred id [])
+          | _ -> None) 
+        annots
+    in
+    smk_and (smk_or (f :: List.map mk_not lbls) :: lbls)
   in
   let rec el = function
     | Binder (b, vs, f, annots) ->

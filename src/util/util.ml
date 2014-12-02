@@ -65,6 +65,14 @@ let partition_map p f xs =
 let map_split f xs =
   List.fold_right (fun x (ys, zs) -> let y, z = f x in y :: ys, z :: zs) xs ([], [])
 
+(** Applies [fn] to the elements in [xs] until the result becomes Some _ *)
+let rec find_map fn = function
+  | [] -> None
+  | x :: xs ->
+      match fn x with
+      | None -> find_map fn xs
+      | v -> v
+
 let flat_map f ls = List.flatten (List.map f ls)
 
 let find_index elt ls =

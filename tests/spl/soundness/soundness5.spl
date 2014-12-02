@@ -1,6 +1,6 @@
 include "../include/slslist.spl";
 
-// quicksort: the postcondition of split was too weak and gave a panhandle list.
+// quicksort: the postcondition of split is too weak and gives a panhandle list.
 
 procedure predecessor(start: Node, end: Node, ghost lb: Int, ghost ub: Int) 
   returns (prv: Node)
@@ -24,51 +24,52 @@ procedure predecessor(start: Node, end: Node, ghost lb: Int, ghost ub: Int)
   return prv;
 }
 
-procedure split(lst: Node, tsl: Node, lb: Int, ub: Int) returns (res: Node)
-    requires blseg(lst, tsl, lb, ub) &*& lst != tsl;
-    ensures  blseg(lst, res, lb, res.data);
-    ensures  blseg(res, tsl, res.data, ub) &*& res != tsl;
-    ensures  res.data >= lb &*& res.data <= ub;
+procedure split(lst: Node, tsl: Node, lb: Int, ub: Int) 
+  returns (res: Node)
+  requires blseg(lst, tsl, lb, ub) &*& lst != tsl
+  ensures blseg(lst, res, lb, res.data)
+  ensures blseg(res, tsl, res.data, ub) &*& res != tsl
+  ensures res.data >= lb &*& res.data <= ub
 {
-    var pivot: Node, start: Node, end: Node;
-    pivot := predecessor(lst, tsl, lb, ub);
-    end := pivot;
-    start := lst;
-    while (start != end)
-        invariant blseg(lst, start, lb, pivot.data);
-        invariant blseg(start, end, lb, ub);
-        invariant blseg(end, pivot, pivot.data, ub);
-        invariant pivot.next |-> tsl; 
-        invariant pivot.data >= lb;
-        invariant pivot.data <= ub;
-    {
-        if (start.data <= pivot.data) {
-            start := start.next;
-        } else if (end.data > pivot.data) {
-            end := predecessor(start, end, lb, ub);
-        } else {
-            var tmp: Int;
-            tmp := start.data;
-            start.data := end.data;
-            end.data := tmp;
-        }
+  var pivot: Node, start: Node, end: Node;
+  pivot := predecessor(lst, tsl, lb, ub);
+  end := pivot;
+  start := lst;
+  while (start != end)
+    invariant blseg(lst, start, lb, pivot.data)
+    invariant blseg(start, end, lb, ub)
+    invariant blseg(end, pivot, pivot.data, ub)
+    invariant pivot.next |-> tsl
+    invariant pivot.data >= lb
+    invariant pivot.data <= ub
+  {
+    if (start.data <= pivot.data) {
+      start := start.next;
+    } else if (end.data > pivot.data) {
+      end := predecessor(start, end, lb, ub);
+    } else {
+      var tmp: Int;
+      tmp := start.data;
+      start.data := end.data;
+      end.data := tmp;
     }
-    var tmp2: Int;
-    tmp2 := pivot.data;
-    pivot.data := end.data;
-    end.data := tmp2;
-    return end;
+  }
+  var tmp2: Int;
+  tmp2 := pivot.data;
+  pivot.data := end.data;
+  end.data := tmp2;
+  return end;
 }
 
 
 procedure quicksort(lst: Node, tsl: Node, ghost lb: Int, ghost ub: Int)
-    requires blseg(lst, tsl, lb, ub);
-    ensures  bslseg(lst, tsl, lb, ub);
+  requires blseg(lst, tsl, lb, ub)
+  ensures bslseg(lst, tsl, lb, ub)
 {
-    if (lst != tsl && lst.next != tsl) {
-      var pivot: Node;
-      pivot := split(lst, tsl, lb, ub);
-      quicksort(lst, pivot, lb, pivot.data);
-      quicksort(pivot.next, tsl, pivot.data, ub);
-    }
+  if (lst != tsl && lst.next != tsl) {
+    var pivot: Node;
+    pivot := split(lst, tsl, lb, ub);
+    quicksort(lst, pivot, lb, pivot.data);
+    quicksort(pivot.next, tsl, pivot.data, ub);
+  }
 }

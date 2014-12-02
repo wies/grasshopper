@@ -8,7 +8,7 @@ procedure contains(root: Node, val: Int)
   var cur: Node;
   cur := root;
   while (cur != null && cur.data != val)
-    invariant tree(cur) //non-empty frame between loops exec
+    invariant tree(cur) //non empty frame after loop iteration
   {
     if (cur.data > val) {
       cur := cur.left;

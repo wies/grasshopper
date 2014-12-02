@@ -127,7 +127,7 @@ let elim_loops (prog : program) =
           in
           let msg _ = 
             "An invariant might not be maintained by this loop",
-            ""
+            ProgError.mk_error_info "This is the invariant that might not be maintained"
           in
           mk_spec_form (FOL f) "invariant" (Some msg) pp.pp_pos
         in
@@ -492,7 +492,7 @@ let elim_state prog =
                 let assume_precond_implicits = 
                   List.map 
                     (fun sf -> 
-                      let sf1 = map_spec_fol_form strip_comments sf in
+                      let sf1 = map_spec_fol_form strip_error_msgs sf in
                       mk_assume_cmd sf1 pp.pp_pos) 
                     preconds_w_implicits
                 in
@@ -581,7 +581,7 @@ let elim_state prog =
                   (fun sf -> 
                     let old_sf = oldify_spec (id_set_of_list callee_decl.proc_formals) sf in
                     let sf1 = subst_spec subst_post old_sf in
-                    let sf2 = map_spec_fol_form strip_comments sf1 in
+                    let sf2 = map_spec_fol_form strip_error_msgs sf1 in
                     mk_assume_cmd sf2 pp.pp_pos)
                   callee_decl.proc_postcond
               in
@@ -596,7 +596,7 @@ let elim_state prog =
           let preconds = 
             List.map 
               (fun sf -> 
-                let sf1 = map_spec_fol_form strip_comments sf in
+                let sf1 = map_spec_fol_form strip_error_msgs sf in
                 mk_assume_cmd sf1 sf.spec_pos) 
               proc.proc_precond 
           in

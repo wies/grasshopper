@@ -149,7 +149,7 @@ let elim_sl prog =
           sfs ([], None, Free)
       in
       let name, msg, pos = Util.Opt.get_or_else (name, None, dummy_position) aux in
-      SlUtil.mk_sep_star_lst fs, kind, name, msg, pos
+      SlUtil.mk_sep_star_lst ~pos:pos fs, kind, name, msg, pos
     in
     (* translate SL precondition *)
     let sl_precond, other_precond = List.partition is_sl_spec proc.proc_precond in
@@ -319,7 +319,7 @@ let annotate_heap_checks prog =
     TermSet.fold 
       (fun t acc ->
         let t_in_footprint = FOL (mk_elem t footprint_set) in
-        let mk_msg callee = "Possible invalid heap access", "" in
+        let mk_msg callee = "Possible invalid heap access", "Possible invalid heap access" in
         let sf = mk_spec_form t_in_footprint "check heap access" (Some mk_msg) pos in
         let check_access = mk_assert_cmd sf pos in
         check_access :: acc)
@@ -335,7 +335,7 @@ let annotate_heap_checks prog =
     | (Dispose dc, pp) ->
         let arg = dc.dispose_arg in
         let arg_in_footprint = FOL (mk_elem arg footprint_set) in
-        let mk_msg callee = "This deallocation might be unsafe", "" in
+        let mk_msg callee = "This deallocation might be unsafe", "This deallocation might be unsafe" in
         let sf = 
           mk_spec_form arg_in_footprint "check free" (Some mk_msg) pp.pp_pos 
         in

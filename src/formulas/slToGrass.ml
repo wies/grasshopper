@@ -11,9 +11,15 @@ let close f =
 (** Translate SL formula [f] to a GRASS formula where the set [domain] holds [f]'s footprint.
   * Atomic predicates in [f] are translated using the function [pred_to_form]. *)
 let to_form pred_to_form domain f =
-  let mk_srcpos pos_opt f = match pos_opt with
-  | Some pos -> GrassUtil.mk_srcpos pos f
-  | None -> f
+  let mk_error_msg (pos_opt, msg) f =
+    match pos_opt with
+    | Some pos -> GrassUtil.mk_error_msg (pos, msg) f
+    | None -> f
+  in
+  let mk_srcpos pos_opt f = 
+    match pos_opt with
+    | Some pos -> GrassUtil.mk_srcpos pos f
+    | None -> f
   in
   let fresh_dom d = mk_loc_set_var (GrassUtil.fresh_ident ("?" ^ fst d)) in
   let rec process_sep d f = 
@@ -43,7 +49,7 @@ let to_form pred_to_form domain f =
              | SepPlus -> []
              | SepStar -> 
                  let f1_and_f2_disjoint = 
-                   GrassUtil.mk_comment (ProgError.mk_error_info "Specified regions are not disjoint")
+                   mk_error_msg (pos, ProgError.mk_error_info "Specified regions are not disjoint")
                      (empty_t (GrassUtil.mk_inter [f1_dom; f2_dom]))
                  in
                  [mk_srcpos pos f1_and_f2_disjoint]
@@ -82,10 +88,10 @@ let to_form pred_to_form domain f =
       let pos = pos_of_sl_form sep in
       let process (tr, d) = 
         let d_eq_domain = 
-          GrassUtil.mk_comment (ProgError.mk_error_info "Memory footprint at error location does not match this specification")
+          mk_error_msg (pos, ProgError.mk_error_info "Memory footprint at error location does not match this specification")
             (mk_srcpos pos (GrassUtil.mk_eq d domain))
         in
-        GrassUtil.smk_and [tr; d_eq_domain]
+        GrassUtil.smk_and [d_eq_domain; tr]
       in
       GrassUtil.smk_or (List.map process translated)
   in

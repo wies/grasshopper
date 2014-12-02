@@ -129,6 +129,7 @@ type guard =
 type annot =
   | Comment of string
   | SrcPos of source_position
+  | ErrorMsg of source_position * string
   | Label of ident
   | Name of ident
   | TermGenerator of sorted_ident list * sorted_ident list * guard list * term
@@ -455,25 +456,23 @@ and pr_union ppf = function
 
 let rec pr_form ppf = function
   | Binder (b, vs, f, a) -> 
-      let name = extract_name false a in
-      let pos = extract_src_pos a in
-      (match name, pos with
-      |	"", None -> fprintf ppf "@[(%a)@]" pr_quantifier (b, vs, f)
-      | "", Some pos -> fprintf ppf "@[(%a@ /* %s */)@]" pr_quantifier (b, vs, f) (string_of_src_pos pos)
-      | n, Some pos -> fprintf ppf "@[(%a@ /* %s: %s */)@]" pr_quantifier (b, vs, f) (string_of_src_pos pos) n
-      |	n, None -> fprintf ppf "@[(%a@ /* %s */)@]" pr_quantifier (b, vs, f) n)
+      fprintf ppf "@[(%a%a)@]" pr_quantifier (b, vs, f) pr_annot a
   | BoolOp (And, fs) -> pr_ands ppf fs
   | BoolOp (Or, fs) -> pr_ors ppf fs
   | BoolOp (Not, [f]) -> pr_not ppf f
   | BoolOp (_, _) -> ()
-  | Atom (t, a) -> 
-      let name = extract_name false a in
-      let pos = extract_src_pos a in
-      (match name, pos with
-      |	"", None -> fprintf ppf "@[(%a)@]" pr_term t
-      | "", Some pos -> fprintf ppf "@[(%a@ /* %s */)@]" pr_term t (string_of_src_pos pos)
-      | n, Some pos -> fprintf ppf "@[(%a@ /* %s: %s */)@]" pr_term t (string_of_src_pos pos) n
-      |	n, None -> fprintf ppf "@[(%a@ /* %s */)@]" pr_term t n)
+  | Atom (t, []) -> fprintf ppf "@[%a@]" pr_term t
+  | Atom (t, a) -> fprintf ppf "@[(%a%a)@]" pr_term t pr_annot a
+      
+and pr_annot ppf a =
+  let name = extract_name false a in
+  let pos = extract_src_pos a in
+  (match name, pos with
+  | "", None -> fprintf ppf ""
+  | "", Some pos -> fprintf ppf "@ /* %s */" (string_of_src_pos pos)
+  | n, Some pos -> fprintf ppf "@ /* %s: %s */" (string_of_src_pos pos) n
+  | n, None -> fprintf ppf "@ /* %s */" n)
+ 
 
 and pr_ands ppf = function
   | [] -> fprintf ppf "%s" "true"
@@ -487,10 +486,10 @@ and pr_ors ppf = function
   | f :: fs -> fprintf ppf "@[<2>%a@] ||@ %a" pr_form f pr_ors fs
 
 and pr_not ppf = function
-  | Atom (App (Eq, [t1; t2], _), _) ->
-      fprintf ppf "@[%a@]@ !=@ @[<2>%a@]" pr_term t1 pr_term t2
-  | Atom (App (Elem, [t1; t2], _), _) ->
-      fprintf ppf "@[%a@]@ !in@ @[<2>%a@]" pr_term t1 pr_term t2
+  | Atom (App (Eq, [t1; t2], _), a) ->
+      fprintf ppf "@[(@[%a@]@ !=@ @[<2>%a@]%a)@]" pr_term t1 pr_term t2 pr_annot a
+  | Atom (App (Elem, [t1; t2], _), a) ->
+      fprintf ppf "@[(@[%a@]@ !in@ @[<2>%a@]%a)@]" pr_term t1 pr_term t2 pr_annot a
   | Atom (App (_, [], _), _) as f -> 
       fprintf ppf "!@[%a@]" pr_form f
   | f -> fprintf ppf "!(@[%a@])" pr_form f

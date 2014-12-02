@@ -30,20 +30,39 @@ let simplify prog =
   dump_if 3 prog;
   prog
 
+(** Annotate [msg] as comment to leaves of formula [f] *)
+let annotate_aux_msg msg f = 
+  let annotate annot = 
+    if List.exists (function ErrorMsg _ -> true | _ -> false) annot 
+    then annot
+    else 
+      Util.partial_map 
+        (function SrcPos pos -> Some (ErrorMsg (pos, msg)) | _ -> None)
+        annot @ annot
+  in
+  let rec annotate_form = function
+    | Binder (Forall as b, vs, (BoolOp (Or, fs) as f), annot)
+    | Binder (Exists as b, vs, (BoolOp (And, fs) as f), annot) ->
+        if List.for_all (function Atom (_, _) | BoolOp (Not, [Atom (_, _)]) -> true | _ -> false) fs &&
+          List.exists (function SrcPos _ -> true | _ -> false) annot
+        then Binder (b, vs, f, annotate annot)
+        else 
+          Binder (b, vs, annotate_form f, annotate annot)
+    | Binder (b, vs, f, annot) ->
+        Binder (b, vs, annotate_form f, annotate annot)
+    | BoolOp (op, fs) -> 
+        BoolOp (op, List.map annotate_form fs)
+    | Atom (t, annot) -> Atom (t, annotate annot)
+  in annotate_form f  
+
 (** Add labels for trace generation and debugging to verification condition [vc] *)
 let add_labels vc =
-  let rec get_comment = function
-    | Comment c :: _ -> Some c
-    | _ :: annots -> get_comment annots
-    | [] -> None
-  in
-  let process_annot c (ltop, annots) ann =
-    match ann, c with
-    | SrcPos pos, Some c -> 
+  let process_annot (ltop, annots) = function
+    | ErrorMsg (pos, msg) ->
         let lbl = fresh_ident "Label" in
-        IdMap.add lbl (pos, c) ltop, 
-        Label lbl :: ann :: annots
-    | _ -> ltop, ann :: annots
+        IdMap.add lbl (pos, msg) ltop, 
+        Label lbl :: annots 
+    | ann -> ltop, ann :: annots
   in
   let rec al f ltop = 
     match f with
@@ -55,13 +74,11 @@ let add_labels vc =
         in
         ltop1, BoolOp (op, fs1)
     | Binder (b, vs, f, annots) ->
-        let c = get_comment annots in
         let ltop1, f1 = al f ltop in
-        let ltop2, annots1 = List.fold_left (process_annot c) (ltop1, []) annots in
+        let ltop2, annots1 = List.fold_left process_annot (ltop1, []) annots in
         ltop2, Binder (b, vs, f1, annots1)
     | Atom (t, annots) -> 
-        let c = get_comment annots in
-        let ltop1, annots1 = List.fold_left (process_annot c) (ltop, []) annots in
+        let ltop1, annots1 = List.fold_left process_annot (ltop, []) annots in
         ltop1, Atom (t, annots1)
   in
   al vc IdMap.empty
@@ -90,23 +107,30 @@ let add_pred_insts prog f =
     if pos then body else nnf (mk_not body)
   in
   let f_inst = 
-    let rec expand_neg seen = function
+    let rec expand_neg msg_opt seen = function
       | Binder (b, vs, f, a) -> 
-          Binder (b, vs, expand_neg seen f, a)
+          Binder (b, vs, expand_neg msg_opt seen f, a)
       | BoolOp (And as op, fs)
       | BoolOp (Or as op, fs) ->
-          let fs_inst = List.map (expand_neg seen) fs in
+          let fs_inst = List.map (expand_neg msg_opt seen) fs in
           smk_op op fs_inst
       | BoolOp (Not, [Atom (App (FreeSym p, ts, _), a)])
         when IdMap.mem p prog.prog_preds && 
           not (IdSet.mem p seen) ->
             let pbody = expand_pred false p ts in
-            let c = ProgError.mk_error_info ("Definition of predicate " ^ (string_of_ident p)) in
-            let p1 = annotate (smk_and [(*mk_not (mk_pred p ts);*) pbody]) (Comment c :: a) in
-            expand_neg (IdSet.add p seen) p1
+            let p_msg = ProgError.mk_error_info ("Definition of predicate " ^ (string_of_ident p)) in
+            let a1 = 
+              match msg_opt with
+              | Some msg ->
+                  Util.partial_map (function SrcPos pos -> Some (ErrorMsg (pos, msg)) | _ -> None) a @ a
+              | None -> a
+            in
+            let p1 = (smk_and [(*mk_not (mk_pred p ts);*) pbody]) in
+            let f1 = expand_neg (Some p_msg) (IdSet.add p seen) p1 in
+            annotate (annotate_aux_msg p_msg f1) a1
       | f -> f
     in 
-    let f1 = expand_neg IdSet.empty (nnf f) in
+    let f1 = expand_neg None IdSet.empty (nnf f) in
     (*print_endline "f1:";
     print_form stdout (f1); print_newline (); print_newline ();
     print_endline "foralls_to_exists f1:";
@@ -159,7 +183,7 @@ let add_pred_insts prog f =
   (*print_form stdout (smk_and (f_inst :: pos_instances)); print_newline ();*)
   let f = mk_exists ~ann:a vs (smk_and (f :: pos_instances)) in
   f
-
+        
 (** Generate verification conditions for procedure [proc] of program [prog]. 
  ** Assumes that [proc] has been transformed into SSA form. *)
 let vcgen prog proc =
@@ -192,20 +216,6 @@ let vcgen prog proc =
               | FOL f -> acc, [mk_name name f]
               | _ -> failwith "vcgen: found SL formula that should have been desugared")
         | Assert s ->
-            let rec annotate_aux_msg msg = 
-              let annotate annot = 
-                if List.exists (function SrcPos _ -> true | _ -> false) annot &&
-                  List.for_all (function Comment _ -> false | _ -> true) annot
-                then Comment msg :: annot
-                else annot
-              in
-              function
-                | BoolOp (op, fs) -> 
-                    BoolOp (op, List.map (annotate_aux_msg msg) fs)
-                | Binder (b, vs, f, annot) ->
-                    Binder (b, vs, annotate_aux_msg msg f, annotate annot)
-                | Atom (t, annot) -> Atom (t, annotate annot)
-            in
             let name = 
               Printf.sprintf "%s_%d_%d" 
                 s.spec_name pp.pp_pos.sp_start_line pp.pp_pos.sp_start_col
@@ -214,7 +224,7 @@ let vcgen prog proc =
               match s.spec_msg with
               | None -> 
                   "Possible assertion violation.", 
-                  "This is the assertion that might be violated"
+                  ProgError.mk_error_info "This is the assertion that might be violated"
               | Some msg -> msg proc.proc_name
             in 
             let vc_msg = (vc_msg, pp.pp_pos) in
@@ -243,7 +253,9 @@ let check_proc prog proc =
       if errors <> [] && not !Config.robust then errors else
       let vc_and_preds = add_pred_insts prog vc in
       let labels, vc_and_preds = add_labels vc_and_preds in
-      Debug.info (fun () -> "Checking VC: " ^ vc_name ^ ".\n");
+      (*IdMap.iter (fun id (pos, c) -> Printf.printf ("%s -> %s: %s\n") 
+          (string_of_ident id) (string_of_src_pos pos) c) labels;
+      Debug.info (fun () -> "Checking VC: " ^ vc_name ^ ".\n");*)
       Debug.debug (fun () -> (string_of_form vc_and_preds) ^ "\n");
       let sat_means = 
         Str.global_replace (Str.regexp "\n\n") "\n  " (ProgError.error_to_string pp vc_msg)
@@ -274,7 +286,9 @@ let check_proc prog proc =
           let sorted_error_msgs = 
             List.sort
               (fun (pos1, msg1) (pos2, msg2) -> 
-                let mc = compare (String.get msg1 0) (String.get msg2 0) in
+                let mc = 
+                  compare (String.get msg1 0) (String.get msg2 0) 
+                in
                 if mc = 0 then compare_src_pos pos1 pos2 else mc) 
               error_msgs
           in

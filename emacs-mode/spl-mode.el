@@ -198,7 +198,8 @@
     "On-the-fly verifier for Grasshopper programs."
     :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) "-lint" source)
     :error-patterns
-    ((warning line-start (file-name) ":" line ":" column (optional "-" end-column) ":Related Location:" (message) line-end)
+    ((info line-start (file-name) ":" line ":" column (optional "-" end-column) ":Trace Information:" (message) line-end)
+     (warning line-start (file-name) ":" line ":" column (optional "-" end-column) ":Related Location:" (message) line-end)
      (error line-start (file-name) ":" line ":" column (optional "-" end-column) ":" (message) line-end))
     ;((error line-start (file-name) ":" line ":" column ":" (message) line-end))
     :modes (spl-mode))

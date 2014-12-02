@@ -640,7 +640,7 @@ let mk_ite cond cond_pos then_cmd else_cmd then_msg else_msg pos =
   let mk_cond cmt =
     if cond_pos = dummy_position
     then cond
-    else mk_srcpos cond_pos (mk_comment cmt cond)
+    else mk_error_msg (cond_pos, cmt) cond
   in
   let t_cond = 
     mk_spec_form 
