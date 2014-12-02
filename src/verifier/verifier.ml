@@ -254,8 +254,8 @@ let check_proc prog proc =
       let vc_and_preds = add_pred_insts prog vc in
       let labels, vc_and_preds = add_labels vc_and_preds in
       (*IdMap.iter (fun id (pos, c) -> Printf.printf ("%s -> %s: %s\n") 
-          (string_of_ident id) (string_of_src_pos pos) c) labels;
-      Debug.info (fun () -> "Checking VC: " ^ vc_name ^ ".\n");*)
+          (string_of_ident id) (string_of_src_pos pos) c) labels;*)
+      Debug.info (fun () -> "Checking VC: " ^ vc_name ^ ".\n");
       Debug.debug (fun () -> (string_of_form vc_and_preds) ^ "\n");
       let sat_means = 
         Str.global_replace (Str.regexp "\n\n") "\n  " (ProgError.error_to_string pp vc_msg)

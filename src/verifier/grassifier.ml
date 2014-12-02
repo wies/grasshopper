@@ -143,7 +143,7 @@ let elim_sl prog =
               new_kind
           | SL f, Some (_, _, p) -> 
               f :: fs, 
-              Some (sf.spec_name, sf.spec_msg, merge_src_positions p sf.spec_pos),
+              Some (sf.spec_name, sf.spec_msg, merge_src_pos p sf.spec_pos),
               new_kind
           | _ -> fs, aux, kind)
           sfs ([], None, Free)

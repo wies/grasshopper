@@ -120,10 +120,17 @@ let elim_loops (prog : program) =
         (* additional precondition *)
         (* TODO: find alternative to using the footprint sets since they are introduced by grassification *)
         let precond =
+          let inv_pos = 
+            List.fold_left 
+              (fun pos sf -> merge_src_pos pos sf.spec_pos) 
+              dummy_position lc.loop_inv 
+          in
+          let msg = "Memory footprint at error location does not match this specification" in
           let f = mk_or [mk_pred first_iter_id []; 
-                         mk_eq 
-                           (mk_diff Grassifier.footprint_caller_set Grassifier.footprint_set)
-                           (mk_empty (Set Loc))] 
+                         mk_error_msg (inv_pos, ProgError.mk_error_info msg)
+                           (mk_eq 
+                              (mk_diff Grassifier.footprint_caller_set Grassifier.footprint_set)
+                              (mk_empty (Set Loc)))]
           in
           let msg _ = 
             "An invariant might not be maintained by this loop",
@@ -503,7 +510,7 @@ let elim_state prog =
                       let new_aux =
                         match aux with
                         | Some (_, _, p) ->
-                            Some (sf.spec_name, sf.spec_msg, merge_src_positions p sf.spec_pos)
+                            Some (sf.spec_name, sf.spec_msg, merge_src_pos p sf.spec_pos)
                         | None -> Some (sf.spec_name, sf.spec_msg, sf.spec_pos)
                       in
                       form_of_spec sf :: fs, new_aux)

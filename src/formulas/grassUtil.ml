@@ -21,7 +21,7 @@ let global_scope =
     sp_end_col = max_int;
   }
 
-let merge_src_positions pos1 pos2 =
+let merge_src_pos pos1 pos2 =
   assert (pos1.sp_file = "" || pos2.sp_file = "" || pos1.sp_file = pos2.sp_file);
   let file = max pos1.sp_file pos2.sp_file in
   let start_line, start_col =
