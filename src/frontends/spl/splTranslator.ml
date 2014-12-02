@@ -865,7 +865,7 @@ let convert cus =
          type_error (pos_of_expr e) "expression of type bool" (ty_str ty)
     and extract_fol_form locals e =
       match convert_expr locals e with
-      | SL_form (Atom (Pred p, ts, pos)) ->
+      | SL_form (Sl.Atom (Pred p, ts, pos)) ->
           GrassUtil.mk_pred ~ann:[SrcPos (pos_of_expr e)] p ts
       | SL_form _ ->
           type_error (pos_of_expr e) "expression of type bool" "SL formula"
