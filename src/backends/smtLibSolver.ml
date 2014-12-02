@@ -283,28 +283,11 @@ let declare_sort session sort_name num_of_params =
     
 let declare_sorts has_int session =
   declare_sort session loc_sort_string 0;
-  writefn session (fun solver ->
-    if !Config.use_set_theory && solver.info.has_set_theory
-    then "(define-sort " ^ set_sort_string ^ loc_sort_string ^ " () (Set " ^ loc_sort_string ^ "))"
-    else "(declare-sort " ^ set_sort_string ^ loc_sort_string ^ " 0)");
-  if has_int then
-    writefn session (fun solver ->
-      if !Config.use_set_theory && solver.info.has_set_theory
-      then "(define-sort " ^ set_sort_string ^ int_sort_string ^ " () (Set " ^ int_sort_string ^ "))"
-      else "(declare-sort " ^ set_sort_string ^ int_sort_string ^ " 0)");
+  if not !Config.use_set_theory
+  then declare_sort session set_sort_string 1;
   if !Config.encode_fields_as_arrays 
-  then 
-    begin
-      writeln session ("(define-sort " ^ fld_sort_string ^ loc_sort_string ^ " () (Array Loc Loc))");
-      writeln session ("(define-sort " ^ fld_sort_string ^ bool_sort_string ^ " () (Array Loc Bool))");
-      if has_int then writeln session ("(define-sort " ^ fld_sort_string ^ int_sort_string ^ " () (Array Loc Int))")
-    end
-  else 
-    begin
-      declare_sort session (fld_sort_string ^ bool_sort_string) 0;
-      declare_sort session (fld_sort_string ^ loc_sort_string) 0;
-      if has_int then declare_sort session (fld_sort_string ^ int_sort_string) 0
-    end
+  then writeln session ("(define-sort " ^ map_sort_string ^ " (X Y) (Array X Y))")
+  else declare_sort session map_sort_string 2
 
 let start_with_solver session_name sat_means solver produce_models produce_unsat_cores = 
   let log_file_name = (string_of_ident (fresh_ident session_name)) ^ ".smt2" in
@@ -361,12 +344,12 @@ let start_with_solver session_name sat_means solver produce_models produce_unsat
   session
 
 let init_session session sign =
-  (* is int sort anywhere in the signature? *)
+  (* is Int sort anywhere in the signature? *)
   let has_int = 
     let rec hi = function
       | Int -> true
-      | Set srt
-      | Fld srt -> hi srt
+      | Set srt -> hi srt
+      | Map (dsrt, rsrt) -> hi dsrt || hi rsrt
       | _ -> false
     in
     SymbolMap.exists 
@@ -547,16 +530,12 @@ let convert_model session smtModel =
     | BoolSort -> Bool
     | FreeSort ((name, num), srts) ->
         let csrts = List.map convert_sort srts in
-        match name with
-        | "Loc" -> Loc
-        | "FldLoc" -> Fld Loc
-        | "FldInt" -> Fld Int
-        | "FldBool" -> Fld Bool
-        | "SetLoc" -> Set Loc
-        | "SetInt" -> Set Int
-        | "Set" -> Set (List.hd csrts)
-        | "Fld" -> Fld (List.hd csrts)
-        | _ -> FreeSrt (name, num)
+        match name, csrts with
+        | "Loc", [] -> Loc
+        | "Set", [esrt] -> Set esrt
+        | "Map", [dsrt; rsrt] -> Map (dsrt, rsrt)
+        | _, [] -> FreeSrt (name, num)
+        | _, _ -> fail session "encountered unexpected sort in model conversion"
   in
   (* detect Z3/CVC4 identifiers that represent values of uninterpreted sorts *)
   let to_val (name, num) =
@@ -597,7 +576,7 @@ let convert_model session smtModel =
       IdSet.fold 
         (fun id cards ->
           match to_val id with
-          | Some (Fld _ as srt, index)
+          | Some (Map _ as srt, index)
           | Some (Set _ as srt, index)
           | Some (Loc as srt, index) -> 
               let card = try SortMap.find srt cards with Not_found -> 0 in

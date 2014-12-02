@@ -125,7 +125,7 @@ let get_result_sort model sym arg_srts =
     
 
 let find_map_value model v srt = 
-  match SortedValueMap.find (v, Fld srt) model.vals with
+  match SortedValueMap.find (v, Map (Loc, srt)) model.vals with
   | MapVal (m, d) -> m, d
   | Undef -> ValueListMap.empty, Undef
   | _ -> raise Undefined
@@ -170,7 +170,7 @@ let extend_interp model sym (arity: arity) args res =
   (* update extended value mapping *)
   begin
     match res_srt with
-    | Fld srt
+    | Map (Loc, srt)
     | Set srt ->
         model.vals <- SortedValueMap.add (I card, res_srt) res model.vals
     | _ -> ()
@@ -187,14 +187,15 @@ let rec eval model = function
   | App (Read, [fld; ind], srt) -> 
       let fld_val = eval model fld in
       let ind_val = eval model ind in
-      let arity = [Fld srt; Loc], srt in
+      let ind_srt = sort_of ind in
+      let arity = [Map (ind_srt, srt); ind_srt], srt in
       let res = interp_symbol model Read arity [fld_val; ind_val] in
       res
-  | App (Write, [fld; ind; upd], (Fld isrt as srt)) ->
+  | App (Write, [fld; ind; upd], (Map (dsrt, rsrt) as srt)) ->
       let ind_val = eval model ind in
       let upd_val = eval model upd in
       let fld_val = eval model fld in
-      let arity = [srt; Loc; isrt], srt in
+      let arity = [srt; dsrt; rsrt], srt in
       (try interp_symbol model Write arity [fld_val; ind_val; upd_val]
       with Undefined ->
         let m, d = find_map_value model fld_val srt in
@@ -428,7 +429,7 @@ let rename_free_symbols model fn =
   { model with intp = new_intp }
 
 let succ model fld x =
-  let arity = [Fld Loc; Loc; Loc; Loc], Bool in
+  let arity = [loc_field_sort; Loc; Loc; Loc], Bool in
   let locs = get_values_of_sort model Loc in
   List.fold_left (fun s y ->
     if y <> x && 
@@ -439,13 +440,13 @@ let succ model fld x =
       
 let complete model =
   let locs = get_values_of_sort model Loc in
-  let loc_flds = get_values_of_sort model (Fld Loc) in
+  let loc_flds = get_values_of_sort model loc_field_sort in
   let flds = 
     let null = interp_symbol model Null ([], Loc) [] in
     List.filter (fun f ->
       try 
         bool_of_value 
-          (interp_symbol model Btwn ([Fld Loc; Loc; Loc; Loc], Bool) [f; null; null; null])
+          (interp_symbol model Btwn ([loc_field_sort; Loc; Loc; Loc], Bool) [f; null; null; null])
       with Undefined -> false) loc_flds
   in
   let new_model =
@@ -454,7 +455,7 @@ let complete model =
         List.fold_left 
           (fun new_model arg ->
             let res = succ model fld arg in
-            add_def new_model Read ([Fld Loc; Loc], Loc) [fld; arg] res)
+            add_def new_model Read ([loc_field_sort; Loc], Loc) [fld; arg] res)
           new_model locs)
       model flds
   in
@@ -539,13 +540,13 @@ let finalize_values model =
       let fmap =
         List.fold_left (fun fmap e ->
           try
-            let f_of_e = interp_symbol model Read ([Fld srt; Loc], srt) [f; e] in
+            let f_of_e = interp_symbol model Read ([field_sort srt; Loc], srt) [f; e] in
             ValueListMap.add [e] f_of_e fmap
           with Undefined -> fmap)
           ValueListMap.empty loc_values
       in
-      model.vals <- SortedValueMap.add (f, Fld srt) (MapVal (fmap, Undef)) model.vals)
-      (get_values_of_sort model (Fld srt))
+      model.vals <- SortedValueMap.add (f, field_sort srt) (MapVal (fmap, Undef)) model.vals)
+      (get_values_of_sort model (field_sort srt))
   in
   generate_sets ();
   List.iter generate_fields [Loc; Int; Bool];
@@ -579,14 +580,14 @@ let output_json chan model =
           let s = find_set_value model set esrt in
           output_set (ValueSet.elements s) esrt
         with Undefined -> output_set [] esrt (* fix me *))
-    | Fld rsrt ->
+    | Map (Loc, rsrt) ->
         let fld = interp_symbol model sym ([], srt) [] in
         let args = get_values_of_sort model Loc in
         let arg_res = 
           Util.flat_map 
             (fun arg ->
               try
-                let res = interp_symbol model Read ([Fld rsrt; Loc], rsrt) [fld; arg] in
+                let res = interp_symbol model Read ([field_sort rsrt; Loc], rsrt) [fld; arg] in
                 if arg = null_val || res = null_val 
                 then [] 
                 else  [(arg, res)]
@@ -632,7 +633,7 @@ let output_graphviz chan model =
   let find_term = find_term model in
   let colors1 = ["blue"; "red"; "green"; "orange"; "darkviolet"] in
   let colors2 = ["blueviolet"; "crimson"; "olivedrab"; "orangered"; "purple"] in
-  let flds = get_values_of_sort model (Fld Loc) in
+  let flds = get_values_of_sort model loc_field_sort in
   let locs = get_values_of_sort model Loc in
   let fld_colors =
     Util.fold_left2 (fun acc fld color -> ((fld, color)::acc)) [] flds colors1
@@ -644,7 +645,7 @@ let output_graphviz chan model =
     let color =
       try List.assoc fld fld_colors with Not_found -> "black"
     in
-    let f = find_term fld (Fld Loc) in
+    let f = find_term fld loc_field_sort in
     Printf.sprintf "label=\"%s\", fontcolor=%s, color=%s" (string_of_term f) color color
   in
   let string_of_loc_value l = string_of_sorted_value Loc l in 
@@ -653,7 +654,7 @@ let output_graphviz chan model =
       (fun f ->
         List.iter (fun l ->
           try
-            let r = interp_symbol model Read ([Fld Loc; Loc], Loc) [f; l] in
+            let r = interp_symbol model Read ([loc_field_sort; Loc], Loc) [f; l] in
             if interp_symbol model Null ([], Loc) [] = r then () else
 	    let label = get_label f in
 	    Printf.fprintf chan "\"%s\" -> \"%s\" [%s]\n" 
@@ -667,7 +668,7 @@ let output_graphviz chan model =
       (fun f ->
         List.iter (fun l ->
           let r = succ model f l in
-          if is_defined model Read ([Fld Loc; Loc], Loc) [f; l] || r == l then () else
+          if is_defined model Read ([loc_field_sort; Loc], Loc) [f; l] || r == l then () else
 	  let label = get_label f in
 	  Printf.fprintf chan "\"%s\" -> \"%s\" [%s, style=dashed]\n" 
 	    (string_of_loc_value l) (string_of_loc_value r) label)
@@ -675,11 +676,11 @@ let output_graphviz chan model =
       flds
   in
   let output_eps () =
-    let arg_srts = [Set Loc; Fld Loc; Loc] in
+    let arg_srts = [Set Loc; loc_field_sort; Loc] in
     let m, _ = get_interp model EntPnt (arg_srts, Loc) in
     ValueListMap.iter (function 
       | [s; f; l] -> fun v ->
-          let fld = find_term f (Fld Loc) in
+          let fld = find_term f loc_field_sort in
           let set = find_term s (Set Loc) in
           let color = try List.assoc f ep_colors with Not_found -> "black" in
           let label =
@@ -696,13 +697,13 @@ let output_graphviz chan model =
       SymbolSet.iter
         (fun fld ->
           try 
-            let f = interp_symbol model fld ([], Fld srt) [] in
+            let f = interp_symbol model fld ([], field_sort srt) [] in
             let fld_str = string_of_symbol fld in
             let m, d = find_map_value model f srt in
             let v = fun_app model (MapVal (m, d)) [loc] in
             Printf.fprintf chan "      <tr><td><b>%s = %s</b></td></tr>\n" fld_str (string_of_value v)
           with Undefined -> ())
-        (get_symbols_of_sort model ([], Fld srt))
+        (get_symbols_of_sort model ([], field_sort srt))
     in
     List.iter
       (fun loc ->

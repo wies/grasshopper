@@ -32,7 +32,7 @@ module IdMap = Map.Make(struct
 type sort =
   | Bool | Loc | Int (** basic sorts *)
   | Set of sort (** sets *)
-  | Fld of sort (** fields *)
+  | Map of sort * sort (** maps *)
   | FreeSrt of ident (** uninterpreted sorts *)
 
 module IdSrtSet = Set.Make(struct
@@ -220,7 +220,7 @@ let rec pr_ident_list ppf = function
   | id :: ids -> fprintf ppf "%a,@ %a" pr_ident id pr_ident_list ids
 
 let loc_sort_string = "Loc"
-let fld_sort_string = "Fld"
+let map_sort_string = "Map"
 let set_sort_string = "Set"
 let bool_sort_string = "Bool"
 let int_sort_string = "Int"
@@ -236,10 +236,8 @@ and pr_sort ppf = function
   | Bool -> fprintf ppf "%s" bool_sort_string
   | Int -> fprintf ppf "%s" int_sort_string
   | FreeSrt id -> pr_ident ppf id
-  (*| Fld s -> fprintf ppf "@[<4>(%s@ %a)@]" fld_sort_string pr_sort0 s*)
-  | Fld s -> fprintf ppf "@[<4>%s%a@]" fld_sort_string pr_sort0 s
-  (*| Set s -> fprintf ppf "@[<4>(%s@ %a)@]" set_sort_string pr_sort0 s*)
-  | Set s -> fprintf ppf "@[<4>%s%a@]" set_sort_string pr_sort0 s
+  | Map (d, r) -> fprintf ppf "@[<4>(%s@ %a %a)@]" map_sort_string pr_sort0 d pr_sort0 r
+  | Set s -> fprintf ppf "@[<4>(%s@ %a)@]" set_sort_string pr_sort0 s
 
 let pr_sym ppf sym = fprintf ppf "%s" (string_of_symbol sym)
 
@@ -383,7 +381,7 @@ let rec pr_sort ppf = function
   | Bool -> fprintf ppf "%s" bool_sort_string
   | Int -> fprintf ppf "%s" int_sort_string
   | FreeSrt id -> pr_ident ppf id
-  | Fld s -> fprintf ppf "%s<@[%a@]>" fld_sort_string pr_sort s
+  | Map (d, r) -> fprintf ppf "%s<@[%a,@ %a@]>" map_sort_string pr_sort d pr_sort r
   | Set s -> fprintf ppf "%s<@[%a@]>" set_sort_string pr_sort s
 		
 let pr_var ppf (x, srt) =
@@ -407,8 +405,8 @@ and pr_term ppf = function
   | Var (id, _) -> fprintf ppf "%a" pr_ident id
   | App (Empty, _, _) -> fprintf ppf "{}"
   | App (sym, [], _) -> fprintf ppf "%a" pr_sym sym
-  | App (Read, [fld; t], _) -> fprintf ppf "%a.%a" pr_term t pr_term fld
-  | App (Write, [fld; t1; t2], _) -> fprintf ppf "%a[%a := %a]" pr_term fld pr_term t1 pr_term t2
+  | App (Read, [map; t], _) -> fprintf ppf "%a.%a" pr_term t pr_term map
+  | App (Write, [map; t1; t2], _) -> fprintf ppf "%a[%a := %a]" pr_term map pr_term t1 pr_term t2
   | App (Minus, [t1; t2], _) -> fprintf ppf "%a - @[<2>%a@]" pr_term0 t1 pr_term0 t2
   | App (Plus, [t1; t2], _) -> fprintf ppf "%a + @[<2>%a@]" pr_term0 t1 pr_term0 t2
   | App (Mult, [t1; t2], _) -> fprintf ppf "%a * @[<2>%a@]" pr_term0 t1 pr_term0 t2

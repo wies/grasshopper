@@ -115,8 +115,8 @@ let stratify_types axioms =
   (* 3: find the set of edges with smallest weight such that remove them makes a DAG 
         break symmetry using a default order *)
   let default_priorities =
-    [ Fld Loc, 6 ;
-      Fld Int, 5 ;
+    [ Map (Loc, Loc), 6 ;
+      Map (Loc, Int), 5 ;
       Loc, 4 ;
       Int, 3 ;
       Set Loc, 2 ;
@@ -178,9 +178,9 @@ let stratify_types axioms =
 
 let default_type_stratification =
   let edges = [
-    (Fld Bool, Bool);
-    (Fld Loc, Loc);
-    (Fld Int, Int);
+    (Map (Loc, Bool), Bool);
+    (Map (Loc, Loc), Loc);
+    (Map (Loc, Int), Int);
     (Bool, Loc);
     (Loc, Int);
     (Loc, Set Loc);

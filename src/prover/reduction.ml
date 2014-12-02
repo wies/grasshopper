@@ -101,7 +101,7 @@ let field_partitions fs gts =
   let fld_partition, fld_map, fields = 
     let max, fld_map, fields = 
       TermSet.fold (fun t (n, fld_map, fields) -> match t with
-      | App (_, _, Fld _) as fld -> 
+      | App (_, _, Map (Loc, _)) as fld -> 
           n+1, TermMap.add fld n fld_map, TermSet.add fld fields
       | _ -> n, fld_map, fields)
         gts (0, TermMap.empty, TermSet.empty)
@@ -109,7 +109,7 @@ let field_partitions fs gts =
     let rec collect_eq partition = function
       | BoolOp (Not, f) -> partition
       | BoolOp (op, fs) -> List.fold_left collect_eq partition fs
-      | Atom (App (Eq, [App (_, _, Fld _) as fld1; fld2], _), _) ->
+      | Atom (App (Eq, [App (_, _, Map (Loc, _)) as fld1; fld2], _), _) ->
           Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
       | Binder (_, _, f, _) -> collect_eq partition f
       | f -> partition
@@ -198,8 +198,8 @@ let reduce_frame fs =
     in
       (*Debug.amsg ("expanding frame for " ^ (string_of_term f) ^ "\n");*)
       match sort_of f with
-      | Fld Loc -> reduce_graph ()
-      | Fld Int | Fld Bool -> reduce_data ()
+      | Map (Loc, Loc) -> reduce_graph ()
+      | Map (Loc, Int) | Map (Loc, Bool) -> reduce_data ()
       | other -> failwith ("reduce_frame did not expect field of type " ^ (string_of_sort other))
   in
   let rec process f (frame_axioms, fields) = match f with
@@ -266,7 +266,7 @@ let open_axioms ?(force=false) open_cond axioms =
   in
   List.fold_right open_axioms axioms ([], [])
     
-let isFld f = function (_, Fld _) -> true | _ -> false
+let isFld f = function (_, Map (Loc, _)) -> true | _ -> false
 
 let isFunVar f =
   let fvars = vars_in_fun_terms f in
@@ -355,7 +355,7 @@ let instantiate_ep fs =
  
 let reduce_read_write fs =
   let gts = ground_terms (smk_and fs) in
-  let basic_pt_flds = TermSet.filter (has_sort (Fld Loc) &&& is_free_const) gts in
+  let basic_pt_flds = TermSet.filter (has_sort loc_field_sort &&& is_free_const) gts in
   (* instantiate null axioms *)
   let classes =  CongruenceClosure.congr_classes fs gts in
   let null_ax, _ = open_axioms ~force:true isFld (Axioms.null_axioms ()) in
@@ -365,16 +365,16 @@ let reduce_read_write fs =
   let gts = TermSet.union (ground_terms (smk_and null_ax1)) gts in
   let field_sorts = TermSet.fold (fun t srts ->
     match sort_of t with
-    | Fld srt -> SortSet.add srt srts
+    | Map (Loc, srt) -> SortSet.add srt srts
     | _ -> srts)
       gts SortSet.empty
   in
   (* propagate read terms *)
   let read_propagators =
     SortSet.fold (fun srt propagators ->
-      let f1 = fresh_ident "?f", Fld srt in
+      let f1 = fresh_ident "?f", field_sort srt in
       let fld1 = mk_var (snd f1) (fst f1) in
-      let f2 = fresh_ident "?g", Fld srt in
+      let f2 = fresh_ident "?g", field_sort srt in
       let fld2 = mk_var (snd f2) (fst f2) in
       let d = fresh_ident "?d" in
       let d1 = d, srt in
@@ -450,7 +450,7 @@ let reduce_read_write fs =
  ** Assumes that f is typed. *)
 let reduce_reach fs gts =
   let classes = CongruenceClosure.congr_classes fs gts in
-  (* instantiate the variables of sort Fld in all reachability axioms *)
+  (* instantiate the field variables in all reachability axioms *)
   let btwn_flds = btwn_fields fs gts in
   (*let _ = TermSet.iter (print_term stdout) btwn_flds in*)
   let reach_write_ax = 

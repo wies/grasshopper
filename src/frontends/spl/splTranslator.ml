@@ -545,7 +545,7 @@ let convert cus =
     let rec convert_type = function
       | LocType -> Loc
       | StructType id -> Loc
-      | FieldType (id, typ) -> Fld (convert_type typ) 
+      | FieldType (id, typ) -> GrassUtil.field_sort (convert_type typ) 
       | SetType typ -> Set (convert_type typ)
       | IntType -> Int
       | BoolType -> Bool
@@ -597,7 +597,7 @@ let convert cus =
           | StructType id ->
               let res_ty = field_type pos id fld_id in
               let res_srt = convert_type res_ty in
-              let fld = GrassUtil.mk_free_const (Fld res_srt) fld_id in
+              let fld = GrassUtil.mk_free_const (GrassUtil.field_sort res_srt) fld_id in
               FOL_term (GrassUtil.mk_read fld t, res_ty)
           | LocType -> ProgError.error pos "Cannot dereference null"
           | ty -> failwith "unexpected type")
@@ -990,7 +990,7 @@ let convert cus =
           in
           (match ind_opt with
           | Some t -> 
-              let fld_srt = Fld (convert_type (List.hd rhs_tys)) in
+              let fld_srt = GrassUtil.field_sort (convert_type (List.hd rhs_tys)) in
               let fld = GrassUtil.mk_free_const fld_srt (List.hd lhs_ids) in
               mk_assign_cmd lhs_ids [GrassUtil.mk_write fld t (List.hd rhs_ts)] pos
           | None -> mk_assign_cmd lhs_ids rhs_ts pos)

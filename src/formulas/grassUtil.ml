@@ -124,17 +124,27 @@ let rec sort_ofs = function
   | [] -> failwith "tried to extract sort from empty list of terms"
   | t :: ts -> sort_of t
 
-let range_sort_of_field f =
-  match sort_of f with
-  | Fld srt -> srt
-  | _ -> failwith "untyped or illtyped field expression"
+let range_sort_of_map map =
+  match sort_of map with
+  | Map (_, srt) -> srt
+  | _ -> failwith "illtyped map expression"
+
+let dom_sort_of_map map =
+  match sort_of map with
+  | Map (srt, _) -> srt
+  | _ -> failwith "illtyped map expression"
 
 let element_sort_of_set s =
   match sort_of s with
   | Set srt -> srt
-  | _ -> failwith "untyped or illtyped set expression"
+  | _ -> failwith "illtyped set expression"
 
 let has_sort srt t = sort_of t = srt
+
+let field_sort ran_srt = Map (Loc, ran_srt)
+let array_sort ran_srt = Map (Int, ran_srt)
+
+let loc_field_sort = field_sort Loc
 
 let is_free_const = function
   | App (FreeSym _, [], _) -> true
@@ -195,22 +205,25 @@ let mk_div s t = mk_app Int Div [s; t]
 
 let mk_null = mk_app Loc Null []
 
-let mk_read fld ind = 
-  let srt = match sort_of fld with
-  | Fld s -> s
+let mk_read map ind = 
+  let dom_srt, ran_srt = match sort_of map with
+  | Map (d,r) -> d, r
   | s -> 
       failwith 
-	("tried to read from term" ^ 
-         (string_of_term fld) ^ " which is of sort " ^ (string_of_sort s) ^ ".\n" ^
-         "Expected sort (Fld X) for some sort X.")
-  in mk_app srt Read [fld; ind]
+	("tried to read from term " ^ 
+         (string_of_term map) ^ " which is of sort " ^ (string_of_sort s) ^ ".\n" ^
+         "Expected sort (Map X Y) for some sorts X, Y.")
+  in 
+  assert (sort_of ind = dom_srt);
+  mk_app ran_srt Read [map; ind]
 
-let mk_read_form fld ind = match sort_of fld with
-  | Fld Bool -> mk_atom Read [fld; ind]
-  | _ -> failwith "mk_read_form requries a Fld Bool"
+let mk_read_form map ind = 
+  match sort_of map with
+  | Map (_, Bool) -> mk_atom Read [map; ind]
+  | _ -> failwith "mk_read_form expects a term of sort Map(_,Bool)"
 
-let mk_write fld ind upd =
-  mk_app (sort_of fld) Write [fld; ind; upd]
+let mk_write map ind upd =
+  mk_app (sort_of map) Write [map; ind; upd]
 
 let mk_ep fld set t = mk_app Loc EntPnt [fld; set; t]
 

@@ -11,7 +11,7 @@ module IdMap = Grass.IdMap
 module IdSet = Grass.IdSet
 let ident_to_string = Grass.string_of_ident
 
-let to_field f = GrassUtil.mk_free_const (Grass.Fld Grass.Loc) f
+let to_field f = GrassUtil.mk_free_const (GrassUtil.field_sort Grass.Loc) f
 
 type pred_symbol =
   | Emp

@@ -18,7 +18,7 @@ let final_footprint_caller_set = mk_loc_set final_footprint_caller_id
 let add_ghost_field_invariants prog =
   let ghost_loc_fields =
     List.filter 
-      (fun decl -> decl.var_sort = Fld Loc && decl.var_is_ghost)
+      (fun decl -> decl.var_sort = loc_field_sort && decl.var_is_ghost)
       (Prog.vars prog)
   in
   let locals = IdMap.add alloc_id alloc_decl IdMap.empty in
@@ -216,7 +216,7 @@ let elim_sl prog =
         List.fold_left
           (fun acc var ->
             match var.var_sort with
-            | Fld _ -> IdSet.add var.var_name acc 
+            | Map (Loc, _) -> IdSet.add var.var_name acc 
             | _ -> acc
           )
           IdSet.empty

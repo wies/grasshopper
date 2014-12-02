@@ -11,9 +11,9 @@ let l2 = fresh_ident "?y", Loc
 let l3 = fresh_ident "?z", Loc
 let l4 = fresh_ident "?u", Loc
 let l5 = fresh_ident "?v", Loc
-let f1 = fresh_ident "?f", Fld Loc
-let f2 = fresh_ident "?g", Fld Loc
-let f3 = fresh_ident "?h", Fld Loc
+let f1 = fresh_ident "?f", loc_field_sort
+let f2 = fresh_ident "?g", loc_field_sort
+let f3 = fresh_ident "?h", loc_field_sort
 let s1 = fresh_ident "?X", Set Loc 
 let s2 = fresh_ident "?Y", Set Loc 
 let s3 = fresh_ident "?Z", Set Loc 
@@ -66,7 +66,7 @@ let extract_axioms fs =
 let read_write_axioms fld1 =
   let res_srt = 
     match sort_of fld1 with
-    | Fld srt -> srt
+    | Map (Loc, srt) -> srt
     | _ -> failwith "expected field in read_write_axioms"
   in
   let srt_string = string_of_sort res_srt in
