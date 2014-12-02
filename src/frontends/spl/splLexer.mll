@@ -32,6 +32,7 @@ let _ =
       ("invariant", INVARIANT);
       ("include", INCLUDE);
       ("implicit", IMPLICIT);
+      ("Loc", LOC);
       ("matching", MATCHING);
       ("new", NEW);
       ("null", NULL);

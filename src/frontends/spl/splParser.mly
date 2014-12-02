@@ -51,7 +51,7 @@ let fix_scopes stmnt =
 %token IF ELSE WHILE
 %token GHOST IMPLICIT VAR STRUCT PROCEDURE PREDICATE FUNCTION INCLUDE
 %token OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
-%token INT BOOL SET
+%token LOC INT BOOL SET
 %token MATCHING YIELDS COMMENT 
 %token EOF
 
@@ -230,6 +230,7 @@ var_modifier:
 ; 
 
 var_type:
+| LOC { LocType }
 | INT { IntType }
 | BOOL { BoolType }
 | SET LT var_type GT { SetType $3 }
