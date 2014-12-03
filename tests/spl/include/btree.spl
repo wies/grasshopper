@@ -1,0 +1,103 @@
+
+struct BTree {
+  var order: Int;
+  var root: Node;
+}
+
+struct Node {
+  var pointers: Node[];
+  var keys: Int[];
+  var data: Int[];
+  var parent: Node;
+  var is_leaf: bool;
+  var num_keys: Int;
+};
+
+
+function btree_footprint(r: Node) returns (FP: Set<Loc>) {
+  forall x: Loc :: x in FP == (Btwn(parent, x, r, r) && r != null)
+}
+
+function witness(v: Int, C: Set<Int>) returns (res: Node, idx: Int) {
+  true
+}
+
+function btree_keys(FP: Set<Loc>) returns (Keys: Set<Int>) {
+  (forall x: Loc, idx: Int :: x in FP && idx >= 0 && idx <= x.num_keys ==> (x, idx) == witness(x.keys[idx], Keys)) &&
+  (forall x: Loc, idx: Int :: x in FP && idx >= 0 && idx <= x.num_keys ==> x.keys[idx] in Keys) &&
+  (forall x: Loc, idx: Int, i: Int :: i in Keys && (x, idx) == witness(i, Keys) ==> x in FP && idx >= 0 && idx <= x.num_keys) &&
+  (forall i: Int :: !(i in Keys) ==> (null, -1) == witness(i, Keys)) &&
+  (forall x: Loc, idx: Int, i: Int :: i in Keys && (x, idx) == witness(i, Keys) ==> i == x.keys[idx])
+}
+
+predicate well_formed_node(order: Int, n: Node) {
+  n != null &&
+  0 < n.num_keys &&
+  n.num_keys < order &&
+  (
+    ( n.is_leaf &&
+      (forall h: Int :: 0 <= h && h < n.num_keys ==> n.pointers[h] == null) &&
+      (forall x: Int, y: Int :: 0 <= x && x < y && y < n.num_keys ==> n.keys[x] < n.keys[y]) &&
+      (n.pointers[n.num_keys] != null ==>
+        (n.pointers[n.num_keys].is_leaf && n.keys[n.num_keys-1] < n.pointers[n.num_keys].keys[0])
+      )
+    )
+  || 
+    ( !n.is_leaf &&
+      (forall k in btree_keys(btree_footprint(n.pointers[0])):: k < n.keys[0]) &&
+      (forall h: Int :: 0 < h && h <= n.num_keys ==>
+        (forall k in btree_keys(btree_footprint(n.pointers[h])):: k >= n.keys[h-1] && k < n.keys[h])
+      )
+    )
+  )    
+}
+
+predicate parent_equal_child(FP: Set<Loc>) {
+  (forall x: Node, idx: Int ::
+      x in FP && idx >= 0 && idx <= x.num_keys
+    ==>
+      x.pointers[idx] == null || Btwn(parent, x.pointers[idx], x, x) && x.pointers[idx] != x
+  ) &&
+  (forall x: Node, y: Node, idx: Int ::
+      x in FP && idx >= 0 && idx <= x.num_keys && Btwn(parent, x.pointers[idx], y, x)
+    ==>
+      x == y || x.pointers[idx] == y
+  )
+}
+
+predicate children_distinct(FP: Set<Loc>) {
+  (forall x: Node, i: Int, j: Int ::
+      x in FP &&
+      i >= 0 && i <= x.num_keys &&
+      j >= 0 && j <= x.num_keys &&
+      i != j && x.pointers[i] == x.pointers[j]
+    ==>
+      x.pointers[i] == null 
+  )
+}
+
+
+function witness1(x: Node, y: Node) returns (res: Int) {
+  res >= 0 && res <= x.num_keys
+}
+
+predicate reach_via_child(FP: Set<Loc>) {
+  forall x: Node, y: Node ::
+      x in FP && y in FP && Btwn(parent, y, x, x)
+    ==>
+      x == y || Btwn(parent, y, x.pointers[witness1(x, y)], x)
+}
+
+
+predicate btree(t: BTree, FP: Set<Loc>) {
+  t.order >= 3 &&
+  (exists FP1: Set<Loc> :: 
+    FP1 == btree_footprint(t.root) &&
+    FP == FP1 ++ Set<Loc>(t) &&
+    (forall l in FP1 :: well_formed_node(t.order, l)) &&
+    parent_equal_child(FP1) &&
+    children_distinct(FP1) &&
+    reach_via_child(FP1) &&
+    ( t.root != null ==> t.root.parent == null )
+  )
+}

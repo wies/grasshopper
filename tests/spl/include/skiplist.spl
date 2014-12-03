@@ -1,7 +1,7 @@
 // Structure and predicate declarations for unbounded skip lists
 
 struct SkipList {
-  var max: Int;
+  var max_height: Int;
   var height: Int;
   var head: Node;
 }

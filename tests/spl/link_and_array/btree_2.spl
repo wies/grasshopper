@@ -13,14 +13,14 @@
  *  Last modified: 15 April 2014
  */
 
-var order: int;
+var order: Int;
 assume(order >= 3);
 
 // TYPES.
 
 /* Type representing the record to which a given key refers. */
 struct Record {
-  value: int;
+  value: Int;
 };
 
 /* Type representing a node in the B+ tree.
@@ -42,7 +42,7 @@ struct Node {
   keys: In[order - 1];
   parent: Node;
   is_leaf: bool;
-  num_keys: int;
+  num_keys: Int;
 };
 
 
@@ -57,15 +57,15 @@ struct Node {
  * entries found.
  */
 procedure find_range( root: Node,
-                      key_start: int,
-                      key_end: int,
-                      returned_keys: int[],
-                      returned_pointers: Node[] ) returns (res: int)
+                      key_start: Int,
+                      key_end: Int,
+                      returned_keys: Int[],
+                      returned_pointers: Node[] ) returns (res: Int)
   requires  ??? ;
   ensures   ??? ;
 {
-    var i: int;
-    var num_found: int;
+    var i: Int;
+    var num_found: Int;
     num_found = 0;
     var n: Node = find_leaf( root, key_start);
     if (n == null)
@@ -99,11 +99,11 @@ procedure find_range( root: Node,
 /* Traces the path from the root to a leaf, searching by key.
  * Returns the leaf containing the given key.
  */
-procedure find_leaf(root: Node, key: int) returns (res: Node)
+procedure find_leaf(root: Node, key: Int) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
-  var i: int = 0;
+  var i: Int = 0;
   var c: Node = root;
   if (c == null) {
     return c;
@@ -123,11 +123,11 @@ procedure find_leaf(root: Node, key: int) returns (res: Node)
 
 
 /* Finds and returns the record to which a key refers. */
-procedure find( root: Node, key: int) returns (res: Record)
+procedure find( root: Node, key: Int) returns (res: Record)
   requires  ??? ;
   ensures   ??? ;
 {
-  var i: int = 0;
+  var i: Int = 0;
   var c: Node = find_leaf( root, key);
   if (c == null) return null;
 
@@ -141,7 +141,7 @@ procedure find( root: Node, key: int) returns (res: Record)
 }
 
 /* Finds the appropriate place to split a node that is too big into two. */
-procedure cut( int length ) returns (res: int)
+procedure cut( Int length ) returns (res: Int)
   requires  ??? ;
   ensures   ??? ;
 {
@@ -155,7 +155,7 @@ procedure cut( int length ) returns (res: int)
 // INSERTION
 
 /* Creates a new record to hold the value to which a key refers. */
-procedure make_record(value: int) returns (res: Record)
+procedure make_record(value: Int) returns (res: Record)
   requires  ??? ;
   ensures   ??? ;
 {
@@ -198,7 +198,7 @@ procedure get_left_index(parent: Node, left: Node) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
-  var left_index: int = 0;
+  var left_index: Int = 0;
   while (left_index <= parent.num_keys && parent.pointers[left_index] != left)
     invariant ??? ;
   {
@@ -209,13 +209,13 @@ procedure get_left_index(parent: Node, left: Node) returns (res: Node)
 
 /* Inserts a new pointer to a record and its corresponding key into a leaf.
  * Returns the altered leaf. */
-procedure insert_into_leaf( leaf: Node, key: int, pointer: Record ) returns (res: Node)
+procedure insert_into_leaf( leaf: Node, key: Int, pointer: Record ) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
 
-  var i: int;
-  var insertion_point: int;
+  var i: Int;
+  var insertion_point: Int;
 
   insertion_point = 0;
   while (insertion_point < leaf.num_keys && leaf.keys[insertion_point] < key)
@@ -242,23 +242,23 @@ procedure insert_into_leaf( leaf: Node, key: int, pointer: Record ) returns (res
 
 /* Inserts a new key and pointer to a new record into a leaf so as to exceed
  * the tree's order, causing the leaf to be split in half. */
-procedure insert_into_leaf_after_splitting(root: Node, leaf: Node, key: int, pointer: record) returns (res: Node)
+procedure insert_into_leaf_after_splitting(root: Node, leaf: Node, key: Int, pointer: record) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
 
   var new_leaf: Node;
-  var temp_keys: int[];
+  var temp_keys: Int[];
   var temp_pointers: Node[]; //TODO data
-  var insertion_index: int;
-  var split: int
-  var new_key: int
-  var i: int;
-  var j: int;
+  var insertion_index: Int;
+  var split: Int
+  var new_key: Int
+  var i: Int;
+  var j: Int;
 
   new_leaf = make_leaf();
 
-  temp_keys = new int[order];
+  temp_keys = new Int[order];
 
   temp_pointers = new Node[order]; //TODO data
  
@@ -343,11 +343,11 @@ procedure insert_into_leaf_after_splitting(root: Node, leaf: Node, key: int, poi
  * into a node into which these can fit
  * without violating the B+ tree properties.
  */
-node * insert_into_node(node * root, node * n, int left_index, int key, node * right)
+node * insert_into_node(node * root, node * n, Int left_index, Int key, node * right)
   requires  ??? ;
   ensures   ??? ;
 {
-  int i;
+  Int i;
 
   for (i = n.num_keys; i > left_index; i--) {
       n.pointers[i + 1] = n.pointers[i];
@@ -366,21 +366,21 @@ node * insert_into_node(node * root, node * n, int left_index, int key, node * r
  */
 procedure insert_into_node_after_splitting( root: Node,
                                             old_node: Node,
-                                            left_index: int,
-                                            key: int,
+                                            left_index: Int,
+                                            key: Int,
                                             right: Node
                                           ) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
 
-  var i: int;
-  var j: int;
-  var split: int;
-  var k_prime: int;
+  var i: Int;
+  var j: Int;
+  var split: Int;
+  var k_prime: Int;
   var new_node: Node;
   var child: Node;
-  var temp_keys: int[];
+  var temp_keys: Int[];
   var temp_pointers: Node[];
 
   /* First create a temporary set of keys and pointers
@@ -392,7 +392,7 @@ procedure insert_into_node_after_splitting( root: Node,
    */
 
   temp_pointers = new Node[order+1];
-  temp_keys = new int[order]
+  temp_keys = new Int[order]
 
   for (i = 0, j = 0; i < old_node.num_keys + 1; i++, j++) {
       if (j == left_index + 1) j++;
@@ -448,12 +448,12 @@ procedure insert_into_node_after_splitting( root: Node,
 /* Inserts a new node (leaf or internal node) into the B+ tree.
  * Returns the root of the tree after insertion.
  */
-insert_into_parent(root: Node, left: Node, key: int, right: Node) returns (res: Node)
+insert_into_parent(root: Node, left: Node, key: Int, right: Node) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
 
-  var left_index: int;
+  var left_index: Int;
   var parent: Node;
 
   parent = left.parent;
@@ -492,7 +492,7 @@ insert_into_parent(root: Node, left: Node, key: int, right: Node) returns (res: 
  * and inserts the appropriate key into
  * the new root.
  */
-procedure insert_into_new_root(left: Node, key: int, right: Node) returns (res: Node)
+procedure insert_into_new_root(left: Node, key: Int, right: Node) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
@@ -510,7 +510,7 @@ procedure insert_into_new_root(left: Node, key: int, right: Node) returns (res: 
 
 
 /* First insertion: start a new tree. */
-procedure start_new_tree(key: int, pointer: Record) returns (res: Node)
+procedure start_new_tree(key: Int, pointer: Record) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
@@ -531,7 +531,7 @@ procedure start_new_tree(key: int, pointer: Record) returns (res: Node)
  * however necessary to maintain the B+ tree
  * properties.
  */
-procedure insert(root: Node, key: int, value: int) returns (res: Node)
+procedure insert(root: Node, key: Int, value: Int) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
@@ -584,12 +584,12 @@ procedure insert(root: Node, key: int, value: int) returns (res: Node)
  * is the leftmost child), returns -1 to signify
  * this special case.
  */
-procedure get_neighbor_index(n: Node ) returns (res: int)
+procedure get_neighbor_index(n: Node ) returns (res: Int)
   requires  ??? ;
   ensures   ??? ;
 {
 
-  var i: int;
+  var i: Int;
 
   /* Return the index of the key to the left
    * of the pointer in the parent pointing to n.  
@@ -608,13 +608,13 @@ procedure get_neighbor_index(n: Node ) returns (res: int)
 }
 
 
-procedure remove_entry_from_node(n: Node, key: int, pointer: Node) returns (res: Node)
+procedure remove_entry_from_node(n: Node, key: Int, pointer: Node) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
 
-  var i: int;
-  var num_pointers: int;
+  var i: Int;
+  var num_pointers: Int;
 
   // Remove the key and shift other keys accordingly.
   i = 0;
@@ -726,7 +726,7 @@ procedure adjust_root(root: Node) returns (res: Node)
  * can accept the additional entries
  * without exceeding the maximum.
  */
-procedure coalesce_nodes(root: Node, n: Node, neighbor: Node, neighbor_index: int, k_prime: int) returns (res: Node)
+procedure coalesce_nodes(root: Node, n: Node, neighbor: Node, neighbor_index: Int, k_prime: Int) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
@@ -843,14 +843,14 @@ procedure coalesce_nodes(root: Node, n: Node, neighbor: Node, neighbor_index: in
 procedure redistribute_nodes(root: Node,
                              n: Node,
                              neighbor: Node,
-                             neighbor_index: int,
-                             k_prime_index: int,
-                             k_prime: int) returns (res: Node)
+                             neighbor_index: Int,
+                             k_prime_index: Int,
+                             k_prime: Int) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
 
-  var i: int;
+  var i: Int;
   var tmp: Node;
 
   /* Case: n has a neighbor to the left. 
@@ -933,17 +933,17 @@ procedure redistribute_nodes(root: Node,
  * from the leaf, and then makes all appropriate
  * changes to preserve the B+ tree properties.
  */
-procedure delete_entry( root: Node, n: Node, key: int, pointer: Node/Removes )
+procedure delete_entry( root: Node, n: Node, key: Int, pointer: Node/Removes )
   requires  ??? ;
   ensures   ??? ;
 {
 
-  var min_keys: int;
+  var min_keys: Int;
   var neighbor: Node;
-  var neighbor_index: int;
-  var k_prime_index: int;
-  var k_prime: int;
-  var capacity: int;
+  var neighbor_index: Int;
+  var k_prime_index: Int;
+  var k_prime: Int;
+  var capacity: Int;
 
   // Remove key and pointer from node.
 
@@ -1019,7 +1019,7 @@ procedure delete_entry( root: Node, n: Node, key: int, pointer: Node/Removes )
 
 /* Master deletion function.
  */
-procedure delete(root: Node, key: int) returns (node: Node)
+procedure delete(root: Node, key: Int) returns (node: Node)
   requires  ??? ;
   ensures   ??? ;
 {
@@ -1041,7 +1041,7 @@ procedure destroy_tree_nodes(root: Node)
   requires  BPTree(root);
   ensures   emp;
 {
-  var i: int;
+  var i: Int;
   if (root.is_leaf) {
     i = 0;
     while (i < root.num_keys)
