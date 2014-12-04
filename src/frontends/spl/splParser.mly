@@ -19,11 +19,11 @@ let mk_position s e =
 
 let fix_scopes stmnt =
   let rec fs scope = function
-    | LocalVars (decls, pos) ->
+    | LocalVars (decls, es_opt, pos) ->
         let decls1 = 
           List.map (fun decl -> { decl with v_scope = scope }) decls
         in 
-        LocalVars (decls1, pos)
+        LocalVars (decls1, es_opt, pos)
     | Block (stmnts, pos) ->
         Block (List.map (fs pos) stmnts, pos)
     | If (cond, t, e, pos) ->
@@ -288,7 +288,8 @@ stmt_no_short_if:
 
 stmt_wo_trailing_substmt:
 /* variable declaration */
-| VAR var_decls SEMICOLON { LocalVars ($2, mk_position 1 3) }
+| VAR var_decls SEMICOLON { LocalVars ($2, None, mk_position 1 3) }
+| VAR var_decls COLONEQ expr_list SEMICOLON { LocalVars ($2, Some $4, mk_position 1 5) }
 /* nested block */
 | LBRACE block RBRACE { 
   Block ($2, mk_position 1 3) 

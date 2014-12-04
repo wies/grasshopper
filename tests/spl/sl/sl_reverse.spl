@@ -5,8 +5,7 @@ procedure reverse(lst: Node)
   requires lseg(lst, null)
   ensures lseg(rev, null)
 {
-  var curr: Node;
-  curr := lst;
+  var curr: Node := lst;
   rev := null;
   while (curr != null) 
     invariant lseg(rev, null)

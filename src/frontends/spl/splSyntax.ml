@@ -102,7 +102,7 @@ and structs = struc IdMap.t
 and stmt =
   | Skip of pos
   | Block of stmts * pos
-  | LocalVars of var list * pos
+  | LocalVars of var list * exprs option * pos
   | Assume of expr * pos
   | Assert of expr * pos
   | Assign of exprs * exprs * pos
@@ -166,7 +166,7 @@ let pos_of_expr = function
 let pos_of_stmt = function
   | Skip pos
   | Block (_, pos)
-  | LocalVars (_, pos)
+  | LocalVars (_, _, pos)
   | Assume (_, pos)
   | Assert (_, pos)
   | Assign (_, _, pos)

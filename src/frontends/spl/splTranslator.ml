@@ -1,13 +1,13 @@
-open Grass
 open Prog
 open Sl
 open Grass
 open SplSyntax
+open SplTypeChecker
 
 let pred_arg_mismatch_error pos name expected =
     ProgError.error pos (Printf.sprintf "Predicate %s expects %d argument(s)" name expected)
 
-let resolve_names cus =
+let resolve_names cu =
   let lookup_id init_id tbl pos =
     let name = GrassUtil.name init_id in
     match SymbolTbl.find tbl name with
@@ -72,124 +72,132 @@ let resolve_names cus =
         IdMap.add decl.v_name decl vars, tbl)
       vars (IdMap.empty, tbl)
   in
-  let rn cu (cus, tbl) =
-    (* declare struct names *)
-    let structs0, tbl =
-      IdMap.fold 
-        (fun init_id decl (structs, tbl) ->
-          let id, tbl = declare_name decl.s_pos init_id GrassUtil.global_scope tbl in
-          IdMap.add id { decl with s_name = id } structs, tbl)
-        cu.struct_decls (IdMap.empty, tbl)
-    in
-    (* declare global variables *)
-    let globals0, tbl = declare_vars cu.var_decls structs0 tbl in
-    (* declare struct fields *)
-    let structs, globals, tbl =
-      IdMap.fold
-        (fun id decl (structs, globals, tbl) ->
-          let fields, globals, tbl =
-            IdMap.fold 
-              (fun init_id fdecl (fields, globals, tbl) ->
-                let id, tbl = declare_name fdecl.v_pos init_id GrassUtil.global_scope tbl in
-                let res_type = match fdecl.v_type with
-                | StructType init_id ->
-                    let id = lookup_id init_id tbl fdecl.v_pos in
-                    check_struct id structs0 fdecl.v_pos;
-                    StructType id
-                | ty -> ty
-                in
-                let fdecl = { fdecl with v_name = id; v_type = res_type } in
-                let gfdecl = { fdecl with v_type = FieldType (decl.s_name, res_type) } in
-                IdMap.add id fdecl fields, IdMap.add id gfdecl globals, tbl
-              )
-              decl.s_fields (IdMap.empty, globals, tbl)
-          in
-          IdMap.add id { decl with s_fields = fields } structs, globals, tbl
-        )
-        structs0 (IdMap.empty, globals0, tbl)
-    in
-    (* declare procedure names *)
-    let procs0, tbl =
-      IdMap.fold (fun init_id decl (procs, tbl) ->
-        let id, tbl = declare_name decl.p_pos init_id GrassUtil.global_scope tbl in
-        IdMap.add id { decl with p_name = id } procs, tbl)
-        cu.proc_decls (IdMap.empty, tbl)
-    in
-    (* declare predicate names *)
-    let preds0, tbl =
-      IdMap.fold (fun init_id decl (preds, tbl) ->
-        let id, tbl = declare_name decl.pr_pos init_id GrassUtil.global_scope tbl in
-        IdMap.add id { decl with pr_name = id } preds, tbl)
-        cu.pred_decls (IdMap.empty, tbl)
-    in
-    let resolve_expr locals tbl e = 
-      let rec re tbl = function
-        | Setenum (ty, args, pos) ->
-            let args1 = List.map (re tbl) args in
-            Setenum (ty, args1, pos)
-        | New (init_id, pos) ->
-            let id = lookup_id init_id tbl pos in
-            check_struct id structs pos;
-            New (id, pos)
-        | Dot (e, init_id, pos) ->
-            let id = lookup_id init_id tbl pos in
-            check_field id globals pos;
-            Dot (re tbl e, id, pos)
-        | GuardedQuant (q, init_id, e, f, pos) ->
-            let e1 = re tbl e in
-            let id, tbl1 = declare_name pos init_id pos tbl in
-            let f1 = re tbl1 f in
-            GuardedQuant (q, id, e1, f1, pos)
-        | Quant (q, vars, f, pos) ->
-            let decls, tbl1 = List.fold_right 
+  let tbl = SymbolTbl.empty in
+  (* declare struct names *)
+  let structs0, tbl =
+    IdMap.fold 
+      (fun init_id decl (structs, tbl) ->
+        let id, tbl = declare_name decl.s_pos init_id GrassUtil.global_scope tbl in
+        IdMap.add id { decl with s_name = id } structs, tbl)
+      cu.struct_decls (IdMap.empty, tbl)
+  in
+  (* declare global variables *)
+  let globals0, tbl = declare_vars cu.var_decls structs0 tbl in
+  (* declare struct fields *)
+  let structs, globals, tbl =
+    IdMap.fold
+      (fun id decl (structs, globals, tbl) ->
+        let fields, globals, tbl =
+          IdMap.fold 
+            (fun init_id fdecl (fields, globals, tbl) ->
+              let id, tbl = declare_name fdecl.v_pos init_id GrassUtil.global_scope tbl in
+              let res_type = match fdecl.v_type with
+              | StructType init_id ->
+                  let id = lookup_id init_id tbl fdecl.v_pos in
+                  check_struct id structs0 fdecl.v_pos;
+                  StructType id
+              | ty -> ty
+              in
+              let fdecl = { fdecl with v_name = id; v_type = res_type } in
+              let gfdecl = { fdecl with v_type = FieldType (decl.s_name, res_type) } in
+              IdMap.add id fdecl fields, IdMap.add id gfdecl globals, tbl
+            )
+            decl.s_fields (IdMap.empty, globals, tbl)
+        in
+        IdMap.add id { decl with s_fields = fields } structs, globals, tbl
+      )
+      structs0 (IdMap.empty, globals0, tbl)
+  in
+  (* declare procedure names *)
+  let procs0, tbl =
+    IdMap.fold (fun init_id decl (procs, tbl) ->
+      let id, tbl = declare_name decl.p_pos init_id GrassUtil.global_scope tbl in
+      IdMap.add id { decl with p_name = id } procs, tbl)
+      cu.proc_decls (IdMap.empty, tbl)
+  in
+  (* declare predicate names *)
+  let preds0, tbl =
+    IdMap.fold (fun init_id decl (preds, tbl) ->
+      let id, tbl = declare_name decl.pr_pos init_id GrassUtil.global_scope tbl in
+      IdMap.add id { decl with pr_name = id } preds, tbl)
+      cu.pred_decls (IdMap.empty, tbl)
+  in
+  let cu = 
+    { cu with
+      var_decls = globals; 
+      struct_decls = structs; 
+      proc_decls = procs0;
+      pred_decls = preds0;
+    }
+  in
+  let resolve_expr locals tbl e = 
+    let rec re tbl = function
+      | Setenum (ty, args, pos) ->
+          let args1 = List.map (re tbl) args in
+          Setenum (ty, args1, pos)
+      | New (init_id, pos) ->
+          let id = lookup_id init_id tbl pos in
+          check_struct id structs pos;
+          New (id, pos)
+      | Dot (e, init_id, pos) ->
+          let id = lookup_id init_id tbl pos in
+          check_field id globals pos;
+          Dot (re tbl e, id, pos)
+      | GuardedQuant (q, init_id, e, f, pos) ->
+          let e1 = re tbl e in
+          let id, tbl1 = declare_name pos init_id pos tbl in
+          let f1 = re tbl1 f in
+          GuardedQuant (q, id, e1, f1, pos)
+      | Quant (q, vars, f, pos) ->
+          let decls, tbl1 = List.fold_right 
               (fun decl (decls, tbl) ->
-                 let decl, tbl1 = declare_var structs decl tbl in
-                 decl :: decls, tbl1
+                let decl, tbl1 = declare_var structs decl tbl in
+                decl :: decls, tbl1
               ) 
               vars ([], tbl)
-            in
-            let f1 = re tbl1 f in
-            Quant (q, decls, f1, pos)
-        | ProcCall (("acc", _), [arg], pos) ->
-            Access (re tbl arg, pos)
-        | ProcCall (("Btwn", _), args, pos) ->
-            let args1 = List.map (re tbl) args in
-            (match args1 with
-            | [fld; x; y; z] ->
-                BtwnPred (fld, x, y, z, pos)
-            | _ -> pred_arg_mismatch_error pos "Btwn" 4)
-        | ProcCall (init_id, args, pos) ->
-            let id = lookup_id init_id tbl pos in
-            let args1 = List.map (re tbl) args in
-            (try 
-              check_proc id procs0 pos;
-              ProcCall (id, args1, pos)
-            with ProgError.Prog_error _ ->
-              check_pred id preds0 pos;
-              PredApp (id, args1, pos))
-        | PredApp (init_id, args, pos) ->
-            let id = lookup_id init_id tbl pos in
+          in
+          let f1 = re tbl1 f in
+          Quant (q, decls, f1, pos)
+      | ProcCall (("acc", _), [arg], pos) ->
+          Access (re tbl arg, pos)
+      | ProcCall (("Btwn", _), args, pos) ->
+          let args1 = List.map (re tbl) args in
+          (match args1 with
+          | [fld; x; y; z] ->
+              BtwnPred (fld, x, y, z, pos)
+          | _ -> pred_arg_mismatch_error pos "Btwn" 4)
+      | ProcCall (init_id, args, pos) ->
+          let id = lookup_id init_id tbl pos in
+          let args1 = List.map (re tbl) args in
+          (try 
+            check_proc id procs0 pos;
+            ProcCall (id, args1, pos)
+          with ProgError.Prog_error _ ->
             check_pred id preds0 pos;
-            PredApp (id, List.map (re tbl) args, pos)              
-        | UnaryOp (op, e, pos) ->
-            UnaryOp (op, re tbl e, pos)
-        | BinaryOp (e1, op, e2, pos) ->
-            BinaryOp (re tbl e1, op, re tbl e2, pos)
-        | Ident (init_id, pos) ->
-            let id = lookup_id init_id tbl pos in
-            Ident (id, pos)
-        | Annot (e, GeneratorAnnot (es, ge), pos) ->
-            let es1 = List.map (re tbl) es in
-            Annot (re tbl e, GeneratorAnnot (es1, re tbl ge), pos)
-        | Annot (e, ann, pos) ->
-            Annot (re tbl e, ann, pos)
-        | e -> e
-      in
-      re tbl e
+            PredApp (id, args1, pos))
+      | PredApp (init_id, args, pos) ->
+          let id = lookup_id init_id tbl pos in
+          check_pred id preds0 pos;
+          PredApp (id, List.map (re tbl) args, pos)              
+      | UnaryOp (op, e, pos) ->
+          UnaryOp (op, re tbl e, pos)
+      | BinaryOp (e1, op, e2, pos) ->
+          BinaryOp (re tbl e1, op, re tbl e2, pos)
+      | Ident (init_id, pos) ->
+          let id = lookup_id init_id tbl pos in
+          Ident (id, pos)
+      | Annot (e, GeneratorAnnot (es, ge), pos) ->
+          let es1 = List.map (re tbl) es in
+          Annot (re tbl e, GeneratorAnnot (es1, re tbl ge), pos)
+      | Annot (e, ann, pos) ->
+          Annot (re tbl e, ann, pos)
+      | e -> e
     in
-    let rec resolve_stmt locals tbl = function
-      | Skip pos -> Skip pos, locals, tbl
-      | Block (stmts0, pos) ->
+    re tbl e
+  in
+  let rec resolve_stmt locals tbl = function
+    | Skip pos -> Skip pos, locals, tbl
+    | Block (stmts0, pos) ->
         let stmts, locals, _ = 
           List.fold_left
             (fun (stmts, locals, tbl) stmt0  ->
@@ -198,109 +206,123 @@ let resolve_names cus =
             ) 
             ([], locals, SymbolTbl.push tbl) stmts0
         in Block (List.rev stmts, pos), locals, tbl
-      | LocalVars (vars, pos) ->
-          let ids, locals, tbl = List.fold_right 
-              (fun decl (ids, locals, tbl) ->
-                let decl, tbl = declare_var structs decl tbl in
-                Ident (decl.v_name, decl.v_pos) :: ids, 
-                IdMap.add decl.v_name decl locals, 
-                tbl
-              )
-              vars ([], locals, tbl)
-          in
-          Havoc (ids, pos), locals, tbl
-      | Assume (e, pos) ->
-          Assume (resolve_expr locals tbl e, pos), locals, tbl
-      | Assert (e, pos) ->
-          Assert (resolve_expr locals tbl e, pos), locals, tbl
-      | Assign (lhs, rhs, pos) ->
-          let lhs1 = List.map (resolve_expr locals tbl) lhs in
-          let rhs1 = List.map (resolve_expr locals tbl) rhs in
-          Assign (lhs1, rhs1, pos), locals, tbl
-      | Dispose (e, pos) -> 
-          Dispose (resolve_expr locals tbl e, pos), locals, tbl
-      | Havoc (es, pos) ->
-          let es1 = List.map (resolve_expr locals tbl) es in
-          Havoc (es1, pos), locals, tbl
-      | If (cond, t, e, pos) ->
-          let t1, locals, _ = resolve_stmt locals tbl t in
-          let e1, locals, _ = resolve_stmt locals tbl e in
-          If (resolve_expr locals tbl cond, t1, e1, pos), locals, tbl
-      | Loop (inv, preb, cond, postb, pos) ->
-          let inv1 = 
-            List.fold_right 
-              (function Invariant e -> fun inv1 ->
-                Invariant (resolve_expr locals tbl e) :: inv1
-              ) 
-              inv []
-          in
-          let preb1, locals, _ = resolve_stmt locals tbl preb in
-          let cond1 = resolve_expr locals tbl cond in
-          let postb1, locals, _ = resolve_stmt locals tbl postb in
-          Loop (inv1, preb1, cond1, postb1, pos), locals, tbl
-      | Return (es, pos) ->
-          Return (List.map (resolve_expr locals tbl) es, pos), locals, tbl
-    in
-    (* declare and resolve local variables *)
-    let procs =
-      IdMap.fold
-        (fun _ decl procs ->
-          let locals0, tbl = declare_vars decl.p_locals structs (SymbolTbl.push tbl) in
-          let contracts = 
-            List.map 
-              (function 
-                | Requires e -> Requires (resolve_expr locals0 tbl e)
-                | Ensures e -> Ensures (resolve_expr locals0 tbl e)
-              )
-              decl.p_contracts
-          in
-          let body, locals, _ = resolve_stmt locals0 tbl decl.p_body in
-          let formals = List.map (fun id -> lookup_id id tbl decl.p_pos) decl.p_formals in
-          let returns = List.map (fun id -> lookup_id id tbl decl.p_pos) decl.p_returns in
-          let decl1 = 
-            { decl with 
-              p_formals = formals;
-              p_returns = returns;
-              p_locals = locals; 
-              p_contracts = contracts; 
-              p_body = body } 
-          in
-          IdMap.add decl.p_name decl1 procs
-        )
-        procs0 IdMap.empty 
-    in
-    let preds =
-      IdMap.fold
-        (fun _ decl preds ->
-          let locals, tbl = declare_vars decl.pr_locals structs (SymbolTbl.push tbl) in
-          let body = resolve_expr locals tbl decl.pr_body in
-          let formals = List.map (fun id -> lookup_id id tbl decl.pr_pos) decl.pr_formals in
-          let outputs = List.map (fun id -> lookup_id id tbl decl.pr_pos) decl.pr_outputs in
-          let decl1 = 
-            { decl with 
-              pr_formals = formals; 
-              pr_outputs = outputs; 
-              pr_locals = locals; 
-              pr_body = body 
-            } 
-          in
-          IdMap.add decl.pr_name decl1 preds
-        )
-        preds0 IdMap.empty 
-    in
-    { cu with 
-      var_decls = globals; 
-      struct_decls = structs; 
-      proc_decls = procs;
-      pred_decls = preds;
-    } :: cus, 
-    tbl
+    | LocalVars (vars, es_opt, pos) ->
+        let es_opt1, _ =
+          (* ignore computed types of initializers for now... *)
+          match es_opt with
+          | Some es ->
+              let es1, tys = 
+                List.split 
+                  (List.map (fun e -> 
+                    let e1 = resolve_expr locals tbl e in
+                    e1, type_of_expr cu locals e1) es)
+              in
+              Some es1, tys
+          | None ->
+              None, List.map (fun decl -> decl.v_type) vars
+        in
+        let ids, locals, tbl = 
+          List.fold_right
+            (fun decl (ids, locals, tbl) ->
+              let decl, tbl = declare_var structs decl tbl in
+              Ident (decl.v_name, decl.v_pos) :: ids, 
+              IdMap.add decl.v_name decl locals, 
+              tbl
+            )
+            vars ([], locals, tbl)
+        in
+        (match es_opt1 with
+        | Some es1 -> 
+            Assign (ids, es1, pos), locals, tbl
+        | None -> 
+            Havoc (ids, pos), locals, tbl)
+    | Assume (e, pos) ->
+        Assume (resolve_expr locals tbl e, pos), locals, tbl
+    | Assert (e, pos) ->
+        Assert (resolve_expr locals tbl e, pos), locals, tbl
+    | Assign (lhs, rhs, pos) ->
+        let lhs1 = List.map (resolve_expr locals tbl) lhs in
+        let rhs1 = List.map (resolve_expr locals tbl) rhs in
+        Assign (lhs1, rhs1, pos), locals, tbl
+    | Dispose (e, pos) -> 
+        Dispose (resolve_expr locals tbl e, pos), locals, tbl
+    | Havoc (es, pos) ->
+        let es1 = List.map (resolve_expr locals tbl) es in
+        Havoc (es1, pos), locals, tbl
+    | If (cond, t, e, pos) ->
+        let t1, locals, _ = resolve_stmt locals tbl t in
+        let e1, locals, _ = resolve_stmt locals tbl e in
+        If (resolve_expr locals tbl cond, t1, e1, pos), locals, tbl
+    | Loop (inv, preb, cond, postb, pos) ->
+        let inv1 = 
+          List.fold_right 
+            (function Invariant e -> fun inv1 ->
+              Invariant (resolve_expr locals tbl e) :: inv1
+            ) 
+            inv []
+        in
+        let preb1, locals, _ = resolve_stmt locals tbl preb in
+        let cond1 = resolve_expr locals tbl cond in
+        let postb1, locals, _ = resolve_stmt locals tbl postb in
+        Loop (inv1, preb1, cond1, postb1, pos), locals, tbl
+    | Return (es, pos) ->
+        Return (List.map (resolve_expr locals tbl) es, pos), locals, tbl
   in
-  let cus, _ = List.fold_right rn cus ([], SymbolTbl.empty) in
-  cus
+  (* declare and resolve local variables *)
+  let procs =
+    IdMap.fold
+      (fun _ decl procs ->
+        let locals0, tbl = declare_vars decl.p_locals structs (SymbolTbl.push tbl) in
+        let contracts = 
+          List.map 
+            (function 
+              | Requires e -> Requires (resolve_expr locals0 tbl e)
+              | Ensures e -> Ensures (resolve_expr locals0 tbl e)
+            )
+            decl.p_contracts
+        in
+        let body, locals, _ = resolve_stmt locals0 tbl decl.p_body in
+        let formals = List.map (fun id -> lookup_id id tbl decl.p_pos) decl.p_formals in
+        let returns = List.map (fun id -> lookup_id id tbl decl.p_pos) decl.p_returns in
+        let decl1 = 
+          { decl with 
+            p_formals = formals;
+            p_returns = returns;
+            p_locals = locals; 
+            p_contracts = contracts; 
+            p_body = body } 
+        in
+        IdMap.add decl.p_name decl1 procs
+      )
+      procs0 IdMap.empty 
+  in
+  let preds =
+    IdMap.fold
+      (fun _ decl preds ->
+        let locals, tbl = declare_vars decl.pr_locals structs (SymbolTbl.push tbl) in
+        let body = resolve_expr locals tbl decl.pr_body in
+        let formals = List.map (fun id -> lookup_id id tbl decl.pr_pos) decl.pr_formals in
+        let outputs = List.map (fun id -> lookup_id id tbl decl.pr_pos) decl.pr_outputs in
+        let decl1 = 
+          { decl with 
+            pr_formals = formals; 
+            pr_outputs = outputs; 
+            pr_locals = locals; 
+            pr_body = body 
+          } 
+        in
+        IdMap.add decl.pr_name decl1 preds
+      )
+      preds0 IdMap.empty 
+  in
+  { cu with 
+    var_decls = globals; 
+    struct_decls = structs; 
+    proc_decls = procs;
+    pred_decls = preds;
+  }
 
-
-let flatten_exprs cus =
+let flatten_exprs cu =
   let decl_aux_var name vtype pos scope locals =
     let aux_id = GrassUtil.fresh_ident name in
     let decl = 
@@ -390,7 +412,7 @@ let flatten_exprs cus =
             ) 
             ([], locals) stmts0
         in Block (List.rev stmts, pos), locals
-      | LocalVars (vars, pos) ->
+      | LocalVars (_, _, pos) ->
           failwith "flatten_exprs: LocalVars should have been eliminated"
       | (Assume (e, pos) as stmt)
       | (Assert (e, pos) as stmt) ->
@@ -506,8 +528,7 @@ let flatten_exprs cus =
     in
     { cu with proc_decls = procs }
   in
-  let cus = List.map fe cus in
-  cus
+  fe cu
 
 type cexpr =
   | SL_form of Sl.form
@@ -525,8 +546,7 @@ let rec compatible_types ty1 ty2 =
   | FieldType (id1, ty1), FieldType (ty2 -> compatible_types ty1 ty2
   | _, _ -> false*)
 
-let convert cus =
-  let convert_cu cu prog =
+let convert cu =
     let find_var_decl locals id =
       try IdMap.find id locals 
       with Not_found -> 
@@ -985,8 +1005,7 @@ let convert cus =
             try convert_lhs lhs rhs_tys
             with Invalid_argument _ -> 
               ProgError.error pos 
-                (Printf.sprintf "Tried to assign %d value(s) to %d variable(s)" 
-                   (List.length rhs) (List.length lhs))
+                "Mismatch in number of expressions on left and right side of assignment"                
           in
           (match ind_opt with
           | Some t -> 
@@ -1036,7 +1055,7 @@ let convert cus =
     let prog =
       IdMap.fold
         (fun id decl prog -> declare_global prog (convert_var_decl decl))
-        cu.var_decls prog
+        cu.var_decls empty_prog
     in
     let prog =
       IdMap.fold 
@@ -1106,10 +1125,8 @@ let convert cus =
         cu.proc_decls prog
     in
     prog
-  in
-  List.fold_right convert_cu cus empty_prog
 
-let to_program cus =
-  let cus1 = resolve_names cus in
-  let cus2 = flatten_exprs cus1 in
-  convert cus2
+let to_program cu =
+  let cu1 = resolve_names cu in
+  let cu2 = flatten_exprs cu1 in
+  convert cu2
