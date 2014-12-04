@@ -63,7 +63,7 @@ let cmd_options =
    ("-noverify", Arg.Clear verify, " Do not check the generated verification conditions");
    ("-robust", Arg.Set robust, " Continue even if some verification condition cannot be checked");
    ("-smtsolver", Arg.Set_string smtsolver, " Choose SMT solver (Z3, CVC4, CVC4MF)");
-   ("-smtpatterns", Arg.Set smtpatterns, " Always add trigger annotations to quantifiers in SMT queries");
+   ("-smtpatterns", Arg.Set smtpatterns, " Always add pattern annotations to quantifiers in SMT queries");
    ("-smtsets", Arg.Set use_set_theory, " Use solver's set theory to encode sets (if supported)");
    ("-smtarrays", Arg.Set encode_fields_as_arrays, " Use array theory of SMT solver to encode fields");
    ("-noreach", Arg.Clear with_reach_axioms, " Omit axioms for reachability predicates");
