@@ -166,6 +166,12 @@ let resolve_names cu =
           | [fld; x; y; z] ->
               BtwnPred (fld, x, y, z, pos)
           | _ -> pred_arg_mismatch_error pos "Btwn" 4)
+      | ProcCall (("Reach", _), args, pos) ->
+          let args1 = List.map (re tbl) args in
+          (match args1 with
+          | [fld; x; y] ->
+              BtwnPred (fld, x, y, y, pos)
+          | _ -> pred_arg_mismatch_error pos "Reach" 3)
       | ProcCall (init_id, args, pos) ->
           let id = lookup_id init_id tbl pos in
           let args1 = List.map (re tbl) args in
@@ -613,22 +619,37 @@ let convert cu =
       | BoolVal (b, pos) -> FOL_form (GrassUtil.mk_srcpos pos (GrassUtil.mk_bool b))
       | Dot (e, fld_id, pos) -> 
           let t, ty = extract_term locals LocType e in
-          (match ty with
-          | StructType id ->
-              let res_ty = field_type pos id fld_id in
-              let res_srt = convert_type res_ty in
-              let fld = GrassUtil.mk_free_const (GrassUtil.field_sort res_srt) fld_id in
-              FOL_term (GrassUtil.mk_read fld t, res_ty)
-          | LocType -> ProgError.error pos "Cannot dereference null"
-          | ty -> failwith "unexpected type")
+          let res_ty =
+            match ty with
+            | StructType id ->
+                field_type pos id fld_id
+            | LocType -> 
+                let id_opt =
+                  IdMap.fold 
+                    (fun id decl -> function 
+                      | None -> 
+                          if IdMap.mem fld_id decl.s_fields then Some id else None
+                      | Some id -> Some id)
+                    cu.struct_decls None
+                in
+                (match id_opt with
+                | Some id -> 
+                    field_type pos id fld_id
+                | None ->
+                    ProgError.error pos ("Unknown field " ^ (GrassUtil.name fld_id)))
+            | ty -> failwith "unexpected type"
+          in
+          let res_srt = convert_type res_ty in
+          let fld = GrassUtil.mk_free_const (GrassUtil.field_sort res_srt) fld_id in
+          FOL_term (GrassUtil.mk_read fld t, res_ty)
       | Access (e, pos) ->
           let t, ty = extract_term locals UniversalType e in
           (match ty with
-          | StructType id ->
+          | StructType _
+          | LocType ->
               SL_form (SlUtil.mk_cell ~pos:pos t)
           | SetType (StructType _) ->
               SL_form (SlUtil.mk_region ~pos:pos t)
-          | LocType -> ProgError.error pos "Cannot access null"
           | ty -> failwith "unexpected type")
       | BtwnPred (fld, x, y, z, pos) ->
           let tfld, fld_ty = extract_term locals UniversalType fld in
