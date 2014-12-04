@@ -1,8 +1,14 @@
+(** {5 Translation of SPL programs to internal representation } *)
+
 open Prog
 open Sl
 open Grass
 open SplSyntax
 open SplTypeChecker
+
+let assignment_mismatch_error pos =
+  ProgError.error pos 
+    "Mismatch in number of expressions on left and right side of assignment"                
 
 let pred_arg_mismatch_error pos name expected =
     ProgError.error pos (Printf.sprintf "Predicate %s expects %d argument(s)" name expected)
@@ -213,8 +219,7 @@ let resolve_names cu =
             ([], locals, SymbolTbl.push tbl) stmts0
         in Block (List.rev stmts, pos), locals, tbl
     | LocalVars (vars, es_opt, pos) ->
-        let es_opt1, _ =
-          (* ignore computed types of initializers for now... *)
+        let es_opt1, tys =
           match es_opt with
           | Some es ->
               let es1, tys = 
@@ -228,14 +233,21 @@ let resolve_names cu =
               None, List.map (fun decl -> decl.v_type) vars
         in
         let ids, locals, tbl = 
-          List.fold_right
-            (fun decl (ids, locals, tbl) ->
-              let decl, tbl = declare_var structs decl tbl in
-              Ident (decl.v_name, decl.v_pos) :: ids, 
-              IdMap.add decl.v_name decl locals, 
-              tbl
-            )
-            vars ([], locals, tbl)
+          try 
+            List.fold_right2
+              (fun decl ty (ids, locals, tbl) ->
+                let decl = 
+                  match decl.v_type with
+                  | UniversalType -> { decl with v_type = ty }
+                  | _ -> decl
+                in
+                let decl, tbl = declare_var structs decl tbl in
+                Ident (decl.v_name, decl.v_pos) :: ids, 
+                IdMap.add decl.v_name decl locals, 
+                tbl
+              )
+              vars tys ([], locals, tbl)
+          with Invalid_argument _ -> assignment_mismatch_error pos
         in
         (match es_opt1 with
         | Some es1 -> 
@@ -1009,7 +1021,7 @@ let convert cu =
           let rhs_ts, rhs_tys = 
             Util.map_split (fun e ->
               match convert_expr proc.p_locals e with
-              | SL_form _ -> ProgError.error (pos_of_expr e) "SL formulas cannot be assigned"
+              | SL_form _ -> ProgError.error (pos_of_expr e) "Permissions cannot be assigned"
               | FOL_term (t, ty) -> t, ty
               | FOL_form f -> 
                   extract_term proc.p_locals BoolType e)
@@ -1017,9 +1029,7 @@ let convert cu =
           in
           let lhs_ids, ind_opt =
             try convert_lhs lhs rhs_tys
-            with Invalid_argument _ -> 
-              ProgError.error pos 
-                "Mismatch in number of expressions on left and right side of assignment"                
+            with Invalid_argument _ -> assignment_mismatch_error pos
           in
           (match ind_opt with
           | Some t -> 

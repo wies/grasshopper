@@ -61,8 +61,7 @@ returns (new_root: Node, max: Node)
     if (c != null) { c.parent := root; }
     return root, m;
   } else {
-    var c: Node;
-    c := root.left;
+    var c := root.left;
     root.parent := null;
     return c, root;
   }
@@ -74,8 +73,7 @@ procedure insert(root: Node, value: Int, implicit ghost content: Set<Int>)
   ensures  tree_set(new_root, content ++ Set(value))
 {
   if (root == null) {
-    var t: Node;
-    t := new Node;
+    var t := new Node;
     t.left := null;
     t.right := null;
     t.data := value;

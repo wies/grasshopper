@@ -1,14 +1,13 @@
 include "../include/sllist.spl";
 
 procedure dispose(lst: Node)
-  requires lseg(lst, null);
-  ensures emp;
+  requires lseg(lst, null)
+  ensures emp
 {
   while (lst != null) 
-    invariant lseg(lst, null);
+    invariant lseg(lst, null)
   {
-    var curr: Node;
-    curr := lst;
+    var curr := lst;
     lst := lst.next; 
     free(curr);
   }

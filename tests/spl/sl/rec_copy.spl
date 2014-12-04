@@ -1,47 +1,49 @@
 include "../include/sllist.spl";
 
-procedure rec_reverse_loop(lst: Node, acc: Node) returns (res: Node)
-  requires lseg(lst, null) &*& lseg(acc, null);
-  ensures lseg(res, null);
+procedure rec_reverse_loop(lst: Node, acc: Node) 
+  returns (res: Node)
+  requires lseg(lst, null) &*& lseg(acc, null)
+  ensures lseg(res, null)
 {
   if (lst == null) {
     return acc;
   } else {
-    var old_lst : Node;
-    old_lst := lst;
+    var old_lst := lst;
     lst := lst.next;
     old_lst.next := acc;
     return rec_reverse_loop(lst, old_lst);
   }
 }
 
-procedure rec_reverse(lst: Node) returns (res: Node)
-  requires lseg(lst, null);
-  ensures lseg(res, null);
+procedure rec_reverse(lst: Node) 
+  returns (res: Node)
+  requires lseg(lst, null)
+  ensures lseg(res, null)
 {
   return rec_reverse_loop(lst, null);
 }
 
 
-procedure rec_copy_loop(curr: Node, cp: Node) returns (res: Node)
-  requires lseg(cp, null) &*& lseg(curr, null);
-  ensures lseg(res, null) &*& lseg(curr, null);
+procedure rec_copy_loop(curr: Node, cp: Node) 
+  returns (res: Node)
+  requires lseg(cp, null) &*& lseg(curr, null)
+  ensures lseg(res, null) &*& lseg(curr, null)
 {
   if (curr == null) {
     return rec_reverse(cp);
   } else {
-    var old_cp: Node, n: Node;
-    old_cp := cp;
+    var old_cp := cp;
     cp := new Node;
     cp.next := old_cp;
-    n := curr.next;
+    var n := curr.next;
     return rec_copy_loop(n, cp);
   }
 }
 
-procedure rec_copy(lst: Node) returns (res: Node)
-  requires lseg(lst, null);
-  ensures lseg(lst, null) &*& lseg(res, null);
+procedure rec_copy(lst: Node) 
+  returns (res: Node)
+  requires lseg(lst, null)
+  ensures lseg(lst, null) &*& lseg(res, null)
 {
   return rec_copy_loop(lst, null);
 }

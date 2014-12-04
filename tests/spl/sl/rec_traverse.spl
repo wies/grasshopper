@@ -1,12 +1,11 @@
 include "../include/sllist.spl";
 
 procedure rec_traverse(lst: Node)
-  requires lseg(lst, null);
-  ensures lseg(lst, null);
+  requires lseg(lst, null)
+  ensures lseg(lst, null)
 {
   if (lst != null) {
-    var n: Node;
-    n := lst.next;
+    var n := lst.next;
     rec_traverse(n);
   }
 }

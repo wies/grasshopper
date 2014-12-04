@@ -1,12 +1,11 @@
 include "../include/sllist.spl";
 
 procedure rec_dispose(lst: Node)
-  requires lseg(lst, null);
-  ensures emp;
+  requires lseg(lst, null)
+  ensures emp
 {
   if (lst != null) {
-    var n: Node;
-    n := lst.next;
+    var n := lst.next;
     free(lst);
     rec_dispose(n);
   }

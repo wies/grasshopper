@@ -1,27 +1,25 @@
 include "../include/slslist.spl";
 
 procedure sls_pairwise_sum(x: Node, y: Node) returns (z: Node)
-  requires slseg(x, null) &*& slseg(y, null);
-  ensures slseg(x, null) &*& slseg(y, null) &*& slseg(z, null);
+  requires slseg(x, null) &*& slseg(y, null)
+  ensures slseg(x, null) &*& slseg(y, null) &*& slseg(z, null)
 {
   if (x == null || y == null) {
     return null;
   }
-  var curr_x: Node, curr_y: Node, last_z: Node;
-  curr_x := x;
-  curr_y := y;
   z := new Node;
-  last_z := z;
+  var curr_x := x;
+  var curr_y := y;
+  var last_z := z;
   z.data := curr_x.data + curr_y.data;
   z.next := null;
   while (curr_x.next != null && curr_y.next != null) 
-    invariant curr_x != null &*& lslseg(x, curr_x, curr_x.data) &*& slseg(curr_x, null);
-    invariant curr_y != null &*& lslseg(y, curr_y, curr_y.data) &*& slseg(curr_y, null);
-    invariant lslseg(z, last_z, last_z.data) &*& last_z.next |-> null;
-    invariant last_z.data <= curr_x.data + curr_y.data;
+    invariant curr_x != null &*& lslseg(x, curr_x, curr_x.data) &*& slseg(curr_x, null)
+    invariant curr_y != null &*& lslseg(y, curr_y, curr_y.data) &*& slseg(curr_y, null)
+    invariant lslseg(z, last_z, last_z.data) &*& last_z.next |-> null
+    invariant last_z.data <= curr_x.data + curr_y.data
   {
-    var tmp: Node;
-    tmp := last_z;
+    var tmp := last_z;
     curr_x := curr_x.next;
     curr_y := curr_y.next;
     last_z := new Node;

@@ -1,22 +1,23 @@
 include "../include/sllist.spl";
 
-procedure rec_reverse_acc(curr: Node, rev: Node) returns (res: Node)
-  requires lseg(rev, null) &*& lseg(curr, null);
-  ensures lseg(res, null);
+procedure rec_reverse_acc(curr: Node, rev: Node)
+  returns (res: Node)
+  requires lseg(rev, null) &*& lseg(curr, null)
+  ensures lseg(res, null)
 {
   if (curr == null) {
     return rev;
   } else {
-    var tmp: Node;
-    tmp := curr.next;
+    var tmp := curr.next;
     curr.next := rev;
     return rec_reverse_acc(curr, tmp);
   }
 }
 
-procedure rec_reverse(lst: Node) returns (res: Node)
-  requires lseg(lst, null);
-  ensures lseg(res, null);
+procedure rec_reverse(lst: Node) 
+  returns (res: Node)
+  requires lseg(lst, null)
+  ensures lseg(res, null)
 {
   return rec_reverse_acc(lst, null);
 }

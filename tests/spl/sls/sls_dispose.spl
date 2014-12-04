@@ -1,16 +1,14 @@
 include "../include/slslist.spl";
 
 procedure sls_dispose(lst: Node)
-  requires slseg(lst, null);
-  ensures emp;
+  requires slseg(lst, null)
+  ensures emp
 {
-  var curr: Node;
-  curr := lst;
+  var curr := lst;
   while (curr != null) 
-    invariant slseg(curr, null);
+    invariant slseg(curr, null)
   {
-    var tmp: Node;
-    tmp := curr;
+    var tmp := curr;
     curr := curr.next; 
     free tmp;
   }

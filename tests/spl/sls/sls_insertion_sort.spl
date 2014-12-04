@@ -1,33 +1,30 @@
 include "../include/slslist.spl";
 
 procedure insertion_sort(lst: Node) 
-  requires lseg(lst, null);
-  ensures slseg(lst, null);
+  requires lseg(lst, null)
+  ensures slseg(lst, null)
 {
-  var prv: Node, srt: Node;
-  prv := null;
-  srt := lst;
+  var prv: Node := null;
+  var srt := lst;
   while (srt != null)
     invariant (prv == null &*& srt == lst &*& lseg(lst, null))
-           || (lslseg(lst, prv, prv.data) &*& prv.next |-> srt &*& ulseg(srt, null, prv.data));
+           || (lslseg(lst, prv, prv.data) &*& prv.next |-> srt &*& ulseg(srt, null, prv.data))
   {
-    var curr: Node, min: Node;
-    curr := srt.next;
-    min := srt;
+    var curr := srt.next;
+    var min := srt;
     while (curr != null)
       invariant prv == null &*& lseg(curr, null)
-             || ulseg(curr, null, prv.data) &*& prv.data <= min.data;
-      invariant ulseg(srt, min, min.data);
-      invariant ulseg(min, curr, min.data);
-      invariant min != null;
+             || ulseg(curr, null, prv.data) &*& prv.data <= min.data
+      invariant ulseg(srt, min, min.data)
+      invariant ulseg(min, curr, min.data)
+      invariant min != null
     {
       if (curr.data < min.data) {
         min := curr;
       }
       curr := curr.next;
     }
-    var tmp: Int;
-    tmp := min.data;
+    var tmp := min.data;
     min.data := srt.data;
     srt.data := tmp;
     prv := srt;

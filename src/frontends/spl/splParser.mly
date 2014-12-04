@@ -223,6 +223,34 @@ var_decl:
 }
 ;
 
+var_decls_opt_type:
+| var_decl var_decl_opt_type_list { $1 :: $2 }
+| var_decl_opt_type var_decl_opt_type_list { $1 :: $2 }
+| /* empty */ { [] }
+;
+
+var_decl_opt_type_list:
+| COMMA var_decl var_decl_opt_type_list { $2 :: $3 }
+| COMMA var_decl_opt_type var_decl_opt_type_list { $2 :: $3 }
+| /* empty */ { [] }
+;
+
+var_decl_opt_type:
+| var_modifier IDENT { 
+  let decl = 
+    { v_name = ($2, 0);
+      v_type = UniversalType;
+      v_ghost = snd $1;
+      v_implicit = fst $1;
+      v_aux = false;
+      v_pos = mk_position 2 2;
+      v_scope = GrassUtil.global_scope; (* scope is fixed later *)
+    } 
+  in
+  decl
+}
+;
+
 var_modifier:
 | IMPLICIT GHOST { true, true }
 | GHOST { false, true }
@@ -289,7 +317,7 @@ stmt_no_short_if:
 stmt_wo_trailing_substmt:
 /* variable declaration */
 | VAR var_decls SEMICOLON { LocalVars ($2, None, mk_position 1 3) }
-| VAR var_decls COLONEQ expr_list SEMICOLON { LocalVars ($2, Some $4, mk_position 1 5) }
+| VAR var_decls_opt_type COLONEQ expr_list SEMICOLON { LocalVars ($2, Some $4, mk_position 1 5) }
 /* nested block */
 | LBRACE block RBRACE { 
   Block ($2, mk_position 1 3) 

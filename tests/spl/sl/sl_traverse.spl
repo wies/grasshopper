@@ -4,8 +4,7 @@ procedure traverse1(lst: Node)
   requires lseg(lst, null)
   ensures lseg(lst, null)
 {
-  var curr: Node;
-  curr := lst;
+  var curr := lst;
   while (curr != null) 
     invariant lseg(lst, curr)
     invariant lseg(curr, null)
@@ -18,9 +17,8 @@ procedure traverse2(lst: Node)
   requires lseg(lst, null);
   ensures lseg(lst, null);
 {
-  var curr: Node;
   if (lst != null) {
-    curr := lst;
+    var curr := lst;
     while (curr.next != null) 
       invariant lseg(lst, curr);
       invariant lseg(curr, null);

@@ -1,14 +1,12 @@
 include "../include/sllist.spl";
 
 procedure find_last(a: Node) returns (l: Node)
-  requires a != null &*& lseg(a, null);
-  ensures lseg(a, l) &*& l.next |-> null;
+  requires a != null &*& lseg(a, null)
+  ensures lseg(a, l) &*& l.next |-> null
 {
-  var n: Node;
-  n := a.next;
+  var n := a.next;
   if (n != null) {
-    var n2: Node;
-    n2 := find_last(n);
+    var n2 := find_last(n);
     return n2;
   } else {
     return a;
@@ -16,10 +14,9 @@ procedure find_last(a: Node) returns (l: Node)
 }
 
 procedure rec_concat(a: Node, b: Node)
-  requires a != null &*& lseg(a, null) &*& lseg(b, null);
-  ensures lseg(a, null);
+  requires a != null &*& lseg(a, null) &*& lseg(b, null)
+  ensures lseg(a, null)
 {
-  var l: Node;
-  l := find_last(a);
+  var l := find_last(a);
   l.next := b;
 }

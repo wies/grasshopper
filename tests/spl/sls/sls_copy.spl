@@ -1,25 +1,24 @@
 include "../include/slslist.spl";
 
 procedure copy(lst: Node) returns (res: Node)
-  requires slseg(lst, null);
-  ensures slseg(lst, null) &*& slseg(res, null);
+  requires slseg(lst, null)
+  ensures slseg(lst, null) &*& slseg(res, null)
 {
   if (lst == null) {
     return null;
   } else {
-    var curr: Node, cp: Node;
-    curr := lst;
     res := new Node;
-    cp := res;
+    var curr := lst;
+    var cp := res;
     cp.data := curr.data;
     cp.next := null;
     while (curr.next != null) 
-      invariant lslseg(lst, curr, curr.data);
-      invariant slseg(curr, null);
-      invariant lslseg(res, cp, curr.data);
-      invariant cp.next |-> null;
-      invariant cp.data == curr.data;
-      invariant curr != null;
+      invariant lslseg(lst, curr, curr.data)
+      invariant slseg(curr, null)
+      invariant lslseg(res, cp, curr.data)
+      invariant cp.next |-> null
+      invariant cp.data == curr.data
+      invariant curr != null
     {
       var old_cp: Node;
       old_cp := cp;
@@ -29,7 +28,6 @@ procedure copy(lst: Node) returns (res: Node)
       cp.data := curr.data;
       cp.next := null;
     }
-    //cp.next := null;
     return res;
   }
 }

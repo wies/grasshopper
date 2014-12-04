@@ -8,8 +8,8 @@ procedure remove(lst: Node)
   if (lst == null)
     return null;
   else {
-    var nondet: Bool, curr: Node;
-    curr := lst;
+    var nondet: Bool;
+    var curr := lst;
     while (nondet && curr.next != null) 
       invariant curr != null
       invariant lseg(lst, curr)
@@ -19,8 +19,7 @@ procedure remove(lst: Node)
       curr := curr.next;
     }
     
-    var tmp: Node;
-    tmp := curr.next;
+    var tmp := curr.next;
     if (tmp != null) {
       curr.next := tmp.next;
       free(tmp);

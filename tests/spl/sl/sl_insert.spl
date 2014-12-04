@@ -1,6 +1,7 @@
 include "../include/sllist.spl";
 
-procedure insert(lst: Node, elt: Node) returns (res: Node)
+procedure insert(lst: Node, elt: Node) 
+  returns (res: Node)
   requires lseg(lst, null) &*& elt.next |-> null
   ensures lseg(res, null)
 {
@@ -8,8 +9,7 @@ procedure insert(lst: Node, elt: Node) returns (res: Node)
     return elt;
   else {
     var nondet: Bool;
-    var curr: Node;
-    curr := lst;
+    var curr := lst;
     while (nondet && curr.next != null) 
       invariant acc(curr) -** lseg(lst, null)
     {

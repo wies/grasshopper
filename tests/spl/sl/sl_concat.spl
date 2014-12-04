@@ -8,8 +8,7 @@ procedure concat(a: Node, b: Node)
   if (a == null) {
     return b;
   } else {
-    var curr: Node;
-    curr := a;
+    var curr := a;
     while (curr.next != null) 
       invariant acc(curr) -** lseg(a, null)
     {

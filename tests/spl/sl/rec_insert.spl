@@ -1,8 +1,9 @@
 include "../include/sllist.spl";
 
-procedure rec_insert(lst: Node, elt: Node) returns (res: Node)
-  requires lseg(lst, null) &*& elt.next |-> null;
-  ensures lseg(res, null);
+procedure rec_insert(lst: Node, elt: Node) 
+  returns (res: Node)
+  requires lseg(lst, null) &*& elt.next |-> null
+  ensures lseg(res, null)
 {
   if (lst == null)
     return elt;
@@ -12,9 +13,8 @@ procedure rec_insert(lst: Node, elt: Node) returns (res: Node)
       elt.next := lst;
       return elt;
     } else {
-      var n1: Node, n2: Node;
-      n1 := lst.next;
-      n2 := rec_insert(n1, elt);
+      var n1 := lst.next;
+      var n2 := rec_insert(n1, elt);
       lst.next := n2;
       return lst;
     }

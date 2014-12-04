@@ -1,19 +1,18 @@
 include "../include/slslist.spl";
 
-procedure filter (x: Node) returns (res: Node)
-  requires slseg(x, null);
-  ensures slseg(res, null);
+procedure filter (x: Node) 
+  returns (res: Node)
+  requires slseg(x, null)
+  ensures slseg(res, null)
 {
-  var curr: Node, prv: Node;
   res := x;
-  prv := null;
-  curr := res;
+  var curr := res;
+  var prv: Node := null;
   while (curr != null) 
     invariant (lslseg(res, prv, prv.data) &*& prv.next |-> curr &*& uslseg(curr, null, prv.data))
-           || (prv == null &*& res == curr &*& slseg(curr, null));
+           || (prv == null &*& res == curr &*& slseg(curr, null))
   {
-    var old_curr: Node;
-    old_curr := curr;
+    var old_curr := curr;
     curr := curr.next;
     var nondet: Bool;
     if (nondet) {

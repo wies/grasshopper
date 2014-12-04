@@ -1,17 +1,14 @@
 include "../include/sllist.spl";
 
 procedure copy(lst: Node) returns (res: Node)
-  requires lseg(lst, null);
-  ensures lseg(lst, null) &*& lseg(res, null);
+  requires lseg(lst, null)
+  ensures lseg(lst, null) &*& lseg(res, null)
 {
-  var curr: Node, cp: Node;
-  curr := lst;
-  cp := null;
+  var curr, cp: Node := lst, null;
   while (curr != null) 
-    invariant lseg(lst, curr) &*& lseg(curr, null) &*& lseg(cp, null);
+    invariant (curr == null || acc(curr)) -** lseg(lst, null) &*& lseg(cp, null)
   {
-    var old_cp: Node;
-    old_cp := cp;
+    var old_cp := cp;
     cp := new Node;
     cp.next := old_cp;
     curr := curr.next;

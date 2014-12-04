@@ -1,8 +1,9 @@
 include "../include/sllist.spl";
 
-procedure rec_remove(lst: Node) returns (res: Node)
-  requires lseg(lst, null);
-  ensures lseg(res, null);
+procedure rec_remove(lst: Node) 
+  returns (res: Node)
+  requires lseg(lst, null)
+  ensures lseg(res, null)
 {
   var nondet: Bool;
   if (lst == null)
@@ -13,9 +14,8 @@ procedure rec_remove(lst: Node) returns (res: Node)
     free(lst);
     return n;
   } else {
-    var n1: Node, n2: Node;
-    n1 := lst.next;
-    n2 := rec_remove(n1);
+    var n1 := lst.next;
+    var n2 := rec_remove(n1);
     lst.next := n2;
     return lst;
   }

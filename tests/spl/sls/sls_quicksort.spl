@@ -1,27 +1,25 @@
 include "../include/slslist.spl";
 
 procedure split(x: Node, y: Node, lb: Int, ub: Int) returns (pivot: Node)
-  requires blseg(x, y, lb, ub) &*& x != y;
-  ensures  blseg(x, pivot, lb, pivot.data);
-  ensures  blseg(pivot, y, pivot.data, ub) &*& pivot != y;
-  ensures  lb <= pivot.data &*& pivot.data <= ub;
-  ensures  Btwn(next, x, pivot, y);
+  requires blseg(x, y, lb, ub) &*& x != y
+  ensures  blseg(x, pivot, lb, pivot.data)
+  ensures  blseg(pivot, y, pivot.data, ub) &*& pivot != y
+  ensures  lb <= pivot.data &*& pivot.data <= ub
+  ensures  Btwn(next, x, pivot, y)
 {
-  var curr: Node;
-  curr := x.next;
+  var curr := x.next;
   pivot := x;
 
   while (curr != y) 
-    invariant blseg(x, pivot, lb, pivot.data);
-    invariant blseg(pivot, curr, pivot.data, ub) &*& pivot != curr;
-    invariant blseg(curr, y, lb, ub);
-    invariant lb <= pivot.data &*& pivot.data <= ub;
-    invariant Btwn(next, x, pivot, y);
-    invariant Btwn(next, pivot, curr, y);
+    invariant blseg(x, pivot, lb, pivot.data)
+    invariant blseg(pivot, curr, pivot.data, ub) &*& pivot != curr
+    invariant blseg(curr, y, lb, ub)
+    invariant lb <= pivot.data &*& pivot.data <= ub
+    invariant Btwn(next, x, pivot, y)
+    invariant Btwn(next, pivot, curr, y)
   {
     if (curr.data < pivot.data) {
-      var tmp: Int;
-      tmp := curr.data;
+      var tmp := curr.data;
       curr.data := pivot.next.data;
       pivot.next.data := pivot.data;
       pivot.data := tmp;
@@ -32,12 +30,11 @@ procedure split(x: Node, y: Node, lb: Int, ub: Int) returns (pivot: Node)
 }
 
 procedure quicksort(x: Node, y: Node, ghost lb: Int, ghost ub: Int)
-  requires blseg(x, y, lb, ub);
-  ensures  bslseg(x, y, lb, ub);
+  requires blseg(x, y, lb, ub)
+  ensures  bslseg(x, y, lb, ub)
 {
   if (x != y && x.next != y) {
-    var pivot: Node;
-    pivot := split(x, y, lb, ub);
+    var pivot := split(x, y, lb, ub);
     quicksort(x, pivot, lb, pivot.data);
     quicksort(pivot.next, y, pivot.data, ub);
   }
