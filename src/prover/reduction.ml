@@ -9,7 +9,7 @@ open SimplifyGrass
 
 (** Eliminate all implicit and explicit existential quantifiers using skolemization.
  ** Assumes that [f] is typed and in negation normal form. *)
-let reduce_exists =
+let elim_exists =
   let e = fresh_ident "?e" in
   let rec elim_neq = function
     | BoolOp (Not, [Atom (App (Eq, [s1; s2], _), a)]) as f ->
@@ -27,40 +27,11 @@ let reduce_exists =
     | Binder (b, vs, f, a) -> Binder (b, vs, elim_neq f, a)
     | f -> f
   in
-  fun f -> 
+  List.map (fun f -> 
     let f1 = elim_neq f in
     let f2 = propagate_exists f1 in
-    skolemize f2
+    skolemize f2)
 
-let massage_field_reads fs = 
-  let reach_flds = 
-    fold_terms (fun flds -> function
-      | App (Btwn, Var _ :: _, _) -> flds
-      | App (Btwn, fld :: _, _) -> TermSet.add fld flds
-      | _ -> flds)
-      TermSet.empty (mk_and fs)
-  in
-  let rec massage = function 
-  | BoolOp (And as op, fs)
-  | BoolOp (Or as op, fs) -> BoolOp (op, List.map massage fs)
-  | Binder (b, vs, f, a) -> Binder (b, vs, massage f, a)
-  | Atom (App (Eq, [App (Read, [fld; Var _ as arg], Loc); App (FreeSym _, [], _) as t], _), a)
-  | Atom (App (Eq, [App (FreeSym _, [], _) as t; App (Read, [fld; Var _ as arg], Loc)], _), a) 
-    when TermSet.mem fld reach_flds ->
-      let f1 = 
-        annotate
-          (mk_and [mk_btwn fld arg t t;
-                   mk_or [mk_neq arg t; 
-                          mk_forall [Axioms.l1]
-                            (mk_or [mk_not (mk_reach fld t Axioms.loc1); mk_eq t Axioms.loc1])];
-                   mk_forall [Axioms.l1]
-                     (mk_or [mk_eq Axioms.loc1 arg; mk_eq Axioms.loc1 t; 
-                             mk_not (mk_btwn fld arg Axioms.loc1 t)])]) a
-      in
-      f1
-  | f -> f
-  in List.map massage fs
-    
 (** Hoist all universally quantified subformulas to top level.
  ** Assumes that formulas [fs] are in negation normal form. *)
 let factorize_axioms fs =
@@ -146,7 +117,7 @@ let btwn_fields fs gts =
 
 let btwn_fields_in_fs fs = btwn_fields fs (ground_terms (smk_and fs))
 
-let reduce_frame fs =
+let add_frame_axioms fs =
   let btwn_flds = btwn_fields_in_fs fs in
   let expand_frame x a f f' =
     let frame = mk_diff a x in
@@ -287,7 +258,7 @@ let rec valid = function
 
 (** Simplifies set constraints and adds axioms for set operations.
  ** Assumes that f is typed and in negation normal form. *)
-let reduce_sets fs =
+let add_set_axioms fs =
   let split ts = List.fold_left (fun (ts1, ts2) t -> (ts2, t :: ts1)) ([], []) ts in
   let rec unflatten = function
     | App (Union, [t], _) 
@@ -330,7 +301,7 @@ let reduce_sets fs =
 
 (** Adds theory axioms for the entry point function to formula f.
  ** Assumes that f is typed and that all frame predicates have been reduced. *)
-let instantiate_ep fs =
+let add_ep_axioms fs =
   let gts = ground_terms (smk_and fs) in
   let flds = btwn_fields fs gts in
   let flds =
@@ -353,7 +324,7 @@ let instantiate_ep fs =
     | _ -> failwith "don't know where to put the generators"
   (*List.rev_append (Axioms.ep_axioms ()) fs*)
  
-let reduce_read_write fs =
+let add_read_write_axioms fs =
   let gts = ground_terms (smk_and fs) in
   let basic_pt_flds = TermSet.filter (has_sort loc_field_sort &&& is_free_const) gts in
   (* instantiate null axioms *)
@@ -448,7 +419,7 @@ let reduce_read_write fs =
 
 (** Adds instantiated theory axioms for graph reachability to formula f.
  ** Assumes that f is typed. *)
-let reduce_reach fs gts =
+let add_reach_axioms fs gts =
   let classes = CongruenceClosure.congr_classes fs gts in
   (* instantiate the field variables in all reachability axioms *)
   let btwn_flds = btwn_fields fs gts in
@@ -474,7 +445,7 @@ let reduce_reach fs gts =
   let reach_ax1 = instantiate_with_terms ~force:true false reach_ax (CongruenceClosure.restrict_classes classes non_updated_flds) in
   rev_concat [reach_ax1; reach_write_ax; fs], gts
 
-let instantiate_user_def_axioms read_propagators fs gts =
+let instantiate read_propagators fs gts =
   (* generate local instances of all remaining axioms in which variables occur below function symbols *)
   let fs1, generators = open_axioms isFunVar fs in
   let gts1 = generate_terms (read_propagators @ generators) gts in
@@ -531,9 +502,9 @@ let encode_labels fs =
         BoolOp (op, List.map el fs)
   in List.rev_map el fs
 
-(** Reduces the given formula to the target theory fragment, as specified by the configuration.
- ** Assumes that f is typed. *)
+(** Reduces the given formula to the target theory fragment, as specified by the configuration. *)
 let reduce f = 
+  (* split f into conjuncts and eliminate all existential quantifiers *)
   let rec split_ands acc = function
     | BoolOp(And, fs) :: gs -> 
         split_ands acc (fs @ gs)
@@ -545,21 +516,22 @@ let reduce f =
   let f1 = nnf f in
   let fs = split_ands [] [f1] in
   (* *)
-  let fs = massage_field_reads fs in
-  let fs = List.map reduce_exists fs in
+  let fs = elim_exists fs in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
-  (* formula rewriting that helps with the solving *)
+  (* some formula rewriting that helps the SMT solver *)
+  let fs = massage_field_reads fs in
   let fs = simplify_sets fs in
-  let fs = pull_eq_up fs in
+  let fs = pull_up_equalities fs in
   (*TypeStrat.init fs;*)
+  (* add all axioms and instantiate *)
   TypeStrat.default ();
-  let fs = instantiate_ep fs in
-  let fs = reduce_frame fs in
+  let fs = add_ep_axioms fs in
+  let fs = add_frame_axioms fs in
   let fs = factorize_axioms (split_ands [] fs) in
-  let fs = reduce_sets fs in
-  let fs, read_propagators, gts = reduce_read_write fs in
-  let fs, gts = reduce_reach fs gts in
-  let fs, gts = instantiate_user_def_axioms read_propagators fs gts in
+  let fs = add_set_axioms fs in
+  let fs, read_propagators, gts = add_read_write_axioms fs in
+  let fs, gts = add_reach_axioms fs gts in
+  let fs, gts = instantiate read_propagators fs gts in
   let fs = add_terms fs gts in
   let fs = encode_labels fs in
   TypeStrat.reset ();

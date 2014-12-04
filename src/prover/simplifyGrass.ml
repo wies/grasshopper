@@ -2,10 +2,10 @@ open Grass
 open GrassUtil
 
 
-(* pull out '=' below disj when on of the variable is occuring in a single branch of the disj
- * Assumes that [f] is typed and in NNF, return a formula in NNF *)
+(** Pull up equalities of the form "x = t" below disjunctions when x occurs only in a single disjunct
+ ** Assumes that [f] is typed and in NNF, returns a formula in NNF *)
 (* TODO inefficient implementation, lots of redundent computation *)
-let pull_eq_up fs =
+let pull_up_equalities fs =
   (* phrase this as a rewrite rule ?? *)
   (* identifies the constants/ground terms that are only in one disjunct
    * be careful about pulling eq with literals and/or pulling more than one eq *)
@@ -58,7 +58,39 @@ let pull_eq_up fs =
     | [] -> pre
   in
     process [] fs
-   
+
+(** Eliminate certain field reads using reachability predicates *)   
+let massage_field_reads fs = 
+  let reach_flds = 
+    fold_terms (fun flds -> function
+      | App (Btwn, Var _ :: _, _) -> flds
+      | App (Btwn, fld :: _, _) -> TermSet.add fld flds
+      | _ -> flds)
+      TermSet.empty (mk_and fs)
+  in
+  let rec massage = function 
+  | BoolOp (And as op, fs)
+  | BoolOp (Or as op, fs) -> BoolOp (op, List.map massage fs)
+  | Binder (b, vs, f, a) -> Binder (b, vs, massage f, a)
+  | Atom (App (Eq, [App (Read, [fld; Var _ as arg], Loc); App (FreeSym _, [], _) as t], _), a)
+  | Atom (App (Eq, [App (FreeSym _, [], _) as t; App (Read, [fld; Var _ as arg], Loc)], _), a) 
+    when TermSet.mem fld reach_flds ->
+      let f1 = 
+        annotate
+          (mk_and [mk_btwn fld arg t t;
+                   mk_or [mk_neq arg t; 
+                          mk_forall [Axioms.l1]
+                            (mk_or [mk_not (mk_reach fld t Axioms.loc1); mk_eq t Axioms.loc1])];
+                   mk_forall [Axioms.l1]
+                     (mk_or [mk_eq Axioms.loc1 arg; mk_eq Axioms.loc1 t; 
+                             mk_not (mk_btwn fld arg Axioms.loc1 t)])]) a
+      in
+      f1
+  | f -> f
+  in List.map massage fs
+
+
+(** Simplify set expressions by propagating empty sets, etc. *)
 let rec simplify_sets fs =
   let rec simp (t : term) = 
     match t with
