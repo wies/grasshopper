@@ -37,7 +37,7 @@ let resolve_names cu =
     try 
       let decl = IdMap.find id globals in
       match decl.v_type with
-      | FieldType _ -> ()
+      | MapType (StructType _, _) -> ()
       | _ -> error ()
     with Not_found -> error ()
   in
@@ -99,7 +99,7 @@ let resolve_names cu =
               | ty -> ty
               in
               let fdecl = { fdecl with v_name = id; v_type = res_type } in
-              let gfdecl = { fdecl with v_type = FieldType (decl.s_name, res_type) } in
+              let gfdecl = { fdecl with v_type = MapType (StructType decl.s_name, res_type) } in
               IdMap.add id fdecl fields, IdMap.add id gfdecl globals, tbl
             )
             decl.s_fields (IdMap.empty, globals, tbl)
@@ -439,7 +439,7 @@ let flatten_exprs cu =
                 let decl = IdMap.find id cu.var_decls in
                 let res_ty = 
                   match decl.v_type with
-                  | FieldType (_, ty) -> ty
+                  | MapType (StructType _, ty) -> ty
                   | ty -> ty
                 in
                 let aux_id, locals = decl_aux_var "tmp" res_ty opos scope locals in
@@ -571,10 +571,11 @@ let convert cu =
     let rec convert_type = function
       | LocType -> Loc
       | StructType id -> Loc
-      | FieldType (id, typ) -> GrassUtil.field_sort (convert_type typ) 
+      | MapType (dtyp, rtyp) -> Map (convert_type dtyp, convert_type rtyp)
       | SetType typ -> Set (convert_type typ)
       | IntType -> Int
       | BoolType -> Bool
+      | PermType -> failwith "cannot convert permission type"
       | UniversalType -> failwith "cannot convert universal type"
     in
     let convert_var_decl decl = 
@@ -588,18 +589,10 @@ let convert cu =
         var_scope = decl.v_scope;
       }
     in 
-    let ty_str = function
-      | LocType -> "expression of a struct type"
-      | StructType id -> "expression of type " ^ (fst id)
-      | SetType _ -> "expression of type set"
-      | IntType -> "expression of type int"
-      | BoolType -> "expression of type bool"
-      | FieldType _ -> "field"
-      | UniversalType -> "expression"
-    in
-    let type_error pos expected found =
+    let ty_str ty = "expression of type " ^ string_of_type ty in
+    let type_error pos exp_ty fnd_ty =
       ProgError.type_error pos
-        ("Expected an " ^ expected ^ " but found an " ^ found)
+        ("Expected an " ^ ty_str exp_ty ^ " but found an " ^ ty_str fnd_ty)
     in
     let rec convert_expr locals = function
       | Null _ -> FOL_term (GrassUtil.mk_null, LocType)
@@ -654,12 +647,12 @@ let convert cu =
       | BtwnPred (fld, x, y, z, pos) ->
           let tfld, fld_ty = extract_term locals UniversalType fld in
           (match fld_ty with
-          | FieldType (id, StructType id1) when id = id1 ->
+          | MapType (StructType id, StructType id1) when id = id1 ->
               let tx, _ = extract_term locals (StructType id) x in
               let ty, _ = extract_term locals (StructType id) y in
               let tz, _ = extract_term locals (StructType id) z in
               FOL_form (GrassUtil.mk_srcpos pos (GrassUtil.mk_btwn tfld tx ty tz))
-          | _ -> type_error (pos_of_expr fld) "reference field" (ty_str fld_ty))
+          | _ -> type_error (pos_of_expr fld) (MapType(LocType, LocType)) fld_ty)
       | Quant (q, decls, f, pos) ->
           let vars, locals1 = 
              List.fold_right (fun decl (vars, locals1) ->
@@ -903,19 +896,19 @@ let convert cu =
       | SL_form f -> f
       | FOL_form f -> Pure (f, Some (pos_of_expr e))
       | FOL_term (t, ty) ->
-         type_error (pos_of_expr e) "expression of type bool" (ty_str ty)
+         type_error (pos_of_expr e) PermType ty
     and extract_fol_form locals e =
       match convert_expr locals e with
       | SL_form (Sl.Atom (Pred p, ts, pos)) ->
           GrassUtil.mk_pred ~ann:[SrcPos (pos_of_expr e)] p ts
       | SL_form _ ->
-          type_error (pos_of_expr e) "expression of type bool" "SL formula"
+          type_error (pos_of_expr e) BoolType PermType
       | FOL_form f -> f
       | FOL_term (t, BoolType) -> Grass.Atom (t, [SrcPos (pos_of_expr e)])
-      | FOL_term (t, ty) -> type_error (pos_of_expr e) "expression of type bool" (ty_str ty)
+      | FOL_term (t, ty) -> type_error (pos_of_expr e) BoolType ty
     and extract_term locals ty e =
       match convert_expr locals e with
-      | SL_form _ -> type_error (pos_of_expr e) (ty_str ty) "SL formula"
+      | SL_form _ -> type_error (pos_of_expr e) ty PermType
       | FOL_form (BoolOp (And, [])) 
       | FOL_form (Binder (_, [], BoolOp (And, []), _)) -> 
           Grass.App (BoolConst true, [], Bool), BoolType
@@ -923,7 +916,7 @@ let convert cu =
       | FOL_form (Binder (_, [], BoolOp (Or, []), _)) -> 
           Grass.App (BoolConst false, [], Bool), BoolType
       | FOL_form (Atom (t, _)) -> t, BoolType
-      | FOL_form _ -> type_error (pos_of_expr e) (ty_str ty) "formula"
+      | FOL_form _ -> type_error (pos_of_expr e) ty BoolType
       | FOL_term (t, tty) ->
           let rec match_types ty1 ty2 = 
             match ty1, ty2 with
@@ -933,7 +926,7 @@ let convert cu =
             | _, UniversalType -> ty1
             | SetType ty1, SetType ty2 -> SetType (match_types ty1 ty2)
             | ty, tty when ty = tty -> ty2
-            | _ -> type_error (pos_of_expr e) (ty_str ty) (ty_str tty)
+            | _ -> type_error (pos_of_expr e) ty tty
           in t, match_types ty tty
     in
     let convert_spec_form locals e name msg =

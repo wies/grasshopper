@@ -12,13 +12,14 @@ type names = name list
 
 type typ =
   | StructType of ident
-  | FieldType of ident * typ
+  | MapType of typ * typ
   | SetType of typ
   | IntType
   | BoolType
   | LocType
+  | PermType (* SL formulas *)
   | UniversalType
-  (*| ArrayType of typ*)
+
 
 type var_decl_id =
   | IdentDecl of ident
@@ -247,4 +248,20 @@ let mk_block pos = function
   | [] -> Skip pos
   | [stmt] -> stmt
   | stmts -> Block (stmts, pos)
+
+(** Pretty printing *)
+
+open Format
+
+let rec pr_type ppf = function
+  | LocType -> fprintf ppf "%s" loc_sort_string
+  | BoolType -> fprintf ppf "%s" bool_sort_string
+  | IntType -> fprintf ppf "%s" int_sort_string
+  | StructType id -> pr_ident ppf id
+  | MapType (d, r) -> fprintf ppf "%s<@[%a,@ %a@]>" map_sort_string pr_type d pr_type r
+  | SetType s -> fprintf ppf "%s<@[%a@]>" set_sort_string pr_type s
+  | PermType -> fprintf ppf "Permission"
+  | UniversalType -> fprintf ppf "Any"
+
+let string_of_type t = pr_type str_formatter t; flush_str_formatter ()
 

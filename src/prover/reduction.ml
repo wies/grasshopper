@@ -563,18 +563,4 @@ let reduce f =
   let fs = add_terms fs gts in
   let fs = encode_labels fs in
   TypeStrat.reset ();
-  (* the following is a (probably stupid) heuristic to sort the formulas for improving the running time *)
-  (*let _ = 
-    (* sort by decreasing number of disjuncts in formula *)
-    let cmp f1 f2 =
-      let rec count_disjuncts acc = function
-        | BoolOp (Or, fs) -> List.fold_left count_disjuncts (acc + List.length fs) fs
-        | BoolOp (_, fs) -> List.fold_left count_disjuncts acc fs
-        | Binder (_, _, f, _) -> count_disjuncts acc f
-        | Atom _ -> acc
-      in
-      compare (count_disjuncts 0 f2) (count_disjuncts 0 f1)
-    in
-    List.stable_sort cmp fs
-  in*)
   fs

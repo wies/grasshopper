@@ -41,7 +41,7 @@ let type_of_expr cu locals e =
     | Dot (_, id, _) ->
         let decl = IdMap.find id cu.var_decls in
         (match decl.v_type with
-        | FieldType (_, ty) -> ty
+        | MapType (_, ty) -> ty
         | _ -> UniversalType)
     | ProcCall (id, _, _) ->
         let decl = IdMap.find id cu.proc_decls in
