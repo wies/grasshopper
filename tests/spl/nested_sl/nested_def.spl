@@ -1,0 +1,39 @@
+struct OuterNode {
+  var onext: OuterNode;
+  var down: InnerNode;
+}
+
+struct InnerNode {
+  var inext: InnerNode;
+  var head: OuterNode;
+}
+
+function lseg_footprint(x: InnerNode, y: InnerNode) returns (FP: Set<Loc>) {
+  forall z: Loc :: z in FP == (Btwn(inext, x, z, y) && z != y)
+}
+
+predicate lseg(x: InnerNode, y: InnerNode, FP: Set<Loc>) {
+  Btwn(inext, x, y, y) && 
+  FP == lseg_footprint(x, y)
+}
+
+function llseg_outer_footprint(x: OuterNode, y: OuterNode) 
+  returns (FP: Set<Loc>) 
+{
+  forall z: Loc :: z in FP == Btwn(onext, x, z, y) && z != y
+}
+
+function llseg_inner_footprint(x: OuterNode, y: OuterNode) 
+  returns (FP: Set<Loc>) 
+{
+  forall z: Loc :: z in FP ==
+    (z.head in llseg_outer_footprint(x, y) && Btwn(inext, z.head.down, z, null))
+}
+
+predicate llseg(x: OuterNode, y: OuterNode, FP: Set<Loc>) {
+  Reach(onext, x, y) &&
+  (forall u: InnerNode, v: InnerNode :: 
+    u in llseg_inner_footprint(x, y) && v in llseg_inner_footprint(x, y) ==>
+     (u.head == v.head) == (Reach(inext, u, v) || Reach(inext, v, u))) &&
+  FP == llseg_outer_footprint(x, y) ++ llseg_inner_footprint(x, y)
+}

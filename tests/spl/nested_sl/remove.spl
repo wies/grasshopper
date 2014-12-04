@@ -1,0 +1,54 @@
+include "nested_def.spl";
+
+
+procedure remove(x: OuterNode) returns (res: OuterNode)
+  requires llseg(x, null)
+  ensures llseg(res, null)
+{
+  if (x == null)
+    return null;
+  else {
+    var nondet: Bool;
+    var curr := x;
+    //traverse outer list
+    while (nondet && curr.onext != null) 
+      invariant acc(curr) -** llseg(x, null)
+    {
+      havoc nondet;
+      curr := curr.onext;
+    }
+    var prev := curr;
+    curr := curr.onext;
+    if (curr != null) {
+      //traverse inner list
+      if (curr.down != null) {
+        havoc nondet;
+        var icurr := curr.down;
+        //traverse the inner list
+        while(nondet && icurr.inext != null)
+          invariant acc(icurr) -** lseg(curr.down, null)
+        {
+          havoc nondet;
+          icurr := icurr.inext;
+        }
+        if (!nondet && icurr.inext == null && curr.down == icurr) {
+          curr.down := null;
+          free(icurr);
+        } else {
+          var iprev := icurr;
+          icurr := icurr.inext;
+          if (icurr != null) {
+            iprev.inext := icurr.inext;
+            free(icurr);
+          }
+        }
+      }
+     
+      if (curr.down == null) {
+        prev.onext := curr.onext;
+        free(curr);
+      }
+    }
+    return x;
+  }
+}

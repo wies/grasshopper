@@ -1,0 +1,57 @@
+include "nested_def.spl";
+
+
+procedure insert(x: OuterNode) returns (res: OuterNode)
+  requires llseg(x, null)
+  ensures llseg(res, null)
+{
+  if (x == null) {
+    var o := new OuterNode;
+    o.onext := null;
+    var i := new InnerNode;
+    o.down := i;
+    i.head := o;
+    i.inext := null;
+    return o;
+  } else {
+    var nondet: Bool;
+    var curr := x;
+    //traverse outer list
+    while (nondet && curr.onext != null)
+      invariant acc(curr) -** llseg(x, null)
+    {
+      havoc nondet;
+      curr := curr.onext;
+    }
+    //new outer node
+    if (nondet && curr.onext == null) {
+      var o := new OuterNode;
+      o.onext := null;
+      o.down := null;
+      curr.onext := o;
+      curr := o;
+    }
+    //insert in inner list
+    if (curr.down == null) {
+      var i := new InnerNode;
+      curr.down := i;
+      i.head := curr;
+      i.inext := null;
+    } else {
+      havoc nondet;
+      var icurr := curr.down;
+      //traverse the inner list
+      while(nondet && icurr.inext != null)
+        invariant acc(icurr) -** lseg(curr.down, null)
+      {
+        havoc nondet;
+        icurr := icurr.inext;
+      }
+      var i := new InnerNode;
+      i.inext := icurr.inext;
+      icurr.inext := i;
+      i.head := curr;
+    }
+    return x;
+  }
+}
