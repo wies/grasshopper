@@ -12,7 +12,6 @@ let trace_file = ref ""
 
 (* Flags controlling the axioms generation *)
 let with_reach_axioms = ref true
-let keep_sets = ref true
 let encode_fields_as_arrays = ref false
 let with_ep = ref true
 let use_set_theory = ref false
@@ -31,8 +30,6 @@ let named_assertions = true
 let verify = ref true
 (* Flag that controls whether to stop after the first VC that cannot be proved. *)
 let robust = ref false
-(* Flag that controls whether predefined predicates only are used (heuristic to infer them is default) *)
-let predefPreds = ref true
 (* Flag that enables error messages for on-the-fly checking *)
 let flycheck_mode = ref false
 
@@ -65,19 +62,16 @@ let cmd_options =
    ("-core", Arg.Set unsat_cores, " Produce unsat cores with every unsat SMT query");
    ("-noverify", Arg.Clear verify, " Do not check the generated verification conditions");
    ("-robust", Arg.Set robust, " Continue even if some verification condition cannot be checked");
-   ("-smtsolver", Arg.Set_string smtsolver, " Choose SMT solver (Z3, CVC4, MathSAT)");
+   ("-smtsolver", Arg.Set_string smtsolver, " Choose SMT solver (Z3, CVC4, CVC4MF)");
    ("-smtpatterns", Arg.Set smtpatterns, " Always add trigger annotations to quantifiers in SMT queries");
    ("-smtsets", Arg.Set use_set_theory, " Use solver's set theory to encode sets (if supported)");
    ("-smtarrays", Arg.Set encode_fields_as_arrays, " Use array theory of SMT solver to encode fields");
    ("-noreach", Arg.Clear with_reach_axioms, " Omit axioms for reachability predicates");
    ("-noep", Arg.Clear with_ep, " Omit entry points");
-   ("-nosets", Arg.Clear keep_sets, " Eliminate sets in reduction to GRASS");
    ("-noinst", Arg.Clear instantiate, " Let the SMT solver deal with the quantifiers without prior instantiation");
    ("-nostratify", Arg.Clear stratify, " Instantiate quantifiers that satisfy stratified sort restrictions");
    ("-noOptFieldMod", Arg.Clear opt_field_mod, " Disable mod set analysis optimization for fields");
    ("-optSelfFrame", Arg.Set optSelfFrame, " enable generation of self-framing clauses for SL predicates");
-   ("-predefPreds", Arg.Set predefPreds, " Disable heuristics to translate SL predicates to GRASS");
-   ("-heuristicTranslation", Arg.Clear predefPreds, " Enable heuristics to translate SL predicates to GRASS");
    ("-stats", Arg.Set print_stats, " Print statistics");
    ("-v", Arg.Unit Debug.more_verbose, " Display more messages");
    ("-q", Arg.Unit Debug.less_verbose, " Display less messages");
