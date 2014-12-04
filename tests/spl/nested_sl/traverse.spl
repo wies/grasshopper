@@ -1,0 +1,30 @@
+struct OuterNode {
+  var next: OuterNode;
+  var down: InnerNode;
+}
+
+struct InnerNode {
+  var next: InnerNode;
+  var head: OuterNode;
+}
+
+procedure traverse(x: OuterNode, y: OuterNode)
+  requires llseg(x, y)
+  ensures llseg(x, y)
+{
+  var oc: OuterNode;
+  oc := x;
+  while (oc != y)
+    invariant (oc == y || acc(oc)) -** llseg(x, y)
+  {
+    var ic: InnerNode;
+    ic := oc.down;
+    while (ic != null)
+      invariant acc(oc)
+      invariant (ic == null || acc(ic)) -** lseg(oc.down, null)
+    {
+      ic := ic.next;
+    }
+    oc := oc.next;
+  }
+}
