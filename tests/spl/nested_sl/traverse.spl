@@ -31,7 +31,7 @@ function llseg_inner_footprint(x: OuterNode, y: OuterNode)
 }
 
 predicate llseg(x: OuterNode, y: OuterNode, FP: Set<Loc>) {
-  Btwn(onext, x, y, y) &&
+  Reach(onext, x, y) &&
   (forall u: InnerNode, v: InnerNode :: 
     u in llseg_inner_footprint(x, y) && v in llseg_inner_footprint(x, y) ==>
      (u.head == v.head) == (Reach(inext, u, v) || Reach(inext, v, u))) &&
