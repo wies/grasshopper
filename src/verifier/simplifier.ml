@@ -132,9 +132,13 @@ let elim_loops (prog : program) =
                               (mk_diff Grassifier.footprint_caller_set Grassifier.footprint_set)
                               (mk_empty (Set Loc)))]
           in
-          let msg _ = 
-            "An invariant might not be maintained by this loop",
-            ProgError.mk_error_info "This is the invariant that might not be maintained"
+          let msg caller =
+            if caller <> proc_name then
+              "An invariant might not hold before entering this loop",
+              ProgError.mk_error_info "This is the loop invariant that might not hold initially"
+            else 
+              "An invariant might not be maintained by this loop",
+              ProgError.mk_error_info "This is the loop invariant that might not be maintained"
           in
           mk_spec_form (FOL f) "invariant" (Some msg) pp.pp_pos
         in

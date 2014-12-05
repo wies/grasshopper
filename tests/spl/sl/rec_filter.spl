@@ -1,8 +1,8 @@
 include "../include/sllist.spl";
 
 procedure rec_filter(x: Node) returns (res: Node)
-  requires lseg(x, null);
-  ensures lseg(res, null);
+  requires lseg(x, null)
+  ensures lseg(res, null)
 {
   var n1: Node, n2: Node;
   var nondet: Bool;

@@ -11,7 +11,7 @@ procedure traverse(x: OuterNode, y: OuterNode)
     var ic := oc.down;
     while (ic != null)
       invariant acc(oc)
-      invariant (ic == null || acc(ic)) -** lseg(oc.down, null)
+      invariant /*(ic == null || acc(ic)) -***/ lseg(oc.down, null)
     {
       ic := ic.inext;
     }

@@ -39,7 +39,7 @@ let fix_scopes stmnt =
 %token <int> INTVAL
 %token <bool> BOOLVAL
 %token <string> STRINGVAL
-%token LPAREN RPAREN LBRACE RBRACE 
+%token LPAREN RPAREN LBRACE RBRACE LBRACKET RBRACKET
 %token COLON COLONEQ COLONCOLON SEMICOLON DOT PIPE
 %token UMINUS PLUS MINUS DIV TIMES
 %token UNION INTER DIFF
@@ -51,7 +51,7 @@ let fix_scopes stmnt =
 %token IF ELSE WHILE
 %token GHOST IMPLICIT VAR STRUCT PROCEDURE PREDICATE FUNCTION INCLUDE
 %token OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
-%token LOC INT BOOL SET
+%token LOC INT BOOL SET MAP
 %token MATCHING YIELDS COMMENT 
 %token EOF
 
@@ -262,6 +262,7 @@ var_type:
 | INT { IntType }
 | BOOL { BoolType }
 | SET LT var_type GT { SetType $3 }
+| MAP LT var_type COMMA var_type GT { MapType ($3, $5) }
 | IDENT { StructType ($1, 0) }
 ;
 
@@ -419,9 +420,9 @@ alloc:
 ;
 
 proc_call:
-| SET LT var_type GT LPAREN RPAREN { Setenum ($3, [], mk_position 1 6) }
-| SET LT var_type GT LPAREN expr_list RPAREN { Setenum ($3, $6, mk_position 1 6) }
+| SET LT var_type GT LPAREN expr_list_opt RPAREN { Setenum ($3, $6, mk_position 1 6) }
 | SET LPAREN expr_list RPAREN { Setenum (UniversalType, $3, mk_position 1 4) }
+/*| MAP LT var_type, var_type GT LPAREN expr_list_opt RPAREN {*/
 | IDENT LPAREN expr_list_opt RPAREN { ProcCall (($1, 0), $3, mk_position 1 4) }
 ;
 

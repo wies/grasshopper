@@ -901,9 +901,21 @@ let rec pr_preds ppf = function
   | pred :: preds ->
       fprintf ppf "%a@\n%a" pr_pred pred pr_preds preds
 
+let pr_axiom ppf sf =
+  fprintf ppf "/* %s */@\n@[<2>axiom@ %a@];@\n"
+    sf.spec_name
+    pr_spec_form sf 
+    
+
+let rec pr_axioms ppf = function
+  | [] -> ()
+  | axiom :: axioms ->
+      fprintf ppf "%a@\n%a" pr_axiom axiom pr_axioms axioms
+
 let pr_prog ppf prog =
-  fprintf ppf "%a%a%a" 
+  fprintf ppf "%a%a%a%a" 
     pr_var_decls (IdMap.bindings prog.prog_vars)
+    pr_axioms prog.prog_axioms
     pr_preds (List.map snd (IdMap.bindings prog.prog_preds))
     pr_procs (List.map snd (IdMap.bindings prog.prog_procs))
 

@@ -26,8 +26,18 @@ function llseg_outer_footprint(x: OuterNode, y: OuterNode)
 function llseg_inner_footprint(x: OuterNode, y: OuterNode) 
   returns (FP: Set<Loc>) 
 {
-  forall z: Loc :: z in FP ==
-    (z.head in llseg_outer_footprint(x, y) && Btwn(inext, z.head.down, z, null))
+  (forall z: Loc, zh: Loc :: z in FP && zh == z.head ==>
+    //zh in llseg_outer_footprint(x, y) && 
+    Btwn(onext, x, zh, y) && zh != y &&
+    Btwn(inext, zh.down, z, null)
+    @(matching z yields z.head)
+    @(matching zh yields zh.down)) &&
+  (forall z: Loc, zh: Loc :: 
+    zh == z.head && 
+    //zh in llseg_outer_footprint(x, y) &&
+    Btwn(onext, x, zh, y) && zh != y &&
+    Btwn(inext, zh.down, z, null) ==>
+      z in FP)
 }
 
 predicate llseg(x: OuterNode, y: OuterNode, FP: Set<Loc>) {
@@ -37,5 +47,8 @@ predicate llseg(x: OuterNode, y: OuterNode, FP: Set<Loc>) {
      (u.head == v.head) == (Reach(inext, u, v) || Reach(inext, v, u))) &&
   (forall u: OuterNode :: u in llseg_outer_footprint(x, y) ==>
     Reach(inext, u.down, null)) &&
+  // the following two constraints should be implied by the types but are not yet
+  llseg_outer_footprint(x, y) <= OuterNode &&
+  llseg_inner_footprint(x, y) <= InnerNode &&
   FP == llseg_outer_footprint(x, y) ++ llseg_inner_footprint(x, y)
 }

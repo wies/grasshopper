@@ -187,6 +187,16 @@ let add_pred_insts prog f =
 (** Generate verification conditions for procedure [proc] of program [prog]. 
  ** Assumes that [proc] has been transformed into SSA form. *)
 let vcgen prog proc =
+  let axioms = 
+    Util.flat_map 
+      (fun sf -> 
+        let name = 
+          Printf.sprintf "%s_%d_%d" 
+            sf.spec_name sf.spec_pos.sp_start_line sf.spec_pos.sp_start_col
+        in
+        match sf.spec_form with FOL f -> [mk_name name f] | SL _ -> [])
+      prog.prog_axioms
+  in
   let rec vcs acc pre = function
     | Loop _ -> 
         failwith "vcgen: loop should have been desugared"
@@ -238,7 +248,7 @@ let vcgen prog proc =
                 (string_of_ident proc.proc_name ^ "_" ^ name)
             in
             let vc = pre @ [mk_name name f] in
-            (vc_name, vc_msg, smk_and vc) :: acc, []
+            (vc_name, vc_msg, smk_and (axioms @ vc)) :: acc, []
         | _ -> 
             failwith "vcgen: found unexpected basic command that should have been desugared"
   in

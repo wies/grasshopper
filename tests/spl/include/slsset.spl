@@ -3,13 +3,13 @@
 
 include "slslist.spl";
 
-function witness(v: Int, C: Set<Int>) returns (res: Node) {
+function witness(v: Int, C: Set<Int>) returns (res: Loc) {
   true
 }
 
 function content(FP: Set<Loc>) returns (C: Set<Int>) {
-  (forall x: Node :: x in FP ==> x == witness(x.data, C)) &&
-  (forall x: Node :: x in FP ==> x.data in C) &&
+  (forall x: Loc :: x in FP ==> x == witness(x.data, C)) &&
+  (forall x: Loc :: x in FP ==> x.data in C) &&
   (forall v in C :: witness(v, C) in FP) &&
   (forall v: Int :: v !in C ==> witness(v, C) == null) &&
   (forall v in C :: v == witness(v, C).data @(matching v yields witness(v, C).data))

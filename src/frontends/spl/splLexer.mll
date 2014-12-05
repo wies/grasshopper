@@ -33,6 +33,7 @@ let _ =
       ("include", INCLUDE);
       ("implicit", IMPLICIT);
       ("Loc", LOC);
+      ("Map", MAP);
       ("matching", MATCHING);
       ("new", NEW);
       ("null", NULL);
@@ -72,6 +73,7 @@ rule token = parse
   [' ' '\t'] { token lexbuf }
 | '\n' { Lexing.new_line lexbuf; token lexbuf }
 | "//" [^ '\n']* { token lexbuf }
+| "/*" { comments 0 lexbuf }
 | "\"" ([^ '"']* as str) "\"" { STRINGVAL str }
 | "==>" { IMPLIES }
 | "<=>" { IFF }
@@ -99,6 +101,8 @@ rule token = parse
 | ')' { RPAREN }
 | '{' { LBRACE }
 | '}' { RBRACE }
+| '[' { LBRACKET }
+| ']' { RBRACKET }
 | ":=" { COLONEQ }
 | "::" { COLONCOLON }
 | ':' { COLON }
@@ -119,3 +123,11 @@ rule token = parse
 | eof { EOF }
 | '=' { lexical_error lexbuf (Some ("Unknown operator. Did you mean ':=' or '=='?")) }
 | _ { lexical_error lexbuf None }
+
+and comments level = parse
+| "*/" { if level = 0 then token lexbuf
+         else comments (level - 1) lexbuf
+       }
+| "/*" { comments (level + 1) lexbuf }
+| _ { comments level lexbuf }
+| eof { EOF }

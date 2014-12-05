@@ -1,5 +1,6 @@
 (** {5 Translation of SPL programs to internal representation } *)
 
+open Util 
 open Prog
 open Sl
 open Grass
@@ -12,6 +13,29 @@ let assignment_mismatch_error pos =
 
 let pred_arg_mismatch_error pos name expected =
     ProgError.error pos (Printf.sprintf "Predicate %s expects %d argument(s)" name expected)
+
+let rec assert_type id typ pos =
+  if not !Config.keep_types then None else
+  let open GrassUtil in
+  let f = match typ with
+  | StructType tid ->
+      Some (mk_elem (mk_free_const Loc id) (mk_loc_set tid))
+  | SetType (StructType tid) ->
+      Some (GrassUtil.mk_subseteq (mk_loc_set id) (mk_loc_set tid))
+  | MapType (StructType tid1, StructType tid2) ->
+      let fld = mk_free_const (Map (Loc, Loc)) id in
+      Some 
+        (mk_and
+           [mk_forall [Axioms.l1] 
+              (mk_sequent [mk_elem Axioms.loc1 (mk_loc_set tid1)] 
+                 [mk_elem (mk_read fld Axioms.loc1) (mk_loc_set tid2)]);
+            mk_forall [Axioms.l1]
+              (mk_or [mk_elem Axioms.loc1 (mk_loc_set tid1); mk_eq (mk_read fld Axioms.loc1) mk_null])
+          ])      
+  | _ -> None
+  in
+  Util.Opt.map (fun f -> 
+    mk_free_spec_form (FOL f) ("type_of_" ^ string_of_ident id) None pos) f
 
 let resolve_names cu =
   let lookup_id init_id tbl pos =
@@ -90,12 +114,12 @@ let resolve_names cu =
   (* declare global variables *)
   let globals0, tbl = declare_vars cu.var_decls structs0 tbl in
   (* declare struct fields *)
-  let structs, globals, tbl =
+  let structs, globals, axioms, tbl =
     IdMap.fold
-      (fun id decl (structs, globals, tbl) ->
-        let fields, globals, tbl =
+      (fun id decl (structs, globals, axioms, tbl) ->
+        let fields, globals, axioms, tbl =
           IdMap.fold 
-            (fun init_id fdecl (fields, globals, tbl) ->
+            (fun init_id fdecl (fields, globals, axioms, tbl) ->
               let id, tbl = declare_name fdecl.v_pos init_id GrassUtil.global_scope tbl in
               let res_type = match fdecl.v_type with
               | StructType init_id ->
@@ -104,15 +128,48 @@ let resolve_names cu =
                   StructType id
               | ty -> ty
               in
+              let typ = MapType (StructType decl.s_name, res_type) in
               let fdecl = { fdecl with v_name = id; v_type = res_type } in
-              let gfdecl = { fdecl with v_type = MapType (StructType decl.s_name, res_type) } in
-              IdMap.add id fdecl fields, IdMap.add id gfdecl globals, tbl
+              let gfdecl = { fdecl with v_type = typ } in
+              let type_of_id = Util.Opt.to_list (assert_type id typ fdecl.v_pos) in
+              IdMap.add id fdecl fields, IdMap.add id gfdecl globals, type_of_id @ axioms, tbl
             )
-            decl.s_fields (IdMap.empty, globals, tbl)
+            decl.s_fields (IdMap.empty, globals, axioms, tbl)
         in
-        IdMap.add id { decl with s_fields = fields } structs, globals, tbl
+        let gdecl = 
+          { v_name =  id; 
+            v_type = SetType LocType;
+            v_ghost = true;
+            v_implicit = false;
+            v_aux = false;
+            v_pos = decl.s_pos;
+            v_scope = GrassUtil.global_scope;
+          }
+        in
+        let contains_null = 
+          let f = GrassUtil.mk_elem GrassUtil.mk_null (GrassUtil.mk_loc_set id) in
+          mk_free_spec_form (FOL f) ("null_in_" ^ (string_of_ident id)) None decl.s_pos
+        in
+        let axioms =
+          IdMap.fold 
+            (fun oid _ axioms ->
+              let open GrassUtil in
+              let f = 
+                mk_eq (mk_inter [mk_loc_set oid; mk_loc_set id]) (mk_setenum [mk_null]) 
+              in
+              let disjoint = 
+                mk_free_spec_form 
+                  (FOL f) (string_of_ident oid ^ "_disjoint_from_" ^ string_of_ident id)
+                  None decl.s_pos
+              in disjoint :: axioms)
+            structs axioms
+        in
+        IdMap.add id { decl with s_fields = fields } structs, 
+        IdMap.add id gdecl globals, 
+        contains_null :: axioms,
+        tbl
       )
-      structs0 (IdMap.empty, globals0, tbl)
+      structs0 (IdMap.empty, globals0, [], tbl)
   in
   (* declare procedure names *)
   let procs0, tbl =
@@ -338,7 +395,8 @@ let resolve_names cu =
     struct_decls = structs; 
     proc_decls = procs;
     pred_decls = preds;
-  }
+  },
+  axioms
 
 let flatten_exprs cu =
   let decl_aux_var name vtype pos scope locals =
@@ -666,22 +724,36 @@ let convert cu =
               FOL_form (GrassUtil.mk_srcpos pos (GrassUtil.mk_btwn tfld tx ty tz))
           | _ -> type_error (pos_of_expr fld) (MapType(LocType, LocType)) fld_ty)
       | Quant (q, decls, f, pos) ->
-          let vars, locals1 = 
-             List.fold_right (fun decl (vars, locals1) ->
+          let vars, locals1, type_info = 
+             List.fold_right (fun decl (vars, locals1, type_info) ->
                let id = decl.v_name in
                let ty = decl.v_type in
-               (id, convert_type ty) :: vars, IdMap.add id decl locals1)
-               decls ([], locals)
+               let ti = assert_type id ty decl.v_pos in
+               (id, convert_type ty) :: vars, 
+               IdMap.add id decl locals1,
+               Opt.to_list (Opt.map form_of_spec ti) @ type_info)
+               decls ([], locals, [])
           in
           let subst = 
             List.fold_right (fun (id, srt) subst -> 
               IdMap.add id (GrassUtil.mk_var srt id) subst)
               vars IdMap.empty
-          in            
+          in
+          let type_info1 = GrassUtil.subst_consts subst (GrassUtil.smk_and type_info) in
           (try
-            let mk_quant = match q with
-	    | Forall -> GrassUtil.mk_forall
-            | Exists -> GrassUtil.mk_exists
+            let mk_quant vs f = 
+              let f0, ann = 
+                match f with
+                | Binder (_, [], f0, ann) -> f0, ann
+                | f0 -> f0, []
+              in
+              let f1 = 
+                match q with
+	        | Forall -> 
+                    GrassUtil.mk_forall vs (GrassUtil.mk_implies type_info1 f0)
+                | Exists -> 
+                    GrassUtil.mk_exists vs (GrassUtil.smk_and [type_info1; f0])
+              in GrassUtil.annotate f1 ann
             in
             let f1 = extract_fol_form locals1 f in
             let f2 = GrassUtil.subst_consts subst f1 in
@@ -888,7 +960,8 @@ let convert cu =
               let flt = 
                 TermSet.fold 
                   (function 
-                    | App (FreeSym sym, ts, _) ->
+                    | App (FreeSym sym, ts, _)
+                    | App (Read, (App (FreeSym sym, [], _) :: _ as ts), _) ->
                         (function 
                           | FilterTrue ->
                               if List.exists 
@@ -1015,8 +1088,12 @@ let convert cu =
       | Assign ([lhs], [New (id, npos)], pos) ->
           let lhs_ids, _ = convert_lhs [lhs] [StructType id] in
           let lhs_id = List.hd lhs_ids in
+          let type_info = 
+            let ti = assert_type lhs_id (StructType id) pos in
+            Opt.to_list (Opt.map (fun sf -> mk_assume_cmd sf pos) ti)
+          in
           let new_cmd = mk_new_cmd lhs_id Loc npos in
-          new_cmd
+          mk_seq_cmd (new_cmd :: type_info) pos
       | Assign (lhs, rhs, pos) ->
           let rhs_ts, rhs_tys = 
             Util.map_split (fun e ->
@@ -1041,15 +1118,22 @@ let convert cu =
           let t, _ = extract_term proc.p_locals LocType e in
           mk_dispose_cmd t pos
       | Havoc (es, pos) ->
-          let ids = 
-            List.map 
+          let ids, type_info = 
+            Util.map_split 
               (function 
-                | Ident (id, _) -> id 
+                | Ident (id, _) -> 
+                    let decl = find_var_decl proc.p_locals id in
+                    id, assert_type id decl.v_type pos
                 | e -> ProgError.error (pos_of_expr e) "Only variables can be havoced"
               )
               es
           in 
-          mk_havoc_cmd ids pos
+          let assume_cmds = 
+            Util.flat_map 
+              (fun ti -> Opt.to_list (Opt.map (fun sf -> mk_assume_cmd sf pos) ti))
+              type_info
+          in
+          mk_seq_cmd (mk_havoc_cmd ids pos :: assume_cmds) pos
       | If (c, t, e, pos) ->
           let cond = extract_fol_form proc.p_locals c in
           let t_cmd = convert_stmt proc t in
@@ -1132,13 +1216,18 @@ let convert cu =
       IdMap.fold
         (fun id decl prog ->
           let pre, post = convert_contract decl.p_name decl.p_locals decl.p_contracts in
+          let mk_types ids = 
+            Util.flat_map (fun id ->
+              let vdecl = find_var_decl decl.p_locals id in
+              Opt.to_list (assert_type id vdecl.v_type vdecl.v_pos)) ids
+          in
           let proc_decl =
             { proc_name = id;
               proc_formals = decl.p_formals;
               proc_returns = decl.p_returns;
               proc_locals = IdMap.map convert_var_decl decl.p_locals;
-              proc_precond = pre;
-              proc_postcond = post;
+              proc_precond = mk_types decl.p_formals @ pre ;
+              proc_postcond = mk_types decl.p_returns @ post;
               proc_body = convert_body decl;
               proc_pos = decl.p_pos;
               proc_deps = [];
@@ -1151,6 +1240,7 @@ let convert cu =
     prog
 
 let to_program cu =
-  let cu1 = resolve_names cu in
+  let cu1, axioms = resolve_names cu in
   let cu2 = flatten_exprs cu1 in
-  convert cu2
+  let prog = convert cu2 in
+  { prog with prog_axioms = axioms }

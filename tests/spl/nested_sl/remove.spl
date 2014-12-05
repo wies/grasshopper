@@ -43,7 +43,6 @@ procedure remove(x: OuterNode) returns (res: OuterNode)
           }
         }
       }
-     
       if (curr.down == null) {
         prev.onext := curr.onext;
         free(curr);
