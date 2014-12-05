@@ -852,9 +852,8 @@ let rec pr_id_srt_list ppf = function
         pr_id_srt_list iss
 
 let pr_var_decl ppf (id, decl) =
-  fprintf ppf "@[<2>%avar@ %a@];@\n" 
-    pr_ghost decl.var_is_ghost
-    (pr_id_srt false false) (id, decl.var_sort)
+  fprintf ppf "@[<2>var@ %a@];@\n" 
+    (pr_id_srt decl.var_is_implicit decl.var_is_ghost) (id, decl.var_sort)
 
 let rec pr_var_decls ppf = function
   | [] -> ()
