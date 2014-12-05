@@ -78,6 +78,6 @@ checking of SPL programs and provides keyboard shortcuts for verifying
 the program from inside buffers. See the documentation in the file
 spl-mode.el for details.
 
-Note that We are using a patched version of the original flycheck mode
+Note that we are using a patched version of the original flycheck mode
 by Sebastian Wiesner. The minor mode will not work correctly with the
 original version of the flycheck mode.
