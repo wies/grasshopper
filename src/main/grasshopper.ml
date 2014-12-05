@@ -1,7 +1,11 @@
 open Util
 
+let greeting =
+  "GRASShopper version " ^ Config.version ^ "\n"
+
 let usage_message =
-  "Usage:\n  " ^ Sys.argv.(0) ^ 
+  greeting ^
+  "\nUsage:\n  " ^ Sys.argv.(0) ^ 
   " <input file> [options]\n"
 
 let cmd_line_error msg =
