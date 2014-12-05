@@ -32,7 +32,7 @@ Installation Instructions
   to produce native code compiled executables.
 
 - Optional: run
-     ./regression-tests
+     ./build.sh tests
   to check whether the build succeeded.
 
 -------------------------

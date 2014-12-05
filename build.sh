@@ -61,25 +61,23 @@ smtlib()
     done
 }
 
-rule() {
-    case $1 in
+if [ $# -eq 0 ]; then
+    action=native
+else
+    action=$1;
+    shift
+fi
+
+case $action in
     clean)  ocb -clean;;
     native) ocb ${TARGET//" "/".native "} ;;
     byte)   ocb ${TARGET//" "/".byte "} ;;
     all)    ocb ${TARGET//" "/".native "} ${TARGET//" "/".byte "} ;;
     prof)   ocb ${TARGET//" "/".p.native "} ;;
+    tests)  bin/regression-tests $@ ;;
     depend) echo "Not needed.";;
     distro) distro ;;
     smt-lib) smtlib ;;
-    *)      echo "Unknown action $1";;
-    esac;
-}
+    *)      echo "Unknown action $action";;
+esac;
 
-if [ $# -eq 0 ]; then
-    rule native
-else
-    while [ $# -gt 0 ]; do
-        rule $1;
-        shift
-    done
-fi
