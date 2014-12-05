@@ -26,12 +26,19 @@ let rec assert_type id typ pos =
       let fld = mk_free_const (Map (Loc, Loc)) id in
       Some 
         (mk_and
-           [mk_forall [Axioms.l1] 
+           (mk_forall [Axioms.l1] 
               (mk_sequent [mk_elem Axioms.loc1 (mk_loc_set tid1)] 
-                 [mk_elem (mk_read fld Axioms.loc1) (mk_loc_set tid2)]);
+                 [mk_elem (mk_read fld Axioms.loc1) (mk_loc_set tid2)]) ::
             mk_forall [Axioms.l1]
-              (mk_or [mk_elem Axioms.loc1 (mk_loc_set tid1); mk_eq (mk_read fld Axioms.loc1) mk_null])
-          ])      
+              (mk_or [mk_elem Axioms.loc1 (mk_loc_set tid1); mk_eq (mk_read fld Axioms.loc1) mk_null]) ::
+            if tid1 = tid2 then
+              [mk_forall [Axioms.l1; Axioms.l2]
+                 (mk_sequent [mk_elem Axioms.loc1 (mk_loc_set tid1); mk_reach fld Axioms.loc1 Axioms.loc2]
+                    [mk_elem Axioms.loc2 (mk_loc_set tid1)]);
+               mk_forall [Axioms.l1; Axioms.l2]
+                 (mk_or [mk_elem Axioms.loc1 (mk_loc_set tid1); mk_not (mk_reach fld Axioms.loc1 Axioms.loc2);
+                         mk_eq Axioms.loc1 Axioms.loc2; mk_eq Axioms.loc2 mk_null])]
+            else []))      
   | _ -> None
   in
   Util.Opt.map (fun f -> 

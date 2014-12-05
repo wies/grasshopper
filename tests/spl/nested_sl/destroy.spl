@@ -1,12 +1,12 @@
 include "nested_def.spl";
 
 procedure destroy(x: OuterNode, y: OuterNode)
-  requires llseg(x, y)
+  requires nlseg(x, y)
   ensures emp
 {
   var oc := x;
   while (oc != y)
-    invariant llseg(oc, y)
+    invariant nlseg(oc, y)
   {
     var ic := oc.down;
     while (ic != null)

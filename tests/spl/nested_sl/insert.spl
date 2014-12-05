@@ -2,8 +2,8 @@ include "nested_def.spl";
 
 
 procedure insert(x: OuterNode) returns (res: OuterNode)
-  requires llseg(x, null)
-  ensures llseg(res, null)
+  requires nlseg(x, null)
+  ensures nlseg(res, null)
 {
   if (x == null) {
     var o := new OuterNode;
@@ -18,7 +18,7 @@ procedure insert(x: OuterNode) returns (res: OuterNode)
     var curr := x;
     //traverse outer list
     while (nondet && curr.onext != null)
-      invariant acc(curr) -** llseg(x, null)
+      invariant acc(curr) -** nlseg(x, null)
     {
       havoc nondet;
       curr := curr.onext;

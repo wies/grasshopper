@@ -1,17 +1,17 @@
 include "nested_def.spl";
 
 procedure traverse(x: OuterNode, y: OuterNode)
-  requires llseg(x, y)
-  ensures llseg(x, y)
+  requires nlseg(x, y)
+  ensures nlseg(x, y)
 {
   var oc := x;
   while (oc != y)
-    invariant (oc == y || acc(oc)) -** llseg(x, y)
+    invariant (oc == y || acc(oc)) -** nlseg(x, y)
   {
     var ic := oc.down;
     while (ic != null)
       invariant acc(oc)
-      invariant /*(ic == null || acc(ic)) -***/ lseg(oc.down, null)
+      invariant (ic == null || acc(ic)) -** lseg(oc.down, null)
     {
       ic := ic.inext;
     }
