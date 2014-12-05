@@ -8,9 +8,14 @@ modification, are permitted provided that the following conditions are met:
 
 1. Redistributions of source code must retain the above copyright notice, this
    list of conditions and the following disclaimer. 
+
 2. Redistributions in binary form must reproduce the above copyright notice,
    this list of conditions and the following disclaimer in the documentation
    and/or other materials provided with the distribution. 
+
+3. The names of the contributors may not be used to endorse or promote
+   products derived from this software without specific prior written
+   permission.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
 ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -22,3 +27,68 @@ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
 ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+(See http://www.opensource.org/licenses/bsd-license.php)
+
+----
+
+GRASShopper integrates a union-find data structure library excluded
+from the above copyright. See files
+
+src/util/parray.mli
+src/util/parray.ml
+src/util/puf.mli
+src/util/puf.ml
+
+Its copyright:
+
+Copyright (C) Jean-Christophe Filliatre                               
+
+This software is free software; you can redistribute it and/or
+modify it under the terms of the GNU Library General Public
+License version 2.1 with the special exception on linking described
+below.
+
+This software is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+(See https://www.gnu.org/licenses/old-licenses/lgpl-2.1-standalone.html)
+
+As a special exception to the GNU Library General Public License, you
+may link, statically or dynamically, a "work that uses the Library"
+with a publicly distributed version of the Library to produce an
+executable file containing portions of the Library, and distribute
+that executable file under terms of your choice, without any of the
+additional requirements listed in clause 6 of the GNU Library General
+Public License. By "a publicly distributed version of the Library", we
+mean either the unmodified Library as distributed, or a
+modified version of the Library that is distributed under the
+conditions defined in clause 3 of the GNU Library General Public
+License. This exception does not however invalidate any other reasons
+why the executable file might be covered by the GNU Library General
+Public License.  
+
+----
+
+GRASShopper integrates a modified version of the flycheck Emacs mode. See file
+emacs-mode/flycheck.el.
+
+Its copyright:
+
+Copyright (c) 2012, 2013, 2014 Sebastian Wiesner <swiesner@lunaryorn.com>
+Copyright (C) 2013, 2014 Free Software Foundation, Inc.
+
+This file is not part of GNU Emacs.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+General Public License for more details.
+
+(see http://www.gnu.org/licenses/)

@@ -1,24 +1,24 @@
-GRASShopper preliminary version of $DATE.
-
-This is a preliminary distribution.
-Please let us know if you are planing to use it.
+GRASShopper version 0.3.
 
 (c) Thomas Wies (wies@cs.nyu.edu)
     Damien Zufferey (zufferey@csail.mit.edu)
 
-The code written by us is released under a BSD license, see file
-LICENSE. GRASShopper uses a union-find data structure that is written
-by Jean-Christophe Filliatre and is released under an LGPL
-license. The Emacs mode uses a minor mode, called flycheck, for
-on-the-fly syntax checking. The original flycheck mode was written by
-Sebastian Wiesner and released under a GPL license.
+GRASShopper is an experimental verification tool for programs that
+manipulate dynamically allocated data structures. GRASShopper programs
+can be annotated with specifications expressed in a decidable
+specification logic to check functional correctness properties. The
+logic supports mixing of assertions expressed in separation logic and
+first-order logic, yielding concise specifications.
+
+The tool is released under a BSD license, see file LICENSE for
+details.
 
 -------------------------
-Required
+Installation Requirements
 -------------------------
 - OCaml, version >= 3.12
 
-- Z3, version >= 3.2, or
+- Z3, version >= 3.2, and/or
 
 - CVC4, version >= 1.4
 
@@ -27,9 +27,7 @@ GRASShopper has been tested on Linux, Mac OS, and Windows/Cygwin.
 -------------------------
 Installation Instructions 
 -------------------------
-- Untar the distribution
-
-- In the grasshopper directory, run 
+- Run 
      ./build.sh
   to produce native code compiled executables.
 
@@ -40,12 +38,12 @@ Installation Instructions
 -------------------------
 Usage
 -------------------------
-- To run GRASShopper execute, e.g.
+- To run GRASShopper, execute e.g.
      ./grasshopper.native tests/spl/sl_reverse.spl
   The analyzer expects the Z3 (respectively, CVC4) executable in the path.
 
 - To see the available command line options, run
-     ./grasshopper.native -h
+     ./grasshopper.native -help
 
 -------------------------
 Emacs Modes
