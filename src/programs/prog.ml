@@ -744,12 +744,14 @@ let pr_basic_cmd ppf = function
   | Dispose dc -> 
       fprintf ppf "@[<2>free@ %a@]" pr_term dc.dispose_arg
   | Assume sf ->
-      fprintf ppf "/* %s */@\n@[<2>assume@ %a@]" 
+      fprintf ppf "/* %s */@\n@[<2>%sassume@ %a@]" 
         sf.spec_name
+        (fold_spec_form (fun _ -> "pure ") (fun _ -> "") sf)
         pr_spec_form sf
   | Assert sf ->
-      fprintf ppf "/* %s */@\n@[<2>assert@ %a@]" 
+      fprintf ppf "/* %s */@\n@[<2>%sassert@ %a@]" 
         sf.spec_name
+        (fold_spec_form (fun _ -> "pure ") (fun _ -> "") sf)
         pr_spec_form sf
   | Return rc -> 
       fprintf ppf "@[<2>return@ %a@]" pr_term_list rc.return_args
@@ -767,8 +769,15 @@ let pr_basic_cmd ppf = function
 
 let rec pr_invs ppf = function
   | [] -> ()
-  | [sf] -> fprintf ppf "invariant@ @[<2>%a@];" pr_spec_form sf
-  | sf :: sfs -> fprintf ppf "@<0>%s@[<2>@ %a@];@\n%a" "invariant" pr_spec_form sf pr_invs sfs 
+  | [sf] -> 
+      fprintf ppf "%sinvariant@ @[<2>%a@]" 
+        (fold_spec_form (fun _ -> "pure ") (fun _ -> "") sf)
+        pr_spec_form sf
+  | sf :: sfs -> 
+      fprintf ppf "@<0>%s%s@[<2>@ %a@]@\n%a"
+        (fold_spec_form (fun _ -> "pure ") (fun _ -> "") sf)
+        "invariant" 
+        pr_spec_form sf pr_invs sfs 
 
 let rec pr_cmd ppf = function
   | Loop (lc, _) ->
@@ -802,18 +811,20 @@ let pr_spec_kind ppf = function
 let rec pr_precond ppf = function
   | [] -> ()
   | sf :: sfs -> 
-      fprintf ppf "/* %s */@\n@[<2>%arequires@ %a@];@\n%a"
+      fprintf ppf "@\n/* %s */@\n@[<2>%a%srequires@ %a@]%a"
         sf.spec_name
         pr_spec_kind sf.spec_kind
+        (fold_spec_form (fun _ -> "pure ") (fun _ -> "") sf)
         pr_spec_form sf 
         pr_precond sfs 
 
 let rec pr_postcond ppf = function
   | [] -> ()
   | sf :: sfs -> 
-      fprintf ppf "/* %s */@\n@[<2>%aensures@ %a@];@\n%a"
+      fprintf ppf "@\n/* %s */@\n@[<2>%a%sensures@ %a@]%a"
         sf.spec_name
         pr_spec_kind sf.spec_kind
+        (fold_spec_form (fun _ -> "pure ") (fun _ -> "") sf)
         pr_spec_form sf 
         pr_postcond sfs 
 
@@ -840,19 +851,26 @@ let rec pr_id_srt_list ppf = function
         (pr_id_srt implicit ghost) is 
         pr_id_srt_list iss
 
-let pr_body ppf = function
-  | None -> ()
-  | Some (Seq _ as c) -> pr_cmd ppf c 
-  | Some c -> pr_cmd ppf (Seq ([c], mk_ppoint dummy_position))
-
 let pr_var_decl ppf (id, decl) =
-  fprintf ppf "%avar@ @[<2>%a@];@\n@\n" 
+  fprintf ppf "@[<2>%avar@ %a@];@\n" 
     pr_ghost decl.var_is_ghost
     (pr_id_srt false false) (id, decl.var_sort)
 
 let rec pr_var_decls ppf = function
   | [] -> ()
   | decl :: decls -> fprintf ppf "%a%a" pr_var_decl decl pr_var_decls decls
+
+let pr_body locals ppf = function
+  | None -> ()
+  | Some c ->
+      let cs = match c with
+      | Seq (cs, _) -> cs
+      | _ -> [c]
+      in
+      fprintf ppf "{@[<1>@\n%a%a@]@\n}"
+        pr_var_decls locals
+        pr_seq cs 
+
 
 let pr_proc ppf proc =
   let add_srts = List.map (fun id -> 
@@ -862,16 +880,16 @@ let pr_proc ppf proc =
   let locals = IdMap.fold (fun id decl locals ->
     if List.mem id (proc.proc_returns @ proc.proc_formals) 
     then locals
-    else (decl.var_is_implicit, decl.var_is_ghost, (id, decl.var_sort)) :: locals) proc.proc_locals []
+    else (id, decl) :: locals) proc.proc_locals []
   in
-  fprintf ppf "@[<2>procedure@ %a(@[<0>%a@])@]@ @,returns (@[<0>%a@])@ @,locals (@[%a@])@\n%a%a%a@\n"
+  fprintf ppf "@[<2>%s %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a%a@]@\n%a@\n"
+    "procedure"
     pr_ident proc.proc_name
     pr_id_srt_list (add_srts proc.proc_formals)
     pr_id_srt_list (add_srts proc.proc_returns)
-    pr_id_srt_list locals
     pr_precond proc.proc_precond
     pr_postcond proc.proc_postcond
-    pr_body proc.proc_body
+    (pr_body locals) proc.proc_body
 
 let rec pr_procs ppf = function
   | [] -> ()
@@ -885,12 +903,12 @@ let pr_pred ppf pred =
   in
   match pred.pred_outputs with
   | [] ->
-      fprintf ppf "@[<2>predicate@ %a(@[<0>%a@])@]@ {@[<1>@\n%a@]@\n}@\n@\n"
+      fprintf ppf "@[<2>predicate %a(@[<0>%a@])@]@ {@[<1>@\n%a@]@\n}@\n@\n"
         pr_ident pred.pred_name
         pr_id_srt_list (add_srts pred.pred_formals)
         pr_spec_form pred.pred_body
   | _ ->
-      fprintf ppf "@[<2>function@ %a(@[<0>%a@])@]@ @,returns (@[<0>%a@])@ {@[<1>@\n%a@]@\n}@\n@\n"
+      fprintf ppf "@[<2>function %a(@[<0>%a@])@\nreturns (@[<0>%a@])@]@\n{@[<1>@\n%a@]@\n}@\n@\n"
         pr_ident pred.pred_name
         pr_id_srt_list (add_srts pred.pred_formals)
         pr_id_srt_list (add_srts pred.pred_outputs)
@@ -913,7 +931,7 @@ let rec pr_axioms ppf = function
       fprintf ppf "%a@\n%a" pr_axiom axiom pr_axioms axioms
 
 let pr_prog ppf prog =
-  fprintf ppf "%a%a%a%a" 
+  fprintf ppf "%a@\n%a%a%a" 
     pr_var_decls (IdMap.bindings prog.prog_vars)
     pr_axioms prog.prog_axioms
     pr_preds (List.map snd (IdMap.bindings prog.prog_preds))

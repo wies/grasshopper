@@ -22,7 +22,7 @@ let _ =
       ("false", BOOLVAL(false));
       ("forall", QUANT(SplSyntax.Forall));
       ("exists", QUANT(SplSyntax.Exists));
-      ("free", DISPOSE);
+      ("free", FREE);
       ("function", FUNCTION);
       ("ghost", GHOST);
       ("havoc", HAVOC);
@@ -40,6 +40,7 @@ let _ =
       ("outputs", OUTPUTS);
       ("predicate", PREDICATE);
       ("procedure", PROCEDURE);
+      ("pure", PURE);
       ("requires", REQUIRES);
       ("return", RETURN);
       ("returns", RETURNS);

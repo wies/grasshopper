@@ -87,8 +87,8 @@ and var =
 and vars = var IdMap.t
 
 and proc_contract =
-  | Requires of expr
-  | Ensures of expr
+  | Requires of expr * bool
+  | Ensures of expr * bool
 
 and proc_contracts = proc_contract list
 
@@ -104,8 +104,8 @@ and stmt =
   | Skip of pos
   | Block of stmts * pos
   | LocalVars of var list * exprs option * pos
-  | Assume of expr * pos
-  | Assert of expr * pos
+  | Assume of expr * bool * pos
+  | Assert of expr * bool * pos
   | Assign of exprs * exprs * pos
   | Havoc of exprs * pos
   | Dispose of expr * pos
@@ -118,7 +118,7 @@ and stmts = stmt list
 and loop_contracts = loop_contract list
 
 and loop_contract = 
-  | Invariant of expr
+  | Invariant of expr * bool
 
 and expr =
   | Null of pos
@@ -168,8 +168,8 @@ let pos_of_stmt = function
   | Skip pos
   | Block (_, pos)
   | LocalVars (_, _, pos)
-  | Assume (_, pos)
-  | Assert (_, pos)
+  | Assume (_, _, pos)
+  | Assert (_, _, pos)
   | Assign (_, _, pos)
   | Dispose (_, pos)
   | Havoc (_, pos)

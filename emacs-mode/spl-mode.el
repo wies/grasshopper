@@ -40,16 +40,16 @@
    '("\\(//[^\n]*\\)" 1 
      font-lock-comment-face)
 
-   '("\\<\\(i\\(f\\|nclude\\)\\|comment\\|else\\|f\\(ree\\|unction\\)\\|havoc\\|matching\\|new\\|outputs\\|pr\\(ocedure\\|edicate\\)\\|return\\(s\\|\\)\\|struct\\|var\\|while\\|yields\\)\\>"
+   '("\\<\\(i\\(f\\|nclude\\)\\|c\\(hoose\\|omment\\)\\|else\\|f\\(ree\\|unction\\)\\|havoc\\|matching\\|new\\|or\\|pr\\(ocedure\\|edicate\\)\\|return\\(s\\|\\)\\|struct\\|var\\|while\\|yields\\)\\>"
          1 font-lock-keyword-face)
 
-   '("\\<\\(ass\\(ert\\|ume\\)\\|ensures\\|i\\(mplicit\\|nvariant\\)\\|requires\\|ghost\\)\\>"
+   '("\\<\\(a\\(xiom\\|ss\\(ert\\|ume\\)\\)\\|ensures\\|i\\(mplicit\\|nvariant\\)\\|pure\\|requires\\|ghost\\)\\>"
          1 font-lock-spec-face)
 
-   '("\\<\\(Btwn\\|forall\\|exists\\|old\\)\\>"
+   '("\\<\\(Btwn\\|exists\\|forall\\|in\\|old\\|Reach\\)\\>"
          1 font-lock-builtin-face)
 
-   '("\\<\\(emp\\|false\\|in\\|null\\|true\\)\\>"
+   '("\\<\\(emp\\|false\\|null\\|true\\)\\>"
          1 font-lock-constant-face)
 
    '("\\(\\<[a-zA-Z_][a-zA-Z0-9_']*[ \t]*\\>\\)(" 1

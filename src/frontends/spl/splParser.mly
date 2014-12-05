@@ -47,9 +47,9 @@ let fix_scopes stmnt =
 %token PTS EMP NULL
 %token SEPSTAR SEPPLUS SEPINCL AND OR IMPLIES IFF NOT COMMA
 %token <SplSyntax.quantifier_kind> QUANT
-%token ASSUME ASSERT CALL DISPOSE HAVOC NEW RETURN
+%token ASSUME ASSERT CALL FREE HAVOC NEW RETURN
 %token IF ELSE WHILE
-%token GHOST IMPLICIT VAR STRUCT PROCEDURE PREDICATE FUNCTION INCLUDE
+%token GHOST IMPLICIT VAR STRUCT PURE PROCEDURE PREDICATE FUNCTION INCLUDE
 %token OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token LOC INT BOOL SET MAP
 %token MATCHING YIELDS COMMENT 
@@ -57,7 +57,7 @@ let fix_scopes stmnt =
 
 %nonassoc COLONEQ 
 %nonassoc ASSUME ASSERT
-%nonassoc NEW DISPOSE
+%nonassoc NEW FREE
 
 %left SEMICOLON
 %left OR
@@ -142,9 +142,13 @@ proc_contracts:
 ;
 
 proc_contract:
-| REQUIRES expr semicolon_opt { Requires $2 }
-| ENSURES expr semicolon_opt { Ensures $2 }
+| pure_opt REQUIRES expr semicolon_opt { Requires ($3, $1) }
+| pure_opt ENSURES expr semicolon_opt { Ensures ($3, $1) }
 ;
+
+pure_opt:
+| PURE { true }
+| /* empty */ { false }
 
 semicolon_opt:
 | SEMICOLON {}
@@ -324,7 +328,7 @@ stmt_wo_trailing_substmt:
   Block ($2, mk_position 1 3) 
 }
 /* deallocation */
-| DISPOSE expr SEMICOLON { 
+| FREE expr SEMICOLON { 
   Dispose ($2, mk_position 1 3)
 }
 /* procedure call */
@@ -340,12 +344,12 @@ stmt_wo_trailing_substmt:
   Havoc ($2, mk_position 1 3)
 }
 /* assume */
-| ASSUME expr SEMICOLON {
-  Assume ($2, mk_position 1 3)
+| pure_opt ASSUME expr SEMICOLON {
+  Assume ($3, $1, mk_position 1 4)
 }
 /* assert */
-| ASSERT expr SEMICOLON { 
-  Assert ($2, mk_position 1 3)
+| pure_opt ASSERT expr SEMICOLON { 
+  Assert ($3, $1, mk_position 1 4)
 }
 /* return */
 | RETURN expr_list_opt SEMICOLON { 
@@ -402,7 +406,7 @@ loop_contracts:
 ;
 
 loop_contract:
-| INVARIANT expr semicolon_opt { Invariant $2 }
+| pure_opt INVARIANT expr semicolon_opt { Invariant ($3, $1) }
 ;
 
 primary:

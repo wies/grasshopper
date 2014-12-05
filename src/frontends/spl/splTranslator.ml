@@ -318,10 +318,10 @@ let resolve_names cu =
             Assign (ids, es1, pos), locals, tbl
         | None -> 
             Havoc (ids, pos), locals, tbl)
-    | Assume (e, pos) ->
-        Assume (resolve_expr locals tbl e, pos), locals, tbl
-    | Assert (e, pos) ->
-        Assert (resolve_expr locals tbl e, pos), locals, tbl
+    | Assume (e, pure, pos) ->
+        Assume (resolve_expr locals tbl e, pure, pos), locals, tbl
+    | Assert (e, pure, pos) ->
+        Assert (resolve_expr locals tbl e, pure, pos), locals, tbl
     | Assign (lhs, rhs, pos) ->
         let lhs1 = List.map (resolve_expr locals tbl) lhs in
         let rhs1 = List.map (resolve_expr locals tbl) rhs in
@@ -338,8 +338,8 @@ let resolve_names cu =
     | Loop (inv, preb, cond, postb, pos) ->
         let inv1 = 
           List.fold_right 
-            (function Invariant e -> fun inv1 ->
-              Invariant (resolve_expr locals tbl e) :: inv1
+            (function Invariant (e, pure) -> fun inv1 ->
+              Invariant (resolve_expr locals tbl e, pure) :: inv1
             ) 
             inv []
         in
@@ -358,8 +358,8 @@ let resolve_names cu =
         let contracts = 
           List.map 
             (function 
-              | Requires e -> Requires (resolve_expr locals0 tbl e)
-              | Ensures e -> Ensures (resolve_expr locals0 tbl e)
+              | Requires (e, pure) -> Requires (resolve_expr locals0 tbl e, pure)
+              | Ensures (e, pure) -> Ensures (resolve_expr locals0 tbl e, pure)
             )
             decl.p_contracts
         in
@@ -497,8 +497,8 @@ let flatten_exprs cu =
         in Block (List.rev stmts, pos), locals
       | LocalVars (_, _, pos) ->
           failwith "flatten_exprs: LocalVars should have been eliminated"
-      | (Assume (e, pos) as stmt)
-      | (Assert (e, pos) as stmt) ->
+      | (Assume (e, pure, pos) as stmt)
+      | (Assert (e, pure, pos) as stmt) ->
           check_side_effects e;
           stmt, locals
       | Assign (lhs, [ProcCall (id, args, cpos)], pos) ->
@@ -571,7 +571,7 @@ let flatten_exprs cu =
       | Loop (inv, preb, cond, postb, pos) ->
           let _ = 
             List.iter 
-              (function Invariant e -> check_side_effects e)
+              (function Invariant (e, _) -> check_side_effects e)
               inv
           in
           let preb1, locals = flatten pos locals returns preb in
@@ -1021,13 +1021,17 @@ let convert cu =
             | _ -> type_error (pos_of_expr e) ty tty
           in t, match_types ty tty
     in
-    let convert_spec_form locals e name msg =
-      let f = extract_sl_form locals e in
-      mk_spec_form (SL f) name msg (pos_of_expr e)
+    let convert_spec_form pure locals e name msg =
+      let f = 
+        if pure 
+        then FOL (extract_fol_form locals e)
+        else SL (extract_sl_form locals e)
+      in
+      mk_spec_form f name msg (pos_of_expr e)
     in
     let convert_loop_contract proc_name locals contract =
       List.map
-        (function Invariant e -> 
+        (function Invariant (e, pure) -> 
           let msg caller =
             if caller = proc_name then
               (Printf.sprintf 
@@ -1041,7 +1045,7 @@ let convert cu =
                ProgError.mk_error_info "This is the loop invariant that might not be maintained")
           in
           (*let pos = pos_of_expr e in*)
-          convert_spec_form locals e "invariant" (Some msg)
+          convert_spec_form pure locals e "invariant" (Some msg)
         )
         contract
     in
@@ -1066,11 +1070,11 @@ let convert cu =
       | Block (stmts, pos) ->
           let cmds = List.map (convert_stmt proc) stmts in
           mk_seq_cmd cmds pos
-      | Assume (e, pos) ->
-          let sf = convert_spec_form proc.p_locals e "assume" None in
+      | Assume (e, pure, pos) ->
+          let sf = convert_spec_form pure proc.p_locals e "assume" None in
           mk_assume_cmd sf pos
-      | Assert (e, pos) ->
-          let sf = convert_spec_form proc.p_locals e "assert" None in
+      | Assert (e, pure, pos) ->
+          let sf = convert_spec_form pure proc.p_locals e "assert" None in
           mk_assert_cmd sf pos
       | Assign (lhs, [ProcCall (id, es, cpos)], pos) ->
           let decl = IdMap.find id cu.proc_decls in
@@ -1194,7 +1198,7 @@ let convert cu =
     let convert_contract proc_name locals contract =
       List.fold_right 
         (function 
-          | Requires e -> fun (pre, post) -> 
+          | Requires (e, pure) -> fun (pre, post) -> 
               let mk_msg caller =
                 Printf.sprintf 
                   "A precondition for this call of %s might not hold"
@@ -1202,8 +1206,8 @@ let convert cu =
                 ProgError.mk_error_info "This is the precondition that might not hold"
               in
               let name = "precondition of " ^ string_of_ident proc_name in
-              convert_spec_form locals e name (Some mk_msg) :: pre, post
-          | Ensures e -> fun (pre, post) ->
+              convert_spec_form pure locals e name (Some mk_msg) :: pre, post
+          | Ensures (e, pure) -> fun (pre, post) ->
               let mk_msg caller =
                 Printf.sprintf 
                   "A postcondition of procedure %s might not hold at this return point"
@@ -1211,7 +1215,7 @@ let convert cu =
                 ProgError.mk_error_info "This is the postcondition that might not hold"
               in 
               let name = "postcondition of " ^ string_of_ident proc_name in
-              pre, convert_spec_form locals e name (Some mk_msg) :: post)
+              pre, convert_spec_form pure locals e name (Some mk_msg) :: post)
         contract ([], [])
     in
     let convert_body decl =
