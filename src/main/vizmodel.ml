@@ -27,7 +27,7 @@ let vizmodel file =
   let model = parse_input file in
   let model_chan = open_out !Config.model_file in
   (* Model.print_model2 model;*)
-  Model.output_graphviz model_chan model;
+  Model.output_graphviz model_chan model Grass.TermSet.empty;
   close_out model_chan  
 
 let _ =

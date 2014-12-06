@@ -15,33 +15,31 @@ let pred_arg_mismatch_error pos name expected =
     ProgError.error pos (Printf.sprintf "Predicate %s expects %d argument(s)" name expected)
 
 let rec assert_type id typ pos =
-  if not !Config.keep_types then None else
+  if not !Config.keep_types then [] else
   let open GrassUtil in
   let f = match typ with
   | StructType tid ->
-      Some (mk_elem (mk_free_const Loc id) (mk_loc_set tid))
+      [mk_elem (mk_free_const Loc id) (mk_loc_set tid)]
   | SetType (StructType tid) ->
-      Some (GrassUtil.mk_subseteq (mk_loc_set id) (mk_loc_set tid))
+      [GrassUtil.mk_subseteq (mk_loc_set id) (mk_loc_set tid)]
   | MapType (StructType tid1, StructType tid2) ->
       let fld = mk_free_const (Map (Loc, Loc)) id in
-      Some 
-        (mk_and
-           (mk_forall [Axioms.l1] 
-              (mk_sequent [mk_elem Axioms.loc1 (mk_loc_set tid1)] 
-                 [mk_elem (mk_read fld Axioms.loc1) (mk_loc_set tid2)]) ::
-            mk_forall [Axioms.l1]
-              (mk_or [mk_elem Axioms.loc1 (mk_loc_set tid1); mk_eq (mk_read fld Axioms.loc1) mk_null]) ::
-            if tid1 = tid2 then
-              [mk_forall [Axioms.l1; Axioms.l2]
-                 (mk_sequent [mk_elem Axioms.loc1 (mk_loc_set tid1); mk_reach fld Axioms.loc1 Axioms.loc2]
-                    [mk_elem Axioms.loc2 (mk_loc_set tid1)]);
-               mk_forall [Axioms.l1; Axioms.l2]
-                 (mk_or [mk_elem Axioms.loc1 (mk_loc_set tid1); mk_not (mk_reach fld Axioms.loc1 Axioms.loc2);
-                         mk_eq Axioms.loc1 Axioms.loc2; mk_eq Axioms.loc2 mk_null])]
-            else []))      
-  | _ -> None
+      mk_forall [Axioms.l1] 
+        (mk_sequent [mk_elem Axioms.loc1 (mk_loc_set tid1)] 
+           [mk_elem (mk_read fld Axioms.loc1) (mk_loc_set tid2)]) ::
+      mk_forall [Axioms.l1]
+        (mk_or [mk_elem Axioms.loc1 (mk_loc_set tid1); mk_eq (mk_read fld Axioms.loc1) mk_null]) ::
+      if tid1 = tid2 then
+        [mk_forall [Axioms.l1; Axioms.l2]
+           (mk_sequent [mk_elem Axioms.loc1 (mk_loc_set tid1); mk_reach fld Axioms.loc1 Axioms.loc2]
+              [mk_elem Axioms.loc2 (mk_loc_set tid1)]);
+         mk_forall [Axioms.l1; Axioms.l2]
+           (mk_or [mk_elem Axioms.loc1 (mk_loc_set tid1); mk_not (mk_reach fld Axioms.loc1 Axioms.loc2);
+                   mk_eq Axioms.loc1 Axioms.loc2; mk_eq Axioms.loc2 mk_null])]
+      else [] 
+  | _ -> []
   in
-  Util.Opt.map (fun f -> 
+  List.map (fun f -> 
     mk_free_spec_form (FOL f) ("type_of_" ^ string_of_ident id) None pos) f
 
 let resolve_names cu =
@@ -138,7 +136,7 @@ let resolve_names cu =
               let typ = MapType (StructType decl.s_name, res_type) in
               let fdecl = { fdecl with v_name = id; v_type = res_type } in
               let gfdecl = { fdecl with v_type = typ } in
-              let type_of_id = Util.Opt.to_list (assert_type id typ fdecl.v_pos) in
+              let type_of_id = assert_type id typ fdecl.v_pos in
               IdMap.add id fdecl fields, IdMap.add id gfdecl globals, type_of_id @ axioms, tbl
             )
             decl.s_fields (IdMap.empty, globals, axioms, tbl)
@@ -738,7 +736,7 @@ let convert cu =
                let ti = assert_type id ty decl.v_pos in
                (id, convert_type ty) :: vars, 
                IdMap.add id decl locals1,
-               Opt.to_list (Opt.map form_of_spec ti) @ type_info)
+               List.map form_of_spec ti @ type_info)
                decls ([], locals, [])
           in
           let subst = 
@@ -961,19 +959,32 @@ let convert cu =
           let es1 = List.map (fun e -> fst (extract_term locals UniversalType e)) es in
           let ge1, _ = extract_term locals UniversalType ge in
           let gts = GrassUtil.ground_terms (Atom (ge1, [])) in
+          (*let filter id sm =
+            
+          in*)
           let matches = 
             List.map (fun e -> 
               let ce = GrassUtil.free_consts_term e in
+              let ce_occur_below ts =
+                List.exists 
+                  (function App (FreeSym id, [], _) -> IdSet.mem id ce | _ -> false)
+                  ts
+              in
               let flt = 
                 TermSet.fold 
                   (function 
-                    | App (FreeSym sym, ts, _)
-                    | App (Read, (App (FreeSym sym, [], _) :: _ as ts), _) ->
+                    | App (FreeSym sym, ts, _) ->
                         (function 
                           | FilterTrue ->
-                              if List.exists 
-                                  (function App (FreeSym id, [], _) -> IdSet.mem id ce | _ -> false) ts
-                              then FilterNotOccurs (FreeSym sym)
+                              if ce_occur_below ts
+                              then FilterSymbolNotOccurs (FreeSym sym)
+                              else FilterTrue
+                          | flt -> flt)
+                    | App (Read, (App (FreeSym sym, [], _) as t :: _ as ts), _) ->
+                        (function 
+                          | FilterTrue ->
+                              if ce_occur_below ts
+                              then FilterTermNotOccurs t
                               else FilterTrue
                           | flt -> flt)
                     | _ -> function flt -> flt)
@@ -1030,6 +1041,11 @@ let convert cu =
       mk_spec_form f name msg (pos_of_expr e)
     in
     let convert_loop_contract proc_name locals contract =
+      let typ_invs =
+        IdMap.fold (fun id decl acc ->
+          assert_type id decl.v_type decl.v_pos @ acc) locals []
+      in
+      typ_invs @
       List.map
         (function Invariant (e, pure) -> 
           let msg caller =
@@ -1101,7 +1117,7 @@ let convert cu =
           let lhs_id = List.hd lhs_ids in
           let type_info = 
             let ti = assert_type lhs_id (StructType id) pos in
-            Opt.to_list (Opt.map (fun sf -> mk_assume_cmd sf pos) ti)
+            List.map (fun sf -> mk_assume_cmd sf pos) ti
           in
           let new_cmd = mk_new_cmd lhs_id Loc npos in
           mk_seq_cmd (new_cmd :: type_info) pos
@@ -1119,12 +1135,21 @@ let convert cu =
             try convert_lhs lhs rhs_tys
             with Invalid_argument _ -> assignment_mismatch_error pos
           in
-          (match ind_opt with
-          | Some t -> 
-              let fld_srt = GrassUtil.field_sort (convert_type (List.hd rhs_tys)) in
-              let fld = GrassUtil.mk_free_const fld_srt (List.hd lhs_ids) in
-              mk_assign_cmd lhs_ids [GrassUtil.mk_write fld t (List.hd rhs_ts)] pos
-          | None -> mk_assign_cmd lhs_ids rhs_ts pos)
+          let lhs_types =
+            Util.flat_map
+              (fun id ->
+                let decl = find_var_decl proc.p_locals id in
+                assert_type id decl.v_type pos) lhs_ids
+          in
+          let cmd =
+            (match ind_opt with
+            | Some t -> 
+                let fld_srt = GrassUtil.field_sort (convert_type (List.hd rhs_tys)) in
+                let fld = GrassUtil.mk_free_const fld_srt (List.hd lhs_ids) in
+                mk_assign_cmd lhs_ids [GrassUtil.mk_write fld t (List.hd rhs_ts)] pos
+            | None -> mk_assign_cmd lhs_ids rhs_ts pos)
+          in
+          mk_seq_cmd (cmd :: List.map (fun sf -> mk_assume_cmd sf pos) lhs_types) pos
       | Dispose (e, pos) ->
           let t, _ = extract_term proc.p_locals LocType e in
           mk_dispose_cmd t pos
@@ -1141,7 +1166,7 @@ let convert cu =
           in 
           let assume_cmds = 
             Util.flat_map 
-              (fun ti -> Opt.to_list (Opt.map (fun sf -> mk_assume_cmd sf pos) ti))
+              (fun ti -> List.map (fun sf -> mk_assume_cmd sf pos) ti)
               type_info
           in
           mk_seq_cmd (mk_havoc_cmd ids pos :: assume_cmds) pos
@@ -1230,7 +1255,7 @@ let convert cu =
           let mk_types ids = 
             Util.flat_map (fun id ->
               let vdecl = find_var_decl decl.p_locals id in
-              Opt.to_list (assert_type id vdecl.v_type vdecl.v_pos)) ids
+              assert_type id vdecl.v_type vdecl.v_pos) ids
           in
           let proc_decl =
             { proc_name = id;

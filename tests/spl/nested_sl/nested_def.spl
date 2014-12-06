@@ -10,8 +10,10 @@ struct InnerNode {
   var head: OuterNode;
 }
 
-function lseg_footprint(x: InnerNode, y: InnerNode) returns (FP: Set<Loc>) {
-  forall z: Loc :: z in FP == (Btwn(inext, x, z, y) && z != y)
+function lseg_footprint(x: InnerNode, y: InnerNode)
+  returns (FP: Set<Loc>)
+{
+  forall z: Loc :: z in FP == (Btwn(inext, x, z, y) && z != y && z in InnerNode)
 }
 
 predicate lseg(x: InnerNode, y: InnerNode, FP: Set<Loc>) {
@@ -22,18 +24,19 @@ predicate lseg(x: InnerNode, y: InnerNode, FP: Set<Loc>) {
 function nlseg_outer_footprint(x: OuterNode, y: OuterNode) 
   returns (FP: Set<Loc>) 
 {
-  forall z: Loc :: z in FP == (Btwn(onext, x, z, y) && z != y)
+  forall z: Loc :: z in FP == (Btwn(onext, x, z, y) && z != y && z in OuterNode)
 }
 
 function nlseg_inner_footprint(x: OuterNode, y: OuterNode) 
-  returns (FP: Set<Loc>) 
+  returns (FP: Set<Loc>)
 {
+  (forall z: Loc :: z in FP ==> z in InnerNode) &&
   (forall z: Loc, zh: Loc :: z in FP && zh == z.head ==>
-    zh in nlseg_outer_footprint(x, y) && Btwn(inext, zh.down, z, null)
-   @(matching z yields z.head)
-   @(matching zh yields zh.down)) &&
+   (zh in nlseg_outer_footprint(x, y) && z in lseg_footprint(zh.down, null))
+   @(matching z in InnerNode yields z.head)
+   @(matching zh in OuterNode yields zh.down)) &&
   (forall zh: Loc, z: Loc :: 
-    zh in nlseg_outer_footprint(x, y) && Btwn(inext, zh.down, z, null) ==> z in FP)
+   zh in nlseg_outer_footprint(x, y) && z in lseg_footprint(zh.down, null) ==> z in FP)
 }
 
 predicate nlseg(x: OuterNode, y: OuterNode, FP: Set<Loc>) {

@@ -1,3 +1,5 @@
+(** Main module of GRASShopper *)
+
 open Util
 
 let greeting =
@@ -120,7 +122,7 @@ let print_stats start_time =
     Printf.printf "  measured time: %.2fs\n" !Util.measured_time;
     Printf.printf "  # measured calls: %.2d\n" !Util.measured_calls
 
-(** Main entry of Grasshopper *)
+(** Main entry of GRASShopper *)
 let _ =
   let main_file = ref "" in
   let set_main_file s =
@@ -131,6 +133,7 @@ let _ =
   let start_time = current_time () in
   try
     Arg.parse Config.cmd_options set_main_file usage_message;
+    Debug.info (fun () -> greeting);
     SmtLibSolver.select_solver (String.uppercase !Config.smtsolver);
     if !main_file = ""
     then cmd_line_error "input file missing"

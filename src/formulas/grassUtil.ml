@@ -554,27 +554,36 @@ let free_symbols_term t = free_symbols_term_acc IdSet.empty t
 let free_symbols f =
   fold_terms free_symbols_term_acc IdSet.empty f
 
-
-(** Computes the set of ground terms appearing in [f].
- ** Free variables are treated as implicitly universally quantified *)
-let ground_terms ?(include_atoms=false) f =
-  let rec gt bv terms t = 
+(** Computes the set of all ground terms in term [t].
+ ** Takes accumulator [terms] as additional arguments *)
+let ground_terms_term_acc ?(include_atoms=false) terms t =
+  let rec gt terms t = 
     match t with
     | Var (id, _) -> terms, false
     | App (_, ts, srt) ->
 	let terms1, is_ground = 
 	  List.fold_left 
 	    (fun (terms, is_ground) t ->
-	      let terms_t, is_ground_t = gt bv terms t in
+	      let terms_t, is_ground_t = gt terms t in
 	      terms_t, is_ground && is_ground_t)
 	    (terms, true) ts
 	in
 	if is_ground && (not include_atoms || srt <> Bool)
 	then TermSet.add t terms1, true 
 	else terms1, is_ground
-  in 
-  fold_terms_with_bound 
-    (fun bv acc t -> fst (gt bv acc t)) 
+  in
+  fst (gt terms t)
+
+(** Computes the set of all ground terms in term [t].
+ ** Takes accumulator [terms] as additional arguments *)
+let ground_terms_term ?(include_atoms=false) t =
+  ground_terms_term_acc ~include_atoms:include_atoms TermSet.empty t
+    
+(** Computes the set of ground terms appearing in [f].
+ ** Free variables are treated as implicitly universally quantified *)
+let ground_terms ?(include_atoms=false) f =
+   fold_terms
+    (ground_terms_term_acc ~include_atoms:include_atoms) 
     TermSet.empty f
   
 (** Computes the set of all free variables that appear below function symbols in formula [f]. *)
@@ -678,7 +687,18 @@ let subst_id_term subst_map t =
 let subst_id subst_map f =
   let subt = subst_id_term subst_map in
   let subg g = match g with
-    | Match (t, f) -> Match (subt t, f)
+  | Match (t, f) ->
+      let t1 = subt t in
+      let f1 =
+        match f with
+        | FilterSymbolNotOccurs (FreeSym id) ->
+            (try FilterSymbolNotOccurs (FreeSym (IdMap.find id subst_map))
+            with Not_found -> f)
+        | FilterTermNotOccurs t ->
+            FilterTermNotOccurs (subt t)
+        | _ -> f
+      in
+      Match (t1, f1)
   in
   let suba a = match a with
     | TermGenerator (bvs, fvs, guards, gen_term) -> 
@@ -729,7 +749,19 @@ let subst_consts subst_map f =
               match m with
               | Match (t, f) ->
                   let t1 = subst_consts_term subst_map t in
-                  sorted_fv_term_acc sign t1, Match (t1, f) :: guards1)
+                  let f1 = match f with
+                  | FilterSymbolNotOccurs (FreeSym id) ->
+                      (try
+                        match IdMap.find id subst_map with
+                        | App (FreeSym id1, [], _) ->
+                            FilterSymbolNotOccurs (FreeSym id1)
+                        | _ -> f
+                      with Not_found -> f)
+                  | FilterTermNotOccurs t ->
+                      FilterTermNotOccurs (subst_consts_term subst_map t)
+                  | _ -> f
+                  in
+                  sorted_fv_term_acc sign t1, Match (t1, f1) :: guards1)
             guards (IdMap.empty, [])
         in
         let bvs1 = 

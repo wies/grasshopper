@@ -135,7 +135,8 @@ let find_set_value model v srt =
     match SortedValueMap.find (v, Set srt) model.vals with
     | SetVal s -> s
     | _ -> raise Undefined
-  with Not_found -> raise Undefined          
+  with Not_found ->
+    raise Undefined          
 
 let equal model v1 v2 srt =
   v1 = v2 ||
@@ -371,7 +372,7 @@ let get_values_of_sort model srt =
           ValueListMap.fold (fun _ -> ValueSet.add) m vals
         in 
         match arg_srts, d with
-        | [], BaseVal v -> ValueSet.add v map_vals
+        | _, BaseVal v -> ValueSet.add v map_vals
         | _, _ -> map_vals
       else vals)
       model.intp ValueSet.empty
@@ -629,7 +630,7 @@ let output_json chan model =
   List.iter output_symbol defs;
   output_string chan "]"
   
-let output_graphviz chan model =
+let output_graphviz chan model terms =
   let find_term = find_term model in
   let colors1 = ["blue"; "red"; "green"; "orange"; "darkviolet"] in
   let colors2 = ["blueviolet"; "crimson"; "olivedrab"; "orangered"; "purple"] in
@@ -770,7 +771,21 @@ let output_graphviz chan model =
           with _ -> ()
         )
         sets
-    in 
+    in
+    let print_sets srt =
+      TermSet.iter
+        (function
+          | App (FreeSym _, _, Set srt1) as set_t when srt = srt1 ->
+              (try 
+                let set = eval model set_t in
+                let s = find_set_value model set srt in
+                let vals = List.map (fun e ->  string_of_sorted_value srt e) (ValueSet.elements s) in
+                let set_rep = String.concat ", " vals in
+                Printf.fprintf chan "        <tr><td>%s == {%s}</td></tr>\n" (string_of_term set_t) set_rep
+              with Failure _ -> print_endline (string_of_term set_t))
+          | _ -> ())
+        terms
+    in
     print_table_header "sets";
     print_sets Loc;
     print_sets Int;
@@ -779,23 +794,23 @@ let output_graphviz chan model =
   (* functions and pred *)
   let output_freesyms () =
     print_table_header "predicates and functions";
-    SortedSymbolMap.iter 
+    TermSet.iter 
       (function
-        | ((FreeSym _ as sym), ((_ :: _, _) as arity)) -> fun _ ->
-            let m, _ = get_interp model sym arity in
-            ValueListMap.iter 
-              (fun vs v ->
-                try
-                  let args = List.map2 find_term vs (fst arity) in
-                  let t1 = mk_app (snd arity) sym args in
-                  let t2 = find_term v (snd arity) in
-                  if t1 <> t2 then
-                    Printf.fprintf chan "      <tr><td>%s == %s</td></tr>\n"
-                      (string_of_term t1) (string_of_term t2)
-                with Not_found -> ()
-              ) m
-        | _ -> fun _ -> ()
-      ) model.intp;
+        | (App (FreeSym _, _, (Bool as srt)) as t)
+        (*| (App (FreeSym _, _, (Set _ as srt)) as t)*)
+        | (App (FreeSym _, _ :: _, (Int as srt)) as t)
+        | (App (FreeSym _, _ :: _, (Loc as srt)) as t) ->
+            (try
+              let res =
+                eval model t
+              in
+              let res_t = find_term res srt in
+              if t <> res_t then
+                Printf.fprintf chan "      <tr><td>%s == %s</td></tr>\n"
+                  (string_of_term t) (string_of_term res_t)
+            with _ -> ())
+        | _ -> ()
+      ) terms;
     print_table_footer ()
   in
   let output_graph () =

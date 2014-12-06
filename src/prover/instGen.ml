@@ -125,12 +125,20 @@ let generate_terms generators ground_terms =
   let filter_term filter t sm = 
     match filter with
     | FilterTrue -> true
-    | FilterNotOccurs sym -> 
-        let rec hasSym = function
+    | FilterSymbolNotOccurs sym ->
+        let rec not_occurs = function
           | App (sym1, _, _) when sym1 = sym -> false
-          | App (_, ts, _) -> List.for_all hasSym ts
+          | App (_, ts, _) -> List.for_all not_occurs ts
           | _ -> true
-        in hasSym t
+        in not_occurs t
+    | FilterTermNotOccurs t1 ->
+        let ts = ground_terms_term t in
+        let res = not (TermSet.mem t1 ts) in
+        if false && res then begin
+          print_endline ("Filtering " ^ string_of_term t ^ " for occurrence of " ^ string_of_term t1);
+          print_endline ("Result: " ^ string_of_bool res);
+        end;
+        res
     | FilterGeneric fn -> fn sm t
   in
   let rec generate new_terms old_terms = function
@@ -141,8 +149,9 @@ let generate_terms generators ground_terms =
               List.fold_left 
                 (fun new_subst_maps sm ->
                   let matches = find_matches new_terms (subst_term sm t) sm in
-                  Util.filter_map 
-                    (fun (t_matched, sm) -> 
+                  Util.filter_rev_map 
+                    (fun (t_matched, sm) ->
+                      (*let _ = print_endline ("Matched " ^ string_of_term t_matched) in*)
                       filter_term filter t_matched sm)
                     (fun (t_matched, sm) -> 
                       sm) matches @ new_subst_maps

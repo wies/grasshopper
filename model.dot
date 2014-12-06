@@ -1,0 +1,142 @@
+digraph Model {
+  "Loc!0" [shape=none, margin=0, label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td><b>Loc!0</b></td></tr>
+</table>
+>];
+  "Loc!1" [shape=none, margin=0, label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td><b>Loc!1</b></td></tr>
+</table>
+>];
+  "Loc!2" [shape=none, margin=0, label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td><b>Loc!2</b></td></tr>
+</table>
+>];
+  "Loc!3" [shape=none, margin=0, label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td><b>Loc!3</b></td></tr>
+</table>
+>];
+  "Loc!4" [shape=none, margin=0, label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td><b>Loc!4</b></td></tr>
+</table>
+>];
+  "Loc!5" [shape=none, margin=0, label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td><b>Loc!5</b></td></tr>
+</table>
+>];
+  "Loc!6" [shape=none, margin=0, label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td><b>Loc!6</b></td></tr>
+</table>
+>];
+  "Loc!7" [shape=none, margin=0, label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td><b>Loc!7</b></td></tr>
+</table>
+>];
+  "Loc!8" [shape=none, margin=0, label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td><b>Loc!8</b></td></tr>
+</table>
+>];
+  "Loc!9" [shape=none, margin=0, label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td><b>Loc!9</b></td></tr>
+</table>
+>];
+  "Loc!10" [shape=none, margin=0, label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td><b>Loc!10</b></td></tr>
+</table>
+>];
+  "Loc!11" [shape=none, margin=0, label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr><td><b>Loc!11</b></td></tr>
+</table>
+>];
+"Loc!1" -> "Loc!4" [label="down", fontcolor=blue, color=blue]
+"Loc!2" -> "Loc!5" [label="down", fontcolor=blue, color=blue]
+"Loc!8" -> "Loc!3" [label="down", fontcolor=blue, color=blue]
+"Loc!10" -> "Loc!6" [label="head", fontcolor=red, color=red]
+"Loc!11" -> "Loc!7" [label="head", fontcolor=red, color=red]
+"Loc!1" -> "Loc!1" [label="inext", fontcolor=green, color=green]
+"Loc!2" -> "Loc!2" [label="inext", fontcolor=green, color=green]
+"Loc!3" -> "Loc!3" [label="inext", fontcolor=green, color=green]
+"Loc!4" -> "Loc!4" [label="inext", fontcolor=green, color=green]
+"Loc!6" -> "Loc!6" [label="inext", fontcolor=green, color=green]
+"Loc!7" -> "Loc!7" [label="inext", fontcolor=green, color=green]
+"Loc!8" -> "Loc!8" [label="inext", fontcolor=green, color=green]
+"Loc!9" -> "Loc!9" [label="inext", fontcolor=green, color=green]
+"Loc!10" -> "Loc!10" [label="inext", fontcolor=green, color=green]
+"Loc!11" -> "Loc!11" [label="inext", fontcolor=green, color=green]
+"Loc!1" -> "Loc!1" [label="onext", fontcolor=orange, color=orange]
+"Loc!2" -> "Loc!1" [label="onext", fontcolor=orange, color=orange]
+"Loc!3" -> "Loc!3" [label="onext", fontcolor=orange, color=orange]
+"Loc!4" -> "Loc!4" [label="onext", fontcolor=orange, color=orange]
+"Loc!5" -> "Loc!5" [label="onext", fontcolor=orange, color=orange]
+"Loc!6" -> "Loc!6" [label="onext", fontcolor=orange, color=orange]
+"Loc!7" -> "Loc!7" [label="onext", fontcolor=orange, color=orange]
+"Loc!8" -> "Loc!8" [label="onext", fontcolor=orange, color=orange]
+"Loc!9" -> "Loc!9" [label="onext", fontcolor=orange, color=orange]
+"Loc!10" -> "Loc!10" [label="onext", fontcolor=orange, color=orange]
+"Loc!11" -> "Loc!11" [label="onext", fontcolor=orange, color=orange]
+"null" -> "Loc!0"
+"i_3" -> "Loc!11"
+"ic_3" -> "Loc!10"
+"oc_3" -> "Loc!2"
+"oc_4" -> "Loc!1"
+"sk_?e_1" -> "Loc!9"
+"x" -> "Loc!2"
+"x_8" -> "Loc!8"
+"y" -> "Loc!1"
+"y_8" -> "Loc!1"
+{ rank = sink; Legend1 [shape=none, margin=0, label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr>
+        <td><b>sets</b></td>
+      </tr>
+        <tr><td>Alloc == {Loc!1, Loc!2, Loc!3, Loc!7, Loc!8, Loc!10}</td></tr>
+        <tr><td>Alloc_1 == {Loc!1, Loc!3, Loc!4, Loc!7, Loc!8, Loc!9, Loc!10}</td></tr>
+        <tr><td>FP == {Loc!2}</td></tr>
+        <tr><td>FP_6 == {Loc!2}</td></tr>
+        <tr><td>FP_7 == {Loc!4, Loc!9}</td></tr>
+        <tr><td>FP_Caller == {Loc!2, Loc!3, Loc!10}</td></tr>
+        <tr><td>FP_Caller_1 == {Loc!3, Loc!10}</td></tr>
+        <tr><td>FP_Caller_final_1 == {Loc!3, Loc!4, Loc!9, Loc!10}</td></tr>
+        <tr><td>InnerNode == {Loc!0, Loc!3, Loc!4, Loc!5, Loc!9, Loc!10, Loc!11}</td></tr>
+        <tr><td>OuterNode == {Loc!0, Loc!1, Loc!2, Loc!6, Loc!7, Loc!8}</td></tr>
+        <tr><td>nlseg_inner_footprint(InnerNode, OuterNode, down, head, inext, onext, oc_3, y) == {}</td></tr>
+        <tr><td>nlseg_inner_footprint(InnerNode, OuterNode, down, head, inext, onext, oc_4, y_8) == {Loc!4, Loc!9}</td></tr>
+        <tr><td>nlseg_inner_footprint(InnerNode, OuterNode, down, head, inext, onext, x, y) == {}</td></tr>
+        <tr><td>nlseg_outer_footprint(OuterNode, onext, oc_3, y) == {Loc!2}</td></tr>
+        <tr><td>nlseg_outer_footprint(OuterNode, onext, oc_4, y_8) == {}</td></tr>
+        <tr><td>nlseg_outer_footprint(OuterNode, onext, x, y) == {Loc!2}</td></tr>
+        <tr><td>sk_?X_2 == {Loc!4, Loc!9}</td></tr>
+        <tr><td>sk_?X_3 == {Loc!2}</td></tr>
+        <tr><td>sk_?X_4 == {Loc!2}</td></tr>
+</table>
+>];
+}
+{ rank = sink; Legend2 [shape=none, margin=0, label=<
+    <table border="0" cellborder="1" cellspacing="0" cellpadding="4">
+      <tr>
+        <td><b>predicates and functions</b></td>
+      </tr>
+      <tr><td>Axiom_2 == true</td></tr>
+      <tr><td>Axiom_3 == true</td></tr>
+      <tr><td>Axiom_4 == true</td></tr>
+      <tr><td>Axiom_5 == true</td></tr>
+      <tr><td>Axiom_6 == true</td></tr>
+      <tr><td>Axiom_7 == true</td></tr>
+      <tr><td>nlseg(InnerNode, OuterNode, down, head, inext, onext, oc_3, y, sk_?X_3) == true</td></tr>
+      <tr><td>nlseg(InnerNode, OuterNode, down, head, inext, onext, oc_4, y_8, sk_?X_2) == true</td></tr>
+      <tr><td>nlseg(InnerNode, OuterNode, down, head, inext, onext, x, y, sk_?X_4) == true</td></tr>
+</table>
+>];
+}
+}

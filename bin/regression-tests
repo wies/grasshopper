@@ -6,7 +6,7 @@ TESTS="
 soudness0               tests/spl/soundness/soundness0.spl      fail
 soudness1               tests/spl/soundness/soundness1.spl      fail
 soudness2               tests/spl/soundness/soundness2.spl      fail
-soudness3               tests/spl/soundness/soundness3.spl      fail
+soudness6               tests/spl/soundness/soundness6.spl      fail
 sl_traverse             tests/spl/sl/sl_traverse.spl            pass
 sl_dispose              tests/spl/sl/sl_dispose.spl             pass
 sl_copy                 tests/spl/sl/sl_copy.spl                pass

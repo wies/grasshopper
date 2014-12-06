@@ -118,7 +118,8 @@ module TermMap = Map.Make(struct
 (** filters for term generators *)
 type filter =
   | FilterTrue
-  | FilterNotOccurs of symbol
+  | FilterSymbolNotOccurs of symbol
+  | FilterTermNotOccurs of term
   | FilterGeneric of (subst_map -> term -> bool)
 
 (** matching guards for term generators *)
@@ -461,7 +462,8 @@ let rec pr_form ppf = function
   | BoolOp (_, _) -> ()
   | Atom (t, []) -> fprintf ppf "@[%a@]" pr_term t
   | Atom (t, a) -> fprintf ppf "@[(%a%a)@]" pr_term t pr_annot a
-      
+
+     
 and pr_annot ppf a =
   let name = extract_name false a in
   let pos = extract_src_pos a in

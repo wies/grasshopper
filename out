@@ -1,0 +1,414 @@
+sat
+(model 
+  ;; universe for (Set Loc):
+  ;;   Set!val!5 Set!val!7 Set!val!16 Set!val!10 Set!val!12 Set!val!15 Set!val!4 Set!val!22 Set!val!11 Set!val!2 Set!val!13 Set!val!9 Set!val!19 Set!val!14 Set!val!6 Set!val!1 Set!val!17 Set!val!18 Set!val!20 Set!val!21 Set!val!8 Set!val!0 Set!val!3 
+  ;; -----------
+  ;; definitions for universe elements:
+  (declare-fun Set!val!5 () (Set Loc))
+  (declare-fun Set!val!7 () (Set Loc))
+  (declare-fun Set!val!16 () (Set Loc))
+  (declare-fun Set!val!10 () (Set Loc))
+  (declare-fun Set!val!12 () (Set Loc))
+  (declare-fun Set!val!15 () (Set Loc))
+  (declare-fun Set!val!4 () (Set Loc))
+  (declare-fun Set!val!22 () (Set Loc))
+  (declare-fun Set!val!11 () (Set Loc))
+  (declare-fun Set!val!2 () (Set Loc))
+  (declare-fun Set!val!13 () (Set Loc))
+  (declare-fun Set!val!9 () (Set Loc))
+  (declare-fun Set!val!19 () (Set Loc))
+  (declare-fun Set!val!14 () (Set Loc))
+  (declare-fun Set!val!6 () (Set Loc))
+  (declare-fun Set!val!1 () (Set Loc))
+  (declare-fun Set!val!17 () (Set Loc))
+  (declare-fun Set!val!18 () (Set Loc))
+  (declare-fun Set!val!20 () (Set Loc))
+  (declare-fun Set!val!21 () (Set Loc))
+  (declare-fun Set!val!8 () (Set Loc))
+  (declare-fun Set!val!0 () (Set Loc))
+  (declare-fun Set!val!3 () (Set Loc))
+  ;; cardinality constraint:
+  (forall ((x (Set Loc)))
+          (or (= x Set!val!5)
+              (= x Set!val!7)
+              (= x Set!val!16)
+              (= x Set!val!10)
+              (= x Set!val!12)
+              (= x Set!val!15)
+              (= x Set!val!4)
+              (= x Set!val!22)
+              (= x Set!val!11)
+              (= x Set!val!2)
+              (= x Set!val!13)
+              (= x Set!val!9)
+              (= x Set!val!19)
+              (= x Set!val!14)
+              (= x Set!val!6)
+              (= x Set!val!1)
+              (= x Set!val!17)
+              (= x Set!val!18)
+              (= x Set!val!20)
+              (= x Set!val!21)
+              (= x Set!val!8)
+              (= x Set!val!0)
+              (= x Set!val!3)))
+  ;; -----------
+  ;; universe for Loc:
+  ;;   Loc!val!2 Loc!val!8 Loc!val!9 Loc!val!3 Loc!val!5 Loc!val!6 Loc!val!1 Loc!val!0 Loc!val!4 Loc!val!7 
+  ;; -----------
+  ;; definitions for universe elements:
+  (declare-fun Loc!val!2 () Loc)
+  (declare-fun Loc!val!8 () Loc)
+  (declare-fun Loc!val!9 () Loc)
+  (declare-fun Loc!val!3 () Loc)
+  (declare-fun Loc!val!5 () Loc)
+  (declare-fun Loc!val!6 () Loc)
+  (declare-fun Loc!val!1 () Loc)
+  (declare-fun Loc!val!0 () Loc)
+  (declare-fun Loc!val!4 () Loc)
+  (declare-fun Loc!val!7 () Loc)
+  ;; cardinality constraint:
+  (forall ((x Loc))
+          (or (= x Loc!val!2)
+              (= x Loc!val!8)
+              (= x Loc!val!9)
+              (= x Loc!val!3)
+              (= x Loc!val!5)
+              (= x Loc!val!6)
+              (= x Loc!val!1)
+              (= x Loc!val!0)
+              (= x Loc!val!4)
+              (= x Loc!val!7)))
+  ;; -----------
+  ;; universe for (Map Loc Loc):
+  ;;   Map!val!3 Map!val!0 Map!val!2 Map!val!1 
+  ;; -----------
+  ;; definitions for universe elements:
+  (declare-fun Map!val!3 () (Map Loc Loc))
+  (declare-fun Map!val!0 () (Map Loc Loc))
+  (declare-fun Map!val!2 () (Map Loc Loc))
+  (declare-fun Map!val!1 () (Map Loc Loc))
+  ;; cardinality constraint:
+  (forall ((x (Map Loc Loc)))
+          (or (= x Map!val!3) (= x Map!val!0) (= x Map!val!2) (= x Map!val!1)))
+  ;; -----------
+  (define-fun ic_5$0 () Loc
+    Loc!val!5)
+  (define-fun sk_FP_3$0 () (Set Loc)
+    Set!val!11)
+  (define-fun sk_?X_26$0 () (Set Loc)
+    Set!val!11)
+  (define-fun Label_28$0 () Bool
+    true)
+  (define-fun sk_?X_28$0 () (Set Loc)
+    Set!val!3)
+  (define-fun oc_5$0 () Loc
+    Loc!val!1)
+  (define-fun InnerNode$0 () (Set Loc)
+    Set!val!4)
+  (define-fun sk_?X_17$0 () (Set Loc)
+    Set!val!3)
+  (define-fun sk_?X_23$0 () (Set Loc)
+    Set!val!14)
+  (define-fun sk_?X_24$0 () (Set Loc)
+    Set!val!13)
+  (define-fun OuterNode$0 () (Set Loc)
+    Set!val!5)
+  (define-fun Label_19$0 () Bool
+    true)
+  (define-fun ic_4$0 () Loc
+    Loc!val!4)
+  (define-fun sk_?X_19$0 () (Set Loc)
+    Set!val!13)
+  (define-fun Label_21$0 () Bool
+    true)
+  (define-fun onext$0 () (Map Loc Loc)
+    Map!val!3)
+  (define-fun x_6$0 () Loc
+    Loc!val!2)
+  (define-fun Axiom_13$0 () Bool
+    true)
+  (define-fun oc_1$0 () Loc
+    Loc!val!1)
+  (define-fun FP$0 () (Set Loc)
+    Set!val!3)
+  (define-fun inext$0 () (Map Loc Loc)
+    Map!val!2)
+  (define-fun sk_?X_18$0 () (Set Loc)
+    Set!val!12)
+  (define-fun x_9$0 () Loc
+    Loc!val!2)
+  (define-fun first_iter$0 () Bool
+    true)
+  (define-fun sk_?X_21$0 () (Set Loc)
+    Set!val!11)
+  (define-fun sk_?X_27$0 () (Set Loc)
+    Set!val!12)
+  (define-fun sk_?X_25$0 () (Set Loc)
+    Set!val!13)
+  (define-fun FP_Caller_2$0 () (Set Loc)
+    Set!val!0)
+  (define-fun y_9$0 () Loc
+    Loc!val!3)
+  (define-fun sk_?X_22$0 () (Set Loc)
+    Set!val!12)
+  (define-fun sk_?X_20$0 () (Set Loc)
+    Set!val!13)
+  (define-fun y_6$0 () Loc
+    Loc!val!3)
+  (define-fun Label_20$0 () Bool
+    true)
+  (define-fun emptyset$0 () (Set Loc)
+    Set!val!1)
+  (define-fun head$0 () (Map Loc Loc)
+    Map!val!1)
+  (define-fun ic_1$0 () Loc
+    Loc!val!4)
+  (define-fun sk_FP_2$0 () (Set Loc)
+    Set!val!11)
+  (define-fun down$0 () (Map Loc Loc)
+    Map!val!0)
+  (define-fun Alloc$0 () (Set Loc)
+    Set!val!2)
+  (define-fun null$0 () Loc
+    Loc!val!0)
+  (define-fun FP_Caller$0 () (Set Loc)
+    Set!val!6)
+  (define-fun Axiom_12$0 () Bool
+    true)
+  (define-fun singleton$0!427 ((x!1 Loc)) (Set Loc)
+    (ite (= x!1 Loc!val!0) Set!val!10
+    (ite (= x!1 Loc!val!5) Set!val!14
+    (ite (= x!1 Loc!val!4) Set!val!16
+    (ite (= x!1 Loc!val!8) Set!val!17
+    (ite (= x!1 Loc!val!9) Set!val!18
+    (ite (= x!1 Loc!val!7) Set!val!19
+    (ite (= x!1 Loc!val!2) Set!val!20
+    (ite (= x!1 Loc!val!3) Set!val!21
+    (ite (= x!1 Loc!val!6) Set!val!22
+      Set!val!12))))))))))
+  (define-fun k!426 ((x!1 Loc)) Loc
+    (ite (= x!1 Loc!val!2) Loc!val!2
+    (ite (= x!1 Loc!val!7) Loc!val!7
+    (ite (= x!1 Loc!val!1) Loc!val!1
+    (ite (= x!1 Loc!val!6) Loc!val!6
+    (ite (= x!1 Loc!val!3) Loc!val!3
+    (ite (= x!1 Loc!val!0) Loc!val!0
+    (ite (= x!1 Loc!val!9) Loc!val!9
+    (ite (= x!1 Loc!val!4) Loc!val!4
+    (ite (= x!1 Loc!val!8) Loc!val!8
+      Loc!val!5))))))))))
+  (define-fun singleton$0 ((x!1 Loc)) (Set Loc)
+    (singleton$0!427 (k!426 x!1)))
+  (define-fun Btwn$0!428 ((x!1 (Map Loc Loc)) (x!2 Loc) (x!3 Loc) (x!4 Loc)) Bool
+    (ite (and (= x!1 Map!val!3)
+              (= x!2 Loc!val!2)
+              (= x!3 Loc!val!3)
+              (= x!4 Loc!val!3))
+      true
+    (ite (and (= x!1 Map!val!2)
+              (= x!2 Loc!val!5)
+              (= x!3 Loc!val!5)
+              (= x!4 Loc!val!5))
+      true
+    (ite (and (= x!1 Map!val!2)
+              (= x!2 Loc!val!7)
+              (= x!3 Loc!val!0)
+              (= x!4 Loc!val!0))
+      true
+    (ite (and (= x!1 Map!val!3)
+              (= x!2 Loc!val!0)
+              (= x!3 Loc!val!0)
+              (= x!4 Loc!val!0))
+      true
+    (ite (and (= x!1 Map!val!2)
+              (= x!2 Loc!val!0)
+              (= x!3 Loc!val!0)
+              (= x!4 Loc!val!0))
+      true
+    (ite (and (= x!1 Map!val!3)
+              (= x!2 Loc!val!2)
+              (= x!3 Loc!val!2)
+              (= x!4 Loc!val!3))
+      true
+    (ite (and (= x!1 Map!val!3)
+              (= x!2 Loc!val!3)
+              (= x!3 Loc!val!3)
+              (= x!4 Loc!val!3))
+      true
+    (ite (and (= x!1 Map!val!3)
+              (= x!2 Loc!val!2)
+              (= x!3 Loc!val!2)
+              (= x!4 Loc!val!2))
+      true
+    (ite (and (= x!1 Map!val!3)
+              (= x!2 Loc!val!5)
+              (= x!3 Loc!val!5)
+              (= x!4 Loc!val!5))
+      true
+    (ite (and (= x!1 Map!val!2)
+              (= x!2 Loc!val!2)
+              (= x!3 Loc!val!2)
+              (= x!4 Loc!val!2))
+      true
+    (ite (and (= x!1 Map!val!2)
+              (= x!2 Loc!val!4)
+              (= x!3 Loc!val!4)
+              (= x!4 Loc!val!4))
+      true
+    (ite (and (= x!1 Map!val!3)
+              (= x!2 Loc!val!4)
+              (= x!3 Loc!val!4)
+              (= x!4 Loc!val!4))
+      true
+    (ite (and (= x!1 Map!val!3)
+              (= x!2 Loc!val!9)
+              (= x!3 Loc!val!9)
+              (= x!4 Loc!val!9))
+      true
+    (ite (and (= x!1 Map!val!2)
+              (= x!2 Loc!val!9)
+              (= x!3 Loc!val!9)
+              (= x!4 Loc!val!9))
+      true
+    (ite (and (= x!1 Map!val!2)
+              (= x!2 Loc!val!1)
+              (= x!3 Loc!val!1)
+              (= x!4 Loc!val!1))
+      true
+    (ite (and (= x!1 Map!val!2)
+              (= x!2 Loc!val!7)
+              (= x!3 Loc!val!7)
+              (= x!4 Loc!val!7))
+      true
+    (ite (and (= x!1 Map!val!3)
+              (= x!2 Loc!val!1)
+              (= x!3 Loc!val!1)
+              (= x!4 Loc!val!1))
+      true
+    (ite (and (= x!1 Map!val!3)
+              (= x!2 Loc!val!7)
+              (= x!3 Loc!val!7)
+              (= x!4 Loc!val!7))
+      true
+    (ite (and (= x!1 Map!val!3)
+              (= x!2 Loc!val!8)
+              (= x!3 Loc!val!8)
+              (= x!4 Loc!val!8))
+      true
+    (ite (and (= x!1 Map!val!2)
+              (= x!2 Loc!val!8)
+              (= x!3 Loc!val!8)
+              (= x!4 Loc!val!8))
+      true
+    (ite (and (= x!1 Map!val!2)
+              (= x!2 Loc!val!7)
+              (= x!3 Loc!val!7)
+              (= x!4 Loc!val!0))
+      true
+    (ite (and (= x!1 Map!val!2)
+              (= x!2 Loc!val!3)
+              (= x!3 Loc!val!3)
+              (= x!4 Loc!val!3))
+      true
+    (ite (and (= x!1 Map!val!2)
+              (= x!2 Loc!val!6)
+              (= x!3 Loc!val!6)
+              (= x!4 Loc!val!6))
+      true
+    (ite (and (= x!1 Map!val!3)
+              (= x!2 Loc!val!6)
+              (= x!3 Loc!val!6)
+              (= x!4 Loc!val!6))
+      true
+      false)))))))))))))))))))))))))
+  (define-fun Btwn$0 ((x!1 (Map Loc Loc)) (x!2 Loc) (x!3 Loc) (x!4 Loc)) Bool
+    (Btwn$0!428 x!1 (k!426 x!2) (k!426 x!3) (k!426 x!4)))
+  (define-fun intersection$0 ((x!1 (Set Loc)) (x!2 (Set Loc))) (Set Loc)
+    (ite (and (= x!1 Set!val!4) (= x!2 Set!val!5)) Set!val!10
+      Set!val!9))
+  (define-fun nlseg$0 ((x!1 (Set Loc))
+   (x!2 (Set Loc))
+   (x!3 (Map Loc Loc))
+   (x!4 (Map Loc Loc))
+   (x!5 (Map Loc Loc))
+   (x!6 (Map Loc Loc))
+   (x!7 Loc)
+   (x!8 Loc)
+   (x!9 (Set Loc))) Bool
+    true)
+  (define-fun read$0 ((x!1 (Map Loc Loc)) (x!2 Loc)) Loc
+    (ite (and (= x!1 Map!val!0) (= x!2 Loc!val!3)) Loc!val!6
+    (ite (and (= x!1 Map!val!0) (= x!2 Loc!val!2)) Loc!val!7
+    (ite (and (= x!1 Map!val!1) (= x!2 Loc!val!4)) Loc!val!8
+    (ite (and (= x!1 Map!val!0) (= x!2 Loc!val!1)) Loc!val!5
+    (ite (and (= x!1 Map!val!1) (= x!2 Loc!val!5)) Loc!val!9
+      Loc!val!0))))))
+  (define-fun setminus$0 ((x!1 (Set Loc)) (x!2 (Set Loc))) (Set Loc)
+    (ite (and (= x!1 Set!val!3) (= x!2 Set!val!11)) Set!val!15
+      Set!val!0))
+  (define-fun nlseg_outer_footprint$0 ((x!1 (Set Loc))
+   (x!2 (Map Loc Loc))
+   (x!3 Loc)
+   (x!4 Loc)) (Set Loc)
+    Set!val!7)
+  (define-fun nlseg_inner_footprint$0 ((x!1 (Set Loc))
+   (x!2 (Set Loc))
+   (x!3 (Map Loc Loc))
+   (x!4 (Map Loc Loc))
+   (x!5 (Map Loc Loc))
+   (x!6 (Map Loc Loc))
+   (x!7 Loc)
+   (x!8 Loc)) (Set Loc)
+    Set!val!8)
+  (define-fun member$0!429 ((x!1 Loc) (x!2 (Set Loc))) Bool
+    (ite (and (= x!1 Loc!val!3) (= x!2 Set!val!5)) true
+    (ite (and (= x!1 Loc!val!2) (= x!2 Set!val!5)) true
+    (ite (and (= x!1 Loc!val!1) (= x!2 Set!val!5)) true
+    (ite (and (= x!1 Loc!val!5) (= x!2 Set!val!4)) true
+    (ite (and (= x!1 Loc!val!4) (= x!2 Set!val!4)) true
+    (ite (and (= x!1 Loc!val!0) (= x!2 Set!val!5)) true
+    (ite (and (= x!1 Loc!val!0) (= x!2 Set!val!4)) true
+    (ite (and (= x!1 Loc!val!6) (= x!2 Set!val!4)) true
+    (ite (and (= x!1 Loc!val!7) (= x!2 Set!val!4)) true
+    (ite (and (= x!1 Loc!val!9) (= x!2 Set!val!5)) true
+    (ite (and (= x!1 Loc!val!8) (= x!2 Set!val!5)) true
+    (ite (and (= x!1 Loc!val!2) (= x!2 Set!val!7)) true
+    (ite (and (= x!1 Loc!val!0) (= x!2 Set!val!10)) true
+    (ite (and (= x!1 Loc!val!1) (= x!2 Set!val!11)) true
+    (ite (and (= x!1 Loc!val!1) (= x!2 Set!val!12)) true
+    (ite (and (= x!1 Loc!val!1) (= x!2 Set!val!3)) true
+    (ite (and (= x!1 Loc!val!1) (= x!2 Set!val!8)) true
+    (ite (and (= x!1 Loc!val!1) (= x!2 Set!val!6)) true
+    (ite (and (= x!1 Loc!val!1) (= x!2 Set!val!2)) true
+    (ite (and (= x!1 Loc!val!4) (= x!2 Set!val!16)) true
+    (ite (and (= x!1 Loc!val!8) (= x!2 Set!val!17)) true
+    (ite (and (= x!1 Loc!val!7) (= x!2 Set!val!19)) true
+    (ite (and (= x!1 Loc!val!2) (= x!2 Set!val!20)) true
+    (ite (and (= x!1 Loc!val!9) (= x!2 Set!val!18)) true
+    (ite (and (= x!1 Loc!val!5) (= x!2 Set!val!14)) true
+    (ite (and (= x!1 Loc!val!3) (= x!2 Set!val!21)) true
+    (ite (and (= x!1 Loc!val!6) (= x!2 Set!val!22)) true
+    (ite (and (= x!1 Loc!val!2) (= x!2 Set!val!3)) true
+    (ite (and (= x!1 Loc!val!2) (= x!2 Set!val!6)) true
+    (ite (and (= x!1 Loc!val!2) (= x!2 Set!val!15)) true
+    (ite (and (= x!1 Loc!val!2) (= x!2 Set!val!2)) true
+    (ite (and (= x!1 Loc!val!8) (= x!2 Set!val!3)) true
+    (ite (and (= x!1 Loc!val!8) (= x!2 Set!val!8)) true
+    (ite (and (= x!1 Loc!val!8) (= x!2 Set!val!15)) true
+    (ite (and (= x!1 Loc!val!8) (= x!2 Set!val!6)) true
+    (ite (and (= x!1 Loc!val!8) (= x!2 Set!val!2)) true
+      false)))))))))))))))))))))))))))))))))))))
+  (define-fun member$0 ((x!1 Loc) (x!2 (Set Loc))) Bool
+    (member$0!429 (k!426 x!1) x!2))
+  (define-fun union$1 ((x!1 (Set Loc)) (x!2 (Set Loc))) (Set Loc)
+    (ite (and (= x!1 Set!val!6) (= x!2 Set!val!2)) Set!val!2
+    (ite (and (= x!1 Set!val!3) (= x!2 Set!val!6)) Set!val!6
+    (ite (and (= x!1 Set!val!12) (= x!2 Set!val!13)) Set!val!11
+      Set!val!3))))
+  (define-fun lseg_footprint$0 ((x!1 (Set Loc))
+   (x!2 (Map Loc Loc))
+   (x!3 Loc)
+   (x!4 Loc)) (Set Loc)
+    Set!val!13)
+)

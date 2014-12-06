@@ -190,14 +190,14 @@ let ep_axioms () =
       [s2; f2; f3; l3; l4],
       [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
        Match (mk_btwn_term fld3 loc1 loc3 loc4, FilterGeneric (field_filter (fst f1) (fst f3)));
-       Match (loc1, FilterNotOccurs EntPnt)], 
+       Match (loc1, FilterSymbolNotOccurs EntPnt)], 
       mk_ep fld1 set1 loc1);
      ([s1; f1; l1],
       [s2; s3; f2; f3; l2; l3; l4],
       [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
        Match (mk_btwn_term fld3 loc2 loc3 loc4, FilterGeneric (field_filter (fst f1) (fst f3)));
        Match (mk_elem_term loc1 set3, FilterTrue);
-       Match (loc1, FilterNotOccurs EntPnt)], 
+       Match (loc1, FilterSymbolNotOccurs EntPnt)], 
       mk_ep fld1 set1 loc1);
      (*([s1; f1],
      [s2; is1; f2; i1],
