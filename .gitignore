@@ -1,4 +1,7 @@
 _build/
 *.native
 *.smt2
+*.dot
+out
+*.pdf
 *~
