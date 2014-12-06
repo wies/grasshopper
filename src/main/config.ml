@@ -65,7 +65,7 @@ let cmd_options =
    ("-core", Arg.Set unsat_cores, " Produce unsat cores with every unsat SMT query");
    ("-noverify", Arg.Clear verify, " Do not check the generated verification conditions");
    ("-robust", Arg.Set robust, " Continue even if some verification condition cannot be checked");
-   ("-smtsolver", Arg.Set_string smtsolver, " Choose SMT solver (Z3, CVC4, CVC4MF)");
+   ("-smtsolver", Arg.Set_string smtsolver, "<solver> Choose SMT solver (z3, cvc4, cvc4mf), e.g., 'z3+cvc4mf'");
    ("-smtpatterns", Arg.Set smtpatterns, " Always add pattern annotations to quantifiers in SMT queries");
    ("-smtsets", Arg.Set use_set_theory, " Use solver's set theory to encode sets (if supported)");
    ("-smtarrays", Arg.Set encode_fields_as_arrays, " Use array theory of SMT solver to encode fields");
@@ -75,7 +75,7 @@ let cmd_options =
    ("-noinst", Arg.Clear instantiate, " Let the SMT solver deal with the quantifiers without prior instantiation");
    ("-nostratify", Arg.Clear stratify, " Instantiate quantifiers that satisfy stratified sort restrictions");
    ("-noOptFieldMod", Arg.Clear opt_field_mod, " Disable mod set analysis optimization for fields");
-   ("-optSelfFrame", Arg.Set optSelfFrame, " enable generation of self-framing clauses for SL predicates");
+   (*("-optSelfFrame", Arg.Set optSelfFrame, " enable generation of self-framing clauses for SL predicates");*)
    ("-stats", Arg.Set print_stats, " Print statistics");
    ("-v", Arg.Unit Debug.more_verbose, " Display more messages");
    ("-q", Arg.Unit Debug.less_verbose, " Display less messages");
