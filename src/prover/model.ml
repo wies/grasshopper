@@ -759,20 +759,6 @@ let output_graphviz chan model terms =
   in
   let output_sets () =
     let print_sets srt =
-      let sets = get_values_of_sort model (Set srt) in
-      List.iter
-        (fun set ->
-          try
-            let set_t = find_term set (Set srt) in
-            let s = find_set_value model set srt in
-            let vals = List.map (fun e ->  string_of_sorted_value srt e) (ValueSet.elements s) in
-            let set_rep = String.concat ", " vals in
-            Printf.fprintf chan "        <tr><td>%s == {%s}</td></tr>\n" (string_of_term set_t) set_rep
-          with _ -> ()
-        )
-        sets
-    in
-    let print_sets srt =
       TermSet.iter
         (function
           | App (FreeSym _, _, Set srt1) as set_t when srt = srt1 ->
