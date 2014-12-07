@@ -7,8 +7,8 @@ GRASShopper is an experimental verification tool for programs that
 manipulate dynamically allocated data structures. GRASShopper programs
 can be annotated with specifications expressed in a decidable
 specification logic to check functional correctness properties. The
-logic supports mixing of assertions expressed in separation logic and
-first-order logic, yielding concise specifications.
+logic supports mixing of separation logic and first-order logic
+assertions, yielding expressive yet concise specifications.
 
 The tool is released under a BSD license, see file LICENSE for
 details.
