@@ -240,7 +240,10 @@ let vcgen prog proc =
             let vc_msg = (vc_msg, pp.pp_pos) in
             let f =
               match s.spec_form with
-              | FOL f -> annotate_aux_msg vc_aux_msg (unoldify_form (mk_not f))
+              | FOL f ->
+                  let f1 = unoldify_form (mk_not f) in
+                  let f2 = annotate_aux_msg vc_aux_msg f1 in
+                  f2
               | _ -> failwith "vcgen: found SL formula that should have been desugared"
             in
             let vc_name = 
@@ -263,10 +266,10 @@ let check_proc prog proc =
       if errors <> [] && not !Config.robust then errors else
       let vc_and_preds = add_pred_insts prog vc in
       let labels, vc_and_preds = add_labels vc_and_preds in
-      (*IdMap.iter (fun id (pos, c) -> Printf.printf ("%s -> %s: %s\n") 
-          (string_of_ident id) (string_of_src_pos pos) c) labels;*)
       Debug.info (fun () -> "Checking VC: " ^ vc_name ^ ".\n");
       Debug.debug (fun () -> (string_of_form vc_and_preds) ^ "\n");
+      (*IdMap.iter (fun id (pos, c) -> Printf.printf ("%s -> %s: %s\n") 
+          (string_of_ident id) (string_of_src_pos pos) c) labels;*)
       let sat_means = 
         Str.global_replace (Str.regexp "\n\n") "\n  " (ProgError.error_to_string pp vc_msg)
       in

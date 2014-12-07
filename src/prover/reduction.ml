@@ -299,8 +299,8 @@ let add_set_axioms fs =
   rev_concat [fs1; Axioms.set_axioms elem_srts]
 
 
-(** Adds theory axioms for the entry point function to formula f.
- ** Assumes that f is typed and that all frame predicates have been reduced. *)
+(** Adds theory axioms for the entry point function to formulas [fs].
+ ** Assumes that all frame predicates have been reduced in formulas [fs]. *)
 let add_ep_axioms fs =
   let gts = ground_terms (smk_and fs) in
   let flds = btwn_fields fs gts in

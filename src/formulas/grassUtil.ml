@@ -694,8 +694,8 @@ let subst_id subst_map f =
         | FilterSymbolNotOccurs (FreeSym id) ->
             (try FilterSymbolNotOccurs (FreeSym (IdMap.find id subst_map))
             with Not_found -> f)
-        | FilterTermNotOccurs t ->
-            FilterTermNotOccurs (subt t)
+        (*| FilterTermNotOccurs t ->
+            FilterTermNotOccurs (subt t)*)
         | _ -> f
       in
       Match (t1, f1)
@@ -757,8 +757,8 @@ let subst_consts subst_map f =
                             FilterSymbolNotOccurs (FreeSym id1)
                         | _ -> f
                       with Not_found -> f)
-                  | FilterTermNotOccurs t ->
-                      FilterTermNotOccurs (subst_consts_term subst_map t)
+                  (*| FilterTermNotOccurs t ->
+                      FilterTermNotOccurs (subst_consts_term subst_map t)*)
                   | _ -> f
                   in
                   sorted_fv_term_acc sign t1, Match (t1, f1) :: guards1)

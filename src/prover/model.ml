@@ -660,7 +660,7 @@ let output_graphviz chan model terms =
 	    let label = get_label f in
 	    Printf.fprintf chan "\"%s\" -> \"%s\" [%s]\n" 
 	      (string_of_loc_value l) (string_of_loc_value r) label
-          with Undefined -> ())
+          with Not_found -> ())
           locs)
       flds
   in

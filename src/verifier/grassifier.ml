@@ -225,6 +225,8 @@ let elim_sl prog =
       let frame_preds =
         IdSet.fold
           (fun var frames ->
+            if !Config.opt_field_mod && not (IdSet.mem var (modifies_proc prog proc))
+            then frames else
             let old_var = oldify var in
             let srt = (find_global prog var).var_sort in
             mk_framecond (mk_frame init_footprint_set init_alloc_set 

@@ -11,7 +11,7 @@ let usage_message =
   " <input file> [options]\n"
 
 let cmd_line_error msg =
-  Arg.usage Config.cmd_options usage_message;
+  Arg.usage (Arg.align Config.cmd_options) usage_message;
   failwith ("Command line option error: " ^ msg)
 
 (** Output JSON file with error trace *)

@@ -119,7 +119,7 @@ module TermMap = Map.Make(struct
 type filter =
   | FilterTrue
   | FilterSymbolNotOccurs of symbol
-  | FilterTermNotOccurs of term
+  | FilterNameNotOccurs of string * arity
   | FilterGeneric of (subst_map -> term -> bool)
 
 (** matching guards for term generators *)
@@ -294,7 +294,12 @@ let extract_name smt ann =
 let rec extract_src_pos = function
   | SrcPos pos :: _ -> Some pos
   | _ :: ann -> extract_src_pos ann
-  | [] -> None  
+  | [] -> None
+
+let rec extract_label = function
+  | Label lbl :: _ -> Some lbl
+  | _ :: ann -> extract_label ann
+  | [] -> None
 
 let rec pr_form ppf = function
   | Binder (b, vs, f, a) -> 
@@ -467,11 +472,14 @@ let rec pr_form ppf = function
 and pr_annot ppf a =
   let name = extract_name false a in
   let pos = extract_src_pos a in
-  (match name, pos with
-  | "", None -> fprintf ppf ""
-  | "", Some pos -> fprintf ppf "@ /* %s */" (string_of_src_pos pos)
-  | n, Some pos -> fprintf ppf "@ /* %s: %s */" (string_of_src_pos pos) n
-  | n, None -> fprintf ppf "@ /* %s */" n)
+  let lbl = extract_label a in
+  (match name, pos, lbl with
+  | "", None, None -> fprintf ppf ""
+  | "", Some pos, None -> fprintf ppf "@ /* %s */" (string_of_src_pos pos)
+  | "", Some pos, Some lbl -> fprintf ppf "@ /* %s -> %s */" (string_of_ident lbl) (string_of_src_pos pos)
+  | n, Some pos, None -> fprintf ppf "@ /* %s: %s */" (string_of_src_pos pos) n
+  | n, Some pos, Some lbl -> fprintf ppf "@ /* %s -> %s: %s */" (string_of_ident lbl) (string_of_src_pos pos) n
+  | n, None, _ -> fprintf ppf "@ /* %s */" n)
  
 
 and pr_ands ppf = function

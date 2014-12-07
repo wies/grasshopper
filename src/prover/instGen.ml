@@ -131,14 +131,19 @@ let generate_terms generators ground_terms =
           | App (_, ts, _) -> List.for_all not_occurs ts
           | _ -> true
         in not_occurs t
-    | FilterTermNotOccurs t1 ->
-        let ts = ground_terms_term t in
-        let res = not (TermSet.mem t1 ts) in
-        if false && res then begin
-          print_endline ("Filtering " ^ string_of_term t ^ " for occurrence of " ^ string_of_term t1);
-          print_endline ("Result: " ^ string_of_bool res);
-        end;
-        res
+    | FilterNameNotOccurs (name, (arg_srts, res_srt)) ->
+        let rec not_occurs = function
+          | App (FreeSym (name1, _), ts, res_srt1) ->
+              let ok =
+                try
+                  name1 <> name ||
+                  res_srt1 <> res_srt ||
+                  List.fold_left2 (fun acc t1 srt -> acc || sort_of t1 <> srt) false ts arg_srts 
+                with Invalid_argument _ -> true
+              in ok && List.for_all not_occurs ts
+          | App (_, ts, _) -> List.for_all not_occurs ts
+          | _ -> true
+        in not_occurs t
     | FilterGeneric fn -> fn sm t
   in
   let rec generate new_terms old_terms = function

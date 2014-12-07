@@ -671,7 +671,7 @@ let convert cu =
     in
     let rec convert_expr locals = function
       | Null _ -> FOL_term (GrassUtil.mk_null, LocType)
-      | Emp _ -> SL_form SlUtil.mk_emp
+      | Emp pos -> SL_form (SlUtil.mk_emp (Some pos))
       | Setenum (ty, es, pos) ->
           let ts, ty = 
             List.fold_right (fun e (ts, ty) ->
@@ -980,11 +980,11 @@ let convert cu =
                               then FilterSymbolNotOccurs (FreeSym sym)
                               else FilterTrue
                           | flt -> flt)
-                    | App (Read, (App (FreeSym sym, [], _) as t :: _ as ts), _) ->
+                    | App (Read, (App (FreeSym sym, [], srt) :: _ as ts), _) ->
                         (function 
                           | FilterTrue ->
                               if ce_occur_below ts
-                              then FilterTermNotOccurs t
+                              then FilterNameNotOccurs (GrassUtil.name sym, ([], srt))
                               else FilterTrue
                           | flt -> flt)
                     | _ -> function flt -> flt)

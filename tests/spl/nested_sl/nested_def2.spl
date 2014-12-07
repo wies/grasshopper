@@ -27,6 +27,12 @@ function nlseg_outer_footprint(x: OuterNode, y: OuterNode)
   forall z: Loc :: z in FP == (Btwn(onext, x, z, y) && z != y && z in OuterNode)
 }
 
+function dinext() returns(m: Map<Loc, Loc>) {
+  forall x: Loc, y: Loc :: x.m == y == (x.down == y || x.inext == y)
+    @(matching x.down yields m[x])
+    @(matching x.inext yields m[x])
+}
+
 function nlseg_inner_footprint(x: OuterNode, y: OuterNode) 
   returns (FP: Set<Loc>)
 {
