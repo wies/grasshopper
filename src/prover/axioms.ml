@@ -6,17 +6,17 @@ open Config
 
 (* {6 Variable and short-hand declarations} *)
 
-let l1 = fresh_ident "?x", Loc
-let l2 = fresh_ident "?y", Loc
-let l3 = fresh_ident "?z", Loc
-let l4 = fresh_ident "?u", Loc
-let l5 = fresh_ident "?v", Loc
-let f1 = fresh_ident "?f", loc_field_sort
-let f2 = fresh_ident "?g", loc_field_sort
-let f3 = fresh_ident "?h", loc_field_sort
-let s1 = fresh_ident "?X", Set Loc 
-let s2 = fresh_ident "?Y", Set Loc 
-let s3 = fresh_ident "?Z", Set Loc 
+let l1 struct_id = fresh_ident "?x", Loc struct_id
+let l2 struct_id = fresh_ident "?y", Loc struct_id
+let l3 struct_id = fresh_ident "?z", Loc struct_id
+let l4 struct_id = fresh_ident "?u", Loc struct_id
+let l5 struct_id = fresh_ident "?v", Loc struct_id
+let f1 struct_id = fresh_ident "?f", loc_field_sort struct_id
+let f2 struct_id = fresh_ident "?g", loc_field_sort struct_id
+let f3 struct_id = fresh_ident "?h", loc_field_sort struct_id
+let s1 struct_id = fresh_ident "?X", Set (Loc struct_id)
+let s2 struct_id = fresh_ident "?Y", Set (Loc struct_id)
+let s3 struct_id = fresh_ident "?Z", Set (Loc struct_id)
 let is1 = fresh_ident "?N", Set Int 
 let i1 = fresh_ident "?m", Int
 let i2 = fresh_ident "?n", Int

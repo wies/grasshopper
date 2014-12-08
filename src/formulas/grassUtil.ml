@@ -141,10 +141,10 @@ let element_sort_of_set s =
 
 let has_sort srt t = sort_of t = srt
 
-let field_sort ran_srt = Map (Loc, ran_srt)
+let field_sort id ran_srt = Map (Loc id, ran_srt)
 let array_sort ran_srt = Map (Int, ran_srt)
 
-let loc_field_sort = field_sort Loc
+let loc_field_sort struct_id = field_sort struct_id (Loc struct_id)
 
 let is_free_const = function
   | App (FreeSym _, [], _) -> true
@@ -203,7 +203,7 @@ let mk_uminus s = mk_app Int UMinus [s]
 let mk_mult s t = mk_app Int Mult [s; t]
 let mk_div s t = mk_app Int Div [s; t]
 
-let mk_null = mk_app Loc Null []
+let mk_null id = mk_app (Loc id) Null []
 
 let mk_read map ind = 
   let dom_srt, ran_srt = match sort_of map with
@@ -225,7 +225,7 @@ let mk_read_form map ind =
 let mk_write map ind upd =
   mk_app (sort_of map) Write [map; ind; upd]
 
-let mk_ep fld set t = mk_app Loc EntPnt [fld; set; t]
+let mk_ep fld set t = mk_app (element_sort_of_set set) EntPnt [fld; set; t]
 
 let mk_btwn_term fld t1 t2 t3 =
   mk_app Bool Btwn [fld; t1; t2; t3]
@@ -238,7 +238,7 @@ let mk_reach fld t1 t2 =
   
 let mk_empty srt = mk_app srt Empty []
 
-let mk_loc_set id = mk_free_const (Set Loc) id
+let mk_loc_set struct_id id = mk_free_const (Set (Loc struct_id)) id
 
 let mk_setenum ts = 
   let srt = Set (sort_ofs ts) in

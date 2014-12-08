@@ -30,7 +30,7 @@ module IdMap = Map.Make(struct
 
 (** sorts *)
 type sort =
-  | Bool | Loc | Int (** basic sorts *)
+  | Bool | Loc of ident | Int (** basic sorts *)
   | Set of sort (** sets *)
   | Map of sort * sort (** maps *)
   | FreeSrt of ident (** uninterpreted sorts *)
@@ -227,13 +227,13 @@ let bool_sort_string = "Bool"
 let int_sort_string = "Int"
 
 let rec pr_sort0 ppf srt = match srt with
-  | Loc | Bool | Int -> fprintf ppf "%a" pr_sort srt
+  | Loc _ | Bool | Int -> fprintf ppf "%a" pr_sort srt
   | FreeSrt id -> pr_ident ppf id
   | _ -> fprintf ppf "@[<1>%a@]" pr_sort srt
   (*| _ -> fprintf ppf "@[<1>(%a)@]" pr_sort srt*)
 
 and pr_sort ppf = function
-  | Loc -> fprintf ppf "%s" loc_sort_string
+  | Loc id -> fprintf ppf "%s %s" loc_sort_string (string_of_ident id)
   | Bool -> fprintf ppf "%s" bool_sort_string
   | Int -> fprintf ppf "%s" int_sort_string
   | FreeSrt id -> pr_ident ppf id
@@ -383,7 +383,7 @@ let print_form out_ch f = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_fo
 (** {5 Infix Notation} *)
 
 let rec pr_sort ppf = function
-  | Loc -> fprintf ppf "%s" loc_sort_string
+  | Loc id -> fprintf ppf "%s<[@%s]>" loc_sort_string (string_of_ident id)
   | Bool -> fprintf ppf "%s" bool_sort_string
   | Int -> fprintf ppf "%s" int_sort_string
   | FreeSrt id -> pr_ident ppf id
