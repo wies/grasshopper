@@ -441,8 +441,8 @@ let add_reach_axioms fs gts =
 	    | _ -> true) (CongruenceClosure.class_of t classes))
       btwn_flds
   in
-  let reach_ax, _ = open_axioms ~force:true isFld (Axioms.reach_axioms ()) in
-  let reach_ax1 = instantiate_with_terms ~force:true false reach_ax (CongruenceClosure.restrict_classes classes non_updated_flds) in
+  let reach_ax, _ = open_axioms (*~force:true*) isFld (Axioms.reach_axioms ()) in
+  let reach_ax1 = instantiate_with_terms (*~force:true*) false reach_ax (CongruenceClosure.restrict_classes classes non_updated_flds) in
   rev_concat [reach_ax1; reach_write_ax; fs], gts
 
 let instantiate read_propagators fs gts =
