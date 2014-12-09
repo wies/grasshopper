@@ -273,7 +273,10 @@ let check_proc prog proc =
       let sat_means = 
         Str.global_replace (Str.regexp "\n\n") "\n  " (ProgError.error_to_string pp vc_msg)
       in
-      match Prover.get_model ~session_name:vc_name ~sat_means:sat_means vc_and_preds with
+      let session_name =
+        Filename.chop_extension (Filename.basename pp.sp_file) ^ "_" ^ vc_name 
+      in
+      match Prover.get_model ~session_name:session_name ~sat_means:sat_means vc_and_preds with
       | None -> errors
       | Some model -> 
           (* generate error message from model *)
