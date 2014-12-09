@@ -122,10 +122,9 @@ let get_result_sort model sym arg_srts =
       if sym1 = sym && arg_srts = arg_srts1 then Some res_srt1 else srt_opt)
     model.intp None
       
-    
 
-let find_map_value model v srt = 
-  match SortedValueMap.find (v, Map (Loc, srt)) model.vals with
+let find_map_value model v arg_srt res_srt = 
+  match SortedValueMap.find (v, Map (arg_srt, res_srt)) model.vals with
   | MapVal (m, d) -> m, d
   | Undef -> ValueListMap.empty, Undef
   | _ -> raise Undefined
@@ -171,7 +170,7 @@ let extend_interp model sym (arity: arity) args res =
   (* update extended value mapping *)
   begin
     match res_srt with
-    | Map (Loc, srt)
+    | Map (Loc _, srt)
     | Set srt ->
         model.vals <- SortedValueMap.add (I card, res_srt) res model.vals
     | _ -> ()
@@ -199,7 +198,7 @@ let rec eval model = function
       let arity = [srt; dsrt; rsrt], srt in
       (try interp_symbol model Write arity [fld_val; ind_val; upd_val]
       with Undefined ->
-        let m, d = find_map_value model fld_val srt in
+        let m, d = find_map_value model fld_val (sort_of ind) srt in
         let res = MapVal (ValueListMap.add [ind_val] upd_val m, d) in
         extend_interp model Write arity [fld_val; ind_val; upd_val] res)
   | App (UMinus, [t], _) ->
@@ -379,6 +378,20 @@ let get_values_of_sort model srt =
   in
   ValueSet.elements vals
 
+let get_loc_sorts model =
+  SortedSymbolMap.fold
+    (function
+      | (_, ([], Loc sid)) -> fun _ srts -> IdSet.add sid srts
+      | _ -> fun _ srts -> srts)
+    model.intp IdSet.empty
+
+let get_set_sorts model =
+  SortedSymbolMap.fold
+    (function
+      | (_, ([], Set srt)) -> fun _ srts -> SortSet.add srt srts
+      | _ -> fun _ srts -> srts)
+    model.intp SortSet.empty
+    
 let get_symbols_of_sort model arity =
   SortedSymbolMap.fold 
     (fun (sym, arity1) _ symbols ->
@@ -429,36 +442,43 @@ let rename_free_symbols model fn =
   in
   { model with intp = new_intp }
 
-let succ model fld x =
-  let arity = [loc_field_sort; Loc; Loc; Loc], Bool in
-  let locs = get_values_of_sort model Loc in
+let succ model sid fld x =
+  let loc_srt = Loc sid in
+  let btwn_arity = [loc_field_sort sid; loc_srt; loc_srt; loc_srt], Bool in
+  let locs = get_values_of_sort model loc_srt in
   List.fold_left (fun s y ->
     if y <> x && 
-      bool_of_value (interp_symbol model Btwn arity [fld; x; y; y]) &&
-      (s == x || bool_of_value (interp_symbol model Btwn arity [fld; x; y; s]))
+      bool_of_value (interp_symbol model Btwn btwn_arity [fld; x; y; y]) &&
+      (s == x || bool_of_value (interp_symbol model Btwn btwn_arity [fld; x; y; s]))
     then y else s)
     x locs
       
 let complete model =
-  let locs = get_values_of_sort model Loc in
-  let loc_flds = get_values_of_sort model loc_field_sort in
-  let flds = 
-    let null = interp_symbol model Null ([], Loc) [] in
+  let locs sid = get_values_of_sort model (Loc sid) in
+  let loc_flds sid = get_values_of_sort model (loc_field_sort sid) in
+  let flds sid =
+    let loc_srt = Loc sid in
+    let null = interp_symbol model Null ([], loc_srt) [] in
+    let btwn_arity = [loc_field_sort sid; loc_srt; loc_srt; loc_srt], Bool in
     List.filter (fun f ->
       try 
         bool_of_value 
-          (interp_symbol model Btwn ([loc_field_sort; Loc; Loc; Loc], Bool) [f; null; null; null])
-      with Undefined -> false) loc_flds
+          (interp_symbol model Btwn btwn_arity [f; null; null; null])
+      with Undefined -> false) (loc_flds sid)
   in
+  let loc_srts = get_loc_sorts model in
   let new_model =
-    List.fold_left 
-      (fun new_model fld ->
-        List.fold_left 
-          (fun new_model arg ->
-            let res = succ model fld arg in
-            add_def new_model Read ([loc_field_sort; Loc], Loc) [fld; arg] res)
-          new_model locs)
-      model flds
+    IdSet.fold (fun sid model ->
+      List.fold_left 
+        (fun new_model fld ->
+          List.fold_left 
+            (fun new_model arg ->
+              let res = succ model sid fld arg in
+              let read_arity = [loc_field_sort sid; Loc sid], Loc sid in
+              add_def new_model Read read_arity [fld; arg] res)
+            new_model (locs sid))
+        model (flds sid))
+      loc_srts model
   in
   new_model
 
@@ -506,35 +526,46 @@ let find_term model =
   in fun v srt -> find SortedValueSet.empty (v, srt)
 
 let finalize_values model =
-  let loc_values = get_values_of_sort model Loc in
-  let generate_sets () =
-    List.iter (fun s ->
-      let vset =
-        List.fold_left (fun vset e ->
-          let e_in_s = interp_symbol model Elem ([Loc; Set Loc], Bool) [e; s] in
-          if bool_of_value e_in_s 
-          then ValueSet.add e vset
-          else vset)
-          ValueSet.empty loc_values
-      in
-      model.vals <- SortedValueMap.add (s, Set Loc) (SetVal vset) model.vals)
-      (get_values_of_sort model (Set Loc));
-    List.iter (fun s ->
-      let m, d = SortedSymbolMap.find (Elem, ([Int; Set Int], Bool)) model.intp in
-      match d with
-      | BaseVal (B false) -> 
-          let vset =
-            ValueListMap.fold 
-              (fun vs v vset ->
-                match vs with
-                | [e; s1] when bool_of_value v && s1 = s ->
-                    ValueSet.add e vset
-                | _ -> vset)
-              m ValueSet.empty
-          in
-          model.vals <- SortedValueMap.add (s, Set Int) (SetVal vset) model.vals
-      | _ -> ())
-      (get_values_of_sort model (Set Int))
+  let loc_sorts sid = get_loc_sorts sid in
+  let loc_values sid = get_values_of_sort model (Loc sid) in
+  let mk_finite_set srt s =
+    let vset =
+      List.fold_left (fun vset e ->
+        let e_in_s = interp_symbol model Elem ([srt; Set srt], Bool) [e; s] in
+        if bool_of_value e_in_s 
+        then ValueSet.add e vset
+        else vset)
+        ValueSet.empty (get_values_of_sort model srt)
+    in
+    model.vals <- SortedValueMap.add (s, Set srt) (SetVal vset) model.vals
+  in
+  let mk_set srt s =
+    let m, d = SortedSymbolMap.find (Elem, ([srt; Set srt], Bool)) model.intp in
+    match d with
+    | BaseVal (B false) -> 
+        let vset =
+          ValueListMap.fold 
+            (fun vs v vset ->
+              match vs with
+              | [e; s1] when bool_of_value v && s1 = s ->
+                  ValueSet.add e vset
+              | _ -> vset)
+            m ValueSet.empty
+        in
+        model.vals <- SortedValueMap.add (s, Set srt) (SetVal vset) model.vals
+    | _ -> ()
+  in
+  let generate_sets srt =
+    let is_finite_set_srt =
+      (* TODO: refine *)
+      match srt with
+      | Bool -> true
+      | Loc _ -> true
+      | _ -> false
+    in
+    List.iter
+      (if is_finite_set_srt then mk_finite_set srt else mk_set srt)
+      (get_values_of_sort model (Set srt))
   in
   let generate_fields srt =
     List.iter (fun f ->
@@ -549,7 +580,7 @@ let finalize_values model =
       model.vals <- SortedValueMap.add (f, field_sort srt) (MapVal (fmap, Undef)) model.vals)
       (get_values_of_sort model (field_sort srt))
   in
-  generate_sets ();
+  SortSet.iter generate_sets (get_set_sorts model);
   List.iter generate_fields [Loc; Int; Bool];
   model
 
