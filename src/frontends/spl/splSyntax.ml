@@ -16,7 +16,7 @@ type typ =
   | SetType of typ
   | IntType
   | BoolType
-  | LocType
+  | LocType of ident
   | PermType (* SL formulas *)
   | UniversalType
 

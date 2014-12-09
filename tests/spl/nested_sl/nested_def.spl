@@ -11,43 +11,44 @@ struct InnerNode {
 }
 
 function lseg_footprint(x: InnerNode, y: InnerNode)
-  returns (FP: Set<Loc>)
+  returns (FP: Set<Loc<InnerNode>>)
 {
-  forall z: Loc :: z in FP == (Btwn(inext, x, z, y) && z != y && z in InnerNode)
+  forall z: Loc<InnerNode> :: z in FP == (Btwn(inext, x, z, y) && z != y)
 }
 
-predicate lseg(x: InnerNode, y: InnerNode, FP: Set<Loc>) {
+predicate lseg(x: InnerNode, y: InnerNode, FP: Set<Loc<InnerNode>>) {
   Reach(inext, x, y) && 
   FP == lseg_footprint(x, y)
 }
 
 function nlseg_outer_footprint(x: OuterNode, y: OuterNode) 
-  returns (FP: Set<Loc>) 
+  returns (FP: Set<Loc<OuterNode>>) 
 {
-  forall z: Loc :: z in FP == (Btwn(onext, x, z, y) && z != y && z in OuterNode)
+  forall z: Loc<OuterNode> :: z in FP == (Btwn(onext, x, z, y) && z != y)
 }
 
 function nlseg_inner_footprint(x: OuterNode, y: OuterNode) 
-  returns (FP: Set<Loc>)
+  returns (FP: Set<Loc<InnerNode>>)
 {
-  (forall z: Loc, zh: Loc :: z in FP ==>
+  (forall z: Loc<InnerNode> :: z in FP ==>
    z.head in nlseg_outer_footprint(x, y)) &&
-  (forall z: Loc, zh: Loc :: z in FP && zh == z.head ==>
+  (forall z: Loc<InnerNode>, zh<OuterNode>: Loc :: z in FP && zh == z.head ==>
    /* z in lseg_footprint(zh.down, null) */
-   Btwn(inext, zh.down, z, null) && z != null && z in InnerNode
+   Btwn(inext, zh.down, z, null) && z != null
    @(matching z yields z.head)
    @(matching zh yields zh.down)) &&
-  (forall zh: Loc, z: Loc :: 
+  (forall zh: Loc<OuterNode>, z: Loc<InnerNode> :: 
    zh in nlseg_outer_footprint(x, y) &&
    /*z in lseg_footprint(zh.down, null)*/
-   Btwn(inext, zh.down, z, null) && z != null && z in InnerNode ==> z in FP)
+   Btwn(inext, zh.down, z, null) && z != null ==> z in FP)
 }
 
-predicate nlseg(x: OuterNode, y: OuterNode, FP: Set<Loc>) {
+predicate nlseg(x: OuterNode, y: OuterNode, FP0: Set<Loc<OuterNode>>, FP1: Set<Loc<InnerNode>>) {
   Reach(onext, x, y) &&
   (forall u: OuterNode, v: InnerNode ::
      u in nlseg_outer_footprint(x, y) && v in nlseg_inner_footprint(x, y) && 
      Reach(inext, u.down, v) ==> v.head == u) &&
   (forall u: OuterNode :: u in nlseg_outer_footprint(x, y) ==> Reach(inext, u.down, null)) &&
-  FP == nlseg_outer_footprint(x, y) ++ nlseg_inner_footprint(x, y)
+  FP0 == nlseg_outer_footprint(x, y) &&
+  FP1 == nlseg_inner_footprint(x, y)
 }

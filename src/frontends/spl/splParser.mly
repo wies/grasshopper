@@ -262,7 +262,7 @@ var_modifier:
 ; 
 
 var_type:
-| LOC { LocType }
+| LOC LT IDENT GT { LocType $3 }
 | INT { IntType }
 | BOOL { BoolType }
 | SET LT var_type GT { SetType $3 }

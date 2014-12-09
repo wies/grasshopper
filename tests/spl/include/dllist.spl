@@ -5,11 +5,11 @@ struct Node {
   var prev: Node;
 }
 
-function dlseg_footprint(x: Node, y: Node) returns (FP: Set<Loc>) {
-  forall z: Loc :: z in FP == (Btwn(next, x, z, y) && z != y)
+function dlseg_footprint(x: Node, y: Node) returns (FP: Set<Loc<Node>>) {
+  forall z: Loc<Node> :: z in FP == (Btwn(next, x, z, y) && z != y)
 }
 
-predicate dlseg(x1: Node, x2: Node, y1: Node, y2: Node, FP: Set<Loc>) {
+predicate dlseg(x1: Node, x2: Node, y1: Node, y2: Node, FP: Set<Loc<Node>>) {
   FP == dlseg_footprint(x1, y1) &&
   (x1 == y1 && x2 == y2 ||
    //x1 in FP && y2 in FP &&
@@ -18,10 +18,10 @@ predicate dlseg(x1: Node, x2: Node, y1: Node, y2: Node, FP: Set<Loc>) {
    Btwn (prev, y2, x1, x2) &&
    y2.next == y1 &&
    x1.prev == x2 &&
-   (forall l1: Loc, l2: Loc :: 
+   (forall l1: Loc<Node>, l2: Loc<Node> :: 
      Btwn(next, x1, l1, y1) && Btwn(next, x1, l2, y1) && Btwn(next, l1, l2, y1) ==>
        l2 == y1 || Btwn(prev, y2, l2, l1) && Btwn(prev, l2, l1, x1)) &&
-   (forall l1: Loc, l2: Loc ::
+   (forall l1: Loc<Node>, l2: Loc<Node> ::
      Btwn(prev, y2, l1, x2) && Btwn(prev, y2, l2, x2) && Btwn(prev, l1, l2, x2) ==>
        l2 == x2 || Btwn(next, x1, l2, l1) && Btwn(next, l2, l1, y1)))
 }

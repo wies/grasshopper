@@ -23,19 +23,23 @@ let rec assert_type id typ pos =
   | SetType (StructType tid) ->
       [GrassUtil.mk_subseteq (mk_loc_set id) (mk_loc_set tid)]
   | MapType (StructType tid1, StructType tid2) ->
-      let fld = mk_free_const (Map (Loc, Loc)) id in
-      mk_forall [Axioms.l1] 
-        (mk_sequent [mk_elem Axioms.loc1 (mk_loc_set tid1)] 
-           [mk_elem (mk_read fld Axioms.loc1) (mk_loc_set tid2)]) ::
-      mk_forall [Axioms.l1]
-        (mk_or [mk_elem Axioms.loc1 (mk_loc_set tid1); mk_eq (mk_read fld Axioms.loc1) mk_null]) ::
+      let fld = mk_free_const (Map (Loc tid1, Loc tid2)) id in
+      let l1 = Axioms.l1 tid1 in
+      let l2 = Axioms.l2 tid1 in
+      let loc1 = Axioms.loc1 tid1 in
+      let loc2 = Axioms.loc2 tid1 in
+      mk_forall [l1] 
+        (mk_sequent [mk_elem loc1 (mk_loc_set tid1)] 
+           [mk_elem (mk_read fld loc1) (mk_loc_set tid2)]) ::
+      mk_forall [l1]
+        (mk_or [mk_elem loc1 (mk_loc_set tid1); mk_eq (mk_read fld loc1) (mk_null tid1)]) ::
       if tid1 = tid2 then
-        [mk_forall [Axioms.l1; Axioms.l2]
-           (mk_sequent [mk_elem Axioms.loc1 (mk_loc_set tid1); mk_reach fld Axioms.loc1 Axioms.loc2]
-              [mk_elem Axioms.loc2 (mk_loc_set tid1)]);
-         mk_forall [Axioms.l1; Axioms.l2]
-           (mk_or [mk_elem Axioms.loc1 (mk_loc_set tid1); mk_not (mk_reach fld Axioms.loc1 Axioms.loc2);
-                   mk_eq Axioms.loc1 Axioms.loc2; mk_eq Axioms.loc2 mk_null])]
+        [mk_forall [l1; l2]
+           (mk_sequent [mk_elem loc1 (mk_loc_set tid1); mk_reach fld loc1 loc2]
+              [mk_elem loc2 (mk_loc_set tid1)]);
+         mk_forall [l1; l2]
+           (mk_or [mk_elem loc1 (mk_loc_set tid1); mk_not (mk_reach fld loc1 loc2);
+                   mk_eq loc1 loc2; mk_eq loc2 (mk_null tid1)])]
       else [] 
   | _ -> []
   in
@@ -644,8 +648,8 @@ let convert cu =
           ("Struct " ^ fst id ^ " does not have a field named " ^ fst fld_id)
     in
     let rec convert_type = function
-      | LocType -> Loc
-      | StructType id -> Loc
+      | LocType id -> Loc id
+      | StructType id -> Loc id
       | MapType (dtyp, rtyp) -> Map (convert_type dtyp, convert_type rtyp)
       | SetType typ -> Set (convert_type typ)
       | IntType -> Int
@@ -1023,8 +1027,8 @@ let convert cu =
       | FOL_term (t, tty) ->
           let rec match_types ty1 ty2 = 
             match ty1, ty2 with
-            | LocType, StructType _
-            | StructType _, LocType -> ty2
+            | LocType _, StructType _
+            | StructType _, LocType _ -> ty2
             | UniversalType, _ -> ty2
             | _, UniversalType -> ty1
             | SetType ty1, SetType ty2 -> SetType (match_types ty1 ty2)
