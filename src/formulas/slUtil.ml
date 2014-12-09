@@ -9,24 +9,24 @@ let pos_of_sl_form = function
   | BoolOp (_, _, pos) 
   | Binder (_, _, _, pos) -> pos
 
-let mk_loc_set d =
-  let srt = Grass.Set Grass.Loc in
+let mk_loc_set struct_id d =
+  let srt = Grass.Set (Grass.Loc struct_id) in
     GrassUtil.mk_free_const srt d
 
-let mk_loc_set_var d =
-  let srt = Grass.Set Grass.Loc in
+let mk_loc_set_var struct_id d =
+  let srt = Grass.Set (Grass.Loc struct_id) in
     GrassUtil.mk_var srt d
 
-let mk_loc d =
-  if fst d = "null" then GrassUtil.mk_null
-  else GrassUtil.mk_free_const (Grass.Loc) d
+let mk_loc struct_id d =
+  if fst d = "null" then GrassUtil.mk_null struct_id
+  else GrassUtil.mk_free_const (Grass.Loc struct_id) d
 
-let mk_domain d v = GrassUtil.mk_elem v (mk_loc_set d)
-let mk_domain_var d v = GrassUtil.mk_elem v (mk_loc_set_var d)
-let emptyset = GrassUtil.mk_empty (Grass.Set Grass.Loc)
-let empty_t domain = GrassUtil.mk_eq emptyset domain
-let empty domain = empty_t (mk_loc_set domain)
-let empty_var domain = empty_t (mk_loc_set_var domain)
+let mk_domain     struct_id d v    = GrassUtil.mk_elem v (mk_loc_set struct_id d)
+let mk_domain_var struct_id d v    = GrassUtil.mk_elem v (mk_loc_set_var struct_id d)
+let emptyset      struct_id        = GrassUtil.mk_empty (Grass.Set (Grass.Loc struct_id))
+let empty_t       struct_id domain = GrassUtil.mk_eq (emptyset struct_id) domain
+let empty         struct_id domain = empty_t struct_id (mk_loc_set struct_id domain)
+let empty_var     struct_id domain = empty_t struct_id (mk_loc_set_var struct_id domain)
 
 let mk_pure ?pos p = Pure (p, pos)
 let mk_true = mk_pure GrassUtil.mk_true

@@ -72,18 +72,24 @@ let massage_field_reads fs =
   | BoolOp (And as op, fs)
   | BoolOp (Or as op, fs) -> BoolOp (op, List.map massage fs)
   | Binder (b, vs, f, a) -> Binder (b, vs, massage f, a)
-  | Atom (App (Eq, [App (Read, [fld; Var _ as arg], Loc); App (FreeSym _, [], _) as t], _), a)
-  | Atom (App (Eq, [App (FreeSym _, [], _) as t; App (Read, [fld; Var _ as arg], Loc)], _), a) 
+  | Atom (App (Eq, [App (Read, [fld; Var _ as arg], Loc _); App (FreeSym _, [], _) as t], _), a)
+  | Atom (App (Eq, [App (FreeSym _, [], _) as t; App (Read, [fld; Var _ as arg], Loc _)], _), a) 
     when TermSet.mem fld reach_flds ->
+      let sid = match sort with
+        | Map (Loc s, _) -> s
+        | _ -> failwith "massage_field_reads: field has not Map<Loc _, _> type"
+      in
+      let l1 = Axioms.l1 sid in
+      let loc1 = Axioms.loc1 sid in
       let f1 = 
         annotate
           (mk_and [mk_btwn fld arg t t;
                    mk_or [mk_neq arg t; 
-                          mk_forall [Axioms.l1]
-                            (mk_or [mk_not (mk_reach fld t Axioms.loc1); mk_eq t Axioms.loc1])];
-                   mk_forall [Axioms.l1]
-                     (mk_or [mk_eq Axioms.loc1 arg; mk_eq Axioms.loc1 t; 
-                             mk_not (mk_btwn fld arg Axioms.loc1 t)])]) a
+                          mk_forall [l1]
+                            (mk_or [mk_not (mk_reach fld t loc1); mk_eq t loc1])];
+                   mk_forall [l1]
+                     (mk_or [mk_eq loc1 arg; mk_eq loc1 t; 
+                             mk_not (mk_btwn fld arg loc1 t)])]) a
       in
       f1
   | f -> f

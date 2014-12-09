@@ -72,7 +72,7 @@ let field_partitions fs gts =
   let fld_partition, fld_map, fields = 
     let max, fld_map, fields = 
       TermSet.fold (fun t (n, fld_map, fields) -> match t with
-      | App (_, _, Map (Loc, _)) as fld -> 
+      | App (_, _, Map (Loc _, _)) as fld -> 
           n+1, TermMap.add fld n fld_map, TermSet.add fld fields
       | _ -> n, fld_map, fields)
         gts (0, TermMap.empty, TermSet.empty)
@@ -80,7 +80,7 @@ let field_partitions fs gts =
     let rec collect_eq partition = function
       | BoolOp (Not, f) -> partition
       | BoolOp (op, fs) -> List.fold_left collect_eq partition fs
-      | Atom (App (Eq, [App (_, _, Map (Loc, _)) as fld1; fld2], _), _) ->
+      | Atom (App (Eq, [App (_, _, Map (Loc _, _)) as fld1; fld2], _), _) ->
           Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
       | Binder (_, _, f, _) -> collect_eq partition f
       | f -> partition
@@ -121,12 +121,16 @@ let add_frame_axioms fs =
   let btwn_flds = btwn_fields_in_fs fs in
   let expand_frame x a f f' =
     let frame = mk_diff a x in
-    let reduce_graph () =
+    let reduce_graph id =
+      let loc1 = Axioms.loc1 id in
+      let loc2 = Axioms.loc2 id in
+      let loc3 = Axioms.loc3 id in
+
       let replacement_pts =
         Axioms.mk_axiom "pts_frame"
           (mk_implies
-             (smk_elem Axioms.loc1 frame)
-             (mk_eq (mk_read f Axioms.loc1) (mk_read f' Axioms.loc1))
+             (smk_elem loc1 frame)
+             (mk_eq (mk_read f loc1) (mk_read f' loc1))
           )
       in
      
@@ -135,7 +139,6 @@ let add_frame_axioms fs =
         let reachwo_f = Axioms.reachwo_Fld f in
         let reach_f x y z = mk_btwn f x z y in
         let reach_f' x y z = mk_btwn f' x z y in
-        let open Axioms in
         if TermSet.mem f' btwn_flds then
           match f' with
           | App (FreeSym (p, _), _, _) when p = "parent" ->
@@ -160,18 +163,23 @@ let add_frame_axioms fs =
       in
       mk_and axioms
     in
-    let reduce_data () =
+    let reduce_data id =
+      let loc1 = Axioms.loc1 id in
       Axioms.mk_axiom "data_frame"
         (mk_implies
-           (smk_elem Axioms.loc1 frame)
-           (mk_eq (mk_read f Axioms.loc1) (mk_read f' Axioms.loc1))
+           (smk_elem loc1 frame)
+           (mk_eq (mk_read f loc1) (mk_read f' loc1))
         )
     in
       (*Debug.amsg ("expanding frame for " ^ (string_of_term f) ^ "\n");*)
       match sort_of f with
-      | Map (Loc, Loc) -> reduce_graph ()
-      | Map (Loc, Int) | Map (Loc, Bool) -> reduce_data ()
-      | other -> failwith ("reduce_frame did not expect field of type " ^ (string_of_sort other))
+      | Map (Loc id1, Loc id2) ->
+        if (id1 = id2) reduce_graph id1
+        else reduce_data id1
+      | Map (Loc id, Int) | Map (Loc id, Bool) ->
+        reduce_data id
+      | other ->
+        failwith ("reduce_frame did not expect field of type " ^ (string_of_sort other))
   in
   let rec process f (frame_axioms, fields) = match f with
     | Atom (App (Frame, [x; a; fld; fld'], _), ann) when fld <> fld' ->
@@ -237,7 +245,7 @@ let open_axioms ?(force=false) open_cond axioms =
   in
   List.fold_right open_axioms axioms ([], [])
     
-let isFld f = function (_, Map (Loc, _)) -> true | _ -> false
+let isFld f = function (_, Map (Loc _, _)) -> true | _ -> false
 
 let isFunVar f =
   let fvars = vars_in_fun_terms f in
@@ -336,28 +344,28 @@ let add_read_write_axioms fs =
   let gts = TermSet.union (ground_terms (smk_and null_ax1)) gts in
   let field_sorts = TermSet.fold (fun t srts ->
     match sort_of t with
-    | Map (Loc, srt) -> SortSet.add srt srts
+    | Map (Loc id, srt) -> IdSrtSet.add (id, srt) srts
     | _ -> srts)
-      gts SortSet.empty
+      gts IdSrtSet.empty
   in
   (* propagate read terms *)
   let read_propagators =
-    SortSet.fold (fun srt propagators ->
-      let f1 = fresh_ident "?f", field_sort srt in
+    IdSrtSet.fold (fun (id, srt) propagators ->
+      let f1 = fresh_ident "?f", field_sort id srt in
       let fld1 = mk_var (snd f1) (fst f1) in
-      let f2 = fresh_ident "?g", field_sort srt in
+      let f2 = fresh_ident "?g", field_sort id srt in
       let fld2 = mk_var (snd f2) (fst f2) in
       let d = fresh_ident "?d" in
       let d1 = d, srt in
       let dvar = mk_var srt d in
-      let l1 = Axioms.l1 in
-      let loc1 = Axioms.loc1 in
-      let l2 = Axioms.l2 in
-      let loc2 = Axioms.loc2 in
-      let s1 = Axioms.s1 in
-      let set1 = Axioms.set1 in
-      let s2 = Axioms.s2 in
-      let set2 = Axioms.set2 in
+      let l1 = Axioms.l1 id in
+      let loc1 = Axioms.loc1 id in
+      let l2 = Axioms.l2 id in
+      let loc2 = Axioms.loc2 id in
+      let s1 = Axioms.s1 id in
+      let set1 = Axioms.set1 id in
+      let s2 = Axioms.s2 id in
+      let set2 = Axioms.set2 id in
       (* f = g, x.f -> x.g *)
       ([],
        [f1; f2; l1],

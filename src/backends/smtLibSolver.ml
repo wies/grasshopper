@@ -55,9 +55,9 @@ let get_version name cmd vregexp versions =
     with Not_found -> None
 
 let z3_v3 = { version = 3;
-	      subversion = 2;
+              subversion = 2;
               has_set_theory = false;
-	      smt_options = [":mbqi", true;
+              smt_options = [":mbqi", true;
 			 ":MODEL_V2", true;
 			 ":MODEL_PARTIAL", true;
 			 ":MODEL_HIDE_UNUSED_PARTITIONS", true];
@@ -65,14 +65,14 @@ let z3_v3 = { version = 3;
 	    }
 
 let z3_v4 = { version = 4;
-	      subversion = 3;
+              subversion = 3;
               has_set_theory = false;
-	      smt_options = 
+              smt_options = 
               (if not !Config.instantiate then [(":auto-config", false)] else []) @
               [(*":smt.mbqi", true;
                ":smt.ematching", true;
                ":model.v2", true;
-	       ":model.partial", true*)];
+               ":model.partial", true*)];
               kind = Process ("z3", ["-smt2"; "-in"]);
 	    }
 
@@ -281,8 +281,9 @@ let declare_fun session sym_name arg_sorts res_sort =
 let declare_sort session sort_name num_of_params =
   writeln session (Printf.sprintf "(declare-sort %s %d)" sort_name num_of_params)
     
-let declare_sorts has_int session =
-  declare_sort session loc_sort_string 0;
+let declare_sorts has_int session structs =
+  IdSet.foreach (fun id -> declare_sort session (string_of_ident id) 0) structs;
+  declare_sort session loc_sort_string 1;
   if not !Config.use_set_theory
   then declare_sort session set_sort_string 1;
   if !Config.encode_fields_as_arrays 
@@ -358,6 +359,24 @@ let init_session session sign =
           variants)
       sign
   in
+  (* collect the struct types *)
+  let structs =
+    let add acc srt = match srt with
+      | Loc id -> IdSet.add id acc
+      | _ -> acc
+    in
+    SymbolMap.fold
+      (fun _ funSig acc ->
+        List.fold_left
+          (fun acc (args,ret) ->
+            List.fold_left (add) (add acc ret) args
+          )
+          acc
+          funSig
+      )
+      sign
+      IdSet.empty
+  in
   (* set all options *)
   List.iter (fun (solver, state) ->
     List.iter 
@@ -390,7 +409,7 @@ let init_session session sign =
   writeln session ("(set-info :category \"crafted\")");
   writeln session ("(set-info :status \"unknown\")");
   (* desclare all sorts *)
-  declare_sorts has_int session
+  declare_sorts has_int session structs
 
 let start session_name sat_means =
   start_with_solver
@@ -531,7 +550,7 @@ let convert_model session smtModel =
     | FreeSort ((name, num), srts) ->
         let csrts = List.map convert_sort srts in
         match name, csrts with
-        | "Loc", [] -> Loc
+        | "Loc", [FreeSort id] -> Loc id
         | "Set", [esrt] -> Set esrt
         | "Map", [dsrt; rsrt] -> Map (dsrt, rsrt)
         | _, [] -> FreeSrt (name, num)
@@ -578,7 +597,7 @@ let convert_model session smtModel =
           match to_val id with
           | Some (Map _ as srt, index)
           | Some (Set _ as srt, index)
-          | Some (Loc as srt, index) -> 
+          | Some (Loc _ as srt, index) -> 
               let card = try SortMap.find srt cards with Not_found -> 0 in
               SortMap.add srt (max card (index + 1)) cards
           | _ -> cards
