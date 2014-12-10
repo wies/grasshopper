@@ -174,7 +174,7 @@ let add_frame_axioms fs =
       (*Debug.amsg ("expanding frame for " ^ (string_of_term f) ^ "\n");*)
       match sort_of f with
       | Map (Loc id1, Loc id2) ->
-        if (id1 = id2) reduce_graph id1
+        if (id1 = id2) then reduce_graph id1
         else reduce_data id1
       | Map (Loc id, Int) | Map (Loc id, Bool) ->
         reduce_data id

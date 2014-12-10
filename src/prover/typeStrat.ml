@@ -114,17 +114,14 @@ let stratify_types axioms =
   in
   (* 3: find the set of edges with smallest weight such that remove them makes a DAG 
         break symmetry using a default order *)
-  let default_priorities =
-    [ Map (Loc, Loc), 6 ;
-      Map (Loc, Int), 5 ;
-      Loc, 4 ;
-      Int, 3 ;
-      Set Loc, 2 ;
-      Set Int, 1 ]
-  in
-  let get_priority t =
-    try List.assoc t default_priorities
-    with Not_found -> 7
+  let get_priority t = match t with
+    | Map (Loc _, Loc _) -> 6
+    | Map (Loc _, Int) -> 5
+    | Loc _ -> 4
+    | Int -> 3
+    | Set (Loc _) -> 2
+    | Set Int -> 1
+    | _ -> 7
   in
   let sequencify lst =
     if List.length lst > 1 then
@@ -176,42 +173,79 @@ let stratify_types axioms =
       end;
     graph
 
-let default_type_stratification =
-  let edges = [
-    (Map (Loc, Bool), Bool);
-    (Map (Loc, Loc), Loc);
-    (Map (Loc, Int), Int);
-    (Bool, Loc);
-    (Loc, Int);
-    (Loc, Set Loc);
-    (Int, Set Int)
-    ]
-  in
-    List.fold_left
-      (fun acc (a, b) ->
-        let old = try SortMap.find a acc with Not_found -> SortSet.empty in
-          SortMap.add a (SortSet.add b old) acc
-      )
-      SortMap.empty
-      edges
 
 let type_graph: (SortSet.t SortMap.t) option ref = ref None
-
-let get () = match !type_graph with
-  | None ->
-    Debug.warn (fun () -> "Type stratification was not initialized, using the default one!\n");
-    default_type_stratification
-  | Some ts -> ts
 
 let init fs =
   if !type_graph <> None then
     Debug.warn (fun () -> "Type stratification is already existing!\n");
-  type_graph := Some (stratify_types fs)
+  type_graph := Some (transitive_closure (stratify_types fs))
 
 let default () =
   if !type_graph <> None then
     Debug.warn (fun () -> "Type stratification is already existing!\n");
-  type_graph := Some default_type_stratification
+  type_graph := None
 
 let reset () = 
   type_graph := None
+
+
+
+let is_stratified t1 t2 =
+  match !type_graph with
+  | Some closed_type_graph ->
+    let can_reach a b =
+      try SortSet.mem b (SortMap.find a closed_type_graph)
+      with Not_found -> false
+    in
+    let res = t1 <> Int && t1 <> t2 && not (can_reach t2 t1) in
+    Debug.debugl 1 (fun () -> "is_stratified("^(string_of_sort t1)^","^(string_of_sort t2)^") = "^(string_of_bool res)^"\n");
+    res
+  | None ->
+    begin
+    (*[ (Map (Loc, Bool), Bool);
+        (Map (Loc, Loc), Loc);
+        (Map (Loc, Int), Int);
+        (Bool, Loc);
+        (Loc, Int);
+        (Loc, Set Loc);
+        (Int, Set Int) ] *)
+      match t1 with
+      | Map (Loc _, Bool) ->
+        begin
+          match t2 with
+          | Bool | Loc _ | Int | Set Int | Set (Loc _) -> true
+          | _ -> false
+        end
+      | Map (Loc _, Loc _) -> 
+        begin
+          match t2 with
+          | Loc _ | Int | Set Int | Set (Loc _) -> true
+          | _ -> false
+        end
+      | Map (Loc _, Int) ->
+        begin
+          match t2 with
+          | Int | Set Int -> true
+          | _ -> false
+        end
+      | Bool ->
+        begin
+          match t2 with
+          | Loc _ | Int | Set Int | Set (Loc _) -> true
+          | _ -> false
+        end
+      | Loc _ ->
+        begin
+          match t2 with
+          | Int | Set (Loc _) -> true
+          | _ -> false
+        end
+      | Int ->
+        begin
+          match t2 with
+          | Set Int -> true
+          | _ -> false
+        end
+    end
+

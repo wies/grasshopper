@@ -44,7 +44,8 @@ let type_of_expr cu locals e =
         | MapType (_, ty) -> ty
         | _ -> UniversalType)
     (* Other stuff *)
-    | Null _ -> LocType
+    | Null _ -> UniversalType (*TODO null should have a more precise type, e.g. Loc<T>. *)
+    (*| Null _ -> LocType*)
     | ProcCall (id, _, _) ->
         let decl = IdMap.find id cu.proc_decls in
         (match decl.p_returns with

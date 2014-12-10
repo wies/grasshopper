@@ -181,18 +181,7 @@ let generate_terms generators ground_terms =
   generate new_terms ground_terms generators
 
 
-let generate_instances useLocalInst axioms rep_terms egraph type_graph = 
-  (* stratification: can a var of type t1 be used to generate a term of type t2 *)
-  let closed_type_graph = TypeStrat.transitive_closure type_graph in
-  let can_reach a b =
-    try SortSet.mem b (SortMap.find a closed_type_graph)
-    with Not_found -> false
-  in
-  let is_stratified t1 t2 =
-    let res = t1 <> Int && t1 <> t2 && not (can_reach t2 t1) in
-      Debug.debugl 1 (fun () -> "is_stratified("^(string_of_sort t1)^","^(string_of_sort t2)^") = "^(string_of_bool res)^"\n");
-      res
-  in
+let generate_instances useLocalInst axioms rep_terms egraph = 
   (* *)
   let epr_axioms, axioms = 
     List.partition 
@@ -236,7 +225,7 @@ let generate_instances useLocalInst axioms rep_terms egraph type_graph =
             (fun (id, srt) ->
               try
                 let generating = IdMap.find id gen_map in
-                  not (List.for_all (is_stratified srt) generating)
+                  not (List.for_all (TypeStrat.is_stratified srt) generating)
               with Not_found ->
                 begin
                   Debug.warn (fun () -> "BUG in stratification: " ^ (string_of_ident id) ^ "\n");
@@ -330,10 +319,9 @@ let instantiate_with_terms ?(force=false) local axioms classes =
               print_newline ();
               num + 1) 1 classes)
       in
-      let type_graph = TypeStrat.get () in
       (* choose representatives for instantiation *)
       let reps_f, egraph = choose_rep_terms classes in
-      let instances_f = generate_instances local axioms reps_f egraph type_graph in
+      let instances_f = generate_instances local axioms reps_f egraph in
       instances_f
     else
       axioms

@@ -70,7 +70,13 @@ let parse_spl_program main_file =
         parse parsed1 to_parse2 (SplSyntax.merge_spl_programs spl_prog cu)
     | [] -> spl_prog
   in
-  parse StringSet.empty [(main_file, GrassUtil.dummy_position)] SplSyntax.initial_spl_program
+  let prog =
+    parse
+      StringSet.empty
+      [(main_file, GrassUtil.dummy_position)]
+      SplSyntax.empty_spl_program
+  in
+  SplSyntax.add_alloc_decl prog
 
 (** Check SPL program in main file [file] and procedure [proc] *)
 let check_spl_program file proc =

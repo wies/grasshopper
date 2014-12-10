@@ -231,6 +231,23 @@ let merge_spl_programs prog1 prog2 =
   in
   extend_spl_program prog1.includes decls prog2
 
+let add_alloc_decl prog =
+  let alloc_decls =
+    IdMap.fold
+      (fun _ decl acc ->
+        let sid = decl.s_name in
+        let id = Prog.alloc_id sid in
+        let tpe = SetType (LocType id) in
+        let pos = GrassUtil.dummy_position in
+        let scope = GrassUtil.global_scope in
+        let vdecl = VarDecl (var_decl id tpe true false pos scope) in
+          vdecl :: acc
+      )
+      prog.struct_decls
+      []
+  in
+    extend_spl_program [] alloc_decls prog
+
 let empty_spl_program =
   { includes = [];
     var_decls = IdMap.empty;
@@ -239,10 +256,6 @@ let empty_spl_program =
     pred_decls = IdMap.empty;
   }
 
-let initial_spl_program =
-  let alloc_decl = VarDecl (var_decl Prog.alloc_id (SetType LocType) true false GrassUtil.dummy_position GrassUtil.global_scope) in
-  extend_spl_program [] [alloc_decl] empty_spl_program
-  
 
 let mk_block pos = function
   | [] -> Skip pos
@@ -254,7 +267,7 @@ let mk_block pos = function
 open Format
 
 let rec pr_type ppf = function
-  | LocType -> fprintf ppf "%s" loc_sort_string
+  | LocType id -> fprintf ppf "%s<%s>" loc_sort_string (string_of_ident id)
   | BoolType -> fprintf ppf "%s" bool_sort_string
   | IntType -> fprintf ppf "%s" int_sort_string
   | StructType id -> pr_ident ppf id

@@ -75,7 +75,7 @@ let massage_field_reads fs =
   | Atom (App (Eq, [App (Read, [fld; Var _ as arg], Loc _); App (FreeSym _, [], _) as t], _), a)
   | Atom (App (Eq, [App (FreeSym _, [], _) as t; App (Read, [fld; Var _ as arg], Loc _)], _), a) 
     when TermSet.mem fld reach_flds ->
-      let sid = match sort with
+      let sid = match sort_of fld with
         | Map (Loc s, _) -> s
         | _ -> failwith "massage_field_reads: field has not Map<Loc _, _> type"
       in

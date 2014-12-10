@@ -10,7 +10,8 @@ let close f =
 
 (** Translate SL formula [f] to a GRASS formula where the set [domain] holds [f]'s footprint.
   * Atomic predicates in [f] are translated using the function [pred_to_form]. *)
-let to_form pred_to_form domain f =
+let to_form pred_to_form domains f =
+  let struct_ids = struct_ids_from_domains domains in
   let mk_error_msg (pos_opt, msg) f =
     match pos_opt with
     | Some pos -> GrassUtil.mk_error_msg (pos, msg) f
@@ -21,16 +22,22 @@ let to_form pred_to_form domain f =
     | Some pos -> GrassUtil.mk_srcpos pos f
     | None -> f
   in
-  let fresh_dom d = mk_loc_set_var (GrassUtil.fresh_ident ("?" ^ fst d)) in
+  let fresh_dom d = mk_fresh_var_domains struct_ids ("?" ^ fst d) in
   let rec process_sep d f = 
     match f with
     | Pure (p, _) -> 
-        [p, GrassUtil.mk_empty (Grass.Set Grass.Loc)]
+        [p, mk_empty_domains struct_ids]
     | Atom (Emp, _, pos) ->
-        [GrassUtil.mk_true, GrassUtil.mk_empty (Grass.Set Grass.Loc)]
+        [GrassUtil.mk_true, mk_empty_domains struct_ids]
     | Atom (Region, [t], _) ->
-        let domain = fresh_dom d in
-        [GrassUtil.mk_eq domain t, domain]
+        begin 
+          let prefix = "?" ^ (fst d) in
+          match GrassUtil.sort_of t with
+          | Loc id ->
+            let domain = mk_empty_domains_except struct_ids id prefix in
+            [GrassUtil.mk_eq (IdMap.find id domain) t, domain]
+          | _ -> failwith "Region param not of Loc type"
+        end
     | Atom (Pred p, args, pos) ->
         let domain = fresh_dom d in
         let pdef = pred_to_form p args domain in
@@ -49,19 +56,31 @@ let to_form pred_to_form domain f =
              | SepPlus -> []
              | SepStar -> 
                  let f1_and_f2_disjoint = 
-                   mk_error_msg (pos, ProgError.mk_error_info "Specified regions are not disjoint")
-                     (empty_t (GrassUtil.mk_inter [f1_dom; f2_dom]))
+                   List.map
+                     (mk_error_msg (pos, ProgError.mk_error_info "Specified regions are not disjoint"))
+                     (mk_domains_disjoint f1_dom f2_dom)
                  in
-                 [mk_srcpos pos f1_and_f2_disjoint]
-             | SepIncl -> [mk_srcpos pos (GrassUtil.mk_subseteq f1_dom f2_dom)]
+                 List.map (mk_srcpos pos) f1_and_f2_disjoint
+             | SepIncl ->
+               let f1_in_f2 =
+                 map_domains
+                   (fun _ t1 t2 -> GrassUtil.mk_subseteq t1 t2)
+                   f1_dom f2_dom
+               in
+               List.map (mk_srcpos pos) f1_in_f2
            in
            let dom_def = 
              match op with
-             | SepStar 
-             | SepPlus -> GrassUtil.mk_eq domain (GrassUtil.mk_union [f1_dom; f2_dom])
-             | SepIncl -> GrassUtil.mk_eq domain f2_dom
+             | SepStar | SepPlus ->
+               mk_domains_eq
+                 domain
+                 (mk_union_domains f1_dom f2_dom)
+             | SepIncl ->
+               mk_domains_eq
+                 domain
+                 f2_dom
            in
-           (GrassUtil.smk_and (dom_def :: f1_tr :: f2_tr :: aux_tr), domain) :: trs
+           (GrassUtil.smk_and (f1_tr :: f2_tr :: dom_def @ aux_tr), domain) :: trs
         in
         List.fold_left process [] tr_product
     | BoolOp (Or, forms, _) ->
@@ -87,11 +106,15 @@ let to_form pred_to_form domain f =
       let translated = process_sep d' sep in
       let pos = pos_of_sl_form sep in
       let process (tr, d) = 
-        let d_eq_domain = 
-          mk_error_msg (pos, ProgError.mk_error_info "Memory footprint at error location does not match this specification")
-            (mk_srcpos pos (GrassUtil.mk_eq d domain))
+        let eqs = mk_domains_eq domains d in
+        let d_eqs_domain = 
+          List.map
+            (fun eq -> mk_error_msg
+              (pos, ProgError.mk_error_info "Memory footprint at error location does not match this specification")
+              (mk_srcpos pos eq))
+            eqs
         in
-        GrassUtil.smk_and [d_eq_domain; tr]
+        GrassUtil.smk_and (tr :: d_eqs_domain)
       in
       GrassUtil.smk_or (List.map process translated)
   in
@@ -102,8 +125,3 @@ let to_grass pred_to_form domain f =
   let translated = to_form pred_to_form domain (prenex_form f) in
   close translated
 
-
-let to_grass_negated pred_to_form domain f =
-  let f1 = prenex_form (mk_not f) in
-  let translated = to_form pred_to_form domain f1 in
-  close translated

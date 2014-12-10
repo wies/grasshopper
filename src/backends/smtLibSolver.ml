@@ -282,7 +282,7 @@ let declare_sort session sort_name num_of_params =
   writeln session (Printf.sprintf "(declare-sort %s %d)" sort_name num_of_params)
     
 let declare_sorts has_int session structs =
-  IdSet.foreach (fun id -> declare_sort session (string_of_ident id) 0) structs;
+  IdSet.iter (fun id -> declare_sort session (string_of_ident id) 0) structs;
   declare_sort session loc_sort_string 1;
   if not !Config.use_set_theory
   then declare_sort session set_sort_string 1;
@@ -550,7 +550,7 @@ let convert_model session smtModel =
     | FreeSort ((name, num), srts) ->
         let csrts = List.map convert_sort srts in
         match name, csrts with
-        | "Loc", [FreeSort id] -> Loc id
+        | "Loc", [FreeSrt id] -> Loc id
         | "Set", [esrt] -> Set esrt
         | "Map", [dsrt; rsrt] -> Map (dsrt, rsrt)
         | _, [] -> FreeSrt (name, num)

@@ -2,10 +2,19 @@ open Grass
 open GrassUtil
 open Axioms
 
-(** Alloc set *)
+(** Alloc set(s) *)
 
-let alloc_id = fresh_ident "Alloc"
-let alloc_set = mk_loc_set alloc_id
+let alloc_ids = Hashtbl.create 0
+let alloc_id struct_id =
+  let name = "Alloc_" ^ (name struct_id) in
+  try Hashtbl.find alloc_ids name 
+  with Not_found ->
+    begin
+      let id = fresh_ident name in
+        Hashtbl.replace alloc_ids name id;
+        id
+    end
+let alloc_set struct_id = mk_loc_set (alloc_id struct_id)
 
 (** Specification formulas *)
 
@@ -174,10 +183,10 @@ let source_pos c = (prog_point c).pp_pos
 
 (** Auxiliary functions for programs and declarations *)
 
-let mk_loc_set_decl id pos =
+let mk_loc_set_decl id struct_id pos =
   { var_name = id;
     var_orig_name = name id;
-    var_sort = Set Loc;
+    var_sort = Set (Loc struct_id);
     var_is_ghost = true;
     var_is_implicit = false;
     var_is_aux = true;
@@ -185,11 +194,17 @@ let mk_loc_set_decl id pos =
     var_scope = global_scope
   }
 
-let alloc_decl = mk_loc_set_decl alloc_id dummy_position
+let alloc_decl struct_id = mk_loc_set_decl (alloc_id struct_id) struct_id dummy_position
 
-let empty_prog = 
+let empty_prog struct_ids = 
+  let alloc_vars =
+    IdSet.fold
+      (fun sid acc -> IdMap.add (alloc_id sid) (alloc_decl sid) acc)
+      struct_ids
+      IdMap.empty
+  in
   { prog_axioms = [];
-    prog_vars = IdMap.add alloc_id alloc_decl IdMap.empty;
+    prog_vars = alloc_vars;
     prog_preds = IdMap.empty;
     prog_procs = IdMap.empty 
   }
@@ -459,9 +474,9 @@ let modifies_proc prog proc =
 let modifies_basic_cmd = function
   | Assign ac -> id_set_of_list ac.assign_lhs
   | Havoc hc -> id_set_of_list hc.havoc_args
-  | New nc -> IdSet.add alloc_id (IdSet.singleton nc.new_lhs)
+  | New nc -> IdSet.add (alloc_id (struct_id_of_sort nc.new_sort)) (IdSet.singleton nc.new_lhs)
   | Call cc -> id_set_of_list cc.call_lhs
-  | Dispose _ -> IdSet.singleton alloc_id
+  | Dispose dc -> IdSet.singleton (alloc_id (struct_id_of_sort (sort_of dc.dispose_arg)))
   | Assume _
   | Assert _
   | Return _ -> IdSet.empty
