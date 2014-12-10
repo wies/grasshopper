@@ -124,6 +124,18 @@ let rec sort_ofs = function
   | [] -> failwith "tried to extract sort from empty list of terms"
   | t :: ts -> sort_of t
 
+let range_sort = function
+  | Map (_, srt) -> srt
+  | _ -> raise (Invalid_argument "range_sort")
+
+let dom_sort = function
+  | Map (srt, _) -> srt
+  | _ -> raise (Invalid_argument "dom_sort")
+
+let struct_id_of_sort = function
+  | Loc sid -> sid
+  | _ -> raise (Invalid_argument "struct_id_of_sort")
+
 let range_sort_of_map map =
   match sort_of map with
   | Map (_, srt) -> srt
@@ -139,8 +151,21 @@ let element_sort_of_set s =
   | Set srt -> srt
   | _ -> failwith "illtyped set expression"
 
+       
 let has_sort srt t = sort_of t = srt
 
+let is_set_sort = function
+  | Set _ -> true
+  | _ -> false
+
+let is_loc_sort = function
+  | Loc _ -> true
+  | _ -> false
+
+let is_map_sort = function
+  | Map _ -> true
+  | _ -> false
+    
 let field_sort id ran_srt = Map (Loc id, ran_srt)
 let array_sort ran_srt = Map (Int, ran_srt)
 
