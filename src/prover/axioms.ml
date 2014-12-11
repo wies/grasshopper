@@ -147,6 +147,9 @@ let reach_axioms () =
   let btwn_trn3 = mk_or [mk_not (btwn loc1 loc2 loc3); mk_not (btwn loc1 loc4 loc2);
                          mk_and [btwn loc1 loc4 loc3; btwn loc4 loc2 loc3]]
   in
+  (*let btwn_trn4 = mk_or [mk_not (btwn loc1 loc2 loc3);
+                         mk_and [btwn loc1 loc2 loc2; btwn loc1 loc3 loc3]]
+  in*)
   (**)
   if !with_reach_axioms then
     [mk_axiom "btwn_refl" btwn_refl; 
@@ -158,7 +161,8 @@ let reach_axioms () =
      mk_axiom "btwn_ord2" btwn_ord2;
      mk_axiom "btwn_trn1" btwn_trn1; 
      mk_axiom "btwn_trn2" btwn_trn2;
-     mk_axiom "btwn_trn3" btwn_trn3]
+     mk_axiom "btwn_trn3" btwn_trn3;
+     (*mk_axiom "btwn_trn4" btwn_trn4*)]
   else []
 
 (** Axioms for null *)
