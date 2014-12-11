@@ -434,10 +434,14 @@ let is_interpreted sym = match sym with
       !Config.use_set_theory
   | Eq | Gt | Lt | GtEq | LtEq | IntConst _ | BoolConst _
   | Plus | Minus | Mult | Div | UMinus -> true
+  | FreeSym id -> id = ("inst-closure", 0)
   | _ -> false
 
 let string_of_overloaded_symbol sym idx =
-  (string_of_symbol sym) ^ "$" ^ (string_of_int idx)
+  (string_of_symbol sym) ^
+  if sym = FreeSym ("inst-closure", 0)
+  then ""
+  else "$" ^ (string_of_int idx)
 
 let declare session sign =
   let declare sym idx (arg_sorts, res_sort) = 

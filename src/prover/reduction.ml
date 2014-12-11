@@ -465,19 +465,13 @@ let add_terms fs gts =
   if !Config.instantiate then fs else
   (*let gts_fs = ground_terms (mk_and fs) in*)
   let extra_gts = (*TermSet.diff gts gts_fs*) gts in
-  let fs1, _ = 
-    TermSet.fold (fun t (fs1, pmap) ->
+  let fs1 = 
+    TermSet.fold (fun t fs1 ->
       match sort_of t with
-      | Bool -> fs1, pmap
+      | Bool -> fs1
       | srt ->
-          let id, pmap = 
-            try SortMap.find srt pmap, pmap
-            with Not_found ->
-              let id = fresh_ident "Psi" in
-              id, SortMap.add srt id pmap
-          in
-          mk_pred id [t] :: fs1, pmap)
-      extra_gts (fs, SortMap.empty)
+          mk_pred ("inst-closure", 0) [t] :: fs1)
+      extra_gts fs
   in fs1
 
 let encode_labels fs =
