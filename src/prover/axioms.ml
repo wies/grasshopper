@@ -133,13 +133,13 @@ let reach_write_axioms fld1 loc1 loc2 =
 let f x =
   let struct_id = match sort_of x with
     | Loc s -> s
-    | _ -> failwith "expected loc type"
+    | _ -> failwith "expected Loc sort"
   in
   mk_read (fld1 struct_id) x
 let g x =
   let struct_id = match sort_of x with
     | Loc s -> s
-    | _ -> failwith "expected loc type"
+    | _ -> failwith "expected Loc sort"
   in
   mk_read (fld2 struct_id) x
 
@@ -191,8 +191,8 @@ let reach_axioms struct_id =
   else []
 
 (** Axioms for null *)
-let null_axioms struct_id =
-  let n = mk_null struct_id in
+let null_axioms struct_id1 =
+  let n = mk_null struct_id1 in
   let nll = mk_eq (f n) n in
   [mk_axiom "read_null" nll]
 

@@ -247,5 +247,6 @@ let is_stratified t1 t2 =
           | Set Int -> true
           | _ -> false
         end
+      | _ -> false
     end
 

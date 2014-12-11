@@ -142,19 +142,19 @@ let add_frame_axioms fs =
         if TermSet.mem f' btwn_flds then
           match f' with
           | App (FreeSym (p, _), _, _) when p = "parent" ->
-              [mk_axiom "reach_frame"
+              [Axioms.mk_axiom "reach_frame"
                  (mk_sequent
                     [smk_elem loc1 frame]
                     [mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)])]
           | _ ->
               [replacement_pts;
-               mk_axiom "reach_frame1"
+               Axioms.mk_axiom "reach_frame1"
                  (mk_sequent
                     [reachwo_f loc1 loc2 (ep loc1)]
                     [(mk_iff 
                        (reach_f loc1 loc2 loc3)
                        (reach_f' loc1 loc2 loc3))]);
-               mk_axiom "reach_frame2"
+               Axioms.mk_axiom "reach_frame2"
                  (mk_implies
                     (mk_and [mk_not (smk_elem loc1 x); mk_eq loc1 (ep loc1)])
                     (mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)))
@@ -306,23 +306,33 @@ let add_set_axioms fs =
   in
   rev_concat [fs1; Axioms.set_axioms elem_srts]
 
+(** Compute the set of struct names of the domain sort from the set of field terms [flds]. *)
+let struct_ids_of_fields flds =
+  TermSet.fold
+    (fun fld structs ->
+      match fld with
+      | App (_, _, Map (Loc id, _)) -> IdSet.add id structs
+      | _ -> structs)
+    flds IdSet.empty
 
+    
 (** Adds theory axioms for the entry point function to formulas [fs].
  ** Assumes that all frame predicates have been reduced in formulas [fs]. *)
 let add_ep_axioms fs =
   let gts = ground_terms (smk_and fs) in
   let flds = btwn_fields fs gts in
-  let flds =
+  (*let flds =
     TermSet.filter 
       (fun t -> match t with | App (FreeSym (p, _), _, _) -> p <> "parent" | _ -> true)
       flds
-  in
-  let classes =  CongruenceClosure.congr_classes fs gts in
-  (*List.iter (fun f -> print_form stdout f; print_newline ()) (Axioms.ep_axioms ());*)
-  let ep_ax, generators = open_axioms isFld (Axioms.ep_axioms ()) in
+     in*)
+  let structs = struct_ids_of_fields flds in
+  let axioms = IdSet.fold (fun sid axioms -> Axioms.ep_axioms sid @ axioms) structs [] in
+  let ep_ax, generators = open_axioms isFld axioms in
   let generators = List.map (fun (a,b,c,d)-> TermGenerator(a, b, c, d)) generators in
   (*print_endline "---";
   List.iter (fun f -> print_form stdout f; print_newline ()) ep_ax;*)
+  let classes =  CongruenceClosure.congr_classes fs gts in
   let ep_ax = instantiate_with_terms false ep_ax (CongruenceClosure.restrict_classes classes flds) in
   (*print_endline "---";
   List.iter (fun f -> print_form stdout f; print_newline ()) ep_ax;*)
@@ -334,11 +344,17 @@ let add_ep_axioms fs =
  
 let add_read_write_axioms fs =
   let gts = ground_terms (smk_and fs) in
-  let basic_pt_flds = TermSet.filter (has_sort loc_field_sort &&& is_free_const) gts in
+  let has_loc_field_sort = function
+    | App (_, _, Map(Loc id1, Loc id2)) -> id1 = id2
+    | _ -> false
+  in
+  let basic_pt_flds = TermSet.filter (has_loc_field_sort &&& is_free_const) gts in
+  let basic_structs = struct_ids_of_fields basic_pt_flds in
   (* instantiate null axioms *)
-  let classes =  CongruenceClosure.congr_classes fs gts in
-  let null_ax, _ = open_axioms ~force:true isFld (Axioms.null_axioms ()) in
-  (* note: not forcing the instantiation here will yield an inconsistency with the read/write axioms *)
+  let axioms = IdSet.fold (fun sid axioms -> Axioms.null_axioms sid @ axioms) basic_structs [] in
+  let null_ax, _ = open_axioms ~force:true isFld axioms in
+  let classes = CongruenceClosure.congr_classes fs gts in
+  (* CAUTION: not forcing the instantiation here would yield an inconsistency with the read/write axioms *)
   let null_ax1 = instantiate_with_terms ~force:true false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
   let fs1 = null_ax1 @ fs in
   let gts = TermSet.union (ground_terms (smk_and null_ax1)) gts in
@@ -449,7 +465,9 @@ let add_reach_axioms fs gts =
 	    | _ -> true) (CongruenceClosure.class_of t classes))
       btwn_flds
   in
-  let reach_ax, _ = open_axioms ~force:true isFld (Axioms.reach_axioms ()) in
+  let structs = struct_ids_of_fields non_updated_flds in
+  let axioms = IdSet.fold (fun sid axioms -> Axioms.reach_axioms sid @ axioms) structs [] in
+  let reach_ax, _ = open_axioms ~force:true isFld axioms in
   let reach_ax1 = instantiate_with_terms ~force:true false reach_ax (CongruenceClosure.restrict_classes classes non_updated_flds) in
   rev_concat [reach_ax1; reach_write_ax; fs], gts
 
