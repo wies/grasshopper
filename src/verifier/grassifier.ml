@@ -5,55 +5,67 @@ open GrassUtil
 open Prog
 
 (** Auxiliary variables for desugaring SL specifications *)
-let footprint_id = fresh_ident "FP"
-let footprint_set = mk_loc_set footprint_id
+let footprint_id = mk_loc_set_generator "FP"
+let footprint_set struct_id = mk_loc_set struct_id (footprint_id struct_id)
 
-let footprint_caller_id = fresh_ident "FP_Caller"
-let footprint_caller_set = mk_loc_set footprint_caller_id
+let footprint_caller_id = mk_loc_set_generator "FP_Caller"
+let footprint_caller_set struct_id = mk_loc_set struct_id (footprint_caller_id struct_id)
 
-let final_footprint_caller_id = fresh_ident "FP_Caller_final"
-let final_footprint_caller_set = mk_loc_set final_footprint_caller_id
+let final_footprint_caller_id = mk_loc_set_generator "FP_Caller_final"
+let final_footprint_caller_set struct_id = mk_loc_set struct_id (final_footprint_caller_id struct_id)
 
 (** Add reachability invariants for ghost fields of sort Loc *)
 let add_ghost_field_invariants prog =
   let ghost_loc_fields =
     List.filter 
-      (fun decl -> decl.var_sort = loc_field_sort && decl.var_is_ghost)
+      (fun decl ->
+        match decl.var_sort with
+        | Map (Loc id1, Loc id2) -> id1 = id2 && decl.var_is_ghost
+        | _ -> false)
       (Prog.vars prog)
   in
-  let locals = IdMap.add alloc_id alloc_decl IdMap.empty in
-  let preds, pred_map =
-    List.fold_left (fun (preds, pred_map) decl ->
-      let open Axioms in
-      let fld = mk_free_const decl.var_sort decl.var_name in
-      let body_form =
-        mk_and 
-          [ mk_name "field_eventually_null" 
-              (mk_forall [l1] (mk_reach fld loc1 mk_null));
-            mk_name "field_nonalloc_null"
-              (mk_forall [l1; l2]
-                 (mk_sequent
-                    [mk_reach fld loc1 loc2]
-                    [mk_eq loc1 loc2; mk_and [mk_elem loc1 alloc_set; mk_elem loc2 alloc_set]; mk_eq loc2 mk_null]));
+  let mk_inv_pred (preds, pred_map, alloc_ids) decl =
+    let open Axioms in
+    let struct_id = struct_id_of_sort (dom_sort decl.var_sort) in
+    let alloc_decl, alloc_set, alloc_id = alloc_all struct_id in
+    let locals = IdMap.add alloc_id alloc_decl IdMap.empty in
+    let fld = mk_free_const decl.var_sort decl.var_name in
+    let l1 = Axioms.l1 struct_id in
+    let loc1 = Axioms.loc1 struct_id in
+    let l2 = Axioms.l2 struct_id in
+    let loc2 = Axioms.loc2 struct_id in
+    let null = mk_null struct_id in
+    let body_form =
+      mk_and 
+        [ mk_name "field_eventually_null" 
+            (mk_forall [l1] (mk_reach fld loc1 null));
+          mk_name "field_nonalloc_null"
+            (mk_forall [l1; l2]
+               (mk_sequent
+                  [mk_reach fld loc1 loc2]
+                  [mk_eq loc1 loc2; mk_and [mk_elem loc1 alloc_set; mk_elem loc2 alloc_set]; mk_eq loc2 null]));
           ]
-      in
-      let pred_id = fresh_ident "ghost_field_invariant" in
-      let name = "ghost field invariant for " ^ string_of_ident decl.var_name in
-      let body = mk_spec_form (FOL body_form) name None (decl.var_pos) in
-      let pred = 
-        { pred_name = pred_id;
-          pred_formals = [decl.var_name; alloc_id]; 
-          pred_outputs = []; 
-          pred_locals = IdMap.add decl.var_name decl locals; 
-          pred_body = body;
-          pred_pos = decl.var_pos;
-          pred_accesses = IdSet.empty;
-          pred_is_free = false;
-        }
-      in
-      (pred :: preds, IdMap.add decl.var_name pred_id pred_map)) 
-      ([], IdMap.empty) 
-      ghost_loc_fields
+    in
+    let pred_id = fresh_ident "ghost_field_invariant" in
+    let name = "ghost field invariant for " ^ string_of_ident decl.var_name in
+    let body = mk_spec_form (FOL body_form) name None (decl.var_pos) in
+    let pred = 
+      { pred_name = pred_id;
+        pred_formals = [decl.var_name; alloc_id]; 
+        pred_outputs = []; 
+        pred_locals = IdMap.add decl.var_name decl locals; 
+        pred_body = body;
+        pred_pos = decl.var_pos;
+        pred_accesses = IdSet.empty;
+        pred_is_free = false;
+      }
+    in
+    pred :: preds,
+    IdMap.add decl.var_name pred_id pred_map,
+    IdSet.add alloc_id alloc_ids
+  in
+  let preds, pred_map, alloc_ids =
+    List.fold_left mk_inv_pred ([], IdMap.empty, IdSet.empty) ghost_loc_fields
   in
   let add_invs proc = 
     let all_accesses = accesses_proc prog proc in
@@ -65,21 +77,22 @@ let add_ghost_field_invariants prog =
     let accessed =
       List.filter 
         (fun decl -> 
-          IdSet.mem alloc_id all_modifies ||
+          IdSet.empty <> IdSet.inter alloc_ids all_modifies ||
           IdSet.mem decl.var_name all_accesses) 
         ghost_loc_fields
     in
     let modified =
       List.filter 
         (fun decl -> 
-          IdSet.mem alloc_id all_modifies ||
+          IdSet.empty <> IdSet.inter alloc_ids all_modifies ||
           IdSet.mem decl.var_name all_modifies) 
         ghost_loc_fields
     in
     let mk_inv decl =
       let fld = mk_free_const decl.var_sort decl.var_name in
       let pred_id = IdMap.find decl.var_name pred_map in
-      let inv = mk_pred pred_id [fld; alloc_set] in
+      let struct_id = struct_id_of_sort (dom_sort decl.var_sort) in
+      let inv = mk_pred pred_id [fld; alloc_set struct_id] in
       let name = "ghost field invariant for " ^ string_of_ident decl.var_name in
       mk_spec_form (FOL inv) name None decl.var_pos
     in 
@@ -97,10 +110,10 @@ let add_ghost_field_invariants prog =
 (** Desugare SL specification to FOL specifications. 
  ** Assumes that loops have been transformed to tail-recursive procedures. *)
 let elim_sl prog =
-  let pred_to_form p args domain = 
+  let pred_to_form p args domains = 
     let decl = find_pred prog p in
     if List.length decl.pred_formals > List.length args then
-      mk_pred p (args @ [domain])
+      mk_pred p (args @ domains)
     else 
       let fp = List.hd (List.rev args) in
       mk_and [mk_eq domain fp; mk_pred p args]
@@ -112,13 +125,22 @@ let elim_sl prog =
     else compile_preds (preds prog)
   in
   let prog = { prog with prog_preds = preds; } in *)
+  let struct_ids = struct_ids prog in
   let compile_proc proc =
     (* add auxiliary set variables *)
-    let new_locals = 
-      let footprint_decl = mk_loc_set_decl footprint_id proc.proc_pos in
-      (footprint_id, { footprint_decl with var_is_implicit = true }) ::
-      List.map (fun id -> (id, mk_loc_set_decl id proc.proc_pos)) 
-        [footprint_caller_id; final_footprint_caller_id]
+    let new_locals, aux_formals, aux_returns = 
+      IdSet.fold (fun sid (new_locals, aux_formals, aux_returns) ->
+        let footprint_id = footprint_id sid in
+        let footprint_caller_id = footprint_caller_id sid in
+        let final_footprint_caller_id = final_footprint_caller_id sid in
+        let footprint_decl = mk_loc_set_decl sid footprint_id proc.proc_pos in
+        (footprint_id, { footprint_decl with var_is_implicit = true }) ::
+        List.map (fun id -> (id, mk_loc_set_decl sid id proc.proc_pos)) 
+          [footprint_caller_id; final_footprint_caller_id] @
+        new_locals,
+        footprint_caller_id :: footprint_id :: aux_formals,
+        final_footprint_caller_id :: aux_returns)
+        struct_ids ([], [], [])    
     in
     let locals =
       List.fold_left 
@@ -126,8 +148,8 @@ let elim_sl prog =
         proc.proc_locals 
         new_locals
     in
-    let returns = proc.proc_returns @ [final_footprint_caller_id] in
-    let formals = proc.proc_formals @ [footprint_caller_id; footprint_id] in
+    let returns = proc.proc_returns @ aux_returns in
+    let formals = proc.proc_formals @ aux_formals in
     let convert_sl_form sfs name =
       let fs, aux, kind = 
         List.fold_right (fun sf (fs, aux, kind) -> 
