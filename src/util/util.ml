@@ -110,13 +110,21 @@ let rec partial_map f = function
       |	Some y -> y :: partial_map f xs
       |	None -> partial_map f xs
 
-(** Like List.map2 but ignores the tail of the longer list instead of throwing an exception *)
-let rec map2 fn xs ys =
+(** Like List.map2 but additionally returns the remainder of the two lists *)
+let map2_remainder fn xs ys =
+  let rec m xs ys zs =
   match xs, ys with
   | [], _ 
-  | _, [] -> []
+  | _, [] -> List.rev zs, xs, ys
   | x :: xs1, y :: ys1 -> 
-      fn x y :: map2 fn xs1 ys1
+      m xs1 ys1 (fn x y :: zs)
+  in
+  m xs ys []
+
+(** Like List.map2 but ignores the tail of the longer list instead of throwing an exception *)
+let map2 fn xs ys =
+  let zs, _, _ = map2_remainder fn xs ys in
+  zs
 
 (** Like List.fold_left2 but ignores the tail of the longer list instead of throwing an exception *)
 let rec fold_left2 fn init xs ys =

@@ -128,13 +128,15 @@ type proc_decl = {
     proc_postcond : spec list; (** postcondition *)
     proc_body : command option; (* procedure body *)
     proc_pos : source_position; (** position of declaration *)
-    proc_deps : ident list (** names of dependant procedures *)
+    proc_deps : ident list; (** names of dependant procedures *)
+    proc_is_tailrec : bool; (** whether the procedure is tail recursive *)
   }
 
 (** Predicate declaration *)
 type pred_decl = {
     pred_name : ident; (** predicate name *)
     pred_formals : ident list; (** formal parameter list *)
+    pred_footprints : ident list; (** footprint parameter list *)
     pred_outputs : ident list; (** return parameter list *)
     pred_locals : var_decl IdMap.t; (** local variables *)
     pred_body : spec; (** predicate body *)
@@ -227,6 +229,7 @@ let dummy_proc name =
     proc_body = None;
     proc_pos = dummy_position;
     proc_deps = [];
+    proc_is_tailrec = false;
   }
 
 let declare_global prog var =

@@ -51,7 +51,8 @@ let add_ghost_field_invariants prog =
     let body = mk_spec_form (FOL body_form) name None (decl.var_pos) in
     let pred = 
       { pred_name = pred_id;
-        pred_formals = [decl.var_name; alloc_id]; 
+        pred_formals = [decl.var_name; alloc_id];
+        pred_footprints = [];
         pred_outputs = []; 
         pred_locals = IdMap.add decl.var_name decl locals; 
         pred_body = body;
@@ -112,9 +113,16 @@ let add_ghost_field_invariants prog =
 let elim_sl prog =
   let pred_to_form p args domains = 
     let decl = find_pred prog p in
-    if List.length decl.pred_formals > List.length args then
-      mk_pred p (args @ domains)
-    else 
+    let _, fps, _ =
+      Util.map2_remainder (fun _ _ -> ()) args decl.pred_formals
+    in
+    match fps with
+    | [] -> mk_pred p (args @ domains)
+    | _ ->
+        let eqs =
+          IdMap.map (fun fp ->
+            let srt = sort_of fp in
+            let 
       let fp = List.hd (List.rev args) in
       mk_and [mk_eq domain fp; mk_pred p args]
   in
