@@ -116,15 +116,34 @@ let elim_sl prog =
     let _, fps, _ =
       Util.map2_remainder (fun _ _ -> ()) args decl.pred_formals
     in
+    let mk_empty_except sids =
+      IdMap.fold
+        (fun sid dom eqs ->
+          if List.mem sid sids then eqs
+          else mk_eq dom (mk_empty (Set (Loc sid))) :: eqs)
+        domains []
+    in
     match fps with
-    | [] -> mk_pred p (args @ domains)
+    | [] ->
+        let fp_args, sids =
+          Util.map_split (fun id ->
+            let fp_decl = IdMap.find id decl.pred_locals in
+            let sid = struct_id_of_sort fp_decl.var_sort in
+            IdMap.find sid domains, sid)
+            decl.pred_footprints
+        in
+        let eqs = mk_empty_except sids in
+        smk_and (mk_pred p (args @ fp_args) :: eqs)
     | _ ->
-        let eqs =
-          IdMap.map (fun fp ->
-            let srt = sort_of fp in
-            let 
-      let fp = List.hd (List.rev args) in
-      mk_and [mk_eq domain fp; mk_pred p args]
+        let fp_eqs, sids =
+          Util.map_split
+            (fun fp ->
+              let sid = struct_id_of_sort (sort_of fp) in
+              mk_eq fp (IdMap.find sid domains), sid)
+            fps
+        in
+        let eqs = mk_empty_except sids in
+        smk_and (mk_pred p args :: fp_eqs @ eqs)
   in
   (* transform the preds from SL to GRASS *)
   (*let preds =
@@ -181,43 +200,74 @@ let elim_sl prog =
       let name, msg, pos = Util.Opt.get_or_else (name, None, dummy_position) aux in
       SlUtil.mk_sep_star_lst ~pos:pos fs, kind, name, msg, pos
     in
+    let footprint_ids, footprint_sets =
+      IdSet.fold
+        (fun sid (ids, sets) ->
+          footprint_id sid :: ids,
+          IdMap.add sid (footprint_set sid) sets)
+        struct_ids ([], IdMap.empty)
+    in
     (* translate SL precondition *)
     let sl_precond, other_precond = List.partition is_sl_spec proc.proc_precond in
     let precond, free_precond =
       let name = "precondition of " ^ string_of_ident proc.proc_name in
       let f, _, name, msg, pos = convert_sl_form sl_precond name in
-      let f_eq_init_footprint =  
-        propagate_exists (mk_and [SlToGrass.to_grass pred_to_form footprint_set f; 
-                                  mk_subseteq footprint_set footprint_caller_set])
+      let f_eq_init_footprint =
+        let fp_inclusions =
+          IdSet.fold
+            (fun sid fs ->
+              mk_subseteq (footprint_set sid) (footprint_caller_set sid) :: fs)
+            struct_ids
+            []
+        in
+        propagate_exists (mk_and (SlToGrass.to_grass pred_to_form footprint_sets f ::
+                                  fp_inclusions))
       in
       let precond = mk_spec_form (FOL f_eq_init_footprint) name msg pos in
       let fp_name = "initial footprint of " ^ string_of_ident proc.proc_name in
+      let null_not_in_alloc =
+        IdSet.fold
+          (fun sid fs -> mk_not (mk_elem (mk_null sid) (alloc_set sid)) :: fs)
+          struct_ids
+          []
+      in
+      let footprint_caller_in_alloc =
+        IdSet.fold
+          (fun sid fs -> mk_subseteq (footprint_caller_set sid) (alloc_set sid) :: fs)
+          struct_ids
+          []
+      in
       let free_precond = 
-        FOL (mk_and [mk_subseteq footprint_caller_set alloc_set; mk_not (mk_elem mk_null alloc_set)])
+        FOL (mk_and (footprint_caller_in_alloc @ null_not_in_alloc))
       in
       precond,
       mk_free_spec_form free_precond fp_name None pos
     in
     (* translate SL postcondition *)
-    let init_alloc_set = oldify_term (IdSet.singleton alloc_id) alloc_set in
-    let init_footprint_caller_set = footprint_caller_set in
-    let init_footprint_set = footprint_set in
-    let final_footprint_set = 
-      mk_union [mk_inter [alloc_set; init_footprint_set];
-                mk_diff alloc_set init_alloc_set]
+    let init_alloc_set sid = oldify_term (IdSet.singleton (alloc_id sid)) (alloc_set sid) in
+    let init_footprint_caller_set sid = footprint_caller_set sid in
+    let init_footprint_set sid = footprint_set sid in
+    let final_footprint_set sid =
+      mk_union [mk_inter [alloc_set sid; init_footprint_set sid];
+                mk_diff (alloc_set sid) (init_alloc_set sid)]
     in
-    let final_alloc_set =
-      mk_union [mk_diff init_alloc_set init_footprint_caller_set;
-                final_footprint_caller_set]
+    let final_alloc_set sid =
+      mk_union [mk_diff (init_alloc_set sid) (init_footprint_caller_set sid);
+                (final_footprint_caller_set sid)]
     in
     let sl_postcond, other_postcond = List.partition is_sl_spec proc.proc_postcond in
     let postcond, post_pos =
       let name = "postcondition of " ^ string_of_ident proc.proc_name in
       let f, kind, name, msg, pos = convert_sl_form sl_postcond name in
-      let f_eq_final_footprint = 
-        SlToGrass.to_grass pred_to_form final_footprint_set f 
+      let final_footprint_sets =
+        IdSet.fold (fun sid sets -> IdMap.add sid (final_footprint_set sid) sets) struct_ids IdMap.empty
       in
-      let final_footprint_postcond = mk_spec_form (FOL f_eq_final_footprint) name msg pos in
+      let f_eq_final_footprint = 
+        SlToGrass.to_grass pred_to_form final_footprint_sets f 
+      in
+      let final_footprint_postcond =
+        mk_spec_form (FOL f_eq_final_footprint) name msg pos
+      in
       (*let init_footprint_postcond = 
         mk_free_spec_form (FOL (mk_eq init_footprint_set (oldify_term (IdSet.singleton footprint_id) footprint_set))) name msg pos
       in*)
@@ -230,67 +280,78 @@ let elim_sl prog =
       let name = "framecondition of " ^ (string_of_ident proc.proc_name) in
       let mk_framecond f = mk_free_spec_form (FOL f) name None post_pos in
       (* final caller footprint is frame with final footprint *)
-      let final_footprint_caller_postcond = 
-        mk_eq final_footprint_caller_set 
-          (mk_union [mk_diff init_footprint_caller_set init_footprint_set;
-                     final_footprint_set])
+      let final_footprint_caller_postconds = 
+        IdSet.fold (fun sid fs ->
+          let f =
+            mk_eq (final_footprint_caller_set sid)
+              (mk_union [mk_diff (init_footprint_caller_set sid) (init_footprint_set sid);
+                         (final_footprint_set sid)])
+          in
+          mk_framecond f :: fs)
+          struct_ids []
       in
-      mk_framecond final_footprint_caller_postcond ::
       (* null is not allocated *)
-      mk_framecond (mk_and [mk_eq alloc_set final_alloc_set; 
-                            mk_not (smk_elem mk_null alloc_set)]) ::
-      (* frame axioms for modified fields
-       * in this version the frame contains all the pairs of fields both unprimed and primed
-       *)
+      let final_null_alloc =
+        IdSet.fold (fun sid fs ->
+          mk_framecond (mk_and [mk_eq (alloc_set sid) (final_alloc_set sid); 
+                                mk_not (smk_elem (mk_null sid) (alloc_set sid))]) :: fs)
+          struct_ids []
+      in
+      (* frame axioms for modified fields *)
       let all_fields =
         List.fold_left
           (fun acc var ->
             match var.var_sort with
-            | Map (Loc, _) -> IdSet.add var.var_name acc 
+            | Map (Loc _, _) as srt -> IdMap.add var.var_name srt acc 
             | _ -> acc
           )
-          IdSet.empty
+          IdMap.empty
           (vars prog)
       in
       let frame_preds =
-        IdSet.fold
-          (fun var frames ->
-            if !Config.opt_field_mod && not (IdSet.mem var (modifies_proc prog proc))
+        IdMap.fold
+          (fun fld srt frames ->
+            if !Config.opt_field_mod && not (IdSet.mem fld (modifies_proc prog proc))
             then frames else
-            let old_var = oldify var in
-            let srt = (find_global prog var).var_sort in
-            mk_framecond (mk_frame init_footprint_set init_alloc_set 
-                             (mk_free_const srt old_var)
-                             (mk_free_const srt var)) ::
+            let old_fld = oldify fld in
+            let sid = struct_id_of_sort (dom_sort srt) in
+            mk_framecond (mk_frame (init_footprint_set sid) (init_alloc_set sid)
+                             (mk_free_const srt old_fld)
+                             (mk_free_const srt fld)) ::
             frames
           )
           all_fields
           []
       in
-      frame_preds
+      final_footprint_caller_postconds @ final_null_alloc @ frame_preds
     in
     (* update all procedure calls and return commands in body *)
     let rec compile_stmt = function
       | (Call cc, pp) ->
           mk_call_cmd ~prog:(Some prog) 
-            (cc.call_lhs @ [footprint_id]) 
+            (cc.call_lhs @ footprint_ids) 
             cc.call_name 
-            (cc.call_args @ [footprint_set]) 
+            (cc.call_args @ IdMap.fold (fun _ s sets -> s :: sets) footprint_sets []) 
             pp.pp_pos
       | (Return rc, pp) ->
-          let rc1 = { return_args = rc.return_args @ [mk_union [footprint_caller_set; footprint_set]] } in
+          let fp_returns =
+            IdSet.fold (fun sid fp_returns ->
+              mk_union [footprint_caller_set sid; footprint_set sid] :: fp_returns)
+              struct_ids []
+          in
+          let rc1 = { return_args = rc.return_args @ fp_returns } in
           Basic (Return rc1, pp)
       | (Assume sf, pp) ->
           (match sf.spec_form with
           | SL f ->
-              let f1 = SlToGrass.to_grass pred_to_form footprint_set f in
+              let f1 = SlToGrass.to_grass pred_to_form footprint_sets f in
               let sf1 = mk_spec_form (FOL f1) sf.spec_name sf.spec_msg sf.spec_pos in
               mk_assume_cmd sf1 pp.pp_pos
           | FOL f -> Basic (Assume sf, pp))
       | (Assert sf, pp) ->
           (match sf.spec_form with
           | SL f ->
-              let f1 = SlToGrass.to_grass pred_to_form footprint_set f in
+              let f1 = SlToGrass.to_grass pred_to_form footprint_sets f in
               let sf1 = mk_spec_form (FOL f1) sf.spec_name sf.spec_msg sf.spec_pos in
               mk_assert_cmd sf1 pp.pp_pos
           | FOL f -> Basic (Assert sf, pp))
@@ -301,23 +362,29 @@ let elim_sl prog =
         (fun body ->
           let body1 = map_basic_cmds compile_stmt body in
           let body_pp = prog_point body in
-          let assign_init_footprint_caller =
-            let new_footprint_caller_set =
-              mk_diff footprint_caller_set footprint_set
+          let assign_init_footprints_caller =
+            let new_footprint_caller_set sid =
+              mk_diff (footprint_caller_set sid) (footprint_set sid)
             in
-            mk_assign_cmd 
-              [footprint_caller_id] 
-              [new_footprint_caller_set] 
-              body_pp.pp_pos
+            IdSet.fold
+              (fun sid cmds ->
+                mk_assign_cmd 
+                  [footprint_caller_id sid] 
+                  [new_footprint_caller_set sid] 
+                  body_pp.pp_pos :: cmds)
+              struct_ids []
           in
-          let assign_final_footprint_caller =
-            mk_assign_cmd 
-              [final_footprint_caller_id] 
-              [mk_union [footprint_caller_set; footprint_set]] 
-              body_pp.pp_pos
+          let assign_final_footprints_caller =
+            IdSet.fold
+              (fun sid cmds ->
+                mk_assign_cmd 
+                  [final_footprint_caller_id sid] 
+                  [mk_union [footprint_caller_set sid; footprint_set sid]]
+                  body_pp.pp_pos :: cmds)
+              struct_ids []
           in
           mk_seq_cmd 
-            [assign_init_footprint_caller; body1; assign_final_footprint_caller]
+            (assign_init_footprints_caller @ [body1] @ assign_final_footprints_caller)
             body_pp.pp_pos
         ) proc.proc_body 
     in
@@ -350,7 +417,8 @@ let annotate_heap_checks prog =
     let locs = derefs TermSet.empty t in
     TermSet.fold 
       (fun t acc ->
-        let t_in_footprint = FOL (mk_elem t footprint_set) in
+        let sid = struct_id_of_sort (sort_of t) in
+        let t_in_footprint = FOL (mk_elem t (footprint_set sid)) in
         let mk_msg callee = "Possible invalid heap access", "Possible invalid heap access" in
         let sf = mk_spec_form t_in_footprint "check heap access" (Some mk_msg) pos in
         let check_access = mk_assert_cmd sf pos in
@@ -366,7 +434,8 @@ let annotate_heap_checks prog =
         ann_term_checks ac.assign_rhs (Basic (Assign ac, pp))
     | (Dispose dc, pp) ->
         let arg = dc.dispose_arg in
-        let arg_in_footprint = FOL (mk_elem arg footprint_set) in
+        let sid = struct_id_of_sort (sort_of arg) in
+        let arg_in_footprint = FOL (mk_elem arg (footprint_set sid)) in
         let mk_msg callee = "This deallocation might be unsafe", "This deallocation might be unsafe" in
         let sf = 
           mk_spec_form arg_in_footprint "check free" (Some mk_msg) pp.pp_pos 
@@ -395,20 +464,20 @@ let elim_new_dispose prog =
         let arg = mk_free_const nc.new_sort nc.new_lhs in
         let aux =
           match nc.new_sort with
-          | Loc ->          
-              let new_loc = mk_and [mk_not (mk_elem arg alloc_set); mk_neq arg mk_null] in
+          | Loc sid ->          
+              let new_loc = mk_and [mk_not (mk_elem arg (alloc_set sid)); mk_neq arg (mk_null sid)] in
               let sf = mk_spec_form (FOL new_loc) "new" None pp.pp_pos in
               let assume_fresh = mk_assume_cmd sf pp.pp_pos in
               let assign_alloc = 
                 mk_assign_cmd 
-                  [alloc_id] 
-                  [mk_union [alloc_set; mk_setenum [arg]]] 
+                  [alloc_id sid] 
+                  [mk_union [alloc_set sid; mk_setenum [arg]]] 
                   pp.pp_pos 
               in
               let assign_footprint = 
                 mk_assign_cmd 
-                  [footprint_id] 
-                  [mk_union [footprint_set; mk_setenum [arg]]] 
+                  [footprint_id sid] 
+                  [mk_union [footprint_set sid; mk_setenum [arg]]] 
                   pp.pp_pos 
               in
               [assume_fresh; assign_alloc; assign_footprint]
@@ -417,16 +486,17 @@ let elim_new_dispose prog =
         mk_seq_cmd (havoc :: aux) pp.pp_pos
     | (Dispose dc, pp) ->
         let arg = dc.dispose_arg in
+        let sid = struct_id_of_sort (sort_of arg) in
         let assign_alloc = 
           mk_assign_cmd 
-            [alloc_id] 
-            [mk_diff alloc_set (mk_setenum [arg])] 
+            [alloc_id sid] 
+            [mk_diff (alloc_set sid) (mk_setenum [arg])] 
             pp.pp_pos 
         in
         let assign_footprint = 
           mk_assign_cmd 
-            [footprint_id] 
-            [mk_diff footprint_set (mk_setenum [arg])] 
+            [footprint_id sid] 
+            [mk_diff (footprint_set sid) (mk_setenum [arg])] 
             pp.pp_pos 
         in
         mk_seq_cmd [assign_alloc; assign_footprint] pp.pp_pos
