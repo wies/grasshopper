@@ -257,7 +257,10 @@ let mk_union sets =
       (function App (Empty, [], _) -> false | _ -> true) 
       sets
   in
-  mk_app (sort_ofs sets) Union sets1
+  match sets1 with
+  | [] -> mk_empty (sort_ofs sets)
+  | [s] -> s
+  | _ -> mk_app (sort_ofs sets) Union sets1
 
 let mk_diff s t = mk_app (sort_of s) Diff [s; t]
 

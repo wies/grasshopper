@@ -95,15 +95,10 @@ let rec simplify_sets fs =
   let rec simp (t : term) = 
     match t with
     | App (Union, ts, srt) ->
-        let ts1 = 
-          List.filter 
-            (function App (Empty, [], _) -> false | _ -> true) 
-            (List.map simp ts)
-        in
+        let ts1 = List.map simp ts in
         (match ts1 with
         | [] -> mk_empty srt
-        | [t] -> t
-        | _ -> App (Union, ts1, srt))
+        | _ -> mk_union ts1)
     | App (Inter, ts, srt) ->
         let ts1 = List.map simp ts in
         if List.exists (function App (Empty, [], _) -> true | _ -> false) ts1
