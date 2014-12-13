@@ -608,7 +608,7 @@ let convert cu =
       ProgError.type_error pos
         ("Expected an " ^ ty_str exp_ty ^ " but found an " ^ ty_str fnd_ty)
     in
-    let rec convert_expr locals = function
+    let rec convert_expr locals ty = function
       | Null _ -> FOL_term (GrassUtil.mk_null, LocType)
       | Emp pos -> SL_form (SlUtil.mk_emp (Some pos))
       | Setenum (ty, es, pos) ->
@@ -743,16 +743,19 @@ let convert cu =
             then pred_arg_mismatch_error pos (fst id) (List.length tys)
             else Util.map2 (extract_term locals) tys es
           in 
-          (match decl.pr_outputs with
-          | [] -> SL_form (SlUtil.mk_pred ~pos:pos id (List.map fst ts))
-          | [res] ->
+          (match decl.pr_outputs, ty with
+          | [], PermType ->
+              SL_form (SlUtil.mk_pred ~pos:pos id (List.map fst ts))
+          | [], _ ->
+              FOL_form (GrassUtil.mk_pred ~ann:[SrcPos pos] id (List.map fst ts))
+          | [res], _ ->
               let res_decl = IdMap.find res decl.pr_locals in
               let res_srt = convert_type res_decl.v_type in
               let t = GrassUtil.mk_free_fun res_srt id (List.map fst ts) in
               FOL_term (t, res_decl.v_type)
           | _ -> failwith "impossible")
       | BinaryOp (e1, OpEq, e2, pos) ->
-          (match convert_expr locals e1 with
+          (match convert_expr locals UniversalType e1 with
           | FOL_form _ 
           | FOL_term (_, BoolType) ->
               let f1 = extract_fol_form locals e1 in
@@ -778,7 +781,7 @@ let convert cu =
           let t2, ty2 = extract_term locals ty1 e2 in
           FOL_term (mk_app t1 t2, ty2)
       | BinaryOp (e1, OpNeq, e2, pos) ->
-          convert_expr locals (UnaryOp (OpNot, BinaryOp (e1, OpEq, e2, pos), pos))
+          convert_expr locals BoolType (UnaryOp (OpNot, BinaryOp (e1, OpEq, e2, pos), pos))
       | BinaryOp (e1, (OpMinus as op), e2, _)
       | BinaryOp (e1, (OpPlus as op), e2, _)
       | BinaryOp (e1, (OpMult as op), e2, _)
@@ -829,31 +832,34 @@ let convert cu =
       | BinaryOp (e1, (OpAnd as op), e2, _)
       | BinaryOp (e1, (OpOr as op), e2, _)
       | BinaryOp (e1, (OpImpl as op), e2, _) ->
-          (try
-            let mk_form = 
-              match op with
-              | OpAnd -> fun f1 f2 -> GrassUtil.mk_and [f1; f2]
-              | OpOr -> fun f1 f2 -> GrassUtil.mk_or [f1; f2]
-              | OpImpl -> GrassUtil.mk_implies           
-              | _ -> failwith "unexpected operator"
-            in
-            let f1 = extract_fol_form locals e1 in
-            let f2 = extract_fol_form locals e2 in
-            FOL_form (mk_form f1 f2)
-          with ProgError.Prog_error _ ->
-            let mk_form = 
-              match op with
-              | OpAnd -> SlUtil.mk_and
-              | OpOr -> SlUtil.mk_or
-              | OpImpl -> SlUtil.mk_implies
-              | _ -> failwith "unexpected operator"      
-            in
-            let f1 = extract_sl_form locals e1 in
-            let f2 = extract_sl_form locals e2 in
-            SL_form (mk_form f1 f2))
+          let f1, f2 = convert_expr locals ty e1, convert_expr locals ty e2 in
+          (match f1, f2 with
+          | SL_form _, _
+          | _, SL_form _ ->
+              let mk_form = 
+                match op with
+                | OpAnd -> SlUtil.mk_and
+                | OpOr -> SlUtil.mk_or
+                | OpImpl -> SlUtil.mk_implies
+                | _ -> failwith "unexpected operator"      
+              in
+              let f1 = extract_sl_form locals e1 in
+              let f2 = extract_sl_form locals e2 in
+              SL_form (mk_form f1 f2)
+          | _, _ ->
+              let mk_form = 
+                match op with
+                | OpAnd -> fun f1 f2 -> GrassUtil.mk_and [f1; f2]
+                | OpOr -> fun f1 f2 -> GrassUtil.mk_or [f1; f2]
+                | OpImpl -> GrassUtil.mk_implies           
+                | _ -> failwith "unexpected operator"
+              in
+              let f1 = extract_fol_form locals e1 in
+              let f2 = extract_fol_form locals e2 in
+              FOL_form (mk_form f1 f2))
       | BinaryOp (e1, OpPts, e2, pos) ->
           let fld, ind, ty = 
-            match convert_expr locals e1 with
+            match convert_expr locals LocType e1 with
             | FOL_term (App (Read, [fld; ind], _), ty) -> fld, ind, ty
             | _ -> 
                 ProgError.error (pos_of_expr e1) 
@@ -934,13 +940,13 @@ let convert cu =
           FOL_form (GrassUtil.annotate f [TermGenerator ([], [], matches, ge1)])
       | _ -> failwith "convert_expr: unexpected expression"
     and extract_sl_form locals e =
-      match convert_expr locals e with
+      match convert_expr locals PermType e with
       | SL_form f -> f
       | FOL_form f -> Pure (f, Some (pos_of_expr e))
       | FOL_term (t, ty) ->
          type_error (pos_of_expr e) PermType ty
     and extract_fol_form locals e =
-      match convert_expr locals e with
+      match convert_expr locals BoolType e with
       | SL_form (Sl.Atom (Pred p, ts, pos)) ->
           GrassUtil.mk_pred ~ann:[SrcPos (pos_of_expr e)] p ts
       | SL_form _ ->
@@ -949,7 +955,7 @@ let convert cu =
       | FOL_term (t, BoolType) -> Grass.Atom (t, [SrcPos (pos_of_expr e)])
       | FOL_term (t, ty) -> type_error (pos_of_expr e) BoolType ty
     and extract_term locals ty e =
-      match convert_expr locals e with
+      match convert_expr locals PermType e with
       | SL_form _ -> type_error (pos_of_expr e) ty PermType
       | FOL_form (BoolOp (And, [])) 
       | FOL_form (Binder (_, [], BoolOp (And, []), _)) -> 
@@ -1063,7 +1069,7 @@ let convert cu =
       | Assign (lhs, rhs, pos) ->
           let rhs_ts, rhs_tys = 
             Util.map_split (fun e ->
-              match convert_expr proc.p_locals e with
+              match convert_expr proc.p_locals UniversalType e with
               | SL_form _ -> ProgError.error (pos_of_expr e) "Permissions cannot be assigned"
               | FOL_term (t, ty) -> t, ty
               | FOL_form f -> 

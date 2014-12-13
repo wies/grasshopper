@@ -28,37 +28,55 @@ distro()
     rm -rf grasshopper
 }
 
+generate()
+{
+    # COMMIT_ID and COMMON_ARGS should be defined
+
+    VAR_ARGS="$@"
+    OUTDIR=smtlib/${COMMIT_ID}$(echo $VAR_ARGS | tr -d " ")
+
+    [ -d $OUTDIR ] && {
+      echo "Looks like benchmarks already generated, skipping (delete $OUTDIR to force generation)"
+      return
+    }
+
+    echo "Generating benchmarks with arguments ${VAR_ARGS}..."
+    ./bin/regression-tests $COMMON_ARGS $VAR_ARGS > /dev/null
+    rm soundness*.smt2
+
+    mkdir -p $OUTDIR
+    echo "Post processing..."
+    for file in *.smt2
+    do
+        sed -i -e '/set-option/d' -e 's/unknown/unsat/'  $file
+        LOGIC=`grep 'set-logic' $file | sed 's/(set-logic \([^)]*\))/\1/'`
+        # test -s $LOGIC || mkdir -p smt-lib/$LOGIC/grasshopper/uninstantiated
+        mv $file $OUTDIR
+    done
+}
+
 smtlib()
 {
     ls *.smt2 2>/dev/null && echo "Remove existing SMT-LIB files to proceed. Aborting." && exit 0
-    
-    for sets in "" "-smtsets"; do 
-      echo "Generating uninstantiated$sets benchmarks..."
-      ./regression-tests $sets -noverify -noinst -dumpvcs -lint -smtpatterns > /dev/null
-      rm soundness*.smt2
-  
-      echo "Post processing..."
-      for file in *.smt2 
-      do
-          sed -i -e '/set-option/d' -e 's/unknown/unsat/'  $file
-          LOGIC=`grep 'set-logic' $file | sed 's/(set-logic \([^)]*\))/\1/'`
-          test -s $LOGIC || mkdir -p smt-lib/$LOGIC/grasshopper/uninstantiated
-          mv $file smt-lib/$LOGIC/grasshopper/uninstantiated
-      done
-  
-      echo "Generating instantiated$sets benchmarks..."
-      ./regression-tests $sets -noverify -nostratify -dumpvcs -lint -smtpatterns > /dev/null
-      rm soundness*.smt2
-  
-      echo "Post processing..."
-      for file in *.smt2 
-      do
-          sed -i -e '/set-option/d' -e 's/unknown/unsat/'  $file
-          LOGIC=`grep 'set-logic' $file | sed 's/(set-logic \([^)]*\))/\1/'`
-          test -s $LOGIC || mkdir -p smt-lib/$LOGIC/grasshopper/instantiated
-          mv $file smt-lib/$LOGIC/grasshopper/instantiated
-      done
-    done
+
+    COMMIT_ID="$(git log -1 --format="%cd-%h" --date=short)"
+    COMMON_ARGS="-lint -noverify -dumpvcs -smtpatterns"
+
+    generate "-nostratify"
+    generate "-nostratify -smtsets"
+    generate "-noinst"
+    generate "-noinst -smtsets"
+    generate "-noinst -nomodifiesopt"
+    generate "-noinst -smtsets -nomodifiesopt"
+
+    ## for kshitij's testing infrastructure
+    [ -d "../test/benchmarks" ] && (
+      rsync -r smtlib/ ../test/benchmarks/grasshopper/
+      cd ../test/benchmarks
+      LISTFILE=grasshopper_${COMMIT_ID}.list
+      find grasshopper/$COMMIT_ID* -iname "*.smt2" >$LISTFILE
+      wc -l $LISTFILE
+    )
 }
 
 if [ $# -eq 0 ]; then
