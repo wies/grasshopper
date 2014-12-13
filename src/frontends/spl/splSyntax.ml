@@ -16,7 +16,7 @@ type typ =
   | SetType of typ
   | IntType
   | BoolType
-  | LocType of ident
+  | NullType
   | PermType (* SL formulas *)
   | UniversalType
 
@@ -66,6 +66,7 @@ and procs = proc IdMap.t
 and pred =
     { pr_name : ident;
       pr_formals : idents;
+      pr_footprints : idents;
       pr_outputs : idents;
       pr_locals : vars;
       pr_body : expr; 
@@ -237,7 +238,7 @@ let add_alloc_decl prog =
       (fun _ decl acc ->
         let sid = decl.s_name in
         let id = Prog.alloc_id sid in
-        let tpe = SetType (LocType id) in
+        let tpe = SetType (StructType id) in
         let pos = GrassUtil.dummy_position in
         let scope = GrassUtil.global_scope in
         let vdecl = VarDecl (var_decl id tpe true false pos scope) in
@@ -267,7 +268,7 @@ let mk_block pos = function
 open Format
 
 let rec pr_type ppf = function
-  | LocType id -> fprintf ppf "%s<%s>" loc_sort_string (string_of_ident id)
+  | NullType -> fprintf ppf "Null" 
   | BoolType -> fprintf ppf "%s" bool_sort_string
   | IntType -> fprintf ppf "%s" int_sort_string
   | StructType id -> pr_ident ppf id

@@ -162,6 +162,28 @@ proc_impl:
 ;
 
 pred_decl:
+| PREDICATE IDENT LPAREN var_decls RPAREN LPAREN var_decls RPAREN LBRACE expr RBRACE {
+  let formals, locals =
+    List.fold_right (fun decl (formals, locals) ->
+      decl.v_name :: formals, IdMap.add decl.v_name decl locals)
+      $4 ([], IdMap.empty)
+  in
+  let footprints, locals =
+    List.fold_right (fun decl (footprints, locals) ->
+      decl.v_name :: footprints, IdMap.add decl.v_name decl locals)
+      $7 ([], locals)
+  in
+  let decl =
+    { pr_name = ($2, 0);
+      pr_formals = formals;
+      pr_outputs = [];
+      pr_footprints = footprints;
+      pr_locals = locals;
+      pr_body = $10;
+      pr_pos = mk_position 2 2;
+    }
+  in decl
+}
 | PREDICATE IDENT LPAREN var_decls RPAREN LBRACE expr RBRACE {
   let formals, locals =
     List.fold_right (fun decl (formals, locals) ->
@@ -172,6 +194,7 @@ pred_decl:
     { pr_name = ($2, 0);
       pr_formals = formals;
       pr_outputs = [];
+      pr_footprints = [];
       pr_locals = locals;
       pr_body = $7;
       pr_pos = mk_position 2 2;
@@ -192,6 +215,7 @@ pred_decl:
   let decl =
     { pr_name = ($2, 0);
       pr_formals = formals;
+      pr_footprints = [];
       pr_outputs = outputs;
       pr_locals = locals;
       pr_body = $11;
@@ -262,7 +286,7 @@ var_modifier:
 ; 
 
 var_type:
-| LOC LT IDENT GT { LocType $3 }
+| LOC LT IDENT GT { StructType ($3, 0) }
 | INT { IntType }
 | BOOL { BoolType }
 | SET LT var_type GT { SetType $3 }

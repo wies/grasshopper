@@ -206,15 +206,9 @@ let alloc_all struct_id =
   alloc_set struct_id,
   alloc_id struct_id
     
-let empty_prog struct_ids = 
-  let alloc_vars =
-    IdSet.fold
-      (fun sid acc -> IdMap.add (alloc_id sid) (alloc_decl sid) acc)
-      struct_ids
-      IdMap.empty
-  in
+let empty_prog = 
   { prog_axioms = [];
-    prog_vars = alloc_vars;
+    prog_vars = IdMap.empty;
     prog_preds = IdMap.empty;
     prog_procs = IdMap.empty 
   }

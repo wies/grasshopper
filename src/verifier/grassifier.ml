@@ -153,6 +153,16 @@ let elim_sl prog =
   in
   let prog = { prog with prog_preds = preds; } in *)
   let struct_ids = struct_ids prog in
+  (* declare alloc sets *)
+  let prog =
+    let globals_with_alloc_sets =
+      IdSet.fold
+        (fun sid acc -> IdMap.add (alloc_id sid) (alloc_decl sid) acc)
+        struct_ids
+        prog.prog_vars
+    in
+    { prog with prog_vars = globals_with_alloc_sets }
+  in
   let compile_proc proc =
     (* add auxiliary set variables *)
     let new_locals, aux_formals, aux_returns = 

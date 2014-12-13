@@ -136,6 +136,9 @@ let struct_id_of_sort = function
   | Loc sid -> sid
   | _ -> raise (Invalid_argument "struct_id_of_sort")
 
+let struct_id_of_term t =
+  struct_id_of_sort (sort_of t)
+        
 let range_sort_of_map map =
   match sort_of map with
   | Map (_, srt) -> srt

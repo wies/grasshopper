@@ -12,8 +12,10 @@ let assignment_mismatch_error pos =
     "Mismatch in number of expressions on left and right side of assignment"                
 
 let pred_arg_mismatch_error pos name expected =
-    ProgError.error pos (Printf.sprintf "Predicate %s expects %d argument(s)" name expected)
+  ProgError.error pos (Printf.sprintf "Predicate %s expects %d argument(s)" name expected)
 
+let null_access_error pos =
+  ProgError.error pos "Tried to dereference of access null"
 
 let resolve_names cu =
   let lookup_id init_id tbl pos =
@@ -583,7 +585,7 @@ let convert cu =
           ("Struct " ^ fst id ^ " does not have a field named " ^ fst fld_id)
     in
     let rec convert_type = function
-      | LocType id -> Loc id
+      | NullType -> failwith "cannot convert Null type"
       | StructType id -> Loc id
       | MapType (dtyp, rtyp) -> Map (convert_type dtyp, convert_type rtyp)
       | SetType typ -> Set (convert_type typ)
@@ -609,7 +611,10 @@ let convert cu =
         ("Expected an " ^ ty_str exp_ty ^ " but found an " ^ ty_str fnd_ty)
     in
     let rec convert_expr locals ty = function
-      | Null _ -> FOL_term (GrassUtil.mk_null, LocType)
+      | Null _ ->
+          let cty = convert_type ty in
+          let sid = GrassUtil.struct_id_of_sort cty in
+          FOL_term (GrassUtil.mk_null sid, ty)
       | Emp pos -> SL_form (SlUtil.mk_emp (Some pos))
       | Setenum (ty, es, pos) ->
           let ts, ty = 
@@ -625,36 +630,24 @@ let convert cu =
       | IntVal (i, _) -> FOL_term (GrassUtil.mk_int i, IntType)
       | BoolVal (b, pos) -> FOL_form (GrassUtil.mk_srcpos pos (GrassUtil.mk_bool b))
       | Dot (e, fld_id, pos) -> 
-          let t, ty = extract_term locals LocType e in
-          let res_ty =
+          let t, ty = extract_term locals UniversalType e in
+          let sid, res_ty =
             match ty with
-            | StructType id ->
-                field_type pos id fld_id
-            | LocType -> 
-                let id_opt =
-                  IdMap.fold 
-                    (fun id decl -> function 
-                      | None -> 
-                          if IdMap.mem fld_id decl.s_fields then Some id else None
-                      | Some id -> Some id)
-                    cu.struct_decls None
-                in
-                (match id_opt with
-                | Some id -> 
-                    field_type pos id fld_id
-                | None ->
-                    ProgError.error pos ("Unknown field " ^ (GrassUtil.name fld_id)))
+            | StructType sid ->
+                sid, field_type pos sid fld_id
+            | NullType -> null_access_error pos
             | ty -> failwith "unexpected type"
           in
           let res_srt = convert_type res_ty in
-          let fld = GrassUtil.mk_free_const (GrassUtil.field_sort res_srt) fld_id in
+          let fld = GrassUtil.mk_free_const (GrassUtil.field_sort sid res_srt) fld_id in
           FOL_term (GrassUtil.mk_read fld t, res_ty)
       | Access (e, pos) ->
           let t, ty = extract_term locals UniversalType e in
           (match ty with
-          | StructType _
-          | LocType ->
+          | StructType _ ->
               SL_form (SlUtil.mk_cell ~pos:pos t)
+          | NullType ->
+              null_access_error pos
           | SetType (StructType _) ->
               SL_form (SlUtil.mk_region ~pos:pos t)
           | ty -> failwith "unexpected type")
@@ -666,24 +659,21 @@ let convert cu =
               let ty, _ = extract_term locals (StructType id) y in
               let tz, _ = extract_term locals (StructType id) z in
               FOL_form (GrassUtil.mk_srcpos pos (GrassUtil.mk_btwn tfld tx ty tz))
-          | _ -> type_error (pos_of_expr fld) (MapType(LocType, LocType)) fld_ty)
+          | _ -> type_error (pos_of_expr fld) (MapType(StructType ("Loc<T>", 0), StructType ("Loc<T>", 0))) fld_ty)
       | Quant (q, decls, f, pos) ->
-          let vars, locals1, type_info = 
-             List.fold_right (fun decl (vars, locals1, type_info) ->
+          let vars, locals1 = 
+             List.fold_right (fun decl (vars, locals1) ->
                let id = decl.v_name in
                let ty = decl.v_type in
-               let ti = assert_type id ty decl.v_pos in
                (id, convert_type ty) :: vars, 
-               IdMap.add id decl locals1,
-               List.map form_of_spec ti @ type_info)
-               decls ([], locals, [])
+               IdMap.add id decl locals1)
+               decls ([], locals)
           in
           let subst = 
             List.fold_right (fun (id, srt) subst -> 
               IdMap.add id (GrassUtil.mk_var srt id) subst)
               vars IdMap.empty
           in
-          let type_info1 = GrassUtil.subst_consts subst (GrassUtil.smk_and type_info) in
           (try
             let mk_quant vs f = 
               let f0, ann = 
@@ -694,9 +684,9 @@ let convert cu =
               let f1 = 
                 match q with
 	        | Forall -> 
-                    GrassUtil.mk_forall vs (GrassUtil.mk_implies type_info1 f0)
+                    GrassUtil.mk_forall vs f0
                 | Exists -> 
-                    GrassUtil.mk_exists vs (GrassUtil.smk_and [type_info1; f0])
+                    GrassUtil.mk_exists vs f0
               in GrassUtil.annotate f1 ann
             in
             let f1 = extract_fol_form locals1 f in
@@ -859,7 +849,7 @@ let convert cu =
               FOL_form (mk_form f1 f2))
       | BinaryOp (e1, OpPts, e2, pos) ->
           let fld, ind, ty = 
-            match convert_expr locals LocType e1 with
+            match convert_expr locals NullType e1 with
             | FOL_term (App (Read, [fld; ind], _), ty) -> fld, ind, ty
             | _ -> 
                 ProgError.error (pos_of_expr e1) 
@@ -968,8 +958,8 @@ let convert cu =
       | FOL_term (t, tty) ->
           let rec match_types ty1 ty2 = 
             match ty1, ty2 with
-            | LocType _, StructType _
-            | StructType _, LocType _ -> ty2
+            | NullType, StructType _
+            | StructType _, NullType -> ty2
             | UniversalType, _ -> ty2
             | _, UniversalType -> ty1
             | SetType ty1, SetType ty2 -> SetType (match_types ty1 ty2)
@@ -986,11 +976,6 @@ let convert cu =
       mk_spec_form f name msg (pos_of_expr e)
     in
     let convert_loop_contract proc_name locals contract =
-      let typ_invs =
-        IdMap.fold (fun id decl acc ->
-          assert_type id decl.v_type decl.v_pos @ acc) locals []
-      in
-      typ_invs @
       List.map
         (function Invariant (e, pure) -> 
           let msg caller =
@@ -1060,12 +1045,7 @@ let convert cu =
       | Assign ([lhs], [New (id, npos)], pos) ->
           let lhs_ids, _ = convert_lhs [lhs] [StructType id] in
           let lhs_id = List.hd lhs_ids in
-          let type_info = 
-            let ti = assert_type lhs_id (StructType id) pos in
-            List.map (fun sf -> mk_assume_cmd sf pos) ti
-          in
-          let new_cmd = mk_new_cmd lhs_id Loc npos in
-          mk_seq_cmd (new_cmd :: type_info) pos
+          mk_new_cmd lhs_id (Loc id) pos
       | Assign (lhs, rhs, pos) ->
           let rhs_ts, rhs_tys = 
             Util.map_split (fun e ->
@@ -1080,41 +1060,29 @@ let convert cu =
             try convert_lhs lhs rhs_tys
             with Invalid_argument _ -> assignment_mismatch_error pos
           in
-          let lhs_types =
-            Util.flat_map
-              (fun id ->
-                let decl = find_var_decl proc.p_locals id in
-                assert_type id decl.v_type pos) lhs_ids
-          in
           let cmd =
             (match ind_opt with
-            | Some t -> 
-                let fld_srt = GrassUtil.field_sort (convert_type (List.hd rhs_tys)) in
+            | Some t ->
+                let sid = GrassUtil.struct_id_of_term t in
+                let fld_srt = GrassUtil.field_sort sid (convert_type (List.hd rhs_tys)) in
                 let fld = GrassUtil.mk_free_const fld_srt (List.hd lhs_ids) in
                 mk_assign_cmd lhs_ids [GrassUtil.mk_write fld t (List.hd rhs_ts)] pos
             | None -> mk_assign_cmd lhs_ids rhs_ts pos)
           in
-          mk_seq_cmd (cmd :: List.map (fun sf -> mk_assume_cmd sf pos) lhs_types) pos
+          cmd
       | Dispose (e, pos) ->
-          let t, _ = extract_term proc.p_locals LocType e in
+          let t, _ = extract_term proc.p_locals NullType e in
           mk_dispose_cmd t pos
       | Havoc (es, pos) ->
-          let ids, type_info = 
-            Util.map_split 
+          let ids = 
+            List.map
               (function 
-                | Ident (id, _) -> 
-                    let decl = find_var_decl proc.p_locals id in
-                    id, assert_type id decl.v_type pos
+                | Ident (id, _) -> id
                 | e -> ProgError.error (pos_of_expr e) "Only variables can be havoced"
               )
               es
           in 
-          let assume_cmds = 
-            Util.flat_map 
-              (fun ti -> List.map (fun sf -> mk_assume_cmd sf pos) ti)
-              type_info
-          in
-          mk_seq_cmd (mk_havoc_cmd ids pos :: assume_cmds) pos
+          mk_havoc_cmd ids pos
       | If (c, t, e, pos) ->
           let cond = extract_fol_form proc.p_locals c in
           let t_cmd = convert_stmt proc t in
@@ -1154,6 +1122,7 @@ let convert cu =
             { pred_name = id;
               pred_formals = decl.pr_formals;
               pred_outputs = decl.pr_outputs;
+              pred_footprints = decl.pr_footprints;
               pred_locals = IdMap.map convert_var_decl decl.pr_locals;
               pred_body = mk_spec_form (FOL body) (string_of_ident id) None (pos_of_expr decl.pr_body);
               pred_pos = decl.pr_pos;
@@ -1197,21 +1166,17 @@ let convert cu =
       IdMap.fold
         (fun id decl prog ->
           let pre, post = convert_contract decl.p_name decl.p_locals decl.p_contracts in
-          let mk_types ids = 
-            Util.flat_map (fun id ->
-              let vdecl = find_var_decl decl.p_locals id in
-              assert_type id vdecl.v_type vdecl.v_pos) ids
-          in
           let proc_decl =
             { proc_name = id;
               proc_formals = decl.p_formals;
               proc_returns = decl.p_returns;
               proc_locals = IdMap.map convert_var_decl decl.p_locals;
-              proc_precond = mk_types decl.p_formals @ pre ;
-              proc_postcond = mk_types decl.p_returns @ post;
+              proc_precond = pre;
+              proc_postcond = post;
               proc_body = convert_body decl;
               proc_pos = decl.p_pos;
               proc_deps = [];
+              proc_is_tailrec = false;
            } 
           in
           declare_proc prog proc_decl
@@ -1221,7 +1186,6 @@ let convert cu =
     prog
 
 let to_program cu =
-  let cu1, axioms = resolve_names cu in
+  let cu1 = resolve_names cu in
   let cu2 = flatten_exprs cu1 in
-  let prog = convert cu2 in
-  { prog with prog_axioms = axioms }
+  convert cu2
