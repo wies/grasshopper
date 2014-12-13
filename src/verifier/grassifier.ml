@@ -209,7 +209,7 @@ let elim_sl prog =
     in
     (* translate SL precondition *)
     let sl_precond, other_precond = List.partition is_sl_spec proc.proc_precond in
-    let precond, free_precond =
+    let precond =
       let name = "precondition of " ^ string_of_ident proc.proc_name in
       let f, _, name, msg, pos = convert_sl_form sl_precond name in
       let f_eq_init_footprint =
@@ -237,11 +237,35 @@ let elim_sl prog =
           struct_ids
           []
       in
-      let free_precond = 
-        FOL (mk_and (footprint_caller_in_alloc @ null_not_in_alloc))
+      let free_preconds =
+        List.map (fun f -> mk_free_spec_form (FOL f) fp_name None pos)
+          (footprint_caller_in_alloc @ null_not_in_alloc)
       in
-      precond,
-      mk_free_spec_form free_precond fp_name None pos
+      (* additional precondition for tail-recursive procedures *)
+      let tailrec_precond =
+        if not proc.proc_is_tailrec then [] else
+        let first_iter_id = List.hd formals in
+        let error_msg = ProgError.mk_error_info "Memory footprint at error location does not match this specification" in
+        let msg caller =
+          if caller <> proc.proc_name then
+            "An invariant might not hold before entering this loop",
+            ProgError.mk_error_info "This is the loop invariant that might not hold initially"
+          else 
+            "An invariant might not be maintained by this loop",
+            ProgError.mk_error_info "This is the loop invariant that might not be maintained"
+        in
+        IdSet.fold (fun sid fs ->
+          let f = mk_or [mk_pred first_iter_id []; 
+                         mk_error_msg (pos, error_msg)
+                           (mk_eq 
+                              (mk_diff (footprint_caller_set sid) (footprint_set sid))
+                              (mk_empty (Set (Loc sid))))]
+          in
+          mk_spec_form (FOL f) "invariant" (Some msg) pos :: fs)
+          struct_ids
+          []
+      in
+      precond :: free_preconds @ tailrec_precond
     in
     (* translate SL postcondition *)
     let init_alloc_set sid = oldify_term (IdSet.singleton (alloc_id sid)) (alloc_set sid) in
@@ -395,7 +419,7 @@ let elim_sl prog =
       proc_formals = formals;
       proc_returns = returns;
       proc_locals = locals;
-      proc_precond = precond :: free_precond :: other_precond;
+      proc_precond = precond @ other_precond;
       proc_postcond = postcond @ framecond @ other_postcond;
       proc_body = body;
     } 

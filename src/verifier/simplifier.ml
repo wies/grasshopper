@@ -117,31 +117,6 @@ let elim_loops (prog : program) =
             )
             [] returns (List.tl formals)
         in
-        (* additional precondition *)
-        (* TODO: find alternative to using the footprint sets since they are introduced by grassification *)
-        let precond =
-          let inv_pos = 
-            List.fold_left 
-              (fun pos sf -> merge_src_pos pos sf.spec_pos) 
-              dummy_position lc.loop_inv 
-          in
-          let msg = "Memory footprint at error location does not match this specification" in
-          let f = mk_or [mk_pred first_iter_id []; 
-                         mk_error_msg (inv_pos, ProgError.mk_error_info msg)
-                           (mk_eq 
-                              (mk_diff Grassifier.footprint_caller_set Grassifier.footprint_set)
-                              (mk_empty (Set Loc)))]
-          in
-          let msg caller =
-            if caller <> proc_name then
-              "An invariant might not hold before entering this loop",
-              ProgError.mk_error_info "This is the loop invariant that might not hold initially"
-            else 
-              "An invariant might not be maintained by this loop",
-              ProgError.mk_error_info "This is the loop invariant that might not be maintained"
-          in
-          mk_spec_form (FOL f) "invariant" (Some msg) pp.pp_pos
-        in
         let postcond =
           loop_exit :: 
           (* invariant *)
@@ -154,11 +129,12 @@ let elim_loops (prog : program) =
             proc_formals = formals;
             proc_returns = returns;
             proc_locals = locals;
-            proc_precond = precond :: List.map (subst_id_spec subst_formals) lc.loop_inv;
+            proc_precond = List.map (subst_id_spec subst_formals) lc.loop_inv;
             proc_postcond = postcond;
             proc_body = Some body;
             proc_pos = pp.pp_pos;
             proc_deps = [];
+            proc_is_tailrec = true;
           } 
         in
         let call_loop =
