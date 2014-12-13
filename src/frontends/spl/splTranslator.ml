@@ -14,37 +14,6 @@ let assignment_mismatch_error pos =
 let pred_arg_mismatch_error pos name expected =
     ProgError.error pos (Printf.sprintf "Predicate %s expects %d argument(s)" name expected)
 
-let rec assert_type id typ pos =
-  if not !Config.keep_types then [] else
-  let open GrassUtil in
-  let f = match typ with
-  | StructType tid ->
-      [mk_elem (mk_free_const Loc id) (mk_loc_set tid)]
-  | SetType (StructType tid) ->
-      [GrassUtil.mk_subseteq (mk_loc_set id) (mk_loc_set tid)]
-  | MapType (StructType tid1, StructType tid2) ->
-      let fld = mk_free_const (Map (Loc tid1, Loc tid2)) id in
-      let l1 = Axioms.l1 tid1 in
-      let l2 = Axioms.l2 tid1 in
-      let loc1 = Axioms.loc1 tid1 in
-      let loc2 = Axioms.loc2 tid1 in
-      mk_forall [l1] 
-        (mk_sequent [mk_elem loc1 (mk_loc_set tid1)] 
-           [mk_elem (mk_read fld loc1) (mk_loc_set tid2)]) ::
-      mk_forall [l1]
-        (mk_or [mk_elem loc1 (mk_loc_set tid1); mk_eq (mk_read fld loc1) (mk_null tid1)]) ::
-      if tid1 = tid2 then
-        [mk_forall [l1; l2]
-           (mk_sequent [mk_elem loc1 (mk_loc_set tid1); mk_reach fld loc1 loc2]
-              [mk_elem loc2 (mk_loc_set tid1)]);
-         mk_forall [l1; l2]
-           (mk_or [mk_elem loc1 (mk_loc_set tid1); mk_not (mk_reach fld loc1 loc2);
-                   mk_eq loc1 loc2; mk_eq loc2 (mk_null tid1)])]
-      else [] 
-  | _ -> []
-  in
-  List.map (fun f -> 
-    mk_free_spec_form (FOL f) ("type_of_" ^ string_of_ident id) None pos) f
 
 let resolve_names cu =
   let lookup_id init_id tbl pos =
@@ -86,10 +55,7 @@ let resolve_names cu =
     | Some _ -> 
         ProgError.error pos ("Identifier " ^ name ^ " has already been declared in this scope.")
     | None ->
-        let id = 
-          if init_id = Prog.alloc_id then alloc_id
-          else GrassUtil.fresh_ident name 
-        in
+        let id = GrassUtil.fresh_ident name in
         (id, SymbolTbl.add tbl name (id, scope))
   in
   let declare_var structs decl tbl =
@@ -123,12 +89,12 @@ let resolve_names cu =
   (* declare global variables *)
   let globals0, tbl = declare_vars cu.var_decls structs0 tbl in
   (* declare struct fields *)
-  let structs, globals, axioms, tbl =
+  let structs, globals, tbl =
     IdMap.fold
-      (fun id decl (structs, globals, axioms, tbl) ->
-        let fields, globals, axioms, tbl =
+      (fun id decl (structs, globals, tbl) ->
+        let fields, globals, tbl =
           IdMap.fold 
-            (fun init_id fdecl (fields, globals, axioms, tbl) ->
+            (fun init_id fdecl (fields, globals, tbl) ->
               let id, tbl = declare_name fdecl.v_pos init_id GrassUtil.global_scope tbl in
               let res_type = match fdecl.v_type with
               | StructType init_id ->
@@ -140,45 +106,15 @@ let resolve_names cu =
               let typ = MapType (StructType decl.s_name, res_type) in
               let fdecl = { fdecl with v_name = id; v_type = res_type } in
               let gfdecl = { fdecl with v_type = typ } in
-              let type_of_id = assert_type id typ fdecl.v_pos in
-              IdMap.add id fdecl fields, IdMap.add id gfdecl globals, type_of_id @ axioms, tbl
+              IdMap.add id fdecl fields, IdMap.add id gfdecl globals, tbl
             )
-            decl.s_fields (IdMap.empty, globals, axioms, tbl)
-        in
-        let gdecl = 
-          { v_name =  id; 
-            v_type = SetType LocType;
-            v_ghost = true;
-            v_implicit = false;
-            v_aux = false;
-            v_pos = decl.s_pos;
-            v_scope = GrassUtil.global_scope;
-          }
-        in
-        let contains_null = 
-          let f = GrassUtil.mk_elem GrassUtil.mk_null (GrassUtil.mk_loc_set id) in
-          mk_free_spec_form (FOL f) ("null_in_" ^ (string_of_ident id)) None decl.s_pos
-        in
-        let axioms =
-          IdMap.fold 
-            (fun oid _ axioms ->
-              let open GrassUtil in
-              let f = 
-                mk_eq (mk_inter [mk_loc_set oid; mk_loc_set id]) (mk_setenum [mk_null]) 
-              in
-              let disjoint = 
-                mk_free_spec_form 
-                  (FOL f) (string_of_ident oid ^ "_disjoint_from_" ^ string_of_ident id)
-                  None decl.s_pos
-              in disjoint :: axioms)
-            structs axioms
+            decl.s_fields (IdMap.empty, globals, tbl)
         in
         IdMap.add id { decl with s_fields = fields } structs, 
-        IdMap.add id gdecl globals, 
-        contains_null :: axioms,
+        globals, 
         tbl
       )
-      structs0 (IdMap.empty, globals0, [], tbl)
+      structs0 (IdMap.empty, globals0, tbl)
   in
   (* declare procedure names *)
   let procs0, tbl =
@@ -404,9 +340,8 @@ let resolve_names cu =
     struct_decls = structs; 
     proc_decls = procs;
     pred_decls = preds;
-  },
-  axioms
-
+  }
+    
 let flatten_exprs cu =
   let decl_aux_var name vtype pos scope locals =
     let aux_id = GrassUtil.fresh_ident name in
