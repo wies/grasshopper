@@ -11,23 +11,23 @@ struct Node {
   var parent: Node;
   var is_leaf: bool;
   var num_keys: Int;
-};
+}
 
 
-function btree_footprint(r: Node) returns (FP: Set<Loc<Node>>) {
-  forall x: Loc<Node> :: x in FP == (Btwn(parent, x, r, r) && r != null)
+function btree_footprint(r: Node) returns (FP: Set<Node>) {
+  forall x: Node :: x in FP == (Btwn(parent, x, r, r) && r != null)
 }
 
 function witness(v: Int, C: Set<Int>) returns (res: Node, idx: Int) {
   true
 }
 
-function btree_keys(FP: Set<Loc<Node>>) returns (Keys: Set<Int>) {
-  (forall x: Loc<Node>, idx: Int :: x in FP && idx >= 0 && idx <= x.num_keys ==> (x, idx) == witness(x.keys[idx], Keys)) &&
-  (forall x: Loc<Node>, idx: Int :: x in FP && idx >= 0 && idx <= x.num_keys ==> x.keys[idx] in Keys) &&
-  (forall x: Loc<Node>, idx: Int, i: Int :: i in Keys && (x, idx) == witness(i, Keys) ==> x in FP && idx >= 0 && idx <= x.num_keys) &&
+function btree_keys(FP: Set<Node>) returns (Keys: Set<Int>) {
+  (forall x: Node, idx: Int :: x in FP && idx >= 0 && idx <= x.num_keys ==> (x, idx) == witness(x.keys[idx], Keys)) &&
+  (forall x: Node, idx: Int :: x in FP && idx >= 0 && idx <= x.num_keys ==> x.keys[idx] in Keys) &&
+  (forall x: Node, idx: Int, i: Int :: i in Keys && (x, idx) == witness(i, Keys) ==> x in FP && idx >= 0 && idx <= x.num_keys) &&
   (forall i: Int :: !(i in Keys) ==> (null, -1) == witness(i, Keys)) &&
-  (forall x: Loc<Node>, idx: Int, i: Int :: i in Keys && (x, idx) == witness(i, Keys) ==> i == x.keys[idx])
+  (forall x: Node, idx: Int, i: Int :: i in Keys && (x, idx) == witness(i, Keys) ==> i == x.keys[idx])
 }
 
 predicate well_formed_node(order: Int, n: Node) {
@@ -52,7 +52,7 @@ predicate well_formed_node(order: Int, n: Node) {
   )    
 }
 
-predicate parent_equal_child(FP: Set<Loc<Node>>) {
+predicate parent_equal_child(FP: Set<Node>) {
   (forall x: Node, idx: Int ::
       x in FP && idx >= 0 && idx <= x.num_keys
     ==>
@@ -65,7 +65,7 @@ predicate parent_equal_child(FP: Set<Loc<Node>>) {
   )
 }
 
-predicate children_distinct(FP: Set<Loc<Node>>) {
+predicate children_distinct(FP: Set<Node>) {
   (forall x: Node, i: Int, j: Int ::
       x in FP &&
       i >= 0 && i <= x.num_keys &&
@@ -81,7 +81,7 @@ function witness1(x: Node, y: Node) returns (res: Int) {
   res >= 0 && res <= x.num_keys
 }
 
-predicate reach_via_child(FP: Set<Loc<Node>>) {
+predicate reach_via_child(FP: Set<Node>) {
   forall x: Node, y: Node ::
       x in FP && y in FP && Btwn(parent, y, x, x)
     ==>
@@ -89,7 +89,7 @@ predicate reach_via_child(FP: Set<Loc<Node>>) {
 }
 
 
-predicate btree(t: BTree, FP0: Set<Loc<BTree>>, FP1: Set<Loc<Node>>) {
+predicate btree(t: BTree)(FP0: Set<BTree>, FP1: Set<Node>) {
   t.order >= 3 &&
   FP1 == btree_footprint(t.root) &&
   FP0 == Set<Loc>(t) &&

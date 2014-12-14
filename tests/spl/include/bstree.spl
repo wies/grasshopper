@@ -9,37 +9,37 @@ struct Node {
     
 // Predicates for tree shapes
 
-function tree_footprint(r: Node) returns (FP: Set<Loc<Node>>) {
-  forall x: Loc<Node> :: x in FP == (Btwn(parent, x, r, r) && r != null)
+function tree_footprint(r: Node) returns (FP: Set<Node>) {
+  forall x: Node :: x in FP == (Btwn(parent, x, r, r) && r != null)
 }
 
 function tree_parent(r: Node) returns (p: Node) {
   r != null && r.parent == p || r == null && p == null
 }
 
-predicate parent_equal_left_child(FP: Set<Loc<Node>>) {
+predicate parent_equal_left_child(FP: Set<Node>) {
   (forall x: Node :: x !in FP || x.left == null || Btwn(parent, x.left, x, x) && x.left != x) &&
   (forall x: Node, y: Node :: x in FP && Btwn(parent, x.left, y, x) ==> x == y || x.left == y)
 }
 
-predicate parent_equal_right_child(FP: Set<Loc<Node>>) {
+predicate parent_equal_right_child(FP: Set<Node>) {
   (forall x: Node :: x !in FP || x.right == null || Btwn(parent, x.right, x, x) && x.right != x) &&
   (forall x: Node, y: Node :: x in FP && Btwn(parent, x.right, y, x) ==> x == y || x.right == y)
 }
 
-predicate left_right_distinct(FP: Set<Loc<Node>>) {
+predicate left_right_distinct(FP: Set<Node>) {
   (forall x: Node :: x in FP && x.left == x.right ==> x.left == null 
     @(matching x.right yields x.left)
     @(matching x.left yields x.right))
 }
 
-predicate reach_via_left_right(FP: Set<Loc<Node>>) {
+predicate reach_via_left_right(FP: Set<Node>) {
   forall x: Node, y: Node ::
     x in FP && y in FP && Btwn(parent, y, x, x) ==>
       x == y || Btwn(parent, y, x.left, x) || Btwn(parent, y, x.right, x)
 }
 
-predicate tree(r: Node, FP: Set<Loc<Node>>) {
+predicate tree(r: Node)(FP: Set<Node>) {
   tree_footprint(r) == FP &&
   parent_equal_left_child(FP) &&
   parent_equal_right_child(FP) &&
@@ -47,14 +47,14 @@ predicate tree(r: Node, FP: Set<Loc<Node>>) {
   reach_via_left_right(FP)
 }
 
-predicate ptree(r: Node, p: Node, FP: Set<Loc<Node>>) {
+predicate ptree(r: Node, p: Node)(FP: Set<Node>) {
   tree_parent(r) == p &&
   tree(r, FP)
 }
 
 // Predicates for binary search trees
 
-predicate tree_sorted(FP: Set<Loc<Node>>) {
+predicate tree_sorted(FP: Set<Node>) {
   (forall x: Node, y: Node :: 
    x in FP && y in FP && Btwn(parent, x, y.left, y) ==> x.data < y.data
    @(matching y.left yields y.data)) &&
@@ -63,20 +63,20 @@ predicate tree_sorted(FP: Set<Loc<Node>>) {
    @(matching y.right yields y.data))  
 }
 
-predicate upper_bound(ub: Int, FP: Set<Loc<Node>>) {
+predicate upper_bound(ub: Int, FP: Set<Node>) {
   forall z: Node :: z in FP ==> z.data <= ub
 }
 
-predicate lower_bound(lb: Int, FP: Set<Loc<Node>>) {
+predicate lower_bound(lb: Int, FP: Set<Node>) {
   forall z: Node :: z in FP ==> z.data >= lb
 }
 
-predicate bstree(r: Node, FP: Set<Loc<Node>>) {
+predicate bstree(r: Node)(FP: Set<Node>) {
   tree(r, FP) &&
   tree_sorted(FP)
 }
 
-predicate bstree_bounded(r: Node, lb: Int, ub: Int, FP: Set<Loc<Node>>) {
+predicate bstree_bounded(r: Node, lb: Int, ub: Int)(FP: Set<Node>) {
   bstree(r, FP) &&
   upper_bound(ub, FP) &&
   lower_bound(lb, FP)
@@ -88,7 +88,7 @@ function witness(v: Int, C: Set<Int>) returns (res: Node) {
   true
 }
 
-function content(FP: Set<Loc<Node>>) returns (C: Set<Int>) {
+function content(FP: Set<Node>) returns (C: Set<Int>) {
   (forall x: Node :: x in FP ==> x == witness(x.data, C)) &&
   (forall x: Node :: x in FP ==> x.data in C) &&
   (forall v in C :: witness(v, C) in FP) &&
@@ -96,18 +96,18 @@ function content(FP: Set<Loc<Node>>) returns (C: Set<Int>) {
   (forall v in C :: v == witness(v, C).data @(matching v yields witness(v, C).data))
 }
 
-predicate tree_set(r: Node, C: Set<Int>, FP: Set<Loc<Node>>) {
+predicate tree_set(r: Node, C: Set<Int>)(FP: Set<Node>) {
   bstree(r, FP) &&
   C == content(FP)
 }
 
 // Predicates for heaps
 
-predicate heap_property(FP: Set<Loc<Node>>) {
+predicate heap_property(FP: Set<Node>) {
   forall x: Node, y: Node :: x in FP && y in FP && Btwn(parent,x,y,y) ==> x.data <= y.data
 }
 
-predicate heap(r: Node, FP: Set<Loc<Node>>) {
+predicate heap(r: Node)(FP: Set<Node>) {
   heap_property(FP) &&
   tree(r, FP)
 }
