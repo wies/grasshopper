@@ -19,7 +19,7 @@ type typ =
   | NullType
   | PermType (* SL formulas *)
   | UniversalType
-
+  | EmptyType
 
 type var_decl_id =
   | IdentDecl of ident
@@ -276,6 +276,7 @@ let rec pr_type ppf = function
   | SetType s -> fprintf ppf "%s<@[%a@]>" set_sort_string pr_type s
   | PermType -> fprintf ppf "Permission"
   | UniversalType -> fprintf ppf "Any"
+  | EmptyType -> fprintf ppf "Nothing"
 
 let string_of_type t = pr_type str_formatter t; flush_str_formatter ()
 

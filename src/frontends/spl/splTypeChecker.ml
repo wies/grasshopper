@@ -66,4 +66,31 @@ let type_of_expr cu locals e =
     | _ -> UniversalType
   in 
   te e
-  
+
+(** Returns true iff [ty1] is a subtype of [ty2]. *)
+let rec is_sub_type ty1 ty2 = 
+  match ty1, ty2 with
+  | NullType, StructType _
+  | StructType _, NullType
+  | EmptyType, _ -> true
+  | _, UniversalType -> true
+  | SetType ty1, SetType ty2 ->
+      is_sub_type ty1 ty2
+  | MapType (dty1, rty1), MapType (dty2, rty2) ->
+      is_sub_type dty2 dty1 && is_sub_type rty1 rty2
+  | _ -> ty1 = ty2
+
+let rec match_types ty1 ty2 = 
+  match ty1, ty2 with
+  | NullType, StructType _
+  | StructType _, NullType -> Some ty2
+  | UniversalType, _ -> Some ty2
+  | _, UniversalType -> Some ty1
+  | SetType ty1, SetType ty2 ->
+      Util.Opt.map (fun ty -> SetType ty) (match_types ty1 ty2)
+  | MapType (dty1, rty1), MapType (dty2, rty2) ->
+      (match match_types dty1 dty2, match_types rty1 rty2 with
+      | Some dty, Some rty -> Some (MapType (dty, rty))
+      | _, _ -> None)
+  | ty, tty when ty = tty -> Some ty2
+  | _ -> None

@@ -7,6 +7,28 @@ open Grass
 open SplSyntax
 open SplTypeChecker
 
+let unknown_ident_error id pos =
+  ProgError.error pos ("Unknown identifier " ^ GrassUtil.name id)
+
+let not_a_struct_error id pos =
+  ProgError.error pos 
+    ("Identifier " ^ GrassUtil.name id ^ " does not refer to a struct.")
+
+let not_a_proc_error id pos =
+  ProgError.error pos 
+    ("Identifier " ^ GrassUtil.name id ^ " does not refer to a procedure or predicate.")
+
+let not_a_pred_error id pos =
+  ProgError.error pos 
+    ("Identifier " ^ GrassUtil.name id ^ " does not refer to a procedure or predicate.")
+
+let not_a_field_error id pos =
+  ProgError.error pos 
+    ("Identifier " ^ GrassUtil.name id ^ " does not refer to a struct field.")
+
+let redeclaration_error id pos =
+  ProgError.error pos ("Identifier " ^ GrassUtil.name id ^ " has already been declared in this scope.")
+    
 let assignment_mismatch_error pos =
   ProgError.error pos 
     "Mismatch in number of expressions on left and right side of assignment"                
@@ -17,33 +39,36 @@ let pred_arg_mismatch_error pos name expected =
 let null_access_error pos =
   ProgError.error pos "Tried to dereference of access null"
 
+let footprint_declaration_error id pos =
+  ProgError.error pos ("Footprint parameter " ^ string_of_ident id ^ " has an unexpected type. Expected type " ^
+                       string_of_type (SetType (StructType ("T", 0))) ^ " for some struct type T")
+
+let invalid_nested_proc_call_error id pos =
+  ProgError.error pos 
+    ("Procedure " ^ GrassUtil.name id ^ " has more than one return value")
+
+    
 let resolve_names cu =
   let lookup_id init_id tbl pos =
     let name = GrassUtil.name init_id in
     match SymbolTbl.find tbl name with
     | Some (id, _) -> id
-    | None -> ProgError.error pos ("Unknown identifier " ^ name ^ ".")
+    | None -> unknown_ident_error init_id pos
   in 
   let check_struct id structs pos =
     if not (IdMap.mem id structs) then
-      ProgError.error pos 
-        ("Identifier " ^ GrassUtil.name id ^ " does not refer to a struct.")
+      not_a_struct_error id pos
   in
   let check_proc id procs pos =
     if not (IdMap.mem id procs) then
-      ProgError.error pos 
-        ("Identifier " ^ GrassUtil.name id ^ " does not refer to a procedure or predicate.")
+      not_a_proc_error id pos
   in
   let check_pred id preds pos =
     if not (IdMap.mem id preds) then
-      ProgError.error pos 
-        ("Identifier " ^ GrassUtil.name id ^ " does not refer to a procedure or predicate.")
+      not_a_pred_error id pos
   in
   let check_field id globals pos =
-    let error () = 
-      ProgError.error pos 
-        ("Identifier " ^ GrassUtil.name id ^ " does not refer to a struct field.")
-    in
+    let error () = not_a_field_error id pos in
     try 
       let decl = IdMap.find id globals in
       match decl.v_type with
@@ -54,8 +79,7 @@ let resolve_names cu =
   let declare_name pos init_id scope tbl =
     let name = GrassUtil.name init_id in
     match SymbolTbl.find_local tbl name with
-    | Some _ -> 
-        ProgError.error pos ("Identifier " ^ name ^ " has already been declared in this scope.")
+    | Some _ -> redeclaration_error init_id pos
     | None ->
         let id = GrassUtil.fresh_ident name in
         (id, SymbolTbl.add tbl name (id, scope))
@@ -324,10 +348,19 @@ let resolve_names cu =
         let locals, tbl = declare_vars decl.pr_locals structs (SymbolTbl.push tbl) in
         let body = resolve_expr locals tbl decl.pr_body in
         let formals = List.map (fun id -> lookup_id id tbl decl.pr_pos) decl.pr_formals in
+        let footprints =
+          List.map (fun id ->
+            let vdecl = IdMap.find id decl.pr_locals in
+            match match_types vdecl.v_type (SetType (NullType)) with
+            | None -> footprint_declaration_error id vdecl.v_pos
+            | Some _ -> lookup_id id tbl decl.pr_pos)
+            decl.pr_footprints
+        in
         let outputs = List.map (fun id -> lookup_id id tbl decl.pr_pos) decl.pr_outputs in
         let decl1 = 
           { decl with 
-            pr_formals = formals; 
+            pr_formals = formals;
+            pr_footprints = footprints;
             pr_outputs = outputs; 
             pr_locals = locals; 
             pr_body = body 
@@ -390,9 +423,7 @@ let flatten_exprs cu =
             | [res] ->
                 let rdecl = IdMap.find res pdecl.p_locals in
                 rdecl.v_type
-            | _ ->
-                ProgError.error pos 
-                  ("Procedure " ^ fst pdecl.p_name ^ " has more than one return value")
+            | _ -> invalid_nested_proc_call_error pdecl.p_name pos
           in
           let aux_id, locals = decl_aux_var "tmp" res_type pos scope locals in
           let args1, aux1, locals = 
@@ -584,20 +615,21 @@ let convert cu =
         ProgError.error pos 
           ("Struct " ^ fst id ^ " does not have a field named " ^ fst fld_id)
     in
-    let rec convert_type = function
-      | NullType -> failwith "cannot convert Null type"
-      | StructType id -> Loc id
-      | MapType (dtyp, rtyp) -> Map (convert_type dtyp, convert_type rtyp)
-      | SetType typ -> Set (convert_type typ)
-      | IntType -> Int
-      | BoolType -> Bool
-      | PermType -> failwith "cannot convert permission type"
-      | UniversalType -> failwith "cannot convert universal type"
+    let convert_type ty pos =
+      let rec ct = function
+        | StructType id -> Loc id
+        | MapType (dtyp, rtyp) -> Map (ct dtyp, ct rtyp)
+        | SetType typ -> Set (ct typ)
+        | IntType -> Int
+        | BoolType -> Bool
+        | ty -> failwith ("cannot convert type " ^ string_of_type ty ^ " near position " ^ string_of_src_pos pos)
+      in
+      ct ty
     in
     let convert_var_decl decl = 
       { var_name = decl.v_name;
         var_orig_name = fst decl.v_name;
-        var_sort = convert_type decl.v_type;
+        var_sort = convert_type decl.v_type decl.v_pos;
         var_is_ghost = decl.v_ghost;
         var_is_implicit = decl.v_implicit;
         var_is_aux = decl.v_aux;
@@ -611,8 +643,8 @@ let convert cu =
         ("Expected an " ^ ty_str exp_ty ^ " but found an " ^ ty_str fnd_ty)
     in
     let rec convert_expr locals ty = function
-      | Null _ ->
-          let cty = convert_type ty in
+      | Null pos ->
+          let cty = convert_type ty pos in
           let sid = GrassUtil.struct_id_of_sort cty in
           FOL_term (GrassUtil.mk_null sid, ty)
       | Emp pos -> SL_form (SlUtil.mk_emp (Some pos))
@@ -623,7 +655,7 @@ let convert cu =
               t :: ts, ty)
               es ([], ty)
           in
-          let elem_ty =  convert_type ty in
+          let elem_ty =  convert_type ty pos in
           (match es with
           | [] -> FOL_term (GrassUtil.mk_empty (Set elem_ty), SetType ty)
           | _ -> FOL_term (GrassUtil.mk_setenum ts, SetType ty))
@@ -638,7 +670,7 @@ let convert cu =
             | NullType -> null_access_error pos
             | ty -> failwith "unexpected type"
           in
-          let res_srt = convert_type res_ty in
+          let res_srt = convert_type res_ty pos in
           let fld = GrassUtil.mk_free_const (GrassUtil.field_sort sid res_srt) fld_id in
           FOL_term (GrassUtil.mk_read fld t, res_ty)
       | Access (e, pos) ->
@@ -652,7 +684,7 @@ let convert cu =
               SL_form (SlUtil.mk_region ~pos:pos t)
           | ty -> failwith "unexpected type")
       | BtwnPred (fld, x, y, z, pos) ->
-          let tfld, fld_ty = extract_term locals UniversalType fld in
+          let tfld, fld_ty = extract_term locals (MapType (UniversalType, UniversalType)) fld in
           (match fld_ty with
           | MapType (StructType id, StructType id1) when id = id1 ->
               let tx, _ = extract_term locals (StructType id) x in
@@ -665,7 +697,7 @@ let convert cu =
              List.fold_right (fun decl (vars, locals1) ->
                let id = decl.v_name in
                let ty = decl.v_type in
-               (id, convert_type ty) :: vars, 
+               (id, convert_type ty pos) :: vars, 
                IdMap.add id decl locals1)
                decls ([], locals)
           in
@@ -706,7 +738,7 @@ let convert cu =
           | SetType elem_srt ->
               let decl = var_decl id elem_srt false false pos pos in
               let locals1 = IdMap.add id decl locals in
-              let elem_srt = convert_type elem_srt in
+              let elem_srt = convert_type elem_srt pos in
               let v_id = GrassUtil.mk_var elem_srt id in
 	      let mk_guard = match q with
 	      | Forall -> GrassUtil.mk_implies
@@ -740,7 +772,7 @@ let convert cu =
               FOL_form (GrassUtil.mk_pred ~ann:[SrcPos pos] id (List.map fst ts))
           | [res], _ ->
               let res_decl = IdMap.find res decl.pr_locals in
-              let res_srt = convert_type res_decl.v_type in
+              let res_srt = convert_type res_decl.v_type pos in
               let t = GrassUtil.mk_free_fun res_srt id (List.map fst ts) in
               FOL_term (t, res_decl.v_type)
           | _ -> failwith "impossible")
@@ -756,7 +788,7 @@ let convert cu =
               FOL_form (GrassUtil.mk_srcpos pos (GrassUtil.mk_eq t1 t2))
           | SL_form _ -> 
               ProgError.error (pos_of_expr e1) 
-                "Operator == is not defined for SL formulas")
+                "Operator == cannot be applied to a permission")
       | BinaryOp (e1, (OpDiff as op), e2, _)
       | BinaryOp (e1, (OpUn as op), e2, _)      
       | BinaryOp (e1, (OpInt as op), e2, _) ->
@@ -884,7 +916,7 @@ let convert cu =
             SL_form (SlUtil.mk_not ~pos:pos f))
       | Ident (id, pos) ->
           let decl = find_var_decl locals id in
-          let srt = convert_type decl.v_type in
+          let srt = convert_type decl.v_type pos in
           FOL_term (GrassUtil.mk_free_const srt decl.v_name, decl.v_type)
       | Annot (e, CommentAnnot c, pos) ->
           let f = extract_fol_form locals e in
@@ -956,16 +988,9 @@ let convert cu =
       | FOL_form (Atom (t, _)) -> t, BoolType
       | FOL_form _ -> type_error (pos_of_expr e) ty BoolType
       | FOL_term (t, tty) ->
-          let rec match_types ty1 ty2 = 
-            match ty1, ty2 with
-            | NullType, StructType _
-            | StructType _, NullType -> ty2
-            | UniversalType, _ -> ty2
-            | _, UniversalType -> ty1
-            | SetType ty1, SetType ty2 -> SetType (match_types ty1 ty2)
-            | ty, tty when ty = tty -> ty2
-            | _ -> type_error (pos_of_expr e) ty tty
-          in t, match_types ty tty
+          match match_types ty tty with
+          | Some ty -> t, ty
+          | None -> type_error (pos_of_expr e) ty tty
     in
     let convert_spec_form pure locals e name msg =
       let f = 
@@ -1064,7 +1089,7 @@ let convert cu =
             (match ind_opt with
             | Some t ->
                 let sid = GrassUtil.struct_id_of_term t in
-                let fld_srt = GrassUtil.field_sort sid (convert_type (List.hd rhs_tys)) in
+                let fld_srt = GrassUtil.field_sort sid (convert_type (List.hd rhs_tys) pos) in
                 let fld = GrassUtil.mk_free_const fld_srt (List.hd lhs_ids) in
                 mk_assign_cmd lhs_ids [GrassUtil.mk_write fld t (List.hd rhs_ts)] pos
             | None -> mk_assign_cmd lhs_ids rhs_ts pos)
