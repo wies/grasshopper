@@ -90,7 +90,7 @@ let add_pred_insts prog f =
     let sm = 
       List.fold_left2 
         (fun sm id t -> IdMap.add id t sm)
-        IdMap.empty (pred.pred_formals) ts
+        IdMap.empty (pred.pred_formals @ pred.pred_footprints) ts
     in
     let sm =
       match pred.pred_outputs with

@@ -267,7 +267,7 @@ var_decl_opt_type:
 | var_modifier IDENT { 
   let decl = 
     { v_name = ($2, 0);
-      v_type = UniversalType;
+      v_type = AnyType;
       v_ghost = snd $1;
       v_implicit = fst $1;
       v_aux = false;
@@ -436,7 +436,7 @@ loop_contract:
 primary:
 | INTVAL { IntVal ($1, mk_position 1 1) }
 | BOOLVAL { BoolVal ($1, mk_position 1 1) }
-| NULL { Null (mk_position 1 1) }
+| NULL { Null (AnyRefType, mk_position 1 1) }
 | EMP { Emp (mk_position 1 1) }
 | LPAREN expr RPAREN { $2 }
 | alloc { $1 }
@@ -449,7 +449,7 @@ alloc:
 
 proc_call:
 | SET LT var_type GT LPAREN expr_list_opt RPAREN { Setenum ($3, $6, mk_position 1 6) }
-| SET LPAREN expr_list RPAREN { Setenum (UniversalType, $3, mk_position 1 4) }
+| SET LPAREN expr_list RPAREN { Setenum (AnyType, $3, mk_position 1 4) }
 /*| MAP LT var_type, var_type GT LPAREN expr_list_opt RPAREN {*/
 | IDENT LPAREN expr_list_opt RPAREN { ProcCall (($1, 0), $3, mk_position 1 4) }
 ;
@@ -477,77 +477,77 @@ unary_expr_not_plus_minus:
 
 diff_expr:
 | unary_expr { $1 }
-| diff_expr DIFF unary_expr { BinaryOp ($1, OpDiff, $3, mk_position 1 3) }
+| diff_expr DIFF unary_expr { BinaryOp ($1, OpDiff, $3, SetType AnyType, mk_position 1 3) }
 ;
 
 mult_expr:
 | diff_expr  { $1 }
-| mult_expr TIMES diff_expr { BinaryOp ($1, OpMult, $3, mk_position 1 3) }
-| mult_expr DIV diff_expr { BinaryOp ($1, OpDiv, $3, mk_position 1 3) }
-| mult_expr INTER diff_expr { BinaryOp ($1, OpInt, $3, mk_position 1 3) }
+| mult_expr TIMES diff_expr { BinaryOp ($1, OpMult, $3, IntType, mk_position 1 3) }
+| mult_expr DIV diff_expr { BinaryOp ($1, OpDiv, $3, IntType, mk_position 1 3) }
+| mult_expr INTER diff_expr { BinaryOp ($1, OpInt, $3, SetType AnyType, mk_position 1 3) }
 ;
 
 add_expr:
 | mult_expr { $1 }
-| add_expr PLUS mult_expr { BinaryOp ($1, OpPlus, $3, mk_position 1 3) }
-| add_expr MINUS mult_expr { BinaryOp ($1, OpMinus, $3, mk_position 1 3) }
-| add_expr UNION mult_expr { BinaryOp ($1, OpUn, $3, mk_position 1 3) }
+| add_expr PLUS mult_expr { BinaryOp ($1, OpPlus, $3, IntType, mk_position 1 3) }
+| add_expr MINUS mult_expr { BinaryOp ($1, OpMinus, $3, IntType, mk_position 1 3) }
+| add_expr UNION mult_expr { BinaryOp ($1, OpUn, $3, SetType AnyType, mk_position 1 3) }
 ;
 
 pts_expr:
 | add_expr { $1 }
-| pts_expr PTS add_expr { BinaryOp ($1, OpPts, $3, mk_position 1 3) }
+| pts_expr PTS add_expr { BinaryOp ($1, OpPts, $3, PermType, mk_position 1 3) }
 ;
 
 rel_expr:
 | pts_expr { $1 }
-| rel_expr LT pts_expr { BinaryOp ($1, OpLt, $3, mk_position 1 3) }
-| rel_expr GT pts_expr { BinaryOp ($1, OpGt, $3, mk_position 1 3) }
-| rel_expr LEQ pts_expr { BinaryOp ($1, OpLeq, $3, mk_position 1 3) }
-| rel_expr GEQ pts_expr { BinaryOp ($1, OpGeq, $3, mk_position 1 3) }
-| rel_expr IN pts_expr { BinaryOp ($1, OpIn, $3, mk_position 1 3) }
-| rel_expr NOTIN pts_expr { UnaryOp (OpNot, BinaryOp ($1, OpIn, $3, mk_position 1 3), mk_position 1 3) }
+| rel_expr LT pts_expr { BinaryOp ($1, OpLt, $3, BoolType, mk_position 1 3) }
+| rel_expr GT pts_expr { BinaryOp ($1, OpGt, $3, BoolType, mk_position 1 3) }
+| rel_expr LEQ pts_expr { BinaryOp ($1, OpLeq, $3, BoolType, mk_position 1 3) }
+| rel_expr GEQ pts_expr { BinaryOp ($1, OpGeq, $3, BoolType, mk_position 1 3) }
+| rel_expr IN pts_expr { BinaryOp ($1, OpIn, $3, BoolType, mk_position 1 3) }
+| rel_expr NOTIN pts_expr { UnaryOp (OpNot, BinaryOp ($1, OpIn, $3, BoolType, mk_position 1 3), mk_position 1 3) }
 ;
 
 eq_expr:
 | rel_expr { $1 }
-| eq_expr EQ eq_expr { BinaryOp ($1, OpEq, $3, mk_position 1 3) }
-| eq_expr NEQ eq_expr { BinaryOp ($1, OpNeq, $3, mk_position 1 3) }
+| eq_expr EQ eq_expr { BinaryOp ($1, OpEq, $3, BoolType, mk_position 1 3) }
+| eq_expr NEQ eq_expr { UnaryOp (OpNot, BinaryOp ($1, OpEq, $3, BoolType, mk_position 1 3), mk_position 1 3) }
 ;
 
 sep_star_expr:
 | eq_expr { $1 }
-| sep_star_expr SEPSTAR eq_expr { BinaryOp ($1, OpSepStar, $3, mk_position 1 3) }
+| sep_star_expr SEPSTAR eq_expr { BinaryOp ($1, OpSepStar, $3, PermType, mk_position 1 3) }
 ;
 
 sep_plus_expr:
 | sep_star_expr { $1 }
-| sep_plus_expr SEPPLUS sep_star_expr { BinaryOp ($1, OpSepPlus, $3, mk_position 1 3) }
+| sep_plus_expr SEPPLUS sep_star_expr { BinaryOp ($1, OpSepPlus, $3, PermType, mk_position 1 3) }
 ;
 
 sep_incl_expr:
 | sep_plus_expr { $1 }
-| sep_incl_expr SEPINCL sep_plus_expr { BinaryOp ($1, OpSepIncl, $3, mk_position 1 3) }
+| sep_incl_expr SEPINCL sep_plus_expr { BinaryOp ($1, OpSepIncl, $3, PermType, mk_position 1 3) }
 ;
 
 and_expr:
 | sep_incl_expr { $1 }
-| and_expr AND sep_incl_expr { BinaryOp ($1, OpAnd, $3, mk_position 1 3) }
+| and_expr AND sep_incl_expr { BinaryOp ($1, OpAnd, $3, AnyType, mk_position 1 3) }
 ;
 
 or_expr:
 | and_expr { $1 }
-| or_expr OR and_expr { BinaryOp ($1, OpOr, $3, mk_position 1 3) }
+| or_expr OR and_expr { BinaryOp ($1, OpOr, $3, AnyType, mk_position 1 3) }
 ;
 
 impl_expr:
 | or_expr { $1 }
-| or_expr IMPLIES impl_expr { BinaryOp ($1, OpImpl, $3, mk_position 1 3) }
+| or_expr IMPLIES impl_expr { BinaryOp ($1, OpImpl, $3, BoolType, mk_position 1 3) }
 ;
 
 iff_expr:
 | impl_expr { $1 }
-| iff_expr IFF iff_expr { BinaryOp ($1, OpEq, $3, mk_position 1 3) }
+| iff_expr IFF iff_expr { BinaryOp ($1, OpEq, $3, BoolType, mk_position 1 3) }
 ;
 
 annot_expr:

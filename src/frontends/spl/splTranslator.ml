@@ -33,9 +33,6 @@ let assignment_mismatch_error pos =
   ProgError.error pos 
     "Mismatch in number of expressions on left and right side of assignment"                
 
-let pred_arg_mismatch_error pos name expected =
-  ProgError.error pos (Printf.sprintf "Predicate %s expects %d argument(s)" name expected)
-
 let null_access_error pos =
   ProgError.error pos "Tried to dereference of access null"
 
@@ -193,7 +190,11 @@ let resolve_names cu =
           let f1 = re tbl1 f in
           Quant (q, decls, f1, pos)
       | ProcCall (("acc", _), [arg], pos) ->
-          Access (re tbl arg, pos)
+          (match type_of_expr cu locals arg with
+          | SetType _ -> 
+              Access (re tbl arg, pos)
+          | ty ->
+              Access (Setenum (ty, [re tbl arg], pos), pos))
       | ProcCall (("Btwn", _), args, pos) ->
           let args1 = List.map (re tbl) args in
           (match args1 with
@@ -221,8 +222,8 @@ let resolve_names cu =
           PredApp (id, List.map (re tbl) args, pos)              
       | UnaryOp (op, e, pos) ->
           UnaryOp (op, re tbl e, pos)
-      | BinaryOp (e1, op, e2, pos) ->
-          BinaryOp (re tbl e1, op, re tbl e2, pos)
+      | BinaryOp (e1, op, e2, ty, pos) ->
+          BinaryOp (re tbl e1, op, re tbl e2, ty, pos)
       | Ident (init_id, pos) ->
           let id = lookup_id init_id tbl pos in
           Ident (id, pos)
@@ -266,7 +267,7 @@ let resolve_names cu =
               (fun decl ty (ids, locals, tbl) ->
                 let decl = 
                   match decl.v_type with
-                  | UniversalType -> { decl with v_type = ty }
+                  | AnyType -> { decl with v_type = ty }
                   | _ -> decl
                 in
                 let decl, tbl = declare_var structs decl tbl in
@@ -349,12 +350,7 @@ let resolve_names cu =
         let body = resolve_expr locals tbl decl.pr_body in
         let formals = List.map (fun id -> lookup_id id tbl decl.pr_pos) decl.pr_formals in
         let footprints =
-          List.map (fun id ->
-            let vdecl = IdMap.find id decl.pr_locals in
-            match match_types vdecl.v_type (SetType (NullType)) with
-            | None -> footprint_declaration_error id vdecl.v_pos
-            | Some _ -> lookup_id id tbl decl.pr_pos)
-            decl.pr_footprints
+          List.map (fun id -> lookup_id id tbl decl.pr_pos) decl.pr_footprints
         in
         let outputs = List.map (fun id -> lookup_id id tbl decl.pr_pos) decl.pr_outputs in
         let decl1 = 
@@ -396,67 +392,66 @@ let flatten_exprs cu =
   let rec check_side_effects = function
     | e -> ()
   in
-  let fe cu =
-    let rec flatten_expr scope aux locals = function
-      | Setenum (ty, args, pos) as e ->
-          List.iter check_side_effects args;
-          e, aux, locals
-      | New (id, pos) as e ->
-          let aux_id, locals = decl_aux_var "tmp" (StructType id) pos scope locals in
-          let aux_var = Ident (aux_id, pos) in
-          let alloc = Assign ([aux_var], [e], pos) in
-          aux_var, alloc :: aux, locals
-      | Dot (e, id, pos) ->
-          let e1, aux1, locals = flatten_expr scope aux locals e in
-          Dot (e1, id, pos), aux1, locals
-      | Quant (q, _, f, pos) as e ->
-          check_side_effects f;
-          e, aux, locals
-      | GuardedQuant (q, id, s, f, pos) as e ->
-          check_side_effects s;
-          check_side_effects f;
-          e, aux, locals
-      | ProcCall (id, args, pos) ->
-          let pdecl = IdMap.find id cu.proc_decls in
-          let res_type = 
-            match pdecl.p_returns with
-            | [res] ->
-                let rdecl = IdMap.find res pdecl.p_locals in
-                rdecl.v_type
-            | _ -> invalid_nested_proc_call_error pdecl.p_name pos
-          in
-          let aux_id, locals = decl_aux_var "tmp" res_type pos scope locals in
-          let args1, aux1, locals = 
-            List.fold_right 
-              (fun arg (args1, aux1, locals) ->
-                let arg1, aux1, locals = flatten_expr scope aux1 locals arg in
-                arg1 :: args1, aux1, locals
-              ) args ([], aux, locals)
-          in
-          let aux_var = Ident (aux_id, pos) in
-          let call = Assign ([aux_var], [ProcCall (id, args1, pos)], pos) in
-          aux_var, (aux1 @ [call]), locals
-      | Access (arg, pos) as e ->
-          check_side_effects [arg];
-          e, aux, locals
-      | BtwnPred (fld, x, y, z, pos) as e ->
-          check_side_effects [fld; x; y; z];
-          e, aux, locals
-      | PredApp (init_id, args, pos) as e->
-          List.iter check_side_effects args;
-          e, aux, locals
-      | UnaryOp (op, e, pos) ->
-          let e1, aux1, locals = flatten_expr scope aux locals e in
-          UnaryOp (op, e1, pos), aux1, locals
-      | BinaryOp (e1, op, e2, pos) ->
-          let e21, aux1, locals = flatten_expr scope aux locals e2 in
-          let e11, aux2, locals = flatten_expr scope aux1 locals e1 in
-          BinaryOp (e11, op, e21, pos), aux2, locals
-      | e -> e, aux, locals
-    in
-    let rec flatten scope locals returns = function
-      | Skip pos -> Skip pos, locals
-      | Block (stmts0, pos) ->
+  let rec flatten_expr scope aux locals = function
+    | Setenum (ty, args, pos) as e ->
+        List.iter check_side_effects args;
+        e, aux, locals
+    | New (id, pos) as e ->
+        let aux_id, locals = decl_aux_var "tmp" (StructType id) pos scope locals in
+        let aux_var = Ident (aux_id, pos) in
+        let alloc = Assign ([aux_var], [e], pos) in
+        aux_var, alloc :: aux, locals
+    | Dot (e, id, pos) ->
+        let e1, aux1, locals = flatten_expr scope aux locals e in
+        Dot (e1, id, pos), aux1, locals
+    | Quant (q, _, f, pos) as e ->
+        check_side_effects f;
+        e, aux, locals
+    | GuardedQuant (q, id, s, f, pos) as e ->
+        check_side_effects s;
+        check_side_effects f;
+        e, aux, locals
+    | ProcCall (id, args, pos) ->
+        let pdecl = IdMap.find id cu.proc_decls in
+        let res_type = 
+          match pdecl.p_returns with
+          | [res] ->
+              let rdecl = IdMap.find res pdecl.p_locals in
+              rdecl.v_type
+          | _ -> invalid_nested_proc_call_error pdecl.p_name pos
+        in
+        let aux_id, locals = decl_aux_var "tmp" res_type pos scope locals in
+        let args1, aux1, locals = 
+          List.fold_right 
+            (fun arg (args1, aux1, locals) ->
+              let arg1, aux1, locals = flatten_expr scope aux1 locals arg in
+              arg1 :: args1, aux1, locals
+            ) args ([], aux, locals)
+        in
+        let aux_var = Ident (aux_id, pos) in
+        let call = Assign ([aux_var], [ProcCall (id, args1, pos)], pos) in
+        aux_var, (aux1 @ [call]), locals
+    | Access (arg, pos) as e ->
+        check_side_effects [arg];
+        e, aux, locals
+    | BtwnPred (fld, x, y, z, pos) as e ->
+        check_side_effects [fld; x; y; z];
+        e, aux, locals
+    | PredApp (init_id, args, pos) as e->
+        List.iter check_side_effects args;
+        e, aux, locals
+    | UnaryOp (op, e, pos) ->
+        let e1, aux1, locals = flatten_expr scope aux locals e in
+        UnaryOp (op, e1, pos), aux1, locals
+    | BinaryOp (e1, op, e2, ty, pos) ->
+        let e21, aux1, locals = flatten_expr scope aux locals e2 in
+        let e11, aux2, locals = flatten_expr scope aux1 locals e1 in
+        BinaryOp (e11, op, e21, ty, pos), aux2, locals
+    | e -> e, aux, locals
+  in
+  let rec flatten scope locals returns = function
+    | Skip pos -> Skip pos, locals
+    | Block (stmts0, pos) ->
         let stmts, locals = 
           List.fold_left
             (fun (stmts, locals) stmt0  ->
@@ -465,124 +460,254 @@ let flatten_exprs cu =
             ) 
             ([], locals) stmts0
         in Block (List.rev stmts, pos), locals
-      | LocalVars (_, _, pos) ->
-          failwith "flatten_exprs: LocalVars should have been eliminated"
-      | (Assume (e, pure, pos) as stmt)
-      | (Assert (e, pure, pos) as stmt) ->
-          check_side_effects e;
-          stmt, locals
-      | Assign (lhs, [ProcCall (id, args, cpos)], pos) ->
-          let args1, aux1, locals = 
-            List.fold_right 
-              (fun e (es, aux, locals) ->
-                let e1, aux1, locals = flatten_expr scope aux locals e in
-                e1 :: es, aux1, locals
-              ) 
-              args ([], [], locals)
-          in 
-          let lhs1, aux2, locals = 
-            match lhs with
-            | [Dot (e, id, opos)] ->
-                let decl = IdMap.find id cu.var_decls in
-                let res_ty = 
-                  match decl.v_type with
-                  | MapType (StructType _, ty) -> ty
-                  | ty -> ty
-                in
-                let aux_id, locals = decl_aux_var "tmp" res_ty opos scope locals in
-                let aux_var = Ident (aux_id, pos) in
-                let assign_aux = Assign ([Dot (e, id, opos)], [aux_var], pos) in
-                [aux_var], [assign_aux], locals
-            | _ ->
-                List.fold_right 
-                  (fun e (es, aux, locals) ->
-                    let e1, aux1, locals = flatten_expr scope aux locals e in
-                    e1 :: es, aux1, locals
-                  ) 
-                  lhs ([], aux1, locals)
-          in 
-          mk_block pos ([Assign (lhs1, [ProcCall (id, args1, cpos)], pos)] @ aux2), locals
-      | Assign (lhs, rhs, pos) ->
-          let rhs1, aux1, locals = 
-            List.fold_right 
-              (fun e (es, aux, locals) ->
-                let e1, aux1, locals = flatten_expr scope aux locals e in
-                e1 :: es, aux1, locals
-              ) 
-              rhs ([], [], locals)
-          in 
-          let lhs1, aux2, locals = 
-            List.fold_right 
-              (fun e (es, aux, locals) ->
-                let e1, aux1, locals = flatten_expr scope aux locals e in
-                e1 :: es, aux1, locals
-              ) 
-              lhs ([], aux1, locals)
-          in 
-          mk_block pos (aux2 @ [Assign (lhs1, rhs1, pos)]), locals
-      | Dispose (e, pos) -> 
-          let e1, aux, locals = flatten_expr scope [] locals e in
-          mk_block pos (aux @ [Dispose (e1, pos)]), locals
-      | Havoc (es, pos) -> 
-          let es1, aux1, locals = 
-            List.fold_right 
-              (fun e (es, aux, locals) ->
-                let e1, aux1, locals1 = flatten_expr scope aux locals e in
-                e1 :: es, aux1, locals
-              ) 
-              es ([], [], locals)
-          in 
-          mk_block pos (aux1 @ [Havoc (es1, pos)]), locals          
-      | If (cond, t, e, pos) ->
-          let cond1, aux, locals = flatten_expr scope [] locals cond in
-          let t1, locals = flatten scope locals returns t in
-          let e1, locals = flatten scope locals returns e in
-          mk_block pos (aux @ [If (cond1, t1, e1, pos)]), locals
-      | Loop (inv, preb, cond, postb, pos) ->
-          let _ = 
-            List.iter 
-              (function Invariant (e, _) -> check_side_effects e)
-              inv
-          in
-          let preb1, locals = flatten pos locals returns preb in
-          let cond1, aux, locals2 = flatten_expr pos [] locals cond in
-          let postb1, locals = flatten pos locals returns postb in
-          Loop (inv, mk_block pos ([preb1] @ aux), cond1, postb1, pos), locals
-      | Return ([ProcCall (id, args, cpos)], pos) ->
-          let args1, aux1, locals = 
-            List.fold_right 
-              (fun e (es, aux, locals) ->
-                let e1, aux1, locals = flatten_expr scope aux locals e in
-                e1 :: es, aux1, locals
-              ) 
-              args ([], [], locals)
-          in 
-          let rts = List.map (fun id -> Ident (id, cpos)) returns in
-          Block ([Assign (rts, [ProcCall (id, args1, cpos)], pos); 
-                  Return (rts, pos)], pos), locals
-      | Return (es, pos) ->
-          let es1, aux1, locals = 
-            List.fold_right 
-              (fun e (es, aux, locals) ->
-                let e1, aux1, locals = flatten_expr scope aux locals e in
-                e1 :: es, aux1, locals
-              ) 
-              es ([], [], locals)
-          in 
-          mk_block pos (aux1 @ [Return (es1, pos)]), locals
-    in
-    let procs =
-      IdMap.fold
-        (fun _ decl procs ->
-          let body, locals = flatten decl.p_pos decl.p_locals decl.p_returns decl.p_body in
-          let decl1 = { decl with p_locals = locals; p_body = body } in
-          IdMap.add decl.p_name decl1 procs)
-        cu.proc_decls IdMap.empty
-    in
-    { cu with proc_decls = procs }
+    | LocalVars (_, _, pos) ->
+        failwith "flatten_exprs: LocalVars should have been eliminated"
+    | (Assume (e, pure, pos) as stmt)
+    | (Assert (e, pure, pos) as stmt) ->
+        check_side_effects e;
+        stmt, locals
+    | Assign (lhs, [ProcCall (id, args, cpos)], pos) ->
+        let args1, aux1, locals = 
+          List.fold_right 
+            (fun e (es, aux, locals) ->
+              let e1, aux1, locals = flatten_expr scope aux locals e in
+              e1 :: es, aux1, locals
+            ) 
+            args ([], [], locals)
+        in 
+        let lhs1, aux2, locals = 
+          match lhs with
+          | [Dot (e, id, opos)] ->
+              let decl = IdMap.find id cu.var_decls in
+              let res_ty = 
+                match decl.v_type with
+                | MapType (StructType _, ty) -> ty
+                | ty -> ty
+              in
+              let aux_id, locals = decl_aux_var "tmp" res_ty opos scope locals in
+              let aux_var = Ident (aux_id, pos) in
+              let assign_aux = Assign ([Dot (e, id, opos)], [aux_var], pos) in
+              [aux_var], [assign_aux], locals
+          | _ ->
+              List.fold_right 
+                (fun e (es, aux, locals) ->
+                  let e1, aux1, locals = flatten_expr scope aux locals e in
+                  e1 :: es, aux1, locals
+                ) 
+                lhs ([], aux1, locals)
+        in 
+        mk_block pos ([Assign (lhs1, [ProcCall (id, args1, cpos)], pos)] @ aux2), locals
+    | Assign (lhs, rhs, pos) ->
+        let rhs1, aux1, locals = 
+          List.fold_right 
+            (fun e (es, aux, locals) ->
+              let e1, aux1, locals = flatten_expr scope aux locals e in
+              e1 :: es, aux1, locals
+            ) 
+            rhs ([], [], locals)
+        in 
+        let lhs1, aux2, locals = 
+          List.fold_right 
+            (fun e (es, aux, locals) ->
+              let e1, aux1, locals = flatten_expr scope aux locals e in
+              e1 :: es, aux1, locals
+            ) 
+            lhs ([], aux1, locals)
+        in 
+        mk_block pos (aux2 @ [Assign (lhs1, rhs1, pos)]), locals
+    | Dispose (e, pos) -> 
+        let e1, aux, locals = flatten_expr scope [] locals e in
+        mk_block pos (aux @ [Dispose (e1, pos)]), locals
+    | Havoc (es, pos) -> 
+        let es1, aux1, locals = 
+          List.fold_right 
+            (fun e (es, aux, locals) ->
+              let e1, aux1, locals1 = flatten_expr scope aux locals e in
+              e1 :: es, aux1, locals
+            ) 
+            es ([], [], locals)
+        in 
+        mk_block pos (aux1 @ [Havoc (es1, pos)]), locals          
+    | If (cond, t, e, pos) ->
+        let cond1, aux, locals = flatten_expr scope [] locals cond in
+        let t1, locals = flatten scope locals returns t in
+        let e1, locals = flatten scope locals returns e in
+        mk_block pos (aux @ [If (cond1, t1, e1, pos)]), locals
+    | Loop (inv, preb, cond, postb, pos) ->
+        let _ = 
+          List.iter 
+            (function Invariant (e, _) -> check_side_effects e)
+            inv
+        in
+        let preb1, locals = flatten pos locals returns preb in
+        let cond1, aux, locals2 = flatten_expr pos [] locals cond in
+        let postb1, locals = flatten pos locals returns postb in
+        Loop (inv, mk_block pos ([preb1] @ aux), cond1, postb1, pos), locals
+    | Return ([ProcCall (id, args, cpos)], pos) ->
+        let args1, aux1, locals = 
+          List.fold_right 
+            (fun e (es, aux, locals) ->
+              let e1, aux1, locals = flatten_expr scope aux locals e in
+              e1 :: es, aux1, locals
+            ) 
+            args ([], [], locals)
+        in 
+        let rts = List.map (fun id -> Ident (id, cpos)) returns in
+        Block ([Assign (rts, [ProcCall (id, args1, cpos)], pos); 
+                Return (rts, pos)], pos), locals
+    | Return (es, pos) ->
+        let es1, aux1, locals = 
+          List.fold_right 
+            (fun e (es, aux, locals) ->
+              let e1, aux1, locals = flatten_expr scope aux locals e in
+              e1 :: es, aux1, locals
+            ) 
+            es ([], [], locals)
+        in 
+        mk_block pos (aux1 @ [Return (es1, pos)]), locals
   in
-  fe cu
+  let procs =
+    IdMap.fold
+      (fun _ decl procs ->
+        let body, locals = flatten decl.p_pos decl.p_locals decl.p_returns decl.p_body in
+        let decl1 = { decl with p_locals = locals; p_body = body } in
+        IdMap.add decl.p_name decl1 procs)
+      cu.proc_decls IdMap.empty
+  in
+  { cu with proc_decls = procs }
 
+let infer_types cu =
+  let check_spec locals pure e =
+    let ty = if pure then BoolType else PermType in
+    infer_types cu locals ty e
+  in
+  let rec check_stmt proc =
+    let locals = proc.p_locals in
+    function
+    | Skip pos -> Skip pos
+    | Block (stmts, pos) ->
+        Block (List.map (check_stmt proc) stmts, pos)
+    | LocalVars (_, _, pos) ->
+        failwith "infer_types: LocalVars should have been eliminated"
+    | Assume (e, pure, pos) ->
+        Assume (check_spec locals pure e, pure, pos)
+    | Assert (e, pure, pos) ->
+        Assert (check_spec locals pure e, pure, pos)
+    | Assign (lhs, [ProcCall (id, args, cpos) as e], pos) ->
+        let decl = IdMap.find id cu.proc_decls in
+        let rtys =
+          List.map (fun fid ->
+            let vdecl = IdMap.find fid decl.p_locals in
+            vdecl.v_type)
+            decl.p_returns
+        in
+        let lhs1 =
+          try List.map2 (infer_types cu locals) rtys lhs
+          with Invalid_argument _ -> 
+            ProgError.error cpos 
+              (Printf.sprintf "Procedure %s has %d return value(s)" 
+                 (fst id) (List.length rtys))
+        in
+        let e1 = infer_types cu locals AnyType e in
+        Assign (lhs1, [e1], pos)
+    | Assign (lhs, rhs, pos) ->
+        let rhs1, tys =
+          Util.map_split (fun e ->
+            let e1 = infer_types cu locals AnyType e in
+            let ty =
+              match type_of_expr cu locals e with
+              | PermType ->
+                  ProgError.error (pos_of_expr e) "Permissions cannot be assigned"
+              | ty -> ty
+            in
+            e1, ty) rhs
+        in
+        let lhs1 =
+          try
+            List.map2 (infer_types cu locals) tys lhs
+          with Invalid_argument _ ->
+            assignment_mismatch_error pos
+        in
+        let rhs2 =
+          List.map2
+            (fun e1 e2 -> infer_types cu locals (type_of_expr cu locals e1) e2)
+            lhs1 rhs1          
+        in
+        Assign (lhs1, rhs2, pos)
+    | Dispose (e, pos) -> 
+        let e1 = infer_types cu locals AnyRefType e in
+        Dispose (e1, pos)
+    | Havoc (es, pos) ->
+        let es1 =
+          List.map (fun e ->
+            let e1 = infer_types cu locals AnyType e in
+            match type_of_expr cu locals e1 with
+            | PermType ->
+                ProgError.error (pos_of_expr e) "Permissions cannot be assigned"
+            | _ -> e1)
+            es
+        in
+        Havoc (es1, pos)
+    | If (cond, t, e, pos) ->
+        let cond1 = infer_types cu locals BoolType cond in
+        let t1 = check_stmt proc t in
+        let e1 = check_stmt proc e in
+        If (cond1, t1, e1, pos)
+    | Loop (inv, preb, cond, postb, pos) ->
+        let inv1 = 
+          List.map 
+            (function Invariant (e, pure) ->
+              Invariant (check_spec locals pure e, pure))
+            inv
+        in
+        let preb1 = check_stmt proc preb in
+        let cond1 = infer_types cu locals BoolType cond in
+        let postb1 = check_stmt proc postb in
+        Loop (inv1, preb1, cond1, postb1, pos)
+    | Return (es, pos) ->
+        let rtys =
+          List.map (fun id -> (IdMap.find id locals).v_type) proc.p_returns
+        in
+        let es1 =
+          try List.map2 (infer_types cu locals) rtys es
+          with Invalid_argument _ ->
+            ProgError.error pos 
+              (Printf.sprintf "Procedure %s returns %d values(s), found %d" 
+                 (fst proc.p_name) (List.length rtys) (List.length es))
+        in
+        Return (es1, pos)
+  in
+  let preds =
+    IdMap.fold
+      (fun id pred preds ->
+        let body = infer_types cu pred.pr_locals BoolType pred.pr_body in
+        let _ =
+          List.iter (fun vid ->
+            let vdecl = IdMap.find vid pred.pr_locals in
+            match vdecl.v_type with
+            | SetType (StructType _) -> ()
+            | _ -> footprint_declaration_error vid vdecl.v_pos)
+            pred.pr_footprints
+        in
+        let pred1 = { pred with pr_body = body } in
+        IdMap.add id pred1 preds)
+      cu.pred_decls IdMap.empty
+  in
+  let procs =
+    IdMap.fold
+      (fun _ proc procs ->
+        let contracts =
+          List.map (function
+            | Requires (e, pure) -> Requires (check_spec proc.p_locals pure e, pure)
+            | Ensures (e, pure) -> Ensures (check_spec proc.p_locals pure e, pure)) proc.p_contracts
+        in
+        let body = check_stmt proc proc.p_body in
+        let proc1 = { proc with p_contracts = contracts; p_body = body } in
+        IdMap.add proc.p_name proc1 procs)
+      cu.proc_decls IdMap.empty
+  in
+  { cu with pred_decls = preds; proc_decls = procs }
+    
 type cexpr =
   | SL_form of Sl.form
   | FOL_form of Grass.form
@@ -591,8 +716,8 @@ type cexpr =
 (*
 let rec compatible_types ty1 ty2 =
   match ty1, ty2 with
-  | StructType _, NullType
-  | NullType, StructType _ 
+  | StructType _, AnyRefType
+  | AnyRefType, StructType _ 
   | IntType, IntType
   | BoolType, BoolType -> true
   | StructType id1, StructType id2 when id1 = id2 -> true
@@ -637,13 +762,8 @@ let convert cu =
         var_scope = decl.v_scope;
       }
     in 
-    let ty_str ty = "expression of type " ^ string_of_type ty in
-    let type_error pos exp_ty fnd_ty =
-      ProgError.type_error pos
-        ("Expected an " ^ ty_str exp_ty ^ " but found an " ^ ty_str fnd_ty)
-    in
     let rec convert_expr locals ty = function
-      | Null pos ->
+      | Null (ty, pos) ->
           let cty = convert_type ty pos in
           let sid = GrassUtil.struct_id_of_sort cty in
           FOL_term (GrassUtil.mk_null sid, ty)
@@ -662,29 +782,29 @@ let convert cu =
       | IntVal (i, _) -> FOL_term (GrassUtil.mk_int i, IntType)
       | BoolVal (b, pos) -> FOL_form (GrassUtil.mk_srcpos pos (GrassUtil.mk_bool b))
       | Dot (e, fld_id, pos) -> 
-          let t, ty = extract_term locals UniversalType e in
+          let t, ty = extract_term locals AnyType e in
           let sid, res_ty =
             match ty with
             | StructType sid ->
                 sid, field_type pos sid fld_id
-            | NullType -> null_access_error pos
+            | AnyRefType -> null_access_error pos
             | ty -> failwith "unexpected type"
           in
           let res_srt = convert_type res_ty pos in
           let fld = GrassUtil.mk_free_const (GrassUtil.field_sort sid res_srt) fld_id in
           FOL_term (GrassUtil.mk_read fld t, res_ty)
       | Access (e, pos) ->
-          let t, ty = extract_term locals UniversalType e in
+          let t, ty = extract_term locals AnyType e in
           (match ty with
           | StructType _ ->
               SL_form (SlUtil.mk_cell ~pos:pos t)
-          | NullType ->
+          | AnyRefType ->
               null_access_error pos
           | SetType (StructType _) ->
               SL_form (SlUtil.mk_region ~pos:pos t)
           | ty -> failwith "unexpected type")
       | BtwnPred (fld, x, y, z, pos) ->
-          let tfld, fld_ty = extract_term locals (MapType (UniversalType, UniversalType)) fld in
+          let tfld, fld_ty = extract_term locals (MapType (AnyType, AnyType)) fld in
           (match fld_ty with
           | MapType (StructType id, StructType id1) when id = id1 ->
               let tx, _ = extract_term locals (StructType id) x in
@@ -733,7 +853,7 @@ let convert cu =
             let f2 = SlUtil.subst_consts subst f1 in
             SL_form (mk_quant ~pos:pos vars f2))
       | GuardedQuant (q, id, e, f, pos) ->
-          let e1, ty = extract_term locals (SetType UniversalType) e in
+          let e1, ty = extract_term locals (SetType AnyType) e in
           (match ty with
           | SetType elem_srt ->
               let decl = var_decl id elem_srt false false pos pos in
@@ -776,8 +896,8 @@ let convert cu =
               let t = GrassUtil.mk_free_fun res_srt id (List.map fst ts) in
               FOL_term (t, res_decl.v_type)
           | _ -> failwith "impossible")
-      | BinaryOp (e1, OpEq, e2, pos) ->
-          (match convert_expr locals UniversalType e1 with
+      | BinaryOp (e1, OpEq, e2, ty, pos) ->
+          (match convert_expr locals ty e1 with
           | FOL_form _ 
           | FOL_term (_, BoolType) ->
               let f1 = extract_fol_form locals e1 in
@@ -789,9 +909,9 @@ let convert cu =
           | SL_form _ -> 
               ProgError.error (pos_of_expr e1) 
                 "Operator == cannot be applied to a permission")
-      | BinaryOp (e1, (OpDiff as op), e2, _)
-      | BinaryOp (e1, (OpUn as op), e2, _)      
-      | BinaryOp (e1, (OpInt as op), e2, _) ->
+      | BinaryOp (e1, (OpDiff as op), e2, ty, _)
+      | BinaryOp (e1, (OpUn as op), e2, ty, _)      
+      | BinaryOp (e1, (OpInt as op), e2, ty, _) ->
           let mk_app =
             match op with
             | OpDiff -> GrassUtil.mk_diff
@@ -799,15 +919,13 @@ let convert cu =
             | OpInt -> (fun t1 t2 -> GrassUtil.mk_inter [t1; t2])
             | _ -> failwith "unexpected operator"
           in
-          let t1, ty1 = extract_term locals (SetType UniversalType) e1 in
+          let t1, ty1 = extract_term locals (SetType AnyType) e1 in
           let t2, ty2 = extract_term locals ty1 e2 in
           FOL_term (mk_app t1 t2, ty2)
-      | BinaryOp (e1, OpNeq, e2, pos) ->
-          convert_expr locals BoolType (UnaryOp (OpNot, BinaryOp (e1, OpEq, e2, pos), pos))
-      | BinaryOp (e1, (OpMinus as op), e2, _)
-      | BinaryOp (e1, (OpPlus as op), e2, _)
-      | BinaryOp (e1, (OpMult as op), e2, _)
-      | BinaryOp (e1, (OpDiv as op), e2, _) ->
+      | BinaryOp (e1, (OpMinus as op), e2, ty, _)
+      | BinaryOp (e1, (OpPlus as op), e2, ty, _)
+      | BinaryOp (e1, (OpMult as op), e2, ty, _)
+      | BinaryOp (e1, (OpDiv as op), e2, ty, _) ->
           let mk_app =
             match op with
             | OpMinus -> GrassUtil.mk_minus
@@ -819,10 +937,10 @@ let convert cu =
           let t1, _ = extract_term locals IntType e1 in
           let t2, _ = extract_term locals IntType e2 in
           FOL_term (mk_app t1 t2, IntType)
-      | BinaryOp (e1, (OpGt as op), e2, pos)
-      | BinaryOp (e1, (OpLt as op), e2, pos)
-      | BinaryOp (e1, (OpGeq as op), e2, pos)
-      | BinaryOp (e1, (OpLeq as op), e2, pos) ->
+      | BinaryOp (e1, (OpGt as op), e2, ty, pos)
+      | BinaryOp (e1, (OpLt as op), e2, ty, pos)
+      | BinaryOp (e1, (OpGeq as op), e2, ty, pos)
+      | BinaryOp (e1, (OpLeq as op), e2, ty, pos) ->
           let mk_int_form =
             match op with
             | OpGt -> GrassUtil.mk_gt
@@ -844,16 +962,16 @@ let convert cu =
             let t2, _ = extract_term locals IntType e2 in            
             FOL_form (GrassUtil.mk_srcpos pos (mk_int_form t1 t2))
           with _ ->
-            let t1, ty1 = extract_term locals (SetType UniversalType) e1 in
+            let t1, ty1 = extract_term locals (SetType AnyType) e1 in
             let t2, _ = extract_term locals ty1 e2 in            
             FOL_form (GrassUtil.mk_srcpos pos (mk_set_form t1 t2)))
-      | BinaryOp (e1, OpIn, e2, pos) ->
-          let t1, ty1 = extract_term locals UniversalType e1 in
+      | BinaryOp (e1, OpIn, e2, ty, pos) ->
+          let t1, ty1 = extract_term locals AnyType e1 in
           let t2, _ = extract_term locals (SetType ty1) e2 in
           FOL_form (GrassUtil.mk_srcpos pos (GrassUtil.mk_elem t1 t2))
-      | BinaryOp (e1, (OpAnd as op), e2, _)
-      | BinaryOp (e1, (OpOr as op), e2, _)
-      | BinaryOp (e1, (OpImpl as op), e2, _) ->
+      | BinaryOp (e1, (OpAnd as op), e2, _, _)
+      | BinaryOp (e1, (OpOr as op), e2, _, _)
+      | BinaryOp (e1, (OpImpl as op), e2, _, _) ->
           let f1, f2 = convert_expr locals ty e1, convert_expr locals ty e2 in
           (match f1, f2 with
           | SL_form _, _
@@ -879,9 +997,9 @@ let convert cu =
               let f1 = extract_fol_form locals e1 in
               let f2 = extract_fol_form locals e2 in
               FOL_form (mk_form f1 f2))
-      | BinaryOp (e1, OpPts, e2, pos) ->
+      | BinaryOp (e1, OpPts, e2, _, pos) ->
           let fld, ind, ty = 
-            match convert_expr locals NullType e1 with
+            match convert_expr locals AnyRefType e1 with
             | FOL_term (App (Read, [fld; ind], _), ty) -> fld, ind, ty
             | _ -> 
                 ProgError.error (pos_of_expr e1) 
@@ -889,9 +1007,9 @@ let convert cu =
           in
           let t2, _ = extract_term locals ty e2 in
           SL_form (SlUtil.mk_pts ~pos:pos fld ind t2)
-      | BinaryOp (e1, (OpSepStar as op), e2, pos)
-      | BinaryOp (e1, (OpSepPlus as op), e2, pos)
-      | BinaryOp (e1, (OpSepIncl as op), e2, pos) ->
+      | BinaryOp (e1, (OpSepStar as op), e2, _, pos)
+      | BinaryOp (e1, (OpSepPlus as op), e2, _, pos)
+      | BinaryOp (e1, (OpSepIncl as op), e2, _, pos) ->
           let mk_op = function
             | OpSepStar -> SlUtil.mk_sep_star
             | OpSepPlus -> SlUtil.mk_sep_plus
@@ -923,8 +1041,8 @@ let convert cu =
           FOL_form (GrassUtil.annotate f [Comment c])
       | Annot (e, GeneratorAnnot (es, ge), pos) ->
           let f = extract_fol_form locals e in
-          let es1 = List.map (fun e -> fst (extract_term locals UniversalType e)) es in
-          let ge1, _ = extract_term locals UniversalType ge in
+          let es1 = List.map (fun e -> fst (extract_term locals AnyType e)) es in
+          let ge1, _ = extract_term locals AnyType ge in
           let gts = GrassUtil.ground_terms (Atom (ge1, [])) in
           (*let filter id sm =
             
@@ -988,9 +1106,7 @@ let convert cu =
       | FOL_form (Atom (t, _)) -> t, BoolType
       | FOL_form _ -> type_error (pos_of_expr e) ty BoolType
       | FOL_term (t, tty) ->
-          match match_types ty tty with
-          | Some ty -> t, ty
-          | None -> type_error (pos_of_expr e) ty tty
+          t, match_types (pos_of_expr e) ty tty
     in
     let convert_spec_form pure locals e name msg =
       let f = 
@@ -1074,7 +1190,7 @@ let convert cu =
       | Assign (lhs, rhs, pos) ->
           let rhs_ts, rhs_tys = 
             Util.map_split (fun e ->
-              match convert_expr proc.p_locals UniversalType e with
+              match convert_expr proc.p_locals AnyType e with
               | SL_form _ -> ProgError.error (pos_of_expr e) "Permissions cannot be assigned"
               | FOL_term (t, ty) -> t, ty
               | FOL_form f -> 
@@ -1096,7 +1212,7 @@ let convert cu =
           in
           cmd
       | Dispose (e, pos) ->
-          let t, _ = extract_term proc.p_locals NullType e in
+          let t, _ = extract_term proc.p_locals AnyRefType e in
           mk_dispose_cmd t pos
       | Havoc (es, pos) ->
           let ids = 
@@ -1213,4 +1329,5 @@ let convert cu =
 let to_program cu =
   let cu1 = resolve_names cu in
   let cu2 = flatten_exprs cu1 in
-  convert cu2
+  let cu3 = infer_types cu2 in
+  convert cu3

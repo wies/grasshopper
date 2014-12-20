@@ -128,7 +128,7 @@ let elim_sl prog =
         let fp_args, sids =
           Util.map_split (fun id ->
             let fp_decl = IdMap.find id decl.pred_locals in
-            let sid = struct_id_of_sort fp_decl.var_sort in
+            let sid = struct_id_of_sort (element_sort_of_sort fp_decl.var_sort) in
             IdMap.find sid domains, sid)
             decl.pred_footprints
         in

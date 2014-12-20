@@ -148,6 +148,10 @@ let dom_sort_of_map map =
   match sort_of map with
   | Map (srt, _) -> srt
   | _ -> failwith "illtyped map expression"
+        
+let element_sort_of_sort = function
+  | Set srt -> srt
+  | _ -> raise (Invalid_argument "element_of_sort")
 
 let element_sort_of_set s =
   match sort_of s with

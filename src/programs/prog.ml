@@ -187,7 +187,7 @@ let source_pos c = (prog_point c).pp_pos
 
 (** Auxiliary functions for programs and declarations *)
 
-let mk_loc_set_decl id struct_id pos =
+let mk_loc_set_decl struct_id id pos =
   { var_name = id;
     var_orig_name = name id;
     var_sort = Set (Loc struct_id);
@@ -199,7 +199,7 @@ let mk_loc_set_decl id struct_id pos =
   }
 
 let alloc_decl struct_id =
-  mk_loc_set_decl (alloc_id struct_id) struct_id dummy_position
+  mk_loc_set_decl struct_id (alloc_id struct_id) dummy_position
 
 let alloc_all struct_id =
   alloc_decl struct_id,

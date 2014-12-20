@@ -227,13 +227,13 @@ let bool_sort_string = "Bool"
 let int_sort_string = "Int"
 
 let rec pr_sort0 ppf srt = match srt with
-  | Loc _ | Bool | Int -> fprintf ppf "%a" pr_sort srt
+  | Bool | Int -> fprintf ppf "%a" pr_sort srt
   | FreeSrt id -> pr_ident ppf id
   | _ -> fprintf ppf "@[<1>%a@]" pr_sort srt
   (*| _ -> fprintf ppf "@[<1>(%a)@]" pr_sort srt*)
 
 and pr_sort ppf = function
-  | Loc id -> fprintf ppf "%s %s" loc_sort_string (string_of_ident id)
+  | Loc id -> fprintf ppf "@[<4>(%s %s)@]" loc_sort_string (string_of_ident id)
   | Bool -> fprintf ppf "%s" bool_sort_string
   | Int -> fprintf ppf "%s" int_sort_string
   | FreeSrt id -> pr_ident ppf id
@@ -288,7 +288,7 @@ let extract_name smt ann =
       ann 
   in
   if smt 
-  then Str.global_replace (Str.regexp " ") "_" (String.concat "_" (List.rev names))
+  then Str.global_replace (Str.regexp " \\|(\\|)") "_" (String.concat "_" (List.rev names))
   else String.concat "; " (List.rev names)
 
 let rec extract_src_pos = function
@@ -383,7 +383,7 @@ let print_form out_ch f = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_fo
 (** {5 Infix Notation} *)
 
 let rec pr_sort ppf = function
-  | Loc id -> fprintf ppf "%s<[@%s]>" loc_sort_string (string_of_ident id)
+  | Loc id -> fprintf ppf "%s<@[%s@]>" loc_sort_string (string_of_ident id)
   | Bool -> fprintf ppf "%s" bool_sort_string
   | Int -> fprintf ppf "%s" int_sort_string
   | FreeSrt id -> pr_ident ppf id

@@ -16,10 +16,9 @@ type typ =
   | SetType of typ
   | IntType
   | BoolType
-  | NullType
+  | AnyRefType
   | PermType (* SL formulas *)
-  | UniversalType
-  | EmptyType
+  | AnyType
 
 type var_decl_id =
   | IdentDecl of ident
@@ -28,7 +27,7 @@ type var_decl_id =
 type op = 
   | OpDiff | OpUn | OpInt 
   | OpMinus | OpPlus | OpMult | OpDiv 
-  | OpEq | OpNeq | OpGt | OpLt | OpGeq | OpLeq | OpIn
+  | OpEq | OpGt | OpLt | OpGeq | OpLeq | OpIn
   | OpPts | OpSepStar | OpSepPlus | OpSepIncl
   | OpAnd | OpOr | OpImpl | OpNot 
 
@@ -122,7 +121,7 @@ and loop_contract =
   | Invariant of expr * bool
 
 and expr =
-  | Null of pos
+  | Null of typ * pos
   | Emp of pos
   | Setenum of typ * exprs * pos
   | IntVal of int * pos
@@ -136,7 +135,7 @@ and expr =
   | Access of expr * pos
   | BtwnPred of expr * expr * expr * expr * pos
   | UnaryOp of op * expr * pos
-  | BinaryOp of expr * op * expr * pos
+  | BinaryOp of expr * op * expr * typ * pos
   | Ident of ident * pos
   | Annot of expr * annotation * pos
 
@@ -147,7 +146,7 @@ and annotation =
   | CommentAnnot of string
 
 let pos_of_expr = function
-  | Null p 
+  | Null (_, p) 
   | Emp p 
   | IntVal (_, p) 
   | BoolVal (_, p)
@@ -161,7 +160,7 @@ let pos_of_expr = function
   | ProcCall (_, _, p)
   | PredApp (_, _, p)
   | UnaryOp (_, _, p)
-  | BinaryOp (_, _, _, p)
+  | BinaryOp (_, _, _, _, p)
   | Ident (_, p) -> p
   | Annot (_, _, p) -> p  
 
@@ -238,7 +237,7 @@ let add_alloc_decl prog =
       (fun _ decl acc ->
         let sid = decl.s_name in
         let id = Prog.alloc_id sid in
-        let tpe = SetType (StructType id) in
+        let tpe = SetType (StructType sid) in
         let pos = GrassUtil.dummy_position in
         let scope = GrassUtil.global_scope in
         let vdecl = VarDecl (var_decl id tpe true false pos scope) in
@@ -268,15 +267,14 @@ let mk_block pos = function
 open Format
 
 let rec pr_type ppf = function
-  | NullType -> fprintf ppf "Null" 
+  | AnyRefType -> fprintf ppf "AnyRef" 
   | BoolType -> fprintf ppf "%s" bool_sort_string
   | IntType -> fprintf ppf "%s" int_sort_string
   | StructType id -> pr_ident ppf id
   | MapType (d, r) -> fprintf ppf "%s<@[%a,@ %a@]>" map_sort_string pr_type d pr_type r
   | SetType s -> fprintf ppf "%s<@[%a@]>" set_sort_string pr_type s
   | PermType -> fprintf ppf "Permission"
-  | UniversalType -> fprintf ppf "Any"
-  | EmptyType -> fprintf ppf "Nothing"
+  | AnyType -> fprintf ppf "Any"
 
 let string_of_type t = pr_type str_formatter t; flush_str_formatter ()
 

@@ -11,4 +11,3 @@ function lseg_footprint(x: Node, y: Node) returns (FP: Set<Node>) {
 predicate lseg(x: Node, y: Node)(FP: Set<Node>) {
   Reach(next, x, y) && FP == lseg_footprint(x, y)
 }
-
