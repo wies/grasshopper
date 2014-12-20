@@ -195,18 +195,18 @@ let resolve_names cu =
               Access (re tbl arg, pos)
           | ty ->
               Access (Setenum (ty, [re tbl arg], pos), pos))
-      | ProcCall (("Btwn", _), args, pos) ->
+      | ProcCall (("Btwn", _ as id), args, pos) ->
           let args1 = List.map (re tbl) args in
           (match args1 with
           | [fld; x; y; z] ->
               BtwnPred (fld, x, y, z, pos)
-          | _ -> pred_arg_mismatch_error pos "Btwn" 4)
-      | ProcCall (("Reach", _), args, pos) ->
+          | _ -> pred_arg_mismatch_error pos id 4)
+      | ProcCall (("Reach", _ as id), args, pos) ->
           let args1 = List.map (re tbl) args in
           (match args1 with
           | [fld; x; y] ->
               BtwnPred (fld, x, y, y, pos)
-          | _ -> pred_arg_mismatch_error pos "Reach" 3)
+          | _ -> pred_arg_mismatch_error pos id 3)
       | ProcCall (init_id, args, pos) ->
           let id = lookup_id init_id tbl pos in
           let args1 = List.map (re tbl) args in
@@ -879,11 +879,8 @@ let convert cu =
           | _ -> failwith "unexpected type")
       | PredApp (id, es, pos) ->
           let decl = IdMap.find id cu.pred_decls in
-          let tys = List.map (fun p -> (IdMap.find p decl.pr_locals).v_type) decl.pr_formals in
-          let ts = 
-            if List.length es > List.length tys
-            then pred_arg_mismatch_error pos (fst id) (List.length tys)
-            else Util.map2 (extract_term locals) tys es
+          let tys = List.map (fun p -> (IdMap.find p decl.pr_locals).v_type) (decl.pr_formals @ decl.pr_footprints) in
+          let ts = Util.map2 (extract_term locals) tys es
           in 
           (match decl.pr_outputs, ty with
           | [], PermType ->
@@ -1169,11 +1166,7 @@ let convert cu =
           let formal_tys = List.map (fun p -> (IdMap.find p decl.p_locals).v_type) formals in
           let return_tys = List.map (fun p -> (IdMap.find p decl.p_locals).v_type) decl.p_returns in
           let args = 
-            try List.map2 (fun ty e -> fst (extract_term proc.p_locals ty e)) formal_tys es
-            with Invalid_argument _ -> 
-              ProgError.error cpos 
-                (Printf.sprintf "Procedure %s expects %d argument(s)" 
-                   (fst id) (List.length formal_tys))
+            List.map2 (fun ty e -> fst (extract_term proc.p_locals ty e)) formal_tys es
           in 
           let lhs_ids, _ = 
             try convert_lhs lhs return_tys

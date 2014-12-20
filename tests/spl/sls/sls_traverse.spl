@@ -1,13 +1,13 @@
 include "../include/slslist.spl";
 
 procedure sls_traverse(lst: Node)
-  requires slseg(lst, null);
-  ensures slseg(lst, null);
+  requires slseg(lst, null)
+  ensures slseg(lst, null)
 {
   var curr: Node;
   curr := lst;
   while (curr != null) 
-    invariant (curr != null &*& lslseg(lst, curr, curr.data) &*& slseg(curr, null)) || (curr == null &*& slseg(lst, curr));
+    invariant (curr != null &*& lslseg(lst, curr, curr.data) &*& slseg(curr, null)) || (curr == null &*& slseg(lst, curr))
   {
     curr := curr.next; 
   }

@@ -1,9 +1,15 @@
 open Grass
 open SplSyntax
 
-let pred_arg_mismatch_error pos name expected =
-  ProgError.error pos (Printf.sprintf "Predicate %s expects %d argument(s)" name expected)
+let pred_arg_mismatch_error pos id expected =
+  ProgError.error pos (Printf.sprintf "Predicate %s expects %d argument(s)" (GrassUtil.name id) expected)
 
+let proc_arg_mismatch_error pos id expected =
+  ProgError.error pos 
+    (Printf.sprintf "Procedure %s expects %d argument(s)" 
+       (GrassUtil.name id) (List.length expected))
+
+    
 let type_error pos exp_ty fnd_ty =
   let ty_str ty = "expression of type " ^ string_of_type ty in
   ProgError.type_error pos
@@ -11,19 +17,20 @@ let type_error pos exp_ty fnd_ty =
 
 let match_types pos oty1 oty2 =
   let rec mt ty1 ty2 =
-  match ty1, ty2 with
-  | AnyRefType, StructType _ -> ty2
-  | StructType _, AnyRefType -> ty1
-  | AnyType, _ -> ty2
-  | _, AnyType -> ty1
-  | SetType ty1, SetType ty2 ->
-      SetType (mt ty1 ty2)
-  | MapType (dty1, rty1), MapType (dty2, rty2) ->
-      let dty = mt dty1 dty2 in
-      let rty = mt rty1 rty2 in
-      MapType (dty, rty)
-  | ty, tty when ty = tty -> ty2
-  | _ -> type_error pos oty1 oty2
+    match ty1, ty2 with
+    | PermType, BoolType -> PermType
+    | AnyRefType, StructType _ -> ty2
+    | StructType _, AnyRefType -> ty1
+    | AnyType, _ -> ty2
+    | _, AnyType -> ty1
+    | SetType ty1, SetType ty2 ->
+        SetType (mt ty1 ty2)
+    | MapType (dty1, rty1), MapType (dty2, rty2) ->
+        let dty = mt dty1 dty2 in
+        let rty = mt rty1 rty2 in
+        MapType (dty, rty)
+    | ty, tty when ty = tty -> ty2
+    | _ -> type_error pos oty1 oty2
   in mt oty1 oty2
 
 (** Computes SPL type of expression [e] in compilation unit [cu] and environment [locals].
@@ -222,10 +229,10 @@ let infer_types cu locals ty e =
         e
     | Dot (e, id, pos) ->
         let decl = IdMap.find id cu.var_decls in
-        let rty, dty =
+        let dty, rty =
           match decl.v_type with
-          | MapType (rty, dty) ->
-              rty, dty
+          | MapType (dty, rty) ->
+              dty, rty
           | fty -> type_error pos (MapType (AnyRefType, AnyType)) fty
         in
         let e1 = it locals dty e in
@@ -249,13 +256,18 @@ let infer_types cu locals ty e =
         BtwnPred (e1, e2, e3, e4, pos)
     | ProcCall (id, es, pos) ->
         let decl = IdMap.find id cu.proc_decls in
+        let formals = List.filter (fun p -> not (IdMap.find p decl.p_locals).v_implicit) decl.p_formals in
         let ftys =
           List.map (fun fid ->
             let vdecl = IdMap.find fid decl.p_locals in
             vdecl.v_type)
-            decl.p_formals
+            formals
         in
-        let es1 = List.map2 (it locals) ftys es in
+        let es1 =
+          try List.map2 (it locals) ftys es
+          with Invalid_argument _ ->
+            proc_arg_mismatch_error pos id ftys
+        in
         (match decl.p_returns with
         | [rid] -> 
             let rdecl = IdMap.find rid decl.p_locals in
@@ -269,18 +281,18 @@ let infer_types cu locals ty e =
             (fun fid -> (IdMap.find fid decl.pr_locals).v_type)
             (decl.pr_formals @ decl.pr_footprints)
         in
-        let es1, ftys, es =
+        let es1, rftys, res =
           Util.map2_remainder (it locals) ftys es
         in
         (* Check whether number of actual arguments is correct *)
         let _ = 
-          match ty, ftys, es with
+          match ty, rftys, res with
           | _, _, _ :: _
           | BoolType, _ :: _, _ ->
-              pred_arg_mismatch_error pos (fst id) (List.length ftys)
+              pred_arg_mismatch_error pos id (List.length ftys)
           | PermType, _ :: _, _ ->
               if List.length es1 <> List.length decl.pr_formals then
-                pred_arg_mismatch_error pos (fst id) (List.length decl.pr_formals)
+                pred_arg_mismatch_error pos id (List.length decl.pr_formals)
           | _ -> ()
         in
         (* Check whether return type matches expected type *)
@@ -308,9 +320,9 @@ let infer_types cu locals ty e =
     | BinaryOp _ -> failwith "impossible"
   and itp locals ty e1 e2 =
     let e1 = it locals ty e1 in
-    let ty1 = type_of_expr cu locals e1 in
+    let ty1 = match_types (pos_of_expr e1) ty (type_of_expr cu locals e1) in
     let e2 = it locals ty1 e2 in
-    let ty2 = type_of_expr cu locals e2 in
+    let ty2 = match_types (pos_of_expr e2) ty (type_of_expr cu locals e2) in
     let e1 =
       if ty1 <> ty2
       then it locals ty2 e1

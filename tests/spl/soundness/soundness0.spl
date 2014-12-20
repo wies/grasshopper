@@ -6,5 +6,3 @@ procedure soundness0(x: Node)
 {
   assert false;
 }
-
-

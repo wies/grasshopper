@@ -3,16 +3,17 @@ include "../include/sllist.spl";
 // Faulty filtering of a singly-linked list:
 // the access to curr.next at the end of the loop happens after freeing curr.
 
-procedure soundness2(x: Node) returns (y: Node)
-  requires lseg(x, null);
-  ensures lseg(y, null);
+procedure soundness2(x: Node)
+  returns (y: Node)
+  requires lseg(x, null)
+  ensures lseg(y, null)
 {
   var curr: Node, prv: Node;
   y := x;
   prv := null;
   curr := y;
   while (curr != null) 
-    invariant ((lseg(y, prv) &*& prv.next |-> curr || prv == null &*& y == curr) &*& lseg(curr, null));
+    invariant ((lseg(y, prv) &*& prv.next |-> curr || prv == null &*& y == curr) &*& lseg(curr, null))
   {
     var nondet: Bool;
     if (nondet) {

@@ -3,19 +3,19 @@
 
 include "slslist.spl";
 
-function witness(v: Int, C: Set<Int>) returns (res: Loc<Node>) {
+function witness(v: Int, C: Set<Int>) returns (res: Node) {
   true
 }
 
-function content(FP: Set<Loc<Node>>) returns (C: Set<Int>) {
-  (forall x: Loc<Node> :: x in FP ==> x == witness(x.data, C)) &&
-  (forall x: Loc<Node> :: x in FP ==> x.data in C) &&
+function content(FP: Set<Node>) returns (C: Set<Int>) {
+  (forall x: Node :: x in FP ==> x == witness(x.data, C)) &&
+  (forall x: Node :: x in FP ==> x.data in C) &&
   (forall v in C :: witness(v, C) in FP) &&
   (forall v: Int :: v !in C ==> witness(v, C) == null) &&
   (forall v in C :: v == witness(v, C).data @(matching v yields witness(v, C).data))
 }
 
-predicate list_set(x: Node, y: Node, C: Set<Int>, FP: Set<Loc<Node>>) {
+predicate list_set(x: Node, y: Node, C: Set<Int>)(FP: Set<Node>) {
   lseg(x, y, FP) &&
   lseg_strictly_increasing(x, FP) &&
   C == content(FP)

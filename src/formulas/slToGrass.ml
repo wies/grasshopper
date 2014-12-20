@@ -30,14 +30,10 @@ let to_form pred_to_form domains f =
     | Atom (Emp, _, pos) ->
         [GrassUtil.mk_true, mk_empty_domains struct_ids]
     | Atom (Region, [t], _) ->
-        begin 
-          let prefix = "?" ^ (fst d) in
-          match GrassUtil.sort_of t with
-          | Loc id ->
-            let domain = mk_empty_domains_except struct_ids id prefix in
-            [GrassUtil.mk_eq (IdMap.find id domain) t, domain]
-          | _ -> failwith "Region param not of Loc type"
-        end
+        let prefix = "?" ^ (fst d) in
+        let sid = GrassUtil.struct_id_of_sort (GrassUtil.element_sort_of_set t) in
+        let domain = mk_empty_domains_except struct_ids sid prefix in
+        [GrassUtil.mk_eq (IdMap.find sid domain) t, domain]
     | Atom (Pred p, args, pos) ->
         let domain = fresh_dom d in
         let pdef = pred_to_form p args domain in
