@@ -5,18 +5,30 @@ open GrassUtil
 open Config
 
 (* {6 Variable and short-hand declarations} *)
+  
+let mk_loc_var name = 
+  let id = fresh_ident name in
+  fun struct_id -> id, Loc struct_id
 
-let l1 struct_id = fresh_ident "?x", Loc struct_id
-let l2 struct_id = fresh_ident "?y", Loc struct_id
-let l3 struct_id = fresh_ident "?z", Loc struct_id
-let l4 struct_id = fresh_ident "?u", Loc struct_id
-let l5 struct_id = fresh_ident "?v", Loc struct_id
-let f1 struct_id = fresh_ident "?f", loc_field_sort struct_id
-let f2 struct_id = fresh_ident "?g", loc_field_sort struct_id
-let f3 struct_id = fresh_ident "?h", loc_field_sort struct_id
-let s1 struct_id = fresh_ident "?X", Set (Loc struct_id)
-let s2 struct_id = fresh_ident "?Y", Set (Loc struct_id)
-let s3 struct_id = fresh_ident "?Z", Set (Loc struct_id)
+let mk_loc_field_var name =
+  let id = fresh_ident name in
+  fun struct_id -> id, loc_field_sort struct_id
+
+let mk_loc_set_var name =
+  let id = fresh_ident name in
+  fun struct_id -> id, Set (Loc struct_id)
+      
+let l1 = mk_loc_var "?x"
+let l2 = mk_loc_var "?y"
+let l3 = mk_loc_var "?z"
+let l4 = mk_loc_var "?u"
+let l5 = mk_loc_var "?v"
+let f1 = mk_loc_field_var "?f"
+let f2 = mk_loc_field_var "?g"
+let f3 = mk_loc_field_var "?h"
+let s1 = mk_loc_set_var "?X"
+let s2 = mk_loc_set_var "?Y"
+let s3 = mk_loc_set_var "?Z"
 let is1 = fresh_ident "?N", Set Int 
 let i1 = fresh_ident "?m", Int
 let i2 = fresh_ident "?n", Int

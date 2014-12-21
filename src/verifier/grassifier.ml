@@ -138,7 +138,7 @@ let elim_sl prog =
         let fp_eqs, sids =
           Util.map_split
             (fun fp ->
-              let sid = struct_id_of_sort (sort_of fp) in
+              let sid = struct_id_of_sort (element_sort_of_set fp) in
               mk_eq fp (IdMap.find sid domains), sid)
             fps
         in

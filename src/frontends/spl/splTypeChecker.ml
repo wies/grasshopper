@@ -9,7 +9,6 @@ let proc_arg_mismatch_error pos id expected =
     (Printf.sprintf "Procedure %s expects %d argument(s)" 
        (GrassUtil.name id) (List.length expected))
 
-    
 let type_error pos exp_ty fnd_ty =
   let ty_str ty = "expression of type " ^ string_of_type ty in
   ProgError.type_error pos
@@ -112,7 +111,9 @@ let type_of_expr cu locals e =
     | BinaryOp _ -> failwith "impossible"
   in 
   te e
-    
+
+(** Infer the types in expression [e] and check whether its type is compatible with [ty].
+ ** The typing environment is given by the parameters [cu] and [locals]. *)    
 let infer_types cu locals ty e =
   let rec it locals ty = function
     (* Non-ambiguous Boolean operators *)
@@ -331,15 +332,4 @@ let infer_types cu locals ty e =
     ty2, e1, e2
   in it locals ty e
 
-(** Returns true iff [ty1] is a subtype of [ty2]. *)
-let rec is_sub_type ty1 ty2 = 
-  match ty1, ty2 with
-  | AnyRefType, StructType _
-  | StructType _, AnyRefType
-  | _, AnyType -> true
-  | SetType ty1, SetType ty2 ->
-      is_sub_type ty1 ty2
-  | MapType (dty1, rty1), MapType (dty2, rty2) ->
-      is_sub_type dty2 dty1 && is_sub_type rty1 rty2
-  | _ -> ty1 = ty2
 

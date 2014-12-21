@@ -189,12 +189,16 @@ let resolve_names cu =
           in
           let f1 = re tbl1 f in
           Quant (q, decls, f1, pos)
-      | ProcCall (("acc", _), [arg], pos) ->
-          (match type_of_expr cu locals arg with
-          | SetType _ -> 
-              Access (re tbl arg, pos)
-          | ty ->
-              Access (Setenum (ty, [re tbl arg], pos), pos))
+      | ProcCall (("acc", _ as id), args, pos) ->
+          let args1 = List.map (re tbl) args in
+          (match args1 with
+          | [arg] ->
+              (match type_of_expr cu locals arg with
+              | SetType _ -> 
+                  Access (re tbl arg, pos)
+              | ty ->
+                  Access (Setenum (ty, [re tbl arg], pos), pos))
+          | _ -> pred_arg_mismatch_error pos id 1)
       | ProcCall (("Btwn", _ as id), args, pos) ->
           let args1 = List.map (re tbl) args in
           (match args1 with
