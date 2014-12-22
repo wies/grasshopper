@@ -4,15 +4,13 @@
 
 include "../include/skiplist.spl";
 
-procedure findPredNode(this: SkipList, x: int) 
+procedure findPredNode(this: SkipList, x: Int) 
   returns (res: Node)
   requires skiplist(this)
   ensures acc(res) -** skiplist(this)
 {
-  var u: Node;
-  u := this.head;
-  var r: Int;
-  r := this.height;
+  var u: Node := this.head;
+  var r: Int := this.height;
 
   while (r >= 0)
     invariant r <= this.height
@@ -22,7 +20,7 @@ procedure findPredNode(this: SkipList, x: int)
     {
       u := u.next[r];   // go right in list r
     }
-    r := r - 1;         // go down into list r-1
+    r := r - 1;         // go down Into list r-1
   }
   return u;
 }
@@ -32,8 +30,7 @@ procedure find(this: SkipList, x: Int)
   requires skiplist(this)
   ensures (res == null || acc(res)) -** skiplist(this)
 {
-  var u: Node;
-  u := findPredNode(this, x);
+  var u: Node := findPredNode(this, x);
   if (u.next[0] == null) {
     return null;
   } else {
@@ -87,8 +84,7 @@ procedure add(this: SkipList, x: Int)
     stack[this.height] := this.head;   // increasing height of skiplist
   }
 
-  var i: Int;
-  i := 0;
+  var i: Int := 0;
   while (i < w.next.length)
     invariant skiplist(this)
   {
@@ -105,10 +101,8 @@ procedure remove(this: SkipList, x: Int)
   ensures skiplist(this)
 {
   removed := false;
-  var u: Node;
-  u := this.head;
-  var r: Int;
-  r := this.height;
+  var u: Node := this.head;
+  var r: Int := this.height;
   
   while (r >= 0)
     invariant skiplist(this)
