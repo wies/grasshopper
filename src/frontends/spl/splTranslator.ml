@@ -717,443 +717,393 @@ type cexpr =
   | FOL_form of Grass.form
   | FOL_term of Grass.term * typ
 
-(*
-let rec compatible_types ty1 ty2 =
-  match ty1, ty2 with
-  | StructType _, AnyRefType
-  | AnyRefType, StructType _ 
-  | IntType, IntType
-  | BoolType, BoolType -> true
-  | StructType id1, StructType id2 when id1 = id2 -> true
-  | FieldType (id1, ty1), FieldType (ty2 -> compatible_types ty1 ty2
-  | _, _ -> false*)
-
 let convert cu =
-    let find_var_decl locals id =
-      try IdMap.find id locals 
-      with Not_found -> 
-        try IdMap.find id cu.var_decls
-        with Not_found -> failwith ("Unable to find identifier " ^ (string_of_ident id))
+  let find_var_decl locals id =
+    try IdMap.find id locals 
+    with Not_found -> 
+      try IdMap.find id cu.var_decls
+      with Not_found -> failwith ("Unable to find identifier " ^ (string_of_ident id))
+  in
+  let field_type pos fld_id =
+    let fdecl = IdMap.find fld_id cu.var_decls in
+    fdecl.v_type
+    (*with Not_found ->
+      ProgError.error pos 
+        ("Struct " ^ fst id ^ " does not have a field named " ^ fst fld_id)*)
+  in
+  let convert_type ty pos =
+    let rec ct = function
+      | StructType id -> Loc id
+      | MapType (dtyp, rtyp) -> Map (ct dtyp, ct rtyp)
+      | SetType typ -> Set (ct typ)
+      | IntType -> Int
+      | BoolType -> Bool
+      | ty -> failwith ("cannot convert type " ^ string_of_type ty ^ " near position " ^ string_of_src_pos pos)
     in
-    let field_type pos id fld_id =
-      let decl = IdMap.find id cu.struct_decls in
-      try 
-        let fdecl = IdMap.find fld_id decl.s_fields in
-        fdecl.v_type
-      with Not_found ->
-        ProgError.error pos 
-          ("Struct " ^ fst id ^ " does not have a field named " ^ fst fld_id)
-    in
-    let convert_type ty pos =
-      let rec ct = function
-        | StructType id -> Loc id
-        | MapType (dtyp, rtyp) -> Map (ct dtyp, ct rtyp)
-        | SetType typ -> Set (ct typ)
-        | IntType -> Int
-        | BoolType -> Bool
-        | ty -> failwith ("cannot convert type " ^ string_of_type ty ^ " near position " ^ string_of_src_pos pos)
-      in
-      ct ty
-    in
-    let convert_var_decl decl = 
-      { var_name = decl.v_name;
-        var_orig_name = fst decl.v_name;
-        var_sort = convert_type decl.v_type decl.v_pos;
-        var_is_ghost = decl.v_ghost;
-        var_is_implicit = decl.v_implicit;
-        var_is_aux = decl.v_aux;
-        var_pos = decl.v_pos;
+    ct ty
+  in
+  let convert_var_decl decl = 
+    { var_name = decl.v_name;
+      var_orig_name = fst decl.v_name;
+      var_sort = convert_type decl.v_type decl.v_pos;
+      var_is_ghost = decl.v_ghost;
+      var_is_implicit = decl.v_implicit;
+      var_is_aux = decl.v_aux;
+      var_pos = decl.v_pos;
         var_scope = decl.v_scope;
-      }
-    in 
-    let rec convert_expr locals ty = function
-      | Null (ty, pos) ->
-          let cty = convert_type ty pos in
-          let sid = GrassUtil.struct_id_of_sort cty in
-          FOL_term (GrassUtil.mk_null sid, ty)
-      | Emp pos -> SL_form (SlUtil.mk_emp (Some pos))
-      | Setenum (ty, es, pos) ->
-          let ts, ty = 
-            List.fold_right (fun e (ts, ty) ->
-              let t, ty = extract_term locals ty e in
-              t :: ts, ty)
-              es ([], ty)
+    }
+  in
+  let rec convert_term locals = function
+    | Null (ty, pos) ->
+        let cty = convert_type ty pos in
+        let sid = GrassUtil.struct_id_of_sort cty in
+        GrassUtil.mk_null sid
+    | Setenum (ty, es, pos) ->
+        let ts = List.map (convert_term locals) es in
+        let elem_ty =  convert_type ty pos in
+        (match es with
+        | [] -> GrassUtil.mk_empty (Set elem_ty)
+        | _ -> GrassUtil.mk_setenum ts)
+    | IntVal (i, _) ->
+        GrassUtil.mk_int i
+    | BoolVal (b, pos) ->
+        App (BoolConst b, [], Bool)
+    | Dot (e, fld_id, pos) -> 
+        let t = convert_term locals e in
+        let fty = convert_type (field_type pos fld_id) pos in
+        let fld = GrassUtil.mk_free_const fty fld_id in
+        GrassUtil.mk_read fld t
+    | PredApp (id, es, pos) ->
+        let decl = IdMap.find id cu.pred_decls in
+        let ts = List.map (convert_term locals) es in 
+        (match decl.pr_outputs with
+        | [res] ->
+            let res_decl = IdMap.find res decl.pr_locals in
+            let res_srt = convert_type res_decl.v_type pos in
+            GrassUtil.mk_free_fun res_srt id ts
+        | _ -> failwith "unexpected expression")
+    | BinaryOp (e1, (OpDiff as op), e2, ty, _)
+    | BinaryOp (e1, (OpUn as op), e2, ty, _)      
+    | BinaryOp (e1, (OpInt as op), e2, ty, _) ->
+        let mk_app =
+          match op with
+          | OpDiff -> GrassUtil.mk_diff
+          | OpUn -> (fun t1 t2 -> GrassUtil.mk_union [t1; t2])
+          | OpInt -> (fun t1 t2 -> GrassUtil.mk_inter [t1; t2])
+          | _ -> failwith "unexpected operator"
+        in
+        let t1 = convert_term locals e1 in
+        let t2 = convert_term locals e2 in
+        mk_app t1 t2
+    | BinaryOp (e1, (OpMinus as op), e2, ty, _)
+    | BinaryOp (e1, (OpPlus as op), e2, ty, _)
+    | BinaryOp (e1, (OpMult as op), e2, ty, _)
+    | BinaryOp (e1, (OpDiv as op), e2, ty, _) ->
+        let mk_app =
+          match op with
+          | OpMinus -> GrassUtil.mk_minus
+          | OpPlus -> GrassUtil.mk_plus
+          | OpMult -> GrassUtil.mk_mult
+          | OpDiv -> GrassUtil.mk_div
+          | _ -> failwith "unexpected operator"
+        in
+        let t1 = convert_term locals e1 in
+        let t2 = convert_term locals e2 in
+        mk_app t1 t2
+    | UnaryOp (OpPlus, e, _) ->
+        convert_term locals e
+    | UnaryOp (OpMinus, e, _) ->
+        let t = convert_term locals e in
+        GrassUtil.mk_uminus t
+    | Ident (id, pos) ->
+        let decl = find_var_decl locals id in
+        let srt = convert_type decl.v_type pos in
+        GrassUtil.mk_free_const srt decl.v_name
+    | BinaryOp (_, OpOr, _, _, _) -> failwith "meop"
+    | e -> failwith ("unexpected expression at " ^ string_of_src_pos (pos_of_expr e))
+  in
+  let rec convert_grass_form locals = function
+    | BoolVal (b, pos) -> GrassUtil.mk_srcpos pos (GrassUtil.mk_bool b)
+    | BtwnPred (fld, x, y, z, pos) ->
+        let tfld = convert_term locals fld in
+        let tx = convert_term locals x in
+        let ty = convert_term locals y in
+        let tz = convert_term locals z in
+        GrassUtil.mk_srcpos pos (GrassUtil.mk_btwn tfld tx ty tz)
+    | Quant (q, decls, f, pos) ->
+        let vars, locals1 = 
+          List.fold_right (fun decl (vars, locals1) ->
+            let id = decl.v_name in
+            let ty = decl.v_type in
+            (id, convert_type ty pos) :: vars, 
+            IdMap.add id decl locals1)
+            decls ([], locals)
+        in
+        let subst = 
+          List.fold_right (fun (id, srt) subst -> 
+            IdMap.add id (GrassUtil.mk_var srt id) subst)
+            vars IdMap.empty
+        in
+        let mk_quant vs f = 
+          let f0, ann = 
+            match f with
+            | Binder (_, [], f0, ann) -> f0, ann
+            | f0 -> f0, []
           in
-          let elem_ty =  convert_type ty pos in
-          (match es with
-          | [] -> FOL_term (GrassUtil.mk_empty (Set elem_ty), SetType ty)
-          | _ -> FOL_term (GrassUtil.mk_setenum ts, SetType ty))
-      | IntVal (i, _) -> FOL_term (GrassUtil.mk_int i, IntType)
-      | BoolVal (b, pos) -> FOL_form (GrassUtil.mk_srcpos pos (GrassUtil.mk_bool b))
-      | Dot (e, fld_id, pos) -> 
-          let t, ty = extract_term locals AnyType e in
-          let sid, res_ty =
-            match ty with
-            | StructType sid ->
-                sid, field_type pos sid fld_id
-            | AnyRefType -> null_access_error pos
-            | ty -> failwith "unexpected type"
+          let f1 = 
+            match q with
+	    | Forall -> 
+                GrassUtil.mk_forall vs f0
+            | Exists -> 
+                GrassUtil.mk_exists vs f0
+          in GrassUtil.annotate f1 ann
           in
-          let res_srt = convert_type res_ty pos in
-          let fld = GrassUtil.mk_free_const (GrassUtil.field_sort sid res_srt) fld_id in
-          FOL_term (GrassUtil.mk_read fld t, res_ty)
-      | Access (e, pos) ->
-          let t, ty = extract_term locals AnyType e in
-          (match ty with
-          | StructType _ ->
-              SL_form (SlUtil.mk_cell ~pos:pos t)
-          | AnyRefType ->
-              null_access_error pos
-          | SetType (StructType _) ->
-              SL_form (SlUtil.mk_region ~pos:pos t)
-          | ty -> failwith "unexpected type")
-      | BtwnPred (fld, x, y, z, pos) ->
-          let tfld, fld_ty = extract_term locals (MapType (AnyType, AnyType)) fld in
-          (match fld_ty with
-          | MapType (StructType id, StructType id1) when id = id1 ->
-              let tx, _ = extract_term locals (StructType id) x in
-              let ty, _ = extract_term locals (StructType id) y in
-              let tz, _ = extract_term locals (StructType id) z in
-              FOL_form (GrassUtil.mk_srcpos pos (GrassUtil.mk_btwn tfld tx ty tz))
-          | _ -> type_error (pos_of_expr fld) (MapType(StructType ("Loc<T>", 0), StructType ("Loc<T>", 0))) fld_ty)
-      | Quant (q, decls, f, pos) ->
-          let vars, locals1 = 
-             List.fold_right (fun decl (vars, locals1) ->
-               let id = decl.v_name in
-               let ty = decl.v_type in
-               (id, convert_type ty pos) :: vars, 
-               IdMap.add id decl locals1)
-               decls ([], locals)
-          in
-          let subst = 
-            List.fold_right (fun (id, srt) subst -> 
-              IdMap.add id (GrassUtil.mk_var srt id) subst)
-              vars IdMap.empty
-          in
-          (try
-            let mk_quant vs f = 
-              let f0, ann = 
-                match f with
-                | Binder (_, [], f0, ann) -> f0, ann
-                | f0 -> f0, []
-              in
-              let f1 = 
-                match q with
-	        | Forall -> 
-                    GrassUtil.mk_forall vs f0
-                | Exists -> 
-                    GrassUtil.mk_exists vs f0
-              in GrassUtil.annotate f1 ann
-            in
-            let f1 = extract_fol_form locals1 f in
-            let f2 = GrassUtil.subst_consts subst f1 in
-            FOL_form (GrassUtil.mk_srcpos pos (mk_quant vars f2))
-          with _ -> 
+        let f1 = convert_grass_form locals1 f in
+        let f2 = GrassUtil.subst_consts subst f1 in
+        GrassUtil.mk_srcpos pos (mk_quant vars f2)
+    | GuardedQuant (q, id, e, f, pos) ->
+        let e1 = convert_term locals e in
+        (match type_of_expr cu locals e with
+        | SetType elem_srt ->
+            let decl = var_decl id elem_srt false false pos pos in
+            let locals1 = IdMap.add id decl locals in
+            let elem_srt = convert_type elem_srt pos in
+            let v_id = GrassUtil.mk_var elem_srt id in
+	    let mk_guard = match q with
+	    | Forall -> GrassUtil.mk_implies
+            | Exists -> fun f g -> GrassUtil.mk_and [f; g] 
+	    in
             let mk_quant = match q with
-            | Forall -> SlUtil.mk_forall 
-            | Exists -> SlUtil.mk_exists
+	    | Forall -> GrassUtil.mk_forall
+            | Exists -> GrassUtil.mk_exists
             in
-            let f1 = extract_sl_form locals1 f in
-            let f2 = SlUtil.subst_consts subst f1 in
-            SL_form (mk_quant ~pos:pos vars f2))
-      | GuardedQuant (q, id, e, f, pos) ->
-          let e1, ty = extract_term locals (SetType AnyType) e in
-          (match ty with
-          | SetType elem_srt ->
-              let decl = var_decl id elem_srt false false pos pos in
-              let locals1 = IdMap.add id decl locals in
-              let elem_srt = convert_type elem_srt pos in
-              let v_id = GrassUtil.mk_var elem_srt id in
-	      let mk_guard = match q with
-	      | Forall -> GrassUtil.mk_implies
-              | Exists -> fun f g -> GrassUtil.mk_and [f; g] 
-	      in
-              let mk_quant = match q with
-	      | Forall -> GrassUtil.mk_forall
-              | Exists -> GrassUtil.mk_exists
-              in
-              let f0, ann = 
-                match extract_fol_form locals1 f with
-                | Binder (_, [], f0, ann) -> f0, ann
-                | f0 -> f0, []
-              in
-              let f1 = GrassUtil.annotate (mk_guard (GrassUtil.mk_elem v_id e1) f0) ann in
-              let f2 = GrassUtil.subst_consts (IdMap.add id v_id IdMap.empty) f1 in
-              FOL_form (GrassUtil.mk_srcpos pos (mk_quant [(id, elem_srt)] f2))
-          | _ -> failwith "unexpected type")
-      | PredApp (id, es, pos) ->
-          let decl = IdMap.find id cu.pred_decls in
-          let tys = List.map (fun p -> (IdMap.find p decl.pr_locals).v_type) (decl.pr_formals @ decl.pr_footprints) in
-          let ts = Util.map2 (extract_term locals) tys es
-          in 
-          (match decl.pr_outputs, ty with
-          | [], PermType ->
-              SL_form (SlUtil.mk_pred ~pos:pos id (List.map fst ts))
-          | [], _ ->
-              FOL_form (GrassUtil.mk_pred ~ann:[SrcPos pos] id (List.map fst ts))
-          | [res], _ ->
-              let res_decl = IdMap.find res decl.pr_locals in
-              let res_srt = convert_type res_decl.v_type pos in
-              let t = GrassUtil.mk_free_fun res_srt id (List.map fst ts) in
-              FOL_term (t, res_decl.v_type)
-          | _ -> failwith "impossible")
-      | BinaryOp (e1, OpEq, e2, ty, pos) ->
-          (match convert_expr locals ty e1 with
-          | FOL_form _ 
-          | FOL_term (_, BoolType) ->
-              let f1 = extract_fol_form locals e1 in
-              let f2 = extract_fol_form locals e2 in
-              FOL_form (GrassUtil.mk_srcpos pos (GrassUtil.mk_iff f1 f2))
-          | FOL_term (t1, ty1) ->
-              let t2, _ = extract_term locals ty1 e2 in
-              FOL_form (GrassUtil.mk_srcpos pos (GrassUtil.mk_eq t1 t2))
-          | SL_form _ -> 
-              ProgError.error (pos_of_expr e1) 
-                "Operator == cannot be applied to a permission")
-      | BinaryOp (e1, (OpDiff as op), e2, ty, _)
-      | BinaryOp (e1, (OpUn as op), e2, ty, _)      
-      | BinaryOp (e1, (OpInt as op), e2, ty, _) ->
-          let mk_app =
-            match op with
-            | OpDiff -> GrassUtil.mk_diff
-            | OpUn -> (fun t1 t2 -> GrassUtil.mk_union [t1; t2])
-            | OpInt -> (fun t1 t2 -> GrassUtil.mk_inter [t1; t2])
-            | _ -> failwith "unexpected operator"
-          in
-          let t1, ty1 = extract_term locals (SetType AnyType) e1 in
-          let t2, ty2 = extract_term locals ty1 e2 in
-          FOL_term (mk_app t1 t2, ty2)
-      | BinaryOp (e1, (OpMinus as op), e2, ty, _)
-      | BinaryOp (e1, (OpPlus as op), e2, ty, _)
-      | BinaryOp (e1, (OpMult as op), e2, ty, _)
-      | BinaryOp (e1, (OpDiv as op), e2, ty, _) ->
-          let mk_app =
-            match op with
-            | OpMinus -> GrassUtil.mk_minus
-            | OpPlus -> GrassUtil.mk_plus
-            | OpMult -> GrassUtil.mk_mult
-            | OpDiv -> GrassUtil.mk_div
-            | _ -> failwith "unexpected operator"
-          in
-          let t1, _ = extract_term locals IntType e1 in
-          let t2, _ = extract_term locals IntType e2 in
-          FOL_term (mk_app t1 t2, IntType)
-      | BinaryOp (e1, (OpGt as op), e2, ty, pos)
-      | BinaryOp (e1, (OpLt as op), e2, ty, pos)
-      | BinaryOp (e1, (OpGeq as op), e2, ty, pos)
-      | BinaryOp (e1, (OpLeq as op), e2, ty, pos) ->
-          let mk_int_form =
-            match op with
-            | OpGt -> GrassUtil.mk_gt
-            | OpLt -> GrassUtil.mk_lt
-            | OpGeq -> GrassUtil.mk_geq
-            | OpLeq -> GrassUtil.mk_leq
-            | _ -> failwith "unexpected operator"
-          in
-          let mk_set_form =
-            match op with
-            | OpGt -> (fun s t -> GrassUtil.mk_strict_subset t s)
-            | OpLt -> GrassUtil.mk_strict_subset
-            | OpGeq -> (fun s t -> GrassUtil.mk_subseteq t s)
-            | OpLeq -> GrassUtil.mk_subseteq
-            | _ -> failwith "unexpected operator"
-          in
-          (try
-            let t1, _ = extract_term locals IntType e1 in
-            let t2, _ = extract_term locals IntType e2 in            
-            FOL_form (GrassUtil.mk_srcpos pos (mk_int_form t1 t2))
-          with _ ->
-            let t1, ty1 = extract_term locals (SetType AnyType) e1 in
-            let t2, _ = extract_term locals ty1 e2 in            
-            FOL_form (GrassUtil.mk_srcpos pos (mk_set_form t1 t2)))
-      | BinaryOp (e1, OpIn, e2, ty, pos) ->
-          let t1, ty1 = extract_term locals AnyType e1 in
-          let t2, _ = extract_term locals (SetType ty1) e2 in
-          FOL_form (GrassUtil.mk_srcpos pos (GrassUtil.mk_elem t1 t2))
-      | BinaryOp (e1, (OpAnd as op), e2, _, _)
-      | BinaryOp (e1, (OpOr as op), e2, _, _)
-      | BinaryOp (e1, (OpImpl as op), e2, _, _) ->
-          let f1, f2 = convert_expr locals ty e1, convert_expr locals ty e2 in
-          (match f1, f2 with
-          | SL_form _, _
-          | _, SL_form _ ->
-              let mk_form = 
-                match op with
-                | OpAnd -> SlUtil.mk_and
-                | OpOr -> SlUtil.mk_or
-                | OpImpl -> SlUtil.mk_implies
-                | _ -> failwith "unexpected operator"      
-              in
-              let f1 = extract_sl_form locals e1 in
-              let f2 = extract_sl_form locals e2 in
-              SL_form (mk_form f1 f2)
-          | _, _ ->
-              let mk_form = 
-                match op with
-                | OpAnd -> fun f1 f2 -> GrassUtil.mk_and [f1; f2]
-                | OpOr -> fun f1 f2 -> GrassUtil.mk_or [f1; f2]
-                | OpImpl -> GrassUtil.mk_implies           
-                | _ -> failwith "unexpected operator"
-              in
-              let f1 = extract_fol_form locals e1 in
-              let f2 = extract_fol_form locals e2 in
-              FOL_form (mk_form f1 f2))
-      | BinaryOp (e1, OpPts, e2, _, pos) ->
-          let fld, ind, ty = 
-            match convert_expr locals AnyRefType e1 with
-            | FOL_term (App (Read, [fld; ind], _), ty) -> fld, ind, ty
-            | _ -> 
-                ProgError.error (pos_of_expr e1) 
-                  "Expected field access on left-hand-side of points-to predicate"
-          in
-          let t2, _ = extract_term locals ty e2 in
-          SL_form (SlUtil.mk_pts ~pos:pos fld ind t2)
-      | BinaryOp (e1, (OpSepStar as op), e2, _, pos)
-      | BinaryOp (e1, (OpSepPlus as op), e2, _, pos)
-      | BinaryOp (e1, (OpSepIncl as op), e2, _, pos) ->
-          let mk_op = function
-            | OpSepStar -> SlUtil.mk_sep_star
-            | OpSepPlus -> SlUtil.mk_sep_plus
-            | OpSepIncl -> SlUtil.mk_sep_incl
-            | _ -> failwith "unexpected operator"
-          in
-          let f1 = extract_sl_form locals e1 in
-          let f2 = extract_sl_form locals e2 in
-          SL_form (mk_op ~pos:pos op f1 f2)
-      | UnaryOp (OpPlus, e, _) ->
-          let t, _ = extract_term locals IntType e in 
-          FOL_term (t, IntType)
-      | UnaryOp (OpMinus, e, _) ->
-          let t, _ = extract_term locals IntType e in
-          FOL_term (GrassUtil.mk_uminus t, IntType)
-      | UnaryOp (OpNot, e, pos) ->
-          (try
-            let f = extract_fol_form locals e in
-            FOL_form (GrassUtil.mk_not f)
-          with ProgError.Prog_error _ ->
-            let f = extract_sl_form locals e in
-            SL_form (SlUtil.mk_not ~pos:pos f))
-      | Ident (id, pos) ->
-          let decl = find_var_decl locals id in
-          let srt = convert_type decl.v_type pos in
-          FOL_term (GrassUtil.mk_free_const srt decl.v_name, decl.v_type)
-      | Annot (e, CommentAnnot c, pos) ->
-          let f = extract_fol_form locals e in
-          FOL_form (GrassUtil.annotate f [Comment c])
-      | Annot (e, GeneratorAnnot (es, ge), pos) ->
-          let f = extract_fol_form locals e in
-          let es1 = List.map (fun e -> fst (extract_term locals AnyType e)) es in
-          let ge1, _ = extract_term locals AnyType ge in
-          let gts = GrassUtil.ground_terms (Atom (ge1, [])) in
-          (*let filter id sm =
-            
-          in*)
-          let matches = 
-            List.map (fun e -> 
-              let ce = GrassUtil.free_consts_term e in
-              let ce_occur_below ts =
-                List.exists 
-                  (function App (FreeSym id, [], _) -> IdSet.mem id ce | _ -> false)
-                  ts
-              in
-              let flt = 
-                TermSet.fold 
-                  (function 
-                    | App (FreeSym sym, ts, _) ->
-                        (function 
-                          | FilterTrue ->
-                              if ce_occur_below ts
-                              then FilterSymbolNotOccurs (FreeSym sym)
-                              else FilterTrue
-                          | flt -> flt)
-                    | App (Read, (App (FreeSym sym, [], srt) :: _ as ts), _) ->
-                        (function 
-                          | FilterTrue ->
-                              if ce_occur_below ts
-                              then FilterNameNotOccurs (GrassUtil.name sym, ([], srt))
-                              else FilterTrue
-                          | flt -> flt)
-                    | _ -> function flt -> flt)
-                  gts FilterTrue
-              in
-              Match (e, flt)) es1
-          in
-          FOL_form (GrassUtil.annotate f [TermGenerator ([], [], matches, ge1)])
-      | _ -> failwith "convert_expr: unexpected expression"
-    and extract_sl_form locals e =
-      match convert_expr locals PermType e with
-      | SL_form f -> f
-      | FOL_form f -> Pure (f, Some (pos_of_expr e))
-      | FOL_term (t, ty) ->
-         type_error (pos_of_expr e) PermType ty
-    and extract_fol_form locals e =
-      match convert_expr locals BoolType e with
-      | SL_form (Sl.Atom (Pred p, ts, pos)) ->
-          GrassUtil.mk_pred ~ann:[SrcPos (pos_of_expr e)] p ts
-      | SL_form _ ->
-          type_error (pos_of_expr e) BoolType PermType
-      | FOL_form f -> f
-      | FOL_term (t, BoolType) -> Grass.Atom (t, [SrcPos (pos_of_expr e)])
-      | FOL_term (t, ty) -> type_error (pos_of_expr e) BoolType ty
-    and extract_term locals ty e =
-      match convert_expr locals PermType e with
-      | SL_form _ -> type_error (pos_of_expr e) ty PermType
-      | FOL_form (BoolOp (And, [])) 
-      | FOL_form (Binder (_, [], BoolOp (And, []), _)) -> 
-          Grass.App (BoolConst true, [], Bool), BoolType
-      | FOL_form (BoolOp (Or, []))
-      | FOL_form (Binder (_, [], BoolOp (Or, []), _)) -> 
-          Grass.App (BoolConst false, [], Bool), BoolType
-      | FOL_form (Atom (t, _)) -> t, BoolType
-      | FOL_form _ -> type_error (pos_of_expr e) ty BoolType
-      | FOL_term (t, tty) ->
-          t, match_types (pos_of_expr e) ty tty
-    in
-    let convert_spec_form pure locals e name msg =
-      let f = 
-        if pure 
-        then FOL (extract_fol_form locals e)
-        else SL (extract_sl_form locals e)
-      in
-      mk_spec_form f name msg (pos_of_expr e)
-    in
-    let convert_loop_contract proc_name locals contract =
-      List.map
-        (function Invariant (e, pure) -> 
-          let msg caller =
-            if caller = proc_name then
-              (Printf.sprintf 
-                "An invariant might not hold before entering a loop in procedure %s"
-                (string_of_ident proc_name),
-               ProgError.mk_error_info "This is the loop invariant that might not hold initially")
-            else 
-              (Printf.sprintf 
-                 "An invariant might not be maintained by a loop in procedure %s"
-                 (string_of_ident proc_name),
-               ProgError.mk_error_info "This is the loop invariant that might not be maintained")
-          in
-          (*let pos = pos_of_expr e in*)
-          convert_spec_form pure locals e "invariant" (Some msg)
-        )
-        contract
-    in
-    let rec convert_stmt proc = 
-      let convert_lhs es tys = 
-        let ts = List.map2 (extract_term proc.p_locals) tys es in
-        match ts with
-        | [App (Read, [App (FreeSym fld, [], _); ind], _), _] -> [fld], Some ind
-        | _ -> 
-            let ids = 
-              List.map 
+            let f0, ann = 
+              match convert_grass_form locals1 f with
+              | Binder (_, [], f0, ann) -> f0, ann
+              | f0 -> f0, []
+            in
+            let f1 = GrassUtil.annotate (mk_guard (GrassUtil.mk_elem v_id e1) f0) ann in
+            let f2 = GrassUtil.subst_consts (IdMap.add id v_id IdMap.empty) f1 in
+            GrassUtil.mk_srcpos pos (mk_quant [(id, elem_srt)] f2)
+        | _ -> failwith "unexpected type")
+    | PredApp (id, es, pos) ->
+        let ts = List.map (convert_term locals) es in 
+        GrassUtil.mk_pred ~ann:[SrcPos pos] id ts
+    | BinaryOp (e1, OpEq, e2, _, pos) ->
+        (match type_of_expr cu locals e1 with
+        | BoolType ->
+            let f1 = convert_grass_form locals e1 in
+            let f2 = convert_grass_form locals e2 in
+            GrassUtil.mk_srcpos pos (GrassUtil.mk_iff f1 f2)
+        | _ ->
+            let t1 = convert_term locals e1 in
+            let t2 = convert_term locals e2 in
+            GrassUtil.mk_srcpos pos (GrassUtil.mk_eq t1 t2))
+    | BinaryOp (e1, (OpGt as op), e2, ty, pos)
+    | BinaryOp (e1, (OpLt as op), e2, ty, pos)
+    | BinaryOp (e1, (OpGeq as op), e2, ty, pos)
+    | BinaryOp (e1, (OpLeq as op), e2, ty, pos) ->
+        let mk_int_form =
+          match op with
+          | OpGt -> GrassUtil.mk_gt
+          | OpLt -> GrassUtil.mk_lt
+          | OpGeq -> GrassUtil.mk_geq
+          | OpLeq -> GrassUtil.mk_leq
+          | _ -> failwith "unexpected operator"
+        in
+        let mk_set_form =
+          match op with
+          | OpGt -> (fun s t -> GrassUtil.mk_strict_subset t s)
+          | OpLt -> GrassUtil.mk_strict_subset
+          | OpGeq -> (fun s t -> GrassUtil.mk_subseteq t s)
+          | OpLeq -> GrassUtil.mk_subseteq
+          | _ -> failwith "unexpected operator"
+        in
+        let t1 = convert_term locals e1 in
+        let t2 = convert_term locals e2 in
+        (match type_of_expr cu locals e1 with
+        | IntType -> GrassUtil.mk_srcpos pos (mk_int_form t1 t2)
+        | SetType _ -> GrassUtil.mk_srcpos pos (mk_set_form t1 t2)
+        | ty -> failwith ("unexpected type " ^ string_of_type ty ^ " at " ^ string_of_src_pos pos)) 
+    | BinaryOp (e1, OpIn, e2, ty, pos) ->
+        let t1 = convert_term locals e1 in
+        let t2 = convert_term locals e2 in
+        GrassUtil.mk_srcpos pos (GrassUtil.mk_elem t1 t2)
+    | UnaryOp (OpNot, e, pos) ->
+        let f = convert_grass_form locals e in
+        GrassUtil.mk_not f
+    | BinaryOp (e1, (OpAnd as op), e2, _, _)
+    | BinaryOp (e1, (OpOr as op), e2, _, _)
+    | BinaryOp (e1, (OpImpl as op), e2, _, _) ->
+        let f1 = convert_grass_form locals e1 in
+        let f2 = convert_grass_form locals e2 in
+        let mk_form = 
+          match op with
+          | OpAnd -> fun f1 f2 -> GrassUtil.mk_and [f1; f2]
+          | OpOr -> fun f1 f2 -> GrassUtil.mk_or [f1; f2]
+          | OpImpl -> GrassUtil.mk_implies           
+          | _ -> failwith "unexpected operator"
+        in
+        mk_form f1 f2
+    | Annot (e, CommentAnnot c, pos) ->
+        let f = convert_grass_form locals e in
+        GrassUtil.annotate f [Comment c]
+    | Annot (e, GeneratorAnnot (es, ge), pos) ->
+        let f = convert_grass_form locals e in
+        let es1 = List.map (convert_term locals) es in
+        let ge1 = convert_term locals ge in
+        let gts = GrassUtil.ground_terms (Atom (ge1, [])) in
+        (*let filter id sm =
+           
+        in*)
+        let matches = 
+          List.map (fun e -> 
+            let ce = GrassUtil.free_consts_term e in
+            let ce_occur_below ts =
+              List.exists 
+                (function App (FreeSym id, [], _) -> IdSet.mem id ce | _ -> false)
+                ts
+            in
+            let flt = 
+              TermSet.fold 
                 (function 
-                  | Ident (id, _) -> id
-                  | e -> 
-                      ProgError.error (pos_of_expr e) 
-                        "Only variables are allowed on left-hand-side of simultaneous assignments"
-                ) es                
-            in ids, None
-      in
-      function
+                  | App (FreeSym sym, ts, _) ->
+                      (function 
+                        | FilterTrue ->
+                            if ce_occur_below ts
+                            then FilterSymbolNotOccurs (FreeSym sym)
+                            else FilterTrue
+                        | flt -> flt)
+                  | App (Read, (App (FreeSym sym, [], srt) :: _ as ts), _) ->
+                      (function 
+                        | FilterTrue ->
+                            if ce_occur_below ts
+                            then FilterNameNotOccurs (GrassUtil.name sym, ([], srt))
+                            else FilterTrue
+                        | flt -> flt)
+                  | _ -> function flt -> flt)
+                gts FilterTrue
+            in
+            Match (e, flt)) es1
+        in
+        GrassUtil.annotate f [TermGenerator ([], [], matches, ge1)]
+    | e ->
+        let t = convert_term locals e in
+        Grass.Atom (t, [SrcPos (pos_of_expr e)])
+  in
+  let rec convert_sl_form locals = function
+    | Emp pos -> SlUtil.mk_emp (Some pos)
+    | Access (e, pos) ->
+        let t = convert_term locals e in
+        SlUtil.mk_region ~pos:pos t
+    | PredApp (id, es, pos) ->
+        let ts = List.map (convert_term locals) es in 
+        SlUtil.mk_pred ~pos:pos id ts
+    | BinaryOp (e1, OpPts, e2, _, pos) ->
+        let fld, ind = 
+          match convert_term locals e1 with
+          | App (Read, [fld; ind], _) -> fld, ind
+          | _ -> 
+              ProgError.error (pos_of_expr e1) 
+                "Expected field access on left-hand-side of points-to predicate"
+        in
+        let t2 = convert_term locals e2 in
+        SlUtil.mk_pts ~pos:pos fld ind t2
+    | BinaryOp (e1, (OpSepStar as op), e2, _, pos)
+    | BinaryOp (e1, (OpSepPlus as op), e2, _, pos)
+    | BinaryOp (e1, (OpSepIncl as op), e2, _, pos) ->
+        let mk_op = function
+          | OpSepStar -> SlUtil.mk_sep_star
+          | OpSepPlus -> SlUtil.mk_sep_plus
+          | OpSepIncl -> SlUtil.mk_sep_incl
+          | _ -> failwith "unexpected operator"
+        in
+        let f1 = convert_sl_form locals e1 in
+        let f2 = convert_sl_form locals e2 in
+        mk_op ~pos:pos op f1 f2
+    | BinaryOp (e1, (OpAnd as op), e2, PermType, _)
+    | BinaryOp (e1, (OpOr as op), e2, PermType, _) ->
+        let f1 = convert_sl_form locals e1 in
+        let f2 = convert_sl_form locals e2 in
+        let mk_form = 
+          match op with
+          | OpAnd -> SlUtil.mk_and
+          | OpOr -> SlUtil.mk_or
+          | _ -> failwith "unexpected operator" 
+        in
+        mk_form f1 f2
+    | Quant (q, decls, f, pos) ->
+        let vars, locals1 = 
+          List.fold_right (fun decl (vars, locals1) ->
+            let id = decl.v_name in
+            let ty = decl.v_type in
+            (id, convert_type ty pos) :: vars, 
+            IdMap.add id decl locals1)
+            decls ([], locals)
+        in
+        let subst = 
+          List.fold_right (fun (id, srt) subst -> 
+            IdMap.add id (GrassUtil.mk_var srt id) subst)
+            vars IdMap.empty
+        in
+        let mk_quant = match q with
+        | Forall -> SlUtil.mk_forall 
+        | Exists -> SlUtil.mk_exists
+        in
+        let f1 = convert_sl_form locals1 f in
+        let f2 = SlUtil.subst_consts subst f1 in
+        mk_quant ~pos:pos vars f2
+    | e ->
+        let f = convert_grass_form locals e in
+        Pure (f, Some (pos_of_expr e))
+  in
+  let convert_spec_form pure locals e name msg =
+    let f = 
+      if pure 
+      then FOL (convert_grass_form locals e)
+      else SL (convert_sl_form locals e)
+    in
+    mk_spec_form f name msg (pos_of_expr e)
+  in
+  let convert_loop_contract proc_name locals contract =
+    List.map
+      (function Invariant (e, pure) -> 
+        let msg caller =
+          if caller = proc_name then
+            (Printf.sprintf 
+               "An invariant might not hold before entering a loop in procedure %s"
+               (string_of_ident proc_name),
+             ProgError.mk_error_info "This is the loop invariant that might not hold initially")
+          else 
+            (Printf.sprintf 
+               "An invariant might not be maintained by a loop in procedure %s"
+               (string_of_ident proc_name),
+             ProgError.mk_error_info "This is the loop invariant that might not be maintained")
+        in
+        (*let pos = pos_of_expr e in*)
+        convert_spec_form pure locals e "invariant" (Some msg)
+      )
+      contract
+  in
+  let rec convert_stmt proc = 
+    let convert_lhs es = 
+      let ts = List.map (convert_term proc.p_locals) es in
+      match ts with
+      | [App (Read, [App (FreeSym fld, [], _); ind], _)] ->
+          [fld], Some ind
+      | _ -> 
+          let ids = 
+            List.map 
+              (function 
+                | Ident (id, _) -> id
+                | e -> 
+                    ProgError.error (pos_of_expr e) 
+                      "Only variables are allowed on left-hand-side of simultaneous assignments"
+              ) es                
+          in
+          ids, None
+    in
+    function
       | Skip pos -> mk_seq_cmd [] pos
       | Block (stmts, pos) ->
           let cmds = List.map (convert_stmt proc) stmts in
@@ -1165,51 +1115,30 @@ let convert cu =
           let sf = convert_spec_form pure proc.p_locals e "assert" None in
           mk_assert_cmd sf pos
       | Assign (lhs, [ProcCall (id, es, cpos)], pos) ->
-          let decl = IdMap.find id cu.proc_decls in
-          let formals = List.filter (fun p -> not (IdMap.find p decl.p_locals).v_implicit) decl.p_formals in
-          let formal_tys = List.map (fun p -> (IdMap.find p decl.p_locals).v_type) formals in
-          let return_tys = List.map (fun p -> (IdMap.find p decl.p_locals).v_type) decl.p_returns in
           let args = 
-            List.map2 (fun ty e -> fst (extract_term proc.p_locals ty e)) formal_tys es
+            List.map (convert_term proc.p_locals) es
           in 
-          let lhs_ids, _ = 
-            try convert_lhs lhs return_tys
-            with Invalid_argument _ ->
-              ProgError.error pos
-              (Printf.sprintf "Procedure %s has %d return value(s)" 
-                 (fst id) (List.length return_tys))
-          in
+          let lhs_ids, _ = convert_lhs lhs in
           mk_call_cmd lhs_ids id args cpos
       | Assign ([lhs], [New (id, npos)], pos) ->
-          let lhs_ids, _ = convert_lhs [lhs] [StructType id] in
+          let lhs_ids, _ = convert_lhs [lhs] in
           let lhs_id = List.hd lhs_ids in
           mk_new_cmd lhs_id (Loc id) pos
       | Assign (lhs, rhs, pos) ->
-          let rhs_ts, rhs_tys = 
-            Util.map_split (fun e ->
-              match convert_expr proc.p_locals AnyType e with
-              | SL_form _ -> ProgError.error (pos_of_expr e) "Permissions cannot be assigned"
-              | FOL_term (t, ty) -> t, ty
-              | FOL_form f -> 
-                  extract_term proc.p_locals BoolType e)
-              rhs
-          in
-          let lhs_ids, ind_opt =
-            try convert_lhs lhs rhs_tys
-            with Invalid_argument _ -> assignment_mismatch_error pos
-          in
+          let rhs_ts = List.map (convert_term proc.p_locals) rhs in
+          let lhs_ids, ind_opt = convert_lhs lhs in
           let cmd =
             (match ind_opt with
             | Some t ->
-                let sid = GrassUtil.struct_id_of_term t in
-                let fld_srt = GrassUtil.field_sort sid (convert_type (List.hd rhs_tys) pos) in
-                let fld = GrassUtil.mk_free_const fld_srt (List.hd lhs_ids) in
+                let fld_id = List.hd lhs_ids in
+                let fld_srt = convert_type (field_type pos fld_id) pos in
+                let fld = GrassUtil.mk_free_const fld_srt fld_id in
                 mk_assign_cmd lhs_ids [GrassUtil.mk_write fld t (List.hd rhs_ts)] pos
             | None -> mk_assign_cmd lhs_ids rhs_ts pos)
           in
           cmd
       | Dispose (e, pos) ->
-          let t, _ = extract_term proc.p_locals AnyRefType e in
+          let t = convert_term proc.p_locals e in
           mk_dispose_cmd t pos
       | Havoc (es, pos) ->
           let ids = 
@@ -1222,7 +1151,7 @@ let convert cu =
           in 
           mk_havoc_cmd ids pos
       | If (c, t, e, pos) ->
-          let cond = extract_fol_form proc.p_locals c in
+          let cond = convert_grass_form proc.p_locals c in
           let t_cmd = convert_stmt proc t in
           let e_cmd = convert_stmt proc e in
           let t_msg = "The 'then' branch of this conditional has been taken on the error trace" in
@@ -1231,97 +1160,90 @@ let convert cu =
       | Loop (contract, preb, cond, postb, pos) ->
           let preb_cmd = convert_stmt proc preb in
           let cond_pos = pos_of_expr cond in
-          let cond = extract_fol_form proc.p_locals cond in
+          let cond = convert_grass_form proc.p_locals cond in
           let invs = convert_loop_contract proc.p_name proc.p_locals contract in
           let postb_cmd = convert_stmt proc postb in
           mk_loop_cmd invs preb_cmd cond cond_pos postb_cmd pos
       | Return (es, pos) ->
-          let return_tys = List.map (fun p -> (IdMap.find p proc.p_locals).v_type) proc.p_returns in
-          let ts = 
-            try List.map2 (fun ty e -> fst (extract_term proc.p_locals ty e)) return_tys es
-            with Invalid_argument _ -> 
-              ProgError.error pos 
-                (Printf.sprintf "Procedure %s returns %d values(s), found %d" 
-                   (fst proc.p_name) (List.length return_tys) (List.length es))
-          in
+          let ts = List.map (convert_term proc.p_locals) es in
           mk_return_cmd ts pos
       | _ -> failwith "unexpected statement"
-    in
-    let prog =
-      IdMap.fold
-        (fun id decl prog -> declare_global prog (convert_var_decl decl))
-        cu.var_decls empty_prog
-    in
-    let prog =
-      IdMap.fold 
-        (fun id decl prog ->
-          let body = extract_fol_form decl.pr_locals decl.pr_body in
-          let pred_decl = 
-            { pred_name = id;
-              pred_formals = decl.pr_formals;
-              pred_outputs = decl.pr_outputs;
-              pred_footprints = decl.pr_footprints;
-              pred_locals = IdMap.map convert_var_decl decl.pr_locals;
-              pred_body = mk_spec_form (FOL body) (string_of_ident id) None (pos_of_expr decl.pr_body);
-              pred_pos = decl.pr_pos;
-              pred_accesses = IdSet.empty;
-              pred_is_free = false
-            }
-          in
-         declare_pred prog pred_decl
-        )
-        cu.pred_decls prog
-    in
-    let convert_contract proc_name locals contract =
-      List.fold_right 
-        (function 
-          | Requires (e, pure) -> fun (pre, post) -> 
-              let mk_msg caller =
-                Printf.sprintf 
-                  "A precondition for this call of %s might not hold"
-                  (string_of_ident proc_name),
-                ProgError.mk_error_info "This is the precondition that might not hold"
-              in
-              let name = "precondition of " ^ string_of_ident proc_name in
-              convert_spec_form pure locals e name (Some mk_msg) :: pre, post
-          | Ensures (e, pure) -> fun (pre, post) ->
-              let mk_msg caller =
-                Printf.sprintf 
-                  "A postcondition of procedure %s might not hold at this return point"
-                  (string_of_ident proc_name),
-                ProgError.mk_error_info "This is the postcondition that might not hold"
-              in 
-              let name = "postcondition of " ^ string_of_ident proc_name in
-              pre, convert_spec_form pure locals e name (Some mk_msg) :: post)
-        contract ([], [])
-    in
-    let convert_body decl =
-      match decl.p_body with
-      | Skip _ -> None
-      | _ -> Some (convert_stmt decl decl.p_body)
-    in
-    let prog =
-      IdMap.fold
-        (fun id decl prog ->
-          let pre, post = convert_contract decl.p_name decl.p_locals decl.p_contracts in
-          let proc_decl =
-            { proc_name = id;
-              proc_formals = decl.p_formals;
-              proc_returns = decl.p_returns;
-              proc_locals = IdMap.map convert_var_decl decl.p_locals;
-              proc_precond = pre;
-              proc_postcond = post;
-              proc_body = convert_body decl;
-              proc_pos = decl.p_pos;
-              proc_deps = [];
-              proc_is_tailrec = false;
-           } 
-          in
-          declare_proc prog proc_decl
-        )
-        cu.proc_decls prog
-    in
-    prog
+  in
+  let prog =
+    IdMap.fold
+      (fun id decl prog -> declare_global prog (convert_var_decl decl))
+      cu.var_decls empty_prog
+  in
+  let prog =
+    IdMap.fold 
+      (fun id decl prog ->
+        let body = convert_grass_form decl.pr_locals decl.pr_body in
+        let pred_decl = 
+          { pred_name = id;
+            pred_formals = decl.pr_formals;
+            pred_outputs = decl.pr_outputs;
+            pred_footprints = decl.pr_footprints;
+            pred_locals = IdMap.map convert_var_decl decl.pr_locals;
+            pred_body = mk_spec_form (FOL body) (string_of_ident id) None (pos_of_expr decl.pr_body);
+            pred_pos = decl.pr_pos;
+            pred_accesses = IdSet.empty;
+            pred_is_free = false
+          }
+        in
+        declare_pred prog pred_decl
+      )
+      cu.pred_decls prog
+  in
+  let convert_contract proc_name locals contract =
+    List.fold_right 
+      (function 
+        | Requires (e, pure) -> fun (pre, post) -> 
+            let mk_msg caller =
+              Printf.sprintf 
+                "A precondition for this call of %s might not hold"
+                (string_of_ident proc_name),
+              ProgError.mk_error_info "This is the precondition that might not hold"
+            in
+            let name = "precondition of " ^ string_of_ident proc_name in
+            convert_spec_form pure locals e name (Some mk_msg) :: pre, post
+        | Ensures (e, pure) -> fun (pre, post) ->
+            let mk_msg caller =
+              Printf.sprintf 
+                "A postcondition of procedure %s might not hold at this return point"
+                (string_of_ident proc_name),
+              ProgError.mk_error_info "This is the postcondition that might not hold"
+            in 
+            let name = "postcondition of " ^ string_of_ident proc_name in
+            pre, convert_spec_form pure locals e name (Some mk_msg) :: post)
+      contract ([], [])
+  in
+  let convert_body decl =
+    match decl.p_body with
+    | Skip _ -> None
+    | _ -> Some (convert_stmt decl decl.p_body)
+  in
+  let prog =
+    IdMap.fold
+      (fun id decl prog ->
+        let pre, post = convert_contract decl.p_name decl.p_locals decl.p_contracts in
+        let proc_decl =
+          { proc_name = id;
+            proc_formals = decl.p_formals;
+            proc_returns = decl.p_returns;
+            proc_locals = IdMap.map convert_var_decl decl.p_locals;
+            proc_precond = pre;
+            proc_postcond = post;
+            proc_body = convert_body decl;
+            proc_pos = decl.p_pos;
+            proc_deps = [];
+            proc_is_tailrec = false;
+          } 
+        in
+        declare_proc prog proc_decl
+      )
+      cu.proc_decls prog
+  in
+  prog
 
 let to_program cu =
   let cu1 = resolve_names cu in

@@ -16,6 +16,7 @@ type typ =
   | SetType of typ
   | IntType
   | BoolType
+  | UnitType
   | AnyRefType
   | PermType (* SL formulas *)
   | AnyType
@@ -270,6 +271,7 @@ let rec pr_type ppf = function
   | AnyRefType -> fprintf ppf "AnyRef" 
   | BoolType -> fprintf ppf "%s" bool_sort_string
   | IntType -> fprintf ppf "%s" int_sort_string
+  | UnitType -> fprintf ppf "Unit"
   | StructType id -> pr_ident ppf id
   | MapType (d, r) -> fprintf ppf "%s<@[%a,@ %a@]>" map_sort_string pr_type d pr_type r
   | SetType s -> fprintf ppf "%s<@[%a@]>" set_sort_string pr_type s

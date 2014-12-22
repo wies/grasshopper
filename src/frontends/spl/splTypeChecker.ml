@@ -32,6 +32,25 @@ let match_types pos oty1 oty2 =
     | _ -> type_error pos oty1 oty2
   in mt oty1 oty2
 
+let merge_types pos oty1 oty2 =
+  let rec mt ty1 ty2 =
+    match ty1, ty2 with
+    | PermType, BoolType -> PermType
+    | BoolType, PermType -> PermType
+    | AnyRefType, StructType _ -> ty2
+    | StructType _, AnyRefType -> ty1
+    | AnyType, _ -> ty2
+    | _, AnyType -> ty1
+    | SetType ty1, SetType ty2 ->
+        SetType (mt ty1 ty2)
+    | MapType (dty1, rty1), MapType (dty2, rty2) ->
+        let dty = mt dty1 dty2 in
+        let rty = mt rty1 rty2 in
+        MapType (dty, rty)
+    | ty, tty when ty = tty -> ty2
+    | _ -> type_error pos oty1 oty2
+  in mt oty1 oty2
+
 (** Computes SPL type of expression [e] in compilation unit [cu] and environment [locals].
   * Assumes that all identifiers in [e] have been resolved. *)
 let type_of_expr cu locals e = 
@@ -88,7 +107,7 @@ let type_of_expr cu locals e =
         | [rid] -> 
             let rdecl = IdMap.find rid decl.p_locals in
             rdecl.v_type
-        | _ -> AnyType)
+        | _ -> UnitType)
     | PredApp (id, _, _) ->
         let decl = IdMap.find id cu.pred_decls in
         (match decl.pr_outputs with
@@ -118,116 +137,108 @@ let infer_types cu locals ty e =
   let rec it locals ty = function
     (* Non-ambiguous Boolean operators *)
     | UnaryOp (OpNot, e, pos) ->
-        UnaryOp (OpNot, it locals BoolType e, pos)
+        let e1, ty = it locals ty e in
+        UnaryOp (OpNot, e1, pos), ty
     | BinaryOp (e1, OpImpl, e2, _, pos) ->
-        let ty, e1, e2 = itp locals BoolType e1 e2 in
-        ignore (match_types pos ty BoolType);
-        BinaryOp (e1, OpImpl, e2, BoolType, pos)
+        let e1, e2, ty = itp locals BoolType e1 e2 in
+        BinaryOp (e1, OpImpl, e2, ty, pos), ty
     (* Ambiguous relational operators *)
     | BinaryOp (e1, (OpEq as op), e2, _, pos)
     | BinaryOp (e1, (OpGt as op), e2, _, pos)
     | BinaryOp (e1, (OpLt as op), e2, _, pos)
     | BinaryOp (e1, (OpGeq as op), e2, _, pos)
     | BinaryOp (e1, (OpLeq as op), e2, _, pos) ->
-        let _, e1, e2 = itp locals AnyType e1 e2 in
-        let ty = match_types pos ty BoolType in
-        BinaryOp (e1, op, e2, ty, pos)
+        let e1, e2, _ = itp locals AnyType e1 e2 in
+        ignore (match_types pos ty BoolType);
+        BinaryOp (e1, op, e2, BoolType, pos), BoolType
     (* Unary integer operators *)
     | UnaryOp (OpMinus, e, pos) ->
-        let e1 = it locals IntType e in
+        let e1, _ = it locals IntType e in
         ignore (match_types pos ty IntType);
-        UnaryOp (OpMinus, e1, pos)
+        UnaryOp (OpMinus, e1, pos), IntType
     (* Binary integer operators *)
     | BinaryOp (e1, (OpMinus as op), e2, _, pos)
     | BinaryOp (e1, (OpPlus as op), e2, _, pos)
     | BinaryOp (e1, (OpMult as op), e2, _, pos)
     | BinaryOp (e1, (OpDiv as op), e2, _, pos)
-    (* Ambiguous binary Boolean operatators *)
+    (* Ambiguous binary Boolean operators *)
     | BinaryOp (e1, (OpAnd as op), e2, _, pos)
     | BinaryOp (e1, (OpOr as op), e2, _, pos)
     (* Binary set operators *)
     | BinaryOp (e1, (OpDiff as op), e2, _, pos)
     | BinaryOp (e1, (OpUn as op), e2, _, pos)
     | BinaryOp (e1, (OpInt as op), e2, _, pos) ->
-        let ty, e1, e2 = itp locals ty e1 e2 in
-        BinaryOp (e1, op, e2, ty, pos)
+        let e1, e2, ty = itp locals ty e1 e2 in
+        BinaryOp (e1, op, e2, ty, pos), ty
     | BinaryOp (e1, OpIn, e2, _, pos) ->
-        let e1 = it locals AnyType e1 in
-        let ety = type_of_expr cu locals e1 in
-        let e2 = it locals (SetType ety) e2 in
-        let ety1 = match type_of_expr cu locals e2 with
-        | SetType ety1 -> ety1
+        let e1, ty1 = it locals AnyType e1 in
+        let e2, ty2 = it locals (SetType ty1) e2 in
+        let ty11 = match ty2 with
+        | SetType ty11 -> ty11
         | _ -> failwith "impossible"
         in
         let e1 =
-          if ety1 <> ety then it locals ety1 e1 else e1
+          if ty1 <> ty11 then fst (it locals ty11 e1) else e1
         in
         ignore (match_types pos ty BoolType);
-        BinaryOp (e1, OpIn, e2, BoolType, pos)
+        BinaryOp (e1, OpIn, e2, BoolType, pos), BoolType
     (* Integer constants *)
     | IntVal (_, pos) as e ->
-        ignore (match_types pos ty IntType);
-        e
+        e, match_types pos ty IntType
     (* Boolean constants *)
     | BoolVal (_, pos) as e ->
         ignore (match_types pos ty BoolType);
-        e
+        e, BoolType
     (* Permissions *)
     | Emp pos as e ->
-        ignore (match_types pos ty PermType);
-        e
+        e, match_types pos ty PermType
     | Access (e, pos) ->
-        let e = it locals (SetType AnyRefType) e in
-        ignore (match_types pos ty PermType);
-        Access (e, pos)
+        let e, _ = it locals (SetType AnyRefType) e in
+        Access (e, pos), match_types pos ty PermType
     | BinaryOp (e1, (OpSepStar as op), e2, _, pos)
     | BinaryOp (e1, (OpSepPlus as op), e2, _, pos)
     | BinaryOp (e1, (OpSepIncl as op), e2, _, pos) ->
-        let ty, e1, e2 = itp locals PermType e1 e2 in
-        ignore (match_types pos ty PermType);
-        BinaryOp (e1, op, e2, PermType, pos)
+        let e1, e2, _ = itp locals (match_types pos ty PermType) e1 e2 in
+        BinaryOp (e1, op, e2, PermType, pos), PermType
     | BinaryOp (e1, OpPts, e2, _, pos) ->
-        let _, e1, e2 = itp locals AnyType e1 e2 in
-        ignore (match_types pos ty PermType);
-        BinaryOp (e1, OpPts, e2, PermType, pos)
+        let e1, e2, _ = itp locals AnyType e1 e2 in
+        let ty = match_types pos ty PermType in
+        BinaryOp (e1, OpPts, e2, ty, pos), ty
     (* Set enumerations *)
     | Setenum (ety, es, pos) ->
-        let ety1, es1 =
-          List.fold_right (fun e (ety, es) ->
-            let e = it locals ety e in
-            type_of_expr cu locals e, e :: es)
-            es (ety, [])
+        let es1, ety1 =
+          List.fold_right (fun e (es, ety) ->
+            let e, ety1 = it locals ety e in
+            e :: es, ety1)
+            es ([], ety)
         in
         let es1 =
           if ety <> ety1
-          then List.map (it locals ety1) es1
+          then List.map (fun e -> fst (it locals ety1 e)) es1
           else es1
         in
-        ignore (match_types pos ty (SetType ety));
-        Setenum (ety1, es1, pos)
+        Setenum (ety1, es1, pos), match_types pos ty (SetType ety)
     | GuardedQuant (b, id, e, f, pos) ->
-        let e1 = it locals (SetType AnyType) e in
-        let ety = type_of_expr cu locals e1 in
+        let e1, ety = it locals (SetType AnyType) e in
         let idty = match ety with
         | SetType ty -> ty
         | _ -> type_error pos (SetType AnyType) ety
         in
         let decl = var_decl id idty false false pos pos in
         let locals1 = IdMap.add id decl locals in
-        let f1 = it locals1 ty f in
-        GuardedQuant (b, id, e1, f1, pos)
+        let f1, ty = it locals1 (match_types pos ty BoolType) f in
+        GuardedQuant (b, id, e1, f1, pos), ty
     | Quant (b, decls, f, pos) ->
         let locals1 =
           List.fold_right
             (fun decl locals1 -> IdMap.add decl.v_name decl locals1)
             decls locals
         in
-        let f1 = it locals1 ty f in
-        Quant (b, decls, f1, pos)
+        let f1, ty = it locals1 (match_types pos ty BoolType) f in
+        Quant (b, decls, f1, pos), ty
     (* Reference types *)
-    | New (id, pos) as e->
-        ignore (match_types pos ty (StructType id));
-        e
+    | New (id, pos) as e ->
+        e, match_types pos ty (StructType id)
     | Dot (e, id, pos) ->
         let decl = IdMap.find id cu.var_decls in
         let dty, rty =
@@ -236,14 +247,14 @@ let infer_types cu locals ty e =
               dty, rty
           | fty -> type_error pos (MapType (AnyRefType, AnyType)) fty
         in
-        let e1 = it locals dty e in
-        ignore (match_types pos ty rty);
-        Dot (e1, id, pos)
-    | Null (nty, pos) -> Null (match_types pos ty nty, pos)
+        let e1, _ = it locals dty e in
+        Dot (e1, id, pos), match_types pos ty rty
+    | Null (nty, pos) ->
+        let ty = match_types pos ty nty in
+        Null (ty, pos), ty
     (* Other stuff *)
     | BtwnPred (e1, e2, e3, e4, pos) ->
-        let e1 = it locals (MapType (AnyRefType, AnyRefType)) e1 in
-        let fty = type_of_expr cu locals e1 in
+        let e1, fty = it locals (MapType (AnyRefType, AnyRefType)) e1 in
         let id = match fty with
         | MapType (StructType id1, StructType id2) ->
             if id1 <> id2
@@ -251,10 +262,10 @@ let infer_types cu locals ty e =
             else id1
         | _ -> failwith "impossible"
         in
-        let e2 = it locals (StructType id) e2 in
-        let e3 = it locals (StructType id) e3 in
-        let e4 = it locals (StructType id) e4 in
-        BtwnPred (e1, e2, e3, e4, pos)
+        let e2, _ = it locals (StructType id) e2 in
+        let e3, _ = it locals (StructType id) e3 in
+        let e4, _ = it locals (StructType id) e4 in
+        BtwnPred (e1, e2, e3, e4, pos), match_types pos ty BoolType
     | ProcCall (id, es, pos) ->
         let decl = IdMap.find id cu.proc_decls in
         let formals = List.filter (fun p -> not (IdMap.find p decl.p_locals).v_implicit) decl.p_formals in
@@ -265,16 +276,18 @@ let infer_types cu locals ty e =
             formals
         in
         let es1 =
-          try List.map2 (it locals) ftys es
+          try List.map2 (fun ty e -> fst (it locals ty e)) ftys es
           with Invalid_argument _ ->
             proc_arg_mismatch_error pos id ftys
         in
-        (match decl.p_returns with
-        | [rid] -> 
-            let rdecl = IdMap.find rid decl.p_locals in
-            ignore (match_types pos ty rdecl.v_type)
-        | _ -> ());
-        ProcCall (id, es1, pos)
+        let rty =
+          match decl.p_returns with
+          | [rid] -> 
+              let rdecl = IdMap.find rid decl.p_locals in
+              match_types pos ty rdecl.v_type
+          | _ -> match_types pos ty UnitType
+        in
+        ProcCall (id, es1, pos), rty
     | PredApp (id, es, pos) ->
         let decl = IdMap.find id cu.pred_decls in
         let ftys =
@@ -283,7 +296,7 @@ let infer_types cu locals ty e =
             (decl.pr_formals @ decl.pr_footprints)
         in
         let es1, rftys, res =
-          Util.map2_remainder (it locals) ftys es
+          Util.map2_remainder (fun ty e -> fst (it locals ty e)) ftys es
         in
         (* Check whether number of actual arguments is correct *)
         let _ = 
@@ -297,14 +310,15 @@ let infer_types cu locals ty e =
           | _ -> ()
         in
         (* Check whether return type matches expected type *)
-        let _ =
+        let rty =
           match decl.pr_outputs with
           | [rid] -> 
-            let rdecl = IdMap.find rid decl.pr_locals in
-            ignore (match_types pos ty rdecl.v_type)
-          | _ -> ()
+              let rdecl = IdMap.find rid decl.pr_locals in
+              match_types pos ty rdecl.v_type
+          | _ ->
+              match_types pos ty BoolType
         in
-        PredApp (id, es1, pos)
+        PredApp (id, es1, pos), rty
     | Ident (id, pos) as e ->
         let decl = 
           try
@@ -312,24 +326,26 @@ let infer_types cu locals ty e =
           with Not_found ->
             IdMap.find id cu.var_decls
         in
-        let _ = match_types pos ty decl.v_type in
-        e
+        e, match_types pos ty decl.v_type
     | Annot (e, a, pos) ->
         (* TODO: check annotation *)
-        Annot (it locals ty e, a, pos)
+        let e1, ty = it locals ty e in
+        Annot (e1, a, pos), ty
     | UnaryOp _
     | BinaryOp _ -> failwith "impossible"
   and itp locals ty e1 e2 =
-    let e1 = it locals ty e1 in
-    let ty1 = match_types (pos_of_expr e1) ty (type_of_expr cu locals e1) in
-    let e2 = it locals ty1 e2 in
-    let ty2 = match_types (pos_of_expr e2) ty (type_of_expr cu locals e2) in
+    let e1, ty1 = it locals ty e1 in
+    let e2, ty2 = it locals ty e2 in
+    let ty = merge_types (pos_of_expr e2) ty1 ty2 in
     let e1 =
-      if ty1 <> ty2
-      then it locals ty2 e1
+      if ty1 <> ty 
+      then fst (it locals ty e1)
       else e1
     in
-    ty2, e1, e2
-  in it locals ty e
-
-
+    let e2 =
+      if ty2 <> ty
+      then fst (it locals ty e2)
+      else e2
+    in
+    e1, e2, ty
+  in fst (it locals ty e)
