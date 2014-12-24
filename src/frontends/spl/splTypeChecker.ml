@@ -349,3 +349,14 @@ let infer_types cu locals ty e =
     in
     e1, e2, ty
   in fst (it locals ty e)
+
+let rec is_abstract_type = function
+  | AnyRefType
+  | AnyType -> true
+  | SetType ty -> is_abstract_type ty
+  | MapType (dty, rty) ->
+      is_abstract_type dty ||
+      is_abstract_type rty
+  | _ -> false
+
+    

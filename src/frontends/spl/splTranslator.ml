@@ -33,8 +33,12 @@ let assignment_mismatch_error pos =
   ProgError.error pos 
     "Mismatch in number of expressions on left and right side of assignment"                
 
+let abstract_initializer_error pos id =
+  ProgError.error pos
+    ("Unable to infer unique type from initializer of variable " ^ GrassUtil.name id ^ ". Type annotation required.")
+    
 let null_access_error pos =
-  ProgError.error pos "Tried to dereference of access null"
+  ProgError.error pos "Tried to dereference of access null."
 
 let footprint_declaration_error id pos =
   ProgError.error pos ("Footprint parameter " ^ string_of_ident id ^ " has an unexpected type. Expected type " ^
@@ -256,10 +260,9 @@ let resolve_names cu =
           match es_opt with
           | Some es ->
               let es1, tys = 
-                List.split 
-                  (List.map (fun e -> 
+                Util.map_split (fun e -> 
                     let e1 = resolve_expr locals tbl e in
-                    e1, type_of_expr cu locals e1) es)
+                    e1, type_of_expr cu locals e1) es
               in
               Some es1, tys
           | None ->
@@ -271,7 +274,10 @@ let resolve_names cu =
               (fun decl ty (ids, locals, tbl) ->
                 let decl = 
                   match decl.v_type with
-                  | AnyType -> { decl with v_type = ty }
+                  | AnyType ->
+                      if is_abstract_type ty then
+                        abstract_initializer_error pos decl.v_name;
+                      { decl with v_type = ty }
                   | _ -> decl
                 in
                 let decl, tbl = declare_var structs decl tbl in
@@ -734,6 +740,7 @@ let convert cu =
   let convert_type ty pos =
     let rec ct = function
       | StructType id -> Loc id
+      | AnyRefType -> Loc ("Null", 0)
       | MapType (dtyp, rtyp) -> Map (ct dtyp, ct rtyp)
       | SetType typ -> Set (ct typ)
       | IntType -> Int

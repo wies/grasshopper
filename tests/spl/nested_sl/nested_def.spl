@@ -11,12 +11,12 @@ struct InnerNode {
 }
 
 function lseg_footprint(x: InnerNode, y: InnerNode)
-  returns (FP: Set<Loc<InnerNode>>)
+  returns (FP: Set<InnerNode>)
 {
-  forall z: Loc<InnerNode> :: z in FP == (Btwn(inext, x, z, y) && z != y)
+  forall z: InnerNode :: z in FP == (Btwn(inext, x, z, y) && z != y)
 }
 
-predicate lseg(x: InnerNode, y: InnerNode, FP: Set<Loc<InnerNode>>) {
+predicate lseg(x: InnerNode, y: InnerNode)(FP: Set<InnerNode>) {
   Reach(inext, x, y) && 
   FP == lseg_footprint(x, y)
 }
@@ -28,22 +28,22 @@ function nlseg_outer_footprint(x: OuterNode, y: OuterNode)
 }
 
 function nlseg_inner_footprint(x: OuterNode, y: OuterNode) 
-  returns (FP: Set<Loc<InnerNode>>)
+  returns (FP: Set<InnerNode>)
 {
-  (forall z: Loc<InnerNode> :: z in FP ==>
+  (forall z: InnerNode :: z in FP ==>
    z.head in nlseg_outer_footprint(x, y)) &&
-  (forall z: Loc<InnerNode>, zh<OuterNode>: Loc :: z in FP && zh == z.head ==>
+    (forall z: InnerNode, zh: OuterNode :: z in FP && zh == z.head ==>
    /* z in lseg_footprint(zh.down, null) */
    Btwn(inext, zh.down, z, null) && z != null
    @(matching z yields z.head)
    @(matching zh yields zh.down)) &&
-  (forall zh: Loc<OuterNode>, z: Loc<InnerNode> :: 
+  (forall zh: OuterNode, z: InnerNode :: 
    zh in nlseg_outer_footprint(x, y) &&
    /*z in lseg_footprint(zh.down, null)*/
    Btwn(inext, zh.down, z, null) && z != null ==> z in FP)
 }
 
-predicate nlseg(x: OuterNode, y: OuterNode, FP0: Set<Loc<OuterNode>>, FP1: Set<Loc<InnerNode>>) {
+predicate nlseg(x: OuterNode, y: OuterNode)(FP0: Set<OuterNode>, FP1: Set<InnerNode>) {
   Reach(onext, x, y) &&
   (forall u: OuterNode, v: InnerNode ::
      u in nlseg_outer_footprint(x, y) && v in nlseg_inner_footprint(x, y) && 
