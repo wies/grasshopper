@@ -52,7 +52,7 @@ let get_version name cmd vregexp versions =
       Some { name = name;
            info = v; }
     else (print_endline "no match"; raise Not_found)
-    with Not_found -> None
+    with _ -> None
 
 let z3_v3 = { version = 3;
               subversion = 2;

@@ -1032,7 +1032,7 @@ let convert cu =
           | _ -> failwith "unexpected operator" 
         in
         mk_form f1 f2
-    | Quant (q, decls, f, pos) ->
+    | Quant (q, decls, f, pos) when q = Exists ->
         let vars, locals1 = 
           List.fold_right (fun decl (vars, locals1) ->
             let id = decl.v_name in
