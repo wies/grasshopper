@@ -30,6 +30,8 @@ procedure insert(x: OuterNode) returns (res: OuterNode)
       o.down := null;
       curr.onext := o;
       curr := o;
+    } else {
+      assume false;
     }
     //insert in inner list
     if (curr.down == null) {
@@ -37,7 +39,9 @@ procedure insert(x: OuterNode) returns (res: OuterNode)
       curr.down := i;
       i.head := curr;
       i.inext := null;
+      return x;
     } else {
+      assume false;
       havoc nondet;
       var icurr := curr.down;
       //traverse the inner list
@@ -51,7 +55,7 @@ procedure insert(x: OuterNode) returns (res: OuterNode)
       i.inext := icurr.inext;
       icurr.inext := i;
       i.head := curr;
+      return x;
     }
-    return x;
   }
 }

@@ -22,7 +22,7 @@ predicate lseg(x: InnerNode, y: InnerNode)(FP: Set<InnerNode>) {
 }
 
 function nlseg_outer_footprint(x: OuterNode, y: OuterNode) 
-  returns (FP: Set<Loc<OuterNode>>) 
+  returns (FP: Set<OuterNode>) 
 {
   forall z: Loc<OuterNode> :: z in FP == (Btwn(onext, x, z, y) && z != y)
 }
