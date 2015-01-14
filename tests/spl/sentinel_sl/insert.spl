@@ -1,0 +1,21 @@
+include "ssllist.spl";
+
+procedure insert(lst: Node, elt: Node) 
+  requires slist(lst) &*& elt.next |-> null
+  ensures slist(lst)
+{
+  var nondet: Bool;
+  var curr := lst.next;
+  if (curr == null) {
+    lst.next := elt;
+  } else {
+    while (nondet && curr.next != null) 
+      invariant acc(curr) -** lseg(lst.next, null)
+    {
+      havoc nondet;
+      curr := curr.next;
+    }
+    elt.next := curr.next;
+    curr.next := elt;
+  }
+}

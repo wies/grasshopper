@@ -1,0 +1,21 @@
+include "ssllist.spl";
+
+procedure filter(lst: Node)
+  requires slist(lst)
+  ensures slist(lst)
+{
+  var prv: Node, curr := lst, lst.next;
+  while (curr != null) 
+    invariant (prv.next |-> curr) -** slist(lst);
+  {
+    var old_curr := curr;
+    curr := curr.next; 
+    var nondet: Bool;
+    if (nondet) {
+      prv.next := old_curr.next;
+      free old_curr;
+    } else {
+      prv := old_curr;
+    }
+  }
+}

@@ -1,0 +1,29 @@
+include "ssllist.spl";
+
+procedure clear(lst: Node)
+  requires slist(lst)
+  ensures slist(lst) &*& lst.next == null
+{
+  var curr := lst.next;
+  lst.next := null;
+  while (curr != null) 
+    invariant lseg(curr, null)
+  {
+    var prev := curr;
+    curr := curr.next; 
+    free(prev);
+  }
+}
+
+procedure dispose(lst: Node)
+  requires slist(lst)
+  ensures emp
+{
+  while (lst != null) 
+    invariant lseg(lst, null)
+  {
+    var curr := lst;
+    lst := lst.next; 
+    free(curr);
+  }
+}

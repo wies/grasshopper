@@ -1,0 +1,14 @@
+include "ssllist.spl";
+
+procedure traverse(lst: Node)
+  requires slist(lst)
+  ensures slist(lst)
+{
+  var curr := lst.next;
+  while (curr != null) 
+    invariant lseg(lst, curr)
+    invariant lseg(curr, null)
+  {
+    curr := curr.next; 
+  }
+}
