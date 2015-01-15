@@ -1,0 +1,44 @@
+include "ssllist.spl";
+
+procedure copy(lst: Node) returns (res: Node)
+  requires slist(lst)
+  ensures slist(lst) &*& slist(res)
+{
+  var curr := lst.next;
+  var cp := new Node;
+  cp.next := null;
+  var last := cp;
+  while (curr != null) 
+    invariant acc(lst)
+    invariant (curr == null || acc(curr)) -** lseg(lst.next, null)
+    invariant lseg(cp,last) &*& last.next |-> null
+  {
+    last.next := new Node;
+    last := last.next;
+    last.next := null;
+    curr := curr.next;
+  }
+  return cp;
+}
+
+/*
+procedure copy_strange(lst: Node) returns (res: Node)
+  requires slist(lst)
+  ensures slist(lst) &*& slist(res)
+{
+  var curr := lst.next;
+  var cp := new Node;
+  cp.next := null;
+  var last := cp;
+  while (curr != null) 
+    invariant (curr == null || acc(curr)) -** lseg(lst.next, null)
+    invariant lseg(cp,last) &*& last.next |-> null
+  {
+    last.next := new Node;
+    last := last.next;
+    last.next := null;
+    curr := curr.next;
+  }
+  return cp;
+}
+*/

@@ -1,0 +1,17 @@
+// Structure and predicate declarations for singly-linked lists
+
+struct Node {
+  var next: Node;
+}
+
+function lseg_footprint(x: Node, y: Node) returns (FP: Set<Node>) {
+  forall z: Node :: z in FP == (Btwn(next, x, z, y) && z != y)
+}
+
+predicate lseg(x: Node, y: Node)(FP: Set<Node>) {
+  Reach(next, x, y) && FP == lseg_footprint(x, y)
+}
+
+predicate slist(x: Node)(FP: Set<Node>) {
+  Reach(next, x, null) && x != null && FP == lseg_footprint(x, null)
+}

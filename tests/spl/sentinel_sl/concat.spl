@@ -1,0 +1,22 @@
+include "ssllist.spl";
+
+procedure concat(a: Node, b: Node)
+  returns (res: Node)
+  requires slist(a) &*& slist(b)
+  ensures slist(res)
+{
+  if (a.next == null) {
+    free(a);
+    return b;
+  } else {
+    var curr := a.next;
+    while (curr.next != null) 
+      invariant acc(curr) -** lseg(a.next, null)
+    {
+      curr := curr.next; 
+    }
+    curr.next := b.next;
+    free(b);
+    return a;
+  }
+}

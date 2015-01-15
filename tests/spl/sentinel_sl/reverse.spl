@@ -1,0 +1,21 @@
+include "ssllist.spl";
+
+procedure reverse(lst: Node) 
+  requires slist(lst)
+  ensures slist(lst)
+{
+  var rev: Node := null;
+  var curr := lst.next;
+  while (curr != null) 
+    invariant lseg(rev, null)
+    invariant lseg(curr, null)
+  {
+    var tmp := curr;
+    curr := curr.next;
+    tmp.next := rev;
+    rev := tmp;
+  }
+  lst.next := rev;
+}
+
+

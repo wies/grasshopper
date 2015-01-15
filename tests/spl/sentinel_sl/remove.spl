@@ -1,0 +1,26 @@
+include "ssllist.spl";
+
+
+procedure remove(lst: Node) 
+  requires slist(lst)
+  ensures slist(lst)
+{
+  if (lst.next != null) {
+    var nondet: Bool;
+    var curr := lst.next;
+    while (nondet && curr.next != null) 
+      invariant curr != null
+      invariant lseg(lst, curr)
+      invariant lseg(curr, null)
+    {
+      havoc nondet;
+      curr := curr.next;
+    }
+    
+    var tmp := curr.next;
+    if (tmp != null) {
+      curr.next := tmp.next;
+      free(tmp);
+    }
+  }
+}
