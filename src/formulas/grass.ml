@@ -156,7 +156,7 @@ module FormSet = Set.Make(struct
 
 (** {6 Pretty printing} *)
 
-(** {5 SMT-LIB 2 Notation} **)
+(** {5 Infix Notation} *)
 
 open Format
 
@@ -213,6 +213,7 @@ let string_of_symbol = function
   (* uninterpreted symbols *)
   | FreeSym id -> string_of_ident id
 
+        
 let pr_ident ppf id = fprintf ppf "%s" (string_of_ident id)
 
 let rec pr_ident_list ppf = function
@@ -226,161 +227,7 @@ let set_sort_string = "Set"
 let bool_sort_string = "Bool"
 let int_sort_string = "Int"
 
-let rec pr_sort0 ppf srt = match srt with
-  | Bool | Int -> fprintf ppf "%a" pr_sort srt
-  | FreeSrt id -> pr_ident ppf id
-  | _ -> fprintf ppf "@[<1>%a@]" pr_sort srt
-  (*| _ -> fprintf ppf "@[<1>(%a)@]" pr_sort srt*)
-
-and pr_sort ppf = function
-  | Loc id -> fprintf ppf "@[<4>(%s %s)@]" loc_sort_string (string_of_ident id)
-  | Bool -> fprintf ppf "%s" bool_sort_string
-  | Int -> fprintf ppf "%s" int_sort_string
-  | FreeSrt id -> pr_ident ppf id
-  | Map (d, r) -> fprintf ppf "@[<4>(%s@ %a %a)@]" map_sort_string pr_sort0 d pr_sort0 r
-  | Set s -> fprintf ppf "@[<4>(%s@ %a)@]" set_sort_string pr_sort0 s
-
 let pr_sym ppf sym = fprintf ppf "%s" (string_of_symbol sym)
-
-let rec pr_term ppf = function
-  | Var (id, _) -> fprintf ppf "%a" pr_ident id
-  | App (Empty as sym, [], srt) -> fprintf ppf "(as@ %a@ %a)" pr_sym sym pr_sort0 srt
-  | App (sym, [], _) -> fprintf ppf "%a" pr_sym sym
-  | App (sym, ts, _) -> fprintf ppf "@[<2>(%a@ %a)@]" pr_sym sym pr_terms ts
-
-and pr_terms ppf = function
-  | [] -> ()
-  | [t] -> fprintf ppf "%a" pr_term t
-  | t :: ts -> fprintf ppf "%a@ %a" pr_term t pr_terms ts
-
-let rec pr_term_list ppf = function
-  | [] -> ()
-  | [t] -> pr_term ppf t
-  | t :: ts -> fprintf ppf "%a,@ %a" pr_term t pr_term_list ts
-      
-let pr_binder ppf b =
-  let b_str = match b with
-  | Forall -> "forall"
-  | Exists -> "exists"
-  in 
-  fprintf ppf "%s" b_str
-
-let pr_boolop ppf op =
-  let op_str = match op with
-  | And -> "and"
-  | Or -> "or"
-  | Not -> "not"
-  in 
-  fprintf ppf "%s" op_str
-
-let pr_var ppf (x, srt) =
-  fprintf ppf "@[<1>(%a@ %a)@]" pr_ident x pr_sort0 srt
-
-let rec pr_vars ppf = function
-  | [] -> ()
-  | [v] -> fprintf ppf "%a" pr_var v
-  | v :: vs -> fprintf ppf "%a@ %a" pr_var v pr_vars vs
-
-let extract_name smt ann =
-  let names = Util.filter_map 
-      (function Name _ -> Config.named_assertions && true | _ -> false) 
-      (function Name id -> string_of_ident id | _ -> "")
-      ann 
-  in
-  if smt 
-  then Str.global_replace (Str.regexp " \\|(\\|)") "_" (String.concat "_" (List.rev names))
-  else String.concat "; " (List.rev names)
-
-let rec extract_src_pos = function
-  | SrcPos pos :: _ -> Some pos
-  | _ :: ann -> extract_src_pos ann
-  | [] -> None
-
-let rec extract_label = function
-  | Label lbl :: _ -> Some lbl
-  | _ :: ann -> extract_label ann
-  | [] -> None
-
-let rec pr_form ppf = function
-  | Binder (b, vs, f, a) -> 
-      let name = extract_name true a in
-      (match name with
-      |	"" -> fprintf ppf "%a" pr_quantifier (b, vs, f)
-      |	n -> fprintf ppf "@[<3>(! %a@ @[:named@ %s@])@]" pr_quantifier (b, vs, f) n)
-  | Atom (t, a) -> 
-      let name = extract_name true a in
-      (match name with
-      | "" -> fprintf ppf "%a" pr_term t
-      | n -> fprintf ppf "@[<3>(! %a@ @[:named@ %s@])@]" pr_term t n)
-  | BoolOp (And, []) -> fprintf ppf "%s" "true"
-  | BoolOp (Or, []) -> fprintf ppf "%s" "false"
-  | BoolOp (Or, fs) -> fprintf ppf "@[<4>(%a@ %a)@]" pr_boolop Or pr_forms fs
-  | BoolOp (op, fs) -> fprintf ppf "@[<5>(%a@ %a)@]" pr_boolop op pr_forms fs
-
-and pr_quantifier ppf = 
-  let rec is_pattern below_app = function
-    | App (_, ts, _) -> List.exists (is_pattern true) ts
-    | Var _ -> below_app
-  in
-  let rec find_patterns acc = function
-    | BoolOp (_, fs) ->
-        List.fold_left find_patterns acc fs
-    | Binder (_, _, f, _) -> find_patterns acc f
-    | Atom (App (_, ts, _), _) ->
-        let pts = List.filter (is_pattern false) ts in
-        List.fold_left (fun acc t -> TermSet.add t acc) acc pts
-    | Atom _ -> acc
-  in
-  let fvt t =
-    let rec fvt1 vars = function
-      | Var (id, _) -> IdSet.add id vars
-      | App (_, ts, _) -> List.fold_left fvt1 vars ts
-    in fvt1 IdSet.empty t
-  in
-  function
-  | (_, [], f) -> fprintf ppf "%a" pr_form f
-  | (b, vs, f) -> 
-      let fun_patterns = find_patterns TermSet.empty f in
-      let patterns =
-        let pvs = 
-          TermSet.fold 
-            (fun t pvs -> IdSet.union (fvt t) pvs)
-            fun_patterns IdSet.empty
-        in 
-        List.fold_left
-          (fun patterns (id, srt) ->
-            if IdSet.mem id pvs 
-            then patterns 
-            else TermSet.add (Var (id, srt)) patterns)
-          fun_patterns vs
-      in
-      if not !Config.smtpatterns && !Config.instantiate || TermSet.is_empty patterns
-      then fprintf ppf "@[<8>(%a@ @[<1>(%a)@]@ %a)@]" pr_binder b pr_vars vs pr_form f
-      else 
-        fprintf ppf "@[<8>(%a@ @[<1>(%a)@]@ @[<3>(! %a@ @[:pattern@ (%a)@])@])@]" 
-          pr_binder b pr_vars vs pr_form f pr_terms (TermSet.elements patterns)
-
-
-and pr_forms ppf = function
-  | [] -> ()
-  | [t] -> fprintf ppf "%a" pr_form t
-  | t :: ts -> fprintf ppf "%a@ %a" pr_form t pr_forms ts
-
-
-let print_smtlib_sort out_ch s = pr_sort (formatter_of_out_channel out_ch) s
-let print_smtlib_term out_ch t = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_term t
-let print_smtlib_form out_ch f =  fprintf (formatter_of_out_channel out_ch) "@[<8>%a@]@?" pr_form f
-
-let string_of_smtlib_sort s = pr_sort str_formatter s; flush_str_formatter ()
-
-(** Print term [t] to out channel [out_chan]. *)
-let print_term out_ch t = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_term t
-
-(** Print formula [f] to out channel [out_chan]. *)
-let print_form out_ch f = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_form f
-
-
-(** {5 Infix Notation} *)
 
 let rec pr_sort ppf = function
   | Loc id -> fprintf ppf "%s<@[%s@]>" loc_sort_string (string_of_ident id)
@@ -458,6 +305,32 @@ and pr_union ppf = function
   | s :: ss -> 
       fprintf ppf "@[<2>%a@] ++ %a" pr_term s pr_union ss
 
+let extract_name ann =
+  let names = Util.filter_map 
+      (function Name _ -> Config.named_assertions && true | _ -> false) 
+      (function Name id -> string_of_ident id | _ -> "")
+      ann 
+  in
+  String.concat "; " (List.rev names)
+
+let rec extract_src_pos = function
+  | SrcPos pos :: _ -> Some pos
+  | _ :: ann -> extract_src_pos ann
+  | [] -> None
+
+let rec extract_label = function
+  | Label lbl :: _ -> Some lbl
+  | _ :: ann -> extract_label ann
+  | [] -> None
+
+let pr_binder ppf b =
+  let b_str = match b with
+  | Forall -> "forall"
+  | Exists -> "exists"
+  in 
+  fprintf ppf "%s" b_str
+
+       
 let rec pr_form ppf = function
   | Binder (b, vs, f, a) -> 
       fprintf ppf "@[(%a%a)@]" pr_quantifier (b, vs, f) pr_annot a
@@ -467,10 +340,9 @@ let rec pr_form ppf = function
   | BoolOp (_, _) -> ()
   | Atom (t, []) -> fprintf ppf "@[%a@]" pr_term t
   | Atom (t, a) -> fprintf ppf "@[(%a%a)@]" pr_term t pr_annot a
-
      
 and pr_annot ppf a =
-  let name = extract_name false a in
+  let name = extract_name a in
   let pos = extract_src_pos a in
   let lbl = extract_label a in
   (match name, pos, lbl with
@@ -513,7 +385,7 @@ and pr_forms ppf = function
   | t :: ts -> fprintf ppf "%a@ %a" pr_form t pr_forms ts
 
 
-let string_of_sort s = pr_sort0 str_formatter s; flush_str_formatter ()
+let string_of_sort s = pr_sort str_formatter s; flush_str_formatter ()
 
 let string_of_term t = 
   let margin = pp_get_margin str_formatter () in
@@ -526,6 +398,12 @@ let string_of_term t =
 let string_of_form f = 
   pr_form str_formatter f; 
   flush_str_formatter ()
+
+(** Print term [t] to out channel [out_chan]. *)
+let print_term out_ch t = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_term t
+
+(** Print formula [f] to out channel [out_chan]. *)
+let print_form out_ch f = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_form f
 
 let print_forms ch fs = 
   List.iter (fun f -> print_form ch f;  output_string ch "\n") fs

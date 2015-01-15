@@ -18,6 +18,7 @@ type solver_info =
     { version: int;
       subversion: int;
       has_set_theory: bool;
+      has_inst_closure: bool;
       smt_options: (string * string) list;
       kind: solver_kind; 
     }
@@ -30,15 +31,21 @@ type solver =
 let logger_info = 
   { version = 0;
     subversion = 0;
-    has_set_theory = true;
+    has_set_theory = false;
+    has_inst_closure = false;
     smt_options = [];
     kind = Logger;
   }
 
-let logger =
-  { name = "LOGGER";
+let z3logger =
+  { name = "Z3LOG";
     info = logger_info }
 
+let cvc4logger =
+  { name = "CVC4LOG";
+    info = { logger_info with has_set_theory = true; has_inst_closure = true }}
+
+    
 let get_version name cmd vregexp versions =
   try
     let in_chan = Unix.open_process_in cmd in
@@ -57,6 +64,7 @@ let get_version name cmd vregexp versions =
 let z3_v3 = { version = 3;
               subversion = 2;
               has_set_theory = false;
+              has_inst_closure = false;
               smt_options = [":mbqi", "true";
 			 ":MODEL_V2", "true";
 			 ":MODEL_PARTIAL", "true";
@@ -67,6 +75,7 @@ let z3_v3 = { version = 3;
 let z3_v4 = { version = 4;
               subversion = 3;
               has_set_theory = false;
+              has_inst_closure = false;
               smt_options = 
               (if not !Config.instantiate then [(":auto-config", "false")] else []) @
               [":smt.mbqi", "true";
@@ -90,6 +99,7 @@ let cvc4_v1 =
   { version = 1;
     subversion = 5;
     has_set_theory = true;
+    has_inst_closure = true;
     smt_options = [];
     kind = Process ("cvc4", options);
   }
@@ -116,6 +126,7 @@ let mathsat_v5 =
   { version = 5;
     subversion = 1;
     has_set_theory = false;
+    has_inst_closure = false;
     smt_options = [];
     kind = Process ("mathsat", ["-verbosity=0"]);
   }
@@ -126,7 +137,7 @@ let mathsat =
    }
 
 let available_solvers = 
-  logger :: Util.flat_map Util.Opt.to_list [z3; cvc4; cvc4mf]
+  z3logger :: cvc4logger :: Util.flat_map Util.Opt.to_list [z3; cvc4; cvc4mf]
 
 let selected_solvers = ref []
 
@@ -134,8 +145,10 @@ let select_solver name =
   let selected = Str.split (Str.regexp "+") name in
   selected_solvers := 
     List.filter 
-      (fun s -> List.mem s.name selected && !Config.verify || 
-      s.info.kind = Logger && !Config.dump_smt_queries) available_solvers;
+      (fun s -> List.mem s.name selected && (!Config.verify || s.info.kind = Logger))
+      available_solvers;
+  if List.for_all (fun s -> s.info.kind <> Logger) !selected_solvers && !Config.dump_smt_queries then
+    selected_solvers := z3logger :: !selected_solvers;
   Debug.info (fun () ->
     "Selected SMT solvers: " ^
     String.concat ", " (List.map (fun s -> s.name) !selected_solvers) ^
@@ -446,43 +459,84 @@ let push session =
   let new_session = { session with stack_height = session.stack_height + 1 } in
   new_session
 
-let is_interpreted sym = match sym with
+let is_interpreted solver_info sym = match sym with
   | Read | Write -> !Config.encode_fields_as_arrays
   | Empty | SetEnum | Union | Inter | Diff | Elem | SubsetEq ->
-      !Config.use_set_theory
+      !Config.use_set_theory && solver_info.has_set_theory
   | Eq | Gt | Lt | GtEq | LtEq | IntConst _ | BoolConst _
   | Plus | Minus | Mult | Div | UMinus -> true
-  | FreeSym id -> id = ("inst-closure", 0)
+  (*| FreeSym id -> id = ("inst-closure", 0)*)
   | _ -> false
 
-let string_of_overloaded_symbol sym idx =
+let string_of_overloaded_symbol solver_info sym idx =
   (string_of_symbol sym) ^
-  if sym = FreeSym ("inst-closure", 0)
+  if solver_info.has_inst_closure && sym = FreeSym ("inst-closure", 0)
   then ""
   else "$" ^ (string_of_int idx)
 
-let declare session sign =
-  let declare sym idx (arg_sorts, res_sort) = 
-    let sym_str = string_of_overloaded_symbol sym idx in
-    declare_fun session sym_str arg_sorts res_sort
+
+let smtlib_sort_of_grass_sort srt =
+  let rec csort = function
+  | Int -> IntSort
+  | Bool -> BoolSort
+  | Set srt ->
+      FreeSort ((set_sort_string, 0), [csort srt])
+  | Map (dsrt, rsrt) ->
+      FreeSort ((map_sort_string, 0), [csort dsrt; csort rsrt])
+  | Loc id ->
+      FreeSort ((loc_sort_string, 0), [FreeSort (id, [])])
+  | FreeSrt id -> FreeSort (id, [])
   in
-  let write_decl sym overloaded_variants = 
-    if not (is_interpreted sym) then
-      begin
-        match overloaded_variants with
-        | [] -> fail session ("missing sort for symbol " ^ string_of_symbol sym)
-        | _ -> Util.iteri (declare sym) overloaded_variants
-      end
+  csort srt
+
+let declare session sign =
+  let declare solver_info out_chan sym idx (arg_sorts, res_sort) = 
+    let sym_str = string_of_overloaded_symbol solver_info sym idx in
+    let decl =
+      mk_declare_fun (sym_str, 0) (List.map smtlib_sort_of_grass_sort arg_sorts) (smtlib_sort_of_grass_sort res_sort)
+    in
+    SmtLibSyntax.print_command out_chan decl 
+  in
+  let write_decl sym overloaded_variants =
+    iter_solvers session
+      (fun solver state -> 
+        if not (is_interpreted solver.info sym) then
+          begin
+            match overloaded_variants with
+            | [] -> fail session ("missing sort for symbol " ^ string_of_symbol sym)
+            | _ -> Util.iteri (declare solver.info state.out_chan sym) overloaded_variants
+          end)
   in
   init_session session sign;
   SymbolMap.iter write_decl sign;
   writeln session "";
   { session with signature = Some sign }
 
-let disambiguate_overloaded_symbols signs f =
+let smtlib_symbol_of_grass_symbol = function
+  | FreeSym id -> SmtLibSyntax.Ident id
+  | Plus -> SmtLibSyntax.Plus
+  | Minus | UMinus -> SmtLibSyntax.Minus
+  | Mult -> SmtLibSyntax.Mult
+  | Div -> SmtLibSyntax.Div
+  | Eq -> SmtLibSyntax.Eq
+  | LtEq -> SmtLibSyntax.Leq
+  | GtEq -> SmtLibSyntax.Geq
+  | Lt -> SmtLibSyntax.Lt
+  | Gt -> SmtLibSyntax.Gt
+  | sym -> SmtLibSyntax.Ident (string_of_symbol sym, 0)
+
+let extract_name ann =
+  let names = Util.filter_map 
+      (function Name _ -> Config.named_assertions | _ -> false) 
+      (function Name id -> string_of_ident id | _ -> "")
+      ann 
+  in
+  Str.global_replace (Str.regexp " \\|(\\|)") "_" (String.concat "_" (List.rev names))
+
+let smtlib_form_of_grass_form solver_info signs f =
   let osym sym sign =
-    if is_interpreted sym 
-    then sym
+    if is_interpreted solver_info sym 
+    then smtlib_symbol_of_grass_symbol sym
     else
       let versions = 
         try SymbolMap.find sym signs 
@@ -490,23 +544,94 @@ let disambiguate_overloaded_symbols signs f =
       in
       try
         let version = Util.find_index sign versions in
-        FreeSym (mk_ident (string_of_overloaded_symbol sym version))
-      with Not_found -> sym
+        SmtLibSyntax.Ident (mk_ident (string_of_overloaded_symbol solver_info sym version))
+      with Not_found ->
+        smtlib_symbol_of_grass_symbol sym
   in
-  let rec over t = match t with
-    | Var _ as v -> v
-    | App (sym, ts, srt) ->
-      let ts = List.map over ts in
+  let rec cterm t = match t with
+  | Var (id, _) -> SmtLibSyntax.mk_app (SmtLibSyntax.Ident id) []
+  | App (Empty as sym, [], srt) ->
+      let sym = osym sym ([], srt) in
+      SmtLibSyntax.mk_annot (SmtLibSyntax.mk_app sym []) (As (smtlib_sort_of_grass_sort srt))
+  | App (sym, ts, srt) ->
       let args_srt = List.map sort_of ts in
-        App (osym sym (args_srt, srt), ts, srt)
+      let ts = List.map cterm ts in
+      SmtLibSyntax.mk_app (osym sym (args_srt, srt)) ts
   in
-  map_terms over f
+  let rec is_pattern below_app = function
+    | App (_, ts, _) -> List.exists (is_pattern true) ts
+    | Var _ -> below_app
+  in
+  let rec find_patterns acc = function
+    | BoolOp (_, fs) ->
+        List.fold_left find_patterns acc fs
+    | Binder (_, _, f, _) -> find_patterns acc f
+    | Atom (App (_, ts, _), _) ->
+        let pts = List.filter (is_pattern false) ts in
+        List.fold_left (fun acc t -> TermSet.add t acc) acc pts
+    | Atom _ -> acc
+  in
+  let name t a =
+    match extract_name a with
+    | "" -> t
+    | n -> SmtLibSyntax.mk_annot t (Name (n, 0))
+  in
+  let rec cform f = match f with
+  | BoolOp (And, []) -> SmtLibSyntax.mk_app (BoolConst true) []
+  | BoolOp (Or, []) -> SmtLibSyntax.mk_app (BoolConst false) []
+  | BoolOp (op, fs) ->
+      let fs = List.map cform fs in
+      let sym = match op with
+      | Not -> SmtLibSyntax.Not
+      | And -> SmtLibSyntax.And
+      | Or -> SmtLibSyntax.Or
+      in
+      SmtLibSyntax.mk_app sym fs
+  | Atom (t, a) -> name (cterm t) a
+  | Binder (_, [], f, a) -> name (cform f) a
+  | Binder (b, vs, f, a) ->
+      let fun_patterns = find_patterns TermSet.empty f in
+      let patterns =
+        let pvs = 
+          TermSet.fold 
+            (fun t pvs -> IdSet.union (fv_term t) pvs)
+            fun_patterns IdSet.empty
+        in 
+        List.fold_left
+          (fun patterns (id, srt) ->
+            let p =
+              if solver_info.has_inst_closure
+              then Var (id, srt)
+              else App (FreeSym ("inst-closure", 0), [Var (id, srt)], Bool)
+            in
+            if IdSet.mem id pvs 
+            then patterns 
+            else TermSet.add p patterns)
+          fun_patterns vs
+      in
+      let vs = List.map (fun (id, srt) -> (id, smtlib_sort_of_grass_sort srt)) vs in
+      let b = match b with
+      | Forall -> SmtLibSyntax.Forall
+      | Exists -> SmtLibSyntax.Exists
+      in
+      let f =
+        if not !Config.smtpatterns && !Config.instantiate || TermSet.is_empty patterns
+        then SmtLibSyntax.mk_binder b vs (cform f)
+        else
+          let annot =
+            SmtLibSyntax.Pattern (List.map cterm (TermSet.elements patterns))
+          in
+          SmtLibSyntax.mk_binder b vs (SmtLibSyntax.mk_annot (cform f) annot)
+      in
+      name f a
+  in
+  cform f
 
 let assert_form session f =
   let _ = match f with
     | Binder (_, _, _, ann) ->
       begin
-        let name = extract_name true ann in
+        let name = extract_name ann in
           match session.named_clauses with
           | Some tbl -> Hashtbl.add tbl name f
           | None -> ()
@@ -515,16 +640,14 @@ let assert_form session f =
   in
   session.assert_count <- session.assert_count + 1;
   session.sat_checked <- None;
-  let cf = 
-    match session.signature with
-    | None -> fail session "tried to assert formula before declaring symbols"
-    | Some sign -> disambiguate_overloaded_symbols sign f 
-  in
   iter_solvers session
-    (fun _ state -> 
-      output_string state.out_chan "(assert ";
-      print_smtlib_form state.out_chan cf;
-      output_string state.out_chan ")\n")
+    (fun solver state -> 
+      let cf = 
+        match session.signature with
+        | None -> fail session "tried to assert formula before declaring symbols"
+        | Some sign -> smtlib_form_of_grass_form solver.info sign f 
+      in
+      SmtLibSyntax.print_command state.out_chan (mk_assert cf))
     
 (*let assert_form session f = Util.measure (assert_form session) f*)
     

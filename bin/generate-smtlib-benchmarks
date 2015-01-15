@@ -88,7 +88,7 @@ smtlib()
     ls *.smt2 2>/dev/null && echo "Remove existing SMT-LIB files to proceed. Aborting." && exit 0
 
     COMMIT_ID="$(git log -1 --format="%cd-%h" --date=short)"
-    COMMON_ARGS="-lint -noverify -dumpvcs -smtpatterns"
+    COMMON_ARGS="-lint -noverify -dumpvcs -smtpatterns -smtsolver cvc4log"
 
     generate "-nostratify"
     generate "-nostratify -smtsets"
