@@ -15,6 +15,7 @@ let trace_file = ref ""
 
 (* Flags controlling the axioms generation *)
 let with_reach_axioms = ref true
+let with_opt_reach_axioms = ref false
 let encode_fields_as_arrays = ref false
 let with_ep = ref true
 let use_set_theory = ref false
@@ -70,6 +71,7 @@ let cmd_options =
    ("-robust", Arg.Set robust, " Continue even if some verification condition cannot be checked\n\nOptions for controlling verification condition generation:");
    ("-types", Arg.Set keep_types, " Keep type information when translating to intermediate representation");
    ("-nomodifiesopt", Arg.Clear opt_field_mod, " Disable mod set analysis optimization for fields\n\nOptions for controlling the GRASS prover:");
+   ("-optreach", Arg.Set with_opt_reach_axioms, " Use optimized but incomplete reachability axioms");
    ("-noreach", Arg.Clear with_reach_axioms, " Omit axioms for reachability predicates");
    ("-noep", Arg.Clear with_ep, " Omit axioms for entry points");
    ("-noinst", Arg.Clear instantiate, " Let the SMT solver deal with the quantifiers without prior instantiation");

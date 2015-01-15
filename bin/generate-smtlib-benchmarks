@@ -3,10 +3,13 @@
 source bin/osx_gnu.sh
 
 TESTS="
-soudness0               tests/spl/soundness/soundness0.spl      fail
-soudness1               tests/spl/soundness/soundness1.spl      fail
 soudness2               tests/spl/soundness/soundness2.spl      fail
 soudness3               tests/spl/soundness/soundness3.spl      fail
+soudness4               tests/spl/soundness/soundness4.spl      fail
+soudness5               tests/spl/soundness/soundness5.spl      fail
+soudness6               tests/spl/soundness/soundness6.spl      fail
+soudness7               tests/spl/soundness/soundness7.spl      fail
+soudness8               tests/spl/soundness/soundness8.spl      fail
 sl_traverse             tests/spl/sl/sl_traverse.spl            pass
 sl_dispose              tests/spl/sl/sl_dispose.spl             pass
 sl_copy                 tests/spl/sl/sl_copy.spl                pass
@@ -50,7 +53,59 @@ list_set_difference     tests/spl/list_set/difference.spl       pass
 list_set_insert         tests/spl/list_set/insert.spl           pass
 list_set_traverse       tests/spl/list_set/traverse.spl         pass
 list_set_union          tests/spl/list_set/union.spl            pass
+bst_set                 tests/spl/tree/binary_search_tree.spl   pass
+nested_list_destroy     tests/spl/nested_sl/destroy.spl         pass
 "
+generate()
+{
+    # COMMIT_ID and COMMON_ARGS should be defined
+
+    VAR_ARGS="$@"
+    OUTDIR=smtlib/${COMMIT_ID}$(echo $VAR_ARGS | tr -d " ")
+
+    [ -d $OUTDIR ] && {
+      echo "Looks like benchmarks already generated, skipping (delete $OUTDIR to force generation)"
+      return
+    }
+
+    echo "Generating benchmarks with arguments ${VAR_ARGS}..."
+    OPTIONS="$COMMON_ARGS $VAR_ARGS" ./bin/run-tests $TESTS 
+    #rm soundness*.smt2
+
+    mkdir -p $OUTDIR
+    echo "Post processing..."
+    for file in *.smt2
+    do
+        #sed -i -e '/set-option/d' -e 's/unknown/unsat/'  $file
+        LOGIC=`grep 'set-logic' $file | sed 's/(set-logic \([^)]*\))/\1/'`
+        # test -s $LOGIC || mkdir -p smt-lib/$LOGIC/grasshopper/uninstantiated
+        mv $file $OUTDIR
+    done
+}
+
+smtlib()
+{
+    ls *.smt2 2>/dev/null && echo "Remove existing SMT-LIB files to proceed. Aborting." && exit 0
+
+    COMMIT_ID="$(git log -1 --format="%cd-%h" --date=short)"
+    COMMON_ARGS="-lint -noverify -dumpvcs -smtpatterns"
+
+    generate "-nostratify"
+    generate "-nostratify -smtsets"
+    generate "-noinst"
+    generate "-noinst -smtsets"
+    generate "-noinst -nomodifiesopt"
+    generate "-noinst -smtsets -nomodifiesopt"
+
+    ## for kshitij's testing infrastructure
+    [ -d "../test/benchmarks" ] && (
+      rsync -r smtlib/ ../test/benchmarks/grasshopper/
+      cd ../test/benchmarks
+      LISTFILE=grasshopper_${COMMIT_ID}.list
+      find grasshopper/$COMMIT_ID* -iname "*.smt2" >$LISTFILE
+      wc -l $LISTFILE
+    )
+}
 
 
-OPTIONS=$@ time -f "Elapsed user time: %Us.\nElapsed real time: %es." ./bin/run-tests $TESTS
+smtlib

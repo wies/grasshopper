@@ -18,7 +18,7 @@ type solver_info =
     { version: int;
       subversion: int;
       has_set_theory: bool;
-      smt_options: (string * bool) list;
+      smt_options: (string * string) list;
       kind: solver_kind; 
     }
 
@@ -57,10 +57,10 @@ let get_version name cmd vregexp versions =
 let z3_v3 = { version = 3;
               subversion = 2;
               has_set_theory = false;
-              smt_options = [":mbqi", true;
-			 ":MODEL_V2", true;
-			 ":MODEL_PARTIAL", true;
-			 ":MODEL_HIDE_UNUSED_PARTITIONS", true];
+              smt_options = [":mbqi", "true";
+			 ":MODEL_V2", "true";
+			 ":MODEL_PARTIAL", "true";
+			 ":MODEL_HIDE_UNUSED_PARTITIONS", "true"];
               kind = Process ("z3", ["-smt2"; "-in"]);
 	    }
 
@@ -68,11 +68,10 @@ let z3_v4 = { version = 4;
               subversion = 3;
               has_set_theory = false;
               smt_options = 
-              (if not !Config.instantiate then [(":auto-config", false)] else []) @
-              [(*":smt.mbqi", true;
-               ":smt.ematching", true;
-               ":model.v2", true;
-               ":model.partial", true*)];
+              (if not !Config.instantiate then [(":auto-config", "false")] else []) @
+              [":smt.mbqi", "true";
+               ":smt.ematching", "true";
+             ];
               kind = Process ("z3", ["-smt2"; "-in"]);
 	    }
 
@@ -269,7 +268,7 @@ let read session =
   Some state, result
 
 let set_option chan opt_name opt_value =
-  Printf.fprintf chan "(set-option %s %b)\n" opt_name opt_value
+  Printf.fprintf chan "(set-option %s %s)\n" opt_name opt_value
 
 let set_logic chan logic =
   output_string chan ("(set-logic " ^ logic ^ ")\n")
@@ -319,9 +318,9 @@ let start_with_solver session_name sat_means solver produce_models produce_unsat
           }
     in 
     let options = 
-      (if produce_models then [":produce-models", true] else []) @
+      (if produce_models then [":produce-models", "true"] else []) @
       solver.info.smt_options @
-      (if produce_unsat_cores then [":produce-unsat-cores", true] else [])
+      (if produce_unsat_cores then [":produce-unsat-cores", "true"] else [])
     in
     let info = { solver.info with smt_options = options } in
     { solver with info = info },
