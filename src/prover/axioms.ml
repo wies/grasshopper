@@ -204,10 +204,10 @@ let reach_axioms struct_id =
      mk_axiom "btwn_reach" btwn_reac;
      mk_axiom "btwn_sndw" btwn_sndw; 
      mk_axiom "btwn_ord1" btwn_ord1;
-     mk_axiom "btwn_ord2" btwn_ord2] @
+     mk_axiom "btwn_ord2" btwn_ord2;
+     mk_axiom "btwn_trn1" btwn_trn1;] @
     if not !Config.with_opt_reach_axioms then
-      [mk_axiom "btwn_trn1" btwn_trn1; 
-       mk_axiom "btwn_trn2" btwn_trn2;
+      [mk_axiom "btwn_trn2" btwn_trn2;
        mk_axiom "btwn_trn3" btwn_trn3]
     else
       [mk_axiom "btwn_trn4" btwn_trn4;
