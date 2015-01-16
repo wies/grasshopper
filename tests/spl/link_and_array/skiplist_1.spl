@@ -48,18 +48,16 @@ procedure add(this: SkipList, x: Int)
   requires skiplist(this)
   ensures skiplist(this)
 {
-  var stack: Node[];
-  stack := new Node[this.max_height];
-  var u: Node;
-  u := this.head;
-  var r: Int;
-  r := this.height;
+  var stack: Node[] := new Node[this.max_height];
+  var u: Node := this.head;
+  var r: Int := this.height;
 
   while (r >= 0)
-    invariant skiplist(this)
+    invariant r <= this.height
+    invariant acc(u) -** skiplist(this)
   {
     while (u.next[r] != null && u.next[r].data < x)
-      invariant skiplist(this)
+      invariant acc(u) -** skiplist(this)
     {
       u := u.next[r];
     }
@@ -72,13 +70,12 @@ procedure add(this: SkipList, x: Int)
   var height: Int;
   height := pickHeight(this.max_height);
 
-  var w: Node;
-  w := new Node;
+  var w: Node := new Node;
   w.data := x;
   w.next := new Node[height + 1];
 
   while (this.height < height)
-    invariant emp
+    invariant emp //how do we write the array permissions ?
   {
     this.height := this.height + 1;
     stack[this.height] := this.head;   // increasing height of skiplist
@@ -86,7 +83,7 @@ procedure add(this: SkipList, x: Int)
 
   var i: Int := 0;
   while (i < w.next.length)
-    invariant skiplist(this)
+    invariant acc(w) -** skiplist(this)
   {
     w.next[i] := stack[i].next[i];
     stack[i].next[i] := w;
@@ -105,10 +102,11 @@ procedure remove(this: SkipList, x: Int)
   var r: Int := this.height;
   
   while (r >= 0)
-    invariant skiplist(this)
+    invariant acc(u) -** skiplist(this)
+    invariant r <= this.height
   {
     while (u.next[r] != null && u.next[r].data < x)
-      invariant skiplist(this)
+      invariant acc(u) -** skiplist(this)
     {
       u := u.next[r];
     }

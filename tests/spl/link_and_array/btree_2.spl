@@ -1,31 +1,21 @@
-//  inspired by 
+//  inspired by
 //  http://www.amittai.com/prose/bplustree.html
 //  under GPL v3
-
-/*  Author:  Amittai Aviram 
+/*  Author:  Amittai Aviram
  *    http://www.amittai.com
  *    amittai.aviram@gmail.edu or afa13@columbia.edu
  *    Senior Software Engineer
  *    MathWorks, Inc.
  *    3 Apple Hill Drive
- *    Natick, MA 01760 
+ *    Natick, MA 01760
  *  Original Date:  26 June 2010
  *  Last modified: 15 April 2014
  */
-
-var order: Int;
-assume(order >= 3);
-
-// TYPES.
-
-/* Type representing the record to which a given key refers. */
-struct Record {
-  value: Int;
-};
+include "../include/btree.spl";
 
 /* Type representing a node in the B+ tree.
  * This type is general enough to serve for both the leaf and the internal node.
- * The heart of the node is the array  of keys and the array of corresponding pointers. 
+ * The heart of the node is the array  of keys and the array of corresponding pointers.
  * The relation between keys and pointers differs between leaves and internal nodes.
  * In a leaf, the index of each key equals the index of its corresponding pointer, with a maximum of order - 1 key-pointer pairs..
  * The last pointer points to the leaf to the right (or null in the case of the rightmost leaf).
@@ -36,20 +26,6 @@ struct Record {
  * In a leaf, the number of valid pointers to data is always num_keys.
  * The last leaf pointer points to the next leaf.
  */
-struct Node {
-  pointers: Node[order];
-  data: Record[order - 1];
-  keys: In[order - 1];
-  parent: Node;
-  is_leaf: bool;
-  num_keys: Int;
-};
-
-
-
-// FUNCTION PROTOTYPES.
-
-// OUTPUT AND UTILITIES
 
 /* Finds keys and their pointers, if present, in the range specified
  * by key_start and key_end, inclusive.  Places these in the arrays
@@ -60,21 +36,21 @@ procedure find_range( root: Node,
                       key_start: Int,
                       key_end: Int,
                       returned_keys: Int[],
-                      returned_pointers: Node[] ) returns (res: Int)
+                      returned_data: Int[])
+  returns (res: Int)
   requires  ??? ;
   ensures   ??? ;
 {
     var i: Int;
-    var num_found: Int;
-    num_found = 0;
-    var n: Node = find_leaf( root, key_start);
+    var num_found: Int := 0;
+    var n: Node := find_leaf( root, key_start);
     if (n == null)
       return 0;
-    i = 0;
+    i := 0;
     while (i < n.num_keys && n.keys[i] < key_start)
       invariant ??? ;
     {
-      i = i + 1;
+      i := i + 1;
     }
     if (i == n.num_keys)
       return 0;
@@ -84,13 +60,13 @@ procedure find_range( root: Node,
       while (i < n.num_keys && n.keys[i] <= key_end)
         invariant ??? ;
       {
-        returned_keys[num_found] = n.keys[i];
-        returned_pointers[num_found] = n.pointers[i];
-        num_found = num_found + 1;
-        i = i + 1;
+        returned_keys[num_found] := n.keys[i];
+        returned_data[num_found] := n.data[i];
+        num_found := num_found + 1;
+        i := i + 1;
       }
-      n = n.pointers[order - 1];
-      i = 0;
+      n := n.pointers[order - 1];
+      i := 0;
     }
     return num_found;
 }
@@ -103,41 +79,45 @@ procedure find_leaf(root: Node, key: Int) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
-  var i: Int = 0;
-  var c: Node = root;
+  var i: Int := 0;
+  var c: Node := root;
   if (c == null) {
     return c;
   }
   while (!c.is_leaf)
+    invariant ???
   {
-    i = 0;
-    while (i < c.num_keys)
+    i := 0;
+    while (i < c.num_keys && key >= c.keys[i])
+      invariant ???
     {
-      if (key >= c.keys[i]) i++;
-      else break;
+      i := i + 1;
     }
-    c = c.pointers[i];
+    c := c.pointers[i];
   }
   return c;
 }
 
 
 /* Finds and returns the record to which a key refers. */
-procedure find( root: Node, key: Int) returns (res: Record)
+procedure find( root: Node, key: Int) returns (res: Int)
   requires  ??? ;
   ensures   ??? ;
 {
-  var i: Int = 0;
-  var c: Node = find_leaf( root, key);
+  var i: Int := 0;
+  var c: Node := find_leaf( root, key);
   if (c == null) return null;
 
-  for (i = 0; i < c.num_keys; i++)
-    if (c.keys[i] == key) break;
+  while(i < c.num_keys && c.keys[i] != key)
+    invariant ??? ;
+  {
+    i := i + 1;
+  }
 
-  if (i == c.num_keys) 
-    return null;
+  if (i == c.num_keys)
+    return -1;//TODO is that the best ?
   else
-    return (record *)c.pointers[i];
+    return c.data[i];
 }
 
 /* Finds the appropriate place to split a node that is too big into two. */
@@ -154,28 +134,16 @@ procedure cut( Int length ) returns (res: Int)
 
 // INSERTION
 
-/* Creates a new record to hold the value to which a key refers. */
-procedure make_record(value: Int) returns (res: Record)
-  requires  ??? ;
-  ensures   ??? ;
-{
-  var new_record: Record = new Record;
-  assert(record != null);
-  new_record.value = value;
-  return new_record;
-}
-
-
 /* Creates a new general node, which can be adapted
  * to serve as either a leaf or an internal node. */
 procedure make_node( ) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
-  var new_node: Node = new Node;
-  new_node.is_leaf = false;
-  new_node.num_keys = 0;
-  new_node.parent = null;
+  var new_node := new Node;
+  new_node.is_leaf := false;
+  new_node.num_keys := 0;
+  new_node.parent := null;
   return new_node;
 }
 
@@ -184,32 +152,32 @@ procedure make_leaf( ) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
-  var leaf: Node = make_node();
-  leaf.is_leaf = true;
+  var leaf: Node := make_node();
+  leaf.is_leaf := true;
   return leaf;
 }
 
 
 /* Helper function used in insert_into_parent
- * to find the index of the parent's pointer to 
+ * to find the index of the parent's pointer to
  * the node to the left of the key to be inserted.
  */
 procedure get_left_index(parent: Node, left: Node) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
-  var left_index: Int = 0;
+  var left_index: Int := 0;
   while (left_index <= parent.num_keys && parent.pointers[left_index] != left)
     invariant ??? ;
   {
-    left_index++;
+    left_index := left_index + 1;
   }
   return left_index;
 }
 
 /* Inserts a new pointer to a record and its corresponding key into a leaf.
  * Returns the altered leaf. */
-procedure insert_into_leaf( leaf: Node, key: Int, pointer: Record ) returns (res: Node)
+procedure insert_into_leaf( leaf: Node, key: Int, value: Int ) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
@@ -217,123 +185,125 @@ procedure insert_into_leaf( leaf: Node, key: Int, pointer: Record ) returns (res
   var i: Int;
   var insertion_point: Int;
 
-  insertion_point = 0;
+  insertion_point := 0;
   while (insertion_point < leaf.num_keys && leaf.keys[insertion_point] < key)
     invariant ??? ;
   {
-    insertion_point = insertion_point + 1;
+    insertion_point := insertion_point + 1;
   }
 
-  i = leaf.num_keys;
+  i := leaf.num_keys;
   while(i > insertion_point)
     invariant ??? ;
   {
-    leaf.keys[i] = leaf.keys[i - 1];
-    leaf.pointers[i] = leaf.pointers[i - 1];
-    i = i - 1;
+    leaf.keys[i] := leaf.keys[i - 1];
+    leaf.data[i] := leaf.data[i - 1];
+    i := i - 1;
   }
 
-  leaf.keys[insertion_point] = key;
-  leaf.pointers[insertion_point] = pointer;
-  leaf.num_keys = leaf.num_keys + 1;
+  leaf.keys[insertion_point] := key;
+  leaf.data[insertion_point] := value;
+  leaf.num_keys := leaf.num_keys + 1;
   return leaf;
 }
 
 
 /* Inserts a new key and pointer to a new record into a leaf so as to exceed
  * the tree's order, causing the leaf to be split in half. */
-procedure insert_into_leaf_after_splitting(root: Node, leaf: Node, key: Int, pointer: record) returns (res: Node)
+procedure insert_into_leaf_after_splitting(root: Node, leaf: Node, key: Int, value: Int)
+  returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
 
   var new_leaf: Node;
   var temp_keys: Int[];
-  var temp_pointers: Node[]; //TODO data
+  var temp_data: Int[];
   var insertion_index: Int;
   var split: Int
   var new_key: Int
   var i: Int;
   var j: Int;
 
-  new_leaf = make_leaf();
+  new_leaf := make_leaf();
 
-  temp_keys = new Int[order];
+  temp_keys := new Int[order];
 
-  temp_pointers = new Node[order]; //TODO data
- 
-  insertion_index = 0;
+  temp_data := new Int[order];
+
+  insertion_index := 0;
   while (insertion_index < order - 1 && leaf.keys[insertion_index] < key)
     invariant ??? ;
   {
-    insertion_index = insertion_index + 1;
+    insertion_index := insertion_index + 1;
   }
 
-  i = 0;
-  j = 0;
+  i := 0;
+  j := 0;
   while (i < leaf.num_keys)
     invariant ??? ;
   {
     if (j == insertion_index)
-      j = j + 1;
-    temp_keys[j] = leaf.keys[i];
-    temp_pointers[j] = leaf.pointers[i];
-    i = i + 1;
-    j = j + 1;
+      j := j + 1;
+    temp_keys[j] := leaf.keys[i];
+    temp_data[j] := leaf.data[i];
+    i := i + 1;
+    j := j + 1;
   }
 
-  temp_keys[insertion_index] = key;
-  temp_pointers[insertion_index] = pointer;
+  temp_keys[insertion_index] := key;
+  temp_data[insertion_index] := value;
 
-  leaf.num_keys = 0;
+  leaf.num_keys := 0;
 
-  split = cut(order - 1);
+  split := cut(order - 1);
 
-  i = 0;
+  i := 0;
   while (i < split)
     invariant ??? ;
   {
-    leaf.pointers[i] = temp_pointers[i];
-    leaf.keys[i] = temp_keys[i];
-    leaf.num_keys++;
-    i++
+    leaf.data[i] := temp_data[i];
+    leaf.keys[i] := temp_keys[i];
+    leaf.num_keys := leaf.num_keys + 1;
+    i := i + 1;
   }
 
-  for (
-  i = split
-  j = 0;
+  i := split;
+  j := 0;
   while(i < order)
     invariant ??? ;
   {
-    new_leaf.pointers[j] = temp_pointers[i];
-    new_leaf.keys[j] = temp_keys[i];
-    new_leaf.num_keys++;
-    i++;
-    j++;
+    new_leaf.data[j] := temp_data[i];
+    new_leaf.keys[j] := temp_keys[i];
+    new_leaf.num_keys := new_leaf.num_keys + 1;
+    i := i + 1;
+    j := j + 1;
   }
 
-  free(temp_pointers);
+  free(temp_data);
   free(temp_keys);
 
-  new_leaf.pointers[order - 1] = leaf.pointers[order - 1];
-  leaf.pointers[order - 1] = new_leaf;
+  new_leaf.pointers[order - 1] := leaf.pointers[order - 1];
+  leaf.pointers[order - 1] := new_leaf;
 
-  i = leaf.num_keys;
+  i := leaf.num_keys;
   while(i < order - 1)
+    invariant ???
   {
-    leaf.pointers[i] = null;
-    i++;
+    leaf.pointers[i] := null;
+    i := i + 1;
   }
 
-  i = new_leaf.num_keys;
+  i := new_leaf.num_keys;
   while (i < order - 1)
+    invariant ???
   {
-    new_leaf.pointers[i] = null;
-    i++;
+    new_leaf.pointers[i] := null;
+    i := i + 1;
   }
 
-  new_leaf.parent = leaf.parent;
-  new_key = new_leaf.keys[0];
+  new_leaf.parent := leaf.parent;
+  new_key := new_leaf.keys[0];
 
   return insert_into_parent(root, leaf, new_key, new_leaf);
 }
@@ -343,19 +313,24 @@ procedure insert_into_leaf_after_splitting(root: Node, leaf: Node, key: Int, poi
  * into a node into which these can fit
  * without violating the B+ tree properties.
  */
-node * insert_into_node(node * root, node * n, Int left_index, Int key, node * right)
-  requires  ??? ;
-  ensures   ??? ;
+procedure insert_into_node(root: Node, n: Node, left_index: Int, key: Int, right: Node)
+  returns (res: Node)
+  requires  ???
+  ensures   ???
 {
-  Int i;
+  var i: Int;
 
-  for (i = n.num_keys; i > left_index; i--) {
-      n.pointers[i + 1] = n.pointers[i];
-      n.keys[i] = n.keys[i - 1];
+  i := n.num_keys;
+  while (i > left_index)
+    invariant ???
+  {
+    n.pointers[i + 1] := n.pointers[i];
+    n.keys[i] := n.keys[i - 1];
+    i := i - 1;
   }
-  n.pointers[left_index + 1] = right;
-  n.keys[left_index] = key;
-  n.num_keys++;
+  n.pointers[left_index + 1] := right;
+  n.keys[left_index] := key;
+  n.num_keys := n.num_keys + 1;
   return root;
 }
 
@@ -368,8 +343,8 @@ procedure insert_into_node_after_splitting( root: Node,
                                             old_node: Node,
                                             left_index: Int,
                                             key: Int,
-                                            right: Node
-                                          ) returns (res: Node)
+                                            right: Node)
+  returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
@@ -385,54 +360,82 @@ procedure insert_into_node_after_splitting( root: Node,
 
   /* First create a temporary set of keys and pointers
    * to hold everything in order, including
-   * the new key and pointer, inserted in their correct places. 
-   * Then create a new node and copy half of the 
+   * the new key and pointer, inserted in their correct places.
+   * Then create a new node and copy half of the
    * keys and pointers to the old node and
    * the other half to the new.
    */
 
-  temp_pointers = new Node[order+1];
-  temp_keys = new Int[order]
+  temp_pointers := new Node[order+1];
+  temp_keys := new Int[order];
 
-  for (i = 0, j = 0; i < old_node.num_keys + 1; i++, j++) {
-      if (j == left_index + 1) j++;
-      temp_pointers[j] = old_node.pointers[i];
+  i := 0;
+  j := 0;
+  while(i < old_node.num_keys + 1)
+    invariant ???
+  {
+    if (j == left_index + 1)
+      j := j + 1;
+    temp_pointers[j] := old_node.pointers[i];
+    i := i + 1;
+    j := j + 1;
   }
 
-  for (i = 0, j = 0; i < old_node.num_keys; i++, j++) {
-      if (j == left_index) j++;
-      temp_keys[j] = old_node.keys[i];
+  i := 0;
+  j := 0;
+  while (i < old_node.num_keys)
+    invariant ???
+  {
+    if (j == left_index)
+      j := j + 1;
+    temp_keys[j] := old_node.keys[i];
+    i := i + 1;
+    j := j + 1;
   }
 
-  temp_pointers[left_index + 1] = right;
-  temp_keys[left_index] = key;
+  temp_pointers[left_index + 1] := right;
+  temp_keys[left_index] := key;
 
   /* Create the new node and copy
    * half the keys and pointers to the
    * old and half to the new.
-   */  
-  split = cut(order);
-  new_node = make_node();
-  old_node.num_keys = 0;
-  for (i = 0; i < split - 1; i++) {
-      old_node.pointers[i] = temp_pointers[i];
-      old_node.keys[i] = temp_keys[i];
-      old_node.num_keys++;
+   */
+  split := cut(order);
+  new_node := make_node();
+  old_node.num_keys := 0;
+  i := 0;
+  while (i < split - 1)
+    invariant ???
+  {
+    old_node.pointers[i] := temp_pointers[i];
+    old_node.keys[i] := temp_keys[i];
+    old_node.num_keys := old_node.num_keys + 1;
+    i := i + 1;
   }
-  old_node.pointers[i] = temp_pointers[i];
-  k_prime = temp_keys[split - 1];
-  for (++i, j = 0; i < order; i++, j++) {
-      new_node.pointers[j] = temp_pointers[i];
-      new_node.keys[j] = temp_keys[i];
-      new_node.num_keys++;
+  old_node.pointers[i] := temp_pointers[i];
+  k_prime := temp_keys[split - 1];
+  i := i + 1;
+  j := 0;
+  while (i < order)
+    invariant ???
+  {
+    new_node.pointers[j] := temp_pointers[i];
+    new_node.keys[j] := temp_keys[i];
+    new_node.num_keys := new_node.num_keys + 1;
+    i := i + 1;
+    j := j + 1;
   }
-  new_node.pointers[j] = temp_pointers[i];
+  new_node.pointers[j] := temp_pointers[i];
   free(temp_pointers);
   free(temp_keys);
-  new_node.parent = old_node.parent;
-  for (i = 0; i <= new_node.num_keys; i++) {
-      child = new_node.pointers[i];
-      child.parent = new_node;
+  new_node.parent := old_node.parent;
+  i := 0;
+  while (i <= new_node.num_keys)
+    invariant ???
+  {
+    child := new_node.pointers[i];
+    child.parent := new_node;
+    i := i + 1;
   }
 
   /* Insert a new key into the parent of the two
@@ -448,7 +451,8 @@ procedure insert_into_node_after_splitting( root: Node,
 /* Inserts a new node (leaf or internal node) into the B+ tree.
  * Returns the root of the tree after insertion.
  */
-insert_into_parent(root: Node, left: Node, key: Int, right: Node) returns (res: Node)
+procedure insert_into_parent(root: Node, left: Node, key: Int, right: Node)
+  returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
@@ -456,31 +460,31 @@ insert_into_parent(root: Node, left: Node, key: Int, right: Node) returns (res: 
   var left_index: Int;
   var parent: Node;
 
-  parent = left.parent;
+  parent := left.parent;
 
   /* Case: new root. */
 
   if (parent == null)
-      return insert_into_new_root(left, key, right);
+    return insert_into_new_root(left, key, right);
 
   /* Case: leaf or node. (Remainder of
-   * function body.)  
+   * function body.)
    */
 
-  /* Find the parent's pointer to the left 
+  /* Find the parent's pointer to the left
    * node.
    */
 
-  left_index = get_left_index(parent, left);
+  left_index := get_left_index(parent, left);
 
 
-  /* Simple case: the new key fits into the node. 
+  /* Simple case: the new key fits into the node.
    */
 
   if (parent.num_keys < order - 1)
-      return insert_into_node(root, parent, left_index, key, right);
+    return insert_into_node(root, parent, left_index, key, right);
 
-  /* Harder case:  split a node in order 
+  /* Harder case:  split a node in order
    * to preserve the B+ tree properties.
    */
 
@@ -492,34 +496,35 @@ insert_into_parent(root: Node, left: Node, key: Int, right: Node) returns (res: 
  * and inserts the appropriate key into
  * the new root.
  */
-procedure insert_into_new_root(left: Node, key: Int, right: Node) returns (res: Node)
-  requires  ??? ;
-  ensures   ??? ;
+procedure insert_into_new_root(left: Node, key: Int, right: Node)
+  returns (res: Node)
+  requires  ???
+  ensures   ???
 {
-  var root: Node = make_node();
-  root.keys[0] = key;
-  root.pointers[0] = left;
-  root.pointers[1] = right;
-  root.num_keys++;
-  root.parent = null;
-  left.parent = root;
-  right.parent = root;
+  var root: Node := make_node();
+  root.keys[0] := key;
+  root.pointers[0] := left;
+  root.pointers[1] := right;
+  root.num_keys := root.num_keys + 1;
+  root.parent := null;
+  left.parent := root;
+  right.parent := root;
   return root;
 }
 
 
 
 /* First insertion: start a new tree. */
-procedure start_new_tree(key: Int, pointer: Record) returns (res: Node)
+procedure start_new_tree(key: Int, value: Int) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
-  var root: node = make_leaf();
-  root.keys[0] = key;
-  root.pointers[0] = pointer;
-  root.pointers[order - 1] = null;
-  root.parent = null;
-  root.num_keys++;
+  var root: Node := make_leaf();
+  root.keys[0] := key;
+  root.data[0] := value;
+  root.pointers[order - 1] := null;
+  root.parent := null;
+  root.num_keys := root.num_keys + 1;
   return root;
 }
 
@@ -536,7 +541,6 @@ procedure insert(root: Node, key: Int, value: Int) returns (res: Node)
   ensures   ??? ;
 {
 
-  var pointer: Record;
   var leaf: Node;
 
   /* The current implementation ignores duplicates. */
@@ -544,33 +548,29 @@ procedure insert(root: Node, key: Int, value: Int) returns (res: Node)
   if (find(root, key, false) != null)
     return root;
 
-  /* Create a new record for the value. */
-  pointer = make_record(value);
-
-
   /* Case: the tree does not exist yet.
    * Start a new tree. */
 
-  if (root == null) 
-    return start_new_tree(key, pointer);
+  if (root == null)
+    return start_new_tree(key, value);
 
 
   /* Case: the tree already exists.
    * (Rest of function body.) */
 
-  leaf = find_leaf(root, key);
+  leaf := find_leaf(root, key);
 
   /* Case: leaf has room for key and pointer. */
 
   if (leaf.num_keys < order - 1) {
-    leaf = insert_into_leaf(leaf, key, pointer);
+    leaf := insert_into_leaf(leaf, key, value);
     return root;
   }
 
 
   /* Case:  leaf must be split. */
 
-  return insert_into_leaf_after_splitting(root, leaf, key, pointer);
+  return insert_into_leaf_after_splitting(root, leaf, key, value);
 }
 
 
@@ -592,16 +592,16 @@ procedure get_neighbor_index(n: Node ) returns (res: Int)
   var i: Int;
 
   /* Return the index of the key to the left
-   * of the pointer in the parent pointing to n.  
+   * of the pointer in the parent pointing to n.
    * If n is the leftmost child, this means return -1.
    */
-  i = 0;
+  i := 0;
   while(i <= n.parent.num_keys)
     invariant ??? ;
   {
     if (n.parent.pointers[i] == n)
       return i - 1;
-    i++;
+    i := i + 1;
   }
 
   assert(false);
@@ -617,61 +617,61 @@ procedure remove_entry_from_node(n: Node, key: Int, pointer: Node) returns (res:
   var num_pointers: Int;
 
   // Remove the key and shift other keys accordingly.
-  i = 0;
+  i := 0;
   while (n.keys[i] != key)
     invariant ??? ;
   {
-    i = i + 1;
+    i := i + 1;
   }
 
-  i = i + 1;
+  i := i + 1;
   while (i < n.num_keys)
     invariant ??? ;
   {
-    n.keys[i - 1] = n.keys[i];
-    i = i + 1;
+    n.keys[i - 1] := n.keys[i];
+    i := i + 1;
   }
 
   // Remove the pointer and shift other pointers accordingly.
   // First determine number of pointers.
   if(n.is_leaf)
-    num_pointers = n.num_keys;
+    num_pointers := n.num_keys;
   else
-    num_pointers = n.num_keys + 1;
-  i = 0;
+    num_pointers := n.num_keys + 1;
+  i := 0;
   while (n.pointers[i] != pointer)
     invariant ??? ;
   {
-    i = i + 1;
+    i := i + 1;
   }
 
-  i = i + 1;
+  i := i + 1;
   while (i < num_pointers)
     invariant ??? ;
   {
-    n.pointers[i - 1] = n.pointers[i];
-    i = i + 1;
+    n.pointers[i - 1] := n.pointers[i];
+    i := i + 1;
   }
 
 
   // One key fewer.
-  n.num_keys = n.num_keys - 1;
+  n.num_keys := n.num_keys - 1;
 
   // Set the other pointers to null for tidiness.
   // A leaf uses the last pointer to point to the next leaf.
   if (n.is_leaf) {
-    i = n.num_keys; 
+    i := n.num_keys;
     while (i < order - 1)
     {
-      n.pointers[i] = null;
-      i = i + 1;
+      n.pointers[i] := null;
+      i := i + 1;
     }
   } else {
-    i = n.num_keys + 1; 
+    i := n.num_keys + 1;
     while (i < order)
     {
-      n.pointers[i] = null;
-      i = i + 1;
+      n.pointers[i] := null;
+      i := i + 1;
     }
   }
 
@@ -694,23 +694,23 @@ procedure adjust_root(root: Node) returns (res: Node)
   if (root.num_keys > 0)
    return root;
 
-  /* Case: empty root. 
+  /* Case: empty root.
    */
 
-  // If it has a child, promote 
+  // If it has a child, promote
   // the first (only) child
   // as the new root.
 
   if (!root.is_leaf) {
-    new_root = root.pointers[0];
-    new_root.parent = null;
+    new_root := root.pointers[0];
+    new_root.parent := null;
   }
 
   // If it is a leaf (has no children),
   // then the whole tree is empty.
 
   else
-   new_root = null;
+   new_root := null;
 
   free(root.keys);
   free(root.pointers);
@@ -743,9 +743,9 @@ procedure coalesce_nodes(root: Node, n: Node, neighbor: Node, neighbor_index: In
    */
 
   if (neighbor_index == -1) {
-    tmp = n;
-    n = neighbor;
-    neighbor = tmp;
+    tmp := n;
+    n := neighbor;
+    neighbor := tmp;
   }
 
   /* Starting point in the neighbor for copying
@@ -754,7 +754,7 @@ procedure coalesce_nodes(root: Node, n: Node, neighbor: Node, neighbor_index: In
    * in the special case of n being a leftmost child.
    */
 
-  neighbor_insertion_index = neighbor.num_keys;
+  neighbor_insertion_index := neighbor.num_keys;
 
   /* Case:  nonleaf node.
    * Append k_prime and the following pointer.
@@ -766,42 +766,42 @@ procedure coalesce_nodes(root: Node, n: Node, neighbor: Node, neighbor_index: In
     /* Append k_prime.
      */
 
-    neighbor.keys[neighbor_insertion_index] = k_prime;
-    neighbor.num_keys = neighbor.num_keys + 1;
+    neighbor.keys[neighbor_insertion_index] := k_prime;
+    neighbor.num_keys := neighbor.num_keys + 1;
 
 
-    n_end = n.num_keys;
+    n_end := n.num_keys;
 
-    
-    i = neighbor_insertion_index + 1;
-    j = 0;
+
+    i := neighbor_insertion_index + 1;
+    j := 0;
     while (j < n_end)
       invariant ??? ;
     {
-      neighbor.keys[i] = n.keys[j];
-      neighbor.pointers[i] = n.pointers[j];
-      neighbor.num_keys = neighbor.num_keys + 1;
-      n.num_keys = n.num_keys - 1;
-      i = i + 1;
-      j = j + 1;
+      neighbor.keys[i] := n.keys[j];
+      neighbor.pointers[i] := n.pointers[j];
+      neighbor.num_keys := neighbor.num_keys + 1;
+      n.num_keys := n.num_keys - 1;
+      i := i + 1;
+      j := j + 1;
     }
 
     /* The number of pointers is always
      * one more than the number of keys.
      */
 
-    neighbor.pointers[i] = n.pointers[j];
+    neighbor.pointers[i] := n.pointers[j];
 
     /* All children must now point up to the same parent.
      */
 
-    i = 0;
+    i := 0;
     while (i < neighbor.num_keys + 1)
       invariant ??? ;
     {
-      tmp = (node *)neighbor.pointers[i];
-      tmp.parent = neighbor;
-      i = i + 1;
+      tmp := neighbor.pointers[i];
+      tmp.parent := neighbor;
+      i := i + 1;
     }
   }
 
@@ -812,24 +812,24 @@ procedure coalesce_nodes(root: Node, n: Node, neighbor: Node, neighbor_index: In
    */
 
   else {
-    i = neighbor_insertion_index;
-    j = 0;
+    i := neighbor_insertion_index;
+    j := 0;
     while (j < n.num_keys)
       invariant ??? ;
     {
-      neighbor.keys[i] = n.keys[j];
-      neighbor.pointers[i] = n.pointers[j];
-      neighbor.num_keys = neighbor.num_keys + 1;
-      i = i + 1;
-      j = j + 1;
+      neighbor.keys[i] := n.keys[j];
+      neighbor.pointers[i] := n.pointers[j];
+      neighbor.num_keys := neighbor.num_keys + 1;
+      i := i + 1;
+      j := j + 1;
     }
-    neighbor.pointers[order - 1] = n.pointers[order - 1];
+    neighbor.pointers[order - 1] := n.pointers[order - 1];
   }
 
-  root = delete_entry(root, n.parent, k_prime, n);
+  root := delete_entry(root, n.parent, k_prime, n);
   free(n.keys);
   free(n.pointers);
-  free(n); 
+  free(n);
   return root;
 }
 
@@ -850,39 +850,41 @@ procedure redistribute_nodes(root: Node,
   ensures   ??? ;
 {
 
+  //TODO pointers vs data
+
   var i: Int;
   var tmp: Node;
 
-  /* Case: n has a neighbor to the left. 
+  /* Case: n has a neighbor to the left.
    * Pull the neighbor's last key-pointer pair over
    * from the neighbor's right end to n's left end.
    */
 
   if (neighbor_index != -1) {
     if (!n.is_leaf)
-      n.pointers[n.num_keys + 1] = n.pointers[n.num_keys];
+      n.pointers[n.num_keys + 1] := n.pointers[n.num_keys];
 
-    i = n.num_keys;
+    i := n.num_keys;
     while(i > 0)
       invariant ??? ;
     {
-      n.keys[i] = n.keys[i - 1];
-      n.pointers[i] = n.pointers[i - 1];
-      i = i - 1;
+      n.keys[i] := n.keys[i - 1];
+      n.pointers[i] := n.pointers[i - 1];
+      i := i - 1;
     }
     if (!n.is_leaf) {
-      n.pointers[0] = neighbor.pointers[neighbor.num_keys];
-      tmp = (node *)n.pointers[0];
-      tmp.parent = n;
-      neighbor.pointers[neighbor.num_keys] = null;
-      n.keys[0] = k_prime;
-      n.parent.keys[k_prime_index] = neighbor.keys[neighbor.num_keys - 1];
+      n.pointers[0] := neighbor.pointers[neighbor.num_keys];
+      tmp := n.pointers[0];
+      tmp.parent := n;
+      neighbor.pointers[neighbor.num_keys] := null;
+      n.keys[0] := k_prime;
+      n.parent.keys[k_prime_index] := neighbor.keys[neighbor.num_keys - 1];
     }
     else {
-      n.pointers[0] = neighbor.pointers[neighbor.num_keys - 1];
-      neighbor.pointers[neighbor.num_keys - 1] = null;
-      n.keys[0] = neighbor.keys[neighbor.num_keys - 1];
-      n.parent.keys[k_prime_index] = n.keys[0];
+      n.pointers[0] := neighbor.pointers[neighbor.num_keys - 1];
+      neighbor.pointers[neighbor.num_keys - 1] := null;
+      n.keys[0] := neighbor.keys[neighbor.num_keys - 1];
+      n.parent.keys[k_prime_index] := n.keys[0];
     }
   }
 
@@ -892,37 +894,37 @@ procedure redistribute_nodes(root: Node,
    * to n's rightmost position.
    */
 
-  else {  
+  else {
     if (n.is_leaf) {
-      n.keys[n.num_keys] = neighbor.keys[0];
-      n.pointers[n.num_keys] = neighbor.pointers[0];
-      n.parent.keys[k_prime_index] = neighbor.keys[1];
+      n.keys[n.num_keys] := neighbor.keys[0];
+      n.pointers[n.num_keys] := neighbor.pointers[0];
+      n.parent.keys[k_prime_index] := neighbor.keys[1];
     }
     else {
-      n.keys[n.num_keys] = k_prime;
-      n.pointers[n.num_keys + 1] = neighbor.pointers[0];
-      tmp = (node *)n.pointers[n.num_keys + 1];
-      tmp.parent = n;
-      n.parent.keys[k_prime_index] = neighbor.keys[0];
+      n.keys[n.num_keys] := k_prime;
+      n.pointers[n.num_keys + 1] := neighbor.pointers[0];
+      tmp := n.pointers[n.num_keys + 1];
+      tmp.parent := n;
+      n.parent.keys[k_prime_index] := neighbor.keys[0];
     }
-    i = 0;
+    i := 0;
     while(i < neighbor.num_keys - 1)
       invariant ??? ;
     {
-      neighbor.keys[i] = neighbor.keys[i + 1];
-      neighbor.pointers[i] = neighbor.pointers[i + 1];
-      i = i + 1
+      neighbor.keys[i] := neighbor.keys[i + 1];
+      neighbor.pointers[i] := neighbor.pointers[i + 1];
+      i := i + 1
     }
     if (!n.is_leaf)
-      neighbor.pointers[i] = neighbor.pointers[i + 1];
+      neighbor.pointers[i] := neighbor.pointers[i + 1];
   }
 
   /* n now has one more key and one more pointer;
    * the neighbor has one fewer of each.
    */
 
-  n.num_keys = n.num_keys + 1;
-  neighbor.num_keys = neighbor.num_keys - 1;
+  n.num_keys := n.num_keys + 1;
+  neighbor.num_keys := neighbor.num_keys - 1;
 
   return root;
 }
@@ -933,7 +935,7 @@ procedure redistribute_nodes(root: Node,
  * from the leaf, and then makes all appropriate
  * changes to preserve the B+ tree properties.
  */
-procedure delete_entry( root: Node, n: Node, key: Int, pointer: Node/Removes )
+procedure delete_entry( root: Node, n: Node, key: Int, pointer: Node/Record ?)
   requires  ??? ;
   ensures   ??? ;
 {
@@ -947,12 +949,12 @@ procedure delete_entry( root: Node, n: Node, key: Int, pointer: Node/Removes )
 
   // Remove key and pointer from node.
 
-  n = remove_entry_from_node(n, key, pointer);
+  n := remove_entry_from_node(n, key, pointer);
 
-  /* Case:  deletion from the root. 
+  /* Case:  deletion from the root.
    */
 
-  if (n == root) 
+  if (n == root)
     return adjust_root(root);
 
 
@@ -965,9 +967,9 @@ procedure delete_entry( root: Node, n: Node, key: Int, pointer: Node/Removes )
    */
 
   if (n.is_leaf) {
-    min_keys = cut(order - 1);
+    min_keys := cut(order - 1);
   } else {
-    min_keys = cut(order) - 1;
+    min_keys := cut(order) - 1;
   }
 
   /* Case:  node stays at or above minimum.
@@ -989,19 +991,23 @@ procedure delete_entry( root: Node, n: Node, key: Int, pointer: Node/Removes )
    * to the neighbor.
    */
 
-  neighbor_index = get_neighbor_index( n );
-  k_prime_index = neighbor_index == -1 ? 0 : neighbor_index;
-  k_prime = n.parent.keys[k_prime_index];
-  if (neighbor_index == -1) {
-    neighbor = n.parent.pointers[1]
+  neighbor_index := get_neighbor_index( n );
+  if (neighbor_index == -1){
+    k_prime_index := 0;
   } else {
-    neighbor = n.parent.pointers[neighbor_index];
+    k_prime_index := neighbor_index;
+  }
+  k_prime := n.parent.keys[k_prime_index];
+  if (neighbor_index == -1) {
+    neighbor := n.parent.pointers[1]
+  } else {
+    neighbor := n.parent.pointers[neighbor_index];
   }
 
   if (n.is_leaf) {
-    capacity = order;
+    capacity := order;
   } else {
-    capacity = order - 1;
+    capacity := order - 1;
   }
 
   /* Coalescence. */
@@ -1027,10 +1033,10 @@ procedure delete(root: Node, key: Int) returns (node: Node)
   var key_leaf: Node;
   var key_record: Record;
 
-  key_record = find(root, key, false);
-  key_leaf = find_leaf(root, key);
+  key_record := find(root, key, false);
+  key_leaf := find_leaf(root, key);
   if (key_record != null && key_leaf != null) {
-    root = delete_entry(root, key_leaf, key, key_record);
+    root := delete_entry(root, key_leaf, key, key_record);
     free(key_record);
   }
   return root;
@@ -1043,20 +1049,20 @@ procedure destroy_tree_nodes(root: Node)
 {
   var i: Int;
   if (root.is_leaf) {
-    i = 0;
+    i := 0;
     while (i < root.num_keys)
       invariant ??? ;
     {
       free(root.data[i]);
-      i = i + i;
+      i := i + i;
     }
   } else {
-    i = 0;
+    i := 0;
     while (i < root.num_keys)
       invariant ??? ;
     {
       destroy_tree_nodes(root.pointers[i]);
-      i = i + i;
+      i := i + i;
     }
   }
   free(root);
