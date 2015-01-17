@@ -27,24 +27,6 @@ type solver =
     { name : string;
       info : solver_info
     }
-
-let logger_info = 
-  { version = 0;
-    subversion = 0;
-    has_set_theory = false;
-    has_inst_closure = false;
-    smt_options = [];
-    kind = Logger;
-  }
-
-let z3logger =
-  { name = "Z3LOG";
-    info = logger_info }
-
-let cvc4logger =
-  { name = "CVC4LOG";
-    info = { logger_info with has_set_theory = true; has_inst_closure = true }}
-
     
 let get_version name cmd vregexp versions =
   try
@@ -55,41 +37,48 @@ let get_version name cmd vregexp versions =
     if Str.string_match version_regexp version_string 0 then
       let version = int_of_string (Str.matched_group 1 version_string) in
       let subversion = int_of_string (Str.matched_group 2 version_string) in
-      let v = List.find (fun v -> v.version < version || (v.version = version && v.subversion <= subversion)) versions in
-      Some { name = name;
-           info = v; }
+      let v =
+        List.find (fun v ->
+          let v = v () in
+          v.version < version || (v.version = version && v.subversion <= subversion)) versions
+      in
+      Some (fun () -> { name = name; info = v (); })
     else (print_endline "no match"; raise Not_found)
     with _ -> None
 
-let z3_v3 = { version = 3;
-              subversion = 2;
-              has_set_theory = false;
-              has_inst_closure = false;
-              smt_options = [":mbqi", "true";
-			 ":MODEL_V2", "true";
-			 ":MODEL_PARTIAL", "true";
-			 ":MODEL_HIDE_UNUSED_PARTITIONS", "true"];
-              kind = Process ("z3", ["-smt2"; "-in"]);
-	    }
+let z3_v3 () =
+  { version = 3;
+    subversion = 2;
+    has_set_theory = false;
+    has_inst_closure = false;
+    smt_options = [":mbqi", "true";
+		   ":MODEL_V2", "true";
+		   ":MODEL_PARTIAL", "true";
+		   ":MODEL_HIDE_UNUSED_PARTITIONS", "true"];
+    kind = Process ("z3", ["-smt2"; "-in"]);
+  }
 
-let z3_v4 = { version = 4;
-              subversion = 3;
-              has_set_theory = false;
-              has_inst_closure = false;
-              smt_options = 
-              (if not !Config.instantiate then [(":auto-config", "false")] else []) @
-              [":smt.mbqi", "true";
-               ":smt.ematching", "true";
-             ];
-              kind = Process ("z3", ["-smt2"; "-in"]);
-	    }
+let z3_v4_options () = 
+  (if not !Config.instantiate then
+    [(":auto-config", "false");
+     (":smt.mbqi", "false")] else
+    [":smt.mbqi", "true"])
+  @ [":smt.ematching", "true"]
+  
+let z3_v4 () =
+  { version = 4;
+    subversion = 3;
+    has_set_theory = false;
+    has_inst_closure = false;
+    smt_options = z3_v4_options ();
+    kind = Process ("z3", ["-smt2"; "-in"]);
+  }
 
 let z3_versions = [z3_v4; z3_v3]
 
-
 let z3 = get_version "Z3" "z3 -version" "^Z3[^0-9]*\\([0-9]*\\).\\([0-9]*\\)" z3_versions
 
-let cvc4_v1 = 
+let cvc4_v1 () = 
   let options =
     ["--lang=smt2"; 
      "--quant-cf"; 
@@ -106,7 +95,7 @@ let cvc4_v1 =
 
 let cvc4 = get_version "CVC4" "cvc4 --version" ".*CVC4[^0-9]*\\([0-9]*\\).\\([0-9]*\\)" [cvc4_v1]
 
-let cvc4mf_v1 = 
+let cvc4mf_v1 () = 
   let options = 
     ["--lang=smt2"; 
      "--finite-model-find"; 
@@ -115,9 +104,9 @@ let cvc4mf_v1 =
      "--fmf-inst-engine";
      "--simplification=none"]
   in
-  { cvc4_v1 with
-    kind = 
-    Process ("cvc4", options);
+  let solver = cvc4_v1 () in
+  { solver with
+    kind = Process ("cvc4", options);
   }
 
 let cvc4mf = get_version "CVC4MF" "cvc4 --version" ".*CVC4 version \\([0-9]*\\).\\([0-9]*\\)" [cvc4mf_v1]
@@ -131,10 +120,29 @@ let mathsat_v5 =
     kind = Process ("mathsat", ["-verbosity=0"]);
   }
 
-let mathsat = 
+let mathsat () = 
   { name = "MathSAT";
     info = mathsat_v5
    }
+
+
+let logger_info = 
+  { version = 0;
+    subversion = 0;
+    has_set_theory = false;
+    has_inst_closure = false;
+    smt_options = [];
+    kind = Logger;
+  }
+
+let z3logger () =
+  { name = "Z3LOG";
+    info = { logger_info with smt_options = z3_v4_options () } }
+
+let cvc4logger () =
+  { name = "CVC4LOG";
+    info = { logger_info with has_set_theory = true; has_inst_closure = true }}
+
 
 let available_solvers = 
   z3logger :: cvc4logger :: Util.flat_map Util.Opt.to_list [z3; cvc4; cvc4mf]
@@ -146,9 +154,9 @@ let select_solver name =
   selected_solvers := 
     List.filter 
       (fun s -> List.mem s.name selected && (!Config.verify || s.info.kind = Logger))
-      available_solvers;
+      (List.map (fun s -> s ()) available_solvers);
   if List.for_all (fun s -> s.info.kind <> Logger) !selected_solvers && !Config.dump_smt_queries then
-    selected_solvers := z3logger :: !selected_solvers;
+    selected_solvers := z3logger () :: !selected_solvers;
   Debug.info (fun () ->
     "Selected SMT solvers: " ^
     String.concat ", " (List.map (fun s -> s.name) !selected_solvers) ^
