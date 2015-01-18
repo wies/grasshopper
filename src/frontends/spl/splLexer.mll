@@ -12,7 +12,8 @@ let set_file_name lexbuf name =
 let keyword_table = Hashtbl.create 32
 let _ =
   List.iter (fun (kwd, tok) -> Hashtbl.add keyword_table kwd tok)
-    ([("assert", ASSERT);
+    ([("Array", ARRAY);
+      ("assert", ASSERT);
       ("assume", ASSUME);
       ("Bool", BOOL);
       ("comment", COMMENT);

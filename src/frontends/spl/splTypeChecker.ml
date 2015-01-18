@@ -22,6 +22,8 @@ let match_types pos oty1 oty2 =
     | StructType _, AnyRefType -> ty1
     | AnyType, _ -> ty2
     | _, AnyType -> ty1
+    | ArrayType ty1, ArrayType ty2 ->
+        ArrayType (mt ty1 ty2)
     | SetType ty1, SetType ty2 ->
         SetType (mt ty1 ty2)
     | MapType (dty1, rty1), MapType (dty2, rty2) ->
@@ -41,6 +43,8 @@ let merge_types pos oty1 oty2 =
     | StructType _, AnyRefType -> ty1
     | AnyType, _ -> ty2
     | _, AnyType -> ty1
+    | ArrayType ty1, ArrayType ty2 ->
+        ArrayType (mt ty1 ty2)
     | SetType ty1, SetType ty2 ->
         SetType (mt ty1 ty2)
     | MapType (dty1, rty1), MapType (dty2, rty2) ->
@@ -98,6 +102,11 @@ let type_of_expr cu locals e =
         let decl = IdMap.find id cu.var_decls in
         (match decl.v_type with
         | MapType (_, ty) -> ty
+        | _ -> AnyType)
+    (* Array types *)
+    | ArrayAccess (ar, _, _) ->
+        (match te ar with
+        | ArrayType ty -> ty
         | _ -> AnyType)
     (* Other stuff *)
     | Null (ty, _) -> ty
@@ -252,6 +261,11 @@ let infer_types cu locals ty e =
     | Null (nty, pos) ->
         let ty = match_types pos ty nty in
         Null (ty, pos), ty
+    (* Array types *)
+    | ArrayAccess (ar, idx, pos) ->
+        let ar1, ty = it locals (ArrayType ty) ar in
+        let idx1, _ = it locals IntType idx in
+        ArrayAccess (ar1, idx1, pos), ty
     (* Other stuff *)
     | BtwnPred (e1, e2, e3, e4, pos) ->
         let e1, fty = it locals (MapType (AnyRefType, AnyRefType)) e1 in

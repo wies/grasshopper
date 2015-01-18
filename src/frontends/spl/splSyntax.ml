@@ -13,6 +13,7 @@ type names = name list
 type typ =
   | StructType of ident
   | MapType of typ * typ
+  | ArrayType of typ
   | SetType of typ
   | IntType
   | BoolType
@@ -129,6 +130,7 @@ and expr =
   | BoolVal of bool * pos
   | New of ident * pos
   | Dot of expr * ident * pos
+  | ArrayAccess of expr * expr * pos
   | ProcCall of ident * exprs * pos
   | PredApp of ident * exprs * pos
   | Quant of quantifier_kind * var list * expr * pos
@@ -273,6 +275,7 @@ let rec pr_type ppf = function
   | IntType -> fprintf ppf "%s" int_sort_string
   | UnitType -> fprintf ppf "Unit"
   | StructType id -> pr_ident ppf id
+  | ArrayType e -> fprintf ppf "%s<@[%a@]>" array_sort_string pr_type e
   | MapType (d, r) -> fprintf ppf "%s<@[%a,@ %a@]>" map_sort_string pr_type d pr_type r
   | SetType s -> fprintf ppf "%s<@[%a@]>" set_sort_string pr_type s
   | PermType -> fprintf ppf "Permission"

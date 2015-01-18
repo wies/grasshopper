@@ -1,0 +1,13 @@
+procedure initialize ()
+  returns (a: Array<Int>)
+  requires emp
+  ensures a
+{
+  a := new Array<Int>(10);
+
+  var i := 0;
+  
+  while (i < a.length) {
+    a[i] := i;
+  }
+}

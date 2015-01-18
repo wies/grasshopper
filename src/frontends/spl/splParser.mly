@@ -49,7 +49,7 @@ let fix_scopes stmnt =
 %token <SplSyntax.quantifier_kind> QUANT
 %token ASSUME ASSERT CALL FREE HAVOC NEW RETURN
 %token IF ELSE WHILE
-%token GHOST IMPLICIT VAR STRUCT PURE PROCEDURE PREDICATE FUNCTION INCLUDE
+%token GHOST IMPLICIT VAR STRUCT ARRAY PURE PROCEDURE PREDICATE FUNCTION INCLUDE
 %token OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token LOC INT BOOL SET MAP
 %token MATCHING YIELDS COMMENT 
@@ -289,6 +289,7 @@ var_type:
 | LOC LT IDENT GT { StructType ($3, 0) }
 | INT { IntType }
 | BOOL { BoolType }
+| ARRAY LT var_type GT { ArrayType $3 }
 | SET LT var_type GT { SetType $3 }
 | MAP LT var_type COMMA var_type GT { MapType ($3, $5) }
 | IDENT { StructType ($1, 0) }
@@ -462,6 +463,10 @@ field_access:
 | unary_expr DOT IDENT { Dot ($1, ($3, 0), mk_position 1 3) }
 ;
 
+array_access:
+| unary_expr LBRACKET expr RBRACKET { ArrayAccess ($1, $3, mk_position 1 4) }
+;
+                                                              
 unary_expr:
 | primary { $1 }
 | ident { $1 }

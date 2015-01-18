@@ -223,6 +223,7 @@ let rec pr_ident_list ppf = function
 
 let loc_sort_string = "Loc"
 let map_sort_string = "Map"
+let array_sort_string = "Array"
 let set_sort_string = "Set"
 let bool_sort_string = "Bool"
 let int_sort_string = "Int"
