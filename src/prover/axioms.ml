@@ -194,7 +194,7 @@ let reach_axioms struct_id =
                                  btwn loc2 loc3 loc3; btwn loc2 loc2 loc3]]
   in
   let btwn_sndw2 = mk_or [mk_not (btwn loc1 loc2 loc3); mk_not (btwn loc2 loc3 loc1);
-                          mk_and [mk_eq loc1 loc2; mk_eq loc2 loc3]]
+                          btwn loc3 loc1 loc2]
   in
   (**)
   if !with_reach_axioms then
