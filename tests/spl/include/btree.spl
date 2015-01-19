@@ -15,6 +15,7 @@ struct Node {
 
 
 function btree_footprint(r: Node) returns (FP: Set<Node>) {
+  //TODO footprint of keys, data, and pointers
   forall x: Node :: x in FP == (Btwn(parent, x, r, r) && r != null)
 }
 

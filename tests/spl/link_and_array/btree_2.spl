@@ -32,15 +32,21 @@ include "../include/btree.spl";
  * returned_keys and returned_pointers, and returns the number of
  * entries found.
  */
-procedure find_range( root: Node,
+procedure find_range( tree: BPTree,
                       key_start: Int,
                       key_end: Int,
                       returned_keys: Int[],
                       returned_data: Int[])
   returns (res: Int)
-  requires  ??? ;
-  ensures   ??? ;
+  requires btree(tree)
+  requires acc(returned_keys) &*& acc(returned_data) //TODO returned_keys and returned_data are big enough arrays (size >= key_end - key_start)
+  requires key_start <= key_end
+  ensures  btree(tree)
+  ensures  acc(returned_keys) &*& acc(returned_data)
+  ensures  forall i: Int :: i >= 0 && i < res ==> returned_keys[i] >= key_start && returned_keys[i] <= key_end
+  //TODO returned_keys and returned_data are a projection of the tree on the given key range
 {
+    var root: Node = tree.root;
     var i: Int;
     var num_found: Int := 0;
     var n: Node := find_leaf( root, key_start);
@@ -48,24 +54,30 @@ procedure find_range( root: Node,
       return 0;
     i := 0;
     while (i < n.num_keys && n.keys[i] < key_start)
-      invariant ??? ;
+      invariant i >= 0
+      invariant ??? //access to n.keys
     {
       i := i + 1;
     }
     if (i == n.num_keys)
       return 0;
     while (n != null)
-      invariant ??? ;
+      invariant (n == null || acc(n)) -** tree
+      invariant n == null || (n.is_leaf && n.keys[i] >= key_start)
+      invariant i >= 0 && (n == null || i < n.num_keys)
+      //TODO returned_keys and returned_data
     {
       while (i < n.num_keys && n.keys[i] <= key_end)
-        invariant ??? ;
+        invariant acc(n)
+        invariant i >= 0
+        //TODO returned_keys and returned_data
       {
         returned_keys[num_found] := n.keys[i];
         returned_data[num_found] := n.data[i];
         num_found := num_found + 1;
         i := i + 1;
       }
-      n := n.pointers[order - 1];
+      n := n.pointers[tree.order - 1];
       i := 0;
     }
     return num_found;
@@ -75,21 +87,25 @@ procedure find_range( root: Node,
 /* Traces the path from the root to a leaf, searching by key.
  * Returns the leaf containing the given key.
  */
-procedure find_leaf(root: Node, key: Int) returns (res: Node)
-  requires  ??? ;
-  ensures   ??? ;
+procedure find_leaf(t: BTree, key: Int) returns (res: Node)
+  requires btree(t)
+  ensures  (res == null || acc(res)) -** btree(t)
+  ensures  res == null || res.is_leaf
+  //TODO if the key is in the tree then res.key[0] >= key && res.keys[res.num_keys-1] <= key
 {
   var i: Int := 0;
-  var c: Node := root;
+  var c: Node := t.root;
   if (c == null) {
     return c;
   }
   while (!c.is_leaf)
-    invariant ???
+    invariant acc(c) -** btree(t)
+    //TODO about the key
   {
     i := 0;
     while (i < c.num_keys && key >= c.keys[i])
-      invariant ???
+      invariant i >= 0
+      //TODO about the key
     {
       i := i + 1;
     }
@@ -100,30 +116,32 @@ procedure find_leaf(root: Node, key: Int) returns (res: Node)
 
 
 /* Finds and returns the record to which a key refers. */
-procedure find( root: Node, key: Int) returns (res: Int)
-  requires  ??? ;
-  ensures   ??? ;
+procedure find( t: BTree, key: Int) returns (res: Int)
+  requires  btree(t)
+  ensures   btree(t) //TODO did we find the key? is -1 a good Not_found ?
 {
   var i: Int := 0;
-  var c: Node := find_leaf( root, key);
-  if (c == null) return null;
+  var c: Node := find_leaf( t, key);
+  if (c == null)
+    return -1;
 
   while(i < c.num_keys && c.keys[i] != key)
-    invariant ??? ;
+    invariant i >= 0 && i <= c.num_keys
+    invariant ???
   {
     i := i + 1;
   }
 
   if (i == c.num_keys)
-    return -1;//TODO is that the best ?
+    return -1;
   else
     return c.data[i];
 }
 
 /* Finds the appropriate place to split a node that is too big into two. */
-procedure cut( Int length ) returns (res: Int)
-  requires  ??? ;
-  ensures   ??? ;
+procedure cut( length: Int ) returns (res: Int)
+  requires  length > 2
+  ensures   res <= length/2 + 1 && res >= length/2
 {
   if (length % 2 == 0)
     return length/2;
@@ -136,11 +154,14 @@ procedure cut( Int length ) returns (res: Int)
 
 /* Creates a new general node, which can be adapted
  * to serve as either a leaf or an internal node. */
-procedure make_node( ) returns (res: Node)
-  requires  ??? ;
-  ensures   ??? ;
+procedure make_node(order: Int) returns (res: Node)
+  requires  order >= 3
+  ensures   ???
 {
   var new_node := new Node;
+  new_node.keys := new Int[order];
+  new_node.data := new Int[order];
+  new_node.pointers := new Node[order];
   new_node.is_leaf := false;
   new_node.num_keys := 0;
   new_node.parent := null;
@@ -148,11 +169,11 @@ procedure make_node( ) returns (res: Node)
 }
 
 /* Creates a new leaf by creating a node and then adapting it appropriately. */
-procedure make_leaf( ) returns (res: Node)
-  requires  ??? ;
-  ensures   ??? ;
+procedure make_leaf(order: Int) returns (res: Node)
+  requires  order >= 3
+  ensures   ???
 {
-  var leaf: Node := make_node();
+  var leaf: Node := make_node(order);
   leaf.is_leaf := true;
   return leaf;
 }
@@ -163,12 +184,12 @@ procedure make_leaf( ) returns (res: Node)
  * the node to the left of the key to be inserted.
  */
 procedure get_left_index(parent: Node, left: Node) returns (res: Node)
-  requires  ??? ;
-  ensures   ??? ;
+  requires  ???
+  ensures   ???
 {
   var left_index: Int := 0;
   while (left_index <= parent.num_keys && parent.pointers[left_index] != left)
-    invariant ??? ;
+    invariant ???
   {
     left_index := left_index + 1;
   }
@@ -178,8 +199,8 @@ procedure get_left_index(parent: Node, left: Node) returns (res: Node)
 /* Inserts a new pointer to a record and its corresponding key into a leaf.
  * Returns the altered leaf. */
 procedure insert_into_leaf( leaf: Node, key: Int, value: Int ) returns (res: Node)
-  requires  ??? ;
-  ensures   ??? ;
+  requires  ???
+  ensures   ???
 {
 
   var i: Int;
@@ -187,14 +208,14 @@ procedure insert_into_leaf( leaf: Node, key: Int, value: Int ) returns (res: Nod
 
   insertion_point := 0;
   while (insertion_point < leaf.num_keys && leaf.keys[insertion_point] < key)
-    invariant ??? ;
+    invariant ???
   {
     insertion_point := insertion_point + 1;
   }
 
   i := leaf.num_keys;
   while(i > insertion_point)
-    invariant ??? ;
+    invariant ???
   {
     leaf.keys[i] := leaf.keys[i - 1];
     leaf.data[i] := leaf.data[i - 1];
@@ -212,8 +233,8 @@ procedure insert_into_leaf( leaf: Node, key: Int, value: Int ) returns (res: Nod
  * the tree's order, causing the leaf to be split in half. */
 procedure insert_into_leaf_after_splitting(root: Node, leaf: Node, key: Int, value: Int)
   returns (res: Node)
-  requires  ??? ;
-  ensures   ??? ;
+  requires  ???
+  ensures   ???
 {
 
   var new_leaf: Node;
@@ -345,8 +366,8 @@ procedure insert_into_node_after_splitting( root: Node,
                                             key: Int,
                                             right: Node)
   returns (res: Node)
-  requires  ??? ;
-  ensures   ??? ;
+  requires  ???
+  ensures   ???
 {
 
   var i: Int;
@@ -453,8 +474,8 @@ procedure insert_into_node_after_splitting( root: Node,
  */
 procedure insert_into_parent(root: Node, left: Node, key: Int, right: Node)
   returns (res: Node)
-  requires  ??? ;
-  ensures   ??? ;
+  requires  ???
+  ensures   ???
 {
 
   var left_index: Int;
@@ -498,8 +519,8 @@ procedure insert_into_parent(root: Node, left: Node, key: Int, right: Node)
  */
 procedure insert_into_new_root(left: Node, key: Int, right: Node)
   returns (res: Node)
-  requires  ???
-  ensures   ???
+  requires ???
+  ensures  ???
 {
   var root: Node := make_node();
   root.keys[0] := key;
@@ -515,9 +536,10 @@ procedure insert_into_new_root(left: Node, key: Int, right: Node)
 
 
 /* First insertion: start a new tree. */
-procedure start_new_tree(key: Int, value: Int) returns (res: Node)
-  requires  ??? ;
-  ensures   ??? ;
+procedure start_new_tree(order: Int, key: Int, value: Int)
+  returns (res: BTree)
+  requires  emp
+  ensures   btree(res) //TODO key → value
 {
   var root: Node := make_leaf();
   root.keys[0] := key;
@@ -525,7 +547,10 @@ procedure start_new_tree(key: Int, value: Int) returns (res: Node)
   root.pointers[order - 1] := null;
   root.parent := null;
   root.num_keys := root.num_keys + 1;
-  return root;
+  var t := new BTree;
+  t.root := root;
+  t.order := order;
+  return t;
 }
 
 
@@ -537,8 +562,8 @@ procedure start_new_tree(key: Int, value: Int) returns (res: Node)
  * properties.
  */
 procedure insert(root: Node, key: Int, value: Int) returns (res: Node)
-  requires  ??? ;
-  ensures   ??? ;
+  requires  ???
+  ensures   ???
 {
 
   var leaf: Node;
@@ -552,7 +577,7 @@ procedure insert(root: Node, key: Int, value: Int) returns (res: Node)
    * Start a new tree. */
 
   if (root == null)
-    return start_new_tree(key, value);
+    return start_new_tree(5, key, value); //TODO the order ?
 
 
   /* Case: the tree already exists.
@@ -585,8 +610,8 @@ procedure insert(root: Node, key: Int, value: Int) returns (res: Node)
  * this special case.
  */
 procedure get_neighbor_index(n: Node ) returns (res: Int)
-  requires  ??? ;
-  ensures   ??? ;
+  requires  ???
+  ensures   ???
 {
 
   var i: Int;
@@ -609,8 +634,8 @@ procedure get_neighbor_index(n: Node ) returns (res: Int)
 
 
 procedure remove_entry_from_node(n: Node, key: Int, pointer: Node) returns (res: Node)
-  requires  ??? ;
-  ensures   ??? ;
+  requires  ???
+  ensures   ???
 {
 
   var i: Int;
@@ -619,14 +644,14 @@ procedure remove_entry_from_node(n: Node, key: Int, pointer: Node) returns (res:
   // Remove the key and shift other keys accordingly.
   i := 0;
   while (n.keys[i] != key)
-    invariant ??? ;
+    invariant ???
   {
     i := i + 1;
   }
 
   i := i + 1;
   while (i < n.num_keys)
-    invariant ??? ;
+    invariant ???
   {
     n.keys[i - 1] := n.keys[i];
     i := i + 1;
@@ -640,14 +665,14 @@ procedure remove_entry_from_node(n: Node, key: Int, pointer: Node) returns (res:
     num_pointers := n.num_keys + 1;
   i := 0;
   while (n.pointers[i] != pointer)
-    invariant ??? ;
+    invariant ???
   {
     i := i + 1;
   }
 
   i := i + 1;
   while (i < num_pointers)
-    invariant ??? ;
+    invariant ???
   {
     n.pointers[i - 1] := n.pointers[i];
     i := i + 1;
@@ -1035,7 +1060,7 @@ procedure delete(root: Node, key: Int) returns (node: Node)
 
   key_record := find(root, key, false);
   key_leaf := find_leaf(root, key);
-  if (key_record != null && key_leaf != null) {
+  if (key_record != -1 && key_leaf != null) {
     root := delete_entry(root, key_leaf, key, key_record);
     free(key_record);
   }
@@ -1044,37 +1069,33 @@ procedure delete(root: Node, key: Int) returns (node: Node)
 
 
 procedure destroy_tree_nodes(root: Node)
-  requires  BPTree(root);
-  ensures   emp;
+  requires  BPTree(root); //TODO
+  ensures   emp
 {
   var i: Int;
-  if (root.is_leaf) {
+  if (!root.is_leaf) {
     i := 0;
     while (i < root.num_keys)
-      invariant ??? ;
-    {
-      free(root.data[i]);
-      i := i + i;
-    }
-  } else {
-    i := 0;
-    while (i < root.num_keys)
-      invariant ??? ;
+      invariant i >= 0
+      //TODO the part <i is free
     {
       destroy_tree_nodes(root.pointers[i]);
       i := i + i;
     }
   }
+  free(root.keys);
+  free(root.data);
+  free(root.pointers);
   free(root);
 }
 
 
-procedure destroy_tree(root: Node) returns (res: Node)
-  requires  BPTree(root);
-  ensures   emp * res == null;
+procedure destroy_tree(t: BTree)
+  requires  btree(t)
+  ensures   emp
 {
-  destroy_tree_nodes(root);
-  return null;
+  destroy_tree_nodes(t.root);
+  free(t);
 }
 
 
