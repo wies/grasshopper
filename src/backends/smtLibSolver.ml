@@ -473,7 +473,7 @@ let is_interpreted solver_info sym = match sym with
       !Config.use_set_theory && solver_info.has_set_theory
   | Eq | Gt | Lt | GtEq | LtEq | IntConst _ | BoolConst _
   | Plus | Minus | Mult | Div | UMinus -> true
-  (*| FreeSym id -> id = ("inst-closure", 0)*)
+  | FreeSym id -> id = ("inst-closure", 0) && solver_info.has_inst_closure
   | _ -> false
 
 let string_of_overloaded_symbol solver_info sym idx =
