@@ -553,7 +553,7 @@ let add_split_lemmas fs gts =
   else fs
     
 (** Reduces the given formula to the target theory fragment, as specified by the configuration. *)
-let reduce f = 
+let reduce f =
   (* split f into conjuncts and eliminate all existential quantifiers *)
   let rec split_ands acc = function
     | BoolOp(And, fs) :: gs -> 
@@ -581,6 +581,7 @@ let reduce f =
   let fs = add_set_axioms fs in
   let fs, read_propagators, gts = add_read_write_axioms fs in
   let fs, gts = add_reach_axioms fs gts in
+  let fs = if !Config.named_assertions then fs else List.map strip_names fs in
   let fs, gts = instantiate read_propagators fs gts in
   let fs = add_terms fs gts in
   let fs = encode_labels fs in
