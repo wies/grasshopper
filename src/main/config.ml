@@ -24,12 +24,14 @@ let keep_types = ref false
 (* Flag that controls whether we are instantiating the axioms or relying on the prover. *)
 let instantiate = ref true
 let stratify = ref true
+(* Flag that controls whether split lemmas are added *)
+let split_lemmas = ref false
 (* Flag that controls whether unsat cores are dumped for each VC *)
 let unsat_cores = ref false
 (* Flag that controls whether the generated VCs are dumped to files. *)
 let dump_smt_queries = ref false
 (* Flag that controls whether the generated VCs use named assertions. *)
-let named_assertions = true
+let named_assertions = ref false
 (* Flag that controls whether the generated VCs are checked. *)
 let verify = ref true
 (* Flag that controls whether to stop after the first VC that cannot be proved. *)
@@ -76,6 +78,7 @@ let cmd_options =
    ("-noep", Arg.Clear with_ep, " Omit axioms for entry points");
    ("-noinst", Arg.Clear instantiate, " Let the SMT solver deal with the quantifiers without prior instantiation");
    ("-nostratify", Arg.Clear stratify, " Instantiate quantifiers that satisfy stratified sort restrictions\n\nOptions for controlling backend solver:");
+   ("-splitlemmas", Arg.Set split_lemmas, " Add split lemmas for all terms of sort Loc");
    ("-smtsolver", Arg.Set_string smtsolver, "<solver> Choose SMT solver (z3, cvc4, cvc4mf), e.g., 'z3+cvc4mf'");
    ("-smtpatterns", Arg.Set smtpatterns, " Always add pattern annotations to quantifiers in SMT queries");
    ("-smtsets", Arg.Set use_set_theory, " Use solver's set theory to encode sets (if supported)");

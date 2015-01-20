@@ -89,9 +89,9 @@ let find_index elt ls =
   let rec traverse i lst = match lst with
     | x :: xs when elt = x -> i
     | _ :: xs -> traverse (i+1) xs
-    | [] -> -1
+    | [] -> raise Not_found
   in
-    traverse 0 ls
+  traverse 0 ls
 
 (* find an element x s.t. p(x) and check that the other elements do not satisfy p.
  * raise Not_found / Failure "not unique"
@@ -147,11 +147,12 @@ let rec for_all2 fn xs ys =
 let rev_concat lists = List.fold_left (List.fold_left (fun acc f -> f :: acc)) [] lists
 
 let iteri fct lst =
-  let rec iter idx lst = match lst with
+  let rec iter idx lst =
+    match lst with
     | x::xs -> fct idx x; iter (idx+1) xs
     | [] -> ()
   in
-    iter 0 lst
+  iter 0 lst
 
 (** Print a list with a given separator *)
 let output_list chan fn sep xs =

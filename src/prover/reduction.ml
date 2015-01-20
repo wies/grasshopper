@@ -488,7 +488,7 @@ let instantiate read_propagators fs gts =
   instantiate_with_terms true fs1 classes, gts1
 
 let add_terms fs gts =
-  if !Config.instantiate then fs else
+  if not !Config.smtpatterns then fs else
   (*let gts_fs = ground_terms (mk_and fs) in*)
   let extra_gts = (*TermSet.diff gts gts_fs*) gts in
   let fs1 = 
@@ -522,8 +522,38 @@ let encode_labels fs =
         BoolOp (op, List.map el fs)
   in List.rev_map el fs
 
+let add_split_lemmas fs gts =
+  let structs =
+    TermSet.fold (fun t structs ->
+      match sort_of t with
+      | Loc sid -> IdSet.add sid structs
+      | _ -> structs)
+      gts IdSet.empty
+  in
+  let classes = CongruenceClosure.congr_classes fs gts in
+  let add_lemmas sid fs1 =
+    let loc_gts =
+      TermSet.filter (fun t -> sort_of t = Loc sid) gts
+    in
+    let classes = CongruenceClosure.restrict_classes classes loc_gts in
+    let rec lem fs1 = function
+      | [] -> fs1
+      | c :: cs ->
+          let t = List.hd c in
+          List.fold_left
+            (fun fs1 c ->
+              let t1 = List.hd c in
+              mk_or [mk_eq t t1; mk_neq t t1] :: fs1)
+            fs1 cs
+    in
+    lem fs1 classes
+  in
+  if !Config.split_lemmas
+  then IdSet.fold add_lemmas structs fs
+  else fs
+    
 (** Reduces the given formula to the target theory fragment, as specified by the configuration. *)
-let reduce f = 
+let reduce f =
   (* split f into conjuncts and eliminate all existential quantifiers *)
   let rec split_ands acc = function
     | BoolOp(And, fs) :: gs -> 
@@ -551,8 +581,10 @@ let reduce f =
   let fs = add_set_axioms fs in
   let fs, read_propagators, gts = add_read_write_axioms fs in
   let fs, gts = add_reach_axioms fs gts in
+  let fs = if !Config.named_assertions then fs else List.map strip_names fs in
   let fs, gts = instantiate read_propagators fs gts in
   let fs = add_terms fs gts in
   let fs = encode_labels fs in
+  let fs = add_split_lemmas fs gts in
   TypeStrat.reset ();
   fs

@@ -377,6 +377,10 @@ let strip_error_msgs f =
   filter_annotations 
     (function ErrorMsg _ -> false | _ -> true) f
 
+let strip_names f = 
+  filter_annotations 
+    (function Name _ -> false | _ -> true) f
+
 let mk_comment c f = 
   annotate f [Comment c]
 
@@ -1084,14 +1088,17 @@ let unique_names f =
   uc f
 
 (** Give formula [f] a name if it does not already have one *)
-let name_unnamed f = match f with
-  | Binder (_, _, _, anns) 
-  | Atom (_, anns) ->
-    if List.exists (fun a -> match a with Name _ -> true | _ -> false) anns
-    then f
-    else mk_name "unnamed" f
-  | f -> mk_name "unnamed" f
-
+let name_unnamed = 
+  let unnamed = "unnamed" in
+  fun f ->
+    match f with
+    | Binder (_, _, _, anns) 
+    | Atom (_, anns) ->
+        if List.exists (fun a -> match a with Name _ -> true | _ -> false) anns
+        then f
+        else mk_name unnamed f
+    | f -> mk_name unnamed f
+        
 module Clauses = struct
 
   type clause = form list

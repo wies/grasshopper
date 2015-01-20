@@ -123,7 +123,7 @@ let mathsat_v5 =
 let mathsat () = 
   { name = "MathSAT";
     info = mathsat_v5
-   }
+  }
 
 
 let logger_info = 
@@ -473,7 +473,7 @@ let is_interpreted solver_info sym = match sym with
       !Config.use_set_theory && solver_info.has_set_theory
   | Eq | Gt | Lt | GtEq | LtEq | IntConst _ | BoolConst _
   | Plus | Minus | Mult | Div | UMinus -> true
-  (*| FreeSym id -> id = ("inst-closure", 0)*)
+  | FreeSym id -> id = ("inst-closure", 0) && solver_info.has_inst_closure
   | _ -> false
 
 let string_of_overloaded_symbol solver_info sym idx =
@@ -512,7 +512,8 @@ let declare session sign =
           begin
             match overloaded_variants with
             | [] -> fail session ("missing sort for symbol " ^ string_of_symbol sym)
-            | _ -> Util.iteri (declare solver.info state.out_chan sym) overloaded_variants
+            | _ ->
+                Util.iteri (declare solver.info state.out_chan sym) overloaded_variants
           end)
   in
   init_session session sign;
@@ -535,7 +536,7 @@ let smtlib_symbol_of_grass_symbol = function
 
 let extract_name ann =
   let names = Util.filter_map 
-      (function Name _ -> Config.named_assertions | _ -> false) 
+      (function Name _ -> !Config.named_assertions | _ -> false) 
       (function Name id -> string_of_ident id | _ -> "")
       ann 
   in
@@ -558,7 +559,7 @@ let smtlib_form_of_grass_form solver_info signs f =
   in
   let rec cterm t = match t with
   | Var (id, _) -> SmtLibSyntax.mk_app (SmtLibSyntax.Ident id) []
-  | App (Empty as sym, [], srt) ->
+  | App (Empty as sym, [], srt) when solver_info.has_set_theory && !Config.use_set_theory ->
       let sym = osym sym ([], srt) in
       SmtLibSyntax.mk_annot (SmtLibSyntax.mk_app sym []) (As (smtlib_sort_of_grass_sort srt))
   | App (sym, ts, srt) ->

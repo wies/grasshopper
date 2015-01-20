@@ -46,14 +46,19 @@ let dump_core session =
 
 let print_query name sat_means f =
   let f_inst = Reduction.reduce f in
-  let f_inst = List.rev (List.rev_map name_unnamed f_inst) in
-  let f_inst = List.rev (List.rev_map unique_names f_inst) in
+  let f_inst =
+    if !Config.named_assertions then
+      let f_inst = List.rev_map unique_names f_inst in
+      let f_inst = List.rev_map name_unnamed f_inst in
+      f_inst
+    else f_inst
+  in
   let signature = overloaded_sign (mk_and f_inst) in
   let session = SmtLibSolver.start name sat_means in
-    Debug.debug (fun () -> "Sending to prover...\n");
-    let session = SmtLibSolver.declare session signature in
-    SmtLibSolver.assert_forms session f_inst;
-    session, f_inst
+  Debug.debug (fun () -> "Sending to prover...\n");
+  let session = SmtLibSolver.declare session signature in
+  SmtLibSolver.assert_forms session f_inst;
+  session, f_inst
 
 
 let start_session name sat_means f = 

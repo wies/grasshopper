@@ -308,7 +308,7 @@ and pr_union ppf = function
 
 let extract_name ann =
   let names = Util.filter_map 
-      (function Name _ -> Config.named_assertions && true | _ -> false) 
+      (function Name _ -> !Config.named_assertions && true | _ -> false) 
       (function Name id -> string_of_ident id | _ -> "")
       ann 
   in
