@@ -87,16 +87,49 @@ smtlib()
 {
     ls *.smt2 2>/dev/null && echo "Remove existing SMT-LIB files to proceed. Aborting." && exit 0
 
+    ./build.sh
+
     COMMIT_ID="$(git log -1 --format="%cd-%h" --date=short)"
-    COMMON_ARGS="-lint -noverify -dumpvcs -smtpatterns "
+    COMMON_ARGS="-lint -noverify -dumpvcs -smtpatterns"
+
+    generate "-smtsolver z3log"
+    generate "-smtsolver z3log -nostratify"
+    generate "-smtsolver z3log -nomodifiesopt"
+    generate "-smtsolver z3log -optreach"
+    generate "-smtsolver z3log -optreach -splitlemmas"
+    generate "-smtsolver z3log -noinst"
+    generate "-smtsolver z3log -noinst -nomodifiesopt"
+    generate "-smtsolver z3log -noinst -optreach"
+    generate "-smtsolver z3log -noinst -optreach -splitlemmas"
 
     generate "-smtsolver cvc4log -nostratify"
+    generate "-smtsolver cvc4log -nostratify -smtsets"
+    generate "-smtsolver cvc4log -nostratify -smtsets -smtarrays"
+    generate "-smtsolver cvc4log -nostratify -nomodifiesopt"
+    generate "-smtsolver cvc4log -splitlemmas -nostratify"
+    generate "-smtsolver cvc4log -splitlemmas -nostratify -smtsets"
     generate "-smtsolver cvc4log -noinst"
-    generate "-smtsolver z3log -nostratify"
-    generate "-smtsolver z3log -noinst"
-    #generate "-smtsolver cvc4log -nostratify -smtsets"
+    generate "-smtsolver cvc4log -noinst -smtsets"
+    generate "-smtsolver cvc4log -noinst -smtsets -smtarrays"
+    generate "-smtsolver cvc4log -noinst -nomodifiesopt"
+    generate "-smtsolver cvc4log -splitlemmas -noinst"
+    generate "-smtsolver cvc4log -splitlemmas -noinst -smtsets"
+
+    generate "-smtsolver cvc4log -optreach -nostratify"
+    generate "-smtsolver cvc4log -optreach -nostratify -smtsets"
+    generate "-smtsolver cvc4log -optreach -splitlemmas -nostratify"
+    generate "-smtsolver cvc4log -optreach -splitlemmas -nostratify -smtsets"
+    generate "-smtsolver cvc4log -optreach -noinst"
+    generate "-smtsolver cvc4log -optreach -noinst -smtsets"
+    generate "-smtsolver cvc4log -optreach -splitlemmas -noinst"
+    generate "-smtsolver cvc4log -optreach -splitlemmas -noinst -smtsets"
+
+
+
+
+    #generate "-smtsolver cvc4log -nostratify -smtsets -splitlemmas"
+    #generate "-smtsolver cvc4log -noinst"
     #generate "-smtsolver cvc4log -noinst -smtsets"
-    #generate "-smtsolver cvc4log -noinst -nomodifiesopt"
     #generate "-smtsolver cvc4log -noinst -smtsets -nomodifiesopt"
 
     ### for kshitij's testing infrastructure

@@ -58,12 +58,12 @@ let z3_v3 () =
     kind = Process ("z3", ["-smt2"; "-in"]);
   }
 
-let z3_v4_options () = 
-  (if not !Config.instantiate then
+let z3_v4_options () = []
+(**  (if not !Config.instantiate then
     [(":auto-config", "false");
      (":smt.mbqi", "false")] else
     [":smt.mbqi", "true"])
-  @ [":smt.ematching", "true"]
+  @ [":smt.ematching", "true"]*)
   
 let z3_v4 () =
   { version = 4;
