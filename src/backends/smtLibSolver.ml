@@ -559,7 +559,7 @@ let smtlib_form_of_grass_form solver_info signs f =
   in
   let rec cterm t = match t with
   | Var (id, _) -> SmtLibSyntax.mk_app (SmtLibSyntax.Ident id) []
-  | App (Empty as sym, [], srt) ->
+  | App (Empty as sym, [], srt) when solver_info.has_set_theory && !Config.use_set_theory ->
       let sym = osym sym ([], srt) in
       SmtLibSyntax.mk_annot (SmtLibSyntax.mk_app sym []) (As (smtlib_sort_of_grass_sort srt))
   | App (sym, ts, srt) ->
