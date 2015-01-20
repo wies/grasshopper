@@ -128,7 +128,7 @@ and expr =
   | Setenum of typ * exprs * pos
   | IntVal of int * pos
   | BoolVal of bool * pos
-  | New of ident * pos
+  | New of typ * exprs * pos
   | Dot of expr * ident * pos
   | ArrayAccess of expr * expr * pos
   | ProcCall of ident * exprs * pos
@@ -154,7 +154,7 @@ let pos_of_expr = function
   | IntVal (_, p) 
   | BoolVal (_, p)
   | Setenum (_, _, p)
-  | New (_, p)
+  | New (_, _, p)
   | Dot (_, _, p)
   | Access (_, p)
   | BtwnPred (_, _, _, _, p)

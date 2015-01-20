@@ -390,6 +390,7 @@ assign_lhs_list:
 assign_lhs:
 | ident { $1 }
 | field_access { $1 }
+| array_access { $1 }
 ;
 
 if_then_stmt:
@@ -442,10 +443,13 @@ primary:
 | LPAREN expr RPAREN { $2 }
 | alloc { $1 }
 | proc_call { $1 }
+| field_access { $1 }
+| array_access { $1 }
 ;
 
 alloc:
-| NEW IDENT { New (($2, 0), mk_position 1 2) }
+| NEW var_type { New ($2, [], mk_position 1 2) }
+| NEW var_type LPAREN expr_list_opt RPAREN { New ($2, $4, mk_position 1 5) }
 ;
 
 proc_call:
@@ -460,17 +464,18 @@ ident:
 ;
 
 field_access:
-| unary_expr DOT IDENT { Dot ($1, ($3, 0), mk_position 1 3) }
+| ident DOT IDENT { Dot ($1, ($3, 0), mk_position 1 3) }
+| primary DOT IDENT { Dot ($1, ($3, 0), mk_position 1 3) }
 ;
 
 array_access:
-| unary_expr LBRACKET expr RBRACKET { ArrayAccess ($1, $3, mk_position 1 4) }
+| ident LBRACKET expr RBRACKET { ArrayAccess ($1, $3, mk_position 1 4) }
+| primary LBRACKET expr RBRACKET { ArrayAccess ($1, $3, mk_position 1 4) }
 ;
                                                               
 unary_expr:
 | primary { $1 }
 | ident { $1 }
-| field_access { $1 }
 | PLUS unary_expr { UnaryOp (OpPlus, $2, mk_position 1 2) }
 | MINUS unary_expr { UnaryOp (OpMinus, $2, mk_position 1 2) }
 | unary_expr_not_plus_minus { $1 }

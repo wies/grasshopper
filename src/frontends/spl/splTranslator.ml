@@ -165,15 +165,29 @@ let resolve_names cu =
       pred_decls = preds0;
     }
   in
-  let resolve_expr locals tbl e = 
-    let rec re tbl = function
-      | Setenum (ty, args, pos) ->
-          let args1 = List.map (re tbl) args in
-          Setenum (ty, args1, pos)
-      | New (init_id, pos) ->
+  let resolve_expr locals tbl e =
+    let rec re_ty pos tbl = function
+      | StructType init_id ->
           let id = lookup_id init_id tbl pos in
           check_struct id structs pos;
-          New (id, pos)
+          StructType id
+      | SetType ty ->
+          SetType (re_ty pos tbl ty)
+      | ArrayType ty ->
+          ArrayType (re_ty pos tbl ty)
+      | MapType (dty, rty) ->
+          MapType (re_ty pos tbl dty, re_ty pos tbl rty)
+      | ty -> ty
+    in
+    let rec re tbl = function
+      | Setenum (ty, args, pos) ->
+          let ty1 = re_ty pos tbl ty in
+          let args1 = List.map (re tbl) args in
+          Setenum (ty1, args1, pos)
+      | New (ty, args, pos) ->
+          let ty1 = re_ty pos tbl ty in 
+          let args1 =  List.map (re tbl) args in
+          New (ty1, args1, pos)
       | Dot (e, init_id, pos) ->
           let id = lookup_id init_id tbl pos in
           check_field id globals pos;
@@ -406,11 +420,18 @@ let flatten_exprs cu =
     | Setenum (ty, args, pos) as e ->
         List.iter check_side_effects args;
         e, aux, locals
-    | New (id, pos) as e ->
-        let aux_id, locals = decl_aux_var "tmp" (StructType id) pos scope locals in
+    | New (ty, args, pos) as e ->
+        let aux_id, locals = decl_aux_var "tmp" ty pos scope locals in
+        let args1, aux1, locals = 
+          List.fold_right 
+            (fun arg (args1, aux1, locals) ->
+              let arg1, aux1, locals = flatten_expr scope aux1 locals arg in
+              arg1 :: args1, aux1, locals
+            ) args ([], aux, locals)
+        in
         let aux_var = Ident (aux_id, pos) in
-        let alloc = Assign ([aux_var], [e], pos) in
-        aux_var, alloc :: aux, locals
+        let alloc = Assign ([aux_var], [New (ty, args1, pos)], pos) in
+        aux_var, alloc :: aux1, locals
     | Dot (e, id, pos) ->
         let e1, aux1, locals = flatten_expr scope aux locals e in
         Dot (e1, id, pos), aux1, locals
@@ -1127,7 +1148,7 @@ let convert cu =
           in 
           let lhs_ids, _ = convert_lhs lhs in
           mk_call_cmd lhs_ids id args cpos
-      | Assign ([lhs], [New (id, npos)], pos) ->
+      | Assign ([lhs], [New (StructType id, [], npos)], pos) ->
           let lhs_ids, _ = convert_lhs [lhs] in
           let lhs_id = List.hd lhs_ids in
           mk_new_cmd lhs_id (Loc id) pos

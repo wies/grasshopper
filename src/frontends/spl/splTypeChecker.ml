@@ -1,6 +1,13 @@
 open Grass
 open SplSyntax
 
+let alloc_arg_mismatch_error pos expected =
+  ProgError.error pos (Printf.sprintf "Constructor expects %d argument(s)" expected)
+
+let alloc_type_error pos ty =
+  ProgError.type_error pos
+    ("Expected an array or struct type but found " ^ string_of_type ty)
+    
 let pred_arg_mismatch_error pos id expected =
   ProgError.error pos (Printf.sprintf "Predicate %s expects %d argument(s)" (GrassUtil.name id) expected)
 
@@ -96,8 +103,8 @@ let type_of_expr cu locals e =
     | Access _
     | Emp _ -> PermType
     (* Struct types *)
-    | New (id, _) ->
-        StructType id
+    | New (ty, _, _) ->
+        ty
     | Dot (_, id, _) ->
         let decl = IdMap.find id cu.var_decls in
         (match decl.v_type with
@@ -246,8 +253,22 @@ let infer_types cu locals ty e =
         let f1, ty = it locals1 (match_types pos ty BoolType) f in
         Quant (b, decls, f1, pos), ty
     (* Reference types *)
-    | New (id, pos) as e ->
-        e, match_types pos ty (StructType id)
+    | New (nty, es, pos) ->
+        let es1 =
+          match nty, es with
+          | StructType _, _ :: _ -> 
+              alloc_arg_mismatch_error pos 0
+          | ArrayType _, []
+          | ArrayType _, _ :: _ :: _ ->
+              alloc_arg_mismatch_error pos 1
+          | StructType _, es
+          | ArrayType _, es ->
+              List.map (fun e -> fst (it locals IntType e)) es
+          | nty, _ ->
+              alloc_type_error pos nty
+        in
+        let ty1 = match_types pos ty nty in
+        New (ty1, es1, pos), ty1
     | Dot (e, id, pos) ->
         let decl = IdMap.find id cu.var_decls in
         let dty, rty =
