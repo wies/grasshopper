@@ -89,7 +89,16 @@ predicate reach_via_child(FP: Set<Node>) {
       x == y || Btwn(parent, y, x.pointers[witness1(x, y)], x)
 }
 
+//partial btree (subtree of the whole tree)
+predicate sub_btree(order: Int, n: Node, FP: Set<Node>) {
+  FP == btree_footprint(n) &&
+  (forall l in FP :: well_formed_node(order, l)) &&
+  parent_equal_child(FP) &&
+  children_distinct(FP) &&
+  reach_via_child(FP)
+}
 
+//full btree (starting from root)
 predicate btree(t: BTree)(FP0: Set<BTree>, FP1: Set<Node>) {
   t.order >= 3 &&
   FP1 == btree_footprint(t.root) &&

@@ -43,26 +43,32 @@ procedure pickHeight(max_height: Int)
   requires 0 <= max_height
   ensures 0 <= height && height <= max_height;
 
+procedure ghostWitness(i: Int) returns (n: Node)
+
 procedure add(this: SkipList, x: Int) 
   returns (res: Bool)
   requires skiplist(this)
   ensures skiplist(this)
 {
-  var stack: Node[] := new Node[this.max_height];
+  var stack: Array<Node> := new Array<Node>(this.max_height);
   var u: Node := this.head;
   var r: Int := this.height;
 
   while (r >= 0)
     invariant r <= this.height
-    invariant acc(u) -** skiplist(this)
+    invariant acc(stack) &*& arrayseg(stack, 0, this.max_height)
+    invariant (acc(u) &*& (star i: Int:: i <= this.height && i > r ==> acc(stack[i]))) -** skiplist(this) //element in the stack are part of the skiplist
+    invariant forall i: Int:: i <= this.height && i > r ==> (stack[i].next[r] == null || stack[i].next[r].data > x) //nodes in the stack point to a value larger than x
   {
     while (u.next[r] != null && u.next[r].data < x)
       invariant acc(u) -** skiplist(this)
     {
       u := u.next[r];
     }
-    if (u.next[r] != null && u.next[r].data == x)
+    if (u.next[r] != null && u.next[r].data == x) {
+      free(stack);
       return false;
+    }
     stack[r] := u;
     r := r - 1;
   }
@@ -72,23 +78,34 @@ procedure add(this: SkipList, x: Int)
 
   var w: Node := new Node;
   w.data := x;
-  w.next := new Node[height + 1];
+  w.next := new Array<Node>(height + 1);
 
+  var old_height := this.height; //added for the proof
   while (this.height < height)
-    invariant emp //how do we write the array permissions ?
+    invariant acc(this) &*& arrayseg(stack, old_height, height)
+    invariant old_height <= this.height && this.height <= height
+    invariant forall i: Int:: old_height <= i && i < this.height ==> stack[i] == this.head
   {
     this.height := this.height + 1;
     stack[this.height] := this.head;   // increasing height of skiplist
   }
 
+  //a ghost map that remember the values of stack[i].next[i]
+  pure assume(forall i: Int:: i >= 0 && i <= w.next.length ==> ghostWitness(i) == stack[i].next[i])
+
   var i: Int := 0;
   while (i < w.next.length)
-    invariant acc(w) -** skiplist(this)
+    invariant acc(w) &*& acc(w.next) &*& arrayseg(w.next, 0, w.next.length)
+    invariant acc(stack) &*& arrayseg(stack, 0, w.next.length)
+    invariant star j: Int:: j >= 0 && j < w.next.length ==> acc(stack[j]) &*& acc(stack[j].next) &*& arraycell(stack[j].next, j)
+    invariant forall j: Int:: j >= 0 && j < i ==> stack[j].next[j] == w && w.next[j] == ghostWitness(j)
+    invariant forall j: Int:: j >= i && j < w.next.length ==> stack[j].next[j] == ghostWitness(j)
   {
     w.next[i] := stack[i].next[i];
     stack[i].next[i] := w;
     i := i + 1;
   }
+  free(stack);
   return true;
 }
 
@@ -112,7 +129,9 @@ procedure remove(this: SkipList, x: Int)
     }
     if (u.next[r] != null && u.next[r].data == x) {
       removed := true;
+      var toRemove := u.next[r];
       u.next[r] := u.next[r].next[r];
+      free(toRemove);
       if (u == this.head && u.next[r] == null) {
         this.height := this.height - 1; // skiplist height has gone down
       }

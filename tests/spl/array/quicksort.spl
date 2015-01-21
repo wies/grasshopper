@@ -1,0 +1,45 @@
+procedure quicksort(a: Array<Int>)
+  requires acc(a) &*& arrayseg(a, 0, a.length)
+  ensures  acc(a) &*& arrayseg(a, 0, a.length)
+  ensures forall i: Int, j: Int:: i >= 0 && i < j && j < a.length ==> a[i] <= a[j]
+{
+  quicksort1(a, 0, a.length)
+}
+
+procedure swap(a: Array<Int>, i: Int, j: Int, implicit ghost iVal: Int, implicit ghost jVal: Int)
+  requires arraycell(a,i) &*& arraycell(a, j) &*& a[i] == iVal &*& a[j] == jVal)
+  ensures  arraycell(a,i) &*& arraycell(a, j) &*& a[i] == jVal &*& a[j] == iVal)
+{
+  var tmp := a[i];
+  a[i] := a[j];
+  a[j] := tmp;
+}
+
+procedure quicksort1(a: Array<Int>, lower: Int, upper: Int)
+  requires acc(a) &*& arrayseg(a, lower, upper+1)
+  ensures  acc(a) &*& arrayseg(a, lower, upper+1)
+  ensures  forall i: Int, j: Int:: i >= lower && i <= j && j <= upper ==> a[i] <= a[j]
+{
+  if (lower < upper) {
+    var pivotIdx := lower + (upper - lower) / 2;
+    var pivotVal := a[pivotIdx];
+    swap(a, pivotIdx, upper);
+    var idx = lower;
+    var i := lower;
+    while (i < upper)
+      invariant idx >= lower && i <= upper && i >= idx
+      invariant arrayseg(a, lower, upper)
+      invariant forall k: Int:: k >= lower && k < idx ==> a[k] < pivotVal
+      invariant forall k: Int:: k >= idx && k < i ==> a[k] >= pivotVal
+    {
+      if (a[i] < pivotVal) {
+        swap(a, i, idx);
+        idx := idx + 1;
+      }
+      i := i + 1;
+    }
+    swap(a, idx, upper);
+    quicksort1(a, lower, idx - 1);
+    quicksort1(a, idx + 1, upper);
+  }
+}

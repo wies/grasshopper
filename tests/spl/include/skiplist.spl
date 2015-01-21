@@ -8,11 +8,19 @@ struct SkipList {
 
 struct Node {
   var data: Int;
-  var next: Node[];
+  var next: Array<Node>;
 }
 
-function skiplist_footprint(x: Node) returns (FP: Set<Loc<Node>>) {
-  forall z: Loc<Node> :: z in FP == (Btwn(next[0], x, z, null) && z != null)
+function skiplist_footprint(x: Node, y: Node) returns (FP: Set<Loc<Node>>) {
+  forall z: Loc<Node> :: z in FP == (Btwn(next[0], x, z, y) && z != y)
+}
+
+function skiplist_array_footprint(FP0: Set<Loc<Node>>) returns (FP1: Set<Loc<Array<Node>>>) {
+  forall z: Loc<Node> :: z in FP0 == z.next in FP1
+}
+
+function skiplist_arraycell_footprint(FP0: Set<Loc<Array<Node>>>) returns (FP1: Set<Loc<ArrayCell<Node>>>) {
+  forall z: Loc<Array<Node>>, i: Int :: i >= 0 && i < z.length ==> (z in FP0 == cell(z.next, i) in FP1)
 }
 
 predicate skiplist_hierarchy(height: Int, FP: Set<Loc<Node>>) {
@@ -30,21 +38,23 @@ predicate skiplist_sorted(x: Node, FP: Set<Loc<Node>>) {
 
 predicate sub_skiplist(x: Node, y: Node, height: Int, FP: Set<Loc<Node>>) {
   Btwn(next[0], x, y, y) && 
-  FP == sub_skiplist_footprint(x, y)
+  FP == skiplist_footprint(x, y)
 }
 
 predicate skiplist_reach_null(height: Int, x: Node) {
   forall h: Int :: 0 <= h && h <= height ==> Btwn(next[h], x, null, null)
 }
 
-predicate skiplist(l: SkipList, FP0: Set<Loc<SkipList>>, FP1: Set<Loc<Node>>) {
+predicate skiplist(l: SkipList, FP0: Set<Loc<SkipList>>, FP1: Set<Loc<Node>>, FP2: Set<Loc<Array<Node>>>, FP3: Set<Loc<ArrayCell<Node>>>) {
   0 < l.max_height &&
   0 <= l.height && l.height < l.max_height && 
   skiplist_reach_null(l.height, l.head) &&
   skiplist_hierarchy(l.height, FP1) &&
   skiplist_sorted(l.head, FP1) &&
   sub_skiplist(l.head, null, l.height, FP1) && 
-  FP1 == skiplist_footprint(l.head) &&
-  FP0 == Set<Loc<SkipList>>(l)
+  FP0 == Set<Loc<SkipList>>(l) &&
+  FP1 == skiplist_footprint(l.head, null) &&
+  FP2 == skiplist_array_footprint(FP1) &&
+  FP3 == skiplist_arraycell_footprint(FP2)
 }
 

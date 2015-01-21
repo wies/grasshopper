@@ -13,7 +13,7 @@ endif
 " syn case ignore
 " spl Keywords
 syn keyword splStatement	include procedure returns if else while return new var
-syn keyword splStatement	assert assume requires ensures invariant null
+syn keyword splStatement	assert assume requires ensures invariant null ghost implicit pure
 syn keyword splTodo         contained TODO ToDo Todo todo XXX FIXME
 " spl Types
 syn keyword splType     Bool Int Node
