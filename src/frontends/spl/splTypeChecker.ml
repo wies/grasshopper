@@ -29,6 +29,8 @@ let match_types pos oty1 oty2 =
     | StructType _, AnyRefType -> ty1
     | AnyType, _ -> ty2
     | _, AnyType -> ty1
+    | MapType (IntType, ty1), ArrayType ty2
+    | MapType (AnyType, ty1), ArrayType ty2 
     | ArrayType ty1, ArrayType ty2 ->
         ArrayType (mt ty1 ty2)
     | SetType ty1, SetType ty2 ->
@@ -44,12 +46,16 @@ let match_types pos oty1 oty2 =
 let merge_types pos oty1 oty2 =
   let rec mt ty1 ty2 =
     match ty1, ty2 with
-    | PermType, BoolType -> PermType
+    | PermType, BoolType
     | BoolType, PermType -> PermType
     | AnyRefType, StructType _ -> ty2
     | StructType _, AnyRefType -> ty1
     | AnyType, _ -> ty2
     | _, AnyType -> ty1
+    | MapType (IntType, ty1), ArrayType ty2 
+    | ArrayType ty1, MapType (IntType, ty2) 
+    | MapType (AnyType, ty1), ArrayType ty2 
+    | ArrayType ty1, MapType (AnyType, ty2) 
     | ArrayType ty1, ArrayType ty2 ->
         ArrayType (mt ty1 ty2)
     | SetType ty1, SetType ty2 ->
@@ -102,19 +108,14 @@ let type_of_expr cu locals e =
     | BinaryOp (_, OpSepIncl, _, _, _)
     | Access _
     | Emp _ -> PermType
-    (* Struct types *)
+    (* Struct and array types *)
     | New (ty, _, _) ->
         ty
-    | Dot (_, id, _) ->
-        let decl = IdMap.find id cu.var_decls in
-        (match decl.v_type with
+    | Read (map, _, _) ->
+        (match te map with
         | MapType (_, ty) -> ty
         | _ -> AnyType)
-    (* Array types *)
-    | ArrayAccess (ar, _, _) ->
-        (match te ar with
-        | ArrayType ty -> ty
-        | _ -> AnyType)
+    | Length (map, _) -> IntType        
     (* Other stuff *)
     | Null (ty, _) -> ty
     | ProcCall (id, _, _) ->
@@ -252,7 +253,7 @@ let infer_types cu locals ty e =
         in
         let f1, ty = it locals1 (match_types pos ty BoolType) f in
         Quant (b, decls, f1, pos), ty
-    (* Reference types *)
+    (* Reference and array types *)
     | New (nty, es, pos) ->
         let es1 =
           match nty, es with
@@ -269,7 +270,11 @@ let infer_types cu locals ty e =
         in
         let ty1 = match_types pos ty nty in
         New (ty1, es1, pos), ty1
-    | Dot (e, id, pos) ->
+    | Length (map, pos) ->
+        let map1, _ = it locals (ArrayType AnyType) map in
+        ignore (match_types pos ty IntType);
+        Length (map1, pos), IntType
+     (*| Dot (e, id, pos) ->
         let decl = IdMap.find id cu.var_decls in
         let dty, rty =
           match decl.v_type with
@@ -278,15 +283,20 @@ let infer_types cu locals ty e =
           | fty -> type_error pos (MapType (AnyRefType, AnyType)) fty
         in
         let e1, _ = it locals dty e in
-        Dot (e1, id, pos), match_types pos ty rty
+       Dot (e1, id, pos), match_types pos ty rty*)
+    | Read (map, idx, pos) ->
+        let map1, mty = it locals (MapType (AnyType, ty)) map in
+        let dty, rty = match mty with
+        | MapType (dty, rty) -> dty, rty
+        | ArrayType rty -> IntType, rty
+        | _ -> failwith "impossible"
+        in
+        let idx1, dty = it locals dty idx in
+        let map2, mty = it locals (MapType (dty, rty)) map1 in
+        Read (map2, idx1, pos), rty
     | Null (nty, pos) ->
         let ty = match_types pos ty nty in
         Null (ty, pos), ty
-    (* Array types *)
-    | ArrayAccess (ar, idx, pos) ->
-        let ar1, ty = it locals (ArrayType ty) ar in
-        let idx1, _ = it locals IntType idx in
-        ArrayAccess (ar1, idx1, pos), ty
     (* Other stuff *)
     | BtwnPred (e1, e2, e3, e4, pos) ->
         let e1, fty = it locals (MapType (AnyRefType, AnyRefType)) e1 in

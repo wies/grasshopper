@@ -464,13 +464,13 @@ ident:
 ;
 
 field_access:
-| ident DOT IDENT { Dot ($1, ($3, 0), mk_position 1 3) }
-| primary DOT IDENT { Dot ($1, ($3, 0), mk_position 1 3) }
+| ident DOT ident { Read ($3, $1, mk_position 1 3) }
+| primary DOT ident { Read ($3, $1, mk_position 1 3) }
 ;
 
 array_access:
-| ident LBRACKET expr RBRACKET { ArrayAccess ($1, $3, mk_position 1 4) }
-| primary LBRACKET expr RBRACKET { ArrayAccess ($1, $3, mk_position 1 4) }
+| ident LBRACKET expr RBRACKET { Read ($1, $3, mk_position 1 4) }
+| primary LBRACKET expr RBRACKET { Read ($1, $3, mk_position 1 4) }
 ;
                                                               
 unary_expr:

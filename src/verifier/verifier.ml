@@ -14,7 +14,8 @@ let simplify prog =
     else ()
   in
   dump_if 0 prog;
-  Debug.info (fun () -> "Inferring accesses, eliminating loops and global dependencies.\n");
+  Debug.info (fun () -> "Inferring accesses, eliminating loops, arrays, and global dependencies.\n");
+  let prog = elim_arrays prog in
   let prog = Analyzer.infer_accesses prog in
   let prog = elim_loops prog in
   let prog = elim_global_deps prog in

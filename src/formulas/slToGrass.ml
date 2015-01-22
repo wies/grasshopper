@@ -11,7 +11,7 @@ let close f =
 (** Translate SL formula [f] to a GRASS formula where the set [domain] holds [f]'s footprint.
   * Atomic predicates in [f] are translated using the function [pred_to_form]. *)
 let to_form pred_to_form domains f =
-  let struct_ids = struct_ids_from_domains domains in
+  let struct_srts = struct_srts_from_domains domains in
   let mk_error_msg (pos_opt, msg) f =
     match pos_opt with
     | Some pos -> GrassUtil.mk_error_msg (pos, msg) f
@@ -22,18 +22,18 @@ let to_form pred_to_form domains f =
     | Some pos -> GrassUtil.mk_srcpos pos f
     | None -> f
   in
-  let fresh_dom d = mk_fresh_var_domains struct_ids ("?" ^ fst d) in
+  let fresh_dom d = mk_fresh_var_domains struct_srts ("?" ^ fst d) in
   let rec process_sep d f = 
     match f with
     | Pure (p, _) -> 
-        [p, mk_empty_domains struct_ids]
+        [p, mk_empty_domains struct_srts]
     | Atom (Emp, _, pos) ->
-        [GrassUtil.mk_true, mk_empty_domains struct_ids]
+        [GrassUtil.mk_true, mk_empty_domains struct_srts]
     | Atom (Region, [t], _) ->
         let prefix = "?" ^ (fst d) in
-        let sid = GrassUtil.struct_id_of_sort (GrassUtil.element_sort_of_set t) in
-        let domain = mk_empty_domains_except struct_ids sid prefix in
-        [GrassUtil.mk_eq (IdMap.find sid domain) t, domain]
+        let ssrt = GrassUtil.struct_sort_of_sort (GrassUtil.element_sort_of_set t) in
+        let domain = mk_empty_domains_except struct_srts ssrt prefix in
+        [GrassUtil.mk_eq (SortMap.find ssrt domain) t, domain]
     | Atom (Pred p, args, pos) ->
         let domain = fresh_dom d in
         let pdef = pred_to_form p args domain in

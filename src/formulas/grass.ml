@@ -30,9 +30,12 @@ module IdMap = Map.Make(struct
 
 (** sorts *)
 type sort =
-  | Bool | Loc of ident | Int (** basic sorts *)
+  | Bool | Int (** basic sorts *)
+  | Loc of sort (** memory locations *)
   | Set of sort (** sets *)
   | Map of sort * sort (** maps *)
+  | Array of sort (** arrays *)
+  | ArrayCell of sort (** array cells *)
   | FreeSrt of ident (** uninterpreted sorts *)
 
 module IdSrtSet = Set.Make(struct
@@ -63,6 +66,7 @@ type symbol =
   | Null | Read | Write | EntPnt
   | UMinus | Plus | Minus | Mult | Div 
   | Empty | SetEnum | Union | Inter | Diff
+  | Length
   (* interpreted predicate symbols *)
   | Eq
   | LtEq | GtEq | Lt | Gt
@@ -102,6 +106,14 @@ type signature = arity SymbolMap.t
 type term = 
   | Var of ident * sort
   | App of symbol * term list * sort
+
+let sort_of = function
+  | Var (_, s) 
+  | App (_, _, s) -> s
+
+let rec sort_ofs = function
+  | [] -> failwith "tried to extract sort from empty list of terms"
+  | t :: ts -> sort_of t
 
 type subst_map = term IdMap.t
 
@@ -190,6 +202,7 @@ let string_of_symbol = function
       then "store"
       else "write"
   | EntPnt -> "ep"
+  | Length -> "length"
   | UMinus -> "-"
   | Plus -> "+"
   | Minus -> "-"
@@ -224,20 +237,33 @@ let rec pr_ident_list ppf = function
 let loc_sort_string = "Loc"
 let map_sort_string = "Map"
 let array_sort_string = "Array"
+let array_cell_sort_string = "ArrayCell"
 let set_sort_string = "Set"
 let bool_sort_string = "Bool"
 let int_sort_string = "Int"
 
+let name_of_sort = function
+  | Int -> int_sort_string
+  | Bool -> bool_sort_string
+  | Loc _ -> loc_sort_string
+  | Set _ -> set_sort_string
+  | Map _ -> map_sort_string
+  | Array _ -> array_sort_string
+  | ArrayCell _ -> array_cell_sort_string
+  | FreeSrt id -> string_of_ident id
+    
 let pr_sym ppf sym = fprintf ppf "%s" (string_of_symbol sym)
 
-let rec pr_sort ppf = function
-  | Loc id -> fprintf ppf "%s<@[%s@]>" loc_sort_string (string_of_ident id)
-  | Bool -> fprintf ppf "%s" bool_sort_string
-  | Int -> fprintf ppf "%s" int_sort_string
+let rec pr_sort ppf srt = match srt with
+  | Bool
+  | Int -> fprintf ppf "%s" (name_of_sort srt)
+  | Loc e
+  | Set e
+  | Array e
+  | ArrayCell e -> fprintf ppf "%s<@[%a@]>" (name_of_sort srt) pr_sort e
   | FreeSrt id -> pr_ident ppf id
   | Map (d, r) -> fprintf ppf "%s<@[%a,@ %a@]>" map_sort_string pr_sort d pr_sort r
-  | Set s -> fprintf ppf "%s<@[%a@]>" set_sort_string pr_sort s
-		
+	
 let pr_var ppf (x, srt) =
   fprintf ppf "@[%a: %a@]" pr_ident x pr_sort srt
 
@@ -259,7 +285,10 @@ and pr_term ppf = function
   | Var (id, _) -> fprintf ppf "%a" pr_ident id
   | App (Empty, _, _) -> fprintf ppf "{}"
   | App (sym, [], _) -> fprintf ppf "%a" pr_sym sym
-  | App (Read, [map; t], _) -> fprintf ppf "%a.%a" pr_term t pr_term map
+  | App (Read, [map; t], _) ->
+      (match sort_of t with
+      | Loc _ -> fprintf ppf "%a.%a" pr_term t pr_term map
+      | _ -> fprintf ppf "%a[%a]" pr_term map pr_term t)
   | App (Write, [map; t1; t2], _) -> fprintf ppf "%a[%a := %a]" pr_term map pr_term t1 pr_term t2
   | App (Minus, [t1; t2], _) -> fprintf ppf "%a - @[<2>%a@]" pr_term0 t1 pr_term0 t2
   | App (Plus, [t1; t2], _) -> fprintf ppf "%a + @[<2>%a@]" pr_term0 t1 pr_term0 t2

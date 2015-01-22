@@ -381,9 +381,9 @@ let get_values_of_sort model srt =
 let get_loc_sorts model =
   SortedSymbolMap.fold
     (function
-      | (_, (_, Loc sid)) -> fun _ srts -> IdSet.add sid srts
+      | (_, (_, Loc srt)) -> fun _ srts -> SortSet.add srt srts
       | _ -> fun _ srts -> srts)
-    model.intp IdSet.empty
+    model.intp SortSet.empty
 
 let get_set_sorts model =
   SortedSymbolMap.fold
@@ -462,30 +462,30 @@ let succ model sid fld x =
     x locs
       
 let complete model =
-  let locs sid = get_values_of_sort model (Loc sid) in
-  let loc_flds sid = get_values_of_sort model (loc_field_sort sid) in
-  let flds sid =
-    let loc_srt = Loc sid in
+  let locs srt = get_values_of_sort model (Loc srt) in
+  let loc_flds srt = get_values_of_sort model (loc_field_sort srt) in
+  let flds srt =
+    let loc_srt = Loc srt in
     let null = interp_symbol model Null ([], loc_srt) [] in
-    let btwn_arity = [loc_field_sort sid; loc_srt; loc_srt; loc_srt], Bool in
+    let btwn_arity = [loc_field_sort srt; loc_srt; loc_srt; loc_srt], Bool in
     List.filter (fun f ->
       try 
         bool_of_value 
           (interp_symbol model Btwn btwn_arity [f; null; null; null])
-      with Undefined -> false) (loc_flds sid)
+      with Undefined -> false) (loc_flds srt)
   in
   let loc_srts = get_loc_sorts model in
   let new_model =
-    IdSet.fold (fun sid model ->
+    SortSet.fold (fun srt model ->
       List.fold_left 
         (fun new_model fld ->
           List.fold_left 
             (fun new_model arg ->
-              let res = succ model sid fld arg in
-              let read_arity = [loc_field_sort sid; Loc sid], Loc sid in
+              let res = succ model srt fld arg in
+              let read_arity = [loc_field_sort srt; Loc srt], Loc srt in
               add_def new_model Read read_arity [fld; arg] res)
-            new_model (locs sid))
-        model (flds sid))
+            new_model (locs srt))
+        model (flds srt))
       loc_srts model
   in
   new_model
@@ -611,7 +611,7 @@ let output_json chan model =
     let set_rep = String.concat ", " vals in
     output_string chan ("[" ^ set_rep ^ "]")
   in
-  let null_val sid = eval model (mk_null sid) in
+  let null_val srt = eval model (mk_null srt) in
   let output_value sym srt =
     match srt with
     | Loc _ | Bool | Int -> 
@@ -632,8 +632,8 @@ let output_json chan model =
               try
                 let res = interp_symbol model Read ([srt; dsrt], rsrt) [fld; arg] in
                 if is_loc_sort dsrt &&
-                  (arg = null_val (struct_id_of_sort dsrt) ||
-                  res = null_val (struct_id_of_sort dsrt))
+                  (arg = null_val (struct_sort_of_sort dsrt) ||
+                  res = null_val (struct_sort_of_sort dsrt))
                 then [] 
                 else  [(arg, res)]
               with Undefined -> [])
@@ -669,9 +669,9 @@ let output_json chan model =
       model.intp []
   in
   output_string chan "[";
-  IdSet.iter (fun sid ->
-    let locs = get_values_of_sort model (Loc sid) in
-    output_id (fun () -> output_set locs (Loc sid)) (string_of_sort (Loc sid)) (Set (Loc sid)))
+  SortSet.iter (fun srt ->
+    let locs = get_values_of_sort model (Loc srt) in
+    output_id (fun () -> output_set locs (Loc srt)) (string_of_sort (Loc srt)) (Set (Loc srt)))
     (get_loc_sorts model);
   List.iter output_symbol defs;
   output_string chan "]"
@@ -683,10 +683,10 @@ let output_graphviz chan model terms =
   let loc_sorts = get_loc_sorts model in
   let all_flds =
     Util.flat_map
-      (fun sid ->
-        List.map (fun fld -> (sid, fld))
-          (get_values_of_sort model (loc_field_sort sid)))
-      (IdSet.elements loc_sorts)
+      (fun srt ->
+        List.map (fun fld -> (srt, fld))
+          (get_values_of_sort model (loc_field_sort srt)))
+      (SortSet.elements loc_sorts)
   in
   let fld_colors =
     Util.fold_left2 (fun acc fld color -> ((fld, color)::acc)) [] all_flds colors1
@@ -694,28 +694,28 @@ let output_graphviz chan model terms =
   let ep_colors =
     Util.fold_left2 (fun acc fld color -> (fld, color)::acc) [] all_flds colors2
   in
-  let get_label sid fld =
+  let get_label srt fld =
     let color =
-      try List.assoc (sid, fld) fld_colors with Not_found -> "black"
+      try List.assoc (srt, fld) fld_colors with Not_found -> "black"
     in
-    let f = find_term fld (loc_field_sort sid) in
+    let f = find_term fld (loc_field_sort srt) in
     Printf.sprintf "label=\"%s\", fontcolor=%s, color=%s" (string_of_term f) color color
   in
-  let string_of_loc_value sid l = string_of_sorted_value (FreeSrt sid) l in 
-  let output_graph sid =
-    let flds = get_values_of_sort model (loc_field_sort sid) in
-    let locs = get_values_of_sort model (Loc sid) in
-    let read_arity = [loc_field_sort sid; Loc sid], Loc sid in
+  let string_of_loc_value srt l = string_of_sorted_value srt l in 
+  let output_graph srt =
+    let flds = get_values_of_sort model (loc_field_sort srt) in
+    let locs = get_values_of_sort model (Loc srt) in
+    let read_arity = [loc_field_sort srt; Loc srt], Loc srt in
     let output_flds () =
       List.iter 
         (fun f ->
           List.iter (fun l ->
             try
               let r = interp_symbol model Read read_arity [f; l] in
-              if interp_symbol model Null ([], Loc sid) [] = r then () else
-	      let label = get_label sid f in
+              if interp_symbol model Null ([], Loc srt) [] = r then () else
+	      let label = get_label srt f in
 	      Printf.fprintf chan "\"%s\" -> \"%s\" [%s]\n" 
-	        (string_of_loc_value sid l) (string_of_loc_value sid r) label
+	        (string_of_loc_value srt l) (string_of_loc_value srt r) label
             with Not_found -> ())
             locs)
         flds
@@ -724,28 +724,28 @@ let output_graphviz chan model terms =
       List.iter 
         (fun f ->
           List.iter (fun l ->
-            let r = succ model sid f l in
+            let r = succ model srt f l in
             if is_defined model Read read_arity [f; l] || r == l then () else
-	    let label = get_label sid f in
+	    let label = get_label srt f in
 	    Printf.fprintf chan "\"%s\" -> \"%s\" [%s, style=dashed]\n" 
-	      (string_of_loc_value sid l) (string_of_loc_value sid r) label)
+	      (string_of_loc_value srt l) (string_of_loc_value srt r) label)
             locs)
         flds
     in
     let output_eps () =
-      let arg_srts = [Set (Loc sid); loc_field_sort sid; Loc sid] in
-      let m, _ = get_interp model EntPnt (arg_srts, Loc sid) in
+      let arg_srts = [Set (Loc srt); loc_field_sort srt; Loc srt] in
+      let m, _ = get_interp model EntPnt (arg_srts, Loc srt) in
       ValueListMap.iter (function 
         | [s; f; l] -> fun v ->
-            let fld = find_term f (loc_field_sort sid) in
-            let set = find_term s (Set (Loc sid)) in
-            let color = try List.assoc (sid, f) ep_colors with Not_found -> "black" in
+            let fld = find_term f (loc_field_sort srt) in
+            let set = find_term s (Set (Loc srt)) in
+            let color = try List.assoc (srt, f) ep_colors with Not_found -> "black" in
             let label =
               "ep(" ^ (string_of_term fld) ^ ", " ^ (string_of_term set) ^ ")"
             in
 	    Printf.fprintf chan
               "\"%s\" -> \"%s\" [label=\"%s\", fontcolor=%s, color=%s, style=dotted]\n"
-              (string_of_loc_value sid l) (string_of_loc_value sid v) label color color
+              (string_of_loc_value srt l) (string_of_loc_value srt v) label color color
         | _ -> fun v -> ()) 
         m
     in
@@ -754,19 +754,19 @@ let output_graphviz chan model terms =
         SymbolSet.iter
           (fun fld ->
             try 
-              let f = interp_symbol model fld ([], field_sort sid srt) [] in
+              let f = interp_symbol model fld ([], field_sort srt srt) [] in
               let fld_str = string_of_symbol fld in
-              let m, d = find_map_value model f (Loc sid) srt in
+              let m, d = find_map_value model f (Loc srt) srt in
               let v = fun_app model (MapVal (m, d)) [loc] in
               Printf.fprintf chan "      <tr><td><b>%s = %s</b></td></tr>\n" fld_str (string_of_value v)
             with Undefined -> ())
-          (get_symbols_of_sort model ([], field_sort sid srt))
+          (get_symbols_of_sort model ([], field_sort srt srt))
       in
       List.iter
         (fun loc ->
-          Printf.fprintf chan "  \"%s\" [shape=none, margin=0, label=<\n" (string_of_loc_value sid loc);
+          Printf.fprintf chan "  \"%s\" [shape=none, margin=0, label=<\n" (string_of_loc_value srt loc);
           output_string chan "    <table border=\"0\" cellborder=\"1\" cellspacing=\"0\" cellpadding=\"4\">\n";
-          Printf.fprintf chan "      <tr><td><b>%s</b></td></tr>\n" (string_of_loc_value sid loc);
+          Printf.fprintf chan "      <tr><td><b>%s</b></td></tr>\n" (string_of_loc_value srt loc);
           output_data_fields loc Int;
           output_data_fields loc Bool;
           output_string chan "</table>\n";
@@ -776,9 +776,9 @@ let output_graphviz chan model terms =
     in
     let output_loc_vars () = 
       SymbolSet.iter (fun sym ->
-        let v = interp_symbol model sym ([], Loc sid) [] in
-        Printf.fprintf chan "\"%s\" -> \"%s\"\n" (string_of_symbol sym) (string_of_loc_value sid v))
-        (get_symbols_of_sort model ([], Loc sid))
+        let v = interp_symbol model sym ([], Loc srt) [] in
+        Printf.fprintf chan "\"%s\" -> \"%s\"\n" (string_of_symbol sym) (string_of_loc_value srt v))
+        (get_symbols_of_sort model ([], Loc srt))
     in
     output_locs ();
     output_flds ();
@@ -835,7 +835,7 @@ let output_graphviz chan model terms =
         terms
     in
     print_table_header "sets";
-    IdSet.iter (fun sid -> print_sets (Loc sid)) loc_sorts;
+    SortSet.iter (fun srt -> print_sets (Loc srt)) loc_sorts;
     print_sets Int;
     print_table_footer ()
   in
@@ -863,7 +863,7 @@ let output_graphviz chan model terms =
   in
   let output_graph () =
     output_string chan "digraph Model {\n";
-    IdSet.iter output_graph loc_sorts;
+    SortSet.iter output_graph loc_sorts;
     output_sets ();
     output_int_vars ();
     output_freesyms ();

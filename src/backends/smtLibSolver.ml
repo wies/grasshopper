@@ -300,9 +300,31 @@ let declare_fun session sym_name arg_sorts res_sort =
 
 let declare_sort session sort_name num_of_params =
   writeln session (Printf.sprintf "(declare-sort %s %d)" sort_name num_of_params)
+
+let smtlib_sort_of_grass_sort srt =
+  let rec csort = function
+  | Int -> IntSort
+  | Bool -> BoolSort
+  | Set srt ->
+      FreeSort ((set_sort_string, 0), [csort srt])
+  | Map (dsrt, rsrt) ->
+      FreeSort ((map_sort_string, 0), [csort dsrt; csort rsrt])
+  | Array srt ->
+      FreeSort ((array_sort_string ^ "_", 0), [csort srt])
+  | ArrayCell srt ->
+      FreeSort ((array_cell_sort_string, 0), [csort srt])
+  | Loc srt ->
+      FreeSort ((loc_sort_string, 0), [csort srt])
+  | FreeSrt id -> FreeSort (id, [])
+  in
+  csort srt
     
 let declare_sorts has_int session structs =
-  IdSet.iter (fun id -> declare_sort session (string_of_ident id) 0) structs;
+  SortSet.iter
+    (function FreeSrt id -> declare_sort session (string_of_ident id) 0 | _ -> ())
+    structs;
+  declare_sort session (array_sort_string ^ "_") 1;
+  declare_sort session array_cell_sort_string 1;
   declare_sort session loc_sort_string 1;
   if not !Config.use_set_theory
   then declare_sort session set_sort_string 1;
@@ -369,7 +391,8 @@ let init_session session sign =
   let has_int = 
     let rec hi = function
       | Int -> true
-      | Set srt -> hi srt
+      | Set srt
+      | Array srt -> hi srt
       | Map (dsrt, rsrt) -> hi dsrt || hi rsrt
       | _ -> false
     in
@@ -382,8 +405,8 @@ let init_session session sign =
   (* collect the struct types *)
   let structs =
     let add acc srt = match srt with
-      | Loc id -> IdSet.add id acc
-      | _ -> acc
+    | Loc (FreeSrt _ as srt) -> SortSet.add srt acc
+    | _ -> acc
     in
     SymbolMap.fold
       (fun _ funSig acc ->
@@ -395,7 +418,7 @@ let init_session session sign =
           funSig
       )
       sign
-      IdSet.empty
+      SortSet.empty
   in
   (* set all options *)
   List.iter (fun (solver, state) ->
@@ -482,20 +505,6 @@ let string_of_overloaded_symbol solver_info sym idx =
   then ""
   else "$" ^ (string_of_int idx)
 
-
-let smtlib_sort_of_grass_sort srt =
-  let rec csort = function
-  | Int -> IntSort
-  | Bool -> BoolSort
-  | Set srt ->
-      FreeSort ((set_sort_string, 0), [csort srt])
-  | Map (dsrt, rsrt) ->
-      FreeSort ((map_sort_string, 0), [csort dsrt; csort rsrt])
-  | Loc id ->
-      FreeSort ((loc_sort_string, 0), [FreeSort (id, [])])
-  | FreeSrt id -> FreeSort (id, [])
-  in
-  csort srt
 
 let declare session sign =
   let declare solver_info out_chan sym idx (arg_sorts, res_sort) = 
@@ -685,8 +694,9 @@ let convert_model session smtModel =
     | FreeSort ((name, num), srts) ->
         let csrts = List.map convert_sort srts in
         match name, csrts with
-        | "Loc", [FreeSrt id] -> Loc id
+        | "Loc", [esrt] -> Loc esrt
         | "Set", [esrt] -> Set esrt
+        | "Array_", [esrt] -> Array esrt
         | "Map", [dsrt; rsrt] -> Map (dsrt, rsrt)
         | _, [] -> FreeSrt (name, num)
         | _, _ -> fail session "encountered unexpected sort in model conversion"

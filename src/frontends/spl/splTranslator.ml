@@ -68,7 +68,7 @@ let resolve_names cu =
     if not (IdMap.mem id preds) then
       not_a_pred_error id pos
   in
-  let check_field id globals pos =
+  (*let check_field id globals pos =
     let error () = not_a_field_error id pos in
     try 
       let decl = IdMap.find id globals in
@@ -76,7 +76,7 @@ let resolve_names cu =
       | MapType (StructType _, _) -> ()
       | _ -> error ()
     with Not_found -> error ()
-  in
+  in*)
   let declare_name pos init_id scope tbl =
     let name = GrassUtil.name init_id in
     match SymbolTbl.find_local tbl name with
@@ -188,10 +188,12 @@ let resolve_names cu =
           let ty1 = re_ty pos tbl ty in 
           let args1 =  List.map (re tbl) args in
           New (ty1, args1, pos)
-      | Dot (e, init_id, pos) ->
-          let id = lookup_id init_id tbl pos in
-          check_field id globals pos;
-          Dot (re tbl e, id, pos)
+      | Read ((Ident (("length", _), _) as map), idx, pos) ->
+          (match type_of_expr cu locals idx with
+          | ArrayType _ -> Length (re tbl idx, pos)
+          | _ -> Read (re tbl map, re tbl idx, pos))
+      | Read (map, idx, pos) ->
+          Read (re tbl map, re tbl idx, pos)
       | GuardedQuant (q, init_id, e, f, pos) ->
           let e1 = re tbl e in
           let id, tbl1 = declare_name pos init_id pos tbl in
@@ -420,7 +422,7 @@ let flatten_exprs cu =
     | Setenum (ty, args, pos) as e ->
         List.iter check_side_effects args;
         e, aux, locals
-    | New (ty, args, pos) as e ->
+    | New (ty, args, pos) ->
         let aux_id, locals = decl_aux_var "tmp" ty pos scope locals in
         let args1, aux1, locals = 
           List.fold_right 
@@ -432,9 +434,10 @@ let flatten_exprs cu =
         let aux_var = Ident (aux_id, pos) in
         let alloc = Assign ([aux_var], [New (ty, args1, pos)], pos) in
         aux_var, alloc :: aux1, locals
-    | Dot (e, id, pos) ->
-        let e1, aux1, locals = flatten_expr scope aux locals e in
-        Dot (e1, id, pos), aux1, locals
+    | Read (map, idx, pos) ->
+        let map1, aux1, locals = flatten_expr scope aux locals map in
+        let idx1, aux2, locals = flatten_expr scope aux1 locals idx in
+        Read (map1, idx1, pos), aux2, locals
     | Quant (q, _, f, pos) as e ->
         check_side_effects f;
         e, aux, locals
@@ -508,16 +511,16 @@ let flatten_exprs cu =
         in 
         let lhs1, aux2, locals = 
           match lhs with
-          | [Dot (e, id, opos)] ->
-              let decl = IdMap.find id cu.var_decls in
+          | [Read (map, idx, opos)] ->
               let res_ty = 
-                match decl.v_type with
-                | MapType (StructType _, ty) -> ty
+                match type_of_expr cu locals map with
+                | MapType (_, ty) -> ty
+                | ArrayType ty -> ty
                 | ty -> ty
               in
               let aux_id, locals = decl_aux_var "tmp" res_ty opos scope locals in
               let aux_var = Ident (aux_id, pos) in
-              let assign_aux = Assign ([Dot (e, id, opos)], [aux_var], pos) in
+              let assign_aux = Assign ([Read (map, idx, opos)], [aux_var], pos) in
               [aux_var], [assign_aux], locals
           | _ ->
               List.fold_right 
@@ -751,8 +754,8 @@ let convert cu =
       try IdMap.find id cu.var_decls
       with Not_found -> failwith ("Unable to find identifier " ^ (string_of_ident id))
   in
-  let field_type pos fld_id =
-    let fdecl = IdMap.find fld_id cu.var_decls in
+  let field_type pos fld_id locals =
+    let fdecl = find_var_decl locals fld_id in
     fdecl.v_type
     (*with Not_found ->
       ProgError.error pos 
@@ -760,10 +763,11 @@ let convert cu =
   in
   let convert_type ty pos =
     let rec ct = function
-      | StructType id -> Loc id
-      | AnyRefType -> Loc ("Null", 0)
+      | StructType id -> Loc (FreeSrt id)
+      | AnyRefType -> Loc (FreeSrt ("Null", 0))
       | MapType (dtyp, rtyp) -> Map (ct dtyp, ct rtyp)
       | SetType typ -> Set (ct typ)
+      | ArrayType typ -> Array (ct typ)
       | IntType -> Int
       | BoolType -> Bool
       | ty -> failwith ("cannot convert type " ^ string_of_type ty ^ " near position " ^ string_of_src_pos pos)
@@ -784,8 +788,8 @@ let convert cu =
   let rec convert_term locals = function
     | Null (ty, pos) ->
         let cty = convert_type ty pos in
-        let sid = GrassUtil.struct_id_of_sort cty in
-        GrassUtil.mk_null sid
+        let ssrt = GrassUtil.struct_sort_of_sort cty in
+        GrassUtil.mk_null ssrt
     | Setenum (ty, es, pos) ->
         let ts = List.map (convert_term locals) es in
         let elem_ty =  convert_type ty pos in
@@ -796,11 +800,13 @@ let convert cu =
         GrassUtil.mk_int i
     | BoolVal (b, pos) ->
         App (BoolConst b, [], Bool)
-    | Dot (e, fld_id, pos) -> 
+    | Read (map, idx, pos) -> 
+        let tmap = convert_term locals map in
+        let tidx = convert_term locals idx in
+        GrassUtil.mk_read tmap tidx
+    | Length (e, pos) ->
         let t = convert_term locals e in
-        let fty = convert_type (field_type pos fld_id) pos in
-        let fld = GrassUtil.mk_free_const fty fld_id in
-        GrassUtil.mk_read fld t
+        GrassUtil.mk_length t
     | PredApp (id, es, pos) ->
         let decl = IdMap.find id cu.pred_decls in
         let ts = List.map (convert_term locals) es in 
@@ -1148,10 +1154,12 @@ let convert cu =
           in 
           let lhs_ids, _ = convert_lhs lhs in
           mk_call_cmd lhs_ids id args cpos
-      | Assign ([lhs], [New (StructType id, [], npos)], pos) ->
+      | Assign ([lhs], [New ((StructType _ as ty), es, npos)], pos)
+      | Assign ([lhs], [New ((ArrayType _ as ty), es, npos)], pos) ->
           let lhs_ids, _ = convert_lhs [lhs] in
+          let ts = List.map (convert_term proc.p_locals) es in
           let lhs_id = List.hd lhs_ids in
-          mk_new_cmd lhs_id (Loc id) pos
+          mk_new_cmd lhs_id (convert_type ty npos) ts pos
       | Assign (lhs, rhs, pos) ->
           let rhs_ts = List.map (convert_term proc.p_locals) rhs in
           let lhs_ids, ind_opt = convert_lhs lhs in
@@ -1159,7 +1167,7 @@ let convert cu =
             (match ind_opt with
             | Some t ->
                 let fld_id = List.hd lhs_ids in
-                let fld_srt = convert_type (field_type pos fld_id) pos in
+                let fld_srt = convert_type (field_type pos fld_id proc.p_locals) pos in
                 let fld = GrassUtil.mk_free_const fld_srt fld_id in
                 mk_assign_cmd lhs_ids [GrassUtil.mk_write fld t (List.hd rhs_ts)] pos
             | None -> mk_assign_cmd lhs_ids rhs_ts pos)

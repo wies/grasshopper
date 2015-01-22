@@ -1,7 +1,7 @@
 procedure initialize ()
   returns (a: Array<Int>)
   requires emp
-  ensures acc(a) &*& arrayseg(a, 0, a.length)
+  //ensures acc(a) &*& arrayseg(a, 0, a.length)
 {
   a := new Array<Int>(10);
 
@@ -9,7 +9,7 @@ procedure initialize ()
   
   while (i < a.length)
     invariant i >= 0;
-    invariant acc(a) &*& arrayseg(a, 0, a.length)
+  //invariant acc(a) &*& arrayseg(a, 0, a.length)
   {
     a[i] := i;
     i := i + 1;

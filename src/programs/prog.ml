@@ -4,19 +4,19 @@ open Axioms
 
 (** Alloc sets *)
 
-let mk_loc_set_generator base_name =
+let mk_name_generator base_name =
   let set_ids = Hashtbl.create 0 in
-  fun struct_id ->
-    let name = base_name ^ "_" ^ (string_of_ident struct_id) in
+  fun srt ->
+    let name = base_name ^ "_" ^ (name_of_sort srt) in
     try Hashtbl.find set_ids name 
     with Not_found ->
       let id = fresh_ident name in
       Hashtbl.replace set_ids name id;
       id
   
-let alloc_id = mk_loc_set_generator "Alloc"
+let alloc_id = mk_name_generator "Alloc"
         
-let alloc_set struct_id = mk_loc_set struct_id (alloc_id struct_id)
+let alloc_set struct_srt = mk_loc_set struct_srt (alloc_id struct_srt)
 
 (** Specification formulas *)
 
@@ -37,10 +37,11 @@ type havoc_command = {
     havoc_args : ident list;
   } 
 
-(** Allocation, x := new T *)
+(** Allocation, x := new T(t_1, ..., t_n) *)
 type new_command = {
     new_lhs : ident;
     new_sort : sort;
+    new_args : term list;
   }
 
 (** Deallocation, free x *)
@@ -187,10 +188,10 @@ let source_pos c = (prog_point c).pp_pos
 
 (** Auxiliary functions for programs and declarations *)
 
-let mk_loc_set_decl struct_id id pos =
+let mk_loc_set_decl struct_srt id pos =
   { var_name = id;
     var_orig_name = name id;
-    var_sort = Set (Loc struct_id);
+    var_sort = Set (Loc struct_srt);
     var_is_ghost = true;
     var_is_implicit = false;
     var_is_aux = true;
@@ -282,12 +283,12 @@ let find_var prog proc name =
   with Not_found ->
     failwith ("find_proc: Could not find variable " ^ (string_of_ident name))
 
-let struct_ids prog =
-  IdMap.fold (fun _ decl struct_ids ->
+let struct_sorts prog =
+  IdMap.fold (fun _ decl struct_srts ->
     match decl.var_sort with
-    | Map (Loc id, _) -> IdSet.add id struct_ids
-    | _ -> struct_ids)
-    prog.prog_vars IdSet.empty
+    | Map (Loc srt, _) -> SortSet.add srt struct_srts
+    | _ -> struct_srts)
+    prog.prog_vars SortSet.empty
       
 let mk_fresh_var_decl decl =
   let id = fresh_ident (name decl.var_name) in
@@ -486,9 +487,29 @@ let modifies_proc prog proc =
 let modifies_basic_cmd = function
   | Assign ac -> id_set_of_list ac.assign_lhs
   | Havoc hc -> id_set_of_list hc.havoc_args
-  | New nc -> IdSet.add (alloc_id (struct_id_of_sort nc.new_sort)) (IdSet.singleton nc.new_lhs)
+  | New nc ->
+      let struct_sorts =
+        match nc.new_sort with
+        | Loc srt -> [srt]
+        | Array srt -> [Array srt; ArrayCell srt]
+        | _ -> []
+      in
+      List.fold_left
+        (fun mods srt -> IdSet.add (alloc_id srt) mods)
+        (IdSet.singleton nc.new_lhs)
+        struct_sorts
   | Call cc -> id_set_of_list cc.call_lhs
-  | Dispose dc -> IdSet.singleton (alloc_id (struct_id_of_sort (sort_of dc.dispose_arg)))
+  | Dispose dc ->
+      let struct_sorts =
+        match sort_of dc.dispose_arg with
+        | Loc srt -> [srt]
+        | Array srt -> [Array srt; ArrayCell srt]
+        | _ -> []
+      in
+      List.fold_left
+        (fun mods srt -> IdSet.add (alloc_id srt) mods)
+        IdSet.empty
+        struct_sorts
   | Assume _
   | Assert _
   | Return _ -> IdSet.empty
@@ -523,7 +544,11 @@ let accesses_basic_cmd = function
       in
       IdSet.union (id_set_of_list ac.assign_lhs) rhs_accesses
   | Havoc hc -> id_set_of_list hc.havoc_args
-  | New nc -> IdSet.singleton nc.new_lhs
+  | New nc ->
+      let arg_accesses =
+        List.fold_left free_consts_term_acc IdSet.empty nc.new_args 
+      in
+      IdSet.add nc.new_lhs arg_accesses
   | Dispose dc -> free_consts_term dc.dispose_arg
   | Assume sf
   | Assert sf -> accesses_spec_form sf
@@ -550,8 +575,8 @@ let mk_havoc_cmd args pos =
   let hc = { havoc_args = args } in
   mk_basic_cmd (Havoc hc) pos
 
-let mk_new_cmd lhs srt pos = 
-  let nc = { new_lhs = lhs; new_sort = srt } in
+let mk_new_cmd lhs srt args pos = 
+  let nc = { new_lhs = lhs; new_sort = srt; new_args = args } in
   mk_basic_cmd (New nc) pos
 
 let mk_dispose_cmd t pos =
@@ -764,10 +789,17 @@ let pr_basic_cmd ppf = function
         pr_term_list ac.assign_rhs
   | Havoc hc -> 
       fprintf ppf "@[<2>havoc@ %a@]" pr_ident_list hc.havoc_args
-  | New nc -> 
-      fprintf ppf "@[<2>%a@ :=@ new@ %a@]" 
-        pr_ident nc.new_lhs 
-        pr_sort nc.new_sort
+  | New nc ->
+      (match nc.new_args with
+      | [] ->
+          fprintf ppf "@[<2>%a@ :=@ new@ %a@]" 
+            pr_ident nc.new_lhs 
+            pr_sort nc.new_sort
+      | args ->
+          fprintf ppf "@[<2>%a@ :=@ new@ %a(%a)@]" 
+            pr_ident nc.new_lhs 
+            pr_sort nc.new_sort
+            pr_term_list args)
   | Dispose dc -> 
       fprintf ppf "@[<2>free@ %a@]" pr_term dc.dispose_arg
   | Assume sf ->

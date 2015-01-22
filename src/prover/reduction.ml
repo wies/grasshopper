@@ -306,14 +306,14 @@ let add_set_axioms fs =
   in
   rev_concat [fs1; Axioms.set_axioms elem_srts]
 
-(** Compute the set of struct names of the domain sort from the set of field terms [flds]. *)
-let struct_ids_of_fields flds =
+(** Compute the set of struct sorts of the domain sort from the set of field terms [flds]. *)
+let struct_sorts_of_fields flds =
   TermSet.fold
     (fun fld structs ->
       match fld with
-      | App (_, _, Map (Loc id, _)) -> IdSet.add id structs
+      | App (_, _, Map (Loc srt, _)) -> SortSet.add srt structs
       | _ -> structs)
-    flds IdSet.empty
+    flds SortSet.empty
 
     
 (** Adds theory axioms for the entry point function to formulas [fs].
@@ -326,8 +326,8 @@ let add_ep_axioms fs =
       (fun t -> match t with | App (FreeSym (p, _), _, _) -> p <> "parent" | _ -> true)
       flds
      in*)
-  let structs = struct_ids_of_fields flds in
-  let axioms = IdSet.fold (fun sid axioms -> Axioms.ep_axioms sid @ axioms) structs [] in
+  let structs = struct_sorts_of_fields flds in
+  let axioms = SortSet.fold (fun srt axioms -> Axioms.ep_axioms srt @ axioms) structs [] in
   let ep_ax, generators = open_axioms isFld axioms in
   let generators = List.map (fun (a,b,c,d)-> TermGenerator(a, b, c, d)) generators in
   (*print_endline "---";
@@ -349,9 +349,9 @@ let add_read_write_axioms fs =
     | _ -> false
   in
   let basic_pt_flds = TermSet.filter (has_loc_field_sort &&& is_free_const) gts in
-  let basic_structs = struct_ids_of_fields basic_pt_flds in
+  let basic_structs = struct_sorts_of_fields basic_pt_flds in
   (* instantiate null axioms *)
-  let axioms = IdSet.fold (fun sid axioms -> Axioms.null_axioms sid @ axioms) basic_structs [] in
+  let axioms = SortSet.fold (fun srt axioms -> Axioms.null_axioms srt @ axioms) basic_structs [] in
   let null_ax, _ = open_axioms ~force:true isFld axioms in
   let classes = CongruenceClosure.congr_classes fs gts in
   (* CAUTION: not forcing the instantiation here would yield an inconsistency with the read/write axioms *)
@@ -360,65 +360,67 @@ let add_read_write_axioms fs =
   let gts = TermSet.union (ground_terms (smk_and null_ax1)) gts in
   let field_sorts = TermSet.fold (fun t srts ->
     match sort_of t with
-    | Map (Loc id, srt) -> IdSrtSet.add (id, srt) srts
+    | Map (Loc _, _) as srt -> SortSet.add srt srts
     | _ -> srts)
-      gts IdSrtSet.empty
+      gts SortSet.empty
   in
   (* propagate read terms *)
   let read_propagators =
-    IdSrtSet.fold (fun (id, srt) propagators ->
-      let f1 = fresh_ident "?f", field_sort id srt in
-      let fld1 = mk_var (snd f1) (fst f1) in
-      let f2 = fresh_ident "?g", field_sort id srt in
-      let fld2 = mk_var (snd f2) (fst f2) in
-      let d = fresh_ident "?d" in
-      let d1 = d, srt in
-      let dvar = mk_var srt d in
-      let l1 = Axioms.l1 id in
-      let loc1 = Axioms.loc1 id in
-      let l2 = Axioms.l2 id in
-      let loc2 = Axioms.loc2 id in
-      let s1 = Axioms.s1 id in
-      let set1 = Axioms.set1 id in
-      let s2 = Axioms.s2 id in
-      let set2 = Axioms.set2 id in
-      (* f = g, x.f -> x.g *)
-      ([],
-       [f1; f2; l1],
-       [Match (mk_eq_term fld1 fld2, FilterTrue);
-        Match (mk_read fld1 loc1, FilterTrue)],
-       mk_read fld2 loc1) ::
-      (* f = g, x.g -> x.f *)
-      ([],
-       [f1; f2; l1],
-       [Match (mk_eq_term fld1 fld2, FilterTrue);
-        Match (mk_read fld1 loc1, FilterTrue)],
-       mk_read fld2 loc1) :: 
-      (* f [x := d], y.(f [x := d]) -> y.f *)
-      ([],
-       [f1; l1; l2; d1],
-       [Match (mk_write fld1 loc1 dvar, FilterTrue);
-        Match (mk_read (mk_write fld1 loc1 dvar) loc2, FilterTrue)],
-       mk_read fld1 loc2) ::
-      (* f [x := d], y.f -> y.(f [x := d]) *)
-      ([],
-       [f1; l1; l2; d1],
-       [Match (mk_write fld1 loc1 dvar, FilterTrue);
-        Match (mk_read fld1 loc2, FilterTrue)],
-       mk_read (mk_write fld1 loc1 dvar) loc2) ::
-      (* Frame (x, a, f, g), y.g -> y.f *)
-      ([],
-       [f1; f2; s1; s2; l1],
-       [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-        Match (mk_read fld2 loc1, FilterTrue)],
-       mk_read fld1 loc1) ::
-      (* Frame (x, a, f, g), y.f -> y.g *)
-      ([],
-       [f1; f2; s1; s2; l1],
-       [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-        Match (mk_read fld1 loc1, FilterTrue)],
-       mk_read fld2 loc1) ::
-      propagators)
+    SortSet.fold (function
+      | Map (Loc ssrt, srt) -> fun propagators ->
+          let f1 = fresh_ident "?f", field_sort ssrt srt in
+          let fld1 = mk_var (snd f1) (fst f1) in
+          let f2 = fresh_ident "?g", field_sort ssrt srt in
+          let fld2 = mk_var (snd f2) (fst f2) in
+          let d = fresh_ident "?d" in
+          let d1 = d, srt in
+          let dvar = mk_var srt d in
+          let l1 = Axioms.l1 ssrt in
+          let loc1 = Axioms.loc1 ssrt in
+          let l2 = Axioms.l2 ssrt in
+          let loc2 = Axioms.loc2 ssrt in
+          let s1 = Axioms.s1 ssrt in
+          let set1 = Axioms.set1 ssrt in
+          let s2 = Axioms.s2 ssrt in
+          let set2 = Axioms.set2 ssrt in
+          (* f = g, x.f -> x.g *)
+          ([],
+           [f1; f2; l1],
+           [Match (mk_eq_term fld1 fld2, FilterTrue);
+            Match (mk_read fld1 loc1, FilterTrue)],
+           mk_read fld2 loc1) ::
+          (* f = g, x.g -> x.f *)
+          ([],
+           [f1; f2; l1],
+           [Match (mk_eq_term fld1 fld2, FilterTrue);
+            Match (mk_read fld1 loc1, FilterTrue)],
+           mk_read fld2 loc1) :: 
+          (* f [x := d], y.(f [x := d]) -> y.f *)
+          ([],
+           [f1; l1; l2; d1],
+           [Match (mk_write fld1 loc1 dvar, FilterTrue);
+            Match (mk_read (mk_write fld1 loc1 dvar) loc2, FilterTrue)],
+           mk_read fld1 loc2) ::
+          (* f [x := d], y.f -> y.(f [x := d]) *)
+          ([],
+           [f1; l1; l2; d1],
+           [Match (mk_write fld1 loc1 dvar, FilterTrue);
+            Match (mk_read fld1 loc2, FilterTrue)],
+           mk_read (mk_write fld1 loc1 dvar) loc2) ::
+          (* Frame (x, a, f, g), y.g -> y.f *)
+          ([],
+           [f1; f2; s1; s2; l1],
+           [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
+            Match (mk_read fld2 loc1, FilterTrue)],
+           mk_read fld1 loc1) ::
+          (* Frame (x, a, f, g), y.f -> y.g *)
+          ([],
+           [f1; f2; s1; s2; l1],
+           [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
+            Match (mk_read fld1 loc1, FilterTrue)],
+           mk_read fld2 loc1) ::
+          propagators
+      | _ -> fun propagators -> propagators)
       field_sorts []
   in
   (* generate instances of all read over write axioms *)
@@ -465,8 +467,8 @@ let add_reach_axioms fs gts =
 	    | _ -> true) (CongruenceClosure.class_of t classes))
       btwn_flds
   in
-  let structs = struct_ids_of_fields non_updated_flds in
-  let axioms = IdSet.fold (fun sid axioms -> Axioms.reach_axioms sid @ axioms) structs [] in
+  let structs = struct_sorts_of_fields non_updated_flds in
+  let axioms = SortSet.fold (fun srt axioms -> Axioms.reach_axioms srt @ axioms) structs [] in
   let reach_ax, _ = open_axioms (*~force:true*) isFld axioms in
   let reach_ax1 = instantiate_with_terms (*~force:true*) false reach_ax (CongruenceClosure.restrict_classes classes non_updated_flds) in
   rev_concat [reach_ax1; reach_write_ax; fs], gts
@@ -526,14 +528,14 @@ let add_split_lemmas fs gts =
   let structs =
     TermSet.fold (fun t structs ->
       match sort_of t with
-      | Loc sid -> IdSet.add sid structs
+      | Loc srt -> SortSet.add srt structs
       | _ -> structs)
-      gts IdSet.empty
+      gts SortSet.empty
   in
   let classes = CongruenceClosure.congr_classes fs gts in
-  let add_lemmas sid fs1 =
+  let add_lemmas srt fs1 =
     let loc_gts =
-      TermSet.filter (fun t -> sort_of t = Loc sid) gts
+      TermSet.filter (fun t -> sort_of t = Loc srt) gts
     in
     let classes = CongruenceClosure.restrict_classes classes loc_gts in
     let rec lem fs1 = function
@@ -549,7 +551,7 @@ let add_split_lemmas fs gts =
     lem fs1 classes
   in
   if !Config.split_lemmas
-  then IdSet.fold add_lemmas structs fs
+  then SortSet.fold add_lemmas structs fs
   else fs
     
 (** Reduces the given formula to the target theory fragment, as specified by the configuration. *)

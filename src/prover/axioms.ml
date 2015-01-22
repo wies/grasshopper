@@ -8,15 +8,15 @@ open Config
   
 let mk_loc_var name = 
   let id = fresh_ident name in
-  fun struct_id -> id, Loc struct_id
+  fun struct_srt -> id, Loc struct_srt
 
 let mk_loc_field_var name =
   let id = fresh_ident name in
-  fun struct_id -> id, loc_field_sort struct_id
+  fun struct_srt -> id, loc_field_sort struct_srt
 
 let mk_loc_set_var name =
   let id = fresh_ident name in
-  fun struct_id -> id, Set (Loc struct_id)
+  fun struct_srt -> id, Set (Loc struct_srt)
       
 let l1 = mk_loc_var "?x"
 let l2 = mk_loc_var "?y"
@@ -30,20 +30,20 @@ let s1 = mk_loc_set_var "?X"
 let s2 = mk_loc_set_var "?Y"
 let s3 = mk_loc_set_var "?Z"
 let is1 = fresh_ident "?N", Set Int 
-let i1 = fresh_ident "?m", Int
-let i2 = fresh_ident "?n", Int
+let i1 = fresh_ident "?i", Int
+let i2 = fresh_ident "?j", Int
 
-let loc1 struct_id = mk_var (snd (l1 struct_id)) (fst (l1 struct_id))
-let loc2 struct_id = mk_var (snd (l2 struct_id)) (fst (l2 struct_id))
-let loc3 struct_id = mk_var (snd (l3 struct_id)) (fst (l3 struct_id))
-let loc4 struct_id = mk_var (snd (l4 struct_id)) (fst (l4 struct_id))
-let loc5 struct_id = mk_var (snd (l5 struct_id)) (fst (l5 struct_id))
-let fld1 struct_id = mk_var (snd (f1 struct_id)) (fst (f1 struct_id))
-let fld2 struct_id = mk_var (snd (f2 struct_id)) (fst (f2 struct_id))
-let fld3 struct_id = mk_var (snd (f3 struct_id)) (fst (f3 struct_id))
-let set1 struct_id = mk_var (snd (s1 struct_id)) (fst (s1 struct_id))
-let set2 struct_id = mk_var (snd (s2 struct_id)) (fst (s2 struct_id))
-let set3 struct_id = mk_var (snd (s3 struct_id)) (fst (s3 struct_id))
+let loc1 struct_srt = mk_var (snd (l1 struct_srt)) (fst (l1 struct_srt))
+let loc2 struct_srt = mk_var (snd (l2 struct_srt)) (fst (l2 struct_srt))
+let loc3 struct_srt = mk_var (snd (l3 struct_srt)) (fst (l3 struct_srt))
+let loc4 struct_srt = mk_var (snd (l4 struct_srt)) (fst (l4 struct_srt))
+let loc5 struct_srt = mk_var (snd (l5 struct_srt)) (fst (l5 struct_srt))
+let fld1 struct_srt = mk_var (snd (f1 struct_srt)) (fst (f1 struct_srt))
+let fld2 struct_srt = mk_var (snd (f2 struct_srt)) (fst (f2 struct_srt))
+let fld3 struct_srt = mk_var (snd (f3 struct_srt)) (fst (f3 struct_srt))
+let set1 struct_srt = mk_var (snd (s1 struct_srt)) (fst (s1 struct_srt))
+let set2 struct_srt = mk_var (snd (s2 struct_srt)) (fst (s2 struct_srt))
+let set3 struct_srt = mk_var (snd (s3 struct_srt)) (fst (s3 struct_srt))
 let intset1 = mk_var (snd is1) (fst is1)
 let int1 = mk_var (snd i1) (fst i1)
 let int2 = mk_var (snd i2) (fst i2)
@@ -51,8 +51,8 @@ let int2 = mk_var (snd i2) (fst i2)
 let reachwo_Fld f u v w = 
   mk_or [mk_btwn f u v w; mk_and [mk_reach f u v; mk_not (mk_reach f u w)]]
   
-let btwn struct_id = mk_btwn (fld1 struct_id)
-let reach struct_id = mk_reach (fld1 struct_id)
+let btwn struct_srt = mk_btwn (fld1 struct_srt)
+let reach struct_srt = mk_reach (fld1 struct_srt)
 
 (** {6 Utility functions} *)
 
@@ -76,7 +76,7 @@ let extract_axioms fs =
 
 (** Array read over write axioms *)
 let read_write_axioms fld1 =
-  let (struct_id, res_srt) = 
+  let (struct_srt, res_srt) = 
     match sort_of fld1 with
     | Map (Loc sid, srt) -> (sid, srt)
     | _ -> failwith "expected field in read_write_axioms"
@@ -87,9 +87,9 @@ let read_write_axioms fld1 =
   let dvar = mk_var res_srt d in
   (*let g = fresh_ident "?g" in
   let g1 = g, Fld res_srt in*)
-  let loc1 = loc1 struct_id in
-  let loc2 = loc2 struct_id in
-  let loc3 = loc3 struct_id in
+  let loc1 = loc1 struct_srt in
+  let loc2 = loc2 struct_srt in
+  let loc3 = loc3 struct_srt in
   let new_fld1 = mk_write fld1 loc1 dvar in
   let f x = mk_read fld1 x in
   let g x = mk_read new_fld1 x in
@@ -104,7 +104,7 @@ let read_write_axioms fld1 =
     else mk_or [mk_eq (g loc1) dvar]
   in
   let generator2 = 
-    [l1 struct_id; d1],
+    [l1 struct_srt; d1],
     [],
     [Match (new_fld1, FilterTrue)],
     g loc1
@@ -116,16 +116,16 @@ let read_write_axioms fld1 =
 
 (** Write axiom for reachability predicates *)
 let reach_write_axioms fld1 loc1 loc2 =
-  let struct_id = 
+  let struct_srt = 
     match sort_of fld1 with
     | Map (Loc s1, Loc s2) ->
       if (s1 = s2) then s1
-      else failwith "expected field mapping a struct_id to the same one in reach_write_axioms"
+      else failwith "expected field mapping a struct_srt to the same one in reach_write_axioms"
     | _ -> failwith "expected field in reach_write_axioms"
   in
-  let loc3 = loc3 struct_id in
-  let loc4 = loc4 struct_id in
-  let loc5 = loc5 struct_id in
+  let loc3 = loc3 struct_srt in
+  let loc4 = loc4 struct_srt in
+  let loc5 = loc5 struct_srt in
   let new_fld1 = mk_write fld1 loc1 loc2 in
   let btwn_write =
     let b = mk_btwn fld1 in
@@ -135,34 +135,34 @@ let reach_write_axioms fld1 loc1 loc2 =
              mk_and [mk_neq loc1 w; reachwo u loc1 w; b u v loc1; reachwo loc2 w loc1];
              mk_and [mk_neq loc1 w; reachwo u loc1 w; b loc2 v w; reachwo loc2 w loc1]]
     in
-    smk_and [smk_or [mk_eq loc1 (mk_null struct_id); mk_not (mk_btwn new_fld1 loc3 loc4 loc5); new_btwn loc3 loc4 loc5];
-	     smk_or [mk_eq loc1 (mk_null struct_id); mk_btwn new_fld1 loc3 loc4 loc5; mk_not (new_btwn loc3 loc4 loc5)]]
+    smk_and [smk_or [mk_eq loc1 (mk_null struct_srt); mk_not (mk_btwn new_fld1 loc3 loc4 loc5); new_btwn loc3 loc4 loc5];
+	     smk_or [mk_eq loc1 (mk_null struct_srt); mk_btwn new_fld1 loc3 loc4 loc5; mk_not (new_btwn loc3 loc4 loc5)]]
   in
   if !with_reach_axioms 
   then [mk_axiom "btwn_write" btwn_write]
   else []
 
 let f x =
-  let struct_id = match sort_of x with
+  let struct_srt = match sort_of x with
     | Loc s -> s
     | _ -> failwith "expected Loc sort"
   in
-  mk_read (fld1 struct_id) x
+  mk_read (fld1 struct_srt) x
 let g x =
-  let struct_id = match sort_of x with
+  let struct_srt = match sort_of x with
     | Loc s -> s
     | _ -> failwith "expected Loc sort"
   in
-  mk_read (fld2 struct_id) x
+  mk_read (fld2 struct_srt) x
 
 (** Axioms for reachability predicates *)
-let reach_axioms struct_id = 
-  let btwn = btwn struct_id in
-  let reach = reach struct_id in
-  let loc1 = loc1 struct_id in
-  let loc2 = loc2 struct_id in
-  let loc3 = loc3 struct_id in
-  let loc4 = loc4 struct_id in
+let reach_axioms struct_srt = 
+  let btwn = btwn struct_srt in
+  let reach = reach struct_srt in
+  let loc1 = loc1 struct_srt in
+  let loc2 = loc2 struct_srt in
+  let loc3 = loc3 struct_srt in
+  let loc4 = loc4 struct_srt in
   (* btwn axioms *)
   let btwn_refl = btwn loc1 loc1 loc1 in
   let btwn_step = btwn loc1 (f loc1) (f loc1) in
@@ -215,36 +215,36 @@ let reach_axioms struct_id =
   else []
 
 (** Axioms for null *)
-let null_axioms struct_id1 =
-  let n = mk_null struct_id1 in
+let null_axioms struct_srt1 =
+  let n = mk_null struct_srt1 in
   let nll = mk_eq (f n) n in
   [mk_axiom "read_null" nll]
 
 
 (** Entry point axioms *)
-let ep_axioms struct_id =
-  let reach = reach struct_id in
-  let btwn = btwn struct_id in
-  let fld1 = fld1 struct_id in
-  let fld2 = fld2 struct_id in
-  let fld3 = fld3 struct_id in
-  let set1 = set1 struct_id in
-  let set2 = set2 struct_id in
-  let set3 = set3 struct_id in
-  let loc1 = loc1 struct_id in
-  let loc2 = loc2 struct_id in
-  let loc3 = loc3 struct_id in
-  let loc4 = loc4 struct_id in
-  let f1 = f1 struct_id in
-  let f2 = f2 struct_id in
-  let f3 = f3 struct_id in
-  let s1 = s1 struct_id in
-  let s2 = s2 struct_id in
-  let s3 = s3 struct_id in
-  let l1 = l1 struct_id in
-  let l2 = l2 struct_id in
-  let l3 = l3 struct_id in
-  let l4 = l4 struct_id in
+let ep_axioms struct_srt =
+  let reach = reach struct_srt in
+  let btwn = btwn struct_srt in
+  let fld1 = fld1 struct_srt in
+  let fld2 = fld2 struct_srt in
+  let fld3 = fld3 struct_srt in
+  let set1 = set1 struct_srt in
+  let set2 = set2 struct_srt in
+  let set3 = set3 struct_srt in
+  let loc1 = loc1 struct_srt in
+  let loc2 = loc2 struct_srt in
+  let loc3 = loc3 struct_srt in
+  let loc4 = loc4 struct_srt in
+  let f1 = f1 struct_srt in
+  let f2 = f2 struct_srt in
+  let f3 = f3 struct_srt in
+  let s1 = s1 struct_srt in
+  let s2 = s2 struct_srt in
+  let s3 = s3 struct_srt in
+  let l1 = l1 struct_srt in
+  let l2 = l2 struct_srt in
+  let l3 = l3 struct_srt in
+  let l4 = l4 struct_srt in
   let ep = mk_ep fld1 set1 loc1 in
   let in_set1 v = mk_elem v set1 in
   let ep1 = reach loc1 ep in

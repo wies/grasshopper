@@ -116,14 +116,6 @@ let dualize_binder = function
 
 let name id = fst id
 
-let sort_of = function
-  | Var (_, s) 
-  | App (_, _, s) -> s
-
-let rec sort_ofs = function
-  | [] -> failwith "tried to extract sort from empty list of terms"
-  | t :: ts -> sort_of t
-
 let range_sort = function
   | Map (_, srt) -> srt
   | _ -> raise (Invalid_argument "range_sort")
@@ -132,12 +124,12 @@ let dom_sort = function
   | Map (srt, _) -> srt
   | _ -> raise (Invalid_argument "dom_sort")
 
-let struct_id_of_sort = function
+let struct_sort_of_sort = function
   | Loc sid -> sid
-  | _ -> raise (Invalid_argument "struct_id_of_sort")
+  | _ -> raise (Invalid_argument "struct_sort_of_sort")
 
-let struct_id_of_term t =
-  struct_id_of_sort (sort_of t)
+let struct_sort_of_term t =
+  struct_sort_of_sort (sort_of t)
         
 let range_sort_of_map map =
   match sort_of map with
@@ -176,7 +168,7 @@ let is_map_sort = function
 let field_sort id ran_srt = Map (Loc id, ran_srt)
 let array_sort ran_srt = Map (Int, ran_srt)
 
-let loc_field_sort struct_id = field_sort struct_id (Loc struct_id)
+let loc_field_sort srt = field_sort srt (Loc srt)
 
 let is_free_const = function
   | App (FreeSym _, [], _) -> true
@@ -240,6 +232,7 @@ let mk_null id = mk_app (Loc id) Null []
 let mk_read map ind = 
   let dom_srt, ran_srt = match sort_of map with
   | Map (d,r) -> d, r
+  | Array r -> Int, r
   | s -> 
       failwith 
 	("tried to read from term " ^ 
@@ -251,9 +244,13 @@ let mk_read map ind =
 
 let mk_read_form map ind = 
   match sort_of map with
-  | Map (_, Bool) -> mk_atom Read [map; ind]
+  | Map (_, Bool)
+  | Array Bool -> mk_atom Read [map; ind]
   | _ -> failwith "mk_read_form expects a term of sort Map(_,Bool)"
 
+let mk_length map =
+  mk_app Int Length [map]
+        
 let mk_write map ind upd =
   mk_app (sort_of map) Write [map; ind; upd]
 
@@ -270,7 +267,7 @@ let mk_reach fld t1 t2 =
   
 let mk_empty srt = mk_app srt Empty []
 
-let mk_loc_set struct_id id = mk_free_const (Set (Loc struct_id)) id
+let mk_loc_set srt id = mk_free_const (Set (Loc srt)) id
 
 let mk_setenum ts = 
   let srt = Set (sort_ofs ts) in

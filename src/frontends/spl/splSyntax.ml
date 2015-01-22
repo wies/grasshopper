@@ -129,8 +129,8 @@ and expr =
   | IntVal of int * pos
   | BoolVal of bool * pos
   | New of typ * exprs * pos
-  | Dot of expr * ident * pos
-  | ArrayAccess of expr * expr * pos
+  | Read of expr * expr * pos
+  | Length of expr * pos
   | ProcCall of ident * exprs * pos
   | PredApp of ident * exprs * pos
   | Quant of quantifier_kind * var list * expr * pos
@@ -155,7 +155,8 @@ let pos_of_expr = function
   | BoolVal (_, p)
   | Setenum (_, _, p)
   | New (_, _, p)
-  | Dot (_, _, p)
+  | Read (_, _, p)
+  | Length (_, p)
   | Access (_, p)
   | BtwnPred (_, _, _, _, p)
   | Quant (_, _, _, p)
@@ -239,12 +240,12 @@ let add_alloc_decl prog =
     IdMap.fold
       (fun _ decl acc ->
         let sid = decl.s_name in
-        let id = Prog.alloc_id sid in
+        let id = Prog.alloc_id (FreeSrt sid) in
         let tpe = SetType (StructType sid) in
         let pos = GrassUtil.dummy_position in
         let scope = GrassUtil.global_scope in
         let vdecl = VarDecl (var_decl id tpe true false pos scope) in
-          vdecl :: acc
+        vdecl :: acc
       )
       prog.struct_decls
       []
