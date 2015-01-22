@@ -12,17 +12,20 @@ endif
 " case is significant
 " syn case ignore
 " spl Keywords
-syn keyword splStatement	include procedure returns if else while return new var
-syn keyword splStatement	assert assume requires ensures invariant null ghost implicit pure
+syn keyword splStatement	include procedure returns if else while return new var null
+syn keyword splStatement	assert assume requires ensures invariant
+syn keyword splStatement	struct function predicate pure ghost implicit
 syn keyword splTodo         contained TODO ToDo Todo todo XXX FIXME
 " spl Types
 syn keyword splType     Bool Int Node
 syn region splType      start="Loc<" end=">" contains=splType
 syn region splType      start="Set<" end=">" contains=splType
 " Operators and special characters
+syn keyword splOperator exists forall
 syn match splOperator	"!"
 syn match splOperator	"="
 syn match splOperator	"&&"
+syn match splOperator	"&*&"
 syn match splOperator	"||"
 syn match splOperator	"!"
 syn match splOperator	"+"
