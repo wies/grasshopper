@@ -370,6 +370,8 @@ let pr_binder ppf b =
 let rec pr_form ppf = function
   | Binder (b, vs, f, a) -> 
       fprintf ppf "@[(%a%a)@]" pr_quantifier (b, vs, f) pr_annot a
+  | BoolOp (And, [f])
+  | BoolOp (Or, [f]) -> pr_form ppf f
   | BoolOp (And, fs) -> pr_ands ppf fs
   | BoolOp (Or, fs) -> pr_ors ppf fs
   | BoolOp (Not, [f]) -> pr_not ppf f
@@ -392,7 +394,7 @@ and pr_annot ppf a =
 
 and pr_ands ppf = function
   | [] -> fprintf ppf "%s" "true"
-  | [f] -> fprintf ppf "@[<2>%a@]" pr_form f
+  | [f] -> fprintf ppf "(@[<2>%a@])" pr_form f
   | (BoolOp (Or, _) as f) :: fs -> fprintf ppf "(@[<2>%a@]) &&@ %a" pr_form f pr_ands fs
   | f :: fs -> fprintf ppf "@[<2>%a@] &&@ %a" pr_form f pr_ands fs
 

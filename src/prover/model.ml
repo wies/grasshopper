@@ -600,7 +600,12 @@ let finalize_values model =
 let string_of_sorted_value srt v = 
   match srt with
   | Int | Bool -> string_of_value v 
-  | _ -> string_of_sort srt ^ "!" ^ string_of_value v
+  | _ ->
+      let srt_str =
+        Str.global_replace (Str.regexp "<") "&lt;"
+          (Str.global_replace (Str.regexp ">") "&gt;" (string_of_sort srt))
+      in
+      srt_str ^ "!" ^ string_of_value v
 
 let output_json chan model =
   let string_of_sorted_value srt v = 
@@ -720,6 +725,30 @@ let output_graphviz chan model terms =
             locs)
         flds
     in
+    let output_array () =
+      match srt with
+      | Array esrt ->
+          let cell_srt = Loc (ArrayCell esrt) in
+          let cell_locs = get_values_of_sort model cell_srt in
+          List.iter (fun l ->
+            try
+              let lt = find_term l (Loc srt) in
+              List.iter (fun c ->
+                let ct = find_term c cell_srt in
+                if bool_of_value (eval model (mk_eq_term (mk_array_of_cell ct) lt)) then begin
+	          Printf.fprintf chan "\"%s\" -> \"%s\" [label=\"array\"]\n" 
+	            (string_of_loc_value (ArrayCell esrt) c) (string_of_loc_value srt l);
+                  ignore (eval model (mk_array_cells (mk_array_of_cell ct)));
+                  if bool_of_value (eval model (mk_eq_term (mk_read (mk_array_cells (mk_array_of_cell ct)) (mk_index_of_cell ct)) ct)) then
+                    let idx = int_of_value (eval model (mk_index_of_cell ct)) in
+                    Printf.fprintf chan "\"%s\" -> \"%s\" [label=\"%d\"]\n" 
+	              (string_of_loc_value srt l) (string_of_loc_value (ArrayCell esrt) c) idx                    
+                end)
+                cell_locs
+            with Not_found -> ())
+            locs
+      | _ -> ()
+    in
     let output_reach () = 
       List.iter 
         (fun f ->
@@ -782,6 +811,7 @@ let output_graphviz chan model terms =
     in
     output_locs ();
     output_flds ();
+    output_array ();
     output_loc_vars ();
     output_reach ();
     output_eps ();

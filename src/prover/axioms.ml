@@ -300,33 +300,40 @@ let array_axioms elem_srt =
   let array_length =
     mk_leq (mk_int 0) (mk_length a)
   in
-  let array_of_cell =
-    mk_sequent [mk_eq (mk_read (mk_array_cells a) i) c] [mk_eq (mk_array_of_cell c) a]
+  let array_cells1 = 
+    mk_sequent [mk_eq (mk_read (mk_array_cells a) i) c] [mk_and [mk_eq (mk_array_of_cell c) a; mk_eq (mk_index_of_cell c) i]]
   in
-  let index_of_cell =
-    mk_sequent [mk_eq (mk_read (mk_array_cells a) i) c] [mk_eq (mk_index_of_cell c) i]
+  let array_cells2 =
+    mk_sequent [mk_eq (mk_array_of_cell c) a; mk_eq (mk_index_of_cell c) i] [mk_eq (mk_read (mk_array_cells a) i) c]
   in
-  let array_of_cell_gen =
-    [([cd],
+  let array_cell_gen =
+    ([cd],
       [],
-      [Match (c, FilterSymbolNotOccurs ArrayOfCell)], 
-      mk_array_of_cell c)] 
+      [Match (c, FilterSymbolNotOccurs ArrayOfCell);
+       Match (c, FilterSymbolNotOccurs IndexOfCell);
+       Match (c, FilterSymbolNotOccurs ArrayCells)], 
+      mk_read (mk_array_cells (mk_array_of_cell c)) (mk_index_of_cell c))
   in
   let index_of_cell_gen =
-    [([cd],
+    ([cd],
       [],
       [Match (c, FilterSymbolNotOccurs IndexOfCell)], 
-      mk_index_of_cell c)] 
+      mk_index_of_cell c)
+  in
+  let array_of_cell_gen =
+    ([cd],
+      [],
+      [Match (c, FilterSymbolNotOccurs ArrayOfCell)], 
+      mk_array_of_cell c)
   in
   let array_cells_gen =
-    [([ad],
+    ([ad],
       [],
       [Match (a, FilterSymbolNotOccurs ArrayCells)], 
-      mk_array_cells a)]
+      mk_array_cells a)
   in
-
-  [mk_axiom ~gen:(index_of_cell_gen @ array_cells_gen) "index-of-cell" index_of_cell;
-   mk_axiom ~gen:array_of_cell_gen "array-of-cell" array_of_cell;
+  [mk_axiom ~gen:[index_of_cell_gen; array_of_cell_gen; array_cells_gen] "array-cells1" array_cells1;
+   mk_axiom ~gen:[array_cell_gen] "array-cells2" array_cells2;
    mk_axiom "array-length" array_length]
      
 (** Set axioms *)

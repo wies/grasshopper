@@ -1,20 +1,24 @@
 function arrayseg_footprint(a: Array<Int>, i: Int, j: Int)
   returns (FP: Set<ArrayCell<Int>>)
 {
-  (forall k: Int :: i <= k && k < j ==> a.cells[k] in FP) &&
-  (forall c: ArrayCell<Int> :: c in FP ==>
-     c.array == a && i <= c.index && c.index < j)
+  (forall c: ArrayCell<Int> ::
+     c in FP == (i <= c.index && c.index < j && c.array == a))
 }
 
 predicate arrayseg(a: Array<Int>, i: Int, j: Int)(FP: Set<ArrayCell<Int>>) {
-  0 <= i && i < j && j <= a.length && 
+  0 <= i && i <= j && j <= a.length && 
   FP == arrayseg_footprint(a, i, j)
+}
+
+predicate array(a: Array<Int>)(FP1: Set<Array<Int>>, FP2: Set<ArrayCell<Int>>) {
+  FP1 == Set(a) &&
+  arrayseg(a, 0, a.length, FP2)
 }
 
 procedure initialize()
   returns (a: Array<Int>)
   requires emp
-  ensures acc(a) &*& arrayseg(a, 0, a.length)
+  ensures array(a)
 {
   a := new Array<Int>(10);
 
@@ -22,7 +26,7 @@ procedure initialize()
   
   while (i < a.length)
     invariant i >= 0
-    invariant acc(a) &*& arrayseg(a, 0, a.length)
+    invariant array(a)
   {
     a[i] := i;
     i := i + 1;

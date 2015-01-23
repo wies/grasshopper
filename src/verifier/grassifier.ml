@@ -669,13 +669,16 @@ let elim_new_dispose prog =
                       mk_spec_form (FOL (mk_eq (mk_length arg) length)) "new" None pp.pp_pos
                     in
                     let assume_length_ok = mk_assume_cmd length_ok pp.pp_pos in
+                    let l = Axioms.loc1 (ArrayCell srt) in
                     let assume_cells_fresh =
                       let cells_fresh =
                         Axioms.mk_axiom "new_array_cells_fresh"
                           (mk_sequent
-                             [mk_leq (mk_int 0) Axioms.int1; mk_lt Axioms.int1 length]
-                             [mk_and [mk_not (mk_elem (mk_read (mk_array_cells arg) Axioms.int1) (alloc_set (ArrayCell srt)));
-                                      mk_neq (mk_read (mk_array_cells arg) Axioms.int1) (mk_null (ArrayCell srt))]])
+                             [mk_leq (mk_int 0) (mk_index_of_cell l);
+                              mk_lt (mk_index_of_cell l) length;
+                              mk_eq (mk_array_of_cell l) arg]
+                             [mk_and [mk_not (mk_elem l (alloc_set (ArrayCell srt)));
+                                      mk_neq l (mk_null (ArrayCell srt))]])
                       in
                       let sf = mk_spec_form (FOL cells_fresh) "new" None pp.pp_pos in
                       mk_assume_cmd sf pp.pp_pos
@@ -688,12 +691,13 @@ let elim_new_dispose prog =
                         mk_havoc_cmd [set_id] pp.pp_pos
                       in
                       let assume_set =
-                        let l = Axioms.loc1 (ArrayCell srt) in
                         let f =
                           Axioms.mk_axiom "new_array_cells_alloc"
                             (mk_iff (mk_elem l set)
                                (mk_or [mk_elem l (tmp_array_cell_set srt);
-                                       mk_and [mk_lt (mk_index_of_cell l) length; mk_eq (mk_array_of_cell l) arg]]))
+                                       mk_and [mk_leq (mk_int 0) (mk_index_of_cell l);
+                                               mk_lt (mk_index_of_cell l) length;
+                                               mk_eq (mk_array_of_cell l) arg]]))
                         in
                         let sf = mk_spec_form (FOL f) "new" None pp.pp_pos in
                         mk_assume_cmd sf pp.pp_pos
