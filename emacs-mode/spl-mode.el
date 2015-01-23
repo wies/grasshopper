@@ -234,7 +234,7 @@
     (save-excursion
       (while (< 0 (current-column))
         (beginning-of-defun))
-      (if (looking-at "[ \t]*procedure[ \t]+\\([^(]+\\)")
+      (if (looking-at "[ \t]*procedure[ \t]+\\([^\s-(]+\\)")
           (let* ((proc-name (match-string 1)))
             (progn (message "Verifying procedure %s..." proc-name)
                    (setq spl-current-procedure proc-name)
