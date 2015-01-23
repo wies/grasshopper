@@ -588,6 +588,7 @@ let annotate_heap_checks prog =
         in
         derefs (derefs acc1 map) idx
     | App (Length, [map], _) -> TermSet.add map acc
+    | App (ArrayCells, [map], _) -> TermSet.add map acc
     | App (Write, fld :: loc :: ts, _) ->
         List.fold_left derefs (TermSet.add loc acc) (fld :: loc :: ts)
     | App (_, ts, _) -> 
@@ -728,7 +729,34 @@ let elim_new_dispose prog =
             [mk_diff (footprint_set ssrt) (mk_setenum [arg])] 
             pp.pp_pos 
         in
-        mk_seq_cmd [assign_alloc; assign_footprint] pp.pp_pos
+        let array_aux =
+          match ssrt with
+          | Array srt ->
+              let update_set set_id set =
+                let assign_tmp_cells =
+                  mk_assign_cmd [tmp_array_cell_set_id srt] [set] pp.pp_pos
+                in
+                let havoc_set =
+                  mk_havoc_cmd [set_id] pp.pp_pos
+                in
+                let l = Axioms.loc1 (ArrayCell srt) in
+                let assume_set =
+                  let f =
+                    Axioms.mk_axiom "free_array_cells_alloc"
+                      (mk_iff (mk_elem l set)
+                         (mk_and [mk_elem l (tmp_array_cell_set srt);
+                                  mk_eq (mk_array_of_cell l) arg]))
+                  in
+                  let sf = mk_spec_form (FOL f) "free" None pp.pp_pos in
+                  mk_assume_cmd sf pp.pp_pos
+                in
+                [assign_tmp_cells; havoc_set; assume_set]
+              in
+              update_set (alloc_id (ArrayCell srt)) (alloc_set (ArrayCell srt)) @
+              update_set (footprint_id (ArrayCell srt)) (footprint_set (ArrayCell srt))
+          | _ -> []
+        in
+        mk_seq_cmd ([assign_alloc; assign_footprint] @ array_aux) pp.pp_pos
     | (c, pp) -> Basic (c, pp)
   in
   let elim_proc proc = 

@@ -122,6 +122,7 @@ let type_of_expr cu locals e =
     | Read (map, _, _) ->
         (match te map with
         | MapType (_, ty) -> ty
+        | ArrayType ty -> ty
         | _ -> AnyType)
     | Length (map, _) -> IntType        
     | ArrayOfCell (c, _) ->
