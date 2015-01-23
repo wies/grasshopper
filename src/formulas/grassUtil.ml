@@ -150,6 +150,16 @@ let element_sort_of_set s =
   | Set srt -> srt
   | _ -> failwith "illtyped set expression"
 
+let element_sort_of_array s =
+  match sort_of s with
+  | Loc (Array srt) -> srt
+  | _ -> failwith "illtyped array expression"
+
+let element_sort_of_cell s =
+  match sort_of s with
+  | Loc (ArrayCell srt) -> srt
+  | _ -> failwith "illtyped array cell expression"
+
        
 let has_sort srt t = sort_of t = srt
 
@@ -232,7 +242,7 @@ let mk_null id = mk_app (Loc id) Null []
 let mk_read map ind = 
   let dom_srt, ran_srt = match sort_of map with
   | Map (d,r) -> d, r
-  | Array r -> Int, r
+  | Loc (Array r) -> Int, r
   | s -> 
       failwith 
 	("tried to read from term " ^ 
@@ -245,12 +255,21 @@ let mk_read map ind =
 let mk_read_form map ind = 
   match sort_of map with
   | Map (_, Bool)
-  | Array Bool -> mk_atom Read [map; ind]
+  | Loc (Array Bool) -> mk_atom Read [map; ind]
   | _ -> failwith "mk_read_form expects a term of sort Map(_,Bool)"
 
 let mk_length map =
   mk_app Int Length [map]
-        
+
+let mk_array_of_cell c =
+  mk_app (Loc (Array (element_sort_of_cell c))) ArrayOfCell [c]
+
+let mk_index_of_cell c =
+  mk_app Int IndexOfCell [c]
+
+let mk_array_cells a =
+  mk_app (Map (Int, Loc (ArrayCell (element_sort_of_array a)))) ArrayCells [a]
+    
 let mk_write map ind upd =
   mk_app (sort_of map) Write [map; ind; upd]
 

@@ -310,7 +310,7 @@ let smtlib_sort_of_grass_sort srt =
   | Map (dsrt, rsrt) ->
       FreeSort ((map_sort_string, 0), [csort dsrt; csort rsrt])
   | Array srt ->
-      FreeSort ((array_sort_string ^ "_", 0), [csort srt])
+      FreeSort (("G" ^ array_sort_string, 0), [csort srt])
   | ArrayCell srt ->
       FreeSort ((array_cell_sort_string, 0), [csort srt])
   | Loc srt ->
@@ -323,7 +323,7 @@ let declare_sorts has_int session structs =
   SortSet.iter
     (function FreeSrt id -> declare_sort session (string_of_ident id) 0 | _ -> ())
     structs;
-  declare_sort session (array_sort_string ^ "_") 1;
+  declare_sort session ("G" ^ array_sort_string) 1;
   declare_sort session array_cell_sort_string 1;
   declare_sort session loc_sort_string 1;
   if not !Config.use_set_theory
@@ -696,10 +696,11 @@ let convert_model session smtModel =
         match name, csrts with
         | "Loc", [esrt] -> Loc esrt
         | "Set", [esrt] -> Set esrt
-        | "Array_", [esrt] -> Array esrt
+        | "GArray", [esrt] -> Array esrt
+        | "ArrayCell", [esrt] -> ArrayCell esrt
         | "Map", [dsrt; rsrt] -> Map (dsrt, rsrt)
         | _, [] -> FreeSrt (name, num)
-        | _, _ -> fail session "encountered unexpected sort in model conversion"
+        | srt, _ -> fail session ("encountered unexpected sort " ^ srt ^ " in model conversion")
   in
   (* detect Z3/CVC4 identifiers that represent values of uninterpreted sorts *)
   let to_val (name, num) =

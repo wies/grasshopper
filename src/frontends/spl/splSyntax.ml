@@ -14,6 +14,7 @@ type typ =
   | StructType of ident
   | MapType of typ * typ
   | ArrayType of typ
+  | ArrayCellType of typ
   | SetType of typ
   | IntType
   | BoolType
@@ -131,6 +132,9 @@ and expr =
   | New of typ * exprs * pos
   | Read of expr * expr * pos
   | Length of expr * pos
+  | ArrayOfCell of expr * pos
+  | IndexOfCell of expr * pos
+  | ArrayCells of expr * pos
   | ProcCall of ident * exprs * pos
   | PredApp of ident * exprs * pos
   | Quant of quantifier_kind * var list * expr * pos
@@ -157,6 +161,9 @@ let pos_of_expr = function
   | New (_, _, p)
   | Read (_, _, p)
   | Length (_, p)
+  | ArrayOfCell (_, p)
+  | IndexOfCell (_, p)
+  | ArrayCells (_, p)
   | Access (_, p)
   | BtwnPred (_, _, _, _, p)
   | Quant (_, _, _, p)
@@ -277,6 +284,7 @@ let rec pr_type ppf = function
   | UnitType -> fprintf ppf "Unit"
   | StructType id -> pr_ident ppf id
   | ArrayType e -> fprintf ppf "%s<@[%a@]>" array_sort_string pr_type e
+  | ArrayCellType e -> fprintf ppf "%s<@[%a@]>" array_cell_sort_string pr_type e
   | MapType (d, r) -> fprintf ppf "%s<@[%a,@ %a@]>" map_sort_string pr_type d pr_type r
   | SetType s -> fprintf ppf "%s<@[%a@]>" set_sort_string pr_type s
   | PermType -> fprintf ppf "Permission"

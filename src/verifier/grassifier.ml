@@ -30,20 +30,11 @@ let array_state_decl srt =
     var_scope = global_scope
   }
 
-let array_cells_id = mk_name_generator "array_cells"
-let array_cells srt = mk_free_const (Map (Loc (Array srt), Map (Int, Loc (ArrayCell srt)))) (array_cells_id srt)
-let array_cells_decl srt =
-  let id = array_cells_id srt in
-  { var_name = id;
-    var_orig_name = name id;
-    var_sort = Map (Loc (Array srt), Map (Int, Loc (ArrayCell srt)));
-    var_is_ghost = false;
-    var_is_implicit = false;
-    var_is_aux = true;
-    var_pos = dummy_position;
-    var_scope = global_scope
-  }
-
+let tmp_array_cell_set_id =
+  let gen = mk_name_generator "tmp" in
+  fun srt -> gen (ArrayCell srt)
+let tmp_array_cell_set_decl srt = mk_loc_set_decl (ArrayCell srt) (tmp_array_cell_set_id (ArrayCell srt)) dummy_position
+let tmp_array_cell_set srt = mk_free_const (Set (Loc (ArrayCell srt))) (tmp_array_cell_set_id (ArrayCell srt))
     
 (** Add reachability invariants for ghost fields of sort Loc *)
 let add_ghost_field_invariants prog =
@@ -138,35 +129,26 @@ let add_ghost_field_invariants prog =
   let prog1 = List.fold_left declare_pred prog preds in
   map_procs add_invs prog1
 
-(** Desugare Arrays. *)
+(** Desugare arrays. *)
 let elim_arrays prog =
-  let rec compile_sort = function
-    | Array srt -> Loc (Array srt)
-    | Loc srt -> Loc (compile_sort srt)
-    | ArrayCell srt -> ArrayCell (compile_sort srt)
-    | Set srt -> Set (compile_sort srt)
-    | Map (dsrt, rsrt) -> Map (compile_sort dsrt, compile_sort rsrt)
-    | srt -> srt
-  in
   let rec compile_term = function
-    | Var (id, srt) -> Var (id, compile_sort srt)
+    | Var (id, srt) -> Var (id, srt)
     | App (Read, [map; idx], _) ->
         let map1 = compile_term map in
         let idx1 = compile_term idx in
         (match sort_of map with
-        | Array srt -> mk_read (array_state srt) (mk_read (mk_read (array_cells srt) map1) idx1)
+        | Loc (Array srt) -> mk_read (array_state srt) (mk_read (mk_array_cells map1) idx1)
         | _ -> mk_read map1 idx1)
     | App (sym, ts, srt) ->
         let ts1 = List.map compile_term ts in
-        App (sym, ts1, compile_sort srt)
+        App (sym, ts1, srt)
   in
   let rec compile_grass_form = function
     (* TODO: convert annotations *)
     | Atom (t, ann) -> Atom (compile_term t, ann)
     | BoolOp (op, fs) -> BoolOp (op, List.map compile_grass_form fs)
     | Binder (b, vs, f, ann) ->
-        let vs1 = List.map (fun (v, srt) -> v, compile_sort srt) vs in
-        Binder (b, vs1, compile_grass_form f, ann)
+        Binder (b, vs, compile_grass_form f, ann)
   in
   let rec compile_sl_form = function
     | Sl.Pure (p, pos) ->
@@ -178,8 +160,7 @@ let elim_arrays prog =
     | Sl.BoolOp (op, fs, pos) ->
         Sl.BoolOp (op, List.map compile_sl_form fs, pos)
     | Sl.Binder (b, vs, f, pos) ->
-        let vs1 = List.map (fun (v, srt) -> v, compile_sort srt) vs in
-        Sl.Binder (b, vs1, compile_sl_form f, pos)
+        Sl.Binder (b, vs, compile_sl_form f, pos)
   in
   let rec compile_cmd = function
     | Loop (lc, pp) ->
@@ -198,7 +179,7 @@ let elim_arrays prog =
         let lhs1, rhs1, aux_cmds =
           List.fold_right2 (fun lhs rhs (lhs1, rhs1, aux_cmds) ->
             match lhs, rhs with
-            | id1, App (Write, [App (FreeSym id2, [], _) as map; idx; upd], Array srt) ->
+            | id1, App (Write, [App (FreeSym id2, [], _) as map; idx; upd], Loc (Array srt)) ->
                 let idx1 = compile_term idx in
                 let upd1 = compile_term upd in
                 let map1 = compile_term map in
@@ -208,7 +189,7 @@ let elim_arrays prog =
                   aux_ac :: aux_cmds
                 in
                 array_state_id srt :: lhs1,
-                mk_write (array_state srt) (mk_read (mk_read (array_cells srt) map1) idx1) upd1 :: rhs1,
+                mk_write (array_state srt) (mk_read (mk_array_cells map1) idx1) upd1 :: rhs1,
                 aux_cmds1
             | id, t -> id :: lhs1, compile_term t :: rhs1, aux_cmds)            
             ac.assign_lhs ac.assign_rhs ([], [], [])
@@ -228,8 +209,7 @@ let elim_arrays prog =
         mk_call_cmd cc.call_lhs cc.call_name args1 pp.pp_pos
     | Basic (New nc, pp) ->
         let args = List.map compile_term nc.new_args in
-        let srt = compile_sort nc.new_sort in
-        mk_new_cmd nc.new_lhs srt args pp.pp_pos
+        mk_new_cmd nc.new_lhs nc.new_sort args pp.pp_pos
     | c -> c
   in
   let compile_proc (elem_sorts, procs) proc =
@@ -237,13 +217,12 @@ let elim_arrays prog =
       IdMap.fold
         (fun id decl (locals, elem_sorts) ->
           match decl.var_sort with
-          | Array srt ->
-              let decl1 =
-                { decl with var_sort = Loc (ArrayCell srt) }
-              in
-              IdMap.add id decl1 locals, SortSet.add srt elem_sorts
-          | _ -> IdMap.add id decl locals, elem_sorts)
-        proc.proc_locals (IdMap.empty, elem_sorts)
+          | Loc (Array srt) ->
+              let tmp_decl = tmp_array_cell_set_decl srt in
+              IdMap.add tmp_decl.var_name tmp_decl locals,
+              SortSet.add srt elem_sorts
+          | _ -> locals, elem_sorts)
+        proc.proc_locals (proc.proc_locals, elem_sorts)
     in
     let body1 = Util.Opt.map compile_cmd proc.proc_body in
     let precond1 = List.map (Prog.map_spec_form compile_grass_form compile_sl_form) proc.proc_precond in
@@ -262,9 +241,7 @@ let elim_arrays prog =
   let globals =
     SortSet.fold (fun srt globals ->
       let asdecl = array_state_decl srt in
-      let acdecl = array_cells_decl srt in
-      IdMap.add asdecl.var_name asdecl
-        (IdMap.add acdecl.var_name acdecl globals))
+      IdMap.add asdecl.var_name asdecl globals)
       elem_sorts prog.prog_vars
   in
   { prog with
@@ -610,6 +587,7 @@ let annotate_heap_checks prog =
           | _ -> acc
         in
         derefs (derefs acc1 map) idx
+    | App (Length, [map], _) -> TermSet.add map acc
     | App (Write, fld :: loc :: ts, _) ->
         List.fold_left derefs (TermSet.add loc acc) (fld :: loc :: ts)
     | App (_, ts, _) -> 
@@ -691,18 +669,40 @@ let elim_new_dispose prog =
                       mk_spec_form (FOL (mk_eq (mk_length arg) length)) "new" None pp.pp_pos
                     in
                     let assume_length_ok = mk_assume_cmd length_ok pp.pp_pos in
-                    let cells_fresh =
-                      Axioms.mk_axiom "new_array_cells"
-                        (mk_sequent
-                           [mk_leq (mk_int 0) Axioms.int1; mk_lt Axioms.int1 length]
-                           [mk_and [mk_not (mk_elem (mk_read (mk_read (array_cells srt) arg) Axioms.int1) (alloc_set (ArrayCell srt)));
-                                    mk_neq (mk_read (mk_read (array_cells srt) arg) Axioms.int1) (mk_null (ArrayCell srt))]])
-                    in
                     let assume_cells_fresh =
-                      let sf = mk_spec_form (FOL cells_fresh) "new_array_cells" None pp.pp_pos in
+                      let cells_fresh =
+                        Axioms.mk_axiom "new_array_cells_fresh"
+                          (mk_sequent
+                             [mk_leq (mk_int 0) Axioms.int1; mk_lt Axioms.int1 length]
+                             [mk_and [mk_not (mk_elem (mk_read (mk_array_cells arg) Axioms.int1) (alloc_set (ArrayCell srt)));
+                                      mk_neq (mk_read (mk_array_cells arg) Axioms.int1) (mk_null (ArrayCell srt))]])
+                      in
+                      let sf = mk_spec_form (FOL cells_fresh) "new" None pp.pp_pos in
                       mk_assume_cmd sf pp.pp_pos
                     in
-                    [assume_length_ok; assume_cells_fresh]
+                    let update_set set_id set =
+                      let assign_tmp_cells =
+                        mk_assign_cmd [tmp_array_cell_set_id srt] [set] pp.pp_pos
+                      in
+                      let havoc_set =
+                        mk_havoc_cmd [set_id] pp.pp_pos
+                      in
+                      let assume_set =
+                        let l = Axioms.loc1 (ArrayCell srt) in
+                        let f =
+                          Axioms.mk_axiom "new_array_cells_alloc"
+                            (mk_iff (mk_elem l set)
+                               (mk_or [mk_elem l (tmp_array_cell_set srt);
+                                       mk_and [mk_lt (mk_index_of_cell l) length; mk_eq (mk_array_of_cell l) arg]]))
+                        in
+                        let sf = mk_spec_form (FOL f) "new" None pp.pp_pos in
+                        mk_assume_cmd sf pp.pp_pos
+                      in
+                      [assign_tmp_cells; havoc_set; assume_set]
+                    in
+                    [assume_length_ok; assume_cells_fresh] @
+                    update_set (alloc_id (ArrayCell srt)) (alloc_set (ArrayCell srt)) @
+                    update_set (footprint_id (ArrayCell srt)) (footprint_set (ArrayCell srt))
                 | _ -> []
               in
               [assume_fresh; assign_alloc; assign_footprint] @ array_aux

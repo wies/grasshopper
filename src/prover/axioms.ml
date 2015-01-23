@@ -290,6 +290,24 @@ let ep_axioms struct_srt =
      mk_axiom "entry-point4" ep4]
   else []
 
+(** Array axioms *)
+let array_axioms elem_srt =
+  let a = loc1 (Array elem_srt) in
+  let c = loc2 (ArrayCell elem_srt) in
+  let i = int1 in
+  let array_length =
+    mk_leq (mk_int 0) (mk_length a)
+  in
+  let array_of_cell =
+    mk_sequent [mk_eq (mk_read (mk_array_cells a) i) c] [mk_eq (mk_array_of_cell c) a]
+  in
+  let index_of_cell =
+    mk_sequent [mk_eq (mk_read (mk_array_cells a) i) c] [mk_eq (mk_index_of_cell c) i]
+  in
+  [mk_axiom "index-of-cell" index_of_cell;
+   mk_axiom "array-of-cell" array_of_cell;
+   mk_axiom "array-length" array_length]
+     
 (** Set axioms *)
 let set_axioms elem_srts =
   let mk_set_axioms t =

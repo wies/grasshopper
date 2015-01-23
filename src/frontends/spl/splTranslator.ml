@@ -179,61 +179,77 @@ let resolve_names cu =
           MapType (re_ty pos tbl dty, re_ty pos tbl rty)
       | ty -> ty
     in
-    let rec re tbl = function
+    let rec re locals tbl = function
       | Setenum (ty, args, pos) ->
           let ty1 = re_ty pos tbl ty in
-          let args1 = List.map (re tbl) args in
+          let args1 = List.map (re locals tbl) args in
           Setenum (ty1, args1, pos)
       | New (ty, args, pos) ->
           let ty1 = re_ty pos tbl ty in 
-          let args1 =  List.map (re tbl) args in
+          let args1 =  List.map (re locals tbl) args in
           New (ty1, args1, pos)
       | Read ((Ident (("length", _), _) as map), idx, pos) ->
-          (match type_of_expr cu locals idx with
-          | ArrayType _ -> Length (re tbl idx, pos)
-          | _ -> Read (re tbl map, re tbl idx, pos))
+          let idx1 = re locals tbl idx in
+          (match type_of_expr cu locals idx1 with
+          | ArrayType _ -> Length (idx1, pos)
+          | ty -> Read (re locals tbl map, idx1, pos))
+      | Read ((Ident (("cells", _), _) as map), idx, pos) ->
+          let idx1 = re locals tbl idx in
+          (match type_of_expr cu locals idx1 with
+          | ArrayType _ -> ArrayCells (idx1, pos)
+          | _ -> Read (re locals tbl map, idx1, pos))
+      | Read ((Ident (("array", _), _) as map), idx, pos) ->
+          let idx1 = re locals tbl idx in
+          (match type_of_expr cu locals idx1 with
+          | ArrayCellType _ -> ArrayOfCell (idx1, pos)
+          | _ -> Read (re locals tbl map, idx1, pos))
+      | Read ((Ident (("index", _), _) as map), idx, pos) ->
+          let idx1 = re locals tbl idx in
+          (match type_of_expr cu locals idx1 with
+          | ArrayCellType _ -> IndexOfCell (idx1, pos)
+          | _ -> Read (re locals tbl map, idx1, pos))
       | Read (map, idx, pos) ->
-          Read (re tbl map, re tbl idx, pos)
+          Read (re locals tbl map, re locals tbl idx, pos)
       | GuardedQuant (q, init_id, e, f, pos) ->
-          let e1 = re tbl e in
+          let e1 = re locals tbl e in
           let id, tbl1 = declare_name pos init_id pos tbl in
-          let f1 = re tbl1 f in
+          let f1 = re locals tbl1 f in
           GuardedQuant (q, id, e1, f1, pos)
       | Quant (q, vars, f, pos) ->
-          let decls, tbl1 = List.fold_right 
-              (fun decl (decls, tbl) ->
+          let locals, decls, tbl1 = List.fold_right 
+              (fun decl (locals, decls, tbl) ->
                 let decl, tbl1 = declare_var structs decl tbl in
-                decl :: decls, tbl1
+                IdMap.add decl.v_name decl locals, decl :: decls, tbl1
               ) 
-              vars ([], tbl)
+              vars (locals, [], tbl)
           in
-          let f1 = re tbl1 f in
+          let f1 = re locals tbl1 f in
           Quant (q, decls, f1, pos)
       | ProcCall (("acc", _ as id), args, pos) ->
-          let args1 = List.map (re tbl) args in
+          let args1 = List.map (re locals tbl) args in
           (match args1 with
           | [arg] ->
               (match type_of_expr cu locals arg with
               | SetType _ -> 
-                  Access (re tbl arg, pos)
+                  Access (re locals tbl arg, pos)
               | ty ->
-                  Access (Setenum (ty, [re tbl arg], pos), pos))
+                  Access (Setenum (ty, [re locals tbl arg], pos), pos))
           | _ -> pred_arg_mismatch_error pos id 1)
       | ProcCall (("Btwn", _ as id), args, pos) ->
-          let args1 = List.map (re tbl) args in
+          let args1 = List.map (re locals tbl) args in
           (match args1 with
           | [fld; x; y; z] ->
               BtwnPred (fld, x, y, z, pos)
           | _ -> pred_arg_mismatch_error pos id 4)
       | ProcCall (("Reach", _ as id), args, pos) ->
-          let args1 = List.map (re tbl) args in
+          let args1 = List.map (re locals tbl) args in
           (match args1 with
           | [fld; x; y] ->
               BtwnPred (fld, x, y, y, pos)
           | _ -> pred_arg_mismatch_error pos id 3)
       | ProcCall (init_id, args, pos) ->
           let id = lookup_id init_id tbl pos in
-          let args1 = List.map (re tbl) args in
+          let args1 = List.map (re locals tbl) args in
           (try 
             check_proc id procs0 pos;
             ProcCall (id, args1, pos)
@@ -243,22 +259,22 @@ let resolve_names cu =
       | PredApp (init_id, args, pos) ->
           let id = lookup_id init_id tbl pos in
           check_pred id preds0 pos;
-          PredApp (id, List.map (re tbl) args, pos)              
+          PredApp (id, List.map (re locals tbl) args, pos)              
       | UnaryOp (op, e, pos) ->
-          UnaryOp (op, re tbl e, pos)
+          UnaryOp (op, re locals tbl e, pos)
       | BinaryOp (e1, op, e2, ty, pos) ->
-          BinaryOp (re tbl e1, op, re tbl e2, ty, pos)
+          BinaryOp (re locals tbl e1, op, re locals tbl e2, ty, pos)
       | Ident (init_id, pos) ->
           let id = lookup_id init_id tbl pos in
           Ident (id, pos)
       | Annot (e, GeneratorAnnot (es, ge), pos) ->
-          let es1 = List.map (re tbl) es in
-          Annot (re tbl e, GeneratorAnnot (es1, re tbl ge), pos)
+          let es1 = List.map (re locals tbl) es in
+          Annot (re locals tbl e, GeneratorAnnot (es1, re locals tbl ge), pos)
       | Annot (e, ann, pos) ->
-          Annot (re tbl e, ann, pos)
+          Annot (re locals tbl e, ann, pos)
       | e -> e
     in
-    re tbl e
+    re locals tbl e
   in
   let rec resolve_stmt locals tbl = function
     | Skip pos -> Skip pos, locals, tbl
@@ -719,7 +735,9 @@ let infer_types cu =
           List.iter (fun vid ->
             let vdecl = IdMap.find vid pred.pr_locals in
             match vdecl.v_type with
-            | SetType (StructType _) -> ()
+            | SetType (StructType _)
+            | SetType (ArrayType _)
+            | SetType (ArrayCellType _) -> ()
             | _ -> footprint_declaration_error vid vdecl.v_pos)
             pred.pr_footprints
         in
@@ -767,7 +785,8 @@ let convert cu =
       | AnyRefType -> Loc (FreeSrt ("Null", 0))
       | MapType (dtyp, rtyp) -> Map (ct dtyp, ct rtyp)
       | SetType typ -> Set (ct typ)
-      | ArrayType typ -> Array (ct typ)
+      | ArrayType typ -> Loc (Array (ct typ))
+      | ArrayCellType typ -> Loc (ArrayCell (ct typ))
       | IntType -> Int
       | BoolType -> Bool
       | ty -> failwith ("cannot convert type " ^ string_of_type ty ^ " near position " ^ string_of_src_pos pos)
@@ -807,6 +826,15 @@ let convert cu =
     | Length (e, pos) ->
         let t = convert_term locals e in
         GrassUtil.mk_length t
+    | ArrayOfCell (e, pos) ->
+        let t = convert_term locals e in
+        GrassUtil.mk_array_of_cell t
+    | IndexOfCell (e, pos) ->
+        let t = convert_term locals e in
+        GrassUtil.mk_index_of_cell t
+    | ArrayCells (e, pos) ->
+        let t = convert_term locals e in
+        GrassUtil.mk_array_cells t
     | PredApp (id, es, pos) ->
         let decl = IdMap.find id cu.pred_decls in
         let ts = List.map (convert_term locals) es in 

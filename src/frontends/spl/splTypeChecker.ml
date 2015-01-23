@@ -25,14 +25,20 @@ let match_types pos oty1 oty2 =
   let rec mt ty1 ty2 =
     match ty1, ty2 with
     | PermType, BoolType -> PermType
-    | AnyRefType, StructType _ -> ty2
-    | StructType _, AnyRefType -> ty1
+    | AnyRefType, StructType _
+    | AnyRefType, ArrayType _
+    | AnyRefType, ArrayCellType _ -> ty2
+    | StructType _, AnyRefType
+    | ArrayType _, AnyRefType
+    | ArrayCellType _, AnyRefType -> ty1
     | AnyType, _ -> ty2
     | _, AnyType -> ty1
     | MapType (IntType, ty1), ArrayType ty2
     | MapType (AnyType, ty1), ArrayType ty2 
     | ArrayType ty1, ArrayType ty2 ->
         ArrayType (mt ty1 ty2)
+    | ArrayCellType ty1, ArrayCellType ty2 ->
+        ArrayCellType (mt ty1 ty2)
     | SetType ty1, SetType ty2 ->
         SetType (mt ty1 ty2)
     | MapType (dty1, rty1), MapType (dty2, rty2) ->
@@ -58,6 +64,8 @@ let merge_types pos oty1 oty2 =
     | ArrayType ty1, MapType (AnyType, ty2) 
     | ArrayType ty1, ArrayType ty2 ->
         ArrayType (mt ty1 ty2)
+    | ArrayCellType ty1, ArrayCellType ty2 ->
+        ArrayCellType (mt ty1 ty2)
     | SetType ty1, SetType ty2 ->
         SetType (mt ty1 ty2)
     | MapType (dty1, rty1), MapType (dty2, rty2) ->
@@ -116,6 +124,15 @@ let type_of_expr cu locals e =
         | MapType (_, ty) -> ty
         | _ -> AnyType)
     | Length (map, _) -> IntType        
+    | ArrayOfCell (c, _) ->
+        (match te c with
+        | ArrayCellType srt -> ArrayType srt
+        | _ -> AnyType)
+    | IndexOfCell (c, _) -> IntType
+    | ArrayCells (map, _) ->
+        (match te map with
+        | ArrayType srt -> MapType (IntType, ArrayCellType srt)
+        | _ -> AnyType)
     (* Other stuff *)
     | Null (ty, _) -> ty
     | ProcCall (id, _, _) ->
@@ -134,13 +151,11 @@ let type_of_expr cu locals e =
             rdecl.v_type
         | _ -> AnyType)
     | Ident (id, _) ->
-        let decl = 
-          try
-            IdMap.find id locals
-          with Not_found ->
-            IdMap.find id cu.var_decls
-        in
-        decl.v_type
+        (try
+          (IdMap.find id locals).v_type
+        with Not_found ->
+          try (IdMap.find id cu.var_decls).v_type
+          with Not_found -> AnyType)
     | Annot (e, _, _) ->
         te e
     | UnaryOp _
@@ -272,8 +287,36 @@ let infer_types cu locals ty e =
         New (ty1, es1, pos), ty1
     | Length (map, pos) ->
         let map1, _ = it locals (ArrayType AnyType) map in
-        ignore (match_types pos ty IntType);
-        Length (map1, pos), IntType
+        Length (map1, pos), match_types pos ty IntType
+    | ArrayOfCell (c, pos) ->
+        let ety =
+          match ty with
+          | ArrayType ety -> ety
+          | _ -> AnyType
+        in
+        let c1, cty = it locals (ArrayCellType ety) c in
+        let ety =
+          match cty with
+          | ArrayCellType ety -> ety
+          | _ -> ety
+        in
+        ArrayOfCell (c1, pos), match_types pos ty (ArrayType ety)
+    | IndexOfCell (c, pos) ->
+        let c1, _ = it locals (ArrayCellType AnyType) c in
+        IndexOfCell (c1, pos), match_types pos ty IntType
+    | ArrayCells (map, pos) ->
+        let ety =
+          match ty with
+          | ArrayCellType ety -> ety
+          | _ -> AnyType
+        in
+        let map1, mty = it locals (ArrayType ety) map in
+        let ety =
+          match mty with
+          | ArrayType ety -> ety
+          | _ -> ety
+        in
+        ArrayCells (map1, pos), match_types pos ty (MapType (IntType, ArrayCellType ety))
      (*| Dot (e, id, pos) ->
         let decl = IdMap.find id cu.var_decls in
         let dty, rty =
@@ -398,7 +441,10 @@ let infer_types cu locals ty e =
 let rec is_abstract_type = function
   | AnyRefType
   | AnyType -> true
-  | SetType ty -> is_abstract_type ty
+  | SetType ty
+  | ArrayType ty
+  | ArrayCellType ty ->
+      is_abstract_type ty
   | MapType (dty, rty) ->
       is_abstract_type dty ||
       is_abstract_type rty

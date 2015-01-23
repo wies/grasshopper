@@ -315,6 +315,15 @@ let struct_sorts_of_fields flds =
       | _ -> structs)
     flds SortSet.empty
 
+let array_sorts ts =
+  TermSet.fold
+    (fun t srts ->
+      match t with
+      | App (_, _, Loc (Array srt))
+      | App (_, _, Loc (ArrayCell srt))
+        -> SortSet.add srt srts
+      | _ -> srts)
+    ts SortSet.empty
     
 (** Adds theory axioms for the entry point function to formulas [fs].
  ** Assumes that all frame predicates have been reduced in formulas [fs]. *)
@@ -473,6 +482,11 @@ let add_reach_axioms fs gts =
   let reach_ax1 = instantiate_with_terms (*~force:true*) false reach_ax (CongruenceClosure.restrict_classes classes non_updated_flds) in
   rev_concat [reach_ax1; reach_write_ax; fs], gts
 
+let add_array_axioms fs gts =
+  let srts = array_sorts gts in
+  let axioms = SortSet.fold (fun srt axioms -> Axioms.array_axioms srt @ axioms) srts [] in
+  axioms @ fs
+  
 let instantiate read_propagators fs gts =
   (* generate local instances of all remaining axioms in which variables occur below function symbols *)
   let fs1, generators = open_axioms isFunVar fs in
@@ -583,6 +597,7 @@ let reduce f =
   let fs = add_set_axioms fs in
   let fs, read_propagators, gts = add_read_write_axioms fs in
   let fs, gts = add_reach_axioms fs gts in
+  let fs = add_array_axioms fs gts in
   let fs = if !Config.named_assertions then fs else List.map strip_names fs in
   let fs, gts = instantiate read_propagators fs gts in
   let fs = add_terms fs gts in

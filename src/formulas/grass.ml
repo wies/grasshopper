@@ -66,7 +66,7 @@ type symbol =
   | Null | Read | Write | EntPnt
   | UMinus | Plus | Minus | Mult | Div 
   | Empty | SetEnum | Union | Inter | Diff
-  | Length
+  | Length | IndexOfCell | ArrayOfCell | ArrayCells
   (* interpreted predicate symbols *)
   | Eq
   | LtEq | GtEq | Lt | Gt
@@ -80,6 +80,7 @@ let symbols =
    Null; Read; Write; EntPnt;
    UMinus; Plus; Minus; Mult;
    Empty; SetEnum; Union; Inter; Diff;
+   Length; IndexOfCell; ArrayOfCell; ArrayCells;
    Eq; LtEq; GtEq; Lt; Gt;
    Btwn; Frame; Elem; SubsetEq]
 
@@ -203,6 +204,9 @@ let string_of_symbol = function
       else "write"
   | EntPnt -> "ep"
   | Length -> "length"
+  | IndexOfCell -> "index"
+  | ArrayOfCell -> "array"
+  | ArrayCells -> "cells"
   | UMinus -> "-"
   | Plus -> "+"
   | Minus -> "-"
@@ -295,6 +299,8 @@ and pr_term ppf = function
   | App (Mult, [t1; t2], _) -> fprintf ppf "%a * @[<2>%a@]" pr_term0 t1 pr_term0 t2
   | App (Div, [t1; t2], _) -> fprintf ppf "%a / @[<2>%a@]" pr_term0 t1 pr_term0 t2
   | App (Diff, [t1; t2], _) -> fprintf ppf "%a -- @[<2>%a@]" pr_term0 t1 pr_term0 t2
+  | App (Length, [t], _) -> fprintf ppf "%a.%s" pr_term t (string_of_symbol Length)
+  | App (ArrayCells, [t], _) -> fprintf ppf "%a.%s" pr_term t (string_of_symbol ArrayCells)
   | App (Inter, ss, _) -> pr_inter ppf ss
   | App (Union, ss, _) -> pr_union ppf ss
   | App (Eq, [t1; t2], _) -> fprintf ppf "@[%a@] == @[<2>%a@]" pr_term t1 pr_term t2

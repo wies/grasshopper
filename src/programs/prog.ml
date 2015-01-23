@@ -281,14 +281,12 @@ let find_var prog proc name =
     try IdMap.find name proc.proc_locals 
     with Not_found -> IdMap.find name prog.prog_vars
   with Not_found ->
-    failwith ("find_proc: Could not find variable " ^ (string_of_ident name))
+    failwith ("find_var: Could not find variable " ^ (string_of_ident name))
 
-let struct_sorts prog =
-  IdMap.fold (fun _ decl struct_srts ->
-    match decl.var_sort with
-    | Map (Loc srt, _) -> SortSet.add srt struct_srts
-    | _ -> struct_srts)
-    prog.prog_vars SortSet.empty
+let find_local_var proc name =
+  try IdMap.find name proc.proc_locals
+  with Not_found ->
+    failwith ("find_local_val: Could not find variable " ^ string_of_ident name)
       
 let mk_fresh_var_decl decl =
   let id = fresh_ident (name decl.var_name) in
@@ -312,6 +310,23 @@ let fold_preds fn init prog =
 let map_preds fn prog =
   { prog with prog_preds = IdMap.map fn prog.prog_preds }
 
+let struct_sorts prog =
+  let collect_srts decls =
+    IdMap.fold (fun _ decl struct_srts ->
+      match decl.var_sort with
+      | Map (Loc srt, _)
+      | Loc srt -> SortSet.add srt struct_srts
+      | _ -> struct_srts)
+      decls 
+  in
+  let struct_srts = 
+    collect_srts prog.prog_vars SortSet.empty
+  in
+  fold_procs (fun struct_srts proc ->
+    collect_srts proc.proc_locals struct_srts)
+    struct_srts prog
+
+    
 (** Auxiliary functions for specifications *)
 
 let mk_spec_form f name msg pos =
@@ -932,7 +947,7 @@ let pr_body locals ppf = function
 
 let pr_proc ppf proc =
   let add_srts = List.map (fun id -> 
-    let decl = IdMap.find id proc.proc_locals in
+    let decl = find_local_var proc id in
     (decl.var_is_implicit, decl.var_is_ghost, (id, decl.var_sort)))
   in
   let locals = IdMap.fold (fun id decl locals ->

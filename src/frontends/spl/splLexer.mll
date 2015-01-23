@@ -13,6 +13,7 @@ let keyword_table = Hashtbl.create 32
 let _ =
   List.iter (fun (kwd, tok) -> Hashtbl.add keyword_table kwd tok)
     ([("Array", ARRAY);
+      ("ArrayCell", ARRAYCELL);
       ("assert", ASSERT);
       ("assume", ASSUME);
       ("Bool", BOOL);
