@@ -234,6 +234,14 @@ let resolve_names cu =
                   Access (re locals tbl arg, pos)
               | ty ->
                   Access (Setenum (ty, [re locals tbl arg], pos), pos))
+          | [map; idx] ->
+              (match type_of_expr cu locals map with
+              | ArrayType typ ->
+                  let map1 = re locals tbl map in
+                  let idx1 = re locals tbl idx in
+                  let cell = Read (ArrayCells (map1, pos_of_expr map1), idx1, pos) in
+                  Access (Setenum (ArrayCellType typ, [cell], pos), pos)
+              | _ -> pred_arg_mismatch_error pos id 1)
           | _ -> pred_arg_mismatch_error pos id 1)
       | ProcCall (("Btwn", _ as id), args, pos) ->
           let args1 = List.map (re locals tbl) args in
