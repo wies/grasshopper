@@ -84,16 +84,16 @@ predicate bstree_bounded(r: Node, lb: Int, ub: Int)(FP: Set<Node>) {
 
 // Predicates for tree sets
 
-function witness(v: Int, C: Set<Int>) returns (res: Node) {
+function witness(v: Int, FP: Set<Node>) returns (res: Node) {
   true
 }
 
 function content(FP: Set<Node>) returns (C: Set<Int>) {
-  (forall x: Node :: x in FP ==> x == witness(x.data, C)) &&
+  (forall x: Node :: x in FP ==> x == witness(x.data, FP)) &&
   (forall x: Node :: x in FP ==> x.data in C) &&
-  (forall v in C :: witness(v, C) in FP) &&
-  (forall v: Int :: v !in C ==> witness(v, C) == null) &&
-  (forall v in C :: v == witness(v, C).data @(matching v yields witness(v, C).data))
+  (forall v in C :: witness(v, FP) in FP) &&
+  (forall v: Int :: v !in C ==> witness(v, FP) == null) &&
+  (forall v in C :: v == witness(v, FP).data @(matching v yields witness(v, FP).data))
 }
 
 predicate tree_set(r: Node, C: Set<Int>)(FP: Set<Node>) {

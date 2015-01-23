@@ -39,11 +39,13 @@ procedure find_range( tree: BPTree,
                       returned_data: Array<Int>)
   returns (res: Int)
   requires btree(tree)
-  requires acc(returned_keys[0..(key_end-key_start)]) &*& acc(returned_data[0..(key_end-key_start)])
   requires key_start <= key_end
+  requires acc(returned_keys) &*& int_arrayseg(returned_keys, 0, key_end-key_start)
+  requires acc(returned_data) &*& int_arrayseg(returned_data, 0, key_end-key_start)
   ensures  btree(tree)
+  requires acc(returned_keys) &*& int_arrayseg(returned_keys, 0, key_end-key_start)
+  requires acc(returned_data) &*& int_arrayseg(returned_data, 0, key_end-key_start)
   ensures  res < key_end-key_start
-  ensures  acc(returned_keys[0..(key_end-key_start)]) &*& acc(returned_data[0..(key_end-key_start)])
   ensures  forall i: Int :: i >= 0 && i < res ==> returned_keys[i] >= key_start && returned_keys[i] <= key_end
   //TODO returned_keys and returned_data are a projection of the tree on the given key range
 {
@@ -56,7 +58,7 @@ procedure find_range( tree: BPTree,
     i := 0;
     while (i < n.num_keys && n.keys[i] < key_start)
       invariant i >= 0
-      invariant acc(n.keys[0..n.num_keys])
+      invariant int_arrayseg(n.keys, 0, n.num_keys)
     {
       i := i + 1;
     }
@@ -66,13 +68,15 @@ procedure find_range( tree: BPTree,
       invariant (n == null || acc(n)) -** tree
       invariant n == null || (n.is_leaf && n.keys[i] >= key_start)
       invariant i >= 0 && (n == null || i < n.num_keys)
-      invariant acc(returned_keys[0..(key_end-key_start)]) &*& acc(returned_data[0..(key_end-key_start)])
+      invariant acc(returned_keys) &*& int_arrayseg(returned_keys, 0, key_end-key_start)
+      invariant acc(returned_data) &*& int_arrayseg(returned_data, 0, key_end-key_start)
       invariant forall i: Int :: i >= 0 && i < res ==> returned_keys[i] >= key_start && returned_keys[i] <= key_end
     {
       while (i < n.num_keys && n.keys[i] <= key_end)
         invariant acc(n)
         invariant i >= 0
-        invariant acc(returned_keys[0..(key_end-key_start)]) &*& acc(returned_data[0..(key_end-key_start)])
+        invariant acc(returned_keys) &*& int_arrayseg(returned_keys, 0, key_end-key_start)
+        invariant acc(returned_data) &*& int_arrayseg(returned_data, 0, key_end-key_start)
         invariant forall i: Int :: i >= 0 && i < res ==> returned_keys[i] >= key_start && returned_keys[i] <= key_end
       {
         returned_keys[num_found] := n.keys[i];
@@ -107,7 +111,8 @@ procedure find_leaf(t: BTree, key: Int) returns (res: Node)
   {
     i := 0;
     while (i < c.num_keys && key >= c.keys[i])
-      invariant i >= 0
+      invariant acc(c) -** btree(t)
+      invariant i >= 0 && i <= c.num_keys
       //TODO about the key
     {
       i := i + 1;
@@ -130,7 +135,7 @@ procedure find( t: BTree, key: Int) returns (res: Int)
 
   while(i < c.num_keys && c.keys[i] != key)
     invariant i >= 0 && i <= c.num_keys
-    invariant ???
+    invariant acc(c) -** btree(t)
   {
     i := i + 1;
   }
@@ -1218,13 +1223,13 @@ procedure destroy_tree_nodes(root: Node, ghost order: Int)
     while (i < root.num_keys)
       invariant i >= 0
       invariant acc(root)
-      //the part <i is free, TODO the footprint is the union of the subtrees' footprints
-      invariant forall j: Int:: j >= 0 && j < i && j < root.num_keys ==> sub_btree(order, root.pointers[j])
+      invariant node_arraysegWithSubtree(root.pointers, i, root.num_keys)
     {
       destroy_tree_nodes(root.pointers[i]);
       i := i + i;
     }
   }
+  root.parent := null; //DZ: due to the way we specify the footprint
   free(root.keys);
   free(root.data);
   free(root.pointers);

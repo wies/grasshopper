@@ -1,14 +1,15 @@
+include "int_array.spl"
+
 procedure quicksort(a: Array<Int>)
-  requires acc(a) &*& arrayseg(a, 0, a.length)
-  ensures  acc(a) &*& arrayseg(a, 0, a.length)
-  ensures forall i: Int, j: Int:: i >= 0 && i < j && j < a.length ==> a[i] <= a[j]
+  requires array(a)
+  ensures  sorted_array(a)
 {
   quicksort1(a, 0, a.length)
 }
 
 procedure swap(a: Array<Int>, i: Int, j: Int, implicit ghost iVal: Int, implicit ghost jVal: Int)
-  requires arraycell(a,i) &*& arraycell(a, j) &*& a[i] == iVal &*& a[j] == jVal)
-  ensures  arraycell(a,i) &*& arraycell(a, j) &*& a[i] == jVal &*& a[j] == iVal)
+  requires acc(a,i) &*& acc(a, j) &*& a[i] == iVal &*& a[j] == jVal)
+  ensures  acc(a,i) &*& acc(a, j) &*& a[i] == jVal &*& a[j] == iVal)
 {
   var tmp := a[i];
   a[i] := a[j];
@@ -17,8 +18,7 @@ procedure swap(a: Array<Int>, i: Int, j: Int, implicit ghost iVal: Int, implicit
 
 procedure quicksort1(a: Array<Int>, lower: Int, upper: Int)
   requires acc(a) &*& arrayseg(a, lower, upper+1)
-  ensures  acc(a) &*& arrayseg(a, lower, upper+1)
-  ensures  forall i: Int, j: Int:: i >= lower && i <= j && j <= upper ==> a[i] <= a[j]
+  ensures  acc(a) &*& sorted_arrayseg(a, lower, upper+1)
 {
   if (lower < upper) {
     var pivotIdx := lower + (upper - lower) / 2;

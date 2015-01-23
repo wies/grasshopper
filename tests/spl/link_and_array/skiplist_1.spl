@@ -43,7 +43,8 @@ procedure pickHeight(max_height: Int)
   requires 0 <= max_height
   ensures 0 <= height && height <= max_height;
 
-procedure ghostWitness(i: Int) returns (n: Node)
+//just for the proof
+function ghostWitness(i: Int, j: Int) returns (n: Node) { true }
 
 procedure add(this: SkipList, x: Int) 
   returns (res: Bool)
@@ -57,7 +58,7 @@ procedure add(this: SkipList, x: Int)
   while (r >= 0)
     invariant r <= this.height
     invariant acc(stack) &*& arrayseg(stack, 0, this.max_height)
-    invariant (acc(u) &*& (star i: Int:: i <= this.height && i > r ==> acc(stack[i]))) -** skiplist(this) //element in the stack are part of the skiplist
+    invariant (acc(u) &*& arraySegOnlyNode(stack, r+1, this.height+1)) -** skiplist(this) //element in the stack are part of the skiplist
     invariant forall i: Int:: i <= this.height && i > r ==> (stack[i].next[r] == null || stack[i].next[r].data > x) //nodes in the stack point to a value larger than x
   {
     while (u.next[r] != null && u.next[r].data < x)
@@ -90,16 +91,17 @@ procedure add(this: SkipList, x: Int)
     stack[this.height] := this.head;   // increasing height of skiplist
   }
 
-  //a ghost map that remember the values of stack[i].next[i]
-  pure assume(forall i: Int:: i >= 0 && i <= w.next.length ==> ghostWitness(i) == stack[i].next[i])
+  //a ghost map that remember the values of stack[i].next[j]
+  pure assume(forall i: Int, j: Int:: i >= 0 && i <= w.next.length && j >= 0 && j <= stack[i].next.length ==> ghostWitness(i,j) == stack[i].next[j])
 
   var i: Int := 0;
   while (i < w.next.length)
     invariant acc(w) &*& acc(w.next) &*& arrayseg(w.next, 0, w.next.length)
     invariant acc(stack) &*& arrayseg(stack, 0, w.next.length)
-    invariant star j: Int:: j >= 0 && j < w.next.length ==> acc(stack[j]) &*& acc(stack[j].next) &*& arraycell(stack[j].next, j)
-    invariant forall j: Int:: j >= 0 && j < i ==> stack[j].next[j] == w && w.next[j] == ghostWitness(j)
-    invariant forall j: Int:: j >= i && j < w.next.length ==> stack[j].next[j] == ghostWitness(j)
+    invariant arraySegWithNode(stack, 0, w.next.length)
+    invariant forall j: Int, k: Int:: j >= 0 && j < w.next.length && k >= 0 && k < stack[j].next.length && j != k ==> stack[j].next[k] == ghostWitness(j, k)
+    invariant forall j: Int:: j >= 0 && j < i ==> stack[j].next[j] == w && w.next[j] == ghostWitness(j, j)
+    invariant forall j: Int:: j >= i && j < stack.length && j < stack[j].next.length ==> stack[j].next[j] == ghostWitness(j, j)
   {
     w.next[i] := stack[i].next[i];
     stack[i].next[i] := w;
@@ -117,26 +119,39 @@ procedure remove(this: SkipList, x: Int)
   removed := false;
   var u: Node := this.head;
   var r: Int := this.height;
+  var toRemove: Node := null;
+
+  //what we want is the path that goes from the top of the sentinel node down to the predecessor of the node to remove
+  //that path has the property that it contains all the nodes that points to node to remove
+  //
+  //the properties to that path is:
+  //-start at max height
+  //-∀ n in the path if h is the outgoing height at n then
+  //    - ∀ i>h. n[i] == null || n[i].data > x
+  //    - n[h].data <= x
   
   while (r >= 0)
-    invariant acc(u) -** skiplist(this)
+    invariant acc(u) -** skiplist(this) //TODO not a skiplist ...
     invariant r <= this.height
   {
     while (u.next[r] != null && u.next[r].data < x)
-      invariant acc(u) -** skiplist(this)
+      invariant acc(u) -** skiplist(this) //TODO not a skiplist ...
     {
       u := u.next[r];
     }
     if (u.next[r] != null && u.next[r].data == x) {
       removed := true;
-      var toRemove := u.next[r];
+      toRemove := u.next[r];
       u.next[r] := u.next[r].next[r];
-      free(toRemove);
       if (u == this.head && u.next[r] == null) {
         this.height := this.height - 1; // skiplist height has gone down
       }
     }
     r := r - 1;
+  }
+  if (removed) {
+    free(toRemove.next);
+    free(toRemove);
   }
   return removed;
 }

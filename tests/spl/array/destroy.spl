@@ -1,0 +1,22 @@
+include "node_array.spl";
+
+struct Node {
+  var data: Int;
+}
+
+procedure destroy(a: Array<Node>)
+  requires arrayWithNode(a)
+  requires emp
+{
+  var i := 0;
+  
+  while (i < a.length)
+    invariant i >= 0 && i <= a.length
+    invariant acc(a) &*& arrayseg(a, 0, i) &*& arraysegWithNode(a, i, a.length)
+  {
+    free(a[i]);
+    i := i + 1;
+  }
+
+  free(a);
+}

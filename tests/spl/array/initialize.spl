@@ -1,19 +1,4 @@
-function arrayseg_footprint(a: Array<Int>, i: Int, j: Int)
-  returns (FP: Set<ArrayCell<Int>>)
-{
-  (forall c: ArrayCell<Int> ::
-     c in FP == (i <= c.index && c.index < j && c.array == a))
-}
-
-predicate arrayseg(a: Array<Int>, i: Int, j: Int)(FP: Set<ArrayCell<Int>>) {
-  0 <= i && i <= j && j <= a.length && 
-  FP == arrayseg_footprint(a, i, j)
-}
-
-predicate array(a: Array<Int>)(FP1: Set<Array<Int>>, FP2: Set<ArrayCell<Int>>) {
-  FP1 == Set(a) &&
-  arrayseg(a, 0, a.length, FP2)
-}
+include "int_array.spl";
 
 procedure initialize()
   returns (a: Array<Int>)

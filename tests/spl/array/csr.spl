@@ -12,30 +12,20 @@
 //  http://netlib.org/linalg/html_templates/node91.html
 //  http://homepage.cs.uiowa.edu/~sriram/21/fall07/code/CRS.java
 
+include "int_array.spl";
+
 struct CSR {
   var val: Array<Int>;
   var col: Array<Int>;
   var row_ptr: Array<Int>;
 }
 
-predicate matrix( a: Array<Array<Int>>,
-                  FP0: Set<Loc<Array<Array<Int>>>>,
-                  FP1: Set<Loc<ArrayCell<Array<Int>>>>,
-                  FP2: Set<Loc<Array<Int>>>,
-                  FP3: Set<Loc<ArrayCell<Int>>> ) {
-  (forall i: Int:: i > 0 && i <= a.length ==> a[i].length == a[0].length) &&
-  FP0 == Set<Loc<Array<Array<Int>>>>(a) &&
-  (forall i: Int:: i > 0 && i <= a.length ==> cell(a, i) in FP1 && a[i] in FP2 &&
-    (forall j: Int:: j > 0 && j <= a[i].length ==> cell(a[i], j) in FP2)
-  )
-}
-
 function witness(a: Array<Array<Int>>, i: Int, j: Int) returns (res: Int) { }
 
 predicate csr(m: CSR, a: Array<Array<Int>>,
-              FP0: Set<Loc<CSR>>,
-              FP1: Set<Loc<Array<Int>>>,
-              FP2: Set<Loc<ArrayCell<Int>>>) {
+              FP0: Set<CSR>,
+              FP1: Set<Array<Int>>,
+              FP2: Set<ArrayCell<Int>>) {
   //a is a matrix
   a.length > 0 &&
   (forall i: Int:: i >= 0 && i < a.length ==> a[i].length == a[0].length) &&
@@ -65,8 +55,8 @@ predicate csr(m: CSR, a: Array<Array<Int>>,
   m.row_ptr.length == a.length + 1 &&
   m.row_ptr[a.length] == m.val.length && //n+1 row indicates the end of the val/col array
   //footprint
-  FP0 == Set<Loc<CSR>>(m) &&
-  FP1 == Set<Loc<Array<Int>>>(m.val, m.col, m.row_ptr) &&
+  FP0 == Set<CSR>(m) &&
+  FP1 == Set<Array<Int>>(m.val, m.col, m.row_ptr) &&
   (forall i: Int:: i > 0 && i <= m.val.length ==> cell(m.val, i) in FP2 && cell(m.col, i) in FP2) &&
   (forall i: Int:: i > 0 && i <= m.row_ptr.length ==> cell(m.row_ptr, i) in FP2)
 }

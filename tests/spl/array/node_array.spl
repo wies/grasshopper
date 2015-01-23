@@ -1,0 +1,38 @@
+function arrayseg_footprint(a: Array<Node>, i: Int, j: Int)
+  returns (FP: Set<ArrayCell<Node>>)
+{
+  (forall k: Int :: i <= k && k < j ==> a.cells[k] in FP) &&
+  (forall c: ArrayCell<Node> :: c in FP ==>
+     c.array == a && i <= c.index && c.index < j)
+}
+
+predicate arrayseg(a: Array<Node>, i: Int, j: Int)(FP: Set<ArrayCell<Node>>) {
+  0 <= i && i <= j && j <= a.length && 
+  FP == arrayseg_footprint(a, i, j)
+}
+
+
+predicate arraysegWithNode(a: Array<Node>, lo: Int, hi: Int)( FP0: Set<ArrayCell<Node>>, FP1: Set<Node>) {
+  0 <= lo && lo <= hi && hi <= a.length &&
+  FP0 == arrayseg_footprint(a, lo, hi) &&
+  (forall c: ArrayCell<Node>:: c in FP0 == a[c.index] in FP1) &&
+  (forall c: ArrayCell<Node>, d: ArrayCell<Node>:: c in FP0 && d in FP0 ==> a[c.index] != a[d.index])
+}
+
+predicate arrayWithNode(a: Array<Node>)( FP0: Set<ArrayCell<Node>>, FP1: Set<Node>) {
+  FP0 == arrayseg_footprint(a, 0, a.length) &&
+  (forall c: ArrayCell<Node>:: c in FP0 == a[c.index] in FP1) &&
+  (forall c: ArrayCell<Node>, d: ArrayCell<Node>:: c in FP0 && d in FP0 ==> a[c.index] != a[d.index])
+}
+
+function witness(n: Node, FP: Set<Node>) returns (index: Int) { true }
+
+predicate arraySegOnlyNode(a: Array<Node>, lo: Int, hi: Int)( FP1: Set<Node>) {
+  0 <= lo && lo <= hi && hi <= a.length &&
+  (forall c: ArrayCell<Node>:: c in arrayseg_footprint(a, lo, hi) == a[c.index] in FP1) &&
+  (forall i: Int:: i >= lo && i < hi == a[i] in FP1) &&
+  (forall n: Node:: n in FP1 ==> witness(n, FP1) >= lo && witness(n, FP1) < hi) &&
+  (forall n: Node:: n !in FP1 ==> witness(n, FP1) == 0) &&
+  (forall i: Int, j: Int :: i >= lo && i < hi && j >= lo && j < hi && i != j ==> a[i] != a[j])
+}
+
