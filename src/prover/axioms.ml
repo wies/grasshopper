@@ -292,7 +292,9 @@ let ep_axioms struct_srt =
 
 (** Array axioms *)
 let array_axioms elem_srt =
+  let ad = l1 (Array elem_srt) in
   let a = loc1 (Array elem_srt) in
+  let cd = l2 (Array elem_srt) in
   let c = loc2 (ArrayCell elem_srt) in
   let i = int1 in
   let array_length =
@@ -304,8 +306,27 @@ let array_axioms elem_srt =
   let index_of_cell =
     mk_sequent [mk_eq (mk_read (mk_array_cells a) i) c] [mk_eq (mk_index_of_cell c) i]
   in
-  [mk_axiom "index-of-cell" index_of_cell;
-   mk_axiom "array-of-cell" array_of_cell;
+  let array_of_cell_gen =
+    [([cd],
+      [],
+      [Match (c, FilterSymbolNotOccurs ArrayOfCell)], 
+      mk_array_of_cell c)] 
+  in
+  let index_of_cell_gen =
+    [([cd],
+      [],
+      [Match (c, FilterSymbolNotOccurs IndexOfCell)], 
+      mk_index_of_cell c)] 
+  in
+  let array_cells_gen =
+    [([ad],
+      [],
+      [Match (a, FilterSymbolNotOccurs ArrayCells)], 
+      mk_array_cells a)]
+  in
+
+  [mk_axiom ~gen:(index_of_cell_gen @ array_cells_gen) "index-of-cell" index_of_cell;
+   mk_axiom ~gen:array_of_cell_gen "array-of-cell" array_of_cell;
    mk_axiom "array-length" array_length]
      
 (** Set axioms *)
