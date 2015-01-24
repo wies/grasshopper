@@ -54,8 +54,12 @@ let merge_types pos oty1 oty2 =
     match ty1, ty2 with
     | PermType, BoolType
     | BoolType, PermType -> PermType
-    | AnyRefType, StructType _ -> ty2
-    | StructType _, AnyRefType -> ty1
+    | AnyRefType, StructType _
+    | AnyRefType, ArrayType _
+    | AnyRefType, ArrayCellType _ -> ty2
+    | StructType _, AnyRefType
+    | ArrayType _, AnyRefType
+    | ArrayCellType _, AnyRefType -> ty1
     | AnyType, _ -> ty2
     | _, AnyType -> ty1
     | MapType (IntType, ty1), ArrayType ty2 
