@@ -732,20 +732,20 @@ let output_graphviz chan model terms =
           let cell_locs = get_values_of_sort model cell_srt in
           List.iter (fun l ->
             try
-              let lt = find_term l (Loc srt) in
               List.iter (fun c ->
-                let ct = find_term c cell_srt in
-                if bool_of_value (eval model (mk_eq_term (mk_array_of_cell ct) lt)) then begin
-	          Printf.fprintf chan "\"%s\" -> \"%s\" [label=\"array\"]\n" 
+                let l1 = interp_symbol model ArrayOfCell ([cell_srt], Loc (Array esrt)) [c] in
+                if l1 = l then begin
+                  Printf.fprintf chan "\"%s\" -> \"%s\" [label=\"array\"]\n" 
 	            (string_of_loc_value (ArrayCell esrt) c) (string_of_loc_value srt l);
-                  ignore (eval model (mk_array_cells (mk_array_of_cell ct)));
-                  if bool_of_value (eval model (mk_eq_term (mk_read (mk_array_cells (mk_array_of_cell ct)) (mk_index_of_cell ct)) ct)) then
-                    let idx = int_of_value (eval model (mk_index_of_cell ct)) in
+                  let cells = interp_symbol model ArrayCells ([Loc (Array esrt)], Map (Int, cell_srt)) [l] in
+                  let i = interp_symbol model IndexOfCell ([cell_srt], Int) [c] in
+                  let c1 = interp_symbol model Read ([Map (Int, cell_srt); Int], cell_srt) [cells; i] in
+                  if c1 = c then
                     Printf.fprintf chan "\"%s\" -> \"%s\" [label=\"%d\"]\n" 
-	              (string_of_loc_value srt l) (string_of_loc_value (ArrayCell esrt) c) idx                    
+	              (string_of_loc_value srt l) (string_of_loc_value (ArrayCell esrt) c) (int_of_value i)                    
                 end)
                 cell_locs
-            with Not_found -> ())
+            with Not_found | Undefined -> ())
             locs
       | _ -> ()
     in
