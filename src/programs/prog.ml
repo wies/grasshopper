@@ -8,10 +8,10 @@ let mk_name_generator base_name =
   let set_ids = Hashtbl.create 0 in
   fun srt ->
     let name = base_name ^ "_" ^ (name_of_sort srt) in
-    try Hashtbl.find set_ids name 
+    try Hashtbl.find set_ids (name, srt)
     with Not_found ->
       let id = fresh_ident name in
-      Hashtbl.replace set_ids name id;
+      Hashtbl.replace set_ids (name, srt) id;
       id
   
 let alloc_id = mk_name_generator "Alloc"

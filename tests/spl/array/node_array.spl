@@ -1,9 +1,8 @@
 function arrayseg_footprint(a: Array<Node>, i: Int, j: Int)
   returns (FP: Set<ArrayCell<Node>>)
 {
-  (forall k: Int :: i <= k && k < j ==> a.cells[k] in FP) &&
-  (forall c: ArrayCell<Node> :: c in FP ==>
-     c.array == a && i <= c.index && c.index < j)
+  (forall c: ArrayCell<Node> ::
+     c in FP == (i <= c.index && c.index < j && c.array == a))
 }
 
 predicate arrayseg(a: Array<Node>, i: Int, j: Int)(FP: Set<ArrayCell<Node>>) {
@@ -11,18 +10,20 @@ predicate arrayseg(a: Array<Node>, i: Int, j: Int)(FP: Set<ArrayCell<Node>>) {
   FP == arrayseg_footprint(a, i, j)
 }
 
-
-predicate arraysegWithNode(a: Array<Node>, lo: Int, hi: Int)( FP0: Set<ArrayCell<Node>>, FP1: Set<Node>) {
-  0 <= lo && lo <= hi && hi <= a.length &&
-  FP0 == arrayseg_footprint(a, lo, hi) &&
-  (forall c: ArrayCell<Node>:: c in FP0 == a[c.index] in FP1) &&
-  (forall c: ArrayCell<Node>, d: ArrayCell<Node>:: c in FP0 && d in FP0 ==> a[c.index] != a[d.index])
+function arrayseg_node_footprint(a: Array<Node>, FP0: Set<ArrayCell<Node>>) returns (FP1: Set<Node>) {
+  (forall c: ArrayCell<Node> :: c in FP0 == c.array[c.index] in FP1) &&
+  (forall c: ArrayCell<Node>, d: ArrayCell<Node>:: c in FP0 && d in FP0 ==> c.array[c.index] != c.array[d.index])
 }
 
-predicate arrayWithNode(a: Array<Node>)( FP0: Set<ArrayCell<Node>>, FP1: Set<Node>) {
-  FP0 == arrayseg_footprint(a, 0, a.length) &&
-  (forall c: ArrayCell<Node>:: c in FP0 == a[c.index] in FP1) &&
-  (forall c: ArrayCell<Node>, d: ArrayCell<Node>:: c in FP0 && d in FP0 ==> a[c.index] != a[d.index])
+predicate arraysegWithNode(a: Array<Node>, lo: Int, hi: Int)(FP0: Set<ArrayCell<Node>>, FP1: Set<Node>) {
+  0 <= lo && lo <= hi && hi <= a.length &&
+  FP0 == arrayseg_footprint(a, lo, hi) &&
+  FP1 == arrayseg_node_footprint(a, FP0)
+}
+
+predicate arrayWithNode(a: Array<Node>)(FP0: Set<Array<Node>>, FP1: Set<ArrayCell<Node>>, FP2: Set<Node>) {
+  FP0 == Set(a) &&
+  arraysegWithNode(a, 0, a.length, FP1, FP2)
 }
 
 function witness(n: Node, FP: Set<Node>) returns (index: Int) { true }

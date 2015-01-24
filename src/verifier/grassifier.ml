@@ -32,9 +32,9 @@ let array_state_decl srt =
 
 let tmp_array_cell_set_id =
   let gen = mk_name_generator "tmp" in
-  fun srt -> gen (ArrayCell srt)
-let tmp_array_cell_set_decl srt = mk_loc_set_decl (ArrayCell srt) (tmp_array_cell_set_id (ArrayCell srt)) dummy_position
-let tmp_array_cell_set srt = mk_free_const (Set (Loc (ArrayCell srt))) (tmp_array_cell_set_id (ArrayCell srt))
+  fun srt -> gen (ArrayCell srt) 
+let tmp_array_cell_set_decl srt = mk_loc_set_decl (ArrayCell srt) (tmp_array_cell_set_id srt) dummy_position
+let tmp_array_cell_set srt = mk_free_const (Set (Loc (ArrayCell srt))) (tmp_array_cell_set_id srt)
     
 (** Add reachability invariants for ghost fields of sort Loc *)
 let add_ghost_field_invariants prog =
@@ -162,6 +162,7 @@ let elim_arrays prog =
     | Sl.Binder (b, vs, f, pos) ->
         Sl.Binder (b, vs, compile_sl_form f, pos)
   in
+  let compile_spec = Prog.map_spec_form compile_grass_form compile_sl_form in
   let rec compile_cmd = function
     | Loop (lc, pp) ->
         let cond = compile_grass_form lc.loop_test in
@@ -196,10 +197,10 @@ let elim_arrays prog =
         in
         mk_seq_cmd (mk_assign_cmd lhs1 rhs1 pp.pp_pos :: aux_cmds) pp.pp_pos
     | Basic (Assume sf, pp) ->
-        let sf1 = Prog.map_spec_form compile_grass_form compile_sl_form sf in
+        let sf1 = compile_spec sf in
         mk_assume_cmd sf1 pp.pp_pos
     | Basic (Assert sf, pp) ->
-        let sf1 = Prog.map_spec_form compile_grass_form compile_sl_form sf in
+        let sf1 = compile_spec sf in
         mk_assert_cmd sf1 pp.pp_pos
     | Basic (Return rc, pp) ->
         let args1 = List.map compile_term rc.return_args in
@@ -210,6 +211,9 @@ let elim_arrays prog =
     | Basic (New nc, pp) ->
         let args = List.map compile_term nc.new_args in
         mk_new_cmd nc.new_lhs nc.new_sort args pp.pp_pos
+    | Basic (Dispose dc, pp) ->
+        let arg = compile_term dc.dispose_arg in
+        mk_dispose_cmd arg pp.pp_pos
     | c -> c
   in
   let compile_proc (elem_sorts, procs) proc =
@@ -225,8 +229,8 @@ let elim_arrays prog =
         proc.proc_locals (proc.proc_locals, elem_sorts)
     in
     let body1 = Util.Opt.map compile_cmd proc.proc_body in
-    let precond1 = List.map (Prog.map_spec_form compile_grass_form compile_sl_form) proc.proc_precond in
-    let postcond1 = List.map (Prog.map_spec_form compile_grass_form compile_sl_form) proc.proc_postcond in
+    let precond1 = List.map compile_spec proc.proc_precond in
+    let postcond1 = List.map compile_spec proc.proc_postcond in
     let proc1 =
       { proc with
         proc_locals = locals;
@@ -237,7 +241,22 @@ let elim_arrays prog =
     in
     elem_sorts, IdMap.add proc.proc_name proc1 procs
   in
+  let compile_pred (elem_sorts, preds) pred =
+    let elem_sorts =
+      IdMap.fold
+        (fun id decl elem_sorts ->
+          match decl.var_sort with
+          | Loc (Array srt)
+          | Loc (ArrayCell srt) -> SortSet.add srt elem_sorts
+          | _ -> elem_sorts)
+        pred.pred_locals elem_sorts
+    in
+    let body = compile_spec pred.pred_body in
+    let pred1 = { pred with pred_body = body } in
+    elem_sorts, IdMap.add pred.pred_name pred1 preds
+  in
   let elem_sorts, procs = fold_procs compile_proc (SortSet.empty, IdMap.empty) prog in
+  let elem_sorts, preds = fold_preds compile_pred (elem_sorts, IdMap.empty) prog in
   let globals =
     SortSet.fold (fun srt globals ->
       let asdecl = array_state_decl srt in
@@ -245,8 +264,9 @@ let elim_arrays prog =
       elem_sorts prog.prog_vars
   in
   { prog with
-    prog_procs = procs;
-    prog_vars = globals;
+      prog_procs = procs;
+      prog_preds = preds;
+      prog_vars = globals;
   }
     
 (** Desugare SL specification to FOL specifications. 
@@ -745,7 +765,7 @@ let elim_new_dispose prog =
                     Axioms.mk_axiom "free_array_cells_alloc"
                       (mk_iff (mk_elem l set)
                          (mk_and [mk_elem l (tmp_array_cell_set srt);
-                                  mk_eq (mk_array_of_cell l) arg]))
+                                  mk_neq (mk_array_of_cell l) arg]))
                   in
                   let sf = mk_spec_form (FOL f) "free" None pp.pp_pos in
                   mk_assume_cmd sf pp.pp_pos
