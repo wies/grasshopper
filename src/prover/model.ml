@@ -293,7 +293,21 @@ and interp_symbol model sym arity args =
   try 
     let m, d = SortedSymbolMap.find (sym, arity) model.intp in
     fun_app model (MapVal (m, d)) args
-  with Not_found -> raise Undefined
+  with Not_found -> 
+    begin
+      if Debug.is_error () then
+        begin
+          print_string "symbol not found '";
+          print_string (string_of_symbol sym);
+          print_string "' of type ";
+          List.iter
+            (fun s -> print_string (" " ^ (string_of_sort s)))
+            (fst arity);
+          print_string " -> ";
+          print_endline (string_of_sort (snd arity));
+        end;
+      raise Undefined
+    end
 
 and fun_app model funv args =
   let default = function

@@ -1,0 +1,73 @@
+include "int_array.spl";
+
+
+procedure equals(first: Array<Int>, second: Array<Int>)
+  returns (res: Bool)
+  requires array(first) &+& array(second)
+  ensures array(first) &+& array(second)
+  ensures res == (first.length == second.length && (forall i: Int:: i >= 0 && i < first.length ==> first[i] == second[i]))
+{
+  if(first.length != second.length)
+    return false;
+  var i := 0;
+  while(i < first.length && first[i] != second[i])
+    invariant array(first) &+& array(second)
+    invariant i >= 0 && i <= first.length && first.length == second.length
+    invariant forall j: Int:: j >= 0 && j < i ==> first[j] == second[j]
+  {
+    i := i + 1;
+  }
+  if (i >= first.length) return true;
+  else return false;
+}
+
+
+//inspired from http://en.wikibooks.org/wiki/C_Programming/Strings#The_strcmp_function
+procedure strcmp(s1: Array<Int>, s2: Array<Int>)
+  returns (res: Int)
+  requires array(s1) &+& array(s2)
+  ensures array(s1) &+& array(s2)
+  ensures (res == 0) == (s1.length == s2.length && (forall i: Int:: i >= 0 && i < s1.length ==> s1[i] == s2[i]))
+{
+  var i := 0; 
+  /* Move s1 and s2 to the s1 differing characters in each string,
+     or the ends of the strings if they are identical.  */
+  while (i < s1.length && i < s2.length && s1[i] == s2[i])
+    invariant array(s1) &+& array(s2)
+    invariant i >= 0 && i <= s1.length && i <= s2.length
+    invariant forall j: Int:: j >= 0 && j < i ==> s1[j] == s2[j]
+  {
+    i := i + 1;
+  }
+
+  if (i >= s1.length && i >= s2.length)
+    return 0;
+  else if (i >= s1.length)
+    return -1;
+  else if (i >= s2.length)
+    return 1;
+  else if (s1[i] < s2[i])
+    return -1;
+  else
+    return 1;
+}
+                 
+procedure strdup(str: Array<Int>)
+  returns (res: Array<Int>)
+  requires array(str)
+  ensures array(str) &*& array(res)
+  ensures str.length == res.length
+  ensures forall i: Int:: i >= 0 && i < str.length ==> str[i] == res[i]
+{
+  var copy := new Array<Int>(str.length);
+  var i := 0;
+  while(i < str.length)
+    invariant array(str) &*& array(copy)
+    invariant i >= 0 && i <= str.length && str.length == copy.length
+    invariant forall j: Int:: j >= 0 && j < i ==> str[j] == copy[j]
+  {
+    copy[i] := str[i];
+    i := i + 1;
+  }
+  return copy;
+}
