@@ -65,7 +65,7 @@ procedure find_range( tree: BPTree,
     if (i == n.num_keys)
       return 0;
     while (n != null)
-      invariant (n == null || acc(n)) -** tree
+      invariant (n == null || acc(n)) -** btree(tree)
       invariant n == null || (n.is_leaf && n.keys[i] >= key_start)
       invariant i >= 0 && (n == null || i < n.num_keys)
       invariant acc(returned_keys) &*& int_arrayseg(returned_keys, 0, key_end-key_start)
@@ -73,8 +73,10 @@ procedure find_range( tree: BPTree,
       invariant forall i: Int :: i >= 0 && i < res ==> returned_keys[i] >= key_start && returned_keys[i] <= key_end
     {
       while (i < n.num_keys && n.keys[i] <= key_end)
-        invariant acc(n)
         invariant i >= 0
+        invariant acc(n) &*& int_arrayseg(n.keys, 0, n.num_keys) &*& int_arrayseg(n.data, 0, n.num_keys)
+        invariant (n.is_leaf && n.keys[i] >= key_start)
+        invariant num_found < key_end-key_start
         invariant acc(returned_keys) &*& int_arrayseg(returned_keys, 0, key_end-key_start)
         invariant acc(returned_data) &*& int_arrayseg(returned_data, 0, key_end-key_start)
         invariant forall i: Int :: i >= 0 && i < res ==> returned_keys[i] >= key_start && returned_keys[i] <= key_end
@@ -82,6 +84,7 @@ procedure find_range( tree: BPTree,
         returned_keys[num_found] := n.keys[i];
         returned_data[num_found] := n.data[i];
         num_found := num_found + 1;
+        pure assume(num_found < key_end-key_start); //TODO we don't count yet
         i := i + 1;
       }
       n := n.pointers[tree.order - 1];
@@ -197,6 +200,7 @@ procedure get_left_index(parent: Node, left: Node) returns (res: Node)
 {
   var left_index: Int := 0;
   while (left_index <= parent.num_keys && parent.pointers[left_index] != left)
+    invariant left_index >= 0;
     invariant ???
   {
     left_index := left_index + 1;
@@ -1222,8 +1226,9 @@ procedure destroy_tree_nodes(root: Node, ghost order: Int)
     i := 0;
     while (i < root.num_keys)
       invariant i >= 0
-      invariant acc(root)
+      invariant acc(root) &*& ...
       invariant node_arraysegWithSubtree(root.pointers, i, root.num_keys)
+      //invariant star j: Int:: j >= i && j < root.num_keys ==> sub_btree(root.pointers[j])
     {
       destroy_tree_nodes(root.pointers[i]);
       i := i + i;

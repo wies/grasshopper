@@ -1,0 +1,157 @@
+
+include "../array/node_array.spl";
+include "../include/slslist.spl";
+include "../include/slset.spl";
+include "../list_set/delete.spl";
+include "../list_set/insert.spl";
+include "../list_set/contains.spl";
+
+struct HashSet {
+  var size: Int; /* the size of the set */
+  var sets: Array<Node>; /* the set elements */
+}
+
+function node_witness(x: Node, FP: Set<ArrayCell<Node>>) returns (c: ArrayCell<Node>) {
+  true
+}
+
+//TODO triggers
+function arrayseg_nodes_footprint(FP0: Set<ArrayCell<Node>>) returns (FP1: Set<Node>) {
+  //not only one node but collect the whole list (which can be null)
+  (forall c: ArrayCell<Node> :: c in FP0 ==> lseg_footprint(c.array[c.index], null) <= FP1) &&
+  //the witness is the cell pointing to the head of the list
+  (forall x in FP1 :: Btwn(next, node_witness(x, FP0).array[node_witness(x, FP0).index], x, null) &&
+  (forall c: ArrayCell<Node> :: c in FP0 ==> c == node_witness(c.array[c.index], FP0)) &&
+  (forall x in FP1 :: node_witness(x, FP0) in FP0) && 
+  (forall x: Node :: x !in FP1 ==> node_witness(x, FP0) == null) &&
+  (forall c: ArrayCell<Node>, d: ArrayCell<Node>:: c in FP0 && d in FP0 ==> c.array[c.index] != c.array[d.index])
+}
+
+predicate arraysegWithNodes(a: Array<Node>, lo: Int, hi: Int)(FP0: Set<ArrayCell<Node>>, FP1: Set<Node>) {
+  0 <= lo && lo <= hi && hi <= a.length &&
+  FP0 == arrayseg_footprint(a, lo, hi) &&
+  FP1 == arrayseg_nodes_footprint(FP0)
+}
+
+predicate arrayWithNodes(a: Array<Node>)(FP0: Set<Array<Node>>, FP1: Set<ArrayCell<Node>>, FP2: Set<Node>) {
+  FP0 == Set(a) &&
+  arraysegWithNodes(a, 0, a.length, FP1, FP2)
+}
+
+predicate hset(hset: HashSet, content: Set<Int>)(FP0: Set<HashSet>, FP1: Set<Array<Node>>, FP2: Set<ArrayCell<Node>>, FP3: Set<Node>) {
+  hset != null && hset.size == hset.sets.size &&
+  FP0 == Set<HashSet>(hset) &&
+  arrayWithNodes(hset.sets, FP1, FP2, FP3) &&
+  C == content(FP3) &&
+  //all the elts from a list have the same hash, and this is the index in the array
+  (forall i: Int, n: Node:: i >= 0 && i < hset.size && Btwn(next, hset.sets[i], n, null) ==> ghostHash(hset, n.data) == i) &&
+  (forall v in FP3:: Btwn(next, hset.sets[ghostHash(hset, v)], witness(v, FP3), null))
+}
+
+//some ghost function that we can use for the spec of hash
+function ghostHash(hashset: HashSet, value: Int) returns (res: Int) {
+  res >= 0 && res < hashset.size
+}
+
+
+procedure hash(hashset: HashSet, value: Int, implicit ghost content: Set<Int>)
+  returns (res: Int)
+  requires hset(hashset, content)
+  ensures  hset(hashset, content)
+  ensures  res >= 0 && res < hashset.size && res == ghostHash(hashset, value)
+{
+  //one of the worse hash function in the world
+  var v := 31 * value;
+  if (v < 0) v := -v;
+  v := v % hashset.size;
+  pure assume(v == ghostHash(hashset, value));
+  return v;
+}
+
+
+
+procedure create_hashset(size: Int) returns (res: HashSet)
+  requires size > 0
+  ensures hset(res, Set<Int>())
+{
+  var new_set := new HashSet;
+  new_set.sets := new Array<Node>(size);    
+
+  var i := 0;
+  while(i < size)
+    invariant i >= 0 && i <= size
+    invariant acc(new_set) &*& acc(new_set.sets)
+    invariant arrayseg(new_set.sets, 0, size)
+    invariant forall j: Int:: j>=0 && j<i ==> new_set.sets[j] == null
+  {
+    new_set.sets[i] := null;
+    i := i + 1;
+  }
+
+  new_set.size := size;
+
+  return new_set;
+}
+
+
+
+procedure member(hashset: HashSet, value: Int, implicit ghost content: Set<Int>)
+  returns (res: Bool)
+  requires hset(hashset, content)
+  ensures  hset(hashset, content)
+  ensures  res == (value in content)
+{
+    var hashval := hash(hashset, value);
+    var list := hashset.sets[hashval];
+    return contains(list, value);
+}
+
+
+
+procedure add(hashset: HashSet, value: Array<Int>, implicit ghost content: Set<Int>)
+  returns (res: Bool)
+  requires hset(hashset, content)
+  ensures  hset(hashset, content ++ Set<Int>(value))
+  ensures  res != (value in content)
+{
+  var hashval := hash(hashset, value);
+  var list := hashset.sets[hashval];
+  hashset.sets[hashval] := insert(list, value);
+}
+
+
+
+procedure remove(hashset: HashSet, value: Array<Int>, implicit ghost content: Set<Int>)
+  requires hset(hashset, content)
+  ensures  hset(hashset, content -- Set<Int>(value))
+{
+  var hashval := hash(hashset, value);
+  var list := hashset.sets[hashval];
+  hashset.sets[hashval] := delete(list, value);
+}
+
+
+
+procedure free_set(hashset: HashSet)
+  requires hset(hashset)
+  ensures emp
+{
+  var i := 0;
+  while(i < hashset.size)
+    invariant arrayseg(hashset.sets, 0, i) &*& arrayWithNodes(hashset, 0, i)
+  {
+    var list := hashset.sets[i];
+    hashset.sets[i] := null; //do we need that line ?
+    while(list != null)
+      invariant slset(list)
+    {
+      var temp := list;
+      list := list.next;
+      free(temp);
+    }
+    i := i + 1;
+  }
+
+  free(hashset.sets);
+  free(hashset);
+}
