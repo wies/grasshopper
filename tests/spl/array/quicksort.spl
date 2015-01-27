@@ -1,15 +1,15 @@
-include "int_array.spl"
+include "int_array.spl";
 
 procedure quicksort(a: Array<Int>)
   requires array(a)
   ensures  sorted_array(a)
 {
-  quicksort1(a, 0, a.length)
+  quicksort1(a, 0, a.length);
 }
 
 procedure swap(a: Array<Int>, i: Int, j: Int, implicit ghost iVal: Int, implicit ghost jVal: Int)
-  requires acc(a,i) &*& acc(a, j) &*& a[i] == iVal &*& a[j] == jVal)
-  ensures  acc(a,i) &*& acc(a, j) &*& a[i] == jVal &*& a[j] == iVal)
+  requires acc(a,i) &*& acc(a, j) &*& a[i] == iVal &*& a[j] == jVal
+  ensures  acc(a,i) &*& acc(a, j) &*& a[i] == jVal &*& a[j] == iVal
 {
   var tmp := a[i];
   a[i] := a[j];
@@ -24,7 +24,7 @@ procedure quicksort1(a: Array<Int>, lower: Int, upper: Int)
     var pivotIdx := lower + (upper - lower) / 2;
     var pivotVal := a[pivotIdx];
     swap(a, pivotIdx, upper);
-    var idx = lower;
+    var idx := lower;
     var i := lower;
     while (i < upper)
       invariant idx >= lower && i <= upper && i >= idx

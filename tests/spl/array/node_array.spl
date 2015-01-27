@@ -16,8 +16,8 @@ function node_witness(x: Node, FP: Set<ArrayCell<Node>>) returns (c: ArrayCell<N
 
 function arrayseg_node_footprint(FP0: Set<ArrayCell<Node>>) returns (FP1: Set<Node>) {
   (forall c: ArrayCell<Node> :: c in FP0 ==> c == node_witness(c.array[c.index], FP0)) &&
-  (forall c: ArrayCell<Node> :: c in FP0 ==> c.array[c.index] in FP1) &&
-  (forall x in FP1 :: node_witness(x, FP0) in FP0) &&
+    (forall c: ArrayCell<Node> :: c in FP0 ==> c.array[c.index] in FP1 @(comment "node_fp")) &&
+    (forall x in FP1 :: node_witness(x, FP0) in FP0) &&
   (forall x: Node :: x !in FP1 ==> node_witness(x, FP0) == null) &&
   (forall x in FP1 :: x == node_witness(x, FP0).array[node_witness(x, FP0).index]
     @(matching x yields node_witness(x, FP0).array[node_witness(x, FP0).index])) &&

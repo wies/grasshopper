@@ -298,7 +298,7 @@ let array_axioms elem_srt =
   let c = loc2 (ArrayCell elem_srt) in
   let i = int1 in
   let array_length =
-    mk_leq (mk_int 0) (mk_length a)
+    mk_or [mk_eq a (mk_null (Array elem_srt)); mk_leq (mk_int 0) (mk_length a)]
   in
   let array_cells1 = 
     mk_sequent [mk_eq (mk_read (mk_array_cells a) i) c] [mk_and [mk_eq (mk_array_of_cell c) a; mk_eq (mk_index_of_cell c) i]]

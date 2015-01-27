@@ -1,4 +1,4 @@
-include "int_array.spl"
+include "int_array.spl";
 
 procedure chechSorted(a: Array<Int>)
   requires sorted_array(a)

@@ -26,7 +26,7 @@ predicate sorted_arrayseg(a: Array<Int>, i: Int, j: Int)(FP: Set<ArrayCell<Int>>
 predicate sorted_array(a: Array<Int>)(FP0: Set<Array<Int>>, FP1: Set<ArrayCell<Int>>) {
   FP0 == Set<Array<Int>>(a) &&
   FP1 == arrayseg_footprint(a, 0, a.length) &&
-  (forall i: Int, j: Int:: i >= 0 && i <= j && j < a.length ==> a[i] <= a[j])
+  (forall i: Int, j: Int:: 0 <= i && i <= j && j < a.length ==> a[i] <= a[j])
 }
 
 

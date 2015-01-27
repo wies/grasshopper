@@ -8,20 +8,38 @@ let close f =
   let aux_vars = Grass.IdSrtSet.elements (GrassUtil.sorted_free_vars f) in
   GrassUtil.mk_exists aux_vars (GrassUtil.nnf f)
 
+let mk_error_msg (pos_opt, msg) f =
+  match pos_opt with
+  | Some pos -> GrassUtil.mk_error_msg (pos, msg) f
+  | None -> f
+
+let mk_srcpos pos_opt f = 
+  match pos_opt with
+  | Some pos -> GrassUtil.mk_srcpos pos f
+  | None -> f
+
+
+let mk_footprint_error pos eqs = 
+  List.map
+    (fun eq ->
+      let msg =
+        match eq with
+        | Grass.Atom (App (Eq, [t; _], _), _) ->
+            let srt = sort_of t in
+            "Memory footprint for type " ^ Grass.string_of_sort srt ^ " does not match this specification"
+        | _ ->
+            "Memory footprint at error location does not match this specification"
+      in
+      mk_error_msg
+        (pos, ProgError.mk_error_info msg)
+        (mk_srcpos pos eq))
+    eqs
+
+
 (** Translate SL formula [f] to a GRASS formula where the set [domain] holds [f]'s footprint.
   * Atomic predicates in [f] are translated using the function [pred_to_form]. *)
 let to_form pred_to_form domains f =
   let struct_srts = struct_srts_from_domains domains in
-  let mk_error_msg (pos_opt, msg) f =
-    match pos_opt with
-    | Some pos -> GrassUtil.mk_error_msg (pos, msg) f
-    | None -> f
-  in
-  let mk_srcpos pos_opt f = 
-    match pos_opt with
-    | Some pos -> GrassUtil.mk_srcpos pos f
-    | None -> f
-  in
   let fresh_dom d = mk_fresh_var_domains struct_srts ("?" ^ fst d) in
   let rec process_sep d f = 
     match f with
@@ -68,9 +86,10 @@ let to_form pred_to_form domains f =
            let dom_def = 
              match op with
              | SepStar | SepPlus ->
-               mk_domains_eq
-                 domain
-                 (mk_union_domains f1_dom f2_dom)
+                 mk_footprint_error pos
+                   (mk_domains_eq
+                      domain
+                      (mk_union_domains f1_dom f2_dom)) 
              | SepIncl ->
                mk_domains_eq
                  domain
@@ -101,15 +120,9 @@ let to_form pred_to_form domains f =
       let d' = GrassUtil.fresh_ident "X" in
       let translated = process_sep d' sep in
       let pos = pos_of_sl_form sep in
-      let process (tr, d) = 
+      let process (tr, d) =
         let eqs = mk_domains_eq domains d in
-        let d_eqs_domain = 
-          List.map
-            (fun eq -> mk_error_msg
-              (pos, ProgError.mk_error_info "Memory footprint at error location does not match this specification")
-              (mk_srcpos pos eq))
-            eqs
-        in
+        let d_eqs_domain = mk_footprint_error pos eqs in
         GrassUtil.smk_and (tr :: d_eqs_domain)
       in
       GrassUtil.smk_or (List.map process translated)

@@ -998,7 +998,8 @@ let foralls_to_exists f =
     let rec find nodefs defs = function
       | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; t], _), a)])
         when IdSet.mem x nodefs && 
-          IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
+          IdSet.is_empty (IdSet.inter nodefs (fv_term t))
+        ->
             IdSet.remove x nodefs, mk_eq xt t :: defs, mk_false
       | BoolOp (Not, [Atom (App (Eq, [t; Var (x, srt) as xt], _), a)])
         when IdSet.mem x nodefs && 

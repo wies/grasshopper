@@ -137,18 +137,31 @@ let elim_arrays prog =
         let map1 = compile_term map in
         let idx1 = compile_term idx in
         (match sort_of map with
-        | Loc (Array srt) -> mk_read (array_state srt) (mk_read (mk_array_cells map1) idx1)
+        | Loc (Array srt) ->
+            let cell = match map1, idx1 with
+            | App (ArrayOfCell, [c1], _), App (IndexOfCell, [c2], _) when c1 = c2 -> c1
+            | _ -> mk_read (mk_array_cells map1) idx1
+            in
+            mk_read (array_state srt) cell
         | _ -> mk_read map1 idx1)
     | App (sym, ts, srt) ->
         let ts1 = List.map compile_term ts in
         App (sym, ts1, srt)
   in
+  let compile_annot =
+    function
+    | TermGenerator (bvs, fvs, gs, t) ->
+        let gs1 = List.map (function Match (t, f) -> Match (compile_term t, f)) gs in
+        TermGenerator (bvs, fvs, gs1, compile_term t)
+    | a -> a
+  in
   let rec compile_grass_form = function
-    (* TODO: convert annotations *)
-    | Atom (t, ann) -> Atom (compile_term t, ann)
-    | BoolOp (op, fs) -> BoolOp (op, List.map compile_grass_form fs)
+    | Atom (t, ann) ->
+        Atom (compile_term t, List.map compile_annot ann)
+    | BoolOp (op, fs) ->
+        BoolOp (op, List.map compile_grass_form fs)
     | Binder (b, vs, f, ann) ->
-        Binder (b, vs, compile_grass_form f, ann)
+        Binder (b, vs, compile_grass_form f, List.map compile_annot ann)
   in
   let rec compile_sl_form = function
     | Sl.Pure (p, pos) ->
@@ -416,7 +429,8 @@ let elim_sl prog =
       let tailrec_precond =
         if not proc.proc_is_tailrec then [] else
         let first_iter_id = List.hd formals in
-        let error_msg = ProgError.mk_error_info "Memory footprint at error location does not match this specification" in
+        let error_msg srt =
+          ProgError.mk_error_info "Memory footprint for type " ^ (string_of_sort srt) ^ " does not match this specification" in
         let msg caller =
           if caller <> proc.proc_name then
             "An invariant might not hold before entering this loop",
@@ -427,10 +441,11 @@ let elim_sl prog =
         in
         SortSet.fold (fun ssrt fs ->
           let f = mk_or [mk_pred first_iter_id []; 
-                         mk_error_msg (pos, error_msg)
-                           (mk_eq 
-                              (mk_diff (footprint_caller_set ssrt) (footprint_set ssrt))
-                              (mk_empty (Set (Loc ssrt))))]
+                         mk_error_msg (pos, error_msg ssrt)
+                           (mk_srcpos pos
+                              (mk_eq 
+                                 (footprint_set ssrt)
+                                 (mk_union [footprint_set ssrt; footprint_caller_set ssrt])))]
           in
           mk_spec_form (FOL f) "invariant" (Some msg) pos :: fs)
           struct_srts

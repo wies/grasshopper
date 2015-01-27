@@ -1017,7 +1017,7 @@ let convert cu =
         mk_form f1 f2
     | Annot (e, CommentAnnot c, pos) ->
         let f = convert_grass_form locals e in
-        GrassUtil.annotate f [Comment c]
+        GrassUtil.annotate f [Name (c, 0)]
     | Annot (e, GeneratorAnnot (es, ge), pos) ->
         let f = convert_grass_form locals e in
         let es1 = List.map (convert_term locals) es in
