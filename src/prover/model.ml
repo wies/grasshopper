@@ -295,9 +295,9 @@ and interp_symbol model sym arity args =
     fun_app model (MapVal (m, d)) args
   with Not_found -> 
     begin
-      if Debug.is_error () then
+      if Debug.is_debug 1 then
         begin
-          print_string "symbol not found '";
+          print_string "Model.interp_symbol: symbol not found '";
           print_string (string_of_symbol sym);
           print_string "' of type ";
           List.iter

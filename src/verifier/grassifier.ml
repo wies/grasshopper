@@ -396,11 +396,15 @@ let elim_sl prog =
     let precond =
       let name = "precondition of " ^ string_of_ident proc.proc_name in
       let f, _, name, msg, pos = convert_sl_form sl_precond name in
+      let error_msg srt =
+        ProgError.mk_error_info "Memory footprint for type " ^ (string_of_sort srt) ^ " does not match this specification"
+      in  
       let f_eq_init_footprint =
         let fp_inclusions =
           SortSet.fold
             (fun ssrt fs ->
-              mk_subseteq (footprint_set ssrt) (footprint_caller_set ssrt) :: fs)
+              mk_error_msg (pos, error_msg ssrt)
+                (mk_srcpos pos (mk_subseteq (footprint_set ssrt) (footprint_caller_set ssrt))) :: fs)
             struct_srts
             []
         in
@@ -429,8 +433,6 @@ let elim_sl prog =
       let tailrec_precond =
         if not proc.proc_is_tailrec then [] else
         let first_iter_id = List.hd formals in
-        let error_msg srt =
-          ProgError.mk_error_info "Memory footprint for type " ^ (string_of_sort srt) ^ " does not match this specification" in
         let msg caller =
           if caller <> proc.proc_name then
             "An invariant might not hold before entering this loop",
