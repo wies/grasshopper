@@ -1,4 +1,3 @@
-
 include "../array/node_array.spl";
 include "../include/slslist.spl";
 include "../include/slset.spl";
@@ -18,13 +17,12 @@ function node_witness(x: Node, FP: Set<ArrayCell<Node>>) returns (c: ArrayCell<N
 //TODO triggers
 function arrayseg_nodes_footprint(FP0: Set<ArrayCell<Node>>) returns (FP1: Set<Node>) {
   //not only one node but collect the whole list (which can be null)
-  (forall c: ArrayCell<Node> :: c in FP0 ==> lseg_footprint(c.array[c.index], null) <= FP1) &&
+  (forall c: ArrayCell<Node>, x: Node :: c in FP0 && Reach(c.array[c.index], x) ==> x in FP1 || x == null) &&
   //the witness is the cell pointing to the head of the list
-  (forall x in FP1 :: Btwn(next, node_witness(x, FP0).array[node_witness(x, FP0).index], x, null) &&
+  (forall x in FP1 :: Btwn(next, node_witness(x, FP0).array[node_witness(x, FP0).index], x, null)) &&
   (forall c: ArrayCell<Node> :: c in FP0 ==> c == node_witness(c.array[c.index], FP0)) &&
-  (forall x in FP1 :: node_witness(x, FP0) in FP0) && 
-  (forall x: Node :: x !in FP1 ==> node_witness(x, FP0) == null) &&
-  (forall c: ArrayCell<Node>, d: ArrayCell<Node>:: c in FP0 && d in FP0 ==> c.array[c.index] != c.array[d.index])
+  (forall x in FP1 :: node_witness(x, FP0) in FP0)
+   //(forall x: Node :: x !in FP1 ==> node_witness(x, FP0) == null) &&
   //disjointness of the sublists of lists should follow from the hash
 }
 
@@ -61,10 +59,10 @@ procedure hash(hashset: HashSet, value: Int, implicit ghost content: Set<Int>)
   ensures  hset(hashset, content)
   ensures  res >= 0 && res < hashset.size && res == ghostHash(hashset, value)
 {
-  //one of the worse hash function in the world
+  //one of the worst hash functions in the world
   var v := 31 * value;
   if (v < 0) v := -v;
-  v := v % hashset.size;
+  v := v mod hashset.size;
   pure assume(v == ghostHash(hashset, value));
   return v;
 }
@@ -102,9 +100,9 @@ procedure member(hashset: HashSet, value: Int, implicit ghost content: Set<Int>)
   ensures  hset(hashset, content)
   ensures  res == (value in content)
 {
-    var hashval := hash(hashset, value);
-    var list := hashset.sets[hashval];
-    return contains(list, value);
+  var hashval := hash(hashset, value);
+  var list := hashset.sets[hashval];
+  return contains(list, value);
 }
 
 
