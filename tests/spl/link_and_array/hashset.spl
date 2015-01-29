@@ -25,6 +25,7 @@ function arrayseg_nodes_footprint(FP0: Set<ArrayCell<Node>>) returns (FP1: Set<N
   (forall x in FP1 :: node_witness(x, FP0) in FP0) && 
   (forall x: Node :: x !in FP1 ==> node_witness(x, FP0) == null) &&
   (forall c: ArrayCell<Node>, d: ArrayCell<Node>:: c in FP0 && d in FP0 ==> c.array[c.index] != c.array[d.index])
+  //disjointness of the sublists of lists should follow from the hash
 }
 
 predicate arraysegWithNodes(a: Array<Node>, lo: Int, hi: Int)(FP0: Set<ArrayCell<Node>>, FP1: Set<Node>) {

@@ -1,0 +1,116 @@
+include "../array/int_array.spl";
+
+struct Node {
+  var data: Array<Int>;
+  var next: Node;
+}
+
+//////////////////////
+// specs for string //
+//////////////////////
+
+struct String { } //TODO is there a better way of introducing a free type
+
+predicate leq(s1: String, s2: String) {
+  (forall x: String:: leq(x, x)) && //reflexive
+  (forall x: String, y: String:: leq(x, y) && leq(y, x) ==> x == y) && //antisymmetric
+  (forall x: String, y: String, z: String:: leq(x, y) && leq(y, z) ==> leq(x, z)) && //transitive
+  (forall x: String, y: String:: leq(x, y) || leq(y, x)) //total
+}
+
+predicate lt(s1: String, s2: String) {
+  (forall x: String, y: String:: lt(x,y) == (leq(x,y) && x!=y))
+}
+
+function repr(str: Array<Int>) returns (res: String) {
+  (forall s1: Array<Int>, s2: Array<Int>::
+      s1.length == s2.length && 
+      (forall i: Int:: i >= 0 && i < s1.length ==> s1[i] == s2[i])
+    ==>
+      repr(s1) == repr(s2) ) &&
+  //TODO should we axiomatize a lexicographic order ? [Fishburn 75]
+  true
+}
+
+///////////////////////
+// spec for the list //
+///////////////////////
+
+function witness(v: String, FP: Set<Node>) returns (res: Node) { true }
+
+function content(FP: Set<Node>) returns (C: Set<String>) {
+  (forall x: Node :: x in FP ==> x == witness(repr(x.data), FP)) &&
+  (forall x: Node :: x in FP ==> repr(x.data) in C) &&
+  (forall v in C :: witness(v, FP) in FP) &&
+  (forall v: String :: v !in C ==> witness(v, FP) == null) &&
+  (forall v in C :: v == repr(witness(v, FP).data) @(matching v yields repr(witness(v, FP).data)))
+}
+
+function lseg_footprint(x: Node, y: Node) returns (FP: Set<Node>) {
+  forall z: Node :: z in FP == (Btwn(next, x, z, y) && z != y)
+}
+
+predicate lseg(x: Node, y: Node)(FP: Set<Node>) {
+  Btwn(next, x, y, y) && FP == lseg_footprint(x, y)
+}
+
+predicate lseg_strictly_increasing(x: Node, FP: Set<Node>) {
+  forall y: Node, z: Node:: y in FP && z in FP && Btwn(next,x,y,z) ==> lt(repr(y.data), repr(z.data)) || y == z
+}
+
+function witness1(a: Array<Int>, FP: Set<Node>) returns (res: Node) { true }
+
+predicate contained_footprint(FP0: Set<Node>)(FP1: Set<Array<Int>>, FP2: Set<ArrayCell<Int>>) {
+  (forall x: Node :: x in FP0 ==> x.data in FP1) &&
+  (forall a: Array<Int>:: a in FP1 ==> witness1(a, FP0) in FP0) &&
+  (forall a: Array<Int>:: a in FP1 ==> witness1(a, FP0).data == a) &&
+  (forall a: Array<Int>:: a !in FP1 ==> witness1(a, FP0) == null) &&
+  (forall c: ArrayCell<Int> :: c in FP2 == (0 <= c.index && c.index < c.array.length && c.array in FP1))
+}
+
+predicate list_set(x: Node, y: Node, C: Set<String>)(FP0: Set<Node>, FP1: Set<Array<Int>>, FP2: Set<ArrayCell<Int>>) {
+  lseg(x, y, FP0) &&
+  lseg_strictly_increasing(x, FP0) &&
+  contained_footprint(FP0, FP1, FP2) &&
+  C == content(FP0)
+}
+
+///////////////////////
+///////////////////////
+///////////////////////
+
+//spec of string comparaison
+procedure strcomp(x: Array<Int>, y: Array<Int>) returns (res: Int)
+  requires array(x) &+& array(y)
+  ensures array(x) &+& array(y)
+  ensures res == 0 || res == -1 || res == 1
+  ensures (res == 0) == (repr(x) == repr(y))
+  ensures (res == -1) == (lt(repr(x), repr(y)))
+  ensures (res == 1) == (lt(repr(y), repr(x)))
+{
+  assume(false);
+}
+
+///////////////////////
+///////////////////////
+///////////////////////
+
+procedure contains(lst: Node, val: Array<Int>, implicit ghost C: Set<String>)
+  returns (res: Bool)
+  requires list_set(lst, null, C) &*& array(val)
+  ensures (res == repr(val) in C) &*& list_set(lst, null, C) &*& array(val)
+{
+  var curr: Node;
+  curr := lst;
+  var prev: Node;
+  prev := null;
+  while (curr != null && strcomp(curr.data, val) == -1) 
+    invariant (prev == null && curr == lst || lt(repr(prev.data), repr(val)) &*& prev.next |-> curr) -** 
+      list_set(lst, null, C)
+  {
+    prev := curr;
+    curr := curr.next;
+  }
+  if (curr != null && strcomp(curr.data, val) == 0) return true;
+  else return false;
+}

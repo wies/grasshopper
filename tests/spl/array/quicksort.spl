@@ -1,24 +1,24 @@
 include "int_array.spl";
 
-procedure quicksort(a: Array<Int>)
-  requires array(a)
-  ensures  sorted_array(a)
+procedure quicksort(a: Array<Int>, implicit ghost content: Set<Int>)
+  requires array_cnt(a, content)
+  ensures  sorted_array(a, content)
 {
-  quicksort1(a, 0, a.length);
+  quicksort1(a, 0, a.length, content);
 }
 
 procedure swap(a: Array<Int>, i: Int, j: Int, implicit ghost iVal: Int, implicit ghost jVal: Int)
-  requires (acc(a,i) &*& acc(a, j)) &*& a[i] == iVal &*& a[j] == jVal
-  ensures (acc(a,i) &*& acc(a, j)) &*& a[i] == jVal &*& a[j] == iVal
+  requires (acc(a,i) &+& acc(a, j)) &*& a[i] == iVal &*& a[j] == jVal
+  ensures  (acc(a,i) &+& acc(a, j)) &*& a[i] == jVal &*& a[j] == iVal
 {
   var tmp := a[i];
   a[i] := a[j];
   a[j] := tmp;
 }
 
-procedure quicksort1(a: Array<Int>, lower: Int, upper: Int)
-  requires acc(a) &*& arrayseg(a, lower, upper+1)
-  ensures  acc(a) &*& sorted_arrayseg(a, lower, upper+1)
+procedure quicksort1(a: Array<Int>, lower: Int, upper: Int, ghost content: Set<Int>)
+  requires acc(a) &*& arrayseg_cnt(a, lower, upper+1, content)
+  ensures  acc(a) &*& sorted_arrayseg(a, lower, upper+1, content)
 {
   if (lower < upper) {
     var pivotIdx := lower + (upper - lower) / 2;
@@ -26,20 +26,32 @@ procedure quicksort1(a: Array<Int>, lower: Int, upper: Int)
     swap(a, pivotIdx, upper);
     var idx := lower;
     var i := lower;
+    var C1 := Set<Int>();
+    var C2 := Set<Int>();
+    var C3 := content;
     while (i < upper)
       invariant idx >= lower && i <= upper && i >= idx
-      invariant arrayseg(a, lower, upper)
-      invariant forall k: Int:: k >= lower && k < idx ==> a[k] < pivotVal
-      invariant forall k: Int:: k >= idx && k < i ==> a[k] >= pivotVal
+      invariant arrayseg_cnt(a, lower, idx, C1) &*& arrayseg_cnt(a, idx, i, C2) &*& arrayseg_cnt(a, i, upper, C3)
+      invariant content == C1 ++ C2 ++ C3
+      invariant forall k in C1:: k < pivotVal
+      invariant forall k in C2:: k >= pivotVal
     {
       if (a[i] < pivotVal) {
         swap(a, i, idx);
         idx := idx + 1;
+        C1 := C1 ++ Set(a[i]);
+      } else {
+        C2 := C2 ++ Set(a[i]);
       }
+      //C3 := C3 -- Set(a[i]); //only true for multiset!
+      var tmp := C3;
+      havoc(C3);
+      pure assume(C3 == tmp || C3 == tmp -- Set(a[i]));
+      //
       i := i + 1;
     }
     swap(a, idx, upper);
-    quicksort1(a, lower, idx - 1);
-    quicksort1(a, idx + 1, upper);
+    quicksort1(a, lower, idx - 1, C1);
+    quicksort1(a, idx + 1, upper, C2);
   }
 }

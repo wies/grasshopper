@@ -17,16 +17,41 @@ predicate array(a: Array<Int>)(FP1: Set<Array<Int>>, FP2: Set<ArrayCell<Int>>) {
 
 //sorted
 
-predicate sorted_arrayseg(a: Array<Int>, i: Int, j: Int)(FP: Set<ArrayCell<Int>>) {
-  0 <= i && i <= j && j <= a.length && 
-  FP == arrayseg_footprint(a, i, j) &&
-  (forall i1: Int, j1: Int:: i1 >= i && i1 <= j1 && j < j1 ==> a[i] <= a[j])
+function contentWitness(v: Int, FP: Set<ArrayCell<Int>>) returns (res: ArrayCell<Int>) {
+  true
 }
 
-predicate sorted_array(a: Array<Int>)(FP0: Set<Array<Int>>, FP1: Set<ArrayCell<Int>>) {
+function array_content(FP: Set<ArrayCell<Int>>) returns (C: Set<Int>) {
+  (forall x: ArrayCell<Int> :: x in FP ==> x == contentWitness(x.array[x.index], FP)) &&
+  (forall x: ArrayCell<Int> :: x in FP ==> x.array[x.index] in C) &&
+  (forall v in C :: contentWitness(v, FP) in FP) &&
+  (forall v: Int :: v !in C ==> contentWitness(v, FP) == null) &&
+  (forall v in C :: v == contentWitness(v, FP).array[contentWitness(v, FP).index])
+}
+
+predicate arrayseg_cnt(a: Array<Int>, i: Int, j: Int, C: Set<Int>)(FP: Set<ArrayCell<Int>>) {
+  0 <= i && i <= j && j <= a.length && 
+  FP == arrayseg_footprint(a, i, j) &&
+  C == array_content(FP)
+}
+
+predicate array_cnt(a: Array<Int>, C: Set<Int>)(FP1: Set<Array<Int>>, FP2: Set<ArrayCell<Int>>) {
+  FP1 == Set(a) &&
+  arrayseg_cnt(a, 0, a.length, C, FP2)
+}
+
+predicate sorted_arrayseg(a: Array<Int>, i: Int, j: Int, C: Set<Int>)(FP: Set<ArrayCell<Int>>) {
+  0 <= i && i <= j && j <= a.length && 
+  FP == arrayseg_footprint(a, i, j) &&
+  (forall i1: Int, j1: Int:: i1 >= i && i1 <= j1 && j < j1 ==> a[i] <= a[j]) &&
+  C == array_content(FP)
+}
+
+predicate sorted_array(a: Array<Int>, C: Set<Int>)(FP0: Set<Array<Int>>, FP1: Set<ArrayCell<Int>>) {
   FP0 == Set<Array<Int>>(a) &&
   FP1 == arrayseg_footprint(a, 0, a.length) &&
-  (forall i: Int, j: Int:: 0 <= i && i <= j && j < a.length ==> a[i] <= a[j])
+  (forall i: Int, j: Int:: 0 <= i && i <= j && j < a.length ==> a[i] <= a[j]) &&
+  C == array_content(FP1)
 }
 
 
