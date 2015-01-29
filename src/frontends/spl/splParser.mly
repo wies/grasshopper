@@ -201,7 +201,16 @@ pred_decl:
     }
   in decl
 }
-| FUNCTION IDENT LPAREN var_decls RPAREN RETURNS LPAREN var_decls RPAREN LBRACE expr RBRACE {
+| function_header {
+  $1
+}
+| function_header pred_impl {
+  pred_decl $1 $2
+}
+;
+
+function_header:
+| FUNCTION IDENT LPAREN var_decls RPAREN RETURNS LPAREN var_decls RPAREN {
   let formals, locals =
     List.fold_right (fun decl (formals, locals) ->
       decl.v_name :: formals, IdMap.add decl.v_name decl locals)
@@ -218,13 +227,18 @@ pred_decl:
       pr_footprints = [];
       pr_outputs = outputs;
       pr_locals = locals;
-      pr_body = $11;
+      pr_body = BoolVal (true, GrassUtil.dummy_position);
       pr_pos = mk_position 2 2;
     }
   in decl
 }
 ;
 
+pred_impl:
+| LBRACE expr RBRACE {
+  $2
+}
+  
 var_decls:
 | var_decl var_decl_list { $1 :: $2 }
 | /* empty */ { [] }

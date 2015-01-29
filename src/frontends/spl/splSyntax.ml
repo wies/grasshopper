@@ -197,6 +197,8 @@ let struct_decl sname sfields pos =
 let var_decl vname vtype vghost vimpl vpos vscope =
   { v_name = vname; v_type = vtype; v_ghost = vghost; v_implicit = vimpl; v_aux = false; v_pos = vpos; v_scope = vscope } 
 
+let pred_decl hdr body =
+  { hdr with pr_body = body }
 
 let extend_spl_program incls decls prog =
   let check_uniqueness id pos (vdecls, pdecls, prdecls, sdecls) =
