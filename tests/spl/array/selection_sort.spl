@@ -1,0 +1,49 @@
+include "int_array.spl";
+
+procedure find_minimum(a: Array<Int>, low: Int, high: Int)
+  returns (min_i: Int)
+  requires array(a)
+  requires 0 <= low && low <= high && high <= a.length
+  ensures array(a)
+  ensures low == high || (low <= min_i && min_i < high)
+  ensures forall j: Int :: low <= j && j < high ==> a[j] >= a[min_i]
+{
+  var i := low;
+  var min_i := low;
+
+  while (i < high)
+    invariant low <= i
+    invariant forall j: Int :: low <= j && j < i ==> a[j] >= a[min_i]
+    invariant low == high || (low <= min_i && min_i < high)
+  {
+    if (a[i] < a[min_i])
+    {
+      min_i := i;
+    }
+    i := i + 1;
+  }
+  return min_i;
+}
+
+
+procedure selection_sort(a: Array<Int>, implicit ghost content: Set<Int>)
+  requires array(a)
+  ensures array(a)
+  ensures forall j: Int, k: Int :: 0 <= j && j <= k && k < a.length ==> a[j] <= a[k]
+{
+  var i := 0;
+
+  while (i < a.length)
+    invariant 0 <= i && i <= a.length
+    invariant array(a)
+    invariant forall j: Int, k: Int :: 0 <= j && j < i && j <= k && k < a.length ==> a[j] <= a[k]
+  {
+    var min_i := find_minimum(a, i, a.length);
+    var temp := a[i];
+    a[i] := a[min_i];
+    a[min_i] := temp;
+
+    i := i + 1;
+  }
+  return;
+}

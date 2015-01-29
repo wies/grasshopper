@@ -1,0 +1,52 @@
+include "int_array.spl";
+
+
+// One pass of bubble sort should leave the maximum element in the correct position
+procedure bubble_one_pass(a: Array<Int>, high: Int)
+  requires arrayseg(a, 0, high)
+  requires high >= 0 && high <= a.length
+  ensures arrayseg(a, 0, high)
+  ensures forall j: Int :: 0 <= j && j < high ==> a[j] <= a[high-1]
+{
+  if (high == 0 || high == 1)
+  {
+    return;
+  }
+
+  var i := 1;
+
+  while (i < high)
+    invariant 1 <= i && i < high && high <= a.length
+    invariant arrayseg(a, 0, high)
+    invariant forall j: Int :: 0 <= j && j < i ==> a[j] <= a[i-1]
+  {
+    if (a[i] < a[i - 1])
+    {
+      var x := a[i];
+      a[i] := a[i - 1];
+      a[i - 1] := x;
+    }
+    i := i + 1;
+  }
+}
+
+
+procedure bubble_sort(a: Array<Int>, implicit ghost content: Set<Int>)
+  requires array(a)
+  ensures array(a)
+  //ensures forall j: Int, k: Int :: 0 <= j && j <= k && k < a.length ==> a[j] <= a[k]
+{
+  var high := a.length;
+
+  while (high > 0)
+    invariant array(a)
+    invariant 0 <= high && high <= a.length
+    invariant forall j: Int, k: Int :: high == a.length - 1 && j == high && 0 <= k && k <= j ==> a[k] <= a[j]
+    invariant forall j: Int, k: Int :: high == 0 && j == high + 1 && j < a.length && 0 <= k && k <= j ==> a[k] <= a[j]
+      //    invariant forall j: Int, k: Int :: high <= j && j < a.length && 0 <= k && k <= j ==> a[k] <= a[j]
+  {
+    bubble_one_pass(a, high);
+    high := high - 1;
+  }
+  return;
+}

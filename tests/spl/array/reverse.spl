@@ -1,0 +1,51 @@
+include "int_array.spl";
+
+// This procedure works
+procedure copy_reverse(a: Array<Int>)
+  returns (b: Array<Int>)
+  requires array(a)
+  ensures array(a) &*& array(b)
+  ensures a.length == b.length
+  ensures forall j: Int:: j >= 0 && j < b.length ==> b[j] == a[a.length - 1 - j]
+{
+  b := new Array<Int>(a.length);
+
+  var i := 0;
+
+  while (i < b.length)
+    invariant i >= 0 && i <= b.length && a.length == b.length
+    invariant array(a) &*& array(b)
+    invariant forall j: Int:: j >= 0 && j < i ==> b[j] == a[a.length - 1 - j]
+  {
+    b[i] := a[a.length - 1 - i];
+    i := i + 1;
+  }
+
+  return b;
+}
+
+// TODO but for some strange reason this doesn't!?
+/*
+procedure copy_reverse1(a: Array<Int>)
+  returns (b: Array<Int>)
+  requires array(a)
+  ensures array(a) &*& array(b)
+  ensures a.length == b.length
+  ensures forall j: Int:: j >= 0 && j < a.length ==> a[j] == b[a.length - j - 1]
+{
+  b := new Array<Int>(a.length);
+
+  var i := 0;
+
+  while (i < a.length)
+    invariant i >= 0 && i <= a.length && a.length == b.length
+    invariant array(a) &*& array(b)
+    invariant forall j: Int:: j >= 0 && j < i ==> a[j] == b[a.length - 1 - j]
+  {
+    b[a.length - 1 - i] := a[i];
+    i := i + 1;
+  }
+
+  return b;
+}
+*/

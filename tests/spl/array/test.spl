@@ -1,0 +1,36 @@
+include "int_array.spl";
+
+procedure test_heap_access(a: Array<Int>, high: Int)
+  requires arrayseg(a, 0, high)
+  requires high >= 0 && high <= a.length
+  ensures arrayseg(a, 0, high)
+{
+  var i := 0;
+
+  while (i < high)
+    invariant 0 <= i && i < high && high <= a.length
+    invariant arrayseg(a, 0, high)
+  {
+    a[i] := a[i];
+  }
+
+}
+
+
+/*
+procedure create()
+  returns (a: Array<Int>)
+  requires emp
+  ensures array(a) &*& a[0] == 111
+{
+  a := new Array<Int>(1);
+
+  a[0] := 111;
+
+  var b:= new Array<Int>(2);
+  b[0] := 555;
+  b[1] := 666;
+
+  return a;
+}
+*/
