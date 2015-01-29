@@ -1,17 +1,18 @@
 include "int_array.spl";
 
 procedure test_heap_access(a: Array<Int>, high: Int)
-  requires arrayseg(a, 0, high)
+  requires acc(a) &*& arrayseg(a, 0, high)
   requires high >= 0 && high <= a.length
-  ensures arrayseg(a, 0, high)
+  ensures acc(a) &*& arrayseg(a, 0, high)
 {
   var i := 0;
 
   while (i < high)
-    invariant 0 <= i && i < high && high <= a.length
-    invariant arrayseg(a, 0, high)
+    invariant 0 <= i && i <= high && high <= a.length
+    invariant acc(a) &*& arrayseg(a, 0, high)
   {
     a[i] := a[i];
+    i := i + 1;
   }
 
 }
