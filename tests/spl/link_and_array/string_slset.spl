@@ -79,7 +79,7 @@ predicate list_set(x: Node, y: Node, C: Set<String>)(FP0: Set<Node>, FP1: Set<Ar
 ///////////////////////
 ///////////////////////
 
-//spec of string comparaison
+//spec of string comparison
 procedure strcomp(x: Array<Int>, y: Array<Int>) returns (res: Int)
   requires array(x) &+& array(y)
   ensures array(x) &+& array(y)

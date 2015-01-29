@@ -88,10 +88,13 @@ let add_labels vc =
 let add_pred_insts prog f =
   let expand_pred pos p ts =
     let pred = find_pred prog p in
-    let sm = 
-      List.fold_left2 
-        (fun sm id t -> IdMap.add id t sm)
-        IdMap.empty (pred.pred_formals @ pred.pred_footprints) ts
+    let sm =
+      try
+        List.fold_left2 
+          (fun sm id t -> IdMap.add id t sm)
+          IdMap.empty (pred.pred_formals @ pred.pred_footprints) ts
+      with Invalid_argument _ ->
+        failwith ("Fatal error while expanding predicate " ^ string_of_ident pred.pred_name)
     in
     let sm =
       match pred.pred_outputs with

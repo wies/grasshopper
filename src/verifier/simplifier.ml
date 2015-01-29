@@ -194,25 +194,25 @@ let elim_global_deps prog =
       in
       tas
     in
+    let rec subst_terms = function
+      | App (sym, ts, srt) ->
+          let ts1 = List.map subst_terms ts in
+          (match sym with
+          | FreeSym id when IdMap.mem id prog.prog_preds ->
+              let tas = get_tas id in
+              App (FreeSym id, tas @ ts1, srt)
+          | _ -> 
+              App (sym, ts1, srt))
+      | Var _ as t -> t
+    in
     let subst_preds_sl f =
       let sf p args pos =
         let tas = get_tas p in
         SlUtil.mk_pred ?pos:pos p (tas @ args)
-      in SlUtil.subst_preds sf f
+      in SlUtil.map_terms subst_terms (SlUtil.subst_preds sf f)
     in
     let subst_preds_fol f = 
-      let rec sf = function
-        | App (sym, ts, srt) ->
-            let ts1 = List.map sf ts in
-            (match sym with
-            | FreeSym id when IdMap.mem id prog.prog_preds ->
-                let tas = get_tas id in
-                App (FreeSym id, tas @ ts1, srt)
-            | _ -> 
-                App (sym, ts1, srt))
-        | Var _ as t -> t
-      in
-      map_terms sf f
+      map_terms subst_terms f
     in
     map_spec_form subst_preds_fol subst_preds_sl sf
   in

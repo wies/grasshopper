@@ -417,7 +417,9 @@ let infer_types cu locals ty e =
           try
             IdMap.find id locals
           with Not_found ->
-            IdMap.find id cu.var_decls
+            try IdMap.find id cu.var_decls
+            with Not_found ->
+              ProgError.error pos ("Unknown identifier " ^ (string_of_ident id))
         in
         e, match_types pos ty decl.v_type
     | Annot (e, a, pos) ->

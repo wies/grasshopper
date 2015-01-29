@@ -129,6 +129,13 @@ let free_symbols f =
   in
   fsym IdSet.empty f
 
+let rec map_terms fct = function
+  | Pure (p, pos) -> Pure (GrassUtil.map_terms fct p, pos)
+  | Atom (s, args, pos) -> mk_atom ?pos:pos s (List.map fct args)
+  | BoolOp (op, fs, pos) -> BoolOp (op, List.map (map_terms fct) fs, pos)
+  | SepOp (op, f1, f2, pos) -> SepOp (op, map_terms fct f1, map_terms fct f2, pos)
+  | Binder (b, vs, f, pos) -> Binder (b, vs, map_terms fct f, pos)
+    
 let rec map_id fct f = match f with
   | Pure (p, pos) -> Pure (GrassUtil.map_id fct p, pos)
   | Atom (s, args, pos) -> mk_atom ?pos:pos s (List.map (GrassUtil.map_id_term fct) args)

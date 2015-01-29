@@ -598,7 +598,7 @@ let flatten_exprs cu =
             inv
         in
         let preb1, locals = flatten pos locals returns preb in
-        let cond1, aux, locals2 = flatten_expr pos [] locals cond in
+        let cond1, aux, locals = flatten_expr pos [] locals cond in
         let postb1, locals = flatten pos locals returns postb in
         Loop (inv, mk_block pos ([preb1] @ aux), cond1, postb1, pos), locals
     | Return ([ProcCall (id, args, cpos)], pos) ->
