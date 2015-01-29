@@ -6,7 +6,7 @@ struct Node {
 
 procedure traverse(a: Array<Node>)
   requires arrayWithNode(a)
-  requires emp
+  ensures arrayWithNode(a)
 {
   var i := 0;
   

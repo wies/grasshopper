@@ -379,7 +379,7 @@ let elim_sl prog =
               Some (sf.spec_name, sf.spec_msg, merge_src_pos p sf.spec_pos),
               new_kind
           | _ -> fs, aux, kind)
-          sfs ([], None, Free)
+          sfs ([], None, Checked)
       in
       let name, msg, pos = Util.Opt.get_or_else (name, None, dummy_position) aux in
       SlUtil.mk_sep_star_lst ~pos:pos fs, kind, name, msg, pos
@@ -471,6 +471,7 @@ let elim_sl prog =
     let postcond, post_pos =
       let name = "postcondition of " ^ string_of_ident proc.proc_name in
       let f, kind, name, msg, pos = convert_sl_form sl_postcond name in
+      (*Printf.printf "%s: %d\n" (string_of_ident proc.proc_name) (List.length fs);*)
       let final_footprint_sets =
         SortSet.fold (fun ssrt sets -> SortMap.add ssrt (final_footprint_set ssrt) sets) struct_srts SortMap.empty
       in
