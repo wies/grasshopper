@@ -8,7 +8,7 @@ open SplSyntax
 open SplTypeChecker
 
 let unknown_ident_error id pos =
-  ProgError.error pos ("Unknown identifier " ^ GrassUtil.name id)
+  ProgError.error pos ("Unknown identifier " ^ GrassUtil.name id ^ ".")
 
 let not_a_struct_error id pos =
   ProgError.error pos 
@@ -42,11 +42,11 @@ let null_access_error pos =
 
 let footprint_declaration_error id pos =
   ProgError.error pos ("Footprint parameter " ^ string_of_ident id ^ " has an unexpected type. Expected type " ^
-                       string_of_type (SetType (StructType ("T", 0))) ^ " for some struct type T")
+                       string_of_type (SetType (StructType ("T", 0))) ^ " for some struct type T.")
 
 let invalid_nested_proc_call_error id pos =
   ProgError.error pos 
-    ("Procedure " ^ GrassUtil.name id ^ " has more than one return value")
+    ("Procedure " ^ GrassUtil.name id ^ " has more than one return value.")
 
     
 let resolve_names cu =
@@ -369,18 +369,26 @@ let resolve_names cu =
   let procs =
     IdMap.fold
       (fun _ decl procs ->
-        let locals0, tbl = declare_vars decl.p_locals structs (SymbolTbl.push tbl) in
-        let contracts = 
+        let locals0, tbl0 = declare_vars decl.p_locals structs (SymbolTbl.push tbl) in
+        let formals = List.map (fun id -> lookup_id id tbl0 decl.p_pos) decl.p_formals in
+        let returns = List.map (fun id -> lookup_id id tbl0 decl.p_pos) decl.p_returns in
+        let contracts =
+          let pre_locals, pre_tbl =
+            List.fold_left
+              (fun (pre_locals, pre_tbl) id ->
+                IdMap.remove id pre_locals,
+                SymbolTbl.remove pre_tbl (GrassUtil.name id))
+              (locals0, tbl0)
+              returns
+          in
           List.map 
             (function 
-              | Requires (e, pure) -> Requires (resolve_expr locals0 tbl e, pure)
-              | Ensures (e, pure) -> Ensures (resolve_expr locals0 tbl e, pure)
+              | Requires (e, pure) -> Requires (resolve_expr pre_locals pre_tbl e, pure)
+              | Ensures (e, pure) -> Ensures (resolve_expr locals0 tbl0 e, pure)
             )
             decl.p_contracts
         in
-        let body, locals, _ = resolve_stmt locals0 tbl decl.p_body in
-        let formals = List.map (fun id -> lookup_id id tbl decl.p_pos) decl.p_formals in
-        let returns = List.map (fun id -> lookup_id id tbl decl.p_pos) decl.p_returns in
+        let body, locals, _ = resolve_stmt locals0 tbl0 decl.p_body in
         let decl1 = 
           { decl with 
             p_formals = formals;

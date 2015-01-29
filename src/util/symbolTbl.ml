@@ -11,6 +11,9 @@ let pop tbl = List.tl tbl
 let add tbl name id =
   StringMap.add name id (List.hd tbl) :: List.tl tbl
 
+let remove tbl name =
+  StringMap.remove name (List.hd tbl) :: List.tl tbl
+                                          
 let declared_in_current tbl name =
   StringMap.mem name (List.hd tbl)
 
