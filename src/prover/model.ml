@@ -486,14 +486,16 @@ let complete model =
   let locs srt = get_values_of_sort model (Loc srt) in
   let loc_flds srt = get_values_of_sort model (loc_field_sort srt) in
   let flds srt =
-    let loc_srt = Loc srt in
-    let null = interp_symbol model Null ([], loc_srt) [] in
-    let btwn_arity = [loc_field_sort srt; loc_srt; loc_srt; loc_srt], Bool in
-    List.filter (fun f ->
-      try 
-        bool_of_value 
-          (interp_symbol model Btwn btwn_arity [f; null; null; null])
-      with Undefined -> false) (loc_flds srt)
+    try
+      let loc_srt = Loc srt in
+      let null = interp_symbol model Null ([], loc_srt) [] in
+      let btwn_arity = [loc_field_sort srt; loc_srt; loc_srt; loc_srt], Bool in
+      List.filter (fun f ->
+        try 
+          bool_of_value 
+            (interp_symbol model Btwn btwn_arity [f; null; null; null])
+        with Undefined -> false) (loc_flds srt)
+    with Undefined -> []
   in
   let loc_srts = get_loc_sorts model in
   let new_model =
