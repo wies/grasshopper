@@ -14,7 +14,6 @@ procedure destroy(a: Array<Node>)
     invariant 0 <= i && i <= a.length
     invariant acc(a) &*& arrayseg(a, 0, i) &*& arraysegWithNode(a, i, a.length)
   {
-    //pure assert a[i] in arrayseg_node_footprint(arrayseg_footprint(a, i, a.length));
     free(a[i]);
     i := i + 1;
   }

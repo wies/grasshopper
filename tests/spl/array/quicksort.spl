@@ -8,8 +8,8 @@ procedure quicksort(a: Array<Int>)
 }
 
 procedure swap(a: Array<Int>, i: Int, j: Int, implicit ghost iVal: Int, implicit ghost jVal: Int)
-  requires acc(a,i) &*& acc(a, j) &*& a[i] == iVal &*& a[j] == jVal
-  ensures  acc(a,i) &*& acc(a, j) &*& a[i] == jVal &*& a[j] == iVal
+  requires (acc(a,i) &*& acc(a, j)) &*& a[i] == iVal &*& a[j] == jVal
+  ensures (acc(a,i) &*& acc(a, j)) &*& a[i] == jVal &*& a[j] == iVal
 {
   var tmp := a[i];
   a[i] := a[j];

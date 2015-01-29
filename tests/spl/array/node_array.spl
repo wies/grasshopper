@@ -10,24 +10,26 @@ predicate arrayseg(a: Array<Node>, i: Int, j: Int)(FP: Set<ArrayCell<Node>>) {
   FP == arrayseg_footprint(a, i, j)
 }
 
-function node_witness(x: Node, FP: Set<ArrayCell<Node>>) returns (c: ArrayCell<Node>) {
+function node_witness(x: Node, a: Array<Node>, m: Map<ArrayCell<Node>, Node>) returns (c: ArrayCell<Node>) {
   true
 }
 
-function arrayseg_node_footprint(FP0: Set<ArrayCell<Node>>) returns (FP1: Set<Node>) {
-  (forall c: ArrayCell<Node> :: c in FP0 ==> c == node_witness(c.array[c.index], FP0)) &&
-    (forall c: ArrayCell<Node> :: c in FP0 ==> c.array[c.index] in FP1 @(comment "node_fp")) &&
-    (forall x in FP1 :: node_witness(x, FP0) in FP0) &&
-  (forall x: Node :: x !in FP1 ==> node_witness(x, FP0) == null) &&
-  (forall x in FP1 :: x == node_witness(x, FP0).array[node_witness(x, FP0).index]
-    @(matching x yields node_witness(x, FP0).array[node_witness(x, FP0).index])) &&
-  (forall c: ArrayCell<Node>, d: ArrayCell<Node>:: c in FP0 && d in FP0 ==> c.array[c.index] != c.array[d.index])
+function array_state() returns (m: Map<ArrayCell<Node>, Node>) {
+  (forall c: ArrayCell<Node> :: c.m == c.array[c.index] @(matching c yields c.m))
+}
+
+function arrayseg_node_footprint(a: Array<Node>, FP0: Set<ArrayCell<Node>>) returns (FP1: Set<Node>) {
+  (forall c: ArrayCell<Node> :: c in FP0 ==> c == node_witness(c.array[c.index], a, array_state()) @(comment "proep")) &&
+  (forall c: ArrayCell<Node> :: c in FP0 ==> c.array[c.index] in FP1 @(comment "moep")) &&
+  (forall x in FP1 :: node_witness(x, a, array_state()) in FP0) &&
+  (forall x in FP1 :: x == node_witness(x, a, array_state()).array[node_witness(x, a, array_state()).index]
+     @(matching x yields node_witness(x, a, array_state()).array[node_witness(x, a, array_state()).index]))
 }
 
 predicate arraysegWithNode(a: Array<Node>, lo: Int, hi: Int)(FP0: Set<ArrayCell<Node>>, FP1: Set<Node>) {
   0 <= lo && lo <= hi && hi <= a.length &&
   FP0 == arrayseg_footprint(a, lo, hi) &&
-  FP1 == arrayseg_node_footprint(FP0)
+  FP1 == arrayseg_node_footprint(a, FP0)
 }
 
 predicate arrayWithNode(a: Array<Node>)(FP0: Set<Array<Node>>, FP1: Set<ArrayCell<Node>>, FP2: Set<Node>) {

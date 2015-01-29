@@ -413,6 +413,13 @@ let get_map_sorts model =
       | _ -> fun _ srts -> srts)
     model.intp SortSet.empty
 
+let get_loc_fld_sorts model =
+  SortedSymbolMap.fold
+    (function
+      | (_, (_, (Map (Loc _, Loc _) as srt))) -> fun _ srts -> SortSet.add srt srts
+      | _ -> fun _ srts -> srts)
+    model.intp SortSet.empty
+    
     
 let get_symbols_of_sort model arity =
   SortedSymbolMap.fold 
@@ -611,13 +618,21 @@ let finalize_values model =
 
 (** Printing *)
             
-let string_of_sorted_value srt v = 
+let string_of_sorted_value srt v =
+  let rec elim_loc = function
+    | Loc srt -> elim_loc srt
+    | Set srt -> Set (elim_loc srt)
+    | Array srt -> Array (elim_loc srt)
+    | ArrayCell srt -> ArrayCell (elim_loc srt)
+    | Map (dsrt, rsrt) -> Map (elim_loc dsrt, elim_loc rsrt)
+    | srt -> srt
+  in
   match srt with
-  | Int | Bool -> string_of_value v 
+  | Int | Bool -> string_of_value v
   | _ ->
       let srt_str =
         Str.global_replace (Str.regexp "<") "&lt;"
-          (Str.global_replace (Str.regexp ">") "&gt;" (string_of_sort srt))
+          (Str.global_replace (Str.regexp ">") "&gt;" (string_of_sort (elim_loc srt)))
       in
       srt_str ^ "!" ^ string_of_value v
 
@@ -700,12 +715,13 @@ let output_graphviz chan model terms =
   let colors1 = ["blue"; "red"; "green"; "orange"; "darkviolet"] in
   let colors2 = ["blueviolet"; "crimson"; "olivedrab"; "orangered"; "purple"] in
   let loc_sorts = get_loc_sorts model in
+  let fld_srts = get_loc_fld_sorts model in
   let all_flds =
     Util.flat_map
       (fun srt ->
         List.map (fun fld -> (srt, fld))
-          (get_values_of_sort model (loc_field_sort srt)))
-      (SortSet.elements loc_sorts)
+          (get_values_of_sort model srt))
+      (SortSet.elements fld_srts)
   in
   let fld_colors =
     Util.fold_left2 (fun acc fld color -> ((fld, color)::acc)) [] all_flds colors1
@@ -713,28 +729,38 @@ let output_graphviz chan model terms =
   let ep_colors =
     Util.fold_left2 (fun acc fld color -> (fld, color)::acc) [] all_flds colors2
   in
-  let get_label srt fld =
+  let get_label fsrt fld =
     let color =
-      try List.assoc (srt, fld) fld_colors with Not_found -> "black"
+      try List.assoc (fsrt, fld) fld_colors with Not_found -> "black"
     in
-    let f = find_term fld (loc_field_sort srt) in
+    let f = find_term fld fsrt in
     Printf.sprintf "label=\"%s\", fontcolor=%s, color=%s" (string_of_term f) color color
   in
-  let string_of_loc_value srt l = string_of_sorted_value srt l in 
+  let string_of_loc_value srt l = string_of_sorted_value srt l in
   let output_graph srt =
     let flds = get_values_of_sort model (loc_field_sort srt) in
     let locs = get_values_of_sort model (Loc srt) in
     let read_arity = [loc_field_sort srt; Loc srt], Loc srt in
-    let output_flds () =
+    let rsrts =
+      SortSet.fold
+        (function
+          | Map (Loc srt1, Loc rsrt) when srt1 = srt -> SortSet.add rsrt
+          | _ -> fun rsrts -> rsrts)
+        fld_srts SortSet.empty
+    in
+    let output_flds rsrt =
+      let fld_srt = Map (Loc srt, Loc rsrt) in
+      let flds = get_values_of_sort model fld_srt in
+      let read_arity = [fld_srt; Loc srt], Loc rsrt in
       List.iter 
         (fun f ->
           List.iter (fun l ->
             try
               let r = interp_symbol model Read read_arity [f; l] in
-              if interp_symbol model Null ([], Loc srt) [] = r then () else
-	      let label = get_label srt f in
+              if interp_symbol model Null ([], Loc rsrt) [] = r then () else
+	      let label = get_label fld_srt f in
 	      Printf.fprintf chan "\"%s\" -> \"%s\" [%s]\n" 
-	        (string_of_loc_value srt l) (string_of_loc_value srt r) label
+	        (string_of_loc_value srt l) (string_of_loc_value rsrt r) label
             with Not_found -> ())
             locs)
         flds
@@ -769,7 +795,7 @@ let output_graphviz chan model terms =
           List.iter (fun l ->
             let r = succ model srt f l in
             if is_defined model Read read_arity [f; l] || r == l then () else
-	    let label = get_label srt f in
+	    let label = get_label (loc_field_sort srt) f in
 	    Printf.fprintf chan "\"%s\" -> \"%s\" [%s, style=dashed]\n" 
 	      (string_of_loc_value srt l) (string_of_loc_value srt r) label)
             locs)
@@ -824,7 +850,7 @@ let output_graphviz chan model terms =
         (get_symbols_of_sort model ([], Loc srt))
     in
     output_locs ();
-    output_flds ();
+    SortSet.iter output_flds rsrts;
     output_array ();
     output_loc_vars ();
     output_reach ();
@@ -891,15 +917,16 @@ let output_graphviz chan model terms =
         | (App (FreeSym _, _, (Bool as srt)) as t)
         (*| (App (FreeSym _, _, (Set _ as srt)) as t)*)
         | (App (FreeSym _, _ :: _, (Int as srt)) as t)
-        | (App (FreeSym _, _ :: _, (Loc _ as srt)) as t) ->
+        | (App (FreeSym _, _ :: _, (Loc _ as srt)) as t)
+        | (App (IndexOfCell, _, srt) as t) ->
             (try
               let res =
                 eval model t
               in
-              let res_t = find_term res srt in
-              if t <> res_t then
+              (*let res_t = find_term res srt in
+              if t <> res_t then*)
                 Printf.fprintf chan "      <tr><td>%s == %s</td></tr>\n"
-                  (string_of_term t) (string_of_term res_t)
+                  (string_of_term t) (string_of_sorted_value srt res) (*(string_of_term res_t)*)
             with _ -> ())
         | _ -> ()
       ) terms;
