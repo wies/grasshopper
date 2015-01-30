@@ -5,14 +5,14 @@ struct Node {
 }
 
 procedure destroy(a: Array<Node>)
-  requires arrayWithNode(a)
+  requires array_with_content(a)
   requires emp
 {
   var i := 0;
   
   while (i < a.length)
     invariant 0 <= i && i <= a.length
-    invariant acc(a) &*& arrayseg(a, 0, i) &*& arraysegWithNode(a, i, a.length)
+    invariant acc(a) &*& arrayseg(a, 0, i) &*& arrayseg_with_content(a, i, a.length)
   {
     free(a[i]);
     i := i + 1;

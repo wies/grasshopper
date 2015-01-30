@@ -17,9 +17,7 @@ predicate array(a: Array<Int>)(FP1: Set<Array<Int>>, FP2: Set<ArrayCell<Int>>) {
 
 //sorted
 
-function contentWitness(v: Int, FP: Set<ArrayCell<Int>>) returns (res: ArrayCell<Int>) {
-  true
-}
+function contentWitness(v: Int, FP: Set<ArrayCell<Int>>) returns (res: ArrayCell<Int>)
 
 function array_content(FP: Set<ArrayCell<Int>>) returns (C: Set<Int>) {
   (forall x: ArrayCell<Int> :: x in FP ==> x == contentWitness(x.array[x.index], FP)) &&
@@ -57,7 +55,7 @@ predicate sorted_array(a: Array<Int>, C: Set<Int>)(FP0: Set<Array<Int>>, FP1: Se
 
 // matrix
 
-function matrixWitness(a: Array<Int>, FP2: Set<Array<Int>>) returns (idx: Int) { true }
+function matrixWitness(a: Array<Int>, FP2: Set<Array<Int>>) returns (idx: Int)
 
 predicate matrix( a: Array<Array<Int>>,
                   FP0: Set<Array<Array<Int>>>,

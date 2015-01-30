@@ -32,7 +32,7 @@ function nlseg_inner_footprint(x: OuterNode, y: OuterNode)
 {
   (forall z: InnerNode :: z in FP ==>
    z.head in nlseg_outer_footprint(x, y)) &&
-    (forall z: InnerNode, zh: OuterNode :: z in FP && zh == z.head ==>
+  (forall z: InnerNode, zh: OuterNode :: z in FP && zh == z.head ==>
    /* z in lseg_footprint(zh.down, null) */
    Btwn(inext, zh.down, z, null) && z != null
    @(matching z yields z.head)
