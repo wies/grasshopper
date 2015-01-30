@@ -65,7 +65,6 @@ procedure hashset_create(_size: Int) returns (res: HashSet)
 {
   var new_set := new HashSet;
   new_set.buckets := new Array<Node>(_size);    
-
   var i := 0;
   while (i < _size)
     invariant i >= 0 && i <= _size
