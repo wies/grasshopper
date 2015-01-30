@@ -39,11 +39,15 @@ function repr(str: Array<Int>) returns (res: String) {
 function witness(v: String, FP: Set<Node>, m: Map<ArrayCell<Int>, Int>) returns (res: Node) { true }
 
 function content(FP: Set<Node>) returns (C: Set<String>) {
-  (forall x: Node :: x in FP ==> x == witness(repr(x.data), FP)) &&
-  (forall x: Node :: x in FP ==> repr(x.data) in C) &&
-  (forall v in C :: witness(v, FP, array_state()) in FP) &&
+  (forall x: Node :: x in FP ==> x == witness(repr(x.data), FP, array_state())
+    @(matching x yields witness(repr(x.data), FP, array_state())) ) &&
+  (forall x: Node :: x in FP ==> repr(x.data) in C
+    @(matching x yields repr(x.data)) ) &&
+  (forall v in C :: witness(v, FP, array_state()) in FP
+    @(matching v yields witness(v, FP, array_state())) ) &&
   (forall v: String :: v !in C ==> witness(v, FP, array_state()) == null) &&
-  (forall v in C :: v == repr(witness(v, FP, array_state()).data) @(matching v yields repr(witness(v, FP, array_state()).data)))
+  (forall v in C :: v == repr(witness(v, FP, array_state()).data)
+    @(matching v yields repr(witness(v, FP, array_state()).data)) )
 }
 
 function lseg_footprint(x: Node, y: Node) returns (FP: Set<Node>) {
@@ -62,10 +66,12 @@ function witness1(a: Array<Int>, FP: Set<Node>) returns (res: Node) { true }
 
 predicate contained_footprint(FP0: Set<Node>)(FP1: Set<Array<Int>>, FP2: Set<ArrayCell<Int>>) {
   (forall x: Node :: x in FP0 ==> x.data in FP1) &&
-  (forall a: Array<Int>:: a in FP1 ==> witness1(a, FP0) in FP0) &&
-  (forall a: Array<Int>:: a in FP1 ==> witness1(a, FP0).data == a) &&
+  (forall a: Array<Int>:: a in FP1 ==> witness1(a, FP0) in FP0  @(matching a yields witness1(a, FP0)) ) &&
+  (forall a: Array<Int>:: a in FP1 ==> witness1(a, FP0).data == a  @(matching a yields witness1(a, FP0).data) ) &&
   (forall a: Array<Int>:: a !in FP1 ==> witness1(a, FP0) == null) &&
-  (forall c: ArrayCell<Int> :: c in FP2 == (0 <= c.index && c.index < c.array.length && c.array in FP1))
+  (forall c: ArrayCell<Int> :: c in FP2 == (0 <= c.index && c.index < c.array.length && c.array in FP1)) &&
+  //disjointness of the data
+  (forall x: Node, y: Node :: x in FP0 && y in FP0 && x != y ==> x.data != y.data)
 }
 
 predicate list_set(x: Node, y: Node, C: Set<String>)(FP0: Set<Node>, FP1: Set<Array<Int>>, FP2: Set<ArrayCell<Int>>) {
@@ -105,6 +111,7 @@ procedure contains(lst: Node, val: Array<Int>, implicit ghost C: Set<String>)
   var prev: Node;
   prev := null;
   while (curr != null && strcomp(curr.data, val) == -1) 
+    invariant array(val)
     invariant (prev == null && curr == lst || lt(repr(prev.data), repr(val)) &*& prev.next |-> curr) -** 
       list_set(lst, null, C)
   {
