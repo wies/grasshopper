@@ -504,7 +504,7 @@ let instantiate read_propagators fs gts =
   instantiate_with_terms true fs1 classes, gts1
 
 let add_terms fs gts =
-  if not !Config.smtpatterns then fs else
+  if not !Config.smtpatterns && !Config.instantiate then fs else
   (*let gts_fs = ground_terms (mk_and fs) in*)
   let extra_gts = (*TermSet.diff gts gts_fs*) gts in
   let fs1 = 
