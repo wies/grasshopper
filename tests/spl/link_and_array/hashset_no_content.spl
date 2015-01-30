@@ -80,5 +80,59 @@ procedure hashset_create(_size: Int) returns (res: HashSet)
   return new_set;
 }
 
+procedure append(val: Int, x: Node, implicit ghost C: Set<Int>) 
+  returns (res: Node)
+  requires list_set(x, null, C)
+  requires forall v in C :: val < v
+  ensures list_set(res, null, C ++ Set(val))
+{
+  res := new Node;
+  res.next := x;
+  res.data := val;
+}
 
+procedure insert(lst: Node, val: Int, implicit ghost C: Set<Int>)
+  returns (res: Node)
+  requires list_set(lst, null, C)
+  ensures list_set(res, null, C ++ Set(val))
+{
+  var curr: Node;
+  curr := lst;
+  var prev: Node;
+  prev := null;
+  
+  while (curr != null && curr.data < val)
+    invariant (prev == null && curr == lst || val > prev.data &*& prev.next |-> curr) -** 
+      list_set(lst, null, C)
+  {
+    prev := curr;
+    curr := curr.next;
+  }
+  
+  if (curr != null && curr.data == val) {
+    return lst;
+  }
+  
+  var n: Node;
+  n := append(val, curr);
+  
+  if (prev == null) {
+    return n;
+  } else {
+    prev.next := n;
+    return lst;
+  }
+}
+
+procedure add(hashset: HashSet, value: Int)
+  returns (res: Bool)
+  requires hset(hashset)
+  ensures  hset(hashset)
+{
+  var hashval := hash(hashset.size, value);
+  var list := hashset.buckets[hashval];
+  assert hset(hashset);
+  assert lseg(list, null) -** hset(hashset);
+  hashset.buckets[hashval] := insert(list, value);
+}
 
