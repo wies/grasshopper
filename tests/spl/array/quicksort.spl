@@ -4,7 +4,7 @@ procedure quicksort(a: Array<Int>, implicit ghost content: Set<Int>)
   requires array_cnt(a, content)
   ensures  sorted_array(a, content)
 {
-  quicksort1(a, 0, a.length, content);
+  quicksort1(a, 0, a.length-1, content);
 }
 
 procedure swap(a: Array<Int>, i: Int, j: Int, implicit ghost iVal: Int, implicit ghost jVal: Int)
@@ -28,11 +28,16 @@ procedure quicksort1(a: Array<Int>, lower: Int, upper: Int, ghost content: Set<I
     var i := lower;
     var C1 := Set<Int>();
     var C2 := Set<Int>();
-    var C3 := content;
+    //var C3 := content -- Set(a[upper]); //only true for multiset
+    var C3: Set<Int>;
+    pure assume(C3 == content || C3 == content -- Set(a[upper]));
     while (i < upper)
       invariant idx >= lower && i <= upper && i >= idx
-      invariant arrayseg_cnt(a, lower, idx, C1) &*& arrayseg_cnt(a, idx, i, C2) &*& arrayseg_cnt(a, i, upper, C3)
-      invariant content == C1 ++ C2 ++ C3
+      invariant acc(a) &*& acc(a, upper)
+      invariant arrayseg_cnt(a, lower, idx, C1)
+      invariant arrayseg_cnt(a, idx, i, C2)
+      invariant arrayseg_cnt(a, i, upper, C3)
+      invariant content == C1 ++ C2 ++ C3 ++ Set(a[upper])
       invariant forall k in C1:: k < pivotVal
       invariant forall k in C2:: k >= pivotVal
     {

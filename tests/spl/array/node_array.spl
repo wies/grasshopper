@@ -37,14 +37,8 @@ predicate arrayWithNode(a: Array<Node>)(FP0: Set<Array<Node>>, FP1: Set<ArrayCel
   arraysegWithNode(a, 0, a.length, FP1, FP2)
 }
 
-function witness(n: Node, FP: Set<Node>) returns (index: Int) { true }
-
 predicate arraySegOnlyNode(a: Array<Node>, lo: Int, hi: Int)( FP1: Set<Node>) {
   0 <= lo && lo <= hi && hi <= a.length &&
-  (forall c: ArrayCell<Node>:: c in arrayseg_footprint(a, lo, hi) == a[c.index] in FP1) &&
-  (forall i: Int:: i >= lo && i < hi == a[i] in FP1) &&
-  (forall n: Node:: n in FP1 ==> witness(n, FP1) >= lo && witness(n, FP1) < hi) &&
-  (forall n: Node:: n !in FP1 ==> witness(n, FP1) == 0) &&
-  (forall i: Int, j: Int :: i >= lo && i < hi && j >= lo && j < hi && i != j ==> a[i] != a[j])
+  FP1 == arrayseg_content(a, arrayseg_footprint(a, lo, hi))
 }
 

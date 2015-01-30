@@ -17,16 +17,21 @@ predicate array(a: Array<Int>)(FP1: Set<Array<Int>>, FP2: Set<ArrayCell<Int>>) {
 
 //sorted
 
-function contentWitness(v: Int, FP: Set<ArrayCell<Int>>) returns (res: ArrayCell<Int>) {
+function contentWitness(v: Int, FP: Set<ArrayCell<Int>>, m: Map<ArrayCell<Int>, Int>) returns (res: ArrayCell<Int>) {
   true
 }
 
+function array_state() returns (m: Map<ArrayCell<Int>, Int>) {
+  (forall c: ArrayCell<Int> :: c.m == c.array[c.index] @(matching c yields c.m))
+}
+
 function array_content(FP: Set<ArrayCell<Int>>) returns (C: Set<Int>) {
-  (forall x: ArrayCell<Int> :: x in FP ==> x == contentWitness(x.array[x.index], FP)) &&
+  (forall x: ArrayCell<Int> :: x in FP ==> x == contentWitness(x.array[x.index], FP, array_state())) &&
   (forall x: ArrayCell<Int> :: x in FP ==> x.array[x.index] in C) &&
-  (forall v in C :: contentWitness(v, FP) in FP) &&
-  (forall v: Int :: v !in C ==> contentWitness(v, FP) == null) &&
-  (forall v in C :: v == contentWitness(v, FP).array[contentWitness(v, FP).index])
+  (forall v in C :: contentWitness(v, FP, array_state()) in FP) &&
+  (forall v: Int :: v !in C ==> contentWitness(v, FP, array_state()) == null) &&
+  (forall v in C :: v == contentWitness(v, FP, array_state()).array[contentWitness(v, FP, array_state()).index]
+   @(matching v yields contentWitness(v, FP, array_state()).array[contentWitness(v, FP, array_state()).index]))
 }
 
 predicate arrayseg_cnt(a: Array<Int>, i: Int, j: Int, C: Set<Int>)(FP: Set<ArrayCell<Int>>) {
