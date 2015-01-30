@@ -552,7 +552,8 @@ let flatten_exprs cu =
               in
               let aux_id, locals = decl_aux_var "tmp" res_ty opos scope locals in
               let aux_var = Ident (aux_id, pos) in
-              let assign_aux = Assign ([Read (map, idx, opos)], [aux_var], pos) in
+              let assign_aux, locals =
+                flatten scope locals returns (Assign ([Read (map, idx, opos)], [aux_var], pos)) in
               [aux_var], [assign_aux], locals
           | _ ->
               List.fold_right 

@@ -286,7 +286,7 @@ let rec pr_term0 ppf t =
   | _ -> pr_term ppf t
 
 and pr_term ppf = function
-  | Var (id, _) -> fprintf ppf "%a" pr_ident id
+  | Var (id, _) -> fprintf ppf "?%a" pr_ident id
   | App (Empty, _, _) -> fprintf ppf "{}"
   | App (sym, [], _) -> fprintf ppf "%a" pr_sym sym
   | App (Read, [map; t], _) ->
@@ -359,6 +359,12 @@ let rec extract_label = function
   | _ :: ann -> extract_label ann
   | [] -> None
 
+let rec extract_gens = function
+  | TermGenerator (_, _, ms, t) :: ann ->
+      (List.map (function Match (t, _) -> t) ms, t) :: extract_gens ann
+  | _ :: ann -> extract_gens ann
+  | [] -> []
+        
 let pr_binder ppf b =
   let b_str = match b with
   | Forall -> "forall"
@@ -380,16 +386,25 @@ let rec pr_form ppf = function
   | Atom (t, a) -> fprintf ppf "@[(%a%a)@]" pr_term t pr_annot a
      
 and pr_annot ppf a =
+  let gen = extract_gens a in
   let name = extract_name a in
   let pos = extract_src_pos a in
   let lbl = extract_label a in
-  (match name, pos, lbl with
-  | "", None, None -> fprintf ppf ""
-  | "", Some pos, None -> fprintf ppf "@ /* %s */" (string_of_src_pos pos)
-  | "", Some pos, Some lbl -> fprintf ppf "@ /* %s -> %s */" (string_of_ident lbl) (string_of_src_pos pos)
-  | n, Some pos, None -> fprintf ppf "@ /* %s: %s */" (string_of_src_pos pos) n
-  | n, Some pos, Some lbl -> fprintf ppf "@ /* %s -> %s: %s */" (string_of_ident lbl) (string_of_src_pos pos) n
-  | n, None, _ -> fprintf ppf "@ /* %s */" n)
+  let rec pr_generators ppf = function
+    | (ms, t) :: gen ->
+        fprintf ppf "@ @[@@(matching %a yields %a)@]%a" pr_term_list ms pr_term t pr_generators gen
+    | [] -> ()
+  in
+  let pr_comment ppf (name, pos, lbl) =
+      (match name, pos, lbl with
+      | "", None, None -> fprintf ppf ""
+      | "", Some pos, None -> fprintf ppf "@ /* %s */" (string_of_src_pos pos)
+      | "", Some pos, Some lbl -> fprintf ppf "@ /* %s -> %s */" (string_of_ident lbl) (string_of_src_pos pos)
+      | n, Some pos, None -> fprintf ppf "@ /* %s: %s */" (string_of_src_pos pos) n
+      | n, Some pos, Some lbl -> fprintf ppf "@ /* %s -> %s: %s */" (string_of_ident lbl) (string_of_src_pos pos) n
+      | n, None, _ -> fprintf ppf "@ /* %s */" n)
+  in
+  fprintf ppf "%a%a" pr_generators gen pr_comment (name, pos, lbl)
  
 
 and pr_ands ppf = function

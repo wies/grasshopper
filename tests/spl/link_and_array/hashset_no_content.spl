@@ -14,7 +14,8 @@ function bucket_head(x: Node, a: Array<Node>, m: Map<ArrayCell<Node>, Node>) ret
 //TODO triggers
 function arrayseg_buckets_footprint(a: Array<Node>, FP0: Set<ArrayCell<Node>>) returns (FP1: Set<Node>) {
   // all nodes reachable from the head of the bucket are in the footprint
-    (forall c: ArrayCell<Node>, x: Node :: c in FP0 && Reach(next, c.array[c.index], x) ==> x in FP1 || x == null) &&
+    (forall c: ArrayCell<Node>, x: Node :: c in FP0 && Reach(next, c.array[c.index], x) ==> x in FP1 || x == null
+     @(matching c yields c.array[c.index])) &&
   // all nodes in the footprint are reachable from the bucket head
     (forall x in FP1 :: Reach(next, bucket_head(x, a, array_state()).array[bucket_head(x, a, array_state()).index], x) && x != null) &&
   // the bucket heads are in the array's footprint
@@ -124,14 +125,14 @@ procedure insert(lst: Node, val: Int, implicit ghost C: Set<Int>)
   }
 }
 
-procedure add(hashset: HashSet, value: Int)
+procedure hashset_add(hashset: HashSet, value: Int)
   returns (res: Bool)
   requires hset(hashset)
   ensures  hset(hashset)
 {
   var hashval := hash(hashset.size, value);
-  var list := hashset.buckets[hashval];
   assert hset(hashset);
+  var list := hashset.buckets[hashval];
   assert lseg(list, null) -** hset(hashset);
   hashset.buckets[hashval] := insert(list, value);
 }

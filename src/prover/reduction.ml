@@ -228,7 +228,7 @@ let open_axioms ?(force=false) open_cond axioms =
             ) a (generators, [], IdSet.empty)
         in
         let open_generators (x, _) = IdSet.mem x gen_vs in
-        let vs1 = List.filter (~~ (open_cond f ||| open_generators)) vs in
+        let vs1 = List.filter (~~ (open_cond f)) vs in
         if !Config.instantiate || force then
           Binder (b, vs1, f, a1), generators1
         else 

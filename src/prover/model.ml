@@ -599,6 +599,9 @@ let finalize_values model =
       | Set srt -> is_finite_set_sort srt
       | Map (dsrt, rsrt) ->
           is_finite_set_sort dsrt && is_finite_set_sort rsrt
+      | Array _ -> true
+      | ArrayCell _ -> true
+      | FreeSrt _ -> true
       | _ -> false
     in
     List.iter
@@ -904,13 +907,13 @@ let output_graphviz chan model terms =
       TermSet.iter
         (function
           | App (FreeSym _, _, Set srt1) as set_t when srt = srt1 ->
-              (try 
+              (try
                 let set = eval model set_t in
                 let s = find_set_value model set srt in
                 let vals = List.map (fun e ->  string_of_sorted_value srt e) (ValueSet.elements s) in
                 let set_rep = String.concat ", " vals in
                 Printf.fprintf chan "        <tr><td>%s == {%s}</td></tr>\n" (string_of_term set_t) set_rep
-              with Failure _ -> print_endline (string_of_term set_t))
+              with Failure _ | Undefined -> ())
           | _ -> ())
         terms
     in
