@@ -576,7 +576,19 @@ let flatten_exprs cu =
           List.fold_right 
             (fun e (es, aux, locals) ->
               let e1, aux1, locals = flatten_expr scope aux locals e in
-              e1 :: es, aux1, locals
+              match e1 with
+              | Read(Ident _, _, _) ->
+                  e1 :: es, aux1, locals
+              | Read (map, ind, opos) ->
+                  let mpos = pos_of_expr map in
+                  let aux_id, locals =
+                    decl_aux_var "tmp" (type_of_expr cu locals map) mpos scope locals
+                  in
+                  let aux_var = Ident (aux_id, mpos) in
+                  let assign_aux = Assign ([aux_var], [map], mpos) in
+                  Read (aux_var, ind, opos) :: es, aux1 @ [assign_aux], locals
+              | _ ->
+                  e1 :: es, aux1, locals
             ) 
             lhs ([], aux1, locals)
         in 
@@ -782,14 +794,15 @@ type cexpr =
   | FOL_term of Grass.term * typ
 
 let convert cu =
-  let find_var_decl locals id =
+  let find_var_decl pos locals id =
     try IdMap.find id locals 
     with Not_found -> 
       try IdMap.find id cu.var_decls
-      with Not_found -> failwith ("Unable to find identifier " ^ (string_of_ident id))
+      with Not_found ->
+        ProgError.error pos ("Unable to find identifier " ^ string_of_ident id)
   in
   let field_type pos fld_id locals =
-    let fdecl = find_var_decl locals fld_id in
+    let fdecl = find_var_decl pos locals fld_id in
     fdecl.v_type
     (*with Not_found ->
       ProgError.error pos 
@@ -894,7 +907,7 @@ let convert cu =
         let t = convert_term locals e in
         GrassUtil.mk_uminus t
     | Ident (id, pos) ->
-        let decl = find_var_decl locals id in
+        let decl = find_var_decl pos locals id in
         let srt = convert_type decl.v_type pos in
         GrassUtil.mk_free_const srt decl.v_name
     | BinaryOp (_, OpOr, _, _, _) -> failwith "meop"

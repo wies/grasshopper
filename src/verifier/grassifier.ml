@@ -639,7 +639,10 @@ let annotate_heap_checks prog =
       (fun t acc ->
         let ssrt = struct_sort_of_sort (sort_of t) in
         let t_in_footprint = FOL (mk_elem t (footprint_set ssrt)) in
-        let mk_msg callee = "Possible invalid heap access", "Possible invalid heap access" in
+        let mk_msg callee =
+          let msg = "Possible invalid heap access to location of type " ^ (string_of_sort ssrt) in
+          msg, msg
+        in
         let sf = mk_spec_form t_in_footprint "check heap access" (Some mk_msg) pos in
         let check_access = mk_assert_cmd sf pos in
         check_access :: acc)
