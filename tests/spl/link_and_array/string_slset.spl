@@ -36,14 +36,14 @@ function repr(str: Array<Int>) returns (res: String) {
 // spec for the list //
 ///////////////////////
 
-function witness(v: String, FP: Set<Node>) returns (res: Node) { true }
+function witness(v: String, FP: Set<Node>, m: Map<ArrayCell<Int>, Int>) returns (res: Node) { true }
 
 function content(FP: Set<Node>) returns (C: Set<String>) {
   (forall x: Node :: x in FP ==> x == witness(repr(x.data), FP)) &&
   (forall x: Node :: x in FP ==> repr(x.data) in C) &&
-  (forall v in C :: witness(v, FP) in FP) &&
-  (forall v: String :: v !in C ==> witness(v, FP) == null) &&
-  (forall v in C :: v == repr(witness(v, FP).data) @(matching v yields repr(witness(v, FP).data)))
+  (forall v in C :: witness(v, FP, array_state()) in FP) &&
+  (forall v: String :: v !in C ==> witness(v, FP, array_state()) == null) &&
+  (forall v in C :: v == repr(witness(v, FP, array_state()).data) @(matching v yields repr(witness(v, FP, array_state()).data)))
 }
 
 function lseg_footprint(x: Node, y: Node) returns (FP: Set<Node>) {

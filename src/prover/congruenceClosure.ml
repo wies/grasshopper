@@ -174,8 +174,10 @@ class dag = fun expr ->
           n
       end
   in
-  let rec convert_exp expr = match expr with
-    | Var (v, _) -> failwith "UIF: term not ground" (* create_and_add var (FreeSym v) []*)
+  let rec convert_exp expr =
+    (*print_endline ("CC adding: " ^ (string_of_term expr));*)
+    match expr with
+    | Var (v, _) -> failwith "CC: term not ground" (* create_and_add var (FreeSym v) []*)
     | App (c, [], _) as cst -> create_and_add cst c []
     | App (f, args, _) as appl ->
       let node_args = (List.map convert_exp args) in
@@ -211,10 +213,10 @@ class dag = fun expr ->
     method add_constr eq = match eq with
       | Atom (App (Eq, [e1; e2], _), _) ->
           if Grass.sort_of e1 <> Bool then 
-	    let n1 = self#get_node e1 in
+            let n1 = self#get_node e1 in
             let n2 = self#get_node e2 in
             n1#merge n2
-      | _ -> failwith "UIF: 'add_constr' only for Eq"
+      | _ -> failwith "CC: 'add_constr' only for Eq"
 
     (** Gets a list of list of equal expressions (connected components). *)
     method get_cc =
