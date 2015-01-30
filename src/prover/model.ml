@@ -135,7 +135,15 @@ let find_set_value model v srt =
     | SetVal s -> s
     | _ -> raise Undefined
   with Not_found ->
-    raise Undefined          
+    begin
+      if Debug.is_debug 1 then
+        begin
+          print_string "Model.find_set_value: not found '";
+          print_string ((string_of_value v) ^ "' of type ");
+          print_endline (string_of_sort (Set srt))
+        end;
+      raise Undefined
+    end
 
 let equal model v1 v2 srt =
   v1 = v2 ||

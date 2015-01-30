@@ -41,11 +41,10 @@ function ghostHash(max: Int, value: Int) returns (res: Int) {
   res >= 0 && res < max
 }
 
-predicate hset(hset: HashSet, C: Set<Int>)(FP0: Set<HashSet>, FP1: Set<Array<Node>>, FP2: Set<ArrayCell<Node>>, FP3: Set<Node>) {
+predicate hset(hset: HashSet)(FP0: Set<HashSet>, FP1: Set<Array<Node>>, FP2: Set<ArrayCell<Node>>, FP3: Set<Node>) {
   hset.size == hset.buckets.length &&
   FP0 == Set(hset) &&
   array_with_buckets(hset.buckets, FP1, FP2, FP3) &&
-  C == content(FP3) &&
   //all the elts from a list have the same hash, and this is the index in the array
     //(forall i: Int, n: Node:: 0 <= i && i < hset.size && Btwn(next, hset.buckets[i], n, null) ==> ghostHash(hset.size, n.data) == i @(matching n yields ghostHash(hset.size, n.data)))
     //(forall v in FP3:: Btwn(next, hset.buckets[ghostHash(hset, v)], witness(v, FP3), null))
@@ -62,7 +61,7 @@ procedure hash(size: Int, value: Int)
 
 procedure hashset_create(_size: Int) returns (res: HashSet)
   requires 0 < _size
-  ensures hset(res, Set<Int>())
+  ensures hset(res)
 {
   var new_set := new HashSet;
   new_set.buckets := new Array<Node>(_size);    
