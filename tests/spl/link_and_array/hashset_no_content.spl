@@ -67,7 +67,7 @@ procedure hashset_create(_size: Int) returns (res: HashSet)
   new_set.buckets := new Array<Node>(_size);    
 
   var i := 0;
-  while(i < _size)
+  while (i < _size)
     invariant i >= 0 && i <= _size
     invariant acc(new_set) &*& acc(new_set.buckets)
     invariant arrayseg_with_buckets(new_set.buckets, 0, i)

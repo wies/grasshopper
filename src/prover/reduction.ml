@@ -539,6 +539,7 @@ let encode_labels fs =
   in List.rev_map el fs
 
 let add_split_lemmas fs gts =
+  if not !Config.split_lemmas then fs else
   let structs =
     TermSet.fold (fun t structs ->
       match sort_of t with
@@ -546,7 +547,7 @@ let add_split_lemmas fs gts =
       | _ -> structs)
       gts SortSet.empty
   in
-  let classes = CongruenceClosure.congr_classes fs gts in
+  let classes = CongruenceClosure.congr_classes fs (ground_terms (mk_and fs)) in
   let add_lemmas srt fs1 =
     let loc_gts =
       TermSet.filter (fun t -> sort_of t = Loc srt) gts
@@ -564,9 +565,7 @@ let add_split_lemmas fs gts =
     in
     lem fs1 classes
   in
-  if !Config.split_lemmas
-  then SortSet.fold add_lemmas structs fs
-  else fs
+  SortSet.fold add_lemmas structs fs
     
 (** Reduces the given formula to the target theory fragment, as specified by the configuration. *)
 let reduce f =
