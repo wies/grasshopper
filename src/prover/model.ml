@@ -829,17 +829,17 @@ let output_graphviz chan model terms =
         m
     in
     let output_locs () =
-      let output_data_fields loc srt =
+      let output_data_fields loc rsrt =
         SymbolSet.iter
           (fun fld ->
             try 
-              let f = interp_symbol model fld ([], field_sort srt srt) [] in
+              let f = interp_symbol model fld ([], field_sort srt rsrt) [] in
               let fld_str = string_of_symbol fld in
-              let m, d = find_map_value model f (Loc srt) srt in
+              let m, d = find_map_value model f (Loc srt) rsrt in
               let v = fun_app model (MapVal (m, d)) [loc] in
               Printf.fprintf chan "      <tr><td><b>%s = %s</b></td></tr>\n" fld_str (string_of_value v)
             with Undefined -> ())
-          (get_symbols_of_sort model ([], field_sort srt srt))
+          (get_symbols_of_sort model ([], field_sort srt rsrt))
       in
       List.iter
         (fun loc ->
