@@ -362,12 +362,12 @@ let elim_sl prog =
     let returns = proc.proc_returns @ aux_returns in
     let formals = proc.proc_formals @ aux_formals in
     let convert_sl_form sfs name =
-      let fs, aux, kind = 
+      let fs, aux, kind_opt = 
         List.fold_right (fun sf (fs, aux, kind) -> 
           let new_kind = 
             match kind with
-            | Free -> sf.spec_kind
-            | k -> k
+            | Some Checked -> Some Checked
+            | _ -> Some (sf.spec_kind)
           in
           match sf.spec_form, aux with
           | SL f, None -> 
@@ -379,9 +379,10 @@ let elim_sl prog =
               Some (sf.spec_name, sf.spec_msg, merge_src_pos p sf.spec_pos),
               new_kind
           | _ -> fs, aux, kind)
-          sfs ([], None, Checked)
+          sfs ([], None, None)
       in
       let name, msg, pos = Util.Opt.get_or_else (name, None, dummy_position) aux in
+      let kind = Util.Opt.get_or_else Checked kind_opt in
       SlUtil.mk_sep_star_lst ~pos:pos fs, kind, name, msg, pos
     in
     let footprint_ids, footprint_sets =

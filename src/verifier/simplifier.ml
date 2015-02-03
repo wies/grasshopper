@@ -275,7 +275,7 @@ let elim_return prog =
           is_checked_spec
           (fun sf ->
             match sf.spec_form with
-            | FOL _ -> oldify_spec (id_set_of_list proc.proc_formals) sf
+            | FOL f -> oldify_spec (id_set_of_list proc.proc_formals) sf
             | SL _ -> failwith "elim_return: Found SL formula that should have been desugared.")
           proc.proc_postcond
       in fun pos -> List.map (fun sf -> mk_assert_cmd sf pos) posts
