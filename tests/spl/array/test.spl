@@ -1,5 +1,77 @@
 include "int_array.spl";
 
+procedure test_invariant_bug(a: Array<Int>, high: Int)
+  requires acc(a) &*& arrayseg(a, 0, high)
+  requires high >= 0 && high <= a.length
+  ensures acc(a) &*& arrayseg(a, 0, high)
+{
+  var i := 0;
+
+  while (i < high)
+    invariant 0 <= i && i <= high
+    invariant acc(a) &*& arrayseg(a, 0, high)
+    invariant forall j: Int :: 0 <= j && j < i ==> a[j] == 4
+  {
+    a[i] := 4;
+
+    i := i + 1;
+  }
+}
+
+procedure test_invariant_no_bug(a: Array<Int>, high: Int)
+  requires acc(a) &*& array(a)
+  requires high >= 0 && high <= a.length
+  ensures acc(a) &*& array(a)
+{
+  var i := 0;
+
+  while (i < high)
+    invariant 0 <= i && i <= high
+    invariant acc(a) &*& array(a)
+    invariant forall j: Int :: 0 <= j && j < i ==> a[j] == 4
+  {
+    a[i] := 4;
+
+    i := i + 1;
+  }
+}
+
+procedure test_invariant_bug1(a: Array<Int>, high: Int)
+  requires acc(a) &*& arrayseg(a, 0, a.length)
+  requires high >= 0 && high <= a.length
+  ensures acc(a) &*& arrayseg(a, 0, a.length)
+{
+  var i := 0;
+
+  while (i < a.length)
+    invariant 0 <= i && i <= a.length
+    invariant acc(a) &*& arrayseg(a, 0, a.length)
+    invariant forall j: Int :: 0 <= j && j < i ==> a[j] == 4
+  {
+    a[i] := 4;
+
+    i := i + 1;
+  }
+}
+
+procedure test_invariant_no_bug1(a: Array<Int>, high: Int)
+  requires acc(a) &*& array(a)
+  requires high >= 0 && high <= a.length
+  ensures acc(a) &*& array(a)
+{
+  var i := 0;
+
+  while (i < a.length)
+    invariant 0 <= i && i <= a.length
+    invariant acc(a) &*& array(a)
+    invariant forall j: Int :: 0 <= j && j < i ==> a[j] == 4
+  {
+    a[i] := 4;
+
+    i := i + 1;
+  }
+}
+
 procedure test_heap_access(a: Array<Int>, high: Int)
   requires acc(a) &*& arrayseg(a, 0, high)
   requires high >= 0 && high <= a.length

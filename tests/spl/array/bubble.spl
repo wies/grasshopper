@@ -1,11 +1,10 @@
 include "int_array.spl";
 
-
 // One pass of bubble sort should leave the maximum element in the correct position
 procedure bubble_one_pass(a: Array<Int>, high: Int)
-  requires arrayseg(a, 0, high)
+  requires acc(a) &*& arrayseg(a, 0, high)
   requires high >= 0 && high <= a.length
-  ensures arrayseg(a, 0, high)
+  ensures acc(a) &*& arrayseg(a, 0, high)
   ensures forall j: Int :: 0 <= j && j < high ==> a[j] <= a[high-1]
 {
   if (high == 0 || high == 1)
@@ -13,11 +12,12 @@ procedure bubble_one_pass(a: Array<Int>, high: Int)
     return;
   }
 
+  pure assert high > 1;
   var i := 1;
 
   while (i < high)
-    invariant 1 <= i && i < high && high <= a.length
-    invariant arrayseg(a, 0, high)
+    invariant 1 <= i && i <= high && high <= a.length
+    invariant acc(a) &*& arrayseg(a, 0, high)
     invariant forall j: Int :: 0 <= j && j < i ==> a[j] <= a[i-1]
   {
     if (a[i] < a[i - 1])
@@ -26,6 +26,7 @@ procedure bubble_one_pass(a: Array<Int>, high: Int)
       a[i] := a[i - 1];
       a[i - 1] := x;
     }
+
     i := i + 1;
   }
 }
