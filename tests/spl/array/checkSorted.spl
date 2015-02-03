@@ -1,14 +1,14 @@
 include "int_array.spl";
 
-procedure chechSorted(a: Array<Int>)
-  requires sorted_array(a)
-  ensures  sorted_array(a)
+procedure chechSorted(a: Array<Int>, implicit ghost content: Set<Int>)
+  requires sorted_array(a, content)
+  ensures  sorted_array(a, content)
 {
   var i := 0;
   
   while (i < a.length - 1)
     invariant i >= 0
-    invariant sorted_array(a)
+    invariant sorted_array(a, content)
   {
     pure assert(a[i] <= a[i+1]);
     i := i + 1;

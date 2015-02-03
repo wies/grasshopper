@@ -452,6 +452,13 @@ let string_of_form f =
   pr_form str_formatter f; 
   flush_str_formatter ()
 
+let string_of_arity arity =
+  List.fold_right
+    (fun s acc -> (string_of_sort s) ^ " -> " ^ acc)
+    (fst arity)
+    (string_of_sort (snd arity))
+
+
 (** Print term [t] to out channel [out_chan]. *)
 let print_term out_ch t = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_term t
 
