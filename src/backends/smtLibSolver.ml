@@ -490,6 +490,30 @@ let push session =
   let new_session = { session with stack_height = session.stack_height + 1 } in
   new_session
 
+let grass_smtlib_prefix = "grass_" 
+
+let smtlib_symbol_of_grass_symbol solver_info sym = match sym with 
+  | FreeSym id -> SmtLibSyntax.Ident id
+  | Plus -> SmtLibSyntax.Plus
+  | Minus | UMinus -> SmtLibSyntax.Minus
+  | Mult -> SmtLibSyntax.Mult
+  | Div -> SmtLibSyntax.Div
+  | Eq -> SmtLibSyntax.Eq
+  | LtEq -> SmtLibSyntax.Leq
+  | GtEq -> SmtLibSyntax.Geq
+  | Lt -> SmtLibSyntax.Lt
+  | Gt -> SmtLibSyntax.Gt
+  | (Read | Write) when !Config.encode_fields_as_arrays -> SmtLibSyntax.Ident (string_of_symbol sym, 0)
+  | (IntConst _ | BoolConst _) as sym -> SmtLibSyntax.Ident (string_of_symbol sym, 0)
+  | sym -> SmtLibSyntax.Ident (grass_smtlib_prefix ^ (string_of_symbol sym), 0)
+
+let grass_symbol_of_smtlib_symbol solver_info =
+  let to_string sym = SmtLibSyntax.string_of_symbol (smtlib_symbol_of_grass_symbol solver_info sym) in
+  let symbol_map = List.map (fun sym -> (to_string sym, sym)) symbols in
+  function (name, _) as id ->
+    try List.assoc name symbol_map
+    with Not_found -> FreeSym id
+
 let is_interpreted solver_info sym = match sym with
   | Read | Write -> !Config.encode_fields_as_arrays
   | Empty | SetEnum | Union | Inter | Diff | Elem | SubsetEq ->
@@ -500,10 +524,14 @@ let is_interpreted solver_info sym = match sym with
   | _ -> false
 
 let string_of_overloaded_symbol solver_info sym idx =
-  (string_of_symbol sym) ^
-  if solver_info.has_inst_closure && sym = FreeSym ("inst-closure", 0)
-  then ""
-  else "$" ^ (string_of_int idx)
+  match smtlib_symbol_of_grass_symbol solver_info sym with
+  | SmtLibSyntax.Ident id ->
+    (string_of_ident id) ^
+    if solver_info.has_inst_closure && sym = FreeSym ("inst-closure", 0)
+    then ""
+    else "$" ^ (string_of_int idx)
+  | _ -> 
+    failwith "string_of_overloaded_symbol"
 
 
 let declare session sign =
@@ -530,19 +558,6 @@ let declare session sign =
   writeln session "";
   { session with signature = Some sign }
 
-let smtlib_symbol_of_grass_symbol = function
-  | FreeSym id -> SmtLibSyntax.Ident id
-  | Plus -> SmtLibSyntax.Plus
-  | Minus | UMinus -> SmtLibSyntax.Minus
-  | Mult -> SmtLibSyntax.Mult
-  | Div -> SmtLibSyntax.Div
-  | Eq -> SmtLibSyntax.Eq
-  | LtEq -> SmtLibSyntax.Leq
-  | GtEq -> SmtLibSyntax.Geq
-  | Lt -> SmtLibSyntax.Lt
-  | Gt -> SmtLibSyntax.Gt
-  | sym -> SmtLibSyntax.Ident (string_of_symbol sym, 0)
-
 let extract_name ann =
   let names = Util.filter_map 
       (function Name _ -> !Config.named_assertions | _ -> false) 
@@ -554,7 +569,7 @@ let extract_name ann =
 let smtlib_form_of_grass_form solver_info signs f =
   let osym sym sign =
     if is_interpreted solver_info sym 
-    then smtlib_symbol_of_grass_symbol sym
+    then smtlib_symbol_of_grass_symbol solver_info sym
     else
       let versions = 
         try SymbolMap.find sym signs 
@@ -564,7 +579,7 @@ let smtlib_form_of_grass_form solver_info signs f =
         let version = Util.find_index sign versions in
         SmtLibSyntax.Ident (mk_ident (string_of_overloaded_symbol solver_info sym version))
       with Not_found ->
-        smtlib_symbol_of_grass_symbol sym
+        smtlib_symbol_of_grass_symbol solver_info sym
   in
   let rec cterm t = match t with
   | Var (id, _) -> SmtLibSyntax.mk_app (SmtLibSyntax.Ident id) []
@@ -702,6 +717,9 @@ let convert_model session smtModel =
         | _, [] -> FreeSrt (name, num)
         | srt, _ -> fail session ("encountered unexpected sort " ^ srt ^ " in model conversion")
   in
+  (* solver_info for symbol conversion *)
+  let solver_info = (fst (List.hd session.solvers)).info in
+  let to_sym = grass_symbol_of_smtlib_symbol solver_info in
   (* detect Z3/CVC4 identifiers that represent values of uninterpreted sorts *)
   let to_val (name, num) =
     let id = name ^ "_" ^ string_of_int num in
@@ -791,7 +809,7 @@ let convert_model session smtModel =
       | SmtLibSyntax.App (Ident id, ts, pos) ->
           let cts = List.map (convert_term bvs) ts in
           let id = normalize_ident id in
-          let sym = symbol_of_ident id in
+          let sym = to_sym id in
           let ts_srts = List.map sort_of cts in
           let res_srt = 
             match Model.get_result_sort model sym ts_srts with
@@ -838,7 +856,7 @@ let convert_model session smtModel =
       | SmtLibSyntax.App (Ident id, ts, _) ->
           let cts = List.map (convert_term bvs) ts in
           let id = normalize_ident id in
-          let sym = symbol_of_ident id in
+          let sym = to_sym id in
           mk_atom sym cts
       | SmtLibSyntax.App (SmtLibSyntax.Eq, [t1; t2], pos) -> 
           (try 
@@ -925,8 +943,9 @@ let convert_model session smtModel =
               (* Z3-specific work around *)
               (match convert_term [] t with
               | App (FreeSym (id2, _) as sym2, ts, srt) as t1 ->
-                  let re = Str.regexp (string_of_symbol sym ^ "\\$[0-9]+![0-9]+") in
-                  if Str.string_match re id2 0 &&
+                  let re1 = Str.regexp (string_of_symbol sym ^ "\\$[0-9]+![0-9]+") in
+                  let re2 = Str.regexp (grass_smtlib_prefix ^ (string_of_symbol sym) ^ "\\$[0-9]+![0-9]+") in
+                  if (Str.string_match re1 id2 0 || Str.string_match re2 id2 0) &&
                     List.fold_left2 (fun acc (id1, _) -> function
                       | App (FreeSym _, [App (FreeSym id2, [], _)], _)
                       | App (FreeSym id2, [], _) -> acc && id1 = id2
@@ -934,7 +953,8 @@ let convert_model session smtModel =
                   then 
                     let def = Model.get_interp model sym2 arity in
                     Model.add_interp model sym arity def
-                  else add_term pos model arg_map t1
+                  else
+                    add_term pos model arg_map t1
               | t1 -> add_term pos model arg_map t1))
       | SmtLibSyntax.Annot (def, _, _) -> 
           p model arg_map def
@@ -952,7 +972,7 @@ let convert_model session smtModel =
             let cres_srt = convert_sort res_srt in
             let cargs = List.map (fun (x, srt) -> x, convert_sort srt) args in
             let carg_srts = List.map snd cargs in
-            let sym = symbol_of_ident (normalize_ident id) in
+            let sym = to_sym (normalize_ident id) in
             process_def model sym (carg_srts, cres_srt) cargs (SmtLibSyntax.unletify def) 
         | _ -> model)
       model1 smtModel 

@@ -93,11 +93,18 @@ let get_interp model sym arity =
   with Not_found -> ValueListMap.empty, Undef
 
 let add_def model sym arity args v =
+  if Debug.is_debug 1 then print_endline (
+      "add_def: " ^ (string_of_symbol sym) ^ ": " ^ (string_of_arity arity) ^
+      " => " ^ (String.concat "," (List.map string_of_value args)) ^
+      " => " ^ (string_of_value v));
   let m, d = get_interp model sym arity in
   let new_m = ValueListMap.add args v m in
   { model with intp = SortedSymbolMap.add (sym, arity) (new_m, d) model.intp }
 
 let add_default_val model sym arity v =
+  if Debug.is_debug 1 then print_endline (
+      "add_default_val: " ^ (string_of_symbol sym) ^ ": " ^ (string_of_arity arity) ^
+      " => " ^ (string_of_value v));
   let m, d = get_interp model sym arity in
   (match d with
   | Undef -> ()
@@ -308,11 +315,9 @@ and interp_symbol model sym arity args =
           print_string "Model.interp_symbol: symbol not found '";
           print_string (string_of_symbol sym);
           print_string "' of type ";
-          List.iter
-            (fun s -> print_string (" " ^ (string_of_sort s)))
-            (fst arity);
-          print_string " -> ";
-          print_endline (string_of_sort (snd arity));
+          print_string (string_of_arity arity);
+          print_endline " in:";
+          SortedSymbolMap.iter (fun (s,a) _ -> print_endline ("  " ^ (string_of_symbol s) ^ ": " ^ string_of_arity a)) model.intp
         end;
       raise Undefined
     end
