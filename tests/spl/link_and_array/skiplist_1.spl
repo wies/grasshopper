@@ -1,6 +1,7 @@
 //  inspired by
 //  http://opendatastructures.org/versions/edition-0.1e/ods-java/4_2_SkiplistSSet_Efficient_.html
 //  under CC-BY
+//  full source at http://opendatastructures.org/ods-java.tgz
 
 include "../include/skiplist.spl";
 
