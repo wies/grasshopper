@@ -277,7 +277,7 @@ let check_proc prog proc =
         Filename.chop_extension (Filename.basename pp.sp_file) ^ "_" ^ vc_name 
       in
       match Prover.get_model ~session_name:session_name ~sat_means:sat_means vc_and_preds with
-      | None -> errors
+      | None -> Printf.printf "%s: %d\n" session_name !InstGen.inst_count; errors
       | Some model -> 
           (* generate error message from model *)
           let add_msg pos msg error_msgs =
