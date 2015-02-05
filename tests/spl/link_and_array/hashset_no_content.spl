@@ -9,7 +9,7 @@ struct HashSet {
   var buckets: Array<Node>; /* the set elements */
 }
 
-function bucket_head(x: Node, a: Array<Node>, m: Map<ArrayCell<Node>, Node>) returns (c: ArrayCell<Node>)
+function bucket_head(x: Node, a: Array<Node>, m: Map<ArrayCell<Node>, Node>) returns (c: ArrayCell<Node>) 
 
 //TODO triggers
 function arrayseg_buckets_footprint(a: Array<Node>, FP0: Set<ArrayCell<Node>>) returns (FP1: Set<Node>) {
@@ -20,7 +20,7 @@ function arrayseg_buckets_footprint(a: Array<Node>, FP0: Set<ArrayCell<Node>>) r
     (forall x in FP1 :: Reach(next, bucket_head(x, a, array_state()).array[bucket_head(x, a, array_state()).index], x) && x != null) &&
   // the bucket heads are in the array's footprint
     (forall x in FP1 :: bucket_head(x, a, array_state()) in FP0
-     @(matching x yields bucket_head(x, a, array_state()).array[bucket_head(x, a, array_state()).index]))
+     @(matching x yields bucket_head(x, a, array_state())))
   // (forall c: ArrayCell<Node> :: c in FP0 ==> c == bucket_head(c.array[c.index], a, array_state())) 
 }
 
@@ -57,7 +57,9 @@ procedure hash(size: Int, value: Int)
   returns (res: Int)
   requires 0 <= size
   ensures res == ghostHash(size, value)
-
+  //{
+  //assume false;
+  //}
 
 
 procedure hashset_create(_size: Int) returns (res: HashSet)
