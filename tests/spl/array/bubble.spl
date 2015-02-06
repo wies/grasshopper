@@ -38,7 +38,9 @@ procedure bubble_sort(a: Array<Int>, implicit ghost content: Set<Int>, implicit 
   var high := a.length;
 
   while (high > 0)
-    invariant (high == a.length &*& arrayseg_bnd(a, 0, high, lb, ub)) || (high < a.length &*& arrayseg_bnd(a, 0, high, lb, a[high]+1))
+    invariant acc(a) //TODO when this was not there is still went through!!
+    invariant (high == a.length &*& arrayseg_bnd(a, 0, high, lb, ub)) ||
+              (high < a.length &*& a[high] >= lb &*& arrayseg_bnd(a, 0, high, lb, a[high]+1))
     invariant sorted_arrayseg_bnd(a, high, a.length, a[high], ub)
     invariant 0 <= high && high <= a.length
   {
