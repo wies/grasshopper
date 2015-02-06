@@ -4,9 +4,8 @@
 function int_arrayseg_footprint(a: Array<Int>, i: Int, j: Int)
   returns (FP: Set<ArrayCell<Int>>)
 {
-  (forall k: Int :: i <= k && k < j ==> a.cells[k] in FP) &&
-  (forall c: ArrayCell<Int> :: c in FP ==>
-     c.array == a && i <= c.index && c.index < j)
+  (forall c: ArrayCell<Int> ::
+     c in FP == (i <= c.index && c.index < j && c.array == a))
 }
 
 predicate int_arrayseg(a: Array<Int>, i: Int, j: Int)(FP: Set<ArrayCell<Int>>) {
@@ -25,9 +24,8 @@ predicate sorted_int_arrayseg(a: Array<Int>, i: Int, j: Int)(FP: Set<ArrayCell<I
 function node_arrayseg_footprint(a: Array<Node>, i: Int, j: Int)
   returns (FP: Set<ArrayCell<Node>>)
 {
-  (forall k: Int :: i <= k && k < j ==> a.cells[k] in FP) &&
-  (forall c: ArrayCell<Node> :: c in FP ==>
-     c.array == a && i <= c.index && c.index < j)
+  (forall c: ArrayCell<Node> ::
+     c in FP == (i <= c.index && c.index < j && c.array == a))
 }
 
 predicate node_arrayseg(a: Array<Node>, i: Int, j: Int)(FP: Set<ArrayCell<Node>>) {
@@ -72,6 +70,7 @@ struct Node {
 }
 
 
+//TODO array_state
 function arrayOwner1(a: Array<Node>, FP: Set<Node>) returns (x: Node) { true }
 function arrayOwner2(a: Array<Int>, FP: Set<Node>) returns (x: Node) { true }
 
@@ -172,6 +171,15 @@ predicate reach_via_child(FP: Set<Node>) {
       x in FP && y in FP && Btwn(parent, y, x, x)
     ==>
       x == y || Btwn(parent, y, x.pointers[witness1(x, y)], x)
+}
+
+predicate btree_node(order: Int, n: Node)(FP0: Set<Node>, FP1: Set<Array<Node>>, FP2: Set<ArrayCell<Node>>, FP3: Set<Array<Int>>, FP4: Set<ArrayCell<Int>>) {
+  well_formed_node(order, n) &&
+  FP0 == Set(n) &&
+  FP1 == Set(n.pointers) &&
+  FP2 == node_arrayseg_footprint(n.pointers, 0, n.pointers.length) &&
+  FP3 == Set(n.keys) ++ Set(n.data) &&
+  FP4 == int_arrayseg_footprint(n.keys, 0, n.keys.length) ++ int_arrayseg_footprint(n.data, 0, n.data.length)
 }
 
 //partial btree (subtree of the whole tree)

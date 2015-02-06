@@ -126,10 +126,10 @@ procedure remove(this: SkipList, x: Int)
   //that path has the property that it contains all the nodes that points to node to remove
   //
   //the properties to that path is:
-  //-start at max height
+  //-start at max height (skiplist.height)
   //-∀ n in the path if h is the outgoing height at n then
-  //    - ∀ i>h. n[i] == null || n[i].data > x
-  //    - n[h].data <= x
+  //  - ∀ i > h && i < n.height. n.next[i] == null || n.next[i].data > x
+  //  - n[h].data <= x
   
   while (r >= 0)
     invariant acc(u) -** skiplist(this) //TODO not a skiplist ...

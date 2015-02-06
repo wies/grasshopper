@@ -167,7 +167,7 @@ procedure cut( length: Int ) returns (res: Int)
  * to serve as either a leaf or an internal node. */
 procedure make_node(order: Int) returns (res: Node)
   requires  order >= 3
-  ensures   acc(res) &*& well_formed_node(order, res) &*& !res.is_leaf
+  ensures   btree_node(order, res) &*& !res.is_leaf
 {
   var new_node := new Node;
   new_node.keys := new Array<Int>(order-1);
@@ -194,14 +194,15 @@ procedure make_leaf(order: Int) returns (res: Node)
  * to find the index of the parent's pointer to
  * the node to the left of the key to be inserted.
  */
-procedure get_left_index(parent: Node, left: Node) returns (res: Node)
-  requires  ???
-  ensures   ???
+procedure get_left_index(parent: Node, left: Node, ghost order: Int) returns (res: Node)
+  requires  sub_btree(order, parent) &*& left.parent == parent
+  ensures   sub_btree(order, parent) &*& left.parent == parent &*& parent.pointer[res] == left
 {
   var left_index: Int := 0;
   while (left_index <= parent.num_keys && parent.pointers[left_index] != left)
-    invariant left_index >= 0;
-    invariant ???
+    invariant well_formed_node(order, parent)
+    invariant left_index >= 0 && left_index < parent.num_keys
+    invariant forall i: Int:: i >= 0 && i < left_index ==> parent.pointers[i] != left
   {
     left_index := left_index + 1;
   }
@@ -210,9 +211,10 @@ procedure get_left_index(parent: Node, left: Node) returns (res: Node)
 
 /* Inserts a new pointer to a record and its corresponding key into a leaf.
  * Returns the altered leaf. */
-procedure insert_into_leaf( leaf: Node, key: Int, value: Int ) returns (res: Node)
-  requires  ???
-  ensures   ???
+procedure insert_into_leaf(leaf: Node, key: Int, value: Int, ghost order: Int) returns (res: Node)
+  requires  sub_btree(order, leaf) &*& leaf.is_leaf &*& leaf.num_keys < order - 1
+  requires  forall i: Int:: i >= 0 && i < leaf.num_keys ==> leaf.keys[i] != key
+  ensures   sub_btree(order, leaf) &*& leaf.is_leaf
 {
 
   var i: Int;
@@ -220,7 +222,9 @@ procedure insert_into_leaf( leaf: Node, key: Int, value: Int ) returns (res: Nod
 
   insertion_point := 0;
   while (insertion_point < leaf.num_keys && leaf.keys[insertion_point] < key)
-    invariant ???
+    invariant insertion_point >= 0 && insertion_point <= leaf.num_keys
+    invariant int_arrayseg(leaf.keys, 0, leaf.num_keys)
+    invariant forall i: Int:: i >= 0 && i < insertion_point ==> leaf.keys[i] < key 
   {
     insertion_point := insertion_point + 1;
   }
