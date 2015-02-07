@@ -55,13 +55,20 @@ list_set_traverse       tests/spl/list_set/traverse.spl         pass
 list_set_union          tests/spl/list_set/union.spl            pass
 bst_set                 tests/spl/tree/binary_search_tree.spl   pass
 nested_list_destroy     tests/spl/nested_sl/destroy.spl         pass
+nests_list_insert	tests/spl/nested_sl/insert.spl		pass
+nests_list_remove	tests/spl/nested_sl/remove.spl		pass
+nests_list_traverse	tests/spl/nested_sl/traverse.spl	pass
+bst_set_trailrec        tests/spl/tree/binary_search_tree_tailrec.spl   pass
+bst_set_so_trailrec     tests/spl/tree/binary_search_tree_shape_only_tailrec.spl   pass
+skewheap		tests/spl/tree/skew_heap_no_content.spl pass
+unionfind_tree          tests/spl/tree/union_find.spl           pass
 "
 generate()
 {
     # COMMIT_ID and COMMON_ARGS should be defined
 
     VAR_ARGS="$@"
-    OUTDIR=smtlib/${COMMIT_ID}$(echo $VAR_ARGS | tr "-" "/" | tr -d " ")/leaf
+    OUTDIR=smtlib/${COMMIT_ID}$(echo $VAR_ARGS | tr -d " ")
 
     [ -d $OUTDIR ] && {
       echo "Looks like benchmarks already generated, skipping (delete $OUTDIR to force generation)"
@@ -90,39 +97,121 @@ smtlib()
     ./build.sh
 
     COMMIT_ID="$(git log -1 --format="%cd-%h" --date=short)"
-    COMMON_ARGS="-lint -noverify -dumpvcs -smtpatterns"
 
-    generate "-smtsolver z3log"
-    generate "-smtsolver z3log -nostratify"
-    generate "-smtsolver z3log -nomodifiesopt"
-    generate "-smtsolver z3log -optreach"
-    generate "-smtsolver z3log -optreach -splitlemmas"
+    COMMON_ARGS="-lint -noverify -dumpvcs"
+    ###generate "-smtsolver z3log"
+    #generate "-smtsolver z3log -nostratify" 
+    #generate "-smtsolver z3log -nomodifiesopt"
+    #generate "-smtsolver z3log -optreach"
+    #generate "-smtsolver z3log -optreach -splitlemmas"
+    #wait
+    #COMMON_ARGS="-lint -noverify -dumpvcs -smtpatterns"
     generate "-smtsolver z3log -noinst"
-    generate "-smtsolver z3log -noinst -nomodifiesopt"
+    #generate "-smtsolver z3log -noinst -nomodifiesopt"
+    #generate "-smtsolver z3log -noinst -optreach"
+    #generate "-smtsolver z3log -noinst -optreach -splitlemmas"
+    #wait
+
+    ###generate "-smtsolver cvc4log -nostratify"
+    #generate "-smtsolver cvc4log -nostratify -smtsets"
+    #generate "-smtsolver cvc4log -nostratify -smtsets -smtarrays"
+    #generate "-smtsolver cvc4log -nostratify -nomodifiesopt"
+    #generate "-smtsolver cvc4log -splitlemmas -nostratify"
+    #wait
+    #generate "-smtsolver cvc4log -splitlemmas -nostratify -smtsets"
+    ###generate "-smtsolver cvc4log -noinst"
+    #generate "-smtsolver cvc4log -noinst -smtsets"
+    #generate "-smtsolver cvc4log -noinst -smtsets -smtarrays"
+    #generate "-smtsolver cvc4log -noinst -nomodifiesopt"
+    #wait
+    #generate "-smtsolver cvc4log -splitlemmas -noinst"
+    #generate "-smtsolver cvc4log -splitlemmas -noinst -smtsets"
+
+    #generate "-smtsolver cvc4log -optreach -nostratify"
+    #generate "-smtsolver cvc4log -optreach -nostratify -smtsets"
+    #generate "-smtsolver cvc4log -optreach -splitlemmas -nostratify"
+    #wait
+    #generate "-smtsolver cvc4log -optreach -splitlemmas -nostratify -smtsets"
+    #generate "-smtsolver cvc4log -optreach -noinst"
+    #generate "-smtsolver cvc4log -optreach -noinst -smtsets"
+    #generate "-smtsolver cvc4log -optreach -splitlemmas -noinst"
+    #generate "-smtsolver cvc4log -optreach -splitlemmas -noinst -smtsets"
+
+
+
+
+    #generate "-smtsolver cvc4log -nostratify -smtsets -splitlemmas"
+    #generate "-smtsolver cvc4log -noinst"
+    #generate "-smtsolver cvc4log -noinst -smtsets"
+    #generate "-smtsolver cvc4log -noinst -smtsets -nomodifiesopt"
+
+    ### for kshitij's testing infrastructure
+    #[ -d "../test/benchmarks" ] && (
+    #  rsync -r smtlib/ ../test/benchmarks/grasshopper/
+    #  cd ../test/benchmarks
+    #  LISTFILE=grasshopper_${COMMIT_ID}.list
+    #  find grasshopper/$COMMIT_ID* -iname "*.smt2" >$LISTFILE
+    #  wc -l $LISTFILE
+    #)
+}
+
+smtlib-cav()
+{
+    ls *.smt2 2>/dev/null && echo "Remove existing SMT-LIB files to proceed. Aborting." && exit 0
+
+    ./build.sh
+
+    COMMIT_ID="$(git log -1 --format="%cd-%h" --date=short)"
+
+    COMMON_ARGS="-lint -noverify -dumpvcs"
+    # generate "-nostratify"                  # for num of instantiations
+    generate "-smtsolver z3log -noinst"
     generate "-smtsolver z3log -noinst -optreach"
-    generate "-smtsolver z3log -noinst -optreach -splitlemmas"
+    generate "-smtsolver z3log -noinst -smtpatterns"
+    generate "-smtsolver z3log -noinst -smtpatterns -optreach"
+    generate "-smtsolver z3log"
+    generate "-smtsolver z3log -smtpatterns"
+    generate "-smtsolver z3log -smtpatterns -optreach"
+    generate "-smtsolver cvc4log -noinst -smtpatterns"
+    generate "-smtsolver cvc4log -noinst -smtpatterns -optreach -splitlemmas"
+    generate "-smtsolver cvc4log -nostratify -smtpatterns"
+    generate "-smtsolver cvc4log -nostratify -smtpatterns -optreach -splitlemmas"
+    ###generate "-smtsolver z3log"
+    #generate "-smtsolver z3log -nostratify" 
+    #generate "-smtsolver z3log -nomodifiesopt"
+    #generate "-smtsolver z3log -optreach"
+    #generate "-smtsolver z3log -optreach -splitlemmas"
+    #wait
+    #COMMON_ARGS="-lint -noverify -dumpvcs -smtpatterns"
+    #generate "-smtsolver z3log -noinst -nomodifiesopt"
+    #generate "-smtsolver z3log -noinst -optreach"
+    #generate "-smtsolver z3log -noinst -optreach -splitlemmas"
+    #wait
 
-    generate "-smtsolver cvc4log -nostratify"
-    generate "-smtsolver cvc4log -nostratify -smtsets"
-    generate "-smtsolver cvc4log -nostratify -smtsets -smtarrays"
-    generate "-smtsolver cvc4log -nostratify -nomodifiesopt"
-    generate "-smtsolver cvc4log -splitlemmas -nostratify"
-    generate "-smtsolver cvc4log -splitlemmas -nostratify -smtsets"
-    generate "-smtsolver cvc4log -noinst"
-    generate "-smtsolver cvc4log -noinst -smtsets"
-    generate "-smtsolver cvc4log -noinst -smtsets -smtarrays"
-    generate "-smtsolver cvc4log -noinst -nomodifiesopt"
-    generate "-smtsolver cvc4log -splitlemmas -noinst"
-    generate "-smtsolver cvc4log -splitlemmas -noinst -smtsets"
+    ###generate "-smtsolver cvc4log -nostratify"
+    #generate "-smtsolver cvc4log -nostratify -smtsets"
+    #generate "-smtsolver cvc4log -nostratify -smtsets -smtarrays"
+    #generate "-smtsolver cvc4log -nostratify -nomodifiesopt"
+    #generate "-smtsolver cvc4log -splitlemmas -nostratify"
+    #wait
+    #generate "-smtsolver cvc4log -splitlemmas -nostratify -smtsets"
+    ###generate "-smtsolver cvc4log -noinst"
+    #generate "-smtsolver cvc4log -noinst -smtsets"
+    #generate "-smtsolver cvc4log -noinst -smtsets -smtarrays"
+    #generate "-smtsolver cvc4log -noinst -nomodifiesopt"
+    #wait
+    #generate "-smtsolver cvc4log -splitlemmas -noinst"
+    #generate "-smtsolver cvc4log -splitlemmas -noinst -smtsets"
 
-    generate "-smtsolver cvc4log -optreach -nostratify"
-    generate "-smtsolver cvc4log -optreach -nostratify -smtsets"
-    generate "-smtsolver cvc4log -optreach -splitlemmas -nostratify"
-    generate "-smtsolver cvc4log -optreach -splitlemmas -nostratify -smtsets"
-    generate "-smtsolver cvc4log -optreach -noinst"
-    generate "-smtsolver cvc4log -optreach -noinst -smtsets"
-    generate "-smtsolver cvc4log -optreach -splitlemmas -noinst"
-    generate "-smtsolver cvc4log -optreach -splitlemmas -noinst -smtsets"
+    #generate "-smtsolver cvc4log -optreach -nostratify"
+    #generate "-smtsolver cvc4log -optreach -nostratify -smtsets"
+    #generate "-smtsolver cvc4log -optreach -splitlemmas -nostratify"
+    #wait
+    #generate "-smtsolver cvc4log -optreach -splitlemmas -nostratify -smtsets"
+    #generate "-smtsolver cvc4log -optreach -noinst"
+    #generate "-smtsolver cvc4log -optreach -noinst -smtsets"
+    #generate "-smtsolver cvc4log -optreach -splitlemmas -noinst"
+    #generate "-smtsolver cvc4log -optreach -splitlemmas -noinst -smtsets"
 
 
 
@@ -143,4 +232,4 @@ smtlib()
 }
 
 
-smtlib
+smtlib-cav
