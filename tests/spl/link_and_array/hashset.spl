@@ -136,8 +136,9 @@ procedure free_set(hashset: HashSet, implicit ghost content: Set<Int>)
 {
   var i := 0;
   while(i < hashset.size)
+    invariant i >= 0 && i <= hashset.size
     invariant acc(hashset) &*& acc(hashset.buckets)
-    invariant arrayseg(hashset.buckets, 0, i) &*& arraysegWithNodes(hashset.buckets, 0, i)
+    invariant arrayseg(hashset.buckets, 0, i) &*& arraysegWithNodes(hashset.buckets, i, hashset.size)
   {
     var list := hashset.buckets[i];
     while(list != null)

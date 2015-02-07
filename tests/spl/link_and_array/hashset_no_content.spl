@@ -9,13 +9,13 @@ struct HashSet {
   var buckets: Array<Node>; /* the set elements */
 }
 
-//TODO triggers
 function arrayseg_buckets_footprint(a: Array<Node>, FP0: Set<ArrayCell<Node>>) returns (FP1: Set<Node>) {
   // all nodes reachable from the head of the bucket are in the footprint
-    (forall c: ArrayCell<Node>, x: Node :: c in FP0 && Reach(next, c.array[c.index], x) ==> x in FP1 || x == null
+    (forall c: ArrayCell<Node>, x: Node :: c in FP0 && Btwn(next, c.array[c.index], x, null) ==> x in FP1 || x == null
      @(matching c yields c.array[c.index])) &&
   // all nodes in the footprint are reachable from the bucket head
-    (forall x in FP1 :: Reach(next, a.cells[ghostHash(a.length, x.data)].array[a.cells[ghostHash(a.length, x.data)].index], x) && x != null) &&
+    (forall x in FP1 :: Btwn(next, a[ghostHash(a.length, x.data)], x, null) && x != null
+     @(matching x yields a[ghostHash(a.length, x.data)])) &&
   // the bucket heads are in the array's footprint
     (forall x in FP1 :: a.cells[ghostHash(a.length, x.data)] in FP0
      @(matching x yields a.cells[ghostHash(a.length, x.data)] ))
@@ -26,10 +26,8 @@ predicate arrayseg_with_buckets(a: Array<Node>, lo: Int, hi: Int)(FP0: Set<Array
   FP0 == arrayseg_footprint(a, lo, hi) &&
   FP1 == arrayseg_buckets_footprint(a, FP0) &&
   (forall c: ArrayCell<Node>, x: Node :: c in FP0 && x in FP1 && Reach(next, c.array[c.index], x) ==> a.cells[ghostHash(a.length, x.data)] == c) &&
-  (forall c: ArrayCell<Node> :: c in FP0 ==> Reach(next, c.array[c.index], null)) &&
+  (forall c: ArrayCell<Node> :: c in FP0 ==> Reach(next, c.array[c.index], null) @(matching c yields c.array[c.index])) &&
   //all the elts from a list have the same hash, and this is the index in the array
-  //TODO some redundancy here ?
-  (forall i: Int, n: Node:: lo <= i && i < hi && Btwn(next, a[i], n, null) && n != null ==> ghostHash(a.length, n.data) == i @(matching n yields ghostHash(a.length, n.data))) &&
   (forall v in FP1:: Btwn(next, a[ghostHash(a.length, v.data)], v, null) @(matching v yields a[ghostHash(a.length, v.data)]))
 }
 
@@ -81,32 +79,11 @@ procedure hashset_create(_size: Int) returns (res: HashSet)
   return new_set;
 }
 
+
 procedure insert(lst: Node, value: Int) 
   returns (res: Node)
   requires lseg(lst, null)
   ensures lseg(res, null)
-{
-  var elt := new Node;
-  elt.data := value;
-  elt.next := null;
-  if (lst == null)
-    return elt;
-  else {
-    var curr := lst;
-    while (curr.next != null && curr.data != value)
-      invariant acc(curr) -** lseg(lst, null)
-    {
-      curr := curr.next;
-    }
-    if (curr.data == value) {
-      free(elt);
-    } else {
-      elt.next := curr.next;
-      curr.next := elt;
-    }
-    return lst;
-  }
-}
 
 procedure hashset_add(hashset: HashSet, value: Int)
   returns (res: Bool)
@@ -120,3 +97,58 @@ procedure hashset_add(hashset: HashSet, value: Int)
   hashset.buckets[hashval] := insert(list, value);
 }
 
+
+procedure contains(lst: Node, value: Int) 
+  returns (res: Bool)
+  requires lseg(lst, null)
+  ensures lseg(lst, null)
+
+procedure hashset_member(hashset: HashSet, value: Int)
+  returns (res: Bool)
+  requires hset(hashset)
+  ensures  hset(hashset)
+{
+  var hashval := hash(hashset.size, value);
+  var list := hashset.buckets[hashval];
+  return contains(list, value);
+}
+
+
+procedure delete(lst: Node, value: Int) 
+  returns (res: Node)
+  requires lseg(lst, null)
+  ensures lseg(res, null)
+
+procedure hashset_remove(hashset: HashSet, value: Int)
+  requires hset(hashset)
+  ensures  hset(hashset)
+{
+  var hashval := hash(hashset.size, value);
+  var list := hashset.buckets[hashval];
+  hashset.buckets[hashval] := delete(list, value);
+}
+
+
+//  procedure hashset_free(hashset: HashSet)
+//    requires hset(hashset)
+//    ensures emp
+//  {
+//    var i := 0;
+//    while(i < hashset.size)
+//      invariant i >= 0 && i <= hashset.size
+//      invariant acc(hashset) &*& acc(hashset.buckets)
+//      invariant arrayseg(hashset.buckets, 0, i) &*& arrayseg_with_buckets(hashset.buckets, 0, i)
+//    {
+//      var list := hashset.buckets[i];
+//      while(list != null)
+//        invariant lseg(list, null)
+//      {
+//        var temp := list;
+//        list := list.next;
+//        free(temp);
+//      }
+//      i := i + 1;
+//    }
+//    free(hashset.buckets);
+//    free(hashset);
+//  }

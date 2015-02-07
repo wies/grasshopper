@@ -767,6 +767,10 @@ let output_graphviz chan model terms =
         fld_srts SortSet.empty
     in
     let output_flds rsrt =
+      let filter_null r =
+        (not !Config.model_null_edge) &&
+        (interp_symbol model Null ([], Loc rsrt) [] = r)
+      in
       let fld_srt = Map (Loc srt, Loc rsrt) in
       let flds = get_values_of_sort model fld_srt in
       let read_arity = [fld_srt; Loc srt], Loc rsrt in
@@ -775,7 +779,7 @@ let output_graphviz chan model terms =
           List.iter (fun l ->
             try
               let r = interp_symbol model Read read_arity [f; l] in
-              if interp_symbol model Null ([], Loc rsrt) [] = r then () else
+              if filter_null r then () else
 	      let label = get_label fld_srt f in
 	      Printf.fprintf chan "\"%s\" -> \"%s\" [%s]\n" 
 	        (string_of_loc_value srt l) (string_of_loc_value rsrt r) label

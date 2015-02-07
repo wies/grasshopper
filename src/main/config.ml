@@ -9,6 +9,8 @@ let procedure = ref None
 
 (* File name where counterexample model is saved. *)
 let model_file = ref ""
+(* Display the edges going to null in the model *)
+let model_null_edge = ref false
 
 (* File name where counterexample trace is saved. *)
 let trace_file = ref ""
@@ -18,6 +20,7 @@ let with_reach_axioms = ref true
 let with_opt_reach_axioms = ref false
 let encode_fields_as_arrays = ref false
 let with_ep = ref true
+let full_ep = ref false
 let use_set_theory = ref false
 let keep_types = ref false
 
@@ -64,6 +67,7 @@ let cmd_options =
    ("-stats", Arg.Set print_stats, " Print statistics");
    ("-lint", Arg.Set flycheck_mode, " Print single line error messages for on-the-fly checking");
    ("-model", Arg.Set_string model_file, "<file>  Produce counterexample model for the first failing verification condition");
+   ("-nulledges", Arg.Set model_null_edge, " Show the edges going to null in the model");
    ("-trace", Arg.Set_string trace_file, "<file>  Produce counterexample trace for the first failing verification condition");
    ("-dumpghp", Arg.Set_int dump_ghp, "<num>  Print intermediate program after specified simplification stage (num=0,1,2,3)");
    ("-dumpvcs", Arg.Set dump_smt_queries, " Generate SMT-LIB 2 files for all verification conditions");
@@ -76,6 +80,7 @@ let cmd_options =
    ("-optreach", Arg.Set with_opt_reach_axioms, " Use optimized but incomplete reachability axioms");
    ("-noreach", Arg.Clear with_reach_axioms, " Omit axioms for reachability predicates");
    ("-noep", Arg.Clear with_ep, " Omit axioms for entry points");
+   ("-fullep", Arg.Set full_ep, " Generates more ep terms");
    ("-noinst", Arg.Clear instantiate, " Let the SMT solver deal with the quantifiers without prior instantiation");
    ("-nostratify", Arg.Clear stratify, " Instantiate quantifiers that satisfy stratified sort restrictions\n\nOptions for controlling backend solver:");
    ("-splitlemmas", Arg.Set split_lemmas, " Add split lemmas for all terms of sort Loc");
