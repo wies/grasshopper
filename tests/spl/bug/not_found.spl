@@ -1,0 +1,72 @@
+// Is this a bug with some stage of translation?
+// When the procedure strcomp below is removed, we get an exception Not_found. Strangely, although the procedure is not used anywhere, when it is present the translation goes through successfully.
+
+include "../array/int_array.spl";
+
+struct Node {
+  var data: Array<Int>;
+  var next: Node;
+}
+
+//////////////////////
+// specs for string //
+//////////////////////
+
+struct String { } //TODO is there a better way of introducing a free type
+
+///////////////////////
+// spec for the list //
+///////////////////////
+
+
+function lseg_footprint(x: Node, y: Node) returns (FP: Set<Node>) {
+  forall z: Node :: z in FP == (Btwn(next, x, z, y) && z != y)
+}
+
+predicate lseg(x: Node, y: Node)(FP: Set<Node>) {
+  Btwn(next, x, y, y) && FP == lseg_footprint(x, y)
+}
+
+
+function witness1(a: Array<Int>, FP: Set<Node>) returns (res: Node) { true }
+
+function contained_array_footprint(FP0: Set<Node>) returns (FP1: Set<Array<Int>>) {
+  (forall x: Node :: x in FP0 ==> x.data in FP1) &&
+  (forall a: Array<Int>:: a in FP1 ==> witness1(a, FP0) in FP0  @(matching a yields witness1(a, FP0)) ) &&
+  (forall a: Array<Int>:: a in FP1 ==> witness1(a, FP0).data == a  @(matching a yields witness1(a, FP0).data) ) &&
+  (forall a: Array<Int>:: a !in FP1 ==> witness1(a, FP0) == null) &&
+  //disjointness of the data
+  (forall x: Node, y: Node :: x in FP0 && y in FP0 && x != y ==> x.data != y.data)
+}
+
+function contained_arraycell_footprint(FP1: Set<Array<Int>>) returns (FP2: Set<ArrayCell<Int>>) {
+  (forall c: ArrayCell<Int> :: c in FP2 == (0 <= c.index && c.index < c.array.length && c.array in FP1))
+}
+
+predicate list_set(x: Node, y: Node)(FP0: Set<Node>, FP1: Set<Array<Int>>, FP2: Set<ArrayCell<Int>>) {
+  lseg(x, y, FP0) &&
+  FP1 == contained_array_footprint(FP0) &&
+  FP2 == contained_arraycell_footprint(FP1)}
+
+///////////////////////
+///////////////////////
+///////////////////////
+
+//spec of string comparison
+procedure strcomp(x: Array<Int>, y: Array<Int>) returns (res: Int)
+  requires array(x) &+& array(y)
+  ensures array(x) &+& array(y)
+{
+  assume(false);
+}
+
+///////////////////////
+///////////////////////
+///////////////////////
+
+procedure test(lst: Node)
+  requires list_set(lst, null)
+  ensures list_set(lst, null)
+{
+  lst := lst;
+}
