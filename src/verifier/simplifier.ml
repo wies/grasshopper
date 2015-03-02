@@ -63,7 +63,7 @@ let elim_loops (prog : program) =
         in
         let loop_end_pos = end_pos pp.pp_pos in
         let loop_start_pos = start_pos pp.pp_pos in
-        let body, prog, dep_procs2 =
+        let body, prog, dep_procs2, prebody =
           let prog, dep_procs1, prebody = 
             elim prog dep_procs proc lc.loop_prebody 
           in
@@ -80,6 +80,7 @@ let elim_loops (prog : program) =
           let then_cmd = 
             mk_seq_cmd
               [ postbody;
+		prebody;
                 loop_call false loop_end_pos
               ] 
               pp.pp_pos
@@ -88,7 +89,6 @@ let elim_loops (prog : program) =
           let then_msg = "The body of this loop has been executed on the error trace" in
           mk_seq_cmd 
             [ init_returns;
-              prebody;
               mk_ite 
                 lc.loop_test lc.loop_test_pos
                 then_cmd else_cmd 
@@ -96,7 +96,8 @@ let elim_loops (prog : program) =
             ]
             pp.pp_pos,
           prog,
-          dep_procs2
+          dep_procs2,
+	  prebody
         in
         (* loop exit condition *)
         let loop_exit =
@@ -140,7 +141,9 @@ let elim_loops (prog : program) =
         let call_loop =
           loop_call true loop_start_pos
         in
-        declare_proc prog loop_proc, proc_name :: dep_procs2, call_loop
+        declare_proc prog loop_proc,
+	proc_name :: dep_procs2,
+	mk_seq_cmd [prebody; call_loop] loop_start_pos
     | Seq (cs, pp) ->
        let prog1, dep_procs1, cs1 =
          List.fold_right 
