@@ -63,12 +63,14 @@ bst_set_so_trailrec     tests/spl/tree/binary_search_tree_shape_only_tailrec.spl
 skewheap		tests/spl/tree/skew_heap_no_content.spl pass
 unionfind_tree          tests/spl/tree/union_find.spl           pass
 "
+
 generate()
 {
     # COMMIT_ID and COMMON_ARGS should be defined
 
     VAR_ARGS="$@"
     OUTDIR=smtlib/${COMMIT_ID}$(echo $VAR_ARGS | tr -d " ")
+    LOGFILE=out/${COMMIT_ID}$(echo $VAR_ARGS | tr -d " ").log
 
     [ -d $OUTDIR ] && {
       echo "Looks like benchmarks already generated, skipping (delete $OUTDIR to force generation)"
@@ -76,21 +78,18 @@ generate()
     }
 
     echo "Generating benchmarks with arguments ${VAR_ARGS}..."
-    OPTIONS="$COMMON_ARGS $VAR_ARGS" ./bin/run-tests $TESTS 
-    #rm soundness*.smt2
+    OPTIONS="$COMMON_ARGS $VAR_ARGS" ./bin/run-tests $TESTS >$LOGFILE
 
     mkdir -p $OUTDIR
     echo "Post processing..."
     for file in *.smt2
     do
-        #sed -i -e '/set-option/d' -e 's/unknown/unsat/'  $file
         LOGIC=`grep 'set-logic' $file | sed 's/(set-logic \([^)]*\))/\1/'`
-        # test -s $LOGIC || mkdir -p smt-lib/$LOGIC/grasshopper/uninstantiated
         mv $file $OUTDIR
     done
 }
 
-smtlib()
+smtlib-cav15()
 {
     ls *.smt2 2>/dev/null && echo "Remove existing SMT-LIB files to proceed. Aborting." && exit 0
 
@@ -99,99 +98,57 @@ smtlib()
     COMMIT_ID="$(git log -1 --format="%cd-%h" --date=short)"
 
     COMMON_ARGS="-lint -noverify -dumpvcs"
-    ###generate "-smtsolver z3log"
-    #generate "-smtsolver z3log -nostratify" 
-    #generate "-smtsolver z3log -nomodifiesopt"
-    #generate "-smtsolver z3log -optreach"
-    #generate "-smtsolver z3log -optreach -splitlemmas"
-    #wait
-    #COMMON_ARGS="-lint -noverify -dumpvcs -smtpatterns"
+
+    # Z3 UD
     generate "-smtsolver z3log -noinst"
-    #generate "-smtsolver z3log -noinst -nomodifiesopt"
-    #generate "-smtsolver z3log -noinst -optreach"
-    #generate "-smtsolver z3log -noinst -optreach -splitlemmas"
-    #wait
 
-    ###generate "-smtsolver cvc4log -nostratify"
-    #generate "-smtsolver cvc4log -nostratify -smtsets"
-    #generate "-smtsolver cvc4log -nostratify -smtsets -smtarrays"
-    #generate "-smtsolver cvc4log -nostratify -nomodifiesopt"
-    #generate "-smtsolver cvc4log -splitlemmas -nostratify"
-    #wait
-    #generate "-smtsolver cvc4log -splitlemmas -nostratify -smtsets"
-    ###generate "-smtsolver cvc4log -noinst"
-    #generate "-smtsolver cvc4log -noinst -smtsets"
-    #generate "-smtsolver cvc4log -noinst -smtsets -smtarrays"
-    #generate "-smtsolver cvc4log -noinst -nomodifiesopt"
-    #wait
-    #generate "-smtsolver cvc4log -splitlemmas -noinst"
-    #generate "-smtsolver cvc4log -splitlemmas -noinst -smtsets"
-
-    #generate "-smtsolver cvc4log -optreach -nostratify"
-    #generate "-smtsolver cvc4log -optreach -nostratify -smtsets"
-    #generate "-smtsolver cvc4log -optreach -splitlemmas -nostratify"
-    #wait
-    #generate "-smtsolver cvc4log -optreach -splitlemmas -nostratify -smtsets"
-    #generate "-smtsolver cvc4log -optreach -noinst"
-    #generate "-smtsolver cvc4log -optreach -noinst -smtsets"
-    #generate "-smtsolver cvc4log -optreach -splitlemmas -noinst"
-    #generate "-smtsolver cvc4log -optreach -splitlemmas -noinst -smtsets"
-
-
-
-
-    #generate "-smtsolver cvc4log -nostratify -smtsets -splitlemmas"
-    #generate "-smtsolver cvc4log -noinst"
-    #generate "-smtsolver cvc4log -noinst -smtsets"
-    #generate "-smtsolver cvc4log -noinst -smtsets -nomodifiesopt"
-
-    ### for kshitij's testing infrastructure
-    #[ -d "../test/benchmarks" ] && (
-    #  rsync -r smtlib/ ../test/benchmarks/grasshopper/
-    #  cd ../test/benchmarks
-    #  LISTFILE=grasshopper_${COMMIT_ID}.list
-    #  find grasshopper/$COMMIT_ID* -iname "*.smt2" >$LISTFILE
-    #  wc -l $LISTFILE
-    #)
-}
-
-smtlib-cav()
-{
-    ls *.smt2 2>/dev/null && echo "Remove existing SMT-LIB files to proceed. Aborting." && exit 0
-
-    ./build.sh
-
-    COMMIT_ID="$(git log -1 --format="%cd-%h" --date=short)"
-
-    COMMON_ARGS="-lint -noverify -dumpvcs"
-    # generate "-nostratify"                  # for num of instantiations
-    generate "-smtsolver z3log -noinst"
-    generate "-smtsolver z3log -noinst -optreach"
+    # Z3 UL
     generate "-smtsolver z3log -noinst -smtpatterns"
+
+    # Z3 ULO
     generate "-smtsolver z3log -noinst -smtpatterns -optreach"
+
+    # Z3 PM
     generate "-smtsolver z3log"
+
+    # Z3 PL
     generate "-smtsolver z3log -smtpatterns"
+
+    # Z3 PLO
     generate "-smtsolver z3log -smtpatterns -optreach"
+
+    # CVC4 UD & UL
     generate "-smtsolver cvc4log -noinst -smtpatterns"
+
+    # CVC4 ULO
     generate "-smtsolver cvc4log -noinst -smtpatterns -optreach -splitlemmas"
+
+    # CVC4 PL
     generate "-smtsolver cvc4log -nostratify -smtpatterns"
+
+    # CVC4 PLO
     generate "-smtsolver cvc4log -nostratify -smtpatterns -optreach -splitlemmas"
+
+    # Prepare benchmarks for uploading to StarExec
+    {
+      cd smtlib &&
+      mkdir ${COMMIT_ID} &&
+      for i in ${COMMIT_ID}-smtsolverz3log/*.smt2; do
+        file=$(basename $i)
+        echo $file
+        zip ${COMMIT_ID}/$file.zip ${COMMIT_ID}-*/$file
+      done &&
+      zip benchmarks-${COMMIT_ID}-forstarexec.zip ${COMMIT_ID}/*.zip
+    }
 }
 
-smtlib-cvc4-sets()
-{
-    ls *.smt2 2>/dev/null && echo "Remove existing SMT-LIB files to proceed. Aborting." && exit 0
 
-    ./build.sh
+mkdir -p out
 
-    COMMIT_ID="$(git log -1 --format="%cd-%h" --date=short)"
+# Calculating num of instantiations for naive algorithm
+OPTIONS="-lint -noverify -nostratify" ./bin/run-tests $TESTS  |
+  tr -d '\015' | sed 's/Checking.*\.\.\.//' | grep -vE "^(Passed |Failed |There were |\*\*\* )|ms\)$" |
+  tee out/num_insts.txt
 
-    COMMON_ARGS="-lint -noverify -dumpvcs"
- 
-    generate "-smtsolver cvc4log -noinst -smtsets -smtpatterns"
-    generate "-smtsolver cvc4log -noinst -smtsets -smtpatterns -optreach -splitlemmas"
-    generate "-smtsolver cvc4log -nostratify -smtsets -smtpatterns"
-    generate "-smtsolver cvc4log -nostratify -smtsets -smtpatterns -optreach -splitlemmas"
-}
-smtlib-cav
-smtlib-cvc4-sets
+# Generate benchmarks
+smtlib-cav15 | tee out/smtlib-cav15.log
