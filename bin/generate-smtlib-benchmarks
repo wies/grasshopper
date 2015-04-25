@@ -164,6 +164,7 @@ smtlib-cav()
     COMMIT_ID="$(git log -1 --format="%cd-%h" --date=short)"
 
     COMMON_ARGS="-lint -noverify -dumpvcs"
+<<<<<<< HEAD
      generate "-nostratify"                  # for num of instantiations
     #generate "-smtsolver z3log -noinst"
     #generate "-smtsolver z3log -noinst -optreach"
@@ -213,23 +214,36 @@ smtlib-cav()
     #generate "-smtsolver cvc4log -optreach -splitlemmas -noinst"
     #generate "-smtsolver cvc4log -optreach -splitlemmas -noinst -smtsets"
 
-
-
-
-    #generate "-smtsolver cvc4log -nostratify -smtsets -splitlemmas"
-    #generate "-smtsolver cvc4log -noinst"
-    #generate "-smtsolver cvc4log -noinst -smtsets"
-    #generate "-smtsolver cvc4log -noinst -smtsets -nomodifiesopt"
-
-    ### for kshitij's testing infrastructure
-    #[ -d "../test/benchmarks" ] && (
-    #  rsync -r smtlib/ ../test/benchmarks/grasshopper/
-    #  cd ../test/benchmarks
-    #  LISTFILE=grasshopper_${COMMIT_ID}.list
-    #  find grasshopper/$COMMIT_ID* -iname "*.smt2" >$LISTFILE
-    #  wc -l $LISTFILE
-    #)
+=======
+    # generate "-nostratify"                  # for num of instantiations
+    generate "-smtsolver z3log -noinst"
+    generate "-smtsolver z3log -noinst -optreach"
+    generate "-smtsolver z3log -noinst -smtpatterns"
+    generate "-smtsolver z3log -noinst -smtpatterns -optreach"
+    generate "-smtsolver z3log"
+    generate "-smtsolver z3log -smtpatterns"
+    generate "-smtsolver z3log -smtpatterns -optreach"
+    generate "-smtsolver cvc4log -noinst -smtpatterns"
+    generate "-smtsolver cvc4log -noinst -smtpatterns -optreach -splitlemmas"
+    generate "-smtsolver cvc4log -nostratify -smtpatterns"
+    generate "-smtsolver cvc4log -nostratify -smtpatterns -optreach -splitlemmas"
 }
+>>>>>>> 514b6754bb9cff5efb6d9baf937949719c902e3f
 
+smtlib-cvc4-sets()
+{
+    ls *.smt2 2>/dev/null && echo "Remove existing SMT-LIB files to proceed. Aborting." && exit 0
 
+    ./build.sh
+
+    COMMIT_ID="$(git log -1 --format="%cd-%h" --date=short)"
+
+    COMMON_ARGS="-lint -noverify -dumpvcs"
+ 
+    generate "-smtsolver cvc4log -noinst -smtsets -smtpatterns"
+    generate "-smtsolver cvc4log -noinst -smtsets -smtpatterns -optreach -splitlemmas"
+    generate "-smtsolver cvc4log -nostratify -smtsets -smtpatterns"
+    generate "-smtsolver cvc4log -nostratify -smtsets -smtpatterns -optreach -splitlemmas"
+}
 smtlib-cav
+smtlib-cvc4-sets
