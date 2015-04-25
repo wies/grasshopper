@@ -464,6 +464,14 @@ let mk_iff a b =
 
 (** {6 Generic formula manipulation and substitution functions} *)
 
+(** Check whether formula [f] is ground *)
+let rec is_ground = function
+   | Binder (_, [], f, _) -> is_ground f
+   | Binder (_, _, _, _) -> false
+   | BoolOp (_, fs) -> List.for_all is_ground fs
+   | _ -> true
+   
+    
 (** Fold all terms appearing in the formula [f] using catamorphism [fn] and initial value [init] *)
 let fold_terms fn init f =
   let rec ft acc = function
