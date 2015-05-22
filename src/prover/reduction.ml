@@ -336,11 +336,11 @@ let add_ep_axioms fs =
   let ep_ax = instantiate_with_terms false ep_ax (CongruenceClosure.restrict_classes classes flds) in
   (*print_endline "---";
   List.iter (fun f -> print_form stdout f; print_newline ()) ep_ax;*)
-    match ep_ax with
+  (*  match ep_ax with
     | Binder(b, vs, f, ann) :: xs -> Binder(b, vs, f, ann @ generators):: xs @ fs
     | [] -> fs
-    | _ -> failwith "don't know where to put the generators"
-  (*List.rev_append (Axioms.ep_axioms ()) fs*)
+    | _ -> failwith "don't know where to put the generators"*)
+  List.rev_append axioms fs
  
 let add_read_write_axioms fs =
   let gts = ground_terms (smk_and fs) in
@@ -468,8 +468,8 @@ let add_reach_axioms fs gts =
   let structs = struct_ids_of_fields non_updated_flds in
   let axioms = IdSet.fold (fun sid axioms -> Axioms.reach_axioms sid @ axioms) structs [] in
   let reach_ax, _ = open_axioms (*~force:true*) isFld axioms in
-  let reach_ax1 = instantiate_with_terms (*~force:true*) false reach_ax (CongruenceClosure.restrict_classes classes non_updated_flds) in
-  rev_concat [reach_ax1; reach_write_ax; fs], gts
+  let reach_ax1 = instantiate_with_terms (*~force:true*) false reach_ax (CongruenceClosure.restrict_classes classes btwn_flds) in
+  rev_concat [axioms; reach_write_ax; fs], gts
 
 let instantiate read_propagators fs gts =
   (* generate local instances of all remaining axioms in which variables occur below function symbols *)
