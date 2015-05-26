@@ -5,7 +5,9 @@ struct Node {
 }
 
 function next_map() returns (m: Map<Node, Node>) {
-  forall x: Node :: x.m == x.next @(matching x.next yields x.m) @(matching x.m yields x.next)
+  //m == next
+  //(forall x: Node :: x.m == x.next @(matching x.next yields x.m) @(matching x.m yields x.next) @(comment "next-map")) &&
+    (forall x: Node, y: Node, z: Node :: Btwn(next, x, y, z) == Btwn(m, x, y, z)) 
 }
 
 function lseg_footprint(x: Node, y: Node) returns (FP: Set<Node>) {
