@@ -9,10 +9,8 @@ module type OrderedType = sig
   type t
   val compare: t -> t -> int
 end
-
-exception Empty
-
-module Make(K: OrderedType, P: OrderedType): sig
+      
+module Make(K: OrderedType)(P: OrderedType): sig
 
   type t
 
@@ -21,6 +19,9 @@ module Make(K: OrderedType, P: OrderedType): sig
   val is_empty: t -> bool
     (* runs in O(1) *)
 
+  val size: t -> int
+    (* runs in O(1) *)
+      
   val insert: K.t -> P.t -> t -> t
     (* runs in O(log n) *)
 

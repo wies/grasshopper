@@ -402,8 +402,8 @@ let add_read_write_axioms fs =
           ([],
            [f1; f2; l1],
            [Match (mk_eq_term fld1 fld2, FilterTrue);
-            Match (mk_read fld1 loc1, FilterTrue)],
-           mk_read fld2 loc1) :: 
+            Match (mk_read fld2 loc1, FilterTrue)],
+           mk_read fld1 loc1) :: 
           (* f [x := d], y.(f [x := d]) -> y.f *)
           ([],
            [f1; l1; l2; d1],

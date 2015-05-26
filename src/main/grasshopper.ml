@@ -1,10 +1,10 @@
 (** Main module of GRASShopper *)
 
 open Util
-
+    
 let greeting =
   "GRASShopper version " ^ Config.version ^ "\n"
-
+                                              
 let usage_message =
   greeting ^
   "\nUsage:\n  " ^ Sys.argv.(0) ^ 

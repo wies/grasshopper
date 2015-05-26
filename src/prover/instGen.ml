@@ -235,17 +235,6 @@ let generate_instances useLocalInst axioms rep_terms egraph =
             fvars
         else fvars, IdSrtSet.empty
     in
-    let _ = if Debug.is_debug 1 then
-      begin
-        print_endline "--------------------";
-        print_endline (string_of_form f);
-        print_string "all  vars: ";
-        print_endline (String.concat ", " (List.map string_of_ident (List.map fst (IdSrtSet.elements fvars0))));
-        print_string "inst vars: ";
-        print_endline (String.concat ", " (List.map string_of_ident (List.map fst (IdSrtSet.elements fvars))));
-        print_endline "--------------------"
-      end
-    in
     (* close the strat_vars so they are not instantiated *)
     let f =
       if not (IdSrtSet.is_empty strat_vars)
@@ -283,24 +272,19 @@ let generate_instances useLocalInst axioms rep_terms egraph =
         fvars proto_subst_maps         
     in
     let subst_maps = (*measure*) subst_maps () in
-    (*let _ = match f with
-    | Binder (_, _, _, [Comment _ (*"entry-point1"*)]) ->
-        begin
-          print_endline "Axiom:";
-          print_forms stdout [f];
-          print_endline "fun_terms:";
-          TermSet.iter (fun t -> print_term stdout t; print_string ", ") fun_terms;
-          print_endline "\nfvars: ";
-          IdSrtSet.iter (fun (id, _) -> Printf.printf "%s, " (string_of_ident id)) fvars;
-          print_endline "\nrep_terms:";
-          TermSet.iter (fun t -> print_term stdout t; print_newline ()) terms;
-          print_endline "\nground_terms:";
-          TermSet.iter (fun t -> print_term stdout t; print_newline ()) ground_terms;
-          print_endline "\nsubst_maps:";
-          List.iter print_subst_map subst_maps
-        end
-    | _ -> ()
-    in*)
+    let _ = if Debug.is_debug 1 then
+      begin
+        print_endline "--------------------";
+        print_endline (string_of_form f);
+        print_string "all  vars: ";
+        print_endline (String.concat ", " (List.map string_of_ident (List.map fst (IdSrtSet.elements fvars0))));
+        print_string "inst vars: ";
+        print_endline (String.concat ", " (List.map string_of_ident (List.map fst (IdSrtSet.elements fvars))));
+        print_endline "subst_maps:";
+        List.iter print_subst_map subst_maps;
+        print_endline "--------------------"
+      end
+    in
     (* generate instances of axiom *)
     List.fold_left (fun acc subst_map -> (*Axioms.mk_axiom2*) (subst subst_map f) :: acc) acc subst_maps
   in

@@ -34,6 +34,13 @@ module SortedValueMap =
     let compare = compare
   end)
 
+module SortedValueListMap =
+  Map.Make(struct
+    type t = (value * sort) list
+    let compare = compare
+  end)
+
+    
 module SortedValueSet =
   Set.Make(struct
     type t = value * sort
@@ -526,48 +533,179 @@ let complete model =
   in
   new_model
 
+
+module PQ = PrioQueue.Make
+    (struct
+      type t = value * sort
+      let compare = compare
+    end)
+    (struct
+      type t = int
+      let compare = compare
+    end)
+    
+(** Find a term that evaluates to value [v] of sort [srt] in [model].*)
 let find_term model =
-  let vm =
+  (* To find a smallest term that represents a given value in [model], we implement
+     a variant of Dijkstra's algorithm that computes shortest hyperpaths in a hypergraph.
+     The algorithm is adapted from this paper:
+       Optimal Traversal of Directed Hypergraphs
+       Georgio Ausiello, Giuseppe Italiano, and Umberto Nanni, 1992
+   *)
+  (* compute FD-graph of model *)
+  let fedges, dedges, init_reach =
     SortedSymbolMap.fold 
-      (fun (sym, (arg_srts, res_srt)) (m, d) vm ->
-        let d_vm =
-          match arg_srts, d with
-          | [], BaseVal v -> 
-              SortedValueMap.add (v, res_srt) (sym, []) vm
-          | _, _ -> vm
-        in
-        ValueListMap.fold (fun args v vm ->
-          let vs = List.combine args arg_srts in
-          let vs1 = 
-            List.fold_left (fun vs1 vsrt ->
-              try snd (SortedValueMap.find vsrt vm) @ vs1
-              with Not_found -> vs1
-            ) vs vs
-          in
-          if List.mem (v, res_srt) vs1 then vm else
-          let el = 
-            try 
-              let sym2, vs2 = SortedValueMap.find (v, res_srt) vm in
-              if List.length vs < List.length vs2 
-              then (sym, vs)
-              else (sym2, vs2)
-            with Not_found -> (sym, vs)
-          in
-          SortedValueMap.add (v, res_srt) el vm) 
-          m d_vm)
-      model.intp SortedValueMap.empty
+      (fun (sym, (arg_srts, res_srt)) (m, d) (fedges, dedges, init_reach) ->
+        match sym, res_srt with
+        | _, Bool | _, Int | Write, _ -> (fedges, dedges, init_reach)
+        | _ ->
+            let m1 =
+              match d with
+              | BaseVal v ->
+                  let arg_vals =
+                    List.map (function
+                      | Int -> [I 0]
+                      | Bool -> [B false]
+                      | srt -> get_values_of_sort model srt)
+                      arg_srts
+                  in
+                  let arg_product =
+                    List.fold_right (fun args arg_product ->
+                      List.fold_left
+                        (fun acc arg ->
+                          List.fold_left
+                            (fun acc args -> (arg :: args) :: acc)
+                            acc arg_product)
+                        [] args)
+                      arg_vals [[]]
+                  in
+                  List.fold_left (fun m args ->
+                    if ValueListMap.mem args m then m
+                    else ValueListMap.add args v m)
+                    m arg_product
+              | _ -> m
+            in
+            ValueListMap.fold
+              (fun args v (fedges, dedges, init_reach) ->
+                let s = List.combine args arg_srts in
+                let t = v, res_srt in
+                let es =
+                  try SortedValueListMap.find s fedges
+                  with Not_found -> []
+                in
+                (match res_srt with
+                | Map (_, Loc _) ->
+                    Printf.printf "[%s] --%s--> %s\n"
+                      (String.concat " " (List.map (function I v -> string_of_int v | B v -> string_of_bool v) args))
+                      (string_of_symbol sym)
+                      ((function I v -> string_of_int v | B v -> string_of_bool v) v)
+                | _ -> ());
+                let fedges1 = SortedValueListMap.add s ((sym, t) :: es) fedges in
+                let init_reach1 = SortedValueListMap.add s (List.length s) init_reach in
+                let init_reach2 = SortedValueListMap.add [t] 1 init_reach1 in
+                let dedges1, init_reach3 =
+                  List.fold_left
+                    (fun (dedges1, init_reach3) (_, srt as z) ->
+                      let es =
+                        try SortedValueMap.find z dedges1
+                        with Not_found -> []
+                      in
+                      SortedValueMap.add z (s :: es) dedges1,
+                      match srt with
+                      | Bool | Int ->
+                          SortedValueListMap.add [z] 0 init_reach3
+                      | _ -> init_reach3
+                    )
+                    (dedges, init_reach2) s
+                in
+                fedges1, dedges1, init_reach3
+              )
+              m1 (fedges, dedges, init_reach)
+      )
+      model.intp (SortedValueListMap.empty, SortedValueMap.empty, SortedValueListMap.empty)
   in
-  let rec find seen (v, srt) =
+  (* initialize remaining data structures *)
+  let init_queue, init_reach, init_dist, init_prev =
+    SortedSymbolMap.fold 
+      (fun (sym, (arg_srts, res_srt)) (m, d) (init_queue, init_reach, init_dist, init_prev) ->
+        let add v =
+          let x = v, res_srt in
+          PQ.insert x 0 init_queue,
+          SortedValueListMap.add [x] 0 init_reach,
+          SortedValueMap.add x 0 init_dist,
+          SortedValueMap.add x (sym, []) init_prev
+        in
+        match arg_srts, d with
+        | [], BaseVal v -> add v
+        | [], Undef -> add (ValueListMap.find [] m)
+        | _, _ ->
+            init_queue, init_reach, init_dist, init_prev)
+      model.intp (PQ.empty, init_reach, SortedValueMap.empty, SortedValueMap.empty)
+  in
+  (* auxiliary function for shortest path algorithm *)
+  let scan t d_t (reach, dist, prev, queue) (sym, x) =
+    let d_t_x = d_t + 1 in
+    let reach_x = SortedValueListMap.find [x] reach in
+    if reach_x = 1 then
+      SortedValueListMap.add [x] 0 reach,
+      SortedValueMap.add x d_t_x dist,
+      SortedValueMap.add x (sym, t) prev,
+      PQ.insert x d_t_x queue
+    else if d_t_x < SortedValueMap.find x dist then
+      reach, 
+      SortedValueMap.add x d_t_x dist,
+      SortedValueMap.add x (sym, t) prev,
+      PQ.adjust (fun _ -> d_t_x) x queue
+    else
+      reach, dist, prev, queue
+  in
+  (* shortest path algorithm *)
+  let rec shortest_paths reach dist prev queue =
+    if PQ.is_empty queue then prev else
+    let t, d_t, queue = PQ.extract_min queue in
+    let get_fedges t =
+      try SortedValueListMap.find t fedges
+      with Not_found -> []
+    in
+    let reach, dist, prev, queue =
+      List.fold_left (scan [t] d_t) (reach, dist, prev, queue) (get_fedges [t])
+    in
+    let dedges_t =
+      try SortedValueMap.find t dedges
+      with Not_found -> []
+    in
+    let reach, dist, prev, queue =
+      List.fold_left
+        (fun (reach, dist, prev, queue) z ->
+          let reach_z = SortedValueListMap.find z reach - 1 in
+          let reach1 = SortedValueListMap.add z reach_z reach in
+          if reach_z = 0 then
+            let d_z =
+              List.fold_left
+                (fun d_z x ->
+                  let d_x = try SortedValueMap.find x dist with Not_found -> 0 in
+                  d_z + d_x)
+                0 z
+            in
+            List.fold_left (scan z d_z) (reach1, dist, prev, queue) (get_fedges z)
+          else reach1, dist, prev, queue
+        )
+        (reach, dist, prev, queue)
+        dedges_t
+    in
+    shortest_paths reach dist prev queue
+  in
+  (* compute shortest paths *)
+  let prev = shortest_paths init_reach init_dist init_prev init_queue in
+  let rec find (v, srt) =
     match srt with 
     | Bool -> mk_bool_term (bool_of_value v)
     | Int -> mk_int (int_of_value v)
     | _ ->
-        (* give up on cyclic definitions *)
-        if SortedValueSet.mem (v, srt) seen then raise Not_found else
-        let sym, vs = SortedValueMap.find (v, srt) vm in
-        let args = List.map (find (SortedValueSet.add (v, srt) seen)) vs in
+        let sym, vs = SortedValueMap.find (v, srt) prev in
+        let args = List.map find vs in
         mk_app srt sym args
-  in fun v srt -> find SortedValueSet.empty (v, srt)
+  in fun v srt -> find (v, srt)
 
 let finalize_values model =
   let mk_finite_set srt s =

@@ -10,7 +10,7 @@ module type OrderedType = sig
   val compare: t -> t -> int
 end
 
-module Make(K: OrderedType, P: OrderedType) = struct
+module Make(K: OrderedType)(P: OrderedType) = struct
    type t =
     | Leaf
     | Node of int * K.t * P.t * t * K.t * t
@@ -29,7 +29,7 @@ module Make(K: OrderedType, P: OrderedType) = struct
 
   let size = function
     | Leaf -> 0
-    | Node (s, _, _, _, _) -> s
+    | Node (s, _, _, _, _, _) -> s
 
   let node k p l m r =
     Node (size l + size r + 1, k, p, l, m, r)
@@ -39,8 +39,8 @@ module Make(K: OrderedType, P: OrderedType) = struct
   let singleton k p = winner k p Leaf k
 
   let get_singleton = function
-    | Node (_, k, p, Leaf, _, Leaf) -> Some(k, p)
-    | _ -> None
+    | Node (_, k, p, Leaf, _, Leaf) -> k, p
+    | _ -> raise Not_found
           
   let balance k p l m r =
     let single_left k p l m r =
@@ -50,12 +50,13 @@ module Make(K: OrderedType, P: OrderedType) = struct
           then node k p (node rk rp l m rl) rm rr
           else node rk rp (node k p l m rl) rm rr
       | Leaf -> node k p l m r
+    in
     let single_right k p l m r =
       match l with
       | Node (_, lk, lp, ll, lm, lr) ->
           if K.compare lk lm > 0 && P.compare p lp <= 0
-          then node k p ll lm (node lk lp l m lr)
-          else node lk lp ll lm (node k p l m lr)
+          then node k p ll lm (node lk lp lr m r)
+          else node lk lp ll lm (node k p lr m r)
       | Leaf -> node k p l m r
     in
     let double_left k p l m r = match r with
@@ -69,25 +70,25 @@ module Make(K: OrderedType, P: OrderedType) = struct
     | Leaf -> node k p l m r
     in
     let balance_left k p l m r = match r with
-    | Node (_, _, _, rl, _, rr)
-      if size rl < size rr
-      then single_left k p l m r
-      else double_left k p l m r
+    | Node (_, _, _, rl, _, rr) ->
+        if size rl < size rr
+        then single_left k p l m r
+        else double_left k p l m r
     | Leaf -> node k p l m r
     in
     let balance_right k p l m r = match l with
-    | Node (_, _, _, ll, _, lr)
+    | Node (_, _, _, ll, _, lr) ->
       if size ll < size lr
       then single_right k p l m r
       else double_right k p l m r
     | Leaf -> node k p l m r
     in
-    let alpha = 0.22 in
+    let ratio = 5 in
     if size l + size r < 2
     then node k p l m r
-    else if float_of_int (size r) > alpha .* float_of_int (size l)
+    else if size r > ratio * size l
     then balance_left k p l m r
-    else if float_of_int (size l) > alpha .* float_of_int (size r)
+    else if size l > ratio * size r
     then balance_right k p l m r
     else node k p l m r
       
@@ -116,7 +117,7 @@ module Make(K: OrderedType, P: OrderedType) = struct
           if K.compare k (max_key l) <= 0
           then play (insert k p l) r
           else play l (insert k p r)
-
+          
   let rec delete k = function 
     | Leaf -> Leaf
     | t ->
