@@ -593,13 +593,6 @@ let find_term model =
                   try SortedValueListMap.find s fedges
                   with Not_found -> []
                 in
-                (match res_srt with
-                | Map (_, Loc _) ->
-                    Printf.printf "[%s] --%s--> %s\n"
-                      (String.concat " " (List.map (function I v -> string_of_int v | B v -> string_of_bool v) args))
-                      (string_of_symbol sym)
-                      ((function I v -> string_of_int v | B v -> string_of_bool v) v)
-                | _ -> ());
                 let fedges1 = SortedValueListMap.add s ((sym, t) :: es) fedges in
                 let init_reach1 = SortedValueListMap.add s (List.length s) init_reach in
                 let init_reach2 = SortedValueListMap.add [t] 1 init_reach1 in
@@ -962,10 +955,10 @@ let output_graphviz chan model terms =
         flds
     in
     let output_eps () =
-      let arg_srts = [Set (Loc srt); loc_field_sort srt; Loc srt] in
+      let arg_srts = [loc_field_sort srt; Set (Loc srt); Loc srt] in
       let m, _ = get_interp model EntPnt (arg_srts, Loc srt) in
       ValueListMap.iter (function 
-        | [s; f; l] -> fun v ->
+        | [f; s; l] -> fun v ->
             let fld = find_term f (loc_field_sort srt) in
             let set = find_term s (Set (Loc srt)) in
             let color = try List.assoc (srt, f) ep_colors with Not_found -> "black" in
