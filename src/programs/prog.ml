@@ -127,7 +127,7 @@ type proc_decl = {
     proc_locals : var_decl IdMap.t; (** all local variables *)
     proc_precond : spec list; (** precondition *)
     proc_postcond : spec list; (** postcondition *)
-    proc_body : command option; (* procedure body *)
+    proc_body : command option; (** procedure body *)
     proc_pos : source_position; (** position of declaration *)
     proc_deps : ident list; (** names of dependant procedures *)
     proc_is_tailrec : bool; (** whether the procedure is tail recursive *)

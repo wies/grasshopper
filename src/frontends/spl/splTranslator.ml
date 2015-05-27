@@ -789,6 +789,68 @@ let infer_types cu =
   in
   { cu with pred_decls = preds; proc_decls = procs }
     
+let make_conditionals_lazy cu =
+  let decl_aux_var name vtype pos scope locals =
+    let aux_id = GrassUtil.fresh_ident name in
+    let decl =
+      { v_name = aux_id;
+        v_type = vtype;
+        v_ghost = false;
+        v_implicit = false;
+        v_aux = true;
+        v_pos = pos;
+        v_scope = scope;
+      }
+    in
+    let locals1 = IdMap.add aux_id decl locals in
+    aux_id, locals1
+  in
+  let rec process_stmt scope locals = function
+    | If (BinaryOp(e1, OpOr, e2, _, p1), s1, s2, p2) -> If (e1, s1, If (e2, s1, s2, p1), p2), locals
+    | Loop (invs, preb, BinaryOp (e1, OpOr, e2, _, pos1), postb, pos) ->
+       let aux_id, locals = decl_aux_var "loop_cond" BoolType pos scope locals
+       in
+       Loop (Invariant (BinaryOp (Ident (aux_id, pos),
+				  OpEq,
+				  BinaryOp (e1, OpOr, e2, BoolType, pos1),
+				  BoolType,
+				  pos),
+			true) :: invs,
+	     Block (
+		 [preb;
+		  If (e1,
+		      Assign ([Ident (aux_id, pos)], [BoolVal (true, pos)], pos),
+		      If (e2,
+			  Assign ([Ident (aux_id, pos)], [BoolVal (true, pos)], pos),
+			  Assign ([Ident (aux_id, pos)], [BoolVal (false, pos)], pos),
+			  pos),
+		      pos)],
+		 pos),
+	     Ident (aux_id, pos1),
+	     postb,
+	     pos), locals
+    | Block (ss, p) ->
+       let ss, locals = List.fold_right
+			  (fun s (s_list, locals) ->
+			   let new_s, locals = process_stmt scope locals s
+			   in
+			   ([new_s] @ s_list), locals)
+			  ss ([], locals)
+       in
+       Block (ss, p), locals
+    | stmt -> stmt, locals
+  in
+  let procs =
+    IdMap.fold
+      (fun _ decl procs ->
+        let body, locals = process_stmt decl.p_pos decl.p_locals decl.p_body in
+        let decl1 = { decl with p_body = body; p_locals = locals } in
+        IdMap.add decl.p_name decl1 procs)
+      cu.proc_decls IdMap.empty
+  in
+  { cu with proc_decls = procs }
+
+
 type cexpr =
   | SL_form of Sl.form
   | FOL_form of Grass.form
@@ -1343,4 +1405,5 @@ let to_program cu =
   let cu1 = resolve_names cu in
   let cu2 = flatten_exprs cu1 in
   let cu3 = infer_types cu2 in
-  convert cu3
+  let cu4 = make_conditionals_lazy cu3 in
+  convert cu4
