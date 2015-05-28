@@ -973,7 +973,10 @@ let convert cu =
         let decl = find_var_decl pos locals id in
         let srt = convert_type decl.v_type pos in
         GrassUtil.mk_free_const srt decl.v_name
-    | BinaryOp (_, OpOr, _, _, _) -> failwith "meop"
+    | BinaryOp (e1, OpIn, e2, ty, pos) ->
+        let t1 = convert_term locals e1 in
+        let t2 = convert_term locals e2 in
+        GrassUtil.mk_elem_term t1 t2
     | e -> failwith ("unexpected expression at " ^ string_of_src_pos (pos_of_expr e))
   in
   let rec convert_grass_form locals = function
@@ -1079,10 +1082,6 @@ let convert cu =
         | IntType -> GrassUtil.mk_srcpos pos (mk_int_form t1 t2)
         | SetType _ -> GrassUtil.mk_srcpos pos (mk_set_form t1 t2)
         | ty -> failwith ("unexpected type " ^ string_of_type ty ^ " at " ^ string_of_src_pos pos)) 
-    | BinaryOp (e1, OpIn, e2, ty, pos) ->
-        let t1 = convert_term locals e1 in
-        let t2 = convert_term locals e2 in
-        GrassUtil.mk_srcpos pos (GrassUtil.mk_elem t1 t2)
     | UnaryOp (OpNot, e, pos) ->
         let f = convert_grass_form locals e in
         GrassUtil.mk_not f

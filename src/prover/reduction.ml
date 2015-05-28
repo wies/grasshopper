@@ -171,15 +171,15 @@ let add_frame_axioms fs =
            (mk_eq (mk_read f loc1) (mk_read f' loc1))
         )
     in
-      (*Debug.amsg ("expanding frame for " ^ (string_of_term f) ^ "\n");*)
-      match sort_of f with
-      | Map (Loc id1, Loc id2) ->
-        if (id1 = id2) then reduce_graph id1
-        else reduce_data id1
-      | Map (Loc id, Int) | Map (Loc id, Bool) ->
-        reduce_data id
-      | other ->
-        failwith ("reduce_frame did not expect field of type " ^ (string_of_sort other))
+    (*Debug.amsg ("expanding frame for " ^ (string_of_term f) ^ "\n");*)
+    match sort_of f with
+    | Map (Loc id1, Loc id2) ->
+       if (id1 = id2) then reduce_graph id1
+       else reduce_data id1
+    | Map (Loc id, Int) | Map (Loc id, Bool) ->
+       reduce_data id
+    | other ->
+       failwith ("reduce_frame did not expect field of type " ^ (string_of_sort other))
   in
   let rec process f (frame_axioms, fields) = match f with
     | Atom (App (Frame, [x; a; fld; fld'], _), ann) when fld <> fld' ->
@@ -227,7 +227,6 @@ let open_axioms ?(force=false) open_cond axioms =
               | _ -> generators, ann :: a1, gen_vs
             ) a (generators, [], IdSet.empty)
         in
-        let open_generators (x, _) = IdSet.mem x gen_vs in
         let vs1 = List.filter (~~ (open_cond f)) vs in
         if !Config.instantiate || force then
           Binder (b, vs1, f, a1), generators1

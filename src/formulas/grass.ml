@@ -286,7 +286,7 @@ let rec pr_term0 ppf t =
   | _ -> pr_term ppf t
 
 and pr_term ppf = function
-  | Var (id, _) -> fprintf ppf "?%a" pr_ident id
+  | Var (id, _) -> fprintf ppf "%a" pr_ident id
   | App (Empty, _, _) -> fprintf ppf "{}"
   | App (sym, [], _) -> fprintf ppf "%a" pr_sym sym
   | App (Read, [map; t], _) ->

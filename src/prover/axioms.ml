@@ -272,7 +272,7 @@ let ep_axioms struct_srt =
       [s2; s3; f2; f3; l2; l3; l4],
       (if !Config.full_ep then
         [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-         Match (loc1, FilterSymbolNotOccurs EntPnt)]
+         Match (loc1, (*FilterGeneric ep_filter*) FilterSymbolNotOccurs EntPnt)]
       else
         [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
          Match (mk_btwn_term fld3 loc2 loc3 loc4, FilterGeneric (field_filter (fst f1) (fst f3)));
