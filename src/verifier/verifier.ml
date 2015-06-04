@@ -142,7 +142,7 @@ let add_pred_insts prog f =
   | Binder (Exists, vs, f, a) -> vs, f, a
   | _ -> [], f_inst, []
   in
-  let pos_preds = 
+  (*let pos_preds = 
     let rec collect pos = function
       | (seen, Binder (_, [], f, _)) :: todo -> 
           collect pos ((seen, f) :: todo)
@@ -169,7 +169,7 @@ let add_pred_insts prog f =
       | _ :: todo -> collect pos todo
       | [] -> pos
     in collect TermSet.empty [(IdSet.empty, f)]
-  in
+  in*)
   let pred_def pred =
     let args = pred.pred_formals @ pred.pred_footprints in
     let sorted_vs, sm =
@@ -202,7 +202,7 @@ let add_pred_insts prog f =
     List.map (fun f -> smk_forall sorted_vs (subst_consts sm f)) body    
   in
   let pred_defs = Prog.fold_preds (fun acc pred -> pred_def pred @ acc) [] prog in
-  let pos_instances = 
+  (*let pos_instances = 
     TermSet.fold (fun t instances ->
       match t with
       | App (FreeSym p, ts, srt) ->
@@ -212,7 +212,7 @@ let add_pred_insts prog f =
           | _ -> pbody :: instances)
       | _ -> instances)
       pos_preds []
-  in
+  in*)
   (*print_form stdout (smk_and (f_inst :: pos_instances)); print_newline ();*)
   let f = mk_exists ~ann:a vs (smk_and (f :: pred_defs (*@ pos_instances*))) in
   f

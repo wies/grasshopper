@@ -230,16 +230,30 @@ let elim_arrays prog =
     | c -> c
   in
   let compile_proc (elem_sorts, procs) proc =
+    let all_locals =
+      prog.prog_vars ::  List.map (fun proc -> proc.proc_locals) (find_proc_with_deps prog proc.proc_name)
+    in
     let locals, elem_sorts =
-      IdMap.fold
-        (fun id decl (locals, elem_sorts) ->
-          match decl.var_sort with
-          | Loc (Array srt) ->
-              let tmp_decl = tmp_array_cell_set_decl srt in
-              IdMap.add tmp_decl.var_name tmp_decl locals,
-              SortSet.add srt elem_sorts
-          | _ -> locals, elem_sorts)
-        proc.proc_locals (proc.proc_locals, elem_sorts)
+      let rec process_sort locals elem_sorts = function
+        | Loc (Array srt)
+        | Loc (ArrayCell srt) ->
+            let tmp_decl = tmp_array_cell_set_decl srt in
+            let locals1 = IdMap.add tmp_decl.var_name tmp_decl locals in
+            let elem_sorts1 = SortSet.add srt elem_sorts in
+            process_sort locals1 elem_sorts1 srt
+        | Set srt
+        | Loc srt -> process_sort locals elem_sorts srt
+        | Map (srt1, srt2) ->
+            let locals1, elem_sorts1 = process_sort locals elem_sorts srt1 in
+            process_sort locals1 elem_sorts1 srt2
+        | _ -> locals, elem_sorts
+      in
+      List.fold_left
+        (fun (locals, elem_sorts) vars ->
+          IdMap.fold
+            (fun id decl (locals, elem_sorts) -> process_sort locals elem_sorts decl.var_sort)
+            vars (locals, elem_sorts))
+        (proc.proc_locals, elem_sorts) all_locals
     in
     let body1 = Util.Opt.map compile_cmd proc.proc_body in
     let precond1 = List.map compile_spec proc.proc_precond in

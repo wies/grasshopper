@@ -66,7 +66,7 @@ procedure hashset_create(_size: Int) returns (res: HashSet)
   new_set.buckets := new Array<Node>(_size);    
   var i := 0;
   while (i < _size)
-    invariant i >= 0 && i <= _size
+    invariant 0 <= i && i <= _size
     invariant acc(new_set) &*& acc(new_set.buckets)
     invariant arrayseg_with_buckets(new_set.buckets, 0, i)
     invariant arrayseg(new_set.buckets, i, _size)
@@ -124,12 +124,12 @@ procedure insert(lst: Node, val: Int)
 
 procedure hashset_add(hashset: HashSet, value: Int)
   requires hset(hashset)
-  ensures  hset(hashset)
+  ensures hset(hashset)
 {
   var hashval := hash(hashset.size, value);
-  assert hset(hashset);
+  //assert hset(hashset);
   var list := hashset.buckets[hashval];
-  assert lseg(list, null) -** hset(hashset);
+  //assert lseg(list, null) -** hset(hashset);
   hashset.buckets[hashval] := insert(list, value);
 }
 
@@ -137,11 +137,11 @@ procedure contains(lst: Node, value: Int)
   returns (res: Bool)
   requires lseg(lst, null)
   ensures lseg(lst, null)
-
+  
 procedure hashset_member(hashset: HashSet, value: Int)
   returns (res: Bool)
   requires hset(hashset)
-  ensures  hset(hashset)
+  ensures hset(hashset)
 {
   var hashval := hash(hashset.size, value);
   var list := hashset.buckets[hashval];
@@ -156,7 +156,7 @@ procedure delete(lst: Node, value: Int)
 
 procedure hashset_remove(hashset: HashSet, value: Int)
   requires hset(hashset)
-  ensures  hset(hashset)
+  ensures hset(hashset)
 {
   var hashval := hash(hashset.size, value);
   var list := hashset.buckets[hashval];
@@ -164,26 +164,27 @@ procedure hashset_remove(hashset: HashSet, value: Int)
 }
 
 
-//  procedure hashset_free(hashset: HashSet)
-//    requires hset(hashset)
-//    ensures emp
-//  {
-//    var i := 0;
-//    while(i < hashset.size)
-//      invariant i >= 0 && i <= hashset.size
-//      invariant acc(hashset) &*& acc(hashset.buckets)
-//      invariant arrayseg(hashset.buckets, 0, i) &*& arrayseg_with_buckets(hashset.buckets, 0, i)
-//    {
-//      var list := hashset.buckets[i];
-//      while(list != null)
-//        invariant lseg(list, null)
-//      {
-//        var temp := list;
-//        list := list.next;
-//        free(temp);
-//      }
-//      i := i + 1;
-//    }
-//    free(hashset.buckets);
-//    free(hashset);
-//  }
+procedure hashset_free(hashset: HashSet)
+  requires hset(hashset)
+  ensures emp
+{
+  var i := 0;
+  while(i < hashset.size)
+    invariant 0 <= i && i <= hashset.size
+    invariant acc(hashset) &*& acc(hashset.buckets)
+    invariant hashset.size == hashset.buckets.length
+    invariant arrayseg(hashset.buckets, 0, i) &*& arrayseg_with_buckets(hashset.buckets, i, hashset.size)
+  {
+    var list := hashset.buckets[i];
+    while(list != null)
+      invariant lseg(list, null)
+    {
+      var temp := list;
+      list := list.next;
+      free(temp);
+    }
+    i := i + 1;
+  }
+  free(hashset.buckets);
+  free(hashset);
+}
