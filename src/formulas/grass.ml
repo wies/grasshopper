@@ -108,6 +108,10 @@ type term =
   | Var of ident * sort
   | App of symbol * term list * sort
 
+let symbol_of = function
+  | Var _ -> None
+  | App (sym, _, _) -> Some sym
+        
 let sort_of = function
   | Var (_, s) 
   | App (_, _, s) -> s
@@ -138,7 +142,7 @@ type filter =
 (** matching guards for term generators *)
 type guard =
   | Match of term * filter
-  
+        
 (** annotations *)
 type annot =
   | Comment of string
@@ -146,7 +150,7 @@ type annot =
   | ErrorMsg of source_position * string
   | Label of ident
   | Name of ident
-  | TermGenerator of sorted_ident list * sorted_ident list * guard list * term
+  | TermGenerator of guard list * term list
 
 (** Boolean operators *)
 type bool_op =
@@ -360,7 +364,7 @@ let rec extract_label = function
   | [] -> None
 
 let rec extract_gens = function
-  | TermGenerator (_, _, ms, t) :: ann ->
+  | TermGenerator (ms, t) :: ann ->
       (List.map (function Match (t, _) -> t) ms, t) :: extract_gens ann
   | _ :: ann -> extract_gens ann
   | [] -> []
@@ -391,8 +395,8 @@ and pr_annot ppf a =
   let pos = extract_src_pos a in
   let lbl = extract_label a in
   let rec pr_generators ppf = function
-    | (ms, t) :: gen ->
-        fprintf ppf "@ @[@@(matching %a yields %a)@]%a" pr_term_list ms pr_term t pr_generators gen
+    | (ms, ts) :: gen ->
+        fprintf ppf "@ @[<3>@@(matching %a yields %a)@]%a" pr_term_list ms pr_term_list ts pr_generators gen
     | [] -> ()
   in
   let pr_comment ppf (name, pos, lbl) =

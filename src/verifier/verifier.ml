@@ -104,10 +104,7 @@ let add_pred_insts prog f =
           IdMap.add id (mk_free_fun var.var_sort p ts) sm
       | _ -> failwith "Functions may only have a single return value."
     in
-    let body = match pred.pred_body.spec_form with
-    | FOL f -> subst_consts sm f
-    | SL f -> failwith "SL formula should have been desugared"
-    in
+    let body = subst_consts sm (form_of_spec pred.pred_body) in
     if pos then body else nnf (mk_not body)
   in
   let f_inst = 
@@ -173,6 +170,38 @@ let add_pred_insts prog f =
       | [] -> pos
     in collect TermSet.empty [(IdSet.empty, f)]
   in
+  let pred_def pred =
+    let args = pred.pred_formals @ pred.pred_footprints in
+    let sorted_vs, sm =
+      List.fold_right
+        (fun id (sorted_vs, sm) ->
+          let var = IdMap.find id pred.pred_locals in
+          (id, var.var_sort) :: sorted_vs,
+          IdMap.add id (Var (id, var.var_sort)) sm
+        )
+        args ([], IdMap.empty)
+    in
+    let body = form_of_spec pred.pred_body in
+    let body =
+      match body with
+      | Binder (Forall, vs, BoolOp (And, fs), a) ->
+          List.map (fun f -> Binder (Forall, vs, f, a)) fs
+      | BoolOp (And, fs) ->
+          fs
+      | f -> [f]
+    in
+    let vs = List.map (fun (id, srt) -> Var (id, srt)) sorted_vs in
+    let sm, body =
+      match pred.pred_outputs with
+      | [] -> sm, List.map (fun f -> mk_implies (mk_pred pred.pred_name vs) f) body
+      | [id] -> 
+          let var = IdMap.find id pred.pred_locals in
+          IdMap.add id (mk_free_fun var.var_sort pred.pred_name vs) sm, body
+      | _ -> failwith "Functions may only have a single return value."
+    in
+    List.map (fun f -> smk_forall sorted_vs (subst_consts sm f)) body    
+  in
+  let pred_defs = Prog.fold_preds (fun acc pred -> pred_def pred @ acc) [] prog in
   let pos_instances = 
     TermSet.fold (fun t instances ->
       match t with
@@ -185,7 +214,7 @@ let add_pred_insts prog f =
       pos_preds []
   in
   (*print_form stdout (smk_and (f_inst :: pos_instances)); print_newline ();*)
-  let f = mk_exists ~ann:a vs (smk_and (f :: pos_instances)) in
+  let f = mk_exists ~ann:a vs (smk_and (f :: pred_defs (*@ pos_instances*))) in
   f
         
 (** Generate verification conditions for procedure [proc] of program [prog]. 

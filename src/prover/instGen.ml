@@ -147,7 +147,7 @@ let generate_terms generators ground_terms =
     | FilterGeneric fn -> fn sm t
   in
   let rec generate new_terms old_terms = function
-    | (bvs, fvs, guards, gen_term) :: generators1 ->
+    | (guards, gen_terms) :: generators1 ->
         let subst_maps =
           List.fold_left (fun subst_maps -> function Match (t, filter) -> 
             let new_subst_maps =
@@ -166,9 +166,15 @@ let generate_terms generators ground_terms =
             [IdMap.empty] guards
         in
         let new_terms1 =
-          List.fold_left (fun acc sm ->
-            let t = subst_term sm gen_term in
-            add_terms acc t)
+          List.fold_left
+            (fun acc sm ->
+              List.fold_left
+                (fun acc gen_term ->
+                  let t = subst_term sm gen_term in
+                  (*let _ = print_endline ("Adding generated term " ^ string_of_term t) in*)
+                  add_terms acc t)
+                acc gen_terms
+            )
             new_terms subst_maps
         in
         generate new_terms1 old_terms generators1
@@ -245,13 +251,14 @@ let generate_instances useLocalInst axioms rep_terms egraph =
     let fun_terms, fun_vs = 
       if not useLocalInst then TermSet.empty, IdSet.empty else
       let rec tt bv (fun_terms, fun_vs) t =
-        match t with  
-        | App (_, _, srt) when srt <> Bool -> 
+        match t with
+        | App (sym, _, srt) when srt <> Bool || is_free_symbol sym -> 
             let vs = IdSet.diff (fv_term t) bv in
             if IdSet.is_empty vs
             then fun_terms, fun_vs
             else TermSet.add t fun_terms, IdSet.union vs fun_vs
-        | App (fn, ts, _) -> List.fold_left (tt bv) (fun_terms, fun_vs) ts
+        | App (_, ts, _) ->
+            List.fold_left (tt bv) (fun_terms, fun_vs) ts
         | _ -> fun_terms, fun_vs
       in fold_terms_with_bound tt (TermSet.empty, IdSet.empty) f
     in
@@ -280,6 +287,8 @@ let generate_instances useLocalInst axioms rep_terms egraph =
         print_endline (String.concat ", " (List.map string_of_ident (List.map fst (IdSrtSet.elements fvars0))));
         print_string "inst vars: ";
         print_endline (String.concat ", " (List.map string_of_ident (List.map fst (IdSrtSet.elements fvars))));
+        print_string "fun terms: ";
+        print_endline (String.concat ", " (List.map string_of_term (TermSet.elements fun_terms)));
         print_endline "subst_maps:";
         List.iter print_subst_map subst_maps;
         print_endline "--------------------"
@@ -293,7 +302,11 @@ let generate_instances useLocalInst axioms rep_terms egraph =
 let instantiate_with_terms ?(force=false) local axioms classes =
     if !Config.instantiate || force then
       (* remove atoms from congruence classes *)
-      let classes = List.filter (function t :: _ -> sort_of t <> Bool | _ -> false) classes in
+      let classes =
+        List.filter
+          (function t :: _ ->
+            sort_of t <> Bool ||
+            Opt.get_or_else false (Opt.map is_free_symbol (symbol_of t)) | _ -> false) classes in
       let _ = 
         if Debug.is_debug 1 then
           ignore

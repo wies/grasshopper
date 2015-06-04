@@ -94,6 +94,10 @@ let id_set_of_list ids =
 
 (** {6 Utility functions for identifiers, Boolean operators, and sorts} *)
 
+let is_free_symbol = function
+  | FreeSym _ -> true
+  | _ -> false
+    
 let fresh_ident =
   let used_names = Hashtbl.create 0 in
   fun (name : string) ->
@@ -468,8 +472,11 @@ let rec cnf =
     | BoolOp (Or, fs) -> cnf_or [] (List.rev_map cnf fs)
     | f -> f
 
-let mk_implies a b =
-  smk_or [nnf (mk_not a); b]
+let mk_implies f g =
+  match g with
+  | Binder (b, [], g1, a) ->
+      Binder (b, [] , smk_or [nnf (mk_not f); g1], a)
+  | _ -> smk_or [nnf (mk_not f); g]
 
 let mk_sequent antecedent succedent =
   smk_or (List.map mk_not antecedent @ succedent)
@@ -496,9 +503,9 @@ let map_terms fn f =
     | Binder (b, vs, f, a) -> 
         let a1 = 
           List.map (function
-            | TermGenerator (bvs, fvs, gs, t) ->
+            | TermGenerator (gs, ts) ->
                 let gs1 = List.map (function Match (t, f) -> Match (fn t, f)) gs in
-                TermGenerator (bvs, fvs, gs1, fn t)
+                TermGenerator (gs1, List.map fn ts)
             | a -> a) a
         in
         Binder (b, vs, mt f, a1)
@@ -623,7 +630,7 @@ let ground_terms_term_acc ?(include_atoms=false) terms t =
 	      terms_t, is_ground && is_ground_t)
 	    (terms, true) ts
 	in
-	if is_ground && (not include_atoms || srt <> Bool)
+	if is_ground && (include_atoms || srt <> Bool)
 	then TermSet.add t terms1, true 
 	else terms1, is_ground
   in
@@ -650,6 +657,8 @@ let vars_in_fun_terms f =
   in
   let rec ct vars t = 
     match t with
+    | App (FreeSym _, _, Bool) ->
+        fvt vars t
     | App (_, ts, Bool) -> 
 	List.fold_left ct vars ts
     | App _ -> fvt vars t
@@ -756,8 +765,8 @@ let subst_id subst_map f =
       Match (t1, f1)
   in
   let suba a = match a with
-    | TermGenerator (bvs, fvs, guards, gen_term) -> 
-      TermGenerator (bvs, fvs, List.map subg guards, subt gen_term)
+    | TermGenerator (guards, gen_terms) -> 
+        TermGenerator (List.map subg guards, List.map subt gen_terms)
     | a -> a
   in
   let rec sub = function 
@@ -791,13 +800,8 @@ let subst_consts_term subst_map t =
 (** Substitutes all constants in formula [f] with other terms according to substitution map [subst_map]. 
  ** This operation is not capture avoiding. *)
 let subst_consts subst_map f =
-  let add_var (id, srt) vs =
-    if List.exists (fun (id2, srt) -> id = id2) vs 
-    then vs 
-    else (id, srt) :: vs
-  in
   let subst_annot = function
-    | TermGenerator (bvs, fvs, guards, gen_term) -> 
+    | TermGenerator (guards, gen_terms) -> 
         let sign, guards1 = 
           List.fold_right 
             (fun m (sign, guards1) -> 
@@ -819,12 +823,7 @@ let subst_consts subst_map f =
                   sorted_fv_term_acc sign t1, Match (t1, f1) :: guards1)
             guards (IdMap.empty, [])
         in
-        let bvs1 = 
-          IdMap.fold 
-            (fun id srt bvs1 -> add_var (id, srt) bvs1)
-            sign bvs
-        in 
-        TermGenerator (bvs1, fvs, guards1, subst_consts_term subst_map gen_term)
+        TermGenerator (guards1, List.map (subst_consts_term subst_map) gen_terms)
     | a -> a
   in
   let rec subst = function
@@ -882,14 +881,13 @@ let subst subst_map f =
     in vs1, sm2
   in
   let suba bvs1 sm = function
-    | TermGenerator (bvs, fvs, guards, gen_term) -> 
-        let fvs1, sm1 = rename_vars fvs sm in
+    | TermGenerator (guards, gen_terms) -> 
         let guards1 = 
           List.map 
-            (function Match (t, f) -> Match (subst_term sm1 t, f))
+            (function Match (t, f) -> Match (subst_term sm t, f))
             guards
         in
-        TermGenerator (bvs1, fvs1, guards1, subst_term sm1 gen_term)
+        TermGenerator (guards1, List.map (subst_term sm) gen_terms)
     | a -> a
   in
   let rec sub sm = function 

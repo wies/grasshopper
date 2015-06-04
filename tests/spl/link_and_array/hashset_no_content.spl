@@ -28,7 +28,7 @@ predicate arrayseg_with_buckets(a: Array<Node>, lo: Int, hi: Int)(FP0: Set<Array
   (forall c: ArrayCell<Node>, x: Node :: c in FP0 && x in FP1 && Reach(next, c.array[c.index], x) ==> a.cells[ghostHash(a.length, x.data)] == c) &&
   (forall c: ArrayCell<Node> :: c in FP0 ==> Reach(next, c.array[c.index], null) @(matching c yields c.array[c.index])) &&
   //all the elts from a list have the same hash, and this is the index in the array
-  (forall v in FP1:: Btwn(next, a[ghostHash(a.length, v.data)], v, null) @(matching v yields a[ghostHash(a.length, v.data)]))
+    (forall v in FP1 :: Btwn(next, a[ghostHash(a.length, v.data)], v, null) @(matching v yields a[ghostHash(a.length, v.data)]))
 }
 
 predicate array_with_buckets(a: Array<Node>)(FP0: Set<Array<Node>>, FP1: Set<ArrayCell<Node>>, FP2: Set<Node>) {
@@ -53,9 +53,9 @@ procedure hash(size: Int, value: Int)
   returns (res: Int)
   requires 0 <= size
   ensures res == ghostHash(size, value)
-  //{
-  //assume false;
-  //}
+{
+  assume false;
+}
 
 
 procedure hashset_create(_size: Int) returns (res: HashSet)
@@ -79,14 +79,50 @@ procedure hashset_create(_size: Int) returns (res: HashSet)
   return new_set;
 }
 
+procedure append(val: Int, x: Node) 
+  returns (res: Node)
+  requires lseg(x, null)
+  ensures lseg(res, null)
+{
+  res := new Node;
+  res.next := x;
+  res.data := val;
+}
 
-procedure insert(lst: Node, value: Int) 
+procedure insert(lst: Node, val: Int) 
   returns (res: Node)
   requires lseg(lst, null)
   ensures lseg(res, null)
+{
+  var curr: Node;
+  curr := lst;
+  var prev: Node;
+  prev := null;
+  
+  while (curr != null && curr.data < val)
+    invariant (prev == null && curr == lst || val > prev.data &*& prev.next |-> curr) -** 
+      lseg(lst, null)
+  {
+    prev := curr;
+    curr := curr.next;
+  }
+  
+  if (curr != null && curr.data == val) {
+    return lst;
+  }
+  
+  var n: Node;
+  n := append(val, curr);
+  
+  if (prev == null) {
+    return n;
+  } else {
+    prev.next := n;
+    return lst;
+  }
+}
 
 procedure hashset_add(hashset: HashSet, value: Int)
-  returns (res: Bool)
   requires hset(hashset)
   ensures  hset(hashset)
 {
@@ -96,7 +132,6 @@ procedure hashset_add(hashset: HashSet, value: Int)
   assert lseg(list, null) -** hset(hashset);
   hashset.buckets[hashval] := insert(list, value);
 }
-
 
 procedure contains(lst: Node, value: Int) 
   returns (res: Bool)

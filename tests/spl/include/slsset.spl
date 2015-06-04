@@ -8,9 +8,9 @@ function data_witness(v: Int, d: Map<Node, Int>, FP: Set<Node>) returns (res: No
 function content(FP: Set<Node>) returns (C: Set<Int>) {
   (forall x: Node :: x in FP ==> x == data_witness(x.data, data, FP)) &&
   (forall x: Node :: x in FP ==> x.data in C) &&
-    (forall v in C :: data_witness(v, data, FP) in FP) &&
-    (forall v: Int :: v !in C ==> data_witness(v, data, FP) == null) &&
-    (forall v in C :: v == data_witness(v, data, FP).data @(matching v yields data_witness(v, data, FP).data))
+  (forall v in C :: data_witness(v, data, FP) in FP) &&
+  (forall v: Int :: v !in C ==> data_witness(v, data, FP) == null) &&
+  (forall v in C :: v == data_witness(v, data, FP).data @(matching v yields data_witness(v, data, FP).data))
 }
 
 predicate list_set(x: Node, y: Node, C: Set<Int>)(FP: Set<Node>) {

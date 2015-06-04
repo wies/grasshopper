@@ -1092,8 +1092,8 @@ let convert cu =
         let f2 = convert_grass_form locals e2 in
         let mk_form = 
           match op with
-          | OpAnd -> fun f1 f2 -> GrassUtil.mk_and [f1; f2]
-          | OpOr -> fun f1 f2 -> GrassUtil.mk_or [f1; f2]
+          | OpAnd -> fun f1 f2 -> GrassUtil.smk_and [f1; f2]
+          | OpOr -> fun f1 f2 -> GrassUtil.smk_or [f1; f2]
           | OpImpl -> GrassUtil.mk_implies           
           | _ -> failwith "unexpected operator"
         in
@@ -1139,7 +1139,7 @@ let convert cu =
             in
             Match (e, flt)) es1
         in
-        GrassUtil.annotate f [TermGenerator ([], [], matches, ge1)]
+        GrassUtil.annotate f [TermGenerator (matches, [ge1])]
     | e ->
         let t = convert_term locals e in
         Grass.Atom (t, [SrcPos (pos_of_expr e)])
@@ -1333,12 +1333,55 @@ let convert cu =
     IdMap.fold 
       (fun id decl prog ->
         let body = convert_grass_form decl.pr_locals decl.pr_body in
+        let locals = IdMap.map convert_var_decl decl.pr_locals in
+        let fun_terms =
+          let rec ft acc = function
+            | App (FreeSym _, _ :: _, _) as t ->
+                if IdSet.is_empty (GrassUtil.fv_term t)
+                then TermSet.add t acc else acc
+            | App (_, ts, _) ->
+                List.fold_left ft acc ts
+            | _ -> acc
+          in
+          GrassUtil.fold_terms ft TermSet.empty body
+        in
+        let sorted_vs =
+          List.map
+            (fun x ->
+              let var = IdMap.find x locals in
+              x, var.var_sort)
+            (decl.pr_formals @ decl.pr_footprints)
+        in
+        let vs = List.map (fun (x, srt) -> GrassUtil.mk_free_const srt x) sorted_vs in
+        let mt = match decl.pr_outputs with
+        | [] -> GrassUtil.mk_free_fun Bool id vs
+        | [x] ->
+            let var = IdMap.find x locals in
+            GrassUtil.mk_free_fun var.var_sort id vs
+        | _ -> failwith "Functions may only have a single return value."
+        in
+        let m = Match (mt, FilterTrue) in
+        let rec add_match = function
+          | Binder (b, vs, f, annots) ->
+              let annots1 =
+                List.map (function TermGenerator (ms, ts) -> TermGenerator (m :: ms, ts) | a -> a) annots
+              in
+              Binder (b, vs, add_match f, annots1)
+          | BoolOp (op, fs) ->
+              BoolOp (op, List.map add_match fs)
+          | f -> f
+        in
+        let generators =
+          if TermSet.is_empty fun_terms then [] else
+          [TermGenerator ([m], TermSet.elements fun_terms)]
+        in
+        let body = GrassUtil.annotate (add_match body) generators in
         let pred_decl = 
           { pred_name = id;
             pred_formals = decl.pr_formals;
             pred_outputs = decl.pr_outputs;
             pred_footprints = decl.pr_footprints;
-            pred_locals = IdMap.map convert_var_decl decl.pr_locals;
+            pred_locals = locals;
             pred_body = mk_spec_form (FOL body) (string_of_ident id) None (pos_of_expr decl.pr_body);
             pred_pos = decl.pr_pos;
             pred_accesses = IdSet.empty;

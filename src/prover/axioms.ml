@@ -60,7 +60,7 @@ let mk_axiom ?(gen=[]) name f =
   let bvars = sorted_free_vars f in
   let annots = 
     Name (name, 0) :: 
-    List.map (fun (bvs, fvs, m, g) -> TermGenerator (bvs, fvs, m, g)) gen 
+    List.map (fun (m, g) -> TermGenerator (m, g)) gen 
   in
   mk_forall ~ann:annots (IdSrtSet.elements bvars) f 
 
@@ -83,7 +83,6 @@ let read_write_axioms fld1 =
   in
   let srt_string = string_of_sort res_srt in
   let d = fresh_ident "?d" in
-  let d1 = d, res_srt in
   let dvar = mk_var res_srt d in
   (*let g = fresh_ident "?g" in
   let g1 = g, Fld res_srt in*)
@@ -104,10 +103,8 @@ let read_write_axioms fld1 =
     else mk_or [mk_eq (g loc1) dvar]
   in
   let generator2 = 
-    [l1 struct_srt; d1],
-    [],
     [Match (new_fld1, FilterTrue)],
-    g loc1
+    [g loc1]
   in      
   if not !encode_fields_as_arrays 
   then [mk_axiom ("read_write_" ^ srt_string ^ "_1") f_upd1;
@@ -236,15 +233,7 @@ let ep_axioms struct_srt =
   let loc3 = loc3 struct_srt in
   let loc4 = loc4 struct_srt in
   let f1 = f1 struct_srt in
-  let f2 = f2 struct_srt in
   let f3 = f3 struct_srt in
-  let s1 = s1 struct_srt in
-  let s2 = s2 struct_srt in
-  let s3 = s3 struct_srt in
-  let l1 = l1 struct_srt in
-  let l2 = l2 struct_srt in
-  let l3 = l3 struct_srt in
-  let l4 = l4 struct_srt in
   let ep = mk_ep fld1 set1 loc1 in
   let in_set1 v = mk_elem v set1 in
   let ep1 = reach loc1 ep in
@@ -262,15 +251,11 @@ let ep_axioms struct_srt =
         | _ -> false
       with Not_found -> false
     in
-    [([s1; f1; l1],
-      [s2; f2; f3; l3; l4],
-      [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
+    [([Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
        Match (mk_btwn_term fld3 loc1 loc3 loc4, FilterGeneric (field_filter (fst f1) (fst f3)));
        Match (loc1, FilterSymbolNotOccurs EntPnt)], 
-      mk_ep fld1 set1 loc1);
-     ([s1; f1; l1],
-      [s2; s3; f2; f3; l2; l3; l4],
-      (if !Config.full_ep then
+      [mk_ep fld1 set1 loc1]);
+     ((if !Config.full_ep then
         [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
          Match (loc1, (*FilterGeneric ep_filter*) FilterSymbolNotOccurs EntPnt)]
       else
@@ -278,13 +263,7 @@ let ep_axioms struct_srt =
          Match (mk_btwn_term fld3 loc2 loc3 loc4, FilterGeneric (field_filter (fst f1) (fst f3)));
          Match (mk_elem_term loc1 set3, FilterTrue);
          Match (loc1, FilterSymbolNotOccurs EntPnt)]), 
-      mk_ep fld1 set1 loc1);
-     (*([s1; f1],
-     [s2; is1; f2; i1],
-     [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-      Match (DefHelpers.mk_witness int1 intset1, FilterNotOccurs EntPnt);
-      ], 
-      mk_ep fld1 set1 (DefHelpers.mk_witness int1 intset1))*)
+      [mk_ep fld1 set1 loc1])
    ]
   in
   if !Config.with_ep then
@@ -296,48 +275,50 @@ let ep_axioms struct_srt =
 
 (** Array axioms *)
 let array_axioms elem_srt =
-  let ad = l1 (Array elem_srt) in
   let a = loc1 (Array elem_srt) in
-  let cd = l2 (ArrayCell elem_srt) in
   let c = loc2 (ArrayCell elem_srt) in
   let i = int1 in
   let array_length =
     mk_or [mk_eq a (mk_null (Array elem_srt)); mk_leq (mk_int 0) (mk_length a)]
   in
+  let array_cells1 =
+    mk_eq (mk_array_of_cell (mk_read (mk_array_cells a) i)) a 
+  in
+  let array_cells2 =
+    mk_eq (mk_index_of_cell (mk_read (mk_array_cells a) i)) i
+  in
+  let array_cells3 =
+    mk_eq (mk_read (mk_array_cells (mk_array_of_cell c)) (mk_index_of_cell c)) c
+  in
+  (*
   let array_cells1 = 
     mk_sequent [mk_eq (mk_read (mk_array_cells a) i) c] [mk_and [mk_eq (mk_array_of_cell c) a; mk_eq (mk_index_of_cell c) i]]
   in
   let array_cells2 =
     mk_sequent [mk_eq (mk_array_of_cell c) a; mk_eq (mk_index_of_cell c) i] [mk_eq (mk_read (mk_array_cells a) i) c]
   in
+   *)
   let array_cell_gen =
-    ([cd],
-      [],
-      [Match (c, FilterSymbolNotOccurs ArrayOfCell);
+    ([Match (c, FilterSymbolNotOccurs ArrayOfCell);
        Match (c, FilterSymbolNotOccurs IndexOfCell);
        Match (c, FilterSymbolNotOccurs ArrayCells)], 
-      mk_read (mk_array_cells (mk_array_of_cell c)) (mk_index_of_cell c))
+      [mk_read (mk_array_cells (mk_array_of_cell c)) (mk_index_of_cell c)])
   in
   let index_of_cell_gen =
-    ([cd],
-      [],
-      [Match (c, FilterSymbolNotOccurs IndexOfCell)], 
-      mk_index_of_cell c)
+    ([Match (c, FilterSymbolNotOccurs IndexOfCell)], 
+     [mk_index_of_cell c])
   in
   let array_of_cell_gen =
-    ([cd],
-      [],
-      [Match (c, FilterSymbolNotOccurs ArrayOfCell)], 
-      mk_array_of_cell c)
+    ([Match (c, FilterSymbolNotOccurs ArrayOfCell)], 
+     [mk_array_of_cell c])
   in
   let array_cells_gen =
-    ([ad],
-      [],
-      [Match (a, FilterSymbolNotOccurs ArrayCells)], 
-      mk_array_cells a)
+    ([Match (a, FilterSymbolNotOccurs ArrayCells)], 
+     [mk_array_cells a])
   in
-  [mk_axiom ~gen:[index_of_cell_gen; array_of_cell_gen; array_cells_gen] "array-cells1" array_cells1;
-   mk_axiom ~gen:[array_cell_gen] "array-cells2" array_cells2;
+  [mk_axiom ~gen:[index_of_cell_gen; array_of_cell_gen; array_cells_gen; array_cell_gen] "array-cells1" array_cells1;
+   mk_axiom "array-cells2" array_cells2;
+   mk_axiom "array-cells3" array_cells3;
    mk_axiom "array-length" array_length]
      
 (** Set axioms *)

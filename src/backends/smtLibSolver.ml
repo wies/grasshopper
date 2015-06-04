@@ -404,8 +404,10 @@ let init_session session sign =
   in
   (* collect the struct types *)
   let structs =
-    let add acc srt = match srt with
+    let rec add acc srt = match srt with
     | Loc (FreeSrt _ as srt) -> SortSet.add srt acc
+    | Set srt | ArrayCell srt | Array srt | Loc srt -> add acc srt
+    | Map (srt1, srt2) -> add (add acc srt1) srt2
     | _ -> acc
     in
     SymbolMap.fold

@@ -150,9 +150,9 @@ let elim_arrays prog =
   in
   let compile_annot =
     function
-    | TermGenerator (bvs, fvs, gs, t) ->
+    | TermGenerator (gs, ts) ->
         let gs1 = List.map (function Match (t, f) -> Match (compile_term t, f)) gs in
-        TermGenerator (bvs, fvs, gs1, compile_term t)
+        TermGenerator (gs1, List.map compile_term ts)
     | a -> a
   in
   let rec compile_grass_form = function
