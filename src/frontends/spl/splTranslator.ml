@@ -935,6 +935,8 @@ let convert cu =
             let res_decl = IdMap.find res decl.pr_locals in
             let res_srt = convert_type res_decl.v_type pos in
             GrassUtil.mk_free_fun res_srt id ts
+        | [] ->
+            GrassUtil.mk_free_fun Bool id ts
         | _ -> failwith "unexpected expression")
     | BinaryOp (e1, (OpDiff as op), e2, ty, _)
     | BinaryOp (e1, (OpUn as op), e2, ty, _)      
@@ -1043,9 +1045,6 @@ let convert cu =
             let f2 = GrassUtil.subst_consts (IdMap.add id v_id IdMap.empty) f1 in
             GrassUtil.mk_srcpos pos (mk_quant [(id, elem_srt)] f2)
         | _ -> failwith "unexpected type")
-    | PredApp (id, es, pos) ->
-        let ts = List.map (convert_term locals) es in 
-        GrassUtil.mk_pred ~ann:[SrcPos pos] id ts
     | BinaryOp (e1, OpEq, e2, _, pos) ->
         (match type_of_expr cu locals e1 with
         | BoolType ->
@@ -1334,16 +1333,16 @@ let convert cu =
       (fun id decl prog ->
         let body = convert_grass_form decl.pr_locals decl.pr_body in
         let locals = IdMap.map convert_var_decl decl.pr_locals in
-        let fun_terms =
+        let fun_terms f =
           let rec ft acc = function
-            | App (FreeSym _, _ :: _, _) as t ->
+            | App (sym, _ :: _, srt) as t when GrassUtil.is_free_symbol sym || srt <> Bool ->
                 if IdSet.is_empty (GrassUtil.fv_term t)
                 then TermSet.add t acc else acc
             | App (_, ts, _) ->
                 List.fold_left ft acc ts
             | _ -> acc
           in
-          GrassUtil.fold_terms ft TermSet.empty body
+          GrassUtil.fold_terms ft TermSet.empty f
         in
         let sorted_vs =
           List.map
@@ -1371,11 +1370,19 @@ let convert cu =
               BoolOp (op, List.map add_match fs)
           | f -> f
         in
-        let generators =
-          if TermSet.is_empty fun_terms then [] else
-          [TermGenerator ([m], TermSet.elements fun_terms)]
+        let rec add_generators f =
+          match f with
+          | BoolOp (And, fs) ->
+              BoolOp (And, List.map add_generators fs)
+          | _ ->
+              let ft = fun_terms f in
+              let generators =
+                if TermSet.is_empty ft then []
+                else [TermGenerator ([m], TermSet.elements ft)]
+              in
+              GrassUtil.annotate f generators
         in
-        let body = GrassUtil.annotate (add_match body) generators in
+        let body = add_generators (add_match body) in
         let pred_decl = 
           { pred_name = id;
             pred_formals = decl.pr_formals;

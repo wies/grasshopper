@@ -41,10 +41,10 @@ function ghostHash(max: Int, value: Int) returns (res: Int) {
   res >= 0 && res < max
 }
 
-predicate hset(hset: HashSet)(FP0: Set<HashSet>, FP1: Set<Array<Node>>, FP2: Set<ArrayCell<Node>>, FP3: Set<Node>) {
-  hset.size == hset.buckets.length &&
-  FP0 == Set(hset) &&
-  array_with_buckets(hset.buckets, FP1, FP2, FP3) &&
+predicate hset(h: HashSet)(FP0: Set<HashSet>, FP1: Set<Array<Node>>, FP2: Set<ArrayCell<Node>>, FP3: Set<Node>) {
+  h.size == h.buckets.length &&
+  FP0 == Set(h) &&
+  array_with_buckets(h.buckets, FP1, FP2, FP3) &&
   true
 }
 

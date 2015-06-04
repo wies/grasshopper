@@ -668,14 +668,14 @@ let vars_in_fun_terms f =
 (** Compute the set of all proper terms in formula [f] that have variables occuring in them. *)
 let fun_terms_with_vars f =
   let rec process acc t = match t with
-    | App (_, ts, Bool) ->
-      (* skip predicates *)
-      List.fold_left process acc ts
-    | App (_, ts, _) ->
+    | App (sym, ts, srt) when srt <> Bool || is_free_symbol sym ->
       let acc = List.fold_left process acc ts in
       if not (IdSet.is_empty (fv_term_acc IdSet.empty t))
       then TermSet.add t acc
       else acc
+    | App (_, ts, _) ->
+      (* skip predicates *)
+      List.fold_left process acc ts
     | Var _ -> acc
   in
     fold_terms process TermSet.empty f
