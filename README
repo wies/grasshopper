@@ -17,7 +17,7 @@ details.
 -------------------------
 Installation Requirements
 -------------------------
-- OCaml, version >= 3.12
+- OCaml, version >= 4.01
 
 - Z3, version >= 3.2, and/or
 
