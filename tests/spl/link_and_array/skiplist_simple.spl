@@ -68,7 +68,7 @@ procedure trivial_add(this: SkipList, x: Int)
   requires skiplist(this)
   ensures skiplist(this)
 {
-  if (this.head.data > elt.data) {
+  if (this.head.data > x) {
     // handle this case
   }
   var u: Node := this.head;
