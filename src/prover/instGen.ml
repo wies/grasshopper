@@ -242,21 +242,19 @@ let generate_instances useLocalInst axioms rep_terms egraph =
         else fvars, IdSrtSet.empty
     in
     (* close the strat_vars so they are not instantiated *)
-    let f =
-      if not (IdSrtSet.is_empty strat_vars)
-      then mk_forall (IdSrtSet.elements strat_vars) f
-      else f
-    in
+    let f = mk_forall (IdSrtSet.elements strat_vars) f in
     (* collect all terms in which free variables appear below function symbols *)
     let fun_terms, fun_vs = 
       if not useLocalInst then TermSet.empty, IdSet.empty else
       let rec tt bv (fun_terms, fun_vs) t =
         match t with
-        | App (sym, _, srt) when srt <> Bool || is_free_symbol sym -> 
-            let vs = IdSet.diff (fv_term t) bv in
-            if IdSet.is_empty vs
-            then fun_terms, fun_vs
-            else TermSet.add t fun_terms, IdSet.union vs fun_vs
+        | App (sym, _, srt) when srt <> Bool || is_free_symbol sym ->
+            let tvs = fv_term t in
+            let tbvs = IdSet.inter tvs bv in
+            if IdSet.is_empty tbvs
+            then TermSet.add t fun_terms, IdSet.union tvs fun_vs
+            else fun_terms, fun_vs
+
         | App (_, ts, _) ->
             List.fold_left (tt bv) (fun_terms, fun_vs) ts
         | _ -> fun_terms, fun_vs
