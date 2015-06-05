@@ -6,6 +6,7 @@ open GrassUtil
 open InstGen
 open SimplifyGrass
 
+ 
 (** Remove binders for universal quantified variables in [axioms] that satisfy the condition [open_cond]. *)
 let open_axioms ?(force=false) open_cond axioms = 
   let rec open_axiom generators = function
@@ -50,6 +51,11 @@ let isFunVar f =
   let fvars = vars_in_fun_terms f in
   fun v -> IdSrtSet.mem v fvars
 
+(** Compute the set of generated ground terms for formulas [fs] *)
+let generated_ground_terms fs =
+  let _, generators = open_axioms isFunVar fs in
+  let gts = generate_terms generators (ground_terms ~include_atoms:true (smk_and fs)) in
+  gts
   
 (** Eliminate all implicit and explicit existential quantifiers using skolemization.
  ** Assumes that [f] is typed and in negation normal form. *)
@@ -191,7 +197,7 @@ let btwn_fields fs gts =
   IdMap.iter (fun id is ->
     Printf.printf "%s -> %s\n" (string_of_ident id) (String.concat ", " (List.map string_of_int is))) related_symbols;*)
   let rec collect_fields flds = function
-    | App (Btwn, (App (_, _, _) as fld) :: _, _) -> 
+    | App (Btwn, fld :: _, _) when IdSet.is_empty (fv_term fld) -> 
         TermSet.union (partition_of fld) flds
     | App (sym, ts, _) ->
         let flds1 = match sym with
@@ -202,7 +208,7 @@ let btwn_fields fs gts =
             let flds1, _, _ =
               List.fold_left (fun (flds, is, j) t ->
                 match t, is with
-                | Var _, i :: is1 when i = j ->
+                | fld, i :: is1 when i = j && not (IdSet.is_empty (fv_term fld)) ->
                     (flds, is1, j + 1)
                 | fld, i :: is1 when i = j ->
                     (TermSet.union (partition_of fld) flds, is1, j + 1)
@@ -218,7 +224,7 @@ let btwn_fields fs gts =
   let flds = fold_terms collect_fields TermSet.empty (smk_and fs) in
   flds
 
-let btwn_fields_in_fs fs = btwn_fields fs (ground_terms (smk_and fs))
+let btwn_fields_in_fs fs = btwn_fields fs (generated_ground_terms fs)
 
 let add_frame_axioms fs =
   let btwn_flds = btwn_fields_in_fs fs in
@@ -386,7 +392,7 @@ let array_sorts ts =
 (** Adds theory axioms for the entry point function to formulas [fs].
  ** Assumes that all frame predicates have been reduced in formulas [fs]. *)
 let add_ep_axioms fs =
-  let gts = ground_terms (smk_and fs) in
+  let gts = generated_ground_terms fs in
   let flds = btwn_fields fs gts in
   (*let flds =
     TermSet.filter 
@@ -603,7 +609,7 @@ let add_split_lemmas fs gts =
       | _ -> structs)
       gts SortSet.empty
   in
-  let classes = CongruenceClosure.congr_classes fs (ground_terms (mk_and fs)) in
+  let classes = CongruenceClosure.congr_classes fs (generated_ground_terms fs) in
   let add_lemmas srt fs1 =
     let loc_gts =
       TermSet.filter (fun t -> sort_of t = Loc srt) gts
