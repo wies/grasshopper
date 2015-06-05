@@ -1097,6 +1097,125 @@ let output_graphviz chan model terms =
     output_string chan "}\n"
   in
   output_graph ()
-    
 
-      
+(** Function that outputs a counter example model in a simple text format.
+   @param chan the output channel to write to
+   @param model the model to output
+   @param terms ground terms to restrict the model to.
+*)
+(* TODO why do we need terms?? *)
+let output_txt chan model terms =
+  let loc_sorts = get_loc_sorts model in
+  let fld_srts = get_loc_fld_sorts model in
+
+  (* Undo SSA encoding: calculate latest version of all loc_sort identifiers *)
+  let latest_version_of_idname =
+    let add_latest_versions_of_srt srt latest_versions =
+      let symbs = get_symbols_of_sort model ([], Loc srt) in
+      let idents =
+	SymbolSet.fold
+	  (fun sym idents -> match sym with
+			     | FreeSym iden -> IdSet.add iden idents
+			     | _ -> idents)
+	  symbs IdSet.empty in
+      let latest_version_curr =
+	IdSet.fold
+	  (fun (name, num) latest_version ->
+	   try
+	     if num > StringMap.find name latest_version
+	     then StringMap.add name num latest_version
+	     else latest_version
+	   with
+	     Not_found -> StringMap.add name num latest_version)
+	  idents StringMap.empty
+      in
+      StringMap.fold (fun name num map ->
+		      if StringMap.mem name map
+		      then failwith "output_txt: duplicate identifier names"
+		      else StringMap.add name num map)
+		     latest_version_curr latest_versions
+    in
+    SortSet.fold add_latest_versions_of_srt loc_sorts StringMap.empty
+  in
+
+  (* To convert all identifiers to integers, first convert the value/symbol/bla
+     to string and then use this string -> int map *)
+  let id_map = StringMap.empty in
+  let id_count = ref 0 in
+  let get_id id_map str =
+    try id_map, StringMap.find str id_map
+    with Not_found ->
+      id_count := !id_count + 1;
+      (StringMap.add str !id_count id_map), !id_count
+  in
+  let string_of_loc_value srt l = string_of_sorted_value srt l in
+  let get_id_of_loc id_map srt l = get_id id_map (string_of_loc_value srt l) in
+
+  let process_srt srt id_map =
+    (* Find the node pointed to by null and give it the id 0 *)
+    (* TODO can there be different nulls for different sorts? *)
+    let l = interp_symbol model Null ([], Loc srt) [] in
+    let id_map = StringMap.add (string_of_sorted_value srt l) 0 id_map in
+
+    let locs = get_values_of_sort model (Loc srt) in
+    let rsrts =
+      SortSet.fold
+        (function
+          | Map (Loc srt1, Loc rsrt) when srt1 = srt -> SortSet.add rsrt
+          | _ -> fun rsrts -> rsrts)
+        fld_srts SortSet.empty
+    in
+    let output_flds rsrt id_map =
+      let fld_srt = Map (Loc srt, Loc rsrt) in
+      let flds = get_values_of_sort model fld_srt in
+      let read_arity = [fld_srt; Loc srt], Loc rsrt in
+      List.fold_left
+        (fun id_map f ->
+          List.fold_left (fun id_map l ->
+            try
+              let r = interp_symbol model Read read_arity [f; l] in
+	      let id_map, l_id = get_id_of_loc id_map srt l in
+	      let id_map, r_id = get_id_of_loc id_map rsrt r in
+	      let f_str = (string_of_term (find_term model f fld_srt)) in
+	      if Debug.is_debug 0 then
+		begin
+		  let l_str = (string_of_loc_value srt l) in
+		  let r_str = (string_of_loc_value rsrt r) in
+		  Printf.printf "\nFound %s edge: %s -> %s\n" f_str l_str r_str;
+		  Printf.printf "id_map: %s -> %d, %s -> %d\n" l_str l_id r_str r_id
+		end;
+	      Printf.fprintf chan "(%d, %s, %d)\n" l_id f_str r_id;
+	      id_map
+            with Not_found -> id_map)
+            id_map locs)
+        id_map flds
+    in
+
+    let output_loc_vars id_map =
+      SymbolSet.fold
+	(fun sym id_map ->
+	 match sym with
+	 | FreeSym (name, num) ->
+	    if num == StringMap.find name latest_version_of_idname then
+	      begin
+		let l = interp_symbol model sym ([], Loc srt) [] in
+		let id_map, l_id = get_id_of_loc id_map srt l in
+
+		Printf.fprintf chan "[%s : %d]\n" name l_id;
+		id_map
+	      end
+	    else
+	      id_map
+	 | Null ->
+	    id_map
+	 | _ ->
+	    Printf.printf "\nERROR: got unknown symbol %s\n\n" (string_of_symbol sym);
+	    id_map
+	 )
+	(get_symbols_of_sort model ([], Loc srt)) id_map
+    in
+    let id_map = output_loc_vars id_map in
+    SortSet.fold output_flds rsrts id_map
+  in
+  let _ = SortSet.fold process_srt loc_sorts id_map in
+  ()

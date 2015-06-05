@@ -13,6 +13,13 @@ let dump_model session f =
     (*Model.print_model2 model;*)
     Model.output_graphviz model_chan (Model.complete model) gts;
     close_out model_chan;
+  end;
+  if !Config.model_txt_file <> "" then begin
+    let gts = ground_terms f in
+    let model = Opt.get (SmtLibSolver.get_model session) in
+    let model_chan = open_out !Config.model_txt_file in
+    Model.output_txt model_chan (Model.complete model) gts;
+    close_out model_chan;
   end
 
 let dump_core session =

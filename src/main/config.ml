@@ -9,6 +9,9 @@ let procedure = ref None
 
 (* File name where counterexample model is saved. *)
 let model_file = ref ""
+(* File name where txt-format counterexample model is saved. *)
+let model_txt_file = ref ""
+
 (* Display the edges going to null in the model *)
 let model_null_edge = ref false
 
@@ -67,6 +70,7 @@ let cmd_options =
    ("-stats", Arg.Set print_stats, " Print statistics");
    ("-lint", Arg.Set flycheck_mode, " Print single line error messages for on-the-fly checking");
    ("-model", Arg.Set_string model_file, "<file>  Produce counterexample model for the first failing verification condition");
+   ("-model-txt", Arg.Set_string model_txt_file, "<file>  Produce counterexample model for the first failing VC in cleaned-up, heap-only, txt file format");
    ("-nulledges", Arg.Set model_null_edge, " Show the edges going to null in the model");
    ("-trace", Arg.Set_string trace_file, "<file>  Produce counterexample trace for the first failing verification condition");
    ("-dumpghp", Arg.Set_int dump_ghp, "<num>  Print intermediate program after specified simplification stage (num=0,1,2,3)");
