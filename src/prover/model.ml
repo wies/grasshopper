@@ -180,7 +180,10 @@ let equal model v1 v2 srt =
 let extend_interp model sym (arity: arity) args res =
   let _, res_srt = arity in
   (* update cardinality *)
-  let card = SortMap.find res_srt model.card in
+  let card =
+    try SortMap.find res_srt model.card
+    with Not_found -> 0
+  in
   model.card <- SortMap.add res_srt (card + 1) model.card;
   (* update base value mapping *)
   let m, d = 
