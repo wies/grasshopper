@@ -25,10 +25,11 @@ let open_axioms ?(force=false) open_cond axioms =
             ) a (generators, [])
         in
         let vs1 = List.filter (~~ (open_cond f)) vs in
+        let f1, generators2 = open_axiom generators1 f in
         if !Config.instantiate || force then
-          Binder (b, vs1, f, a1), generators1
+          Binder (b, vs1, f1, a1), generators2
         else 
-          Binder (b, vs, f, a1), generators1
+          Binder (b, vs, f1, a1), generators2
     | BoolOp (op, fs) -> 
         let fs1, generators1 = 
           List.fold_right open_axioms fs ([], generators)
@@ -161,24 +162,23 @@ let btwn_fields fs gts =
       | _ -> flds
     in
     let btwn_flds = fold_terms btwn_fields IdSet.empty f in
-    let add id i acc =
-      let is = try IdMap.find id acc with Not_found -> [] in
-      IdMap.add id (i :: is) acc
-    in
     let rec related_symbols acc = function
       | App (sym, ts, _) ->
           let acc1 = match sym with
-          | FreeSym id ->
-              let acc1, _ =
+          | FreeSym id when not (IdMap.mem id acc) ->
+              let is, _ =
                 List.fold_left
-                  (fun (acc, i) -> function
+                  (fun (is, i) -> function
                     | Var (fld, Map (Loc _, _)) ->
                         if IdSet.mem fld btwn_flds
-                        then (add id i acc, i+1)
-                        else (acc, i+1)
-                    | _ -> (acc, i+1))
-                  (acc, 0) ts
-              in acc1
+                        then (i :: is, i+1)
+                        else (is, i+1)
+                    | _ -> (is, i+1))
+                  ([], 0) ts
+              in
+              if is <> []
+              then IdMap.add id (List.rev is) acc
+              else acc
           | _ -> acc
           in
           List.fold_left related_symbols acc1 ts
@@ -187,6 +187,9 @@ let btwn_fields fs gts =
     fold_terms related_symbols acc f    
   in
   let related_symbols = List.fold_left collect_symbols IdMap.empty fs1 in
+  (*print_endline "Related symbols:";
+  IdMap.iter (fun id is ->
+    Printf.printf "%s -> %s\n" (string_of_ident id) (String.concat ", " (List.map string_of_int is))) related_symbols;*)
   let rec collect_fields flds = function
     | App (Btwn, (App (_, _, _) as fld) :: _, _) -> 
         TermSet.union (partition_of fld) flds
@@ -212,7 +215,8 @@ let btwn_fields fs gts =
         List.fold_left collect_fields flds1 ts
     | _ -> flds
   in
-  fold_terms collect_fields TermSet.empty (smk_and fs)  
+  let flds = fold_terms collect_fields TermSet.empty (smk_and fs) in
+  flds
 
 let btwn_fields_in_fs fs = btwn_fields fs (ground_terms (smk_and fs))
 
@@ -577,7 +581,7 @@ let encode_labels fs =
           | _ -> None) 
         annots
     in
-    smk_and (smk_or (f :: List.map mk_not lbls) :: lbls)
+    mk_and (mk_or (f :: List.map mk_not lbls) :: lbls)
   in
   let rec el = function
     | Binder (b, vs, f, annots) ->
@@ -635,6 +639,8 @@ let reduce f =
   let fs = split_ands [] [f1] in
   (* *)
   let fs = elim_exists fs in
+  (*print_endline "After skolemization";
+  print_endline (string_of_form (mk_and fs));*)
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
   (* some formula rewriting that helps the SMT solver *)
   let fs = massage_field_reads fs in
