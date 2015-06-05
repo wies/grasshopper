@@ -23,6 +23,14 @@ function arrayseg_buckets_footprint(a: Array<Node>, FP0: Set<ArrayCell<Node>>) r
      @(matching x yields a.cells[ghostHash(a.length, x.data)] ))
 }
 
+function arrayseg_with_buckets_content(FP1: Set<Node>) returns (cnt: Set<Int>) {
+  (forall v in FP1 :: v.data in cnt) &&
+  (forall x: Node :: x in FP1 ==> x == data_witness(x.data, data, FP1)) &&
+  (forall v in cnt :: data_witness(v, data, FP1) in FP1) &&
+  (forall v: Int :: v !in cnt ==> data_witness(v, data, FP1) == null) &&
+  (forall v in cnt :: v == data_witness(v, data, FP1).data @(matching v yields data_witness(v, data, FP1).data))
+}
+
 predicate arrayseg_with_buckets(a: Array<Node>, lo: Int, hi: Int, cnt: Set<Int>)(FP0: Set<ArrayCell<Node>>, FP1: Set<Node>) {
   0 <= lo && lo <= hi && hi <= a.length &&
   FP0 == arrayseg_footprint(a, lo, hi) &&
@@ -31,13 +39,7 @@ predicate arrayseg_with_buckets(a: Array<Node>, lo: Int, hi: Int, cnt: Set<Int>)
   (forall c: ArrayCell<Node> :: c in FP0 ==> Reach(next, c.array[c.index], null) @(matching c yields c.array[c.index])) &&
   //all the elts from a list have the same hash, and this is the index in the array
   (forall v in FP1 :: Btwn(next, a[ghostHash(a.length, v.data)], v, null) @(matching v yields a[ghostHash(a.length, v.data)])) &&
-  //content of the buckets
-  (forall v in FP1 :: v.data in cnt) &&
-  (forall x: Node :: x in FP1 ==> x == data_witness(x.data, data, FP1)) &&
-  (forall v in cnt :: data_witness(v, data, FP1) in FP1) &&
-  //TODO something funny, this works for list_set but not here!!!
-  //(forall v: Int :: v !in cnt ==> data_witness(v, data, FP1) == null) &&
-  (forall v in cnt :: v == data_witness(v, data, FP1).data @(matching v yields data_witness(v, data, FP1).data))
+  cnt == arrayseg_with_buckets_content(FP1)
 }
 
 predicate array_with_buckets(a: Array<Node>, cnt: Set<Int>)(FP0: Set<Array<Node>>, FP1: Set<ArrayCell<Node>>, FP2: Set<Node>) {

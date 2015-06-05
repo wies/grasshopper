@@ -180,7 +180,10 @@ let equal model v1 v2 srt =
 let extend_interp model sym (arity: arity) args res =
   let _, res_srt = arity in
   (* update cardinality *)
-  let card = SortMap.find res_srt model.card in
+  let card =
+    try SortMap.find res_srt model.card
+    with Not_found -> 0
+  in
   model.card <- SortMap.add res_srt (card + 1) model.card;
   (* update base value mapping *)
   let m, d = 
@@ -1016,7 +1019,7 @@ let output_graphviz chan model terms =
       output_string chan ("{ rank = sink; Legend" ^ (string_of_int !l) ^ " [shape=none, margin=0, label=<\n");
       output_string chan "    <table border=\"0\" cellborder=\"1\" cellspacing=\"0\" cellpadding=\"4\">\n";
       output_string chan "      <tr>\n";
-      output_string chan ("        <td><b>" ^ title ^ "</b></td>\n");
+      output_string chan ("        <td colspan=\"2\"><b>" ^ title ^ "</b></td>\n");
       output_string chan "      </tr>\n";
   in
   let print_table_footer () =
@@ -1024,66 +1027,81 @@ let output_graphviz chan model terms =
     output_string chan ">];\n";
     output_string chan "}\n";
   in
-  let output_int_vars () = 
-    let ints = get_symbols_of_sort model ([], Int) in
-    let print_ints () =
-      SymbolSet.iter 
-        (fun sym ->
-          let str = string_of_symbol sym in
-          let value = interp_symbol model sym ([], Int) [] in
-          Printf.fprintf chan "        <tr><td>%s = %s</td></tr>\n" 
-            str (string_of_value value)
-        ) ints
-    in
-    if not (SymbolSet.is_empty ints) then
+  (* group tables in eq classes *)
+  let out_tbl name assoc =
+    let values = List.fold_left (fun acc (_,s) -> StringSet.add s acc) StringSet.empty assoc in
+    if not (StringSet.is_empty values) then
       begin
-        print_table_header "ints";
-        print_ints ();
+        print_table_header name;
+        StringSet.iter
+          (fun s ->
+            let pairs = List.filter (fun (_,s2) -> s = s2) assoc in
+            let keys = List.map fst pairs in
+            let rowspan = List.length keys in
+            Printf.fprintf chan "        <tr><td>%s</td><td rowspan=\"%s\">%s</td></tr>\n" (List.hd keys) (string_of_int rowspan) s;
+            List.iter (fun k -> Printf.fprintf chan "        <tr><td>%s</td></tr>\n" k) (List.tl keys)
+          ) values;
         print_table_footer ()
       end
   in
+  let output_int_vars () = 
+    let ints = get_symbols_of_sort model ([], Int) in
+    let print_ints =
+      SymbolSet.fold
+        (fun sym acc ->
+          let str = string_of_symbol sym in
+          let value = interp_symbol model sym ([], Int) [] in
+          (str, (string_of_value value)) :: acc
+        ) ints []
+    in
+     out_tbl "ints" print_ints
+  in
   let output_sets () =
     let print_sets srt =
-      TermSet.iter
-        (function
+      TermSet.fold
+        (fun t acc -> match t with
           | App (FreeSym _, _, Set srt1) as set_t when srt = srt1 ->
               (try
                 let set = eval model set_t in
                 let s = find_set_value model set srt in
                 let vals = List.map (fun e ->  string_of_sorted_value srt e) (ValueSet.elements s) in
-                let set_rep = String.concat ", " vals in
-                Printf.fprintf chan "        <tr><td>%s == {%s}</td></tr>\n" (string_of_term set_t) set_rep
-              with Failure _ | Undefined -> ())
-          | _ -> ())
-        terms
+                let set_rep = "{" ^ (String.concat ", " vals) ^ "}" in
+                ((string_of_term set_t), set_rep) :: acc
+              with Failure _ | Undefined -> acc)
+          | _ -> acc)
+        terms []
     in
-    print_table_header "sets";
-    SortSet.iter (fun srt -> print_sets (Loc srt)) loc_sorts;
-    print_sets Int;
-    print_table_footer ()
+    let all_loc_sets = SortSet.fold (fun srt acc -> (print_sets (Loc srt)) @ acc) loc_sorts [] in
+    let int_sets = print_sets Int in
+    out_tbl "sets" (int_sets @ all_loc_sets)
   in
   (* functions and pred *)
   let output_freesyms () =
-    print_table_header "predicates and functions";
-    TermSet.iter 
-      (function
+    let funs = TermSet.fold
+      (fun t acc -> match t with
         | (App (FreeSym _, _, (Bool as srt)) as t)
         (*| (App (FreeSym _, _, (Set _ as srt)) as t)*)
         | (App (FreeSym _, _ :: _, (Int as srt)) as t)
         | (App (FreeSym _, _ :: _, (Loc _ as srt)) as t)
         | (App (IndexOfCell, _, srt) as t) ->
             (try
-              let res =
-                eval model t
-              in
-              (*let res_t = find_term res srt in
-              if t <> res_t then*)
+              let res = eval model t in
+              ((string_of_term t), (string_of_sorted_value srt res)) :: acc
+            with _ -> acc)
+        (*
+        | (App (FreeSym _, _ :: _, (Set _ as srt)) as t) ->
+            (try
+              let res = eval model t in
+              let res_t = find_term res srt in
+              if t <> res_t then
                 Printf.fprintf chan "      <tr><td>%s == %s</td></tr>\n"
-                  (string_of_term t) (string_of_sorted_value srt res) (*(string_of_term res_t)*)
+                  (string_of_term t) (string_of_term res_t)
             with _ -> ())
-        | _ -> ()
-      ) terms;
-    print_table_footer ()
+        *)
+        | _ -> acc
+      ) terms [] 
+    in
+    out_tbl "predicates and functions" funs
   in
   let output_graph () =
     output_string chan "digraph Model {\n";
