@@ -161,16 +161,24 @@ let btwn_fields fs gts =
       | _ -> flds
     in
     let btwn_flds = fold_terms btwn_fields IdSet.empty f in
+    let add id i acc =
+      let is = try IdMap.find id acc with Not_found -> [] in
+      IdMap.add id (i :: is) acc
+    in
     let rec related_symbols acc = function
       | App (sym, ts, _) ->
           let acc1 = match sym with
           | FreeSym id ->
-              List.fold_left
-                (fun acc -> function
-                  | Var (fld, Map (Loc _, _)) ->
-                      if IdSet.mem fld btwn_flds then IdSet.add id acc else acc
-                  | _ -> acc)
-                acc ts
+              let acc1, _ =
+                List.fold_left
+                  (fun (acc, i) -> function
+                    | Var (fld, Map (Loc _, _)) ->
+                        if IdSet.mem fld btwn_flds
+                        then (add id i acc, i+1)
+                        else (acc, i+1)
+                    | _ -> (acc, i+1))
+                  (acc, 0) ts
+              in acc1
           | _ -> acc
           in
           List.fold_left related_symbols acc1 ts
@@ -178,21 +186,27 @@ let btwn_fields fs gts =
     in
     fold_terms related_symbols acc f    
   in
-  let related_symbols = List.fold_left collect_symbols IdSet.empty fs1 in
+  let related_symbols = List.fold_left collect_symbols IdMap.empty fs1 in
   let rec collect_fields flds = function
     | App (Btwn, (App (_, _, _) as fld) :: _, _) -> 
         TermSet.union (partition_of fld) flds
     | App (sym, ts, _) ->
         let flds1 = match sym with
         | FreeSym id ->
-            if IdSet.mem id related_symbols
-            then
-              List.fold_left (fun flds -> function
-                | App (_, _, Map (Loc srt1, Loc srt2)) as fld when srt1 = srt2 ->
-                    TermSet.union (partition_of fld) flds
-                | _ -> flds)
-                flds ts
-            else flds
+            let is =
+              try IdMap.find id related_symbols with Not_found -> []
+            in
+            let flds1, _, _ =
+              List.fold_left (fun (flds, is, j) t ->
+                match t, is with
+                | Var _, i :: is1 when i = j ->
+                    (flds, is1, j + 1)
+                | fld, i :: is1 when i = j ->
+                    (TermSet.union (partition_of fld) flds, is1, j + 1)
+                | _ -> (flds, is, j + 1))
+                (flds, is, 0) ts
+            in
+            flds1
         | _ -> flds
         in
         List.fold_left collect_fields flds1 ts
