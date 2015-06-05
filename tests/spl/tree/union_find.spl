@@ -13,7 +13,7 @@ predicate next_eq_gnext(X: Set<Node>) {
       Btwn(next, x, y, z) == Btwn(gnext, x, y, z)
 }
 
-predicate eqclass(r: Node, X: Set<Node>) {
+predicate eqclass(r: Node)(X: Set<Node>) {
   r != null && r.next == null && r.gnext == null &&
   X == eqclass_set(r) &&
   next_eq_gnext(X)
