@@ -127,6 +127,7 @@ procedure remove(this: SkipList, x: Int)
   //
   //the properties to that path is:
   //-start at max height (skiplist.height)
+  //-ends at zero
   //-∀ n in the path if h is the outgoing height at n then
   //  - ∀ i > h && i < n.height. n.next[i] == null || n.next[i].data > x
   //  - n[h].data <= x
