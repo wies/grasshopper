@@ -248,7 +248,7 @@ let generate_instances useLocalInst axioms rep_terms egraph =
       if not useLocalInst then TermSet.empty, IdSet.empty else
       let rec tt bv (fun_terms, fun_vs) t =
         match t with
-        | App (sym, _, srt) when srt <> Bool || is_free_symbol sym ->
+        | App (sym, _ :: _, srt) when srt <> Bool || is_free_symbol sym ->
             let tvs = fv_term t in
             let tbvs = IdSet.inter tvs bv in
             if IdSet.is_empty tbvs

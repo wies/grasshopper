@@ -15,7 +15,8 @@ function next_map(h: Int) returns (m: Map<Node, Node>) {
   // This is syntactically incorrect:
   // m == next[h]
   // As is this:
-  forall x: Node, y: Node, z: Node :: Btwn(next[h], x, y, z) == Btwn(m, x, y, z)
+  //forall x: Node, y: Node, z: Node :: Btwn(next[h], x, y, z) == Btwn(m, x, y, z)
+  forall x: Node :: x.m == x.next[h]
 }
 
 function lseg_footprint(x: Node, y: Node, h: Int) returns (FP: Set<Node>) {
