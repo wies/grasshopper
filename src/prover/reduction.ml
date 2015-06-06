@@ -652,9 +652,6 @@ let reduce f =
   let fs = massage_field_reads fs in
   let fs = simplify_sets fs in
   let fs = pull_up_equalities fs in
-  (*TypeStrat.init fs;*)
-  (* add all axioms and instantiate *)
-  TypeStrat.default ();
   let fs = add_ep_axioms fs in
   let fs = add_frame_axioms fs in
   let fs = factorize_axioms (split_ands [] fs) in
@@ -667,5 +664,4 @@ let reduce f =
   let fs = add_terms fs gts in
   let fs = encode_labels fs in
   let fs = add_split_lemmas fs gts in
-  TypeStrat.reset ();
   fs

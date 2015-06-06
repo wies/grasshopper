@@ -1094,9 +1094,9 @@ let output_graphviz chan model terms =
               let res = eval model t in
               let res_t = find_term res srt in
               if t <> res_t then
-                Printf.fprintf chan "      <tr><td>%s == %s</td></tr>\n"
-                  (string_of_term t) (string_of_term res_t)
-            with _ -> ())
+                ((string_of_term t), (string_of_term res_t)) :: acc
+              else acc
+            with _ -> acc)
         *)
         | _ -> acc
       ) terms [] 
