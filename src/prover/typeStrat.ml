@@ -220,31 +220,31 @@ let is_stratified t1 t2 =
       | Map (Loc _, Loc _) -> 
         begin
           match t2 with
-          | Loc _ | Int | Set Int | Set (Loc _) -> true
+          | Bool | Loc _ | Int | Set Int | Set (Loc _) -> true
           | _ -> false
         end
       | Map (Loc _, Int) ->
         begin
           match t2 with
-          | Int | Set Int -> true
+          | Bool | Int | Set Int -> true
           | _ -> false
         end
       | Bool ->
         begin
           match t2 with
-          | Loc _ | Int | Set Int | Set (Loc _) -> true
+          | Bool | Loc _ | Int | Set Int | Set (Loc _) -> true
           | _ -> false
         end
       | Loc _ ->
         begin
           match t2 with
-          | Int | Set (Loc _) -> true
+          | Bool | Int | Set (Loc _) -> true
           | _ -> false
         end
       | Int ->
         begin
           match t2 with
-          | Set Int -> true
+          | Bool | Set Int -> true
           | _ -> false
         end
       | _ -> false

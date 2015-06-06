@@ -205,7 +205,7 @@ let generate_instances useLocalInst axioms rep_terms egraph =
       then IdSrtSet.inter fvars0 (vars_in_fun_terms f)
       else fvars0
     in
-    (* filter out what is stratified *)
+    (* filter out stratified variables *)
     let fvars, strat_vars =
       let merge_map k a b = match (a,b) with
         | (Some a, Some b) -> Some (a @ b)
@@ -241,25 +241,42 @@ let generate_instances useLocalInst axioms rep_terms egraph =
             fvars
         else fvars, IdSrtSet.empty
     in
-    (* close the strat_vars so they are not instantiated *)
-    let f = mk_forall (IdSrtSet.elements strat_vars) f in
+    let strat_var_ids = IdSrtSet.fold (fun (id, _) acc -> IdSet.add id acc) strat_vars IdSet.empty in 
     (* collect all terms in which free variables appear below function symbols *)
-    let fun_terms, fun_vs = 
-      if not useLocalInst then TermSet.empty, IdSet.empty else
-      let rec tt bv (fun_terms, fun_vs) t =
+    let fun_terms, fun_vars, strat_terms = 
+      if not useLocalInst then TermSet.empty, IdSet.empty, TermSet.empty else
+      let rec tt (fun_terms, fun_vars, strat_terms) t =
         match t with
         | App (sym, _ :: _, srt) when srt <> Bool || is_free_symbol sym ->
             let tvs = fv_term t in
-            let tbvs = IdSet.inter tvs bv in
-            if IdSet.is_empty tbvs
-            then TermSet.add t fun_terms, IdSet.union tvs fun_vs
-            else fun_terms, fun_vs
-
+            if IdSet.is_empty tvs then
+              fun_terms, fun_vars, strat_terms
+            else if IdSet.is_empty (IdSet.inter strat_var_ids tvs)
+            then TermSet.add t fun_terms, IdSet.union tvs fun_vars, strat_terms
+            else fun_terms, fun_vars, TermSet.add t strat_terms
         | App (_, ts, _) ->
-            List.fold_left (tt bv) (fun_terms, fun_vs) ts
-        | _ -> fun_terms, fun_vs
-      in fold_terms_with_bound tt (TermSet.empty, IdSet.empty) f
+            List.fold_left tt (fun_terms, fun_vars, strat_terms) ts
+        | _ -> fun_terms, fun_vars, strat_terms
+      in fold_terms tt (TermSet.empty, IdSet.empty, TermSet.empty) f
     in
+    let unmatched_vars =
+      IdSrtSet.fold (fun (id, _) acc ->
+        if IdSet.mem id fun_vars then acc
+        else IdSet.add id acc) fvars IdSet.empty
+    in
+    let fun_terms, fun_vars, _ =
+      TermSet.fold (fun t (fun_terms, fun_vars, unmatched_vars) ->
+        let vs = fv_term t in
+        if IdSet.is_empty (IdSet.inter unmatched_vars vs)
+        then fun_terms, fun_vars, unmatched_vars
+        else TermSet.add t fun_terms, IdSet.union vs fun_vars, IdSet.diff unmatched_vars vs)
+        strat_terms (fun_terms, fun_vars, unmatched_vars)
+    in
+    let strat_vars =
+      IdSrtSet.filter (fun (id, _) -> not (IdSet.mem id fun_vars)) strat_vars
+    in
+    (* close the strat_vars so they are not instantiated *)
+    let f = mk_forall (IdSrtSet.elements strat_vars) f in
     (* generate substitution maps *)
     let subst_maps () =
       (* generate substitution maps for variables that appear below function symbols *)
@@ -271,7 +288,7 @@ let generate_instances useLocalInst axioms rep_terms egraph =
       (* complete substitution maps for remaining variables *)
       IdSrtSet.fold 
         (fun (v, srt) subst_maps -> 
-          if IdSet.mem v fun_vs 
+          if IdSet.mem v fun_vars
           then subst_maps
           else ematch (Var (v, srt)) rep_terms egraph subst_maps)
         fvars proto_subst_maps         
@@ -281,10 +298,12 @@ let generate_instances useLocalInst axioms rep_terms egraph =
       begin
         print_endline "--------------------";
         print_endline (string_of_form f);
-        print_string "all  vars: ";
+        print_string "all vars: ";
         print_endline (String.concat ", " (List.map string_of_ident (List.map fst (IdSrtSet.elements fvars0))));
+        print_string "strat vars: ";
+        print_endline (String.concat ", " (List.map string_of_ident (List.map fst (IdSrtSet.elements strat_vars))));
         print_string "inst vars: ";
-        print_endline (String.concat ", " (List.map string_of_ident (List.map fst (IdSrtSet.elements fvars))));
+        print_endline (String.concat ", " (List.map string_of_ident (IdSet.elements fun_vars)));
         print_string "fun terms: ";
         print_endline (String.concat ", " (List.map string_of_term (TermSet.elements fun_terms)));
         print_endline "subst_maps:";
