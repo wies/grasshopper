@@ -264,13 +264,13 @@ let generate_instances useLocalInst axioms rep_terms egraph =
         if IdSet.mem id fun_vars then acc
         else IdSet.add id acc) fvars IdSet.empty
     in
-    let fun_terms, fun_vars, _ =
-      TermSet.fold (fun t (fun_terms, fun_vars, unmatched_vars) ->
+    let fun_terms, fun_vars =
+      TermSet.fold (fun t (fun_terms, fun_vars) ->
         let vs = fv_term t in
         if IdSet.is_empty (IdSet.inter unmatched_vars vs)
-        then fun_terms, fun_vars, unmatched_vars
-        else TermSet.add t fun_terms, IdSet.union vs fun_vars, IdSet.diff unmatched_vars vs)
-        strat_terms (fun_terms, fun_vars, unmatched_vars)
+        then fun_terms, fun_vars
+        else TermSet.add t fun_terms, IdSet.union vs fun_vars)
+        strat_terms (fun_terms, fun_vars)
     in
     let strat_vars =
       IdSrtSet.filter (fun (id, _) -> not (IdSet.mem id fun_vars)) strat_vars
