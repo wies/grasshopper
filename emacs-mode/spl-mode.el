@@ -61,6 +61,9 @@
    '("<[ \t]*\\(\\<[a-zA-Z_][a-zA-Z0-9_']*\\>\\)[ \t]*>" 1
      font-lock-type-face)
 
+   '("<[ \t]*\\(\\<[a-zA-Z_][a-zA-Z0-9_']*\\>\\)[ \t]*<" 1
+     font-lock-type-face)
+
    '("new[ \t]+\\(\\<[a-zA-Z_][a-zA-Z0-9_']*\\>\\)" 1
      font-lock-type-face)
 
@@ -103,7 +106,7 @@
         (cons (cons 'spl-mode 
                     '(spl-mode-font-lock-keywords
                       nil nil nil backward-paragraph
-                      (font-lock-comment-start-regexp . "/[*]")))
+                      (font-lock-comment-start-regexp . "/[*/]")))
               font-lock-defaults-alist))
   (defun spl-mode ()
     "Major mode for editing Grasshopper program files"
@@ -123,9 +126,12 @@
     ;; lineup loop invariants
     (save-excursion
       (beginning-of-line)
-      (if (looking-at "[ \t]*invariant")
+      (if (looking-at "[ \t]*\\(invariant\\|//\\)")
           0
-        c-basic-offset)))
+        (if (progn (goto-char (cdr langelem))
+                   (looking-at "[ \t]*\\(function\\|predicate\\)"))
+            0
+          c-basic-offset))))
   (defun spl-lineup-statement (langelem)
     ;; lineup loop invariants
     (save-excursion
@@ -158,6 +164,12 @@
       (if (looking-at "[ \t]*\\(invariant\\|ensures\\|requires\\)")
           (- 0 c-basic-offset)
         0)))
+  (defun spl-lineup-topmost (langelem)
+    (save-excursion
+      (beginning-of-line)
+      (if (looking-at "[ \t]*\\(procedure\\|function\\|predicate\\|struct\\)")
+          0
+        c-basic-offset)))
   (c-set-offset 'statement-cont 'spl-lineup-statement-cont)
   (c-set-offset 'statement 'spl-lineup-statement)
   (c-set-offset 'topmost-intro 'spl-lineup-topmost-intro)
@@ -165,7 +177,8 @@
   (c-set-offset 'substatement-open 'spl-lineup-defun-open)
   (c-set-offset 'block-open 'spl-lineup-block-open)
   ;;(c-set-offset 'substatement-open 0)
-  (c-set-offset 'knr-argdecl-intro '+)
+  (c-set-offset 'knr-argdecl-intro 'spl-lineup-topmost)
+  (c-set-offset 'topmost-intro-cont 'spl-lineup-topmost)
   (c-set-offset 'knr-argdecl 'spl-lineup-topmost-intro)
   (c-set-offset 'label '+))
 
@@ -179,7 +192,7 @@
 (when (require 'flycheck nil :noerror)
   ;; Define syntax and type checker
   (flycheck-define-checker spl-reporter
-    "Syntax and Type checker for Grasshopper programs."
+    "Syntax and type checker for GRASShopper programs."
     :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) "-lint" "-noverify" source)
     :error-patterns
     ((warning line-start (file-name) ":" line ":" column (optional "-" end-column) ":Related Location:" (message) line-end)
@@ -195,7 +208,7 @@
 
   ;; Define checker for verifying current buffer
   (flycheck-define-checker spl-verifier
-    "On-the-fly verifier for Grasshopper programs."
+    "On-the-fly verifier for GRASShopper programs."
     :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) "-lint" source)
     :error-patterns
     ((info line-start (file-name) ":" line ":" column (optional "-" end-column) ":Trace Information:" (message) line-end)
@@ -207,7 +220,7 @@
   ;; Define checker for verifying current procedure
   (defvar spl-current-procedure nil)
   (flycheck-define-checker spl-proc-verifier
-    "On-the-fly verifier for Grasshopper programs."
+    "On-the-fly verifier for GRASShopper programs."
     :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) 
               "-procedure" (eval spl-current-procedure) 
               "-lint" source)
