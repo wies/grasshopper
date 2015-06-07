@@ -129,9 +129,12 @@
       (if (looking-at "[ \t]*\\(invariant\\|//\\)")
           0
         (if (progn (goto-char (cdr langelem))
-                   (looking-at "[ \t]*\\(function\\|predicate\\)"))
+                   (looking-at "[ \t]*\\(function\\|predicate\\|{\\)"))
             0
-          c-basic-offset))))
+          (if (and (not (looking-at "[ \t]*\\(invariant\\|assert\\|assume\\|pure\\|free\\|ensures\\|requires\\)"))
+                   (looking-at ".*\\(&&\\|||\\)[ \t]*$"))
+              0
+            c-basic-offset)))))
   (defun spl-lineup-statement (langelem)
     ;; lineup loop invariants
     (save-excursion
