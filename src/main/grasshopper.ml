@@ -46,7 +46,7 @@ let parse_cu parse_fct file =
 (** normalize the filenames to avoid double inclusion *)
 let normalizeFilename file_name =
   let sep = Str.regexp_string Filename.dir_sep in
-  let parts = Str.split sep file_name in
+  let parts = Str.split_delim sep file_name in
   let rec simplify parts = match parts with
     | x :: ".." :: xs when x <> ".." -> simplify xs
     | x :: xs -> x :: (simplify xs)
