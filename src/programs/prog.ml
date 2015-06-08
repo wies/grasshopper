@@ -974,12 +974,19 @@ let pr_pred ppf pred =
     let decl = IdMap.find id pred.pred_locals in
     (decl.var_is_implicit, decl.var_is_ghost, (id, decl.var_sort)))
   in
-  match pred.pred_outputs with
-  | [] ->
+  match pred.pred_outputs, pred.pred_footprints with
+  | [], [] ->
       fprintf ppf "@[<2>predicate %a(@[<0>%a@])@]@ {@[<1>@\n%a@]@\n}@\n@\n"
         pr_ident pred.pred_name
         pr_id_srt_list (add_srts pred.pred_formals)
         pr_spec_form pred.pred_body
+  | [], _ ->
+      fprintf ppf "@[<2>predicate %a(@[<0>%a@])@\n(@[<0>%a@])@]@ {@[<1>@\n%a@]@\n}@\n@\n"
+        pr_ident pred.pred_name
+        pr_id_srt_list (add_srts pred.pred_formals)
+        pr_id_srt_list (add_srts pred.pred_footprints)
+        pr_spec_form pred.pred_body
+      
   | _ ->
       fprintf ppf "@[<2>function %a(@[<0>%a@])@\nreturns (@[<0>%a@])@]@\n{@[<1>@\n%a@]@\n}@\n@\n"
         pr_ident pred.pred_name
