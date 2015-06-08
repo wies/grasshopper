@@ -320,14 +320,15 @@ and interp_symbol model sym arity args =
     fun_app model (MapVal (m, d)) args
   with Not_found -> 
     begin
-      if Debug.is_debug 3 then
+      if Debug.is_debug 2 then
         begin
           print_string "Model.interp_symbol: symbol not found '";
           print_string (string_of_symbol sym);
           print_string "' of type ";
           print_string (string_of_arity arity);
           print_endline " in:";
-          SortedSymbolMap.iter (fun (s,a) _ -> print_endline ("  " ^ (string_of_symbol s) ^ ": " ^ string_of_arity a)) model.intp
+          SortedSymbolMap.iter (fun (s,a) _ -> print_endline ("  " ^ (string_of_symbol s) ^ ": " ^ string_of_arity a)) model.intp;
+          flush_all ()
         end;
       raise Undefined
     end
@@ -917,7 +918,7 @@ let output_graphviz chan model terms =
 	      let label = get_label fld_srt f in
 	      Printf.fprintf chan "\"%s\" -> \"%s\" [%s]\n" 
 	        (string_of_loc_value srt l) (string_of_loc_value rsrt r) label
-            with Not_found -> ())
+            with Undefined -> ())
             locs)
         flds
     in
