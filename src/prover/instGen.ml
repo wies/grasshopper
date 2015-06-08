@@ -302,6 +302,8 @@ let generate_instances useLocalInst axioms rep_terms egraph =
         print_endline (String.concat ", " (List.map string_of_ident (List.map fst (IdSrtSet.elements fvars0))));
         print_string "strat vars: ";
         print_endline (String.concat ", " (List.map string_of_ident (List.map fst (IdSrtSet.elements strat_vars))));
+        print_string "unmatched vars: ";
+        print_endline (String.concat ", " (List.map string_of_ident (IdSet.elements unmatched_vars)));
         print_string "inst vars: ";
         print_endline (String.concat ", " (List.map string_of_ident (IdSet.elements fun_vars)));
         print_string "fun terms: ";
@@ -318,7 +320,7 @@ let generate_instances useLocalInst axioms rep_terms egraph =
   
 let instantiate_with_terms ?(force=false) local axioms classes =
     if !Config.instantiate || force then
-      (* remove atoms from congruence classes *)
+      (* remove theory atoms from congruence classes *)
       let classes =
         List.filter
           (function t :: _ ->

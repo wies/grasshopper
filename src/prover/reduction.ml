@@ -162,24 +162,24 @@ let btwn_fields fs gts =
   let partition_of = field_partitions fs gts in
   let fs1, _ = open_axioms (fun f v -> true) fs in
   let collect_symbols acc f =
-    let btwn_fields flds = function
-      | App (Btwn, Var (fld, _) :: _, _) ->
-          IdSet.add fld flds
+    let btwn_flds flds = function
+      | App (Btwn, fld :: _, _) ->
+          let vs = fv_term fld in
+          if IdSet.is_empty vs then flds
+          else TermSet.add fld flds
       | _ -> flds
     in
-    let btwn_flds = fold_terms btwn_fields IdSet.empty f in
+    let btwn_flds = fold_terms btwn_flds TermSet.empty f in
     let rec related_symbols acc = function
       | App (sym, ts, _) ->
           let acc1 = match sym with
           | FreeSym id when not (IdMap.mem id acc) ->
               let is, _ =
                 List.fold_left
-                  (fun (is, i) -> function
-                    | Var (fld, Map (Loc _, _)) ->
-                        if IdSet.mem fld btwn_flds
-                        then (i :: is, i+1)
-                        else (is, i+1)
-                    | _ -> (is, i+1))
+                  (fun (is, i) t ->
+                    if TermSet.mem t btwn_flds
+                    then (i :: is, i+1)
+                    else (is, i+1))
                   ([], 0) ts
               in
               if is <> []
@@ -193,9 +193,9 @@ let btwn_fields fs gts =
     fold_terms related_symbols acc f    
   in
   let related_symbols = List.fold_left collect_symbols IdMap.empty fs1 in
-  (*print_endline "Related symbols:";
+  print_endline "Related symbols:";
   IdMap.iter (fun id is ->
-    Printf.printf "%s -> %s\n" (string_of_ident id) (String.concat ", " (List.map string_of_int is))) related_symbols;*)
+    Printf.printf "%s -> %s\n" (string_of_ident id) (String.concat ", " (List.map string_of_int is))) related_symbols;
   let rec collect_fields flds = function
     | App (Btwn, fld :: _, _) when IdSet.is_empty (fv_term fld) -> 
         TermSet.union (partition_of fld) flds
