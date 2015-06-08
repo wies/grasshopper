@@ -16,7 +16,7 @@ function next_map() returns (m: Map<Node, Node>) {
   // m == next[h]
   // As is this:
   //forall x: Node, y: Node, z: Node :: Btwn(next[h], x, y, z) == Btwn(m, x, y, z)
-  forall x: Node :: x.m == x.next[0]
+  forall x: Node :: x.m == x.next[0] @(matching x.next yields x.m) @(matching x.m yields x.next) @(comment "next-map")
 }
 
 function lseg_footprint(x: Node, y: Node) returns (FP: Set<Node>) {
@@ -51,10 +51,14 @@ function array_footprint(x: Node, y: Node, FP1: Set<Node>) returns (FP2: Set<Arr
 }
 
 function array_cell_footprint(x: Node, y: Node, FP2: Set<Array<Node>>) returns (FP3: Set<ArrayCell<Node>>) {
-  // One way
-  forall z: Node :: (Btwn(next_map(), x, z, y) && z != y)
+  // array length restrictions
+    (forall z: Node :: (Btwn(next_map(), x, z, y) && z != y)
     ==>
-     (forall i: Int :: 0 <= i && i < z.next.length ==> z.next.cells[i] in FP3) &&
+     z.next.length == 1) &&
+  // One way
+    (forall z: Node :: (Btwn(next_map(), x, z, y) && z != y)
+    ==>
+     (forall i: Int :: 0 <= i && i < z.next.length ==> z.next.cells[i] in FP3)) &&
   // Return
   (forall c: ArrayCell<Node>:: c in FP3 ==> c.array in FP2 && c.index >= 0 && c.index < c.array.length)
 }
@@ -65,7 +69,8 @@ predicate skiplist(l: SkipList)(FP0: Set<SkipList>, FP1: Set<Node>, FP2: Set<Arr
     FP0 == Set<Loc<SkipList>>(l) &&
     slseg(l.head, null, FP1) &&
     array_footprint(l.head, null, FP1) == FP2 &&
-    array_cell_footprint(l.head, null, FP2) == FP3
+    array_cell_footprint(l.head, null, FP2) == FP3 &&
+    l.head != null
     // TODO don't we need to say that all array lengths are at least height?
 }
 
@@ -74,14 +79,18 @@ procedure traverse1(this: SkipList)
   requires skiplist(this)
   ensures skiplist(this)
 {
-  if (this.head != null) {
-    var curr := this.head;
-    while (curr != null)
-      invariant acc(curr) -** skiplist(this)
-    {
-      curr := curr.next[0];
-    }
+  var curr := this.head;
+
+  if (curr != null) {
+    curr := curr.next[0];
   }
+  /*
+  while (curr != null)
+    invariant (slseg(this.head, curr) &*& slseg(curr, null)) -** skiplist(this)
+  {
+    curr := curr.next[0];
+  }
+  */
 }
 
 /*
