@@ -312,11 +312,16 @@ let map_preds fn prog =
 
 let struct_sorts prog =
   let collect_srts decls =
-    IdMap.fold (fun _ decl struct_srts ->
-      match decl.var_sort with
-      | Map (Loc srt, _)
+    let rec cs struct_srts = function
       | Loc srt -> SortSet.add srt struct_srts
-      | _ -> struct_srts)
+      | Map (srt1, srt2) ->
+          cs (cs struct_srts srt1) srt2
+      | Array srt | ArrayCell srt | Set srt ->
+          cs struct_srts srt
+      | _ -> struct_srts
+    in
+    IdMap.fold
+      (fun _ decl struct_srts -> cs struct_srts decl.var_sort)
       decls 
   in
   let struct_srts = 
