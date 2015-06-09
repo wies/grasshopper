@@ -199,7 +199,13 @@ let add_pred_insts prog f =
           IdMap.add id (mk_free_fun var.var_sort pred.pred_name vs) sm, body
       | _ -> failwith "Functions may only have a single return value."
     in
-    List.map (fun f -> smk_forall sorted_vs (subst_consts sm f)) body    
+    let cnt = ref 0 in
+    let annot () =
+      let i = !cnt in
+      cnt := i+1;
+      Name ("definition_of_" ^ (string_of_ident pred.pred_name), i)
+    in
+    List.map (fun f -> smk_forall ~ann:[annot ()] sorted_vs (subst_consts sm f)) body
   in
   let pred_defs = Prog.fold_preds (fun acc pred -> pred_def pred @ acc) [] prog in
   (*let pos_instances = 
