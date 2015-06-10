@@ -193,9 +193,9 @@ let btwn_fields fs gts =
     fold_terms related_symbols acc f    
   in
   let related_symbols = List.fold_left collect_symbols IdMap.empty fs1 in
-  print_endline "Related symbols:";
+  (*print_endline "Related symbols:";
   IdMap.iter (fun id is ->
-    Printf.printf "%s -> %s\n" (string_of_ident id) (String.concat ", " (List.map string_of_int is))) related_symbols;
+    Printf.printf "%s -> %s\n" (string_of_ident id) (String.concat ", " (List.map string_of_int is))) related_symbols;*)
   let rec collect_fields flds = function
     | App (Btwn, fld :: _, _) when IdSet.is_empty (fv_term fld) -> 
         TermSet.union (partition_of fld) flds

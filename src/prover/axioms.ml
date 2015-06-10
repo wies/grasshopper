@@ -242,6 +242,7 @@ let ep_axioms struct_srt =
   let ep4 = 
     mk_implies (mk_and [reach loc1 loc2; in_set1 loc2]) (btwn loc1 ep loc2)
   in
+  let ep5 = mk_eq ep (mk_ep fld1 set1 ep) in
   let ep_generator = 
     let field_filter f1 f2 sm _ =
       try
@@ -256,13 +257,22 @@ let ep_axioms struct_srt =
        Match (loc1, FilterSymbolNotOccurs EntPnt)], 
       [mk_ep fld1 set1 loc1]);
      ((if !Config.full_ep then
-        [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-         Match (loc1, (*FilterGeneric ep_filter*) FilterSymbolNotOccurs EntPnt)]
+       (*let ep_filter sm t =
+         let rec count n = function
+           | App (sym, ts, _) ->
+               let n1 = if sym = EntPnt then n + 1 else n in
+               List.fold_left count n1 ts
+           | _ -> n
+         in
+         count 0 t < 2
+       in*)
+       [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
+        Match (loc1, (*FilterGeneric ep_filter*) FilterSymbolNotOccurs EntPnt)]
       else
-        [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-         Match (mk_btwn_term fld3 loc2 loc3 loc4, FilterGeneric (field_filter (fst f1) (fst f3)));
-         Match (mk_elem_term loc1 set3, FilterTrue);
-         Match (loc1, FilterSymbolNotOccurs EntPnt)]), 
+       [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
+        Match (mk_btwn_term fld3 loc2 loc3 loc4, FilterGeneric (field_filter (fst f1) (fst f3)));
+        Match (mk_elem_term loc1 set3, FilterTrue);
+        Match (loc1, FilterSymbolNotOccurs EntPnt)]), 
       [mk_ep fld1 set1 loc1])
    ]
   in
@@ -270,7 +280,8 @@ let ep_axioms struct_srt =
     [mk_axiom "entry-point1" ep1; 
      mk_axiom ~gen:ep_generator "entry-point2" ep2; 
      mk_axiom "entry-point3" ep3; 
-     mk_axiom "entry-point4" ep4]
+     mk_axiom "entry-point4" ep4;
+     mk_axiom "entry-point5" ep5]
   else []
 
 (** Array axioms *)
