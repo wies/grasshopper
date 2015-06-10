@@ -31,10 +31,10 @@ predicate arrayseg_with_buckets(a: Array<Node>, lo: Int, hi: Int)
   (forall c: ArrayCell<Node> :: c in FP0 ==> Reach(next, c.array[c.index], null) @(matching c yields c.array[c.index])) &&
   //all the elts from a list have the same hash, and this is the index in the array
   (forall v in FP1 :: Btwn(next, a[ghostHash(a.length, v.data)], v, null) @(matching v yields a[ghostHash(a.length, v.data)])) &&
-  (forall v: Node, w: Node :: v in FP1 && w in FP1 && Reach(next, v, w) ==>
-   ghostHash(a.length, v.data) == ghostHash(a.length, w.data)
-   @(matching v yields ghostHash(a.length, v.data)))
-  
+  //(forall v: Node, w: Node :: v in FP1 && w in FP1 && Reach(next, v, w) ==>
+     //ghostHash(a.length, v.data) == ghostHash(a.length, w.data)
+     //@(matching v yields ghostHash(a.length, v.data))) &&
+  true
 }
 
 predicate array_with_buckets(a: Array<Node>)
