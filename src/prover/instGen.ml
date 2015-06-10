@@ -127,12 +127,14 @@ let generate_terms generators ground_terms =
       (fun f -> match f with
         | FilterSymbolNotOccurs sym ->
             let rec not_occurs = function
+              | App (EntPnt, _, _) -> sym <> EntPnt
               | App (sym1, _, _) when sym1 = sym -> false
               | App (_, ts, _) -> List.for_all not_occurs ts
               | _ -> true
             in not_occurs t
         | FilterReadNotOccurs (name, (arg_srts, res_srt)) ->
             let rec not_occurs = function
+              | App (EntPnt, _, _) -> true
               | App (Read, (App (FreeSym (name1, _), arg_ts, res_srt1) :: _ as ts), _) ->
                   let ok =
                     try
