@@ -364,7 +364,7 @@ let rec extract_label = function
 
 let rec extract_gens = function
   | TermGenerator (ms, t) :: ann ->
-      (List.map (function Match (t, _) -> t) ms, t) :: extract_gens ann
+      (List.map (function Match (t, f) -> t, f) ms, t) :: extract_gens ann
   | _ :: ann -> extract_gens ann
   | [] -> []
         
@@ -393,9 +393,32 @@ and pr_annot ppf a =
   let name = extract_name a in
   let pos = extract_src_pos a in
   let lbl = extract_label a in
+  let pr_filter ppf fs =
+    let ids =
+      List.fold_right
+        (fun f ids -> match f with
+          | FilterSymbolNotOccurs sym ->
+              string_of_symbol sym :: ids
+          | FilterNameNotOccurs (name, _) ->
+              name :: ids
+          | _ ->
+              ids)
+        fs []
+    in
+    match ids with
+    | [] -> ()
+    | _ -> fprintf ppf "@ without@ %s" (String.concat ", " ids)
+  in
+  let rec pr_match_list ppf = function
+    | [] -> ()
+    | [(m, f)] ->
+        fprintf ppf "%a%a" pr_term m pr_filter f
+    | (m, f) :: ms ->
+        fprintf ppf "%a%a,@ %a" pr_term m pr_filter f pr_match_list ms
+  in
   let rec pr_generators ppf = function
     | (ms, ts) :: gen ->
-        fprintf ppf "@ @[<3>@@(matching %a yields %a)@]%a" pr_term_list ms pr_term_list ts pr_generators gen
+        fprintf ppf "@ @[<3>@@(matching %a yields %a)@]%a" pr_match_list ms pr_term_list ts pr_generators gen
     | [] -> ()
   in
   let pr_comment ppf (name, pos, lbl) =
