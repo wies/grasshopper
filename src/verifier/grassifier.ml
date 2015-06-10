@@ -317,7 +317,10 @@ let elim_sl prog =
           Util.map_split (fun id ->
             let fp_decl = IdMap.find id decl.pred_locals in
             let ssrt = struct_sort_of_sort (element_sort_of_sort fp_decl.var_sort) in
-            SortMap.find ssrt domains, ssrt)
+            (try SortMap.find ssrt domains
+            with Not_found ->
+              failwith ("Could not find footprint set for sort " ^ string_of_sort ssrt ^ " in predicate " ^ string_of_ident p)),
+            ssrt)
             decl.pred_footprints
         in
         let eqs = mk_empty_except ssrts in
