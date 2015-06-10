@@ -1219,3 +1219,58 @@ let output_txt chan model terms =
   in
   let _ = SortSet.fold process_srt loc_sorts id_map in
   ()
+
+(** Find all pairs of ground terms in [terms] that point to the same
+  location in a model [model]
+
+  Returns a list of Grass.form, each asserting the equality of two such terms.
+*)
+let find_equalities model terms =
+  (* Filter out only those terms that evaluate to locs *)
+  let terms = TermSet.filter
+		(function
+		| Var (id, srt) -> is_loc_sort srt
+		| App (sym, args, srt) -> is_loc_sort srt)
+		terms
+  in
+
+(* Compute a map from locations to all terms pointing to them *)
+  let loc_to_term_map =
+    let process_term term loc_to_term_map =
+      let loc = eval model term in
+      if ValueMap.mem loc loc_to_term_map then
+	ValueMap.add loc (term :: (ValueMap.find loc loc_to_term_map)) loc_to_term_map
+      else
+	ValueMap.add loc [term] loc_to_term_map
+    in
+    TermSet.fold process_term terms ValueMap.empty
+  in
+
+  (* Then for each location, if it has more than one var, output all pairs *)
+  let equalities_list =
+    let print_terms_pointing_to_loc loc terms =
+      Printf.printf "loc %s : " (string_of_value loc);
+      List.iter (fun term -> Printf.printf "%s, " (string_of_term term)) terms;
+      Printf.printf "\n";
+    in
+
+    let make_pairs_from_list list out_list =
+      let make_pairs_with_elem (prefix_list, out_list) elem =
+	(elem :: prefix_list),
+	List.fold_left (fun out_list prev_elem ->
+			(mk_eq prev_elem elem) :: out_list) out_list prefix_list
+      in
+      let _, out_list = List.fold_left make_pairs_with_elem ([], out_list) list in
+      out_list
+    in
+
+    let process_loc loc term_list equalities_list =
+       print_terms_pointing_to_loc loc term_list;
+       make_pairs_from_list term_list equalities_list
+    in
+
+    ValueMap.fold process_loc loc_to_term_map []
+  in
+  Printf.printf "\nFound equalities:\n";
+  List.iter (fun eq -> Printf.printf "%s\n" (string_of_form eq)) equalities_list;
+  equalities_list
