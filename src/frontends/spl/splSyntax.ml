@@ -43,6 +43,7 @@ type spl_program =
       struct_decls : structs;
       proc_decls : procs;
       pred_decls : preds;
+      background_theory : (expr * pos) list; 
     }
 
 and decl =
@@ -202,7 +203,7 @@ let var_decl vname vtype vghost vimpl vpos vscope =
 let pred_decl hdr body =
   { hdr with pr_body = body }
 
-let extend_spl_program incls decls prog =
+let extend_spl_program incls decls bg_th prog =
   let check_uniqueness id pos (vdecls, pdecls, prdecls, sdecls) =
     if IdMap.mem id vdecls || IdMap.mem id sdecls || IdMap.mem id pdecls || IdMap.mem id prdecls
     then ProgError.error pos ("redeclaration of identifier " ^ (fst id) ^ ".");
@@ -229,6 +230,7 @@ let extend_spl_program incls decls prog =
     struct_decls = sdecls; 
     proc_decls = pdecls;
     pred_decls = prdecls;
+    background_theory = bg_th @ prog.background_theory;
   }
 
 let merge_spl_programs prog1 prog2 =
@@ -244,7 +246,7 @@ let merge_spl_programs prog1 prog2 =
   let decls =
     IdMap.fold (fun _ decl acc -> ProcDecl decl :: acc) prog1.proc_decls prdecls
   in
-  extend_spl_program prog1.includes decls prog2
+  extend_spl_program prog1.includes decls prog1.background_theory prog2
 
 let add_alloc_decl prog =
   let alloc_decls =
@@ -261,7 +263,7 @@ let add_alloc_decl prog =
       prog.struct_decls
       []
   in
-    extend_spl_program [] alloc_decls prog
+    extend_spl_program [] alloc_decls [] prog
 
 let empty_spl_program =
   { includes = [];
@@ -269,6 +271,7 @@ let empty_spl_program =
     struct_decls = IdMap.empty;
     proc_decls = IdMap.empty;
     pred_decls = IdMap.empty;
+    background_theory = [];
   }
 
 

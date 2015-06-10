@@ -1,0 +1,88 @@
+
+struct Data { }
+
+struct Node {
+  var next: Node;
+  var data: Data;
+}
+
+axiom forall a: Data :: !lt(a, a);
+axiom forall a: Data, b: Data :: !lt(a, b) || !lt(b, a);
+axiom forall a: Data, b: Data :: lt(a, b) || lt(b, a) || a == b;
+axiom forall a: Data, b: Data, c: Data :: lt(a, b) && lt(b, c) ==> lt(a, c);
+
+predicate lt(x: Data, y: Data) { lt(x,y) }
+
+function lseg_footprint(x: Node, y: Node) returns (FP: Set<Node>) {
+  forall z: Node :: z in FP == (Btwn(next, x, z, y) && z != y)
+}
+
+predicate lseg(x: Node, y: Node)(FP: Set<Node>) {
+  Btwn(next, x, y, y) && FP == lseg_footprint(x, y)
+}
+
+predicate lseg_strictly_increasing(x: Node, FP: Set<Node>) {
+  forall y: Node, z: Node :: y in FP && z in FP && Btwn(next,x,y,z) ==> lt(y.data, z.data) || y == z @(matching y yields y.data)
+}
+
+function data_witness(v: Data, d: Map<Node, Data>, FP: Set<Node>) returns (res: Node) 
+
+function content(FP: Set<Node>) returns (C: Set<Data>) {
+  (forall x: Node :: x in FP ==> x == data_witness(x.data, data, FP)) &&
+  (forall x: Node :: x in FP ==> x.data in C) &&
+  (forall v in C :: data_witness(v, data, FP) in FP) &&
+  (forall v: Data :: v !in C ==> data_witness(v, data, FP) == null) &&
+  (forall v in C :: v == data_witness(v, data, FP).data @(matching v yields data_witness(v, data, FP).data))
+}
+
+predicate list_set(x: Node, y: Node, C: Set<Data>)(FP: Set<Node>) {
+  lseg(x, y, FP) &&
+  lseg_strictly_increasing(x, FP) &&
+  C == content(FP)
+}
+
+
+procedure append(val: Data, x: Node, implicit ghost C: Set<Data>) 
+  returns (res: Node)
+  requires list_set(x, null, C)
+  requires forall v in C :: lt(val, v)
+  ensures list_set(res, null, C ++ Set(val))
+{
+  res := new Node;
+  res.next := x;
+  res.data := val;
+}
+
+//  procedure insert(lst: Node, val: Data, implicit ghost C: Set<Data>)
+//    returns (res: Node)
+//    requires list_set(lst, null, C)
+//    ensures list_set(res, null, C ++ Set(val))
+//  {
+//    var curr: Node;
+//    curr := lst;
+//    var prev: Node;
+//    prev := null;
+//    
+//    while (curr != null && lt(curr.data, val))
+//      invariant (prev == null && curr == lst || lt(prev.data, val) &*& prev.next |-> curr) -** 
+//        list_set(lst, null, C)
+//    {
+//      prev := curr;
+//      curr := curr.next;
+//    }
+//    
+//    if (curr != null && curr.data == val) {
+//      return lst;
+//    }
+//    
+//    var n: Node;
+//    n := append(val, curr);
+//    
+//    if (prev == null) {
+//      return n;
+//    } else {
+//      prev.next := n;
+//      return lst;
+//    }
+//  }
+

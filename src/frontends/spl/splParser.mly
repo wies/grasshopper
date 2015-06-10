@@ -33,6 +33,10 @@ let fix_scopes stmnt =
     | stmnt -> stmnt
   in fs GrassUtil.global_scope stmnt
 
+let fst3 (v, _, _) = v
+let snd3 (_, v, _) = v
+let trd3 (_, _, v) = v
+
 %}
 
 %token <string> IDENT
@@ -49,7 +53,7 @@ let fix_scopes stmnt =
 %token <SplSyntax.quantifier_kind> QUANT
 %token ASSUME ASSERT CALL FREE HAVOC NEW RETURN
 %token IF ELSE WHILE
-%token GHOST IMPLICIT VAR STRUCT PURE PROCEDURE PREDICATE FUNCTION INCLUDE
+%token GHOST IMPLICIT VAR STRUCT PURE PROCEDURE PREDICATE FUNCTION INCLUDE AXIOM
 %token OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token LOC INT BOOL SET MAP ARRAY ARRAYCELL
 %token MATCHING YIELDS COMMENT 
@@ -81,27 +85,32 @@ let fix_scopes stmnt =
 
 main:
 | declarations {
-  extend_spl_program (fst $1) (snd $1) empty_spl_program
+  extend_spl_program (fst3 $1) (snd3 $1) (trd3 $1) empty_spl_program
 } 
 ;
 
 declarations:
+| background_th declarations
+  { (fst3 $2, snd3 $2, ($1, mk_position 1 1) :: trd3 $2) }
 | include_cmd declarations 
-  { (($1, mk_position 1 1) :: fst $2, snd $2) }
+  { (($1, mk_position 1 1) :: fst3 $2, snd3 $2, trd3 $2) }
 | proc_decl declarations 
-  { (fst $2, ProcDecl $1 :: snd $2) }
+  { (fst3 $2, ProcDecl $1 :: snd3 $2, trd3 $2) }
 |   pred_decl declarations 
-  { (fst $2, PredDecl $1 :: snd $2) }
+  { (fst3 $2, PredDecl $1 :: snd3 $2, trd3 $2) }
 | struct_decl declarations
-  { (fst $2, StructDecl $1 :: snd $2) }
+  { (fst3 $2, StructDecl $1 :: snd3 $2, trd3 $2) }
 | var_decl declarations
-  { (fst $2, VarDecl $1 :: snd $2) }
-| /* empty */ { ([], []) }
+  { (fst3 $2, VarDecl $1 :: snd3 $2, trd3 $2) }
+| /* empty */ { ([], [], []) }
 | error { ProgError.syntax_error (mk_position 1 1) None }
 ;
 
 include_cmd:
 | INCLUDE STRINGVAL SEMICOLON { $2 }
+
+background_th:
+| AXIOM expr SEMICOLON { $2 }
 
 proc_decl:
 | proc_header { proc_decl $1 (Skip GrassUtil.dummy_position) }

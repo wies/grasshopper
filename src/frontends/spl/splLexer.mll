@@ -52,6 +52,7 @@ let _ =
       ("var", VAR);
       ("while", WHILE);
       ("yields", YIELDS);
+      ("axiom", AXIOM);
    ])
 
 let lexical_error lexbuf msg =

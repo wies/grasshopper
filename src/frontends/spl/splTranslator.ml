@@ -426,11 +426,17 @@ let resolve_names cu =
       )
       preds0 IdMap.empty 
   in
+  let bg_theory =
+    List.map
+      (fun (e, pos) -> resolve_expr globals tbl e, pos)
+      cu.background_theory
+  in
   { cu with 
     var_decls = globals; 
     struct_decls = structs; 
     proc_decls = procs;
     pred_decls = preds;
+    background_theory = bg_theory;
   }
     
 let flatten_exprs cu =
@@ -790,7 +796,12 @@ let infer_types cu =
         IdMap.add proc.p_name proc1 procs)
       cu.proc_decls IdMap.empty
   in
-  { cu with pred_decls = preds; proc_decls = procs }
+  let bg_theory =
+    List.map
+      (fun (e, pos) -> (check_spec IdMap.empty true e, pos) )
+      cu.background_theory
+  in
+  { cu with pred_decls = preds; proc_decls = procs; background_theory = bg_theory; }
     
 let make_conditionals_lazy cu =
   let decl_aux_var name vtype pos scope locals =
@@ -1432,6 +1443,16 @@ let convert cu =
         declare_proc prog proc_decl
       )
       cu.proc_decls prog
+  in
+  let prog = 
+    let specs =
+      List.map
+        ( fun (e, pos) ->
+          convert_spec_form true IdMap.empty e "axiom" None
+        )
+        cu.background_theory
+    in
+      { prog with prog_axioms = specs @ prog.prog_axioms }
   in
   prog
 
