@@ -454,28 +454,28 @@ let add_read_write_axioms fs =
           let set1 = Axioms.set1 ssrt in
           let set2 = Axioms.set2 ssrt in
           (* f = g, x.f -> x.g *)
-          ([Match (mk_eq_term fld1 fld2, FilterTrue);
-            Match (mk_read fld1 loc1, FilterTrue)],
+          ([Match (mk_eq_term fld1 fld2, []);
+            Match (mk_read fld1 loc1, [])],
            [mk_read fld2 loc1]) ::
           (* f = g, x.g -> x.f *)
-          ([Match (mk_eq_term fld1 fld2, FilterTrue);
-            Match (mk_read fld2 loc1, FilterTrue)],
+          ([Match (mk_eq_term fld1 fld2, []);
+            Match (mk_read fld2 loc1, [])],
            [mk_read fld1 loc1]) :: 
           (* f [x := d], y.(f [x := d]) -> y.f *)
-          ([Match (mk_write fld1 loc1 dvar, FilterTrue);
-            Match (mk_read (mk_write fld1 loc1 dvar) loc2, FilterTrue)],
+          ([Match (mk_write fld1 loc1 dvar, []);
+            Match (mk_read (mk_write fld1 loc1 dvar) loc2, [])],
            [mk_read fld1 loc2]) ::
           (* f [x := d], y.f -> y.(f [x := d]) *)
-          ([Match (mk_write fld1 loc1 dvar, FilterTrue);
-            Match (mk_read fld1 loc2, FilterTrue)],
+          ([Match (mk_write fld1 loc1 dvar, []);
+            Match (mk_read fld1 loc2, [])],
            [mk_read (mk_write fld1 loc1 dvar) loc2]) ::
           (* Frame (x, a, f, g), y.g -> y.f *)
-          ([Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-            Match (mk_read fld2 loc1, FilterTrue)],
+          ([Match (mk_frame_term set1 set2 fld1 fld2, []);
+            Match (mk_read fld2 loc1, [])],
            [mk_read fld1 loc1]) ::
           (* Frame (x, a, f, g), y.f -> y.g *)
-          ([Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-            Match (mk_read fld1 loc1, FilterTrue)],
+          ([Match (mk_frame_term set1 set2 fld1 fld2, []);
+            Match (mk_read fld1 loc1, [])],
            [mk_read fld2 loc1]) ::
           propagators
       | _ -> fun propagators -> propagators)

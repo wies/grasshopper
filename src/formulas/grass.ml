@@ -134,14 +134,13 @@ module TermMap = Map.Make(struct
 
 (** filters for term generators *)
 type filter =
-  | FilterTrue
   | FilterSymbolNotOccurs of symbol
   | FilterNameNotOccurs of string * arity
   | FilterGeneric of (subst_map -> term -> bool)
 
 (** matching guards for term generators *)
 type guard =
-  | Match of term * filter
+  | Match of term * filter list
         
 (** annotations *)
 type annot =
@@ -478,7 +477,6 @@ let print_subst_map subst_map =
   print_endline "]"
 
 let string_of_filter f = match f with
-  | FilterTrue -> "true filter"
   | FilterSymbolNotOccurs sym -> "symbol filter: " ^ (string_of_symbol sym)
   | FilterNameNotOccurs (name, arity) -> "name filter: " ^ name ^ ": " ^ (string_of_arity arity)
   | FilterGeneric _ -> "generic filter ..."

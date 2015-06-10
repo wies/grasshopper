@@ -1110,23 +1110,13 @@ let convert cu =
             in
             let flt = 
               TermSet.fold 
-                (function 
-                  | App (FreeSym sym, ts, _) ->
-                      (function 
-                        | FilterTrue ->
-                            if ce_occur_below ts
-                            then FilterSymbolNotOccurs (FreeSym sym)
-                            else FilterTrue
-                        | flt -> flt)
-                  | App (Read, (App (FreeSym sym, [], srt) :: _ as ts), _) ->
-                      (function 
-                        | FilterTrue ->
-                            if ce_occur_below ts
-                            then FilterNameNotOccurs (GrassUtil.name sym, ([], srt))
-                            else FilterTrue
-                        | flt -> flt)
-                  | _ -> function flt -> flt)
-                gts FilterTrue
+                (fun t acc -> match t with
+                  | App (FreeSym sym, ts, _) when ce_occur_below ts ->
+                    (FilterSymbolNotOccurs (FreeSym sym)) :: acc
+                  | App (Read, (App (FreeSym sym, [], srt) :: _ as ts), _) when ce_occur_below ts ->
+                    (FilterNameNotOccurs (GrassUtil.name sym, ([], srt))) :: acc
+                  | _ -> acc)
+                gts []
             in
             Match (e, flt)) es1
         in
@@ -1354,7 +1344,7 @@ let convert cu =
             GrassUtil.mk_free_fun var.var_sort id vs
         | _ -> failwith "Functions may only have a single return value."
         in
-        let m = Match (mt, FilterTrue) in
+        let m = Match (mt, []) in
         let rec add_match = function
           | Binder (b, vs, f, annots) ->
               let annots1 =

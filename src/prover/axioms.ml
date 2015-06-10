@@ -103,7 +103,7 @@ let read_write_axioms fld1 =
     else mk_or [mk_eq (g loc1) dvar]
   in
   let generator2 = 
-    [Match (new_fld1, FilterTrue)],
+    [Match (new_fld1, [])],
     [g loc1]
   in      
   if not !encode_fields_as_arrays 
@@ -251,18 +251,18 @@ let ep_axioms struct_srt =
         | _ -> false
       with Not_found -> false
     in
-    [([Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-       Match (mk_btwn_term fld3 loc1 loc3 loc4, FilterGeneric (field_filter (fst f1) (fst f3)));
-       Match (loc1, FilterSymbolNotOccurs EntPnt)], 
+    [([Match (mk_frame_term set1 set2 fld1 fld2, []);
+       Match (mk_btwn_term fld3 loc1 loc3 loc4, [FilterGeneric (field_filter (fst f1) (fst f3))]);
+       Match (loc1, [FilterSymbolNotOccurs EntPnt])], 
       [mk_ep fld1 set1 loc1]);
      ((if !Config.full_ep then
-        [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-         Match (loc1, (*FilterGeneric ep_filter*) FilterSymbolNotOccurs EntPnt)]
+        [Match (mk_frame_term set1 set2 fld1 fld2, []);
+         Match (loc1, (*FilterGeneric ep_filter*) [FilterSymbolNotOccurs EntPnt])]
       else
-        [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-         Match (mk_btwn_term fld3 loc2 loc3 loc4, FilterGeneric (field_filter (fst f1) (fst f3)));
-         Match (mk_elem_term loc1 set3, FilterTrue);
-         Match (loc1, FilterSymbolNotOccurs EntPnt)]), 
+        [Match (mk_frame_term set1 set2 fld1 fld2, []);
+         Match (mk_btwn_term fld3 loc2 loc3 loc4, [FilterGeneric (field_filter (fst f1) (fst f3))]);
+         Match (mk_elem_term loc1 set3, []);
+         Match (loc1, [FilterSymbolNotOccurs EntPnt])]), 
       [mk_ep fld1 set1 loc1])
    ]
   in
@@ -299,21 +299,21 @@ let array_axioms elem_srt =
   in
    *)
   let array_cell_gen =
-    ([Match (c, FilterSymbolNotOccurs ArrayOfCell);
-       Match (c, FilterSymbolNotOccurs IndexOfCell);
-       Match (c, FilterSymbolNotOccurs ArrayCells)], 
+    ([Match (c, [FilterSymbolNotOccurs ArrayOfCell]);
+       Match (c, [FilterSymbolNotOccurs IndexOfCell]);
+       Match (c, [FilterSymbolNotOccurs ArrayCells])], 
       [mk_read (mk_array_cells (mk_array_of_cell c)) (mk_index_of_cell c)])
   in
   let index_of_cell_gen =
-    ([Match (c, FilterSymbolNotOccurs IndexOfCell)], 
+    ([Match (c, [FilterSymbolNotOccurs IndexOfCell])], 
      [mk_index_of_cell c])
   in
   let array_of_cell_gen =
-    ([Match (c, FilterSymbolNotOccurs ArrayOfCell)], 
+    ([Match (c, [FilterSymbolNotOccurs ArrayOfCell])], 
      [mk_array_of_cell c])
   in
   let array_cells_gen =
-    ([Match (a, FilterSymbolNotOccurs ArrayCells)], 
+    ([Match (a, [FilterSymbolNotOccurs ArrayCells])], 
      [mk_array_cells a])
   in
   [mk_axiom ~gen:[index_of_cell_gen; array_of_cell_gen; array_cells_gen; array_cell_gen] "array-cells1" array_cells1;
