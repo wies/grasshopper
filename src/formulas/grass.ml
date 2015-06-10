@@ -399,7 +399,7 @@ and pr_annot ppf a =
         (fun f ids -> match f with
           | FilterSymbolNotOccurs sym ->
               string_of_symbol sym :: ids
-          | FilterNameNotOccurs (name, _) ->
+          | FilterReadNotOccurs (name, _) ->
               name :: ids
           | _ ->
               ids)
