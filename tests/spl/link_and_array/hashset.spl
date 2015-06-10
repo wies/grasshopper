@@ -9,6 +9,7 @@ struct HashSet {
   var buckets: Array<Node>; /* the set elements */
 }
 
+//TODO we are missing:  ghostHash(..., dataWitness(...).data)
 
 function arrayseg_buckets_footprint(a: Array<Node>, FP0: Set<ArrayCell<Node>>) returns (FP1: Set<Node>) {
   // all nodes reachable from the head of the bucket are in the footprint
@@ -26,12 +27,12 @@ predicate arrayseg_with_buckets(a: Array<Node>, lo: Int, hi: Int, cnt: Set<Int>)
   0 <= lo && lo <= hi && hi <= a.length &&
   FP0 == arrayseg_footprint(a, lo, hi) &&
   FP1 == arrayseg_buckets_footprint(a, FP0) &&
-  (forall c: ArrayCell<Node>, x: Node :: c in FP0 && x in FP1 && Reach(next, c.array[c.index], x) ==> a.cells[ghostHash(a.length, x.data)] == c) &&
+  (forall c: ArrayCell<Node>, x in FP1 :: c in FP0 && Reach(next, c.array[c.index], x) ==> a.cells[ghostHash(a.length, x.data)] == c) &&
   (forall c: ArrayCell<Node> :: c in FP0 ==> Reach(next, c.array[c.index], null) @(matching c yields c.array[c.index])) &&
   //all the elts from a list have the same hash, and this is the index in the array
   (forall v in FP1 :: Btwn(next, a[ghostHash(a.length, v.data)], v, null) @(matching v yields a[ghostHash(a.length, v.data)])) &&
   //the buckets are strictly sorted
-  (forall y: Node, z: Node :: y in FP1 && z in FP1 && Btwn(next,y,z,z) ==> y.data < z.data || y == z) &&
+  (forall y in FP1, z in FP1 :: Btwn(next,y,z,z) ==> y.data < z.data || y == z) &&
   cnt == content(FP1)
 }
 

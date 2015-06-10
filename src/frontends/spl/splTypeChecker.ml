@@ -95,7 +95,6 @@ let type_of_expr cu locals e =
     | BinaryOp (_, OpGeq, _, _, _)
     | BinaryOp (_, OpLeq, _, _, _)
     | BinaryOp (_, OpIn, _, _, _)
-    | GuardedQuant _ 
     | Quant _
     | BtwnPred _
     | BoolVal _ -> BoolType
@@ -255,24 +254,26 @@ let infer_types cu locals ty e =
           else es1
         in
         Setenum (ety1, es1, pos), match_types pos ty (SetType ety)
-    | GuardedQuant (b, id, e, f, pos) ->
-        let e1, ety = it locals (SetType AnyType) e in
-        let idty = match ety with
-        | SetType ty -> ty
-        | _ -> type_error pos (SetType AnyType) ety
-        in
-        let decl = var_decl id idty false false pos pos in
-        let locals1 = IdMap.add id decl locals in
-        let f1, ty = it locals1 (match_types pos ty BoolType) f in
-        GuardedQuant (b, id, e1, f1, pos), ty
     | Quant (b, decls, f, pos) ->
-        let locals1 =
-          List.fold_right
-            (fun decl locals1 -> IdMap.add decl.v_name decl locals1)
-            decls locals
+        let (decls1, locals1) =
+          Util.fold_left_map
+            (fun locals decl -> match decl with
+              | GuardedVar (id, e) ->
+                let e1, ety = it locals (SetType AnyType) e in
+                let idty = match ety with
+                | SetType ty -> ty
+                | _ -> type_error pos (SetType AnyType) ety
+                in
+                let decl = var_decl id idty false false pos pos in
+                (GuardedVar (id, e1), IdMap.add id decl locals)
+              | UnguardedVar v ->
+                (UnguardedVar v), (IdMap.add v.v_name v locals)
+            )
+            locals
+            decls
         in
         let f1, ty = it locals1 (match_types pos ty BoolType) f in
-        Quant (b, decls, f1, pos), ty
+        Quant (b, decls1, f1, pos), ty
     (* Reference and array types *)
     | New (nty, es, pos) ->
         let es1 =

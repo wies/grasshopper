@@ -148,16 +148,28 @@ let generate_terms generators ground_terms =
   in
   let rec generate new_terms old_terms = function
     | (guards, gen_terms) :: generators1 ->
+        (*
+        print_endline "======";
+        List.iter (fun t -> print_endline ("  generator: " ^ string_of_term t)) gen_terms;
+        *)
         let subst_maps =
           List.fold_left (fun subst_maps -> function Match (t, filter) -> 
+            (*
+            print_endline ("  matching " ^ (string_of_term t));
+            print_endline ("    subject to " ^ (string_of_filter filter));
+            *)
             let new_subst_maps =
               List.fold_left 
                 (fun new_subst_maps sm ->
                   let matches = find_matches new_terms (subst_term sm t) sm in
                   Util.filter_rev_map 
                     (fun (t_matched, sm) ->
-                      (*let _ = print_endline ("Matched " ^ string_of_term t_matched) in*)
-                      filter_term filter t_matched sm)
+                      let res = filter_term filter t_matched sm in
+                      (*
+                      if res then print_endline ("  Y " ^ string_of_term t_matched)
+                      else print_endline ("  x " ^ string_of_term t_matched);
+                      *)
+                      res )
                     (fun (t_matched, sm) -> 
                       sm) matches @ new_subst_maps
                 ) [] subst_maps 
@@ -171,7 +183,7 @@ let generate_terms generators ground_terms =
               List.fold_left
                 (fun acc gen_term ->
                   let t = subst_term sm gen_term in
-                  (*let _ = print_endline ("Adding generated term " ^ string_of_term t) in*)
+                  (*let _ = print_endline ("  Adding generated term " ^ string_of_term t) in*)
                   add_terms acc t)
                 acc gen_terms
             )

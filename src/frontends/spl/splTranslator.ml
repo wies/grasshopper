@@ -210,21 +210,23 @@ let resolve_names cu =
           | _ -> Read (re locals tbl map, idx1, pos))
       | Read (map, idx, pos) ->
           Read (re locals tbl map, re locals tbl idx, pos)
-      | GuardedQuant (q, init_id, e, f, pos) ->
-          let e1 = re locals tbl e in
-          let id, tbl1 = declare_name pos init_id pos tbl in
-          let f1 = re locals tbl1 f in
-          GuardedQuant (q, id, e1, f1, pos)
-      | Quant (q, vars, f, pos) ->
-          let locals, decls, tbl1 = List.fold_right 
-              (fun decl (locals, decls, tbl) ->
+      | Quant (q, decls, f, pos) ->
+          let (decls1, (locals1, tbl1)) = 
+            Util.fold_left_map
+              (fun (locals, tbl) decl -> match decl with
+              | GuardedVar (init_id, e) ->
+                let e1 = re locals tbl e in
+                let id, tbl1 = declare_name pos init_id pos tbl in
+                (GuardedVar (id, e1)), (locals, tbl1) 
+              | UnguardedVar decl ->
                 let decl, tbl1 = declare_var structs decl tbl in
-                IdMap.add decl.v_name decl locals, decl :: decls, tbl1
-              ) 
-              vars (locals, [], tbl)
+                (UnguardedVar decl), (IdMap.add decl.v_name decl locals, tbl1)
+              )
+              (locals, tbl)
+              decls
           in
-          let f1 = re locals tbl1 f in
-          Quant (q, decls, f1, pos)
+          let f1 = re locals1 tbl1 f in
+          Quant (q, decls1, f1, pos)
       | ProcCall (("acc", _ as id), args, pos) ->
           let args1 = List.map (re locals tbl) args in
           (match args1 with
@@ -470,11 +472,12 @@ let flatten_exprs cu =
         let map1, aux1, locals = flatten_expr scope aux locals map in
         let idx1, aux2, locals = flatten_expr scope aux1 locals idx in
         Read (map1, idx1, pos), aux2, locals
-    | Quant (q, _, f, pos) as e ->
-        check_side_effects f;
-        e, aux, locals
-    | GuardedQuant (q, id, s, f, pos) as e ->
-        check_side_effects s;
+    | Quant (q, vars, f, pos) as e ->
+        List.iter
+          (fun v -> match v with
+          | GuardedVar (_,s) -> check_side_effects s
+          | _ -> () )
+          vars;
         check_side_effects f;
         e, aux, locals
     | ProcCall (id, args, pos) ->
@@ -990,61 +993,50 @@ let convert cu =
         let tz = convert_term locals z in
         GrassUtil.mk_srcpos pos (GrassUtil.mk_btwn tfld tx ty tz)
     | Quant (q, decls, f, pos) ->
-        let vars, locals1 = 
-          List.fold_right (fun decl (vars, locals1) ->
-            let id = decl.v_name in
-            let ty = decl.v_type in
-            (id, convert_type ty pos) :: vars, 
-            IdMap.add id decl locals1)
-            decls ([], locals)
+        let mk_guard = match q with
+          | Forall -> GrassUtil.mk_implies
+          | Exists -> fun f g -> GrassUtil.mk_and [f; g] 
+        in
+        let mk_quant vs f =
+          let f0, ann = match f with
+            | Binder (_, [], f0, ann) -> f0, ann
+            | f0 -> f0, []
+          in
+          let f1 = match q with
+            | Forall -> GrassUtil.mk_forall vs f0
+            | Exists -> GrassUtil.mk_exists vs f0
+          in
+          GrassUtil.annotate f1 ann
+        in
+        let (vars, (domains, locals1)) =
+          Util.fold_left_map
+            (fun (accD,accL) decl -> match decl with
+              | GuardedVar (id, e) ->
+                let e1 = convert_term locals e in
+                (match type_of_expr cu locals e with
+                | SetType elem_srt ->
+                  let decl = var_decl id elem_srt false false pos pos in
+                  let elem_srt = convert_type elem_srt pos in
+                  let v_id = GrassUtil.mk_var elem_srt id in
+                  (id, elem_srt), ((GrassUtil.mk_elem v_id e1) :: accD, IdMap.add id decl accL)
+                | _ -> failwith "unexpected type")
+              | UnguardedVar decl ->
+                let id = decl.v_name in
+                let ty = decl.v_type in
+                (id, convert_type ty pos), (accD, IdMap.add id decl accL)
+            )
+            ([],locals)
+            decls
         in
         let subst = 
           List.fold_right (fun (id, srt) subst -> 
             IdMap.add id (GrassUtil.mk_var srt id) subst)
             vars IdMap.empty
         in
-        let mk_quant vs f = 
-          let f0, ann = 
-            match f with
-            | Binder (_, [], f0, ann) -> f0, ann
-            | f0 -> f0, []
-          in
-          let f1 = 
-            match q with
-	    | Forall -> 
-                GrassUtil.mk_forall vs f0
-            | Exists -> 
-                GrassUtil.mk_exists vs f0
-          in GrassUtil.annotate f1 ann
-          in
         let f1 = convert_grass_form locals1 f in
-        let f2 = GrassUtil.subst_consts subst f1 in
-        GrassUtil.mk_srcpos pos (mk_quant vars f2)
-    | GuardedQuant (q, id, e, f, pos) ->
-        let e1 = convert_term locals e in
-        (match type_of_expr cu locals e with
-        | SetType elem_srt ->
-            let decl = var_decl id elem_srt false false pos pos in
-            let locals1 = IdMap.add id decl locals in
-            let elem_srt = convert_type elem_srt pos in
-            let v_id = GrassUtil.mk_var elem_srt id in
-	    let mk_guard = match q with
-	    | Forall -> GrassUtil.mk_implies
-            | Exists -> fun f g -> GrassUtil.mk_and [f; g] 
-	    in
-            let mk_quant = match q with
-	    | Forall -> GrassUtil.mk_forall
-            | Exists -> GrassUtil.mk_exists
-            in
-            let f0, ann = 
-              match convert_grass_form locals1 f with
-              | Binder (_, [], f0, ann) -> f0, ann
-              | f0 -> f0, []
-            in
-            let f1 = GrassUtil.annotate (mk_guard (GrassUtil.mk_elem v_id e1) f0) ann in
-            let f2 = GrassUtil.subst_consts (IdMap.add id v_id IdMap.empty) f1 in
-            GrassUtil.mk_srcpos pos (mk_quant [(id, elem_srt)] f2)
-        | _ -> failwith "unexpected type")
+        let f2 = mk_guard (GrassUtil.mk_and domains) f1 in
+        let f3 = GrassUtil.subst_consts subst f2 in
+        GrassUtil.mk_srcpos pos (mk_quant vars f3)
     | BinaryOp (e1, OpEq, e2, _, pos) ->
         (match type_of_expr cu locals e1 with
         | BoolType ->
@@ -1186,11 +1178,14 @@ let convert cu =
         mk_form f1 f2
     | Quant (q, decls, f, pos) when q = Exists ->
         let vars, locals1 = 
-          List.fold_right (fun decl (vars, locals1) ->
-            let id = decl.v_name in
-            let ty = decl.v_type in
-            (id, convert_type ty pos) :: vars, 
-            IdMap.add id decl locals1)
+          List.fold_right (fun decl (vars, locals1) -> match decl with
+            | UnguardedVar decl ->
+              let id = decl.v_name in
+              let ty = decl.v_type in
+              (id, convert_type ty pos) :: vars, 
+              IdMap.add id decl locals1
+            | GuardedVar _ -> failwith "unexpected Guarded variable"
+            )
             decls ([], locals)
         in
         let subst = 
