@@ -131,14 +131,14 @@ let generate_terms generators ground_terms =
               | App (_, ts, _) -> List.for_all not_occurs ts
               | _ -> true
             in not_occurs t
-        | FilterNameNotOccurs (name, (arg_srts, res_srt)) ->
+        | FilterReadNotOccurs (name, (arg_srts, res_srt)) ->
             let rec not_occurs = function
-              | App (FreeSym (name1, _), ts, res_srt1) ->
+              | App (Read, (App (FreeSym (name1, _), arg_ts, res_srt1) :: _ as ts), _) ->
                   let ok =
                     try
                       name1 <> name ||
                       res_srt1 <> res_srt ||
-                      List.fold_left2 (fun acc t1 srt -> acc || sort_of t1 <> srt) false ts arg_srts 
+                      List.fold_left2 (fun acc t1 srt -> acc || sort_of t1 <> srt) false arg_ts arg_srts 
                     with Invalid_argument _ -> true
                   in ok && List.for_all not_occurs ts
               | App (_, ts, _) -> List.for_all not_occurs ts

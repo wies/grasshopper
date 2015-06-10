@@ -1114,7 +1114,7 @@ let convert cu =
                   | App (FreeSym sym, ts, _) when ce_occur_below ts ->
                     (FilterSymbolNotOccurs (FreeSym sym)) :: acc
                   | App (Read, (App (FreeSym sym, [], srt) :: _ as ts), _) when ce_occur_below ts ->
-                    (FilterNameNotOccurs (GrassUtil.name sym, ([], srt))) :: acc
+                    (FilterReadNotOccurs (GrassUtil.name sym, ([], srt))) :: acc
                   | _ -> acc)
                 gts []
             in
