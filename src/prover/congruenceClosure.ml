@@ -211,12 +211,12 @@ class dag = fun expr ->
         Buffer.contents buffer
 
     method add_constr eq = match eq with
-      | Atom (App (Eq, [e1; e2], _), _) ->
-          if Grass.sort_of e1 <> Bool then 
-            let n1 = self#get_node e1 in
-            let n2 = self#get_node e2 in
-            n1#merge n2
-      | _ -> failwith "CC: 'add_constr' only for Eq"
+    | Atom (App (Eq, [e1; e2], _), _) ->
+        if Grass.sort_of e1 <> Bool then 
+          let n1 = self#get_node e1 in
+          let n2 = self#get_node e2 in
+          n1#merge n2
+    | _ -> failwith "CC: 'add_constr' only for Eq"
 
     (** Gets a list of list of equal expressions (connected components). *)
     method get_cc =
