@@ -123,6 +123,10 @@ and loop_contracts = loop_contract list
 and loop_contract = 
   | Invariant of expr * bool
 
+and quant_var =
+  | GuardedVar of ident * expr
+  | UnguardedVar of var
+
 and expr =
   | Null of typ * pos
   | Emp of pos
@@ -137,8 +141,7 @@ and expr =
   | ArrayCells of expr * pos
   | ProcCall of ident * exprs * pos
   | PredApp of ident * exprs * pos
-  | Quant of quantifier_kind * var list * expr * pos
-  | GuardedQuant of quantifier_kind * ident * expr * expr * pos
+  | Quant of quantifier_kind * quant_var list * expr * pos
   | Access of expr * pos
   | BtwnPred of expr * expr * expr * expr * pos
   | UnaryOp of op * expr * pos
@@ -167,7 +170,6 @@ let pos_of_expr = function
   | Access (_, p)
   | BtwnPred (_, _, _, _, p)
   | Quant (_, _, _, p)
-  | GuardedQuant (_, _, _, _, p)
   | ProcCall (_, _, p)
   | PredApp (_, _, p)
   | UnaryOp (_, _, p)

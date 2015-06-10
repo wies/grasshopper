@@ -134,14 +134,13 @@ module TermMap = Map.Make(struct
 
 (** filters for term generators *)
 type filter =
-  | FilterTrue
   | FilterSymbolNotOccurs of symbol
   | FilterNameNotOccurs of string * arity
   | FilterGeneric of (subst_map -> term -> bool)
 
 (** matching guards for term generators *)
 type guard =
-  | Match of term * filter
+  | Match of term * filter list
         
 (** annotations *)
 type annot =
@@ -394,12 +393,21 @@ and pr_annot ppf a =
   let name = extract_name a in
   let pos = extract_src_pos a in
   let lbl = extract_label a in
-  let pr_filter ppf = function
-    | FilterSymbolNotOccurs sym ->
-        fprintf ppf "@ without@ %s" (string_of_symbol sym)
-    | FilterNameNotOccurs (name, _) ->
-        fprintf ppf "@ without@ %s" name
-    | _ -> ()
+  let pr_filter ppf fs =
+    let ids =
+      List.fold_right
+        (fun f ids -> match f with
+          | FilterSymbolNotOccurs sym ->
+              string_of_symbol sym :: ids
+          | FilterNameNotOccurs (name, _) ->
+              name :: ids
+          | _ ->
+              ids)
+        fs []
+    in
+    match ids with
+    | [] -> ()
+    | _ -> fprintf ppf "@ without@ %s" (String.concat ", " ids)
   in
   let rec pr_match_list ppf = function
     | [] -> ()
@@ -490,3 +498,9 @@ let print_subst_map subst_map =
   Printf.printf "[";
   IdMap.iter (fun id t -> Printf.printf "  %s -> %s\n" (string_of_ident id) (string_of_term t)) subst_map;
   print_endline "]"
+
+let string_of_filter f = match f with
+  | FilterSymbolNotOccurs sym -> "symbol filter: " ^ (string_of_symbol sym)
+  | FilterNameNotOccurs (name, arity) -> "name filter: " ^ name ^ ": " ^ (string_of_arity arity)
+  | FilterGeneric _ -> "generic filter ..."
+

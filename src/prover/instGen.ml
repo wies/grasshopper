@@ -122,42 +122,56 @@ let generate_terms generators ground_terms =
       | Some sm -> (t2, sm) :: subst_maps)
       candidates []
   in
-  let filter_term filter t sm = 
-    match filter with
-    | FilterTrue -> true
-    | FilterSymbolNotOccurs sym ->
-        let rec not_occurs = function
-          | App (sym1, _, _) when sym1 = sym -> false
-          | App (_, ts, _) -> List.for_all not_occurs ts
-          | _ -> true
-        in not_occurs t
-    | FilterNameNotOccurs (name, (arg_srts, res_srt)) ->
-        let rec not_occurs = function
-          | App (FreeSym (name1, _), ts, res_srt1) ->
-              let ok =
-                try
-                  name1 <> name ||
-                  res_srt1 <> res_srt ||
-                  List.fold_left2 (fun acc t1 srt -> acc || sort_of t1 <> srt) false ts arg_srts 
-                with Invalid_argument _ -> true
-              in ok && List.for_all not_occurs ts
-          | App (_, ts, _) -> List.for_all not_occurs ts
-          | _ -> true
-        in not_occurs t
-    | FilterGeneric fn -> fn sm t
+  let filter_term filters t sm = 
+    List.for_all
+      (fun f -> match f with
+        | FilterSymbolNotOccurs sym ->
+            let rec not_occurs = function
+              | App (sym1, _, _) when sym1 = sym -> false
+              | App (_, ts, _) -> List.for_all not_occurs ts
+              | _ -> true
+            in not_occurs t
+        | FilterNameNotOccurs (name, (arg_srts, res_srt)) ->
+            let rec not_occurs = function
+              | App (FreeSym (name1, _), ts, res_srt1) ->
+                  let ok =
+                    try
+                      name1 <> name ||
+                      res_srt1 <> res_srt ||
+                      List.fold_left2 (fun acc t1 srt -> acc || sort_of t1 <> srt) false ts arg_srts 
+                    with Invalid_argument _ -> true
+                  in ok && List.for_all not_occurs ts
+              | App (_, ts, _) -> List.for_all not_occurs ts
+              | _ -> true
+            in not_occurs t
+        | FilterGeneric fn -> fn sm t
+      )
+      filters
   in
   let rec generate new_terms old_terms = function
     | (guards, gen_terms) :: generators1 ->
+        (*
+        print_endline "======";
+        List.iter (fun t -> print_endline ("  generator: " ^ string_of_term t)) gen_terms;
+        *)
         let subst_maps =
-          List.fold_left (fun subst_maps -> function Match (t, filter) -> 
+          List.fold_left (fun subst_maps -> function Match (t, filters) -> 
+            (*
+            print_endline ("  matching " ^ (string_of_term t));
+            List.iter (fun f -> print_endline ("    subject to " ^ (string_of_filter f))) fiters;
+            *)
             let new_subst_maps =
               List.fold_left 
                 (fun new_subst_maps sm ->
                   let matches = find_matches new_terms (subst_term sm t) sm in
                   Util.filter_rev_map 
                     (fun (t_matched, sm) ->
-                      (*let _ = print_endline ("Matched " ^ string_of_term t_matched) in*)
-                      filter_term filter t_matched sm)
+                      let res = filter_term filters t_matched sm in
+                      (*
+                      if res then print_endline ("  Y " ^ string_of_term t_matched)
+                      else print_endline ("  x " ^ string_of_term t_matched);
+                      *)
+                      res )
                     (fun (t_matched, sm) -> 
                       sm) matches @ new_subst_maps
                 ) [] subst_maps 
@@ -171,7 +185,7 @@ let generate_terms generators ground_terms =
               List.fold_left
                 (fun acc gen_term ->
                   let t = subst_term sm gen_term in
-                  (*let _ = print_endline ("Adding generated term " ^ string_of_term t) in*)
+                  (*let _ = print_endline ("  Adding generated term " ^ string_of_term t) in*)
                   add_terms acc t)
                 acc gen_terms
             )

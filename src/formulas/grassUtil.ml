@@ -751,16 +751,18 @@ let subst_id_term subst_map t =
 let subst_id subst_map f =
   let subt = subst_id_term subst_map in
   let subg g = match g with
-  | Match (t, f) ->
+  | Match (t, fs) ->
       let t1 = subt t in
       let f1 =
-        match f with
-        | FilterSymbolNotOccurs (FreeSym id) ->
-            (try FilterSymbolNotOccurs (FreeSym (IdMap.find id subst_map))
-            with Not_found -> f)
-        (*| FilterTermNotOccurs t ->
-            FilterTermNotOccurs (subt t)*)
-        | _ -> f
+        List.map
+          (fun f -> match f with
+          | FilterSymbolNotOccurs (FreeSym id) ->
+              (try FilterSymbolNotOccurs (FreeSym (IdMap.find id subst_map))
+              with Not_found -> f)
+          (*| FilterTermNotOccurs t ->
+              FilterTermNotOccurs (subt t)*)
+          | _ -> f
+          ) fs
       in
       Match (t1, f1)
   in
@@ -806,19 +808,22 @@ let subst_consts subst_map f =
           List.fold_right 
             (fun m (sign, guards1) -> 
               match m with
-              | Match (t, f) ->
+              | Match (t, fs) ->
                   let t1 = subst_consts_term subst_map t in
-                  let f1 = match f with
-                  | FilterSymbolNotOccurs (FreeSym id) ->
-                      (try
-                        match IdMap.find id subst_map with
-                        | App (FreeSym id1, [], _) ->
-                            FilterSymbolNotOccurs (FreeSym id1)
-                        | _ -> f
-                      with Not_found -> f)
-                  (*| FilterTermNotOccurs t ->
-                      FilterTermNotOccurs (subst_consts_term subst_map t)*)
-                  | _ -> f
+                  let f1 =
+                    List.map
+                      (fun f -> match f with
+                        | FilterSymbolNotOccurs (FreeSym id) ->
+                          (try
+                            match IdMap.find id subst_map with
+                            | App (FreeSym id1, [], _) ->
+                                FilterSymbolNotOccurs (FreeSym id1)
+                            | _ -> f
+                          with Not_found -> f)
+                      (*| FilterTermNotOccurs t ->
+                          FilterTermNotOccurs (subst_consts_term subst_map t)*)
+                        | _ -> f)
+                      fs
                   in
                   sorted_fv_term_acc sign t1, Match (t1, f1) :: guards1)
             guards (IdMap.empty, [])

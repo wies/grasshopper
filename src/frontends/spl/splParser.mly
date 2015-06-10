@@ -579,22 +579,35 @@ annot_expr:
 | iff_expr { $1 }
 | annot_expr AT LPAREN annot RPAREN { Annot ($1, $4, mk_position 1 5) }
 
+
+quant_var:
+| IDENT IN annot_expr {
+    GuardedVar (($1, 0), $3)
+  }
+| IDENT COLON var_type {
+    let decl = { v_name = ($1, 0);
+                 v_type = $3;
+                 v_ghost = false;
+                 v_implicit = false;
+                 v_aux = false;
+                 v_pos = mk_position 1 3;
+                 v_scope = GrassUtil.global_scope; (* scope is fixed later *) } in
+    UnguardedVar decl
+  }
+;
+
+quant_var_list:
+| COMMA quant_var quant_var_list { $2 :: $3 }
+| /* empty */ { [] }
+;
+
+quant_vars:
+| quant_var quant_var_list { $1 :: $2 }
+;
+
 quant_expr: 
 | annot_expr { $1 }
-| QUANT IDENT IN quant_expr COLONCOLON annot_expr { GuardedQuant ($1, ($2, 0), $4, $6, mk_position 1 6) }
-| QUANT IDENT COLON var_type var_decl_list COLONCOLON annot_expr { 
-  let decl = 
-    { v_name = ($2, 0);
-      v_type = $4;
-      v_ghost = false;
-      v_implicit = false;
-      v_aux = false;
-      v_pos = mk_position 2 2;
-      v_scope = mk_position 1 7
-    } 
-  in
-  Quant ($1, decl :: $5, $7, mk_position 1 7) 
-}
+| QUANT quant_vars COLONCOLON annot_expr { Quant ($1, $2, $4, mk_position 1 4) }
 ;
 
 expr:
