@@ -53,36 +53,36 @@ procedure append(val: Data, x: Node, implicit ghost C: Set<Data>)
   res.data := val;
 }
 
-//  procedure insert(lst: Node, val: Data, implicit ghost C: Set<Data>)
-//    returns (res: Node)
-//    requires list_set(lst, null, C)
-//    ensures list_set(res, null, C ++ Set(val))
-//  {
-//    var curr: Node;
-//    curr := lst;
-//    var prev: Node;
-//    prev := null;
-//    
-//    while (curr != null && lt(curr.data, val))
-//      invariant (prev == null && curr == lst || lt(prev.data, val) &*& prev.next |-> curr) -** 
-//        list_set(lst, null, C)
-//    {
-//      prev := curr;
-//      curr := curr.next;
-//    }
-//    
-//    if (curr != null && curr.data == val) {
-//      return lst;
-//    }
-//    
-//    var n: Node;
-//    n := append(val, curr);
-//    
-//    if (prev == null) {
-//      return n;
-//    } else {
-//      prev.next := n;
-//      return lst;
-//    }
-//  }
+procedure insert(lst: Node, val: Data, implicit ghost C: Set<Data>)
+  returns (res: Node)
+  requires list_set(lst, null, C)
+  ensures list_set(res, null, C ++ Set(val))
+{
+  var curr: Node;
+  curr := lst;
+  var prev: Node;
+  prev := null;
+  
+  while (curr != null && lt(curr.data, val))
+    invariant (prev == null && curr == lst || lt(prev.data, val) &*& prev.next |-> curr) -** 
+      list_set(lst, null, C)
+  {
+    prev := curr;
+    curr := curr.next;
+  }
+  
+  if (curr != null && curr.data == val) {
+    return lst;
+  }
+  
+  var n: Node;
+  n := append(val, curr);
+  
+  if (prev == null) {
+    return n;
+  } else {
+    prev.next := n;
+    return lst;
+  }
+}
 
