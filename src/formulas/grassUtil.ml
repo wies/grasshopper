@@ -430,6 +430,22 @@ let strip_names f =
   filter_annotations 
     (function Name _ -> false | _ -> true) f
 
+(** Extract patterns from formula [f].*)
+let extract_patterns f =
+  let extract acc ann =
+    List.fold_left
+      (fun acc -> function Pattern (t, fs) -> (t, fs) :: acc | _ -> acc)
+      acc ann
+  in
+  let rec ep acc = function
+    | BoolOp (op, fs) ->
+        List.fold_left ep acc fs
+    | Atom (_, ann) ->
+        extract acc ann
+    | Binder (_, _, f, ann) ->
+        ep (extract acc ann) f
+  in ep [] f
+  
 (** Annotate [f] with comment [c]. *)
 let mk_comment c f = 
   annotate f [Comment c]
@@ -444,8 +460,8 @@ let mk_name n f = annotate f [Name (fresh_ident n)]
 (** Annotate [f] with source position [pos].*)
 let mk_srcpos pos f = annotate f [SrcPos pos]
 
-(** Annotate [f] with pattern [t]. *)
-let mk_pattern t f = annotate f [Pattern (mk_known t)]
+(** Annotate [f] with pattern [t] and filter [ft]. *)
+let mk_pattern t ft f = annotate f [Pattern (mk_known t, ft)]
    
 (** Smart constructor for Boolean operation [op] taking arguments [fs].*)
 let smk_op op fs =
@@ -533,7 +549,7 @@ let mk_iff a b =
 (** Fold all terms appearing in the formula [f] using catamorphism [fn] and initial value [init] *)
 let fold_terms fn init f =
   let fa acc = function
-    | Pattern t -> fn acc t
+    | Pattern (t, _) -> fn acc t
     | _ -> acc
   in
   let rec ft acc = function
@@ -554,7 +570,7 @@ let map_terms fn f =
             | TermGenerator (gs, ts) ->
                 let gs1 = List.map (function Match (t, f) -> Match (fn t, f)) gs in
                 TermGenerator (gs1, List.map fn ts)
-            | Pattern t -> Pattern (fn t)
+            | Pattern (t, ft) -> Pattern (fn t, ft)
             | a -> a) a
         in
         Binder (b, vs, mt f, a1)
@@ -563,7 +579,7 @@ let map_terms fn f =
 (** Like {!fold_terms} except that [fn] takes the set of bound variables of the given context as additional argument *)
 let fold_terms_with_bound fn init f =
   let fa bv acc = function
-    | Pattern t -> fn bv acc t
+    | Pattern (t, _) -> fn bv acc t
     | _ -> acc
   in
   let rec ft bv acc = function
@@ -720,6 +736,18 @@ let vars_in_fun_terms f =
     | _ -> vars
   in fold_terms ct IdSrtSet.empty f
 
+let terms_with_vars f =
+  let rec process acc t = match t with
+    | App (sym, ts, srt) ->
+      let acc = List.fold_left process acc ts in
+      if not (IdSet.is_empty (fv_term_acc IdSet.empty t))
+      then TermSet.add t acc
+      else acc
+    | Var _ -> acc
+  in
+  fold_terms process TermSet.empty f
+    
+    
 (** Compute the set of all proper terms in formula [f] that have variables occuring in them. *)
 let fun_terms_with_vars f =
   let rec process acc t = match t with
@@ -805,26 +833,24 @@ let subst_id_term subst_map t =
  ** This operation is not capture avoiding. *)
 let subst_id subst_map f =
   let subt = subst_id_term subst_map in
+  let subf f = match f with
+    | FilterSymbolNotOccurs (FreeSym id) ->
+        (try FilterSymbolNotOccurs (FreeSym (IdMap.find id subst_map))
+        with Not_found -> f)
+          (*| FilterTermNotOccurs t ->
+             FilterTermNotOccurs (subt t)*)
+    | f -> f
+  in
   let subg g = match g with
   | Match (t, fs) ->
       let t1 = subt t in
-      let f1 =
-        List.map
-          (fun f -> match f with
-          | FilterSymbolNotOccurs (FreeSym id) ->
-              (try FilterSymbolNotOccurs (FreeSym (IdMap.find id subst_map))
-              with Not_found -> f)
-          (*| FilterTermNotOccurs t ->
-              FilterTermNotOccurs (subt t)*)
-          | _ -> f
-          ) fs
-      in
-      Match (t1, f1)
+      let fs1 = List.map subf fs in
+      Match (t1, fs1)
   in
   let suba a = match a with
     | TermGenerator (guards, gen_terms) -> 
         TermGenerator (List.map subg guards, List.map subt gen_terms)
-    | Pattern t -> Pattern (subt t)
+    | Pattern (t, fs) -> Pattern (subt t, List.map subf fs)
     | a -> a
   in
   let rec sub = function 
@@ -858,6 +884,16 @@ let subst_consts_term subst_map t =
 (** Substitutes all constants in formula [f] with other terms according to substitution map [subst_map]. 
  ** This operation is not capture avoiding. *)
 let subst_consts subst_map f =
+  let subst_filter f = match f with
+    | FilterSymbolNotOccurs (FreeSym id) ->
+        (try
+          match IdMap.find id subst_map with
+          | App (FreeSym id1, [], _) ->
+              FilterSymbolNotOccurs (FreeSym id1)
+          | _ -> f
+        with Not_found -> f)
+    | f -> f
+  in
   let subst_annot = function
     | TermGenerator (guards, gen_terms) -> 
         let sign, guards1 = 
@@ -866,26 +902,12 @@ let subst_consts subst_map f =
               match m with
               | Match (t, fs) ->
                   let t1 = subst_consts_term subst_map t in
-                  let f1 =
-                    List.map
-                      (fun f -> match f with
-                        | FilterSymbolNotOccurs (FreeSym id) ->
-                          (try
-                            match IdMap.find id subst_map with
-                            | App (FreeSym id1, [], _) ->
-                                FilterSymbolNotOccurs (FreeSym id1)
-                            | _ -> f
-                          with Not_found -> f)
-                      (*| FilterTermNotOccurs t ->
-                          FilterTermNotOccurs (subst_consts_term subst_map t)*)
-                        | _ -> f)
-                      fs
-                  in
-                  sorted_fv_term_acc sign t1, Match (t1, f1) :: guards1)
+                  let fs1 = List.map subst_filter fs in
+                  sorted_fv_term_acc sign t1, Match (t1, fs1) :: guards1)
             guards (IdMap.empty, [])
         in
         TermGenerator (guards1, List.map (subst_consts_term subst_map) gen_terms)
-    | Pattern t -> Pattern (subst_consts_term subst_map t)
+    | Pattern (t, fs) -> Pattern (subst_consts_term subst_map t, List.map subst_filter fs)
     | a -> a
   in
   let rec subst = function
@@ -950,7 +972,7 @@ let subst subst_map f =
             guards
         in
         TermGenerator (guards1, List.map (subst_term sm) gen_terms)
-    | Pattern t -> Pattern (subst_term sm t)
+    | Pattern (t, fs) -> Pattern (subst_term sm t, fs)
     | a -> a
   in
   let rec sub sm = function 

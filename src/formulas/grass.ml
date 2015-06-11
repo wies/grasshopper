@@ -153,7 +153,7 @@ type annot =
   | Label of ident
   | Name of ident
   | TermGenerator of guard list * term list
-  | Pattern of term
+  | Pattern of term * filter list
         
 (** Boolean operators *)
 type bool_op =
@@ -426,7 +426,7 @@ and pr_annot ppf a =
   in
   let rec pr_generators ppf = function
     | (ms, ts) :: gen ->
-        fprintf ppf "@ @[<3>@@(matching %a yields %a)@]%a" pr_match_list ms pr_term_list ts pr_generators gen
+        fprintf ppf "@ @[<3>@@(matching %a@ yields %a)@]%a" pr_match_list ms pr_term_list ts pr_generators gen
     | [] -> ()
   in
   let pr_comment ppf (name, pos, lbl) =

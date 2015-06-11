@@ -44,7 +44,36 @@ let choose_rep_terms classes =
       EGraph.empty (List.concat classes)
   in reps, egraph
 
-let ematch t rep_terms egraph subst_maps =
+let filter_term filters t sm = 
+    List.for_all
+      (fun f -> match f with
+      | FilterSymbolNotOccurs sym ->
+          let rec not_occurs = function
+            | App (EntPnt, _, _) -> sym <> EntPnt
+            | App (sym1, _, _) when sym1 = sym -> false
+            | App (_, ts, _) -> List.for_all not_occurs ts
+            | _ -> true
+            in not_occurs t
+      | FilterReadNotOccurs (name, (arg_srts, res_srt)) ->
+          let rec not_occurs = function
+            | App (EntPnt, _, _) -> true
+            | App (Read, (App (FreeSym (name1, _), arg_ts, res_srt1) :: _ as ts), _) ->
+                let ok =
+                  try
+                    name1 <> name ||
+                    res_srt1 <> res_srt ||
+                    List.fold_left2 (fun acc t1 srt -> acc || sort_of t1 <> srt) false arg_ts arg_srts 
+                  with Invalid_argument _ -> true
+                in ok && List.for_all not_occurs ts
+            | App (_, ts, _) -> List.for_all not_occurs ts
+            | _ -> true
+          in not_occurs t
+      | FilterGeneric fn -> fn sm t
+      )
+    filters
+
+    
+let ematch filters t rep_terms egraph subst_maps =
   let rec ematches ts1 ts2s subst_maps =
     TermListSet.fold 
       (fun ts2 out_subst_maps ->
@@ -85,7 +114,8 @@ let ematch t rep_terms egraph subst_maps =
       (fun t terms -> TermListSet.add [t] terms) 
       rep_terms TermListSet.empty 
   in
-  ematches [t] terms subst_maps
+  let subst_maps1 = ematches [t] terms subst_maps in
+  List.filter (fun sm -> filter_term filters (subst_term sm t) sm) subst_maps1 
 
 let generate_terms generators ground_terms =
   let rec add_terms new_terms t =
@@ -121,34 +151,6 @@ let generate_terms generators ground_terms =
       | None -> subst_maps
       | Some sm -> (t2, sm) :: subst_maps)
       candidates []
-  in
-  let filter_term filters t sm = 
-    List.for_all
-      (fun f -> match f with
-        | FilterSymbolNotOccurs sym ->
-            let rec not_occurs = function
-              | App (EntPnt, _, _) -> sym <> EntPnt
-              | App (sym1, _, _) when sym1 = sym -> false
-              | App (_, ts, _) -> List.for_all not_occurs ts
-              | _ -> true
-            in not_occurs t
-        | FilterReadNotOccurs (name, (arg_srts, res_srt)) ->
-            let rec not_occurs = function
-              | App (EntPnt, _, _) -> true
-              | App (Read, (App (FreeSym (name1, _), arg_ts, res_srt1) :: _ as ts), _) ->
-                  let ok =
-                    try
-                      name1 <> name ||
-                      res_srt1 <> res_srt ||
-                      List.fold_left2 (fun acc t1 srt -> acc || sort_of t1 <> srt) false arg_ts arg_srts 
-                    with Invalid_argument _ -> true
-                  in ok && List.for_all not_occurs ts
-              | App (_, ts, _) -> List.for_all not_occurs ts
-              | _ -> true
-            in not_occurs t
-        | FilterGeneric fn -> fn sm t
-      )
-      filters
   in
   let rec generate new_terms old_terms = function
     | (guards, gen_terms) :: generators1 ->
@@ -291,22 +293,30 @@ let generate_instances useLocalInst axioms rep_terms egraph =
     let strat_vars1 =
       IdSrtSet.filter (fun (id, _) -> not (IdSet.mem id fun_vars)) strat_vars
     in
+    (* extract patterns separately to obtain auxilary filters *)
+    let patterns = extract_patterns f in
+    let fun_terms_with_filters =
+      TermSet.fold (fun t acc ->
+        try (t, List.assoc t patterns) :: acc
+        with Not_found -> (t, []) :: acc)
+        fun_terms []
+    in
     (* close the strat_vars so they are not instantiated *)
     let f = mk_forall (IdSrtSet.elements strat_vars1) f in
     (* generate substitution maps *)
     let subst_maps () =
       (* generate substitution maps for variables that appear below function symbols *)
       let proto_subst_maps =
-        TermSet.fold
-          (fun t subst_maps -> ematch t rep_terms egraph subst_maps)
-          fun_terms [IdMap.empty]
+        List.fold_left
+          (fun subst_maps (t, fs) -> ematch fs t rep_terms egraph subst_maps)
+          [IdMap.empty] fun_terms_with_filters 
       in
       (* complete substitution maps for remaining variables *)
       IdSrtSet.fold 
         (fun (v, srt) subst_maps -> 
           if IdSet.mem v fun_vars
           then subst_maps
-          else ematch (Var (v, srt)) rep_terms egraph subst_maps)
+          else ematch [] (Var (v, srt)) rep_terms egraph subst_maps)
         fvars proto_subst_maps         
     in
     let subst_maps = (*measure*) subst_maps () in

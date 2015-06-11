@@ -112,14 +112,10 @@ let read_write_axioms fld1 =
   else []
 
 (** Write axiom for reachability predicates *)
-let reach_write_axioms fld1 loc1 loc2 =
-  let struct_srt = 
-    match sort_of fld1 with
-    | Map (Loc s1, Loc s2) ->
-      if (s1 = s2) then s1
-      else failwith "expected field mapping a struct_srt to the same one in reach_write_axioms"
-    | _ -> failwith "expected field in reach_write_axioms"
-  in
+let reach_write_axioms struct_srt =
+  let fld1 = fld1 struct_srt in
+  let loc1 = loc1 struct_srt in
+  let loc2 = loc2 struct_srt in
   let loc3 = loc3 struct_srt in
   let loc4 = loc4 struct_srt in
   let loc5 = loc5 struct_srt in
@@ -136,7 +132,7 @@ let reach_write_axioms fld1 loc1 loc2 =
 	     smk_or [mk_eq loc1 (mk_null struct_srt); mk_btwn new_fld1 loc3 loc4 loc5; mk_not (new_btwn loc3 loc4 loc5)]]
   in
   if !with_reach_axioms 
-  then [mk_axiom "btwn_write" btwn_write]
+  then [mk_axiom "btwn_write" (mk_pattern fld1 [] btwn_write)]
   else []
 
 let f x =
@@ -194,8 +190,43 @@ let reach_axioms struct_srt =
                           btwn loc3 loc1 loc2]
   in
   (**)
+  let mk_axiom ?(gen=[]) name f =
+    mk_axiom ~gen name (mk_pattern (fld1 struct_srt) [] f)
+  in
+  let gen =
+    let fld1 = fld1 struct_srt in
+    let fld2 = fld2 struct_srt in
+    let set1 = set1 struct_srt in
+    let set2 = set2 struct_srt in
+    (* Btwn(f, _, _, _) -> known(f) *)
+    ([Match (mk_btwn_term fld1 loc1 loc2 loc3, [])], [mk_known fld1]) ::
+    (* f = g, known(f) -> known(g) *)
+      ([Match (mk_eq_term fld1 fld2, []);
+        Match (mk_known fld1, [])],
+       [mk_known fld2]) ::
+    (* f = g, known(g) -> known(f) *)
+    ([Match (mk_eq_term fld1 fld2, []);
+      Match (mk_known fld2, [])],
+     [mk_known fld1]) :: 
+    (* f [x := d], known(f [x := d]) -> known(f) *)
+    ([Match (mk_write fld1 loc1 loc2, []);
+      Match (mk_known (mk_write fld1 loc1 loc2), [])],
+     [mk_known fld1]) ::
+    (* f [x := d], known(f) -> known(f [x := d]) *)
+    ([Match (mk_write fld1 loc1 loc2, []);
+      Match (mk_known fld1, [])],
+     [mk_known (mk_write fld1 loc1 loc2)]) ::
+    (* Frame (x, a, f, g), known(g) -> known(f) *)
+    ([Match (mk_frame_term set1 set2 fld1 fld2, []);
+      Match (mk_known fld2, [])],
+     [mk_known fld1]) ::
+    (* Frame (x, a, f, g), known(f) -> known(g) *)
+    [([Match (mk_frame_term set1 set2 fld1 fld2, []);
+      Match (mk_known fld1, [])],
+     [mk_known fld2])]
+  in
   if !with_reach_axioms then
-    [mk_axiom "btwn_refl" btwn_refl; 
+    [mk_axiom ~gen:gen "btwn_refl" btwn_refl; 
      mk_axiom "btwn_step" btwn_step; 
      mk_axiom "btwn_cycl" btwn_cycl; 
      mk_axiom "btwn_reach" btwn_reac;
@@ -252,7 +283,8 @@ let ep_axioms struct_srt =
         | _ -> false
       with Not_found -> false
     in
-    [([Match (mk_frame_term set1 set2 fld1 fld2, []);
+    [([Match (mk_known fld1, []);
+       Match (mk_frame_term set1 set2 fld1 fld2, []);
        Match (mk_btwn_term fld3 loc1 loc3 loc4, [FilterGeneric (field_filter (fst f1) (fst f3))]);
        Match (loc1, [FilterSymbolNotOccurs EntPnt])], 
       [mk_ep fld1 set1 loc1]);
@@ -266,10 +298,12 @@ let ep_axioms struct_srt =
          in
          count 0 t < 2
        in*)
-       [Match (mk_frame_term set1 set2 fld1 fld2, []);
+       [Match (mk_known fld1, []);
+        Match (mk_frame_term set1 set2 fld1 fld2, []);
         Match (loc1, (*FilterGeneric ep_filter*) [FilterSymbolNotOccurs EntPnt])]
       else
-       [Match (mk_frame_term set1 set2 fld1 fld2, []);
+       [Match (mk_known fld1, []);
+        Match (mk_frame_term set1 set2 fld1 fld2, []);
         Match (mk_btwn_term fld3 loc2 loc3 loc4, [FilterGeneric (field_filter (fst f1) (fst f3))]);
         Match (mk_elem_term loc1 set3, []);
         Match (loc1, [FilterSymbolNotOccurs EntPnt])]), 

@@ -287,7 +287,7 @@ let read_file file =
         List.rev acc
       end
   in
-    String.concat "\n" (read [])
+  String.concat "\n" (read [])
 
 let rec remove_duplicates lst = match lst with
   | x :: xs -> x :: remove_duplicates (List.filter (fun y -> y <> x) xs)

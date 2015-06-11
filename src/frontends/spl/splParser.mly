@@ -96,7 +96,7 @@ declarations:
   { (($1, mk_position 1 1) :: fst3 $2, snd3 $2, trd3 $2) }
 | proc_decl declarations 
   { (fst3 $2, ProcDecl $1 :: snd3 $2, trd3 $2) }
-|   pred_decl declarations 
+| pred_decl declarations 
   { (fst3 $2, PredDecl $1 :: snd3 $2, trd3 $2) }
 | struct_decl declarations
   { (fst3 $2, StructDecl $1 :: snd3 $2, trd3 $2) }

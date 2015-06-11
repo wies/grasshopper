@@ -157,6 +157,34 @@ let field_partitions fs gts =
   in
   partition_of
 
+
+(** Compute term generators for Btwn fields *)
+let btwn_field_generators fs =
+  let make_generators acc f =
+    let ts = terms_with_vars f in
+    let btwn_fields t flds = match t with
+      | App (Btwn, fld :: _, _) ->
+          let vs = fv_term fld in
+          if IdSet.is_empty vs
+          then flds
+          else TermSet.add fld flds
+      | _ -> flds
+    in
+    let btwn_flds = TermSet.fold btwn_fields ts TermSet.empty in
+    let process t acc = match t with
+      | App (FreeSym _, ts, _) ->
+          TermSet.fold (fun fld acc ->
+            if IdSet.subset (fv_term fld) (fv_term t)
+            then ([Match (t, [])], [mk_known fld]) :: acc
+            else acc)
+            btwn_flds acc
+      | _ -> acc
+    in
+    TermSet.fold process ts acc
+  in
+  List.fold_left make_generators [] fs 
+    
+    
 (** Compute the set of all fields that are used in reachability predicates. *)
 let btwn_fields fs gts =
   let partition_of = field_partitions fs gts in
@@ -386,27 +414,16 @@ let array_sorts ts =
  ** Assumes that all frame predicates have been reduced in formulas [fs]. *)
 let add_ep_axioms fs =
   let gts = generated_ground_terms fs in
-  let flds = btwn_fields fs gts in
-  (*let flds =
-    TermSet.filter 
-      (fun t -> match t with | App (FreeSym (p, _), _, _) -> p <> "parent" | _ -> true)
-      flds
-     in*)
-  let structs = struct_sorts_of_fields flds in
-  let axioms = SortSet.fold (fun srt axioms -> Axioms.ep_axioms srt @ axioms) structs [] in
-  let ep_ax, generators = open_axioms isFld axioms in
-  let generators = List.map (fun (ms, ts)-> TermGenerator (ms, ts)) generators in
-  (*print_endline "---";
-  List.iter (fun f -> print_form stdout f; print_newline ()) ep_ax;*)
-  let classes =  CongruenceClosure.congr_classes fs gts in
-  let ep_ax = instantiate_with_terms false ep_ax (CongruenceClosure.restrict_classes classes flds) in
-  (*print_endline "---";
-  List.iter (fun f -> print_form stdout f; print_newline ()) ep_ax;*)
-    match ep_ax with
-    | Binder(b, vs, f, ann) :: xs -> Binder(b, vs, f, ann @ generators):: xs @ fs
-    | [] -> fs
-    | _ -> failwith "don't know where to put the generators"
-  (*List.rev_append (Axioms.ep_axioms ()) fs*)
+  let struct_sorts =
+    TermSet.fold
+      (fun t struct_sorts -> match t with
+      | App (_, _, Map(Loc srt1, Loc srt2)) 
+      | Var (_, Map(Loc srt1, srt2)) when srt1 = srt2 -> SortSet.add srt1 struct_sorts
+      | _ -> struct_sorts)
+      gts SortSet.empty
+  in
+  let axioms = SortSet.fold (fun srt axioms -> Axioms.ep_axioms srt @ axioms) struct_sorts [] in
+  axioms @ fs
  
 let add_read_write_axioms fs =
   let gts = ground_terms ~include_atoms:true (smk_and fs) in
@@ -483,10 +500,6 @@ let add_read_write_axioms fs =
     in
     generators_and_axioms 
   in
-  (*let gts = generate_terms (read_propagators @ generators) gts in
-  let classes1 = CongruenceClosure.congr_classes fs1 gts in
-  let read_write_ax1 = instantiate_with_terms true read_write_ax classes1 in
-  let gts = TermSet.union gts (ground_terms (mk_and read_write_ax1)) in*)
   rev_concat [read_write_ax; fs1], read_propagators, gts
 
 
@@ -495,10 +508,15 @@ let add_read_write_axioms fs =
 (** Adds instantiated theory axioms for graph reachability to formula f.
  ** Assumes that f is typed. *)
 let add_reach_axioms fs gts =
-  let classes = CongruenceClosure.congr_classes fs gts in
-  (* instantiate the field variables in all reachability axioms *)
-  let btwn_flds = btwn_fields fs gts in
-  (*let _ = TermSet.iter (print_term stdout) btwn_flds in*)
+  let struct_sorts =
+    TermSet.fold
+      (fun t struct_sorts -> match t with
+      | App (_, _, Map(Loc srt1, Loc srt2)) 
+      | Var (_, Map(Loc srt1, srt2)) when srt1 = srt2 -> SortSet.add srt1 struct_sorts
+      | _ -> struct_sorts)
+      gts SortSet.empty
+  in
+  (*let btwn_flds = btwn_fields fs gts in
   let reach_write_ax = 
     TermSet.fold (fun t write_ax ->
       match t with
@@ -507,8 +525,8 @@ let add_reach_axioms fs gts =
           then Axioms.reach_write_axioms fld loc1 loc2 @ write_ax
           else write_ax
       | _ -> write_ax) gts []
-  in
-  let non_updated_flds = 
+  in*)
+  (*let non_updated_flds = 
     TermSet.filter 
       (fun t -> List.for_all 
 	  (function 
@@ -516,11 +534,9 @@ let add_reach_axioms fs gts =
 	    | _ -> true) (CongruenceClosure.class_of t classes))
       btwn_flds
   in
-  let structs = struct_sorts_of_fields non_updated_flds in
-  let axioms = SortSet.fold (fun srt axioms -> Axioms.reach_axioms srt @ axioms) structs [] in
-  let reach_ax, _ = open_axioms (*~force:true*) isFld axioms in
-  let reach_ax1 = instantiate_with_terms (*~force:true*) false reach_ax (CongruenceClosure.restrict_classes classes non_updated_flds) in
-  rev_concat [reach_ax1; reach_write_ax; fs], gts
+  let structs = struct_sorts_of_fields non_updated_flds in*)
+  let axioms = SortSet.fold (fun srt axioms -> Axioms.reach_axioms srt @ Axioms.reach_write_axioms srt @ axioms) struct_sorts [] in
+  rev_concat [axioms; fs], gts
 
 let add_array_axioms fs gts =
   let srts = array_sorts gts in
@@ -535,9 +551,10 @@ let instantiate read_propagators fs gts =
       begin
         print_endline "ground terms:";
         TermSet.iter (fun t -> print_endline ("  " ^ (string_of_term t))) gts;
-      end
+      end  
   in
-  let gts1 = generate_terms (read_propagators @ generators) gts in
+  let btwn_gen = btwn_field_generators fs in
+  let gts1 = generate_terms (read_propagators @ btwn_gen @ generators) gts in
   let _ =
     if Debug.is_debug 1 then
       begin
@@ -638,8 +655,6 @@ let reduce f =
   let fs = split_ands [] [f1] in
   (* *)
   let fs = elim_exists fs in
-  (*print_endline "After skolemization";
-  print_endline (string_of_form (mk_and fs));*)
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
   (* some formula rewriting that helps the SMT solver *)
   let fs = massage_field_reads fs in
