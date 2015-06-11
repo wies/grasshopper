@@ -36,6 +36,7 @@ type sort =
   | Map of sort * sort (** maps *)
   | Array of sort (** arrays *)
   | ArrayCell of sort (** array cells *)
+  | Pat (** patterns *)
   | FreeSrt of ident (** uninterpreted sorts *)
 
 module IdSrtSet = Set.Make(struct
@@ -74,6 +75,8 @@ type symbol =
   | Elem | SubsetEq 
   (* uninterpreted constants, functions, and predicates *)
   | FreeSym of ident
+  (* for patterns *)
+  | Known
 
 let symbols = 
   [BoolConst true; BoolConst false; 
@@ -150,7 +153,8 @@ type annot =
   | Label of ident
   | Name of ident
   | TermGenerator of guard list * term list
-
+  | Pattern of term
+        
 (** Boolean operators *)
 type bool_op =
   | And | Or | Not
@@ -232,7 +236,8 @@ let string_of_symbol = function
   | Frame -> "Frame"
   (* uninterpreted symbols *)
   | FreeSym id -> string_of_ident id
-
+  (* patterns *)
+  | Known -> "known"
         
 let pr_ident ppf id = fprintf ppf "%s" (string_of_ident id)
 
@@ -248,7 +253,8 @@ let array_cell_sort_string = "ArrayCell"
 let set_sort_string = "Set"
 let bool_sort_string = "Bool"
 let int_sort_string = "Int"
-
+let pat_sort_string = "Pat"
+    
 let name_of_sort = function
   | Int -> int_sort_string
   | Bool -> bool_sort_string
@@ -257,13 +263,15 @@ let name_of_sort = function
   | Map _ -> map_sort_string
   | Array _ -> array_sort_string
   | ArrayCell _ -> array_cell_sort_string
+  | Pat -> pat_sort_string
   | FreeSrt id -> string_of_ident id
     
 let pr_sym ppf sym = fprintf ppf "%s" (string_of_symbol sym)
 
 let rec pr_sort ppf srt = match srt with
   | Bool
-  | Int -> fprintf ppf "%s" (name_of_sort srt)
+  | Int
+  | Pat -> fprintf ppf "%s" (name_of_sort srt)
   | Loc e
   | Set e
   | Array e

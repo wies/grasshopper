@@ -205,7 +205,12 @@ let add_pred_insts prog f =
       cnt := i+1;
       Name ("definition_of_" ^ (string_of_ident pred.pred_name), i)
     in
-    List.map (fun f -> smk_forall ~ann:[annot ()] sorted_vs (subst_consts sm f)) body
+    let pat =
+      match pred.pred_outputs with
+      | [] -> [Pattern (mk_known (mk_free_fun Bool pred.pred_name vs))]
+      | _ -> []
+    in
+    List.map (fun f -> smk_forall ~ann:(annot () :: pat) sorted_vs (subst_consts sm f)) body
   in
   let pred_defs = Prog.fold_preds (fun acc pred -> pred_def pred @ acc) [] prog in
   (*let pos_instances = 

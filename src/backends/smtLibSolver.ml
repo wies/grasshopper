@@ -305,12 +305,13 @@ let smtlib_sort_of_grass_sort srt =
   let rec csort = function
   | Int -> IntSort
   | Bool -> BoolSort
+  | Pat -> FreeSort (("GrassPat", 0), [])
   | Set srt ->
       FreeSort ((set_sort_string, 0), [csort srt])
   | Map (dsrt, rsrt) ->
       FreeSort ((map_sort_string, 0), [csort dsrt; csort rsrt])
   | Array srt ->
-      FreeSort (("G" ^ array_sort_string, 0), [csort srt])
+      FreeSort (("Grass" ^ array_sort_string, 0), [csort srt])
   | ArrayCell srt ->
       FreeSort ((array_cell_sort_string, 0), [csort srt])
   | Loc srt ->
@@ -323,7 +324,8 @@ let declare_sorts has_int session structs =
   SortSet.iter
     (function FreeSrt id -> declare_sort session (string_of_ident id) 0 | _ -> ())
     structs;
-  declare_sort session ("G" ^ array_sort_string) 1;
+  declare_sort session ("Grass" ^ pat_sort_string) 0;
+  declare_sort session ("Grass" ^ array_sort_string) 1;
   declare_sort session array_cell_sort_string 1;
   declare_sort session loc_sort_string 1;
   if not !Config.use_set_theory
@@ -713,7 +715,8 @@ let convert_model session smtModel =
         match name, csrts with
         | "Loc", [esrt] -> Loc esrt
         | "Set", [esrt] -> Set esrt
-        | "GArray", [esrt] -> Array esrt
+        | "Grass_Array", [esrt] -> Array esrt
+        | "Grass_Pat", [] -> Pat
         | "ArrayCell", [esrt] -> ArrayCell esrt
         | "Map", [dsrt; rsrt] -> Map (dsrt, rsrt)
         | _, [] -> FreeSrt (name, num)

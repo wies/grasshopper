@@ -48,7 +48,8 @@ let invalid_nested_proc_call_error id pos =
   ProgError.error pos 
     ("Procedure " ^ GrassUtil.name id ^ " has more than one return value.")
 
-    
+
+(** Resolve names of identifiers in compilation unit [cu] so that all identifiers have unique names.*)
 let resolve_names cu =
   let lookup_id init_id tbl pos =
     let name = GrassUtil.name init_id in
@@ -438,7 +439,8 @@ let resolve_names cu =
     pred_decls = preds;
     background_theory = bg_theory;
   }
-    
+
+(** Flatten procedure calls and new expressions in compilation unit [cu].*)
 let flatten_exprs cu =
   let decl_aux_var name vtype pos scope locals =
     let aux_id = GrassUtil.fresh_ident name in
@@ -664,6 +666,7 @@ let flatten_exprs cu =
   in
   { cu with proc_decls = procs }
 
+(** Type check compilation unit [cu]. Missing type annotations are inferred along the way.*)
 let infer_types cu =
   let check_spec locals pure e =
     let ty = if pure then BoolType else PermType in
@@ -802,7 +805,8 @@ let infer_types cu =
       cu.background_theory
   in
   { cu with pred_decls = preds; proc_decls = procs; background_theory = bg_theory; }
-    
+
+(** Rewrite Boolean expressions to make the short-circuit evaluation semantics explicit.*)
 let make_conditionals_lazy cu =
   let decl_aux_var name vtype pos scope locals =
     let aux_id = GrassUtil.fresh_ident name in
@@ -865,11 +869,9 @@ let make_conditionals_lazy cu =
   { cu with proc_decls = procs }
 
 
-type cexpr =
-  | SL_form of Sl.form
-  | FOL_form of Grass.form
-  | FOL_term of Grass.term * typ
-
+(** Convert compilation unit [cu] to abstract syntax of the intermediate language.
+ *  Assumes that [cu] has been type-checked and flattened.
+ *)
 let convert cu =
   let find_var_decl pos locals id =
     try IdMap.find id locals 
@@ -1348,14 +1350,16 @@ let convert cu =
             (decl.pr_formals @ decl.pr_footprints)
         in
         let vs = List.map (fun (x, srt) -> GrassUtil.mk_free_const srt x) sorted_vs in
-        let mt = match decl.pr_outputs with
-        | [] -> GrassUtil.mk_free_fun Bool id vs
+        let m, kgen = match decl.pr_outputs with
+        | [] ->
+            let mt = GrassUtil.mk_free_fun Bool id vs in
+            let m = Match (mt, []) in
+            m, [TermGenerator ([m], [GrassUtil.mk_known mt])]
         | [x] ->
             let var = IdMap.find x locals in
-            GrassUtil.mk_free_fun var.var_sort id vs
+            Match (GrassUtil.mk_free_fun var.var_sort id vs, []), []
         | _ -> failwith "Functions may only have a single return value."
         in
-        let m = Match (mt, []) in
         let rec add_match = function
           | Binder (b, vs, f, annots) ->
               let annots1 =
@@ -1373,8 +1377,9 @@ let convert cu =
           | _ ->
               let ft = fun_terms f in
               let generators =
-                if TermSet.is_empty ft then []
-                else [TermGenerator ([m], TermSet.elements ft)]
+                (if TermSet.is_empty ft then []
+                else [TermGenerator ([m], TermSet.elements ft)])
+                @ kgen              
               in
               GrassUtil.annotate f generators
         in
@@ -1456,6 +1461,7 @@ let convert cu =
   in
   prog
 
+(** Convert compilation unit [cu] to abstract syntax of the intermediate language. *)
 let to_program cu =
   let cu1 = resolve_names cu in
   let cu2 = flatten_exprs cu1 in

@@ -1,9 +1,9 @@
-(** Utility functions for manipulating GRASS formulas *)
+(** {5 Utility functions for manipulating GRASS formulas}*)
 
 open Grass
 open Util
 
-(** Auxiliary functions for manipulating source positions *)
+(** {6 Auxiliary functions for manipulating source positions} *)
 
 let dummy_position = 
   { sp_file = "";
@@ -197,7 +197,7 @@ let symbol_of_ident =
   with Not_found -> FreeSym id
  
 
-(** {6 Smart constructors} *)
+(** {6 (Smart) constructors} *)
 
 let mk_true = BoolOp (And, [])
 let mk_false = BoolOp (Or, [])
@@ -277,32 +277,41 @@ let mk_array_cells a =
 let mk_write map ind upd =
   mk_app (sort_of map) Write [map; ind; upd]
 
+(** Constructor for equalities.*)
 let mk_ep fld set t = mk_app (element_sort_of_set set) EntPnt [fld; set; t]
 
+(** Term constructor for between predicates.*)
 let mk_btwn_term fld t1 t2 t3 =
   mk_app Bool Btwn [fld; t1; t2; t3]
 
+(** Constructor for between predicates.*)
 let mk_btwn ?(ann=[]) fld t1 t2 t3 =
   mk_atom ~ann:ann Btwn [fld; t1; t2; t3]
-  
+
+(** Constructor for reachability predicates.*)
 let mk_reach fld t1 t2 = 
   mk_btwn fld t1 t2 t2
-  
+
+(** Constructor for empty set of sort [srt].*)
 let mk_empty srt = mk_app srt Empty []
 
+(** Construcot for set constant [id] with elements of sort [Loc srt].*) 
 let mk_loc_set srt id = mk_free_const (Set (Loc srt)) id
 
+(** Constructor for set enumerations.*)
 let mk_setenum ts = 
   let srt = Set (sort_ofs ts) in
   match ts with
   | [] -> mk_empty srt
   | _ -> mk_app srt SetEnum ts
 
+(** Constructor for set intersection.*)
 let mk_inter sets = 
   if List.exists (function App (Empty, [], _) -> true | _ -> false) sets
   then mk_empty (sort_ofs sets)
   else mk_app (sort_ofs sets) Inter sets
 
+(** Constructor for set union.*)
 let mk_union sets = 
   let sets1 =
     List.filter 
@@ -314,43 +323,57 @@ let mk_union sets =
   | [s] -> s
   | _ -> mk_app (sort_ofs sets) Union sets1
 
+(** Construtor for set difference.*)
 let mk_diff s t = mk_app (sort_of s) Diff [s; t]
 
+(** Term constructor for set membership.*)
 let mk_elem_term e s = mk_app Bool Elem [e; s]
+
+(** Constructor for set membership.*)
 let mk_elem ?(ann=[]) e s = mk_atom ~ann:ann Elem [e; s]
 
+(** Smart constructor for set membership.*)
 let smk_elem ?(ann=[]) e = function
   | App (Empty, _, _) -> mk_false
   | s -> mk_elem ~ann:ann e s
 
+(** Constructor for subset constraints.*)
 let mk_subseteq s t = mk_atom SubsetEq [s; t]
 
+(** Term constructor for frame predicates.*)
 let mk_frame_term x a f f' = mk_app Bool Frame [x; a; f; f']
 
-(* @param a the set of allocated locations
- * @param x the footprint in the pre-state
- * @param f the field in the pre-state
- * @param f' the field in the post-state
- *)
+(** Constructor for frame predicates.*)
 let mk_frame x a f f' = mk_atom Frame [x; a; f; f']
 
+(** Constructor for disjunction.*)
 let mk_and = function
   | [f] -> f
   | fs -> BoolOp(And, fs)
 
+(** Constructor for conjunction.*)
 let mk_or = function
   | [f] -> f
   | fs -> BoolOp (Or, fs)
 
+(** Constructor for negation.*)
 let mk_not = function
   | BoolOp (op, []) -> BoolOp (dualize_op op, [])
   | BoolOp (Not, [f]) -> f
   | f -> BoolOp (Not, [f])
 
+(** Constructor for disequality.*)
 let mk_neq s t = mk_not (mk_eq s t)
 
+(** Constructor for strict subset constraints.*)
 let mk_strict_subset s t = mk_and [mk_subseteq s t; mk_neq s t]
 
+(** Constructor for patterns. *)
+let mk_known t = mk_app Pat Known [t]
+    
+(** Constructor for binder [b], binding variables [bv] in formula [f]. 
+ *  Annotations [ann] are optional.
+ *)
 let rec mk_binder ?(ann=[]) b bv f = 
   match bv, ann with 
   | [], [] -> f
@@ -360,8 +383,12 @@ let rec mk_binder ?(ann=[]) b bv f =
           mk_binder ~ann:(ann @ ann') b bv f'
       | Binder (b', bv', f', ann') when b = b' ->
           mk_binder ~ann:(ann @ ann') b (bv @ bv') f'
-      | _ -> Binder (b, bv, f, ann)
-let mk_forall ?(ann=[]) bv f = mk_binder ~ann:ann Forall bv f 
+   | _ -> Binder (b, bv, f, ann)
+
+(** Constructor for universal quantification.*)
+let mk_forall ?(ann=[]) bv f = mk_binder ~ann:ann Forall bv f
+
+(** Constructor for existential quantification.*)
 let mk_exists ?(ann=[]) bv f = mk_binder ~ann:ann Exists bv f 
   
 (** Add anntotations [ann] to formula [f]. *)
@@ -393,24 +420,34 @@ let strip_comments f =
   filter_annotations 
     (function Comment _ -> false | _ -> true) f
 
+(** Remove all error messages from formula [f]. *)
 let strip_error_msgs f = 
   filter_annotations 
     (function ErrorMsg _ -> false | _ -> true) f
 
+(** Remove all name annotations from formula [f]. *)
 let strip_names f = 
   filter_annotations 
     (function Name _ -> false | _ -> true) f
 
+(** Annotate [f] with comment [c]. *)
 let mk_comment c f = 
   annotate f [Comment c]
 
+(** Annotate [f] with error message [msg] associated with position [pos]. *)
 let mk_error_msg (pos, msg) f =
   annotate f [ErrorMsg (pos, msg)]
 
+(** Annotate [f] with name [n]. *)
 let mk_name n f = annotate f [Name (fresh_ident n)]
 
+(** Annotate [f] with source position [pos].*)
 let mk_srcpos pos f = annotate f [SrcPos pos]
 
+(** Annotate [f] with pattern [t]. *)
+let mk_pattern t f = annotate f [Pattern (mk_known t)]
+   
+(** Smart constructor for Boolean operation [op] taking arguments [fs].*)
 let smk_op op fs =
   match op with
   | Not -> mk_not (List.hd fs)
@@ -430,7 +467,10 @@ let smk_op op fs =
 	| f :: fs1 -> mkop1 fs1 (FormSet.add f acc)
       in mkop1 fs FormSet.empty
 
+(** Smart constructor for conjunctions. *)
 let smk_and fs = smk_op And fs
+
+(** Smart constructor for disjunctions. *)
 let smk_or fs = smk_op Or fs
 
 (** {6 Normal form computation} *)
@@ -472,15 +512,18 @@ let rec cnf =
     | BoolOp (Or, fs) -> cnf_or [] (List.rev_map cnf fs)
     | f -> f
 
+(** Construtor for implications. *)
 let mk_implies f g =
   match g with
   | Binder (b, [], g1, a) ->
       Binder (b, [] , smk_or [nnf (mk_not f); g1], a)
   | _ -> smk_or [nnf (mk_not f); g]
 
+(** Constructor for sequents.*)
 let mk_sequent antecedent succedent =
   smk_or (List.map mk_not antecedent @ succedent)
 
+(** Constructor for biimplication.*)
 let mk_iff a b =
   smk_or [smk_and [a; b]; smk_and [nnf (mk_not a); nnf (mk_not b)]]
 
@@ -489,10 +532,15 @@ let mk_iff a b =
 
 (** Fold all terms appearing in the formula [f] using catamorphism [fn] and initial value [init] *)
 let fold_terms fn init f =
+  let fa acc = function
+    | Pattern t -> fn acc t
+    | _ -> acc
+  in
   let rec ft acc = function
-    | Atom (t, _) -> fn acc t
+    | Atom (t, a) -> fn (List.fold_left fa acc a) t
     | BoolOp (_, fs) ->	List.fold_left ft acc fs
-    | Binder (_, _, f, _) -> ft acc f
+    | Binder (_, _, f, a) ->
+        ft (List.fold_left fa acc a) f
   in ft init f
 
 (** Apply the function fn to all terms appearing in [f] *)
@@ -506,6 +554,7 @@ let map_terms fn f =
             | TermGenerator (gs, ts) ->
                 let gs1 = List.map (function Match (t, f) -> Match (fn t, f)) gs in
                 TermGenerator (gs1, List.map fn ts)
+            | Pattern t -> Pattern (fn t)
             | a -> a) a
         in
         Binder (b, vs, mt f, a1)
@@ -513,13 +562,18 @@ let map_terms fn f =
 
 (** Like {!fold_terms} except that [fn] takes the set of bound variables of the given context as additional argument *)
 let fold_terms_with_bound fn init f =
+  let fa bv acc = function
+    | Pattern t -> fn bv acc t
+    | _ -> acc
+  in
   let rec ft bv acc = function
-    | Atom (t, a) -> fn bv acc t
+    | Atom (t, a) -> fn bv (List.fold_left (fa bv) acc a) t
     | BoolOp (_, fs) ->	List.fold_left (ft bv) acc fs
-    | Binder (_, vs, f, _) -> 
-	ft (List.fold_left (fun bv (x, _) -> IdSet.add x bv) bv vs) acc f
+    | Binder (_, vs, f, a) ->
+        let bv1 = List.fold_left (fun bv (x, _) -> IdSet.add x bv) bv vs in
+        ft bv1 (List.fold_left (fa bv1) acc a) f
   in ft IdSet.empty init f
-
+    
 (** Computes the set of identifiers of free variables occuring in term [t]
  ** union the accumulated set of identifiers [vars]. *)
 let fv_term_acc vars t =
@@ -550,13 +604,16 @@ let sorted_fv_term_acc svars t =
   | App (_, ts, _) -> List.fold_left fvt1 svars ts
   in fvt1 svars t
 
-
+(** Smart constructor for binder [b], binding variables [bv] in formula [f]. *)
 let smk_binder ?(ann=[]) b bv f =
   let fv_f = fv f in
   let bv1 = List.filter (fun (x, _) -> IdSet.mem x fv_f) bv in
   mk_binder ~ann:ann b bv1 f
 
+(** Smart constructor for universal quantifiers.*)
 let smk_forall ?(ann=[]) bv f = smk_binder ~ann:ann Forall bv f
+
+(** Smart constructor for existential quantifiers.*)
 let smk_exists ?(ann=[]) bv f = smk_binder ~ann:ann Exists bv f
 
 (** Computes the set of free variables of formula [f] together with their sorts. *)
@@ -657,8 +714,6 @@ let vars_in_fun_terms f =
   in
   let rec ct vars t = 
     match t with
-    | App (FreeSym _, _, Bool) ->
-        fvt vars t
     | App (_, ts, Bool) -> 
 	List.fold_left ct vars ts
     | App _ -> fvt vars t
@@ -668,7 +723,7 @@ let vars_in_fun_terms f =
 (** Compute the set of all proper terms in formula [f] that have variables occuring in them. *)
 let fun_terms_with_vars f =
   let rec process acc t = match t with
-    | App (sym, ts, srt) when srt <> Bool || is_free_symbol sym ->
+    | App (sym, ts, srt) when srt <> Bool ->
       let acc = List.fold_left process acc ts in
       if not (IdSet.is_empty (fv_term_acc IdSet.empty t))
       then TermSet.add t acc
@@ -678,7 +733,7 @@ let fun_terms_with_vars f =
       List.fold_left process acc ts
     | Var _ -> acc
   in
-    fold_terms process TermSet.empty f
+  fold_terms process TermSet.empty f
      
 (** Extract signature of term [t] with accummulator. *)
 let rec sign_term_acc (decls : signature) t = 
@@ -769,6 +824,7 @@ let subst_id subst_map f =
   let suba a = match a with
     | TermGenerator (guards, gen_terms) -> 
         TermGenerator (List.map subg guards, List.map subt gen_terms)
+    | Pattern t -> Pattern (subt t)
     | a -> a
   in
   let rec sub = function 
@@ -829,6 +885,7 @@ let subst_consts subst_map f =
             guards (IdMap.empty, [])
         in
         TermGenerator (guards1, List.map (subst_consts_term subst_map) gen_terms)
+    | Pattern t -> Pattern (subst_consts_term subst_map t)
     | a -> a
   in
   let rec subst = function
@@ -893,6 +950,7 @@ let subst subst_map f =
             guards
         in
         TermGenerator (guards1, List.map (subst_term sm) gen_terms)
+    | Pattern t -> Pattern (subst_term sm t)
     | a -> a
   in
   let rec sub sm = function 

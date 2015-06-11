@@ -263,7 +263,7 @@ let generate_instances useLocalInst axioms rep_terms egraph =
       if not useLocalInst then TermSet.empty, IdSet.empty, TermSet.empty else
       let rec tt (fun_terms, fun_vars, strat_terms) t =
         match t with
-        | App (sym, _ :: _, srt) when srt <> Bool || is_free_symbol sym ->
+        | App (sym, _ :: _, srt) when srt <> Bool ->
             let tvs = fv_term t in
             if IdSet.is_empty tvs then
               fun_terms, fun_vars, strat_terms
@@ -288,11 +288,11 @@ let generate_instances useLocalInst axioms rep_terms egraph =
         else TermSet.add t fun_terms, IdSet.union vs fun_vars)
         strat_terms (fun_terms, fun_vars)
     in
-    let strat_vars =
+    let strat_vars1 =
       IdSrtSet.filter (fun (id, _) -> not (IdSet.mem id fun_vars)) strat_vars
     in
     (* close the strat_vars so they are not instantiated *)
-    let f = mk_forall (IdSrtSet.elements strat_vars) f in
+    let f = mk_forall (IdSrtSet.elements strat_vars1) f in
     (* generate substitution maps *)
     let subst_maps () =
       (* generate substitution maps for variables that appear below function symbols *)

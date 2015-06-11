@@ -290,27 +290,20 @@ let add_frame_axioms fs =
     | other ->
        failwith ("reduce_frame did not expect field of type " ^ (string_of_sort other))
   in
-  let rec process f (frame_axioms, fields) = match f with
+  let rec process f frame_axioms = match f with
     | Atom (App (Frame, [x; a; fld; fld'], _), ann) when fld <> fld' ->
-        let fields1 = 
-          let _, flds = 
-            try TermMap.find x fields
-            with Not_found -> a, []
-          in
-          TermMap.add x (a, fld :: fld' :: flds) fields
-        in
-        mk_implies f (annotate (expand_frame x a fld fld') ann) :: frame_axioms, fields1
+        mk_implies f (annotate (expand_frame x a fld fld') ann) :: frame_axioms
     | BoolOp (op, fs) -> 
         List.fold_left (fun acc f -> process f acc)
-          (frame_axioms, fields) fs
+          frame_axioms fs
     | Binder (b, vs, f, a) ->
-        process f (frame_axioms, fields)
-    | _ -> (frame_axioms, fields)        
+        process f frame_axioms
+    | _ -> frame_axioms        
   in
-  let frame_axioms, fields =
+  let frame_axioms =
     List.fold_left
       (fun acc f -> process f acc)
-      ([], TermMap.empty) fs
+      [] fs
   in
   Util.rev_concat [frame_axioms; fs] 
  
