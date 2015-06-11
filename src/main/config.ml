@@ -59,6 +59,8 @@ let opt_field_mod = ref true
 (* optmisation: self-framing clause for SL predicates *)
 let optSelfFrame = ref false
 
+(* compute the congruence closure as a fixed point (horn clauses) *)
+let ccFixedPoint = ref true
 
 let cmd_options =
   [("-basedir", Arg.Set_string base_dir, "<string>  Base directory for resolving include directives. Default: current working directory\n\nOptions for controlling error reporting and debug output:");
@@ -88,5 +90,6 @@ let cmd_options =
    ("-smtpatterns", Arg.Set smtpatterns, " Always add pattern annotations to quantifiers in SMT queries");
    ("-smtsets", Arg.Set use_set_theory, " Use solver's set theory to encode sets (if supported)");
    ("-smtarrays", Arg.Set encode_fields_as_arrays, " Use solver's array theory to encode fields\n");
+   ("-nofixedpoint", Arg.Clear ccFixedPoint, " Do not use fixed point for the congruence-closure");
    (*("-optSelfFrame", Arg.Set optSelfFrame, " enable generation of self-framing clauses for SL predicates");*)
   ]

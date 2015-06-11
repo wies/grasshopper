@@ -563,9 +563,10 @@ let instantiate read_propagators fs gts =
       end
   in
   let rec is_equation = function
-    | BoolOp (And, fs) -> List.for_all is_equation fs
+    | BoolOp (_, fs) -> List.for_all is_equation fs
     | Binder (Forall, _, f, _) -> is_equation f
     | Atom (App (Eq, _, _), _) -> true
+    | Atom (App (FreeSym _, _, _), _) -> true
     | _ -> false
   in
   let equations, others = List.partition is_equation fs1 in
@@ -573,7 +574,20 @@ let instantiate read_propagators fs gts =
   let eqs = instantiate_with_terms true equations classes in
   let gts1 = TermSet.union (ground_terms (mk_and eqs)) gts1 in 
   let classes = CongruenceClosure.congr_classes (List.rev_append eqs fs) gts1 in
-  List.rev_append eqs (instantiate_with_terms true others classes), gts1
+  let implied =
+    List.fold_left
+      (fun acc cls ->
+        if (List.length cls > 1 && sort_of (List.hd cls) <> Bool) then
+          let h = List.hd cls in
+          let eq = List.map (fun t -> GrassUtil.mk_eq h t) (List.tl cls) in
+          List.rev_append eq acc
+        else
+          acc
+      )
+      []
+      classes
+  in
+  List.rev_append implied (List.rev_append eqs (instantiate_with_terms true others classes)), gts1
 
 let add_terms fs gts =
   if not !Config.smtpatterns && !Config.instantiate then fs else

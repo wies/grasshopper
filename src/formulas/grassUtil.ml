@@ -204,6 +204,8 @@ let mk_false = BoolOp (Or, [])
 let mk_bool b = if b then mk_true else mk_false
 
 let mk_bool_term b = App (BoolConst b, [], Bool)
+let mk_true_term = mk_bool_term true
+let mk_false_term = mk_bool_term false
 
 let mk_int i = App (IntConst i, [], Int)
 

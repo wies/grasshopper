@@ -347,11 +347,14 @@ let generate_instances useLocalInst axioms rep_terms egraph =
 let instantiate_with_terms ?(force=false) local axioms classes =
     if !Config.instantiate || force then
       (* remove theory atoms from congruence classes *)
+      let filter_term t =
+        sort_of t <> Bool ||
+        Opt.get_or_else false (Opt.map is_free_symbol (symbol_of t))
+      in
       let classes =
-        List.filter
-          (function t :: _ ->
-            sort_of t <> Bool ||
-            Opt.get_or_else false (Opt.map is_free_symbol (symbol_of t)) | _ -> false) classes in
+        let classes2 = List.map (List.filter filter_term) classes in
+        List.filter (fun x -> x <> []) classes2
+      in
       let _ = 
         if Debug.is_debug 1 then
           ignore
