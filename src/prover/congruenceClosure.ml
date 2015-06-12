@@ -187,6 +187,7 @@ class dag = fun expr ->
   in
   let _ = List.iter (fun x -> ignore (convert_exp x)) expr in
   object (self)
+    val mutable neqs: (node * node) list = []
     val nodes: (term, node) Hashtbl.t = table1
     val node_to_expr: (node, term) Hashtbl.t = table2
     method get_node expr =
@@ -210,13 +211,32 @@ class dag = fun expr ->
         Hashtbl.iter (fun _ n -> print_node n) nodes;
         Buffer.contents buffer
 
-    method add_constr eq = match eq with
-    | Atom (App (Eq, [e1; e2], _), _) ->
-        if Grass.sort_of e1 <> Bool then 
-          let n1 = self#get_node e1 in
-          let n2 = self#get_node e2 in
-          n1#merge n2
-    | _ -> failwith "CC: 'add_constr' only for Eq"
+    method add_eq e1 e2 = 
+      let n1 = self#get_node e1 in
+      let n2 = self#get_node e2 in
+      n1#merge n2
+
+    method add_neq e1 e2 = 
+      let n1 = self#get_node e1 in
+      let n2 = self#get_node e2 in
+      neqs <- (n1,n2) :: neqs
+
+    method entails_eq e1 e2 =
+      let n1 = self#get_node e1 in
+      let n2 = self#get_node e2 in
+      n1#find = n2#find
+      
+    method entails_neq e1 e2 =
+      let n1 = (self#get_node e1)#find in
+      let n2 = (self#get_node e2)#find in
+      List.exists
+        (fun (a,b) -> (a#find = n1 && b#find = n2) ||
+                      (a#find = n2 && b#find = n1) )
+        neqs
+      
+
+    (** Returns a method that maps a term to its representative *)
+    method get_repr = (fun e -> self#get_expr (self#get_node e)#find)
 
     (** Gets a list of list of equal expressions (connected components). *)
     method get_cc =
@@ -230,6 +250,26 @@ class dag = fun expr ->
               Hashtbl.replace node_to_cc parent (e::already)
           ) nodes;
         Hashtbl.fold (fun _ cc acc -> cc::acc) node_to_cc []
+
+    (* Returns a function that tests if two terms must be different *)
+    method get_conflicts =
+      let repr = self#get_expr in
+      let conflicts =
+        List.fold_left
+          (fun acc (e1,e2) ->
+            let n1 = self#get_expr e1#find in
+            let n2 = self#get_expr e2#find  in
+            let c1 = try TermMap.find n1 acc with Not_found -> TermSet.empty in
+            let c2 = try TermMap.find n2 acc with Not_found -> TermSet.empty in
+            let c1p = TermSet.add n2 c1 in
+            let c2p = TermSet.add n1 c2 in
+            TermMap.add n2 c2p (TermMap.add n1 c1p acc))
+          TermMap.empty
+          neqs
+      in
+        (fun e1 e2 ->
+          try TermSet.mem (repr e2) (TermMap.find (repr e1) conflicts)
+          with Not_found -> false)
 
     method copy =
       let expressions = Hashtbl.fold (fun e _ acc -> e::acc ) nodes [] in
@@ -247,18 +287,88 @@ class dag = fun expr ->
 
   end
 
-let congr_classes fs gterms =
+(* TODO need implied equalities and watch lists *)
+let congr_classes_fixed_point fs gts =
+  let gterms = TermSet.add GrassUtil.mk_true_term (TermSet.add GrassUtil.mk_false_term gts) in
+  let cc_graph = new dag (TermSet.elements gterms) in
+  let rec remove_false1 f = match f with
+    | Atom (App (Eq, [e1; e2], _), _) -> 
+      if cc_graph#entails_neq e1 e2 then GrassUtil.mk_false else f
+    | BoolOp (Not, [Atom (App (Eq, [e1; e2], _), _)])
+    | Atom (App (Lt, [e1; e2], _), _) 
+    | Atom (App (Gt, [e1; e2], _), _) ->
+      if cc_graph#entails_eq e1 e2 then GrassUtil.mk_false else f
+    | Atom (pred, _) ->
+      if cc_graph#entails_eq pred GrassUtil.mk_false_term then GrassUtil.mk_false else f
+    | BoolOp (Not, [Atom (pred, _)]) ->
+      if cc_graph#entails_eq pred GrassUtil.mk_true_term then GrassUtil.mk_false else f
+    | BoolOp (And, fs) ->
+      GrassUtil.smk_and (List.map remove_false1 fs)
+    | BoolOp (Or, fs) ->
+      GrassUtil.smk_or (List.map remove_false1 fs)
+    | other -> other
+  in
+  let remove_false f = match f with
+    | BoolOp (Or, fs) ->
+      let fs1 = List.map remove_false1 fs in
+      GrassUtil.smk_or fs1
+    | other -> other
+  in
+  let rec loop changed toProcess toSimplify = match toProcess with
+    | f :: fs ->
+      begin
+        match remove_false f with
+        | Binder (_, [], f, _) ->
+          loop changed (f :: fs) toSimplify
+        | BoolOp (And, fs1) ->
+          loop changed (fs1 @ fs) toSimplify
+        | Atom (App (Eq, [e1; e2], _), _) -> 
+          cc_graph#add_eq e1 e2;
+          loop true fs toSimplify
+        | BoolOp (Not, [Atom (App (Eq, [e1; e2], _), _)])
+        | Atom (App (Lt, [e1; e2], _), _) 
+        | Atom (App (Gt, [e1; e2], _), _) ->
+          cc_graph#add_neq e1 e2;
+          loop true fs toSimplify
+        | Atom (pred, _) ->
+          cc_graph#add_eq pred GrassUtil.mk_true_term;
+          loop true fs toSimplify
+        | BoolOp (Not, [Atom (pred, _)]) ->
+          cc_graph#add_eq pred GrassUtil.mk_false_term;
+          loop true fs toSimplify
+        | BoolOp (Or, _) as f ->
+          loop changed fs (f :: toSimplify)
+        | _ -> loop changed fs toSimplify
+      end
+    | [] ->
+      if changed then loop false toSimplify []
+  in
+  cc_graph#add_neq GrassUtil.mk_true_term GrassUtil.mk_false_term;
+  loop false fs [];
+  cc_graph#get_cc
+
+let congr_classes_simple fs gterms =
   let cc_graph = new dag (TermSet.elements gterms) in
   let rec add = function
     | Binder (_, [], f, _) :: fs -> add (f :: fs)
     | BoolOp (And, fs1) :: fs -> add (fs1 @ fs)
-    | (Atom (App (Eq, _, _), _) as f) :: fs -> 
-        cc_graph#add_constr f; add fs
+    | Atom (App (Eq, [e1; e2], _), _) :: fs -> 
+        cc_graph#add_eq e1 e2; add fs
+    | BoolOp (Not, [Atom (App (Eq, [e1; e2], _), _)]) :: fs 
+    | Atom (App (Lt, [e1; e2], _), _) :: fs
+    | Atom (App (Gt, [e1; e2], _), _) :: fs ->
+        cc_graph#add_neq e1 e2; add fs
     | _ :: fs -> add fs
     | [] -> ()
   in
   add fs;
   cc_graph#get_cc
+
+let congr_classes fs gterms =
+  if !Config.ccFixedPoint then
+    congr_classes_fixed_point fs gterms
+  else
+    congr_classes_simple fs gterms
 
 let class_of t classes = List.find (List.mem t) classes
 

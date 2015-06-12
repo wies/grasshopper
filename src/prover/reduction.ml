@@ -185,75 +185,7 @@ let btwn_field_generators fs =
   List.fold_left make_generators [] fs 
     
     
-(** Compute the set of all fields that are used in reachability predicates. *)
-let btwn_fields fs gts =
-  let partition_of = field_partitions fs gts in
-  let fs1, _ = open_axioms (fun f v -> true) fs in
-  let collect_symbols acc f =
-    let btwn_flds flds = function
-      | App (Btwn, fld :: _, _) ->
-          let vs = fv_term fld in
-          if IdSet.is_empty vs then flds
-          else TermSet.add fld flds
-      | _ -> flds
-    in
-    let btwn_flds = fold_terms btwn_flds TermSet.empty f in
-    let rec related_symbols acc = function
-      | App (sym, ts, _) ->
-          let acc1 = match sym with
-          | FreeSym id when not (IdMap.mem id acc) ->
-              let is, _ =
-                List.fold_left
-                  (fun (is, i) t ->
-                    if TermSet.mem t btwn_flds
-                    then (i :: is, i+1)
-                    else (is, i+1))
-                  ([], 0) ts
-              in
-              if is <> []
-              then IdMap.add id (List.rev is) acc
-              else acc
-          | _ -> acc
-          in
-          List.fold_left related_symbols acc1 ts
-      | _ -> acc
-    in
-    fold_terms related_symbols acc f    
-  in
-  let related_symbols = List.fold_left collect_symbols IdMap.empty fs1 in
-  (*print_endline "Related symbols:";
-  IdMap.iter (fun id is ->
-    Printf.printf "%s -> %s\n" (string_of_ident id) (String.concat ", " (List.map string_of_int is))) related_symbols;*)
-  let rec collect_fields flds = function
-    | App (Btwn, fld :: _, _) when IdSet.is_empty (fv_term fld) -> 
-        TermSet.union (partition_of fld) flds
-    | App (sym, ts, _) ->
-        let flds1 = match sym with
-        | FreeSym id ->
-            let is =
-              try IdMap.find id related_symbols with Not_found -> []
-            in
-            let flds1, _, _ =
-              List.fold_left (fun (flds, is, j) t ->
-                match t, is with
-                | fld, i :: is1 when i = j && not (IdSet.is_empty (fv_term fld)) ->
-                    (flds, is1, j + 1)
-                | fld, i :: is1 when i = j ->
-                    (TermSet.union (partition_of fld) flds, is1, j + 1)
-                | _ -> (flds, is, j + 1))
-                (flds, is, 0) ts
-            in
-            flds1
-        | _ -> flds
-        in
-        List.fold_left collect_fields flds1 ts
-    | _ -> flds
-  in
-  let flds = fold_terms collect_fields TermSet.empty (smk_and fs) in
-  flds
-
-let btwn_fields_in_fs fs = btwn_fields fs (generated_ground_terms fs)
-
+(** Add axioms for frame predicates. *)
 let add_frame_axioms fs =
   let gs = ground_terms ~include_atoms:true (smk_and fs) in
   let frame_sorts =
@@ -273,86 +205,6 @@ let add_frame_axioms fs =
           Axioms.frame_axioms srt1 srt2 @ fs
       | _ -> fs)
     frame_sorts fs
-  (*
-  let btwn_flds = btwn_fields_in_fs fs in
-  let expand_frame x a f f' =
-    let frame = mk_diff a x in
-    let reduce_graph id =
-      let loc1 = Axioms.loc1 id in
-      let loc2 = Axioms.loc2 id in
-      let loc3 = Axioms.loc3 id in
-
-      let replacement_pts =
-        Axioms.mk_axiom "pts_frame"
-          (mk_implies
-             (smk_elem loc1 frame)
-             (mk_eq (mk_read f loc1) (mk_read f' loc1))
-          )
-      in
-     
-      let axioms (*add reach*) =
-        let ep v = mk_ep f x v in
-        let reachwo_f = Axioms.reachwo_Fld f in
-        let reach_f x y z = mk_btwn f x z y in
-        let reach_f' x y z = mk_btwn f' x z y in
-        if TermSet.mem f' btwn_flds then
-          match f' with
-          | App (FreeSym (p, _), _, _) when p = "parent" ->
-              [Axioms.mk_axiom "reach_frame"
-                 (mk_sequent
-                    [smk_elem loc1 frame]
-                    [mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)])]
-          | _ ->
-              [replacement_pts;
-               Axioms.mk_axiom "reach_frame1"
-                 (mk_sequent
-                    [reachwo_f loc1 loc2 (ep loc1)]
-                    [(mk_iff 
-                       (reach_f loc1 loc2 loc3)
-                       (reach_f' loc1 loc2 loc3))]);
-               Axioms.mk_axiom "reach_frame2"
-                 (mk_implies
-                    (mk_and [mk_not (smk_elem loc1 x); mk_eq loc1 (ep loc1)])
-                    (mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)))
-              ]
-        else [replacement_pts]
-      in
-      mk_and axioms
-    in
-    let reduce_data id =
-      let loc1 = Axioms.loc1 id in
-      Axioms.mk_axiom "data_frame"
-        (mk_implies
-           (smk_elem loc1 frame)
-           (mk_eq (mk_read f loc1) (mk_read f' loc1))
-        )
-    in
-    (*Debug.amsg ("expanding frame for " ^ (string_of_term f) ^ "\n");*)
-    match sort_of f with
-    | Map (Loc id1, Loc id2) ->
-       if (id1 = id2) then reduce_graph id1
-       else reduce_data id1
-    | Map (Loc id, Int) | Map (Loc id, Bool) ->
-       reduce_data id
-    | other ->
-       failwith ("reduce_frame did not expect field of type " ^ (string_of_sort other))
-  in
-  let rec process f frame_axioms = match f with
-    | Atom (App (Frame, [x; a; fld; fld'], _), ann) when fld <> fld' ->
-        mk_implies f (annotate (expand_frame x a fld fld') ann) :: frame_axioms
-    | BoolOp (op, fs) -> 
-        List.fold_left (fun acc f -> process f acc)
-          frame_axioms fs
-    | Binder (b, vs, f, a) ->
-        process f frame_axioms
-    | _ -> frame_axioms        
-  in
-  let frame_axioms =
-    List.fold_left
-      (fun acc f -> process f acc)
-      [] fs
-  in
-  Util.rev_concat [frame_axioms; fs] *)
  
 
 let rec valid = function
@@ -568,17 +420,31 @@ let instantiate read_propagators fs gts =
       end
   in
   let rec is_equation = function
-    | BoolOp (And, fs) -> List.for_all is_equation fs
+    | BoolOp (_, fs) -> List.for_all is_equation fs
     | Binder (Forall, _, f, _) -> is_equation f
     | Atom (App (Eq, _, _), _) -> true
+    | Atom (App (FreeSym _, _, _), _) -> true
     | _ -> false
   in
   let equations, others = List.partition is_equation fs1 in
   let classes = CongruenceClosure.congr_classes fs gts1 in
   let eqs = instantiate_with_terms true equations classes in
-  let gts1 = TermSet.union (ground_terms (mk_and eqs)) gts1 in 
+  let gts1 = TermSet.union (ground_terms ~include_atoms:true (mk_and eqs)) gts1 in 
   let classes = CongruenceClosure.congr_classes (List.rev_append eqs fs) gts1 in
-  List.rev_append eqs (instantiate_with_terms true others classes), gts1
+  let implied =
+    List.fold_left
+      (fun acc cls ->
+        if (List.length cls > 1 && sort_of (List.hd cls) <> Bool) then
+          let h = List.hd cls in
+          let eq = List.map (fun t -> GrassUtil.mk_eq h t) (List.tl cls) in
+          List.rev_append eq acc
+        else
+          acc
+      )
+      []
+      classes
+  in
+  List.rev_append implied (List.rev_append eqs (instantiate_with_terms true others classes)), gts1
 
 let add_terms fs gts =
   if not !Config.smtpatterns && !Config.instantiate then fs else

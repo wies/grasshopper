@@ -196,11 +196,15 @@ let reach_axioms classes struct_srt =
   (**)
   let non_updated_field sm t =
     let fld = subst_term sm (fld1 struct_srt) in
+    let cl =
+      try CongruenceClosure.class_of fld classes
+      with Not_found -> [fld]
+    in
     List.for_all 
       (function 
 	| (App (Write, _, _)) -> false 
 	| _ -> true)
-      (CongruenceClosure.class_of fld  classes)
+      cl
   in
   let mk_axiom ?(gen=[]) name f =
     mk_axiom ~gen name (mk_pattern (fld1 struct_srt) [FilterGeneric non_updated_field] f)
