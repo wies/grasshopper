@@ -724,7 +724,8 @@ let ground_terms ?(include_atoms=false) f =
 (** Computes the set of all free variables that appear below function symbols in formula [f]. *)
 let vars_in_fun_terms f =
   let rec fvt vars = function
-    | Var (id, srt) -> IdSrtSet.add (id, srt) vars
+    | Var (id, srt) ->
+        IdSrtSet.add (id, srt) vars
     | App (_, ts, _) ->
 	List.fold_left fvt vars ts
   in

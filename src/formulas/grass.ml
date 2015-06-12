@@ -375,6 +375,11 @@ let rec extract_gens = function
       (List.map (function Match (t, f) -> t, f) ms, t) :: extract_gens ann
   | _ :: ann -> extract_gens ann
   | [] -> []
+
+let rec extract_patterns = function
+  | Pattern (t, _) :: ann -> t :: extract_patterns ann
+  | _ :: ann -> extract_patterns ann
+  | [] -> []
         
 let pr_binder ppf b =
   let b_str = match b with
@@ -401,6 +406,7 @@ and pr_annot ppf a =
   let name = extract_name a in
   let pos = extract_src_pos a in
   let lbl = extract_label a in
+  let pat = extract_patterns a in
   let pr_filter ppf fs =
     let ids =
       List.fold_right
@@ -429,6 +435,11 @@ and pr_annot ppf a =
         fprintf ppf "@ @[<3>@@(matching %a@ yields %a)@]%a" pr_match_list ms pr_term_list ts pr_generators gen
     | [] -> ()
   in
+  let rec pr_patterns ppf = function
+    | t :: patterns ->
+        fprintf ppf "@ @[<3>@@(pattern %a)@]%a" pr_term t pr_patterns patterns
+    | [] -> ()
+  in
   let pr_comment ppf (name, pos, lbl) =
       (match name, pos, lbl with
       | "", None, None -> fprintf ppf ""
@@ -438,7 +449,7 @@ and pr_annot ppf a =
       | n, Some pos, Some lbl -> fprintf ppf "@ /* %s -> %s: %s */" (string_of_ident lbl) (string_of_src_pos pos) n
       | n, None, _ -> fprintf ppf "@ /* %s */" n)
   in
-  fprintf ppf "%a%a" pr_generators gen pr_comment (name, pos, lbl)
+  fprintf ppf "%a%a%a" pr_generators gen pr_patterns pat pr_comment (name, pos, lbl)
  
 
 and pr_ands ppf = function

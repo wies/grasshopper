@@ -32,13 +32,16 @@ let choose_rep_terms classes =
             begin
               try
                 let t_rep = TermMap.find t rep_map in
-                let ts_reps = List.map (fun t -> TermMap.find t rep_map) ts in
+                let ts_reps =
+                  List.map (fun t -> TermMap.find t rep_map) ts
+                in
                 let other_ts_reps =
                   try EGraph.find (t_rep, sym) egraph
                   with Not_found -> TermListSet.empty
                 in
                 EGraph.add (t_rep, sym) (TermListSet.add ts_reps other_ts_reps) egraph
-              with Not_found -> egraph
+              with Not_found ->
+                egraph
             end
         | _ -> egraph)
       EGraph.empty (List.concat classes)
@@ -96,7 +99,8 @@ let ematch filters t rep_terms egraph subst_maps =
           try
             let ts2s = EGraph.find (t2, sym1) egraph in
             ematches ts1 ts2s subst_maps
-          with Not_found -> []
+          with Not_found ->
+            []
         end
     | Var (x, srt1) when srt1 = sort_of t2 ->
         List.fold_left 
@@ -107,7 +111,8 @@ let ematch filters t rep_terms egraph subst_maps =
               else out_subst_maps
             else IdMap.add x t2 sm :: out_subst_maps)
           [] subst_maps
-    | _ -> []
+    | _ ->
+        []
   in
   let terms = 
     TermSet.fold 
@@ -308,7 +313,8 @@ let generate_instances useLocalInst axioms rep_terms egraph =
       (* generate substitution maps for variables that appear below function symbols *)
       let proto_subst_maps =
         List.fold_left
-          (fun subst_maps (t, fs) -> ematch fs t rep_terms egraph subst_maps)
+          (fun subst_maps (t, fs) ->
+            ematch fs t rep_terms egraph subst_maps)
           [IdMap.empty] fun_terms_with_filters 
       in
       (* complete substitution maps for remaining variables *)
@@ -327,13 +333,13 @@ let generate_instances useLocalInst axioms rep_terms egraph =
         print_string "all vars: ";
         print_endline (String.concat ", " (List.map string_of_ident (List.map fst (IdSrtSet.elements fvars0))));
         print_string "strat vars: ";
-        print_endline (String.concat ", " (List.map string_of_ident (List.map fst (IdSrtSet.elements strat_vars))));
+        print_endline (String.concat ", " (List.map string_of_ident (List.map fst (IdSrtSet.elements strat_vars1))));
         print_string "unmatched vars: ";
         print_endline (String.concat ", " (List.map string_of_ident (IdSet.elements unmatched_vars)));
         print_string "inst vars: ";
         print_endline (String.concat ", " (List.map string_of_ident (IdSet.elements fun_vars)));
         print_string "fun terms: ";
-        print_endline (String.concat ", " (List.map string_of_term (TermSet.elements fun_terms)));
+        print_endline (String.concat ", " (List.map string_of_term (List.map fst fun_terms_with_filters)));
         print_endline "subst_maps:";
         List.iter print_subst_map subst_maps;
         print_endline "--------------------"
@@ -351,7 +357,7 @@ let instantiate_with_terms ?(force=false) local axioms classes =
         List.filter
           (function t :: _ ->
             sort_of t <> Bool ||
-            Opt.get_or_else false (Opt.map is_free_symbol (symbol_of t)) | _ -> false) classes in
+            Opt.get_or_else false (Opt.map(((=) Frame) ||| is_free_symbol) (symbol_of t)) | _ -> false) classes in
       let _ = 
         if Debug.is_debug 1 then
           ignore

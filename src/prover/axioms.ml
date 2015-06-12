@@ -32,7 +32,9 @@ let s3 = mk_loc_set_var "?Z"
 let is1 = fresh_ident "?N", Set Int 
 let i1 = fresh_ident "?i", Int
 let i2 = fresh_ident "?j", Int
-
+let d = fresh_ident "?d"
+let e = fresh_ident "?e"
+    
 let loc1 struct_srt = mk_var (snd (l1 struct_srt)) (fst (l1 struct_srt))
 let loc2 struct_srt = mk_var (snd (l2 struct_srt)) (fst (l2 struct_srt))
 let loc3 struct_srt = mk_var (snd (l3 struct_srt)) (fst (l3 struct_srt))
@@ -41,6 +43,8 @@ let loc5 struct_srt = mk_var (snd (l5 struct_srt)) (fst (l5 struct_srt))
 let fld1 struct_srt = mk_var (snd (f1 struct_srt)) (fst (f1 struct_srt))
 let fld2 struct_srt = mk_var (snd (f2 struct_srt)) (fst (f2 struct_srt))
 let fld3 struct_srt = mk_var (snd (f3 struct_srt)) (fst (f3 struct_srt))
+let dfld1 struct_srt res_srt = mk_var (Map (Loc struct_srt, res_srt)) d
+let dfld2 struct_srt res_srt = mk_var (Map (Loc struct_srt, res_srt)) e 
 let set1 struct_srt = mk_var (snd (s1 struct_srt)) (fst (s1 struct_srt))
 let set2 struct_srt = mk_var (snd (s2 struct_srt)) (fst (s2 struct_srt))
 let set3 struct_srt = mk_var (snd (s3 struct_srt)) (fst (s3 struct_srt))
@@ -149,7 +153,7 @@ let g x =
   mk_read (fld2 struct_srt) x
 
 (** Axioms for reachability predicates *)
-let reach_axioms struct_srt = 
+let reach_axioms classes struct_srt = 
   let btwn = btwn struct_srt in
   let reach = reach struct_srt in
   let loc1 = loc1 struct_srt in
@@ -190,8 +194,16 @@ let reach_axioms struct_srt =
                           btwn loc3 loc1 loc2]
   in
   (**)
+  let non_updated_field sm t =
+    let fld = subst_term sm (fld1 struct_srt) in
+    List.for_all 
+      (function 
+	| (App (Write, _, _)) -> false 
+	| _ -> true)
+      (CongruenceClosure.class_of fld  classes)
+  in
   let mk_axiom ?(gen=[]) name f =
-    mk_axiom ~gen name (mk_pattern (fld1 struct_srt) [] f)
+    mk_axiom ~gen name (mk_pattern (fld1 struct_srt) [FilterGeneric non_updated_field] f)
   in
   let gen =
     let fld1 = fld1 struct_srt in
@@ -249,6 +261,71 @@ let null_axioms struct_srt1 =
   [mk_axiom "read_null" nll]
 
 
+(** Frame axioms *)
+let frame_axioms struct_srt res_srt =
+  let a = set1 struct_srt in
+  let x = set2 struct_srt in
+  (*let frame_set = mk_diff a x in*)
+  let mk_axiom fld1 fld2 ?(gen=[]) name f =
+    let frame = mk_frame_term x a fld1 fld2 in
+    mk_axiom ~gen name
+      (mk_pattern frame [] (mk_implies (mk_frame x a fld1 fld2) f))
+  in
+  let loc1 = loc1 struct_srt in
+  let read_frame fld1 fld2 =
+    let frame = mk_frame_term x a fld1 fld2 in
+    let gen = [([Match (frame, [])], [mk_known frame])] in
+    mk_axiom fld1 fld2 ~gen:gen "read_frame"
+      (mk_sequent
+         [smk_elem loc1 a]
+         [smk_elem loc1 x;
+          mk_eq (mk_read fld1 loc1) (mk_read fld2 loc1)]
+      )
+  in
+  let reach_frame () =
+    let loc2 = loc2 struct_srt in
+    let loc3 = loc3 struct_srt in
+    let fld1 = fld1 struct_srt in
+    let fld2 = fld2 struct_srt in
+    let axioms =
+      let ep v = mk_ep fld1 x v in
+      let reachwo_f1 = reachwo_Fld fld1 in
+      let reach_f1 x y z = mk_btwn fld1 x z y in
+      let reach_f2 x y z = mk_btwn fld2 x z y in
+      (*match f' with
+      | App (FreeSym (p, _), _, _) when p = "parent" ->
+              [Axioms.mk_axiom "reach_frame"
+                 (mk_sequent
+                    [smk_elem loc1 frame]
+                    [mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)])]
+          | _ ->*)
+      [read_frame fld1 fld2;
+       mk_axiom fld1 fld2 "reach_frame1"
+         (mk_pattern fld1 []
+            (mk_sequent
+               [reachwo_f1 loc1 loc2 (ep loc1)]
+               [(mk_iff 
+                   (reach_f1 loc1 loc2 loc3)
+                   (reach_f2 loc1 loc2 loc3))]));
+       mk_axiom fld1 fld2 "reach_frame2"
+         (mk_pattern fld1 []
+            (mk_implies
+               (mk_and [mk_not (smk_elem loc1 x); mk_eq loc1 (ep loc1)])
+               (mk_iff (reach_f1 loc1 loc2 loc3) (reach_f2 loc1 loc2 loc3))))
+       ]
+    in
+    axioms
+  in
+  let data_frame () =
+    let fld1 = dfld1 struct_srt res_srt in
+    let fld2 = dfld2 struct_srt res_srt in
+    [read_frame fld1 fld2]
+  in
+  if res_srt = Loc struct_srt
+  then reach_frame ()
+  else data_frame ()
+    
+  
 (** Entry point axioms *)
 let ep_axioms struct_srt =
   let reach = reach struct_srt in

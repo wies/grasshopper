@@ -25,7 +25,7 @@ let open_axioms ?(force=false) open_cond axioms =
               | _ -> generators, ann :: a1
             ) a (generators, [])
         in
-        let vs1 = List.filter (~~ (open_cond f)) vs in
+        let vs1 = List.filter (~~ (open_cond (annotate f a))) vs in
         let f1, generators2 = open_axiom generators1 f in
         if !Config.instantiate || force then
           Binder (b, vs1, f1, a1), generators2
@@ -255,6 +255,25 @@ let btwn_fields fs gts =
 let btwn_fields_in_fs fs = btwn_fields fs (generated_ground_terms fs)
 
 let add_frame_axioms fs =
+  let gs = ground_terms ~include_atoms:true (smk_and fs) in
+  let frame_sorts =
+    TermSet.fold
+      (fun t frame_sorts ->
+        match t with
+        | App (Frame, [_; _; f; _], _) ->
+            SortSet.add (sort_of f) frame_sorts
+        | _ -> frame_sorts
+      )
+      gs SortSet.empty
+  in
+  SortSet.fold
+    (fun srt fs ->
+      match srt with
+      | Map (Loc srt1, srt2) ->
+          Axioms.frame_axioms srt1 srt2 @ fs
+      | _ -> fs)
+    frame_sorts fs
+  (*
   let btwn_flds = btwn_fields_in_fs fs in
   let expand_frame x a f f' =
     let frame = mk_diff a x in
@@ -333,7 +352,7 @@ let add_frame_axioms fs =
       (fun acc f -> process f acc)
       [] fs
   in
-  Util.rev_concat [frame_axioms; fs] 
+  Util.rev_concat [frame_axioms; fs] *)
  
 
 let rec valid = function
@@ -516,26 +535,12 @@ let add_reach_axioms fs gts =
       | _ -> struct_sorts)
       gts SortSet.empty
   in
-  (*let btwn_flds = btwn_fields fs gts in
-  let reach_write_ax = 
-    TermSet.fold (fun t write_ax ->
-      match t with
-      | App (Write, [fld; loc1; loc2], _) ->
-          if TermSet.mem fld btwn_flds 
-          then Axioms.reach_write_axioms fld loc1 loc2 @ write_ax
-          else write_ax
-      | _ -> write_ax) gts []
-  in*)
-  (*let non_updated_flds = 
-    TermSet.filter 
-      (fun t -> List.for_all 
-	  (function 
-	    | (App (Write, _, _)) -> false 
-	    | _ -> true) (CongruenceClosure.class_of t classes))
-      btwn_flds
+  let classes = CongruenceClosure.congr_classes fs gts in
+  let axioms =
+    SortSet.fold
+      (fun srt axioms -> Axioms.reach_axioms classes srt @ Axioms.reach_write_axioms srt @ axioms)
+      struct_sorts []
   in
-  let structs = struct_sorts_of_fields non_updated_flds in*)
-  let axioms = SortSet.fold (fun srt axioms -> Axioms.reach_axioms srt @ Axioms.reach_write_axioms srt @ axioms) struct_sorts [] in
   rev_concat [axioms; fs], gts
 
 let add_array_axioms fs gts =

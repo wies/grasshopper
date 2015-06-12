@@ -100,7 +100,7 @@ let get_interp model sym arity =
   with Not_found -> ValueListMap.empty, Undef
 
 let add_def model sym arity args v =
-  if Debug.is_debug 1 then print_endline (
+  if Debug.is_debug 2 then print_endline (
       "add_def: " ^ (string_of_symbol sym) ^ ": " ^ (string_of_arity arity) ^
       " => " ^ (String.concat "," (List.map string_of_value args)) ^
       " => " ^ (string_of_value v));
@@ -109,7 +109,7 @@ let add_def model sym arity args v =
   { model with intp = SortedSymbolMap.add (sym, arity) (new_m, d) model.intp }
 
 let add_default_val model sym arity v =
-  if Debug.is_debug 1 then print_endline (
+  if Debug.is_debug 2 then print_endline (
       "add_default_val: " ^ (string_of_symbol sym) ^ ": " ^ (string_of_arity arity) ^
       " => " ^ (string_of_value v));
   let m, d = get_interp model sym arity in
