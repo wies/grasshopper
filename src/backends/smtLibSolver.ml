@@ -715,8 +715,8 @@ let convert_model session smtModel =
         match name, csrts with
         | "Loc", [esrt] -> Loc esrt
         | "Set", [esrt] -> Set esrt
-        | "Grass_Array", [esrt] -> Array esrt
-        | "Grass_Pat", [] -> Pat
+        | "GrassArray", [esrt] -> Array esrt
+        | "GrassPat", [] -> Pat
         | "ArrayCell", [esrt] -> ArrayCell esrt
         | "Map", [dsrt; rsrt] -> Map (dsrt, rsrt)
         | _, [] -> FreeSrt (name, num)
