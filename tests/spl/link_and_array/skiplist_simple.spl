@@ -85,7 +85,7 @@ procedure traverse1(this: SkipList)
   }
   
   while (curr != null)
-    invariant /*(slseg(this.head, curr) &*& slseg(curr, null))*/ acc(curr) -** skiplist(this)
+    invariant (acc(curr) || curr == null) -** skiplist(this)
   {
     curr := curr.next[0];
   }
