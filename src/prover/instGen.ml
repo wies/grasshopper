@@ -99,7 +99,7 @@ let ematch filters t rep_terms egraph subst_maps =
           try
             let ts2s = EGraph.find (t2, sym1) egraph in
             ematches ts1 ts2s subst_maps
-          with Not_found ->
+          with Not_found -> 
             []
         end
     | Var (x, srt1) when srt1 = sort_of t2 ->

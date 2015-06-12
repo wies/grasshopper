@@ -442,10 +442,13 @@ let array_axioms elem_srt =
     ([Match (a, [FilterSymbolNotOccurs ArrayCells])], 
      [mk_array_cells a])
   in
+  let array_length_gen =
+    ([Match (a, [])], [mk_length a])
+  in
   [mk_axiom ~gen:[index_of_cell_gen; array_of_cell_gen; array_cells_gen; array_cell_gen] "array-cells1" array_cells1;
    mk_axiom "array-cells2" array_cells2;
    mk_axiom "array-cells3" array_cells3;
-   mk_axiom "array-length" array_length]
+   mk_axiom ~gen:[array_length_gen] "array-length" array_length]
      
 (** Set axioms *)
 let set_axioms elem_srts =

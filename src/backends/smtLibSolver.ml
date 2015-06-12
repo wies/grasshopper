@@ -973,12 +973,13 @@ let convert_model session smtModel =
     List.fold_left 
       (fun model cmd ->
         match cmd with
-        | DefineFun (id, args, res_srt, def, _) -> 
+        | DefineFun (id, args, res_srt, def, _) ->
+            let sym = to_sym (normalize_ident id) in
+            if sym = Known then model else
             let cres_srt = convert_sort res_srt in
             let cargs = List.map (fun (x, srt) -> x, convert_sort srt) args in
             let carg_srts = List.map snd cargs in
-            let sym = to_sym (normalize_ident id) in
-            process_def model sym (carg_srts, cres_srt) cargs (SmtLibSyntax.unletify def) 
+            process_def model sym (carg_srts, cres_srt) cargs (SmtLibSyntax.unletify def)
         | _ -> model)
       model1 smtModel 
   in

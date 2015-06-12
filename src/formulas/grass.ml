@@ -85,7 +85,7 @@ let symbols =
    Empty; SetEnum; Union; Inter; Diff;
    Length; IndexOfCell; ArrayOfCell; ArrayCells;
    Eq; LtEq; GtEq; Lt; Gt;
-   Btwn; Frame; Elem; SubsetEq]
+   Btwn; Frame; Elem; SubsetEq; Known]
 
 module SymbolSet = Set.Make(struct
     type t = symbol

@@ -54,7 +54,7 @@ let isFunVar f =
 (** Compute the set of generated ground terms for formulas [fs] *)
 let generated_ground_terms fs =
   let _, generators = open_axioms isFunVar fs in
-  let gts = generate_terms generators (ground_terms ~include_atoms:true (smk_and fs)) in
+  let gts = generate_terms generators (ground_terms ~include_atoms:true (mk_and fs)) in
   gts
   
 (** Eliminate all implicit and explicit existential quantifiers using skolemization.
@@ -187,7 +187,7 @@ let btwn_field_generators fs =
     
 (** Add axioms for frame predicates. *)
 let add_frame_axioms fs =
-  let gs = ground_terms ~include_atoms:true (smk_and fs) in
+  let gs = ground_terms ~include_atoms:true (mk_and fs) in
   let frame_sorts =
     TermSet.fold
       (fun t frame_sorts ->
@@ -297,7 +297,7 @@ let add_ep_axioms fs =
   axioms @ fs
  
 let add_read_write_axioms fs =
-  let gts = ground_terms ~include_atoms:true (smk_and fs) in
+  let gts = ground_terms ~include_atoms:true (mk_and fs) in
   let has_loc_field_sort = function
     | App (_, _, Map(Loc id1, Loc id2)) -> (*id1 = id2*) true
     | _ -> false
@@ -311,7 +311,7 @@ let add_read_write_axioms fs =
   (* CAUTION: not forcing the instantiation here would yield an inconsistency with the read/write axioms *)
   let null_ax1 = instantiate_with_terms ~force:true false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
   let fs1 = null_ax1 @ fs in
-  let gts = TermSet.union (ground_terms ~include_atoms:true (smk_and null_ax1)) gts in
+  let gts = TermSet.union (ground_terms ~include_atoms:true (mk_and null_ax1)) gts in
   let field_sorts = TermSet.fold (fun t srts ->
     match sort_of t with
     | Map (Loc _, _) as srt -> SortSet.add srt srts
@@ -380,12 +380,12 @@ let add_read_write_axioms fs =
  ** Assumes that f is typed. *)
 let add_reach_axioms fs gts =
   let struct_sorts =
-    TermSet.fold
-      (fun t struct_sorts -> match t with
-      | App (_, _, Map(Loc srt1, Loc srt2)) 
-      | Var (_, Map(Loc srt1, srt2)) when srt1 = srt2 -> SortSet.add srt1 struct_sorts
+    SortSet.fold
+      (fun srt struct_sorts -> match srt with
+      | Map(Loc srt1, Loc srt2) when srt1 = srt2 ->
+          SortSet.add srt1 struct_sorts
       | _ -> struct_sorts)
-      gts SortSet.empty
+      (sorts (mk_and fs)) SortSet.empty
   in
   let classes = CongruenceClosure.congr_classes fs gts in
   let axioms =
