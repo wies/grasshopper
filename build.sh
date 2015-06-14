@@ -4,7 +4,7 @@ source bin/osx_gnu.sh
 
 set -e
 
-DIRS="-Is src/util,src/formulas,src/backends,src/programs,src/frontends/spl,src/prover,src/sl,src/verifier,src/main"
+DIRS="-Is src/util,src/formulas,src/backends,src/programs,src/frontends/spl,src/compiler,src/prover,src/sl,src/verifier,src/main"
 TARGET="src/main/grasshopper src/main/vizmodel "
 FLAGS="-cflag -g -lflag -g -libs unix,str $DIRS"
 OCAMLBUILD=ocamlbuild

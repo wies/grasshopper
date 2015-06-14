@@ -1,6 +1,7 @@
 (** Main module of GRASShopper *)
 
 open Util
+open SplCompiler
     
 let greeting =
   "GRASShopper version " ^ Config.version ^ "\n"
@@ -149,6 +150,13 @@ let print_stats start_time =
     Printf.printf "  measured time: %.2fs\n" !Util.measured_time;
     Printf.printf "  # measured calls: %.2d\n" !Util.measured_calls
 
+(** Print c program equivalent *)
+let print_c_program file =
+  let spl_prog = parse_spl_program file in
+  let c_prog_string = SplCompiler.to_program_string spl_prog in
+  Pervasives.print_string c_prog_string;
+  Printf.printf "\n"
+
 (** Main entry of GRASShopper *)
 let _ =
   let main_file = ref "" in
@@ -166,7 +174,8 @@ let _ =
     then cmd_line_error "input file missing"
     else begin
       check_spl_program !main_file !Config.procedure;
-      print_stats start_time 
+      print_stats start_time; 
+      print_c_program !main_file
     end
   with  
   | Sys_error s -> 
