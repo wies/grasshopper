@@ -79,12 +79,12 @@ procedure add(this: SkipList, x: Int)
   requires skiplist(this)
   ensures skiplist(this)
 {
-  pure assert Btwn(next_map(), this.head, null, null);
+  //pure assert Btwn(next_map(), this.head, null, null);
   /* Insert into the beginning: */
   var w: Node := new Node;
-  pure assert Btwn(next_map(), this.head, null, null);
+  //pure assert Btwn(next_map(), this.head, null, null);
   w.data := x;
-  pure assert Btwn(next_map(), this.head, null, null);
+  //pure assert Btwn(next_map(), this.head, null, null);
   w.next := new Array<Node>(1);  // This is messing up values of next_map for this.head
   pure assert Btwn(next_map(), this.head, null, null);
   w.next[0] := this.head;
@@ -93,7 +93,7 @@ procedure add(this: SkipList, x: Int)
 }
 
 procedure add1(this: SkipList, w: Node)
-  requires skiplist(this) &*& acc(w) &*& acc(w.next)
+  requires skiplist(this) &*& acc(w) &*& acc(w.next) &*& acc(w.next.cells[0])
   requires w.next.length == 1
   ensures skiplist(this)
 {
