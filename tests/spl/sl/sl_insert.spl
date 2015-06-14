@@ -22,19 +22,3 @@ procedure insert(lst: Node, elt: Node)
   }
 }
 
-procedure insert_head(lst: Node)
-  returns (w: Node)
-  requires lseg(lst, null)
-  ensures lseg(w, null)
-{
-  var w: Node := new Node;
-  w.next := lst;
-}
-
-// The above one doesn't work, but this does
-procedure insert_head1(lst: Node, w: Node)
-  requires lseg(lst, null) &*& acc(w)
-  ensures lseg(w, null)
-{
-  w.next := lst;
-}

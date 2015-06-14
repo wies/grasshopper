@@ -287,16 +287,17 @@ let resolve_names cu =
     in
     re locals tbl e
   in
-  let rec resolve_stmt locals tbl = function
+  let rec resolve_stmt first_block locals tbl = function
     | Skip pos -> Skip pos, locals, tbl
     | Block (stmts0, pos) ->
+        let tbl1 = if first_block then tbl else SymbolTbl.push tbl in
         let stmts, locals, _ = 
           List.fold_left
             (fun (stmts, locals, tbl) stmt0  ->
-              let stmt, locals, tbl = resolve_stmt locals tbl stmt0 in
+              let stmt, locals, tbl = resolve_stmt false locals tbl stmt0 in
               stmt :: stmts, locals, tbl
             ) 
-            ([], locals, SymbolTbl.push tbl) stmts0
+            ([], locals, tbl1) stmts0
         in Block (List.rev stmts, pos), locals, tbl
     | LocalVars (vars, es_opt, pos) ->
         let es_opt1, tys =
@@ -350,8 +351,8 @@ let resolve_names cu =
         let es1 = List.map (resolve_expr locals tbl) es in
         Havoc (es1, pos), locals, tbl
     | If (cond, t, e, pos) ->
-        let t1, locals, _ = resolve_stmt locals tbl t in
-        let e1, locals, _ = resolve_stmt locals tbl e in
+        let t1, locals, _ = resolve_stmt false locals tbl t in
+        let e1, locals, _ = resolve_stmt false locals tbl e in
         If (resolve_expr locals tbl cond, t1, e1, pos), locals, tbl
     | Loop (inv, preb, cond, postb, pos) ->
         let inv1 = 
@@ -361,9 +362,9 @@ let resolve_names cu =
             ) 
             inv []
         in
-        let preb1, locals, _ = resolve_stmt locals tbl preb in
+        let preb1, locals, _ = resolve_stmt false locals tbl preb in
         let cond1 = resolve_expr locals tbl cond in
-        let postb1, locals, _ = resolve_stmt locals tbl postb in
+        let postb1, locals, _ = resolve_stmt false locals tbl postb in
         Loop (inv1, preb1, cond1, postb1, pos), locals, tbl
     | Return (es, pos) ->
         Return (List.map (resolve_expr locals tbl) es, pos), locals, tbl
@@ -391,7 +392,7 @@ let resolve_names cu =
             )
             decl.p_contracts
         in
-        let body, locals, _ = resolve_stmt locals0 tbl0 decl.p_body in
+        let body, locals, _ = resolve_stmt true locals0 tbl0 decl.p_body in
         let decl1 = 
           { decl with 
             p_formals = formals;
