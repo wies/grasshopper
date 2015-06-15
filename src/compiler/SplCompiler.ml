@@ -813,9 +813,9 @@ let infer_types cu =
 let convert cu = 
  let include_string = 
     match cu with 
-    | {includes = is; var_decls = vs; struct_decls = ds; proc_decls = pos; pred_decls = pes; background_theory = bt}-> "success"
+    | {includes = is} -> String.concat "\n" (List.fold_right (fun (name, pos) a -> name :: a) is []) 
   in 
-  include_string
+  String.concat "\n" [include_string]
 
 (** Convert compilation unit [cu] to string containing a C program. *)
 let to_program_string cu =
