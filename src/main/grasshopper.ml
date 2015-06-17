@@ -149,6 +149,36 @@ let print_stats start_time =
     Printf.printf "  measured time: %.2fs\n" !Util.measured_time;
     Printf.printf "  # measured calls: %.2d\n" !Util.measured_calls
 
+(** Locust: work in progress *)
+let locust () =
+  print_endline "WHATTTTT";
+
+  let store, heap = Locust.read_heap_from_chan stdin in
+
+  (* Temp hack to include the linked list definitions *)
+  let spl_prog = parse_spl_program "tests/spl/include/sllist.spl" in
+
+  (* add model and TODO assertion procedure to this program *)
+  let spl_prog = Locust.add_model_to_prog (store, heap) spl_prog in
+
+
+  (* This part copied from Grasshopper.check_spl_program: *)
+  let prog = SplTranslator.to_program spl_prog in
+  (* DEBUG print and check *)
+  if (Debug.is_debug (-1)) then
+    Prog.print_prog stdout prog;
+
+  let simple_prog = Verifier.simplify prog in
+  let check simple_prog proc =
+    let errors = Verifier.check_proc simple_prog proc in
+    List.iter
+      (fun (pp, error_msg, model) ->
+	ProgError.error pp error_msg;
+      )
+      errors
+  in
+  Prog.iter_procs check simple_prog
+
 (** Main entry of GRASShopper *)
 let _ =
   let main_file = ref "" in
@@ -162,6 +192,11 @@ let _ =
     Arg.parse Config.cmd_options set_main_file usage_message;
     Debug.info (fun () -> greeting);
     SmtLibSolver.select_solver (String.uppercase !Config.smtsolver);
+    if !Config.locust then
+      begin
+	locust ();
+	exit 0
+      end;
     if !main_file = ""
     then cmd_line_error "input file missing"
     else begin

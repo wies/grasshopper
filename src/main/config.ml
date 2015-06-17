@@ -64,6 +64,7 @@ let opt_field_mod = ref true
 (* optmisation: self-framing clause for SL predicates *)
 let optSelfFrame = ref false
 
+let locust = ref false
 
 let cmd_options =
   [("-basedir", Arg.Set_string base_dir, "<string>  Base directory for resolving include directives. Default: current working directory\n\nOptions for controlling error reporting and debug output:");
@@ -96,4 +97,5 @@ let cmd_options =
    ("-smtsets", Arg.Set use_set_theory, " Use solver's set theory to encode sets (if supported)");
    ("-smtarrays", Arg.Set encode_fields_as_arrays, " Use solver's array theory to encode fields\n");
    (*("-optSelfFrame", Arg.Set optSelfFrame, " enable generation of self-framing clauses for SL predicates");*)
+   ("-locust", Arg.Set locust, " Run the locust system");
   ]
