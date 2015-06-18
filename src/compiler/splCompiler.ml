@@ -811,11 +811,17 @@ let infer_types cu =
  *  Assumes that [cu] has been type-checked and flattened.
  *)
 let convert cu = 
- let include_string = 
+  (*let include_string = 
     match cu with 
     | {includes = is} -> String.concat "\n" (List.fold_right (fun (name, pos) a -> name :: a) is []) 
   in 
   String.concat "\n" [include_string]
+  *)
+  let var_string = 
+    match cu with
+    | {var_decls = vds} -> String.concat "\n" (IdMap.fold (fun k {v_name = nIdent} a -> (fst nIdent) :: a) vds [])
+  in
+  var_string
 
 (** Convert compilation unit [cu] to string containing a C program. *)
 let to_program_string cu =
