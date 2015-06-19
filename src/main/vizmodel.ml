@@ -19,7 +19,11 @@ let parse_input file =
   ParseError.buffer := Some lexbuf;
   let input = ParseError.parse_buf_exn SmtLibParser.output SmtLibLexer.token lexbuf in
   match input with
-  | SmtLibSyntax.Model cmds -> SmtLibSolver.convert_model SmtLibSolver.dummy_session cmds
+  | SmtLibSyntax.Model cmds ->
+      let session = SmtLibSolver.start "model" "sat" in
+      let model = SmtLibSolver.convert_model session cmds in
+      SmtLibSolver.quit session;
+      model
   | _ -> failwith "Input file does not contain an SMT-LIB model"
     
 
