@@ -6,6 +6,7 @@ open Sl
 open Grass
 open SplSyntax
 open SplTypeChecker
+open Format
 
 let unknown_ident_error id pos =
   ProgError.error pos ("Unknown identifier " ^ GrassUtil.name id ^ ".")
@@ -811,31 +812,47 @@ let infer_types cu =
  *  Assumes that [cu] has been type-checked and flattened.
  *)
 let convert cu = 
-  (*let include_string = 
+  let pr_c_struct_decls ppf cu =
+   let rec pr_c_type ppf = function
+     | AnyRefType -> fprintf ppf "AnyRef" 
+     | BoolType -> fprintf ppf "%s" bool_sort_string
+     | IntType -> fprintf ppf "int"
+     | UnitType -> fprintf ppf "Unit"
+     | StructType id -> fprintf ppf "struct %s*" (string_of_ident id) 
+     | ArrayType e -> fprintf ppf "%s<@[%a@]>" array_sort_string pr_type e
+     | ArrayCellType e -> fprintf ppf "%s<@[%a@]>" array_cell_sort_string pr_type e
+     | MapType (d, r) -> fprintf ppf "%s<@[%a,@ %a@]>" map_sort_string pr_type d pr_type r
+     | SetType s -> fprintf ppf "%s<@[%a@]>" set_sort_string pr_type s
+     | PermType -> fprintf ppf "Permission"
+     | AnyType -> fprintf ppf "Any"
+    in
+    let pr_c_field ppf f = 
+      match f with 
+      | {v_name=v_name; v_type=v_type} -> fprintf ppf "@[%a %s;@]@\n" pr_c_type v_type (string_of_ident v_name)
+    in
+    let idmap_to_list fs = 
+      IdMap.fold (fun k v a -> v :: a) fs []
+    in
+    let rec pr_c_fields ppf = function
+      | [] -> ()
+      | f :: fs -> fprintf ppf "%a@\n%a" pr_c_field f pr_c_fields fs         
+    in
+    let pr_c_struct ppf s =
+      match s with 
+      | {s_name=s_name; s_fields=s_fields} -> fprintf ppf "@[typedef struct %s {@\n@[<2>  %a@]} %s;@\n@]" 
+      (string_of_ident s_name) 
+      pr_c_fields (idmap_to_list s_fields)
+      (string_of_ident s_name)  
+    in
+    let pr_c_structs ppf sds =
+      IdMap.fold (fun k v a -> pr_c_struct ppf v) sds ()
+    in
     match cu with 
-    | {includes = is} -> String.concat "\n" (List.fold_right (fun (name, pos) a -> name :: a) is []) 
-  in 
-  String.concat "\n" [include_string]
-  
-  let var_string = 
-    match cu with
-    | {var_decls = vds} -> String.concat "\n" (IdMap.fold (fun k {v_name = nIdent} a -> (fst nIdent) :: a) vds [])
-  in*)
-  let format_struct s =
-   let format_struct_sig id = 
-     String.concat " " ["struct"; (fst id); "{"]
-   in
-   let format_struct_fields fs = 
-     String.concat "\n" (IdMap.fold (fun k {v_name = nIdent} a -> (String.concat "" ["    "; (fst nIdent)])  :: a) fs [])
-   in
-   match s with
-   | {s_name=s_name; s_fields=s_fields} -> String.concat "\n" [format_struct_sig s_name; format_struct_fields s_fields; "}"]
+    | {struct_decls=sds} -> pr_c_structs ppf sds
   in
-  let struct_string = 
-    match cu with 
-    | {struct_decls=sds} -> String.concat "\n" (List.rev (IdMap.fold (fun k s  struct_string_list -> (format_struct s) :: struct_string_list) sds []))
-  in 
-  struct_string
+  flush_str_formatter ();
+  pr_c_struct_decls str_formatter cu;
+  flush_str_formatter ()  
 
 (** Convert compilation unit [cu] to string containing a C program. *)
 let to_program_string cu =
