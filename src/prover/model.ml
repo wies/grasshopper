@@ -886,6 +886,7 @@ let output_graphviz chan model terms =
       try List.assoc (fsrt, fld) fld_colors with Not_found -> "black"
     in
     let f = find_term fld fsrt in
+    Printf.printf "\n\nGetting label for fld %s and got %s\n\n" (string_of_sorted_value fsrt fld) (string_of_term f);
     Printf.sprintf "label=\"%s\", fontcolor=%s, color=%s" (string_of_term f) color color
   in
   let string_of_loc_value srt l = string_of_sorted_value srt l in
@@ -915,6 +916,7 @@ let output_graphviz chan model terms =
               let r = interp_symbol model Read read_arity [f; l] in
               if filter_null r then () else
 	      let label = get_label fld_srt f in
+	      Printf.printf "Found edge %s -> %s\n" (string_of_loc_value srt l) (string_of_loc_value srt r);
 	      Printf.fprintf chan "\"%s\" -> \"%s\" [%s]\n" 
 	        (string_of_loc_value srt l) (string_of_loc_value rsrt r) label
             with Not_found -> ())
@@ -1101,10 +1103,8 @@ let output_graphviz chan model terms =
 (** Function that outputs a counter example model in a simple text format.
    @param chan the output channel to write to
    @param model the model to output
-   @param terms ground terms to restrict the model to.
 *)
-(* TODO why do we need terms?? *)
-let output_txt chan model terms =
+let output_txt chan model =
   let loc_sorts = get_loc_sorts model in
   let fld_srts = get_loc_fld_sorts model in
 

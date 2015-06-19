@@ -81,7 +81,7 @@ let dump_more_models session model gts =
 	Printf.printf "found. Model in %s\n" file_name;
 	let model = Model.complete (Opt.get (SmtLibSolver.get_model session)) in
 	let model_chan = open_out file_name in
-	Model.output_txt model_chan model gts;
+	Model.output_txt model_chan model;
 	close_out model_chan;
 
 	(* Also output the dot file *)

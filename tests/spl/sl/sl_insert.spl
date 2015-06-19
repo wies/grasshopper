@@ -10,8 +10,7 @@ procedure insert(lst: Node, elt: Node)
   else {
     var nondet: Bool;
     var curr := lst;
-    while (nondet && curr.next != null) 
-      invariant acc(curr) -** lseg(lst, null)
+    while (nondet && curr.next != null)
     {
       havoc nondet;
       curr := curr.next;

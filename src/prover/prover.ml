@@ -19,7 +19,7 @@ let dump_model session f =
       let gts = ground_terms f in
       let model = Model.complete (Opt.get (SmtLibSolver.get_model session)) in
       let model_chan = open_out !Config.model_txt_file in
-      Model.output_txt model_chan model gts;
+      Model.output_txt model_chan model;
       close_out model_chan;
 
       InvLearner.assert_form_about_model session model gts;

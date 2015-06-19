@@ -99,13 +99,83 @@ let parse_spl_program main_file =
   in
   SplSyntax.add_alloc_decl prog
 
+(** Locust: work in progress *)
+let locust spl_prog simple_prog proc errors =
+  let process_error (error_pos, error_msg, model) =
+    let error_msg = List.hd (Str.split (Str.regexp "\n") error_msg) in
+    Locust.print_debug ("Found error on line "
+			^ (string_of_int error_pos.Grass.sp_start_line)
+			^ ": " ^ error_msg);
+    (* If error is inside loop then neg sample *)
+    if Locust.is_auto_loop_proc proc
+    then begin
+	Locust.print_debug "Geting negative model from inside loop";
+	let neg_model =
+	  Locust.get_model_at_src_pos simple_prog proc (error_pos, model) !Locust.loop_pos
+	in
+	let out_filename = Locust.get_new_model_filename false in
+	let out_chan = open_out out_filename in
+	Model.output_txt out_chan neg_model;
+	close_out out_chan;
+	Locust.print_debug ("Dumped model in file " ^ out_filename);
+      end
+    else
+      if error_pos.Grass.sp_start_line < !Locust.loop_pos.Grass.sp_start_line
+      then
+	begin
+	  (* Assuming precondition =/> invariant. get positive model *)
+	  Locust.print_debug "Geting positive model";
+	  (* TODO need session or something to get multiple models *)
+	  (* TODO what format to get the model in? TODO store models in ref *)
+	  (* For now dumping model to file and storing filename in ref *)
+	  let out_filename = Locust.get_new_model_filename true in
+	  let out_chan = open_out out_filename in
+	  Model.output_txt out_chan model;
+	  close_out out_chan;
+	  Locust.print_debug ("Dumped model in file " ^ out_filename);
+	end
+      else
+	begin
+	  (* Error occured after loop, get negative model *)
+	  Locust.print_debug "Geting negative model";
+	  let neg_model =
+	    Locust.get_model_at_src_pos
+	      simple_prog proc (error_pos, model)
+	      {!Locust.loop_pos with
+		Grass.sp_start_line = !Locust.loop_pos.Grass.sp_start_line + 1}
+	  in
+	  let out_filename = Locust.get_new_model_filename false in
+	  let out_chan = open_out out_filename in
+	  Model.output_txt out_chan neg_model;
+	  close_out out_chan;
+	  Locust.print_debug ("Dumped model in file " ^ out_filename);
+	end
+    (* TODO what to do if it's not inductive *)
+  in
+  process_error (List.hd errors)
+  (* TODO fix model bug and do this instead: List.iter process_error errors *)
+  (* Learn invariant from samples (call predictor, filter results, etc) *)
+
+  (* Instrument program and call check_prog again *)
+
 (** Check SPL program in main file [file] and procedure [proc] *)
 let check_spl_program file proc =
   let spl_prog = parse_spl_program file in
   let prog = SplTranslator.to_program spl_prog in
   let simple_prog = Verifier.simplify prog in
   let check simple_prog proc =
+    if !Config.locust then
+      if not (Locust.is_auto_loop_proc proc) then
+	begin
+	  Locust.print_debug ("starting on procedure "
+			      ^ (Grass.string_of_ident proc.Prog.proc_name));
+	  (* First find source pos of loop/loop invariant *)
+	  Locust.init_refs spl_prog proc;
+	end;
     let errors = Verifier.check_proc simple_prog proc in
+    if !Config.locust
+    then locust spl_prog simple_prog proc errors
+    else
     List.iter 
       (fun (pp, error_msg, model) ->
         output_trace simple_prog proc (pp, model);
@@ -149,10 +219,42 @@ let print_stats start_time =
     Printf.printf "  measured time: %.2fs\n" !Util.measured_time;
     Printf.printf "  # measured calls: %.2d\n" !Util.measured_calls
 
-(** Locust: work in progress *)
-let locust () =
-  print_endline "WHATTTTT";
+(** Main entry of GRASShopper *)
+let _ =
+  let main_file = ref "" in
+  let set_main_file s =
+    main_file := s;
+    if !Config.base_dir = "" 
+    then Config.base_dir := Filename.dirname s
+  in
+  let start_time = current_time () in
+  try
+    Arg.parse Config.cmd_options set_main_file usage_message;
+    Debug.info (fun () -> greeting);
+    SmtLibSolver.select_solver (String.uppercase !Config.smtsolver);
+    if !main_file = ""
+    then cmd_line_error "input file missing"
+    else begin
+      check_spl_program !main_file !Config.procedure;
+      print_stats start_time 
+    end
+  with  
+  | Sys_error s -> 
+      let bs = if Debug.is_debug 0 then Printexc.get_backtrace () else "" in
+      output_string stderr ("Error: " ^ s ^ "\n" ^ bs); exit 1
+  | Failure s ->
+      let bs = if Debug.is_debug 0 then Printexc.get_backtrace () else "" in
+      output_string stderr ("Error: " ^ s ^ "\n" ^ bs); exit 1
+  | Parsing.Parse_error -> 
+      print_endline "parse error"; 
+      exit 1
+  | ProgError.Prog_error _ as e ->
+      output_string stderr (ProgError.to_string e ^ "\n");
+      exit 1
 
+
+(** Given a model and an SL formula, constructs an spl program that checks if the assertion holds for the given model *)
+let assert_formula_about_model () =
   let store, heap = Locust.read_heap_from_chan stdin in
 
   (* Temp hack to include the linked list definitions *)
@@ -178,42 +280,3 @@ let locust () =
       errors
   in
   Prog.iter_procs check simple_prog
-
-(** Main entry of GRASShopper *)
-let _ =
-  let main_file = ref "" in
-  let set_main_file s =
-    main_file := s;
-    if !Config.base_dir = "" 
-    then Config.base_dir := Filename.dirname s
-  in
-  let start_time = current_time () in
-  try
-    Arg.parse Config.cmd_options set_main_file usage_message;
-    Debug.info (fun () -> greeting);
-    SmtLibSolver.select_solver (String.uppercase !Config.smtsolver);
-    if !Config.locust then
-      begin
-	locust ();
-	exit 0
-      end;
-    if !main_file = ""
-    then cmd_line_error "input file missing"
-    else begin
-      check_spl_program !main_file !Config.procedure;
-      print_stats start_time 
-    end
-  with  
-  | Sys_error s -> 
-      let bs = if Debug.is_debug 0 then Printexc.get_backtrace () else "" in
-      output_string stderr ("Error: " ^ s ^ "\n" ^ bs); exit 1
-  | Failure s ->
-      let bs = if Debug.is_debug 0 then Printexc.get_backtrace () else "" in
-      output_string stderr ("Error: " ^ s ^ "\n" ^ bs); exit 1
-  | Parsing.Parse_error -> 
-      print_endline "parse error"; 
-      exit 1
-  | ProgError.Prog_error _ as e ->
-      output_string stderr (ProgError.to_string e ^ "\n");
-      exit 1
-	
