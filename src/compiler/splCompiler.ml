@@ -816,12 +816,26 @@ let convert cu =
     | {includes = is} -> String.concat "\n" (List.fold_right (fun (name, pos) a -> name :: a) is []) 
   in 
   String.concat "\n" [include_string]
-  *)
+  
   let var_string = 
     match cu with
     | {var_decls = vds} -> String.concat "\n" (IdMap.fold (fun k {v_name = nIdent} a -> (fst nIdent) :: a) vds [])
+  in*)
+  let format_struct s =
+   let format_struct_sig id = 
+     String.concat " " ["struct"; (fst id); "{"]
+   in
+   let format_struct_fields fs = 
+     String.concat "\n" (IdMap.fold (fun k {v_name = nIdent} a -> (String.concat "" ["    "; (fst nIdent)])  :: a) fs [])
+   in
+   match s with
+   | {s_name=s_name; s_fields=s_fields} -> String.concat "\n" [format_struct_sig s_name; format_struct_fields s_fields; "}"]
   in
-  var_string
+  let struct_string = 
+    match cu with 
+    | {struct_decls=sds} -> String.concat "\n" (List.rev (IdMap.fold (fun k s  struct_string_list -> (format_struct s) :: struct_string_list) sds []))
+  in 
+  struct_string
 
 (** Convert compilation unit [cu] to string containing a C program. *)
 let to_program_string cu =
