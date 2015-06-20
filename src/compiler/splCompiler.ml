@@ -812,10 +812,18 @@ let infer_types cu =
  *  Assumes that [cu] has been type-checked and flattened.
  *)
 let convert cu = 
+  let import_string =
+    "#include <stdbool.h>\n"
+  in
+  let c_struct_fwd_decls cu =
+    match cu with 
+    | {struct_decls=sds} -> String.concat "" (List.rev (IdMap.fold (fun k {s_name=s_name}  a -> ("struct " ^ (string_of_ident s_name) ^ ";\n") :: a) sds []))
+
+  in
   let pr_c_struct_decls ppf cu =
-   let rec pr_c_type ppf = function
+    let rec pr_c_type ppf = function
      | AnyRefType -> fprintf ppf "AnyRef" 
-     | BoolType -> fprintf ppf "%s" bool_sort_string
+     | BoolType -> fprintf ppf "bool"
      | IntType -> fprintf ppf "int"
      | UnitType -> fprintf ppf "Unit"
      | StructType id -> fprintf ppf "struct %s*" (string_of_ident id) 
@@ -828,7 +836,7 @@ let convert cu =
     in
     let pr_c_field ppf f = 
       match f with 
-      | {v_name=v_name; v_type=v_type} -> fprintf ppf "@[%a %s;@]@\n" pr_c_type v_type (string_of_ident v_name)
+      | {v_name=v_name; v_type=v_type} -> fprintf ppf "@[%a %s;@]" pr_c_type v_type (string_of_ident v_name)
     in
     let idmap_to_list fs = 
       IdMap.fold (fun k v a -> v :: a) fs []
@@ -837,7 +845,8 @@ let convert cu =
       | [] -> ()
       | f :: fs -> fprintf ppf "%a@\n%a" pr_c_field f pr_c_fields fs         
     in
-    let pr_c_struct ppf s =
+    let pr_c_struct ppf = 
+      fun s ->
       match s with 
       | {s_name=s_name; s_fields=s_fields} -> fprintf ppf "@[typedef struct %s {@\n@[<2>  %a@]} %s;@\n@]" 
       (string_of_ident s_name) 
@@ -851,7 +860,10 @@ let convert cu =
     | {struct_decls=sds} -> pr_c_structs ppf sds
   in
   flush_str_formatter ();
-  pr_c_struct_decls str_formatter cu;
+  fprintf str_formatter "%s@\n%s@\n%a"
+    import_string
+    (c_struct_fwd_decls cu)
+    pr_c_struct_decls cu;
   flush_str_formatter ()  
 
 (** Convert compilation unit [cu] to string containing a C program. *)
