@@ -137,6 +137,7 @@ module TermMap = Map.Make(struct
 
 (** filters for term generators *)
 type filter =
+  | FilterNotNull
   | FilterSymbolNotOccurs of symbol
   | FilterReadNotOccurs of string * arity
   | FilterGeneric of (subst_map -> term -> bool)
@@ -517,9 +518,9 @@ let print_subst_map subst_map =
   Printf.printf "[";
   IdMap.iter (fun id t -> Printf.printf "  %s -> %s\n" (string_of_ident id) (string_of_term t)) subst_map;
   print_endline "]"
-
-let string_of_filter f = match f with
+    
+let string_of_filter = function
+  | FilterNotNull -> "null filter"
   | FilterSymbolNotOccurs sym -> "symbol filter: " ^ (string_of_symbol sym)
   | FilterReadNotOccurs (name, arity) -> "name filter: " ^ name ^ ": " ^ (string_of_arity arity)
   | FilterGeneric _ -> "generic filter ..."
-

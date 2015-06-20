@@ -1130,7 +1130,7 @@ let convert cu =
                   | App (Read, (App (FreeSym sym, [], srt) :: _ as ts), _) when ce_occur_below ts ->
                     (FilterReadNotOccurs (GrassUtil.name sym, ([], srt))) :: acc
                   | _ -> acc)
-                gts []
+                gts [FilterNotNull]
             in
             Match (e, flt)) es1
         in

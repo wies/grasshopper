@@ -48,31 +48,35 @@ let choose_rep_terms classes =
   in reps, egraph
 
 let filter_term filters t sm = 
-    List.for_all
-      (fun f -> match f with
-      | FilterSymbolNotOccurs sym ->
-          let rec not_occurs = function
-            | App (EntPnt, _, _) -> sym <> EntPnt
-            | App (sym1, _, _) when sym1 = sym -> false
-            | App (_, ts, _) -> List.for_all not_occurs ts
-            | _ -> true
-            in not_occurs t
-      | FilterReadNotOccurs (name, (arg_srts, res_srt)) ->
-          let rec not_occurs = function
-            | App (EntPnt, _, _) -> true
-            | App (Read, (App (FreeSym (name1, _), arg_ts, res_srt1) :: _ as ts), _) ->
-                let ok =
-                  try
-                    name1 <> name ||
-                    res_srt1 <> res_srt ||
-                    List.fold_left2 (fun acc t1 srt -> acc || sort_of t1 <> srt) false arg_ts arg_srts 
-                  with Invalid_argument _ -> true
-                in ok && List.for_all not_occurs ts
-            | App (_, ts, _) -> List.for_all not_occurs ts
-            | _ -> true
-          in not_occurs t
-      | FilterGeneric fn -> fn sm t
-      )
+  List.for_all
+    (fun f -> match f with
+    | FilterNotNull ->
+        (match t with
+        | App (Null, [], _) -> false
+        | _ -> true)
+    | FilterSymbolNotOccurs sym ->
+        let rec not_occurs = function
+          | App (EntPnt, _, _) -> sym <> EntPnt
+          | App (sym1, _, _) when sym1 = sym -> false
+          | App (_, ts, _) -> List.for_all not_occurs ts
+          | _ -> true
+        in not_occurs t
+    | FilterReadNotOccurs (name, (arg_srts, res_srt)) ->
+        let rec not_occurs = function
+          | App (EntPnt, _, _) -> true
+          | App (Read, (App (FreeSym (name1, _), arg_ts, res_srt1) :: _ as ts), _) ->
+              let ok =
+                try
+                  name1 <> name ||
+                  res_srt1 <> res_srt ||
+                  List.fold_left2 (fun acc t1 srt -> acc || sort_of t1 <> srt) false arg_ts arg_srts 
+                with Invalid_argument _ -> true
+              in ok && List.for_all not_occurs ts
+          | App (_, ts, _) -> List.for_all not_occurs ts
+          | _ -> true
+        in not_occurs t
+    | FilterGeneric fn -> fn sm t
+    )
     filters
 
     
@@ -340,6 +344,7 @@ let generate_instances useLocalInst axioms rep_terms egraph =
         print_endline (String.concat ", " (List.map string_of_ident (IdSet.elements fun_vars)));
         print_string "fun terms: ";
         print_endline (String.concat ", " (List.map string_of_term (List.map fst fun_terms_with_filters)));
+        Printf.printf "# of insts: %d\n" (List.length subst_maps);
         print_endline "subst_maps:";
         List.iter print_subst_map subst_maps;
         print_endline "--------------------"
