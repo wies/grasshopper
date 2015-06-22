@@ -812,29 +812,41 @@ let infer_types cu =
  *  Assumes that [cu] has been type-checked and flattened.
  *)
 let convert cu = 
+  let rec pr_c_type ppf = function
+     | AnyRefType -> fprintf ppf "void*" 
+     | BoolType -> fprintf ppf "bool"
+     | IntType -> fprintf ppf "int"
+     | UnitType -> fprintf ppf "Error: Unit Type is Not Possible For a Field"
+     | StructType id -> fprintf ppf "struct %s*" (string_of_ident id) 
+     | ArrayType e -> fprintf ppf "Array<@[%a@]>" pr_c_type e
+     | ArrayCellType e -> fprintf ppf "Error: ArrayCell type is not yet supported in structs"
+     | MapType (d, r) -> fprintf ppf "Map<@[%a,@ %a@]>" pr_c_type d pr_c_type r (* FIX-ARI *)
+     | SetType s -> fprintf ppf "Set<@[%a@]>" pr_c_type s (* FIX-ARI *)
+     | PermType -> fprintf ppf "Error: Permission Type is Not Possible for a Field"
+     | AnyType -> fprintf ppf "Error: Any Type is Not Possible for a Field"
+  in
+  let rec string_of_c_type  = function
+     | AnyRefType -> "void*" 
+     | BoolType -> "bool"
+     | IntType -> "int"
+     | UnitType -> "Error: Unit Type is Not Possible For a Field"
+     | StructType id -> "struct " ^ (string_of_ident id) ^ "*"
+     | ArrayType e -> "Array<" ^ (string_of_c_type e) ^ ">"
+     | ArrayCellType e -> "Error: ArrayCell type is not yet supported in structs"
+     | MapType (d, r) -> "Map<" ^ (string_of_c_type d) ^ ", " ^ (string_of_c_type r) ^ ">"
+     | SetType s -> "Set<" ^ (string_of_c_type s) ^ ">"
+     | PermType -> "Error: Permission Type is Not Possible for a Field"
+     | AnyType -> "Error: Any Type is Not Possible for a Field"
+  in
   let import_string =
     "#include <stdbool.h>\n"
   in
   let c_struct_fwd_decls cu =
     match cu with 
     | {struct_decls=sds} -> String.concat "" (List.rev (IdMap.fold (fun k {s_name=s_name}  a -> ("struct " ^ (string_of_ident s_name) ^ ";\n") :: a) sds []))
-
   in
   let pr_c_struct_decls ppf cu =
-    let rec pr_c_type ppf = function
-     | AnyRefType -> fprintf ppf "AnyRef" 
-     | BoolType -> fprintf ppf "bool"
-     | IntType -> fprintf ppf "int"
-     | UnitType -> fprintf ppf "Unit"
-     | StructType id -> fprintf ppf "struct %s*" (string_of_ident id) 
-     | ArrayType e -> fprintf ppf "%s<@[%a@]>" array_sort_string pr_type e
-     | ArrayCellType e -> fprintf ppf "%s<@[%a@]>" array_cell_sort_string pr_type e
-     | MapType (d, r) -> fprintf ppf "%s<@[%a,@ %a@]>" map_sort_string pr_type d pr_type r
-     | SetType s -> fprintf ppf "%s<@[%a@]>" set_sort_string pr_type s
-     | PermType -> fprintf ppf "Permission"
-     | AnyType -> fprintf ppf "Any"
-    in
-    let pr_c_field ppf f = 
+        let pr_c_field ppf f = 
       match f with 
       | {v_name=v_name; v_type=v_type} -> fprintf ppf "@[%a %s;@]" pr_c_type v_type (string_of_ident v_name)
     in
@@ -859,11 +871,37 @@ let convert cu =
     match cu with 
     | {struct_decls=sds} -> pr_c_structs ppf sds
   in
+  let pr_c_proc_fwd_decls ppf cu =
+    let pr_c_fwd_proc ppf =
+      fun p ->
+      match p with
+      | {p_name=p_name; p_formals=p_formals; p_locals=p_locals; p_returns=p_returns} -> fprintf ppf "%s %s (%s);" "dogType" (string_of_ident p_name) (String.concat ", " (List.fold_right (fun v a -> ((string_of_c_type (IdMap.find v p_locals).v_type) ^ " " ^ (string_of_ident v)) :: a ) p_formals []))
+    in
+    let pr_c_fwd_procs ppf pds =
+      IdMap.fold (fun k v a -> pr_c_fwd_proc ppf v) pds ()
+    in
+    match cu with 
+    | {proc_decls=pds} -> pr_c_fwd_procs ppf pds
+  in
+  let pr_c_proc_decls ppf cu =
+    let pr_c_proc ppf = 
+      fun p -> 
+      match p with
+      | {p_name=p_name} -> fprintf ppf "%s" (string_of_ident p_name)
+    in
+    let pr_c_procs ppf pds =
+      IdMap.fold (fun k v a -> pr_c_proc ppf v) pds ()
+    in
+    match cu with 
+    | {proc_decls=pds} -> pr_c_procs ppf pds 
+  in
   flush_str_formatter ();
-  fprintf str_formatter "%s@\n%s@\n%a"
+  fprintf str_formatter "%s@\n%s@\n%a@\n%a@\n%a"
     import_string
     (c_struct_fwd_decls cu)
-    pr_c_struct_decls cu;
+    pr_c_struct_decls cu
+    pr_c_proc_fwd_decls cu
+    pr_c_proc_decls cu;
   flush_str_formatter ()  
 
 (** Convert compilation unit [cu] to string containing a C program. *)
