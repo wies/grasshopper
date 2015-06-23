@@ -838,6 +838,19 @@ let convert cu =
      | PermType -> "Error: Permission Type is Not Possible for a Field"
      | AnyType -> "Error: Any Type is Not Possible for a Field"
   in
+  let rec string_of_c_ref_type  = function
+     | AnyRefType -> "void*" 
+     | BoolType -> "bool*"
+     | IntType -> "int*"
+     | UnitType -> "Error: Unit Type is Not Possible For a Field"
+     | StructType id -> "struct " ^ (string_of_ident id) ^ "*"
+     | ArrayType e -> "Array<" ^ (string_of_c_type e) ^ ">"
+     | ArrayCellType e -> "Error: ArrayCell type is not yet supported in structs"
+     | MapType (d, r) -> "Map<" ^ (string_of_c_type d) ^ ", " ^ (string_of_c_type r) ^ ">"
+     | SetType s -> "Set<" ^ (string_of_c_type s) ^ ">"
+     | PermType -> "Error: Permission Type is Not Possible for a Field"
+     | AnyType -> "Error: Any Type is Not Possible for a Field"
+  in
   let import_string =
     "#include <stdbool.h>\n"
   in
@@ -875,7 +888,7 @@ let convert cu =
     let pr_c_fwd_proc ppf =
       fun p ->
       match p with
-      | {p_name=p_name; p_formals=p_formals; p_locals=p_locals; p_returns=p_returns} -> fprintf ppf "%s %s (%s);" "dogType" (string_of_ident p_name) (String.concat ", " (List.fold_right (fun v a -> ((string_of_c_type (IdMap.find v p_locals).v_type) ^ " " ^ (string_of_ident v)) :: a ) p_formals []))
+      | {p_name=p_name; p_formals=p_formals; p_locals=p_locals; p_returns=p_returns} -> fprintf ppf "void %s (%s);" (string_of_ident p_name) (String.concat ", " (List.fold_right (fun v a -> ((string_of_c_type (IdMap.find v p_locals).v_type) ^ " " ^ (string_of_ident v)) :: a ) p_formals (List.fold_right (fun v a -> ((string_of_c_ref_type (IdMap.find v p_locals).v_type) ^ " " ^ (string_of_ident v)) :: a) p_formals [])))
     in
     let pr_c_fwd_procs ppf pds =
       IdMap.fold (fun k v a -> pr_c_fwd_proc ppf v) pds ()
