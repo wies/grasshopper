@@ -1,4 +1,4 @@
-// structure and predicate declarations for set implementation 
+// function and predicate declarations for a set implementation 
 // based on sorted singly-linked lists
 
 include "slslist.spl";
@@ -6,8 +6,8 @@ include "slslist.spl";
 function data_witness(v: Int, d: Map<Node, Int>, FP: Set<Node>) returns (res: Node) 
 
 function content(FP: Set<Node>) returns (C: Set<Int>) {
-  (forall x: Node :: x in FP ==> x == data_witness(x.data, data, FP)) &&
-  (forall x: Node :: x in FP ==> x.data in C) &&
+  (forall x in FP :: x == data_witness(x.data, data, FP)) &&
+  (forall x in FP :: x.data in C) &&
   (forall v in C :: data_witness(v, data, FP) in FP) &&
   (forall v: Int :: v !in C ==> data_witness(v, data, FP) == null) &&
   (forall v in C :: v == data_witness(v, data, FP).data @(matching v yields data_witness(v, data, FP).data))
