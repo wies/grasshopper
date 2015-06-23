@@ -500,10 +500,12 @@ let succ model sid fld x =
   let btwn_arity = [loc_field_sort sid; loc_srt; loc_srt; loc_srt], Bool in
   let locs = get_values_of_sort model loc_srt in
   List.fold_left (fun s y ->
-    if y <> x && 
+    try
+      if y <> x && 
       bool_of_value (interp_symbol model Btwn btwn_arity [fld; x; y; y]) &&
       (s == x || bool_of_value (interp_symbol model Btwn btwn_arity [fld; x; y; s]))
-    then y else s)
+      then y else s
+    with Undefined -> s)
     x locs
       
 let complete model =
