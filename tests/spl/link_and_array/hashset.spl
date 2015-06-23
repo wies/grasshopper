@@ -109,10 +109,8 @@ procedure member(hashset: HashSet, value: Int, implicit ghost content: Set<Int>)
 
 
 procedure add(hashset: HashSet, value: Int, implicit ghost content: Set<Int>)
-  returns (res: Bool)
   requires hset(hashset, content)
   ensures  hset(hashset, content ++ Set<Int>(value))
-  ensures  res != (value in content)
 {
   var hashval := hash(hashset, value);
   var list := hashset.buckets[hashval];

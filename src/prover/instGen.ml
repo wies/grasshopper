@@ -373,8 +373,8 @@ let instantiate_with_terms ?(force=false) local axioms classes =
         if Debug.is_debug 1 then
           ignore
             (List.fold_left (fun num cl ->
-              print_string ("Class " ^ string_of_int num ^ ": ");
-              List.iter (fun t -> print_string (string_of_term t ^ ", ")) cl; 
+              print_endline ("Class " ^ string_of_int num ^ ": " ^ (string_of_sort (sort_of (List.hd cl))));
+              List.iter (fun t -> print_endline ("    " ^ (string_of_term t))) cl; 
               print_newline ();
               num + 1) 1 classes)
       in

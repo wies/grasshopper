@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source osx_gnu.sh
+source bin/osx_gnu.sh
 
 TESTS1="
 sl_traverse tests/spl/sl/sl_traverse.spl pass
@@ -54,24 +54,27 @@ sls_strand_sort     tests/spl/sls/sls_strand_sort.spl pass
 "
 
 TESTS6="
-union_find tests/spl/union_find.spl pass
+union_find tests/spl/sl/union_find.spl pass
 "
 
+echo "building Grasshopper"
+./build.sh
+
 echo "SLL loop"
-OPTIONS=$@ time -f "Accumulated time: %Us." ./run-tests $TESTS1
+OPTIONS=$@ time -f "Accumulated time: %Us." ./bin/run-tests $TESTS1
 
 echo "SLL rec"
-OPTIONS=$@ time -f "Accumulated time: %Us." ./run-tests $TESTS2
+OPTIONS=$@ time -f "Accumulated time: %Us." ./bin/run-tests $TESTS2
 
 echo "DLL"
-OPTIONS=$@ time -f "Accumulated time: %Us." ./run-tests $TESTS3
+OPTIONS=$@ time -f "Accumulated time: %Us." ./bin/run-tests $TESTS3
 
 echo "sorted SLL"
-OPTIONS=$@ time -f "Accumulated time: %Us." ./run-tests $TESTS4
+OPTIONS=$@ time -f "Accumulated time: %Us." ./bin/run-tests $TESTS4
 
 echo "sorting algo"
-OPTIONS=$@ time -f "Accumulated time: %Us." ./run-tests $TESTS5
+OPTIONS=$@ time -f "Accumulated time: %Us." ./bin/run-tests $TESTS5
 
 echo "union-find"
-OPTIONS=$@ time -f "Accumulated time: %Us." ./run-tests $TESTS6
+OPTIONS=$@ time -f "Accumulated time: %Us." ./bin/run-tests $TESTS6
 
