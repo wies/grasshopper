@@ -424,9 +424,16 @@ let infer_types cu locals ty e =
         in
         e, match_types pos ty decl.v_type
     | Annot (e, a, pos) ->
-        (* TODO: check annotation *)
         let e1, ty = it locals ty e in
-        Annot (e1, a, pos), ty
+        let a1 =
+          match a with
+          | GeneratorAnnot (es, ge) ->
+              let es1 = List.map (fun e -> fst (it locals AnyType e)) es in
+              let ge1, _ = it locals AnyType ge in
+              GeneratorAnnot (es1, ge1)
+          | _ -> a
+        in
+        Annot (e1, a1, pos), ty
     | UnaryOp _
     | BinaryOp _ -> failwith "impossible"
   and itp locals ty e1 e2 =
