@@ -37,6 +37,8 @@ let dump_smt_queries = ref false
 let named_assertions = ref false
 (* Flag that controls whether the generated VCs are checked. *)
 let verify = ref true
+(* Flat that controls whether the program is only type-checked. *)
+let typeonly = ref false
 (* Flag that controls whether to stop after the first VC that cannot be proved. *)
 let robust = ref false
 (* Flag that enables error messages for on-the-fly checking *)
@@ -75,6 +77,7 @@ let cmd_options =
    ("-dumpvcs", Arg.Set dump_smt_queries, " Generate SMT-LIB 2 files for all verification conditions");
    ("-dumpcores", Arg.Set unsat_cores, " Produce unsat cores with every unsat SMT query\n\nOptions for controlling what is checked:");
    ("-procedure", Arg.String (fun p -> procedure := Some p), "<string>  Only check the specified procedure");
+   ("-typeonly", Arg.Set typeonly, " Only type-check the program");
    ("-noverify", Arg.Clear verify, " Only type-check the program and generate verification conditions without checking");
    ("-robust", Arg.Set robust, " Continue even if some verification condition cannot be checked\n\nOptions for controlling verification condition generation:");
    ("-types", Arg.Set keep_types, " Keep type information when translating to intermediate representation");

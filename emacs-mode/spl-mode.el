@@ -215,7 +215,7 @@
   ;; Define syntax and type checker
   (flycheck-define-checker spl-reporter
     "Syntax and type checker for GRASShopper programs."
-    :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) "-lint" "-noverify" source)
+    :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) "-lint" "-typeonly" source)
     :error-patterns
     ((warning line-start (file-name) ":" line ":" column (optional "-" end-column) ":Related Location:" (message) line-end)
      (error line-start (file-name) ":" line ":" column (optional "-" end-column) ":" (message) line-end))

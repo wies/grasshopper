@@ -105,6 +105,7 @@ let check_spl_program file proc =
   let prog = SplTranslator.to_program spl_prog in
   let simple_prog = Verifier.simplify prog in
   let check simple_prog proc =
+    if !Config.typeonly then () else
     let errors = Verifier.check_proc simple_prog proc in
     List.iter 
       (fun (pp, error_msg, model) ->
