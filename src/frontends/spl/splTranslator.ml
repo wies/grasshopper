@@ -192,22 +192,22 @@ let resolve_names cu =
       | Read ((Ident (("length", _), _) as map), idx, pos) ->
           let idx1 = re locals tbl idx in
           (match type_of_expr cu locals idx1 with
-          | ArrayType _ -> Length (idx1, pos)
+          | ArrayType _ | AnyType -> Length (idx1, pos)
           | ty -> Read (re locals tbl map, idx1, pos))
       | Read ((Ident (("cells", _), _) as map), idx, pos) ->
           let idx1 = re locals tbl idx in
           (match type_of_expr cu locals idx1 with
-          | ArrayType _ -> ArrayCells (idx1, pos)
+          | ArrayType _ | AnyType -> ArrayCells (idx1, pos)
           | _ -> Read (re locals tbl map, idx1, pos))
       | Read ((Ident (("array", _), _) as map), idx, pos) ->
           let idx1 = re locals tbl idx in
           (match type_of_expr cu locals idx1 with
-          | ArrayCellType _ -> ArrayOfCell (idx1, pos)
+          | ArrayCellType _ | AnyType -> ArrayOfCell (idx1, pos)
           | _ -> Read (re locals tbl map, idx1, pos))
       | Read ((Ident (("index", _), _) as map), idx, pos) ->
           let idx1 = re locals tbl idx in
           (match type_of_expr cu locals idx1 with
-          | ArrayCellType _ -> IndexOfCell (idx1, pos)
+          | ArrayCellType _ | AnyType -> IndexOfCell (idx1, pos)
           | _ -> Read (re locals tbl map, idx1, pos))
       | Read (map, idx, pos) ->
           Read (re locals tbl map, re locals tbl idx, pos)
@@ -246,18 +246,18 @@ let resolve_names cu =
                   Access (Setenum (ArrayCellType typ, [cell], pos), pos)
               | _ -> pred_arg_mismatch_error pos id 1)
           | _ -> pred_arg_mismatch_error pos id 1)
-      | ProcCall (("Btwn", _ as id), args, pos) ->
+      | ProcCall (("Btwn" as name, _ as id), args, pos)
+      | ProcCall (("Reach" as name, _ as id), args, pos)
+      | ProcCall (("Frame" as name, _ as id), args, pos) ->
           let args1 = List.map (re locals tbl) args in
-          (match args1 with
-          | [fld; x; y; z] ->
+          (match name, args1 with
+          | "Btwn", [fld; x; y; z] ->
               BtwnPred (fld, x, y, z, pos)
-          | _ -> pred_arg_mismatch_error pos id 4)
-      | ProcCall (("Reach", _ as id), args, pos) ->
-          let args1 = List.map (re locals tbl) args in
-          (match args1 with
-          | [fld; x; y] ->
+          | "Reach", [fld; x; y] ->
               BtwnPred (fld, x, y, y, pos)
-          | _ -> pred_arg_mismatch_error pos id 3)
+          | "Frame", [set1; set2; fld1; fld2] ->
+              FramePred (set1, set2, fld1, fld2, pos)
+          | _ -> pred_arg_mismatch_error pos id 4)
       | ProcCall (init_id, args, pos) ->
           let id = lookup_id init_id tbl pos in
           let args1 = List.map (re locals tbl) args in
@@ -512,8 +512,9 @@ let flatten_exprs cu =
     | Access (arg, pos) as e ->
         check_side_effects [arg];
         e, aux, locals
-    | BtwnPred (fld, x, y, z, pos) as e ->
-        check_side_effects [fld; x; y; z];
+    | (BtwnPred (e1, e2, e3, e4, pos) as e)
+    | (FramePred (e1, e2, e3, e4, pos) as e) ->
+        check_side_effects [e1; e2; e3; e4];
         e, aux, locals
     | PredApp (init_id, args, pos) as e->
         List.iter check_side_effects args;
@@ -1006,6 +1007,12 @@ let convert cu =
         let ty = convert_term locals y in
         let tz = convert_term locals z in
         GrassUtil.mk_srcpos pos (GrassUtil.mk_btwn tfld tx ty tz)
+    | FramePred (set1, set2, fld1, fld2, pos) ->
+        let tset1 = convert_term locals set1 in
+        let tset2 = convert_term locals set2 in
+        let tfld1 = convert_term locals fld1 in
+        let tfld2 = convert_term locals fld2 in
+        GrassUtil.mk_srcpos pos (GrassUtil.mk_btwn tset1 tset2 tfld1 tfld2)
     | Quant (q, decls, f, pos) ->
         let mk_guard = match q with
           | Forall -> GrassUtil.mk_implies
@@ -1121,11 +1128,17 @@ let convert cu =
               List.exists 
                 (function App (FreeSym id, [], _) -> IdSet.mem id ce | _ -> false)
                 ts
-            in
+               in
+            (*let rec ce_occur_below = function
+              | App (FreeSym id, [], _) -> IdSet.mem id ce
+              | App (_, ts, _) as t ->
+                  t <> e && List.exists ce_occur_below ts
+              | _ -> false
+            in*)
             let flt = 
               TermSet.fold 
                 (fun t acc -> match t with
-                  | App (FreeSym sym, ts, _) when ce_occur_below ts ->
+                  | App (FreeSym sym, (_ :: _ as ts), _) when ce_occur_below ts ->
                     (FilterSymbolNotOccurs (FreeSym sym)) :: acc
                   | App (Read, (App (FreeSym sym, [], srt) :: _ as ts), _) when ce_occur_below ts ->
                     (FilterReadNotOccurs (GrassUtil.name sym, ([], srt))) :: acc

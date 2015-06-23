@@ -97,6 +97,7 @@ let type_of_expr cu locals e =
     | BinaryOp (_, OpIn, _, _, _)
     | Quant _
     | BtwnPred _
+    | FramePred _
     | BoolVal _ -> BoolType
     (* Int return values *)
     | UnaryOp (OpMinus, _, _) 
@@ -360,6 +361,16 @@ let infer_types cu locals ty e =
         let e3, _ = it locals (StructType id) e3 in
         let e4, _ = it locals (StructType id) e4 in
         BtwnPred (e1, e2, e3, e4, pos), match_types pos ty BoolType
+    | FramePred (e1, e2, e3, e4, pos) ->
+        let e1, set_ty = it locals (SetType AnyRefType) e1 in
+        let e2, _ = it locals set_ty e2 in
+        let elem_ty = match set_ty with
+        | SetType ty -> ty
+        | _ -> failwith "impossible"
+        in
+        let e3, fld_ty = it locals (MapType (elem_ty, AnyType)) e3 in
+        let e4, fld_ty = it locals fld_ty e4 in
+        FramePred (e1, e2, e3, e4, pos), match_types pos ty BoolType
     | ProcCall (id, es, pos) ->
         let decl = IdMap.find id cu.proc_decls in
         let formals = List.filter (fun p -> not (IdMap.find p decl.p_locals).v_implicit) decl.p_formals in

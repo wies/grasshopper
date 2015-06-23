@@ -140,6 +140,7 @@ and expr =
   | ArrayOfCell of expr * pos
   | IndexOfCell of expr * pos
   | ArrayCells of expr * pos
+  | FramePred of expr * expr * expr * expr * pos
   | ProcCall of ident * exprs * pos
   | PredApp of ident * exprs * pos
   | Quant of quantifier_kind * quant_var list * expr * pos
@@ -170,6 +171,7 @@ let pos_of_expr = function
   | ArrayCells (_, p)
   | Access (_, p)
   | BtwnPred (_, _, _, _, p)
+  | FramePred (_, _, _, _, p)
   | Quant (_, _, _, p)
   | ProcCall (_, _, p)
   | PredApp (_, _, p)
