@@ -1012,7 +1012,7 @@ let convert cu =
         let tset2 = convert_term locals set2 in
         let tfld1 = convert_term locals fld1 in
         let tfld2 = convert_term locals fld2 in
-        GrassUtil.mk_srcpos pos (GrassUtil.mk_btwn tset1 tset2 tfld1 tfld2)
+        GrassUtil.mk_srcpos pos (GrassUtil.mk_frame tset1 tset2 tfld1 tfld2)
     | Quant (q, decls, f, pos) ->
         let mk_guard = match q with
           | Forall -> GrassUtil.mk_implies
