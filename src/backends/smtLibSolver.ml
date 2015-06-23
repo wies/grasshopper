@@ -149,12 +149,21 @@ let available_solvers =
 
 let selected_solvers = ref []
 
-let select_solver name = 
+let select_solver name =
+  let available_solvers =
+    List.map (fun s -> s ()) available_solvers
+  in
   let selected = Str.split (Str.regexp "+") name in
+  let _ =
+    List.iter (fun name ->
+      if List.for_all (fun s -> s.name <> name) available_solvers then
+        failwith ("SMT solver '" ^ name ^ "' is not supported."))
+      selected
+  in
   selected_solvers := 
     List.filter 
       (fun s -> List.mem s.name selected && (!Config.verify || s.info.kind = Logger))
-      (List.map (fun s -> s ()) available_solvers);
+      available_solvers;
   if List.for_all (fun s -> s.info.kind <> Logger) !selected_solvers && !Config.dump_smt_queries then
     selected_solvers := z3logger () :: !selected_solvers;
   Debug.info (fun () ->
