@@ -69,7 +69,7 @@ let filter_term filters t sm =
                 try
                   name1 <> name ||
                   res_srt1 <> res_srt ||
-                  List.fold_left2 (fun acc t1 srt -> acc || sort_of t1 <> srt) false arg_ts arg_srts 
+                  List.fold_left2 (fun acc t1 srt -> acc || sort_of t1 <> srt) false arg_ts arg_srts
                 with Invalid_argument _ -> true
               in ok && List.for_all not_occurs ts
           | App (_, ts, _) -> List.for_all not_occurs ts
@@ -97,6 +97,7 @@ let ematch filters t rep_terms egraph subst_maps =
         with Invalid_argument _ -> out_subst_maps)
       ts2s []
   and ematch t1 t2 subst_maps =
+    (*print_endline ("matching " ^ string_of_term t1 ^ " with " ^ string_of_term t2);*)
     match t1 with 
     | App (sym1, ts1, srt1) when srt1 = sort_of t2 ->
         begin
@@ -104,6 +105,7 @@ let ematch filters t rep_terms egraph subst_maps =
             let ts2s = EGraph.find (t2, sym1) egraph in
             ematches ts1 ts2s subst_maps
           with Not_found -> 
+            (*print_endline "fail 1";*)
             []
         end
     | Var (x, srt1) when srt1 = sort_of t2 ->
@@ -116,6 +118,7 @@ let ematch filters t rep_terms egraph subst_maps =
             else IdMap.add x t2 sm :: out_subst_maps)
           [] subst_maps
     | _ ->
+        (*print_string (string_of_sort (sort_of t1) ^ " " ^ string_of_sort (sort_of t2) ^ " fail 2");*)
         []
   in
   let terms = 
