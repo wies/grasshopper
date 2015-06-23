@@ -1,38 +1,31 @@
 include "insert.spl";  // Has definitions of list set with uninterpreted Data
-
+include "../array/node_array.spl";
 
 struct HashSet {
   var size: Int; /* the size of the set */
   var buckets: Array<Node>; /* the set elements */
 }
 
-function arrayseg_footprint(a: Array<Node>, i: Int, j: Int)
-  returns (FP: Set<ArrayCell<Node>>)
-{
-  (forall c: ArrayCell<Node> ::
-     c in FP == (i <= c.index && c.index < j && c.array == a))
-}
-
 function arrayseg_buckets_footprint(a: Array<Node>, FP0: Set<ArrayCell<Node>>) returns (FP1: Set<Node>) {
   // all nodes reachable from the head of the bucket are in the footprint
   (forall c: ArrayCell<Node>, x: Node :: c in FP0 && Btwn(next, c.array[c.index], x, null) ==> x in FP1 || x == null) &&
   // all nodes in the footprint are reachable from the bucket head
-  (forall x in FP1 :: Btwn(next, a[ghostHash(a.length, x.data)], x, null) && x != null
-   @(matching x yields a[ghostHash(a.length, x.data)])) &&
+  (forall x in FP1 :: Btwn(next, a[hash(a.length, x.data)], x, null) && x != null
+   @(matching x yields a[hash(a.length, x.data)])) &&
   // the bucket heads are in the array's footprint
-  (forall x in FP1 :: a.cells[ghostHash(a.length, x.data)] in FP0
-   @(matching x yields a.cells[ghostHash(a.length, x.data)] ))
+  (forall x in FP1 :: a.cells[hash(a.length, x.data)] in FP0
+   @(matching x yields a.cells[hash(a.length, x.data)] ))
 }
 
 predicate arrayseg_with_buckets(a: Array<Node>, lo: Int, hi: Int, cnt: Set<Data>)(FP0: Set<ArrayCell<Node>>, FP1: Set<Node>) {
   0 <= lo && lo <= hi && hi <= a.length &&
   FP0 == arrayseg_footprint(a, lo, hi) &&
   FP1 == arrayseg_buckets_footprint(a, FP0) &&
-  (forall c: ArrayCell<Node>, x in FP1 :: c in FP0 && Reach(next, c.array[c.index], x) ==> ghostHash(a.length, x.data) == c.index) &&
-  //(forall c: ArrayCell<Node>, x in FP1 :: c in FP0 && Reach(next, c.array[c.index], x) ==> a.cells[ghostHash(a.length, x.data)] == c) &&
+  (forall c: ArrayCell<Node>, x in FP1 :: c in FP0 && Reach(next, c.array[c.index], x) ==> hash(a.length, x.data) == c.index) &&
+  //(forall c: ArrayCell<Node>, x in FP1 :: c in FP0 && Reach(next, c.array[c.index], x) ==> a.cells[hash(a.length, x.data)] == c) &&
   (forall c: ArrayCell<Node> :: c in FP0 ==> Reach(next, c.array[c.index], null)) &&
   //all the elts from a list have the same hash, and this is the index in the array
-  (forall v in FP1 :: Btwn(next, a[ghostHash(a.length, v.data)], v, null) @(matching v yields a[ghostHash(a.length, v.data)])) &&
+  (forall v in FP1 :: Btwn(next, a[hash(a.length, v.data)], v, null) @(matching v yields a[hash(a.length, v.data)])) &&
   //the buckets are strictly sorted
   (forall y in FP1, z in FP1 :: Btwn(next,y,z,z) ==> lt(y.data, z.data) || y == z) &&
   cnt == content(FP1)
@@ -45,7 +38,7 @@ predicate array_with_buckets(a: Array<Node>, cnt: Set<Data>)(FP0: Set<Array<Node
 
 
 //some ghost function that we can use for the spec of hash
-function ghostHash(max: Int, value: Data) returns (res: Int) {
+function hash(max: Int, value: Data) returns (res: Int) {
   res >= 0 && res < max
 }
 
@@ -56,17 +49,26 @@ predicate hset(h: HashSet, cnt: Set<Data>)(FP0: Set<HashSet>, FP1: Set<Array<Nod
   true
 }
 
-
-procedure hash(size: Int, value: Data)
-  returns (res: Int)
-  ensures res >= 0 && res < size && res == ghostHash(size, value)
+procedure create(_size: Int)
+  returns (res: HashSet)
+  requires 0 < _size
+  ensures hset(res, Set<Data>())
 {
-  // /\/one of the worst hash functions in the world */
-  // var v := 31 * value; */
-  // if (v < 0) v := -v; */
-  // /\/v := v mod hashset.size; /\/TODO this does not parse yet */
-  pure assume(res == ghostHash(size, value));
-  return res;
+  var new_set := new HashSet;
+  new_set.buckets := new Array<Node>(_size);    
+  var i := 0;
+  while (i < _size)
+    invariant 0 <= i && i <= _size && new_set.buckets.length == _size
+    invariant acc(new_set) &*& acc(new_set.buckets)
+    invariant arrayseg_with_buckets(new_set.buckets, 0, i, Set<Data>())
+    invariant arrayseg(new_set.buckets, i, _size)
+  {
+    new_set.buckets[i] := null;
+    i := i + 1;
+  }
+  new_set.size := _size;
+
+  return new_set;
 }
 
 
@@ -78,3 +80,4 @@ procedure add(hashset: HashSet, value: Data, implicit ghost content: Set<Data>)
   var list := hashset.buckets[hashval];
   hashset.buckets[hashval] := insert(list, value);
 }
+
