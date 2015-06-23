@@ -11,6 +11,9 @@ let alloc_type_error pos ty =
 let pred_arg_mismatch_error pos id expected =
   ProgError.error pos (Printf.sprintf "Predicate %s expects %d argument(s)" (GrassUtil.name id) expected)
 
+let fun_arg_mismatch_error pos id expected =
+  ProgError.error pos (Printf.sprintf "Function %s expects %d argument(s)" (GrassUtil.name id) expected)
+
 let proc_arg_mismatch_error pos id expected =
   ProgError.error pos 
     (Printf.sprintf "Procedure %s expects %d argument(s)" 
@@ -407,11 +410,13 @@ let infer_types cu locals ty e =
         let _ = 
           match ty, rftys, res with
           | _, _, _ :: _
-          | BoolType, _ :: _, _ ->
-              pred_arg_mismatch_error pos id (List.length ftys)
           | PermType, _ :: _, _ ->
               if List.length es1 <> List.length decl.pr_formals then
                 pred_arg_mismatch_error pos id (List.length decl.pr_formals)
+          | BoolType, _ :: _, _ ->
+              pred_arg_mismatch_error pos id (List.length ftys)
+          | _, _ :: _, _ ->
+              fun_arg_mismatch_error pos id (List.length ftys)
           | _ -> ()
         in
         (* Check whether return type matches expected type *)
