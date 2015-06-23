@@ -8,23 +8,25 @@ open SimplifyGrass
 
  
 (** Remove binders for universal quantified variables in [axioms] that satisfy the condition [open_cond]. *)
-let open_axioms ?(force=false) open_cond axioms = 
+let open_axioms ?(force=false) open_cond axioms =
+  let extract_generators generators a =
+    List.fold_right 
+      (fun ann (generators, a1) ->
+        match ann with
+        | TermGenerator (g, t) ->
+            let gen = (g, t) in
+            gen :: generators, a1
+        | _ -> generators, ann :: a1
+      ) a (generators, [])
+  in
   let rec open_axiom generators = function
     | Binder (b, [], f, a) ->
         let f1, generators1 = open_axiom generators f in
-        Binder (b, [], f1, a), generators1
+        let generators2, a1 = extract_generators generators a in
+        Binder (b, [], f1, a1), generators2
     | Binder (b, vs, f, a) -> 
         (* extract term generators *)
-        let generators1, a1 =
-          List.fold_right 
-            (fun ann (generators, a1) ->
-              match ann with
-              | TermGenerator (g, t) ->
-                  let gen = (g, t) in
-                  gen :: generators, a1
-              | _ -> generators, ann :: a1
-            ) a (generators, [])
-        in
+        let generators1, a1 = extract_generators generators a in
         let vs1 = List.filter (~~ (open_cond (annotate f a))) vs in
         let f1, generators2 = open_axiom generators1 f in
         if !Config.instantiate || force then

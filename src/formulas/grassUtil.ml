@@ -1060,7 +1060,7 @@ let propagate_binder b f =
             Binder (b1, vs, f1, a), vs1
         | _ -> 
             let f1, vs1 = prop [] f in
-            Binder (b1, vs, mk_binder (dualize_binder b) vs1 f1, a), tvs)
+            mk_binder ~ann:a b1 vs (mk_binder (dualize_binder b) vs1 f1), tvs)
     | f -> 
         let fv_f = fv f in
         f, List.filter (fun (x, _) -> IdSet.mem x fv_f) tvs
@@ -1121,6 +1121,7 @@ let foralls_to_exists f =
         let g1 = distribute_and bvs gs [g] in
         Binder (b, [], g1, a)
     | Binder (_, [], g, a) :: gs1 ->
+        assert (List.for_all (function TermGenerator _ -> false | _ -> true) a);
         distribute_and bvs gs (g :: gs1)
     | g :: gs1 -> distribute_and bvs (g :: gs) gs1
     | [] -> smk_forall bvs (mk_or (List.rev gs))
@@ -1137,7 +1138,9 @@ let foralls_to_exists f =
             let nodefs, defs, g = find_defs bvs_set [] f in
             let ubvs, ebvs = List.partition (fun (x, _) -> IdSet.mem x nodefs) bvs in
             (match ebvs with
-            | [] -> distribute_and bvs [] [g]
+            | [] ->
+                (*assert (List.for_all (function TermGenerator _ -> false | _ -> true) a);*)
+                annotate (distribute_and bvs [] [g]) a
             | _ -> 
                 let g1 = cf (mk_forall ubvs g) in
                 Binder (Exists, ebvs, mk_and (defs @ [g1]), a))
