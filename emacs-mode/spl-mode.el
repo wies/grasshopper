@@ -182,6 +182,7 @@
   ;;(c-set-offset 'substatement-open 0)
   (c-set-offset 'knr-argdecl-intro 'spl-lineup-topmost)
   (c-set-offset 'topmost-intro-cont 'spl-lineup-topmost)
+  (c-set-offset 'func-decl-cont 'spl-lineup-topmost)
   (c-set-offset 'knr-argdecl 'spl-lineup-topmost-intro)
   (c-set-offset 'label '+))
 
@@ -190,6 +191,24 @@
 (or (assoc "\\.spl$" auto-mode-alist)
     (setq auto-mode-alist (cons '("\\.spl$" . spl-mode)
 				auto-mode-alist)))
+
+(add-hook 'spl-mode-hook
+          (lambda ()
+            (push '("::" . ?∷) prettify-symbols-alist)
+            (push '("==>" . ?⟹) prettify-symbols-alist)
+            (push '("|->" . ?↦) prettify-symbols-alist)
+            (push '("&*&" . ?∗) prettify-symbols-alist)
+            (push '("&&" . ?∧) prettify-symbols-alist)
+            (push '("||" . ?∨) prettify-symbols-alist)
+            (push '("**" . ?∩) prettify-symbols-alist)
+            (push '("++" . ?∪) prettify-symbols-alist)
+            (push '("in" . ?∈) prettify-symbols-alist)
+            (push '("!in" . ?∉) prettify-symbols-alist)                   
+            (push '("forall" . ?∀) prettify-symbols-alist)
+            (push '("exists" . ?∃) prettify-symbols-alist)
+            (push '("<=" . ?≤) prettify-symbols-alist)
+            (push '(">=" . ?≥) prettify-symbols-alist)
+            (prettify-symbols-mode)))
 
 ;; Flycheck mode specific settings
 (when (require 'flycheck nil :noerror)
