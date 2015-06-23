@@ -170,7 +170,7 @@
   (defun spl-lineup-topmost (langelem)
     (save-excursion
       (beginning-of-line)
-      (if (looking-at "[ \t]*\\(procedure\\|function\\|predicate\\|struct\\)")
+      (if (looking-at "[ \t]*\\(axiom\\|procedure\\|function\\|predicate\\|struct\\)")
           0
         c-basic-offset)))
   (c-set-offset 'statement-cont 'spl-lineup-statement-cont)
