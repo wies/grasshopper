@@ -406,17 +406,21 @@ let infer_types cu locals ty e =
         let es1, rftys, res =
           Util.map2_remainder (fun ty e -> fst (it locals ty e)) ftys es
         in
+        let arg_error num_args =
+          match ty with
+          | PermType | BoolType ->
+              pred_arg_mismatch_error pos id num_args
+          | _ ->
+              fun_arg_mismatch_error pos id num_args
+        in
         (* Check whether number of actual arguments is correct *)
         let _ = 
           match ty, rftys, res with
-          | _, _, _ :: _
-          | PermType, _ :: _, _ ->
+          | PermType, _ :: _, [] ->
               if List.length es1 <> List.length decl.pr_formals then
-                pred_arg_mismatch_error pos id (List.length decl.pr_formals)
-          | BoolType, _ :: _, _ ->
-              pred_arg_mismatch_error pos id (List.length ftys)
-          | _, _ :: _, _ ->
-              fun_arg_mismatch_error pos id (List.length ftys)
+                arg_error (List.length decl.pr_formals)
+          | _, _ :: _, _ | _, _, _ :: _ ->
+              arg_error (List.length ftys)
           | _ -> ()
         in
         (* Check whether return type matches expected type *)

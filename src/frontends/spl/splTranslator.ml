@@ -997,6 +997,12 @@ let convert cu =
         let t1 = convert_term locals e1 in
         let t2 = convert_term locals e2 in
         GrassUtil.mk_elem_term t1 t2
+    | FramePred (set1, set2, fld1, fld2, pos) ->
+        let tset1 = convert_term locals set1 in
+        let tset2 = convert_term locals set2 in
+        let tfld1 = convert_term locals fld1 in
+        let tfld2 = convert_term locals fld2 in
+        GrassUtil.mk_frame_term tset1 tset2 tfld1 tfld2
     | e -> failwith ("unexpected expression at " ^ string_of_src_pos (pos_of_expr e))
   in
   let rec convert_grass_form locals = function
@@ -1007,12 +1013,6 @@ let convert cu =
         let ty = convert_term locals y in
         let tz = convert_term locals z in
         GrassUtil.mk_srcpos pos (GrassUtil.mk_btwn tfld tx ty tz)
-    | FramePred (set1, set2, fld1, fld2, pos) ->
-        let tset1 = convert_term locals set1 in
-        let tset2 = convert_term locals set2 in
-        let tfld1 = convert_term locals fld1 in
-        let tfld2 = convert_term locals fld2 in
-        GrassUtil.mk_srcpos pos (GrassUtil.mk_frame tset1 tset2 tfld1 tfld2)
     | Quant (q, decls, f, pos) ->
         let mk_guard = match q with
           | Forall -> GrassUtil.mk_implies
