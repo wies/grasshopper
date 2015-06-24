@@ -2,16 +2,48 @@ include "../array/node_array.spl";
 
 struct Node {
   var next: Node;
-  var data: Int;
 }
 
- 
-function lseg_footprint(m: Map<Node, Node>, x: Node, y: Node) returns (FP: Set<Node>)
+axiom (forall a: Set<Node>, fp: Set<Node>, f1: Map<Node,Node>, f2: Map<Node,Node>, x: Node ::
+       Frame(fp, a, f1, f2) ==>
+       mem_skolem(lseg_footprint(f1, x, null), fp) in lseg_footprint(f1, x, null) &&
+       mem_skolem(lseg_footprint(f1, x, null), fp) in fp ||
+       mem_skolem(lseg_footprint(f1, x, null), a) in lseg_footprint(f1, x, null) &&
+       mem_skolem(lseg_footprint(f1, x, null), a) !in a ||
+       lseg_footprint(f1, x, null) == lseg_footprint(f2, x, null)
+       @(pattern Frame(fp, a, f1, f2))
+       @(matching Frame(fp, a, f1, f2), lseg_footprint(f1, x, null) yields mem_skolem(lseg_footprint(f1, x, null), fp))
+       @(matching Frame(fp, a, f1, f2), lseg_footprint(f1, x, null) yields mem_skolem(lseg_footprint(f1, x, null), a))
+       @(matching Frame(fp, a, f1, f2), lseg_footprint(f1, x, null) yields lseg_footprint(f2, x, null))
+       @(matching Frame(fp, a, f1, f2), lseg_footprint(f2, x, null) yields lseg_footprint(f1, x, null)));
 
-function fp_witness(x: Node, m: Map<ArrayCell<Node>, Node>) returns (c: ArrayCell<Node>)
+axiom forall a: Set<Node>, fp: Set<Node>, s: Set<Node>, f1: Map<Node,Node>, f2: Map<Node,Node>, x: Node ::
+  (Frame(fp, a, f1, f2) ==> 
+   mem_skolem(s, fp) in s && mem_skolem(s, fp) in fp ||
+   mem_skolem(s, a) in s && mem_skolem(s, a) !in a ||
+   lseg(f1, x, null, s) == lseg(f2, x, null, s)
+   @(pattern Frame(fp, a, f1, f2))
+   @(matching Frame(fp, a, f1, f2), lseg(f1, x, null, s) yields mem_skolem(s, fp))
+   @(matching Frame(fp, a, f1, f2), lseg(f1, x, null, s) yields mem_skolem(s, a))
+   @(matching Frame(fp, a, f1, f2), lseg(f1, x, null, s) yields lseg(f2, x, null, s))
+   @(matching Frame(fp, a, f1, f2), lseg(f2, x, null, s) yields lseg(f1, x, null, s)));
+
+axiom forall m1: Map<ArrayCell<Node>, Node>, m2: Map<ArrayCell<Node>, Node>, x: Node, s1: Set<ArrayCell<Node>>, s2: Set<ArrayCell<Node>> ::
+  (mem_skolem2(s1, s2) in s1 && mem_skolem2(s1, s2) !in s2 ||  
+   fp_witness(x, m1, s1).m1 != fp_witness(x, m1, s1).m2 ||
+   fp_witness(x, m2, s2) == fp_witness(x, m1, s1)
+   @(matching fp_witness(x, m1, s1), fp_witness(x, m2, s2) yields mem_skolem2(s1, s2)));
+
+function mem_skolem(s1: Set<Node>, s2: Set<Node>) returns (y: Node)
   
-predicate lseg(m: Map<Node, Node>, x: Node, y: Node)(FP: Set<Node>) {
-  FP == lseg_footprint(m, x, y)
+function mem_skolem2(s1: Set<ArrayCell<Node>>, s2: Set<ArrayCell<Node>>) returns (y: ArrayCell<Node>)
+
+function lseg_footprint(next: Map<Node, Node>, x: Node, y: Node) returns (FP: Set<Node>)
+
+function fp_witness(x: Node, as: Map<ArrayCell<Node>, Node>, fp: Set<ArrayCell<Node>>) returns (c: ArrayCell<Node>)
+  
+predicate lseg(next: Map<Node, Node>, x: Node, y: Node)(FP: Set<Node>) {
+  FP == lseg_footprint(next, x, y)
 }
   
 struct HashSet {
@@ -22,11 +54,13 @@ struct HashSet {
 function arrayseg_buckets_footprint(a: Array<Node>, FP0: Set<ArrayCell<Node>>)
   returns (FP1: Set<Node>)
 {
-  (forall c in FP0, x: Node :: x in lseg_footprint(next, c.array[c.index], null) ==> x in FP1) &&
-  (forall x in FP1 :: fp_witness(x, array_state()) in FP0) &&
-  (forall x in FP1 :: x in lseg_footprint(next, fp_witness(x, array_state()).array[fp_witness(x, array_state()).index], null)
-   @(matching x yields lseg_footprint(next, fp_witness(x, array_state()).array[fp_witness(x, array_state()).index], null))) &&
-  (forall c in FP0, x: Node :: x in lseg_footprint(next, c.array[c.index], null) ==> fp_witness(x, array_state()) == c)
+  (forall c1 in FP0, c2 in FP0, x in FP1 :: x in lseg_footprint(next, c1[], null) && x in lseg_footprint(next, c2[], null) ==> c1 = c2) &&
+  (forall c in FP0, x: Node :: x in lseg_footprint(next, c[], null) ==> x in FP1) &&
+  (forall x in FP1 :: fp_witness(x, array_state(), FP0) in FP0) &&
+  (forall x in FP1 :: x in lseg_footprint(next, fp_witness(x, array_state(), FP0)[], null)
+   @(matching x yields lseg(next, fp_witness(x, array_state(), FP0)[], null,
+                            lseg_footprint(next, fp_witness(x, array_state(), FP0)[], null)))) &&
+  (forall c in FP0, x: Node :: x in lseg_footprint(next, c[], null) ==> fp_witness(x, array_state(), FP0) == c)
   //all nodes reachable from the head of the bucket are in the footprint
   //(forall c: ArrayCell<Node>, x: Node :: c in FP0 && Reach(next, c.array[c.index], x) ==> x in FP1 || x == null) &&
   //all nodes in the footprint are reachable from the bucket head
@@ -43,7 +77,7 @@ predicate arrayseg_with_buckets(a: Array<Node>, lo: Int, hi: Int)
   0 <= lo && lo <= hi && hi <= a.length &&
   FP0 == arrayseg_footprint(a, lo, hi) &&
   FP1 == arrayseg_buckets_footprint(a, FP0) &&
-  (forall c in FP0 :: lseg(next, c.array[c.index], null, lseg_footprint(next, c.array[c.index], null)))
+  (forall c in FP0 :: lseg(next, c[], null, lseg_footprint(next, c[], null)))
   //all the elts from a list have the same hash, and this is the index in the array
   //(forall v in FP1 :: Btwn(next, a[hash(a.length, v.data)], v, null) @(matching v yields a[hash(a.length, v.data)]))
 }
@@ -72,11 +106,14 @@ predicate hset(h: HashSet)
   true
 }
 
-
 procedure insert(lst: Node, val: Int) 
   returns (res: Node)
   requires lseg(next, lst, null)
   ensures lseg(next, res, null)
+{
+  //lst.data := val;
+  lst.next := null;
+}
 
 procedure hashset_add(hashset: HashSet, value: Int)
   requires hset(hashset)
@@ -94,8 +131,9 @@ procedure contains(lst: Node, value: Int)
   requires lseg(next, lst, null)
   ensures lseg(next, lst, null)
 {
-  
+  lst.next := null;
 }
+
   
 procedure hashset_member(hashset: HashSet, value: Int)
   returns (res: Bool)
@@ -120,5 +158,3 @@ procedure hashset_remove(hashset: HashSet, value: Int)
   var list := hashset.buckets[hashval];
   hashset.buckets[hashval] := delete(list, value);
 }
-
-
