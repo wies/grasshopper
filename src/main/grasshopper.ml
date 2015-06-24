@@ -100,63 +100,116 @@ let parse_spl_program main_file =
   SplSyntax.add_alloc_decl prog
 
 (** Locust: work in progress *)
-let locust spl_prog simple_prog proc errors =
-  let process_error (error_pos, error_msg, model) =
-    let error_msg = List.hd (Str.split (Str.regexp "\n") error_msg) in
-    Locust.print_debug ("Found error on line "
-			^ (string_of_int error_pos.Grass.sp_start_line)
-			^ ": " ^ error_msg);
-    (* If error is inside loop then neg sample *)
-    if Locust.is_auto_loop_proc proc
-    then begin
-	Locust.print_debug "Geting negative model from inside loop";
-	let neg_model =
-	  Locust.get_model_at_src_pos simple_prog proc (error_pos, model) !Locust.loop_pos
-	in
-	let out_filename = Locust.get_new_model_filename false in
-	let out_chan = open_out out_filename in
-	Model.output_txt out_chan neg_model;
-	close_out out_chan;
-	Locust.print_debug ("Dumped model in file " ^ out_filename);
-      end
-    else
-      if error_pos.Grass.sp_start_line < !Locust.loop_pos.Grass.sp_start_line
-      then
-	begin
-	  (* Assuming precondition =/> invariant. get positive model *)
-	  Locust.print_debug "Geting positive model";
-	  (* TODO need session or something to get multiple models *)
-	  (* TODO what format to get the model in? TODO store models in ref *)
-	  (* For now dumping model to file and storing filename in ref *)
-	  let out_filename = Locust.get_new_model_filename true in
-	  let out_chan = open_out out_filename in
-	  Model.output_txt out_chan model;
-	  close_out out_chan;
-	  Locust.print_debug ("Dumped model in file " ^ out_filename);
-	end
-      else
-	begin
-	  (* Error occured after loop, get negative model *)
-	  Locust.print_debug "Geting negative model";
-	  let neg_model =
-	    Locust.get_model_at_src_pos
-	      simple_prog proc (error_pos, model)
-	      {!Locust.loop_pos with
-		Grass.sp_start_line = !Locust.loop_pos.Grass.sp_start_line + 1}
-	  in
-	  let out_filename = Locust.get_new_model_filename false in
-	  let out_chan = open_out out_filename in
-	  Model.output_txt out_chan neg_model;
-	  close_out out_chan;
-	  Locust.print_debug ("Dumped model in file " ^ out_filename);
-	end
-    (* TODO what to do if it's not inductive *)
-  in
-  process_error (List.hd errors)
-  (* TODO fix model bug and do this instead: List.iter process_error errors *)
-  (* Learn invariant from samples (call predictor, filter results, etc) *)
 
-  (* Instrument program and call check_prog again *)
+(** Given a model and an SL formula, constructs an spl program that checks if the assertion holds for the given model *)
+let assert_formula_about_model formula model_filename =
+  (* Hack: don't consider formulas with the predicate tree in them *)
+  if Locust.formula_contains_tree_pred formula then false
+  else
+    begin
+      let in_chan = open_in model_filename in
+      let store, heap = Locust.read_heap_from_chan in_chan  in
+      close_in in_chan;
+
+      (* TODO hack: to reset identifiers: *)
+      GrassUtil.used_names := Hashtbl.create 0;
+
+      (* Temp hack to include the linked list definitions *)
+      let spl_prog = parse_spl_program "tests/spl/include/sllist.spl" in
+
+      let spl_prog, proc_name =
+	Locust.add_model_and_assertion_to_prog (store, heap) formula spl_prog in
+
+      (* This part copied from Grasshopper.check_spl_program: *)
+      let prog = SplTranslator.to_program spl_prog in
+      (* DEBUG print and check *)
+      if (Debug.is_debug (0)) then
+	Prog.print_prog stdout prog;
+      let simple_prog = Verifier.simplify prog in
+
+      let dummy_proc = Prog.find_proc simple_prog proc_name in
+      let errors = Verifier.check_proc simple_prog dummy_proc in
+      match errors with
+      | [] -> true
+      | _ -> false
+    end
+
+
+let rec locust_loop spl_prog =
+  (* TODO hack: to reset identifiers: *)
+  GrassUtil.used_names := Hashtbl.create 0;
+
+  let prog = SplTranslator.to_program spl_prog in
+  if (Debug.is_debug (- 1)) then
+    Prog.print_prog stdout prog;
+
+  let simple_prog = Verifier.simplify prog in
+
+  let procs = Prog.fold_procs (fun procs p -> p :: procs) [] simple_prog in
+
+  let rec check simple_prog = function
+    | proc :: procs ->
+       let errors = Verifier.check_proc simple_prog proc in
+       begin
+	 match errors with
+	 | [] -> check simple_prog procs
+	 | errors ->
+	    begin
+	      Locust.learn_invariant spl_prog simple_prog proc errors;
+	      (* Learn invariant from samples (call predictor, filter results, etc) *)
+	      let candidates = Locust.get_candidates_from_predictor () in
+	      (* Take first candidate that is consistent with neg samples *)
+	      let candidate_inv =
+		let rec get_first_consistent = function
+		  | cand :: rest_of_cands ->
+		     begin
+		       Locust.print_debug "Verifying a predicted candidate";
+		       if Locust.check_cand_inv_against_models
+			    cand assert_formula_about_model
+		       then cand
+		       else get_first_consistent rest_of_cands
+		     end
+		  | [] -> failwith "Didn't get any consistent candidates from predictor."
+		in
+		get_first_consistent candidates
+	      in
+	      Locust.print_debug "YAY! Found consistent candidate.";
+	      (* Instrument program and call locust again *)
+	      let new_spl_prog = Locust.insert_invariant_into_spl_prog
+				   spl_prog !Locust.proc_name candidate_inv
+	      in
+	      locust_loop new_spl_prog
+	    end
+       end
+    | [] -> ()
+  in
+  check simple_prog procs
+
+
+let locust file =
+  (* DEBUG *)
+  let formula =
+    let in_chan = open_in "sl_formula" in
+    let candidate_invariants =
+      let lexbuf = Lexing.from_channel in_chan in
+      SlParser.formulae SlLexer.token lexbuf
+    in
+    close_in in_chan;
+    List.hd candidate_invariants
+  in
+  let model_filename = read_line () in
+  if assert_formula_about_model formula model_filename then print_endline "\n\nYEP"
+  else print_endline "\n\nNOPE";
+  let model_filename = read_line () in
+  if assert_formula_about_model formula model_filename then print_endline "\n\nYEP"
+  else print_endline "\n\nNOPE";
+  failwith "DONE";
+  let spl_prog = parse_spl_program file in
+  (* First find source pos of loop/loop invariant TODO improve *)
+  Locust.init_refs spl_prog;
+
+  locust_loop spl_prog
+
 
 (** Check SPL program in main file [file] and procedure [proc] *)
 let check_spl_program file proc =
@@ -164,18 +217,7 @@ let check_spl_program file proc =
   let prog = SplTranslator.to_program spl_prog in
   let simple_prog = Verifier.simplify prog in
   let check simple_prog proc =
-    if !Config.locust then
-      if not (Locust.is_auto_loop_proc proc) then
-	begin
-	  Locust.print_debug ("starting on procedure "
-			      ^ (Grass.string_of_ident proc.Prog.proc_name));
-	  (* First find source pos of loop/loop invariant *)
-	  Locust.init_refs spl_prog proc;
-	end;
     let errors = Verifier.check_proc simple_prog proc in
-    if !Config.locust
-    then locust spl_prog simple_prog proc errors
-    else
     List.iter 
       (fun (pp, error_msg, model) ->
         output_trace simple_prog proc (pp, model);
@@ -234,10 +276,14 @@ let _ =
     SmtLibSolver.select_solver (String.uppercase !Config.smtsolver);
     if !main_file = ""
     then cmd_line_error "input file missing"
-    else begin
-      check_spl_program !main_file !Config.procedure;
-      print_stats start_time 
-    end
+    else
+      begin
+	if !Config.locust then
+	  locust !main_file
+	else
+	  check_spl_program !main_file !Config.procedure;
+	print_stats start_time
+      end
   with  
   | Sys_error s -> 
       let bs = if Debug.is_debug 0 then Printexc.get_backtrace () else "" in
@@ -249,34 +295,8 @@ let _ =
       print_endline "parse error"; 
       exit 1
   | ProgError.Prog_error _ as e ->
+     Printexc.print_backtrace stderr;
       output_string stderr (ProgError.to_string e ^ "\n");
       exit 1
 
 
-(** Given a model and an SL formula, constructs an spl program that checks if the assertion holds for the given model *)
-let assert_formula_about_model () =
-  let store, heap = Locust.read_heap_from_chan stdin in
-
-  (* Temp hack to include the linked list definitions *)
-  let spl_prog = parse_spl_program "tests/spl/include/sllist.spl" in
-
-  (* add model and TODO assertion procedure to this program *)
-  let spl_prog = Locust.add_model_to_prog (store, heap) spl_prog in
-
-
-  (* This part copied from Grasshopper.check_spl_program: *)
-  let prog = SplTranslator.to_program spl_prog in
-  (* DEBUG print and check *)
-  if (Debug.is_debug (-1)) then
-    Prog.print_prog stdout prog;
-
-  let simple_prog = Verifier.simplify prog in
-  let check simple_prog proc =
-    let errors = Verifier.check_proc simple_prog proc in
-    List.iter
-      (fun (pp, error_msg, model) ->
-	ProgError.error pp error_msg;
-      )
-      errors
-  in
-  Prog.iter_procs check simple_prog

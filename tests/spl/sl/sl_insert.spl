@@ -11,6 +11,7 @@ procedure insert(lst: Node, elt: Node)
     var nondet: Bool;
     var curr := lst;
     while (nondet && curr.next != null)
+      invariant false
     {
       havoc nondet;
       curr := curr.next;
