@@ -278,6 +278,8 @@ let resolve_names cu =
       | Ident (init_id, pos) ->
           let id = lookup_id init_id tbl pos in
           Ident (id, pos)
+      | Annot (e, PatternAnnot p, pos) ->
+          Annot (re locals tbl e, PatternAnnot (re locals tbl p), pos)
       | Annot (e, GeneratorAnnot (es, ge), pos) ->
           let es1 = List.map (re locals tbl) es in
           Annot (re locals tbl e, GeneratorAnnot (es1, re locals tbl ge), pos)
@@ -1113,6 +1115,10 @@ let convert cu =
     | Annot (e, CommentAnnot c, pos) ->
         let f = convert_grass_form locals e in
         GrassUtil.annotate f [Name (c, 0)]
+    | Annot (e, PatternAnnot p, pos) ->
+        let f = convert_grass_form locals e in
+        let p1 = convert_term locals p in
+        GrassUtil.mk_pattern p1 [] f
     | Annot (e, GeneratorAnnot (es, ge), pos) ->
         let f = convert_grass_form locals e in
         let es1 = List.map (convert_term locals) es in

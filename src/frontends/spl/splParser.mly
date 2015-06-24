@@ -56,7 +56,7 @@ let trd3 (_, _, v) = v
 %token GHOST IMPLICIT VAR STRUCT PURE PROCEDURE PREDICATE FUNCTION INCLUDE AXIOM
 %token OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token LOC INT BOOL SET MAP ARRAY ARRAYCELL
-%token MATCHING YIELDS COMMENT 
+%token MATCHING YIELDS COMMENT PATTERN
 %token EOF
 
 %nonassoc COLONEQ 
@@ -495,6 +495,10 @@ field_access:
 array_access:
 | ident LBRACKET expr RBRACKET { Read ($1, $3, mk_position 1 4) }
 | primary LBRACKET expr RBRACKET { Read ($1, $3, mk_position 1 4) }
+| ident LBRACKET RBRACKET { Read (Read (Ident (("array", 0), mk_position 2 3), $1, mk_position 1 3),
+                                  Read (Ident (("index", 0), mk_position 2 3), $1, mk_position 1 3), mk_position 1 3) }
+| primary LBRACKET RBRACKET { Read (Read (Ident (("array", 0), mk_position 2 3), $1, mk_position 1 3),
+                                    Read (Ident (("index", 0), mk_position 2 3), $1, mk_position 1 3), mk_position 1 3) }
 ;
                                                               
 unary_expr:
@@ -635,4 +639,5 @@ expr_list:
 
 annot:
 | MATCHING expr_list YIELDS expr { GeneratorAnnot($2, $4) }
+| PATTERN expr { PatternAnnot $2 }
 | COMMENT STRINGVAL { CommentAnnot ($2) }

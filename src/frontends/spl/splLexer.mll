@@ -40,6 +40,7 @@ let _ =
       ("new", NEW);
       ("null", NULL);
       ("outputs", OUTPUTS);
+      ("pattern", PATTERN);
       ("predicate", PREDICATE);
       ("procedure", PROCEDURE);
       ("pure", PURE);

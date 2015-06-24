@@ -155,6 +155,7 @@ and exprs = expr list
 
 and annotation =
   | GeneratorAnnot of exprs * expr
+  | PatternAnnot of expr
   | CommentAnnot of string
 
 let pos_of_expr = function
