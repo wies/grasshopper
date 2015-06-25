@@ -3,9 +3,10 @@ open GrassUtil
 open Axioms
 
 (** Alloc sets *)
+let set_ids = Hashtbl.create 0
 
 let mk_name_generator base_name =
-  let set_ids = Hashtbl.create 0 in
+  (* let set_ids = Hashtbl.create 0 in *)
   fun srt ->
     let name = base_name ^ "_" ^ (name_of_sort srt) in
     try Hashtbl.find set_ids (name, srt)

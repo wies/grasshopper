@@ -98,16 +98,16 @@ let is_free_symbol = function
   | FreeSym _ -> true
   | _ -> false
     
-let used_names = ref (Hashtbl.create 0)
+let used_names = Hashtbl.create 0
 
 let fresh_ident =
   (* let used_names = Hashtbl.create 0 in *)
   fun (name : string) ->
     let last_index = 
-      try Hashtbl.find !used_names name
+      try Hashtbl.find used_names name
       with Not_found -> -1
     in 
-    Hashtbl.replace !used_names name (last_index + 1);
+    Hashtbl.replace used_names name (last_index + 1);
     (name, last_index + 1)
 
 let dualize_op op = 

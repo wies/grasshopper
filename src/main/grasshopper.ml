@@ -112,7 +112,8 @@ let assert_formula_about_model formula model_filename =
       close_in in_chan;
 
       (* TODO hack: to reset identifiers: *)
-      GrassUtil.used_names := Hashtbl.create 0;
+      Hashtbl.clear GrassUtil.used_names;
+      Hashtbl.clear Prog.set_ids;
 
       (* Temp hack to include the linked list definitions *)
       let spl_prog = parse_spl_program "tests/spl/include/sllist.spl" in
@@ -137,7 +138,8 @@ let assert_formula_about_model formula model_filename =
 
 let rec locust_loop spl_prog =
   (* TODO hack: to reset identifiers: *)
-  GrassUtil.used_names := Hashtbl.create 0;
+  Hashtbl.clear GrassUtil.used_names;
+  Hashtbl.clear Prog.set_ids;
 
   let prog = SplTranslator.to_program spl_prog in
   if (Debug.is_debug (- 1)) then

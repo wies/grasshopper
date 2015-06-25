@@ -239,10 +239,11 @@ let add_model_and_assertion_to_prog (store, heap) assert_expr prog =
   in
 
   (* add this procedure to the program and return*)
+  let dummy_proc_name = ("dummy_proc", 0) in
   let dummy_proc_decl =
     ProcDecl (
 	{
-	  p_name = ("dummy_proc", 0);
+	  p_name = dummy_proc_name;
 	  p_formals = formals;
 	  p_returns = [];
 	  p_locals = locals;
@@ -251,7 +252,7 @@ let add_model_and_assertion_to_prog (store, heap) assert_expr prog =
 	  p_pos = pos;
 	})
   in
-  SplSyntax.extend_spl_program [] [dummy_proc_decl] prog
+  SplSyntax.extend_spl_program [] [dummy_proc_decl] prog, dummy_proc_name
 
 
 let get_candidates_from_predictor () =
