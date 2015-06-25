@@ -1144,11 +1144,13 @@ let convert cu =
             let flt = 
               TermSet.fold 
                 (fun t acc -> match t with
-                  | App (FreeSym sym, (_ :: _ as ts), _) when ce_occur_below ts ->
+                | App (FreeSym sym, (_ :: _ as ts), _)
+                  when symbol_of e <> Some (FreeSym sym) && ce_occur_below ts ->
                     (FilterSymbolNotOccurs (FreeSym sym)) :: acc
-                  | App (Read, (App (FreeSym sym, [], srt) :: _ as ts), _) when ce_occur_below ts ->
+                | App (Read, (App (FreeSym sym, [], srt) :: _ as ts), _)
+                  when symbol_of e <> Some (FreeSym sym) && ce_occur_below ts ->
                     (FilterReadNotOccurs (GrassUtil.name sym, ([], srt))) :: acc
-                  | _ -> acc)
+                | _ -> acc)
                 gts [FilterNotNull]
             in
             Match (e, flt)) es1
