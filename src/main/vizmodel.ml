@@ -32,7 +32,7 @@ let vizmodel file =
   let model_chan = open_out !Config.model_file in
   (* Model.print_model2 model;*)
   if Str.string_match (Str.regexp ".*\\.html$") !Config.model_file 0 then
-    Model.output_visjs model_chan (Model.complete model) Grass.TermSet.empty
+    Model.output_html model_chan (Model.complete model) Grass.TermSet.empty
   else
     Model.output_graph model_chan (Model.complete model) Grass.TermSet.empty;
   close_out model_chan  
