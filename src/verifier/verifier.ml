@@ -293,7 +293,7 @@ let vcgen prog proc =
   | None -> []
 
 (** Generate verification conditions for procedure [proc] of program [prog] and check them. *)
-let check_proc prog proc =
+let check_proc prog ?(multiple_models=false) proc =
   let check_vc errors (vc_name, (vc_msg, pp), vc0) =
     let check_one vc =
       if errors <> [] && not !Config.robust then errors else
@@ -309,9 +309,14 @@ let check_proc prog proc =
       let session_name =
         Filename.chop_extension (Filename.basename pp.sp_file) ^ "_" ^ vc_name 
       in
-      match Prover.get_model ~session_name:session_name ~sat_means:sat_means vc_and_preds with
+      match Prover.get_model
+	      ~session_name:session_name ~sat_means:sat_means
+	      ~multiple_models:multiple_models
+	      vc_and_preds
+      with
       | None -> errors
-      | Some model -> 
+      | Some ([]) -> errors
+      | Some (model :: models) -> 
           (* generate error message from model *)
           let add_msg pos msg error_msgs =
             let filtered_msgs = 
@@ -349,7 +354,7 @@ let check_proc prog proc =
           let error_msg =
             String.concat "\n\n" (vc_msg :: error_msg_strings)
           in
-          (pp, error_msg, model) :: errors
+          (pp, error_msg, model, models) :: errors
     in check_one vc0
   in
   let _ = Debug.info (fun () -> "Checking procedure " ^ string_of_ident proc.proc_name ^ "...\n") in

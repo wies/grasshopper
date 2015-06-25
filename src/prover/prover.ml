@@ -27,7 +27,8 @@ let dump_model session f =
       if !Config.extra_models then
 	begin
 	  (* Try to get more models *)
-	  InvLearner.dump_more_models session model gts;
+	  (* InvLearner.dump_more_models session model gts; *)
+	  failwith "Dumping extra models broken due to refactoring. Fix if needed.";
 	end
     end
 
@@ -97,16 +98,30 @@ let check_sat ?(session_name="form") ?(sat_means="sat") f =
   SmtLibSolver.quit session;
   result
 
-let get_model ?(session_name="form") ?(sat_means="sat") f =
+let get_model ?(session_name="form") ?(sat_means="sat") ?(multiple_models=false) f =
   let result, session, f_inst = start_session session_name sat_means f in
-  let model = 
+  let models = 
     match result with
     | Some true | None ->
         dump_model session f_inst;
-        SmtLibSolver.get_model session
+        let model = SmtLibSolver.get_model session in
+	(match model with
+	 | Some model ->
+	    let model = Model.complete model in
+	    let other_models =
+	      if multiple_models then
+		begin
+		  let gts = ground_terms ~include_atoms:true f in
+		  InvLearner.get_more_models session model gts
+		end
+	      else []
+	    in
+	    Some (model :: other_models)
+	 | None ->
+	    None)
     | Some false -> 
         dump_core session;
         None
   in
   SmtLibSolver.quit session;
-  Util.Opt.map Model.complete model
+  models

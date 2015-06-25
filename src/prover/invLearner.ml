@@ -65,7 +65,7 @@ let find_equalities model terms =
    @param model the first model
    @param gts the ground terms in the VCs + preds
 *)
-let dump_more_models session model gts =
+let get_more_models session model gts =
   let equalities_list = find_equalities model gts in
   Printf.printf "\n\nDumping models to file:\nOriginal model in file %s\n"
 		!Config.model_txt_file;
@@ -100,7 +100,7 @@ let dump_more_models session model gts =
   let _ = List.fold_left get_model_for_equality (1, session) equalities_list in
   (* Check sat again, otherwise next call to get_model fails *)
   let _ = SmtLibSolver.is_sat session in
-  ()
+  []
 
 
 let assert_form_about_model session model gts =

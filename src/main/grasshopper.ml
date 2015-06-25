@@ -151,7 +151,7 @@ let rec locust_loop spl_prog =
 
   let rec check simple_prog = function
     | proc :: procs ->
-       let errors = Verifier.check_proc simple_prog proc in
+       let errors = Verifier.check_proc simple_prog ~multiple_models:true proc in
        begin
 	 match errors with
 	 | [] -> check simple_prog procs
@@ -189,23 +189,6 @@ let rec locust_loop spl_prog =
 
 
 let locust file =
-  (* DEBUG *)
-  let formula =
-    let in_chan = open_in "sl_formula" in
-    let candidate_invariants =
-      let lexbuf = Lexing.from_channel in_chan in
-      SlParser.formulae SlLexer.token lexbuf
-    in
-    close_in in_chan;
-    List.hd candidate_invariants
-  in
-  let model_filename = read_line () in
-  if assert_formula_about_model formula model_filename then print_endline "\n\nYEP"
-  else print_endline "\n\nNOPE";
-  let model_filename = read_line () in
-  if assert_formula_about_model formula model_filename then print_endline "\n\nYEP"
-  else print_endline "\n\nNOPE";
-  failwith "DONE";
   let spl_prog = parse_spl_program file in
   (* First find source pos of loop/loop invariant TODO improve *)
   Locust.init_refs spl_prog;
@@ -221,7 +204,7 @@ let check_spl_program file proc =
   let check simple_prog proc =
     let errors = Verifier.check_proc simple_prog proc in
     List.iter 
-      (fun (pp, error_msg, model) ->
+      (fun (pp, error_msg, model, models) ->
         output_trace simple_prog proc (pp, model);
         if !Config.robust 
         then ProgError.print_error pp error_msg

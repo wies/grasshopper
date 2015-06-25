@@ -278,7 +278,7 @@ let get_candidates_from_predictor () =
 (** Main entry point of the learning process
 TODO make sure I need all these parameters *)
 let learn_invariant spl_prog simple_prog proc errors =
-  let process_error (error_pos, error_msg, model) =
+  let process_error (error_pos, error_msg, model, model_list) =
     let error_msg = List.hd (Str.split (Str.regexp "\n") error_msg) in
     print_debug ("Found error on line "
 			^ (string_of_int error_pos.Grass.sp_start_line)
@@ -325,8 +325,9 @@ let learn_invariant spl_prog simple_prog proc errors =
 	begin
 	  (* Assuming precondition =/> invariant. get positive model *)
 	  print_debug "Getting positive model";
+	  print_debug ("Number of other models :" ^ (string_of_int (List.length model_list)));
 	  (* TODO need session or something to get multiple models *)
-	  (* TODO what format to get the model in? TODO store models in ref *)
+	  (* TODO what format to get the model in? TODO store models in memory *)
 	  (* For now dumping model to file and storing filename in ref *)
 	  let out_filename = get_new_model_filename true in
 	  let out_chan = open_out out_filename in
