@@ -1237,10 +1237,56 @@ let mixed_graphviz_html =
     output_string chan "      iterateOverNodes(resetNode);\n";
     output_string chan "      fillNode(node);\n";
     output_string chan "    }\n";
+    output_string chan "    var scaleFactor = 1.0;\n";
+    output_string chan "    var shiftX = 0;\n";
+    output_string chan "    var shiftY = 0;\n";
+    output_string chan "    var svgW;\n";
+    output_string chan "    var svgH;\n";
+    output_string chan "    function updateViewBox(svg) {\n";
+    output_string chan "      var w2 = svgW / 2.0 / scaleFactor; \n";
+    output_string chan "      var h2 = svgH / 2.0 / scaleFactor;\n";
+    output_string chan "      svg.viewBox.baseVal.x = shiftX + svgW/2.0 - w2;\n";
+    output_string chan "      svg.viewBox.baseVal.y = shiftY + svgH/2.0 - h2;\n";
+    output_string chan "      svg.viewBox.baseVal.width = svgW/2.0 + w2;\n";
+    output_string chan "      svg.viewBox.baseVal.height = svgH/2.0 + h2;\n";
+    output_string chan "    }\n";
+    output_string chan "    var lastX;\n";
+    output_string chan "    var lastY;\n";
+    output_string chan "    function resizeSvg() {\n";
+    output_string chan "      forEachByTag('svg', function(svg) {\n";
+    output_string chan "        svg.style.width='100vw';\n";
+    output_string chan "        svg.style.height='60vh';\n";
+    output_string chan "        svgW = svg.viewBox.baseVal.width;\n";
+    output_string chan "        svgH = svg.viewBox.baseVal.height;\n";
+    output_string chan "        svg.onwheel = function(ev){\n";
+    output_string chan "           if (ev.deltaY > 0) {\n";
+    output_string chan "             scaleFactor = scaleFactor * 0.9;\n";
+    output_string chan "           } else if (ev.deltaY < 0) {\n";
+    output_string chan "             scaleFactor = scaleFactor * 1.1;\n";
+    output_string chan "           }\n";
+    output_string chan "           updateViewBox(svg)\n";
+    output_string chan "           return false;\n";
+    output_string chan "        };\n";
+    output_string chan "        svg.onmousemove = function(ev){\n";
+    output_string chan "          if(ev.buttons == 1) {\n";
+    output_string chan "            var dx = ev.screenX - lastX;\n";
+    output_string chan "            var dy = ev.screenY - lastY;\n";
+    output_string chan "            shiftX = shiftX - dx / scaleFactor;\n";
+    output_string chan "            shiftY = shiftY - dy / scaleFactor;\n";
+    output_string chan "            updateViewBox(svg);\n";
+    output_string chan "          }\n";
+    output_string chan "          lastX=ev.screenX;\n";
+    output_string chan "          lastY=ev.screenY;\n";
+    output_string chan "        };\n";
+    output_string chan "      });\n";
+    output_string chan "    }\n";
     output_string chan "    window.onload=function() {\n";
     output_string chan "      iterateOverTableCells(1, function(c) { c.onclick=function(){ highlight(this.innerHTML); } });\n";
     output_string chan "      iterateOverTableCells(0, function(c) { c.onclick=function(){ highlightRelated(this); } });\n";
     output_string chan "      iterateOverNodes(function(n) { n.onclick=function(){ highlightNode(this); } });\n";
+    output_string chan "      resizeSvg();\n";
+    output_string chan "      document.body.ondragstart=function(){return false;};\n";
+    output_string chan "      document.body.ondrop=function(){return false;};\n";
     output_string chan "    };\n";
     output_string chan "  </script>\n";
   in
@@ -1266,9 +1312,7 @@ let mixed_graphviz_html =
         end;
       if line <> "</svg>" then read ok2
     in
-    output_string chan "<div style=\"overflow:scroll\">\n";
     read false;
-    output_string chan "</div>\n";
     let _ = Unix.close_process (out, inp) in
     ()
   in    
