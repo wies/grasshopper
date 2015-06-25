@@ -881,7 +881,7 @@ type generic_graph_output = {
     graph: out_channel -> graph_node list -> graph_edge list -> unit;
   }
 
-let grapviz_output =
+let graphviz_output =
   let header chan = output_string chan "digraph Model {\n" in
   let footer chan = output_string chan "}\n" in
   let l = ref 0 in
@@ -892,7 +892,7 @@ let grapviz_output =
         output_string chan ("{ rank = sink; Legend" ^ (string_of_int !l) ^ " [shape=none, margin=0, label=<\n");
         output_string chan "    <table border=\"0\" cellborder=\"1\" cellspacing=\"0\" cellpadding=\"4\">\n";
         output_string chan "      <tr>\n";
-        output_string chan ("        <td colspan=\"2\"><b>" ^ name ^ "</b></td>\n");
+        output_string chan ("        <td colspan=\"2\"><b>" ^ (replace_lt_gt name) ^ "</b></td>\n");
         output_string chan "      </tr>\n";
         StringSet.iter
           (fun s ->
@@ -991,7 +991,7 @@ let visjs_output =
     let print_table_header title = 
       output_string chan "  <div class=\"hspace\"></div>\n";
       output_string chan "  <table>\n";
-      Printf.fprintf chan "    <tr>\n<th colspan=\"2\"><b>%s</b></th></tr>\n" title;
+      Printf.fprintf chan "    <tr><th colspan=\"2\"><b>%s</b></th></tr>\n" title;
     in
     let print_table_footer () =
       output_string chan "  </table>\n"
@@ -1105,6 +1105,176 @@ let visjs_output =
   { header = header;
     footer = footer;
     table = out_tbl;
+    graph = out_graph }
+
+let mixed_graphviz_html =
+  let header chan =
+    output_string chan "<!doctype html>\n";
+    output_string chan "<html>\n";
+    output_string chan "<head>\n";
+    output_string chan "  <title>Model</title>\n";
+    output_string chan "  <meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\" />\n";
+    output_string chan "  <style type=\"text/css\">\n";
+    output_string chan "    .hspace { height: 2em }\n";
+    output_string chan "    td,th {\n";
+    output_string chan "       padding: 0 10px;\n";
+    output_string chan "       border-bottom: 1px solid;\n";
+    output_string chan "    }\n";
+    output_string chan "    .selected { background: rgba(100,200,100,0.5) }\n";
+    output_string chan "    .highlighted { background: rgba(200,100,100,0.5) }\n";
+    output_string chan "  </style>\n";
+    output_string chan "</head>\n";
+    output_string chan "<body>\n";
+    output_string chan "\n";
+    output_string chan "  <script type=\"text/javascript\">\n";
+    output_string chan "    function forEachByTag(tag, callback) {\n";
+    output_string chan "      var elements = document.getElementsByTagName(tag);\n";
+    output_string chan "      for (var i = 0; i < elements.length; i++) {\n";
+    output_string chan "        callback(elements[i]);\n";
+    output_string chan "      }\n";
+    output_string chan "    }\n";
+    output_string chan "    function forEachByClass(cls, callback) {\n";
+    output_string chan "      var elements = document.getElementsByClassName(cls);\n";
+    output_string chan "      for (var i = 0; i < elements.length; i++) {\n";
+    output_string chan "        callback(elements[i]);\n";
+    output_string chan "      }\n";
+    output_string chan "    }\n";
+    output_string chan "    function iterateOverTableCells(col, fct) {\n";
+    output_string chan "      forEachByTag('table', function(t) {\n";
+    output_string chan "        for(var j = 1; j< t.rows.length; j++){\n";
+    output_string chan "          if (t.rows[j].cells.length > col) {\n";
+    output_string chan "            fct(t.rows[j].cells[col])\n";
+    output_string chan "          }\n";
+    output_string chan "        }\n";
+    output_string chan "      });\n";
+    output_string chan "    }\n";
+    output_string chan "    function iterateOverNodes(fct) {\n";
+    output_string chan "      forEachByClass('node', fct);\n";
+    output_string chan "    }\n";
+    output_string chan "    function nodeLabel(node) {\n";
+    output_string chan "      return node.getElementsByTagName('text')[0].innerHTML;\n";
+    output_string chan "    }\n";
+    output_string chan "    function contains(s1, s2) {\n";
+    output_string chan "      return s1.indexOf(s2) > -1;\n";
+    output_string chan "    }\n";
+    output_string chan "    function fillNode(node) {\n";
+    output_string chan "      var elements = node.getElementsByTagName('polygon');\n";
+    output_string chan "      for (var i = 0; i < elements.length; i++) {\n";
+    output_string chan "        elements[i].style.fill = \"rgba(100,250,100,0.7)\";\n";
+    output_string chan "      }\n";
+    output_string chan "      elements = node.getElementsByTagName('ellipse');\n";
+    output_string chan "      for (var i = 0; i < elements.length; i++) {\n";
+    output_string chan "        elements[i].style.fill = \"rgba(100,250,100,0.7)\";\n";
+    output_string chan "      }\n";
+    output_string chan "    }\n";
+    output_string chan "    function resetNode(node) {\n";
+    output_string chan "      var elements = node.getElementsByTagName('polygon');\n";
+    output_string chan "      for (var i = 0; i < elements.length; i++) {\n";
+    output_string chan "        elements[i].style.fill = \"none\";\n";
+    output_string chan "      }\n";
+    output_string chan "      elements = node.getElementsByTagName('ellipse');\n";
+    output_string chan "      for (var i = 0; i < elements.length; i++) {\n";
+    output_string chan "        elements[i].style.fill = \"none\";\n";
+    output_string chan "      }\n";
+    output_string chan "    }\n";
+    output_string chan "    function resetCells() {\n";
+    output_string chan "      //clean the current highlight\n";
+    output_string chan "      var elements = document.getElementsByClassName('selected');\n";
+    output_string chan "      for (var i = 0; i < elements.length; i++) {\n";
+    output_string chan "        elements[i].classList.remove('selected');\n";
+    output_string chan "      }\n";
+    output_string chan "      elements = document.getElementsByClassName('highlighted');\n";
+    output_string chan "      for (var i = 0; i < elements.length; i++) {\n";
+    output_string chan "        elements[i].classList.remove('highlighted');\n";
+    output_string chan "      }\n";
+    output_string chan "    }\n";
+    output_string chan "    var lastHighlight = \"\";\n";
+    output_string chan "    function highlight(terms){\n";
+    output_string chan "      resetCells();\n";
+    output_string chan "      if (terms === lastHighlight) {\n";
+    output_string chan "        terms = \"\";\n";
+    output_string chan "      }\n";
+    output_string chan "      lastHighlight = terms;\n";
+    output_string chan "      iterateOverNodes(function(n) {\n";
+    output_string chan "        if (contains(terms, nodeLabel(n))) {\n";
+    output_string chan "          fillNode(n);\n";
+    output_string chan "        } else {\n";
+    output_string chan "          resetNode(n);\n";
+    output_string chan "        }\n";
+    output_string chan "      });\n";
+    output_string chan "    }\n";
+    output_string chan "    var lastSelected = undefined;\n";
+    output_string chan "    function highlightRelated(cell) {\n";
+    output_string chan "      resetCells();\n";
+    output_string chan "      if (cell === lastSelected) {\n";
+    output_string chan "        highlight(\"\");\n";
+    output_string chan "        lastSelected = undefined;\n";
+    output_string chan "      } else {\n";
+    output_string chan "        highlight(cell.innerHTML);//TODO should expand the defs ???\n";
+    output_string chan "        lastSelected = cell;\n";
+    output_string chan "        iterateOverTableCells(0, function(c) {\n";
+    output_string chan "          if (contains(c.innerHTML, cell.innerHTML)) {\n";
+    output_string chan "            c.classList.add('highlighted');\n";
+    output_string chan "          }\n";
+    output_string chan "        });\n";
+    output_string chan "        cell.classList.remove('highlighted');\n";
+    output_string chan "        cell.classList.add('selected');\n";
+    output_string chan "      }\n";
+    output_string chan "    }\n";
+    output_string chan "    function highlightNode(node) {\n";
+    output_string chan "      resetCells();\n";
+    output_string chan "      var l = nodeLabel(node);\n";
+    output_string chan "      iterateOverTableCells(1, function(c) {\n";
+    output_string chan "        if (contains(c.innerHTML, l)) {\n";
+    output_string chan "          c.classList.add('highlighted');\n";
+    output_string chan "        }\n";
+    output_string chan "      });\n";
+    output_string chan "      iterateOverTableCells(0, function(c) {\n";
+    output_string chan "        if (contains(c.innerHTML, l)) {\n";
+    output_string chan "          c.classList.add('highlighted');\n";
+    output_string chan "        }\n";
+    output_string chan "      });\n";
+    output_string chan "      iterateOverNodes(resetNode);\n";
+    output_string chan "      fillNode(node);\n";
+    output_string chan "    }\n";
+    output_string chan "    window.onload=function() {\n";
+    output_string chan "      iterateOverTableCells(1, function(c) { c.onclick=function(){ highlight(this.innerHTML); } });\n";
+    output_string chan "      iterateOverTableCells(0, function(c) { c.onclick=function(){ highlightRelated(this); } });\n";
+    output_string chan "      iterateOverNodes(function(n) { n.onclick=function(){ highlightNode(this); } });\n";
+    output_string chan "    };\n";
+    output_string chan "  </script>\n";
+  in
+  let footer chan =
+    output_string chan "  <div class=\"hspace\"></div>\n";
+    output_string chan "  <div>generated by <a href=\"https://github.com/wies/grasshopper\">GRASShopper</a></div>\n";
+    output_string chan "</body>\n";
+    output_string chan "</html>\n"
+  in
+  let out_graph chan nodes edges =
+    let (out,inp) = Unix.open_process "dot -Tsvg" in
+    graphviz_output.header inp;
+    graphviz_output.graph inp nodes edges;
+    graphviz_output.footer inp;
+    flush inp;
+    let rec read ok =
+      let line = input_line out in
+      let ok2 = ok || Str.string_match (Str.regexp "^<svg") line 0 in
+      if ok2 then
+        begin
+          output_string chan line;
+          output_string chan "\n"
+        end;
+      if line <> "</svg>" then read ok2
+    in
+    output_string chan "<div style=\"overflow:scroll\">\n";
+    read false;
+    output_string chan "</div>\n";
+    let _ = Unix.close_process (out, inp) in
+    ()
+  in    
+  { header = header;
+    footer = footer;
+    table = visjs_output.table;
     graph = out_graph }
 
 let print_graph output chan model terms =
@@ -1332,7 +1502,5 @@ let print_graph output chan model terms =
     output_freesyms ();
     output.footer chan
  
-let output_graphviz = print_graph grapviz_output
-let output_visjs = print_graph visjs_output
-
-let output_graph = output_graphviz
+let output_html = print_graph mixed_graphviz_html
+let output_graph = print_graph graphviz_output
