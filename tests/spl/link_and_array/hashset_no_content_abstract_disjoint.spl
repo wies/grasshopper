@@ -108,8 +108,7 @@ function arrayseg_buckets_footprint(a: Array<Node>, FP0: Set<ArrayCell<Node>>)
    @(matching c yields lseg_footprint(next, c[], null))) &&
   (forall x in FP1 :: fp_witness(x, array_state(), FP0) in FP0) &&
   (forall x in FP1 :: x in lseg_footprint(next, fp_witness(x, array_state(), FP0)[], null)
-   @(matching x yields lseg(next, fp_witness(x, array_state(), FP0)[], null,
-                            lseg_footprint(next, fp_witness(x, array_state(), FP0)[], null))))
+   @(matching x yields fp_witness(x, array_state(), FP0)))
   //all nodes reachable from the head of the bucket are in the footprint
   //(forall c: ArrayCell<Node>, x: Node :: c in FP0 && Reach(next, c.array[c.index], x) ==> x in FP1 || x == null) &&
   //all nodes in the footprint are reachable from the bucket head
@@ -163,10 +162,10 @@ procedure insert(lst: Node, val: Int)
   returns (res: Node)
   requires lseg(next, lst, null)
   ensures lseg(next, res, null)
-  //{
+{
   //lst.data := val;
-  //lst.next := null;
-  //}
+  lst.next := null;
+}
 
 procedure hashset_add(hashset: HashSet, value: Int)
   requires hset(hashset)
@@ -183,9 +182,9 @@ procedure contains(lst: Node, value: Int)
   returns (res: Bool)
   requires lseg(next, lst, null)
   ensures lseg(next, lst, null)
-  //{
-  // lst.next := null;
-  //}
+{
+  lst.next := null;
+}
 
   
 procedure hashset_member(hashset: HashSet, value: Int)

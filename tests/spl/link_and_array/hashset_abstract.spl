@@ -1,0 +1,224 @@
+include "../array/node_array.spl";
+
+struct Data {}
+
+struct Node {
+  var next: Node;
+  var data: Data;
+}
+
+
+/*
+axiom forall s1: Set<Node> :: s1 subsetof s1;
+
+axiom forall s: Set<Node> :: Set<Node>() subsetof s;
+
+axiom forall s1: Set<Node>, s2: Set<Node>, s3: Set<Node> ::
+  s1 subsetof s2 && s2 subsetof s3 ==> s1 subsetof s3;
+
+axiom forall s1: Set<Node>, s2: Set<Node>, s3: Set<Node> ::
+  s1 ++ s2 subsetof  s3 ==> s1 subsetof s3 && s2 subsetof s3;
+
+axiom forall s1: Set<Node>, s2: Set<Node>, s3: Set<Node> ::
+  s1 subsetof s2 ** s3 ==> s1 subsetof s2 && s1 subsetof s3;
+                                       
+axiom forall s1: Set<Node>, s2: Set<Node>, s3: Set<Node> ::
+  s1 subsetof s3 ==> s1 ** s2 subsetof s3;
+
+axiom forall s1: Set<Node>, s2: Set<Node>, s3: Set<Node> ::
+  s1 subsetof s3 ==> s2 ** s1 subsetof s3;
+
+axiom forall s1: Set<Node>, s2: Set<Node>, s3: Set<Node> ::
+  s1 subsetof s3 ==> s1 -- s2 subsetof s3;
+
+axiom forall s1: Set<Node>, s2: Set<Node>, s3: Set<Node> ::
+  s1 subsetof s3 ==> s1 subsetof s2 ++ s3;
+
+axiom forall s1: Set<Node>, s2: Set<Node>, s3: Set<Node> ::
+  s1 subsetof s3 ==> s1 subsetof s3 ++ s2;
+
+axiom forall s1: Set<Node>, s2: Set<Node>, x: Node :: s1 subsetof s2 && x in s1 ==> x in s2;
+
+axiom forall s1: Set<Node>, s2: Set<Node>, x: Node :: Disjoint(s1, s2) ==> x !in s1 || x !in s2;
+
+axiom forall s: Set<Node> :: Disjoint(s, Set<Node>());
+
+axiom forall s1: Set<Node>, s2: Set<Node>, s3: Set<Node> ::
+  Disjoint(s1 ++ s2, s3) ==> Disjoint(s1, s3) && Disjoint(s2, s3);
+
+axiom forall s1: Set<Node>, s2: Set<Node>, s3: Set<Node> ::
+  Disjoint(s1, s3) ==> Disjoint(s1 -- s2, s3);
+                                                                                 
+axiom forall s1: Set<Node>, s2: Set<Node>, s3: Set<Node> ::
+  Disjoint(s1, s3) ==> Disjoint(s1 ** s2, s3);
+
+axiom forall s1: Set<Node>, s2: Set<Node>, s3: Set<Node> ::
+  Disjoint(s1, s3) ==> Disjoint(s2 ** s1, s3);
+
+axiom forall s1: Set<Node>, s2: Set<Node> ::
+  Disjoint(s1, s2) ==> Disjoint(s2, s1);
+
+axiom forall s1: Set<Node>, s2: Set<Node>, s3: Set<Node> ::
+  s1 subsetof s2 && Disjoint(s2, s3) ==> Disjoint(s1, s3);
+
+axiom forall s1: Set<Node>, s2: Set<Node>, s3: Set<Node> ::
+  s1 subsetof s2 && Disjoint(s2, s3) ==> s1 subsetof s2 -- s3;
+*/
+
+axiom (forall a: Set<Node>, fp: Set<Node>, f1: Map<Node,Node>, f2: Map<Node,Node>, x: Node ::
+       Frame(fp, a, f1, f2) && Disjoint(listset_footprint(f1, x), fp) && listset_footprint(f1, x) subsetof a ==>
+       listset_footprint(f1, x) == listset_footprint(f2, x)
+       @(pattern Frame(fp, a, f1, f2))
+       @(matching Frame(fp, a, f1, f2), listset_footprint(f1, x) yields listset_footprint(f2, x))
+       @(matching Frame(fp, a, f1, f2), listset_footprint(f2, x) yields listset_footprint(f1, x)));
+
+axiom (forall a: Set<Node>, fp: Set<Node>, d1: Map<Node,Data>, d2: Map<Node,Data>, s: Set<Node>, x: Node ::
+       Frame(fp, a, d1, d2) && Disjoint(s, fp) && s subsetof a ==>
+       listset_content(d1, s) == listset_content(d2, s)
+       @(pattern Frame(fp, a, d1, d2))
+       @(matching Frame(fp, a, d1, d2), listset_content(d1, s) yields listset_content(d2, s))
+       @(matching Frame(fp, a, d1, d2), listset_content(d2, s) yields listset_content(d1, s)));
+
+
+axiom forall a: Set<Node>, fp: Set<Node>, s: Set<Node>, c: Set<Data>, f1: Map<Node,Node>, f2: Map<Node,Node>,
+  d1: Map<Node,Data>, d2: Map<Node,Data>, x: Node ::
+  (Frame(fp, a, f1, f2) && Frame(fp, a, d1, d2) && Disjoint(s, fp) && s subsetof a ==>
+   listset(f1, d1, x, c, s) == listset(f2, d2, x, c, s)
+   @(pattern Frame(fp, a, f1, f2))
+   @(matching Frame(fp, a, f1, f2), Frame(fp, a, d1, d2), listset(f1, d1, x, c, s) yields listset(f2, d2, x, c, s))
+   @(matching Frame(fp, a, f1, f2), Frame(fp, a, d1, d2), listset(f2, d2, x, c, s) yields listset(f1, d1, x, c, s)));
+
+function listset_footprint(next: Map<Node, Node>, x: Node) returns (FP: Set<Node>)
+  
+function fp_witness(x: Node, as: Map<ArrayCell<Node>, Node>, fp: Set<ArrayCell<Node>>) returns (c: ArrayCell<Node>)
+  
+function listset_content(data: Map<Node, Data>, FP: Set<Node>) returns (C: Set<Data>)
+
+function cnt_witness(d: Data, as: Map<ArrayCell<Node>, Node>, fp: Set<ArrayCell<Node>>) returns (c: ArrayCell<Node>)
+  
+predicate listset(next: Map<Node, Node>, data: Map<Node, Data>, x: Node, C: Set<Data>)(FP: Set<Node>) {
+  FP == listset_footprint(next, x) &&
+  C == listset_content(data, FP)
+}
+  
+struct HashSet {
+  var size: Int; /* the size of the set */
+  var buckets: Array<Node>; /* the set elements */
+}
+
+function arrayseg_buckets_footprint(FP0: Set<ArrayCell<Node>>)
+  returns (FP1: Set<Node>)
+{
+  // FP1 = (++) { listset_footprint(next, c[]) | c in FP0 }
+  (forall c in FP0 :: listset_footprint(next, c[]) subsetof FP1
+   @(matching c yields listset_footprint(next, c[]))) &&
+  (forall x in FP1 :: fp_witness(x, array_state(), FP0) in FP0) &&
+  (forall x in FP1 :: x in listset_footprint(next, fp_witness(x, array_state(), FP0)[])
+   @(matching x yields fp_witness(x, array_state(), FP0)))
+}
+
+function arrayseg_buckets_content(FP0: Set<ArrayCell<Node>>)
+  returns (C: Set<Data>)
+{
+  // C = (++) { listset_content(next, c[]) | c in FP0 }
+  (forall c in FP0 :: listset_content(data, listset_footprint(next, c[])) subsetof C
+   @(matching c yields listset_content(data, listset_footprint(next, c[])))) &&
+  (forall d in C :: cnt_witness(d, array_state(), FP0) in FP0) &&
+  (forall d in C :: d in listset_content(data, listset_footprint(next, cnt_witness(d, array_state(), FP0)[]))
+   @(matching d yields cnt_witness(d, array_state(), FP0)))
+}
+
+predicate arrayseg_with_buckets(a: Array<Node>, lo: Int, hi: Int, C: Set<Data>)
+  (FP0: Set<ArrayCell<Node>>, FP1: Set<Node>)
+{
+  0 <= lo && lo <= hi && hi <= a.length &&
+  FP0 == arrayseg_footprint(a, lo, hi) &&
+  FP1 == arrayseg_buckets_footprint(FP0) &&
+  C == arrayseg_buckets_content(FP0) &&
+  // every array cells points to a bucket list
+  (forall c in FP0 :: listset(next, data, c[], listset_content(data, listset_footprint(next, c[])), listset_footprint(next, c[]))) &&
+  // the footprint sets of the bucket lists are disjoint
+  (forall c1 in FP0, c2 in FP0 :: c1 == c2 || Disjoint(listset_footprint(next, c1[]), listset_footprint(next, c2[]))) &&
+  // all data values of a bucket list have the same hash, which is the index of the array cell that points to the list
+  // (implies the disjointness of the content sets of the lists)
+  (forall c in FP0, d in listset_content(data, listset_footprint(next, c[])) :: hash(a.length, d) = c.index) 
+}
+
+predicate array_with_buckets(a: Array<Node>, C: Set<Data>)
+  (FP0: Set<Array<Node>>, FP1: Set<ArrayCell<Node>>, FP2: Set<Node>)
+{
+  FP0 == Set(a) &&
+  arrayseg_with_buckets(a, 0, a.length, C, FP1, FP2)
+}
+
+function hash(max: Int, value: Data)
+  returns (res: Int)
+{
+  res >= 0 && res < max
+}
+
+predicate hashset(h: HashSet, C: Set<Data>)
+  (FP0: Set<HashSet>, FP1: Set<Array<Node>>,
+   FP2: Set<ArrayCell<Node>>, FP3: Set<Node>)
+{
+  h.size == h.buckets.length &&
+  FP0 == Set(h) &&
+  array_with_buckets(h.buckets, C, FP1, FP2, FP3) &&
+  true
+}
+
+procedure slset_add(lst: Node, val: Data, implicit ghost C: Set<Data>) 
+  returns (res: Node)
+  requires listset(next, data, lst, C)
+  ensures listset(next, data, res, C ++ Set(val))
+{
+  lst.data := val;
+  lst.next := null;
+}
+
+procedure hashset_add(hset: HashSet, value: Data, implicit ghost C: Set<Data>)
+  requires hashset(hset, C)
+  ensures hashset(hset, C ++ Set(value))
+{
+  var hashval := hash(hset.size, value);
+  var list := hset.buckets[hashval];
+  hset.buckets[hashval] := slset_add(list, value);
+}
+
+procedure slset_contains(lst: Node, value: Data, implicit ghost C: Set<Data>)
+  returns (res: Bool)
+  requires listset(next, data, lst, C)
+  ensures listset(next, data, lst, C) &*& res == value in C
+{
+ lst.next := null;
+ lst.data := value;
+}
+  
+procedure hashset_contains(hset: HashSet, value: Data, implicit ghost C: Set<Data>)
+  returns (res: Bool)
+  requires hashset(hset, C)
+  ensures hashset(hset, C) &*& res == value in C
+{
+  var hashval := hash(hset.size, value);
+  var list := hset.buckets[hashval];
+  res := slset_contains(list, value);
+  return res;
+}
+
+procedure slset_remove(lst: Node, value: Data, implicit ghost C: Set<Data>) 
+  returns (res: Node)
+  requires listset(next, data, lst, C)
+  ensures listset(next, data, res, C -- Set(value))
+{
+  lst.next := null;
+  lst.data := value;
+}
+  
+procedure hashset_remove(hset: HashSet, value: Data, C: Set<Data>)
+  requires hashset(hset, C)
+  ensures hashset(hset, C -- Set(value))
+{
+  var hashval := hash(hset.size, value);
+  var list := hset.buckets[hashval];
+  hset.buckets[hashval] := slset_remove(list, value);
+}
