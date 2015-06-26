@@ -72,7 +72,7 @@ type symbol =
   | Eq
   | LtEq | GtEq | Lt | Gt
   | Btwn | Frame
-  | Elem | SubsetEq 
+  | Elem | SubsetEq | Disjoint
   (* uninterpreted constants, functions, and predicates *)
   | FreeSym of ident
   (* for patterns *)
@@ -85,7 +85,7 @@ let symbols =
    Empty; SetEnum; Union; Inter; Diff;
    Length; IndexOfCell; ArrayOfCell; ArrayCells;
    Eq; LtEq; GtEq; Lt; Gt;
-   Btwn; Frame; Elem; SubsetEq; Known]
+   Btwn; Frame; Elem; SubsetEq; Disjoint; Known]
 
 module SymbolSet = Set.Make(struct
     type t = symbol
@@ -234,6 +234,7 @@ let string_of_symbol = function
   | Btwn -> "Btwn"
   | Elem -> "member"
   | SubsetEq -> "subset"
+  | Disjoint -> "disjoint"
   | Frame -> "Frame"
   (* uninterpreted symbols *)
   | FreeSym id -> string_of_ident id
@@ -316,7 +317,7 @@ and pr_term ppf = function
   | App (Inter, ss, _) -> pr_inter ppf ss
   | App (Union, ss, _) -> pr_union ppf ss
   | App (Eq, [t1; t2], _) -> fprintf ppf "@[%a@] == @[<2>%a@]" pr_term t1 pr_term t2
-  | App (SubsetEq, [t1; t2], _)
+  | App (SubsetEq, [t1; t2], _) -> fprintf ppf "@[%a@] subsetof @[<2>%a@]" pr_term t1 pr_term t2
   | App (LtEq, [t1; t2], _) -> fprintf ppf "%a <= @[<2>%a@]" pr_term t1 pr_term t2
   | App (GtEq, [t1; t2], _) -> fprintf ppf "%a >= @[<2>%a@]" pr_term t1 pr_term t2
   | App (Lt, [t1; t2], _) -> fprintf ppf "%a < @[<2>%a@]" pr_term t1 pr_term t2

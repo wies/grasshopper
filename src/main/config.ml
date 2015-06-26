@@ -27,6 +27,8 @@ let keep_types = ref false
 (* Flag that controls whether we are instantiating the axioms or relying on the prover. *)
 let instantiate = ref true
 let stratify = ref true
+(* Flag that controls whether predicates are treated as abstract *)
+let abstract_preds = ref false
 (* Flag that controls whether split lemmas are added *)
 let split_lemmas = ref false
 (* Flag that controls whether unsat cores are dumped for each VC *)
@@ -88,6 +90,7 @@ let cmd_options =
    ("-fullep", Arg.Set full_ep, " Generates more ep terms");
    ("-noinst", Arg.Clear instantiate, " Let the SMT solver deal with the quantifiers without prior instantiation");
    ("-nostratify", Arg.Clear stratify, " Instantiate quantifiers that satisfy stratified sort restrictions\n\nOptions for controlling backend solver:");
+   ("-abspreds", Arg.Set abstract_preds, " Treat predicates as abstract.");
    ("-splitlemmas", Arg.Set split_lemmas, " Add split lemmas for all terms of sort Loc");
    ("-smtsolver", Arg.Set_string smtsolver, "<solver> Choose SMT solver (z3, cvc4, cvc4mf), e.g., 'z3+cvc4mf'");
    ("-smtpatterns", Arg.Set smtpatterns, " Always add pattern annotations to quantifiers in SMT queries");

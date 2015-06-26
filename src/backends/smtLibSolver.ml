@@ -529,7 +529,7 @@ let grass_symbol_of_smtlib_symbol solver_info =
 
 let is_interpreted solver_info sym = match sym with
   | Read | Write -> !Config.encode_fields_as_arrays
-  | Empty | SetEnum | Union | Inter | Diff | Elem | SubsetEq ->
+  | Empty | SetEnum | Union | Inter | Diff | Elem | SubsetEq | Disjoint ->
       !Config.use_set_theory && solver_info.has_set_theory
   | Eq | Gt | Lt | GtEq | LtEq | IntConst _ | BoolConst _
   | Plus | Minus | Mult | Div | UMinus -> true

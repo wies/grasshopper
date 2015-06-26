@@ -246,10 +246,19 @@ let resolve_names cu =
                   Access (Setenum (ArrayCellType typ, [cell], pos), pos)
               | _ -> pred_arg_mismatch_error pos id 1)
           | _ -> pred_arg_mismatch_error pos id 1)
+      | ProcCall (("Disjoint" as name, _ as id), args, pos)
       | ProcCall (("Btwn" as name, _ as id), args, pos)
       | ProcCall (("Reach" as name, _ as id), args, pos)
       | ProcCall (("Frame" as name, _ as id), args, pos) ->
           let args1 = List.map (re locals tbl) args in
+          let expected_num_of_args =
+            match name with
+            | "Btwn" -> 4
+            | "Reach" -> 3
+            | "Frame" -> 4
+            | "Disjoint" -> 2
+            | _ -> 0
+          in
           (match name, args1 with
           | "Btwn", [fld; x; y; z] ->
               BtwnPred (fld, x, y, z, pos)
@@ -257,7 +266,9 @@ let resolve_names cu =
               BtwnPred (fld, x, y, y, pos)
           | "Frame", [set1; set2; fld1; fld2] ->
               FramePred (set1, set2, fld1, fld2, pos)
-          | _ -> pred_arg_mismatch_error pos id 4)
+          | "Disjoint", [set1; set2] ->
+              DisjointPred (set1, set2, pos)
+          | _ -> pred_arg_mismatch_error pos id expected_num_of_args)
       | ProcCall (init_id, args, pos) ->
           let id = lookup_id init_id tbl pos in
           let args1 = List.map (re locals tbl) args in
@@ -517,6 +528,9 @@ let flatten_exprs cu =
     | (BtwnPred (e1, e2, e3, e4, pos) as e)
     | (FramePred (e1, e2, e3, e4, pos) as e) ->
         check_side_effects [e1; e2; e3; e4];
+        e, aux, locals
+    | DisjointPred (e1, e2, pos) as e ->
+        check_side_effects [e1; e2];
         e, aux, locals
     | PredApp (init_id, args, pos) as e->
         List.iter check_side_effects args;
@@ -1005,6 +1019,10 @@ let convert cu =
         let tfld1 = convert_term locals fld1 in
         let tfld2 = convert_term locals fld2 in
         GrassUtil.mk_frame_term tset1 tset2 tfld1 tfld2
+    | DisjointPred (set1, set2, pos) ->
+        let tset1 = convert_term locals set1 in
+        let tset2 = convert_term locals set2 in
+        GrassUtil.mk_disjoint_term tset1 tset2
     | e -> failwith ("unexpected expression at " ^ string_of_src_pos (pos_of_expr e))
   in
   let rec convert_grass_form locals = function

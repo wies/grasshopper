@@ -48,6 +48,7 @@ let _ =
       ("return", RETURN);
       ("returns", RETURNS);
       ("struct", STRUCT);
+      ("subsetof", LEQ);
       ("Set", SET);
       ("true", BOOLVAL(true));
       ("var", VAR);
@@ -134,5 +135,6 @@ and comments level = parse
          else comments (level - 1) lexbuf
        }
 | "/*" { comments (level + 1) lexbuf }
+| '\n' { Lexing.new_line lexbuf; comments (level) lexbuf }
 | _ { comments level lexbuf }
 | eof { EOF }

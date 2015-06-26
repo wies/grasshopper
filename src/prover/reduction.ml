@@ -63,7 +63,7 @@ let generated_ground_terms fs =
  ** Assumes that [f] is typed and in negation normal form. *)
 let elim_exists =
   let e = fresh_ident "?e" in
-  let rec elim_neq = function
+  let rec elim_neq bvs = function
     | BoolOp (Not, [Atom (App (Eq, [s1; s2], _), a)]) as f ->
 	(match sort_of s1 with
 	| Set srt ->
@@ -71,16 +71,20 @@ let elim_exists =
 	    mk_exists [(e, srt)] (smk_or [smk_and [smk_elem ~ann:a ve s1; mk_not (smk_elem ~ann:a ve s2)];
 					 smk_and [smk_elem ~ann:a ve s2; mk_not (smk_elem ~ann:a ve s1)]])
 	| _ -> f)
-    | BoolOp (Not, [Atom (App (SubsetEq, [s1; s2], _), a)]) ->
+    | BoolOp (Not, [Atom (App (Disjoint, [s1; s2], _), a)]) when bvs = [] ->
+        let srt = element_sort_of_set s1 in
+        elim_neq bvs (mk_not (Atom (App (Eq, [mk_inter [s1; s2]; mk_empty (Set srt)], Bool), a)))
+    | BoolOp (Not, [Atom (App (SubsetEq, [s1; s2], _), a)]) when bvs = [] ->
 	let srt = element_sort_of_set s1 in
 	let ve = mk_var srt e in
 	mk_exists [(e, srt)] (annotate (smk_and [smk_elem ve s1; mk_not (smk_elem ve s2)]) a)
-    | BoolOp (op, fs) -> smk_op op (List.map elim_neq fs)
-    | Binder (b, vs, f, a) -> Binder (b, vs, elim_neq f, a)
+    | BoolOp (op, fs) -> smk_op op (List.map (elim_neq bvs) fs)
+    | Binder (Exists, vs, f, a) -> Binder (Exists, vs, elim_neq bvs f, a)
+    | Binder (Forall, vs, f, a) -> Binder (Forall, vs, elim_neq (bvs @ vs) f, a)
     | f -> f
   in
   List.map (fun f -> 
-    let f1 = elim_neq f in
+    let f1 = elim_neq [] f in
     let f2 = propagate_exists f1 in
     skolemize f2)
 
@@ -236,19 +240,19 @@ let add_set_axioms fs =
     | App (sym, ts, srt) -> App (sym, List.map unflatten ts, srt)
     | t -> t
   in
-  let rec simplify_term = function
-    (* todo: flatten unions, intersections, and enumerations *)
-    | App (SubsetEq, [t1; t2], _) -> 
-        let t11 = unflatten t1 in
-        let t21 = unflatten t2 in
-        (*let s = mk_free_const ?srt:(sort_of t11) (fresh_ident "S") in*)
-        App (Eq, [t21; mk_union [t11; t21]], Bool)
-    | t -> unflatten t
-  in
   let rec simplify = function
     | BoolOp (op, fs) -> BoolOp (op, List.map simplify fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, simplify f, a)
-    | Atom (t, a) -> Atom (simplify_term t, a)
+    | Atom (App (Disjoint, [t1; t2], _), a) when not !Config.abstract_preds ->
+        let srt = element_sort_of_set t1 in
+        let t11 = unflatten t1 in
+        let t21 = unflatten t2 in
+        Atom (mk_eq_term (mk_empty (Set srt)) (mk_inter [t11; t21]), a)
+    | Atom (App (SubsetEq, [t1; t2], _), a) when not !Config.abstract_preds -> 
+        let t11 = unflatten t1 in
+        let t21 = unflatten t2 in
+        Atom (mk_eq_term t21 (mk_union [t11; t21]), a)
+    | Atom (t, a) -> Atom (unflatten t, a)
   in
   let fs1 = List.map simplify fs in
   let elem_srts = 
@@ -541,6 +545,13 @@ let reduce f =
   let fs, gts = add_reach_axioms fs gts in
   let fs = add_array_axioms fs gts in
   let fs = if !Config.named_assertions then fs else List.map strip_names fs in
+  let _ =
+    if Debug.is_debug 1 then begin
+      print_endline "VC before instantiation:";
+      print_form stdout (mk_and fs);
+      print_newline ()
+    end
+  in
   let fs, gts = instantiate read_propagators fs gts in
   let fs = add_terms fs gts in
   let fs = encode_labels fs in

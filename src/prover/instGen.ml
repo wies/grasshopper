@@ -313,6 +313,13 @@ let generate_instances useLocalInst axioms rep_terms egraph =
         with Not_found -> (t, []) :: acc)
         fun_terms []
     in
+    let fun_terms_with_filters =
+      List.sort (fun (t1, _) (t2, _) ->
+        - (compare
+             (IdSet.cardinal (fv_term t1))
+             (IdSet.cardinal (fv_term t2))))
+        fun_terms_with_filters
+    in
     (* close the strat_vars so they are not instantiated *)
     let f = mk_forall (IdSrtSet.elements strat_vars1) f in
     (* generate substitution maps *)
@@ -321,7 +328,11 @@ let generate_instances useLocalInst axioms rep_terms egraph =
       let proto_subst_maps =
         List.fold_left
           (fun subst_maps (t, fs) ->
-            ematch fs t rep_terms egraph subst_maps)
+            (*print_endline ("Matching term " ^ string_of_term t);*)
+            let subst_maps1 = ematch fs t rep_terms egraph subst_maps in
+            (*List.iter print_subst_map subst_maps1;*)
+            subst_maps1
+          )
           [IdMap.empty] fun_terms_with_filters 
       in
       (* complete substitution maps for remaining variables *)

@@ -458,6 +458,7 @@ let set_axioms elem_srts =
     let elt2 = mk_var t (mk_ident "y") in
     let set1 = mk_var (Set t) (mk_ident "X") in
     let set2 = mk_var (Set t) (mk_ident "Y") in
+    let set3 = mk_var (Set t) (mk_ident "Z") in
     let empty = 
       (* don't use the smart constructor smk_elem for set membership here *)
       mk_not (mk_elem elt1 (mk_empty (Set t)))
@@ -478,13 +479,111 @@ let set_axioms elem_srts =
       mk_iff (mk_elem elt1 (mk_setenum [elt2])) 
         (mk_eq elt1 elt2)
     in
+    let subseteq =
+      mk_sequent [mk_subseteq set1 set2; mk_elem elt1 set1] [mk_elem elt1 set2]
+    in
+    (* Auxiliary subset axioms *)
+    let subset_refl =
+      mk_subseteq set1 set1
+    in
+    let subset_trans =
+      mk_sequent [mk_subseteq set1 set2; mk_subseteq set2 set3]
+        [mk_subseteq set1 set3]
+    in
+    let subset_empty =
+      mk_subseteq (mk_empty (Set t)) set1
+    in
+    let subset_union1 =
+      mk_sequent [mk_subseteq (mk_union [set1; set2]) set3]
+        [mk_and [mk_subseteq set1 set3; mk_subseteq set2 set3]]
+    in
+    let subset_union21 =
+      mk_sequent [mk_subseteq set1 set2]
+        [mk_subseteq set1 (mk_union [set2; set3])]
+    in
+    let subset_union22 =
+      mk_sequent [mk_subseteq set1 set2]
+        [mk_subseteq set1 (mk_union [set3; set2])]
+    in
+    let subset_inter1 =
+      mk_sequent [mk_subseteq set1 (mk_inter [set2; set3])]
+        [mk_and [mk_subseteq set1 set2; mk_subseteq set1 set3]]
+    in
+    let subset_inter21 =
+      mk_sequent [mk_subseteq set1 set2]
+        [mk_subseteq (mk_inter [set1; set3]) set2]
+    in
+    let subset_inter22 =
+      mk_sequent [mk_subseteq set1 set2]
+        [mk_subseteq (mk_inter [set3; set1]) set2]
+    in
+    let subset_diff =
+      mk_sequent [mk_subseteq set1 set2]
+        [mk_subseteq (mk_diff set1 set3) set2]
+    in
+    let disjoint_def =
+      mk_sequent [mk_disjoint set1 set2]
+        [mk_not (mk_elem elt1 set1); mk_not (mk_elem elt1 set2)]
+    in
+    let disjoint_empty =
+      mk_disjoint set1 (mk_empty (Set t))
+    in
+    let disjoint_sym =
+      mk_sequent [mk_disjoint set1 set2] [mk_disjoint set2 set1]
+    in
+    let disjoint_union =
+      mk_sequent [mk_disjoint (mk_union [set1; set2]) set3]
+        [mk_disjoint set1 set3; mk_disjoint set2 set3]
+    in
+    let disjoint_inter1 =
+      mk_sequent [mk_disjoint set1 set2]
+        [mk_disjoint (mk_inter [set1; set3]) set2]
+    in
+    let disjoint_inter2 =
+      mk_sequent [mk_disjoint set1 set2]
+        [mk_disjoint (mk_inter [set3; set1]) set2]
+    in
+    let disjoint_diff =
+      mk_sequent [mk_disjoint set1 set2]
+        [mk_disjoint (mk_diff set1 set3) set2]
+    in
+    let disjoint_subset1 =
+      mk_sequent [mk_subseteq set1 set2; mk_disjoint set2 set3]
+        [mk_disjoint set1 set3]
+    in
+    let disjoint_subset2 =
+      mk_sequent [mk_subseteq set1 set2; mk_disjoint set2 set3]
+        [mk_subseteq set1 (mk_diff set2 set3)]
+    in
     let ssrt = string_of_sort t in
     if !Config.use_set_theory then []
     else [mk_axiom ("def of emptyset" ^ ssrt) empty;
           mk_axiom ("def of union" ^ ssrt) union;
           mk_axiom ("def of inter" ^ ssrt) inter;
           mk_axiom ("def of setminus" ^ ssrt) diff;
-          mk_axiom ("def of setenum" ^ ssrt) setenum]
+          mk_axiom ("def of setenum" ^ ssrt) setenum] @
+      if !Config.abstract_preds then
+        [mk_axiom ("def of subseteq" ^ ssrt) subseteq;
+         mk_axiom ("subset refl" ^ ssrt) subset_refl;
+         mk_axiom ("subset empty" ^ ssrt) subset_empty;
+         mk_axiom ("subset trans" ^ ssrt) subset_trans;
+         mk_axiom ("subset union1" ^ ssrt) subset_union1;
+         mk_axiom ("subset union21" ^ ssrt) subset_union21;
+         mk_axiom ("subset union22" ^ ssrt) subset_union22;
+         mk_axiom ("subset inter1" ^ ssrt) subset_inter1;
+         mk_axiom ("subset inter21" ^ ssrt) subset_inter21;
+         mk_axiom ("subset inter22" ^ ssrt) subset_inter22;
+         mk_axiom ("subset diff" ^ ssrt) subset_diff;
+         mk_axiom ("def of Disjoint" ^ ssrt) disjoint_def;
+         mk_axiom ("Disjoint sym" ^ ssrt) disjoint_sym;
+         mk_axiom ("Disjoint empty" ^ ssrt) disjoint_empty;
+         mk_axiom ("Disjoint union" ^ ssrt) disjoint_union;
+         mk_axiom ("Disjoint inter1" ^ ssrt) disjoint_inter1;
+         mk_axiom ("Disjoint inter2" ^ ssrt) disjoint_inter2;
+         mk_axiom ("Disjoint diff" ^ ssrt) disjoint_diff;
+         mk_axiom ("Disjoint subset1" ^ ssrt) disjoint_subset1;
+         mk_axiom ("Disjoint subset2" ^ ssrt) disjoint_subset2;
+       ] else []
   in
   Util.flat_map mk_set_axioms elem_srts
       

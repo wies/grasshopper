@@ -342,6 +342,12 @@ let smk_elem ?(ann=[]) e = function
 (** Constructor for subset constraints.*)
 let mk_subseteq s t = mk_atom SubsetEq [s; t]
 
+(** Term constructor for disjointness constraints.*)
+let mk_disjoint_term s t = mk_app Bool Disjoint [s; t]
+
+(** Constructor for disjointness constraints.*)
+let mk_disjoint s t = mk_atom Disjoint [s; t]
+
 (** Term constructor for frame predicates.*)
 let mk_frame_term x a f f' = mk_app Bool Frame [x; a; f; f']
 

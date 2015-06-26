@@ -146,6 +146,7 @@ and expr =
   | Quant of quantifier_kind * quant_var list * expr * pos
   | Access of expr * pos
   | BtwnPred of expr * expr * expr * expr * pos
+  | DisjointPred of expr * expr * pos
   | UnaryOp of op * expr * pos
   | BinaryOp of expr * op * expr * typ * pos
   | Ident of ident * pos
@@ -173,6 +174,7 @@ let pos_of_expr = function
   | Access (_, p)
   | BtwnPred (_, _, _, _, p)
   | FramePred (_, _, _, _, p)
+  | DisjointPred (_, _, p)
   | Quant (_, _, _, p)
   | ProcCall (_, _, p)
   | PredApp (_, _, p)
