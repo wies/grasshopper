@@ -167,7 +167,7 @@ predicate hashset(h: HashSet, C: Set<Data>)
   true
 }
 
-procedure slset_add(lst: Node, val: Data, implicit ghost C: Set<Data>) 
+procedure listset_add(lst: Node, val: Data, implicit ghost C: Set<Data>) 
   returns (res: Node)
   requires listset(next, data, lst, C)
   ensures listset(next, data, res, C ++ Set(val))
@@ -182,10 +182,10 @@ procedure hashset_add(hset: HashSet, value: Data, implicit ghost C: Set<Data>)
 {
   var hashval := hash(hset.size, value);
   var list := hset.buckets[hashval];
-  hset.buckets[hashval] := slset_add(list, value);
+  hset.buckets[hashval] := listset_add(list, value);
 }
 
-procedure slset_contains(lst: Node, value: Data, implicit ghost C: Set<Data>)
+procedure listset_contains(lst: Node, value: Data, implicit ghost C: Set<Data>)
   returns (res: Bool)
   requires listset(next, data, lst, C)
   ensures listset(next, data, lst, C) &*& res == value in C
@@ -201,11 +201,11 @@ procedure hashset_contains(hset: HashSet, value: Data, implicit ghost C: Set<Dat
 {
   var hashval := hash(hset.size, value);
   var list := hset.buckets[hashval];
-  res := slset_contains(list, value);
+  res := listset_contains(list, value);
   return res;
 }
 
-procedure slset_remove(lst: Node, value: Data, implicit ghost C: Set<Data>) 
+procedure listset_remove(lst: Node, value: Data, implicit ghost C: Set<Data>) 
   returns (res: Node)
   requires listset(next, data, lst, C)
   ensures listset(next, data, res, C -- Set(value))
@@ -220,5 +220,5 @@ procedure hashset_remove(hset: HashSet, value: Data, C: Set<Data>)
 {
   var hashval := hash(hset.size, value);
   var list := hset.buckets[hashval];
-  hset.buckets[hashval] := slset_remove(list, value);
+  hset.buckets[hashval] := listset_remove(list, value);
 }
