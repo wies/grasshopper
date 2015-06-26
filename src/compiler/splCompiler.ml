@@ -897,10 +897,25 @@ let convert cu =
     | {proc_decls=pds} -> pr_c_fwd_procs ppf pds
   in
   let pr_c_proc_decls ppf cu =
+    let rec pr_c_stmt ppf = function 
+      | Skip (_) -> ()
+      | Block ([], _) -> ()
+      | Block (s :: [], _) -> fprintf ppf "@%a;" pr_c_stmt s
+      | Block (s :: ses, _) -> fprintf ppf "@%a@\n@%a" pr_c_stmt s pr_c_stm ses
+      | LocalVars of var list * exprs option * pos
+      | Assume (_, _, _) -> fprintf ppf "//TO ADD: ASSUME STATEMENTS"
+      | Assert (_, _, _) -> fprinft ppf "//TO ADD: ASSERT STAEMENTS"
+      | Assign of exprs * exprs * pos
+      | Havoc of exprs * pos
+      | Dispose of expr * pos
+      | If of expr * stmt * stmt * pos
+      | Loop of loop_contracts * stmt * expr * stmt * pos
+      | Return of exprs * pos
+    in
     let pr_c_proc ppf = 
       fun p -> 
       match p with
-      | {p_name=p_name} -> fprintf ppf "%s" (string_of_ident p_name)
+      | {p_name=p_name} -> fprintf ppf "void %s (%s) {@\n  @[<2>@%a@]@\n}" (string_of_ident p_name) "PUT PARAMS LIST HERE" pr_c_stmt "dogs"
     in
     let pr_c_procs ppf pds =
       IdMap.fold (fun k v a -> pr_c_proc ppf v) pds ()
