@@ -1035,7 +1035,7 @@ let convert cu =
           Util.fold_left_map
             (fun (accD,accL) decl -> match decl with
               | GuardedVar (id, e) ->
-                let e1 = convert_term locals e in
+                let e1 = convert_term accL e in
                 (match type_of_expr cu locals e with
                 | SetType elem_srt ->
                   let decl = var_decl id elem_srt false false pos pos in
