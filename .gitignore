@@ -2,6 +2,7 @@ _build/
 *.native
 *.smt2
 *.dot
+model.html
 out
 *.pdf
 *.png
