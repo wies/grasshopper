@@ -46,7 +46,7 @@
    '("\\<\\(a\\(xiom\\|ss\\(ert\\|ume\\)\\)\\|ensures\\|i\\(mplicit\\|nvariant\\)\\|pure\\|requires\\|ghost\\)\\>"
          1 font-lock-spec-face)
 
-   '("\\<\\(Btwn\\|exists\\|forall\\|in\\|old\\|Reach\\)\\>"
+   '("\\<\\(Btwn\\|Disjoint\\|exists\\|forall\\|Frame\\|in\\|old\\|Reach\\|subsetof\\|&\\|!\\||\\|*\\|-\\|=\\|:\\|+\\)\\>"
          1 font-lock-builtin-face)
 
    '("\\<\\(emp\\|false\\|null\\|true\\)\\>"
@@ -201,9 +201,12 @@
             (push '("&&" . ?∧) prettify-symbols-alist)
             (push '("||" . ?∨) prettify-symbols-alist)
             (push '("**" . ?∩) prettify-symbols-alist)
+            (push '("(++)" . ?⋃) prettify-symbols-alist)
             (push '("++" . ?∪) prettify-symbols-alist)
+            (push '("--" . ?—) prettify-symbols-alist)
             (push '("in" . ?∈) prettify-symbols-alist)
             (push '("!in" . ?∉) prettify-symbols-alist)
+            (push '("subsetof" . ?⊆) prettify-symbols-alist)
             (push '("!=" . ?≠) prettify-symbols-alist)
             (push '("==" . ?=) prettify-symbols-alist)
             (push '("!" . ?¬) prettify-symbols-alist)
