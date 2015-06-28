@@ -532,8 +532,8 @@ let set_axioms elem_srts =
       mk_sequent [mk_disjoint set1 set2] [mk_disjoint set2 set1]
     in
     let disjoint_union =
-      mk_sequent [mk_disjoint (mk_union [set1; set2]) set3]
-        [mk_disjoint set1 set3; mk_disjoint set2 set3]
+      mk_iff (mk_disjoint (mk_union [set1; set2]) set3)
+        (mk_and [mk_disjoint set1 set3; mk_disjoint set2 set3])
     in
     let disjoint_inter1 =
       mk_sequent [mk_disjoint set1 set2]
@@ -554,6 +554,9 @@ let set_axioms elem_srts =
     let disjoint_subset2 =
       mk_sequent [mk_subseteq set1 set2; mk_disjoint set2 set3]
         [mk_subseteq set1 (mk_diff set2 set3)]
+    in
+    let disjoint_subset3 =
+      mk_sequent [mk_subseteq set1 set2] [mk_disjoint set1 (mk_diff set3 set2)]
     in
     let ssrt = string_of_sort t in
     if !Config.use_set_theory then []
@@ -583,6 +586,7 @@ let set_axioms elem_srts =
          mk_axiom ("Disjoint diff" ^ ssrt) disjoint_diff;
          mk_axiom ("Disjoint subset1" ^ ssrt) disjoint_subset1;
          mk_axiom ("Disjoint subset2" ^ ssrt) disjoint_subset2;
+         mk_axiom ("Disjoint subset3" ^ ssrt) disjoint_subset3;
        ] else []
   in
   Util.flat_map mk_set_axioms elem_srts
