@@ -43,8 +43,8 @@
    '("\\<\\(i\\(f\\|nclude\\)\\|c\\(hoose\\|omment\\)\\|else\\|f\\(ree\\|unction\\)\\|havoc\\|matching\\|new\\|or\\|p\\(attern\\|r\\(ocedure\\|edicate\\)\\)\\|return\\(s\\|\\)\\|struct\\|var\\|w\\(ithout\\|hile\\)\\|yields\\)\\>"
          1 font-lock-keyword-face)
 
-   '("\\<\\(a\\(xiom\\|ss\\(ert\\|ume\\)\\)\\|ensures\\|i\\(mplicit\\|nvariant\\)\\|pure\\|requires\\|ghost\\)\\>"
-         1 font-lock-spec-face)
+   '("\\<\\(a\\(xiom\\|ss\\(ert\\|ume\\)\\)\\|ensures\\|i\\(mplicit\\|nvariant\\)\\|pure\\|requires\\|ghost\\|footprint\\)\\>"
+         1 font-lock-keyword-face)
 
    '("\\<\\(Btwn\\|Disjoint\\|exists\\|forall\\|Frame\\|in\\|old\\|Reach\\|subsetof\\|&\\|!\\||\\|*\\|-\\|=\\|:\\|+\\)\\>"
          1 font-lock-builtin-face)

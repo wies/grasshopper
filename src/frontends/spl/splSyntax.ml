@@ -73,6 +73,7 @@ and pred =
       pr_outputs : idents;
       pr_locals : vars;
       pr_body : expr; 
+      pr_is_footprint : bool;
       pr_pos : pos;
     }
 

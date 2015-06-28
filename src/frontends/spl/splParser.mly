@@ -53,7 +53,7 @@ let trd3 (_, _, v) = v
 %token <SplSyntax.quantifier_kind> QUANT
 %token ASSUME ASSERT CALL FREE HAVOC NEW RETURN
 %token IF ELSE WHILE
-%token GHOST IMPLICIT VAR STRUCT PURE PROCEDURE PREDICATE FUNCTION INCLUDE AXIOM
+%token GHOST IMPLICIT VAR STRUCT PURE PROCEDURE PREDICATE FUNCTION FOOTPRINT INCLUDE AXIOM
 %token OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token LOC INT BOOL SET MAP ARRAY ARRAYCELL
 %token MATCHING YIELDS COMMENT PATTERN
@@ -189,6 +189,7 @@ pred_decl:
       pr_footprints = footprints;
       pr_locals = locals;
       pr_body = $10;
+      pr_is_footprint = false;
       pr_pos = mk_position 2 2;
     }
   in decl
@@ -206,6 +207,7 @@ pred_decl:
       pr_footprints = [];
       pr_locals = locals;
       pr_body = $7;
+      pr_is_footprint = false;
       pr_pos = mk_position 2 2;
     }
   in decl
@@ -219,30 +221,63 @@ pred_decl:
 ;
 
 function_header:
-| FUNCTION IDENT LPAREN var_decls RPAREN RETURNS LPAREN var_decls RPAREN {
+| footprint FUNCTION IDENT LPAREN var_decls RPAREN LPAREN var_decls RPAREN RETURNS LPAREN var_decls RPAREN {
   let formals, locals =
     List.fold_right (fun decl (formals, locals) ->
       decl.v_name :: formals, IdMap.add decl.v_name decl locals)
-      $4 ([], IdMap.empty)
+      $5 ([], IdMap.empty)
+  in
+  let footprints, locals =
+    List.fold_right (fun decl (footprints, locals) ->
+      decl.v_name :: footprints, IdMap.add decl.v_name decl locals)
+      $8 ([], locals)
   in
   let outputs, locals =
     List.fold_right (fun decl (outputs, locals) ->
       decl.v_name :: outputs, IdMap.add decl.v_name decl locals)
-      $8 ([], locals)
+      $12 ([], locals)
   in
   let decl =
-    { pr_name = ($2, 0);
+    { pr_name = ($3, 0);
+      pr_formals = formals;
+      pr_footprints = footprints;
+      pr_outputs = outputs;
+      pr_locals = locals;
+      pr_body = BoolVal (true, GrassUtil.dummy_position);
+      pr_is_footprint = $1;
+      pr_pos = mk_position 3 3;
+    }
+  in decl
+}
+| footprint FUNCTION IDENT LPAREN var_decls RPAREN RETURNS LPAREN var_decls RPAREN {
+  let formals, locals =
+    List.fold_right (fun decl (formals, locals) ->
+      decl.v_name :: formals, IdMap.add decl.v_name decl locals)
+      $5 ([], IdMap.empty)
+  in
+  let outputs, locals =
+    List.fold_right (fun decl (outputs, locals) ->
+      decl.v_name :: outputs, IdMap.add decl.v_name decl locals)
+      $9 ([], locals)
+  in
+  let decl =
+    { pr_name = ($3, 0);
       pr_formals = formals;
       pr_footprints = [];
       pr_outputs = outputs;
       pr_locals = locals;
       pr_body = BoolVal (true, GrassUtil.dummy_position);
-      pr_pos = mk_position 2 2;
+      pr_is_footprint = $1;
+      pr_pos = mk_position 3 3;
     }
   in decl
 }
 ;
 
+footprint:
+| FOOTPRINT { true }
+| /* empty */ { false }
+  
 pred_impl:
 | LBRACE expr RBRACE {
   $2
@@ -482,7 +517,7 @@ proc_call:
 /*| MAP LT var_type, var_type GT LPAREN expr_list_opt RPAREN {*/
 | IDENT LPAREN expr_list_opt RPAREN { ProcCall (($1, 0), $3, mk_position 1 4) }
 ;
-
+                                                             
 ident: 
 | IDENT { Ident (($1, 0), mk_position 1 1) }
 ;

@@ -80,7 +80,7 @@ let add_ghost_field_invariants prog =
         pred_body = body;
         pred_pos = decl.var_pos;
         pred_accesses = IdSet.empty;
-        pred_is_free = false;
+        pred_is_footprint = false;
       }
     in
     pred :: preds,
@@ -295,7 +295,105 @@ let elim_arrays prog =
       prog_preds = preds;
       prog_vars = globals;
   }
-    
+
+(** Add frame axioms for framed predicates and functions *)
+let annotate_frame_axioms prog =
+  let process_pred frame_axioms pred =
+    let footprints =
+      List.fold_left (fun footprints id ->
+        let decl = IdMap.find id pred.pred_locals in
+        let struct_srt = struct_sort_of_sort (element_sort_of_sort decl.var_sort) in
+        SortMap.add decl.var_sort
+          (mk_var decl.var_sort id,
+           mk_var decl.var_sort (alloc_id (struct_srt)),
+           mk_var decl.var_sort (footprint_id (struct_srt)))
+          footprints)
+        SortMap.empty pred.pred_footprints
+    in
+    let res_srt = Prog.result_sort_of_pred pred in
+    let old_args =
+      List.map (fun id ->
+        let decl = IdMap.find id pred.pred_locals in
+        mk_var decl.var_sort id)
+        (pred.pred_formals @ pred.pred_footprints)
+    in
+    let old_pred = mk_free_app res_srt pred.pred_name old_args in
+    let footprints =
+      if pred.pred_is_footprint (* self-framing function? *)
+      then
+        let struct_srt = struct_sort_of_sort (element_sort_of_sort res_srt) in
+        SortMap.add res_srt
+          (old_pred,
+           mk_var res_srt (alloc_id (struct_srt)),
+           mk_var res_srt (footprint_id (struct_srt)))
+          footprints
+      else footprints
+    in
+    let loc_fields =
+      List.fold_left (fun loc_fields id1 ->
+        let decl = IdMap.find id1 pred.pred_locals in
+        match decl.var_sort with
+        | Map (Loc dsrt, rsrt) ->
+            if SortMap.mem (Set (Loc dsrt)) footprints then
+              let id2 = fresh_ident (name id1) in 
+              IdMap.add id1 (id2, Loc dsrt, rsrt) loc_fields
+            else loc_fields
+        | _ -> loc_fields)
+        IdMap.empty pred.pred_formals
+    in
+    let new_args =
+      List.map (fun id ->
+        try
+          let id2, srt1, srt2 = IdMap.find id loc_fields in
+          mk_var (Map (srt1, srt2)) id2
+        with Not_found ->
+          let decl = IdMap.find id pred.pred_locals in
+          mk_var decl.var_sort id)
+        (pred.pred_formals @ pred.pred_footprints)
+    in
+    let new_pred = mk_free_app res_srt pred.pred_name new_args in
+    let frame_pred_terms =
+      IdMap.fold (fun id1 (id2, srt1, srt2) frame_preds ->
+        let map_srt = Map (srt1, srt2) in
+        let _, a, fp = SortMap.find (Set srt1) footprints in
+        mk_app Bool Frame [fp; a; mk_var map_srt id1; mk_var map_srt id2] :: frame_preds)
+        loc_fields []
+    in
+    let frame_preds = List.map (fun t -> Atom (t, [])) frame_pred_terms in
+    let guards =
+      SortMap.fold (fun _ (fr, a, fp) guards ->
+        mk_subseteq fr a :: mk_disjoint fr fp :: guards)
+        footprints frame_preds
+    in
+    let name = "frame of " ^ string_of_ident pred.pred_name in
+    let frame_axiom =
+      let generators =
+        let match_frame_preds =
+          List.map (fun t -> Match (t, [])) frame_pred_terms
+        in
+        [(match_frame_preds @ [Match (new_pred, [])], [old_pred]);
+         (match_frame_preds @ [Match (old_pred, [])], [new_pred])]
+      in
+      let f =
+        List.fold_left (fun f t -> mk_pattern t [] f)
+          (mk_sequent guards [mk_eq old_pred new_pred])
+          frame_pred_terms
+      in
+      Axioms.mk_axiom ~gen:generators name f
+    in
+    let frame_axiom_spec =
+      mk_free_spec_form (FOL frame_axiom) name None pred.pred_pos
+    in
+    match frame_pred_terms with
+    | [] -> frame_axioms
+    | _ -> frame_axiom_spec :: frame_axioms
+  in
+  let frame_axioms =
+    Prog.fold_preds process_pred [] prog
+  in
+  { prog with prog_axioms = frame_axioms @ prog.prog_axioms }
+
+  
 (** Desugare SL specification to FOL specifications. 
  ** Assumes that loops have been transformed to tail-recursive procedures. *)
 let elim_sl prog =

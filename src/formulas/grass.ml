@@ -234,7 +234,7 @@ let string_of_symbol = function
   | Btwn -> "Btwn"
   | Elem -> "member"
   | SubsetEq -> "subset"
-  | Disjoint -> "disjoint"
+  | Disjoint -> "Disjoint"
   | Frame -> "Frame"
   (* uninterpreted symbols *)
   | FreeSym id -> string_of_ident id

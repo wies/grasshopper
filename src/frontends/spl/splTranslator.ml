@@ -1433,7 +1433,7 @@ let convert cu =
             pred_body = mk_spec_form (FOL body) (string_of_ident id) None (pos_of_expr decl.pr_body);
             pred_pos = decl.pr_pos;
             pred_accesses = IdSet.empty;
-            pred_is_free = false
+            pred_is_footprint = decl.pr_is_footprint;
           }
         in
         declare_pred prog pred_decl
