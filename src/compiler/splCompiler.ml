@@ -897,16 +897,38 @@ let convert cu =
     | {proc_decls=pds} -> pr_c_fwd_procs ppf pds
   in
   let pr_c_proc_decls ppf cu =
+    let rec pr_c_expr ppf = function
+      | Null (_, _) -> fprintf ppf "null"
+      | Emp _ -> fprintf pff "//TO DO: Add support for Emp"
+      | Setenum of typ * exprs * pos
+      | IntVal (i, _) -> fprintf ppf "%i" i
+      | BoolVal (b, _) -> fpritnf ppf (if b then "true" else "false")
+      | New of typ * exprs * pos
+      | Read of expr * expr * pos
+      | Length of expr * pos
+      | ArrayOfCell of expr * pos
+      | IndexOfCell of expr * pos
+      | ArrayCells of expr * pos
+      | ProcCall of ident * exprs * pos
+      | PredApp of ident * exprs * pos
+      | Quant of quantifier_kind * quant_var list * expr * pos
+      | Access of expr * pos
+      | BtwnPred of expr * expr * expr * expr * pos
+      | UnaryOp of op * expr * pos
+      | BinaryOp of expr * op * expr * typ * pos
+      | Ident of ident * pos
+      | Annot of expr * annotation * pos
+    in
     let rec pr_c_stmt ppf = function 
       | Skip (_) -> ()
       | Block ([], _) -> ()
       | Block (s :: [], _) -> fprintf ppf "@%a;" pr_c_stmt s
-      | Block (s :: ses, _) -> fprintf ppf "@%a@\n@%a" pr_c_stmt s pr_c_stm ses
+      | Block (s :: ses, _) -> fprintf ppf "@%a@\n@%a" pr_c_stmt s pr_c_stmt ses
       | LocalVars of var list * exprs option * pos
       | Assume (_, _, _) -> fprintf ppf "//TO ADD: ASSUME STATEMENTS"
       | Assert (_, _, _) -> fprinft ppf "//TO ADD: ASSERT STAEMENTS"
       | Assign of exprs * exprs * pos
-      | Havoc of exprs * pos
+      | Havoc (_, _) -> fprintf ppf "//TO ADD: HAVOC STATEMENTS"
       | Dispose of expr * pos
       | If of expr * stmt * stmt * pos
       | Loop of loop_contracts * stmt * expr * stmt * pos
