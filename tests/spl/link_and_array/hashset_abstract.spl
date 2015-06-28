@@ -63,7 +63,6 @@ axiom forall s1: Set<Node>, s2: Set<Node>, s3: Set<Node> ::
 
 axiom forall s1: Set<Node>, s2: Set<Node>, s3: Set<Node> ::
   s1 subsetof s2 && Disjoint(s2, s3) ==> s1 subsetof s2 -- s3;
-*/
 
 axiom (forall a: Set<Node>, fp: Set<Node>, f1: Map<Node,Node>, f2: Map<Node,Node>, x: Node ::
        Frame(fp, a, f1, f2) && Disjoint(listset_footprint(f1, x), fp) && listset_footprint(f1, x) subsetof a ==>
@@ -71,6 +70,7 @@ axiom (forall a: Set<Node>, fp: Set<Node>, f1: Map<Node,Node>, f2: Map<Node,Node
        @(pattern Frame(fp, a, f1, f2))
        @(matching Frame(fp, a, f1, f2), listset_footprint(f1, x) yields listset_footprint(f2, x))
        @(matching Frame(fp, a, f1, f2), listset_footprint(f2, x) yields listset_footprint(f1, x)));
+
 
 axiom (forall a: Set<Node>, fp: Set<Node>, d1: Map<Node,Data>, d2: Map<Node,Data>, s: Set<Node>, x: Node ::
        Frame(fp, a, d1, d2) && Disjoint(s, fp) && s subsetof a ==>
@@ -87,16 +87,18 @@ axiom forall a: Set<Node>, fp: Set<Node>, s: Set<Node>, c: Set<Data>, f1: Map<No
    @(pattern Frame(fp, a, f1, f2))
    @(matching Frame(fp, a, f1, f2), Frame(fp, a, d1, d2), listset(f1, d1, x, c, s) yields listset(f2, d2, x, c, s))
    @(matching Frame(fp, a, f1, f2), Frame(fp, a, d1, d2), listset(f2, d2, x, c, s) yields listset(f1, d1, x, c, s)));
+  */
 
-function listset_footprint(next: Map<Node, Node>, x: Node) returns (FP: Set<Node>)
+footprint function listset_footprint(next: Map<Node, Node>, x: Node) returns (FP: Set<Node>)
   
-function fp_witness(x: Node, as: Map<ArrayCell<Node>, Node>, fp: Set<ArrayCell<Node>>) returns (c: ArrayCell<Node>)
+function fp_witness(x: Node, as: Map<ArrayCell<Node>, Node>)(fp: Set<ArrayCell<Node>>) returns (c: ArrayCell<Node>)
   
-function listset_content(data: Map<Node, Data>, FP: Set<Node>) returns (C: Set<Data>)
+function listset_content(data: Map<Node, Data>)(FP: Set<Node>) returns (C: Set<Data>)
 
-function cnt_witness(d: Data, as: Map<ArrayCell<Node>, Node>, fp: Set<ArrayCell<Node>>) returns (c: ArrayCell<Node>)
+function cnt_witness(d: Data, as: Map<ArrayCell<Node>, Node>)(fp: Set<ArrayCell<Node>>) returns (c: ArrayCell<Node>)
   
-predicate listset(next: Map<Node, Node>, data: Map<Node, Data>, x: Node, C: Set<Data>)(FP: Set<Node>) {
+predicate listset(x: Node, C: Set<Data>)(FP: Set<Node>) {
+  //Reach(next, x, null)
   FP == listset_footprint(next, x) &&
   C == listset_content(data, FP)
 }
@@ -136,7 +138,7 @@ predicate arrayseg_with_buckets(a: Array<Node>, lo: Int, hi: Int, C: Set<Data>)
   FP1 == arrayseg_buckets_footprint(FP0) &&
   C == arrayseg_buckets_content(FP0) &&
   // every array cells points to a bucket list
-  (forall c in FP0 :: listset(next, data, c[], listset_content(data, listset_footprint(next, c[])), listset_footprint(next, c[]))) &&
+  (forall c in FP0 :: listset(c[], listset_content(data, listset_footprint(next, c[])), listset_footprint(next, c[]))) &&
   // the footprint sets of the bucket lists are disjoint
   (forall c1 in FP0, c2 in FP0 :: c1 == c2 || Disjoint(listset_footprint(next, c1[]), listset_footprint(next, c2[]))) &&
   // all data values of a bucket list have the same hash, which is the index of the array cell that points to the list
@@ -169,11 +171,12 @@ predicate hashset(h: HashSet, C: Set<Data>)
 
 procedure listset_add(lst: Node, val: Data, implicit ghost C: Set<Data>) 
   returns (res: Node)
-  requires listset(next, data, lst, C)
-  ensures listset(next, data, res, C ++ Set(val))
+  requires listset(lst, C)
+  ensures listset(res, C ++ Set(val))
 {
   lst.data := val;
   lst.next := null;
+  free lst;
 }
 
 procedure hashset_add(hset: HashSet, value: Data, implicit ghost C: Set<Data>)
@@ -187,8 +190,8 @@ procedure hashset_add(hset: HashSet, value: Data, implicit ghost C: Set<Data>)
 
 procedure listset_contains(lst: Node, value: Data, implicit ghost C: Set<Data>)
   returns (res: Bool)
-  requires listset(next, data, lst, C)
-  ensures listset(next, data, lst, C) &*& res == value in C
+  requires listset(lst, C)
+  ensures listset(lst, C) &*& res == value in C
 {
  lst.next := null;
  lst.data := value;
@@ -207,8 +210,8 @@ procedure hashset_contains(hset: HashSet, value: Data, implicit ghost C: Set<Dat
 
 procedure listset_remove(lst: Node, value: Data, implicit ghost C: Set<Data>) 
   returns (res: Node)
-  requires listset(next, data, lst, C)
-  ensures listset(next, data, res, C -- Set(value))
+  requires listset(lst, C)
+  ensures listset(res, C -- Set(value))
 {
   lst.next := null;
   lst.data := value;

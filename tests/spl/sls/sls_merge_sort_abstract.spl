@@ -1,0 +1,36 @@
+struct Node {
+  var next: Node;
+  var data: Int;
+}
+
+footprint function lseg_footprint(next: Map<Node, Node>, x: Node, y: Node) returns (FP: Set<Node>)
+
+predicate lseg(x: Node, y: Node)(FP: Set<Node>) {
+  FP == lseg_footprint(next, x, y)
+}
+
+predicate slseg(data: Map<Node, Int>, x: Node, y: Node)(FP: Set<Node>) {
+  FP = lseg_footprint(next, x, y)
+}
+
+procedure merge(a: Node, b: Node) returns (res: Node)
+  requires slseg(data, a, null) &*& slseg(data, b, null)
+  ensures slseg(data, res, null)
+
+procedure split(x: Node) returns (y: Node, z: Node)
+  requires lseg(x, null)
+  ensures lseg(y, null) &*& lseg(z, null)
+
+procedure merge_sort(x: Node) returns (res: Node)
+  requires lseg(x, null)
+  ensures slseg(data, res, null)
+{
+  var x1: Node, x2: Node;
+  x1, x2 := split(x);
+  var res1 := merge_sort(x1);
+  assert slseg(data, res1, null) &*& lseg(x2, null);
+  //assume slseg(data, res1, null) &*& lseg(x2, null);
+  var res2 := merge_sort(x2);
+  assert slseg(data, res1, null) &*& slseg(data, res2, null);
+  return merge(res1, res2);
+}
