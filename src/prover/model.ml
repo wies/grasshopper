@@ -1184,7 +1184,9 @@ let output_txt chan model =
 		  Printf.printf "\nFound %s edge: %s -> %s\n" f_str l_str r_str;
 		  Printf.printf "id_map: %s -> %d, %s -> %d\n" l_str l_id r_str r_id
 		end;
-	      Printf.fprintf chan "(%d, %s, %d)\n" l_id f_str r_id;
+	      (* Don't print null.next *)
+	      if l_id != 0 then
+		Printf.fprintf chan "(%d, %s, %d)\n" l_id f_str r_id;
 	      id_map
             with Not_found -> id_map)
             id_map locs)
