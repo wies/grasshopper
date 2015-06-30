@@ -902,7 +902,7 @@ let convert cu =
       | Emp _ -> fprintf pff "//TO DO: Add support for Emp"
       | Setenum of typ * exprs * pos
       | IntVal (i, _) -> fprintf ppf "%i" i
-      | BoolVal (b, _) -> fpritnf ppf (if b then "true" else "false")
+      | BoolVal (b, _) -> fprintf ppf (if b then "true" else "false")
       | New of typ * exprs * pos
       | Read of expr * expr * pos
       | Length of expr * pos
@@ -910,14 +910,15 @@ let convert cu =
       | IndexOfCell of expr * pos
       | ArrayCells of expr * pos
       | ProcCall of ident * exprs * pos
-      | PredApp of ident * exprs * pos
-      | Quant of quantifier_kind * quant_var list * expr * pos
+      | PredApp _ -> fprintf ppf "//TO DO: Add supperot for predicates"
+      | Quant _ -> fprintf ppf "//TO DO: Add support for quantifiers"
       | Access of expr * pos
-      | BtwnPred of expr * expr * expr * expr * pos
-      | UnaryOp of op * expr * pos
+      | BtwnPred _  -> fprintf ppf "//TO DO: Add support for Between Predicate"
+      | UnaryOp (OpNot, e1, _) -> fprintf ppf "!@%a" pr_c_expr e1
+      | UnaryOp _ -> fprintf ppf "ERROR: No such unary operator"
       | BinaryOp of expr * op * expr * typ * pos
-      | Ident of ident * pos
-      | Annot of expr * annotation * pos
+      | Ident (id, _) -> fprintf ppf "%s" (string_of_ident ppf)
+      | Annot _ -> fprintf ppf "//TO DO: Add support for annotations"
     in
     let rec pr_c_stmt ppf = function 
       | Skip (_) -> ()
@@ -927,11 +928,13 @@ let convert cu =
       | LocalVars of var list * exprs option * pos
       | Assume (_, _, _) -> fprintf ppf "//TO ADD: ASSUME STATEMENTS"
       | Assert (_, _, _) -> fprinft ppf "//TO ADD: ASSERT STAEMENTS"
-      | Assign of exprs * exprs * pos
+      | Assign (evar :: [], einit :: [], _) -> fprintf ppf "@%a = @%a;" pr_c_expr evar pr_c_expr einit
+      | Assign (evar :: evars, einit :: einits, p) fprintf ppf "@%a = @%a;@\n@%a" pr_c_expr evar pr_c_expr einit pr_c_stmt Assign (evars, einits, p)
+      | Assign (_, _, _) -> "//ERROR: unequal number of variables and assigned values"
       | Havoc (_, _) -> fprintf ppf "//TO ADD: HAVOC STATEMENTS"
-      | Dispose of expr * pos
-      | If of expr * stmt * stmt * pos
-      | Loop of loop_contracts * stmt * expr * stmt * pos
+      | Dispose (e1, _) -> fprintf ppf "free(%a);" pr_c_expr e1
+      | If (cond, b1, b2, _) -> fprintf ppf "if (%a) {@\n  @[<2>@%a@]@\n} else {@\n  @[<2>@%a@]@\n}" pr_c_expr cond pr_c_stmt b1 pr_c_stmt b2
+      | Loop (_, pre, cond, body, _) -> fprintf ppf "while (@%a) {@\n  @[<2>@%a@\n@%a@]@\n}" pr_c_exxpr cond pr_c_stmt body pr_c_stmt pre
       | Return of exprs * pos
     in
     let pr_c_proc ppf = 
