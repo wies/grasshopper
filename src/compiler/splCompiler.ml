@@ -943,7 +943,7 @@ let convert cu =
       | Quant _ -> fprintf ppf "//TO DO: Add support for quantifiers"
       | Access _ -> fprintf ppf "//TO DO: Add support for Access."
       | BtwnPred _  -> fprintf ppf "//TO DO: Add support for Between Predicate"
-      | UnaryOp (OpNot, e1, _) -> fprintf ppf "!@%a" pr_c_expr e1
+      | UnaryOp (OpNot, e1, _) -> fprintf ppf "!%a" pr_c_expr e1
       | UnaryOp (OpMinus, e1, _) -> fprintf ppf "-%a" pr_c_expr e1
       | UnaryOp _ -> fprintf ppf "ERROR: No such unary operator"
       | BinaryOp (e1, op1, e2, _, _) -> fprintf ppf "%a" pr_bin_op (e1, op1, e2)
@@ -953,8 +953,8 @@ let convert cu =
     let rec pr_c_stmt ppf = function 
       | (Skip (_), _) -> ()
       | (Block ([], _), _) -> ()
-      | (Block (s :: [], _), vs) -> fprintf ppf "@%a;" pr_c_stmt (s, vs) 
-      | (Block (s :: ses, pos), vs) -> fprintf ppf "@%a@\n@%a" pr_c_stmt (s, vs) pr_c_stmt (Block(ses, pos), vs)
+      | (Block (s :: [], _), vs) -> fprintf ppf "%a;" pr_c_stmt (s, vs) 
+      | (Block (s :: ses, pos), vs) -> fprintf ppf "%a@\n%a" pr_c_stmt (s, vs) pr_c_stmt (Block(ses, pos), vs)
       | (LocalVars (v::[], None, p), _) -> fprintf ppf "%s %s;" (string_of_c_type v.v_type) (string_of_ident v.v_name)
       | (LocalVars (v::vs, None, p), rvs) -> fprintf ppf "%a@\n%a" pr_c_stmt (LocalVars ([v], None, p), rvs) pr_c_stmt (LocalVars (vs, None, p), rvs)
       | (LocalVars (v::vs, Some(e::es), p), rvs) -> fprintf ppf "%a@\n%a" pr_c_stmt (LocalVars ([v], Some([e]), p), rvs) pr_c_stmt (LocalVars (vs, Some(es), p), rvs)
@@ -962,24 +962,22 @@ let convert cu =
       | (Assume _, _) -> fprintf ppf "//TO ADD: ASSUME STATEMENTS"
       | (Assert (_, _, _), _) -> fprintf ppf "//TO ADD: ASSERT STAEMENTS"
       | (Assign (evars, ProcCall(id, es, p1) :: [], p2), vs) -> fprintf ppf "%a" pr_c_expr (ProcCall(id,(List.fold_right (fun nextId acc -> nextId :: acc) es (List.fold_right (fun v a -> (Ident(v, p1)) :: a) vs  [])), p1))
-      | (Assign (evar :: [], einit :: [], _), _) -> fprintf ppf "@%a = @%a;" pr_c_expr evar pr_c_expr einit
-      | (Assign (evar :: evars, einit :: einits, p), rvs) -> fprintf ppf "@%a = @%a;@\n@%a" pr_c_expr evar pr_c_expr einit pr_c_stmt (Assign (evars, einits, p), rvs)
+      | (Assign (evar :: [], einit :: [], _), _) -> fprintf ppf "%a = %a;" pr_c_expr evar pr_c_expr einit
+      | (Assign (evar :: evars, einit :: einits, p), rvs) -> fprintf ppf "%a = %a;@\n%a" pr_c_expr evar pr_c_expr einit pr_c_stmt (Assign (evars, einits, p), rvs)
       | (Assign (_, _, _), _) -> fprintf ppf "//ERROR: unequal number of variables and assigned values"
       | (Havoc (_, _), _) -> fprintf ppf "//TO ADD: HAVOC STATEMENTS"
       | (Dispose (e1, _), _) -> fprintf ppf "free(%a);" pr_c_expr e1
-      | (If (cond, b1, b2, _), vs) -> fprintf ppf "if (%a) {@\n  @[<2>@%a@]@\n} else {@\n  @[<2>@%a@]@\n}" pr_c_expr cond pr_c_stmt (b1, vs) pr_c_stmt (b2, vs)
-      | (Loop (_, pre, cond, body, _), vs) -> fprintf ppf "while (true) {@\n  @[<2>@%a@\nif (!(@%a)) {@\n  break;@\n}@\n@%a@]@\n}" pr_c_stmt (pre, vs) pr_c_expr cond pr_c_stmt (body, vs)
+      | (If (cond, b1, b2, _), vs) -> fprintf ppf "if (%a) {@\n  @[<2>%a@]@\n} else {@\n  @[<2>%a@]@\n}" pr_c_expr cond pr_c_stmt (b1, vs) pr_c_stmt (b2, vs)
+      | (Loop (_, pre, cond, body, _), vs) -> fprintf ppf "while (true) {@\n  @[<2>%a@\nif (!(%a)) {@\n  break;@\n}@\n%a@]@\n}" pr_c_stmt (pre, vs) pr_c_expr cond pr_c_stmt (body, vs)
       | (Return(e :: [], _), v :: []) -> fprintf ppf "%s = %a;" (string_of_ident v) pr_c_expr e
       | (Return(e :: es, p), v :: vs) -> fprintf ppf "%a@\n%a" pr_c_stmt (Return([e], p), [v]) pr_c_stmt (Return(es, p), vs)
       | (Return _, _) -> ()
     in
     let pr_c_proc ppf = 
-      fun p -> 
-      match p with
-      | {p_name=p_name} -> fprintf ppf "void %s (%s) {@\n  @[<2>@%a@]@\n}" (string_of_ident p_name) "PUT PARAMS LIST HERE" pr_c_stmt "dogs"
+      fun p -> fprintf ppf "void %s (%s) {@\n  @[<2>%a@]@\n}" (string_of_ident p.p_name) "PUT PARAMS LIST HERE" pr_c_stmt (p.p_body, [])
     in
     let pr_c_procs ppf pds =
-      IdMap.fold (fun k v a -> pr_c_proc ppf (make_return_explicit v)) pds ()
+      IdMap.fold (fun k v a -> fprintf ppf "%a" pr_c_proc ppf (make_return_explicit v)) pds ()
     in
     match cu with 
     | {proc_decls=pds} -> pr_c_procs ppf pds 
