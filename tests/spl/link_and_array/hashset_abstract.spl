@@ -91,11 +91,11 @@ axiom forall a: Set<Node>, fp: Set<Node>, s: Set<Node>, c: Set<Data>, f1: Map<No
 
 footprint function listset_footprint(next: Map<Node, Node>, x: Node) returns (FP: Set<Node>)
   
-function fp_witness(x: Node, as: Map<ArrayCell<Node>, Node>)(fp: Set<ArrayCell<Node>>) returns (c: ArrayCell<Node>)
+function fp_witness(next: Map<Node, Node>, as: Map<ArrayCell<Node>, Node>, x: Node)(fp: Set<ArrayCell<Node>>) returns (c: ArrayCell<Node>)
   
 function listset_content(data: Map<Node, Data>)(FP: Set<Node>) returns (C: Set<Data>)
 
-function cnt_witness(d: Data, as: Map<ArrayCell<Node>, Node>)(fp: Set<ArrayCell<Node>>) returns (c: ArrayCell<Node>)
+function cnt_witness(data: Map<Node, Data>, as: Map<ArrayCell<Node>, Node>, d: Data)(fp: Set<ArrayCell<Node>>) returns (c: ArrayCell<Node>)
   
 predicate listset(x: Node, C: Set<Data>)(FP: Set<Node>) {
   //Reach(next, x, null)
@@ -114,9 +114,9 @@ function arrayseg_buckets_footprint(FP0: Set<ArrayCell<Node>>)
   // FP1 = (++) { listset_footprint(next, c[]) | c in FP0 }
   (forall c in FP0 :: listset_footprint(next, c[]) subsetof FP1
    @(matching c yields listset_footprint(next, c[]))) &&
-  (forall x in FP1 :: fp_witness(x, array_state(), FP0) in FP0) &&
-  (forall x in FP1 :: x in listset_footprint(next, fp_witness(x, array_state(), FP0)[])
-   @(matching x yields fp_witness(x, array_state(), FP0)))
+  (forall x in FP1 :: fp_witness(next, array_state(), x, FP0) in FP0) &&
+  (forall x in FP1 :: x in listset_footprint(next, fp_witness(next, array_state(), x, FP0)[])
+   @(matching x without cnt_witness yields fp_witness(next, array_state(), x, FP0)))
 }
 
 function arrayseg_buckets_content(FP0: Set<ArrayCell<Node>>)
@@ -125,22 +125,23 @@ function arrayseg_buckets_content(FP0: Set<ArrayCell<Node>>)
   // C = (++) { listset_content(next, c[]) | c in FP0 }
   (forall c in FP0 :: listset_content(data, listset_footprint(next, c[])) subsetof C
    @(matching c yields listset_content(data, listset_footprint(next, c[])))) &&
-  (forall d in C :: cnt_witness(d, array_state(), FP0) in FP0) &&
-  (forall d in C :: d in listset_content(data, listset_footprint(next, cnt_witness(d, array_state(), FP0)[]))
-   @(matching d yields cnt_witness(d, array_state(), FP0)))
+  (forall d in C :: cnt_witness(data, array_state(), d, FP0) in FP0) &&
+  (forall d in C :: d in listset_content(data, listset_footprint(next, cnt_witness(data, array_state(), d, FP0)[]))
+   @(matching d without fp_witness yields cnt_witness(data, array_state(), d, FP0)))
 }
 
 predicate arrayseg_with_buckets(a: Array<Node>, lo: Int, hi: Int, C: Set<Data>)
   (FP0: Set<ArrayCell<Node>>, FP1: Set<Node>)
 {
   0 <= lo && lo <= hi && hi <= a.length &&
+  // (&*&) lo <= i < hi :: listset(a[i], ?)
   FP0 == arrayseg_footprint(a, lo, hi) &&
   FP1 == arrayseg_buckets_footprint(FP0) &&
-  C == arrayseg_buckets_content(FP0) &&
   // every array cells points to a bucket list
   (forall c in FP0 :: listset(c[], listset_content(data, listset_footprint(next, c[])), listset_footprint(next, c[]))) &&
   // the footprint sets of the bucket lists are disjoint
   (forall c1 in FP0, c2 in FP0 :: c1 == c2 || Disjoint(listset_footprint(next, c1[]), listset_footprint(next, c2[]))) &&
+  C == arrayseg_buckets_content(FP0) &&
   // all data values of a bucket list have the same hash, which is the index of the array cell that points to the list
   // (implies the disjointness of the content sets of the lists)
   (forall c in FP0, d in listset_content(data, listset_footprint(next, c[])) :: hash(a.length, d) = c.index) 
@@ -216,7 +217,7 @@ procedure listset_remove(lst: Node, value: Data, implicit ghost C: Set<Data>)
   lst.next := null;
   lst.data := value;
 }
-  
+
 procedure hashset_remove(hset: HashSet, value: Data, C: Set<Data>)
   requires hashset(hset, C)
   ensures hashset(hset, C -- Set(value))
