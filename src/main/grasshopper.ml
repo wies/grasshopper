@@ -150,12 +150,16 @@ let print_stats start_time =
     Printf.printf "  measured time: %.2fs\n" !Util.measured_time;
     Printf.printf "  # measured calls: %.2d\n" !Util.measured_calls
 
-(** Print c program equivalent *)
+(** Print C program equivalent *)
 let print_c_program file =
-  let spl_prog = parse_spl_program file in
-  let c_prog_string = SplCompiler.to_program_string spl_prog in
-  Pervasives.print_string c_prog_string;
-  Printf.printf "\n"
+  if ((!Config.compile_to) <> "") then
+    let spl_prog = parse_spl_program file in
+    let c_prog_string = SplCompiler.to_program_string spl_prog in
+    let oc = open_out !Config.compile_to in
+    Printf.fprintf oc "%s" c_prog_string;
+    close_out oc;
+  else 
+    ()
 
 (** Main entry of GRASShopper *)
 let _ =

@@ -977,7 +977,7 @@ let convert cu =
       fun p -> fprintf ppf "void %s (%s) {@\n  @[<2>%a@]@\n}" (string_of_ident p.p_name) "PUT PARAMS LIST HERE" pr_c_stmt (p.p_body, [])
     in
     let pr_c_procs ppf pds =
-      IdMap.fold (fun k v a -> fprintf ppf "%a" pr_c_proc ppf (make_return_explicit v)) pds ()
+      IdMap.fold (fun k v a -> fprintf ppf "%a" pr_c_proc (make_return_explicit v)) pds ()
     in
     match cu with 
     | {proc_decls=pds} -> pr_c_procs ppf pds 

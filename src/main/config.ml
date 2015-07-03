@@ -54,6 +54,9 @@ let smtsolver = ref "Z3"
 (* Always add trigger annotations for quantifiers in SMT queries *)
 let smtpatterns = ref false
 
+(* The file that the SPL program converted into C is written to *)
+let compile_to = ref ""
+
 (* optmisation: oldify fields only if modified *)
 let opt_field_mod = ref true
 (* optmisation: self-framing clause for SL predicates *)
@@ -88,5 +91,7 @@ let cmd_options =
    ("-smtpatterns", Arg.Set smtpatterns, " Always add pattern annotations to quantifiers in SMT queries");
    ("-smtsets", Arg.Set use_set_theory, " Use solver's set theory to encode sets (if supported)");
    ("-smtarrays", Arg.Set encode_fields_as_arrays, " Use solver's array theory to encode fields\n");
+   ("-compile", Arg.Set_string compile_to, "<filename> Compile SPL program to a C program outputed as a file with the given name.");
+ 
    (*("-optSelfFrame", Arg.Set optSelfFrame, " enable generation of self-framing clauses for SL predicates");*)
   ]
