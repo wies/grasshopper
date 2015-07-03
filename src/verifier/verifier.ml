@@ -22,7 +22,7 @@ let simplify prog =
   dump_if 1 prog;
   Debug.info (fun () -> "Eliminating SL, adding heap access checks, and eliminating new/dispose.\n");
   let prog = elim_sl prog in
-  let prog = if true || !Config.abstract_preds then annotate_frame_axioms prog else prog in
+  let prog = if !Config.abstract_preds then annotate_frame_axioms prog else prog in
   let prog = annotate_heap_checks prog in
   let prog = elim_new_dispose prog in
   dump_if 2 prog;

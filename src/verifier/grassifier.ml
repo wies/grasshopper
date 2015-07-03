@@ -70,7 +70,9 @@ let add_ghost_field_invariants prog =
     in
     let pred_id = fresh_ident "ghost_field_invariant" in
     let name = "ghost field invariant for " ^ string_of_ident decl.var_name in
-    let body = mk_spec_form (FOL body_form) name None (decl.var_pos) in
+    let pred_term = mk_free_app Bool pred_id [fld; alloc_set] in
+    let gen = TermGenerator ([Match (pred_term, [])], [mk_known pred_term]) in
+    let body = mk_spec_form (FOL (annotate body_form [gen])) name None (decl.var_pos) in
     let pred = 
       { pred_name = pred_id;
         pred_formals = [decl.var_name; alloc_id];
@@ -366,7 +368,7 @@ let annotate_frame_axioms prog =
         footprints frame_preds
     in
     let name = "frame of " ^ string_of_ident pred.pred_name in
-    let frame_axiom =
+    let pred_frames =
       let generators =
         let match_frame_preds =
           List.map (fun t -> Match (t, [])) frame_pred_terms
@@ -374,19 +376,37 @@ let annotate_frame_axioms prog =
         [(match_frame_preds @ [Match (new_pred, [])], [old_pred]);
          (match_frame_preds @ [Match (old_pred, [])], [new_pred])]
       in
-      let f =
-        List.fold_left (fun f t -> mk_pattern t [] f)
-          (mk_sequent guards [mk_eq old_pred new_pred])
-          frame_pred_terms
+      let frame =
+        let f =
+          List.fold_left (fun f t -> mk_pattern t [] f)
+            (mk_sequent guards [mk_eq old_pred new_pred])
+            frame_pred_terms
+        in
+        Axioms.mk_axiom ~gen:generators name f
       in
-      Axioms.mk_axiom ~gen:generators name f
-    in
-    let frame_axiom_spec =
-      mk_free_spec_form (FOL frame_axiom) name None pred.pred_pos
+      let write_frames =
+        (*IdMap.fold (fun id1 (id2, srt1, srt2) write_frames ->
+          let dvar = mk_var srt2 Axioms.d in
+          let lvar = Axioms.loc1 (struct_sort_of_sort srt1) in
+          let fld1 = mk_var (Map (srt1, srt2)) id1 in
+          let fld2 = mk_write fld1 lvar dvar in
+          let fr, _, _ = SortMap.find (Set srt1) footprints in
+          let sm = IdMap.add id1 fld2 IdMap.empty in
+          let new_pred = subst_term sm old_pred in
+          let f = mk_or [mk_elem lvar fr; mk_eq old_pred new_pred] in
+          let generators =
+            [[Match (fld2, []); Match (new_pred, [])], [old_pred];
+             [Match (fld2, []); Match (old_pred, [])], [new_pred]]
+          in
+          (*Axioms.mk_axiom ~gen:generators name (mk_pattern old_pred [] f) ::*) write_frames)
+          loc_fields*) []
+      in
+      List.map (fun axiom -> mk_free_spec_form (FOL axiom) name None pred.pred_pos)
+        (frame :: write_frames)
     in
     match frame_pred_terms with
     | [] -> frame_axioms
-    | _ -> frame_axiom_spec :: frame_axioms
+    | _ -> pred_frames @ frame_axioms
   in
   let frame_axioms =
     Prog.fold_preds process_pred [] prog

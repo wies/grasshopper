@@ -292,7 +292,14 @@ let resolve_names cu =
       | Annot (e, PatternAnnot p, pos) ->
           Annot (re locals tbl e, PatternAnnot (re locals tbl p), pos)
       | Annot (e, GeneratorAnnot (es, ge), pos) ->
-          let es1 = List.map (re locals tbl) es in
+          let es1 =
+            List.map (fun (e, ids) ->
+              let ids1 =
+                List.map (fun init_id -> lookup_id init_id tbl pos) ids
+              in
+              re locals tbl e, ids1)
+              es
+          in
           Annot (re locals tbl e, GeneratorAnnot (es1, re locals tbl ge), pos)
       | Annot (e, ann, pos) ->
           Annot (re locals tbl e, ann, pos)
@@ -1139,14 +1146,20 @@ let convert cu =
         GrassUtil.mk_pattern p1 [] f
     | Annot (e, GeneratorAnnot (es, ge), pos) ->
         let f = convert_grass_form locals e in
-        let es1 = List.map (convert_term locals) es in
+        let es1 =
+          List.map (fun (e, ids) ->
+            let e1 = convert_term locals e in
+            let filters = List.map (fun id -> FilterSymbolNotOccurs (FreeSym id)) ids in
+            e1, filters)
+            es
+        in
         let ge1 = convert_term locals ge in
         let gts = GrassUtil.ground_terms (Atom (ge1, [])) in
         (*let filter id sm =
            
         in*)
         let matches = 
-          List.map (fun e -> 
+          List.map (fun (e, filters) -> 
             let ce = GrassUtil.free_consts_term e in
             let ce_occur_below ts =
               List.exists 
@@ -1169,7 +1182,7 @@ let convert cu =
                   when symbol_of e <> Some (FreeSym sym) && ce_occur_below ts ->
                     (FilterReadNotOccurs (GrassUtil.name sym, ([], srt))) :: acc
                 | _ -> acc)
-                gts [FilterNotNull]
+                gts (FilterNotNull :: filters)
             in
             Match (e, flt)) es1
         in

@@ -391,7 +391,8 @@ let rec mk_binder ?(ann=[]) b bv f =
           mk_binder ~ann:(ann @ ann') b bv f'
       | Binder (b', bv', f', ann') when b = b' ->
           mk_binder ~ann:(ann @ ann') b (bv @ bv') f'
-   | _ -> Binder (b, bv, f, ann)
+      | BoolOp (op, []) -> f
+      | _ -> Binder (b, bv, f, ann)
 
 (** Constructor for universal quantification.*)
 let mk_forall ?(ann=[]) bv f = mk_binder ~ann:ann Forall bv f
@@ -486,8 +487,10 @@ let smk_op op fs =
             end
 	| BoolOp (op', fs0) :: fs1 when op = op' -> 
 	    mkop1 (fs0 @ fs1) acc
-	| BoolOp (And, []) :: fs1 when op = Or -> mk_true
-	| BoolOp (Or, []) :: fs1 when op = And -> mk_false
+	| BoolOp (And, []) :: fs1
+        | Atom (App (BoolConst true, [], _), _) :: fs1 when op = Or -> mk_true
+	| BoolOp (Or, []) :: fs1
+        | Atom (App (BoolConst false, [], _), _) :: fs1 when op = And -> mk_false
 	| f :: fs1 -> mkop1 fs1 (FormSet.add f acc)
       in mkop1 fs FormSet.empty
 
@@ -508,6 +511,8 @@ let rec nnf = function
       Binder (b, [], nnf (mk_not f), a)
   | BoolOp (Not, [Binder (b, vs, f, a)]) -> 
       Binder (dualize_binder b, vs, nnf (mk_not f), a)
+  | BoolOp (Not, [Atom (App (BoolConst b, [], _), _)]) ->
+      mk_bool (not b)
   | BoolOp (op, fs) -> smk_op op (List.map nnf fs)
   | Binder (b, vs, f, a) -> mk_binder ~ann:a b vs (nnf f)
   | f -> f

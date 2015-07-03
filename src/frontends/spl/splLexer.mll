@@ -54,6 +54,7 @@ let _ =
       ("true", BOOLVAL(true));
       ("var", VAR);
       ("while", WHILE);
+      ("without", WITHOUT);
       ("yields", YIELDS);
       ("axiom", AXIOM);
    ])

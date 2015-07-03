@@ -56,7 +56,7 @@ let trd3 (_, _, v) = v
 %token GHOST IMPLICIT VAR STRUCT PURE PROCEDURE PREDICATE FUNCTION FOOTPRINT INCLUDE AXIOM
 %token OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token LOC INT BOOL SET MAP ARRAY ARRAYCELL
-%token MATCHING YIELDS COMMENT PATTERN
+%token MATCHING YIELDS WITHOUT COMMENT PATTERN
 %token EOF
 
 %nonassoc COLONEQ 
@@ -673,6 +673,14 @@ expr_list:
 ;
 
 annot:
-| MATCHING expr_list YIELDS expr { GeneratorAnnot($2, $4) }
+| MATCHING ematch_list YIELDS expr { GeneratorAnnot($2, $4) }
 | PATTERN expr { PatternAnnot $2 }
 | COMMENT STRINGVAL { CommentAnnot ($2) }
+
+ematch_list:
+| ematch { [$1] }
+| ematch COMMA ematch_list { $1 :: $3 }
+
+ematch:
+| expr { ($1, []) }
+| expr WITHOUT IDENT { ($1, [($3, 0)]) }

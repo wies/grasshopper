@@ -79,9 +79,11 @@ let elim_exists =
 	let ve = mk_var srt e in
 	mk_exists [(e, srt)] (annotate (smk_and [smk_elem ve s1; mk_not (smk_elem ve s2)]) a)
     | BoolOp (op, fs) -> smk_op op (List.map (elim_neq bvs) fs)
-    | Binder (Exists, vs, f, a) -> Binder (Exists, vs, elim_neq bvs f, a)
-    | Binder (Forall, vs, f, a) -> Binder (Forall, vs, elim_neq (bvs @ vs) f, a)
-    | f -> f
+    | Binder (Exists, vs, f, a) ->
+        mk_exists ~ann:a vs (elim_neq bvs f)
+    | Binder (Forall, vs, f, a) ->
+        mk_forall ~ann:a vs (elim_neq (bvs @ vs) f)
+    | f -> f 
   in
   List.map (fun f -> 
     let f1 = elim_neq [] f in

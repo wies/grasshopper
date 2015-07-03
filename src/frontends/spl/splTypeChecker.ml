@@ -453,7 +453,7 @@ let infer_types cu locals ty e =
         let a1 =
           match a with
           | GeneratorAnnot (es, ge) ->
-              let es1 = List.map (fun e -> fst (it locals AnyType e)) es in
+              let es1 = List.map (fun (e, ids) -> (fst (it locals AnyType e), ids)) es in
               let ge1, _ = it locals AnyType ge in
               GeneratorAnnot (es1, ge1)
           | PatternAnnot p ->
