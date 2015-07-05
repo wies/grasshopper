@@ -808,9 +808,8 @@ let infer_types cu =
   { cu with pred_decls = preds; proc_decls = procs; background_theory = bg_theory; }
 
 
-(** Converts abstract syntax into c program string.
- *  Assumes that [cu] has been type-checked and flattened.
- *)
+(** Converts abstract syntax into a C program string.
+ *  Assumes that [cu] has been type-checked and flattened. *)
 let convert cu = 
   let rec pr_c_type ppf = function
      | AnyRefType -> fprintf ppf "void*" 
@@ -855,12 +854,10 @@ let convert cu =
       | { p_name=p_name; p_formals=p_formals; p_returns=p_returns; p_locals=p_locals; p_contracts=p_contracts; p_body=Block(ss,pos); p_pos=p_pos; } -> {p_name=p_name; p_formals=p_formals;p_returns=p_returns;p_locals=p_locals;p_contracts=p_contracts;p_body=Block(ss@[Return((List.fold_right (fun v a -> (Ident(v, pos)) :: a)  p_returns []), pos)], pos);p_pos=p_pos}
     | { p_name=p_name; p_formals=p_formals; p_returns=p_returns; p_locals=p_locals; p_contracts=p_contracts; p_body=p_body; p_pos=p_pos; } -> {p_name=p_name; p_formals=p_formals;p_returns=p_returns;p_locals=p_locals;p_contracts=p_contracts;p_body=Block([p_body;Return((List.fold_right (fun v a -> (Ident(v, p_pos)) :: a)  p_returns []), p_pos)], (pos_of_stmt p_body));p_pos=p_pos} 
   in
-  let import_string =
-    "#include <stdbool.h>\n"
-  in
+  (* Forward declaration for structs in order to allow mutual recursion. *) 
   let c_struct_fwd_decls cu =
-    match cu with 
-    | {struct_decls=sds} -> String.concat "" (List.rev (IdMap.fold (fun k {s_name=s_name}  a -> ("struct " ^ (string_of_ident s_name) ^ ";\n") :: a) sds []))
+    let sds = cu.struct_decls in
+    String.concat "" (List.rev (IdMap.fold (fun k {s_name=s_name}  a -> ("struct " ^ (string_of_ident s_name) ^ ";\n") :: a) sds []))
   in
   let pr_c_struct_decls ppf cu =
         let pr_c_field ppf f = 
@@ -887,7 +884,7 @@ let convert cu =
     in
     match cu with 
     | {struct_decls=sds} -> pr_c_structs ppf sds
-  in
+  in 
   let pr_c_proc_fwd_decls ppf cu =
     let pr_c_fwd_proc ppf =
       fun p ->
@@ -982,13 +979,27 @@ let convert cu =
     match cu with 
     | {proc_decls=pds} -> pr_c_procs ppf pds 
   in
-  flush_str_formatter ();
-  fprintf str_formatter "%s@\n%s@\n%a@\n%a@\n%a"
-    import_string
+  (** Section functions -- functions that format particular categories of code
+   *  (e.g. imports, structs, procs) completely so they can be integrated into
+   *  the program total. *)
+  let pr_c_import_section ppf () =
+    fprintf ppf "#include <stdbool.h>"
+  in
+  let pr_c_struct_section ppf cu =
+    fprintf ppf "%s@\n@\n%a"
     (c_struct_fwd_decls cu)
     pr_c_struct_decls cu
+  in 
+  let pr_c_proc_section ppf cu =
+    fprintf ppf "%a@\n@\n%a"
     pr_c_proc_fwd_decls cu
-    pr_c_proc_decls cu;
+    pr_c_proc_decls cu
+  in
+  flush_str_formatter ();
+  fprintf str_formatter "%a%a%a"
+    pr_c_import_section ()
+    pr_c_struct_section cu
+    pr_c_proc_section cu;
   flush_str_formatter ()  
 
 (** Convert compilation unit [cu] to string containing a C program. *)
