@@ -855,9 +855,19 @@ let convert cu =
     | { p_name=p_name; p_formals=p_formals; p_returns=p_returns; p_locals=p_locals; p_contracts=p_contracts; p_body=p_body; p_pos=p_pos; } -> {p_name=p_name; p_formals=p_formals;p_returns=p_returns;p_locals=p_locals;p_contracts=p_contracts;p_body=Block([p_body;Return((List.fold_right (fun v a -> (Ident(v, p_pos)) :: a)  p_returns []), p_pos)], (pos_of_stmt p_body));p_pos=p_pos} 
   in
   (* Forward declaration for structs in order to allow mutual recursion. *) 
-  let c_struct_fwd_decls cu =
+  let pr_c_struct_fwd_decls ppf cu =
     let sds = cu.struct_decls in
-    String.concat "" (List.rev (IdMap.fold (fun k {s_name=s_name}  a -> ("struct " ^ (string_of_ident s_name) ^ ";\n") :: a) sds []))
+    let string_of_struct_fwd_decl s_id = 
+      "struct " ^ (string_of_ident s_id) ^ ";"
+    in
+    fprintf ppf "%s"
+      (String.concat 
+        "\n" 
+        (List.rev 
+          (IdMap.fold 
+            (fun k {s_name=s_id}  a -> (string_of_struct_fwd_decl s_id) :: a) 
+            sds 
+            [])))
   in
   let pr_c_struct_decls ppf cu =
         let pr_c_field ppf f = 
@@ -983,12 +993,12 @@ let convert cu =
    *  (e.g. imports, structs, procs) completely so they can be integrated into
    *  the program total. *)
   let pr_c_import_section ppf () =
-    fprintf ppf "#include <stdbool.h>"
+    fprintf ppf "#include <stdbool.h>@\n@\n"
   in
   let pr_c_struct_section ppf cu =
-    fprintf ppf "%s@\n@\n%a"
-    (c_struct_fwd_decls cu)
-    pr_c_struct_decls cu
+    fprintf ppf "%a@\n@\n%a"
+    pr_c_struct_fwd_decls cu
+    pr_c_struct_decls     cu
   in 
   let pr_c_proc_section ppf cu =
     fprintf ppf "%a@\n@\n%a"
