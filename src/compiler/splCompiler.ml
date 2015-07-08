@@ -908,10 +908,15 @@ let convert cu =
         ", " 
         (List.fold_right 
           (fun v a -> 
-            ((string_of_c_type (IdMap.find v p.p_locals).v_type) ^ " " ^ (string_of_ident v)) :: a) 
+            ((string_of_c_type (IdMap.find v p.p_locals).v_type) ^ 
+            " " ^ 
+            (string_of_ident v)) :: a) 
           p.p_formals 
           (List.fold_right 
-            (fun v a -> ((string_of_c_ref_type (IdMap.find v p.p_locals).v_type) ^ " " ^ (string_of_ident v)) :: a) 
+            (fun v a -> 
+              ((string_of_c_ref_type (IdMap.find v p.p_locals).v_type) ^ 
+              " " ^ 
+              (string_of_ident v)) :: a) 
             p.p_formals 
             [])))
   in
@@ -931,31 +936,32 @@ let convert cu =
   in
   (** Translation of SPL prc declarations into C function declarations. *)
   let pr_c_proc_decls ppf cu =
-    let rec pr_c_args ppf = function
+    let rec pr_c_expr_args ppf = function
       | []      -> ()
       | e :: [] -> fprintf ppf "%a" pr_c_expr e 
-      | e :: es -> fprintf ppf "%a, %a" pr_c_expr e pr_c_args es
+      | e :: es -> fprintf ppf "%a, %a" pr_c_expr e pr_c_expr_args es
     and pr_bin_op ppf = function
-      | (_, (OpDiff | OpUn | OpInt), _) -> fprintf ppf "ERROR: Sets not yet implemented"
       | (e1, OpMinus, e2) -> fprintf ppf "%a - %a" pr_c_expr e1 pr_c_expr e2
-      | (e1, OpPlus, e2) -> fprintf ppf "%a + %a" pr_c_expr e1 pr_c_expr e2
-      | (e1, OpMult, e2) -> fprintf ppf "%a * %a" pr_c_expr e1 pr_c_expr e2 
-      | (e1, OpDiv, e2) -> fprintf ppf "%a / %a" pr_c_expr e1 pr_c_expr e2
-      | (e1, OpEq, e2) -> fprintf ppf "%a == %a" pr_c_expr e1 pr_c_expr e2
-      | (e1, OpGt, e2) -> fprintf ppf "%a > %a" pr_c_expr e1 pr_c_expr e2
-      | (e1, OpLt, e2) -> fprintf ppf "%a < %a" pr_c_expr e1 pr_c_expr e2
-      | (e1, OpGeq, e2) -> fprintf ppf "%a >= %a" pr_c_expr e1 pr_c_expr e2 
-      | (e1, OpLeq, e2) -> fprintf ppf "%a <= %a" pr_c_expr e1 pr_c_expr e2
-      | (e1, OpIn, e2) -> fprintf ppf "%a != %a" pr_c_expr e1 pr_c_expr e2
-      | (_, (OpPts | OpSepStar | OpSepPlus | OpSepIncl), _) -> fprintf ppf "ERROR: Separation logic not implemented."
-      | (e1, OpAnd, e2) -> fprintf ppf "%a && %a" pr_c_expr e1 pr_c_expr e1 
-      | (e1, OpOr, e2) -> fprintf ppf "%a || %a" pr_c_expr e1 pr_c_expr e1 
-      | (e1, OpImpl, e2) -> fprintf ppf "((!%a) || %a)" pr_c_expr e1 pr_c_expr e2 
-      | _ -> fprintf ppf "ERROR: No such Binary Operator"
+      | (e1, OpPlus,  e2) -> fprintf ppf "%a + %a" pr_c_expr e1 pr_c_expr e2
+      | (e1, OpMult,  e2) -> fprintf ppf "%a * %a" pr_c_expr e1 pr_c_expr e2 
+      | (e1, OpDiv, e2)   -> fprintf ppf "%a / %a" pr_c_expr e1 pr_c_expr e2
+      | (e1, OpEq, e2)    -> fprintf ppf "%a == %a" pr_c_expr e1 pr_c_expr e2
+      | (e1, OpGt, e2)    -> fprintf ppf "%a > %a" pr_c_expr e1 pr_c_expr e2
+      | (e1, OpLt, e2)    -> fprintf ppf "%a < %a" pr_c_expr e1 pr_c_expr e2
+      | (e1, OpGeq, e2)   -> fprintf ppf "%a >= %a" pr_c_expr e1 pr_c_expr e2 
+      | (e1, OpLeq, e2)   -> fprintf ppf "%a <= %a" pr_c_expr e1 pr_c_expr e2
+      | (e1, OpIn, e2)    -> fprintf ppf "%a != %a" pr_c_expr e1 pr_c_expr e2
+      | (e1, OpAnd, e2)   -> fprintf ppf "%a && %a" pr_c_expr e1 pr_c_expr e2 
+      | (e1, OpOr, e2)    -> fprintf ppf "%a || %a" pr_c_expr e1 pr_c_expr e2 
+      | (e1, OpImpl, e2)  -> 
+        fprintf ppf "((!%a) || %a)" pr_c_expr e1 pr_c_expr e2 
+      | (_, (OpDiff | OpUn | OpInt), _) -> 
+        fprintf ppf "/* ERROR: sets not yet implemented */"
+      | (_, (OpPts | OpSepStar | OpSepPlus | OpSepIncl), _) -> 
+        fprintf ppf "/* ERROR: separation logic not yet implemented. */"
+      | _ -> fprintf ppf "/* ERROR: no such Binary Operator */"
     and pr_c_expr ppf = function
       | Null (_, _) -> fprintf ppf "null"
-      | Emp _ -> fprintf ppf "//TO DO: Add support for Emp"
-      | Setenum _ -> fprintf ppf "//FIX WHEN SETS ARE AVAILABLE"
       | IntVal (i, _) -> fprintf ppf "%i" i
       | BoolVal (b, _) -> fprintf ppf (if b then "true" else "false")
       | New (t1, [], _) -> fprintf ppf "malloc(sizeof(%s))" (string_of_c_type t1) (*FIX-GET * off struct*)
@@ -968,46 +974,104 @@ let convert cu =
         | _ -> fprintf ppf "ERROR: can't address such an object with Read")
       | Length (idexp, _) -> fprintf ppf "%a.length" pr_c_expr idexp
       | (ArrayCells _) | (ArrayOfCell _) | (IndexOfCell _) -> fprintf ppf "//TO DO: Implement"
-      | ProcCall (id, es, _) -> fprintf ppf "%s(%a)" (string_of_ident id) pr_c_args es
-      | PredApp _ -> fprintf ppf "//TO DO: Add supperot for predicates"
-      | Quant _ -> fprintf ppf "//TO DO: Add support for quantifiers"
-      | Access _ -> fprintf ppf "//TO DO: Add support for Access."
-      | BtwnPred _  -> fprintf ppf "//TO DO: Add support for Between Predicate"
+      | ProcCall (id, es, _) -> fprintf ppf "%s(%a)" (string_of_ident id) pr_c_expr_args es
       | UnaryOp (OpNot, e1, _) -> fprintf ppf "!%a" pr_c_expr e1
       | UnaryOp (OpMinus, e1, _) -> fprintf ppf "-%a" pr_c_expr e1
       | UnaryOp _ -> fprintf ppf "ERROR: No such unary operator"
       | BinaryOp (e1, op1, e2, _, _) -> fprintf ppf "%a" pr_bin_op (e1, op1, e2)
       | Ident (id, _) -> fprintf ppf "%s" (string_of_ident id)
-      | Annot _ -> fprintf ppf "//TO DO: Add support for annotations"
+      | Emp _|Setenum _|PredApp _|Quant _|Access _|BtwnPred _|Annot _ ->
+        fprintf ppf "/* Error: expression type not yet implemented. */"
+      | _ -> fprintf ppf "/* Error: badly formed expression. */
     in
-    let rec pr_c_stmt ppf = function 
+    let rec pr_c_stmt ppf = 
+      let rec pr_c_block ppf = function 
+        | (Block ([], _), _) -> ()
+        | (Block (s :: [], _), rs) -> fprintf ppf "%a;" pr_c_block (s, rs) 
+        | (Block (s :: ses, pos), rs) -> 
+          fprintf ppf "%a@\n%a" 
+            pr_c_block (s, rs) 
+            pr_c_block (Block(ses, pos), rs)
+        | _ -> fprintf ppf "/* ERROR: badly formed statement block. */"
+      in
+      let rec pr_c_localvars ppf = function
+        | (LocalVars (v::[], None, p), _) -> 
+          fprintf ppf "%s %s;" 
+            (string_of_c_type v.v_type) 
+            (string_of_ident v.v_name)
+        | (LocalVars (v::vs, None, p), rs) -> 
+          fprintf ppf "%a@\n%a" 
+            pr_c_localvars (LocalVars ([v], None, p), rs) 
+            pr_c_localvars (LocalVars (vs, None, p), rs)
+        | (LocalVars (v::vs, Some(e::es), p), rs) -> 
+          fprintf ppf "%a@\n%a" 
+            pr_c_localvars (LocalVars ([v], Some([e]), p), rs) 
+            pr_c_localvars (LocalVars (vs, Some(es), p), rs)
+        | _ -> fprintf ppf "/* ERROR: badly formed LocalVars statement. */"
+      in
+      let rec pr_c_assign ppf = function
+        | (Assign (vs, ProcCall(id, es, p1) :: [], p2), rs) -> 
+          fprintf ppf "%a"
+            pr_c_expr
+             (ProcCall(
+               id,
+               (List.fold_right
+                 (fun nextId acc -> nextId :: acc)
+                 es
+                 (List.fold_right
+                   (fun v a -> (Ident(v, p1)) :: a)
+                   rs
+                   [])),
+               p1))
+        | (Assign (v :: [], e :: [], _), _) -> 
+          fprintf ppf "%a = %a;" 
+            pr_c_expr v 
+            pr_c_expr e
+        | (Assign (v :: vs, e :: es, p), rs) -> 
+          fprintf ppf "%a = %a;@\n%a"
+            pr_c_expr v
+            pr_c_expr e 
+            pr_c_stmt (Assign (vs, es, p), rs)
+        | _ -> fprintf ppf "/* ERROR: badly formed Assign statement */"
+      in
+      let pr_c_return ppf = function
+        | (Return([], _), []) -> ()
+        | (Return(e :: [], _), v :: []) ->
+          fprintf ppf "%s = %a;" 
+            (string_of_ident v)
+            pr_c_expr e
+        | (Return(e :: es, p), v :: rs) ->
+          fprintf ppf "%a@\n%a"
+            pr_c_stmt (Return([e], p), [v])
+            pr_c_stmt (Return(es, p), rs)
+        | _ -> fprintf ppf "/* ERROR: badly formed Return statement. */"
+      in
+      function 
       | (Skip (_), _) -> ()
-      | (Block ([], _), _) -> ()
-      | (Block (s :: [], _), vs) -> fprintf ppf "%a;" pr_c_stmt (s, vs) 
-      | (Block (s :: ses, pos), vs) -> fprintf ppf "%a@\n%a" pr_c_stmt (s, vs) pr_c_stmt (Block(ses, pos), vs)
-      | (LocalVars (v::[], None, p), _) -> fprintf ppf "%s %s;" (string_of_c_type v.v_type) (string_of_ident v.v_name)
-      | (LocalVars (v::vs, None, p), rvs) -> fprintf ppf "%a@\n%a" pr_c_stmt (LocalVars ([v], None, p), rvs) pr_c_stmt (LocalVars (vs, None, p), rvs)
-      | (LocalVars (v::vs, Some(e::es), p), rvs) -> fprintf ppf "%a@\n%a" pr_c_stmt (LocalVars ([v], Some([e]), p), rvs) pr_c_stmt (LocalVars (vs, Some(es), p), rvs)
-      | (LocalVars _, _) -> fprintf ppf "//ERROR: the number of assigned variables and values being assigned is not equal."
-      | (Assume _, _) -> fprintf ppf "//TO ADD: ASSUME STATEMENTS"
-      | (Assert (_, _, _), _) -> fprintf ppf "//TO ADD: ASSERT STAEMENTS"
-      | (Assign (evars, ProcCall(id, es, p1) :: [], p2), vs) -> fprintf ppf "%a" pr_c_expr (ProcCall(id,(List.fold_right (fun nextId acc -> nextId :: acc) es (List.fold_right (fun v a -> (Ident(v, p1)) :: a) vs  [])), p1))
-      | (Assign (evar :: [], einit :: [], _), _) -> fprintf ppf "%a = %a;" pr_c_expr evar pr_c_expr einit
-      | (Assign (evar :: evars, einit :: einits, p), rvs) -> fprintf ppf "%a = %a;@\n%a" pr_c_expr evar pr_c_expr einit pr_c_stmt (Assign (evars, einits, p), rvs)
-      | (Assign (_, _, _), _) -> fprintf ppf "//ERROR: unequal number of variables and assigned values"
-      | (Havoc (_, _), _) -> fprintf ppf "//TO ADD: HAVOC STATEMENTS"
+      | (Block _, _) as b -> pr_c_block ppf b
+      | (LocalVars _, _) as lv -> pr_c_localvars ppf lv
+      | (Assign _, _) as a -> pr_c_assign ppf a
       | (Dispose (e1, _), _) -> fprintf ppf "free(%a);" pr_c_expr e1
-      | (If (cond, b1, b2, _), vs) -> fprintf ppf "if (%a) {@\n  @[<2>%a@]@\n} else {@\n  @[<2>%a@]@\n}" pr_c_expr cond pr_c_stmt (b1, vs) pr_c_stmt (b2, vs)
-      | (Loop (_, pre, cond, body, _), vs) -> fprintf ppf "while (true) {@\n  @[<2>%a@\nif (!(%a)) {@\n  break;@\n}@\n%a@]@\n}" pr_c_stmt (pre, vs) pr_c_expr cond pr_c_stmt (body, vs)
-      | (Return(e :: [], _), v :: []) -> fprintf ppf "%s = %a;" (string_of_ident v) pr_c_expr e
-      | (Return(e :: es, p), v :: vs) -> fprintf ppf "%a@\n%a" pr_c_stmt (Return([e], p), [v]) pr_c_stmt (Return(es, p), vs)
-      | (Return _, _) -> ()
+      | (If (cond, b1, b2, _), rs) -> 
+        fprintf ppf "if (%a) {@\n  @[<2>%a@]@\n} else {@\n  @[<2>%a@]@\n}"
+          pr_c_expr cond
+          pr_c_stmt (b1, rs)
+          pr_c_stmt (b2, rs)
+      | (Loop (_, pre, cond, body, _), rs) -> 
+        fprintf ppf "while (true) {@\n  @[<2>%a@\nif (!(%a)) {@\n  break;@\n}@\n%a@]@\n}"
+        pr_c_stmt (pre, rs)
+        pr_c_expr cond
+        pr_c_stmt (body, rs)
+      | (Return _, _) as r -> pr_c_return ppf r
+      | (((Assume _)|(Assert _)|(Havoc _)), _) -> 
+        fprintf ppf "/* ERROR: Unimplemented statement */"
+      | _ -> fprintf ppf "/* ERROR: Unaccounted for statement */"
     in
     let pr_c_proc ppf p =
         fprintf ppf "void %s (%a) {@\n  @[<2>%a@]@\n}" 
           (string_of_ident p.p_name) 
           pr_c_proc_args p
-          pr_c_stmt (p.p_body, [])
+          pr_c_stmt ((make_return_explicit p).p_body, [])
     in
     let rec pr_c_procs ppf = function 
       | []      -> () 
