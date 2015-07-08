@@ -811,6 +811,7 @@ let infer_types cu =
 (** Converts abstract syntax into a C program string.
  *  Assumes that [cu] has been type-checked and flattened. *)
 let convert cu = 
+  let idmap_to_list fs = (List.rev (IdMap.fold (fun k v a -> v :: a) fs [])) in
   let rec pr_c_type ppf = function
      | AnyRefType -> fprintf ppf "void*" 
      | BoolType -> fprintf ppf "bool"
@@ -854,7 +855,7 @@ let convert cu =
       | { p_name=p_name; p_formals=p_formals; p_returns=p_returns; p_locals=p_locals; p_contracts=p_contracts; p_body=Block(ss,pos); p_pos=p_pos; } -> {p_name=p_name; p_formals=p_formals;p_returns=p_returns;p_locals=p_locals;p_contracts=p_contracts;p_body=Block(ss@[Return((List.fold_right (fun v a -> (Ident(v, pos)) :: a)  p_returns []), pos)], pos);p_pos=p_pos}
     | { p_name=p_name; p_formals=p_formals; p_returns=p_returns; p_locals=p_locals; p_contracts=p_contracts; p_body=p_body; p_pos=p_pos; } -> {p_name=p_name; p_formals=p_formals;p_returns=p_returns;p_locals=p_locals;p_contracts=p_contracts;p_body=Block([p_body;Return((List.fold_right (fun v a -> (Ident(v, p_pos)) :: a)  p_returns []), p_pos)], (pos_of_stmt p_body));p_pos=p_pos} 
   in
-  (* Forward declaration for structs in order to allow mutual recursion. *) 
+  (** Forward declarations for structs in order to allow mutual recursion. *)
   let pr_c_struct_fwd_decls ppf cu =
     let sds = cu.struct_decls in
     let string_of_struct_fwd_decl s_id = 
@@ -869,44 +870,66 @@ let convert cu =
             sds 
             [])))
   in
+  (** Translation of SPL struct declarations into C struct declarations. *)
   let pr_c_struct_decls ppf cu =
-        let pr_c_field ppf f = 
-      match f with 
-      | {v_name=v_name; v_type=v_type} -> fprintf ppf "@[%a %s;@]" pr_c_type v_type (string_of_ident v_name)
-    in
-    let idmap_to_list fs = 
-      IdMap.fold (fun k v a -> v :: a) fs []
+    let pr_c_field ppf v = 
+      fprintf ppf "%a %s;" 
+        pr_c_type v.v_type 
+        (string_of_ident v.v_name)
     in
     let rec pr_c_fields ppf = function
-      | [] -> ()
+      | []      -> ()
+      | f :: [] -> pr_c_field ppf f
       | f :: fs -> fprintf ppf "%a@\n%a" pr_c_field f pr_c_fields fs         
     in
-    let pr_c_struct ppf = 
-      fun s ->
-      match s with 
-      | {s_name=s_name; s_fields=s_fields} -> fprintf ppf "@[typedef struct %s {@\n@[<2>  %a@]} %s;@\n@]" 
-      (string_of_ident s_name) 
-      pr_c_fields (idmap_to_list s_fields)
-      (string_of_ident s_name)  
+    let pr_c_struct ppf s = 
+      fprintf ppf "typedef struct %s {@\n@[<2>  %a@]@\n} %s;" 
+        (string_of_ident s.s_name) 
+        pr_c_fields (idmap_to_list s.s_fields)
+        (string_of_ident s.s_name)  
     in
-    let pr_c_structs ppf sds =
-      IdMap.fold (fun k v a -> pr_c_struct ppf v) sds ()
+    let rec pr_c_structs ppf = function 
+      | []      -> ()
+      | s :: [] -> pr_c_struct ppf s
+      | s :: ss -> fprintf ppf "%a@\n@\n%a" pr_c_struct s pr_c_structs ss
     in
-    match cu with 
-    | {struct_decls=sds} -> pr_c_structs ppf sds
-  in 
-  let pr_c_proc_fwd_decls ppf cu =
-    let pr_c_fwd_proc ppf =
-      fun p ->
-      match p with
-      | {p_name=p_name; p_formals=p_formals; p_locals=p_locals; p_returns=p_returns} -> fprintf ppf "void %s (%s);" (string_of_ident p_name) (String.concat ", " (List.fold_right (fun v a -> ((string_of_c_type (IdMap.find v p_locals).v_type) ^ " " ^ (string_of_ident v)) :: a ) p_formals (List.fold_right (fun v a -> ((string_of_c_ref_type (IdMap.find v p_locals).v_type) ^ " " ^ (string_of_ident v)) :: a) p_formals [])))
-    in
-    let pr_c_fwd_procs ppf pds =
-      IdMap.fold (fun k v a -> pr_c_fwd_proc ppf v) pds ()
-    in
-    match cu with 
-    | {proc_decls=pds} -> pr_c_fwd_procs ppf pds
+    pr_c_structs ppf (idmap_to_list cu.struct_decls)
   in
+  (** Proc arguments, used in forward and regular procedure declaration -
+   *  This, slightly over-complex function that could probably be more 
+   *  elegantly implemented, puts together a list of strings that describe
+   *  a procedures arguments and the variables it returns (since, in the
+   *  implementation, return variables are actually passed by reference into
+   *  the function) and then this list is concatnetated using a comma and space
+   *  as a delimter. *)
+  let pr_c_proc_args ppf p =
+    fprintf ppf "%s"
+      (String.concat 
+        ", " 
+        (List.fold_right 
+          (fun v a -> 
+            ((string_of_c_type (IdMap.find v p.p_locals).v_type) ^ " " ^ (string_of_ident v)) :: a) 
+          p.p_formals 
+          (List.fold_right 
+            (fun v a -> ((string_of_c_ref_type (IdMap.find v p.p_locals).v_type) ^ " " ^ (string_of_ident v)) :: a) 
+            p.p_formals 
+            [])))
+  in
+  (* Forward declarations for procs in order to allow mutual recursion. *)   
+  let rec pr_c_proc_fwd_decls ppf cu =
+    let pr_c_fwd_proc ppf p =
+      fprintf ppf "void %s (%a);" 
+        (string_of_ident p.p_name) 
+        pr_c_proc_args p
+    in
+    let rec pr_c_fwd_procs ppf = function
+      | []      -> ()
+      | p :: [] -> pr_c_fwd_proc ppf p
+      | p :: ps -> fprintf ppf "%a@\n@\n%a" pr_c_fwd_proc p pr_c_fwd_procs ps
+    in
+    pr_c_fwd_procs ppf (idmap_to_list cu.proc_decls)
+  in
+  (** Translation of SPL prc declarations into C function declarations. *)
   let pr_c_proc_decls ppf cu =
     let rec pr_c_args ppf = function
       | []      -> ()
@@ -980,31 +1003,45 @@ let convert cu =
       | (Return(e :: es, p), v :: vs) -> fprintf ppf "%a@\n%a" pr_c_stmt (Return([e], p), [v]) pr_c_stmt (Return(es, p), vs)
       | (Return _, _) -> ()
     in
-    let pr_c_proc ppf = 
-      fun p -> fprintf ppf "void %s (%s) {@\n  @[<2>%a@]@\n}" (string_of_ident p.p_name) "PUT PARAMS LIST HERE" pr_c_stmt (p.p_body, [])
+    let pr_c_proc ppf p =
+        fprintf ppf "void %s (%a) {@\n  @[<2>%a@]@\n}" 
+          (string_of_ident p.p_name) 
+          pr_c_proc_args p
+          pr_c_stmt (p.p_body, [])
     in
-    let pr_c_procs ppf pds =
-      IdMap.fold (fun k v a -> fprintf ppf "%a" pr_c_proc (make_return_explicit v)) pds ()
+    let rec pr_c_procs ppf = function 
+      | []      -> () 
+      | p :: [] -> fprintf ppf "%a" pr_c_proc p
+      | p :: ps -> fprintf ppf "%a@\n@\n%a" pr_c_proc p pr_c_procs ps
     in
-    match cu with 
-    | {proc_decls=pds} -> pr_c_procs ppf pds 
+    pr_c_procs ppf (idmap_to_list cu.proc_decls)
   in
   (** Section functions -- functions that format particular categories of code
    *  (e.g. imports, structs, procs) completely so they can be integrated into
    *  the program total. *)
   let pr_c_import_section ppf () =
-    fprintf ppf "#include <stdbool.h>@\n@\n"
+    fprintf ppf "%s@\n%s@\n@\n"
+      "/*\n * Includes\n */"
+      "#include <stdbool.h>" 
   in
   let pr_c_struct_section ppf cu =
-    fprintf ppf "%a@\n@\n%a"
-    pr_c_struct_fwd_decls cu
-    pr_c_struct_decls     cu
+    if (IdMap.is_empty cu.struct_decls) then
+      ()
+    else
+      fprintf ppf "%a@\n@\n%a"
+      pr_c_struct_fwd_decls cu
+      pr_c_struct_decls     cu
   in 
   let pr_c_proc_section ppf cu =
-    fprintf ppf "%a@\n@\n%a"
-    pr_c_proc_fwd_decls cu
-    pr_c_proc_decls cu
+    if (IdMap.is_empty cu.proc_decls) then
+      ()
+    else
+      fprintf ppf "%a@\n@\n%a"
+      pr_c_proc_fwd_decls cu
+      pr_c_proc_decls cu
   in
+  (** The actual work - flush the formatter of previous residue, feed-in the
+   *  printing of the sections, then return the entire thing as a string. *)
   flush_str_formatter ();
   fprintf str_formatter "%a%a%a"
     pr_c_import_section ()
