@@ -1,0 +1,24 @@
+struct SomeFields0 {
+  var x0: Int;
+  var y0: Bool;   
+}
+
+struct SomeFields1 {
+  var x1: Int;
+  var y1: Bool;   
+}
+
+struct SomeFields2 {
+  var x2: Int;
+  var y2: Bool;   
+}
+
+struct SomeFields3 {
+  var x3: Int;
+  var y3: Bool;   
+}
+
+struct SomeFields4 {
+  var x4: Int;
+  var y4: Bool;   
+}

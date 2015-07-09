@@ -1,0 +1,4 @@
+struct SomeFields {
+  var x: Int;
+  var y: Bool;   
+}

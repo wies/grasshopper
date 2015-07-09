@@ -812,19 +812,6 @@ let infer_types cu =
  *  Assumes that [cu] has been type-checked and flattened. *)
 let convert cu = 
   let idmap_to_list fs = (List.rev (IdMap.fold (fun k v a -> v :: a) fs [])) in
-  let rec pr_c_type ppf = function
-     | AnyRefType -> fprintf ppf "void*" 
-     | BoolType -> fprintf ppf "bool"
-     | IntType -> fprintf ppf "int"
-     | UnitType -> fprintf ppf "Error: Unit Type is Not Possible For a Field"
-     | StructType id -> fprintf ppf "struct %s*" (string_of_ident id) 
-     | ArrayType e -> fprintf ppf "Array<@[%a@]>" pr_c_type e
-     | ArrayCellType e -> fprintf ppf "Error: ArrayCell type is not yet supported in structs"
-     | MapType (d, r) -> fprintf ppf "Map<@[%a,@ %a@]>" pr_c_type d pr_c_type r (* FIX-ARI *)
-     | SetType s -> fprintf ppf "Set<@[%a@]>" pr_c_type s (* FIX-ARI *)
-     | PermType -> fprintf ppf "Error: Permission Type is Not Possible for a Field"
-     | AnyType -> fprintf ppf "Error: Any Type is Not Possible for a Field"
-  in
   let rec string_of_c_type  = function
      | AnyRefType -> "void*" 
      | BoolType -> "bool"
@@ -851,9 +838,40 @@ let convert cu =
      | PermType -> "Error: Permission Type is Not Possible for a Field"
      | AnyType -> "Error: Any Type is Not Possible for a Field"
   in
-  let make_return_explicit = function
-      | { p_name=p_name; p_formals=p_formals; p_returns=p_returns; p_locals=p_locals; p_contracts=p_contracts; p_body=Block(ss,pos); p_pos=p_pos; } -> {p_name=p_name; p_formals=p_formals;p_returns=p_returns;p_locals=p_locals;p_contracts=p_contracts;p_body=Block(ss@[Return((List.fold_right (fun v a -> (Ident(v, pos)) :: a)  p_returns []), pos)], pos);p_pos=p_pos}
-    | { p_name=p_name; p_formals=p_formals; p_returns=p_returns; p_locals=p_locals; p_contracts=p_contracts; p_body=p_body; p_pos=p_pos; } -> {p_name=p_name; p_formals=p_formals;p_returns=p_returns;p_locals=p_locals;p_contracts=p_contracts;p_body=Block([p_body;Return((List.fold_right (fun v a -> (Ident(v, p_pos)) :: a)  p_returns []), p_pos)], (pos_of_stmt p_body));p_pos=p_pos} 
+  (** make_return_explicit - a method that is not needed in the current
+   *  implementation, because return variables are passed in by reference in
+   *  the resulting C code, but which may be used again. It adds a return 
+   *  statement at the end of a procedure body to make such a return explicit. 
+   *  *)
+  let make_return_explicit = 
+    let rec last_is_return = function
+      | []               -> false
+      | (Return _) :: [] -> true
+      | s :: []          -> false
+      | s :: ss          -> (last_is_return ss)
+    in
+    let default_return_statement p =
+      let p_pos = (pos_of_stmt p.p_body) in 
+      Return(
+        (List.fold_right (fun v a -> (Ident(v, p_pos)) :: a) p.p_returns []),
+        (pos_of_stmt p.p_body)) 
+    in
+    function
+    | {p_body=Return _} as p -> p
+    | {p_body=Block(ss, b_pos)} as p -> 
+      if (last_is_return ss) then
+        p
+      else
+        {p with p_body=Block(ss@[(default_return_statement p)], b_pos)}
+    | p -> 
+      {p with 
+        p_body=Block(
+          p.p_body :: [(default_return_statement p)],
+          (pos_of_stmt p.p_body))}
+  in
+  (** Struct wrapper for SPL arrays implemented in. C *)
+  let arr_struct = 
+    "/* Implement arr struct wrapper */"
   in
   (** Forward declarations for structs in order to allow mutual recursion. *)
   let pr_c_struct_fwd_decls ppf cu =
@@ -873,8 +891,8 @@ let convert cu =
   (** Translation of SPL struct declarations into C struct declarations. *)
   let pr_c_struct_decls ppf cu =
     let pr_c_field ppf v = 
-      fprintf ppf "%a %s;" 
-        pr_c_type v.v_type 
+      fprintf ppf "%s %s;" 
+        (string_of_c_type v.v_type)
         (string_of_ident v.v_name)
     in
     let rec pr_c_fields ppf = function
@@ -917,7 +935,7 @@ let convert cu =
               ((string_of_c_ref_type (IdMap.find v p.p_locals).v_type) ^ 
               " " ^ 
               (string_of_ident v)) :: a) 
-            p.p_formals 
+            p.p_returns 
             [])))
   in
   (* Forward declarations for procs in order to allow mutual recursion. *)   
@@ -940,6 +958,30 @@ let convert cu =
       | []      -> ()
       | e :: [] -> fprintf ppf "%a" pr_c_expr e 
       | e :: es -> fprintf ppf "%a, %a" pr_c_expr e pr_c_expr_args es
+    and pr_new pf = function 
+      | _ -> fprintf ppf "/* ERROR: Array and Struct implementations are not solidified enough to actually make this work */"
+      | (t1, []) -> 
+        fprintf ppf "malloc(sizeof(%s))" (string_of_c_type t1) (*FIX-GET * off struct*)
+      | (ArrayType t1, l::[]) ->
+        fprintf ppf "malloc(sizeof(%s)*%a)" 
+          (string_of_c_type t1)
+          pr_c_expr l
+    and pr_read pf = fun (from, index) ->
+      (* The code below gets the type of the expression from and, if it is a
+       * Map or an Array, prints some C code that reads from the respective
+       * datastructure. *)
+      (match from with 
+        | Ident (id, _) -> 
+          (match (IdMap.find id cu.var_decls).v_type with 
+            | MapType(d, r) -> fprintf ppf "/* ERROR: Map type not yet implemented */"
+            | ArrayType(t1) -> 
+              fprintf ppf "%s[%a]" (string_of_ident id) pr_c_expr index 
+            | _             -> fprintf ppf "/* ERROR: can't address such an object with Read. */")
+        | _ -> fprintf ppf "/* ERROR: can't address such an object with Read */")
+    and pr_un_op ppf = function
+      | (OpNot, e1) -> fprintf ppf "!%a" pr_c_expr e1
+      | (OpMinus, e1) -> fprintf ppf "-%a" pr_c_expr e1
+      |  _ -> fprintf ppf "/* ERROR: no such unary operator. */"
     and pr_bin_op ppf = function
       | (e1, OpMinus, e2) -> fprintf ppf "%a - %a" pr_c_expr e1 pr_c_expr e2
       | (e1, OpPlus,  e2) -> fprintf ppf "%a + %a" pr_c_expr e1 pr_c_expr e2
@@ -964,33 +1006,29 @@ let convert cu =
       | Null (_, _) -> fprintf ppf "null"
       | IntVal (i, _) -> fprintf ppf "%i" i
       | BoolVal (b, _) -> fprintf ppf (if b then "true" else "false")
-      | New (t1, [], _) -> fprintf ppf "malloc(sizeof(%s))" (string_of_c_type t1) (*FIX-GET * off struct*)
-      | New (ArrayType t1, l::[], _) -> fprintf ppf "malloc(sizeof(%s)*%a)" (string_of_c_type t1) pr_c_expr l
-      | Read (from, index, _) -> (match from with 
-        | Ident (id, _) -> (match (IdMap.find id cu.var_decls).v_type with 
-                           | MapType(d, r) -> fprintf ppf "ADD WHEN MAP IS IMPLEMENTED"
-                           | ArrayType(t1) -> fprintf ppf "%s[%a]" (string_of_ident id) pr_c_expr index 
-                           | _             -> fprintf ppf "Error: can't address such an object with Read")
-        | _ -> fprintf ppf "ERROR: can't address such an object with Read")
-      | Length (idexp, _) -> fprintf ppf "%a.length" pr_c_expr idexp
-      | (ArrayCells _) | (ArrayOfCell _) | (IndexOfCell _) -> fprintf ppf "//TO DO: Implement"
-      | ProcCall (id, es, _) -> fprintf ppf "%s(%a)" (string_of_ident id) pr_c_expr_args es
-      | UnaryOp (OpNot, e1, _) -> fprintf ppf "!%a" pr_c_expr e1
-      | UnaryOp (OpMinus, e1, _) -> fprintf ppf "-%a" pr_c_expr e1
-      | UnaryOp _ -> fprintf ppf "ERROR: No such unary operator"
-      | BinaryOp (e1, op1, e2, _, _) -> fprintf ppf "%a" pr_bin_op (e1, op1, e2)
-      | Ident (id, _) -> fprintf ppf "%s" (string_of_ident id)
-      | Emp _|Setenum _|PredApp _|Quant _|Access _|BtwnPred _|Annot _ ->
+      | New (t, args, _) -> pr_new ppf (t, args)
+      | Read (from, index, _) -> pr_read ppf (from, index)
+      | Length (idexp, _) -> 
+        fprintf ppf "/* ERROR: Array wrapper not yet implemented. */" 
+      | ProcCall (id, es, _) ->
+        fprintf ppf "%s(%a)"
+        (string_of_ident id)
+        pr_c_expr_args es
+      | UnaryOp  (op, e, _)          -> pr_un_op ppf (op, e)
+      | BinaryOp (e1, op1, e2, _, _) -> pr_bin_op ppf (e1, op1, e2)
+      | Ident (id, _)                -> fprintf ppf "%s" (string_of_ident id)
+      | ArrayCells _|ArrayOfCell _|IndexOfCell _|Emp _|Setenum _|PredApp _|
+        Quant _|Access _|BtwnPred _|Annot _ ->
         fprintf ppf "/* Error: expression type not yet implemented. */"
-      | _ -> fprintf ppf "/* Error: badly formed expression. */
+      | _ -> fprintf ppf "/* Error: badly formed expression. */"
     in
     let rec pr_c_stmt ppf = 
       let rec pr_c_block ppf = function 
-        | (Block ([], _), _) -> ()
-        | (Block (s :: [], _), rs) -> fprintf ppf "%a;" pr_c_block (s, rs) 
+        | (Block ([], _), _)          -> ()
+        | (Block (s :: [], _), rs)    -> fprintf ppf "%a" pr_c_stmt(s, rs) 
         | (Block (s :: ses, pos), rs) -> 
           fprintf ppf "%a@\n%a" 
-            pr_c_block (s, rs) 
+            pr_c_stmt  (s, rs) 
             pr_c_block (Block(ses, pos), rs)
         | _ -> fprintf ppf "/* ERROR: badly formed statement block. */"
       in
@@ -1034,16 +1072,17 @@ let convert cu =
             pr_c_stmt (Assign (vs, es, p), rs)
         | _ -> fprintf ppf "/* ERROR: badly formed Assign statement */"
       in
-      let pr_c_return ppf = function
+      let rec pr_c_return ppf = function
         | (Return([], _), []) -> ()
-        | (Return(e :: [], _), v :: []) ->
-          fprintf ppf "%s = %a;" 
-            (string_of_ident v)
+        | (Return(e :: [], _), r :: []) ->
+          fprintf ppf "%s* = %a;" 
+            (string_of_ident r)
             pr_c_expr e
-        | (Return(e :: es, p), v :: rs) ->
+        | (Return(e :: es, p), r :: rs) ->
           fprintf ppf "%a@\n%a"
-            pr_c_stmt (Return([e], p), [v])
-            pr_c_stmt (Return(es, p), rs)
+            pr_c_return (Return([e], p), [r])
+            pr_c_return (Return(es, p), rs)
+        | (Return (a :: aa, b), []) -> fprintf ppf "cccc"
         | _ -> fprintf ppf "/* ERROR: badly formed Return statement. */"
       in
       function 
@@ -1064,14 +1103,14 @@ let convert cu =
         pr_c_stmt (body, rs)
       | (Return _, _) as r -> pr_c_return ppf r
       | (((Assume _)|(Assert _)|(Havoc _)), _) -> 
-        fprintf ppf "/* ERROR: Unimplemented statement */"
-      | _ -> fprintf ppf "/* ERROR: Unaccounted for statement */"
+        fprintf ppf "/* ERROR: Unimplemented statement type. */"
+      | _ -> fprintf ppf "/* ERROR: Unaccounted for statement. */"
     in
     let pr_c_proc ppf p =
         fprintf ppf "void %s (%a) {@\n  @[<2>%a@]@\n}" 
           (string_of_ident p.p_name) 
           pr_c_proc_args p
-          pr_c_stmt ((make_return_explicit p).p_body, [])
+          pr_c_stmt (p.p_body, p.p_returns)
     in
     let rec pr_c_procs ppf = function 
       | []      -> () 
@@ -1084,31 +1123,41 @@ let convert cu =
    *  (e.g. imports, structs, procs) completely so they can be integrated into
    *  the program total. *)
   let pr_c_import_section ppf () =
-    fprintf ppf "%s@\n%s@\n@\n"
+    fprintf ppf "%s@\n%s@\n"
       "/*\n * Includes\n */"
       "#include <stdbool.h>" 
+  in
+  (** A section for structs and functions in C that form the base
+   *  implementation of SPL. *) 
+  let pr_c_preloaded_section ppf () =
+    fprintf ppf "@\n%s@\n%s@\n"
+      "/*\n * Preloaded Code\n */"
+      arr_struct
   in
   let pr_c_struct_section ppf cu =
     if (IdMap.is_empty cu.struct_decls) then
       ()
     else
-      fprintf ppf "%a@\n@\n%a"
-      pr_c_struct_fwd_decls cu
-      pr_c_struct_decls     cu
+      fprintf ppf "@\n%s@\n%a@\n@\n%a"
+        "/*\n * Structs\n */"
+        pr_c_struct_fwd_decls cu
+        pr_c_struct_decls     cu
   in 
   let pr_c_proc_section ppf cu =
     if (IdMap.is_empty cu.proc_decls) then
       ()
     else
-      fprintf ppf "%a@\n@\n%a"
-      pr_c_proc_fwd_decls cu
-      pr_c_proc_decls cu
+      fprintf ppf "@\n%s@\n%a@\n@\n%a"
+        "/*\n * Procedures\n */"
+        pr_c_proc_fwd_decls cu
+        pr_c_proc_decls cu
   in
   (** The actual work - flush the formatter of previous residue, feed-in the
    *  printing of the sections, then return the entire thing as a string. *)
   flush_str_formatter ();
-  fprintf str_formatter "%a%a%a"
+  fprintf str_formatter "%a%a%a%a"
     pr_c_import_section ()
+    pr_c_preloaded_section ()
     pr_c_struct_section cu
     pr_c_proc_section cu;
   flush_str_formatter ()  
