@@ -890,8 +890,7 @@ let convert cu =
             (string_of_ident v))
             :: a) 
           p.p_formals 
-          (if ((List.length p.p_returns) == 1) 
-          then
+          (if ((List.length p.p_returns) == 1) then
             []
           else
             (List.fold_right 
@@ -1001,55 +1000,58 @@ let convert cu =
         | _ -> fprintf ppf "/* ERROR: badly formed statement block. */"
       in
       let rec pr_c_localvars ppf = function
-        | (LocalVars (v::[], None, p), _) -> 
+        | (LocalVars (v::[], None, _), _)          -> 
           fprintf ppf "%s %s;" 
             (string_of_c_type v.v_type) 
             (string_of_ident  v.v_name)
-        | (LocalVars (v::vs, None, p), rs) -> 
+        | (LocalVars (v::[], Some(e :: []), _), _) ->
+          fprintf ppf "%s %s = %a;"
+            (string_of_c_type v.v_type)
+            (string_of_ident  v.v_name)
+            pr_c_expr e
+        | (LocalVars (v::vs, None, p), rs)         -> 
           fprintf ppf "%a@\n%a" 
             pr_c_localvars (LocalVars ([v], None, p), rs) 
             pr_c_localvars (LocalVars (vs, None, p), rs)
-        | (LocalVars (v::vs, Some(e::es), p), rs) -> 
+        | (LocalVars (v::vs, Some(e::es), p), rs)  -> 
           fprintf ppf "%a@\n%a" 
             pr_c_localvars (LocalVars ([v], Some([e]), p), rs) 
             pr_c_localvars (LocalVars (vs, Some(es), p), rs)
         | _ -> fprintf ppf "/* ERROR: badly formed LocalVars statement. */"
       in
       let rec pr_c_assign ppf = function
-        | (Assign (vs, ProcCall(id, es, p1) :: [], p2), rs) -> 
-          fprintf ppf "%a"
-            pr_c_expr
-             (ProcCall(
-               id,
-               (List.fold_right
-                 (fun nextId acc -> nextId :: acc)
-                 es
-                 (List.fold_right
-                   (fun v a -> (Ident(v, p1)) :: a)
-                   rs
-                   [])),
-               p1))
         | (Assign (v :: [], e :: [], _), _) -> 
           fprintf ppf "%a = %a;" 
             pr_c_expr v 
             pr_c_expr e
-        | (Assign (v :: vs, e :: es, p), rs) -> 
-          fprintf ppf "%a = %a;@\n%a"
-            pr_c_expr v
-            pr_c_expr e 
-            pr_c_stmt (Assign (vs, es, p), rs)
+        | (Assign (vs, ProcCall(id, es, p) :: [], _), rs) -> 
+          pr_c_expr ppf
+            (ProcCall(
+             id,
+             (List.fold_right
+               (fun nextId acc -> nextId :: acc)
+               es
+               (List.fold_right
+               (fun v a -> (Ident(v, p)) :: a)
+                 rs
+                 [])),
+              p))
+        | (Assign (v :: vs, e :: es, apos), rs) -> 
+          fprintf ppf "%a@\n%a"
+            pr_c_stmt (Assign ([v], [e], apos), rs)
+            pr_c_stmt (Assign (vs,  es,  apos), rs)
         | _ -> fprintf ppf "/* ERROR: badly formed Assign statement */"
       in
       let rec pr_c_return ppf = function
         | (Return([], _), []) -> ()
         | (Return(e :: [], _), r :: []) ->
-          fprintf ppf "%s* = %a;" 
+          fprintf ppf "*%s = %a;" 
             (string_of_ident r)
             pr_c_expr e
         | (Return(e :: es, p), r :: rs) ->
           fprintf ppf "%a@\n%a"
             pr_c_return (Return([e], p), [r])
-            pr_c_return (Return(es, p), rs)
+            pr_c_return (Return(es,  p), rs)
         | _ -> fprintf ppf "/* ERROR: badly formed Return statement. */"
       in
       function 
@@ -1057,7 +1059,7 @@ let convert cu =
       | (Block _, _) as b -> pr_c_block ppf b
       | (LocalVars _, _) as lv -> pr_c_localvars ppf lv
       | (Assign _, _) as a -> pr_c_assign ppf a
-      | (Dispose (e1, _), _) -> fprintf ppf "free(%a);" pr_c_expr e1
+      | (Dispose (e, _), _) -> fprintf ppf "free(%a);" pr_c_expr e (* FIX - This may be more complicated for array wrappers *)
       | (If (cond, b1, b2, _), rs) -> 
         fprintf ppf "if (%a) {@\n  @[<2>%a@]@\n} else {@\n  @[<2>%a@]@\n}"
           pr_c_expr cond
@@ -1071,21 +1073,20 @@ let convert cu =
       | (Return _, _) as r -> pr_c_return ppf r
       | (((Assume _)|(Assert _)|(Havoc _)), _) -> 
         fprintf ppf "/* ERROR: Unimplemented statement type. */"
-      | _ -> fprintf ppf "/* ERROR: Unaccounted for statement. */"
+      | _ -> fprintf ppf "/* ERROR: Unaccounted for statement type. */"
     in
     let pr_c_proc ppf p =
-      match (List.length p.p_returns) with
-        | 1 -> 
-          fprintf ppf "%s %s (%a) {@\n  @[<2>%a@]@\n}"
-            (string_of_c_type ((IdMap.find (List.hd p.p_returns) p.p_locals).v_type))
-            (string_of_ident p.p_name) 
-            pr_c_proc_args p
-            pr_c_stmt (p.p_body, p.p_returns)
-        | _ -> 
-          fprintf ppf "void %s (%a) {@\n  @[<2>%a@]@\n}" 
-            (string_of_ident p.p_name) 
-            pr_c_proc_args p
-            pr_c_stmt (p.p_body, p.p_returns)
+      if ((List.length p.p_returns) == 1) then
+        fprintf ppf "%s %s (%a) {@\n  @[<2>%a@]@\n}"
+          (string_of_c_type ((IdMap.find (List.hd p.p_returns) p.p_locals).v_type))
+          (string_of_ident p.p_name) 
+          pr_c_proc_args p
+          pr_c_stmt (p.p_body, p.p_returns)
+      else
+        fprintf ppf "void %s (%a) {@\n  @[<2>%a@]@\n}" 
+          (string_of_ident p.p_name) 
+          pr_c_proc_args p
+          pr_c_stmt (p.p_body, p.p_returns)
     in
     let rec pr_c_procs ppf = function 
       | []      -> () 
