@@ -1,0 +1,19 @@
+struct First {
+  var a: Second;
+}
+
+struct Second {
+  var b: Third;
+}
+
+struct Third {
+  var c: Fourth;
+}
+
+struct Fourth {
+  var d: Fifth;
+}
+
+struct Fifth {
+  var e: First;
+}

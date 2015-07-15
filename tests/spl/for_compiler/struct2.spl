@@ -1,0 +1,4 @@
+struct RecStruct {
+  var next: RecStruct;
+  var data: Int;
+}

@@ -1,0 +1,11 @@
+struct First {
+  var a: First;
+  var b: Second;
+  var c: Int;
+}
+
+struct Second {
+  var e: First;
+  var f: Second;
+  var g: Int;
+}

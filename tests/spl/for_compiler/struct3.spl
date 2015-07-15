@@ -1,0 +1,7 @@
+struct First {
+  var a: Second;
+}
+
+struct Second { 
+  var b: First;
+}
