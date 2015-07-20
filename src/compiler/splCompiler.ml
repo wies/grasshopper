@@ -1016,28 +1016,29 @@ let convert cu =
         | _ -> fprintf ppf "/* ERROR: badly formed LocalVars statement. */"
       in
       let rec pr_c_assign ppf = function
-        | (Assign(Ident(id, _) :: [], New(t, args, _) :: [], _) ->
+        | _ -> fprintf ppf "dogs" 
+        | (Assign(Ident(id, _) :: [], New(t, args, _) :: [], _), _) ->
           let type_string = (string_of_c_type t) in
-          (match args with 
-            | []      ->
-              fprintf ppf "%s = ((%s*) malloc(sizeof(%s)))" 
+          (match (t, args) with 
+            | (StructType _, [])      ->
+              fprintf ppf "%s = ((%s* ) malloc(sizeof(%s)))" 
                 (string_of_ident id)
                 type_string
                 type_string
-            | l :: [] ->
-              let pointer_name = 
+            | (ArrayType(t_sub), l :: []) ->
+              let index_name = 
                 let l1 = String.length (string_of_ident id) in
                 let l2 = (String.length type_string) - 7    in
-                if ((l1 != 1) && (l2 != !)) then
-                  "p"
+                if ((l1 != 1) && (l2 != 1)) then
+                  "i"
                 else if ((l1 != 2) && (l2 != 2)) then
-                  "pp"
+                  "ic"
                 else
-                  "ppp" 
-              in 
+                  "inc" 
+              in
               let pr_init_wrapper ppf () =
                 fprintf ppf 
-                  "%s = (%s*) malloc(sizeof(%s));@\n%s->%s = %a;@\n"
+                  "%s = (%s* ) malloc(sizeof(%s));@\n%s->%s = %a;"
                     (string_of_ident id)
                     arr_type
                     arr_type
@@ -1046,22 +1047,38 @@ let convert cu =
                     pr_c_expr l
               in
               let pr_malloc_loop ppf () =
-                (* FIX *)
+                let pr_looper ppf () =
+                  fprintf ppf "for (int %s = 0; %s < %a; %s++)"
+                    index_name
+                    index_name 
+                    pr_c_expr l
+                    index_name 
+                in 
+                let pr_body ppf () =
+                    fprintf ppf "*(%s + %s) = (%s * ) malloc(sizeof(%s))"
+                      (string_of_ident id)
+                      index_name
+                      (string_of_c_type t_sub)
+                      (string_of_c_type t_sub)
+                in
+                fprintf ppf "%a {@\n  @[<2>%a@]@\n}@\n"
+                  pr_looper ()
+                  pr_body   ()
               in
               fprintf ppf "%a{%a}"
                 pr_init_wrapper ()
-                pr_malloc_loop  ()
+                pr_malloc_loop  () 
             | _ -> fprintf ppf "/* ERROR: badly formed New expression. */"              
-          )
+          )  
         | (Assign (v :: [], e :: [], _), _) -> 
           fprintf ppf "%a = %a;" 
             pr_c_expr v 
-            pr_c_expr e
+            pr_c_expr e 
         (* This branch passes in multiple return variables by reference
          * into the appropriate function in order to facilitate
          * multiple return variables within a C program. *)
         | (Assign (vs, ProcCall(id, es, _) :: [], _), _) ->
-          let p = (IdMap.find id cu.proc_decls) in
+          (* let p = (IdMap.find id cu.proc_decls) in
           let rec pr_args_in ppf = function 
             | [] -> ()
             | e :: es -> 
@@ -1072,8 +1089,11 @@ let convert cu =
           let rec pr_args_ref ppf = function 
             | e :: [] -> fprintf ppf "&%s" (string_of_ident)
             | e :: es -> fprintf ppf "%a, %a" pr_args_ref [e] pr_args_ref es
+            (* FIX *)
+          in 
           fprintf ppf "%s(%a, %a)"
-            (string_of_ident id)
+          *)
+          fprintf ppf "/* ERROR: Implement */"
         | (Assign (v :: vs, e :: es, apos), rs) -> 
           fprintf ppf "%a@\n%a"
             pr_c_stmt (Assign ([v], [e], apos), rs)
@@ -1086,7 +1106,7 @@ let convert cu =
           fprintf ppf "*%s = %a;" 
             (string_of_ident r)
             pr_c_expr e
-        | (Return(e1 :: e1 :: [], _), r1 :: r2 :: []) ->
+        | (Return(e1 :: e2 :: [], _), r1 :: r2 :: []) ->
           fprintf ppf "*%s = %a;@\n*%s = %a;"
             (string_of_ident r1)
             pr_c_expr e1
