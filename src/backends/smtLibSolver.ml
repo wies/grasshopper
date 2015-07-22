@@ -30,10 +30,10 @@ type solver =
     
 let get_version name cmd vregexp versions =
   try
-    let in_chan = Unix.open_process_in cmd in
+    let in_chan, out_chan, err_chan = Unix.open_process_full cmd (Unix.environment ()) in
     let version_regexp = Str.regexp vregexp in
     let version_string = input_line in_chan in
-    let _ = Unix.close_process_in in_chan in
+    let _ = Unix.close_process_full (in_chan, out_chan, err_chan) in
     if Str.string_match version_regexp version_string 0 then
       let version = int_of_string (Str.matched_group 1 version_string) in
       let subversion = int_of_string (Str.matched_group 2 version_string) in
