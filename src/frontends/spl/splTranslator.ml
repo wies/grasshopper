@@ -234,54 +234,39 @@ let resolve_names cu =
           | [arg] ->
               (match type_of_expr cu locals arg with
               | SetType _ -> 
-                  Access (re locals tbl arg, pos)
+                  PredApp (AccessPred, [re locals tbl arg], pos)
               | ty ->
-                  Access (Setenum (ty, [re locals tbl arg], pos), pos))
+                  PredApp (AccessPred, [Setenum (ty, [re locals tbl arg], pos)], pos))
           | [map; idx] ->
               (match type_of_expr cu locals map with
               | ArrayType typ ->
                   let map1 = re locals tbl map in
                   let idx1 = re locals tbl idx in
                   let cell = Read (ArrayCells (map1, pos_of_expr map1), idx1, pos) in
-                  Access (Setenum (ArrayCellType typ, [cell], pos), pos)
+                  PredApp (AccessPred, [Setenum (ArrayCellType typ, [cell], pos)], pos)
               | _ -> pred_arg_mismatch_error pos id 1)
           | _ -> pred_arg_mismatch_error pos id 1)
-      | ProcCall (("Disjoint" as name, _ as id), args, pos)
-      | ProcCall (("Btwn" as name, _ as id), args, pos)
-      | ProcCall (("Reach" as name, _ as id), args, pos)
-      | ProcCall (("Frame" as name, _ as id), args, pos) ->
-          let args1 = List.map (re locals tbl) args in
-          let expected_num_of_args =
-            match name with
-            | "Btwn" -> 4
-            | "Reach" -> 3
-            | "Frame" -> 4
-            | "Disjoint" -> 2
-            | _ -> 0
-          in
-          (match name, args1 with
-          | "Btwn", [fld; x; y; z] ->
-              BtwnPred (fld, x, y, z, pos)
-          | "Reach", [fld; x; y] ->
-              BtwnPred (fld, x, y, y, pos)
-          | "Frame", [set1; set2; fld1; fld2] ->
-              FramePred (set1, set2, fld1, fld2, pos)
-          | "Disjoint", [set1; set2] ->
-              DisjointPred (set1, set2, pos)
-          | _ -> pred_arg_mismatch_error pos id expected_num_of_args)
       | ProcCall (init_id, args, pos) ->
-          let id = lookup_id init_id tbl pos in
           let args1 = List.map (re locals tbl) args in
-          (try 
-            check_proc id procs0 pos;
-            ProcCall (id, args1, pos)
-          with ProgError.Prog_error _ ->
-            check_pred id preds0 pos;
-            PredApp (id, args1, pos))
-      | PredApp (init_id, args, pos) ->
-          let id = lookup_id init_id tbl pos in
-          check_pred id preds0 pos;
-          PredApp (id, List.map (re locals tbl) args, pos)              
+          (match GrassUtil.name init_id with
+          | "Btwn" ->
+              PredApp (BtwnPred, args1, pos)
+          | "Reach" ->
+              PredApp (ReachPred, args1, pos)
+          | "Frame" ->
+              PredApp (FramePred, args1, pos)
+          | "Disjoint" ->
+              PredApp (DisjointPred, args1, pos)
+          | _ ->
+              let id = lookup_id init_id tbl pos in
+              try 
+                check_proc id procs0 pos;
+                ProcCall (id, args1, pos)
+              with ProgError.Prog_error _ ->
+                check_pred id preds0 pos;
+                PredApp (Pred id, args1, pos))
+      | PredApp (sym, args, pos) ->
+          PredApp (sym, List.map (re locals tbl) args, pos)              
       | UnaryOp (op, e, pos) ->
           UnaryOp (op, re locals tbl e, pos)
       | BinaryOp (e1, op, e2, ty, pos) ->
@@ -529,17 +514,7 @@ let flatten_exprs cu =
         let aux_var = Ident (aux_id, pos) in
         let call = Assign ([aux_var], [ProcCall (id, args1, pos)], pos) in
         aux_var, (aux1 @ [call]), locals
-    | Access (arg, pos) as e ->
-        check_side_effects [arg];
-        e, aux, locals
-    | (BtwnPred (e1, e2, e3, e4, pos) as e)
-    | (FramePred (e1, e2, e3, e4, pos) as e) ->
-        check_side_effects [e1; e2; e3; e4];
-        e, aux, locals
-    | DisjointPred (e1, e2, pos) as e ->
-        check_side_effects [e1; e2];
-        e, aux, locals
-    | PredApp (init_id, args, pos) as e->
+    | PredApp (_, args, pos) as e ->
         List.iter check_side_effects args;
         e, aux, locals
     | UnaryOp (op, e, pos) ->
@@ -968,7 +943,7 @@ let convert cu =
     | ArrayCells (e, pos) ->
         let t = convert_term locals e in
         GrassUtil.mk_array_cells t
-    | PredApp (id, es, pos) ->
+    | PredApp (Pred id, es, pos) ->
         let decl = IdMap.find id cu.pred_decls in
         let ts = List.map (convert_term locals) es in 
         (match decl.pr_outputs with
@@ -1020,13 +995,13 @@ let convert cu =
         let t1 = convert_term locals e1 in
         let t2 = convert_term locals e2 in
         GrassUtil.mk_elem_term t1 t2
-    | FramePred (set1, set2, fld1, fld2, pos) ->
+    | PredApp (FramePred, [set1; set2; fld1; fld2], pos) ->
         let tset1 = convert_term locals set1 in
         let tset2 = convert_term locals set2 in
         let tfld1 = convert_term locals fld1 in
         let tfld2 = convert_term locals fld2 in
         GrassUtil.mk_frame_term tset1 tset2 tfld1 tfld2
-    | DisjointPred (set1, set2, pos) ->
+    | PredApp (DisjointPred, [set1; set2], pos) ->
         let tset1 = convert_term locals set1 in
         let tset2 = convert_term locals set2 in
         GrassUtil.mk_disjoint_term tset1 tset2
@@ -1034,7 +1009,14 @@ let convert cu =
   in
   let rec convert_grass_form locals = function
     | BoolVal (b, pos) -> GrassUtil.mk_srcpos pos (GrassUtil.mk_bool b)
-    | BtwnPred (fld, x, y, z, pos) ->
+    | PredApp (BtwnPred, args, pos)
+    | PredApp (ReachPred, args, pos) ->
+        let fld, x, y, z =
+          match args with
+          | [fld; x; y; z] -> fld, x, y, z (* BtwnPred *)
+          | [fld; x; y] -> fld, x, y, y (* ReachPred *)
+          | _ -> failwith "impossible"
+        in
         let tfld = convert_term locals fld in
         let tx = convert_term locals x in
         let ty = convert_term locals y in
@@ -1193,10 +1175,10 @@ let convert cu =
   in
   let rec convert_sl_form locals = function
     | Emp pos -> SlUtil.mk_emp (Some pos)
-    | Access (e, pos) ->
+    | PredApp (AccessPred, [e], pos) ->
         let t = convert_term locals e in
         SlUtil.mk_region ~pos:pos t
-    | PredApp (id, es, pos) ->
+    | PredApp (Pred id, es, pos) ->
         let ts = List.map (convert_term locals) es in 
         SlUtil.mk_pred ~pos:pos id ts
     | BinaryOp (e1, OpPts, e2, _, pos) ->

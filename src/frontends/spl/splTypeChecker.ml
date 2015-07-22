@@ -99,9 +99,10 @@ let type_of_expr cu locals e =
     | BinaryOp (_, OpLeq, _, _, _)
     | BinaryOp (_, OpIn, _, _, _)
     | Quant _
-    | BtwnPred _
-    | FramePred _
-    | DisjointPred _
+    | PredApp (BtwnPred, _, _)
+    | PredApp (ReachPred, _, _)
+    | PredApp (FramePred, _, _)
+    | PredApp (DisjointPred, _, _)
     | BoolVal _ -> BoolType
     (* Int return values *)
     | UnaryOp (OpMinus, _, _) 
@@ -122,7 +123,7 @@ let type_of_expr cu locals e =
     | BinaryOp (_, OpSepPlus, _, _, _)
     | BinaryOp (_, OpPts, _, _, _)
     | BinaryOp (_, OpSepIncl, _, _, _)
-    | Access _
+    | PredApp (AccessPred, _, _)
     | Emp _ -> PermType
     (* Struct and array types *)
     | New (ty, _, _) ->
@@ -151,7 +152,7 @@ let type_of_expr cu locals e =
             let rdecl = IdMap.find rid decl.p_locals in
             rdecl.v_type
         | _ -> UnitType)
-    | PredApp (id, _, _) ->
+    | PredApp (Pred id, _, _) ->
         let decl = IdMap.find id cu.pred_decls in
         (match decl.pr_outputs with
         | [] -> BoolType
@@ -233,9 +234,12 @@ let infer_types cu locals ty e =
     (* Permissions *)
     | Emp pos as e ->
         e, match_types pos ty PermType
-    | Access (e, pos) ->
-        let e, _ = it locals (SetType AnyRefType) e in
-        Access (e, pos), match_types pos ty PermType
+    | PredApp (AccessPred, es, pos) ->
+        (match es with
+        | [e] ->
+            let e, _ = it locals (SetType AnyRefType) e in
+            PredApp (AccessPred, [e], pos), match_types pos ty PermType
+        | _ -> pred_arg_mismatch_error pos ("acc", 0) 1)
     | BinaryOp (e1, (OpSepStar as op), e2, _, pos)
     | BinaryOp (e1, (OpSepPlus as op), e2, _, pos)
     | BinaryOp (e1, (OpSepIncl as op), e2, _, pos) ->
@@ -352,33 +356,54 @@ let infer_types cu locals ty e =
         let ty = match_types pos ty nty in
         Null (ty, pos), ty
     (* Other stuff *)
-    | BtwnPred (e1, e2, e3, e4, pos) ->
-        let e1, fty = it locals (MapType (AnyRefType, AnyRefType)) e1 in
-        let id = match fty with
-        | MapType (StructType id1, StructType id2) ->
-            if id1 <> id2
-            then type_error pos (MapType (StructType id1, StructType id1)) fty
-            else id1
-        | _ -> failwith "impossible"
+    | PredApp (BtwnPred as sym, es, pos)
+    | PredApp (ReachPred as sym, es, pos) ->
+        let arg_error () = 
+          match sym with
+          | BtwnPred -> pred_arg_mismatch_error pos ("Btwn", 0) 4
+          | ReachPred -> pred_arg_mismatch_error pos ("Reach", 0) 3
+          | _ -> failwith "impossible"
         in
-        let e2, _ = it locals (StructType id) e2 in
-        let e3, _ = it locals (StructType id) e3 in
-        let e4, _ = it locals (StructType id) e4 in
-        BtwnPred (e1, e2, e3, e4, pos), match_types pos ty BoolType
-    | FramePred (e1, e2, e3, e4, pos) ->
-        let e1, set_ty = it locals (SetType AnyRefType) e1 in
-        let e2, _ = it locals set_ty e2 in
-        let elem_ty = match set_ty with
-        | SetType ty -> ty
-        | _ -> failwith "impossible"
-        in
-        let e3, fld_ty = it locals (MapType (elem_ty, AnyType)) e3 in
-        let e4, fld_ty = it locals fld_ty e4 in
-        FramePred (e1, e2, e3, e4, pos), match_types pos ty BoolType
-    | DisjointPred (e1, e2, pos) ->
-        let e1, set_ty = it locals (SetType AnyRefType) e1 in
-        let e2, _ = it locals set_ty e2 in
-        DisjointPred (e1, e2, pos), match_types pos ty BoolType
+        (match es with
+        | e1 :: e2 :: e3 :: es1 ->
+            let e1, fty = it locals (MapType (AnyRefType, AnyRefType)) e1 in
+            let id = match fty with
+            | MapType (StructType id1, StructType id2) ->
+                if id1 <> id2
+                then type_error pos (MapType (StructType id1, StructType id1)) fty
+                else id1
+            | _ -> failwith "impossible"
+            in
+            let e2, _ = it locals (StructType id) e2 in
+            let e3, _ = it locals (StructType id) e3 in
+            (match sym, es1 with
+            | BtwnPred, [e4] ->
+                let e4, _ = it locals (StructType id) e4 in
+                PredApp (BtwnPred, [e1; e2; e3; e4], pos), match_types pos ty BoolType
+            | ReachPred, [] ->
+                PredApp (BtwnPred, [e1; e2; e3], pos), match_types pos ty BoolType
+            | _ -> arg_error ())
+        | _ -> arg_error ())   
+    | PredApp (FramePred, es, pos) ->
+        (match es with
+        | [e1; e2; e3; e4] ->
+            let e1, set_ty = it locals (SetType AnyRefType) e1 in
+            let e2, _ = it locals set_ty e2 in
+            let elem_ty = match set_ty with
+            | SetType ty -> ty
+            | _ -> failwith "impossible"
+            in
+            let e3, fld_ty = it locals (MapType (elem_ty, AnyType)) e3 in
+            let e4, fld_ty = it locals fld_ty e4 in
+            PredApp (FramePred, [e1; e2; e3; e4], pos), match_types pos ty BoolType
+        | _ -> pred_arg_mismatch_error pos ("Frame", 0) 4)
+    | PredApp (DisjointPred, es, pos) ->
+      (match es with
+        [e1; e2] ->
+          let e1, set_ty = it locals (SetType AnyRefType) e1 in
+          let e2, _ = it locals set_ty e2 in
+          PredApp (DisjointPred, [e1; e2], pos), match_types pos ty BoolType
+      | _ -> pred_arg_mismatch_error pos ("Disjoint", 0) 2)
     | ProcCall (id, es, pos) ->
         let decl = IdMap.find id cu.proc_decls in
         let formals = List.filter (fun p -> not (IdMap.find p decl.p_locals).v_implicit) decl.p_formals in
@@ -401,7 +426,7 @@ let infer_types cu locals ty e =
           | _ -> match_types pos ty UnitType
         in
         ProcCall (id, es1, pos), rty
-    | PredApp (id, es, pos) ->
+    | PredApp (Pred id, es, pos) ->
         let decl = IdMap.find id cu.pred_decls in
         let ftys =
           List.map
@@ -437,7 +462,7 @@ let infer_types cu locals ty e =
           | _ ->
               match_types pos ty BoolType
         in
-        PredApp (id, es1, pos), rty
+        PredApp (Pred id, es1, pos), rty
     | Ident (id, pos) as e ->
         let decl = 
           try
