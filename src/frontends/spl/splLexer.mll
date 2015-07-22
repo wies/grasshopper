@@ -12,7 +12,9 @@ let set_file_name lexbuf name =
 let keyword_table = Hashtbl.create 32
 let _ =
   List.iter (fun (kwd, tok) -> Hashtbl.add keyword_table kwd tok)
-    ([("assert", ASSERT);
+    ([("Array", ARRAY);
+      ("ArrayCell", ARRAYCELL);
+      ("assert", ASSERT);
       ("assume", ASSUME);
       ("Bool", BOOL);
       ("comment", COMMENT);
@@ -22,6 +24,7 @@ let _ =
       ("false", BOOLVAL(false));
       ("forall", QUANT(SplSyntax.Forall));
       ("exists", QUANT(SplSyntax.Exists));
+      ("footprint", FOOTPRINT);
       ("free", FREE);
       ("function", FUNCTION);
       ("ghost", GHOST);
@@ -38,6 +41,7 @@ let _ =
       ("new", NEW);
       ("null", NULL);
       ("outputs", OUTPUTS);
+      ("pattern", PATTERN);
       ("predicate", PREDICATE);
       ("procedure", PROCEDURE);
       ("pure", PURE);
@@ -45,11 +49,14 @@ let _ =
       ("return", RETURN);
       ("returns", RETURNS);
       ("struct", STRUCT);
+      ("subsetof", LEQ);
       ("Set", SET);
       ("true", BOOLVAL(true));
       ("var", VAR);
       ("while", WHILE);
+      ("without", WITHOUT);
       ("yields", YIELDS);
+      ("axiom", AXIOM);
    ])
 
 let lexical_error lexbuf msg =
@@ -71,7 +78,7 @@ let ident = idchar (idchar | digitchar)*
 let digits = digitchar+
 
 rule token = parse
-  [' ' '\t'] { token lexbuf }
+    [' ' '\t'] { token lexbuf }
 | '\n' { Lexing.new_line lexbuf; token lexbuf }
 | "//" [^ '\n']* { token lexbuf }
 | "/*" { comments 0 lexbuf }
@@ -82,6 +89,7 @@ rule token = parse
 | "!=" { NEQ }
 | "<=" { LEQ }
 | ">=" { GEQ }
+| '=' { EQ }
 | "<" { LT }
 | ">" { GT }
 | "||" { OR }
@@ -122,7 +130,6 @@ rule token = parse
     }
 | digits as num { INTVAL (int_of_string num) }
 | eof { EOF }
-| '=' { lexical_error lexbuf (Some ("Unknown operator. Did you mean ':=' or '=='?")) }
 | _ { lexical_error lexbuf None }
 
 and comments level = parse
@@ -130,5 +137,6 @@ and comments level = parse
          else comments (level - 1) lexbuf
        }
 | "/*" { comments (level + 1) lexbuf }
+| '\n' { Lexing.new_line lexbuf; comments (level) lexbuf }
 | _ { comments level lexbuf }
 | eof { EOF }

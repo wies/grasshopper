@@ -1,10 +1,10 @@
 (** Main module of GRASShopper *)
 
 open Util
-
+    
 let greeting =
   "GRASShopper version " ^ Config.version ^ "\n"
-
+                                              
 let usage_message =
   greeting ^
   "\nUsage:\n  " ^ Sys.argv.(0) ^ 
@@ -43,31 +43,52 @@ let parse_cu parse_fct file =
   SplLexer.set_file_name lexbuf file; 
   parse_fct lexbuf
 
+(** normalize the filenames to avoid double inclusion *)
+let normalizeFilename file_name =
+  let sep = Str.regexp_string Filename.dir_sep in
+  let parts = Str.split_delim sep file_name in
+  let rec simplify parts = match parts with
+    | x :: ".." :: xs when x <> ".." -> simplify xs
+    | x :: xs -> x :: (simplify xs)
+    | [] -> []
+  in
+  let remaining = simplify parts in
+  String.concat Filename.dir_sep remaining
+
 (** Parse SPL program in main file [main_file] *)
 let parse_spl_program main_file =
   let rec parse parsed to_parse spl_prog =
     match to_parse with
     | (file, pos) :: to_parse1 ->
-        let cu = 
-          try 
-            parse_cu (fun lexbuf -> SplParser.main SplLexer.token lexbuf) file 
-          with Sys_error _ ->
-            ProgError.error pos ("Could not find file " ^ file)
-        in
-        let dir = 
-          if file = main_file
-          then !Config.base_dir
-          else Filename.dirname file 
-        in
-        let parsed1 = StringSet.add file parsed in
-        let to_parse2 =
-          List.fold_left (fun acc (incl, pos) -> 
-            (* TODO: make sure that file names are unique *)
-            let file = dir ^ Filename.dir_sep ^ incl in
-            if StringSet.mem file parsed1 then acc else (file, pos) :: acc)
-            to_parse1 cu.SplSyntax.includes 
-        in
-        parse parsed1 to_parse2 (SplSyntax.merge_spl_programs spl_prog cu)
+        let file = normalizeFilename file in
+        if not (StringSet.mem file parsed) then
+          begin
+            Debug.debug (fun () -> "parsing: " ^ file ^ "\n");
+            let cu = 
+              try 
+                parse_cu (fun lexbuf -> SplParser.main SplLexer.token lexbuf) file 
+              with Sys_error _ ->
+                ProgError.error pos ("Could not find file " ^ file)
+            in
+            let dir = 
+              if file = main_file
+              then !Config.base_dir
+              else Filename.dirname file 
+            in
+            let parsed1 = StringSet.add file parsed in
+            let to_parse2 =
+              List.fold_left (fun acc (incl, pos) -> 
+                let file = dir ^ Filename.dir_sep ^ incl in
+                if StringSet.mem file parsed1 then acc else (file, pos) :: acc)
+                to_parse1 cu.SplSyntax.includes 
+            in
+            parse parsed1 to_parse2 (SplSyntax.merge_spl_programs spl_prog cu)
+          end
+        else
+          begin
+            Debug.debug (fun () -> "already included: " ^ file ^ "\n");
+            parse parsed to_parse1 spl_prog
+          end
     | [] -> spl_prog
   in
   let prog =
@@ -84,6 +105,7 @@ let check_spl_program file proc =
   let prog = SplTranslator.to_program spl_prog in
   let simple_prog = Verifier.simplify prog in
   let check simple_prog proc =
+    if !Config.typeonly then () else
     let errors = Verifier.check_proc simple_prog proc in
     List.iter 
       (fun (pp, error_msg, model) ->

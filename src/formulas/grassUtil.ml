@@ -1,9 +1,9 @@
-(** Utility functions for manipulating GRASS formulas *)
+(** {5 Utility functions for manipulating GRASS formulas}*)
 
 open Grass
 open Util
 
-(** Auxiliary functions for manipulating source positions *)
+(** {6 Auxiliary functions for manipulating source positions} *)
 
 let dummy_position = 
   { sp_file = "";
@@ -94,6 +94,10 @@ let id_set_of_list ids =
 
 (** {6 Utility functions for identifiers, Boolean operators, and sorts} *)
 
+let is_free_symbol = function
+  | FreeSym _ -> true
+  | _ -> false
+    
 let fresh_ident =
   let used_names = Hashtbl.create 0 in
   fun (name : string) ->
@@ -116,14 +120,6 @@ let dualize_binder = function
 
 let name id = fst id
 
-let sort_of = function
-  | Var (_, s) 
-  | App (_, _, s) -> s
-
-let rec sort_ofs = function
-  | [] -> failwith "tried to extract sort from empty list of terms"
-  | t :: ts -> sort_of t
-
 let range_sort = function
   | Map (_, srt) -> srt
   | _ -> raise (Invalid_argument "range_sort")
@@ -132,12 +128,12 @@ let dom_sort = function
   | Map (srt, _) -> srt
   | _ -> raise (Invalid_argument "dom_sort")
 
-let struct_id_of_sort = function
+let struct_sort_of_sort = function
   | Loc sid -> sid
-  | _ -> raise (Invalid_argument "struct_id_of_sort")
+  | _ -> raise (Invalid_argument "struct_sort_of_sort")
 
-let struct_id_of_term t =
-  struct_id_of_sort (sort_of t)
+let struct_sort_of_term t =
+  struct_sort_of_sort (sort_of t)
         
 let range_sort_of_map map =
   match sort_of map with
@@ -158,6 +154,16 @@ let element_sort_of_set s =
   | Set srt -> srt
   | _ -> failwith "illtyped set expression"
 
+let element_sort_of_array s =
+  match sort_of s with
+  | Loc (Array srt) -> srt
+  | _ -> failwith "illtyped array expression"
+
+let element_sort_of_cell s =
+  match sort_of s with
+  | Loc (ArrayCell srt) -> srt
+  | _ -> failwith "illtyped array cell expression"
+
        
 let has_sort srt t = sort_of t = srt
 
@@ -176,7 +182,7 @@ let is_map_sort = function
 let field_sort id ran_srt = Map (Loc id, ran_srt)
 let array_sort ran_srt = Map (Int, ran_srt)
 
-let loc_field_sort struct_id = field_sort struct_id (Loc struct_id)
+let loc_field_sort srt = field_sort srt (Loc srt)
 
 let is_free_const = function
   | App (FreeSym _, [], _) -> true
@@ -191,13 +197,15 @@ let symbol_of_ident =
   with Not_found -> FreeSym id
  
 
-(** {6 Smart constructors} *)
+(** {6 (Smart) constructors} *)
 
 let mk_true = BoolOp (And, [])
 let mk_false = BoolOp (Or, [])
 let mk_bool b = if b then mk_true else mk_false
 
 let mk_bool_term b = App (BoolConst b, [], Bool)
+let mk_true_term = mk_bool_term true
+let mk_false_term = mk_bool_term false
 
 let mk_int i = App (IntConst i, [], Int)
 
@@ -240,6 +248,7 @@ let mk_null id = mk_app (Loc id) Null []
 let mk_read map ind = 
   let dom_srt, ran_srt = match sort_of map with
   | Map (d,r) -> d, r
+  | Loc (Array r) -> Int, r
   | s -> 
       failwith 
 	("tried to read from term " ^ 
@@ -251,38 +260,60 @@ let mk_read map ind =
 
 let mk_read_form map ind = 
   match sort_of map with
-  | Map (_, Bool) -> mk_atom Read [map; ind]
+  | Map (_, Bool)
+  | Loc (Array Bool) -> mk_atom Read [map; ind]
   | _ -> failwith "mk_read_form expects a term of sort Map(_,Bool)"
 
+let mk_length map =
+  mk_app Int Length [map]
+
+let mk_array_of_cell c =
+  mk_app (Loc (Array (element_sort_of_cell c))) ArrayOfCell [c]
+
+let mk_index_of_cell c =
+  mk_app Int IndexOfCell [c]
+
+let mk_array_cells a =
+  mk_app (Map (Int, Loc (ArrayCell (element_sort_of_array a)))) ArrayCells [a]
+    
 let mk_write map ind upd =
   mk_app (sort_of map) Write [map; ind; upd]
 
+(** Constructor for equalities.*)
 let mk_ep fld set t = mk_app (element_sort_of_set set) EntPnt [fld; set; t]
 
+(** Term constructor for between predicates.*)
 let mk_btwn_term fld t1 t2 t3 =
   mk_app Bool Btwn [fld; t1; t2; t3]
 
+(** Constructor for between predicates.*)
 let mk_btwn ?(ann=[]) fld t1 t2 t3 =
   mk_atom ~ann:ann Btwn [fld; t1; t2; t3]
-  
+
+(** Constructor for reachability predicates.*)
 let mk_reach fld t1 t2 = 
   mk_btwn fld t1 t2 t2
-  
+
+(** Constructor for empty set of sort [srt].*)
 let mk_empty srt = mk_app srt Empty []
 
-let mk_loc_set struct_id id = mk_free_const (Set (Loc struct_id)) id
+(** Construcot for set constant [id] with elements of sort [Loc srt].*) 
+let mk_loc_set srt id = mk_free_const (Set (Loc srt)) id
 
+(** Constructor for set enumerations.*)
 let mk_setenum ts = 
   let srt = Set (sort_ofs ts) in
   match ts with
   | [] -> mk_empty srt
   | _ -> mk_app srt SetEnum ts
 
+(** Constructor for set intersection.*)
 let mk_inter sets = 
   if List.exists (function App (Empty, [], _) -> true | _ -> false) sets
   then mk_empty (sort_ofs sets)
   else mk_app (sort_ofs sets) Inter sets
 
+(** Constructor for set union.*)
 let mk_union sets = 
   let sets1 =
     List.filter 
@@ -294,43 +325,63 @@ let mk_union sets =
   | [s] -> s
   | _ -> mk_app (sort_ofs sets) Union sets1
 
+(** Construtor for set difference.*)
 let mk_diff s t = mk_app (sort_of s) Diff [s; t]
 
+(** Term constructor for set membership.*)
 let mk_elem_term e s = mk_app Bool Elem [e; s]
+
+(** Constructor for set membership.*)
 let mk_elem ?(ann=[]) e s = mk_atom ~ann:ann Elem [e; s]
 
+(** Smart constructor for set membership.*)
 let smk_elem ?(ann=[]) e = function
   | App (Empty, _, _) -> mk_false
   | s -> mk_elem ~ann:ann e s
 
+(** Constructor for subset constraints.*)
 let mk_subseteq s t = mk_atom SubsetEq [s; t]
 
+(** Term constructor for disjointness constraints.*)
+let mk_disjoint_term s t = mk_app Bool Disjoint [s; t]
+
+(** Constructor for disjointness constraints.*)
+let mk_disjoint s t = mk_atom Disjoint [s; t]
+
+(** Term constructor for frame predicates.*)
 let mk_frame_term x a f f' = mk_app Bool Frame [x; a; f; f']
 
-(* @param a the set of allocated locations
- * @param x the footprint in the pre-state
- * @param f the field in the pre-state
- * @param f' the field in the post-state
- *)
+(** Constructor for frame predicates.*)
 let mk_frame x a f f' = mk_atom Frame [x; a; f; f']
 
+(** Constructor for disjunction.*)
 let mk_and = function
   | [f] -> f
   | fs -> BoolOp(And, fs)
 
+(** Constructor for conjunction.*)
 let mk_or = function
   | [f] -> f
   | fs -> BoolOp (Or, fs)
 
+(** Constructor for negation.*)
 let mk_not = function
   | BoolOp (op, []) -> BoolOp (dualize_op op, [])
   | BoolOp (Not, [f]) -> f
   | f -> BoolOp (Not, [f])
 
+(** Constructor for disequality.*)
 let mk_neq s t = mk_not (mk_eq s t)
 
+(** Constructor for strict subset constraints.*)
 let mk_strict_subset s t = mk_and [mk_subseteq s t; mk_neq s t]
 
+(** Constructor for patterns. *)
+let mk_known t = mk_app Pat Known [t]
+    
+(** Constructor for binder [b], binding variables [bv] in formula [f]. 
+ *  Annotations [ann] are optional.
+ *)
 let rec mk_binder ?(ann=[]) b bv f = 
   match bv, ann with 
   | [], [] -> f
@@ -340,8 +391,13 @@ let rec mk_binder ?(ann=[]) b bv f =
           mk_binder ~ann:(ann @ ann') b bv f'
       | Binder (b', bv', f', ann') when b = b' ->
           mk_binder ~ann:(ann @ ann') b (bv @ bv') f'
+      | BoolOp (op, []) -> f
       | _ -> Binder (b, bv, f, ann)
-let mk_forall ?(ann=[]) bv f = mk_binder ~ann:ann Forall bv f 
+
+(** Constructor for universal quantification.*)
+let mk_forall ?(ann=[]) bv f = mk_binder ~ann:ann Forall bv f
+
+(** Constructor for existential quantification.*)
 let mk_exists ?(ann=[]) bv f = mk_binder ~ann:ann Exists bv f 
   
 (** Add anntotations [ann] to formula [f]. *)
@@ -373,24 +429,50 @@ let strip_comments f =
   filter_annotations 
     (function Comment _ -> false | _ -> true) f
 
+(** Remove all error messages from formula [f]. *)
 let strip_error_msgs f = 
   filter_annotations 
     (function ErrorMsg _ -> false | _ -> true) f
 
+(** Remove all name annotations from formula [f]. *)
 let strip_names f = 
   filter_annotations 
     (function Name _ -> false | _ -> true) f
 
+(** Extract patterns from formula [f].*)
+let extract_patterns f =
+  let extract acc ann =
+    List.fold_left
+      (fun acc -> function Pattern (t, fs) -> (t, fs) :: acc | _ -> acc)
+      acc ann
+  in
+  let rec ep acc = function
+    | BoolOp (op, fs) ->
+        List.fold_left ep acc fs
+    | Atom (_, ann) ->
+        extract acc ann
+    | Binder (_, _, f, ann) ->
+        ep (extract acc ann) f
+  in ep [] f
+  
+(** Annotate [f] with comment [c]. *)
 let mk_comment c f = 
   annotate f [Comment c]
 
+(** Annotate [f] with error message [msg] associated with position [pos]. *)
 let mk_error_msg (pos, msg) f =
   annotate f [ErrorMsg (pos, msg)]
 
+(** Annotate [f] with name [n]. *)
 let mk_name n f = annotate f [Name (fresh_ident n)]
 
+(** Annotate [f] with source position [pos].*)
 let mk_srcpos pos f = annotate f [SrcPos pos]
 
+(** Annotate [f] with pattern [t] and filter [ft]. *)
+let mk_pattern t ft f = annotate f [Pattern (mk_known t, ft)]
+   
+(** Smart constructor for Boolean operation [op] taking arguments [fs].*)
 let smk_op op fs =
   match op with
   | Not -> mk_not (List.hd fs)
@@ -405,12 +487,17 @@ let smk_op op fs =
             end
 	| BoolOp (op', fs0) :: fs1 when op = op' -> 
 	    mkop1 (fs0 @ fs1) acc
-	| BoolOp (And, []) :: fs1 when op = Or -> mk_true
-	| BoolOp (Or, []) :: fs1 when op = And -> mk_false
+	| BoolOp (And, []) :: fs1
+        | Atom (App (BoolConst true, [], _), _) :: fs1 when op = Or -> mk_true
+	| BoolOp (Or, []) :: fs1
+        | Atom (App (BoolConst false, [], _), _) :: fs1 when op = And -> mk_false
 	| f :: fs1 -> mkop1 fs1 (FormSet.add f acc)
       in mkop1 fs FormSet.empty
 
+(** Smart constructor for conjunctions. *)
 let smk_and fs = smk_op And fs
+
+(** Smart constructor for disjunctions. *)
 let smk_or fs = smk_op Or fs
 
 (** {6 Normal form computation} *)
@@ -424,6 +511,8 @@ let rec nnf = function
       Binder (b, [], nnf (mk_not f), a)
   | BoolOp (Not, [Binder (b, vs, f, a)]) -> 
       Binder (dualize_binder b, vs, nnf (mk_not f), a)
+  | BoolOp (Not, [Atom (App (BoolConst b, [], _), _)]) ->
+      mk_bool (not b)
   | BoolOp (op, fs) -> smk_op op (List.map nnf fs)
   | Binder (b, vs, f, a) -> mk_binder ~ann:a b vs (nnf f)
   | f -> f
@@ -452,12 +541,18 @@ let rec cnf =
     | BoolOp (Or, fs) -> cnf_or [] (List.rev_map cnf fs)
     | f -> f
 
-let mk_implies a b =
-  smk_or [nnf (mk_not a); b]
+(** Construtor for implications. *)
+let mk_implies f g =
+  match g with
+  | Binder (b, [], g1, a) ->
+      Binder (b, [] , smk_or [nnf (mk_not f); g1], a)
+  | _ -> smk_or [nnf (mk_not f); g]
 
+(** Constructor for sequents.*)
 let mk_sequent antecedent succedent =
   smk_or (List.map mk_not antecedent @ succedent)
 
+(** Constructor for biimplication.*)
 let mk_iff a b =
   smk_or [smk_and [a; b]; smk_and [nnf (mk_not a); nnf (mk_not b)]]
 
@@ -474,10 +569,15 @@ let rec is_ground = function
     
 (** Fold all terms appearing in the formula [f] using catamorphism [fn] and initial value [init] *)
 let fold_terms fn init f =
+  let fa acc = function
+    | Pattern (t, _) -> fn acc t
+    | _ -> acc
+  in
   let rec ft acc = function
-    | Atom (t, _) -> fn acc t
+    | Atom (t, a) -> fn (List.fold_left fa acc a) t
     | BoolOp (_, fs) ->	List.fold_left ft acc fs
-    | Binder (_, _, f, _) -> ft acc f
+    | Binder (_, _, f, a) ->
+        ft (List.fold_left fa acc a) f
   in ft init f
 
 (** Apply the function fn to all terms appearing in [f] *)
@@ -488,9 +588,10 @@ let map_terms fn f =
     | Binder (b, vs, f, a) -> 
         let a1 = 
           List.map (function
-            | TermGenerator (bvs, fvs, gs, t) ->
+            | TermGenerator (gs, ts) ->
                 let gs1 = List.map (function Match (t, f) -> Match (fn t, f)) gs in
-                TermGenerator (bvs, fvs, gs1, fn t)
+                TermGenerator (gs1, List.map fn ts)
+            | Pattern (t, ft) -> Pattern (fn t, ft)
             | a -> a) a
         in
         Binder (b, vs, mt f, a1)
@@ -498,13 +599,18 @@ let map_terms fn f =
 
 (** Like {!fold_terms} except that [fn] takes the set of bound variables of the given context as additional argument *)
 let fold_terms_with_bound fn init f =
+  let fa bv acc = function
+    | Pattern (t, _) -> fn bv acc t
+    | _ -> acc
+  in
   let rec ft bv acc = function
-    | Atom (t, a) -> fn bv acc t
+    | Atom (t, a) -> fn bv (List.fold_left (fa bv) acc a) t
     | BoolOp (_, fs) ->	List.fold_left (ft bv) acc fs
-    | Binder (_, vs, f, _) -> 
-	ft (List.fold_left (fun bv (x, _) -> IdSet.add x bv) bv vs) acc f
+    | Binder (_, vs, f, a) ->
+        let bv1 = List.fold_left (fun bv (x, _) -> IdSet.add x bv) bv vs in
+        ft bv1 (List.fold_left (fa bv1) acc a) f
   in ft IdSet.empty init f
-
+    
 (** Computes the set of identifiers of free variables occuring in term [t]
  ** union the accumulated set of identifiers [vars]. *)
 let fv_term_acc vars t =
@@ -535,13 +641,16 @@ let sorted_fv_term_acc svars t =
   | App (_, ts, _) -> List.fold_left fvt1 svars ts
   in fvt1 svars t
 
-
+(** Smart constructor for binder [b], binding variables [bv] in formula [f]. *)
 let smk_binder ?(ann=[]) b bv f =
   let fv_f = fv f in
   let bv1 = List.filter (fun (x, _) -> IdSet.mem x fv_f) bv in
   mk_binder ~ann:ann b bv1 f
 
+(** Smart constructor for universal quantifiers.*)
 let smk_forall ?(ann=[]) bv f = smk_binder ~ann:ann Forall bv f
+
+(** Smart constructor for existential quantifiers.*)
 let smk_exists ?(ann=[]) bv f = smk_binder ~ann:ann Exists bv f
 
 (** Computes the set of free variables of formula [f] together with their sorts. *)
@@ -615,7 +724,7 @@ let ground_terms_term_acc ?(include_atoms=false) terms t =
 	      terms_t, is_ground && is_ground_t)
 	    (terms, true) ts
 	in
-	if is_ground && (not include_atoms || srt <> Bool)
+	if is_ground && (include_atoms || srt <> Bool)
 	then TermSet.add t terms1, true 
 	else terms1, is_ground
   in
@@ -636,7 +745,8 @@ let ground_terms ?(include_atoms=false) f =
 (** Computes the set of all free variables that appear below function symbols in formula [f]. *)
 let vars_in_fun_terms f =
   let rec fvt vars = function
-    | Var (id, srt) -> IdSrtSet.add (id, srt) vars
+    | Var (id, srt) ->
+        IdSrtSet.add (id, srt) vars
     | App (_, ts, _) ->
 	List.fold_left fvt vars ts
   in
@@ -648,20 +758,32 @@ let vars_in_fun_terms f =
     | _ -> vars
   in fold_terms ct IdSrtSet.empty f
 
-(** Compute the set of all proper terms in formula [f] that have variables occuring in them. *)
-let fun_terms_with_vars f =
+let terms_with_vars f =
   let rec process acc t = match t with
-    | App (_, ts, Bool) ->
-      (* skip predicates *)
-      List.fold_left process acc ts
-    | App (_, ts, _) ->
+    | App (sym, ts, srt) ->
       let acc = List.fold_left process acc ts in
       if not (IdSet.is_empty (fv_term_acc IdSet.empty t))
       then TermSet.add t acc
       else acc
     | Var _ -> acc
   in
-    fold_terms process TermSet.empty f
+  fold_terms process TermSet.empty f
+    
+    
+(** Compute the set of all proper terms in formula [f] that have variables occuring in them. *)
+let fun_terms_with_vars f =
+  let rec process acc t = match t with
+    | App (sym, ts, srt) when srt <> Bool ->
+      let acc = List.fold_left process acc ts in
+      if not (IdSet.is_empty (fv_term_acc IdSet.empty t))
+      then TermSet.add t acc
+      else acc
+    | App (_, ts, _) ->
+      (* skip predicates *)
+      List.fold_left process acc ts
+    | Var _ -> acc
+  in
+  fold_terms process TermSet.empty f
      
 (** Extract signature of term [t] with accummulator. *)
 let rec sign_term_acc (decls : signature) t = 
@@ -733,23 +855,24 @@ let subst_id_term subst_map t =
  ** This operation is not capture avoiding. *)
 let subst_id subst_map f =
   let subt = subst_id_term subst_map in
+  let subf f = match f with
+    | FilterSymbolNotOccurs (FreeSym id) ->
+        (try FilterSymbolNotOccurs (FreeSym (IdMap.find id subst_map))
+        with Not_found -> f)
+          (*| FilterTermNotOccurs t ->
+             FilterTermNotOccurs (subt t)*)
+    | f -> f
+  in
   let subg g = match g with
-  | Match (t, f) ->
+  | Match (t, fs) ->
       let t1 = subt t in
-      let f1 =
-        match f with
-        | FilterSymbolNotOccurs (FreeSym id) ->
-            (try FilterSymbolNotOccurs (FreeSym (IdMap.find id subst_map))
-            with Not_found -> f)
-        (*| FilterTermNotOccurs t ->
-            FilterTermNotOccurs (subt t)*)
-        | _ -> f
-      in
-      Match (t1, f1)
+      let fs1 = List.map subf fs in
+      Match (t1, fs1)
   in
   let suba a = match a with
-    | TermGenerator (bvs, fvs, guards, gen_term) -> 
-      TermGenerator (bvs, fvs, List.map subg guards, subt gen_term)
+    | TermGenerator (guards, gen_terms) -> 
+        TermGenerator (List.map subg guards, List.map subt gen_terms)
+    | Pattern (t, fs) -> Pattern (subt t, List.map subf fs)
     | a -> a
   in
   let rec sub = function 
@@ -783,40 +906,30 @@ let subst_consts_term subst_map t =
 (** Substitutes all constants in formula [f] with other terms according to substitution map [subst_map]. 
  ** This operation is not capture avoiding. *)
 let subst_consts subst_map f =
-  let add_var (id, srt) vs =
-    if List.exists (fun (id2, srt) -> id = id2) vs 
-    then vs 
-    else (id, srt) :: vs
+  let subst_filter f = match f with
+    | FilterSymbolNotOccurs (FreeSym id) ->
+        (try
+          match IdMap.find id subst_map with
+          | App (FreeSym id1, [], _) ->
+              FilterSymbolNotOccurs (FreeSym id1)
+          | _ -> f
+        with Not_found -> f)
+    | f -> f
   in
   let subst_annot = function
-    | TermGenerator (bvs, fvs, guards, gen_term) -> 
+    | TermGenerator (guards, gen_terms) -> 
         let sign, guards1 = 
           List.fold_right 
             (fun m (sign, guards1) -> 
               match m with
-              | Match (t, f) ->
+              | Match (t, fs) ->
                   let t1 = subst_consts_term subst_map t in
-                  let f1 = match f with
-                  | FilterSymbolNotOccurs (FreeSym id) ->
-                      (try
-                        match IdMap.find id subst_map with
-                        | App (FreeSym id1, [], _) ->
-                            FilterSymbolNotOccurs (FreeSym id1)
-                        | _ -> f
-                      with Not_found -> f)
-                  (*| FilterTermNotOccurs t ->
-                      FilterTermNotOccurs (subst_consts_term subst_map t)*)
-                  | _ -> f
-                  in
-                  sorted_fv_term_acc sign t1, Match (t1, f1) :: guards1)
+                  let fs1 = List.map subst_filter fs in
+                  sorted_fv_term_acc sign t1, Match (t1, fs1) :: guards1)
             guards (IdMap.empty, [])
         in
-        let bvs1 = 
-          IdMap.fold 
-            (fun id srt bvs1 -> add_var (id, srt) bvs1)
-            sign bvs
-        in 
-        TermGenerator (bvs1, fvs, guards1, subst_consts_term subst_map gen_term)
+        TermGenerator (guards1, List.map (subst_consts_term subst_map) gen_terms)
+    | Pattern (t, fs) -> Pattern (subst_consts_term subst_map t, List.map subst_filter fs)
     | a -> a
   in
   let rec subst = function
@@ -874,14 +987,14 @@ let subst subst_map f =
     in vs1, sm2
   in
   let suba bvs1 sm = function
-    | TermGenerator (bvs, fvs, guards, gen_term) -> 
-        let fvs1, sm1 = rename_vars fvs sm in
+    | TermGenerator (guards, gen_terms) -> 
         let guards1 = 
           List.map 
-            (function Match (t, f) -> Match (subst_term sm1 t, f))
+            (function Match (t, f) -> Match (subst_term sm t, f))
             guards
         in
-        TermGenerator (bvs1, fvs1, guards1, subst_term sm1 gen_term)
+        TermGenerator (guards1, List.map (subst_term sm) gen_terms)
+    | Pattern (t, fs) -> Pattern (subst_term sm t, fs)
     | a -> a
   in
   let rec sub sm = function 
@@ -966,7 +1079,7 @@ let propagate_binder b f =
             Binder (b1, vs, f1, a), vs1
         | _ -> 
             let f1, vs1 = prop [] f in
-            Binder (b1, vs, mk_binder (dualize_binder b) vs1 f1, a), tvs)
+            mk_binder ~ann:a b1 vs (mk_binder (dualize_binder b) vs1 f1), tvs)
     | f -> 
         let fv_f = fv f in
         f, List.filter (fun (x, _) -> IdSet.mem x fv_f) tvs
@@ -990,7 +1103,8 @@ let foralls_to_exists f =
     let rec find nodefs defs = function
       | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; t], _), a)])
         when IdSet.mem x nodefs && 
-          IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
+          IdSet.is_empty (IdSet.inter nodefs (fv_term t))
+        ->
             IdSet.remove x nodefs, mk_eq xt t :: defs, mk_false
       | BoolOp (Not, [Atom (App (Eq, [t; Var (x, srt) as xt], _), a)])
         when IdSet.mem x nodefs && 
@@ -1026,6 +1140,7 @@ let foralls_to_exists f =
         let g1 = distribute_and bvs gs [g] in
         Binder (b, [], g1, a)
     | Binder (_, [], g, a) :: gs1 ->
+        assert (List.for_all (function TermGenerator _ -> false | _ -> true) a);
         distribute_and bvs gs (g :: gs1)
     | g :: gs1 -> distribute_and bvs (g :: gs) gs1
     | [] -> smk_forall bvs (mk_or (List.rev gs))
@@ -1042,7 +1157,9 @@ let foralls_to_exists f =
             let nodefs, defs, g = find_defs bvs_set [] f in
             let ubvs, ebvs = List.partition (fun (x, _) -> IdSet.mem x nodefs) bvs in
             (match ebvs with
-            | [] -> distribute_and bvs [] [g]
+            | [] ->
+                (*assert (List.for_all (function TermGenerator _ -> false | _ -> true) a);*)
+                annotate (distribute_and bvs [] [g]) a
             | _ -> 
                 let g1 = cf (mk_forall ubvs g) in
                 Binder (Exists, ebvs, mk_and (defs @ [g1]), a))

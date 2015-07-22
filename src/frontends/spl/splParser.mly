@@ -33,6 +33,10 @@ let fix_scopes stmnt =
     | stmnt -> stmnt
   in fs GrassUtil.global_scope stmnt
 
+let fst3 (v, _, _) = v
+let snd3 (_, v, _) = v
+let trd3 (_, _, v) = v
+
 %}
 
 %token <string> IDENT
@@ -49,10 +53,10 @@ let fix_scopes stmnt =
 %token <SplSyntax.quantifier_kind> QUANT
 %token ASSUME ASSERT CALL FREE HAVOC NEW RETURN
 %token IF ELSE WHILE
-%token GHOST IMPLICIT VAR STRUCT PURE PROCEDURE PREDICATE FUNCTION INCLUDE
+%token GHOST IMPLICIT VAR STRUCT PURE PROCEDURE PREDICATE FUNCTION FOOTPRINT INCLUDE AXIOM
 %token OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
-%token LOC INT BOOL SET MAP
-%token MATCHING YIELDS COMMENT 
+%token LOC INT BOOL SET MAP ARRAY ARRAYCELL
+%token MATCHING YIELDS WITHOUT COMMENT PATTERN
 %token EOF
 
 %nonassoc COLONEQ 
@@ -81,27 +85,32 @@ let fix_scopes stmnt =
 
 main:
 | declarations {
-  extend_spl_program (fst $1) (snd $1) empty_spl_program
+  extend_spl_program (fst3 $1) (snd3 $1) (trd3 $1) empty_spl_program
 } 
 ;
 
 declarations:
+| background_th declarations
+  { (fst3 $2, snd3 $2, ($1, mk_position 1 1) :: trd3 $2) }
 | include_cmd declarations 
-  { (($1, mk_position 1 1) :: fst $2, snd $2) }
+  { (($1, mk_position 1 1) :: fst3 $2, snd3 $2, trd3 $2) }
 | proc_decl declarations 
-  { (fst $2, ProcDecl $1 :: snd $2) }
-|   pred_decl declarations 
-  { (fst $2, PredDecl $1 :: snd $2) }
+  { (fst3 $2, ProcDecl $1 :: snd3 $2, trd3 $2) }
+| pred_decl declarations 
+  { (fst3 $2, PredDecl $1 :: snd3 $2, trd3 $2) }
 | struct_decl declarations
-  { (fst $2, StructDecl $1 :: snd $2) }
+  { (fst3 $2, StructDecl $1 :: snd3 $2, trd3 $2) }
 | var_decl declarations
-  { (fst $2, VarDecl $1 :: snd $2) }
-| /* empty */ { ([], []) }
+  { (fst3 $2, VarDecl $1 :: snd3 $2, trd3 $2) }
+| /* empty */ { ([], [], []) }
 | error { ProgError.syntax_error (mk_position 1 1) None }
 ;
 
 include_cmd:
 | INCLUDE STRINGVAL SEMICOLON { $2 }
+
+background_th:
+| AXIOM expr SEMICOLON { $2 }
 
 proc_decl:
 | proc_header { proc_decl $1 (Skip GrassUtil.dummy_position) }
@@ -180,6 +189,7 @@ pred_decl:
       pr_footprints = footprints;
       pr_locals = locals;
       pr_body = $10;
+      pr_is_footprint = false;
       pr_pos = mk_position 2 2;
     }
   in decl
@@ -197,34 +207,82 @@ pred_decl:
       pr_footprints = [];
       pr_locals = locals;
       pr_body = $7;
+      pr_is_footprint = false;
       pr_pos = mk_position 2 2;
     }
   in decl
 }
-| FUNCTION IDENT LPAREN var_decls RPAREN RETURNS LPAREN var_decls RPAREN LBRACE expr RBRACE {
+| function_header {
+  $1
+}
+| function_header pred_impl {
+  pred_decl $1 $2
+}
+;
+
+function_header:
+| footprint FUNCTION IDENT LPAREN var_decls RPAREN LPAREN var_decls RPAREN RETURNS LPAREN var_decls RPAREN {
   let formals, locals =
     List.fold_right (fun decl (formals, locals) ->
       decl.v_name :: formals, IdMap.add decl.v_name decl locals)
-      $4 ([], IdMap.empty)
+      $5 ([], IdMap.empty)
+  in
+  let footprints, locals =
+    List.fold_right (fun decl (footprints, locals) ->
+      decl.v_name :: footprints, IdMap.add decl.v_name decl locals)
+      $8 ([], locals)
   in
   let outputs, locals =
     List.fold_right (fun decl (outputs, locals) ->
       decl.v_name :: outputs, IdMap.add decl.v_name decl locals)
-      $8 ([], locals)
+      $12 ([], locals)
   in
   let decl =
-    { pr_name = ($2, 0);
+    { pr_name = ($3, 0);
+      pr_formals = formals;
+      pr_footprints = footprints;
+      pr_outputs = outputs;
+      pr_locals = locals;
+      pr_body = BoolVal (true, GrassUtil.dummy_position);
+      pr_is_footprint = $1;
+      pr_pos = mk_position 3 3;
+    }
+  in decl
+}
+| footprint FUNCTION IDENT LPAREN var_decls RPAREN RETURNS LPAREN var_decls RPAREN {
+  let formals, locals =
+    List.fold_right (fun decl (formals, locals) ->
+      decl.v_name :: formals, IdMap.add decl.v_name decl locals)
+      $5 ([], IdMap.empty)
+  in
+  let outputs, locals =
+    List.fold_right (fun decl (outputs, locals) ->
+      decl.v_name :: outputs, IdMap.add decl.v_name decl locals)
+      $9 ([], locals)
+  in
+  let decl =
+    { pr_name = ($3, 0);
       pr_formals = formals;
       pr_footprints = [];
       pr_outputs = outputs;
       pr_locals = locals;
-      pr_body = $11;
-      pr_pos = mk_position 2 2;
+      pr_body = BoolVal (true, GrassUtil.dummy_position);
+      pr_is_footprint = $1;
+      pr_pos = mk_position 3 3;
     }
   in decl
 }
 ;
 
+footprint:
+| FOOTPRINT { true }
+| /* empty */ { false }
+  
+pred_impl:
+| LBRACE expr RBRACE {
+  $2
+}
+  
 var_decls:
 | var_decl var_decl_list { $1 :: $2 }
 | /* empty */ { [] }
@@ -289,6 +347,8 @@ var_type:
 | LOC LT IDENT GT { StructType ($3, 0) }
 | INT { IntType }
 | BOOL { BoolType }
+| ARRAY LT var_type GT { ArrayType $3 }
+| ARRAYCELL LT var_type GT { ArrayCellType $3 }
 | SET LT var_type GT { SetType $3 }
 | MAP LT var_type COMMA var_type GT { MapType ($3, $5) }
 | IDENT { StructType ($1, 0) }
@@ -389,6 +449,7 @@ assign_lhs_list:
 assign_lhs:
 | ident { $1 }
 | field_access { $1 }
+| array_access { $1 }
 ;
 
 if_then_stmt:
@@ -441,10 +502,13 @@ primary:
 | LPAREN expr RPAREN { $2 }
 | alloc { $1 }
 | proc_call { $1 }
+| field_access { $1 }
+| array_access { $1 }
 ;
 
 alloc:
-| NEW IDENT { New (($2, 0), mk_position 1 2) }
+| NEW var_type { New ($2, [], mk_position 1 2) }
+| NEW var_type LPAREN expr_list_opt RPAREN { New ($2, $4, mk_position 1 5) }
 ;
 
 proc_call:
@@ -453,19 +517,28 @@ proc_call:
 /*| MAP LT var_type, var_type GT LPAREN expr_list_opt RPAREN {*/
 | IDENT LPAREN expr_list_opt RPAREN { ProcCall (($1, 0), $3, mk_position 1 4) }
 ;
-
+                                                             
 ident: 
 | IDENT { Ident (($1, 0), mk_position 1 1) }
 ;
 
 field_access:
-| unary_expr DOT IDENT { Dot ($1, ($3, 0), mk_position 1 3) }
+| ident DOT ident { Read ($3, $1, mk_position 1 3) }
+| primary DOT ident { Read ($3, $1, mk_position 1 3) }
 ;
 
+array_access:
+| ident LBRACKET expr RBRACKET { Read ($1, $3, mk_position 1 4) }
+| primary LBRACKET expr RBRACKET { Read ($1, $3, mk_position 1 4) }
+| ident LBRACKET RBRACKET { Read (Read (Ident (("array", 0), mk_position 2 3), $1, mk_position 1 3),
+                                  Read (Ident (("index", 0), mk_position 2 3), $1, mk_position 1 3), mk_position 1 3) }
+| primary LBRACKET RBRACKET { Read (Read (Ident (("array", 0), mk_position 2 3), $1, mk_position 1 3),
+                                    Read (Ident (("index", 0), mk_position 2 3), $1, mk_position 1 3), mk_position 1 3) }
+;
+                                                              
 unary_expr:
 | primary { $1 }
 | ident { $1 }
-| field_access { $1 }
 | PLUS unary_expr { UnaryOp (OpPlus, $2, mk_position 1 2) }
 | MINUS unary_expr { UnaryOp (OpMinus, $2, mk_position 1 2) }
 | unary_expr_not_plus_minus { $1 }
@@ -554,22 +627,35 @@ annot_expr:
 | iff_expr { $1 }
 | annot_expr AT LPAREN annot RPAREN { Annot ($1, $4, mk_position 1 5) }
 
+
+quant_var:
+| IDENT IN annot_expr {
+    GuardedVar (($1, 0), $3)
+  }
+| IDENT COLON var_type {
+    let decl = { v_name = ($1, 0);
+                 v_type = $3;
+                 v_ghost = false;
+                 v_implicit = false;
+                 v_aux = false;
+                 v_pos = mk_position 1 3;
+                 v_scope = GrassUtil.global_scope; (* scope is fixed later *) } in
+    UnguardedVar decl
+  }
+;
+
+quant_var_list:
+| COMMA quant_var quant_var_list { $2 :: $3 }
+| /* empty */ { [] }
+;
+
+quant_vars:
+| quant_var quant_var_list { $1 :: $2 }
+;
+
 quant_expr: 
 | annot_expr { $1 }
-| QUANT IDENT IN quant_expr COLONCOLON annot_expr { GuardedQuant ($1, ($2, 0), $4, $6, mk_position 1 6) }
-| QUANT IDENT COLON var_type var_decl_list COLONCOLON annot_expr { 
-  let decl = 
-    { v_name = ($2, 0);
-      v_type = $4;
-      v_ghost = false;
-      v_implicit = false;
-      v_aux = false;
-      v_pos = mk_position 2 2;
-      v_scope = mk_position 1 7
-    } 
-  in
-  Quant ($1, decl :: $5, $7, mk_position 1 7) 
-}
+| QUANT quant_vars COLONCOLON annot_expr { Quant ($1, $2, $4, mk_position 1 4) }
 ;
 
 expr:
@@ -587,5 +673,14 @@ expr_list:
 ;
 
 annot:
-| MATCHING expr_list YIELDS expr { GeneratorAnnot($2, $4) }
+| MATCHING ematch_list YIELDS expr { GeneratorAnnot($2, $4) }
+| PATTERN expr { PatternAnnot $2 }
 | COMMENT STRINGVAL { CommentAnnot ($2) }
+
+ematch_list:
+| ematch { [$1] }
+| ematch COMMA ematch_list { $1 :: $3 }
+
+ematch:
+| expr { ($1, []) }
+| expr WITHOUT IDENT { ($1, [($3, 0)]) }

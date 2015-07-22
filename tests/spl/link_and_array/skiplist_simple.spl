@@ -1,0 +1,150 @@
+// Simple version of skiplist: height 1 (basically linked list)
+
+struct SkipList {
+  var max_height: Int;
+  var height: Int;
+  var head: Node;
+}
+
+struct Node {
+  var data: Int;
+  var next: Array<Node>;
+}
+
+function next_map() returns (m: Map<Node, Node>) {
+  // This is syntactically incorrect:
+  // m == next[h]
+  // As is this:
+  //forall x: Node, y: Node, z: Node :: Btwn(next[h], x, y, z) == Btwn(m, x, y, z)
+  (forall x: Node :: x.m == x.next[0]
+   @(matching x.next[0] yields x.m)
+   @(matching x.m yields x.next[0])
+   @(comment "next-map"))
+}
+
+function lseg_footprint(x: Node, y: Node) returns (FP: Set<Node>) {
+  forall z: Node :: z in FP == (Btwn(next_map(), x, z, y) && z != y)
+}
+
+predicate lseg(x: Node, y: Node)(FP: Set<Node>) {
+  Btwn(next_map(), x, y, y) && FP == lseg_footprint(x, y)
+}
+
+predicate lseg_increasing(x: Node, FP: Set<Node>) {
+  forall y: Node, z: Node :: y in FP && z in FP && Btwn(next_map(),x,y,z) ==> y.data <= z.data
+}
+
+predicate slseg(x: Node, y: Node)(FP: Set<Node>) {
+  lseg(x, y, FP) &&
+  lseg_increasing(x, FP)
+}
+
+function arrayOwner(a: Array<Node>, FP: Set<Node>) returns (x: Node) 
+
+function array_footprint(x: Node, y: Node, FP1: Set<Node>) returns (FP2: Set<Array<Node>>) {
+  // One way
+  (forall z in FP1 :: z.next in FP2) &&
+  // Return
+  (forall a: Array<Node>:: a in FP2 ==> arrayOwner(a, FP1) in FP1 && arrayOwner(a, FP1).next == a) &&
+  (forall a: Array<Node>:: a !in FP2 ==> arrayOwner(a, FP1) == null
+   @(matching a yields arrayOwner(a, FP1).next))
+   
+}
+
+function array_cell_footprint(x: Node, y: Node, FP2: Set<Array<Node>>) returns (FP3: Set<ArrayCell<Node>>) {
+  // One way
+  (forall a: Array<Node>, i: Int :: a in FP2 && 0 <= i && i < a.length ==> a.cells[i] in FP3) &&
+  // Return
+  (forall c: ArrayCell<Node>:: c in FP3 ==> c.array in FP2 && 0 <= c.index && c.index < c.array.length)
+}
+
+predicate skiplist(l: SkipList)(FP0: Set<SkipList>, FP1: Set<Node>, FP2: Set<Array<Node>>, FP3: Set<ArrayCell<Node>>) {
+  //  0 <= l.height && l.height < l.max_height &&
+  1 == l.height && 1 == l.max_height &&
+  FP0 == Set<Loc<SkipList>>(l) &&
+  slseg(l.head, null, FP1) &&
+  // array length restrictions
+  (forall a: Array<Node> :: a in FP2 ==> a.length > 0) &&
+  // disjointness constraints
+  (forall a: Node, b: Node:: a in FP1 && b in FP1 && a != b ==> a.next != b.next) &&
+  array_footprint(l.head, null, FP1) == FP2 &&
+  array_cell_footprint(l.head, null, FP2) == FP3 &&
+  l.head != null  // TODO remove this?
+  // TODO don't we need to say that all array lengths are at least height?
+  && (forall a: Array<Node> :: a in FP2 ==> a.length == l.height)
+}
+
+
+procedure add(this: SkipList, x: Int)
+  requires skiplist(this)
+  ensures skiplist(this)
+{
+  //pure assert Btwn(next_map(), this.head, null, null);
+  /* Insert into the beginning: */
+  var w: Node := new Node;
+  //pure assert Btwn(next_map(), this.head, null, null);
+  w.data := x;
+  //pure assert Btwn(next_map(), this.head, null, null);
+  w.next := new Array<Node>(1);  // This is messing up values of next_map for this.head
+  pure assert Btwn(next_map(), this.head, null, null);
+  w.next[0] := this.head;
+  pure assert Btwn(next_map(), this.head, null, null);
+  this.head := w;
+}
+
+procedure add1(this: SkipList, w: Node)
+  requires skiplist(this) &*& acc(w) &*& acc(w.next) &*& acc(w.next.cells[0])
+  requires w.next.length == 1
+  ensures skiplist(this)
+{
+  w.next[0] := this.head;
+  this.head := w;
+}
+
+procedure traverse1(this: SkipList)
+  requires skiplist(this)
+  ensures skiplist(this)
+{
+  var curr := this.head;
+
+  if (curr != null) {
+    curr := curr.next[0];
+  }
+  
+  while (curr != null)
+    invariant (acc(curr) || curr == null) -** skiplist(this)
+  {
+    curr := curr.next[0];
+  }
+  
+}
+
+
+procedure trivial_add(this: SkipList, x: Int)
+  returns (res: Bool)
+  requires skiplist(this)
+  ensures skiplist(this)
+{
+  if (this.head.data > x) {
+    // Insert into the beginning:
+    var w: Node := new Node;
+    w.data := x;
+    w.next := new Array<Node>(1);
+    w.next[0] := this.head;
+    this.head := w;
+  }
+  var u: Node := this.head;
+
+  while (u.next[0] != null && u.next[0].data < x)
+    invariant acc(u) -** skiplist(this)
+    invariant u.data <= x
+  {
+    u := u.next[0];
+  }
+  var w: Node := new Node;
+  w.data := x;
+  w.next := new Array<Node>(1);
+
+  w.next[0] := u.next[0];
+  u.next[0] := w;
+}

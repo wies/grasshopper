@@ -1,6 +1,7 @@
 //  inspired by
 //  http://opendatastructures.org/versions/edition-0.1e/ods-java/4_2_SkiplistSSet_Efficient_.html
 //  under CC-BY
+//  full source at http://opendatastructures.org/ods-java.tgz
 
 include "../include/skiplist.spl";
 
@@ -43,26 +44,33 @@ procedure pickHeight(max_height: Int)
   requires 0 <= max_height
   ensures 0 <= height && height <= max_height;
 
+//just for the proof
+function ghostWitness(i: Int, j: Int) returns (n: Node) { true }
+
 procedure add(this: SkipList, x: Int) 
   returns (res: Bool)
   requires skiplist(this)
   ensures skiplist(this)
 {
-  var stack: Node[] := new Node[this.max_height];
+  var stack: Array<Node> := new Array<Node>(this.max_height);
   var u: Node := this.head;
   var r: Int := this.height;
 
   while (r >= 0)
     invariant r <= this.height
-    invariant acc(u) -** skiplist(this)
+    invariant acc(stack) &*& arrayseg(stack, 0, this.max_height)
+    invariant (acc(u) &*& arraySegOnlyNode(stack, r+1, this.height+1)) -** skiplist(this) //element in the stack are part of the skiplist
+    invariant forall i: Int:: i <= this.height && i > r ==> (stack[i].next[r] == null || stack[i].next[r].data > x) //nodes in the stack point to a value larger than x
   {
     while (u.next[r] != null && u.next[r].data < x)
       invariant acc(u) -** skiplist(this)
     {
       u := u.next[r];
     }
-    if (u.next[r] != null && u.next[r].data == x)
+    if (u.next[r] != null && u.next[r].data == x) {
+      free(stack);
       return false;
+    }
     stack[r] := u;
     r := r - 1;
   }
@@ -72,23 +80,35 @@ procedure add(this: SkipList, x: Int)
 
   var w: Node := new Node;
   w.data := x;
-  w.next := new Node[height + 1];
+  w.next := new Array<Node>(height + 1);
 
+  var old_height := this.height; //added for the proof
   while (this.height < height)
-    invariant emp //how do we write the array permissions ?
+    invariant acc(this) &*& arrayseg(stack, old_height, height)
+    invariant old_height <= this.height && this.height <= height
+    invariant forall i: Int:: old_height <= i && i < this.height ==> stack[i] == this.head
   {
     this.height := this.height + 1;
     stack[this.height] := this.head;   // increasing height of skiplist
   }
 
+  //a ghost map that remember the values of stack[i].next[j]
+  pure assume(forall i: Int, j: Int:: i >= 0 && i <= w.next.length && j >= 0 && j <= stack[i].next.length ==> ghostWitness(i,j) == stack[i].next[j])
+
   var i: Int := 0;
   while (i < w.next.length)
-    invariant acc(w) -** skiplist(this)
+    invariant acc(w) &*& acc(w.next) &*& arrayseg(w.next, 0, w.next.length)
+    invariant acc(stack) &*& arrayseg(stack, 0, w.next.length)
+    invariant arraySegWithNode(stack, 0, w.next.length)
+    invariant forall j: Int, k: Int:: j >= 0 && j < w.next.length && k >= 0 && k < stack[j].next.length && j != k ==> stack[j].next[k] == ghostWitness(j, k)
+    invariant forall j: Int:: j >= 0 && j < i ==> stack[j].next[j] == w && w.next[j] == ghostWitness(j, j)
+    invariant forall j: Int:: j >= i && j < stack.length && j < stack[j].next.length ==> stack[j].next[j] == ghostWitness(j, j)
   {
     w.next[i] := stack[i].next[i];
     stack[i].next[i] := w;
     i := i + 1;
   }
+  free(stack);
   return true;
 }
 
@@ -100,24 +120,40 @@ procedure remove(this: SkipList, x: Int)
   removed := false;
   var u: Node := this.head;
   var r: Int := this.height;
+  var toRemove: Node := null;
+
+  //what we want is the path that goes from the top of the sentinel node down to the predecessor of the node to remove
+  //that path has the property that it contains all the nodes that points to node to remove
+  //
+  //the properties to that path is:
+  //-start at max height (skiplist.height)
+  //-ends at zero
+  //-∀ n in the path if h is the outgoing height at n then
+  //  - ∀ i > h && i < n.height. n.next[i] == null || n.next[i].data > x
+  //  - n[h].data <= x
   
   while (r >= 0)
-    invariant acc(u) -** skiplist(this)
+    invariant acc(u) -** skiplist(this) //TODO not a skiplist ...
     invariant r <= this.height
   {
     while (u.next[r] != null && u.next[r].data < x)
-      invariant acc(u) -** skiplist(this)
+      invariant acc(u) -** skiplist(this) //TODO not a skiplist ...
     {
       u := u.next[r];
     }
     if (u.next[r] != null && u.next[r].data == x) {
       removed := true;
+      toRemove := u.next[r];
       u.next[r] := u.next[r].next[r];
       if (u == this.head && u.next[r] == null) {
         this.height := this.height - 1; // skiplist height has gone down
       }
     }
     r := r - 1;
+  }
+  if (removed) {
+    free(toRemove.next);
+    free(toRemove);
   }
   return removed;
 }

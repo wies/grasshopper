@@ -289,7 +289,8 @@ and pr_let_decls ppf = function
 and pr_annot ppf (t, a) =
   match a with
   | Name id ->
-      fprintf ppf "@[<3>(! %a@ @[:named@ %a@])@]" pr_term t pr_ident id
+      let id2 = Str.global_replace (Str.regexp " \\|(\\|)\\|<\\|>") "_" (string_of_ident id) in
+      fprintf ppf "@[<3>(! %a@ @[:named@ %s@])@]" pr_term t id2
   | Pattern [] -> ()
   | Pattern ts ->
       fprintf ppf "@[<3>(! %a@ @[:pattern@ (%a)@])@]" pr_term t pr_terms ts

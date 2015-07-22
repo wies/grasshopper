@@ -6,12 +6,64 @@ open GrassUtil
 open InstGen
 open SimplifyGrass
 
+ 
+(** Remove binders for universal quantified variables in [axioms] that satisfy the condition [open_cond]. *)
+let open_axioms ?(force=false) open_cond axioms =
+  let extract_generators generators a =
+    List.fold_right 
+      (fun ann (generators, a1) ->
+        match ann with
+        | TermGenerator (g, t) ->
+            let gen = (g, t) in
+            gen :: generators, a1
+        | _ -> generators, ann :: a1
+      ) a (generators, [])
+  in
+  let rec open_axiom generators = function
+    | Binder (b, [], f, a) ->
+        let f1, generators1 = open_axiom generators f in
+        let generators2, a1 = extract_generators generators a in
+        Binder (b, [], f1, a1), generators2
+    | Binder (b, vs, f, a) -> 
+        (* extract term generators *)
+        let generators1, a1 = extract_generators generators a in
+        let vs1 = List.filter (~~ (open_cond (annotate f a))) vs in
+        let f1, generators2 = open_axiom generators1 f in
+        if !Config.instantiate || force then
+          Binder (b, vs1, f1, a1), generators2
+        else 
+          Binder (b, vs, f1, a1), generators2
+    | BoolOp (op, fs) -> 
+        let fs1, generators1 = 
+          List.fold_right open_axioms fs ([], generators)
+        in
+        BoolOp (op, fs1), generators1
+    | f -> f, generators
+  and open_axioms f (fs1, generators) =
+    let f1, generators1 = open_axiom generators f in
+    f1 :: fs1, generators1
+  in
+  List.fold_right open_axioms axioms ([], [])
 
+(** Open condition that checks whether the given sorted variable is a field. *)
+let isFld f = function (_, Map (Loc _, _)) -> true | _ -> false
+
+(* Open condition that checks whether the given sorted variable appears below a function symbol. *) 
+let isFunVar f =
+  let fvars = vars_in_fun_terms f in
+  fun v -> IdSrtSet.mem v fvars
+
+(** Compute the set of generated ground terms for formulas [fs] *)
+let generated_ground_terms fs =
+  let _, generators = open_axioms isFunVar fs in
+  let gts = generate_terms generators (ground_terms ~include_atoms:true (mk_and fs)) in
+  gts
+  
 (** Eliminate all implicit and explicit existential quantifiers using skolemization.
  ** Assumes that [f] is typed and in negation normal form. *)
 let elim_exists =
   let e = fresh_ident "?e" in
-  let rec elim_neq = function
+  let rec elim_neq bvs = function
     | BoolOp (Not, [Atom (App (Eq, [s1; s2], _), a)]) as f ->
 	(match sort_of s1 with
 	| Set srt ->
@@ -19,16 +71,22 @@ let elim_exists =
 	    mk_exists [(e, srt)] (smk_or [smk_and [smk_elem ~ann:a ve s1; mk_not (smk_elem ~ann:a ve s2)];
 					 smk_and [smk_elem ~ann:a ve s2; mk_not (smk_elem ~ann:a ve s1)]])
 	| _ -> f)
-    | BoolOp (Not, [Atom (App (SubsetEq, [s1; s2], _), a)]) ->
+    | BoolOp (Not, [Atom (App (Disjoint, [s1; s2], _), a)]) when bvs = [] ->
+        let srt = element_sort_of_set s1 in
+        elim_neq bvs (mk_not (Atom (App (Eq, [mk_inter [s1; s2]; mk_empty (Set srt)], Bool), a)))
+    | BoolOp (Not, [Atom (App (SubsetEq, [s1; s2], _), a)]) when bvs = [] ->
 	let srt = element_sort_of_set s1 in
 	let ve = mk_var srt e in
 	mk_exists [(e, srt)] (annotate (smk_and [smk_elem ve s1; mk_not (smk_elem ve s2)]) a)
-    | BoolOp (op, fs) -> smk_op op (List.map elim_neq fs)
-    | Binder (b, vs, f, a) -> Binder (b, vs, elim_neq f, a)
-    | f -> f
+    | BoolOp (op, fs) -> smk_op op (List.map (elim_neq bvs) fs)
+    | Binder (Exists, vs, f, a) ->
+        mk_exists ~ann:a vs (elim_neq bvs f)
+    | Binder (Forall, vs, f, a) ->
+        mk_forall ~ann:a vs (elim_neq (bvs @ vs) f)
+    | f -> f 
   in
   List.map (fun f -> 
-    let f1 = elim_neq f in
+    let f1 = elim_neq [] f in
     let f2 = propagate_exists f1 in
     skolemize f2)
 
@@ -107,149 +165,55 @@ let field_partitions fs gts =
   in
   partition_of
 
-let btwn_fields fs gts =
-  let partition_of = field_partitions fs gts in
-  fold_terms (fun flds -> function
-    | App (Btwn, (App (_, _, _) as fld) :: _, _) -> 
-        TermSet.union (partition_of fld) flds
-    | _ -> flds)
-    TermSet.empty (smk_and fs)  
 
-let btwn_fields_in_fs fs = btwn_fields fs (ground_terms (smk_and fs))
-
-let add_frame_axioms fs =
-  let btwn_flds = btwn_fields_in_fs fs in
-  let expand_frame x a f f' =
-    let frame = mk_diff a x in
-    let reduce_graph id =
-      let loc1 = Axioms.loc1 id in
-      let loc2 = Axioms.loc2 id in
-      let loc3 = Axioms.loc3 id in
-
-      let replacement_pts =
-        Axioms.mk_axiom "pts_frame"
-          (mk_implies
-             (smk_elem loc1 frame)
-             (mk_eq (mk_read f loc1) (mk_read f' loc1))
-          )
-      in
-     
-      let axioms (*add reach*) =
-        let ep v = mk_ep f x v in
-        let reachwo_f = Axioms.reachwo_Fld f in
-        let reach_f x y z = mk_btwn f x z y in
-        let reach_f' x y z = mk_btwn f' x z y in
-        if TermSet.mem f' btwn_flds then
-          match f' with
-          | App (FreeSym (p, _), _, _) when p = "parent" ->
-              [Axioms.mk_axiom "reach_frame"
-                 (mk_sequent
-                    [smk_elem loc1 frame]
-                    [mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)])]
-          | _ ->
-              [replacement_pts;
-               Axioms.mk_axiom "reach_frame1"
-                 (mk_sequent
-                    [reachwo_f loc1 loc2 (ep loc1)]
-                    [(mk_iff 
-                       (reach_f loc1 loc2 loc3)
-                       (reach_f' loc1 loc2 loc3))]);
-               Axioms.mk_axiom "reach_frame2"
-                 (mk_implies
-                    (mk_and [mk_not (smk_elem loc1 x); mk_eq loc1 (ep loc1)])
-                    (mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)))
-              ]
-        else [replacement_pts]
-      in
-      mk_and axioms
+(** Compute term generators for Btwn fields *)
+let btwn_field_generators fs =
+  let make_generators acc f =
+    let ts = terms_with_vars f in
+    let btwn_fields t flds = match t with
+      | App (Btwn, fld :: _, _) ->
+          let vs = fv_term fld in
+          if IdSet.is_empty vs
+          then flds
+          else TermSet.add fld flds
+      | _ -> flds
     in
-    let reduce_data id =
-      let loc1 = Axioms.loc1 id in
-      Axioms.mk_axiom "data_frame"
-        (mk_implies
-           (smk_elem loc1 frame)
-           (mk_eq (mk_read f loc1) (mk_read f' loc1))
-        )
+    let btwn_flds = TermSet.fold btwn_fields ts TermSet.empty in
+    let process t acc = match t with
+      | App (FreeSym _, ts, _) ->
+          TermSet.fold (fun fld acc ->
+            if IdSet.subset (fv_term fld) (fv_term t)
+            then ([Match (t, [])], [mk_known fld]) :: acc
+            else acc)
+            btwn_flds acc
+      | _ -> acc
     in
-      (*Debug.amsg ("expanding frame for " ^ (string_of_term f) ^ "\n");*)
-      match sort_of f with
-      | Map (Loc id1, Loc id2) ->
-        if (id1 = id2) then reduce_graph id1
-        else reduce_data id1
-      | Map (Loc id, Int) | Map (Loc id, Bool) ->
-        reduce_data id
-      | other ->
-        failwith ("reduce_frame did not expect field of type " ^ (string_of_sort other))
+    TermSet.fold process ts acc
   in
-  let rec process f (frame_axioms, fields) = match f with
-    | Atom (App (Frame, [x; a; fld; fld'], _), ann) when fld <> fld' ->
-        let fields1 = 
-          let _, flds = 
-            try TermMap.find x fields
-            with Not_found -> a, []
-          in
-          TermMap.add x (a, fld :: fld' :: flds) fields
-        in
-        mk_implies f (annotate (expand_frame x a fld fld') ann) :: frame_axioms, fields1
-    | BoolOp (op, fs) -> 
-        List.fold_left (fun acc f -> process f acc)
-          (frame_axioms, fields) fs
-    | Binder (b, vs, f, a) ->
-        process f (frame_axioms, fields)
-    | _ -> (frame_axioms, fields)        
-  in
-  let frame_axioms, fields =
-    List.fold_left
-      (fun acc f -> process f acc)
-      ([], TermMap.empty) fs
-  in
-  Util.rev_concat [frame_axioms; fs] 
-  
-let open_axioms ?(force=false) open_cond axioms = 
-  let rec open_axiom generators = function
-    | Binder (b, [], f, a) ->
-        let f1, generators1 = open_axiom generators f in
-        Binder (b, [], f1, a), generators1
-    | Binder (b, vs, f, a) -> 
-        (* extract term generators *)
-        let generators1, a1, gen_vs =
-          List.fold_right 
-            (fun ann (generators, a1, gen_vs) ->
-              match ann with
-              | TermGenerator (bvs, fvs, g, t) ->
-                  let gen = (bvs, fvs, g, t) in
-                  let gen_vs1 = 
-                    List.fold_left 
-                      (fun acc (x, _) -> IdSet.add x acc) 
-                      gen_vs bvs 
-                  in
-                  gen :: generators, a1, gen_vs1
-              | _ -> generators, ann :: a1, gen_vs
-            ) a (generators, [], IdSet.empty)
-        in
-        let open_generators (x, _) = IdSet.mem x gen_vs in
-        let vs1 = List.filter (~~ (open_cond f ||| open_generators)) vs in
-        if !Config.instantiate || force then
-          Binder (b, vs1, f, a1), generators1
-        else 
-          Binder (b, vs, f, a1), generators1
-    | BoolOp (op, fs) -> 
-        let fs1, generators1 = 
-          List.fold_right open_axioms fs ([], generators)
-        in
-        BoolOp (op, fs1), generators1
-    | f -> f, generators
-  and open_axioms f (fs1, generators) =
-    let f1, generators1 = open_axiom generators f in
-    f1 :: fs1, generators1
-  in
-  List.fold_right open_axioms axioms ([], [])
+  List.fold_left make_generators [] fs 
     
-let isFld f = function (_, Map (Loc _, _)) -> true | _ -> false
-
-let isFunVar f =
-  let fvars = vars_in_fun_terms f in
-  fun v -> IdSrtSet.mem v fvars
+    
+(** Add axioms for frame predicates. *)
+let add_frame_axioms fs =
+  let gs = ground_terms ~include_atoms:true (mk_and fs) in
+  let frame_sorts =
+    TermSet.fold
+      (fun t frame_sorts ->
+        match t with
+        | App (Frame, [_; _; f; _], _) ->
+            SortSet.add (sort_of f) frame_sorts
+        | _ -> frame_sorts
+      )
+      gs SortSet.empty
+  in
+  SortSet.fold
+    (fun srt fs ->
+      match srt with
+      | Map (Loc srt1, srt2) ->
+          Axioms.frame_axioms srt1 srt2 @ fs
+      | _ -> fs)
+    frame_sorts fs
+ 
 
 let rec valid = function
   | BoolOp (op, fs) ->
@@ -278,19 +242,19 @@ let add_set_axioms fs =
     | App (sym, ts, srt) -> App (sym, List.map unflatten ts, srt)
     | t -> t
   in
-  let rec simplify_term = function
-    (* todo: flatten unions, intersections, and enumerations *)
-    | App (SubsetEq, [t1; t2], _) -> 
-        let t11 = unflatten t1 in
-        let t21 = unflatten t2 in
-        (*let s = mk_free_const ?srt:(sort_of t11) (fresh_ident "S") in*)
-        App (Eq, [t21; mk_union [t11; t21]], Bool)
-    | t -> unflatten t
-  in
   let rec simplify = function
     | BoolOp (op, fs) -> BoolOp (op, List.map simplify fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, simplify f, a)
-    | Atom (t, a) -> Atom (simplify_term t, a)
+    | Atom (App (Disjoint, [t1; t2], _), a) when not !Config.abstract_preds ->
+        let srt = element_sort_of_set t1 in
+        let t11 = unflatten t1 in
+        let t21 = unflatten t2 in
+        Atom (mk_eq_term (mk_empty (Set srt)) (mk_inter [t11; t21]), a)
+    | Atom (App (SubsetEq, [t1; t2], _), a) when not !Config.abstract_preds -> 
+        let t11 = unflatten t1 in
+        let t21 = unflatten t2 in
+        Atom (mk_eq_term t21 (mk_union [t11; t21]), a)
+    | Atom (t, a) -> Atom (unflatten t, a)
   in
   let fs1 = List.map simplify fs in
   let elem_srts = 
@@ -306,119 +270,102 @@ let add_set_axioms fs =
   in
   rev_concat [fs1; Axioms.set_axioms elem_srts]
 
-(** Compute the set of struct names of the domain sort from the set of field terms [flds]. *)
-let struct_ids_of_fields flds =
+(** Compute the set of struct sorts of the domain sort from the set of field terms [flds]. *)
+let struct_sorts_of_fields flds =
   TermSet.fold
     (fun fld structs ->
       match fld with
-      | App (_, _, Map (Loc id, _)) -> IdSet.add id structs
+      | App (_, _, Map (Loc srt, _)) -> SortSet.add srt structs
       | _ -> structs)
-    flds IdSet.empty
+    flds SortSet.empty
 
+let array_sorts ts =
+  TermSet.fold
+    (fun t srts ->
+      match t with
+      | App (_, _, Loc (Array srt))
+      | App (_, _, Loc (ArrayCell srt))
+        -> SortSet.add srt srts
+      | _ -> srts)
+    ts SortSet.empty
     
 (** Adds theory axioms for the entry point function to formulas [fs].
  ** Assumes that all frame predicates have been reduced in formulas [fs]. *)
 let add_ep_axioms fs =
-  let gts = ground_terms (smk_and fs) in
-  let flds = btwn_fields fs gts in
-  (*let flds =
-    TermSet.filter 
-      (fun t -> match t with | App (FreeSym (p, _), _, _) -> p <> "parent" | _ -> true)
-      flds
-     in*)
-  let structs = struct_ids_of_fields flds in
-  let axioms = IdSet.fold (fun sid axioms -> Axioms.ep_axioms sid @ axioms) structs [] in
-  let ep_ax, generators = open_axioms isFld axioms in
-  let generators = List.map (fun (a,b,c,d)-> TermGenerator(a, b, c, d)) generators in
-  (*print_endline "---";
-  List.iter (fun f -> print_form stdout f; print_newline ()) ep_ax;*)
-  let classes =  CongruenceClosure.congr_classes fs gts in
-  let ep_ax = instantiate_with_terms false ep_ax (CongruenceClosure.restrict_classes classes flds) in
-  (*print_endline "---";
-  List.iter (fun f -> print_form stdout f; print_newline ()) ep_ax;*)
-  (*  match ep_ax with
-    | Binder(b, vs, f, ann) :: xs -> Binder(b, vs, f, ann @ generators):: xs @ fs
-    | [] -> fs
-    | _ -> failwith "don't know where to put the generators"*)
-  List.rev_append axioms fs
+  let gts = generated_ground_terms fs in
+  let struct_sorts =
+    TermSet.fold
+      (fun t struct_sorts -> match t with
+      | App (_, _, Map(Loc srt1, Loc srt2)) 
+      | Var (_, Map(Loc srt1, srt2)) when srt1 = srt2 -> SortSet.add srt1 struct_sorts
+      | _ -> struct_sorts)
+      gts SortSet.empty
+  in
+  let axioms = SortSet.fold (fun srt axioms -> Axioms.ep_axioms srt @ axioms) struct_sorts [] in
+  axioms @ fs
  
 let add_read_write_axioms fs =
-  let gts = ground_terms (smk_and fs) in
+  let gts = ground_terms ~include_atoms:true (mk_and fs) in
   let has_loc_field_sort = function
-    | App (_, _, Map(Loc id1, Loc id2)) -> id1 = id2
+    | App (_, _, Map(Loc id1, Loc id2)) -> (*id1 = id2*) true
     | _ -> false
   in
   let basic_pt_flds = TermSet.filter (has_loc_field_sort &&& is_free_const) gts in
-  let basic_structs = struct_ids_of_fields basic_pt_flds in
+  let basic_structs = struct_sorts_of_fields basic_pt_flds in
   (* instantiate null axioms *)
-  let axioms = IdSet.fold (fun sid axioms -> Axioms.null_axioms sid @ axioms) basic_structs [] in
+  let axioms = SortSet.fold (fun srt axioms -> Axioms.null_axioms srt @ axioms) basic_structs [] in
   let null_ax, _ = open_axioms ~force:true isFld axioms in
   let classes = CongruenceClosure.congr_classes fs gts in
   (* CAUTION: not forcing the instantiation here would yield an inconsistency with the read/write axioms *)
   let null_ax1 = instantiate_with_terms ~force:true false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
   let fs1 = null_ax1 @ fs in
-  let gts = TermSet.union (ground_terms (smk_and null_ax1)) gts in
+  let gts = TermSet.union (ground_terms ~include_atoms:true (mk_and null_ax1)) gts in
   let field_sorts = TermSet.fold (fun t srts ->
     match sort_of t with
-    | Map (Loc id, srt) -> IdSrtSet.add (id, srt) srts
+    | Map (Loc _, _) as srt -> SortSet.add srt srts
     | _ -> srts)
-      gts IdSrtSet.empty
+      gts SortSet.empty
   in
   (* propagate read terms *)
   let read_propagators =
-    IdSrtSet.fold (fun (id, srt) propagators ->
-      let f1 = fresh_ident "?f", field_sort id srt in
-      let fld1 = mk_var (snd f1) (fst f1) in
-      let f2 = fresh_ident "?g", field_sort id srt in
-      let fld2 = mk_var (snd f2) (fst f2) in
-      let d = fresh_ident "?d" in
-      let d1 = d, srt in
-      let dvar = mk_var srt d in
-      let l1 = Axioms.l1 id in
-      let loc1 = Axioms.loc1 id in
-      let l2 = Axioms.l2 id in
-      let loc2 = Axioms.loc2 id in
-      let s1 = Axioms.s1 id in
-      let set1 = Axioms.set1 id in
-      let s2 = Axioms.s2 id in
-      let set2 = Axioms.set2 id in
-      (* f = g, x.f -> x.g *)
-      ([],
-       [f1; f2; l1],
-       [Match (mk_eq_term fld1 fld2, FilterTrue);
-        Match (mk_read fld1 loc1, FilterTrue)],
-       mk_read fld2 loc1) ::
-      (* f = g, x.g -> x.f *)
-      ([],
-       [f1; f2; l1],
-       [Match (mk_eq_term fld1 fld2, FilterTrue);
-        Match (mk_read fld1 loc1, FilterTrue)],
-       mk_read fld2 loc1) :: 
-      (* f [x := d], y.(f [x := d]) -> y.f *)
-      ([],
-       [f1; l1; l2; d1],
-       [Match (mk_write fld1 loc1 dvar, FilterTrue);
-        Match (mk_read (mk_write fld1 loc1 dvar) loc2, FilterTrue)],
-       mk_read fld1 loc2) ::
-      (* f [x := d], y.f -> y.(f [x := d]) *)
-      ([],
-       [f1; l1; l2; d1],
-       [Match (mk_write fld1 loc1 dvar, FilterTrue);
-        Match (mk_read fld1 loc2, FilterTrue)],
-       mk_read (mk_write fld1 loc1 dvar) loc2) ::
-      (* Frame (x, a, f, g), y.g -> y.f *)
-      ([],
-       [f1; f2; s1; s2; l1],
-       [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-        Match (mk_read fld2 loc1, FilterTrue)],
-       mk_read fld1 loc1) ::
-      (* Frame (x, a, f, g), y.f -> y.g *)
-      ([],
-       [f1; f2; s1; s2; l1],
-       [Match (mk_frame_term set1 set2 fld1 fld2, FilterTrue);
-        Match (mk_read fld1 loc1, FilterTrue)],
-       mk_read fld2 loc1) ::
-      propagators)
+    SortSet.fold (function
+      | Map (Loc ssrt, srt) -> fun propagators ->
+          let f1 = fresh_ident "?f", field_sort ssrt srt in
+          let fld1 = mk_var (snd f1) (fst f1) in
+          let f2 = fresh_ident "?g", field_sort ssrt srt in
+          let fld2 = mk_var (snd f2) (fst f2) in
+          let d = fresh_ident "?d" in
+          let dvar = mk_var srt d in
+          let loc1 = Axioms.loc1 ssrt in
+          let loc2 = Axioms.loc2 ssrt in
+          let set1 = Axioms.set1 ssrt in
+          let set2 = Axioms.set2 ssrt in
+          (* f = g, x.f -> x.g *)
+          ([Match (mk_eq_term fld1 fld2, []);
+            Match (mk_read fld1 loc1, [])],
+           [mk_read fld2 loc1]) ::
+          (* f = g, x.g -> x.f *)
+          ([Match (mk_eq_term fld1 fld2, []);
+            Match (mk_read fld2 loc1, [])],
+           [mk_read fld1 loc1]) :: 
+          (* f [x := d], y.(f [x := d]) -> y.f *)
+          ([Match (mk_write fld1 loc1 dvar, []);
+            Match (mk_read (mk_write fld1 loc1 dvar) loc2, [])],
+           [mk_read fld1 loc2]) ::
+          (* f [x := d], y.f -> y.(f [x := d]) *)
+          ([Match (mk_write fld1 loc1 dvar, []);
+            Match (mk_read fld1 loc2, [])],
+           [mk_read (mk_write fld1 loc1 dvar) loc2]) ::
+          (* Frame (x, a, f, g), y.g -> y.f *)
+          ([Match (mk_frame_term set1 set2 fld1 fld2, []);
+            Match (mk_read fld2 loc1, [])],
+           [mk_read fld1 loc1]) ::
+          (* Frame (x, a, f, g), y.f -> y.g *)
+          ([Match (mk_frame_term set1 set2 fld1 fld2, []);
+            Match (mk_read fld1 loc1, [])],
+           [mk_read fld2 loc1]) ::
+          propagators
+      | _ -> fun propagators -> propagators)
       field_sorts []
   in
   (* generate instances of all read over write axioms *)
@@ -432,10 +379,6 @@ let add_read_write_axioms fs =
     in
     generators_and_axioms 
   in
-  (*let gts = generate_terms (read_propagators @ generators) gts in
-  let classes1 = CongruenceClosure.congr_classes fs1 gts in
-  let read_write_ax1 = instantiate_with_terms true read_write_ax classes1 in
-  let gts = TermSet.union gts (ground_terms (mk_and read_write_ax1)) in*)
   rev_concat [read_write_ax; fs1], read_propagators, gts
 
 
@@ -444,48 +387,72 @@ let add_read_write_axioms fs =
 (** Adds instantiated theory axioms for graph reachability to formula f.
  ** Assumes that f is typed. *)
 let add_reach_axioms fs gts =
+  let struct_sorts =
+    SortSet.fold
+      (fun srt struct_sorts -> match srt with
+      | Map(Loc srt1, Loc srt2) when srt1 = srt2 ->
+          SortSet.add srt1 struct_sorts
+      | _ -> struct_sorts)
+      (sorts (mk_and fs)) SortSet.empty
+  in
   let classes = CongruenceClosure.congr_classes fs gts in
-  (* instantiate the field variables in all reachability axioms *)
-  let btwn_flds = btwn_fields fs gts in
-  (*let _ = TermSet.iter (print_term stdout) btwn_flds in*)
-  let reach_write_ax = 
-    TermSet.fold (fun t write_ax ->
-      match t with
-      | App (Write, [fld; loc1; loc2], _) ->
-          if TermSet.mem fld btwn_flds 
-          then Axioms.reach_write_axioms fld loc1 loc2 @ write_ax
-          else write_ax
-      | _ -> write_ax) gts []
+  let axioms =
+    SortSet.fold
+      (fun srt axioms -> Axioms.reach_axioms classes srt @ Axioms.reach_write_axioms srt @ axioms)
+      struct_sorts []
   in
-  let non_updated_flds = 
-    TermSet.filter 
-      (fun t -> List.for_all 
-	  (function 
-	    | (App (Write, _, _)) -> false 
-	    | _ -> true) (CongruenceClosure.class_of t classes))
-      btwn_flds
-  in
-  let structs = struct_ids_of_fields non_updated_flds in
-  let axioms = IdSet.fold (fun sid axioms -> Axioms.reach_axioms sid @ axioms) structs [] in
-  let reach_ax, _ = open_axioms (*~force:true*) isFld axioms in
-  let reach_ax1 = instantiate_with_terms (*~force:true*) false reach_ax (CongruenceClosure.restrict_classes classes btwn_flds) in
-  rev_concat [axioms; reach_write_ax; fs], gts
+  rev_concat [axioms; fs], gts
 
+let add_array_axioms fs gts =
+  let srts = array_sorts gts in
+  let axioms = SortSet.fold (fun srt axioms -> Axioms.array_axioms srt @ axioms) srts [] in
+  axioms @ fs
+  
 let instantiate read_propagators fs gts =
   (* generate local instances of all remaining axioms in which variables occur below function symbols *)
   let fs1, generators = open_axioms isFunVar fs in
-  let gts1 = generate_terms (read_propagators @ generators) gts in
   let _ =
     if Debug.is_debug 1 then
       begin
         print_endline "ground terms:";
         TermSet.iter (fun t -> print_endline ("  " ^ (string_of_term t))) gts;
+      end  
+  in
+  let btwn_gen = btwn_field_generators fs in
+  let gts1 = generate_terms (read_propagators @ btwn_gen @ generators) gts in
+  let _ =
+    if Debug.is_debug 1 then
+      begin
         print_endline "generated terms:";
         TermSet.iter (fun t -> print_endline ("  " ^ (string_of_term t))) (TermSet.diff gts1 gts)
       end
   in
+  let rec is_equation = function
+    | BoolOp (_, fs) -> List.for_all is_equation fs
+    | Binder (Forall, _, f, _) -> is_equation f
+    | Atom (App (Eq, _, _), _) -> true
+    | Atom (App (FreeSym _, _, _), _) -> true
+    | _ -> false
+  in
+  let equations, others = List.partition is_equation fs1 in
   let classes = CongruenceClosure.congr_classes fs gts1 in
-  instantiate_with_terms true fs1 classes, gts1
+  let eqs = instantiate_with_terms true equations classes in
+  let gts1 = TermSet.union (ground_terms ~include_atoms:true (mk_and eqs)) gts1 in 
+  let classes = CongruenceClosure.congr_classes (List.rev_append eqs fs) gts1 in
+  let implied =
+    List.fold_left
+      (fun acc cls ->
+        if (List.length cls > 1 && sort_of (List.hd cls) <> Bool) then
+          let h = List.hd cls in
+          let eq = List.map (fun t -> GrassUtil.mk_eq h t) (List.tl cls) in
+          List.rev_append eq acc
+        else
+          acc
+      )
+      []
+      classes
+  in
+  List.rev_append implied (List.rev_append eqs (instantiate_with_terms true others classes)), gts1
 
 let add_terms fs gts =
   if not !Config.smtpatterns && !Config.instantiate then fs else
@@ -509,7 +476,7 @@ let encode_labels fs =
           | _ -> None) 
         annots
     in
-    smk_and (smk_or (f :: List.map mk_not lbls) :: lbls)
+    mk_and (mk_or (f :: List.map mk_not lbls) :: lbls)
   in
   let rec el = function
     | Binder (b, vs, f, annots) ->
@@ -523,17 +490,18 @@ let encode_labels fs =
   in List.rev_map el fs
 
 let add_split_lemmas fs gts =
+  if not !Config.split_lemmas then fs else
   let structs =
     TermSet.fold (fun t structs ->
       match sort_of t with
-      | Loc sid -> IdSet.add sid structs
+      | Loc srt -> SortSet.add srt structs
       | _ -> structs)
-      gts IdSet.empty
+      gts SortSet.empty
   in
-  let classes = CongruenceClosure.congr_classes fs gts in
-  let add_lemmas sid fs1 =
+  let classes = CongruenceClosure.congr_classes fs (generated_ground_terms fs) in
+  let add_lemmas srt fs1 =
     let loc_gts =
-      TermSet.filter (fun t -> sort_of t = Loc sid) gts
+      TermSet.filter (fun t -> sort_of t = Loc srt) gts
     in
     let classes = CongruenceClosure.restrict_classes classes loc_gts in
     let rec lem fs1 = function
@@ -548,9 +516,7 @@ let add_split_lemmas fs gts =
     in
     lem fs1 classes
   in
-  if !Config.split_lemmas
-  then IdSet.fold add_lemmas structs fs
-  else fs
+  SortSet.fold add_lemmas structs fs
     
 (** Reduces the given formula to the target theory fragment, as specified by the configuration. *)
 let reduce f =
@@ -560,7 +526,8 @@ let reduce f =
         split_ands acc (fs @ gs)
     | Binder(_, [], BoolOp(And, fs), a) :: gs ->
         split_ands acc (List.map (fun f -> annotate f a) fs @ gs)
-    | f :: gs -> split_ands (f :: acc) gs
+    | f :: gs ->
+        split_ands (f :: acc) gs
     | [] -> List.rev acc
   in
   let f1 = nnf f in
@@ -572,19 +539,23 @@ let reduce f =
   let fs = massage_field_reads fs in
   let fs = simplify_sets fs in
   let fs = pull_up_equalities fs in
-  (*TypeStrat.init fs;*)
-  (* add all axioms and instantiate *)
-  TypeStrat.default ();
   let fs = add_ep_axioms fs in
   let fs = add_frame_axioms fs in
   let fs = factorize_axioms (split_ands [] fs) in
   let fs = add_set_axioms fs in
   let fs, read_propagators, gts = add_read_write_axioms fs in
   let fs, gts = add_reach_axioms fs gts in
+  let fs = add_array_axioms fs gts in
   let fs = if !Config.named_assertions then fs else List.map strip_names fs in
+  let _ =
+    if Debug.is_debug 1 then begin
+      print_endline "VC before instantiation:";
+      print_form stdout (mk_and fs);
+      print_newline ()
+    end
+  in
   let fs, gts = instantiate read_propagators fs gts in
   let fs = add_terms fs gts in
   let fs = encode_labels fs in
   let fs = add_split_lemmas fs gts in
-  TypeStrat.reset ();
   fs

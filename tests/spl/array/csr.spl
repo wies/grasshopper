@@ -1,0 +1,197 @@
+/* Compressed Row Storage (CRS)
+ * turn a n*m matrix a into three matrices:
+ * - val for the non-zero value
+ * - col for the column index
+ * - row_ptr for the index at which a row starts
+ * satisfying the following:
+ *  ∀ i,j. a[i][j] ≠ 0 ⇒ (∃ k. val[k] = a[i][j] ∧ col[k] = j ∧ row_ptr[i] ≤ k ∧ k < row_ptr[i+1])
+ *  ∀ i,k. val[k] = a[i][col[k]] ∧ row_ptr[i] ≤ k ∧ k < row_ptr[i+1]
+ */
+
+//inspired from 
+//  http://netlib.org/linalg/html_templates/node91.html
+//  http://homepage.cs.uiowa.edu/~sriram/21/fall07/code/CRS.java
+
+include "int_array.spl";
+
+struct CSR {
+  var val: Array<Int>;
+  var col: Array<Int>;
+  var row_ptr: Array<Int>;
+}
+
+function witness(a: Array<Array<Int>>, i: Int, j: Int) returns (res: Int) { }
+
+predicate csr(m: CSR, a: Array<Array<Int>>,
+              FP0: Set<CSR>,
+              FP1: Set<Array<Int>>,
+              FP2: Set<ArrayCell<Int>>) {
+  //a is a matrix
+  a.length > 0 &&
+  (forall i: Int:: i >= 0 && i < a.length ==> a[i].length == a[0].length) &&
+  //CSR encoding
+  (forall i,j: Int::
+      i >= 0 &&
+      i < a.length &&
+      j >= 0 &&
+      j < a[0].length &&
+      a[i][j] != 0
+    ==>
+      m.val[witness(a,i,j)] == a[i][j] &&
+      m.col[witness(a,i,j)] == j &&
+      m.row_ptr[i] <= witness(a,i,j) &&
+      witness(a,i,j) < m.row_ptr[i+1]) &&
+  (forall i,k: Int::
+      i >= 0 &&
+      i < a[0].length &&
+      k >= 0 &&
+      k < m.val.length &&
+      m.row_ptr[i] <= k &&
+      k < m.row_ptr[i+1]
+    ==>
+      m.val[k] == a[i][m.col[k]]) &&
+  //misc conditions
+  m.val.length == m.col.length &&
+  m.row_ptr.length == a.length + 1 &&
+  m.row_ptr[a.length] == m.val.length && //n+1 row indicates the end of the val/col array
+  //footprint
+  FP0 == Set<CSR>(m) &&
+  FP1 == Set<Array<Int>>(m.val, m.col, m.row_ptr) &&
+  (forall i: Int:: i > 0 && i <= m.val.length ==> cell(m.val, i) in FP2 && cell(m.col, i) in FP2) &&
+  (forall i: Int:: i > 0 && i <= m.row_ptr.length ==> cell(m.row_ptr, i) in FP2)
+}
+
+procedure make(a: Array<Array<Int>>)
+  returns (res: CSR)
+  requires matrix(a)
+  ensures  matrix(a) &*& csr(res, a)
+{
+  var nonZeros := 0;
+
+  var i := 0;
+  while(i < a.length)
+    invariant matrix(a)
+    invariant i >= 0
+  {
+    var j := 0;
+    while(j < a[i].length)
+      invariant acc(a[i]) &*& arrayseg(a[i], 0, a[i].length)
+      invariant j >= 0
+    {
+      if (a[i][j] != 0) {
+        nonZeros := nonZeros + 1;
+      }
+      j := j + 1;
+    }
+    i := i + 1;
+  }
+
+  var c := new CSR;
+  c.val := new Array<Int>(nonZeros);
+  c.col := new Array<Int>(nonZeros);
+  c.row_ptr := new Array<Int>(a[0].length + 1);
+
+  c.row_ptr[a[0].length] := nonZeros;
+
+  var index := 0;
+  var i := 0;
+  while(i < a.length)
+    invariant i >= 0 && index >= 0 && index <= nonZeros
+    invariant matrix(a) &*& acc(c) &*& acc(c.val) &*& acc(c.col) &*& acc(c.row_ptr)
+    invariant arrayseg(c.val, 0, nonZeros) &*& arrayseg(c.col, 0, nonZeros) &*& arrayseg(c.row_ptr, 0, a[0].length)
+    //CSR up to the i and index
+    invariant forall i1,j: Int::
+                  i1 >= 0 && i1 < i &&
+                  j >= 0 && j < a[0].length &&
+                  a[i1][j] != 0
+                ==>
+                  m.val[witness(a,i1,j)] == a[i1][j] &&
+                  m.col[witness(a,i1,j)] == j &&
+                  m.row_ptr[i1] <= witness(a,i1,j) &&
+                  witness(a,i1,j) < m.row_ptr[i1+1]
+    invariant forall i1,k: Int::
+                  i1 >= 0 && i1 < i && k >= 0 && k < index &&
+                  m.row_ptr[i1] <= k
+                ==>
+                  m.val[k] == a[i1][m.col[k]]
+  {
+    c.row_ptr[i] := index;
+    var j := 0;
+    while(j < a[i].length)
+      invariant matrix(a) &*& acc(c) &*& acc(c.val) &*& acc(c.col) &*& acc(c.row_ptr)
+      invariant j >= 0 && index >= c.row_ptr[i]
+      invariant index <= nonZeros //TODO strict if not yet finished ??
+      invariant arrayseg(c.val, c.row_ptr[i], nonZeros) &*& arrayseg(c.col, c.row_ptr[i], nonZeros) &*& arraycell(c.row_ptr, i)
+      //CSR up to the i and index
+      invariant forall j1: Int::
+                    j1 >= 0 && j1 < j && a[i][j1] != 0
+                  ==>
+                    m.val[witness(a,i,j1)] == a[i][j1] &&
+                    m.col[witness(a,i,j1)] == j1 &&
+                    m.row_ptr[i] <= witness(a,i,j1) &&
+                    witness(a,i,j1) < m.row_ptr[i+1]
+      invariant forall k: Int::
+                    k < index && m.row_ptr[i] <= k
+                  ==>
+                    m.val[k] == a[i][m.col[k]]
+    {
+      if (a[i][j] != 0) {
+        c.val[index] := matrix[i][j];
+        c.col[index] := j;
+        index := index + 1;
+        pure assume(index <= nonZeros); //TODO we can't count yet
+      }
+      j := j + 1;
+    }
+    i := i + 1;
+  }
+  pure assume(index == nonZeros); //TODO we can't count yet
+  
+  return c;
+}
+
+procedure get(c: CSR, i: Int, j: Int, ghost a: Array<Array<Int>>)
+  returns (res: Int)
+  requires csr(res, a)
+  requires i >= 0 && i < c.row_ptr.length - 1 && j >= 0
+  ensures  csr(res, a) &*& res == a[i][j]
+{
+  var k := c.row_ptr[i];
+  while (k < c.row_ptr[i+1])
+    invariant k >= c.row_ptr[i]
+    invariant csr(res, a)
+  {
+    if(c.col_idx[k] == j) {
+      return c.val[k];
+    } else if(c.col_idx[k] > j) {
+      return 0;
+    }
+  }
+
+  return 0;
+}
+
+procedure product(c: CSR, x: Array<Int>, ghost a: Array<Array<Int>>)
+  returns (res: Array<Int>)
+  requires csr(c, a) &*& acc(x) &*& x.length == a[0].length &*& arrayseg(x, 0, x.length)
+  ensures  csr(c, a) &*& acc(x) &*& x.length == a[0].length &*& arrayseg(x, 0, x.length)
+  ensures  acc(res) &*& res.length == a.length &*& arrayseg(res, 0, res.length)
+  //ensures  ??? //TODO a*x product
+{
+    var p := new Array<Int>(x.length);
+    var i := 0;
+    while(i < x.length)
+      invariant ???
+    {
+      var j := c.row_ptr[i];
+      while(j < c.row_ptr[i+1])
+        invariant csr(c,a) &*& acc(x) &*& arrayseg(x, 0, x.length) &*& acc(p) &*& arrayseg(p, 0, p.length)
+      {
+        p[i] := p[i] + c.val[j] * x[c.col_idx[j]];
+        j := j + 1;
+      }
+      i := i + 1;
+    }
+
+    return p;
+}

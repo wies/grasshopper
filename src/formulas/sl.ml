@@ -9,6 +9,8 @@ type source_position = Grass.source_position
 let mk_ident = GrassUtil.mk_ident
 module IdMap = Grass.IdMap
 module IdSet = Grass.IdSet
+module SortMap = Grass.SortMap
+module SortSet = Grass.SortSet
 let ident_to_string = Grass.string_of_ident
 
 (*deprecated?*)

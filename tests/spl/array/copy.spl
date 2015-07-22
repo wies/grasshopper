@@ -1,0 +1,24 @@
+include "int_array.spl";
+
+procedure copy(a: Array<Int>)
+  returns (b: Array<Int>)
+  requires array(a)
+  ensures array(a) &*& array(b)
+  ensures a.length == b.length
+  ensures forall i: Int:: i >= 0 && i < a.length ==> a[i] == b[i]
+{
+  b := new Array<Int>(a.length);
+
+  var i := 0;
+
+  while (i < a.length)
+    invariant i >= 0 && i <= a.length && a.length == b.length
+    invariant array(a) &*& array(b)
+    invariant forall j: Int:: j >= 0 && j < i ==> a[j] == b[j]
+  {
+    b[i] := a[i];
+    i := i + 1;
+  }
+
+  return b;
+}

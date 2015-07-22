@@ -1,0 +1,66 @@
+// Test to see if reachability over user defined fields works on a simple singly linked list example
+
+struct Node {
+  var next: Node;
+}
+
+function next_map() returns (m: Map<Node, Node>) {
+  //m == next
+  //(forall x: Node :: x.m == x.next @(matching x.next yields x.m) @(matching x.m yields x.next) @(comment "next-map")) &&
+  (forall x: Node, y: Node, z: Node :: Btwn(next, x, y, z) == Btwn(m, x, y, z)) 
+}
+
+function lseg_footprint(x: Node, y: Node) returns (FP: Set<Node>) {
+  forall z: Node :: z in FP == (Btwn(next_map(), x, z, y) && z != y)
+}
+
+predicate lseg(x: Node, y: Node)(FP: Set<Node>) {
+  Reach(next_map(), x, y) && FP == lseg_footprint(x, y)
+}
+
+procedure traverse1(lst: Node)
+  requires lseg(lst, null)
+  ensures lseg(lst, null)
+{
+  var curr := lst;
+  while (curr != null) 
+    invariant lseg(lst, curr)
+    invariant lseg(curr, null)
+  {
+    curr := curr.next; 
+  }
+}
+
+procedure traverse2(lst: Node)
+  requires lseg(lst, null);
+  ensures lseg(lst, null);
+{
+  if (lst != null) {
+    var curr := lst;
+    while (curr.next != null) 
+      invariant lseg(lst, curr);
+      invariant lseg(curr, null);
+    {
+      curr := curr.next; 
+    }
+  }
+}
+
+procedure reverse(lst: Node) 
+  returns (rev: Node)
+  requires lseg(lst, null)
+  ensures lseg(rev, null)
+{
+  rev := null;
+  var curr := lst;
+  while (curr != null) 
+    invariant lseg(rev, null)
+    invariant lseg(curr, null)
+  {
+    var tmp := curr;
+    curr := curr.next;
+    tmp.next := rev;
+    rev := tmp;
+  }
+}
+

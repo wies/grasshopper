@@ -1,0 +1,21 @@
+include "int_array.spl";
+
+procedure initialize()
+  returns (a: Array<Int>)
+  requires emp
+  ensures array(a)
+  ensures forall k: Int :: 0 <= k && k < a.length ==> a[k] == k
+{
+  a := new Array<Int>(10);
+
+  var i := 0;
+  
+  while (i < a.length)
+    invariant i >= 0
+    invariant array(a)
+    invariant forall k: Int :: 0 <= k && k < i ==> a[k] == k
+  {
+    a[i] := i;
+    i := i + 1;
+  }
+}

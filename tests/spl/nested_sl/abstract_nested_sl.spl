@@ -1,0 +1,97 @@
+/* struct Data {} */
+
+/* Notation: u, v, .. for InnerNodes and x, y, .. for OuterNodes */
+struct InnerNode {
+  var inext: InnerNode;
+  /* var data: Data; */
+}
+
+footprint function listset_footprint(next: Map<InnerNode, InnerNode>, u: InnerNode) returns (FP: Set<InnerNode>)
+  
+function fp_witness(u: InnerNode)(fp: Set<OuterNode>) returns (x: OuterNode)
+  
+// function listset_content(data: Map<InnerNode, Data>)(FP: Set<InnerNode>) returns (C: Set<Data>) */
+
+predicate listset(u: InnerNode/*, C: Set<Data>*/)(FP: Set<InnerNode>) {
+  FP == listset_footprint(inext, u)
+  // C == listset_content(data, FP) */
+}
+
+struct OuterNode {
+  var onext: OuterNode;
+  var down: InnerNode;
+}
+
+function nlseg_outer_footprint(x: OuterNode, y: OuterNode) 
+  returns (FP: Set<OuterNode>) 
+{
+  forall z: Loc<OuterNode> :: z in FP == (Btwn(onext, x, z, y) && z != y)
+}
+
+function nlseg_inner_footprint(FP0: Set<OuterNode>) 
+  returns (FP1: Set<InnerNode>)
+{
+  (forall x in FP0 :: listset_footprint(inext, x.down) subsetof FP1
+   @(matching x yields listset_footprint(inext, x.down))) &&
+  (forall u in FP1 :: fp_witness(u, FP0) in FP0) &&
+  (forall u in FP1 :: u in listset_footprint(inext, fp_witness(u, FP0).down)
+   @(matching u yields fp_witness(u, FP0)))
+}
+
+predicate nlseg(x: OuterNode, y: OuterNode)(FP0: Set<OuterNode>, FP1: Set<InnerNode>) {
+  Reach(onext, x, y) &&
+  FP0 == nlseg_outer_footprint(x, y) &&
+  FP1 == nlseg_inner_footprint(FP0) &&
+  // C = nlseg_inner_content(FP0) && */
+
+  // every OuterNode points to a listset
+  (forall z in FP0 :: listset(z.down, listset_footprint(inext, z.down))) &&
+  // footprints of listsets are disjoint
+  (forall z1 in FP0, z2 in FP0 :: z1 == z2 || Disjoint(listset_footprint(inext, z1.down), listset_footprint(inext, z2.down)))
+  // TODO do we need something like the fact that all elements in a bucket have the same hash?
+}
+
+procedure nlseg_traverse(lst: OuterNode)
+  requires nlseg(lst, null)
+  ensures nlseg(lst, null)
+{
+  var curr := lst;
+  while (curr != null)
+    invariant nlseg(lst, curr) &*& nlseg(curr, null)
+  {
+    curr := curr.onext;
+  }
+}
+
+procedure listset_add(lst: InnerNode) 
+  returns (res: InnerNode)
+  requires listset(lst)
+  ensures listset(res)
+
+procedure nlseg_add(lst: OuterNode)
+  requires nlseg(lst, null)
+  ensures nlseg(lst, null)
+{
+  var curr := lst;
+  var nondet : Bool;
+  while (nondet && curr != null)
+    invariant nlseg(lst, curr) &*& nlseg(curr, null)
+  {
+    curr := curr.onext;
+    havoc nondet;
+  }
+  if (curr != null) {
+    curr.down := listset_add(curr.down);
+  }
+}
+
+// This runs for a long time.. even with res.down = null
+procedure test() returns (res: OuterNode)
+  requires emp
+  ensures nlseg(res, null)
+{
+  res := new OuterNode;
+  res.onext := null;
+  res.down := new InnerNode;
+  (res.down).inext := null;
+}

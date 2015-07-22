@@ -4,19 +4,19 @@ open Axioms
 
 (** Alloc sets *)
 
-let mk_loc_set_generator base_name =
+let mk_name_generator base_name =
   let set_ids = Hashtbl.create 0 in
-  fun struct_id ->
-    let name = base_name ^ "_" ^ (string_of_ident struct_id) in
-    try Hashtbl.find set_ids name 
+  fun srt ->
+    let name = base_name ^ "_" ^ (name_of_sort srt) in
+    try Hashtbl.find set_ids (name, srt)
     with Not_found ->
       let id = fresh_ident name in
-      Hashtbl.replace set_ids name id;
+      Hashtbl.replace set_ids (name, srt) id;
       id
   
-let alloc_id = mk_loc_set_generator "Alloc"
+let alloc_id = mk_name_generator "Alloc"
         
-let alloc_set struct_id = mk_loc_set struct_id (alloc_id struct_id)
+let alloc_set struct_srt = mk_loc_set struct_srt (alloc_id struct_srt)
 
 (** Specification formulas *)
 
@@ -37,10 +37,11 @@ type havoc_command = {
     havoc_args : ident list;
   } 
 
-(** Allocation, x := new T *)
+(** Allocation, x := new T(t_1, ..., t_n) *)
 type new_command = {
     new_lhs : ident;
     new_sort : sort;
+    new_args : term list;
   }
 
 (** Deallocation, free x *)
@@ -126,7 +127,7 @@ type proc_decl = {
     proc_locals : var_decl IdMap.t; (** all local variables *)
     proc_precond : spec list; (** precondition *)
     proc_postcond : spec list; (** postcondition *)
-    proc_body : command option; (* procedure body *)
+    proc_body : command option; (** procedure body *)
     proc_pos : source_position; (** position of declaration *)
     proc_deps : ident list; (** names of dependant procedures *)
     proc_is_tailrec : bool; (** whether the procedure is tail recursive *)
@@ -142,7 +143,7 @@ type pred_decl = {
     pred_body : spec; (** predicate body *)
     pred_pos : source_position; (** position of declaration *)
     pred_accesses : IdSet.t; (** accessed variables *)
-    pred_is_free : bool; (** assume when occurs positively *)
+    pred_is_footprint : bool; (** assume when occurs positively *)
   } 
 
 (** Program *)
@@ -187,10 +188,10 @@ let source_pos c = (prog_point c).pp_pos
 
 (** Auxiliary functions for programs and declarations *)
 
-let mk_loc_set_decl struct_id id pos =
+let mk_loc_set_decl struct_srt id pos =
   { var_name = id;
     var_orig_name = name id;
-    var_sort = Set (Loc struct_id);
+    var_sort = Set (Loc struct_srt);
     var_is_ghost = true;
     var_is_implicit = false;
     var_is_aux = true;
@@ -280,14 +281,12 @@ let find_var prog proc name =
     try IdMap.find name proc.proc_locals 
     with Not_found -> IdMap.find name prog.prog_vars
   with Not_found ->
-    failwith ("find_proc: Could not find variable " ^ (string_of_ident name))
+    failwith ("find_var: Could not find variable " ^ (string_of_ident name))
 
-let struct_ids prog =
-  IdMap.fold (fun _ decl struct_ids ->
-    match decl.var_sort with
-    | Map (Loc id, _) -> IdSet.add id struct_ids
-    | _ -> struct_ids)
-    prog.prog_vars IdSet.empty
+let find_local_var proc name =
+  try IdMap.find name proc.proc_locals
+  with Not_found ->
+    failwith ("find_local_val: Could not find variable " ^ string_of_ident name)
       
 let mk_fresh_var_decl decl =
   let id = fresh_ident (name decl.var_name) in
@@ -311,6 +310,28 @@ let fold_preds fn init prog =
 let map_preds fn prog =
   { prog with prog_preds = IdMap.map fn prog.prog_preds }
 
+let struct_sorts prog =
+  let collect_srts decls =
+    let rec cs struct_srts = function
+      | Loc srt -> SortSet.add srt struct_srts
+      | Map (srt1, srt2) ->
+          cs (cs struct_srts srt1) srt2
+      | Array srt | ArrayCell srt | Set srt ->
+          cs struct_srts srt
+      | _ -> struct_srts
+    in
+    IdMap.fold
+      (fun _ decl struct_srts -> cs struct_srts decl.var_sort)
+      decls 
+  in
+  let struct_srts = 
+    collect_srts prog.prog_vars SortSet.empty
+  in
+  fold_procs (fun struct_srts proc ->
+    collect_srts proc.proc_locals struct_srts)
+    struct_srts prog
+
+    
 (** Auxiliary functions for specifications *)
 
 let mk_spec_form f name msg pos =
@@ -486,9 +507,29 @@ let modifies_proc prog proc =
 let modifies_basic_cmd = function
   | Assign ac -> id_set_of_list ac.assign_lhs
   | Havoc hc -> id_set_of_list hc.havoc_args
-  | New nc -> IdSet.add (alloc_id (struct_id_of_sort nc.new_sort)) (IdSet.singleton nc.new_lhs)
+  | New nc ->
+      let struct_sorts =
+        match nc.new_sort with
+        | Loc srt -> [srt]
+        | Array srt -> [Array srt; ArrayCell srt]
+        | _ -> []
+      in
+      List.fold_left
+        (fun mods srt -> IdSet.add (alloc_id srt) mods)
+        (IdSet.singleton nc.new_lhs)
+        struct_sorts
   | Call cc -> id_set_of_list cc.call_lhs
-  | Dispose dc -> IdSet.singleton (alloc_id (struct_id_of_sort (sort_of dc.dispose_arg)))
+  | Dispose dc ->
+      let struct_sorts =
+        match sort_of dc.dispose_arg with
+        | Loc srt -> [srt]
+        | Array srt -> [Array srt; ArrayCell srt]
+        | _ -> []
+      in
+      List.fold_left
+        (fun mods srt -> IdSet.add (alloc_id srt) mods)
+        IdSet.empty
+        struct_sorts
   | Assume _
   | Assert _
   | Return _ -> IdSet.empty
@@ -523,7 +564,11 @@ let accesses_basic_cmd = function
       in
       IdSet.union (id_set_of_list ac.assign_lhs) rhs_accesses
   | Havoc hc -> id_set_of_list hc.havoc_args
-  | New nc -> IdSet.singleton nc.new_lhs
+  | New nc ->
+      let arg_accesses =
+        List.fold_left free_consts_term_acc IdSet.empty nc.new_args 
+      in
+      IdSet.add nc.new_lhs arg_accesses
   | Dispose dc -> free_consts_term dc.dispose_arg
   | Assume sf
   | Assert sf -> accesses_spec_form sf
@@ -550,8 +595,8 @@ let mk_havoc_cmd args pos =
   let hc = { havoc_args = args } in
   mk_basic_cmd (Havoc hc) pos
 
-let mk_new_cmd lhs srt pos = 
-  let nc = { new_lhs = lhs; new_sort = srt } in
+let mk_new_cmd lhs srt args pos = 
+  let nc = { new_lhs = lhs; new_sort = srt; new_args = args } in
   mk_basic_cmd (New nc) pos
 
 let mk_dispose_cmd t pos =
@@ -747,6 +792,12 @@ let subst_id_pred map pred =
       pred_body = body;
       pred_accesses = accesses }
 
+let result_sort_of_pred pred =
+  match pred.pred_outputs with
+  | [] -> Bool
+  | id :: _ ->
+      (IdMap.find id pred.pred_locals).var_sort
+    
 
 (** Pretty printing *)
 
@@ -764,10 +815,17 @@ let pr_basic_cmd ppf = function
         pr_term_list ac.assign_rhs
   | Havoc hc -> 
       fprintf ppf "@[<2>havoc@ %a@]" pr_ident_list hc.havoc_args
-  | New nc -> 
-      fprintf ppf "@[<2>%a@ :=@ new@ %a@]" 
-        pr_ident nc.new_lhs 
-        pr_sort nc.new_sort
+  | New nc ->
+      (match nc.new_args with
+      | [] ->
+          fprintf ppf "@[<2>%a@ :=@ new@ %a@]" 
+            pr_ident nc.new_lhs 
+            pr_sort nc.new_sort
+      | args ->
+          fprintf ppf "@[<2>%a@ :=@ new@ %a(%a)@]" 
+            pr_ident nc.new_lhs 
+            pr_sort nc.new_sort
+            pr_term_list args)
   | Dispose dc -> 
       fprintf ppf "@[<2>free@ %a@]" pr_term dc.dispose_arg
   | Assume sf ->
@@ -900,7 +958,7 @@ let pr_body locals ppf = function
 
 let pr_proc ppf proc =
   let add_srts = List.map (fun id -> 
-    let decl = IdMap.find id proc.proc_locals in
+    let decl = find_local_var proc id in
     (decl.var_is_implicit, decl.var_is_ghost, (id, decl.var_sort)))
   in
   let locals = IdMap.fold (fun id decl locals ->
@@ -927,12 +985,19 @@ let pr_pred ppf pred =
     let decl = IdMap.find id pred.pred_locals in
     (decl.var_is_implicit, decl.var_is_ghost, (id, decl.var_sort)))
   in
-  match pred.pred_outputs with
-  | [] ->
+  match pred.pred_outputs, pred.pred_footprints with
+  | [], [] ->
       fprintf ppf "@[<2>predicate %a(@[<0>%a@])@]@ {@[<1>@\n%a@]@\n}@\n@\n"
         pr_ident pred.pred_name
         pr_id_srt_list (add_srts pred.pred_formals)
         pr_spec_form pred.pred_body
+  | [], _ ->
+      fprintf ppf "@[<2>predicate %a(@[<0>%a@])@\n(@[<0>%a@])@]@ {@[<1>@\n%a@]@\n}@\n@\n"
+        pr_ident pred.pred_name
+        pr_id_srt_list (add_srts pred.pred_formals)
+        pr_id_srt_list (add_srts pred.pred_footprints)
+        pr_spec_form pred.pred_body
+      
   | _ ->
       fprintf ppf "@[<2>function %a(@[<0>%a@])@\nreturns (@[<0>%a@])@]@\n{@[<1>@\n%a@]@\n}@\n@\n"
         pr_ident pred.pred_name

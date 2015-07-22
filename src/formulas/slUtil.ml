@@ -9,62 +9,62 @@ let pos_of_sl_form = function
   | BoolOp (_, _, pos) 
   | Binder (_, _, _, pos) -> pos
 
-let mk_loc_set struct_id d =
-  let srt = Grass.Set (Grass.Loc struct_id) in
+let mk_loc_set struct_srt d =
+  let srt = Grass.Set (Grass.Loc struct_srt) in
     GrassUtil.mk_free_const srt d
 
-let mk_loc_set_var struct_id d =
-  let srt = Grass.Set (Grass.Loc struct_id) in
+let mk_loc_set_var struct_srt d =
+  let srt = Grass.Set (Grass.Loc struct_srt) in
     GrassUtil.mk_var srt d
 
-let mk_loc struct_id d =
-  if fst d = "null" then GrassUtil.mk_null struct_id
-  else GrassUtil.mk_free_const (Grass.Loc struct_id) d
+let mk_loc struct_srt d =
+  if fst d = "null" then GrassUtil.mk_null struct_srt
+  else GrassUtil.mk_free_const (Grass.Loc struct_srt) d
 
-let emptyset      struct_id        = GrassUtil.mk_empty (Grass.Set (Grass.Loc struct_id))
-let empty_t       struct_id domain = GrassUtil.mk_eq (emptyset struct_id) domain
-let empty         struct_id domain = empty_t struct_id (mk_loc_set struct_id domain)
+let emptyset      struct_srt        = GrassUtil.mk_empty (Grass.Set (Grass.Loc struct_srt))
+let empty_t       struct_srt domain = GrassUtil.mk_eq (emptyset struct_srt) domain
+let empty         struct_srt domain = empty_t struct_srt (mk_loc_set struct_srt domain)
 
 (* the domain is a map id -> Set<Loc<id>> *)
 
-let struct_ids_from_domains domains =
-  IdMap.fold
-    (fun k _ acc -> IdSet.add k acc)
+let struct_srts_from_domains domains =
+  SortMap.fold
+    (fun k _ acc -> SortSet.add k acc)
     domains
-    IdSet.empty
+    SortSet.empty
 
-let replace_domains_elt domains struct_id v =
-  IdMap.add struct_id v domains
+let replace_domains_elt domains struct_srt v =
+  SortMap.add struct_srt v domains
 
-let mk_empty_domains struct_ids =
-  IdSet.fold
-    (fun id acc -> IdMap.add id (emptyset id) acc)
-    struct_ids
-    IdMap.empty
+let mk_empty_domains struct_srts =
+  SortSet.fold
+    (fun srt acc -> SortMap.add srt (emptyset srt) acc)
+    struct_srts
+    SortMap.empty
 
-let mk_empty_domains_except struct_ids struct_id prefix =
-  let emp = mk_empty_domains struct_ids in
-  let v = GrassUtil.fresh_ident (prefix ^ (fst struct_id)) in
-    replace_domains_elt emp struct_id (mk_loc_set_var struct_id v)
+let mk_empty_domains_except struct_srts struct_srt prefix =
+  let emp = mk_empty_domains struct_srts in
+  let v = GrassUtil.fresh_ident prefix in
+  replace_domains_elt emp struct_srt (mk_loc_set_var struct_srt v)
 
-let mk_fresh_var_domains struct_ids prefix =
-  IdSet.fold
-    (fun id acc ->
-      let v = GrassUtil.fresh_ident (prefix ^ (fst id)) in
-        IdMap.add id (mk_loc_set_var id v) acc
+let mk_fresh_var_domains struct_srts prefix =
+  SortSet.fold
+    (fun srt acc ->
+      let v = GrassUtil.fresh_ident prefix in
+      SortMap.add srt (mk_loc_set_var srt v) acc
     )
-    struct_ids
-    IdMap.empty
+    struct_srts
+    SortMap.empty
 
 let map_domains fct domains1 domains2 =
   List.map2
-    (fun (sid, t1) (_, t2) -> fct sid t1 t2)
-    (IdMap.bindings domains1)
-    (IdMap.bindings domains2)
+    (fun (ssrt, t1) (_, t2) -> fct ssrt t1 t2)
+    (SortMap.bindings domains1)
+    (SortMap.bindings domains2)
 
 let mk_domains_disjoint domains1 domains2 =
   map_domains
-    (fun sid t1 t2 -> empty_t sid (GrassUtil.mk_inter [t1; t2]) )
+    (fun ssrt t1 t2 -> GrassUtil.mk_disjoint t1 t2)
     domains1
     domains2
 
@@ -75,9 +75,9 @@ let mk_domains_eq domains1 domains2 =
     domains2
   
 let mk_union_domains domains1 domains2 =
-  IdMap.mapi
-    (fun id t1 ->
-      let t2 = IdMap.find id domains2 in
+  SortMap.mapi
+    (fun srt t1 ->
+      let t2 = SortMap.find srt domains2 in
         GrassUtil.mk_union [t1; t2]
     )
     domains1
@@ -108,7 +108,7 @@ let mk_region ?pos r = mk_atom ?pos:pos Region [r]
 let mk_pred ?pos p ts = mk_atom ?pos:pos (Pred p) ts
 let mk_pts ?pos f a b = 
   mk_sep_star ?pos:pos (mk_eq ?pos:pos (GrassUtil.mk_read f a) b) (mk_cell ?pos:pos a)
-let mk_sep_star_lst ?pos:pos args = List.fold_left (mk_sep_star ?pos:pos) (mk_emp None) args
+let mk_sep_star_lst ?pos:pos args = List.fold_left (mk_sep_star ?pos:pos) (mk_emp pos) args
 let mk_exists ?pos vs f = Binder (Grass.Exists, vs, f, pos)
 let mk_forall ?pos vs f = Binder (Grass.Forall, vs, f, pos)
 
@@ -129,6 +129,13 @@ let free_symbols f =
   in
   fsym IdSet.empty f
 
+let rec map_terms fct = function
+  | Pure (p, pos) -> Pure (GrassUtil.map_terms fct p, pos)
+  | Atom (s, args, pos) -> mk_atom ?pos:pos s (List.map fct args)
+  | BoolOp (op, fs, pos) -> BoolOp (op, List.map (map_terms fct) fs, pos)
+  | SepOp (op, f1, f2, pos) -> SepOp (op, map_terms fct f1, map_terms fct f2, pos)
+  | Binder (b, vs, f, pos) -> Binder (b, vs, map_terms fct f, pos)
+    
 let rec map_id fct f = match f with
   | Pure (p, pos) -> Pure (GrassUtil.map_id fct p, pos)
   | Atom (s, args, pos) -> mk_atom ?pos:pos s (List.map (GrassUtil.map_id_term fct) args)

@@ -1,0 +1,35 @@
+include "int_array.spl";
+
+// TODO: run quicksort_distinct on skolem
+// heap access is also not being checked inside formulas!
+
+// Find the 1st element in given (nonempty) range [begin, end) that is not less than x. If no such element exists then returns end.
+procedure lower_bound(a: Array<Int>, x: Int, begin: Int, end: Int) returns (idx: Int)
+  requires array(a)
+  requires forall i: Int, j: Int :: begin <= i && i < j && j < end ==> a[i] <= a[j]
+  requires 0 <= begin && begin < end && end <= a.length
+  ensures array(a)
+  ensures begin <= idx && (idx < end && a[idx] >= x && (idx > begin ==> a[idx-1] < x)) || (idx == end && a[idx-1] < x)
+{
+  var lo := begin;
+  var hi := end;
+
+  while (hi > lo)
+    invariant array(a)
+    invariant forall i: Int, j: Int :: begin <= i && i < j && j < end ==> a[i] <= a[j]
+    invariant begin <= lo && lo <= hi && hi <= end
+    invariant (lo < end && (a[lo] < x || (a[lo] >= x && (lo > begin ==> a[lo-1] < x)))) || (lo == end && a[lo-1] < x)
+    invariant hi == end || a[hi] >= x
+  {
+    var mid := (lo + hi) / 2;
+    if (a[mid] < x)
+    {
+      lo := mid + 1;
+    }
+    else
+    {
+      hi := mid;
+    }
+  }
+  idx := lo;
+}

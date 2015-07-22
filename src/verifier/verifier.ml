@@ -14,13 +14,15 @@ let simplify prog =
     else ()
   in
   dump_if 0 prog;
-  Debug.info (fun () -> "Inferring accesses, eliminating loops and global dependencies.\n");
+  Debug.info (fun () -> "Inferring accesses, eliminating loops, arrays, and global dependencies.\n");
+  let prog = elim_arrays prog in
   let prog = Analyzer.infer_accesses prog in
   let prog = elim_loops prog in
   let prog = elim_global_deps prog in
   dump_if 1 prog;
   Debug.info (fun () -> "Eliminating SL, adding heap access checks, and eliminating new/dispose.\n");
   let prog = elim_sl prog in
+  let prog = if !Config.abstract_preds then annotate_frame_axioms prog else prog in
   let prog = annotate_heap_checks prog in
   let prog = elim_new_dispose prog in
   dump_if 2 prog;
@@ -87,10 +89,13 @@ let add_labels vc =
 let add_pred_insts prog f =
   let expand_pred pos p ts =
     let pred = find_pred prog p in
-    let sm = 
-      List.fold_left2 
-        (fun sm id t -> IdMap.add id t sm)
-        IdMap.empty (pred.pred_formals @ pred.pred_footprints) ts
+    let sm =
+      try
+        List.fold_left2 
+          (fun sm id t -> IdMap.add id t sm)
+          IdMap.empty (pred.pred_formals @ pred.pred_footprints) ts
+      with Invalid_argument _ ->
+        failwith ("Fatal error while expanding predicate " ^ string_of_ident pred.pred_name)
     in
     let sm =
       match pred.pred_outputs with
@@ -100,10 +105,7 @@ let add_pred_insts prog f =
           IdMap.add id (mk_free_fun var.var_sort p ts) sm
       | _ -> failwith "Functions may only have a single return value."
     in
-    let body = match pred.pred_body.spec_form with
-    | FOL f -> subst_consts sm f
-    | SL f -> failwith "SL formula should have been desugared"
-    in
+    let body = subst_consts sm (form_of_spec pred.pred_body) in
     if pos then body else nnf (mk_not body)
   in
   let f_inst = 
@@ -141,47 +143,50 @@ let add_pred_insts prog f =
   | Binder (Exists, vs, f, a) -> vs, f, a
   | _ -> [], f_inst, []
   in
-  let pos_preds = 
-    let rec collect pos = function
-      | (seen, Binder (_, [], f, _)) :: todo -> 
-          collect pos ((seen, f) :: todo)
-      | (seen, BoolOp (And, fs)) :: todo
-      | (seen, BoolOp (Or, fs)) :: todo ->
-          collect pos (List.fold_left (fun todo f -> (seen, f) :: todo) todo fs)
-      | (seen, Atom (App (FreeSym p, ts, _) as t, _)) :: todo -> 
-          let todo1 = 
-            List.fold_left (fun todo t -> (seen, Atom (t, [])) :: todo) todo ts
-          in
-          let pos1, todo2 =
-            if IdMap.mem p prog.prog_preds && not (TermSet.mem t pos) && not (IdSet.mem p seen)
-            then 
-              TermSet.add t pos, (IdSet.add p seen, expand_pred true p ts) :: todo1
-            else pos, todo1
-          in
-          collect pos1 todo2
-      | (seen, BoolOp (Not, [Atom (App (_, ts, _), _)])) :: todo
-      | (seen, Atom (App (_, ts, _), _)) :: todo -> 
-          let todo1 = 
-            List.fold_left (fun todo t -> (seen, Atom (t, [])) :: todo) todo ts
-          in
-          collect pos todo1
-      | _ :: todo -> collect pos todo
-      | [] -> pos
-    in collect TermSet.empty [(IdSet.empty, f)]
+  let pred_def pred =
+    let args = pred.pred_formals @ pred.pred_footprints in
+    let sorted_vs, sm =
+      List.fold_right
+        (fun id (sorted_vs, sm) ->
+          let var = IdMap.find id pred.pred_locals in
+          (id, var.var_sort) :: sorted_vs,
+          IdMap.add id (Var (id, var.var_sort)) sm
+        )
+        args ([], IdMap.empty)
+    in
+    let body = form_of_spec pred.pred_body in
+    let body =
+      match body with
+      | Binder (Forall, vs, BoolOp (And, fs), a) ->
+          List.map (fun f -> Binder (Forall, vs, f, a)) fs
+      | BoolOp (And, fs) ->
+          fs
+      | f -> [f]
+    in
+    let vs = List.map (fun (id, srt) -> Var (id, srt)) sorted_vs in
+    let sm, body =
+      match pred.pred_outputs with
+      | [] -> sm, List.map (fun f -> mk_implies (mk_pred pred.pred_name vs) f) body
+      | [id] -> 
+          let var = IdMap.find id pred.pred_locals in
+          IdMap.add id (mk_free_fun var.var_sort pred.pred_name vs) sm, body
+      | _ -> failwith "Functions may only have a single return value."
+    in
+    let cnt = ref 0 in
+    let annot () =
+      let i = !cnt in
+      cnt := i+1;
+      Name ("definition_of_" ^ (string_of_ident pred.pred_name), i)
+    in
+    let pat =
+      match pred.pred_outputs with
+      | [] -> [Pattern (mk_known (mk_free_fun Bool pred.pred_name vs), [])]
+      | _ -> []
+    in
+    List.map (fun f -> smk_forall ~ann:(annot () :: pat) sorted_vs (subst_consts sm f)) body
   in
-  let pos_instances = 
-    TermSet.fold (fun t instances ->
-      match t with
-      | App (FreeSym p, ts, srt) ->
-          let pbody = expand_pred true p ts in
-          (match srt with
-          | Bool -> mk_implies (mk_pred p ts) pbody :: instances
-          | _ -> pbody :: instances)
-      | _ -> instances)
-      pos_preds []
-  in
-  (*print_form stdout (smk_and (f_inst :: pos_instances)); print_newline ();*)
-  let f = mk_exists ~ann:a vs (smk_and (f :: pos_instances)) in
+  let pred_defs = Prog.fold_preds (fun acc pred -> pred_def pred @ acc) [] prog in
+  let f = mk_exists ~ann:a vs (smk_and (f :: pred_defs)) in
   f
         
 (** Generate verification conditions for procedure [proc] of program [prog]. 
@@ -251,7 +256,9 @@ let vcgen prog proc =
                 (string_of_ident proc.proc_name ^ "_" ^ name)
             in
             let vc = pre @ [mk_name name f] in
-            (vc_name, vc_msg, smk_and (axioms @ vc)) :: acc, []
+            let vc_and_preds = add_pred_insts prog (smk_and vc) in
+            let labels, vc_and_preds = add_labels vc_and_preds in
+            (vc_name, vc_msg, smk_and (axioms @ [vc_and_preds]), labels) :: acc, []
         | _ -> 
             failwith "vcgen: found unexpected basic command that should have been desugared"
   in
@@ -261,62 +268,61 @@ let vcgen prog proc =
 
 (** Generate verification conditions for procedure [proc] of program [prog] and check them. *)
 let check_proc prog proc =
-  let check_vc errors (vc_name, (vc_msg, pp), vc0) =
+  let check_vc errors (vc_name, (vc_msg, pp), vc0, labels) =
     let check_one vc =
-      if errors <> [] && not !Config.robust then errors else
-      let vc_and_preds = add_pred_insts prog vc in
-      let labels, vc_and_preds = add_labels vc_and_preds in
-      Debug.info (fun () -> "Checking VC: " ^ vc_name ^ ".\n");
-      Debug.debug (fun () -> (string_of_form vc_and_preds) ^ "\n");
+      if errors <> [] && not !Config.robust then errors else begin
+        Debug.info (fun () -> "Checking VC: " ^ vc_name ^ ".\n");
+        Debug.debug (fun () -> (string_of_form vc) ^ "\n");
       (*IdMap.iter (fun id (pos, c) -> Printf.printf ("%s -> %s: %s\n") 
-          (string_of_ident id) (string_of_src_pos pos) c) labels;*)
-      let sat_means = 
-        Str.global_replace (Str.regexp "\n\n") "\n  " (ProgError.error_to_string pp vc_msg)
-      in
-      let session_name =
-        Filename.chop_extension (Filename.basename pp.sp_file) ^ "_" ^ vc_name 
-      in
-      match Prover.get_model ~session_name:session_name ~sat_means:sat_means vc_and_preds with
-      | None -> errors
-      | Some model -> 
+         (string_of_ident id) (string_of_src_pos pos) c) labels;*)
+        let sat_means = 
+          Str.global_replace (Str.regexp "\n\n") "\n  " (ProgError.error_to_string pp vc_msg)
+        in
+        let session_name =
+          Filename.chop_extension (Filename.basename pp.sp_file) ^ "_" ^ vc_name 
+        in
+        match Prover.get_model ~session_name:session_name ~sat_means:sat_means vc with
+        | None -> errors
+        | Some model -> 
           (* generate error message from model *)
-          let add_msg pos msg error_msgs =
-            let filtered_msgs = 
-              List.filter 
-                (fun (pos2, _) -> not (contained_in_src_pos pos pos2))
+            let add_msg pos msg error_msgs =
+              let filtered_msgs = 
+                List.filter 
+                  (fun (pos2, _) -> not (contained_in_src_pos pos pos2))
+                  error_msgs
+              in
+              (pos, msg) :: filtered_msgs
+            in
+            let error_msgs = 
+              IdMap.fold 
+                (fun id (pos, msg) error_msgs ->
+                  let p = mk_free_const Bool id in
+                  match Model.eval_bool_opt model p with
+                  | Some true ->
+                      add_msg pos msg error_msgs
+                  | _ -> error_msgs
+                ) 
+                labels []
+            in
+            let sorted_error_msgs = 
+              List.sort
+                (fun (pos1, msg1) (pos2, msg2) -> 
+                  let mc = 
+                    compare (String.get msg1 0) (String.get msg2 0) 
+                  in
+                  if mc = 0 then compare_src_pos pos1 pos2 else mc) 
                 error_msgs
             in
-            (pos, msg) :: filtered_msgs
-          in
-          let error_msgs = 
-            IdMap.fold 
-              (fun id (pos, msg) error_msgs ->
-                let p = mk_free_const Bool id in
-                match Model.eval_bool_opt model p with
-                | Some true ->
-                    add_msg pos msg error_msgs
-                | _ -> error_msgs
-              ) 
-              labels []
-          in
-          let sorted_error_msgs = 
-            List.sort
-              (fun (pos1, msg1) (pos2, msg2) -> 
-                let mc = 
-                  compare (String.get msg1 0) (String.get msg2 0) 
-                in
-                if mc = 0 then compare_src_pos pos1 pos2 else mc) 
-              error_msgs
-          in
-          let error_msg_strings = 
-            List.map 
-              (fun (pos, msg) -> ProgError.error_to_string pos msg) 
-              sorted_error_msgs
-          in
-          let error_msg =
-            String.concat "\n\n" (vc_msg :: error_msg_strings)
-          in
-          (pp, error_msg, model) :: errors
+            let error_msg_strings = 
+              List.map 
+                (fun (pos, msg) -> ProgError.error_to_string pos msg) 
+                sorted_error_msgs
+            in
+            let error_msg =
+              String.concat "\n\n" (vc_msg :: error_msg_strings)
+            in
+            (pp, error_msg, model) :: errors
+      end
     in check_one vc0
   in
   let _ = Debug.info (fun () -> "Checking procedure " ^ string_of_ident proc.proc_name ^ "...\n") in

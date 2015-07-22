@@ -1,3 +1,59 @@
+//copy-pasted and renamed from other array def
+
+//int_array
+function int_arrayseg_footprint(a: Array<Int>, i: Int, j: Int)
+  returns (FP: Set<ArrayCell<Int>>)
+{
+  (forall c: ArrayCell<Int> ::
+     c in FP == (i <= c.index && c.index < j && c.array == a))
+}
+
+predicate int_arrayseg(a: Array<Int>, i: Int, j: Int)(FP: Set<ArrayCell<Int>>) {
+  0 <= i && i <= j && j <= a.length && 
+  FP == int_arrayseg_footprint(a, i, j)
+}
+
+predicate sorted_int_arrayseg(a: Array<Int>, i: Int, j: Int)(FP: Set<ArrayCell<Int>>) {
+  0 <= i && i <= j && j <= a.length && 
+  FP == int_arrayseg_footprint(a, i, j) &&
+  (forall i: Int, j: Int:: i >= 0 && i <= j && j < a.length ==> a[i] <= a[j])
+}
+
+
+//node_array
+function node_arrayseg_footprint(a: Array<Node>, i: Int, j: Int)
+  returns (FP: Set<ArrayCell<Node>>)
+{
+  (forall c: ArrayCell<Node> ::
+     c in FP == (i <= c.index && c.index < j && c.array == a))
+}
+
+predicate node_arrayseg(a: Array<Node>, i: Int, j: Int)(FP: Set<ArrayCell<Node>>) {
+  0 <= i && i <= j && j <= a.length && 
+  FP == node_arrayseg_footprint(a, i, j)
+}
+
+predicate node_arraysegWithNode(a: Array<Node>, lo: Int, hi: Int)( FP0: Set<ArrayCell<Node>>, FP1: Set<Node>) {
+  0 <= lo && lo <= hi && hi <= a.length &&
+  FP0 == node_arrayseg_footprint(a, lo, hi) &&
+  (forall c: ArrayCell<Node>:: c in FP0 == a[c.index] in FP1) &&
+  (forall c: ArrayCell<Node>, d: ArrayCell<Node>:: c in FP0 && d in FP0 ==> a[c.index] != a[d.index])
+}
+
+function node_witness(n: Node, FP: Set<Node>) returns (index: Int) { true }
+
+predicate node_arraySegOnlyNode(a: Array<Node>, lo: Int, hi: Int)( FP1: Set<Node>) {
+  0 <= lo && lo <= hi && hi <= a.length &&
+  (forall c: ArrayCell<Node>:: c in node_arrayseg_footprint(a, lo, hi) == a[c.index] in FP1) &&
+  (forall i: Int:: i >= lo && i < hi == a[i] in FP1) &&
+  (forall n: Node:: n in FP1 ==> node_witness(n, FP1) >= lo && node_witness(n, FP1) < hi) &&
+  (forall n: Node:: n !in FP1 ==> node_witness(n, FP1) == 0) &&
+  (forall i: Int, j: Int :: i >= lo && i < hi && j >= lo && j < hi && i != j ==> a[i] != a[j])
+}
+
+//////////////////////////////
+//////////////////////////////
+//////////////////////////////
 
 struct BTree {
   var order: Int;
@@ -14,26 +70,55 @@ struct Node {
 }
 
 
-function btree_footprint(r: Node) returns (FP: Set<Node>) {
-  forall x: Node :: x in FP == (Btwn(parent, x, r, r) && r != null)
+//TODO array_state
+function arrayOwner1(a: Array<Node>, FP: Set<Node>) returns (x: Node) { true }
+function arrayOwner2(a: Array<Int>, FP: Set<Node>) returns (x: Node) { true }
+
+function btree_footprint(r: Node) returns (FP0: Set<Node>, FP1: Set<Array<Node>>, FP2: Set<ArrayCell<Node>>, FP3: Set<Array<Int>>, FP4: Set<ArrayCell<Int>>) {
+  // FP0
+  (forall x: Node :: x in FP0 == (Btwn(parent, x, r, r) && r != null)) &&
+  // FP1, FP2, FP3, FP4 one way
+  (forall z: Node ::
+      z in FP0
+    ==>
+      ( z.pointers in FP1 &&
+        z.keys in FP3 &&
+        z.data in FP3 &&
+        (forall i: Int :: i >= 0 && i < z.pointers.length ==> z.pointers.cells[i] in FP2) &&
+        (forall i: Int :: i >= 0 && i < z.keys.length ==> z.keys.cells[i] in FP4) &&
+        (forall i: Int :: i >= 0 && i < z.data.length ==> z.data.cells[i] in FP4) )
+  ) &&
+  // FP1 return
+  (forall a: Array<Node>:: a in FP1 ==> arrayOwner1(a, FP0) in FP0 && arrayOwner1(a, FP0).pointers == a) &&
+  (forall a: Array<Node>:: a !in FP1 ==> arrayOwner1(a, FP0) == null) &&
+  // FP2 return
+  (forall c: ArrayCell<Node>:: c in FP2 ==> c.array in FP1 && c.index > 0 && c.index <= c.array.length) && 
+  // FP3 return
+  (forall a: Array<Int>:: a in FP3 ==> arrayOwner2(a, FP0) in FP0 && (arrayOwner2(a, FP0).keys == a || arrayOwner2(a, FP0).data == a) ) &&
+  (forall a: Array<Int>:: a !in FP3 ==> arrayOwner2(a, FP0) == null) &&
+  // FP4 return
+  (forall c: ArrayCell<Int>:: c in FP4 ==> c.array in FP3 && c.index > 0 && c.index <= c.array.length) && 
+  // disjointness constraints
+  (forall a: Node, b: Node:: a in FP0 && b in FP0 && a != b ==> a.keys != b.keys && a.pointers != b.pointers && a.data != b.data)
 }
 
-function witness(v: Int, C: Set<Int>) returns (res: Node, idx: Int) {
-  true
-}
+function key_witness(v: Int, C: Set<Int>) returns (res: Node, idx: Int) { true }
 
 function btree_keys(FP: Set<Node>) returns (Keys: Set<Int>) {
-  (forall x: Node, idx: Int :: x in FP && idx >= 0 && idx <= x.num_keys ==> (x, idx) == witness(x.keys[idx], Keys)) &&
+  (forall x: Node, idx: Int :: x in FP && idx >= 0 && idx <= x.num_keys ==> (x, idx) == key_witness(x.keys[idx], Keys)) &&
   (forall x: Node, idx: Int :: x in FP && idx >= 0 && idx <= x.num_keys ==> x.keys[idx] in Keys) &&
-  (forall x: Node, idx: Int, i: Int :: i in Keys && (x, idx) == witness(i, Keys) ==> x in FP && idx >= 0 && idx <= x.num_keys) &&
-  (forall i: Int :: !(i in Keys) ==> (null, -1) == witness(i, Keys)) &&
-  (forall x: Node, idx: Int, i: Int :: i in Keys && (x, idx) == witness(i, Keys) ==> i == x.keys[idx])
+  (forall x: Node, idx: Int, i: Int :: i in Keys && (x, idx) == key_witness(i, Keys) ==> x in FP && idx >= 0 && idx <= x.num_keys) &&
+  (forall i: Int :: !(i in Keys) ==> (null, -1) == key_witness(i, Keys)) &&
+  (forall x: Node, idx: Int, i: Int :: i in Keys && (x, idx) == key_witness(i, Keys) ==> i == x.keys[idx])
 }
 
 predicate well_formed_node(order: Int, n: Node) {
   n != null &&
-  0 < n.num_keys &&
+  0 <= n.num_keys && //TODO should be strict ??
   n.num_keys < order &&
+  n.keys.length == order-1 &&
+  n.data.length == order-1 &&
+  n.pointers.length == order &&
   (
     ( n.is_leaf &&
       (forall h: Int :: 0 <= h && h < n.num_keys ==> n.pointers[h] == null) &&
@@ -88,14 +173,42 @@ predicate reach_via_child(FP: Set<Node>) {
       x == y || Btwn(parent, y, x.pointers[witness1(x, y)], x)
 }
 
+predicate btree_node(order: Int, n: Node)(FP0: Set<Node>, FP1: Set<Array<Node>>, FP2: Set<ArrayCell<Node>>, FP3: Set<Array<Int>>, FP4: Set<ArrayCell<Int>>) {
+  well_formed_node(order, n) &&
+  FP0 == Set(n) &&
+  FP1 == Set(n.pointers) &&
+  FP2 == node_arrayseg_footprint(n.pointers, 0, n.pointers.length) &&
+  FP3 == Set(n.keys) ++ Set(n.data) &&
+  FP4 == int_arrayseg_footprint(n.keys, 0, n.keys.length) ++ int_arrayseg_footprint(n.data, 0, n.data.length)
+}
 
-predicate btree(t: BTree)(FP0: Set<BTree>, FP1: Set<Node>) {
+//partial btree (subtree of the whole tree)
+predicate sub_btree(order: Int, n: Node)(FP0: Set<Node>, FP1: Set<Array<Node>>, FP2: Set<ArrayCell<Node>>, FP3: Set<Array<Int>>, FP4: Set<ArrayCell<Int>>) {
+  (FP0, FP1, FP2, FP3, FP4) == btree_footprint(n) &&
+  (forall l in FP0 :: well_formed_node(order, l)) &&
+  parent_equal_child(FP0) &&
+  children_distinct(FP0) &&
+  reach_via_child(FP0)
+}
+
+//full btree (starting from root)
+predicate btree(t: BTree)(FP: Set<BTree>, FP0: Set<Node>, FP1: Set<Array<Node>>, FP2: Set<ArrayCell<Node>>, FP3: Set<Array<Int>>, FP4: Set<ArrayCell<Int>>)) {
   t.order >= 3 &&
-  FP1 == btree_footprint(t.root) &&
-  FP0 == Set<Loc>(t) &&
-  (forall l in FP1 :: well_formed_node(t.order, l)) &&
-  parent_equal_child(FP1) &&
-  children_distinct(FP1) &&
-  reach_via_child(FP1) &&
+  FP == Set<Loc>(t) &&
+  sub_btree(t.order, t.root, FP0, FP1, FP2, FP3, FP4) &&
   ( t.root != null ==> t.root.parent == null )
+}
+
+
+////////////////////////
+////////////////////////
+////////////////////////
+
+
+predicate node_arraysegWithSubtree(a: Array<Node>, lo: Int, hi: Int)( FP0: Set<ArrayCell<Node>>, FP1: Set<Node>) {
+  ???
+  0 <= lo && lo <= hi && hi <= a.length &&
+  FP0 == node_arrayseg_footprint(a, lo, hi) &&
+  (forall c: ArrayCell<Node>:: c in FP0 == a[c.index] in FP1) &&
+  (forall c: ArrayCell<Node>, d: ArrayCell<Node>:: c in FP0 && d in FP0 ==> a[c.index] != a[d.index])
 }

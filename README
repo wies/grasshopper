@@ -2,6 +2,7 @@ GRASShopper version 0.3.
 
 (c) Thomas Wies (wies@cs.nyu.edu)
     Damien Zufferey (zufferey@csail.mit.edu)
+    Siddharth Krishna (siddharth@cs.nyu.edu)
 
 GRASShopper is an experimental verification tool for programs that
 manipulate dynamically allocated data structures. GRASShopper programs
@@ -16,7 +17,7 @@ details.
 -------------------------
 Installation Requirements
 -------------------------
-- OCaml, version >= 3.12
+- OCaml, version >= 4.01
 
 - Z3, version >= 3.2, and/or
 
@@ -39,7 +40,7 @@ Installation Instructions
 Usage
 -------------------------
 - To run GRASShopper, execute e.g.
-     ./grasshopper.native tests/spl/sl_reverse.spl
+     ./grasshopper.native tests/spl/sl/sl_reverse.spl
   The analyzer expects the Z3 (respectively, CVC4) executable in the path.
 
 - To see the available command line options, run

@@ -1,0 +1,156 @@
+include "../array/node_array.spl";
+include "../include/slslist.spl";
+include "../list_set/delete.spl";
+include "../list_set/insert.spl";
+include "../list_set/contains.spl";
+
+struct HashSet {
+  var size: Int; /* the size of the set */
+  var buckets: Array<Node>; /* the set elements */
+}
+
+//TODO we are missing:  ghostHash(..., dataWitness(...).data)
+
+function arrayseg_buckets_footprint(a: Array<Node>, FP0: Set<ArrayCell<Node>>) returns (FP1: Set<Node>) {
+  // all nodes reachable from the head of the bucket are in the footprint
+    (forall c: ArrayCell<Node>, x: Node :: c in FP0 &&
+     Reach(next, c.array[c.index], x) ==> x in FP1 || x == null
+     @(matching c yields c.array[c.index])) &&
+  // all nodes in the footprint are reachable from the bucket head
+    (forall x in FP1 :: Reach(next, a[ghostHash(a.length, x.data)], x) && x != null
+     @(matching x yields a[ghostHash(a.length, x.data)])) &&
+  // the bucket heads are in the array's footprint
+    (forall x in FP1 :: a.cells[ghostHash(a.length, x.data)] in FP0
+     @(matching x yields a.cells[ghostHash(a.length, x.data)] ))
+}
+
+predicate arrayseg_with_buckets(a: Array<Node>, lo: Int, hi: Int, cnt: Set<Int>)(FP0: Set<ArrayCell<Node>>, FP1: Set<Node>) {
+  0 <= lo && lo <= hi && hi <= a.length &&
+  FP0 == arrayseg_footprint(a, lo, hi) &&
+  FP1 == arrayseg_buckets_footprint(a, FP0) &&
+  (forall c: ArrayCell<Node>, x in FP1 :: c in FP0 && Reach(next, c.array[c.index], x) ==> ghostHash(a.length, x.data) == c.index) &&
+  (forall c: ArrayCell<Node> :: c in FP0 ==> Reach(next, c.array[c.index], null) @(matching c yields c.array[c.index])) &&
+  //all the elts from a list have the same hash, and this is the index in the array
+  (forall v in FP1 :: Btwn(next, a[ghostHash(a.length, v.data)], v, null) @(matching v yields a[ghostHash(a.length, v.data)])) &&
+  //the buckets are strictly sorted
+  (forall y in FP1, z in FP1 :: Btwn(next,y,z,z) ==> y.data < z.data || y == z) &&
+  cnt == content(FP1)
+}
+
+predicate array_with_buckets(a: Array<Node>, cnt: Set<Int>)(FP0: Set<Array<Node>>, FP1: Set<ArrayCell<Node>>, FP2: Set<Node>) {
+  FP0 == Set(a) &&
+  arrayseg_with_buckets(a, 0, a.length, cnt, FP1, FP2)
+}
+
+//some ghost function that we can use for the spec of hash
+function ghostHash(max: Int, value: Int) returns (res: Int) {
+  res >= 0 && res < max
+}
+
+predicate hset(h: HashSet, cnt: Set<Int>)(FP0: Set<HashSet>, FP1: Set<Array<Node>>, FP2: Set<ArrayCell<Node>>, FP3: Set<Node>) {
+  h.size == h.buckets.length &&
+  FP0 == Set(h) &&
+  array_with_buckets(h.buckets, cnt, FP1, FP2, FP3) &&
+  true
+}
+
+
+procedure hash(hashset: HashSet, value: Int, implicit ghost content: Set<Int>)
+  returns (res: Int)
+  requires hset(hashset, content)
+  ensures  hset(hashset, content)
+  ensures  res >= 0 && res < hashset.size && res == ghostHash(hashset.size, value)
+{
+  //one of the worst hash functions in the world
+  var v := 31 * value;
+  if (v < 0) v := -v;
+  //v := v mod hashset.size; //TODO this does not parse yet
+  pure assume(v == ghostHash(hashset.size, value));
+  return v;
+}
+
+
+procedure create_hashset(s: Int) returns (res: HashSet)
+  requires s > 0
+  ensures hset(res, Set<Int>())
+{
+  var new_set := new HashSet;
+  new_set.buckets := new Array<Node>(s);    
+
+  var i := 0;
+  while(i < s)
+    invariant i >= 0 && i <= s && new_set.buckets.length == s
+    invariant acc(new_set) &*& acc(new_set.buckets)
+    invariant arrayseg_with_buckets(new_set.buckets, 0, i, Set<Int>())
+    invariant arrayseg(new_set.buckets, i, s)
+  {
+    new_set.buckets[i] := null;
+    i := i + 1;
+  }
+
+  new_set.size := s;
+
+  return new_set;
+}
+
+
+
+procedure member(hashset: HashSet, value: Int, implicit ghost content: Set<Int>)
+  returns (res: Bool)
+  requires hset(hashset, content)
+  ensures  hset(hashset, content)
+  ensures  res == (value in content)
+{
+  var hashval := hash(hashset, value);
+  var list := hashset.buckets[hashval];
+  return contains(list, value);
+}
+
+
+
+procedure add(hashset: HashSet, value: Int, implicit ghost content: Set<Int>)
+  requires hset(hashset, content)
+  ensures  hset(hashset, content ++ Set<Int>(value))
+{
+  var hashval := hash(hashset, value);
+  var list := hashset.buckets[hashval];
+  hashset.buckets[hashval] := insert(list, value);
+}
+
+
+
+procedure remove(hashset: HashSet, value: Int, implicit ghost content: Set<Int>)
+  requires hset(hashset, content)
+  ensures  hset(hashset, content -- Set<Int>(value))
+{
+  var hashval := hash(hashset, value);
+  var list := hashset.buckets[hashval];
+  hashset.buckets[hashval] := delete(list, value);
+}
+
+
+
+//  procedure free_set(hashset: HashSet, implicit ghost content: Set<Int>)
+//    requires hset(hashset, content)
+//    ensures emp
+//  {
+//    var i := 0;
+//    while(i < hashset.size)
+//      invariant i >= 0 && i <= hashset.size
+//      invariant acc(hashset) &*& acc(hashset.buckets)
+//      invariant arrayseg(hashset.buckets, 0, i) &*& arraysegWithNodes(hashset.buckets, i, hashset.size)
+//    {
+//      var list := hashset.buckets[i];
+//      while(list != null)
+//        invariant lseg(list, null)
+//      {
+//        var temp := list;
+//        list := list.next;
+//        free(temp);
+//      }
+//      i := i + 1;
+//    }
+
+//    free(hashset.buckets);
+//    free(hashset);
+//  }

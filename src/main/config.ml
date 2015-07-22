@@ -9,6 +9,8 @@ let procedure = ref None
 
 (* File name where counterexample model is saved. *)
 let model_file = ref ""
+(* Display the edges going to null in the model *)
+let model_null_edge = ref false
 
 (* File name where counterexample trace is saved. *)
 let trace_file = ref ""
@@ -18,12 +20,15 @@ let with_reach_axioms = ref true
 let with_opt_reach_axioms = ref false
 let encode_fields_as_arrays = ref false
 let with_ep = ref true
+let full_ep = ref false
 let use_set_theory = ref false
 let keep_types = ref false
 
 (* Flag that controls whether we are instantiating the axioms or relying on the prover. *)
 let instantiate = ref true
 let stratify = ref true
+(* Flag that controls whether predicates are treated as abstract *)
+let abstract_preds = ref false
 (* Flag that controls whether split lemmas are added *)
 let split_lemmas = ref false
 (* Flag that controls whether unsat cores are dumped for each VC *)
@@ -34,6 +39,8 @@ let dump_smt_queries = ref false
 let named_assertions = ref false
 (* Flag that controls whether the generated VCs are checked. *)
 let verify = ref true
+(* Flat that controls whether the program is only type-checked. *)
+let typeonly = ref false
 (* Flag that controls whether to stop after the first VC that cannot be proved. *)
 let robust = ref false
 (* Flag that enables error messages for on-the-fly checking *)
@@ -56,6 +63,8 @@ let opt_field_mod = ref true
 (* optmisation: self-framing clause for SL predicates *)
 let optSelfFrame = ref false
 
+(* compute the congruence closure as a fixed point (horn clauses) *)
+let ccFixedPoint = ref true
 
 let cmd_options =
   [("-basedir", Arg.Set_string base_dir, "<string>  Base directory for resolving include directives. Default: current working directory\n\nOptions for controlling error reporting and debug output:");
@@ -64,11 +73,13 @@ let cmd_options =
    ("-stats", Arg.Set print_stats, " Print statistics");
    ("-lint", Arg.Set flycheck_mode, " Print single line error messages for on-the-fly checking");
    ("-model", Arg.Set_string model_file, "<file>  Produce counterexample model for the first failing verification condition");
+   ("-nulledges", Arg.Set model_null_edge, " Show the edges going to null in the model");
    ("-trace", Arg.Set_string trace_file, "<file>  Produce counterexample trace for the first failing verification condition");
    ("-dumpghp", Arg.Set_int dump_ghp, "<num>  Print intermediate program after specified simplification stage (num=0,1,2,3)");
    ("-dumpvcs", Arg.Set dump_smt_queries, " Generate SMT-LIB 2 files for all verification conditions");
    ("-dumpcores", Arg.Set unsat_cores, " Produce unsat cores with every unsat SMT query\n\nOptions for controlling what is checked:");
    ("-procedure", Arg.String (fun p -> procedure := Some p), "<string>  Only check the specified procedure");
+   ("-typeonly", Arg.Set typeonly, " Only type-check the program");
    ("-noverify", Arg.Clear verify, " Only type-check the program and generate verification conditions without checking");
    ("-robust", Arg.Set robust, " Continue even if some verification condition cannot be checked\n\nOptions for controlling verification condition generation:");
    ("-types", Arg.Set keep_types, " Keep type information when translating to intermediate representation");
@@ -76,12 +87,15 @@ let cmd_options =
    ("-optreach", Arg.Set with_opt_reach_axioms, " Use optimized but incomplete reachability axioms");
    ("-noreach", Arg.Clear with_reach_axioms, " Omit axioms for reachability predicates");
    ("-noep", Arg.Clear with_ep, " Omit axioms for entry points");
+   ("-fullep", Arg.Set full_ep, " Generates more ep terms");
    ("-noinst", Arg.Clear instantiate, " Let the SMT solver deal with the quantifiers without prior instantiation");
    ("-nostratify", Arg.Clear stratify, " Instantiate quantifiers that satisfy stratified sort restrictions\n\nOptions for controlling backend solver:");
+   ("-abspreds", Arg.Set abstract_preds, " Treat predicates as abstract.");
    ("-splitlemmas", Arg.Set split_lemmas, " Add split lemmas for all terms of sort Loc");
    ("-smtsolver", Arg.Set_string smtsolver, "<solver> Choose SMT solver (z3, cvc4, cvc4mf), e.g., 'z3+cvc4mf'");
    ("-smtpatterns", Arg.Set smtpatterns, " Always add pattern annotations to quantifiers in SMT queries");
    ("-smtsets", Arg.Set use_set_theory, " Use solver's set theory to encode sets (if supported)");
    ("-smtarrays", Arg.Set encode_fields_as_arrays, " Use solver's array theory to encode fields\n");
+   ("-nofixedpoint", Arg.Clear ccFixedPoint, " Do not use fixed point for the congruence-closure");
    (*("-optSelfFrame", Arg.Set optSelfFrame, " enable generation of self-framing clauses for SL predicates");*)
   ]

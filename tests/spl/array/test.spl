@@ -1,0 +1,83 @@
+include "int_array.spl";
+
+procedure heap_access_conditional(a: Array<Int>, x: Int, begin: Int, end: Int) returns (idx: Int)
+  requires array(a)
+  requires begin < end
+  ensures array(a)
+{
+  var lo := begin;
+
+  while (lo < end)
+    invariant true
+  {
+    // This causes an error, but the if condition doesn't!
+    //    var b := a[lo];
+    if (a[lo] < x)
+    {
+      lo := lo + 1;
+    }
+  }
+  idx := lo;
+}
+
+procedure unsat_precondition(a: Array<Int>) returns (y: Int)
+  requires acc(a) &*& acc(a)
+  ensures y == 3
+{
+  y := 2;
+}
+
+procedure test_invariant_bug(a: Array<Int>, high: Int)
+  requires acc(a) &*& arrayseg(a, 0, high)
+  requires high >= 0 && high <= a.length
+  ensures acc(a) &*& arrayseg(a, 0, high)
+{
+  var i := 0;
+
+  while (i < high)
+    invariant 0 <= i && i <= high
+    invariant acc(a) &*& arrayseg(a, 0, high)
+    invariant forall j: Int :: 0 <= j && j < i ==> a[j] == 4 @(matching j yields a[j])
+  {
+    a[i] := 4;
+
+    i := i + 1;
+  }
+}
+
+/*
+procedure test_heap_access(a: Array<Int>, high: Int)
+  requires acc(a) &*& arrayseg(a, 0, high)
+  requires high >= 0 && high <= a.length
+  ensures acc(a) &*& arrayseg(a, 0, high)
+{
+  var i := 0;
+
+  while (i < high)
+    invariant 0 <= i && i <= high && high <= a.length
+    invariant acc(a) &*& arrayseg(a, 0, high)
+  {
+    a[i] := a[i];
+    i := i + 1;
+  }
+
+}
+
+
+
+procedure create()
+  returns (a: Array<Int>)
+  requires emp
+  ensures array(a) &*& a[0] == 111
+{
+  a := new Array<Int>(1);
+
+  a[0] := 111;
+
+  var b:= new Array<Int>(2);
+  b[0] := 555;
+  b[1] := 666;
+
+  return a;
+}
+*/

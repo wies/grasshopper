@@ -1,0 +1,45 @@
+function arrayseg_footprint(a: Array<Node>, i: Int, j: Int)
+  returns (FP: Set<ArrayCell<Node>>)
+{
+  (forall c: ArrayCell<Node> ::
+     c in FP == (i <= c.index && c.index < j && c.array == a))
+}
+
+predicate arrayseg(a: Array<Node>, i: Int, j: Int)(FP: Set<ArrayCell<Node>>) {
+  0 <= i && i <= j && j <= a.length && 
+  FP == arrayseg_footprint(a, i, j)
+}
+
+predicate array(a: Array<Node>)(FP0: Set<Array<Node>>, FP1: Set<ArrayCell<Node>>) {
+  FP0 == Set(a) &&
+  FP1 == arrayseg_footprint(a, 0, a.length)
+}
+
+
+function node_witness(x: Node, a: Array<Node>, m: Map<ArrayCell<Node>, Node>)
+  returns (c: ArrayCell<Node>)
+
+function array_state() returns (m: Map<ArrayCell<Node>, Node>) {
+  (forall c: ArrayCell<Node> :: c.m == c[] @(matching c yields c.m))
+}
+
+function arrayseg_content(a: Array<Node>, FP0: Set<ArrayCell<Node>>) returns (FP1: Set<Node>) {
+  (forall c: ArrayCell<Node> :: c in FP0 ==> c == node_witness(c[], a, array_state())) &&
+  (forall x in FP1 :: x == node_witness(x, a, array_state())[]
+   @(matching x yields node_witness(x, a, array_state())[])) &&
+  (forall c: ArrayCell<Node> :: c in FP0 ==> c[] in FP1) &&
+  (forall x in FP1 :: node_witness(x, a, array_state()) in FP0)
+}
+
+predicate arrayseg_with_content(a: Array<Node>, lo: Int, hi: Int)(FP0: Set<ArrayCell<Node>>, FP1: Set<Node>) {
+  0 <= lo && lo <= hi && hi <= a.length &&
+  FP0 == arrayseg_footprint(a, lo, hi) &&
+  FP1 == arrayseg_content(a, FP0)
+}
+
+predicate array_with_content(a: Array<Node>)(FP0: Set<Array<Node>>, FP1: Set<ArrayCell<Node>>, FP2: Set<Node>) {
+  FP0 == Set(a) &&
+  arrayseg_with_content(a, 0, a.length, FP1, FP2)
+}
+
+

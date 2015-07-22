@@ -21,3 +21,4 @@ procedure insert(lst: Node, elt: Node)
     return lst;
   }
 }
+

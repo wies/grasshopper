@@ -75,6 +75,17 @@ let partition_map p f xs =
 let map_split f xs =
   List.fold_right (fun x (ys, zs) -> let y, z = f x in y :: ys, z :: zs) xs ([], [])
 
+(** Composition of [List.fold_left] and [List.map] *)
+let fold_left_map f acc xs =
+  let rec process acc lst = match lst with
+    | x :: xs ->
+      let y, acc2 = f acc x in
+      let ys, acc3 = process acc2 xs in
+      (y::ys, acc3)
+    | [] -> ([], acc)
+  in
+    process acc xs
+
 (** Applies [fn] to the elements in [xs] until the result becomes Some _ *)
 let rec find_map fn = function
   | [] -> None
@@ -276,7 +287,7 @@ let read_file file =
         List.rev acc
       end
   in
-    String.concat "\n" (read [])
+  String.concat "\n" (read [])
 
 let rec remove_duplicates lst = match lst with
   | x :: xs -> x :: remove_duplicates (List.filter (fun y -> y <> x) xs)

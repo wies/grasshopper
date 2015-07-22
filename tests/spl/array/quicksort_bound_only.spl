@@ -1,0 +1,77 @@
+include "int_array.spl";
+
+////////////////
+// predicates //
+////////////////
+
+predicate arrayseg_bnd(a: Array<Int>, i: Int, j: Int, lb: Int, ub: Int)(FP: Set<ArrayCell<Int>>) {
+  0 <= i && i <= j && j <= a.length && 
+  FP == arrayseg_footprint(a, i, j) &&
+  (forall k: Int:: k >= i && k < j ==> a[k] >= lb && a[k] < ub @(matching k yields a[k]) )
+}
+
+predicate array_bnd(a: Array<Int>, lb: Int, ub: Int)(FP1: Set<Array<Int>>, FP2: Set<ArrayCell<Int>>) {
+  FP1 == Set(a) &&
+  arrayseg_bnd(a, 0, a.length, lb, ub, FP2)
+}
+
+predicate sorted_arrayseg_bnd(a: Array<Int>, i: Int, j: Int, lb: Int, ub: Int)(FP: Set<ArrayCell<Int>>) {
+  0 <= i && i <= j && j <= a.length && 
+  FP == arrayseg_footprint(a, i, j) &&
+  (forall i1: Int, j1: Int:: i1 >= i && i1 <= j1 && j1 < j ==> a[i1] <= a[j1]) &&
+  (forall k: Int:: k >= i && k < j ==> a[k] >= lb && a[k] < ub@(matching k yields a[k]) )
+}
+
+predicate sorted_array_bnd(a: Array<Int>, lb: Int, ub: Int)(FP0: Set<Array<Int>>, FP1: Set<ArrayCell<Int>>) {
+  FP0 == Set<Array<Int>>(a) &&
+  sorted_arrayseg_bnd(a, 0, a.length, lb, ub, FP1)
+}
+
+////////////////
+////////////////
+////////////////
+
+procedure quicksort(a: Array<Int>, implicit ghost lb: Int, implicit ghost ub: Int)
+  requires array_bnd(a, lb, ub)
+  ensures  sorted_array_bnd(a, lb, ub)
+{
+  quicksort1(a, 0, a.length-1, lb, ub);
+}
+
+procedure swap(a: Array<Int>, i: Int, j: Int, implicit ghost iVal: Int, implicit ghost jVal: Int)
+  requires acc(a) &*& (acc(a,i) &+& acc(a, j)) &*& a[i] == iVal &*& a[j] == jVal
+  ensures  acc(a) &*& (acc(a,i) &+& acc(a, j)) &*& a[i] == jVal &*& a[j] == iVal
+{
+  var tmp := a[i];
+  a[i] := a[j];
+  a[j] := tmp;
+}
+
+procedure quicksort1(a: Array<Int>, lower: Int, upper: Int, ghost lb: Int, ghost ub: Int)
+  requires acc(a) &*& arrayseg_bnd(a, lower, upper+1, lb, ub)
+  ensures  acc(a) &*& sorted_arrayseg_bnd(a, lower, upper+1, lb, ub)
+{
+  if (lower < upper) {
+    var pivotIdx := lower + (upper - lower) / 2;
+    var pivotVal := a[pivotIdx];
+    swap(a, pivotIdx, upper);
+    var idx := lower;
+    var i := lower;
+    while (i < upper)
+      invariant idx >= lower && i <= upper && i >= idx
+      invariant acc(a)
+      invariant arrayseg_bnd(a, lower, idx, lb, pivotVal)
+      invariant arrayseg_bnd(a, idx, i, pivotVal, ub)
+      invariant arrayseg_bnd(a, i, upper, lb, ub)
+    {
+      if (a[i] < pivotVal) {
+        swap(a, i, idx);
+        idx := idx + 1;
+      }
+      i := i + 1;
+    }
+    swap(a, idx, upper);
+    quicksort1(a, lower, idx - 1, lb, pivotVal);
+    quicksort1(a, idx + 1, upper, pivotVal, ub);
+  }
+}

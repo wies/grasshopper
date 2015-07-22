@@ -1,0 +1,20 @@
+include "node_array.spl";
+
+struct Node {
+  var data: Int;
+}
+
+procedure traverse(a: Array<Node>)
+  requires arrayWithNode(a)
+  ensures arrayWithNode(a)
+{
+  var i := 0;
+  
+  while (i < a.length)
+    invariant 0 <= i
+    invariant arrayWithNode(a)
+  {
+    a[i] := a[i];
+    i := i + 1;
+  }
+}

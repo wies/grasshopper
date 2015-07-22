@@ -13,6 +13,8 @@ type names = name list
 type typ =
   | StructType of ident
   | MapType of typ * typ
+  | ArrayType of typ
+  | ArrayCellType of typ
   | SetType of typ
   | IntType
   | BoolType
@@ -25,22 +27,13 @@ type var_decl_id =
   | IdentDecl of ident
   | ArrayDecl of var_decl_id
 
-type op = 
-  | OpDiff | OpUn | OpInt 
-  | OpMinus | OpPlus | OpMult | OpDiv 
-  | OpEq | OpGt | OpLt | OpGeq | OpLeq | OpIn
-  | OpPts | OpSepStar | OpSepPlus | OpSepIncl
-  | OpAnd | OpOr | OpImpl | OpNot 
-
-type quantifier_kind =
-  | Forall | Exists
-
 type spl_program =
     { includes : (name * pos) list;
       var_decls : vars;
       struct_decls : structs;
       proc_decls : procs;
       pred_decls : preds;
+      background_theory : (expr * pos) list; 
     }
 
 and decl =
@@ -70,6 +63,7 @@ and pred =
       pr_outputs : idents;
       pr_locals : vars;
       pr_body : expr; 
+      pr_is_footprint : bool;
       pr_pos : pos;
     }
 
@@ -121,20 +115,25 @@ and loop_contracts = loop_contract list
 and loop_contract = 
   | Invariant of expr * bool
 
+and quant_var =
+  | GuardedVar of ident * expr
+  | UnguardedVar of var
+
 and expr =
   | Null of typ * pos
   | Emp of pos
   | Setenum of typ * exprs * pos
   | IntVal of int * pos
   | BoolVal of bool * pos
-  | New of ident * pos
-  | Dot of expr * ident * pos
+  | New of typ * exprs * pos
+  | Read of expr * expr * pos
+  | Length of expr * pos
+  | ArrayOfCell of expr * pos
+  | IndexOfCell of expr * pos
+  | ArrayCells of expr * pos
   | ProcCall of ident * exprs * pos
-  | PredApp of ident * exprs * pos
-  | Quant of quantifier_kind * var list * expr * pos
-  | GuardedQuant of quantifier_kind * ident * expr * expr * pos
-  | Access of expr * pos
-  | BtwnPred of expr * expr * expr * expr * pos
+  | PredApp of pred_sym * exprs * pos
+  | Quant of quantifier_kind * quant_var list * expr * pos
   | UnaryOp of op * expr * pos
   | BinaryOp of expr * op * expr * typ * pos
   | Ident of ident * pos
@@ -142,8 +141,22 @@ and expr =
 
 and exprs = expr list
 
+and op = 
+  | OpDiff | OpUn | OpInt 
+  | OpMinus | OpPlus | OpMult | OpDiv 
+  | OpEq | OpGt | OpLt | OpGeq | OpLeq | OpIn
+  | OpPts | OpSepStar | OpSepPlus | OpSepIncl
+  | OpAnd | OpOr | OpImpl | OpNot 
+
+and pred_sym =
+  | AccessPred | BtwnPred | DisjointPred | FramePred | ReachPred | Pred of ident
+      
+and quantifier_kind =
+  | Forall | Exists
+
 and annotation =
-  | GeneratorAnnot of exprs * expr
+  | GeneratorAnnot of (expr * ident list) list * expr
+  | PatternAnnot of expr
   | CommentAnnot of string
 
 let pos_of_expr = function
@@ -152,12 +165,13 @@ let pos_of_expr = function
   | IntVal (_, p) 
   | BoolVal (_, p)
   | Setenum (_, _, p)
-  | New (_, p)
-  | Dot (_, _, p)
-  | Access (_, p)
-  | BtwnPred (_, _, _, _, p)
+  | New (_, _, p)
+  | Read (_, _, p)
+  | Length (_, p)
+  | ArrayOfCell (_, p)
+  | IndexOfCell (_, p)
+  | ArrayCells (_, p)
   | Quant (_, _, _, p)
-  | GuardedQuant (_, _, _, _, p)
   | ProcCall (_, _, p)
   | PredApp (_, _, p)
   | UnaryOp (_, _, p)
@@ -187,8 +201,10 @@ let struct_decl sname sfields pos =
 let var_decl vname vtype vghost vimpl vpos vscope =
   { v_name = vname; v_type = vtype; v_ghost = vghost; v_implicit = vimpl; v_aux = false; v_pos = vpos; v_scope = vscope } 
 
+let pred_decl hdr body =
+  { hdr with pr_body = body }
 
-let extend_spl_program incls decls prog =
+let extend_spl_program incls decls bg_th prog =
   let check_uniqueness id pos (vdecls, pdecls, prdecls, sdecls) =
     if IdMap.mem id vdecls || IdMap.mem id sdecls || IdMap.mem id pdecls || IdMap.mem id prdecls
     then ProgError.error pos ("redeclaration of identifier " ^ (fst id) ^ ".");
@@ -215,6 +231,7 @@ let extend_spl_program incls decls prog =
     struct_decls = sdecls; 
     proc_decls = pdecls;
     pred_decls = prdecls;
+    background_theory = bg_th @ prog.background_theory;
   }
 
 let merge_spl_programs prog1 prog2 =
@@ -230,24 +247,24 @@ let merge_spl_programs prog1 prog2 =
   let decls =
     IdMap.fold (fun _ decl acc -> ProcDecl decl :: acc) prog1.proc_decls prdecls
   in
-  extend_spl_program prog1.includes decls prog2
+  extend_spl_program prog1.includes decls prog1.background_theory prog2
 
 let add_alloc_decl prog =
   let alloc_decls =
     IdMap.fold
       (fun _ decl acc ->
         let sid = decl.s_name in
-        let id = Prog.alloc_id sid in
+        let id = Prog.alloc_id (FreeSrt sid) in
         let tpe = SetType (StructType sid) in
         let pos = GrassUtil.dummy_position in
         let scope = GrassUtil.global_scope in
         let vdecl = VarDecl (var_decl id tpe true false pos scope) in
-          vdecl :: acc
+        vdecl :: acc
       )
       prog.struct_decls
       []
   in
-    extend_spl_program [] alloc_decls prog
+    extend_spl_program [] alloc_decls [] prog
 
 let empty_spl_program =
   { includes = [];
@@ -255,6 +272,7 @@ let empty_spl_program =
     struct_decls = IdMap.empty;
     proc_decls = IdMap.empty;
     pred_decls = IdMap.empty;
+    background_theory = [];
   }
 
 
@@ -273,6 +291,8 @@ let rec pr_type ppf = function
   | IntType -> fprintf ppf "%s" int_sort_string
   | UnitType -> fprintf ppf "Unit"
   | StructType id -> pr_ident ppf id
+  | ArrayType e -> fprintf ppf "%s<@[%a@]>" array_sort_string pr_type e
+  | ArrayCellType e -> fprintf ppf "%s<@[%a@]>" array_cell_sort_string pr_type e
   | MapType (d, r) -> fprintf ppf "%s<@[%a,@ %a@]>" map_sort_string pr_type d pr_type r
   | SetType s -> fprintf ppf "%s<@[%a@]>" set_sort_string pr_type s
   | PermType -> fprintf ppf "Permission"

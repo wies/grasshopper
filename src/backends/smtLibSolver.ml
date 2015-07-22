@@ -149,12 +149,21 @@ let available_solvers =
 
 let selected_solvers = ref []
 
-let select_solver name = 
+let select_solver name =
+  let available_solvers =
+    List.map (fun s -> s ()) available_solvers
+  in
   let selected = Str.split (Str.regexp "+") name in
+  let _ =
+    List.iter (fun name ->
+      if List.for_all (fun s -> s.name <> name) available_solvers then
+        failwith ("SMT solver '" ^ name ^ "' is not supported."))
+      selected
+  in
   selected_solvers := 
     List.filter 
       (fun s -> List.mem s.name selected && (!Config.verify || s.info.kind = Logger))
-      (List.map (fun s -> s ()) available_solvers);
+      available_solvers;
   if List.for_all (fun s -> s.info.kind <> Logger) !selected_solvers && !Config.dump_smt_queries then
     selected_solvers := z3logger () :: !selected_solvers;
   Debug.info (fun () ->
@@ -300,9 +309,33 @@ let declare_fun session sym_name arg_sorts res_sort =
 
 let declare_sort session sort_name num_of_params =
   writeln session (Printf.sprintf "(declare-sort %s %d)" sort_name num_of_params)
+
+let smtlib_sort_of_grass_sort srt =
+  let rec csort = function
+  | Int -> IntSort
+  | Bool -> BoolSort
+  | Pat -> FreeSort (("GrassPat", 0), [])
+  | Set srt ->
+      FreeSort ((set_sort_string, 0), [csort srt])
+  | Map (dsrt, rsrt) ->
+      FreeSort ((map_sort_string, 0), [csort dsrt; csort rsrt])
+  | Array srt ->
+      FreeSort (("Grass" ^ array_sort_string, 0), [csort srt])
+  | ArrayCell srt ->
+      FreeSort ((array_cell_sort_string, 0), [csort srt])
+  | Loc srt ->
+      FreeSort ((loc_sort_string, 0), [csort srt])
+  | FreeSrt id -> FreeSort (id, [])
+  in
+  csort srt
     
 let declare_sorts has_int session structs =
-  IdSet.iter (fun id -> declare_sort session (string_of_ident id) 0) structs;
+  SortSet.iter
+    (function FreeSrt id -> declare_sort session (string_of_ident id) 0 | _ -> ())
+    structs;
+  declare_sort session ("Grass" ^ pat_sort_string) 0;
+  declare_sort session ("Grass" ^ array_sort_string) 1;
+  declare_sort session array_cell_sort_string 1;
   declare_sort session loc_sort_string 1;
   if not !Config.use_set_theory
   then declare_sort session set_sort_string 1;
@@ -369,7 +402,8 @@ let init_session session sign =
   let has_int = 
     let rec hi = function
       | Int -> true
-      | Set srt -> hi srt
+      | Set srt
+      | Array srt -> hi srt
       | Map (dsrt, rsrt) -> hi dsrt || hi rsrt
       | _ -> false
     in
@@ -381,9 +415,11 @@ let init_session session sign =
   in
   (* collect the struct types *)
   let structs =
-    let add acc srt = match srt with
-      | Loc id -> IdSet.add id acc
-      | _ -> acc
+    let rec add acc srt = match srt with
+    | Loc (FreeSrt _ as srt) -> SortSet.add srt acc
+    | Set srt | ArrayCell srt | Array srt | Loc srt -> add acc srt
+    | Map (srt1, srt2) -> add (add acc srt1) srt2
+    | _ -> acc
     in
     SymbolMap.fold
       (fun _ funSig acc ->
@@ -395,7 +431,7 @@ let init_session session sign =
           funSig
       )
       sign
-      IdSet.empty
+      SortSet.empty
   in
   (* set all options *)
   List.iter (fun (solver, state) ->
@@ -467,9 +503,33 @@ let push session =
   let new_session = { session with stack_height = session.stack_height + 1 } in
   new_session
 
+let grass_smtlib_prefix = "grass_" 
+
+let smtlib_symbol_of_grass_symbol solver_info sym = match sym with 
+  | FreeSym id -> SmtLibSyntax.Ident id
+  | Plus -> SmtLibSyntax.Plus
+  | Minus | UMinus -> SmtLibSyntax.Minus
+  | Mult -> SmtLibSyntax.Mult
+  | Div -> SmtLibSyntax.Div
+  | Eq -> SmtLibSyntax.Eq
+  | LtEq -> SmtLibSyntax.Leq
+  | GtEq -> SmtLibSyntax.Geq
+  | Lt -> SmtLibSyntax.Lt
+  | Gt -> SmtLibSyntax.Gt
+  | (Read | Write) when !Config.encode_fields_as_arrays -> SmtLibSyntax.Ident (string_of_symbol sym, 0)
+  | (IntConst _ | BoolConst _) as sym -> SmtLibSyntax.Ident (string_of_symbol sym, 0)
+  | sym -> SmtLibSyntax.Ident (grass_smtlib_prefix ^ (string_of_symbol sym), 0)
+
+let grass_symbol_of_smtlib_symbol solver_info =
+  let to_string sym = SmtLibSyntax.string_of_symbol (smtlib_symbol_of_grass_symbol solver_info sym) in
+  let symbol_map = List.map (fun sym -> (to_string sym, sym)) symbols in
+  function (name, _) as id ->
+    try List.assoc name symbol_map
+    with Not_found -> FreeSym id
+
 let is_interpreted solver_info sym = match sym with
   | Read | Write -> !Config.encode_fields_as_arrays
-  | Empty | SetEnum | Union | Inter | Diff | Elem | SubsetEq ->
+  | Empty | SetEnum | Union | Inter | Diff | Elem | SubsetEq | Disjoint ->
       !Config.use_set_theory && solver_info.has_set_theory
   | Eq | Gt | Lt | GtEq | LtEq | IntConst _ | BoolConst _
   | Plus | Minus | Mult | Div | UMinus -> true
@@ -477,25 +537,15 @@ let is_interpreted solver_info sym = match sym with
   | _ -> false
 
 let string_of_overloaded_symbol solver_info sym idx =
-  (string_of_symbol sym) ^
-  if solver_info.has_inst_closure && sym = FreeSym ("inst-closure", 0)
-  then ""
-  else "$" ^ (string_of_int idx)
+  match smtlib_symbol_of_grass_symbol solver_info sym with
+  | SmtLibSyntax.Ident id ->
+    (string_of_ident id) ^
+    if solver_info.has_inst_closure && sym = FreeSym ("inst-closure", 0)
+    then ""
+    else "$" ^ (string_of_int idx)
+  | _ -> 
+    failwith "string_of_overloaded_symbol"
 
-
-let smtlib_sort_of_grass_sort srt =
-  let rec csort = function
-  | Int -> IntSort
-  | Bool -> BoolSort
-  | Set srt ->
-      FreeSort ((set_sort_string, 0), [csort srt])
-  | Map (dsrt, rsrt) ->
-      FreeSort ((map_sort_string, 0), [csort dsrt; csort rsrt])
-  | Loc id ->
-      FreeSort ((loc_sort_string, 0), [FreeSort (id, [])])
-  | FreeSrt id -> FreeSort (id, [])
-  in
-  csort srt
 
 let declare session sign =
   let declare solver_info out_chan sym idx (arg_sorts, res_sort) = 
@@ -521,19 +571,6 @@ let declare session sign =
   writeln session "";
   { session with signature = Some sign }
 
-let smtlib_symbol_of_grass_symbol = function
-  | FreeSym id -> SmtLibSyntax.Ident id
-  | Plus -> SmtLibSyntax.Plus
-  | Minus | UMinus -> SmtLibSyntax.Minus
-  | Mult -> SmtLibSyntax.Mult
-  | Div -> SmtLibSyntax.Div
-  | Eq -> SmtLibSyntax.Eq
-  | LtEq -> SmtLibSyntax.Leq
-  | GtEq -> SmtLibSyntax.Geq
-  | Lt -> SmtLibSyntax.Lt
-  | Gt -> SmtLibSyntax.Gt
-  | sym -> SmtLibSyntax.Ident (string_of_symbol sym, 0)
-
 let extract_name ann =
   let names = Util.filter_map 
       (function Name _ -> !Config.named_assertions | _ -> false) 
@@ -545,7 +582,7 @@ let extract_name ann =
 let smtlib_form_of_grass_form solver_info signs f =
   let osym sym sign =
     if is_interpreted solver_info sym 
-    then smtlib_symbol_of_grass_symbol sym
+    then smtlib_symbol_of_grass_symbol solver_info sym
     else
       let versions = 
         try SymbolMap.find sym signs 
@@ -555,7 +592,7 @@ let smtlib_form_of_grass_form solver_info signs f =
         let version = Util.find_index sign versions in
         SmtLibSyntax.Ident (mk_ident (string_of_overloaded_symbol solver_info sym version))
       with Not_found ->
-        smtlib_symbol_of_grass_symbol sym
+        smtlib_symbol_of_grass_symbol solver_info sym
   in
   let rec cterm t = match t with
   | Var (id, _) -> SmtLibSyntax.mk_app (SmtLibSyntax.Ident id) []
@@ -685,12 +722,18 @@ let convert_model session smtModel =
     | FreeSort ((name, num), srts) ->
         let csrts = List.map convert_sort srts in
         match name, csrts with
-        | "Loc", [FreeSrt id] -> Loc id
+        | "Loc", [esrt] -> Loc esrt
         | "Set", [esrt] -> Set esrt
+        | "GrassArray", [esrt] -> Array esrt
+        | "GrassPat", [] -> Pat
+        | "ArrayCell", [esrt] -> ArrayCell esrt
         | "Map", [dsrt; rsrt] -> Map (dsrt, rsrt)
         | _, [] -> FreeSrt (name, num)
-        | _, _ -> fail session "encountered unexpected sort in model conversion"
+        | srt, _ -> fail session ("encountered unexpected sort " ^ srt ^ " in model conversion")
   in
+  (* solver_info for symbol conversion *)
+  let solver_info = (fst (List.hd session.solvers)).info in
+  let to_sym = grass_symbol_of_smtlib_symbol solver_info in
   (* detect Z3/CVC4 identifiers that represent values of uninterpreted sorts *)
   let to_val (name, num) =
     let id = name ^ "_" ^ string_of_int num in
@@ -780,7 +823,7 @@ let convert_model session smtModel =
       | SmtLibSyntax.App (Ident id, ts, pos) ->
           let cts = List.map (convert_term bvs) ts in
           let id = normalize_ident id in
-          let sym = symbol_of_ident id in
+          let sym = to_sym id in
           let ts_srts = List.map sort_of cts in
           let res_srt = 
             match Model.get_result_sort model sym ts_srts with
@@ -827,7 +870,7 @@ let convert_model session smtModel =
       | SmtLibSyntax.App (Ident id, ts, _) ->
           let cts = List.map (convert_term bvs) ts in
           let id = normalize_ident id in
-          let sym = symbol_of_ident id in
+          let sym = to_sym id in
           mk_atom sym cts
       | SmtLibSyntax.App (SmtLibSyntax.Eq, [t1; t2], pos) -> 
           (try 
@@ -914,8 +957,9 @@ let convert_model session smtModel =
               (* Z3-specific work around *)
               (match convert_term [] t with
               | App (FreeSym (id2, _) as sym2, ts, srt) as t1 ->
-                  let re = Str.regexp (string_of_symbol sym ^ "\\$[0-9]+![0-9]+") in
-                  if Str.string_match re id2 0 &&
+                  let re1 = Str.regexp (string_of_symbol sym ^ "\\$[0-9]+![0-9]+") in
+                  let re2 = Str.regexp (grass_smtlib_prefix ^ (string_of_symbol sym) ^ "\\$[0-9]+![0-9]+") in
+                  if (Str.string_match re1 id2 0 || Str.string_match re2 id2 0) &&
                     List.fold_left2 (fun acc (id1, _) -> function
                       | App (FreeSym _, [App (FreeSym id2, [], _)], _)
                       | App (FreeSym id2, [], _) -> acc && id1 = id2
@@ -923,7 +967,8 @@ let convert_model session smtModel =
                   then 
                     let def = Model.get_interp model sym2 arity in
                     Model.add_interp model sym arity def
-                  else add_term pos model arg_map t1
+                  else
+                    add_term pos model arg_map t1
               | t1 -> add_term pos model arg_map t1))
       | SmtLibSyntax.Annot (def, _, _) -> 
           p model arg_map def
@@ -937,12 +982,13 @@ let convert_model session smtModel =
     List.fold_left 
       (fun model cmd ->
         match cmd with
-        | DefineFun (id, args, res_srt, def, _) -> 
+        | DefineFun (id, args, res_srt, def, _) ->
+            let sym = to_sym (normalize_ident id) in
+            if sym = Known then model else
             let cres_srt = convert_sort res_srt in
             let cargs = List.map (fun (x, srt) -> x, convert_sort srt) args in
             let carg_srts = List.map snd cargs in
-            let sym = symbol_of_ident (normalize_ident id) in
-            process_def model sym (carg_srts, cres_srt) cargs (SmtLibSyntax.unletify def) 
+            process_def model sym (carg_srts, cres_srt) cargs (SmtLibSyntax.unletify def)
         | _ -> model)
       model1 smtModel 
   in
