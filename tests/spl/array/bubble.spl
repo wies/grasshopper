@@ -2,7 +2,7 @@ include "int_array.spl";
 include "quicksort_bound_only.spl";
 
 
-// One pass of bubble sort should leave the maximum element in the correct position
+/* One pass of bubble sort should leave the maximum element in the correct position */
 procedure bubble_one_pass(a: Array<Int>, high: Int, ghost lb: Int, ghost ub: Int)
   requires acc(a) &*& arrayseg_bnd(a, 0, high, lb, ub)
   requires high >= 0 && high <= a.length
