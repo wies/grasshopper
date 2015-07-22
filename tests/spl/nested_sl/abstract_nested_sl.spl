@@ -67,7 +67,6 @@ procedure listset_add(lst: InnerNode)
   returns (res: InnerNode)
   requires listset(lst)
   ensures listset(res)
-{}
 
 procedure nlseg_add(lst: OuterNode)
   requires nlseg(lst, null)

@@ -175,11 +175,11 @@ procedure listset_add(lst: Node, val: Data, implicit ghost C: Set<Data>)
   requires listset(lst, C)
   ensures listset(res, C ++ Set(val))
 {
-  lst.data := val;
+  lst := new Node;
+  lst.data := null;
   lst.next := null;
-  free lst;
 }
-
+  
 procedure hashset_add(hset: HashSet, value: Data, implicit ghost C: Set<Data>)
   requires hashset(hset, C)
   ensures hashset(hset, C ++ Set(value))
@@ -194,8 +194,6 @@ procedure listset_contains(lst: Node, value: Data, implicit ghost C: Set<Data>)
   requires listset(lst, C)
   ensures listset(lst, C) &*& res == value in C
 {
- lst.next := null;
- lst.data := value;
 }
   
 procedure hashset_contains(hset: HashSet, value: Data, implicit ghost C: Set<Data>)

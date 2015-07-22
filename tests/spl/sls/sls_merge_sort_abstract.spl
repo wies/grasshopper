@@ -28,9 +28,6 @@ procedure merge_sort(x: Node) returns (res: Node)
   var x1: Node, x2: Node;
   x1, x2 := split(x);
   var res1 := merge_sort(x1);
-  assert slseg(data, res1, null) &*& lseg(x2, null);
-  //assume slseg(data, res1, null) &*& lseg(x2, null);
   var res2 := merge_sort(x2);
-  assert slseg(data, res1, null) &*& slseg(data, res2, null);
   return merge(res1, res2);
 }
