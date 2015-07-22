@@ -3,8 +3,6 @@ open Grass
 open GrassUtil
 open Axioms
 
-let inst_count = ref 0
-  
 module TermListSet = Set.Make(struct
     type t = term list
     let compare = compare
@@ -303,7 +301,6 @@ let generate_instances useLocalInst axioms rep_terms egraph =
         end
     | _ -> ()
        in*)
-    if is_ground f then inst_count := !inst_count + List.length subst_maps;
     (* generate instances of axiom *)
     List.fold_left
       (fun acc subst_map -> (subst subst_map f) :: acc) acc subst_maps
@@ -324,34 +321,8 @@ let instantiate_with_terms ?(force=false) local axioms classes =
               num + 1) 1 classes)
       in
       (* choose representatives for instantiation *)
-      inst_count := 0;
       let reps_f, egraph = choose_rep_terms classes in
-      let instances_f = generate_instances local axioms reps_f egraph in
-      let get_count term_count srt =
-        try SortMap.find srt term_count with Not_found -> 0
-      in
-      let term_count =
-        List.fold_left (fun term_count c ->
-          let t = List.hd c in
-          SortMap.add (sort_of t) (get_count term_count (sort_of t) + 1) term_count)
-          SortMap.empty classes
-      in
-      let num_of_instances =
-        List.fold_left (fun count f -> match f with
-          | BoolOp (Or, _ :: Binder (Forall, vs, _, _) :: _)
-          | BoolOp (Or, Binder (Forall, vs, _, _) :: _)
-          | Binder (Forall, vs, _, _) ->
-              let c =
-                List.fold_left
-                  (fun c (_, srt) -> c * get_count term_count srt)
-                  1 vs
-              in
-              count + c
-          | _ -> count + 1)
-          0 instances_f
-      in
-      inst_count := !inst_count + num_of_instances;
-      instances_f
-    else
-      axioms
-
+      generate_instances local axioms reps_f egraph
+        else
+          axioms
+            
