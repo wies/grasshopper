@@ -452,7 +452,18 @@ let instantiate read_propagators fs gts =
       []
       classes
   in
-  List.rev_append implied (List.rev_append eqs (instantiate_with_terms true others classes)), gts1
+  let fs2, gts2 =
+    let fs1 = instantiate_with_terms true others classes in
+    let gts_inst = generated_ground_terms (List.rev_append eqs fs1) in
+    let gts2 = generate_terms (read_propagators @ btwn_gen @ generators) gts_inst in
+    if TermSet.subset gts2 gts_inst
+    then fs1, gts1
+    else
+      let classes = CongruenceClosure.congr_classes (List.rev_append eqs fs) gts2 in
+      instantiate_with_terms true others classes, gts2
+      (*fs1, gts1*)
+  in
+  List.rev_append implied (List.rev_append eqs fs2), gts2
 
 let add_terms fs gts =
   if not !Config.smtpatterns && !Config.instantiate then fs else
