@@ -920,13 +920,13 @@ let convert cu =
   (** Translation of SPL proc declarations into C function declarations. *)
   let pr_c_proc_decls ppf cu =
     let rec pr_c_expr_args ppf = function
-      | []      -> ()
-      | e :: [] -> fprintf ppf "%a" pr_c_expr e 
-      | e :: es -> fprintf ppf "%a, %a" pr_c_expr e pr_c_expr_args es
-    and pr_read pf = fun (from, index) ->
+      | ([], _)      -> ()
+      | (e :: [], cur_proc) -> fprintf ppf "%a" pr_c_expr (e, cur_proc) 
+      | (e :: es, cur_proc) -> fprintf ppf "%a, %a" pr_c_expr (e, cur_proc) pr_c_expr_args (es, cur_proc)
+    and pr_read pf = function (from, index, cur_proc) -> (* FIX *)
       (* The code below gets the type of the expression from and, if it is a
        * Map or an Array, prints some C code that reads the appropriate part of
-       * the datastructure. *)
+       * the datastructure. *) (* FIX - MAYBE CHANGE SPLArray struct and then FIX
       (match from with 
         | Ident (id, _) -> 
           (match (IdMap.find id cu.var_decls).v_type with 
@@ -937,9 +937,9 @@ let convert cu =
                 ((string_of_c_type t1) ^ "**")
                 (string_of_ident id)
                 arr_field
-                pr_c_expr index
-            | _             -> fprintf ppf "/* ERROR: can't address such an object with Read. */")
-        | _ -> fprintf ppf "/* ERROR: can't address such an object with Read */")
+                pr_c_expr (index, cur_proc)
+            | _             -> fprintf ppf "/* ERROR: can't address such an object with Read. */") *)
+       (* | _ ->*) fprintf ppf "/* ERROR: can't address such an object with Read */"(*)*)
     and pr_un_op ppf = function
       | (OpNot, e1) -> fprintf ppf "!%a" pr_c_expr e1
       | (OpMinus, e1) -> fprintf ppf "-%a" pr_c_expr e1
@@ -965,34 +965,37 @@ let convert cu =
         fprintf ppf "/* ERROR: separation logic not yet implemented. */"
       | _ -> fprintf ppf "/* ERROR: no such Binary Operator */"
     and pr_c_expr ppf = function
-      | Null (_, _)           -> fprintf ppf "null"
-      | IntVal (i, _)         -> fprintf ppf "%i" i
-      | BoolVal (b, _)        -> fprintf ppf (if b then "true" else "false")
-      | Read (from, index, _) -> pr_read ppf (from, index)
-      | Length (idexp, _)     -> fprintf ppf "(%a->%s)" pr_c_expr idexp len_field
-      | ProcCall (id, es, _)  ->
+      | (Null (_, _), _)           -> fprintf ppf "null"
+      | (IntVal (i, _), _)         -> fprintf ppf "%i" i
+      | (BoolVal (b, _), _)        -> fprintf ppf (if b then "true" else "false")
+      | (Read (from, index, _), cur_proc) -> pr_read ppf (from, index, cur_proc)
+      | (Length (idexp, _), cur_proc)     -> fprintf ppf "(%a->%s)" pr_c_expr (idexp, cur_proc) len_field (* FIX - this is possibly not the desired semantics, ask Wies about multi-dimensional arrays *)
+      | (ProcCall (id, es, _), cur_proc)  ->
         fprintf ppf "%s(%a)"
         (string_of_ident id)
-        pr_c_expr_args es
-      | UnaryOp  (op, e, _)          -> pr_un_op ppf (op, e)
-      | BinaryOp (e1, op1, e2, _, _) -> pr_bin_op ppf (e1, op1, e2)
-      | Ident (id, _)                -> 
-          fprintf ppf "%s" (string_of_ident id)
-      | New (t, args, _)             ->
-        fprintf ppf "/* ERROR: New expressions only allowed at top level */"
-      | ArrayCells _|ArrayOfCell _|IndexOfCell _|Emp _|Setenum _|PredApp _|
-        Quant _|Access _|BtwnPred _|Annot _ ->
+        pr_c_expr_args (es, cur_proc)
+      | (UnaryOp  (op, e, _), cur_proc)          -> pr_un_op ppf (op, (e, cur_proc))
+      | (BinaryOp (e1, op1, e2, _, _), cur_proc) -> pr_bin_op ppf ((e1, cur_proc), op1, (e2, cur_proc))
+      | (Ident (id, _), {p_returns=p_returns})                -> (* FIX - include checks for current return variables *) 
+          if (List.exists (fun lid -> lid == id) p_returns) then
+            fprintf ppf "(*%s)" (string_of_ident id)
+          else
+            fprintf ppf "%s" (string_of_ident id)
+      | (New (t, args, _), _)             ->
+        fprintf ppf "/* ERROR: New expressions only allowed directly within an Assign stmt. */"
+      | ((ArrayCells _|ArrayOfCell _|IndexOfCell _|Emp _|Setenum _|PredApp _|
+        Quant _|Access _|BtwnPred _|Annot _), _) ->
         fprintf ppf "/* Error: expression type not yet implemented. */"
       | _ -> fprintf ppf "/* Error: badly formed expression. */"
     in
     let rec pr_c_stmt ppf = 
       let rec pr_c_block ppf = function 
         | (Block ([], _), _)          -> ()
-        | (Block (s :: [], _), rs)    -> fprintf ppf "%a" pr_c_stmt(s, rs) 
-        | (Block (s :: ses, pos), rs) -> 
+        | (Block (s :: [], _), cur_proc)     -> fprintf ppf "%a" pr_c_stmt(s, cur_proc)
+        | (Block (s :: ses, pos), cur_proc)  ->
           fprintf ppf "%a@\n%a" 
-            pr_c_stmt  (s, rs) 
-            pr_c_block (Block(ses, pos), rs)
+            pr_c_stmt  (s, cur_proc) 
+            pr_c_block (Block(ses, pos), cur_proc)
         | _ -> fprintf ppf "/* ERROR: badly formed statement block. */"
       in
       let rec pr_c_localvars ppf = function
@@ -1000,32 +1003,34 @@ let convert cu =
           fprintf ppf "%s %s;" 
             (string_of_c_type v.v_type) 
             (string_of_ident  v.v_name)
-        | (LocalVars (v::[], Some(e :: []), _), _) ->
+        | (LocalVars (v::[], Some(e :: []), _), cur_proc) ->
           fprintf ppf "%s %s = %a;"
             (string_of_c_type v.v_type)
             (string_of_ident  v.v_name)
-            pr_c_expr e
-        | (LocalVars (v::vs, None, p), rs)         -> 
+            pr_c_expr (e, cur_proc)
+        | (LocalVars (v::vs, None, p), cur_proc)         -> 
           fprintf ppf "%a@\n%a" 
-            pr_c_localvars (LocalVars ([v], None, p), rs) 
-            pr_c_localvars (LocalVars (vs, None, p), rs)
-        | (LocalVars (v::vs, Some(e::es), p), rs)  -> 
+            pr_c_localvars (LocalVars ([v], None, p), cur_proc) 
+            pr_c_localvars (LocalVars (vs, None, p),  cur_proc)
+        | (LocalVars (v::vs, Some(e::es), p), cur_proc)  -> 
           fprintf ppf "%a@\n%a" 
-            pr_c_localvars (LocalVars ([v], Some([e]), p), rs) 
-            pr_c_localvars (LocalVars (vs, Some(es), p), rs)
+            pr_c_localvars (LocalVars ([v], Some([e]), p), cur_proc) 
+            pr_c_localvars (LocalVars (vs, Some(es), p), cur_proc)
         | _ -> fprintf ppf "/* ERROR: badly formed LocalVars statement. */"
       in
       let rec pr_c_assign ppf = function
-        | _ -> fprintf ppf "dogs" 
-        | (Assign(Ident(id, _) :: [], New(t, args, _) :: [], _), _) ->
+        | (Assign(Ident(id, _) :: [], New(t, args, _) :: [], _), cur_proc) ->
           let type_string = (string_of_c_type t) in
           (match (t, args) with 
             | (StructType _, [])      ->
-              fprintf ppf "%s = ((%s* ) malloc(sizeof(%s)))" 
-                (string_of_ident id)
+              fprintf ppf "%s = ((%s*) malloc(sizeof(%s)))" 
+                (if (List.exists (fun lid -> lid == id) cur_proc.p_returns) then 
+                  "(*" ^ (string_of_ident id) ^ ")"
+                else  
+                  (string_of_ident id))
                 type_string
                 type_string
-            | (ArrayType(t_sub), l :: []) ->
+            | (ArrayType(t_sub), l :: []) -> (* FIX - after asking Wies about semantics of initialization of nested arrays *)
               let index_name = 
                 let l1 = String.length (string_of_ident id) in
                 let l2 = (String.length type_string) - 7    in
@@ -1038,24 +1043,24 @@ let convert cu =
               in
               let pr_init_wrapper ppf () =
                 fprintf ppf 
-                  "%s = (%s* ) malloc(sizeof(%s));@\n%s->%s = %a;"
-                    (string_of_ident id)
-                    arr_type
-                    arr_type
-                    (string_of_ident id)
-                    len_field
-                    pr_c_expr l
+                  "%s = (%s*) malloc(sizeof(%s));@\n%s->%s = %a;"
+                  (string_of_ident id)
+                  arr_type
+                  arr_type
+                  (string_of_ident id)
+                  len_field
+                  pr_c_expr (l, cur_proc)
               in
               let pr_malloc_loop ppf () =
                 let pr_looper ppf () =
                   fprintf ppf "for (int %s = 0; %s < %a; %s++)"
                     index_name
                     index_name 
-                    pr_c_expr l
+                    pr_c_expr (l, cur_proc)
                     index_name 
                 in 
                 let pr_body ppf () =
-                    fprintf ppf "*(%s + %s) = (%s * ) malloc(sizeof(%s))"
+                    fprintf ppf "*(%s + %s) = (%s *) malloc(sizeof(%s))"
                       (string_of_ident id)
                       index_name
                       (string_of_c_type t_sub)
@@ -1070,52 +1075,57 @@ let convert cu =
                 pr_malloc_loop  () 
             | _ -> fprintf ppf "/* ERROR: badly formed New expression. */"              
           )  
-        | (Assign (v :: [], e :: [], _), _) -> 
+        | (Assign (v :: [], e :: [], _),cur_proc) -> 
           fprintf ppf "%a = %a;" 
-            pr_c_expr v 
-            pr_c_expr e 
+            pr_c_expr (v, cur_proc)
+            pr_c_expr (e, cur_proc)
         (* This branch passes in multiple return variables by reference
          * into the appropriate function in order to facilitate
          * multiple return variables within a C program. *)
-        | (Assign (vs, ProcCall(id, es, _) :: [], _), _) ->
-          (* let p = (IdMap.find id cu.proc_decls) in
+        | (Assign (vs, ProcCall(id, es, _) :: [], _), cur_proc) ->
+          let p = (IdMap.find id cu.proc_decls) in
           let rec pr_args_in ppf = function 
-            | [] -> ()
+            | []      -> ()
+            | e :: [] ->
+              fprintf ppf "%a"
+                pr_c_expr (e, cur_proc)
             | e :: es -> 
               fprintf ppf "%a, %a"
-                pr_c_expr e
+                pr_c_expr (e, cur_proc)
                 pr_args_in es
           in
           let rec pr_args_ref ppf = function 
-            | e :: [] -> fprintf ppf "&%s" (string_of_ident)
+            | []      -> ()
+            | e :: [] -> fprintf ppf "&%a"    pr_c_expr (e, cur_proc)
             | e :: es -> fprintf ppf "%a, %a" pr_args_ref [e] pr_args_ref es
-            (* FIX *)
           in 
           fprintf ppf "%s(%a, %a)"
-          *)
-          fprintf ppf "/* ERROR: Implement */"
-        | (Assign (v :: vs, e :: es, apos), rs) -> 
+            (string_of_ident p.p_name)
+            pr_args_in  es
+            pr_args_ref vs
+        | (Assign (v :: vs, e :: es, apos), cur_proc) -> 
           fprintf ppf "%a@\n%a"
-            pr_c_stmt (Assign ([v], [e], apos), rs)
-            pr_c_stmt (Assign (vs,  es,  apos), rs)
+            pr_c_stmt (Assign ([v], [e], apos), cur_proc)
+            pr_c_stmt (Assign (vs,  es,  apos), cur_proc)
         | _ -> fprintf ppf "/* ERROR: badly formed Assign statement */"
       in
-      let rec pr_c_return ppf = function
-        | (Return([], _), []) -> ()
-        | (Return(e :: [], _), r :: []) ->
-          fprintf ppf "*%s = %a;" 
-            (string_of_ident r)
-            pr_c_expr e
-        | (Return(e1 :: e2 :: [], _), r1 :: r2 :: []) ->
+      (* FIX - Add comment because this function is confusing and inelegant *)
+      let rec pr_c_return ppf = function (* FIX - possibly need alternative list format and need actual return somewhere in statement *)
+        | (Return([], _), {p_returns=[]}, []) -> fprintf ppf "return;"
+        | (Return(e :: [], _), ({p_returns=r_single :: []} as cur_proc), r :: []) ->
+          fprintf ppf "return %a;" 
+            pr_c_expr (e, cur_proc)
+        | (Return(e1 :: e2 :: [], _), cur_proc, r1 :: r2 :: rs) ->
           fprintf ppf "*%s = %a;@\n*%s = %a;"
             (string_of_ident r1)
-            pr_c_expr e1
+            pr_c_expr (e1, cur_proc)
             (string_of_ident r2)
-            pr_c_expr e2
-        | (Return(e :: es, p), r :: rs) ->
-          fprintf ppf "%a@\n%a"
-            pr_c_return (Return([e], p), [r])
-            pr_c_return (Return(es,  p), rs)
+            pr_c_expr (e2, cur_proc)
+        | (Return(e :: es, p), cur_proc, r :: rs) ->
+          fprintf ppf "*%s = %a;@\n%a"
+            (string_of_ident r)
+            pr_c_expr (e, cur_proc)
+            pr_c_return (Return(es,  p), cur_proc, rs)
         | _ -> fprintf ppf "/* ERROR: badly formed Return statement. */"
       in
       function 
@@ -1123,18 +1133,18 @@ let convert cu =
       | (Block _, _) as b -> pr_c_block ppf b
       | (LocalVars _, _) as lv -> pr_c_localvars ppf lv
       | (Assign _, _) as a -> pr_c_assign ppf a
-      | (Dispose (e, _), _) -> fprintf ppf "free(%a);" pr_c_expr e (* FIX - This may be more complicated for array wrappers *)
-      | (If (cond, b1, b2, _), rs) -> 
+      | (Dispose (e, _), _) -> fprintf ppf "/* ERROR: FIX */" (* "free(%a);" pr_c_expr e (* FIX - This may be more complicated for array wrappers EDIT: it is. *) *)
+      | (If (cond, b1, b2, _), cur_proc) -> 
         fprintf ppf "if (%a) {@\n  @[<2>%a@]@\n} else {@\n  @[<2>%a@]@\n}"
-          pr_c_expr cond
-          pr_c_stmt (b1, rs)
-          pr_c_stmt (b2, rs)
-      | (Loop (_, pre, cond, body, _), rs) -> 
+          pr_c_expr (cond, cur_proc)
+          pr_c_stmt (b1, cur_proc)
+          pr_c_stmt (b2, cur_proc)
+      | (Loop (_, pre, cond, body, _), cur_proc) -> 
         fprintf ppf "while (true) {@\n  @[<2>%a@\nif (!(%a)) {@\n  break;@\n}@\n%a@]@\n}"
-        pr_c_stmt (pre, rs)
-        pr_c_expr cond
-        pr_c_stmt (body, rs)
-      | (Return _, _) as r -> pr_c_return ppf r
+          pr_c_stmt (pre, cur_proc)
+          pr_c_expr (cond, cur_proc)
+          pr_c_stmt (body, cur_proc)
+      | ((Return _) as r, cur_proc) -> pr_c_return ppf (r, cur_proc, cur_proc.p_returns)
       | (((Assume _)|(Assert _)|(Havoc _)), _) -> 
         fprintf ppf "/* ERROR: Unimplemented statement type. */"
       | _ -> fprintf ppf "/* ERROR: Unaccounted for statement type. */"
@@ -1145,12 +1155,12 @@ let convert cu =
           (string_of_c_type ((IdMap.find (List.hd p.p_returns) p.p_locals).v_type))
           (string_of_ident p.p_name) 
           pr_c_proc_args p
-          pr_c_stmt (p.p_body, p.p_returns)
+          pr_c_stmt (p.p_body, p)
       else
         fprintf ppf "void %s (%a) {@\n  @[<2>%a@]@\n}" 
           (string_of_ident p.p_name) 
           pr_c_proc_args p
-          pr_c_stmt (p.p_body, p.p_returns)
+          pr_c_stmt (p.p_body, p)
     in
     let rec pr_c_procs ppf = function 
       | []      -> () 
