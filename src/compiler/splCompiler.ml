@@ -832,6 +832,14 @@ let convert cu =
      | MapType _| SetType _ -> "/* ERROR: Maps and Sets are not implemented yet. */"
      | _ -> "/* ERROR: no C equivalent (yet?). */"
   in
+  (** Since, within the program, structs and arrays are referred to by reference
+   *  the type of a field or argument will be a reference if it is for a struct
+   *  or an array. This is why a special method for printing the "passing type"
+   *  of a value is created below. *)
+  let rec string_of_c_pass_type = function
+    | (StructType _|ArrayType _)  as t -> (string_of_c_type t) ^ "*"
+    | _ as t -> (string_of_c_type t)
+  in
   (** Forward declarations for structs in order to allow mutual recursion. *)
   let pr_c_struct_fwd_decls ppf cu =
     let sds = cu.struct_decls in
@@ -851,7 +859,7 @@ let convert cu =
   let pr_c_struct_decls ppf cu =
     let pr_c_field ppf v = 
       fprintf ppf "%s %s;" 
-        (string_of_c_type v.v_type)
+        (string_of_c_pass_type v.v_type)
         (string_of_ident v.v_name)
     in
     let rec pr_c_fields ppf = function
@@ -886,7 +894,7 @@ let convert cu =
         ", " 
         (List.fold_right 
           (fun v a -> 
-            ((string_of_c_type (IdMap.find v p.p_locals).v_type) ^ 
+            ((string_of_c_pass_type (IdMap.find v p.p_locals).v_type) ^ 
             " " ^ 
             (string_of_ident v))
             :: a) 
@@ -896,7 +904,7 @@ let convert cu =
           else
             (List.fold_right 
               (fun v a -> 
-                ((string_of_c_type (IdMap.find v p.p_locals).v_type) ^ 
+                ((string_of_c_pass_type (IdMap.find v p.p_locals).v_type) ^ 
                 "* " ^ (* Star operator used because return variables are passed in by reference *) 
                 (string_of_ident v))
                 :: a) 
@@ -923,10 +931,10 @@ let convert cu =
       | ([], _)      -> ()
       | (e :: [], cur_proc) -> fprintf ppf "%a" pr_c_expr (e, cur_proc) 
       | (e :: es, cur_proc) -> fprintf ppf "%a, %a" pr_c_expr (e, cur_proc) pr_c_expr_args (es, cur_proc)
-    and pr_read pf = function (from, index, cur_proc) -> (* FIX *)
+    and pr_read pf = function (from, index, cur_proc) ->
       (* The code below gets the type of the expression from and, if it is a
        * Map or an Array, prints some C code that reads the appropriate part of
-       * the datastructure. *) (* FIX - MAYBE CHANGE SPLArray struct and then FIX
+       * the datastructure. *)
       (match from with 
         | Ident (id, _) -> 
           (match (IdMap.find id cu.var_decls).v_type with 
@@ -934,16 +942,21 @@ let convert cu =
             | ArrayType(t1) ->
               fprintf ppf
                 "*(((%s) (%s->%s))[%a])"
-                ((string_of_c_type t1) ^ "**")
+                (* The match statement in the following lines is required 
+                 * because Arrays are stored as references while other values
+                 * are not, so Arrays should be dereferenced one time less. *)
+                ((string_of_c_type t1) ^ (match t1 with        
+                                           | ArrayType(_)|StructType(_) -> "*"
+                                           | _ -> "**"))
                 (string_of_ident id)
                 arr_field
                 pr_c_expr (index, cur_proc)
-            | _             -> fprintf ppf "/* ERROR: can't address such an object with Read. */") *)
-       (* | _ ->*) fprintf ppf "/* ERROR: can't address such an object with Read */"(*)*)
+            | _             -> fprintf ppf "/* ERROR: can't address such an object with Read. */")
+        | _                 -> fprintf ppf "/* ERROR: can't address such an object with Read */"
     and pr_un_op ppf = function
-      | (OpNot, e1) -> fprintf ppf "!%a" pr_c_expr e1
+      | (OpNot, e1)   -> fprintf ppf "!%a" pr_c_expr e1
       | (OpMinus, e1) -> fprintf ppf "-%a" pr_c_expr e1
-      |  _ -> fprintf ppf "/* ERROR: no such unary operator. */"
+      |  _            -> fprintf ppf "/* ERROR: no such unary operator. */"
     and pr_bin_op ppf = function
       | (e1, OpMinus, e2) -> fprintf ppf "%a - %a"  pr_c_expr e1 pr_c_expr e2
       | (e1, OpPlus,  e2) -> fprintf ppf "%a + %a"  pr_c_expr e1 pr_c_expr e2
@@ -957,8 +970,7 @@ let convert cu =
       | (e1, OpIn, e2)    -> fprintf ppf "%a != %a" pr_c_expr e1 pr_c_expr e2
       | (e1, OpAnd, e2)   -> fprintf ppf "%a && %a" pr_c_expr e1 pr_c_expr e2 
       | (e1, OpOr, e2)    -> fprintf ppf "%a || %a" pr_c_expr e1 pr_c_expr e2 
-      | (e1, OpImpl, e2)  -> 
-        fprintf ppf "((!%a) || %a)" pr_c_expr e1 pr_c_expr e2 
+      | (e1, OpImpl, e2)  -> fprintf ppf "((!%a) || %a)" pr_c_expr e1 pr_c_expr e2 
       | (_, (OpDiff | OpUn | OpInt), _) -> 
         fprintf ppf "/* ERROR: Sets not yet implemented */"
       | (_, (OpPts | OpSepStar | OpSepPlus | OpSepIncl), _) -> 
@@ -969,13 +981,17 @@ let convert cu =
       | (IntVal (i, _), _)         -> fprintf ppf "%i" i
       | (BoolVal (b, _), _)        -> fprintf ppf (if b then "true" else "false")
       | (Read (from, index, _), cur_proc) -> pr_read ppf (from, index, cur_proc)
-      | (Length (idexp, _), cur_proc)     -> fprintf ppf "(%a->%s)" pr_c_expr (idexp, cur_proc) len_field (* FIX - this is possibly not the desired semantics, ask Wies about multi-dimensional arrays *)
+      | (Length (idexp, _), cur_proc)     -> 
+        fprintf ppf "(%a->%s)" 
+          pr_c_expr (idexp, cur_proc)
+          len_field
       | (ProcCall (id, es, _), cur_proc)  ->
         fprintf ppf "%s(%a)"
-        (string_of_ident id)
-        pr_c_expr_args (es, cur_proc)
-      | (UnaryOp  (op, e, _), cur_proc)          -> pr_un_op ppf (op, (e, cur_proc))
-      | (BinaryOp (e1, op1, e2, _, _), cur_proc) -> pr_bin_op ppf ((e1, cur_proc), op1, (e2, cur_proc))
+          (string_of_ident id)
+          pr_c_expr_args (es, cur_proc)
+      | (UnaryOp  (op, e, _), cur_proc)          -> pr_un_op  ppf (op, (e, cur_proc))
+      | (BinaryOp (e1, op1, e2, _, _), cur_proc) -> 
+        pr_bin_op ppf ((e1, cur_proc), op1, (e2, cur_proc))
       | (Ident (id, _), {p_returns=p_returns})                -> (* FIX - include checks for current return variables *) 
           if (List.exists (fun lid -> lid == id) p_returns) then
             fprintf ppf "(*%s)" (string_of_ident id)
