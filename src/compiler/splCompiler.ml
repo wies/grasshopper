@@ -1001,8 +1001,8 @@ let convert cu =
         fprintf ppf "/* ERROR: New expression only allowed directly within an Assign stmt. */"
       | ((ArrayCells _|ArrayOfCell _|IndexOfCell _|Emp _|Setenum _|PredApp _|
         Quant _|Access _|BtwnPred _|Annot _), _) ->
-        fprintf ppf "/* Error: expression type not yet implemented. */"
-      | _ -> fprintf ppf "/* Error: badly formed expression. */"
+        fprintf ppf "/* ERROR: expression type not yet implemented. */"
+      | _ -> fprintf ppf "/* ERROR: badly formed expression. */"
     in
     let rec pr_c_stmt ppf = 
       let rec pr_c_block ppf = function 
@@ -1075,7 +1075,7 @@ let convert cu =
                 pr_malloc_loop  () 
             | _ -> fprintf ppf "/* ERROR: badly formed New expression. */"              
           )  
-        | _ -> "/* Error: badly formed assign-new combination */"
+        | _ -> "/* ERROR: badly formed assign-new combination */"
       in
       let rec pr_c_localvars ppf = function
         | (LocalVars (v::[], None, _), _) -> 
@@ -1137,6 +1137,9 @@ let convert cu =
             pr_c_stmt (Assign (vs,  es,  apos), cur_proc)
         | _ -> fprintf ppf "/* ERROR: badly formed Assign statement */"
       in
+      let pr_c_dispose ppf = function
+        | x -> fprintf ppf "/* ERROR: Implement */" (* FIX - implement this *)
+      in 
       (** Because SPL allows multiple return variables but C does not, yet in
        *  SPL only procedures with only one return value can be embedded in
        *  other expressions a number of cases are needed: no return value,
@@ -1145,12 +1148,13 @@ let convert cu =
        *  completely  different), more than 2 return values, and the error
        *  case. *)
       let rec pr_c_return ppf = function (* FIX - possibly need alternative list format and need actual return somewhere in statement *)
-        | (Return([], _), {p_returns=[]}, []) -> fprintf ppf "return;"
+        | (Return([], _), {p_returns=[]}, []) ->
+          fprintf ppf "return;"
         | (Return(e :: [], _), ({p_returns=r_single :: []} as cur_proc), r :: []) ->
           fprintf ppf "return %a;" 
             pr_c_expr (e, cur_proc)
         | (Return(e1 :: e2 :: [], _), cur_proc, r1 :: r2 :: rs) ->
-          fprintf ppf "*%s = %a;@\n*%s = %a;"
+          fprintf ppf "*%s = %a;@\n*%s = %a;@\nreturn;"
             (string_of_ident r1)
             pr_c_expr (e1, cur_proc)
             (string_of_ident r2)
@@ -1167,12 +1171,12 @@ let convert cu =
       | (Block _, _) as b -> pr_c_block ppf b
       | (LocalVars _, _) as lv -> pr_c_localvars ppf lv
       | (Assign _, _) as a -> pr_c_assign ppf a
-      | (Dispose (e, _), _) -> fprintf ppf "/* ERROR: FIX */" (* "free(%a);" pr_c_expr e (* FIX - This may be more complicated for array wrappers EDIT: it is. *) *)
+      | (Dispose (e, _), _) -> pr_c_dispose ppf ()
       | (If (cond, b1, b2, _), cur_proc) -> 
         fprintf ppf "if (%a) {@\n  @[<2>%a@]@\n} else {@\n  @[<2>%a@]@\n}"
           pr_c_expr (cond, cur_proc)
-          pr_c_stmt (b1, cur_proc)
-          pr_c_stmt (b2, cur_proc)
+          pr_c_stmt (b1,   cur_proc)
+          pr_c_stmt (b2,   cur_proc)
       | (Loop (_, pre, cond, body, _), cur_proc) -> 
         fprintf ppf "while (true) {@\n  @[<2>%a@\nif (!(%a)) {@\n  break;@\n}@\n%a@]@\n}"
           pr_c_stmt (pre, cur_proc)
@@ -1186,10 +1190,10 @@ let convert cu =
     let pr_c_proc ppf p = (* FIX - need automatic return for single variable  procs *)
       if ((List.length p.p_returns) == 1) then
         fprintf ppf "%s %s (%a) {@\n  @[<2>%a@]@\n}"
-          (string_of_c_type ((IdMap.find (List.hd p.p_returns) p.p_locals).v_type))
+          (string_of_c_pass_type ((IdMap.find (List.hd p.p_returns) p.p_locals).v_type))
           (string_of_ident p.p_name) 
           pr_c_proc_args p
-          pr_c_stmt (p.p_body, p)
+          pr_c_stmt (p.p_body, p) (* FIX - ensure return at end of body *)
       else
         fprintf ppf "void %s (%a) {@\n  @[<2>%a@]@\n}" 
           (string_of_ident p.p_name) 
@@ -1198,7 +1202,7 @@ let convert cu =
     in
     let rec pr_c_procs ppf = function 
       | []      -> () 
-      | p :: [] -> fprintf ppf "%a" pr_c_proc p
+      | p :: [] -> fprintf ppf "%a"         pr_c_proc p
       | p :: ps -> fprintf ppf "%a@\n@\n%a" pr_c_proc p pr_c_procs ps
     in
     pr_c_procs ppf (idmap_to_list cu.proc_decls)
@@ -1214,11 +1218,9 @@ let convert cu =
   (** A section for structs and functions in C that form the base
    *  implementation of SPL. *) 
   let pr_c_preloaded_section ppf () =
-    fprintf ppf "@\n%s@\n%s@\n%s\n%s\n"
+    fprintf ppf "@\n%s@\n%s"
       "/*\n * Preloaded Code\n */"
       arr_struct
-      lev_fwd
-      lev_struct
   in
   let pr_c_struct_section ppf cu =
     if (IdMap.is_empty cu.struct_decls) then
@@ -1242,10 +1244,10 @@ let convert cu =
    *  printing of the sections, then return the entire thing as a string. *)
   flush_str_formatter ();
   fprintf str_formatter "%a%a%a%a"
-    pr_c_import_section ()
-    pr_c_preloaded_section ()
-    pr_c_struct_section cu
-    pr_c_proc_section cu;
+    pr_c_import_section    () (* We pass unit (i.e. ()) simply to allow future *)
+    pr_c_preloaded_section () (* changes to be easier to implement. *)
+    pr_c_struct_section    cu
+    pr_c_proc_section      cu;
   flush_str_formatter ()  
 
 (** Convert compilation unit [cu] to string containing a C program. *)
