@@ -1014,11 +1014,11 @@ let convert cu =
             pr_c_block (Block(ses, pos), cur_proc)
         | _ -> fprintf ppf "/* ERROR: badly formed statement block. */"
       in
-      let rec pr_c_assign_new ppf = function (* FIX THIS FUNCTION *) 
+      let rec pr_c_assign_new ppf = function
         | (id, t, args, cur_proc) ->
           let type_string = (string_of_c_type t) in
           (match (t, args) with 
-            | (StructType _, [])      -> (* Fix this for arbitrary embedding of structs *)
+            | (StructType _, [])  ->
               fprintf ppf "%s = ((%s*) malloc(sizeof(%s)))" 
                 (if (List.exists (fun lid -> lid == id) cur_proc.p_returns) then 
                   "(*" ^ (string_of_ident id) ^ ")"
@@ -1077,18 +1077,20 @@ let convert cu =
           )  
         | _ -> "/* Error: badly formed assign-new combination */"
       in
-      let rec pr_c_localvars ppf = function (* FIX to solve the problem if New is here *)
-        | (LocalVars (v::[], None, _), _)          -> 
-          fprintf ppf "%s %s;" 
-            (string_of_c_type v.v_type) 
-            (string_of_ident  v.v_name)
+      let rec pr_c_localvars ppf = function
+        | (LocalVars (v::[], None, _), _) -> 
+          fprintf ppf "%s %s;"
+            (string_of_c_pass_type v.v_type) 
+            (string_of_ident       v.v_name)
         | (LocalVars (v::[], Some(New(t, args, _) :: []), _), cur_proc) ->
           fprintf ppf "%s %s;@\n%a"
-            (string_of_c_pass_type
+            (string_of_c_pass_type t)
+            (string_of_ident       v.v_name)
+            pr_c_assign_new (v.v_name, t, args, cur_proc)
         | (LocalVars (v::[], Some(e :: []), _), cur_proc) ->
           fprintf ppf "%s %s = %a;"
-            (string_of_c_type v.v_type)
-            (string_of_ident  v.v_name)
+            (string_of_c_pass_type v.v_type)
+            (string_of_ident       v.v_name)
             pr_c_expr (e, cur_proc)
         | (LocalVars (v::vs, None, p), cur_proc)         -> 
           fprintf ppf "%a@\n%a" 
@@ -1103,6 +1105,9 @@ let convert cu =
       let rec pr_c_assign ppf = function
         | (Assign(Ident(id, _) :: [], New(t, args, _) :: [], _), cur_proc) ->
           pr_c_assign_new ppf (id, t, args, cur_proc)
+        (* This branch is necessary because the next branch's pattern captures
+         * all calls to procedures, but is only equipped to handle procedures
+         * with multiple return values. *)
         | (Assign (v :: [], e :: [], _),cur_proc) -> 
           fprintf ppf "%a = %a;" 
             pr_c_expr (v, cur_proc)
@@ -1114,30 +1119,31 @@ let convert cu =
           let p = (IdMap.find id cu.proc_decls) in
           let rec pr_args_in ppf = function 
             | []      -> ()
-            | e :: [] ->
-              fprintf ppf "%a"
-                pr_c_expr (e, cur_proc)
-            | e :: es -> 
-              fprintf ppf "%a, %a"
-                pr_c_expr (e, cur_proc)
-                pr_args_in es
+            | e :: [] -> fprintf ppf "%a"     pr_c_expr (e, cur_proc)
+            | e :: es -> fprintf ppf "%a, %a" pr_c_expr (e, cur_proc) pr_args_in es
           in
-          let rec pr_args_ref ppf = function 
+          let rec pr_args_out ppf = function 
             | []      -> ()
             | e :: [] -> fprintf ppf "&%a"    pr_c_expr (e, cur_proc)
-            | e :: es -> fprintf ppf "%a, %a" pr_args_ref [e] pr_args_ref es
+            | e :: es -> fprintf ppf "%a, %a" pr_args_out [e] pr_args_out es
           in 
           fprintf ppf "%s(%a, %a)"
             (string_of_ident p.p_name)
             pr_args_in  es
-            pr_args_ref vs
+            pr_args_out vs
         | (Assign (v :: vs, e :: es, apos), cur_proc) -> 
           fprintf ppf "%a@\n%a"
             pr_c_stmt (Assign ([v], [e], apos), cur_proc)
             pr_c_stmt (Assign (vs,  es,  apos), cur_proc)
         | _ -> fprintf ppf "/* ERROR: badly formed Assign statement */"
       in
-      (* FIX - Add comment because this function is confusing and inelegant *)
+      (** Because SPL allows multiple return variables but C does not, yet in
+       *  SPL only procedures with only one return value can be embedded in
+       *  other expressions a number of cases are needed: no return value,
+       *  single return value, double return values (as the base case of 
+       *  multiple return values, since the single retun value case is something
+       *  completely  different), more than 2 return values, and the error
+       *  case. *)
       let rec pr_c_return ppf = function (* FIX - possibly need alternative list format and need actual return somewhere in statement *)
         | (Return([], _), {p_returns=[]}, []) -> fprintf ppf "return;"
         | (Return(e :: [], _), ({p_returns=r_single :: []} as cur_proc), r :: []) ->
