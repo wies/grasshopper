@@ -821,7 +821,22 @@ let convert cu =
     "typedef struct " ^ arr_string ^ " {\n" ^ 
     "  int " ^ len_field ^ ";\n" ^ 
     "  void* " ^ arr_field ^ "[];\n" ^
-    "} SPLArray;\n"
+    "} " ^ arr_string ^ ";\n"
+  in
+  let lev_string     = "LevelList" in
+  let len_size_field = "lengthOrSize" in 
+  let p_count_field  = "pCount" in 
+  let p_array_field  = "ps" in 
+  let next_field     = "next" in
+  let lev_fwd    = 
+    "struct " ^ lev_string ^ ";\n"
+  let lev_struct = 
+    "typedef struct " ^ lev_string ^ "{\n" ^
+    "  size_t " ^ len_size_field ^ ";\n" ^
+    "  unsigned int " ^ p_count_field ^ ";\n" ^
+    "  void* " ^ p_array_field ^ "[];\n" ^
+    "  struct level_list* " ^ next_field ^ ";\n" ^
+    "} " ^ lev_string ^ ";\n"
   in
   let rec string_of_c_type  = function
      | AnyRefType -> "void*" 
@@ -992,13 +1007,13 @@ let convert cu =
       | (UnaryOp  (op, e, _), cur_proc)          -> pr_un_op  ppf (op, (e, cur_proc))
       | (BinaryOp (e1, op1, e2, _, _), cur_proc) -> 
         pr_bin_op ppf ((e1, cur_proc), op1, (e2, cur_proc))
-      | (Ident (id, _), {p_returns=p_returns})                -> (* FIX - include checks for current return variables *) 
+      | (Ident (id, _), {p_returns=p_returns})   ->
           if (List.exists (fun lid -> lid == id) p_returns) then
             fprintf ppf "(*%s)" (string_of_ident id)
           else
-            fprintf ppf "%s" (string_of_ident id)
+            fprintf ppf "%s"    (string_of_ident id)
       | (New (t, args, _), _)             ->
-        fprintf ppf "/* ERROR: New expressions only allowed directly within an Assign stmt. */"
+        fprintf ppf "/* ERROR: New expression only allowed directly within an Assign stmt. */"
       | ((ArrayCells _|ArrayOfCell _|IndexOfCell _|Emp _|Setenum _|PredApp _|
         Quant _|Access _|BtwnPred _|Annot _), _) ->
         fprintf ppf "/* Error: expression type not yet implemented. */"
@@ -1006,7 +1021,7 @@ let convert cu =
     in
     let rec pr_c_stmt ppf = 
       let rec pr_c_block ppf = function 
-        | (Block ([], _), _)          -> ()
+        | (Block ([], _), _)                 -> ()
         | (Block (s :: [], _), cur_proc)     -> fprintf ppf "%a" pr_c_stmt(s, cur_proc)
         | (Block (s :: ses, pos), cur_proc)  ->
           fprintf ppf "%a@\n%a" 
@@ -1014,31 +1029,11 @@ let convert cu =
             pr_c_block (Block(ses, pos), cur_proc)
         | _ -> fprintf ppf "/* ERROR: badly formed statement block. */"
       in
-      let rec pr_c_localvars ppf = function
-        | (LocalVars (v::[], None, _), _)          -> 
-          fprintf ppf "%s %s;" 
-            (string_of_c_type v.v_type) 
-            (string_of_ident  v.v_name)
-        | (LocalVars (v::[], Some(e :: []), _), cur_proc) ->
-          fprintf ppf "%s %s = %a;"
-            (string_of_c_type v.v_type)
-            (string_of_ident  v.v_name)
-            pr_c_expr (e, cur_proc)
-        | (LocalVars (v::vs, None, p), cur_proc)         -> 
-          fprintf ppf "%a@\n%a" 
-            pr_c_localvars (LocalVars ([v], None, p), cur_proc) 
-            pr_c_localvars (LocalVars (vs, None, p),  cur_proc)
-        | (LocalVars (v::vs, Some(e::es), p), cur_proc)  -> 
-          fprintf ppf "%a@\n%a" 
-            pr_c_localvars (LocalVars ([v], Some([e]), p), cur_proc) 
-            pr_c_localvars (LocalVars (vs, Some(es), p), cur_proc)
-        | _ -> fprintf ppf "/* ERROR: badly formed LocalVars statement. */"
-      in
-      let rec pr_c_assign ppf = function
-        | (Assign(Ident(id, _) :: [], New(t, args, _) :: [], _), cur_proc) ->
+      let rec pr_c_assign_new ppf = function (* FIX THIS FUNCTION *) 
+        | (id, t, args, cur_proc) ->
           let type_string = (string_of_c_type t) in
           (match (t, args) with 
-            | (StructType _, [])      ->
+            | (StructType _, [])      -> (* Fix this for arbitrary embedding of structs *)
               fprintf ppf "%s = ((%s*) malloc(sizeof(%s)))" 
                 (if (List.exists (fun lid -> lid == id) cur_proc.p_returns) then 
                   "(*" ^ (string_of_ident id) ^ ")"
@@ -1046,7 +1041,7 @@ let convert cu =
                   (string_of_ident id))
                 type_string
                 type_string
-            | (ArrayType(t_sub), l :: []) -> (* FIX - after asking Wies about semantics of initialization of nested arrays *)
+            | (ArrayType(t_sub), l :: []) ->
               let index_name = 
                 let l1 = String.length (string_of_ident id) in
                 let l2 = (String.length type_string) - 7    in
@@ -1091,6 +1086,34 @@ let convert cu =
                 pr_malloc_loop  () 
             | _ -> fprintf ppf "/* ERROR: badly formed New expression. */"              
           )  
+        | _ -> "/* Error: badly formed assign-new combination */"
+      in
+      let rec pr_c_localvars ppf = function (* FIX to solve the problem if New is here *)
+        | (LocalVars (v::[], None, _), _)          -> 
+          fprintf ppf "%s %s;" 
+            (string_of_c_type v.v_type) 
+            (string_of_ident  v.v_name)
+        | (LocalVars (v::[], Some(New(t, args, _) :: []), _), cur_proc) ->
+          fprintf ppf "%s %s;@\n%a"
+            (string_of_c_pass_type
+        | (LocalVars (v::[], Some(e :: []), _), cur_proc) ->
+          fprintf ppf "%s %s = %a;"
+            (string_of_c_type v.v_type)
+            (string_of_ident  v.v_name)
+            pr_c_expr (e, cur_proc)
+        | (LocalVars (v::vs, None, p), cur_proc)         -> 
+          fprintf ppf "%a@\n%a" 
+            pr_c_localvars (LocalVars ([v], None, p), cur_proc) 
+            pr_c_localvars (LocalVars (vs, None, p),  cur_proc)
+        | (LocalVars (v::vs, Some(e::es), p), cur_proc)  -> 
+          fprintf ppf "%a@\n%a" 
+            pr_c_localvars (LocalVars ([v], Some([e]), p), cur_proc) 
+            pr_c_localvars (LocalVars (vs, Some(es), p), cur_proc)
+        | _ -> fprintf ppf "/* ERROR: badly formed LocalVars statement. */"
+      in
+      let rec pr_c_assign ppf = function
+        | (Assign(Ident(id, _) :: [], New(t, args, _) :: [], _), cur_proc) ->
+          pr_c_assign_new ppf (id, t, args, cur_proc)
         | (Assign (v :: [], e :: [], _),cur_proc) -> 
           fprintf ppf "%a = %a;" 
             pr_c_expr (v, cur_proc)
@@ -1165,7 +1188,7 @@ let convert cu =
         fprintf ppf "/* ERROR: Unimplemented statement type. */"
       | _ -> fprintf ppf "/* ERROR: Unaccounted for statement type. */"
     in
-    let pr_c_proc ppf p =
+    let pr_c_proc ppf p = (* FIX - need automatic return for single variable  procs *)
       if ((List.length p.p_returns) == 1) then
         fprintf ppf "%s %s (%a) {@\n  @[<2>%a@]@\n}"
           (string_of_c_type ((IdMap.find (List.hd p.p_returns) p.p_locals).v_type))
@@ -1196,9 +1219,11 @@ let convert cu =
   (** A section for structs and functions in C that form the base
    *  implementation of SPL. *) 
   let pr_c_preloaded_section ppf () =
-    fprintf ppf "@\n%s@\n%s@\n"
+    fprintf ppf "@\n%s@\n%s@\n%s\n%s\n"
       "/*\n * Preloaded Code\n */"
       arr_struct
+      lev_fwd
+      lev_struct
   in
   let pr_c_struct_section ppf cu =
     if (IdMap.is_empty cu.struct_decls) then
