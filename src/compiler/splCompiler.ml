@@ -823,21 +823,6 @@ let convert cu =
     "  void* " ^ arr_field ^ "[];\n" ^
     "} " ^ arr_string ^ ";\n"
   in
-  let lev_string     = "LevelList" in
-  let len_size_field = "lengthOrSize" in 
-  let p_count_field  = "pCount" in 
-  let p_array_field  = "ps" in 
-  let next_field     = "next" in
-  let lev_fwd    = 
-    "struct " ^ lev_string ^ ";\n"
-  let lev_struct = 
-    "typedef struct " ^ lev_string ^ "{\n" ^
-    "  size_t " ^ len_size_field ^ ";\n" ^
-    "  unsigned int " ^ p_count_field ^ ";\n" ^
-    "  void* " ^ p_array_field ^ "[];\n" ^
-    "  struct level_list* " ^ next_field ^ ";\n" ^
-    "} " ^ lev_string ^ ";\n"
-  in
   let rec string_of_c_type  = function
      | AnyRefType -> "void*" 
      | BoolType -> "bool"
@@ -1042,9 +1027,12 @@ let convert cu =
                 type_string
                 type_string
             | (ArrayType(t_sub), l :: []) ->
+              (** index_name is set to a variable name that will not shadow
+               *  any variables that are used for initialization in the current
+               *  scope. *)
               let index_name = 
                 let l1 = String.length (string_of_ident id) in
-                let l2 = (String.length type_string) - 7    in
+                let l2 = (String.length type_string) - (String.length "struct ") in
                 if ((l1 != 1) && (l2 != 1)) then
                   "i"
                 else if ((l1 != 2) && (l2 != 2)) then
@@ -1071,8 +1059,9 @@ let convert cu =
                     index_name 
                 in 
                 let pr_body ppf () =
-                    fprintf ppf "*(%s + %s) = (%s *) malloc(sizeof(%s))"
+                    fprintf ppf "*((%s->%s) + %s) = (%s*) malloc(sizeof(%s))"
                       (string_of_ident id)
+                      arr_field
                       index_name
                       (string_of_c_type t_sub)
                       (string_of_c_type t_sub)
@@ -1081,7 +1070,7 @@ let convert cu =
                   pr_looper ()
                   pr_body   ()
               in
-              fprintf ppf "%a{%a}"
+              fprintf ppf "%a@\n{@\n  @[<2>%a@]@\n}@\n"
                 pr_init_wrapper ()
                 pr_malloc_loop  () 
             | _ -> fprintf ppf "/* ERROR: badly formed New expression. */"              
