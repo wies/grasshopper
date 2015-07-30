@@ -1189,11 +1189,26 @@ let convert cu =
     in
     let pr_c_proc ppf p = (* FIX - need automatic return for single variable  procs *)
       if ((List.length p.p_returns) == 1) then
+        let default_return =
+          Return(
+            Ident(
+              (List.hd p.p_returns).v_name,
+              pos_of_stmt(p.p_body)),
+            pos_of_stmt(p.p_body))
+        in
+        let force_return = function 
+          | {p_body=Block(ss, pos1)} as proc1 ->
+            (match (List.hd (List.rev ss)) with
+              | Return _ ->  proc1
+              | _        -> {proc1 with p_body=Block(ss@[default_return], pos1)}
+          | {p_body=stmt1}           as proc1 ->
+            {proc1 with p_body=Block(stmt1 :: [default_return], pos_of_stmt(stmt1))}
+        in
         fprintf ppf "%s %s (%a) {@\n  @[<2>%a@]@\n}"
           (string_of_c_pass_type ((IdMap.find (List.hd p.p_returns) p.p_locals).v_type))
           (string_of_ident p.p_name) 
           pr_c_proc_args p
-          pr_c_stmt (p.p_body, p) (* FIX - ensure return at end of body *)
+          pr_c_stmt ((force_return p.p_body), p)
       else
         fprintf ppf "void %s (%a) {@\n  @[<2>%a@]@\n}" 
           (string_of_ident p.p_name) 
