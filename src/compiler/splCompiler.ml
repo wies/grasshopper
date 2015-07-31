@@ -936,19 +936,19 @@ let convert cu =
        * Map or an Array, prints some C code that reads the appropriate part of
        * the datastructure. *)
       (match from with 
-        | Ident (id, _) -> 
+        | (Ident (id, _)) as idExpr -> 
           (match (IdMap.find id cu.var_decls).v_type with 
             | MapType(d, r) -> fprintf ppf "/* ERROR: Map type not yet implemented */"
             | ArrayType(t1) ->
               fprintf ppf
-                "*(((%s) (%s->%s))[%a])"
+                "*(((%s) (%a->%s))[%a])"
                 (* The match statement in the following lines is required 
                  * because Arrays are stored as references while other values
                  * are not, so Arrays should be dereferenced one time less. *)
                 ((string_of_c_type t1) ^ (match t1 with        
                                            | ArrayType(_)|StructType(_) -> "*"
                                            | _ -> "**"))
-                (string_of_ident id)
+                pr_c_expr (idExpr, cur_proc)
                 arr_field
                 pr_c_expr (index, cur_proc)
             | _             -> fprintf ppf "/* ERROR: can't address such an object with Read. */")
@@ -1014,16 +1014,20 @@ let convert cu =
             pr_c_block (Block(ses, pos), cur_proc)
         | _ -> fprintf ppf "/* ERROR: badly formed statement block. */"
       in
-      let rec pr_c_assign_new ppf = function
+      let rec pr_c_assign_new ppf =
+        let usable_id_string =
+          (if (List.exists (fun lid -> lid == id) cur_proc.p_returns) then 
+            "(*" ^ (string_of_ident id) ^ ")"
+          else  
+             (string_of_ident id))
+        in
+        function
         | (id, t, args, cur_proc) ->
           let type_string = (string_of_c_type t) in
           (match (t, args) with 
             | (StructType _, [])  ->
               fprintf ppf "%s = ((%s*) malloc(sizeof(%s)))" 
-                (if (List.exists (fun lid -> lid == id) cur_proc.p_returns) then 
-                  "(*" ^ (string_of_ident id) ^ ")"
-                else  
-                  (string_of_ident id))
+                usable_id_string
                 type_string
                 type_string
             | (ArrayType(t_sub), l :: []) ->
@@ -1043,10 +1047,10 @@ let convert cu =
               let pr_init_wrapper ppf () =
                 fprintf ppf 
                   "%s = (%s*) malloc(sizeof(%s));@\n%s->%s = %a;"
-                  (string_of_ident id)
+                  usable_string_id
                   arr_type
                   arr_type
-                  (string_of_ident id)
+                  usable_string_id
                   len_field
                   pr_c_expr (l, cur_proc)
               in
@@ -1060,7 +1064,7 @@ let convert cu =
                 in 
                 let pr_body ppf () =
                     fprintf ppf "*((%s->%s) + %s) = (%s*) malloc(sizeof(%s))"
-                      (string_of_ident id)
+                      usable_string_id
                       arr_field
                       index_name
                       (string_of_c_type t_sub)
@@ -1165,7 +1169,7 @@ let convert cu =
        *  multiple return values, since the single retun value case is something
        *  completely  different), more than 2 return values, and the error
        *  case. *)
-      let rec pr_c_return ppf = function (* FIX - possibly need alternative list format and need actual return somewhere in statement *)
+      let rec pr_c_return ppf = function
         | (Return([], _), {p_returns=[]}, []) ->
           fprintf ppf "return;"
         | (Return(e :: [], _), ({p_returns=r_single :: []} as cur_proc), r :: []) ->
