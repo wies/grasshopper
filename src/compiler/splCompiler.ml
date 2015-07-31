@@ -1137,8 +1137,26 @@ let convert cu =
             pr_c_stmt (Assign (vs,  es,  apos), cur_proc)
         | _ -> fprintf ppf "/* ERROR: badly formed Assign statement */"
       in
-      let pr_c_dispose ppf = function
-        | x -> fprintf ppf "/* ERROR: Implement */" (* FIX - implement this *)
+      let pr_c_dispose ppf = function (e, cur_proc) -> match e with  (* FIX - finish this *)
+        | Ident(id, _) as idExpr -> (match (IdMap.find id cu.var_decls).v_type with
+          | StructType _ -> 
+            fprintf ppf "free(%a);@\n"
+              pr_c_expr (idExpr, cur_proc) 
+          | ArrayType  _ -> 
+            fprintf ppf "free(%a->%s);@\nfree(%a);@\n"
+              pr_c_expr (idExpr, cur_proc)
+              arr_field
+              pr_c_expr (idExpr, cur_proc)
+          | _            ->
+            fprintf ppf "/* ERROR: a variable of such a type cannot be disposed. */"
+        )
+        | Read _ -> fprintf ppf "/* ERROR: freeing the result of a READ will possibly be implemented in the future. */"
+        | BinaryOp _ -> fprintf ppf "/* ERROR: freeing the result of binary operation will possibly be implemented in the future. */" 
+        | (Null _ | Emp _ | Setenum _ | IntVal _ | BoolVal _ | New _ | Length _ 
+          | ArrayOfCell _ | IndexOfCell _ | ArrayCells _ | ProcCall _ 
+          | PredApp _ | Quant _ | Access _ | BtwnPred _ | UnaryOp _ | Annot _) ->
+            fprintf ppf "/* ERROR: expression cannot be dispsosed */"
+        | _ -> fprintf ppf "/* ERROR: unaccounted for expression */"
       in 
       (** Because SPL allows multiple return variables but C does not, yet in
        *  SPL only procedures with only one return value can be embedded in
