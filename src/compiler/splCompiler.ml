@@ -952,7 +952,7 @@ let convert cu =
                 arr_field
                 pr_c_expr (index, cur_proc)
             | _             -> fprintf ppf "/* ERROR: can't address such an object with Read. */")
-        | _                 -> fprintf ppf "/* ERROR: can't address such an object with Read */"
+        | _                 -> fprintf ppf "/* ERROR: can't address such an object with Read */")
     and pr_un_op ppf = function
       | (OpNot, e1)   -> fprintf ppf "!%a" pr_c_expr e1
       | (OpMinus, e1) -> fprintf ppf "-%a" pr_c_expr e1
@@ -1014,15 +1014,14 @@ let convert cu =
             pr_c_block (Block(ses, pos), cur_proc)
         | _ -> fprintf ppf "/* ERROR: badly formed statement block. */"
       in
-      let rec pr_c_assign_new ppf =
-        let usable_id_string =
-          (if (List.exists (fun lid -> lid == id) cur_proc.p_returns) then 
-            "(*" ^ (string_of_ident id) ^ ")"
-          else  
-             (string_of_ident id))
-        in
-        function
+      let rec pr_c_assign_new ppf = function
         | (id, t, args, cur_proc) ->
+          let usable_id_string =
+            (if (List.exists (fun lid -> lid == id) cur_proc.p_returns) then 
+              "(*" ^ (string_of_ident id) ^ ")"
+            else  
+               (string_of_ident id))
+          in
           let type_string = (string_of_c_type t) in
           (match (t, args) with 
             | (StructType _, [])  ->
@@ -1047,10 +1046,10 @@ let convert cu =
               let pr_init_wrapper ppf () =
                 fprintf ppf 
                   "%s = (%s*) malloc(sizeof(%s));@\n%s->%s = %a;"
-                  usable_string_id
+                  usable_id_string
                   arr_type
                   arr_type
-                  usable_string_id
+                  usable_id_string
                   len_field
                   pr_c_expr (l, cur_proc)
               in
@@ -1064,7 +1063,7 @@ let convert cu =
                 in 
                 let pr_body ppf () =
                     fprintf ppf "*((%s->%s) + %s) = (%s*) malloc(sizeof(%s))"
-                      usable_string_id
+                      usable_id_string
                       arr_field
                       index_name
                       (string_of_c_type t_sub)
@@ -1079,7 +1078,7 @@ let convert cu =
                 pr_malloc_loop  () 
             | _ -> fprintf ppf "/* ERROR: badly formed New expression. */"              
           )  
-        | _ -> "/* ERROR: badly formed assign-new combination */"
+        | _ -> fprintf ppf "/* ERROR: badly formed assign-new combination */"
       in
       let rec pr_c_localvars ppf = function
         | (LocalVars (v::[], None, _), _) -> 
@@ -1193,7 +1192,7 @@ let convert cu =
       | (Block _, _) as b -> pr_c_block ppf b
       | (LocalVars _, _) as lv -> pr_c_localvars ppf lv
       | (Assign _, _) as a -> pr_c_assign ppf a
-      | (Dispose (e, _), _) -> pr_c_dispose ppf ()
+      | (Dispose (e, _), cur_proc) -> pr_c_dispose ppf (e, cur_proc)
       | (If (cond, b1, b2, _), cur_proc) -> 
         fprintf ppf "if (%a) {@\n  @[<2>%a@]@\n} else {@\n  @[<2>%a@]@\n}"
           pr_c_expr (cond, cur_proc)
@@ -1213,16 +1212,16 @@ let convert cu =
       if ((List.length p.p_returns) == 1) then
         let default_return =
           Return(
-            Ident(
-              (List.hd p.p_returns).v_name,
-              pos_of_stmt(p.p_body)),
+            [Ident(
+              (List.hd p.p_returns),
+              pos_of_stmt(p.p_body))],
             pos_of_stmt(p.p_body))
         in
         let force_return = function 
           | {p_body=Block(ss, pos1)} as proc1 ->
             (match (List.hd (List.rev ss)) with
               | Return _ ->  proc1
-              | _        -> {proc1 with p_body=Block(ss@[default_return], pos1)}
+              | _        -> {proc1 with p_body=Block(ss@[default_return], pos1)})
           | {p_body=stmt1}           as proc1 ->
             {proc1 with p_body=Block(stmt1 :: [default_return], pos_of_stmt(stmt1))}
         in
@@ -1230,7 +1229,7 @@ let convert cu =
           (string_of_c_pass_type ((IdMap.find (List.hd p.p_returns) p.p_locals).v_type))
           (string_of_ident p.p_name) 
           pr_c_proc_args p
-          pr_c_stmt ((force_return p.p_body), p)
+          pr_c_stmt ((force_return p).p_body, p)
       else
         fprintf ppf "void %s (%a) {@\n  @[<2>%a@]@\n}" 
           (string_of_ident p.p_name) 
