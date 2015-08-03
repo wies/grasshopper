@@ -1,6 +1,9 @@
 procedure proc1(a: Int, b: Bool) 
   returns (ap: Int, bp: Bool)
 {
-  ap := a;
-  bp := b;
+  var f := 0;
+  var g := 0; 
+  var i := 0;
+  var j := 0;
+  var k := 0;
 }

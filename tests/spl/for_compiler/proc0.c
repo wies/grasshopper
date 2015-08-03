@@ -20,9 +20,12 @@ void freeSPLArray (SPLArray* a) {
 /*
  * Procedures
  */
-void proc1_1 (int a_1, bool b_1, int* ap_2, bool* bp_2);
+void proc1_1 (int a_1, bool b_1, int* ap_1, bool* bp_1);
 
-void proc1_1 (int a_1, bool b_1, int* ap_2, bool* bp_2) {
-  (*ap_2) = a_1;
-    (*bp_2) = b_1;
+void proc1_1 (int a_1, bool b_1, int* ap_1, bool* bp_1) {
+  f_2 = 0;
+  g_2 = 0;
+  i_2 = 0;
+  j_2 = 0;
+  k_2 = 0;
 }

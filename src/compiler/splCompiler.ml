@@ -1147,8 +1147,8 @@ let convert cu =
             pr_c_stmt (Assign (vs,  es,  apos), cur_proc)
         | _ -> fprintf ppf "/* ERROR: badly formed Assign statement */"
       in
-      let pr_c_dispose ppf = function (e, cur_proc) -> match e with  (* FIX - finish this *)
-        | (Ident _ | New  _ | Read _ | ProcCall _) as e -> (match (SplTypeChecker.type_of_expr cu cu.var_decls e) with (* FIX -  check if this is right *) 
+      let pr_c_dispose ppf = function (e, cur_proc) -> match e with
+        | (Ident _ | New  _ | Read _ | ProcCall _) as e -> (match (SplTypeChecker.type_of_expr cu cu.var_decls e) with
           | StructType _ ->
             fprintf ppf "free(%a);@\n"
               pr_c_expr (e, cur_proc) 
@@ -1212,7 +1212,7 @@ let convert cu =
         fprintf ppf "/* ERROR: Unimplemented statement type. */"
       | _ -> fprintf ppf "/* ERROR: Unaccounted for statement type. */"
     in
-    let pr_c_proc ppf p = (* FIX - need automatic return for single variable  procs *)
+    let pr_c_proc ppf p =
       if ((List.length p.p_returns) == 1) then
         let default_return =
           Return(
@@ -1235,7 +1235,7 @@ let convert cu =
           pr_c_proc_args p
           pr_c_stmt ((force_return p).p_body, p)
       else
-        fprintf ppf "void %s (%a) {@\n  @[<2>%a@]@\n}" 
+        fprintf ppf "void %s (%a) {@\n  @[%a@]@\n}" 
           (string_of_ident p.p_name) 
           pr_c_proc_args p
           pr_c_stmt (p.p_body, p)
