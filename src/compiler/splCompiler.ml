@@ -823,6 +823,13 @@ let convert cu =
     "  void* " ^ arr_field ^ "[];\n" ^
     "} " ^ arr_string ^ ";\n"
   in
+  let free_SPLArray_proc_string = "freeSPLArray" in
+  let free_SPLArray_proc_decl = 
+    "void " ^ free_SPLArray_proc_string ^" (" ^ arr_string ^ "* a) {@\n" ^
+    "  free(a->" ^ arr_field ^");" ^
+    "  free(a);" ^
+    "}"
+  in
   let rec string_of_c_type  = function
      | AnyRefType -> "void*" 
      | BoolType -> "bool"
@@ -1141,23 +1148,20 @@ let convert cu =
         | _ -> fprintf ppf "/* ERROR: badly formed Assign statement */"
       in
       let pr_c_dispose ppf = function (e, cur_proc) -> match e with  (* FIX - finish this *)
-        | Ident(id, _) as idExpr -> (match (IdMap.find id cu.var_decls).v_type with
-          | StructType _ -> 
+        | (Ident _ | New  _ | Read _ | ProcCall _) as e -> (match (SplTypeChecker.type_of_expr cu cu.var_decls e) with (* FIX -  check if this is right *) 
+          | StructType _ ->
             fprintf ppf "free(%a);@\n"
-              pr_c_expr (idExpr, cur_proc) 
-          | ArrayType  _ -> 
-            fprintf ppf "free(%a->%s);@\nfree(%a);@\n"
-              pr_c_expr (idExpr, cur_proc)
-              arr_field
-              pr_c_expr (idExpr, cur_proc)
-          | _            ->
-            fprintf ppf "/* ERROR: a variable of such a type cannot be disposed. */"
+              pr_c_expr (e, cur_proc) 
+          | ArrayType _  -> 
+            fprintf ppf "%s(%a);@\n"
+              free_SPLArray_proc_string
+              pr_c_expr (e, cur_proc)
+          | _ -> fprintf ppf "/* ERROR: a variable of such a type cannot be disposed. */" 
         )
-        | Read _ -> fprintf ppf "/* ERROR: freeing the result of a READ will possibly be implemented in the future. */"
-        | BinaryOp _ -> fprintf ppf "/* ERROR: freeing the result of binary operation will possibly be implemented in the future. */" 
-        | (Null _ | Emp _ | Setenum _ | IntVal _ | BoolVal _ | New _ | Length _ 
-          | ArrayOfCell _ | IndexOfCell _ | ArrayCells _ | ProcCall _ 
-          | PredApp _ | Quant _ | Access _ | BtwnPred _ | UnaryOp _ | Annot _) ->
+        | BinaryOp _ -> fprintf ppf "/* ERROR: freeing the result of binary operation will possibly be implemented in the future for freeing Sets. */" 
+        | (Null _ | Emp _ | Setenum _ | IntVal _ | BoolVal _ | Length _ 
+        | ArrayOfCell _ | IndexOfCell _ | ArrayCells _ | PredApp _ | Quant _
+        | Access _ | BtwnPred _ | UnaryOp _ | Annot _) ->
             fprintf ppf "/* ERROR: expression cannot be dispsosed */"
         | _ -> fprintf ppf "/* ERROR: unaccounted for expression */"
       in 
@@ -1254,9 +1258,10 @@ let convert cu =
   (** A section for structs and functions in C that form the base
    *  implementation of SPL. *) 
   let pr_c_preloaded_section ppf () =
-    fprintf ppf "@\n%s@\n%s"
+    fprintf ppf "@\n%s@\n%s@\n%s"
       "/*\n * Preloaded Code\n */"
       arr_struct
+      free_SPLArray_proc_decl
   in
   let pr_c_struct_section ppf cu =
     if (IdMap.is_empty cu.struct_decls) then
