@@ -825,9 +825,9 @@ let convert cu =
   in
   let free_SPLArray_proc_string = "freeSPLArray" in
   let free_SPLArray_proc_decl = 
-    "void " ^ free_SPLArray_proc_string ^" (" ^ arr_string ^ "* a) {@\n" ^
-    "  free(a->" ^ arr_field ^");" ^
-    "  free(a);" ^
+    "void " ^ free_SPLArray_proc_string ^" (" ^ arr_string ^ "* a) {\n" ^
+    "  free(a->" ^ arr_field ^");\n" ^
+    "  free(a);\n" ^
     "}"
   in
   let rec string_of_c_type  = function
@@ -1251,14 +1251,15 @@ let convert cu =
    *  (e.g. imports, structs, procs) completely so they can be integrated into
    *  the program total. *)
   let pr_c_import_section ppf () =
-    fprintf ppf "%s@\n%s@\n"
+    fprintf ppf "%s@\n%s@\n%s\n"
       "/*\n * Includes\n */"
-      "#include <stdbool.h>" 
+      "#include <stdbool.h>"
+      "#include <stdlib.h>"
   in
   (** A section for structs and functions in C that form the base
    *  implementation of SPL. *) 
   let pr_c_preloaded_section ppf () =
-    fprintf ppf "@\n%s@\n%s@\n%s"
+    fprintf ppf "@\n%s@\n%s@\n%s@\n"
       "/*\n * Preloaded Code\n */"
       arr_struct
       free_SPLArray_proc_decl

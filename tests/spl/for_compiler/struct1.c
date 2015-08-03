@@ -2,7 +2,24 @@
  * Includes
  */
 #include <stdbool.h>
+#include <stdlib.h>
 
+/*
+ * Preloaded Code
+ */
+typedef struct SPLArray {
+  int length;
+  void* arr[];
+} SPLArray;
+
+void freeSPLArray (SPLArray* a) {
+  free(a->arr);
+  free(a);
+}
+
+/*
+ * Structs
+ */
 struct SomeFields0_1;
 struct SomeFields1_1;
 struct SomeFields2_1;
@@ -34,3 +51,4 @@ typedef struct SomeFields4_1 {
   bool y4_1;
 } SomeFields4_1;
 
+int main() {return 0;}

@@ -2,6 +2,7 @@
  * Includes
  */
 #include <stdbool.h>
+#include <stdlib.h>
 
 /*
  * Preloaded Code
@@ -11,6 +12,10 @@ typedef struct SPLArray {
   void* arr[];
 } SPLArray;
 
+void freeSPLArray (SPLArray* a) {
+  free(a->arr);
+  free(a);
+}
 
 /*
  * Structs
@@ -21,3 +26,5 @@ typedef struct RecStruct_1 {
   int data_1;
   struct RecStruct_1* next_1;
 } RecStruct_1;
+
+int main() {return 1;}
