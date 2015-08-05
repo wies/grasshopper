@@ -1,0 +1,85 @@
+include "int_array.spl";
+
+// This takes care of the Read, Length and New expressions.
+// I tried to develop my own procedure to test them, but GRASShopper
+// would never finish computing their correctness.
+procedure copy(a: Array<Int>)
+  returns (b: Array<Int>)
+  requires array(a)
+  ensures array(a) &*& array(b)
+  ensures a.length == b.length
+  ensures forall i: Int:: i >= 0 && i < a.length ==> a[i] == b[i]
+{
+  b := new Array<Int>(a.length);
+
+  var i := 0;
+
+  while (i < a.length)
+    invariant i >= 0 && i <= a.length && a.length == b.length
+    invariant array(a) &*& array(b)
+    invariant forall j: Int:: j >= 0 && j < i ==> a[j] == b[j]
+  {
+    b[i] := a[i];
+    i := i + 1;
+  }
+
+  return b;
+}
+
+procedure procNull ()
+  returns (a: Int)
+{
+  if (null == null)
+  {
+    a := 1;
+  }
+  else
+  {
+    a := 0;
+  }
+}
+
+procedure procIntAndBoolVal ()
+  returns (a: Int, b: Bool)
+{
+  a := 1;
+  a := -1;
+  a := 0;
+  a := 277;
+
+  b := true;
+  b := false;
+}
+
+procedure procCall ()
+ returns (a: Int, b: Bool)
+{
+  return procIntAndBoolVal();
+}
+
+procedure procOps (a: Int, b: Int, c: Bool, d: Bool)
+  returns (ap: Int, bp: Int, cp: Bool, dp: Bool)
+{
+  ap := a;
+  bp := b;
+  cp := c;
+  dp := d;
+
+  ap := -ap;
+  if (!dp) {}
+
+  ap := ap + bp;
+  bp := ap - bp;
+  ap := ap * bp;
+  ap := ap / bp;
+  if (ap == bp) {}
+  if (ap > bp) {}
+  if (ap < bp) {}
+  if (ap >= bp) {}
+  if (ap <= bp) {}
+  if (ap != bp) {}
+  if (cp && dp) {}
+  if (cp || dp) {}
+  if (cp ==> dp) {}
+}
+

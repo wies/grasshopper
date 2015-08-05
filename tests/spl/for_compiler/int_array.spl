@@ -1,0 +1,80 @@
+function arrayseg_footprint(a: Array<Int>, i: Int, j: Int)
+  returns (FP: Set<ArrayCell<Int>>)
+{
+  (forall c: ArrayCell<Int> ::
+     c in FP == (i <= c.index && c.index < j && c.array == a))
+}
+
+predicate arrayseg(a: Array<Int>, i: Int, j: Int)(FP: Set<ArrayCell<Int>>) {
+  0 <= i && i <= j && j <= a.length && 
+  FP == arrayseg_footprint(a, i, j)
+}
+
+predicate array(a: Array<Int>)(FP1: Set<Array<Int>>, FP2: Set<ArrayCell<Int>>) {
+  FP1 == Set(a) &&
+  arrayseg(a, 0, a.length, FP2)
+}
+
+//sorted
+
+function contentWitness(v: Int, FP: Set<ArrayCell<Int>>, m: Map<ArrayCell<Int>, Int>) returns (res: ArrayCell<Int>) 
+
+function array_state() returns (m: Map<ArrayCell<Int>, Int>) {
+  (forall c: ArrayCell<Int> :: c.m == c.array[c.index] @(matching c yields c.m))
+}
+
+function array_content(FP: Set<ArrayCell<Int>>) returns (C: Set<Int>) {
+  (forall x: ArrayCell<Int> :: x in FP ==> x == contentWitness(x.array[x.index], FP, array_state())) &&
+  (forall x: ArrayCell<Int> :: x in FP ==> x.array[x.index] in C) &&
+  (forall v in C :: contentWitness(v, FP, array_state()) in FP) &&
+  (forall v: Int :: v !in C ==> contentWitness(v, FP, array_state()) == null) &&
+  (forall v in C :: v == contentWitness(v, FP, array_state()).array[contentWitness(v, FP, array_state()).index]
+   @(matching v yields contentWitness(v, FP, array_state()).array[contentWitness(v, FP, array_state()).index]))
+}
+
+predicate arrayseg_cnt(a: Array<Int>, i: Int, j: Int, C: Set<Int>)(FP: Set<ArrayCell<Int>>) {
+  0 <= i && i <= j && j <= a.length && 
+  FP == arrayseg_footprint(a, i, j) &&
+  C == array_content(FP)
+}
+
+predicate array_cnt(a: Array<Int>, C: Set<Int>)(FP1: Set<Array<Int>>, FP2: Set<ArrayCell<Int>>) {
+  FP1 == Set(a) &&
+  arrayseg_cnt(a, 0, a.length, C, FP2)
+}
+
+predicate sorted_arrayseg(a: Array<Int>, i: Int, j: Int, C: Set<Int>)(FP: Set<ArrayCell<Int>>) {
+  0 <= i && i <= j && j <= a.length && 
+  FP == arrayseg_footprint(a, i, j) &&
+  (forall i1: Int, j1: Int:: i1 >= i && i1 <= j1 && j1 < j ==> a[i1] <= a[j1]  @(matching i1 yields a[i1])  @(matching j1 yields a[j1]) ) &&
+  C == array_content(FP)
+}
+
+predicate sorted_array(a: Array<Int>, C: Set<Int>)(FP0: Set<Array<Int>>, FP1: Set<ArrayCell<Int>>) {
+  FP0 == Set<Array<Int>>(a) &&
+  FP1 == arrayseg_footprint(a, 0, a.length) &&
+  (forall i: Int, j: Int:: 0 <= i && i <= j && j < a.length ==> a[i] <= a[j]  @(matching i yields a[i])  @(matching j yields a[j]) ) &&
+  C == array_content(FP1)
+}
+
+
+// matrix
+
+function matrixWitness(a: Array<Int>, FP2: Set<Array<Int>>) returns (idx: Int)
+
+predicate matrix( a: Array<Array<Int>>,
+                  FP0: Set<Array<Array<Int>>>,
+                  FP1: Set<ArrayCell<Array<Int>>>,
+                  FP2: Set<Array<Int>>,
+                  FP3: Set<ArrayCell<Int>> ) {
+  (forall i: Int:: i >= 0 && i < a.length ==> a[i].length == a[0].length) &&
+  FP0 == Set<Array<Array<Int>>>(a) &&
+  (forall c: ArrayCell<Array<Int>> ::
+     c in FP1 == (0 <= c.index && c.index < a.length && c.array == a)) &&
+  (forall c: ArrayCell<Int> ::
+     c in FP3 == (0 <= c.index && c.index < c.array.length && c.array in FP2)) &&
+  (forall i: Int:: i > 0 && i <= a.length ==> a[i] in FP2) &&
+  (forall b: Array<Int>:: b in FP2 ==> a[matrixWitness(b, FP2)] == b) &&
+  (forall b: Array<Int>:: b !in FP2 ==> matrixWitness(b, FP2) == 0) &&
+  (forall i: Int, j: Int:: i > 0 && i <= a.length && j > 0 && j <= a.length && i != j ==> a[i] != a[j])
+}

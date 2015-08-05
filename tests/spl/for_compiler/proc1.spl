@@ -1,0 +1,36 @@
+procedure proc0 (a: Int) 
+  returns (b: Int)
+{
+  if (a == 0)
+  {
+    b := 0;
+  }
+  else
+  {
+    b := a + proc0(a-1);
+  } 
+}
+
+procedure proc1 (a: Int)
+  returns (b: Int)
+{
+  if (a == 0)
+  {
+   return 0;
+  } else 
+  {
+   return proc2(a);
+  }
+}
+
+procedure proc2 (a: Int)
+  returns (b: Int)
+{
+  if (a < 0) 
+  { 
+    return proc1(a+1);
+  } else 
+  {
+    return proc1(a-1);
+  }
+}

@@ -875,7 +875,7 @@ let convert cu =
       | f :: fs -> fprintf ppf "%a@\n%a" pr_c_field f pr_c_fields fs         
     in
     let pr_c_struct ppf s = 
-      fprintf ppf "typedef struct %s {@\n@[<2>  %a@]@\n} %s;" 
+      fprintf ppf "typedef struct %s {@\n  @[%a@]@\n} %s;" 
         (string_of_ident s.s_name) 
         pr_c_fields (idmap_to_list s.s_fields)
         (string_of_ident s.s_name)  
@@ -901,12 +901,12 @@ let convert cu =
         ", " 
         (List.fold_right 
           (fun v a -> 
-            ((string_of_c_pass_type (IdMap.find v p.p_locals).v_type) ^ 
+            ((string_of_c_pass_type (IdMap.find v p.p_locals).v_type ) ^ 
             " " ^ 
             (string_of_ident v))
             :: a) 
           p.p_formals 
-          (if ((List.length p.p_returns) == 1) then
+          (if ((List.length p.p_returns) <= 1) then
             []
           else
             (List.fold_right 
@@ -921,7 +921,11 @@ let convert cu =
   (* Forward declarations for procs in order to allow mutual recursion. *)   
   let rec pr_c_proc_fwd_decls ppf cu =
     let pr_c_fwd_proc ppf p =
-      fprintf ppf "void %s (%a);" 
+      fprintf ppf "%s %s (%a);" 
+        (if ((List.length p.p_returns) != 1) then
+          "void"
+        else
+          (string_of_c_pass_type (IdMap.find (List.hd p.p_returns) p.p_locals).v_type))
         (string_of_ident p.p_name) 
         pr_c_proc_args p
     in
@@ -944,7 +948,7 @@ let convert cu =
        * the datastructure. *)
       (match from with 
         | (Ident (id, _)) as idExpr -> 
-          (match (IdMap.find id cu.var_decls).v_type with 
+          (match (IdMap.find id cur_proc.p_locals).v_type with 
             | MapType(d, r) -> fprintf ppf "/* ERROR: Map type not yet implemented */"
             | ArrayType(t1) ->
               fprintf ppf
@@ -984,7 +988,7 @@ let convert cu =
         fprintf ppf "/* ERROR: separation logic not yet implemented. */"
       | _ -> fprintf ppf "/* ERROR: no such Binary Operator */"
     and pr_c_expr ppf = function
-      | (Null (_, _), _)           -> fprintf ppf "null"
+      | (Null (_, _), _)           -> fprintf ppf "NULL"
       | (IntVal (i, _), _)         -> fprintf ppf "%i" i
       | (BoolVal (b, _), _)        -> fprintf ppf (if b then "true" else "false")
       | (Read (from, index, _), cur_proc) -> pr_read ppf (from, index, cur_proc)
@@ -1000,12 +1004,15 @@ let convert cu =
       | (BinaryOp (e1, op1, e2, _, _), cur_proc) -> 
         pr_bin_op ppf ((e1, cur_proc), op1, (e2, cur_proc))
       | (Ident (id, _), {p_returns=p_returns})   ->
-          if (List.exists (fun lid -> lid == id) p_returns) then
-            fprintf ppf "(*%s)" (string_of_ident id)
+          if ((List.length p_returns) == 1) then
+            fprintf ppf "%s" (string_of_ident id)
           else
-            fprintf ppf "%s"    (string_of_ident id)
+            if (List.exists (fun lid -> lid == id) p_returns) then
+              fprintf ppf "(*%s)" (string_of_ident id)
+            else
+              fprintf ppf "%s"    (string_of_ident id)
       | (New (t, args, _), _)             ->
-        fprintf ppf "/* ERROR: New expression only allowed directly within an Assign stmt. */"
+        fprintf ppf "/* ERROR: New expression only allowed directly within an Assign or Free stmt. */"
       | ((ArrayCells _|ArrayOfCell _|IndexOfCell _|Emp _|Setenum _|PredApp _|
         Quant _|Access _|BtwnPred _|Annot _), _) ->
         fprintf ppf "/* ERROR: expression type not yet implemented. */"
@@ -1076,11 +1083,11 @@ let convert cu =
                       (string_of_c_type t_sub)
                       (string_of_c_type t_sub)
                 in
-                fprintf ppf "%a {@\n  @[<2>%a@]@\n}@\n"
+                fprintf ppf "%a {@\n  @[%a@]@\n}@\n"
                   pr_looper ()
                   pr_body   ()
               in
-              fprintf ppf "%a@\n{@\n  @[<2>%a@]@\n}@\n"
+              fprintf ppf "%a@\n{@\n  @[%a@]@\n}@\n"
                 pr_init_wrapper ()
                 pr_malloc_loop  () 
             | _ -> fprintf ppf "/* ERROR: badly formed New expression. */"              
@@ -1137,10 +1144,20 @@ let convert cu =
             | e :: [] -> fprintf ppf "&%a"    pr_c_expr (e, cur_proc)
             | e :: es -> fprintf ppf "%a, %a" pr_args_out [e] pr_args_out es
           in 
-          fprintf ppf "%s(%a, %a)"
+          let pr_args_total ppf = function
+            | (es, vs) ->
+              if (((List.length es) == 0) && ((List.length vs) == 0)) then
+                ()
+              else if ((List.length es) == 0) then
+                fprintf ppf "%a" pr_args_out vs
+              else if ((List.length vs) == 0) then
+                fprintf ppf "%a" pr_args_in  es
+              else 
+                fprintf ppf "%a, %a" pr_args_in es pr_args_out vs
+          in
+          fprintf ppf "%s(%a);"
             (string_of_ident p.p_name)
-            pr_args_in  es
-            pr_args_out vs
+            pr_args_total (es, vs)
         | (Assign (v :: vs, e :: es, apos), cur_proc) -> 
           fprintf ppf "%a@\n%a"
             pr_c_stmt (Assign ([v], [e], apos), cur_proc)
@@ -1178,7 +1195,7 @@ let convert cu =
         | (Return(e :: [], _), ({p_returns=r_single :: []} as cur_proc), r :: []) ->
           fprintf ppf "return %a;" 
             pr_c_expr (e, cur_proc)
-        | (Return(e1 :: e2 :: [], _), cur_proc, r1 :: r2 :: rs) ->
+        | (Return(e1 :: e2 :: [], _), cur_proc, r1 :: r2 :: []) ->
           fprintf ppf "*%s = %a;@\n*%s = %a;@\nreturn;"
             (string_of_ident r1)
             pr_c_expr (e1, cur_proc)
@@ -1198,12 +1215,12 @@ let convert cu =
       | (Assign _, _) as a -> pr_c_assign ppf a
       | (Dispose (e, _), cur_proc) -> pr_c_dispose ppf (e, cur_proc)
       | (If (cond, b1, b2, _), cur_proc) -> 
-        fprintf ppf "if (%a) {@\n  @[<2>%a@]@\n} else {@\n  @[<2>%a@]@\n}"
+        fprintf ppf "if (%a) {@\n  @[%a@]@\n} else {@\n  @[%a@]@\n}"
           pr_c_expr (cond, cur_proc)
           pr_c_stmt (b1,   cur_proc)
           pr_c_stmt (b2,   cur_proc)
       | (Loop (_, pre, cond, body, _), cur_proc) -> 
-        fprintf ppf "while (true) {@\n  @[<2>%a@\nif (!(%a)) {@\n  break;@\n}@\n%a@]@\n}"
+        fprintf ppf "while (true) {@\n  @[%a@\nif (!(%a)) {@\n  break;@\n}@\n%a@]@\n}"
           pr_c_stmt (pre, cur_proc)
           pr_c_expr (cond, cur_proc)
           pr_c_stmt (body, cur_proc)
@@ -1229,11 +1246,24 @@ let convert cu =
           | {p_body=stmt1}           as proc1 ->
             {proc1 with p_body=Block(stmt1 :: [default_return], pos_of_stmt(stmt1))}
         in
-        fprintf ppf "%s %s (%a) {@\n  @[<2>%a@]@\n}"
+        let init_return_var = function 
+          | {p_body=Block(ss, pos1)} as proc1 -> 
+            {proc1 with p_body=Block(
+              LocalVars([(IdMap.find (List.hd proc1.p_returns) p.p_locals)], None, pos1) :: ss,
+              pos1)}
+          | {p_body=s} as proc1 ->
+            {proc1 with p_body=Block(
+              [LocalVars([(IdMap.find (List.hd proc1.p_returns) p.p_locals)], 
+                None,
+                (pos_of_stmt s))
+              ; s],
+              (pos_of_stmt s))}
+        in
+        fprintf ppf "%s %s (%a) {@\n  @[%a@]@\n}"
           (string_of_c_pass_type ((IdMap.find (List.hd p.p_returns) p.p_locals).v_type))
           (string_of_ident p.p_name) 
           pr_c_proc_args p
-          pr_c_stmt ((force_return p).p_body, p)
+          pr_c_stmt ((init_return_var (force_return p)).p_body, p)
       else
         fprintf ppf "void %s (%a) {@\n  @[%a@]@\n}" 
           (string_of_ident p.p_name) 
@@ -1282,14 +1312,19 @@ let convert cu =
         pr_c_proc_fwd_decls cu
         pr_c_proc_decls cu
   in
+  (** This is just so it will compile for testing purposes. *)
+  let pr_c_main_section ppf () =
+    fprintf ppf "@\n@\nint main() {@\n  return 0;@\n}@\n"
+  in
   (** The actual work - flush the formatter of previous residue, feed-in the
    *  printing of the sections, then return the entire thing as a string. *)
   flush_str_formatter ();
-  fprintf str_formatter "%a%a%a%a"
+  fprintf str_formatter "%a%a%a%a%a"
     pr_c_import_section    () (* We pass unit (i.e. ()) simply to allow future *)
     pr_c_preloaded_section () (* changes to be easier to implement. *)
     pr_c_struct_section    cu
-    pr_c_proc_section      cu;
+    pr_c_proc_section      cu
+    pr_c_main_section      ();
   flush_str_formatter ()  
 
 (** Convert compilation unit [cu] to string containing a C program. *)

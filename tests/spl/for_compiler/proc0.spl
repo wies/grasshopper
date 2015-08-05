@@ -1,9 +1,55 @@
-procedure proc1(a: Int, b: Bool) 
-  returns (ap: Int, bp: Bool)
+procedure proc1() 
+  returns ()
 {
-  var f := 0;
-  var g := 0; 
-  var i := 0;
-  var j := 0;
-  var k := 0;
 }
+
+procedure proc2(a: Int)
+  returns ()
+{
+}
+
+procedure proc3(a: Int, b: Int)
+  returns ()
+{
+}
+
+procedure proc4()
+  returns (ar: Int)
+{
+  ar := 4;
+}
+
+procedure proc5(a: Int)
+  returns (ar: Int)
+{
+  ar := a;
+}
+
+procedure proc6(a: Int, b: Int) 
+  returns (ar: Int)
+{
+  ar := a;
+  ar := b;
+}
+
+procedure proc7()
+  returns (ar: Int, br: Int)
+{
+  ar := 4;
+  br := 5;
+}
+
+procedure proc8(a: Int)
+  returns (ar: Int, br: Int)
+{
+  ar := a;
+  br := 5;
+}
+
+procedure proc9(a: Int, b: Int)
+  returns (ar: Int, br: Int)
+{
+  ar := a;
+  br := b;
+}
+
