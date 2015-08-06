@@ -932,7 +932,7 @@ let convert cu =
     let rec pr_c_fwd_procs ppf = function
       | []      -> ()
       | p :: [] -> pr_c_fwd_proc ppf p
-      | p :: ps -> fprintf ppf "%a@\n@\n%a" pr_c_fwd_proc p pr_c_fwd_procs ps
+      | p :: ps -> fprintf ppf "%a@\n%a" pr_c_fwd_proc p pr_c_fwd_procs ps
     in
     pr_c_fwd_procs ppf (idmap_to_list cu.proc_decls)
   in
@@ -942,14 +942,18 @@ let convert cu =
       | ([], _)      -> ()
       | (e :: [], cur_proc) -> fprintf ppf "%a" pr_c_expr (e, cur_proc) 
       | (e :: es, cur_proc) -> fprintf ppf "%a, %a" pr_c_expr (e, cur_proc) pr_c_expr_args (es, cur_proc)
-    and pr_read pf = function (from, index, cur_proc) ->
+    and pr_read ppf = function (from, index, cur_proc) ->
       (* The code below gets the type of the expression from and, if it is a
        * Map or an Array, prints some C code that reads the appropriate part of
        * the datastructure. *)
       (match from with 
         | (Ident (id, _)) as idExpr -> 
-          (match (IdMap.find id cur_proc.p_locals).v_type with 
-            | MapType(d, r) -> fprintf ppf "/* ERROR: Map type not yet implemented */"
+          (match (SplTypeChecker.type_of_expr cu cur_proc.p_locals idExpr) with 
+            | MapType _ -> 
+              fprintf ppf
+                "(%a->%a)"
+                pr_c_expr (index, cur_proc)
+                pr_c_expr (idExpr, cur_proc)
             | ArrayType(t1) ->
               fprintf ppf
                 "*(((%s) (%a->%s))[%a])"
@@ -1016,7 +1020,6 @@ let convert cu =
       | ((ArrayCells _|ArrayOfCell _|IndexOfCell _|Emp _|Setenum _|PredApp _|
         Quant _|Access _|BtwnPred _|Annot _), _) ->
         fprintf ppf "/* ERROR: expression type not yet implemented. */"
-      | _ -> fprintf ppf "/* ERROR: badly formed expression. */"
     in
     let rec pr_c_stmt ppf = 
       let rec pr_c_block ppf = function 
@@ -1165,7 +1168,7 @@ let convert cu =
         | _ -> fprintf ppf "/* ERROR: badly formed Assign statement */"
       in
       let pr_c_dispose ppf = function (e, cur_proc) -> match e with
-        | (Ident _ | New  _ | Read _ | ProcCall _) as e -> (match (SplTypeChecker.type_of_expr cu cu.var_decls e) with
+        | (Ident _ | New  _ | Read _ | ProcCall _) as e -> (match (SplTypeChecker.type_of_expr cu cur_proc.p_locals e) with
           | StructType _ ->
             fprintf ppf "free(%a);@\n"
               pr_c_expr (e, cur_proc) 
@@ -1211,7 +1214,7 @@ let convert cu =
       function 
       | (Skip (_), _) -> ()
       | (Block _, _) as b -> pr_c_block ppf b
-      | (LocalVars _, _) as lv -> pr_c_localvars ppf lv
+      | (LocalVars _, _) as lv -> pr_c_localvars ppf lv (* FIX *)
       | (Assign _, _) as a -> pr_c_assign ppf a
       | (Dispose (e, _), cur_proc) -> pr_c_dispose ppf (e, cur_proc)
       | (If (cond, b1, b2, _), cur_proc) -> 
@@ -1225,9 +1228,7 @@ let convert cu =
           pr_c_expr (cond, cur_proc)
           pr_c_stmt (body, cur_proc)
       | ((Return _) as r, cur_proc) -> pr_c_return ppf (r, cur_proc, cur_proc.p_returns)
-      | (((Assume _)|(Assert _)|(Havoc _)), _) -> 
-        fprintf ppf "/* ERROR: Unimplemented statement type. */"
-      | _ -> fprintf ppf "/* ERROR: Unaccounted for statement type. */"
+      | (((Assume _)|(Assert _)|(Havoc _)), _) -> ()
     in
     let pr_c_proc ppf p =
       if ((List.length p.p_returns) == 1) then
@@ -1238,7 +1239,9 @@ let convert cu =
               pos_of_stmt(p.p_body))],
             pos_of_stmt(p.p_body))
         in
-        let force_return = function 
+        let force_return = function
+          | {p_body=Block([], pos1)} as proc1 ->
+            {proc1 with p_body=Block(default_return :: [], pos1)}
           | {p_body=Block(ss, pos1)} as proc1 ->
             (match (List.hd (List.rev ss)) with
               | Return _ ->  proc1
@@ -1307,14 +1310,15 @@ let convert cu =
     if (IdMap.is_empty cu.proc_decls) then
       ()
     else
-      fprintf ppf "@\n%s@\n%a@\n@\n%a"
+      fprintf ppf "@\n@\n%s@\n%a@\n@\n%a"
         "/*\n * Procedures\n */"
         pr_c_proc_fwd_decls cu
         pr_c_proc_decls cu
   in
   (** This is just so it will compile for testing purposes. *)
   let pr_c_main_section ppf () =
-    fprintf ppf "@\n@\nint main() {@\n  return 0;@\n}@\n"
+    fprintf ppf "@\n@\n%s@\nint main() {@\n  return 0;@\n}@\n"
+    "/*\n * Main Function, here for compilability\n */"
   in
   (** The actual work - flush the formatter of previous residue, feed-in the
    *  printing of the sections, then return the entire thing as a string. *)
