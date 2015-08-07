@@ -51,6 +51,15 @@ procedure procIntAndBoolVal ()
   b := false;
 }
 
+procedure procReadLengthNew ()
+  returns (a: Array<Int>)
+{
+  a := new Array<Int>(10);
+  var b := a.length;
+  a[0] := 1;
+  var c := a[0];
+}
+
 procedure procCall ()
  returns (a: Int, b: Bool)
 {

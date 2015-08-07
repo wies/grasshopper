@@ -1,0 +1,6 @@
+struct Node {
+  var data: Int;
+  var next: Node;
+}
+
+procedure emptyChain (var

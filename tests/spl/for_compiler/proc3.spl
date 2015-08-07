@@ -1,24 +1,90 @@
-include "int_array.spl";
+// Test for stmt compilation.
 
-procedure copy(a: Array<Int>)
-  returns (b: Array<Int>)
-  requires array(a)
-  ensures array(a) &*& array(b)
-  ensures a.length == b.length
-  ensures forall i: Int:: i >= 0 && i < a.length ==> a[i] == b[i]
+procedure procBlock ()
+  returns (a: Int, b: Bool, c: Int)
 {
-  b := new Array<Int>(a.length);
+  a := 1;
+  a := 2;
+  a := 3;
 
-  var i := 0;
+  b := false;
+  c := -2000;
+}
 
-  while (i < a.length)
-    invariant i >= 0 && i <= a.length && a.length == b.length
-    invariant array(a) &*& array(b)
-    invariant forall j: Int:: j >= 0 && j < i ==> a[j] == b[j]
+struct SillyStruct {
+  var a: Int;
+}
+
+procedure procAssign()
+{
+  var a := new SillyStruct();
+  var b := new Array<Bool>(10);
+
+  var x: Int;
+  var y: Bool;
+  var z: Int;
+  x, y, z := procBlock();
+
+  x, y, z := 1+1, true, (700 * 6)/2;
+
+  x := 100;
+}
+
+procedure procNewArray ()
+  returns (a: Array<Bool>)
+{
+  return new Array<Bool>(10);
+}
+
+struct SuperSillyStruct {
+  var arr: Array<Int>;
+}
+
+procedure procDispose(a: Array<Int>, b: SillyStruct)
+{
+  free(a);
+  free(b);
+
+  free(new Array<Int>(5));
+  
+  var c := new SuperSillyStruct();
+  c.arr := new Array<Int>(10);
+  free(c.arr);
+  free(c);
+  
+  var d := new Array<Array<Int>>(5);
+  d[0] := new Array<Int>(5);
+  free(d[0]);
+  free(d);
+
+  free(procNewArray());
+}
+
+procedure procIf(a: Int, b: Int)
+  returns (c: Bool)
+{
+  if (a == b)
   {
-    b[i] := a[i];
+    c := true;
+  } 
+  else
+  {
+    c := false;
+  }
+}
+
+procedure procLoop()
+{
+  var i := 0;
+  
+  while (i != 5)
+  {
     i := i + 1;
   }
+}
 
-  return b;
+procedure procReturn()
+  returns (a: Int)
+{
+  return 5; 
 }
