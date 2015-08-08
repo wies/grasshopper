@@ -823,6 +823,7 @@ let convert cu =
     "  void* " ^ arr_field ^ "[];\n" ^
     "} " ^ arr_string ^ ";\n"
   in
+  (** Procedure for freeing struct wrapper and contents *)
   let free_SPLArray_proc_string = "freeSPLArray" in
   let free_SPLArray_proc_decl = 
     "void " ^ free_SPLArray_proc_string ^" (" ^ arr_string ^ "* a) {\n" ^
@@ -894,7 +895,8 @@ let convert cu =
    *  implementation, return variables are actually passed by reference into
    *  the function) and then this list is concatnetated into a string using a
    *  comma and space as a delimter. However, if the procedure has only one 
-   *  return value, only the "true" arguments are printed. *)
+   *  return value, only the "true" arguments are printed, because the C
+   *  return value is used in that case. *)
   let pr_c_proc_args ppf p =
     fprintf ppf "%s"
       (String.concat 
@@ -1098,7 +1100,7 @@ let convert cu =
                   pr_looper ()
                   pr_body   ()
               in
-              fprintf ppf "%a@\n{@\n  @[%a@]@\n}@\n"
+              fprintf ppf "%a@\n{@\n  @[%a@]@\n}"
                 pr_init_wrapper ()
                 pr_malloc_loop  () 
             | _ -> fprintf ppf "/* ERROR: badly formed New expression. */"              
@@ -1128,7 +1130,8 @@ let convert cu =
             | []      -> ()
             | e :: [] -> fprintf ppf "&%a"    pr_c_expr (e, cur_proc)
             | e :: es -> fprintf ppf "%a, %a" pr_args_out [e] pr_args_out es
-          in 
+          in
+          (** Printing arguments with various number of input and return variables *) 
           let pr_args_total ppf = function
             | (es, vs) ->
               if (((List.length es) == 0) && ((List.length vs) == 0)) then
@@ -1171,8 +1174,8 @@ let convert cu =
        *  other expressions a number of cases are needed: no return value,
        *  single return value, double return values (as the base case of 
        *  multiple return values, since the single retun value case is something
-       *  completely  different), more than 2 return values, and the error
-       *  case. *)
+       *  completely  different), more than 2 return values (as the inductive case),
+       *  and the error case. *)
       let rec pr_c_return ppf = function
         | (Return([], _), {p_returns=[]}, []) ->
           fprintf ppf "return;"
@@ -1220,7 +1223,13 @@ let convert cu =
       | (LocalVars _, _) -> fprintf ppf "/* ERROR: all LocalVars statements should have been removed by name resolution phase. */"
     in
     let pr_c_proc ppf p =
+      (** Declarations of variables and their types are taken out of the AST,
+       *  but we have to put them back in the C program, which is what the 
+       *  function below does. *)
       let pr_c_decl_locals ppf p =
+        (* We don't want to re-declare parameters or return variables (which
+         * are either passed in as parameters or taken care of by the 
+         * pre-processing function force_return. *)
         let do_not_decl_list = p.p_formals @ p.p_returns in
         let decl_list = 
           IdMap.fold 
@@ -1247,6 +1256,7 @@ let convert cu =
               pos_of_stmt(p.p_body))],
             pos_of_stmt(p.p_body))
         in
+        (* Required because in SPL return statements at the end of functions are optional. *)
         let force_return = function
           | {p_body=Block([], pos1)} as proc1 ->
             {proc1 with p_body=Block(default_return :: [], pos1)}
@@ -1329,7 +1339,7 @@ let convert cu =
   flush_str_formatter ();
   fprintf str_formatter "%a%a%a%a%a"
     pr_c_import_section    () (* We pass unit (i.e. ()) simply to allow future *)
-    pr_c_preloaded_section () (* changes to be easier to implement. *)
+    pr_c_preloaded_section () (* changes to be easier to implement with printing functions. *)
     pr_c_struct_section    cu
     pr_c_proc_section      cu
     pr_c_main_section      ();
