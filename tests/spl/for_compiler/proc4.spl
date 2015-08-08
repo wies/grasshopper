@@ -3,4 +3,127 @@ struct Node {
   var next: Node;
 }
 
-procedure emptyChain (var
+struct NodeBlack {
+  var white: NodeWhite;
+  var number: Int;
+  var bool: Bool;
+  var someMoreNumbers: Array<Int>;
+}
+
+struct NodeWhite {
+  var black: NodeBlack;
+}
+
+procedure emptyChain (n: Int)
+  returns (head: Node)
+{
+  if (n <= 0)
+  {
+   return null;
+  }
+
+  head := new Node();
+  var cur := head;
+  
+  var i := 0;
+  while (i < n-1)
+  {
+    cur.next := new Node();
+    cur := cur.next;
+    i := i + 1; 
+  }
+
+  cur.next := null;  
+
+  return head;
+}
+
+procedure freeChain (head: Node)
+{
+  var temp: Node;
+
+  while (head != null)
+  {
+    temp := head;
+    head := head.next;
+    free(temp);
+  }
+}
+
+procedure blackAndWhiteChain (n: Int)
+  returns (h: NodeBlack)
+{
+  return helperBlack(n);   
+}
+
+procedure helperBlack (n: Int)
+  returns (h: NodeBlack)
+{
+  if (n <= 0)
+  { 
+    return null;
+  }
+  else
+  {
+    h := new NodeBlack();
+    
+    h.number := n;
+    if (n <= 6)
+    {
+      h.bool := false;
+    }
+    else
+    {
+      h.bool := true;
+    }
+    h.someMoreNumbers := new Array<Int>(n);
+    var i := 0;
+    while (i < n)
+    {
+      h.someMoreNumbers[i] := i*i;
+      i := i + 1;
+    }
+    
+    h.white := helperWhite(n - 1);
+    return h;
+  }
+}
+
+procedure helperWhite (n: Int)
+  returns (h: NodeWhite)
+{
+  if (n <= 0)
+  {
+    return null;
+  }
+  else
+  {
+    h := new NodeWhite();
+    h.black := helperBlack(n - 1);
+    return h;
+  }
+}
+
+ 
+procedure clearNodeBlackChain(h: NodeBlack)
+{
+  var blackN := h;
+  var whiteN: NodeWhite;
+  var curIsBlack := true;
+ 
+  while ((blackN != null) || (whiteN != null))
+  {
+    if (curIsBlack)
+    {
+      whiteN := blackN.white;
+      free(blackN);
+      curIsBlack := false;
+    }
+    else
+    {
+      blackN := whiteN.black;
+      free(whiteN);
+      curIsBlack := true;
+    }
+  }
+}

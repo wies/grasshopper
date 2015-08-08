@@ -33,11 +33,11 @@ struct SPLArray* copy_1 (struct SPLArray* a_28) {
   struct SPLArray* tmp_4;
   int i_27;
   
-  tmp_4 = (struct SPLArray*) malloc(sizeof(struct SPLArray));
+  tmp_4 = (struct SPLArray*) malloc(sizeof(struct SPLArray) + (sizeof(void*) * (a_28->length)));
   tmp_4->length = (a_28->length);
   {
     for (int i = 0; i < (a_28->length); i++) {
-      *((tmp_4->arr) + i) = (int*) malloc(sizeof(int));
+      (tmp_4->arr)[i] = (int*) malloc(sizeof(int));
     }
     
   }
@@ -45,7 +45,6 @@ struct SPLArray* copy_1 (struct SPLArray* a_28) {
   b_18 = tmp_4;
   i_27 = 0;
   while (true) {
-    
     if (!((i_27 < (a_28->length)))) {
       break;
     }
@@ -56,8 +55,6 @@ struct SPLArray* copy_1 (struct SPLArray* a_28) {
 }
 
 void procCall_1 (int* a_29, bool* b_19) {
-  
-  
   procIntAndBoolVal_1(&(*a_29), &(*b_19));
   *a_29 = (*a_29);
   *b_19 = (*b_19);
@@ -65,8 +62,6 @@ void procCall_1 (int* a_29, bool* b_19) {
 }
 
 void procIntAndBoolVal_1 (int* a_30, bool* b_20) {
-  
-  
   (*a_30) = 1;
   (*a_30) = (-1);
   (*a_30) = 0;
@@ -77,8 +72,6 @@ void procIntAndBoolVal_1 (int* a_30, bool* b_20) {
 
 int procNull_1 () {
   int a_31;
-  
-  
   if ((NULL == NULL)) {
     a_31 = 1;
   } else {
@@ -88,16 +81,12 @@ int procNull_1 () {
 }
 
 void procOps_1 (int a_32, int b_21, bool c_7, bool d_1, int* ap_6, int* bp_3, bool* cp_2, bool* dp_2) {
-  
-  
   (*ap_6) = a_32;
   (*bp_3) = b_21;
   (*cp_2) = c_7;
   (*dp_2) = d_1;
   (*ap_6) = (-(*ap_6));
   if ((!(*dp_2))) {
-    
-  } else {
     
   }
   (*ap_6) = ((*ap_6) + (*bp_3));
@@ -106,47 +95,29 @@ void procOps_1 (int a_32, int b_21, bool c_7, bool d_1, int* ap_6, int* bp_3, bo
   (*ap_6) = ((*ap_6) / (*bp_3));
   if (((*ap_6) == (*bp_3))) {
     
-  } else {
-    
   }
   if (((*ap_6) > (*bp_3))) {
-    
-  } else {
     
   }
   if (((*ap_6) < (*bp_3))) {
     
-  } else {
-    
   }
   if (((*ap_6) >= (*bp_3))) {
-    
-  } else {
     
   }
   if (((*ap_6) <= (*bp_3))) {
     
-  } else {
-    
   }
   if ((!((*ap_6) == (*bp_3)))) {
-    
-  } else {
     
   }
   if (((*cp_2) && (*dp_2))) {
     
-  } else {
-    
   }
   if (((*cp_2) || (*dp_2))) {
     
-  } else {
-    
   }
   if (((!(*cp_2)) || (*dp_2))) {
-    
-  } else {
     
   }
 }
@@ -157,11 +128,11 @@ struct SPLArray* procReadLengthNew_1 () {
   int c_8;
   int b_22;
   
-  tmp_5 = (struct SPLArray*) malloc(sizeof(struct SPLArray));
+  tmp_5 = (struct SPLArray*) malloc(sizeof(struct SPLArray) + (sizeof(void*) * 10));
   tmp_5->length = 10;
   {
     for (int i = 0; i < 10; i++) {
-      *((tmp_5->arr) + i) = (int*) malloc(sizeof(int));
+      (tmp_5->arr)[i] = (int*) malloc(sizeof(int));
     }
     
   }

@@ -27,4 +27,9 @@ typedef struct RecStruct_1 {
   struct RecStruct_1* next_1;
 } RecStruct_1;
 
-int main() {return 1;}
+/*
+ * Main Function, here for compilability
+ */
+int main() {
+  return 0;
+}

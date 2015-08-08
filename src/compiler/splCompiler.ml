@@ -948,6 +948,7 @@ let convert cu =
        * the datastructure. *)
       (match from with 
         | (Ident (id, _)) as idExpr -> 
+          (match (SplTypeChecker.type_of_expr cu cur_proc.p_locals idExpr) with 
             | MapType _ -> 
               fprintf ppf
                 "(%a->%a)"
@@ -1068,10 +1069,11 @@ let convert cu =
               in
               let pr_init_wrapper ppf () =
                 fprintf ppf 
-                  "%s = (%s*) malloc(sizeof(%s));@\n%s->%s = %a;"
+                  "%s = (%s*) malloc(sizeof(%s) + (sizeof(void*) * %a));@\n%s->%s = %a;"
                   usable_id_string
                   arr_type
                   arr_type
+                  pr_c_expr (l, cur_proc)
                   usable_id_string
                   len_field
                   pr_c_expr (l, cur_proc)
@@ -1195,13 +1197,21 @@ let convert cu =
       | (Block _, _) as b -> pr_c_block ppf b
       | (Assign _, _) as a -> pr_c_assign ppf a
       | (Dispose (e, _), cur_proc) -> pr_c_dispose ppf (e, cur_proc)
-      | (If (cond, b1, b2, _), cur_proc) -> 
-        fprintf ppf "if (%a) {@\n  @[%a@]@\n} else {@\n  @[%a@]@\n}"
-          pr_c_expr (cond, cur_proc)
-          pr_c_stmt (b1,   cur_proc)
-          pr_c_stmt (b2,   cur_proc)
+      | (If (cond, b1, b2, _), cur_proc) -> (match b2 with
+        | Skip _ ->
+         fprintf ppf "if (%a) {@\n  @[%a@]@\n}"
+            pr_c_expr (cond, cur_proc)
+            pr_c_stmt (b1,   cur_proc)
+        | _      -> 
+          fprintf ppf "if (%a) {@\n  @[%a@]@\n} else {@\n  @[%a@]@\n}"
+            pr_c_expr (cond, cur_proc)
+            pr_c_stmt (b1,   cur_proc)
+            pr_c_stmt (b2,   cur_proc))
       | (Loop (_, pre, cond, body, _), cur_proc) -> 
-        fprintf ppf "while (true) {@\n  @[%a@\nif (!(%a)) {@\n  break;@\n}@\n%a@]@\n}"
+        fprintf ppf "while (true) {@\n  @[%s%aif (!(%a)) {@\n  break;@\n}@\n%a@]@\n}"
+          (match pre with 
+            | Skip _ -> ""
+            | _      -> "\n")
           pr_c_stmt (pre, cur_proc)
           pr_c_expr (cond, cur_proc)
           pr_c_stmt (body, cur_proc)

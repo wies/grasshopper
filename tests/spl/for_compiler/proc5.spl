@@ -1,0 +1,54 @@
+struct Node {
+  var data: Int;
+  var next: Node;
+}
+
+procedure arrayOfSquares (n: Int)
+  returns (a: Array<Int>)
+{
+  a := new Array<Int>(n);
+  var i := 0;
+
+  while (i < n)
+  {
+    a[i] := (i+1) * (i+1);
+    i := i + 1;
+  }
+}
+
+procedure getLessThan(a: Array<Int>, n: Int)
+  returns (b: Array<Int>)
+{
+  var isLess := new Array<Bool>(a.length);
+  var count := 0;
+  var i := 0;
+  
+  while (i < a.length)
+  {
+    if (a[i] < n)
+    {
+      isLess[i] := true;
+      count := count + 1;
+    }
+    else
+    { 
+      isLess[i] := false;
+    }
+
+    i := i + 1;
+  }
+
+  b := new Array<Int>(count);
+  i := 0;
+  var j := 0;
+  while (i < a.length)
+  {
+    if (isLess[i])
+    {
+      b[j] := a[i];
+      j := j + 1;
+    }
+
+    i := i + 1;
+  } 
+}

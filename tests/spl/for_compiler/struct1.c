@@ -51,4 +51,9 @@ typedef struct SomeFields4_1 {
   bool y4_1;
 } SomeFields4_1;
 
-int main() {return 0;}
+/*
+ * Main Function, here for compilability
+ */
+int main() {
+  return 0;
+}

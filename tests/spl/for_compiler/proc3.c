@@ -53,7 +53,7 @@ void procAssign_1 () {
   
   tmp_18 = ((struct SillyStruct_1*) malloc(sizeof(struct SillyStruct_1)));
   a_14 = tmp_18;
-  tmp_19 = (struct SPLArray*) malloc(sizeof(struct SPLArray));
+  tmp_19 = (struct SPLArray*) malloc(sizeof(struct SPLArray) + (sizeof(void*) * 10));
   tmp_19->length = 10;
   {
     for (int i = 0; i < 10; i++) {
@@ -95,7 +95,7 @@ void procDispose_1 (struct SPLArray* a_16, struct SillyStruct_1* b_8) {
   
   free(b_8);
   
-  tmp_20 = (struct SPLArray*) malloc(sizeof(struct SPLArray));
+  tmp_20 = (struct SPLArray*) malloc(sizeof(struct SPLArray) + (sizeof(void*) * 5));
   tmp_20->length = 5;
   {
     for (int i = 0; i < 5; i++) {
@@ -108,7 +108,7 @@ void procDispose_1 (struct SPLArray* a_16, struct SillyStruct_1* b_8) {
   
   tmp_21 = ((struct SuperSillyStruct_1*) malloc(sizeof(struct SuperSillyStruct_1)));
   c_8 = tmp_21;
-  tmp_22 = (struct SPLArray*) malloc(sizeof(struct SPLArray));
+  tmp_22 = (struct SPLArray*) malloc(sizeof(struct SPLArray) + (sizeof(void*) * 10));
   tmp_22->length = 10;
   {
     for (int i = 0; i < 10; i++) {
@@ -122,7 +122,7 @@ void procDispose_1 (struct SPLArray* a_16, struct SillyStruct_1* b_8) {
   
   free(c_8);
   
-  tmp_23 = (struct SPLArray*) malloc(sizeof(struct SPLArray));
+  tmp_23 = (struct SPLArray*) malloc(sizeof(struct SPLArray) + (sizeof(void*) * 5));
   tmp_23->length = 5;
   {
     for (int i = 0; i < 5; i++) {
@@ -132,7 +132,7 @@ void procDispose_1 (struct SPLArray* a_16, struct SillyStruct_1* b_8) {
   }
   
   d_2 = tmp_23;
-  tmp_24 = (struct SPLArray*) malloc(sizeof(struct SPLArray));
+  tmp_24 = (struct SPLArray*) malloc(sizeof(struct SPLArray) + (sizeof(void*) * 5));
   tmp_24->length = 5;
   {
     for (int i = 0; i < 5; i++) {
@@ -166,7 +166,6 @@ void procLoop_1 () {
   
   i_7 = 0;
   while (true) {
-    
     if (!((!(i_7 == 5)))) {
       break;
     }
@@ -178,7 +177,7 @@ struct SPLArray* procNewArray_1 () {
   struct SPLArray* a_18;
   struct SPLArray* tmp_26;
   
-  tmp_26 = (struct SPLArray*) malloc(sizeof(struct SPLArray));
+  tmp_26 = (struct SPLArray*) malloc(sizeof(struct SPLArray) + (sizeof(void*) * 10));
   tmp_26->length = 10;
   {
     for (int i = 0; i < 10; i++) {

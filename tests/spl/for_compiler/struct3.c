@@ -31,4 +31,9 @@ typedef struct Second_1 {
   struct First_1* b_1;
 } Second_1;
 
-int main() {return 0;}
+/*
+ * Main Function, here for compilability
+ */
+int main() {
+  return 0;
+}

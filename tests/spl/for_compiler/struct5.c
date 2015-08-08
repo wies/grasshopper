@@ -46,4 +46,9 @@ typedef struct Third_1 {
   struct Fourth_1* c_1;
 } Third_1;
 
-int main() {return 0;}
+/*
+ * Main Function, here for compilability
+ */
+int main() {
+  return 0;
+}
