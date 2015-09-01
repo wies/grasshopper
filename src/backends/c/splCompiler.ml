@@ -1336,7 +1336,7 @@ let convert cu =
   in
   (** The actual work - flush the formatter of previous residue, feed-in the
    *  printing of the sections, then return the entire thing as a string. *)
-  flush_str_formatter ();
+  ignore (flush_str_formatter ());
   fprintf str_formatter "%a%a%a%a%a"
     pr_c_import_section    () (* We pass unit (i.e. ()) simply to allow future *)
     pr_c_preloaded_section () (* changes to be easier to implement with printing functions. *)
