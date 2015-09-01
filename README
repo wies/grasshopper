@@ -40,7 +40,7 @@ Installation Instructions
 Usage
 -------------------------
 - To run GRASShopper, execute e.g.
-     ./grasshopper.native tests/spl/sl_reverse.spl
+     ./grasshopper.native tests/spl/sl/sl_reverse.spl
   The analyzer expects the Z3 (respectively, CVC4) executable in the path.
 
 - To see the available command line options, run

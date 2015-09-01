@@ -68,9 +68,9 @@ procedure insert(root: Node, val: Int)
       curr.left := n;
     } else {
       curr.right := n;
-    }
+    } 
     return root;
-  }
+ }
 }
 
 procedure test(root: Node)
@@ -177,89 +177,3 @@ procedure remove(root: Node, val: Int) returns (new_root: Node)
   }
 }
 
-procedure remove_alt(root: Node, val: Int) returns (new_root: Node)
-  requires tree(root)
-  ensures tree(new_root)
-{
-  var curr: Node;
-  curr := root;
-  new_root := root;
-
-  while (curr != null && curr.data != val) 
-    invariant tree(root)
-    invariant root == null || curr == null || Btwn(parent, curr, root, root)
-    invariant root != null || curr == null
-  {
-    if (curr.data > val) {
-      curr := curr.left;
-    } else if (curr.data < val) {
-      curr := curr.right;
-    }
-  }
-
-  if (curr == null) return root;
-
-  var cp: Node, cl: Node, cr: Node;
-  cp, cl, cr := curr.parent, curr.left, curr.right;
-
-  if (cl != null && cr != null) {
-    var lm: Node, lmp: Node;
-    lmp := cl;
-    lm := cl;            
-
-    while (lm.right != null) 
-      invariant tree(root)
-      invariant Btwn(parent, lm, cl, root) && Btwn(parent, lm, lmp, cl) && Btwn(parent, lm, lmp, root)
-      invariant lm != null && (cl == lm || lmp.right == lm)
-    {
-      lmp := lm;
-      lm := lm.right;
-    }
-
-    if (cl != lm) {
-      var lml: Node;
-      lml := lm.left;
-      lmp.right := lml;
-      if (lml != null) lml.parent := lmp;
-      lm.left := cl;
-      cl.parent := lm;      
-    }
-    lm.parent := cp;
-    lm.right := cr;
-    cr.parent := lm;
-
-    curr.parent := null;
-    free curr;
-
-    if (curr == root) {
-      return lm;
-    } else {
-      if (cp.left == curr) {
-        cp.left := lm;
-      } else {
-        cp.right := lm;
-      }
-      return root;
-    }
-  } else {
-    curr.parent := null;
-    free curr;
-    var nc: Node;
-    if (cl != null) {
-      nc := cl;
-    } else {
-      nc := cr;
-    }
-    if (nc != null) nc.parent := cp;
-    if (curr == root) {
-      return nc;  
-    } else {
-      if (cp.left == curr) {
-        cp.left := nc;
-      } else {
-        cp.right := nc;
-      }
-      return root;
-    }
-  }
-}

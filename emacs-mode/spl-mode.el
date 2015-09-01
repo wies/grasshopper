@@ -40,13 +40,13 @@
    '("\\(//[^\n]*\\)" 1 
      font-lock-comment-face)
 
-   '("\\<\\(i\\(f\\|nclude\\)\\|c\\(hoose\\|omment\\)\\|else\\|f\\(ree\\|unction\\)\\|havoc\\|matching\\|new\\|or\\|pr\\(ocedure\\|edicate\\)\\|return\\(s\\|\\)\\|struct\\|var\\|w\\(ithout\\|hile\\)\\|yields\\)\\>"
+   '("\\<\\(i\\(f\\|nclude\\)\\|c\\(hoose\\|omment\\)\\|else\\|f\\(ree\\|unction\\)\\|havoc\\|matching\\|new\\|or\\|p\\(attern\\|r\\(ocedure\\|edicate\\)\\)\\|return\\(s\\|\\)\\|struct\\|var\\|w\\(ithout\\|hile\\)\\|yields\\)\\>"
          1 font-lock-keyword-face)
 
-   '("\\<\\(a\\(xiom\\|ss\\(ert\\|ume\\)\\)\\|ensures\\|i\\(mplicit\\|nvariant\\)\\|pure\\|requires\\|ghost\\)\\>"
-         1 font-lock-spec-face)
+   '("\\<\\(a\\(xiom\\|ss\\(ert\\|ume\\)\\)\\|ensures\\|i\\(mplicit\\|nvariant\\)\\|pure\\|requires\\|ghost\\|footprint\\)\\>"
+         1 font-lock-keyword-face)
 
-   '("\\<\\(Btwn\\|exists\\|forall\\|in\\|old\\|Reach\\)\\>"
+   '("\\<\\(Btwn\\|Disjoint\\|exists\\|forall\\|Frame\\|in\\|old\\|Reach\\|subsetof\\|&\\|!\\||\\|*\\|-\\|=\\|:\\|+\\)\\>"
          1 font-lock-builtin-face)
 
    '("\\<\\(emp\\|false\\|null\\|true\\)\\>"
@@ -170,7 +170,7 @@
   (defun spl-lineup-topmost (langelem)
     (save-excursion
       (beginning-of-line)
-      (if (looking-at "[ \t]*\\(procedure\\|function\\|predicate\\|struct\\)")
+      (if (looking-at "[ \t]*\\(axiom\\|procedure\\|function\\|predicate\\|struct\\)")
           0
         c-basic-offset)))
   (c-set-offset 'statement-cont 'spl-lineup-statement-cont)
@@ -182,6 +182,7 @@
   ;;(c-set-offset 'substatement-open 0)
   (c-set-offset 'knr-argdecl-intro 'spl-lineup-topmost)
   (c-set-offset 'topmost-intro-cont 'spl-lineup-topmost)
+  (c-set-offset 'func-decl-cont 'spl-lineup-topmost)
   (c-set-offset 'knr-argdecl 'spl-lineup-topmost-intro)
   (c-set-offset 'label '+))
 
@@ -191,12 +192,39 @@
     (setq auto-mode-alist (cons '("\\.spl$" . spl-mode)
 				auto-mode-alist)))
 
+(add-hook 'spl-mode-hook
+          (lambda ()
+            (push '("::" . ?∷) prettify-symbols-alist)
+            (push '("==>" . ?⟹) prettify-symbols-alist)
+            (push '("|->" . ?↦) prettify-symbols-alist)
+            (push '("->" . ?⟶) prettify-symbols-alist)
+            (push '("(&*&)" . ?✹) prettify-symbols-alist)
+            (push '("&*&" . ?✶) prettify-symbols-alist)
+            (push '("&&" . ?∧) prettify-symbols-alist)
+            (push '("||" . ?∨) prettify-symbols-alist)
+            (push '("**" . ?∩) prettify-symbols-alist)
+            (push '("(+*)" . ?⨄) prettify-symbols-alist)
+            (push '("(++)" . ?⋃) prettify-symbols-alist)
+            (push '("++" . ?∪) prettify-symbols-alist)
+            (push '("--" . ?—) prettify-symbols-alist)
+            (push '("in" . ?∈) prettify-symbols-alist)
+            (push '("!in" . ?∉) prettify-symbols-alist)
+            (push '("subsetof" . ?⊆) prettify-symbols-alist)
+            (push '("!=" . ?≠) prettify-symbols-alist)
+            (push '("==" . ?=) prettify-symbols-alist)
+            (push '("!" . ?¬) prettify-symbols-alist)
+            (push '("forall" . ?∀) prettify-symbols-alist)
+            (push '("exists" . ?∃) prettify-symbols-alist)
+            (push '("<=" . ?≤) prettify-symbols-alist)
+            (push '(">=" . ?≥) prettify-symbols-alist)
+            (prettify-symbols-mode)))
+
 ;; Flycheck mode specific settings
 (when (require 'flycheck nil :noerror)
   ;; Define syntax and type checker
   (flycheck-define-checker spl-reporter
     "Syntax and type checker for GRASShopper programs."
-    :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) "-lint" "-noverify" source)
+    :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) "-lint" "-typeonly" source)
     :error-patterns
     ((warning line-start (file-name) ":" line ":" column (optional "-" end-column) ":Related Location:" (message) line-end)
      (error line-start (file-name) ":" line ":" column (optional "-" end-column) ":" (message) line-end))

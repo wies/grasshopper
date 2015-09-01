@@ -30,10 +30,10 @@ type solver =
     
 let get_version name cmd vregexp versions =
   try
-    let in_chan = Unix.open_process_in cmd in
+    let in_chan, out_chan, err_chan = Unix.open_process_full cmd (Unix.environment ()) in
     let version_regexp = Str.regexp vregexp in
     let version_string = input_line in_chan in
-    let _ = Unix.close_process_in in_chan in
+    let _ = Unix.close_process_full (in_chan, out_chan, err_chan) in
     if Str.string_match version_regexp version_string 0 then
       let version = int_of_string (Str.matched_group 1 version_string) in
       let subversion = int_of_string (Str.matched_group 2 version_string) in
@@ -58,12 +58,12 @@ let z3_v3 () =
     kind = Process ("z3", ["-smt2"; "-in"]);
   }
 
-let z3_v4_options () = 
-  (if not !Config.instantiate then
+let z3_v4_options () = []
+(**  (if not !Config.instantiate then
     [(":auto-config", "false");
      (":smt.mbqi", "false")] else
     [":smt.mbqi", "true"])
-  @ [":smt.ematching", "true"]
+  @ [":smt.ematching", "true"]*)
   
 let z3_v4 () =
   { version = 4;
@@ -149,12 +149,21 @@ let available_solvers =
 
 let selected_solvers = ref []
 
-let select_solver name = 
+let select_solver name =
+  let available_solvers =
+    List.map (fun s -> s ()) available_solvers
+  in
   let selected = Str.split (Str.regexp "+") name in
+  let _ =
+    List.iter (fun name ->
+      if List.for_all (fun s -> s.name <> name) available_solvers then
+        failwith ("SMT solver '" ^ name ^ "' is not supported."))
+      selected
+  in
   selected_solvers := 
     List.filter 
       (fun s -> List.mem s.name selected && (!Config.verify || s.info.kind = Logger))
-      (List.map (fun s -> s ()) available_solvers);
+      available_solvers;
   if List.for_all (fun s -> s.info.kind <> Logger) !selected_solvers && !Config.dump_smt_queries then
     selected_solvers := z3logger () :: !selected_solvers;
   Debug.info (fun () ->
@@ -520,7 +529,7 @@ let grass_symbol_of_smtlib_symbol solver_info =
 
 let is_interpreted solver_info sym = match sym with
   | Read | Write -> !Config.encode_fields_as_arrays
-  | Empty | SetEnum | Union | Inter | Diff | Elem | SubsetEq ->
+  | Empty | SetEnum | Union | Inter | Diff | Elem | SubsetEq | Disjoint ->
       !Config.use_set_theory && solver_info.has_set_theory
   | Eq | Gt | Lt | GtEq | LtEq | IntConst _ | BoolConst _
   | Plus | Minus | Mult | Div | UMinus -> true
@@ -715,8 +724,8 @@ let convert_model session smtModel =
         match name, csrts with
         | "Loc", [esrt] -> Loc esrt
         | "Set", [esrt] -> Set esrt
-        | "Grass_Array", [esrt] -> Array esrt
-        | "Grass_Pat", [] -> Pat
+        | "GrassArray", [esrt] -> Array esrt
+        | "GrassPat", [] -> Pat
         | "ArrayCell", [esrt] -> ArrayCell esrt
         | "Map", [dsrt; rsrt] -> Map (dsrt, rsrt)
         | _, [] -> FreeSrt (name, num)
@@ -973,12 +982,13 @@ let convert_model session smtModel =
     List.fold_left 
       (fun model cmd ->
         match cmd with
-        | DefineFun (id, args, res_srt, def, _) -> 
+        | DefineFun (id, args, res_srt, def, _) ->
+            let sym = to_sym (normalize_ident id) in
+            if sym = Known then model else
             let cres_srt = convert_sort res_srt in
             let cargs = List.map (fun (x, srt) -> x, convert_sort srt) args in
             let carg_srts = List.map snd cargs in
-            let sym = to_sym (normalize_ident id) in
-            process_def model sym (carg_srts, cres_srt) cargs (SmtLibSyntax.unletify def) 
+            process_def model sym (carg_srts, cres_srt) cargs (SmtLibSyntax.unletify def)
         | _ -> model)
       model1 smtModel 
   in

@@ -32,44 +32,51 @@ let choose_rep_terms classes =
             begin
               try
                 let t_rep = TermMap.find t rep_map in
-                let ts_reps = List.map (fun t -> TermMap.find t rep_map) ts in
+                let ts_reps =
+                  List.map (fun t -> TermMap.find t rep_map) ts
+                in
                 let other_ts_reps =
                   try EGraph.find (t_rep, sym) egraph
                   with Not_found -> TermListSet.empty
                 in
                 EGraph.add (t_rep, sym) (TermListSet.add ts_reps other_ts_reps) egraph
-              with Not_found -> egraph
+              with Not_found ->
+                egraph
             end
         | _ -> egraph)
       EGraph.empty (List.concat classes)
   in reps, egraph
 
 let filter_term filters t sm = 
-    List.for_all
-      (fun f -> match f with
-      | FilterSymbolNotOccurs sym ->
-          let rec not_occurs = function
-            | App (EntPnt, _, _) -> sym <> EntPnt
-            | App (sym1, _, _) when sym1 = sym -> false
-            | App (_, ts, _) -> List.for_all not_occurs ts
-            | _ -> true
-            in not_occurs t
-      | FilterReadNotOccurs (name, (arg_srts, res_srt)) ->
-          let rec not_occurs = function
-            | App (EntPnt, _, _) -> true
-            | App (Read, (App (FreeSym (name1, _), arg_ts, res_srt1) :: _ as ts), _) ->
-                let ok =
-                  try
-                    name1 <> name ||
-                    res_srt1 <> res_srt ||
-                    List.fold_left2 (fun acc t1 srt -> acc || sort_of t1 <> srt) false arg_ts arg_srts 
-                  with Invalid_argument _ -> true
-                in ok && List.for_all not_occurs ts
-            | App (_, ts, _) -> List.for_all not_occurs ts
-            | _ -> true
-          in not_occurs t
-      | FilterGeneric fn -> fn sm t
-      )
+  List.for_all
+    (fun f -> match f with
+    | FilterNotNull ->
+        (match t with
+        | App (Null, [], _) -> false
+        | _ -> true)
+    | FilterSymbolNotOccurs sym ->
+        let rec not_occurs = function
+          | App (EntPnt, _, _) -> sym <> EntPnt
+          | App (sym1, _, _) when sym1 = sym -> false
+          | App (_, ts, _) -> List.for_all not_occurs ts
+          | _ -> true
+        in not_occurs t
+    | FilterReadNotOccurs (name, (arg_srts, res_srt)) ->
+        let rec not_occurs = function
+          | App (EntPnt, _, _) -> true
+          | App (Read, (App (FreeSym (name1, _), arg_ts, res_srt1) :: _ as ts), _) ->
+              let ok =
+                try
+                  name1 <> name ||
+                  res_srt1 <> res_srt ||
+                  List.fold_left2 (fun acc t1 srt -> acc || sort_of t1 <> srt) false arg_ts arg_srts
+                with Invalid_argument _ -> true
+              in ok && List.for_all not_occurs ts
+          | App (_, ts, _) -> List.for_all not_occurs ts
+          | _ -> true
+        in not_occurs t
+    | FilterGeneric fn -> fn sm t
+    )
     filters
 
     
@@ -90,13 +97,16 @@ let ematch filters t rep_terms egraph subst_maps =
         with Invalid_argument _ -> out_subst_maps)
       ts2s []
   and ematch t1 t2 subst_maps =
+    (*print_endline ("matching " ^ string_of_term t1 ^ " with " ^ string_of_term t2);*)
     match t1 with 
     | App (sym1, ts1, srt1) when srt1 = sort_of t2 ->
         begin
           try
             let ts2s = EGraph.find (t2, sym1) egraph in
             ematches ts1 ts2s subst_maps
-          with Not_found -> []
+          with Not_found -> 
+            (*print_endline "fail 1";*)
+            []
         end
     | Var (x, srt1) when srt1 = sort_of t2 ->
         List.fold_left 
@@ -107,7 +117,9 @@ let ematch filters t rep_terms egraph subst_maps =
               else out_subst_maps
             else IdMap.add x t2 sm :: out_subst_maps)
           [] subst_maps
-    | _ -> []
+    | _ ->
+        (*print_string (string_of_sort (sort_of t1) ^ " " ^ string_of_sort (sort_of t2) ^ " fail 2");*)
+        []
   in
   let terms = 
     TermSet.fold 
@@ -301,6 +313,13 @@ let generate_instances useLocalInst axioms rep_terms egraph =
         with Not_found -> (t, []) :: acc)
         fun_terms []
     in
+    let fun_terms_with_filters =
+      List.sort (fun (t1, _) (t2, _) ->
+        - (compare
+             (IdSet.cardinal (fv_term t1))
+             (IdSet.cardinal (fv_term t2))))
+        fun_terms_with_filters
+    in
     (* close the strat_vars so they are not instantiated *)
     let f = mk_forall (IdSrtSet.elements strat_vars1) f in
     (* generate substitution maps *)
@@ -308,7 +327,12 @@ let generate_instances useLocalInst axioms rep_terms egraph =
       (* generate substitution maps for variables that appear below function symbols *)
       let proto_subst_maps =
         List.fold_left
-          (fun subst_maps (t, fs) -> ematch fs t rep_terms egraph subst_maps)
+          (fun subst_maps (t, fs) ->
+            (*print_endline ("Matching term " ^ string_of_term t);*)
+            let subst_maps1 = ematch fs t rep_terms egraph subst_maps in
+            (*List.iter print_subst_map subst_maps1;*)
+            subst_maps1
+          )
           [IdMap.empty] fun_terms_with_filters 
       in
       (* complete substitution maps for remaining variables *)
@@ -327,44 +351,48 @@ let generate_instances useLocalInst axioms rep_terms egraph =
         print_string "all vars: ";
         print_endline (String.concat ", " (List.map string_of_ident (List.map fst (IdSrtSet.elements fvars0))));
         print_string "strat vars: ";
-        print_endline (String.concat ", " (List.map string_of_ident (List.map fst (IdSrtSet.elements strat_vars))));
+        print_endline (String.concat ", " (List.map string_of_ident (List.map fst (IdSrtSet.elements strat_vars1))));
         print_string "unmatched vars: ";
         print_endline (String.concat ", " (List.map string_of_ident (IdSet.elements unmatched_vars)));
         print_string "inst vars: ";
         print_endline (String.concat ", " (List.map string_of_ident (IdSet.elements fun_vars)));
         print_string "fun terms: ";
-        print_endline (String.concat ", " (List.map string_of_term (TermSet.elements fun_terms)));
+        print_endline (String.concat ", " (List.map string_of_term (List.map fst fun_terms_with_filters)));
+        Printf.printf "# of insts: %d\n" (List.length subst_maps);
         print_endline "subst_maps:";
         List.iter print_subst_map subst_maps;
         print_endline "--------------------"
       end
     in
     (* generate instances of axiom *)
-    List.fold_left (fun acc subst_map -> (*Axioms.mk_axiom2*) (subst subst_map f) :: acc) acc subst_maps
+    List.fold_left
+      (fun acc subst_map -> (subst subst_map f) :: acc) acc subst_maps
   in
   List.fold_left instantiate epr_axioms axioms
   
 let instantiate_with_terms ?(force=false) local axioms classes =
     if !Config.instantiate || force then
       (* remove theory atoms from congruence classes *)
+      let filter_term t =
+        sort_of t <> Bool ||
+        Opt.get_or_else false (Opt.map (((=) Frame) ||| is_free_symbol) (symbol_of t))
+      in
       let classes =
-        List.filter
-          (function t :: _ ->
-            sort_of t <> Bool ||
-            Opt.get_or_else false (Opt.map is_free_symbol (symbol_of t)) | _ -> false) classes in
+        let classes2 = List.map (List.filter filter_term) classes in
+        List.filter (fun x -> x <> []) classes2
+      in
       let _ = 
         if Debug.is_debug 1 then
           ignore
             (List.fold_left (fun num cl ->
-              print_string ("Class " ^ string_of_int num ^ ": ");
-              List.iter (fun t -> print_string (string_of_term t ^ ", ")) cl; 
+              print_endline ("Class " ^ string_of_int num ^ ": " ^ (string_of_sort (sort_of (List.hd cl))));
+              List.iter (fun t -> print_endline ("    " ^ (string_of_term t))) cl; 
               print_newline ();
               num + 1) 1 classes)
       in
       (* choose representatives for instantiation *)
       let reps_f, egraph = choose_rep_terms classes in
-      let instances_f = generate_instances local axioms reps_f egraph in
-      instances_f
-    else
-      axioms
-
+      generate_instances local axioms reps_f egraph
+        else
+          axioms
+            

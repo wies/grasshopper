@@ -100,7 +100,7 @@ let get_interp model sym arity =
   with Not_found -> ValueListMap.empty, Undef
 
 let add_def model sym arity args v =
-  if Debug.is_debug 1 then print_endline (
+  if Debug.is_debug 2 then print_endline (
       "add_def: " ^ (string_of_symbol sym) ^ ": " ^ (string_of_arity arity) ^
       " => " ^ (String.concat "," (List.map string_of_value args)) ^
       " => " ^ (string_of_value v));
@@ -109,7 +109,7 @@ let add_def model sym arity args v =
   { model with intp = SortedSymbolMap.add (sym, arity) (new_m, d) model.intp }
 
 let add_default_val model sym arity v =
-  if Debug.is_debug 1 then print_endline (
+  if Debug.is_debug 2 then print_endline (
       "add_default_val: " ^ (string_of_symbol sym) ^ ": " ^ (string_of_arity arity) ^
       " => " ^ (string_of_value v));
   let m, d = get_interp model sym arity in
@@ -500,10 +500,12 @@ let succ model sid fld x =
   let btwn_arity = [loc_field_sort sid; loc_srt; loc_srt; loc_srt], Bool in
   let locs = get_values_of_sort model loc_srt in
   List.fold_left (fun s y ->
-    if y <> x && 
+    try
+      if y <> x && 
       bool_of_value (interp_symbol model Btwn btwn_arity [fld; x; y; y]) &&
       (s == x || bool_of_value (interp_symbol model Btwn btwn_arity [fld; x; y; s]))
-    then y else s)
+      then y else s
+    with Undefined -> s)
     x locs
       
 let complete model =
@@ -783,15 +785,16 @@ let string_of_sorted_value srt v =
   match srt with
   | Int | Bool -> string_of_value v
   | _ ->
-      let srt_str =
-        Str.global_replace (Str.regexp "<") "&lt;"
-          (Str.global_replace (Str.regexp ">") "&gt;" (string_of_sort (elim_loc srt)))
-      in
+      let srt_str = string_of_sort (elim_loc srt) in
       srt_str ^ "!" ^ string_of_value v
+
+let replace_lt_gt str =
+  Str.global_replace (Str.regexp "<") "&lt;"
+    (Str.global_replace (Str.regexp ">") "&gt;" str)
 
 let output_json chan model =
   let string_of_sorted_value srt v = 
-    "\"" ^ string_of_sorted_value srt v ^ "\""
+    "\"" ^ replace_lt_gt (string_of_sorted_value srt v) ^ "\""
   in
   let output_set s esrt =
     let vals = List.map (fun e ->  string_of_sorted_value esrt e) s in
@@ -863,173 +866,136 @@ let output_json chan model =
   List.iter output_symbol defs;
   output_string chan "]"
   
-let output_graphviz chan model terms =
-  let find_term = find_term model in
-  let colors1 = ["blue"; "red"; "green"; "orange"; "darkviolet"] in
-  let colors2 = ["blueviolet"; "crimson"; "olivedrab"; "orangered"; "purple"] in
-  let loc_sorts = get_loc_sorts model in
-  let fld_srts = get_loc_fld_sorts model in
-  let all_flds =
-    Util.flat_map
-      (fun srt ->
-        List.map (fun fld -> (srt, fld))
-          (get_values_of_sort model srt))
-      (SortSet.elements fld_srts)
+(* pretty printing *)
+type shape = Box | Ellipse
+type edge_style = Solid | Dashed
+
+type graph_node = int * string * (string * string) list * shape (* id, name, data values, shape TODO more info for style *)
+
+type graph_edge = int * int * string * edge_style * string (* src, dst, name, style, color TODO more info for style *)
+
+type generic_graph_output = {
+    header: out_channel -> unit;
+    footer: out_channel -> unit;
+    table: out_channel -> string -> (string * string) list -> unit;
+    graph: out_channel -> graph_node list -> graph_edge list -> unit;
+  }
+
+let graphviz_output =
+  let header chan = output_string chan "digraph Model {\n" in
+  let footer chan = output_string chan "}\n" in
+  let l = ref 0 in
+  let out_tbl chan name assoc =
+    let values = List.fold_left (fun acc (_,s) -> StringSet.add s acc) StringSet.empty assoc in
+    if not (StringSet.is_empty values) then
+      begin
+        output_string chan ("{ rank = sink; Legend" ^ (string_of_int !l) ^ " [shape=none, margin=0, label=<\n");
+        output_string chan "    <table border=\"0\" cellborder=\"1\" cellspacing=\"0\" cellpadding=\"4\">\n";
+        output_string chan "      <tr>\n";
+        output_string chan ("        <td colspan=\"2\"><b>" ^ (replace_lt_gt name) ^ "</b></td>\n");
+        output_string chan "      </tr>\n";
+        StringSet.iter
+          (fun s ->
+            let pairs = List.filter (fun (_,s2) -> s = s2) assoc in
+            let keys = List.map fst pairs in
+            let rowspan = List.length keys in
+            Printf.fprintf chan "        <tr><td>%s</td><td rowspan=\"%s\">%s</td></tr>\n" (List.hd keys) (string_of_int rowspan) s;
+            List.iter (fun k -> Printf.fprintf chan "        <tr><td>%s</td></tr>\n" k) (List.tl keys)
+          ) values;
+        output_string chan "</table>\n";
+        output_string chan ">];\n";
+        output_string chan "}\n";
+      end
   in
-  let fld_colors =
-    Util.fold_left2 (fun acc fld color -> ((fld, color)::acc)) [] all_flds colors1
-  in
-  let ep_colors =
-    Util.fold_left2 (fun acc fld color -> (fld, color)::acc) [] all_flds colors2
-  in
-  let get_label fsrt fld =
-    let color =
-      try List.assoc (fsrt, fld) fld_colors with Not_found -> "black"
-    in
-    let f = find_term fld fsrt in
-    Printf.sprintf "label=\"%s\", fontcolor=%s, color=%s" (string_of_term f) color color
-  in
-  let string_of_loc_value srt l = string_of_sorted_value srt l in
-  let output_graph srt =
-    let flds = get_values_of_sort model (loc_field_sort srt) in
-    let locs = get_values_of_sort model (Loc srt) in
-    let read_arity = [loc_field_sort srt; Loc srt], Loc srt in
-    let rsrts =
-      SortSet.fold
-        (function
-          | Map (Loc srt1, Loc rsrt) when srt1 = srt -> SortSet.add rsrt
-          | _ -> fun rsrts -> rsrts)
-        fld_srts SortSet.empty
-    in
-    let output_flds rsrt =
-      let filter_null r =
-        (not !Config.model_null_edge) &&
-        (interp_symbol model Null ([], Loc rsrt) [] = r)
-      in
-      let fld_srt = Map (Loc srt, Loc rsrt) in
-      let flds = get_values_of_sort model fld_srt in
-      let read_arity = [fld_srt; Loc srt], Loc rsrt in
-      List.iter 
-        (fun f ->
-          List.iter (fun l ->
-            try
-              let r = interp_symbol model Read read_arity [f; l] in
-              if filter_null r then () else
-	      let label = get_label fld_srt f in
-	      Printf.fprintf chan "\"%s\" -> \"%s\" [%s]\n" 
-	        (string_of_loc_value srt l) (string_of_loc_value rsrt r) label
-            with Undefined -> ())
-            locs)
-        flds
-    in
-    let output_array () =
-      match srt with
-      | Array esrt ->
-          let cell_srt = Loc (ArrayCell esrt) in
-          let cell_locs = get_values_of_sort model cell_srt in
-          List.iter (fun l ->
-            try
-              List.iter (fun c ->
-                let l1 = interp_symbol model ArrayOfCell ([cell_srt], Loc (Array esrt)) [c] in
-                if l1 = l then begin
-                  Printf.fprintf chan "\"%s\" -> \"%s\" [label=\"array\"]\n" 
-	            (string_of_loc_value (ArrayCell esrt) c) (string_of_loc_value srt l);
-                  let cells = interp_symbol model ArrayCells ([Loc (Array esrt)], Map (Int, cell_srt)) [l] in
-                  let i = interp_symbol model IndexOfCell ([cell_srt], Int) [c] in
-                  let c1 = interp_symbol model Read ([Map (Int, cell_srt); Int], cell_srt) [cells; i] in
-                  if c1 = c then
-                    Printf.fprintf chan "\"%s\" -> \"%s\" [label=\"%d\"]\n" 
-	              (string_of_loc_value srt l) (string_of_loc_value (ArrayCell esrt) c) (int_of_value i)                    
-                end)
-                cell_locs
-            with Not_found | Undefined -> ())
-            locs
-      | _ -> ()
-    in
-    let output_reach () = 
-      List.iter 
-        (fun f ->
-          List.iter (fun l ->
-            let r = succ model srt f l in
-            if is_defined model Read read_arity [f; l] || r == l then () else
-	    let label = get_label (loc_field_sort srt) f in
-	    Printf.fprintf chan "\"%s\" -> \"%s\" [%s, style=dashed]\n" 
-	      (string_of_loc_value srt l) (string_of_loc_value srt r) label)
-            locs)
-        flds
-    in
-    let output_eps () =
-      let arg_srts = [loc_field_sort srt; Set (Loc srt); Loc srt] in
-      let m, _ = get_interp model EntPnt (arg_srts, Loc srt) in
-      ValueListMap.iter (function 
-        | [f; s; l] -> fun v ->
-            let fld = find_term f (loc_field_sort srt) in
-            let set = find_term s (Set (Loc srt)) in
-            let color = try List.assoc (srt, f) ep_colors with Not_found -> "black" in
-            let label =
-              "ep(" ^ (string_of_term fld) ^ ", " ^ (string_of_term set) ^ ")"
-            in
-	    Printf.fprintf chan
-              "\"%s\" -> \"%s\" [label=\"%s\", fontcolor=%s, color=%s, style=dotted]\n"
-              (string_of_loc_value srt l) (string_of_loc_value srt v) label color color
-        | _ -> fun v -> ()) 
-        m
-    in
-    let output_locs () =
-      let output_data_fields loc rsrt =
-        SymbolSet.iter
-          (fun fld ->
-            try 
-              let f = interp_symbol model fld ([], field_sort srt rsrt) [] in
-              let fld_str = string_of_symbol fld in
-              let m, d = find_map_value model f (Loc srt) rsrt in
-              let v = fun_app model (MapVal (m, d)) [loc] in
-              Printf.fprintf chan "      <tr><td><b>%s = %s</b></td></tr>\n" fld_str (string_of_value v)
-            with Undefined -> ())
-          (get_symbols_of_sort model ([], field_sort srt rsrt))
-      in
-      List.iter
-        (fun loc ->
-          Printf.fprintf chan "  \"%s\" [shape=none, margin=0, label=<\n" (string_of_loc_value srt loc);
+  let out_graph chan nodes edges =
+    let out_node (id,name,values,shape) =
+      match shape with
+      | Box ->
+          Printf.fprintf chan "  \"%i\" [shape=none, margin=0, label=<\n" id;
           output_string chan "    <table border=\"0\" cellborder=\"1\" cellspacing=\"0\" cellpadding=\"4\">\n";
-          Printf.fprintf chan "      <tr><td><b>%s</b></td></tr>\n" (string_of_loc_value srt loc);
-          output_data_fields loc Int;
-          output_data_fields loc Bool;
+          Printf.fprintf chan "      <tr><td><b>%s</b></td></tr>\n" (replace_lt_gt name);
+          List.iter
+            (fun (f,v) -> Printf.fprintf chan "      <tr><td><b>%s = %s</b></td></tr>\n" (replace_lt_gt f) (replace_lt_gt v))
+            values;
           output_string chan "</table>\n";
           output_string chan ">];\n"
-        )
-        locs
+      | Ellipse ->
+        assert(values = []);
+        Printf.fprintf chan "  \"%i\" [label=\"%s\"];" id name
     in
-    let output_loc_vars () = 
-      SymbolSet.iter (fun sym ->
-        let v = interp_symbol model sym ([], Loc srt) [] in
-        Printf.fprintf chan "\"%s\" -> \"%s\"\n" (string_of_symbol sym) (string_of_loc_value srt v))
-        (get_symbols_of_sort model ([], Loc srt))
+    let out_edge (src,dst,label,style,color) =
+      match style with
+      | Solid ->
+        Printf.fprintf chan "\"%i\" -> \"%i\" [label=\"%s\", color=\"%s\"]\n" src dst (replace_lt_gt label) color
+      | Dashed ->
+        Printf.fprintf chan "\"%i\" -> \"%i\" [label=\"%s\", color=\"%s\", style=dashed]\n" src dst (replace_lt_gt label) color
     in
-    output_locs ();
-    SortSet.iter output_flds rsrts;
-    output_array ();
-    output_loc_vars ();
-    output_reach ();
-    output_eps ();
+    List.iter out_node nodes;
+    List.iter out_edge edges
   in
-  let print_table_header = 
-    let l = ref 0 in
-    fun title ->
-      l := !l + 1;
-      output_string chan ("{ rank = sink; Legend" ^ (string_of_int !l) ^ " [shape=none, margin=0, label=<\n");
-      output_string chan "    <table border=\"0\" cellborder=\"1\" cellspacing=\"0\" cellpadding=\"4\">\n";
-      output_string chan "      <tr>\n";
-      output_string chan ("        <td colspan=\"2\"><b>" ^ title ^ "</b></td>\n");
-      output_string chan "      </tr>\n";
+  { header = header;
+    footer = footer;
+    table = out_tbl;
+    graph = out_graph }
+
+let visjs_output =
+  let header chan =
+    output_string chan "<!doctype html>\n";
+    output_string chan "<html>\n";
+    output_string chan "<head>\n";
+    output_string chan "  <title>Model</title>\n";
+    output_string chan "  <meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\" />\n";
+    output_string chan "  <script src=\"https://cdnjs.cloudflare.com/ajax/libs/vis/4.2.0/vis.min.js\"></script>\n";
+    output_string chan "  <link href=\"https://cdnjs.cloudflare.com/ajax/libs/vis/4.2.0/vis.min.css\" rel=\"stylesheet\" type=\"text/css\" />\n";
+    output_string chan "  <style type=\"text/css\">\n";
+    output_string chan "    #heapGraph {\n";
+    output_string chan "      width: 80vw;\n";
+    output_string chan "      height: 60vh;\n";
+    output_string chan "      border: 1px solid lightgray;\n";
+    output_string chan "    }\n";
+    output_string chan "    .hspace { height: 2em }\n";
+    output_string chan "    td,th {\n";
+    output_string chan "       padding: 0 10px;\n";
+    output_string chan "       border-bottom: 1px solid;\n";
+    output_string chan "    }\n";
+    output_string chan "    .selected { background: rgba(100,200,100,0.5) }\n";
+    output_string chan "    .highlighted { background: rgba(200,100,100,0.5) }\n";
+    output_string chan "  </style>\n";
+    output_string chan "</head>\n";
+    output_string chan "<body>\n";
+    output_string chan "\n";
+    output_string chan "  <div id=\"heapGraph\"></div>\n"
   in
-  let print_table_footer () =
-    output_string chan "</table>\n";
-    output_string chan ">];\n";
-    output_string chan "}\n";
+  let footer chan =
+    output_string chan "  <div class=\"hspace\"></div>\n";
+    output_string chan "  <div>generated by <a href=\"https://github.com/wies/grasshopper\">GRASShopper</a></div>\n";
+    output_string chan "  <script type=\"text/javascript\">\n";
+    output_string chan "    function iterateOverTableCells(col, fct) {\n";
+    output_string chan "      var tbls = document.getElementsByTagName(\"table\");\n";
+    output_string chan "      for (var i = 0; i < tbls.length; i++) {\n";
+    output_string chan "        var t = tbls[i];\n";
+    output_string chan "        for(var j = 1; j< t.rows.length; j++){\n";
+    output_string chan "          if (t.rows[j].cells.length > col) {\n";
+    output_string chan "            fct(t.rows[j].cells[col])\n";
+    output_string chan "          }\n";
+    output_string chan "        }\n";
+    output_string chan "      }\n";
+    output_string chan "    }\n";
+    output_string chan "    iterateOverTableCells(1, function(c) { c.onclick=function(){ highlight(this.innerHTML); } });\n";
+    output_string chan "    iterateOverTableCells(0, function(c) { c.onclick=function(){ highlightRelated(this); } });\n";
+    output_string chan "  </script>\n";
+    output_string chan "</body>\n";
+    output_string chan "</html>\n"
   in
-  (* group tables in eq classes *)
-  let out_tbl name assoc =
+  let out_tbl chan name assoc =
+    let print_table_header title = 
+      output_string chan "  <div class=\"hspace\"></div>\n";
+      output_string chan "  <table>\n";
+      Printf.fprintf chan "    <tr><th colspan=\"2\"><b>%s</b></th></tr>\n" title;
+    in
+    let print_table_footer () =
+      output_string chan "  </table>\n"
+    in
     let values = List.fold_left (fun acc (_,s) -> StringSet.add s acc) StringSet.empty assoc in
     if not (StringSet.is_empty values) then
       begin
@@ -1039,12 +1005,351 @@ let output_graphviz chan model terms =
             let pairs = List.filter (fun (_,s2) -> s = s2) assoc in
             let keys = List.map fst pairs in
             let rowspan = List.length keys in
-            Printf.fprintf chan "        <tr><td>%s</td><td rowspan=\"%s\">%s</td></tr>\n" (List.hd keys) (string_of_int rowspan) s;
-            List.iter (fun k -> Printf.fprintf chan "        <tr><td>%s</td></tr>\n" k) (List.tl keys)
+            Printf.fprintf chan "    <tr><td>%s</td><td rowspan=\"%i\">%s</td></tr>\n" 
+              (replace_lt_gt (List.hd keys)) rowspan (replace_lt_gt s);
+            List.iter (fun k -> Printf.fprintf chan "    <tr><td>%s</td></tr>\n" (replace_lt_gt k)) (List.tl keys)
           ) values;
         print_table_footer ()
       end
   in
+  let out_graph chan nodes edges =
+    let out_node (id,name,values,shape) =
+      let s = match shape with Box -> "box" | Ellipse -> "ellipse" in
+      Printf.fprintf chan "      {id: %i, label: '%s" id name;
+      List.iter (fun (k,v) -> Printf.fprintf chan "\\n%s = %s" k v) values;
+      Printf.fprintf chan "', shape: '%s', color: 'lightblue'},\n"  s
+    in
+    let out_edge (src,dst,label,style,color) =
+      let s = match style with | Solid -> "" | Dashed -> ", dashed: true" in
+      Printf.fprintf chan "      {from: %i, to: %i, label: '%s', font: {color:'%s'}, color: '%s'%s},\n" src dst label color color s
+    in
+    output_string chan "  <script type=\"text/javascript\">\n";
+    output_string chan "    var nodes = new vis.DataSet([\n";
+    List.iter out_node nodes;
+    output_string chan "    ]);\n";
+    output_string chan "    var edges = new vis.DataSet([\n";
+    List.iter out_edge edges;
+    output_string chan "    ]);\n";
+    output_string chan "    var container = document.getElementById('heapGraph');\n";
+    output_string chan "    var data = {\n";
+    output_string chan "      nodes: nodes,\n";
+    output_string chan "      edges: edges\n";
+    output_string chan "    };\n";
+    output_string chan "    var options = {\n";
+    output_string chan "      layout: {\n";
+    output_string chan "        hierarchical: { sortMethod: \"directed\" }\n";
+    output_string chan "      },\n";
+    output_string chan "      edges: {\n";
+    output_string chan "        smooth: true,\n";
+    output_string chan "        arrows: {to : true },\n";
+    output_string chan "        font: {align: 'horizontal'}\n";
+    output_string chan "      }\n";
+    output_string chan "    };\n";
+    output_string chan "    var network = new vis.Network(container, data, options);\n";
+    output_string chan "    \n";
+    output_string chan "    function getFirstLine(text) {\n";
+    output_string chan "      var index = text.indexOf(\"\\n\");\n";
+    output_string chan "      if (index === -1) index = undefined;\n";
+    output_string chan "      return text.substring(0, index);\n";
+    output_string chan "    }\n";
+    output_string chan "    \n";
+    output_string chan "    var lastHighlight = \"\";\n";
+    output_string chan "    function highlight(terms){\n";
+    output_string chan "      terms = terms.replace(/&lt;/g,\"<\");\n";
+    output_string chan "      terms = terms.replace(/&gt;/g,\">\");\n";
+    output_string chan "      if (terms === lastHighlight) {\n";
+    output_string chan "        terms = \"\";\n";
+    output_string chan "      }\n";
+    output_string chan "      lastHighlight = terms;\n";
+    output_string chan "      nodes.update(nodes.map(function(n) {\n";
+    output_string chan "        var fl = getFirstLine(n.label);\n";
+    output_string chan "        if (n.originalColor === undefined) {\n";
+    output_string chan "          n.originalColor = n.color;\n";
+    output_string chan "        }\n";
+    output_string chan "        if (terms === \"\" || terms.indexOf(fl) > -1) {\n";
+    output_string chan "          n.color = n.originalColor;\n";
+    output_string chan "        } else {\n";
+    output_string chan "          n.color = 'rgba(200,200,200,0.5)';\n";
+    output_string chan "        }\n";
+    output_string chan "        return n;\n";
+    output_string chan "      }));\n";
+    output_string chan "    }\n";
+    output_string chan "    var lastSelected = undefined;\n";
+    output_string chan "    function highlightRelated(cell) {\n";
+    output_string chan "      //clean the current highlight\n";
+    output_string chan "      var elements = document.getElementsByClassName('selected');\n";
+    output_string chan "      for (var i = 0; i < elements.length; i++) {\n";
+    output_string chan "        elements[i].classList.remove('selected');\n";
+    output_string chan "      }\n";
+    output_string chan "      elements = document.getElementsByClassName('highlighted');\n";
+    output_string chan "      for (var i = 0; i < elements.length; i++) {\n";
+    output_string chan "        elements[i].classList.remove('highlighted');\n";
+    output_string chan "      }\n";
+    output_string chan "      if (cell === lastSelected) {\n";
+    output_string chan "        highlight(\"\");\n";
+    output_string chan "        lastSelected = undefined;\n";
+    output_string chan "      } else {\n";
+    output_string chan "        highlight(cell.innerHTML);//TODO should expand the defs ???\n";
+    output_string chan "        lastSelected = cell;\n";
+    output_string chan "        iterateOverTableCells(0, function(c) {\n";
+    output_string chan "          if (c.innerHTML.indexOf(cell.innerHTML) > -1) {\n";
+    output_string chan "            c.classList.add('highlighted');\n";
+    output_string chan "          }\n";
+    output_string chan "        });\n";
+    output_string chan "        cell.classList.remove('highlighted');\n";
+    output_string chan "        cell.classList.add('selected');\n";
+    output_string chan "      }\n";
+    output_string chan "    }\n";
+    output_string chan "  </script>\n";
+  in    
+  { header = header;
+    footer = footer;
+    table = out_tbl;
+    graph = out_graph }
+
+let mixed_graphviz_html =
+  let header chan =
+    output_string chan "<!doctype html>\n";
+    output_string chan "<html>\n";
+    output_string chan "<head>\n";
+    output_string chan "  <title>Model</title>\n";
+    output_string chan "  <meta http-equiv=\"content-type\" content=\"text/html; charset=UTF-8\" />\n";
+    output_string chan "  <style type=\"text/css\">\n";
+    output_string chan "    .hspace { height: 2em }\n";
+    output_string chan "    td,th {\n";
+    output_string chan "       padding: 0 10px;\n";
+    output_string chan "       border-bottom: 1px solid;\n";
+    output_string chan "    }\n";
+    output_string chan "    .selected { background: rgba(100,200,100,0.5) }\n";
+    output_string chan "    .highlighted { background: rgba(200,100,100,0.5) }\n";
+    output_string chan "  </style>\n";
+    output_string chan "</head>\n";
+    output_string chan "<body>\n";
+    output_string chan "\n";
+    output_string chan "  <script type=\"text/javascript\">\n";
+    output_string chan "    function forEachByTag(tag, callback) {\n";
+    output_string chan "      var elements = document.getElementsByTagName(tag);\n";
+    output_string chan "      for (var i = 0; i < elements.length; i++) {\n";
+    output_string chan "        callback(elements[i]);\n";
+    output_string chan "      }\n";
+    output_string chan "    }\n";
+    output_string chan "    function forEachByClass(cls, callback) {\n";
+    output_string chan "      var elements = document.getElementsByClassName(cls);\n";
+    output_string chan "      for (var i = 0; i < elements.length; i++) {\n";
+    output_string chan "        callback(elements[i]);\n";
+    output_string chan "      }\n";
+    output_string chan "    }\n";
+    output_string chan "    function iterateOverTableCells(col, fct) {\n";
+    output_string chan "      forEachByTag('table', function(t) {\n";
+    output_string chan "        for(var j = 1; j< t.rows.length; j++){\n";
+    output_string chan "          if (t.rows[j].cells.length > col) {\n";
+    output_string chan "            fct(t.rows[j].cells[col])\n";
+    output_string chan "          }\n";
+    output_string chan "        }\n";
+    output_string chan "      });\n";
+    output_string chan "    }\n";
+    output_string chan "    function iterateOverNodes(fct) {\n";
+    output_string chan "      forEachByClass('node', fct);\n";
+    output_string chan "    }\n";
+    output_string chan "    function nodeLabel(node) {\n";
+    output_string chan "      return node.getElementsByTagName('text')[0].innerHTML;\n";
+    output_string chan "    }\n";
+    output_string chan "    function contains(s1, s2) {\n";
+    output_string chan "      return s1.indexOf(s2) > -1;\n";
+    output_string chan "    }\n";
+    output_string chan "    function fillNode(node) {\n";
+    output_string chan "      var elements = node.getElementsByTagName('polygon');\n";
+    output_string chan "      for (var i = 0; i < elements.length; i++) {\n";
+    output_string chan "        elements[i].style.fill = \"rgba(100,250,100,0.7)\";\n";
+    output_string chan "      }\n";
+    output_string chan "      elements = node.getElementsByTagName('ellipse');\n";
+    output_string chan "      for (var i = 0; i < elements.length; i++) {\n";
+    output_string chan "        elements[i].style.fill = \"rgba(100,250,100,0.7)\";\n";
+    output_string chan "      }\n";
+    output_string chan "    }\n";
+    output_string chan "    function resetNode(node) {\n";
+    output_string chan "      var elements = node.getElementsByTagName('polygon');\n";
+    output_string chan "      for (var i = 0; i < elements.length; i++) {\n";
+    output_string chan "        elements[i].style.fill = \"none\";\n";
+    output_string chan "      }\n";
+    output_string chan "      elements = node.getElementsByTagName('ellipse');\n";
+    output_string chan "      for (var i = 0; i < elements.length; i++) {\n";
+    output_string chan "        elements[i].style.fill = \"none\";\n";
+    output_string chan "      }\n";
+    output_string chan "    }\n";
+    output_string chan "    function resetCells() {\n";
+    output_string chan "      //clean the current highlight\n";
+    output_string chan "      var elements = document.getElementsByClassName('selected');\n";
+    output_string chan "      for (var i = 0; i < elements.length; i++) {\n";
+    output_string chan "        elements[i].classList.remove('selected');\n";
+    output_string chan "      }\n";
+    output_string chan "      elements = document.getElementsByClassName('highlighted');\n";
+    output_string chan "      for (var i = 0; i < elements.length; i++) {\n";
+    output_string chan "        elements[i].classList.remove('highlighted');\n";
+    output_string chan "      }\n";
+    output_string chan "    }\n";
+    output_string chan "    var lastHighlight = \"\";\n";
+    output_string chan "    function highlight(terms){\n";
+    output_string chan "      resetCells();\n";
+    output_string chan "      if (terms === lastHighlight) {\n";
+    output_string chan "        terms = \"\";\n";
+    output_string chan "      }\n";
+    output_string chan "      lastHighlight = terms;\n";
+    output_string chan "      iterateOverNodes(function(n) {\n";
+    output_string chan "        if (contains(terms, nodeLabel(n))) {\n";
+    output_string chan "          fillNode(n);\n";
+    output_string chan "        } else {\n";
+    output_string chan "          resetNode(n);\n";
+    output_string chan "        }\n";
+    output_string chan "      });\n";
+    output_string chan "    }\n";
+    output_string chan "    var lastSelected = undefined;\n";
+    output_string chan "    function highlightRelated(cell) {\n";
+    output_string chan "      resetCells();\n";
+    output_string chan "      if (cell === lastSelected) {\n";
+    output_string chan "        highlight(\"\");\n";
+    output_string chan "        lastSelected = undefined;\n";
+    output_string chan "      } else {\n";
+    output_string chan "        highlight(cell.innerHTML);//TODO should expand the defs ???\n";
+    output_string chan "        lastSelected = cell;\n";
+    output_string chan "        iterateOverTableCells(0, function(c) {\n";
+    output_string chan "          if (contains(c.innerHTML, cell.innerHTML)) {\n";
+    output_string chan "            c.classList.add('highlighted');\n";
+    output_string chan "          }\n";
+    output_string chan "        });\n";
+    output_string chan "        cell.classList.remove('highlighted');\n";
+    output_string chan "        cell.classList.add('selected');\n";
+    output_string chan "      }\n";
+    output_string chan "    }\n";
+    output_string chan "    function highlightNode(node) {\n";
+    output_string chan "      resetCells();\n";
+    output_string chan "      var l = nodeLabel(node);\n";
+    output_string chan "      iterateOverTableCells(1, function(c) {\n";
+    output_string chan "        if (contains(c.innerHTML, l)) {\n";
+    output_string chan "          c.classList.add('highlighted');\n";
+    output_string chan "        }\n";
+    output_string chan "      });\n";
+    output_string chan "      iterateOverTableCells(0, function(c) {\n";
+    output_string chan "        if (contains(c.innerHTML, l)) {\n";
+    output_string chan "          c.classList.add('highlighted');\n";
+    output_string chan "        }\n";
+    output_string chan "      });\n";
+    output_string chan "      iterateOverNodes(resetNode);\n";
+    output_string chan "      fillNode(node);\n";
+    output_string chan "    }\n";
+    output_string chan "    var scaleFactor = 1.0;\n";
+    output_string chan "    var shiftX = 0;\n";
+    output_string chan "    var shiftY = 0;\n";
+    output_string chan "    var svgW;\n";
+    output_string chan "    var svgH;\n";
+    output_string chan "    function updateViewBox(svg) {\n";
+    output_string chan "      var w2 = svgW / 2.0 / scaleFactor; \n";
+    output_string chan "      var h2 = svgH / 2.0 / scaleFactor;\n";
+    output_string chan "      svg.viewBox.baseVal.x = shiftX + svgW/2.0 - w2;\n";
+    output_string chan "      svg.viewBox.baseVal.y = shiftY + svgH/2.0 - h2;\n";
+    output_string chan "      svg.viewBox.baseVal.width = svgW/2.0 + w2;\n";
+    output_string chan "      svg.viewBox.baseVal.height = svgH/2.0 + h2;\n";
+    output_string chan "    }\n";
+    output_string chan "    var lastX;\n";
+    output_string chan "    var lastY;\n";
+    output_string chan "    function resizeSvg() {\n";
+    output_string chan "      forEachByTag('svg', function(svg) {\n";
+    output_string chan "        svg.style.width='100vw';\n";
+    output_string chan "        svg.style.height='60vh';\n";
+    output_string chan "        svgW = svg.viewBox.baseVal.width;\n";
+    output_string chan "        svgH = svg.viewBox.baseVal.height;\n";
+    output_string chan "        svg.onwheel = function(ev){\n";
+    output_string chan "           if (ev.deltaY > 0) {\n";
+    output_string chan "             scaleFactor = scaleFactor * 0.9;\n";
+    output_string chan "           } else if (ev.deltaY < 0) {\n";
+    output_string chan "             scaleFactor = scaleFactor * 1.1;\n";
+    output_string chan "           }\n";
+    output_string chan "           updateViewBox(svg)\n";
+    output_string chan "           return false;\n";
+    output_string chan "        };\n";
+    output_string chan "        svg.onmousemove = function(ev){\n";
+    output_string chan "          if(ev.buttons == 1) {\n";
+    output_string chan "            var dx = ev.screenX - lastX;\n";
+    output_string chan "            var dy = ev.screenY - lastY;\n";
+    output_string chan "            shiftX = shiftX - dx / scaleFactor;\n";
+    output_string chan "            shiftY = shiftY - dy / scaleFactor;\n";
+    output_string chan "            updateViewBox(svg);\n";
+    output_string chan "          }\n";
+    output_string chan "          lastX=ev.screenX;\n";
+    output_string chan "          lastY=ev.screenY;\n";
+    output_string chan "        };\n";
+    output_string chan "      });\n";
+    output_string chan "    }\n";
+    output_string chan "    function setTooltip(){\n";
+    output_string chan "      forEachByTag('table', function(t) {\n";
+    output_string chan "        var lbl;\n";
+    output_string chan "        for(var j = 1; j < t.rows.length; j++){\n";
+    output_string chan "          var row = t.rows[j].cells;\n";
+    output_string chan "          if (row.length > 1) {\n";
+    output_string chan "            lbl = row[1].innerHTML.replace(/&lt;/g,'<').replace(/&gt;/g,'>');\n";
+    output_string chan "          }\n";
+    output_string chan "          if (lbl !== undefined) {\n";
+    output_string chan "            row[0].title = lbl;\n";
+    output_string chan "          }\n";
+    output_string chan "        }\n";
+    output_string chan "      });\n";
+    output_string chan "    }\n";
+    output_string chan "    window.onload=function() {\n";
+    output_string chan "      iterateOverTableCells(1, function(c) { c.onclick=function(){ highlight(this.innerHTML); } });\n";
+    output_string chan "      iterateOverTableCells(0, function(c) { c.onclick=function(){ highlightRelated(this); } });\n";
+    output_string chan "      iterateOverNodes(function(n) { n.onclick=function(){ highlightNode(this); } });\n";
+    output_string chan "      resizeSvg();\n";
+    output_string chan "      setTooltip();\n";
+    output_string chan "      document.body.ondragstart=function(){return false;};\n";
+    output_string chan "      document.body.ondrop=function(){return false;};\n";
+    output_string chan "    };\n";
+    output_string chan "  </script>\n";
+  in
+  let footer chan =
+    output_string chan "  <div class=\"hspace\"></div>\n";
+    output_string chan "  <div>generated by <a href=\"https://github.com/wies/grasshopper\">GRASShopper</a></div>\n";
+    output_string chan "</body>\n";
+    output_string chan "</html>\n"
+  in
+  let out_graph chan nodes edges =
+    let (out,inp) = Unix.open_process "dot -Tsvg" in
+    graphviz_output.header inp;
+    graphviz_output.graph inp nodes edges;
+    graphviz_output.footer inp;
+    flush inp;
+    let rec read ok =
+      let line = input_line out in
+      let ok2 = ok || Str.string_match (Str.regexp "^<svg") line 0 in
+      if ok2 then
+        begin
+          output_string chan line;
+          output_string chan "\n"
+        end;
+      if line <> "</svg>" then read ok2
+    in
+    read false;
+    let _ = Unix.close_process (out, inp) in
+    ()
+  in    
+  { header = header;
+    footer = footer;
+    table = visjs_output.table;
+    graph = out_graph }
+
+let print_graph output chan model terms =
+  let loc_sorts = get_loc_sorts model in
+  let fld_srts = get_loc_fld_sorts model in
+  let colors1 = ["blue"; "red"; "green"; "orange"; "darkviolet"] in
+  let colors2 = ["blueviolet"; "crimson"; "olivedrab"; "orangered"; "purple"] in
+  let all_flds =
+    Util.flat_map
+      (fun srt -> List.map (fun fld -> (srt, fld)) (get_values_of_sort model srt))
+      (SortSet.elements fld_srts)
+  in
+  let fld_colors = Util.fold_left2 (fun acc fld color -> ((fld, color)::acc)) [] all_flds colors1 in
+  let ep_colors = Util.fold_left2 (fun acc fld color -> (fld, color)::acc) [] all_flds colors2 in
+  let get_color fsrt fld = try List.assoc (fsrt, fld) fld_colors with Not_found -> "black" in
+  let out_tbl = output.table chan in
   let output_int_vars () = 
     let ints = get_symbols_of_sort model ([], Int) in
     let print_ints =
@@ -1081,7 +1386,6 @@ let output_graphviz chan model terms =
     let funs = TermSet.fold
       (fun t acc -> match t with
         | (App (FreeSym _, _, (Bool as srt)) as t)
-        (*| (App (FreeSym _, _, (Set _ as srt)) as t)*)
         | (App (FreeSym _, _ :: _, (Int as srt)) as t)
         | (App (FreeSym _, _ :: _, (Loc _ as srt)) as t)
         | (App (IndexOfCell, _, srt) as t) ->
@@ -1089,30 +1393,173 @@ let output_graphviz chan model terms =
               let res = eval model t in
               ((string_of_term t), (string_of_sorted_value srt res)) :: acc
             with _ -> acc)
-        (*
-        | (App (FreeSym _, _ :: _, (Set _ as srt)) as t) ->
-            (try
-              let res = eval model t in
-              let res_t = find_term res srt in
-              if t <> res_t then
-                ((string_of_term t), (string_of_term res_t)) :: acc
-              else acc
-            with _ -> acc)
-        *)
         | _ -> acc
       ) terms [] 
     in
     out_tbl "predicates and functions" funs
   in
-  let output_graph () =
-    output_string chan "digraph Model {\n";
-    SortSet.iter output_graph loc_sorts;
+  let node_counter = ref 0 in
+  let sorted_value_to_node = Hashtbl.create 64 in
+  let sym_to_node = Hashtbl.create 64 in
+  let nodes = ref [] in
+  let declare_value srt v values =
+    try Hashtbl.find sorted_value_to_node (srt, v)
+    with Not_found ->
+      begin
+        (*print_endline ("declare_value: " ^ (string_of_sorted_value srt v));*)
+        let i = !node_counter in
+        node_counter := i + 1;
+        nodes := (i, string_of_sorted_value srt v, values,Box) :: !nodes;
+        Hashtbl.add sorted_value_to_node (srt, v) i;
+        i
+      end
+  in
+  let declare_symbol sym =
+    try Hashtbl.find sym_to_node sym
+    with Not_found ->
+      begin
+        let i = !node_counter in
+        node_counter := i + 1;
+        nodes := (i, string_of_symbol sym, [], Ellipse) :: !nodes;
+        i
+      end
+  in
+  let get_node srt v =
+    try Hashtbl.find sorted_value_to_node (srt, v)
+    with Not_found ->
+      failwith ("not found: " ^ (string_of_sorted_value srt v))
+  in
+  let edges = ref [] in
+  let declare_locs srt =
+    let locs = get_values_of_sort model (Loc srt) in
+    let output_data_fields loc rsrt =
+      SymbolSet.fold
+        (fun fld acc ->
+          try 
+            let f = interp_symbol model fld ([], field_sort srt rsrt) [] in
+            let fld_str = string_of_symbol fld in
+            let m, d = find_map_value model f (Loc srt) rsrt in
+            let v = fun_app model (MapVal (m, d)) [loc] in
+            (fld_str, (string_of_value v)) :: acc
+          with Undefined -> acc)
+        (get_symbols_of_sort model ([], field_sort srt rsrt)) []
+    in
+    List.iter
+      (fun loc ->
+        let values = (output_data_fields loc) Int @ (output_data_fields loc Bool) in
+        let _ = declare_value srt loc values in ())
+      locs
+  in
+  let mk_graph srt =
+    let flds = get_values_of_sort model (loc_field_sort srt) in
+    let locs = get_values_of_sort model (Loc srt) in
+    let read_arity = [loc_field_sort srt; Loc srt], Loc srt in
+    let rsrts =
+      SortSet.fold
+        (function
+          | Map (Loc srt1, Loc rsrt) when srt1 = srt -> SortSet.add rsrt
+          | _ -> fun rsrts -> rsrts)
+        fld_srts SortSet.empty
+    in
+    let output_loc_vars () = 
+      SymbolSet.iter (fun sym ->
+        let v = interp_symbol model sym ([], Loc srt) [] in
+        let src = declare_symbol sym in
+        let dst = Hashtbl.find sorted_value_to_node (srt, v) in
+        edges := (src, dst, "", Solid, "black") :: !edges)
+        (get_symbols_of_sort model ([], Loc srt))
+    in
+    let output_flds rsrt =
+      let filter_null r =
+        (not !Config.model_null_edge) &&
+        (interp_symbol model Null ([], Loc rsrt) [] = r)
+      in
+      let fld_srt = Map (Loc srt, Loc rsrt) in
+      let flds = get_values_of_sort model fld_srt in
+      let read_arity = [fld_srt; Loc srt], Loc rsrt in
+      List.iter 
+        (fun f ->
+          List.iter (fun l ->
+            try
+              let r = interp_symbol model Read read_arity [f; l] in
+              if not (filter_null r) then 
+	        let label = string_of_term (find_term model f fld_srt) in
+                try 
+                  let src = get_node srt l in
+                  let dst = get_node srt r in
+                  edges := (src,dst,label,Solid,get_color fld_srt f) :: !edges
+                with _ -> ()
+            with Undefined -> ())
+            locs)
+        flds
+    in
+    let output_array () =
+      match srt with
+      | Array esrt ->
+          let cell_srt = Loc (ArrayCell esrt) in
+          let cell_locs = get_values_of_sort model cell_srt in
+          List.iter (fun l ->
+            try
+              List.iter (fun c ->
+                let l1 = interp_symbol model ArrayOfCell ([cell_srt], Loc (Array esrt)) [c] in
+                if l1 = l then begin
+                  let src = declare_value (ArrayCell esrt) c [] in
+                  let dst = get_node srt l in
+                  edges := (src, dst, "array", Solid, "black") :: !edges;
+                  let cells = interp_symbol model ArrayCells ([Loc (Array esrt)], Map (Int, cell_srt)) [l] in
+                  let i = interp_symbol model IndexOfCell ([cell_srt], Int) [c] in
+                  let c1 = interp_symbol model Read ([Map (Int, cell_srt); Int], cell_srt) [cells; i] in
+                  if c1 = c then
+                    edges := (dst, src, string_of_int (int_of_value i), Solid, "black") :: !edges
+                end)
+                cell_locs
+            with Not_found | Undefined -> ())
+            locs
+      | _ -> ()
+    in
+    let output_reach () =
+      List.iter 
+        (fun f ->
+          List.iter
+            (fun l ->
+              let r = succ model srt f l in
+              if is_defined model Read read_arity [f; l] || r == l then () else
+              let src = get_node srt l in
+              let dst = get_node srt r in
+	      let label = string_of_term (find_term model f (loc_field_sort srt)) in
+              edges := (src,dst,label,Dashed,get_color (loc_field_sort srt) f) :: !edges)
+            locs)
+        flds
+    in
+    let output_eps () =
+      let arg_srts = [loc_field_sort srt; Set (Loc srt); Loc srt] in
+      let m, _ = get_interp model EntPnt (arg_srts, Loc srt) in
+      ValueListMap.iter (function 
+        | [f; s; l] -> fun v ->
+            let fld = find_term model f (loc_field_sort srt) in
+            let set = find_term model s (Set (Loc srt)) in
+            let src = get_node srt l in
+            let dst = get_node srt v in
+            let color = try List.assoc (srt, f) ep_colors with Not_found -> "black" in
+            let label = "ep(" ^ (string_of_term fld) ^ ", " ^ (string_of_term set) ^ ")" in
+              edges := (src,dst,label,Dashed,color) :: !edges
+        | _ -> fun v -> ()) 
+        m
+    in
+      SortSet.iter output_flds rsrts;
+      output_array ();
+      output_loc_vars ();
+      output_reach ();
+      output_eps ()
+  in
+    SortSet.iter declare_locs loc_sorts;
+    SortSet.iter mk_graph loc_sorts;
+    output.header chan;
+    output.graph chan !nodes !edges;
     output_sets ();
     output_int_vars ();
     output_freesyms ();
-    output_string chan "}\n"
-  in
-  output_graph ()
-    
-
-      
+    output.footer chan
+ 
+let output_html = print_graph mixed_graphviz_html
+let output_graph = print_graph graphviz_output

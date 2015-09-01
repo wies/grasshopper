@@ -15,28 +15,28 @@ let is_stratified t1 t2 =
       | Map (Loc _, (Bool | Loc _)) ->
         begin
           match t2 with
-          | Bool | Loc _ | Int | Set Int | Set (Loc _) -> true
+          | Loc (FreeSrt ("Data", 0)) | Bool | Loc _ | Int | Set Int | Set (Loc _) -> true
           | _ -> false
         end
       | Map (Loc _, Int) ->
         begin
           match t2 with
-          | Bool | Int | Set Int -> true
+          | Loc (FreeSrt ("Data", 0)) | Bool | Int | Set Int -> true
           | _ -> false
         end
       | Loc _ ->
         begin
           match t2 with
-          | Bool | Int | Set (Loc _) -> true
+          | Loc (FreeSrt ("Data", 0)) | Bool | Int | Set (Loc _) -> true
           | _ -> false
         end
       | Bool -> true
       | Int ->
         begin
           match t2 with
-          | Bool | Set Int -> true
+          | Loc (FreeSrt ("Data", 0)) | Bool | Set Int -> true
           | _ -> false
         end
-      | _ -> t2 = Bool
+      | _ -> t2 = Bool || t2 = Loc (FreeSrt ("Data", 0))
     end
 

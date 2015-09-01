@@ -27,6 +27,8 @@ let keep_types = ref false
 (* Flag that controls whether we are instantiating the axioms or relying on the prover. *)
 let instantiate = ref true
 let stratify = ref true
+(* Flag that controls whether predicates are treated as abstract *)
+let abstract_preds = ref false
 (* Flag that controls whether split lemmas are added *)
 let split_lemmas = ref false
 (* Flag that controls whether unsat cores are dumped for each VC *)
@@ -37,6 +39,8 @@ let dump_smt_queries = ref false
 let named_assertions = ref false
 (* Flag that controls whether the generated VCs are checked. *)
 let verify = ref true
+(* Flat that controls whether the program is only type-checked. *)
+let typeonly = ref false
 (* Flag that controls whether to stop after the first VC that cannot be proved. *)
 let robust = ref false
 (* Flag that enables error messages for on-the-fly checking *)
@@ -62,6 +66,8 @@ let opt_field_mod = ref true
 (* optmisation: self-framing clause for SL predicates *)
 let optSelfFrame = ref false
 
+(* compute the congruence closure as a fixed point (horn clauses) *)
+let ccFixedPoint = ref true
 
 let cmd_options =
   [("-basedir", Arg.Set_string base_dir, "<string>  Base directory for resolving include directives. Default: current working directory\n\nOptions for controlling error reporting and debug output:");
@@ -76,6 +82,7 @@ let cmd_options =
    ("-dumpvcs", Arg.Set dump_smt_queries, " Generate SMT-LIB 2 files for all verification conditions");
    ("-dumpcores", Arg.Set unsat_cores, " Produce unsat cores with every unsat SMT query\n\nOptions for controlling what is checked:");
    ("-procedure", Arg.String (fun p -> procedure := Some p), "<string>  Only check the specified procedure");
+   ("-typeonly", Arg.Set typeonly, " Only type-check the program");
    ("-noverify", Arg.Clear verify, " Only type-check the program and generate verification conditions without checking");
    ("-robust", Arg.Set robust, " Continue even if some verification condition cannot be checked\n\nOptions for controlling verification condition generation:");
    ("-types", Arg.Set keep_types, " Keep type information when translating to intermediate representation");
@@ -86,12 +93,13 @@ let cmd_options =
    ("-fullep", Arg.Set full_ep, " Generates more ep terms");
    ("-noinst", Arg.Clear instantiate, " Let the SMT solver deal with the quantifiers without prior instantiation");
    ("-nostratify", Arg.Clear stratify, " Instantiate quantifiers that satisfy stratified sort restrictions\n\nOptions for controlling backend solver:");
+   ("-nofixedpoint", Arg.Clear ccFixedPoint, " Do not use fixed point for the congruence-closure");
+   ("-abspreds", Arg.Set abstract_preds, " Treat predicates as abstract.");
    ("-splitlemmas", Arg.Set split_lemmas, " Add split lemmas for all terms of sort Loc");
    ("-smtsolver", Arg.Set_string smtsolver, "<solver> Choose SMT solver (z3, cvc4, cvc4mf), e.g., 'z3+cvc4mf'");
    ("-smtpatterns", Arg.Set smtpatterns, " Always add pattern annotations to quantifiers in SMT queries");
    ("-smtsets", Arg.Set use_set_theory, " Use solver's set theory to encode sets (if supported)");
-   ("-smtarrays", Arg.Set encode_fields_as_arrays, " Use solver's array theory to encode fields\n");
+   ("-smtarrays", Arg.Set encode_fields_as_arrays, " Use solver's array theory to encode fields\n\nOptions for compiler:");
    ("-compile", Arg.Set_string compile_to, "<filename> Compile SPL program to a C program outputed as a file with the given name.");
- 
    (*("-optSelfFrame", Arg.Set optSelfFrame, " enable generation of self-framing clauses for SL predicates");*)
   ]

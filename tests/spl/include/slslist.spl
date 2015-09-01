@@ -5,7 +5,7 @@ struct Node {
   var data: Int;
 }
 
-function lseg_footprint(x: Node, y: Node) returns (FP: Set<Node>) {
+footprint function lseg_footprint(x: Node, y: Node) returns (FP: Set<Node>) {
   forall z: Node :: z in FP == (Btwn(next, x, z, y) && z != y)
 }
 

@@ -27,16 +27,6 @@ type var_decl_id =
   | IdentDecl of ident
   | ArrayDecl of var_decl_id
 
-type op = 
-  | OpDiff | OpUn | OpInt 
-  | OpMinus | OpPlus | OpMult | OpDiv 
-  | OpEq | OpGt | OpLt | OpGeq | OpLeq | OpIn
-  | OpPts | OpSepStar | OpSepPlus | OpSepIncl
-  | OpAnd | OpOr | OpImpl | OpNot 
-
-type quantifier_kind =
-  | Forall | Exists
-
 type spl_program =
     { includes : (name * pos) list;
       var_decls : vars;
@@ -73,6 +63,7 @@ and pred =
       pr_outputs : idents;
       pr_locals : vars;
       pr_body : expr; 
+      pr_is_footprint : bool;
       pr_pos : pos;
     }
 
@@ -141,10 +132,8 @@ and expr =
   | IndexOfCell of expr * pos
   | ArrayCells of expr * pos
   | ProcCall of ident * exprs * pos
-  | PredApp of ident * exprs * pos
+  | PredApp of pred_sym * exprs * pos
   | Quant of quantifier_kind * quant_var list * expr * pos
-  | Access of expr * pos
-  | BtwnPred of expr * expr * expr * expr * pos
   | UnaryOp of op * expr * pos
   | BinaryOp of expr * op * expr * typ * pos
   | Ident of ident * pos
@@ -152,8 +141,22 @@ and expr =
 
 and exprs = expr list
 
+and op = 
+  | OpDiff | OpUn | OpInt 
+  | OpMinus | OpPlus | OpMult | OpDiv 
+  | OpEq | OpGt | OpLt | OpGeq | OpLeq | OpIn
+  | OpPts | OpSepStar | OpSepPlus | OpSepIncl
+  | OpAnd | OpOr | OpImpl | OpNot 
+
+and pred_sym =
+  | AccessPred | BtwnPred | DisjointPred | FramePred | ReachPred | Pred of ident
+      
+and quantifier_kind =
+  | Forall | Exists
+
 and annotation =
-  | GeneratorAnnot of exprs * expr
+  | GeneratorAnnot of (expr * ident list) list * expr
+  | PatternAnnot of expr
   | CommentAnnot of string
 
 let pos_of_expr = function
@@ -168,8 +171,6 @@ let pos_of_expr = function
   | ArrayOfCell (_, p)
   | IndexOfCell (_, p)
   | ArrayCells (_, p)
-  | Access (_, p)
-  | BtwnPred (_, _, _, _, p)
   | Quant (_, _, _, p)
   | ProcCall (_, _, p)
   | PredApp (_, _, p)

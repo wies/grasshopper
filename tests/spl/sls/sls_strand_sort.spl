@@ -42,7 +42,7 @@ procedure pull_strands(lst: Node) returns (sorted: Node, rest: Node)
   requires lseg(lst, null) &*& lst != null;
   ensures slseg(sorted, null) &*& lseg(rest, null);
 {
-  var sorted: Node, sorted_tail: Node, rest: Node, curr: Node, prv: Node;
+  var sorted_tail: Node, curr: Node, prv: Node;
   rest := lst.next;
   curr := rest;
   prv := null;

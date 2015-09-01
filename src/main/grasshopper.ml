@@ -98,14 +98,15 @@ let parse_spl_program main_file =
       [(main_file, GrassUtil.dummy_position)]
       SplSyntax.empty_spl_program
   in
-  SplSyntax.add_alloc_decl prog
+  SplChecker.check (SplSyntax.add_alloc_decl prog)
 
+   
 (** Check SPL program in main file [file] and procedure [proc] *)
-let check_spl_program file proc =
-  let spl_prog = parse_spl_program file in
+let check_spl_program spl_prog proc =
   let prog = SplTranslator.to_program spl_prog in
   let simple_prog = Verifier.simplify prog in
   let check simple_prog proc =
+    if !Config.typeonly then () else
     let errors = Verifier.check_proc simple_prog proc in
     List.iter 
       (fun (pp, error_msg, model) ->
@@ -151,14 +152,12 @@ let print_stats start_time =
     Printf.printf "  # measured calls: %.2d\n" !Util.measured_calls
 
 (** Print C program equivalent *)
-let print_c_program file =
-  if ((!Config.compile_to) <> "") then
-    let spl_prog = parse_spl_program file in
-    let c_prog_string = SplCompiler.to_program_string spl_prog in
+let print_c_program spl_prog =
+  if !Config.compile_to <> "" then begin
     let oc = open_out !Config.compile_to in
-    Printf.fprintf oc "%s" c_prog_string;
+    SplCompiler.compile oc spl_prog;
     close_out oc;
-  else 
+  end else 
     ()
 
 (** Main entry of GRASShopper *)
@@ -177,9 +176,10 @@ let _ =
     if !main_file = ""
     then cmd_line_error "input file missing"
     else begin
-      check_spl_program !main_file !Config.procedure;
+      let spl_prog = parse_spl_program !main_file in
+      check_spl_program spl_prog !Config.procedure;
       print_stats start_time; 
-      print_c_program !main_file
+      print_c_program spl_prog
     end
   with  
   | Sys_error s -> 

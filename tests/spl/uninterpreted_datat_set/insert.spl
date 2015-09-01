@@ -22,14 +22,14 @@ predicate lseg(x: Node, y: Node)(FP: Set<Node>) {
 }
 
 predicate lseg_strictly_increasing(x: Node, FP: Set<Node>) {
-  forall y: Node, z: Node :: y in FP && z in FP && Btwn(next,x,y,z) ==> lt(y.data, z.data) || y == z @(matching y yields y.data)
+  forall y: Node, z: Node :: y in FP && z in FP && Btwn(next,x,y,z) ==> lt(y.data, z.data) || y == z
 }
 
 function data_witness(v: Data, d: Map<Node, Data>, FP: Set<Node>) returns (res: Node) 
 
 function content(FP: Set<Node>) returns (C: Set<Data>) {
-  (forall x: Node :: x in FP ==> x == data_witness(x.data, data, FP)) &&
-  (forall x: Node :: x in FP ==> x.data in C) &&
+  (forall x in FP :: x == data_witness(x.data, data, FP)) &&
+  (forall x in FP :: x.data in C) &&
   (forall v in C :: data_witness(v, data, FP) in FP) &&
   (forall v: Data :: v !in C ==> data_witness(v, data, FP) == null) &&
   (forall v in C :: v == data_witness(v, data, FP).data @(matching v yields data_witness(v, data, FP).data))

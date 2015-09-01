@@ -204,6 +204,8 @@ let mk_false = BoolOp (Or, [])
 let mk_bool b = if b then mk_true else mk_false
 
 let mk_bool_term b = App (BoolConst b, [], Bool)
+let mk_true_term = mk_bool_term true
+let mk_false_term = mk_bool_term false
 
 let mk_int i = App (IntConst i, [], Int)
 
@@ -340,6 +342,12 @@ let smk_elem ?(ann=[]) e = function
 (** Constructor for subset constraints.*)
 let mk_subseteq s t = mk_atom SubsetEq [s; t]
 
+(** Term constructor for disjointness constraints.*)
+let mk_disjoint_term s t = mk_app Bool Disjoint [s; t]
+
+(** Constructor for disjointness constraints.*)
+let mk_disjoint s t = mk_atom Disjoint [s; t]
+
 (** Term constructor for frame predicates.*)
 let mk_frame_term x a f f' = mk_app Bool Frame [x; a; f; f']
 
@@ -383,7 +391,8 @@ let rec mk_binder ?(ann=[]) b bv f =
           mk_binder ~ann:(ann @ ann') b bv f'
       | Binder (b', bv', f', ann') when b = b' ->
           mk_binder ~ann:(ann @ ann') b (bv @ bv') f'
-   | _ -> Binder (b, bv, f, ann)
+      | BoolOp (op, []) -> f
+      | _ -> Binder (b, bv, f, ann)
 
 (** Constructor for universal quantification.*)
 let mk_forall ?(ann=[]) bv f = mk_binder ~ann:ann Forall bv f
@@ -478,8 +487,10 @@ let smk_op op fs =
             end
 	| BoolOp (op', fs0) :: fs1 when op = op' -> 
 	    mkop1 (fs0 @ fs1) acc
-	| BoolOp (And, []) :: fs1 when op = Or -> mk_true
-	| BoolOp (Or, []) :: fs1 when op = And -> mk_false
+	| BoolOp (And, []) :: fs1
+        | Atom (App (BoolConst true, [], _), _) :: fs1 when op = Or -> mk_true
+	| BoolOp (Or, []) :: fs1
+        | Atom (App (BoolConst false, [], _), _) :: fs1 when op = And -> mk_false
 	| f :: fs1 -> mkop1 fs1 (FormSet.add f acc)
       in mkop1 fs FormSet.empty
 
@@ -500,6 +511,8 @@ let rec nnf = function
       Binder (b, [], nnf (mk_not f), a)
   | BoolOp (Not, [Binder (b, vs, f, a)]) -> 
       Binder (dualize_binder b, vs, nnf (mk_not f), a)
+  | BoolOp (Not, [Atom (App (BoolConst b, [], _), _)]) ->
+      mk_bool (not b)
   | BoolOp (op, fs) -> smk_op op (List.map nnf fs)
   | Binder (b, vs, f, a) -> mk_binder ~ann:a b vs (nnf f)
   | f -> f
@@ -546,6 +559,14 @@ let mk_iff a b =
 
 (** {6 Generic formula manipulation and substitution functions} *)
 
+(** Check whether formula [f] is ground *)
+let rec is_ground = function
+   | Binder (_, [], f, _) -> is_ground f
+   | Binder (_, _, _, _) -> false
+   | BoolOp (_, fs) -> List.for_all is_ground fs
+   | _ -> true
+   
+    
 (** Fold all terms appearing in the formula [f] using catamorphism [fn] and initial value [init] *)
 let fold_terms fn init f =
   let fa acc = function
@@ -724,7 +745,8 @@ let ground_terms ?(include_atoms=false) f =
 (** Computes the set of all free variables that appear below function symbols in formula [f]. *)
 let vars_in_fun_terms f =
   let rec fvt vars = function
-    | Var (id, srt) -> IdSrtSet.add (id, srt) vars
+    | Var (id, srt) ->
+        IdSrtSet.add (id, srt) vars
     | App (_, ts, _) ->
 	List.fold_left fvt vars ts
   in
@@ -1057,7 +1079,7 @@ let propagate_binder b f =
             Binder (b1, vs, f1, a), vs1
         | _ -> 
             let f1, vs1 = prop [] f in
-            Binder (b1, vs, mk_binder (dualize_binder b) vs1 f1, a), tvs)
+            mk_binder ~ann:a b1 vs (mk_binder (dualize_binder b) vs1 f1), tvs)
     | f -> 
         let fv_f = fv f in
         f, List.filter (fun (x, _) -> IdSet.mem x fv_f) tvs
@@ -1118,6 +1140,7 @@ let foralls_to_exists f =
         let g1 = distribute_and bvs gs [g] in
         Binder (b, [], g1, a)
     | Binder (_, [], g, a) :: gs1 ->
+        assert (List.for_all (function TermGenerator _ -> false | _ -> true) a);
         distribute_and bvs gs (g :: gs1)
     | g :: gs1 -> distribute_and bvs (g :: gs) gs1
     | [] -> smk_forall bvs (mk_or (List.rev gs))
@@ -1134,7 +1157,9 @@ let foralls_to_exists f =
             let nodefs, defs, g = find_defs bvs_set [] f in
             let ubvs, ebvs = List.partition (fun (x, _) -> IdSet.mem x nodefs) bvs in
             (match ebvs with
-            | [] -> distribute_and bvs [] [g]
+            | [] ->
+                (*assert (List.for_all (function TermGenerator _ -> false | _ -> true) a);*)
+                annotate (distribute_and bvs [] [g]) a
             | _ -> 
                 let g1 = cf (mk_forall ubvs g) in
                 Binder (Exists, ebvs, mk_and (defs @ [g1]), a))

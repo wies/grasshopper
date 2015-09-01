@@ -8,24 +8,26 @@ open SimplifyGrass
 
  
 (** Remove binders for universal quantified variables in [axioms] that satisfy the condition [open_cond]. *)
-let open_axioms ?(force=false) open_cond axioms = 
+let open_axioms ?(force=false) open_cond axioms =
+  let extract_generators generators a =
+    List.fold_right 
+      (fun ann (generators, a1) ->
+        match ann with
+        | TermGenerator (g, t) ->
+            let gen = (g, t) in
+            gen :: generators, a1
+        | _ -> generators, ann :: a1
+      ) a (generators, [])
+  in
   let rec open_axiom generators = function
     | Binder (b, [], f, a) ->
         let f1, generators1 = open_axiom generators f in
-        Binder (b, [], f1, a), generators1
+        let generators2, a1 = extract_generators generators a in
+        Binder (b, [], f1, a1), generators2
     | Binder (b, vs, f, a) -> 
         (* extract term generators *)
-        let generators1, a1 =
-          List.fold_right 
-            (fun ann (generators, a1) ->
-              match ann with
-              | TermGenerator (g, t) ->
-                  let gen = (g, t) in
-                  gen :: generators, a1
-              | _ -> generators, ann :: a1
-            ) a (generators, [])
-        in
-        let vs1 = List.filter (~~ (open_cond f)) vs in
+        let generators1, a1 = extract_generators generators a in
+        let vs1 = List.filter (~~ (open_cond (annotate f a))) vs in
         let f1, generators2 = open_axiom generators1 f in
         if !Config.instantiate || force then
           Binder (b, vs1, f1, a1), generators2
@@ -54,14 +56,14 @@ let isFunVar f =
 (** Compute the set of generated ground terms for formulas [fs] *)
 let generated_ground_terms fs =
   let _, generators = open_axioms isFunVar fs in
-  let gts = generate_terms generators (ground_terms ~include_atoms:true (smk_and fs)) in
+  let gts = generate_terms generators (ground_terms ~include_atoms:true (mk_and fs)) in
   gts
   
 (** Eliminate all implicit and explicit existential quantifiers using skolemization.
  ** Assumes that [f] is typed and in negation normal form. *)
 let elim_exists =
   let e = fresh_ident "?e" in
-  let rec elim_neq = function
+  let rec elim_neq bvs = function
     | BoolOp (Not, [Atom (App (Eq, [s1; s2], _), a)]) as f ->
 	(match sort_of s1 with
 	| Set srt ->
@@ -69,16 +71,22 @@ let elim_exists =
 	    mk_exists [(e, srt)] (smk_or [smk_and [smk_elem ~ann:a ve s1; mk_not (smk_elem ~ann:a ve s2)];
 					 smk_and [smk_elem ~ann:a ve s2; mk_not (smk_elem ~ann:a ve s1)]])
 	| _ -> f)
-    | BoolOp (Not, [Atom (App (SubsetEq, [s1; s2], _), a)]) ->
+    | BoolOp (Not, [Atom (App (Disjoint, [s1; s2], _), a)]) when bvs = [] ->
+        let srt = element_sort_of_set s1 in
+        elim_neq bvs (mk_not (Atom (App (Eq, [mk_inter [s1; s2]; mk_empty (Set srt)], Bool), a)))
+    | BoolOp (Not, [Atom (App (SubsetEq, [s1; s2], _), a)]) when bvs = [] ->
 	let srt = element_sort_of_set s1 in
 	let ve = mk_var srt e in
 	mk_exists [(e, srt)] (annotate (smk_and [smk_elem ve s1; mk_not (smk_elem ve s2)]) a)
-    | BoolOp (op, fs) -> smk_op op (List.map elim_neq fs)
-    | Binder (b, vs, f, a) -> Binder (b, vs, elim_neq f, a)
-    | f -> f
+    | BoolOp (op, fs) -> smk_op op (List.map (elim_neq bvs) fs)
+    | Binder (Exists, vs, f, a) ->
+        mk_exists ~ann:a vs (elim_neq bvs f)
+    | Binder (Forall, vs, f, a) ->
+        mk_forall ~ann:a vs (elim_neq (bvs @ vs) f)
+    | f -> f 
   in
   List.map (fun f -> 
-    let f1 = elim_neq f in
+    let f1 = elim_neq [] f in
     let f2 = propagate_exists f1 in
     skolemize f2)
 
@@ -185,155 +193,26 @@ let btwn_field_generators fs =
   List.fold_left make_generators [] fs 
     
     
-(** Compute the set of all fields that are used in reachability predicates. *)
-let btwn_fields fs gts =
-  let partition_of = field_partitions fs gts in
-  let fs1, _ = open_axioms (fun f v -> true) fs in
-  let collect_symbols acc f =
-    let btwn_flds flds = function
-      | App (Btwn, fld :: _, _) ->
-          let vs = fv_term fld in
-          if IdSet.is_empty vs then flds
-          else TermSet.add fld flds
-      | _ -> flds
-    in
-    let btwn_flds = fold_terms btwn_flds TermSet.empty f in
-    let rec related_symbols acc = function
-      | App (sym, ts, _) ->
-          let acc1 = match sym with
-          | FreeSym id when not (IdMap.mem id acc) ->
-              let is, _ =
-                List.fold_left
-                  (fun (is, i) t ->
-                    if TermSet.mem t btwn_flds
-                    then (i :: is, i+1)
-                    else (is, i+1))
-                  ([], 0) ts
-              in
-              if is <> []
-              then IdMap.add id (List.rev is) acc
-              else acc
-          | _ -> acc
-          in
-          List.fold_left related_symbols acc1 ts
-      | _ -> acc
-    in
-    fold_terms related_symbols acc f    
-  in
-  let related_symbols = List.fold_left collect_symbols IdMap.empty fs1 in
-  (*print_endline "Related symbols:";
-  IdMap.iter (fun id is ->
-    Printf.printf "%s -> %s\n" (string_of_ident id) (String.concat ", " (List.map string_of_int is))) related_symbols;*)
-  let rec collect_fields flds = function
-    | App (Btwn, fld :: _, _) when IdSet.is_empty (fv_term fld) -> 
-        TermSet.union (partition_of fld) flds
-    | App (sym, ts, _) ->
-        let flds1 = match sym with
-        | FreeSym id ->
-            let is =
-              try IdMap.find id related_symbols with Not_found -> []
-            in
-            let flds1, _, _ =
-              List.fold_left (fun (flds, is, j) t ->
-                match t, is with
-                | fld, i :: is1 when i = j && not (IdSet.is_empty (fv_term fld)) ->
-                    (flds, is1, j + 1)
-                | fld, i :: is1 when i = j ->
-                    (TermSet.union (partition_of fld) flds, is1, j + 1)
-                | _ -> (flds, is, j + 1))
-                (flds, is, 0) ts
-            in
-            flds1
-        | _ -> flds
-        in
-        List.fold_left collect_fields flds1 ts
-    | _ -> flds
-  in
-  let flds = fold_terms collect_fields TermSet.empty (smk_and fs) in
-  flds
-
-let btwn_fields_in_fs fs = btwn_fields fs (generated_ground_terms fs)
-
+(** Add axioms for frame predicates. *)
 let add_frame_axioms fs =
-  let btwn_flds = btwn_fields_in_fs fs in
-  let expand_frame x a f f' =
-    let frame = mk_diff a x in
-    let reduce_graph id =
-      let loc1 = Axioms.loc1 id in
-      let loc2 = Axioms.loc2 id in
-      let loc3 = Axioms.loc3 id in
-
-      let replacement_pts =
-        Axioms.mk_axiom "pts_frame"
-          (mk_implies
-             (smk_elem loc1 frame)
-             (mk_eq (mk_read f loc1) (mk_read f' loc1))
-          )
-      in
-     
-      let axioms (*add reach*) =
-        let ep v = mk_ep f x v in
-        let reachwo_f = Axioms.reachwo_Fld f in
-        let reach_f x y z = mk_btwn f x z y in
-        let reach_f' x y z = mk_btwn f' x z y in
-        if TermSet.mem f' btwn_flds then
-          match f' with
-          | App (FreeSym (p, _), _, _) when p = "parent" ->
-              [Axioms.mk_axiom "reach_frame"
-                 (mk_sequent
-                    [smk_elem loc1 frame]
-                    [mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)])]
-          | _ ->
-              [replacement_pts;
-               Axioms.mk_axiom "reach_frame1"
-                 (mk_sequent
-                    [reachwo_f loc1 loc2 (ep loc1)]
-                    [(mk_iff 
-                       (reach_f loc1 loc2 loc3)
-                       (reach_f' loc1 loc2 loc3))]);
-               Axioms.mk_axiom "reach_frame2"
-                 (mk_implies
-                    (mk_and [mk_not (smk_elem loc1 x); mk_eq loc1 (ep loc1)])
-                    (mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)))
-              ]
-        else [replacement_pts]
-      in
-      mk_and axioms
-    in
-    let reduce_data id =
-      let loc1 = Axioms.loc1 id in
-      Axioms.mk_axiom "data_frame"
-        (mk_implies
-           (smk_elem loc1 frame)
-           (mk_eq (mk_read f loc1) (mk_read f' loc1))
-        )
-    in
-    (*Debug.amsg ("expanding frame for " ^ (string_of_term f) ^ "\n");*)
-    match sort_of f with
-    | Map (Loc id1, Loc id2) ->
-       if (id1 = id2) then reduce_graph id1
-       else reduce_data id1
-    | Map (Loc id, Int) | Map (Loc id, Bool) ->
-       reduce_data id
-    | other ->
-       failwith ("reduce_frame did not expect field of type " ^ (string_of_sort other))
+  let gs = ground_terms ~include_atoms:true (mk_and fs) in
+  let frame_sorts =
+    TermSet.fold
+      (fun t frame_sorts ->
+        match t with
+        | App (Frame, [_; _; f; _], _) ->
+            SortSet.add (sort_of f) frame_sorts
+        | _ -> frame_sorts
+      )
+      gs SortSet.empty
   in
-  let rec process f frame_axioms = match f with
-    | Atom (App (Frame, [x; a; fld; fld'], _), ann) when fld <> fld' ->
-        mk_implies f (annotate (expand_frame x a fld fld') ann) :: frame_axioms
-    | BoolOp (op, fs) -> 
-        List.fold_left (fun acc f -> process f acc)
-          frame_axioms fs
-    | Binder (b, vs, f, a) ->
-        process f frame_axioms
-    | _ -> frame_axioms        
-  in
-  let frame_axioms =
-    List.fold_left
-      (fun acc f -> process f acc)
-      [] fs
-  in
-  Util.rev_concat [frame_axioms; fs] 
+  SortSet.fold
+    (fun srt fs ->
+      match srt with
+      | Map (Loc srt1, srt2) ->
+          Axioms.frame_axioms srt1 srt2 @ fs
+      | _ -> fs)
+    frame_sorts fs
  
 
 let rec valid = function
@@ -363,19 +242,19 @@ let add_set_axioms fs =
     | App (sym, ts, srt) -> App (sym, List.map unflatten ts, srt)
     | t -> t
   in
-  let rec simplify_term = function
-    (* todo: flatten unions, intersections, and enumerations *)
-    | App (SubsetEq, [t1; t2], _) -> 
-        let t11 = unflatten t1 in
-        let t21 = unflatten t2 in
-        (*let s = mk_free_const ?srt:(sort_of t11) (fresh_ident "S") in*)
-        App (Eq, [t21; mk_union [t11; t21]], Bool)
-    | t -> unflatten t
-  in
   let rec simplify = function
     | BoolOp (op, fs) -> BoolOp (op, List.map simplify fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, simplify f, a)
-    | Atom (t, a) -> Atom (simplify_term t, a)
+    | Atom (App (Disjoint, [t1; t2], _), a) when not !Config.abstract_preds ->
+        let srt = element_sort_of_set t1 in
+        let t11 = unflatten t1 in
+        let t21 = unflatten t2 in
+        Atom (mk_eq_term (mk_empty (Set srt)) (mk_inter [t11; t21]), a)
+    | Atom (App (SubsetEq, [t1; t2], _), a) when not !Config.abstract_preds -> 
+        let t11 = unflatten t1 in
+        let t21 = unflatten t2 in
+        Atom (mk_eq_term t21 (mk_union [t11; t21]), a)
+    | Atom (t, a) -> Atom (unflatten t, a)
   in
   let fs1 = List.map simplify fs in
   let elem_srts = 
@@ -426,7 +305,7 @@ let add_ep_axioms fs =
   axioms @ fs
  
 let add_read_write_axioms fs =
-  let gts = ground_terms ~include_atoms:true (smk_and fs) in
+  let gts = ground_terms ~include_atoms:true (mk_and fs) in
   let has_loc_field_sort = function
     | App (_, _, Map(Loc id1, Loc id2)) -> (*id1 = id2*) true
     | _ -> false
@@ -440,7 +319,7 @@ let add_read_write_axioms fs =
   (* CAUTION: not forcing the instantiation here would yield an inconsistency with the read/write axioms *)
   let null_ax1 = instantiate_with_terms ~force:true false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
   let fs1 = null_ax1 @ fs in
-  let gts = TermSet.union (ground_terms ~include_atoms:true (smk_and null_ax1)) gts in
+  let gts = TermSet.union (ground_terms ~include_atoms:true (mk_and null_ax1)) gts in
   let field_sorts = TermSet.fold (fun t srts ->
     match sort_of t with
     | Map (Loc _, _) as srt -> SortSet.add srt srts
@@ -509,33 +388,19 @@ let add_read_write_axioms fs =
  ** Assumes that f is typed. *)
 let add_reach_axioms fs gts =
   let struct_sorts =
-    TermSet.fold
-      (fun t struct_sorts -> match t with
-      | App (_, _, Map(Loc srt1, Loc srt2)) 
-      | Var (_, Map(Loc srt1, srt2)) when srt1 = srt2 -> SortSet.add srt1 struct_sorts
+    SortSet.fold
+      (fun srt struct_sorts -> match srt with
+      | Map(Loc srt1, Loc srt2) when srt1 = srt2 ->
+          SortSet.add srt1 struct_sorts
       | _ -> struct_sorts)
-      gts SortSet.empty
+      (sorts (mk_and fs)) SortSet.empty
   in
-  (*let btwn_flds = btwn_fields fs gts in
-  let reach_write_ax = 
-    TermSet.fold (fun t write_ax ->
-      match t with
-      | App (Write, [fld; loc1; loc2], _) ->
-          if TermSet.mem fld btwn_flds 
-          then Axioms.reach_write_axioms fld loc1 loc2 @ write_ax
-          else write_ax
-      | _ -> write_ax) gts []
-  in*)
-  (*let non_updated_flds = 
-    TermSet.filter 
-      (fun t -> List.for_all 
-	  (function 
-	    | (App (Write, _, _)) -> false 
-	    | _ -> true) (CongruenceClosure.class_of t classes))
-      btwn_flds
+  let classes = CongruenceClosure.congr_classes fs gts in
+  let axioms =
+    SortSet.fold
+      (fun srt axioms -> Axioms.reach_axioms classes srt @ Axioms.reach_write_axioms srt @ axioms)
+      struct_sorts []
   in
-  let structs = struct_sorts_of_fields non_updated_flds in*)
-  let axioms = SortSet.fold (fun srt axioms -> Axioms.reach_axioms srt @ Axioms.reach_write_axioms srt @ axioms) struct_sorts [] in
   rev_concat [axioms; fs], gts
 
 let add_array_axioms fs gts =
@@ -563,17 +428,42 @@ let instantiate read_propagators fs gts =
       end
   in
   let rec is_equation = function
-    | BoolOp (And, fs) -> List.for_all is_equation fs
+    | BoolOp (_, fs) -> List.for_all is_equation fs
     | Binder (Forall, _, f, _) -> is_equation f
     | Atom (App (Eq, _, _), _) -> true
+    | Atom (App (FreeSym _, _, _), _) -> true
     | _ -> false
   in
   let equations, others = List.partition is_equation fs1 in
   let classes = CongruenceClosure.congr_classes fs gts1 in
   let eqs = instantiate_with_terms true equations classes in
-  let gts1 = TermSet.union (ground_terms (mk_and eqs)) gts1 in 
+  let gts1 = TermSet.union (ground_terms ~include_atoms:true (mk_and eqs)) gts1 in 
   let classes = CongruenceClosure.congr_classes (List.rev_append eqs fs) gts1 in
-  List.rev_append eqs (instantiate_with_terms true others classes), gts1
+  let implied =
+    List.fold_left
+      (fun acc cls ->
+        if (List.length cls > 1 && sort_of (List.hd cls) <> Bool) then
+          let h = List.hd cls in
+          let eq = List.map (fun t -> GrassUtil.mk_eq h t) (List.tl cls) in
+          List.rev_append eq acc
+        else
+          acc
+      )
+      []
+      classes
+  in
+  let fs2, gts2 =
+    let fs1 = instantiate_with_terms true others classes in
+    let gts_inst = generated_ground_terms (List.rev_append eqs fs1) in
+    let gts2 = generate_terms (read_propagators @ btwn_gen @ generators) gts_inst in
+    if TermSet.subset gts2 gts_inst
+    then fs1, gts1
+    else
+      let classes = CongruenceClosure.congr_classes (List.rev_append eqs fs) gts2 in
+      instantiate_with_terms true others classes, gts2
+      (*fs1, gts1*)
+  in
+  List.rev_append implied (List.rev_append eqs fs2), gts2
 
 let add_terms fs gts =
   if not !Config.smtpatterns && !Config.instantiate then fs else
@@ -668,6 +558,13 @@ let reduce f =
   let fs, gts = add_reach_axioms fs gts in
   let fs = add_array_axioms fs gts in
   let fs = if !Config.named_assertions then fs else List.map strip_names fs in
+  let _ =
+    if Debug.is_debug 1 then begin
+      print_endline "VC before instantiation:";
+      print_form stdout (mk_and fs);
+      print_newline ()
+    end
+  in
   let fs, gts = instantiate read_propagators fs gts in
   let fs = add_terms fs gts in
   let fs = encode_labels fs in

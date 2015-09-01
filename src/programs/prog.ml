@@ -143,7 +143,7 @@ type pred_decl = {
     pred_body : spec; (** predicate body *)
     pred_pos : source_position; (** position of declaration *)
     pred_accesses : IdSet.t; (** accessed variables *)
-    pred_is_free : bool; (** assume when occurs positively *)
+    pred_is_footprint : bool; (** assume when occurs positively *)
   } 
 
 (** Program *)
@@ -792,6 +792,12 @@ let subst_id_pred map pred =
       pred_body = body;
       pred_accesses = accesses }
 
+let result_sort_of_pred pred =
+  match pred.pred_outputs with
+  | [] -> Bool
+  | id :: _ ->
+      (IdMap.find id pred.pred_locals).var_sort
+    
 
 (** Pretty printing *)
 

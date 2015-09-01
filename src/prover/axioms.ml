@@ -32,7 +32,9 @@ let s3 = mk_loc_set_var "?Z"
 let is1 = fresh_ident "?N", Set Int 
 let i1 = fresh_ident "?i", Int
 let i2 = fresh_ident "?j", Int
-
+let d = fresh_ident "?d"
+let e = fresh_ident "?e"
+    
 let loc1 struct_srt = mk_var (snd (l1 struct_srt)) (fst (l1 struct_srt))
 let loc2 struct_srt = mk_var (snd (l2 struct_srt)) (fst (l2 struct_srt))
 let loc3 struct_srt = mk_var (snd (l3 struct_srt)) (fst (l3 struct_srt))
@@ -41,6 +43,8 @@ let loc5 struct_srt = mk_var (snd (l5 struct_srt)) (fst (l5 struct_srt))
 let fld1 struct_srt = mk_var (snd (f1 struct_srt)) (fst (f1 struct_srt))
 let fld2 struct_srt = mk_var (snd (f2 struct_srt)) (fst (f2 struct_srt))
 let fld3 struct_srt = mk_var (snd (f3 struct_srt)) (fst (f3 struct_srt))
+let dfld1 struct_srt res_srt = mk_var (Map (Loc struct_srt, res_srt)) d
+let dfld2 struct_srt res_srt = mk_var (Map (Loc struct_srt, res_srt)) e 
 let set1 struct_srt = mk_var (snd (s1 struct_srt)) (fst (s1 struct_srt))
 let set2 struct_srt = mk_var (snd (s2 struct_srt)) (fst (s2 struct_srt))
 let set3 struct_srt = mk_var (snd (s3 struct_srt)) (fst (s3 struct_srt))
@@ -93,12 +97,12 @@ let read_write_axioms fld1 =
   let f x = mk_read fld1 x in
   let g x = mk_read new_fld1 x in
   let f_upd1 =
-    if !Config.instantiate || !Config.smtpatterns
+    if not !Config.instantiate || !Config.smtpatterns
     then mk_or [mk_eq loc2 loc1; mk_neq loc2 loc3; mk_eq (f loc2) (g loc3)]
     else mk_or [mk_eq loc2 loc1; mk_eq (f loc2) (g loc2)]
   in
   let f_upd2 = 
-    if !Config.instantiate || !Config.smtpatterns
+    if not !Config.instantiate || !Config.smtpatterns
     then mk_or [mk_neq loc1 loc2; mk_eq (g loc2) dvar]
     else mk_or [mk_eq (g loc1) dvar]
   in
@@ -149,7 +153,7 @@ let g x =
   mk_read (fld2 struct_srt) x
 
 (** Axioms for reachability predicates *)
-let reach_axioms struct_srt = 
+let reach_axioms classes struct_srt = 
   let btwn = btwn struct_srt in
   let reach = reach struct_srt in
   let loc1 = loc1 struct_srt in
@@ -190,8 +194,20 @@ let reach_axioms struct_srt =
                           btwn loc3 loc1 loc2]
   in
   (**)
+  let non_updated_field sm t =
+    let fld = subst_term sm (fld1 struct_srt) in
+    let cl =
+      try CongruenceClosure.class_of fld classes
+      with Not_found -> [fld]
+    in
+    List.for_all 
+      (function 
+	| (App (Write, _, _)) -> false 
+	| _ -> true)
+      cl
+  in
   let mk_axiom ?(gen=[]) name f =
-    mk_axiom ~gen name (mk_pattern (fld1 struct_srt) [] f)
+    mk_axiom ~gen name (mk_pattern (fld1 struct_srt) [FilterGeneric non_updated_field] f)
   in
   let gen =
     let fld1 = fld1 struct_srt in
@@ -249,6 +265,71 @@ let null_axioms struct_srt1 =
   [mk_axiom "read_null" nll]
 
 
+(** Frame axioms *)
+let frame_axioms struct_srt res_srt =
+  let a = set1 struct_srt in
+  let x = set2 struct_srt in
+  (*let frame_set = mk_diff a x in*)
+  let mk_axiom fld1 fld2 ?(gen=[]) name f =
+    let frame = mk_frame_term x a fld1 fld2 in
+    mk_axiom ~gen name
+      (mk_pattern frame [] (mk_implies (mk_frame x a fld1 fld2) f))
+  in
+  let loc1 = loc1 struct_srt in
+  let read_frame fld1 fld2 =
+    let frame = mk_frame_term x a fld1 fld2 in
+    let gen = [([Match (frame, [])], [mk_known frame])] in
+    mk_axiom fld1 fld2 ~gen:gen "read_frame"
+      (mk_sequent
+         [smk_elem loc1 a]
+         [smk_elem loc1 x;
+          mk_eq (mk_read fld1 loc1) (mk_read fld2 loc1)]
+      )
+  in
+  let reach_frame () =
+    let loc2 = loc2 struct_srt in
+    let loc3 = loc3 struct_srt in
+    let fld1 = fld1 struct_srt in
+    let fld2 = fld2 struct_srt in
+    let axioms =
+      let ep v = mk_ep fld1 x v in
+      let reachwo_f1 = reachwo_Fld fld1 in
+      let reach_f1 x y z = mk_btwn fld1 x z y in
+      let reach_f2 x y z = mk_btwn fld2 x z y in
+      (*match f' with
+      | App (FreeSym (p, _), _, _) when p = "parent" ->
+              [Axioms.mk_axiom "reach_frame"
+                 (mk_sequent
+                    [smk_elem loc1 frame]
+                    [mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)])]
+          | _ ->*)
+      [read_frame fld1 fld2;
+       mk_axiom fld1 fld2 "reach_frame1"
+         (mk_pattern fld1 []
+            (mk_sequent
+               [reachwo_f1 loc1 loc2 (ep loc1)]
+               [(mk_iff 
+                   (reach_f1 loc1 loc2 loc3)
+                   (reach_f2 loc1 loc2 loc3))]));
+       mk_axiom fld1 fld2 "reach_frame2"
+         (mk_pattern fld1 []
+            (mk_implies
+               (mk_and [mk_not (smk_elem loc1 x); mk_eq loc1 (ep loc1)])
+               (mk_iff (reach_f1 loc1 loc2 loc3) (reach_f2 loc1 loc2 loc3))))
+       ]
+    in
+    axioms
+  in
+  let data_frame () =
+    let fld1 = dfld1 struct_srt res_srt in
+    let fld2 = dfld2 struct_srt res_srt in
+    [read_frame fld1 fld2]
+  in
+  if res_srt = Loc struct_srt
+  then reach_frame ()
+  else data_frame ()
+    
+  
 (** Entry point axioms *)
 let ep_axioms struct_srt =
   let reach = reach struct_srt in
@@ -286,7 +367,7 @@ let ep_axioms struct_srt =
     [([Match (mk_known fld1, []);
        Match (mk_frame_term set1 set2 fld1 fld2, []);
        Match (mk_btwn_term fld3 loc1 loc3 loc4, [FilterGeneric (field_filter (fst f1) (fst f3))]);
-       Match (loc1, [FilterSymbolNotOccurs EntPnt])], 
+       Match (loc1, [FilterNotNull; FilterSymbolNotOccurs EntPnt])], 
       [mk_ep fld1 set1 loc1]);
      ((if !Config.full_ep then
        (*let ep_filter sm t =
@@ -300,13 +381,13 @@ let ep_axioms struct_srt =
        in*)
        [Match (mk_known fld1, []);
         Match (mk_frame_term set1 set2 fld1 fld2, []);
-        Match (loc1, (*FilterGeneric ep_filter*) [FilterSymbolNotOccurs EntPnt])]
+        Match (loc1, [FilterNotNull; FilterSymbolNotOccurs EntPnt])]
       else
        [Match (mk_known fld1, []);
         Match (mk_frame_term set1 set2 fld1 fld2, []);
-        Match (mk_btwn_term fld3 loc2 loc3 loc4, [FilterGeneric (field_filter (fst f1) (fst f3))]);
+        (*Match (mk_btwn_term fld3 loc2 loc3 loc4, [FilterGeneric (field_filter (fst f1) (fst f3))]);*)
         Match (mk_elem_term loc1 set3, []);
-        Match (loc1, [FilterSymbolNotOccurs EntPnt])]), 
+        Match (loc1, [FilterNotNull; FilterSymbolNotOccurs EntPnt])]), 
       [mk_ep fld1 set1 loc1])
    ]
   in
@@ -344,27 +425,31 @@ let array_axioms elem_srt =
   in
    *)
   let array_cell_gen =
-    ([Match (c, [FilterSymbolNotOccurs ArrayOfCell]);
-       Match (c, [FilterSymbolNotOccurs IndexOfCell]);
-       Match (c, [FilterSymbolNotOccurs ArrayCells])], 
+    ([Match (c, [FilterSymbolNotOccurs ArrayOfCell;
+                 FilterSymbolNotOccurs IndexOfCell;
+                 FilterSymbolNotOccurs ArrayCells;
+                 FilterNotNull])], 
       [mk_read (mk_array_cells (mk_array_of_cell c)) (mk_index_of_cell c)])
   in
   let index_of_cell_gen =
-    ([Match (c, [FilterSymbolNotOccurs IndexOfCell])], 
+    ([Match (c, [FilterSymbolNotOccurs IndexOfCell; FilterNotNull])], 
      [mk_index_of_cell c])
   in
   let array_of_cell_gen =
-    ([Match (c, [FilterSymbolNotOccurs ArrayOfCell])], 
+    ([Match (c, [FilterSymbolNotOccurs ArrayOfCell; FilterNotNull])], 
      [mk_array_of_cell c])
   in
   let array_cells_gen =
-    ([Match (a, [FilterSymbolNotOccurs ArrayCells])], 
+    ([Match (a, [FilterSymbolNotOccurs ArrayCells; FilterNotNull])], 
      [mk_array_cells a])
+  in
+  let array_length_gen =
+    ([Match (a, [])], [mk_length a])
   in
   [mk_axiom ~gen:[index_of_cell_gen; array_of_cell_gen; array_cells_gen; array_cell_gen] "array-cells1" array_cells1;
    mk_axiom "array-cells2" array_cells2;
    mk_axiom "array-cells3" array_cells3;
-   mk_axiom "array-length" array_length]
+   mk_axiom ~gen:[array_length_gen] "array-length" array_length]
      
 (** Set axioms *)
 let set_axioms elem_srts =
@@ -373,6 +458,7 @@ let set_axioms elem_srts =
     let elt2 = mk_var t (mk_ident "y") in
     let set1 = mk_var (Set t) (mk_ident "X") in
     let set2 = mk_var (Set t) (mk_ident "Y") in
+    let set3 = mk_var (Set t) (mk_ident "Z") in
     let empty = 
       (* don't use the smart constructor smk_elem for set membership here *)
       mk_not (mk_elem elt1 (mk_empty (Set t)))
@@ -393,13 +479,115 @@ let set_axioms elem_srts =
       mk_iff (mk_elem elt1 (mk_setenum [elt2])) 
         (mk_eq elt1 elt2)
     in
+    let subseteq =
+      mk_sequent [mk_subseteq set1 set2; mk_elem elt1 set1] [mk_elem elt1 set2]
+    in
+    (* Auxiliary subset axioms *)
+    let subset_refl =
+      mk_subseteq set1 set1
+    in
+    let subset_trans =
+      mk_sequent [mk_subseteq set1 set2; mk_subseteq set2 set3]
+        [mk_subseteq set1 set3]
+    in
+    let subset_empty =
+      mk_subseteq (mk_empty (Set t)) set1
+    in
+    let subset_union1 =
+      mk_sequent [mk_subseteq (mk_union [set1; set2]) set3]
+        [mk_and [mk_subseteq set1 set3; mk_subseteq set2 set3]]
+    in
+    let subset_union21 =
+      mk_sequent [mk_subseteq set1 set2]
+        [mk_subseteq set1 (mk_union [set2; set3])]
+    in
+    let subset_union22 =
+      mk_sequent [mk_subseteq set1 set2]
+        [mk_subseteq set1 (mk_union [set3; set2])]
+    in
+    let subset_inter1 =
+      mk_sequent [mk_subseteq set1 (mk_inter [set2; set3])]
+        [mk_and [mk_subseteq set1 set2; mk_subseteq set1 set3]]
+    in
+    let subset_inter21 =
+      mk_sequent [mk_subseteq set1 set2]
+        [mk_subseteq (mk_inter [set1; set3]) set2]
+    in
+    let subset_inter22 =
+      mk_sequent [mk_subseteq set1 set2]
+        [mk_subseteq (mk_inter [set3; set1]) set2]
+    in
+    let subset_diff =
+      mk_sequent [mk_subseteq set1 set2]
+        [mk_subseteq (mk_diff set1 set3) set2]
+    in
+    let disjoint_def =
+      mk_sequent [mk_disjoint set1 set2]
+        [mk_not (mk_elem elt1 set1); mk_not (mk_elem elt1 set2)]
+    in
+    let disjoint_empty =
+      mk_disjoint set1 (mk_empty (Set t))
+    in
+    let disjoint_sym =
+      mk_sequent [mk_disjoint set1 set2] [mk_disjoint set2 set1]
+    in
+    let disjoint_union =
+      mk_iff (mk_disjoint (mk_union [set1; set2]) set3)
+        (mk_and [mk_disjoint set1 set3; mk_disjoint set2 set3])
+    in
+    let disjoint_inter1 =
+      mk_sequent [mk_disjoint set1 set2]
+        [mk_disjoint (mk_inter [set1; set3]) set2]
+    in
+    let disjoint_inter2 =
+      mk_sequent [mk_disjoint set1 set2]
+        [mk_disjoint (mk_inter [set3; set1]) set2]
+    in
+    let disjoint_diff =
+      mk_sequent [mk_disjoint set1 set2]
+        [mk_disjoint (mk_diff set1 set3) set2]
+    in
+    let disjoint_subset1 =
+      mk_sequent [mk_subseteq set1 set2; mk_disjoint set2 set3]
+        [mk_disjoint set1 set3]
+    in
+    let disjoint_subset2 =
+      mk_sequent [mk_subseteq set1 set2; mk_disjoint set2 set3]
+        [mk_subseteq set1 (mk_diff set2 set3)]
+    in
+    let disjoint_subset3 =
+      mk_sequent [mk_subseteq set1 set2] [mk_disjoint set1 (mk_diff set3 set2)]
+    in
     let ssrt = string_of_sort t in
     if !Config.use_set_theory then []
     else [mk_axiom ("def of emptyset" ^ ssrt) empty;
           mk_axiom ("def of union" ^ ssrt) union;
           mk_axiom ("def of inter" ^ ssrt) inter;
           mk_axiom ("def of setminus" ^ ssrt) diff;
-          mk_axiom ("def of setenum" ^ ssrt) setenum]
+          mk_axiom ("def of setenum" ^ ssrt) setenum] @
+      if !Config.abstract_preds then
+        [mk_axiom ("def of subseteq" ^ ssrt) subseteq;
+         mk_axiom ("subset refl" ^ ssrt) subset_refl;
+         mk_axiom ("subset empty" ^ ssrt) subset_empty;
+         mk_axiom ("subset trans" ^ ssrt) subset_trans;
+         mk_axiom ("subset union1" ^ ssrt) subset_union1;
+         mk_axiom ("subset union21" ^ ssrt) subset_union21;
+         mk_axiom ("subset union22" ^ ssrt) subset_union22;
+         mk_axiom ("subset inter1" ^ ssrt) subset_inter1;
+         mk_axiom ("subset inter21" ^ ssrt) subset_inter21;
+         mk_axiom ("subset inter22" ^ ssrt) subset_inter22;
+         mk_axiom ("subset diff" ^ ssrt) subset_diff;
+         mk_axiom ("def of Disjoint" ^ ssrt) disjoint_def;
+         mk_axiom ("Disjoint sym" ^ ssrt) disjoint_sym;
+         mk_axiom ("Disjoint empty" ^ ssrt) disjoint_empty;
+         mk_axiom ("Disjoint union" ^ ssrt) disjoint_union;
+         mk_axiom ("Disjoint inter1" ^ ssrt) disjoint_inter1;
+         mk_axiom ("Disjoint inter2" ^ ssrt) disjoint_inter2;
+         mk_axiom ("Disjoint diff" ^ ssrt) disjoint_diff;
+         mk_axiom ("Disjoint subset1" ^ ssrt) disjoint_subset1;
+         mk_axiom ("Disjoint subset2" ^ ssrt) disjoint_subset2;
+         mk_axiom ("Disjoint subset3" ^ ssrt) disjoint_subset3;
+       ] else []
   in
   Util.flat_map mk_set_axioms elem_srts
       
