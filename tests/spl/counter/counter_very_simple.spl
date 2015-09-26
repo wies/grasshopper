@@ -1,0 +1,46 @@
+struct Counter {
+  var ghost n: Int;
+  var c: Cell;
+}
+
+struct Cell {
+  var data: Int;
+}
+
+procedure NewCounter(initValue: Int)
+  returns (this: Counter)
+  requires 0 <= initValue
+  ensures acc(this) &*& acc(this.c) &*& 0 <= this.n &*& this.n == this.c.data
+  ensures this.n == initValue
+{
+  this := new Counter;
+  this.c := new Cell;
+  this.n := initValue;
+  this.c.data := initValue;
+}
+
+procedure FreeCounter(this: Counter)
+  requires acc(this) &*& acc(this.c)
+{
+  free this.c;
+  free this;
+}
+
+procedure Inc(this: Counter)
+  requires acc(this) &*& acc(this.c) &*& 0 <= this.n &*& this.n == this.c.data
+  ensures acc(this) &*& acc(this.c) &*& 0 <= this.n &*& this.n == this.c.data
+  ensures old(this.n) < this.n
+{
+  this.n := this.n + 1;
+  this.c.data := this.c.data + 1;
+}
+
+procedure Main() {
+  var c := NewCounter(23);
+  Inc(c);
+  Inc(c);
+  pure assert c.n >= 25;
+  FreeCounter(c);
+}
+
+

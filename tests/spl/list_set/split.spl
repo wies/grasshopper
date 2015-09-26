@@ -1,0 +1,26 @@
+
+include "../include/slsset.spl";
+
+predicate ls_unord(x: Node, y: Node, C: Set<Int>)(FP: Set<Node>) {
+  lseg(x, y, FP) &&
+  C == content(FP)
+}
+
+procedure split(x: Node, y: Node, implicit ghost C: Set<Int>)
+  returns (t: Node)
+  requires ls_unord(x, y, C)// &*& x != y
+  ensures exists C1: Set<Int>, C2: Set<Int> ::
+    ls_unord(x, t, C1) &*& ls_unord(t, y, C2) &*& C == C1 ++ C2
+{
+  t := x;
+  var nondet: Bool;
+  while (nondet && t != y)
+    invariant exists C1: Set<Int>, C2: Set<Int> ::
+    ls_unord(x, t, C1) &*& ls_unord(t, y, C2) &*& C == C1 ++ C2
+    //ls_unord(x, t, C1) &*& ls_unord(t, y, C2) -** ls_unord(x, y, C)
+  {
+    havoc nondet;
+    t := t.next;
+  }
+  return t;
+}
