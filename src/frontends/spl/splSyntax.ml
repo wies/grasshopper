@@ -127,6 +127,7 @@ and expr =
   | BoolVal of bool * pos
   | New of typ * exprs * pos
   | Read of expr * expr * pos
+  | Old of expr * pos
   | Length of expr * pos
   | ArrayOfCell of expr * pos
   | IndexOfCell of expr * pos

@@ -208,6 +208,8 @@ let resolve_names cu =
       | ProcCall (init_id, args, pos) ->
           let args1 = List.map (re locals tbl) args in
           (match GrassUtil.name init_id with
+          | "old" ->
+              Old(List.hd args1, pos)
           | "Btwn" ->
               PredApp (BtwnPred, args1, pos)
           | "Reach" ->

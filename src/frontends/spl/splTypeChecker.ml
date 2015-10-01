@@ -133,6 +133,7 @@ let type_of_expr cu locals e =
         | MapType (_, ty) -> ty
         | ArrayType ty -> ty
         | _ -> AnyType)
+    | Old (e, _) -> te e        
     | Length (map, _) -> IntType        
     | ArrayOfCell (c, _) ->
         (match te c with
@@ -300,6 +301,9 @@ let infer_types cu locals ty e =
         in
         let ty1 = match_types pos ty nty in
         New (ty1, es1, pos), ty1
+    | Old (e, pos) ->
+        let e1, ty1 = it locals ty e in
+        Old (e1, pos), ty1
     | Length (map, pos) ->
         let map1, _ = it locals (ArrayType AnyType) map in
         Length (map1, pos), match_types pos ty IntType

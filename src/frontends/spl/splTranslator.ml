@@ -134,6 +134,9 @@ let convert cu =
         let tmap = convert_term locals map in
         let tidx = convert_term locals idx in
         GrassUtil.mk_read tmap tidx
+    | Old (e, pos) ->
+        let t = convert_term locals e in
+        oldify_term (GrassUtil.free_consts_term t) t
     | Length (e, pos) ->
         let t = convert_term locals e in
         GrassUtil.mk_length t
