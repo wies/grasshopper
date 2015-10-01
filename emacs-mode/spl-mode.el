@@ -211,7 +211,7 @@
             (push '("!in" . ?∉) prettify-symbols-alist)
             (push '("subsetof" . ?⊆) prettify-symbols-alist)
             (push '("!=" . ?≠) prettify-symbols-alist)
-            (push '("==" . ?=) prettify-symbols-alist)
+            ;(push '("==" . ?=) prettify-symbols-alist)
             (push '("!" . ?¬) prettify-symbols-alist)
             (push '("forall" . ?∀) prettify-symbols-alist)
             (push '("exists" . ?∃) prettify-symbols-alist)
