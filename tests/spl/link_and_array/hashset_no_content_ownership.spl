@@ -95,6 +95,7 @@ predicate arrayseg_with_buckets(a: Array<List>, lo: Int, hi: Int)
   (forall c in FP0 :: lseg(c[], head, next, lseg_footprint(c[], head, next))) &&
   (forall c1 in FP0, c2 in FP0, n : Node :: c1 == c2 || (n !in lseg_footprint(c1[], head, next) || n !in lseg_footprint(c2[], head, next))) &&
   (forall x in FP2 :: hash(a.length, x.data) = list_witness(node_witness(x, head, FP1), array_state(), FP0).index) &&
+  /* TODO does this prevent a node having a node_witness that's not the same as the List who's head can reach the node? */
   //(forall x: Node :: x in FP2 || list_witness(x, array_state(), FP0) == null)
   //all the elts from a list have the same hash, and this is the index in the array
   //(forall v in FP2 :: Btwn(next, a[hash(a.length, v.data)], v, null) @(matching v yields a[hash(a.length, v.data)]))
@@ -126,9 +127,8 @@ predicate hset(h: HashSet)
 }
 
 procedure insert(lst: List, val: Int)
-  returns (res: List)
-  requires lseg(lst, head, next)
-  ensures lseg(res, head, next)
+  requires acc(lst) &*& lseg(lst, head, next)
+  ensures acc(lst) &*& lseg(lst, head, next)
 {
   //lst.data := val;
   // These are just to tell GHP what fields can be modified in this procedure
@@ -145,5 +145,5 @@ procedure hashset_add(hashset: HashSet, value: Int)
   assert hset(hashset);
   var list := hashset.buckets[hashval];
   /* assert lseg(list, head, next) -** hset(hashset); */
-  hashset.buckets[hashval] := insert(list, value);
+  insert(list, value);
 }
