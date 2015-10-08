@@ -1,0 +1,215 @@
+/*
+Hashset with content, based on the ownership idea. 
+
+Each bucket is "owned" by an object of type List, and this object must be in the footprint if the list it owns is modified in any way.
+*/
+
+
+/* ********** Begin stuff copied from node_array, modified for list ********** */
+
+function arrayseg_footprint(a: Array<List>, i: Int, j: Int)
+  returns (FP: Set<ArrayCell<List>>)
+{
+  (forall c: ArrayCell<List> ::
+     c in FP == (i <= c.index && c.index < j && c.array == a))
+}
+
+function array_state() returns (m: Map<ArrayCell<List>, List>) {
+  (forall c: ArrayCell<List> :: c.m == c[] @(matching c yields c.m))
+}
+
+/* ********** Struct definitions ********** */
+
+struct Data {}
+
+struct Node {
+  var next: Node;
+  var data: Data;
+}
+
+struct List {
+  var head: Node;
+}
+
+struct HashSet {
+  var size: Int; /* the size of the set */
+  var buckets: Array<List>; /* the set elements */
+}
+
+/* ********** Extra frame axioms, based on ownership ********** */
+  
+axiom (forall a1: Set<List>, fp1: Set<List>, a2: Set<Node>, fp2: Set<Node>, next1: Map<Node, Node>, next2: Map<Node, Node>, head1: Map<List, Node>, head2: Map<List, Node>, l: List ::
+       Frame(fp2, a2, next1, next2) && Frame(fp1, a1, head1, head2) &&
+       l !in fp1 && l in a1 ==>
+       listset_footprint(l, head1, next1) == listset_footprint(l, head2, next2)
+       @(pattern Frame(fp2, a2, next1, next2))
+       @(pattern Frame(fp1, a1, head1, head2))
+       @(matching Frame(fp2, a2, next1, next2), Frame(fp1, a1, head1, head2), listset_footprint(l, head1, next1) yields listset_footprint(l, head2, next2))
+       @(matching Frame(fp2, a2, next1, next2), Frame(fp1, a1, head1, head2), listset_footprint(l, head2, next2) yields listset_footprint(l, head1, next1)));
+
+axiom (forall a1: Set<List>, fp1: Set<List>, a2: Set<Node>, fp2: Set<Node>, s: Set<Node>, C: Set<Data>, next1: Map<Node, Node>, next2: Map<Node, Node>, head1: Map<List, Node>, head2: Map<List, Node>, l: List ::
+       Frame(fp2, a2, next1, next2) && Frame(fp1, a1, head1, head2) &&
+       l !in fp1 && l in a1 ==>
+       listset(l, head1, next1, C, s) == listset(l, head2, next2, C, s)
+       @(pattern Frame(fp2, a2, next1, next2))
+       @(pattern Frame(fp1, a1, head1, head2))
+       @(matching Frame(fp2, a2, next1, next2), Frame(fp1, a1, head1, head2), listset(l, head1, next1, C, s) yields listset(l, head2, next2, C, s))
+       @(matching Frame(fp2, a2, next1, next2), Frame(fp1, a1, head1, head2), listset(l, head2, next2, C, s) yields listset(l, head1, next1, C, s)));
+
+/* ********** Functions and predicates ********** */
+
+function listset_footprint(l: List, head: Map<List, Node>, next: Map<Node, Node>) returns (FP: Set<Node>)
+
+function list_witness(l: List, as: Map<ArrayCell<List>, List>, fp: Set<ArrayCell<List>>) returns (c: ArrayCell<List>)
+
+function node_witness(n: Node, head: Map<List, Node>, fp: Set<List>) returns (c: List) // TODO Does this depend on next too? Does this need a frame axiom too?
+
+function listset_content(data: Map<Node, Data>)(FP: Set<Node>) returns (C: Set<Data>)
+
+function cnt_witness(d: Data, data: Map<Node, Data>, head: Map<List, Node>)(FP: Set<List>) returns (n: List)
+  
+predicate listset(l: List, head: Map<List, Node>, next: Map<Node, Node>, C: Set<Data>)(FPN: Set<Node>) {
+  FPN == listset_footprint(l, head, next) &&
+  C == listset_content(data, FPN)
+}
+
+function arrayseg_list_footprint(a: Array<List>, FP0: Set<ArrayCell<List>>)
+  returns (FP1: Set<List>)
+{
+  (forall c in FP0 :: c[] in FP1
+   @(matching c yields c[])) &&
+  (forall l in FP1 :: list_witness(l, array_state(), FP0) in FP0) &&
+    (forall l in FP1 :: l == list_witness(l, array_state(), FP0)[]
+   @(matching l yields list_witness(l, array_state(), FP0)))
+}
+
+function arrayseg_node_footprint(FP0: Set<List>) returns (FP1: Set<Node>)
+{
+  (forall l in FP0, n : Node :: n in listset_footprint(l, head, next) ==> n in FP1
+   @(matching l yields listset_footprint(l, head, next))) &&
+  (forall n in FP1 :: node_witness(n, head, FP0) in FP0) &&
+    (forall n in FP1 :: n in listset_footprint(node_witness(n, head, FP0), head, next)
+   @(matching n yields node_witness(n, head, FP0))) &&
+    (forall n in FP1 :: node_witness(n, head, FP0) == node_witness(node_witness(n, head, FP0).head, head, FP0))
+  /* TODO does this prevent a node having a node_witness that's not the same as the List who's head can reach the node? */
+}
+
+function arrayseg_buckets_content(FP0: Set<List>) returns (C: Set<Data>)
+{
+  (forall l in FP0 :: listset_content(data, listset_footprint(l, head, next)) subsetof C
+   @(matching l yields listset_content(data, listset_footprint(l, head, next)))) &&
+    (forall d in C :: cnt_witness(d, data, head, FP0) in FP0) &&
+    (forall d in C :: d in listset_content(data, listset_footprint(cnt_witness(d, data, head, FP0), head, next))
+     @(matching d yields cnt_witness(d, data, head, FP0)))
+}
+
+predicate arrayseg_with_buckets(a: Array<List>, lo: Int, hi: Int, C: Set<Data>)
+  (FP0: Set<ArrayCell<List>>, FP1: Set<List>, FP2: Set<Node>)
+{
+  0 <= lo && lo <= hi && hi <= a.length &&
+  FP0 == arrayseg_footprint(a, lo, hi) &&
+  FP1 = arrayseg_list_footprint(a, FP0) &&
+  FP2 == arrayseg_node_footprint(FP1) &&
+  C == arrayseg_buckets_content(FP1) &&
+
+  /* every array cells points to a listset */
+  (forall c in FP0 :: listset(c[], head, next, listset_content(data, listset_footprint(c[], head, next)), listset_footprint(c[], head, next))) &&
+
+  /* The footprints of the listsets are disjoint */
+  (forall c1 in FP0, c2 in FP0, n : Node :: c1 == c2 || (n !in listset_footprint(c1[], head, next) || n !in listset_footprint(c2[], head, next))) &&
+
+  /* all data values of a bucket list have the same hash,
+  which is the index of the array cell that points to the list.
+  (implies the disjointness of the content sets of the lists) */
+  (forall c in FP0, d in listset_content(data, listset_footprint(c[], head, next)) :: hash(a.length, d) = c.index) &&
+  /* TODO Or this version??
+  (forall n in FP2 :: hash(a.length, n.data) = list_witness(node_witness(n, head, FP1), array_state(), FP0).index) && */
+  true
+}
+
+predicate array_with_buckets(a: Array<List>, C: Set<Data>)
+  (FP0: Set<Array<List>>, FP1: Set<ArrayCell<List>>, FP2: Set<List>, FP3: Set<Node>)
+{
+  FP0 == Set(a) &&
+  arrayseg_with_buckets(a, 0, a.length, C, FP1, FP2, FP3)
+}
+
+// some ghost function that we can use for the spec of hash
+function hash(max: Int, value: Data)
+  returns (res: Int)
+{
+  res >= 0 && res < max
+}
+
+predicate hset(h: HashSet, C: Set<Data>)
+  (FP0: Set<HashSet>, FP1: Set<Array<List>>,
+   FP2: Set<ArrayCell<List>>, FP3: Set<List>, FP4: Set<Node>)
+{
+  h.size == h.buckets.length &&
+  FP0 == Set(h) &&
+  array_with_buckets(h.buckets, C, FP1, FP2, FP3, FP4) &&
+  true
+}
+
+/* ********** The actual procedures ********** */
+
+procedure list_add(lst: List, val: Data, implicit ghost C: Set<Data>)
+  requires acc(lst) &*& listset(lst, head, next, C)
+  ensures acc(lst) &*& listset(lst, head, next, C ++ Set(val))
+{
+  lst.head.data := val;
+  /* These are just to tell GHP what fields can be modified in this procedure */
+  lst.head := null;
+  lst.head.next := null;
+  free(lst);
+}
+
+procedure hashset_add(hashset: HashSet, value: Data, implicit ghost C: Set<Data>)
+  requires hset(hashset, C)
+  ensures hset(hashset, C ++ Set(value))
+{
+  var hashval := hash(hashset.size, value);
+  assert hset(hashset, C);
+  var list := hashset.buckets[hashval];
+  /* assert listset(list, head, next) -** hset(hashset, C); */
+  list_add(list, value);
+}
+/*
+procedure list_contains(lst: List, val: Data)
+  returns (res: Bool)
+  requires acc(lst) &*& listset(lst, head, next)
+  ensures acc(lst) &*& listset(lst, head, next)
+{
+}
+
+procedure hashset_contains(hashset: HashSet, value: Data)
+  returns (res: Bool)
+  requires hset(hashset)
+  ensures hset(hashset)
+{
+  var hashval := hash(hashset.size, value);
+  var list := hashset.buckets[hashval];
+  res := list_contains(list, value);
+  return res;
+}
+
+procedure list_remove(lst: List, val: Data)
+  requires acc(lst) &*& listset(lst, head, next)
+  ensures acc(lst) &*& listset(lst, head, next)
+{
+  //lst.data := val;
+  // These are just to tell GHP what fields can be modified in this procedure
+  lst.head := null;
+  lst.head.next := null;
+  free(lst);
+}
+
+procedure hashset_remove(hashset: HashSet, value: Data)
+  requires hset(hashset)
+  ensures hset(hashset)
+{
+  var hashval := hash(hashset.size, value);
+  var list := hashset.buckets[hashval];
+  list_remove(list, value);
+}
+*/
