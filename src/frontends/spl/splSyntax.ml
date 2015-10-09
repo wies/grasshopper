@@ -168,6 +168,7 @@ let pos_of_expr = function
   | Setenum (_, _, p)
   | New (_, _, p)
   | Read (_, _, p)
+  | Old (_, p)
   | Length (_, p)
   | ArrayOfCell (_, p)
   | IndexOfCell (_, p)
