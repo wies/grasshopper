@@ -110,11 +110,12 @@ function arrayseg_node_footprint(FP0: Set<List>) returns (FP1: Set<Node>)
 
 function arrayseg_buckets_content(FP0: Set<List>) returns (C: Set<Data>)
 {
-  (forall l in FP0 :: listset_content(l, head, next, data, listset_footprint(l, head, next)) subsetof C
+  (forall l in FP0, d: Data :: d in listset_content(l, head, next, data, listset_footprint(l, head, next)) ==> d in C
    @(matching l yields listset_content(l, head, next, data, listset_footprint(l, head, next)))) &&
     (forall d in C :: cnt_witness(d, data, head, next, FP0) in FP0) &&
     (forall d in C :: d in listset_content(cnt_witness(d, data, head, next, FP0), head, next, data, listset_footprint(cnt_witness(d, data, head, next, FP0), head, next))
-     @(matching d yields cnt_witness(d, data, head, next, FP0)))
+     @(matching d yields cnt_witness(d, data, head, next, FP0))) &&
+    true
 }
 
 predicate arrayseg_with_buckets(a: Array<List>, lo: Int, hi: Int, C: Set<Data>)
@@ -167,7 +168,7 @@ predicate hset(h: HashSet, C: Set<Data>)
 
 /* ********** The actual procedures ********** */
 
-procedure list_add(lst: List, val: Data, implicit ghost C: Set<Data>)
+procedure listset_add(lst: List, val: Data, implicit ghost C: Set<Data>)
   requires acc(lst) &*& listset(lst, head, next, C)
   ensures acc(lst) &*& listset(lst, head, next, C ++ Set(val))
 
@@ -176,13 +177,13 @@ procedure hashset_add(hashset: HashSet, value: Data, implicit ghost C: Set<Data>
   ensures hset(hashset, C ++ Set(value))
 {
   var hashval := hash(hashset.size, value);
-  assert hset(hashset, C);
+  /* assert hset(hashset, C); */
   var list := hashset.buckets[hashval];
   /* assert listset(list, head, next) -** hset(hashset, C); */
-  list_add(list, value);
+  listset_add(list, value);
 }
 
-procedure list_contains(lst: List, val: Data, implicit ghost C: Set<Data>)
+procedure listset_contains(lst: List, val: Data, implicit ghost C: Set<Data>)
   returns (res: Bool)
   requires acc(lst) &*& listset(lst, head, next, C)
   ensures acc(lst) &*& listset(lst, head, next, C) &*& res == val in C
@@ -194,27 +195,20 @@ procedure hashset_contains(hashset: HashSet, value: Data, implicit ghost C: Set<
 {
   var hashval := hash(hashset.size, value);
   var list := hashset.buckets[hashval];
-  res := list_contains(list, value);
+  /* pure assert listset_content(list, head, next, data, listset_footprint(list, head, next)) subsetof C; */
+  res := listset_contains(list, value);
   return res;
 }
-/*
-procedure list_remove(lst: List, val: Data)
-  requires acc(lst) &*& listset(lst, head, next)
-  ensures acc(lst) &*& listset(lst, head, next)
-{
-  //lst.data := val;
-  // These are just to tell GHP what fields can be modified in this procedure
-  lst.head := null;
-  lst.head.next := null;
-  free(lst);
-}
 
-procedure hashset_remove(hashset: HashSet, value: Data)
-  requires hset(hashset)
-  ensures hset(hashset)
+procedure listset_remove(lst: List, val: Data, implicit ghost C: Set<Data>)
+  requires acc(lst) &*& listset(lst, head, next, C)
+  ensures acc(lst) &*& listset(lst, head, next, C -- Set(val))
+
+procedure hashset_remove(hashset: HashSet, value: Data, implicit ghost C: Set<Data>)
+  requires hset(hashset, C)
+  ensures hset(hashset, C -- Set(value))
 {
   var hashval := hash(hashset.size, value);
   var list := hashset.buckets[hashval];
-  list_remove(list, value);
+  listset_remove(list, value);
 }
-*/
