@@ -56,6 +56,16 @@ axiom (forall a1: Set<List>, fp1: Set<List>, a2: Set<Node>, fp2: Set<Node>, s: S
        @(matching Frame(fp2, a2, next1, next2), Frame(fp1, a1, head1, head2), listset(l, head1, next1, C, s) yields listset(l, head2, next2, C, s))
        @(matching Frame(fp2, a2, next1, next2), Frame(fp1, a1, head1, head2), listset(l, head2, next2, C, s) yields listset(l, head1, next1, C, s)));
 
+axiom (forall a1: Set<List>, fp1: Set<List>, a2: Set<Node>, fp2: Set<Node>, s: Set<Node>, next1: Map<Node, Node>, next2: Map<Node, Node>, head1: Map<List, Node>, head2: Map<List, Node>, data1: Map<Node, Data>, data2: Map<Node, Data>, l: List ::
+       Frame(fp2, a2, next1, next2) && Frame(fp1, a1, head1, head2) && Frame(fp2, a2, data1, data2) &&
+       l !in fp1 && l in a1 ==>
+       listset_content(l, head1, next1, data1, s) == listset_content(l, head2, next2, data2, s)
+       @(pattern Frame(fp1, a1, head1, head2))
+       @(pattern Frame(fp2, a2, next1, next2))
+       @(pattern Frame(fp2, a2, data1, data2))
+       @(matching Frame(fp2, a2, next1, next2), Frame(fp1, a1, head1, head2), Frame(fp2, a2, data1, data2), listset_content(l, head1, next1, data1, s) yields listset_content(l, head2, next2, data2, s))
+       @(matching Frame(fp2, a2, next1, next2), Frame(fp1, a1, head1, head2), Frame(fp2, a2, data1, data2), listset_content(l, head2, next2, data2, s) yields listset_content(l, head1, next1, data1, s)));
+
 /* ********** Functions and predicates ********** */
 
 function listset_footprint(l: List, head: Map<List, Node>, next: Map<Node, Node>) returns (FP: Set<Node>)
@@ -64,13 +74,13 @@ function list_witness(l: List, as: Map<ArrayCell<List>, List>, fp: Set<ArrayCell
 
 function node_witness(n: Node, head: Map<List, Node>, fp: Set<List>) returns (c: List) // TODO Does this depend on next too? Does this need a frame axiom too?
 
-function listset_content(data: Map<Node, Data>)(FP: Set<Node>) returns (C: Set<Data>)
+function listset_content(l: List, head: Map<List, Node>, next: Map<Node, Node>, data: Map<Node, Data>, FP: Set<Node>) returns (C: Set<Data>)
 
-function cnt_witness(d: Data, data: Map<Node, Data>, head: Map<List, Node>)(FP: Set<List>) returns (n: List)
+function cnt_witness(d: Data, data: Map<Node, Data>, head: Map<List, Node>, next: Map<Node, Node>)(FP: Set<List>) returns (n: List)
   
 predicate listset(l: List, head: Map<List, Node>, next: Map<Node, Node>, C: Set<Data>)(FPN: Set<Node>) {
   FPN == listset_footprint(l, head, next) &&
-  C == listset_content(data, FPN)
+  C == listset_content(l, head, next, data, FPN)
 }
 
 function arrayseg_list_footprint(a: Array<List>, FP0: Set<ArrayCell<List>>)
@@ -80,7 +90,10 @@ function arrayseg_list_footprint(a: Array<List>, FP0: Set<ArrayCell<List>>)
    @(matching c yields c[])) &&
   (forall l in FP1 :: list_witness(l, array_state(), FP0) in FP0) &&
     (forall l in FP1 :: l == list_witness(l, array_state(), FP0)[]
-   @(matching l yields list_witness(l, array_state(), FP0)))
+   @(matching l yields list_witness(l, array_state(), FP0))) &&
+    /* Each ArrayCell should have a distinct List object */
+    (forall c1 in FP0, c2 in FP0 :: c1 == c2 || c1[] != c2[]) &&
+    true
 }
 
 function arrayseg_node_footprint(FP0: Set<List>) returns (FP1: Set<Node>)
@@ -90,17 +103,18 @@ function arrayseg_node_footprint(FP0: Set<List>) returns (FP1: Set<Node>)
   (forall n in FP1 :: node_witness(n, head, FP0) in FP0) &&
     (forall n in FP1 :: n in listset_footprint(node_witness(n, head, FP0), head, next)
    @(matching n yields node_witness(n, head, FP0))) &&
-    (forall n in FP1 :: node_witness(n, head, FP0) == node_witness(node_witness(n, head, FP0).head, head, FP0))
-  /* TODO does this prevent a node having a node_witness that's not the same as the List who's head can reach the node? */
+/*    (forall n in FP1 :: node_witness(n, head, FP0) == node_witness(node_witness(n, head, FP0).head, head, FP0))
+   TODO does this prevent a node having a node_witness that's not the same as the List who's head can reach the node? */
+    true
 }
 
 function arrayseg_buckets_content(FP0: Set<List>) returns (C: Set<Data>)
 {
-  (forall l in FP0 :: listset_content(data, listset_footprint(l, head, next)) subsetof C
-   @(matching l yields listset_content(data, listset_footprint(l, head, next)))) &&
-    (forall d in C :: cnt_witness(d, data, head, FP0) in FP0) &&
-    (forall d in C :: d in listset_content(data, listset_footprint(cnt_witness(d, data, head, FP0), head, next))
-     @(matching d yields cnt_witness(d, data, head, FP0)))
+  (forall l in FP0 :: listset_content(l, head, next, data, listset_footprint(l, head, next)) subsetof C
+   @(matching l yields listset_content(l, head, next, data, listset_footprint(l, head, next)))) &&
+    (forall d in C :: cnt_witness(d, data, head, next, FP0) in FP0) &&
+    (forall d in C :: d in listset_content(cnt_witness(d, data, head, next, FP0), head, next, data, listset_footprint(cnt_witness(d, data, head, next, FP0), head, next))
+     @(matching d yields cnt_witness(d, data, head, next, FP0)))
 }
 
 predicate arrayseg_with_buckets(a: Array<List>, lo: Int, hi: Int, C: Set<Data>)
@@ -113,7 +127,7 @@ predicate arrayseg_with_buckets(a: Array<List>, lo: Int, hi: Int, C: Set<Data>)
   C == arrayseg_buckets_content(FP1) &&
 
   /* every array cells points to a listset */
-  (forall c in FP0 :: listset(c[], head, next, listset_content(data, listset_footprint(c[], head, next)), listset_footprint(c[], head, next))) &&
+  (forall c in FP0 :: listset(c[], head, next, listset_content(c[], head, next, data, listset_footprint(c[], head, next)), listset_footprint(c[], head, next))) &&
 
   /* The footprints of the listsets are disjoint */
   (forall c1 in FP0, c2 in FP0, n : Node :: c1 == c2 || (n !in listset_footprint(c1[], head, next) || n !in listset_footprint(c2[], head, next))) &&
@@ -121,7 +135,7 @@ predicate arrayseg_with_buckets(a: Array<List>, lo: Int, hi: Int, C: Set<Data>)
   /* all data values of a bucket list have the same hash,
   which is the index of the array cell that points to the list.
   (implies the disjointness of the content sets of the lists) */
-  (forall c in FP0, d in listset_content(data, listset_footprint(c[], head, next)) :: hash(a.length, d) = c.index) &&
+  (forall c in FP0, d in listset_content(c[], head, next, data, listset_footprint(c[], head, next)) :: hash(a.length, d) = c.index) &&
   /* TODO Or this version??
   (forall n in FP2 :: hash(a.length, n.data) = list_witness(node_witness(n, head, FP1), array_state(), FP0).index) && */
   true
@@ -156,13 +170,6 @@ predicate hset(h: HashSet, C: Set<Data>)
 procedure list_add(lst: List, val: Data, implicit ghost C: Set<Data>)
   requires acc(lst) &*& listset(lst, head, next, C)
   ensures acc(lst) &*& listset(lst, head, next, C ++ Set(val))
-{
-  lst.head.data := val;
-  /* These are just to tell GHP what fields can be modified in this procedure */
-  lst.head := null;
-  lst.head.next := null;
-  free(lst);
-}
 
 procedure hashset_add(hashset: HashSet, value: Data, implicit ghost C: Set<Data>)
   requires hset(hashset, C)
@@ -174,25 +181,23 @@ procedure hashset_add(hashset: HashSet, value: Data, implicit ghost C: Set<Data>
   /* assert listset(list, head, next) -** hset(hashset, C); */
   list_add(list, value);
 }
-/*
-procedure list_contains(lst: List, val: Data)
-  returns (res: Bool)
-  requires acc(lst) &*& listset(lst, head, next)
-  ensures acc(lst) &*& listset(lst, head, next)
-{
-}
 
-procedure hashset_contains(hashset: HashSet, value: Data)
+procedure list_contains(lst: List, val: Data, implicit ghost C: Set<Data>)
   returns (res: Bool)
-  requires hset(hashset)
-  ensures hset(hashset)
+  requires acc(lst) &*& listset(lst, head, next, C)
+  ensures acc(lst) &*& listset(lst, head, next, C) &*& res == val in C
+
+procedure hashset_contains(hashset: HashSet, value: Data, implicit ghost C: Set<Data>)
+  returns (res: Bool)
+  requires hset(hashset, C)
+  ensures hset(hashset, C) &*& res == value in C
 {
   var hashval := hash(hashset.size, value);
   var list := hashset.buckets[hashval];
   res := list_contains(list, value);
   return res;
 }
-
+/*
 procedure list_remove(lst: List, val: Data)
   requires acc(lst) &*& listset(lst, head, next)
   ensures acc(lst) &*& listset(lst, head, next)
