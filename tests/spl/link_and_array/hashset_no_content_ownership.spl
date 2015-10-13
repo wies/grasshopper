@@ -1,3 +1,10 @@
+/*
+Hashset without content, based on the ownership idea.
+
+Each bucket is "owned" by an object of type List, and this object must be in the footprint if the list it owns is modified in any way.
+*/
+
+
 /* ********** Begin stuff copied from node_array, modified for list ********** */
 
 function arrayseg_footprint(a: Array<List>, i: Int, j: Int)
@@ -11,7 +18,7 @@ function array_state() returns (m: Map<ArrayCell<List>, List>) {
   (forall c: ArrayCell<List> :: c.m == c[] @(matching c yields c.m))
 }
 
-/* ********** End node_array stuff ********** */
+/* ********** Struct definitions ********** */
 
 struct Node {
   var next: Node;
@@ -21,6 +28,13 @@ struct Node {
 struct List {
   var head: Node;
 }
+
+struct HashSet {
+  var size: Int; /* the size of the set */
+  var buckets: Array<List>; /* the set elements */
+}
+
+/* ********** Extra frame axioms, based on ownership ********** */
 
 axiom (forall a1: Set<List>, fp1: Set<List>, a2: Set<Node>, fp2: Set<Node>, next1: Map<Node, Node>, next2: Map<Node, Node>, head1: Map<List, Node>, head2: Map<List, Node>, l: List ::
        Frame(fp2, a2, next1, next2) && Frame(fp1, a1, head1, head2) &&
@@ -39,31 +53,17 @@ axiom (forall a1: Set<List>, fp1: Set<List>, a2: Set<Node>, fp2: Set<Node>, s: S
        @(pattern Frame(fp1, a1, head1, head2))
        @(matching Frame(fp2, a2, next1, next2), Frame(fp1, a1, head1, head2), lseg(l, head1, next1, s) yields lseg(l, head2, next2, s))
        @(matching Frame(fp2, a2, next1, next2), Frame(fp1, a1, head1, head2), lseg(l, head2, next2, s) yields lseg(l, head1, next1, s)));
-/*
 
-axiom (forall a1: Set<List>, fp1: Set<List>, a2: Set<Node>, fp2: Set<Node>, next1: Map<Node, Node>, next2: Map<Node, Node>, head1: Map<List, Node>, head2: Map<List, Node>, l: List ::
-       Frame(fp2, a2, next1, next2) && Frame(fp1, a1, head1, head2) &&
-       l !in fp1 && l in a1 ==>
-       lseg(l, head1, next1, lseg_footprint(l, head1, next1)) == lseg(l, head2, next2, lseg_footprint(l, head2, next2))
-       @(pattern Frame(fp2, a2, next1, next2))
-       @(pattern Frame(fp1, a1, head1, head2))
-       @(matching Frame(fp2, a2, next1, next2), Frame(fp1, a1, head1, head2), lseg(l, head1, next1, lseg_footprint(l, head1, next1)) yields lseg(l, head2, next2, lseg_footprint(l, head2, next2)))
-@(matching Frame(fp2, a2, next1, next2), Frame(fp1, a1, head1, head2), lseg(l, head2, next2, lseg_footprint(l, head2, next2)) yields lseg(l, head1, next1, lseg_footprint(l, head1, next1))));
-*/
+/* ********** Functions and predicates ********** */
 
 function lseg_footprint(l: List, head: Map<List, Node>, next: Map<Node, Node>) returns (FP: Set<Node>)
 
 function list_witness(l: List, as: Map<ArrayCell<List>, List>, fp: Set<ArrayCell<List>>) returns (c: ArrayCell<List>)
 
-function node_witness(n: Node, head: Map<List, Node>, fp: Set<List>) returns (c: List) // TODO Does this depend on next too? Does this need a frame axiom too?
+function node_witness(n: Node, head: Map<List, Node>, next: Map<Node, Node>, fp: Set<List>) returns (c: List)
 
 predicate lseg(l: List, head: Map<List, Node>, next: Map<Node, Node>)(FPN: Set<Node>) {
   FPN == lseg_footprint(l, head, next)
-}
-
-struct HashSet {
-  var size: Int; /* the size of the set */
-  var buckets: Array<List>; /* the set elements */
 }
 
 function arrayseg_list_footprint(a: Array<List>, FP0: Set<ArrayCell<List>>)
@@ -73,18 +73,20 @@ function arrayseg_list_footprint(a: Array<List>, FP0: Set<ArrayCell<List>>)
    @(matching c yields c[])) &&
   (forall l in FP1 :: list_witness(l, array_state(), FP0) in FP0) &&
     (forall l in FP1 :: l == list_witness(l, array_state(), FP0)[]
-   @(matching l yields list_witness(l, array_state(), FP0)))
+   @(matching l yields list_witness(l, array_state(), FP0))) &&
+    /* Each ArrayCell should have a distinct List object */
+    (forall c1 in FP0, c2 in FP0 :: c1 == c2 || c1[] != c2[]) &&
+    true
 }
 
 function arrayseg_node_footprint(FP0: Set<List>) returns (FP1: Set<Node>)
 {
   (forall l in FP0, n : Node :: n in lseg_footprint(l, head, next) ==> n in FP1
    @(matching l yields lseg_footprint(l, head, next))) &&
-  (forall n in FP1 :: node_witness(n, head, FP0) in FP0) &&
-    (forall n in FP1 :: n in lseg_footprint(node_witness(n, head, FP0), head, next)
-   @(matching n yields node_witness(n, head, FP0))) &&
-    (forall n in FP1 :: node_witness(n, head, FP0) == node_witness(node_witness(n, head, FP0).head, head, FP0))
-  /* TODO does this prevent a node having a node_witness that's not the same as the List who's head can reach the node? */
+    (forall n in FP1 :: node_witness(n, head, next, FP0) in FP0) &&
+    (forall n in FP1 :: n in lseg_footprint(node_witness(n, head, next, FP0), head, next)
+     @(matching n yields node_witness(n, head, next, FP0))) &&
+    true
 }
 
 predicate arrayseg_with_buckets(a: Array<List>, lo: Int, hi: Int)
@@ -96,10 +98,9 @@ predicate arrayseg_with_buckets(a: Array<List>, lo: Int, hi: Int)
   FP2 == arrayseg_node_footprint(FP1) &&
   (forall c in FP0 :: lseg(c[], head, next, lseg_footprint(c[], head, next))) &&
   (forall c1 in FP0, c2 in FP0, n : Node :: c1 == c2 || (n !in lseg_footprint(c1[], head, next) || n !in lseg_footprint(c2[], head, next))) &&
-  (forall n in FP2 :: hash(a.length, n.data) = list_witness(node_witness(n, head, FP1), array_state(), FP0).index) &&
-  //(forall x: Node :: x in FP2 || list_witness(x, array_state(), FP0) == null)
-  //all the elts from a list have the same hash, and this is the index in the array
-  //(forall v in FP2 :: Btwn(next, a[hash(a.length, v.data)], v, null) @(matching v yields a[hash(a.length, v.data)]))
+  /* Can't prove invariant that data values in a bucket have the same hash,
+  Because we can't show that data is preserved by list functions.
+  (forall n in FP2 :: hash(a.length, n.data) = list_witness(node_witness(n, head, next, FP1), array_state(), FP0).index) && */
   true
 }
 
@@ -127,20 +128,11 @@ predicate hset(h: HashSet)
   true
 }
 
-/* **************************************** */
-/* The actual procedures */
-/* **************************************** */
+/* ********** The actual procedures ********** */
 
 procedure list_add(lst: List, val: Int)
   requires acc(lst) &*& lseg(lst, head, next)
   ensures acc(lst) &*& lseg(lst, head, next)
-{
-  //lst.data := val;
-  // These are just to tell GHP what fields can be modified in this procedure
-  lst.head := null;
-  lst.head.next := null;
-  free(lst);
-}
 
 procedure hashset_add(hashset: HashSet, value: Int)
   requires hset(hashset)
@@ -157,8 +149,6 @@ procedure list_contains(lst: List, val: Int)
   returns (res: Bool)
   requires acc(lst) &*& lseg(lst, head, next)
   ensures acc(lst) &*& lseg(lst, head, next)
-{
-}
 
 procedure hashset_contains(hashset: HashSet, value: Int)
   returns (res: Bool)
@@ -174,13 +164,6 @@ procedure hashset_contains(hashset: HashSet, value: Int)
 procedure list_remove(lst: List, val: Int)
   requires acc(lst) &*& lseg(lst, head, next)
   ensures acc(lst) &*& lseg(lst, head, next)
-{
-  //lst.data := val;
-  // These are just to tell GHP what fields can be modified in this procedure
-  lst.head := null;
-  lst.head.next := null;
-  free(lst);
-}
 
 procedure hashset_remove(hashset: HashSet, value: Int)
   requires hset(hashset)
