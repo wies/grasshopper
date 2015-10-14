@@ -1486,6 +1486,7 @@ let print_graph output chan model terms =
     let flds = get_values_of_sort model (loc_field_sort srt) in
     let locs = get_values_of_sort model (Loc srt) in
     let read_arity = [loc_field_sort srt; Loc srt], Loc srt in
+    let find_term = find_term model in
     let rsrts =
       SortSet.fold
         (function
@@ -1515,7 +1516,7 @@ let print_graph output chan model terms =
             try
               let r = interp_symbol model Read read_arity [f; l] in
               if not (filter_null r) then 
-	        let label = string_of_term (find_term model f fld_srt) in
+	        let label = string_of_term (find_term f fld_srt) in
                 try 
                   let src = get_node srt l in
                   let dst = get_node srt r in
@@ -1558,7 +1559,7 @@ let print_graph output chan model terms =
               if is_defined model Read read_arity [f; l] || r == l then () else
               let src = get_node srt l in
               let dst = get_node srt r in
-	      let label = string_of_term (find_term model f (loc_field_sort srt)) in
+	      let label = string_of_term (find_term f (loc_field_sort srt)) in
               edges := (src,dst,label,Dashed,get_color (loc_field_sort srt) f) :: !edges)
             locs)
         flds
@@ -1568,8 +1569,8 @@ let print_graph output chan model terms =
       let m, _ = get_interp model EntPnt (arg_srts, Loc srt) in
       ValueListMap.iter (function 
         | [f; s; l] -> fun v ->
-            let fld = find_term model f (loc_field_sort srt) in
-            let set = find_term model s (Set (Loc srt)) in
+            let fld = find_term f (loc_field_sort srt) in
+            let set = find_term s (Set (Loc srt)) in
             let src = get_node srt l in
             let dst = get_node srt v in
             let color = try List.assoc (srt, f) ep_colors with Not_found -> "black" in
