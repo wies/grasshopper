@@ -127,6 +127,7 @@ and expr =
   | BoolVal of bool * pos
   | New of typ * exprs * pos
   | Read of expr * expr * pos
+  | Old of expr * pos
   | Length of expr * pos
   | ArrayOfCell of expr * pos
   | IndexOfCell of expr * pos
@@ -167,6 +168,7 @@ let pos_of_expr = function
   | Setenum (_, _, p)
   | New (_, _, p)
   | Read (_, _, p)
+  | Old (_, p)
   | Length (_, p)
   | ArrayOfCell (_, p)
   | IndexOfCell (_, p)

@@ -1,5 +1,7 @@
 include "../include/dllist.spl";
 
+// Implementation of Dancing Links (see Problem 3 of Verify This Competition 2015)
+
 procedure remove(l: Node, x: Node, ghost e: Node, implicit ghost FP: Set<Node>)
   requires (acc(x.prev) &*& acc(x) &*& acc(x.next)) -** dlseg(l, null, null, e, FP)
   ensures ((acc(x.prev) &*& acc(x.next)) -** dlseg(l, null, null, e, FP -- Set(x))) &*& acc(x)

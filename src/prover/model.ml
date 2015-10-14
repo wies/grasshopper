@@ -990,7 +990,7 @@ let visjs_output =
   let out_tbl chan name assoc =
     let print_table_header title = 
       output_string chan "  <div class=\"hspace\"></div>\n";
-      output_string chan "  <table>\n";
+      output_string chan "  <table class=\"values-table table\">\n";
       Printf.fprintf chan "    <tr><th colspan=\"2\"><b>%s</b></th></tr>\n" title;
     in
     let print_table_footer () =
@@ -1000,6 +1000,7 @@ let visjs_output =
     if not (StringSet.is_empty values) then
       begin
         print_table_header name;
+(*
         StringSet.iter
           (fun s ->
             let pairs = List.filter (fun (_,s2) -> s = s2) assoc in
@@ -1009,6 +1010,15 @@ let visjs_output =
               (replace_lt_gt (List.hd keys)) rowspan (replace_lt_gt s);
             List.iter (fun k -> Printf.fprintf chan "    <tr><td>%s</td></tr>\n" (replace_lt_gt k)) (List.tl keys)
           ) values;
+*)
+	List.iter
+	  (fun (k, v) ->
+	   Printf.fprintf
+	     chan
+	     "    <tr><td>%s</td><td>%s</td></tr>\n"
+	     (replace_lt_gt k) (replace_lt_gt v)
+	  )
+	  assoc;
         print_table_footer ()
       end
   in
@@ -1122,7 +1132,22 @@ let mixed_graphviz_html =
     output_string chan "    }\n";
     output_string chan "    .selected { background: rgba(100,200,100,0.5) }\n";
     output_string chan "    .highlighted { background: rgba(200,100,100,0.5) }\n";
+    output_string chan "   #heapgraph-container {\n";
+    output_string chan "     height: 500px;\n";
+    output_string chan "     width: 100%;\n";
+    output_string chan "     border: 1px solid black;\n";
+    output_string chan "   }\n";
+    output_string chan "   svg {\n";
+    output_string chan "     overflow: hidden;\n";
+    output_string chan "     display: inline;\n";
+    output_string chan "     width: inherit;\n";
+    output_string chan "     height: inherit;\n";
+    output_string chan "     min-width: inherit;\n";
+    output_string chan "     min-height: inherit;\n";
+    output_string chan "   }\n";
     output_string chan "  </style>\n";
+    output_string chan "  <script src=\"http://ariutta.github.io/svg-pan-zoom/dist/svg-pan-zoom.min.js\"></script>
+\n";
     output_string chan "</head>\n";
     output_string chan "<body>\n";
     output_string chan "\n";
@@ -1237,49 +1262,6 @@ let mixed_graphviz_html =
     output_string chan "      iterateOverNodes(resetNode);\n";
     output_string chan "      fillNode(node);\n";
     output_string chan "    }\n";
-    output_string chan "    var scaleFactor = 1.0;\n";
-    output_string chan "    var shiftX = 0;\n";
-    output_string chan "    var shiftY = 0;\n";
-    output_string chan "    var svgW;\n";
-    output_string chan "    var svgH;\n";
-    output_string chan "    function updateViewBox(svg) {\n";
-    output_string chan "      var w2 = svgW / 2.0 / scaleFactor; \n";
-    output_string chan "      var h2 = svgH / 2.0 / scaleFactor;\n";
-    output_string chan "      svg.viewBox.baseVal.x = shiftX + svgW/2.0 - w2;\n";
-    output_string chan "      svg.viewBox.baseVal.y = shiftY + svgH/2.0 - h2;\n";
-    output_string chan "      svg.viewBox.baseVal.width = svgW/2.0 + w2;\n";
-    output_string chan "      svg.viewBox.baseVal.height = svgH/2.0 + h2;\n";
-    output_string chan "    }\n";
-    output_string chan "    var lastX;\n";
-    output_string chan "    var lastY;\n";
-    output_string chan "    function resizeSvg() {\n";
-    output_string chan "      forEachByTag('svg', function(svg) {\n";
-    output_string chan "        svg.style.width='100vw';\n";
-    output_string chan "        svg.style.height='60vh';\n";
-    output_string chan "        svgW = svg.viewBox.baseVal.width;\n";
-    output_string chan "        svgH = svg.viewBox.baseVal.height;\n";
-    output_string chan "        svg.onwheel = function(ev){\n";
-    output_string chan "           if (ev.deltaY > 0) {\n";
-    output_string chan "             scaleFactor = scaleFactor * 0.9;\n";
-    output_string chan "           } else if (ev.deltaY < 0) {\n";
-    output_string chan "             scaleFactor = scaleFactor * 1.1;\n";
-    output_string chan "           }\n";
-    output_string chan "           updateViewBox(svg)\n";
-    output_string chan "           return false;\n";
-    output_string chan "        };\n";
-    output_string chan "        svg.onmousemove = function(ev){\n";
-    output_string chan "          if(ev.buttons == 1) {\n";
-    output_string chan "            var dx = ev.screenX - lastX;\n";
-    output_string chan "            var dy = ev.screenY - lastY;\n";
-    output_string chan "            shiftX = shiftX - dx / scaleFactor;\n";
-    output_string chan "            shiftY = shiftY - dy / scaleFactor;\n";
-    output_string chan "            updateViewBox(svg);\n";
-    output_string chan "          }\n";
-    output_string chan "          lastX=ev.screenX;\n";
-    output_string chan "          lastY=ev.screenY;\n";
-    output_string chan "        };\n";
-    output_string chan "      });\n";
-    output_string chan "    }\n";
     output_string chan "    function setTooltip(){\n";
     output_string chan "      forEachByTag('table', function(t) {\n";
     output_string chan "        var lbl;\n";
@@ -1298,12 +1280,56 @@ let mixed_graphviz_html =
     output_string chan "      iterateOverTableCells(1, function(c) { c.onclick=function(){ highlight(this.innerHTML); } });\n";
     output_string chan "      iterateOverTableCells(0, function(c) { c.onclick=function(){ highlightRelated(this); } });\n";
     output_string chan "      iterateOverNodes(function(n) { n.onclick=function(){ highlightNode(this); } });\n";
-    output_string chan "      resizeSvg();\n";
+    output_string chan "      var PanZoomGraph = svgPanZoom(\"#heapgraph\");\n";
     output_string chan "      setTooltip();\n";
     output_string chan "      document.body.ondragstart=function(){return false;};\n";
     output_string chan "      document.body.ondrop=function(){return false;};\n";
     output_string chan "    };\n";
+
+    output_string chan "// Filter rows of the table\n";
+    output_string chan "// Code from http://codepen.io/chriscoyier/pen/tIuBL\n";
+    output_string chan "(function(document) {\n";
+    output_string chan "    'use strict';\n";
+    output_string chan "\n";
+    output_string chan "    var LightTableFilter = (function(Arr) {\n";
+    output_string chan "\n";
+    output_string chan "        var _input;\n";
+    output_string chan "\n";
+    output_string chan "        function _onInputEvent(e) {\n";
+    output_string chan "            _input = e.target;\n";
+    output_string chan "            var tables = document.getElementsByClassName(_input.getAttribute('data-table'));\n";
+    output_string chan "            Arr.forEach.call(tables, function(table) {\n";
+    output_string chan "                Arr.forEach.call(table.tBodies, function(tbody) {\n";
+    output_string chan "                    Arr.forEach.call(tbody.rows, _filter);\n";
+    output_string chan "                });\n";
+    output_string chan "            });\n";
+    output_string chan "        }\n";
+    output_string chan "\n";
+    output_string chan "        function _filter(row) {\n";
+    output_string chan "            var text = row.textContent.toLowerCase(), val = _input.value.toLowerCase();\n";
+    output_string chan "            row.style.display = text.indexOf(val) === -1 ? 'none' : 'table-row';\n";
+    output_string chan "        }\n";
+    output_string chan "\n";
+    output_string chan "        return {\n";
+    output_string chan "            init: function() {\n";
+    output_string chan "                var inputs = document.getElementsByClassName('light-table-filter');\n";
+    output_string chan "                Arr.forEach.call(inputs, function(input) {\n";
+    output_string chan "                    input.oninput = _onInputEvent;\n";
+    output_string chan "                });\n";
+    output_string chan "            }\n";
+    output_string chan "        };\n";
+    output_string chan "    })(Array.prototype);\n";
+    output_string chan "\n";
+    output_string chan "    document.addEventListener('readystatechange', function() {\n";
+    output_string chan "        if (document.readyState === 'complete') {\n";
+    output_string chan "            LightTableFilter.init();\n";
+    output_string chan "        }\n";
+    output_string chan "    });\n";
+    output_string chan "\n";
+    output_string chan "})(document);\n";
+    output_string chan "\n";
     output_string chan "  </script>\n";
+    output_string chan "  <div class=\"hspace\"></div>\n"
   in
   let footer chan =
     output_string chan "  <div class=\"hspace\"></div>\n";
@@ -1322,15 +1348,21 @@ let mixed_graphviz_html =
       let ok2 = ok || Str.string_match (Str.regexp "^<svg") line 0 in
       if ok2 then
         begin
+	  let line = Str.replace_first (Str.regexp "^<svg") "<svg id=\"heapgraph\"" line in
           output_string chan line;
           output_string chan "\n"
         end;
       if line <> "</svg>" then read ok2
     in
+    output_string chan "<div id=\"heapgraph-container\">\n";
     read false;
+    output_string chan "</div>\n";
+    (* Putting the filter box for the table here - below graph, above tables *)
+    output_string chan "  <div class=\"hspace\"></div>\n";
+    output_string chan "  <input type=\"search\" class=\"light-table-filter\" data-table=\"values-table\" placeholder=\"Filter\">\n";
     let _ = Unix.close_process (out, inp) in
     ()
-  in    
+  in
   { header = header;
     footer = footer;
     table = visjs_output.table;

@@ -253,7 +253,8 @@ let elim_global_deps prog =
     } 
   in
   let prog1 = map_procs elim_proc prog in
-  map_preds elim_pred prog1
+  let prog2 = map_preds elim_pred prog1 in
+  { prog2 with prog_axioms = List.map elim_spec prog2.prog_axioms }
 
 (** Eliminate all return commands.
  ** Assumes that all SL formulas have been desugared. *)

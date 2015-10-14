@@ -582,19 +582,18 @@ let fold_terms fn init f =
 
 (** Apply the function fn to all terms appearing in [f] *)
 let map_terms fn f =
+  let ma a =
+     List.map (function
+       | TermGenerator (gs, ts) ->
+           let gs1 = List.map (function Match (t, f) -> Match (fn t, f)) gs in
+           TermGenerator (gs1, List.map fn ts)
+       | Pattern (t, ft) -> Pattern (fn t, ft)
+       | a -> a) a
+  in
   let rec mt = function
-    | Atom (t, a) -> Atom (fn t, a)
+    | Atom (t, a) -> Atom (fn t, ma a)
     | BoolOp (op, fs) -> BoolOp (op, List.map mt fs)
-    | Binder (b, vs, f, a) -> 
-        let a1 = 
-          List.map (function
-            | TermGenerator (gs, ts) ->
-                let gs1 = List.map (function Match (t, f) -> Match (fn t, f)) gs in
-                TermGenerator (gs1, List.map fn ts)
-            | Pattern (t, ft) -> Pattern (fn t, ft)
-            | a -> a) a
-        in
-        Binder (b, vs, mt f, a1)
+    | Binder (b, vs, f, a) -> Binder (b, vs, mt f, ma a)
   in mt f
 
 (** Like {!fold_terms} except that [fn] takes the set of bound variables of the given context as additional argument *)
