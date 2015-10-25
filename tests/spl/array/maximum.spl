@@ -8,7 +8,7 @@ procedure maximum(a: Array<Int>)
   ensures forall j: Int :: 0 <= j && j < a.length ==> a[j] <= a[max_i]
 {
   var i := 0;
-  var max_i := 0;
+  max_i := 0;
 
   while (i < a.length)
     invariant 0 <= i
