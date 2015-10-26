@@ -1139,7 +1139,7 @@ let foralls_to_exists f =
         let g1 = distribute_and bvs gs [g] in
         Binder (b, [], g1, a)
     | Binder (_, [], g, a) :: gs1 ->
-        assert (List.for_all (function TermGenerator _ -> false | _ -> true) a);
+        (*assert (List.for_all (function TermGenerator _ -> false | _ -> true) a);*)
         distribute_and bvs gs (g :: gs1)
     | g :: gs1 -> distribute_and bvs (g :: gs) gs1
     | [] -> smk_forall bvs (mk_or (List.rev gs))
