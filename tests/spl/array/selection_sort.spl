@@ -9,7 +9,7 @@ procedure find_minimum(a: Array<Int>, low: Int, high: Int)
   ensures forall j: Int :: low <= j && j < high ==> a[j] >= a[min_i]
 {
   var i := low;
-  var min_i := low;
+  min_i := low;
 
   while (i < high)
     invariant low <= i

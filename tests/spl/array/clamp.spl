@@ -1,0 +1,26 @@
+include "int_array.spl";
+
+// @author David Stingley and Jenny Ramseyer
+
+procedure clamp(a: Array<Int>, bLower: Int, bUpper: Int)
+    requires array(a)
+    requires bLower <= bUpper
+    ensures array(a)
+    ensures forall i: Int:: i >= 0 && i < a.length ==> a[i] <= bUpper && a[i] >= bLower
+{
+    var i := 0;
+
+    while(i < a.length)
+        invariant i >= 0 && i <= a.length
+        invariant bLower <= bUpper
+        invariant array(a)
+        invariant forall j: Int:: j >= 0 && j < i ==> a[j] <= bUpper && a[j] >= bLower
+        {
+            if(a[i] < bLower){
+                a[i] := bLower;
+            } else if(a[i] > bUpper){
+                a[i] := bUpper;
+            }
+            i := i + 1;
+        }
+}

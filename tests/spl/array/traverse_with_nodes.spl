@@ -5,14 +5,14 @@ struct Node {
 }
 
 procedure traverse(a: Array<Node>)
-  requires arrayWithNode(a)
-  ensures arrayWithNode(a)
+  requires array(a)
+  ensures array(a)
 {
   var i := 0;
   
   while (i < a.length)
     invariant 0 <= i
-    invariant arrayWithNode(a)
+    invariant array(a)
   {
     a[i] := a[i];
     i := i + 1;
