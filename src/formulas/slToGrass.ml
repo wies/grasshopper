@@ -100,6 +100,29 @@ let to_form pred_to_form domains f =
         List.fold_left process [] tr_product
     | BoolOp (Or, forms, _) ->
         Util.flat_map (process_sep d) forms
+    | BoolOp (And, forms, _) ->
+        let domain = fresh_dom d in
+        let translated = List.map (process_sep d) forms in
+        let tr_product =
+          List.fold_left
+            (fun acc fs1 ->
+              List.fold_left
+                (fun acc2 f1 ->
+                  List.fold_left
+                    (fun acc f2s -> (f1 :: f2s) :: acc2)
+                    acc2 acc)
+                [] fs1)
+            [[]] translated
+        in
+        List.map (fun fs ->
+          let fs_tr =
+            List.fold_left (fun acc (f_tr, f_dom) ->
+              let dom_def = mk_domains_eq f_dom domains in
+              f_tr :: dom_def @ acc)
+              [] fs
+          in
+          GrassUtil.smk_and fs_tr, domain)
+          tr_product
     | other -> failwith ("process_sep does not expect " ^ (string_of_form other))
   in
   let rec process_bool f = match f with
