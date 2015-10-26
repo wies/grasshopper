@@ -33,9 +33,9 @@ procedure FreeCounter(this: Counter)
   free this;
 }
 
-procedure Inc(this: Counter, implicit ghost FP1: Set<Counter>)
-  requires counter(this) && acc(FP1)
-  ensures (counter(this) &*& old(this.n) < this.n) && acc(FP1)
+procedure Inc(this: Counter, implicit ghost FP1: Set<Counter>, implicit ghost FP2: Set<Cell>)
+  requires counter(this) && acc(FP1) &*& acc(FP2)
+  ensures (counter(this) && acc(FP1) &*& acc(FP2)) &*& old(this.n) < this.n
 {
   this.n := this.n + 1;
   this.c.data := this.c.data + 1;
