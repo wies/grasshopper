@@ -64,7 +64,7 @@ let filter_term filters t sm =
     | FilterReadNotOccurs (name, (arg_srts, res_srt)) ->
         let rec not_occurs = function
           | App (EntPnt, _, _) -> true
-          | App (Read, (App (FreeSym (name1, _), arg_ts, res_srt1) :: _ as ts), _) ->
+          | App ((Read | ArrayCells), (App (FreeSym (name1, _), arg_ts, res_srt1) :: _ as ts), _) ->
               let ok =
                 try
                   name1 <> name ||
@@ -174,7 +174,7 @@ let generate_terms generators ground_terms =
           List.fold_left (fun subst_maps -> function Match (t, filters) -> 
             (*
             print_endline ("  matching " ^ (string_of_term t));
-            List.iter (fun f -> print_endline ("    subject to " ^ (string_of_filter f))) fiters;
+            List.iter (fun f -> print_endline ("    subject to " ^ (string_of_filter f))) filters;
             *)
             let new_subst_maps =
               List.fold_left 
