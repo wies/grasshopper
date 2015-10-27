@@ -5,6 +5,7 @@ string as `Array<Int>`
 predicate string(s) ⇔ array(s) ∧ ∀ i. s[i] ≥ 0 ∧ s[i] ≤ 255
 
 do we want strings to be '\0' terminated or use the lenght of the array ?
+do we want to support UTF8/16/32 (variable length encoding except for UFT32)
 
 # Files
 
