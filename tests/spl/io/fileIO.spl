@@ -1,12 +1,12 @@
 include "../array/int_array.spl";
 
-//var O_CREAT := 1;
-//var O_APPEND := 2;
+O_CREAT: Int
+O_APPEND: Int
 
 procedure open(pathname: Array<Int>, flags: Int) returns (fd: Int)
     requires array(pathname)
     //requires string(pathname)
-    requires flags == 0 // || flags == O_CREAT || flags == O_APPEND
+    requires flags == 0 || flags == O_CREAT || flags == O_APPEND
     ensures array(pathname)
     //ensures string(pathname)
     ensures pathname == old(pathname)

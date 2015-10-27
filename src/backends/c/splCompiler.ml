@@ -7,6 +7,7 @@ open Grass
 open SplSyntax
 open SplTypeChecker
 open Format
+open RemoveGhost
 
 
 (** Converts abstract syntax into a C program string and print it to output channel [oc].
@@ -542,10 +543,19 @@ let convert oc cu =
     if (IdMap.is_empty cu.proc_decls) then
       ()
     else
-      fprintf ppf "@\n@\n%s@\n%a@\n@\n%a"
-        "/*\n * Procedures\n */"
-        pr_c_proc_fwd_decls cu
-        pr_c_proc_decls cu
+      begin
+        let cu_no_ghost = removeGhost cu in
+        let has_body _ p = match p.p_body with
+          | Skip _ -> false
+          | _ -> true
+        in
+        (* remove the functions which does not have body *)
+        let cu_no_skip = {cu_no_ghost with proc_decls = IdMap.filter has_body cu_no_ghost.proc_decls} in
+          fprintf ppf "@\n@\n%s@\n%a@\n@\n%a"
+            "/*\n * Procedures\n */"
+            pr_c_proc_fwd_decls cu_no_ghost
+            pr_c_proc_decls cu_no_skip
+      end
   in
   (** This is just so it will compile for testing purposes. *)
   let pr_c_main_section ppf () =
