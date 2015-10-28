@@ -3,7 +3,7 @@ include "../array/int_array.spl";
 O_CREAT: Int
 O_APPEND: Int
 
-procedure open(pathname: Array<Int>, flags: Int) returns (fd: Int)
+procedure gopen(pathname: Array<Int>, flags: Int) returns (fd: Int)
     requires array(pathname)
     //requires string(pathname)
     requires flags == 0 || flags == O_CREAT || flags == O_APPEND
@@ -14,7 +14,7 @@ procedure open(pathname: Array<Int>, flags: Int) returns (fd: Int)
     ensures forall i: Int :: i >= 0 && i <= pathname.length ==> pathname[i] == old(pathname[i])
     ensures fd >= -1
 
-procedure read(fd: Int, buffer: Array<Int>) returns (nbr: Int)
+procedure gread(fd: Int, buffer: Array<Int>) returns (nbr: Int)
     requires fd >= 0
     requires array(buffer)
     //requires byte_array(buffer)
@@ -24,7 +24,7 @@ procedure read(fd: Int, buffer: Array<Int>) returns (nbr: Int)
     ensures buffer.length == old(buffer.length)
     ensures nbr >= -1 && nbr <= buffer.length
 
-procedure write(fd: Int, buffer: Array<Int>) returns (nbr: Int)
+procedure gwrite(fd: Int, buffer: Array<Int>) returns (nbr: Int)
     requires fd >= 0
     requires array(buffer)
     //requires byte_array(buffer)
@@ -35,5 +35,5 @@ procedure write(fd: Int, buffer: Array<Int>) returns (nbr: Int)
     ensures forall i: Int :: i >= 0 && i <= buffer.length ==> buffer[i] == old(buffer[i])
     ensures nbr >= -1 && nbr <= buffer.length
 
-procedure close(fd: Int)
+procedure gclose(fd: Int)
     requires fd >= 0
