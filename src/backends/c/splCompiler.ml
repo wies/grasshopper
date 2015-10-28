@@ -103,8 +103,8 @@ let convert oc cu =
    *  elegantly implemented puts together a list of strings that describe
    *  a procedure's arguments and the variables it returns (since, in the
    *  implementation, return variables are actually passed by reference into
-   *  the function) and then this list is concatnetated into a string using a
-   *  comma and space as a delimter. However, if the procedure has only one 
+   *  the function) and then this list is concatenated into a string using a
+   *  comma and space as a delimiter. However, if the procedure has only one 
    *  return value, only the "true" arguments are printed, because the C
    *  return value is used in that case. *)
   let pr_c_proc_args ppf p =
