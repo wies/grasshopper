@@ -18,6 +18,7 @@ type typ =
   | SetType of typ
   | IntType
   | BoolType
+  | ByteType
   | UnitType
   | AnyRefType
   | PermType (* SL formulas *)
@@ -291,6 +292,7 @@ let rec pr_type ppf = function
   | AnyRefType -> fprintf ppf "AnyRef" 
   | BoolType -> fprintf ppf "%s" bool_sort_string
   | IntType -> fprintf ppf "%s" int_sort_string
+  | ByteType -> fprintf ppf "%s" byte_sort_string
   | UnitType -> fprintf ppf "Unit"
   | StructType id -> pr_ident ppf id
   | ArrayType e -> fprintf ppf "%s<@[%a@]>" array_sort_string pr_type e

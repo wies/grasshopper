@@ -30,7 +30,7 @@ module IdMap = Map.Make(struct
 
 (** sorts *)
 type sort =
-  | Bool | Int (** basic sorts *)
+  | Bool | Byte | Int (** basic sorts *)
   | Loc of sort (** memory locations *)
   | Set of sort (** sets *)
   | Map of sort * sort (** maps *)
@@ -62,7 +62,7 @@ type arity = sort list * sort
 type symbol =
   (* interpreted constant symbols *)
   | BoolConst of bool
-  | IntConst of int
+  | IntConst of Int64.t
   (* interpreted function symbols *)
   | Null | Read | Write | EntPnt
   | UMinus | Plus | Minus | Mult | Div 
@@ -200,7 +200,7 @@ let string_of_ident (name, n) =
 let string_of_symbol = function
   (* function symbols *)
   | BoolConst b -> Printf.sprintf "%b" b
-  | IntConst i -> string_of_int i
+  | IntConst i -> Int64.to_string i
   | Null -> "null"
   | Read -> 
       if !Config.encode_fields_as_arrays 
@@ -255,11 +255,13 @@ let array_cell_sort_string = "ArrayCell"
 let set_sort_string = "Set"
 let bool_sort_string = "Bool"
 let int_sort_string = "Int"
+let byte_sort_string = "Byte"
 let pat_sort_string = "Pat"
     
 let name_of_sort = function
   | Int -> int_sort_string
   | Bool -> bool_sort_string
+  | Byte -> byte_sort_string
   | Loc _ -> loc_sort_string
   | Set _ -> set_sort_string
   | Map _ -> map_sort_string
@@ -273,6 +275,7 @@ let pr_sym ppf sym = fprintf ppf "%s" (string_of_symbol sym)
 let rec pr_sort ppf srt = match srt with
   | Bool
   | Int
+  | Byte
   | Pat -> fprintf ppf "%s" (name_of_sort srt)
   | Loc e
   | Set e

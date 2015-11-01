@@ -32,6 +32,7 @@ let _ =
       ("if", IF);
       ("in", IN);
       ("Int", INT);
+      ("Byte", BYTE);
       ("invariant", INVARIANT);
       ("include", INCLUDE);
       ("implicit", IMPLICIT);
@@ -128,7 +129,7 @@ rule token = parse
       with Not_found ->
         IDENT (kw)
     }
-| digits as num { INTVAL (int_of_string num) }
+| digits as num { INTVAL (int_of_string num) (* TODO hexadecimal *) }
 | eof { EOF }
 | _ { lexical_error lexbuf None }
 

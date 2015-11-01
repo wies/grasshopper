@@ -36,6 +36,7 @@ let convert oc cu =
      | AnyRefType -> "void*" 
      | BoolType -> "bool"
      | IntType -> "int"
+     | ByteType -> "char"
      | StructType id -> "struct " ^ (string_of_ident id)
      | ArrayType _ -> "struct " ^ arr_string 
      | MapType _| SetType _ -> "/* ERROR: Maps and Sets are not implemented yet. */"

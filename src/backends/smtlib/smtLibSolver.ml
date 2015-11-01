@@ -312,7 +312,8 @@ let declare_sort session sort_name num_of_params =
 
 let smtlib_sort_of_grass_sort srt =
   let rec csort = function
-  | Int -> IntSort
+  | Byte -> if !Config.use_bitvector then BvSort 8 else failwith "cannot use bitvector without '-bitvector' option"
+  | Int ->  if !Config.use_bitvector then BvSort 32 else IntSort
   | Bool -> BoolSort
   | Pat -> FreeSort (("GrassPat", 0), [])
   | Set srt ->
@@ -444,7 +445,7 @@ let init_session session sign =
     let logic_str =
       (if !Config.encode_fields_as_arrays then "A" else "") ^
       "UF" ^
-      (if has_int then "LIA" else "") ^
+      (if !Config.use_bitvector then "BV" else if has_int then "LIA" else "") ^
       (if solver.info.has_set_theory && !Config.use_set_theory then "FS" else "")
     in
     set_logic state.out_chan logic_str;
@@ -505,7 +506,7 @@ let push session =
 
 let grass_smtlib_prefix = "grass_" 
 
-let smtlib_symbol_of_grass_symbol solver_info sym = match sym with 
+let smtlib_symbol_of_grass_symbol_no_bv solver_info sym = match sym with 
   | FreeSym id -> SmtLibSyntax.Ident id
   | Plus -> SmtLibSyntax.Plus
   | Minus | UMinus -> SmtLibSyntax.Minus
@@ -516,16 +517,67 @@ let smtlib_symbol_of_grass_symbol solver_info sym = match sym with
   | GtEq -> SmtLibSyntax.Geq
   | Lt -> SmtLibSyntax.Lt
   | Gt -> SmtLibSyntax.Gt
+  (* TODO add bitwise operations *)
   | (Read | Write) when !Config.encode_fields_as_arrays -> SmtLibSyntax.Ident (string_of_symbol sym, 0)
   | (IntConst _ | BoolConst _) as sym -> SmtLibSyntax.Ident (string_of_symbol sym, 0)
   | sym -> SmtLibSyntax.Ident (grass_smtlib_prefix ^ (string_of_symbol sym), 0)
 
+let smtlib_symbol_of_grass_symbol_bv solver_info sym = match sym with 
+  | FreeSym id -> SmtLibSyntax.Ident id
+  | Plus -> SmtLibSyntax.BvAdd
+  | Minus -> failwith "bitvector theory does not have subtraction."
+  | UMinus -> SmtLibSyntax.BvNeg
+  | Mult -> SmtLibSyntax.BvMul
+  | Div -> SmtLibSyntax.BvUdiv
+  | Eq -> SmtLibSyntax.Eq
+  | LtEq -> failwith "bitvector theory does not have '<='."
+  | GtEq -> failwith "bitvector theory does not have '>='."
+  | Lt -> SmtLibSyntax.BvUlt
+  | Gt -> failwith "bitvector theory does not have '>'."
+  (* TODO add bitwise operations *)
+  | (Read | Write) when !Config.encode_fields_as_arrays -> SmtLibSyntax.Ident (string_of_symbol sym, 0)
+  | (IntConst _ | BoolConst _) as sym -> SmtLibSyntax.Ident (string_of_symbol sym, 0)
+  | sym -> SmtLibSyntax.Ident (grass_smtlib_prefix ^ (string_of_symbol sym), 0)
+
+let smtlib_symbol_of_grass_symbol solver_info sym =
+  if !Config.use_bitvector then smtlib_symbol_of_grass_symbol_bv solver_info sym
+  else smtlib_symbol_of_grass_symbol_no_bv solver_info sym
+
 let grass_symbol_of_smtlib_symbol solver_info =
   let to_string sym = SmtLibSyntax.string_of_symbol (smtlib_symbol_of_grass_symbol solver_info sym) in
-  let symbol_map = List.map (fun sym -> (to_string sym, sym)) symbols in
+  let symbol_map =
+    List.fold_left
+      (fun acc sym ->
+        try (to_string sym, sym) :: acc
+        with _ -> acc)
+      []
+      symbols
+  in
   function (name, _) as id ->
     try List.assoc name symbol_map
     with Not_found -> FreeSym id
+
+let bitvecorize_grass_formula formula =
+  let rec process_term t = match t with
+    | Var _ -> t
+    | App (sym, ts, srt) ->
+      begin
+        match App (sym, List.map process_term ts, srt) with
+        | App (Minus, [a;b], srt) -> App (Plus, [a; mk_uminus b], srt)
+        | other -> other
+      end
+  in
+  let rec process_form t = match t with
+    | BoolOp (bop, fs) -> BoolOp (bop, List.map process_form fs)
+    | Binder (a, b, f, c) -> Binder(a, b, process_form f, c)
+    | Atom (a, annot) ->
+      match process_term a with
+      | App (LtEq, [a;b], srt) -> mk_not (Atom ((App (Lt, [b;a], srt)), annot))
+      | App (GtEq, [a;b], srt) -> mk_not (Atom ((App (Lt, [a;b], srt)), annot))
+      | App (Gt, [a;b], srt) -> Atom(App (Lt, [b;a], srt), annot)
+      | other -> Atom (other, annot)
+  in
+    process_form formula
 
 let is_interpreted solver_info sym = match sym with
   | Read | Write -> !Config.encode_fields_as_arrays
@@ -533,6 +585,7 @@ let is_interpreted solver_info sym = match sym with
       !Config.use_set_theory && solver_info.has_set_theory
   | Eq | Gt | Lt | GtEq | LtEq | IntConst _ | BoolConst _
   | Plus | Minus | Mult | Div | UMinus -> true
+  (* TODO bitvecor *)
   | FreeSym id -> id = ("inst-closure", 0) && solver_info.has_inst_closure
   | _ -> false
 
@@ -580,6 +633,7 @@ let extract_name ann =
   Str.global_replace (Str.regexp " \\|(\\|)") "_" (String.concat "_" (List.rev names))
 
 let smtlib_form_of_grass_form solver_info signs f =
+  let f = if !Config.use_bitvector then bitvecorize_grass_formula f else f in
   let osym sym sign =
     if is_interpreted solver_info sym 
     then smtlib_symbol_of_grass_symbol solver_info sym
@@ -596,6 +650,8 @@ let smtlib_form_of_grass_form solver_info signs f =
   in
   let rec cterm t = match t with
   | Var (id, _) -> SmtLibSyntax.mk_app (SmtLibSyntax.Ident id) []
+  | App (IntConst i, [], Int) when !Config.use_bitvector -> SmtLibSyntax.mk_app (BvConst (32,i)) []
+  | App (IntConst i, [], Byte) when !Config.use_bitvector -> SmtLibSyntax.mk_app (BvConst (8,i)) []
   | App (Empty as sym, [], srt) when solver_info.has_set_theory && !Config.use_set_theory ->
       let sym = osym sym ([], srt) in
       SmtLibSyntax.mk_annot (SmtLibSyntax.mk_app sym []) (As (smtlib_sort_of_grass_sort srt))
@@ -719,6 +775,10 @@ let convert_model session smtModel =
   let rec convert_sort = function
     | IntSort -> Int
     | BoolSort -> Bool
+    | BvSort i ->
+      if i = 8 then Byte
+      else if i = 32 then Int
+      else failwith ("no equivalent for bitvector of size " ^ (string_of_int i))
     | FreeSort ((name, num), srts) ->
         let csrts = List.map convert_sort srts in
         match name, csrts with

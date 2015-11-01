@@ -7,7 +7,7 @@ open SmtLibParser
 let set_file_name lexbuf name =
    lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = name }
 
-let keyword_table = Hashtbl.create 32
+let keyword_table = Hashtbl.create 48
 let _ =
   List.iter (fun (kwd, tok) -> Hashtbl.add keyword_table kwd tok)
     (["set-logic", SET_LOGIC;
@@ -20,6 +20,7 @@ let _ =
       (* sorts *)
       Grass.bool_sort_string, SORT(BoolSort);
       Grass.int_sort_string, SORT(IntSort);
+      "BitVec", BV;
       (* term constructors *)
       "forall", BINDER(Forall);
       "exists", BINDER(Exists);
@@ -27,6 +28,19 @@ let _ =
       "or", SYMBOL(Or);
       "not", SYMBOL(Not);
       "ite", SYMBOL(Ite);
+      "bvnot", SYMBOL(BvNot);
+      "bvand", SYMBOL(BvAnd);
+      "bvor", SYMBOL(BvOr);
+      "bvult", SYMBOL(BvUlt);
+      "bvneg", SYMBOL(BvNeg);
+      "bvadd", SYMBOL(BvAdd);
+      "bvmul", SYMBOL(BvMul);
+      "bvudiv", SYMBOL(BvUdiv);
+      "bvurem", SYMBOL(BvUrem);
+      "bvshl", SYMBOL(BvShl);
+      "bvshr", SYMBOL(BvShr);
+      "concat", SYMBOL(BvConcat);
+      "extract", SYMBOL(BvExtract);
       "let", LET;
       (* values *)
       "true", SYMBOL(BoolConst true);
@@ -69,7 +83,8 @@ rule token = parse
 | '!' { BANG }
 | '(' { LPAREN }
 | ')' { RPAREN }
-| ('-'? digitchar*) as num { INT(int_of_string num) }
+| "#b" (('0' | '1')* as bits) { INT (int_of_bits bits) }
+| ('-'? digitchar*) as num { INT(int_of_string num) (* TODO bitvector HEX literal *) }
 | ident as name '_' (digitchar* as num) { IDENT(name, int_of_string num) }
 | ident as kw
     { try

@@ -99,6 +99,7 @@ let convert cu =
       | ArrayType typ -> Loc (Array (ct typ))
       | ArrayCellType typ -> Loc (ArrayCell (ct typ))
       | IntType -> Int
+      | ByteType -> Byte
       | BoolType -> Bool
       | ty -> failwith ("cannot convert type " ^ string_of_type ty ^ " near position " ^ string_of_src_pos pos)
     in

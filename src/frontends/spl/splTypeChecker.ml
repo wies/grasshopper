@@ -134,7 +134,7 @@ let type_of_expr cu locals e =
         | ArrayType ty -> ty
         | _ -> AnyType)
     | Old (e, _) -> te e        
-    | Length (map, _) -> IntType        
+    | Length (map, _) -> IntType
     | ArrayOfCell (c, _) ->
         (match te c with
         | ArrayCellType srt -> ArrayType srt
