@@ -35,5 +35,6 @@ procedure gwrite(fd: Int, buffer: Array<Int>) returns (nbr: Int)
     ensures forall i: Int :: i >= 0 && i <= buffer.length ==> buffer[i] == old(buffer[i])
     ensures nbr >= -1 && nbr <= buffer.length
 
-procedure gclose(fd: Int)
+procedure gclose(fd: Int) returns (nbr: Int)
     requires fd >= 0
+    ensures nbr >= -1
