@@ -243,6 +243,13 @@ let mk_minus s t = mk_app Int Minus [s; t]
 let mk_uminus s = mk_app Int UMinus [s]
 let mk_mult s t = mk_app Int Mult [s; t]
 let mk_div s t = mk_app Int Div [s; t]
+let mk_bv_and s t = mk_app Int BitAnd [s; t]
+let mk_bv_or s t = mk_app Int BitOr [s; t]
+let mk_bv_not s = mk_app Int BitNot [s]
+let mk_bv_shift_left s t = mk_app Int ShiftLeft [s; t]
+let mk_bv_shift_right s t = mk_app Int ShiftRight [s; t]
+let mk_int_to_byte s = mk_app Byte IntToByte [s]
+let mk_byte_to_int s = mk_app Byte ByteToInt [s]
 
 let mk_null id = mk_app (Loc id) Null []
 

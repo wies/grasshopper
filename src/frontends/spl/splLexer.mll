@@ -58,6 +58,8 @@ let _ =
       ("without", WITHOUT);
       ("yields", YIELDS);
       ("axiom", AXIOM);
+      ("int2byte", INT2BYTE);
+      ("byte2int", BYTE2INT);
    ])
 
 let lexical_error lexbuf msg =
@@ -122,7 +124,11 @@ rule token = parse
 | "&*&" { SEPSTAR }
 | "&+&" { SEPPLUS }
 | "|->" { PTS }
-| '|' { PIPE }
+| '&' { BAND }
+| '|' { BOR }
+| '~' { BNOT }
+| "<<" { BSL }
+| ">>" { BSR }
 | ident as kw
     { try
         Hashtbl.find keyword_table kw

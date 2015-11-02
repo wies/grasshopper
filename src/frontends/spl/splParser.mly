@@ -48,6 +48,7 @@ let trd3 (_, _, v) = v
 %token UMINUS PLUS MINUS DIV TIMES
 %token UNION INTER DIFF
 %token EQ NEQ LEQ GEQ LT GT IN NOTIN AT
+%token BOR BAND BNOT BSL BSR INT2BYTE BYTE2INT
 %token PTS EMP NULL
 %token SEPSTAR SEPPLUS SEPINCL AND OR IMPLIES IFF NOT COMMA
 %token <SplSyntax.quantifier_kind> QUANT
@@ -497,6 +498,7 @@ loop_contract:
 primary:
 | INTVAL { IntVal ($1, mk_position 1 1) }
 | BOOLVAL { BoolVal ($1, mk_position 1 1) }
+/* TODO Byte literal */
 | NULL { Null (AnyRefType, mk_position 1 1) }
 | EMP { Emp (mk_position 1 1) }
 | LPAREN expr RPAREN { $2 }
@@ -504,6 +506,7 @@ primary:
 | proc_call { $1 }
 | field_access { $1 }
 | array_access { $1 }
+| cast { $1 }
 ;
 
 alloc:
@@ -535,6 +538,11 @@ array_access:
 | primary LBRACKET RBRACKET { Read (Read (Ident (("array", 0), mk_position 2 3), $1, mk_position 1 3),
                                     Read (Ident (("index", 0), mk_position 2 3), $1, mk_position 1 3), mk_position 1 3) }
 ;
+
+cast:
+| INT2BYTE LBRACKET expr RBRACKET  { UnaryOp (OpToByte, $3, mk_position 1 4) }
+| BYTE2INT LBRACKET expr RBRACKET { UnaryOp (OpToInt, $3, mk_position 1 4) }
+;
                                                               
 unary_expr:
 | primary { $1 }
@@ -546,11 +554,14 @@ unary_expr:
 
 unary_expr_not_plus_minus:
 | NOT unary_expr  { UnaryOp (OpNot, $2, mk_position 1 2) }
+| BNOT unary_expr  { UnaryOp (OpBvNot, $2, mk_position 1 2) }
 ;
 
 diff_expr:
 | unary_expr { $1 }
 | diff_expr DIFF unary_expr { BinaryOp ($1, OpDiff, $3, SetType AnyType, mk_position 1 3) }
+| diff_expr BSL  unary_expr { BinaryOp ($1, OpBvShiftL, $3, IntType, mk_position 1 3) }
+| diff_expr BSR  unary_expr { BinaryOp ($1, OpBvShiftR, $3, IntType, mk_position 1 3) }
 ;
 
 mult_expr:
@@ -558,6 +569,7 @@ mult_expr:
 | mult_expr TIMES diff_expr { BinaryOp ($1, OpMult, $3, IntType, mk_position 1 3) }
 | mult_expr DIV diff_expr { BinaryOp ($1, OpDiv, $3, IntType, mk_position 1 3) }
 | mult_expr INTER diff_expr { BinaryOp ($1, OpInt, $3, SetType AnyType, mk_position 1 3) }
+| mult_expr BAND diff_expr { BinaryOp ($1, OpBvAnd, $3, IntType, mk_position 1 3) }
 ;
 
 add_expr:
@@ -565,6 +577,7 @@ add_expr:
 | add_expr PLUS mult_expr { BinaryOp ($1, OpPlus, $3, IntType, mk_position 1 3) }
 | add_expr MINUS mult_expr { BinaryOp ($1, OpMinus, $3, IntType, mk_position 1 3) }
 | add_expr UNION mult_expr { BinaryOp ($1, OpUn, $3, SetType AnyType, mk_position 1 3) }
+| add_expr BOR mult_expr { BinaryOp ($1, OpBvOr, $3, IntType, mk_position 1 3) }
 ;
 
 pts_expr:

@@ -596,8 +596,9 @@ let is_interpreted solver_info sym = match sym with
   | Empty | SetEnum | Union | Inter | Diff | Elem | SubsetEq | Disjoint ->
       !Config.use_set_theory && solver_info.has_set_theory
   | Eq | Gt | Lt | GtEq | LtEq | IntConst _ | BoolConst _
-  | Plus | Minus | Mult | Div | UMinus -> true
-  (* TODO bitvecor *)
+  | Plus | Minus | Mult | Div | UMinus 
+  | BitNot | BitAnd | BitOr | ShiftLeft | ShiftRight
+  | IntToByte | ByteToInt -> true
   | FreeSym id -> id = ("inst-closure", 0) && solver_info.has_inst_closure
   | _ -> false
 

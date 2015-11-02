@@ -148,6 +148,7 @@ and op =
   | OpMinus | OpPlus | OpMult | OpDiv 
   | OpEq | OpGt | OpLt | OpGeq | OpLeq | OpIn
   | OpPts | OpSepStar | OpSepPlus | OpSepIncl
+  | OpBvAnd | OpBvOr | OpBvNot | OpBvShiftL | OpBvShiftR | OpToInt | OpToByte
   | OpAnd | OpOr | OpImpl | OpNot 
 
 and pred_sym =

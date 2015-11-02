@@ -106,11 +106,19 @@ let type_of_expr cu locals e =
     | BoolVal _ -> BoolType
     (* Int return values *)
     | UnaryOp (OpMinus, _, _) 
+    | UnaryOp (OpBvNot, _, _)
     | BinaryOp (_, OpMinus, _, _, _)
     | BinaryOp (_, OpPlus, _, _, _)
     | BinaryOp (_, OpMult, _, _, _)
     | BinaryOp (_, OpDiv, _, _, _)
+    | BinaryOp (_, OpBvAnd, _, _, _)
+    | BinaryOp (_, OpBvOr, _, _, _)
+    | BinaryOp (_, OpBvShiftL, _, _, _)
+    | BinaryOp (_, OpBvShiftR, _, _, _)
+    | BinaryOp (_, OpToInt, _, _, _)
     | IntVal _ -> IntType
+    (* Byte values *)
+    | BinaryOp (_, OpToByte, _, _, _) -> ByteType
     (* Set return values *)
     | BinaryOp (e, OpDiff, _, _, _)
     | BinaryOp (e, OpUn, _, _, _)
@@ -179,9 +187,10 @@ let type_of_expr cu locals e =
 let infer_types cu locals ty e =
   let rec it locals ty = function
     (* Non-ambiguous Boolean operators *)
-    | UnaryOp (OpNot, e, pos) ->
+    | UnaryOp (OpNot as op, e, pos)
+    | UnaryOp (OpBvNot as op, e, pos) ->
         let e1, ty = it locals ty e in
-        UnaryOp (OpNot, e1, pos), ty
+        UnaryOp (op, e1, pos), ty
     | BinaryOp (e1, OpImpl, e2, _, pos) ->
         let e1, e2, ty = itp locals BoolType e1 e2 in
         BinaryOp (e1, OpImpl, e2, ty, pos), ty
@@ -204,6 +213,10 @@ let infer_types cu locals ty e =
     | BinaryOp (e1, (OpPlus as op), e2, _, pos)
     | BinaryOp (e1, (OpMult as op), e2, _, pos)
     | BinaryOp (e1, (OpDiv as op), e2, _, pos)
+    | BinaryOp (e1, (OpBvAnd as op), e2, _, pos)
+    | BinaryOp (e1, (OpBvOr as op), e2, _, pos)
+    | BinaryOp (e1, (OpBvShiftL as op), e2, _, pos)
+    | BinaryOp (e1, (OpBvShiftR as op), e2, _, pos)
     (* Ambiguous binary Boolean operators *)
     | BinaryOp (e1, (OpAnd as op), e2, _, pos)
     | BinaryOp (e1, (OpOr as op), e2, _, pos)
