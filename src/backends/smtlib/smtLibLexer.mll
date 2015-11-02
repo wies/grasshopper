@@ -40,7 +40,7 @@ let _ =
       "bvshl", SYMBOL(BvShl);
       "bvshr", SYMBOL(BvShr);
       "concat", SYMBOL(BvConcat);
-      "extract", SYMBOL(BvExtract);
+      "extract", EXTRACT;
       "let", LET;
       (* values *)
       "true", SYMBOL(BoolConst true);

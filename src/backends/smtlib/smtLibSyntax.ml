@@ -22,7 +22,7 @@ type symbol =
   (* bitvector theory *)
   | BvNot | BvAnd | BvOr | BvUlt
   | BvNeg | BvAdd | BvMul | BvUdiv | BvUrem
-  | BvShl | BvShr | BvConcat | BvExtract
+  | BvShl | BvShr | BvConcat | BvExtract of int * int
 
 type binder = Exists | Forall
 
@@ -282,7 +282,7 @@ let string_of_symbol = function
   | BvShl -> "bvshl"
   | BvShr -> "bvshr"
   | BvConcat -> "concat"
-  | BvExtract -> "extract"
+  | BvExtract (i, j) -> "(_ extract " ^(string_of_int i)^ " " ^(string_of_int j)^")"
 
 let pr_ident ppf id = fprintf ppf "%s" (string_of_ident id)
 

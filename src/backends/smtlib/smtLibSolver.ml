@@ -517,7 +517,13 @@ let smtlib_symbol_of_grass_symbol_no_bv solver_info sym = match sym with
   | GtEq -> SmtLibSyntax.Geq
   | Lt -> SmtLibSyntax.Lt
   | Gt -> SmtLibSyntax.Gt
-  (* TODO add bitwise operations *)
+  | BitAnd -> failwith "bitwise and requires bitvector theory."
+  | BitOr -> failwith "bitwise or requires bitvector theory."
+  | BitNot -> failwith "bitwise not requires bitvector theory."
+  | ShiftLeft -> failwith "shift left requires bitvector theory."
+  | ShiftRight -> failwith "shift right requires bitvector theory."
+  | ByteToInt -> failwith "Byte to Int requires bitvector theory."
+  | IntToByte -> failwith "Int to Byte requires bitvector theory."
   | (Read | Write) when !Config.encode_fields_as_arrays -> SmtLibSyntax.Ident (string_of_symbol sym, 0)
   | (IntConst _ | BoolConst _) as sym -> SmtLibSyntax.Ident (string_of_symbol sym, 0)
   | sym -> SmtLibSyntax.Ident (grass_smtlib_prefix ^ (string_of_symbol sym), 0)
@@ -534,7 +540,13 @@ let smtlib_symbol_of_grass_symbol_bv solver_info sym = match sym with
   | GtEq -> failwith "bitvector theory does not have '>='."
   | Lt -> SmtLibSyntax.BvUlt
   | Gt -> failwith "bitvector theory does not have '>'."
-  (* TODO add bitwise operations *)
+  | BitAnd -> SmtLibSyntax.BvAnd
+  | BitOr -> SmtLibSyntax.BvOr
+  | BitNot -> SmtLibSyntax.BvNot
+  | ShiftLeft -> SmtLibSyntax.BvShl
+  | ShiftRight -> SmtLibSyntax.BvShr
+  | ByteToInt -> SmtLibSyntax.BvConcat
+  | IntToByte -> SmtLibSyntax.BvExtract (7, 0)
   | (Read | Write) when !Config.encode_fields_as_arrays -> SmtLibSyntax.Ident (string_of_symbol sym, 0)
   | (IntConst _ | BoolConst _) as sym -> SmtLibSyntax.Ident (string_of_symbol sym, 0)
   | sym -> SmtLibSyntax.Ident (grass_smtlib_prefix ^ (string_of_symbol sym), 0)
@@ -648,10 +660,12 @@ let smtlib_form_of_grass_form solver_info signs f =
       with Not_found ->
         smtlib_symbol_of_grass_symbol solver_info sym
   in
+  let bv_lit w i = SmtLibSyntax.mk_app (BvConst (w,i)) [] in
   let rec cterm t = match t with
   | Var (id, _) -> SmtLibSyntax.mk_app (SmtLibSyntax.Ident id) []
-  | App (IntConst i, [], Int) when !Config.use_bitvector -> SmtLibSyntax.mk_app (BvConst (32,i)) []
-  | App (IntConst i, [], Byte) when !Config.use_bitvector -> SmtLibSyntax.mk_app (BvConst (8,i)) []
+  | App (IntConst i, [], Int) when !Config.use_bitvector -> bv_lit 32 i
+  | App (IntConst i, [], Byte) when !Config.use_bitvector -> bv_lit 8 i
+  | App (ByteToInt, [a], srt) -> SmtLibSyntax.mk_app BvConcat  [bv_lit 24 Int64.zero; cterm a]
   | App (Empty as sym, [], srt) when solver_info.has_set_theory && !Config.use_set_theory ->
       let sym = osym sym ([], srt) in
       SmtLibSyntax.mk_annot (SmtLibSyntax.mk_app sym []) (As (smtlib_sort_of_grass_sort srt))

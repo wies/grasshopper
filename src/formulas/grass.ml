@@ -65,9 +65,11 @@ type symbol =
   | IntConst of Int64.t
   (* interpreted function symbols *)
   | Null | Read | Write | EntPnt
-  | UMinus | Plus | Minus | Mult | Div 
-  | Empty | SetEnum | Union | Inter | Diff
+  | UMinus | Plus | Minus | Mult | Div  (* Int *)
+  | BitAnd | BitOr | BitNot | ShiftLeft | ShiftRight (* Bit Vector *)
+  | Empty | SetEnum | Union | Inter | Diff  (* Set *)
   | Length | IndexOfCell | ArrayOfCell | ArrayCells
+  | ByteToInt | IntToByte (* explicit conversion *)
   (* interpreted predicate symbols *)
   | Eq
   | LtEq | GtEq | Lt | Gt
@@ -81,7 +83,8 @@ type symbol =
 let symbols = 
   [BoolConst true; BoolConst false; 
    Null; Read; Write; EntPnt;
-   UMinus; Plus; Minus; Mult;
+   UMinus; Plus; Minus; Mult; Div;
+   BitAnd; BitOr; BitNot; ShiftLeft; ShiftRight;
    Empty; SetEnum; Union; Inter; Diff;
    Length; IndexOfCell; ArrayOfCell; ArrayCells;
    Eq; LtEq; GtEq; Lt; Gt;
@@ -225,6 +228,13 @@ let string_of_symbol = function
   | Union -> "union"
   | Inter -> "intersection"
   | Diff -> "setminus"
+  | BitAnd -> "&"
+  | BitOr -> "|"
+  | BitNot -> "!"
+  | ShiftLeft -> "<<"
+  | ShiftRight -> ">>"
+  | ByteToInt -> "toInt"
+  | IntToByte -> "toByte"
   (* predicate symbols *)
   | Eq -> "="
   | LtEq -> "<="

@@ -20,7 +20,7 @@ let mk_position s e =
 %token <SmtLibSyntax.symbol> SYMBOL
 %token <SmtLibSyntax.sort> SORT
 %token <SmtLibSyntax.binder> BINDER
-%token BV
+%token BV EXTRACT
 %token LET
 %token <SmtLibSyntax.ident> IDENT
 %token <int> INT
@@ -121,6 +121,7 @@ ident_sort_list_opt:
 symbol:
 | SYMBOL { $1 }
 | IDENT { Ident $1 }
+| LPAREN IDENT EXTRACT INT INT RPAREN { assert($2 = ("_",0)); BvExtract ($4, $5) }
 ;
 
 term:
