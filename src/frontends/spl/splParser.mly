@@ -348,6 +348,7 @@ var_type:
 | LOC LT IDENT GT { StructType ($3, 0) }
 | INT { IntType }
 | BOOL { BoolType }
+| BYTE { ByteType }
 | ARRAY LT var_type GT { ArrayType $3 }
 | ARRAYCELL LT var_type GT { ArrayCellType $3 }
 | SET LT var_type GT { SetType $3 }

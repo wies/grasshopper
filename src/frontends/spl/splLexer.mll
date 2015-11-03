@@ -127,8 +127,8 @@ rule token = parse
 | '&' { BAND }
 | '|' { BOR }
 | '~' { BNOT }
-| "<<" { BSL }
-| ">>" { BSR }
+| "<-<" { BSL }
+| ">->" { BSR }
 | ident as kw
     { try
         Hashtbl.find keyword_table kw

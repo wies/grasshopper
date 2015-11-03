@@ -280,7 +280,7 @@ let string_of_symbol = function
   | BvUdiv -> "bvudiv"
   | BvUrem -> "bvurem"
   | BvShl -> "bvshl"
-  | BvShr -> "bvshr"
+  | BvShr -> "bvlshr"
   | BvConcat -> "concat"
   | BvExtract (i, j) -> "(_ extract " ^(string_of_int i)^ " " ^(string_of_int j)^")"
 
