@@ -183,6 +183,8 @@ let convert oc cu =
       | (OpNot, e1)   -> fprintf ppf "(!%a)" pr_c_expr e1
       | (OpMinus, e1) -> fprintf ppf "(-%a)" pr_c_expr e1
       | (OpBvNot, e1) -> fprintf ppf "(~%a)" pr_c_expr e1
+      | (OpToInt, e1) -> fprintf ppf "((int) %a)" pr_c_expr e1
+      | (OpToByte, e1) -> fprintf ppf "((char) %a)" pr_c_expr e1
       |  _            -> fprintf ppf "/* ERROR: no such unary operator. */"
     and pr_bin_op ppf = function
       | (e1, OpMinus, e2) -> fprintf ppf "(%a - %a)"  pr_c_expr e1 pr_c_expr e2

@@ -107,6 +107,7 @@ let type_of_expr cu locals e =
     (* Int return values *)
     | UnaryOp (OpMinus, _, _) 
     | UnaryOp (OpBvNot, _, _)
+    | UnaryOp (OpToInt, _, _)
     | BinaryOp (_, OpMinus, _, _, _)
     | BinaryOp (_, OpPlus, _, _, _)
     | BinaryOp (_, OpMult, _, _, _)
@@ -115,10 +116,9 @@ let type_of_expr cu locals e =
     | BinaryOp (_, OpBvOr, _, _, _)
     | BinaryOp (_, OpBvShiftL, _, _, _)
     | BinaryOp (_, OpBvShiftR, _, _, _)
-    | BinaryOp (_, OpToInt, _, _, _)
     | IntVal _ -> IntType
     (* Byte values *)
-    | BinaryOp (_, OpToByte, _, _, _) -> ByteType
+    | UnaryOp (OpToByte, _, _) -> ByteType
     (* Set return values *)
     | BinaryOp (e, OpDiff, _, _, _)
     | BinaryOp (e, OpUn, _, _, _)
@@ -191,6 +191,14 @@ let infer_types cu locals ty e =
     | UnaryOp (OpBvNot as op, e, pos) ->
         let e1, ty = it locals ty e in
         UnaryOp (op, e1, pos), ty
+    | UnaryOp (OpToByte, e, pos) ->
+        let e1, ty = it locals IntType e in
+        ignore (match_types pos ty IntType);
+        UnaryOp (OpToByte, e1, pos), ByteType
+    | UnaryOp (OpToInt, e, pos) ->
+        let e1, ty = it locals ByteType e in
+        ignore (match_types pos ty ByteType);
+        UnaryOp (OpToInt, e1, pos), IntType
     | BinaryOp (e1, OpImpl, e2, _, pos) ->
         let e1, e2, ty = itp locals BoolType e1 e2 in
         BinaryOp (e1, OpImpl, e2, ty, pos), ty

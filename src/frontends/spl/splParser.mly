@@ -540,8 +540,8 @@ array_access:
 ;
 
 cast:
-| INT2BYTE LBRACKET expr RBRACKET  { UnaryOp (OpToByte, $3, mk_position 1 4) }
-| BYTE2INT LBRACKET expr RBRACKET { UnaryOp (OpToInt, $3, mk_position 1 4) }
+| INT2BYTE LPAREN expr RPAREN { UnaryOp (OpToByte, $3, mk_position 1 4) }
+| BYTE2INT LPAREN expr RPAREN { UnaryOp (OpToInt, $3, mk_position 1 4) }
 ;
                                                               
 unary_expr:

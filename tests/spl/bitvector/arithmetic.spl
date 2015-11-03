@@ -1,0 +1,10 @@
+procedure main() returns (res: Int) {
+  var a := 23;
+  var b := a + 1;
+  pure assert b == 24;
+  var c := (1024 + 23) & 255;
+  pure assert c == 23;
+  var d := int2byte(c);
+  pure assert c == byte2int(d);
+  return 0;
+}
