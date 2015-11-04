@@ -1,0 +1,78 @@
+include "../array/byte_array.spl";
+include "../array/copy.spl";
+include "../bitvector/intToByteArray.spl"
+include "../io/fileIO.spl"
+
+procedure checkPacket(packet: Array<Int>)
+  returns (valid: Int)
+  requires array(packet)
+  requires packet.length == 12
+{
+  var l := (packet[0] & 255) >_> 6;
+  var v := ((packet[0] & 255) <_< 2) >_> 5;
+  var m := ((packet[0] & 255) <_< 5) >_> 5;
+
+  var valid := 0;
+
+  if( l == 0 || l == 3){
+    if( v >= 1 && v <= 4){
+      if( m == 3){
+        valid := 1
+      }
+    }
+  }
+
+  return valid;
+}
+
+procedure constructPacket(req: Array<Int>)
+  return (packet: Array<Int)
+  requires array(req)
+  requires req.length == 12
+  ensures array(packet) &*& array(req)
+  ensures packet.length == 12
+{
+  packet = new Array<Int>(12);
+
+  var seconds := 1;
+  var fraction := 1;
+
+  packet[0] := (req[0] & 56) + 1;
+  packet[0] := packet[0] + (1 <_< 8);
+  packet[0] := packet[0] + (req[0] & (255 <_< 16));
+  packet[0] := packet[0] + (236 <_< 24);
+
+  packet[1] := 0;
+  packet[2] := 0;
+
+  packet[3] := 1413695822; // 0x5443494E
+
+  packet[4] := seconds;
+  packet[5] := 0;
+
+  packet[6] := req[10];
+  packet[7] := req[11];
+
+  packet[8] := seconds;
+  packet[9] := fraction;
+
+  packet[10] := req[10];
+  packet[11] := req[11];
+}
+
+procedure server(host: Array<Int>)
+  returns emp
+  requires array(host)
+  // requires host.length == 4
+  // requires forall i: Int:: i >= 0 && i < host.length ==> host[i] < 256 && host[i] > 0
+{
+  var flags := 0;
+  var fd := gopen(host, flags);
+
+  buffer := new Array<Int>(12);
+  gread(fd, buffer);
+
+  if( checkPacket(buffer) != 0 ){
+    gwrite(fd, constructPacket(buffer));
+  }
+}
