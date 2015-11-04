@@ -9,7 +9,6 @@
 
 //Jenny Ramseyer
 
-//TODO: Add create.
 
 int gclose (int fd){
   return close(fd);
