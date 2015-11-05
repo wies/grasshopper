@@ -240,19 +240,19 @@
   ;; Define checker for verifying current buffer
   (flycheck-define-checker spl-verifier
     "On-the-fly verifier for GRASShopper programs."
-    :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) "-lint" source)
+    :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) "-lint" source "-smtsolver" "z3+cvc4")
     :error-patterns
-    ((info line-start (file-name) ":" line ":" column (optional "-" end-column) ":Trace Information:" (message) line-end)
+   ((info line-start (file-name) ":" line ":" column (optional "-" end-column) ":Trace Information:" (message) line-end)
      (warning line-start (file-name) ":" line ":" column (optional "-" end-column) ":Related Location:" (message) line-end)
      (error line-start (file-name) ":" line ":" column (optional "-" end-column) ":" (message) line-end))
     ;((error line-start (file-name) ":" line ":" column ":" (message) line-end))
-    :modes (spl-mode))
+   :modes (spl-mode))
 
   ;; Define checker for verifying current procedure
   (defvar spl-current-procedure nil)
   (flycheck-define-checker spl-proc-verifier
     "On-the-fly verifier for GRASShopper programs."
-    :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) 
+    :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) "-smtsolver" "z3+cvc4"
               "-procedure" (eval spl-current-procedure) 
               "-lint" source)
     :error-patterns
@@ -290,6 +290,17 @@
             (lambda () 
               (local-set-key (kbd "C-c C-v") 'spl-verify-buffer)
               (local-set-key (kbd "C-c C-p") 'spl-verify-procedure))))
+
+(add-hook 'compilation-finish-functions
+           (lambda (buf str)
+             (if (null (string-match ".*exited abnormally.*" str))
+                 (message "%s" (propertize "Verification succeeded." 'face '(:foreground "darkgreen")))
+               (message "%s" (propertize "Verification failed." 'face '(:foreground "red"))))))
+
+(add-hook 'compilation-start-hook
+          (lambda (proc)
+            (let ((win  (get-buffer-window (get-buffer "*compilation*") 'visible)))
+              (when win (delete-window win)))))
 
 (provide 'spl-mode)
 

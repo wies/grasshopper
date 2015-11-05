@@ -83,7 +83,7 @@ buffer-local wherever it is set."
                      symbol-start (one-or-more not-newline) symbol-end
                      " cannot be used" string-end))))
 
-
+
 ;;;; Customization
 (defgroup flycheck nil
   "On-the-fly syntax checking (aka \"flymake done right\")."
