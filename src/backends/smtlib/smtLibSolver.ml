@@ -93,7 +93,7 @@ let cvc4_v1 () =
     kind = Process ("cvc4", options);
   }
 
-let cvc4 = get_version "CVC4" "cvc4 --version" ".*CVC4[^0-9]*\\([0-9]*\\).\\([0-9]*\\)" [cvc4_v1]
+let cvc4 = get_version "CVC4" "cvc4 --version" ".*CVC4 version \\([0-9]*\\).\\([0-9]*\\)" [cvc4_v1]
 
 let cvc4mf_v1 () = 
   let options = 
@@ -813,7 +813,7 @@ let convert_model session smtModel =
   let to_val (name, num) =
     let id = name ^ "_" ^ string_of_int num in
     let z3_val_re = Str.regexp "\\([^!]*\\)!val!\\([0-9]*\\)" in
-    let cvc4_val_re = Str.regexp "@uc_\\([^_]*\\)_\\([0-9]*\\)" in
+    let cvc4_val_re = Str.regexp "@uc__\\(.*\\)__\\([0-9]*\\)$" in
     if Str.string_match z3_val_re id 0 || 
        Str.string_match cvc4_val_re id 0
     then 
