@@ -5,10 +5,10 @@ O_APPEND: Int
 
 procedure gopen(pathname: Array<Int>, flags: Int) returns (fd: Int)
     requires array(pathname)
-    requires string(pathname)
+    //requires string(pathname)
     requires flags == 0 || flags == O_CREAT || flags == O_APPEND
     ensures array(pathname)
-    ensures string(pathname)
+    //ensures string(pathname)
     ensures pathname == old(pathname)
     ensures pathname.length == old(pathname.length)
     ensures forall i: Int :: i >= 0 && i <= pathname.length ==> pathname[i] == old(pathname[i])
