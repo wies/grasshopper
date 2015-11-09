@@ -234,8 +234,9 @@ let string_of_bv width value =
   "#b" ^ (digits [] width value)
 
 let int_of_bits bits =
+  let l = String.length bits in
   let rec fill acc i =
-    if i < 0 then
+    if i > l then
       acc
     else
       begin 
@@ -248,8 +249,7 @@ let int_of_bits bits =
         fill acc2 (i+1)
       end
   in
-  let l = String.length bits in
-  fill 0 l
+  fill 0 0
 
 let string_of_symbol = function
   | BoolConst b -> Printf.sprintf "%b" b

@@ -124,7 +124,7 @@ and expr =
   | Null of typ * pos
   | Emp of pos
   | Setenum of typ * exprs * pos
-  | IntVal of int * pos
+  | IntVal of Int64.t * pos
   | BoolVal of bool * pos
   | New of typ * exprs * pos
   | Read of expr * expr * pos

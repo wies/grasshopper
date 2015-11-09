@@ -211,7 +211,7 @@ let convert oc cu =
       | _ -> fprintf ppf "/* ERROR: no such Binary Operator */"
     and pr_c_expr ppf = function
       | (Null (_, _), _)           -> fprintf ppf "NULL"
-      | (IntVal (i, _), _)         -> fprintf ppf "%i" i
+      | (IntVal (i, _), _)         -> fprintf ppf "%s" (Int64.to_string i)
       | (BoolVal (b, _), _)        -> fprintf ppf (if b then "true" else "false")
       | (Read (from, index, _), cur_proc) -> pr_c_read ppf (from, index, cur_proc)
       | (Length (idexp, _), cur_proc)     -> 

@@ -40,7 +40,7 @@ let trd3 (_, _, v) = v
 %}
 
 %token <string> IDENT
-%token <int> INTVAL
+%token <Int64.t> INTVAL
 %token <bool> BOOLVAL
 %token <string> STRINGVAL
 %token LPAREN RPAREN LBRACE RBRACE LBRACKET RBRACKET

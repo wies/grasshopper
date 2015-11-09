@@ -43,6 +43,7 @@ syn match splSpecial 	":="
 syn region splLiteral   start=+"+ end=+"+ oneline
 syn keyword splLiteral  true false
 syn match  splLiteral   "-\=\<\d\+\>"
+syn match  splLiteral   "0x\x\+"
 " spl Comments
 syn region splComment start="/\*" end="\*/" contains=splTodo,@Spell
 syn match  splComment "//.*" contains=splTodo,@Spell

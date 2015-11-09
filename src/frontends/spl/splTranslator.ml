@@ -128,7 +128,7 @@ let convert cu =
         | [] -> GrassUtil.mk_empty (Set elem_ty)
         | _ -> GrassUtil.mk_setenum ts)
     | IntVal (i, _) ->
-        GrassUtil.mk_int i
+        GrassUtil.mk_int64 i
     | BoolVal (b, pos) ->
         App (BoolConst b, [], Bool)
     | Read (map, idx, pos) -> 
