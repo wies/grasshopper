@@ -7,8 +7,8 @@ include "../io/fileIO.spl";
 procedure constructPacket(mode: Int, version: Int)
   returns (packet: Array<Int>)
   //requires emp
-  requires mode < 256 && mode >= 0
-  requires version < 256 && version >= 0
+  requires mode <= 0xFF && mode >= 0
+  requires version <= 0xFF && version >= 0
   ensures array(packet)
   ensures packet.length == 12
   //ensures forall i: Int:: i >= 1 && i < packet.length ==> packet[i] == 0
@@ -26,19 +26,19 @@ procedure constructPacket(mode: Int, version: Int)
     i := i + 1;
   }
 
-  packet[0] := (packet[0] & 199) | mode;
-  packet[0] := (packet[0] & 199) | version <-< 3;
+  packet[0] := (packet[0] & 0xC7) | mode;
+  packet[0] := (packet[0] & 0xC7) | version <-< 3;
 
   //return packet;
 }
 
 procedure client(host: Array<Int>, mode: Int, version: Int)
   returns (time: Int)
-  requires mode < 256 && mode >= 0
-  requires version < 256 && version >= 0
+  requires mode <= 0xFF && mode >= 0
+  requires version <= 0xFF && version >= 0
   requires array(host)
   requires host.length == 4
-  requires forall i: Int:: i >= 0 && i < host.length ==> host[i] < 256 && host[i] > 0
+  requires forall i: Int:: i >= 0 && i < host.length ==> host[i] <= 0xFF && host[i] > 0
   ensures array(host)
 {
   var flags := 0;

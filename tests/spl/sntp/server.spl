@@ -9,9 +9,9 @@ procedure checkPacket(packet: Array<Int>)
   requires packet.length == 12
   ensures array(packet)
 {
-  var l := (packet[0] & 255) >-> 6;
-  var v := ((packet[0] & 255) <-< 2) >-> 5;
-  var m := ((packet[0] & 255) <-< 5) >-> 5;
+  var l := (packet[0] & 0xFF) >-> 6;
+  var v := ((packet[0] & 0xFF) <-< 2) >-> 5;
+  var m := ((packet[0] & 0xFF) <-< 5) >-> 5;
 
   valid := 0;
 
@@ -38,15 +38,15 @@ procedure constructPacket(req: Array<Int>)
   var seconds := 1;
   var fraction := 1;
 
-  packet[0] := (req[0] & 56) + 1;
+  packet[0] := (req[0] & 0x38) + 1;
   packet[0] := packet[0] + (1 <-< 8);
-  packet[0] := packet[0] + (req[0] & (255 <-< 16));
-  packet[0] := packet[0] + (236 <-< 24);
+  packet[0] := packet[0] + (req[0] & (0xFF <-< 16));
+  packet[0] := packet[0] + (0xEC <-< 24);
 
   packet[1] := 0;
   packet[2] := 0;
 
-  packet[3] := 1413695822; // 0x5443494E
+  packet[3] := 0x5443494E;
 
   packet[4] := seconds;
   packet[5] := 0;
