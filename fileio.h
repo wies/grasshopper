@@ -24,7 +24,8 @@ void freeSPLArray (SPLArray* a) {
 int gclose (int fd);
 int gopen (struct SPLArray* pathname, int flags);
 int gread (int fd_2, struct SPLArray* buffer);
-int gwrite (int fd_3, struct SPLArray* buffer_1);
+int greadOffset (int fd_3, struct SPLArray* buffer_1, int offset);
+int gwrite (int fd_4, struct SPLArray* buffer_2);
 
 
 

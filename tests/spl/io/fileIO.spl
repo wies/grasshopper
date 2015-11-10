@@ -24,6 +24,16 @@ procedure gread(fd: Int, buffer: Array<Int>) returns (nbr: Int)
     ensures buffer.length == old(buffer.length)
     ensures nbr >= -1 && nbr <= buffer.length
 
+procedure greadOffset(fd: Int, buffer: Array<Int>, offset: Int) returns (nbr: Int)
+    requires fd >= 0
+    requires array(buffer)
+    requires offset >= 0
+    requires offset <= buffer.length
+    ensures array(buffer)
+    ensures buffer == old(buffer)
+    ensures buffer.length == old(buffer.length)
+    ensures nbr >= -1 && nbr <= buffer.length
+
 procedure gwrite(fd: Int, buffer: Array<Int>) returns (nbr: Int)
     requires fd >= 0
     requires array(buffer)
