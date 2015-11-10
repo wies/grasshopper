@@ -325,7 +325,7 @@ let convert cu =
         let t1 = convert_term locals e1 in
         let t2 = convert_term locals e2 in
         (match type_of_expr cu locals e1 with
-        | IntType -> GrassUtil.mk_srcpos pos (mk_int_form t1 t2)
+        | IntType | ByteType -> GrassUtil.mk_srcpos pos (mk_int_form t1 t2)
         | SetType _ -> GrassUtil.mk_srcpos pos (mk_set_form t1 t2)
         | ty -> failwith ("unexpected type " ^ string_of_type ty ^ " at " ^ string_of_src_pos pos)) 
     | UnaryOp (OpNot, e, pos) ->

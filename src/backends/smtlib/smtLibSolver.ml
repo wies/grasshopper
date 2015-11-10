@@ -312,7 +312,7 @@ let declare_sort session sort_name num_of_params =
 
 let smtlib_sort_of_grass_sort srt =
   let rec csort = function
-  | Byte -> if !Config.use_bitvector then BvSort 8 else failwith "cannot use bitvector without '-bitvector' option"
+  | Byte -> if !Config.use_bitvector then BvSort 8 else FreeSort(("GrassByte",0), [])
   | Int ->  if !Config.use_bitvector then BvSort 32 else IntSort
   | Bool -> BoolSort
   | Pat -> FreeSort (("GrassPat", 0), [])
@@ -342,7 +342,9 @@ let declare_sorts has_int session structs =
   then declare_sort session set_sort_string 1;
   if !Config.encode_fields_as_arrays 
   then writeln session ("(define-sort " ^ map_sort_string ^ " (X Y) (Array X Y))")
-  else declare_sort session map_sort_string 2
+  else declare_sort session map_sort_string 2;
+  if not !Config.use_bitvector
+  then declare_sort session ("GrassByte") 0
 
 let start_with_solver session_name sat_means solver produce_models produce_unsat_cores = 
   let log_file_name = (string_of_ident (fresh_ident session_name)) ^ ".smt2" in
@@ -465,7 +467,7 @@ let init_session session sign =
   writeln session ("(set-info :smt-lib-version 2.0)");
   writeln session ("(set-info :category \"crafted\")");
   writeln session ("(set-info :status \"unknown\")");
-  (* desclare all sorts *)
+  (* declare all sorts *)
   declare_sorts has_int session structs
 
 let start session_name sat_means =
