@@ -30,8 +30,8 @@ int gwrite (int fd_3, struct SPLArray* buffer_1);
 
 /*
  * Main Function, here for compilability
- */
-/*int main() {
+ 
+int main() {
   return 0;
 }
 */
