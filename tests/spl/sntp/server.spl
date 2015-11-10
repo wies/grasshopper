@@ -1,23 +1,24 @@
 include "../array/byte_array.spl";
 include "../array/copy.spl";
-include "../bitvector/intToByteArray.spl"
-include "../io/fileIO.spl"
+include "../bitvector/intToByteArray.spl";
+include "../io/fileIO.spl";
 
 procedure checkPacket(packet: Array<Int>)
   returns (valid: Int)
   requires array(packet)
   requires packet.length == 12
+  ensures array(packet)
 {
-  var l := (packet[0] & 255) >_> 6;
-  var v := ((packet[0] & 255) <_< 2) >_> 5;
-  var m := ((packet[0] & 255) <_< 5) >_> 5;
+  var l := (packet[0] & 255) >-> 6;
+  var v := ((packet[0] & 255) <-< 2) >-> 5;
+  var m := ((packet[0] & 255) <-< 5) >-> 5;
 
-  var valid := 0;
+  valid := 0;
 
   if( l == 0 || l == 3){
     if( v >= 1 && v <= 4){
       if( m == 3){
-        valid := 1
+        valid := 1;
       }
     }
   }
@@ -26,21 +27,21 @@ procedure checkPacket(packet: Array<Int>)
 }
 
 procedure constructPacket(req: Array<Int>)
-  return (packet: Array<Int)
+  returns (packet: Array<Int>)
   requires array(req)
   requires req.length == 12
   ensures array(packet) &*& array(req)
   ensures packet.length == 12
 {
-  packet = new Array<Int>(12);
+  packet := new Array<Int>(12);
 
   var seconds := 1;
   var fraction := 1;
 
   packet[0] := (req[0] & 56) + 1;
-  packet[0] := packet[0] + (1 <_< 8);
-  packet[0] := packet[0] + (req[0] & (255 <_< 16));
-  packet[0] := packet[0] + (236 <_< 24);
+  packet[0] := packet[0] + (1 <-< 8);
+  packet[0] := packet[0] + (req[0] & (255 <-< 16));
+  packet[0] := packet[0] + (236 <-< 24);
 
   packet[1] := 0;
   packet[2] := 0;
@@ -61,18 +62,19 @@ procedure constructPacket(req: Array<Int>)
 }
 
 procedure server(host: Array<Int>)
-  returns emp
+  //returns emp
   requires array(host)
   // requires host.length == 4
   // requires forall i: Int:: i >= 0 && i < host.length ==> host[i] < 256 && host[i] > 0
+  ensures array(host)
 {
   var flags := 0;
   var fd := gopen(host, flags);
 
-  buffer := new Array<Int>(12);
-  gread(fd, buffer);
+  var buffer := new Array<Int>(12);
+  var temp := gread(fd, buffer);
 
   if( checkPacket(buffer) != 0 ){
-    gwrite(fd, constructPacket(buffer));
+    temp := gwrite(fd, constructPacket(buffer));
   }
 }

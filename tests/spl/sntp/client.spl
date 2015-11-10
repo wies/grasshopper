@@ -6,7 +6,7 @@ include "../io/fileIO.spl";
 
 procedure constructPacket(mode: Int, version: Int)
   returns (packet: Array<Int>)
-  requires emp
+  //requires emp
   requires mode < 256 && mode >= 0
   requires version < 256 && version >= 0
   ensures array(packet)
