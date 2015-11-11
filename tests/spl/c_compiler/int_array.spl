@@ -6,7 +6,7 @@ function arrayseg_footprint(a: Array<Int>, i: Int, j: Int)
 }
 
 predicate arrayseg(a: Array<Int>, i: Int, j: Int)(FP: Set<ArrayCell<Int>>) {
-  0 <= i && i <= j && j <= a.length && 
+  0 <= i && i <= j && j <= a.length && a.length <= 65535 && //FIXME hack while we improve the BV backend
   FP == arrayseg_footprint(a, i, j)
 }
 
