@@ -513,7 +513,7 @@ let flatten_exprs cu =
             ) 
             args ([], [], locals)
         in 
-        let lhs1, aux2, locals = 
+        begin
           match lhs with
           | [Read (map, idx, opos)] ->
               let res_ty = 
@@ -526,16 +526,18 @@ let flatten_exprs cu =
               let aux_var = Ident (aux_id, pos) in
               let assign_aux, locals =
                 flatten scope locals returns (Assign ([Read (map, idx, opos)], [aux_var], pos)) in
-              [aux_var], [assign_aux], locals
+              mk_block pos (aux1 @ [Assign ([aux_var], [ProcCall (id, args1, cpos)], pos)] @ [assign_aux]), locals
           | _ ->
-              List.fold_right 
-                (fun e (es, aux, locals) ->
-                  let e1, aux1, locals = flatten_expr scope aux locals e in
-                  e1 :: es, aux1, locals
-                ) 
-                lhs ([], aux1, locals)
-        in 
-        mk_block pos ([Assign (lhs1, [ProcCall (id, args1, cpos)], pos)] @ aux2), locals
+              let lhs1, aux2, locals = 
+                List.fold_right 
+                  (fun e (es, aux, locals) ->
+                    let e1, aux1, locals = flatten_expr scope aux locals e in
+                    e1 :: es, aux1, locals
+                  ) 
+                  lhs ([], aux1, locals)
+              in
+              mk_block pos (aux2 @ [Assign (lhs1, [ProcCall (id, args1, cpos)], pos)]), locals
+        end
     | Assign (lhs, rhs, pos) ->
         let rhs1, aux1, locals = 
           List.fold_right 
@@ -604,8 +606,9 @@ let flatten_exprs cu =
             args ([], [], locals)
         in 
         let rts = List.map (fun id -> Ident (id, cpos)) returns in
-        Block ([Assign (rts, [ProcCall (id, args1, cpos)], pos); 
-                Return (rts, pos)], pos), locals
+        let assign = Assign (rts, [ProcCall (id, args1, cpos)], pos) in
+        let ret = Return (rts, pos) in
+        mk_block pos (aux1 @ [assign; ret]), locals
     | Return (es, pos) ->
         let es1, aux1, locals = 
           List.fold_right 
