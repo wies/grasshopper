@@ -49,7 +49,7 @@ procedure client(host: Array<Int>, mode: Int, version: Int)
   var buffer := copy(packet);
   var temp := gwrite(fd, buffer);
 
-  temp := gread(fd, buffer);
+  temp := greadOffset(fd, buffer, 0);
 
   return buffer[9] * 1000000000 + (buffer[10] * (1000000000 >-> 32));
   //return flags;

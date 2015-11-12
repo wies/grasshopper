@@ -48,7 +48,7 @@ int greadOffset (int fd_3, struct SPLArray* buffer_1, int offset){
   return res;
 }
 
-int main() {
+//int main() {
   /*
   struct SPLArray* test;
   test = (struct SPLArray*) malloc(sizeof(struct SPLArray) + (sizeof(void*) * 5));
@@ -135,6 +135,6 @@ int main() {
   free(test);
   free(writeMe);
   free(readOffset);
-*/  return 0;
-}
+  *///  return 0;
+//}
 
