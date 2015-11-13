@@ -83,7 +83,7 @@ let wrap_c_main =
   "  int s = 0;\n" ^
   "  if (argc > 1) {\n" ^
   "    for(s = 0; argv[1][s] != 0; s++) { }\n" ^
-  "    s++;\n"
+  "    s++;\n" ^
   "  }\n" ^
   "  SPLArray_char* a = newSPLArray_char(s);\n" ^
   "  for(int i = 0; i < s; i++) {\n" ^
