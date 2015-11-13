@@ -9,5 +9,7 @@ procedure main() returns (res: Int) {
   pure assert d >= int2byte(23);
   pure assert d <= int2byte(23);
   pure assert c == byte2int(d);
+  var e := d & int2byte(0xF);
+  pure assert e == int2byte(7);
   return 0;
 }
