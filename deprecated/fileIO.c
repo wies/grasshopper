@@ -14,38 +14,36 @@ int gclose (int fd){
   return close(fd);
 }
 
-int gopen (struct SPLArray* pathname, int flags){
-  char* name = malloc(sizeof(char) * pathname->length);
-  for (int i = 0; i < pathname->length; i++){
-    name[i] = *((char*) pathname->arr[i]);
+int gopen (SPLArray_char* pathname, int flags){
+  //check if null terminated
+  bool null_terminated = false;
+  for(int i = 0; i < pathname->length && !null_terminated; i++) {
+    null_terminated |= (pathname->arr[i] == 0);
   }
-  return open(name, flags);
+  if (null_terminated) {
+    //valid C string
+    return open(pathname->arr, flags);
+  } else {
+    //create a valid C string
+    char name[pathname->length + 1]; //allocate on the stack for simplicity
+    for(int i = 0; i < pathname->length; i++) {
+      name[i] = pathname->arr[i];
+    }
+    name[pathname->length] = 0;
+    return open(name, flags);
+  }
 }
 
-int gread (int fd_2, struct SPLArray* buffer) {
-  char* toRead = malloc(sizeof(char) * buffer->length);
-  int res = read(fd_2, toRead, buffer->length);
-  for (int i = 0; i < buffer->length; i++){
-    buffer->arr[i] = (void *) toRead[i];
-  }
-  return res;
+int gread (int fd_2, SPLArray_char* buffer) {
+  return read(fd_2, buffer->arr, buffer->length);
 }
 
-int gwrite (int fd_4, struct SPLArray* buffer_2){
-  char* toWrite = malloc(sizeof(char) * buffer_2->length);
-  for (int i = 0; i < buffer_2->length; i++){
-    toWrite[i] = *((char*) buffer_2->arr[i]);
-  }
-  return write(fd_4, toWrite, buffer_2->length);  
+int gwrite (int fd_4, SPLArray_char* buffer_2){
+  return write(fd_4, buffer_2->arr, buffer_2->length);  
 }
 
-int greadOffset (int fd_3, struct SPLArray* buffer_1, int offset){
-  char* toRead = malloc(sizeof(char) * buffer_1->length);
-  int res = pread(fd_3, toRead, buffer_1->length, offset);
-  for (int i = 0; i < buffer_1->length; i++){
-    buffer_1->arr[i] = (void*) toRead[i];
-  }
-  return res;
+int greadOffset (int fd_3, SPLArray_char* buffer_1, int offset){
+  return pread(fd_3, buffer_1->arr, buffer_1->length, offset);
 }
 
 //int main() {
