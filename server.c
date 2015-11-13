@@ -38,7 +38,8 @@ int checkPacket (struct SPLArray* packet) {
   int v;
   int m;
   int l;
-  
+
+  printf("packet 0 is %x\n", packet->arr[0]);
   l = (((((int*) (packet->arr))[0]) & 255) >> 6);
   v = ((((((int*) (packet->arr))[0]) & 255) << 2) >> 5);
   m = ((((((int*) (packet->arr))[0]) & 255) << 5) >> 5);
@@ -142,7 +143,7 @@ void server (struct SPLArray* host) {
   int flags_1;
   int fd_5;
   struct SPLArray* buffer_3;
-  
+
   flags_1 = O_RDWR;
   fd_5 = gopen(host, flags_1);
   tmp_3 = (struct SPLArray*) malloc(sizeof(struct SPLArray) + (sizeof(void*) * 12));
@@ -154,7 +155,8 @@ void server (struct SPLArray* host) {
     
   }
   buffer_3 = tmp_3;
-  temp = gread(fd_5, buffer_3);
+  temp = greadOffset(fd_5, buffer_3, 0);
+  printf("we start: %x\n", buffer_3->arr[0]);
   tmp_4 = checkPacket(buffer_3);
   printf("tmp_4 is %d\n", tmp_4);
   if ((!(tmp_4 == 0))) {

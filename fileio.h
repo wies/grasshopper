@@ -10,6 +10,7 @@
 #include <string.h>
 #include <assert.h>
 
+
 /*
  * Preloaded Code
  */
@@ -76,7 +77,7 @@ int greadOffset (int fd_3, struct SPLArray* buffer_1, int offset){
   int* toRead = malloc(sizeof(int) * buffer_1->length);
   int res = pread(fd_3, toRead, sizeof(int) * buffer_1->length, offset);
   for (int i = 0; i < buffer_1->length; i++){
-    buffer_1->arr[i] = (void*) toRead[i];
+    buffer_1->arr[i] = toRead[i];
   }
   return res;
 }
