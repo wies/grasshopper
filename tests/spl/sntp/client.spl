@@ -21,16 +21,16 @@ procedure constructPacket(mode: Int, version: Int)
   while (i < packet.length)
     invariant i >= 0 && i <= packet.length
     invariant byte_array(packet)
-    invariant forall k: Int :: 0 <= k && k < i ==> packet[k] == 0
+    invariant forall k: Int :: 0 <= k && k < i ==> packet[k] == int2byte(0)
   {
-    packet[i] := 0;
+    packet[i] := int2byte(0);
     i := i + 1;
   }
 
-  packet[0] := (packet[0] & 0xC7) | mode;
-  packet[0] := (packet[0] & 0xC7) | version <-< 3;
+  packet[0] := (packet[0] & int2byte(0xC7)) | int2byte(mode);
+  packet[0] := (packet[0] & int2byte(0xC7)) | version <-< 3;
 
-  //return packet;
+  return packet;
 }
 
 procedure client(host: Array<Byte>, mode: Int, version: Int)
@@ -52,8 +52,11 @@ procedure client(host: Array<Byte>, mode: Int, version: Int)
 
   temp := greadOffset(fd, buffer, 0);
 
-//  var test := (buffer[9]) * int2byte(1000000000);
+//  var ret1 := buffer[9] * int2byte(1000000000);
+//  var ret2 := buffer[10] * (1000000000 >-> 32);
+//  var retF := ret1 + ret2;
+//  return byte2int(retF);
 
-  return buffer[9] * 1000000000 + (buffer[10] * (1000000000 >-> 32));
+  return byte2int(buffer[9] * int2byte(1000000000) + (buffer[10] * (1000000000 >-> 32)));
   //return flags;
 }

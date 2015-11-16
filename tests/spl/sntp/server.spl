@@ -10,14 +10,16 @@ procedure checkPacket(packet: Array<Byte>)
   ensures byte_array(packet)
 {
   var l := (packet[0] & int2byte(0xFF)) >-> 6;
-  var v := ((packet[0] & int2byte(0xFF)) <-< 2) >-> 5; //why can't we shift twice?
-  var m := ((packet[0] & int2byte(0xFF)) <-< 5) >-> 5;
+  var vt := ((packet[0] & int2byte(0xFF)) <-< 2);
+  var v := vt  >-> 5; 
+  var mt := ((packet[0] & int2byte(0xFF)) <-< 5);
+  var m := mt >-> 5;  
 
   valid := 0;
 
-  if( l == 0 || l == 3){
-    if( v >= 1 && v <= 4){
-      if( m == 3){
+  if( l == int2byte(0) || l == int2byte(3)){
+    if( v >= int2byte(1) && v <= int2byte(4)){
+      if( m == int2byte(3)){
         valid := 1;
       }
     }
@@ -35,21 +37,21 @@ procedure constructPacket(req: Array<Byte>)
 {
   packet := new Array<Byte>(12);
 
-  var seconds := 1;
-  var fraction := 1;
+  var seconds := int2byte(1);
+  var fraction := int2byte(1);
 
-  packet[0] := (req[0] & int2byte(0x38)) + 1;
+  packet[0] := (req[0] & int2byte(0x38)) + int2byte(1);
   packet[0] := packet[0] + (1 <-< 8);
   packet[0] := packet[0] + (req[0] & (int2byte(0xFF) <-< 16));
   packet[0] := packet[0] + (int2byte(0xEC) <-< 24);
 
-  packet[1] := 0;
-  packet[2] := 0;
+  packet[1] := int2byte(0);
+  packet[2] := int2byte(0);
 
-  packet[3] := 0x5443494E;
+  packet[3] := int2byte(0x5443494E);
 
   packet[4] := seconds;
-  packet[5] := 0;
+  packet[5] := int2byte(0);
 
   packet[6] := req[10];
   packet[7] := req[11];
