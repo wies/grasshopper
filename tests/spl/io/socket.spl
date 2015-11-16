@@ -1,0 +1,157 @@
+include "../array/byte_array.spl";
+
+///////////////
+// Constants //
+///////////////
+
+PF_INET: Int
+PF_INET6: Int
+
+SOCK_DGRAM: Int
+SOCK_STREAM: Int
+
+IPPROTO_TCP: Int
+IPPROTO_UDP: Int
+
+
+////////////
+// Struct //
+////////////
+
+struct SocketAddressIP4 {
+  //var sin4_family: Int; = AF_INET
+  var sin4_port: Int;
+  var sin4_addr: Int;
+  //var sin4_addr_lower: Int;
+  //var sin4_addr_upper: Int;
+}
+
+struct SocketAddressIP6 {
+  //var sin6_family: Int; = AF_INET6
+  var sin6_port: Int;
+  var sin6_flowinfo: Int;
+  var sin6_addr: Array<Byte>; //should be 16 Bytes
+  var sin6_scope_id: Int;
+}
+
+////////////////
+// Predicates //
+////////////////
+
+predicate socket_addr_4( address: SocketAddressIP4)(FP: Set<SocketAddressIP4>) {
+  FP == Set<SocketAddressIP4>(address) &&
+  address.sin4_port >= 0 &&
+  address.sin4_port < 65536 
+}
+
+predicate socket_addr_6( address: SocketAddressIP6)(FP0: Set<SocketAddressIP6>, FP1: Set<Array<Byte>>, FP2: Set<ArrayCell<Byte>>) {
+  FP0 == Set<SocketAddressIP6>(address) &&
+  FP1 == Set<Array<Byte>>(address.sin6_addr) &&
+  byte_arrayseg(address.sin6_addr, 0, address.sin6_addr.length, FP2) &&
+  address.sin6_addr.length == 16 &&
+  address.sin6_port >= 0 &&
+  address.sin6_port < 65536 
+}
+
+////////////////
+// Procedures //
+////////////////
+
+procedure get_address4(node: Array<Byte>, service: Array<Byte>) returns (address: SocketAddressIP4)
+  requires byte_array(node) &*& byte_array(service)
+  ensures  byte_array(node) &*& byte_array(service)
+  ensures  address == null || socket_addr_4(address)
+
+procedure get_address6(node: Array<Byte>, service: Array<Byte>) returns (address: SocketAddressIP6)
+  requires byte_array(node) &*& byte_array(service)
+  ensures  byte_array(node) &*& byte_array(service)
+  ensures  address == null || socket_addr_6(address)
+
+procedure create_socket(inet_type: Int, socket_type: Int, protocol: Int) returns (fd: Int)
+  requires inet_type == PF_INET || inet_type == PF_INET6
+  requires (socket_type == SOCK_STREAM && protocol == IPPROTO_TCP) || (socket_type == SOCK_DGRAM && protocol == IPPROTO_UDP)
+  ensures fd >= -1
+
+procedure bind4(fd: Int, address: SocketAddressIP4) returns (success: Bool)
+  requires fd >= 0
+  requires socket_addr_4(address)
+  ensures  socket_addr_4(address)
+  ensures  address == old(address) && address.sin4_port == old(address.sin4_port)
+  ensures  address.sin4_addr == old(address.sin4_addr)
+
+procedure bind6(fd: Int, address: SocketAddressIP6) returns (success: Bool)
+  requires fd >= 0
+  requires socket_addr_6(address)
+  ensures  socket_addr_6(address)
+  ensures  address == old(address)
+  ensures  address.sin6_port == old(address.sin6_port)
+  ensures  address.sin6_flowinfo == old(address.sin6_flowinfo)
+  ensures  address.sin6_scope_id == old(address.sin6_scope_id)
+  ensures  forall i: Int:: i >= 0 && i < 16 ==> address.sin6_addr[i] == old(address.sin6_addr[i])
+
+// int sendto(int sockfd, const void *msg, int len, unsigned int flags, const struct sockaddr *to, socklen_t tolen)
+
+procedure udp_send4(fd: Int, msg: Array<Byte>, len: Int, address: SocketAddressIP4) returns (byteCount: Int)
+  requires fd >= 0
+  requires socket_addr_4(address)
+  requires byte_array(msg)
+  requires msg.length <= len
+  ensures  socket_addr_4(address)
+  ensures  address == old(address) && address.sin4_port == old(address.sin4_port)
+  ensures  address.sin4_addr == old(address.sin4_addr)
+  ensures  byte_array(msg)
+  ensures  msg == old(msg)
+  ensures  msg.length == old(msg.length)
+  ensures  byteCount <= msg.length
+  ensures  byteCount >= -1
+
+
+procedure udp_send6(fd: Int, msg: Array<Byte>, len: Int, address: SocketAddressIP6) returns (byteCount: Int)
+  requires fd >= 0
+  requires socket_addr_6(address)
+  requires byte_array(msg)
+  requires msg.length <= len
+  ensures  socket_addr_6(address)
+  ensures  address == old(address)
+  ensures  address.sin6_port == old(address.sin6_port)
+  ensures  address.sin6_flowinfo == old(address.sin6_flowinfo)
+  ensures  address.sin6_scope_id == old(address.sin6_scope_id)
+  ensures  forall i: Int:: i >= 0 && i < 16 ==> address.sin6_addr[i] == old(address.sin6_addr[i])
+  ensures  byte_array(msg)
+  ensures  msg == old(msg)
+  ensures  msg.length == old(msg.length)
+  ensures  byteCount <= msg.length
+  ensures  byteCount >= -1
+
+
+// int recvfrom(int sockfd, void *buf, int len, unsigned int flags, struct sockaddr *from, int *fromlen);
+
+procedure udp_recv4(fd: Int, msg: Array<Byte>, from: SocketAddressIP4) returns (byteCount: Int)
+  requires fd >= 0
+  requires socket_addr_4(from)
+  requires byte_array(msg)
+  ensures  socket_addr_4(from)
+  ensures  byte_array(msg)
+  ensures  msg == old(msg)
+  ensures  msg.length == old(msg.length)
+  ensures  byteCount <= msg.length
+  ensures  byteCount >= -1
+
+procedure udp_recv6(fd: Int, msg: Array<Byte>, from: SocketAddressIP6) returns (byteCount: Int)
+  requires fd >= 0
+  requires socket_addr_6(from)
+  requires byte_array(msg)
+  ensures  socket_addr_6(from)
+  ensures  byte_array(msg)
+  ensures  msg == old(msg)
+  ensures  msg.length == old(msg.length)
+  ensures  byteCount <= msg.length
+  ensures  byteCount >= -1
+
+//TODO TCP methods
+//  int listen(int sockfd, int backlog);
+//  int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+//  int connect(int sockfd, struct sockaddr *serv_addr, int addrlen);
+//  int send(int sockfd, const void *msg, int len, int flags); 
+//  int recv(int sockfd, void *buf, int len, int flags);
+

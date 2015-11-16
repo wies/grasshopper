@@ -56,7 +56,7 @@ do we want to support UTF8/16/32 (variable length encoding except for UFT32)
     int sock = socket(PF_INET,  SOCK_DGRAM,  IPPROTO_UDP);
     int sock = socket(PF_INET6, SOCK_STREAM, IPPROTO_TCP);
 
-    int success = bind(sock, (struct sockaddr *)&sa,      sizeof sa));
+    int success = bind(sock, (struct sockaddr *)&sa,      sizeof sa);
     int success = bind(sock, (struct sockaddr *)&ip6addr, sizeof ip6addr);
 
     int getaddrinfo(const char *node,     // e.g. "www.example.com" or IP
