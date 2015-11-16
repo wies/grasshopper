@@ -1,0 +1,24 @@
+include "byte_array.spl";
+
+procedure copyByte(a: Array<Byte>)
+  returns (b: Array<Byte>)
+  requires byte_array(a)
+  ensures byte_array(a) &*& byte_array(b)
+  ensures a.length == b.length
+  ensures forall i: Int:: i >= 0 && i < a.length ==> a[i] == b[i]
+{
+  b := new Array<Byte>(a.length);
+
+  var i := 0;
+
+  while (i < a.length)
+    invariant i >= 0 && i <= a.length && a.length == b.length
+    invariant byte_array(a) &*& byte_array(b)
+    invariant forall j: Int:: j >= 0 && j < i ==> a[j] == b[j]
+  {
+    b[i] := a[i];
+    i := i + 1;
+  }
+
+  return b;
+}

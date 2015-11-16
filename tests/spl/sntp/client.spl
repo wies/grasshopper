@@ -3,23 +3,24 @@ include "../array/byte_array.spl";
 include "../array/copy.spl";
 include "../bitvector/intToByteArray.spl";
 include "../io/fileIO.spl";
+include "../array/copyByte.spl";
 
 procedure constructPacket(mode: Int, version: Int)
-  returns (packet: Array<Int>)
+  returns (packet: Array<Byte>)
   //requires emp
   requires mode <= 0xFF && mode >= 0
   requires version <= 0xFF && version >= 0
-  ensures array(packet)
+  ensures byte_array(packet)
   ensures packet.length == 12
   //ensures forall i: Int:: i >= 1 && i < packet.length ==> packet[i] == 0
 {
-  packet := new Array<Int>(12);
+  packet := new Array<Byte>(12);
 
   var i := 0;
 
   while (i < packet.length)
     invariant i >= 0 && i <= packet.length
-    invariant array(packet)
+    invariant byte_array(packet)
     invariant forall k: Int :: 0 <= k && k < i ==> packet[k] == 0
   {
     packet[i] := 0;
@@ -38,7 +39,7 @@ procedure client(host: Array<Byte>, mode: Int, version: Int)
   requires version <= 0xFF && version >= 0
   requires byte_array(host)
   requires host.length == 4
-  requires forall i: Int:: i >= 0 && i < host.length ==> host[i] <= 0xFF && host[i] > 0
+  requires forall i: Int:: i >= 0 && i < host.length ==> host[i] <= int2byte(0xFF) && host[i] > int2byte(0)
   ensures byte_array(host)
 {
   var flags := 0;
@@ -46,10 +47,11 @@ procedure client(host: Array<Byte>, mode: Int, version: Int)
 
   var packet := constructPacket(mode, version);
 
-  var buffer := copy(packet);
+  var buffer := copyByte(packet);
   var temp := gwrite(fd, buffer);
 
   temp := greadOffset(fd, buffer, 0);
+
 
   return buffer[9] * 1000000000 + (buffer[10] * (1000000000 >-> 32));
   //return flags;
