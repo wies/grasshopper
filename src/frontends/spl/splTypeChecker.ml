@@ -105,16 +105,16 @@ let type_of_expr cu locals e =
     | PredApp (DisjointPred, _, _)
     | BoolVal _ -> BoolType
     (* Int return values *)
-    | UnaryOp (OpMinus, _, _) 
     | UnaryOp (OpToInt, _, _)
-    | BinaryOp (_, OpMinus, _, _, _)
-    | BinaryOp (_, OpPlus, _, _, _)
-    | BinaryOp (_, OpMult, _, _, _)
-    | BinaryOp (_, OpDiv, _, _, _)
     | IntVal _ -> IntType
     (* Byte values *)
     | UnaryOp (OpToByte, _, _) -> ByteType
     (* Int or Byte return values *)
+    | UnaryOp (OpMinus, e, _) 
+    | BinaryOp (e, OpMinus, _, _, _)
+    | BinaryOp (e, OpPlus, _, _, _)
+    | BinaryOp (e, OpMult, _, _, _)
+    | BinaryOp (e, OpDiv, _, _, _)
     | UnaryOp (OpBvNot, e, _)
     | BinaryOp (e, OpBvAnd, _, _, _)
     | BinaryOp (e, OpBvOr, _, _, _)
@@ -213,16 +213,6 @@ let infer_types cu locals ty e =
         let e1, e2, _ = itp locals AnyType e1 e2 in
         ignore (match_types pos ty BoolType);
         BinaryOp (e1, op, e2, BoolType, pos), BoolType
-    (* Unary integer operators *)
-    | UnaryOp (OpMinus, e, pos) ->
-        let e1, _ = it locals IntType e in
-        ignore (match_types pos ty IntType);
-        UnaryOp (OpMinus, e1, pos), IntType
-    (* Binary integer operators *)
-    | BinaryOp (e1, (OpMinus as op), e2, _, pos)
-    | BinaryOp (e1, (OpPlus as op), e2, _, pos)
-    | BinaryOp (e1, (OpMult as op), e2, _, pos)
-    | BinaryOp (e1, (OpDiv as op), e2, _, pos)
     (* Ambiguous binary Boolean operators *)
     | BinaryOp (e1, (OpAnd as op), e2, _, pos)
     | BinaryOp (e1, (OpOr as op), e2, _, pos)
@@ -245,12 +235,17 @@ let infer_types cu locals ty e =
         ignore (match_types pos ty BoolType);
         BinaryOp (e1, OpIn, e2, BoolType, pos), BoolType
     (* Ambiguous Int/Byte operators*)
+    | UnaryOp (OpMinus as op, e, pos) 
     | UnaryOp (OpBvNot as op, e, pos) ->
       let e1, ty = it locals AnyType e in
       if ty = IntType || ty = ByteType then
         UnaryOp (op, e1, pos), ty
       else
         type_error pos IntType ty
+    | BinaryOp (e1, (OpMinus as op), e2, _, pos)
+    | BinaryOp (e1, (OpPlus as op), e2, _, pos)
+    | BinaryOp (e1, (OpMult as op), e2, _, pos)
+    | BinaryOp (e1, (OpDiv as op), e2, _, pos)
     | BinaryOp (e1, (OpBvAnd as op), e2, _, pos)
     | BinaryOp (e1, (OpBvOr as op), e2, _, pos) ->
       let e1, e2, ty = itp locals ty e1 e2 in

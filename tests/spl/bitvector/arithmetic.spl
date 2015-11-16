@@ -1,4 +1,10 @@
-procedure main() returns (res: Int) {
+include "../array/byte_array.spl";
+
+procedure Main(arg: Array<Byte>) returns (res: Int)
+  requires byte_array(arg)
+  ensures  emp
+{
+  free(arg);
   var a := 23;
   var b := a + 1;
   pure assert b == 24;
@@ -11,5 +17,7 @@ procedure main() returns (res: Int) {
   pure assert c == byte2int(d);
   var e := d & int2byte(0xF);
   pure assert e == int2byte(7);
+  var f := d + e;
+  pure assert f == int2byte(30);
   return 0;
 }
