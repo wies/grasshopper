@@ -52,6 +52,7 @@ procedure client(host: Array<Byte>, mode: Int, version: Int)
 
   temp := greadOffset(fd, buffer, 0);
 
+//  var test := (buffer[9]) * int2byte(1000000000);
 
   return buffer[9] * 1000000000 + (buffer[10] * (1000000000 >-> 32));
   //return flags;
