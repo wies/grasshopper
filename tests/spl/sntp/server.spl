@@ -3,15 +3,15 @@ include "../array/copy.spl";
 include "../bitvector/intToByteArray.spl";
 include "../io/fileIO.spl";
 
-procedure checkPacket(packet: Array<Int>)
+procedure checkPacket(packet: Array<Byte>)
   returns (valid: Int)
-  requires array(packet)
+  requires byte_array(packet)
   requires packet.length == 12
-  ensures array(packet)
+  ensures byte_array(packet)
 {
-  var l := (packet[0] & 0xFF) >-> 6;
-  var v := ((packet[0] & 0xFF) <-< 2) >-> 5;
-  var m := ((packet[0] & 0xFF) <-< 5) >-> 5;
+  var l := (packet[0] & int2byte(0xFF)) >-> 6;
+  var v := ((packet[0] & int2byte(0xFF)) <-< 2) >-> 5; //why can't we shift twice?
+  var m := ((packet[0] & int2byte(0xFF)) <-< 5) >-> 5;
 
   valid := 0;
 
@@ -26,22 +26,22 @@ procedure checkPacket(packet: Array<Int>)
   return valid;
 }
 
-procedure constructPacket(req: Array<Int>)
-  returns (packet: Array<Int>)
-  requires array(req)
+procedure constructPacket(req: Array<Byte>)
+  returns (packet: Array<Byte>)
+  requires byte_array(req)
   requires req.length == 12
-  ensures array(packet) &*& array(req)
+  ensures byte_array(packet) &*& byte_array(req)
   ensures packet.length == 12
 {
-  packet := new Array<Int>(12);
+  packet := new Array<Byte>(12);
 
   var seconds := 1;
   var fraction := 1;
 
-  packet[0] := (req[0] & 0x38) + 1;
+  packet[0] := (req[0] & int2byte(0x38)) + 1;
   packet[0] := packet[0] + (1 <-< 8);
-  packet[0] := packet[0] + (req[0] & (0xFF <-< 16));
-  packet[0] := packet[0] + (0xEC <-< 24);
+  packet[0] := packet[0] + (req[0] & (int2byte(0xFF) <-< 16));
+  packet[0] := packet[0] + (int2byte(0xEC) <-< 24);
 
   packet[1] := 0;
   packet[2] := 0;
@@ -61,17 +61,17 @@ procedure constructPacket(req: Array<Int>)
   packet[11] := req[11];
 }
 
-procedure server(host: Array<Int>)
+procedure server(host: Array<Byte>)
   //returns emp
-  requires array(host)
+  requires byte_array(host)
   // requires host.length == 4
   // requires forall i: Int:: i >= 0 && i < host.length ==> host[i] < 256 && host[i] > 0
-  ensures array(host)
+  ensures byte_array(host)
 {
   var flags := 0;
   var fd := gopen(host, flags);
 
-  var buffer := new Array<Int>(12);
+  var buffer := new Array<Byte>(12);
   var temp := gread(fd, buffer);
 
   if( checkPacket(buffer) != 0 ){
