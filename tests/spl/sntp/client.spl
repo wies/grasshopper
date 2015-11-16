@@ -32,14 +32,14 @@ procedure constructPacket(mode: Int, version: Int)
   //return packet;
 }
 
-procedure client(host: Array<Int>, mode: Int, version: Int)
+procedure client(host: Array<Byte>, mode: Int, version: Int)
   returns (time: Int)
   requires mode <= 0xFF && mode >= 0
   requires version <= 0xFF && version >= 0
-  requires array(host)
+  requires byte_array(host)
   requires host.length == 4
   requires forall i: Int:: i >= 0 && i < host.length ==> host[i] <= 0xFF && host[i] > 0
-  ensures array(host)
+  ensures byte_array(host)
 {
   var flags := 0;
   var fd := gopen(host, flags);
