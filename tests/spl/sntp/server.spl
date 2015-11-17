@@ -41,7 +41,7 @@ procedure constructPacket(req: Array<Byte>)
   var fraction := int2byte(1);
 
   packet[0] := (req[0] & int2byte(0x38)) + int2byte(1);
-  packet[0] := packet[0] + (1 <-< 8);
+  packet[0] := packet[0] + (int2byte(1) <-< 8);
   packet[0] := packet[0] + (req[0] & (int2byte(0xFF) <-< 16));
   packet[0] := packet[0] + (int2byte(0xEC) <-< 24);
 
@@ -79,4 +79,13 @@ procedure server(host: Array<Byte>)
   if( checkPacket(buffer) != 0 ){
     temp := gwrite(fd, constructPacket(buffer));
   }
+}
+
+procedure Main(args: Array<Byte>)
+  returns (res: Int)
+  requires byte_array(args)
+{
+  server(args);
+  res := 0; //got to return something?
+  return res;
 }

@@ -3,51 +3,100 @@
  */
 #include <stdbool.h>
 #include <stdlib.h>
-#include "fileIO.h"
+#include <assert.h>
 
 /*
  * Preloaded Code
- 
-typedef struct SPLArray {
+ */
+
+typedef struct {
+  int length;
+  int arr[];
+} SPLArray_int;
+
+SPLArray_int* newSPLArray_int(int size) {
+  SPLArray_int* a = (SPLArray_int*)malloc(sizeof(SPLArray_int) + size * sizeof(int));
+  assert(a != NULL);
+  a->length = size;
+  return a;
+}
+
+typedef struct {
+  int length;
+  bool arr[];
+} SPLArray_bool;
+
+SPLArray_bool* newSPLArray_bool(int size) {
+  SPLArray_bool* a = (SPLArray_bool*)malloc(sizeof(SPLArray_bool) + size * sizeof(bool));
+  assert(a != NULL);
+  a->length = size;
+  return a;
+}
+
+typedef struct {
+  int length;
+  char arr[];
+} SPLArray_char;
+
+SPLArray_char* newSPLArray_char(int size) {
+  SPLArray_char* a = (SPLArray_char*)malloc(sizeof(SPLArray_char) + size * sizeof(char));
+  assert(a != NULL);
+  a->length = size;
+  return a;
+}
+
+typedef struct {
   int length;
   void* arr[];
-} SPLArray;
+} SPLArray_generic;
 
-void freeSPLArray (SPLArray* a) {
-  free(a->arr);
-  free(a);
+SPLArray_generic* newSPLArray_generic(int size) {
+  SPLArray_generic* a = (SPLArray_generic*)malloc(sizeof(SPLArray_generic) + size * sizeof(void*));
+  assert(a != NULL);
+  a->length = size;
+  return a;
 }
-*/
+
 
 /*
  * Procedures
  */
-int checkPacket (struct SPLArray* packet);
-struct SPLArray* constructPacket (struct SPLArray* req);
-struct SPLArray* copy (struct SPLArray* a);
-//int gclose (int fd);
-//int gopen (struct SPLArray* pathname, int flags);
-//int gread (int fd_2, struct SPLArray* buffer);
-//int greadOffset (int fd_3, struct SPLArray* buffer_1, int offset);
-//int gwrite (int fd_4, struct SPLArray* buffer_2);
-struct SPLArray* intToByteArray (int i_4);
-void server (struct SPLArray* host);
+int Main (SPLArray_char* args);
+int checkPacket (SPLArray_char* packet);
+SPLArray_char* constructPacket (SPLArray_char* req);
+SPLArray_int* copy (SPLArray_int* a);
+int gclose (int fd);
+int gopen (SPLArray_char* pathname, int flags);
+int gread (int fd_2, SPLArray_char* buffer);
+int greadOffset (int fd_3, SPLArray_char* buffer_1, int offset);
+int gwrite (int fd_4, SPLArray_char* buffer_2);
+SPLArray_char* intToByteArray (int i_4);
+void server (SPLArray_char* host);
 
-int checkPacket (struct SPLArray* packet) {
+int Main (SPLArray_char* args) {
+  int res;
+  server(args);
+  res = 0;
+  return res;
+}
+
+int checkPacket (SPLArray_char* packet) {
   int valid;
-  int v;
-  int m;
-  int l;
-
-  printf("packet 0 is %x\n", packet->arr[0]);
-  l = (((((int*) (packet->arr))[0]) & 255) >> 6);
-  v = ((((((int*) (packet->arr))[0]) & 255) << 2) >> 5);
-  m = ((((((int*) (packet->arr))[0]) & 255) << 5) >> 5);
+  char vt;
+  char v;
+  char mt;
+  char m;
+  char l;
+  
+  l = (((packet->arr[0]) & ((char) 255)) >> 6);
+  vt = (((packet->arr[0]) & ((char) 255)) << 2);
+  v = (vt >> 5);
+  mt = (((packet->arr[0]) & ((char) 255)) << 5);
+  m = (mt >> 5);
   valid = 0;
-  printf("l %x v %x m %x\n", l, v, m);
-  if (((l == 0) || (l == 3))) {
-    if (((v >= 1) && (v <= 4))) {
-      if ((m == 3)) {
+  if (((l == ((char) 0)) || (l == ((char) 3)))) {
+    if (((v >= ((char) 1)) && (v <= ((char) 4)))) {
+      if ((m == ((char) 3))) {
         valid = 1;
       }
     }
@@ -55,110 +104,80 @@ int checkPacket (struct SPLArray* packet) {
   return valid;
 }
 
-struct SPLArray* constructPacket (struct SPLArray* req) {
-  struct SPLArray* packet_1;
-  struct SPLArray* tmp;
-  int seconds;
-  int fraction;
+SPLArray_char* constructPacket (SPLArray_char* req) {
+  SPLArray_char* packet_1;
+  SPLArray_char* tmp;
+  char seconds;
+  char fraction;
   
-  tmp = (struct SPLArray*) malloc(sizeof(struct SPLArray) + (sizeof(void*) * 12));
-  tmp->length = 12;
-  {
-    for (int i = 0; i < 12; i++) {
-      (tmp->arr)[i] = (int*) malloc(sizeof(int));
-    }
-    
-  }
+  tmp = newSPLArray_char( 12);
   packet_1 = tmp;
-  seconds = 1;
-  fraction = 1;
-  (((int*) (packet_1->arr))[0]) = (((((int*) (req->arr))[0]) & 56) + 1);
-  (((int*) (packet_1->arr))[0]) = ((((int*) (packet_1->arr))[0]) + (1 << 8));
-  (((int*) (packet_1->arr))[0]) = ((((int*) (packet_1->arr))[0]) + ((((int*) (req->arr))[0]) & (255 << 16)));
-  (((int*) (packet_1->arr))[0]) = ((((int*) (packet_1->arr))[0]) + (236 << 24));
-  (((int*) (packet_1->arr))[1]) = 0;
-  (((int*) (packet_1->arr))[2]) = 0;
-  (((int*) (packet_1->arr))[3]) = 1413695822;
-  (((int*) (packet_1->arr))[4]) = seconds;
-  (((int*) (packet_1->arr))[5]) = 0;
-  (((int*) (packet_1->arr))[6]) = (((int*) (req->arr))[10]);
-  (((int*) (packet_1->arr))[7]) = (((int*) (req->arr))[11]);
-  (((int*) (packet_1->arr))[8]) = seconds;
-  (((int*) (packet_1->arr))[9]) = fraction;
-  (((int*) (packet_1->arr))[10]) = (((int*) (req->arr))[10]);
-  (((int*) (packet_1->arr))[11]) = (((int*) (req->arr))[11]);
+  seconds = ((char) 1);
+  fraction = ((char) 1);
+  (packet_1->arr[0]) = (((req->arr[0]) & ((char) 56)) + ((char) 1));
+  (packet_1->arr[0]) = ((packet_1->arr[0]) + (((char) 1) << 8));
+  (packet_1->arr[0]) = ((packet_1->arr[0]) + ((req->arr[0]) & (((char) 255) << 16)));
+  (packet_1->arr[0]) = ((packet_1->arr[0]) + (((char) 236) << 24));
+  (packet_1->arr[1]) = ((char) 0);
+  (packet_1->arr[2]) = ((char) 0);
+  (packet_1->arr[3]) = ((char) 1413695822);
+  (packet_1->arr[4]) = seconds;
+  (packet_1->arr[5]) = ((char) 0);
+  (packet_1->arr[6]) = (req->arr[10]);
+  (packet_1->arr[7]) = (req->arr[11]);
+  (packet_1->arr[8]) = seconds;
+  (packet_1->arr[9]) = fraction;
+  (packet_1->arr[10]) = (req->arr[10]);
+  (packet_1->arr[11]) = (req->arr[11]);
   return packet_1;
 }
 
-struct SPLArray* copy (struct SPLArray* a) {
-  struct SPLArray* b;
-  struct SPLArray* tmp_1;
+SPLArray_int* copy (SPLArray_int* a) {
+  SPLArray_int* b;
+  SPLArray_int* tmp_1;
   int i_1;
   
-  tmp_1 = (struct SPLArray*) malloc(sizeof(struct SPLArray) + (sizeof(void*) * (a->length)));
-  tmp_1->length = (a->length);
-  {
-    for (int i = 0; i < (a->length); i++) {
-      (tmp_1->arr)[i] = (int*) malloc(sizeof(int));
-    }
-    
-  }
+  tmp_1 = newSPLArray_int( (a->length));
   b = tmp_1;
   i_1 = 0;
   while (true) {
     if (!((i_1 < (a->length)))) {
       break;
     }
-    *(((int**) (b->arr))[i_1]) = *(((int**) (a->arr))[i_1]);
+    (b->arr[i_1]) = (a->arr[i_1]);
     i_1 = (i_1 + 1);
   }
   return b;
 }
 
-struct SPLArray* intToByteArray (int i_4) {
-  struct SPLArray* arr;
-  struct SPLArray* tmp_2;
+SPLArray_char* intToByteArray (int i_4) {
+  SPLArray_char* arr;
+  SPLArray_char* tmp_2;
   
-  tmp_2 = (struct SPLArray*) malloc(sizeof(struct SPLArray) + (sizeof(void*) * 4));
-  tmp_2->length = 4;
-  {
-    for (int i = 0; i < 4; i++) {
-      (tmp_2->arr)[i] = (char*) malloc(sizeof(char));
-    }
-    
-  }
+  tmp_2 = newSPLArray_char( 4);
   arr = tmp_2;
-  *(((char**) (arr->arr))[0]) = ((char) (i_4 >> 0));
-  *(((char**) (arr->arr))[1]) = ((char) (i_4 >> 8));
-  *(((char**) (arr->arr))[2]) = ((char) (i_4 >> 16));
-  *(((char**) (arr->arr))[3]) = ((char) (i_4 >> 24));
+  (arr->arr[0]) = ((char) (i_4 >> 0));
+  (arr->arr[1]) = ((char) (i_4 >> 8));
+  (arr->arr[2]) = ((char) (i_4 >> 16));
+  (arr->arr[3]) = ((char) (i_4 >> 24));
   return arr;
 }
 
-void server (struct SPLArray* host) {
-  struct SPLArray* tmp_5;
+void server (SPLArray_char* host) {
+  SPLArray_char* tmp_5;
   int tmp_4;
-  struct SPLArray* tmp_3;
+  SPLArray_char* tmp_3;
   int temp;
   int flags_1;
   int fd_5;
-  struct SPLArray* buffer_3;
-
-  flags_1 = O_RDWR;
+  SPLArray_char* buffer_3;
+  
+  flags_1 = 0;
   fd_5 = gopen(host, flags_1);
-  tmp_3 = (struct SPLArray*) malloc(sizeof(struct SPLArray) + (sizeof(void*) * 12));
-  tmp_3->length = 12;
-  {
-    for (int i = 0; i < 12; i++) {
-      (tmp_3->arr)[i] = (int*) malloc(sizeof(int));
-    }
-    
-  }
+  tmp_3 = newSPLArray_char( 12);
   buffer_3 = tmp_3;
-  temp = greadOffset(fd_5, buffer_3, 0);
-  printf("we start: %x\n", buffer_3->arr[0]);
+  temp = gread(fd_5, buffer_3);
   tmp_4 = checkPacket(buffer_3);
-  printf("tmp_4 is %d\n", tmp_4);
   if ((!(tmp_4 == 0))) {
     tmp_5 = constructPacket(buffer_3);
     temp = gwrite(fd_5, tmp_5);
@@ -168,20 +187,17 @@ void server (struct SPLArray* host) {
 /*
  * Main Function, here for compilability
  */
-int main() {
-  struct SPLArray* host;
-  host = (struct SPLArray*) malloc(sizeof(struct SPLArray) + (sizeof(void*) * 5));
-  host->length = 5;
-  for (int i = 0; i < 5; i++){
-    (host->arr)[i] = (char*) malloc(sizeof(char));
+int main(int argc, char *argv[]) {
+  assert(argc <= 2);
+  int s = 0;
+  if (argc > 1) {
+    for(s = 0; argv[1][s] != 0; s++) { }
+    s++;
   }
-  *(((char**) (host->arr))[0]) = 'p';
-  *(((char**) (host->arr))[1]) = '.';
-  *(((char**) (host->arr))[2]) = 't';
-  *(((char**) (host->arr))[3]) = 'x';
-  *(((char**) (host->arr))[4]) = 't';
-
-  server(host);
-
-  return 0;
+  SPLArray_char* a = newSPLArray_char(s);
+  for(int i = 0; i < s; i++) {
+    a->arr[i] = argv[1][i];
+  }
+  return Main(a);
 }
+

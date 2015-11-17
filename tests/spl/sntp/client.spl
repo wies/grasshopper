@@ -28,7 +28,7 @@ procedure constructPacket(mode: Int, version: Int)
   }
 
   packet[0] := (packet[0] & int2byte(0xC7)) | int2byte(mode);
-  packet[0] := (packet[0] & int2byte(0xC7)) | version <-< 3;
+  packet[0] := (packet[0] & int2byte(0xC7)) | int2byte(version) <-< 3;
 
   return packet;
 }
@@ -52,11 +52,19 @@ procedure client(host: Array<Byte>, mode: Int, version: Int)
 
   temp := greadOffset(fd, buffer, 0);
 
-//  var ret1 := buffer[9] * int2byte(1000000000);
-//  var ret2 := buffer[10] * (1000000000 >-> 32);
-//  var retF := ret1 + ret2;
-//  return byte2int(retF);
+  //var ret1 := buffer[9] * int2byte(1000000000);
+  //var ret2 := buffer[10] * (int2byte(1000000000) >-> 32);
+  //var retF := ret1 + ret2;
+ // return byte2int(retF);
 
-  return byte2int(buffer[9] * int2byte(1000000000) + (buffer[10] * (1000000000 >-> 32)));
+  return byte2int(buffer[9] * int2byte(1000000000) + (buffer[10] * (int2byte(1000000000) >-> 32)));
   //return flags;
+}
+
+procedure Main(args: Array<Byte>)
+  returns (res: Int)
+  requires byte_array(args)
+{
+  res := client(args, 1, 1);
+  return res;
 }
