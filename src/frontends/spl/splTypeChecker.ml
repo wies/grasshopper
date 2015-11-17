@@ -258,7 +258,7 @@ let infer_types cu locals ty e =
       let e1, ty1 = it locals AnyType e1 in
       let e2, ty2 = it locals IntType e2 in
       if ty1 = IntType || ty1 = ByteType then
-        BinaryOp (e1, op, e2, ty, pos), ty
+        BinaryOp (e1, op, e2, ty1, pos), ty1
       else
         type_error pos IntType ty
     (* Integer constants *)

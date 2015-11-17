@@ -578,6 +578,8 @@ let bitvecorize_grass_formula formula =
       begin
         match App (sym, List.map process_term ts, srt) with
         | App (Minus, [a;b], srt) -> App (Plus, [a; mk_uminus b], srt)
+        | App (ShiftLeft, [a;b], Byte) -> App (ShiftLeft, [a; mk_int_to_byte b], Byte)
+        | App (ShiftRight, [a;b], Byte) -> App (ShiftRight, [a; mk_int_to_byte b], Byte)
         | other -> other
       end
   in
