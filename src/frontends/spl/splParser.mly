@@ -41,6 +41,7 @@ let trd3 (_, _, v) = v
 
 %token <string> IDENT
 %token <Int64.t> INTVAL
+%token <char> CHARVAL
 %token <bool> BOOLVAL
 %token <string> STRINGVAL
 %token LPAREN RPAREN LBRACE RBRACE LBRACKET RBRACKET
@@ -499,6 +500,7 @@ loop_contract:
 primary:
 | INTVAL { IntVal ($1, mk_position 1 1) }
 | BOOLVAL { BoolVal ($1, mk_position 1 1) }
+| CHARVAL { UnaryOp (OpToByte, IntVal(Int64.of_int (int_of_char $1), mk_position 1 1), mk_position 1 1) }
 /* TODO Byte literal */
 | NULL { Null (AnyRefType, mk_position 1 1) }
 | EMP { Emp (mk_position 1 1) }
