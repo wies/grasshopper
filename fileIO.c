@@ -23,9 +23,9 @@ int gopen (SPLArray_char* pathname, int flags){
   if (null_terminated) {
     //valid C string
     if (flags & O_CREAT != 0) {
-        return open(pathname->arr, flags);
-    } else {
         return open(pathname->arr, flags, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    } else {
+        return open(pathname->arr, flags);
     }
   } else {
     //create a valid C string
@@ -35,9 +35,9 @@ int gopen (SPLArray_char* pathname, int flags){
     }
     name[pathname->length] = 0;
     if (flags & O_CREAT != 0) {
-        return open(name, flags);
-    } else {
         return open(name, flags, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    } else {
+        return open(name, flags);
     }
   }
 }

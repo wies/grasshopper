@@ -6,10 +6,10 @@ procedure Main(arg: Array<Byte>) returns (res: Int)
     ensures  byte_array(arg)
 {
     var port := new Array<Byte>(5);
-    port[0] := int2byte(52); //4
-    port[1] := int2byte(52); //4
-    port[2] := int2byte(52); //4
-    port[3] := int2byte(52); //4
+    port[0] := '4';
+    port[1] := '4';
+    port[2] := '4';
+    port[3] := '4';
     port[4] := int2byte( 0); // \0
     var addr := get_address4(null, port); //null should return localhost
     free(port);
@@ -24,18 +24,18 @@ procedure Main(arg: Array<Byte>) returns (res: Int)
     }
     
     var content := new Array<Byte>(13);
-    content[ 0] := int2byte(104); // h
-    content[ 1] := int2byte(101); // e
-    content[ 2] := int2byte(108); // l
-    content[ 3] := int2byte(108); // l
-    content[ 4] := int2byte(111); // o
-    content[ 5] := int2byte( 32); // 
-    content[ 6] := int2byte(119); // w
-    content[ 7] := int2byte(111); // o
-    content[ 8] := int2byte(114); // r
-    content[ 9] := int2byte(108); // l
-    content[10] := int2byte(100); // d
-    content[11] := int2byte( 33); // !
+    content[ 0] := 'h';
+    content[ 1] := 'e';
+    content[ 2] := 'l';
+    content[ 3] := 'l';
+    content[ 4] := 'o';
+    content[ 5] := ' ';
+    content[ 6] := 'w';
+    content[ 7] := 'o';
+    content[ 8] := 'r';
+    content[ 9] := 'l';
+    content[10] := 'd';
+    content[11] := '!';
     content[12] := int2byte( 10); // \n
 
     var sent := udp_send4(fd, content, 13, addr);
