@@ -1,12 +1,19 @@
 include "../array/byte_array.spl";
 
+//using this requires adding "#include <fcntl.h>" to the generated C file
+
 O_CREAT: Int
 O_APPEND: Int
+O_TRUNC: Int
+
+O_RDONLY: Int
+O_WRONLY: Int
+O_RDWR: Int
 
 procedure gopen(pathname: Array<Byte>, flags: Int) returns (fd: Int)
     requires byte_array(pathname)
     //requires string(pathname)
-    requires flags == 0 || flags == O_CREAT || flags == O_APPEND
+    requires (flags & ~(O_CREAT | O_APPEND | O_TRUNC | O_RDONLY | O_WRONLY | O_RDWR)) == 0
     ensures byte_array(pathname)
     //ensures string(pathname)
     ensures pathname == old(pathname)

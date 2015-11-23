@@ -1,0 +1,77 @@
+include "../fileIO.spl";
+
+procedure Main(arg: Array<Byte>) returns (res: Int)
+    requires byte_array(arg)
+    ensures  byte_array(arg)
+{
+    if (arg.length == 0) {
+        return -1;
+    }
+    var fd := gopen(arg, O_CREAT | O_WRONLY);
+    if (fd == -1) {
+        return -2;
+    }
+
+    var content := new Array<Byte>(13);
+    content[ 0] := int2byte(104); // h
+    content[ 1] := int2byte(101); // e
+    content[ 2] := int2byte(108); // l
+    content[ 3] := int2byte(108); // l
+    content[ 4] := int2byte(111); // o
+    content[ 5] := int2byte( 32); // 
+    content[ 6] := int2byte(119); // w
+    content[ 7] := int2byte(111); // o
+    content[ 8] := int2byte(114); // r
+    content[ 9] := int2byte(108); // l
+    content[10] := int2byte(100); // d
+    content[11] := int2byte( 33); // !
+    content[12] := int2byte( 10); // \n
+
+    if (gwrite(fd, content) != 13) {
+        free(content);
+        return -3;
+    }
+
+    var closed := gclose(fd);
+    var i := 0;
+    while (i < 13)
+        invariant i >= 0 && i <= 13
+        invariant byte_array(content)
+        invariant content.length == 13
+    {
+        content[i] := int2byte(0);
+        i := i + 1;
+    }
+
+    fd := gopen(arg, O_RDONLY);
+    if (fd == -1) {
+        return -4;
+    }
+
+    var read := gread(fd, content);
+    if (read != 13) {
+        free(content);
+        return -5;
+    }
+
+    if (content[ 0] != int2byte(104) || // h
+        content[ 1] != int2byte(101) || // e
+        content[ 2] != int2byte(108) || // l
+        content[ 3] != int2byte(108) || // l
+        content[ 4] != int2byte(111) || // o
+        content[ 5] != int2byte( 32) || // 
+        content[ 6] != int2byte(119) || // w
+        content[ 7] != int2byte(111) || // o
+        content[ 8] != int2byte(114) || // r
+        content[ 9] != int2byte(108) || // l
+        content[10] != int2byte(100) || // d
+        content[11] != int2byte( 33) || // !
+        content[12] != int2byte( 10) )  // \n
+    {
+        free(content);
+        return -6;
+    }
+
+    free(content);
+    return 0;
+}

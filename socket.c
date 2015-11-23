@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+//#include <arpa/inet.h>
 
 /*
  * Preloaded Code
@@ -19,7 +20,7 @@ typedef struct {
   char arr[];
 } SPLArray_char;
 
-SPLArray_char* newSPLArray_char(int size) {
+SPLArray_char* _newSPLArray_char(int size) {
   SPLArray_char* a = (SPLArray_char*)malloc(sizeof(SPLArray_char) + size * sizeof(char));
   assert(a != NULL);
   a->length = size;
@@ -88,8 +89,12 @@ struct SocketAddressIP4* get_address4(SPLArray_char* node, SPLArray_char* servic
     hint.ai_socktype = SOCK_DGRAM; //SOCK_STREAM
     hint.ai_protocol = IPPROTO_UDP; //IPPROTO_TCP
     struct addrinfo *servinfo = NULL;
-    //TODO 
-    int rv = getaddrinfo(node->arr, service->arr, &hint, &servinfo);
+    int rv;
+    if (node == NULL) {
+        rv = getaddrinfo(NULL, service->arr, &hint, &servinfo);
+    } else {
+        rv = getaddrinfo(node->arr, service->arr, &hint, &servinfo);
+    }
     if (rv != 0) {
         return NULL;
     } else {
@@ -117,7 +122,12 @@ struct SocketAddressIP6* get_address6(SPLArray_char* node, SPLArray_char* servic
     hint.ai_protocol = IPPROTO_UDP; //IPPROTO_TCP
     struct addrinfo *servinfo = NULL;
     //TODO
-    int rv = getaddrinfo(node->arr, service->arr, &hint, &servinfo);
+    int rv;
+    if (node == NULL) {
+        rv = getaddrinfo(NULL, service->arr, &hint, &servinfo);
+    } else {
+        rv = getaddrinfo(node->arr, service->arr, &hint, &servinfo);
+    }
     if (rv != 0) {
         return NULL;
     } else {
@@ -126,7 +136,7 @@ struct SocketAddressIP6* get_address6(SPLArray_char* node, SPLArray_char* servic
             if (p->ai_family == AF_INET6) {
                 struct SocketAddressIP6* address = malloc(sizeof(struct SocketAddressIP6));
                 assert(address != NULL);
-                address->sin6_addr = newSPLArray_char(16);
+                address->sin6_addr = _newSPLArray_char(16);
                 struct sockaddr_in6* a = (struct sockaddr_in6*)p->ai_addr;
                 to_grass_addr6(a, address);
                 freeaddrinfo(servinfo);
@@ -141,13 +151,15 @@ struct SocketAddressIP6* get_address6(SPLArray_char* node, SPLArray_char* servic
 bool bind4(int fd, struct SocketAddressIP4* address) {
     struct sockaddr_in sa;
     from_grass_addr(address, &sa);
-    return bind(fd, (struct sockaddr *)&sa, sizeof sa);
+    //printf("IP address is: %s\n", inet_ntoa(sa.sin_addr));
+    //printf("port is: %d\n", (int) ntohs(sa.sin_port));
+    return bind(fd, (struct sockaddr *)&sa, sizeof sa) == 0;
 }
 
 bool bind6(int fd, struct SocketAddressIP6* address) {
     struct sockaddr_in6 sa;
     from_grass_addr6(address, &sa);
-    return bind(fd, (struct sockaddr *)&sa, sizeof sa);
+    return bind(fd, (struct sockaddr *)&sa, sizeof sa) == 0;
 }
 
 int create_socket(int inet_type, int socket_type, int protocol) {

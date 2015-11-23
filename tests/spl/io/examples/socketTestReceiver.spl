@@ -1,0 +1,64 @@
+include "../socket.spl";
+include "../fileIO.spl";
+
+procedure Main(arg: Array<Byte>) returns (res: Int)
+    requires byte_array(arg)
+    ensures  byte_array(arg)
+{
+    var port := new Array<Byte>(5);
+    port[0] := int2byte(52); //4
+    port[1] := int2byte(52); //4
+    port[2] := int2byte(52); //4
+    port[3] := int2byte(52); //4
+    port[4] := int2byte( 0); // \0
+    var addr := get_address4(null, port); //null should return localhost
+    free(port);
+    if (addr == null) {
+        return 1;
+    }
+
+    var fd := create_socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (fd==-1) {
+        free(addr);
+        return 2;
+    }
+    
+    var bound := bind4(fd, addr);
+    if (!bound) {
+        return 3;
+    }
+
+    var content := new Array<Byte>(128);
+
+    var received := udp_recv4(fd, content, addr);
+    var closed := gclose(fd);
+        
+    free(addr);
+    
+    if (received != 13) {
+        free(content);
+        return 4;
+    }
+    
+    if (content[ 0] != int2byte(104) || // h
+        content[ 1] != int2byte(101) || // e
+        content[ 2] != int2byte(108) || // l
+        content[ 3] != int2byte(108) || // l
+        content[ 4] != int2byte(111) || // o
+        content[ 5] != int2byte( 32) || // 
+        content[ 6] != int2byte(119) || // w
+        content[ 7] != int2byte(111) || // o
+        content[ 8] != int2byte(114) || // r
+        content[ 9] != int2byte(108) || // l
+        content[10] != int2byte(100) || // d
+        content[11] != int2byte( 33) || // !
+        content[12] != int2byte( 10) )  // \n
+    {
+        free(content);
+        return -6;
+    } else {
+        free(content);
+        return 0;
+    }
+
+}

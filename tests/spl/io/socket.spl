@@ -4,6 +4,8 @@ include "../array/byte_array.spl";
 // Constants //
 ///////////////
 
+//using this requires adding "#include <netinet/in.h>" to the generated C file
+
 PF_INET: Int
 PF_INET6: Int
 
@@ -58,13 +60,15 @@ predicate socket_addr_6( address: SocketAddressIP6)(FP0: Set<SocketAddressIP6>, 
 ////////////////
 
 procedure get_address4(node: Array<Byte>, service: Array<Byte>) returns (address: SocketAddressIP4)
-  requires byte_array(node) &*& byte_array(service)
-  ensures  byte_array(node) &*& byte_array(service)
+  requires (node == null || byte_array(node)) &*& byte_array(service)
+  ensures  (node == null || byte_array(node)) &*& byte_array(service)
+  ensures  node == old(node)
   ensures  address == null || socket_addr_4(address)
 
 procedure get_address6(node: Array<Byte>, service: Array<Byte>) returns (address: SocketAddressIP6)
-  requires byte_array(node) &*& byte_array(service)
-  ensures  byte_array(node) &*& byte_array(service)
+  requires (node == null || byte_array(node)) &*& byte_array(service)
+  ensures  (node == null || byte_array(node)) &*& byte_array(service)
+  ensures  node == old(node)
   ensures  address == null || socket_addr_6(address)
 
 procedure create_socket(inet_type: Int, socket_type: Int, protocol: Int) returns (fd: Int)
