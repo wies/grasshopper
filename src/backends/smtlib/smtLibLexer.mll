@@ -84,7 +84,8 @@ rule token = parse
 | '(' { LPAREN }
 | ')' { RPAREN }
 | "#b" (('0' | '1')* as bits) { INT (int_of_bits bits) }
-| ('-'? digitchar*) as num { INT(int_of_string num) (* TODO bitvector HEX literal *) }
+| "#x" (['A'-'F''a'-'f''0'-'9']* as hex) { INT (Int64.to_int (SplLexer.hexa_to_int hex)) }
+| ('-'? digitchar*) as num { INT(int_of_string num) }
 | ident as name '_' (digitchar* as num) { IDENT(name, int_of_string num) }
 | ident as kw
     { try
