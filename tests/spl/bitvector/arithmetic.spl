@@ -24,3 +24,17 @@ procedure Main(arg: Array<Byte>) returns (res: Int)
   pure assert int2byte(48) == '0';
   return 0;
 }
+
+procedure ultTest()
+{
+  pure assert -1 > -2;
+  pure assert -1 <  0;
+  pure assert  1 >  0;
+  pure assert  1 > -1;
+  pure assert  2 >  1;
+  pure assert int2byte(-1) > int2byte(-2);
+  pure assert int2byte(-1) < int2byte( 0);
+  pure assert int2byte( 1) > int2byte( 0);
+  pure assert int2byte( 1) > int2byte(-1);
+  pure assert int2byte( 2) > int2byte( 1);
+}
