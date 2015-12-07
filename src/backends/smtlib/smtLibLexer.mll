@@ -32,6 +32,10 @@ let _ =
       "bvand", SYMBOL(BvAnd);
       "bvor", SYMBOL(BvOr);
       "bvult", SYMBOL(BvUlt);
+      "bvslt", SYMBOL(BvSlt);
+      "bvsle", SYMBOL(BvSle);
+      "bvsgt", SYMBOL(BvSgt);
+      "bvsge", SYMBOL(BvSge);
       "bvneg", SYMBOL(BvNeg);
       "bvadd", SYMBOL(BvAdd);
       "bvmul", SYMBOL(BvMul);

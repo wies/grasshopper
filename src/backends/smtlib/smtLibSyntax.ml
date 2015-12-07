@@ -20,8 +20,8 @@ type symbol =
   | Eq | Gt | Lt | Geq | Leq
   | And | Or | Impl | Not | Ite
   (* bitvector theory *)
-  | BvNot | BvAnd | BvOr | BvUlt
-  | BvNeg | BvAdd | BvMul | BvUdiv | BvUrem
+  | BvNot | BvAnd | BvOr | BvUlt | BvSlt | BvSle | BvSgt | BvSge
+  | BvNeg | BvAdd | BvMul | BvUdiv | BvSdiv | BvUrem
   | BvShl | BvShr | BvConcat | BvExtract of int * int
 
 type binder = Exists | Forall
@@ -274,10 +274,15 @@ let string_of_symbol = function
   | BvAnd -> "bvand"
   | BvOr -> "bvor"
   | BvUlt -> "bvult"
+  | BvSlt -> "bvslt"
+  | BvSle -> "bvsle"
+  | BvSgt -> "bvsgt"
+  | BvSge -> "bvsge"
   | BvNeg -> "bvneg"
   | BvAdd -> "bvadd"
   | BvMul -> "bvmul"
   | BvUdiv -> "bvudiv"
+  | BvSdiv -> "bvsdiv"
   | BvUrem -> "bvurem"
   | BvShl -> "bvshl"
   | BvShr -> "bvlshr"

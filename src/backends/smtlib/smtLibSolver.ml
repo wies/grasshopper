@@ -536,12 +536,12 @@ let smtlib_symbol_of_grass_symbol_bv solver_info sym = match sym with
   | Minus -> failwith "bitvector theory does not have subtraction."
   | UMinus -> SmtLibSyntax.BvNeg
   | Mult -> SmtLibSyntax.BvMul
-  | Div -> SmtLibSyntax.BvUdiv (* watch out this one is unsigned *)
+  | Div -> SmtLibSyntax.BvSdiv
   | Eq -> SmtLibSyntax.Eq
-  | LtEq -> failwith "bitvector theory does not have '<='."
-  | GtEq -> failwith "bitvector theory does not have '>='."
-  | Lt -> SmtLibSyntax.BvUlt (* watch out this one is unsigned *)
-  | Gt -> failwith "bitvector theory does not have '>'."
+  | LtEq -> SmtLibSyntax.BvSle
+  | GtEq -> SmtLibSyntax.BvSge
+  | Lt -> SmtLibSyntax.BvSlt
+  | Gt -> SmtLibSyntax.BvSgt
   | BitAnd -> SmtLibSyntax.BvAnd
   | BitOr -> SmtLibSyntax.BvOr
   | BitNot -> SmtLibSyntax.BvNot
@@ -670,27 +670,6 @@ let smtlib_form_of_grass_form solver_info signs f =
   | Var (id, _) -> SmtLibSyntax.mk_app (SmtLibSyntax.Ident id) []
   | App (IntConst i, [], Int) when !Config.use_bitvector -> bv_lit 32 i
   | App (IntConst i, [], Byte) when !Config.use_bitvector -> bv_lit 8 i
-  | App (Lt, [a;b], _) when !Config.use_bitvector ->
-    let sign_bit = match sort_of a with
-      | Int -> 31
-      | Byte -> 7
-      | other -> failwith ("Lt expected Byte or Int type, found: " ^ (string_of_sort other))
-    in
-    let a = cterm a in
-    let b = cterm b in
-    let a_sign = SmtLibSyntax.mk_app (SmtLibSyntax.BvExtract (sign_bit, sign_bit)) [a] in
-    let b_sign = SmtLibSyntax.mk_app (SmtLibSyntax.BvExtract (sign_bit, sign_bit)) [b] in
-    let a_data = SmtLibSyntax.mk_app (SmtLibSyntax.BvExtract (sign_bit - 1, 0)) [a] in
-    let b_data = SmtLibSyntax.mk_app (SmtLibSyntax.BvExtract (sign_bit - 1, 0)) [b] in
-    let data_lt = SmtLibSyntax.mk_app SmtLibSyntax.BvUlt [a_data; b_data] in
-    let eq a b = SmtLibSyntax.mk_app SmtLibSyntax.Eq [a; b] in
-    let neg a = SmtLibSyntax.mk_app SmtLibSyntax.Not [a] in
-    let is_zero sign = eq sign (bv_lit 1 Int64.zero) in
-    let is_one sign = neg (is_zero sign) in
-    let o lst = SmtLibSyntax.mk_app SmtLibSyntax.Or lst in
-    let n lst = SmtLibSyntax.mk_app SmtLibSyntax.And lst in
-    o [n [is_one a_sign; is_zero b_sign];
-       n [eq a_sign b_sign; data_lt]]
   | App (ByteToInt, [a], srt) -> SmtLibSyntax.mk_app BvConcat  [bv_lit 24 Int64.zero; cterm a]
   | App (Empty as sym, [], srt) when solver_info.has_set_theory && !Config.use_set_theory ->
       let sym = osym sym ([], srt) in
