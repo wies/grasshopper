@@ -7,8 +7,6 @@
 #include <errno.h>
 #include <string.h>
 
-//Jenny Ramseyer
-
 
 int gclose (int fd){
   return close(fd);
