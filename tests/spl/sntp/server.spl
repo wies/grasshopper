@@ -2,6 +2,7 @@ include "../array/byte_array.spl";
 include "../array/copy.spl";
 include "../bitvector/intToByteArray.spl";
 include "../io/fileIO.spl";
+include "../io/socket.spl";
 
 procedure checkPacket(packet: Array<Byte>)
   returns (valid: Int)
@@ -61,31 +62,77 @@ procedure constructPacket(req: Array<Byte>)
 
   packet[10] := req[10];
   packet[11] := req[11];
+  //  return packet;
 }
 
-procedure server(host: Array<Byte>)
-  //returns emp
+procedure server(host: Array<Byte>) 
+  returns (res: Int)
   requires byte_array(host)
   // requires host.length == 4
   // requires forall i: Int:: i >= 0 && i < host.length ==> host[i] < 256 && host[i] > 0
   ensures byte_array(host)
 {
-  var flags := 0;
-  var fd := gopen(host, flags);
+  var port := new Array<Byte>(4);
+  port[0] := '1';
+  port[1] := '2';
+  port[2] := '3';
+  port[3] := int2byte(0);
 
-  var buffer := new Array<Byte>(12);
-  var temp := gread(fd, buffer);
-
-  if( checkPacket(buffer) != 0 ){
-    temp := gwrite(fd, constructPacket(buffer));
+  var addr := get_address4(host, port);
+  free(port);
+  //  if (addr == null){
+    //  return 1;
+    // }
+  var fd := create_socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  if (fd < 0){
+    free(addr);
+    return 2;
   }
+  
+  var bound := bind4(fd, addr);
+  if (!bound) {
+    return 3;
+  }
+
+  //packets are of size 12
+  var content := new Array<Byte>(12);
+  
+  var recd := udp_recv4(fd, content, addr);
+  if (recd != 12) {
+    free(content);
+    return 4;
+  }
+  if (checkPacket(content) != 1){
+    //invalid packet
+    free(content);
+    return 5;
+  }
+  
+  //now we send
+  var toSend := constructPacket(content);
+  var sent := udp_send4(fd, toSend, toSend.length, addr);
+  var closed := gclose(fd);
+  free(addr);
+  free(content);
+  free(toSend);
+  if (sent != toSend.length) {
+    return 6;
+  } 
+  return 0;
+  //  var flags := 0;
+  // var fd := gopen(host, flags);
+
+  //  var buffer := new Array<Byte>(12);
+  //  var temp := gread(fd, buffer);
+  // if( checkPacket(buffer) != 0 ){
+    //  temp := gwrite(fd, constructPacket(buffer));
+    // }
 }
 
 procedure Main(args: Array<Byte>)
   returns (res: Int)
   requires byte_array(args)
 {
-  server(args);
-  res := 0; //got to return something?
+  res := server(args);
   return res;
 }

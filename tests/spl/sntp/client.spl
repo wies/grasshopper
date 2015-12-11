@@ -4,6 +4,7 @@ include "../array/copy.spl";
 include "../bitvector/intToByteArray.spl";
 include "../io/fileIO.spl";
 include "../array/copyByte.spl";
+include "../io/socket.spl";
 
 procedure constructPacket(mode: Int, version: Int)
   returns (packet: Array<Byte>)
@@ -45,33 +46,60 @@ procedure client(host: Array<Byte>, mode: Int, version: Int)
 {
   var flags := 0;
   
-  var fd := gopen(host, flags);
+  var fd := create_socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  //  var fd := gopen(host, flags);
 
   //there was an error when opening the file
   if (fd == -1) {
     return 1;
+  }
+ 
+  var port := new Array<Byte>(4);
+  port[0] := '4';
+  port[1] := '4';
+  port[2] := '4';
+  port[3] := int2byte(0); 
+  var addr := get_address4(host, port);
+  free(port);
+
+  if (addr == null) {
+    return 2;
+  }
+
+  var success := bind4(fd, addr);
+  if (!success){
+    //there was an error binding
+      return 3;
   }
 
   var packet := constructPacket(mode, version);
 
   var buffer := copyByte(packet);
 
+  var sent := udp_send4(fd, buffer, buffer.length, addr);
 
-  var temp := gwrite(fd, buffer);
+  //  var temp := gwrite(fd, buffer);
 
-  temp := greadOffset(fd, buffer, 0);
+  //  temp := greadOffset(fd, buffer, 0);
 
-  //var ret1 := buffer[9] * int2byte(1000000000);
-  //var ret2 := buffer[10] * (int2byte(1000000000) >-> 32);
-  //var retF := ret1 + ret2;
- // return byte2int(retF);
+  //believe this is correct size
+  var response := new Array<Byte>(12);
 
-  var res := byte2int(buffer[9] * int2byte(1000000000) + (buffer[10] * (int2byte(1000000000) >-> 32)));
+  //now we wait for a reply
+  var received := udp_recv4(fd, response, addr);
+
+  var closed := gclose(fd);
+
+  free(addr);
+
+  //we should check the size of the received data as well
+
+  var res := byte2int(response[9] * int2byte(1000000000) + (response[10] * (int2byte(1000000000) >-> 32)));
   free(packet);
+  free(response);
   free(buffer);
-  temp := gclose(fd);
+  var temp := gclose(fd);
   return res;
-  //return flags;
 }
 
 procedure Main(args: Array<Byte>)
