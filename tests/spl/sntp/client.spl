@@ -39,15 +39,24 @@ procedure client(host: Array<Byte>, mode: Int, version: Int)
   requires version <= 0xFF && version >= 0
   requires byte_array(host)
   requires host.length == 4
-  requires forall i: Int:: i >= 0 && i < host.length ==> host[i] <= int2byte(0xFF) && host[i] > int2byte(0)
+  //DZ: the next line is not needed since we have a Byte type now
+  //requires forall i: Int:: i >= 0 && i < host.length ==> host[i] <= int2byte(0xFF) && host[i] > int2byte(0)
   ensures byte_array(host)
 {
   var flags := 0;
+  
   var fd := gopen(host, flags);
+
+  //there was an error when opening the file
+  if (fd == -1) {
+    return 1;
+  }
 
   var packet := constructPacket(mode, version);
 
   var buffer := copyByte(packet);
+
+
   var temp := gwrite(fd, buffer);
 
   temp := greadOffset(fd, buffer, 0);
@@ -57,14 +66,22 @@ procedure client(host: Array<Byte>, mode: Int, version: Int)
   //var retF := ret1 + ret2;
  // return byte2int(retF);
 
-  return byte2int(buffer[9] * int2byte(1000000000) + (buffer[10] * (int2byte(1000000000) >-> 32)));
+  var res := byte2int(buffer[9] * int2byte(1000000000) + (buffer[10] * (int2byte(1000000000) >-> 32)));
+  free(packet);
+  free(buffer);
+  temp := gclose(fd);
+  return res;
   //return flags;
 }
 
 procedure Main(args: Array<Byte>)
   returns (res: Int)
   requires byte_array(args)
+  ensures  byte_array(args)
 {
+  if (args.length != 4) {
+    return 1;
+  }
   res := client(args, 1, 1);
   return res;
 }
