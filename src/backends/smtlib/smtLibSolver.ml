@@ -878,11 +878,27 @@ let convert_model session smtModel =
       in fail session msg
     in
     let add_val pos model arg_map v =
-      try
-        let arg_vals = List.map (fun (x, _) -> IdMap.find x arg_map) args in
-        Model.add_def model sym arity arg_vals v
-      with Not_found -> 
-        Model.add_default_val model sym arity v
+      if IdMap.is_empty arg_map && args <> []
+      then Model.add_default_val model sym arity v
+      else
+        begin
+          let rec fill_vals model acc args = match args with
+          | (x, srt) :: xs ->
+            if IdMap.mem x arg_map
+            then fill_vals model ((IdMap.find x arg_map) :: acc) xs
+            else
+              begin
+                let values = Model.get_values_of_sort model srt in
+                List.fold_left
+                  (fun m xv -> fill_vals m (xv :: acc) xs)
+                  model
+                  values
+              end
+          | [] ->
+            Model.add_def model sym arity (List.rev acc) v
+          in
+            fill_vals model [] args
+        end
     in
     let add_term pos model arg_map t =
       if IdMap.is_empty arg_map 
