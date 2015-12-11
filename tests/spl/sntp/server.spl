@@ -132,6 +132,7 @@ procedure server(host: Array<Byte>)
 procedure Main(args: Array<Byte>)
   returns (res: Int)
   requires byte_array(args)
+  ensures byte_array(args)
 {
   res := server(args);
   return res;
