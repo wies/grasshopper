@@ -69,7 +69,8 @@ procedure client(host: Array<Byte>, mode: Int, version: Int)
   var success := bind4(fd, addr);
   if (!success){
     //there was an error binding
-      return 3;
+    free(addr);
+    return 3;
   }
 
   var packet := constructPacket(mode, version);

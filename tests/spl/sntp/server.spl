@@ -84,11 +84,13 @@ procedure server(host: Array<Byte>)
   }
   var fd := create_socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
   if (fd < 0){
+    free(addr);
     return;
   }
   
   var bound := bind4(fd, addr);
   if (!bound) {
+    free(addr);
     return;
   }
 
@@ -97,11 +99,13 @@ procedure server(host: Array<Byte>)
   
   var recd := udp_recv4(fd, content, addr);
   if (recd != 12) {
+    free(addr);
     free(content);
     return;
   }
   if (checkPacket(content) != 1){
     //invalid packet
+    free(addr);
     free(content);
     return;
   }
