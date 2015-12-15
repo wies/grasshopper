@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <netinet/in.h>
+#include <stdio.h>
+#include <errno.h>
 
 /*
  * Preloaded Code
@@ -212,20 +214,23 @@ void server (SPLArray_char* host) {
   (port->arr[3]) = ((char) 0);
   addr = get_address4(host, port);
   free(port);
-  
+
+  //  gwrite(1, host);
+  // printf("%x\n", addr->sin4_addr);
+
   if ((addr == NULL)) {
     return;
   }
   fd_8 = create_socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
   if ((fd_8 < 0)) {
     free(addr);
-    
+
     return;
   }
   bound = bind4(fd_8, addr);
   if ((!bound)) {
     free(addr);
-    
+    printf("error: %s\n", strerror(errno));
     return;
   }
   tmp_4 = newSPLArray_char( 12);
