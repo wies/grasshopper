@@ -21,6 +21,7 @@ syn keyword splType     Bool Int Node
 syn region splType      start="Array<" end=">" contains=splType
 syn region splType      start="Loc<"   end=">" contains=splType
 syn region splType      start="Set<"   end=">" contains=splType
+syn region splType      start="Map<"   end=">" contains=splType
 " Operators and special characters
 syn keyword splOperator exists forall
 syn match splOperator	"!"

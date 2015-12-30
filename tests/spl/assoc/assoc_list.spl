@@ -1,0 +1,35 @@
+
+struct Node {
+  var next: Node;
+  var key: Int;
+  var data: Int;
+}
+
+footprint function lseg_footprint(x: Node, y: Node) returns (FP: Set<Node>) {
+  forall z: Node :: z in FP == (Btwn(next, x, z, y) && z != y)
+}
+
+predicate lseg(x: Node, y: Node)(FP: Set<Node>) {
+  Btwn(next, x, y, y) && FP == lseg_footprint(x, y)
+}
+
+predicate lseg_strictly_increasing(x: Node, FP: Set<Node>) {
+  forall y: Node, z: Node :: y in FP && z in FP && Btwn(next,x,y,z) ==> y.key < z.key || y == z
+}
+
+function key_witness(k: Int, ks: Map<Node, Int>, FP: Set<Node>) returns (res: Node) 
+
+function content(FP: Set<Node>) returns (C: Set<Int>) {
+  (forall x in FP :: x == key_witness(x.key, key, FP)) &&
+  (forall x in FP :: x.key  in C) &&
+  (forall v in C :: key_witness(v, key, FP) in FP) &&
+  (forall v: Int :: v !in C ==> key_witness(v, key, FP) == null) &&
+  (forall v in C :: v == key_witness(v, key, FP).key @(matching v yields key_witness(v, key, FP).key))
+}
+
+predicate list_map(x: Node, y: Node, D: Set<Int>, C: Map<Int,Int>)(FP: Set<Node>) {
+  lseg(x, y, FP) &&
+  lseg_strictly_increasing(x, FP) &&
+  D == content(FP) &&
+  (forall n in FP :: n.key.C == n.data  @(matching n.data yields n.key.C) )
+}
