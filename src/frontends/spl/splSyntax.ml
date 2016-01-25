@@ -18,6 +18,7 @@ type typ =
   | SetType of typ
   | IntType
   | BoolType
+  | ByteType
   | UnitType
   | AnyRefType
   | PermType (* SL formulas *)
@@ -123,7 +124,7 @@ and expr =
   | Null of typ * pos
   | Emp of pos
   | Setenum of typ * exprs * pos
-  | IntVal of int * pos
+  | IntVal of Int64.t * pos
   | BoolVal of bool * pos
   | New of typ * exprs * pos
   | Read of expr * expr * pos
@@ -147,6 +148,7 @@ and op =
   | OpMinus | OpPlus | OpMult | OpDiv 
   | OpEq | OpGt | OpLt | OpGeq | OpLeq | OpIn
   | OpPts | OpSepStar | OpSepPlus | OpSepIncl
+  | OpBvAnd | OpBvOr | OpBvNot | OpBvShiftL | OpBvShiftR | OpToInt | OpToByte
   | OpAnd | OpOr | OpImpl | OpNot 
 
 and pred_sym =
@@ -291,6 +293,7 @@ let rec pr_type ppf = function
   | AnyRefType -> fprintf ppf "AnyRef" 
   | BoolType -> fprintf ppf "%s" bool_sort_string
   | IntType -> fprintf ppf "%s" int_sort_string
+  | ByteType -> fprintf ppf "%s" byte_sort_string
   | UnitType -> fprintf ppf "Unit"
   | StructType id -> pr_ident ppf id
   | ArrayType e -> fprintf ppf "%s<@[%a@]>" array_sort_string pr_type e

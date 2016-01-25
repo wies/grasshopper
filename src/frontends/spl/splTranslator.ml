@@ -99,6 +99,7 @@ let convert cu =
       | ArrayType typ -> Loc (Array (ct typ))
       | ArrayCellType typ -> Loc (ArrayCell (ct typ))
       | IntType -> Int
+      | ByteType -> Byte
       | BoolType -> Bool
       | ty -> failwith ("cannot convert type " ^ string_of_type ty ^ " near position " ^ string_of_src_pos pos)
     in
@@ -127,7 +128,7 @@ let convert cu =
         | [] -> GrassUtil.mk_empty (Set elem_ty)
         | _ -> GrassUtil.mk_setenum ts)
     | IntVal (i, _) ->
-        GrassUtil.mk_int i
+        GrassUtil.mk_int64 i
     | BoolVal (b, pos) ->
         App (BoolConst b, [], Bool)
     | Read (map, idx, pos) -> 
@@ -176,13 +177,21 @@ let convert cu =
     | BinaryOp (e1, (OpMinus as op), e2, ty, _)
     | BinaryOp (e1, (OpPlus as op), e2, ty, _)
     | BinaryOp (e1, (OpMult as op), e2, ty, _)
-    | BinaryOp (e1, (OpDiv as op), e2, ty, _) ->
+    | BinaryOp (e1, (OpDiv as op), e2, ty, _)
+    | BinaryOp (e1, (OpBvAnd as op), e2, ty, _)
+    | BinaryOp (e1, (OpBvOr as op), e2, ty, _)
+    | BinaryOp (e1, (OpBvShiftL as op), e2, ty, _)
+    | BinaryOp (e1, (OpBvShiftR as op), e2, ty, _) ->
         let mk_app =
           match op with
           | OpMinus -> GrassUtil.mk_minus
           | OpPlus -> GrassUtil.mk_plus
           | OpMult -> GrassUtil.mk_mult
           | OpDiv -> GrassUtil.mk_div
+          | OpBvAnd -> GrassUtil.mk_bv_and
+          | OpBvOr -> GrassUtil.mk_bv_or
+          | OpBvShiftL -> GrassUtil.mk_bv_shift_left
+          | OpBvShiftR -> GrassUtil.mk_bv_shift_right
           | _ -> failwith "unexpected operator"
         in
         let t1 = convert_term locals e1 in
@@ -190,9 +199,19 @@ let convert cu =
         mk_app t1 t2
     | UnaryOp (OpPlus, e, _) ->
         convert_term locals e
-    | UnaryOp (OpMinus, e, _) ->
+    | UnaryOp (OpMinus as op, e, _)
+    | UnaryOp (OpBvNot as op, e, _)
+    | UnaryOp (OpToInt as op, e, _)
+    | UnaryOp (OpToByte as op, e, _) ->
         let t = convert_term locals e in
-        GrassUtil.mk_uminus t
+        let mk_app = match op with
+          | OpMinus  -> GrassUtil.mk_uminus
+          | OpBvNot  -> GrassUtil.mk_bv_not
+          | OpToInt  -> GrassUtil.mk_byte_to_int
+          | OpToByte -> GrassUtil.mk_int_to_byte
+          | _ -> failwith "unexpected operator"
+        in
+        mk_app t
     | Ident (id, pos) ->
         let decl = find_var_decl pos locals id in
         let srt = convert_type decl.v_type pos in
@@ -306,7 +325,7 @@ let convert cu =
         let t1 = convert_term locals e1 in
         let t2 = convert_term locals e2 in
         (match type_of_expr cu locals e1 with
-        | IntType -> GrassUtil.mk_srcpos pos (mk_int_form t1 t2)
+        | IntType | ByteType -> GrassUtil.mk_srcpos pos (mk_int_form t1 t2)
         | SetType _ -> GrassUtil.mk_srcpos pos (mk_set_form t1 t2)
         | ty -> failwith ("unexpected type " ^ string_of_type ty ^ " at " ^ string_of_src_pos pos)) 
     | UnaryOp (OpNot, e, pos) ->

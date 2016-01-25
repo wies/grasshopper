@@ -36,6 +36,7 @@ let convert oc cu =
      | AnyRefType -> "void*" 
      | BoolType -> "bool"
      | IntType -> "int"
+     | ByteType -> "char"
      | StructType id -> "struct " ^ (string_of_ident id)
      | ArrayType _ -> "struct " ^ arr_string 
      | MapType _| SetType _ -> "/* ERROR: Maps and Sets are not implemented yet. */"
@@ -181,6 +182,9 @@ let convert oc cu =
     and pr_un_op ppf = function
       | (OpNot, e1)   -> fprintf ppf "(!%a)" pr_c_expr e1
       | (OpMinus, e1) -> fprintf ppf "(-%a)" pr_c_expr e1
+      | (OpBvNot, e1) -> fprintf ppf "(~%a)" pr_c_expr e1
+      | (OpToInt, e1) -> fprintf ppf "((int) %a)" pr_c_expr e1
+      | (OpToByte, e1) -> fprintf ppf "((char) %a)" pr_c_expr e1
       |  _            -> fprintf ppf "/* ERROR: no such unary operator. */"
     and pr_bin_op ppf = function
       | (e1, OpMinus, e2) -> fprintf ppf "(%a - %a)"  pr_c_expr e1 pr_c_expr e2
@@ -196,6 +200,10 @@ let convert oc cu =
       | (e1, OpAnd, e2)   -> fprintf ppf "(%a && %a)" pr_c_expr e1 pr_c_expr e2 
       | (e1, OpOr, e2)    -> fprintf ppf "(%a || %a)" pr_c_expr e1 pr_c_expr e2 
       | (e1, OpImpl, e2)  -> fprintf ppf "((!%a) || %a)" pr_c_expr e1 pr_c_expr e2 
+      | (e1, OpBvAnd, e2) -> fprintf ppf "(%a & %a)" pr_c_expr e1 pr_c_expr e2 
+      | (e1, OpBvOr, e2)  -> fprintf ppf "(%a | %a)" pr_c_expr e1 pr_c_expr e2 
+      | (e1, OpBvShiftL, e2)  -> fprintf ppf "(%a << %a)" pr_c_expr e1 pr_c_expr e2 
+      | (e1, OpBvShiftR, e2)  -> fprintf ppf "(%a >> %a)" pr_c_expr e1 pr_c_expr e2 
       | (_, (OpDiff | OpUn | OpInt), _) -> 
         fprintf ppf "/* ERROR: Sets not yet implemented */"
       | (_, (OpPts | OpSepStar | OpSepPlus | OpSepIncl), _) -> 
@@ -203,7 +211,7 @@ let convert oc cu =
       | _ -> fprintf ppf "/* ERROR: no such Binary Operator */"
     and pr_c_expr ppf = function
       | (Null (_, _), _)           -> fprintf ppf "NULL"
-      | (IntVal (i, _), _)         -> fprintf ppf "%i" i
+      | (IntVal (i, _), _)         -> fprintf ppf "%s" (Int64.to_string i)
       | (BoolVal (b, _), _)        -> fprintf ppf (if b then "true" else "false")
       | (Read (from, index, _), cur_proc) -> pr_c_read ppf (from, index, cur_proc)
       | (Length (idexp, _), cur_proc)     -> 

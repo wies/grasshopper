@@ -21,6 +21,7 @@ syn keyword splType     Bool Int Node
 syn region splType      start="Array<" end=">" contains=splType
 syn region splType      start="Loc<"   end=">" contains=splType
 syn region splType      start="Set<"   end=">" contains=splType
+syn region splType      start="Map<"   end=">" contains=splType
 " Operators and special characters
 syn keyword splOperator exists forall
 syn match splOperator	"!"
@@ -43,6 +44,7 @@ syn match splSpecial 	":="
 syn region splLiteral   start=+"+ end=+"+ oneline
 syn keyword splLiteral  true false
 syn match  splLiteral   "-\=\<\d\+\>"
+syn match  splLiteral   "0x\x\+"
 " spl Comments
 syn region splComment start="/\*" end="\*/" contains=splTodo,@Spell
 syn match  splComment "//.*" contains=splTodo,@Spell

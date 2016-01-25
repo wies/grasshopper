@@ -7,7 +7,7 @@ open GrassUtil
 exception Undefined
 
 type value =
-  | I of int
+  | I of Int64.t
   | B of bool
 
 module ValueMap = 
@@ -55,7 +55,8 @@ type ext_value =
   | FormVal of (ident * sort) list * form
   | Undef
 
-let value_of_int i = I i
+let value_of_int i = I (Int64.of_int i)
+let value_of_int64 i = I i
 
 let value_of_bool b = B b
 
@@ -68,7 +69,7 @@ let int_of_value = function
   | _ -> raise Undefined
 
 let string_of_value = function
-  | I i -> string_of_int i
+  | I i -> Int64.to_string i
   | B b -> string_of_bool b
 
 type interpretation = (value ValueListMap.t * ext_value) SortedSymbolMap.t
@@ -190,17 +191,17 @@ let extend_interp model sym (arity: arity) args res =
     try SortedSymbolMap.find (sym, arity) model.intp 
     with Not_found -> ValueListMap.empty, Undef
   in
-  let new_sym_intp = ValueListMap.add args (I card) m, d in
+  let new_sym_intp = ValueListMap.add args (value_of_int card) m, d in
   model.intp <- SortedSymbolMap.add (sym, arity) new_sym_intp model.intp;
   (* update extended value mapping *)
   begin
     match res_srt with
     | Map (Loc _, srt)
     | Set srt ->
-        model.vals <- SortedValueMap.add (I card, res_srt) res model.vals
+        model.vals <- SortedValueMap.add (value_of_int card, res_srt) res model.vals
     | _ -> ()
   end;
-  I card
+  value_of_int card
             
 let rec eval model = function
   | Var (id, srt) -> 
@@ -227,16 +228,16 @@ let rec eval model = function
         let res = MapVal (ValueListMap.add [ind_val] upd_val m, d) in
         extend_interp model Write arity [fld_val; ind_val; upd_val] res)
   | App (UMinus, [t], _) ->
-      I (-(eval_int model t))
+      I (Int64.mul Int64.minus_one (eval_int model t))
   | App (Plus as intop, [t1; t2], _)
   | App (Minus as intop, [t1; t2], _)
   | App (Mult as intop, [t1; t2], _)
   | App (Div as intop, [t1; t2], _) ->
       let f = match intop with
-      | Plus -> (+)
-      | Minus -> (-)
-      | Mult -> ( * )
-      | Div -> (/)
+      | Plus -> Int64.add
+      | Minus -> Int64.sub
+      | Mult -> Int64.mul
+      | Div -> Int64.div
       | _ -> failwith "impossible"
       in I (f (eval_int model t1) (eval_int model t2))
   | App (Empty, [], Set srt) -> 
@@ -292,11 +293,14 @@ let rec eval model = function
   | App (GtEq as rel, [t1; t2], _)
   | App (Lt as rel, [t1; t2], _)
   | App (Gt as rel, [t1; t2], _) ->
+      let i1 = eval_int model t1 in
+      let i2 = eval_int model t2 in
+      let c = Int64.compare i1 i2 in
       let r = match rel with
       | LtEq -> (<=) | GtEq -> (>=) | Lt -> (<) | Gt -> (>)
       | _ -> failwith "impossible"
       in 
-      B (r (eval_int model t1) (eval_int model t2))
+      B (r c 0)
   | App (Elem, [e; s], _) ->
       let e_val = eval model e in
       let srt = element_sort_of_set s in
@@ -570,7 +574,7 @@ let find_term model =
               | BaseVal v ->
                   let arg_vals =
                     List.map (function
-                      | Int -> [I 0]
+                      | Int -> [I Int64.zero]
                       | Bool -> [B false]
                       | srt -> get_values_of_sort model srt)
                       arg_srts
@@ -699,7 +703,7 @@ let find_term model =
   let rec find (v, srt) =
     match srt with 
     | Bool -> mk_bool_term (bool_of_value v)
-    | Int -> mk_int (int_of_value v)
+    | Int -> mk_int64 (int_of_value v)
     | _ ->
         let sym, vs = SortedValueMap.find (v, srt) prev in
         let args = List.map find vs in
@@ -1543,7 +1547,7 @@ let print_graph output chan model terms =
                   let i = interp_symbol model IndexOfCell ([cell_srt], Int) [c] in
                   let c1 = interp_symbol model Read ([Map (Int, cell_srt); Int], cell_srt) [cells; i] in
                   if c1 = c then
-                    edges := (dst, src, string_of_int (int_of_value i), Solid, "black") :: !edges
+                    edges := (dst, src, Int64.to_string (int_of_value i), Solid, "black") :: !edges
                 end)
                 cell_locs
             with Not_found | Undefined -> ())

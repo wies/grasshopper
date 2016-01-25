@@ -1,0 +1,40 @@
+include "../array/byte_array.spl";
+
+procedure Main(arg: Array<Byte>) returns (res: Int)
+  requires byte_array(arg)
+  ensures  emp
+{
+  free(arg);
+  var a := 23;
+  var b := a + 1;
+  pure assert b == 24;
+  var c := (1024 + 23) & 0xFF;
+  pure assert c == 23;
+  var d := int2byte(c);
+  pure assert d == int2byte(23);
+  pure assert d >= int2byte(23);
+  pure assert d <= int2byte(23);
+  pure assert c == byte2int(d);
+  var e := d & int2byte(0xF);
+  pure assert e == int2byte(7);
+  var f := d + e;
+  pure assert f == int2byte(30);
+  pure assert int2byte(4)*f == int2byte(30) <-< 1 <-< 1;
+  pure assert int2byte(4)*f == int2byte(30) <-< 2 ;
+  pure assert int2byte(48) == '0';
+  return 0;
+}
+
+procedure ultTest()
+{
+  pure assert -1 > -2;
+  pure assert -1 <  0;
+  pure assert  1 >  0;
+  pure assert  1 > -1;
+  pure assert  2 >  1;
+  pure assert int2byte(-1) > int2byte(-2);
+  pure assert int2byte(-1) < int2byte( 0);
+  pure assert int2byte( 1) > int2byte( 0);
+  pure assert int2byte( 1) > int2byte(-1);
+  pure assert int2byte( 2) > int2byte( 1);
+}

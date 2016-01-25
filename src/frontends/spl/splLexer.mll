@@ -32,6 +32,7 @@ let _ =
       ("if", IF);
       ("in", IN);
       ("Int", INT);
+      ("Byte", BYTE);
       ("invariant", INVARIANT);
       ("include", INCLUDE);
       ("implicit", IMPLICIT);
@@ -57,6 +58,8 @@ let _ =
       ("without", WITHOUT);
       ("yields", YIELDS);
       ("axiom", AXIOM);
+      ("int2byte", INT2BYTE);
+      ("byte2int", BYTE2INT);
    ])
 
 let lexical_error lexbuf msg =
@@ -70,6 +73,31 @@ let lexical_error lexbuf msg =
     } 
   in
   ProgError.syntax_error spos msg
+
+let hexa_to_int num =
+  let rec process acc i =
+    if i >= String.length num then acc
+    else
+      begin
+        let d = match num.[i] with
+          | '0' -> 0    | '1' -> 1  | '2' -> 2
+          | '3' -> 3    | '4' -> 4  | '5' -> 5
+          | '6' -> 6    | '7' -> 7  | '8' -> 8
+          | '9' -> 9    | 'A' | 'a' -> 10
+          | 'B' | 'b' -> 11   | 'C' | 'c' -> 12
+          | 'D' | 'd' -> 13   | 'E' | 'e' -> 14
+          | 'F' | 'f' -> 15
+          | _ -> failwith "hexa_to_int: should not happen."
+        in
+        let acc2 = 
+          Int64.add
+            (Int64.shift_left acc 4)
+            (Int64.of_int d)
+        in
+        process acc2 (i+1)
+      end
+  in
+  process Int64.zero 0
 }
 
 let digitchar = ['0'-'9']
@@ -121,14 +149,20 @@ rule token = parse
 | "&*&" { SEPSTAR }
 | "&+&" { SEPPLUS }
 | "|->" { PTS }
-| '|' { PIPE }
+| '&' { BAND }
+| '|' { BOR }
+| '~' { BNOT }
+| "<-<" { BSL }
+| ">->" { BSR }
 | ident as kw
     { try
         Hashtbl.find keyword_table kw
       with Not_found ->
         IDENT (kw)
     }
-| digits as num { INTVAL (int_of_string num) }
+| "0x" (['A'-'F''a'-'f''0'-'9']+ as num) { INTVAL (hexa_to_int num) }
+| digits as num { INTVAL (Int64.of_string num) }
+| "'" (_ as c) "'" { CHARVAL c }
 | eof { EOF }
 | _ { lexical_error lexbuf None }
 

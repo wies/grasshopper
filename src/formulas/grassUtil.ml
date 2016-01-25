@@ -207,7 +207,8 @@ let mk_bool_term b = App (BoolConst b, [], Bool)
 let mk_true_term = mk_bool_term true
 let mk_false_term = mk_bool_term false
 
-let mk_int i = App (IntConst i, [], Int)
+let mk_int i = App (IntConst (Int64.of_int i), [], Int)
+let mk_int64 i = App (IntConst i, [], Int)
 
 let mk_ident name = (name, 0)
 
@@ -237,11 +238,18 @@ let mk_gt s t = mk_atom Gt [s; t]
 let mk_leq s t = mk_atom LtEq [s; t]
 let mk_geq s t = mk_atom GtEq [s; t]
 
-let mk_plus s t = mk_app Int Plus [s; t]
-let mk_minus s t = mk_app Int Minus [s; t]
-let mk_uminus s = mk_app Int UMinus [s]
-let mk_mult s t = mk_app Int Mult [s; t]
-let mk_div s t = mk_app Int Div [s; t]
+let mk_plus s t = mk_app (sort_of s) Plus [s; t]
+let mk_minus s t = mk_app (sort_of s) Minus [s; t]
+let mk_uminus s = mk_app (sort_of s) UMinus [s]
+let mk_mult s t = mk_app (sort_of s) Mult [s; t]
+let mk_div s t = mk_app (sort_of s) Div [s; t]
+let mk_bv_and s t = mk_app (sort_of s) BitAnd [s; t]
+let mk_bv_or s t = mk_app (sort_of s) BitOr [s; t]
+let mk_bv_not s = mk_app (sort_of s) BitNot [s]
+let mk_bv_shift_left s t = mk_app (sort_of s) ShiftLeft [s; t]
+let mk_bv_shift_right s t = mk_app (sort_of s) ShiftRight [s; t]
+let mk_int_to_byte s = mk_app Byte IntToByte [s]
+let mk_byte_to_int s = mk_app Int ByteToInt [s]
 
 let mk_null id = mk_app (Loc id) Null []
 

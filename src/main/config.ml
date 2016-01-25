@@ -24,6 +24,9 @@ let full_ep = ref false
 let use_set_theory = ref false
 let keep_types = ref false
 
+(* Flag to switch between integer and bitvectors *)
+let use_bitvector = ref false
+
 (* Flag that controls whether we are instantiating the axioms or relying on the prover. *)
 let instantiate = ref true
 let stratify = ref true
@@ -99,7 +102,8 @@ let cmd_options =
    ("-smtsolver", Arg.Set_string smtsolver, "<solver> Choose SMT solver (z3, cvc4, cvc4mf), e.g., 'z3+cvc4mf'");
    ("-smtpatterns", Arg.Set smtpatterns, " Always add pattern annotations to quantifiers in SMT queries");
    ("-smtsets", Arg.Set use_set_theory, " Use solver's set theory to encode sets (if supported)");
-   ("-smtarrays", Arg.Set encode_fields_as_arrays, " Use solver's array theory to encode fields\n\nOptions for compiler:");
+   ("-smtarrays", Arg.Set encode_fields_as_arrays, " Use solver's array theory to encode fields");
+   ("-bitvector", Arg.Set use_bitvector, " Use bitvector theory for integers\n\nOptions for compiler:");
    ("-compile", Arg.Set_string compile_to, "<filename> Compile SPL program to a C program outputed as a file with the given name.");
    (*("-optSelfFrame", Arg.Set optSelfFrame, " enable generation of self-framing clauses for SL predicates");*)
   ]

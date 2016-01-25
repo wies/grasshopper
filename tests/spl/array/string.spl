@@ -1,17 +1,19 @@
-include "int_array.spl";
+include "byte_array.spl";
 
 
-procedure equals(first: Array<Int>, second: Array<Int>)
+procedure equals(first: Array<Byte>, second: Array<Byte>)
   returns (res: Bool)
-  requires array(first) &+& array(second)
-  ensures array(first) &+& array(second)
+  requires byte_array(first) &+& byte_array(second)
+  ensures byte_array(first) &+& byte_array(second)
   ensures res == (first.length == second.length && (forall i: Int:: 0 <= i && i < first.length ==> first[i] == second[i]))
 {
   if(first.length != second.length)
     return false;
   var i := 0;
+  //pure assume first.length < 256*256;
   while(i < first.length && first[i] == second[i])
-    invariant array(first) &+& array(second)
+    //invariant first.length < 256*256
+    invariant byte_array(first) &+& byte_array(second)
     invariant 0 <= i && i <= first.length && first.length == second.length
     invariant forall j: Int:: 0 <= j && j < i ==> first[j] == second[j]
   {
@@ -23,17 +25,19 @@ procedure equals(first: Array<Int>, second: Array<Int>)
 
 
 //inspired from http://en.wikibooks.org/wiki/C_Programming/Strings#The_strcmp_function
-procedure strcmp(s1: Array<Int>, s2: Array<Int>)
+procedure strcmp(s1: Array<Byte>, s2: Array<Byte>)
   returns (res: Int)
-  requires array(s1) &+& array(s2)
-  ensures array(s1) &+& array(s2)
+  requires byte_array(s1) &+& byte_array(s2)
+  ensures byte_array(s1) &+& byte_array(s2)
   ensures (res == 0) == (s1.length == s2.length && (forall i: Int:: 0 <= i && i < s1.length ==> s1[i] == s2[i]))
 {
   var i := 0; 
   /* Move s1 and s2 to the s1 differing characters in each string,
      or the ends of the strings if they are identical.  */
+  //pure assume s1.length < 256*256;
   while (i < s1.length && i < s2.length && s1[i] == s2[i])
-    invariant array(s1) &+& array(s2)
+    //invariant s1.length < 256*256
+    invariant byte_array(s1) &+& byte_array(s2)
     invariant 0 <= i && i <= s1.length && i <= s2.length
     invariant forall j: Int:: 0 <= j && j < i ==> s1[j] == s2[j]
   {
@@ -52,17 +56,19 @@ procedure strcmp(s1: Array<Int>, s2: Array<Int>)
     return 1;
 }
                  
-procedure strdup(str: Array<Int>)
-  returns (res: Array<Int>)
-  requires array(str)
-  ensures array(str) &*& array(res)
+procedure strdup(str: Array<Byte>)
+  returns (res: Array<Byte>)
+  requires byte_array(str)
+  ensures byte_array(str) &*& byte_array(res)
   ensures str.length == res.length
   ensures forall i: Int:: 0 <= i && i < str.length ==> str[i] == res[i]
 {
-  var copy := new Array<Int>(str.length);
+  var copy := new Array<Byte>(str.length);
   var i := 0;
+  //pure assume str.length < 256*256;
   while(i < str.length)
-    invariant array(str) &*& array(copy)
+    //invariant str.length < 256*256
+    invariant byte_array(str) &*& byte_array(copy)
     invariant 0 <= i && i <= str.length && str.length == copy.length
     invariant forall j: Int:: 0 <= j && j < i ==> str[j] == copy[j]
   {

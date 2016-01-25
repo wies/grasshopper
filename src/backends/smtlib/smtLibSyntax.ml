@@ -8,15 +8,21 @@ type pos = Grass.source_position
 
 type sort = 
   | IntSort | BoolSort
+  | BvSort of int
   | FreeSort of ident * sort list
 
 type symbol =
   | BoolConst of bool
   | IntConst of int
+  | BvConst of int * Int64.t
   | Ident of ident
   | Minus | Plus | Mult | Div
   | Eq | Gt | Lt | Geq | Leq
   | And | Or | Impl | Not | Ite
+  (* bitvector theory *)
+  | BvNot | BvAnd | BvOr | BvUlt | BvSlt | BvSle | BvSgt | BvSge
+  | BvNeg | BvAdd | BvMul | BvUdiv | BvSdiv | BvUrem
+  | BvShl | BvShr | BvConcat | BvExtract of int * int
 
 type binder = Exists | Forall
 
@@ -209,9 +215,46 @@ let unletify t =
 
 open Format
 
+let string_of_bv width value =
+  let two = Int64.of_int 2 in
+  let rec digits acc w v =
+    assert(w >= 0);
+    if w = 0 then
+      begin
+        if v <> Int64.zero then
+          Debug.warn (fun () -> "string_of_bv: potential overflow with " ^ (Int64.to_string value));
+        String.concat "" acc
+      end
+    else
+      begin
+        let d = if (Int64.rem v two) = Int64.one then "1" else "0" in
+        digits (d :: acc) (w - 1) (Int64.shift_right v 1)
+      end
+  in
+  "#b" ^ (digits [] width value)
+
+let int_of_bits bits =
+  let l = String.length bits in
+  let rec fill acc i =
+    if i > l then
+      acc
+    else
+      begin 
+        let lower =
+          if bits.[i] = '0' then 0
+          else if bits.[i] = '1' then 1
+          else failwith ("bits are not 0 or 1: " ^ bits)
+        in
+        let acc2 = (acc lsl 1) + lower in
+        fill acc2 (i+1)
+      end
+  in
+  fill 0 0
+
 let string_of_symbol = function
   | BoolConst b -> Printf.sprintf "%b" b
   | IntConst i -> string_of_int i
+  | BvConst (w,i) -> string_of_bv w i
   | Ident id -> string_of_ident id
   | Plus -> "+"
   | Minus -> "-"
@@ -227,6 +270,24 @@ let string_of_symbol = function
   | Impl -> "=>"
   | Not -> "not"
   | Ite -> "ite"
+  | BvNot -> "bvnot"
+  | BvAnd -> "bvand"
+  | BvOr -> "bvor"
+  | BvUlt -> "bvult"
+  | BvSlt -> "bvslt"
+  | BvSle -> "bvsle"
+  | BvSgt -> "bvsgt"
+  | BvSge -> "bvsge"
+  | BvNeg -> "bvneg"
+  | BvAdd -> "bvadd"
+  | BvMul -> "bvmul"
+  | BvUdiv -> "bvudiv"
+  | BvSdiv -> "bvsdiv"
+  | BvUrem -> "bvurem"
+  | BvShl -> "bvshl"
+  | BvShr -> "bvlshr"
+  | BvConcat -> "concat"
+  | BvExtract (i, j) -> "(_ extract " ^(string_of_int i)^ " " ^(string_of_int j)^")"
 
 let pr_ident ppf id = fprintf ppf "%s" (string_of_ident id)
 
@@ -240,6 +301,7 @@ let rec pr_sort ppf = function
   | FreeSort (id, srts) -> fprintf ppf "@[<2>(%s@ %a)@]" (string_of_ident id) pr_sorts srts
   | BoolSort -> fprintf ppf "Bool"
   | IntSort -> fprintf ppf "Int"
+  | BvSort size -> fprintf ppf "(_ BitVec %s)" (string_of_int size)
 
 and pr_sorts ppf = function
   | [] -> ()

@@ -1,0 +1,13 @@
+include "../array/byte_array.spl";
+
+procedure intToByteArray(i: Int) returns (arr: Array<Byte>)
+    requires emp
+    ensures byte_array(arr) &*& arr.length == 4
+{
+    arr := new Array<Byte>(4);
+    arr[0] := int2byte(i >->  0);
+    arr[1] := int2byte(i >->  8);
+    arr[2] := int2byte(i >-> 16);
+    arr[3] := int2byte(i >-> 24);
+    return arr;
+}

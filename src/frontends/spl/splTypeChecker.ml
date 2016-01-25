@@ -105,12 +105,22 @@ let type_of_expr cu locals e =
     | PredApp (DisjointPred, _, _)
     | BoolVal _ -> BoolType
     (* Int return values *)
-    | UnaryOp (OpMinus, _, _) 
-    | BinaryOp (_, OpMinus, _, _, _)
-    | BinaryOp (_, OpPlus, _, _, _)
-    | BinaryOp (_, OpMult, _, _, _)
-    | BinaryOp (_, OpDiv, _, _, _)
+    | UnaryOp (OpToInt, _, _)
     | IntVal _ -> IntType
+    (* Byte values *)
+    | UnaryOp (OpToByte, _, _) -> ByteType
+    (* Int or Byte return values *)
+    | UnaryOp (OpMinus, e, _) 
+    | BinaryOp (e, OpMinus, _, _, _)
+    | BinaryOp (e, OpPlus, _, _, _)
+    | BinaryOp (e, OpMult, _, _, _)
+    | BinaryOp (e, OpDiv, _, _, _)
+    | UnaryOp (OpBvNot, e, _)
+    | BinaryOp (e, OpBvAnd, _, _, _)
+    | BinaryOp (e, OpBvOr, _, _, _)
+    | BinaryOp (e, OpBvShiftL, _, _, _)
+    | BinaryOp (e, OpBvShiftR, _, _, _) ->
+        te e
     (* Set return values *)
     | BinaryOp (e, OpDiff, _, _, _)
     | BinaryOp (e, OpUn, _, _, _)
@@ -134,7 +144,7 @@ let type_of_expr cu locals e =
         | ArrayType ty -> ty
         | _ -> AnyType)
     | Old (e, _) -> te e        
-    | Length (map, _) -> IntType        
+    | Length (map, _) -> IntType
     | ArrayOfCell (c, _) ->
         (match te c with
         | ArrayCellType srt -> ArrayType srt
@@ -179,12 +189,21 @@ let type_of_expr cu locals e =
 let infer_types cu locals ty e =
   let rec it locals ty = function
     (* Non-ambiguous Boolean operators *)
-    | UnaryOp (OpNot, e, pos) ->
+    | UnaryOp (OpNot as op, e, pos) ->
         let e1, ty = it locals ty e in
-        UnaryOp (OpNot, e1, pos), ty
+        UnaryOp (op, e1, pos), ty
     | BinaryOp (e1, OpImpl, e2, _, pos) ->
         let e1, e2, ty = itp locals BoolType e1 e2 in
         BinaryOp (e1, OpImpl, e2, ty, pos), ty
+    (* Non-ambiguous Int/Byte operators*)
+    | UnaryOp (OpToByte, e, pos) ->
+        let e1, ty = it locals IntType e in
+        ignore (match_types pos ty IntType);
+        UnaryOp (OpToByte, e1, pos), ByteType
+    | UnaryOp (OpToInt, e, pos) ->
+        let e1, ty = it locals ByteType e in
+        ignore (match_types pos ty ByteType);
+        UnaryOp (OpToInt, e1, pos), IntType
     (* Ambiguous relational operators *)
     | BinaryOp (e1, (OpEq as op), e2, _, pos)
     | BinaryOp (e1, (OpGt as op), e2, _, pos)
@@ -194,16 +213,6 @@ let infer_types cu locals ty e =
         let e1, e2, _ = itp locals AnyType e1 e2 in
         ignore (match_types pos ty BoolType);
         BinaryOp (e1, op, e2, BoolType, pos), BoolType
-    (* Unary integer operators *)
-    | UnaryOp (OpMinus, e, pos) ->
-        let e1, _ = it locals IntType e in
-        ignore (match_types pos ty IntType);
-        UnaryOp (OpMinus, e1, pos), IntType
-    (* Binary integer operators *)
-    | BinaryOp (e1, (OpMinus as op), e2, _, pos)
-    | BinaryOp (e1, (OpPlus as op), e2, _, pos)
-    | BinaryOp (e1, (OpMult as op), e2, _, pos)
-    | BinaryOp (e1, (OpDiv as op), e2, _, pos)
     (* Ambiguous binary Boolean operators *)
     | BinaryOp (e1, (OpAnd as op), e2, _, pos)
     | BinaryOp (e1, (OpOr as op), e2, _, pos)
@@ -225,6 +234,33 @@ let infer_types cu locals ty e =
         in
         ignore (match_types pos ty BoolType);
         BinaryOp (e1, OpIn, e2, BoolType, pos), BoolType
+    (* Ambiguous Int/Byte operators*)
+    | UnaryOp (OpMinus as op, e, pos) 
+    | UnaryOp (OpBvNot as op, e, pos) ->
+      let e1, ty = it locals AnyType e in
+      if ty = IntType || ty = ByteType then
+        UnaryOp (op, e1, pos), ty
+      else
+        type_error pos IntType ty
+    | BinaryOp (e1, (OpMinus as op), e2, _, pos)
+    | BinaryOp (e1, (OpPlus as op), e2, _, pos)
+    | BinaryOp (e1, (OpMult as op), e2, _, pos)
+    | BinaryOp (e1, (OpDiv as op), e2, _, pos)
+    | BinaryOp (e1, (OpBvAnd as op), e2, _, pos)
+    | BinaryOp (e1, (OpBvOr as op), e2, _, pos) ->
+      let e1, e2, ty = itp locals ty e1 e2 in
+      if ty = IntType || ty = ByteType then
+        BinaryOp (e1, op, e2, ty, pos), ty
+      else
+        type_error pos IntType ty
+    | BinaryOp (e1, (OpBvShiftL as op), e2, _, pos)
+    | BinaryOp (e1, (OpBvShiftR as op), e2, _, pos) ->
+      let e1, ty1 = it locals AnyType e1 in
+      let e2, ty2 = it locals IntType e2 in
+      if ty1 = IntType || ty1 = ByteType then
+        BinaryOp (e1, op, e2, ty1, pos), ty1
+      else
+        type_error pos IntType ty
     (* Integer constants *)
     | IntVal (_, pos) as e ->
         e, match_types pos ty IntType

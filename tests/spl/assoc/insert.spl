@@ -1,0 +1,39 @@
+include "assoc_list.spl";
+
+procedure insert(lst: Node, k: Int, v: Int,
+                 implicit ghost C: Set<Int>,
+                 implicit ghost D1: Map<Int,Int>,
+                 implicit ghost D2: Map<Int,Int>)
+  returns (res: Node)
+  requires list_map(lst, null, C, D1)
+  requires (forall x in C :: (x != k ==> x.D2 == x.D1) @(matching x.D2 yields x.D1) @(matching x.D1 yields x.D2))
+  requires k.D2 == v
+  ensures list_map(res, null, C ++ Set(k), D2)
+{
+  var curr: Node;
+  curr := lst;
+  var prev: Node;
+  prev := null;
+  while (curr != null && curr.key < k) 
+    invariant (prev == null && curr == lst || k > prev.key &*& prev.next |-> curr) -** 
+      list_map(lst, null, C, D1)
+  {
+    prev := curr;
+    curr := curr.next;
+  }
+  if (curr != null && curr.key == k) {
+    curr.data := v;
+    return lst;
+  } else {
+    var n := new Node;
+    n.next := curr;
+    n.key := k;
+    n.data := v;
+    if (prev == null) {
+      return n;
+    } else {
+      prev.next := n;
+      return lst;
+    }
+  }
+}

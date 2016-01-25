@@ -20,6 +20,7 @@ let mk_position s e =
 %token <SmtLibSyntax.symbol> SYMBOL
 %token <SmtLibSyntax.sort> SORT
 %token <SmtLibSyntax.binder> BINDER
+%token BV EXTRACT
 %token LET
 %token <SmtLibSyntax.ident> IDENT
 %token <int> INT
@@ -96,7 +97,9 @@ sort_list:
 
 sort: 
 | SORT { $1 }
+/* TODO bitvector */
 | IDENT { FreeSort ($1, []) }
+| LPAREN IDENT BV INT RPAREN { assert($2 = ("_",0)); BvSort $4 }
 | LPAREN IDENT sort_list RPAREN { FreeSort ($2, $3) }
 ;
 
@@ -118,6 +121,7 @@ ident_sort_list_opt:
 symbol:
 | SYMBOL { $1 }
 | IDENT { Ident $1 }
+| LPAREN IDENT EXTRACT INT INT RPAREN { assert($2 = ("_",0)); BvExtract ($4, $5) }
 ;
 
 term:

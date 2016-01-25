@@ -1,0 +1,21 @@
+include "assoc_list.spl";
+
+procedure contains(lst: Node, val: Int, implicit ghost C: Set<Int>, implicit ghost D: Map<Int,Int>)
+  returns (res: Bool)
+  requires list_map(lst, null, C, D)
+  ensures (res == val in C) &*& list_map(lst, null, C, D)
+{
+  var curr: Node;
+  curr := lst;
+  var prev: Node;
+  prev := null;
+  while (curr != null && curr.key < val) 
+    invariant (prev == null && curr == lst || val > prev.key &*& prev.next |-> curr) -** 
+      list_map(lst, null, C, D)
+  {
+    prev := curr;
+    curr := curr.next;
+  }
+  if (curr != null && curr.key == val) return true;
+  else return false;
+}
