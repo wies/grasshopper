@@ -1,5 +1,5 @@
-include "../socket.spl";
-include "../fileIO.spl";
+include "../../../lib/socket.spl";
+include "../../../lib/file.spl";
 
 procedure Main(arg: Array<Byte>) returns (res: Int)
     requires byte_array(arg)

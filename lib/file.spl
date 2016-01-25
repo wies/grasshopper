@@ -1,4 +1,4 @@
-include "../array/byte_array.spl";
+include "../tests/spl/array/byte_array.spl";
 
 //using this requires adding "#include <fcntl.h>" to the generated C file
 

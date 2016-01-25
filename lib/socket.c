@@ -199,3 +199,50 @@ int udp_send6(int fd, SPLArray_char* msg, int len, struct SocketAddressIP6* addr
   from_grass_addr6(address, &sa);
   return sendto(fd, msg->arr, len, 0, (struct sockaddr*) &sa, sizeof sa);
 }
+
+bool glisten(int fd,  int backlog) {
+  return listen(fd, backlog) == 0;
+}
+
+int accept4(int fd, struct SocketAddressIP4* address) {
+  struct sockaddr_in sa;
+  int len = sizeof sa;
+  int res = accept(fd, (struct sockaddr*)&sa, &len);
+  if (res >= 0) {
+    to_grass_addr(&sa, address);
+  }
+  return res;
+}
+
+int accept6(int fd, struct SocketAddressIP6* address) {
+  struct sockaddr_in6 sa;
+  int len = sizeof sa;
+  int res = accept(fd, (struct sockaddr*)&sa, &len);
+  if (res >= 0) {
+    to_grass_addr6(&sa, address);
+  }
+  return res;
+}
+
+bool connect4(int fd, struct SocketAddressIP4* address)
+{
+  struct sockaddr_in sa;
+  from_grass_addr(address, &sa);
+  return connect(fd, (struct sockaddr*) &sa, sizeof sa) == 0;
+}
+
+bool connect6(int fd, struct SocketAddressIP6* address)
+{
+  struct sockaddr_in6 sa;
+  from_grass_addr6(address, &sa);
+  return connect(fd, (struct sockaddr*) &sa, sizeof sa) == 0;
+}
+
+int tcp_send(int fd, SPLArray_char* msg, int len) {
+  //printf("sending is: (%d) %s\n", len, msg->arr);
+  return send(fd, msg->arr, len, 0);
+}
+
+int tcp_recv(int fd, SPLArray_char* msg) {
+  return recv(fd, msg->arr, msg->length, 0);
+}

@@ -1,0 +1,59 @@
+include "../../../lib/socket.spl";
+include "../../../lib/file.spl";
+
+procedure Main(arg: Array<Byte>) returns (res: Int)
+    requires byte_array(arg)
+    ensures  byte_array(arg)
+{
+    var port := new Array<Byte>(5);
+    port[0] := '4';
+    port[1] := '4';
+    port[2] := '4';
+    port[3] := '4';
+    port[4] := int2byte( 0); // \0
+    var addr := get_address4(null, port); //null should return localhost
+    free(port);
+    if (addr == null) {
+        return 1;
+    }
+
+    var fd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (fd==-1) {
+        free(addr);
+        return 2;
+    }
+
+    var sent := 0;
+
+    if (connect4(fd, addr)) {
+        
+        var content := new Array<Byte>(13);
+        content[ 0] := 'h';
+        content[ 1] := 'e';
+        content[ 2] := 'l';
+        content[ 3] := 'l';
+        content[ 4] := 'o';
+        content[ 5] := ' ';
+        content[ 6] := 'w';
+        content[ 7] := 'o';
+        content[ 8] := 'r';
+        content[ 9] := 'l';
+        content[10] := 'd';
+        content[11] := '!';
+        content[12] := int2byte( 10); // \n
+
+        sent := tcp_send(fd, content, 13);
+
+        free(content);
+    }
+    
+    var closed := gclose(fd);
+    free(addr);
+    
+    if (sent != 13) {
+        return 3;
+    } else {
+        return 0;
+    }
+
+}

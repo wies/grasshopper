@@ -1,0 +1,79 @@
+include "../../../lib/socket.spl";
+include "../../../lib/file.spl";
+include "../../../lib/fork.spl";
+
+procedure Main(arg: Array<Byte>) returns (res: Int)
+    requires byte_array(arg)
+    ensures  byte_array(arg)
+{
+    var port := new Array<Byte>(5);
+    port[0] := '4';
+    port[1] := '4';
+    port[2] := '4';
+    port[3] := '4';
+    port[4] := int2byte( 0); // \0
+    var addr := get_address4(null, port); //null should return localhost
+    free(port);
+    if (addr == null) {
+        return 1;
+    }
+
+    var fd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (fd == -1) {
+        free(addr);
+        return 2;
+    }
+    
+    var bound := bind4(fd, addr);
+    if (!bound) {
+        free(addr);
+        return 3;
+    }
+
+    var listening := glisten(fd, 10);
+    if (!listening) {
+        free(addr);
+        return 4;
+    }
+
+    var connectionFd := 0;
+    var pid := 1;
+
+    while (pid == 1 && connectionFd >= 0)
+        invariant fd >= 0
+        invariant socket_addr_4(addr)
+    {
+        connectionFd := accept4(fd, addr);
+        if (connectionFd >= 0) {
+            pid := gfork();
+            if (pid > 0) {
+                var closed := gclose(connectionFd);
+                pid := 1;
+            }
+        } // else: problem when accepting, exit the loop
+    }
+
+    if (connectionFd == -1) {
+        //problem when accepting
+        free(addr);
+        return 5;
+    } else {
+        free(addr);
+        var closed := gclose(fd);
+
+        var content := new Array<Byte>(128);
+        var received := tcp_recv(connectionFd, content);
+        while (received > 0)
+            invariant connectionFd >= 0
+            invariant byte_array(content)
+        {
+            //XXX
+            received := tcp_recv(connectionFd, content);
+        }
+
+        closed := gclose(connectionFd);
+        free(content);
+        return 0;
+    }
+
+}

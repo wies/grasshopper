@@ -2,7 +2,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include "fileio.h"
+#include "file.h"
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
