@@ -574,7 +574,7 @@ let accesses_basic_cmd = function
   | Assert sf -> accesses_spec_form sf
   | Return rc -> List.fold_left free_consts_term_acc IdSet.empty rc.return_args
   | Call cc -> 
-      List.fold_left free_consts_term_acc IdSet.empty cc.call_args
+      List.fold_left free_consts_term_acc (id_set_of_list cc.call_lhs) cc.call_args
 
 (** Smart constructors for commands *)
 

@@ -41,8 +41,8 @@ let infer_accesses prog =
         has_new, Seq (cs1, pp1)
     | Basic (Call cc, pp) ->
         let callee = find_proc prog cc.call_name in
-        let mods = modifies_proc prog callee in
-        let accs = accesses_proc prog callee in
+        let mods = IdSet.union (modifies_proc prog callee) pp.pp_modifies in
+        let accs = IdSet.union (accesses_proc prog callee) pp.pp_accesses in
         let has_new = 
           not (IdSet.subset mods pp.pp_modifies) ||  
           not (IdSet.subset accs pp.pp_accesses)
