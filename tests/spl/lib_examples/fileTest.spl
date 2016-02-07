@@ -13,18 +13,7 @@ procedure Main(arg: Array<Byte>) returns (res: Int)
     }
 
     var content := new Array<Byte>(13);
-    content[ 0] := 'h';
-    content[ 1] := 'e';
-    content[ 2] := 'l';
-    content[ 3] := 'l';
-    content[ 4] := 'o';
-    content[ 5] := ' ';
-    content[ 6] := 'w';
-    content[ 7] := 'o';
-    content[ 8] := 'r';
-    content[ 9] := 'l';
-    content[10] := 'd';
-    content[11] := '!';
+    content := "hello world!";
     content[12] := int2byte( 10); // \n
 
     if (gwrite(fd, content) != 13) {

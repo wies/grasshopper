@@ -6,11 +6,7 @@ procedure Main(arg: Array<Byte>) returns (res: Int)
     ensures  byte_array(arg)
 {
     var port := new Array<Byte>(5);
-    port[0] := '4';
-    port[1] := '4';
-    port[2] := '4';
-    port[3] := '4';
-    port[4] := int2byte( 0); // \0
+    port := "4444";
     var addr := get_address4(null, port); //null should return localhost
     free(port);
     if (addr == null) {
