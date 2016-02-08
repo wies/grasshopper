@@ -1,0 +1,159 @@
+include "../../../lib/socket.spl";
+include "../../../lib/file.spl";
+
+procedure client(filename: Array<Byte>, store: Int) 
+  returns (res: Int)
+{
+//if store is 1, then we store a file STOR
+// else we download it RETR
+//client can say PORT
+//client can say PASS for now "anonymous"
+//Client can say USER for now "dummy"
+//Client can say QUIT	 
+  var port := new Array<Byte>(5);
+  port[0] := '4';
+  port[1] := '4';
+  port[2] := '4';
+  port[3] := '4';
+  port[4] := int2byte(0); // backslash 0
+  var addr := get_address4(null, port); //null should return localhost
+  free(port);
+  if (addr == null) {
+    return 1;
+  }
+  
+  var fd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (fd == -1) {
+    free(addr);
+    return 2;
+  }
+  var sent := 0;
+
+  //we set up the command connection
+
+  if (connect4(fd, addr)) {
+  
+    var port := new Array<Byte>(5);
+    port[0] := '4';
+    port[1] := '4';
+    port[2] := '4';
+    port[3] := '0';
+    port[4] := int2byte(0);
+    var dataAddr := get_address4(null, port);
+    free(port);
+    if (dataAddr == null){
+      return 1;
+    }
+    var dataFD := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (dataFD == -1){
+      free(dataAddr);
+      return 2;
+    }
+    var bound := bind4(dataFD, dataAddr);
+    if (!bound) {
+      free(dataAddr);
+      return 3;
+    }
+    var datalistening := glisten(dataFD, 10); //we don't need a big backlog here, as the only connection should be to the server
+    if (!datalistening){
+      free(dataAddr);
+      return 4;
+    }
+    //we tell the server what port we are setting the data connection on
+    var portMsg := new Array<Byte>(10);
+    portMsg := "PORT 4440";
+    sent := tcp_send(fd, portMsg, 10);
+    free(portMsg);
+
+    //now we wait for the server to connect to us on the data connection
+    var connectedDataFD := accept4(dataFD, dataAddr);
+    //now we can receive a bunch of data
+
+    var userMsg := new Array<Byte>(12);
+    userMsg := "USER potato";
+    sent := tcp_send(fd, userMsg, 12);
+    free(userMsg);
+    
+    var passMsg := new Array<Byte>(15);
+    passMsg := "PASS anonymous";
+    sent := tcp_send(fd, passMsg, 15);
+    free(passMsg);
+
+    if (store == 1){
+      //we store the file
+      var buffer := Array<Byte>(128); //we should really do this better
+      var opened := gopen(filename,  O_CREAT | O_WRONLY);
+      if (opened < 0){
+	free(buffer);
+	return 5;
+      }
+      var read := gread(opened, buffer);
+      if (read < 0){
+	free(buffer);
+	return 6;
+      }
+      var sendMsg := new Array<Byte>(5);
+      sendMsg := "STOR";
+      sent := tcp_send(fd, sendMsg, 5);
+      free(sendMsg);
+      var sentData := tcp_send(dataFD, buffer, 128); //again, we should be better than this
+      free(buffer);
+      if (sentData < 0){
+	return 7;
+      }
+      var close(opened);
+      if (close < 0){
+	return 13;
+      }
+      
+    }
+    else {
+      var buffer := new Array<Byte>(128); //be better than this
+      var recvMsg := new Array<Byte>(5);
+      recvMsg := "RETR";
+      sent := tcp_send(fd, recvMsg);
+      free(recvMsg);
+      var recvData := tcp_recv(dataFD, buffer);
+      if (recvData < 0){
+        free(buffer);
+	return 8;
+      }
+      var saveFD := gopen(filename, O_CREAT | O_WRONLY); //here we save the file under the same name as it is stored on the server.  May overwrite other files.  
+      //need to consider that we may partially overwrite files, so maybe we should delete the previous file?
+      if (saveFD < 0){
+	free(buffer);
+	return 9;
+      }
+      var written := gwrite(saveFD, buffer);
+      if (written < 0){
+	free(buffer);
+	return 10;
+      }
+      free(buffer);
+      var close := gclose(saveFD);
+      if (close < 0){
+	return 11;
+      }
+    }
+    var quitMsg := new Array<Byte>(5);
+    quitMsg := "QUIT";
+    sent := tcp_send(fd, quitMsg);
+    free(quitMsg);
+    var closeFD := gclose(fd);
+    if (closeFD < 0){
+      return 12;
+    }
+    var closeData := gclose(dataFD);
+    if (closeData < 0){
+      return 14;
+    }
+    return 0;
+}
+
+procedure Main(args: Array<Byte>)
+  return (res: Int)
+  requires byte_array(args)
+  ensures byte_array(args)
+{
+  return res;
+}
