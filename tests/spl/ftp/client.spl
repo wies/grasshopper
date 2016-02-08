@@ -11,11 +11,7 @@ procedure client(filename: Array<Byte>, store: Int)
 //Client can say USER for now "dummy"
 //Client can say QUIT	 
   var port := new Array<Byte>(5);
-  port[0] := '4';
-  port[1] := '4';
-  port[2] := '4';
-  port[3] := '4';
-  port[4] := int2byte(0); // backslash 0
+  port = "4444";
   var addr := get_address4(null, port); //null should return localhost
   free(port);
   if (addr == null) {
@@ -34,11 +30,7 @@ procedure client(filename: Array<Byte>, store: Int)
   if (connect4(fd, addr)) {
   
     var port := new Array<Byte>(5);
-    port[0] := '4';
-    port[1] := '4';
-    port[2] := '4';
-    port[3] := '0';
-    port[4] := int2byte(0);
+    port = "4440";
     var dataAddr := get_address4(null, port);
     free(port);
     if (dataAddr == null){
@@ -70,7 +62,7 @@ procedure client(filename: Array<Byte>, store: Int)
     //now we can receive a bunch of data
 
     var userMsg := new Array<Byte>(12);
-    userMsg := "USER potato";
+    userMsg := "USER potato"; //it's anonymous login, so you can put whatever here.  It's not checked
     sent := tcp_send(fd, userMsg, 12);
     free(userMsg);
     
