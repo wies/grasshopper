@@ -43,3 +43,5 @@ int gopen (SPLArray_char* pathname, int flags);
 int gread (int fd_2, SPLArray_char* buffer);
 int greadOffset (int fd_3, SPLArray_char* buffer_1, int offset);
 int gwrite (int fd_4, SPLArray_char* buffer_2);
+int gwrite2 (int fd_4, SPLArray_char* buffer_2, int size);
+int fileSize (SPLArray_char* pathname);

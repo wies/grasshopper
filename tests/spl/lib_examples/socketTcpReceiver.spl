@@ -41,7 +41,7 @@ procedure Main(arg: Array<Byte>) returns (res: Int)
     {
         connectionFd := accept4(fd, addr);
         if (connectionFd >= 0) {
-            pid := gfork();
+            pid := fork();
             if (pid > 0) {
                 var closed := gclose(connectionFd);
                 pid := 1;

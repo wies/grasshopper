@@ -48,6 +48,23 @@ procedure gwrite(fd: Int, buffer: Array<Byte>) returns (nbr: Int)
     ensures forall i: Int :: i >= 0 && i <= buffer.length ==> buffer[i] == old(buffer[i])
     ensures nbr >= -1 && nbr <= buffer.length
 
+procedure gwrite2(fd: Int, buffer: Array<Byte>, size: Int) returns (nbr: Int)
+    requires fd >= 0
+    requires byte_array(buffer)
+    requires size >= 0 && size <= buffer.length
+    ensures byte_array(buffer)
+    ensures buffer == old(buffer)
+    ensures buffer.length == old(buffer.length)
+    ensures forall i: Int :: i >= 0 && i <= buffer.length ==> buffer[i] == old(buffer[i])
+    ensures nbr >= -1 && nbr <= size
+
 procedure gclose(fd: Int) returns (nbr: Int)
     requires fd >= 0
     ensures nbr >= -1
+
+procedure fileSize(pathname: Array<Byte>) returns (size: Int)
+    requires byte_array(pathname)
+    ensures byte_array(pathname)
+    ensures pathname == old(pathname)
+    ensures pathname.length == old(pathname.length)
+    ensures forall i: Int :: i >= 0 && i <= pathname.length ==> pathname[i] == old(pathname[i])

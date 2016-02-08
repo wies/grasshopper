@@ -5,20 +5,19 @@ procedure Main(arg: Array<Byte>) returns (res: Int)
     ensures  byte_array(arg)
 {
     if (arg.length == 0) {
-        return -1;
+        return 1;
     }
-    var fd := gopen(arg, O_CREAT | O_WRONLY);
+    var fd := gopen(arg, O_CREAT | O_WRONLY | O_TRUNC);
     if (fd == -1) {
-        return -2;
+        return 2;
     }
 
-    var content := new Array<Byte>(13);
-    content := "hello world!";
-    content[12] := int2byte( 10); // \n
+    var content := new Array<Byte>(14);
+    content := "hello world!\n";
 
-    if (gwrite(fd, content) != 13) {
+    if (gwrite2(fd, content, 13) != 13) {
         free(content);
-        return -3;
+        return 3;
     }
 
     var closed := gclose(fd);
@@ -26,7 +25,7 @@ procedure Main(arg: Array<Byte>) returns (res: Int)
     while (i < 13)
         invariant i >= 0 && i <= 13
         invariant byte_array(content)
-        invariant content.length == 13
+        invariant content.length == 14
     {
         content[i] := int2byte(0);
         i := i + 1;
@@ -34,13 +33,14 @@ procedure Main(arg: Array<Byte>) returns (res: Int)
 
     fd := gopen(arg, O_RDONLY);
     if (fd == -1) {
-        return -4;
+        free(content);
+        return 4;
     }
 
     var read := gread(fd, content);
     if (read != 13) {
         free(content);
-        return -5;
+        return 5;
     }
 
     if (content[ 0] != 'h' ||
@@ -58,7 +58,7 @@ procedure Main(arg: Array<Byte>) returns (res: Int)
         content[12] != int2byte( 10) )  // \n
     {
         free(content);
-        return -6;
+        return 6;
     }
 
     free(content);
