@@ -1,20 +1,20 @@
 include "../../../lib/socket.spl";
 include "../../../lib/file.spl";
+include "../../../lib/console.spl";
 
-procedure client(filename: Array<Byte>, store: Int) 
+procedure client(store: Int) 
   returns (res: Int)
 {
 //if store is 1, then we store a file STOR
 // else we download it RETR
-//client can say PORT
 //client can say PASS for now "anonymous"
 //Client can say USER for now "dummy"
-//Client can say QUIT	 
   var port := new Array<Byte>(5);
-  port = "4444";
+  port := "4444";
   var addr := get_address4(null, port); //null should return localhost
   free(port);
   if (addr == null) {
+    //free(addr);
     return 1;
   }
   
@@ -28,28 +28,29 @@ procedure client(filename: Array<Byte>, store: Int)
   //we set up the command connection
 
   if (connect4(fd, addr)) {
-  
+    free(addr);
     var port := new Array<Byte>(5);
-    port = "4440";
+    port := "4440";
     var dataAddr := get_address4(null, port);
     free(port);
     if (dataAddr == null){
-      return 1;
+      return 3;
     }
     var dataFD := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (dataFD == -1){
       free(dataAddr);
-      return 2;
+      return 4;
     }
     var bound := bind4(dataFD, dataAddr);
     if (!bound) {
       free(dataAddr);
-      return 3;
+      return 5;
     }
-    var datalistening := glisten(dataFD, 10); //we don't need a big backlog here, as the only connection should be to the server
+    var datalistening := glisten(dataFD, 10); 
+    //we don't need a big backlog here, as the only connection should be to the server
     if (!datalistening){
       free(dataAddr);
-      return 4;
+      return 6;
     }
     //we tell the server what port we are setting the data connection on
     var portMsg := new Array<Byte>(10);
@@ -59,7 +60,14 @@ procedure client(filename: Array<Byte>, store: Int)
 
     //now we wait for the server to connect to us on the data connection
     var connectedDataFD := accept4(dataFD, dataAddr);
+    free(dataAddr);
+    var closeData := gclose(dataFD);
+    if (closeData < 0){
+      return 7;
+    }
     //now we can receive a bunch of data
+
+	  //Note that at this point, fd is the command file descriptor, and connectedDataFD is the data file descriptor.  dataFD is the port that is ready to handle new connections.   
 
     var userMsg := new Array<Byte>(12);
     userMsg := "USER potato"; //it's anonymous login, so you can put whatever here.  It's not checked
@@ -71,81 +79,127 @@ procedure client(filename: Array<Byte>, store: Int)
     sent := tcp_send(fd, passMsg, 15);
     free(passMsg);
 
+    var filename := new Array<Byte>(100); //we decide max filename length is 100
+    var text := new Array<Byte>(20);
+    text := "input the file name";
+    var written := gputs(text);
+    if (written <= 0){
+      free(text);
+      free(filename);
+      return 8;
+    }
+    if (written > 20){
+      free(text);
+      free(filename);
+      return 9;
+    }
+    free(text);
+    var numChars := ggets(filename);
+    if (numChars > 100){
+      free(filename);
+      return 10;
+    }
+    if (numChars <= 0){
+      free(filename);
+      return 11;
+    }
+
     if (store == 1){
       //we store the file
-      var buffer := Array<Byte>(128); //we should really do this better
       var opened := gopen(filename,  O_CREAT | O_WRONLY);
       if (opened < 0){
-	free(buffer);
-	return 5;
+	      free(filename);
+	      return 12;
       }
+      var size := fileSize(filename);
+      if (size < 0){
+	      free(filename);
+        return 13;
+      }
+      var buffer := new Array<Byte>(size);
       var read := gread(opened, buffer);
       if (read < 0){
-	free(buffer);
-	return 6;
+	      free(filename);
+	      free(buffer);
+	      return 14;
       }
-      var sendMsg := new Array<Byte>(5);
-      sendMsg := "STOR";
-      sent := tcp_send(fd, sendMsg, 5);
+      var commandSize := filename.length + 6;
+      var sendMsg := new Array<Byte>(commandSize);
+      sendMsg := "STOR "; //we should add the file name to this
+      sent := tcp_send(fd, sendMsg, commandSize);
       free(sendMsg);
-      var sentData := tcp_send(dataFD, buffer, 128); //again, we should be better than this
+      var sentData := tcp_send(connectedDataFD, buffer, size); 
       free(buffer);
+      free(filename);
       if (sentData < 0){
-	return 7;
+	      return 15;
       }
-      var close(opened);
+      var close := gclose(opened);
       if (close < 0){
-	return 13;
+	      return 16;
       }
       
     }
     else {
-      var buffer := new Array<Byte>(128); //be better than this
-      var recvMsg := new Array<Byte>(5);
-      recvMsg := "RETR";
-      sent := tcp_send(fd, recvMsg);
+      var sizeMsg := new Array<Byte>(5);
+      sizeMsg := "SIZE";
+      sent := tcp_send(fd, sizeMsg, 5);
+      var sizeBuff := new Array<Byte>(1);
+      var recvData := tcp_recv(fd, sizeBuff); //response gets sent on command buffer
+      var size := byte2int(sizeBuff[0]);
+      var buffer := new Array<Byte>(size);
+      var recvMsgSize := filename.length + 6;
+      var recvMsg := new Array<Byte>(recvMsgSize);
+      recvMsg := "RETR"; //we need to tack the file name onto this
+      sent := tcp_send(fd, recvMsg, recvMsgSize);
       free(recvMsg);
-      var recvData := tcp_recv(dataFD, buffer);
+      recvData := tcp_recv(connectedDataFD, buffer);
       if (recvData < 0){
         free(buffer);
-	return 8;
+        free(filename);
+	      return 17;
       }
-      var saveFD := gopen(filename, O_CREAT | O_WRONLY); //here we save the file under the same name as it is stored on the server.  May overwrite other files.  
-      //need to consider that we may partially overwrite files, so maybe we should delete the previous file?
+      var saveFD := gopen(filename, O_CREAT | O_WRONLY | O_TRUNC); //here we save the file under the same name as it is stored on the server.  We use O_TRUNC to wipe the file before we overwrite it  
+      free(filename);
       if (saveFD < 0){
-	free(buffer);
-	return 9;
+	      free(buffer);
+	      return 18;
       }
       var written := gwrite(saveFD, buffer);
       if (written < 0){
-	free(buffer);
-	return 10;
+	      free(buffer);
+	      return 19;
       }
       free(buffer);
       var close := gclose(saveFD);
       if (close < 0){
-	return 11;
+	      return 20;
       }
+    }
+    var closeConn := gclose(connectedDataFD);
+    if (closeConn < 0){
+      return 22;
     }
     var quitMsg := new Array<Byte>(5);
     quitMsg := "QUIT";
-    sent := tcp_send(fd, quitMsg);
+    sent := tcp_send(fd, quitMsg, 5);
     free(quitMsg);
-    var closeFD := gclose(fd);
-    if (closeFD < 0){
-      return 12;
-    }
-    var closeData := gclose(dataFD);
-    if (closeData < 0){
-      return 14;
-    }
-    return 0;
+  }
+  else {
+    free(addr);
+  }
+  //free(addr);
+  var closeFD := gclose(fd);
+  if (closeFD < 0){
+    return 21;
+  }
+  return 0;
 }
-
-procedure Main(args: Array<Byte>)
-  return (res: Int)
-  requires byte_array(args)
-  ensures byte_array(args)
-{
-  return res;
-}
+  //procedure Main(args: Array<Byte>)
+      //returns (res: Int)
+      //requires byte_array(args)
+      //ensures byte_array(args)
+      //{
+    //res := client(args);
+    //return res;
+    //}
