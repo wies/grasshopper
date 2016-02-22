@@ -1,6 +1,7 @@
 include "../../../lib/socket.spl";
 include "../../../lib/file.spl";
 include "../../../lib/console.spl";
+include "../array/string.spl";
 
 procedure client(store: Int) 
   returns (res: Int)
@@ -124,8 +125,10 @@ procedure client(store: Int)
 	      return 14;
       }
       var commandSize := filename.length + 6;
+      var strMsg := new Array<Byte>(6);
+      strMsg := "STOR ";
       var sendMsg := new Array<Byte>(commandSize);
-      sendMsg := "STOR "; //we should add the file name to this
+      sendMsg := strcat(strMsg, filename);
       sent := tcp_send(fd, sendMsg, commandSize);
       free(sendMsg);
       var sentData := tcp_send(connectedDataFD, buffer, size); 
@@ -150,7 +153,10 @@ procedure client(store: Int)
       var buffer := new Array<Byte>(size);
       var recvMsgSize := filename.length + 6;
       var recvMsg := new Array<Byte>(recvMsgSize);
-      recvMsg := "RETR"; //we need to tack the file name onto this
+      var retStr := new Array<Byte>(6);
+      retStr := "RETR ";
+      recvMsg := strcat(retStr, filename);
+      free(retStr);
       sent := tcp_send(fd, recvMsg, recvMsgSize);
       free(recvMsg);
       recvData := tcp_recv(connectedDataFD, buffer);
