@@ -1,207 +1,255 @@
-//include "../../../lib/socket.spl";
-//include "../../../lib/file.spl";
-//include "../../../lib/console.spl";
+include "../../../lib/socket.spl";
+include "../../../lib/file.spl";
+include "../../../lib/console.spl";
 include "../array/string.spl";
 
-include "../jennylibtest/socket.spl";
-include "../jennylibtest/file.spl";
-include "../jennylibtest/console.spl";
+procedure connectTo(ip: Array<Byte>, port: Array<Byte>)
+  returns (fd: Int)
+  requires (ip == null || byte_array(ip)) &*& byte_array(port)
+  ensures (ip == null || byte_array(ip)) &*& byte_array(port)
+  ensures ip == old(ip) && port == old(port)
+{
+  var addr := get_address4(ip, port); //null should return localhost
+  if (addr == null) {
+    return -1;
+  }
+  fd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (connect4(fd, addr)) {
+    free(addr);
+    return fd;
+  } else {
+    free(addr);
+    var closing := gclose(fd);
+    return -1;
+  }
+}
+
+procedure setupDataConnection(cmdFd: Int, port: Array<Byte>)
+  returns (connectedDataFD: Int)
+  requires cmdFd >= 0
+  requires byte_array(port)
+  ensures byte_array(port)
+  ensures port == old(port)
+{
+  var dataAddr := get_address4(null, port);
+  if (dataAddr == null){
+    return -1;
+  }
+  var dataFD := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (dataFD == -1){
+    free(dataAddr);
+    return -1;
+  }
+  var bound := bind4(dataFD, dataAddr);
+  if (!bound) {
+    free(dataAddr);
+    return -1;
+  }
+  var datalistening := glisten(dataFD, 10);
+  //we don't need a big backlog here, as the only connection should be to the server
+  if (!datalistening){
+    free(dataAddr);
+    return -1;
+  }
+  //we tell the server what port we are setting the data connection on
+  var portMsg := new Array<Byte>(6 + port.length);
+  portMsg := "PORT ";
+  var copied := strcat(port, portMsg);
+  var sent := tcp_send(cmdFd, portMsg, portMsg.length);
+  free(portMsg);
+  if (sent != portMsg.length) {
+    return -1;
+  }
+
+  //now we wait for the server to connect to us on the data connection
+  connectedDataFD := accept4(dataFD, dataAddr);
+  free(dataAddr);
+  var closeData := gclose(dataFD);
+  return connectedDataFD;
+}
+
+procedure authenticate(cmdFd: Int)
+  returns (success: Bool)
+  requires cmdFd >= 0
+{
+  var userMsg := new Array<Byte>(12);
+  userMsg := "USER potato"; //it's anonymous login, so you can put whatever here.  It's not checked
+  var sent := tcp_send(cmdFd, userMsg, 12);
+  free(userMsg);
+  //TODO receive confirmation by the server ?
+  
+  var passMsg := new Array<Byte>(15);
+  passMsg := "PASS anonymous";
+  sent := tcp_send(cmdFd, passMsg, 15);
+  free(passMsg);
+  //TODO receive confirmation by the server ?
+
+  return true;
+}
+
+procedure askFilename()
+  returns (fn: Array<Byte>)
+  ensures fn == null || byte_array(fn)
+{
+  var filename := new Array<Byte>(100); //we decide max filename length is 100
+
+  var text := new Array<Byte>(24);
+  text := "input the file name:\\n";
+  var written := gputs(text);
+  if (written != strlen(text)) {
+    free(text);
+    free(filename);
+    return null;
+  }
+  free(text);
+  var numChars := ggets(filename);
+  if (numChars >= 100 || numChars <= 0){
+    free(filename);
+    return null;
+  }
+
+  return filename;
+}
+
+procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
+  returns (success: Bool)
+  requires cmdFd >= 0 && dataFD >= 0
+  requires byte_array(filename)
+  ensures byte_array(filename)
+{
+  var size := fileSize(filename);
+  if (size < 0){
+    return false;
+  }
+  var opened := gopen(filename, O_CREAT | O_WRONLY);
+  if (opened < 0){
+    return false;
+  }
+  var buffer := new Array<Byte>(size);
+  var read := gread(opened, buffer);
+  if (read < 0){
+    free(buffer);
+    return false;
+  }
+  var commandSize := filename.length + 6;
+  var sendMsg := new Array<Byte>(commandSize);
+  sendMsg := "STOR ";
+  var copied := strcat(filename, sendMsg);
+  var sent := tcp_send(cmdFd, sendMsg, commandSize);
+  free(sendMsg);
+  var sentData := tcp_send(dataFD, buffer, size); 
+  free(buffer);
+  var close := gclose(opened);
+  if (sentData == size) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
+  returns (success: Bool)
+  requires cmdFd >= 0 && dataFD >= 0
+  requires byte_array(filename)
+  ensures byte_array(filename)
+{
+  var sizeMsg := new Array<Byte>(5);
+  sizeMsg := "SIZE";
+  var sent := tcp_send(cmdFd, sizeMsg, 5);
+  free(sizeMsg); 
+  var sizeBuff := new Array<Byte>(1);
+  var recvData := tcp_recv(cmdFd, sizeBuff); //response gets sent on command buffer
+  var size := byte2int(sizeBuff[0]);
+  free(sizeBuff);
+  var buffer := new Array<Byte>(size);
+  var recvMsgSize := filename.length + 6;
+  var recvMsg := new Array<Byte>(recvMsgSize);
+  recvMsg := "RETR ";
+  var copied := strcat(recvMsg, filename);
+  sent := tcp_send(cmdFd, recvMsg, recvMsgSize);
+  free(recvMsg);
+  recvData := tcp_recv(dataFD, buffer);
+  if (recvData < 0){
+    free(buffer);
+    return false;
+  }
+  var saveFD := gopen(filename, O_CREAT | O_WRONLY | O_TRUNC); //here we save the file under the same name as it is stored on the server.  We use O_TRUNC to wipe the file before we overwrite it  
+  if (saveFD < 0){
+    free(buffer);
+    return false;
+  }
+  var written := gwrite(saveFD, buffer);
+  free(buffer);
+  if (written < 0){
+    return false;
+  }
+  var close := gclose(saveFD);
+  return true;
+}
 
 procedure client(store: Int) 
   returns (res: Int)
+  requires emp;
+  ensures  emp;
 {
 //if store is 1, then we store a file STOR
 // else we download it RETR
 //client can say PASS for now "anonymous"
 //Client can say USER for now "dummy"
+
   var port := new Array<Byte>(5);
   port := "4444";
-  var addr := get_address4(null, port); //null should return localhost
-  free(port);
-  if (addr == null) {
-    //free(addr);
-    return 1;
-  }
-  
-  var fd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  var fd := connectTo(null, port);
   if (fd == -1) {
-    free(addr);
+    free(port);
     return 2;
   }
-  var sent := 0;
 
   //we set up the command connection
-
-  if (connect4(fd, addr)) {
-    free(addr);
-    var port := new Array<Byte>(5);
-    port := "4440";
-    var dataAddr := get_address4(null, port);
+  port := "4440";
+  var connectedDataFD := setupDataConnection(fd, port);
+  if (connectedDataFD == -1) {
     free(port);
-    if (dataAddr == null){
-      return 3;
-    }
-    var dataFD := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (dataFD == -1){
-      free(dataAddr);
-      return 4;
-    }
-    var bound := bind4(dataFD, dataAddr);
-    if (!bound) {
-      free(dataAddr);
-      return 5;
-    }
-    var datalistening := glisten(dataFD, 10); 
-    //we don't need a big backlog here, as the only connection should be to the server
-    if (!datalistening){
-      free(dataAddr);
-      return 6;
-    }
-    //we tell the server what port we are setting the data connection on
-    var portMsg := new Array<Byte>(10);
-    portMsg := "PORT 4440";
-    sent := tcp_send(fd, portMsg, 10);
-    free(portMsg);
-
-    //now we wait for the server to connect to us on the data connection
-    var connectedDataFD := accept4(dataFD, dataAddr);
-    free(dataAddr);
-    var closeData := gclose(dataFD);
-    if (closeData < 0){
-      return 7;
-    }
-    //now we can receive a bunch of data
-
-	  //Note that at this point, fd is the command file descriptor, and connectedDataFD is the data file descriptor.  dataFD is the port that is ready to handle new connections.   
-
-    var userMsg := new Array<Byte>(12);
-    userMsg := "USER potato"; //it's anonymous login, so you can put whatever here.  It's not checked
-    sent := tcp_send(fd, userMsg, 12);
-    free(userMsg);
-    
-    var passMsg := new Array<Byte>(15);
-    passMsg := "PASS anonymous";
-    sent := tcp_send(fd, passMsg, 15);
-    free(passMsg);
-
-    var filename := new Array<Byte>(100); //we decide max filename length is 100
-    var text := new Array<Byte>(20);
-    text := "input the file name";
-    var written := gputs(text);
-    if (written <= 0){
-      free(text);
-      free(filename);
-      return 8;
-    }
-    if (written > 20){
-      free(text);
-      free(filename);
-      return 9;
-    }
-    free(text);
-    var numChars := ggets(filename);
-    if (numChars > 100){
-      free(filename);
-      return 10;
-    }
-    if (numChars <= 0){
-      free(filename);
-      return 11;
-    }
-
-    if (store == 1){
-      //we store the file
-      var opened := gopen(filename,  O_CREAT | O_WRONLY);
-      if (opened < 0){
-	      free(filename);
-	      return 12;
-      }
-      var size := fileSize(filename);
-      if (size < 0){
-	      free(filename);
-        return 13;
-      }
-      var buffer := new Array<Byte>(size);
-      var read := gread(opened, buffer);
-      if (read < 0){
-	      free(filename);
-	      free(buffer);
-	      return 14;
-      }
-      var commandSize := filename.length + 6;
-      var strMsg := new Array<Byte>(6);
-      strMsg := "STOR ";
-      var sendMsg := new Array<Byte>(commandSize);
-      sendMsg := strcat(strMsg, filename);
-      sent := tcp_send(fd, sendMsg, commandSize);
-      free(strMsg);
-      free(sendMsg);
-      var sentData := tcp_send(connectedDataFD, buffer, size); 
-      free(buffer);
-      free(filename);
-      if (sentData < 0){
-	      return 15;
-      }
-      var close := gclose(opened);
-      if (close < 0){
-	      return 16;
-      }
-      
-    }
-    else {
-      var sizeMsg := new Array<Byte>(5);
-      sizeMsg := "SIZE";
-      sent := tcp_send(fd, sizeMsg, 5);
-      free(sizeMsg); 
-      var sizeBuff := new Array<Byte>(1);
-      var recvData := tcp_recv(fd, sizeBuff); //response gets sent on command buffer
-      var size := byte2int(sizeBuff[0]);
-      free(sizeBuff);
-      var buffer := new Array<Byte>(size);
-      var recvMsgSize := filename.length + 6;
-      var recvMsg := new Array<Byte>(recvMsgSize);
-      var retStr := new Array<Byte>(6);
-      retStr := "RETR ";
-      recvMsg := strcat(retStr, filename);
-      free(retStr);
-      sent := tcp_send(fd, recvMsg, recvMsgSize);
-      free(recvMsg);
-      recvData := tcp_recv(connectedDataFD, buffer);
-      if (recvData < 0){
-        free(buffer);
-        free(filename);
-	      return 17;
-      }
-      var saveFD := gopen(filename, O_CREAT | O_WRONLY | O_TRUNC); //here we save the file under the same name as it is stored on the server.  We use O_TRUNC to wipe the file before we overwrite it  
-      free(filename);
-      if (saveFD < 0){
-	      free(buffer);
-	      return 18;
-      }
-      var written := gwrite(saveFD, buffer);
-      if (written < 0){
-	      free(buffer);
-	      return 19;
-      }
-      free(buffer);
-      var close := gclose(saveFD);
-      if (close < 0){
-	      return 20;
-      }
-    }
-    var closeConn := gclose(connectedDataFD);
-    if (closeConn < 0){
-      return 22;
-    }
-    var quitMsg := new Array<Byte>(5);
-    quitMsg := "QUIT";
-    sent := tcp_send(fd, quitMsg, 5);
-    free(quitMsg);
+    return 3;
   }
-  else {
-    free(addr);
+  //now we can receive a bunch of data
+
+  //Note that at this point:
+  //-fd is the command file descriptor
+  //-connectedDataFD is the data file descriptor.
+
+  var authenticated := authenticate(fd);
+  if (!authenticated) {
+    free(port);
+    return 4;
   }
-  //free(addr);
+
+  var filename := askFilename();
+  
+  if (filename == null) {
+    return 5;
+  }
+
+  var success := false;
+  if (store == 1){
+    //we store the file
+    success := uploadFile(fd, connectedDataFD, filename);
+  } else {
+    //we retrieve the file
+    success := downloadFile(fd, connectedDataFD, filename);
+  }
+  free(filename);
+  if (!success) {
+    return 6;
+  }
+  var closeConn := gclose(connectedDataFD);
+  if (closeConn < 0){
+    return 22;
+  }
+  var quitMsg := new Array<Byte>(5);
+  quitMsg := "QUIT";
+  var sent := tcp_send(fd, quitMsg, 5);
+  free(quitMsg);
   var closeFD := gclose(fd);
   if (closeFD < 0){
     return 21;
@@ -212,14 +260,12 @@ procedure client(store: Int)
 procedure Main(args: Array<Byte>)
   returns (res: Int)
   requires byte_array(args)
-  ensures byte_array(args)
+  ensures  byte_array(args)
 {
   if (args.length > 1){
     res := client(0);
-  }
-  else {
-    var tmp := byte2int(args[0]);
-    res := client(tmp);
+  } else {
+    res := client(1);
   }
   return res;
 }

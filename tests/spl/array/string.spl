@@ -133,7 +133,8 @@ procedure concat(str1: Array<Byte>, str2: Array<Byte>)
   return copy;
 }
 
-procedure strcat(str1: Array<Byte>, str2: Array<Byte>)
+//TODO stronger spec
+procedure strconcat(str1: Array<Byte>, str2: Array<Byte>)
   returns (res: Array<Byte>)
   requires byte_array(str1) &*& byte_array(str2)
   requires str1.length + str2.length >= 0
@@ -170,4 +171,37 @@ procedure strcat(str1: Array<Byte>, str2: Array<Byte>)
   }
   return copy;
 
+}
+
+//TODO stronger spec
+procedure strcat(str1: Array<Byte>, str2: Array<Byte>)
+  returns (res: Int)
+  requires byte_array(str1) &*& byte_array(str2)
+  ensures  byte_array(str1) &*& byte_array(str2)
+  ensures  0 <= res && res <= str1.length
+{
+  var l1 := strlen(str1);
+  var l2 := strlen(str2);
+  var copy_size := str2.length - l2;
+  if (copy_size > l1) {
+    copy_size := l1;
+  }
+  var i := 0;
+  while(i < copy_size)
+    invariant byte_array(str1) &*& byte_array(str2)
+    invariant 0 <= copy_size
+    invariant 0 <= i && i <= copy_size
+    invariant copy_size <= str1.length
+    invariant l2 + copy_size <= str2.length
+    //XXX next the two lines needed to avoid overflow (currently depends on max array size)
+    invariant l2 + copy_size >= 0
+    invariant l2 >= 0
+  {
+    str2[i+l2] := str1[i];
+    i := i + 1;
+  }
+  if (l2 + copy_size < str2.length) {
+    str2[l2 + copy_size] := int2byte(0);
+  }
+  return copy_size;
 }
