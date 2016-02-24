@@ -145,7 +145,9 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   var copied := strcat(filename, sendMsg);
   var sent := tcp_send(cmdFd, sendMsg, commandSize);
   free(sendMsg);
-  var sentData := tcp_send(dataFD, buffer, size); 
+  //Todo: get confirmation from the server
+  var sentData := tcp_send(dataFD, buffer, size);
+  //Todo: get confirmation from the server
   free(buffer);
   var close := gclose(opened);
   if (sentData == size) {
@@ -164,6 +166,7 @@ procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   var sizeMsg := new Array<Byte>(5);
   sizeMsg := "SIZE";
   var sent := tcp_send(cmdFd, sizeMsg, 5);
+  //We get confirmation from the server when it sends us the size back.  
   free(sizeMsg); 
   var sizeBuff := new Array<Byte>(1);
   var recvData := tcp_recv(cmdFd, sizeBuff); //response gets sent on command buffer
@@ -175,6 +178,7 @@ procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   recvMsg := "RETR ";
   var copied := strcat(recvMsg, filename);
   sent := tcp_send(cmdFd, recvMsg, recvMsgSize);
+  //Todo: get response (maybe)
   free(recvMsg);
   recvData := tcp_recv(dataFD, buffer);
   if (recvData < 0){
@@ -257,6 +261,7 @@ procedure client(store: Int)
   quitMsg := "QUIT";
   var sent := tcp_send(fd, quitMsg, 5);
   free(quitMsg);
+  //we can check for the correct quitting response or not.  
   var closeFD := gclose(fd);
   if (closeFD < 0){
     return 21;
