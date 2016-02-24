@@ -43,3 +43,6 @@ let footprint_declaration_error id pos =
 let invalid_nested_proc_call_error id pos =
   ProgError.error pos 
     ("Procedure " ^ GrassUtil.name id ^ " has more than one return value.")
+
+let return_in_loop_error pos =
+  ProgError.error pos "A procedure cannot return from within a loop."
