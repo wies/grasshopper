@@ -45,10 +45,17 @@ let parse_cu parse_fct file =
   parse_fct lexbuf
 
 (** normalize the filenames to avoid double inclusion *)
-let normalizeFilename file_name =
+let normalizeFilename base_dir file_name =
+  let fullname =
+    if Filename.is_relative file_name then
+      base_dir ^ Filename.dir_sep ^ file_name
+    else
+      file_name
+  in
   let sep = Str.regexp_string Filename.dir_sep in
-  let parts = Str.split_delim sep file_name in
+  let parts = Str.split_delim sep fullname in
   let rec simplify parts = match parts with
+    | "." :: xs -> simplify xs
     | x :: ".." :: xs when x <> ".." -> simplify xs
     | x :: xs -> x :: (simplify xs)
     | [] -> []
@@ -60,8 +67,8 @@ let normalizeFilename file_name =
 let parse_spl_program main_file =
   let rec parse parsed to_parse spl_prog =
     match to_parse with
-    | (file, pos) :: to_parse1 ->
-        let file = normalizeFilename file in
+    | (dir, file, pos) :: to_parse1 ->
+        let file = normalizeFilename dir file in
         if not (StringSet.mem file parsed) then
           begin
             Debug.debug (fun () -> "parsing: " ^ file ^ "\n");
@@ -71,17 +78,13 @@ let parse_spl_program main_file =
               with Sys_error _ ->
                 ProgError.error pos ("Could not find file " ^ file)
             in
-            let dir = 
-              if file = main_file
-              then !Config.base_dir
-              else Filename.dirname file 
-            in
             let parsed1 = StringSet.add file parsed in
+            let dir2 = Filename.dirname file in
             let to_parse2 =
-              List.fold_left (fun acc (incl, pos) -> 
-                let file = dir ^ Filename.dir_sep ^ incl in
-                if StringSet.mem file parsed1 then acc else (file, pos) :: acc)
-                to_parse1 cu.SplSyntax.includes 
+              List.fold_left
+                (fun acc (incl, pos) -> (dir2, incl, pos) :: acc)
+                to_parse1
+                cu.SplSyntax.includes 
             in
             parse parsed1 to_parse2 (SplSyntax.merge_spl_programs spl_prog cu)
           end
@@ -92,10 +95,15 @@ let parse_spl_program main_file =
           end
     | [] -> spl_prog
   in
+  let main_dir = 
+    if !Config.base_dir = ""
+    then Unix.getcwd ()
+    else normalizeFilename (Unix.getcwd ()) !Config.base_dir
+  in
   let prog =
     parse
       StringSet.empty
-      [(main_file, GrassUtil.dummy_position)]
+      [(main_dir, main_file, GrassUtil.dummy_position)]
       SplSyntax.empty_spl_program
   in
   SplChecker.check (SplSyntax.add_alloc_decl prog)
@@ -165,8 +173,6 @@ let _ =
   let main_file = ref "" in
   let set_main_file s =
     main_file := s;
-    if !Config.base_dir = "" 
-    then Config.base_dir := Filename.dirname s
   in
   let start_time = current_time () in
   try
