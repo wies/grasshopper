@@ -1,7 +1,11 @@
-include "../../../lib/socket.spl";
-include "../../../lib/file.spl";
-include "../../../lib/console.spl";
+//include "../../../lib/socket.spl";
+//include "../../../lib/file.spl";
+//include "../../../lib/console.spl";
 include "../array/string.spl";
+
+include "../jennylibtest/socket.spl";
+include "../jennylibtest/file.spl";
+include "../jennylibtest/console.spl";
 
 procedure client(store: Int) 
   returns (res: Int)
@@ -130,6 +134,7 @@ procedure client(store: Int)
       var sendMsg := new Array<Byte>(commandSize);
       sendMsg := strcat(strMsg, filename);
       sent := tcp_send(fd, sendMsg, commandSize);
+      free(strMsg);
       free(sendMsg);
       var sentData := tcp_send(connectedDataFD, buffer, size); 
       free(buffer);
@@ -147,9 +152,11 @@ procedure client(store: Int)
       var sizeMsg := new Array<Byte>(5);
       sizeMsg := "SIZE";
       sent := tcp_send(fd, sizeMsg, 5);
+      free(sizeMsg); 
       var sizeBuff := new Array<Byte>(1);
       var recvData := tcp_recv(fd, sizeBuff); //response gets sent on command buffer
       var size := byte2int(sizeBuff[0]);
+      free(sizeBuff);
       var buffer := new Array<Byte>(size);
       var recvMsgSize := filename.length + 6;
       var recvMsg := new Array<Byte>(recvMsgSize);
@@ -201,11 +208,18 @@ procedure client(store: Int)
   }
   return 0;
 }
-  //procedure Main(args: Array<Byte>)
-      //returns (res: Int)
-      //requires byte_array(args)
-      //ensures byte_array(args)
-      //{
-    //res := client(args);
-    //return res;
-    //}
+
+procedure Main(args: Array<Byte>)
+  returns (res: Int)
+  requires byte_array(args)
+  ensures byte_array(args)
+{
+  if (args.length > 1){
+    res := client(0);
+  }
+  else {
+    var tmp := byte2int(args[0]);
+    res := client(tmp);
+  }
+  return res;
+}
