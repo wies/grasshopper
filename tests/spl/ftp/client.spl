@@ -7,7 +7,9 @@ procedure connectTo(ip: Array<Byte>, port: Array<Byte>)
   returns (fd: Int)
   requires (ip == null || byte_array(ip)) &*& byte_array(port)
   ensures (ip == null || byte_array(ip)) &*& byte_array(port)
-  ensures ip == old(ip) && port == old(port)
+  ensures ip == old(ip) && port == old(port) && port.length == old(port.length)
+  ensures ip == null || ip.length == old(ip.length)
+  ensures fd >= -1
 {
   var addr := get_address4(ip, port); //null should return localhost
   if (addr == null) {
@@ -29,7 +31,8 @@ procedure setupDataConnection(cmdFd: Int, port: Array<Byte>)
   requires cmdFd >= 0
   requires byte_array(port)
   ensures byte_array(port)
-  ensures port == old(port)
+  ensures port == old(port) && port.length == old(port.length)
+  ensures connectedDataFD >= -1
 {
   var dataAddr := get_address4(null, port);
   if (dataAddr == null){
@@ -208,8 +211,8 @@ procedure client(store: Int)
   //we set up the command connection
   port := "4440";
   var connectedDataFD := setupDataConnection(fd, port);
+  free(port);
   if (connectedDataFD == -1) {
-    free(port);
     return 3;
   }
   //now we can receive a bunch of data
@@ -220,7 +223,6 @@ procedure client(store: Int)
 
   var authenticated := authenticate(fd);
   if (!authenticated) {
-    free(port);
     return 4;
   }
 
