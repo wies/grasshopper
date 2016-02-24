@@ -14,26 +14,35 @@ struct Node {
 
 function arrayOwner(a: Array<Node>, FP: Set<Node>) returns (x: Node) { true }
 
-function segment_footprint(x: Node, y: Node) returns (FP0: Set<Loc<Node>>, FP1: Set<Loc<Array<Node>>>, FP2: Set<Loc<ArrayCell<Node>>>) {
+function segment_footprint_0(x: Node, y: Node) returns (FP0: Set<Node>) {
   // FP0
-  (forall z: Loc<Node> :: z in FP0 == (Btwn(next[0], x, z, y) && z != y)) &&
-  // FP1, FP2 one way
-  (forall z: Loc<Node> ::
+  (forall z: Node :: z in FP0 == (Btwn(next[0], x, z, y) && z != y))
+}
+
+function segment_footprint_1(x: Node, y: Node, FP0: Set<Node>) returns (FP1: Set<Array<Node>>) {
+  // FP1 one way
+  (forall z: Node ::
       z in FP0
     ==>
-      ( z.next in FP1 &&
-        (forall i: Int :: i >= 0 && i < z.next.length ==> z.next.cells[i] in FP2) )
+      ( z.next in FP1)
   ) &&
   // FP1 return
   (forall a: Array<Node>:: a in FP1 ==> arrayOwner(a, FP0) in FP0 && arrayOwner(a, FP0).next == a) &&
-  (forall a: Array<Node>:: a !in FP1 ==> arrayOwner(a, FP0) == null) &&
-  // FP2 return
-  (forall c: ArrayCell<Node>:: c in FP2 ==> c.array in FP1 && c.index > 0 && c.index <= c.array.length) && 
-  // disjointness constraints
-  (forall a: Node, b: Node:: a in FP0 && b in FP0 && a != b ==> a.next != b.next)
+  (forall a: Array<Node>:: a !in FP1 ==> arrayOwner(a, FP0) == null)
 }
 
-predicate skiplist_hierarchy(height: Int, FP: Set<Loc<Node>>) {
+function segment_footprint_2(x: Node, y: Node, FP0: Set<Node>, FP1: Set<Array<Node>>) returns (FP2: Set<ArrayCell<Node>>) {
+  // FP2 one way
+  (forall z: Node ::
+      z in FP0
+    ==>
+      (forall i: Int :: i >= 0 && i < z.next.length ==> z.next.cells[i] in FP2)
+  ) &&
+  // FP2 return
+  (forall c: ArrayCell<Node>:: c in FP2 ==> c.array in FP1 && c.index > 0 && c.index <= c.array.length)
+}
+
+predicate skiplist_hierarchy(height: Int, FP: Set<Node>) {
   (forall h1: Int, h2: Int :: 
    0 <= h1 && h1 <= h2 && h2 <= height ==> 
    (forall x: Node, y: Node, z: Node ::
@@ -41,7 +50,7 @@ predicate skiplist_hierarchy(height: Int, FP: Set<Loc<Node>>) {
     Btwn(next[h1], x, y, z)))
 }
 
-predicate skiplist_sorted(x: Node, FP: Set<Loc<Node>>) {
+predicate skiplist_sorted(x: Node, FP: Set<Node>) {
   forall y: Node, z: Node :: 
     y in FP && z in FP && Btwn(next[0], x, y, z) ==> y.data <= z.data
 }
@@ -50,7 +59,7 @@ predicate skiplist_reach_null(height: Int, x: Node) {
   forall h: Int :: 0 <= h && h <= height ==> Btwn(next[h], x, null, null)
 }
 
-predicate skiplist(l: SkipList)( FP0: Set<Loc<SkipList>>, FP1: Set<Loc<Node>>, FP2: Set<Loc<Array<Node>>>, FP3: Set<Loc<ArrayCell<Node>>>) {
+predicate skiplist(l: SkipList)( FP0: Set<SkipList>, FP1: Set<Node>, FP2: Set<Array<Node>>, FP3: Set<ArrayCell<Node>>) {
   0 < l.max_height &&
   0 <= l.height && l.height < l.max_height && 
   skiplist_reach_null(l.height, l.head) &&
@@ -58,7 +67,11 @@ predicate skiplist(l: SkipList)( FP0: Set<Loc<SkipList>>, FP1: Set<Loc<Node>>, F
   skiplist_sorted(l.head, FP1) &&
   sub_skiplist(l.head, null, l.height, FP1) && 
   Btwn(next[0], l.head, null, null) && 
-  FP0 == Set<Loc<SkipList>>(l) &&
-  segment_footprint(l.head, null) == (FP1, FP2, FP3)
+  FP0 == Set<SkipList>(l) &&
+  segment_footprint_0(l.head, null) == FP1 &&
+  segment_footprint_1(l.head, null, FP1) == FP2 &&
+  segment_footprint_2(l.head, null, FP1, FP2) == FP3 &&
+  // disjointness constraints
+  (forall a: Node, b: Node:: a in FP1 && b in FP1 && a != b ==> a.next != b.next)
 }
 
