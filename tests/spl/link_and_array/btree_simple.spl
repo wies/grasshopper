@@ -4,11 +4,14 @@
 //  full source at http://opendatastructures.org/ods-java.tgz
 
 struct Node {
-  var keys: Array<Int>; /** The keys stored in this block */
-  var children: Array<Node>; /** The indicies of the children of this block (if any) */
-  /* NOTE: adding these two */
+  var keys: Array<Int>;
+  var children: Array<Node>;
+
+  /* NOTE: adding these */
   var num_keys: Int;
+  var num_children: Int;
   var ghost parent: Node;
+  var ghost is_leaf: Bool;
 }
 
 struct BTree {
@@ -95,40 +98,54 @@ predicate btree(b: BTree)(FP_B: Set<BTree>, FP_N: Set<Node>, FP_A_I: Set<Array<I
   b.B >= 2 &&
   /* keys and children arrays are of size 2B */
   (forall n: Node :: n in FP_N ==> n.children.length == 2 * b.B && n.keys.length == 2 * b.B) &&
-  /* num_keys is at least (root ? 1 : B - 1) */
-  (forall n: Node :: n in FP_N ==> (n == b.root && 2 <= n.num_keys || b.B - 1 <= n.num_keys) && n.num_keys <= n.keys.length) &&
-  /* children[] has num_keys + 1 non-null elements */
-  (forall n: Node, i: Int :: n in FP_N && 0 <= i && i < n.children.length ==>
-   (i <= n.num_keys && n.children[i] != null) || (i > n.num_keys && n.children[i] == null)
-   ) &&
-  /* The keys of every node are sorted */
-  (forall n: Node :: n in FP_N ==> sorted_int_arrayseg(n.keys, 0, n.keys.length, int_arrayseg_fp(n.keys, 0, n.keys.length))) &&
+
+  /* For structural verification: number of children */
+  (forall n: Node :: n in FP_N ==> 0 <= n.num_children && n.num_children <= n.children.length) &&
+  (forall n: Node, i: Int :: n in FP_N && 0 <= i && i < n.num_children ==> n.children[i] != null) &&
+  (forall n: Node, i: Int :: n in FP_N && n.num_children <= i && i <= n.children.length ==> n.children[i] == null) &&
+
+  /* Every node has a certain number of keys TODO refine */
+  (forall n: Node :: n in FP_N ==> 0 <= n.num_keys && n.num_keys <= n.keys.length) &&
+  /* TODO The keys of every node are sorted */
   true
 }
 
 /* -------------------- Actual Implementation -------------------- */
 
-procedure find(b: BTree, x: Int) returns (res: Node)
+/* Find the smallest value >= x in this BTree */
+procedure find(b: BTree, x: Int) returns (res: Int)
   requires btree(b)
   ensures btree(b)
 {
+  var z: Int;
   var n := b.root;
-  var z: Node := null;
   var flag := false;
   while (n != null && !flag)
-    invariant btree(b)
+    invariant acc(n) -** btree(b)
   {
-    var i: Int := findIt(n.keys, x, 0, n.keys.length);
-    if (n.keys[i] == x)
-      flag := true;
-    if (n.keys[i] != n.num_keys)
-      z := n.children[i];
-    n := n.children[i];
+    var i := findIt(n.keys, x, 0, n.num_keys);
+    if (n.keys[i] == x) {
+      z := n.keys[i];
+      flag := true;  /* Found x, so return */
+    } else {
+      /* n.keys[i] is smallest value > x, go to child[i] if exists */
+      if (n.keys[i] != n.num_keys) {
+	z := n.keys[i];
+      }
+      n := n.children[i];
+    }
   }
   return z;
 }
 
-/* For simplicity, replaced this with array/bsearch.spl */
+procedure findIt(a: Array<Int>, x: Int, begin: Int, end: Int) returns (idx: Int)
+  requires int_arrayseg(a, begin, end)
+  requires 0 <= begin && begin <= end && end <= a.length
+  ensures int_arrayseg(a, begin, end)
+  ensures begin <= idx && idx <= end
+{} /* TODO for nomodifiesopt, better to give body for proc or not?
+
+/* For simplicity, replaced this with array/bsearch.spl
 procedure findIt(a: Array<Int>, x: Int, begin: Int, end: Int) returns (idx: Int)
   requires int_arrayseg(a, begin, end)
   requires forall i: Int, j: Int :: begin <= i && i < j && j < end ==> a[i] <= a[j]
@@ -158,3 +175,4 @@ procedure findIt(a: Array<Int>, x: Int, begin: Int, end: Int) returns (idx: Int)
   }
   return lo;
 }
+*/
