@@ -1,4 +1,4 @@
-//  inspired by 
+//  inspired by
 //  http://opendatastructures.org/ods-java/14_2_B_Trees.html
 //  under CC-BY
 //  full source at http://opendatastructures.org/ods-java.tgz
@@ -11,6 +11,11 @@ struct Node {
   var ghost parent: Node;
 }
 
+struct BTree {
+  var B: Int;
+  var root: Node;
+}
+
 /* -------------------- Predicate Definitions -------------------- */
 
 function int_arrayseg_fp(a: Array<Int>, i: Int, j: Int)
@@ -21,8 +26,14 @@ function int_arrayseg_fp(a: Array<Int>, i: Int, j: Int)
 }
 
 predicate int_arrayseg(a: Array<Int>, i: Int, j: Int)(FP: Set<ArrayCell<Int>>) {
-  0 <= i && i <= j && j <= a.length && 
+  0 <= i && i <= j && j <= a.length &&
   FP == int_arrayseg_fp(a, i, j)
+}
+
+predicate sorted_int_arrayseg(a: Array<Int>, i: Int, j: Int)(FP: Set<ArrayCell<Int>>) {
+  0 <= i && i <= j && j <= a.length &&
+  FP == int_arrayseg_fp(a, i, j) &&
+  (forall k: Int, l: Int:: k >= i && k <= l && l < j ==> a[k] <= a[l])
 }
 
 function node_arrayseg_fp(a: Array<Node>, i: Int, j: Int)
@@ -33,7 +44,7 @@ function node_arrayseg_fp(a: Array<Node>, i: Int, j: Int)
 }
 
 predicate node_arrayseg(a: Array<Node>, i: Int, j: Int)(FP: Set<ArrayCell<Node>>) {
-  0 <= i && i <= j && j <= a.length && 
+  0 <= i && i <= j && j <= a.length &&
   FP == node_arrayseg_fp(a, i, j)
 }
 
@@ -72,27 +83,44 @@ function arraycell_node_fp(FP_A_N: Set<Array<Node>>) returns (FP_AC_N: Set<Array
   (forall ac: ArrayCell<Node> :: ac in FP_AC_N ==> ac.array in FP_A_N)
 }
 
-predicate btree(n: Node)(FP_N: Set<Node>, FP_A_I: Set<Array<Int>>, FP_AC_I: Set<ArrayCell<Int>>, FP_A_N: Set<Array<Node>>, FP_AC_N: Set<ArrayCell<Node>>) {
-  FP_N == node_footprint(n) &&
+predicate btree(b: BTree)(FP_B: Set<BTree>, FP_N: Set<Node>, FP_A_I: Set<Array<Int>>, FP_AC_I: Set<ArrayCell<Int>>, FP_A_N: Set<Array<Node>>, FP_AC_N: Set<ArrayCell<Node>>) {
+  FP_B == Set(b) &&
+  FP_N == node_footprint(b.root) &&
   FP_A_I == array_int_fp(FP_N) &&
   FP_AC_I == arraycell_int_fp(FP_A_I) &&
   FP_A_N == array_node_fp(FP_N) &&
   FP_AC_N == arraycell_node_fp(FP_A_N) &&
+
+  /* The order, B, is at least 2 */
+  b.B >= 2 &&
+  /* keys and children arrays are of size 2B */
+  (forall n: Node :: n in FP_N ==> n.children.length == 2 * b.B && n.keys.length == 2 * b.B) &&
+  /* num_keys is at least (root ? 1 : B - 1) */
+  (forall n: Node :: n in FP_N ==> (n == b.root && 2 <= n.num_keys || b.B - 1 <= n.num_keys) && n.num_keys <= n.keys.length) &&
+  /* children[] has num_keys + 1 non-null elements */
+  (forall n: Node, i: Int :: n in FP_N && 0 <= i && i < n.children.length ==>
+   (i <= n.num_keys && n.children[i] != null) || (i > n.num_keys && n.children[i] == null)
+   ) &&
+  /* The keys of every node are sorted */
+  (forall n: Node :: n in FP_N ==> sorted_int_arrayseg(n.keys, 0, n.keys.length, int_arrayseg_fp(n.keys, 0, n.keys.length))) &&
   true
 }
 
 /* -------------------- Actual Implementation -------------------- */
-  
-procedure find(n: Node, x: Int) returns (res: Node)
-  requires btree(n)
-  ensures btree(n)
+
+procedure find(b: BTree, x: Int) returns (res: Node)
+  requires btree(b)
+  ensures btree(b)
 {
+  var n := b.root;
   var z: Node := null;
-  while (n != null)
-    invariant btree(n)
+  var flag := false;
+  while (n != null && !flag)
+    invariant btree(b)
   {
-    var i: Int := findIt(n.keys, x, 0, n.num_keys);
-    if (n.keys[i] == x) return n.children[i];
+    var i: Int := findIt(n.keys, x, 0, n.keys.length);
+    if (n.keys[i] == x)
+      flag := true;
     if (n.keys[i] != n.num_keys)
       z := n.children[i];
     n := n.children[i];
@@ -110,7 +138,7 @@ procedure findIt(a: Array<Int>, x: Int, begin: Int, end: Int) returns (idx: Int)
 {
   var lo := begin;
   var hi := end;
-  
+
   while (hi > lo)
     invariant int_arrayseg(a, begin, end)
     invariant forall i: Int, j: Int :: begin <= i && i < j && j < end ==> a[i] <= a[j]
