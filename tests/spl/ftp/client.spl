@@ -11,11 +11,14 @@ procedure connectTo(ip: Array<Byte>, port: Array<Byte>)
   ensures ip == null || ip.length == old(ip.length)
   ensures fd >= -1
 {
+  fd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (fd == -1) {
+    return -1;
+  }
   var addr := get_address4(ip, port); //null should return localhost
   if (addr == null) {
     return -1;
   }
-  fd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (connect4(fd, addr)) {
     free(addr);
     return fd;
@@ -29,6 +32,7 @@ procedure connectTo(ip: Array<Byte>, port: Array<Byte>)
 procedure setupDataConnection(cmdFd: Int, port: Array<Byte>)
   returns (connectedDataFD: Int)
   requires cmdFd >= 0
+  requires port.length == 5;
   requires byte_array(port)
   ensures byte_array(port)
   ensures port == old(port) && port.length == old(port.length)
@@ -61,6 +65,7 @@ procedure setupDataConnection(cmdFd: Int, port: Array<Byte>)
   var sent := tcp_send(cmdFd, portMsg, portMsg.length);
   free(portMsg);
   if (sent != portMsg.length) {
+    free(dataAddr);
     return -1;
   }
 
