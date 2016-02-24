@@ -54,20 +54,17 @@ let normalizeFilename base_dir file_name =
   in
   let sep = Str.regexp_string Filename.dir_sep in
   let parts = Str.split_delim sep fullname in
-  let rec simplify parts = match parts with
-    | "." :: xs -> simplify xs
-    | x :: ".." :: xs when x <> ".." -> simplify xs
-    | x :: xs ->
-      let ys = simplify xs in
-        begin 
-          match ys with
-          | ".." :: _ -> simplify (x :: ys)
-          | _ -> x :: ys
-        end
-    | [] -> []
+  let remaining =
+    List.fold_left
+      (fun acc x ->
+        if x = ".."
+        then List.tl acc
+        else x :: acc
+      )
+      []
+      parts
   in
-  let remaining = simplify parts in
-  String.concat Filename.dir_sep remaining
+  String.concat Filename.dir_sep (List.rev remaining)
 
 (** Parse SPL program in main file [main_file] *)
 let parse_spl_program main_file =
