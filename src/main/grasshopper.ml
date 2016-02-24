@@ -57,7 +57,13 @@ let normalizeFilename base_dir file_name =
   let rec simplify parts = match parts with
     | "." :: xs -> simplify xs
     | x :: ".." :: xs when x <> ".." -> simplify xs
-    | x :: xs -> x :: (simplify xs)
+    | x :: xs ->
+      let ys = simplify xs in
+        begin 
+          match ys with
+          | ".." :: _ -> simplify (x :: ys)
+          | _ -> x :: ys
+        end
     | [] -> []
   in
   let remaining = simplify parts in
