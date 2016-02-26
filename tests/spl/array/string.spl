@@ -205,3 +205,65 @@ procedure strcat(str1: Array<Byte>, str2: Array<Byte>)
   }
   return copy_size;
 }
+
+//use the content_witness to show that the array did not change
+procedure atoi(str: Array<Byte>, implicit ghost content_witness: Map<Int,Byte>)
+  returns (res: Int)
+  requires byte_array(str)
+  requires forall i: Int :: 0 <= i && i < str.length ==> i.content_witness == str[i]
+  ensures byte_array(str)
+  ensures old(str.length) == str.length
+  ensures forall i: Int :: 0 <= i && i < str.length ==> i.content_witness == str[i]
+{
+  res := 0;
+  var i := 0;
+  var foundStart := false;
+  var foundEnd := false;
+  var isPositive := true;
+
+  while (i < str.length && !foundStart)
+    invariant byte_array(str)
+    invariant 0 <= i && i <= str.length
+    invariant forall j: Int :: 0 <= j && j < str.length ==> str[j] == j.content_witness
+  {
+    if (str[i] == int2byte( 9) || // \t
+        str[i] == int2byte(10) || // \n
+        str[i] == int2byte(11) || // \v
+        str[i] == int2byte(12) || // \f
+        str[i] == int2byte(13) || // \r
+        str[i] == int2byte(32)    // ' '
+       ) {
+      i := i + 1;
+    } else {
+      foundStart := true;
+    }
+  }
+
+  if (i < str.length) {
+    if (str[i] == '-') {
+      isPositive := false;
+      i := i + 1;
+    }
+  }
+
+  while (i < str.length && !foundEnd)
+    invariant byte_array(str)
+    invariant 0 <= i && i <= str.length
+    invariant forall j: Int :: 0 <= j && j < str.length ==> str[j] == j.content_witness
+  {
+    if (str[i] >= '0' && str[i] <= '9') {
+      var digit := byte2int(str[i] - '0');
+      res := res * 10;
+      res := res + digit;
+      i := i + 1;
+    } else {
+      foundEnd := true;
+    }
+  }
+
+  if (!isPositive) {
+    res := -1 * res;
+  }
+
+  return res;
+}
