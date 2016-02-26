@@ -207,16 +207,20 @@ procedure strcat(str1: Array<Byte>, str2: Array<Byte>)
 }
 
 //use the content_witness to show that the array did not change
-procedure atoi(str: Array<Byte>, implicit ghost content_witness: Map<Int,Byte>)
+procedure atoiFrom(str: Array<Byte>, startIdx: Int /*, implicit ghost content_witness: Map<Int,Byte>*/)
   returns (res: Int)
   requires byte_array(str)
-  requires forall i: Int :: 0 <= i && i < str.length ==> i.content_witness == str[i]
+  requires startIdx >= 0
+  //requires forall i: Int :: 0 <= i && i < str.length ==> i.content_witness == str[i]
   ensures byte_array(str)
   ensures old(str.length) == str.length
-  ensures forall i: Int :: 0 <= i && i < str.length ==> i.content_witness == str[i]
+  //ensures forall i: Int :: 0 <= i && i < str.length ==> i.content_witness == str[i]
 {
   res := 0;
-  var i := 0;
+  var i := startIdx;
+  if (i > str.length) {
+    i := str.length;
+  }
   var foundStart := false;
   var foundEnd := false;
   var isPositive := true;
@@ -224,7 +228,7 @@ procedure atoi(str: Array<Byte>, implicit ghost content_witness: Map<Int,Byte>)
   while (i < str.length && !foundStart)
     invariant byte_array(str)
     invariant 0 <= i && i <= str.length
-    invariant forall j: Int :: 0 <= j && j < str.length ==> str[j] == j.content_witness
+    //invariant forall j: Int :: 0 <= j && j < str.length ==> str[j] == j.content_witness
   {
     if (str[i] == int2byte( 9) || // \t
         str[i] == int2byte(10) || // \n
@@ -249,7 +253,7 @@ procedure atoi(str: Array<Byte>, implicit ghost content_witness: Map<Int,Byte>)
   while (i < str.length && !foundEnd)
     invariant byte_array(str)
     invariant 0 <= i && i <= str.length
-    invariant forall j: Int :: 0 <= j && j < str.length ==> str[j] == j.content_witness
+    //invariant forall j: Int :: 0 <= j && j < str.length ==> str[j] == j.content_witness
   {
     if (str[i] >= '0' && str[i] <= '9') {
       var digit := byte2int(str[i] - '0');
@@ -266,4 +270,15 @@ procedure atoi(str: Array<Byte>, implicit ghost content_witness: Map<Int,Byte>)
   }
 
   return res;
+}
+
+procedure atoi(str: Array<Byte> /*, implicit ghost content_witness: Map<Int,Byte>*/)
+  returns (res: Int)
+  requires byte_array(str)
+  //requires forall i: Int :: 0 <= i && i < str.length ==> i.content_witness == str[i]
+  ensures byte_array(str)
+  ensures old(str.length) == str.length
+  //ensures forall i: Int :: 0 <= i && i < str.length ==> i.content_witness == str[i]
+{
+  return atoiFrom(str, 0);
 }
