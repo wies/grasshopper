@@ -19,6 +19,14 @@ procedure connectTo(ip: Array<Byte>, port: Array<Byte>)
   if (addr == null) {
     return -1;
   }
+<<<<<<< HEAD
+=======
+  fd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (fd < 0){
+    free(addr);
+    return fd;
+  }
+>>>>>>> 4f111d9... client work--now takes 200
   if (connect4(fd, addr)) {
     free(addr);
     return fd;
@@ -59,6 +67,10 @@ procedure setupDataConnection(cmdFd: Int, port: Array<Byte>)
     return -1;
   }
   //we tell the server what port we are setting the data connection on
+  if ((port.length < 0) || (port.length > (65535 - 6))){ //this is to cover for the max length of an array, as set in byte_array.spl  We subtract 6 to account for PORT
+    free(dataAddr);
+    return -1;
+  }
   var portMsg := new Array<Byte>(6 + port.length);
   portMsg := "PORT ";
   var copied := strcat(port, portMsg);
@@ -126,7 +138,7 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   ensures byte_array(filename)
 {
   var size := fileSize(filename);
-  if (size < 0){
+  if ((size < 0) || (size > 65535)){
     return false;
   }
   var opened := gopen(filename, O_CREAT | O_WRONLY);
@@ -139,15 +151,29 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
     free(buffer);
     return false;
   }
+  if ((filename.length < 0) || (filename.length > (65535 - 6))) {
+    free(buffer);
+    return false;
+  }
   var commandSize := filename.length + 6;
   var sendMsg := new Array<Byte>(commandSize);
   sendMsg := "STOR ";
   var copied := strcat(filename, sendMsg);
   var sent := tcp_send(cmdFd, sendMsg, commandSize);
   free(sendMsg);
-  //Todo: get confirmation from the server
+  //Get confirmation from the server
+  var okMsg := new Array<Byte>(4);
+  var ok := tcp_recv(cmdFd, okMsg);
+  //check if the first digit is a two
+  if (okMsg[0] != int2byte(2)) {
+    free(okMsg);
+    free(buffer);
+    return false;
+  }
+  free(okMsg);
   var sentData := tcp_send(dataFD, buffer, size);
-  //Todo: get confirmation from the server
+  //get confirmation from the server
+
   free(buffer);
   var close := gclose(opened);
   if (sentData == size) {
@@ -173,10 +199,14 @@ procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   var size := byte2int(sizeBuff[0]);
   free(sizeBuff);
   var buffer := new Array<Byte>(size);
+  if ((filename.length < 0) || (filename.length > (65535-6))) { //maybe we should include zero as well.  65535-6 comes from byte_array.spl's max length.  We subtract 6 because we add 6 later on.  
+    free(buffer);
+    return false;
+  }
   var recvMsgSize := filename.length + 6;
   var recvMsg := new Array<Byte>(recvMsgSize);
   recvMsg := "RETR ";
-  var copied := strcat(recvMsg, filename);
+  var copied := strcat(recvMsg, filename); 
   sent := tcp_send(cmdFd, recvMsg, recvMsgSize);
   //Todo: get response (maybe)
   free(recvMsg);
