@@ -19,14 +19,7 @@ procedure connectTo(ip: Array<Byte>, port: Array<Byte>)
   if (addr == null) {
     return -1;
   }
-<<<<<<< HEAD
-=======
-  fd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if (fd < 0){
-    free(addr);
-    return fd;
-  }
->>>>>>> 4f111d9... client work--now takes 200
+
   if (connect4(fd, addr)) {
     free(addr);
     return fd;
