@@ -257,17 +257,23 @@ procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   requires byte_array(filename)
   ensures byte_array(filename)
 {
-  var sizeMsg := new Array<Byte>(5);
-  sizeMsg := "SIZE";
-  var sent := tcp_send(cmdFd, sizeMsg, 5);
+  if ((filename.length <= 0) || (filename.length > (65535-6))) { //maybe we should include zero as well.  65535-6 comes from byte_array.spl's max length.  We subtract 6 because we add 6 later on.  
+    return false;
+  }
+  var cmdSize := 6 + filename.length;
+  var sizeMsg := new Array<Byte>(cmdSize);
+  sizeMsg := "SIZE ";
+  var copied := strcat(filename, sizeMsg);
+  var sent := tcp_send(cmdFd, sizeMsg, cmdSize);
   //We get confirmation from the server when it sends us the size back.  
   free(sizeMsg); 
-  var sizeBuff := new Array<Byte>(1);
+  var sizeBuff := new Array<Byte>(128);
   var recvData := tcp_recv(cmdFd, sizeBuff); //response gets sent on command buffer
 
   var pleaseAccept := new Array<Int>(1);
   pleaseAccept[0] := 213;
   var checked := checkServerResponse(sizeBuff, pleaseAccept);
+  free(pleaseAccept);
   if (!checked) {
     free(sizeBuff);
     return false;
@@ -279,19 +285,17 @@ procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
     return false;
   } 
   */
-//this ensures we receive a valid size response
+  //this ensures we receive a valid size response
   var size := atoiFrom(sizeBuff, 4);
   free(sizeBuff);
-  var buffer := new Array<Byte>(size);
-  if ((filename.length < 0) || (filename.length > (65535-6))) { //maybe we should include zero as well.  65535-6 comes from byte_array.spl's max length.  We subtract 6 because we add 6 later on.  
-    free(buffer);
+  if ((size <= 0) || (size > 65535)) { //maybe we should include zero as well.  65535-6 comes from byte_array.spl's max length.  We subtract 6 because we add 6 later on.  
     return false;
   }
-  var recvMsgSize := filename.length + 6;
-  var recvMsg := new Array<Byte>(recvMsgSize);
+  var buffer := new Array<Byte>(size);
+  var recvMsg := new Array<Byte>(cmdSize);
   recvMsg := "RETR ";
-  var copied := strcat(recvMsg, filename); 
-  sent := tcp_send(cmdFd, recvMsg, recvMsgSize);
+  copied := strcat(filename, recvMsg); 
+  sent := tcp_send(cmdFd, recvMsg, cmdSize);
   free(recvMsg);
   recvData := tcp_recv(dataFD, buffer);
   //Todo: get response (maybe -- one could consider recvData < 0 as providing the same utility as the response)
