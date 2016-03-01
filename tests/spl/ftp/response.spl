@@ -1,0 +1,23 @@
+include "../array/string.spl";
+include "../array/int_array.spl";
+
+procedure checkServerResponse(response: Array<Byte>, acceptables: Array<Int>) 
+  returns (success: Bool)
+  requires (byte_array(response) &*& array(acceptables))
+  ensures (byte_array(response) &*& array(acceptables))
+{
+  var i := 0;
+  var ack := atoi(response);
+  success := false;
+
+  while (i < acceptables.length)
+    invariant i >= 0 && i <= acceptables.length
+    invariant byte_array(response) &*& array(acceptables)
+      //      invariant forall j: Int:: j >= 0 && j < i ==>
+  {
+    if (ack == acceptables[i]) {
+      success := true;
+    }
+  }
+  return success;
+}

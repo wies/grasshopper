@@ -2,7 +2,8 @@ include "../../../lib/socket.spl";
 include "../../../lib/file.spl";
 include "../../../lib/console.spl";
 include "../array/string.spl";
-
+include "response.spl";
+  
 procedure connectTo(ip: Array<Byte>, port: Array<Byte>)
   returns (fd: Int)
   requires (ip == null || byte_array(ip)) &*& byte_array(port)
@@ -89,14 +90,53 @@ procedure authenticate(cmdFd: Int)
   userMsg := "USER potato"; //it's anonymous login, so you can put whatever here.  It's not checked
   var sent := tcp_send(cmdFd, userMsg, 12);
   free(userMsg);
-  //TODO receive confirmation by the server ?
-  
+  //receive confirmation by the server
+  var okMsg := new Array<Byte>(4);
+  var ok := tcp_recv(cmdFd, okMsg);
+  //valid responses are 200, 230, 234, 300, 331
+  var acceptables := new Array<Int>(5);
+  acceptables[0] := 200;
+  acceptables[1] := 230;
+  acceptables[2] := 234;
+  acceptables[3] := 300;
+  acceptables[4] := 331;
+  var checked := checkServerResponse(okMsg, acceptables);
+  free(okMsg);
+  free(acceptables);
+  if (!checked) {
+    return false;
+  }
+      /*  var ack := atoi(okMsg);
+  if ((ack != 200) && (ack != 230) && (ack != 234) && (ack != 300) && (ack != 331)) {
+    free(okMsg);
+    return false;
+    }*/
+  // free(okMsg);
+
   var passMsg := new Array<Byte>(15);
   passMsg := "PASS anonymous";
   sent := tcp_send(cmdFd, passMsg, 15);
   free(passMsg);
-  //TODO receive confirmation by the server ?
-
+  //receive confirmation by the server.  Acceptable responses include 200, 230, 202, 234
+  okMsg := new Array<Byte>(4);
+  ok := tcp_recv(cmdFd, okMsg);
+  var acceptThese := new Array<Int>(4);
+  acceptThese[0] := 200;
+  acceptThese[1] := 202;
+  acceptThese[2] := 230;
+  acceptThese[3] := 234;
+  checked := checkServerResponse(okMsg, acceptThese);
+  free(okMsg);
+  free(acceptThese);
+  if (!checked) {
+    return false;
+  }
+/*  ack := atoi(okMsg);
+  if ((ack != 200) && (ack != 202) && (ack != 230) && (ack != 234)) {
+    free(okMsg);
+    return false;
+  }
+  free(okMsg);*/
   return true;
 }
 
@@ -157,17 +197,52 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   //Get confirmation from the server
   var okMsg := new Array<Byte>(4);
   var ok := tcp_recv(cmdFd, okMsg);
-  //check if the first digit is a two
-  if (okMsg[0] != int2byte(2)) {
+
+  var acceptThese := new Array<Int>(2);
+  acceptThese[0] := 200;
+  acceptThese[1] := 150;
+  var checked := checkServerResponse(okMsg, acceptThese);
+  free(okMsg);
+  free(acceptThese);
+  if (!checked) {
+    free(buffer);
+    return false;
+  }
+
+  /*  var ack := atoi(okMsg);
+  if ((ack != 200) && (ack != 150)) { //note that it might actually return something else that starts with two, but ends in other things (200, 150)
     free(okMsg);
     free(buffer);
     return false;
   }
   free(okMsg);
+  */
   var sentData := tcp_send(dataFD, buffer, size);
-  //get confirmation from the server
+  //get confirmation from the server (200, 226, 250)
+  okMsg := new Array<Byte>(4);
+  ok := tcp_recv(cmdFd, okMsg);
 
+  var pleaseAccept := new Array<Int>(3);
+  pleaseAccept[0] := 200;
+  pleaseAccept[1] := 226;
+  pleaseAccept[2] := 250;
+  checked := checkServerResponse(okMsg, pleaseAccept);
+  free(okMsg);
+  free(pleaseAccept);
   free(buffer);
+  if (!checked) {
+    return false;
+  }
+  /*
+  ack := atoi(okMsg);
+  if ((ack != 200) && (ack != 226) && (ack != 250)) {
+    free(okMsg);
+    free(buffer);
+    return false;
+  }
+  free(okMsg);
+  free(buffer);
+  */
   var close := gclose(opened);
   if (sentData == size) {
     return true;
@@ -189,7 +264,23 @@ procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   free(sizeMsg); 
   var sizeBuff := new Array<Byte>(1);
   var recvData := tcp_recv(cmdFd, sizeBuff); //response gets sent on command buffer
-  var size := byte2int(sizeBuff[0]);
+
+  var pleaseAccept := new Array<Int>(1);
+  pleaseAccept[0] := 213;
+  var checked := checkServerResponse(sizeBuff, pleaseAccept);
+  if (!checked) {
+    free(sizeBuff);
+    return false;
+  }
+  /*
+  var sizeCode := atoi(sizeBuff);
+  if (sizeCode != 213){
+    free(sizeBuff);
+    return false;
+  } 
+  */
+//this ensures we receive a valid size response
+  var size := atoiFrom(sizeBuff, 4);
   free(sizeBuff);
   var buffer := new Array<Byte>(size);
   if ((filename.length < 0) || (filename.length > (65535-6))) { //maybe we should include zero as well.  65535-6 comes from byte_array.spl's max length.  We subtract 6 because we add 6 later on.  
@@ -201,9 +292,9 @@ procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   recvMsg := "RETR ";
   var copied := strcat(recvMsg, filename); 
   sent := tcp_send(cmdFd, recvMsg, recvMsgSize);
-  //Todo: get response (maybe)
   free(recvMsg);
   recvData := tcp_recv(dataFD, buffer);
+  //Todo: get response (maybe -- one could consider recvData < 0 as providing the same utility as the response)
   if (recvData < 0){
     free(buffer);
     return false;
