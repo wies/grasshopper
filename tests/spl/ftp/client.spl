@@ -335,7 +335,7 @@ procedure client(store: Int)
     return 2;
   }
 
-  //we set up the command connection
+  //we set up the data connection
   port := "4440";
   var connectedDataFD := setupDataConnection(fd, port);
   free(port);
@@ -392,6 +392,9 @@ procedure Main(args: Array<Byte>)
   requires byte_array(args)
   ensures  byte_array(args)
 {
+
+  //make sure this length check works
+
   if (args.length > 1){
     res := client(0);
   } else {

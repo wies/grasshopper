@@ -1,0 +1,136 @@
+include "../../../lib/socket.spl";
+include "../../../lib/file.spl";
+include "../../../lib/console.spl";
+include "../array/string.spl";
+
+procedure connectMeCommand(port: Array<Byte>) returns (res: Int)
+  requires byte_array(port)
+  ensures byte_array(port)
+{
+  var cmdAddr := get_address4(null, port);
+  free(port);
+  if (cmdAddr == null) {
+    return -1;
+  }
+  //this is basically just socketTcpReceiver
+  var cmdFd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (cmdFd == -1) {
+    free(cmdAddr);
+    return -1;
+  }
+    
+  var bound := bind4(cmdFd, cmdAddr);
+  if (!bound) {
+    free(cmdAddr);
+    return -1;
+  }
+
+  var listening := glisten(cmdFd, 10);
+  if (!listening) {
+    free(cmdAddr);
+    return -1;
+  }
+  
+  var connFd := accept4(cmdFd, cmdAddr);
+  free(cmdAddr);
+  var closed := gclose(cmdFd);
+  return connFd;
+}
+
+procedure recvDataConnection(cmdFd: Int) returns (res: Int)
+  requires cmdFd > -1
+{
+  var resp := new Array<Byte>(10);
+  var response := tcp_recv(cmdFd, resp);
+  //  var port := atoi(resp);
+  free(resp);
+  
+  var fd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (fd == -1) {
+    return -1;
+  }
+  var portArray := new Array<Byte>(5);
+  portArray[0] := response[5];
+  portArray[1] := response[6];
+  portArray[2] := response[7];
+  portArray[3] := response[8];
+  portArray[4] := response[9];
+  var addr := get_address4(null, portArray);
+  if (addr == null){
+    return -1;
+  }
+  
+  if (connect4(fd, addr)) {
+    free(addr);
+    return fd;
+  } else {
+    free(addr);
+    var closing := gclose(fd);
+    return -1;
+  }
+}
+
+procedure handleAuth(cmdFd: Int, password: Array<Byte>)
+  returns (success: Bool)
+  requires cmdFd >= 0
+  requires byte_array(password)
+  ensures byte_array(password)
+{
+  var userName := new Array<Byte>(12); //we're capping the username message out at 12
+  var recvUser := tcp_recv(cmdFd, userName);
+  free(userName);
+  var response := new Array<Byte>(4);
+  response := "331"; //we don't actually do anything with the username
+  var sent := tcp_send(cmdFd, response, 4);
+  free(response);
+
+  var sentPassword := new Array<Byte>(15);
+  var recvpass := tcp_recv(cmdFd, sentPassword);
+
+  var pass := new Array<Byte>(15);
+  pass := "PASS anonymous";
+  var isOkay := false;
+  if (pass == sentPassword) {
+    isOkay := true;
+  }
+  free(sentPassword);
+  free(pass);
+
+  var response := new Array<Byte>(4);
+  if (isOkay) {
+    response := "230";
+    var sent := tcp_send(cmdFd, response, 4);
+    free(response);
+    return true;
+  } else {
+    response := "430";
+    var sent := tcp_send(cmdFd, response, 4);
+    free(response);
+    return false;
+  }
+}
+
+procedure server(args: Array<Byte>) returns ()
+{
+  var port := new Array<Byte>(5);
+  port := "4444";
+
+  var cmdFd := connectMeCommand(port);
+  var dataConnFd := recvDataConnection(cmdFd);
+  
+  var authenticated := handleAuth(cmdFd, args);
+
+  if (!authenticated){
+    return -1;
+  }
+  //if handleAuth fails, abort.
+
+  var iQuit := false;
+  while (!iQuit)
+    invariant bool(iQuit)
+  {
+    var request := new Array<Byte>(100); // it needs to be so big to hold the filename
+    var recd := tcp_recv(cmdFd, request);
+    var 
+
+}
