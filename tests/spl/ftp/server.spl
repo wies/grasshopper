@@ -70,11 +70,9 @@ procedure recvDataConnection(cmdFd: Int) returns (res: Int)
   }
 }
 
-procedure handleAuth(cmdFd: Int, password: Array<Byte>)
+procedure handleAuth(cmdFd: Int)
   returns (success: Bool)
   requires cmdFd >= 0
-  requires byte_array(password)
-  ensures byte_array(password)
 {
   var userName := new Array<Byte>(12); //we're capping the username message out at 12
   var recvUser := tcp_recv(cmdFd, userName);
@@ -118,7 +116,7 @@ procedure server(args: Array<Byte>) returns ()
   var cmdFd := connectMeCommand(port);
   var dataConnFd := recvDataConnection(cmdFd);
   
-  var authenticated := handleAuth(cmdFd, args);
+  var authenticated := handleAuth(cmdFd);
 
   if (!authenticated){
     return -1;
