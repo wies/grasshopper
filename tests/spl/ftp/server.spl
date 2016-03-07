@@ -2,6 +2,7 @@ include "../../../lib/socket.spl";
 include "../../../lib/file.spl";
 include "../../../lib/console.spl";
 include "../array/string.spl";
+include "../array/copy_byte_slice.spl";
 
 procedure connectMeCommand(port: Array<Byte>) returns (res: Int)
   requires byte_array(port)
@@ -49,12 +50,12 @@ procedure recvDataConnection(cmdFd: Int) returns (res: Int)
   if (fd == -1) {
     return -1;
   }
-  var portArray := new Array<Byte>(5);
-  portArray[0] := response[5];
-  portArray[1] := response[6];
-  portArray[2] := response[7];
-  portArray[3] := response[8];
-  portArray[4] := response[9];
+  var portArray := copy_byte_slice(resp, 5, 10);
+  //  portArray[0] := response[5];
+  //portArray[1] := response[6];
+  //portArray[2] := response[7];
+  //portArray[3] := response[8];
+  //portArray[4] := response[9];
   var addr := get_address4(null, portArray);
   if (addr == null){
     return -1;
@@ -94,7 +95,7 @@ procedure handleAuth(cmdFd: Int)
   free(sentPassword);
   free(pass);
 
-  var response := new Array<Byte>(4);
+  response := new Array<Byte>(4);
   if (isOkay) {
     response := "230";
     var sent := tcp_send(cmdFd, response, 4);
@@ -136,11 +137,10 @@ procedure accept_incoming_file(dataFd: Int, filename: Array<Byte>) returns (res:
   }
   return 1;
 }
-procedure send_outgoing_file(dataFd: Int, filename: Array<Byte>) returns (res:Int)
+procedure send_outgoing_file(dataFd: Int, filename: Array<Byte>) returns (res: Bool)
   requires (dataFd > 0)
   requires byte_array(filename)
   ensures (dataFd > 0)
-  ensures (res >= -1)
   ensures byte_array(filename)
 {
   var fileFd := gopen(filename, O_CREAT);
@@ -167,16 +167,116 @@ procedure send_outgoing_file(dataFd: Int, filename: Array<Byte>) returns (res:In
   if (sent < 0) {
     flag := true;
   }
-  return !flag; 
+  //we want to return !flag
+  if (flag) {
+    return false;
+  } else {
+    return true;
+  }
 }
 
-procedure server(args: Array<Byte>) returns (res:Int)
+procedure store_help(cmdFd: Int, dataFd: Int, filename: Array<Byte>) returns (fail: Bool)
+  requires cmdFd > 0;
+  requires dataFd > 0;
+  requires byte_array(filename);
+  ensures cmdFd > 0;
+  ensures dataFd > 0;
+  ensures byte_array(filename);
+{
+  var ok := new Array<Byte>(4);
+  ok := "150";
+  var sent := tcp_send(cmdFd, ok, 4);
+  free(ok);
+  var stored := accept_incoming_file(dataFd, filename);
+  if (stored < 0) {
+    var notOk := new Array<Byte>(4);
+    notOk := "550";
+    sent := tcp_send(cmdFd, notOk, 4);
+    free(notOk);
+    fail := true;
+    return fail;
+  }
+  var goodPacket := new Array<Byte>(4);
+  goodPacket := "250";
+  sent := tcp_send(cmdFd, goodPacket, 4);
+  fail := true;
+  return fail;
+}
+
+procedure size_help(cmdFd: Int, filename: Array<Byte>) returns (fail: Bool)
+  requires cmdFd > 0;
+  requires byte_array(filename);
+  ensures cmdFd > 0;
+  ensures byte_array(filename);
+{
+  var sizeF := fileSize(filename); //an int
+  if (sizeF < 0) {
+    //file doesn't exist, or we can't get at it
+    var badPacket := new Array<Byte>(4);
+    badPacket := "550";
+    var sent := tcp_send(cmdFd, badPacket, 4);
+    free(badPacket);
+    return true;
+  }
+  var sizePacket := new Array<Byte>(1);
+  sizePacket[0] := int2byte(sizeF);
+  var goodPacket := new Array<Byte>(6);
+  goodPacket := "213 "; 
+  var finished := strcat(sizePacket, goodPacket);
+  var sent := tcp_send(cmdFd, goodPacket, 6);
+  free(sizePacket);
+  free(goodPacket);
+  return false;
+}
+
+procedure retr_help(cmdFd: Int, dataFd: Int, filename: Array<Byte>) returns (fail: Bool)
+  requires cmdFd > 0;
+  requires dataFd > 0;
+  requires byte_array(filename);
+  ensures cmdFd > 0;
+  ensures dataFd > 0;
+  ensures byte_array(filename);
+{
+  var ok := new Array<Byte>(4);
+  ok := "150";
+  var sent := tcp_send(cmdFd, ok, 4);
+  free(ok);
+  var done := send_outgoing_file(dataFd, filename);
+  if (!done){
+    //we failed
+    var notOk := new Array<Byte>(4);
+    notOk := "550";
+    sent := tcp_send(cmdFd, notOk, 4);
+    free(notOk);
+    return true;
+  }
+  var goodPacket := new Array<Byte>(4);
+  goodPacket := "250";
+  sent := tcp_send(cmdFd, goodPacket, 4);
+  return true;
+}
+
+procedure process_string(thing:Array<Byte>) returns (out: Array<Byte>)
+  requires byte_array(thing)
+  ensures byte_array(thing)
+{
+  if (thing[thing.length-1] != int2byte(0)){
+    var out := new Array<Byte>(thing.length + 1);
+    out := thing;
+    out[out.length -1] := int2byte(0);
+    return out;
+  }
+  return out;
+}
+
+procedure server() returns (res:Int)
+  ensures res >= -1;
 {
   var port := new Array<Byte>(5);
   port := "4444";
 
   var cmdFd := connectMeCommand(port);
-  var dataConnFd := recvDataConnection(cmdFd);
+  var dataFd := recvDataConnection(cmdFd);
   
   var authenticated := handleAuth(cmdFd);
 
@@ -187,88 +287,66 @@ procedure server(args: Array<Byte>) returns (res:Int)
 
   var iQuit := false;
   while (!iQuit)
-    invariant bool(iQuit)
+    //   invariant boolean(iQuit)
   {
     var request := new Array<Byte>(100); // it needs to be so big to hold the filename
     var recd := tcp_recv(cmdFd, request);
-    var typeCom := new Array<Byte>(5);
-    typeCom[0] := request[0];
-    typeCom[1] := request[1];
-    typeCom[2] := request[2];
-    typeCom[3] := request[3];
-    typeCom[4] := int2byte(0);
+    //   var typeCom := new Array<Byte>(5);
+    var typeCom := copy_byte_slice(request, 0, 4);
+    //  typeCom[0] := request[0];
+    //typeCom[1] := request[1];
+    //typeCom[2] := request[2];
+    //typeCom[3] := request[3];
+    //typeCom[4] := int2byte(0);
     var filename := copy_byte_slice(request, 5, (request.length -1));
     free(request);
-    if (typeCom == "STOR") {
-      var ok := new Array<Byte>(4);
-      ok := "150";
-      var sent := tcp_send(cmdFd, ok, 4);
-      free(ok);
-      var stored := accept_incoming_file(dataFd, filename);
-      if (stored < 0) {
-      	var notOk := new Array<Byte>(4);
-        notOk := "550";
-        sent := tcp_send(cmdFd, notOk, 4);
-	free(notOk);
-        free(filename);
-        free(typeCom);
-        iQuit := true;
+    var final := process_string(typeCom);
+    free(typeCom);
+    var stor := new Array<Byte>(5);
+    stor := "STOR";
+    var sizeCheck := new Array<Byte>(5);
+    sizeCheck := "SIZE";
+    var retr := new Array<Byte>(5);
+    retr := "RETR";
+    if (final == stor) {
+      var temp := store_help(cmdFd, dataFd, filename);
+      if (temp) {
+	free(filename);
+	free(final);
+	free(retr);
+	free(stor);
+	free(sizeCheck);
       }
-      var goodPacket := new Array<Byte>(4);
-      goodPacket := "250";
-      var sent := tcp_send(cmdFd, goodPacket, 4);
-      free(filename);
-      free(typeCom);
-      iQuit := true;
+      iQuit := temp;
     }
-    if (typeCom == "SIZE") {
-      var sizeF := fileSize(filename);
-      if (sizeF < 0) {
-	//file doesn't exist, or we can't get at it
-	var badPacket := new Array<Byte>(4);
-        badPacket := "550";
-	var sent := tcp_send(cmdFd, badPacket, 4);
-	free(badPacket);
-        free(filename);
-        free(typeCom);
-        iQuit := true;
+    if (final == sizeCheck) {
+      var temp := size_help(cmdFd, filename);
+      if (temp) {
+	free(filename);
+	free(final);
+	free(retr);
+	free(stor);
+	free(sizeCheck);
       }
-      var sizeByte := byte2int(sizeF);
-      var sizePacket := new Array<Byte>(1);
-      sizePacket := sizeByte;
-      var goodPacket := new Array<Byte>(7);
-      goodPacket := "213 "; //potential bug: do we need to strip the end character?  Made it size 7 just in case strcat did not strip it.  But we really only need size 6
-      var finished := strcat(sizePacket, goodPacket);
-      var sent := tcp_sent(cmdFd, goodPacket, 7); //should be six
-      free(sizePacket);
-      free(goodPacket);
+      iQuit := temp;
     }
-    if (typeCom == "RETR") {
-      var ok := new Array<Byte>(4);
-      ok := "150";
-      var sent := tcp_send(cmdFd, ok, 4);
-      free(ok);
-      sent := send_outgoing_file(dataFd, filename);
-      if (!sent){
-	      //we failed
-	var notOk := new Array<Byte>(4);
-        notOk := "550";
-        sent := tcp_send(cmdFd, notOk, 4);
-	free(notOk);
-        free(filename);
-        free(typeCom);
-        iQuit := true;
+    if (typeCom == retr) {
+      var temp := retr_help(cmdFd, dataFd, filename);
+      if (temp) {
+	free(filename);
+	free(final);
+	free(retr);
+	free(stor);
+	free(sizeCheck);
       }
-      var goodPacket := new Array<Byte>(4);
-      goodPacket := "250";
-      var sent := tcp_send(cmdFd, goodPacket, 4);
-      free(filename);
-      free(typeCom);
-      iQuit := true;
+      iQuit := temp;
     }
     else {
       free(filename);
-      free(typeCom);
+      free(final);
+      free(retr);
+      free(stor);
+      free(sizeCheck);
       var badPacket := new Array<Byte>(4);
       badPacket := "500";
       var sent := tcp_send(cmdFd, badPacket, 4);
@@ -277,15 +355,28 @@ procedure server(args: Array<Byte>) returns (res:Int)
       //something we did not expect
     }
   }
+ 
   var quitBuff := new Array<Byte>(5);
   var recv := tcp_recv(cmdFd, quitBuff);
-  if (quitBuff == "QUIT") {
+  var quit := new Array<Byte>(5);
+  quit := "QUIT";
+  if (quitBuff == quit) {
+    free(quit);
     var closed := gclose(cmdFd);
     closed := gclose(dataFd);
     return 0;
   }
   else {
+    free(quit);
     return -1;
   }
+}
 
+procedure Main(args: Array<Byte>)
+  returns (res:Int)
+  requires byte_array(args)
+  ensures byte_array(args)
+{
+  res := server();
+  return res;
 }

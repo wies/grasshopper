@@ -270,7 +270,7 @@ procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   var sizeBuff := new Array<Byte>(128); //this could probably be smaller
   var recvData := tcp_recv(cmdFd, sizeBuff); //response gets sent on command buffer
 
-  var pleaseAccept := new Array<Byte>(1);
+  var pleaseAccept := new Array<Int>(1);
   pleaseAccept[0] := 213;
   var checked := checkServerResponse(sizeBuff, pleaseAccept);
   free(pleaseAccept);
@@ -304,7 +304,7 @@ procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   var acceptThese := new Array<Int>(2);
   acceptThese[0] := 200;
   acceptThese[1] := 150;
-  var checked := checkServerResponse(okMsg, acceptThese);
+  checked := checkServerResponse(okMsg, acceptThese);
   free(okMsg);
   free(acceptThese);
   if (!checked) {
@@ -317,7 +317,7 @@ procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   okMsg := new Array<Byte>(4);
   ok := tcp_recv(cmdFd, okMsg);
 
-  var pleaseAccept := new Array<Int>(3);
+  pleaseAccept := new Array<Int>(3);
   pleaseAccept[0] := 200;
   pleaseAccept[1] := 226;
   pleaseAccept[2] := 250;
