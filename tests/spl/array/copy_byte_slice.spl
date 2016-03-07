@@ -19,19 +19,15 @@ procedure copy_byte_slice(a: Array<Byte>, start: Int, end: Int)
   var i := 0;
 
   while (i < finalLength)
-    invariant b.length == finalLength
-    invariant i >= 0 && i <= finalLength 
-    invariant a.length >= b.length
     invariant byte_array(a) &*& byte_array(b)
+    invariant i >= 0 && i <= finalLength
+    invariant finalLength == end - start
+    invariant start >= 0
     invariant end < a.length
-    invariant (i+start) <= a.length
-    invariant (i+start) >= start
-    invariant finalLength >= 0
-    invariant i <= b.length
+    invariant b.length == finalLength
     invariant forall j: Int:: j >= 0 && j < i ==> a[j+start] == b[j]
   {
-    var temp := a[i+start];
-    b[i] := temp;
+    b[i] := a[i+start];
     i := i + 1;
   }
 
