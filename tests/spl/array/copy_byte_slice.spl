@@ -22,6 +22,7 @@ procedure copy_byte_slice(a: Array<Byte>, start: Int, end: Int)
     invariant byte_array(a) &*& byte_array(b)
     invariant i >= 0 && i <= finalLength
     invariant finalLength == end - start
+    invariant end > start
     invariant start >= 0
     invariant end < a.length
     invariant b.length == finalLength
