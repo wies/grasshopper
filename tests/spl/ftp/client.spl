@@ -267,10 +267,10 @@ procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   var sent := tcp_send(cmdFd, sizeMsg, cmdSize);
   //We get confirmation from the server when it sends us the size back.  
   free(sizeMsg); 
-  var sizeBuff := new Array<Byte>(128);
+  var sizeBuff := new Array<Byte>(128); //this could probably be smaller
   var recvData := tcp_recv(cmdFd, sizeBuff); //response gets sent on command buffer
 
-  var pleaseAccept := new Array<Int>(1);
+  var pleaseAccept := new Array<Byte>(1);
   pleaseAccept[0] := 213;
   var checked := checkServerResponse(sizeBuff, pleaseAccept);
   free(pleaseAccept);
@@ -297,8 +297,39 @@ procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   copied := strcat(filename, recvMsg); 
   sent := tcp_send(cmdFd, recvMsg, cmdSize);
   free(recvMsg);
+
+  var okMsg := new Array<Byte>(4);
+  var ok := tcp_recv(cmdFd, okMsg);
+
+  var acceptThese := new Array<Int>(2);
+  acceptThese[0] := 200;
+  acceptThese[1] := 150;
+  var checked := checkServerResponse(okMsg, acceptThese);
+  free(okMsg);
+  free(acceptThese);
+  if (!checked) {
+    free(buffer);
+    return false;
+  }
+
   recvData := tcp_recv(dataFD, buffer);
-  //Todo: get response (maybe -- one could consider recvData < 0 as providing the same utility as the response)
+  //get response
+  okMsg := new Array<Byte>(4);
+  ok := tcp_recv(cmdFd, okMsg);
+
+  var pleaseAccept := new Array<Int>(3);
+  pleaseAccept[0] := 200;
+  pleaseAccept[1] := 226;
+  pleaseAccept[2] := 250;
+  checked := checkServerResponse(okMsg, pleaseAccept);
+  free(okMsg);
+  free(pleaseAccept);
+
+  if (!checked) {
+    free(buffer);
+    return false;
+  }
+
   if (recvData < 0){
     free(buffer);
     return false;
