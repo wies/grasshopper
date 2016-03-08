@@ -6,11 +6,12 @@ procedure copy_byte_slice(a: Array<Byte>, start: Int, end: Int)
   requires byte_array(a)
   requires start >= 0
   requires end > 0
-  requires end < a.length
+  requires end <= a.length
   requires start < a.length
   requires end > start
   ensures byte_array(a) &*& byte_array(b)
   ensures a.length >= b.length
+  ensures b.length == end - start
   ensures forall i: Int:: i >= 0 && i < (end-start) ==> b[i] == a[i+start]
 {
   var finalLength := end - start;
@@ -24,7 +25,7 @@ procedure copy_byte_slice(a: Array<Byte>, start: Int, end: Int)
     invariant finalLength == end - start
     invariant end > start
     invariant start >= 0
-    invariant end < a.length
+    invariant end <= a.length
     invariant b.length == finalLength
     invariant forall j: Int:: j >= 0 && j < i ==> a[j+start] == b[j]
   {

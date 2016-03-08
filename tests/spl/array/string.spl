@@ -29,14 +29,14 @@ procedure strcmp(s1: Array<Byte>, s2: Array<Byte>)
   returns (res: Int)
   requires byte_array(s1) &+& byte_array(s2)
   ensures byte_array(s1) &+& byte_array(s2)
+  ensures old(s1.length) == s1.length
+  ensures old(s2.length) == s2.length
   ensures (res == 0) == (s1.length == s2.length && (forall i: Int:: 0 <= i && i < s1.length ==> s1[i] == s2[i]))
 {
   var i := 0; 
   /* Move s1 and s2 to the s1 differing characters in each string,
      or the ends of the strings if they are identical.  */
-  //pure assume s1.length < 256*256;
   while (i < s1.length && i < s2.length && s1[i] == s2[i])
-    //invariant s1.length < 256*256
     invariant byte_array(s1) &+& byte_array(s2)
     invariant 0 <= i && i <= s1.length && i <= s2.length
     invariant forall j: Int:: 0 <= j && j < i ==> s1[j] == s2[j]

@@ -6,7 +6,7 @@ include "../array/copy_byte_slice.spl";
 
 procedure connectMeCommand(port: Array<Byte>) returns (res: Int)
   requires byte_array(port)
-  ensures byte_array(port)
+  ensures  emp //byte_array(port)
 {
   var cmdAddr := get_address4(null, port);
   free(port);
@@ -39,24 +39,26 @@ procedure connectMeCommand(port: Array<Byte>) returns (res: Int)
 }
 
 procedure recvDataConnection(cmdFd: Int) returns (res: Int)
-  requires cmdFd > -1
+  requires cmdFd >= 0
 {
   var resp := new Array<Byte>(10);
   var response := tcp_recv(cmdFd, resp);
   //  var port := atoi(resp);
-  free(resp);
   
   var fd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (fd == -1) {
+    free(resp);
     return -1;
   }
   var portArray := copy_byte_slice(resp, 5, 10);
+  free(resp);
   //  portArray[0] := response[5];
   //portArray[1] := response[6];
   //portArray[2] := response[7];
   //portArray[3] := response[8];
   //portArray[4] := response[9];
   var addr := get_address4(null, portArray);
+  free(portArray);
   if (addr == null){
     return -1;
   }
@@ -113,7 +115,6 @@ procedure accept_incoming_file(dataFd: Int, filename: Array<Byte>) returns (res:
   requires (dataFd > 0)
   requires (byte_array(filename))
   ensures (byte_array(filename))
-  ensures (dataFd > 0)
   ensures res >= -1
 {
   var buffer := new Array<Byte>(65535);//max size, since we don't know incoming file size
@@ -124,15 +125,13 @@ procedure accept_incoming_file(dataFd: Int, filename: Array<Byte>) returns (res:
   }
   var fileFd := gopen(filename, O_CREAT | O_TRUNC);
   if (fileFd < 0) {
-    return -1;
-  }
-  var written := gwrite(fileFd, buffer);
-  if (written < 0) {
     free(buffer);
     return -1;
   }
+  var written := gwrite(fileFd, buffer);
+  free(buffer);
   var closed := gclose(fileFd);
-  if (closed < 0) {
+  if (written < 0 || closed < 0) {
     return -1;
   }
   return 1;
@@ -176,11 +175,9 @@ procedure send_outgoing_file(dataFd: Int, filename: Array<Byte>) returns (res: B
 }
 
 procedure store_help(cmdFd: Int, dataFd: Int, filename: Array<Byte>) returns (fail: Bool)
-  requires cmdFd > 0;
-  requires dataFd > 0;
+  requires cmdFd >= 0;
+  requires dataFd >= 0;
   requires byte_array(filename);
-  ensures cmdFd > 0;
-  ensures dataFd > 0;
   ensures byte_array(filename);
 {
   var ok := new Array<Byte>(4);
@@ -204,9 +201,8 @@ procedure store_help(cmdFd: Int, dataFd: Int, filename: Array<Byte>) returns (fa
 }
 
 procedure size_help(cmdFd: Int, filename: Array<Byte>) returns (fail: Bool)
-  requires cmdFd > 0;
+  requires cmdFd >= 0;
   requires byte_array(filename);
-  ensures cmdFd > 0;
   ensures byte_array(filename);
 {
   var sizeF := fileSize(filename); //an int
@@ -230,11 +226,9 @@ procedure size_help(cmdFd: Int, filename: Array<Byte>) returns (fail: Bool)
 }
 
 procedure retr_help(cmdFd: Int, dataFd: Int, filename: Array<Byte>) returns (fail: Bool)
-  requires cmdFd > 0;
-  requires dataFd > 0;
+  requires cmdFd >= 0;
+  requires dataFd >= 0;
   requires byte_array(filename);
-  ensures cmdFd > 0;
-  ensures dataFd > 0;
   ensures byte_array(filename);
 {
   var ok := new Array<Byte>(4);
@@ -257,16 +251,63 @@ procedure retr_help(cmdFd: Int, dataFd: Int, filename: Array<Byte>) returns (fai
 }
 
 procedure process_string(thing:Array<Byte>) returns (out: Array<Byte>)
-  requires byte_array(thing)
-  ensures byte_array(thing)
+  requires byte_array(thing) &*& thing.length == 4
+  ensures byte_array(out) &*& out.length == 5
 {
-  if (thing[thing.length-1] != int2byte(0)){
-    var out := new Array<Byte>(thing.length + 1);
-    out := thing;
+  //if (thing[thing.length-1] != int2byte(0)){
+    out := new Array<Byte>(thing.length + 1);
+    out[0] := int2byte(0);
+    var copied := strcat(thing, out);
+    free(thing);
     out[out.length -1] := int2byte(0);
     return out;
+  //}
+  //return thing;
+}
+
+procedure is_stor(cmd: Array<Byte>) returns (is: Bool)
+  requires byte_array(cmd) &*& cmd.length == 5
+  ensures  byte_array(cmd) &*& cmd.length == 5
+{
+  var stor := new Array<Byte>(5);
+  stor := "STOR";
+  if (strcmp(cmd, stor) == 0) {
+    free(stor);
+    return true;
+  } else {
+    free(stor);
+    return false;
   }
-  return out;
+}
+
+procedure is_size(cmd: Array<Byte>) returns (is: Bool)
+  requires byte_array(cmd) &*& cmd.length == 5
+  ensures  byte_array(cmd) &*& cmd.length == 5
+{
+  var size := new Array<Byte>(5);
+  size := "SIZE";
+  if (strcmp(cmd, size) == 0) {
+    free(size);
+    return true;
+  } else {
+    free(size);
+    return false;
+  }
+}
+
+procedure is_retr(cmd: Array<Byte>) returns (is: Bool)
+  requires byte_array(cmd) &*& cmd.length == 5
+  ensures  byte_array(cmd) &*& cmd.length == 5
+{
+  var retr := new Array<Byte>(5);
+  retr := "RETR";
+  if (strcmp(cmd, retr) == 0) {
+    free(retr);
+    return true;
+  } else {
+    free(retr);
+    return false;
+  }
 }
 
 procedure server() returns (res:Int)
@@ -276,77 +317,61 @@ procedure server() returns (res:Int)
   port := "4444";
 
   var cmdFd := connectMeCommand(port);
-  var dataFd := recvDataConnection(cmdFd);
-  
-  var authenticated := handleAuth(cmdFd);
+  if (cmdFd <= -1) {
+    return -1;
+  }
 
+  //if handleAuth fails, abort.
+  var authenticated := handleAuth(cmdFd);
   if (!authenticated){
     return -1;
   }
-  //if handleAuth fails, abort.
-
+  
   var iQuit := false;
+
+  var dataFd := recvDataConnection(cmdFd);
+  if (dataFd <= -1) {
+    var closed := gclose(cmdFd);
+    return -1;
+  }
+  
+
   while (!iQuit)
-    //   invariant boolean(iQuit)
+    invariant cmdFd >= 0
+    invariant dataFd >= 0
   {
     var request := new Array<Byte>(100); // it needs to be so big to hold the filename
     var recd := tcp_recv(cmdFd, request);
     //   var typeCom := new Array<Byte>(5);
     var typeCom := copy_byte_slice(request, 0, 4);
-    //  typeCom[0] := request[0];
-    //typeCom[1] := request[1];
-    //typeCom[2] := request[2];
-    //typeCom[3] := request[3];
-    //typeCom[4] := int2byte(0);
+    var final := process_string(typeCom);
     var filename := copy_byte_slice(request, 5, (request.length -1));
     free(request);
-    var final := process_string(typeCom);
-    free(typeCom);
-    var stor := new Array<Byte>(5);
-    stor := "STOR";
-    var sizeCheck := new Array<Byte>(5);
-    sizeCheck := "SIZE";
-    var retr := new Array<Byte>(5);
-    retr := "RETR";
-    if (final == stor) {
+    if (is_stor(final)) {
       var temp := store_help(cmdFd, dataFd, filename);
       if (temp) {
 	free(filename);
 	free(final);
-	free(retr);
-	free(stor);
-	free(sizeCheck);
       }
       iQuit := temp;
     }
-    if (final == sizeCheck) {
+    else if (is_size(final)) {
       var temp := size_help(cmdFd, filename);
       if (temp) {
 	free(filename);
 	free(final);
-	free(retr);
-	free(stor);
-	free(sizeCheck);
       }
       iQuit := temp;
     }
-    if (typeCom == retr) {
+    else if (is_retr(final)) {
       var temp := retr_help(cmdFd, dataFd, filename);
       if (temp) {
 	free(filename);
 	free(final);
-	free(retr);
-	free(stor);
-	free(sizeCheck);
       }
       iQuit := temp;
     }
     else {
-      free(filename);
-      free(final);
-      free(retr);
-      free(stor);
-      free(sizeCheck);
       var badPacket := new Array<Byte>(4);
       badPacket := "500";
       var sent := tcp_send(cmdFd, badPacket, 4);
@@ -354,20 +379,24 @@ procedure server() returns (res:Int)
       iQuit := true;
       //something we did not expect
     }
+    free(filename);
+    free(final);
   }
  
   var quitBuff := new Array<Byte>(5);
   var recv := tcp_recv(cmdFd, quitBuff);
   var quit := new Array<Byte>(5);
   quit := "QUIT";
-  if (quitBuff == quit) {
+  if (strcmp(quitBuff, quit) == 0) {
     free(quit);
+    free(quitBuff);
     var closed := gclose(cmdFd);
     closed := gclose(dataFd);
     return 0;
   }
   else {
     free(quit);
+    free(quitBuff);
     return -1;
   }
 }
