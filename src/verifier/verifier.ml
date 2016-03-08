@@ -14,17 +14,17 @@ let simplify prog =
     else ()
   in
   dump_if 0 prog;
-  Debug.info (fun () -> "Inferring accesses, eliminating loops, arrays, and global dependencies.\n");
+  Debug.info (fun () -> "Inferring accesses, eliminating loops, arrays, new/dispose, and global dependencies.\n");
   let prog = elim_arrays prog in
+  let prog = elim_new_dispose prog in
   let prog = Analyzer.infer_accesses prog in
   let prog = elim_loops prog in
   let prog = elim_global_deps prog in
   dump_if 1 prog;
-  Debug.info (fun () -> "Eliminating SL, adding heap access checks, and eliminating new/dispose.\n");
+  Debug.info (fun () -> "Eliminating SL, adding heap access checks.\n");
   let prog = elim_sl prog in
   let prog = if !Config.abstract_preds then annotate_frame_axioms prog else prog in
   let prog = annotate_heap_checks prog in
-  let prog = elim_new_dispose prog in
   dump_if 2 prog;
   Debug.info (fun () -> "Eliminating return statements and transforming to SSA form.\n");
   let prog = elim_return prog in

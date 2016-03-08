@@ -106,9 +106,8 @@ let ident = idchar (idchar | digitchar)*
 let digits = digitchar+
 
 rule token = parse
-    [' ' '\t'] { token lexbuf }
+  [' ' '\t'] { token lexbuf }
 | '\n' { Lexing.new_line lexbuf; token lexbuf }
-| "//" [^ '\n']* { token lexbuf }
 | "/*" { comments 0 lexbuf }
 | "\"" ([^ '"']* as str) "\"" { STRINGVAL str }
 | "==>" { IMPLIES }
@@ -173,4 +172,4 @@ and comments level = parse
 | "/*" { comments (level + 1) lexbuf }
 | '\n' { Lexing.new_line lexbuf; comments (level) lexbuf }
 | _ { comments level lexbuf }
-| eof { EOF }
+| eof { token lexbuf }
