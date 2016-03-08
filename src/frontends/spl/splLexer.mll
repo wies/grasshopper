@@ -108,6 +108,7 @@ let digits = digitchar+
 rule token = parse
   [' ' '\t'] { token lexbuf }
 | '\n' { Lexing.new_line lexbuf; token lexbuf }
+| "//" [^ '\n']* { token lexbuf }
 | "/*" { comments 0 lexbuf }
 | "\"" ([^ '"']* as str) "\"" { STRINGVAL str }
 | "==>" { IMPLIES }
