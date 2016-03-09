@@ -112,9 +112,9 @@ procedure handleAuth(cmdFd: Int)
 }
 
 procedure accept_incoming_file(dataFd: Int, filename: Array<Byte>) returns (res:Int)
-  requires (dataFd > 0)
-  requires (byte_array(filename))
-  ensures (byte_array(filename))
+  requires dataFd >= 0
+  requires byte_array(filename)
+  ensures byte_array(filename)
   ensures res >= -1
 {
   var buffer := new Array<Byte>(65535);//max size, since we don't know incoming file size
@@ -137,9 +137,8 @@ procedure accept_incoming_file(dataFd: Int, filename: Array<Byte>) returns (res:
   return 1;
 }
 procedure send_outgoing_file(dataFd: Int, filename: Array<Byte>) returns (res: Bool)
-  requires (dataFd > 0)
+  requires dataFd >= 0
   requires byte_array(filename)
-  ensures (dataFd > 0)
   ensures byte_array(filename)
 {
   var fileFd := gopen(filename, O_CREAT);
@@ -148,24 +147,26 @@ procedure send_outgoing_file(dataFd: Int, filename: Array<Byte>) returns (res: B
     flag := true;
   }
   var fileS := fileSize(filename);
-  if (fileS < 0) {
+  if (fileS < 0 || fileS > 65535) { //FIXME
     fileS := 0; //we need it to be zero in order to allocate the array
     flag := true;
   }
   var buffer := new Array<Byte>(fileS);
-  
-  var read := gread(fileFd, buffer);
-  if (read < 0){
-    flag := true;
+
+  if (!flag) {
+    var read := gread(fileFd, buffer);
+    var closed := gclose(fileFd);
+    if (read < 0 || closed < 0){
+      flag := true;
+    } 
   }
-  var closed := gclose(fileFd);
-  if (closed < 0) {
-    flag := true;
+  if (!flag) {
+    var sent := tcp_send(dataFd, buffer, fileS);
+    if (sent < 0) {
+      flag := true;
+    }
   }
-  var sent := tcp_send(dataFd, buffer, fileS);
-  if (sent < 0) {
-    flag := true;
-  }
+  free(buffer);
   //we want to return !flag
   if (flag) {
     return false;
@@ -190,14 +191,13 @@ procedure store_help(cmdFd: Int, dataFd: Int, filename: Array<Byte>) returns (fa
     notOk := "550";
     sent := tcp_send(cmdFd, notOk, 4);
     free(notOk);
-    fail := true;
-    return fail;
+    return true;
   }
   var goodPacket := new Array<Byte>(4);
   goodPacket := "250";
   sent := tcp_send(cmdFd, goodPacket, 4);
-  fail := true;
-  return fail;
+  free(goodPacket);
+  return false;
 }
 
 procedure size_help(cmdFd: Int, filename: Array<Byte>) returns (fail: Bool)
@@ -247,6 +247,7 @@ procedure retr_help(cmdFd: Int, dataFd: Int, filename: Array<Byte>) returns (fai
   var goodPacket := new Array<Byte>(4);
   goodPacket := "250";
   sent := tcp_send(cmdFd, goodPacket, 4);
+  free(goodPacket);
   return true;
 }
 
