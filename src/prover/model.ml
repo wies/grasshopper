@@ -567,7 +567,7 @@ let find_term model =
     SortedSymbolMap.fold 
       (fun (sym, (arg_srts, res_srt)) (m, d) (fedges, dedges, init_reach) ->
         match sym, res_srt with
-        | _, Bool | _, Int | Write, _ -> (fedges, dedges, init_reach)
+        | _, Bool | _, Int (*| Write, _*) -> (fedges, dedges, init_reach)
         | _ ->
             let m1 =
               match d with
