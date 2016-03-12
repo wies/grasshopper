@@ -272,7 +272,7 @@ procedure atoiFrom(str: Array<Byte>, startIdx: Int /*, implicit ghost content_wi
   return res;
 }
 
-procedure atoi(str: Array<Byte> /*, implicit ghost content_witness: Map<Int,Byte>*/)
+procedure atoiG(str: Array<Byte> /*, implicit ghost content_witness: Map<Int,Byte>*/)
   returns (res: Int)
   requires byte_array(str)
   //requires forall i: Int :: 0 <= i && i < str.length ==> i.content_witness == str[i]

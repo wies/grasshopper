@@ -7,7 +7,7 @@ procedure checkServerResponse(response: Array<Byte>, acceptables: Array<Int>)
   ensures (byte_array(response) &*& array(acceptables))
 {
   var i := 0;
-  var ack := atoi(response);
+  var ack := atoiG(response);
   success := false;
 
   while (i < acceptables.length)
