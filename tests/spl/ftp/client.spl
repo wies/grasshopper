@@ -157,7 +157,7 @@ procedure askFilename()
   free(text);
   var numChars := ggets(filename);
 
-  if (numChars >= 100 || numChars <= 0){
+  if (numChars >= 100 || numChars <= 1){ //switched to 1 to catch the newline character at the end of the line
     free(filename);
     return null;
   }
