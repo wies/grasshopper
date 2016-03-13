@@ -317,9 +317,26 @@ procedure server() returns (res:Int)
   var port := new Array<Byte>(5);
   port := "4444";
 
-  var cmdFd := connectMeCommand(port);
-  if (cmdFd <= -1) {
-    return -1;
+  var cmdFd := -1;
+  var dataFd := -1;
+
+  while((dataFd < 0) || (cmdFd < 0)) 
+    invariant cmdFd >= -1
+    invariant dataFd >= -1
+  {
+    if (cmdFd < 0){
+      var cmdFd := connectMeCommand(port);
+    }
+  //  if (cmdFd <= -1) {
+    //  return -1;
+    // }
+    if (dataFd < 0) {
+      var dataFd := recvDataConnection(cmdFd);
+    }
+  // if (dataFd <= -1) {
+    //  var closed := gclose(cmdFd);
+    // return -1;
+    // }
   }
 
   //if handleAuth fails, abort.
