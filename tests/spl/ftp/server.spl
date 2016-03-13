@@ -91,7 +91,7 @@ procedure handleAuth(cmdFd: Int)
   var pass := new Array<Byte>(15);
   pass := "PASS anonymous";
   var isOkay := false;
-  if (pass == sentPassword) {
+  if (strcmp(pass, sentPassword) == 0) {
     isOkay := true;
   }
   free(sentPassword);
