@@ -330,6 +330,7 @@ procedure server() returns (res:Int)
     // }
   var dataFd := recvDataConnection(cmdFd);
  
+  free(port);
   if (dataFd <= -1) {
     var closed := gclose(cmdFd);
     return -1;
