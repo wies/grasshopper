@@ -163,7 +163,7 @@ procedure askFilename()
   }
   var fixedName := new Array<Byte>(numChars -1);
   var zeros := new Array<Byte>(1);
-  zeros := int2byte(0);
+  zeros[0] := int2byte(0);
   var finished := strcat(zeros, fixedName);
   return fixedName;
 }
