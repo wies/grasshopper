@@ -41,7 +41,7 @@ procedure connectMeCommand(port: Array<Byte>) returns (res: Int)
 procedure recvDataConnection(cmdFd: Int) returns (res: Int)
   requires cmdFd >= 0
 {
-  var resp := new Array<Byte>(10);
+  var resp := new Array<Byte>(11);
   var response := tcp_recv(cmdFd, resp);
   //  var port := atoi(resp);
   
