@@ -320,7 +320,7 @@ procedure server() returns (res:Int)
   var cmdFd := -1;
 
   while(cmdFd < 0) 
-    invariant cmdFd >= -1
+    //  invariant cmdFd >= -1
   {
     cmdFd := connectMeCommand(port);
   }
