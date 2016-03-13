@@ -7,6 +7,7 @@ include "../array/copy_byte_slice.spl";
 procedure connectMeCommand(port: Array<Byte>) returns (res: Int)
   requires byte_array(port)
   ensures  emp //byte_array(port)
+  ensures res >= -1
 {
   var cmdAddr := get_address4(null, port);
   free(port);
@@ -320,7 +321,7 @@ procedure server() returns (res:Int)
   var cmdFd := -1;
 
   while(cmdFd < 0) 
-    //  invariant cmdFd >= -1
+    invariant cmdFd >= -1
   {
     cmdFd := connectMeCommand(port);
   }
