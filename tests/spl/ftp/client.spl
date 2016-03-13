@@ -161,8 +161,8 @@ procedure askFilename()
     free(filename);
     return null;
   }
-  if (numChars > 1){
-    var fixedName := new Array<Byte>(numChars -1);
+  if ((numChars > 1) && (numChars < 65535)) {
+    var fixedName := new Array<Byte>(numChars - 1);
     var zeros := new Array<Byte>(1);
     zeros[0] := int2byte(0);
     var finished := strcat(zeros, fixedName);
