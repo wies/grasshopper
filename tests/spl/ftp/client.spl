@@ -161,15 +161,13 @@ procedure askFilename()
     free(filename);
     return null;
   }
-  if ((numChars > 1) && (numChars < 65535)) {
-    var temp := numChars -1;
-    var fixedName := new Array<Byte>(temp);
+  var temp := numChars -1;
+  var fixedName := new Array<Byte>(temp);
     //    var zeros := new Array<Byte>(1);
     //zeros[0] := int2byte(0);
     //var finished := strcat(zeros, fixedName);
-    return fixedName;
-  }
-  return null;
+  return fixedName;
+
 }
 
 procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
