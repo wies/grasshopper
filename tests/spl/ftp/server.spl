@@ -6,11 +6,11 @@ include "../array/copy_byte_slice.spl";
 
 procedure connectMeCommand(port: Array<Byte>) returns (res: Int)
   requires byte_array(port)
-  ensures  emp //byte_array(port)
+  ensures byte_array(port) //emp //byte_array(port)
   ensures res >= -1
 {
   var cmdAddr := get_address4(null, port);
-  free(port);
+  //  free(port);
   if (cmdAddr == null) {
     return -1;
   }
