@@ -322,6 +322,7 @@ procedure server() returns (res:Int)
 
   while(cmdFd < 0) 
     invariant cmdFd >= -1
+    invariant byte_array(port)
   {
     cmdFd := connectMeCommand(port);
   }
