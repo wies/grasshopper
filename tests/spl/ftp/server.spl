@@ -329,10 +329,10 @@ procedure server() returns (res:Int)
     // }
   var dataFd := recvDataConnection(cmdFd);
  
-  // if (dataFd <= -1) {
-    //  var closed := gclose(cmdFd);
-    // return -1;
-    // }
+  if (dataFd <= -1) {
+    var closed := gclose(cmdFd);
+    return -1;
+  }
  
   //if handleAuth fails, abort.
   var authenticated := handleAuth(cmdFd);
