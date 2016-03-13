@@ -147,7 +147,7 @@ procedure askFilename()
   var filename := new Array<Byte>(100); //we decide max filename length is 100
 
   var text := new Array<Byte>(24);
-  text := "input the file name:\\n";
+  text := "input the file name:";
   var written := gputs(text);
   if (written != strlen(text)) {
     free(text);
@@ -156,12 +156,16 @@ procedure askFilename()
   }
   free(text);
   var numChars := ggets(filename);
+
   if (numChars >= 100 || numChars <= 0){
     free(filename);
     return null;
   }
-
-  return filename;
+  var fixedName := new Array<Byte>(numChars -1);
+  var zeros := new Array<Byte>(1);
+  zeros := int2byte(0);
+  var finished := strcat(zeros, fixedName);
+  return fixedName;
 }
 
 procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
