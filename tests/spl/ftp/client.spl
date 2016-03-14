@@ -191,7 +191,7 @@ procedure doWeUpload()
 
   var uChar := new Array<Byte>(2);
   uChar := "u";
-  if (strcmp(uChar[0], updown[0]) == 0) {
+  if (strcmp(uChar, updown) == 0) {
     free(updown);
     return 1;
   } else {
