@@ -183,7 +183,7 @@ procedure doWeUpload()
   free(text);
   var numChars := ggets(updown);
 
-  if (numChars > 2 || numChars < 1){ 
+  if ((numChars > 2) || (numChars < 1)){ 
     free(updown);
     return -1;
   }
