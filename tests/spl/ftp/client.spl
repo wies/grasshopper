@@ -178,7 +178,7 @@ procedure doWeUpload()
   if (written != strlen(text)) {
     free(text);
     free(updown);
-    return -1
+    return -1;
   }
   free(text);
   var numChars := ggets(updown);
