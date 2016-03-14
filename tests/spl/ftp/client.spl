@@ -187,11 +187,11 @@ procedure doWeUpload()
     free(updown);
     return -1;
   }
-  updown[1] := int2byte(0);
+  //  updown[1] := int2byte(0);
 
   var uChar := new Array<Byte>(2);
   uChar := "u";
-  if (strcmp(uChar, updown) == 0) {
+  if (strcmp(uChar[0], updown[0]) == 0) {
     free(updown);
     return 1;
   } else {
