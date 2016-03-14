@@ -322,7 +322,7 @@ procedure is_quit(cmd: Array<Byte>) returns (is: Bool)
     free(quit);
     return true;
   } else {
-    free(quit)
+    free(quit);
     return false;
   }
 }
