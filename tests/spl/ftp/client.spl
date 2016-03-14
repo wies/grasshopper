@@ -168,7 +168,7 @@ procedure askFilename()
 
 procedure doWeUpload()
   returns (res: Int)
-  ensures res >= -1
+  ensures (res >= -1)
 {
   var updown := new Array<Byte>(2);
 
