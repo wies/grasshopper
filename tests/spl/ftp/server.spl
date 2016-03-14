@@ -365,6 +365,7 @@ procedure server() returns (res:Int)
     invariant cmdFd >= 0
     invariant dataFd >= 0
   {
+    //upped from 100 to 150
     var request := new Array<Byte>(150); // it needs to be so big to hold the filename
     var recd := tcp_recv(cmdFd, request);
     //   var typeCom := new Array<Byte>(5);
@@ -407,9 +408,9 @@ procedure server() returns (res:Int)
       iQuit := true;
       //something we did not expect
     }
+    free(filename);
+    free(final);
   }
-  free(filename);
-  free(final);
  
   //  var quitBuff := new Array<Byte>(5);
   //var recv := tcp_recv(cmdFd, quitBuff);
