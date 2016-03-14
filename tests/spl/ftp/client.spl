@@ -176,7 +176,7 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   if ((size < 0) || (size > 65535)){
     return false;
   }
-  var opened := gopen(filename, O_CREAT | O_WRONLY);
+  var opened := gopen(filename, O_CREAT | O_RDONLY);
   if (opened < 0){
     return false;
   }

@@ -124,7 +124,7 @@ procedure accept_incoming_file(dataFd: Int, filename: Array<Byte>) returns (res:
     free(buffer);
     return -1;
   }
-  var fileFd := gopen(filename, O_CREAT | O_TRUNC);
+  var fileFd := gopen(filename, O_CREAT | O_TRUNC | O_WRONLY);
   if (fileFd < 0) {
     free(buffer);
     return -1;
@@ -142,7 +142,7 @@ procedure send_outgoing_file(dataFd: Int, filename: Array<Byte>) returns (res: B
   requires byte_array(filename)
   ensures byte_array(filename)
 {
-  var fileFd := gopen(filename, O_CREAT);
+  var fileFd := gopen(filename, O_CREAT | O_RDONLY);
   var flag := false;
   if (fileFd < 0){
     flag := true;
