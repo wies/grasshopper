@@ -166,6 +166,37 @@ procedure askFilename()
 
 }
 
+procedure doWeUpload()
+  returns (res: Bool)
+{
+  var updown := new Array<Byte>(2);
+
+  var text := new Array<Byte>(27);
+  text := "upload (u) or download (d):";
+  var written := gputs(text);
+  if (written != strlen(text)) {
+    free(text);
+    free(updown);
+    return null;
+  }
+  free(text);
+  var numChars := ggets(updown);
+
+  if (numChars >= 2 || numChars <= 1){ //switched to 1 to catch the newline character at the end of the line
+    free(updown);
+    return null;
+  }
+  updown[numChars -1] := int2byte(0);
+  
+  var uChar := new Array<Byte>(2);
+  uChar := "u";
+  if (strcmp(uChar, updown) == 0) {
+    return true; //we upload
+  } else {
+    return false;
+  }
+}
+
 procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   returns (success: Bool)
   requires cmdFd >= 0 && dataFD >= 0
@@ -350,7 +381,7 @@ procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   return true;
 }
 
-procedure client(store: Int) 
+procedure client(upload: Bool) 
   returns (res: Int)
   requires emp;
   ensures  emp;
@@ -393,7 +424,7 @@ procedure client(store: Int)
   }
 
   var success := false;
-  if (store == 1){
+  if (upload){
     //we store the file
     success := uploadFile(fd, connectedDataFD, filename);
   } else {
@@ -425,13 +456,9 @@ procedure Main(args: Array<Byte>)
   requires byte_array(args)
   ensures  byte_array(args)
 {
+  var upload := doWeUpload();
+  
+  res := client(upload);
 
-  //make sure this length check works
-
-  if (args.length > 1){
-    res := client(0);
-  } else {
-    res := client(1);
-  }
   return res;
 }
