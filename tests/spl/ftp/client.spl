@@ -185,7 +185,7 @@ procedure doWeUpload()
 
   if (numChars >= 2 || numChars <= 1){ //switched to 1 to catch the newline character at the end of the line
     free(updown);
-    return -1
+    return -1;
   }
   updown[numChars -1] := int2byte(0);
   
