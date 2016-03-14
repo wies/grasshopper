@@ -172,7 +172,7 @@ procedure doWeUpload()
 {
   var updown := new Array<Byte>(2);
 
-  var text := new Array<Byte>(27);
+  var text := new Array<Byte>(28);
   text := "upload (u) or download (d):";
   var written := gputs(text);
   if (written != strlen(text)) {
