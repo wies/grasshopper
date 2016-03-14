@@ -312,6 +312,21 @@ procedure is_retr(cmd: Array<Byte>) returns (is: Bool)
   }
 }
 
+procedure is_quit(cmd: Array<Byte>) returns (is: Bool)
+  requires byte_array(cmd) &*& cmd.length == 5
+  ensures byte_array(cmd) &*& cmd.length == 5
+{
+  var quit := new Array<Byte>(5);
+  quit := "QUIT";
+  if (strcmp(cmd, quit) == 0) {
+    free(quit);
+    return true;
+  } else {
+    free(quit)
+    return false;
+  }
+}
+
 procedure server() returns (res:Int)
   ensures res >= -1;
 {
@@ -344,13 +359,7 @@ procedure server() returns (res:Int)
   }
   
   var iQuit := false;
-
-  var dataFd := recvDataConnection(cmdFd);
-  if (dataFd <= -1) {
-    var closed := gclose(cmdFd);
-    return -1;
-  }
-  
+  var properQuit := false;
 
   while (!iQuit)
     invariant cmdFd >= 0
@@ -387,7 +396,10 @@ procedure server() returns (res:Int)
       }
       iQuit := temp;
     }
-    else {
+    else if (is_quit(final)) {
+      properQuit := true;
+      iQuit := true;
+    } else {
       var badPacket := new Array<Byte>(4);
       badPacket := "500";
       var sent := tcp_send(cmdFd, badPacket, 4);
@@ -399,20 +411,21 @@ procedure server() returns (res:Int)
     free(final);
   }
  
-  var quitBuff := new Array<Byte>(5);
-  var recv := tcp_recv(cmdFd, quitBuff);
-  var quit := new Array<Byte>(5);
-  quit := "QUIT";
-  if (strcmp(quitBuff, quit) == 0) {
-    free(quit);
-    free(quitBuff);
+  //  var quitBuff := new Array<Byte>(5);
+  //var recv := tcp_recv(cmdFd, quitBuff);
+  //var quit := new Array<Byte>(5);
+  // quit := "QUIT";
+  //if (strcmp(quitBuff, quit) == 0) {
+    //  free(quit);
+    //free(quitBuff);
+  if (properQuit){
     var closed := gclose(cmdFd);
     closed := gclose(dataFd);
     return 0;
   }
   else {
-    free(quit);
-    free(quitBuff);
+    //  free(quit);
+    //free(quitBuff);
     return -1;
   }
 }
