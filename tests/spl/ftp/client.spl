@@ -167,7 +167,8 @@ procedure askFilename()
 }
 
 procedure doWeUpload()
-  returns (res: Bool)
+  returns (res: Int)
+  ensures res >= -1
 {
   var updown := new Array<Byte>(2);
 
@@ -177,23 +178,23 @@ procedure doWeUpload()
   if (written != strlen(text)) {
     free(text);
     free(updown);
-    return null;
+    return -1
   }
   free(text);
   var numChars := ggets(updown);
 
   if (numChars >= 2 || numChars <= 1){ //switched to 1 to catch the newline character at the end of the line
     free(updown);
-    return null;
+    return -1
   }
   updown[numChars -1] := int2byte(0);
   
   var uChar := new Array<Byte>(2);
   uChar := "u";
   if (strcmp(uChar, updown) == 0) {
-    return true; //we upload
+    return 1;
   } else {
-    return false;
+    return 0;
   }
 }
 
@@ -457,8 +458,12 @@ procedure Main(args: Array<Byte>)
   ensures  byte_array(args)
 {
   var upload := doWeUpload();
-  
-  res := client(upload);
-
+  if (upload == 1){
+    res := client(true);
+  } else if (upload == 0){
+    res := client(false);
+  } else {
+    res := -1;
+  }
   return res;
 }
