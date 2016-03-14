@@ -184,17 +184,17 @@ procedure doWeUpload()
   var numChars := ggets(updown);
 
   if (numChars == 2){
-    //  updown[1] := int2byte(0);
+    updown[1] := int2byte(0);
     var uChar := new Array<Byte>(2);
     uChar := "u";
     
-    if (strcmp(uChar, updown) == 0) {
-      free(updown);
-      return 1;
-    } else {
-      free(updown);
-      return 0;
-    }
+    //    if (strcmp(uChar, updown) == 0) {
+      //      free(updown);
+      //      return 1;
+      //    } else {
+    free(updown);
+    return 0;
+    //   }
 
   } else {
     free(updown);
