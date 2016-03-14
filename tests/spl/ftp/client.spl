@@ -226,11 +226,11 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
     free(buffer);
     return false;
   }
-  if ((filename.length < 0) || (filename.length > (65535 - 6))) {
+  if ((filename.length < 0) || (filename.length > (65535 - 7))) {
     free(buffer);
     return false;
   }
-  var commandSize := filename.length + 6;
+  var commandSize := filename.length + 7;
   var sendMsg := new Array<Byte>(commandSize);
   sendMsg := "STOR ";
   var copied := strcat(filename, sendMsg);

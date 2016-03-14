@@ -407,9 +407,9 @@ procedure server() returns (res:Int)
       iQuit := true;
       //something we did not expect
     }
-    free(filename);
-    free(final);
   }
+  free(filename);
+  free(final);
  
   //  var quitBuff := new Array<Byte>(5);
   //var recv := tcp_recv(cmdFd, quitBuff);
