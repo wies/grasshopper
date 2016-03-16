@@ -504,21 +504,100 @@ int connectTo (SPLArray_char* ip, SPLArray_char* port_1) {
 
 int doWeUpload () {
   int res_5;
-  return 1;
+  int written_1;
+  SPLArray_char* updown;
+  SPLArray_char* uChar;
+  int tmp_16;
+  SPLArray_char* tmp_15;
+  SPLArray_char* tmp_14;
+  SPLArray_char* tmp_13;
+  int textLen;
+  SPLArray_char* text_1;
+  int numChars_1;
+  
+  tmp_13 = newSPLArray_char( 2);
+  updown = tmp_13;
+  tmp_14 = newSPLArray_char( 28);
+  text_1 = tmp_14;
+  (text_1->arr[0]) = ((char) 117);
+  (text_1->arr[1]) = ((char) 112);
+  (text_1->arr[2]) = ((char) 108);
+  (text_1->arr[3]) = ((char) 111);
+  (text_1->arr[4]) = ((char) 97);
+  (text_1->arr[5]) = ((char) 100);
+  (text_1->arr[6]) = ((char) 32);
+  (text_1->arr[7]) = ((char) 40);
+  (text_1->arr[8]) = ((char) 117);
+  (text_1->arr[9]) = ((char) 41);
+  (text_1->arr[10]) = ((char) 32);
+  (text_1->arr[11]) = ((char) 111);
+  (text_1->arr[12]) = ((char) 114);
+  (text_1->arr[13]) = ((char) 32);
+  (text_1->arr[14]) = ((char) 100);
+  (text_1->arr[15]) = ((char) 111);
+  (text_1->arr[16]) = ((char) 119);
+  (text_1->arr[17]) = ((char) 110);
+  (text_1->arr[18]) = ((char) 108);
+  (text_1->arr[19]) = ((char) 111);
+  (text_1->arr[20]) = ((char) 97);
+  (text_1->arr[21]) = ((char) 100);
+  (text_1->arr[22]) = ((char) 32);
+  (text_1->arr[23]) = ((char) 40);
+  (text_1->arr[24]) = ((char) 100);
+  (text_1->arr[25]) = ((char) 41);
+  (text_1->arr[26]) = ((char) 58);
+  (text_1->arr[27]) = ((char) 0);
+  written_1 = gputs(text_1);
+  textLen = strlen(text_1);
+  free(text_1);
+  
+  if ((!(written_1 == textLen))) {
+    free(updown);
+    
+    return (-1);
+  } else {
+    numChars_1 = ggets(updown);
+    if ((numChars_1 == 1)) {
+      (updown->arr[1]) = ((char) 0);
+      tmp_15 = newSPLArray_char( 2);
+      uChar = tmp_15;
+      (uChar->arr[0]) = ((char) 117);
+      (uChar->arr[1]) = ((char) 0);
+      tmp_16 = strcmp(uChar, updown);
+      if ((tmp_16 == 0)) {
+        free(uChar);
+        
+        free(updown);
+        
+        return 1;
+      } else {
+        free(uChar);
+        
+        free(updown);
+        
+        return 0;
+      }
+    } else {
+      free(updown);
+      
+      return (-1);
+    }
+  }
+  return res_5;
 }
 
 bool downloadFile (int cmdFd_1, int dataFD, SPLArray_char* filename_2) {
   bool success_7;
-  int written_1;
-  SPLArray_int* tmp_21;
+  int written_2;
+  SPLArray_int* tmp_25;
+  SPLArray_char* tmp_24;
+  SPLArray_int* tmp_23;
+  SPLArray_char* tmp_22;
+  SPLArray_char* tmp_21;
   SPLArray_char* tmp_20;
   SPLArray_int* tmp_19;
   SPLArray_char* tmp_18;
   SPLArray_char* tmp_17;
-  SPLArray_char* tmp_16;
-  SPLArray_int* tmp_15;
-  SPLArray_char* tmp_14;
-  SPLArray_char* tmp_13;
   SPLArray_char* sizeMsg;
   SPLArray_char* sizeBuff;
   int size;
@@ -540,8 +619,8 @@ bool downloadFile (int cmdFd_1, int dataFD, SPLArray_char* filename_2) {
     return false;
   }
   cmdSize = (6 + (filename_2->length));
-  tmp_13 = newSPLArray_char( cmdSize);
-  sizeMsg = tmp_13;
+  tmp_17 = newSPLArray_char( cmdSize);
+  sizeMsg = tmp_17;
   (sizeMsg->arr[0]) = ((char) 83);
   (sizeMsg->arr[1]) = ((char) 73);
   (sizeMsg->arr[2]) = ((char) 90);
@@ -552,11 +631,11 @@ bool downloadFile (int cmdFd_1, int dataFD, SPLArray_char* filename_2) {
   sent_2 = tcp_send(cmdFd_1, sizeMsg, cmdSize);
   free(sizeMsg);
   
-  tmp_14 = newSPLArray_char( 128);
-  sizeBuff = tmp_14;
+  tmp_18 = newSPLArray_char( 128);
+  sizeBuff = tmp_18;
   recvData = tcp_recv(cmdFd_1, sizeBuff);
-  tmp_15 = newSPLArray_int( 1);
-  pleaseAccept = tmp_15;
+  tmp_19 = newSPLArray_int( 1);
+  pleaseAccept = tmp_19;
   (pleaseAccept->arr[0]) = 213;
   checked_1 = checkServerResponse(sizeBuff, pleaseAccept);
   free(pleaseAccept);
@@ -572,10 +651,10 @@ bool downloadFile (int cmdFd_1, int dataFD, SPLArray_char* filename_2) {
   if (((size <= 0) || (size > 65535))) {
     return false;
   }
-  tmp_16 = newSPLArray_char( size);
-  buffer = tmp_16;
-  tmp_17 = newSPLArray_char( cmdSize);
-  recvMsg = tmp_17;
+  tmp_20 = newSPLArray_char( size);
+  buffer = tmp_20;
+  tmp_21 = newSPLArray_char( cmdSize);
+  recvMsg = tmp_21;
   (recvMsg->arr[0]) = ((char) 82);
   (recvMsg->arr[1]) = ((char) 69);
   (recvMsg->arr[2]) = ((char) 84);
@@ -586,11 +665,11 @@ bool downloadFile (int cmdFd_1, int dataFD, SPLArray_char* filename_2) {
   sent_2 = tcp_send(cmdFd_1, recvMsg, cmdSize);
   free(recvMsg);
   
-  tmp_18 = newSPLArray_char( 4);
-  okMsg_1 = tmp_18;
+  tmp_22 = newSPLArray_char( 4);
+  okMsg_1 = tmp_22;
   ok_1 = tcp_recv(cmdFd_1, okMsg_1);
-  tmp_19 = newSPLArray_int( 2);
-  acceptThese_1 = tmp_19;
+  tmp_23 = newSPLArray_int( 2);
+  acceptThese_1 = tmp_23;
   (acceptThese_1->arr[0]) = 200;
   (acceptThese_1->arr[1]) = 150;
   checked_1 = checkServerResponse(okMsg_1, acceptThese_1);
@@ -604,11 +683,11 @@ bool downloadFile (int cmdFd_1, int dataFD, SPLArray_char* filename_2) {
     return false;
   }
   recvData = tcp_recv(dataFD, buffer);
-  tmp_20 = newSPLArray_char( 4);
-  okMsg_1 = tmp_20;
+  tmp_24 = newSPLArray_char( 4);
+  okMsg_1 = tmp_24;
   ok_1 = tcp_recv(cmdFd_1, okMsg_1);
-  tmp_21 = newSPLArray_int( 3);
-  pleaseAccept = tmp_21;
+  tmp_25 = newSPLArray_int( 3);
+  pleaseAccept = tmp_25;
   (pleaseAccept->arr[0]) = 200;
   (pleaseAccept->arr[1]) = 226;
   (pleaseAccept->arr[2]) = 250;
@@ -633,10 +712,10 @@ bool downloadFile (int cmdFd_1, int dataFD, SPLArray_char* filename_2) {
     
     return false;
   }
-  written_1 = gwrite(saveFD, buffer);
+  written_2 = gwrite(saveFD, buffer);
   free(buffer);
   
-  if ((written_1 < 0)) {
+  if ((written_2 < 0)) {
     return false;
   }
   close = gclose(saveFD);
@@ -667,7 +746,7 @@ bool equals (SPLArray_char* first, SPLArray_char* second) {
 
 int setupDataConnection (int cmdFd_2, SPLArray_char* port_2) {
   int connectedDataFD_1;
-  SPLArray_char* tmp_22;
+  SPLArray_char* tmp_26;
   int sent_3;
   SPLArray_char* portMsg;
   bool datalistening;
@@ -704,8 +783,8 @@ int setupDataConnection (int cmdFd_2, SPLArray_char* port_2) {
     
     return (-1);
   }
-  tmp_22 = newSPLArray_char( (6 + (port_2->length)));
-  portMsg = tmp_22;
+  tmp_26 = newSPLArray_char( (6 + (port_2->length)));
+  portMsg = tmp_26;
   (portMsg->arr[0]) = ((char) 80);
   (portMsg->arr[1]) = ((char) 79);
   (portMsg->arr[2]) = ((char) 82);
@@ -788,7 +867,7 @@ int strcmp (SPLArray_char* s1, SPLArray_char* s2) {
 
 SPLArray_char* strconcat (SPLArray_char* str1_2, SPLArray_char* str2_2) {
   SPLArray_char* res_9;
-  SPLArray_char* tmp_23;
+  SPLArray_char* tmp_27;
   int l2_1;
   int l1_1;
   int i_15;
@@ -797,8 +876,8 @@ SPLArray_char* strconcat (SPLArray_char* str1_2, SPLArray_char* str2_2) {
   l1_1 = strlen(str1_2);
   l2_1 = strlen(str2_2);
   
-  tmp_23 = newSPLArray_char( (l1_1 + l2_1));
-  copy_1 = tmp_23;
+  tmp_27 = newSPLArray_char( (l1_1 + l2_1));
+  copy_1 = tmp_27;
   i_15 = 0;
   while (true) {
     if (!((i_15 < l1_1))) {
@@ -819,12 +898,12 @@ SPLArray_char* strconcat (SPLArray_char* str1_2, SPLArray_char* str2_2) {
 
 SPLArray_char* strdup (SPLArray_char* str_2) {
   SPLArray_char* res_10;
-  SPLArray_char* tmp_24;
+  SPLArray_char* tmp_28;
   int i_17;
   SPLArray_char* copy_2;
   
-  tmp_24 = newSPLArray_char( (str_2->length));
-  copy_2 = tmp_24;
+  tmp_28 = newSPLArray_char( (str_2->length));
+  copy_2 = tmp_28;
   i_17 = 0;
   while (true) {
     if (!((i_17 < (str_2->length)))) {
@@ -852,12 +931,12 @@ int strlen (SPLArray_char* str_3) {
 
 bool uploadFile (int cmdFd_3, int dataFD_2, SPLArray_char* filename_3) {
   bool success_9;
-  SPLArray_int* tmp_30;
+  SPLArray_int* tmp_34;
+  SPLArray_char* tmp_33;
+  SPLArray_int* tmp_32;
+  SPLArray_char* tmp_31;
+  SPLArray_char* tmp_30;
   SPLArray_char* tmp_29;
-  SPLArray_int* tmp_28;
-  SPLArray_char* tmp_27;
-  SPLArray_char* tmp_26;
-  SPLArray_char* tmp_25;
   int size_3;
   int sentData;
   int sent_4;
@@ -882,8 +961,8 @@ bool uploadFile (int cmdFd_3, int dataFD_2, SPLArray_char* filename_3) {
   if ((opened < 0)) {
     return false;
   }
-  tmp_25 = newSPLArray_char( size_3);
-  buffer_7 = tmp_25;
+  tmp_29 = newSPLArray_char( size_3);
+  buffer_7 = tmp_29;
   read = gread(opened, buffer_7);
   if ((read < 0)) {
     free(buffer_7);
@@ -896,8 +975,8 @@ bool uploadFile (int cmdFd_3, int dataFD_2, SPLArray_char* filename_3) {
     return false;
   }
   commandSize = ((filename_3->length) + 6);
-  tmp_26 = newSPLArray_char( commandSize);
-  sendMsg = tmp_26;
+  tmp_30 = newSPLArray_char( commandSize);
+  sendMsg = tmp_30;
   (sendMsg->arr[0]) = ((char) 83);
   (sendMsg->arr[1]) = ((char) 84);
   (sendMsg->arr[2]) = ((char) 79);
@@ -908,11 +987,11 @@ bool uploadFile (int cmdFd_3, int dataFD_2, SPLArray_char* filename_3) {
   sent_4 = tcp_send(cmdFd_3, sendMsg, commandSize);
   free(sendMsg);
   
-  tmp_27 = newSPLArray_char( 4);
-  okMsg_2 = tmp_27;
+  tmp_31 = newSPLArray_char( 4);
+  okMsg_2 = tmp_31;
   ok_2 = tcp_recv(cmdFd_3, okMsg_2);
-  tmp_28 = newSPLArray_int( 2);
-  acceptThese_2 = tmp_28;
+  tmp_32 = newSPLArray_int( 2);
+  acceptThese_2 = tmp_32;
   (acceptThese_2->arr[0]) = 200;
   (acceptThese_2->arr[1]) = 150;
   checked_2 = checkServerResponse(okMsg_2, acceptThese_2);
@@ -926,11 +1005,11 @@ bool uploadFile (int cmdFd_3, int dataFD_2, SPLArray_char* filename_3) {
     return false;
   }
   sentData = tcp_send(dataFD_2, buffer_7, size_3);
-  tmp_29 = newSPLArray_char( 4);
-  okMsg_2 = tmp_29;
+  tmp_33 = newSPLArray_char( 4);
+  okMsg_2 = tmp_33;
   ok_2 = tcp_recv(cmdFd_3, okMsg_2);
-  tmp_30 = newSPLArray_int( 3);
-  pleaseAccept_1 = tmp_30;
+  tmp_34 = newSPLArray_int( 3);
+  pleaseAccept_1 = tmp_34;
   (pleaseAccept_1->arr[0]) = 200;
   (pleaseAccept_1->arr[1]) = 226;
   (pleaseAccept_1->arr[2]) = 250;
