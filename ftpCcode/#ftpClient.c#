@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 
+
 /*
  * Preloaded Code
  */
@@ -515,7 +516,7 @@ int doWeUpload () {
   SPLArray_char* text_1;
   int numChars_1;
   
-  tmp_13 = newSPLArray_char( 2);
+  tmp_13 = newSPLArray_char( 30);
   updown = tmp_13;
   tmp_14 = newSPLArray_char( 28);
   text_1 = tmp_14;
@@ -557,7 +558,7 @@ int doWeUpload () {
     return (-1);
   } else {
     numChars_1 = ggets(updown);
-    if ((numChars_1 == 1)) {
+    if ((numChars_1 == 2)) {
       (updown->arr[1]) = ((char) 0);
       tmp_15 = newSPLArray_char( 2);
       uChar = tmp_15;
