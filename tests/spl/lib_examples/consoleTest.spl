@@ -1,0 +1,26 @@
+include "../../../lib/console.spl";
+
+
+procedure Main(arg: Array<Byte>) returns (res: Int)
+    requires byte_array(arg)
+    ensures  byte_array(arg)
+{
+    var count := 0;
+    var content := new Array<Byte>(14);
+    content := "hello world!\n";
+    count := gputs(content);
+
+    var input := new Array<Byte>(128);
+
+    while (ggets(input) >= 0)
+      invariant byte_array(content) &*& content.length == 14
+      invariant byte_array(input)
+    {
+      content := "you said:\n";
+      count := gputs(content);
+      count := gputs(input);
+    }
+
+    free(content);
+    free(input);
+}
