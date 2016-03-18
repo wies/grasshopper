@@ -11,9 +11,8 @@ procedure doWeUpload()
   var text := new Array<Byte>(28);
   text := "upload (u) or download (d):";
   var written := gputs(text);
-  var textLen := strlen(text);
   free(text);
-  if (written != textLen) {
+  if (!written) {
     free(updown);
     return -1;
   } else {
@@ -24,7 +23,7 @@ procedure doWeUpload()
       var uChar := new Array<Byte>(2);
       uChar := "u";
     
-      if (strcmp(uChar, updown) == 0) {
+      if (gstrcmp(uChar, updown) == 0) {
         free(uChar);
 	free(updown);
 	return 1;

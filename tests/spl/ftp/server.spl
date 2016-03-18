@@ -92,7 +92,7 @@ procedure handleAuth(cmdFd: Int)
   var pass := new Array<Byte>(15);
   pass := "PASS anonymous";
   var isOkay := false;
-  if (strcmp(pass, sentPassword) == 0) {
+  if (gstrcmp(pass, sentPassword) == 0) {
     isOkay := true;
   }
   free(sentPassword);
@@ -219,7 +219,7 @@ procedure size_help(cmdFd: Int, filename: Array<Byte>) returns (fail: Bool)
   sizePacket[0] := int2byte(sizeF);
   var goodPacket := new Array<Byte>(6);
   goodPacket := "213 "; 
-  var finished := strcat(sizePacket, goodPacket);
+  var finished := gstrcat(sizePacket, goodPacket);
   var sent := tcp_send(cmdFd, goodPacket, 6);
   free(sizePacket);
   free(goodPacket);
@@ -259,7 +259,7 @@ procedure process_string(thing:Array<Byte>) returns (out: Array<Byte>)
   //if (thing[thing.length-1] != int2byte(0)){
     out := new Array<Byte>(thing.length + 1);
     out[0] := int2byte(0);
-    var copied := strcat(thing, out);
+    var copied := gstrcat(thing, out);
     free(thing);
     out[out.length -1] := int2byte(0);
     return out;
@@ -273,7 +273,7 @@ procedure is_stor(cmd: Array<Byte>) returns (is: Bool)
 {
   var stor := new Array<Byte>(5);
   stor := "STOR";
-  if (strcmp(cmd, stor) == 0) {
+  if (gstrcmp(cmd, stor) == 0) {
     free(stor);
     return true;
   } else {
@@ -288,7 +288,7 @@ procedure is_size(cmd: Array<Byte>) returns (is: Bool)
 {
   var size := new Array<Byte>(5);
   size := "SIZE";
-  if (strcmp(cmd, size) == 0) {
+  if (gstrcmp(cmd, size) == 0) {
     free(size);
     return true;
   } else {
@@ -303,7 +303,7 @@ procedure is_retr(cmd: Array<Byte>) returns (is: Bool)
 {
   var retr := new Array<Byte>(5);
   retr := "RETR";
-  if (strcmp(cmd, retr) == 0) {
+  if (gstrcmp(cmd, retr) == 0) {
     free(retr);
     return true;
   } else {
@@ -318,7 +318,7 @@ procedure is_quit(cmd: Array<Byte>) returns (is: Bool)
 {
   var quit := new Array<Byte>(5);
   quit := "QUIT";
-  if (strcmp(cmd, quit) == 0) {
+  if (gstrcmp(cmd, quit) == 0) {
     free(quit);
     return true;
   } else {
@@ -416,7 +416,7 @@ procedure server() returns (res:Int)
   //var recv := tcp_recv(cmdFd, quitBuff);
   //var quit := new Array<Byte>(5);
   // quit := "QUIT";
-  //if (strcmp(quitBuff, quit) == 0) {
+  //if (gstrcmp(quitBuff, quit) == 0) {
     //  free(quit);
     //free(quitBuff);
   if (properQuit){

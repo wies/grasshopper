@@ -5,10 +5,10 @@ procedure Main(arg: Array<Byte>) returns (res: Int)
     requires byte_array(arg)
     ensures  byte_array(arg)
 {
-    var count := 0;
+    var success := true;
     var content := new Array<Byte>(14);
     content := "hello world!\n";
-    count := gputs(content);
+    success := gputs(content);
 
     var input := new Array<Byte>(128);
 
@@ -17,8 +17,8 @@ procedure Main(arg: Array<Byte>) returns (res: Int)
       invariant byte_array(input)
     {
       content := "you said:\n";
-      count := gputs(content);
-      count := gputs(input);
+      success := gputs(content);
+      success := gputs(input);
     }
 
     free(content);

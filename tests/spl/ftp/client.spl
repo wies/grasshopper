@@ -68,7 +68,7 @@ procedure setupDataConnection(cmdFd: Int, port: Array<Byte>)
   }
   var portMsg := new Array<Byte>(6 + port.length);
   portMsg := "PORT ";
-  var copied := strcat(port, portMsg);
+  var copied := gstrcat(port, portMsg);
   var sent := tcp_send(cmdFd, portMsg, portMsg.length);
   free(portMsg);
   if (sent != portMsg.length) {
@@ -149,8 +149,7 @@ procedure askFilename()
 
   var text := new Array<Byte>(24);
   text := "input the file name:";
-  var written := gputs(text);
-  if (written != strlen(text)) {
+  if (gputs(text)) {
     free(text);
     free(filename);
     return null;
@@ -194,7 +193,7 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   var commandSize := filename.length + 6; //7??
   var sendMsg := new Array<Byte>(commandSize);
   sendMsg := "STOR ";
-  var copied := strcat(filename, sendMsg);
+  var copied := gstrcat(filename, sendMsg);
   var sent := tcp_send(cmdFd, sendMsg, commandSize);
   free(sendMsg);
   //Get confirmation from the server
@@ -266,7 +265,7 @@ procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   var cmdSize := 6 + filename.length;
   var sizeMsg := new Array<Byte>(cmdSize);
   sizeMsg := "SIZE ";
-  var copied := strcat(filename, sizeMsg);
+  var copied := gstrcat(filename, sizeMsg);
   var sent := tcp_send(cmdFd, sizeMsg, cmdSize);
   //We get confirmation from the server when it sends us the size back.  
   free(sizeMsg); 
@@ -297,7 +296,7 @@ procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   var buffer := new Array<Byte>(size);
   var recvMsg := new Array<Byte>(cmdSize);
   recvMsg := "RETR ";
-  copied := strcat(filename, recvMsg); 
+  copied := gstrcat(filename, recvMsg); 
   sent := tcp_send(cmdFd, recvMsg, cmdSize);
   free(recvMsg);
 

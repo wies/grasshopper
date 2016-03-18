@@ -25,7 +25,7 @@ procedure equals(first: Array<Byte>, second: Array<Byte>)
 
 /*
 //inspired from http://en.wikibooks.org/wiki/C_Programming/Strings#The_strcmp_function
-procedure strcmp(s1: Array<Byte>, s2: Array<Byte>)
+procedure gstrcmp(s1: Array<Byte>, s2: Array<Byte>)
   returns (res: Int)
   requires byte_array(s1) &+& byte_array(s2)
   ensures byte_array(s1) &+& byte_array(s2)
@@ -56,7 +56,7 @@ procedure strcmp(s1: Array<Byte>, s2: Array<Byte>)
     return 1;
 }
                  
-procedure strdup(str: Array<Byte>)
+procedure gstrdup(str: Array<Byte>)
   returns (res: Array<Byte>)
   requires byte_array(str)
   ensures byte_array(str) &*& byte_array(res)
@@ -79,7 +79,7 @@ procedure strdup(str: Array<Byte>)
 }
 */
 
-procedure strlen(str: Array<Byte>)
+procedure gstrlen(str: Array<Byte>)
   returns (res: Int)
   requires byte_array(str)
   ensures byte_array(str)
@@ -141,8 +141,8 @@ procedure strconcat(str1: Array<Byte>, str2: Array<Byte>)
   ensures byte_array(str1) &*& byte_array(str2) &*& byte_array(res)
   ensures res.length <= str1.length + str2.length
 {
-  var l1 := strlen(str1);
-  var l2 := strlen(str2);
+  var l1 := gstrlen(str1);
+  var l2 := gstrlen(str2);
   pure assume(str1.length + str2.length < 65535); //TODO fix that
   var copy := new Array<Byte>(l1 + l2);
   var i := 0;
@@ -174,14 +174,14 @@ procedure strconcat(str1: Array<Byte>, str2: Array<Byte>)
 }
 
 //TODO stronger spec
-procedure strcat(str1: Array<Byte>, str2: Array<Byte>)
+procedure gstrcat(str1: Array<Byte>, str2: Array<Byte>)
   returns (res: Int)
   requires byte_array(str1) &*& byte_array(str2)
   ensures  byte_array(str1) &*& byte_array(str2)
   ensures  0 <= res && res <= str1.length
 {
-  var l1 := strlen(str1);
-  var l2 := strlen(str2);
+  var l1 := gstrlen(str1);
+  var l2 := gstrlen(str2);
   var copy_size := str2.length - l2;
   if (copy_size > l1) {
     copy_size := l1;
