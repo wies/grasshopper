@@ -149,12 +149,12 @@ procedure askFilename()
 
   var text := new Array<Byte>(24);
   text := "input the file name:";
-  if (!(gputs(text))) {
-    free(text);
+  var putted := gputs(text);
+  free(text);
+  if (!putted) {
     free(filename);
     return null;
   }
-  free(text);
   var numChars := ggets(filename);
 
   if (numChars >= 100 || numChars <= 1){ //switched to 1 to catch the newline character at the end of the line
