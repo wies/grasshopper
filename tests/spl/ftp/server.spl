@@ -318,6 +318,9 @@ procedure server() returns (res:Int)
   port := "4444";
 
   var cmdFd := -1;
+  if (port.length > 65535) {
+    return -1;
+  }
 
   var cmdAddr := get_address4(null, port);
   free(port);
