@@ -149,7 +149,7 @@ procedure askFilename()
 
   var text := new Array<Byte>(24);
   text := "input the file name:";
-  if (gputs(text)) {
+  if (!(gputs(text))) {
     free(text);
     free(filename);
     return null;
