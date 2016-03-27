@@ -6,7 +6,7 @@ procedure doWeUpload()
   ensures (res == -1) || (res == 1) || (res == 0)
 {
 
-  var updown := new Array<Byte>(2);
+  var updown := new Array<Byte>(30);
 
   var text := new Array<Byte>(28);
   text := "upload (u) or download (d):";
@@ -19,17 +19,23 @@ procedure doWeUpload()
     var numChars := ggets(updown);
 
     if (numChars == 2) {
-      updown[1] := int2byte(0);
+      var copy := new Array<Byte>(2);
+      copy[0] := updown[0];
+      copy[1] := int2byte(0);
+      free(updown);
+      //      updown[1] := int2byte(0);
       var uChar := new Array<Byte>(2);
       uChar := "u";
     
-      if (gstrcmp(uChar, updown) == 0) {
+      if (gstrcmp(uChar, copy) == 0) {
         free(uChar);
-	free(updown);
+	//	free(updown);
+	free(copy);
 	return 1;
       } else {
 	free(uChar);
-	free(updown);
+	//free(updown);
+	free(copy);
 	return 0;
       }
     } else {
