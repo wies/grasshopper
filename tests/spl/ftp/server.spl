@@ -339,7 +339,7 @@ procedure server() returns (res:Int)
     invariant cmdFd >= -1
     invariant byte_array(port)
   {
-    cmdFd := connectMeCommand(port);
+    cmdFd := connectMeCommand(tempCmdFd, cmdAddr);
   }
   free(cmdAddr);
   //  if (cmdFd <= -1) {
