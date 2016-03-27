@@ -374,7 +374,7 @@ procedure client(upload: Bool)
   free(port);
   if (connectedDataFD == -1) {
     var closed := gclose(fd);
-    closed := gclose(connectedDataFd);
+    closed := gclose(connectedDataFD);
     return 3;
   }
   //now we can receive a bunch of data
