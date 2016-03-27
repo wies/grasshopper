@@ -19,7 +19,7 @@ procedure connectMeCommand(cmdFd: Int, cmdAddr: SocketAddressIP4) returns (res: 
   
   var connFd := accept4(cmdFd, cmdAddr);
   //  free(cmdAddr);
-  var closed := gclose(cmdFd);
+  //  var closed := gclose(cmdFd);
   return connFd;
 }
 
@@ -331,11 +331,13 @@ procedure server() returns (res:Int)
   var tempCmdFd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (tempCmdFd < 0) {
     free(cmdAddr);
+    var closed := gclose(tempCmdFd);
     return -1;
   }
   var bound := bind4(tempCmdFd, cmdAddr);
   if (!bound) {
     free(cmdAddr);
+    var closed := gclose(tempCmdFd);
     return -1;
   }
 
@@ -347,6 +349,7 @@ procedure server() returns (res:Int)
   {
     cmdFd := connectMeCommand(tempCmdFd, cmdAddr);
   }
+  var closedTemp := gclose(tempCmdFd);
   free(cmdAddr);
   //  if (cmdFd <= -1) {
     //  return -1;
@@ -356,12 +359,15 @@ procedure server() returns (res:Int)
   //  free(port);
   if (dataFd <= -1) {
     var closed := gclose(cmdFd);
+    closed := gclose(dataFd);
     return -1;
   }
  
   //if handleAuth fails, abort.
   var authenticated := handleAuth(cmdFd);
   if (!authenticated){
+    var closed := gclose(cmdFd);
+    closed := gclose(dataFd);
     return -1;
   }
   
@@ -426,9 +432,10 @@ procedure server() returns (res:Int)
   //if (gstrcmp(quitBuff, quit) == 0) {
     //  free(quit);
     //free(quitBuff);
+  var closed := gclose(cmdFd);
+  closed := gclose(dataFd);
+
   if (properQuit){
-    var closed := gclose(cmdFd);
-    closed := gclose(dataFd);
     return 0;
   }
   else {

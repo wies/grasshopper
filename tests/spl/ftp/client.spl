@@ -27,7 +27,6 @@ procedure connectTo(ip: Array<Byte>, port: Array<Byte>)
     return fd;
   } else {
     free(addr);
-    var closing := gclose(fd);
     return -1;
   }
 }
@@ -365,6 +364,7 @@ procedure client(upload: Bool)
   var fd := connectTo(null, port);
   if (fd == -1) {
     free(port);
+    var closed := gclose(fd);
     return 2;
   }
 
@@ -373,6 +373,8 @@ procedure client(upload: Bool)
   var connectedDataFD := setupDataConnection(fd, port);
   free(port);
   if (connectedDataFD == -1) {
+    var closed := gclose(fd);
+    closed := gclose(connectedDataFd);
     return 3;
   }
   //now we can receive a bunch of data
@@ -383,12 +385,16 @@ procedure client(upload: Bool)
 
   var authenticated := authenticate(fd);
   if (!authenticated) {
+    var closed := gclose(fd);
+    closed := gclose(connectedDataFd);
     return 4;
   }
 
   var filename := askFilename();
   
   if (filename == null) {
+    var closed := gclose(fd);
+    closed := gclose(connectedDataFd);
     return 5;
   }
 
@@ -402,6 +408,8 @@ procedure client(upload: Bool)
   }
   free(filename);
   if (!success) {
+    var closed := gclose(fd);
+    closed := gclose(connectedDataFd);
     return 6;
   }
   var closeConn := gclose(connectedDataFD);
