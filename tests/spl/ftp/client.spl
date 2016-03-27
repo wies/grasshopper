@@ -409,7 +409,7 @@ procedure client(upload: Bool)
   free(filename);
   if (!success) {
     var closed := gclose(fd);
-    closed := gclose(connectedDataFd);
+    closed := gclose(connectedDataFD);
     return 6;
   }
   var closeConn := gclose(connectedDataFD);
