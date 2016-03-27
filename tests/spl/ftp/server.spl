@@ -342,7 +342,7 @@ procedure server() returns (res:Int)
   while(cmdFd < 0) 
     invariant cmdFd >= -1
     invariant socket_addr_4(cmdAddr)
-    invariant tempCmdF >= -1
+    invariant tempCmdFd >= -1
       //    invariant byte_array(port)
   {
     cmdFd := connectMeCommand(tempCmdFd, cmdAddr);
