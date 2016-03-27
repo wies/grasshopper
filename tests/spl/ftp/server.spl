@@ -4,37 +4,21 @@ include "../../../lib/console.spl";
 include "../array/string.spl";
 include "../array/copy_byte_slice.spl";
 
-procedure connectMeCommand(port: Array<Byte>) returns (res: Int)
-  requires byte_array(port)
-  ensures byte_array(port) //emp //byte_array(port)
+
+procedure connectMeCommand(cmdFd: Int, cmdAddr: SocketAddressIP4) returns (res: Int)
+  requires socket_addr_4(cmdAddr)
+  requires cmdFd >= 0
+  ensures socket_addr_4(cmdAddr)
   ensures res >= -1
 {
-  var cmdAddr := get_address4(null, port);
-  //  free(port);
-  if (cmdAddr == null) {
-    return -1;
-  }
-
-  var cmdFd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if (cmdFd == -1) {
-    free(cmdAddr);
-    return -1;
-  }
-    
-  var bound := bind4(cmdFd, cmdAddr);
-  if (!bound) {
-    free(cmdAddr);
-    return -1;
-  }
-
   var listening := glisten(cmdFd, 10);
   if (!listening) {
-    free(cmdAddr);
+    //    free(cmdAddr);
     return -1;
   }
   
   var connFd := accept4(cmdFd, cmdAddr);
-  free(cmdAddr);
+  //  free(cmdAddr);
   var closed := gclose(cmdFd);
   return connFd;
 }
@@ -335,12 +319,29 @@ procedure server() returns (res:Int)
 
   var cmdFd := -1;
 
+  var cmdAddr := get_address4(null, port);
+  if (cmdAddr == null) {
+    return -1;
+  }
+
+  var tempCmdFd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (tempCmdFd < 0) {
+    free(cmdAddr);
+    return -1;
+  }
+  var bound := bind4(tempCmdFd, cmdAddr);
+  if (!bound) {
+    free(cmdAddr);
+    return -1;
+  }
+
   while(cmdFd < 0) 
     invariant cmdFd >= -1
     invariant byte_array(port)
   {
     cmdFd := connectMeCommand(port);
   }
+  free(cmdAddr);
   //  if (cmdFd <= -1) {
     //  return -1;
     // }
