@@ -386,7 +386,7 @@ procedure client(upload: Bool)
   var authenticated := authenticate(fd);
   if (!authenticated) {
     var closed := gclose(fd);
-    closed := gclose(connectedDataFd);
+    closed := gclose(connectedDataFD);
     return 4;
   }
 
@@ -394,7 +394,7 @@ procedure client(upload: Bool)
   
   if (filename == null) {
     var closed := gclose(fd);
-    closed := gclose(connectedDataFd);
+    closed := gclose(connectedDataFD);
     return 5;
   }
 
