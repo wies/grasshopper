@@ -6,7 +6,7 @@ procedure doWeUpload()
   ensures (res == -1) || (res == 1) || (res == 0)
 {
 
-  var updown := new Array<Byte>(30);
+  var updown := new Array<Byte>(2);
 
   var text := new Array<Byte>(28);
   text := "upload (u) or download (d):";
