@@ -331,7 +331,6 @@ procedure server() returns (res:Int)
   var tempCmdFd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (tempCmdFd < 0) {
     free(cmdAddr);
-    var closed := gclose(tempCmdFd);
     return -1;
   }
   var bound := bind4(tempCmdFd, cmdAddr);
@@ -359,7 +358,6 @@ procedure server() returns (res:Int)
   //  free(port);
   if (dataFd <= -1) {
     var closed := gclose(cmdFd);
-    closed := gclose(dataFd);
     return -1;
   }
  
