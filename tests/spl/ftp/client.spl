@@ -225,7 +225,7 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   acceptThese := new Array<Int>(2);
   acceptThese[0] := 200;
   acceptThese[1] := 150;
-  var checked := checkServerResponse(okMsg, acceptThese);
+  checked := checkServerResponse(okMsg, acceptThese);
   free(okMsg);
   free(acceptThese);
   if (!checked) {
