@@ -94,15 +94,8 @@ procedure authenticate(cmdFd: Int)
   var okMsg := new Array<Byte>(4);
   var ok := tcp_recv(cmdFd, okMsg);
   //valid responses are 200, 230, 234, 300, 331
-  var acceptables := new Array<Int>(5);
-  acceptables[0] := 200;
-  acceptables[1] := 230;
-  acceptables[2] := 234;
-  acceptables[3] := 300;
-  acceptables[4] := 331;
-  var checked := checkServerResponse(okMsg, acceptables);
+  var checked := checkServerResponseUSER(okMsg);
   free(okMsg);
-  free(acceptables);
   if (!checked) {
     return false;
   }
@@ -120,14 +113,8 @@ procedure authenticate(cmdFd: Int)
   //receive confirmation by the server.  Acceptable responses include 200, 230, 202, 234
   okMsg := new Array<Byte>(4);
   ok := tcp_recv(cmdFd, okMsg);
-  var acceptThese := new Array<Int>(4);
-  acceptThese[0] := 200;
-  acceptThese[1] := 202;
-  acceptThese[2] := 230;
-  acceptThese[3] := 234;
-  checked := checkServerResponse(okMsg, acceptThese);
+  checked := checkServerResponsePASS(okMsg);
   free(okMsg);
-  free(acceptThese);
   if (!checked) {
     return false;
   }
@@ -142,7 +129,7 @@ procedure authenticate(cmdFd: Int)
 
 procedure askFilename()
   returns (fn: Array<Byte>)
-  ensures fn == null || byte_array(fn)
+  ensures fn == null || (byte_array(fn) &*& fn.length == 100)
 {
   var filename := new Array<Byte>(100); //we decide max filename length is 100
 
@@ -183,11 +170,8 @@ procedure allo_help(size:Int, cmdFd:Int) returns (success:Bool)
   var okMsg := new Array<Byte>(4);
   var ok := tcp_recv(cmdFd, okMsg);
 
-  var acceptThese := new Array<Int>(1);
-  acceptThese[0] := 200;
-  var checked := checkServerResponse(okMsg, acceptThese);
+  var checked := checkServerResponse_200(okMsg);
   free(okMsg);
-  free(acceptThese);
   if (!checked) {
     return false;
   }
@@ -195,6 +179,9 @@ procedure allo_help(size:Int, cmdFd:Int) returns (success:Bool)
 }
 
 procedure store_send_help(cmdFd: Int, filename: Array<Byte>) returns (success: Bool)
+  requires cmdFd >= 0
+  requires byte_array(filename) &*& filename.length <= (65535 - 6)
+  ensures byte_array(filename)
 {
   var commandSize := filename.length + 6; //7??
   var sendMsg := new Array<Byte>(commandSize);
@@ -206,12 +193,8 @@ procedure store_send_help(cmdFd: Int, filename: Array<Byte>) returns (success: B
   var okMsg := new Array<Byte>(4);
   var ok := tcp_recv(cmdFd, okMsg);
 
-  var acceptThese := new Array<Int>(2);
-  acceptThese[0] := 200;
-  acceptThese[1] := 150;
-  var checked := checkServerResponse(okMsg, acceptThese);
+  var checked := checkServerResponse_200_150(okMsg);
   free(okMsg);
-  free(acceptThese);
   if (!checked) {
     return false;
   }
@@ -221,15 +204,9 @@ procedure store_send_help(cmdFd: Int, filename: Array<Byte>) returns (success: B
 procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   returns (success: Bool)
   requires cmdFd >= 0 && dataFD >= 0
-  requires byte_array(filename)
+  requires byte_array(filename) &*& filename.length <= (65535 - 6)
   ensures byte_array(filename)
 {
-  //moved up from below gopen
-  if ((filename.length < 0) || (filename.length > (65535 - 6))) {
-    //    free(buffer);
-    return false;
-  }
-
   var size := fileSize(filename);
   if ((size < 0) || (size > 65535)){
     return false;
@@ -262,13 +239,8 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   var okMsg := new Array<Byte>(4);
   var ok := tcp_recv(cmdFd, okMsg);
 
-  var pleaseAccept := new Array<Int>(3);
-  pleaseAccept[0] := 200;
-  pleaseAccept[1] := 226;
-  pleaseAccept[2] := 250;
-  var checked := checkServerResponse(okMsg, pleaseAccept);
+  var checked := checkServerResponse_200_226_250(okMsg);
   free(okMsg);
-  free(pleaseAccept);
   free(buffer);
   if (!checked) {
     return false;
@@ -298,10 +270,7 @@ procedure sizeHelp(cmdFd: Int, filename: Array<Byte>, cmdSize: Int) returns (suc
   var sizeBuff := new Array<Byte>(128); //this could probably be smaller
   var recvData := tcp_recv(cmdFd, sizeBuff); //response gets sent on command buffer
 
-  var pleaseAccept := new Array<Int>(1);
-  pleaseAccept[0] := 213;
-  var checked := checkServerResponse(sizeBuff, pleaseAccept);
-  free(pleaseAccept);
+  var checked := checkServerResponse_213(sizeBuff);
   if (!checked) {
     free(sizeBuff);
     return -1;
@@ -330,12 +299,8 @@ procedure retrHelp(cmdFd: Int, filename: Array<Byte>, cmdSize: Int) returns (suc
   var okMsg := new Array<Byte>(4);
   var ok := tcp_recv(cmdFd, okMsg);
 
-  var acceptThese := new Array<Int>(2);
-  acceptThese[0] := 200;
-  acceptThese[1] := 150;
-  var checked := checkServerResponse(okMsg, acceptThese);
+  var checked := checkServerResponse_200_150(okMsg);
   free(okMsg);
-  free(acceptThese);
   if (!checked) {
     return false;
   }
@@ -372,13 +337,8 @@ procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   var okMsg := new Array<Byte>(4);
   var ok := tcp_recv(cmdFd, okMsg);
 
-  var pleaseAccept := new Array<Int>(3);
-  pleaseAccept[0] := 200;
-  pleaseAccept[1] := 226;
-  pleaseAccept[2] := 250;
-  var checked := checkServerResponse(okMsg, pleaseAccept);
+  var checked := checkServerResponse_200_226_250(okMsg);
   free(okMsg);
-  free(pleaseAccept);
 
   if (!checked) {
     free(buffer);

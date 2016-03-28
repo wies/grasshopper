@@ -1,23 +1,110 @@
 include "../array/string.spl";
 include "../array/int_array.spl";
 
-procedure checkServerResponse(response: Array<Byte>, acceptables: Array<Int>) 
-  returns (success: Bool)
-  requires (byte_array(response) &*& array(acceptables))
-  ensures (byte_array(response) &*& array(acceptables))
-{
-  var i := 0;
-  var ack := atoiG(response);
-  success := false;
+//  procedure checkServerResponse(response: Array<Byte>, acceptables: Array<Int>) 
+//    returns (success: Bool)
+//    requires (byte_array(response) &*& array(acceptables))
+//    ensures (byte_array(response) &*& array(acceptables))
+//  {
+//    var i := 0;
+//    var ack := atoiG(response);
+//    success := false;
 
-  while (i < acceptables.length)
-    invariant i >= 0 && i <= acceptables.length
-    invariant byte_array(response) &*& array(acceptables)
-      //      invariant forall j: Int:: j >= 0 && j < i ==>
-  {
-    if (ack == acceptables[i]) {
-      success := true;
-    }
-  }
+//    while (i < acceptables.length)
+//      invariant i >= 0 && i <= acceptables.length
+//      invariant byte_array(response) &*& array(acceptables)
+//        //      invariant forall j: Int:: j >= 0 && j < i ==>
+//    {
+//      if (ack == acceptables[i]) {
+//        success := true;
+//      }
+//      i := i + 1;
+//    }
+//    return success;
+//  }
+
+procedure checkServerResponseUSER(response: Array<Byte>)
+  returns (success: Bool)
+  requires byte_array(response)
+  ensures byte_array(response)
+{
+  var ack := atoiG(response);
+  if ((ack == 200) ||
+      (ack == 230) ||
+      (ack == 234) ||
+      (ack == 300) ||
+      (ack == 331) )
+    success := true;
+  else
+    success := false;
+  return success;
+}
+
+procedure checkServerResponsePASS(response: Array<Byte>)
+  returns (success: Bool)
+  requires byte_array(response)
+  ensures byte_array(response)
+{
+  var ack := atoiG(response);
+  if ((ack == 200) ||
+      (ack == 202) ||
+      (ack == 230) ||
+      (ack == 234))
+    success := true;
+  else
+    success := false;
+  return success;
+}
+
+procedure checkServerResponse_200(response: Array<Byte>)
+  returns (success: Bool)
+  requires byte_array(response)
+  ensures byte_array(response)
+{
+  var ack := atoiG(response);
+  if (ack == 200)
+    return true;
+  else
+    return false;
+}
+
+procedure checkServerResponse_213(response: Array<Byte>)
+  returns (success: Bool)
+  requires byte_array(response)
+  ensures byte_array(response)
+{
+  var ack := atoiG(response);
+  if (ack == 213)
+    return true;
+  else
+    return false;
+}
+
+procedure checkServerResponse_200_150(response: Array<Byte>)
+  returns (success: Bool)
+  requires byte_array(response)
+  ensures byte_array(response)
+{
+  var ack := atoiG(response);
+  if ((ack == 200) ||
+      (ack == 150))
+    success := true;
+  else
+    success := false;
+  return success;
+}
+
+procedure checkServerResponse_200_226_250(response: Array<Byte>)
+  returns (success: Bool)
+  requires byte_array(response)
+  ensures byte_array(response)
+{
+  var ack := atoiG(response);
+  if ((ack == 200) ||
+      (ack == 226) ||
+      (ack == 250))
+    success := true;
+  else
+    success := false;
   return success;
 }
