@@ -213,7 +213,7 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
     return false;
   }
   var commandSize := filename.length + 6; //7??
-  var sendMsg := new Array<Byte>(commandSize);
+  sendMsg := new Array<Byte>(commandSize);
   sendMsg := "STOR ";
   var copied := gstrcat(filename, sendMsg);
   var sent := tcp_send(cmdFd, sendMsg, commandSize);
