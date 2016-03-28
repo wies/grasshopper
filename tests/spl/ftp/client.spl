@@ -165,16 +165,10 @@ procedure askFilename()
 
 }
 
-procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
-  returns (success: Bool)
-  requires cmdFd >= 0 && dataFD >= 0
-  requires byte_array(filename)
-  ensures byte_array(filename)
+procedure allo_help(size:Int, cmdFd:Int) returns (success:Bool)
+  requires cmdFd >= 0
+  requires ((size >= 0) && (size <= 65535))
 {
-  var size := fileSize(filename);
-  if ((size < 0) || (size > 65535)){
-    return false;
-  }
 
   var alloSize := new Array<Byte>(2);
   alloSize[0] := int2byte(size);
@@ -197,6 +191,54 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   if (!checked) {
     return false;
   }
+  return true;
+}
+
+procedure store_send_help(cmdFd: Int, filename: Array<Byte>) returns (success: Bool)
+{
+  var commandSize := filename.length + 6; //7??
+  var sendMsg := new Array<Byte>(commandSize);
+  sendMsg := "STOR ";
+  var copied := gstrcat(filename, sendMsg);
+  var sent := tcp_send(cmdFd, sendMsg, commandSize);
+  free(sendMsg);
+  //Get confirmation from the server
+  okMsg := new Array<Byte>(4);
+  ok := tcp_recv(cmdFd, okMsg);
+
+  var acceptThese := new Array<Int>(2);
+  acceptThese[0] := 200;
+  acceptThese[1] := 150;
+  var checked := checkServerResponse(okMsg, acceptThese);
+  free(okMsg);
+  free(acceptThese);
+  if (!checked) {
+    return false;
+  }
+  return true;
+}
+
+procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
+  returns (success: Bool)
+  requires cmdFd >= 0 && dataFD >= 0
+  requires byte_array(filename)
+  ensures byte_array(filename)
+{
+  //moved up from below gopen
+  if ((filename.length < 0) || (filename.length > (65535 - 6))) {
+    free(buffer);
+    return false;
+  }
+
+  var size := fileSize(filename);
+  if ((size < 0) || (size > 65535)){
+    return false;
+  }
+
+  var allo_check := allo_help(size, cmdFd);
+  if (!allo_check){
+    return false;
+  }
 
   var opened := gopen(filename, O_CREAT | O_RDONLY);
   if (opened < 0){
@@ -208,39 +250,13 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
     free(buffer);
     return false;
   }
-  if ((filename.length < 0) || (filename.length > (65535 - 6))) {
-    free(buffer);
-    return false;
-  }
-  var commandSize := filename.length + 6; //7??
-  sendMsg := new Array<Byte>(commandSize);
-  sendMsg := "STOR ";
-  copied := gstrcat(filename, sendMsg);
-  sent := tcp_send(cmdFd, sendMsg, commandSize);
-  free(sendMsg);
-  //Get confirmation from the server
-  okMsg := new Array<Byte>(4);
-  ok := tcp_recv(cmdFd, okMsg);
 
-  acceptThese := new Array<Int>(2);
-  acceptThese[0] := 200;
-  acceptThese[1] := 150;
-  checked := checkServerResponse(okMsg, acceptThese);
-  free(okMsg);
-  free(acceptThese);
-  if (!checked) {
+  var stored := store_send_help(cmdFd, filename);
+  if (!stored){
     free(buffer);
     return false;
   }
 
-  /*  var ack := atoi(okMsg);
-  if ((ack != 200) && (ack != 150)) { //note that it might actually return something else that starts with two, but ends in other things (200, 150)
-    free(okMsg);
-    free(buffer);
-    return false;
-  }
-  free(okMsg);
-  */
   var sentData := tcp_send(dataFD, buffer, size);
   //get confirmation from the server (200, 226, 250)
   okMsg := new Array<Byte>(4);
@@ -257,16 +273,7 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   if (!checked) {
     return false;
   }
-  /*
-  ack := atoi(okMsg);
-  if ((ack != 200) && (ack != 226) && (ack != 250)) {
-    free(okMsg);
-    free(buffer);
-    return false;
-  }
-  free(okMsg);
-  free(buffer);
-  */
+
   var close := gclose(opened);
   if (sentData == size) {
     return true;
@@ -275,16 +282,13 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   }
 }
 
-procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
-  returns (success: Bool)
-  requires cmdFd >= 0 && dataFD >= 0
+procedure sizeHelp(cmdFd: Int, filename: Array<Byte>, cmdSize: Int) returns (success: Int)
+  requires cmdF >= 0
   requires byte_array(filename)
+  requires ((cmdSize >= 0) && (cmdSize <= 65535))
   ensures byte_array(filename)
+  ensures ((success >= -1) && (success <= 65535))
 {
-  if ((filename.length <= 0) || (filename.length > (65535-6))) { //maybe we should include zero as well.  65535-6 comes from byte_array.spl's max length.  We subtract 6 because we add 6 later on.  
-    return false;
-  }
-  var cmdSize := 6 + filename.length;
   var sizeMsg := new Array<Byte>(cmdSize);
   sizeMsg := "SIZE ";
   var copied := gstrcat(filename, sizeMsg);
@@ -300,26 +304,27 @@ procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   free(pleaseAccept);
   if (!checked) {
     free(sizeBuff);
-    return false;
+    return -1;
   }
-  /*
-  var sizeCode := atoi(sizeBuff);
-  if (sizeCode != 213){
-    free(sizeBuff);
-    return false;
-  } 
-  */
   //this ensures we receive a valid size response
   var size := atoiFrom(sizeBuff, 4);
   free(sizeBuff);
   if ((size <= 0) || (size > 65535)) { //maybe we should include zero as well.  65535-6 comes from byte_array.spl's max length.  We subtract 6 because we add 6 later on.  
-    return false;
+    return -1;
   }
-  var buffer := new Array<Byte>(size);
+  return size;
+}
+
+procedure retrHelp(cmdFd: Int, filename: Array<Byte>, cmdSize: Int) returns (success: Bool)
+  requires cmdF >= 0
+  requires byte_array(filename)
+  requires ((cmdSize >= 0) && (cmdSize <= 65535))
+  ensures byte_array(filename)
+{
   var recvMsg := new Array<Byte>(cmdSize);
   recvMsg := "RETR ";
-  copied := gstrcat(filename, recvMsg); 
-  sent := tcp_send(cmdFd, recvMsg, cmdSize);
+  var copied := gstrcat(filename, recvMsg); 
+  var sent := tcp_send(cmdFd, recvMsg, cmdSize);
   free(recvMsg);
 
   var okMsg := new Array<Byte>(4);
@@ -328,24 +333,50 @@ procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   var acceptThese := new Array<Int>(2);
   acceptThese[0] := 200;
   acceptThese[1] := 150;
-  checked := checkServerResponse(okMsg, acceptThese);
+  var checked := checkServerResponse(okMsg, acceptThese);
   free(okMsg);
   free(acceptThese);
   if (!checked) {
+    return false;
+  }
+  return true;
+}
+
+
+procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
+  returns (success: Bool)
+  requires cmdFd >= 0 && dataFD >= 0
+  requires byte_array(filename)
+  ensures byte_array(filename)
+{
+  if ((filename.length <= 0) || (filename.length > (65535-6))) { //maybe we should include zero as well.  65535-6 comes from byte_array.spl's max length.  We subtract 6 because we add 6 later on.  
+    return false;
+  }
+  var cmdSize := 6 + filename.length;
+
+  var size := sizeHelp(cmdFd, filename, cmdSize);
+  if (size < 0){
+    return false;
+  }
+
+  var buffer := new Array<Byte>(size);
+
+  var retrDone := retrHelp(cmdFd, filename, cmdSize);
+  if (!retrDone) {
     free(buffer);
     return false;
   }
 
-  recvData := tcp_recv(dataFD, buffer);
+  var recvData := tcp_recv(dataFD, buffer);
   //get response
-  okMsg := new Array<Byte>(4);
-  ok := tcp_recv(cmdFd, okMsg);
+  var okMsg := new Array<Byte>(4);
+  var ok := tcp_recv(cmdFd, okMsg);
 
-  pleaseAccept := new Array<Int>(3);
+  var pleaseAccept := new Array<Int>(3);
   pleaseAccept[0] := 200;
   pleaseAccept[1] := 226;
   pleaseAccept[2] := 250;
-  checked := checkServerResponse(okMsg, pleaseAccept);
+  var checked := checkServerResponse(okMsg, pleaseAccept);
   free(okMsg);
   free(pleaseAccept);
 
@@ -358,6 +389,7 @@ procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
     free(buffer);
     return false;
   }
+
   var saveFD := gopen(filename, O_CREAT | O_WRONLY | O_TRUNC); //here we save the file under the same name as it is stored on the server.  We use O_TRUNC to wipe the file before we overwrite it  
   if (saveFD < 0){
     free(buffer);
