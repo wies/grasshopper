@@ -177,7 +177,7 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   }
 
   var alloSize := new Array<Byte>(2);
-  alloSize[0] := size;
+  alloSize[0] := int2byte(size);
   alloSize[1] := int2byte(0);
   var sendMsg := new Array<Byte>(6);
   sendMsg := "ALLO ";
