@@ -215,14 +215,14 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   var commandSize := filename.length + 6; //7??
   sendMsg := new Array<Byte>(commandSize);
   sendMsg := "STOR ";
-  var copied := gstrcat(filename, sendMsg);
-  var sent := tcp_send(cmdFd, sendMsg, commandSize);
+  copied := gstrcat(filename, sendMsg);
+  sent := tcp_send(cmdFd, sendMsg, commandSize);
   free(sendMsg);
   //Get confirmation from the server
   var okMsg := new Array<Byte>(4);
   var ok := tcp_recv(cmdFd, okMsg);
 
-  var acceptThese := new Array<Int>(2);
+  acceptThese := new Array<Int>(2);
   acceptThese[0] := 200;
   acceptThese[1] := 150;
   var checked := checkServerResponse(okMsg, acceptThese);
