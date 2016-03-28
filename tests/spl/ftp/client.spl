@@ -285,7 +285,7 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
 procedure sizeHelp(cmdFd: Int, filename: Array<Byte>, cmdSize: Int) returns (success: Int)
   requires cmdFd >= 0
   requires byte_array(filename)
-  requires ((cmdSize >= 0) && (cmdSize <= 65535))
+  requires ((cmdSize >= 6) && (cmdSize <= 65535))
   ensures byte_array(filename)
   ensures ((success >= -1) && (success <= 65535))
 {
@@ -318,7 +318,7 @@ procedure sizeHelp(cmdFd: Int, filename: Array<Byte>, cmdSize: Int) returns (suc
 procedure retrHelp(cmdFd: Int, filename: Array<Byte>, cmdSize: Int) returns (success: Bool)
   requires cmdFd >= 0
   requires byte_array(filename)
-  requires ((cmdSize >= 0) && (cmdSize <= 65535))
+  requires ((cmdSize >= 6) && (cmdSize <= 65535))
   ensures byte_array(filename)
 {
   var recvMsg := new Array<Byte>(cmdSize);
