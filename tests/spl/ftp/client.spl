@@ -226,7 +226,7 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
 {
   //moved up from below gopen
   if ((filename.length < 0) || (filename.length > (65535 - 6))) {
-    free(buffer);
+    //    free(buffer);
     return false;
   }
 
