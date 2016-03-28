@@ -316,7 +316,7 @@ procedure sizeHelp(cmdFd: Int, filename: Array<Byte>, cmdSize: Int) returns (suc
 }
 
 procedure retrHelp(cmdFd: Int, filename: Array<Byte>, cmdSize: Int) returns (success: Bool)
-  requires cmdF >= 0
+  requires cmdFd >= 0
   requires byte_array(filename)
   requires ((cmdSize >= 0) && (cmdSize <= 65535))
   ensures byte_array(filename)
