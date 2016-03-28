@@ -428,7 +428,7 @@ procedure server() returns (res:Int)
     var final := process_string(typeCom);
     var allo_size := -1;
     if (is_allo(final)) {
-      allo_size := allo_help(request);
+      allo_size := allo_help(cmdFd, request);
       if (allo_size < 0) {
 	free(final);
         iQuit := true;
