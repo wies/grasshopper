@@ -203,8 +203,8 @@ procedure store_send_help(cmdFd: Int, filename: Array<Byte>) returns (success: B
   var sent := tcp_send(cmdFd, sendMsg, commandSize);
   free(sendMsg);
   //Get confirmation from the server
-  okMsg := new Array<Byte>(4);
-  ok := tcp_recv(cmdFd, okMsg);
+  var okMsg := new Array<Byte>(4);
+  var ok := tcp_recv(cmdFd, okMsg);
 
   var acceptThese := new Array<Int>(2);
   acceptThese[0] := 200;
