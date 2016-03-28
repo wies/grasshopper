@@ -219,8 +219,8 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   sent := tcp_send(cmdFd, sendMsg, commandSize);
   free(sendMsg);
   //Get confirmation from the server
-  var okMsg := new Array<Byte>(4);
-  var ok := tcp_recv(cmdFd, okMsg);
+  okMsg := new Array<Byte>(4);
+  ok := tcp_recv(cmdFd, okMsg);
 
   acceptThese := new Array<Int>(2);
   acceptThese[0] := 200;
