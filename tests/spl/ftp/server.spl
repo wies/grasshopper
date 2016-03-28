@@ -165,7 +165,7 @@ procedure send_outgoing_file(dataFd: Int, filename: Array<Byte>) returns (res: B
 procedure store_help(cmdFd: Int, dataFd: Int, filename: Array<Byte>, allo_size: Int) returns (fail: Bool)
   requires cmdFd >= 0;
   requires dataFd >= 0;
-  requires allo_size >= 0;
+  requires allo_size >= 1;
   requires allo_size <= 65535;
   requires byte_array(filename);
   ensures byte_array(filename);
@@ -433,7 +433,7 @@ procedure server() returns (res:Int)
     //   var typeCom := new Array<Byte>(5);
     var typeCom := copy_byte_slice(request, 0, 4);
     var final := process_string(typeCom);
-    var allo_size := -1;
+    var allo_size := 65535;
     if (is_allo(final)) {
       allo_size := allo_help(cmdFd, request);
       if (allo_size < 0) {
