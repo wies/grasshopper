@@ -175,6 +175,29 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
   if ((size < 0) || (size > 65535)){
     return false;
   }
+
+  var alloSize := new Array<Byte>(2);
+  alloSize[0] := size;
+  alloSize[1] := int2byte(0);
+  var sendMsg := new Array<Byte>(6);
+  sendMsg := "ALLO ";
+  var copied := gstrcat(alloSize, sendMsg);
+  var sent := tcp_send(cmdFd, sendMsg, 7);
+  free(sendMsg);
+  //Get confirmation from the server
+  var okMsg := new Array<Byte>(4);
+  var ok := tcp_recv(cmdFd, okMsg);
+
+  var acceptThese := new Array<Int>(1);
+  acceptThese[0] := 200;
+  var checked := checkServerResponse(okMsg, acceptThese);
+  free(okMsg);
+  free(acceptThese);
+  if (!checked) {
+    free(buffer);
+    return false;
+  }
+
   var opened := gopen(filename, O_CREAT | O_RDONLY);
   if (opened < 0){
     return false;

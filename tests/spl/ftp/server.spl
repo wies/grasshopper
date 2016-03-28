@@ -96,13 +96,15 @@ procedure handleAuth(cmdFd: Int)
   }
 }
 
-procedure accept_incoming_file(dataFd: Int, filename: Array<Byte>) returns (res:Int)
+procedure accept_incoming_file(dataFd: Int, filename: Array<Byte>, allo_size: Int) returns (res:Int)
   requires dataFd >= 0
+  requires allo_size >= 0
+  requires allo_size <= 65535
   requires byte_array(filename)
   ensures byte_array(filename)
   ensures res >= -1
 {
-  var buffer := new Array<Byte>(65535);//max size, since we don't know incoming file size
+  var buffer := new Array<Byte>(allo_size);
   var recv := tcp_recv(dataFd, buffer);
   if (recv < 0) {
     free(buffer);
@@ -160,9 +162,11 @@ procedure send_outgoing_file(dataFd: Int, filename: Array<Byte>) returns (res: B
   }
 }
 
-procedure store_help(cmdFd: Int, dataFd: Int, filename: Array<Byte>) returns (fail: Bool)
+procedure store_help(cmdFd: Int, dataFd: Int, filename: Array<Byte>, allo_size: Int) returns (fail: Bool)
   requires cmdFd >= 0;
   requires dataFd >= 0;
+  requires allo_size >= 0;
+  requires allo_size <= 65535;
   requires byte_array(filename);
   ensures byte_array(filename);
 {
@@ -170,7 +174,7 @@ procedure store_help(cmdFd: Int, dataFd: Int, filename: Array<Byte>) returns (fa
   ok := "150";
   var sent := tcp_send(cmdFd, ok, 4);
   free(ok);
-  var stored := accept_incoming_file(dataFd, filename);
+  var stored := accept_incoming_file(dataFd, filename, allo_size);
   if (stored < 0) {
     var notOk := new Array<Byte>(4);
     notOk := "550";
@@ -183,6 +187,29 @@ procedure store_help(cmdFd: Int, dataFd: Int, filename: Array<Byte>) returns (fa
   sent := tcp_send(cmdFd, goodPacket, 4);
   free(goodPacket);
   return false;
+}
+
+
+procedure allo_help(cmdFd:Int, request: Array<Byte>) returns (allo_size: Int)
+  requires byte_array(request);
+  ensures byte_array(request);
+  requires cmdFd >= 0;
+  ensures allo_size >= -1;
+  ensures allo_size <= 65535;
+{
+  var allo_size := copy_byte_slice(request, 5, 6);
+  if ((allo_size < 1) || (allo_size > 65535)) {
+    var notOkay := new Array<Byte>(4);
+    notOkay := "552";
+    var sent := tcp_send(cmdFd, notOkay, 4);
+    free(notOkay);
+    return -1;
+  }
+  var goodPacket := new Array<Byte>(4);
+  goodPacket := "200"; 
+  var sent := tcp_send(cmdFd, goodPacket, 4);
+  free(goodPacket);
+  return allo_size;
 }
 
 procedure size_help(cmdFd: Int, filename: Array<Byte>) returns (fail: Bool)
@@ -277,6 +304,21 @@ procedure is_size(cmd: Array<Byte>) returns (is: Bool)
     return true;
   } else {
     free(size);
+    return false;
+  }
+}
+
+procedure is_allo(cmd: Array<Byte>) returns (is: Bool)
+  requires byte_array(cmd) &*& cmd.length == 5
+  ensures  byte_array(cmd) &*& cmd.length == 5
+{
+  var allo := new Array<Byte>(5);
+  allo := "ALLO";
+  if (gstrcmp(cmd, allo) == 0) {
+    free(allo);
+    return true;
+  } else {
+    free(allo);
     return false;
   }
 }
@@ -382,45 +424,55 @@ procedure server() returns (res:Int)
     //   var typeCom := new Array<Byte>(5);
     var typeCom := copy_byte_slice(request, 0, 4);
     var final := process_string(typeCom);
-    var filename := copy_byte_slice(request, 5, (request.length -1));
-    free(request);
-    if (is_stor(final)) {
-      var temp := store_help(cmdFd, dataFd, filename);
-      if (temp) {
-	free(filename);
+    var allo_size := -1;
+    if (is_allo(final)) {
+      allo_size := allo_help(request);
+      if (allo_size < 0) {
 	free(final);
+        iQuit := true;
       }
-      iQuit := temp;
     }
-    else if (is_size(final)) {
-      var temp := size_help(cmdFd, filename);
-      if (temp) {
-	free(filename);
-	free(final);
+    else {
+      var filename := copy_byte_slice(request, 5, (request.length -1));
+      free(request);
+      if (is_stor(final)) {
+        var temp := store_help(cmdFd, dataFd, filename, allo_size);
+        if (temp) {
+  	free(filename);
+  	free(final);
+        }
+        iQuit := temp;
       }
-      iQuit := temp;
-    }
-    else if (is_retr(final)) {
-      var temp := retr_help(cmdFd, dataFd, filename);
-      if (temp) {
-	free(filename);
-	free(final);
+      else if (is_size(final)) {
+        var temp := size_help(cmdFd, filename);
+        if (temp) {
+  	free(filename);
+  	free(final);
+        }
+        iQuit := temp;
       }
-      iQuit := temp;
+      else if (is_retr(final)) {
+        var temp := retr_help(cmdFd, dataFd, filename);
+        if (temp) {
+  	free(filename);
+  	free(final);
+        }
+        iQuit := temp;
+      }
+      else if (is_quit(final)) {
+        properQuit := true;
+        iQuit := true;
+      } else {
+        var badPacket := new Array<Byte>(4);
+        badPacket := "500";
+        var sent := tcp_send(cmdFd, badPacket, 4);
+        free(badPacket);
+        iQuit := true;
+        //something we did not expect
+      }
+      free(filename);
+      free(final);
     }
-    else if (is_quit(final)) {
-      properQuit := true;
-      iQuit := true;
-    } else {
-      var badPacket := new Array<Byte>(4);
-      badPacket := "500";
-      var sent := tcp_send(cmdFd, badPacket, 4);
-      free(badPacket);
-      iQuit := true;
-      //something we did not expect
-    }
-    free(filename);
-    free(final);
   }
  
   //  var quitBuff := new Array<Byte>(5);
