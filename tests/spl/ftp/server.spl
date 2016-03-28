@@ -190,21 +190,21 @@ procedure store_help(cmdFd: Int, dataFd: Int, filename: Array<Byte>, allo_size: 
 }
 
 
-procedure allo_help(cmdFd:Int, request: Array<Byte>) returns (allo_size: Int)
-  requires byte_array(request);
-  ensures byte_array(request);
+procedure allo_help(cmdFd:Int, sizeB: Array<Byte>) returns (allo_size: Int)
+  requires byte_array(sizeB);
+  ensures byte_array(sizeB);
   requires cmdFd >= 0;
   ensures allo_size >= -1;
   ensures allo_size <= 65535;
 {
-  if (request.length < 7) {
+  if (sizeB.length < 2) {
     var notOkay := new Array<Byte>(4);
     notOkay := "552";
     var sent := tcp_send(cmdFd, notOkay, 4);
     free(notOkay);
     return -1;
   }    
-  var allo_size_arr := copy_byte_slice(request, 5, 6);
+  var allo_size_arr := copy_byte_slice(sizeB, 0, 1);
   allo_size := byte2int(allo_size_arr[0]);
   free(allo_size_arr);
   if ((allo_size < 1) || (allo_size > 65535)) {
@@ -434,54 +434,52 @@ procedure server() returns (res:Int)
     var typeCom := copy_byte_slice(request, 0, 4);
     var final := process_string(typeCom);
     var allo_size := 65535;
-    if (is_allo(final)) {
-      allo_size := allo_help(cmdFd, request);
+    var filename := copy_byte_slice(request, 5, (request.length -1));
+    free(request);
+    if (is_stor(final)) {
+      var temp := store_help(cmdFd, dataFd, filename, allo_size);
+      if (temp) {
+	free(filename);
+	free(final);
+      }
+      iQuit := temp;
+    }
+    else if (is_allo(final)) {
+      allo_size := allo_help(cmdFd, filename);
       if (allo_size < 0) {
 	free(final);
         iQuit := true;
       }
     }
-    else {
-      var filename := copy_byte_slice(request, 5, (request.length -1));
-      free(request);
-      if (is_stor(final)) {
-        var temp := store_help(cmdFd, dataFd, filename, allo_size);
-        if (temp) {
-  	free(filename);
-  	free(final);
-        }
-        iQuit := temp;
+    else if (is_size(final)) {
+      var temp := size_help(cmdFd, filename);
+      if (temp) {
+	free(filename);
+	free(final);
       }
-      else if (is_size(final)) {
-        var temp := size_help(cmdFd, filename);
-        if (temp) {
-  	free(filename);
-  	free(final);
-        }
-        iQuit := temp;
-      }
-      else if (is_retr(final)) {
-        var temp := retr_help(cmdFd, dataFd, filename);
-        if (temp) {
-  	free(filename);
-  	free(final);
-        }
-        iQuit := temp;
-      }
-      else if (is_quit(final)) {
-        properQuit := true;
-        iQuit := true;
-      } else {
-        var badPacket := new Array<Byte>(4);
-        badPacket := "500";
-        var sent := tcp_send(cmdFd, badPacket, 4);
-        free(badPacket);
-        iQuit := true;
-        //something we did not expect
-      }
-      free(filename);
-      free(final);
+      iQuit := temp;
     }
+    else if (is_retr(final)) {
+      var temp := retr_help(cmdFd, dataFd, filename);
+      if (temp) {
+	free(filename);
+	free(final);
+      }
+      iQuit := temp;
+    }
+    else if (is_quit(final)) {
+      properQuit := true;
+      iQuit := true;
+    } else {
+      var badPacket := new Array<Byte>(4);
+      badPacket := "500";
+      var sent := tcp_send(cmdFd, badPacket, 4);
+      free(badPacket);
+      iQuit := true;
+      //something we did not expect
+    }
+    free(filename);
+    free(final);
   }
  
   //  var quitBuff := new Array<Byte>(5);
