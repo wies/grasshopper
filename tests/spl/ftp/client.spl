@@ -259,14 +259,14 @@ procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
 
   var sentData := tcp_send(dataFD, buffer, size);
   //get confirmation from the server (200, 226, 250)
-  okMsg := new Array<Byte>(4);
-  ok := tcp_recv(cmdFd, okMsg);
+  var okMsg := new Array<Byte>(4);
+  var ok := tcp_recv(cmdFd, okMsg);
 
   var pleaseAccept := new Array<Int>(3);
   pleaseAccept[0] := 200;
   pleaseAccept[1] := 226;
   pleaseAccept[2] := 250;
-  checked := checkServerResponse(okMsg, pleaseAccept);
+  var checked := checkServerResponse(okMsg, pleaseAccept);
   free(okMsg);
   free(pleaseAccept);
   free(buffer);
