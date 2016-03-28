@@ -197,7 +197,9 @@ procedure allo_help(cmdFd:Int, request: Array<Byte>) returns (allo_size: Int)
   ensures allo_size >= -1;
   ensures allo_size <= 65535;
 {
-  allo_size := copy_byte_slice(request, 5, 6);
+  var allo_size_arr := copy_byte_slice(request, 5, 6);
+  allo_size := allo_size_arr[0];
+  free(allo_size_arr);
   if ((allo_size < 1) || (allo_size > 65535)) {
     var notOkay := new Array<Byte>(4);
     notOkay := "552";
