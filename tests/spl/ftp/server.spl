@@ -439,7 +439,7 @@ procedure server() returns (res:Int)
 
     if (is_allo(final)) {
       allo_size := allo_help(cmdFd, filename);
-      if (allo_size < 1) {
+      if ((allo_size < 1) || (allo_size > 65535)) {
 	free(final);
         allo_size := 65535;
         iQuit := true;
