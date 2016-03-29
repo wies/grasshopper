@@ -422,6 +422,7 @@ procedure server() returns (res:Int)
   
   var iQuit := false;
   var properQuit := false;
+  var allo_size := 65535;
 
   while (!iQuit)
     invariant cmdFd >= 0
@@ -433,7 +434,6 @@ procedure server() returns (res:Int)
     //   var typeCom := new Array<Byte>(5);
     var typeCom := copy_byte_slice(request, 0, 4);
     var final := process_string(typeCom);
-    var allo_size := 65535;
     var filename := copy_byte_slice(request, 5, (request.length -1));
     free(request);
 
