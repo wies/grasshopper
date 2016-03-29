@@ -441,6 +441,7 @@ procedure server() returns (res:Int)
       allo_size := allo_help(cmdFd, filename);
       if (allo_size < 1) {
 	free(final);
+        allo_size := 65535;
         iQuit := true;
       }
     }
