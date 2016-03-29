@@ -436,20 +436,21 @@ procedure server() returns (res:Int)
     var allo_size := 65535;
     var filename := copy_byte_slice(request, 5, (request.length -1));
     free(request);
-    if (is_stor(final)) {
+
+    if (is_allo(final)) {
+      allo_size := allo_help(cmdFd, filename);
+      if (allo_size < 0) {
+	free(final);
+        iQuit := true;
+      }
+    }
+    else if (is_stor(final)) {
       var temp := store_help(cmdFd, dataFd, filename, allo_size);
       if (temp) {
 	free(filename);
 	free(final);
       }
       iQuit := temp;
-    }
-    else if (is_allo(final)) {
-      allo_size := allo_help(cmdFd, filename);
-      if (allo_size < 0) {
-	free(final);
-        iQuit := true;
-      }
     }
     else if (is_size(final)) {
       var temp := size_help(cmdFd, filename);
