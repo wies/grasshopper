@@ -440,18 +440,25 @@ procedure server() returns (res:Int)
     if (is_allo(final)) {
       allo_size := allo_help(cmdFd, filename);
       if ((allo_size < 1) || (allo_size > 65535)) {
-	free(final);
         allo_size := 65535;
+	free(final);
         iQuit := true;
       }
     }
     else if (is_stor(final)) {
-      var temp := store_help(cmdFd, dataFd, filename, allo_size);
-      if (temp) {
+      if ((allo_size < 1) || (allo_size > 65535)){
 	free(filename);
 	free(final);
+        iQuit := true;
       }
-      iQuit := temp;
+      else {
+	var temp := store_help(cmdFd, dataFd, filename, allo_size);
+	if (temp) {
+	  free(filename);
+	  free(final);
+	}
+        iQuit := temp;
+      }
     }
     else if (is_size(final)) {
       var temp := size_help(cmdFd, filename);
