@@ -3,7 +3,7 @@ include "../../../lib/file.spl";
 include "../../../lib/console.spl";
 include "../array/string.spl";
 include "../array/copy_byte_slice.spl";
-
+include "../../../lib/makeStr.spl";
 
 procedure connectMeCommand(cmdFd: Int, cmdAddr: SocketAddressIP4) returns (res: Int)
   requires socket_addr_4(cmdAddr)
@@ -235,8 +235,10 @@ procedure size_help(cmdFd: Int, filename: Array<Byte>) returns (fail: Bool)
     free(badPacket);
     return true;
   }
-  var sizePacket := new Array<Byte>(1);
-  sizePacket[0] := int2byte(sizeF);
+  var sizePacket := new Array<Byte>(2);
+  //  sizePacket[0] := int2byte(sizeF);
+  sizePacket[0] := makeStrFromInt(sizeF);
+  sizePacket[1] := int2byte(0);
   var goodPacket := new Array<Byte>(6);
   goodPacket := "213 "; 
   var finished := gstrcat(sizePacket, goodPacket);
