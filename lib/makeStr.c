@@ -1,6 +1,6 @@
 #include <stdlib.h>
 
-int makeStringFromInt(int myInt){
+int makeStrFromInt(int myInt){
   char c = myInt + '0';
   return c;
 }

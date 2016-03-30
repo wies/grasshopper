@@ -271,7 +271,7 @@ procedure retr_help(cmdFd: Int, dataFd: Int, filename: Array<Byte>) returns (fai
   goodPacket := "250";
   sent := tcp_send(cmdFd, goodPacket, 4);
   free(goodPacket);
-  return true;
+  return false;
 }
 
 procedure process_string(thing:Array<Byte>) returns (out: Array<Byte>)
