@@ -357,6 +357,8 @@ let start_with_solver session_name sat_means solver produce_models produce_unsat
           let out_read, out_write = Unix.pipe () in
           let pid = Unix.create_process cmnd aargs out_read in_write in_write in
           add_running_pid pid;
+          close out_read;
+          close in_write;
           { in_chan = Some (in_channel_of_descr in_read);
             out_chan = out_channel_of_descr out_write;
             pid = pid;
@@ -483,14 +485,14 @@ let quit session =
   (* clean up resources *)
   iter_solvers session (fun solver state ->
     flush state.out_chan;
+    close_out state.out_chan;
+    Opt.iter close_in state.in_chan;
     (match solver.info.kind with
     | Process _ -> 
         (try Unix.kill state.pid Sys.sigkill 
         with Unix.Unix_error _ -> ())
         (*ignore (Unix.close_process (Opt.get state.in_chan, state.out_chan))*)
-    | _ -> ());
-    close_out state.out_chan;
-    Opt.iter close_in state.in_chan);
+    | _ -> ()));
   iter_solvers session (fun solver state ->
     if state.pid <> 0 then ignore (Unix.waitpid [] state.pid));
   remove_running_pids session
