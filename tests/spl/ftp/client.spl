@@ -40,7 +40,24 @@ procedure setupDataConnection(cmdFd: Int, port: Array<Byte>)
   ensures port == old(port) && port.length == old(port.length)
   ensures connectedDataFD >= -1
 {
+
+  var writtenPrompt := new Array<Byte>(46);
+  writtenPrompt := "Enter IP of server (hit enter for localhost):";
+  
+  var written := gputs(writtenPrompt);
+  free(writtenPrompt);
+  if (!written) {
+    return -1;
+  }
+  var getip := new Array<Byte(50);
+
+  var numChars := ggets(getip);
   var dataAddr := get_address4(null, port);
+  if (numChars != 1){
+    dataAddr := get_address4(getip, port);
+  }
+  free(getip);
+  
   if (dataAddr == null){
     return -1;
   }
