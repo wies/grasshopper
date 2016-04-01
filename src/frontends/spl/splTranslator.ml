@@ -116,6 +116,13 @@ let convert cu =
         var_scope = decl.v_scope;
     }
   in
+  (** convert global variables *)
+  let prog, globals =
+    IdMap.fold
+      (fun id decl (prog, globals) ->
+        declare_global prog (convert_var_decl decl), IdSet.add decl.v_name globals)
+      cu.var_decls (empty_prog, IdSet.empty)
+  in
   let rec convert_term locals = function
     | Null (ty, pos) ->
         let cty = convert_type ty pos in
@@ -137,7 +144,7 @@ let convert cu =
         GrassUtil.mk_read tmap tidx
     | Old (e, pos) ->
         let t = convert_term locals e in
-        oldify_term (GrassUtil.free_consts_term t) t
+        oldify_term globals t
     | Length (e, pos) ->
         let t = convert_term locals e in
         GrassUtil.mk_length t
@@ -580,11 +587,6 @@ let convert cu =
           let ts = List.map (convert_term proc.p_locals) es in
           mk_return_cmd ts pos
       | _ -> failwith "unexpected statement"
-  in
-  let prog =
-    IdMap.fold
-      (fun id decl prog -> declare_global prog (convert_var_decl decl))
-      cu.var_decls empty_prog
   in
   let prog =
     IdMap.fold 
