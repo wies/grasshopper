@@ -31,6 +31,31 @@ procedure connectTo(ip: Array<Byte>, port: Array<Byte>)
   }
 }
 
+procedure askIP(port: Array<Byte>)
+  returns (ip: SocketAddressIP4)
+  requires byte_array(port)
+  ensures byte_array(port)
+  ensures port == old(port) && port.length == old(port.length)
+  ensures socket_addr_4(ip) || (ip == null)
+{
+  var writtenPrompt := new Array<Byte>(46);
+  writtenPrompt := "Enter IP of server (hit enter for localhost):";
+  
+  var written := gputs(writtenPrompt);
+  free(writtenPrompt);
+  var getip := new Array<Byte>(50);
+
+  var numChars := ggets(getip);
+  var dataAddr: SocketAddressIP4 := null;
+  if (numChars != 1){
+    dataAddr := get_address4(getip, port);
+  } else {
+    dataAddr := get_address4(null, port);
+  }
+  free(getip);
+  return dataAddr;
+}
+
 procedure setupDataConnection(cmdFd: Int, port: Array<Byte>)
   returns (connectedDataFD: Int)
   requires cmdFd >= 0
@@ -40,24 +65,7 @@ procedure setupDataConnection(cmdFd: Int, port: Array<Byte>)
   ensures port == old(port) && port.length == old(port.length)
   ensures connectedDataFD >= -1
 {
-
-  var writtenPrompt := new Array<Byte>(46);
-  writtenPrompt := "Enter IP of server (hit enter for localhost):";
-  
-  var written := gputs(writtenPrompt);
-  free(writtenPrompt);
-  if (!written) {
-    return -1;
-  }
-  var getip := new Array<Byte(50);
-
-  var numChars := ggets(getip);
-  var dataAddr := get_address4(null, port);
-  if (numChars != 1){
-    dataAddr := get_address4(getip, port);
-  }
-  free(getip);
-  
+  var dataAddr := askIP(port);
   if (dataAddr == null){
     return -1;
   }
