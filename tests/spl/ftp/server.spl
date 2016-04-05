@@ -28,7 +28,6 @@ procedure recvDataConnection(cmdFd: Int) returns (res: Int)
 {
   var resp := new Array<Byte>(11);
   var response := tcp_recv(cmdFd, resp);
-  //  var port := atoi(resp);
   
   var fd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (fd == -1) {
@@ -37,11 +36,7 @@ procedure recvDataConnection(cmdFd: Int) returns (res: Int)
   }
   var portArray := copy_byte_slice(resp, 5, 10);
   free(resp);
-  //  portArray[0] := response[5];
-  //portArray[1] := response[6];
-  //portArray[2] := response[7];
-  //portArray[3] := response[8];
-  //portArray[4] := response[9];
+
   var addr := get_address4(null, portArray);
   free(portArray);
   if (addr == null){

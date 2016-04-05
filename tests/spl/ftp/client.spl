@@ -4,90 +4,73 @@ include "../../../lib/console.spl";
 include "../array/string.spl";
 include "response.spl";
 include "doWeUpload.spl";
+include "../array/copy_byte_slice.spl";
+include "askIP.spl";
 
-procedure connectTo(ip: Array<Byte>, port: Array<Byte>)
+procedure connectTo(addr: SocketAddressIP4)
   returns (fd: Int)
-  requires (ip == null || byte_array(ip)) &*& byte_array(port)
-  ensures (ip == null || byte_array(ip)) &*& byte_array(port)
-  ensures ip == old(ip) && port == old(port) && port.length == old(port.length)
-  ensures ip == null || ip.length == old(ip.length)
+  //  requires (ip == null || byte_array(ip)) &*& byte_array(port)
+     //ensures (ip == null || byte_array(ip)) &*& byte_array(port)
+     //ensures ip == old(ip) && port == old(port) && port.length == old(port.length)
+  //ensures ip == null || ip.length == old(ip.length)
+  requires socket_addr_4(addr)
+  ensures socket_addr_4(addr)
   ensures fd >= -1
 {
   fd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (fd == -1) {
     return -1;
   }
-  var addr := get_address4(ip, port); //null should return localhost
-  if (addr == null) {
-    return -1;
-  }
+  //  var addr := get_address4(ip, port); //null should return localhost
+  //  if (addr == null) {
+    //    return -1;
+    // }
 
   if (connect4(fd, addr)) {
-    free(addr);
+    //   free(addr);
     return fd;
   } else {
-    free(addr);
+    //    free(addr);
     return -1;
   }
 }
 
-procedure askIP(port: Array<Byte>)
-  returns (ip: SocketAddressIP4)
-  requires byte_array(port)
-  ensures byte_array(port)
-  ensures port == old(port) && port.length == old(port.length)
-  ensures socket_addr_4(ip) || (ip == null)
-{
-  var writtenPrompt := new Array<Byte>(46);
-  writtenPrompt := "Enter IP of server (hit enter for localhost):";
-  
-  var written := gputs(writtenPrompt);
-  free(writtenPrompt);
-  var getip := new Array<Byte>(50);
-
-  var numChars := ggets(getip);
-  var dataAddr: SocketAddressIP4 := null;
-  if (numChars != 1){
-    dataAddr := get_address4(getip, port);
-  } else {
-    dataAddr := get_address4(null, port);
-  }
-  free(getip);
-  return dataAddr;
-}
-
-procedure setupDataConnection(cmdFd: Int, port: Array<Byte>)
+procedure setupDataConnection(cmdFd: Int, address: SocketAddressIP4, port: Array<Byte>)
   returns (connectedDataFD: Int)
   requires cmdFd >= 0
   requires port.length == 5;
   requires byte_array(port)
+  requires socket_addr_4(address)
   ensures byte_array(port)
   ensures port == old(port) && port.length == old(port.length)
   ensures connectedDataFD >= -1
+  ensures socket_addr_4(address)
 {
-  var dataAddr := askIP(port);
-  if (dataAddr == null){
-    return -1;
-  }
+
+  //  var dataAddr := askIP(port);
+  // if (dataAddr == null){
+    //   return -1;
+    // }
   var dataFD := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (dataFD == -1){
-    free(dataAddr);
+    // free(dataAddr);
     return -1;
   }
-  var bound := bind4(dataFD, dataAddr);
+  // var bound := bind4(dataFD, dataAddr);
+  var bound := bind4(dataFD, address);
   if (!bound) {
-    free(dataAddr);
+    //    free(dataAddr);
     return -1;
   }
   var datalistening := glisten(dataFD, 10);
   //we don't need a big backlog here, as the only connection should be to the server
   if (!datalistening){
-    free(dataAddr);
+    //   free(dataAddr);
     return -1;
   }
   //we tell the server what port we are setting the data connection on
   if ((port.length < 0) || (port.length > (65535 - 6))){ //this is to cover for the max length of an array, as set in byte_array.spl  We subtract 6 to account for PORT
-    free(dataAddr);
+    //    free(dataAddr);
     return -1;
   }
   var portMsg := new Array<Byte>(6 + port.length);
@@ -96,13 +79,14 @@ procedure setupDataConnection(cmdFd: Int, port: Array<Byte>)
   var sent := tcp_send(cmdFd, portMsg, portMsg.length);
   free(portMsg);
   if (sent != portMsg.length) {
-    free(dataAddr);
+    //    free(dataAddr);
     return -1;
   }
 
   //now we wait for the server to connect to us on the data connection
-  connectedDataFD := accept4(dataFD, dataAddr);
-  free(dataAddr);
+  //  connectedDataFD := accept4(dataFD, dataAddr);
+  connectedDataFD := accept4(dataFD, address);
+  //  free(dataAddr);
   var closeData := gclose(dataFD);
   return connectedDataFD;
 }
@@ -396,21 +380,36 @@ procedure client(upload: Bool)
 {
 //if store is 1, then we store a file STOR
 // else we download it RETR
-//client can say PASS for now "anonymous"
-//Client can say USER for now "dummy"
 
   var port := new Array<Byte>(5);
   port := "4444";
-  var fd := connectTo(null, port);
+
+  //we get the ip the first time
+  var remoteAddr := askIP(port);
+  if (remoteAddr == null){
+    free(port);
+    return -1;
+  }
+
+  //  var fd := connectTo(null, port);
+  var fd := connectTo(remoteAddr);
+  free(remoteAddr);
   if (fd == -1) {
     free(port);
-    return 2;
+    return -1;
   }
 
   //we set up the data connection
   port := "4440";
-  var connectedDataFD := setupDataConnection(fd, port);
+  //we ask again
+  var dataAddr := askIP(port);
+  if (dataAddr == null){
+    free(port);
+    return -1;
+  }
+  var connectedDataFD := setupDataConnection(fd, dataAddr, port);
   free(port);
+  free(dataAddr);
   if (connectedDataFD == -1) {
     var closed := gclose(fd);
     return 3;
