@@ -228,6 +228,16 @@ bool connect4(int fd, struct SocketAddressIP4* address)
 {
   struct sockaddr_in sa;
   from_grass_addr(address, &sa);
+  // char ipPrint[INET_ADDRSTRLEN];
+
+  //inet_ntop(AF_INET, &(sa.sin_addr), ipPrint, INET_ADDRSTRLEN);
+
+  //printf("IP is: %s\n", ipPrint);
+  //printf("port is: %d\n", (int) ntohs(sa.sin_port));
+  //int res = connect(fd, (struct sockaddr*) &sa, sizeof sa);
+  //if (res < 0) {
+  //  printf("error: %s\n", strerror(errno));
+  //}
   return connect(fd, (struct sockaddr*) &sa, sizeof sa) == 0;
 }
 

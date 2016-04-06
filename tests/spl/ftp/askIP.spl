@@ -19,6 +19,11 @@ procedure askIP(port: Array<Byte>)
 
   var numChars := ggets(getip);
   var dataAddr: SocketAddressIP4 := null;
+  if (numChars < 1) {
+    free(getip);
+    return dataAddr;
+  }
+  getip[numChars-1] := int2byte(0);
   if (numChars != 1){
     dataAddr := get_address4(getip, port);
   } else {
