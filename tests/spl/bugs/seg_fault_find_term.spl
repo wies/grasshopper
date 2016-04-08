@@ -1,0 +1,95 @@
+struct Node {
+  var data : Int;
+  var next : Node;
+}
+predicate Candidate1(prv : Node, curr : Node) (FP : Set<Node>) {
+  ((lseg(prv, curr, FP) && (forall uu : Node :: ((uu in FP) ==> ((((uu.data <= curr.data) && (uu.data <= prv.data)) && (prv.data <= uu.data)) || (((uu.data <= prv.data) && (prv.data <= uu.data)) && (curr == null)))))) && (lseg(prv, curr, FP) && (forall uu : Node, vv : Node :: ((((uu in FP) && (vv in FP)) && Btwn(next, prv, uu, vv)) ==> (((curr == null) && (prv == null)) || ((uu.data <= vv.data) && (vv.data <= uu.data)))))))
+}
+predicate Candidate2(curr : Node, prv : Node) (FP : Set<Node>) {
+  ((((lseg(curr, null, FP) && (forall uu : Node :: ((uu in FP) ==> ((((curr.data <= uu.data) && (prv == null)) || ((curr.data <= uu.data) && (uu.data > prv.data))) || (((uu.data <= curr.data) && (curr.data <= uu.data)) && (prv.data <= uu.data)))))) && (lseg(curr, null, FP) && (forall uu : Node, vv : Node :: ((((uu in FP) && (vv in FP)) && Btwn(next, curr, uu, vv)) ==> ((((((curr == null) && (prv == null)) || ((uu.data > vv.data) && (vv.data > uu.data))) || ((uu.data <= vv.data) && (prv == null))) || ((uu.data <= vv.data) && curr != null)) || ((uu.data <= vv.data) && (vv.data <= uu.data))))))) && (lseg(curr, null, FP) && (forall uu : Node :: ((uu in FP) ==> ((((curr.data <= uu.data) && (prv == null)) || ((curr.data <= uu.data) && (uu.data > prv.data))) || (((uu.data <= curr.data) && (curr.data <= uu.data)) && (prv.data <= uu.data))))))) && (lseg(curr, null, FP) && (forall uu : Node, vv : Node :: ((((uu in FP) && (vv in FP)) && Btwn(next, curr, uu, vv)) ==> ((((((curr == null) && (prv == null)) || ((uu.data > vv.data) && (vv.data > uu.data))) || ((uu.data <= vv.data) && (prv == null))) || ((uu.data <= vv.data) && curr != null)) || ((uu.data <= vv.data) && (vv.data <= uu.data)))))))
+}
+predicate Candidate3(prv : Node, curr : Node, x : Node) {
+  ((((((curr != prv || ((curr == null) && (prv == null))) && (!(((curr == null) && (prv == null))) || (curr == prv))) && (curr != x || (prv == null))) && (prv != null || (curr == x))) && (prv != x || (prv != null || (curr == null)))) && (!(((curr == null) && (prv == null))) || (prv == x)))
+}
+predicate Candidate4(x : Node, prv : Node, curr : Node) (FP : Set<Node>) {
+  ((lseg(x, prv, FP) && (forall uu : Node :: ((uu in FP) ==> ((((curr != null && (prv == null)) || ((curr == null) && prv != null)) || ((curr.data > uu.data) && prv != null)) || ((curr.data > uu.data) && curr != null))))) && (lseg(x, prv, FP) && (forall uu : Node, vv : Node :: ((((uu in FP) && (vv in FP)) && Btwn(next, x, uu, vv)) ==> (((curr == null) && (prv == null)) || (uu.data <= vv.data))))))
+}
+predicate blseg(x : Node, y : Node, lb : Int, ub : Int) (FP : Set<Node>) {
+  ((lseg(x, y, FP) && lseg_lowerbound(lb, FP)) && lseg_upperbound(ub, FP))
+}
+predicate bslseg(x : Node, y : Node, lb : Int, ub : Int) (FP : Set<Node>) {
+  (((lseg(x, y, FP) && lseg_lowerbound(lb, FP)) && lseg_upperbound(ub, FP)) && lseg_increasing(x, FP))
+}
+predicate llseg(x : Node, y : Node, ub : Int) (FP : Set<Node>) {
+  (lseg(x, y, FP) && lseg_upperbound(ub, FP))
+}
+predicate lseg(x : Node, y : Node) (FP : Set<Node>) {
+  (Btwn(next, x, y, y) && (FP == lseg_footprint(x, y)))
+}
+predicate lseg_decreasing(x : Node, FP : Set<Node>) {
+  (forall y : Node, z : Node :: ((((y in FP) && (z in FP)) && Btwn(next, x, y, z)) ==> (z.data <= y.data)))
+}
+footprint function lseg_footprint(x : Node, y : Node) returns (FP : Set<Node>) {
+  (forall z : Node :: ((z in FP) == (Btwn(next, x, z, y) && z != y)))
+}
+predicate lseg_increasing(x : Node, FP : Set<Node>) {
+  (forall y : Node, z : Node :: ((((y in FP) && (z in FP)) && Btwn(next, x, y, z)) ==> (y.data <= z.data)))
+}
+predicate lseg_lowerbound(lb : Int, FP : Set<Node>) {
+  (forall z : Node :: ((z in FP) ==> (lb <= z.data)))
+}
+predicate lseg_strictly_increasing(x : Node, FP : Set<Node>) {
+  (forall y : Node, z : Node :: ((((y in FP) && (z in FP)) && Btwn(next, x, y, z)) ==> ((y.data < z.data) || (y == z))))
+}
+predicate lseg_upperbound(ub : Int, FP : Set<Node>) {
+  (forall z : Node :: ((z in FP) ==> (z.data <= ub)))
+}
+predicate lslseg(x : Node, y : Node, ub : Int) (FP : Set<Node>) {
+  ((lseg(x, y, FP) && lseg_upperbound(ub, FP)) && lseg_increasing(x, FP))
+}
+predicate rslseg(x : Node, y : Node) (FP : Set<Node>) {
+  (lseg(x, y, FP) && lseg_decreasing(x, FP))
+}
+predicate slseg(x : Node, y : Node) (FP : Set<Node>) {
+  (lseg(x, y, FP) && lseg_increasing(x, FP))
+}
+predicate ulseg(x : Node, y : Node, lb : Int) (FP : Set<Node>) {
+  (lseg(x, y, FP) && lseg_lowerbound(lb, FP))
+}
+predicate uslseg(x : Node, y : Node, lb : Int) (FP : Set<Node>) {
+  ((lseg(x, y, FP) && lseg_lowerbound(lb, FP)) && lseg_increasing(x, FP))
+}
+procedure filter(x : Node) returns (res : Node)
+  ensures (true &*& (lseg(res, null) &*& emp));
+  requires slseg(x, null);  {
+   var curr := x;
+   var prv : Node := null;
+   while (curr != null)
+    invariant ((((curr == x) &*& (prv == null)) &*& (Candidate2(curr, prv) &*& emp)) || ((curr != prv &*& (curr != x &*& (prv != null &*& ((prv.next == curr) &*& x != null)))) &*& (Candidate2(curr, prv) &*& (Candidate1(prv, curr) &*& (Candidate4(x, prv, curr) &*& emp)))));
+    invariant Candidate3(prv, curr, x);
+    {
+     var old_curr := curr;
+     curr := curr.next;
+     var nondet : Bool;
+     if (nondet)
+      {
+       if (prv != null)
+        {
+         prv.next := curr;
+        }
+       else
+        {
+         x := curr;
+        }
+
+       free old_curr;
+      }
+     else
+      {
+       prv := old_curr;
+      }
+
+    }
+
+   return x;
+  }
