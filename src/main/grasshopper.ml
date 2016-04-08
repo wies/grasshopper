@@ -56,10 +56,10 @@ let normalizeFilename base_dir file_name =
   let parts = Str.split_delim sep fullname in
   let remaining =
     List.fold_left
-      (fun acc x ->
-        if x = ".."
-        then List.tl acc
-        else x :: acc
+      (fun acc -> function
+        | "" when acc <> [] -> acc
+        | ".." -> List.tl acc
+        | x -> x :: acc
       )
       []
       parts
@@ -71,7 +71,6 @@ let parse_spl_program main_file =
   let rec parse parsed to_parse spl_prog =
     match to_parse with
     | (dir, file, pos) :: to_parse1 ->
-        let file = normalizeFilename dir file in
         if not (StringSet.mem file parsed) then
           begin
             Debug.debug (fun () -> "parsing: " ^ file ^ "\n");
@@ -82,10 +81,12 @@ let parse_spl_program main_file =
                 ProgError.error pos ("Could not find file " ^ file)
             in
             let parsed1 = StringSet.add file parsed in
-            let dir2 = Filename.dirname file in
             let to_parse2 =
               List.fold_left
-                (fun acc (incl, pos) -> (dir2, incl, pos) :: acc)
+                (fun acc (incl, pos) ->
+                  let incl2 = normalizeFilename dir incl in
+                  let dir2 = Filename.dirname incl2 in
+                  (dir2, incl2, pos) :: acc)
                 to_parse1
                 cu.SplSyntax.includes 
             in
@@ -98,10 +99,11 @@ let parse_spl_program main_file =
           end
     | [] -> spl_prog
   in
-  let main_dir = 
-    if !Config.base_dir = ""
-    then Unix.getcwd ()
-    else normalizeFilename (Unix.getcwd ()) !Config.base_dir
+  let norm_dir = normalizeFilename (Unix.getcwd ()) !Config.base_dir in
+  let main_file = normalizeFilename norm_dir main_file in
+  let main_dir  =
+    if !Config.base_dir <> "" then norm_dir
+    else Filename.dirname main_file
   in
   let prog =
     parse
