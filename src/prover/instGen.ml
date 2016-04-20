@@ -164,7 +164,7 @@ let generate_terms generators ground_terms =
       | Some sm -> (t2, sm) :: subst_maps)
       candidates []
   in
-  let rec generate new_terms old_terms = function
+  let rec generate round new_terms old_terms = function
     | (guards, gen_terms) :: generators1 ->
         (*
         print_endline "======";
@@ -181,15 +181,9 @@ let generate_terms generators ground_terms =
                 (fun new_subst_maps sm ->
                   let matches = find_matches new_terms (subst_term sm t) sm in
                   Util.filter_rev_map 
-                    (fun (t_matched, sm) ->
-                      let res = filter_term filters t_matched sm in
-                      (*
-                      if res then print_endline ("  Y " ^ string_of_term t_matched)
-                      else print_endline ("  x " ^ string_of_term t_matched);
-                      *)
-                      res )
-                    (fun (t_matched, sm) -> 
-                      sm) matches @ new_subst_maps
+                    (fun (t_matched, sm) -> filter_term filters t_matched sm)
+                    (fun (t_matched, sm) -> sm)
+                    matches @ new_subst_maps
                 ) [] subst_maps 
             in
             new_subst_maps)
@@ -201,20 +195,19 @@ let generate_terms generators ground_terms =
               List.fold_left
                 (fun acc gen_term ->
                   let t = subst_term sm gen_term in
-                  (*let _ = print_endline ("  Adding generated term " ^ string_of_term t) in*)
+                  (*let _ = print_endline ("  Adding generated term " ^ string_of_term t) in *)
                   add_terms acc t)
                 acc gen_terms
             )
             new_terms subst_maps
         in
-        generate new_terms1 old_terms generators1
+        generate round new_terms1 old_terms generators1
     | [] -> 
-        if new_terms <> old_terms 
-        then 
-          generate new_terms new_terms generators
+        if round < !Config.term_gen_max_rounds && new_terms <> old_terms 
+        then generate (round + 1) new_terms new_terms generators
         else new_terms
   in
-  generate new_terms ground_terms generators
+  generate 0 new_terms ground_terms generators
 
 
 let generate_instances useLocalInst axioms rep_terms egraph = 

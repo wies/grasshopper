@@ -72,6 +72,9 @@ let optSelfFrame = ref false
 (* compute the congruence closure as a fixed point (horn clauses) *)
 let ccFixedPoint = ref true
 
+(* maximal number of term generation rounds *)
+let term_gen_max_rounds = ref 2
+    
 let cmd_options =
   [("-basedir", Arg.Set_string base_dir, "<string>  Base directory for resolving include directives. Default: current working directory\n\nOptions for controlling error reporting and debug output:");
    ("-v", Arg.Unit Debug.more_verbose, " Display more messages");
