@@ -1,29 +1,7 @@
 open Grass
 open SplSyntax
-
-let alloc_arg_mismatch_error pos expected =
-  ProgError.error pos (Printf.sprintf "Constructor expects %d argument(s)" expected)
-
-let alloc_type_error pos ty =
-  ProgError.type_error pos
-    ("Expected an array or struct type but found " ^ string_of_type ty)
-    
-let pred_arg_mismatch_error pos id expected =
-  ProgError.error pos (Printf.sprintf "Predicate %s expects %d argument(s)" (GrassUtil.name id) expected)
-
-let fun_arg_mismatch_error pos id expected =
-  ProgError.error pos (Printf.sprintf "Function %s expects %d argument(s)" (GrassUtil.name id) expected)
-
-let proc_arg_mismatch_error pos id expected =
-  ProgError.error pos 
-    (Printf.sprintf "Procedure %s expects %d argument(s)" 
-       (GrassUtil.name id) (List.length expected))
-
-let type_error pos exp_ty fnd_ty =
-  let ty_str ty = "expression of type " ^ string_of_type ty in
-  ProgError.type_error pos
-    ("Expected an " ^ ty_str exp_ty ^ " but found an " ^ ty_str fnd_ty)
-
+open SplErrors
+  
 let match_types pos oty1 oty2 =
   let rec mt ty1 ty2 =
     match ty1, ty2 with
@@ -205,12 +183,17 @@ let infer_types cu locals ty e =
         ignore (match_types pos ty ByteType);
         UnaryOp (OpToInt, e1, pos), IntType
     (* Ambiguous relational operators *)
-    | BinaryOp (e1, (OpEq as op), e2, _, pos)
+    | BinaryOp (e1, (OpEq as op), e2, _, pos) ->
+        let e1, e2, ty1 = itp locals AnyType e1 e2 in
+        ignore (match_types pos ty BoolType);
+        BinaryOp (e1, op, e2, BoolType, pos), BoolType
     | BinaryOp (e1, (OpGt as op), e2, _, pos)
     | BinaryOp (e1, (OpLt as op), e2, _, pos)
     | BinaryOp (e1, (OpGeq as op), e2, _, pos)
     | BinaryOp (e1, (OpLeq as op), e2, _, pos) ->
-        let e1, e2, _ = itp locals AnyType e1 e2 in
+        let e1, e2, ty1 = itp locals AnyType e1 e2 in
+        if ty1 <> IntType && ty1 <> ByteType then
+          ignore (match_types (pos_of_expr e1) ty1 (SetType AnyType));
         ignore (match_types pos ty BoolType);
         BinaryOp (e1, op, e2, BoolType, pos), BoolType
     (* Ambiguous binary Boolean operators *)
