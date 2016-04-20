@@ -16,11 +16,10 @@ struct Node {
   var ghost ubound: Int;
 }
 
-struct BTree {
-  var B: Int;
-  var root: Node;
-}
-  
+/* The order, B, is at least 2 */
+var B: Int;
+axiom B >= 2;
+
 /* -------------------- Predicate Definitions -------------------- */
 
 footprint function int_arrayseg_fp(a: Array<Int>, i: Int, j: Int)
@@ -87,18 +86,15 @@ footprint function arraycell_node_fp(FP_A_N: Set<Array<Node>>) returns (FP_AC_N:
   (forall ac: ArrayCell<Node> :: ac in FP_AC_N ==> ac.array in FP_A_N)
 }
 
-predicate btree(b: BTree)(FP_B: Set<BTree>, FP_N: Set<Node>, FP_A_I: Set<Array<Int>>, FP_AC_I: Set<ArrayCell<Int>>, FP_A_N: Set<Array<Node>>, FP_AC_N: Set<ArrayCell<Node>>) {
-  FP_B == Set(b) &&
-  FP_N == node_footprint(b.root) &&
+predicate btree(b: Node)(FP_N: Set<Node>, FP_A_I: Set<Array<Int>>, FP_AC_I: Set<ArrayCell<Int>>, FP_A_N: Set<Array<Node>>, FP_AC_N: Set<ArrayCell<Node>>) {
+  FP_N == node_footprint(b) &&
   FP_A_I == array_int_fp(FP_N) &&
   FP_AC_I == arraycell_int_fp(FP_A_I) &&
   FP_A_N == array_node_fp(FP_N) &&
   FP_AC_N == arraycell_node_fp(FP_A_N) &&
 
-  /* The order, B, is at least 2 */
-  b.B >= 2 &&
   /* keys and children arrays are of size 2B */
-  (forall n: Node :: n in FP_N ==> n.children.length == 2 * b.B && n.keys.length == 2 * b.B) &&
+  (forall n: Node :: n in FP_N ==> n.children.length == 2 * B && n.keys.length == 2 * B) &&
 
   /* For structural verification: number of children */
   (forall n: Node :: n in FP_N ==> 0 <= n.num_children && n.num_children <= n.children.length) &&
@@ -131,17 +127,18 @@ predicate btree(b: BTree)(FP_B: Set<BTree>, FP_N: Set<Node>, FP_A_I: Set<Array<I
 /* -------------------- Actual Implementation -------------------- */
 
 /* Find the smallest value >= x in this BTree */
-procedure find(b: BTree, x: Int) returns (res: Int)
-  requires btree(b) &*& b.root != null
+procedure find(b: Node, x: Int) returns (res: Int)
+  requires btree(b) &*& b != null;
   ensures btree(b)
 {
   var z: Int;
-  var n := b.root;
+  var n := b;
   var flag := false;
   while (n != null && !flag)
     invariant (n == null || acc(n)) -** btree(b)
   {
     var i := findIt(n.keys, x, 0, n.num_keys);
+    assert acc(n.keys.cells[i]) -** btree(b); 
     if (n.keys[i] == x) {
       z := n.keys[i];
       flag := true;  /* Found x, so return */
