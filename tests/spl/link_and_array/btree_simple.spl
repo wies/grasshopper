@@ -147,7 +147,7 @@ procedure find(b: BTree, x: Int) returns (res: Int)
       flag := true;  /* Found x, so return */
     } else {
       /* n.keys[i] is smallest value > x, go to child[i] if exists */
-      if (n.keys[i] != n.num_keys) {
+      if (i != n.num_keys) {
 	z := n.keys[i];
       }
       n := n.children[i];
@@ -160,7 +160,7 @@ procedure findIt(a: Array<Int>, x: Int, begin: Int, end: Int) returns (idx: Int)
   requires int_arrayseg(a, begin, end)
   requires 0 <= begin && begin <= end && end <= a.length
   ensures int_arrayseg(a, begin, end)
-  ensures begin <= idx && idx < end
+  ensures begin <= idx && idx <= end
 { }
 /* TODO for nomodifiesopt, better to give body for proc or not? */
 
