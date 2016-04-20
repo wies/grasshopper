@@ -9,15 +9,20 @@ predicate lt(x: T, y: T) {
   lt(x, y) 
 }
 
+predicate le(x: T, y: T) {
+  le(x, y)
+}
+
 axiom forall a: T :: !lt(a, a);
 axiom forall a: T, b: T :: !lt(a, b) || !lt(b, a);
 axiom forall a: T, b: T :: lt(a, b) || lt(b, a) || a == b;
 axiom forall a: T, b: T, c: T :: lt(a, b) && lt(b, c) ==> lt(a, c);
-    
+axiom forall a: T, b: T :: le(a, b) == (lt(a, b) || a == b);
+
 function compare(x: T, y: T) returns (res: Int) {
-  (x == y) == (compare(x, y) == 0) &&
-  lt(x, y) == (compare(x, y) < 0) &&
-  lt(y, x) == (compare(x, y) > 0)
+  (x == y) == (res == 0) &&
+  lt(x, y) == (res < 0) &&
+  lt(y, x) == (res > 0)
 }
 
 /* The order, B, is at least 2 */
@@ -31,8 +36,8 @@ struct Node {
   /* NOTE: adding these */
   var ghost parent: Node;
   var ghost is_leaf: Bool;
-  var ghost lbound: Int;
-  var ghost ubound: Int;
+  var ghost lbound: T;
+  var ghost ubound: T;
 }
 
 /* -------------------- Predicate Definitions -------------------- */
@@ -110,17 +115,20 @@ predicate btree(b: Node)(FP_N: Set<Node>, FP_A_I: Set<Array<T>>, FP_AC_I: Set<Ar
 
   /* keys and children arrays are of size 2B */
   (forall n: Node :: n in FP_N ==> n.children.length == 2 * B && n.keys.length == 2 * B) &&
-
-  /* For structural verification: children */
-  
+ 
   /* Structural properties of arrays */
+  // keys arrays are partitioned into non-null/null halfs
   (forall a in FP_A_I, i: Int, j: Int :: 0 <= i && i <= j && j < a.length && a[i] == null ==> a[j] == null) &&
+  // children arrays are partitioned into non-null/null halfs
   (forall a in FP_A_N, i: Int, j: Int :: 0 <= i && i <= j && j < a.length && a[i] == null ==> a[j] == null) &&
-  (forall n in FP_N, i: Int :: 0 <= i && i < n.keys.length ==> (n.keys[i] == null) == (n.children[i] == null)) && 
+  // if a child entry is null then, so is the corresponding key entry
+  (forall n in FP_N, i: Int :: 0 <= i && i < n.keys.length && n.children[i] == null ==> n.keys[i] == null) &&
+  // if a key entry is null, then it is either the first null entry in the key array
+  // or the corresponding child entry is also null
+  (forall n in FP_N, i: Int, j: Int :: 0 <= i && i < j && j < n.keys.length && n.keys[i] == null && n.keys[j] == null ==> n.children[j] == null) && 
+  // the keys are sorted
+  (forall a in FP_A_I, i: Int, j: Int :: 0 <= i && i <= j && j < a.length ==> a[i] == null || a[j] == null || lt(a[i], a[j])) &&
   
-  //(forall n: Node :: n in FP_N ==> 0 <= n.num_keys && n.num_keys <= n.keys.length) &&
-  /* TODO The keys of every node are sorted */
-
   /* Tree invariants */
   // parent is inverse of child array 
   (forall c in FP_AC_N :: c[] == null || Reach(parent, c[], array_node_owner(c.array, FP_N)) && c[] != array_node_owner(c.array, FP_N)) &&
@@ -128,14 +136,14 @@ predicate btree(b: Node)(FP_N: Set<Node>, FP_A_I: Set<Array<T>>, FP_AC_I: Set<Ar
   // child array entries are all distinct
   (forall c in FP_AC_N, d in FP_AC_N :: c[] == d[] ==> c == d || c[] == null) &&
   // ancestor nodes must be reachable via correct child
-  (forall x in FP_N, c in FP_AC_N :: Reach(parent, x, array_node_owner(c.array, FP_N)) && c[].lbound <= x.lbound && x.ubound <= c[].ubound ==>
+  (forall x in FP_N, c in FP_AC_N :: Reach(parent, x, array_node_owner(c.array, FP_N)) && le(c[].lbound, x.lbound) && le(x.ubound, c[].ubound) ==>
    Btwn(parent, x, c[], array_node_owner(c.array, FP_N)) @(matching x yields x.lbound) @(matching x yields x.ubound)) &&
-  // bounds of ancestor nodes include bounds of decendants
-  (forall x in FP_N, y in FP_N :: Reach(parent, x, y) ==> y.lbound <= x.lbound && x.ubound <= y.ubound) &&
-  // bounds of children are disjoint
-  (forall c in FP_AC_N, d in FP_AC_N :: c.index < d.index && c.array == d.array ==> c[].ubound < d[].lbound) &&
-  // bounds of nodes are consistent
-  (forall x in FP_N :: x.lbound <= x.ubound) &&
+  // keys of ancestor nodes include keys of decendants
+  (forall x in FP_N, y in FP_N :: Reach(parent, x, y) ==> le(y.lbound, x.lbound) && le(x.ubound, y.ubound)) &&
+  // keys of children are disjoint
+  (forall c in FP_AC_N, d in FP_AC_N :: c.index < d.index && c.array == d.array ==> lt(c[].ubound, d[].lbound)) &&
+  // key bounds of nodes are consistent
+  (forall x in FP_N :: le(x.lbound, x.ubound)) &&
   // ...TODO
   
   true
