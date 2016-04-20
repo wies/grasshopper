@@ -102,8 +102,8 @@ declarations:
   { (fst3 $2, PredDecl $1 :: snd3 $2, trd3 $2) }
 | struct_decl declarations
   { (fst3 $2, StructDecl $1 :: snd3 $2, trd3 $2) }
-| var_decl declarations
-  { (fst3 $2, VarDecl $1 :: snd3 $2, trd3 $2) }
+| VAR var_decl SEMICOLON declarations
+  { (fst3 $4, VarDecl $2 :: snd3 $4, trd3 $4) }
 | /* empty */ { ([], [], []) }
 | error { ProgError.syntax_error (mk_position 1 1) None }
 ;
