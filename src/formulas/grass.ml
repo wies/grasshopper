@@ -386,8 +386,8 @@ let rec extract_label = function
   | [] -> None
 
 let rec extract_gens = function
-  | TermGenerator (ms, t) :: ann ->
-      (List.map (function Match (t, f) -> t, f) ms, t) :: extract_gens ann
+  | TermGenerator (ms, ts) :: ann ->
+      (List.map (function Match (t, f) -> t, f) ms, ts) :: extract_gens ann
   | _ :: ann -> extract_gens ann
   | [] -> []
 
