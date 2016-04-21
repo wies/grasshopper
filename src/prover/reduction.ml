@@ -239,6 +239,8 @@ let add_set_axioms fs =
     | App (Union, ts, srt) ->
         let ts1, ts2 = split ts in
         App (Union, [unflatten (mk_union ts1); unflatten (mk_union ts2)], srt)
+    | App (SetEnum, (_ :: _ as ts), srt) ->
+        List.fold_left (fun acc t -> mk_union [acc; mk_setenum [t]]) (mk_empty srt) ts
     | App (sym, ts, srt) -> App (sym, List.map unflatten ts, srt)
     | t -> t
   in
@@ -487,7 +489,7 @@ let encode_labels fs =
           | _ -> None) 
         annots
     in
-    mk_and (mk_or (f :: List.map mk_not lbls) :: lbls)
+    mk_and (f :: lbls)
   in
   let rec el = function
     | Binder (b, vs, f, annots) ->
