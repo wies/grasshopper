@@ -519,7 +519,7 @@ alloc:
 
 proc_call:
 | SET LT var_type GT LPAREN expr_list_opt RPAREN { Setenum ($3, $6, mk_position 1 6) }
-| SET LPAREN expr_list RPAREN { Setenum (AnyType, $3, mk_position 1 4) }
+| SET LPAREN expr_list_opt RPAREN { Setenum (AnyType, $3, mk_position 1 4) }
 /*| MAP LT var_type, var_type GT LPAREN expr_list_opt RPAREN {*/
 | IDENT LPAREN expr_list_opt RPAREN { ProcCall (($1, 0), $3, mk_position 1 4) }
 ;
