@@ -233,7 +233,8 @@ let elim_global_deps prog =
     | (New nc, pp) ->
         mk_basic_cmd (New { nc with new_args = List.map subst_terms nc.new_args }) pp.pp_pos
     | (Call cc, pp) ->
-        mk_basic_cmd (Call { cc with call_args = List.map subst_terms cc.call_args }) pp.pp_pos
+        let cc1 = mk_basic_cmd (Call { cc with call_args = List.map subst_terms cc.call_args }) pp.pp_pos in
+        update_ppoint pp cc1
     | (bc, pp) -> Basic (bc, pp)
   in
   let elim_proc proc =
