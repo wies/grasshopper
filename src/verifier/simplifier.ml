@@ -184,30 +184,30 @@ let elim_loops (prog : program) =
 
 (** Eliminate global dependencies of predicates *)
 let elim_global_deps prog =
+  let get_tas p =
+    let decl = find_pred prog p in
+    let accs = decl.pred_accesses in
+    let tas = 
+      List.map 
+        (fun id ->
+          let decl = find_global prog id in
+          mk_free_const decl.var_sort id)
+        (IdSet.elements accs)
+    in
+    tas
+    in
+  let rec subst_terms = function
+    | App (sym, ts, srt) ->
+        let ts1 = List.map subst_terms ts in
+        (match sym with
+        | FreeSym id when IdMap.mem id prog.prog_preds ->
+            let tas = get_tas id in
+            App (FreeSym id, tas @ ts1, srt)
+        | _ -> 
+            App (sym, ts1, srt))
+    | Var _ as t -> t
+  in
   let elim_spec sf = 
-    let get_tas p =
-      let decl = find_pred prog p in
-      let accs = decl.pred_accesses in
-      let tas = 
-        List.map 
-          (fun id ->
-            let decl = find_global prog id in
-            mk_free_const decl.var_sort id)
-          (IdSet.elements accs)
-      in
-      tas
-    in
-    let rec subst_terms = function
-      | App (sym, ts, srt) ->
-          let ts1 = List.map subst_terms ts in
-          (match sym with
-          | FreeSym id when IdMap.mem id prog.prog_preds ->
-              let tas = get_tas id in
-              App (FreeSym id, tas @ ts1, srt)
-          | _ -> 
-              App (sym, ts1, srt))
-      | Var _ as t -> t
-    in
     let subst_preds_sl f =
       let sf p args pos =
         let tas = get_tas p in
@@ -224,6 +224,16 @@ let elim_global_deps prog =
         mk_assert_cmd (elim_spec sf) pp.pp_pos
     | (Assume sf, pp) ->
         mk_assume_cmd (elim_spec sf) pp.pp_pos
+    | (Assign ac, pp) ->
+        mk_assign_cmd ac.assign_lhs (List.map subst_terms ac.assign_rhs) pp.pp_pos
+    | (Return rc, pp) ->
+        mk_return_cmd (List.map subst_terms rc.return_args) pp.pp_pos
+    | (Dispose dc, pp) ->
+        mk_dispose_cmd (subst_terms dc.dispose_arg) pp.pp_pos
+    | (New nc, pp) ->
+        mk_basic_cmd (New { nc with new_args = List.map subst_terms nc.new_args }) pp.pp_pos
+    | (Call cc, pp) ->
+        mk_basic_cmd (Call { cc with call_args = List.map subst_terms cc.call_args }) pp.pp_pos
     | (bc, pp) -> Basic (bc, pp)
   in
   let elim_proc proc =
