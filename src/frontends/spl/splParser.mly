@@ -451,8 +451,8 @@ assign_lhs_list:
 
 assign_lhs:
 | ident { $1 }
-| field_access { $1 }
-| array_access { $1 }
+| field_access_no_set { $1 }
+| array_access_no_set { $1 }
 ;
 
 if_then_stmt:
@@ -505,13 +505,32 @@ primary:
 | NULL { Null (AnyRefType, mk_position 1 1) }
 | EMP { Emp (mk_position 1 1) }
 | LPAREN expr RPAREN { $2 }
+| set_expr { $1 }
 | alloc { $1 }
 | proc_call { $1 }
 | field_access { $1 }
 | array_access { $1 }
 | cast { $1 }
+    ;
+
+primary_no_set:
+| INTVAL { IntVal ($1, mk_position 1 1) }
+| BOOLVAL { BoolVal ($1, mk_position 1 1) }
+| CHARVAL { UnaryOp (OpToByte, IntVal(Int64.of_int (int_of_char $1), mk_position 1 1), mk_position 1 1) }
+/* TODO Byte literal */
+| NULL { Null (AnyRefType, mk_position 1 1) }
+| EMP { Emp (mk_position 1 1) }
+| LPAREN expr RPAREN { $2 }
+| alloc { $1 }
+| proc_call { $1 }
+| field_access_no_set { $1 }
+| array_access_no_set { $1 }
+| cast { $1 }
 ;
 
+set_expr:
+| LBRACE expr_list_opt RBRACE { Setenum (AnyType, $2, mk_position 1 3) }
+  
 alloc:
 | NEW var_type { New ($2, [], mk_position 1 2) }
 | NEW var_type LPAREN expr_list_opt RPAREN { New ($2, $4, mk_position 1 5) }
@@ -533,6 +552,11 @@ field_access:
 | primary DOT ident { Read ($3, $1, mk_position 1 3) }
 ;
 
+field_access_no_set:
+| ident DOT ident { Read ($3, $1, mk_position 1 3) }
+| primary_no_set DOT ident { Read ($3, $1, mk_position 1 3) }
+;
+
 array_access:
 | ident LBRACKET expr RBRACKET { Read ($1, $3, mk_position 1 4) }
 | primary LBRACKET expr RBRACKET { Read ($1, $3, mk_position 1 4) }
@@ -540,6 +564,15 @@ array_access:
                                   Read (Ident (("index", 0), mk_position 2 3), $1, mk_position 1 3), mk_position 1 3) }
 | primary LBRACKET RBRACKET { Read (Read (Ident (("array", 0), mk_position 2 3), $1, mk_position 1 3),
                                     Read (Ident (("index", 0), mk_position 2 3), $1, mk_position 1 3), mk_position 1 3) }
+;
+
+array_access_no_set:
+| ident LBRACKET expr RBRACKET { Read ($1, $3, mk_position 1 4) }
+| primary_no_set LBRACKET expr RBRACKET { Read ($1, $3, mk_position 1 4) }
+| ident LBRACKET RBRACKET { Read (Read (Ident (("array", 0), mk_position 2 3), $1, mk_position 1 3),
+                                  Read (Ident (("index", 0), mk_position 2 3), $1, mk_position 1 3), mk_position 1 3) }
+| primary_no_set LBRACKET RBRACKET { Read (Read (Ident (("array", 0), mk_position 2 3), $1, mk_position 1 3),
+                                           Read (Ident (("index", 0), mk_position 2 3), $1, mk_position 1 3), mk_position 1 3) }
 ;
 
 cast:
