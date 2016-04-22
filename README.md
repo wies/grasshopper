@@ -1,10 +1,5 @@
-GRASShopper version 0.3.
-========================
-
-(c) Thomas Wies (wies@cs.nyu.edu)
-    + Damien Zufferey (zufferey@csail.mit.edu)
-    Siddharth Krishna (siddharth@cs.nyu.edu)
-    Ari Holtzman (ah2637@nyu.edu)
+GRASShopper 0.3
+===============
 
 GRASShopper is an experimental verification tool for programs that
 manipulate dynamically allocated data structures. GRASShopper programs
@@ -32,12 +27,12 @@ Installation Instructions
 -------------------------
 - To produce native code compiled executables, run 
 ```bash
-  ./build.sh`
+./build.sh`
 ```
 
 - Optional: to check whether the build succeeded, run
 ```bash
-   ./build.sh tests
+./build.sh tests
 ```
 
 Usage
@@ -45,13 +40,13 @@ Usage
 
 To run GRASShopper, execute e.g.
 ```bash
-  ./grasshopper.native tests/spl/sl/sl_reverse.spl
+./grasshopper.native tests/spl/sl/sl_reverse.spl
 ```
 The analyzer expects the Z3 (respectively, CVC4) executable in the path.
 
 To see the available command line options, run
 ```bash
-  ./grasshopper.native -help
+./grasshopper.native -help
 ```
 
 Emacs Modes
