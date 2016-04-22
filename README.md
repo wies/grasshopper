@@ -37,7 +37,9 @@ Installation Instructions
 to produce native code compiled executables.
 
 - Optional: run
-     ./build.sh tests
+```bash
+   ./build.sh tests
+```
   to check whether the build succeeded.
 
 Usage
