@@ -2,7 +2,7 @@ GRASShopper version 0.3.
 ========================
 
 (c) Thomas Wies (wies@cs.nyu.edu)
-    Damien Zufferey (zufferey@csail.mit.edu)
+... Damien Zufferey (zufferey@csail.mit.edu)
     Siddharth Krishna (siddharth@cs.nyu.edu)
     Ari Holtzman (ah2637@nyu.edu)
 
@@ -34,23 +34,24 @@ Installation Instructions
 ```bash
   ./build.sh`
 ```
-to produce native code compiled executables.
+... to produce native code compiled executables.
 
-- Optional: run
+Optional: run
 ```bash
    ./build.sh tests
 ```
-  to check whether the build succeeded.
+to check whether the build succeeded.
 
 Usage
 -------------------------
-- To run GRASShopper, execute e.g.
+
+To run GRASShopper, execute e.g.
 ```bash
   ./grasshopper.native tests/spl/sl/sl_reverse.spl
 ```
-  The analyzer expects the Z3 (respectively, CVC4) executable in the path.
+The analyzer expects the Z3 (respectively, CVC4) executable in the path.
 
-- To see the available command line options, run
+To see the available command line options, run
 ```bash
   ./grasshopper.native -help
 ```
