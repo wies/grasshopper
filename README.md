@@ -31,8 +31,9 @@ GRASShopper has been tested on Linux, Mac OS, and Windows/Cygwin.
 Installation Instructions 
 -------------------------
 - Run 
-     ./build.sh
-  to produce native code compiled executables.
+```bash
+  ./build.sh`
+```  to produce native code compiled executables.
 
 - Optional: run
      ./build.sh tests
@@ -66,7 +67,7 @@ GRASShopper provides two emacs modes for GRASShopper programs:
   verification condition generation.
 
 To use the emacs modes, copy the files in the directory emacs-mode to
-your site-lisp directory and add the following lines to your .emacs file:
+your site-lisp directory and add the following lines to your `.emacs` file:
 
 ```elisp
 (load "spl-mode")   
@@ -77,12 +78,12 @@ Optional: Flycheck minor mode
 
 If you are using Emacs 24.1 or newer, we suggest to use the
 flycheck minor mode of the SPL emacs mode. To do so, copy the file
-emacs-mode/flycheck.el into your site-lisp directory. Additionally,
+emacs-mode/flycheck.el into your `site-lisp` directory. Additionally,
 you need to put the GRASShopper executable in your path and rename it
-to "grasshopper". The mode supports on-the-fly syntax and type
+to `grasshopper`. The mode supports on-the-fly syntax and type
 checking of SPL programs and provides keyboard shortcuts for verifying
 the program from inside buffers. See the documentation in the file
-spl-mode.el for details.
+`spl-mode.el` for details.
 
 Note that we are using a patched version of the original flycheck mode
 by Sebastian Wiesner. The minor mode will not work correctly with the
