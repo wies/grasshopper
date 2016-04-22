@@ -2,7 +2,7 @@ GRASShopper version 0.3.
 ========================
 
 (c) Thomas Wies (wies@cs.nyu.edu)
-... Damien Zufferey (zufferey@csail.mit.edu)
+    + Damien Zufferey (zufferey@csail.mit.edu)
     Siddharth Krishna (siddharth@cs.nyu.edu)
     Ari Holtzman (ah2637@nyu.edu)
 
@@ -31,11 +31,11 @@ GRASShopper has been tested on Linux, Mac OS, and Windows/Cygwin.
 Installation Instructions 
 -------------------------
 - To produce native code compiled executables, run 
-... ```bash
+```bash
   ./build.sh`
 ```
 
-Optional: to check whether the build succeeded, run
+- Optional: to check whether the build succeeded, run
 ```bash
    ./build.sh tests
 ```
