@@ -2,42 +2,62 @@
 //  http://opendatastructures.org/ods-java/14_2_B_Trees.html
 //  under CC-BY
 //  full source at http://opendatastructures.org/ods-java.tgz
-  
-struct Node {
-  var keys: Array<Int>;
-  var children: Array<Node>;
 
-  /* NOTE: adding these */
-  var num_keys: Int;
-  var num_children: Int;
-  var ghost parent: Node;
-  var ghost is_leaf: Bool;
-  var ghost lbound: Int;
-  var ghost ubound: Int;
+struct T { }
+
+predicate lt(x: T, y: T) {
+  lt(x, y) 
+}
+
+predicate le(x: T, y: T) {
+  le(x, y)
+}
+
+axiom forall a: T :: !lt(a, a);
+axiom forall a: T, b: T :: !lt(a, b) || !lt(b, a);
+axiom forall a: T, b: T :: lt(a, b) || lt(b, a) || a == b;
+axiom forall a: T, b: T, c: T :: lt(a, b) && lt(b, c) ==> lt(a, c);
+axiom forall a: T, b: T :: le(a, b) == (lt(a, b) || a == b);
+
+function compare(x: T, y: T) returns (res: Int) {
+  (x == y) == (res == 0) &&
+  lt(x, y) == (res < 0) &&
+  lt(y, x) == (res > 0)
 }
 
 /* The order, B, is at least 2 */
 var B: Int;
 axiom B >= 2;
 
+struct Node {
+  var keys: Array<T>;
+  var children: Array<Node>;
+
+  /* NOTE: adding these */
+  var ghost parent: Node;
+  var ghost is_leaf: Bool;
+  var ghost lbound: T;
+  var ghost ubound: T;
+}
+
 /* -------------------- Predicate Definitions -------------------- */
 
-footprint function int_arrayseg_fp(a: Array<Int>, i: Int, j: Int)
-  returns (FP: Set<ArrayCell<Int>>)
+footprint function key_arrayseg_fp(a: Array<T>, i: Int, j: Int)
+  returns (FP: Set<ArrayCell<T>>)
 {
-  (forall c: ArrayCell<Int> ::
+  (forall c: ArrayCell<T> ::
      c in FP == (i <= c.index && c.index < j && c.array == a))
 }
 
-predicate int_arrayseg(a: Array<Int>, i: Int, j: Int)(FP: Set<ArrayCell<Int>>) {
+predicate key_arrayseg(a: Array<T>, i: Int, j: Int)(FP: Set<ArrayCell<T>>) {
   0 <= i && i <= j && j <= a.length &&
-  FP == int_arrayseg_fp(a, i, j)
+  FP == key_arrayseg_fp(a, i, j)
 }
 
-predicate sorted_int_arrayseg(a: Array<Int>, i: Int, j: Int)(FP: Set<ArrayCell<Int>>) {
+predicate sorted_key_arrayseg(a: Array<T>, i: Int, j: Int)(FP: Set<ArrayCell<T>>) {
   0 <= i && i <= j && j <= a.length &&
-  FP == int_arrayseg_fp(a, i, j) &&
-  (forall k: Int, l: Int:: k >= i && k <= l && l < j ==> a[k] <= a[l])
+  FP == key_arrayseg_fp(a, i, j) &&
+  (forall k: Int, l: Int:: k >= i && k <= l && l < j ==> lt(a[k], a[l]))
 }
 
 footprint function node_arrayseg_fp(a: Array<Node>, i: Int, j: Int)
@@ -56,13 +76,13 @@ footprint function node_footprint(r: Node) returns (FP: Set<Node>) {
   forall x: Node :: x in FP == (Btwn(parent, x, r, r) && r != null)
 }
 
-function array_int_owner(a: Array<Int>, FP_N: Set<Node>) returns (n: Node)
+function key_array_owner(a: Array<T>, FP_N: Set<Node>) returns (n: Node)
 
-footprint function array_int_fp(FP_N: Set<Node>) returns (FP_A_I: Set<Array<Int>>) {
+footprint function array_int_fp(FP_N: Set<Node>) returns (FP_A_I: Set<Array<T>>) {
   (forall n: Node :: n in FP_N ==> n.keys in FP_A_I
    @(matching n yields n.keys)) &&
-  (forall a: Array<Int> :: a in FP_A_I ==> array_int_owner(a, FP_N) in FP_N && array_int_owner(a, FP_N).keys == a
-   @(matching a without array_node_owner yields array_int_owner(a, FP_N).keys))
+  (forall a: Array<T> :: a in FP_A_I ==> key_array_owner(a, FP_N) in FP_N && key_array_owner(a, FP_N).keys == a
+   @(matching a without array_node_owner yields key_array_owner(a, FP_N).keys))
 }
 
 function array_node_owner(a: Array<Node>, FP_N: Set<Node>) returns (n: Node)
@@ -71,13 +91,13 @@ footprint function array_node_fp(FP_N: Set<Node>) returns (FP_A_N: Set<Array<Nod
   (forall n: Node :: n in FP_N ==> n.children in FP_A_N
    @(matching n yields n.children)) &&
   (forall a: Array<Node> :: a in FP_A_N ==> array_node_owner(a, FP_N) in FP_N && array_node_owner(a, FP_N).children == a
-   @(matching a without array_int_owner yields array_node_owner(a, FP_N).children))
+   @(matching a without key_array_owner yields array_node_owner(a, FP_N).children))
 }
 
-footprint function arraycell_int_fp(FP_A_I: Set<Array<Int>>) returns (FP_AC_I: Set<ArrayCell<Int>>) {
-  (forall a: Array<Int>, ac: ArrayCell<Int> :: a in FP_A_I && ac in int_arrayseg_fp(a, 0, a.length) ==> ac in FP_AC_I
-   @(matching a yields int_arrayseg_fp(a, 0, a.length))) &&
-  (forall ac: ArrayCell<Int> :: ac in FP_AC_I ==> ac.array in FP_A_I)
+footprint function arraycell_int_fp(FP_A_I: Set<Array<T>>) returns (FP_AC_I: Set<ArrayCell<T>>) {
+  (forall a: Array<T>, ac: ArrayCell<T> :: a in FP_A_I && ac in key_arrayseg_fp(a, 0, a.length) ==> ac in FP_AC_I
+   @(matching a yields key_arrayseg_fp(a, 0, a.length))) &&
+  (forall ac: ArrayCell<T> :: ac in FP_AC_I ==> ac.array in FP_A_I)
 }
 
 footprint function arraycell_node_fp(FP_A_N: Set<Array<Node>>) returns (FP_AC_N: Set<ArrayCell<Node>>) {
@@ -86,7 +106,7 @@ footprint function arraycell_node_fp(FP_A_N: Set<Array<Node>>) returns (FP_AC_N:
   (forall ac: ArrayCell<Node> :: ac in FP_AC_N ==> ac.array in FP_A_N)
 }
 
-predicate btree(b: Node)(FP_N: Set<Node>, FP_A_I: Set<Array<Int>>, FP_AC_I: Set<ArrayCell<Int>>, FP_A_N: Set<Array<Node>>, FP_AC_N: Set<ArrayCell<Node>>) {
+predicate btree(b: Node)(FP_N: Set<Node>, FP_A_I: Set<Array<T>>, FP_AC_I: Set<ArrayCell<T>>, FP_A_N: Set<Array<Node>>, FP_AC_N: Set<ArrayCell<Node>>) {
   FP_N == node_footprint(b) &&
   FP_A_I == array_int_fp(FP_N) &&
   FP_AC_I == arraycell_int_fp(FP_A_I) &&
@@ -95,12 +115,20 @@ predicate btree(b: Node)(FP_N: Set<Node>, FP_A_I: Set<Array<Int>>, FP_AC_I: Set<
 
   /* keys and children arrays are of size 2B */
   (forall n: Node :: n in FP_N ==> n.children.length == 2 * B && n.keys.length == 2 * B) &&
-
-  /* For structural verification: number of children */
-  (forall n: Node :: n in FP_N ==> 0 <= n.num_children && n.num_children <= n.children.length) &&
-  (forall n: Node, i: Int :: n in FP_N && 0 <= i && i < n.num_children ==> n.children[i] != null) &&
-  (forall n: Node, i: Int :: n in FP_N && n.num_children <= i && i <= n.children.length ==> n.children[i] == null) &&
-
+ 
+  /* Structural properties of arrays */
+  // keys arrays are partitioned into non-null/null halfs
+  (forall a in FP_A_I, i: Int, j: Int :: 0 <= i && i <= j && j < a.length && a[i] == null ==> a[j] == null) &&
+  // children arrays are partitioned into non-null/null halfs
+  (forall a in FP_A_N, i: Int, j: Int :: 0 <= i && i <= j && j < a.length && a[i] == null ==> a[j] == null) &&
+  // if a child entry is null then, so is the corresponding key entry
+  (forall n in FP_N, i: Int :: 0 <= i && i < n.keys.length && n.children[i] == null ==> n.keys[i] == null) &&
+  // if a key entry is null, then it is either the first null entry in the key array
+  // or the corresponding child entry is also null
+  (forall n in FP_N, i: Int, j: Int :: 0 <= i && i < j && j < n.keys.length && n.keys[i] == null && n.keys[j] == null ==> n.children[j] == null) && 
+  // the keys are sorted
+  (forall a in FP_A_I, i: Int, j: Int :: 0 <= i && i <= j && j < a.length ==> a[i] == null || a[j] == null || lt(a[i], a[j])) &&
+  
   /* Tree invariants */
   // parent is inverse of child array 
   (forall c in FP_AC_N :: c[] == null || Reach(parent, c[], array_node_owner(c.array, FP_N)) && c[] != array_node_owner(c.array, FP_N)) &&
@@ -108,44 +136,40 @@ predicate btree(b: Node)(FP_N: Set<Node>, FP_A_I: Set<Array<Int>>, FP_AC_I: Set<
   // child array entries are all distinct
   (forall c in FP_AC_N, d in FP_AC_N :: c[] == d[] ==> c == d || c[] == null) &&
   // ancestor nodes must be reachable via correct child
-  (forall x in FP_N, c in FP_AC_N :: Reach(parent, x, array_node_owner(c.array, FP_N)) && c[].lbound <= x.lbound && x.ubound <= c[].ubound ==>
+  (forall x in FP_N, c in FP_AC_N :: Reach(parent, x, array_node_owner(c.array, FP_N)) && le(c[].lbound, x.lbound) && le(x.ubound, c[].ubound) ==>
    Btwn(parent, x, c[], array_node_owner(c.array, FP_N)) @(matching x yields x.lbound) @(matching x yields x.ubound)) &&
-  // bounds of ancestor nodes include bounds of decendants
-  (forall x in FP_N, y in FP_N :: Reach(parent, x, y) ==> y.lbound <= x.lbound && x.ubound <= y.ubound) &&
-  // bounds of children are disjoint
-  (forall c in FP_AC_N, d in FP_AC_N :: c.index < d.index && c.array == d.array ==> c[].ubound < d[].lbound) &&
-  // bounds of nodes are consistent
-  (forall x in FP_N :: x.lbound <= x.ubound) &&
+  // keys of ancestor nodes include keys of decendants
+  (forall x in FP_N, y in FP_N :: Reach(parent, x, y) ==> le(y.lbound, x.lbound) && le(x.ubound, y.ubound)) &&
+  // keys of children are disjoint
+  (forall c in FP_AC_N, d in FP_AC_N :: c.index < d.index && c.array == d.array ==> lt(c[].ubound, d[].lbound)) &&
+  // key bounds of nodes are consistent
+  (forall x in FP_N :: le(x.lbound, x.ubound)) &&
   // ...TODO
   
-  /* Every node has a certain number of keys TODO refine */
-  (forall n: Node :: n in FP_N ==> 0 <= n.num_keys && n.num_keys <= n.keys.length) &&
-  /* TODO The keys of every node are sorted */
   true
 }
 
 /* -------------------- Actual Implementation -------------------- */
 
 /* Find the smallest value >= x in this BTree */
-procedure find(b: Node, x: Int) returns (res: Int)
-  requires btree(b) &*& b != null;
+procedure find(b: Node, x: T) returns (res: T)
+  requires btree(b) &*& b != null
   ensures btree(b)
 {
-  var z: Int;
+  var z: T := null;
   var n := b;
   var flag := false;
   while (n != null && !flag)
     invariant (n == null || acc(n)) -** btree(b)
   {
-    var i := findIt(n.keys, x, 0, n.num_keys);
-    assert acc(n.keys.cells[i]) -** btree(b); 
+    var i := findIt(n.keys, x);
     if (n.keys[i] == x) {
       z := n.keys[i];
       flag := true;  /* Found x, so return */
     } else {
       /* n.keys[i] is smallest value > x, go to child[i] if exists */
-      if (i != n.num_keys) {
-	z := n.keys[i];
+      if (n.keys != null) {
+        z := n.keys[i];
       }
       n := n.children[i];
     }
@@ -153,11 +177,10 @@ procedure find(b: Node, x: Int) returns (res: Int)
   return z;
 }
 
-procedure findIt(a: Array<Int>, x: Int, begin: Int, end: Int) returns (idx: Int)
-  requires int_arrayseg(a, begin, end)
-  requires 0 <= begin && begin <= end && end <= a.length
-  ensures int_arrayseg(a, begin, end)
-  ensures begin <= idx && idx <= end
+procedure findIt(a: Array<T>, x: T) returns (idx: Int)
+  requires key_arrayseg(a, 0, a.length)
+  ensures key_arrayseg(a, 0, a.length)
+  ensures 0 <= idx && idx < a.length
 { }
 /* TODO for nomodifiesopt, better to give body for proc or not? */
 

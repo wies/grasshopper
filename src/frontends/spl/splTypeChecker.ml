@@ -1,29 +1,7 @@
 open Grass
 open SplSyntax
-
-let alloc_arg_mismatch_error pos expected =
-  ProgError.error pos (Printf.sprintf "Constructor expects %d argument(s)" expected)
-
-let alloc_type_error pos ty =
-  ProgError.type_error pos
-    ("Expected an array or struct type but found " ^ string_of_type ty)
-    
-let pred_arg_mismatch_error pos id expected =
-  ProgError.error pos (Printf.sprintf "Predicate %s expects %d argument(s)" (GrassUtil.name id) expected)
-
-let fun_arg_mismatch_error pos id expected =
-  ProgError.error pos (Printf.sprintf "Function %s expects %d argument(s)" (GrassUtil.name id) expected)
-
-let proc_arg_mismatch_error pos id expected =
-  ProgError.error pos 
-    (Printf.sprintf "Procedure %s expects %d argument(s)" 
-       (GrassUtil.name id) (List.length expected))
-
-let type_error pos exp_ty fnd_ty =
-  let ty_str ty = "expression of type " ^ string_of_type ty in
-  ProgError.type_error pos
-    ("Expected an " ^ ty_str exp_ty ^ " but found an " ^ ty_str fnd_ty)
-
+open SplErrors
+  
 let match_types pos oty1 oty2 =
   let rec mt ty1 ty2 =
     match ty1, ty2 with
@@ -187,6 +165,10 @@ let type_of_expr cu locals e =
 (** Infer the types in expression [e] and check whether its type is compatible with [ty].
  ** The typing environment is given by the parameters [cu] and [locals]. *)    
 let infer_types cu locals ty e =
+  let elem_type_of = function
+    | SetType ty -> ty
+    | _ -> failwith "impossible"
+  in
   let rec it locals ty = function
     (* Non-ambiguous Boolean operators *)
     | UnaryOp (OpNot as op, e, pos) ->
@@ -205,12 +187,17 @@ let infer_types cu locals ty e =
         ignore (match_types pos ty ByteType);
         UnaryOp (OpToInt, e1, pos), IntType
     (* Ambiguous relational operators *)
-    | BinaryOp (e1, (OpEq as op), e2, _, pos)
+    | BinaryOp (e1, (OpEq as op), e2, _, pos) ->
+        let e1, e2, ty1 = itp locals AnyType e1 e2 in
+        ignore (match_types pos ty BoolType);
+        BinaryOp (e1, op, e2, BoolType, pos), BoolType
     | BinaryOp (e1, (OpGt as op), e2, _, pos)
     | BinaryOp (e1, (OpLt as op), e2, _, pos)
     | BinaryOp (e1, (OpGeq as op), e2, _, pos)
     | BinaryOp (e1, (OpLeq as op), e2, _, pos) ->
-        let e1, e2, _ = itp locals AnyType e1 e2 in
+        let e1, e2, ty1 = itp locals AnyType e1 e2 in
+        if ty1 <> IntType && ty1 <> ByteType then
+          ignore (match_types (pos_of_expr e1) ty1 (SetType AnyType));
         ignore (match_types pos ty BoolType);
         BinaryOp (e1, op, e2, BoolType, pos), BoolType
     (* Ambiguous binary Boolean operators *)
@@ -225,10 +212,7 @@ let infer_types cu locals ty e =
     | BinaryOp (e1, OpIn, e2, _, pos) ->
         let e1, ty1 = it locals AnyType e1 in
         let e2, ty2 = it locals (SetType ty1) e2 in
-        let ty11 = match ty2 with
-        | SetType ty11 -> ty11
-        | _ -> failwith "impossible"
-        in
+        let ty11 = elem_type_of ty2 in
         let e1 =
           if ty1 <> ty11 then fst (it locals ty11 e1) else e1
         in
@@ -288,18 +272,19 @@ let infer_types cu locals ty e =
         BinaryOp (e1, OpPts, e2, ty, pos), ty
     (* Set enumerations *)
     | Setenum (ety, es, pos) ->
-        let es1, ety1 =
+        let ety1 = match_types pos ty (SetType ety) in
+        let es1, ety2 =
           List.fold_right (fun e (es, ety) ->
             let e, ety1 = it locals ety e in
             e :: es, ety1)
-            es ([], ety)
+            es ([], elem_type_of ety1)
         in
         let es1 =
-          if ety <> ety1
-          then List.map (fun e -> fst (it locals ety1 e)) es1
+          if ety1 <> ety2
+          then List.map (fun e -> fst (it locals ety2 e)) es1
           else es1
         in
-        Setenum (ety1, es1, pos), match_types pos ty (SetType ety)
+        Setenum (ety2, es1, pos), SetType ety2
     | Quant (b, decls, f, pos) ->
         let (decls1, locals1) =
           Util.fold_left_map
@@ -429,10 +414,7 @@ let infer_types cu locals ty e =
         | [e1; e2; e3; e4] ->
             let e1, set_ty = it locals (SetType AnyRefType) e1 in
             let e2, _ = it locals set_ty e2 in
-            let elem_ty = match set_ty with
-            | SetType ty -> ty
-            | _ -> failwith "impossible"
-            in
+            let elem_ty = elem_type_of set_ty in
             let e3, fld_ty = it locals (MapType (elem_ty, AnyType)) e3 in
             let e4, fld_ty = it locals fld_ty e4 in
             PredApp (FramePred, [e1; e2; e3; e4], pos), match_types pos ty BoolType

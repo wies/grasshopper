@@ -46,3 +46,26 @@ let invalid_nested_proc_call_error id pos =
 
 let return_in_loop_error pos =
   ProgError.error pos "A procedure cannot return from within a loop."
+
+let alloc_arg_mismatch_error pos expected =
+  ProgError.error pos (Printf.sprintf "Constructor expects %d argument(s)" expected)
+
+let alloc_type_error pos ty =
+  ProgError.type_error pos
+    ("Expected an array or struct type but found " ^ string_of_type ty)
+    
+let pred_arg_mismatch_error pos id expected =
+  ProgError.error pos (Printf.sprintf "Predicate %s expects %d argument(s)" (GrassUtil.name id) expected)
+
+let fun_arg_mismatch_error pos id expected =
+  ProgError.error pos (Printf.sprintf "Function %s expects %d argument(s)" (GrassUtil.name id) expected)
+
+let proc_arg_mismatch_error pos id expected =
+  ProgError.error pos 
+    (Printf.sprintf "Procedure %s expects %d argument(s)" 
+       (GrassUtil.name id) (List.length expected))
+
+let type_error pos exp_ty fnd_ty =
+  let ty_str ty = "expression of type " ^ string_of_type ty in
+  ProgError.type_error pos
+    ("Expected an " ^ ty_str exp_ty ^ " but found an " ^ ty_str fnd_ty)

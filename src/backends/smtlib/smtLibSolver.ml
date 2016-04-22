@@ -688,7 +688,7 @@ let smtlib_form_of_grass_form solver_info signs f =
   let rec find_patterns acc = function
     | BoolOp (_, fs) ->
         List.fold_left find_patterns acc fs
-    | Binder (_, _, f, _) -> find_patterns acc f
+    | Binder (_, vs, f, _) -> acc
     | Atom (App (_, ts, _), _) ->
         let pts = List.filter (is_pattern false) ts in
         List.fold_left (fun acc t -> TermSet.add t acc) acc pts

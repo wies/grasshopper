@@ -102,8 +102,8 @@ declarations:
   { (fst3 $2, PredDecl $1 :: snd3 $2, trd3 $2) }
 | struct_decl declarations
   { (fst3 $2, StructDecl $1 :: snd3 $2, trd3 $2) }
-| var_decl declarations
-  { (fst3 $2, VarDecl $1 :: snd3 $2, trd3 $2) }
+| VAR var_decl SEMICOLON declarations
+  { (fst3 $4, VarDecl $2 :: snd3 $4, trd3 $4) }
 | /* empty */ { ([], [], []) }
 | error { ProgError.syntax_error (mk_position 1 1) None }
 ;
@@ -519,7 +519,7 @@ alloc:
 
 proc_call:
 | SET LT var_type GT LPAREN expr_list_opt RPAREN { Setenum ($3, $6, mk_position 1 6) }
-| SET LPAREN expr_list RPAREN { Setenum (AnyType, $3, mk_position 1 4) }
+| SET LPAREN expr_list_opt RPAREN { Setenum (AnyType, $3, mk_position 1 4) }
 /*| MAP LT var_type, var_type GT LPAREN expr_list_opt RPAREN {*/
 | IDENT LPAREN expr_list_opt RPAREN { ProcCall (($1, 0), $3, mk_position 1 4) }
 ;

@@ -182,6 +182,7 @@ let _ =
   let start_time = current_time () in
   try
     Arg.parse Config.cmd_options set_main_file usage_message;
+    if !Config.unsat_cores then Config.named_assertions := true;
     Debug.info (fun () -> greeting);
     SmtLibSolver.select_solver (String.uppercase !Config.smtsolver);
     if !main_file = ""
