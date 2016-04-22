@@ -27,7 +27,7 @@ Installation Instructions
 -------------------------
 - To produce native code compiled executables, run 
 ```bash
-./build.sh`
+./build.sh
 ```
 
 - Optional: to check whether the build succeeded, run
