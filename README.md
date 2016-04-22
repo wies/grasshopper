@@ -30,17 +30,15 @@ GRASShopper has been tested on Linux, Mac OS, and Windows/Cygwin.
 
 Installation Instructions 
 -------------------------
-- Run 
-```bash
+- To produce native code compiled executables, run 
+...```bash
   ./build.sh`
 ```
-... to produce native code compiled executables.
 
-Optional: run
+Optional: to check whether the build succeeded, run
 ```bash
    ./build.sh tests
 ```
-to check whether the build succeeded.
 
 Usage
 -------------------------
