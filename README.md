@@ -33,7 +33,8 @@ Installation Instructions
 - Run 
 ```bash
   ./build.sh`
-```  to produce native code compiled executables.
+```
+to produce native code compiled executables.
 
 - Optional: run
      ./build.sh tests
