@@ -254,19 +254,21 @@ let convert cu =
         let ty = convert_term locals y in
         let tz = convert_term locals z in
         GrassUtil.mk_srcpos pos (GrassUtil.mk_btwn tfld tx ty tz)
-    | Quant (q, decls, f, pos) ->
+    | Binder (q, decls, f, pos) ->
         let mk_guard = match q with
-          | Forall -> GrassUtil.mk_implies
-          | Exists -> fun f g -> GrassUtil.mk_and [f; g] 
+        | Forall -> GrassUtil.mk_implies
+        | Exists -> fun f g -> GrassUtil.mk_and [f; g]
+        | SetComp -> failwith "unexpected type"
         in
         let mk_quant vs f =
           let f0, ann = match f with
-            | Binder (_, [], f0, ann) -> f0, ann
+            | Grass.Binder (_, [], f0, ann) -> f0, ann
             | f0 -> f0, []
           in
           let f1 = match q with
             | Forall -> GrassUtil.mk_forall vs f0
             | Exists -> GrassUtil.mk_exists vs f0
+            | SetComp -> failwith "unexpected type"
           in
           GrassUtil.annotate f1 ann
         in
@@ -446,7 +448,7 @@ let convert cu =
           | _ -> failwith "unexpected operator" 
         in
         mk_form f1 f2
-    | Quant (q, decls, f, pos) when q = Exists ->
+    | Binder (Exists as q, decls, f, pos) ->
         let vars, locals1 = 
           List.fold_right (fun decl (vars, locals1) -> match decl with
             | UnguardedVar decl ->
@@ -466,6 +468,7 @@ let convert cu =
         let mk_quant = match q with
         | Forall -> SlUtil.mk_forall 
         | Exists -> SlUtil.mk_exists
+        | SetComp -> failwith "unexpected type"
         in
         let f1 = convert_sl_form locals1 f in
         let f2 = SlUtil.subst_consts subst f1 in
@@ -623,11 +626,11 @@ let convert cu =
         | _ -> failwith "Functions may only have a single return value."
         in
         let rec add_match = function
-          | Binder (b, vs, f, annots) ->
+          | Grass.Binder (b, vs, f, annots) ->
               let annots1 =
                 List.map (function TermGenerator (ms, ts) -> TermGenerator (m :: ms, ts) | a -> a) annots
               in
-              Binder (b, vs, add_match f, annots1)
+              Grass.Binder (b, vs, add_match f, annots1)
           | BoolOp (op, fs) ->
               BoolOp (op, List.map add_match fs)
           | f -> f

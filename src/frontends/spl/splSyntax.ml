@@ -116,7 +116,7 @@ and loop_contracts = loop_contract list
 and loop_contract = 
   | Invariant of expr * bool
 
-and quant_var =
+and bound_var =
   | GuardedVar of ident * expr
   | UnguardedVar of var
 
@@ -135,7 +135,7 @@ and expr =
   | ArrayCells of expr * pos
   | ProcCall of ident * exprs * pos
   | PredApp of pred_sym * exprs * pos
-  | Quant of quantifier_kind * quant_var list * expr * pos
+  | Binder of binder_kind * bound_var list * expr * pos
   | UnaryOp of op * expr * pos
   | BinaryOp of expr * op * expr * typ * pos
   | Ident of ident * pos
@@ -154,14 +154,16 @@ and op =
 and pred_sym =
   | AccessPred | BtwnPred | DisjointPred | FramePred | ReachPred | Pred of ident
       
-and quantifier_kind =
-  | Forall | Exists
+and binder_kind =
+  | Forall | Exists | SetComp
 
 and annotation =
   | GeneratorAnnot of (expr * ident list) list * expr
   | PatternAnnot of expr
   | CommentAnnot of string
 
+(** Utility functions *)
+        
 let pos_of_expr = function
   | Null (_, p) 
   | Emp p 
@@ -175,7 +177,7 @@ let pos_of_expr = function
   | ArrayOfCell (_, p)
   | IndexOfCell (_, p)
   | ArrayCells (_, p)
-  | Quant (_, _, _, p)
+  | Binder (_, _, _, p)
   | ProcCall (_, _, p)
   | PredApp (_, _, p)
   | UnaryOp (_, _, p)
@@ -183,6 +185,40 @@ let pos_of_expr = function
   | Ident (_, p) -> p
   | Annot (_, _, p) -> p  
 
+let free_vars e =
+  let rec fv bv acc = function
+    | Ident (x, _) ->
+        if IdSet.mem x bv then acc else IdSet.add x acc
+    | Setenum (_, es, _)
+    | New (_, es, _)
+    | ProcCall (_, es, _)
+    | PredApp (_, es, _) ->
+        List.fold_left (fv bv) acc es
+    | UnaryOp (_, e, _)
+    | Old (e, _)
+    | Length (e, _)
+    | ArrayOfCell (e, _)
+    | IndexOfCell (e, _)
+    | ArrayCells (e, _)
+    | Annot (e, _, _) ->
+        fv bv acc e
+    | Read (e1, e2, _) 
+    | BinaryOp (e1, _, e2, _, _) ->
+        fv bv (fv bv acc e1) e2
+    | Binder (_, vs, e, _) ->
+        let bv, acc =
+          List.fold_left (fun (bv, acc) -> function
+            | UnguardedVar v ->
+                IdSet.add v.v_name bv, acc
+            | GuardedVar (x, e) ->
+                let acc = fv bv acc e in
+                IdSet.add x bv, acc)
+            (bv, acc) vs
+        in
+        fv bv acc e
+    | _ -> acc
+  in fv IdSet.empty IdSet.empty e
+          
 let pos_of_stmt = function
   | Skip pos
   | Block (_, pos)

@@ -4,10 +4,6 @@ struct Node {
   var next: Node;
 }
 
-function lseg_footprint(x: Node, y: Node) returns (FP: Set<Node>) {
-  forall z: Node :: z in FP == (Btwn(next, x, z, y) && z != y)
-}
-
 predicate lseg(x: Node, y: Node)(FP: Set<Node>) {
-  Reach(next, x, y) && FP == lseg_footprint(x, y)
+  Reach(next, x, y) && FP == { z: Node :: Btwn(next, x, z, y) && z != y }
 }

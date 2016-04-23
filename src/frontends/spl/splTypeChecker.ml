@@ -1,3 +1,4 @@
+open Util
 open Grass
 open SplSyntax
 open SplErrors
@@ -76,7 +77,7 @@ let type_of_expr cu locals e =
     | BinaryOp (_, OpGeq, _, _, _)
     | BinaryOp (_, OpLeq, _, _, _)
     | BinaryOp (_, OpIn, _, _, _)
-    | Quant _
+    | Binder ((Forall | Exists), _, _, _)
     | PredApp (BtwnPred, _, _)
     | PredApp (ReachPred, _, _)
     | PredApp (FramePred, _, _)
@@ -104,6 +105,11 @@ let type_of_expr cu locals e =
     | BinaryOp (e, OpUn, _, _, _)
     | BinaryOp (e, OpInt, _, _, _) ->
         te e
+    | Binder (SetComp, [v], _, _) ->
+        (match v with
+        | GuardedVar (_, e) -> SetType (te e)
+        | UnguardedVar v -> SetType (v.v_type))
+    | Binder (SetComp, _, _, _) -> failwith "invalid set comprehension"        
     | Setenum (ty, _, _) ->
         SetType ty
     (* Permission types *)
@@ -285,26 +291,36 @@ let infer_types cu locals ty e =
           else es1
         in
         Setenum (ety2, es1, pos), SetType ety2
-    | Quant (b, decls, f, pos) ->
-        let (decls1, locals1) =
+    (* Binders *)
+    | Binder (b, decls, f, pos) ->
+        let decls1, (locals1, vty_opt) =
           Util.fold_left_map
-            (fun locals decl -> match decl with
+            (fun (locals, vty_opt) decl ->
+              match decl with
               | GuardedVar (id, e) ->
-                let e1, ety = it locals (SetType AnyType) e in
-                let idty = match ety with
-                | SetType ty -> ty
-                | _ -> type_error pos (SetType AnyType) ety
-                in
-                let decl = var_decl id idty false false pos pos in
-                (GuardedVar (id, e1), IdMap.add id decl locals)
+                  let e1, ety = it locals (SetType AnyType) e in
+                  let idty = match ety with
+                  | SetType ty -> ty
+                  | _ -> type_error pos (SetType AnyType) ety
+                  in
+                  let decl = var_decl id idty false false pos pos in
+                  GuardedVar (id, e1),
+                  (IdMap.add id decl locals, Some (Opt.get_or_else ety vty_opt))
               | UnguardedVar v ->
-                (UnguardedVar v), (IdMap.add v.v_name v locals)
+                  UnguardedVar v,
+                  (IdMap.add v.v_name v locals, Some (Opt.get_or_else v.v_type vty_opt))
             )
-            locals
+            (locals, None)
             decls
         in
-        let f1, ty = it locals1 (match_types pos ty BoolType) f in
-        Quant (b, decls1, f1, pos), ty
+        let f1, ty =
+          match b with
+          | Exists | Forall ->
+              it locals1 (match_types pos ty BoolType) f
+          | SetComp ->
+              fst (it locals1 BoolType f), SetType (Opt.get vty_opt)
+        in
+        Binder (b, decls1, f1, pos), ty
     (* Reference and array types *)
     | New (nty, es, pos) ->
         let es1 =

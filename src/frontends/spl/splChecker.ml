@@ -170,7 +170,7 @@ let resolve_names cu =
           | _ -> Read (re locals tbl map, idx1, pos))
       | Read (map, idx, pos) ->
           Read (re locals tbl map, re locals tbl idx, pos)
-      | Quant (q, decls, f, pos) ->
+      | Binder (q, decls, f, pos) ->
           let (decls1, (locals1, tbl1)) = 
             Util.fold_left_map
               (fun (locals, tbl) decl -> match decl with
@@ -186,7 +186,7 @@ let resolve_names cu =
               decls
           in
           let f1 = re locals1 tbl1 f in
-          Quant (q, decls1, f1, pos)
+          Binder (q, decls1, f1, pos)
       | ProcCall (("acc", _ as id), args, pos) ->
           let args1 = List.map (re locals tbl) args in
           (match args1 with
@@ -425,37 +425,77 @@ let flatten_exprs cu =
     let locals1 = IdMap.add aux_id decl locals in
     aux_id, locals1
   in
-  let rec check_side_effects = function
-    | e -> ()
-  in
-  let rec flatten_expr scope aux locals = function
-    | Setenum (ty, args, pos) as e ->
-        List.iter check_side_effects args;
-        e, aux, locals
+  let rec flatten_expr_list scope aux locals es =
+     List.fold_right (fun e (es1, aux1, locals) ->
+       let e1, aux1, locals = flatten_expr scope aux1 locals e in
+       e1 :: es1, aux1, locals)
+      es ([], aux, locals)
+  and flatten_expr scope aux locals = function
+    | Setenum (ty, args, pos) ->
+        let args1, aux1, locals = flatten_expr_list scope aux locals args in
+        Setenum (ty, args1, pos), aux1, locals
     | New (ty, args, pos) ->
         let aux_id, locals = decl_aux_var "tmp" ty pos scope locals in
-        let args1, aux1, locals = 
-          List.fold_right 
-            (fun arg (args1, aux1, locals) ->
-              let arg1, aux1, locals = flatten_expr scope aux1 locals arg in
-              arg1 :: args1, aux1, locals
-            ) args ([], aux, locals)
-        in
+        let args1, aux1, locals = flatten_expr_list scope aux locals args in
         let aux_var = Ident (aux_id, pos) in
         let alloc = Assign ([aux_var], [New (ty, args1, pos)], pos) in
-        aux_var, alloc :: aux1, locals
+        let aux_cmds, aux_funs = aux1 in
+        aux_var, (alloc :: aux_cmds, aux_funs), locals
     | Read (map, idx, pos) ->
         let map1, aux1, locals = flatten_expr scope aux locals map in
         let idx1, aux2, locals = flatten_expr scope aux1 locals idx in
         Read (map1, idx1, pos), aux2, locals
-    | Quant (q, vars, f, pos) as e ->
-        List.iter
-          (fun v -> match v with
-          | GuardedVar (_,s) -> check_side_effects s
-          | _ -> () )
-          vars;
-        check_side_effects f;
-        e, aux, locals
+    | Binder (b, vars, f, pos) as e ->
+        let vars1, aux, locals =
+          List.fold_right (fun v (vars1, aux, locals) ->
+            match v with
+            | GuardedVar (x, s) ->
+                let s1, aux1, locals = flatten_expr scope aux locals s in
+                GuardedVar (x, s) :: vars1, aux1, locals
+            | _ -> v :: vars1, aux, locals)
+            vars ([], aux, locals)
+        in
+        let f1, aux, locals = flatten_expr scope aux locals f in          
+        (match b with
+        | Exists | Forall -> Binder (b, vars1, f1, pos), aux, locals
+        | SetComp ->
+            let v_decl =
+              match vars1 with
+              | [UnguardedVar decl] -> decl
+              | _ -> failwith "unexpected set comprehension"
+            in
+            let elem_type = v_decl.v_type in
+            let sc_id = GrassUtil.fresh_ident "set_compr" in
+            let sc_locals = IdMap.add v_decl.v_name v_decl IdMap.empty in
+            let sc_ret_id, sc_locals = decl_aux_var "X" (SetType elem_type) pos scope sc_locals in
+            let v = Ident (v_decl.v_name, v_decl.v_pos) in
+            let r = Ident (sc_ret_id, pos) in
+            let fv = IdSet.elements (free_vars e) in
+            let formals = List.filter (fun id -> IdMap.mem id locals) fv in
+            let sc_locals =
+              List.fold_left
+                (fun sc_locals id -> IdMap.add id (IdMap.find id locals) sc_locals)
+                sc_locals formals
+            in
+            let sc_body =
+              Binder (Forall, [UnguardedVar v_decl], BinaryOp (BinaryOp (v, OpIn, r, BoolType, pos), OpEq, f1, BoolType, pos), pos)
+            in
+            let sc_decl =
+              { pr_name = sc_id;
+                pr_formals = formals;
+                pr_footprints = [];
+                pr_outputs = [sc_ret_id];
+                pr_locals = sc_locals;
+                pr_body = sc_body;
+                pr_is_footprint = false;
+                pr_pos = pos;
+              }
+            in
+            let actuals = List.map (fun id -> Ident (id, pos)) formals in
+            let sc_app = PredApp (Pred sc_id, actuals, pos) in
+            let aux_cmds, aux_funs = aux in
+            sc_app, (aux_cmds, sc_decl :: aux_funs), locals
+        )
     | ProcCall (id, args, pos) ->
         let pdecl = IdMap.find id cu.proc_decls in
         let res_type = 
@@ -466,19 +506,14 @@ let flatten_exprs cu =
           | _ -> invalid_nested_proc_call_error pdecl.p_name pos
         in
         let aux_id, locals = decl_aux_var "tmp" res_type pos scope locals in
-        let args1, aux1, locals = 
-          List.fold_right 
-            (fun arg (args1, aux1, locals) ->
-              let arg1, aux1, locals = flatten_expr scope aux1 locals arg in
-              arg1 :: args1, aux1, locals
-            ) args ([], aux, locals)
-        in
+        let args1, aux1, locals = flatten_expr_list scope aux locals args in
         let aux_var = Ident (aux_id, pos) in
         let call = Assign ([aux_var], [ProcCall (id, args1, pos)], pos) in
-        aux_var, (aux1 @ [call]), locals
-    | PredApp (_, args, pos) as e ->
-        List.iter check_side_effects args;
-        e, aux, locals
+        let aux_cmds, aux_funs = aux1 in
+        aux_var, (aux_cmds @ [call], aux_funs), locals
+    | PredApp (p, args, pos) ->
+        let args1, aux1, locals = flatten_expr_list scope aux locals args in
+        PredApp(p, args1, pos), aux1, locals
     | UnaryOp (op, e, pos) ->
         let e1, aux1, locals = flatten_expr scope aux locals e in
         UnaryOp (op, e1, pos), aux1, locals
@@ -488,32 +523,27 @@ let flatten_exprs cu =
         BinaryOp (e11, op, e21, ty, pos), aux2, locals
     | e -> e, aux, locals
   in
-  let rec flatten scope locals returns = function
-    | Skip pos -> Skip pos, locals
+  let rec flatten scope locals aux_funs returns = function
+    | Skip pos -> Skip pos, locals, aux_funs
     | Block (stmts0, pos) ->
-        let stmts, locals = 
+        let stmts, locals, aux_funs = 
           List.fold_left
-            (fun (stmts, locals) stmt0  ->
-              let stmt, locals = flatten pos locals returns stmt0 in
-              stmt :: stmts, locals
+            (fun (stmts, locals, aux_funs) stmt0  ->
+              let stmt, locals, aux_funs = flatten pos locals aux_funs returns stmt0 in
+              stmt :: stmts, locals, aux_funs
             ) 
-            ([], locals) stmts0
-        in Block (List.rev stmts, pos), locals
+            ([], locals, aux_funs) stmts0
+        in Block (List.rev stmts, pos), locals, aux_funs
     | LocalVars (_, _, pos) ->
         failwith "flatten_exprs: LocalVars should have been eliminated"
-    | (Assume (e, pure, pos) as stmt)
-    | (Assert (e, pure, pos) as stmt) ->
-        check_side_effects e;
-        stmt, locals
+    | Assume (e, pure, pos) ->
+        let e1, aux1, locals = flatten_expr scope ([], aux_funs) locals e in
+        Assume (e1, pure, pos), locals, snd aux1
+    | Assert (e, pure, pos) ->
+        let e1, aux1, locals = flatten_expr scope ([], aux_funs) locals e in
+        Assert (e1, pure, pos), locals, snd aux1
     | Assign (lhs, [ProcCall (id, args, cpos)], pos) ->
-        let args1, aux1, locals = 
-          List.fold_right 
-            (fun e (es, aux, locals) ->
-              let e1, aux1, locals = flatten_expr scope aux locals e in
-              e1 :: es, aux1, locals
-            ) 
-            args ([], [], locals)
-        in 
+        let args1, aux1, locals = flatten_expr_list scope ([], aux_funs) locals args in 
         begin
           match lhs with
           | [Read (map, idx, opos)] ->
@@ -525,9 +555,10 @@ let flatten_exprs cu =
               in
               let aux_id, locals = decl_aux_var "tmp" res_ty opos scope locals in
               let aux_var = Ident (aux_id, pos) in
-              let assign_aux, locals =
-                flatten scope locals returns (Assign ([Read (map, idx, opos)], [aux_var], pos)) in
-              mk_block pos (aux1 @ [Assign ([aux_var], [ProcCall (id, args1, cpos)], pos)] @ [assign_aux]), locals
+              let aux_cmds, aux_funs = aux1 in
+              let assign_aux, locals, aux_funs =
+                flatten scope locals aux_funs returns (Assign ([Read (map, idx, opos)], [aux_var], pos)) in
+              mk_block pos (aux_cmds @ [Assign ([aux_var], [ProcCall (id, args1, cpos)], pos)] @ [assign_aux]), locals, aux_funs
           | _ ->
               let lhs1, aux2, locals = 
                 List.fold_right 
@@ -537,17 +568,11 @@ let flatten_exprs cu =
                   ) 
                   lhs ([], aux1, locals)
               in
-              mk_block pos (aux2 @ [Assign (lhs1, [ProcCall (id, args1, cpos)], pos)]), locals
+              let aux_cmds, aux_funs = aux2 in
+              mk_block pos (aux_cmds @ [Assign (lhs1, [ProcCall (id, args1, cpos)], pos)]), locals, aux_funs
         end
     | Assign (lhs, rhs, pos) ->
-        let rhs1, aux1, locals = 
-          List.fold_right 
-            (fun e (es, aux, locals) ->
-              let e1, aux1, locals = flatten_expr scope aux locals e in
-              e1 :: es, aux1, locals
-            ) 
-            rhs ([], [], locals)
-        in 
+        let rhs1, aux1, locals = flatten_expr_list scope ([], aux_funs) locals rhs in
         let lhs1, aux2, locals = 
           List.fold_right 
             (fun e (es, aux, locals) ->
@@ -562,74 +587,68 @@ let flatten_exprs cu =
                   in
                   let aux_var = Ident (aux_id, mpos) in
                   let assign_aux = Assign ([aux_var], [map], mpos) in
-                  Read (aux_var, ind, opos) :: es, aux1 @ [assign_aux], locals
+                  let aux_cmds, aux_funs = aux1 in
+                  Read (aux_var, ind, opos) :: es, (aux_cmds @ [assign_aux], aux_funs), locals
               | _ ->
                   e1 :: es, aux1, locals
             ) 
             lhs ([], aux1, locals)
-        in 
-        mk_block pos (aux2 @ [Assign (lhs1, rhs1, pos)]), locals
-    | Dispose (e, pos) -> 
-        let e1, aux, locals = flatten_expr scope [] locals e in
-        mk_block pos (aux @ [Dispose (e1, pos)]), locals
-    | Havoc (es, pos) -> 
-        let es1, aux1, locals = 
-          List.fold_right 
-            (fun e (es, aux, locals) ->
-              let e1, aux1, locals1 = flatten_expr scope aux locals e in
-              e1 :: es, aux1, locals
-            ) 
-            es ([], [], locals)
-        in 
-        mk_block pos (aux1 @ [Havoc (es1, pos)]), locals          
-    | If (cond, t, e, pos) ->
-        let cond1, aux, locals = flatten_expr scope [] locals cond in
-        let t1, locals = flatten scope locals returns t in
-        let e1, locals = flatten scope locals returns e in
-        mk_block pos (aux @ [If (cond1, t1, e1, pos)]), locals
-    | Loop (inv, preb, cond, postb, pos) ->
-        let _ = 
-          List.iter 
-            (function Invariant (e, _) -> check_side_effects e)
-            inv
         in
-        let preb1, locals = flatten pos locals returns preb in
-        let cond1, aux, locals = flatten_expr pos [] locals cond in
-        let postb1, locals = flatten pos locals returns postb in
-        Loop (inv, mk_block pos ([preb1] @ aux), cond1, postb1, pos), locals
+        let aux_cmds, aux_funs = aux2 in
+        mk_block pos (aux_cmds @ [Assign (lhs1, rhs1, pos)]), locals, aux_funs
+    | Dispose (e, pos) -> 
+        let e1, aux, locals = flatten_expr scope ([], aux_funs) locals e in
+        mk_block pos (fst aux @ [Dispose (e1, pos)]), locals, snd aux
+    | Havoc (es, pos) -> 
+        let es1, aux1, locals = flatten_expr_list scope ([], aux_funs) locals es in
+        let aux_cmds, aux_funs = aux1 in
+        mk_block pos (aux_cmds @ [Havoc (es1, pos)]), locals, aux_funs
+    | If (cond, t, e, pos) ->
+        let cond1, (aux_cmds, aux_funs), locals = flatten_expr scope ([], aux_funs) locals cond in
+        let t1, locals, aux_funs = flatten scope locals aux_funs returns t in
+        let e1, locals, aux_funs = flatten scope locals aux_funs returns e in
+        mk_block pos (aux_cmds @ [If (cond1, t1, e1, pos)]), locals, aux_funs
+    | Loop (inv, preb, cond, postb, pos) ->
+        let inv1, aux_funs, locals = 
+          List.fold_right
+            (function Invariant (e, pos) -> fun (inv1, aux_funs, locals) ->
+              let e1, (_, aux_funs), locals = flatten_expr scope ([], aux_funs) locals e in
+              Invariant (e1, pos) :: inv1, aux_funs, locals)
+            inv ([], aux_funs, locals)
+        in
+        let preb1, locals, aux_funs = flatten pos locals aux_funs returns preb in
+        let cond1, (aux_cmds, aux_funs), locals = flatten_expr pos ([], aux_funs) locals cond in
+        let postb1, locals, aux_funs = flatten pos locals aux_funs returns postb in
+        Loop (inv, mk_block pos ([preb1] @ aux_cmds), cond1, postb1, pos), locals, aux_funs
     | Return ([ProcCall (id, args, cpos)], pos) ->
-        let args1, aux1, locals = 
-          List.fold_right 
-            (fun e (es, aux, locals) ->
-              let e1, aux1, locals = flatten_expr scope aux locals e in
-              e1 :: es, aux1, locals
-            ) 
-            args ([], [], locals)
-        in 
+        let args1, aux1, locals = flatten_expr_list scope ([], aux_funs) locals args in
         let rts = List.map (fun id -> Ident (id, cpos)) returns in
         let assign = Assign (rts, [ProcCall (id, args1, cpos)], pos) in
         let ret = Return (rts, pos) in
-        mk_block pos (aux1 @ [assign; ret]), locals
+        let aux_cmds, aux_funs = aux1 in
+        mk_block pos (aux_cmds @ [assign; ret]), locals, aux_funs
     | Return (es, pos) ->
-        let es1, aux1, locals = 
-          List.fold_right 
-            (fun e (es, aux, locals) ->
-              let e1, aux1, locals = flatten_expr scope aux locals e in
-              e1 :: es, aux1, locals
-            ) 
-            es ([], [], locals)
-        in 
-        mk_block pos (aux1 @ [Return (es1, pos)]), locals
+        let es1, (aux_cmds, aux_funs), locals = flatten_expr_list scope ([], aux_funs) locals es in
+        mk_block pos (aux_cmds @ [Return (es1, pos)]), locals, aux_funs
   in
-  let procs =
+  let procs, aux_funs =
     IdMap.fold
-      (fun _ decl procs ->
-        let body, locals = flatten decl.p_pos decl.p_locals decl.p_returns decl.p_body in
+      (fun _ decl (procs, aux_funs) ->
+        let body, locals, aux_funs = flatten decl.p_pos decl.p_locals aux_funs decl.p_returns decl.p_body in
         let decl1 = { decl with p_locals = locals; p_body = body } in
-        IdMap.add decl.p_name decl1 procs)
-      cu.proc_decls IdMap.empty
+        IdMap.add decl.p_name decl1 procs, aux_funs)
+      cu.proc_decls (IdMap.empty, [])
   in
-  { cu with proc_decls = procs }
+  let preds, aux_funs =
+    IdMap.fold
+      (fun _ decl (preds, aux_funs) ->
+        let body, (_, aux_funs), locals = flatten_expr decl.pr_pos ([], aux_funs) decl.pr_locals decl.pr_body in
+        let decl1 = { decl with pr_locals = locals; pr_body = body } in
+        IdMap.add decl.pr_name decl1 preds, aux_funs)
+      cu.pred_decls (IdMap.empty, [])
+  in
+  let preds_all = List.fold_left (fun preds_all decl -> IdMap.add decl.pr_name decl preds_all) preds aux_funs in
+  { cu with proc_decls = procs; pred_decls = preds_all }
 
 (** Type check compilation unit [cu]. Missing type annotations are inferred along the way.*)
 let infer_types cu =
@@ -774,6 +793,6 @@ let infer_types cu =
 (** Check compilation unit [cu]. *)
 let check cu =
   let cu1 = resolve_names cu in
-  let cu2 = flatten_exprs cu1 in
-  let cu3 = infer_types cu2 in
+  let cu2 = infer_types cu1 in
+  let cu3 = flatten_exprs cu2 in
   cu3

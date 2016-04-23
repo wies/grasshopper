@@ -52,7 +52,7 @@ let trd3 (_, _, v) = v
 %token BOR BAND BNOT BSL BSR INT2BYTE BYTE2INT
 %token PTS EMP NULL
 %token SEPSTAR SEPPLUS SEPINCL AND OR IMPLIES IFF NOT COMMA
-%token <SplSyntax.quantifier_kind> QUANT
+%token <SplSyntax.binder_kind> QUANT
 %token ASSUME ASSERT CALL FREE HAVOC NEW RETURN
 %token IF ELSE WHILE
 %token GHOST IMPLICIT VAR STRUCT PURE PROCEDURE PREDICATE FUNCTION FOOTPRINT INCLUDE AXIOM
@@ -530,6 +530,8 @@ primary_no_set:
 
 set_expr:
 | LBRACE expr_list_opt RBRACE { Setenum (AnyType, $2, mk_position 1 3) }
+| LBRACE simple_bound_var COLONCOLON expr RBRACE { Binder (SetComp, [$2], $4, mk_position 1 5) }
+;
   
 alloc:
 | NEW var_type { New ($2, [], mk_position 1 2) }
@@ -681,6 +683,10 @@ quant_var:
 | IDENT IN annot_expr {
     GuardedVar (($1, 0), $3)
   }
+| simple_bound_var { $1 }
+;
+  
+simple_bound_var:      
 | IDENT COLON var_type {
     let decl = { v_name = ($1, 0);
                  v_type = $3;
@@ -704,7 +710,7 @@ quant_vars:
 
 quant_expr: 
 | annot_expr { $1 }
-| QUANT quant_vars COLONCOLON annot_expr { Quant ($1, $2, $4, mk_position 1 4) }
+| QUANT quant_vars COLONCOLON annot_expr { Binder ($1, $2, $4, mk_position 1 4) }
 ;
 
 expr:
