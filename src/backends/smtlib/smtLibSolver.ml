@@ -649,7 +649,7 @@ let extract_name ann =
       (function Name id -> string_of_ident id | _ -> "")
       ann 
   in
-  Str.global_replace (Str.regexp " \\|(\\|)") "_" (String.concat "_" (List.rev names))
+  Str.global_replace (Str.regexp " \\|(\\|)\\|<\\|>") "-" (String.concat "-" (List.rev names))
 
 let smtlib_form_of_grass_form solver_info signs f =
   let f = if !Config.use_bitvector then bitvecorize_grass_formula f else f in
@@ -752,6 +752,7 @@ let smtlib_form_of_grass_form solver_info signs f =
 
 let assert_form session f =
   let _ = match f with
+    | Atom (_, ann)
     | Binder (_, _, _, ann) ->
       begin
         let name = extract_name ann in
