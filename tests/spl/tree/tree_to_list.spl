@@ -1,137 +1,155 @@
-struct Node { //union between tree and list
-  var next: Node;
-  var left: Node;
-  var right: Node;
-  var parent: Node;
-  var data: Int;
+// sorted list
+struct LNode {
+  var next: LNode;
+  var ldata: Int;
 }
 
-//same as sorted_set but forces parent to be null
-predicate sorted_set2(x: Node, y: Node, c: Set<Int>) {
-    x == y &*&
-    c == Set<Int>()
-  || 
-    x != y &*&
-    x.parent == null &*&
-    x.data == x.data &*&
-    x.next == x.next &*&
-    x.right == x.right &*&
-    x.left == x.left
-    //sorted_set_lb(x, y, x.data - 1, c) TODO
+footprint function lseg_footprint(x: LNode, y: LNode) returns (FP: Set<LNode>) {
+  forall z: LNode :: z in FP == (Btwn(next, x, z, y) && z != y)
 }
 
-predicate sorted_set2_lb(x: Node, y: Node, lb: Int, c: Set<Int>) {
-    x == y &*&
-    c == Set<Int>()
-  || 
-    x != y &*&
-    x.parent == null &*&
-    x.data >= lb &*&
-    x.next == x.next &*&
-    x.right == x.right &*&
-    x.left == x.left &*&
-    sorted_set2_lb(x.next, y, x.data + 1, c)
+function ldata_witness(v: Int, d: Map<LNode, Int>, FP: Set<LNode>) returns (res: LNode) 
+
+function lcontent(FP: Set<LNode>) returns (C: Set<Int>) {
+  (forall x in FP :: x == ldata_witness(x.ldata, ldata, FP)) &&
+  (forall x in FP :: x.ldata in C) &&
+  (forall v in C :: ldata_witness(v, ldata, FP) in FP) &&
+  (forall v: Int :: v !in C ==> ldata_witness(v, ldata, FP) == null) &&
+  (forall v in C :: v == ldata_witness(v, ldata, FP).ldata @(matching v yields ldata_witness(v, ldata, FP).ldata))
 }
 
-predicate stree2(x: Node, content: Set<Int>) {
-    x == null &*&
-    content == Set<Int>()
-  ||
-    x != null &*&
-    x.parent == x.parent &*&
-    x.next == null &*&
-    x.data in content &*&
-    stree2(x.left, content) &*&  //TODO content
-    stree2(x.right, content)     //TODO content
+predicate list_set(x: LNode, y: LNode, C: Set<Int>)(FP: Set<LNode>) {
+  Btwn(next, x, y, y) &&
+  FP == lseg_footprint(x, y) &&
+  (forall m in FP, n in FP :: Btwn(next,x,m,n) ==> m.ldata <= n.ldata) &&
+  C == lcontent(FP)
 }
 
-predicate stree2_b(x: Node, lb: Int, ub: Int, content: Set<Int>) {
-    x == null &*&
-    content == Set<Int>()
-  ||
-    x != null &*&
-    x.parent == x.parent &*&
-    x.next == null &*&
-    x.data in content &*&
-    x.data <= ub &*&
-    lb <= x.data &*&
-    stree2_b(x.left, lb, ub, content) &*&  //TODO content
-    stree2_b(x.right, lb, ub, content)     //TODO content
+//binary search tree
+struct TNode {
+  var left: TNode;
+  var right: TNode;
+  var ghost parent: TNode;
+  var tdata: Int;
 }
 
-predicate treeAllocInvariant(X: Set<Node>) {
-  (forall n in X :: n.parent == n.parent)
+function tree_footprint(r: TNode) returns (FP: Set<TNode>) {
+  forall x: TNode :: x in FP == (Btwn(parent, x, r, r) && r != null)
 }
 
-procedure union(lst1: Node, lst2: Node,
+function tree_parent(r: TNode) returns (p: TNode) {
+  r != null && r.parent == p || r == null && p == null
+}
+
+predicate parent_equal_left_child(FP: Set<TNode>) {
+  (forall x: TNode :: x !in FP || x.left == null || Btwn(parent, x.left, x, x) && x.left != x) &&
+  (forall x: TNode, y: TNode :: x in FP && Btwn(parent, x.left, y, x) ==> x == y || x.left == y)
+}
+
+predicate parent_equal_right_child(FP: Set<TNode>) {
+  (forall x: TNode :: x !in FP || x.right == null || Btwn(parent, x.right, x, x) && x.right != x) &&
+  (forall x: TNode, y: TNode :: x in FP && Btwn(parent, x.right, y, x) ==> x == y || x.right == y)
+}
+
+predicate left_right_distinct(FP: Set<TNode>) {
+  (forall x: TNode :: x in FP && x.left == x.right ==> x.left == null 
+    @(matching x.right yields x.left)
+    @(matching x.left yields x.right))
+}
+
+predicate reach_via_left_right(FP: Set<TNode>) {
+  forall x in FP, y in FP ::
+    Btwn(parent, y, x, x) ==>
+      x == y || Btwn(parent, y, x.left, x) || Btwn(parent, y, x.right, x)
+}
+
+function tdata_witness(v: Int, d: Map<TNode, Int>, FP: Set<TNode>) returns (res: TNode)
+
+function tcontent(FP: Set<TNode>) returns (C: Set<Int>) {
+  (forall x: TNode :: x in FP ==> x == tdata_witness(x.tdata, tdata, FP)) &&
+  (forall x: TNode :: x in FP ==> x.tdata in C) &&
+  (forall v in C :: tdata_witness(v, tdata, FP) in FP) &&
+  (forall v: Int :: v !in C ==> tdata_witness(v, tdata, FP) == null) &&
+  (forall v in C :: v == tdata_witness(v, tdata, FP).tdata @(matching v yields tdata_witness(v, tdata, FP).tdata))
+}
+
+predicate tree_set(r: TNode, C: Set<Int>)(FP: Set<TNode>) {
+  tree_footprint(r) == FP &&
+  parent_equal_left_child(FP) &&
+  parent_equal_right_child(FP) &&
+  left_right_distinct(FP) &&
+  reach_via_left_right(FP) &&
+  (forall x in FP, y in FP :: Btwn(parent, x, y.left, y) ==> x.tdata < y.tdata @(matching y.left yields y.tdata)) &&
+  (forall x in FP, y in FP :: Btwn(parent, x, y.right, y) ==> x.tdata > y.tdata @(matching y.right yields y.tdata)) &&
+  C == tcontent(FP)
+}
+
+//////////
+
+procedure union(lst1: LNode, lst2: LNode,
                 implicit ghost content1: Set<Int>,
                 implicit ghost content2: Set<Int>)
-  returns (res: Node)
-  requires sorted_set2(lst1, null, content1);
-  requires sorted_set2(lst2, null, content2);
-  requires treeAllocInvariant(Alloc);
-  ensures  treeAllocInvariant(Alloc);
-  ensures sorted_set2(res, null, content1 ++ content2);
+  returns (res: LNode)
+  requires list_set(lst1, null, content1);
+  requires list_set(lst2, null, content2);
+  ensures  list_set(res, null, content1 ++ content2);
 {
     if (lst1 == null) {
         return lst2;
     } else if (lst2 == null) {
         return lst1;
-    } else if (lst1.data < lst2.data) {
+    } else if (lst1.ldata < lst2.ldata) {
         lst1.next := union(lst1.next, lst2);
         return lst1;
-    } else if (lst1.data > lst2.data) {
+    } else if (lst1.ldata > lst2.ldata) {
         lst2.next := union(lst1, lst2.next);
         return lst2;
     } else { //lst1.data == lst2.data
-        var n: Node;
+        var n: LNode;
         n := lst1.next;
         free(lst1);
         return union(n, lst2);
     }
 }
 
-procedure insertL( lst: Node, val: Int,
+procedure insertL(lst: LNode, val: Int,
                   implicit ghost content: Set<Int>)
-  returns (res: Node)
-  requires sorted_set2(lst, null, content);
-  requires treeAllocInvariant(Alloc);
-  ensures  treeAllocInvariant(Alloc);
-  ensures sorted_set2(res, null, content ++ Set(val));
+  returns (res: LNode)
+  requires list_set(lst, null, content);
+  ensures  list_set(res, null, content ++ Set(val));
 {
-  var curr: Node, prev: Node;
+  var curr: LNode, prev: LNode;
   curr := lst;
   prev := null;
-  var c1: Set<Int>, c2: Set<Int>;
-  c1 := content;
-  c2 := Set<Int>();
+  var ghost c1 := content;
+  var ghost c2 := Set<Int>();
 
-  while (curr != null && curr.data < val)
+  while (curr != null && curr.ldata < val)
     invariant prev == null && curr == lst && c2 == Set<Int>() || 
-                (val > prev.data && 
+                (val > prev.ldata && 
                 prev != curr && 
                 prev.next == curr && 
                 Btwn(next,lst,prev,curr)) &*&
-                sorted_set2(lst, curr, c2);
-    invariant sorted_set2(curr, null, c1);
+                list_set(lst, curr, c2);
+    invariant list_set(curr, null, c1);
     invariant content == c1 ++ c2;
-    invariant prev == null || curr == null || prev.data < curr.data;
+    invariant prev == null || curr == null || prev.ldata < curr.ldata;
   {
-    c1 := c1 -- Set(curr.data);
-    c2 := c2 ++ Set(curr.data);
+    c1 := c1 -- Set(curr.ldata);
+    c2 := c2 ++ Set(curr.ldata);
     prev := curr;
     curr := curr.next; 
   }
 
-  var n: Node;
+  var n: LNode;
 
-  if (curr != null && curr.data == val) {
+  if (curr != null && curr.ldata == val) {
     return lst;
   }
 
-  n := new Node;
+  n := new LNode;
   n.next := curr;
-  n.data := val;
+  n.ldata := val;
 
   if (prev != null) {
     prev.next := n;
@@ -142,77 +160,70 @@ procedure insertL( lst: Node, val: Int,
 
 }
 
-//this goes through, but it is extremely slow
-procedure toList(t: Node, implicit ghost content: Set<Int>)
-returns (res: Node)
-  requires stree2(t, content);
-  requires treeAllocInvariant(Alloc);
-  ensures  treeAllocInvariant(Alloc);
-  ensures sorted_set2(res, null, content);
+procedure toList(t: TNode, implicit ghost content: Set<Int>)
+returns (res: LNode)
+  requires tree_set(t, content);
+  ensures list_set(res, null, content);
 {
     if (t == null) {
         return null;
     } else {
         t.parent := null;
-        var l: Node, r: Node, u: Node, d: Int;
-        r := t.right;
-        l := t.left;
-        d := t.data;
+        var r := t.right;
+        var l := t.left;
+        var d := t.tdata;
         if (r != null) { r.parent := null; }
         if (l != null) { l.parent := null; }
         free(t);
-        r := toList(r);
-        l := toList(l);
-        u := union(l, r);
+        var u := union(toList(l), toList(r));
         return insertL(u, d);
     }
 }
 
 //TODO needs bound!!
-procedure toListRec(t: Node, l: Node, ghost lb: Int, ghost bnd: Int,
-                    implicit ghost contentT: Set<Int>, implicit ghost contentL: Set<Int>)
-returns (res: Node)
-  requires lb <= bnd &*& stree2_b(t, lb, bnd, contentT);
-  requires sorted_set2_lb(l, null, bnd + 1, contentL) &*& treeAllocInvariant(Alloc);
-  ensures  sorted_set2_lb(res, null, lb, contentT ++ contentL) &*& treeAllocInvariant(Alloc);
+procedure toListRec(t: TNode, l: LNode, ghost bnd: Int,
+                    implicit ghost contentT: Set<Int>,
+                    implicit ghost contentL: Set<Int>)
+returns (res: LNode)
+  requires tree_set(t, contentT);
+  requires list_set(l, null, contentL);
+  requires forall v in contentT :: v >= bnd
+  requires forall v in contentL :: v < bnd
+  ensures  list_set(res, null, contentT ++ contentL);
 {
     if (t == null) {
         return l;
     } else {
-        var lft: Node;
-        lft := t.left;
-        if (lft != null) lft.parent := null;
-        if (t.right != null) t.right.parent := null;
-        l := toListRec(t.right, l, t.data, bnd);
-        //t.left := null;
-        //t.right := null;
-        t.next := l;
-        return toListRec(lft, t, lb, t.data -1);
+        var n := new LNode;
+        n.ldata := t.tdata;
+        n.next := toListRec(t.left, l, bnd);
+        res := toListRec(t.right, n, -1); //XXX
+        t.parent := null;
+        free(t);
     }
 }
 
 
-procedure insert(root: Node, value: Int, implicit ghost content: Set<Int>)
-returns (new_root: Node)
-  requires stree2(root, content) &*& treeAllocInvariant(Alloc);
-  ensures stree2(new_root, content ++ Set(value)) &*& treeAllocInvariant(Alloc);
+procedure insert(root: TNode, value: Int, implicit ghost content: Set<Int>)
+returns (new_root: TNode)
+  requires tree_set(root, content);
+  ensures tree_set(new_root, content ++ Set(value));
 {
   if (root == null) {
-    var t: Node;
-    t := new Node;
+    var t := new TNode;
     t.left := null;
     t.right := null;
-    t.data := value;
-    t.next := null;
+    t.tdata := value;
+    t.parent := null;
     return t;
   } else { 
-    var n: Node;
-    if (root.data > value) {
+    var n: TNode;
+    if (root.tdata > value) {
       n := insert(root.left, value);
       root.left := n;
       if (n != null) {n.parent := root;}
       return root;
-    } else if (root.data < value) {
+    } else if (root.tdata < value) {
       n := insert(root.right, value);
       root.right := n;
       if (n != null) {n.parent := root;}
@@ -222,20 +233,16 @@ returns (new_root: Node)
   }
 }
 
-procedure toTree(t: Node, implicit ghost content: Set<Int>)
-returns (res: Node)
-  requires sorted_set2(t, null, content) &*& treeAllocInvariant(Alloc);
-  ensures  stree2(res, content) &*& treeAllocInvariant(Alloc);
+procedure toTree(l: LNode, implicit ghost content: Set<Int>)
+returns (res: TNode)
+  requires list_set(l, null, content);
+  ensures  tree_set(res, content);
 {
-    if (t == null) {
-        return null;
-    } else {
-        var n: Node, d: Int;
-        n := t.next;
-        d := t.data;
-        free(t);
-        n := toTree(n);
-        return insert(n, d);
-    }
+  if (l == null) {
+    res := null;
+  } else {
+    res := insert(toTree(l.next), l.ldata);
+    free(l);
+  }
 }
 

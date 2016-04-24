@@ -1,4 +1,4 @@
-include "int_array.spl";
+include "../include/int_array.spl";
 
 procedure chechSorted(a: Array<Int>, implicit ghost content: Set<Int>)
   requires sorted_array(a, content)

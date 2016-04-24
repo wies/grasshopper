@@ -1,4 +1,4 @@
-include "int_array.spl";
+include "../include/int_array.spl";
 
 procedure find_minimum(a: Array<Int>, low: Int, high: Int)
   returns (min_i: Int)

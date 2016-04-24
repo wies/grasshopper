@@ -1,5 +1,5 @@
 include "insert.spl";  // Has definitions of list set with uninterpreted Data
-include "../array/node_array.spl";
+include "../include/node_array.spl";
 
 struct HashSet {
   var size: Int; /* the size of the set */
