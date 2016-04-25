@@ -1,4 +1,4 @@
-include "assoc_list.spl";
+include "../include/assoc_list.spl";
 
 procedure insert(lst: Node, k: Int, v: Int,
                  implicit ghost C: Set<Int>,

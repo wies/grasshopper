@@ -1,4 +1,4 @@
-include "assoc_list.spl";
+include "../include/assoc_list.spl";
 
 procedure remove(lst: Node, k: Int,
                  implicit ghost C: Set<Int>,
