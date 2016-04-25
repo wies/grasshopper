@@ -32,7 +32,6 @@ procedure checkServerResponseUSER(response: Array<Byte>)
   if ((ack == 200) ||
       (ack == 230) ||
       (ack == 234) ||
-      (ack == 300) ||
       (ack == 331) )
     success := true;
   else
