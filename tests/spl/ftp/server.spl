@@ -84,7 +84,7 @@ procedure handleAuth(cmdFd: Int)
     free(response);
     return true;
   } else {
-    response := "430";
+    response := "530";
     var sent := tcp_send(cmdFd, response, 4);
     free(response);
     return false;
