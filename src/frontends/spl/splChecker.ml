@@ -755,7 +755,7 @@ let infer_types cu =
   let preds =
     IdMap.fold
       (fun id pred preds ->
-        let body = infer_types cu pred.pr_locals BoolType pred.pr_body in
+        let body = infer_types cu pred.pr_locals PermType pred.pr_body in
         let _ =
           List.iter (fun vid ->
             let vdecl = IdMap.find vid pred.pr_locals in

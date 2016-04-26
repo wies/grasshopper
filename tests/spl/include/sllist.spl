@@ -7,3 +7,14 @@ struct Node {
 predicate lseg(x: Node, y: Node)(FP: Set<Node>) {
   Reach(next, x, y) && FP == { z: Node :: Btwn(next, x, z, y) && z != y }
 }
+
+predicate lseg2(x: Node, y: Node) {
+  exists X: Set<Node> ::
+    acc(X) &*& Reach(next, x, y) &*&
+    X == { z: Node :: Btwn(next, x, z, y) && z != y }
+}
+
+predicate lseg3(x: Node, y: Node) {
+  x == y &*& emp ||
+  x != y &*& acc(x) &*& lseg(x.next, y)
+}
