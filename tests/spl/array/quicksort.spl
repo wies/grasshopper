@@ -1,4 +1,4 @@
-include "int_array.spl";
+include "../include/int_array.spl";
 
 procedure quicksort(a: Array<Int>, implicit ghost content: Set<Int>)
   requires array_cnt(a, content)

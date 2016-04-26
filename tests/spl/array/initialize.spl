@@ -1,4 +1,4 @@
-include "int_array.spl";
+include "../include/int_array.spl";
 
 procedure initialize()
   returns (a: Array<Int>)

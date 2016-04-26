@@ -1,4 +1,4 @@
-include "int_array.spl";
+include "../include/int_array.spl";
 
 // @author David Stingley and Jenny Ramseyer
 

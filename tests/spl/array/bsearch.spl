@@ -1,4 +1,4 @@
-include "int_array.spl";
+include "../include/int_array.spl";
 
 // TODO: run quicksort_distinct on skolem
 // heap access is also not being checked inside formulas!

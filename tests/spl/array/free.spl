@@ -1,4 +1,4 @@
-include "int_array.spl";
+include "../include/int_array.spl";
 
 procedure free_array(a: Array<Int>)
   requires array(a)

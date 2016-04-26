@@ -1,4 +1,4 @@
-include "assoc_list.spl";
+include "../include/assoc_list.spl";
 
 procedure contains(lst: Node, val: Int, implicit ghost C: Set<Int>, implicit ghost D: Map<Int,Int>)
   returns (res: Bool)

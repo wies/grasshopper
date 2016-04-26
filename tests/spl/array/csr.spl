@@ -12,7 +12,7 @@
 //  http://netlib.org/linalg/html_templates/node91.html
 //  http://homepage.cs.uiowa.edu/~sriram/21/fall07/code/CRS.java
 
-include "int_array.spl";
+include "../include/int_array.spl";
 
 struct CSR {
   var val: Array<Int>;
