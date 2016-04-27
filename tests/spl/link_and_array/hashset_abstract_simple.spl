@@ -126,7 +126,7 @@ predicate arrayseg_with_buckets(a: Array<Node>, lo: Int, hi: Int)
   (forall c1 in FP0, c2 in FP0 :: c1 == c2 || Disjoint(listset_footprint(next, c1[]), listset_footprint(next, c2[])))
   // all data values of a bucket list have the same hash, which is the index of the array cell that points to the list
   // (implies the disjointness of the content sets of the lists)
-  //(forall c in FP0, d in listset_content(data, listset_footprint(next, c[])) :: hash(a.length, d) = c.index) 
+  //(forall c in FP0, d in listset_content(data, listset_footprint(next, c[])) :: hash(a.length, d) = c.index)
 }
 
 predicate array_with_buckets(a: Array<Node>)
@@ -168,9 +168,10 @@ procedure hashset_add(hset: HashSet, value: Data)
   var hashval := hash(hset.size, value);
   var list := hset.buckets[hashval];
   hset.buckets[hashval] := listset_add(list, value);
-  assert listset(list) -** hashset(hset);
+  list := hset.buckets[hashval];
+  //assert listset(list) -** hashset(hset);
   //assume hashset(hset);
-  //hset.buckets[hashval] := listset_add(list, value);
+  hset.buckets[hashval] := listset_add(list, value);
 }
 
   
