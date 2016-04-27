@@ -14,69 +14,95 @@ let infer_accesses prog =
         has_new1 || has_new2, 
         mk_loop_cmd lc.loop_inv prebody1 lc.loop_test lc.loop_test_pos postbody1 pp.pp_pos
     | Choice (cs, pp) ->
-        let has_new, mods, accs, cs1 = 
+        let has_new, mods, accs, fps, cs1 = 
           List.fold_right 
-            (fun c (has_new, mods, accs, cs1) ->
+            (fun c (has_new, mods, accs, fps, cs1) ->
               let has_new1, c1 = pm prog c in
               has_new1 || has_new, 
-              IdSet.union (modifies c1) mods, 
-              IdSet.union (accesses c1) accs, 
+              IdSet.union (modifies_cmd c1) mods, 
+              IdSet.union (accesses_cmd c1) accs,
+              SortSet.union (footprint_sorts_cmd c1) fps,
               c1 :: cs1)
-            cs (false, IdSet.empty, IdSet.empty, [])
+            cs (false, IdSet.empty, IdSet.empty, SortSet.empty, [])
         in
-        let pp1 = {pp with pp_modifies = mods; pp_accesses = accs} in
+        let pp1 =
+          { pp with
+            pp_modifies = mods;
+            pp_accesses = accs;
+            pp_footprint_sorts = fps
+          }
+        in
         has_new, Choice (cs1, pp1)
     | Seq (cs, pp) ->
-        let has_new, mods, accs, cs1 = 
+        let has_new, mods, accs, fps, cs1 = 
           List.fold_right 
-            (fun c (has_new, mods, accs, cs1) ->
+            (fun c (has_new, mods, accs, fps, cs1) ->
               let has_new1, c1 = pm prog c in
               has_new1 || has_new, 
-              IdSet.union (modifies c1) mods, 
-              IdSet.union (accesses c1) accs, 
+              IdSet.union (modifies_cmd c1) mods, 
+              IdSet.union (accesses_cmd c1) accs,
+              SortSet.union (footprint_sorts_cmd c1) fps,
               c1 :: cs1)
-            cs (false, IdSet.empty, IdSet.empty, [])
+            cs (false, IdSet.empty, IdSet.empty, SortSet.empty, [])
         in
-        let pp1 = {pp with pp_modifies = mods; pp_accesses = accs} in
+        let pp1 =
+          { pp with
+            pp_modifies = mods;
+            pp_accesses = accs;
+            pp_footprint_sorts = fps
+          }
+        in
         has_new, Seq (cs1, pp1)
     | Basic (Call cc, pp) ->
         let callee = find_proc prog cc.call_name in
         let mods = IdSet.union (modifies_proc prog callee) pp.pp_modifies in
         let accs = IdSet.union (accesses_proc prog callee) pp.pp_accesses in
+        let fps = SortSet.union (footprint_sorts_proc prog callee) pp.pp_footprint_sorts in
         let has_new = 
           not (IdSet.subset mods pp.pp_modifies) ||  
-          not (IdSet.subset accs pp.pp_accesses)
+          not (IdSet.subset accs pp.pp_accesses) ||
+          not (SortSet.subset fps pp.pp_footprint_sorts)
         in
-        let pp1 = {pp with pp_modifies = mods; pp_accesses = accs} in
+        let pp1 =
+          { pp with
+            pp_modifies = mods;
+            pp_accesses = accs;
+            pp_footprint_sorts = fps
+          }
+        in
         has_new, Basic (Call cc, pp1)
     | c ->  false, c
   in
   let pm_pred prog pred =
-    let accs_preds, body_accs =
+    let accs_preds, body_accs, body_fps =
+      let fps = footprint_sorts_spec_form pred.pred_body in
       match pred.pred_body.spec_form with
       | SL f -> 
           let accs_preds = SlUtil.preds f in
           let accs = SlUtil.free_consts f in
-          accs_preds, accs
+          accs_preds, accs, fps
       | FOL f -> 
           let accs = free_consts f in
           let accs_preds = 
             IdSet.filter (fun p -> IdMap.mem p prog.prog_preds)
               (free_symbols f)
           in
-          accs_preds, accs
+          accs_preds, accs, fps
     in
-    let accs = 
-      IdSet.fold (fun p -> 
+    let accs, fps = 
+      IdSet.fold (fun p (accs, fps) -> 
         let opred = find_pred prog p in
-        IdSet.union opred.pred_accesses)
-        accs_preds body_accs
+        IdSet.union opred.pred_accesses accs,
+        SortSet.union opred.pred_footprints fps)
+        accs_preds (body_accs, body_fps)
     in
     let global_accs = 
       IdSet.filter (fun id -> IdMap.mem id prog.prog_vars) accs
     in
-    not (IdSet.subset global_accs pred.pred_accesses),
-    { pred with pred_accesses = global_accs }
+    let fps = SortSet.union fps (footprint_sorts_pred pred) in
+    not (IdSet.subset global_accs pred.pred_accesses) ||
+    not (SortSet.subset fps pred.pred_footprints),
+    { pred with pred_accesses = global_accs; pred_footprints = fps }
   in
   let rec pm_prog prog = 
     let procs = procs prog in

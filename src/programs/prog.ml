@@ -124,7 +124,7 @@ type var_decl = {
 type proc_decl = {
     proc_name: ident; (** procedure name *)
     proc_formals: ident list;  (** formal parameter list *)
-    proc_footprints: ident list; (** footprint parameter list *)
+    proc_footprints: SortSet.t; (** footprint sorts *)
     proc_returns: ident list; (** return parameter list *)
     proc_locals: var_decl IdMap.t; (** all local variables *)
     proc_precond: spec list; (** precondition *)
@@ -139,7 +139,7 @@ type proc_decl = {
 type pred_decl = {
     pred_name: ident; (** predicate name *)
     pred_formals: ident list; (** formal parameter list *)
-    pred_footprints: ident list; (** footprint parameter list *)
+    pred_footprints: SortSet.t; (** footprint sorts *)
     pred_outputs: ident list; (** return parameter list *)
     pred_locals: var_decl IdMap.t; (** local variables *)
     pred_body: spec; (** predicate body *)
@@ -219,7 +219,7 @@ let empty_prog =
 let dummy_proc name = 
   { proc_name = name;
     proc_formals = [];
-    proc_footprints = [];
+    proc_footprints = SortSet.empty;
     proc_returns = [];
     proc_locals = IdMap.empty;
     proc_precond = [];
@@ -489,9 +489,9 @@ let unoldify_spec sf =
 
 (** Auxiliary functions for commands *)
 
-let modifies c = (prog_point c).pp_modifies
-let accesses c = (prog_point c).pp_accesses
-let footprint_sorts c = (prog_point c).pp_footprint_sorts
+let modifies_cmd c = (prog_point c).pp_modifies
+let accesses_cmd c = (prog_point c).pp_accesses
+let footprint_sorts_cmd c = (prog_point c).pp_footprint_sorts
 
 let modifies_proc prog proc = 
   match proc.proc_body with
@@ -500,7 +500,7 @@ let modifies_proc prog proc =
       then 
         IdSet.filter 
           (fun id -> IdMap.mem id prog.prog_vars) 
-          (modifies cmd)
+          (modifies_cmd cmd)
        else 
         IdMap.fold 
           (fun id _ mods -> IdSet.add id mods) 
@@ -550,7 +550,7 @@ let accesses_spec_form sf =
 let accesses_proc prog proc = 
   let body_accs =
     match proc.proc_body with
-    | Some cmd -> accesses cmd
+    | Some cmd -> accesses_cmd cmd
     | None -> IdSet.empty
   in
   IdSet.filter 
@@ -580,43 +580,62 @@ let accesses_basic_cmd = function
   | Call cc -> 
       List.fold_left free_consts_term_acc (id_set_of_list cc.call_lhs) cc.call_args
 
-        
-let footprint_sorts_of_term_acc acc t =
-  let add_fp acc = function
-  | (Loc _ as s)
-  | Set (Loc _ as s) -> SortSet.add s acc
+let footprint_sorts_acc acc = function
+  | (Loc _ as srt)
+  | Set (Loc _ as srt)
+  | Map (Loc _ as srt, _) ->
+      SortSet.add srt acc
   | _ -> acc
-  in 
+        
+let footprint_sorts_term_acc acc t =
   let rec c acc = function
     | App (_, ts, srt) ->
-        let acc = add_fp acc srt in
+        let acc = footprint_sorts_acc acc srt in
         List.fold_left c acc ts
-    | Var (_, srt) -> add_fp acc srt
+    | Var (_, srt) -> footprint_sorts_acc acc srt
   in
   c acc t
 
-let footprint_sorts_of_term t = footprint_sorts_of_term_acc SortSet.empty t
+let footprint_sorts_term t = footprint_sorts_term_acc SortSet.empty t
 
-let footprint_sorts_of_spec_form sf =
-  match sf.spec_form with
-  | SL f -> SlUtil.fold_terms footprint_sorts_of_term_acc SortSet.empty f
-  | FOL f -> fold_terms footprint_sorts_of_term_acc SortSet.empty f
+let footprint_sorts_form_acc acc f = fold_terms footprint_sorts_term_acc acc f
     
+let footprint_sorts_spec_form_acc acc sf =
+  match sf.spec_form with
+  | SL f -> SlUtil.fold_terms footprint_sorts_term_acc acc f
+  | FOL f -> footprint_sorts_form_acc acc f
+
+let footprint_sorts_spec_form sf = footprint_sorts_spec_form_acc SortSet.empty sf
+
+let footprint_sorts_pred pred = pred.pred_footprints
+
 let footprint_sorts_basic_cmd = function
   | Assign ac -> 
       let rhs_fps = 
-        List.fold_left footprint_sorts_of_term_acc SortSet.empty ac.assign_rhs 
+        List.fold_left footprint_sorts_term_acc SortSet.empty ac.assign_rhs 
       in
       rhs_fps
   | Havoc hc -> SortSet.empty
   | New nc ->
-      List.fold_left footprint_sorts_of_term_acc SortSet.empty nc.new_args 
-  | Dispose dc -> footprint_sorts_of_term dc.dispose_arg
+      List.fold_left footprint_sorts_term_acc SortSet.empty nc.new_args 
+  | Dispose dc -> footprint_sorts_term dc.dispose_arg
   | Assume sf
-  | Assert sf -> footprint_sorts_of_spec_form sf
-  | Return rc -> List.fold_left footprint_sorts_of_term_acc SortSet.empty rc.return_args
+  | Assert sf -> footprint_sorts_spec_form sf
+  | Return rc -> List.fold_left footprint_sorts_term_acc SortSet.empty rc.return_args
   | Call cc -> 
-      List.fold_left footprint_sorts_of_term_acc SortSet.empty cc.call_args
+      List.fold_left footprint_sorts_term_acc SortSet.empty cc.call_args
+
+let footprint_sorts_proc prog proc = 
+  let body_fps =
+    match proc.proc_body with
+    | Some cmd -> footprint_sorts_cmd cmd
+    | None -> SortSet.empty
+  in
+  let spec_fps =
+    List.fold_left footprint_sorts_spec_form_acc body_fps (proc.proc_precond @ proc.proc_postcond)
+  in
+  IdMap.fold (fun _ decl acc -> footprint_sorts_acc acc decl.var_sort) proc.proc_locals spec_fps
+
         
 (** Smart constructors for commands *)
 
@@ -660,6 +679,7 @@ let mk_call_cmd ?(prog=None) lhs name args pos =
   let cc = {call_lhs = lhs; call_name = name; call_args = args} in
   let accs = accesses_basic_cmd (Call cc) in
   let mods = modifies_basic_cmd (Call cc) in
+  let fps = footprint_sorts_basic_cmd (Call cc) in
   let pp = mk_ppoint pos in
   match prog with
   | None -> Basic (Call cc, { pp with pp_accesses = accs; pp_modifies = mods }) 
@@ -667,34 +687,39 @@ let mk_call_cmd ?(prog=None) lhs name args pos =
       let proc = find_proc prog name in
       let mods = IdSet.union (modifies_proc prog proc) mods in
       let accs = IdSet.union (accesses_proc prog proc) accs in
+      let fps = SortSet.union (footprint_sorts_proc prog proc) fps in
       let pp1 = 
         { pp with 
           pp_modifies = mods;
           pp_accesses = accs;
+          pp_footprint_sorts = fps;
         }
       in
       Basic (Call cc, pp1)
 
 let mk_seq_cmd cmds pos =
-  let cmds1, mods, accs = 
+  let cmds1, mods, accs, fps = 
     List.fold_right (function
-      | Seq (cs, _) -> fun (cmds1, mods, accs) -> 
-          List.fold_right (fun c (cmds1, mods, accs) ->
+      | Seq (cs, _) -> fun (cmds1, mods, accs, fps) -> 
+          List.fold_right (fun c (cmds1, mods, accs, fps) ->
             c :: cmds1, 
-            IdSet.union (modifies c) mods, 
-            IdSet.union (accesses c) accs)
-            cs (cmds1, mods, accs)
-      | c -> fun (cmds1, mods, accs) -> 
+            IdSet.union (modifies_cmd c) mods, 
+            IdSet.union (accesses_cmd c) accs,
+            SortSet.union (footprint_sorts_cmd c) fps)
+            cs (cmds1, mods, accs, fps)
+      | c -> fun (cmds1, mods, accs, fps) -> 
           c :: cmds1, 
-          IdSet.union (modifies c) mods, 
-          IdSet.union (accesses c) accs)
-      cmds ([], IdSet.empty, IdSet.empty)
+          IdSet.union (modifies_cmd c) mods, 
+          IdSet.union (accesses_cmd c) accs,
+          SortSet.union (footprint_sorts_cmd c) fps)
+      cmds ([], IdSet.empty, IdSet.empty, SortSet.empty)
   in
   let pp = mk_ppoint pos in
   let pp1 = 
     { pp with
       pp_modifies = mods;
       pp_accesses = accs;
+      pp_footprint_sorts = fps;
     } 
   in
   match cmds1 with
@@ -702,25 +727,28 @@ let mk_seq_cmd cmds pos =
   | _ -> Seq (cmds1, pp1)
 
 let mk_choice_cmd cmds pos =
-  let cmds1, mods, accs = 
+  let cmds1, mods, accs, fps = 
     List.fold_right (function
-      | Choice (cs, _) -> fun (cmds1, mods, accs) -> 
-          List.fold_right (fun c (cmds1, mods, accs) ->
+      | Choice (cs, _) -> fun (cmds1, mods, accs, fps) -> 
+          List.fold_right (fun c (cmds1, mods, accs, fps) ->
             c :: cmds1, 
-            IdSet.union (modifies c) mods, 
-            IdSet.union (accesses c) accs)
-            cs (cmds1, mods, accs)
-      | c -> fun (cmds1, mods, accs) -> 
+            IdSet.union (modifies_cmd c) mods, 
+            IdSet.union (accesses_cmd c) accs,
+            SortSet.union (footprint_sorts_cmd c) fps)
+            cs (cmds1, mods, accs, fps)
+      | c -> fun (cmds1, mods, accs, fps) -> 
           c :: cmds1, 
-          IdSet.union (modifies c) mods, 
-          IdSet.union (accesses c) accs)
-      cmds ([], IdSet.empty, IdSet.empty)
+          IdSet.union (modifies_cmd c) mods, 
+          IdSet.union (accesses_cmd c) accs,
+          SortSet.union (footprint_sorts_cmd c) fps)
+      cmds ([], IdSet.empty, IdSet.empty, SortSet.empty)
   in
   let pp = mk_ppoint pos in
   let pp1 = 
     { pp with
       pp_modifies = mods;
       pp_accesses = accs;
+      pp_footprint_sorts = fps;
     } 
   in
   match cmds1 with
@@ -737,16 +765,23 @@ let mk_loop_cmd inv preb cond cond_pos postb pos =
     } 
   in
   let pp = mk_ppoint pos in
-  let mods = IdSet.union (modifies preb) (modifies postb) in
+  let mods = IdSet.union (modifies_cmd preb) (modifies_cmd postb) in
   let accs = 
     IdSet.union
-      (IdSet.union (accesses preb) (accesses postb))
+      (IdSet.union (accesses_cmd preb) (accesses_cmd postb))
       (List.fold_left (accesses_spec_form_acc) (free_consts cond) inv)
+  in
+  let fps =
+    SortSet.union 
+      (SortSet.union (footprint_sorts_cmd preb) (footprint_sorts_cmd postb))
+      (List.fold_left footprint_sorts_spec_form_acc
+         (footprint_sorts_form_acc SortSet.empty cond) inv)
   in
   let pp1 = 
     { pp with
       pp_modifies = mods;
       pp_accesses = accs;
+      pp_footprint_sorts = fps;
     } 
   in
   Loop (loop, pp1)
@@ -1009,26 +1044,14 @@ let pr_proc ppf proc =
     then locals
     else (id, decl) :: locals) proc.proc_locals []
   in
-  match proc.proc_footprints with
-  | [] ->
-      fprintf ppf "@[<2>%s %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a%a@]@\n%a@\n"
-        "procedure"
-        pr_ident proc.proc_name
-        pr_id_srt_list (add_srts proc.proc_formals)
-        pr_id_srt_list (add_srts proc.proc_returns)
-        pr_precond proc.proc_precond
-        pr_postcond proc.proc_postcond
-        (pr_body locals) proc.proc_body
-  | _ ->
-      fprintf ppf "@[<2>%s %a(@[<0>%a@])@\n(@[<0>%a@])@\nreturns (@[<0>%a@])%a%a@]@\n%a@\n"
-        "procedure"
-        pr_ident proc.proc_name
-        pr_id_srt_list (add_srts proc.proc_formals)
-        pr_id_srt_list (add_srts proc.proc_footprints)
-        pr_id_srt_list (add_srts proc.proc_returns)
-        pr_precond proc.proc_precond
-        pr_postcond proc.proc_postcond
-        (pr_body locals) proc.proc_body
+  fprintf ppf "@[<2>%s %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a%a@]@\n%a@\n"
+    "procedure"
+    pr_ident proc.proc_name
+    pr_id_srt_list (add_srts proc.proc_formals)
+    pr_id_srt_list (add_srts proc.proc_returns)
+    pr_precond proc.proc_precond
+    pr_postcond proc.proc_postcond
+    (pr_body locals) proc.proc_body
 
 let rec pr_procs ppf = function
   | [] -> ()
@@ -1040,19 +1063,12 @@ let pr_pred ppf pred =
     let decl = IdMap.find id pred.pred_locals in
     (decl.var_is_implicit, decl.var_is_ghost, (id, decl.var_sort)))
   in
-  match pred.pred_outputs, pred.pred_footprints with
-  | [], [] ->
+  match pred.pred_outputs with
+  | [] ->
       fprintf ppf "@[<2>predicate %a(@[<0>%a@])@]@ {@[<1>@\n%a@]@\n}@\n@\n"
         pr_ident pred.pred_name
         pr_id_srt_list (add_srts pred.pred_formals)
         pr_spec_form pred.pred_body
-  | [], _ ->
-      fprintf ppf "@[<2>predicate %a(@[<0>%a@])@\n(@[<0>%a@])@]@ {@[<1>@\n%a@]@\n}@\n@\n"
-        pr_ident pred.pred_name
-        pr_id_srt_list (add_srts pred.pred_formals)
-        pr_id_srt_list (add_srts pred.pred_footprints)
-        pr_spec_form pred.pred_body
-      
   | _ ->
       fprintf ppf "@[<2>function %a(@[<0>%a@])@\nreturns (@[<0>%a@])@]@\n{@[<1>@\n%a@]@\n}@\n@\n"
         pr_ident pred.pred_name
