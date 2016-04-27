@@ -1,5 +1,6 @@
 (** {5 Verification of GRASS programs} *)
 
+open Util
 open Grass
 open GrassUtil
 open Prog
@@ -10,28 +11,29 @@ open Grassifier
 let simplify prog =
   let dump_if n prog = 
     if !Config.dump_ghp == n 
-    then print_prog stdout prog 
-    else ()
+    then (print_prog stdout prog; prog)
+    else prog
   in
-  dump_if 0 prog;
-  Debug.info (fun () -> "Inferring accesses, eliminating loops, arrays, new/dispose, and global dependencies.\n");
-  let prog = elim_arrays prog in
-  let prog = elim_new_dispose prog in
-  let prog = Analyzer.infer_accesses prog in
-  let prog = elim_loops prog in
-  let prog = elim_global_deps prog in
-  dump_if 1 prog;
-  Debug.info (fun () -> "Eliminating SL, adding heap access checks.\n");
-  let prog = elim_sl prog in
-  (*let prog = if !Config.abstract_preds then annotate_frame_axioms prog else prog in*)
-  let prog = annotate_term_generators prog in
-  let prog = annotate_heap_checks prog in
-  dump_if 2 prog;
-  Debug.info (fun () -> "Eliminating return statements and transforming to SSA form.\n");
-  let prog = elim_return prog in
-  let prog = elim_state prog in
-  dump_if 3 prog;
-  prog
+  let info msg prog = Debug.info (fun () -> msg); prog in
+  prog |>
+  dump_if 0 |>
+  info "Inferring accesses, eliminating loops, arrays, new/dispose, and global dependencies.\n" |>
+  elim_arrays |>
+  elim_new_dispose |>
+  Analyzer.infer_accesses |>
+  elim_loops |>
+  elim_global_deps |>
+  dump_if 1 |>
+  info "Eliminating SL, adding heap access checks.\n" |>
+  elim_sl |>
+  (*(fun prog -> if !Config.abstract_preds then annotate_frame_axioms prog else prog) |> *)
+  annotate_term_generators |>
+  annotate_heap_checks |>
+  dump_if 2 |>
+  info "Eliminating return statements and transforming to SSA form.\n" |>
+  elim_return |>
+  elim_state |>
+  dump_if 3
 
 (** Annotate [msg] as comment to leaves of formula [f] *)
 let annotate_aux_msg msg f = 
