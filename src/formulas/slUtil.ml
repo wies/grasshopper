@@ -192,6 +192,15 @@ let free_consts f =
     | Binder (b, vs, f, _) -> fc acc f
   in fc IdSet.empty f
 
+let rec fold_terms fct acc f = 
+  match f with
+  | Binder (b, vs, f, _) -> fold_terms fct acc f
+  | BoolOp (op, fs, _) -> List.fold_left (fold_terms fct) acc fs
+  | SepOp (_, f1, f2, _) -> fold_terms fct (fold_terms fct acc f1) f2
+  | Atom (_, args, _) -> List.fold_left fct acc args
+  | Pure (g, _) -> GrassUtil.fold_terms fct acc g
+
+    
 let rec fold_atoms fct acc f = 
   match f with
   | Binder (b, vs, f, _) -> fold_atoms fct acc f

@@ -23,7 +23,8 @@ let simplify prog =
   dump_if 1 prog;
   Debug.info (fun () -> "Eliminating SL, adding heap access checks.\n");
   let prog = elim_sl prog in
-  let prog = if !Config.abstract_preds then annotate_frame_axioms prog else prog in
+  (*let prog = if !Config.abstract_preds then annotate_frame_axioms prog else prog in*)
+  let prog = annotate_term_generators prog in
   let prog = annotate_heap_checks prog in
   dump_if 2 prog;
   Debug.info (fun () -> "Eliminating return statements and transforming to SSA form.\n");

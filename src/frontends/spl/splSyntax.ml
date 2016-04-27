@@ -60,11 +60,9 @@ and procs = proc IdMap.t
 and pred =
     { pr_name : ident;
       pr_formals : idents;
-      pr_footprints : idents;
       pr_outputs : idents;
       pr_locals : vars;
       pr_body : expr; 
-      pr_is_footprint : bool;
       pr_pos : pos;
     }
 

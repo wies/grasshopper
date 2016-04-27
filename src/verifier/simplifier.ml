@@ -56,6 +56,7 @@ let elim_loops (prog : program) =
             { pp_pos = pos; 
               pp_modifies = pp.pp_modifies; 
               pp_accesses = pp.pp_accesses;
+              pp_footprint_sorts = pp.pp_footprint_sorts;
             }
           in
           let call = mk_call_cmd returns proc_name (mk_bool_term first :: ids_to_terms returns) pos in
@@ -128,6 +129,7 @@ let elim_loops (prog : program) =
         let loop_proc = 
           { proc_name = proc_name;
             proc_formals = formals;
+            proc_footprints = proc.proc_footprints;
             proc_returns = returns;
             proc_locals = locals;
             proc_precond = List.map (subst_id_spec subst_formals) lc.loop_inv;
@@ -182,6 +184,7 @@ let elim_loops (prog : program) =
   in
   fold_procs elim_proc prog prog
 
+    
 (** Eliminate global dependencies of predicates *)
 let elim_global_deps prog =
   let get_tas p =
@@ -607,3 +610,71 @@ let elim_state prog =
     { proc with proc_locals = locals; proc_body = body }
   in
   { prog with prog_procs = IdMap.map elim_proc prog.prog_procs }
+
+
+(** Annotate term generators in predicate bodies *)
+let annotate_term_generators prog =
+  let annotate_pred pred =
+    let fun_terms f =
+      let rec ft acc = function
+        | App (sym, _ :: _, srt) as t when is_free_symbol sym || srt <> Bool ->
+            if IdSet.is_empty (fv_term t)
+            then TermSet.add t acc else acc
+        | App (_, ts, _) ->
+            List.fold_left ft acc ts
+        | _ -> acc
+      in
+      fold_terms ft TermSet.empty f
+    in
+    let sorted_vs =
+      List.map
+        (fun x ->
+          let var = IdMap.find x pred.pred_locals in
+          x, var.var_sort)
+        (pred.pred_formals @ pred.pred_footprints)
+    in
+    let vs = List.map (fun (x, srt) -> mk_free_const srt x) sorted_vs in
+    let m, kgen = match pred.pred_outputs with
+    | [] ->
+        let mt = mk_free_fun Bool pred.pred_name vs in
+        let m = Match (mt, []) in
+        m, [TermGenerator ([m], [mk_known mt])]
+    | [x] ->
+        let var = IdMap.find x pred.pred_locals in
+        Match (mk_free_fun var.var_sort pred.pred_name vs, []), []
+    | _ -> failwith "Functions may only have a single return value."
+    in
+    let rec add_match = function
+      | Grass.Binder (b, vs, f, annots) ->
+          let annots1 =
+            List.map (function TermGenerator (ms, ts) -> TermGenerator (m :: ms, ts) | a -> a) annots
+          in
+          Grass.Binder (b, vs, add_match f, annots1)
+      | BoolOp (op, fs) ->
+          BoolOp (op, List.map add_match fs)
+      | f -> f
+    in
+    let rec add_generators f =
+      match f with
+      | BoolOp (And, fs) ->
+          BoolOp (And, List.map add_generators fs)
+      | _ ->
+          let ft = fun_terms f in
+          let generators =
+            (if TermSet.is_empty ft then []
+            else [TermGenerator ([m], TermSet.elements ft)])
+            @ kgen              
+          in
+          annotate f generators
+    in
+    let annot_spec sf = 
+      let annot_sl f = f in
+      let annot_fol f =
+        add_generators (add_match f)
+      in
+      map_spec_form annot_fol annot_sl sf
+  in
+    let body1 = annot_spec pred.pred_body in
+    { pred with pred_body = body1 }  
+  in
+  map_preds annotate_pred prog
