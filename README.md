@@ -1,5 +1,6 @@
-GRASShopper 0.3
-===============
+GRASShopper
+===========
+[![Version 0.4 alpha](https://img.shields.io/badge/version-0.4_alpha-green.svg)]
 [![BSD licensed](https://img.shields.io/badge/license-BSD-blue.svg)](https://raw.githubusercontent.com/wies/grasshopper/master/LICENSE)
 
 GRASShopper is an experimental verification tool for programs that
