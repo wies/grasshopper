@@ -1,4 +1,4 @@
-include "int_array.spl";
+include "../include/int_array.spl";
 
 procedure maximum(a: Array<Int>)
   returns (max_i: Int)

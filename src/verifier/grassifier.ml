@@ -82,7 +82,6 @@ let add_ghost_field_invariants prog =
         pred_body = body;
         pred_pos = decl.var_pos;
         pred_accesses = IdSet.empty;
-        pred_is_footprint = false;
       }
     in
     pred :: preds,
@@ -299,6 +298,7 @@ let elim_arrays prog =
   }
 
 (** Add frame axioms for framed predicates and functions *)
+(*
 let annotate_frame_axioms prog =
   let process_pred frame_axioms pred =
     let footprints =
@@ -412,7 +412,7 @@ let annotate_frame_axioms prog =
     Prog.fold_preds process_pred [] prog
   in
   { prog with prog_axioms = frame_axioms @ prog.prog_axioms }
-
+*)
   
 (** Desugare SL specification to FOL specifications. 
  ** Assumes that loops have been transformed to tail-recursive procedures. *)

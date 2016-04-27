@@ -1,4 +1,4 @@
-include "../array/int_array.spl";
+include "../include/int_array.spl";
 
 struct Node {
   var data: Array<Int>;

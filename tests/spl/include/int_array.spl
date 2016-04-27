@@ -57,6 +57,31 @@ predicate sorted_array(a: Array<Int>, C: Set<Int>)(FP0: Set<Array<Int>>, FP1: Se
   C == array_content(FP1)
 }
 
+// array with bounds
+
+predicate arrayseg_bnd(a: Array<Int>, i: Int, j: Int, lb: Int, ub: Int)(FP: Set<ArrayCell<Int>>) {
+  0 <= i && i <= j && j <= a.length && 
+  FP == arrayseg_footprint(a, i, j) &&
+  (forall k: Int:: k >= i && k < j ==> a[k] >= lb && a[k] < ub @(matching k yields a[k]) )
+}
+
+predicate array_bnd(a: Array<Int>, lb: Int, ub: Int)(FP1: Set<Array<Int>>, FP2: Set<ArrayCell<Int>>) {
+  FP1 == Set(a) &&
+  arrayseg_bnd(a, 0, a.length, lb, ub, FP2)
+}
+
+predicate sorted_arrayseg_bnd(a: Array<Int>, i: Int, j: Int, lb: Int, ub: Int)(FP: Set<ArrayCell<Int>>) {
+  0 <= i && i <= j && j <= a.length && 
+  FP == arrayseg_footprint(a, i, j) &&
+  (forall i1: Int, j1: Int:: i1 >= i && i1 <= j1 && j1 < j ==> a[i1] <= a[j1]) &&
+  (forall k: Int:: k >= i && k < j ==> a[k] >= lb && a[k] < ub@(matching k yields a[k]) )
+}
+
+predicate sorted_array_bnd(a: Array<Int>, lb: Int, ub: Int)(FP0: Set<Array<Int>>, FP1: Set<ArrayCell<Int>>) {
+  FP0 == Set<Array<Int>>(a) &&
+  sorted_arrayseg_bnd(a, 0, a.length, lb, ub, FP1)
+}
+
 
 // matrix
 

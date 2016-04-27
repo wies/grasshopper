@@ -1,4 +1,4 @@
-include "int_array.spl";
+include "../include/int_array.spl";
 
 procedure heap_access_conditional(a: Array<Int>, x: Int, begin: Int, end: Int) returns (idx: Int)
   requires array(a)

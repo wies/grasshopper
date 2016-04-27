@@ -469,7 +469,7 @@ let infer_types cu locals ty e =
         let ftys =
           List.map
             (fun fid -> (IdMap.find fid decl.pr_locals).v_type)
-            (decl.pr_formals @ decl.pr_footprints)
+            decl.pr_formals
         in
         let es1, rftys, res =
           Util.map2_remainder (fun ty e -> fst (it locals ty e)) ftys es

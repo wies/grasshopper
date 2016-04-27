@@ -8,8 +8,9 @@ open SplSyntax
 open SplErrors
 open SplTypeChecker
 
+  
 (** Resolve names of identifiers in compilation unit [cu] so that all identifiers have unique names.*)
-let resolve_names cu =
+let resolve_names cu = 
   let lookup_id init_id tbl pos =
     let name = GrassUtil.name init_id in
     match SymbolTbl.find tbl name with
@@ -378,14 +379,10 @@ let resolve_names cu =
         let locals, tbl = declare_vars decl.pr_locals structs (SymbolTbl.push tbl) in
         let body = resolve_expr locals tbl decl.pr_body in
         let formals = List.map (fun id -> lookup_id id tbl decl.pr_pos) decl.pr_formals in
-        let footprints =
-          List.map (fun id -> lookup_id id tbl decl.pr_pos) decl.pr_footprints
-        in
         let outputs = List.map (fun id -> lookup_id id tbl decl.pr_pos) decl.pr_outputs in
         let decl1 = 
           { decl with 
             pr_formals = formals;
-            pr_footprints = footprints;
             pr_outputs = outputs; 
             pr_locals = locals; 
             pr_body = body 
@@ -483,11 +480,9 @@ let flatten_exprs cu =
             let sc_decl =
               { pr_name = sc_id;
                 pr_formals = formals;
-                pr_footprints = [];
                 pr_outputs = [sc_ret_id];
                 pr_locals = sc_locals;
                 pr_body = sc_body;
-                pr_is_footprint = false;
                 pr_pos = pos;
               }
             in
@@ -756,16 +751,6 @@ let infer_types cu =
     IdMap.fold
       (fun id pred preds ->
         let body = infer_types cu pred.pr_locals PermType pred.pr_body in
-        let _ =
-          List.iter (fun vid ->
-            let vdecl = IdMap.find vid pred.pr_locals in
-            match vdecl.v_type with
-            | SetType (StructType _)
-            | SetType (ArrayType _)
-            | SetType (ArrayCellType _) -> ()
-            | _ -> footprint_declaration_error vid vdecl.v_pos)
-            pred.pr_footprints
-        in
         let pred1 = { pred with pr_body = body } in
         IdMap.add id pred1 preds)
       cu.pred_decls IdMap.empty

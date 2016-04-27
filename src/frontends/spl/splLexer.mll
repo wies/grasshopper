@@ -24,7 +24,6 @@ let _ =
       ("false", BOOLVAL(false));
       ("forall", QUANT(SplSyntax.Forall));
       ("exists", QUANT(SplSyntax.Exists));
-      ("footprint", FOOTPRINT);
       ("free", FREE);
       ("function", FUNCTION);
       ("ghost", GHOST);

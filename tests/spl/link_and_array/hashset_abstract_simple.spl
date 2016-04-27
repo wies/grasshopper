@@ -1,4 +1,4 @@
-include "../array/node_array.spl";
+include "../include/node_array.spl";
 
 struct Data {}
 

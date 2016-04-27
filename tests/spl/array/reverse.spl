@@ -1,4 +1,4 @@
-include "int_array.spl";
+include "../include/int_array.spl";
 
 // This procedure works
 procedure copy_reverse(a: Array<Int>)
