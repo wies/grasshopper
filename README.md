@@ -1,6 +1,6 @@
 GRASShopper 0.3
 ===============
-[![BSD License](https://img.shields.io/badge/License-BSD_License-green.svg)][COPYING]
+[![BSD License](https://img.shields.io/github/license/grasshopper/grasshopper.svg)][COPYING]
 
 GRASShopper is an experimental verification tool for programs that
 manipulate dynamically allocated data structures. GRASShopper programs
