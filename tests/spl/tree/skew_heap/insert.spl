@@ -1,44 +1,18 @@
-struct Node {
-  var left: Node;
-  var right: Node;
-  var parent: Node;
-  var data: Int;
-}
-
-predicate heap_cnt(x: Node, y: Node, content: Set<Int>) {
-    x == null &*&
-    content == Set<Int>()
-  ||
-    x != null &*&
-    x.parent |-> y &*&
-    x.data in content &*&
-    heap_cnt(x.left, x, content) &*& //TODO content
-    heap_cnt(x.right, x, content) &*& //TODO content
-    (x.left == null || (x.left != null && x.left.data <= x.data)) &*&
-    (x.right == null || (x.right != null && x.right.data <= x.data)) 
-}
-
-predicate treeAllocInvariant(X: Set<Node>) {
-  (forall n in X :: n.parent == n.parent)
-}
+include "../../include/bstree.spl";
 
 procedure union(h1: Node, h2: Node,
                 implicit ghost content1: Set<Int>,
                 implicit ghost content2: Set<Int>)
     returns (res: Node)
-    requires heap_cnt(h1, null, content1) &*& heap_cnt(h2, null, content2);
-    requires treeAllocInvariant(Alloc);
-    ensures treeAllocInvariant(Alloc);
-    ensures heap_cnt(res, null, content1 ++ content2);
+    requires heap_set(h1, content1) &*& heap_set(h2, content2);
+    ensures heap_set(res, content1 ++ content2);
 
 
 procedure insert(h: Node, value: Int,
                  implicit ghost content: Set<Int>)
 returns (res: Node)
-    requires heap_cnt(h, null, content);
-    requires treeAllocInvariant(Alloc);
-    ensures treeAllocInvariant(Alloc);
-    ensures heap_cnt(res, null, content ++ Set(value));
+    requires heap_set(h, content);
+    ensures heap_set(res, content ++ Set(value));
 {
     var n: Node;
     n := new Node;
