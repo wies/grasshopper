@@ -508,6 +508,12 @@ let smk_and fs = smk_op And fs
 (** Smart constructor for disjunctions. *)
 let smk_or fs = smk_op Or fs
 
+let smk_disjoint s t =
+  match s, t with
+  | App (Empty, _, _), _
+  | _, App (Empty, _, _) -> mk_true
+  | _ -> mk_atom Disjoint [s; t]
+    
 (** {6 Normal form computation} *)
 
 (** Compute negation normal form of a formula *)
@@ -1110,13 +1116,12 @@ let foralls_to_exists f =
     let rec find nodefs defs = function
       | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; t], _), a)])
         when IdSet.mem x nodefs && 
-          IdSet.is_empty (IdSet.inter nodefs (fv_term t))
-        ->
+          IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
             IdSet.remove x nodefs, mk_eq xt t :: defs, mk_false
       | BoolOp (Not, [Atom (App (Eq, [t; Var (x, srt) as xt], _), a)])
         when IdSet.mem x nodefs && 
           IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
-          IdSet.remove x nodefs, mk_eq xt t :: defs, mk_false
+            IdSet.remove x nodefs, mk_eq xt t :: defs, mk_false
       | BoolOp (Or, fs) ->
           let nodefs, defs, gs =
             List.fold_right 
@@ -1134,7 +1139,20 @@ let foralls_to_exists f =
     in 
     let nodefs, defs, g = find bvs defs f in
     if IdSet.subset bvs nodefs 
-    then nodefs, defs, g
+    then begin
+      let defs, sm =
+        List.fold_right (fun f (defs, sm) ->
+          match f with
+          | Atom (App (Eq, [Var (v, _); t], _), a) ->
+              let t1 = subst_term sm t in
+              if not (IdSet.mem v @@ fv_term t1)
+              then defs, IdMap.add v t1 sm
+              else f :: defs, sm
+          | f -> f :: defs, sm)
+          defs ([], IdMap.empty)
+      in
+      nodefs, defs, subst sm g
+    end
     else find_defs nodefs defs g
   in
   let rec distribute_and bvs gs = function
@@ -1169,7 +1187,7 @@ let foralls_to_exists f =
                 annotate (distribute_and bvs [] [g]) a
             | _ -> 
                 let g1 = cf (mk_forall ubvs g) in
-                Binder (Exists, ebvs, mk_and (defs @ [g1]), a))
+                smk_exists ~ann:a ebvs (mk_and (defs @ [g1])))
         | _ -> f)
     | Binder (Exists, bvs, f, a) ->
         mk_exists ~ann:a bvs (cf f)

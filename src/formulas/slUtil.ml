@@ -64,7 +64,7 @@ let map_domains fct domains1 domains2 =
 
 let mk_domains_disjoint domains1 domains2 =
   map_domains
-    (fun ssrt t1 t2 -> GrassUtil.mk_disjoint t1 t2)
+    (fun ssrt t1 t2 -> GrassUtil.smk_disjoint t1 t2)
     domains1
     domains2
 

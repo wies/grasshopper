@@ -96,7 +96,7 @@ let add_pred_insts prog f =
       try
         List.fold_left2 
           (fun sm id t -> IdMap.add id t sm)
-          IdMap.empty (pred.pred_formals @ pred.pred_footprints) ts
+          IdMap.empty pred.pred_formals ts
       with Invalid_argument _ ->
         failwith ("Fatal error while expanding predicate " ^ string_of_ident pred.pred_name)
     in
@@ -147,7 +147,7 @@ let add_pred_insts prog f =
   | _ -> [], f_inst, []
   in
   let pred_def pred =
-    let args = pred.pred_formals @ pred.pred_footprints in
+    let args = pred.pred_formals in
     let sorted_vs, sm =
       List.fold_right
         (fun id (sorted_vs, sm) ->

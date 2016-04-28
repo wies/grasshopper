@@ -373,6 +373,13 @@ let map_spec_fol_form fn sf =
   in
   { sf with spec_form = sf1 }
 
+let map_spec_sl_form fn sf =
+  let sf1 = match sf.spec_form with
+  | SL f -> fn f
+  | f -> f
+  in
+  { sf with spec_form = sf1 }
+
 let is_checked_spec sf =
   match sf.spec_kind with
   | Free -> false
@@ -581,9 +588,9 @@ let accesses_basic_cmd = function
       List.fold_left free_consts_term_acc (id_set_of_list cc.call_lhs) cc.call_args
 
 let footprint_sorts_acc acc = function
-  | (Loc _ as srt)
-  | Set (Loc _ as srt)
-  | Map (Loc _ as srt, _) ->
+  | (Loc srt)
+  | Set (Loc srt)
+  | Map (Loc srt, _) ->
       SortSet.add srt acc
   | _ -> acc
         

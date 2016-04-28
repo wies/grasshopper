@@ -631,7 +631,7 @@ let annotate_term_generators prog =
         (fun x ->
           let var = IdMap.find x pred.pred_locals in
           x, var.var_sort)
-        (pred.pred_formals @ pred.pred_footprints)
+        pred.pred_formals
     in
     let vs = List.map (fun (x, srt) -> mk_free_const srt x) sorted_vs in
     let m, kgen = match pred.pred_outputs with
