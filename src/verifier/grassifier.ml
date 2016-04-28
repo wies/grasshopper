@@ -482,9 +482,25 @@ let elim_sl prog =
           SortMap.add ssrt (footprint_set ssrt) sets)
         pred.pred_footprints ([], SortMap.empty)
     in
+    let subst_preds f =
+      let s sym ts srt =
+        match sym with
+        | FreeSym p when IdMap.mem p prog.prog_preds ->
+            let decl = find_pred prog p in
+            let fps =
+              SortSet.fold
+                (fun ssrt fps -> footprint_set ssrt :: fps)
+                decl.pred_footprints []
+            in
+            mk_app srt sym (ts @ fps) 
+        | _ -> mk_app srt sym ts 
+      in
+      subst_funs s f
+    in
     let translate_sl_body body =
       body |>
       SlToGrass.to_grass pred_to_form footprint_sets |>
+      subst_preds |>
       propagate_exists |>
       mk_not |>
       nnf |>

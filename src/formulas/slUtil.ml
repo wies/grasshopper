@@ -129,19 +129,18 @@ let free_symbols f =
   in
   fsym IdSet.empty f
 
-let rec map_terms fct = function
-  | Pure (p, pos) -> Pure (GrassUtil.map_terms fct p, pos)
-  | Atom (s, args, pos) -> mk_atom ?pos:pos s (List.map fct args)
-  | BoolOp (op, fs, pos) -> BoolOp (op, List.map (map_terms fct) fs, pos)
-  | SepOp (op, f1, f2, pos) -> SepOp (op, map_terms fct f1, map_terms fct f2, pos)
-  | Binder (b, vs, f, pos) -> Binder (b, vs, map_terms fct f, pos)
+let rec map_pure_and_terms ffct tfct f =
+  let rec m = function 
+  | Pure (p, pos) -> Pure (ffct p, pos)
+  | Atom (s, args, pos) -> mk_atom ?pos:pos s (List.map tfct args)
+  | BoolOp (op, fs, pos) -> BoolOp (op, List.map m fs, pos)
+  | SepOp (op, f1, f2, pos) -> SepOp (op, m f1, m f2, pos)
+  | Binder (b, vs, f, pos) -> Binder (b, vs, m f, pos)
+  in m f
     
-let rec map_id fct f = match f with
-  | Pure (p, pos) -> Pure (GrassUtil.map_id fct p, pos)
-  | Atom (s, args, pos) -> mk_atom ?pos:pos s (List.map (GrassUtil.map_id_term fct) args)
-  | BoolOp (op, fs, pos) -> BoolOp (op, List.map (map_id fct) fs, pos)
-  | SepOp (op, f1, f2, pos) -> SepOp (op, map_id fct f1, map_id fct f2, pos)
-  | Binder (b, vs, f, pos) -> Binder (b, vs, map_id fct f, pos)
+let rec map_terms fct = map_pure_and_terms (GrassUtil.map_terms fct) fct
+    
+let rec map_id fct = map_pure_and_terms (GrassUtil.map_id fct) (GrassUtil.map_id_term fct)
 
 let subst_id subst f =
   let get id =
@@ -150,27 +149,10 @@ let subst_id subst f =
   map_id get f
 
 let subst_consts_fun subst f =
-  let rec map f = 
-    match f with
-    | Pure (g, pos) -> Pure (GrassUtil.subst_consts_fun subst g, pos)
-    | Atom (p, args, pos) -> 
-        mk_atom ?pos:pos p (List.map (GrassUtil.subst_consts_fun_term subst) args)
-    | BoolOp (op, fs, pos) -> BoolOp (op, List.map map fs, pos)
-    | SepOp (op, f1, f2, pos) -> SepOp (op, map f1, map f2, pos)
-    | Binder (b, vs, f, pos) -> Binder (b, vs, map f, pos)
-  in
-  map f
+  map_pure_and_terms (GrassUtil.subst_consts_fun subst) (GrassUtil.subst_consts_fun_term subst) f
 
 let subst_consts subst f =
-  let rec map f = match f with
-    | Pure (g, pos) -> Pure (GrassUtil.subst_consts subst g, pos)
-    | Atom (p, args, pos) -> 
-        mk_atom ?pos:pos p (List.map (GrassUtil.subst_consts_term subst) args)
-    | BoolOp (op, fs, pos) -> BoolOp (op, List.map map fs, pos)
-    | SepOp (op, f1, f2, pos) -> SepOp (op, map f1, map f2, pos)
-    | Binder (b, vs, f, pos) -> Binder (b, vs, map f, pos)
-  in
-  map f
+  map_pure_and_terms (GrassUtil.subst_consts subst) (GrassUtil.subst_consts_term subst) f
 
 let subst_preds subst f =
   let rec map f =
@@ -183,15 +165,9 @@ let subst_preds subst f =
     | f -> f
   in map f
 
-let free_consts f =
-  let rec fc acc = function
-    | Pure (g, _) -> IdSet.union acc (GrassUtil.free_consts g)
-    | Atom (p, args, _) -> List.fold_left GrassUtil.free_consts_term_acc acc args
-    | BoolOp (op, fs, _) -> List.fold_left fc acc fs
-    | SepOp (_, f1, f2, _) ->  fc (fc acc f1) f2
-    | Binder (b, vs, f, _) -> fc acc f
-  in fc IdSet.empty f
-
+let subst_funs fct f =
+  map_pure_and_terms (GrassUtil.subst_funs fct) (GrassUtil.subst_funs_term fct) f
+    
 let rec fold_terms fct acc f = 
   match f with
   | Binder (b, vs, f, _) -> fold_terms fct acc f
@@ -200,7 +176,9 @@ let rec fold_terms fct acc f =
   | Atom (_, args, _) -> List.fold_left fct acc args
   | Pure (g, _) -> GrassUtil.fold_terms fct acc g
 
-    
+let free_consts f =
+  fold_terms GrassUtil.free_consts_term_acc IdSet.empty f
+ 
 let rec fold_atoms fct acc f = 
   match f with
   | Binder (b, vs, f, _) -> fold_atoms fct acc f

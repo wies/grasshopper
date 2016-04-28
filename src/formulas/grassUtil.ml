@@ -1190,7 +1190,7 @@ let foralls_to_exists f =
                 smk_exists ~ann:a ebvs (mk_and (defs @ [g1])))
         | _ -> f)
     | Binder (Exists, bvs, f, a) ->
-        mk_exists ~ann:a bvs (cf f)
+        smk_exists ~ann:a bvs (cf f)
     | BoolOp (And as op, fs)
     | BoolOp (Or as op, fs) ->
         let fs1 = List.map cf fs in
