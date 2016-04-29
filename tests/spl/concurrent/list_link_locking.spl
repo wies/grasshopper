@@ -13,15 +13,15 @@ struct ConcList {
 }
 
 
-function previous(n: Node) returns (p: Node) {
-  /*(forall y: Node :: Btwn(next, previous(n), y, n) ==> y == previous(n) || y = n @(matching n yields previous(n))) &&*/
-  (forall x: Node :: Reach(next, x, n) && x != n ==> Btwn(next, x, previous(n), n) @(matching n yields previous(n))) &&
-  (previous(n) != n || previous(n) == null)
+function previous(n: Node, head: Node) returns (p: Node) {
+  (forall x: Node :: Btwn(next, head, x, n) && x != n ==>
+   Btwn(next, x, previous(n, head), n) && previous(n, head) != n
+   @(matching n yields previous(n, head))) &&
+  (!Reach(next, head, n) || head == n ==> previous(n, head) == null)
 }
 
-function keyset(n: Node) returns (K: Set<Int>) {
-  K == {x: Int :: previous(n).data < x && x <= n.data}
-  && (true @(matching n yields keyset(n)))
+function keyset(n: Node, head: Node) returns (K: Set<Int>) {
+  K == {x: Int :: previous(n, head).data < x && x <= n.data}
   /* TODO what's the sentinel head's keyset? */
 }
 
@@ -47,11 +47,13 @@ predicate conc_list_set(c: ConcList, C: Set<Int>)(FP_C: Set<ConcList>, FP_N: Set
 /* Proof that conc_list_set encodes a good state */
 procedure good_state(c: ConcList, implicit ghost C: Set<Int>, implicit ghost FP_C: Set<ConcList>, FP_N: Set<Node>)
   requires conc_list_set(c, C, FP_C, FP_N)
-  ensures conc_list_set(c, C, FP_C, FP_N)
+{
   /* keysets of all nodes are disjoint */
-  ensures (forall n1 in FP_N, n2 in FP_N, x: Int :: x in keyset(n1) && x in keyset(n2) ==> n1 == n2)
-/* TODO keysets cover keyspace */
-{}
+  pure assert (forall n1 in FP_N, n2 in FP_N, x: Int :: x in keyset(n1, c.head) && x in keyset(n2, c.head) ==> n1 == n2);
+  /* keysets cover keyspace TODO this can't be proved */
+  /* pure assert (forall x: Int :: c.head.data < x && x < c.tail.data ==> (exists n: Node :: x in keyset(n, c.head) @(matching n yields keyset(n, c.head)))); */
+  pure assume false;
+}
 
 
 procedure create() returns (res: ConcList)
@@ -86,39 +88,54 @@ procedure traverse(c: ConcList, implicit ghost C: Set<Int>)
 }
 
 
-procedure delete(c: ConcList, x: Int, implicit ghost C: Set<Int>)
+procedure delete(c: ConcList, x: Int, implicit ghost C: Set<Int>, ghost L: Set<Node>)
   requires conc_list_set(c, C) &*& c.head.data < x &*& x < c.tail.data
   ensures conc_list_set(c, C -- {x})
+  requires L == {}
+  ensures L == {}
 {
   /* lock(c.head); */
+  L := {c.head} ++ L;
   var pred := c.head;
   var curr := c.head.next;
   /* lock(curr); */
+  L := {curr} ++ L;
 
   assert conc_list_set(c, C);
 
   while (curr != null && curr.data < x)
     invariant (pred.data < x &*& pred.next |-> curr) -**
       conc_list_set(c, C)
+    invariant L == {pred, curr}
   {
   /* unlock(pred); */
+    L := L -- {pred};
     pred := curr;
     curr := curr.next;
   /* lock(curr); */
+    L := L ++ {curr};
   }
 
   assert conc_list_set(c, C);
 
   /* Decisive operation: */
   if (curr.data == x) {
-    assert x in keyset(curr) &*& (pred.next |-> curr -** conc_list_set(c, C)) &*& pred.data < curr.data &*& curr.data < curr.next.data;
+    assert x in keyset(curr, c.head) &*& (pred.next |-> curr -** conc_list_set(c, C)) &*& pred.data < curr.data &*& curr.data < curr.next.data;
+    pure assert pred in L && curr in L; /* Check lock for heap access and write */
     pred.next := curr.next;
-    pure assert x in keyset(curr.next) && x != curr.next.data;
     free curr;
+    pure assert x in keyset(pred.next, c.head) && x != pred.next.data;
   }
   /* assert conc_list_set(c, C -- {x}); unnecessary, checked in post */
 
+  /* unlock(curr); TODO should this happen before the free? */
+  L := L -- {curr};
+  /* unlock(pred); */
+  L := L -- {pred};
+  pure assert L == {};  /* TODO why does postcondition not check this? */
 }
+
+
 /* Properties needed to be seralizable:
  * 1. TODO Check that locks hold before every read/write
  * 2. Every op maps good state to good state
