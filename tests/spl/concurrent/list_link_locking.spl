@@ -1,0 +1,129 @@
+/* Concurrent list set implementation.
+ *
+ * Hand-over-hand locking scheme, and concurrency proof based on the linked
+ * technique from paper "Concurrent Search Structure Algorithms" 1988.
+*/
+
+include "../include/slsset.spl";
+
+
+struct ConcList {
+  var head: Node;
+  var tail: Node;
+}
+
+
+function previous(n: Node) returns (p: Node) {
+  /*(forall y: Node :: Btwn(next, previous(n), y, n) ==> y == previous(n) || y = n @(matching n yields previous(n))) &&*/
+  (forall x: Node :: Reach(next, x, n) && x != n ==> Btwn(next, x, previous(n), n) @(matching n yields previous(n))) &&
+  (previous(n) != n || previous(n) == null)
+}
+
+function keyset(n: Node) returns (K: Set<Int>) {
+  K == {x: Int :: previous(n).data < x && x <= n.data}
+  && (true @(matching n yields keyset(n)))
+  /* TODO what's the sentinel head's keyset? */
+}
+
+
+/* A sorted linked list, with sentinal head and tail nodes */
+predicate conc_list_set(c: ConcList, C: Set<Int>)(FP_C: Set<ConcList>, FP_N: Set<Node>) {
+  FP_C = {c} &&
+  c.head != null && c.tail != null && c.head != c.tail &&
+  lseg(c.head, null, FP_N) &&
+  Btwn(next, c.head, c.tail, null) &&
+  /* tail is the last element in the list */
+  c.tail.next == null &&
+  lseg_strictly_increasing(c.head, FP_N) &&
+  C == content(FP_N) &&
+  /* The head is smallest */
+  (forall n in FP_N :: n == c.head || c.head.data < n.data) &&
+  /* The tail is largest */
+  (forall n in FP_N :: n == c.tail || c.tail.data > n.data)
+  /* TODO use MININT/MAXINT here instead? */
+}
+
+
+/* Proof that conc_list_set encodes a good state */
+procedure good_state(c: ConcList, implicit ghost C: Set<Int>, implicit ghost FP_C: Set<ConcList>, FP_N: Set<Node>)
+  requires conc_list_set(c, C, FP_C, FP_N)
+  ensures conc_list_set(c, C, FP_C, FP_N)
+  /* keysets of all nodes are disjoint */
+  ensures (forall n1 in FP_N, n2 in FP_N, x: Int :: x in keyset(n1) && x in keyset(n2) ==> n1 == n2)
+/* TODO keysets cover keyspace */
+{}
+
+
+procedure create() returns (res: ConcList)
+  ensures conc_list_set(res, {1, 4})
+{
+  var c := new ConcList;
+  c.head := new Node;
+  c.tail := new Node;
+  c.head.next := c.tail;
+  c.head.data := 1;
+  c.tail.data := 4;
+  c.tail.next := null;
+  return c;
+}
+
+
+procedure traverse(c: ConcList, implicit ghost C: Set<Int>)
+  requires conc_list_set(c, C)
+  ensures conc_list_set(c, C)
+{
+  var curr: Node;
+  curr := c.head;
+  var prev: Node;
+  prev := null;
+  while (curr != null)
+    invariant (prev == null && curr == c.head || prev.next |-> curr) -**
+      conc_list_set(c, C)
+  {
+    prev := curr;
+    curr := curr.next;
+  }
+}
+
+
+procedure delete(c: ConcList, x: Int, implicit ghost C: Set<Int>)
+  requires conc_list_set(c, C) &*& c.head.data < x &*& x < c.tail.data
+  ensures conc_list_set(c, C -- {x})
+{
+  /* lock(c.head); */
+  var pred := c.head;
+  var curr := c.head.next;
+  /* lock(curr); */
+
+  assert conc_list_set(c, C);
+
+  while (curr != null && curr.data < x)
+    invariant (pred.data < x &*& pred.next |-> curr) -**
+      conc_list_set(c, C)
+  {
+  /* unlock(pred); */
+    pred := curr;
+    curr := curr.next;
+  /* lock(curr); */
+  }
+
+  assert conc_list_set(c, C);
+
+  /* Decisive operation: */
+  if (curr.data == x) {
+    assert x in keyset(curr) &*& (pred.next |-> curr -** conc_list_set(c, C)) &*& pred.data < curr.data &*& curr.data < curr.next.data;
+    pred.next := curr.next;
+    pure assert x in keyset(curr.next) && x != curr.next.data;
+    free curr;
+  }
+  /* assert conc_list_set(c, C -- {x}); unnecessary, checked in post */
+
+}
+/* Properties needed to be seralizable:
+ * 1. TODO Check that locks hold before every read/write
+ * 2. Every op maps good state to good state
+ * 3. x in keyset(curr) before decisive op, and
+ *    decisive op is proper (see defn in paper)
+ * 4. TODO If an op reduces inset(n) then it holds a wlock on n
+ * 5. Non decisive ops don't change GC
+*/
