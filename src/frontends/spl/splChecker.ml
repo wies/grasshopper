@@ -377,7 +377,7 @@ let resolve_names cu =
     IdMap.fold
       (fun _ decl preds ->
         let locals, tbl = declare_vars decl.pr_locals structs (SymbolTbl.push tbl) in
-        let body = resolve_expr locals tbl decl.pr_body in
+        let body = Opt.map (resolve_expr locals tbl) decl.pr_body in
         let formals = List.map (fun id -> lookup_id id tbl decl.pr_pos) decl.pr_formals in
         let outputs = List.map (fun id -> lookup_id id tbl decl.pr_pos) decl.pr_outputs in
         let decl1 = 
@@ -461,12 +461,8 @@ let flatten_exprs cu =
               | [UnguardedVar decl] -> decl
               | _ -> failwith "unexpected set comprehension"
             in
-            let elem_type = v_decl.v_type in
             let sc_id = GrassUtil.fresh_ident "set_compr" in
             let sc_locals = IdMap.add v_decl.v_name v_decl IdMap.empty in
-            let sc_ret_id, sc_locals = decl_aux_var "X" (SetType elem_type) pos scope sc_locals in
-            let v = Ident (v_decl.v_name, v_decl.v_pos) in
-            let r = Ident (sc_ret_id, pos) in
             let fv = IdSet.elements (free_vars e) in
             let formals = List.filter (fun id -> IdMap.mem id locals) fv in
             let sc_locals =
@@ -474,15 +470,12 @@ let flatten_exprs cu =
                 (fun sc_locals id -> IdMap.add id (IdMap.find id locals) sc_locals)
                 sc_locals formals
             in
-            let sc_body =
-              Binder (Forall, [UnguardedVar v_decl], BinaryOp (BinaryOp (v, OpIn, r, BoolType, pos), OpEq, f1, BoolType, pos), pos)
-            in
             let sc_decl =
               { pr_name = sc_id;
                 pr_formals = formals;
-                pr_outputs = [sc_ret_id];
+                pr_outputs = [];
                 pr_locals = sc_locals;
-                pr_body = sc_body;
+                pr_body = Some e;
                 pr_pos = pos;
               }
             in
@@ -637,7 +630,13 @@ let flatten_exprs cu =
   let preds, aux_funs =
     IdMap.fold
       (fun _ decl (preds, aux_funs) ->
-        let body, (_, aux_funs), locals = flatten_expr decl.pr_pos ([], aux_funs) decl.pr_locals decl.pr_body in
+        let body, (_, aux_funs), locals =
+          match decl.pr_body with
+          | Some body ->
+              let body, aux, locals = flatten_expr decl.pr_pos ([], aux_funs) decl.pr_locals body in
+              Some body, aux, locals
+          | None -> None, ([], aux_funs), decl.pr_locals
+        in
         let decl1 = { decl with pr_locals = locals; pr_body = body } in
         IdMap.add decl.pr_name decl1 preds, aux_funs)
       cu.pred_decls (IdMap.empty, [])
@@ -750,7 +749,15 @@ let infer_types cu =
   let preds =
     IdMap.fold
       (fun id pred preds ->
-        let body = infer_types cu pred.pr_locals PermType pred.pr_body in
+        let rtype =
+          match pred.pr_outputs with
+          | [res_id] ->
+              (IdMap.find res_id pred.pr_locals).v_type
+          | _ -> PermType
+        in
+        let body =
+          Opt.map (infer_types cu pred.pr_locals rtype) pred.pr_body
+        in
         let pred1 = { pred with pr_body = body } in
         IdMap.add id pred1 preds)
       cu.pred_decls IdMap.empty

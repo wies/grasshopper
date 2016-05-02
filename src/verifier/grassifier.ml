@@ -469,10 +469,19 @@ let elim_sl prog =
     let locals, aux_formals = 
       SortSet.fold
         (fun ssrt (locals, aux_formals) ->
-          let footprint_id = footprint_id ssrt in
-          let footprint_decl = mk_loc_set_decl ssrt footprint_id pred.pred_pos in
-          IdMap.add footprint_id { footprint_decl with var_is_implicit = true } locals,
-          footprint_id :: aux_formals)
+          let locals1, aux_formals1 =
+            match pred.pred_outputs with
+            | [] ->
+                let footprint_id = footprint_id ssrt in
+                let footprint_decl = mk_loc_set_decl ssrt footprint_id pred.pred_pos in
+                IdMap.add footprint_id { footprint_decl with var_is_implicit = true } locals,
+                footprint_id :: aux_formals
+            | _ -> locals, aux_formals
+          in
+          let footprint_caller_id = footprint_caller_id ssrt in
+          let footprint_caller_decl = mk_loc_set_decl ssrt footprint_caller_id pred.pred_pos in
+          IdMap.add footprint_caller_id footprint_caller_decl locals1,
+          footprint_caller_id :: aux_formals1)
         pred.pred_footprints (pred.pred_locals, [])    
     in
     let footprint_ids, footprint_sets =
@@ -487,9 +496,10 @@ let elim_sl prog =
         match sym with
         | FreeSym p when IdMap.mem p prog.prog_preds ->
             let decl = find_pred prog p in
+            if decl.pred_outputs = [] then mk_app srt sym ts else
             let fps =
               SortSet.fold
-                (fun ssrt fps -> footprint_set ssrt :: fps)
+                (fun ssrt fps -> footprint_caller_set ssrt :: fps)
                 decl.pred_footprints []
             in
             mk_app srt sym (ts @ fps) 

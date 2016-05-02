@@ -1,5 +1,6 @@
 (** {5 Analysis of GRASShopper programs} *)
 
+open Util
 open Grass
 open GrassUtil
 open Prog
@@ -104,17 +105,28 @@ let infer_accesses prog =
     not (SortSet.subset fps pred.pred_footprints),
     { pred with pred_accesses = global_accs; pred_footprints = fps }
   in
+  let pm_proc prog proc =
+    let has_new, body, body_fps =
+      match proc.proc_body with
+      | Some body ->
+          let has_new, body = pm prog body in
+          has_new, Some body, footprint_sorts_cmd body
+      | _ -> false, None, SortSet.empty
+    in
+    let fps =
+      List.fold_left footprint_sorts_spec_form_acc
+        body_fps (proc.proc_precond @ proc.proc_postcond)
+    in
+    has_new || not (SortSet.subset fps proc.proc_footprints),
+    { proc with proc_body = body; proc_footprints = fps }
+  in
   let rec pm_prog prog = 
     let procs = procs prog in
     let has_new, procs1 =
       List.fold_left 
         (fun (has_new, procs1) proc ->
-          match proc.proc_body with
-          | Some body ->
-              let has_new1, body1 = pm prog body in
-              let proc1 = {proc with proc_body = Some body1} in
-              (has_new || has_new1, proc1 :: procs1)
-          | None -> (has_new, proc :: procs1))
+          let has_new1, proc1 = pm_proc prog proc in
+              (has_new || has_new1, proc1 :: procs1))
         (false, []) procs
     in 
     let procs2 = 

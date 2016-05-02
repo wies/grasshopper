@@ -68,8 +68,6 @@ let type_of_expr cu locals e =
   let rec te = function
     (* Bool return values *)
     | UnaryOp (OpNot, _, _)
-    | BinaryOp (_, OpAnd, _, _, _)
-    | BinaryOp (_, OpOr, _, _, _)
     | BinaryOp (_, OpImpl, _, _, _)
     | BinaryOp (_, OpEq, _, _, _)
     | BinaryOp (_, OpGt, _, _, _)
@@ -119,6 +117,10 @@ let type_of_expr cu locals e =
     | BinaryOp (_, OpSepIncl, _, _, _)
     | PredApp (AccessPred, _, _)
     | Emp _ -> PermType
+    (* Permission or Bool types *)
+    | BinaryOp (e1, OpAnd, e2, ty, pos)
+    | BinaryOp (e1, OpOr, e2, ty, pos) ->
+        ty
     (* Struct and array types *)
     | New (ty, _, _) ->
         ty
@@ -150,7 +152,7 @@ let type_of_expr cu locals e =
     | PredApp (Pred id, _, _) ->
         let decl = IdMap.find id cu.pred_decls in
         (match decl.pr_outputs with
-        | [] -> BoolType
+        | [] -> decl.pr_body |> Opt.map te |> Opt.get_or_else AnyType
         | [rid] -> 
             let rdecl = IdMap.find rid decl.pr_locals in
             rdecl.v_type
@@ -498,7 +500,12 @@ let infer_types cu locals ty e =
               let rdecl = IdMap.find rid decl.pr_locals in
               match_types pos ty rdecl.v_type
           | _ ->
-              match_types pos ty BoolType
+              let body_ty =
+                decl.pr_body |>
+                Opt.map (type_of_expr cu locals) |>
+                Opt.get_or_else AnyType
+              in
+              match_types pos ty body_ty
         in
         PredApp (Pred id, es1, pos), rty
     | Ident (id, pos) as e ->

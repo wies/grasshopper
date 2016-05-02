@@ -159,14 +159,20 @@ let convert cu =
         GrassUtil.mk_array_cells t
     | PredApp (Pred id, es, pos) ->
         let decl = IdMap.find id cu.pred_decls in
-        let ts = List.map (convert_term locals) es in 
+        let ts = List.map (convert_term locals) es in
         (match decl.pr_outputs with
         | [res] ->
             let res_decl = IdMap.find res decl.pr_locals in
             let res_srt = convert_type res_decl.v_type pos in
             GrassUtil.mk_free_fun res_srt id ts
         | [] ->
-            GrassUtil.mk_free_fun Bool id ts
+            let res_ty =
+              decl.pr_body |>
+              Opt.map (type_of_expr cu decl.pr_locals) |>
+              Opt.get_or_else AnyType
+            in
+            let res_srt = convert_type res_ty pos in
+            GrassUtil.mk_free_fun res_srt id ts
         | _ -> failwith "unexpected expression")
     | BinaryOp (e1, (OpDiff as op), e2, ty, _)
     | BinaryOp (e1, (OpUn as op), e2, ty, _)      
@@ -594,15 +600,65 @@ let convert cu =
   let prog =
     IdMap.fold 
       (fun id decl prog ->
-        let body = convert_sl_form decl.pr_locals decl.pr_body in
-        let locals = IdMap.map convert_var_decl decl.pr_locals in
+        let rtype =
+          decl.pr_body |>
+          Opt.map (type_of_expr cu decl.pr_locals) |>
+          Opt.get_or_else AnyType
+        in
+        let body, locals, outputs =
+          match rtype with
+          | BoolType ->
+              print_endline (string_of_ident decl.pr_name);
+              let body = Opt.get_or_else (BoolVal (true, decl.pr_pos)) decl.pr_body in
+              FOL (convert_grass_form decl.pr_locals body), decl.pr_locals, decl.pr_outputs
+          | PermType ->
+              let body = Opt.get_or_else (BoolVal (true, decl.pr_pos)) decl.pr_body in
+              SL (convert_sl_form decl.pr_locals body), decl.pr_locals, decl.pr_outputs
+          | rtype ->
+              let ret_id, locals =
+                match decl.pr_outputs with
+                | [r] -> r, decl.pr_locals
+                | _ ->
+                    let res_id = GrassUtil.fresh_ident "res" in
+                    let rdecl = 
+                      { v_name = res_id;
+                        v_type = rtype;
+                        v_ghost = false;
+                        v_implicit = false;
+                        v_aux = true;
+                        v_pos = decl.pr_pos;
+                        v_scope = decl.pr_pos;
+                      }
+                    in
+                    res_id, IdMap.add res_id rdecl decl.pr_locals
+              in
+              let r = Ident (ret_id, decl.pr_pos) in
+              let body = match decl.pr_body with
+              | Some (Binder (SetComp, vs, f, pos)) ->
+                  let v_decl =
+                    match vs with
+                    | [UnguardedVar decl] -> decl
+                    | _ -> failwith "unexpected set comprehension"
+                  in
+                  let v = Ident (v_decl.v_name, v_decl.v_pos) in
+                  Binder (Forall, [UnguardedVar v_decl], BinaryOp (BinaryOp (v, OpIn, r, BoolType, pos), OpEq, f, BoolType, pos), pos)
+              | Some e ->
+                  BinaryOp (r, OpEq, e, BoolType, pos_of_expr e)
+              | None -> BoolVal (true, decl.pr_pos)
+              in
+              FOL (convert_grass_form locals body), locals, [ret_id]
+        in
+        let locals = IdMap.map convert_var_decl locals in
+        let body_pos =
+          Opt.map pos_of_expr decl.pr_body |> Opt.get_or_else decl.pr_pos
+        in
         let pred_decl = 
           { pred_name = id;
             pred_formals = decl.pr_formals;
-            pred_outputs = decl.pr_outputs;
+            pred_outputs = outputs;
             pred_footprints = SortSet.empty;
             pred_locals = locals;
-            pred_body = mk_spec_form (SL body) (string_of_ident id) None (pos_of_expr decl.pr_body);
+            pred_body = mk_spec_form body (string_of_ident id) None body_pos;
             pred_pos = decl.pr_pos;
             pred_accesses = IdSet.empty;
           }

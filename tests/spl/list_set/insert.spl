@@ -4,7 +4,7 @@ procedure append(val: Int, x: Node, implicit ghost C: Set<Int>)
   returns (res: Node)
   requires list_set(x, null, C)
   requires forall v in C :: val < v
-  ensures list_set(res, null, C ++ Set(val))
+  ensures list_set(res, null, C ++ {val})
 {
   res := new Node;
   res.next := x;

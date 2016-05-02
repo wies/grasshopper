@@ -173,7 +173,7 @@ proc_impl:
 ;
 
 pred_decl:
-| PREDICATE IDENT LPAREN var_decls RPAREN LBRACE expr RBRACE {
+| PREDICATE IDENT LPAREN var_decls RPAREN pred_impl {
   let formals, locals =
     List.fold_right (fun decl (formals, locals) ->
       decl.v_name :: formals, IdMap.add decl.v_name decl locals)
@@ -184,13 +184,10 @@ pred_decl:
       pr_formals = formals;
       pr_outputs = [];
       pr_locals = locals;
-      pr_body = $7;
+      pr_body = $6;
       pr_pos = mk_position 2 2;
     }
   in decl
-}
-| function_header {
-  $1
 }
 | function_header pred_impl {
   pred_decl $1 $2
@@ -214,7 +211,7 @@ function_header:
       pr_formals = formals;
       pr_outputs = outputs;
       pr_locals = locals;
-      pr_body = BoolVal (true, GrassUtil.dummy_position);
+      pr_body = None;
       pr_pos = mk_position 2 2;
     }
   in decl
@@ -223,8 +220,10 @@ function_header:
   
 pred_impl:
 | LBRACE expr RBRACE {
-  $2
+  Some $2
 }
+| /* empty */ { None }
+
   
 var_decls:
 | var_decl var_decl_list { $1 :: $2 }

@@ -62,7 +62,7 @@ and pred =
       pr_formals : idents;
       pr_outputs : idents;
       pr_locals : vars;
-      pr_body : expr; 
+      pr_body : expr option; 
       pr_pos : pos;
     }
 
