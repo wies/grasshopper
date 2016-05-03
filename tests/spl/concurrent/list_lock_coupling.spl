@@ -139,6 +139,7 @@ procedure delete(c: ConcList, x: Int, implicit ghost C: Set<Int>, ghost L: Set<N
     pure assert pred in L && curr in L; /* Check lock for heap access and write */
     pred.next := curr.next;
     free curr;
+    /* This checks that the decisive op is proper decisive */
     pure assert x in keyset(pred.next, c.head) && x != pred.next.data;
   }
   /* assert conc_list_set(c, C -- {x}); unnecessary, checked in post */
@@ -152,10 +153,8 @@ procedure delete(c: ConcList, x: Int, implicit ghost C: Set<Int>, ghost L: Set<N
 
 
 /* Properties needed to be seralizable:
- * 1. TODO Check that locks hold before every read/write
+ * 1. Check that locks hold before every read/write
  * 2. Every op maps good state to good state
- * 3. x in keyset(curr) before decisive op, and
- *    decisive op is proper (see defn in paper)
- * 4. TODO If an op reduces inset(n) then it holds a wlock on n
- * 5. Non decisive ops don't change GC
+ * 3. The decisive op is proper (see defn in paper)
+ * 4. Non decisive ops don't change GC
 */
