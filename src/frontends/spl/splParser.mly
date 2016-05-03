@@ -122,7 +122,7 @@ proc_decl:
 ;
 
 proc_header:
-| PROCEDURE IDENT LPAREN var_decls RPAREN proc_returns proc_contracts {  
+| PROCEDURE IDENT LPAREN var_decls RPAREN proc_returns contracts {  
   let formals, locals0 =
     List.fold_right (fun decl (formals, locals0) ->
       decl.v_name :: formals, IdMap.add decl.v_name decl locals0)
@@ -147,12 +147,12 @@ proc_header:
 } 
 ;
 
-proc_contracts:
-| proc_contract proc_contracts { $1 :: $2 }
+contracts:
+| contract contracts { $1 :: $2 }
 | /* empty */ { [] }
 ;
 
-proc_contract:
+contract:
 | pure_opt REQUIRES expr semicolon_opt { Requires ($3, $1) }
 | pure_opt ENSURES expr semicolon_opt { Ensures ($3, $1) }
 ;
@@ -173,7 +173,7 @@ proc_impl:
 ;
 
 pred_decl:
-| PREDICATE IDENT LPAREN var_decls RPAREN pred_impl {
+| PREDICATE IDENT LPAREN var_decls RPAREN contracts pred_impl {
   let formals, locals =
     List.fold_right (fun decl (formals, locals) ->
       decl.v_name :: formals, IdMap.add decl.v_name decl locals)
@@ -184,7 +184,7 @@ pred_decl:
       pr_formals = formals;
       pr_outputs = [];
       pr_locals = locals;
-      pr_body = $6;
+      pr_body = $7;
       pr_pos = mk_position 2 2;
     }
   in decl
@@ -195,7 +195,7 @@ pred_decl:
 ;
 
 function_header:
-| FUNCTION IDENT LPAREN var_decls RPAREN RETURNS LPAREN var_decls RPAREN {
+| FUNCTION IDENT LPAREN var_decls RPAREN RETURNS LPAREN var_decls RPAREN contracts {
   let formals, locals =
     List.fold_right (fun decl (formals, locals) ->
       decl.v_name :: formals, IdMap.add decl.v_name decl locals)

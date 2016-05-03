@@ -608,9 +608,9 @@ let convert cu =
         let body, locals, outputs =
           match rtype with
           | BoolType ->
-              print_endline (string_of_ident decl.pr_name);
               let body = Opt.get_or_else (BoolVal (true, decl.pr_pos)) decl.pr_body in
-              FOL (convert_grass_form decl.pr_locals body), decl.pr_locals, decl.pr_outputs
+              let cbody = convert_grass_form decl.pr_locals body in
+              SL (Pure (cbody, Some (pos_of_expr body))), decl.pr_locals, decl.pr_outputs              
           | PermType ->
               let body = Opt.get_or_else (BoolVal (true, decl.pr_pos)) decl.pr_body in
               SL (convert_sl_form decl.pr_locals body), decl.pr_locals, decl.pr_outputs

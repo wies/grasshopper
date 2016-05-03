@@ -75,7 +75,6 @@ let type_of_expr cu locals e =
     | BinaryOp (_, OpGeq, _, _, _)
     | BinaryOp (_, OpLeq, _, _, _)
     | BinaryOp (_, OpIn, _, _, _)
-    | Binder ((Forall | Exists), _, _, _)
     | PredApp (BtwnPred, _, _)
     | PredApp (ReachPred, _, _)
     | PredApp (FramePred, _, _)
@@ -118,6 +117,8 @@ let type_of_expr cu locals e =
     | PredApp (AccessPred, _, _)
     | Emp _ -> PermType
     (* Permission or Bool types *)
+    | Binder ((Forall | Exists), _, f, _) ->
+        te f
     | BinaryOp (e1, OpAnd, e2, ty, pos)
     | BinaryOp (e1, OpOr, e2, ty, pos) ->
         ty
