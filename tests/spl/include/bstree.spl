@@ -111,3 +111,9 @@ predicate heap(r: Node)(FP: Set<Node>) {
   heap_property(FP) &&
   tree(r, FP)
 }
+
+predicate heap_set(r: Node, C: Set<Int>)(FP: Set<Node>) {
+  heap_property(FP) &&
+  tree(r, FP) &&
+  C == content(FP)
+}
