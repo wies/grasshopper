@@ -18,7 +18,7 @@ function tree_parent(r: Node) returns (p: Node) {
 }
 
 predicate parent_equal_left_child(FP: Set<Node>) {
-  (forall x: Node :: x !in FP || x.left == null || Btwn(parent, x.left, x, x) && x.left != x) &&
+  (forall x in FP :: x.left == null || Btwn(parent, x.left, x, x) && x.left != x) &&
   (forall x: Node, y: Node :: x in FP && Btwn(parent, x.left, y, x) ==> x == y || x.left == y)
 }
 
@@ -110,4 +110,10 @@ predicate heap_property(FP: Set<Node>) {
 predicate heap(r: Node)(FP: Set<Node>) {
   heap_property(FP) &&
   tree(r, FP)
+}
+
+predicate heap_set(r: Node, C: Set<Int>)(FP: Set<Node>) {
+  heap_property(FP) &&
+  tree(r, FP) &&
+  C == content(FP)
 }

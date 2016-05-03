@@ -1150,8 +1150,7 @@ let mixed_graphviz_html =
     output_string chan "     min-height: inherit;\n";
     output_string chan "   }\n";
     output_string chan "  </style>\n";
-    output_string chan "  <script src=\"http://ariutta.github.io/svg-pan-zoom/dist/svg-pan-zoom.min.js\"></script>
-\n";
+    output_string chan "  <script src=\"http://ariutta.github.io/svg-pan-zoom/dist/svg-pan-zoom.min.js\"></script>\n";
     output_string chan "</head>\n";
     output_string chan "<body>\n";
     output_string chan "\n";
@@ -1523,7 +1522,7 @@ let print_graph output chan model terms =
 	        let label = string_of_term (find_term f fld_srt) in
                 try 
                   let src = get_node srt l in
-                  let dst = get_node srt r in
+                  let dst = get_node rsrt r in
                   edges := (src,dst,label,Solid,get_color fld_srt f) :: !edges
                 with _ -> ()
             with Undefined -> ())
