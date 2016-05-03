@@ -45,13 +45,25 @@ predicate conc_list_set(c: ConcList, C: Set<Int>)(FP_C: Set<ConcList>, FP_N: Set
 
 
 /* Proof that conc_list_set encodes a good state */
+
+function next_greater(x: Int, h: Node, t: Node) returns (n: Node) {
+  (!Reach(next, h, t) ==> n == null) &&
+  (h == t ==> n == null) &&
+  (x <= h.data ==> n == h) &&
+  (h.data < x ==> n == next_greater(x, h.next, t))
+}
+
 procedure good_state(c: ConcList, implicit ghost C: Set<Int>, implicit ghost FP_C: Set<ConcList>, FP_N: Set<Node>)
   requires conc_list_set(c, C, FP_C, FP_N)
 {
   /* keysets of all nodes are disjoint */
-  pure assert (forall n1 in FP_N, n2 in FP_N, x: Int :: x in keyset(n1, c.head) && x in keyset(n2, c.head) ==> n1 == n2);
+  pure assert (forall n1 in FP_N, n2 in FP_N, x: Int :: x in keyset(n1, c.head) && x in keyset(n2, c.head) ==> n1 == n2 @(matching n1 yields keyset(n1, c.head)));
   /* keysets cover keyspace TODO this can't be proved */
   /* pure assert (forall x: Int :: c.head.data < x && x < c.tail.data ==> (exists n: Node :: x in keyset(n, c.head) @(matching n yields keyset(n, c.head)))); */
+
+  pure assert (forall x: Int :: c.head.data < x && x < c.tail.data ==> (x in keyset(next_greater(x, c.head, null), c.head) @(matching x yields next_greater(x, c.head, null))));
+  /*  pure assert (forall x: Int :: c.head.data < x && x < c.tail.data ==> (x in keyset(ks_witness(x, c.head), c.head) @(matching  yields keyset(ks_witness(x, c.head), c.head))));*/
+
   pure assume false;
 }
 
