@@ -1,10 +1,9 @@
-include "../include/node_array.spl";
+include "../../include/node_array.spl";
 
 struct Data {}
 
 struct Node {
   var next: Node;
-  var data: Data;
 }
 
 
@@ -92,15 +91,10 @@ axiom forall a: Set<Node>, fp: Set<Node>, s: Set<Node>, c: Set<Data>, f1: Map<No
 footprint function listset_footprint(next: Map<Node, Node>, x: Node) returns (FP: Set<Node>)
   
 function fp_witness(next: Map<Node, Node>, as: Map<ArrayCell<Node>, Node>, x: Node)(fp: Set<ArrayCell<Node>>) returns (c: ArrayCell<Node>)
-  
-function listset_content(data: Map<Node, Data>)(FP: Set<Node>) returns (C: Set<Data>)
-
-function cnt_witness(data: Map<Node, Data>, as: Map<ArrayCell<Node>, Node>, d: Data)(fp: Set<ArrayCell<Node>>) returns (c: ArrayCell<Node>)
-  
-predicate listset(x: Node, C: Set<Data>)(FP: Set<Node>) {
+    
+predicate listset(x: Node)(FP: Set<Node>) {
   //Reach(next, x, null)
-  FP == listset_footprint(next, x) &&
-  C == listset_content(data, FP)
+  FP == listset_footprint(next, x)
 }
   
 struct HashSet {
@@ -116,21 +110,10 @@ function arrayseg_buckets_footprint(FP0: Set<ArrayCell<Node>>)
    @(matching c yields listset_footprint(next, c[]))) &&
   (forall x in FP1 :: fp_witness(next, array_state(), x, FP0) in FP0) &&
   (forall x in FP1 :: x in listset_footprint(next, fp_witness(next, array_state(), x, FP0)[])
-   @(matching x without cnt_witness yields fp_witness(next, array_state(), x, FP0)))
+   @(matching x yields fp_witness(next, array_state(), x, FP0)))
 }
 
-function arrayseg_buckets_content(FP0: Set<ArrayCell<Node>>)
-  returns (C: Set<Data>)
-{
-  // C = (++) { listset_content(next, c[]) | c in FP0 }
-  (forall c in FP0 :: listset_content(data, listset_footprint(next, c[])) subsetof C
-   @(matching c yields listset_content(data, listset_footprint(next, c[])))) &&
-  (forall d in C :: cnt_witness(data, array_state(), d, FP0) in FP0) &&
-  (forall d in C :: d in listset_content(data, listset_footprint(next, cnt_witness(data, array_state(), d, FP0)[]))
-   @(matching d without fp_witness yields cnt_witness(data, array_state(), d, FP0)))
-}
-
-predicate arrayseg_with_buckets(a: Array<Node>, lo: Int, hi: Int, C: Set<Data>)
+predicate arrayseg_with_buckets(a: Array<Node>, lo: Int, hi: Int)
   (FP0: Set<ArrayCell<Node>>, FP1: Set<Node>)
 {
   0 <= lo && lo <= hi && hi <= a.length &&
@@ -138,20 +121,19 @@ predicate arrayseg_with_buckets(a: Array<Node>, lo: Int, hi: Int, C: Set<Data>)
   FP0 == arrayseg_footprint(a, lo, hi) &&
   FP1 == arrayseg_buckets_footprint(FP0) &&
   // every array cells points to a bucket list
-  (forall c in FP0 :: listset(c[], listset_content(data, listset_footprint(next, c[])), listset_footprint(next, c[]))) &&
+  (forall c in FP0 :: listset(c[], listset_footprint(next, c[]))) &&
   // the footprint sets of the bucket lists are disjoint
-  (forall c1 in FP0, c2 in FP0 :: c1 == c2 || Disjoint(listset_footprint(next, c1[]), listset_footprint(next, c2[]))) &&
-  C == arrayseg_buckets_content(FP0) &&
+  (forall c1 in FP0, c2 in FP0 :: c1 == c2 || Disjoint(listset_footprint(next, c1[]), listset_footprint(next, c2[])))
   // all data values of a bucket list have the same hash, which is the index of the array cell that points to the list
   // (implies the disjointness of the content sets of the lists)
-  (forall c in FP0, d in listset_content(data, listset_footprint(next, c[])) :: hash(a.length, d) = c.index) 
+  //(forall c in FP0, d in listset_content(data, listset_footprint(next, c[])) :: hash(a.length, d) = c.index) 
 }
 
-predicate array_with_buckets(a: Array<Node>, C: Set<Data>)
+predicate array_with_buckets(a: Array<Node>)
   (FP0: Set<Array<Node>>, FP1: Set<ArrayCell<Node>>, FP2: Set<Node>)
 {
   FP0 == Set(a) &&
-  arrayseg_with_buckets(a, 0, a.length, C, FP1, FP2)
+  arrayseg_with_buckets(a, 0, a.length, FP1, FP2)
 }
 
 function hash(max: Int, value: Data)
@@ -160,67 +142,35 @@ function hash(max: Int, value: Data)
   res >= 0 && res < max
 }
 
-predicate hashset(h: HashSet, C: Set<Data>)
+predicate hashset(h: HashSet)
   (FP0: Set<HashSet>, FP1: Set<Array<Node>>,
    FP2: Set<ArrayCell<Node>>, FP3: Set<Node>)
 {
   h.size == h.buckets.length &&
   FP0 == Set(h) &&
-  array_with_buckets(h.buckets, C, FP1, FP2, FP3) &&
+  array_with_buckets(h.buckets, FP1, FP2, FP3) &&
   true
 }
 
-procedure listset_add(lst: Node, val: Data, implicit ghost C: Set<Data>) 
+procedure listset_add(lst: Node, val: Data) 
   returns (res: Node)
-  requires listset(lst, C)
-  ensures listset(res, C ++ Set(val))
+  requires listset(lst)
+  ensures listset(res)
 {
   lst := new Node;
-  lst.data := null;
   lst.next := null;
 }
   
-procedure hashset_add(hset: HashSet, value: Data, implicit ghost C: Set<Data>)
-  requires hashset(hset, C)
-  ensures hashset(hset, C ++ Set(value))
+procedure hashset_add(hset: HashSet, value: Data)
+  requires hashset(hset)
+  ensures hashset(hset)
 {
   var hashval := hash(hset.size, value);
   var list := hset.buckets[hashval];
   hset.buckets[hashval] := listset_add(list, value);
+  assert listset(list) -** hashset(hset);
+  //assume hashset(hset);
+  //hset.buckets[hashval] := listset_add(list, value);
 }
 
-procedure listset_contains(lst: Node, value: Data, implicit ghost C: Set<Data>)
-  returns (res: Bool)
-  requires listset(lst, C)
-  ensures listset(lst, C) &*& res == value in C
-{
-}
   
-procedure hashset_contains(hset: HashSet, value: Data, implicit ghost C: Set<Data>)
-  returns (res: Bool)
-  requires hashset(hset, C)
-  ensures hashset(hset, C) &*& res == value in C
-{
-  var hashval := hash(hset.size, value);
-  var list := hset.buckets[hashval];
-  res := listset_contains(list, value);
-  return res;
-}
-
-procedure listset_remove(lst: Node, value: Data, implicit ghost C: Set<Data>) 
-  returns (res: Node)
-  requires listset(lst, C)
-  ensures listset(res, C -- Set(value))
-{
-  lst.next := null;
-  lst.data := value;
-}
-
-procedure hashset_remove(hset: HashSet, value: Data, C: Set<Data>)
-  requires hashset(hset, C)
-  ensures hashset(hset, C -- Set(value))
-{
-  var hashval := hash(hset.size, value);
-  var list := hset.buckets[hashval];
-  hset.buckets[hashval] := listset_remove(list, value);
-}
