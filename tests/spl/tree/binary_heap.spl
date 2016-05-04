@@ -1,8 +1,0 @@
-struct Node {
-  var left: Node;
-  var right: Node;
-  var parent: Node;
-  var data: Int;
-}
-
-//TODO insert / get_min requires a short way of inserting at the end of the tree ...

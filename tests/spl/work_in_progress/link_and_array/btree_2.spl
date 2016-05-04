@@ -11,7 +11,7 @@
  *  Original Date:  26 June 2010
  *  Last modified: 15 April 2014
  */
-include "../include/btree.spl";
+include "../../include/btree.spl";
 
 /* Type representing a node in the B+ tree.
  * This type is general enough to serve for both the leaf and the internal node.

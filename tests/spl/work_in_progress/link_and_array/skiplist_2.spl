@@ -3,7 +3,7 @@
 //  under CC-BY
 //  full source at http://opendatastructures.org/ods-java.tgz
 
-include "../include/skiplistWithLength.spl";
+include "../../include/skiplistWithLength.spl";
 
 procedure findPred(this: SkipList, index: Int)
   returns (res: Node)
