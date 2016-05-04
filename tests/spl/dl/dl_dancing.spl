@@ -4,10 +4,10 @@ include "../include/dllist.spl";
 
 procedure remove(l: Node, x: Node, ghost e: Node, implicit ghost FP: Set<Node>)
   requires (acc(x.prev) &*& acc(x) &*& acc(x.next)) -** dlseg(l, null, null, e) && acc(FP)
-  ensures ((acc(x.prev) &*& acc(x.next)) -** dlseg(l, null, null, e) && acc(FP -- Set(x))) &*& acc(x)
+  ensures ((acc(x.prev) &*& acc(x.next)) -** dlseg(l, null, null, e) && acc(FP -- {x})) &*& acc(x)
   ensures x.next.prev == x.prev
   ensures x.next == x.prev.next
-  ensures forall z1 in FP -- Set(x), z2 in FP -- Set(x) :: Reach(old(next), z1, z2) ==> Reach(next, z1, z2)
+  ensures forall z1 in FP -- {x}, z2 in FP -- {x} :: Reach(old(next), z1, z2) ==> Reach(next, z1, z2)
 {
   var xn := x.next;
   xn.prev := x.prev;
