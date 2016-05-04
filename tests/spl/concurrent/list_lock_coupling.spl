@@ -44,20 +44,23 @@ predicate conc_list_set(c: ConcList, C: Set<Int>)(FP_C: Set<ConcList>, FP_N: Set
 }
 
 
-/* Proof that conc_list_set encodes a good state */
+/* ---------- Proof that conc_list_set encodes a good state ---------- */
 
 function next_greater(x: Int, h: Node, t: Node) returns (n: Node) {
-  (!Reach(next, h, t) ==> n == null) &&
-  (h == t ==> n == null) &&
-  (x <= h.data ==> n == h) &&
-  (h.data < x ==> n == next_greater(x, h.next, t))
+  ((!Reach(next, h, t) || h == null) ==> n == null) &&
+  (Reach(next, h, t) && h != null && h == t && h.data < x ==> n == null) &&
+  (Reach(next, h, t) && x <= h.data ==> n == h) &&
+  (Reach(next, h, t) && h != null && h != t && h.data < x
+   ==> n == next_greater(x, h.next, t))
 }
 
 /* Since we cannot prove this property, as it needs induction, we add as axiom */
 /* TODO prove this property by induction */
-axiom (forall x: Int, h: Node, n: Node :: next_greater(x, h, null) == n && n != null ==> x <= n.data && previous(n, h).data < x);
-
-/* TODO should we make VC smaller by removing t as a param since it's always null ? */
+axiom (forall x: Int, h: Node, t: Node, n: Node, FP: Set<Node> ::
+       lseg_strictly_increasing(h, FP) && Btwn(next, h, t, null) && t.next == null &&
+       next_greater(x, h, t) == n && x <= t.data
+       ==>
+       Btwn(next, h, n, null) && n != null && x <= n.data && previous(n, h).data < x);
 
 procedure good_state(c: ConcList, implicit ghost C: Set<Int>, implicit ghost FP_C: Set<ConcList>, FP_N: Set<Node>)
   requires conc_list_set(c, C, FP_C, FP_N)
@@ -65,11 +68,13 @@ procedure good_state(c: ConcList, implicit ghost C: Set<Int>, implicit ghost FP_
   /* keysets of all nodes are disjoint */
   pure assert (forall n1 in FP_N, n2 in FP_N, x: Int :: x in keyset(n1, c.head) && x in keyset(n2, c.head) ==> n1 == n2 @(matching n1 yields keyset(n1, c.head)));
   /* keysets cover keyspace */
-  pure assert (forall x: Int :: c.head.data < x && x < c.tail.data ==> (x in keyset(next_greater(x, c.head, null), c.head) @(matching x yields next_greater(x, c.head, null))));
+  pure assert (forall x: Int :: c.head.data < x && x < c.tail.data ==> (x in keyset(next_greater(x, c.head, c.tail), c.head) @(matching x yields next_greater(x, c.head, c.tail))));
 
   pure assume false;
 }
 
+
+/* -------------------- Actual Implementation -------------------- */
 
 procedure create() returns (res: ConcList)
   ensures conc_list_set(res, {1, 4})
