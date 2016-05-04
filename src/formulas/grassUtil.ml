@@ -1092,7 +1092,7 @@ let propagate_binder b f =
             Binder (b1, vs, f1, a), vs1
         | _ -> 
             let f1, vs1 = prop [] f in
-            mk_binder ~ann:a b1 vs (mk_binder (dualize_binder b) vs1 f1), tvs)
+            mk_binder ~ann:a b1 vs (mk_binder b vs1 f1), tvs)
     | f -> 
         let fv_f = fv f in
         f, List.filter (fun (x, _) -> IdSet.mem x fv_f) tvs
@@ -1114,6 +1114,9 @@ let propagate_forall f = propagate_binder Forall f
 let foralls_to_exists f =
   let rec find_defs bvs defs f =
     let rec find nodefs defs = function
+      | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; Var _ as yt], _), a)])
+          when IdSet.mem x nodefs ->
+            IdSet.remove x nodefs, mk_eq xt yt :: defs, mk_false
       | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; t], _), a)])
         when IdSet.mem x nodefs && 
           IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
@@ -1145,13 +1148,17 @@ let foralls_to_exists f =
           match f with
           | Atom (App (Eq, [Var (v, _); t], _), a) ->
               let t1 = subst_term sm t in
-              if not (IdSet.mem v @@ fv_term t1)
-              then defs, IdMap.add v t1 sm
+              if not (IdSet.mem v @@ fv_term t1) (** is this condition tautological? *)
+              then begin
+                let smv = IdMap.singleton v t1 in
+                let sm = IdMap.fold (fun w tw -> IdMap.add w (subst_term smv tw)) sm IdMap.empty in
+                defs, IdMap.add v t1 sm
+              end
               else f :: defs, sm
           | f -> f :: defs, sm)
           defs ([], IdMap.empty)
       in
-      nodefs, defs, subst sm g
+      nodefs, List.map (subst sm) defs, subst sm g
     end
     else find_defs nodefs defs g
   in
