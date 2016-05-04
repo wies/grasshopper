@@ -25,7 +25,7 @@ let mk_footprint_error pos eqs =
       let msg =
         match eq with
         | Grass.Atom (App (Eq, [t; _], _), _) ->
-            let srt = sort_of t in
+            let srt = GrassUtil.struct_sort_of_sort @@ GrassUtil.element_sort_of_set t in
             "Memory footprint for type " ^ Grass.string_of_sort srt ^ " does not match this specification"
         | _ ->
             "Memory footprint at error location does not match this specification"

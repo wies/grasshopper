@@ -111,15 +111,15 @@ let add_pred_insts prog f =
           x, var.var_sort)
         pred.pred_formals
     in
-    let vs = List.map (fun (x, srt) -> mk_var srt x) sorted_vs in
+    let pvs = List.map (fun (x, srt) -> mk_var srt x) sorted_vs in
     let m, kgen = match pred.pred_outputs with
     | [] ->
-        let mt = mk_free_fun Bool pred.pred_name vs in
+        let mt = mk_free_fun Bool pred.pred_name pvs in
         let m = Match (mt, []) in
         m, [TermGenerator ([m], [mk_known mt])]
     | [x] ->
         let var = IdMap.find x pred.pred_locals in
-        Match (mk_free_fun var.var_sort pred.pred_name vs, []), []
+        Match (mk_free_fun var.var_sort pred.pred_name pvs, []), []
     | _ -> failwith "Functions may only have a single return value."
     in
     let rec add_match = function
@@ -134,13 +134,20 @@ let add_pred_insts prog f =
     in
     let rec add_generators bvs = function
       | BoolOp (op, fs) ->
-          BoolOp (And, List.map (add_generators bvs) fs)
+          BoolOp (op, List.map (add_generators bvs) fs)
       | Binder (Forall, vs, f, ann) ->
           let bvs = List.fold_left (fun bvs (v, _) -> IdSet.add v bvs) bvs vs in
-          let ft = fun_terms bvs f in
+          let pvs = id_set_of_list @@ List.map fst sorted_vs in
+          let ft =
+            f |>
+            fun_terms bvs |>
+            TermSet.elements |>
+            List.filter (fun t -> IdSet.subset (fv_term t) pvs)
+          in
           let generators =
-            (if TermSet.is_empty ft then []
-            else [TermGenerator ([m], TermSet.elements ft)])
+            (match ft with
+            | [] -> []
+            | _ -> [TermGenerator ([m], ft)])
             @ kgen              
           in
           Binder (Forall, vs, add_generators bvs f, generators @ ann)
@@ -209,7 +216,6 @@ let add_pred_insts prog f =
   | _ -> [], f_inst, []
   in
   let pred_def pred =
-    print_endline (string_of_ident pred.pred_name);
     let args = pred.pred_formals in
     let sorted_vs, sm =
       List.fold_right
@@ -256,8 +262,8 @@ let add_pred_insts prog f =
       skolemize |>
       (*propagate_forall |>*)
       annotate_term_generators pred)
-      body |>
-      (fun fs -> print_forms stdout fs; print_newline (); fs)
+      body
+      (*(fun fs -> print_forms stdout fs; print_newline (); fs)*)
   in
   let pred_defs = Prog.fold_preds (fun acc pred -> pred_def pred @ acc) [] prog in
   let f = mk_exists ~ann:a vs (smk_and (f :: pred_defs)) in

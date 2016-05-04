@@ -479,7 +479,7 @@ let set_axioms elem_srts =
       mk_iff (mk_elem elt1 (mk_setenum [elt2])) 
         (mk_eq elt1 elt2)
     in
-    let subseteq =
+    let subset_def =
       mk_sequent [mk_subseteq set1 set2; mk_elem elt1 set1] [mk_elem elt1 set2]
     in
     (* Auxiliary subset axioms *)
@@ -564,9 +564,12 @@ let set_axioms elem_srts =
           mk_axiom ("def of union" ^ ssrt) union;
           mk_axiom ("def of inter" ^ ssrt) inter;
           mk_axiom ("def of setminus" ^ ssrt) diff;
-          mk_axiom ("def of setenum" ^ ssrt) setenum] @
+          mk_axiom ("def of setenum" ^ ssrt) setenum;
+          mk_axiom ("def of disjoint" ^ ssrt) disjoint_def;
+          mk_axiom ("def of subset" ^ ssrt) subset_def;
+        ] @
       if !Config.abstract_preds then
-        [mk_axiom ("def of subseteq" ^ ssrt) subseteq;
+        [mk_axiom ("def of subseteq" ^ ssrt) subset_def;
          mk_axiom ("subset refl" ^ ssrt) subset_refl;
          mk_axiom ("subset empty" ^ ssrt) subset_empty;
          mk_axiom ("subset trans" ^ ssrt) subset_trans;
