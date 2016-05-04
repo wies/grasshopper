@@ -482,6 +482,9 @@ let set_axioms elem_srts =
     let subset_def =
       mk_sequent [mk_subseteq set1 set2; mk_elem elt1 set1] [mk_elem elt1 set2]
     in
+    let subset_def_union =
+      nnf (mk_iff (mk_subseteq set1 set2) (mk_eq (mk_union [set1; set2]) set2))
+    in
     (* Auxiliary subset axioms *)
     let subset_refl =
       mk_subseteq set1 set1
@@ -543,6 +546,10 @@ let set_axioms elem_srts =
       mk_sequent [mk_disjoint set1 set2]
         [mk_disjoint (mk_inter [set3; set1]) set2]
     in
+    let disjoint_def_inter =
+      nnf (mk_iff (mk_eq (mk_inter [set1; set2]) (mk_empty (Set t)))
+             (mk_disjoint set1 set2))
+    in
     let disjoint_diff =
       mk_sequent [mk_disjoint set1 set2]
         [mk_disjoint (mk_diff set1 set3) set2]
@@ -565,8 +572,10 @@ let set_axioms elem_srts =
           mk_axiom ("def of inter" ^ ssrt) inter;
           mk_axiom ("def of setminus" ^ ssrt) diff;
           mk_axiom ("def of setenum" ^ ssrt) setenum;
-          mk_axiom ("def of disjoint" ^ ssrt) disjoint_def;
+          (*mk_axiom ("def of disjoint" ^ ssrt) disjoint_def;
+          mk_axiom ("def of disjoint inter" ^ ssrt) disjoint_def_inter;
           mk_axiom ("def of subset" ^ ssrt) subset_def;
+          mk_axiom ("def of subset union" ^ ssrt) subset_def_union;*)
         ] @
       if !Config.abstract_preds then
         [mk_axiom ("def of subseteq" ^ ssrt) subset_def;

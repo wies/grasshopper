@@ -101,7 +101,11 @@ let rec simplify_sets fs =
   let rec simp (t : term) = 
     match t with
     | App (Union, ts, srt) ->
-        let ts1 = List.map simp ts in
+        let ts1 =
+          List.filter
+            (function App (Empty, [], _) -> false | _ -> true)
+            (List.map simp ts)
+        in
         (match ts1 with
         | [] -> mk_empty srt
         | _ -> mk_union ts1)
@@ -117,27 +121,39 @@ let rec simplify_sets fs =
         else
           begin
             match (s1', s2') with
-            | (App (Empty, _, _), _) | (_, App (Empty, _, _)) -> s1'
+            | (App (Empty, _, _), s) | (s, App (Empty, _, _)) -> s
             | (App (SetEnum, ts1, _), App (SetEnum, ts2, _)) ->
               let ts = List.filter (fun t -> not (List.mem t ts2)) ts1 in
                 mk_setenum ts
             | _ -> mk_diff s1' s2'
           end
+    | App (Disjoint, [s1; s2], _) ->
+      let s1' = simp s1 in
+      let s2' = simp s2 in
+      (match s1', s2' with
+      | App (Empty, _, _), _ | _, App (Empty, _, _) -> mk_true_term
+      | _ -> mk_disjoint_term s1' s2')
     (*| App (SetEnum, ts, srt) -> ...*)
     | App (sym, ts, srt) -> 
         App (sym, List.map simp ts, srt)
-    | t -> t
+    | Var _ -> t
   in
-  let submap, fs1 = 
+  let fs1 = List.map (fun f -> map_terms simp f) fs in
+  let submap, fs2 = 
     List.fold_right (fun f (submap, fs1) -> 
       match f with
-      | Atom (App (Eq, [App (FreeSym id, [], _); App (Empty, [], srt)], _), _) 
+      | Atom (App ((Eq | SubsetEq), [App (FreeSym id, [], _); App (Empty, [], srt)], _), _) 
       | Atom (App (Eq, [App (Empty, [], srt); App (FreeSym id, [], _)], _), _) ->
           IdMap.add id (App (Empty, [], srt)) submap, fs1
-      | _ -> submap, f :: fs1) fs (IdMap.empty, [])
+      | _ -> submap, f :: fs1) fs1 (IdMap.empty, [])
   in
-  if IdMap.is_empty submap then fs else 
-  let fs2 = List.map (fun f -> map_terms simp (subst_consts submap f)) fs1 in
-  simplify_sets fs2
+  if IdMap.is_empty submap then fs2 else 
+  simplify_sets (List.map (subst_consts submap) fs2)
+
+let simplify_one_sets f =
+  split_ands [f] |>
+  simplify_sets |>
+  mk_and
   
+    
 let simplify fs = simplify_sets fs

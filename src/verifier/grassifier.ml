@@ -444,6 +444,10 @@ let elim_sl prog =
     let kind = Util.Opt.get_or_else Checked kind_opt in
     SlUtil.mk_sep_star_lst ~pos:pos fs, kind, name, msg, pos
   in
+  let is_pure pred = match pred.pred_body.spec_form with
+  | FOL _ | SL (Sl.Pure _) -> true
+  | _ -> false
+  in
   let pred_to_form fp_context p args domains = 
     let decl = find_pred prog p in
     let mk_empty_except ssrts =
@@ -455,28 +459,34 @@ let elim_sl prog =
     in
     let fp_caller_args, fp_args =
       SortSet.fold (fun ssrt (fp_caller_args, fp_args) ->
-        try SortMap.find ssrt fp_context :: fp_caller_args, SortMap.find ssrt domains :: fp_args
+        try
+          SortMap.find ssrt fp_context :: fp_caller_args,
+          SortMap.find ssrt domains :: fp_args
         with Not_found ->
           failwith ("Could not find footprint set for sort " ^ string_of_sort ssrt ^ " in predicate " ^ string_of_ident p))
         decl.pred_footprints ([], [])
     in
-    let eqs = mk_empty_except decl.pred_footprints in
+    let fp_args, p_footprints =
+      if is_pure decl
+      then [], SortSet.empty
+      else fp_args, decl.pred_footprints
+    in
+    let eqs = mk_empty_except p_footprints in
     smk_and (mk_pred p (args @ fp_caller_args @ fp_args) :: eqs)
   in
   (* translate the predicates from SL to GRASS *)
   let translate_pred pred =
     (*print_endline @@ "translating predicate " ^ string_of_ident pred.pred_name;*)
-    let locals, aux_formals = 
+    let locals, aux_formals =
       SortSet.fold
         (fun ssrt (locals, aux_formals) ->
           let locals1, aux_formals1 =
-            match pred.pred_outputs with
-            | [] ->
-                let footprint_id = footprint_id ssrt in
-                let footprint_decl = mk_loc_set_decl ssrt footprint_id pred.pred_pos in
-                IdMap.add footprint_id { footprint_decl with var_is_implicit = true } locals,
-                footprint_id :: aux_formals
-            | _ -> locals, aux_formals
+            if is_pure pred then locals, aux_formals
+            else 
+              let footprint_id = footprint_id ssrt in
+              let footprint_decl = mk_loc_set_decl ssrt footprint_id pred.pred_pos in
+              IdMap.add footprint_id { footprint_decl with var_is_implicit = true } locals,
+              footprint_id :: aux_formals
           in
           let footprint_caller_id = footprint_caller_id ssrt in
           let footprint_caller_decl = mk_loc_set_decl ssrt footprint_caller_id pred.pred_pos in
@@ -509,20 +519,27 @@ let elim_sl prog =
       in
       subst_funs s f
     in
+    let simplify f =
+      let round f =
+        f |>
+        propagate_exists |>
+        mk_not |>
+        nnf |>
+        foralls_to_exists |>
+        SimplifyGrass.simplify_one_sets |>
+        mk_not |>
+        nnf |>
+        foralls_to_exists 
+      in
+      f |> round |> round
+    in
     let translate_sl_body body =
       body |>
-      SlToGrass.to_grass (pred_to_form footprint_context) footprint_sets |>
+      (function
+        | Sl.Pure (f, _) -> f
+        | f -> SlToGrass.to_grass (pred_to_form footprint_context) footprint_sets f) |>
       subst_preds |>
-      propagate_exists |>
-      mk_not |>
-      nnf |>
-      (*(fun f -> print_form stdout f; print_newline (); f) |>*)
-      foralls_to_exists |>
-      (*fun f -> print_form stdout f; print_newline (); f) |>*)
-      mk_not |>
-      nnf |>
-      foralls_to_exists |>
-      propagate_exists |>
+      simplify |>
       fun f -> FOL f
     in
     { pred with

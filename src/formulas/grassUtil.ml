@@ -1019,6 +1019,18 @@ let subst subst_map f =
   in sub subst_map f
 
 
+let split_ands fs =
+  let rec split acc = function
+    | BoolOp(And, fs) :: gs -> 
+        split acc (fs @ gs)
+    | Binder(_, [], BoolOp(And, fs), a) :: gs ->
+        split acc (List.map (fun f -> annotate f a) fs @ gs)
+    | f :: gs ->
+        split (f :: acc) gs
+    | [] -> List.rev acc
+  in split [] fs
+    
+
 (** Propagate [b] quantified variables upward in the formula [f].
  ** Assumes that [f] is in negation normal form. *)
 let propagate_binder b f =

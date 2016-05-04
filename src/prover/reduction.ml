@@ -247,12 +247,12 @@ let add_set_axioms fs =
   let rec simplify = function
     | BoolOp (op, fs) -> BoolOp (op, List.map simplify fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, simplify f, a)
-    | Atom (App (Disjoint, [t1; t2], _), a) when false && not !Config.abstract_preds ->
+    | Atom (App (Disjoint, [t1; t2], _), a) when not !Config.abstract_preds ->
         let srt = element_sort_of_set t1 in
         let t11 = unflatten t1 in
         let t21 = unflatten t2 in
         Atom (mk_eq_term (mk_empty (Set srt)) (mk_inter [t11; t21]), a)
-    | Atom (App (SubsetEq, [t1; t2], _), a) when false && not !Config.abstract_preds -> 
+    | Atom (App (SubsetEq, [t1; t2], _), a) when not !Config.abstract_preds -> 
         let t11 = unflatten t1 in
         let t21 = unflatten t2 in
         Atom (mk_eq_term t21 (mk_union [t11; t21]), a)
@@ -534,17 +534,8 @@ let add_split_lemmas fs gts =
 (** Reduces the given formula to the target theory fragment, as specified by the configuration. *)
 let reduce f =
   (* split f into conjuncts and eliminate all existential quantifiers *)
-  let rec split_ands acc = function
-    | BoolOp(And, fs) :: gs -> 
-        split_ands acc (fs @ gs)
-    | Binder(_, [], BoolOp(And, fs), a) :: gs ->
-        split_ands acc (List.map (fun f -> annotate f a) fs @ gs)
-    | f :: gs ->
-        split_ands (f :: acc) gs
-    | [] -> List.rev acc
-  in
   let f1 = nnf f in
-  let fs = split_ands [] [f1] in
+  let fs = split_ands [f1] in
   (* *)
   let fs = elim_exists fs in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
@@ -554,7 +545,7 @@ let reduce f =
   let fs = pull_up_equalities fs in
   let fs = add_ep_axioms fs in
   let fs = add_frame_axioms fs in
-  let fs = factorize_axioms (split_ands [] fs) in
+  let fs = factorize_axioms (split_ands fs) in
   let fs = add_set_axioms fs in
   let fs, read_propagators, gts = add_read_write_axioms fs in
   let fs, gts = add_reach_axioms fs gts in
