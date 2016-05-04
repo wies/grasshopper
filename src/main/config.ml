@@ -66,8 +66,6 @@ let compile_to = ref ""
 
 (* optmisation: oldify fields only if modified *)
 let opt_field_mod = ref true
-(* optmisation: self-framing clause for SL predicates *)
-let optSelfFrame = ref false
 
 (* compute the congruence closure as a fixed point (horn clauses) *)
 let ccFixedPoint = ref true
@@ -109,5 +107,4 @@ let cmd_options =
    ("-smtarrays", Arg.Set encode_fields_as_arrays, " Use solver's array theory to encode fields");
    ("-bitvector", Arg.Set use_bitvector, " Use bitvector theory for integers\n\nOptions for compiler:");
    ("-compile", Arg.Set_string compile_to, "<filename> Compile SPL program to a C program outputed as a file with the given name.");
-   (*("-optSelfFrame", Arg.Set optSelfFrame, " enable generation of self-framing clauses for SL predicates");*)
   ]
