@@ -465,7 +465,7 @@ let elim_sl prog =
   in
   (* translate the predicates from SL to GRASS *)
   let translate_pred pred =
-    print_endline @@ "translating predicate " ^ string_of_ident pred.pred_name;
+    (*print_endline @@ "translating predicate " ^ string_of_ident pred.pred_name;*)
     let locals, aux_formals = 
       SortSet.fold
         (fun ssrt (locals, aux_formals) ->
@@ -516,10 +516,13 @@ let elim_sl prog =
       propagate_exists |>
       mk_not |>
       nnf |>
+      (*(fun f -> print_form stdout f; print_newline (); f) |>*)
       foralls_to_exists |>
+      (*fun f -> print_form stdout f; print_newline (); f) |>*)
       mk_not |>
       nnf |>
       foralls_to_exists |>
+      propagate_exists |>
       fun f -> FOL f
     in
     { pred with

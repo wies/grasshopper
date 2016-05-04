@@ -27,7 +27,7 @@ let simplify prog =
   info "Eliminating SL, adding heap access checks.\n" |>
   elim_sl |>
   (*(fun prog -> if !Config.abstract_preds then annotate_frame_axioms prog else prog) |> *)
-  annotate_term_generators |>
+  (*annotate_term_generators |>*)
   annotate_heap_checks |>
   dump_if 2 |>
   info "Eliminating return statements and transforming to SSA form.\n" |>
@@ -90,6 +90,65 @@ let add_labels vc =
 
 (** Expand predicate definitions for all predicates in formula [f] according to program [prog] *)
 let add_pred_insts prog f =
+  (* Annotates term generators in predicate bodies *)
+  let annotate_term_generators pred f =
+    let fun_terms bvs f =
+      let rec ft acc = function
+        | App (sym, _ :: _, srt) as t when is_free_symbol sym || srt <> Bool ->
+            let fvs = fv_term t in
+            if IdSet.subset fvs bvs && not @@ IdSet.is_empty (fv_term t)
+            then TermSet.add t acc else acc
+        | App (_, ts, _) ->
+            List.fold_left ft acc ts
+        | _ -> acc
+      in
+      fold_terms ft TermSet.empty f
+    in
+    let sorted_vs =
+      List.map
+        (fun x ->
+          let var = IdMap.find x pred.pred_locals in
+          x, var.var_sort)
+        pred.pred_formals
+    in
+    let vs = List.map (fun (x, srt) -> mk_var srt x) sorted_vs in
+    let m, kgen = match pred.pred_outputs with
+    | [] ->
+        let mt = mk_free_fun Bool pred.pred_name vs in
+        let m = Match (mt, []) in
+        m, [TermGenerator ([m], [mk_known mt])]
+    | [x] ->
+        let var = IdMap.find x pred.pred_locals in
+        Match (mk_free_fun var.var_sort pred.pred_name vs, []), []
+    | _ -> failwith "Functions may only have a single return value."
+    in
+    let rec add_match = function
+      | Binder (b, vs, f, annots) ->
+          let annots1 =
+            List.map (function TermGenerator (ms, ts) -> TermGenerator (m :: ms, ts) | a -> a) annots
+          in
+          Binder (b, vs, add_match f, annots1)
+      | BoolOp (op, fs) ->
+          BoolOp (op, List.map add_match fs)
+      | f -> f
+    in
+    let rec add_generators bvs = function
+      | BoolOp (op, fs) ->
+          BoolOp (And, List.map (add_generators bvs) fs)
+      | Binder (Forall, vs, f, ann) ->
+          let bvs = List.fold_left (fun bvs (v, _) -> IdSet.add v bvs) bvs vs in
+          let ft = fun_terms bvs f in
+          let generators =
+            (if TermSet.is_empty ft then []
+            else [TermGenerator ([m], TermSet.elements ft)])
+            @ kgen              
+          in
+          Binder (Forall, vs, add_generators bvs f, generators @ ann)
+      | f -> f
+    in
+    add_generators IdSet.empty (add_match f)
+  in
+  (* Expands definition of predicate [p] for arguments [ts] assuming polarity of occurrence [pol] *)
   let expand_pred pos p ts =
     let pred = find_pred prog p in
     let sm =
@@ -134,19 +193,23 @@ let add_pred_insts prog f =
             let f1 = expand_neg (Some p_msg) (IdSet.add p seen) p1 in
             annotate (annotate_aux_msg p_msg f1) a1
       | f -> f
-    in 
-    let f1 = expand_neg None IdSet.empty (nnf f) in
+    in
+    f |>
+    nnf |>
+    expand_neg None IdSet.empty |>
+    foralls_to_exists |>
+    propagate_exists
     (*print_endline "f1:";
     print_form stdout (f1); print_newline (); print_newline ();
     print_endline "foralls_to_exists f1:";
     print_form stdout (foralls_to_exists f1); print_newline (); print_newline ();*)
-    propagate_exists (foralls_to_exists f1)
   in
   let vs, f, a = match f_inst with
   | Binder (Exists, vs, f, a) -> vs, f, a
   | _ -> [], f_inst, []
   in
   let pred_def pred =
+    print_endline (string_of_ident pred.pred_name);
     let args = pred.pred_formals in
     let sorted_vs, sm =
       List.fold_right
@@ -186,7 +249,15 @@ let add_pred_insts prog f =
       | [] -> [Pattern (mk_known (mk_free_fun Bool pred.pred_name vs), [])]
       | _ -> []
     in
-    List.map (fun f -> smk_forall ~ann:(annot () :: pat) sorted_vs (subst_consts sm f)) body
+    List.map (fun f ->
+      f |>
+      subst_consts sm |>
+      smk_forall ~ann:(annot () :: pat) sorted_vs |>
+      skolemize |>
+      (*propagate_forall |>*)
+      annotate_term_generators pred)
+      body |>
+      (fun fs -> print_forms stdout fs; print_newline (); fs)
   in
   let pred_defs = Prog.fold_preds (fun acc pred -> pred_def pred @ acc) [] prog in
   let f = mk_exists ~ann:a vs (smk_and (f :: pred_defs)) in
