@@ -13,8 +13,8 @@ function content(FP: Set<Node>) returns (C: Set<Int>) {
   (forall v in C :: v == data_witness(v, data, FP).data @(matching v yields data_witness(v, data, FP).data))
 }
 
-predicate list_set(x: Node, y: Node, C: Set<Int>)(FP: Set<Node>) {
-  lseg(x, y, FP) &&
-  lseg_strictly_increasing(x, FP) &&
-  C == content(FP)
+predicate list_set(x: Node, y: Node, C: Set<Int>) {
+  exists X: Set<Node> :: (lseg(x, y) && acc(X)) &*&
+    (lseg_strictly_increasing(x, X) &&
+     C == content(X))
 }
