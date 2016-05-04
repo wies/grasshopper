@@ -55,7 +55,7 @@ function next_greater(x: Int, h: Node, t: Node) returns (n: Node) {
 
 /* Since we cannot prove this property, as it needs induction, we add as axiom */
 /* TODO prove this property by induction */
-axiom (forall x: Int, h: Node, n: Node :: next_greater(x, h, null) == n ==> x <= n.data && previous(n, h).data < x);
+axiom (forall x: Int, h: Node, n: Node :: next_greater(x, h, null) == n && n != null ==> x <= n.data && previous(n, h).data < x);
 
 /* TODO should we make VC smaller by removing t as a param since it's always null ? */
 
