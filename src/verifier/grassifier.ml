@@ -611,7 +611,7 @@ let elim_sl prog =
             []
         in
         f |>
-        SlToGrass.to_grass (pred_to_form footprint_pre_context) footprint_sets |>
+        SlToGrass.to_grass (pred_to_form  footprint_sets) footprint_sets |>
         (fun f -> mk_and (f :: fp_inclusions)) |>
         propagate_exists
       in
