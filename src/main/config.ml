@@ -74,7 +74,7 @@ let ccFixedPoint = ref true
 
 (* maximal number of term generation rounds *)
 let term_gen_max_rounds = ref 2
-    
+
 let cmd_options =
   [("-basedir", Arg.Set_string base_dir, "<string>  Base directory for resolving include directives. Default: current working directory\n\nOptions for controlling error reporting and debug output:");
    ("-v", Arg.Unit Debug.more_verbose, " Display more messages");
@@ -98,6 +98,7 @@ let cmd_options =
    ("-noep", Arg.Clear with_ep, " Omit axioms for entry points");
    ("-fullep", Arg.Set full_ep, " Generates more ep terms");
    ("-noinst", Arg.Clear instantiate, " Let the SMT solver deal with the quantifiers without prior instantiation");
+   ("-termgen", Arg.Set_int term_gen_max_rounds, "<num> Number of rounds to run the term generation procedure");
    ("-nostratify", Arg.Clear stratify, " Instantiate quantifiers that satisfy stratified sort restrictions\n\nOptions for controlling backend solver:");
    ("-nofixedpoint", Arg.Clear ccFixedPoint, " Do not use fixed point for the congruence-closure");
    ("-abspreds", Arg.Set abstract_preds, " Treat predicates as abstract.");
