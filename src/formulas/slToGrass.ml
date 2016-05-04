@@ -44,9 +44,11 @@ let to_form pred_to_form domains f =
   let rec process_sep d f = 
     match f with
     | Pure (p, _) -> 
-        [p, mk_empty_domains struct_srts]
+        let domains = mk_empty_domains struct_srts in
+        [p, domains]
     | Atom (Emp, _, pos) ->
-        [GrassUtil.mk_true, mk_empty_domains struct_srts]
+        let domains = mk_empty_domains struct_srts in
+        [GrassUtil.mk_true, domains]
     | Atom (Region, [t], _) ->
         let prefix = "?" ^ (fst d) in
         let ssrt = GrassUtil.struct_sort_of_sort (GrassUtil.element_sort_of_set t) in
@@ -117,7 +119,7 @@ let to_form pred_to_form domains f =
         List.map (fun fs ->
           let fs_tr =
             List.fold_left (fun acc (f_tr, f_dom) ->
-              let dom_def = mk_domains_eq f_dom domains in
+              let dom_def = mk_domains_eq f_dom domain in
               f_tr :: dom_def @ acc)
               [] fs
           in
