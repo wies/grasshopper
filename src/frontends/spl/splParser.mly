@@ -579,9 +579,14 @@ eq_expr:
 | eq_expr NEQ eq_expr { UnaryOp (OpNot, BinaryOp ($1, OpEq, $3, BoolType, mk_position 1 3), mk_position 1 3) }
 ;
 
-sep_star_expr:
+and_expr:
 | eq_expr { $1 }
-| sep_star_expr SEPSTAR eq_expr { BinaryOp ($1, OpSepStar, $3, PermType, mk_position 1 3) }
+| and_expr AND eq_expr { BinaryOp ($1, OpAnd, $3, AnyType, mk_position 1 3) }
+;
+
+sep_star_expr:
+| and_expr { $1 }
+| sep_star_expr SEPSTAR and_expr { BinaryOp ($1, OpSepStar, $3, PermType, mk_position 1 3) }
 ;
 
 sep_plus_expr:
@@ -594,14 +599,9 @@ sep_incl_expr:
 | sep_incl_expr SEPINCL sep_plus_expr { BinaryOp ($1, OpSepIncl, $3, PermType, mk_position 1 3) }
 ;
 
-and_expr:
-| sep_incl_expr { $1 }
-| and_expr AND sep_incl_expr { BinaryOp ($1, OpAnd, $3, AnyType, mk_position 1 3) }
-;
-
 or_expr:
-| and_expr { $1 }
-| or_expr OR and_expr { BinaryOp ($1, OpOr, $3, AnyType, mk_position 1 3) }
+| sep_incl_expr { $1 }
+| or_expr OR sep_incl_expr { BinaryOp ($1, OpOr, $3, AnyType, mk_position 1 3) }
 ;
 
 impl_expr:
