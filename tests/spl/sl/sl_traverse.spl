@@ -20,8 +20,8 @@ procedure traverse2(lst: Node)
   if (lst != null) {
     var curr := lst;
     while (curr.next != null) 
-      invariant lseg(lst, curr);
-      invariant lseg(curr, null);
+      invariant lseg(lst, curr)
+      invariant lseg(curr, null)
     {
       curr := curr.next; 
     }

@@ -1,0 +1,160 @@
+/* Concurrent list set implementation.
+ *
+ * Hand-over-hand locking scheme, and concurrency proof based on the linked
+ * technique from paper "Concurrent Search Structure Algorithms" 1988.
+*/
+
+include "../include/slsset.spl";
+
+
+struct ConcList {
+  var head: Node;
+  var tail: Node;
+}
+
+
+function previous(n: Node, h: Node) returns (p: Node) {
+  (forall x: Node :: Btwn(next, h, x, n) && x != n ==>
+   Btwn(next, x, previous(n, h), n) && previous(n, h) != n
+   @(matching n yields previous(n, h))) &&
+  (!Reach(next, h, n) || h == n ==> previous(n, h) == null)
+}
+
+function keyset(n: Node, h: Node) returns (K: Set<Int>) {
+  K == {x: Int :: previous(n, h).data < x && x <= n.data}
+  /* TODO what's the sentinel head's keyset? */
+}
+
+
+/* A sorted linked list, with sentinal head and tail nodes */
+predicate conc_list_set(c: ConcList, C: Set<Int>)(FP_C: Set<ConcList>, FP_N: Set<Node>) {
+  FP_C = {c} &&
+  c.head != null && c.tail != null && c.head != c.tail &&
+  lseg(c.head, null, FP_N) &&
+  Btwn(next, c.head, c.tail, null) &&
+  /* tail is the last element in the list */
+  c.tail.next == null &&
+  lseg_strictly_increasing(c.head, FP_N) &&
+  C == content(FP_N) &&
+  /* The head is smallest */
+  (forall n in FP_N :: n == c.head || c.head.data < n.data) &&
+  /* The tail is largest */
+  (forall n in FP_N :: n == c.tail || c.tail.data > n.data)
+  /* TODO use MININT/MAXINT here instead? */
+}
+
+
+/* Proof that conc_list_set encodes a good state */
+
+function next_greater(x: Int, h: Node, t: Node) returns (n: Node) {
+  (!Reach(next, h, t) ==> n == null) &&
+  (h == t ==> n == null) &&
+  (x <= h.data ==> n == h) &&
+  (h.data < x ==> n == next_greater(x, h.next, t))
+}
+
+/* Since we cannot prove this property, as it needs induction, we add as axiom */
+/* TODO prove this property by induction */
+axiom (forall x: Int, h: Node, n: Node :: next_greater(x, h, null) == n && n != null ==> x <= n.data && previous(n, h).data < x);
+
+/* TODO should we make VC smaller by removing t as a param since it's always null ? */
+
+procedure good_state(c: ConcList, implicit ghost C: Set<Int>, implicit ghost FP_C: Set<ConcList>, FP_N: Set<Node>)
+  requires conc_list_set(c, C, FP_C, FP_N)
+{
+  /* keysets of all nodes are disjoint */
+  pure assert (forall n1 in FP_N, n2 in FP_N, x: Int :: x in keyset(n1, c.head) && x in keyset(n2, c.head) ==> n1 == n2 @(matching n1 yields keyset(n1, c.head)));
+  /* keysets cover keyspace */
+  pure assert (forall x: Int :: c.head.data < x && x < c.tail.data ==> (x in keyset(next_greater(x, c.head, null), c.head) @(matching x yields next_greater(x, c.head, null))));
+
+  pure assume false;
+}
+
+
+procedure create() returns (res: ConcList)
+  ensures conc_list_set(res, {1, 4})
+{
+  var c := new ConcList;
+  c.head := new Node;
+  c.tail := new Node;
+  c.head.next := c.tail;
+  c.head.data := 1;
+  c.tail.data := 4;
+  c.tail.next := null;
+  return c;
+}
+
+
+procedure traverse(c: ConcList, implicit ghost C: Set<Int>)
+  requires conc_list_set(c, C)
+  ensures conc_list_set(c, C)
+{
+  var curr: Node;
+  curr := c.head;
+  var prev: Node;
+  prev := null;
+  while (curr != null)
+    invariant (prev == null && curr == c.head || prev.next |-> curr) -**
+      conc_list_set(c, C)
+  {
+    prev := curr;
+    curr := curr.next;
+  }
+}
+
+
+procedure delete(c: ConcList, x: Int, implicit ghost C: Set<Int>, ghost L: Set<Node>)
+  requires conc_list_set(c, C) &*& c.head.data < x &*& x < c.tail.data
+  ensures conc_list_set(c, C -- {x})
+  requires L == {}
+  ensures L == {}
+{
+  /* lock(c.head); */
+  L := {c.head} ++ L;
+  var pred := c.head;
+  var curr := c.head.next;
+  /* lock(curr); */
+  L := {curr} ++ L;
+
+  assert conc_list_set(c, C);
+
+  while (curr != null && curr.data < x)
+    invariant (pred.data < x &*& pred.next |-> curr) -**
+      conc_list_set(c, C)
+    invariant L == {pred, curr}
+  {
+  /* unlock(pred); */
+    L := L -- {pred};
+    pred := curr;
+    curr := curr.next;
+  /* lock(curr); */
+    L := L ++ {curr};
+  }
+
+  assert conc_list_set(c, C);
+
+  /* Decisive operation: */
+  if (curr.data == x) {
+    assert x in keyset(curr, c.head) &*& (pred.next |-> curr -** conc_list_set(c, C)) &*& pred.data < curr.data &*& curr.data < curr.next.data;
+    pure assert pred in L && curr in L; /* Check lock for heap access and write */
+    pred.next := curr.next;
+    free curr;
+    /* This checks that the decisive op is proper decisive */
+    pure assert x in keyset(pred.next, c.head) && x != pred.next.data;
+  }
+  /* assert conc_list_set(c, C -- {x}); unnecessary, checked in post */
+
+  /* unlock(curr); TODO should this happen before the free? */
+  L := L -- {curr};
+  /* unlock(pred); */
+  L := L -- {pred};
+  pure assert L == {};  /* TODO why does postcondition not check this? */
+}
+
+
+/* Properties needed to be seralizable:
+ * 1. Check that locks hold before every read/write
+ * 2. Every op maps good state to good state
+ * 3. The decisive op is proper (see defn in paper)
+ * 4. Non decisive ops don't change GC
+*/

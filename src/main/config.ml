@@ -1,5 +1,5 @@
 (* Version string *)
-let version = "0.3"
+let version = "0.4 alpha"
 
 (* Base directory for includes *)
 let base_dir = ref ""
@@ -66,15 +66,13 @@ let compile_to = ref ""
 
 (* optmisation: oldify fields only if modified *)
 let opt_field_mod = ref true
-(* optmisation: self-framing clause for SL predicates *)
-let optSelfFrame = ref false
 
 (* compute the congruence closure as a fixed point (horn clauses) *)
 let ccFixedPoint = ref true
 
 (* maximal number of term generation rounds *)
 let term_gen_max_rounds = ref 2
-    
+
 let cmd_options =
   [("-basedir", Arg.Set_string base_dir, "<string>  Base directory for resolving include directives. Default: current working directory\n\nOptions for controlling error reporting and debug output:");
    ("-v", Arg.Unit Debug.more_verbose, " Display more messages");
@@ -98,6 +96,7 @@ let cmd_options =
    ("-noep", Arg.Clear with_ep, " Omit axioms for entry points");
    ("-fullep", Arg.Set full_ep, " Generates more ep terms");
    ("-noinst", Arg.Clear instantiate, " Let the SMT solver deal with the quantifiers without prior instantiation");
+   ("-termgen", Arg.Set_int term_gen_max_rounds, "<num> Number of rounds to run the term generation procedure");
    ("-nostratify", Arg.Clear stratify, " Instantiate quantifiers that satisfy stratified sort restrictions\n\nOptions for controlling backend solver:");
    ("-nofixedpoint", Arg.Clear ccFixedPoint, " Do not use fixed point for the congruence-closure");
    ("-abspreds", Arg.Set abstract_preds, " Treat predicates as abstract.");
@@ -108,5 +107,4 @@ let cmd_options =
    ("-smtarrays", Arg.Set encode_fields_as_arrays, " Use solver's array theory to encode fields");
    ("-bitvector", Arg.Set use_bitvector, " Use bitvector theory for integers\n\nOptions for compiler:");
    ("-compile", Arg.Set_string compile_to, "<filename> Compile SPL program to a C program outputed as a file with the given name.");
-   (*("-optSelfFrame", Arg.Set optSelfFrame, " enable generation of self-framing clauses for SL predicates");*)
   ]

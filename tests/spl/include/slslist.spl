@@ -41,50 +41,56 @@ predicate lseg_decreasing(x: Node, FP: Set<Node>)
 
 predicate uslseg(x: Node, y: Node, lb: Int) {
   exists X: Set<Node> ::
-    (lseg(x, y) && acc(X)) &*&
+    lseg(x, y) && acc(X) &*&
     lseg_lowerbound(lb, X) &*&
     lseg_increasing(x, X)
 }
 
 predicate ulseg(x: Node, y: Node, lb: Int) {
   exists X: Set<Node> ::
-    (lseg(x, y) && acc(X)) &*&
-    lseg(x, y, X) &*&
+    lseg(x, y) && acc(X) &*&
     lseg_lowerbound(lb, X)
 }
 
-/*
-predicate slseg(x: Node, y: Node)(FP: Set<Node>) {
-  lseg(x, y, FP) &&
-  lseg_increasing(x, FP)
+
+predicate slseg(x: Node, y: Node) {
+  exists X: Set<Node> ::
+    lseg(x, y) && acc(X) &*&
+    lseg_increasing(x, X)
 }
 
-predicate rslseg(x: Node, y: Node)(FP: Set<Node>) {
-  lseg(x, y, FP) &&
-  lseg_decreasing(x, FP)
+
+predicate rslseg(x: Node, y: Node) {
+  exists X: Set<Node> ::
+    lseg(x, y) && acc(X) &*&
+    lseg_decreasing(x, X)
 }
 
-predicate llseg(x: Node, y: Node, ub: Int)(FP: Set<Node>) {
-  lseg(x, y, FP) &&
-  lseg_upperbound(ub, FP)
+predicate llseg(x: Node, y: Node, ub: Int) {
+  exists X: Set<Node> ::
+    lseg(x, y) && acc(X) &*&
+    lseg_upperbound(ub, X)
 }
 
-predicate lslseg(x: Node, y: Node, ub: Int)(FP: Set<Node>) {
-  lseg(x, y, FP) &&
-  lseg_upperbound(ub, FP) &&
-  lseg_increasing(x, FP)
+predicate lslseg(x: Node, y: Node, ub: Int) {
+  exists X: Set<Node> ::
+    lseg(x, y) && acc(X) &*&
+    lseg_upperbound(ub, X) &&
+    lseg_increasing(x, X)
 }
 
-predicate blseg(x: Node, y: Node, lb: Int, ub: Int)(FP: Set<Node>) {
-  lseg(x, y, FP) &&
-  lseg_lowerbound(lb, FP) &&
-  lseg_upperbound(ub, FP)
+predicate blseg(x: Node, y: Node, lb: Int, ub: Int) {
+  exists X: Set<Node> ::
+    lseg(x, y) && acc(X) &*&
+    lseg_lowerbound(lb, X) &&
+     lseg_upperbound(ub, X)
 }
 
-predicate bslseg(x: Node, y: Node, lb: Int, ub: Int)(FP: Set<Node>) {
-  lseg(x, y, FP) &&
-  lseg_lowerbound(lb, FP) &&
-  lseg_upperbound(ub, FP) &&
-  lseg_increasing(x, FP)
+predicate bslseg(x: Node, y: Node, lb: Int, ub: Int) {
+  exists X: Set<Node> ::
+    lseg(x, y) && acc(X) &*&
+    lseg_lowerbound(lb, X) &&
+    lseg_upperbound(ub, X) &&
+    lseg_increasing(x, X)
 }
-*/
+

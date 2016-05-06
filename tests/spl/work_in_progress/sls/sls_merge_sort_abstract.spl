@@ -10,7 +10,7 @@ predicate lseg(x: Node, y: Node)(FP: Set<Node>) {
 }
 
 predicate slseg(data: Map<Node, Int>, x: Node, y: Node)(FP: Set<Node>) {
-  FP = lseg_footprint(next, x, y)
+  FP == lseg_footprint(next, x, y)
 }
 
 procedure merge(a: Node, b: Node) returns (res: Node)

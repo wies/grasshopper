@@ -122,7 +122,7 @@ proc_decl:
 ;
 
 proc_header:
-| PROCEDURE IDENT LPAREN var_decls RPAREN proc_returns proc_contracts {  
+| PROCEDURE IDENT LPAREN var_decls RPAREN proc_returns contracts {  
   let formals, locals0 =
     List.fold_right (fun decl (formals, locals0) ->
       decl.v_name :: formals, IdMap.add decl.v_name decl locals0)
@@ -147,12 +147,12 @@ proc_header:
 } 
 ;
 
-proc_contracts:
-| proc_contract proc_contracts { $1 :: $2 }
+contracts:
+| contract contracts { $1 :: $2 }
 | /* empty */ { [] }
 ;
 
-proc_contract:
+contract:
 | pure_opt REQUIRES expr semicolon_opt { Requires ($3, $1) }
 | pure_opt ENSURES expr semicolon_opt { Ensures ($3, $1) }
 ;
@@ -173,7 +173,7 @@ proc_impl:
 ;
 
 pred_decl:
-| PREDICATE IDENT LPAREN var_decls RPAREN pred_impl {
+| PREDICATE IDENT LPAREN var_decls RPAREN contracts pred_impl {
   let formals, locals =
     List.fold_right (fun decl (formals, locals) ->
       decl.v_name :: formals, IdMap.add decl.v_name decl locals)
@@ -184,7 +184,7 @@ pred_decl:
       pr_formals = formals;
       pr_outputs = [];
       pr_locals = locals;
-      pr_body = $6;
+      pr_body = $7;
       pr_pos = mk_position 2 2;
     }
   in decl
@@ -195,7 +195,7 @@ pred_decl:
 ;
 
 function_header:
-| FUNCTION IDENT LPAREN var_decls RPAREN RETURNS LPAREN var_decls RPAREN {
+| FUNCTION IDENT LPAREN var_decls RPAREN RETURNS LPAREN var_decls RPAREN contracts {
   let formals, locals =
     List.fold_right (fun decl (formals, locals) ->
       decl.v_name :: formals, IdMap.add decl.v_name decl locals)
@@ -579,9 +579,14 @@ eq_expr:
 | eq_expr NEQ eq_expr { UnaryOp (OpNot, BinaryOp ($1, OpEq, $3, BoolType, mk_position 1 3), mk_position 1 3) }
 ;
 
-sep_star_expr:
+and_expr:
 | eq_expr { $1 }
-| sep_star_expr SEPSTAR eq_expr { BinaryOp ($1, OpSepStar, $3, PermType, mk_position 1 3) }
+| and_expr AND eq_expr { BinaryOp ($1, OpAnd, $3, AnyType, mk_position 1 3) }
+;
+
+sep_star_expr:
+| and_expr { $1 }
+| sep_star_expr SEPSTAR and_expr { BinaryOp ($1, OpSepStar, $3, PermType, mk_position 1 3) }
 ;
 
 sep_plus_expr:
@@ -594,14 +599,9 @@ sep_incl_expr:
 | sep_incl_expr SEPINCL sep_plus_expr { BinaryOp ($1, OpSepIncl, $3, PermType, mk_position 1 3) }
 ;
 
-and_expr:
-| sep_incl_expr { $1 }
-| and_expr AND sep_incl_expr { BinaryOp ($1, OpAnd, $3, AnyType, mk_position 1 3) }
-;
-
 or_expr:
-| and_expr { $1 }
-| or_expr OR and_expr { BinaryOp ($1, OpOr, $3, AnyType, mk_position 1 3) }
+| sep_incl_expr { $1 }
+| or_expr OR sep_incl_expr { BinaryOp ($1, OpOr, $3, AnyType, mk_position 1 3) }
 ;
 
 impl_expr:

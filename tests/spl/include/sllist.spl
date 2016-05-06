@@ -8,8 +8,3 @@ predicate lseg(x: Node, y: Node) {
   acc({ z: Node :: Btwn(next, x, z, y) && z != y }) &*& Reach(next, x, y)
 }
 
-predicate lseg2(x: Node, y: Node) {
-  x == y ||
-  x != y &*& acc(x) &*& lseg2(x.next, y)
-}
-

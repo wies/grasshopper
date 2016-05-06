@@ -9,52 +9,59 @@ struct Node {
     
 // Predicates for tree shapes
 
-function tree_footprint(r: Node) returns (FP: Set<Node>) {
-  forall x: Node :: x in FP == (Btwn(parent, x, r, r) && r != null)
-}
+function tree_parent(r: Node) returns (p: Node)
+  requires r == null || acc(r)
+  ensures r != null ==> p == r.parent
+  ensures r == null ==> p == null
 
-function tree_parent(r: Node) returns (p: Node) {
-  r != null && r.parent == p || r == null && p == null
-}
-
-predicate parent_equal_left_child(FP: Set<Node>) {
-  (forall x: Node :: x !in FP || x.left == null || Btwn(parent, x.left, x, x) && x.left != x) &&
+predicate parent_equal_left_child(FP: Set<Node>)
+  requires acc(FP)
+{
+  (forall x in FP :: x.left == null || Btwn(parent, x.left, x, x) && x.left != x) &&
   (forall x: Node, y: Node :: x in FP && Btwn(parent, x.left, y, x) ==> x == y || x.left == y)
 }
 
-predicate parent_equal_right_child(FP: Set<Node>) {
+predicate parent_equal_right_child(FP: Set<Node>)
+  requires acc(FP)
+{
   (forall x: Node :: x !in FP || x.right == null || Btwn(parent, x.right, x, x) && x.right != x) &&
   (forall x: Node, y: Node :: x in FP && Btwn(parent, x.right, y, x) ==> x == y || x.right == y)
 }
 
-predicate left_right_distinct(FP: Set<Node>) {
+predicate left_right_distinct(FP: Set<Node>)
+  requires acc(FP)
+{
   (forall x: Node :: x in FP && x.left == x.right ==> x.left == null 
     @(matching x.right yields x.left)
     @(matching x.left yields x.right))
 }
 
-predicate reach_via_left_right(FP: Set<Node>) {
+predicate reach_via_left_right(FP: Set<Node>)
+  requires acc(FP)
+{
   forall x: Node, y: Node ::
     x in FP && y in FP && Btwn(parent, y, x, x) ==>
       x == y || Btwn(parent, y, x.left, x) || Btwn(parent, y, x.right, x)
 }
 
-predicate tree(r: Node)(FP: Set<Node>) {
-  tree_footprint(r) == FP &&
-  parent_equal_left_child(FP) &&
-  parent_equal_right_child(FP) &&
-  left_right_distinct(FP) &&
-  reach_via_left_right(FP)
+predicate tree(r: Node) {
+  exists X: Set<Node> ::
+    acc({ x: Node :: Reach(parent, x, r) && r != null}) && acc(X) &*&
+    parent_equal_left_child(X) &&
+    parent_equal_right_child(X) &&
+    left_right_distinct(X) &&
+    reach_via_left_right(X)
 }
 
-predicate ptree(r: Node, p: Node)(FP: Set<Node>) {
-  tree_parent(r) == p &&
-  tree(r, FP)
+predicate ptree(r: Node, p: Node) {
+  tree_parent(r) == p &*& tree(r)
 }
 
 // Predicates for binary search trees
 
-predicate tree_sorted(FP: Set<Node>) {
+predicate tree_sorted(FP: Set<Node>)
+  requires acc(FP)
+{
   (forall x: Node, y: Node :: 
    x in FP && y in FP && Btwn(parent, x, y.left, y) ==> x.data < y.data
    @(matching y.left yields y.data)) &&
@@ -63,51 +70,72 @@ predicate tree_sorted(FP: Set<Node>) {
    @(matching y.right yields y.data))  
 }
 
-predicate upper_bound(ub: Int, FP: Set<Node>) {
+predicate upper_bound(ub: Int, FP: Set<Node>)
+  requires acc(FP)
+{
   forall z: Node :: z in FP ==> z.data <= ub
 }
 
-predicate lower_bound(lb: Int, FP: Set<Node>) {
+predicate lower_bound(lb: Int, FP: Set<Node>)
+  requires acc(FP)
+{
   forall z: Node :: z in FP ==> z.data >= lb
 }
 
-predicate bstree(r: Node)(FP: Set<Node>) {
-  tree(r, FP) &&
-  tree_sorted(FP)
+predicate bstree(r: Node) {
+  exists X: Set<Node> ::
+    tree(r) && acc(X) &*& tree_sorted(X)
 }
 
-predicate bstree_bounded(r: Node, lb: Int, ub: Int)(FP: Set<Node>) {
-  bstree(r, FP) &&
-  upper_bound(ub, FP) &&
-  lower_bound(lb, FP)
+predicate bstree_bounded(r: Node, lb: Int, ub: Int) {
+  exists X: Set<Node> ::
+    bstree(r) && acc(X) &*&
+    upper_bound(ub, X) &&
+    lower_bound(lb, X)
 }
 
 // Predicates for tree sets
 
-function witness(v: Int, d: Map<Node, Int>, FP: Set<Node>) returns (res: Node) {
-  true
-}
+function data_witness(v: Int, d: Map<Node, Int>, FP: Set<Node>) returns (res: Node) 
 
-function content(FP: Set<Node>) returns (C: Set<Int>) {
-  (forall x: Node :: x in FP ==> x == witness(x.data, data, FP)) &&
-  (forall x: Node :: x in FP ==> x.data in C) &&
-  (forall v in C :: witness(v, data, FP) in FP) &&
-  (forall v: Int :: v !in C ==> witness(v, data, FP) == null) &&
-  (forall v in C :: v == witness(v, data, FP).data @(matching v yields witness(v, data, FP).data))
-}
+function content(FP: Set<Node>, d: Map<Node, Int>) returns (C: Set<Int>)
 
-predicate tree_set(r: Node, C: Set<Int>)(FP: Set<Node>) {
-  bstree(r, FP) &&
-  C == content(FP)
+
+axiom forall FP: Set<Node>, d: Map<Node, Int>, x in FP :: x == data_witness(x.d, d, FP);
+
+axiom forall FP: Set<Node>, d: Map<Node, Int>, x in FP :: x.d in content(FP, d);
+
+axiom forall FP: Set<Node>, d: Map<Node, Int>, v in content(FP, d) :: data_witness(v, d, FP) in FP;
+
+axiom forall FP: Set<Node>, d: Map<Node, Int>, v: Int :: v !in content(FP, d) ==> data_witness(v, d, FP) == null;
+
+axiom forall FP: Set<Node>, d: Map<Node, Int>, v in content(FP, d) :: v == data_witness(v, d, FP).d
+  @(matching v, content(FP, d) yields data_witness(v, d, FP).d);
+
+                                                                                          
+predicate tree_set(r: Node, C: Set<Int>) {
+  exists X: Set<Node> ::
+    bstree(r) && acc(X) &*&
+    C == content(X, data)
 }
 
 // Predicates for heaps
 
-predicate heap_property(FP: Set<Node>) {
+predicate heap_property(FP: Set<Node>)
+  requires acc(X)
+{
   forall x: Node, y: Node :: x in FP && y in FP && Btwn(parent,x,y,y) ==> x.data <= y.data
 }
 
-predicate heap(r: Node)(FP: Set<Node>) {
-  heap_property(FP) &&
-  tree(r, FP)
+predicate heap(r: Node) {
+  exists X: Set<Node> ::
+    tree(r) && acc(X) &*&
+    heap_property(X)
+}
+
+predicate heap_set(r: Node, C: Set<Int>) {
+  exists X: Set<Node> ::
+    tree(r) && acc(X) &*&
+    heap_property(X) &&
+    C == content(X, data)
 }

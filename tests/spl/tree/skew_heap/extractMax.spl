@@ -1,46 +1,19 @@
-struct Node {
-  var left: Node;
-  var right: Node;
-  var parent: Node;
-  var data: Int;
-}
-
-predicate heap_cnt(x: Node, y: Node, content: Set<Int>) {
-    x == null &*&
-    content == Set<Int>()
-  ||
-    x != null &*&
-    x.parent |-> y &*&
-    x.data in content &*&
-    heap_cnt(x.left, x, content) &*& //TODO content
-    heap_cnt(x.right, x, content) &*& //TODO content
-    (x.left == null || (x.left != null && x.left.data <= x.data)) &*&
-    (x.right == null || (x.right != null && x.right.data <= x.data)) 
-}
-
-predicate treeAllocInvariant(X: Set<Node>) {
-  (forall n in X :: n.parent == n.parent)
-}
+include "../../include/bstree.spl";
 
 procedure union(h1: Node, h2: Node,
                 implicit ghost content1: Set<Int>,
                 implicit ghost content2: Set<Int>)
-    returns (res: Node, ghost res_content: Set<Int>)
-    requires heap_cnt(h1, null, content1) &*& heap_cnt(h2, null, content2);
-    requires treeAllocInvariant(Alloc);
-    ensures treeAllocInvariant(Alloc);
-    ensures res_content == content1 ++ content2;
-    ensures heap_cnt(res, null, res_content);
+    returns (res: Node)
+    requires heap_set(h1, content1) &*& heap_set(h2, content2);
+    ensures heap_set(res, content1 ++ content2);
 
 
 procedure extractMax(h: Node,
                      implicit ghost content: Set<Int>)
-returns (max: Int, rest: Node, ghost remaining: Set<Int>)
-    requires heap_cnt(h, null, content) &*& h != null;
-    requires treeAllocInvariant(Alloc);
-    ensures  treeAllocInvariant(Alloc);
-    ensures  heap_cnt(rest, null, remaining);
-    ensures  content == Set(max) ++ remaining;
+returns (max: Int, rest: Node)
+    requires heap_set(h, content) &*& h != null &*& h.parent == null
+    ensures  exists remaining: Set<Int> :: heap_set(rest, remaining) &*& content == Set(max) ++ remaining
+    ensures  forall x in content :: max >= x
 {
     var d : Int;
     d := h.data;
@@ -51,8 +24,7 @@ returns (max: Int, rest: Node, ghost remaining: Set<Int>)
     h.right := null;
     if (l != null) { l.parent := null; }
     if (r != null) { r.parent := null; }
-    var rem: Set<Int>;
-    hp, rem := union(l, r);
+    hp := union(l, r);
     free h;
-    return d, hp, rem;
+    return d, hp;
 }

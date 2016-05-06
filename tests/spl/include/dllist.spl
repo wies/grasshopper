@@ -5,13 +5,9 @@ struct Node {
   var prev: Node;
 }
 
-function dlseg_footprint(x: Node, y: Node) returns (FP: Set<Node>) {
-  forall z: Node :: z in FP == (Btwn(next, x, z, y) && z != y)
-}
-
-predicate dlseg(x1: Node, x2: Node, y1: Node, y2: Node)(FP: Set<Node>) {
-  FP == dlseg_footprint(x1, y1) &&
-  (x1 == y1 && x2 == y2 ||
+predicate dlseg(x1: Node, x2: Node, y1: Node, y2: Node) {
+  acc({ z: Node :: Btwn(next, x1, z, y1) && z != y1}) &*&
+   (x1 == y1 && x2 == y2 ||
    //x1 in FP && y2 in FP &&
    x1 != x2 && y1 != y2 &&
    Btwn (next, x1, y2, y1) &&

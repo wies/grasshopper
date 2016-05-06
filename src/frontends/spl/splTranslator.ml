@@ -280,16 +280,16 @@ let convert cu =
         in
         let (vars, (domains, locals1)) =
           Util.fold_left_map
-            (fun (accD,accL) decl -> match decl with
+            (fun (accD, accL) decl -> match decl with
               | GuardedVar (id, e) ->
                 let e1 = convert_term accL e in
-                (match type_of_expr cu locals e with
+                (match type_of_expr cu accL e with
                 | SetType elem_srt ->
                   let decl = var_decl id elem_srt false false pos pos in
                   let elem_srt = convert_type elem_srt pos in
                   let v_id = GrassUtil.mk_var elem_srt id in
                   (id, elem_srt), ((GrassUtil.mk_elem v_id e1) :: accD, IdMap.add id decl accL)
-                | _ -> failwith "unexpected type")
+                | ty -> failwith "unexpected type after type inference" (*type_error (pos_of_expr e) (SetType AnyType) ty*))
               | UnguardedVar decl ->
                 let id = decl.v_name in
                 let ty = decl.v_type in
@@ -608,9 +608,9 @@ let convert cu =
         let body, locals, outputs =
           match rtype with
           | BoolType ->
-              print_endline (string_of_ident decl.pr_name);
               let body = Opt.get_or_else (BoolVal (true, decl.pr_pos)) decl.pr_body in
-              FOL (convert_grass_form decl.pr_locals body), decl.pr_locals, decl.pr_outputs
+              let cbody = convert_grass_form decl.pr_locals body in
+              SL (Pure (cbody, Some (pos_of_expr body))), decl.pr_locals, decl.pr_outputs              
           | PermType ->
               let body = Opt.get_or_else (BoolVal (true, decl.pr_pos)) decl.pr_body in
               SL (convert_sl_form decl.pr_locals body), decl.pr_locals, decl.pr_outputs

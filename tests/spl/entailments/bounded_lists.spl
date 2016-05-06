@@ -1,19 +1,17 @@
-struct Node {
-  var next: Node;
-  var data: Int;
-}
-
-predicate ulseg(x: Node, y: Node, lb: Int) {
-  x == y || x != y &*& acc(x) &*& lb <= x.data &*& ulseg(x.next, y, lb)
-}
+include "../include/slslist.spl";
 
 procedure test1(x: Node, y: Node) 
-  requires x.next |-> y &*& x.data == 2;
-  ensures ulseg(x,y,0);
+  requires x.next |-> y &*& x != y
+  ensures lseg(x,y)
 {}
 
 procedure test2(x: Node, y: Node) 
-  requires ulseg(x,y,2);
-  ensures ulseg(x,y,0);
+  requires x.next |-> y &*& x != y && x.data == 2
+  ensures ulseg(x,y,0)
+{}
+
+procedure test3(x: Node, y: Node) 
+  requires ulseg(x,y,2)
+  ensures ulseg(x,y,0)
 {}
 

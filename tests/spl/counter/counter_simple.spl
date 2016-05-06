@@ -7,10 +7,9 @@ struct Cell {
   var data: Int;
 }
 
-predicate counter(this: Counter)(FP1: Set<Counter>, FP2: Set<Cell>) {
-  FP1 == Set(this) &&
-  FP2 = Set(this.c) &&
-  0 <= this.n &&
+predicate counter(this: Counter) {
+  acc(this) &*& acc(this.c) &*&
+  0 <= this.n &*&
   this.n == this.c.data
 }
   
@@ -26,6 +25,13 @@ procedure NewCounter(initValue: Int)
   this.c.data := initValue;
 }
 
+procedure test(this: Counter)
+  requires counter(this)
+{
+  assert counter(this);
+  assume false;
+}
+
 procedure FreeCounter(this: Counter)
   requires counter(this)
 {
@@ -33,9 +39,9 @@ procedure FreeCounter(this: Counter)
   free this;
 }
 
-procedure Inc(this: Counter, implicit ghost FP1: Set<Counter>, implicit ghost FP2: Set<Cell>)
-  requires counter(this) && acc(FP1) &*& acc(FP2)
-  ensures (counter(this) && acc(FP1) &*& acc(FP2)) &*& old(this.n) < this.n
+procedure Inc(this: Counter, implicit ghost FP1: Set<Counter>)
+  requires counter(this) && acc(FP1)
+  ensures counter(this) && acc(FP1) &*& old(this.n) < this.n
 {
   this.n := this.n + 1;
   this.c.data := this.c.data + 1;

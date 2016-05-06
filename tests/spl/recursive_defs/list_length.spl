@@ -1,0 +1,14 @@
+include "tests/spl/include/sllist.spl";
+
+function lengthNodes(this: Node, end: Node) returns (l: Int)
+  requires lseg(this, end)
+  ensures this == end ==> l == 0 // then-branch
+  ensures this != end ==> l == 1 + lengthNodes(this.next, end) // else-branch
+
+
+procedure test(x: Node)
+  requires lseg(x, null) &*& lengthNodes(x, null) > 0
+  ensures lseg(x, null)
+{
+  pure assert x != null;
+}
