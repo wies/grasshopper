@@ -1,21 +1,14 @@
-function arrayseg_footprint(a: Array<Int>, i: Int, j: Int)
-  returns (FP: Set<ArrayCell<Int>>)
-{
-  (forall c: ArrayCell<Int> ::
-     c in FP == (i <= c.index && c.index < j && c.array == a))
+predicate arrayseg(a: Array<Int>, i: Int, j: Int) {
+  (0 <= i && i <= j && j <= a.length) &*& 
+  acc({ c: ArrayCell<Int> :: i <= c.index && c.index < j && c.array == a })
 }
 
-predicate arrayseg(a: Array<Int>, i: Int, j: Int)(FP: Set<ArrayCell<Int>>) {
-  0 <= i && i <= j && j <= a.length && 
-  FP == arrayseg_footprint(a, i, j)
+
+predicate array(a: Array<Int>) {
+  acc(a) &*&
+  arrayseg(a, 0, a.length)
 }
 
-predicate array(a: Array<Int>)(FP1: Set<Array<Int>>, FP2: Set<ArrayCell<Int>>) {
-  FP1 == Set(a) &&
-  arrayseg(a, 0, a.length, FP2)
-}
-
-//sorted
 
 function contentWitness(v: Int, FP: Set<ArrayCell<Int>>, m: Map<ArrayCell<Int>, Int>) returns (res: ArrayCell<Int>) 
 
@@ -32,59 +25,66 @@ function array_content(FP: Set<ArrayCell<Int>>) returns (C: Set<Int>) {
    @(matching v yields contentWitness(v, FP, array_state()).array[contentWitness(v, FP, array_state()).index]))
 }
 
-predicate arrayseg_cnt(a: Array<Int>, i: Int, j: Int, C: Set<Int>)(FP: Set<ArrayCell<Int>>) {
-  0 <= i && i <= j && j <= a.length && 
-  FP == arrayseg_footprint(a, i, j) &&
-  C == array_content(FP)
+predicate arrayseg_cnt(a: Array<Int>, i: Int, j: Int, C: Set<Int>) {
+  exists X: Set<ArrayCell<Int>> ::
+    arrayseg(a, i, j) && acc(X) &*&
+    C == array_content(X)
 }
 
-predicate array_cnt(a: Array<Int>, C: Set<Int>)(FP1: Set<Array<Int>>, FP2: Set<ArrayCell<Int>>) {
-  FP1 == Set(a) &&
-  arrayseg_cnt(a, 0, a.length, C, FP2)
+predicate array_cnt(a: Array<Int>, C: Set<Int>) {
+  acc(a) &*&
+  arrayseg_cnt(a, 0, a.length, C)
 }
 
-predicate sorted_arrayseg(a: Array<Int>, i: Int, j: Int, C: Set<Int>)(FP: Set<ArrayCell<Int>>) {
-  0 <= i && i <= j && j <= a.length && 
-  FP == arrayseg_footprint(a, i, j) &&
-  (forall i1: Int, j1: Int:: i1 >= i && i1 <= j1 && j1 < j ==> a[i1] <= a[j1]  @(matching i1 yields a[i1])  @(matching j1 yields a[j1]) ) &&
-  C == array_content(FP)
+predicate is_sorted_arrayseg(a: Array<Int>, i: Int, j: Int)
+  requires arrayseg(a, i, j)
+{
+  (forall i1: Int, j1: Int:: i1 >= i && i1 <= j1 && j1 < j ==> a[i1] <= a[j1]  @(matching i1 yields a[i1])  @(matching j1 yields a[j1]) )
 }
 
-predicate sorted_array(a: Array<Int>, C: Set<Int>)(FP0: Set<Array<Int>>, FP1: Set<ArrayCell<Int>>) {
-  FP0 == Set<Array<Int>>(a) &&
-  FP1 == arrayseg_footprint(a, 0, a.length) &&
-  (forall i: Int, j: Int:: 0 <= i && i <= j && j < a.length ==> a[i] <= a[j]  @(matching i yields a[i])  @(matching j yields a[j]) ) &&
-  C == array_content(FP1)
+predicate sorted_arrayseg(a: Array<Int>, i: Int, j: Int, C: Set<Int>) {
+  arrayseg_cnt(a, i, j, C) &*&
+  is_sorted_arrayseg(a, i, j)
+}
+
+predicate sorted_array(a: Array<Int>, C: Set<Int>) {
+  acc(a) &*&
+  sorted_arrayseg(a, 0, a.length, C)
 }
 
 // array with bounds
 
-predicate arrayseg_bnd(a: Array<Int>, i: Int, j: Int, lb: Int, ub: Int)(FP: Set<ArrayCell<Int>>) {
-  0 <= i && i <= j && j <= a.length && 
-  FP == arrayseg_footprint(a, i, j) &&
+predicate is_bounded_arrayseg(a: Array<Int>, i: Int, j: Int, lb: Int, ub: Int)
+  requires arrayseg(a, i, j)
+{
   (forall k: Int:: k >= i && k < j ==> a[k] >= lb && a[k] < ub @(matching k yields a[k]) )
 }
 
-predicate array_bnd(a: Array<Int>, lb: Int, ub: Int)(FP1: Set<Array<Int>>, FP2: Set<ArrayCell<Int>>) {
-  FP1 == Set(a) &&
-  arrayseg_bnd(a, 0, a.length, lb, ub, FP2)
+  
+predicate arrayseg_bnd(a: Array<Int>, i: Int, j: Int, lb: Int, ub: Int) {
+  arrayseg(a, i, j) &*&
+  is_bounded_arrayseg(a, i, j, lb, ub)
 }
 
-predicate sorted_arrayseg_bnd(a: Array<Int>, i: Int, j: Int, lb: Int, ub: Int)(FP: Set<ArrayCell<Int>>) {
-  0 <= i && i <= j && j <= a.length && 
-  FP == arrayseg_footprint(a, i, j) &&
-  (forall i1: Int, j1: Int:: i1 >= i && i1 <= j1 && j1 < j ==> a[i1] <= a[j1]) &&
-  (forall k: Int:: k >= i && k < j ==> a[k] >= lb && a[k] < ub@(matching k yields a[k]) )
+predicate array_bnd(a: Array<Int>, lb: Int, ub: Int) {
+  acc(a) &*&
+  arrayseg_bnd(a, 0, a.length, lb, ub)
 }
 
-predicate sorted_array_bnd(a: Array<Int>, lb: Int, ub: Int)(FP0: Set<Array<Int>>, FP1: Set<ArrayCell<Int>>) {
-  FP0 == Set<Array<Int>>(a) &&
-  sorted_arrayseg_bnd(a, 0, a.length, lb, ub, FP1)
+predicate sorted_arrayseg_bnd(a: Array<Int>, i: Int, j: Int, lb: Int, ub: Int) {
+  arrayseg(a, i, j) &*&
+  is_bounded_arrayseg(a, i, j, lb, ub) &&
+  is_sorted_arrayseg(a, i, j)
 }
 
+predicate sorted_array_bnd(a: Array<Int>, lb: Int, ub: Int) {
+  acc(a) &*&
+  sorted_arrayseg_bnd(a, 0, a.length, lb, ub)
+}
 
 // matrix
 
+/*
 function matrixWitness(a: Array<Int>, FP2: Set<Array<Int>>) returns (idx: Int)
 
 predicate matrix( a: Array<Array<Int>>,
@@ -103,3 +103,4 @@ predicate matrix( a: Array<Array<Int>>,
   (forall b: Array<Int>:: b !in FP2 ==> matrixWitness(b, FP2) == 0) &&
   (forall i: Int, j: Int:: i > 0 && i <= a.length && j > 0 && j <= a.length && i != j ==> a[i] != a[j])
 }
+*/
