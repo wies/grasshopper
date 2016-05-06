@@ -171,6 +171,14 @@ let resolve_names cu =
           | _ -> Read (re locals tbl map, idx1, pos))
       | Read (map, idx, pos) ->
           Read (re locals tbl map, re locals tbl idx, pos)
+      | IndexOfCell (e, pos) ->
+          IndexOfCell (re locals tbl e, pos)
+      | Length (e, pos) ->
+          Length (re locals tbl e, pos)
+      | ArrayOfCell (e, pos) ->
+          ArrayOfCell (re locals tbl e, pos)
+      | ArrayCells (e, pos) ->
+          ArrayCells (re locals tbl e, pos)
       | Binder (q, decls, f, pos) ->
           let (decls1, (locals1, tbl1)) = 
             Util.fold_left_map
@@ -250,7 +258,7 @@ let resolve_names cu =
           Annot (re locals tbl e, GeneratorAnnot (es1, re locals tbl ge), pos)
       | Annot (e, ann, pos) ->
           Annot (re locals tbl e, ann, pos)
-      | e -> e
+      | e -> e (*failwith "unhandled case in SplChecker.resolve_expr"*)
     in
     re locals tbl e
   in
