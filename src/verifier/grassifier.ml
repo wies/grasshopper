@@ -569,10 +569,7 @@ let elim_sl prog =
           IdMap.empty formals
       in
       let mk_new_arg id1 = 
-        let id2, srt = try IdMap.find id1 new_arg_ids
-        with Not_found ->
-          print_endline (string_of_ident pred.pred_name);
-          print_endline (string_of_ident id1); raise Not_found in
+        let id2, srt = IdMap.find id1 new_arg_ids in
         mk_var srt id2
       in
       let new_pred =
@@ -662,6 +659,7 @@ let elim_sl prog =
         f |>
         SlToGrass.to_grass (pred_to_form footprint_pre_context) footprint_sets |>
         (fun f -> mk_and (f :: fp_inclusions)) |>
+        (*(fun f -> print_endline (string_of_ident proc.proc_name ^ " (before):"); print_form stdout f; print_newline (); f) |>*)
         post_process_form
       in
       let precond = mk_spec_form (FOL f_eq_init_footprint) name msg pos in
