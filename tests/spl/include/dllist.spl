@@ -7,7 +7,7 @@ struct Node {
 
 predicate dlseg(x1: Node, x2: Node, y1: Node, y2: Node) {
   acc({ z: Node :: Btwn(next, x1, z, y1) && z != y1}) &*&
-  (x1 == y1 && x2 == y2 ||
+   (x1 == y1 && x2 == y2 ||
    //x1 in FP && y2 in FP &&
    x1 != x2 && y1 != y2 &&
    Btwn (next, x1, y2, y1) &&

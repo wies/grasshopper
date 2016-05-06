@@ -4,39 +4,27 @@ struct Node {
   var data: Int;
 }
 
-function lsegf_footprint(x: Node, y: Node) returns (FP: Set<Loc>) {
-  forall z: Loc :: z in FP == (Btwn(next, x, z, y) && z != y)
+// singly-linked list segment (over field f)
+predicate lseg(f: Map<Node, Node>, x: Node, y: Node) {
+  Reach(f, x, y) &*& acc({ z: Node :: z != y && Btwn(f, x, z, y) })
 }
-
-// singly-linked list segment (over next)
-predicate lsegf(x: Node, y: Node, FP: Set<Loc>) {
-  Reach(next, x, y) && FP == lsegf_footprint(x, y)
-}
-
-function lsegb_footprint(x: Node, y: Node) returns (FP: Set<Loc>) {
-  forall z: Loc :: z in FP == (Btwn(prev, x, z, y) && z != y)
-}
-
-// singly-linked list segment (over prev)
-predicate lsegb(x: Node, y: Node, FP: Set<Loc>) {
-  Reach(prev, x, y) && FP == lsegb_footprint(x, y)
-}
-
 
 // doubly-linked list segment (over next and prev)
-predicate dlseg(x1: Node, x2: Node, y1: Node, y2: Node, FP: Set<Loc>) {
-  FP == lsegf_footprint(x1, y1) &&
-  (x1 == y1 && x2 == y2 ||
+predicate dlseg(x1: Node, x2: Node, y1: Node, y2: Node) {
+  acc({ z: Node :: Btwn(next, x1, z, y1) && z != y1}) &*&
+   (x1 == y1 && x2 == y2 ||
    //x1 in FP && y2 in FP &&
    x1 != x2 && y1 != y2 &&
    Btwn (next, x1, y2, y1) &&
    Btwn (prev, y2, x1, x2) &&
-   y2.next == y1 &&
-   x1.prev == x2 &&
-   (forall l1: Loc, l2: Loc :: 
+   //y2.next == y1 &&
+   (forall l1: Node :: Btwn(next, y2, l1, y1) ==> l1 == y2 || l1 == y1) &&
+   //x1.prev == x2 &&
+   (forall l1: Node :: Btwn(prev, x1, l1, x2) ==> l1 == x1 || l1 == x2) &&
+   (forall l1: Node, l2: Node :: 
      Btwn(next, x1, l1, y1) && Btwn(next, x1, l2, y1) && Btwn(next, l1, l2, y1) ==>
        l2 == y1 || Btwn(prev, y2, l2, l1) && Btwn(prev, l2, l1, x1)) &&
-   (forall l1: Loc, l2: Loc ::
+   (forall l1: Node, l2: Node ::
      Btwn(prev, y2, l1, x2) && Btwn(prev, y2, l2, x2) && Btwn(prev, l1, l2, x2) ==>
        l2 == x2 || Btwn(next, x1, l2, l1) && Btwn(next, l2, l1, y1)))
 }
@@ -44,48 +32,68 @@ predicate dlseg(x1: Node, x2: Node, y1: Node, y2: Node, FP: Set<Loc>) {
 // a doubly-linked list is a singly-linked list over both next and prev
 procedure entails1(a: Node, b: Node, c: Node, d: Node)
   requires dlseg(a, b, c, d)
-  ensures lsegf(a, c) && lsegb(d, b)
+  ensures lseg(next, a, c) && lseg(prev, d, b)
 {
 }
 
-predicate lseg_lowerbound(lb: Int, FP: Set<Loc>) {
-  forall z: Loc :: z in FP ==> lb <= z.data
+
+predicate lseg_lowerbound(lb: Int, FP: Set<Node>)
+  requires acc(FP)
+{
+  forall z: Node :: z in FP ==> lb <= z.data
 }
 
-predicate lseg_upperbound(ub: Int, FP: Set<Loc>) {
-  forall z: Loc :: z in FP ==> z.data <= ub
+predicate lseg_upperbound(ub: Int, FP: Set<Node>)
+  requires acc(FP)
+{
+  forall z: Node :: z in FP ==> z.data <= ub
 }
 
 // bounded singly-linked list segment (over next)
-predicate blseg(x: Node, y: Node, lb: Int, ub: Int, FP: Set<Loc>) {
-  lsegf(x, y, FP) &&
-  lseg_lowerbound(lb, FP) &&
-  lseg_upperbound(ub, FP)
+predicate blseg(x: Node, y: Node, lb: Int, ub: Int) {
+  exists X: Set<Node> ::
+    lseg(next, x, y) && acc(X) &*&
+    lseg_lowerbound(lb, X) &&
+    lseg_upperbound(ub, X)
 }
 
-function witness(v: Int, C: Set<Int>) returns (res: Loc) {
-  true
+function data_witness(v: Int, d: Map<Node, Int>, FP: Set<Node>) returns (res: Node) 
+
+function content(FP: Set<Node>, d: Map<Node, Int>) returns (C: Set<Int>)
+
+
+axiom forall FP: Set<Node>, d: Map<Node, Int>, x in FP :: x == data_witness(x.d, d, FP);
+
+axiom forall FP: Set<Node>, d: Map<Node, Int>, x in FP :: x.d in content(FP, d);
+
+axiom forall FP: Set<Node>, d: Map<Node, Int>, v in content(FP, d) :: data_witness(v, d, FP) in FP;
+
+axiom forall FP: Set<Node>, d: Map<Node, Int>, v: Int :: v !in content(FP, d) ==> data_witness(v, d, FP) == null;
+
+axiom forall FP: Set<Node>, d: Map<Node, Int>, v in content(FP, d) :: v == data_witness(v, d, FP).d
+  @(matching v, content(FP, d) yields data_witness(v, d, FP).d);
+
+
+/*
+{ v: Int :: exists x: Node :: x in FP && x.data == v }
+
+-->
+
+  forall v in C :: f(v, data, FP) in FP && f(v, data, FP).data == v
+  forall x, v :: x in FP && x.data == v ==> v in C
+*/
+ 
+predicate list_set(x: Node, y: Node, C: Set<Int>) {
+  exists X: Set<Node> ::
+    lseg(next, x, y) && acc(X) &*&
+    lseg_strictly_increasing(x, X) && C == content(X, data)
 }
 
-function content(FP: Set<Loc>) returns (C: Set<Int>) {
-  (forall x: Loc :: x in FP ==> x == witness(x.data, C)) &&
-  (forall x: Loc :: x in FP ==> x.data in C) &&
-  (forall v in C :: witness(v, C) in FP) &&
-  (forall v: Int :: v !in C ==> witness(v, C) == null) &&
-  (forall v in C :: v == witness(v, C).data @(matching v yields witness(v, C).data))
+predicate lseg_strictly_increasing(x: Node, FP: Set<Node>)
+  requires acc(FP)
+{
+  forall y in FP, z in FP :: Btwn(next,x,y,z) ==> y.data < z.data || y == z
 }
-
-predicate lseg_strictly_increasing(x: Node, FP: Set<Loc>) {
-  forall y: Loc, z: Loc :: y in FP && z in FP && Btwn(next,x,y,z) ==> y.data < z.data || y == z
-}
-
-// sorted singly-linked list segment with content (over next)
-predicate list_set(x: Node, y: Node, C: Set<Int>, FP: Set<Loc>) {
-  lsegf(x, y, FP) &&
-  lseg_strictly_increasing(x, FP) &&
-  C == content(FP)
-}
-
 
 procedure entails2(a: Node, b: Node, c: Node, C: Set<Int>, C1: Set<Int>, C2: Set<Int>)
   requires list_set(a, b, C)
@@ -113,3 +121,4 @@ procedure false_entails1(a: Node, b: Node, c: Node, C1: Set<Int>, C2: Set<Int>)
   ensures list_set(a, c, C1 ++ C2)
 {
 }
+
