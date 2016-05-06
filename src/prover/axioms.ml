@@ -552,11 +552,11 @@ let set_axioms elem_srts =
         [mk_disjoint set1 set3]
     in
     let disjoint_subset2 =
-      mk_sequent [mk_subseteq set1 set2; mk_disjoint set2 set3]
-        [mk_subseteq set1 (mk_diff set2 set3)]
+      mk_sequent [mk_subseteq set1 set2] [mk_disjoint set1 (mk_diff set3 set2)]
     in
     let disjoint_subset3 =
-      mk_sequent [mk_subseteq set1 set2] [mk_disjoint set1 (mk_diff set3 set2)]
+      mk_sequent [mk_subseteq set1 set2; mk_disjoint set1 set3]
+        [mk_subseteq set1 (mk_diff set2 set3)]
     in
     let ssrt = string_of_sort t in
     if !Config.use_set_theory then []

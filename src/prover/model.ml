@@ -1520,8 +1520,8 @@ let print_graph output chan model terms =
             try
               let r = interp_symbol model Read read_arity [f; l] in
               if not (filter_null r) then 
-	        let label = string_of_term (find_term f fld_srt) in
                 try 
+	          let label = string_of_term (find_term f fld_srt) in
                   let src = get_node srt l in
                   let dst = get_node srt r in
                   edges := (src,dst,label,Solid,get_color fld_srt f) :: !edges
