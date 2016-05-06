@@ -474,6 +474,42 @@ let elim_sl prog =
     let eqs = mk_empty_except p_footprints in
     smk_and (mk_pred p (args @ fp_caller_args @ fp_args) :: eqs)
   in
+  (* post process SL formula *)
+  let post_process_form f =
+    let subst_preds f =
+      let s sym ts srt =
+        match sym with
+        | FreeSym p when IdMap.mem p prog.prog_preds ->
+            let decl = find_pred prog p in
+            if decl.pred_outputs = [] then mk_app srt sym ts else
+            let fps =
+              SortSet.fold
+                (fun ssrt fps -> footprint_caller_set ssrt :: fps)
+                decl.pred_footprints []
+            in
+            mk_app srt sym (ts @ fps) 
+        | _ -> mk_app srt sym ts 
+      in
+      subst_funs s f
+    in
+    let simplify f =
+      let round f =
+        f |>
+        propagate_exists |>
+        mk_not |>
+        nnf |>
+        foralls_to_exists |>
+        SimplifyGrass.simplify_one_sets |>
+        mk_not |>
+        nnf |>
+        foralls_to_exists 
+      in
+      f |> round |> round
+    in
+    f |>
+    subst_preds |>
+    simplify
+  in
   (* translate the predicates from SL to GRASS *)
   let translate_pred (preds, axioms) pred =
     (*print_endline @@ "translating predicate " ^ string_of_ident pred.pred_name;*)
@@ -508,43 +544,12 @@ let elim_sl prog =
         )
         pred.pred_footprints ([], SortMap.empty, SortMap.empty)
     in
-    let subst_preds f =
-      let s sym ts srt =
-        match sym with
-        | FreeSym p when IdMap.mem p prog.prog_preds ->
-            let decl = find_pred prog p in
-            if decl.pred_outputs = [] then mk_app srt sym ts else
-            let fps =
-              SortSet.fold
-                (fun ssrt fps -> footprint_caller_set ssrt :: fps)
-                decl.pred_footprints []
-            in
-            mk_app srt sym (ts @ fps) 
-        | _ -> mk_app srt sym ts 
-      in
-      subst_funs s f
-    in
-    let simplify f =
-      let round f =
-        f |>
-        propagate_exists |>
-        mk_not |>
-        nnf |>
-        foralls_to_exists |>
-        SimplifyGrass.simplify_one_sets |>
-        mk_not |>
-        nnf |>
-        foralls_to_exists 
-      in
-      f |> round |> round
-    in
     let translate_sl_body body =
       body |>
       (function
         | Sl.Pure (f, _) -> f
         | f -> SlToGrass.to_grass (pred_to_form footprint_context) footprint_sets f) |>
-      subst_preds |>
-      simplify |>
+      post_process_form |>
       fun f -> FOL f
     in
     let frame_axioms =
@@ -657,7 +662,7 @@ let elim_sl prog =
         f |>
         SlToGrass.to_grass (pred_to_form footprint_pre_context) footprint_sets |>
         (fun f -> mk_and (f :: fp_inclusions)) |>
-        propagate_exists
+        post_process_form
       in
       let precond = mk_spec_form (FOL f_eq_init_footprint) name msg pos in
       let fp_name = "initial footprint of " ^ string_of_ident proc.proc_name in
@@ -693,9 +698,9 @@ let elim_sl prog =
           let f = mk_or [mk_pred first_iter_id []; 
                          mk_error_msg (pos, error_msg ssrt)
                            (mk_srcpos pos
-                              (mk_eq 
+                              (mk_subseteq
                                  (footprint_set ssrt)
-                                 (mk_union [footprint_set ssrt; footprint_caller_set ssrt])))]
+                                 (footprint_caller_set ssrt)))]
           in
           mk_spec_form (FOL f) "invariant" (Some msg) pos :: fs)
           struct_srts
@@ -723,8 +728,10 @@ let elim_sl prog =
       let final_footprint_sets =
         SortSet.fold (fun ssrt sets -> SortMap.add ssrt (final_footprint_set ssrt) sets) struct_srts SortMap.empty
       in
-      let f_eq_final_footprint = 
-        SlToGrass.to_grass (pred_to_form final_footprint_sets) final_footprint_sets f 
+      let f_eq_final_footprint =
+        f |>
+        SlToGrass.to_grass (pred_to_form final_footprint_sets) final_footprint_sets |>
+        post_process_form
       in
       let final_footprint_postcond =
         mk_spec_form (FOL f_eq_final_footprint) name msg pos

@@ -204,12 +204,12 @@ let add_pred_insts prog f =
     f |>
     nnf |>
     expand_neg None IdSet.empty |>
+    (*fun f -> print_endline "before: "; print_form stdout f; print_newline(); f ) |> *)
     foralls_to_exists |>
-    propagate_exists
-    (*print_endline "f1:";
-    print_form stdout (f1); print_newline (); print_newline ();
-    print_endline "foralls_to_exists f1:";
-    print_form stdout (foralls_to_exists f1); print_newline (); print_newline ();*)
+    (*fun f -> print_endline "after: "; print_form stdout f; print_newline(); f ) |> *)
+    propagate_exists |>
+    foralls_to_exists
+    (* (fun f -> print_endline "after: "; print_form stdout f; print_newline(); f ) *)
   in
   let vs, f, a = match f_inst with
   | Binder (Exists, vs, f, a) -> vs, f, a
