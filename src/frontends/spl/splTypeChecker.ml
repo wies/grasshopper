@@ -420,12 +420,13 @@ let infer_types cu locals ty e =
             in
             let e2, _ = it locals (StructType id) e2 in
             let e3, _ = it locals (StructType id) e3 in
+            ignore (match_types pos ty BoolType);
             (match sym, es1 with
             | BtwnPred, [e4] ->
                 let e4, _ = it locals (StructType id) e4 in
-                PredApp (BtwnPred, [e1; e2; e3; e4], pos), match_types pos ty BoolType
+                PredApp (BtwnPred, [e1; e2; e3; e4], pos), BoolType
             | ReachPred, [] ->
-                PredApp (BtwnPred, [e1; e2; e3], pos), match_types pos ty BoolType
+                PredApp (ReachPred, [e1; e2; e3], pos), BoolType
             | _ -> arg_error ())
         | _ -> arg_error ())   
     | PredApp (FramePred, es, pos) ->
