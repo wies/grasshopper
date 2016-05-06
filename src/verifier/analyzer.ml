@@ -10,19 +10,20 @@ open Prog
 let infer_accesses prog =
   let rec pm prog = function
     | Loop (lc, pp) ->
-        let has_new1, prebody1 = pm prog lc.loop_prebody in
-        let has_new2, postbody1 = pm prog lc.loop_postbody in
-        has_new1 || has_new2, 
+        let has_new1, fps1, prebody1 = pm prog lc.loop_prebody in
+        let has_new2, fps2, postbody1 = pm prog lc.loop_postbody in
+        has_new1 || has_new2,
+        SortSet.union fps1 fps2,
         mk_loop_cmd lc.loop_inv prebody1 lc.loop_test lc.loop_test_pos postbody1 pp.pp_pos
     | Choice (cs, pp) ->
         let has_new, mods, accs, fps, cs1 = 
           List.fold_right 
             (fun c (has_new, mods, accs, fps, cs1) ->
-              let has_new1, c1 = pm prog c in
+              let has_new1, fps1, c1 = pm prog c in
               has_new1 || has_new, 
               IdSet.union (modifies_cmd c1) mods, 
               IdSet.union (accesses_cmd c1) accs,
-              SortSet.union (footprint_sorts_cmd c1) fps,
+              SortSet.union fps1 fps,
               c1 :: cs1)
             cs (false, IdSet.empty, IdSet.empty, SortSet.empty, [])
         in
@@ -30,19 +31,18 @@ let infer_accesses prog =
           { pp with
             pp_modifies = mods;
             pp_accesses = accs;
-            pp_footprint_sorts = fps
           }
         in
-        has_new, Choice (cs1, pp1)
+        has_new, fps, Choice (cs1, pp1)
     | Seq (cs, pp) ->
         let has_new, mods, accs, fps, cs1 = 
           List.fold_right 
             (fun c (has_new, mods, accs, fps, cs1) ->
-              let has_new1, c1 = pm prog c in
+              let has_new1, fps1, c1 = pm prog c in
               has_new1 || has_new, 
               IdSet.union (modifies_cmd c1) mods, 
               IdSet.union (accesses_cmd c1) accs,
-              SortSet.union (footprint_sorts_cmd c1) fps,
+              SortSet.union fps1 fps,
               c1 :: cs1)
             cs (false, IdSet.empty, IdSet.empty, SortSet.empty, [])
         in
@@ -50,33 +50,30 @@ let infer_accesses prog =
           { pp with
             pp_modifies = mods;
             pp_accesses = accs;
-            pp_footprint_sorts = fps
           }
         in
-        has_new, Seq (cs1, pp1)
+        has_new, fps, Seq (cs1, pp1)
     | Basic (Call cc, pp) ->
         let callee = find_proc prog cc.call_name in
         let mods = IdSet.union (modifies_proc prog callee) pp.pp_modifies in
         let accs = IdSet.union (accesses_proc prog callee) pp.pp_accesses in
-        let fps = SortSet.union (footprint_sorts_proc prog callee) pp.pp_footprint_sorts in
+        let fps = List.fold_left (footprint_sorts_term_acc prog) callee.proc_footprints cc.call_args in
         let has_new = 
           not (IdSet.subset mods pp.pp_modifies) ||  
-          not (IdSet.subset accs pp.pp_accesses) ||
-          not (SortSet.subset fps pp.pp_footprint_sorts)
+          not (IdSet.subset accs pp.pp_accesses)
         in
         let pp1 =
           { pp with
             pp_modifies = mods;
             pp_accesses = accs;
-            pp_footprint_sorts = fps
           }
         in
-        has_new, Basic (Call cc, pp1)
-    | c ->  false, c
+        has_new, fps, Basic (Call cc, pp1)
+    | Basic(bc, _) as c ->  false, footprint_sorts_basic_cmd prog bc, c
   in
   let pm_pred prog pred =
     let accs_preds, body_accs, body_fps =
-      let fps = footprint_sorts_spec_form pred.pred_body in
+      let fps = footprint_sorts_spec_form prog pred.pred_body in
       match pred.pred_body.spec_form with
       | SL f -> 
           let accs_preds = SlUtil.preds f in
@@ -109,12 +106,12 @@ let infer_accesses prog =
     let has_new, body, body_fps =
       match proc.proc_body with
       | Some body ->
-          let has_new, body = pm prog body in
-          has_new, Some body, footprint_sorts_cmd body
+          let has_new, body_fps, body = pm prog body in
+          has_new, Some body, body_fps
       | _ -> false, None, SortSet.empty
     in
     let fps =
-      List.fold_left footprint_sorts_spec_form_acc
+      List.fold_left (footprint_sorts_spec_form_acc prog)
         body_fps (proc.proc_precond @ proc.proc_postcond)
     in
     has_new || not (SortSet.subset fps proc.proc_footprints),
@@ -151,7 +148,8 @@ let infer_accesses prog =
       { prog with 
         prog_procs = procs2;
         prog_preds = preds2 
-      } in
+      }
+    in
     if has_new then pm_prog prog1 else prog1 
   in
   pm_prog prog

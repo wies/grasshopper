@@ -55,8 +55,7 @@ let elim_loops (prog : program) =
           let pp_call = 
             { pp_pos = pos; 
               pp_modifies = pp.pp_modifies; 
-              pp_accesses = pp.pp_accesses;
-              pp_footprint_sorts = pp.pp_footprint_sorts;
+              pp_accesses = pp.pp_accesses
             }
           in
           let call = mk_call_cmd returns proc_name (mk_bool_term first :: ids_to_terms returns) pos in
