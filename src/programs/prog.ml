@@ -1094,15 +1094,17 @@ let pr_pred ppf pred =
   in
   match returns_of_pred pred with
   | [] ->
-      fprintf ppf "@[<2>predicate %a(@[<0>%a@])@]@ {@[<1>@\n%a@]@\n}@\n@\n"
+      fprintf ppf "@[<2>predicate %a(@[<0>%a@])%a@]@ {@[<1>@\n%a@]@\n}@\n@\n"
         pr_ident (name_of_pred pred)
         pr_id_srt_list (add_srts (formals_of_pred pred))
+        pr_contract pred.pred_contract
         pr_spec_form pred.pred_body
   | _ ->
-      fprintf ppf "@[<2>function %a(@[<0>%a@])@\nreturns (@[<0>%a@])@]@\n{@[<1>@\n%a@]@\n}@\n@\n"
+      fprintf ppf "@[<2>function %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a@]@\n{@[<1>@\n%a@]@\n}@\n@\n"
         pr_ident (name_of_pred pred)
         pr_id_srt_list (add_srts (formals_of_pred pred))
         pr_id_srt_list (add_srts (returns_of_pred pred))
+        pr_contract pred.pred_contract
         pr_spec_form pred.pred_body
 
 let rec pr_preds ppf = function
