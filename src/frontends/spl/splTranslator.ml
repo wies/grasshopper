@@ -652,14 +652,20 @@ let convert cu =
         let body_pos =
           Opt.map pos_of_expr decl.pr_body |> Opt.get_or_else decl.pr_pos
         in
+        let contract =
+          { contr_name = id;
+            contr_formals = decl.pr_formals;
+            contr_returns = outputs;
+            contr_footprint_sorts = SortSet.empty;
+            contr_locals = locals;
+            contr_precond = [];
+            contr_postcond = [];
+            contr_pos = decl.pr_pos;
+         }
+        in
         let pred_decl = 
-          { pred_name = id;
-            pred_formals = decl.pr_formals;
-            pred_outputs = outputs;
-            pred_footprints = SortSet.empty;
-            pred_locals = locals;
+          { pred_contract = contract;
             pred_body = mk_spec_form body (string_of_ident id) None body_pos;
-            pred_pos = decl.pr_pos;
             pred_accesses = IdSet.empty;
           }
         in
@@ -699,16 +705,20 @@ let convert cu =
     IdMap.fold
       (fun id decl prog ->
         let pre, post = convert_contract decl.p_name decl.p_locals decl.p_contracts in
+        let proc_contract =
+          { contr_name = id;
+            contr_formals = decl.p_formals;
+            contr_footprint_sorts = SortSet.empty;
+            contr_returns = decl.p_returns;
+            contr_locals = IdMap.map convert_var_decl decl.p_locals;
+            contr_precond = pre;
+            contr_postcond = post;
+            contr_pos = decl.p_pos;
+          }
+        in
         let proc_decl =
-          { proc_name = id;
-            proc_formals = decl.p_formals;
-            proc_footprints = SortSet.empty;
-            proc_returns = decl.p_returns;
-            proc_locals = IdMap.map convert_var_decl decl.p_locals;
-            proc_precond = pre;
-            proc_postcond = post;
+          { proc_contract = proc_contract;
             proc_body = convert_body decl;
-            proc_pos = decl.p_pos;
             proc_deps = [];
             proc_is_tailrec = false;
           } 

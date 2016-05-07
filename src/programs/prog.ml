@@ -23,7 +23,19 @@ let alloc_set struct_srt = mk_loc_set struct_srt (alloc_id struct_srt)
 type spec_form =
   | SL of Sl.form 
   | FOL of form 
+   
+type spec_kind =
+  | Free | Checked
 
+(** Assume or assert of pure formula *)
+type spec = {
+    spec_form: spec_form;
+    spec_kind: spec_kind;
+    spec_name: string;
+    spec_msg: (ident -> (string * string)) option;
+    spec_pos: source_position;
+  } 
+      
 (** Commands *)
 
 (** Assignment, x_1,...,x_n := e_1,...,e_n *)
@@ -49,17 +61,6 @@ type dispose_command = {
     dispose_arg: term;
   }
      
-type spec_kind =
-  | Free | Checked
-
-(** Assume or assert of pure formula *)
-type spec = {
-    spec_form: spec_form;
-    spec_kind: spec_kind;
-    spec_name: string;
-    spec_msg: (ident -> (string * string)) option;
-    spec_pos: source_position;
-  } 
 
 (** Procedure call, x_1,..., x_n := p(e_1,...,e_m) *)
 type call_command = {
@@ -119,30 +120,30 @@ type var_decl = {
     var_scope: source_position; (** scope of the variable *)
   }
 
+(** Procedure/predicate contract *)
+type contract = {
+    contr_name: ident; (** name of procedure/contract *)
+    contr_formals: ident list;  (** formal parameter list *)
+    contr_returns: ident list; (** return parameter list *)
+    contr_locals: var_decl IdMap.t; (** all local variables *)    
+    contr_precond: spec list; (** precondition *)
+    contr_postcond: spec list; (** postcondition *)
+    contr_footprint_sorts: SortSet.t; (** footprint sorts *)
+    contr_pos: source_position; (** position of declaration *)
+  }
+      
 (** Procedure declaration *)
 type proc_decl = {
-    proc_name: ident; (** procedure name *)
-    proc_formals: ident list;  (** formal parameter list *)
-    proc_footprints: SortSet.t; (** footprint sorts *)
-    proc_returns: ident list; (** return parameter list *)
-    proc_locals: var_decl IdMap.t; (** all local variables *)
-    proc_precond: spec list; (** precondition *)
-    proc_postcond: spec list; (** postcondition *)
+    proc_contract: contract; (** contract *)
     proc_body: command option; (** procedure body *)
-    proc_pos: source_position; (** position of declaration *)
     proc_deps: ident list; (** names of dependant procedures *)
     proc_is_tailrec: bool; (** whether the procedure is tail recursive *)
   }
 
 (** Predicate declaration *)
 type pred_decl = {
-    pred_name: ident; (** predicate name *)
-    pred_formals: ident list; (** formal parameter list *)
-    pred_footprints: SortSet.t; (** footprint sorts *)
-    pred_outputs: ident list; (** return parameter list *)
-    pred_locals: var_decl IdMap.t; (** local variables *)
+    pred_contract: contract; (** contract *)
     pred_body: spec; (** predicate body *)
-    pred_pos: source_position; (** position of declaration *)
     pred_accesses: IdSet.t; (** accessed variables *)
   } 
 
@@ -213,29 +214,55 @@ let empty_prog =
     prog_preds = IdMap.empty;
     prog_procs = IdMap.empty 
   }
+
+let trivial_contract name =
+  { contr_name = name;
+    contr_formals = [];
+    contr_returns = [];
+    contr_locals = IdMap.empty;
+    contr_pos = dummy_position;
+    contr_precond = [];
+    contr_postcond = [];
+    contr_footprint_sorts = SortSet.empty;
+  }
     
 let dummy_proc name = 
-  { proc_name = name;
-    proc_formals = [];
-    proc_footprints = SortSet.empty;
-    proc_returns = [];
-    proc_locals = IdMap.empty;
-    proc_precond = [];
-    proc_postcond = [];
+  { proc_contract = trivial_contract name;
     proc_body = None;
-    proc_pos = dummy_position;
     proc_deps = [];
     proc_is_tailrec = false;
   }
 
+let name_of_pred decl = decl.pred_contract.contr_name
+let name_of_proc decl = decl.proc_contract.contr_name
+
+let locals_of_pred decl = decl.pred_contract.contr_locals
+let locals_of_proc decl = decl.proc_contract.contr_locals
+
+let formals_of_pred decl = decl.pred_contract.contr_formals
+let formals_of_proc decl = decl.proc_contract.contr_formals
+
+let returns_of_pred decl = decl.pred_contract.contr_returns
+let returns_of_proc decl = decl.proc_contract.contr_returns
+
+let pos_of_pred decl = decl.pred_contract.contr_pos
+let pos_of_proc decl = decl.proc_contract.contr_pos
+
+let precond_of_pred decl = decl.pred_contract.contr_precond
+let precond_of_proc decl = decl.proc_contract.contr_precond
+
+let postcond_of_pred decl = decl.pred_contract.contr_postcond
+let postcond_of_proc decl = decl.proc_contract.contr_postcond
+
+    
 let declare_global prog var =
   { prog with prog_vars = IdMap.add var.var_name var prog.prog_vars }
 
 let declare_pred prog pred =
-  { prog with prog_preds = IdMap.add pred.pred_name pred prog.prog_preds }
+  { prog with prog_preds = IdMap.add (name_of_pred pred) pred prog.prog_preds }
 
 let declare_proc prog proc =
-  { prog with prog_procs = IdMap.add proc.proc_name proc prog.prog_procs }
+  { prog with prog_procs = IdMap.add (name_of_proc proc) proc prog.prog_procs }
 
 
 let procs prog = IdMap.fold (fun _ proc procs -> proc :: procs) prog.prog_procs []
@@ -279,13 +306,13 @@ let find_global prog name =
 
 let find_var prog proc name =
   try
-    try IdMap.find name proc.proc_locals 
+    try IdMap.find name (locals_of_proc proc)
     with Not_found -> IdMap.find name prog.prog_vars
   with Not_found ->
     failwith ("find_var: Could not find variable " ^ (string_of_ident name))
 
 let find_local_var proc name =
-  try IdMap.find name proc.proc_locals
+  try IdMap.find name (locals_of_proc proc)
   with Not_found ->
     failwith ("find_local_val: Could not find variable " ^ string_of_ident name)
       
@@ -329,7 +356,7 @@ let struct_sorts prog =
     collect_srts prog.prog_vars SortSet.empty
   in
   fold_procs (fun struct_srts proc ->
-    collect_srts proc.proc_locals struct_srts)
+    collect_srts (locals_of_proc proc) struct_srts)
     struct_srts prog
 
     
@@ -551,6 +578,10 @@ let accesses_spec_form_acc acc sf =
 let accesses_spec_form sf = 
   accesses_spec_form_acc IdSet.empty sf
 
+let accesses_contract_acc acc contr =
+  List.fold_left accesses_spec_form_acc acc
+    (contr.contr_precond @ contr.contr_postcond)
+    
 let accesses_proc prog proc = 
   let body_accs =
     match proc.proc_body with
@@ -559,8 +590,7 @@ let accesses_proc prog proc =
   in
   IdSet.filter 
     (fun id -> IdMap.mem id prog.prog_vars)
-    (List.fold_left accesses_spec_form_acc body_accs
-       (proc.proc_precond @ proc.proc_postcond))
+    (accesses_contract_acc body_accs proc.proc_contract)
 
 let accesses_pred pred =
   pred.pred_accesses
@@ -590,6 +620,8 @@ let footprint_sorts_acc acc = function
   | Map (Loc srt, _) ->
       SortSet.add srt acc
   | _ -> acc
+
+let footprint_sorts_pred pred = pred.pred_contract.contr_footprint_sorts
         
 let footprint_sorts_term_acc prog acc t =
   let rec c acc = function
@@ -598,7 +630,7 @@ let footprint_sorts_term_acc prog acc t =
           match sym with
           | FreeSym id when IdMap.mem id prog.prog_preds ->
               let decl = find_pred prog id in
-              SortSet.union decl.pred_footprints acc
+              SortSet.union (footprint_sorts_pred decl) acc
           | _ -> acc
         in
         let acc = footprint_sorts_acc acc srt in
@@ -617,7 +649,7 @@ let footprint_sorts_spec_form_acc prog acc sf =
       let pids = SlUtil.preds f in
       let acc = IdSet.fold
           (fun id acc ->
-            SortSet.union (find_pred prog id).pred_footprints acc)
+            SortSet.union (footprint_sorts_pred (find_pred prog id)) acc)
           pids acc
       in
       SlUtil.fold_terms (footprint_sorts_term_acc prog) acc f
@@ -625,8 +657,8 @@ let footprint_sorts_spec_form_acc prog acc sf =
 
 let footprint_sorts_spec_form prog sf = footprint_sorts_spec_form_acc prog SortSet.empty sf
 
-let footprint_sorts_pred pred = pred.pred_footprints
-
+let footprint_sorts_proc proc = proc.proc_contract.contr_footprint_sorts
+    
 let footprint_sorts_basic_cmd prog = function
   | Assign ac -> 
       let rhs_fps = 
@@ -642,7 +674,7 @@ let footprint_sorts_basic_cmd prog = function
   | Return rc -> List.fold_left (footprint_sorts_term_acc prog) SortSet.empty rc.return_args
   | Call cc ->
       let decl = find_proc prog cc.call_name in
-      List.fold_left (footprint_sorts_term_acc prog) decl.proc_footprints cc.call_args
+      List.fold_left (footprint_sorts_term_acc prog) (footprint_sorts_proc decl) cc.call_args
       
 (** Smart constructors for commands *)
 
@@ -836,13 +868,13 @@ let subst_id_var_decl map vd =
 
 let subst_id_pred map pred =
   let try_subst id = try IdMap.find id map with Not_found -> id in
-  let name = try_subst pred.pred_name in
-  let formals = List.map try_subst pred.pred_formals in
-  let returns = List.map try_subst pred.pred_outputs in
+  let name = try_subst (name_of_pred pred) in
+  let formals = List.map try_subst (formals_of_pred pred) in
+  let returns = List.map try_subst (returns_of_pred pred) in
   let locals =
     IdMap.fold
       (fun k v acc -> IdMap.add (try_subst k) (subst_id_var_decl map v) acc)
-      pred.pred_locals
+      (locals_of_pred pred)
       IdMap.empty
   in
   let body = subst_id_spec map pred.pred_body in
@@ -852,19 +884,23 @@ let subst_id_pred map pred =
       pred.pred_accesses
       IdSet.empty
   in
-    { pred with
-      pred_name = name;
-      pred_formals = formals;
-      pred_outputs = returns;
-      pred_locals = locals;
-      pred_body = body;
-      pred_accesses = accesses }
+  let contract =
+    { pred.pred_contract with
+      contr_name = name;
+      contr_formals = formals;
+      contr_returns = returns;
+      contr_locals = locals;
+    }
+  in
+  { pred_contract = contract;
+    pred_body = body;
+    pred_accesses = accesses }
 
 let result_sort_of_pred pred =
-  match pred.pred_outputs with
+  match returns_of_pred pred with
   | [] -> Bool
   | id :: _ ->
-      (IdMap.find id pred.pred_locals).var_sort
+      (IdMap.find id (locals_of_pred pred)).var_sort
     
 
 (** Pretty printing *)
@@ -1023,6 +1059,10 @@ let pr_body locals ppf = function
         pr_var_decls locals
         pr_seq cs 
 
+let pr_contract ppf contr =
+  fprintf ppf "%a%a"
+    pr_precond contr.contr_precond
+    pr_postcond contr.contr_postcond
 
 let pr_proc ppf proc =
   let add_srts = List.map (fun id -> 
@@ -1030,17 +1070,16 @@ let pr_proc ppf proc =
     (decl.var_is_implicit, decl.var_is_ghost, (id, decl.var_sort)))
   in
   let locals = IdMap.fold (fun id decl locals ->
-    if List.mem id (proc.proc_returns @ proc.proc_formals) 
+    if List.mem id (returns_of_proc proc @ formals_of_proc proc)
     then locals
-    else (id, decl) :: locals) proc.proc_locals []
+    else (id, decl) :: locals) (locals_of_proc proc) []
   in
-  fprintf ppf "@[<2>%s %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a%a@]@\n%a@\n"
+  fprintf ppf "@[<2>%s %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a@]@\n%a@\n"
     "procedure"
-    pr_ident proc.proc_name
-    pr_id_srt_list (add_srts proc.proc_formals)
-    pr_id_srt_list (add_srts proc.proc_returns)
-    pr_precond proc.proc_precond
-    pr_postcond proc.proc_postcond
+    pr_ident (name_of_proc proc)
+    pr_id_srt_list (add_srts (formals_of_proc proc))
+    pr_id_srt_list (add_srts (returns_of_proc proc))
+    pr_contract proc.proc_contract
     (pr_body locals) proc.proc_body
 
 let rec pr_procs ppf = function
@@ -1050,20 +1089,20 @@ let rec pr_procs ppf = function
 
 let pr_pred ppf pred =
   let add_srts = List.map (fun id -> 
-    let decl = IdMap.find id pred.pred_locals in
+    let decl = IdMap.find id (locals_of_pred pred) in
     (decl.var_is_implicit, decl.var_is_ghost, (id, decl.var_sort)))
   in
-  match pred.pred_outputs with
+  match returns_of_pred pred with
   | [] ->
       fprintf ppf "@[<2>predicate %a(@[<0>%a@])@]@ {@[<1>@\n%a@]@\n}@\n@\n"
-        pr_ident pred.pred_name
-        pr_id_srt_list (add_srts pred.pred_formals)
+        pr_ident (name_of_pred pred)
+        pr_id_srt_list (add_srts (formals_of_pred pred))
         pr_spec_form pred.pred_body
   | _ ->
       fprintf ppf "@[<2>function %a(@[<0>%a@])@\nreturns (@[<0>%a@])@]@\n{@[<1>@\n%a@]@\n}@\n@\n"
-        pr_ident pred.pred_name
-        pr_id_srt_list (add_srts pred.pred_formals)
-        pr_id_srt_list (add_srts pred.pred_outputs)
+        pr_ident (name_of_pred pred)
+        pr_id_srt_list (add_srts (formals_of_pred pred))
+        pr_id_srt_list (add_srts (returns_of_pred pred))
         pr_spec_form pred.pred_body
 
 let rec pr_preds ppf = function

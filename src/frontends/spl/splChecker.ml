@@ -258,7 +258,7 @@ let resolve_names cu =
           Annot (re locals tbl e, GeneratorAnnot (es1, re locals tbl ge), pos)
       | Annot (e, ann, pos) ->
           Annot (re locals tbl e, ann, pos)
-      | e -> e (*failwith "unhandled case in SplChecker.resolve_expr"*)
+      | e -> e
     in
     re locals tbl e
   in

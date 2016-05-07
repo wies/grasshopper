@@ -139,7 +139,9 @@ let check_spl_program spl_prog proc =
     if procs = [] then begin
       let available =
         Prog.fold_procs 
-          (fun acc proc -> "\t" ^ Grass.string_of_ident proc.Prog.proc_name ^ "\n" ^ acc) 
+          (fun acc proc ->
+            let name = Prog.name_of_proc proc in
+            "\t" ^ Grass.string_of_ident name ^ "\n" ^ acc) 
           "" prog
       in
       failwith ("Could not find a procedure named " ^ p ^ 

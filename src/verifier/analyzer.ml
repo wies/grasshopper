@@ -57,7 +57,7 @@ let infer_accesses prog =
         let callee = find_proc prog cc.call_name in
         let mods = IdSet.union (modifies_proc prog callee) pp.pp_modifies in
         let accs = IdSet.union (accesses_proc prog callee) pp.pp_accesses in
-        let fps = List.fold_left (footprint_sorts_term_acc prog) callee.proc_footprints cc.call_args in
+        let fps = List.fold_left (footprint_sorts_term_acc prog) (footprint_sorts_proc callee) cc.call_args in
         let has_new = 
           not (IdSet.subset mods pp.pp_modifies) ||  
           not (IdSet.subset accs pp.pp_accesses)
@@ -91,16 +91,23 @@ let infer_accesses prog =
       IdSet.fold (fun p (accs, fps) -> 
         let opred = find_pred prog p in
         IdSet.union opred.pred_accesses accs,
-        SortSet.union opred.pred_footprints fps)
+        SortSet.union (footprint_sorts_pred opred) fps)
         accs_preds (body_accs, body_fps)
     in
     let global_accs = 
       IdSet.filter (fun id -> IdMap.mem id prog.prog_vars) accs
     in
     let fps = SortSet.union fps (footprint_sorts_pred pred) in
+    let fps =
+      List.fold_left (footprint_sorts_spec_form_acc prog)
+        fps (pred.pred_contract.contr_precond @ pred.pred_contract.contr_postcond)
+    in    
     not (IdSet.subset global_accs pred.pred_accesses) ||
-    not (SortSet.subset fps pred.pred_footprints),
-    { pred with pred_accesses = global_accs; pred_footprints = fps }
+    not (SortSet.subset fps (footprint_sorts_pred pred)),
+    { pred with
+      pred_accesses = global_accs;
+      pred_contract = { pred.pred_contract with contr_footprint_sorts = fps }
+    }
   in
   let pm_proc prog proc =
     let has_new, body, body_fps =
@@ -112,10 +119,13 @@ let infer_accesses prog =
     in
     let fps =
       List.fold_left (footprint_sorts_spec_form_acc prog)
-        body_fps (proc.proc_precond @ proc.proc_postcond)
+        body_fps (proc.proc_contract.contr_precond @ proc.proc_contract.contr_postcond)
     in
-    has_new || not (SortSet.subset fps proc.proc_footprints),
-    { proc with proc_body = body; proc_footprints = fps }
+    has_new || not (SortSet.subset fps (footprint_sorts_proc proc)),
+    { proc with
+      proc_body = body;
+      proc_contract = { proc.proc_contract with contr_footprint_sorts = fps }
+    }
   in
   let rec pm_prog prog = 
     let procs = procs prog in
@@ -128,7 +138,7 @@ let infer_accesses prog =
     in 
     let procs2 = 
       List.fold_left 
-      (fun procs2 proc -> IdMap.add proc.proc_name proc procs2) 
+      (fun procs2 proc -> IdMap.add (name_of_proc proc) proc procs2) 
       IdMap.empty procs1
     in
     let preds = preds prog in
@@ -141,7 +151,7 @@ let infer_accesses prog =
     in
     let preds2 = 
       List.fold_left 
-        (fun preds2 pred -> IdMap.add pred.pred_name pred preds2)
+        (fun preds2 pred -> IdMap.add (name_of_pred pred) pred preds2)
         IdMap.empty preds1
     in
     let prog1 = 

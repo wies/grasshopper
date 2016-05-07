@@ -21,12 +21,12 @@ let elim_loops (prog : program) =
   let rec elim prog dep_procs proc = function
     | Loop (lc, pp) -> 
         let proc_name = 
-          fresh_ident ((string_of_ident proc.proc_name) ^ "_loop") 
+          fresh_ident ((string_of_ident (name_of_proc proc)) ^ "_loop") 
         in
         let locals = 
           IdMap.filter 
             (fun id _ -> IdSet.mem id pp.pp_accesses)
-            proc.proc_locals
+            (locals_of_proc proc)
         in
         let returns, return_decls = 
           IdMap.fold 
@@ -125,16 +125,20 @@ let elim_loops (prog : program) =
           (* framecondition *)
           @ framecond
         in
+        let loop_contr =
+          { contr_name = proc_name;
+            contr_formals = formals;
+            contr_footprint_sorts = footprint_sorts_proc proc;
+            contr_returns = returns;
+            contr_locals = locals;
+            contr_precond = List.map (subst_id_spec subst_formals) lc.loop_inv;
+            contr_postcond = postcond;
+            contr_pos = pp.pp_pos;
+          }
+        in
         let loop_proc = 
-          { proc_name = proc_name;
-            proc_formals = formals;
-            proc_footprints = proc.proc_footprints;
-            proc_returns = returns;
-            proc_locals = locals;
-            proc_precond = List.map (subst_id_spec subst_formals) lc.loop_inv;
-            proc_postcond = postcond;
+          { proc_contract = loop_contr;
             proc_body = Some body;
-            proc_pos = pp.pp_pos;
             proc_deps = [];
             proc_is_tailrec = true;
           } 
@@ -240,28 +244,37 @@ let elim_global_deps prog =
     | (bc, pp) -> Basic (bc, pp)
   in
   let elim_proc proc =
-    let precond1 = List.map elim_spec proc.proc_precond in
-    let postcond1 = List.map elim_spec proc.proc_postcond in
+    let precond1 = List.map elim_spec (precond_of_proc proc) in
+    let postcond1 = List.map elim_spec (postcond_of_proc proc) in
     let body1 = Util.Opt.map (map_basic_cmds elim_stmt) proc.proc_body in
-    { proc with 
+    let contract1 =
+      { proc.proc_contract with
+        contr_precond = precond1;
+        contr_postcond = postcond1;
+     }
+    in
+    { proc with
+      proc_contract = contract1;
       proc_body = body1;
-      proc_precond = precond1;
-      proc_postcond = postcond1;
     } 
   in
   let elim_pred pred =
     let body1 = elim_spec pred.pred_body in
     let accesses = pred.pred_accesses in
-    let formals1 = IdSet.elements accesses @ pred.pred_formals in
+    let formals1 = IdSet.elements accesses @ formals_of_pred pred in
     let locals1 = 
       IdSet.fold 
         (fun id locals -> IdMap.add id (find_global prog id) locals) 
-        accesses pred.pred_locals
+        accesses (locals_of_pred pred)
     in
-    { pred with 
+    let contract1 =
+      { pred.pred_contract with
+        contr_formals = formals1; 
+        contr_locals = locals1; 
+      }
+    in
+    { pred_contract = contract1;
       pred_body = body1; 
-      pred_formals = formals1; 
-      pred_locals = locals1; 
       pred_accesses = IdSet.empty;
     } 
   in
@@ -292,9 +305,9 @@ let elim_return prog =
           is_checked_spec
           (fun sf ->
             match sf.spec_form with
-            | FOL f -> oldify_spec (id_set_of_list proc.proc_formals) sf
+            | FOL f -> oldify_spec (id_set_of_list (formals_of_proc proc)) sf
             | SL _ -> failwith "elim_return: Found SL formula that should have been desugared.")
-          proc.proc_postcond
+          (postcond_of_proc proc)
       in fun pos -> List.map (fun sf -> mk_assert_cmd sf pos) posts
     in
     let body = 
@@ -314,7 +327,7 @@ let elim_return prog =
             mk_seq_cmd (body :: mk_postcond_check return_pos) (prog_point body).pp_pos) 
           proc.proc_body
       in
-      Util.Opt.map (map_basic_cmds (elim proc.proc_returns mk_postcond_check)) body1
+      Util.Opt.map (map_basic_cmds (elim (returns_of_proc proc) mk_postcond_check)) body1
          
     in
     { proc with proc_body = body }
@@ -459,13 +472,16 @@ let elim_state prog =
               in
               let to_term_subst sm locals = to_term_subst_merge sm locals IdMap.empty in
               let callee_decl = find_proc prog cc.call_name in
+              let callee_locals = locals_of_proc callee_decl in
+              let callee_formals = formals_of_proc callee_decl in
+              let callee_returns = returns_of_proc callee_decl in
               (* update actual arguments of call *)
               let args1 = List.map (subst_id_term sm) cc.call_args in
               (* compute substitution for precondition *)
               let implicit_formals, explicit_formals =
                 List.partition 
-                  (fun id -> (IdMap.find id callee_decl.proc_locals).var_is_implicit) 
-                  callee_decl.proc_formals
+                  (fun id -> (IdMap.find id callee_locals).var_is_implicit) 
+                  (formals_of_proc callee_decl)
               in
               let subst_pre_explicit = 
                 List.fold_left2 
@@ -484,7 +500,7 @@ let elim_state prog =
                 let checked_preconds =
                   Util.filter_map is_checked_spec 
                     (fun sf -> subst_spec subst_pre sf)
-                    callee_decl.proc_precond
+                    (precond_of_proc callee_decl)
                 in
                 let implicits = List.map (fun id -> IdMap.find id subst_implicits) implicit_formals in
                 let implicitss = id_set_of_list implicits in
@@ -553,7 +569,7 @@ let elim_state prog =
                   List.fold_left 
                     (fun sm id ->
                       IdMap.add (oldify id) (IdMap.find id subst_pre) sm)
-                    subst_pre callee_decl.proc_formals
+                    subst_pre callee_formals
                 in
                 (* substitute formal return parameters to actual return parameters *)
                 let subst_wo_old_mods = 
@@ -562,7 +578,7 @@ let elim_state prog =
                       let decl = IdMap.find rtn_id locals in
                       IdMap.add id (mk_free_const decl.var_sort rtn_id) sm)
                     subst_wo_old_mods_formals
-                    callee_decl.proc_returns 
+                    callee_returns 
                     (List.map (fun id -> IdMap.find id sm1) cc.call_lhs)
                 in
                 (* TODO: I currently have no idea what this was supposed to do. Is this redundant? *)
@@ -583,30 +599,35 @@ let elim_state prog =
               let assume_postcond =
                 List.map
                   (fun sf -> 
-                    let old_sf = oldify_spec (id_set_of_list callee_decl.proc_formals) sf in
+                    let old_sf = oldify_spec (id_set_of_list callee_formals) sf in
                     let sf1 = subst_spec subst_post old_sf in
                     let sf2 = map_spec_fol_form strip_error_msgs sf1 in
                     mk_assume_cmd sf2 pp.pp_pos)
-                  callee_decl.proc_postcond
+                  (postcond_of_proc callee_decl)
               in
               sm1, locals, mk_seq_cmd (assert_precond @ assume_precond_implicits @ mods_havoc @ assume_postcond) pp.pp_pos
           | _ -> sm, locals, Basic (bc, pp)
     in
     let locals, body =
       match proc.proc_body with
-      | None -> proc.proc_locals, None
+      | None -> locals_of_proc proc, None
       | Some body -> 
-          let _, locals, body1 = elim IdMap.empty proc.proc_locals body in
+          let _, locals, body1 = elim IdMap.empty (locals_of_proc proc) body in
           let preconds = 
             List.map 
               (fun sf -> 
                 let sf1 = map_spec_fol_form strip_error_msgs sf in
                 mk_assume_cmd sf1 sf.spec_pos) 
-              proc.proc_precond 
+              (precond_of_proc proc)
           in
           locals, Some (mk_seq_cmd (preconds @ [body1]) (prog_point body).pp_pos)
     in
-    { proc with proc_locals = locals; proc_body = body }
+    let contract =
+      { proc.proc_contract with
+        contr_locals = locals;
+      }
+    in
+    { proc with proc_contract = contract; proc_body = body }
   in
   { prog with prog_procs = IdMap.map elim_proc prog.prog_procs }
 
