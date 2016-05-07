@@ -6,7 +6,10 @@ struct HashSet {
   var buckets: Array<Node>; /* the set elements */
 }
 
-function arrayseg_buckets_footprint(a: Array<Node>, FP0: Set<ArrayCell<Node>>) returns (FP1: Set<Node>) {
+predicate arrayseg_buckets_footprint(a: Array<Node>, FP0: Set<ArrayCell<Node>>)
+  requires acc(FP0);
+{
+  // FIXME
   // all nodes reachable from the head of the bucket are in the footprint
   (forall c: ArrayCell<Node>, x: Node :: c in FP0 && Btwn(next, c.array[c.index], x, null) ==> x in FP1 || x == null) &&
   // all nodes in the footprint are reachable from the bucket head
@@ -17,42 +20,40 @@ function arrayseg_buckets_footprint(a: Array<Node>, FP0: Set<ArrayCell<Node>>) r
    @(matching x yields a.cells[hash(a.length, x.data)] ))
 }
 
-predicate arrayseg_with_buckets(a: Array<Node>, lo: Int, hi: Int, cnt: Set<Data>)(FP0: Set<ArrayCell<Node>>, FP1: Set<Node>) {
-  0 <= lo && lo <= hi && hi <= a.length &&
-  FP0 == arrayseg_footprint(a, lo, hi) &&
-  FP1 == arrayseg_buckets_footprint(a, FP0) &&
-  (forall c: ArrayCell<Node>, x in FP1 :: c in FP0 && Reach(next, c.array[c.index], x) ==> hash(a.length, x.data) == c.index) &&
-  //(forall c: ArrayCell<Node>, x in FP1 :: c in FP0 && Reach(next, c.array[c.index], x) ==> a.cells[hash(a.length, x.data)] == c) &&
-  (forall c: ArrayCell<Node> :: c in FP0 ==> Reach(next, c.array[c.index], null)) &&
-  //all the elts from a list have the same hash, and this is the index in the array
-  (forall v in FP1 :: Btwn(next, a[hash(a.length, v.data)], v, null) @(matching v yields a[hash(a.length, v.data)])) &&
-  //the buckets are strictly sorted
-  (forall y in FP1, z in FP1 :: Btwn(next,y,z,z) ==> lt(y.data, z.data) || y == z) &&
-  cnt == content(FP1)
+predicate arrayseg_with_buckets(a: Array<Node>, lo: Int, hi: Int, cnt: Set<Data>) {
+  exists FP0: Set<ArrayCell<Node>>, FP1: Set<Node> ::
+    arrayseg(a, lo, hi) && acc(FP0) &*&
+    buckets(a, FP0) && acc(FP0) &*&
+    (forall c: ArrayCell<Node>, x in FP1 :: c in FP0 && Reach(next, c.array[c.index], x) ==> hash(a.length, x.data) == c.index) &&
+    //(forall c: ArrayCell<Node>, x in FP1 :: c in FP0 && Reach(next, c.array[c.index], x) ==> a.cells[hash(a.length, x.data)] == c) &&
+    (forall c: ArrayCell<Node> :: c in FP0 ==> Reach(next, c.array[c.index], null)) &&
+    //all the elts from a list have the same hash, and this is the index in the array
+    (forall v in FP1 :: Btwn(next, a[hash(a.length, v.data)], v, null) @(matching v yields a[hash(a.length, v.data)])) &&
+    //the buckets are strictly sorted
+    (forall y in FP1, z in FP1 :: Btwn(next,y,z,z) ==> lt(y.data, z.data) || y == z) &&
+    cnt == content(FP1)
 }
 
-predicate array_with_buckets(a: Array<Node>, cnt: Set<Data>)(FP0: Set<Array<Node>>, FP1: Set<ArrayCell<Node>>, FP2: Set<Node>) {
-  FP0 == Set(a) &&
-  arrayseg_with_buckets(a, 0, a.length, cnt, FP1, FP2)
+predicate array_with_buckets(a: Array<Node>, cnt: Set<Data>) {
+  acc(a) &*&
+  arrayseg_with_buckets(a, 0, a.length, cnt)
 }
 
 
 //some ghost function that we can use for the spec of hash
-function hash(max: Int, value: Data) returns (res: Int) {
-  res >= 0 && res < max
-}
+function hash(max: Int, value: Data) returns (res: Int)
+  ensures res >= 0 && res < max
 
-predicate hset(h: HashSet, cnt: Set<Data>)(FP0: Set<HashSet>, FP1: Set<Array<Node>>, FP2: Set<ArrayCell<Node>>, FP3: Set<Node>) {
-  h.size == h.buckets.length &&
-  FP0 == Set(h) &&
-  array_with_buckets(h.buckets, cnt, FP1, FP2, FP3) &&
-  true
+predicate hset(h: HashSet, cnt: Set<Data>) {
+  acc(h) &*&
+  array_with_buckets(h.buckets, cnt) &*&
+  h.size == h.buckets.length
 }
 
 procedure create(_size: Int)
   returns (res: HashSet)
   requires 0 < _size
-  ensures hset(res, Set<Data>())
+  ensures hset(res, {})
 {
   var new_set := new HashSet;
   new_set.buckets := new Array<Node>(_size);    
@@ -60,7 +61,7 @@ procedure create(_size: Int)
   while (i < _size)
     invariant 0 <= i && i <= _size && new_set.buckets.length == _size
     invariant acc(new_set) &*& acc(new_set.buckets)
-    invariant arrayseg_with_buckets(new_set.buckets, 0, i, Set<Data>())
+    invariant arrayseg_with_buckets(new_set.buckets, 0, i, {})
     invariant arrayseg(new_set.buckets, i, _size)
   {
     new_set.buckets[i] := null;
@@ -74,7 +75,7 @@ procedure create(_size: Int)
 
 procedure add(hashset: HashSet, value: Data, implicit ghost content: Set<Data>)
   requires hset(hashset, content)
-  ensures hset(hashset, content ++ Set<Data>(value))
+  ensures hset(hashset, content ++ {value})
 {  
   var hashval := hash(hashset.size, value);
   var list := hashset.buckets[hashval];
