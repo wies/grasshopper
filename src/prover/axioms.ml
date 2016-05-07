@@ -572,10 +572,10 @@ let set_axioms elem_srts =
           mk_axiom ("def of inter" ^ ssrt) inter;
           mk_axiom ("def of setminus" ^ ssrt) diff;
           mk_axiom ("def of setenum" ^ ssrt) setenum;
-          (*mk_axiom ("def of disjoint" ^ ssrt) disjoint_def;
+          mk_axiom ("def of disjoint" ^ ssrt) disjoint_def;
           mk_axiom ("def of disjoint inter" ^ ssrt) disjoint_def_inter;
           mk_axiom ("def of subset" ^ ssrt) subset_def;
-          mk_axiom ("def of subset union" ^ ssrt) subset_def_union;*)
+          mk_axiom ("def of subset union" ^ ssrt) subset_def_union;
         ] @
       if !Config.abstract_preds then
         [mk_axiom ("def of subseteq" ^ ssrt) subset_def;
