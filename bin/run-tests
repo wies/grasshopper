@@ -39,6 +39,9 @@ run_test()
     ./grasshopper.native $2 $OPTIONS 2> /dev/null
     res=$?
     ulimit -St unlimited
+    if [ $res -gt 128 ]; then
+        exit 1
+    fi
     if [ $3 == "pass" ]; then
         ensure_verifies $res $1
     else

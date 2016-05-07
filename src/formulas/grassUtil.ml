@@ -1193,8 +1193,8 @@ let foralls_to_exists f =
         Binder (b, [], cf f, a)
     | Binder (Forall, bvs, BoolOp (And, fs), a) ->
         let fs1 = List.map (fun f -> cf (Binder (Forall, bvs, f, a))) fs in
-        mk_and fs1
-    | Binder (Forall, _, BoolOp (Or, fs), _) as f ->
+        smk_and fs1
+    | Binder (Forall, _, BoolOp (Or, _), _) as f ->
         (match propagate_forall f with
         | Binder (Forall, bvs, (BoolOp (Or, fs) as f), a) ->
             let bvs_set = id_set_of_list (List.map fst bvs) in
@@ -1208,6 +1208,8 @@ let foralls_to_exists f =
                 let g1 = cf (mk_forall ubvs g) in
                 smk_exists ~ann:a ebvs (mk_and (defs @ [g1])))
         | _ -> f)
+    | Binder (Forall, bvs1, Binder (Forall, bvs2, f2, a2), a1) ->
+        cf (Binder (Forall, bvs1 @ bvs2, f2, a1 @ a2))
     | Binder (Exists, bvs, f, a) ->
         smk_exists ~ann:a bvs (cf f)
     | BoolOp (And as op, fs)

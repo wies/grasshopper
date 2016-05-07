@@ -6,7 +6,7 @@ procedure copy(lst: Node) returns (res: Node)
 {
   var curr, cp: Node := lst, null;
   while (curr != null) 
-    invariant (curr == null || acc(curr)) -** lseg(lst, null) &*& lseg(cp, null)
+    invariant ((curr == null || acc(curr)) -** lseg(lst, null)) &*& lseg(cp, null)
   {
     var old_cp := cp;
     cp := new Node;
