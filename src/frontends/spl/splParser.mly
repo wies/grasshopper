@@ -184,6 +184,7 @@ pred_decl:
       pr_formals = formals;
       pr_outputs = [];
       pr_locals = locals;
+      pr_contracts = $6;
       pr_body = $7;
       pr_pos = mk_position 2 2;
     }
@@ -211,6 +212,7 @@ function_header:
       pr_formals = formals;
       pr_outputs = outputs;
       pr_locals = locals;
+      pr_contracts = $10;
       pr_body = None;
       pr_pos = mk_position 2 2;
     }
@@ -525,8 +527,8 @@ cast:
 unary_expr:
 | primary { $1 }
 | ident { $1 }
-| PLUS unary_expr { UnaryOp (OpPlus, $2, mk_position 1 2) }
-| MINUS unary_expr { UnaryOp (OpMinus, $2, mk_position 1 2) }
+| PLUS unary_expr { UnaryOp (OpUPlus, $2, mk_position 1 2) }
+| MINUS unary_expr { UnaryOp (OpUMinus, $2, mk_position 1 2) }
 | unary_expr_not_plus_minus { $1 }
 ;
 

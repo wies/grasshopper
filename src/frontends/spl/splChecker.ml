@@ -152,33 +152,25 @@ let resolve_names cu =
       | Read ((Ident (("length", _), _) as map), idx, pos) ->
           let idx1 = re locals tbl idx in
           (match type_of_expr cu locals idx1 with
-          | ArrayType _ | AnyType -> Length (idx1, pos)
+          | ArrayType _ | AnyType -> UnaryOp (OpLength, idx1, pos)
           | ty -> Read (re locals tbl map, idx1, pos))
       | Read ((Ident (("cells", _), _) as map), idx, pos) ->
           let idx1 = re locals tbl idx in
           (match type_of_expr cu locals idx1 with
-          | ArrayType _ | AnyType -> ArrayCells (idx1, pos)
+          | ArrayType _ | AnyType -> UnaryOp (OpArrayCells, idx1, pos)
           | _ -> Read (re locals tbl map, idx1, pos))
       | Read ((Ident (("array", _), _) as map), idx, pos) ->
           let idx1 = re locals tbl idx in
           (match type_of_expr cu locals idx1 with
-          | ArrayCellType _ | AnyType -> ArrayOfCell (idx1, pos)
+          | ArrayCellType _ | AnyType -> UnaryOp (OpArrayOfCell, idx1, pos)
           | _ -> Read (re locals tbl map, idx1, pos))
       | Read ((Ident (("index", _), _) as map), idx, pos) ->
           let idx1 = re locals tbl idx in
           (match type_of_expr cu locals idx1 with
-          | ArrayCellType _ | AnyType -> IndexOfCell (idx1, pos)
+          | ArrayCellType _ | AnyType -> UnaryOp (OpIndexOfCell, idx1, pos)
           | _ -> Read (re locals tbl map, idx1, pos))
       | Read (map, idx, pos) ->
           Read (re locals tbl map, re locals tbl idx, pos)
-      | IndexOfCell (e, pos) ->
-          IndexOfCell (re locals tbl e, pos)
-      | Length (e, pos) ->
-          Length (re locals tbl e, pos)
-      | ArrayOfCell (e, pos) ->
-          ArrayOfCell (re locals tbl e, pos)
-      | ArrayCells (e, pos) ->
-          ArrayCells (re locals tbl e, pos)
       | Binder (q, decls, f, pos) ->
           let (decls1, (locals1, tbl1)) = 
             Util.fold_left_map
@@ -210,7 +202,7 @@ let resolve_names cu =
               | ArrayType typ ->
                   let map1 = re locals tbl map in
                   let idx1 = re locals tbl idx in
-                  let cell = Read (ArrayCells (map1, pos_of_expr map1), idx1, pos) in
+                  let cell = Read (UnaryOp (OpArrayCells, map1, pos_of_expr map1), idx1, pos) in
                   PredApp (AccessPred, [Setenum (ArrayCellType typ, [cell], pos)], pos)
               | _ -> pred_arg_mismatch_error pos id 1)
           | _ -> pred_arg_mismatch_error pos id 1)
@@ -218,7 +210,7 @@ let resolve_names cu =
           let args1 = List.map (re locals tbl) args in
           (match GrassUtil.name init_id with
           | "old" ->
-              Old(List.hd args1, pos)
+              UnaryOp (OpOld, List.hd args1, pos)
           | "Btwn" ->
               PredApp (BtwnPred, args1, pos)
           | "Reach" ->
@@ -346,28 +338,29 @@ let resolve_names cu =
         Return (List.map (resolve_expr locals tbl) es, pos), locals, tbl
   in
   (* declare and resolve local variables *)
+  let resolve_contracts contracts returns locals tbl =
+    let pre_locals, pre_tbl =
+      List.fold_left
+        (fun (pre_locals, pre_tbl) id ->
+          IdMap.remove id pre_locals,
+          SymbolTbl.remove pre_tbl (GrassUtil.name id))
+        (locals, tbl)
+        returns
+    in
+    List.map 
+      (function 
+        | Requires (e, pure) -> Requires (resolve_expr pre_locals pre_tbl e, pure)
+        | Ensures (e, pure) -> Ensures (resolve_expr locals tbl e, pure)
+      )
+      contracts
+  in
   let procs =
     IdMap.fold
       (fun _ decl procs ->
         let locals0, tbl0 = declare_vars decl.p_locals structs (SymbolTbl.push tbl) in
         let formals = List.map (fun id -> lookup_id id tbl0 decl.p_pos) decl.p_formals in
         let returns = List.map (fun id -> lookup_id id tbl0 decl.p_pos) decl.p_returns in
-        let contracts =
-          let pre_locals, pre_tbl =
-            List.fold_left
-              (fun (pre_locals, pre_tbl) id ->
-                IdMap.remove id pre_locals,
-                SymbolTbl.remove pre_tbl (GrassUtil.name id))
-              (locals0, tbl0)
-              returns
-          in
-          List.map 
-            (function 
-              | Requires (e, pure) -> Requires (resolve_expr pre_locals pre_tbl e, pure)
-              | Ensures (e, pure) -> Ensures (resolve_expr locals0 tbl0 e, pure)
-            )
-            decl.p_contracts
-        in
+        let contracts = resolve_contracts decl.p_contracts returns locals0 tbl0 in
         let body, locals, _ = resolve_stmt true false locals0 tbl0 decl.p_body in
         let decl1 = 
           { decl with 
@@ -388,11 +381,13 @@ let resolve_names cu =
         let body = Opt.map (resolve_expr locals tbl) decl.pr_body in
         let formals = List.map (fun id -> lookup_id id tbl decl.pr_pos) decl.pr_formals in
         let outputs = List.map (fun id -> lookup_id id tbl decl.pr_pos) decl.pr_outputs in
+        let contracts = resolve_contracts decl.pr_contracts outputs locals tbl in
         let decl1 = 
           { decl with 
             pr_formals = formals;
             pr_outputs = outputs; 
-            pr_locals = locals; 
+            pr_locals = locals;
+            pr_contracts = contracts;
             pr_body = body 
           } 
         in
@@ -483,6 +478,7 @@ let flatten_exprs cu =
                 pr_formals = formals;
                 pr_outputs = [];
                 pr_locals = sc_locals;
+                pr_contracts = [];
                 pr_body = Some e;
                 pr_pos = pos;
               }
@@ -627,25 +623,68 @@ let flatten_exprs cu =
         let es1, (aux_cmds, aux_funs), locals = flatten_expr_list scope ([], aux_funs) locals es in
         mk_block pos (aux_cmds @ [Return (es1, pos)]), locals, aux_funs
   in
+  let flatten_contracts aux_funs locals contracts =
+    List.fold_right
+      (fun c (contracts, aux_funs, locals) ->
+        let flatten_spec e =
+          let e1, (aux_cmds, aux_funs), locals =
+            flatten_expr (pos_of_expr e) ([], aux_funs) locals e
+          in
+          match aux_cmds with
+          | [] -> e1, aux_funs, locals
+          | cmd :: _ -> illegal_side_effect_error (pos_of_stmt cmd) "specifications"
+        in
+        match c with
+        | Requires (e, pure) -> 
+            let e1, aux_funs, locals = flatten_spec e in
+            Requires (e1, pure) :: contracts, aux_funs, locals
+        | Ensures (e, pure) ->
+            let e1, aux_funs, locals = flatten_spec e in
+            Ensures (e1, pure) :: contracts, aux_funs, locals)
+      contracts ([], aux_funs, locals)
+  in
   let procs, aux_funs =
     IdMap.fold
       (fun _ decl (procs, aux_funs) ->
-        let body, locals, aux_funs = flatten decl.p_pos decl.p_locals aux_funs decl.p_returns decl.p_body in
-        let decl1 = { decl with p_locals = locals; p_body = body } in
+        let contracts, aux_funs, locals =
+          flatten_contracts aux_funs decl.p_locals decl.p_contracts
+        in
+        let body, locals, aux_funs =
+          flatten decl.p_pos locals aux_funs decl.p_returns decl.p_body
+        in
+        let decl1 =
+          { decl with
+            p_locals = locals;
+            p_contracts = contracts;
+            p_body = body }
+        in
         IdMap.add decl.p_name decl1 procs, aux_funs)
       cu.proc_decls (IdMap.empty, [])
   in
   let preds, aux_funs =
     IdMap.fold
       (fun _ decl (preds, aux_funs) ->
-        let body, (_, aux_funs), locals =
+        let contracts, aux_funs, locals =
+          flatten_contracts aux_funs decl.pr_locals decl.pr_contracts
+        in
+        let body, (aux_cmds, aux_funs), locals =
           match decl.pr_body with
           | Some body ->
               let body, aux, locals = flatten_expr decl.pr_pos ([], aux_funs) decl.pr_locals body in
               Some body, aux, locals
-          | None -> None, ([], aux_funs), decl.pr_locals
+          | None -> None, ([], aux_funs), locals
         in
-        let decl1 = { decl with pr_locals = locals; pr_body = body } in
+        match aux_cmds with
+        | cmd :: _ ->
+            illegal_side_effect_error (pos_of_stmt cmd) "function and procedure bodies"
+        | _ -> ();
+        let decl1 =
+          { decl with
+            pr_locals = locals;
+            pr_contracts = contracts;
+            pr_body = body  
+          }
+        in
         IdMap.add decl.pr_name decl1 preds, aux_funs)
       cu.pred_decls (IdMap.empty, [])
   in
@@ -763,10 +802,20 @@ let infer_types cu =
               (IdMap.find res_id pred.pr_locals).v_type
           | _ -> PermType
         in
+        let contracts =
+          List.map (function
+            | Requires (e, pure) -> Requires (check_spec pred.pr_locals pure e, pure)
+            | Ensures (e, pure) -> Ensures (check_spec pred.pr_locals pure e, pure)) pred.pr_contracts
+        in
         let body =
           Opt.map (infer_types cu pred.pr_locals rtype) pred.pr_body
         in
-        let pred1 = { pred with pr_body = body } in
+        let pred1 =
+          { pred with
+            pr_contracts = contracts;
+            pr_body = body
+          }
+        in
         IdMap.add id pred1 preds)
       cu.pred_decls IdMap.empty
   in

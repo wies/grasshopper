@@ -142,19 +142,19 @@ let convert cu =
         let tmap = convert_term locals map in
         let tidx = convert_term locals idx in
         GrassUtil.mk_read tmap tidx
-    | Old (e, pos) ->
+    | UnaryOp (OpOld, e, pos) ->
         let t = convert_term locals e in
         oldify_term globals t
-    | Length (e, pos) ->
+    | UnaryOp (OpLength, e, pos) ->
         let t = convert_term locals e in
         GrassUtil.mk_length t
-    | ArrayOfCell (e, pos) ->
+    | UnaryOp (OpArrayOfCell, e, pos) ->
         let t = convert_term locals e in
         GrassUtil.mk_array_of_cell t
-    | IndexOfCell (e, pos) ->
+    | UnaryOp (OpIndexOfCell, e, pos) ->
         let t = convert_term locals e in
         GrassUtil.mk_index_of_cell t
-    | ArrayCells (e, pos) ->
+    | UnaryOp (OpArrayCells, e, pos) ->
         let t = convert_term locals e in
         GrassUtil.mk_array_cells t
     | PredApp (Pred id, es, pos) ->
@@ -210,15 +210,15 @@ let convert cu =
         let t1 = convert_term locals e1 in
         let t2 = convert_term locals e2 in
         mk_app t1 t2
-    | UnaryOp (OpPlus, e, _) ->
+    | UnaryOp (OpUPlus, e, _) ->
         convert_term locals e
-    | UnaryOp (OpMinus as op, e, _)
+    | UnaryOp (OpUMinus as op, e, _)
     | UnaryOp (OpBvNot as op, e, _)
     | UnaryOp (OpToInt as op, e, _)
     | UnaryOp (OpToByte as op, e, _) ->
         let t = convert_term locals e in
         let mk_app = match op with
-          | OpMinus  -> GrassUtil.mk_uminus
+          | OpUMinus  -> GrassUtil.mk_uminus
           | OpBvNot  -> GrassUtil.mk_bv_not
           | OpToInt  -> GrassUtil.mk_byte_to_int
           | OpToByte -> GrassUtil.mk_int_to_byte
@@ -597,9 +597,35 @@ let convert cu =
           mk_return_cmd ts pos
       | _ -> failwith "unexpected statement"
   in
+  (* Convert contracts *)
+  let convert_contract name locals contract =
+    List.fold_right 
+      (function 
+        | Requires (e, pure) -> fun (pre, post) -> 
+            let mk_msg caller =
+              Printf.sprintf 
+                "A precondition for this call of %s might not hold"
+                (string_of_ident name),
+              ProgError.mk_error_info "This is the precondition that might not hold"
+            in
+            let name = "precondition of " ^ string_of_ident name in
+            convert_spec_form pure locals e name (Some mk_msg) :: pre, post
+        | Ensures (e, pure) -> fun (pre, post) ->
+            let mk_msg caller =
+              Printf.sprintf 
+                "A postcondition of %s might not hold at this return point"
+                (string_of_ident name),
+              ProgError.mk_error_info "This is the postcondition that might not hold"
+            in 
+            let name = "postcondition of " ^ string_of_ident name in
+            pre, convert_spec_form pure locals e name (Some mk_msg) :: post)
+      contract ([], [])
+  in
+  (* Convert predicates *)
   let prog =
     IdMap.fold 
       (fun id decl prog ->
+        let pre, post = convert_contract decl.pr_name decl.pr_locals decl.pr_contracts in
         let rtype =
           decl.pr_body |>
           Opt.map (type_of_expr cu decl.pr_locals) |>
@@ -658,8 +684,8 @@ let convert cu =
             contr_returns = outputs;
             contr_footprint_sorts = SortSet.empty;
             contr_locals = locals;
-            contr_precond = [];
-            contr_postcond = [];
+            contr_precond = pre;
+            contr_postcond = post;
             contr_pos = decl.pr_pos;
          }
         in
@@ -673,29 +699,7 @@ let convert cu =
       )
       cu.pred_decls prog
   in
-  let convert_contract proc_name locals contract =
-    List.fold_right 
-      (function 
-        | Requires (e, pure) -> fun (pre, post) -> 
-            let mk_msg caller =
-              Printf.sprintf 
-                "A precondition for this call of %s might not hold"
-                (string_of_ident proc_name),
-              ProgError.mk_error_info "This is the precondition that might not hold"
-            in
-            let name = "precondition of " ^ string_of_ident proc_name in
-            convert_spec_form pure locals e name (Some mk_msg) :: pre, post
-        | Ensures (e, pure) -> fun (pre, post) ->
-            let mk_msg caller =
-              Printf.sprintf 
-                "A postcondition of procedure %s might not hold at this return point"
-                (string_of_ident proc_name),
-              ProgError.mk_error_info "This is the postcondition that might not hold"
-            in 
-            let name = "postcondition of " ^ string_of_ident proc_name in
-            pre, convert_spec_form pure locals e name (Some mk_msg) :: post)
-      contract ([], [])
-  in
+  (* Convert procedures *)
   let convert_body decl =
     match decl.p_body with
     | Skip _ -> None
@@ -727,6 +731,7 @@ let convert cu =
       )
       cu.proc_decls prog
   in
+  (* Convert axioms *)
   let prog = 
     let specs =
       List.map

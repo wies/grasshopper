@@ -50,7 +50,7 @@ and proc =
       p_formals : idents;
       p_returns : idents;
       p_locals : vars;
-      p_contracts : proc_contracts;
+      p_contracts : contracts;
       p_body : stmt; 
       p_pos : pos;
     }
@@ -62,6 +62,7 @@ and pred =
       pr_formals : idents;
       pr_outputs : idents;
       pr_locals : vars;
+      pr_contracts : contracts;
       pr_body : expr option; 
       pr_pos : pos;
     }
@@ -80,11 +81,11 @@ and var =
 
 and vars = var IdMap.t
 
-and proc_contract =
+and contract =
   | Requires of expr * bool
   | Ensures of expr * bool
 
-and proc_contracts = proc_contract list
+and contracts = contract list
 
 and struc =
     { s_name : ident;
@@ -126,29 +127,31 @@ and expr =
   | BoolVal of bool * pos
   | New of typ * exprs * pos
   | Read of expr * expr * pos
-  | Old of expr * pos
-  | Length of expr * pos
-  | ArrayOfCell of expr * pos
-  | IndexOfCell of expr * pos
-  | ArrayCells of expr * pos
   | ProcCall of ident * exprs * pos
   | PredApp of pred_sym * exprs * pos
   | Binder of binder_kind * bound_var list * expr * pos
-  | UnaryOp of op * expr * pos
-  | BinaryOp of expr * op * expr * typ * pos
+  | UnaryOp of un_op * expr * pos
+  | BinaryOp of expr * bin_op * expr * typ * pos
   | Ident of ident * pos
   | Annot of expr * annotation * pos
 
 and exprs = expr list
 
-and op = 
+and bin_op = 
   | OpDiff | OpUn | OpInt 
   | OpMinus | OpPlus | OpMult | OpDiv 
   | OpEq | OpGt | OpLt | OpGeq | OpLeq | OpIn
   | OpPts | OpSepStar | OpSepPlus | OpSepIncl
-  | OpBvAnd | OpBvOr | OpBvNot | OpBvShiftL | OpBvShiftR | OpToInt | OpToByte
-  | OpAnd | OpOr | OpImpl | OpNot 
+  | OpBvAnd | OpBvOr | OpBvShiftL | OpBvShiftR 
+  | OpAnd | OpOr | OpImpl 
 
+and un_op =
+  | OpArrayCells | OpIndexOfCell | OpArrayOfCell | OpLength
+  | OpUMinus | OpUPlus
+  | OpBvNot | OpToInt | OpToByte
+  | OpNot
+  | OpOld
+      
 and pred_sym =
   | AccessPred | BtwnPred | DisjointPred | FramePred | ReachPred | Pred of ident
       
@@ -170,11 +173,6 @@ let pos_of_expr = function
   | Setenum (_, _, p)
   | New (_, _, p)
   | Read (_, _, p)
-  | Old (_, p)
-  | Length (_, p)
-  | ArrayOfCell (_, p)
-  | IndexOfCell (_, p)
-  | ArrayCells (_, p)
   | Binder (_, _, _, p)
   | ProcCall (_, _, p)
   | PredApp (_, _, p)
@@ -193,11 +191,6 @@ let free_vars e =
     | PredApp (_, es, _) ->
         List.fold_left (fv bv) acc es
     | UnaryOp (_, e, _)
-    | Old (e, _)
-    | Length (e, _)
-    | ArrayOfCell (e, _)
-    | IndexOfCell (e, _)
-    | ArrayCells (e, _)
     | Annot (e, _, _) ->
         fv bv acc e
     | Read (e1, e2, _) 
@@ -312,8 +305,7 @@ let empty_spl_program =
     pred_decls = IdMap.empty;
     background_theory = [];
   }
-
-
+    
 let mk_block pos = function
   | [] -> Skip pos
   | [stmt] -> stmt

@@ -86,7 +86,8 @@ let type_of_expr cu locals e =
     (* Byte values *)
     | UnaryOp (OpToByte, _, _) -> ByteType
     (* Int or Byte return values *)
-    | UnaryOp (OpMinus, e, _) 
+    | UnaryOp (OpUMinus, e, _)
+    | UnaryOp (OpUPlus, e, _) 
     | BinaryOp (e, OpMinus, _, _, _)
     | BinaryOp (e, OpPlus, _, _, _)
     | BinaryOp (e, OpMult, _, _, _)
@@ -130,14 +131,14 @@ let type_of_expr cu locals e =
         | MapType (_, ty) -> ty
         | ArrayType ty -> ty
         | _ -> AnyType)
-    | Old (e, _) -> te e        
-    | Length (map, _) -> IntType
-    | ArrayOfCell (c, _) ->
+    | UnaryOp (OpOld, e, _) -> te e        
+    | UnaryOp (OpLength, map, _) -> IntType
+    | UnaryOp (OpArrayOfCell, c, _) ->
         (match te c with
         | ArrayCellType srt -> ArrayType srt
         | _ -> AnyType)
-    | IndexOfCell (c, _) -> IntType
-    | ArrayCells (map, _) ->
+    | UnaryOp (OpIndexOfCell, c, _) -> IntType
+    | UnaryOp (OpArrayCells, map, _) ->
         (match te map with
         | ArrayType srt -> MapType (IntType, ArrayCellType srt)
         | _ -> AnyType)
@@ -166,8 +167,6 @@ let type_of_expr cu locals e =
           with Not_found -> AnyType)
     | Annot (e, _, _) ->
         te e
-    | UnaryOp _
-    | BinaryOp _ -> failwith "impossible"
   in 
   te e
 
@@ -228,7 +227,8 @@ let infer_types cu locals ty e =
         ignore (match_types pos ty BoolType);
         BinaryOp (e1, OpIn, e2, BoolType, pos), BoolType
     (* Ambiguous Int/Byte operators*)
-    | UnaryOp (OpMinus as op, e, pos) 
+    | UnaryOp (OpUMinus as op, e, pos) 
+    | UnaryOp (OpUPlus as op, e, pos) 
     | UnaryOp (OpBvNot as op, e, pos) ->
       let e1, ty = it locals AnyType e in
       if ty = IntType || ty = ByteType then
@@ -341,13 +341,13 @@ let infer_types cu locals ty e =
         in
         let ty1 = match_types pos ty nty in
         New (ty1, es1, pos), ty1
-    | Old (e, pos) ->
+    | UnaryOp (OpOld, e, pos) ->
         let e1, ty1 = it locals ty e in
-        Old (e1, pos), ty1
-    | Length (map, pos) ->
+        UnaryOp(OpOld, e1, pos), ty1
+    | UnaryOp (OpLength, map, pos) ->
         let map1, _ = it locals (ArrayType AnyType) map in
-        Length (map1, pos), match_types pos ty IntType
-    | ArrayOfCell (c, pos) ->
+        UnaryOp (OpLength, map1, pos), match_types pos ty IntType
+    | UnaryOp (OpArrayOfCell, c, pos) ->
         let ety =
           match ty with
           | ArrayType ety -> ety
@@ -359,11 +359,11 @@ let infer_types cu locals ty e =
           | ArrayCellType ety -> ety
           | _ -> ety
         in
-        ArrayOfCell (c1, pos), match_types pos ty (ArrayType ety)
-    | IndexOfCell (c, pos) ->
+        UnaryOp (OpArrayOfCell, c1, pos), match_types pos ty (ArrayType ety)
+    | UnaryOp (OpIndexOfCell, c, pos) ->
         let c1, _ = it locals (ArrayCellType AnyType) c in
-        IndexOfCell (c1, pos), match_types pos ty IntType
-    | ArrayCells (map, pos) ->
+        UnaryOp (OpIndexOfCell, c1, pos), match_types pos ty IntType
+    | UnaryOp (OpArrayCells, map, pos) ->
         let ety =
           match ty with
           | ArrayCellType ety -> ety
@@ -375,7 +375,7 @@ let infer_types cu locals ty e =
           | ArrayType ety -> ety
           | _ -> ety
         in
-        ArrayCells (map1, pos), match_types pos ty (MapType (IntType, ArrayCellType ety))
+        UnaryOp (OpArrayCells, map1, pos), match_types pos ty (MapType (IntType, ArrayCellType ety))
      (*| Dot (e, id, pos) ->
         let decl = IdMap.find id cu.var_decls in
         let dty, rty =
@@ -534,8 +534,6 @@ let infer_types cu locals ty e =
           | _ -> a
         in
         Annot (e1, a1, pos), ty
-    | UnaryOp _
-    | BinaryOp _ -> failwith "impossible"
   and itp locals ty e1 e2 =
     let e1, ty1 = it locals ty e1 in
     let e2, ty2 = it locals ty e2 in

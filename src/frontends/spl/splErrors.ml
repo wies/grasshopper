@@ -24,6 +24,10 @@ let not_a_field_error id pos =
 
 let redeclaration_error id pos =
   ProgError.error pos ("Identifier " ^ GrassUtil.name id ^ " has already been declared in this scope.")
+
+let illegal_side_effect_error pos source =
+  ProgError.error pos ("Operations that may have side effects are not allowed in " ^ source)
+
     
 let assignment_mismatch_error pos =
   ProgError.error pos 
@@ -48,21 +52,21 @@ let return_in_loop_error pos =
   ProgError.error pos "A procedure cannot return from within a loop."
 
 let alloc_arg_mismatch_error pos expected =
-  ProgError.error pos (Printf.sprintf "Constructor expects %d argument(s)" expected)
+  ProgError.error pos (Printf.sprintf "Constructor expects %d argument(s)." expected)
 
 let alloc_type_error pos ty =
   ProgError.type_error pos
     ("Expected an array or struct type but found " ^ string_of_type ty)
     
 let pred_arg_mismatch_error pos id expected =
-  ProgError.error pos (Printf.sprintf "Predicate %s expects %d argument(s)" (GrassUtil.name id) expected)
+  ProgError.error pos (Printf.sprintf "Predicate %s expects %d argument(s)." (GrassUtil.name id) expected)
 
 let fun_arg_mismatch_error pos id expected =
-  ProgError.error pos (Printf.sprintf "Function %s expects %d argument(s)" (GrassUtil.name id) expected)
+  ProgError.error pos (Printf.sprintf "Function %s expects %d argument(s)." (GrassUtil.name id) expected)
 
 let proc_arg_mismatch_error pos id expected =
   ProgError.error pos 
-    (Printf.sprintf "Procedure %s expects %d argument(s)" 
+    (Printf.sprintf "Procedure %s expects %d argument(s)." 
        (GrassUtil.name id) (List.length expected))
 
 let type_error pos exp_ty fnd_ty =

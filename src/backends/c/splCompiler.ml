@@ -181,11 +181,13 @@ let convert oc cu =
         | _                 -> fprintf ppf "/* ERROR: can't address such an object with Read */")
     and pr_un_op ppf = function
       | (OpNot, e1)   -> fprintf ppf "(!%a)" pr_c_expr e1
-      | (OpMinus, e1) -> fprintf ppf "(-%a)" pr_c_expr e1
+      | (OpUMinus, e1) -> fprintf ppf "(-%a)" pr_c_expr e1
       | (OpBvNot, e1) -> fprintf ppf "(~%a)" pr_c_expr e1
       | (OpToInt, e1) -> fprintf ppf "((int) %a)" pr_c_expr e1
-      | (OpToByte, e1) -> fprintf ppf "((char) %a)" pr_c_expr e1
-      |  _            -> fprintf ppf "/* ERROR: no such unary operator. */"
+      | (OpToByte, e1) -> fprintf ppf "%a" pr_c_expr e1
+      | (OpUPlus, e1) -> fprintf ppf "((char) %a)" pr_c_expr e1
+      | ((OpLength | OpOld | OpArrayCells | OpArrayOfCell | OpIndexOfCell), _)  ->
+          fprintf ppf "/* ERROR: no such unary operator. */"
     and pr_bin_op ppf = function
       | (e1, OpMinus, e2) -> fprintf ppf "(%a - %a)"  pr_c_expr e1 pr_c_expr e2
       | (e1, OpPlus,  e2) -> fprintf ppf "(%a + %a)"  pr_c_expr e1 pr_c_expr e2
@@ -208,20 +210,20 @@ let convert oc cu =
         fprintf ppf "/* ERROR: Sets not yet implemented */"
       | (_, (OpPts | OpSepStar | OpSepPlus | OpSepIncl), _) -> 
         fprintf ppf "/* ERROR: separation logic not yet implemented. */"
-      | _ -> fprintf ppf "/* ERROR: no such Binary Operator */"
+      (*| _ -> fprintf ppf "/* ERROR: no such Binary Operator */"*)
     and pr_c_expr ppf = function
       | (Null (_, _), _)           -> fprintf ppf "NULL"
       | (IntVal (i, _), _)         -> fprintf ppf "%s" (Int64.to_string i)
       | (BoolVal (b, _), _)        -> fprintf ppf (if b then "true" else "false")
       | (Read (from, index, _), cur_proc) -> pr_c_read ppf (from, index, cur_proc)
-      | (Length (idexp, _), cur_proc)     -> 
-        fprintf ppf "(%a->%s)" 
-          pr_c_expr (idexp, cur_proc)
-          len_field
       | (ProcCall (id, es, _), cur_proc)  ->
         fprintf ppf "%s(%a)"
           (string_of_ident id)
           pr_c_expr_args (es, cur_proc)
+      | (UnaryOp (OpLength, idexp, _), cur_proc) -> 
+        fprintf ppf "(%a->%s)" 
+          pr_c_expr (idexp, cur_proc)
+          len_field
       | (UnaryOp  (op, e, _), cur_proc)          -> pr_un_op  ppf (op, (e, cur_proc))
       | (BinaryOp (e1, op1, e2, _, _), cur_proc) -> 
         pr_bin_op ppf ((e1, cur_proc), op1, (e2, cur_proc))
@@ -235,7 +237,7 @@ let convert oc cu =
               fprintf ppf "%s"    (string_of_ident id)
       | (New (t, args, _), _)             ->
         fprintf ppf "/* ERROR: New expression only allowed directly within an Assign or Free stmt. */"
-      | ((Old _ | ArrayCells _|ArrayOfCell _|IndexOfCell _|Emp _|Setenum _|PredApp _|
+      | ((Emp _|Setenum _|PredApp _|
         Binder _| Annot _), _) ->
         fprintf ppf "/* ERROR: expression type not yet implemented. */"
     in
@@ -373,8 +375,7 @@ let convert oc cu =
           | _ -> fprintf ppf "/* ERROR: a variable of such a type cannot be disposed. */" 
         )
         | BinaryOp _ -> fprintf ppf "/* ERROR: freeing the result of binary operation will possibly be implemented in the future for freeing Sets. */" 
-        | (Old _ | Null _ | Emp _ | Setenum _ | IntVal _ | BoolVal _ | Length _ 
-        | ArrayOfCell _ | IndexOfCell _ | ArrayCells _ | PredApp _ | Binder _
+        | (Null _ | Emp _ | Setenum _ | IntVal _ | BoolVal _ | PredApp _ | Binder _
         | UnaryOp _ | Annot _) ->
             fprintf ppf "/* ERROR: expression cannot be dispsosed */"
       in 
