@@ -2,6 +2,9 @@
 
 open Grass
 open SplSyntax
+
+let arguments_to_string d =
+  if d = 1 then "one argument" else Printf.sprintf "%d arguments" d
   
 let unknown_ident_error id pos =
   ProgError.error pos ("Unknown identifier " ^ GrassUtil.name id ^ ".")
@@ -52,22 +55,22 @@ let return_in_loop_error pos =
   ProgError.error pos "A procedure cannot return from within a loop."
 
 let alloc_arg_mismatch_error pos expected =
-  ProgError.error pos (Printf.sprintf "Constructor expects %d argument(s)." expected)
+  ProgError.error pos (Printf.sprintf "Constructor expects %s." (arguments_to_string expected))
 
 let alloc_type_error pos ty =
   ProgError.type_error pos
     ("Expected an array or struct type but found " ^ string_of_type ty)
     
 let pred_arg_mismatch_error pos id expected =
-  ProgError.error pos (Printf.sprintf "Predicate %s expects %d argument(s)." (GrassUtil.name id) expected)
+  ProgError.error pos (Printf.sprintf "Predicate %s expects %s." (GrassUtil.name id) (arguments_to_string expected))
 
 let fun_arg_mismatch_error pos id expected =
-  ProgError.error pos (Printf.sprintf "Function %s expects %d argument(s)." (GrassUtil.name id) expected)
+  ProgError.error pos (Printf.sprintf "Function %s expects %s." (GrassUtil.name id) (arguments_to_string expected))
 
 let proc_arg_mismatch_error pos id expected =
   ProgError.error pos 
-    (Printf.sprintf "Procedure %s expects %d argument(s)." 
-       (GrassUtil.name id) (List.length expected))
+    (Printf.sprintf "Procedure %s expects %s." 
+       (GrassUtil.name id) (arguments_to_string @@ List.length expected))
 
 let type_error pos exp_ty fnd_ty =
   let ty_str ty = "expression of type " ^ string_of_type ty in
