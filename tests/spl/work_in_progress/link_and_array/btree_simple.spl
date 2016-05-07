@@ -2,7 +2,7 @@
 //  http://opendatastructures.org/ods-java/14_2_B_Trees.html
 //  under CC-BY
 //  full source at http://opendatastructures.org/ods-java.tgz
-  
+   
 struct Node {
   var keys: Array<Int>;
   var children: Array<Node>;
@@ -128,7 +128,7 @@ predicate btree(b: Node)(FP_N: Set<Node>, FP_A_I: Set<Array<Int>>, FP_AC_I: Set<
 
 /* Find the smallest value >= x in this BTree */
 procedure find(b: Node, x: Int) returns (res: Int)
-  requires btree(b) &*& b != null;
+  requires btree(b) &*& b != null
   ensures btree(b)
 {
   var z: Int;
@@ -138,14 +138,13 @@ procedure find(b: Node, x: Int) returns (res: Int)
     invariant (n == null || acc(n)) -** btree(b)
   {
     var i := findIt(n.keys, x, 0, n.num_keys);
-    assert acc(n.keys.cells[i]) -** btree(b); 
     if (n.keys[i] == x) {
       z := n.keys[i];
       flag := true;  /* Found x, so return */
     } else {
       /* n.keys[i] is smallest value > x, go to child[i] if exists */
       if (i != n.num_keys) {
-	z := n.keys[i];
+        z := n.keys[i];
       }
       n := n.children[i];
     }
@@ -157,7 +156,7 @@ procedure findIt(a: Array<Int>, x: Int, begin: Int, end: Int) returns (idx: Int)
   requires int_arrayseg(a, begin, end)
   requires 0 <= begin && begin <= end && end <= a.length
   ensures int_arrayseg(a, begin, end)
-  ensures begin <= idx && idx <= end
+  ensures begin <= idx && idx < end
 { }
 /* TODO for nomodifiesopt, better to give body for proc or not? */
 
