@@ -169,7 +169,7 @@ let convert cu =
             let res_ty =
               decl.pr_body |>
               Opt.map (type_of_expr cu decl.pr_locals) |>
-              Opt.get_or_else AnyType
+              Opt.get_or_else BoolType
             in
             let res_srt = convert_type res_ty pos in
             GrassUtil.mk_free_fun res_srt id ts
@@ -603,7 +603,7 @@ let convert cu =
         let rtype =
           decl.pr_body |>
           Opt.map (type_of_expr cu decl.pr_locals) |>
-          Opt.get_or_else AnyType
+          Opt.get_or_else BoolType
         in
         let body, locals, outputs =
           match rtype with

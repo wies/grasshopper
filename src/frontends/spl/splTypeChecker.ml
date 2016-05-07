@@ -153,7 +153,7 @@ let type_of_expr cu locals e =
     | PredApp (Pred id, _, _) ->
         let decl = IdMap.find id cu.pred_decls in
         (match decl.pr_outputs with
-        | [] -> decl.pr_body |> Opt.map te |> Opt.get_or_else AnyType
+        | [] -> decl.pr_body |> Opt.map te |> Opt.get_or_else BoolType
         | [rid] -> 
             let rdecl = IdMap.find rid decl.pr_locals in
             rdecl.v_type
@@ -505,7 +505,7 @@ let infer_types cu locals ty e =
               let body_ty =
                 decl.pr_body |>
                 Opt.map (type_of_expr cu locals) |>
-                Opt.get_or_else AnyType
+                Opt.get_or_else BoolType
               in
               match_types pos ty body_ty
         in
