@@ -77,11 +77,12 @@ procedure setupDataConnection(cmdFd: Int, address: SocketAddressIP4, port: Array
   portMsg := "PORT ";
   var copied := gstrcat(port, portMsg);
   var sent := tcp_send(cmdFd, portMsg, portMsg.length);
-  free(portMsg);
   if (sent != portMsg.length) {
+    free(portMsg);
     //    free(dataAddr);
     return -1;
   }
+  free(portMsg);
 
   //now we wait for the server to connect to us on the data connection
   //  connectedDataFD := accept4(dataFD, dataAddr);
@@ -402,7 +403,7 @@ procedure client(upload: Bool)
   //we set up the data connection
   port := "4440";
   //we ask again
-  var dataAddr := askIP(port);
+  var dataAddr := get_address_4(null, port);//askIP(port);
   if (dataAddr == null){
     free(port);
     return -1;
