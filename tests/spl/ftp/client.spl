@@ -403,7 +403,7 @@ procedure client(upload: Bool)
   //we set up the data connection
   port := "4440";
   //we ask again
-  var dataAddr := get_address_4(null, port);//askIP(port);
+  var dataAddr := get_address4(null, port);//askIP(port);
   if (dataAddr == null){
     free(port);
     return -1;
