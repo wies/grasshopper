@@ -40,7 +40,7 @@ procedure recvDataConnection(cmdFd: Int, addr: SocketAddressIP4) returns (res: I
   free(resp);
 
   //  var addr := get_address4(null, portArray);
-  addr.sin4_port := ghtons(atoiG(portArray));
+  addr.sin4_port := atoiG(portArray);
   free(portArray);
 
   if (connect4(fd, addr)) {
