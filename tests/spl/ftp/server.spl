@@ -42,6 +42,11 @@ procedure recvDataConnection(cmdFd: Int, addr: SocketAddressIP4) returns (res: I
   //  var addr := get_address4(null, portArray);
   addr.sin4_port := atoiG(portArray);
   free(portArray);
+  if (addr.sin4_port < 0 || addr.sin4_port >= 65536) {
+    addr.sin4_port := 0;
+    var closing := gclose(fd);
+    return -1;
+  }
 
   if (connect4(fd, addr)) {
     return fd;
