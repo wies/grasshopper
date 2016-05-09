@@ -9,7 +9,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
-//#include <arpa/inet.h>
+#include <arpa/inet.h>
 
 /*
  * Preloaded Code
@@ -46,7 +46,7 @@ typedef struct SocketAddressIP6 {
  */
 
 void to_grass_addr(struct sockaddr_in* c, struct SocketAddressIP4* address) {
-  address->sin4_port = c->sin_port;
+  address->sin4_port = ntohs(c->sin_port);
   //address->sin4_addr_upper = (int)(c->sin_addr.s_addr >> 32);
   //address->sin4_addr_lower = (int)(c->sin_addr.s_addr);
   address->sin4_addr = c->sin_addr.s_addr;
@@ -54,7 +54,7 @@ void to_grass_addr(struct sockaddr_in* c, struct SocketAddressIP4* address) {
 
 void from_grass_addr(struct SocketAddressIP4* address, struct sockaddr_in* c) {
   c->sin_family = AF_INET;
-  c->sin_port = (short) address->sin4_port;
+  c->sin_port = htons((short) address->sin4_port);
   //c->sin_addr.s_addr = (((long)address->sin4_addr_upper) << 32) | address->sin4_addr_lower;
   c->sin_addr.s_addr = address->sin4_addr;
   c->sin_zero[0] = 0;  c->sin_zero[1] = 0;
