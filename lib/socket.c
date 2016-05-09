@@ -83,34 +83,51 @@ void from_grass_addr6(struct SocketAddressIP6* address, struct sockaddr_in6* c) 
 }
 
 struct SocketAddressIP4* get_address4(SPLArray_char* node, SPLArray_char* service) {
-  struct addrinfo hint;
-  memset(&hint, 0, sizeof hint);
-  hint.ai_family = AF_INET;
-  hint.ai_socktype = SOCK_DGRAM; //SOCK_STREAM
-  hint.ai_protocol = IPPROTO_UDP; //IPPROTO_TCP
-  struct addrinfo *servinfo = NULL;
-  int rv;
   if (node == NULL) {
-    rv = getaddrinfo(NULL, service->arr, &hint, &servinfo);
+    struct sockaddr_in sa;
+    memset(&sa, 0, sizeof sa);
+    sa.sin_family = AF_INET;
+    sa.sin_port = htons(atoi(service->arr));
+    sa.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    //printf("(local) IP address is: %s\n", inet_ntoa(sa.sin_addr));
+
+    struct SocketAddressIP4* address = malloc(sizeof(struct SocketAddressIP4));
+    to_grass_addr(&sa, address);
+
+    return address;
+
   } else {
-    rv = getaddrinfo(node->arr, service->arr, &hint, &servinfo);
-  }
-  if (rv != 0) {
-    return NULL;
-  } else {
-    struct addrinfo *p;
-    for(p = servinfo; p != NULL; p = p->ai_next) {
-      if (p->ai_family == AF_INET) {
-	struct SocketAddressIP4* address = malloc(sizeof(struct SocketAddressIP4));
-	assert(address != NULL);
-	struct sockaddr_in* a = (struct sockaddr_in*)p->ai_addr;
-	to_grass_addr(a, address);
-	freeaddrinfo(servinfo);
-	return address;
-      }
+    struct addrinfo hint;
+    memset(&hint, 0, sizeof hint);
+    hint.ai_family = AF_INET;
+    hint.ai_socktype = SOCK_DGRAM; //SOCK_STREAM
+    hint.ai_protocol = IPPROTO_UDP; //IPPROTO_TCP
+    struct addrinfo *servinfo = NULL;
+    int rv;
+    if (node == NULL) {
+      rv = getaddrinfo(NULL, service->arr, &hint, &servinfo);
+    } else {
+      rv = getaddrinfo(node->arr, service->arr, &hint, &servinfo);
     }
-    freeaddrinfo(servinfo);
-    return NULL;
+    if (rv != 0) {
+      return NULL;
+    } else {
+      struct addrinfo *p;
+      for(p = servinfo; p != NULL; p = p->ai_next) {
+        if (p->ai_family == AF_INET) {
+          struct SocketAddressIP4* address = malloc(sizeof(struct SocketAddressIP4));
+          assert(address != NULL);
+          struct sockaddr_in* a = (struct sockaddr_in*)p->ai_addr;
+          //printf("(remote) IP address is: %s\n", inet_ntoa(a->sin_addr));
+          to_grass_addr(a, address);
+          freeaddrinfo(servinfo);
+          return address;
+        }
+      }
+      freeaddrinfo(servinfo);
+      return NULL;
+    }
   }
 }
 
@@ -228,17 +245,18 @@ bool connect4(int fd, struct SocketAddressIP4* address)
 {
   struct sockaddr_in sa;
   from_grass_addr(address, &sa);
-  // char ipPrint[INET_ADDRSTRLEN];
 
+  //char ipPrint[INET_ADDRSTRLEN];
   //inet_ntop(AF_INET, &(sa.sin_addr), ipPrint, INET_ADDRSTRLEN);
-
   //printf("IP is: %s\n", ipPrint);
   //printf("port is: %d\n", (int) ntohs(sa.sin_port));
-  //int res = connect(fd, (struct sockaddr*) &sa, sizeof sa);
+
+  int res = connect(fd, (struct sockaddr*) &sa, sizeof sa);
   //if (res < 0) {
   //  printf("error: %s\n", strerror(errno));
   //}
-  return connect(fd, (struct sockaddr*) &sa, sizeof sa) == 0;
+  return res == 0;
+
 }
 
 bool connect6(int fd, struct SocketAddressIP6* address)
