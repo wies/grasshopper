@@ -13,26 +13,26 @@ struct ConcList {
 }
 
 
-function previous(n: Node, h: Node) returns (p: Node) {
+function previous(next: Map<Node, Node>, n: Node, h: Node) returns (p: Node) {
   (!Reach(next, h, n) ==> p == null) &&
   (h == n ==> p == h) &&
   (forall x: Node :: Btwn(next, h, x, n) && x != n && h != n ==>
    Btwn(next, x, p, n) && p != n)
-   @(matching n yields previous(n, h))
+  @(matching n yields previous(next, n, h))
 }
 
-function inset(n: Node, h: Node) returns (I: Set<Int>) {
+function inset(data: Map<Node, Int>, next: Map<Node, Node>, n: Node, h: Node) returns (I: Set<Int>) {
   (!Reach(next, h, n) ==> I == {}) &&
-  /* If head.data were MININT, this would be unnecessary: */
+  /* If head.data were MININT, this would be unextecessary: */
   (h == n ==> I == {x: Int :: true}) &&
-  (Reach(next, h, n) && h != n ==> I == {x: Int :: previous(n, h).data < x})
+  (Reach(next, h, n) && h != n ==> I == {x: Int :: previous(next, n, h).data < x})
 }
 /* TODO parametrize with ConcList instead of head Node? Fewer instances? */
 
 function keyset(n: Node, h: Node) returns (K: Set<Int>) {
   /* Again, if head were MININT, this would be unnecessary: */
   (h == n ==> K == {}) &&
-  (h != n ==> K == inset(n, h) -- {x: Int :: n.data < x})
+  (h != n ==> K == inset(data, next, n, h) -- {x: Int :: n.data < x})
 }
 
 
@@ -70,13 +70,13 @@ axiom (forall x: Int, h: Node, t: Node, n: Node, FP: Set<Node> ::
        lseg_strictly_increasing(h, FP) && Btwn(next, h, t, null) && t.next == null &&
        next_greater(x, h, t) == n && x <= t.data
        ==>
-       Btwn(next, h, n, null) && n != null && x <= n.data && previous(n, h).data < x);
+       Btwn(next, h, n, null) && n != null && x <= n.data && previous(next, n, h).data < x);
 
 procedure good_state(c: ConcList, implicit ghost C: Set<Int>, implicit ghost FP_C: Set<ConcList>, FP_N: Set<Node>)
   requires conc_list_set(c, C, FP_C, FP_N)
 {
   /* keysets of all nodes are disjoint */
-  pure assert (forall n1 in FP_N, n2 in FP_N, x: Int :: x in keyset(n1, c.head) && x in keyset(n2, c.head) ==> n1 == n2 @(matching n1 yields keyset(n1, c.head)) @(matching keyset(n1, c.head) yields inset(n1, c.head)));
+  pure assert (forall n1 in FP_N, n2 in FP_N, x: Int :: x in keyset(n1, c.head) && x in keyset(n2, c.head) ==> n1 == n2 @(matching n1 yields keyset(n1, c.head)) @(matching keyset(n1, c.head) yields inset(data, next, n1, c.head)));
   /* keysets cover keyspace */
   pure assert (forall x: Int :: c.head.data < x && x < c.tail.data ==> (x in keyset(next_greater(x, c.head, c.tail), c.head) @(matching x yields next_greater(x, c.head, c.tail))));
 
@@ -255,11 +255,11 @@ procedure delete01(c: ConcList, x: Int,
   requires (c.head.data < x &*& x < c.tail.data)
     -** (acc(L) &+& (conc_list_set(c, C)))
   ensures L1 == {c.head}
-  ensures (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head))
+  ensures (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, c.head, c.head))
     -** (acc(L1) &+& (conc_list_set(c, C)))
   /* Global invariants: */
   /* Don't change inset of anything you don't hold lock on */ /* TODO shrink? */
-  ensures (forall n: Node :: n !in L ==> inset(n, c.head) == old(inset(n, c.head)))
+  ensures (forall n: Node :: n !in L ==> inset(data, next, n, c.head) == old(inset(data, next, n, c.head)))
   /* Sentinel head & tail are not modified */
   ensures (c.head == old(c.head) && c.head.data == old(c.head.data) && c.tail == old(c.tail) && c.tail.data == old(c.tail.data))
 {
@@ -276,7 +276,7 @@ procedure havoc_S(c: ConcList, L: Set<Node>, S: Set<Node>, implicit ghost C: Set
   ensures Frame(S, S ++ L, old(next), next) &*& Frame(S, S ++ L, old(data), data)
   /* Global invariants: */
   /* Don't change inset of anything you don't hold lock on */
-  ensures forall n: Node :: n in L ==> inset(n, c.head) == old(inset(n, c.head))
+  ensures forall n: Node :: n in L ==> inset(data, next, n, c.head) == old(inset(data, next, n, c.head))
   /* Sentinel head & tail are not modified */
   ensures (c.head == old(c.head) && c.head.data == old(c.head.data) && c.tail == old(c.tail) && c.tail.data == old(c.tail.data))
 
@@ -286,10 +286,10 @@ procedure delete01_env(c: ConcList, x: Int, pred: Node, curr: Node,
   returns (L1: Set<Node>, pred1: Node, curr1: Node)
 
   requires L == {c.head} &*& Disjoint(L, S)
-  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head))
+  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, c.head, c.head))
     -** (acc(S) -** (acc(L) &+& conc_list_set(c, C)))
   ensures L1 == {c.head}
-  ensures exists C1: Set<Int> :: (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head))
+  ensures exists C1: Set<Int> :: (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, c.head, c.head))
     -** (acc(L1) &+& (conc_list_set(c, C1)))
 {
   havoc_S(c, L, S);
@@ -300,14 +300,14 @@ procedure delete02(c: ConcList, x: Int,
 		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
   returns (L1: Set<Node>, pred1: Node)
   requires L == {c.head}
-  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head))
+  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, c.head, c.head))
     -** (acc(L) &+& (conc_list_set(c, C)))
   ensures L1 == {pred1}
-  ensures (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head) &*& pred1 == c.head)
+  ensures (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, c.head, c.head) &*& pred1 == c.head)
     -** (acc(L1) &+& (conc_list_set(c, C)))
   /* Global invariants: */
   /* Don't change inset of anything you don't hold lock on */
-  ensures (forall n: Node :: n !in L ==> inset(n, c.head) == old(inset(n, c.head)))
+  ensures (forall n: Node :: n !in L ==> inset(data, next, n, c.head) == old(inset(data, next, n, c.head)))
   /* Sentinel head & tail are not modified */
   ensures (c.head == old(c.head) && c.head.data == old(c.head.data) && c.tail == old(c.tail) && c.tail.data == old(c.tail.data))
 {
@@ -320,10 +320,10 @@ procedure delete02_env(c: ConcList, x: Int, pred: Node, curr: Node,
   returns (L1: Set<Node>, pred1: Node, curr1: Node)
 
   requires L == {pred} &*& Disjoint(L, S)
-  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head) &*& pred == c.head)
+  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, c.head, c.head) &*& pred == c.head)
     -** (acc(S) -** (acc(L) &+& conc_list_set(c, C)))
   ensures L1 == {pred1}
-  ensures exists C1: Set<Int> :: (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head) &*& pred1 == c.head)
+  ensures exists C1: Set<Int> :: (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, c.head, c.head) &*& pred1 == c.head)
     -** (acc(L1) &+& (conc_list_set(c, C1)))
 {
   havoc_S(c, L, S);
@@ -334,14 +334,14 @@ procedure delete03(c: ConcList, x: Int, pred: Node,
 		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
   returns (L1: Set<Node>, pred1: Node, curr1: Node)
   requires L == {pred}
-  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head) &*& pred == c.head)
+  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, c.head, c.head) &*& pred == c.head)
     -** (acc(L) &+& (conc_list_set(c, C)))
   ensures L1 == {pred1}
-  ensures (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head) &*& pred == c.head &*& pred1.next |-> curr1)
+  ensures (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, c.head, c.head) &*& pred == c.head &*& pred1.next |-> curr1)
     -** (acc(L1) &+& (conc_list_set(c, C)))
   /* Global invariants: */
   /* Don't change inset of anything you don't hold lock on */
-  ensures (forall n: Node :: n !in L ==> inset(n, c.head) == old(inset(n, c.head)))
+  ensures (forall n: Node :: n !in L ==> inset(data, next, n, c.head) == old(inset(data, next, n, c.head)))
   /* Sentinel head & tail are not modified */
   ensures (c.head == old(c.head) && c.head.data == old(c.head.data) && c.tail == old(c.tail) && c.tail.data == old(c.tail.data))
 {
@@ -354,10 +354,10 @@ procedure delete03_env(c: ConcList, x: Int, pred: Node, curr: Node,
   returns (L1: Set<Node>, pred1: Node, curr1: Node)
 
   requires L == {pred} &*& Disjoint(L, S)
-  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head) &*& pred == c.head &*& pred.next |-> curr)
+  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, c.head, c.head) &*& pred == c.head &*& pred.next |-> curr)
     -** (acc(S) -** (acc(L) &+& conc_list_set(c, C)))
   ensures L1 == {pred1}
-  ensures exists C1: Set<Int> :: (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head) &*& pred1 == c.head &*& pred1.next |-> curr1)
+  ensures exists C1: Set<Int> :: (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, c.head, c.head) &*& pred1 == c.head &*& pred1.next |-> curr1)
     -** (acc(L1) &+& (conc_list_set(c, C1)))
 {
   havoc_S(c, L, S);
@@ -368,14 +368,14 @@ procedure delete04(c: ConcList, x: Int, pred: Node, curr: Node,
 		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
   returns (L1: Set<Node>, pred1: Node, curr1: Node)
   requires L == {pred}
-  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head) &*& pred == c.head &*& pred.next |-> curr)
+  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, c.head, c.head) &*& pred == c.head &*& pred.next |-> curr)
     -** (acc(L) &+& conc_list_set(c, C))
   ensures L1 == {pred1, curr1}
-  ensures (c.head.data < x &*& x < c.tail.data &*& x in inset(curr1, c.head) &*& pred == c.head &*& pred1.next |-> curr1)
+  ensures (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, curr1, c.head) &*& pred == c.head &*& pred1.next |-> curr1)
     -** (acc(L1) &+& (conc_list_set(c, C)))
   /* Global invariants: */
   /* Don't change inset of anything you don't hold lock on */
-  ensures (forall n: Node :: n !in L ==> inset(n, c.head) == old(inset(n, c.head)))
+  ensures (forall n: Node :: n !in L ==> inset(data, next, n, c.head) == old(inset(data, next, n, c.head)))
   /* Sentinel head & tail are not modified */
   ensures (c.head == old(c.head) && c.head.data == old(c.head.data) && c.tail == old(c.tail) && c.tail.data == old(c.tail.data))
 {
@@ -389,10 +389,10 @@ procedure delete04_env(c: ConcList, x: Int, pred: Node, curr: Node,
   returns (L1: Set<Node>, pred1: Node, curr1: Node)
 
   requires L == {pred, curr} &*& Disjoint(L, S)
-  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(curr, c.head) &*& pred == c.head &*& pred.next |-> curr)
+  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, curr, c.head) &*& pred == c.head &*& pred.next |-> curr)
     -** (acc(S) -** (acc(L) &+& conc_list_set(c, C)))
   ensures L1 == {pred1, curr1}
-  ensures exists C1: Set<Int> :: (c.head.data < x &*& x < c.tail.data &*& x in inset(curr1, c.head) &*& pred1 == c.head &*& pred1.next |-> curr1)
+  ensures exists C1: Set<Int> :: (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, curr1, c.head) &*& pred1 == c.head &*& pred1.next |-> curr1)
     -** (acc(L1) &+& (conc_list_set(c, C1)))
 {
   havoc_S(c, L, S);
@@ -404,11 +404,11 @@ procedure delete05(c: ConcList, x: Int, pred: Node, curr: Node,
 		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
   returns (L1: Set<Node>, pred1: Node, curr1: Node)
   requires L == {pred, curr}
-  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(curr, c.head) &*& pred == c.head &*& pred.next |-> curr)
+  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, curr, c.head) &*& pred == c.head &*& pred.next |-> curr)
     -** (acc(L) &+& (conc_list_set(c, C)))
   ensures L1 == {pred1, curr1}
   /* Loop invariant: */
-  ensures (c.head.data < x &*& x < c.tail.data &*& Reach(next, c.head, pred1) &*& pred1.next |-> curr1 &*& pred1.data < x &*& x in inset(curr1, c.head))
+  ensures (c.head.data < x &*& x < c.tail.data &*& Reach(next, c.head, pred1) &*& pred1.next |-> curr1 &*& pred1.data < x &*& x in inset(data, next, curr1, c.head))
     -** (acc(L1) &+& (conc_list_set(c, C)))
 {
   return L, pred, curr;
@@ -419,10 +419,10 @@ procedure delete06(c: ConcList, x: Int, pred: Node, curr: Node,
 		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
   returns (L1: Set<Node>, pred1: Node, curr1: Node)
   requires L == {pred, curr}
-  requires (c.head.data < x &*& x < c.tail.data &*& pred.next |-> curr &*& pred.data < x &*& x in inset(curr, c.head) &*& curr != null &*& curr.data < x)
+  requires (c.head.data < x &*& x < c.tail.data &*& pred.next |-> curr &*& pred.data < x &*& x in inset(data, next, curr, c.head) &*& curr != null &*& curr.data < x)
     -** (acc(L) &+& (conc_list_set(c, C)))
   ensures L1 == {curr1}
-  ensures (c.head.data < x &*& x < c.tail.data &*& x in inset(curr1, c.head) &*& curr1 != null &*& curr1.data < x)
+  ensures (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, curr1, c.head) &*& curr1 != null &*& curr1.data < x)
     -** (acc(L1) &+& (conc_list_set(c, C)))
 {
   /* unlock(pred); */
@@ -430,16 +430,15 @@ procedure delete06(c: ConcList, x: Int, pred: Node, curr: Node,
   return L, pred, curr;
 }
 
-/* TODO why doesn't this go through? */
 procedure delete06_env(c: ConcList, x: Int, pred: Node, curr: Node,
 		       C: Set<Int>, L: Set<Node>, S: Set<Node>)
   returns (L1: Set<Node>, pred1: Node, curr1: Node)
 
   requires L == {curr} &*& Disjoint(L, S)
-  requires (x in inset(curr, c.head))
+  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, curr, c.head) &*& curr != null &*& curr.data < x)
     -** (acc(S) -** (acc(L) &+& conc_list_set(c, C)))
   ensures L1 == {curr1}
-  ensures exists C1: Set<Int> :: (x in inset(curr1, c.head))
+  ensures exists C1: Set<Int> :: (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, curr1, c.head) &*& curr1 != null &*& curr1.data < x)
     -** (acc(L1) &+& (conc_list_set(c, C1)))
 {
   havoc_S(c, L, S);
