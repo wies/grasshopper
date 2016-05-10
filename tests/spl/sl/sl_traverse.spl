@@ -14,8 +14,8 @@ procedure traverse1(lst: Node)
 }
 
 procedure traverse2(lst: Node)
-  requires lseg(lst, null);
-  ensures lseg(lst, null);
+  requires lseg(lst, null)
+  ensures lseg(lst, null)
 {
   if (lst != null) {
     var curr := lst;
