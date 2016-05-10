@@ -1,4 +1,4 @@
-include "tests/spl/include/sllist.spl";
+include "../include/sllist.spl";
 
 function lengthNodes(this: Node, end: Node) returns (l: Int)
   requires lseg(this, end)
