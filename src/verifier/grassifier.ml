@@ -650,28 +650,31 @@ let elim_sl prog =
     in
     let sl_postcond, other_postcond = List.partition is_sl_spec contr.contr_postcond in
     let postcond, post_pos =
-      let name = "postcondition of " ^ string_of_ident contr.contr_name in
-      let f, kind, name, msg, pos = prepare_sl_form sl_postcond name in
-      (*Printf.printf "%s: %d\n" (string_of_ident proc.proc_name) (List.length fs);*)
-      let final_footprint_sets =
-        SortSet.fold
-          (fun ssrt sets -> SortMap.add ssrt (final_footprint_set ssrt) sets)
-          footprint_sorts SortMap.empty
-      in
-      let f_eq_final_footprint =
-        f |>
-        SlToGrass.to_grass (pred_to_form final_footprint_sets) final_footprint_sets |>
-        post_process_form
-      in
-      let final_footprint_postcond =
-        mk_spec_form (FOL f_eq_final_footprint) name msg pos
-      in
-      (*let init_footprint_postcond = 
-        mk_free_spec_form (FOL (mk_eq init_footprint_set (oldify_term (IdSet.singleton footprint_id) footprint_set))) name msg pos
-      in*)
-      [{ final_footprint_postcond with 
-        spec_kind = kind;
-       }], pos
+      match sl_postcond with
+      | [] -> [], pos
+      | _ ->
+          let name = "postcondition of " ^ string_of_ident contr.contr_name in
+          let f, kind, name, msg, pos = prepare_sl_form sl_postcond name in
+          (*Printf.printf "%s: %d\n" (string_of_ident proc.proc_name) (List.length fs);*)
+          let final_footprint_sets =
+            SortSet.fold
+              (fun ssrt sets -> SortMap.add ssrt (final_footprint_set ssrt) sets)
+              footprint_sorts SortMap.empty
+          in
+          let f_eq_final_footprint =
+            f |>
+            SlToGrass.to_grass (pred_to_form final_footprint_sets) final_footprint_sets |>
+            post_process_form
+          in
+          let final_footprint_postcond =
+            mk_spec_form (FOL f_eq_final_footprint) name msg pos
+          in
+          (*let init_footprint_postcond = 
+            mk_free_spec_form (FOL (mk_eq init_footprint_set (oldify_term (IdSet.singleton footprint_id) footprint_set))) name msg pos
+            in*)
+          [{ final_footprint_postcond with 
+             spec_kind = kind;
+           }], pos
     in
     (* generate frame condition by applying the frame rule *) 
     let framecond =
@@ -872,7 +875,7 @@ let elim_sl prog =
                   [footprint_caller_id ssrt] 
                   [new_footprint_caller_set ssrt] 
                   body_pp.pp_pos :: cmds)
-              struct_srts []
+              proc_footprints []
           in
           let assign_final_footprints_caller =
             SortSet.fold
@@ -881,7 +884,7 @@ let elim_sl prog =
                   [final_footprint_caller_id ssrt] 
                   [mk_union [footprint_caller_set ssrt; footprint_set ssrt]]
                   body_pp.pp_pos :: cmds)
-              struct_srts []
+              proc_footprints []
           in
           mk_seq_cmd 
             (assign_init_footprints_caller @ [body1] @ assign_final_footprints_caller)

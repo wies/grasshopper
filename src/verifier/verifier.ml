@@ -237,22 +237,24 @@ let add_pred_insts prog f =
         )
         formals ([], IdMap.empty)
     in
-    let body = form_of_spec pred.pred_body in
-    let body =
-      match body with
-      | Binder (Forall, vs, BoolOp (And, fs), a) ->
-          List.map (fun f -> Binder (Forall, vs, f, a)) fs
-      | BoolOp (And, fs) ->
-          fs
-      | f -> [f]
+    let defs = List.map form_of_spec (pred.pred_body :: postcond_of_pred pred) in
+    let defs =
+      let rec split acc = function
+        | Binder (Forall, vs, BoolOp (And, fs), a) :: ofs ->
+            split acc (List.map (fun f -> Binder (Forall, vs, f, a)) fs @ ofs)
+      | BoolOp (And, fs) :: ofs ->
+          split ofs (fs @ ofs)
+      | f :: ofs -> split (f :: acc) ofs
+      | [] -> List.rev acc
+      in split [] defs
     in
     let vs = List.map (fun (id, srt) -> Var (id, srt)) sorted_vs in
-    let sm, body =
+    let sm, defs =
       match returns with
-      | [] -> sm, List.map (fun f -> mk_implies (mk_pred name vs) f) body
+      | [] -> sm, List.map (fun f -> mk_implies (mk_pred name vs) f) defs
       | [id] -> 
           let var = IdMap.find id locals in
-          IdMap.add id (mk_free_fun var.var_sort name vs) sm, body
+          IdMap.add id (mk_free_fun var.var_sort name vs) sm, defs
       | _ -> failwith "Functions may only have a single return value."
     in
     let cnt = ref 0 in
@@ -273,7 +275,7 @@ let add_pred_insts prog f =
       skolemize |>
       (*propagate_forall |>*)
       annotate_term_generators pred)
-      body
+      defs
       (*(fun fs -> print_forms stdout fs; print_newline (); fs)*)
   in
   let pred_defs = Prog.fold_preds (fun acc pred -> pred_def pred @ acc) [] prog in
