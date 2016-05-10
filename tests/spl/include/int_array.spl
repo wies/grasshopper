@@ -1,5 +1,5 @@
 predicate arrayseg(a: Array<Int>, i: Int, j: Int) {
-  (0 <= i && i <= j && j <= a.length) &*& 
+  0 <= i && i <= j && j <= a.length &*& 
   acc({ c: ArrayCell<Int> :: i <= c.index && c.index < j && c.array == a })
 }
 
@@ -9,12 +9,11 @@ predicate array(a: Array<Int>) {
   arrayseg(a, 0, a.length)
 }
 
-
 function contentWitness(v: Int, FP: Set<ArrayCell<Int>>, m: Map<ArrayCell<Int>, Int>) returns (res: ArrayCell<Int>) 
 
 function array_state()
   returns (m: Map<ArrayCell<Int>, Int>)
-  pure ensures (forall c: ArrayCell<Int> :: c.m == c.array[c.index] @(matching c yields c.m))
+  pure ensures forall c: ArrayCell<Int> :: c.m == c.array[c.index] @(matching c yields c.m)
 
 function array_content(FP: Set<ArrayCell<Int>>)
   returns (C: Set<Int>)
@@ -22,8 +21,8 @@ function array_content(FP: Set<ArrayCell<Int>>)
   pure ensures forall x: ArrayCell<Int> :: x in FP ==> x.array[x.index] in C
   pure ensures forall v in C :: contentWitness(v, FP, array_state()) in FP
   pure ensures forall v: Int :: v !in C ==> contentWitness(v, FP, array_state()) == null
-  pure ensures (forall v in C :: v == contentWitness(v, FP, array_state()).array[contentWitness(v, FP, array_state()).index]
-             @(matching v yields contentWitness(v, FP, array_state()).array[contentWitness(v, FP, array_state()).index]))
+  pure ensures forall v in C :: v == contentWitness(v, FP, array_state())[]
+             @(matching v yields contentWitness(v, FP, array_state())[])
 
 
 predicate arrayseg_cnt(a: Array<Int>, i: Int, j: Int, C: Set<Int>) {
@@ -40,7 +39,7 @@ predicate array_cnt(a: Array<Int>, C: Set<Int>) {
 predicate is_sorted_arrayseg(a: Array<Int>, i: Int, j: Int)
   requires arrayseg(a, i, j)
 {
-  (forall i1: Int, j1: Int:: i1 >= i && i1 <= j1 && j1 < j ==> a[i1] <= a[j1]  @(matching i1 yields a[i1])  @(matching j1 yields a[j1]) )
+  forall i1: Int, j1: Int:: i1 >= i && i1 <= j1 && j1 < j ==> a[i1] <= a[j1]
 }
 
 predicate sorted_arrayseg(a: Array<Int>, i: Int, j: Int, C: Set<Int>) {
@@ -58,7 +57,7 @@ predicate sorted_array(a: Array<Int>, C: Set<Int>) {
 predicate is_bounded_arrayseg(a: Array<Int>, i: Int, j: Int, lb: Int, ub: Int)
   requires arrayseg(a, i, j)
 {
-  (forall k: Int:: k >= i && k < j ==> a[k] >= lb && a[k] < ub @(matching k yields a[k]) )
+  forall k: Int:: k >= i && k < j ==> a[k] >= lb && a[k] < ub
 }
 
   

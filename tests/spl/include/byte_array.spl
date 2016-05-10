@@ -1,16 +1,8 @@
-function byte_arrayseg_footprint(a: Array<Byte>, i: Int, j: Int)
-  returns (FP: Set<ArrayCell<Byte>>)
-{
-  (forall c: ArrayCell<Byte> ::
-     c in FP == (i <= c.index && c.index < j && c.array == a))
+predicate byte_arrayseg(a: Array<Byte>, i: Int, j: Int) {
+  0 <= i && i <= j && j <= a.length &*&
+  acc({ c: ArrayCell<Byte> :: i <= c.index && c.index < j && c.array == a })
 }
 
-predicate byte_arrayseg(a: Array<Byte>, i: Int, j: Int)(FP: Set<ArrayCell<Byte>>) {
-  0 <= i && i <= j && j <= a.length && 
-  FP == byte_arrayseg_footprint(a, i, j)
-}
-
-predicate byte_array(a: Array<Byte>)(FP1: Set<Array<Byte>>, FP2: Set<ArrayCell<Byte>>) {
-  FP1 == Set(a) &&
-  byte_arrayseg(a, 0, a.length, FP2)
+predicate byte_array(a: Array<Byte>) {
+  acc(a) &*& byte_arrayseg(a, 0, a.length)
 }

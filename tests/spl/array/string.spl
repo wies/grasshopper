@@ -5,13 +5,13 @@ procedure equals(first: Array<Byte>, second: Array<Byte>)
   returns (res: Bool)
   requires byte_array(first) &+& byte_array(second)
   ensures byte_array(first) &+& byte_array(second)
-  ensures res == (first.length == second.length && (forall i: Int:: 0 <= i && i < first.length ==> first[i] == second[i]))
+  ensures res == (first.length == second.length && (forall i: Int :: 0 <= i && i < first.length ==> first[i] == second[i]))
 {
   if(first.length != second.length)
     return false;
   var i := 0;
   //pure assume first.length < 256*256;
-  while(i < first.length && first[i] == second[i])
+  while (i < first.length && first[i] == second[i])
     //invariant first.length < 256*256
     invariant byte_array(first) &+& byte_array(second)
     invariant 0 <= i && i <= first.length && first.length == second.length
@@ -20,7 +20,7 @@ procedure equals(first: Array<Byte>, second: Array<Byte>)
     i := i + 1;
   }
   if (i >= first.length) return true;
-  else return false;
+  else { return false;}
 }
 
 

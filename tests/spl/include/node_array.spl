@@ -15,30 +15,26 @@ function node_witness(x: Node, a: Array<Node>, m: Map<ArrayCell<Node>, Node>)
   returns (c: ArrayCell<Node>)
 
 function array_state() returns (m: Map<ArrayCell<Node>, Node>)
-  ensures (forall c: ArrayCell<Node> :: c.m == c[] @(matching c yields c.m));
+  pure ensures (forall c: ArrayCell<Node> :: c.m == c[] @(matching c yields c.m))
 
-predicate arrayseg_content(a: Array<Node>, FP0: Set<ArrayCell<Node>>)
+function arrayseg_content(a: Array<Node>, FP0: Set<ArrayCell<Node>>) returns (N: Set<Node>)
   requires acc(a) &*& acc(FP0)
-{
-  /// FIXME
-  (forall c: ArrayCell<Node> :: c in FP0 ==> c == node_witness(c[], a, array_state())) &&
-  (forall x in FP1 :: x == node_witness(x, a, array_state())[]
-   @(matching x yields node_witness(x, a, array_state())[])) &&
-  (forall c: ArrayCell<Node> :: c in FP0 ==> c[] in FP1) &&
-  (forall x in FP1 :: node_witness(x, a, array_state()) in FP0)
-}
+  pure ensures forall c in FP0 :: c == node_witness(c[], a, array_state())
+  pure ensures forall x in N :: x == node_witness(x, a, array_state())[] @(matching x yields node_witness(x, a, array_state())[])
+  pure ensures forall c in FP0 :: c[] in N
+  pure ensures forall x in N :: node_witness(x, a, array_state()) in FP0
 
-predicate arrayseg_with_content(a: Array<Node>, lo: Int, hi: Int)
+
+predicate arrayseg_with_content(a: Array<Node>, lo: Int, hi: Int, N: Set<Node>)
   requires acc(a)
 {
   exists X: Set<ArrayCell<Node>> ::
-    arrayseg(a, lo, hi) && acc(FP0) &*&
-    arrayseg_content(a, FP0)
+    arrayseg(a, lo, hi) && acc(X) &*&
+    N == arrayseg_content(a, X)
 }
 
-predicate array_with_content(a: Array<Node>) {
+predicate array_with_content(a: Array<Node>, N: Set<Node>) {
   acc(a) &*&
-  arrayseg_with_content(a, 0, a.length)
+  arrayseg_with_content(a, 0, a.length, N)
 }
-
 
