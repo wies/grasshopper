@@ -127,7 +127,7 @@ procedure delete(c: ConcList, x: Int, implicit ghost C: Set<Int>, ghost L: Set<N
   /* lock(c.head); */
   L := {c.head} ++ L;
   var pred := c.head;
-  var curr := c.head.next;
+  var curr := pred.next;
   /* lock(curr); */
   L := {curr} ++ L;
 
@@ -173,3 +173,400 @@ procedure delete(c: ConcList, x: Int, implicit ghost C: Set<Int>, ghost L: Set<N
  * 3. The decisive op is proper (see defn in paper)
  * 4. Non decisive ops don't change GC
 */
+
+/* -------------------- Buggy delete with only one lock -------------------- */
+
+procedure delete_b(c: ConcList, x: Int, implicit ghost C: Set<Int>, ghost L: Set<Node>)
+  requires conc_list_set(c, C) &*& c.head.data < x &*& x < c.tail.data
+  ensures conc_list_set(c, C -- {x})
+  requires L == {}
+  ensures L == {}
+{
+  /* lock(c.head); */
+  L := {c.head} ++ L;
+  var pred := c.head;
+  var curr := c.head.next;
+
+  while (curr != null && curr.data < x)
+    invariant (pred.data < x &*& pred.next |-> curr) -**
+      conc_list_set(c, C)
+    invariant L == {pred}
+  {
+    /* lock(curr); */
+    L := L ++ {curr};
+    /* unlock(pred); */
+    L := L -- {pred};
+    pred := curr;
+    curr := curr.next;
+  }
+
+  assert conc_list_set(c, C);
+
+  /* Decisive operation: */
+  if (curr.data == x) {
+    assert x in keyset(curr, c.head) &*& (pred.next |-> curr -** conc_list_set(c, C)) &*& pred.data < curr.data &*& curr.data < curr.next.data;
+    pure assert pred in L; /* Check lock for write */
+    pred.next := curr.next;
+    free curr;
+    /* This checks that the decisive op is proper decisive */
+    pure assert x in keyset(pred.next, c.head) && x != pred.next.data;
+  }
+
+}
+
+/* The above goes through because we don't model interference by other threads.
+ * To solve this, we need to test that each line is given an arbitrary good state
+ * and that it ensures a good state. For example, by wrapping it in a procedure.
+ *
+ * The assert checking proper decisive property should fail in the below proc:
+*/
+
+procedure delete_b1(c: ConcList, x: Int, pred: Node, curr: Node,
+		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+  requires L == {pred}
+  requires (pred.next |-> curr &*& pred.data < x &*& acc(curr) &*& curr.data == x)
+    -** (acc(L) &+& (conc_list_set(c, C) &*& c.head.data < x &*& x < c.tail.data))
+  ensures L1 == {pred1}
+  ensures (pred1.next |-> curr1.next &*& pred1.data < x)
+    -** (acc(pred1) &+& (conc_list_set(c, C -- {x}) &*& c.head.data < x &*& x < c.tail.data))
+{
+  pure assert pred in L; /* Check lock for write */
+  pred.next := curr.next;
+  /* This is the decisive operation, so check that it is proper decisive */
+  pure assert x in keyset(pred.next, c.head) && x != pred.next.data;
+  return L, pred, curr;
+}
+
+/* -------------------- Hand-over-hand list: Take 2 -------------------- */
+
+/* The idea is to wrap each line of the delete procedure in a separate function
+ * so that it assumes nothing about the current state other than that it is a
+ * good state and whatever invariant about nodes it has locked.
+ * We then also check that the invariant is preserved by all allowed environment
+ * changes in a separate procedure where we havoc all non-locked nodes subject to
+ * the guarantees.
+*/
+
+procedure delete01(c: ConcList, x: Int,
+		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
+  returns (L1: Set<Node>)
+  requires L == {}
+  requires (c.head.data < x &*& x < c.tail.data)
+    -** (acc(L) &+& (conc_list_set(c, C)))
+  ensures L1 == {c.head}
+  ensures (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head))
+    -** (acc(L1) &+& (conc_list_set(c, C)))
+  /* Global invariants: */
+  /* Don't change inset of anything you don't hold lock on */ /* TODO shrink? */
+  ensures (forall n: Node :: n !in L ==> inset(n, c.head) == old(inset(n, c.head)))
+  /* Sentinel head & tail are not modified */
+  ensures (c.head == old(c.head) && c.head.data == old(c.head.data) && c.tail == old(c.tail) && c.tail.data == old(c.tail.data))
+{
+  /* lock(c.head); */
+  L := {c.head} ++ L;
+  return L;
+}
+
+procedure havoc_S(c: ConcList, L: Set<Node>, S: Set<Node>, implicit ghost C: Set<Int>)
+  requires acc(S) -** (acc(L) &+& conc_list_set(c, C))
+  requires Disjoint(L, S)
+  ensures exists S1: Set<Node>, C1: Set<Int> ::
+		acc(S1) -** (acc(L) &+& conc_list_set(c, C1))
+  ensures Frame(S, S ++ L, old(next), next) &*& Frame(S, S ++ L, old(data), data)
+  /* Global invariants: */
+  /* Don't change inset of anything you don't hold lock on */
+  ensures forall n: Node :: n in L ==> inset(n, c.head) == old(inset(n, c.head))
+  /* Sentinel head & tail are not modified */
+  ensures (c.head == old(c.head) && c.head.data == old(c.head.data) && c.tail == old(c.tail) && c.tail.data == old(c.tail.data))
+
+/* Check that the environment preserves the current invariant */
+procedure delete01_env(c: ConcList, x: Int, pred: Node, curr: Node,
+		       C: Set<Int>, L: Set<Node>, S: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+
+  requires L == {c.head} &*& Disjoint(L, S)
+  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head))
+    -** (acc(S) -** (acc(L) &+& conc_list_set(c, C)))
+  ensures L1 == {c.head}
+  ensures exists C1: Set<Int> :: (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head))
+    -** (acc(L1) &+& (conc_list_set(c, C1)))
+{
+  havoc_S(c, L, S);
+  return L, pred, curr;
+}
+
+procedure delete02(c: ConcList, x: Int,
+		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node)
+  requires L == {c.head}
+  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head))
+    -** (acc(L) &+& (conc_list_set(c, C)))
+  ensures L1 == {pred1}
+  ensures (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head) &*& pred1 == c.head)
+    -** (acc(L1) &+& (conc_list_set(c, C)))
+  /* Global invariants: */
+  /* Don't change inset of anything you don't hold lock on */
+  ensures (forall n: Node :: n !in L ==> inset(n, c.head) == old(inset(n, c.head)))
+  /* Sentinel head & tail are not modified */
+  ensures (c.head == old(c.head) && c.head.data == old(c.head.data) && c.tail == old(c.tail) && c.tail.data == old(c.tail.data))
+{
+  var pred := c.head;
+  return L, pred;
+}
+
+procedure delete02_env(c: ConcList, x: Int, pred: Node, curr: Node,
+		       C: Set<Int>, L: Set<Node>, S: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+
+  requires L == {pred} &*& Disjoint(L, S)
+  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head) &*& pred == c.head)
+    -** (acc(S) -** (acc(L) &+& conc_list_set(c, C)))
+  ensures L1 == {pred1}
+  ensures exists C1: Set<Int> :: (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head) &*& pred1 == c.head)
+    -** (acc(L1) &+& (conc_list_set(c, C1)))
+{
+  havoc_S(c, L, S);
+  return L, pred, curr;
+}
+
+procedure delete03(c: ConcList, x: Int, pred: Node,
+		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+  requires L == {pred}
+  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head) &*& pred == c.head)
+    -** (acc(L) &+& (conc_list_set(c, C)))
+  ensures L1 == {pred1}
+  ensures (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head) &*& pred == c.head &*& pred1.next |-> curr1)
+    -** (acc(L1) &+& (conc_list_set(c, C)))
+  /* Global invariants: */
+  /* Don't change inset of anything you don't hold lock on */
+  ensures (forall n: Node :: n !in L ==> inset(n, c.head) == old(inset(n, c.head)))
+  /* Sentinel head & tail are not modified */
+  ensures (c.head == old(c.head) && c.head.data == old(c.head.data) && c.tail == old(c.tail) && c.tail.data == old(c.tail.data))
+{
+  var curr := c.head.next;
+  return L, pred, curr;
+}
+
+procedure delete03_env(c: ConcList, x: Int, pred: Node, curr: Node,
+		       C: Set<Int>, L: Set<Node>, S: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+
+  requires L == {pred} &*& Disjoint(L, S)
+  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head) &*& pred == c.head &*& pred.next |-> curr)
+    -** (acc(S) -** (acc(L) &+& conc_list_set(c, C)))
+  ensures L1 == {pred1}
+  ensures exists C1: Set<Int> :: (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head) &*& pred1 == c.head &*& pred1.next |-> curr1)
+    -** (acc(L1) &+& (conc_list_set(c, C1)))
+{
+  havoc_S(c, L, S);
+  return L, pred, curr;
+}
+
+procedure delete04(c: ConcList, x: Int, pred: Node, curr: Node,
+		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+  requires L == {pred}
+  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(c.head, c.head) &*& pred == c.head &*& pred.next |-> curr)
+    -** (acc(L) &+& conc_list_set(c, C))
+  ensures L1 == {pred1, curr1}
+  ensures (c.head.data < x &*& x < c.tail.data &*& x in inset(curr1, c.head) &*& pred == c.head &*& pred1.next |-> curr1)
+    -** (acc(L1) &+& (conc_list_set(c, C)))
+  /* Global invariants: */
+  /* Don't change inset of anything you don't hold lock on */
+  ensures (forall n: Node :: n !in L ==> inset(n, c.head) == old(inset(n, c.head)))
+  /* Sentinel head & tail are not modified */
+  ensures (c.head == old(c.head) && c.head.data == old(c.head.data) && c.tail == old(c.tail) && c.tail.data == old(c.tail.data))
+{
+  /* lock(curr); */
+  L := {curr} ++ L;
+  return L, pred, curr;
+}
+
+procedure delete04_env(c: ConcList, x: Int, pred: Node, curr: Node,
+		       C: Set<Int>, L: Set<Node>, S: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+
+  requires L == {pred, curr} &*& Disjoint(L, S)
+  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(curr, c.head) &*& pred == c.head &*& pred.next |-> curr)
+    -** (acc(S) -** (acc(L) &+& conc_list_set(c, C)))
+  ensures L1 == {pred1, curr1}
+  ensures exists C1: Set<Int> :: (c.head.data < x &*& x < c.tail.data &*& x in inset(curr1, c.head) &*& pred1 == c.head &*& pred1.next |-> curr1)
+    -** (acc(L1) &+& (conc_list_set(c, C1)))
+{
+  havoc_S(c, L, S);
+  return L, pred, curr;
+}
+
+/* Prove loop invariant holds on entry */
+procedure delete05(c: ConcList, x: Int, pred: Node, curr: Node,
+		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+  requires L == {pred, curr}
+  requires (c.head.data < x &*& x < c.tail.data &*& x in inset(curr, c.head) &*& pred == c.head &*& pred.next |-> curr)
+    -** (acc(L) &+& (conc_list_set(c, C)))
+  ensures L1 == {pred1, curr1}
+  /* Loop invariant: */
+  ensures (c.head.data < x &*& x < c.tail.data &*& Reach(next, c.head, pred1) &*& pred1.next |-> curr1 &*& pred1.data < x &*& x in inset(curr1, c.head))
+    -** (acc(L1) &+& (conc_list_set(c, C)))
+{
+  return L, pred, curr;
+}
+
+/* First line inside loop, so assume loop condition and invariant */
+procedure delete06(c: ConcList, x: Int, pred: Node, curr: Node,
+		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+  requires L == {pred, curr}
+  requires (c.head.data < x &*& x < c.tail.data &*& pred.next |-> curr &*& pred.data < x &*& x in inset(curr, c.head) &*& curr != null &*& curr.data < x)
+    -** (acc(L) &+& (conc_list_set(c, C)))
+  ensures L1 == {curr1}
+  ensures (c.head.data < x &*& x < c.tail.data &*& x in inset(curr1, c.head) &*& curr1 != null &*& curr1.data < x)
+    -** (acc(L1) &+& (conc_list_set(c, C)))
+{
+  /* unlock(pred); */
+  L := L -- {pred};
+  return L, pred, curr;
+}
+
+/* TODO why doesn't this go through? */
+procedure delete06_env(c: ConcList, x: Int, pred: Node, curr: Node,
+		       C: Set<Int>, L: Set<Node>, S: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+
+  requires L == {curr} &*& Disjoint(L, S)
+  requires (x in inset(curr, c.head))
+    -** (acc(S) -** (acc(L) &+& conc_list_set(c, C)))
+  ensures L1 == {curr1}
+  ensures exists C1: Set<Int> :: (x in inset(curr1, c.head))
+    -** (acc(L1) &+& (conc_list_set(c, C1)))
+{
+  havoc_S(c, L, S);
+  return L, pred, curr;
+}
+
+/* ==================== TODO continue here ==================== */
+
+procedure delete07(c: ConcList, x: Int, pred: Node, curr: Node,
+		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+  requires L == {curr}
+  requires ((pred.next == curr &*& pred.data < x &*& curr != null &*& curr.data < x) -** acc(L))
+    -** (conc_list_set(c, C) &*& c.head.data < x &*& x < c.tail.data)
+  ensures L1 == {pred1}
+  ensures ((pred1 == curr1 &*& curr1 != null &*& curr1.data < x) -** acc(L1))
+    -** (conc_list_set(c, C) &*& c.head.data < x &*& x < c.tail.data)
+{
+  pred := curr;
+  return L, pred, curr;
+}
+
+procedure delete08(c: ConcList, x: Int, pred: Node, curr: Node,
+		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+  requires L == {pred}
+  requires ((pred == curr &*& curr != null &*& curr.data < x) -** acc(L))
+    -** (conc_list_set(c, C) &*& c.head.data < x &*& x < c.tail.data)
+  ensures L1 == {pred1}
+  ensures ((pred1.next == curr1 &*& pred1 != null &*& pred1.data < x) -** acc(L1))
+    -** (conc_list_set(c, C) &*& c.head.data < x &*& x < c.tail.data)
+{
+  curr := curr.next;
+  return L, pred, curr;
+}
+
+procedure delete09(c: ConcList, x: Int, pred: Node, curr: Node,
+		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+  requires L == {pred}
+  requires ((pred.next == curr &*& pred != null &*& pred.data < x) -** acc(L))
+    -** (conc_list_set(c, C) &*& c.head.data < x &*& x < c.tail.data)
+  ensures L1 == {pred1, curr1}
+  ensures ((pred1.next == curr1 &*& pred1 != null &*& pred1.data < x) -** acc(L1))
+    -** (conc_list_set(c, C) &*& c.head.data < x &*& x < c.tail.data)
+{
+  /* lock(curr); */
+  L := L ++ {curr};
+  return L, pred, curr;
+}
+
+/* Prove loop inv at the end of loop */
+procedure delete10(c: ConcList, x: Int, pred: Node, curr: Node,
+		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+  requires L == {pred, curr}
+  requires ((pred.next == curr &*& pred != null &*& pred.data < x) -** acc(L))
+    -** (conc_list_set(c, C) &*& c.head.data < x &*& x < c.tail.data)
+  ensures L1 == {pred1, curr1}
+  /* TODO is it okay to magically bring the points-to back? */
+  ensures ((pred1.next |-> curr1 &*& pred1.data < x) -** acc(L1))
+    -** (conc_list_set(c, C) &*& c.head.data < x &*& x < c.tail.data)
+{
+  return L, pred, curr;
+}
+
+/* Now assume the negated loop condition for first line after loop */
+procedure delete11(c: ConcList, x: Int, pred: Node, curr: Node,
+		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+  requires L == {pred, curr}
+  requires ((pred.next |-> curr &*& pred.data < x &*& (curr == null || curr.data >= x) &*& curr.data == x) /* and the if condition */
+	    -** acc(L))
+    -** (conc_list_set(c, C) &*& c.head.data < x &*& x < c.tail.data)
+  ensures L1 == {pred1, curr1}
+  /* TODO how to deal with the fact that curr is no longer in the structure? */
+  ensures ((pred1.next |-> curr1.next &*& pred1.data < x) -** acc(pred1))
+    -** (conc_list_set(c, C -- {x}) &*& c.head.data < x &*& x < c.tail.data)
+  ensures acc(curr1)
+{
+  pure assert pred in L && curr in L; /* Check lock for heap access and write */
+  pred.next := curr.next;
+  /* This is the decisive operation, so check that it is proper decisive */
+  pure assert x in keyset(pred.next, c.head) && x != pred.next.data;
+  return L, pred, curr;
+}
+
+procedure delete12(c: ConcList, x: Int, pred: Node, curr: Node,
+		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+  requires L == {pred, curr}
+  requires ((pred.next |-> curr.next &*& pred.data < x) -** acc(pred))
+    -** (conc_list_set(c, C -- {x}) &*& c.head.data < x &*& x < c.tail.data)
+  requires acc(curr)
+  ensures L1 == {pred1, curr1}
+  ensures (pred1 != curr1 -** acc(pred1))
+    -** (conc_list_set(c, C -- {x}) &*& c.head.data < x &*& x < c.tail.data)
+{
+  free curr;
+  return L, pred, curr;
+}
+
+procedure delete13(c: ConcList, x: Int, pred: Node, curr: Node,
+		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+  requires L == {pred, curr}
+  requires (pred != curr -** acc(pred))
+    -** (conc_list_set(c, C -- {x}) &*& c.head.data < x &*& x < c.tail.data)
+  ensures L1 == {pred1}
+  ensures acc(L1)
+    -** (conc_list_set(c, C -- {x}) &*& c.head.data < x &*& x < c.tail.data)
+{
+  /* unlock(curr); TODO should this happen before the free? */
+  L := L -- {curr};
+  return L, pred, curr;
+}
+
+procedure delete14(c: ConcList, x: Int, pred: Node, curr: Node,
+		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+  requires L == {pred}
+  requires acc(L)
+    -** (conc_list_set(c, C -- {x}) &*& c.head.data < x &*& x < c.tail.data)
+  ensures L1 == {}
+  ensures conc_list_set(c, C -- {x})
+{
+  /* unlock(pred); */
+  L := L -- {pred};
+  return L, pred, curr;
+}
