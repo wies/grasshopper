@@ -1094,7 +1094,7 @@ let convert_model session smtModel =
 
 let rec get_model session = 
   let gm state =
-    output_string state.out_chan "(get-model)\n";
+    writeln session "(get-model)";
     flush state.out_chan;
     match read_from_chan session (Opt.get state.in_chan) with
     | Model m -> 
