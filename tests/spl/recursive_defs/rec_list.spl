@@ -1,0 +1,16 @@
+include "../include/sllist.spl";
+
+predicate lseg2(x: Node, y: Node) {
+  x == y ||
+  x != y &*& acc(x) &*& lseg2(x.next, y)
+}
+
+procedure lseg_entails_lseg2(x: Node, y: Node)
+  requires lseg(x, y)
+  ensures x == y || x != y &*& acc(x) &*& lseg(x.next, y)
+{}
+
+procedure lseg2_entails_lseg(x: Node, y: Node)
+  requires x == y || x != y &*& acc(x) &*& lseg(x.next, y)
+  ensures lseg(x, y)
+{}
