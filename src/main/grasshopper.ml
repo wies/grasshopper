@@ -191,7 +191,8 @@ let _ =
       let spl_prog = parse_spl_program !main_file in
       check_spl_program spl_prog !Config.procedure;
       print_stats start_time; 
-      print_c_program spl_prog
+      print_c_program spl_prog;
+      Debug.info (fun () -> "Program successfully verified.\n")
     end
   with  
   | Sys_error s -> 
