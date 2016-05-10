@@ -1160,13 +1160,9 @@ let foralls_to_exists f =
           match f with
           | Atom (App (Eq, [Var (v, _); t], _), a) ->
               let t1 = subst_term sm t in
-              if not (IdSet.mem v @@ fv_term t1) (** is this condition tautological? *)
-              then begin
-                let smv = IdMap.singleton v t1 in
-                let sm = IdMap.fold (fun w tw -> IdMap.add w (subst_term smv tw)) sm IdMap.empty in
-                defs, IdMap.add v t1 sm
-              end
-              else f :: defs, sm
+              let smv = IdMap.singleton v t1 in
+              let sm = IdMap.fold (fun w tw -> IdMap.add w (subst_term smv tw)) sm IdMap.empty in
+              defs, IdMap.add v t1 sm
           | f -> f :: defs, sm)
           defs ([], IdMap.empty)
       in

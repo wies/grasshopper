@@ -98,7 +98,8 @@ let add_pred_insts prog f =
     let name = name_of_pred pred in
     let fun_terms bvs f =
       let rec ft acc = function
-        | App (sym, _ :: _, srt) as t when is_free_symbol sym || srt <> Bool ->
+        | App (sym, _ :: _, srt) as t
+          when is_free_symbol sym || sym = Disjoint || sym = Disjoint || srt <> Bool ->
             let fvs = fv_term t in
             if IdSet.subset fvs bvs && not @@ IdSet.is_empty (fv_term t)
             then TermSet.add t acc else acc
@@ -146,6 +147,11 @@ let add_pred_insts prog f =
             f |>
             fun_terms bvs |>
             TermSet.elements |>
+            List.map
+              (function
+                | App (Disjoint, [t1; t2], _) -> mk_inter [t1; t2]
+                | App (SubsetEq, [t1; t2], _) -> mk_union [t1; t2]
+                | t -> t) |>
             List.filter (fun t -> IdSet.subset (fv_term t) pvs)
           in
           let generators =
@@ -216,8 +222,9 @@ let add_pred_insts prog f =
     foralls_to_exists |>
     (*fun f -> print_endline "after: "; print_form stdout f; print_newline(); f ) |> *)
     propagate_exists |>
+    SimplifyGrass.simplify_one_sets |>
     foralls_to_exists
-    (* (fun f -> print_endline "after: "; print_form stdout f; print_newline(); f ) *)
+    (* |> (fun f -> print_endline "after: "; print_form stdout f; print_newline(); f )*)
   in
   let vs, f, a = match f_inst with
   | Binder (Exists, vs, f, a) -> vs, f, a
@@ -237,7 +244,11 @@ let add_pred_insts prog f =
         )
         formals ([], IdMap.empty)
     in
-    let defs = List.map form_of_spec (pred.pred_body :: postcond_of_pred pred) in
+    let defs =
+      List.map
+        (fun f -> f |> form_of_spec |> strip_error_msgs)
+        (pred.pred_body :: postcond_of_pred pred)
+    in
     let defs =
       let rec split acc = function
         | Binder (Forall, vs, BoolOp (And, fs), a) :: ofs ->

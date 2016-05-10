@@ -567,7 +567,7 @@ let elim_sl prog =
         (fun ssrt (ids, sets, context) ->
           (if is_pure then ids else footprint_id ssrt :: ids),
           SortMap.add ssrt (footprint_set ssrt) sets,
-          SortMap.add ssrt (footprint_caller_set ssrt) sets
+          SortMap.add ssrt (footprint_caller_set ssrt) context
         )
         footprint_sorts ([], SortMap.empty, SortMap.empty)
     in
@@ -590,9 +590,9 @@ let elim_sl prog =
         in
         f |>
         SlToGrass.to_grass (pred_to_form footprint_context) footprint_sets |>
-        (fun f -> mk_and (f :: fp_inclusions)) |>
-        (*(fun f -> print_endline (string_of_ident proc.proc_name ^ " (before):"); print_form stdout f; print_newline (); f) |>*)
-        post_process_form
+        post_process_form |>
+        (fun f -> mk_and (f :: fp_inclusions))
+        (*|> (fun f -> print_endline (string_of_ident contr.contr_name ^ " (after):"); print_form stdout f; print_newline (); f)*)
       in
       let precond = mk_spec_form (FOL f_eq_init_footprint) name msg pos in
       let fp_name = "initial footprint of " ^ string_of_ident contr.contr_name in
@@ -638,6 +638,7 @@ let elim_sl prog =
       in
       precond :: free_preconds @ tailrec_precond
     in
+    let other_precond = List.map (map_spec_fol_form post_process_form) other_precond in
     (* translate SL postcondition *)
     let init_alloc_set ssrt = oldify_term (IdSet.singleton (alloc_id ssrt)) (alloc_set ssrt) in
     let init_footprint_caller_set ssrt = footprint_caller_set ssrt in
@@ -676,6 +677,7 @@ let elim_sl prog =
              spec_kind = kind;
            }], pos
     in
+    let other_postcond = List.map (map_spec_fol_form post_process_form) other_postcond in
     (* generate frame condition by applying the frame rule *) 
     let framecond =
       if not is_proc then [] else
@@ -744,10 +746,10 @@ let elim_sl prog =
   in
   (* translate the predicates from SL to GRASS *)
   let translate_pred (preds, axioms) pred =
-    (*print_endline @@ "translating predicate " ^ string_of_ident pred.pred_name;*)
     let is_pure = is_pure pred in
     let pos = pos_of_pred pred in
     let pname = name_of_pred pred in
+    (* print_endline @@ "translating predicate " ^ string_of_ident pname; *)
     let contract, footprint_sets, footprint_context =
       translate_contract pred.pred_contract false false is_pure IdSet.empty
     in
@@ -758,6 +760,7 @@ let elim_sl prog =
       (function
         | Sl.Pure (f, _) -> f
         | f -> SlToGrass.to_grass (pred_to_form footprint_context) footprint_sets f) |>
+      (* (fun f -> print_form stdout f; print_newline (); f) |> *)
       post_process_form |>
       fun f -> FOL f
     in
@@ -847,14 +850,22 @@ let elim_sl prog =
       | (Assume sf, pp) ->
           (match sf.spec_form with
           | SL f ->
-              let f1 = SlToGrass.to_grass (pred_to_form footprint_sets) footprint_sets f in
+              let f1 =
+                f |>
+                SlToGrass.to_grass (pred_to_form footprint_sets) footprint_sets |>
+                post_process_form
+              in
               let sf1 = mk_spec_form (FOL f1) sf.spec_name sf.spec_msg sf.spec_pos in
               mk_assume_cmd sf1 pp.pp_pos
           | FOL f -> Basic (Assume sf, pp))
       | (Assert sf, pp) ->
           (match sf.spec_form with
           | SL f ->
-              let f1 = SlToGrass.to_grass (pred_to_form footprint_sets) footprint_sets f in
+              let f1 =
+                f |>
+                SlToGrass.to_grass (pred_to_form footprint_sets) footprint_sets |>
+                post_process_form
+              in
               let sf1 = mk_spec_form (FOL f1) sf.spec_name sf.spec_msg sf.spec_pos in
               mk_assert_cmd sf1 pp.pp_pos
           | FOL f -> Basic (Assert sf, pp))
