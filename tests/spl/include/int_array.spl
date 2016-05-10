@@ -14,15 +14,15 @@ function contentWitness(v: Int, FP: Set<ArrayCell<Int>>, m: Map<ArrayCell<Int>, 
 
 function array_state()
   returns (m: Map<ArrayCell<Int>, Int>)
-  ensures (forall c: ArrayCell<Int> :: c.m == c.array[c.index] @(matching c yields c.m))
+  pure ensures (forall c: ArrayCell<Int> :: c.m == c.array[c.index] @(matching c yields c.m))
 
 function array_content(FP: Set<ArrayCell<Int>>)
   returns (C: Set<Int>)
-  ensures forall x: ArrayCell<Int> :: x in FP ==> x == contentWitness(x.array[x.index], FP, array_state())
-  ensures forall x: ArrayCell<Int> :: x in FP ==> x.array[x.index] in C
-  ensures forall v in C :: contentWitness(v, FP, array_state()) in FP
-  ensures forall v: Int :: v !in C ==> contentWitness(v, FP, array_state()) == null
-  ensures (forall v in C :: v == contentWitness(v, FP, array_state()).array[contentWitness(v, FP, array_state()).index]
+  pure ensures forall x: ArrayCell<Int> :: x in FP ==> x == contentWitness(x.array[x.index], FP, array_state())
+  pure ensures forall x: ArrayCell<Int> :: x in FP ==> x.array[x.index] in C
+  pure ensures forall v in C :: contentWitness(v, FP, array_state()) in FP
+  pure ensures forall v: Int :: v !in C ==> contentWitness(v, FP, array_state()) == null
+  pure ensures (forall v in C :: v == contentWitness(v, FP, array_state()).array[contentWitness(v, FP, array_state()).index]
              @(matching v yields contentWitness(v, FP, array_state()).array[contentWitness(v, FP, array_state()).index]))
 
 
