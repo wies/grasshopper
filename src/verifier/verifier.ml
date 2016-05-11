@@ -226,10 +226,10 @@ let add_pred_insts prog f =
     foralls_to_exists
     (* |> (fun f -> print_endline "after: "; print_form stdout f; print_newline(); f )*)
   in
-  let vs, f, a = match f_inst with
+  (*let vs, f, a = match f_inst with
   | Binder (Exists, vs, f, a) -> vs, f, a
   | _ -> [], f_inst, []
-  in
+    in*)
   let pred_def pred =
     let locals = locals_of_pred pred in
     let formals = formals_of_pred pred in
@@ -290,7 +290,9 @@ let add_pred_insts prog f =
       (*(fun fs -> print_forms stdout fs; print_newline (); fs)*)
   in
   let pred_defs = Prog.fold_preds (fun acc pred -> pred_def pred @ acc) [] prog in
-  let f = mk_exists ~ann:a vs (smk_and (f :: pred_defs)) in
+  let f = (*mk_exists ~ann:a vs (smk_and (f :: pred_defs))*)
+    smk_and (f_inst :: pred_defs)
+  in
   f
         
 (** Generate verification conditions for procedure [proc] of program [prog]. 

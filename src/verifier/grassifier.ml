@@ -296,7 +296,20 @@ let elim_arrays prog =
         (locals_of_pred pred) elem_sorts
     in
     let body = compile_spec pred.pred_body in
-    let pred1 = { pred with pred_body = body } in
+    let precond1 = List.map compile_spec (precond_of_pred pred) in
+    let postcond1 = List.map compile_spec (postcond_of_pred pred) in
+    let contract1 =
+      { pred.pred_contract with
+        contr_precond = precond1;
+        contr_postcond = postcond1;
+     }
+    in
+    let pred1 =
+      { pred with
+        pred_contract = contract1;
+        pred_body = body          
+      }
+    in
     elem_sorts, IdMap.add (name_of_pred pred) pred1 preds
   in
   let elem_sorts, procs = fold_procs compile_proc (SortSet.empty, IdMap.empty) prog in

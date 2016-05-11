@@ -259,6 +259,8 @@ let elim_global_deps prog =
     } 
   in
   let elim_pred pred =
+    let precond1 = List.map elim_spec (precond_of_pred pred) in
+    let postcond1 = List.map elim_spec (postcond_of_pred pred) in
     let body1 = elim_spec pred.pred_body in
     let accesses = pred.pred_accesses in
     let formals1 = IdSet.elements accesses @ formals_of_pred pred in
@@ -270,7 +272,9 @@ let elim_global_deps prog =
     let contract1 =
       { pred.pred_contract with
         contr_formals = formals1; 
-        contr_locals = locals1; 
+        contr_locals = locals1;
+        contr_precond = precond1;
+        contr_postcond = postcond1;
       }
     in
     { pred_contract = contract1;

@@ -73,19 +73,19 @@ let infer_accesses prog =
   in
   let pm_pred prog pred =
     let accs_preds, body_accs, body_fps =
-      let fps = footprint_sorts_spec_form prog pred.pred_body in
-      match pred.pred_body.spec_form with
-      | SL f -> 
-          let accs_preds = SlUtil.preds f in
-          let accs = SlUtil.free_consts f in
-          accs_preds, accs, fps
-      | FOL f -> 
-          let accs = free_consts f in
-          let accs_preds = 
-            IdSet.filter (fun p -> IdMap.mem p prog.prog_preds)
-              (free_symbols f)
-          in
-          accs_preds, accs, fps
+      List.fold_left (fun (acc_preds, accs, fps) sf ->
+        let acc_preds =
+          IdSet.union acc_preds
+              (IdSet.filter (fun p -> IdMap.mem p prog.prog_preds)
+                 (fold_spec_form free_symbols SlUtil.free_symbols sf))
+        in
+        let accs =
+          IdSet.union accs (fold_spec_form free_consts SlUtil.free_consts sf)
+        in
+        let fps = footprint_sorts_spec_form_acc prog fps sf in
+        acc_preds, accs, fps)
+        (IdSet.empty, IdSet.empty, SortSet.empty)
+        (pred.pred_body :: pred.pred_contract.contr_precond @ pred.pred_contract.contr_postcond)        
     in
     let accs, fps = 
       IdSet.fold (fun p (accs, fps) -> 
@@ -98,10 +98,6 @@ let infer_accesses prog =
       IdSet.filter (fun id -> IdMap.mem id prog.prog_vars) accs
     in
     let fps = SortSet.union fps (footprint_sorts_pred pred) in
-    let fps =
-      List.fold_left (footprint_sorts_spec_form_acc prog)
-        fps (pred.pred_contract.contr_precond @ pred.pred_contract.contr_postcond)
-    in    
     not (IdSet.subset global_accs pred.pred_accesses) ||
     not (SortSet.subset fps (footprint_sorts_pred pred)),
     { pred with
