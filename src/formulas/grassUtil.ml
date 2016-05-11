@@ -1036,7 +1036,7 @@ let split_ands fs =
 
 (** Propagate [b] quantified variables upward in the formula [f].
  ** Assumes that [f] is in negation normal form. *)
-let propagate_binder b f =
+let propagate_binder_up b f =
   let rec merge sm zs xs ys ys2 =
     match xs, ys with
     | (x, srt1) :: xs1, (y, srt2) :: ys1 ->
@@ -1118,11 +1118,11 @@ let propagate_binder b f =
 
 (** Propagate existentially quantified variables upward in the formula [f].
  ** Assumes that [f] is in negation normal form. *)
-let propagate_exists f = propagate_binder Exists f
+let propagate_exists_up f = propagate_binder_up Exists f
 
 (** Propagate universally quantified variables upward in the formula [f].
  ** Assumes that [f] is in negation normal form. *)
-let propagate_forall f = propagate_binder Forall f
+let propagate_forall_up f = propagate_binder_up Forall f
 
 (** Convert universal quantifiers in formula [f] into existentials where possible. *)
 (** Assumes that [f] is in negation normal form. *)
@@ -1194,7 +1194,7 @@ let foralls_to_exists f =
         let fs1 = List.map (fun f -> cf (Binder (Forall, bvs, f, a))) fs in
         smk_and fs1
     | Binder (Forall, _, BoolOp (Or, _), _) as f ->
-        (match propagate_forall f with
+        (match propagate_forall_up f with
         | Binder (Forall, bvs, (BoolOp (Or, fs) as f), a) ->
             let bvs_set = id_set_of_list (List.map fst bvs) in
             let nodefs, defs, g = find_defs bvs_set [] f in
@@ -1241,7 +1241,7 @@ let skolemize f =
 	annotate (subst sm (sk vs f)) a
     | f -> f
   in 
-  let f1 = propagate_exists f in
+  let f1 = propagate_exists_up f in
   sk IdMap.empty f1
 
 (** Make all names in formula [f] unique *)

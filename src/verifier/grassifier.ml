@@ -525,7 +525,7 @@ let elim_sl prog =
     let simplify f =
       let round f =
         f |>
-        propagate_exists |>
+        propagate_exists_up |>
         mk_not |>
         nnf |>
         foralls_to_exists |>

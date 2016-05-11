@@ -87,7 +87,7 @@ let elim_exists =
   in
   List.map (fun f -> 
     let f1 = elim_neq [] f in
-    let f2 = propagate_exists f1 in
+    let f2 = propagate_exists_up f1 in
     skolemize f2)
 
 (** Hoist all universally quantified subformulas to top level.
