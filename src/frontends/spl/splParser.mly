@@ -207,12 +207,15 @@ function_header:
       decl.v_name :: outputs, IdMap.add decl.v_name decl locals)
       $8 ([], locals)
   in
+  let contracts =
+    List.map (function Ensures (e, _) -> Ensures (e, true) | c -> c) $10
+  in
   let decl =
     { pr_name = ($2, 0);
       pr_formals = formals;
       pr_outputs = outputs;
       pr_locals = locals;
-      pr_contracts = $10;
+      pr_contracts = contracts;
       pr_body = None;
       pr_pos = mk_position 2 2;
     }
