@@ -576,7 +576,10 @@ let find_term model =
                     List.map (function
                       | Int -> [I Int64.zero]
                       | Bool -> [B false]
-                      | srt -> get_values_of_sort model srt)
+                      | srt ->
+                          match get_values_of_sort model srt with
+                          | v1 :: v2 :: v3 :: _ -> [v1; v2; v3]
+                          | vs -> vs)
                       arg_srts
                   in
                   let arg_product =
@@ -706,6 +709,7 @@ let find_term model =
     | Int -> mk_int64 (int_of_value v)
     | _ ->
         let sym, vs = SortedValueMap.find (v, srt) prev in
+        if List.mem (v, srt) vs then failwith "fixme";
         let args = List.map find vs in
         mk_app srt sym args
   in fun v srt -> find (v, srt)
@@ -1588,14 +1592,14 @@ let print_graph output chan model terms =
       output_reach ();
       output_eps ()
   in
-    SortSet.iter declare_locs loc_sorts;
-    SortSet.iter mk_graph loc_sorts;
-    output.header chan;
-    output.graph chan !nodes !edges;
-    output_sets ();
-    output_int_vars ();
-    output_freesyms ();
-    output.footer chan
+  SortSet.iter declare_locs loc_sorts;
+  SortSet.iter mk_graph loc_sorts;
+  output.header chan;
+  output.graph chan !nodes !edges;
+  output_sets ();
+  output_int_vars ();
+  output_freesyms ();
+  output.footer chan
  
 let output_html = print_graph mixed_graphviz_html
 let output_graph = print_graph graphviz_output
