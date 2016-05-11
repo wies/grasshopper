@@ -64,7 +64,7 @@ let generated_ground_terms fs =
 let elim_exists =
   let e = fresh_ident "?e" in
   let rec elim_neq bvs = function
-    | BoolOp (Not, [Atom (App (Eq, [s1; s2], _), a)]) as f ->
+    | BoolOp (Not, [Atom (App (Eq, [s1; s2], _), a)]) as f when bvs = [] ->
 	(match sort_of s1 with
 	| Set srt ->
 	    let ve = mk_var srt e in
