@@ -804,7 +804,8 @@ let elim_sl prog =
     in
     IdMap.add pname pred1 preds, frame_axioms @ axioms
   in
-  let preds, axioms = fold_preds translate_pred (IdMap.empty, prog.prog_axioms) prog in
+  let axioms = List.map (map_spec_fol_form post_process_form) prog.prog_axioms in
+  let preds, axioms = fold_preds translate_pred (IdMap.empty, axioms) prog in
   let prog = { prog with prog_preds = preds; prog_axioms = axioms } in
   let struct_srts = struct_sorts prog in
   (* declare alloc sets *)
