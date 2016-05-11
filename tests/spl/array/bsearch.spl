@@ -22,12 +22,9 @@ procedure lower_bound(a: Array<Int>, x: Int, begin: Int, end: Int) returns (idx:
     invariant hi == end || a[hi] >= x
   {
     var mid := (lo + hi) / 2;
-    if (a[mid] < x)
-    {
+    if (a[mid] < x) {
       lo := mid + 1;
-    }
-    else
-    {
+    } else {
       hi := mid;
     }
   }

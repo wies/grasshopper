@@ -4,10 +4,17 @@
 include "slslist.spl";
 
 function data_witness(v: Int, d: Map<Node, Int>, FP: Set<Node>) returns (res: Node) 
+  ensures forall x in FP :: x == data_witness(x.d, d, FP)
 
-function content(FP: Set<Node>, d: Map<Node, Int>) returns (C: Set<Int>)
-
-
+function content(FP: Set<Node>, d: Map<Node, Int>)
+  returns (C: Set<Int>)
+  requires acc(FP)
+  ensures forall x in FP :: x.d in C
+  ensures forall v in C :: data_witness(v, d, FP) in FP
+  ensures forall v: Int :: v !in C ==> data_witness(v, d, FP) == null
+  ensures forall v in C :: v == data_witness(v, d, FP).d @(matching v, content(FP, d) yields data_witness(v, d, FP).d)
+  
+/*
 axiom forall FP: Set<Node>, d: Map<Node, Int>, x in FP :: x == data_witness(x.d, d, FP);
 
 axiom forall FP: Set<Node>, d: Map<Node, Int>, x in FP :: x.d in content(FP, d);
@@ -18,7 +25,7 @@ axiom forall FP: Set<Node>, d: Map<Node, Int>, v: Int :: v !in content(FP, d) ==
 
 axiom forall FP: Set<Node>, d: Map<Node, Int>, v in content(FP, d) :: v == data_witness(v, d, FP).d
   @(matching v, content(FP, d) yields data_witness(v, d, FP).d);
-
+*/
 
 /*
 { v: Int :: exists x: Node :: x in FP && x.data == v }

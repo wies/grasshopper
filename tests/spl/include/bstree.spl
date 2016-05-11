@@ -122,7 +122,7 @@ predicate tree_set(r: Node, C: Set<Int>) {
 // Predicates for heaps
 
 predicate heap_property(FP: Set<Node>)
-  requires acc(X)
+  requires acc(FP)
 {
   forall x: Node, y: Node :: x in FP && y in FP && Btwn(parent,x,y,y) ==> x.data <= y.data
 }

@@ -28,7 +28,7 @@ procedure contains(root: Node, val: Int, implicit ghost content: Set<Int>)
 procedure singleton(val: Int)
   returns (root: Node)
   requires emp
-  ensures tree_set(root, Set<Int>(val)) &*& root.parent == null
+  ensures tree_set(root, {val}) &*& root.parent == null
 {
   root := new Node;
   root.left := null;
@@ -37,10 +37,21 @@ procedure singleton(val: Int)
   root.data := val;
 }
 
+procedure test()
+  requires emp
+  ensures emp
+{
+  var t := singleton(1);
+  if (!contains(t, 1) || contains(t, 0)) {
+    assert false;
+  }
+  free t;
+}
+
 procedure insert(root: Node, val: Int, implicit ghost Content: Set<Int>)
   returns (nroot: Node)
   requires tree_set(root, Content)
-  ensures tree_set(nroot, Content ++ Set<Int>(val))
+  ensures tree_set(nroot, Content ++ {val})
 {
   if (root == null) {
     nroot := singleton(val);

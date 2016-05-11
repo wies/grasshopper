@@ -17,8 +17,8 @@ function array_state()
 
 function array_content(FP: Set<ArrayCell<Int>>)
   returns (C: Set<Int>)
-  ensures forall x: ArrayCell<Int> :: x in FP ==> x == contentWitness(x.array[x.index], FP, array_state())
-  ensures forall x: ArrayCell<Int> :: x in FP ==> x.array[x.index] in C
+  ensures forall x in FP :: x == contentWitness(x.array[x.index], FP, array_state())
+  ensures forall x in FP :: x.array[x.index] in C
   ensures forall v in C :: contentWitness(v, FP, array_state()) in FP
   ensures forall v: Int :: v !in C ==> contentWitness(v, FP, array_state()) == null
   ensures forall v in C :: v == contentWitness(v, FP, array_state())[]
