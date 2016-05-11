@@ -20,7 +20,7 @@ procedure equals(first: Array<Byte>, second: Array<Byte>)
     i := i + 1;
   }
   if (i >= first.length) return true;
-  else { return false;}
+  else return false;
 }
 
 

@@ -3,27 +3,22 @@ predicate arrayseg(a: Array<Int>, i: Int, j: Int) {
   acc({ c: ArrayCell<Int> :: i <= c.index && c.index < j && c.array == a })
 }
 
-
 predicate array(a: Array<Int>) {
   acc(a) &*&
   arrayseg(a, 0, a.length)
 }
 
-function contentWitness(v: Int, FP: Set<ArrayCell<Int>>, m: Map<ArrayCell<Int>, Int>) returns (res: ArrayCell<Int>) 
-
-function array_state()
-  returns (m: Map<ArrayCell<Int>, Int>)
-  ensures forall c: ArrayCell<Int> :: c.m == c.array[c.index] @(matching c yields c.m)
-
+function contentWitness(v: Int, FP: Set<ArrayCell<Int>>)
+  returns (res: ArrayCell<Int>) 
+  ensures forall c in FP :: c == contentWitness(c[], FP)
+  ensures forall c: ArrayCell<Int> :: c !in FP ==> null == contentWitness(c[], FP)
+  
 function array_content(FP: Set<ArrayCell<Int>>)
   returns (C: Set<Int>)
-  ensures forall x in FP :: x == contentWitness(x.array[x.index], FP, array_state())
   ensures forall x in FP :: x.array[x.index] in C
-  ensures forall v in C :: contentWitness(v, FP, array_state()) in FP
-  ensures forall v: Int :: v !in C ==> contentWitness(v, FP, array_state()) == null
-  ensures forall v in C :: v == contentWitness(v, FP, array_state())[]
-             @(matching v yields contentWitness(v, FP, array_state())[])
-
+  ensures forall v in C :: contentWitness(v, FP) in FP
+  ensures forall v in C :: v == contentWitness(v, FP)[]
+             @(matching v yields contentWitness(v, FP)[])
 
 predicate arrayseg_cnt(a: Array<Int>, i: Int, j: Int, C: Set<Int>) {
   exists X: Set<ArrayCell<Int>> ::
