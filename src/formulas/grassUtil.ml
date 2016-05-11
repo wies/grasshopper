@@ -384,6 +384,9 @@ let mk_neq s t = mk_not (mk_eq s t)
 (** Constructor for strict subset constraints.*)
 let mk_strict_subset s t = mk_and [mk_subseteq s t; mk_neq s t]
 
+(** Constructor for oldification *)
+let mk_old t = mk_app (sort_of t) Old [t]
+    
 (** Constructor for patterns. *)
 let mk_known t = mk_app Pat Known [t]
     

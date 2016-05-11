@@ -665,7 +665,8 @@ let elim_sl prog =
           let f_eq_final_footprint =
             f |>
             SlToGrass.to_grass (pred_to_form final_footprint_sets) final_footprint_sets |>
-            post_process_form
+            post_process_form |>
+            elim_old_form modifies
           in
           let final_footprint_postcond =
             mk_spec_form (FOL f_eq_final_footprint) name msg pos
@@ -677,7 +678,11 @@ let elim_sl prog =
              spec_kind = kind;
            }], pos
     in
-    let other_postcond = List.map (map_spec_fol_form post_process_form) other_postcond in
+    let other_postcond =
+      List.map
+        (map_spec_fol_form (fun f -> f |> post_process_form |> elim_old_form modifies))
+        other_postcond
+    in
     (* generate frame condition by applying the frame rule *) 
     let framecond =
       if not is_proc then [] else

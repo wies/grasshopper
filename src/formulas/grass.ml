@@ -77,6 +77,8 @@ type symbol =
   | Elem | SubsetEq | Disjoint
   (* uninterpreted constants, functions, and predicates *)
   | FreeSym of ident
+  (* oldification *)
+  | Old      
   (* for patterns *)
   | Known
 
@@ -88,7 +90,8 @@ let symbols =
    Empty; SetEnum; Union; Inter; Diff;
    Length; IndexOfCell; ArrayOfCell; ArrayCells;
    Eq; LtEq; GtEq; Lt; Gt;
-   Btwn; Frame; Elem; SubsetEq; Disjoint; Known]
+   Btwn; Frame; Elem; SubsetEq; Disjoint;
+   Known; Old]
 
 module SymbolSet = Set.Make(struct
     type t = symbol
@@ -248,6 +251,8 @@ let string_of_symbol = function
   | Frame -> "Frame"
   (* uninterpreted symbols *)
   | FreeSym id -> string_of_ident id
+  (* oldification *)
+  | Old -> "old"      
   (* patterns *)
   | Known -> "known"
         

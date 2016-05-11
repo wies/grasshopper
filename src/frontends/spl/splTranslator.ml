@@ -144,7 +144,7 @@ let convert cu =
         GrassUtil.mk_read tmap tidx
     | UnaryOp (OpOld, e, pos) ->
         let t = convert_term locals e in
-        oldify_term globals t
+        GrassUtil.mk_old t
     | UnaryOp (OpLength, e, pos) ->
         let t = convert_term locals e in
         GrassUtil.mk_length t

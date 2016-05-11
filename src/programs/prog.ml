@@ -458,6 +458,7 @@ let oldify_term vars t =
       vars IdMap.empty
   in subst_id_term subst_map t
 
+
 let oldify_form vars f =
   let subst_map = 
     IdSet.fold (fun var subst_map ->
@@ -465,12 +466,14 @@ let oldify_form vars f =
       vars IdMap.empty
   in subst_id subst_map f
 
+
 let oldify_sl_form vars f =
   let subst_map = 
     IdSet.fold (fun var subst_map ->
       IdMap.add var (oldify var) subst_map)
       vars IdMap.empty
   in SlUtil.subst_id subst_map f
+
 
 let oldify_spec vars sf =
   let old_form =
@@ -482,6 +485,20 @@ let oldify_spec vars sf =
     spec_form = old_form;
   }
 
+
+let elim_old_term vars t =
+  let rec e = function
+    | App (Old, [t], _) ->
+        oldify_term vars t |> e
+    | App (sym, ts, srt) ->
+        App (sym, List.map e ts, srt)
+    | Var _ as t -> t
+  in e t
+    
+
+let elim_old_form vars f =
+  map_terms (elim_old_term vars) f
+        
 let old_to_fun f =
   let rec o2f = function
     | App (FreeSym (name, num as id), [], srt) ->
