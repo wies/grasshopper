@@ -193,6 +193,7 @@ let convert oc cu =
       | (e1, OpPlus,  e2) -> fprintf ppf "(%a + %a)"  pr_c_expr e1 pr_c_expr e2
       | (e1, OpMult,  e2) -> fprintf ppf "(%a * %a)"  pr_c_expr e1 pr_c_expr e2 
       | (e1, OpDiv, e2)   -> fprintf ppf "(%a / %a)"  pr_c_expr e1 pr_c_expr e2
+      | (e1, OpMod, e2)   -> fprintf ppf "(%a %% %a)"  pr_c_expr e1 pr_c_expr e2
       | (e1, OpEq, e2)    -> fprintf ppf "(%a == %a)" pr_c_expr e1 pr_c_expr e2
       | (e1, OpGt, e2)    -> fprintf ppf "(%a > %a)"  pr_c_expr e1 pr_c_expr e2
       | (e1, OpLt, e2)    -> fprintf ppf "(%a < %a)"  pr_c_expr e1 pr_c_expr e2

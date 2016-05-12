@@ -953,36 +953,49 @@ let elim_sl prog =
 
 (** Annotate safety checks for heap accesses *)
 let annotate_heap_checks prog =
-  let rec derefs acc = function
+  let rec checks acc = function
     | App (Read, [map; idx], _) ->
         let acc1 =
           match sort_of map with
           | Map (Loc _, _) -> TermSet.add idx acc
           | _ -> acc
         in
-        derefs (derefs acc1 map) idx
+        checks (checks acc1 map) idx
     | App (Length, [map], _) -> TermSet.add map acc
     | App (ArrayCells, [map], _) -> TermSet.add map acc
     | App (Write, fld :: loc :: ts, _) ->
-        List.fold_left derefs (TermSet.add loc acc) (fld :: loc :: ts)
+        List.fold_left checks (TermSet.add loc acc) (fld :: loc :: ts)
+    | App ((Div | Mod), [t1; t2], _) ->
+        List.fold_left checks (TermSet.add t2 acc) [t1; t2]
     | App (_, ts, _) -> 
-        List.fold_left derefs acc ts
+        List.fold_left checks acc ts
     | _ -> acc
   in
   let mk_term_checks pos acc t =
-    let locs = derefs TermSet.empty t in
+    let to_check = checks TermSet.empty t in
     TermSet.fold 
       (fun t acc ->
-        let ssrt = struct_sort_of_sort (sort_of t) in
-        let t_in_footprint = FOL (mk_elem t (footprint_set ssrt)) in
-        let mk_msg callee =
-          let msg = "Possible invalid heap access to location of type " ^ (string_of_sort ssrt) in
-          msg, msg
-        in
-        let sf = mk_spec_form t_in_footprint "check heap access" (Some mk_msg) pos in
-        let check_access = mk_assert_cmd sf pos in
+        match sort_of t with
+        | Int ->
+            let t_not_zero = FOL (mk_not (mk_eq t (mk_int 0))) in
+            let mk_msg callee =
+              let msg = "Possible division by zero" in
+              msg, msg
+            in
+            let sf = mk_spec_form t_not_zero "check division" (Some mk_msg) pos in
+            let check_division = mk_assert_cmd sf pos in
+            check_division :: acc
+        | _ ->
+            let ssrt = struct_sort_of_sort (sort_of t) in
+            let t_in_footprint = FOL (mk_elem t (footprint_set ssrt)) in
+            let mk_msg callee =
+              let msg = "Possible invalid heap access to location of type " ^ (string_of_sort ssrt) in
+              msg, msg
+            in
+            let sf = mk_spec_form t_in_footprint "check heap access" (Some mk_msg) pos in
+            let check_access = mk_assert_cmd sf pos in
         check_access :: acc)
-      locs acc
+      to_check acc
   in
   let ann_term_checks ts cmd =
     let checks = List.fold_left (mk_term_checks (source_pos cmd)) [] ts in

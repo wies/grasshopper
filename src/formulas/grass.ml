@@ -65,7 +65,7 @@ type symbol =
   | IntConst of Int64.t
   (* interpreted function symbols *)
   | Null | Read | Write | EntPnt
-  | UMinus | Plus | Minus | Mult | Div  (* Int *)
+  | UMinus | Plus | Minus | Mult | Div | Mod (* Int *)
   | BitAnd | BitOr | BitNot | ShiftLeft | ShiftRight (* Bit Vector *)
   | Empty | SetEnum | Union | Inter | Diff  (* Set *)
   | Length | IndexOfCell | ArrayOfCell | ArrayCells
@@ -85,7 +85,7 @@ type symbol =
 let symbols = 
   [BoolConst true; BoolConst false; 
    Null; Read; Write; EntPnt;
-   UMinus; Plus; Minus; Mult; Div;
+   UMinus; Plus; Minus; Mult; Div; Mod;
    BitAnd; BitOr; BitNot; ShiftLeft; ShiftRight;
    Empty; SetEnum; Union; Inter; Diff;
    Length; IndexOfCell; ArrayOfCell; ArrayCells;
@@ -226,6 +226,7 @@ let string_of_symbol = function
   | Minus -> "-"
   | Mult -> "*"
   | Div -> "div"
+  | Mod -> "mod"
   | Empty -> "emptyset"
   | SetEnum -> "singleton"
   | Union -> "union"

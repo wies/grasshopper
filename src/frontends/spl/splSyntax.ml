@@ -139,7 +139,7 @@ and exprs = expr list
 
 and bin_op = 
   | OpDiff | OpUn | OpInt 
-  | OpMinus | OpPlus | OpMult | OpDiv 
+  | OpMinus | OpPlus | OpMult | OpDiv | OpMod 
   | OpEq | OpGt | OpLt | OpGeq | OpLeq | OpIn
   | OpPts | OpSepStar | OpSepPlus | OpSepIncl
   | OpBvAnd | OpBvOr | OpBvShiftL | OpBvShiftR 

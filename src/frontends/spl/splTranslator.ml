@@ -187,20 +187,15 @@ let convert cu =
         let t1 = convert_term locals e1 in
         let t2 = convert_term locals e2 in
         mk_app t1 t2
-    | BinaryOp (e1, (OpMinus as op), e2, ty, _)
-    | BinaryOp (e1, (OpPlus as op), e2, ty, _)
-    | BinaryOp (e1, (OpMult as op), e2, ty, _)
-    | BinaryOp (e1, (OpDiv as op), e2, ty, _)
-    | BinaryOp (e1, (OpBvAnd as op), e2, ty, _)
-    | BinaryOp (e1, (OpBvOr as op), e2, ty, _)
-    | BinaryOp (e1, (OpBvShiftL as op), e2, ty, _)
-    | BinaryOp (e1, (OpBvShiftR as op), e2, ty, _) ->
+    | BinaryOp (e1, ((OpMinus | OpPlus | OpMult | OpDiv | OpMod) as op), e2, ty, _)
+    | BinaryOp (e1, ((OpBvAnd | OpBvOr | OpBvShiftL | OpBvShiftR) as op), e2, ty, _)  ->
         let mk_app =
           match op with
           | OpMinus -> GrassUtil.mk_minus
           | OpPlus -> GrassUtil.mk_plus
           | OpMult -> GrassUtil.mk_mult
           | OpDiv -> GrassUtil.mk_div
+          | OpMod -> GrassUtil.mk_mod
           | OpBvAnd -> GrassUtil.mk_bv_and
           | OpBvOr -> GrassUtil.mk_bv_or
           | OpBvShiftL -> GrassUtil.mk_bv_shift_left

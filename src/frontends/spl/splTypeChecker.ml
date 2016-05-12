@@ -88,10 +88,7 @@ let type_of_expr cu locals e =
     (* Int or Byte return values *)
     | UnaryOp (OpUMinus, e, _)
     | UnaryOp (OpUPlus, e, _) 
-    | BinaryOp (e, OpMinus, _, _, _)
-    | BinaryOp (e, OpPlus, _, _, _)
-    | BinaryOp (e, OpMult, _, _, _)
-    | BinaryOp (e, OpDiv, _, _, _)
+    | BinaryOp (e, (OpMinus | OpPlus | OpMult | OpDiv | OpMod), _, _, _)
     | UnaryOp (OpBvNot, e, _)
     | BinaryOp (e, OpBvAnd, _, _, _)
     | BinaryOp (e, OpBvOr, _, _, _)
@@ -235,12 +232,8 @@ let infer_types cu locals ty e =
         UnaryOp (op, e1, pos), ty
       else
         type_error pos IntType ty
-    | BinaryOp (e1, (OpMinus as op), e2, _, pos)
-    | BinaryOp (e1, (OpPlus as op), e2, _, pos)
-    | BinaryOp (e1, (OpMult as op), e2, _, pos)
-    | BinaryOp (e1, (OpDiv as op), e2, _, pos)
-    | BinaryOp (e1, (OpBvAnd as op), e2, _, pos)
-    | BinaryOp (e1, (OpBvOr as op), e2, _, pos) ->
+    | BinaryOp (e1, ((OpMinus | OpPlus | OpMult | OpDiv | OpMod) as op), e2, _, pos)
+    | BinaryOp (e1, ((OpBvAnd | OpBvOr)  as op), e2, _, pos) ->
       let e1, e2, ty = itp locals ty e1 e2 in
       if ty = IntType || ty = ByteType then
         BinaryOp (e1, op, e2, ty, pos), ty

@@ -133,6 +133,7 @@ rule token = parse
 | '-' { MINUS }
 | '/' { DIV }
 | '*' { TIMES }
+| '%' { MOD }
 | '(' { LPAREN }
 | ')' { RPAREN }
 | '{' { LBRACE }

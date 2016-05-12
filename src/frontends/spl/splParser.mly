@@ -46,7 +46,7 @@ let trd3 (_, _, v) = v
 %token <string> STRINGVAL
 %token LPAREN RPAREN LBRACE RBRACE LBRACKET RBRACKET
 %token COLON COLONEQ COLONCOLON SEMICOLON DOT PIPE
-%token UMINUS PLUS MINUS DIV TIMES
+%token UMINUS PLUS MINUS DIV TIMES MOD
 %token UNION INTER DIFF
 %token EQ NEQ LEQ GEQ LT GT IN NOTIN AT
 %token BOR BAND BNOT BSL BSR INT2BYTE BYTE2INT
@@ -78,7 +78,7 @@ let trd3 (_, _, v) = v
 %nonassoc PTS LS
 %left PLUS MINUS
 %left UNION INTER DIFF
-%left TIMES DIV
+%left TIMES DIV MOD
 %nonassoc LPAREN
 
 %start main
@@ -551,6 +551,7 @@ mult_expr:
 | diff_expr  { $1 }
 | mult_expr TIMES diff_expr { BinaryOp ($1, OpMult, $3, IntType, mk_position 1 3) }
 | mult_expr DIV diff_expr { BinaryOp ($1, OpDiv, $3, IntType, mk_position 1 3) }
+| mult_expr MOD diff_expr { BinaryOp ($1, OpMod, $3, IntType, mk_position 1 3) }
 | mult_expr INTER diff_expr { BinaryOp ($1, OpInt, $3, SetType AnyType, mk_position 1 3) }
 | mult_expr BAND diff_expr { BinaryOp ($1, OpBvAnd, $3, IntType, mk_position 1 3) }
 ;
