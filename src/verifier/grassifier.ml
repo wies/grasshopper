@@ -584,6 +584,23 @@ let elim_sl prog =
         )
         footprint_sorts ([], SortMap.empty, SortMap.empty)
     in
+    let rec split_sep pure_fs = function
+      | Sl.SepOp ((Sl.SepStar | Sl.SepPlus | Sl.SepIncl), Sl.Pure (f, _), slf, _)
+      | Sl.SepOp ((Sl.SepStar | Sl.SepPlus), slf, Sl.Pure (f, _), _) ->
+          split_sep (f :: pure_fs) slf
+      | Sl.SepOp ((Sl.SepStar | Sl.SepPlus) as op, f1, f2, pos) ->
+          let pure_fs, f1 = split_sep (pure_fs) f1 in
+          let pure_fs, f2 = split_sep (pure_fs) f2 in
+          let mk_op = match op with
+          | Sl.SepStar -> SlUtil.mk_sep_star
+          | Sl.SepPlus -> SlUtil.mk_sep_plus
+          | _ -> failwith "impossible"
+          in
+          pure_fs, mk_op f1 f2
+      | Sl.Pure (f, pos) ->
+          f :: pure_fs, Sl.Atom (Sl.Emp, [], pos)
+      | f -> pure_fs, f
+    in
     (* translate SL precondition *)
     let sl_precond, other_precond = List.partition is_sl_spec contr.contr_precond in
     let precond =
@@ -601,10 +618,11 @@ let elim_sl prog =
             footprint_sorts
             []
         in
-        f |>
+        let sl_pure, sl_nonpure = split_sep [] f in
+        sl_nonpure |>
         SlToGrass.to_grass (pred_to_form footprint_context) footprint_sets |>
         post_process_form |>
-        (fun f -> mk_and (f :: fp_inclusions))
+        (fun f -> mk_and (f :: sl_pure @ fp_inclusions))
         (*|> (fun f -> print_endline (string_of_ident contr.contr_name ^ " (after):"); print_form stdout f; print_newline (); f)*)
       in
       let precond = mk_spec_form (FOL f_eq_init_footprint) name msg pos in
@@ -675,10 +693,12 @@ let elim_sl prog =
               (fun ssrt sets -> SortMap.add ssrt (final_footprint_set ssrt) sets)
               footprint_sorts SortMap.empty
           in
+          let sl_pure, sl_nonpure = split_sep [] f in
           let f_eq_final_footprint =
-            f |>
+            sl_nonpure |>
             SlToGrass.to_grass (pred_to_form final_footprint_sets) final_footprint_sets |>
             post_process_form |>
+            (fun f -> mk_and (f :: sl_pure)) |>
             elim_old_form modifies
           in
           let final_footprint_postcond =
