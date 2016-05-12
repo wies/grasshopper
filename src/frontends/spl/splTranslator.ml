@@ -27,7 +27,10 @@ let make_conditionals_lazy cu =
     aux_id, locals1
   in
   let rec process_stmt scope locals = function
-    | If (BinaryOp(e1, OpOr, e2, _, p1), s1, s2, p2) -> If (e1, s1, If (e2, s1, s2, p1), p2), locals
+    | If (BinaryOp(e1, OpOr, e2, _, p1), s1, s2, p2) ->
+        If (e1, s1, If (e2, s1, s2, p1), p2), locals
+    | If (BinaryOp (e1, OpImpl, e2, _, p1), s1, s2, p2) ->
+        If (UnaryOp (OpNot, e1, p1), s1, If (e2, s1, s2, p1), p2), locals
     | Loop (invs, preb, BinaryOp (e1, OpOr, e2, _, pos1), postb, pos) ->
        let aux_id, locals = decl_aux_var "loop_cond" BoolType pos scope locals
        in
