@@ -3,7 +3,8 @@
 
 include "slslist.spl";
 
-function data_witness(v: Int, FP: Set<Node>) returns (res: Node) 
+function data_witness(v: Int, FP: Set<Node>) returns (res: Node)
+  requires acc(FP)
   ensures forall x in FP :: x == data_witness(x.data, FP)
 
 function content(FP: Set<Node>)
@@ -12,7 +13,7 @@ function content(FP: Set<Node>)
   ensures forall x in FP :: x.data in C
   ensures forall v in C :: data_witness(v, FP) in FP
   ensures forall v: Int :: v !in C ==> data_witness(v, FP) == null
-  ensures forall v in C :: v == data_witness(v, FP).data @(matching v, content(FP) yields data_witness(v, FP).data)
+  ensures forall v in C :: v == data_witness(v, FP).data @(matching v yields data_witness(v, FP).data)
   
 /*
 axiom forall FP: Set<Node>, d: Map<Node, Int>, x in FP :: x == data_witness(x.d, d, FP);
