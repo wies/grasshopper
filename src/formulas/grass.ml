@@ -330,6 +330,7 @@ and pr_term ppf = function
   | App (Plus, [t1; t2], _) -> fprintf ppf "%a + @[<2>%a@]" pr_term0 t1 pr_term0 t2
   | App (Mult, [t1; t2], _) -> fprintf ppf "%a * @[<2>%a@]" pr_term0 t1 pr_term0 t2
   | App (Div, [t1; t2], _) -> fprintf ppf "%a / @[<2>%a@]" pr_term0 t1 pr_term0 t2
+  | App (Mod, [t1; t2], _) -> fprintf ppf "%a % @[<2>%a@]" pr_term0 t1 pr_term0 t2
   | App (Diff, [t1; t2], _) -> fprintf ppf "%a -- @[<2>%a@]" pr_term0 t1 pr_term0 t2
   | App (Length, [t], _) -> fprintf ppf "%a.%s" pr_term t (string_of_symbol Length)
   | App (ArrayCells, [t], _) -> fprintf ppf "%a.%s" pr_term t (string_of_symbol ArrayCells)
