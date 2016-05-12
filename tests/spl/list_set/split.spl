@@ -1,9 +1,8 @@
-
 include "../include/slsset.spl";
 
-predicate ls_unord(x: Node, y: Node, C: Set<Int>)(FP: Set<Node>) {
-  lseg(x, y, FP) &&
-  C == content(FP)
+predicate ls_unord(x: Node, y: Node, C: Set<Int>) {
+  exists X: Set<Node> ::
+    lseg(x, y) && acc(X) &*& C == content(X)
 }
 
 procedure split(x: Node, y: Node, implicit ghost C: Set<Int>)

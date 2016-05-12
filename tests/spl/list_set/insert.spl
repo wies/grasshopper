@@ -14,12 +14,10 @@ procedure append(val: Int, x: Node, implicit ghost C: Set<Int>)
 procedure insert(lst: Node, val: Int, implicit ghost C: Set<Int>)
   returns (res: Node)
   requires list_set(lst, null, C)
-  ensures list_set(res, null, C ++ Set(val))
+  ensures list_set(res, null, C ++ {val})
 {
-  var curr: Node;
-  curr := lst;
-  var prev: Node;
-  prev := null;
+  var curr := lst;
+  var prev: Node := null;
   
   while (curr != null && curr.data < val)
     invariant (prev == null && curr == lst || val > prev.data &*& prev.next |-> curr) -** 

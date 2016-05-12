@@ -3,16 +3,16 @@
 
 include "slslist.spl";
 
-function data_witness(v: Int, d: Map<Node, Int>, FP: Set<Node>) returns (res: Node) 
-  ensures forall x in FP :: x == data_witness(x.d, d, FP)
+function data_witness(v: Int, FP: Set<Node>) returns (res: Node) 
+  ensures forall x in FP :: x == data_witness(x.data, FP)
 
-function content(FP: Set<Node>, d: Map<Node, Int>)
+function content(FP: Set<Node>)
   returns (C: Set<Int>)
   requires acc(FP)
-  ensures forall x in FP :: x.d in C
-  ensures forall v in C :: data_witness(v, d, FP) in FP
-  ensures forall v: Int :: v !in C ==> data_witness(v, d, FP) == null
-  ensures forall v in C :: v == data_witness(v, d, FP).d @(matching v, content(FP, d) yields data_witness(v, d, FP).d)
+  ensures forall x in FP :: x.data in C
+  ensures forall v in C :: data_witness(v, FP) in FP
+  ensures forall v: Int :: v !in C ==> data_witness(v, FP) == null
+  ensures forall v in C :: v == data_witness(v, FP).data @(matching v, content(FP) yields data_witness(v, FP).data)
   
 /*
 axiom forall FP: Set<Node>, d: Map<Node, Int>, x in FP :: x == data_witness(x.d, d, FP);
@@ -39,5 +39,5 @@ axiom forall FP: Set<Node>, d: Map<Node, Int>, v in content(FP, d) :: v == data_
 predicate list_set(x: Node, y: Node, C: Set<Int>) {
   exists X: Set<Node> ::
     lseg(x, y) && acc(X) &*&
-    lseg_strictly_increasing(x, X) && C == content(X, data)
+    lseg_strictly_increasing(x, X) && C == content(X)
 }
