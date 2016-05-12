@@ -96,27 +96,24 @@ predicate bstree_bounded(r: Node, lb: Int, ub: Int) {
 
 // Predicates for tree sets
 
-function data_witness(v: Int, d: Map<Node, Int>, FP: Set<Node>) returns (res: Node) 
+function data_witness(v: Int, FP: Set<Node>)
+  returns (res: Node)
+  requires acc(FP)
+  ensures forall x in FP :: x == data_witness(x.data, FP)
 
-function content(FP: Set<Node>, d: Map<Node, Int>) returns (C: Set<Int>)
-
-
-axiom forall FP: Set<Node>, d: Map<Node, Int>, x in FP :: x == data_witness(x.d, d, FP);
-
-axiom forall FP: Set<Node>, d: Map<Node, Int>, x in FP :: x.d in content(FP, d);
-
-axiom forall FP: Set<Node>, d: Map<Node, Int>, v in content(FP, d) :: data_witness(v, d, FP) in FP;
-
-axiom forall FP: Set<Node>, d: Map<Node, Int>, v: Int :: v !in content(FP, d) ==> data_witness(v, d, FP) == null;
-
-axiom forall FP: Set<Node>, d: Map<Node, Int>, v in content(FP, d) :: v == data_witness(v, d, FP).d
-  @(matching v, content(FP, d) yields data_witness(v, d, FP).d);
+function content(FP: Set<Node>) returns (C: Set<Int>)
+  requires acc(FP)
+  ensures forall v: Int :: v !in C ==> data_witness(v, FP) == null
+  ensures forall x in FP :: x.data in content(FP)
+  ensures forall v in C :: data_witness(v, FP) in FP;
+  ensures forall v in C :: v == data_witness(v, FP).data
+  @(matching v yields data_witness(v, FP).data);
 
                                                                                           
 predicate tree_set(r: Node, C: Set<Int>) {
   exists X: Set<Node> ::
     bstree(r) && acc(X) &*&
-    C == content(X, data)
+    C == content(X)
 }
 
 // Predicates for heaps
@@ -137,5 +134,5 @@ predicate heap_set(r: Node, C: Set<Int>) {
   exists X: Set<Node> ::
     tree(r) && acc(X) &*&
     heap_property(X) &&
-    C == content(X, data)
+    C == content(X)
 }
