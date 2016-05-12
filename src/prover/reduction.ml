@@ -445,14 +445,11 @@ let instantiate read_propagators fs gts =
   let classes = CongruenceClosure.congr_classes (List.rev_append eqs fs) gts1 in
   let implied =
     List.fold_left
-      (fun acc cls ->
-        if (List.length cls > 1 && sort_of (List.hd cls) <> Bool) then
-          let h = List.hd cls in
-          let eq = List.map (fun t -> GrassUtil.mk_eq h t) (List.tl cls) in
-          List.rev_append eq acc
-        else
-          acc
-      )
+      (fun acc -> function
+        | c :: cls when sort_of c <> Bool && sort_of c <> Pat -> 
+            let eq = List.map (fun t -> GrassUtil.mk_eq c t) cls in
+            List.rev_append eq acc
+        | _ -> acc)
       []
       classes
   in

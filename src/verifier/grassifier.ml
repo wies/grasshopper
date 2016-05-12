@@ -813,9 +813,13 @@ let elim_sl prog =
       in
       let new_arg_ids =
         List.fold_left (fun new_args id1 ->
-          let decl = IdMap.find id1 locals in
-          let id2 = fresh_ident (name id1) in 
-          IdMap.add id1 (id2, decl.var_sort) new_args)
+          try
+            let decl = IdMap.find id1 pred.pred_contract.contr_locals in
+            IdMap.add id1 (id1, decl.var_sort) new_args
+          with Not_found ->
+            let decl = IdMap.find id1 locals in
+            let id2 = fresh_ident (name id1) in 
+            IdMap.add id1 (id2, decl.var_sort) new_args)
           IdMap.empty formals
       in
       let mk_new_arg id1 = 
@@ -825,13 +829,20 @@ let elim_sl prog =
       let new_pred =
         mk_free_app res_srt pname (List.map mk_new_arg formals)
       in
-      let guards =
+      (*let guards =
         List.map
           (fun id -> mk_eq (mk_old_arg id) (mk_new_arg id))
           formals 
-      in
+      in*)
       let name = "frame of " ^ string_of_ident pname in
-      let axiom_forms = [Axioms.mk_axiom name (mk_sequent guards [mk_eq old_pred new_pred])] in
+      let annot =
+        match pred.pred_contract.contr_returns with
+        | [] -> [Pattern (mk_known (old_pred), []); Pattern (mk_known (new_pred), [])]
+        | _ -> []
+      in
+      let axiom_forms =
+        [Axioms.mk_axiom name (mk_eq old_pred new_pred) |> fun f -> annotate f annot]
+      in
       List.map (fun axiom -> mk_free_spec_form (FOL axiom) name None pos) axiom_forms
     in
     let pred1 =
