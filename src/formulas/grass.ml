@@ -437,6 +437,8 @@ and pr_annot ppf a =
               string_of_symbol sym :: ids
           | FilterReadNotOccurs (name, _) ->
               name :: ids
+          | FilterNotNull ->
+              string_of_symbol Null :: ids
           | _ ->
               ids)
         fs []

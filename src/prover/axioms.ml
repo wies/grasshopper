@@ -107,7 +107,7 @@ let read_write_axioms fld1 =
     else mk_or [mk_eq (g loc1) dvar]
   in
   let generator2 = 
-    [Match (new_fld1, [])],
+    [Match (new_fld1, [FilterNotNull])],
     [g loc1]
   in      
   if not !encode_fields_as_arrays 

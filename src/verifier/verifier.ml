@@ -268,11 +268,8 @@ let add_pred_insts prog f =
           IdMap.add id (mk_free_fun var.var_sort name vs) sm, defs
       | _ -> failwith "Functions may only have a single return value."
     in
-    let cnt = ref 0 in
     let annot () =
-      let i = !cnt in
-      cnt := i+1;
-      Name ("definition_of_" ^ (string_of_ident name), i)
+      Name (fresh_ident @@ "definition_of_" ^ (string_of_ident name))
     in
     let pat =
       match returns with

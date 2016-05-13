@@ -379,7 +379,7 @@ let convert cu =
            
         in*)
         let matches = 
-          List.map (fun (e, filters) -> 
+          List.fold_right (fun (e, filters) matches -> 
             let ce = GrassUtil.free_consts_term e in
             let ce_occur_below ts =
               List.exists 
@@ -392,19 +392,20 @@ let convert cu =
                   t <> e && List.exists ce_occur_below ts
               | _ -> false
             in*)
-            let flt = 
+            let flt, aux_matches = 
               TermSet.fold 
-                (fun t acc -> match t with
+                (fun t (flt, aux_matches) -> match t with
                 | App (FreeSym sym, (_ :: _ as ts), _)
                   when symbol_of e <> Some (FreeSym sym) && ce_occur_below ts ->
-                    (FilterSymbolNotOccurs (FreeSym sym)) :: acc
-                | App (Read, (App (FreeSym sym, [], srt) :: _ as ts), _)
+                    (FilterSymbolNotOccurs (FreeSym sym)) :: flt, aux_matches
+                | App (Read, ([App (FreeSym sym, [], srt); l] as ts), _)
                   when symbol_of e <> Some (FreeSym sym) && ce_occur_below ts ->
-                    (FilterReadNotOccurs (GrassUtil.name sym, ([], srt))) :: acc
-                | _ -> acc)
-                gts (FilterNotNull :: filters)
+                    (FilterReadNotOccurs (GrassUtil.name sym, ([], srt))) :: flt,
+                    Match (l, [FilterNotNull]) :: aux_matches
+                | _ -> flt, aux_matches)
+                gts (filters, [])
             in
-            Match (e, flt)) es1
+            Match (e, flt) :: aux_matches @ matches) es1 []
         in
         GrassUtil.annotate f [TermGenerator (matches, [ge1])]
     | e ->

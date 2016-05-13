@@ -534,7 +534,7 @@ let elim_sl prog =
         nnf |>
         foralls_to_exists 
       in
-      f |> round |> round
+      f |> round |> round |> propagate_exists_up
     in
     f |>
     subst_preds |>

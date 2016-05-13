@@ -488,15 +488,45 @@ let mk_pattern t ft f = annotate f [Pattern (mk_known t, ft)]
 let smk_op op fs =
   match op with
   | Not -> mk_not (List.hd fs)
-  | _ -> 
+  | _ ->
+      let collect acc =
+        function
+          | BoolOp (And, gs)
+          | Binder (_, [], (BoolOp (And, gs)), _) ->
+            let gss =
+              List.fold_left (fun gss g -> FormSet.add g gss) FormSet.empty gs
+            in
+            acc |> Opt.map (FormSet.inter gss) |> Opt.some gss
+          | f ->
+              let gss = FormSet.singleton f in
+              acc |> Opt.map (FormSet.inter gss) |> Opt.some gss
+      in
+      let filter common f fs =
+        match f with
+        | BoolOp (And, gs) ->
+            let gs1 =
+              List.filter (fun g -> not @@ FormSet.mem g common) gs
+            in
+            mk_and gs1 :: fs
+        | Binder (_, [], BoolOp (And, gs), a) ->
+            let gs1 =
+              List.filter (fun g -> not @@ FormSet.mem g common) gs
+            in
+            annotate (mk_and gs1) a :: fs
+        | f -> f :: fs 
+      in
+      let distr fs =
+        match fs with
+        | [f] -> f
+        | _ :: _ when op = Or ->
+            let common = List.fold_left collect None fs |> Opt.get in
+            let fs1 = List.fold_right (filter common) fs [] in
+            mk_and (mk_or fs1 :: FormSet.elements common)
+        | _ -> BoolOp (op, fs)
+      in
       let rec mkop1 fs acc = 
 	match fs with
-	| [] ->
-            begin
-              match FormSet.elements acc with
-	      | [f] -> f
-	      | fs -> BoolOp (op, fs)
-            end
+	| [] -> distr (FormSet.elements acc)
 	| BoolOp (op', fs0) :: fs1 when op = op' -> 
 	    mkop1 (fs0 @ fs1) acc
 	| BoolOp (And, []) :: fs1
@@ -1056,8 +1086,13 @@ let propagate_binder_up b f =
         let sm, vs = merge IdMap.empty [] vs1 vs2 [] in
         subst sm f1 :: fs2, vs) 
         fs ([], [])
-    in 
-    BoolOp (op, fs1), vs
+    in
+    (*if op = Or && List.length fs1 = 2 then begin
+      print_endline "propagating";
+      print_form stdout (mk_or fs1);
+      print_newline ();
+    end;*)
+    smk_op op fs1, vs
   and prop_op_diff tvs op fs =
     let fv_fs = fv (BoolOp (op, fs)) in
     let fvs, used =
@@ -1077,7 +1112,7 @@ let propagate_binder_up b f =
     in
     let tvs1 = List.filter (fun (x, _) -> IdSet.mem x fv_fs && not (IdSet.mem x used)) tvs in
     let fs1, vss = List.split (List.map (fun (f, ftvs) -> prop ftvs f) fvs) in
-    BoolOp (op, fs1), List.concat (tvs1 :: vss)
+    smk_op op fs1, List.concat (tvs1 :: vss)
   and prop tvs = function
     | BoolOp (And, fs) when b = Forall ->
         prop_op_same tvs And fs
@@ -1116,7 +1151,7 @@ let propagate_binder_up b f =
   let f1, vs = prop [] f in 
   let res = mk_binder b vs f1 in
   res
-
+ 
 (** Propagate existentially quantified variables upward in the formula [f].
  ** Assumes that [f] is in negation normal form. *)
 let propagate_exists_up f = propagate_binder_up Exists f
@@ -1124,7 +1159,7 @@ let propagate_exists_up f = propagate_binder_up Exists f
 (** Propagate universally quantified variables upward in the formula [f].
  ** Assumes that [f] is in negation normal form. *)
 let propagate_forall_up f = propagate_binder_up Forall f
-
+    
 (** Convert universal quantifiers in formula [f] into existentials where possible. *)
 (** Assumes that [f] is in negation normal form. *)
 let foralls_to_exists f =
@@ -1149,7 +1184,7 @@ let foralls_to_exists f =
                 nodefs, defs, g :: gs)
               fs (nodefs, defs, [])
           in
-          nodefs, defs, smk_or gs
+          nodefs, defs, mk_or gs
       | Binder (b, [], f, a) ->
           let nodefs, defs, g = find nodefs defs f in
           nodefs, defs, Binder (b, [], g, a)

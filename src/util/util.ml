@@ -46,6 +46,10 @@ module Opt = struct
   let iter f = function
     | Some x -> f x
     | None -> ()
+
+  let some x = function
+    | None -> Some x
+    | o -> o
 end
 
 (** Utility functions on lists *)

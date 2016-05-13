@@ -346,27 +346,33 @@ let add_read_write_axioms fs =
           let set2 = Axioms.set2 ssrt in
           (* f = g, x.f -> x.g *)
           ([Match (mk_eq_term fld1 fld2, []);
-            Match (mk_read fld1 loc1, [])],
+            Match (mk_read fld1 loc1, []);
+            Match (loc2, [FilterNotNull])],
            [mk_read fld2 loc1]) ::
           (* f = g, x.g -> x.f *)
           ([Match (mk_eq_term fld1 fld2, []);
-            Match (mk_read fld2 loc1, [])],
+            Match (mk_read fld2 loc1, []);
+            Match (loc1, [FilterNotNull])],
            [mk_read fld1 loc1]) :: 
           (* f [x := d], y.(f [x := d]) -> y.f *)
           ([Match (mk_write fld1 loc1 dvar, []);
-            Match (mk_read (mk_write fld1 loc1 dvar) loc2, [])],
+            Match (mk_read (mk_write fld1 loc1 dvar) loc2, []);
+            Match (loc2, [FilterNotNull])],
            [mk_read fld1 loc2]) ::
           (* f [x := d], y.f -> y.(f [x := d]) *)
           ([Match (mk_write fld1 loc1 dvar, []);
-            Match (mk_read fld1 loc2, [])],
+            Match (mk_read fld1 loc2, []);
+            Match (loc2, [FilterNotNull])],
            [mk_read (mk_write fld1 loc1 dvar) loc2]) ::
           (* Frame (x, a, f, g), y.g -> y.f *)
           ([Match (mk_frame_term set1 set2 fld1 fld2, []);
-            Match (mk_read fld2 loc1, [])],
+            Match (mk_read fld2 loc1, []);
+            Match (loc1, [FilterNotNull])],
            [mk_read fld1 loc1]) ::
           (* Frame (x, a, f, g), y.f -> y.g *)
           ([Match (mk_frame_term set1 set2 fld1 fld2, []);
-            Match (mk_read fld1 loc1, [])],
+            Match (mk_read fld1 loc1, []);
+            Match (loc2, [FilterNotNull])],
            [mk_read fld2 loc1]) ::
           propagators
       | _ -> fun propagators -> propagators)
@@ -436,6 +442,7 @@ let instantiate read_propagators fs gts =
     | Binder (Forall, _, f, _) -> is_equation f
     | Atom (App (Eq, _, _), _) -> true
     | Atom (App (FreeSym _, _, _), _) -> true
+    | Atom (App ((Disjoint | SubsetEq), _, _), _) -> true
     | _ -> false
   in
   let equations, others = List.partition is_equation fs1 in
@@ -534,9 +541,9 @@ let add_split_lemmas fs gts =
 let reduce f =
   (* split f into conjuncts and eliminate all existential quantifiers *)
   let f1 = nnf f in
-  let fs = split_ands [f1] in
+  let fs = elim_exists [f1] in
+  let fs = split_ands fs in
   (* *)
-  let fs = elim_exists fs in
   (* no reduction step should introduce implicit or explicit existential quantifiers after this point *)
   (* some formula rewriting that helps the SMT solver *)
   let fs = massage_field_reads fs in
@@ -550,6 +557,7 @@ let reduce f =
   let fs, gts = add_reach_axioms fs gts in
   let fs = add_array_axioms fs gts in
   let fs = if !Config.named_assertions then fs else List.map strip_names fs in
+  let fs = fs |> split_ands in
   let _ =
     if Debug.is_debug 1 then begin
       print_endline "VC before instantiation:";
