@@ -18,8 +18,10 @@ procedure contains(root: Node, val: Int)
     }
   }
 
-  if (curr != null) return true;
-  else return false;
+  if (curr != null) 
+    res := true;
+  else
+    res := false;
 }
 
 procedure singleton(val: Int)
@@ -58,9 +60,7 @@ procedure insert(root: Node, val: Int)
     }
   }
 
-  if (curr.data == val) {
-    return root;
-  } else {
+  if (curr.data != val) {
     var n: Node;
     n := singleton(val);
     n.parent := curr;
@@ -69,8 +69,8 @@ procedure insert(root: Node, val: Int)
     } else {
       curr.right := n;
     } 
-    return root;
- }
+  }
+  return root;
 }
 
 procedure test(root: Node)
