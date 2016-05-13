@@ -21,8 +21,9 @@ procedure contains(root: Node, val: Int, implicit ghost content: Set<Int>)
     }
   }
   
-  if (curr != null) return true;
-  else return false;
+  if (curr != null) res := true;
+  else res := false;
+  return res;
 }
 
 procedure singleton(val: Int)
@@ -77,9 +78,7 @@ procedure insert(root: Node, val: Int, implicit ghost Content: Set<Int>)
     }
   }
   
-  if (curr.data == val) {
-    return root;
-  } else {
+  if (curr.data != val) {
     var n: Node;
     n := singleton(val);
     n.parent := curr;
@@ -88,7 +87,7 @@ procedure insert(root: Node, val: Int, implicit ghost Content: Set<Int>)
     } else {
       curr.right := n;
     }
-    return root;
   }
+  return root;
 }
 
