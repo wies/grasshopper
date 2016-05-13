@@ -23,7 +23,7 @@ function previous(next: Map<Node, Node>, n: Node, h: Node) returns (p: Node) {
 
 function inset(data: Map<Node, Int>, next: Map<Node, Node>, n: Node, h: Node) returns (I: Set<Int>) {
   (!Reach(next, h, n) ==> I == {}) &&
-  /* If head.data were MININT, this would be unextecessary: */
+  /* If head.data were MININT, this would be unnecessary: */
   (h == n ==> I == {x: Int :: true}) &&
   (Reach(next, h, n) && h != n ==> I == {x: Int :: previous(next, n, h).data < x})
 }
@@ -38,7 +38,7 @@ function keyset(n: Node, h: Node) returns (K: Set<Int>) {
 
 /* A sorted linked list, with sentinal head and tail nodes */
 predicate conc_list_set(c: ConcList, C: Set<Int>)(FP_C: Set<ConcList>, FP_N: Set<Node>) {
-  FP_C = {c} &&
+  FP_C == {c} &&
   c.head != null && c.tail != null && c.head != c.tail &&
   lseg(c.head, null, FP_N) &&
   Btwn(next, c.head, c.tail, null) &&
@@ -270,15 +270,15 @@ procedure delete01(c: ConcList, x: Int,
 
 procedure havoc_S(c: ConcList, L: Set<Node>, S: Set<Node>, implicit ghost C: Set<Int>)
   requires acc(S) -** (acc(L) &+& conc_list_set(c, C))
-  requires Disjoint(L, S)
+  pure requires Disjoint(L, S)
   ensures exists S1: Set<Node>, C1: Set<Int> ::
 		acc(S1) -** (acc(L) &+& conc_list_set(c, C1))
-  ensures Frame(S, S ++ L, old(next), next) &*& Frame(S, S ++ L, old(data), data)
+  pure ensures Frame(S, S ++ L, old(next), next) && Frame(S, S ++ L, old(data), data)
   /* Global invariants: */
   /* Don't change inset of anything you don't hold lock on */
-  ensures (forall n: Node :: n in L ==> inset(data, next, n, c.head) == old(inset(data, next, n, c.head)))
+  pure ensures (forall n: Node :: n in L ==> inset(data, next, n, c.head) == old(inset(data, next, n, c.head)))
   /* Sentinel head & tail are not modified */
-  ensures (c.head == old(c.head) && c.head.data == old(c.head.data) && c.tail == old(c.tail) && c.tail.data == old(c.tail.data))
+  pure ensures (c.head == old(c.head) && c.head.data == old(c.head.data) && c.tail == old(c.tail) && c.tail.data == old(c.tail.data))
 
 /* Check that the environment preserves the current invariant */
 procedure delete01_env(c: ConcList, x: Int, pred: Node, curr: Node,
@@ -503,9 +503,7 @@ procedure delete08(c: ConcList, x: Int, pred: Node, curr: Node,
   return L, pred, curr;
 }
 
-/* ==================== TODO continue here ==================== */
-
-/* This procedure does not go through yet.. is timing out */
+/* This procedure is timing out.. But goes through in no_content version! */
 procedure delete08_env(c: ConcList, x: Int, pred: Node, curr: Node,
 		       C: Set<Int>, L: Set<Node>, S: Set<Node>)
   returns (L1: Set<Node>, pred1: Node, curr1: Node)
@@ -513,7 +511,7 @@ procedure delete08_env(c: ConcList, x: Int, pred: Node, curr: Node,
   requires L == {pred} &*& Disjoint(L, S)
   requires (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, curr, c.head) &*& pred.next == curr &*& pred.data < x)
     -** (acc(S) -** (acc(L) &+& conc_list_set(c, C)))
-  ensures L1 == {pred1} @(matching pred1 yields inset(data, next, pred1, c.head))
+  ensures L1 == {pred1}
   ensures exists C1: Set<Int> :: (c.head.data < x &*& x < c.tail.data &*& x in inset(data, next, curr1, c.head) &*& pred1.next == curr1 &*& pred1.data < x)
     -** (acc(L1) &+& (conc_list_set(c, C1)))
 {
@@ -521,50 +519,21 @@ procedure delete08_env(c: ConcList, x: Int, pred: Node, curr: Node,
   return L, pred, curr;
 }
 
-/* This is taking ages too.. Shouldn't this be easy? */
+/* ==================== The rest is in no_content version ==================== */
+
+/* This goes through after manually adding necessary terms! */
 procedure test(c: ConcList, x: Int, pred: Node, curr: Node,
 		       C: Set<Int>, L: Set<Node>, S: Set<Node>)
   returns (L1: Set<Node>, pred1: Node, curr1: Node)
 
-  requires L == {pred} &*& Disjoint(L, S)
-  requires (Reach(next, c.head, pred) &*& pred.next == curr)
-    -** (acc(S) -** (acc(L) &+& conc_list_set(c, C)))
-  ensures L1 == {pred1} @(matching pred1 yields inset(data, next, pred1, c.head))
-    ensures exists C1: Set<Int> :: (Reach(next, c.head, pred1))
-    -** (acc(L1) &+& (conc_list_set(c, C1)))
+  pure requires L == {pred} && Disjoint(L, S)
+  pure requires inset(data, next, pred, c.head) == inset(data, next, pred, c.head)
+  pure requires (Reach(next, c.head, pred) && pred.next == curr)
+  requires (acc(S) -** (acc(L) &+& conc_list_set(c, C)))
+  pure ensures L1 == {pred1} && (Reach(next, c.head, pred1)) && inset(data, next, pred1, c.head) == inset(data, next, pred1, c.head)
+  ensures exists C1: Set<Int> :: (acc(L1) &+& (conc_list_set(c, C1)))
 {
   havoc_S(c, L, S);
-  return L, pred, curr;
-}
-
-
-procedure delete09(c: ConcList, x: Int, pred: Node, curr: Node,
-		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
-  returns (L1: Set<Node>, pred1: Node, curr1: Node)
-  requires L == {pred}
-  requires ((pred.next == curr &*& pred != null &*& pred.data < x) -** acc(L))
-    -** (conc_list_set(c, C) &*& c.head.data < x &*& x < c.tail.data)
-  ensures L1 == {pred1, curr1}
-  ensures ((pred1.next == curr1 &*& pred1 != null &*& pred1.data < x) -** acc(L1))
-    -** (conc_list_set(c, C) &*& c.head.data < x &*& x < c.tail.data)
-{
-  /* lock(curr); */
-  L := L ++ {curr};
-  return L, pred, curr;
-}
-
-/* Prove loop inv at the end of loop */
-procedure delete10(c: ConcList, x: Int, pred: Node, curr: Node,
-		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
-  returns (L1: Set<Node>, pred1: Node, curr1: Node)
-  requires L == {pred, curr}
-  requires ((pred.next == curr &*& pred != null &*& pred.data < x) -** acc(L))
-    -** (conc_list_set(c, C) &*& c.head.data < x &*& x < c.tail.data)
-  ensures L1 == {pred1, curr1}
-  /* TODO is it okay to magically bring the points-to back? */
-  ensures ((pred1.next |-> curr1 &*& pred1.data < x) -** acc(L1))
-    -** (conc_list_set(c, C) &*& c.head.data < x &*& x < c.tail.data)
-{
   return L, pred, curr;
 }
 
