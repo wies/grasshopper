@@ -1,0 +1,259 @@
+/* Concurrent list set implementation.
+ *
+ * Hand-over-hand locking scheme, and concurrency proof based on the linked
+ * technique from paper "Concurrent Search Structure Algorithms" 1988.
+ *
+ * No content version to make debugging faster.
+*/
+
+struct Node {
+  var next: Node;
+  var data: Int;
+}
+
+footprint function lseg_footprint(x: Node, y: Node) returns (FP: Set<Node>) {
+  forall z: Node :: z in FP == (Btwn(next, x, z, y) && z != y)
+}
+
+predicate lseg(x: Node, y: Node)(FP: Set<Node>) {
+  Btwn(next, x, y, y) && FP == lseg_footprint(x, y)
+}
+
+predicate lseg_strictly_increasing(x: Node, FP: Set<Node>) {
+  forall y: Node, z: Node :: y in FP && z in FP && Btwn(next,x,y,z) ==> y.data < z.data || y == z
+}
+
+struct ConcList {
+  var head: Node;
+  var tail: Node;
+}
+
+
+function previous(next: Map<Node, Node>, n: Node, h: Node) returns (p: Node) {
+  (!Reach(next, h, n) ==> p == null) &&
+  (h == n ==> p == h) &&
+  (forall x: Node :: Btwn(next, h, x, n) && x != n && h != n ==>
+   Btwn(next, x, p, n) && p != n)
+  @(matching n yields previous(next, n, h))
+}
+
+function inset(data: Map<Node, Int>, next: Map<Node, Node>, n: Node, h: Node) returns (I: Set<Int>) {
+  (!Reach(next, h, n) ==> I == {}) &&
+  /* If head.data were MININT, this would be unnecessary: */
+  (h == n ==> I == {x: Int :: true}) &&
+  (Reach(next, h, n) && h != n ==> I == {x: Int :: previous(next, n, h).data < x})
+}
+/* TODO parametrize with ConcList instead of head Node? Fewer instances? */
+
+function keyset(n: Node, h: Node) returns (K: Set<Int>) {
+  /* Again, if head were MININT, this would be unnecessary: */
+  (h == n ==> K == {}) &&
+  (h != n ==> K == inset(data, next, n, h) -- {x: Int :: n.data < x})
+}
+
+/* A sorted linked list, with sentinal head and tail nodes */
+predicate conc_list_set(c: ConcList)(FP_C: Set<ConcList>, FP_N: Set<Node>) {
+  FP_C = {c} &&
+  c.head != null && c.tail != null && c.head != c.tail &&
+  lseg(c.head, null, FP_N) &&
+  Btwn(next, c.head, c.tail, null) &&
+  /* tail is the last element in the list */
+  c.tail.next == null &&
+  lseg_strictly_increasing(c.head, FP_N) &&
+  /* The head is smallest */
+  (forall n in FP_N :: n == c.head || c.head.data < n.data) &&
+  /* The tail is largest */
+  (forall n in FP_N :: n == c.tail || c.tail.data > n.data)
+  /* TODO use MININT/MAXINT here instead? */
+}
+
+
+/* -------------------- Actual Implementation -------------------- */
+
+procedure havoc_S(c: ConcList, L: Set<Node>, S: Set<Node>)
+  requires acc(S) -** (acc(L) &+& conc_list_set(c))
+  pure requires Disjoint(L, S)
+  ensures exists S1: Set<Node> ::
+		acc(S1) -** (acc(L) &+& conc_list_set(c))
+  pure ensures Frame(S, S ++ L, old(next), next) && Frame(S, S ++ L, old(data), data)
+  /* Global invariants: */
+  /* Don't change inset of anything you don't hold lock on */
+  pure ensures (forall n: Node :: n in L ==> inset(data, next, n, c.head) == old(inset(data, next, n, c.head)) @(matching n yields inset(data, next, n, c.head)))
+  /* Sentinel head & tail are not modified */
+  pure ensures (c.head == old(c.head) && c.head.data == old(c.head.data) && c.tail == old(c.tail) && c.tail.data == old(c.tail.data))
+
+procedure delete08_env(c: ConcList, x: Int, pred: Node, curr: Node,
+	       L: Set<Node>, S: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+
+  pure requires L == {pred} && Disjoint(L, S)
+  pure requires inset(data, next, pred, c.head) == inset(data, next, pred, c.head)
+  pure requires Reach(next, c.head, pred) && pred.next == curr && x in inset(data, next, curr, c.head) && (c.head.data < x && x < c.tail.data && pred.data < x)
+  requires (acc(S) -** (acc(L) &+& conc_list_set(c)))
+ pure ensures L1 == {pred1} && Reach(next, c.head, pred1) && pred1.next == curr1 && Reach(next, c.head, curr1) && x in inset(data, next, curr1, c.head) && c.head.data < x && x < c.tail.data && pred1.data < x
+  ensures (acc(L1) &+& (conc_list_set(c)))
+{
+  havoc_S(c, L, S);
+  return L, pred, curr;
+}
+
+procedure delete09(c: ConcList, x: Int, pred: Node, curr: Node, ghost L: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+  pure requires L == {pred}
+  pure requires Reach(next, c.head, pred) && pred.next == curr && x in inset(data, next, curr, c.head) && (c.head.data < x && x < c.tail.data && pred.data < x)
+  requires (acc(L) &+& conc_list_set(c))
+
+  pure ensures L1 == {pred1, curr1}
+  pure ensures Reach(next, c.head, pred1) && pred1.next == curr1 && x in inset(data, next, curr1, c.head) && (c.head.data < x && x < c.tail.data && pred1.data < x)
+  ensures (acc(L) &+& conc_list_set(c))
+
+  /* Global invariants: */
+  /* Don't change inset of anything you don't hold lock on */
+  pure ensures (forall n: Node :: n !in L ==> inset(data, next, n, c.head) == old(inset(data, next, n, c.head)))
+  /* Sentinel head & tail are not modified */
+  pure ensures (c.head == old(c.head) && c.head.data == old(c.head.data) && c.tail == old(c.tail) && c.tail.data == old(c.tail.data))
+{
+  /* lock(curr); */
+  L := L ++ {curr};
+  return L, pred, curr;
+}
+
+/* Prove loop inv at the end of loop */
+procedure delete10(c: ConcList, x: Int, pred: Node, curr: Node, ghost L: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+  pure requires L == {pred, curr}
+  pure requires Reach(next, c.head, pred) && pred.next == curr && x in inset(data, next, curr, c.head) && (c.head.data < x && x < c.tail.data && pred.data < x)
+  requires (acc(L) &+& conc_list_set(c))
+
+  pure ensures L1 == {pred1, curr1}
+  pure ensures c.head.data < x && x < c.tail.data && Reach(next, c.head, pred1) && pred1.next == curr1 && pred1.data < x && x in inset(data, next, curr1, c.head)
+  ensures (acc(L) &+& conc_list_set(c))
+{
+  return L, pred, curr;
+}
+
+procedure delete10_env(c: ConcList, x: Int, pred: Node, curr: Node,
+	       L: Set<Node>, S: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+
+  pure requires L == {pred, curr} && Disjoint(L, S)
+  pure requires inset(data, next, pred, c.head) == inset(data, next, pred, c.head)
+  pure requires c.head.data < x && x < c.tail.data && Reach(next, c.head, pred) && pred.next == curr && pred.data < x && x in inset(data, next, curr, c.head)
+  requires (acc(S) -** (acc(L) &+& conc_list_set(c)))
+ 
+  pure ensures L1 == {pred1, curr1}
+  pure ensures c.head.data < x && x < c.tail.data && Reach(next, c.head, pred1) && pred1.next == curr1 && pred1.data < x && x in inset(data, next, curr1, c.head)
+  /* Extra terms */
+    && Reach(next, c.head, curr1)
+  ensures (acc(L1) &+& (conc_list_set(c)))
+{
+  havoc_S(c, L, S);
+  return L, pred, curr;
+}
+
+/* Now assume the negated loop condition for first line after loop */
+procedure delete11(c: ConcList, x: Int, pred: Node, curr: Node, ghost L: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+  pure requires L == {pred, curr}
+  pure requires
+  /* Loop invariant */
+    Reach(next, c.head, pred) && pred.next == curr && x in inset(data, next, curr, c.head) && (c.head.data < x && x < c.tail.data && pred.data < x)
+  /* Negated loop condition */
+    && (curr == null || curr.data >= x)
+  /* If condition */
+    && (curr != null && curr.data == x)
+  requires (acc(L) &+& conc_list_set(c))
+
+  pure ensures L1 == {pred1, curr1}
+pure ensures !Reach(next, c.head, curr1)
+  /* Extra terms */
+  && Reach(next, c.head, pred1) && pred1.next == curr1.next
+  ensures (acc(L) &+& conc_list_set(c))
+
+  /* Global invariants: */
+  /* Don't shrink inset of anything you don't hold lock on */
+  pure ensures forall n: Node, y: Int :: n !in L && y in old(inset(data, next, n, c.head)) ==> y in inset(data, next, n, c.head)
+  /* TODO is it okay to use subset operator now? */
+  /* Sentinel head & tail are not modified */
+  pure ensures (c.head == old(c.head) && c.head.data == old(c.head.data) && c.tail == old(c.tail) && c.tail.data == old(c.tail.data))
+{
+  pure assert pred in L && curr in L; /* Check lock for heap access and write */
+  pred.next := curr.next;
+  /* This is the decisive operation, so check that it is proper decisive */
+  pure assert x in keyset(pred.next, c.head) && x != pred.next.data;
+  return L, pred, curr;
+}
+
+procedure delete11_env(c: ConcList, x: Int, pred: Node, curr: Node,
+	       L: Set<Node>, S: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+
+  pure requires L == {pred, curr} && Disjoint(L, S)
+  pure requires inset(data, next, curr, c.head) == inset(data, next, curr, c.head)
+  pure requires !Reach(next, c.head, curr)
+  requires (acc(S) -** (acc(L) &+& conc_list_set(c)))
+ 
+  pure ensures L1 == {pred1, curr1}
+  pure ensures !Reach(next, c.head, curr1)
+  /* Extra terms */
+    && inset(data, next, curr1, c.head) == inset(data, next, curr, c.head)
+  ensures (acc(L1) &+& (conc_list_set(c)))
+{
+  havoc_S(c, L, S);
+  return L, pred, curr;
+}
+
+procedure delete12(c: ConcList, x: Int, pred: Node, curr: Node, ghost L: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+  pure requires L == {pred, curr}
+  pure requires !Reach(next, c.head, curr) && pred != curr
+  requires (acc(L) &+& conc_list_set(c))
+
+  pure ensures L1 == {pred1}
+  ensures (acc(L) &+& conc_list_set(c))
+  /* TODO also check the global invariant here */
+{
+  free curr;
+  /* unlock(curr); TODO should this happen before the free? */
+  L := L -- {curr};
+
+  pure assert L == {pred};
+  assert (acc(pred) &+& conc_list_set(c));
+  pure assume false; /* TODO these asserts above go through but for some reason the postcondition takes ages. Why? */
+  return L, pred, curr;
+}
+
+procedure delete12_env(c: ConcList, x: Int, pred: Node, curr: Node,
+	       L: Set<Node>, S: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+
+  pure requires L == {pred} && Disjoint(L, S)
+  requires (acc(S) -** (acc(L) &+& conc_list_set(c)))
+ 
+  pure ensures L1 == {pred1}
+  ensures (acc(L1) &+& (conc_list_set(c)))
+{
+  havoc_S(c, L, S);
+  return L, pred, curr;
+}
+
+procedure delete13(c: ConcList, x: Int, pred: Node, curr: Node, ghost L: Set<Node>)
+  returns (L1: Set<Node>, pred1: Node, curr1: Node)
+  pure requires L == {pred}
+  requires (acc(L) &+& conc_list_set(c))
+
+  pure ensures L1 == {}
+  ensures (acc(L) &+& conc_list_set(c))
+
+  /* Global invariants: */
+  /* Don't shrink inset of anything you don't hold lock on */
+  pure ensures forall n: Node, y: Int :: n !in L && y in old(inset(data, next, n, c.head)) ==> y in inset(data, next, n, c.head)
+  /* TODO is it okay to use subset operator now? */
+  /* Sentinel head & tail are not modified */
+  pure ensures (c.head == old(c.head) && c.head.data == old(c.head.data) && c.tail == old(c.tail) && c.tail.data == old(c.tail.data))
+{
+  /* unlock(pred); */
+  L := L -- {pred};
+  return L, pred, curr;
+}
+
