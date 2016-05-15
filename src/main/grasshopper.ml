@@ -194,7 +194,8 @@ let _ =
       check_spl_program spl_prog !Config.procedure;
       print_stats start_time; 
       print_c_program spl_prog;
-      Debug.info (fun () -> "Program successfully verified.\n")
+      if !Config.verify then
+        Debug.info (fun () -> "Program successfully verified.\n")
     end
   with  
   | Sys_error s -> 
