@@ -437,15 +437,23 @@ let instantiate read_propagators fs gts =
         TermSet.iter (fun t -> print_endline ("  " ^ (string_of_term t))) (TermSet.diff gts1 gts)
       end
   in
-  let rec is_equation = function
-    | BoolOp (_, fs) -> List.for_all is_equation fs
-    | Binder (Forall, _, f, _) -> is_equation f
-    | Atom (App (Eq, _, _), _) -> true
-    | Atom (App (FreeSym _, _, _), _) -> true
-    | Atom (App ((Disjoint | SubsetEq), _, _), _) -> true
-    | _ -> false
+  let rec is_horn seen_pos = function
+    | BoolOp (Or, fs) :: gs -> is_horn seen_pos (fs @ gs)
+    | Binder (Forall, [], f, _) :: gs -> is_horn seen_pos (f :: gs)
+    | (Atom (App ((Eq | FreeSym _ | SubsetEq | Disjoint), _, _), _)) :: gs ->
+        (not seen_pos && is_horn true gs)
+    | BoolOp (And, fs) :: gs ->
+        List.for_all (fun f -> is_horn seen_pos [f]) gs && is_horn true gs
+    | BoolOp (Not, [Atom (App ((Eq | FreeSym _ | SubsetEq | Disjoint) , _, _), _)]) :: gs ->
+        is_horn seen_pos gs
+    | _ :: _ -> false
+    | [] -> true
+    (*| BoolOp (_, fs) -> List.for_all is_horn fs
+    | Binder (Forall, [], f, _) -> is_horn f
+    | Atom (App ((FreeSym _ | Eq | Disjoint | SubsetEq), _, _), _) -> true
+    | _ -> false*)
   in
-  let equations, others = List.partition is_equation fs1 in
+  let equations, others = List.partition (fun f -> is_horn false [f]) fs1 in
   let classes = CongruenceClosure.congr_classes fs gts1 in
   let eqs = instantiate_with_terms true equations classes in
   let gts1 = TermSet.union (ground_terms ~include_atoms:true (mk_and eqs)) gts1 in 
@@ -459,7 +467,7 @@ let instantiate read_propagators fs gts =
         | _ -> acc)
       []
       classes
-  in
+    in
   let fs2, gts2 =
     let fs1 = instantiate_with_terms true others classes in
     let gts_inst = generated_ground_terms (List.rev_append eqs fs1) in
