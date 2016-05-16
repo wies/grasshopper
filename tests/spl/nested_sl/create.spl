@@ -1,0 +1,17 @@
+include "nested_def.spl";
+
+procedure create() returns (x: OuterNode)
+  requires emp
+  ensures nlseg(x, null)
+{
+  x := new OuterNode();
+  var y := new InnerNode();
+  var z := new InnerNode();
+
+  x.onext := null;
+  y.head := x;
+  x.down := y;
+  y.inext := z;
+  z.head := x;
+  z.inext := null;
+}
