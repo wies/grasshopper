@@ -845,10 +845,16 @@ let elim_sl prog =
       in
       List.map (fun axiom -> mk_free_spec_form (FOL axiom) name None pos) axiom_forms
     in
+    let translate_body sf =
+      let f1 = match sf.spec_form with
+      | SL f -> translate_sl_body f
+      | FOL f -> FOL (post_process_form f)
+      in { sf with spec_form = f1 }
+    in
     let pred1 =
       { pred with
         pred_contract = contract;
-        pred_body = map_spec_sl_form translate_sl_body pred.pred_body
+        pred_body = translate_body pred.pred_body
       }
     in
     IdMap.add pname pred1 preds, frame_axioms @ axioms
@@ -907,7 +913,10 @@ let elim_sl prog =
               in
               let sf1 = mk_spec_form (FOL f1) sf.spec_name sf.spec_msg sf.spec_pos in
               mk_assume_cmd sf1 pp.pp_pos
-          | FOL f -> Basic (Assume sf, pp))
+          | FOL f ->
+	     let f1 = post_process_form f in
+	     let sf1 = mk_spec_form (FOL f1) sf.spec_name sf.spec_msg sf.spec_pos in
+             mk_assume_cmd sf1 pp.pp_pos)
       | (Assert sf, pp) ->
           (match sf.spec_form with
           | SL f ->
@@ -918,7 +927,10 @@ let elim_sl prog =
               in
               let sf1 = mk_spec_form (FOL f1) sf.spec_name sf.spec_msg sf.spec_pos in
               mk_assert_cmd sf1 pp.pp_pos
-          | FOL f -> Basic (Assert sf, pp))
+          | FOL f ->
+	     let f1 = post_process_form f in
+	     let sf1 = mk_spec_form (FOL f1) sf.spec_name sf.spec_msg sf.spec_pos in
+             mk_assert_cmd sf1 pp.pp_pos)
       | (c, pp) -> Basic (c, pp)
     in
     let body = 
