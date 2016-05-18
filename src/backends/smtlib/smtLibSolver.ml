@@ -516,6 +516,7 @@ let smtlib_symbol_of_grass_symbol_no_bv solver_info sym = match sym with
   | Minus | UMinus -> SmtLibSyntax.Minus
   | Mult -> SmtLibSyntax.Mult
   | Div -> SmtLibSyntax.Div
+  | Mod -> SmtLibSyntax.Mod
   | Eq -> SmtLibSyntax.Eq
   | LtEq -> SmtLibSyntax.Leq
   | GtEq -> SmtLibSyntax.Geq
@@ -602,7 +603,7 @@ let is_interpreted solver_info sym = match sym with
   | Empty | SetEnum | Union | Inter | Diff | Elem | SubsetEq | Disjoint ->
       !Config.use_set_theory && solver_info.has_set_theory
   | Eq | Gt | Lt | GtEq | LtEq | IntConst _ | BoolConst _
-  | Plus | Minus | Mult | Div | UMinus 
+  | Plus | Minus | Mult | Div | Mod | UMinus 
   | BitNot | BitAnd | BitOr | ShiftLeft | ShiftRight
   | IntToByte | ByteToInt -> true
   | FreeSym id -> id = ("inst-closure", 0) && solver_info.has_inst_closure
@@ -944,6 +945,7 @@ let convert_model session smtModel =
           | SmtLibSyntax.Minus -> mk_minus
           | SmtLibSyntax.Mult -> mk_mult
           | SmtLibSyntax.Div -> mk_div
+          | SmtLibSyntax.Mod -> mk_mod
           | _ -> failwith "unexpected match case"
           in mk_term ct1 ct2          
       | SmtLibSyntax.Annot (t, _, _) ->
