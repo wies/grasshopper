@@ -70,6 +70,7 @@ type symbol =
   | Empty | SetEnum | Union | Inter | Diff  (* Set *)
   | Length | IndexOfCell | ArrayOfCell | ArrayCells
   | ByteToInt | IntToByte (* explicit conversion *)
+  | Ite (* if-then-else *)
   (* interpreted predicate symbols *)
   | Eq
   | LtEq | GtEq | Lt | Gt
@@ -89,6 +90,7 @@ let symbols =
    BitAnd; BitOr; BitNot; ShiftLeft; ShiftRight;
    Empty; SetEnum; Union; Inter; Diff;
    Length; IndexOfCell; ArrayOfCell; ArrayCells;
+   Ite;
    Eq; LtEq; GtEq; Lt; Gt;
    Btwn; Frame; Elem; SubsetEq; Disjoint;
    Known; Old]
@@ -239,6 +241,7 @@ let string_of_symbol = function
   | ShiftRight -> ">>"
   | ByteToInt -> "toInt"
   | IntToByte -> "toByte"
+  | Ite -> "ite"
   (* predicate symbols *)
   | Eq -> "="
   | LtEq -> "<="

@@ -252,6 +252,8 @@ let mk_bv_shift_right s t = mk_app (sort_of s) ShiftRight [s; t]
 let mk_int_to_byte s = mk_app Byte IntToByte [s]
 let mk_byte_to_int s = mk_app Int ByteToInt [s]
 
+let mk_ite c t e = mk_app (sort_of t) Ite [c; t; e]
+
 let mk_null id = mk_app (Loc id) Null []
 
 let mk_read map ind = 
@@ -1325,5 +1327,3 @@ module Clauses = struct
   let to_form cs = smk_and (List.map smk_or cs)
 
 end
-
-
