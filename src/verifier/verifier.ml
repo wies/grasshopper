@@ -117,16 +117,16 @@ let add_pred_insts prog f =
         formals
     in
     let pvs = List.map (fun (x, srt) -> mk_var srt x) sorted_vs in
-    let m, kgen = match returns with
+    let mt, kgen = match returns with
     | [] ->
         let mt = mk_free_fun Bool name pvs in
-        let m = Match (mt, []) in
-        m, [TermGenerator ([m], [mk_known mt])]
+        mt, [TermGenerator ([Match (mt, [])], [mk_known mt])]
     | [x] ->
         let var = IdMap.find x locals in
-        Match (mk_free_fun var.var_sort name pvs, []), []
+        mk_free_fun var.var_sort name pvs, []
     | _ -> failwith "Functions may only have a single return value."
     in
+    let m = Match (mt, []) in
     let rec add_match = function
       | Binder (b, vs, f, annots) ->
           let annots1 =
@@ -152,7 +152,7 @@ let add_pred_insts prog f =
                 | App (Disjoint, [t1; t2], _) -> mk_inter [t1; t2]
                 | App (SubsetEq, [t1; t2], _) -> mk_union [t1; t2]
                 | t -> t) |>
-            List.filter (fun t -> IdSet.subset (fv_term t) pvs)
+            List.filter (fun t -> t <> mt && IdSet.subset (fv_term t) pvs)
           in
           let generators =
             (match ft with
