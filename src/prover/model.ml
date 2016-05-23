@@ -311,6 +311,12 @@ let rec eval model = function
       let s1_val = find_set_value model (eval model s1) srt in
       let s2_val = find_set_value model (eval model s2) srt in
       B (ValueSet.subset s1_val s2_val)
+   | App (Ite, [c; t; e], _) ->
+      (match eval model c with
+        | B true -> eval model t
+        | B false -> eval model e
+        | I _ -> failwith "ITE expects a boolean condition"
+      )
    | App (sym, args, srt) ->
       let arg_srts, arg_vals = 
         List.split (List.map (fun arg -> sort_of arg, eval model arg) args)
