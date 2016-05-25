@@ -442,6 +442,12 @@ let convert cu =
         let f1 = convert_sl_form locals e1 in
         let f2 = convert_sl_form locals e2 in
         mk_op ~pos:pos op f1 f2
+    | BinaryOp (e1, OpImpl, e2, PermType, pos) ->
+        let f1 = convert_grass_form locals e1 in
+        let f2 = convert_sl_form locals e2 in
+        SlUtil.mk_or
+          (Pure (GrassUtil.mk_not f1, Some pos))
+          (SlUtil.mk_sep_star (Pure (f1, Some pos)) f2)
     | BinaryOp (e1, (OpAnd as op), e2, PermType, _)
     | BinaryOp (e1, (OpOr as op), e2, PermType, _) ->
         let f1 = convert_sl_form locals e1 in

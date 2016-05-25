@@ -68,7 +68,6 @@ let type_of_expr cu locals e =
   let rec te = function
     (* Bool return values *)
     | UnaryOp (OpNot, _, _)
-    | BinaryOp (_, OpImpl, _, _, _)
     | BinaryOp (_, OpEq, _, _, _)
     | BinaryOp (_, OpGt, _, _, _)
     | BinaryOp (_, OpLt, _, _, _)
@@ -117,8 +116,7 @@ let type_of_expr cu locals e =
     (* Permission or Bool types *)
     | Binder ((Forall | Exists), _, f, _) ->
         te f
-    | BinaryOp (e1, OpAnd, e2, ty, pos)
-    | BinaryOp (e1, OpOr, e2, ty, pos) ->
+    | BinaryOp (e1, (OpAnd | OpOr | OpImpl), e2, ty, pos) ->
         ty
     (* Struct and array types *)
     | New (ty, _, _) ->
@@ -180,8 +178,10 @@ let infer_types cu locals ty e =
         let e1, ty = it locals ty e in
         UnaryOp (op, e1, pos), ty
     | BinaryOp (e1, OpImpl, e2, _, pos) ->
-        let e1, e2, ty = itp locals BoolType e1 e2 in
-        BinaryOp (e1, OpImpl, e2, ty, pos), ty
+        let e1, _ = it locals BoolType e1 in
+        let e2, ty1 = it locals PermType e2 in
+        ignore (match_types pos ty ty1);
+        BinaryOp (e1, OpImpl, e2, ty, pos), ty1
     (* Non-ambiguous Int/Byte operators*)
     | UnaryOp (OpToByte, e, pos) ->
         let e1, ty = it locals IntType e in
