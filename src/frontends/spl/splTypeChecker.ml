@@ -179,8 +179,7 @@ let infer_types cu locals ty e =
         UnaryOp (op, e1, pos), ty
     | BinaryOp (e1, OpImpl, e2, _, pos) ->
         let e1, _ = it locals BoolType e1 in
-        let e2, ty1 = it locals PermType e2 in
-        ignore (match_types pos ty ty1);
+        let e2, ty1 = it locals ty e2 in
         BinaryOp (e1, OpImpl, e2, ty, pos), ty1
     (* Non-ambiguous Int/Byte operators*)
     | UnaryOp (OpToByte, e, pos) ->

@@ -95,6 +95,7 @@ let convert cu =
   in
   let convert_type ty pos =
     let rec ct = function
+      | IdentType id -> FreeSrt id
       | StructType id -> Loc (FreeSrt id)
       | AnyRefType -> Loc (FreeSrt ("Null", 0))
       | MapType (dtyp, rtyp) -> Map (ct dtyp, ct rtyp)

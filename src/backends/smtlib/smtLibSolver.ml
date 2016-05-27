@@ -330,10 +330,10 @@ let smtlib_sort_of_grass_sort srt =
   in
   csort srt
     
-let declare_sorts has_int session structs =
+let declare_sorts has_int session free_srts =
   SortSet.iter
     (function FreeSrt id -> declare_sort session (string_of_ident id) 0 | _ -> ())
-    structs;
+    free_srts;
   declare_sort session ("Grass" ^ pat_sort_string) 0;
   declare_sort session ("Grass" ^ array_sort_string) 1;
   declare_sort session array_cell_sort_string 1;
@@ -419,9 +419,9 @@ let init_session session sign =
       sign
   in
   (* collect the struct types *)
-  let structs =
+  let free_srts =
     let rec add acc srt = match srt with
-    | Loc (FreeSrt _ as srt) -> SortSet.add srt acc
+    | FreeSrt _ -> SortSet.add srt acc
     | Set srt | ArrayCell srt | Array srt | Loc srt -> add acc srt
     | Map (srt1, srt2) -> add (add acc srt1) srt2
     | _ -> acc
@@ -470,7 +470,7 @@ let init_session session sign =
   writeln session ("(set-info :category \"crafted\")");
   writeln session ("(set-info :status \"unknown\")");
   (* declare all sorts *)
-  declare_sorts has_int session structs
+  declare_sorts has_int session free_srts
 
 let start session_name sat_means =
   start_with_solver
