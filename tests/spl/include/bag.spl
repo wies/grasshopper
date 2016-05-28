@@ -1,0 +1,61 @@
+// axiomatization of multisets from "Combining Multisets with Integers" by Calogero G. Zarba.
+
+type Value;
+
+type Bag;
+
+function min(i1: Int, i2: Int)
+  returns (i3: Int)
+  ensures (i1 < i2 && i1 == i3) || (i1 >= i2 && i2 == i3)
+
+function max(i1: Int, i2: Int)
+  returns (i3: Int)
+  ensures (i1 > i2 && i1 == i3) || (i1 <= i2 && i2 == i3)
+
+function difference_witness(b1: Bag, b2: Bag)
+  returns (v: Value)
+  ensures difference_witness(b1, b2) == difference_witness(b2, b1)
+
+function count(v: Value, b: Bag)
+  returns (c: Int)
+  
+axiom (forall v: Value, b: Bag :: count(v, b) >= 0
+    @(matching v, b yields count(v, b)));
+axiom forall b1: Bag, b2: Bag :: b1 != b2 ==> count(difference_witness(b1, b2), b1) != count(difference_witness(b1, b2), b2)
+    @(matching b1, b2 yields count(difference_witness(b1, b2), b1))
+    @(matching b1, b2 yields count(difference_witness(b1, b2), b2));
+
+function empty_bag()
+  returns (b: Bag)
+  ensures forall v: Value :: count(v, b) == 0
+
+function make_bag(v: Value, n: Int)
+  returns (b: Bag)
+  ensures count(v, b) == n
+  ensures forall w: Value :: w != v ==> count(w, b) == 0
+
+predicate memberN(v: Value, n: Int, b: Bag)
+{
+  count(v, b) >= n
+}
+
+predicate member(v: Value, b: Bag)
+{
+  memberN(v, 1, b)
+}
+
+function intersection(b1: Bag, b2: Bag)
+  returns (b3: Bag)
+  ensures forall v: Value :: count(v, b3) == min(count(v, b1), count(v, b2))
+    @(matching v yields min(count(v, b1), count(v, b2)))
+
+function union(b1: Bag, b2: Bag)
+  returns (b3: Bag)
+  ensures forall v: Value :: count(v, b3) == max(count(v, b1), count(v, b2))
+    @(matching v yields max(count(v, b1), count(v, b2)))
+
+function sum(b1: Bag, b2: Bag)
+  returns (b3: Bag)
+  ensures forall v: Value :: count(v, b3) == count(v, b1) + count(v, b2)
+    @(matching v yields count(v, b1) + count(v, b2))
+

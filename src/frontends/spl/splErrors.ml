@@ -9,9 +9,13 @@ let arguments_to_string d =
 let unknown_ident_error id pos =
   ProgError.error pos ("Unknown identifier " ^ GrassUtil.name id ^ ".")
 
+let not_a_type_error id pos =
+  ProgError.error pos 
+    ("Identifier " ^ GrassUtil.name id ^ " does not refer to a type.")
+
 let not_a_struct_error id pos =
   ProgError.error pos 
-    ("Identifier " ^ GrassUtil.name id ^ " does not refer to a struct.")
+    ("Identifier " ^ GrassUtil.name id ^ " does not refer to a struct type.")
 
 let not_a_proc_error id pos =
   ProgError.error pos 

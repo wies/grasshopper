@@ -52,17 +52,21 @@ let convert oc cu =
   in
   (** Forward declarations for structs in order to allow mutual recursion. *)
   let pr_c_struct_fwd_decls ppf cu =
-    let sds = cu.struct_decls in
-    let string_of_struct_fwd_decl s_id = 
-      "struct " ^ (string_of_ident s_id) ^ ";"
+    let tds = cu.type_decls in
+    let string_of_type_fwd_decl t_def t_id = 
+      match t_def with
+      | StructTypeDef _ -> "struct " ^ (string_of_ident t_id) ^ ";"
+      | _ ->
+          (* TODO: better error handling *)
+          failwith "Cannot compile programs with undefined types"
     in
     fprintf ppf "%s"
       (String.concat 
         "\n" 
         (List.rev 
           (IdMap.fold 
-            (fun k {s_name=s_id} a -> (string_of_struct_fwd_decl s_id) :: a) 
-            sds 
+            (fun k {t_name=t_id; t_def=t_def} a -> (string_of_type_fwd_decl t_def t_id) :: a) 
+             tds 
             [])))
   in
   (** Translation of SPL struct declarations into C struct declarations. *)
@@ -77,18 +81,21 @@ let convert oc cu =
       | f :: [] -> pr_c_field ppf f
       | f :: fs -> fprintf ppf "%a@\n%a" pr_c_field f pr_c_fields fs         
     in
-    let pr_c_struct ppf s = 
-      fprintf ppf "typedef struct %s {@\n  @[%a@]@\n} %s;" 
-        (string_of_ident s.s_name) 
-        pr_c_fields (idmap_to_list s.s_fields)
-        (string_of_ident s.s_name)  
+    let pr_c_struct ppf s =
+      match s.t_def with
+      | StructTypeDef fields ->
+          fprintf ppf "typedef struct %s {@\n  @[%a@]@\n} %s;" 
+            (string_of_ident s.t_name) 
+            pr_c_fields (idmap_to_list fields)
+            (string_of_ident s.t_name)
+      | _ -> ()
     in
     let rec pr_c_structs ppf = function 
       | []      -> ()
       | s :: [] -> pr_c_struct ppf s
       | s :: ss -> fprintf ppf "%a@\n@\n%a" pr_c_struct s pr_c_structs ss
     in
-    pr_c_structs ppf (idmap_to_list cu.struct_decls)
+    pr_c_structs ppf (idmap_to_list cu.type_decls)
   in
   (** Proc arguments, used in forward and regular procedure declaration -
    *  This slightly over-complex function that could probably be more 
@@ -523,7 +530,7 @@ let convert oc cu =
       free_SPLArray_proc_decl
   in
   let pr_c_struct_section ppf cu =
-    if (IdMap.is_empty cu.struct_decls) then
+    if (IdMap.is_empty cu.type_decls) then
       ()
     else
       fprintf ppf "@\n%s@\n%a@\n@\n%a"

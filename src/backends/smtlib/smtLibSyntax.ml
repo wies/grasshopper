@@ -211,6 +211,12 @@ let unletify t =
       Annot (ul t, a, pos)
   in ul t
 
+let pos_of_term = function
+  | App (_, _, pos)
+  | Binder (_, _, _, pos)
+  | Let (_, _, pos)
+  | Annot (_, _, pos) -> pos
+
 (** Pretty printing *)
 
 open Format

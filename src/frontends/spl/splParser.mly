@@ -55,7 +55,7 @@ let trd3 (_, _, v) = v
 %token <SplSyntax.binder_kind> QUANT
 %token ASSUME ASSERT CALL FREE HAVOC NEW RETURN
 %token IF ELSE WHILE
-%token GHOST IMPLICIT VAR STRUCT PURE PROCEDURE PREDICATE FUNCTION INCLUDE AXIOM
+%token GHOST IMPLICIT VAR STRUCT PURE PROCEDURE PREDICATE FUNCTION INCLUDE AXIOM TYPE
 %token OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token LOC INT BOOL BYTE SET MAP ARRAY ARRAYCELL
 %token MATCHING YIELDS WITHOUT COMMENT PATTERN
@@ -96,12 +96,12 @@ declarations:
   { (fst3 $2, snd3 $2, ($1, mk_position 1 1) :: trd3 $2) }
 | include_cmd declarations 
   { (($1, mk_position 1 1) :: fst3 $2, snd3 $2, trd3 $2) }
+| type_decl declarations
+  { (fst3 $2, TypeDecl $1 :: snd3 $2, trd3 $2) }
 | proc_decl declarations 
   { (fst3 $2, ProcDecl $1 :: snd3 $2, trd3 $2) }
 | pred_decl declarations 
   { (fst3 $2, PredDecl $1 :: snd3 $2, trd3 $2) }
-| struct_decl declarations
-  { (fst3 $2, StructDecl $1 :: snd3 $2, trd3 $2) }
 | VAR var_decl SEMICOLON declarations
   { (fst3 $4, VarDecl $2 :: snd3 $4, trd3 $4) }
 | /* empty */ { ([], [], []) }
@@ -110,9 +110,20 @@ declarations:
 
 include_cmd:
 | INCLUDE STRINGVAL SEMICOLON { $2 }
-
+;
+  
 background_th:
 | AXIOM expr SEMICOLON { $2 }
+;
+  
+type_decl:
+| TYPE IDENT SEMICOLON {
+  { t_name = ($2, 0);
+    t_def = FreeTypeDef;
+    t_pos = mk_position 2 2 }
+}
+| struct_decl { $1 }
+;
 
 proc_decl:
 | proc_header { $1 }
@@ -299,7 +310,7 @@ var_type:
 | ARRAYCELL LT var_type GT { ArrayCellType $3 }
 | SET LT var_type GT { SetType $3 }
 | MAP LT var_type COMMA var_type GT { MapType ($3, $5) }
-| IDENT { StructType ($1, 0) }
+| IDENT { IdentType ($1, 0) }
 ;
 
 proc_returns:
@@ -315,13 +326,13 @@ struct_decl:
       IdMap.empty $4
   in
   let decl = 
-    { s_name = ($2, 0);
-      s_fields = fields;
-      s_pos = mk_position 2 2;
-    } 
+    { t_name = ($2, 0);
+      t_def = StructTypeDef fields;
+      t_pos = mk_position 2 2;
+    }
   in
   decl
-}  
+}
 ;
 
 field_decls:

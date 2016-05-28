@@ -11,6 +11,7 @@ type name = string
 type names = name list
 
 type typ =
+  | IdentType of ident
   | StructType of ident
   | MapType of typ * typ
   | ArrayType of typ
@@ -29,72 +30,76 @@ type var_decl_id =
   | ArrayDecl of var_decl_id
 
 type spl_program =
-    { includes : (name * pos) list;
-      var_decls : vars;
-      struct_decls : structs;
-      proc_decls : procs;
-      pred_decls : preds;
-      background_theory : (expr * pos) list; 
+    { includes: (name * pos) list;
+      type_decls: typedecls;
+      var_decls: vars;
+      proc_decls: procs;
+      pred_decls: preds;
+      background_theory: (expr * pos) list; 
     }
 
 and decl =
+  | TypeDecl of typedecl
   | VarDecl of var
   | ProcDecl of proc
   | PredDecl of pred
-  | StructDecl of struc
 
 and decls = decl list
 
 and proc =
-    { p_name : ident;
-      p_formals : idents;
-      p_returns : idents;
-      p_locals : vars;
-      p_contracts : contracts;
-      p_body : stmt; 
-      p_pos : pos;
+    { p_name: ident;
+      p_formals: idents;
+      p_returns: idents;
+      p_locals: vars;
+      p_contracts: contracts;
+      p_body: stmt; 
+      p_pos: pos;
     }
 
 and procs = proc IdMap.t
 
 and pred =
-    { pr_name : ident;
-      pr_formals : idents;
-      pr_outputs : idents;
-      pr_locals : vars;
-      pr_contracts : contracts;
-      pr_body : expr option; 
-      pr_pos : pos;
+    { pr_name: ident;
+      pr_formals: idents;
+      pr_outputs: idents;
+      pr_locals: vars;
+      pr_contracts: contracts;
+      pr_body: expr option; 
+      pr_pos: pos;
     }
 
 and preds = pred IdMap.t
 
 and var =
-    { v_name : ident;
-      v_type : typ; 
-      v_ghost : bool;
-      v_implicit : bool;
-      v_aux : bool;
-      v_pos : pos;
-      v_scope : pos;
+    { v_name: ident;
+      v_type: typ; 
+      v_ghost: bool;
+      v_implicit: bool;
+      v_aux: bool;
+      v_pos: pos;
+      v_scope: pos;
     }
 
 and vars = var IdMap.t
 
+and typedecl =
+    { t_name: ident;
+      t_def: type_def;      
+      t_pos: pos;
+    }
+
+and type_def =
+  | FreeTypeDef
+  | StructTypeDef of vars
+      
+and typedecls = typedecl IdMap.t
+      
 and contract =
   | Requires of expr * bool
   | Ensures of expr * bool
 
 and contracts = contract list
 
-and struc =
-    { s_name : ident;
-      s_fields : vars;
-      s_pos : pos;
-    }
-
-and structs = struc IdMap.t
-      
 and stmt =
   | Skip of pos
   | Block of stmts * pos
@@ -227,7 +232,7 @@ let proc_decl hdr body =
   { hdr with p_body = body }
 
 let struct_decl sname sfields pos =
-  { s_name = sname;  s_fields = sfields; s_pos = pos }
+  { t_name = sname;  t_def = StructTypeDef sfields; t_pos = pos }
 
 let var_decl vname vtype vghost vimpl vpos vscope =
   { v_name = vname; v_type = vtype; v_ghost = vghost; v_implicit = vimpl; v_aux = false; v_pos = vpos; v_scope = vscope } 
@@ -236,44 +241,44 @@ let pred_decl hdr body =
   { hdr with pr_body = body }
 
 let extend_spl_program incls decls bg_th prog =
-  let check_uniqueness id pos (vdecls, pdecls, prdecls, sdecls) =
-    if IdMap.mem id vdecls || IdMap.mem id sdecls || IdMap.mem id pdecls || IdMap.mem id prdecls
+  let check_uniqueness id pos (tdecls, vdecls, pdecls, prdecls) =
+    if IdMap.mem id tdecls || IdMap.mem id vdecls || IdMap.mem id pdecls || IdMap.mem id prdecls
     then ProgError.error pos ("redeclaration of identifier " ^ (fst id) ^ ".");
   in
-  let vdecls, pdecls, prdecls, sdecls =
-    List.fold_left (fun (vdecls, pdecls, prdecls, sdecls as decls) -> function
+  let tdecls, vdecls, pdecls, prdecls =
+    List.fold_left (fun (tdecls, vdecls, pdecls, prdecls as decls) -> function
+      | TypeDecl decl -> 
+          check_uniqueness decl.t_name decl.t_pos decls;
+          IdMap.add decl.t_name decl tdecls, vdecls, pdecls, prdecls
       | VarDecl decl -> 
           check_uniqueness decl.v_name decl.v_pos decls;
-          IdMap.add decl.v_name decl vdecls, pdecls, prdecls, sdecls
+          tdecls, IdMap.add decl.v_name decl vdecls, pdecls, prdecls
       | ProcDecl decl -> 
           check_uniqueness decl.p_name decl.p_pos decls;
-          vdecls, IdMap.add decl.p_name decl pdecls, prdecls, sdecls
+          tdecls, vdecls, IdMap.add decl.p_name decl pdecls, prdecls
       | PredDecl decl -> 
           check_uniqueness decl.pr_name decl.pr_pos decls;
-          vdecls, pdecls, IdMap.add decl.pr_name decl prdecls, sdecls
-      | StructDecl decl -> 
-          check_uniqueness decl.s_name decl.s_pos decls;
-          vdecls, pdecls, prdecls, IdMap.add decl.s_name decl sdecls)
-      (prog.var_decls, prog.proc_decls, prog.pred_decls, prog.struct_decls)
+          tdecls, vdecls, pdecls, IdMap.add decl.pr_name decl prdecls)
+      (prog.type_decls, prog.var_decls, prog.proc_decls, prog.pred_decls)
       decls
   in
-  { includes = incls @ prog.includes; 
+  { includes = incls @ prog.includes;
+    type_decls = tdecls;
     var_decls = vdecls; 
-    struct_decls = sdecls; 
     proc_decls = pdecls;
     pred_decls = prdecls;
     background_theory = bg_th @ prog.background_theory;
   }
 
 let merge_spl_programs prog1 prog2 =
-  let vdecls =
-    IdMap.fold (fun _ decl acc -> VarDecl decl :: acc) prog1.var_decls []
+  let tdecls =
+    IdMap.fold (fun _ decl acc -> TypeDecl decl :: acc) prog1.type_decls []
   in
-  let sdecls =
-    IdMap.fold (fun _ decl acc -> StructDecl decl :: acc) prog1.struct_decls vdecls
+  let vdecls =
+    IdMap.fold (fun _ decl acc -> VarDecl decl :: acc) prog1.var_decls tdecls
   in
   let prdecls =
-    IdMap.fold (fun _ decl acc -> PredDecl decl :: acc) prog1.pred_decls sdecls
+    IdMap.fold (fun _ decl acc -> PredDecl decl :: acc) prog1.pred_decls vdecls
   in
   let decls =
     IdMap.fold (fun _ decl acc -> ProcDecl decl :: acc) prog1.proc_decls prdecls
@@ -284,23 +289,25 @@ let add_alloc_decl prog =
   let alloc_decls =
     IdMap.fold
       (fun _ decl acc ->
-        let sid = decl.s_name in
-        let id = Prog.alloc_id (FreeSrt sid) in
-        let tpe = SetType (StructType sid) in
-        let pos = GrassUtil.dummy_position in
-        let scope = GrassUtil.global_scope in
-        let vdecl = VarDecl (var_decl id tpe true false pos scope) in
-        vdecl :: acc
-      )
-      prog.struct_decls
+        match decl.t_def with
+        | StructTypeDef _ ->
+            let sid = decl.t_name in
+            let id = Prog.alloc_id (FreeSrt sid) in
+            let tpe = SetType (StructType sid) in
+            let pos = GrassUtil.dummy_position in
+            let scope = GrassUtil.global_scope in
+            let vdecl = VarDecl (var_decl id tpe true false pos scope) in
+            vdecl :: acc
+        | _ -> acc)
+      prog.type_decls
       []
   in
     extend_spl_program [] alloc_decls [] prog
 
 let empty_spl_program =
   { includes = [];
+    type_decls = IdMap.empty;
     var_decls = IdMap.empty;
-    struct_decls = IdMap.empty;
     proc_decls = IdMap.empty;
     pred_decls = IdMap.empty;
     background_theory = [];
@@ -321,7 +328,7 @@ let rec pr_type ppf = function
   | IntType -> fprintf ppf "%s" int_sort_string
   | ByteType -> fprintf ppf "%s" byte_sort_string
   | UnitType -> fprintf ppf "Unit"
-  | StructType id -> pr_ident ppf id
+  | StructType id | IdentType id -> pr_ident ppf id
   | ArrayType e -> fprintf ppf "%s<@[%a@]>" array_sort_string pr_type e
   | ArrayCellType e -> fprintf ppf "%s<@[%a@]>" array_cell_sort_string pr_type e
   | MapType (d, r) -> fprintf ppf "%s<@[%a,@ %a@]>" map_sort_string pr_type d pr_type r

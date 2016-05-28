@@ -330,10 +330,10 @@ let smtlib_sort_of_grass_sort srt =
   in
   csort srt
     
-let declare_sorts has_int session structs =
+let declare_sorts has_int session free_srts =
   SortSet.iter
     (function FreeSrt id -> declare_sort session (string_of_ident id) 0 | _ -> ())
-    structs;
+    free_srts;
   declare_sort session ("Grass" ^ pat_sort_string) 0;
   declare_sort session ("Grass" ^ array_sort_string) 1;
   declare_sort session array_cell_sort_string 1;
@@ -419,9 +419,9 @@ let init_session session sign =
       sign
   in
   (* collect the struct types *)
-  let structs =
+  let free_srts =
     let rec add acc srt = match srt with
-    | Loc (FreeSrt _ as srt) -> SortSet.add srt acc
+    | FreeSrt _ -> SortSet.add srt acc
     | Set srt | ArrayCell srt | Array srt | Loc srt -> add acc srt
     | Map (srt1, srt2) -> add (add acc srt1) srt2
     | _ -> acc
@@ -470,7 +470,7 @@ let init_session session sign =
   writeln session ("(set-info :category \"crafted\")");
   writeln session ("(set-info :status \"unknown\")");
   (* declare all sorts *)
-  declare_sorts has_int session structs
+  declare_sorts has_int session free_srts
 
 let start session_name sat_means =
   start_with_solver
@@ -792,6 +792,10 @@ let is_sat session =
   | Error e -> fail session e
   | _ -> fail session "unexpected response from prover"
 	
+(** Used to signal that a function definition has a complex ITE term and needs
+  to be represented as an explicit term. *)
+exception Complex_ite
+
 (** Covert SMT-LIB model to GRASS model *)
 let convert_model session smtModel =
   (* convert SMT-LIB sort to GRASS sort *)
@@ -937,7 +941,12 @@ let convert_model session smtModel =
       | SmtLibSyntax.App (SmtLibSyntax.Plus as op, [t1; t2], _)
       | SmtLibSyntax.App (SmtLibSyntax.Mult as op, [t1; t2], _)
       | SmtLibSyntax.App (SmtLibSyntax.Minus as op, [t1; t2], _)
-      | SmtLibSyntax.App (SmtLibSyntax.Div as op, [t1; t2], _) ->
+      | SmtLibSyntax.App (SmtLibSyntax.Div as op, [t1; t2], _)
+      | SmtLibSyntax.App (SmtLibSyntax.Mod as op, [t1; t2], _)
+      | SmtLibSyntax.App (SmtLibSyntax.Lt as op, [t1; t2], _)
+      | SmtLibSyntax.App (SmtLibSyntax.Gt as op, [t1; t2], _)
+      | SmtLibSyntax.App (SmtLibSyntax.Leq as op, [t1; t2], _)
+      | SmtLibSyntax.App (SmtLibSyntax.Geq as op, [t1; t2], _) ->
           let ct1 = convert_term bvs t1 in
           let ct2 = convert_term bvs t2 in
           let mk_term = match op with
@@ -946,8 +955,17 @@ let convert_model session smtModel =
           | SmtLibSyntax.Mult -> mk_mult
           | SmtLibSyntax.Div -> mk_div
           | SmtLibSyntax.Mod -> mk_mod
+          | SmtLibSyntax.Lt -> (fun s t -> mk_app (sort_of s) Lt [s; t])
+          | SmtLibSyntax.Gt -> (fun s t -> mk_app (sort_of s) Gt [s; t])
+          | SmtLibSyntax.Leq -> (fun s t -> mk_app (sort_of s) LtEq [s; t])
+          | SmtLibSyntax.Geq -> (fun s t -> mk_app (sort_of s) GtEq [s; t])
           | _ -> failwith "unexpected match case"
           in mk_term ct1 ct2          
+      | SmtLibSyntax.App (SmtLibSyntax.Ite, [cond; t; e], _) ->
+          let cond1 = convert_term bvs cond in
+          let t1 = convert_term bvs t in
+          let e1 = convert_term bvs e in
+          mk_ite cond1 t1 e1
       | SmtLibSyntax.Annot (t, _, _) ->
           convert_term bvs t
       | SmtLibSyntax.App (_, _, pos)
@@ -1012,7 +1030,7 @@ let convert_model session smtModel =
               IdMap.add id2 (Model.value_of_int index) arg_map
           | None, Some (_, index) ->
               IdMap.add id1 (Model.value_of_int index) arg_map
-          | _ -> fail pos)
+          | _ -> raise Complex_ite)
       | SmtLibSyntax.App
           (SmtLibSyntax.Eq, [SmtLibSyntax.App (Ident id, [], _); 
                              SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _)], pos) ->
@@ -1023,7 +1041,7 @@ let convert_model session smtModel =
           pcond arg_map def
       | SmtLibSyntax.App (_, _, pos) 
       | SmtLibSyntax.Binder (_, _, _, pos)
-      | SmtLibSyntax.Let (_, _, pos) -> fail pos
+      | SmtLibSyntax.Let (_, _, pos) -> raise Complex_ite
     in 
     let rec p model arg_map = function
       | SmtLibSyntax.App (Ident (name, _), [], pos) when name = "#unspecified" ->
@@ -1076,7 +1094,13 @@ let convert_model session smtModel =
           let f = convert_form [] t in
           add_form pos model arg_map f
       | SmtLibSyntax.Let (_, _, pos) -> fail pos
-    in p model IdMap.empty def
+    in
+    try
+      p model IdMap.empty def
+    with
+      | Complex_ite ->
+        let t = convert_term [] def in
+        add_term (pos_of_term def) model IdMap.empty t
   in
   let model2 =
     List.fold_left 

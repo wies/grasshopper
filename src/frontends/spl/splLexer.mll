@@ -52,6 +52,7 @@ let _ =
       ("subsetof", LEQ);
       ("Set", SET);
       ("true", BOOLVAL(true));
+      ("type", TYPE);
       ("var", VAR);
       ("while", WHILE);
       ("without", WITHOUT);
