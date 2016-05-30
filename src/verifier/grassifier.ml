@@ -511,7 +511,8 @@ let elim_sl prog =
         match sym with
         | FreeSym p when IdMap.mem p prog.prog_preds ->
             let decl = find_pred prog p in
-            if returns_of_pred decl = [] then mk_app srt sym ts else
+            if List.length (formals_of_pred decl) <> List.length ts
+            then mk_app srt sym ts else
             let fps =
               SortSet.fold
                 (fun ssrt fps -> footprint_caller_set ssrt :: fps)

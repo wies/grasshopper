@@ -6,7 +6,7 @@ open SplErrors
 let match_types pos oty1 oty2 =
   let rec mt ty1 ty2 =
     match ty1, ty2 with
-    | PermType, BoolType -> PermType
+    | PermType, BoolType -> BoolType
     | AnyRefType, StructType _
     | AnyRefType, ArrayType _
     | AnyRefType, ArrayCellType _ -> ty2
@@ -180,7 +180,7 @@ let infer_types cu locals ty e =
     | BinaryOp (e1, OpImpl, e2, _, pos) ->
         let e1, _ = it locals BoolType e1 in
         let e2, ty1 = it locals ty e2 in
-        BinaryOp (e1, OpImpl, e2, ty, pos), ty1
+        BinaryOp (e1, OpImpl, e2, ty1, pos), ty1
     (* Non-ambiguous Int/Byte operators*)
     | UnaryOp (OpToByte, e, pos) ->
         let e1, ty = it locals IntType e in
@@ -193,8 +193,7 @@ let infer_types cu locals ty e =
     (* Ambiguous relational operators *)
     | BinaryOp (e1, (OpEq as op), e2, _, pos) ->
         let e1, e2, ty1 = itp locals AnyType e1 e2 in
-        ignore (match_types pos ty BoolType);
-        BinaryOp (e1, op, e2, BoolType, pos), BoolType
+        BinaryOp (e1, op, e2, BoolType, pos), match_types pos ty BoolType
     | BinaryOp (e1, (OpGt as op), e2, _, pos)
     | BinaryOp (e1, (OpLt as op), e2, _, pos)
     | BinaryOp (e1, (OpGeq as op), e2, _, pos)
@@ -202,8 +201,7 @@ let infer_types cu locals ty e =
         let e1, e2, ty1 = itp locals AnyType e1 e2 in
         if ty1 <> IntType && ty1 <> ByteType then
           ignore (match_types (pos_of_expr e1) ty1 (SetType AnyType));
-        ignore (match_types pos ty BoolType);
-        BinaryOp (e1, op, e2, BoolType, pos), BoolType
+        BinaryOp (e1, op, e2, BoolType, pos), match_types pos ty BoolType
     (* Ambiguous binary Boolean operators *)
     | BinaryOp (e1, (OpAnd as op), e2, _, pos)
     | BinaryOp (e1, (OpOr as op), e2, _, pos)
@@ -220,8 +218,7 @@ let infer_types cu locals ty e =
         let e1 =
           if ty1 <> ty11 then fst (it locals ty11 e1) else e1
         in
-        ignore (match_types pos ty BoolType);
-        BinaryOp (e1, OpIn, e2, BoolType, pos), BoolType
+        BinaryOp (e1, OpIn, e2, BoolType, pos), match_types pos ty BoolType
     (* Ambiguous Int/Byte operators*)
     | UnaryOp (OpUMinus as op, e, pos) 
     | UnaryOp (OpUPlus as op, e, pos) 
@@ -251,8 +248,7 @@ let infer_types cu locals ty e =
         e, match_types pos ty IntType
     (* Boolean constants *)
     | BoolVal (_, pos) as e ->
-        ignore (match_types pos ty BoolType);
-        e, BoolType
+        e, match_types pos ty BoolType
     (* Permissions *)
     | Emp pos as e ->
         e, match_types pos ty PermType
@@ -311,9 +307,10 @@ let infer_types cu locals ty e =
         let f1, ty =
           match b with
           | Exists | Forall ->
-              it locals1 (match_types pos ty BoolType) f
+              it locals1 ty f
           | SetComp ->
-              fst (it locals1 BoolType f), SetType (Opt.get vty_opt)
+              fst (it locals1 BoolType f),
+              match_types pos ty (SetType (Opt.get vty_opt))
         in
         Binder (b, decls1, f1, pos), ty
     (* Reference and array types *)
