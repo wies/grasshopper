@@ -1035,6 +1035,10 @@ let convert_model session smtModel =
           (SmtLibSyntax.Eq, [SmtLibSyntax.App (Ident id, [], _); 
                              SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _)], pos) ->
           IdMap.add id (Model.value_of_int i) arg_map
+      | SmtLibSyntax.App
+          (SmtLibSyntax.Eq, [SmtLibSyntax.App (Ident id, [], _); 
+                             SmtLibSyntax.App (SmtLibSyntax.BoolConst b, [], _)], pos) ->
+          IdMap.add id (Model.value_of_bool b) arg_map
       | SmtLibSyntax.App (SmtLibSyntax.And, conds, _) ->
           List.fold_left pcond arg_map conds
       | SmtLibSyntax.Annot (def, _, _) -> 
