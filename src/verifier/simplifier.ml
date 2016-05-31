@@ -462,7 +462,9 @@ let elim_state prog =
                     let x_decl = find_var prog proc x in
                     let x1 = mk_free_const x_decl.var_sort (IdMap.find x sm1) in
                     let e1 = subst_id_term sm e in
-                    mk_eq x1 e1)
+                    match sort_of e1 with
+                    | Bool -> mk_iff (Atom (x1, [])) (Atom (e1, []))
+                    | _ -> mk_eq x1 e1)
                   ac.assign_lhs ac.assign_rhs
               in
               let sf = mk_spec_form  (FOL (mk_and eqs)) "assign" None pp.pp_pos in
