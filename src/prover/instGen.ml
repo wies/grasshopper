@@ -368,7 +368,13 @@ let instantiate_with_terms ?(force=false) local axioms classes =
       (* remove theory atoms from congruence classes *)
       let filter_term t =
         sort_of t <> Bool ||
-        Opt.get_or_else false (Opt.map (((=) Frame) ||| is_free_symbol) (symbol_of t))
+        Opt.get_or_else false
+          (Opt.map
+             (((=) Frame) |||
+             is_free_symbol |||
+             ((=) (BoolConst true)) |||
+             ((=) (BoolConst false)))
+             (symbol_of t))
       in
       let classes =
         let classes2 = List.map (List.filter filter_term) classes in
