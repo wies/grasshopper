@@ -6,24 +6,20 @@ struct HashSet {
   var buckets: Array<Node>; /* the set elements */
 }
 
-predicate arrayseg_buckets_footprint(a: Array<Node>, FP0: Set<ArrayCell<Node>>)
-  requires acc(FP0);
-{
-  // FIXME
-  // all nodes reachable from the head of the bucket are in the footprint
-  (forall c: ArrayCell<Node>, x: Node :: c in FP0 && Btwn(next, c.array[c.index], x, null) ==> x in FP1 || x == null) &&
-  // all nodes in the footprint are reachable from the bucket head
-  (forall x in FP1 :: Btwn(next, a[hash(a.length, x.data)], x, null) && x != null
-   @(matching x yields a[hash(a.length, x.data)])) &&
-  // the bucket heads are in the array's footprint
-  (forall x in FP1 :: a.cells[hash(a.length, x.data)] in FP0
-   @(matching x yields a.cells[hash(a.length, x.data)] ))
-}
+function arrayseg_buckets_footprint(a: Array<Node>, FP0: Set<ArrayCell<Node>>)
+  returns (FP1: Set<Node>)
+  requires acc(FP0)
+  ensures // all nodes reachable from the head of the bucket are in the footprint
+    (forall c: ArrayCell<Node>, x: Node :: c in FP0 && Btwn(next, c.array[c.index], x, null) ==> x in FP1 || x == null)
+  ensures // all nodes in the footprint are reachable from the bucket head
+    (forall x in FP1 :: Btwn(next, a[hash(a.length, x.data)], x, null) && x != null @(matching x yields a[hash(a.length, x.data)]))
+  ensures // the bucket heads are in the array's footprint
+    (forall x in FP1 :: a.cells[hash(a.length, x.data)] in FP0 @(matching x yields a.cells[hash(a.length, x.data)] ))
 
 predicate arrayseg_with_buckets(a: Array<Node>, lo: Int, hi: Int, cnt: Set<Data>) {
   exists FP0: Set<ArrayCell<Node>>, FP1: Set<Node> ::
     arrayseg(a, lo, hi) && acc(FP0) &*&
-    buckets(a, FP0) && acc(FP0) &*&
+    FP1 == arrayseg_buckets_footprint(a, FP0) &*& acc(FP1) &*&
     (forall c: ArrayCell<Node>, x in FP1 :: c in FP0 && Reach(next, c.array[c.index], x) ==> hash(a.length, x.data) == c.index) &&
     //(forall c: ArrayCell<Node>, x in FP1 :: c in FP0 && Reach(next, c.array[c.index], x) ==> a.cells[hash(a.length, x.data)] == c) &&
     (forall c: ArrayCell<Node> :: c in FP0 ==> Reach(next, c.array[c.index], null)) &&
@@ -42,12 +38,14 @@ predicate array_with_buckets(a: Array<Node>, cnt: Set<Data>) {
 
 //some ghost function that we can use for the spec of hash
 function hash(max: Int, value: Data) returns (res: Int)
+  requires max > 0
   ensures res >= 0 && res < max
 
 predicate hset(h: HashSet, cnt: Set<Data>) {
   acc(h) &*&
   array_with_buckets(h.buckets, cnt) &*&
-  h.size == h.buckets.length
+  h.size == h.buckets.length &&
+  h.size > 0
 }
 
 procedure create(_size: Int)
