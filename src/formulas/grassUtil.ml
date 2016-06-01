@@ -848,6 +848,9 @@ let rec sign_term_acc (decls : signature) t =
 	  args
       in List.fold_left sign_term_acc (SymbolMap.add sym (arg_srts, res_srt) decls) args
 
+(** Extract signature of term [t]. *)
+let sign_term t = sign_term_acc SymbolMap.empty t
+        
 (** Extracts the signature of formula [f]. *)
 let sign f : signature =
   fold_terms sign_term_acc SymbolMap.empty f

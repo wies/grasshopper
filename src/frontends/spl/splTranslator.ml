@@ -382,6 +382,7 @@ let convert cu =
         let matches = 
           List.fold_right (fun (e, filters) matches -> 
             let ce = GrassUtil.free_consts_term e in
+            let ce_srts = GrassUtil.sign_term e in
             let ce_occur_below ts =
               List.exists 
                 (function App (FreeSym id, [], _) -> IdSet.mem id ce | _ -> false)
@@ -405,6 +406,16 @@ let convert cu =
                     Match (l, [FilterNotNull]) :: aux_matches
                 | _ -> flt, aux_matches)
                 gts (filters, [])
+            in
+            let aux_matches =
+              IdSet.fold
+                (fun id aux_matches ->
+                  let srt = SymbolMap.find (FreeSym id) ce_srts in
+                  match srt with
+                  | ([], (Int | Loc _ as rsrt)) ->
+                      Match (GrassUtil.mk_known (GrassUtil.mk_free_const rsrt id), []) :: aux_matches
+                  | _ -> aux_matches
+                ) ce aux_matches
             in
             Match (e, flt) :: aux_matches @ matches) es1 []
         in

@@ -417,7 +417,24 @@ let add_array_axioms fs gts =
   let srts = array_sorts gts in
   let axioms = SortSet.fold (fun srt axioms -> Axioms.array_axioms srt @ axioms) srts [] in
   axioms @ fs
-  
+
+
+let terms_from_neg_assert fs =
+  let has_label = List.exists (function Label _ -> true | _ -> false) in
+  let rec process_form terms = function
+    | Atom (_, anns) as f ->
+      if has_label anns then
+        ground_terms ~include_atoms:true f |> TermSet.union terms
+      else terms
+    | BoolOp (_, fs) -> process_forms terms fs
+    | Binder (_, _, f1, anns) as f ->
+      if has_label anns then
+        ground_terms ~include_atoms:true f |> TermSet.union terms
+      else process_form terms f1
+  and process_forms terms fs = List.fold_left process_form terms fs
+  in
+  process_forms TermSet.empty fs
+           
 let instantiate read_propagators fs gts =
   (* generate local instances of all remaining axioms in which variables occur below function symbols *)
   let fs1, generators = open_axioms isFunVar fs in
@@ -437,6 +454,15 @@ let instantiate read_propagators fs gts =
         TermSet.iter (fun t -> print_endline ("  " ^ (string_of_term t))) (TermSet.diff gts1 gts)
       end
   in
+  let core_terms =
+    let gts_a = terms_from_neg_assert fs in
+    TermSet.fold (fun t acc ->
+      match sort_of t with
+      | Loc _ | Int -> TermSet.add (mk_known t) acc
+      | _ -> acc)
+      gts_a TermSet.empty
+  in
+  let gts1 = TermSet.union gts1 core_terms in
   let rec is_horn seen_pos = function
     | BoolOp (Or, fs) :: gs -> is_horn seen_pos (fs @ gs)
     | Binder (Forall, [], f, _) :: gs -> is_horn seen_pos (f :: gs)
@@ -471,7 +497,7 @@ let instantiate read_propagators fs gts =
   let fs2, gts2 =
     let fs1 = instantiate_with_terms true others classes in
     let gts_inst = generated_ground_terms (List.rev_append eqs fs1) in
-    let gts2 = generate_terms (read_propagators @ btwn_gen @ generators) gts_inst in
+    let gts2 = generate_terms (read_propagators @ btwn_gen @ generators) (TermSet.union gts_inst core_terms) in
     if TermSet.subset gts2 gts_inst
     then fs1, gts1
     else
