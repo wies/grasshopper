@@ -2,14 +2,14 @@ include "../include/int_array.spl";
 
 procedure quicksort(a: Array<Int>, implicit ghost lb: Int, implicit ghost ub: Int)
   requires array_bnd(a, lb, ub)
-  ensures  sorted_array_bnd(a, lb, ub)
+  ensures sorted_array_bnd(a, lb, ub)
 {
   quicksort1(a, 0, a.length-1, lb, ub);
 }
 
-procedure swap(a: Array<Int>, i: Int, j: Int, implicit ghost iVal: Int, implicit ghost jVal: Int)
-  requires acc(a) &*& (acc(a,i) &+& acc(a, j)) &*& a[i] == iVal &*& a[j] == jVal
-  ensures  acc(a) &*& (acc(a,i) &+& acc(a, j)) &*& a[i] == jVal &*& a[j] == iVal
+procedure swap(a: Array<Int>, i: Int, j: Int)
+  requires acc(a) &*& (acc(a, i) &+& acc(a, j))
+  ensures  acc(a) &*& (acc(a, i) &+& acc(a, j)) &*& a[i] == old(a[j]) &*& a[j] == old(a[i])
 {
   var tmp := a[i];
   a[i] := a[j];
@@ -27,7 +27,7 @@ procedure quicksort1(a: Array<Int>, lower: Int, upper: Int, ghost lb: Int, ghost
     var idx := lower;
     var i := lower;
     while (i < upper)
-      invariant idx >= lower && i <= upper && i >= idx
+      invariant lower <= idx && idx <= i && i <= upper
       invariant acc(a)
       invariant arrayseg_bnd(a, lower, idx, lb, pivotVal)
       invariant arrayseg_bnd(a, idx, i, pivotVal, ub)

@@ -34,7 +34,7 @@ predicate array_cnt(a: Array<Int>, C: Set<Int>) {
 predicate is_sorted_arrayseg(a: Array<Int>, i: Int, j: Int)
   requires arrayseg(a, i, j)
 {
-  forall i1: Int, j1: Int:: i1 >= i && i1 <= j1 && j1 < j ==> a[i1] <= a[j1]
+  forall i1: Int, j1: Int:: i <= i1 && i1 <= j1 && j1 < j ==> a[i1] <= a[j1]
 }
 
 predicate sorted_arrayseg(a: Array<Int>, i: Int, j: Int, C: Set<Int>) {
@@ -52,7 +52,7 @@ predicate sorted_array(a: Array<Int>, C: Set<Int>) {
 predicate is_bounded_arrayseg(a: Array<Int>, i: Int, j: Int, lb: Int, ub: Int)
   requires arrayseg(a, i, j)
 {
-  forall k: Int:: k >= i && k < j ==> a[k] >= lb && a[k] < ub
+  forall k: Int:: i <= k && k < j ==> lb <= a[k] && a[k] < ub
 }
 
   
