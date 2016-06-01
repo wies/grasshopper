@@ -407,8 +407,7 @@ let init_session session sign =
   let has_int = 
     let rec hi = function
       | Int -> true
-      | Set srt
-      | Array srt -> hi srt
+      | Set srt | Loc srt | Array srt | ArrayCell srt -> hi srt
       | Map (dsrt, rsrt) -> hi dsrt || hi rsrt
       | _ -> false
     in
