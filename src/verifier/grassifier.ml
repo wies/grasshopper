@@ -814,13 +814,13 @@ let elim_sl prog =
       in
       let new_arg_ids =
         List.fold_left (fun new_args id1 ->
-          try
-            let decl = IdMap.find id1 pred.pred_contract.contr_locals in
-            IdMap.add id1 (id1, decl.var_sort) new_args
-          with Not_found ->
-            let decl = IdMap.find id1 locals in
-            let id2 = fresh_ident (name id1) in 
-            IdMap.add id1 (id2, decl.var_sort) new_args)
+          let decl = IdMap.find id1 locals in
+          let id2 =
+            match decl.var_sort with
+            | Set (Loc srt) when id1 = footprint_caller_id srt -> fresh_ident (name id1)
+            | _ -> id1
+          in
+          IdMap.add id1 (id2, decl.var_sort) new_args)
           IdMap.empty formals
       in
       let mk_new_arg id1 = 
