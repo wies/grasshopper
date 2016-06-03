@@ -40,7 +40,7 @@
    '("\\(//[^\n]*\\)" 1 
      font-lock-comment-face)
 
-   '("\\<\\(i\\(f\\|nclude\\)\\|c\\(hoose\\|omment\\)\\|else\\|f\\(ree\\|unction\\)\\|havoc\\|matching\\|new\\|or\\|p\\(attern\\|r\\(ocedure\\|edicate\\)\\)\\|return\\(s\\|\\)\\|struct\\|var\\|w\\(ithout\\|hile\\)\\|yields\\)\\>"
+   '("\\<\\(i\\(f\\|nclude\\)\\|c\\(hoose\\|omment\\)\\|else\\|f\\(ree\\|unction\\)\\|havoc\\|matching\\|new\\|or\\|p\\(attern\\|r\\(ocedure\\|edicate\\)\\)\\|return\\(s\\|\\)\\|struct\\|type\\|var\\|w\\(ithout\\|hile\\)\\|yields\\)\\>"
          1 font-lock-keyword-face)
 
    '("\\<\\(a\\(xiom\\|ss\\(ert\\|ume\\)\\)\\|ensures\\|i\\(mplicit\\|nvariant\\)\\|pure\\|requires\\|ghost\\|footprint\\)\\>"
@@ -67,7 +67,7 @@
    '("new[ \t]+\\(\\<[a-zA-Z_][a-zA-Z0-9_']*\\>\\)" 1
      font-lock-type-face)
 
-   '("struct[ \t]+\\(\\<[a-zA-Z_][a-zA-Z0-9_']*\\>\\)" 1
+   '("\\(struct\\|type\\)[ \t]+\\(\\<[a-zA-Z_][a-zA-Z0-9_']*\\>\\)" 2
      font-lock-type-face)
 
    '("\\<\\(forall\\|exists\\)[ \t]*\\([a-zA-Z_][a-zA-Z0-9_']*\\)\\>" 2
