@@ -3,8 +3,58 @@
 open Grass
 open GrassUtil
 open Config
+open Util
+  
+(** {6 Utility functions} *)
 
-(* {6 Variable and short-hand declarations} *)
+(** Remove binders for universal quantified variables in [axioms] that satisfy the condition [open_cond]. *)
+let open_axioms ?(force=false) open_cond axioms =
+  let extract_generators generators a =
+    List.fold_right 
+      (fun ann (generators, a1) ->
+        match ann with
+        | TermGenerator (g, t) ->
+            let gen = (g, t) in
+            gen :: generators, a1
+        | _ -> generators, ann :: a1
+      ) a (generators, [])
+  in
+  let rec open_axiom generators = function
+    | Binder (b, [], f, a) ->
+        let f1, generators1 = open_axiom generators f in
+        let generators2, a1 = extract_generators generators a in
+        Binder (b, [], f1, a1), generators2
+    | Binder (b, vs, f, a) -> 
+        (* extract term generators *)
+        let generators1, a1 = extract_generators generators a in
+        let vs1 = List.filter (~~ (open_cond (annotate f a))) vs in
+        let f1, generators2 = open_axiom generators1 f in
+        if !Config.instantiate || force then
+          Binder (b, vs1, f1, a1), generators2
+        else 
+          Binder (b, vs, f1, a1), generators2
+    | BoolOp (op, fs) -> 
+        let fs1, generators1 = 
+          List.fold_right open_axioms fs ([], generators)
+        in
+        BoolOp (op, fs1), generators1
+    | f -> f, generators
+  and open_axioms f (fs1, generators) =
+    let f1, generators1 = open_axiom generators f in
+    f1 :: fs1, generators1
+  in
+  List.fold_right open_axioms axioms ([], [])
+
+(** Open condition that checks whether the given sorted variable is a field. *)
+let isFld f = function (_, Map (Loc _, _)) -> true | _ -> false
+
+(* Open condition that checks whether the given sorted variable appears below a function symbol. *) 
+let isFunVar f =
+  let fvars = vars_in_fun_terms f in
+  fun v -> IdSrtSet.mem v fvars
+
+  
+(** {6 Variable and short-hand declarations} *)
   
 let mk_loc_var name = 
   let id = fresh_ident name in
