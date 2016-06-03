@@ -5,13 +5,9 @@
 
 struct T { }
 
-predicate lt(x: T, y: T) {
-  lt(x, y) 
-}
+predicate lt(x: T, y: T)
 
-predicate le(x: T, y: T) {
-  le(x, y)
-}
+predicate le(x: T, y: T)
 
 axiom forall a: T :: !lt(a, a);
 axiom forall a: T, b: T :: !lt(a, b) || !lt(b, a);
