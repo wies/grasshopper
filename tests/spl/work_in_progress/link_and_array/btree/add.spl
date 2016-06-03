@@ -1,0 +1,104 @@
+include "def.spl";
+include "find.spl";
+include "node_utils.spl";
+
+procedure splitNode(n: Node) returns (res: Node)
+  requires  btree(n)
+  ensures   btree(res)
+{
+  var w := newNode();
+  var j := keys.length/2;
+  var i := 0;
+
+  //System.arraycopy(keys, j, w.keys, 0, keys.length-j);
+  while(i < n.keys.length-j)
+    invariant ???
+  {
+    w.keys[i] := n.keys[j+i];
+    i := i + 1;
+  }
+
+  //Arrays.fill(keys, j, keys.length, null);
+  i := j;
+  while(i < n.keys.length)
+    invariant ???
+  {
+    n.keys[i] := null;
+    i := i + 1;
+  }
+
+  //System.arraycopy(children, j+1, w.children, 0, children.length-j-1);
+  i := 0;
+  while(i < n.children.length-j-1)
+    invariant ???
+  {
+    w.children[i] := n.children[j+1+i];
+    i := i + 1;
+  }
+
+  //Arrays.fill(children, j+1, children.length, -1);
+  i := j+1;
+  while(i < n.children.length)
+    invariant ???
+  {
+    n.children[i] := null;
+    i := i + 1;
+  }
+
+  //bs.writeBlock(id, this);
+
+  return w;
+}
+
+/* ------ Adding an element ------ */
+
+/*
+procedure addRecursive(x: T, u: Node) returns (res: Node)
+  requires  btree(u)
+  ensures   btree(res)
+{
+  var i := findIt(u.keys, x);
+  if (i < u.keys.length && u.keys[i] == x) {
+    //throw new DuplicateValueException();
+    assert(false);
+  }
+  if (isLeaf(u)) { // leaf node, just add it
+    addNode(u, x, -1);
+  } else {
+    var w := addRecursive(x, u.children[i]);
+    if (w != null) {  // child was split, w is new child 
+      x := removeNode(w, 0);
+      addNode(u, x, w.id);
+    }
+  }
+  if (isFull(u)) {
+    return splitNode(u)
+  } else {
+    return null;
+  }
+}
+
+procedure add(bt: Node, x: T) returns (res: bool)
+  requires  btree(bt)
+  ensures   btree(res)
+{
+  var w: Node;
+  try {
+    w := addRecursive(x, ri);
+  } catch (DuplicateValueException e) {
+    return false;
+  }
+  if (w != null) {   // root was split, make new root
+    var newroot := newNode();
+    x := w.remove(0);
+    bs.writeBlock(w.id, w);
+    newroot.children[0] := ri;
+    newroot.keys[0] := x;
+    newroot.children[1] := w.id;
+    ri := newroot.id;
+    bs.writeBlock(ri, newroot);
+  }
+  n := n + 1;
+  return true;
+}
+*/

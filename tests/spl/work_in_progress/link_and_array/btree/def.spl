@@ -9,11 +9,11 @@ predicate lt(x: T, y: T)
 
 predicate le(x: T, y: T)
 
-axiom forall a: T :: !lt(a, a);
-axiom forall a: T, b: T :: !lt(a, b) || !lt(b, a);
-axiom forall a: T, b: T :: lt(a, b) || lt(b, a) || a == b;
-axiom forall a: T, b: T, c: T :: lt(a, b) && lt(b, c) ==> lt(a, c);
-axiom forall a: T, b: T :: le(a, b) == (lt(a, b) || a == b);
+axiom forall x: T :: !lt(x, x);
+axiom forall x: T, y: T :: !lt(x, y) || !lt(y, x);
+axiom forall x: T, y: T :: lt(x, y) || lt(y, x) || x == y;
+axiom forall x: T, y: T, z: T :: lt(x, y) && lt(y, z) ==> lt(x, z);
+axiom forall x: T, y: T :: le(x, y) == (lt(x, y) || x == y);
 
 function compare(x: T, y: T)
   returns (res: Int)
@@ -26,7 +26,9 @@ axiom forall a: T :: !lt(a, bottom);
 
 /* The order, B, is at least 2 */
 var B: Int;
+var b: Int;
 axiom B >= 2;
+axiom b == 2*B - 1;
 
 struct Node {
   var keys: Array<T>;
@@ -100,17 +102,36 @@ function arraycell_node_fp(FP_A_N: Set<Array<Node>>)
             @(matching a yields node_arrayseg_fp(a, 0, a.length))
   ensures forall ac: ArrayCell<Node> :: ac in FP_AC_N ==> ac.array in FP_A_N
 
-predicate btree(b: Node) {
+predicate btree_node(n: Node) {
+  exists FP_AC_I: Set<ArrayCell<T>>, FP_AC_N: Set<ArrayCell<Node>> ::
+    acc(n) &*& acc(n.keys) &*& acc(n.children) &*& acc(FP_AC_I) &*& acc(FP_AC_N) &*&
+    FP_AC_I == arraycell_int_fp(Set(n.keys)) &&
+    FP_AC_N == arraycell_node_fp(Set(n.children)) &&
+    // size of keys/children
+    n.children.length == b+1 && n.keys.length == b &&
+    // keys arrays are partitioned into non-null/null halfs
+    (forall i: Int, j: Int :: 0 <= i && i <= j && j < n.keys.length && n.keys[i] == bottom ==> n.keys[j] == bottom) &&
+    // children arrays are partitioned into non-null/null halfs
+    (forall i: Int, j: Int :: 0 <= i && i <= j && j < n.children.length && n.children[i] == null ==> n.children[j] == null) &&
+    // if a child entry is null then, so is the corresponding key entry
+    (forall i: Int :: 0 <= i && i < n.keys.length && n.children[i] == null ==> n.keys[i] == bottom) &&
+    // if a key entry is null, then it is either the first null entry in the key array or the corresponding child entry is also null
+    (forall i: Int, j: Int :: 0 <= i && i < j && j < n.keys.length && n.keys[i] == bottom && n.keys[j] == bottom ==> n.children[j] == null) && 
+    // the keys are sorted
+    (forall i: Int, j: Int :: 0 <= i && i <= j && j < n.keys.length ==> n.keys[i] == bottom || n.keys[j] == bottom || lt(n.keys[i], n.keys[j]))
+}
+
+predicate btree(bt: Node) {
   exists FP_N: Set<Node>, FP_A_I: Set<Array<T>>, FP_AC_I: Set<ArrayCell<T>>, FP_A_N: Set<Array<Node>>, FP_AC_N: Set<ArrayCell<Node>> ::
     acc(FP_N) &*& acc(FP_A_I) &*& acc(FP_AC_I) &*& acc(FP_A_N) &*& acc(FP_AC_N) &*&
-    FP_N == node_footprint(b) &&
+    FP_N == node_footprint(bt) &&
     FP_A_I == array_int_fp(FP_N) &&
     FP_AC_I == arraycell_int_fp(FP_A_I) &&
     FP_A_N == array_node_fp(FP_N) &&
     FP_AC_N == arraycell_node_fp(FP_A_N) &&
  
     /* keys and children arrays are of size 2B */
-    (forall n: Node :: n in FP_N ==> n.children.length == 2 * B && n.keys.length == 2 * B) &&
+    (forall n: Node :: n in FP_N ==> n.children.length == b+1 && n.keys.length == b) &&
   
     /* Structural properties of arrays */
     // keys arrays are partitioned into non-null/null halfs
@@ -143,84 +164,4 @@ predicate btree(b: Node) {
     // ...TODO
     
     true
-}
-
-/* -------------------- Actual Implementation -------------------- */
-
-/* Find the smallest value >= x in this BTree */
-procedure find(b: Node, x: T) returns (res: T)
-  requires x != bottom
-  requires btree(b) &*& b != null
-  ensures btree(b)
-{
-  var z: T := bottom;
-  var n := b;
-  var flag := false;
-  while (n != null && !flag)
-    invariant (n == null || acc(n)) -** btree(b)
-  {
-    var i := findIt(n.keys, x);
-    if (n.keys[i] == x) {
-      z := n.keys[i];
-      flag := true;  /* Found x, so return */
-    } else {
-      /* n.keys[i] is smallest value > x, go to child[i] if exists */
-      if (n.keys != null) {
-        z := n.keys[i];
-      }
-      n := n.children[i];
-    }
-  }
-  return z;
-}
-
-procedure findIt(a: Array<T>, x: T) returns (idx: Int)
-  requires a.length == 2 * B
-  requires acc(a)
-  requires key_arrayseg(a, 0, a.length)
-  requires forall i: Int, j: Int :: 0 <= i && i < j && j < a.length ==> a[i] == bottom || a[j] == bottom || lt(a[i], a[j])
-  requires forall i: Int, j: Int :: 0 <= i && i <= j && j < a.length && a[i] == bottom ==> a[j] == bottom
-  ensures a.length == 2 * B
-  ensures acc(a)
-  ensures key_arrayseg(a, 0, a.length)
-  ensures forall i: Int, j: Int :: 0 <= i && i < j && j < a.length ==> a[i] == bottom || a[j] == bottom || lt(a[i], a[j])
-  ensures forall i: Int, j: Int :: 0 <= i && i <= j && j < a.length && a[i] == bottom ==> a[j] == bottom
-  // what we actually care about
-  ensures 0 <= idx && idx < a.length
-  ensures a[idx] == x || a[idx] == bottom || lt(x, a[idx])
-  ensures forall i: Int :: i >= 0 && i < idx ==> a[i] != bottom && lt(a[i], x)
-  ensures forall i: Int :: i > idx && i < a.length ==> a[i] == bottom || lt(x, a[i])
-{
-  var lo := 0;
-  var hi := a.length -1;
-
-  while (hi != lo)
-    invariant a.length > 0
-    invariant acc(a)
-    invariant key_arrayseg(a, 0, a.length)
-    invariant forall i: Int, j: Int :: 0 <= i && i < j && j < a.length ==> a[i] == bottom || a[j] == bottom || lt(a[i], a[j])
-    invariant forall i: Int, j: Int :: 0 <= i && i <= j && j < a.length && a[i] == bottom ==> a[j] == bottom
-    // what we actually care about
-    invariant 0 <= lo && lo <= hi && hi < a.length
-    invariant forall i: Int :: i >= 0 && i < lo ==> a[i] != bottom && lt(a[i], x)
-    invariant forall i: Int :: i > hi && i < a.length ==> a[i] == bottom || lt(x, a[i])
-  {
-    var m := (hi+lo) / 2;
-    var cmp: Int;
-    if (a[m] == bottom) {
-      cmp := -1;
-    } else {
-      cmp := compare(x, a[m]);
-    }
-    if (cmp < 0) {
-      hi := m;      // look in first half
-    } else if (cmp > 0) {
-      lo := m+1;    // look in second half
-    } else {
-      // found it
-      hi := m;
-      lo := m;
-    }
-  }
-  return lo;
 }

@@ -1,0 +1,136 @@
+include "def.spl";
+include "find.spl";
+
+/* is a node full */
+procedure isFull(u: Node) returns (res: Bool)
+  requires btree_node(u)
+  ensures  btree_node(u)
+{
+  if (u.keys[u.keys.length -1] != bottom) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+/* is a node a leaf */
+procedure isLeaf(u: Node) returns (res: Bool)
+  requires btree_node(u)
+  ensures  btree_node(u)
+{
+  if (u.children[0] == null) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+procedure key_arraymove(a: Array<T>, srcPos: Int, dstPos: Int, length: Int, implicit ghost capacity: Int)
+  requires acc(a) &*& key_arrayseg(a, 0, capacity)
+  requires capacity >= srcPos + length
+  requires capacity >= dstPos + length
+  ensures acc(a) &*& key_arrayseg(a, 0, capacity)
+{
+  if (srcPos > dstPos) {
+    var i := capacity -1;
+    while (i >= 0)
+    {
+      a[dstPos + i] := a[srcPos + i];
+      i := i - 1;
+    }
+  } else if (srcPos < dstPos){
+    var i := 0;
+    while (i < capacity)
+    {
+      a[dstPos + i] := a[srcPos + i];
+      i := i + 1;
+    }
+  }
+}
+
+procedure node_arraymove(a: Array<Node>, srcPos: Int, dstPos: Int, length: Int, implicit ghost capacity: Int)
+  requires acc(a) &*& node_arrayseg(a, 0, capacity)
+  requires capacity >= srcPos + length
+  requires capacity >= dstPos + length
+  ensures acc(a) &*& node_arrayseg(a, 0, capacity)
+{
+  if (srcPos > dstPos) {
+    var i := capacity -1;
+    while (i >= 0)
+    {
+      a[dstPos + i] := a[srcPos + i];
+      i := i - 1;
+    }
+  } else if (srcPos < dstPos){
+    var i := 0;
+    while (i < capacity)
+    {
+      a[dstPos + i] := a[srcPos + i];
+      i := i + 1;
+    }
+  }
+}
+
+/* Add the value x to this block
+ * @param x     the value to add
+ * @param ci    the child associated with x
+ * @return      true on success or false if x was not added
+ */
+procedure addNode(u: Node, x: T, ci: Node) returns (res: Bool)
+  requires btree(u) &*& btree(ci)
+  requires ci.parent == null && u != null && ci != null
+  ensures  btree(u)
+{
+  var i := findIt(u.keys, x);
+  if (i < u.keys.length && u.keys[i] == x) {
+    return false;
+  } else if (i < u.keys.length-1) {
+    key_arraymove(u.keys, i, i+1, b-i-1);
+  }
+  u.keys[i] := x;
+  if (i < u.keys.length-1) {
+    node_arraymove(u.children, i+1, i+2, b-i-1);
+  }
+  u.children[i+1] := ci;
+  ci.parent := ci;
+  return true;
+}
+
+/* Remove the i'th value from this block - don't affect this block's children
+ * @param i     the index of the element to remove
+ * @return      the value of the element removed
+ */
+procedure removeNode(u: Node, i: Int) returns (res: T)
+  requires btree_node(u)
+  requires 0 <= i && i < u.keys.length
+  ensures  btree_node(u)
+{
+  var y := u.keys[i];
+  key_arraymove(u.keys, i+1, i, b-i-1);
+  u.keys[u.keys.length-1] := bottom;
+  return y;
+}
+
+procedure newNode() returns (res: Node)
+  requires  emp
+  ensures   btree_node(res)
+{
+  var w := new Node();
+  w.keys := new Array<T>(b);
+  w.children := new Array<Node>(b+1);
+  w.parent := null;
+  var i := 0;
+  while (i < b)
+    invariant 0 <= i && i <= b
+    invariant acc(w) &*& acc(w.keys) &*& acc(w.children)
+    invariant key_arrayseg(w.keys, 0, b)
+    invariant node_arrayseg(w.children, 0, b+1)
+    invariant forall j: Int :: 0 <= j && j < i ==> w.keys[j] == bottom && w.children[j] == null
+  {
+    w.keys[i] := bottom;
+    w.children[i] := null;
+    i := i + 1;
+  }
+  w.children[b] := null;
+  return w;
+}
