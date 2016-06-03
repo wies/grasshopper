@@ -55,17 +55,18 @@ predicate hset(h: HashSet, cnt: Set<Int>) {
 }
 
 /*
-procedure hash(hashset: HashSet, value: Int, implicit ghost content: Set<Int>)
+procedure hashcode(hashset: HashSet, value: Int, implicit ghost content: Set<Int>)
   returns (res: Int)
   requires hset(hashset, content) &*& hashset.size > 0
   ensures  hset(hashset, content)
-  ensures  res >= 0 && res < hashset.size && res == ghostHash(hashset.size, value)
+  ensures  res >= 0 && res < hashset.size && res == hash(hashset.size, value)
 {
   //one of the worst hash functions in the world
   var v := 31 * value;
   if (v < 0) v := -v;
-  return v % hashset.size; 
-  //pure assume(v == ghostHash(hashset.size, value));
+  v := v % hashset.size;
+  pure assume(v == hash(hashset.size, value));
+  return v;
 }
 */
 

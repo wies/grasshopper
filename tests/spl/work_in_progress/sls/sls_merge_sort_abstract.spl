@@ -3,14 +3,15 @@ struct Node {
   var data: Int;
 }
 
-footprint function lseg_footprint(next: Map<Node, Node>, x: Node, y: Node) returns (FP: Set<Node>)
+function lseg_footprint(next: Map<Node, Node>, x: Node, y: Node)
+    returns (FP: Set<Node>)
 
-predicate lseg(x: Node, y: Node)(FP: Set<Node>) {
-  FP == lseg_footprint(next, x, y)
+predicate lseg(x: Node, y: Node) {
+  acc(lseg_footprint(next, x, y))
 }
 
-predicate slseg(data: Map<Node, Int>, x: Node, y: Node)(FP: Set<Node>) {
-  FP == lseg_footprint(next, x, y)
+predicate slseg(data: Map<Node, Int>, x: Node, y: Node) {
+  acc(lseg_footprint(next, x, y))
 }
 
 procedure merge(a: Node, b: Node) returns (res: Node)
