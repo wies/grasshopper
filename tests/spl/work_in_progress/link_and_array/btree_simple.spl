@@ -22,106 +22,108 @@ axiom B >= 2;
 
 /* -------------------- Predicate Definitions -------------------- */
 
-footprint function int_arrayseg_fp(a: Array<Int>, i: Int, j: Int)
+function int_arrayseg_fp(a: Array<Int>, i: Int, j: Int)
   returns (FP: Set<ArrayCell<Int>>)
-{
-  (forall c: ArrayCell<Int> ::
-     c in FP == (i <= c.index && c.index < j && c.array == a))
+  ensures forall c: ArrayCell<Int> ::
+            c in FP == (i <= c.index && c.index < j && c.array == a)
+
+predicate int_arrayseg(a: Array<Int>, i: Int, j: Int) {
+  0 <= i && i <= j && j <= a.length &*&
+  acc(int_arrayseg_fp(a, i, j))
 }
 
-predicate int_arrayseg(a: Array<Int>, i: Int, j: Int)(FP: Set<ArrayCell<Int>>) {
+predicate sorted_int_arrayseg(a: Array<Int>, i: Int, j: Int) {
+  acc(int_arrayseg_fp(a, i, j)) &*&
   0 <= i && i <= j && j <= a.length &&
-  FP == int_arrayseg_fp(a, i, j)
-}
-
-predicate sorted_int_arrayseg(a: Array<Int>, i: Int, j: Int)(FP: Set<ArrayCell<Int>>) {
-  0 <= i && i <= j && j <= a.length &&
-  FP == int_arrayseg_fp(a, i, j) &&
   (forall k: Int, l: Int:: k >= i && k <= l && l < j ==> a[k] <= a[l])
 }
 
-footprint function node_arrayseg_fp(a: Array<Node>, i: Int, j: Int)
+function node_arrayseg_fp(a: Array<Node>, i: Int, j: Int)
   returns (FP: Set<ArrayCell<Node>>)
-{
-  (forall c: ArrayCell<Node> ::
-     c in FP == (i <= c.index && c.index < j && c.array == a))
+  ensures forall c: ArrayCell<Node> ::
+             c in FP == (i <= c.index && c.index < j && c.array == a)
+
+predicate node_arrayseg(a: Array<Node>, i: Int, j: Int) {
+  0 <= i && i <= j && j <= a.length &*&
+  acc(node_arrayseg_fp(a, i, j))
 }
 
-predicate node_arrayseg(a: Array<Node>, i: Int, j: Int)(FP: Set<ArrayCell<Node>>) {
-  0 <= i && i <= j && j <= a.length &&
-  FP == node_arrayseg_fp(a, i, j)
-}
+function node_footprint(r: Node)
+  returns (FP: Set<Node>)
+  ensures forall x: Node :: x in FP == (Btwn(parent, x, r, r) && r != null)
 
-footprint function node_footprint(r: Node) returns (FP: Set<Node>) {
-  forall x: Node :: x in FP == (Btwn(parent, x, r, r) && r != null)
-}
+function array_int_owner(a: Array<Int>, FP_N: Set<Node>)
+  returns (n: Node)
 
-function array_int_owner(a: Array<Int>, FP_N: Set<Node>) returns (n: Node)
-
-footprint function array_int_fp(FP_N: Set<Node>) returns (FP_A_I: Set<Array<Int>>) {
-  (forall n: Node :: n in FP_N ==> n.keys in FP_A_I
-   @(matching n yields n.keys)) &&
-  (forall a: Array<Int> :: a in FP_A_I ==> array_int_owner(a, FP_N) in FP_N && array_int_owner(a, FP_N).keys == a
-   @(matching a without array_node_owner yields array_int_owner(a, FP_N).keys))
-}
+function array_int_fp(FP_N: Set<Node>) returns (FP_A_I: Set<Array<Int>>)
+  requires acc(FP_N)
+  ensures forall n: Node :: n in FP_N ==> n.keys in FP_A_I
+            @(matching n yields n.keys)
+  ensures forall a: Array<Int> :: a in FP_A_I ==> array_int_owner(a, FP_N) in FP_N && array_int_owner(a, FP_N).keys == a
+            @(matching a without array_node_owner yields array_int_owner(a, FP_N).keys)
 
 function array_node_owner(a: Array<Node>, FP_N: Set<Node>) returns (n: Node)
 
-footprint function array_node_fp(FP_N: Set<Node>) returns (FP_A_N: Set<Array<Node>>) {
-  (forall n: Node :: n in FP_N ==> n.children in FP_A_N
-   @(matching n yields n.children)) &&
-  (forall a: Array<Node> :: a in FP_A_N ==> array_node_owner(a, FP_N) in FP_N && array_node_owner(a, FP_N).children == a
-   @(matching a without array_int_owner yields array_node_owner(a, FP_N).children))
-}
+function array_node_fp(FP_N: Set<Node>)
+  returns (FP_A_N: Set<Array<Node>>)
+  requires acc(FP_N)
+  ensures forall n: Node :: n in FP_N ==> n.children in FP_A_N
+            @(matching n yields n.children)
+  ensures forall a: Array<Node> :: a in FP_A_N ==> array_node_owner(a, FP_N) in FP_N && array_node_owner(a, FP_N).children == a
+            @(matching a without array_int_owner yields array_node_owner(a, FP_N).children)
 
-footprint function arraycell_int_fp(FP_A_I: Set<Array<Int>>) returns (FP_AC_I: Set<ArrayCell<Int>>) {
-  (forall a: Array<Int>, ac: ArrayCell<Int> :: a in FP_A_I && ac in int_arrayseg_fp(a, 0, a.length) ==> ac in FP_AC_I
-   @(matching a yields int_arrayseg_fp(a, 0, a.length))) &&
-  (forall ac: ArrayCell<Int> :: ac in FP_AC_I ==> ac.array in FP_A_I)
-}
+function arraycell_int_fp(FP_A_I: Set<Array<Int>>)
+  returns (FP_AC_I: Set<ArrayCell<Int>>)
+  requires acc(FP_A_I)
+  ensures forall a: Array<Int>, ac: ArrayCell<Int> :: a in FP_A_I && ac in int_arrayseg_fp(a, 0, a.length) ==> ac in FP_AC_I
+            @(matching a yields int_arrayseg_fp(a, 0, a.length))
+  ensures forall ac: ArrayCell<Int> :: ac in FP_AC_I ==> ac.array in FP_A_I
 
-footprint function arraycell_node_fp(FP_A_N: Set<Array<Node>>) returns (FP_AC_N: Set<ArrayCell<Node>>) {
-  (forall a: Array<Node>, ac: ArrayCell<Node> :: a in FP_A_N && ac in node_arrayseg_fp(a, 0, a.length) ==> ac in FP_AC_N
-   @(matching a yields node_arrayseg_fp(a, 0, a.length))) &&
-  (forall ac: ArrayCell<Node> :: ac in FP_AC_N ==> ac.array in FP_A_N)
-}
+function arraycell_node_fp(FP_A_N: Set<Array<Node>>)
+  returns (FP_AC_N: Set<ArrayCell<Node>>)
+  ensures forall a: Array<Node>, ac: ArrayCell<Node> :: a in FP_A_N && ac in node_arrayseg_fp(a, 0, a.length) ==> ac in FP_AC_N
+            @(matching a yields node_arrayseg_fp(a, 0, a.length))
+  ensures forall ac: ArrayCell<Node> :: ac in FP_AC_N ==> ac.array in FP_A_N
 
-predicate btree(b: Node)(FP_N: Set<Node>, FP_A_I: Set<Array<Int>>, FP_AC_I: Set<ArrayCell<Int>>, FP_A_N: Set<Array<Node>>, FP_AC_N: Set<ArrayCell<Node>>) {
-  FP_N == node_footprint(b) &&
-  FP_A_I == array_int_fp(FP_N) &&
-  FP_AC_I == arraycell_int_fp(FP_A_I) &&
-  FP_A_N == array_node_fp(FP_N) &&
-  FP_AC_N == arraycell_node_fp(FP_A_N) &&
+predicate btree(b: Node)
+{
+  exists FP_N: Set<Node>, FP_A_I: Set<Array<Int>>, FP_AC_I: Set<ArrayCell<Int>>, FP_A_N: Set<Array<Node>>, FP_AC_N: Set<ArrayCell<Node>> ::
+    acc(FP_N) &*& acc(FP_A_I) &*& acc(FP_AC_I) &*& acc(FP_A_N) &*& acc(FP_AC_N) &*&
+    FP_N == node_footprint(b) &&
+    FP_A_I == array_int_fp(FP_N) &&
+    FP_AC_I == arraycell_int_fp(FP_A_I) &&
+    FP_A_N == array_node_fp(FP_N) &&
+    FP_AC_N == arraycell_node_fp(FP_A_N) &&
+ 
+    /* keys and children arrays are of size 2B */
+    (forall n: Node :: n in FP_N ==> n.children.length == 2 * B && n.keys.length == 2 * B) &&
+ 
+    /* For structural verification: number of children */
+    (forall n: Node :: n in FP_N ==> 0 <= n.num_children && n.num_children <= n.children.length) &&
+    (forall n: Node, i: Int :: n in FP_N && 0 <= i && i < n.num_children ==> n.children[i] != null) &&
+    (forall n: Node, i: Int :: n in FP_N && n.num_children <= i && i <= n.children.length ==> n.children[i] == null) &&
+ 
+    /* Tree invariants */
+    // parent is inverse of child array 
+    (forall c in FP_AC_N :: c[] == null || Reach(parent, c[], array_node_owner(c.array, FP_N)) && c[] != array_node_owner(c.array, FP_N)) &&
+    (forall c in FP_AC_N, x: Node :: Btwn(parent, c[], x, array_node_owner(c.array, FP_N)) ==> x == array_node_owner(c.array, FP_N) || c[] == x) &&
+    // child array entries are all distinct
+    (forall c in FP_AC_N, d in FP_AC_N :: c[] == d[] ==> c == d || c[] == null) &&
+    // ancestor nodes must be reachable via correct child
+    (forall x in FP_N, c in FP_AC_N :: Reach(parent, x, array_node_owner(c.array, FP_N)) && c[].lbound <= x.lbound && x.ubound <= c[].ubound ==>
+     Btwn(parent, x, c[], array_node_owner(c.array, FP_N)) @(matching x yields x.lbound) @(matching x yields x.ubound)) &&
+    // bounds of ancestor nodes include bounds of decendants
+    (forall x in FP_N, y in FP_N :: Reach(parent, x, y) ==> y.lbound <= x.lbound && x.ubound <= y.ubound) &&
+    // bounds of children are disjoint
+    (forall c in FP_AC_N, d in FP_AC_N :: c.index < d.index && c.array == d.array ==> c[].ubound < d[].lbound) &&
+    // bounds of nodes are consistent
+    (forall x in FP_N :: x.lbound <= x.ubound) &&
+    // ...TODO
 
-  /* keys and children arrays are of size 2B */
-  (forall n: Node :: n in FP_N ==> n.children.length == 2 * B && n.keys.length == 2 * B) &&
-
-  /* For structural verification: number of children */
-  (forall n: Node :: n in FP_N ==> 0 <= n.num_children && n.num_children <= n.children.length) &&
-  (forall n: Node, i: Int :: n in FP_N && 0 <= i && i < n.num_children ==> n.children[i] != null) &&
-  (forall n: Node, i: Int :: n in FP_N && n.num_children <= i && i <= n.children.length ==> n.children[i] == null) &&
-
-  /* Tree invariants */
-  // parent is inverse of child array 
-  (forall c in FP_AC_N :: c[] == null || Reach(parent, c[], array_node_owner(c.array, FP_N)) && c[] != array_node_owner(c.array, FP_N)) &&
-  (forall c in FP_AC_N, x: Node :: Btwn(parent, c[], x, array_node_owner(c.array, FP_N)) ==> x == array_node_owner(c.array, FP_N) || c[] == x) &&
-  // child array entries are all distinct
-  (forall c in FP_AC_N, d in FP_AC_N :: c[] == d[] ==> c == d || c[] == null) &&
-  // ancestor nodes must be reachable via correct child
-  (forall x in FP_N, c in FP_AC_N :: Reach(parent, x, array_node_owner(c.array, FP_N)) && c[].lbound <= x.lbound && x.ubound <= c[].ubound ==>
-   Btwn(parent, x, c[], array_node_owner(c.array, FP_N)) @(matching x yields x.lbound) @(matching x yields x.ubound)) &&
-  // bounds of ancestor nodes include bounds of decendants
-  (forall x in FP_N, y in FP_N :: Reach(parent, x, y) ==> y.lbound <= x.lbound && x.ubound <= y.ubound) &&
-  // bounds of children are disjoint
-  (forall c in FP_AC_N, d in FP_AC_N :: c.index < d.index && c.array == d.array ==> c[].ubound < d[].lbound) &&
-  // bounds of nodes are consistent
-  (forall x in FP_N :: x.lbound <= x.ubound) &&
-  // ...TODO
-  
-  /* Every node has a certain number of keys TODO refine */
-  (forall n: Node :: n in FP_N ==> 0 <= n.num_keys && n.num_keys <= n.keys.length) &&
-  /* TODO The keys of every node are sorted */
-  true
+    /* Every node has a certain number of keys TODO refine */
+    (forall n: Node :: n in FP_N ==> 0 <= n.num_keys && n.num_keys <= n.keys.length) &&
+    /* TODO The keys of every node are sorted */
+    true
 }
 
 /* -------------------- Actual Implementation -------------------- */
