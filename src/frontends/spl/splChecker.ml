@@ -679,7 +679,7 @@ let flatten_exprs cu =
           }
         in
         IdMap.add decl.pr_name decl1 preds, aux_funs)
-      cu.pred_decls (IdMap.empty, [])
+      cu.pred_decls (IdMap.empty, aux_funs)
   in
   let preds_all = List.fold_left (fun preds_all decl -> IdMap.add decl.pr_name decl preds_all) preds aux_funs in
   { cu with proc_decls = procs; pred_decls = preds_all }
