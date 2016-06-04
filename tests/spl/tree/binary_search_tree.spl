@@ -50,9 +50,9 @@ procedure traverse(root: Node, implicit ghost content: Set<Int>)
 procedure extract_max(root: Node, implicit ghost content: Set<Int>)
 returns (new_root: Node, max: Node)
   requires tree_set(root, content) &*& root != null
-  ensures tree_set(new_root, content -- Set(max.data)) &*& acc(max)
+  ensures tree_set(new_root, content -- {max.data}) &*& acc(max)
   ensures max.right == null && max.parent == null && max.data in content
-  ensures (forall z in (content -- Set(max.data)) :: z < max.data)
+  ensures (forall z in (content -- {max.data}) :: z < max.data)
 {
   if (root.right != null) {
     var c: Node, m: Node;
@@ -70,7 +70,7 @@ returns (new_root: Node, max: Node)
 procedure insert(root: Node, value: Int, implicit ghost content: Set<Int>)
   returns (new_root: Node)
   requires tree_set(root, content)
-  ensures  tree_set(new_root, content ++ Set(value))
+  ensures  tree_set(new_root, content ++ {value})
 {
   if (root == null) {
     var t := new Node;
@@ -98,7 +98,7 @@ procedure insert(root: Node, value: Int, implicit ghost content: Set<Int>)
 procedure remove(root: Node, value: Int, implicit ghost content: Set<Int>)
   returns (res: Node)
   requires tree_set(root, content)
-  ensures tree_set(res, content -- Set(value))
+  ensures tree_set(res, content -- {value})
 {
   if (root == null) {
     return null;
@@ -125,11 +125,11 @@ procedure remove(root: Node, value: Int, implicit ghost content: Set<Int>)
       l, m := extract_max(root.left);
       m.left := l;
       if (l != null) { l.parent := m; }
-        m.right := root.right;
-        m.right.parent := m;
-        free(root);
-        return m;
-      }
+      m.right := root.right;
+      m.right.parent := m;
+      free(root);
+      return m;
+    }
   } else if (root.data > value) {
     root.left := remove(root.left, value);
     if (root.left != null) {root.left.parent := root;}
