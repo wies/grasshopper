@@ -41,8 +41,8 @@ procedure findIt(a: Array<T>, x: T) returns (idx: Int)
   // what we actually care about
   ensures 0 <= idx && idx <= a.length
   ensures idx == a.length || a[idx] == x || a[idx] == bottom || lt(x, a[idx])
-  ensures forall i: Int :: i >= 0 && i < idx ==> a[i] != bottom && lt(a[i], x)
-  ensures forall i: Int :: i > idx && i < a.length ==> a[i] == bottom || lt(x, a[i])
+  ensures forall i: Int :: 0 <= i && i < idx ==> a[i] != bottom && lt(a[i], x)
+  ensures forall i: Int :: idx < i && i < a.length ==> a[i] == bottom || lt(x, a[i])
 {
   var lo := 0;
   var hi := a.length;
@@ -55,10 +55,10 @@ procedure findIt(a: Array<T>, x: T) returns (idx: Int)
     invariant forall i: Int, j: Int :: 0 <= i && i <= j && j < a.length && a[i] == bottom ==> a[j] == bottom
     // what we actually care about
     invariant 0 <= lo && lo <= hi && hi <= a.length
-    invariant forall i: Int :: i >= 0 && i < lo ==> a[i] != bottom && lt(a[i], x)
-    invariant forall i: Int :: i > hi && i < a.length ==> a[i] == bottom || lt(x, a[i])
+    invariant forall i: Int :: 0 <= i && i < lo ==> a[i] != bottom && lt(a[i], x)
+    invariant forall i: Int :: hi < i && i < a.length ==> a[i] == bottom || lt(x, a[i])
   {
-    var m := (hi+lo) / 2;
+    var m := (hi + lo) / 2;
     var cmp: Int;
     if (a[m] == bottom) {
       cmp := -1;
