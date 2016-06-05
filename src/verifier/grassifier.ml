@@ -557,7 +557,7 @@ let elim_sl prog =
               footprint_id :: footprint_formals
           in
           let locals1, footprint_caller_returns1 =
-            if not is_proc then locals1, footprint_caller_returns
+            if not is_proc || not (IdSet.mem (alloc_id ssrt) modifies) then locals1, footprint_caller_returns
             else
               let final_footprint_caller_id = final_footprint_caller_id ssrt in
               let final_footprint_caller_decl = mk_loc_set_decl ssrt final_footprint_caller_id pos in
@@ -725,16 +725,16 @@ let elim_sl prog =
       (* final caller footprint is frame with final footprint *)
       let final_footprint_caller_postconds = 
         SortSet.fold (fun ssrt fs ->
-          let final_fpc_set =
-            if IdSet.mem (alloc_id ssrt) modifies then
+          if IdSet.mem (alloc_id ssrt) modifies then
+            let final_fpc_set =
               mk_union [mk_diff (init_footprint_caller_set ssrt) (init_footprint_set ssrt);
                         (final_footprint_set ssrt)]
-            else init_footprint_caller_set ssrt
-          in
-          let f =
-            mk_eq (final_footprint_caller_set ssrt) final_fpc_set
-          in
-          mk_framecond f :: fs)
+            in
+            let f =
+              mk_eq (final_footprint_caller_set ssrt) final_fpc_set
+            in
+            mk_framecond f :: fs
+          else fs)
           footprint_sorts []
       in
       (* null is not allocated *)
@@ -881,7 +881,9 @@ let elim_sl prog =
           let footprint_ids, footprint_sets =
             SortSet.fold
               (fun ssrt (ids, sets) ->
-                footprint_id ssrt :: ids,
+                (if IdSet.mem (alloc_id ssrt) (modifies_proc prog decl)
+                then footprint_id ssrt :: ids
+                else ids),
                 footprint_set ssrt :: sets
               )
               (footprint_sorts_proc decl) ([], [])
@@ -894,7 +896,9 @@ let elim_sl prog =
       | (Return rc, pp) ->
           let fp_returns =
             SortSet.fold (fun ssrt fp_returns ->
-              mk_union [footprint_caller_set ssrt; footprint_set ssrt] :: fp_returns)
+              if IdSet.mem (alloc_id ssrt) (modifies_proc prog proc) then
+                mk_union [footprint_caller_set ssrt; footprint_set ssrt] :: fp_returns
+              else fp_returns)
               proc_footprints []
           in
           let rc1 = { return_args = rc.return_args @ fp_returns } in
@@ -937,28 +941,23 @@ let elim_sl prog =
           let assign_init_footprints_caller =
             let new_footprint_caller_set ssrt =
               if IdSet.mem (alloc_id ssrt) body_pp.pp_modifies then
-                mk_diff (footprint_caller_set ssrt) (footprint_set ssrt)
-              else footprint_caller_set ssrt
+                [mk_assign_cmd [footprint_caller_id ssrt] 
+                  [mk_diff (footprint_caller_set ssrt) (footprint_set ssrt)]
+                  body_pp.pp_pos]
+              else []
             in
             SortSet.fold
-              (fun ssrt cmds ->
-                mk_assign_cmd 
-                  [footprint_caller_id ssrt] 
-                  [new_footprint_caller_set ssrt] 
-                  body_pp.pp_pos :: cmds)
+              (fun ssrt cmds -> new_footprint_caller_set ssrt @ cmds)
               proc_footprints []
           in
           let assign_final_footprints_caller =
             SortSet.fold
               (fun ssrt cmds ->
-                let new_final_footprint_caller_set =
-                  if IdSet.mem (alloc_id ssrt) body_pp.pp_modifies then
-                    mk_union [footprint_caller_set ssrt; footprint_set ssrt]
-                  else footprint_caller_set ssrt
-                in
-                mk_assign_cmd 
-                  [final_footprint_caller_id ssrt] [new_final_footprint_caller_set]
-                  body_pp.pp_pos :: cmds)
+                (if IdSet.mem (alloc_id ssrt) body_pp.pp_modifies then
+                  [mk_assign_cmd 
+                    [final_footprint_caller_id ssrt] [mk_union [footprint_caller_set ssrt; footprint_set ssrt]]
+                    body_pp.pp_pos]
+                  else []) @ cmds)
               proc_footprints []
           in
           mk_seq_cmd 
@@ -1012,7 +1011,7 @@ let annotate_heap_checks prog =
             check_division :: acc
         | _ ->
             let ssrt = struct_sort_of_sort (sort_of t) in
-            let t_in_footprint = FOL (mk_elem t (footprint_set ssrt)) in
+            let t_in_footprint = FOL ((annotate (mk_elem t (footprint_set ssrt)) [SrcPos pos])) in
             let mk_msg callee =
               let msg = "Possible invalid heap access to location of type " ^ (string_of_sort ssrt) in
               msg, msg

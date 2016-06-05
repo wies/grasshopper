@@ -28,22 +28,28 @@ let elim_loops (prog : program) =
             (fun id _ -> IdSet.mem id pp.pp_accesses)
             (locals_of_proc proc)
         in
-        let returns, return_decls = 
+        let formals, formal_decls, locals = 
           IdMap.fold 
-            (fun id decl (returns, decls) -> id :: returns, decl :: decls)
-            locals ([], [])
-        in
-        let subst_formals, formals, locals =
-          List.fold_right
-            (fun decl (sm, ids, locals) -> 
-              let init_id = fresh_ident (GrassUtil.name decl.var_name) in
-              let local_decl = { decl with var_is_implicit = false } in
-              let init_decl = { local_decl with var_name = init_id } in
-              IdMap.add decl.var_name init_id sm, 
-              init_id :: ids,
-              IdMap.add decl.var_name local_decl (IdMap.add init_id init_decl locals)
+            (fun id decl (ids, decls, locals) ->
+              let local_decl = { decl with var_is_implicit = false } in              
+              id :: ids,
+              local_decl :: decls,
+              IdMap.add id local_decl locals
             )
-            return_decls (IdMap.empty, [], IdMap.singleton first_iter_id (first_iter_decl pp.pp_pos))
+            locals ([], [], IdMap.singleton first_iter_id (first_iter_decl pp.pp_pos))
+        in
+        let subst_returns, returns, creturns, locals =
+          List.fold_right
+            (fun decl (sm, ids, cids, locals) -> 
+              if IdSet.mem decl.var_name pp.pp_modifies then
+                let return_id = fresh_ident (GrassUtil.name decl.var_name) in
+                let return_decl = { decl with var_name = return_id } in
+                IdMap.add decl.var_name return_id sm, 
+                return_id :: ids,
+                decl.var_name :: cids,
+                IdMap.add return_id return_decl locals
+              else sm, ids, cids, locals)
+            formal_decls (IdMap.empty, [], [], locals)
         in    
         let formals = first_iter_id :: formals in
         let id_to_term id =
@@ -58,7 +64,8 @@ let elim_loops (prog : program) =
               pp_accesses = pp.pp_accesses
             }
           in
-          let call = mk_call_cmd returns proc_name (mk_bool_term first :: ids_to_terms returns) pos in
+          let returns = if first then creturns else returns in
+          let call = mk_call_cmd returns proc_name (mk_bool_term first :: ids_to_terms (List.tl formals)) pos in
           update_ppoint pp_call call
         in
         let loop_end_pos = end_pos pp.pp_pos in
@@ -71,7 +78,7 @@ let elim_loops (prog : program) =
             elim prog dep_procs1 proc lc.loop_postbody 
           in
           let init_returns = 
-            mk_assign_cmd returns (ids_to_terms (List.tl formals)) loop_start_pos 
+            mk_assign_cmd returns (ids_to_terms creturns) loop_start_pos 
           in
           let else_cmd = 
             (*mk_return_cmd (ids_to_terms returns) loop_end_pos*)
@@ -81,7 +88,8 @@ let elim_loops (prog : program) =
             mk_seq_cmd
               [ postbody;
 		prebody;
-                loop_call false loop_end_pos
+                loop_call false loop_end_pos;
+                mk_assume_cmd (mk_spec_form (FOL mk_false) "loop_return" None pp.pp_pos) pp.pp_pos
               ] 
               pp.pp_pos
           in
@@ -104,26 +112,10 @@ let elim_loops (prog : program) =
           let name = "loop exit condition of " ^ (string_of_ident proc_name) in
           mk_free_spec_form (FOL (mk_not lc.loop_test)) name None loop_end_pos
         in
-        (* frame conditions for non modified locals *)          
-        let framecond =
-          List.fold_left2 
-            (fun frames id init_id ->
-              if IdSet.mem id pp.pp_modifies 
-              then frames
-              else 
-                let f = mk_eq (id_to_term id) (id_to_term init_id) in
-                mk_free_spec_form (FOL f) 
-                  ("framecondition of " ^ string_of_ident proc_name) 
-                  None pp.pp_pos :: frames
-            )
-            [] returns (List.tl formals)
-        in
         let postcond =
           loop_exit :: 
           (* invariant *)
           List.map (fun sf -> { sf with spec_kind = Free }) lc.loop_inv
-          (* framecondition *)
-          @ framecond
         in
         let loop_contr =
           { contr_name = proc_name;
@@ -131,8 +123,8 @@ let elim_loops (prog : program) =
             contr_footprint_sorts = footprint_sorts_proc proc;
             contr_returns = returns;
             contr_locals = locals;
-            contr_precond = List.map (subst_id_spec subst_formals) lc.loop_inv;
-            contr_postcond = postcond;
+            contr_precond = lc.loop_inv;
+            contr_postcond = List.map (subst_id_spec subst_returns) postcond;
             contr_pos = pp.pp_pos;
           }
         in
@@ -148,7 +140,7 @@ let elim_loops (prog : program) =
         in
         declare_proc prog loop_proc,
 	proc_name :: dep_procs2,
-	mk_seq_cmd [prebody; call_loop] loop_start_pos
+        mk_seq_cmd [prebody; call_loop] loop_start_pos
     | Seq (cs, pp) ->
        let prog1, dep_procs1, cs1 =
          List.fold_right 
