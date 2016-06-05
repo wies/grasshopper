@@ -676,7 +676,7 @@ let elim_sl prog =
     let init_footprint_caller_set ssrt = footprint_caller_set ssrt in
     let init_footprint_set ssrt = footprint_set ssrt in
     let final_footprint_set ssrt =
-      if is_proc then
+      if is_proc && IdSet.mem (alloc_id ssrt) modifies then
         mk_union [mk_inter [alloc_set ssrt; init_footprint_set ssrt];
                   mk_diff (alloc_set ssrt) (init_alloc_set ssrt)]
       else init_footprint_set ssrt
@@ -725,18 +725,24 @@ let elim_sl prog =
       (* final caller footprint is frame with final footprint *)
       let final_footprint_caller_postconds = 
         SortSet.fold (fun ssrt fs ->
+          let final_fpc_set =
+            if IdSet.mem (alloc_id ssrt) modifies then
+              mk_union [mk_diff (init_footprint_caller_set ssrt) (init_footprint_set ssrt);
+                        (final_footprint_set ssrt)]
+            else init_footprint_caller_set ssrt
+          in
           let f =
-            mk_eq (final_footprint_caller_set ssrt)
-              (mk_union [mk_diff (init_footprint_caller_set ssrt) (init_footprint_set ssrt);
-                         (final_footprint_set ssrt)])
+            mk_eq (final_footprint_caller_set ssrt) final_fpc_set
           in
           mk_framecond f :: fs)
           footprint_sorts []
       in
       (* null is not allocated *)
       let final_alloc_set ssrt =
-        mk_union [mk_diff (init_alloc_set ssrt) (init_footprint_caller_set ssrt);
-                  (final_footprint_caller_set ssrt)]
+        if IdSet.mem (alloc_id ssrt) modifies then
+          mk_union [mk_diff (init_alloc_set ssrt) (init_footprint_caller_set ssrt);
+                    (final_footprint_caller_set ssrt)]
+        else init_alloc_set ssrt
       in
       let final_null_alloc =
         SortSet.fold (fun ssrt fs ->
@@ -863,17 +869,6 @@ let elim_sl prog =
   let axioms = List.map (map_spec_fol_form post_process_form) prog.prog_axioms in
   let preds, axioms = fold_preds translate_pred (IdMap.empty, axioms) prog in
   let prog = { prog with prog_preds = preds; prog_axioms = axioms } in
-  let struct_srts = struct_sorts prog in
-  (* declare alloc sets *)
-  let prog =
-    let globals_with_alloc_sets =
-      SortSet.fold
-        (fun ssrt acc -> IdMap.add (alloc_id ssrt) (alloc_decl ssrt) acc)
-        struct_srts
-        prog.prog_vars
-    in
-    { prog with prog_vars = globals_with_alloc_sets }
-  in
   let compile_proc proc =
     let proc_footprints = footprint_sorts_proc proc in
     let contract, footprint_sets, footprint_pre_context =
@@ -941,7 +936,9 @@ let elim_sl prog =
           let body_pp = prog_point body in
           let assign_init_footprints_caller =
             let new_footprint_caller_set ssrt =
-              mk_diff (footprint_caller_set ssrt) (footprint_set ssrt)
+              if IdSet.mem (alloc_id ssrt) body_pp.pp_modifies then
+                mk_diff (footprint_caller_set ssrt) (footprint_set ssrt)
+              else footprint_caller_set ssrt
             in
             SortSet.fold
               (fun ssrt cmds ->
@@ -954,9 +951,13 @@ let elim_sl prog =
           let assign_final_footprints_caller =
             SortSet.fold
               (fun ssrt cmds ->
+                let new_final_footprint_caller_set =
+                  if IdSet.mem (alloc_id ssrt) body_pp.pp_modifies then
+                    mk_union [footprint_caller_set ssrt; footprint_set ssrt]
+                  else footprint_caller_set ssrt
+                in
                 mk_assign_cmd 
-                  [final_footprint_caller_id ssrt] 
-                  [mk_union [footprint_caller_set ssrt; footprint_set ssrt]]
+                  [final_footprint_caller_id ssrt] [new_final_footprint_caller_set]
                   body_pp.pp_pos :: cmds)
               proc_footprints []
           in
@@ -1173,7 +1174,18 @@ let elim_new_dispose prog =
         mk_seq_cmd ([assign_alloc; assign_footprint] @ array_aux) pp.pp_pos
     | (c, pp) -> Basic (c, pp)
   in
-  let elim_proc proc = 
+  (* declare alloc sets *)
+  let struct_srts = struct_sorts prog in
+  let prog =
+    let globals_with_alloc_sets =
+      SortSet.fold
+        (fun ssrt acc -> IdMap.add (alloc_id ssrt) (alloc_decl ssrt) acc)
+        struct_srts
+        prog.prog_vars
+    in
+    { prog with prog_vars = globals_with_alloc_sets }
+  in
+  let elim_proc proc =
     { proc with proc_body = Util.Opt.map (map_basic_cmds elim) proc.proc_body } 
   in
   { prog with prog_procs = IdMap.map elim_proc prog.prog_procs }

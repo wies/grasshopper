@@ -4,54 +4,6 @@ open Grass
 open GrassUtil
 open Config
 open Util
-  
-(** {6 Utility functions} *)
-
-(** Remove binders for universal quantified variables in [axioms] that satisfy the condition [open_cond]. *)
-let open_axioms ?(force=false) open_cond axioms =
-  let extract_generators generators a =
-    List.fold_right 
-      (fun ann (generators, a1) ->
-        match ann with
-        | TermGenerator (g, t) ->
-            let gen = (g, t) in
-            gen :: generators, a1
-        | _ -> generators, ann :: a1
-      ) a (generators, [])
-  in
-  let rec open_axiom generators = function
-    | Binder (b, [], f, a) ->
-        let f1, generators1 = open_axiom generators f in
-        let generators2, a1 = extract_generators generators a in
-        Binder (b, [], f1, a1), generators2
-    | Binder (b, vs, f, a) -> 
-        (* extract term generators *)
-        let generators1, a1 = extract_generators generators a in
-        let vs1 = List.filter (~~ (open_cond (annotate f a))) vs in
-        let f1, generators2 = open_axiom generators1 f in
-        if !Config.instantiate || force then
-          Binder (b, vs1, f1, a1), generators2
-        else 
-          Binder (b, vs, f1, a1), generators2
-    | BoolOp (op, fs) -> 
-        let fs1, generators1 = 
-          List.fold_right open_axioms fs ([], generators)
-        in
-        BoolOp (op, fs1), generators1
-    | f -> f, generators
-  and open_axioms f (fs1, generators) =
-    let f1, generators1 = open_axiom generators f in
-    f1 :: fs1, generators1
-  in
-  List.fold_right open_axioms axioms ([], [])
-
-(** Open condition that checks whether the given sorted variable is a field. *)
-let isFld f = function (_, Map (Loc _, _)) -> true | _ -> false
-
-(* Open condition that checks whether the given sorted variable appears below a function symbol. *) 
-let isFunVar f =
-  let fvars = vars_in_fun_terms f in
-  fun v -> IdSrtSet.mem v fvars
 
   
 (** {6 Variable and short-hand declarations} *)
@@ -126,6 +78,53 @@ let mk_axiom2 f =
 let extract_axioms fs =
   List.partition (fun f -> IdSet.empty <> fv f) fs
 
+(** Remove binders for universal quantified variables in [axioms] that satisfy the condition [open_cond]. *)
+let open_axioms ?(force=false) open_cond axioms =
+  let extract_generators generators a =
+    List.fold_right 
+      (fun ann (generators, a1) ->
+        match ann with
+        | TermGenerator (g, t) ->
+            let gen = (g, t) in
+            gen :: generators, a1
+        | _ -> generators, ann :: a1
+      ) a (generators, [])
+  in
+  let rec open_axiom generators = function
+    | Binder (b, [], f, a) ->
+        let f1, generators1 = open_axiom generators f in
+        let generators2, a1 = extract_generators generators a in
+        Binder (b, [], f1, a1), generators2
+    | Binder (b, vs, f, a) -> 
+        (* extract term generators *)
+        let generators1, a1 = extract_generators generators a in
+        let vs1 = List.filter (~~ (open_cond (annotate f a))) vs in
+        let f1, generators2 = open_axiom generators1 f in
+        if !Config.instantiate || force then
+          Binder (b, vs1, f1, a1), generators2
+        else 
+          Binder (b, vs, f1, a1), generators2
+    | BoolOp (op, fs) -> 
+        let fs1, generators1 = 
+          List.fold_right open_axioms fs ([], generators)
+        in
+        BoolOp (op, fs1), generators1
+    | f -> f, generators
+  and open_axioms f (fs1, generators) =
+    let f1, generators1 = open_axiom generators f in
+    f1 :: fs1, generators1
+  in
+  List.fold_right open_axioms axioms ([], [])
+
+(** Open condition that checks whether the given sorted variable is a field. *)
+let isFld f = function (_, Map (Loc _, _)) -> true | _ -> false
+
+(** Open condition that checks whether the given sorted variable appears below a function symbol. *) 
+let isFunVar f =
+  let fvars = vars_in_fun_terms f in
+  fun v -> IdSrtSet.mem v fvars
+
+    
 (** {6 Axioms} *)
 
 (** Array read over write axioms *)
@@ -316,7 +315,10 @@ let null_axioms struct_srt1 =
 
 
 (** Frame axioms *)
-let frame_axioms struct_srt res_srt =
+let frame_axioms =
+  let sk_frame1 = fresh_ident "closed_frame" in
+  let sk_frame2 = fresh_ident "closed_frame" in
+  fun struct_srt res_srt ->
   let a = set1 struct_srt in
   let x = set2 struct_srt in
   (*let frame_set = mk_diff a x in*)
@@ -346,13 +348,10 @@ let frame_axioms struct_srt res_srt =
       let reachwo_f1 = reachwo_Fld fld1 in
       let reach_f1 x y z = mk_btwn fld1 x z y in
       let reach_f2 x y z = mk_btwn fld2 x z y in
-      (*match f' with
-      | App (FreeSym (p, _), _, _) when p = "parent" ->
-              [Axioms.mk_axiom "reach_frame"
-                 (mk_sequent
-                    [smk_elem loc1 frame]
-                    [mk_iff (reach_f loc1 loc2 loc3) (reach_f' loc1 loc2 loc3)])]
-          | _ ->*)
+      let frame = mk_frame_term x a fld1 fld2 in
+      let sk1 = mk_free_fun (Loc struct_srt) sk_frame1 [a; fld1] in
+      let sk2 = mk_free_fun (Loc struct_srt) sk_frame2 [a; fld1] in
+      let gen = [([Match (frame, []); Match (mk_known fld1, [])], [sk1; sk2])] in
       [read_frame fld1 fld2;
        mk_axiom fld1 fld2 "reach_frame1"
          (mk_pattern fld1 []
@@ -365,8 +364,13 @@ let frame_axioms struct_srt res_srt =
          (mk_pattern fld1 []
             (mk_implies
                (mk_and [mk_not (smk_elem loc1 x); mk_eq loc1 (ep loc1)])
-               (mk_iff (reach_f1 loc1 loc2 loc3) (reach_f2 loc1 loc2 loc3))))
-       ]
+               (mk_iff (reach_f1 loc1 loc2 loc3) (reach_f2 loc1 loc2 loc3))))] @
+       if not !Config.with_ep then
+         [mk_axiom fld1 fld2  ~gen:gen "reach_frame"
+            (mk_pattern fld1 []
+               (mk_or [mk_and [reach_f1 sk1 sk2 sk2; mk_not (mk_elem sk1 x); mk_elem sk2 x]; mk_not (mk_elem loc1 a); mk_elem loc1 x;
+                       mk_iff (reach_f1 loc1 loc2 loc3) (reach_f2 loc1 loc2 loc3)]))]
+       else []
     in
     axioms
   in

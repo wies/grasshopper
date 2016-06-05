@@ -159,7 +159,7 @@ type annot =
   | Comment of string
   | SrcPos of source_position
   | ErrorMsg of source_position * string
-  | Label of ident
+  | Label of bool * term
   | Name of ident
   | TermGenerator of guard list * term list
   | Pattern of term * filter list
@@ -391,7 +391,7 @@ let rec extract_src_pos = function
   | [] -> None
 
 let rec extract_label = function
-  | Label lbl :: _ -> Some lbl
+  | Label (pol, t) :: _ -> Some (pol, t)
   | _ :: ann -> extract_label ann
   | [] -> None
 
@@ -471,9 +471,13 @@ and pr_annot ppf a =
       (match name, pos, lbl with
       | "", None, None -> fprintf ppf ""
       | "", Some pos, None -> fprintf ppf "@ /* %s */" (string_of_src_pos pos)
-      | "", Some pos, Some lbl -> fprintf ppf "@ /* %s -> %s */" (string_of_ident lbl) (string_of_src_pos pos)
+      | "", Some pos, Some (pol, t) ->
+          let lbl = if pol then Atom (t, []) else BoolOp (Not, [Atom (t, [])]) in
+          fprintf ppf "@ /* %a -> %s */" pr_form lbl (string_of_src_pos pos)
       | n, Some pos, None -> fprintf ppf "@ /* %s: %s */" (string_of_src_pos pos) n
-      | n, Some pos, Some lbl -> fprintf ppf "@ /* %s -> %s: %s */" (string_of_ident lbl) (string_of_src_pos pos) n
+      | n, Some pos, Some (pol, t) ->
+          let lbl = if pol then Atom (t, []) else BoolOp (Not, [Atom (t, [])]) in
+          fprintf ppf "@ /* %a -> %s: %s */" pr_form lbl (string_of_src_pos pos) n
       | n, None, _ -> fprintf ppf "@ /* %s */" n)
   in
   fprintf ppf "%a%a%a" pr_generators gen pr_patterns pat pr_comment (name, pos, lbl)

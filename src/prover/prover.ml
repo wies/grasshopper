@@ -9,7 +9,8 @@ let encode_labels fs =
     let lbls = 
       Util.partial_map 
         (function 
-          | Label id -> Some (mk_pred id [])
+          | Label (pol, t) ->
+              Some (if pol then Atom (t, []) else mk_not (Atom (t, [])))
           | _ -> None) 
         annots
     in
