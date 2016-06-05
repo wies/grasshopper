@@ -255,6 +255,7 @@ let add_read_write_axioms fs =
   let gts = TermSet.union (ground_terms ~include_atoms:true (mk_and null_ax1)) gts in
   let field_sorts = TermSet.fold (fun t srts ->
     match sort_of t with
+    | Loc (Array _) as srt -> SortSet.add srt srts
     | Map (Loc _, _) as srt -> SortSet.add srt srts
     | _ -> srts)
       gts SortSet.empty
@@ -262,6 +263,21 @@ let add_read_write_axioms fs =
   (* propagate read terms *)
   let read_propagators =
     SortSet.fold (function
+      | Loc (Array srt) -> fun propagators ->
+          let f = fresh_ident "?f", field_sort (ArrayCell srt) srt in
+          let fld = mk_var (snd f) (fst f) in
+          let a = Axioms.loc1 (Array srt) in
+          let b = Axioms.loc2 (Array srt) in
+          let i = fresh_ident "?i" in
+          let idx = mk_var Int i in
+          (* a = b, a.cells[i].f -> b.cells[i].f *)
+          ([Match (mk_eq_term a b, []);
+            Match (mk_read fld (mk_read (mk_array_cells a) idx), [])],
+           [mk_read fld (mk_read (mk_array_cells b) idx)]) ::
+          ([Match (mk_eq_term a b, []);
+            (* a = b, b.cells[i].f -> a.cells[i].f *)
+            Match (mk_read fld (mk_read (mk_array_cells b) idx), [])],
+           [mk_read fld (mk_read (mk_array_cells a) idx)]) :: propagators
       | Map (Loc ssrt, srt) -> fun propagators ->
           let f1 = fresh_ident "?f", field_sort ssrt srt in
           let fld1 = mk_var (snd f1) (fst f1) in
