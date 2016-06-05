@@ -65,7 +65,7 @@ let instantiate_and_prove session fs =
       fs
     else fs
   in
-  let terms_from_neg_assert fs =
+  (*let terms_from_neg_assert fs =
     let has_label = List.exists (function Label _ -> true | _ -> false) in
     let rec process_form terms = function
       | Atom (_, anns) as f ->
@@ -80,7 +80,7 @@ let instantiate_and_prove session fs =
     and process_forms terms fs = List.fold_left process_form terms fs
     in
     process_forms TermSet.empty fs
-  in
+  in*)
   let rec is_horn seen_pos = function
     | BoolOp (Or, fs) :: gs -> is_horn seen_pos (fs @ gs)
     | Binder (Forall, [], f, _) :: gs -> is_horn seen_pos (f :: gs)
@@ -121,7 +121,7 @@ let instantiate_and_prove session fs =
     let fs2 = instantiate_with_terms ~stratify:false true fs1 classes in
     let gts_inst = generate_terms generators (TermSet.union gts_inst (ground_terms ~include_atoms:true (mk_and fs2))) in
     let core_terms =
-      let gts_a = terms_from_neg_assert fs in
+      let gts_a = (*terms_from_neg_assert*) ground_terms (mk_and fs) in
       TermSet.fold (fun t acc ->
         match sort_of t with
         | Loc _ | Int -> TermSet.add (mk_known t) acc
