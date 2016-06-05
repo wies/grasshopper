@@ -66,7 +66,7 @@ let add_labels vc =
     | ErrorMsg (pos, msg) ->
         let lbl = fresh_ident "Label" in
         IdMap.add lbl (pos, msg) ltop, 
-        Label lbl :: annots 
+        Label (true, mk_free_const Bool lbl) :: annots
     | ann -> ltop, ann :: annots
   in
   let rec al f ltop = 
@@ -205,26 +205,25 @@ let add_pred_insts prog f =
             let pbody = expand_pred false p ts in
             let p_msg = ProgError.mk_error_info ("Definition of predicate " ^ (string_of_ident p)) in
             let a1 = 
+              Label (false, mk_free_fun Bool p ts) ::
               match msg_opt with
               | Some msg ->
                   Util.partial_map (function SrcPos pos -> Some (ErrorMsg (pos, msg)) | _ -> None) a @ a
               | None -> a
             in
-            let p1 = (smk_and [(*mk_not (mk_pred p ts);*) pbody]) in
-            let f1 = expand_neg (Some p_msg) (IdSet.add p seen) p1 in
+            let f1 = expand_neg (Some p_msg) (IdSet.add p seen) pbody in
             annotate (annotate_aux_msg p_msg f1) a1
       | f -> f
     in
     f |>
     nnf |>
     expand_neg None IdSet.empty |>
-    (*fun f -> print_endline "before: "; print_form stdout f; print_newline(); f ) |> *)
+    (*fun f -> print_endline "before: "; print_form stdout f; print_newline(); f |> *)
     foralls_to_exists |>
-    (*fun f -> print_endline "after: "; print_form stdout f; print_newline(); f ) |> *)
     propagate_exists_up |>
     SimplifyGrass.simplify_one_sets |>
     foralls_to_exists
-    (* |> (fun f -> print_endline "after: "; print_form stdout f; print_newline(); f )*)
+    (*|> fun f -> print_endline "after: "; print_form stdout f; print_newline(); f*)
   in
   (*let vs, f, a = match f_inst with
   | Binder (Exists, vs, f, a) -> vs, f, a

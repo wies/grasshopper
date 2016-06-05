@@ -643,6 +643,7 @@ let map_terms fn f =
            let gs1 = List.map (function Match (t, f) -> Match (fn t, f)) gs in
            TermGenerator (gs1, List.map fn ts)
        | Pattern (t, ft) -> Pattern (fn t, ft)
+       | Label (pol, t) -> Label (pol, fn t)
        | a -> a) a
   in
   let rec mt = function
@@ -930,6 +931,7 @@ let subst_id subst_map f =
     | TermGenerator (guards, gen_terms) -> 
         TermGenerator (List.map subg guards, List.map subt gen_terms)
     | Pattern (t, fs) -> Pattern (subt t, List.map subf fs)
+    | Label (pol, t) -> Label (pol, subt t)
     | a -> a
   in
   let rec sub = function 
@@ -987,6 +989,7 @@ let subst_consts subst_map f =
         in
         TermGenerator (guards1, List.map (subst_consts_term subst_map) gen_terms)
     | Pattern (t, fs) -> Pattern (subst_consts_term subst_map t, List.map subst_filter fs)
+    | Label (pol, t) -> Label (pol, subst_consts_term subst_map t)
     | a -> a
   in
   let rec subst = function
@@ -1052,6 +1055,7 @@ let subst subst_map f =
         in
         TermGenerator (guards1, List.map (subst_term sm) gen_terms)
     | Pattern (t, fs) -> Pattern (subst_term sm t, fs)
+    | Label (pol, t) -> Label (pol, subst_term sm t)
     | a -> a
   in
   let rec sub sm = function 
