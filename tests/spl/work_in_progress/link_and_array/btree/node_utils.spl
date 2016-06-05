@@ -2,7 +2,7 @@ include "def.spl";
 include "find.spl";
 
 /* is a node full */
-procedure isFull(u: Node) returns (res: Bool)
+procedure is_full(u: Node) returns (res: Bool)
   requires btree_node(u)
   ensures  btree_node(u)
 {
@@ -14,7 +14,7 @@ procedure isFull(u: Node) returns (res: Bool)
 }
 
 /* is a node a leaf */
-procedure isLeaf(u: Node) returns (res: Bool)
+procedure is_leaf(u: Node) returns (res: Bool)
   requires btree_node(u)
   ensures  btree_node(u)
 {
@@ -25,22 +25,30 @@ procedure isLeaf(u: Node) returns (res: Bool)
   }
 }
 
-procedure key_arraymove(a: Array<T>, srcPos: Int, dstPos: Int, length: Int, implicit ghost capacity: Int)
-  requires acc(a) &*& key_arrayseg(a, 0, capacity)
-  requires capacity >= srcPos + length
-  requires capacity >= dstPos + length
-  ensures acc(a) &*& key_arrayseg(a, 0, capacity)
+procedure key_arraymove(a: Array<T>, srcPos: Int, dstPos: Int, length: Int)
+  requires acc(a) &*& (key_arrayseg(a, srcPos, srcPos + length) &+& key_arrayseg(a, dstPos, dstPos + length))
+  ensures  acc(a) &*& (key_arrayseg(a, srcPos, srcPos + length) &+& key_arrayseg(a, dstPos, dstPos + length))
+  ensures  forall i: Int :: (srcPos <= i && i < dstPos) || (dstPos + length <= i && i < srcPos + length) ==> a[i] == old(a[i])
+  ensures  forall i: Int :: 0 <= i && i < length ==> a[dstPos + i] == old(a[srcPos + i])
 {
   if (srcPos > dstPos) {
-    var i := capacity -1;
+    var i := length - 1;
     while (i >= 0)
+      invariant acc(a) &*& (key_arrayseg(a, srcPos, srcPos + length) &+& key_arrayseg(a, dstPos, dstPos + length))
+      invariant -1 <= i && i < length
+      invariant forall j: Int :: (srcPos <= j && j < dstPos + i) || (dstPos + length <= j && j < srcPos + length) ==> a[j] == old(a[j])
+      invariant forall j: Int :: i < j && j < length ==> a[dstPos + j] == old(a[srcPos + j])
     {
       a[dstPos + i] := a[srcPos + i];
       i := i - 1;
     }
   } else if (srcPos < dstPos){
     var i := 0;
-    while (i < capacity)
+    while (i < length)
+      invariant acc(a) &*& (key_arrayseg(a, srcPos, srcPos + length) &+& key_arrayseg(a, dstPos, dstPos + length))
+      invariant 0 <= i && i <= length 
+      invariant forall j: Int :: (srcPos <= j && j < dstPos) || (dstPos + i <= j && j < srcPos + i) ==> a[j] == old(a[j])
+      invariant forall j: Int :: 0 <= j && j < i ==> a[dstPos + j] == old(a[srcPos + j])
     {
       a[dstPos + i] := a[srcPos + i];
       i := i + 1;
@@ -48,26 +56,46 @@ procedure key_arraymove(a: Array<T>, srcPos: Int, dstPos: Int, length: Int, impl
   }
 }
 
-procedure node_arraymove(a: Array<Node>, srcPos: Int, dstPos: Int, length: Int, implicit ghost capacity: Int)
-  requires acc(a) &*& node_arrayseg(a, 0, capacity)
-  requires capacity >= srcPos + length
-  requires capacity >= dstPos + length
-  ensures acc(a) &*& node_arrayseg(a, 0, capacity)
+function aux_old_a(idx: Int) returns (val: Node)
+
+procedure node_arraymove(a: Array<Node>, srcPos: Int, dstPos: Int, length: Int)
+  requires acc(a) &*& (node_arrayseg(a, srcPos, srcPos + length) &+& node_arrayseg(a, dstPos, dstPos + length))
+  ensures  acc(a) &*& (node_arrayseg(a, srcPos, srcPos + length) &+& node_arrayseg(a, dstPos, dstPos + length))
+  ensures  forall i: Int :: srcPos <= i && i < srcPos + length && (i < dstPos || dstPos + length <= i) ==> a[i] == old(a[i])
+  ensures  forall i: Int :: 0 <= i && i < length ==> a[dstPos + i] == old(a[srcPos + i])
+           @(matching i yields a[i])
+           @(matching i yields old(a[i]))
 {
-  if (srcPos > dstPos) {
-    var i := capacity -1;
+  pure assume forall j: Int :: srcPos <= j && j < srcPos + length ==> a[j] == aux_old_a(j)
+              @(matching j yields aux_old_a(j));
+  if (srcPos < dstPos) {
+    var i := length - 1;
     while (i >= 0)
+      invariant srcPos < dstPos
+      invariant acc(a) &*& (node_arrayseg(a, srcPos, srcPos + length) &+& node_arrayseg(a, dstPos, dstPos + length))
+      invariant -1 <= i && i < length
+      invariant forall j: Int :: srcPos <= j && j < srcPos + length && j <= dstPos + i ==> a[j] == aux_old_a(j)
+      invariant forall j: Int :: i < j && j < length ==> a[dstPos + j] == aux_old_a(srcPos + j)
+                @(matching j yields aux_old_a(j))
     {
       a[dstPos + i] := a[srcPos + i];
       i := i - 1;
     }
-  } else if (srcPos < dstPos){
+    return ; // XXX
+  } else if (srcPos > dstPos){
     var i := 0;
-    while (i < capacity)
+    while (i < length)
+      invariant srcPos > dstPos
+      invariant acc(a) &*& (node_arrayseg(a, srcPos, srcPos + length) &+& node_arrayseg(a, dstPos, dstPos + length))
+      invariant 0 <= i && i <= length 
+      invariant forall j: Int :: srcPos <= j && j < srcPos + length && dstPos + i <= j ==> a[j] == aux_old_a(j)
+      invariant forall j: Int :: 0 <= j && j < i ==> a[dstPos + j] == aux_old_a(srcPos + j)
+                @(matching j yields aux_old_a(j))
     {
       a[dstPos + i] := a[srcPos + i];
       i := i + 1;
     }
+    return ; // XXX
   }
 }
 
@@ -103,7 +131,7 @@ procedure addNode(u: Node, x: T, ci: Node) returns (res: Bool)
 procedure removeNode(u: Node, i: Int) returns (res: T)
   requires btree_node(u)
   requires 0 <= i && i < u.keys.length
-  ensures  btree_node(u)
+  ensures  btree_node(u) //TODO this does not seems right (we change the key but not the values!)
 {
   var y := u.keys[i];
   key_arraymove(u.keys, i+1, i, b-i-1);
@@ -123,8 +151,9 @@ procedure newNode() returns (res: Node)
   while (i < b)
     invariant 0 <= i && i <= b
     invariant acc(w) &*& acc(w.keys) &*& acc(w.children)
-    invariant key_arrayseg(w.keys, 0, b)
-    invariant node_arrayseg(w.children, 0, b+1)
+    invariant w.keys.length == b && w.children.length == b+1
+    invariant key_arrayseg(w.keys, 0, w.keys.length)
+    invariant node_arrayseg(w.children, 0, w.children.length)
     invariant forall j: Int :: 0 <= j && j < i ==> w.keys[j] == bottom && w.children[j] == null
   {
     w.keys[i] := bottom;

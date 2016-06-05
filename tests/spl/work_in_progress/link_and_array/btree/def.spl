@@ -36,7 +36,6 @@ struct Node {
 
   /* NOTE: adding these */
   var ghost parent: Node;
-  var ghost is_leaf: Bool;
   var ghost lbound: T;
   var ghost ubound: T;
 }
@@ -94,31 +93,30 @@ function arraycell_int_fp(FP_A_I: Set<Array<T>>)
   returns (FP_AC_I: Set<ArrayCell<T>>)
   ensures forall a: Array<T>, ac: ArrayCell<T> :: a in FP_A_I && ac in key_arrayseg_fp(a, 0, a.length) ==> ac in FP_AC_I
             @(matching a yields key_arrayseg_fp(a, 0, a.length))
-  ensures forall ac: ArrayCell<T> :: ac in FP_AC_I ==> ac.array in FP_A_I
+  ensures forall ac: ArrayCell<T> :: ac in FP_AC_I ==> ac.array in FP_A_I && ac in key_arrayseg_fp(ac.array, 0, ac.array.length)
+            @(matching ac yields key_arrayseg_fp(ac.array, 0, ac.array.length))
 
 function arraycell_node_fp(FP_A_N: Set<Array<Node>>)
   returns (FP_AC_N: Set<ArrayCell<Node>>)
   ensures forall a: Array<Node>, ac: ArrayCell<Node> :: a in FP_A_N && ac in node_arrayseg_fp(a, 0, a.length) ==> ac in FP_AC_N
             @(matching a yields node_arrayseg_fp(a, 0, a.length))
-  ensures forall ac: ArrayCell<Node> :: ac in FP_AC_N ==> ac.array in FP_A_N
+  ensures forall ac: ArrayCell<Node> :: ac in FP_AC_N ==> ac.array in FP_A_N && ac in node_arrayseg_fp(ac.array, 0, ac.array.length)
+            @(matching ac yields node_arrayseg_fp(ac.array, 0, ac.array.length))
 
 predicate btree_node(n: Node) {
-  exists FP_AC_I: Set<ArrayCell<T>>, FP_AC_N: Set<ArrayCell<Node>> ::
-    acc(n) &*& acc(n.keys) &*& acc(n.children) &*& acc(FP_AC_I) &*& acc(FP_AC_N) &*&
-    FP_AC_I == arraycell_int_fp(Set(n.keys)) &&
-    FP_AC_N == arraycell_node_fp(Set(n.children)) &&
-    // size of keys/children
-    n.children.length == b+1 && n.keys.length == b &&
-    // keys arrays are partitioned into non-null/null halfs
-    (forall i: Int, j: Int :: 0 <= i && i <= j && j < n.keys.length && n.keys[i] == bottom ==> n.keys[j] == bottom) &&
-    // children arrays are partitioned into non-null/null halfs
-    (forall i: Int, j: Int :: 0 <= i && i <= j && j < n.children.length && n.children[i] == null ==> n.children[j] == null) &&
-    // if a child entry is null then, so is the corresponding key entry
-    (forall i: Int :: 0 <= i && i < n.keys.length && n.children[i] == null ==> n.keys[i] == bottom) &&
-    // if a key entry is null, then it is either the first null entry in the key array or the corresponding child entry is also null
-    (forall i: Int, j: Int :: 0 <= i && i < j && j < n.keys.length && n.keys[i] == bottom && n.keys[j] == bottom ==> n.children[j] == null) && 
-    // the keys are sorted
-    (forall i: Int, j: Int :: 0 <= i && i <= j && j < n.keys.length ==> n.keys[i] == bottom || n.keys[j] == bottom || lt(n.keys[i], n.keys[j]))
+  acc(n) &*& acc(n.keys) &*& acc(n.children) &*& acc(arraycell_int_fp(Set(n.keys))) &*& acc(arraycell_node_fp(Set(n.children))) &*&
+  // size of keys/children
+  n.children.length == b+1 && n.keys.length == b &&
+  // keys arrays are partitioned into non-null/null halfs
+  (forall i: Int, j: Int :: 0 <= i && i <= j && j < n.keys.length && n.keys[i] == bottom ==> n.keys[j] == bottom) &&
+  // children arrays are partitioned into non-null/null halfs
+  (forall i: Int, j: Int :: 0 <= i && i <= j && j < n.children.length && n.children[i] == null ==> n.children[j] == null) &&
+  // if a child entry is null then, so is the corresponding key entry
+  (forall i: Int :: 0 <= i && i < n.keys.length && n.children[i] == null ==> n.keys[i] == bottom) &&
+  // if a key entry is null, then it is either the first null entry in the key array or the corresponding child entry is also null
+  (forall i: Int, j: Int :: 0 <= i && i < j && j < n.keys.length && n.keys[i] == bottom && n.keys[j] == bottom ==> n.children[j] == null) && 
+  // the keys are sorted
+  (forall i: Int, j: Int :: 0 <= i && i <= j && j < n.keys.length ==> n.keys[i] == bottom || n.keys[j] == bottom || lt(n.keys[i], n.keys[j]))
 }
 
 predicate btree(bt: Node) {

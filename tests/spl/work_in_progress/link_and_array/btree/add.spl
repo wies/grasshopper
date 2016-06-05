@@ -52,7 +52,6 @@ procedure splitNode(n: Node) returns (res: Node)
 
 /* ------ Adding an element ------ */
 
-/*
 procedure addRecursive(x: T, u: Node) returns (res: Node)
   requires  btree(u)
   ensures   btree(res)
@@ -62,7 +61,7 @@ procedure addRecursive(x: T, u: Node) returns (res: Node)
     //throw new DuplicateValueException();
     assert(false);
   }
-  if (isLeaf(u)) { // leaf node, just add it
+  if (is_leaf(u)) { // leaf node, just add it
     addNode(u, x, -1);
   } else {
     var w := addRecursive(x, u.children[i]);
@@ -71,7 +70,7 @@ procedure addRecursive(x: T, u: Node) returns (res: Node)
       addNode(u, x, w.id);
     }
   }
-  if (isFull(u)) {
+  if (is_full(u)) {
     return splitNode(u)
   } else {
     return null;
@@ -101,4 +100,3 @@ procedure add(bt: Node, x: T) returns (res: bool)
   n := n + 1;
   return true;
 }
-*/
