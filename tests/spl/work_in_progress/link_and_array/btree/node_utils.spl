@@ -81,7 +81,6 @@ procedure node_arraymove(a: Array<Node>, srcPos: Int, dstPos: Int, length: Int)
       a[dstPos + i] := a[srcPos + i];
       i := i - 1;
     }
-    return ; // XXX
   } else if (srcPos > dstPos){
     var i := 0;
     while (i < length)
@@ -95,7 +94,6 @@ procedure node_arraymove(a: Array<Node>, srcPos: Int, dstPos: Int, length: Int)
       a[dstPos + i] := a[srcPos + i];
       i := i + 1;
     }
-    return ; // XXX
   }
 }
 
