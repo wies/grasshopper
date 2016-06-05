@@ -17,21 +17,21 @@ function tree_parent(r: Node) returns (p: Node)
 predicate parent_equal_left_child(FP: Set<Node>)
   requires acc(FP)
 {
-  (forall x in FP :: x.left == null || Btwn(parent, x.left, x, x) && x.left != x) &&
-  (forall x: Node, y: Node :: x in FP && Btwn(parent, x.left, y, x) ==> x == y || x.left == y)
+  (forall x in FP :: x.left == null || Reach(parent, x.left, x) && x.left != x) &&
+  (forall x in FP, y in FP :: x.left in FP && Btwn(parent, x.left, y, x) ==> x == y || x.left == y)
 }
 
 predicate parent_equal_right_child(FP: Set<Node>)
   requires acc(FP)
 {
-  (forall x: Node :: x !in FP || x.right == null || Btwn(parent, x.right, x, x) && x.right != x) &&
-  (forall x: Node, y: Node :: x in FP && Btwn(parent, x.right, y, x) ==> x == y || x.right == y)
+  (forall x in FP :: x.right == null || Reach(parent, x.right, x) && x.right != x) &&
+  (forall x in FP, y in FP :: x.right in FP && Btwn(parent, x.right, y, x) ==> x == y || x.right == y)
 }
 
 predicate left_right_distinct(FP: Set<Node>)
   requires acc(FP)
 {
-  (forall x: Node :: x in FP && x.left == x.right ==> x.left == null 
+  (forall x in FP :: x.left == x.right ==> x.left == null 
     @(matching x.right yields x.left)
     @(matching x.left yields x.right))
 }
@@ -39,8 +39,7 @@ predicate left_right_distinct(FP: Set<Node>)
 predicate reach_via_left_right(FP: Set<Node>)
   requires acc(FP)
 {
-  forall x: Node, y: Node ::
-    x in FP && y in FP && Btwn(parent, y, x, x) ==>
+  forall x in FP, y in FP :: Btwn(parent, y, x, x) ==>
       x == y || Btwn(parent, y, x.left, x) || Btwn(parent, y, x.right, x)
 }
 
@@ -62,24 +61,22 @@ predicate ptree(r: Node, p: Node) {
 predicate tree_sorted(FP: Set<Node>)
   requires acc(FP)
 {
-  (forall x: Node, y: Node :: 
-   x in FP && y in FP && Btwn(parent, x, y.left, y) ==> x.data < y.data
+  (forall x in FP, y in FP :: Btwn(parent, x, y.left, y) ==> x.data < y.data
    @(matching y.left yields y.data)) &&
-  (forall x: Node, y: Node :: 
-   x in FP && y in FP && Btwn(parent, x, y.right, y) ==> x.data > y.data
+  (forall x in FP, y in FP :: Btwn(parent, x, y.right, y) ==> x.data > y.data
    @(matching y.right yields y.data))  
 }
 
 predicate upper_bound(ub: Int, FP: Set<Node>)
   requires acc(FP)
 {
-  forall z: Node :: z in FP ==> z.data <= ub
+  forall z in FP :: z.data <= ub
 }
 
 predicate lower_bound(lb: Int, FP: Set<Node>)
   requires acc(FP)
 {
-  forall z: Node :: z in FP ==> z.data >= lb
+  forall z in FP :: z.data >= lb
 }
 
 predicate bstree(r: Node) {
