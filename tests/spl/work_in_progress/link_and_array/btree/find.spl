@@ -3,7 +3,7 @@ include "def.spl";
 /* Find the smallest value >= x in this BTree */
 procedure find(bt: Node, x: T) returns (res: T)
   requires x != bottom
-  requires btree(bt) &*& bt != null
+  requires acc(bt) -** btree(bt)
   ensures btree(bt)
 {
   var z: T := bottom;
