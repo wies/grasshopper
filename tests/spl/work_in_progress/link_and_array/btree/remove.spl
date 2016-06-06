@@ -1,0 +1,158 @@
+include "def.spl";
+include "find.spl";
+include "node_utils.spl";
+
+procedure removeRecursive(x: Int, u: Node) returns (res: Bool)
+  requires ???
+  ensures  ???
+{
+  if (u == null) {
+    return false;  // didn't find it
+  }
+  var i := findIt(u.keys, x);
+  if (i < u.keys.length && u.keys[i] == x) { // found it
+    if (is_leaf(u)) {
+      var removed := removeNode(u, i);
+      pure assert(removed == x);
+    } else {
+      u.keys[i] := removeSmallest(u.children[i+1]);
+      checkUnderflow(u, i+1);
+    }
+    return true;  
+  } else if (removeRecursive(x, u.children[i])) {
+    checkUnderflow(u, i);
+    return true;
+  }
+  return false;
+}
+
+procedure removeSmallest(u: Node) returns (res: Node)
+  requires btree(u)
+  ensures  btree(u)
+{
+  if (is_leaf(u)) {
+    return removeNode(u, 0);
+  }
+  var y := removeSmallest(u.children[0]);  
+  checkUnderflow(u, 0);
+  return y;
+}
+
+procedure checkUnderflow(u: Node, i: Int)
+  requires btree(u)
+  ensures  btree(u)
+{
+  if (u.children[i] < 0) {
+    return ;
+  }
+  if (i == 0) {
+    checkUnderflowZero(u, i); // use u's right sibling
+  } else {
+    checkUnderflowNonZero(u, i);
+  }
+}
+
+procedure checkUnderflowNonZero(u: Node, i: Int)
+  requires btree(u)
+  ensures  btree(u)
+{
+  var w := u.children[i];  // w is child of u
+  if (size(w) < B-1) {  // underflow at w
+    var v := u.children[i-1]; // v left of w
+    if (size(v) > B) {  // w can borrow from v
+      shiftLR(u, i-1, v, w);
+    } else { // v will absorb w
+      merge(u, i-1, v, w);
+    }
+  }
+}
+
+procedure checkUnderflowZero(u: Node, i: Int)
+  requires btree(u)
+  ensures  btree(u)
+{
+  var w := u.children[i]; // w is child of u
+  if (size(w) < B-1) {  // underflow at w
+    var v := u.children[i+1]; // v right of w
+    if (size(v) > B) { // w can borrow from v
+      shiftRL(u, i, v, w);
+    } else { // w will absorb w
+      merge(u, i, w, v);
+      u.children[i] := w.id;
+    }
+  }
+}
+
+procedure merge(u: Node, i: Int, v: Node, w: Node)
+  requires (btree(v) &*& btree(w)) -** btree(u)
+  requires v == u.children[i] && w == u.children[i+1]
+  ensures  btree(v) -** btree(u) //TODO more
+{
+  var sw := size(w);
+  var sv := size(v);
+  // copy keys from w to v
+  key_arraycopy(w.keys, 0, v.keys, sv+1, sw);
+  node_arraycopy(w.children, 0, v.children, sv+1, sw+1);
+  // add key to v and remove it from u
+  v.keys[sv] := u.keys[i];
+  key_arraymove(u.keys, i+1, i, b-i-1);
+  u.keys[b-1] := bottom;
+  node_arraymove(u.children, i+2, i+1, b-i-1);
+  u.children[b] := null;
+  // reclaim memory
+  w.parent := null;
+  free(w);
+}
+
+procedure shiftLR(u: Node, i: Int, v: Node, w: Node)
+  requires ???
+  ensures  ???
+{
+  var sw := size(w);
+  var sv := size(v);
+  var shift := ((sw+sv)/2) - sw;  // num. keys to shift from v to w
+
+  // make space for new keys in w
+  key_arraymove(w.keys, 0, shift, sw);
+  node_arraymove(w.children, 0, shift, sw+1);
+
+  // move keys and children out of v and into w (and u)
+  w.keys[shift-1] := u.keys[i];
+  u.keys[i] := v.keys[sv-shift];
+
+  key_arraycopy(v.keys, sv-shift+1, w.keys, 0, shift-1);
+
+  key_fill(v.key_fill, sv-shift, sv, bottom);
+
+  node_arraycopy(v.children, sv-shift+1, w.children, 0, shift);
+
+  node_fill(v.children, sv-shift+1, sv+1, null);
+}
+  
+procedure shiftRL(u: Node, i: Int, v: Node, w: Node)
+  requires ???
+  ensures  ???
+{
+  var sw := size(w);
+  var sv := size(v);
+  var shift := ((sw+sv)/2) - sw;  // number of keys to shift from v to w
+
+  // shift keys and children from v to w
+  w.keys[sw] := u.keys[i];
+
+  key_arraycopy(v.keys, 0, w.keys, sw+1, shift-1);
+
+  node_arraycopy(v.children, 0, w.children, sw+1, shift);
+
+  u.keys[i] := v.keys[shift-1];
+
+  // delete keys and children from v
+
+  key_arraymove(v.keys, shift, 0, b-shift);
+
+  key_fill(v.keys, sv-shift, b, bottom);
+
+  node_arraymove(v.children, shift, 0, b-shift+1);
+
+  node_fill(v.children, sv-shift+1, b+1, null);
+}

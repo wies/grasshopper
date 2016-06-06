@@ -210,7 +210,7 @@ let generate_terms generators ground_terms =
   generate 0 new_terms ground_terms generators
 
 
-let generate_instances useLocalInst axioms rep_terms egraph = 
+let generate_instances stratify useLocalInst axioms rep_terms egraph = 
   (* *)
   let epr_axioms, axioms = 
     List.partition 
@@ -249,7 +249,7 @@ let generate_instances useLocalInst axioms rep_terms egraph =
           (fun_terms_with_vars f)
           IdMap.empty
       in
-        if !Config.stratify && useLocalInst then
+        if stratify && useLocalInst then
           IdSrtSet.partition
             (fun (id, srt) ->
               try
@@ -363,12 +363,18 @@ let generate_instances useLocalInst axioms rep_terms egraph =
   in
   List.fold_left instantiate epr_axioms axioms
   
-let instantiate_with_terms ?(force=false) local axioms classes =
+let instantiate_with_terms ?(force=false) ?(stratify=(!Config.stratify)) local axioms classes =
     if !Config.instantiate || force then
       (* remove theory atoms from congruence classes *)
       let filter_term t =
         sort_of t <> Bool ||
-        Opt.get_or_else false (Opt.map (((=) Frame) ||| is_free_symbol) (symbol_of t))
+        Opt.get_or_else false
+          (Opt.map
+             (((=) Frame) |||
+             is_free_symbol |||
+             ((=) (BoolConst true)) |||
+             ((=) (BoolConst false)))
+             (symbol_of t))
       in
       let classes =
         let classes2 = List.map (List.filter filter_term) classes in
@@ -385,7 +391,7 @@ let instantiate_with_terms ?(force=false) local axioms classes =
       in
       (* choose representatives for instantiation *)
       let reps_f, egraph = choose_rep_terms classes in
-      generate_instances local axioms reps_f egraph
+      generate_instances stratify local axioms reps_f egraph
         else
           axioms
             

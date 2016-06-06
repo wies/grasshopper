@@ -4,59 +4,59 @@
 //  full source at http://opendatastructures.org/ods-java.tgz
 
 /** The maximum number of children of a node (an odd number) */
-var b: int;
-var B: int = b / 2;
-assume(b % 2 == 1);
+var b: Int;
+var B := b / 2;
+axiom (b % 2 == 1);
 
-int n;
-BlockStore<Node> bs;
-int ri;
+var n: Int;
+var bs: BlockStore<Node>;
+var ri: Int;
 
 struct Node {
-  id: int; /** This block's index */
-  keys: int[]; /** The keys stored in this block */
-  children: int[]; /** The indicies of the children of this block (if any) */
+  var id: Int; /** This block's index */
+  var keys: Arrays<Int>; /** The keys stored in this block */
+  var  children: Arrays<Int>; /** The indicies of the children of this block (if any) */
 }
 
-procedure find(x: int) returns (res: int)
+procedure find(x: Int) returns (res: Int)
   requires  ??? ;
   ensures   ??? ;
 {
-  var z: int;
-  var ui: int = ri;
+  var z: Int;
+  var ui := ri;
   while (ui >= 0)
     invariant ??? ;
   {
-    var u: Node = bs.readBlock(ui);
-    var i: int = findIt(u.keys, x);
+    var u: Node := bs.readBlock(ui);
+    var i := findIt(u.keys, x);
     if (i < 0) return u.keys[-(i+1)]; // found it
     if (u.keys[i] != null)
-      z = u.keys[i];
-    ui = u.children[i];
+      z := u.keys[i];
+    ui := u.children[i];
   }
   return z;
 }
 
-procedure findIt(a: int[], x: int) returns (res: int)
+procedure findIt(a: Arrays<Int>, x: Int) returns (res: Int)
   requires  ??? ;
   ensures   ??? ;
 {
-  var lo: int = 0;
-  var hi: int = a.length;
+  var lo := 0;
+  var hi := a.length;
   while (hi != lo)
     invariant ??? ;
   {
-    var m: int = (hi+lo)/2;
-    var cmp: int;
+    var m := (hi+lo)/2;
+    var cmp: Int;
     if( a[m] == null ) {
-      cmp = -1;
+      cmp := -1;
     } else {
-      cmp = compare(x, a[m]);
+      cmp := compare(x, a[m]);
     }
     if (cmp < 0)
-      hi = m;   // look in first half
+      hi := m;   // look in first half
     else if (cmp > 0)
-      lo = m+1; // look in second half
+      lo := m+1; // look in second half
     else
       return -m-1; // found it
   }
@@ -67,44 +67,43 @@ procedure split(n: Node) returns (res: Node)
   requires  ??? ;
   ensures   ??? ;
 {
-  var w: Node = new Node();
-  var j: int = keys.length/2;
-  var i: int;
+  var w := new Node();
+  var j := keys.length/2;
+  var i := 0;
 
   //System.arraycopy(keys, j, w.keys, 0, keys.length-j);
-  i = 0;
   while(i < n.keys.length-j)
     invariant ??? ;
   {
-    w.keys[i] = n.keys[j+i];
-    i = i + 1;
+    w.keys[i] := n.keys[j+i];
+    i := i + 1;
   }
 
   //Arrays.fill(keys, j, keys.length, null);
-  i = j;
+  i := j;
   while(i < n.keys.length)
     invariant ??? ;
   {
-    n.keys[i] = null;
-    i = i + 1;
+    n.keys[i] := null;
+    i := i + 1;
   }
 
   //System.arraycopy(children, j+1, w.children, 0, children.length-j-1);
-  i = 0;
+  i := 0;
   while(i < n.children.length-j-1)
     invariant ??? ;
   {
-    w.children[i] = n.children[j+1+i];
-    i = i + 1;
+    w.children[i] := n.children[j+1+i];
+    i := i + 1;
   }
 
   //Arrays.fill(children, j+1, children.length, -1);
-  i = j+1;
+  i := j+1;
   while(i < n.children.length)
     invariant ??? ;
   {
-    n.children[i] = null;
-    i = i + 1;
+    n.children[i] := null;
+    i := i + 1;
   }
 
   //bs.writeBlock(id, this);
@@ -112,21 +111,24 @@ procedure split(n: Node) returns (res: Node)
   return w;
 }
 
-procedure addRecursive(int x, int ui) returns (res: Node)
+procedure addRecursive(Int x, Int ui) returns (res: Node)
 throws DuplicateValueException
   requires  ??? ;
   ensures   ??? ;
 {
-  var u: Node = bs.readBlock(ui);
-  var i: int = findIt(u.keys, x);
-  if (i < 0) throw new DuplicateValueException();
+  var u := bs.readBlock(ui);
+  var i := findIt(u.keys, x);
+  if (i < 0) {
+    //throw new DuplicateValueException();
+    assert(false);
+  }
   if (u.children[i] < 0) { // leaf node, just add it
     u.add(x, -1);
     bs.writeBlock(u.id, u);
   } else {
-    var w: Node = addRecursive(x, u.children[i]);
+    var w := addRecursive(x, u.children[i]);
     if (w != null) {  // child was split, w is new child 
-      x = w.remove(0);
+      x := w.remove(0);
       bs.writeBlock(w.id, w);
       u.add(x, w.id);
       bs.writeBlock(u.id, u);
@@ -139,44 +141,44 @@ throws DuplicateValueException
   }
 }
 
-procedure add(x: int) returns (res: bool)
+procedure add(x: Int) returns (res: bool)
   requires  ??? ;
   ensures   ??? ;
 {
   var w: Node;
   try {
-    w = addRecursive(x, ri);
+    w := addRecursive(x, ri);
   } catch (DuplicateValueException e) {
     return false;
   }
   if (w != null) {   // root was split, make new root
-    var newroot: Node = new Node();
-    x = w.remove(0);
+    var newroot := new Node();
+    x := w.remove(0);
     bs.writeBlock(w.id, w);
-    newroot.children[0] = ri;
-    newroot.keys[0] = x;
-    newroot.children[1] = w.id;
-    ri = newroot.id;
+    newroot.children[0] := ri;
+    newroot.keys[0] := x;
+    newroot.children[1] := w.id;
+    ri := newroot.id;
     bs.writeBlock(ri, newroot);
   }
-  n = n + 1;
+  n := n + 1;
   return true;
 }
 
-procedure removeRecursive(x: int, ui: int) returns (res: bool)
+procedure removeRecursive(x: Int, ui: Int) returns (res: bool)
   requires  ??? ;
   ensures   ??? ;
 {
   if (ui < 0)
     return false;  // didn't find it
-  var u: Node = bs.readBlock(ui);
-  var i: int = findIt(u.keys, x);
+  var u := bs.readBlock(ui);
+  var i := findIt(u.keys, x);
   if (i < 0) { // found it
-    i = -(i+1);
+    i := -(i+1);
     if (u.isLeaf()) {
       u.remove(i);
     } else {
-      u.keys[i] = removeSmallest(u.children[i+1]);
+      u.keys[i] := removeSmallest(u.children[i+1]);
       checkUnderflow(u, i+1);
     }
     return true;  
@@ -187,19 +189,19 @@ procedure removeRecursive(x: int, ui: int) returns (res: bool)
   return false;
 }
 
-procedure removeSmallest(ui: int) returns (res: int)
+procedure removeSmallest(ui: Int) returns (res: Int)
   requires  ??? ;
   ensures   ??? ;
 {
-  var u: Node = bs.readBlock(ui);
+  var u := bs.readBlock(ui);
   if (u.isLeaf()) 
     return u.remove(0);
-  var y: int = removeSmallest(u.children[0]);  
+  var y := removeSmallest(u.children[0]);  
   checkUnderflow(u, 0);
   return y;
 }
 
-procedure checkUnderflow(u: Node, i: int)
+procedure checkUnderflow(u: Node, i: Int)
   requires  ??? ;
   ensures   ??? ;
 {
@@ -211,13 +213,13 @@ procedure checkUnderflow(u: Node, i: int)
     checkUnderflowNonZero(u,i);
 }
 
-procedure checkUnderflowNonZero(u: Node, i: int)
+procedure checkUnderflowNonZero(u: Node, i: Int)
   requires  ??? ;
   ensures   ??? ;
 {
-  var w: Node = bs.readBlock(u.children[i]);  // w is child of u
+  var w := bs.readBlock(u.children[i]);  // w is child of u
   if (w.size() < B-1) {  // underflow at w
-    var v: Node = bs.readBlock(u.children[i-1]); // v left of w
+    var v := bs.readBlock(u.children[i-1]); // v left of w
     if (v.size() > B) {  // w can borrow from v
       shiftLR(u, i-1, v, w);
     } else { // v will absorb w
@@ -226,155 +228,153 @@ procedure checkUnderflowNonZero(u: Node, i: int)
   }
 }
 
-procedure checkUnderflowZero(u: Node, i: int)
+procedure checkUnderflowZero(u: Node, i: Int)
   requires  ??? ;
   ensures   ??? ;
 {
-  var w: Node = bs.readBlock(u.children[i]); // w is child of u
+  var w := bs.readBlock(u.children[i]); // w is child of u
   if (w.size() < B-1) {  // underflow at w
-    var v: Node = bs.readBlock(u.children[i+1]); // v right of w
+    var v := bs.readBlock(u.children[i+1]); // v right of w
     if (v.size() > B) { // w can borrow from v
       shiftRL(u, i, v, w);
     } else { // w will absorb w
       merge(u, i, w, v);
-      u.children[i] = w.id;
+      u.children[i] := w.id;
     }
   }
 }
 
-protected void shiftLR(u: Node, i: int, v: Node, w: Node)
+procedure shiftLR(u: Node, i: Int, v: Node, w: Node)
   requires  ??? ;
   ensures   ??? ;
 {
-  var sw: int = w.size();
-  var sv: int = v.size();
-  var shift: int = ((sw+sv)/2) - sw;  // num. keys to shift from v to w
+  var sw := w.size();
+  var sv := v.size();
+  var shift := ((sw+sv)/2) - sw;  // num. keys to shift from v to w
 
   // make space for new keys in w
   //System.arraycopy(w.keys, 0, w.keys, shift, sw);
-  var i: int; 
-  i = 0;
+  var i := 0;
   while (i < sw)
     invariant ??? ;
   {
-    w.keys[shift + i] = w.keys[i];
-    i = i + 1;
+    w.keys[shift + i] := w.keys[i];
+    i := i + 1;
   }
   //System.arraycopy(w.children, 0, w.children, shift, sw+1);
-  i = 0;
+  i := 0;
   while (i <= sw)
     invariant ??? ;
   {
-    w.children[shift + i] = w.children[i];
-    i = i + 1;
+    w.children[shift + i] := w.children[i];
+    i := i + 1;
   }
 
   // move keys and children out of v and into w (and u)
-  w.keys[shift-1] = u.keys[i];
-  u.keys[i] = v.keys[sv-shift];
+  w.keys[shift-1] := u.keys[i];
+  u.keys[i] := v.keys[sv-shift];
 
   //System.arraycopy(v.keys, sv-shift+1, w.keys, 0, shift-1);
-  i = 0;
+  i := 0;
   while (i < shift - 1)
     invariant ??? ;
   {
-    w.keys[i] = v.keys[sv-shift+1+i];
-    i = i + 1;
+    w.keys[i] := v.keys[sv-shift+1+i];
+    i := i + 1;
   }
 
   //Arrays.fill(v.keys, sv-shift, sv, null);
-  i = sv- shift;
+  i := sv - shift;
   while (i < sv)
     invariant ??? ;
   {
-    v.keys[i] = null;
-    i = i + 1;
+    v.keys[i] := null;
+    i := i + 1;
   }
 
   //System.arraycopy(v.children, sv-shift+1, w.children, 0, shift);
-  i = 0;
+  i := 0;
   while (i < shift)
     invariant ??? ;
   {
-    w.children[i] = v.children[sv-shift+1+i];
-    i = i + 1;
+    w.children[i] := v.children[sv-shift+1+i];
+    i := i + 1;
   }
 
   //Arrays.fill(v.children, sv-shift+1, sv+1, -1);
-  i = sv - shift + 1;
+  i := sv - shift + 1;
   while (i <= sv)
     invariant ??? ;
   {
-    v.children[i] = -1;//TODO null
-    i = i + 1;
+    v.children[i] := -1;//TODO null
+    i := i + 1;
   }
 }
   
-protected void shiftRL(Node u, int i, Node v, Node w) {
-  var sw: int = w.size();
-  var sv: int = v.size();
-  var shift: int = ((sw+sv)/2) - sw;  // num. keys to shift from v to w
+procedure shiftRL(u: Node, i: Int, v: Node, w: Node) {
+  var sw := w.size();
+  var sv := v.size();
+  var shift := ((sw+sv)/2) - sw;  // num. keys to shift from v to w
 
   // shift keys and children from v to w
-  w.keys[sw] = u.keys[i];
+  w.keys[sw] := u.keys[i];
 
-  var i: int;
+  var i := 0;
 
   //System.arraycopy(v.keys, 0, w.keys, sw+1, shift-1);
-  i = 0;
   while (i < shift - 1)
     invariant ??? ;
   {
-    w.keys[sw + 1 + i] = v.keys[i];
-    i = i + 1;
+    w.keys[sw + 1 + i] := v.keys[i];
+    i := i + 1;
   }
 
   //System.arraycopy(v.children, 0, w.children, sw+1, shift);
-  i = 0;
+  i := 0;
   while (i < shift)
     invariant ??? ;
   {
-    w.children[sw + 1 + i] = v.children[i];
-    i = i + 1;
+    w.children[sw + 1 + i] := v.children[i];
+    i := i + 1;
   }
 
-  u.keys[i] = v.keys[shift-1];
+  u.keys[i] := v.keys[shift-1];
 
   // delete keys and children from v
 
   //System.arraycopy(v.keys, shift, v.keys, 0, b-shift);
-  i = 0;
+  i := 0;
   while (i < b-shift)
     invariant ??? ;
   {
-    v.keys[i] = v.keys[shift+i];
-    i = i + 1;
+    v.keys[i] := v.keys[shift+i];
+    i := i + 1;
   }
 
   //Arrays.fill(v.keys, sv-shift, b, null);
-  i = sv - shift;
+  i := sv - shift;
   while (i < b)
     invariant ??? ;
   {
-    v.keys[i] = -1;//TODO null
-    i = i + 1;
+    v.keys[i] := -1;//TODO null
+    i := i + 1;
   }
 
   //System.arraycopy(v.children, shift, v.children, 0, b-shift+1);
-  i = 0;
+  i := 0;
   while (i < b-shift+1)
     invariant ??? ;
   {
-    v.children[i] = v.children[shift+i];
-    i = i + 1;
+    v.children[i] := v.children[shift+i];
+    i := i + 1;
   }
 
   //Arrays.fill(v.children, sv-shift+1, b+1, -1);
-  i = sv - shift + 1;
+  i := sv - shift + 1;
   while (i <= b)
     invariant ??? ;
   {
-    v.children[i] = -1;//TODO null
-    i = i + 1;
+    v.children[i] := -1;//TODO null
+    i := i + 1;
   }
 }

@@ -126,7 +126,7 @@ type_decl:
 ;
 
 proc_decl:
-| proc_header { proc_decl $1 (Skip GrassUtil.dummy_position) }
+| proc_header { $1 }
 | proc_header proc_impl {
   proc_decl $1 $2
 } 

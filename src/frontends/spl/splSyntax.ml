@@ -100,7 +100,6 @@ and contract =
 
 and contracts = contract list
 
-
 and stmt =
   | Skip of pos
   | Block of stmts * pos

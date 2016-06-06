@@ -1,0 +1,70 @@
+include "def.spl";
+include "find.spl";
+include "node_utils.spl";
+
+procedure splitNode(n: Node) returns (res: Node)
+  requires  btree(n) &*& n != null
+  ensures   btree(n) &*& btree(res) // TODO ???
+{
+  var w := newNode();
+  var j := n.keys.length/2;
+
+  //System.arraycopy(keys, j, w.keys, 0, keys.length-j);
+  key_arraycopy(n.keys, j, w.keys, 0, b-j);
+
+  //Arrays.fill(keys, j, keys.length, null);
+  key_fill(n.keys, j, b, bottom);
+
+  //System.arraycopy(children, j+1, w.children, 0, children.length-j-1);
+  node_arraycopy(n.children, j+1, w.children, 0, b-j);
+
+  //Arrays.fill(children, j+1, children.length, -1);
+  node_fill(n.children, j+1, b+1, null);
+
+  return w;
+}
+
+procedure addRecursive(x: T, u: Node) returns (res: Node)
+  requires  btree(u) &*& u != null
+  ensures   btree(res)
+{
+  var i := findIt(u.keys, x);
+  if (i < u.keys.length && u.keys[i] == x) {
+    //throw new DuplicateValueException();
+    return null;
+  }
+  if (is_leaf(u)) { // leaf node, just add it
+    var added := addNode(u, x, null);
+    pure assert(added); // XXX
+  } else {
+    var w := addRecursive(x, u.children[i]);
+    if (w != null) {  // child was split, w is new child 
+      x := removeNode(w, 0);
+      var added := addNode(u, x, w);
+      pure assert(added); // XXX
+    }
+  }
+  if (is_full(u)) {
+    return splitNode(u);
+  } else {
+    return null;
+  }
+}
+
+procedure add(bt: Node, x: T) returns (res: Node)
+  requires  btree(bt) &*& bt != null
+  ensures   btree(res)
+{
+  var w: Node;
+  w := addRecursive(x, bt);
+  if (w != null) {   // root was split, make new root
+    var newroot := newNode();
+    x := removeNode(w, 0);
+    newroot.children[0] := bt;
+    newroot.keys[0] := x;
+    newroot.children[1] := w;
+    return newroot;
+  } else {
+    return bt;
+  }
+}

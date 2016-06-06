@@ -511,7 +511,8 @@ let elim_sl prog =
         match sym with
         | FreeSym p when IdMap.mem p prog.prog_preds ->
             let decl = find_pred prog p in
-            if returns_of_pred decl = [] then mk_app srt sym ts else
+            if List.length (formals_of_pred decl) <> List.length ts
+            then mk_app srt sym ts else
             let fps =
               SortSet.fold
                 (fun ssrt fps -> footprint_caller_set ssrt :: fps)
@@ -556,7 +557,7 @@ let elim_sl prog =
               footprint_id :: footprint_formals
           in
           let locals1, footprint_caller_returns1 =
-            if not is_proc then locals1, footprint_caller_returns
+            if not is_proc || not (IdSet.mem (alloc_id ssrt) modifies) then locals1, footprint_caller_returns
             else
               let final_footprint_caller_id = final_footprint_caller_id ssrt in
               let final_footprint_caller_decl = mk_loc_set_decl ssrt final_footprint_caller_id pos in
@@ -675,7 +676,7 @@ let elim_sl prog =
     let init_footprint_caller_set ssrt = footprint_caller_set ssrt in
     let init_footprint_set ssrt = footprint_set ssrt in
     let final_footprint_set ssrt =
-      if is_proc then
+      if is_proc && IdSet.mem (alloc_id ssrt) modifies then
         mk_union [mk_inter [alloc_set ssrt; init_footprint_set ssrt];
                   mk_diff (alloc_set ssrt) (init_alloc_set ssrt)]
       else init_footprint_set ssrt
@@ -724,18 +725,24 @@ let elim_sl prog =
       (* final caller footprint is frame with final footprint *)
       let final_footprint_caller_postconds = 
         SortSet.fold (fun ssrt fs ->
-          let f =
-            mk_eq (final_footprint_caller_set ssrt)
-              (mk_union [mk_diff (init_footprint_caller_set ssrt) (init_footprint_set ssrt);
-                         (final_footprint_set ssrt)])
-          in
-          mk_framecond f :: fs)
+          if IdSet.mem (alloc_id ssrt) modifies then
+            let final_fpc_set =
+              mk_union [mk_diff (init_footprint_caller_set ssrt) (init_footprint_set ssrt);
+                        (final_footprint_set ssrt)]
+            in
+            let f =
+              mk_eq (final_footprint_caller_set ssrt) final_fpc_set
+            in
+            mk_framecond f :: fs
+          else fs)
           footprint_sorts []
       in
       (* null is not allocated *)
       let final_alloc_set ssrt =
-        mk_union [mk_diff (init_alloc_set ssrt) (init_footprint_caller_set ssrt);
-                  (final_footprint_caller_set ssrt)]
+        if IdSet.mem (alloc_id ssrt) modifies then
+          mk_union [mk_diff (init_alloc_set ssrt) (init_footprint_caller_set ssrt);
+                    (final_footprint_caller_set ssrt)]
+        else init_alloc_set ssrt
       in
       let final_null_alloc =
         SortSet.fold (fun ssrt fs ->
@@ -813,13 +820,13 @@ let elim_sl prog =
       in
       let new_arg_ids =
         List.fold_left (fun new_args id1 ->
-          try
-            let decl = IdMap.find id1 pred.pred_contract.contr_locals in
-            IdMap.add id1 (id1, decl.var_sort) new_args
-          with Not_found ->
-            let decl = IdMap.find id1 locals in
-            let id2 = fresh_ident (name id1) in 
-            IdMap.add id1 (id2, decl.var_sort) new_args)
+          let decl = IdMap.find id1 locals in
+          let id2 =
+            match decl.var_sort with
+            | Set (Loc srt) when id1 = footprint_caller_id srt -> fresh_ident (name id1)
+            | _ -> id1
+          in
+          IdMap.add id1 (id2, decl.var_sort) new_args)
           IdMap.empty formals
       in
       let mk_new_arg id1 = 
@@ -862,17 +869,6 @@ let elim_sl prog =
   let axioms = List.map (map_spec_fol_form post_process_form) prog.prog_axioms in
   let preds, axioms = fold_preds translate_pred (IdMap.empty, axioms) prog in
   let prog = { prog with prog_preds = preds; prog_axioms = axioms } in
-  let struct_srts = struct_sorts prog in
-  (* declare alloc sets *)
-  let prog =
-    let globals_with_alloc_sets =
-      SortSet.fold
-        (fun ssrt acc -> IdMap.add (alloc_id ssrt) (alloc_decl ssrt) acc)
-        struct_srts
-        prog.prog_vars
-    in
-    { prog with prog_vars = globals_with_alloc_sets }
-  in
   let compile_proc proc =
     let proc_footprints = footprint_sorts_proc proc in
     let contract, footprint_sets, footprint_pre_context =
@@ -885,7 +881,9 @@ let elim_sl prog =
           let footprint_ids, footprint_sets =
             SortSet.fold
               (fun ssrt (ids, sets) ->
-                footprint_id ssrt :: ids,
+                (if IdSet.mem (alloc_id ssrt) (modifies_proc prog decl)
+                then footprint_id ssrt :: ids
+                else ids),
                 footprint_set ssrt :: sets
               )
               (footprint_sorts_proc decl) ([], [])
@@ -898,7 +896,9 @@ let elim_sl prog =
       | (Return rc, pp) ->
           let fp_returns =
             SortSet.fold (fun ssrt fp_returns ->
-              mk_union [footprint_caller_set ssrt; footprint_set ssrt] :: fp_returns)
+              if IdSet.mem (alloc_id ssrt) (modifies_proc prog proc) then
+                mk_union [footprint_caller_set ssrt; footprint_set ssrt] :: fp_returns
+              else fp_returns)
               proc_footprints []
           in
           let rc1 = { return_args = rc.return_args @ fp_returns } in
@@ -940,23 +940,24 @@ let elim_sl prog =
           let body_pp = prog_point body in
           let assign_init_footprints_caller =
             let new_footprint_caller_set ssrt =
-              mk_diff (footprint_caller_set ssrt) (footprint_set ssrt)
+              if IdSet.mem (alloc_id ssrt) body_pp.pp_modifies then
+                [mk_assign_cmd [footprint_caller_id ssrt] 
+                  [mk_diff (footprint_caller_set ssrt) (footprint_set ssrt)]
+                  body_pp.pp_pos]
+              else []
             in
             SortSet.fold
-              (fun ssrt cmds ->
-                mk_assign_cmd 
-                  [footprint_caller_id ssrt] 
-                  [new_footprint_caller_set ssrt] 
-                  body_pp.pp_pos :: cmds)
+              (fun ssrt cmds -> new_footprint_caller_set ssrt @ cmds)
               proc_footprints []
           in
           let assign_final_footprints_caller =
             SortSet.fold
               (fun ssrt cmds ->
-                mk_assign_cmd 
-                  [final_footprint_caller_id ssrt] 
-                  [mk_union [footprint_caller_set ssrt; footprint_set ssrt]]
-                  body_pp.pp_pos :: cmds)
+                (if IdSet.mem (alloc_id ssrt) body_pp.pp_modifies then
+                  [mk_assign_cmd 
+                    [final_footprint_caller_id ssrt] [mk_union [footprint_caller_set ssrt; footprint_set ssrt]]
+                    body_pp.pp_pos]
+                  else []) @ cmds)
               proc_footprints []
           in
           mk_seq_cmd 
@@ -1010,7 +1011,7 @@ let annotate_heap_checks prog =
             check_division :: acc
         | _ ->
             let ssrt = struct_sort_of_sort (sort_of t) in
-            let t_in_footprint = FOL (mk_elem t (footprint_set ssrt)) in
+            let t_in_footprint = FOL ((annotate (mk_elem t (footprint_set ssrt)) [SrcPos pos])) in
             let mk_msg callee =
               let msg = "Possible invalid heap access to location of type " ^ (string_of_sort ssrt) in
               msg, msg
@@ -1172,7 +1173,18 @@ let elim_new_dispose prog =
         mk_seq_cmd ([assign_alloc; assign_footprint] @ array_aux) pp.pp_pos
     | (c, pp) -> Basic (c, pp)
   in
-  let elim_proc proc = 
+  (* declare alloc sets *)
+  let struct_srts = struct_sorts prog in
+  let prog =
+    let globals_with_alloc_sets =
+      SortSet.fold
+        (fun ssrt acc -> IdMap.add (alloc_id ssrt) (alloc_decl ssrt) acc)
+        struct_srts
+        prog.prog_vars
+    in
+    { prog with prog_vars = globals_with_alloc_sets }
+  in
+  let elim_proc proc =
     { proc with proc_body = Util.Opt.map (map_basic_cmds elim) proc.proc_body } 
   in
   { prog with prog_procs = IdMap.map elim_proc prog.prog_procs }

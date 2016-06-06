@@ -37,7 +37,7 @@ procedure test_invariant_bug(a: Array<Int>, high: Int)
   while (i < high)
     invariant 0 <= i && i <= high
     invariant acc(a) &*& arrayseg(a, 0, high)
-    invariant forall j: Int :: 0 <= j && j < i ==> a[j] == 4 @(matching j yields a[j])
+    invariant forall j: Int :: 0 <= j && j < i ==> a[j] == 4
   {
     a[i] := 4;
 

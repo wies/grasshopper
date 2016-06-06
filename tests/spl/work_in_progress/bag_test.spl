@@ -1,0 +1,16 @@
+include "../include/bag.spl";
+
+procedure test00()
+{
+    assert( min(0, 2) == 0 );
+}
+
+procedure test01()
+{
+    assert( max(0, 2) == 2 );
+}
+
+procedure test02(x: Bag, y: Bag)
+{
+    assert( sum(x, y) == sum(union(x,y), intersection(x,y)) );
+}

@@ -9,9 +9,10 @@ procedure lookup(lst: Node, val: Int, implicit ghost C: Set<Int>, implicit ghost
   curr := lst;
   var prev: Node;
   prev := null;
-  while (curr != null && curr.key < val) 
-    invariant (prev == null && curr == lst || val > prev.key &*& prev.next |-> curr) -** 
-      list_map(lst, null, C, D)
+  while (curr.key < val) 
+    invariant
+      (prev == null && curr == lst || val > prev.key &*& prev.next |-> curr) -** 
+      list_map(lst, null, C, D) &*& val in C
   {
     prev := curr;
     curr := curr.next;

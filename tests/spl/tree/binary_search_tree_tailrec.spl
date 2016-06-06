@@ -43,9 +43,10 @@ procedure test()
   ensures emp
 {
   var t := singleton(1);
-  if (!contains(t, 1) || contains(t, 0)) {
-    assert false;
+  if (contains(t, 0)) {
+    pure assert false;
   }
+  var x := t.right;
   free t;
 }
 

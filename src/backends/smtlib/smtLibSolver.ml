@@ -82,7 +82,8 @@ let cvc4_v1 () =
   let options =
     ["--lang=smt2"; 
      "--quant-cf"; 
-     "--inst-max-level=0"; 
+     "--inst-max-level=0";
+     "--incremental";
      "--simplification=none"]
   in
   { version = 1;
@@ -102,6 +103,7 @@ let cvc4mf_v1 () =
      "--mbqi=none"; 
      "--inst-max-level=0"; 
      "--fmf-inst-engine";
+     "--incremental";
      "--simplification=none"]
   in
   let solver = cvc4_v1 () in
@@ -178,7 +180,8 @@ let select_solver name =
 type solver_state = 
     { out_chan: out_channel;
       in_chan: in_channel option;
-      pid: int;     
+      pid: int;
+      mutable response_count: int;
     }
 
 (** Sessions *)
@@ -186,6 +189,7 @@ type solver_state =
 type session = { log_file_name: string;
                  sat_means: string;
 		 mutable assert_count: int;
+                 mutable response_count: int;
 		 mutable sat_checked: (solver_state option * response) option;
 		 stack_height: int;
                  signature: (arity list SymbolMap.t) option;
@@ -197,6 +201,7 @@ let dummy_session =
   { log_file_name = "dummy_session";
     sat_means = "";
     assert_count = 0;
+    response_count = 0;
     sat_checked = None;
     stack_height = 0;
     signature = None;
@@ -281,21 +286,30 @@ let read session =
         Opt.to_list (Opt.map descr_of_in_channel state.in_chan))
       session.solvers 
   in
+  let rec loop () =
+    let ready, _, _ = Unix.select in_descrs [] [] (-1.) in
+    let in_descr = List.hd ready in
+    let in_chan = in_channel_of_descr in_descr in
+    let result = read_from_chan session in_chan in
+    let state = 
+      snd (List.find
+             (fun (_, state) -> 
+               Opt.get_or_else false 
+                 (Opt.map (fun c -> descr_of_in_channel c = in_descr) state.in_chan))
+             session.solvers)
+    in
+    state.response_count <- state.response_count + 1;
+    if state.response_count > session.response_count
+    then begin
+      session.response_count <- session.response_count + 1;
+      Some state, result
+    end
+    else loop ()
+  in
   if in_descrs = [] then 
     (if !Config.verify then None, Unknown else None, Unsat)
-  else
-  let ready, _, _ = Unix.select in_descrs [] [] (-1.) in
-  let in_descr = List.hd ready in
-  let in_chan = in_channel_of_descr in_descr in
-  let result = read_from_chan session in_chan in
-  let state = 
-    snd (List.find
-           (fun (_, state) -> 
-             Opt.get_or_else false 
-               (Opt.map (fun c -> descr_of_in_channel c = in_descr) state.in_chan))
-           session.solvers)
-  in
-  Some state, result
+  else loop ()
+ 
 
 let set_option chan opt_name opt_value =
   Printf.fprintf chan "(set-option %s %s)\n" opt_name opt_value
@@ -362,6 +376,7 @@ let start_with_solver session_name sat_means solver produce_models produce_unsat
           { in_chan = Some (in_channel_of_descr in_read);
             out_chan = out_channel_of_descr out_write;
             pid = pid;
+            response_count = 0;
           }
           (*let cmd = String.concat " " (cmnd :: args) in
           let in_chan, out_chan = open_process cmd in
@@ -374,6 +389,7 @@ let start_with_solver session_name sat_means solver produce_models produce_unsat
           { in_chan = None;
             out_chan = open_out log_file_name;
             pid = 0;
+            response_count = 0;
           }
     in 
     let options = 
@@ -393,6 +409,7 @@ let start_with_solver session_name sat_means solver produce_models produce_unsat
     { log_file_name = log_file_name;
       sat_means = sat_means;
       assert_count = 0;
+      response_count = 0;
       sat_checked = None;
       stack_height = 0;
       signature = None;
@@ -407,8 +424,7 @@ let init_session session sign =
   let has_int = 
     let rec hi = function
       | Int -> true
-      | Set srt
-      | Array srt -> hi srt
+      | Set srt | Loc srt | Array srt | ArrayCell srt -> hi srt
       | Map (dsrt, rsrt) -> hi dsrt || hi rsrt
       | _ -> false
     in
@@ -1035,6 +1051,10 @@ let convert_model session smtModel =
           (SmtLibSyntax.Eq, [SmtLibSyntax.App (Ident id, [], _); 
                              SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _)], pos) ->
           IdMap.add id (Model.value_of_int i) arg_map
+      | SmtLibSyntax.App
+          (SmtLibSyntax.Eq, [SmtLibSyntax.App (Ident id, [], _); 
+                             SmtLibSyntax.App (SmtLibSyntax.BoolConst b, [], _)], pos) ->
+          IdMap.add id (Model.value_of_bool b) arg_map
       | SmtLibSyntax.App (SmtLibSyntax.And, conds, _) ->
           List.fold_left pcond arg_map conds
       | SmtLibSyntax.Annot (def, _, _) -> 
@@ -1122,14 +1142,17 @@ let rec get_model session =
   let gm state =
     writeln session "(get-model)";
     flush state.out_chan;
-    match read_from_chan session (Opt.get state.in_chan) with
+    match snd (read session) with
     | Model m -> 
         let cm = convert_model session m in
         (match session.signature with
         | Some sign -> Some (Model.restrict_to_sign cm sign)
         | None -> Some cm)
+    | Unsat -> None
     | Error e -> fail session e
-    | _ -> None
+    | Unknown -> fail session "unexpected solver response: unknown"
+    | Sat -> fail session "unexpected solver response: sat"
+    | UnsatCore _ -> fail session "unexpected solver response: unsatcore"
   in
   match session.sat_checked with
   | None -> 

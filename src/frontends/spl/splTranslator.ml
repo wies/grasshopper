@@ -28,39 +28,45 @@ let make_conditionals_lazy cu =
   in
   let rec process_stmt scope locals = function
     | If (BinaryOp(e1, OpOr, e2, _, p1), s1, s2, p2) ->
+        let s1, locals = process_stmt scope locals s1 in
+        let s2, locals = process_stmt scope locals s2 in
         If (e1, s1, If (e2, s1, s2, p1), p2), locals
     | If (BinaryOp (e1, OpImpl, e2, _, p1), s1, s2, p2) ->
+        let s1, locals = process_stmt scope locals s1 in
+        let s2, locals = process_stmt scope locals s2 in
         If (UnaryOp (OpNot, e1, p1), s1, If (e2, s1, s2, p1), p2), locals
     | Loop (invs, preb, BinaryOp (e1, OpOr, e2, _, pos1), postb, pos) ->
-       let aux_id, locals = decl_aux_var "loop_cond" BoolType pos scope locals
-       in
-       Loop (Invariant (BinaryOp (Ident (aux_id, pos),
-				  OpEq,
-				  BinaryOp (e1, OpOr, e2, BoolType, pos1),
-				  BoolType,
-				  pos),
-			true) :: invs,
-	     Block (
-		 [preb;
-		  If (e1,
-		      Assign ([Ident (aux_id, pos)], [BoolVal (true, pos)], pos),
-		      If (e2,
-			  Assign ([Ident (aux_id, pos)], [BoolVal (true, pos)], pos),
-			  Assign ([Ident (aux_id, pos)], [BoolVal (false, pos)], pos),
-			  pos),
-		      pos)],
-		 pos),
-	     Ident (aux_id, pos1),
-	     postb,
-	     pos), locals
+        let aux_id, locals = decl_aux_var "loop_cond" BoolType pos scope locals in
+        let preb, locals = process_stmt scope locals preb in
+        let postb, locals = process_stmt scope locals postb in
+        Loop (Invariant (BinaryOp (Ident (aux_id, pos),
+				   OpEq,
+				   BinaryOp (e1, OpOr, e2, BoolType, pos1),
+				   BoolType,
+				   pos),
+			 true) :: invs,
+	      Block (
+	      [preb;
+	       If (e1,
+		   Assign ([Ident (aux_id, pos)], [BoolVal (true, pos)], pos),
+		   If (e2,
+		       Assign ([Ident (aux_id, pos)], [BoolVal (true, pos)], pos),
+		       Assign ([Ident (aux_id, pos)], [BoolVal (false, pos)], pos),
+		       pos),
+		   pos)],
+		                 pos),
+	      Ident (aux_id, pos1),
+	      postb,
+	      pos), locals
     | Block (ss, p) ->
-       let ss, locals = List.fold_right
-			  (fun s (s_list, locals) ->
-			   let new_s, locals = process_stmt scope locals s
-			   in
-			   ([new_s] @ s_list), locals)
-			  ss ([], locals)
-       in
+        let ss, locals =
+          List.fold_right
+	    (fun s (s_list, locals) ->
+	      let new_s, locals = process_stmt scope locals s
+	      in
+	      (new_s :: s_list), locals)
+	    ss ([], locals)
+        in
        Block (ss, p), locals
     | stmt -> stmt, locals
   in
@@ -382,6 +388,7 @@ let convert cu =
         let matches = 
           List.fold_right (fun (e, filters) matches -> 
             let ce = GrassUtil.free_consts_term e in
+            let ce_srts = GrassUtil.sign_term e in
             let ce_occur_below ts =
               List.exists 
                 (function App (FreeSym id, [], _) -> IdSet.mem id ce | _ -> false)
@@ -405,6 +412,16 @@ let convert cu =
                     Match (l, [FilterNotNull]) :: aux_matches
                 | _ -> flt, aux_matches)
                 gts (filters, [])
+            in
+            let aux_matches =
+              IdSet.fold
+                (fun id aux_matches ->
+                  let srt = SymbolMap.find (FreeSym id) ce_srts in
+                  match srt with
+                  | ([], (Int | Loc _ as rsrt)) ->
+                      Match (GrassUtil.mk_known (GrassUtil.mk_free_const rsrt id), []) :: aux_matches
+                  | _ -> aux_matches
+                ) ce aux_matches
             in
             Match (e, flt) :: aux_matches @ matches) es1 []
         in
