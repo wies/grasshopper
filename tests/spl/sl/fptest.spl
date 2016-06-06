@@ -1,0 +1,45 @@
+struct Node {
+  var next: Node;
+}
+
+function lseg_footprint(x: Node, y: Node) returns (X: Set<Node>)
+  ensures forall z: Node :: z in X == (Btwn(next, x, z, y) && z != y)
+
+procedure test1(x: Node, y: Node, X: Set<Node>, Y: Set<Node>)
+  requires acc(X) &*& acc(Y)
+{
+  pure assume Reach(next, x, y); // fails without
+  pure assume Y == lseg_footprint(x, y);
+  havoc_all_but(X);
+  pure assert Y == lseg_footprint(x, y);
+  assume false;
+}
+
+function ok(x: Node) returns (X: Set<Node>)
+  ensures forall z: Node :: z in X == (z == x || z == x.next)
+
+
+procedure test2(x: Node, X: Set<Node>, Y: Set<Node>)
+  requires acc(X) &*& acc(Y)
+{
+  pure assume Y == ok(x);
+  havoc_all_but(X);
+  pure assert Y == ok(x);
+  assume false;
+}
+
+function bad() returns (X: Set<Node>)
+  ensures forall x: Node :: x in X == (x != null && x.next == null)
+
+
+procedure test3(X: Set<Node>, Y: Set<Node>)
+  requires acc(X) &*& acc(Y)
+{
+  pure assume Y == bad();
+  havoc_all_but(X);
+  pure assert Y == bad();
+  assume false;
+}
+
+procedure havoc_all_but(X: Set<Node>)
+  requires acc(X)
