@@ -39,9 +39,9 @@ procedure size(u: Node) returns (res: Int)
   while (hi != lo)
     invariant acc(u) &*& acc(u.keys) &*& key_arrayseg(u.keys, 0, b)
     invariant hi >= lo && lo >= 0 && hi <= b
+    invariant forall i: Int, j: Int :: 0 <= i && i <= j && j < u.keys.length && u.keys[i] == bottom ==> u.keys[j] == bottom
     invariant forall i: Int :: i >= hi && i < b ==> u.keys[i] == bottom
     invariant forall i: Int :: i >= 0 && i < lo ==> u.keys[i] != bottom
-              @(matching i yields u.keys[i])
   {
     var m := (hi+lo)/2;
     if (u.keys[m] == bottom) {
