@@ -1,6 +1,7 @@
 include "def.spl";
 include "find.spl";
 include "node_utils.spl";
+include "array_utils.spl";
 
 procedure removeRecursive(x: Int, u: Node) returns (res: Bool)
   requires ???
