@@ -5,8 +5,9 @@ include "find.spl";
 procedure is_full(u: Node) returns (res: Bool)
   requires btree_node(u)
   ensures  btree_node(u)
+  ensures  forall i: Int :: 0 <= i && i < b ==> !res || u.keys[i] != bottom
 {
-  if (u.keys[u.keys.length -1] != bottom) {
+  if (u.keys[b - 1] != bottom) {
     return true;
   } else {
     return false;
@@ -17,6 +18,7 @@ procedure is_full(u: Node) returns (res: Bool)
 procedure is_leaf(u: Node) returns (res: Bool)
   requires btree_node(u)
   ensures  btree_node(u)
+  ensures  forall i: Int :: 0 <= i && i <= b ==> !res || u.children[i] == null
 {
   if (u.children[0] == null) {
     return true;
@@ -32,33 +34,23 @@ procedure size(u: Node) returns (res: Int)
   ensures  forall i: Int :: i >= 0 && i < res ==> u.keys[i] != bottom
   ensures  forall i: Int :: i >= res && i < b ==> u.keys[i] == bottom
 {
-    var lo := 0;
-    var h := b;
-    while (h != lo)
-        invariant acc(u) &*& acc(u.keys) &*& key_arrayseg(u.keys, 0, b)
-        invariant h >= lo && lo >= 0 && h <= b
-        invariant forall i: Int :: i >= h && i < b  ==> u.keys[i] == bottom
-        invariant forall i: Int :: i >= 0 && i < lo ==> u.keys[i] != bottom
-    {
-        var m := (h+lo)/2;
-        if (u.keys[m] == bottom) {
-            h := m;
-        } else {
-            lo := m+1;
-        }
-    }
-    return lo;
-    /*
-  var i := 0;
-  while (i < u.keys.length && u.keys[i] != bottom)
-    invariant acc(u) &*& acc(u.keys) &*& key_arrayseg(u.keys, 0, u.keys.length)
-    invariant 0 <= i && i <= u.keys.length
-    invariant forall j: Int :: j >= 0 && j < i ==> u.keys[j] != bottom
+  var lo := 0;
+  var hi := b;
+  while (hi != lo)
+    invariant acc(u) &*& acc(u.keys) &*& key_arrayseg(u.keys, 0, b)
+    invariant hi >= lo && lo >= 0 && hi <= b
+    invariant forall i: Int :: i >= hi && i < b ==> u.keys[i] == bottom
+    invariant forall i: Int :: i >= 0 && i < lo ==> u.keys[i] != bottom
+              @(matching i yields u.keys[i])
   {
-    i := i + 1;
+    var m := (hi+lo)/2;
+    if (u.keys[m] == bottom) {
+      hi := m;
+    } else {
+      lo := m+1;
+    }
   }
-  return i;
-    */
+  return lo;
 }
 
 function aux_old_a2(idx: Int) returns (val: T)
