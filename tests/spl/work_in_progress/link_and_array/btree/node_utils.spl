@@ -62,6 +62,7 @@ procedure size(u: Node) returns (res: Int)
 procedure addNode(u: Node, x: T, ci: Node) returns (res: Bool)
   requires btree(u) &*& btree(ci)
   requires u != null && (ci == null || ci.parent == null)
+  requires (ci != null || u.children[0] == null) // inserting null only when the node is a leaf
   requires x != bottom
   requires forall i: Int :: 0 <= i && i < u.keys.length ==> u.keys[i] != x
   ensures  btree(u)
@@ -87,7 +88,8 @@ procedure addNode(u: Node, x: T, ci: Node) returns (res: Bool)
 procedure removeNode(u: Node, i: Int) returns (res: T)
   requires btree_node(u)
   requires 0 <= i && i < u.keys.length
-  ensures  btree_node(u) //TODO this does not seems right (we change the key but not the values!)
+  ensures  btree_node(u)
+  //TODO this is not right. we change the key but not the values!
 {
   var y := u.keys[i];
   key_arraymove(u.keys, i+1, i, b-i-1);
@@ -106,6 +108,8 @@ procedure newNode() returns (res: Node)
   w.keys := new Array<T>(b);
   w.children := new Array<Node>(b+1);
   w.parent := null;
+  w.lbound := bottom;
+  w.ubound := top;
   var i := 0;
   while (i < b)
     invariant 0 <= i && i <= b

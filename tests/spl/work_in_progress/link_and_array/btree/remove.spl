@@ -27,7 +27,7 @@ procedure removeRecursive(x: Int, u: Node) returns (res: Bool)
   return false;
 }
 
-procedure removeSmallest(u: Node) returns (res: Node)
+procedure removeSmallest(u: Node) returns (res: T)
   requires btree(u)
   ensures  btree(u)
 {
@@ -43,7 +43,7 @@ procedure checkUnderflow(u: Node, i: Int)
   requires btree(u)
   ensures  btree(u)
 {
-  if (u.children[i] < 0) {
+  if (u.children[i] == null) {
     return ;
   }
   if (i == 0) {
