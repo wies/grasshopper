@@ -146,13 +146,14 @@ procedure node_arraymove(a: Array<Node>, srcPos: Int, dstPos: Int, length: Int)
  */
 procedure addNode(u: Node, x: T, ci: Node) returns (res: Bool)
   requires btree(u) &*& btree(ci)
-  requires ci.parent == null && u != null && ci != null
+  requires u != null && (ci == null || ci.parent == null)
+  requires x != bottom
+  requires forall i: Int :: 0 <= i && i < u.keys.length ==> u.keys[i] != x
   ensures  btree(u)
 {
+  pure assume u.keys[u.keys.length - 1] == bottom;
   var i := findIt(u.keys, x);
-  if (i < u.keys.length && u.keys[i] == x) {
-    return false;
-  } else if (i < u.keys.length-1) {
+  if (i < u.keys.length-1) {
     key_arraymove(u.keys, i, i+1, b-i-1);
   }
   u.keys[i] := x;
@@ -160,7 +161,7 @@ procedure addNode(u: Node, x: T, ci: Node) returns (res: Bool)
     node_arraymove(u.children, i+1, i+2, b-i-1);
   }
   u.children[i+1] := ci;
-  ci.parent := u;
+  if (ci != null) { ci.parent := u; }
   return true;
 }
 
