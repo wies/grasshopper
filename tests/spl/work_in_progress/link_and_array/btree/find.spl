@@ -10,6 +10,7 @@ procedure find(bt: Node, x: T) returns (res: T)
   var n := bt;
   var flag := false;
   while (n != null && !flag)
+    invariant x != bottom
     invariant (n == null || acc(n)) -** btree(bt)
   {
     var i := findIt(n.keys, x);
@@ -28,6 +29,7 @@ procedure find(bt: Node, x: T) returns (res: T)
 }
 
 procedure findIt(a: Array<T>, x: T) returns (idx: Int)
+  requires x != bottom
   requires a.length == b
   requires acc(a)
   requires key_arrayseg(a, 0, a.length)

@@ -1430,15 +1430,17 @@ let print_graph output chan model terms =
   let output_freesyms () =
     let funs = TermSet.fold
       (fun t acc -> match t with
-        | (App (FreeSym _, _, (Bool as srt)) as t)
-        | (App (FreeSym _, _ :: _, (Int as srt)) as t)
-        | (App (FreeSym _, _ :: _, (Loc _ as srt)) as t)
-        | (App (IndexOfCell, _, srt) as t) ->
+        | App (FreeSym _, _, (Bool as srt))
+        | App (FreeSym _, _ :: _, (Int as srt))
+        | App (FreeSym _, _ :: _, (Loc _ as srt))
+        | App (IndexOfCell, _, srt)
+        | App (_, _, (FreeSrt _ as srt)) ->
             (try
               let res = eval model t in
               ((string_of_term t), (string_of_sorted_value srt res)) :: acc
             with _ -> acc)
-        | _ -> acc
+        | _ ->
+            acc
       ) terms [] 
     in
     out_tbl "predicates and functions" funs
