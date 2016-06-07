@@ -22,7 +22,9 @@ function compare(x: T, y: T)
   ensures lt(y, x) == (res > 0)
 
 var bottom: T;
+var top: T;
 axiom forall a: T :: !lt(a, bottom);
+axiom forall a: T :: !lt(top, a);
 
 /* The order, B, is at least 2 */
 var B: Int;
@@ -111,12 +113,14 @@ predicate btree_node(n: Node) {
   (forall i: Int, j: Int :: 0 <= i && i <= j && j < n.keys.length && n.keys[i] == bottom ==> n.keys[j] == bottom) &&
   // children arrays are partitioned into non-null/null halfs
   (forall i: Int, j: Int :: 0 <= i && i <= j && j < n.children.length && n.children[i] == null ==> n.children[j] == null) &&
-  // if a child entry is null then, so is the corresponding key entry
+  // if a child entry is null then, so is the corresponding key entry, XXX not true for leaves
   (forall i: Int :: 0 <= i && i < n.keys.length && n.children[i] == null ==> n.keys[i] == bottom) &&
   // if a key entry is null, then it is either the first null entry in the key array or the corresponding child entry is also null
   (forall i: Int, j: Int :: 0 <= i && i < j && j < n.keys.length && n.keys[i] == bottom && n.keys[j] == bottom ==> n.children[j] == null) && 
   // the keys are sorted
-  (forall i: Int, j: Int :: 0 <= i && i <= j && j < n.keys.length ==> n.keys[i] == bottom || n.keys[j] == bottom || lt(n.keys[i], n.keys[j]))
+  (forall i: Int, j: Int :: 0 <= i && i <= j && j < n.keys.length ==> n.keys[i] == bottom || n.keys[j] == bottom || lt(n.keys[i], n.keys[j])) &&
+  // key bounds of nodes are consistent
+  le(n.lbound, n.ubound)
 }
 
 predicate btree(bt: Node) {
@@ -139,7 +143,7 @@ predicate btree(bt: Node) {
     // if a child entry is null then, so is the corresponding key entry
     (forall n in FP_N, i: Int :: 0 <= i && i < n.keys.length && n.children[i] == null ==> n.keys[i] == bottom) &&
     // if a key entry is null, then it is either the first null entry in the key array
-    // or the corresponding child entry is also null
+    // or the corresponding child entry is also null, XXX not true for leaves
     (forall n in FP_N, i: Int, j: Int :: 0 <= i && i < j && j < n.keys.length && n.keys[i] == bottom && n.keys[j] == bottom ==> n.children[j] == null) && 
     // the keys are sorted
     (forall a in FP_A_I, i: Int, j: Int :: 0 <= i && i <= j && j < a.length ==> a[i] == bottom || a[j] == bottom || lt(a[i], a[j])) &&
