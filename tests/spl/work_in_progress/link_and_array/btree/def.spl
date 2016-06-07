@@ -118,9 +118,12 @@ predicate btree_node(n: Node) {
   // if a key entry is null, then it is either the first null entry in the key array or the corresponding child entry is also null
   (forall i: Int, j: Int :: 0 <= i && i < j && j < n.keys.length && n.keys[i] == bottom && n.keys[j] == bottom ==> n.children[j] == null) && 
   // the keys are sorted
-  (forall i: Int, j: Int :: 0 <= i && i <= j && j < n.keys.length ==> n.keys[i] == bottom || n.keys[j] == bottom || lt(n.keys[i], n.keys[j])) &&
+  (forall i: Int, j: Int :: 0 <= i && i <  j && j < n.keys.length ==> n.keys[i] == bottom || n.keys[j] == bottom || lt(n.keys[i], n.keys[j])) &&
   // key bounds of nodes are consistent
-  le(n.lbound, n.ubound)
+  le(n.lbound, n.ubound) &&
+  // keys and lbound, ubound
+  (forall i: Int :: i <= 0 && i < n.keys.length && n.keys[i] != bottom ==> le(n.lbound, n.keys[i]) && le(n.keys[i], n.ubound))
+  // TODO children form a partition ?
 }
 
 predicate btree(bt: Node) {
@@ -140,13 +143,13 @@ predicate btree(bt: Node) {
     (forall a in FP_A_I, i: Int, j: Int :: 0 <= i && i <= j && j < a.length && a[i] == bottom ==> a[j] == bottom) &&
     // children arrays are partitioned into non-null/null halfs
     (forall a in FP_A_N, i: Int, j: Int :: 0 <= i && i <= j && j < a.length && a[i] == null ==> a[j] == null) &&
-    // if a child entry is null then, so is the corresponding key entry
+    // if a child entry is null then, so is the corresponding key entry XXX not true for leaves
     (forall n in FP_N, i: Int :: 0 <= i && i < n.keys.length && n.children[i] == null ==> n.keys[i] == bottom) &&
     // if a key entry is null, then it is either the first null entry in the key array
-    // or the corresponding child entry is also null, XXX not true for leaves
+    // or the corresponding child entry is also null,
     (forall n in FP_N, i: Int, j: Int :: 0 <= i && i < j && j < n.keys.length && n.keys[i] == bottom && n.keys[j] == bottom ==> n.children[j] == null) && 
     // the keys are sorted
-    (forall a in FP_A_I, i: Int, j: Int :: 0 <= i && i <= j && j < a.length ==> a[i] == bottom || a[j] == bottom || lt(a[i], a[j])) &&
+    (forall a in FP_A_I, i: Int, j: Int :: 0 <= i && i <  j && j < a.length ==> a[i] == bottom || a[j] == bottom || lt(a[i], a[j])) &&
     
     /* Tree invariants */
     // parent is inverse of child array 
@@ -163,7 +166,18 @@ predicate btree(bt: Node) {
     (forall c in FP_AC_N, d in FP_AC_N :: c.index < d.index && c.array == d.array ==> lt(c[].ubound, d[].lbound)) &&
     // key bounds of nodes are consistent
     (forall x in FP_N :: le(x.lbound, x.ubound)) &&
-    // ...TODO
+    // keys and lbound, ubound
+    (forall x in FP_N, i: Int :: i <= 0 && i < x.keys.length && x.keys[i] != bottom ==> le(x.lbound, x.keys[i]) && le(x.keys[i], x.ubound)) &&
+    // TODO lbound/ubound form a partition
+    // TODO at the root lbound == bottom && ubound == top
+    // ...
     
     true
+}
+
+predicate btree_root(root: Node) {
+  btree(root) &*&
+  root != null &&
+  root.lbound == bottom &&
+  root.ubound == top
 }
