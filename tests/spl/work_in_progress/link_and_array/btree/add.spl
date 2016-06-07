@@ -57,7 +57,8 @@ procedure addRecursive(x: T, u: Node) returns (res: Node)
     }
   }
   if (is_full(u)) {
-    var s, n := splitNode(u);
+    var s: T, n: Node;
+    s, n := splitNode(u);
     // XXX what about s
     return n;
   } else {
