@@ -107,7 +107,7 @@ let mk_cell ?pos t = mk_atom ?pos:pos Region [GrassUtil.mk_setenum [t]]
 let mk_region ?pos r = mk_atom ?pos:pos Region [r]
 let mk_pred ?pos p ts = mk_atom ?pos:pos (Pred p) ts
 let mk_pts ?pos f a b = 
-  mk_sep_star ?pos:pos (mk_eq ?pos:pos (GrassUtil.mk_read f a) b) (mk_cell ?pos:pos a)
+  mk_sep_star ?pos:pos (mk_eq ?pos:pos (GrassUtil.mk_read f [a]) b) (mk_cell ?pos:pos a)
 let mk_sep_star_lst ?pos:pos args = List.fold_left (mk_sep_star ?pos:pos) (mk_emp pos) args
 let mk_exists ?pos vs f = Binder (Grass.Exists, vs, f, pos)
 let mk_forall ?pos vs f = Binder (Grass.Forall, vs, f, pos)

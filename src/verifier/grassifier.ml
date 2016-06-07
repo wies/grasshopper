@@ -17,12 +17,12 @@ let final_footprint_caller_set struct_srt = mk_loc_set struct_srt (final_footpri
 (** Auxiliary variables for desugaring arrays *)
 
 let array_state_id = mk_name_generator "array_state"
-let array_state srt = mk_free_const (Map (Loc (ArrayCell srt), srt)) (array_state_id srt)
+let array_state srt = mk_free_const (Map ([Loc (ArrayCell srt)], srt)) (array_state_id srt)
 let array_state_decl srt =
   let id = array_state_id srt in
   { var_name = id;
     var_orig_name = name id;
-    var_sort = Map (Loc (ArrayCell srt), srt);
+    var_sort = Map ([Loc (ArrayCell srt)], srt);
     var_is_ghost = false;
     var_is_implicit = false;
     var_is_aux = true;
@@ -42,13 +42,13 @@ let add_ghost_field_invariants prog =
     List.filter 
       (fun decl ->
         match decl.var_sort with
-        | Map (Loc id1, Loc id2) -> id1 = id2 && decl.var_is_ghost
+        | Map ([Loc id1], Loc id2) -> id1 = id2 && decl.var_is_ghost
         | _ -> false)
       (Prog.vars prog)
   in
   let mk_inv_pred (preds, pred_map, alloc_ids) decl =
     let open Axioms in
-    let struct_srt = struct_sort_of_sort (dom_sort decl.var_sort) in
+    let struct_srt = struct_sort_of_sort (List.hd (dom_sort decl.var_sort)) in
     let alloc_decl, alloc_set, alloc_id = alloc_all struct_srt in
     let locals = IdMap.add alloc_id alloc_decl IdMap.empty in
     let fld = mk_free_const decl.var_sort decl.var_name in
@@ -121,7 +121,7 @@ let add_ghost_field_invariants prog =
     let mk_inv decl =
       let fld = mk_free_const decl.var_sort decl.var_name in
       let pred_id = IdMap.find decl.var_name pred_map in
-      let struct_srt = struct_sort_of_sort (dom_sort decl.var_sort) in
+      let struct_srt = struct_sort_of_sort (List.hd (dom_sort decl.var_sort)) in
       let inv = mk_pred pred_id [fld; alloc_set struct_srt] in
       let name = "ghost field invariant for " ^ string_of_ident decl.var_name in
       mk_spec_form (FOL inv) name None decl.var_pos
@@ -152,10 +152,10 @@ let elim_arrays prog =
         | Loc (Array srt) ->
             let cell = match map1, idx1 with
             | App (ArrayOfCell, [c1], _), App (IndexOfCell, [c2], _) when c1 = c2 -> c1
-            | _ -> mk_read (mk_array_cells map1) idx1
+            | _ -> mk_read (mk_array_cells map1) [idx1]
             in
-            mk_read (array_state srt) cell
-        | _ -> mk_read map1 idx1)
+            mk_read (array_state srt) [cell]
+        | _ -> mk_read map1 [idx1])
     | App (sym, ts, srt) ->
         let ts1 = List.map compile_term ts in
         App (sym, ts1, srt)
@@ -215,7 +215,7 @@ let elim_arrays prog =
                   aux_ac :: aux_cmds
                 in
                 array_state_id srt :: lhs1,
-                mk_write (array_state srt) (mk_read (mk_array_cells map1) idx1) upd1 :: rhs1,
+                mk_write (array_state srt) [mk_read (mk_array_cells map1) [idx1]] upd1 :: rhs1,
                 aux_cmds1
             | id, t -> id :: lhs1, compile_term t :: rhs1, aux_cmds)            
             ac.assign_lhs ac.assign_rhs ([], [], [])
@@ -246,24 +246,23 @@ let elim_arrays prog =
       prog.prog_vars ::  List.map (fun proc -> locals_of_proc proc) (find_proc_with_deps prog (name_of_proc proc))
     in
     let locals, elem_sorts =
-      let rec process_sort locals elem_sorts = function
+      let rec process_sort (locals, elem_sorts) = function
         | Loc (Array srt)
         | Loc (ArrayCell srt) ->
             let tmp_decl = tmp_array_cell_set_decl srt in
             let locals1 = IdMap.add tmp_decl.var_name tmp_decl locals in
             let elem_sorts1 = SortSet.add srt elem_sorts in
-            process_sort locals1 elem_sorts1 srt
+            process_sort (locals1, elem_sorts1) srt
         | Set srt
-        | Loc srt -> process_sort locals elem_sorts srt
-        | Map (srt1, srt2) ->
-            let locals1, elem_sorts1 = process_sort locals elem_sorts srt1 in
-            process_sort locals1 elem_sorts1 srt2
+        | Loc srt -> process_sort (locals, elem_sorts) srt
+        | Map (dsrts, rsrt) ->
+            List.fold_left process_sort (locals, elem_sorts) (rsrt :: dsrts)
         | _ -> locals, elem_sorts
       in
       List.fold_left
         (fun (locals, elem_sorts) vars ->
           IdMap.fold
-            (fun id decl (locals, elem_sorts) -> process_sort locals elem_sorts decl.var_sort)
+            (fun id decl acc -> process_sort acc decl.var_sort)
             vars (locals, elem_sorts))
         (locals_of_proc proc, elem_sorts) all_locals
     in
@@ -755,7 +754,7 @@ let elim_sl prog =
         List.fold_left
           (fun acc var ->
             match var.var_sort with
-            | Map (Loc _, _) as srt -> IdMap.add var.var_name srt acc 
+            | Map (Loc _ :: _, _) as srt -> IdMap.add var.var_name srt acc 
             | _ -> acc
           )
           IdMap.empty
@@ -767,7 +766,7 @@ let elim_sl prog =
             if !Config.opt_field_mod && not (IdSet.mem fld modifies)
             then frames else
             let old_fld = oldify fld in
-            let ssrt = struct_sort_of_sort (dom_sort srt) in
+            let ssrt = struct_sort_of_sort (List.hd (dom_sort srt)) in
             mk_framecond (mk_frame (init_footprint_set ssrt) (init_alloc_set ssrt)
                              (mk_free_const srt old_fld)
                              (mk_free_const srt fld)) ::
@@ -978,10 +977,10 @@ let elim_sl prog =
 (** Annotate safety checks for heap accesses *)
 let annotate_heap_checks prog =
   let rec checks acc = function
-    | App (Read, [map; idx], _) ->
+    | App (Read, map :: idx :: _, _) ->
         let acc1 =
           match sort_of map with
-          | Map (Loc _, _) -> TermSet.add idx acc
+          | Map (Loc _ :: _, _) -> TermSet.add idx acc
           | _ -> acc
         in
         checks (checks acc1 map) idx

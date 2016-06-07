@@ -136,8 +136,8 @@ let add_frame_axioms fs =
   SortSet.fold
     (fun srt fs ->
       match srt with
-      | Map ((Loc _ :: _ as dsrts), rsrt) ->
-          Axioms.frame_axioms dsrts rsrt @ fs
+      | Map ((Loc ssrt :: _ as dsrts), rsrt) ->
+          Axioms.frame_axioms ssrt dsrts rsrt @ fs
       | _ -> fs)
     frame_sorts fs
  
@@ -240,7 +240,7 @@ let add_ep_axioms fs =
 let add_read_write_axioms fs =
   let gts = ground_terms ~include_atoms:true (mk_and fs) in
   let has_loc_field_sort = function
-    | App (_, _, Map(Loc id1, Loc id2)) -> (*id1 = id2*) true
+    | App (_, _, Map([Loc id1], Loc id2)) -> (*id1 = id2*) true
     | _ -> false
   in
   let basic_pt_flds = TermSet.filter (has_loc_field_sort &&& is_free_const) gts in
@@ -256,7 +256,7 @@ let add_read_write_axioms fs =
   let field_sorts = TermSet.fold (fun t srts ->
     match sort_of t with
     | Loc (Array _) as srt -> SortSet.add srt srts
-    | Map (Loc _, _) as srt -> SortSet.add srt srts
+    | Map (Loc _ :: _, _) as srt -> SortSet.add srt srts
     | _ -> srts)
       gts SortSet.empty
   in
@@ -272,13 +272,13 @@ let add_read_write_axioms fs =
           let idx = mk_var Int i in
           (* a = b, a.cells[i].f -> b.cells[i].f *)
           ([Match (mk_eq_term a b, []);
-            Match (mk_read fld (mk_read (mk_array_cells a) idx), [])],
-           [mk_read fld (mk_read (mk_array_cells b) idx)]) ::
+            Match (mk_read fld [mk_read (mk_array_cells a) [idx]], [])],
+           [mk_read fld [mk_read (mk_array_cells b) [idx]]]) ::
           ([Match (mk_eq_term a b, []);
             (* a = b, b.cells[i].f -> a.cells[i].f *)
-            Match (mk_read fld (mk_read (mk_array_cells b) idx), [])],
-           [mk_read fld (mk_read (mk_array_cells a) idx)]) :: propagators
-      | Map (Loc ssrt, srt) -> fun propagators ->
+            Match (mk_read fld [mk_read (mk_array_cells b) [idx]], [])],
+           [mk_read fld [mk_read (mk_array_cells a) [idx]]]) :: propagators
+      | Map ([Loc ssrt], srt) -> fun propagators ->
           let f1 = fresh_ident "?f", field_sort ssrt srt in
           let fld1 = mk_var (snd f1) (fst f1) in
           let f2 = fresh_ident "?g", field_sort ssrt srt in
@@ -291,34 +291,34 @@ let add_read_write_axioms fs =
           let set2 = Axioms.set2 ssrt in
           (* f = g, x.f -> x.g *)
           ([Match (mk_eq_term fld1 fld2, []);
-            Match (mk_read fld1 loc1, []);
+            Match (mk_read fld1 [loc1], []);
             Match (loc2, [FilterNotNull])],
-           [mk_read fld2 loc1]) ::
+           [mk_read fld2 [loc1]]) ::
           (* f = g, x.g -> x.f *)
           ([Match (mk_eq_term fld1 fld2, []);
-            Match (mk_read fld2 loc1, []);
+            Match (mk_read fld2 [loc1], []);
             Match (loc1, [FilterNotNull])],
-           [mk_read fld1 loc1]) :: 
+           [mk_read fld1 [loc1]]) :: 
           (* f [x := d], y.(f [x := d]) -> y.f *)
-          ([Match (mk_write fld1 loc1 dvar, []);
-            Match (mk_read (mk_write fld1 loc1 dvar) loc2, []);
+          ([Match (mk_write fld1 [loc1] dvar, []);
+            Match (mk_read (mk_write fld1 [loc1] dvar) [loc2], []);
             Match (loc2, [FilterNotNull])],
-           [mk_read fld1 loc2]) ::
+           [mk_read fld1 [loc2]]) ::
           (* f [x := d], y.f -> y.(f [x := d]) *)
-          ([Match (mk_write fld1 loc1 dvar, []);
-            Match (mk_read fld1 loc2, []);
+          ([Match (mk_write fld1 [loc1] dvar, []);
+            Match (mk_read fld1 [loc2], []);
             Match (loc2, [FilterNotNull])],
-           [mk_read (mk_write fld1 loc1 dvar) loc2]) ::
+           [mk_read (mk_write fld1 [loc1] dvar) [loc2]]) ::
           (* Frame (x, a, f, g), y.g -> y.f *)
           ([Match (mk_frame_term set1 set2 fld1 fld2, []);
-            Match (mk_read fld2 loc1, []);
+            Match (mk_read fld2 [loc1], []);
             Match (loc1, [FilterNotNull])],
-           [mk_read fld1 loc1]) ::
+           [mk_read fld1 [loc1]]) ::
           (* Frame (x, a, f, g), y.f -> y.g *)
           ([Match (mk_frame_term set1 set2 fld1 fld2, []);
-            Match (mk_read fld1 loc1, []);
+            Match (mk_read fld1 [loc1], []);
             Match (loc2, [FilterNotNull])],
-           [mk_read fld2 loc1]) ::
+           [mk_read fld2 [loc1]]) ::
           propagators
       | _ -> fun propagators -> propagators)
       field_sorts []
@@ -352,7 +352,7 @@ let add_reach_axioms fs =
   let struct_sorts =
     SortSet.fold
       (fun srt struct_sorts -> match srt with
-      | Map(Loc srt1, Loc srt2) when srt1 = srt2 ->
+      | Map([Loc srt1], Loc srt2) when srt1 = srt2 ->
           SortSet.add srt1 struct_sorts
       | _ -> struct_sorts)
       (sorts (mk_and fs)) SortSet.empty

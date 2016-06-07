@@ -104,7 +104,7 @@ let convert cu =
       | IdentType id -> FreeSrt id
       | StructType id -> Loc (FreeSrt id)
       | AnyRefType -> Loc (FreeSrt ("Null", 0))
-      | MapType (dtyp, rtyp) -> Map (ct dtyp, ct rtyp)
+      | MapType (dtyp, rtyp) -> Map ([ct dtyp], ct rtyp)
       | SetType typ -> Set (ct typ)
       | ArrayType typ -> Loc (Array (ct typ))
       | ArrayCellType typ -> Loc (ArrayCell (ct typ))
@@ -151,7 +151,7 @@ let convert cu =
     | Read (map, idx, pos) -> 
         let tmap = convert_term locals map in
         let tidx = convert_term locals idx in
-        GrassUtil.mk_read tmap tidx
+        GrassUtil.mk_read tmap [tidx]
     | UnaryOp (OpOld, e, pos) ->
         let t = convert_term locals e in
         GrassUtil.mk_old t
@@ -584,7 +584,7 @@ let convert cu =
                 let fld_id = List.hd lhs_ids in
                 let fld_srt = convert_type (field_type pos fld_id proc.p_locals) pos in
                 let fld = GrassUtil.mk_free_const fld_srt fld_id in
-                mk_assign_cmd lhs_ids [GrassUtil.mk_write fld t (List.hd rhs_ts)] pos
+                mk_assign_cmd lhs_ids [GrassUtil.mk_write fld [t] (List.hd rhs_ts)] pos
             | None -> mk_assign_cmd lhs_ids rhs_ts pos)
           in
           cmd
