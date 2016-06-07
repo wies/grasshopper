@@ -332,8 +332,8 @@ let smtlib_sort_of_grass_sort srt =
   | Pat -> FreeSort (("GrassPat", 0), [])
   | Set srt ->
       FreeSort ((set_sort_string, 0), [csort srt])
-  | Map (dsrt, rsrt) ->
-      FreeSort ((map_sort_string, 0), [csort dsrt; csort rsrt])
+  | Map (dsrts, rsrt) ->
+      FreeSort ((map_sort_string, 0), List.map csort dsrts @ [csort rsrt])
   | Array srt ->
       FreeSort (("Grass" ^ array_sort_string, 0), [csort srt])
   | ArrayCell srt ->
@@ -425,7 +425,7 @@ let init_session session sign =
     let rec hi = function
       | Int -> true
       | Set srt | Loc srt | Array srt | ArrayCell srt -> hi srt
-      | Map (dsrt, rsrt) -> hi dsrt || hi rsrt
+      | Map (dsrts, rsrt) -> List.exists hi dsrts || hi rsrt
       | _ -> false
     in
     SymbolMap.exists 
@@ -439,7 +439,7 @@ let init_session session sign =
     let rec add acc srt = match srt with
     | FreeSrt _ -> SortSet.add srt acc
     | Set srt | ArrayCell srt | Array srt | Loc srt -> add acc srt
-    | Map (srt1, srt2) -> add (add acc srt1) srt2
+    | Map (dsrts, rsrt) -> List.fold_left add acc (rsrt :: dsrts)
     | _ -> acc
     in
     SymbolMap.fold
@@ -830,7 +830,11 @@ let convert_model session smtModel =
         | "GrassArray", [esrt] -> Array esrt
         | "GrassPat", [] -> Pat
         | "ArrayCell", [esrt] -> ArrayCell esrt
-        | "Map", [dsrt; rsrt] -> Map (dsrt, rsrt)
+        | "Map", (_ :: _ as srts) ->
+            let srts_rev = List.rev srts in
+            let rsrt = List.hd srts_rev in
+            let dsrts = List.rev (List.tl srts_rev) in
+            Map (dsrts, rsrt)
         | _, [] -> FreeSrt (name, num)
         | srt, _ -> fail session ("encountered unexpected sort " ^ srt ^ " in model conversion")
   in

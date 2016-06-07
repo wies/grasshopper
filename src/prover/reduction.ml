@@ -84,7 +84,7 @@ let field_partitions fs gts =
   let fld_partition, fld_map, fields = 
     let max, fld_map, fields = 
       TermSet.fold (fun t (n, fld_map, fields) -> match t with
-      | App (_, _, Map (Loc _, _)) as fld -> 
+      | App (_, _, Map (Loc _ :: _, _)) as fld -> 
           n+1, TermMap.add fld n fld_map, TermSet.add fld fields
       | _ -> n, fld_map, fields)
         gts (0, TermMap.empty, TermSet.empty)
@@ -92,7 +92,7 @@ let field_partitions fs gts =
     let rec collect_eq partition = function
       | BoolOp (Not, f) -> partition
       | BoolOp (op, fs) -> List.fold_left collect_eq partition fs
-      | Atom (App (Eq, [App (_, _, Map (Loc _, _)) as fld1; fld2], _), _) ->
+      | Atom (App (Eq, [App (_, _, Map (Loc _ :: _, _)) as fld1; fld2], _), _) ->
           Puf.union partition (TermMap.find fld1 fld_map) (TermMap.find fld2 fld_map)
       | Binder (_, _, f, _) -> collect_eq partition f
       | f -> partition
@@ -136,8 +136,8 @@ let add_frame_axioms fs =
   SortSet.fold
     (fun srt fs ->
       match srt with
-      | Map (Loc srt1, srt2) ->
-          Axioms.frame_axioms srt1 srt2 @ fs
+      | Map ((Loc _ :: _ as dsrts), rsrt) ->
+          Axioms.frame_axioms dsrts rsrt @ fs
       | _ -> fs)
     frame_sorts fs
  
@@ -206,7 +206,7 @@ let struct_sorts_of_fields flds =
   TermSet.fold
     (fun fld structs ->
       match fld with
-      | App (_, _, Map (Loc srt, _)) -> SortSet.add srt structs
+      | App (_, _, Map (Loc srt :: _, _)) -> SortSet.add srt structs
       | _ -> structs)
     flds SortSet.empty
 
@@ -229,8 +229,8 @@ let add_ep_axioms fs =
   let struct_sorts =
     TermSet.fold
       (fun t struct_sorts -> match t with
-      | App (_, _, Map(Loc srt1, Loc srt2)) 
-      | Var (_, Map(Loc srt1, srt2)) when srt1 = srt2 -> SortSet.add srt1 struct_sorts
+      | App (_, _, Map([Loc srt1], Loc srt2)) 
+      | Var (_, Map([Loc srt1], srt2)) when srt1 = srt2 -> SortSet.add srt1 struct_sorts
       | _ -> struct_sorts)
       gts SortSet.empty
   in

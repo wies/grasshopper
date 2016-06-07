@@ -185,7 +185,7 @@ let instantiate_and_prove session fs =
     | _ -> k, result, fs_asserted, fs_inst, gts_inst, classes
     in List.fold_left dr (1, None, FormSet.empty, fs1, gts1, classes) rounds
   in
-  let _, result, _, fs_inst, _, _ = do_rounds [round1; round2; round3] in
+  let _, result, _, fs_inst, _, _ = do_rounds [round1; round2(*; round3*)] in
   result, session, fs_inst
 
 

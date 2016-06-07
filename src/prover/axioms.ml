@@ -45,8 +45,8 @@ let loc5 struct_srt = mk_var (snd (l5 struct_srt)) (fst (l5 struct_srt))
 let fld1 struct_srt = mk_var (snd (f1 struct_srt)) (fst (f1 struct_srt))
 let fld2 struct_srt = mk_var (snd (f2 struct_srt)) (fst (f2 struct_srt))
 let fld3 struct_srt = mk_var (snd (f3 struct_srt)) (fst (f3 struct_srt))
-let dfld1 struct_srt res_srt = mk_var (Map (Loc struct_srt, res_srt)) d
-let dfld2 struct_srt res_srt = mk_var (Map (Loc struct_srt, res_srt)) e 
+let dfld1 struct_srt res_srt = mk_var (Map ([Loc struct_srt], res_srt)) d
+let dfld2 struct_srt res_srt = mk_var (Map ([Loc struct_srt], res_srt)) e 
 let set1 struct_srt = mk_var (snd (s1 struct_srt)) (fst (s1 struct_srt))
 let set2 struct_srt = mk_var (snd (s2 struct_srt)) (fst (s2 struct_srt))
 let set3 struct_srt = mk_var (snd (s3 struct_srt)) (fst (s3 struct_srt))
@@ -117,7 +117,7 @@ let open_axioms ?(force=false) open_cond axioms =
   List.fold_right open_axioms axioms ([], [])
 
 (** Open condition that checks whether the given sorted variable is a field. *)
-let isFld f = function (_, Map (Loc _, _)) -> true | _ -> false
+let isFld f = function (_, Map ([Loc _], _)) -> true | _ -> false
 
 (** Open condition that checks whether the given sorted variable appears below a function symbol. *) 
 let isFunVar f =
@@ -129,30 +129,31 @@ let isFunVar f =
 
 (** Array read over write axioms *)
 let read_write_axioms fld1 =
-  let (struct_srt, res_srt) = 
+  let struct_srt, ind_srts, res_srt = 
     match sort_of fld1 with
-    | Map (Loc sid, srt) -> (sid, srt)
+    | Map (Loc sid :: ind_srts, srt) -> (sid, ind_srts, srt)
     | _ -> failwith "expected field in read_write_axioms"
   in
   let srt_string = string_of_sort res_srt in
   let d = fresh_ident "?d" in
   let dvar = mk_var res_srt d in
   (*let g = fresh_ident "?g" in
-  let g1 = g, Fld res_srt in*)
-  let loc1 = loc1 struct_srt in
-  let loc2 = loc2 struct_srt in
-  let loc3 = loc3 struct_srt in
+    let g1 = g, Fld res_srt in*)
+  let mk_inds () = List.map (fun srt -> mk_var srt (fresh_ident "?i")) ind_srts in
+  let loc1 = loc1 struct_srt :: mk_inds () in
+  let loc2 = loc2 struct_srt :: mk_inds () in
+  let loc3 = loc3 struct_srt :: mk_inds () in
   let new_fld1 = mk_write fld1 loc1 dvar in
   let f x = mk_read fld1 x in
   let g x = mk_read new_fld1 x in
   let f_upd1 =
     if not !Config.instantiate || !Config.smtpatterns
-    then mk_or [mk_eq loc2 loc1; mk_neq loc2 loc3; mk_eq (f loc2) (g loc3)]
-    else mk_or [mk_eq loc2 loc1; mk_eq (f loc2) (g loc2)]
+    then mk_or (List.map2 mk_eq loc2 loc1 @ List.map2 mk_neq loc2 loc3 @ [mk_eq (f loc2) (g loc3)])
+    else mk_or (List.map2 mk_eq loc2 loc1 @ [mk_eq (f loc2) (g loc2)])
   in
   let f_upd2 = 
     if not !Config.instantiate || !Config.smtpatterns
-    then mk_or [mk_neq loc1 loc2; mk_eq (g loc2) dvar]
+    then mk_or (List.map2 mk_neq loc1 loc2 @ [mk_eq (g loc2) dvar])
     else mk_or [mk_eq (g loc1) dvar]
   in
   let generator2 = 
@@ -172,7 +173,7 @@ let reach_write_axioms struct_srt =
   let loc3 = loc3 struct_srt in
   let loc4 = loc4 struct_srt in
   let loc5 = loc5 struct_srt in
-  let new_fld1 = mk_write fld1 loc1 loc2 in
+  let new_fld1 = mk_write fld1 [loc1] loc2 in
   let btwn_write =
     let b = mk_btwn fld1 in
     let reachwo u v w = reachwo_Fld fld1 u v w in
@@ -193,13 +194,13 @@ let f x =
     | Loc s -> s
     | _ -> failwith "expected Loc sort"
   in
-  mk_read (fld1 struct_srt) x
+  mk_read (fld1 struct_srt) [x]
 let g x =
   let struct_srt = match sort_of x with
     | Loc s -> s
     | _ -> failwith "expected Loc sort"
   in
-  mk_read (fld2 struct_srt) x
+  mk_read (fld2 struct_srt) [x]
 
 (** Axioms for reachability predicates *)
 let reach_axioms classes struct_srt = 
@@ -274,13 +275,13 @@ let reach_axioms classes struct_srt =
       Match (mk_known fld2, [])],
      [mk_known fld1]) :: 
     (* f [x := d], known(f [x := d]) -> known(f) *)
-    ([Match (mk_write fld1 loc1 loc2, []);
-      Match (mk_known (mk_write fld1 loc1 loc2), [])],
+    ([Match (mk_write fld1 [loc1] loc2, []);
+      Match (mk_known (mk_write fld1 [loc1] loc2), [])],
      [mk_known fld1]) ::
     (* f [x := d], known(f) -> known(f [x := d]) *)
-    ([Match (mk_write fld1 loc1 loc2, []);
+    ([Match (mk_write fld1 [loc1] loc2, []);
       Match (mk_known fld1, [])],
-     [mk_known (mk_write fld1 loc1 loc2)]) ::
+     [mk_known (mk_write fld1 [loc1] loc2)]) ::
     (* Frame (x, a, f, g), known(g) -> known(f) *)
     ([Match (mk_frame_term set1 set2 fld1 fld2, []);
       Match (mk_known fld2, [])],
@@ -318,7 +319,7 @@ let null_axioms struct_srt1 =
 let frame_axioms =
   let sk_frame1 = fresh_ident "closed_frame" in
   let sk_frame2 = fresh_ident "closed_frame" in
-  fun struct_srt res_srt ->
+  fun struct_srt ind_srts res_srt ->
   let a = set1 struct_srt in
   let x = set2 struct_srt in
   (*let frame_set = mk_diff a x in*)
@@ -328,6 +329,7 @@ let frame_axioms =
       (mk_pattern frame [] (mk_implies (mk_frame x a fld1 fld2) f))
   in
   let loc1 = loc1 struct_srt in
+  let inds = List.map (fun srt -> mk_var srt (fresh_ident "?i")) ind_srts in
   let read_frame fld1 fld2 =
     let frame = mk_frame_term x a fld1 fld2 in
     let gen = [([Match (frame, [])], [mk_known frame])] in
@@ -335,7 +337,7 @@ let frame_axioms =
       (mk_sequent
          [smk_elem loc1 a]
          [smk_elem loc1 x;
-          mk_eq (mk_read fld1 loc1) (mk_read fld2 loc1)]
+          mk_eq (mk_read fld1 (loc1 :: inds)) (mk_read fld2 (loc1 :: inds))]
       )
   in
   let reach_frame () =
@@ -462,13 +464,13 @@ let array_axioms elem_srt =
     mk_or [mk_eq a (mk_null (Array elem_srt)); mk_leq (mk_int 0) (mk_length a)]
   in
   let array_cells1 =
-    mk_eq (mk_array_of_cell (mk_read (mk_array_cells a) i)) a 
+    mk_eq (mk_array_of_cell (mk_read (mk_array_cells a) [i])) a 
   in
   let array_cells2 =
-    mk_eq (mk_index_of_cell (mk_read (mk_array_cells a) i)) i
+    mk_eq (mk_index_of_cell (mk_read (mk_array_cells a) [i])) i
   in
   let array_cells3 =
-    mk_eq (mk_read (mk_array_cells (mk_array_of_cell c)) (mk_index_of_cell c)) c
+    mk_eq (mk_read (mk_array_cells (mk_array_of_cell c)) [mk_index_of_cell c]) c
   in
   (*
   let array_cells1 = 
@@ -483,7 +485,7 @@ let array_axioms elem_srt =
                  FilterSymbolNotOccurs IndexOfCell;
                  FilterSymbolNotOccurs ArrayCells;
                  FilterNotNull])], 
-      [mk_read (mk_array_cells (mk_array_of_cell c)) (mk_index_of_cell c)])
+      [mk_read (mk_array_cells (mk_array_of_cell c)) [mk_index_of_cell c]])
   in
   let index_of_cell_gen =
     ([Match (c, [FilterSymbolNotOccurs IndexOfCell; FilterNotNull])], 

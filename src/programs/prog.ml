@@ -342,8 +342,8 @@ let struct_sorts prog =
   let collect_srts decls =
     let rec cs struct_srts = function
       | Loc srt -> SortSet.add srt struct_srts
-      | Map (srt1, srt2) ->
-          cs (cs struct_srts srt1) srt2
+      | Map (dom_srts, res_srt) ->
+          List.fold_left cs struct_srts (res_srt :: dom_srts)
       | Array srt | ArrayCell srt | Set srt ->
           cs struct_srts srt
       | _ -> struct_srts
@@ -631,11 +631,11 @@ let accesses_basic_cmd = function
   | Call cc -> 
       List.fold_left free_consts_term_acc (id_set_of_list cc.call_lhs) cc.call_args
 
-let footprint_sorts_acc acc = function
+let rec footprint_sorts_acc acc = function
   | (Loc srt)
-  | Set (Loc srt)
-  | Map (Loc srt, _) ->
-      SortSet.add srt acc
+  | Set (Loc srt) -> SortSet.add srt acc
+  | Map (srts, _) ->
+      List.fold_left footprint_sorts_acc acc srts
   | _ -> acc
 
 let footprint_sorts_pred pred = pred.pred_contract.contr_footprint_sorts

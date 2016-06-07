@@ -12,13 +12,13 @@ let is_stratified t1 t2 =
         (Loc, Set Loc);
         (Int, Set Int) ] *)
       match t1 with
-      | Map (Loc _, (Bool | Loc _)) ->
+      | Map ([Loc _], (Bool | Loc _)) ->
         begin
           match t2 with
           | Loc (FreeSrt ("Data", 0)) | Bool | Loc _ | Int | Set Int | Set (Loc _) -> true
           | _ -> false
         end
-      | Map (Loc _, Int) ->
+      | Map ([Loc _], Int) ->
         begin
           match t2 with
           | Loc (FreeSrt ("Data", 0)) | Bool | Int | Set Int -> true

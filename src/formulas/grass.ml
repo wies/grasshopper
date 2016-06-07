@@ -33,7 +33,7 @@ type sort =
   | Bool | Byte | Int (** basic sorts *)
   | Loc of sort (** memory locations *)
   | Set of sort (** sets *)
-  | Map of sort * sort (** maps *)
+  | Map of sort list * sort (** maps *)
   | Array of sort (** arrays *)
   | ArrayCell of sort (** array cells *)
   | Pat (** patterns *)
@@ -291,6 +291,11 @@ let name_of_sort = function
     
 let pr_sym ppf sym = fprintf ppf "%s" (string_of_symbol sym)
 
+let rec pr_list pr_x ppf = function
+  | [] -> ()
+  | [x] -> fprintf ppf "%a" pr_x x
+  | x :: xs -> fprintf ppf "%a,@ %a" pr_x x (pr_list pr_x) xs
+  
 let rec pr_sort ppf srt = match srt with
   | Bool
   | Int
@@ -301,15 +306,16 @@ let rec pr_sort ppf srt = match srt with
   | Array e
   | ArrayCell e -> fprintf ppf "%s<@[%a@]>" (name_of_sort srt) pr_sort e
   | FreeSrt id -> pr_ident ppf id
-  | Map (d, r) -> fprintf ppf "%s<@[%a,@ %a@]>" map_sort_string pr_sort d pr_sort r
-	
+  | Map (ds, r) -> fprintf ppf "%s<@[%a,@ %a@]>" map_sort_string pr_sorts ds pr_sort r
+        
+and pr_sorts ppf = function
+  | [srt] ->  fprintf ppf "%a" pr_sort srt
+  | srts -> fprintf ppf "(%a)" (pr_list pr_sort) srts
+        
 let pr_var ppf (x, srt) =
   fprintf ppf "@[%a: %a@]" pr_ident x pr_sort srt
 
-let rec pr_vars ppf = function
-  | [] -> ()
-  | [v] -> pr_var ppf v
-  | v :: vs -> fprintf ppf "%a,@ %a" pr_var v pr_vars vs 
+let rec pr_vars = pr_list pr_var
 
 let rec pr_term0 ppf t =
   match t with
@@ -318,8 +324,8 @@ let rec pr_term0 ppf t =
       | Diff | Union | Inter | Plus | Minus | Mult | Div -> 
           fprintf ppf "(%a)" pr_term t
       | _ -> pr_term ppf t)
-  | _ -> pr_term ppf t
-
+  | _ -> pr_term ppf t    
+        
 and pr_term ppf = function
   | Var (id, _) -> fprintf ppf "%a" pr_ident id
   | App (Empty, _, _) -> fprintf ppf "{}"
@@ -349,10 +355,7 @@ and pr_term ppf = function
   | App (SetEnum, ts, _) -> fprintf ppf "{@[%a@]}" pr_term_list ts
   | App (sym, ts, _) -> fprintf ppf "%a(@[%a@])" pr_sym sym pr_term_list ts
 
-and pr_term_list ppf = function
-  | [] -> ()
-  | [t] -> pr_term ppf t
-  | t :: ts -> fprintf ppf "%a,@ %a" pr_term t pr_term_list ts
+and pr_term_list ppf = pr_list pr_term ppf
 
 and pr_inter ppf = function
   | [] -> fprintf ppf "Univ"

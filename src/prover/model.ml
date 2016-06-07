@@ -138,8 +138,8 @@ let get_result_sort model sym arg_srts =
     model.intp None
       
 
-let find_map_value model v arg_srt res_srt = 
-  match SortedValueMap.find (v, Map (arg_srt, res_srt)) model.vals with
+let find_map_value model v arg_srts res_srt = 
+  match SortedValueMap.find (v, Map (arg_srts, res_srt)) model.vals with
   | MapVal (m, d) -> m, d
   | Undef -> ValueListMap.empty, Undef
   | _ -> raise Undefined
@@ -196,7 +196,7 @@ let extend_interp model sym (arity: arity) args res =
   (* update extended value mapping *)
   begin
     match res_srt with
-    | Map (Loc _, srt)
+    | Map (Loc _ :: _, srt)
     | Set srt ->
         model.vals <- SortedValueMap.add (value_of_int card, res_srt) res model.vals
     | _ -> ()
@@ -214,19 +214,21 @@ let rec eval model = function
       let fld_val = eval model fld in
       let ind_val = eval model ind in
       let ind_srt = sort_of ind in
-      let arity = [Map (ind_srt, srt); ind_srt], srt in
+      let arity = [Map ([ind_srt], srt); ind_srt], srt in
       let res = interp_symbol model Read arity [fld_val; ind_val] in
       res
-  | App (Write, [fld; ind; upd], (Map (dsrt, rsrt) as srt)) ->
-      let ind_val = eval model ind in
-      let upd_val = eval model upd in
+  | App (Write, fld :: (_ :: _ as ind_upd), (Map (dsrts, rsrt) as srt)) ->
+      let ind_upd_vals = List.map (eval model) ind_upd in
+      let arity = srt :: dsrts @ [rsrt], srt in
       let fld_val = eval model fld in
-      let arity = [srt; dsrt; rsrt], srt in
-      (try interp_symbol model Write arity [fld_val; ind_val; upd_val]
+      (try interp_symbol model Write arity (fld_val :: ind_upd_vals)
       with Undefined ->
-        let m, d = find_map_value model fld_val (sort_of ind) srt in
-        let res = MapVal (ValueListMap.add [ind_val] upd_val m, d) in
-        extend_interp model Write arity [fld_val; ind_val; upd_val] res)
+        let upd_ind_vals = List.rev ind_upd_vals in
+        let upd_val = List.hd upd_ind_vals in
+        let ind_val = List.rev (List.tl upd_ind_vals) in
+        let m, d = find_map_value model fld_val dsrts srt in
+        let res = MapVal (ValueListMap.add ind_val upd_val m, d) in
+        extend_interp model Write arity (fld_val :: ind_upd_vals) res)
   | App (UMinus, [t], _) ->
       I (Int64.mul Int64.minus_one (eval_int model t))
   | App (Plus as intop, [t1; t2], _)
@@ -450,7 +452,7 @@ let get_map_sorts model =
 let get_loc_fld_sorts model =
   SortedSymbolMap.fold
     (function
-      | (_, (_, (Map (Loc _, Loc _) as srt))) -> fun _ srts -> SortSet.add srt srts
+      | (_, (_, (Map (Loc _ :: _, Loc _) as srt))) -> fun _ srts -> SortSet.add srt srts
       | _ -> fun _ srts -> srts)
     model.intp SortSet.empty
     
@@ -753,8 +755,8 @@ let finalize_values model =
       | Bool -> true
       | Loc _ -> true
       | Set srt -> is_finite_set_sort srt
-      | Map (dsrt, rsrt) ->
-          is_finite_set_sort dsrt && is_finite_set_sort rsrt
+      | Map (dsrts, rsrt) ->
+          List.for_all is_finite_set_sort dsrts && is_finite_set_sort rsrt
       | Array _ -> true
       | ArrayCell _ -> true
       | FreeSrt _ -> true
@@ -765,21 +767,23 @@ let finalize_values model =
       (get_values_of_sort model (Set srt))
   in
   let generate_fields srt =
-    let dsrt = dom_sort srt in
-    let rsrt = range_sort srt in
-    List.iter
-      (fun f ->
-        let fmap =
-          List.fold_left (fun fmap e ->
-            try
-              let f_of_e = interp_symbol model Read ([srt; dsrt], rsrt) [f; e] in
-              ValueListMap.add [e] f_of_e fmap
-            with Undefined -> fmap)
-            ValueListMap.empty
-            (get_values_of_sort model dsrt)
-        in
-        model.vals <- SortedValueMap.add (f, srt) (MapVal (fmap, Undef)) model.vals)
-      (get_values_of_sort model srt)
+    match dom_sort srt with
+    | [dsrt] ->
+        let rsrt = range_sort srt in
+        List.iter
+          (fun f ->
+            let fmap =
+              List.fold_left (fun fmap e ->
+                try
+                  let f_of_e = interp_symbol model Read ([srt; dsrt], rsrt) [f; e] in
+                  ValueListMap.add [e] f_of_e fmap
+                with Undefined -> fmap)
+                ValueListMap.empty
+                (get_values_of_sort model dsrt)
+            in
+            model.vals <- SortedValueMap.add (f, srt) (MapVal (fmap, Undef)) model.vals)
+          (get_values_of_sort model srt)
+    | _ -> ()
   in
   SortSet.iter generate_sets (get_set_sorts model);
   SortSet.iter generate_fields (get_map_sorts model);
@@ -793,7 +797,7 @@ let string_of_sorted_value srt v =
     | Set srt -> Set (elim_loc srt)
     | Array srt -> Array (elim_loc srt)
     | ArrayCell srt -> ArrayCell (elim_loc srt)
-    | Map (dsrt, rsrt) -> Map (elim_loc dsrt, elim_loc rsrt)
+    | Map (dsrts, rsrt) -> Map (List.map elim_loc dsrts, elim_loc rsrt)
     | srt -> srt
   in
   match srt with
@@ -827,7 +831,7 @@ let output_json chan model =
           let s = find_set_value model set esrt in
           output_set (ValueSet.elements s) esrt
         with Undefined -> output_set [] esrt (* fix me *))
-    | Map (dsrt, rsrt) ->
+    | Map ([dsrt], rsrt) ->
         let fld = interp_symbol model sym ([], srt) [] in
         let args = get_values_of_sort model dsrt in
         let arg_res = 
@@ -1485,7 +1489,7 @@ let print_graph output chan model terms =
           try 
             let f = interp_symbol model fld ([], field_sort srt rsrt) [] in
             let fld_str = string_of_symbol fld in
-            let m, d = find_map_value model f (Loc srt) rsrt in
+            let m, d = find_map_value model f [Loc srt] rsrt in
             let v = fun_app model (MapVal (m, d)) [loc] in
             (fld_str, (string_of_value v)) :: acc
           with Undefined -> acc)
@@ -1505,7 +1509,7 @@ let print_graph output chan model terms =
     let rsrts =
       SortSet.fold
         (function
-          | Map (Loc srt1, Loc rsrt) when srt1 = srt -> SortSet.add rsrt
+          | Map ([Loc srt1], Loc rsrt) when srt1 = srt -> SortSet.add rsrt
           | _ -> fun rsrts -> rsrts)
         fld_srts SortSet.empty
     in
@@ -1522,7 +1526,7 @@ let print_graph output chan model terms =
         (not !Config.model_null_edge) &&
         (interp_symbol model Null ([], Loc rsrt) [] = r)
       in
-      let fld_srt = Map (Loc srt, Loc rsrt) in
+      let fld_srt = Map ([Loc srt], Loc rsrt) in
       let flds = get_values_of_sort model fld_srt in
       let read_arity = [fld_srt; Loc srt], Loc rsrt in
       List.iter 
@@ -1554,9 +1558,9 @@ let print_graph output chan model terms =
                   let src = declare_value (ArrayCell esrt) c [] in
                   let dst = get_node srt l in
                   edges := (src, dst, "array", Solid, "black") :: !edges;
-                  let cells = interp_symbol model ArrayCells ([Loc (Array esrt)], Map (Int, cell_srt)) [l] in
+                  let cells = interp_symbol model ArrayCells ([Loc (Array esrt)], Map ([Int], cell_srt)) [l] in
                   let i = interp_symbol model IndexOfCell ([cell_srt], Int) [c] in
-                  let c1 = interp_symbol model Read ([Map (Int, cell_srt); Int], cell_srt) [cells; i] in
+                  let c1 = interp_symbol model Read ([Map ([Int], cell_srt); Int], cell_srt) [cells; i] in
                   if c1 = c then
                     edges := (dst, src, Int64.to_string (int_of_value i), Solid, "black") :: !edges
                 end)

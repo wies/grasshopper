@@ -179,8 +179,8 @@ let is_map_sort = function
   | Map _ -> true
   | _ -> false
     
-let field_sort id ran_srt = Map (Loc id, ran_srt)
-let array_sort ran_srt = Map (Int, ran_srt)
+let field_sort id ran_srt = Map ([Loc id], ran_srt)
+let array_sort ran_srt = Map ([Int], ran_srt)
 
 let loc_field_sort srt = field_sort srt (Loc srt)
 
@@ -256,18 +256,17 @@ let mk_ite c t e = mk_app (sort_of t) Ite [c; t; e]
 
 let mk_null id = mk_app (Loc id) Null []
 
-let mk_read map ind = 
-  let dom_srt, ran_srt = match sort_of map with
-  | Map (d,r) -> d, r
-  | Loc (Array r) -> Int, r
+let mk_read map inds = 
+  let dom_srts, ran_srt = match sort_of map with
+  | Map (ds,r) -> ds, r
+  | Loc (Array r) -> [Int], r
   | s -> 
       failwith 
 	("tried to read from term " ^ 
          (string_of_term map) ^ " which is of sort " ^ (string_of_sort s) ^ ".\n" ^
          "Expected sort (Map X Y) for some sorts X, Y.")
   in 
-  assert (sort_of ind = dom_srt);
-  mk_app ran_srt Read [map; ind]
+  mk_app ran_srt Read (map :: inds)
 
 let mk_read_form map ind = 
   match sort_of map with
@@ -285,10 +284,10 @@ let mk_index_of_cell c =
   mk_app Int IndexOfCell [c]
 
 let mk_array_cells a =
-  mk_app (Map (Int, Loc (ArrayCell (element_sort_of_array a)))) ArrayCells [a]
+  mk_app (Map ([Int], Loc (ArrayCell (element_sort_of_array a)))) ArrayCells [a]
     
-let mk_write map ind upd =
-  mk_app (sort_of map) Write [map; ind; upd]
+let mk_write map inds upd =
+  mk_app (sort_of map) Write (map :: inds @ [upd])
 
 (** Constructor for equalities.*)
 let mk_ep fld set t = mk_app (element_sort_of_set set) EntPnt [fld; set; t]
