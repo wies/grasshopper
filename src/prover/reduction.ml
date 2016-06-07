@@ -136,7 +136,7 @@ let add_frame_axioms fs =
   SortSet.fold
     (fun srt fs ->
       match srt with
-      | Map ((Loc ssrt :: _ as dsrts), rsrt) ->
+      | Map ((Loc ssrt :: dsrts), rsrt) ->
           Axioms.frame_axioms ssrt dsrts rsrt @ fs
       | _ -> fs)
     frame_sorts fs
