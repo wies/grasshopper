@@ -535,7 +535,9 @@ let smk_op op fs =
         | Atom (App (BoolConst true, [], _), _) :: fs1 when op = Or -> mk_true
 	| BoolOp (Or, []) :: fs1
         | Atom (App (BoolConst false, [], _), _) :: fs1 when op = And -> mk_false
-	| f :: fs1 -> mkop1 fs1 (FormSet.add f acc)
+	| f :: fs1 ->
+            if FormSet.mem (mk_not f) acc then BoolOp (dualize_op op, [])
+            else mkop1 fs1 (FormSet.add f acc)
       in mkop1 fs FormSet.empty
 
 (** Smart constructor for conjunctions. *)
