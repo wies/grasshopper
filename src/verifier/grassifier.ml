@@ -622,8 +622,8 @@ let elim_sl prog =
         let sl_pure, sl_nonpure = split_sep [] f in
         sl_nonpure |>
         SlToGrass.to_grass (pred_to_form footprint_context) footprint_sets |>
-        post_process_form |>
-        (fun f -> mk_and (f :: sl_pure @ fp_inclusions))
+        (fun f -> mk_and (f :: sl_pure @ fp_inclusions)) |>
+        post_process_form
         (*|> (fun f -> print_endline (string_of_ident contr.contr_name ^ " (after):"); print_form stdout f; print_newline (); f)*)
       in
       let precond = mk_spec_form (FOL f_eq_init_footprint) name msg pos in
