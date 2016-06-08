@@ -504,25 +504,25 @@ let elim_sl prog =
     let eqs = mk_empty_except p_footprints in
     smk_and (mk_pred p (args @ fp_caller_args @ fp_args) :: eqs)
   in
-  (* post process SL formula *)
-  let post_process_form f =
-    let subst_preds f =
-      let s sym ts srt =
-        match sym with
-        | FreeSym p when IdMap.mem p prog.prog_preds ->
-            let decl = find_pred prog p in
-            if List.length (formals_of_pred decl) <> List.length ts
+  (* post process term *)
+  let add_footprint_args sym ts srt =
+    match sym with
+    | FreeSym p when IdMap.mem p prog.prog_preds ->
+        let decl = find_pred prog p in
+        if List.length (formals_of_pred decl) <> List.length ts
             then mk_app srt sym ts else
-            let fps =
-              SortSet.fold
-                (fun ssrt fps -> footprint_caller_set ssrt :: fps)
-                (footprint_sorts_pred decl) []
-            in
-            mk_app srt sym (ts @ fps) 
-        | _ -> mk_app srt sym ts 
-      in
-      subst_funs s f
-    in
+          let fps =
+            SortSet.fold
+              (fun ssrt fps -> footprint_caller_set ssrt :: fps)
+              (footprint_sorts_pred decl) []
+          in
+          mk_app srt sym (ts @ fps) 
+    | _ -> mk_app srt sym ts 
+  in
+  let post_process_term t = subst_funs_term add_footprint_args t in
+  (* post process formula *)
+  let post_process_form f =
+    let subst_preds f = subst_funs add_footprint_args f in
     let simplify f =
       let round f =
         f |>
@@ -876,23 +876,9 @@ let elim_sl prog =
     in
     (* update all procedure calls and return commands in body *)
     let rec compile_stmt = function
-      | (Call cc, pp) ->
-          let decl = find_proc prog cc.call_name in
-          let footprint_ids, footprint_sets =
-            SortSet.fold
-              (fun ssrt (ids, sets) ->
-                (if IdSet.mem (alloc_id ssrt) (modifies_proc prog decl)
-                then footprint_id ssrt :: ids
-                else ids),
-                footprint_set ssrt :: sets
-              )
-              (footprint_sorts_proc decl) ([], [])
-          in   
-          mk_call_cmd ~prog:(Some prog) 
-            (cc.call_lhs @ footprint_ids) 
-            cc.call_name 
-            (cc.call_args @ footprint_sets) 
-            pp.pp_pos
+      | (Assign ac, pp) ->
+          let rhs = List.map post_process_term ac.assign_rhs in
+          mk_assign_cmd ac.assign_lhs rhs pp.pp_pos
       | (Return rc, pp) ->
           let fp_returns =
             SortSet.fold (fun ssrt fp_returns ->
@@ -901,7 +887,8 @@ let elim_sl prog =
               else fp_returns)
               proc_footprints []
           in
-          let rc1 = { return_args = rc.return_args @ fp_returns } in
+          let return_args = List.map post_process_term rc.return_args in
+          let rc1 = { return_args = return_args @ fp_returns } in
           Basic (Return rc1, pp)
       | (Assume sf, pp) ->
           (match sf.spec_form with
@@ -931,6 +918,24 @@ let elim_sl prog =
 	     let f1 = post_process_form f in
 	     let sf1 = mk_spec_form (FOL f1) sf.spec_name sf.spec_msg sf.spec_pos in
              mk_assert_cmd sf1 pp.pp_pos)
+      | (Call cc, pp) ->
+          let decl = find_proc prog cc.call_name in
+          let footprint_ids, footprint_sets =
+            SortSet.fold
+              (fun ssrt (ids, sets) ->
+                (if IdSet.mem (alloc_id ssrt) (modifies_proc prog decl)
+                then footprint_id ssrt :: ids
+                else ids),
+                footprint_set ssrt :: sets
+              )
+              (footprint_sorts_proc decl) ([], [])
+          in
+          let call_args = List.map post_process_term cc.call_args in
+          mk_call_cmd ~prog:(Some prog) 
+            (cc.call_lhs @ footprint_ids) 
+            cc.call_name 
+            (call_args @ footprint_sets) 
+            pp.pp_pos
       | (c, pp) -> Basic (c, pp)
     in
     let body = 
