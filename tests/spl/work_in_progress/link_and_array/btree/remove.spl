@@ -3,9 +3,26 @@ include "find.spl";
 include "node_utils.spl";
 include "array_utils.spl";
 
-procedure removeRecursive(x: Int, u: Node) returns (res: Bool)
-  requires ???
-  ensures  ???
+procedure remove(bt: Node, x: T) returns (res: Node)
+  requires btree_root(bt)
+  ensures  btree_root(res)
+{
+  var success := removeRecursive(x, bt)
+  if (size(bt) == 1) {// root has only one child
+    var newRoot := bt.children[0];
+    newRoot.parent := null;
+    newRoot.lbound := bottom;
+    newRoot.ubound := top;
+    free(bt);
+    return newRoot;
+  } else {
+    return bt;
+  }
+}
+
+procedure removeRecursive(x: T, u: Node) returns (res: Bool)
+  requires btree(u) &*& u != null
+  ensures  btree(u)
 {
   if (u == null) {
     return false;  // didn't find it
@@ -19,7 +36,7 @@ procedure removeRecursive(x: Int, u: Node) returns (res: Bool)
       u.keys[i] := removeSmallest(u.children[i+1]);
       checkUnderflow(u, i+1);
     }
-    return true;  
+    return true;
   } else if (removeRecursive(x, u.children[i])) {
     checkUnderflow(u, i);
     return true;
@@ -28,7 +45,7 @@ procedure removeRecursive(x: Int, u: Node) returns (res: Bool)
 }
 
 procedure removeSmallest(u: Node) returns (res: T)
-  requires btree(u)
+  requires btree(u) &*& u != null
   ensures  btree(u)
 {
   if (is_leaf(u)) {
@@ -40,7 +57,7 @@ procedure removeSmallest(u: Node) returns (res: T)
 }
 
 procedure checkUnderflow(u: Node, i: Int)
-  requires btree(u)
+  requires btree(u) &*& u != null
   ensures  btree(u)
 {
   if (u.children[i] == null) {
@@ -54,7 +71,7 @@ procedure checkUnderflow(u: Node, i: Int)
 }
 
 procedure checkUnderflowNonZero(u: Node, i: Int)
-  requires btree(u)
+  requires btree(u) &*& u != null
   ensures  btree(u)
 {
   var w := u.children[i];  // w is child of u
@@ -69,7 +86,7 @@ procedure checkUnderflowNonZero(u: Node, i: Int)
 }
 
 procedure checkUnderflowZero(u: Node, i: Int)
-  requires btree(u)
+  requires btree(u) &*& u != null
   ensures  btree(u)
 {
   var w := u.children[i]; // w is child of u
@@ -106,8 +123,12 @@ procedure merge(u: Node, i: Int, v: Node, w: Node)
 }
 
 procedure shiftLR(u: Node, i: Int, v: Node, w: Node)
-  requires ???
-  ensures  ???
+  requires (btree(v) &*& btree(w)) -** btree(u)
+  requires u != null && v!= null && w != null
+  requires v == u.children[i] && w == u.children[i+1] // v is left of w
+  requires w.keys[B-1] == bottom //size(w) < B-1
+  requires v.keys[B] != bottom   //size(v) > B
+  ensures  btree(u)
 {
   var sw := size(w);
   var sv := size(v);
@@ -122,17 +143,19 @@ procedure shiftLR(u: Node, i: Int, v: Node, w: Node)
   u.keys[i] := v.keys[sv-shift];
 
   key_arraycopy(v.keys, sv-shift+1, w.keys, 0, shift-1);
-
   key_fill(v.key_fill, sv-shift, sv, bottom);
 
   node_arraycopy(v.children, sv-shift+1, w.children, 0, shift);
-
   node_fill(v.children, sv-shift+1, sv+1, null);
 }
   
 procedure shiftRL(u: Node, i: Int, v: Node, w: Node)
-  requires ???
-  ensures  ???
+  requires (btree(v) &*& btree(w)) -** btree(u)
+  requires u != null && v!= null && w != null
+  requires v == u.children[i+1] && w == u.children[i] // v is right of w
+  requires w.keys[B-1] == bottom //size(w) < B-1
+  requires v.keys[B] != bottom   //size(v) > B
+  ensures  btree(u)
 {
   var sw := size(w);
   var sv := size(v);
@@ -140,9 +163,7 @@ procedure shiftRL(u: Node, i: Int, v: Node, w: Node)
 
   // shift keys and children from v to w
   w.keys[sw] := u.keys[i];
-
   key_arraycopy(v.keys, 0, w.keys, sw+1, shift-1);
-
   node_arraycopy(v.children, 0, w.children, sw+1, shift);
 
   u.keys[i] := v.keys[shift-1];
@@ -150,10 +171,8 @@ procedure shiftRL(u: Node, i: Int, v: Node, w: Node)
   // delete keys and children from v
 
   key_arraymove(v.keys, shift, 0, b-shift);
-
   key_fill(v.keys, sv-shift, b, bottom);
 
   node_arraymove(v.children, shift, 0, b-shift+1);
-
   node_fill(v.children, sv-shift+1, b+1, null);
 }

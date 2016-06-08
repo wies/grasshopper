@@ -220,6 +220,7 @@ let add_pred_insts prog f =
     expand_neg None IdSet.empty |>
     (*fun f -> print_endline "before: "; print_form stdout f; print_newline(); f |> *)
     foralls_to_exists |>
+    (*fun f -> print_endline "after: "; print_form stdout f; print_newline(); f |> *)
     propagate_exists_up |>
     SimplifyGrass.simplify_one_sets |>
     foralls_to_exists

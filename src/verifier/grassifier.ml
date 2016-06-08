@@ -698,8 +698,8 @@ let elim_sl prog =
           let f_eq_final_footprint =
             sl_nonpure |>
             SlToGrass.to_grass (pred_to_form final_footprint_sets) final_footprint_sets |>
-            post_process_form |>
             (fun f -> mk_and (f :: sl_pure)) |>
+            post_process_form |>
             elim_old_form modifies
           in
           let final_footprint_postcond =
