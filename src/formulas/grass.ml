@@ -334,7 +334,10 @@ and pr_term ppf = function
       (match sort_of t with
       | Loc _ -> fprintf ppf "%a.%a" pr_term t pr_term map
       | _ -> fprintf ppf "%a[%a]" pr_term map pr_term t)
-  | App (Write, [map; t1; t2], _) -> fprintf ppf "%a[%a := %a]" pr_term map pr_term t1 pr_term t2
+  | App (Read, map :: t :: ts, _) ->
+      fprintf ppf "%a[%a].%a" pr_term t pr_term_list ts pr_term map
+  | App (Write, [map; t1; t2], _) ->
+      fprintf ppf "%a[%a := %a]" pr_term map pr_term t1 pr_term t2
   | App (Minus, [t1; t2], _) -> fprintf ppf "%a - @[<2>%a@]" pr_term0 t1 pr_term0 t2
   | App (Plus, [t1; t2], _) -> fprintf ppf "%a + @[<2>%a@]" pr_term0 t1 pr_term0 t2
   | App (Mult, [t1; t2], _) -> fprintf ppf "%a * @[<2>%a@]" pr_term0 t1 pr_term0 t2

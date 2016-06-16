@@ -1,0 +1,61 @@
+include "../include/simple_int_array.spl";
+
+
+/* One pass of bubble sort should leave the maximum element in the correct position */
+procedure bubble_one_pass(a: Array<Int>, high: Int, ghost lb: Int, ghost ub: Int)
+  requires acc(a) &*& is_bounded_arrayseg(a, 0, high, lb, ub)
+  requires high >= 0 && high <= a.length
+  ensures acc(a) &*& is_bounded_arrayseg(a, 0, high, lb, ub)
+  ensures forall j: Int :: 0 <= j && j < high ==> a[j] <= a[high-1]
+  ensures forall j: Int :: high <= j && j < a.length ==> a[j] == old(a[j])
+{
+  if (high == 0 || high == 1)
+  {
+    return;
+  }
+  var i := 1;
+
+  while (i < high)
+    invariant 1 <= i && i <= high && high <= a.length
+    invariant acc(a) &*& is_bounded_arrayseg(a, 0, high, lb, ub)
+    invariant forall j: Int :: 0 <= j && j < i ==> a[j] <= a[i-1]
+    // TODO: handle old in invariants correctly
+    invariant forall j: Int :: i <= j && j < a.length ==> a[j] == old(a[j])
+  {
+    if (a[i] < a[i - 1])
+    {
+      var x := a[i];
+      a[i] := a[i - 1];
+      a[i - 1] := x;
+    }
+    i := i + 1;
+  }
+}
+
+
+procedure bubble_sort(a: Array<Int>, implicit ghost content: Set<Int>, implicit ghost lb: Int, implicit ghost ub: Int)
+  requires array_bnd(a, lb, ub)
+  ensures sorted_array_bnd(a, lb, ub)
+{
+  var high := a.length;
+
+  while (high > 0)
+    invariant acc(a) //TODO when this was not there is still went through!!
+    invariant (high == a.length &*& is_bounded_arrayseg(a, 0, high, lb, ub)) ||
+              (high < a.length &*& a[high] >= lb &*& is_bounded_arrayseg(a, 0, high, lb, a[high]+1))
+    invariant is_sorted_arrayseg(a, high, a.length)
+    invariant is_bounded_arrayseg(a, high, a.length, a[high], ub)
+    invariant 0 <= high && high <= a.length
+  {
+    if (high == a.length)
+    {
+      bubble_one_pass(a, high, lb, ub);
+    }
+    else
+    {
+      bubble_one_pass(a, high, lb, a[high]+1);
+    }
+    high := high - 1;
+  }
+  return;
+}

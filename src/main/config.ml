@@ -22,8 +22,8 @@ let encode_fields_as_arrays = ref false
 let with_ep = ref true
 let full_ep = ref false
 let use_set_theory = ref false
-let keep_types = ref false
-
+let simple_arrays = ref false
+    
 (* Flag to switch between integer and bitvectors *)
 let use_bitvector = ref false
 
@@ -89,7 +89,6 @@ let cmd_options =
    ("-typeonly", Arg.Set typeonly, " Only type-check the program");
    ("-noverify", Arg.Clear verify, " Only type-check the program and generate verification conditions without checking");
    ("-robust", Arg.Set robust, " Continue even if some verification condition cannot be checked\n\nOptions for controlling verification condition generation:");
-   ("-types", Arg.Set keep_types, " Keep type information when translating to intermediate representation");
    ("-nomodifiesopt", Arg.Clear opt_field_mod, " Disable mod set analysis optimization for fields\n\nOptions for controlling the GRASS prover:");
    ("-optreach", Arg.Set with_opt_reach_axioms, " Use optimized but incomplete reachability axioms");
    ("-noreach", Arg.Clear with_reach_axioms, " Omit axioms for reachability predicates");
@@ -106,5 +105,6 @@ let cmd_options =
    ("-smtsets", Arg.Set use_set_theory, " Use solver's set theory to encode sets (if supported)");
    ("-smtarrays", Arg.Set encode_fields_as_arrays, " Use solver's array theory to encode fields");
    ("-bitvector", Arg.Set use_bitvector, " Use bitvector theory for integers\n\nOptions for compiler:");
+   ("-simplearrays", Arg.Set simple_arrays, " Use simple array encoding");
    ("-compile", Arg.Set_string compile_to, "<filename> Compile SPL program to a C program outputed as a file with the given name.");
   ]

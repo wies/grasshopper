@@ -145,7 +145,7 @@ let generate_terms generators ground_terms =
     if is_ground_term t1 then
       if TermSet.mem t1 candidates then [t1, sm] else [] 
     else 
-    let rec mt sm t1 t2 =
+      let rec mt sm t1 t2 =
       match t1, t2 with 
       | App (sym1, ts1, srt1), App (sym2, ts2, srt2) 
         when sym1 = sym2 && srt1 = srt2 ->
@@ -159,12 +159,19 @@ let generate_terms generators ground_terms =
             if IdMap.find x sm = t2 then Some sm
             else None
           else Some (IdMap.add x t2 sm)
-      | _, _ -> None
+      | _, _ ->
+          (*Printf.printf "%s != %s\n" (string_of_term t1) (string_of_term t2);
+          Printf.printf "%s != %s\n" (string_of_sort (sort_of t1)) (string_of_sort (sort_of t2));*)
+          None
     in
     TermSet.fold (fun t2 subst_maps ->
       match mt sm t1 t2 with
-      | None -> subst_maps
-      | Some sm -> (t2, sm) :: subst_maps)
+      | None ->
+          (*Printf.printf "Failed to match %s and %s\n" (string_of_term t1) (string_of_term t2);*)
+          subst_maps
+      | Some sm ->
+          (*Printf.printf "Succeeded to match %s and %s\n" (string_of_term t1) (string_of_term t2);*)
+          (t2, sm) :: subst_maps)
       candidates []
   in
   let rec generate round new_terms old_terms = function
@@ -186,7 +193,8 @@ let generate_terms generators ground_terms =
                   Util.filter_rev_map 
                     (fun (t_matched, sm) -> filter_term filters t_matched sm)
                     (fun (t_matched, sm) -> sm)
-                    matches @ new_subst_maps
+                    matches |>
+                  fun new_matches -> List.rev_append new_matches new_subst_maps
                 ) [] subst_maps 
             in
             new_subst_maps)

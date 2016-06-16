@@ -16,13 +16,18 @@ let final_footprint_caller_set struct_srt = mk_loc_set struct_srt (final_footpri
 
 (** Auxiliary variables for desugaring arrays *)
 
+let array_state_srt simple srt =
+  if simple
+  then Map ([Loc (Array srt); Int], srt)
+  else Map ([Loc (ArrayCell srt)], srt)
 let array_state_id = mk_name_generator "array_state"
-let array_state srt = mk_free_const (Map ([Loc (ArrayCell srt)], srt)) (array_state_id srt)
-let array_state_decl srt =
+let array_state simple srt =
+  mk_free_const (array_state_srt simple srt) (array_state_id srt)
+let array_state_decl simple srt =
   let id = array_state_id srt in
   { var_name = id;
     var_orig_name = name id;
-    var_sort = Map ([Loc (ArrayCell srt)], srt);
+    var_sort = array_state_srt simple srt;
     var_is_ghost = false;
     var_is_implicit = false;
     var_is_aux = true;
@@ -143,18 +148,21 @@ let add_ghost_field_invariants prog =
 
 (** Desugare arrays. *)
 let elim_arrays prog =
+  let simple = !Config.simple_arrays in
   let rec compile_term = function
     | Var (id, srt) -> Var (id, srt)
     | App (Read, [map; idx], _) ->
         let map1 = compile_term map in
         let idx1 = compile_term idx in
         (match sort_of map with
-        | Loc (Array srt) ->
+        | Loc (Array srt) when not simple ->
             let cell = match map1, idx1 with
             | App (ArrayOfCell, [c1], _), App (IndexOfCell, [c2], _) when c1 = c2 -> c1
             | _ -> mk_read (mk_array_cells map1) [idx1]
             in
-            mk_read (array_state srt) [cell]
+            mk_read (array_state simple srt) [cell]
+        | Loc (Array srt) ->
+            mk_read (array_state simple srt) [map; idx]
         | _ -> mk_read map1 [idx1])
     | App (sym, ts, srt) ->
         let ts1 = List.map compile_term ts in
@@ -214,8 +222,12 @@ let elim_arrays prog =
                   let aux_ac = mk_assign_cmd [id1] [map1] pp.pp_pos in
                   aux_ac :: aux_cmds
                 in
+                let idx =
+                  if simple then [map1; idx1]
+                  else [mk_read (mk_array_cells map1) [idx1]]
+                in
                 array_state_id srt :: lhs1,
-                mk_write (array_state srt) [mk_read (mk_array_cells map1) [idx1]] upd1 :: rhs1,
+                mk_write (array_state simple srt) idx upd1 :: rhs1,
                 aux_cmds1
             | id, t -> id :: lhs1, compile_term t :: rhs1, aux_cmds)            
             ac.assign_lhs ac.assign_rhs ([], [], [])
@@ -315,14 +327,14 @@ let elim_arrays prog =
   let elem_sorts, preds = fold_preds compile_pred (elem_sorts, IdMap.empty) prog in
   let globals =
     SortSet.fold (fun srt globals ->
-      let asdecl = array_state_decl srt in
+      let asdecl = array_state_decl simple srt in
       IdMap.add asdecl.var_name asdecl globals)
       elem_sorts prog.prog_vars
   in
   { prog with
-      prog_procs = procs;
-      prog_preds = preds;
-      prog_vars = globals;
+    prog_procs = procs;
+    prog_preds = preds;
+    prog_vars = globals;
   }
 
 (** Add frame axioms for framed predicates and functions *)
@@ -1058,6 +1070,7 @@ let annotate_heap_checks prog =
 (** Eliminate all new and dispose commands.
  ** Assumes that footprint sets have been introduced. *)
 let elim_new_dispose prog =
+  let simple_arrays = !Config.simple_arrays in
   let elim = function
     | (New nc, pp) ->
         let havoc = mk_havoc_cmd [nc.new_lhs] pp.pp_pos in
@@ -1123,9 +1136,12 @@ let elim_new_dispose prog =
                       in
                       [assign_tmp_cells; havoc_set; assume_set]
                     in
-                    [assume_length_ok; assume_cells_fresh] @
-                    update_set (alloc_id (ArrayCell srt)) (alloc_set (ArrayCell srt)) @
-                    update_set (footprint_id (ArrayCell srt)) (footprint_set (ArrayCell srt))
+                    if simple_arrays
+                    then [assume_length_ok]
+                    else
+                      [assume_length_ok; assume_cells_fresh] @
+                      update_set (alloc_id (ArrayCell srt)) (alloc_set (ArrayCell srt)) @
+                      update_set (footprint_id (ArrayCell srt)) (footprint_set (ArrayCell srt))
                 | _ -> []
               in
               [assume_fresh; assign_alloc; assign_footprint] @ array_aux
@@ -1149,7 +1165,7 @@ let elim_new_dispose prog =
         in
         let array_aux =
           match ssrt with
-          | Array srt ->
+          | Array srt when not simple_arrays ->
               let update_set set_id set =
                 let assign_tmp_cells =
                   mk_assign_cmd [tmp_array_cell_set_id srt] [set] pp.pp_pos

@@ -1,0 +1,50 @@
+predicate array(a: Array<Int>) {
+  acc(a)
+}
+
+function contentWitness(v: Int, a: Array<Int>)
+  returns (res: Int) 
+  requires acc(a)
+  ensures forall i: Int :: i == contentWitness(a[i], a)
+  
+function array_content(a: Array<Int>)
+  returns (C: Set<Int>)
+  requires acc(a)
+  ensures forall i: Int :: 0 <= i && i < a.length ==> a[i] in C
+  ensures forall v in C :: 0 <= contentWitness(v, a) && contentWitness(v, a) < a.length
+  ensures forall v in C :: v == a[contentWitness(v, a)]
+    @(matching v yields a[contentWitness(v, a)])
+
+predicate array_cnt(a: Array<Int>, C: Set<Int>) {
+  acc(a) &*& C == array_content(a)
+}
+
+predicate is_sorted_arrayseg(a: Array<Int>, i: Int, j: Int)
+  requires array(a)
+{
+  forall i1: Int, j1: Int:: i <= i1 && i1 <= j1 && j1 < j ==> a[i1] <= a[j1]
+}
+
+predicate sorted_array(a: Array<Int>, C: Set<Int>) {
+  array_cnt(a, C) &*&
+  is_sorted_arrayseg(a, 0, a.length)
+}
+
+// array with bounds
+
+predicate is_bounded_arrayseg(a: Array<Int>, i: Int, j: Int, lb: Int, ub: Int)
+  requires array(a)
+{
+  forall k: Int:: i <= k && k < j ==> lb <= a[k] && a[k] < ub
+}
+
+predicate array_bnd(a: Array<Int>, lb: Int, ub: Int) {
+  array(a) &*&
+  is_bounded_arrayseg(a, 0, a.length, lb, ub)
+}
+
+predicate sorted_array_bnd(a: Array<Int>, lb: Int, ub: Int) {
+  array(a) &*&
+  is_bounded_arrayseg(a, 0, a.length, lb, ub) &&
+  is_sorted_arrayseg(a, 0, a.length)
+}

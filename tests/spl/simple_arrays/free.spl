@@ -1,0 +1,8 @@
+include "../include/simple_int_array.spl";
+
+procedure free_array(a: Array<Int>)
+  requires array(a)
+  ensures emp
+{
+  free a;
+}

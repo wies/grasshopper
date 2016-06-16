@@ -148,8 +148,8 @@ let read_write_axioms fld1 =
   let g x = mk_read new_fld1 x in
   let f_upd1 =
     if not !Config.instantiate || !Config.smtpatterns
-    then mk_or (List.map2 mk_eq loc2 loc1 @ List.map2 mk_neq loc2 loc3 @ [mk_eq (f loc2) (g loc3)])
-    else mk_or (List.map2 mk_eq loc2 loc1 @ [mk_eq (f loc2) (g loc2)])
+    then mk_or (mk_and (List.map2 mk_eq loc2 loc1) :: List.map2 mk_neq loc2 loc3 @ [mk_eq (f loc2) (g loc3)])
+    else mk_or (mk_and (List.map2 mk_eq loc2 loc1) :: [mk_eq (f loc2) (g loc2)])
   in
   let f_upd2 = 
     if not !Config.instantiate || !Config.smtpatterns
@@ -502,10 +502,13 @@ let array_axioms elem_srt =
   let array_length_gen =
     ([Match (a, [])], [mk_length a])
   in
-  [mk_axiom ~gen:[index_of_cell_gen; array_of_cell_gen; array_cells_gen; array_cell_gen] "array-cells1" array_cells1;
-   mk_axiom "array-cells2" array_cells2;
-   mk_axiom "array-cells3" array_cells3;
-   mk_axiom ~gen:[array_length_gen] "array-length" array_length]
+  if !Config.simple_arrays then
+    [mk_axiom ~gen:[array_length_gen] "array-length" array_length]
+  else 
+    [mk_axiom ~gen:[index_of_cell_gen; array_of_cell_gen; array_cells_gen; array_cell_gen] "array-cells1" array_cells1;
+     mk_axiom "array-cells2" array_cells2;
+     mk_axiom "array-cells3" array_cells3;
+     mk_axiom ~gen:[array_length_gen] "array-length" array_length]
      
 (** Set axioms *)
 let set_axioms elem_srts =

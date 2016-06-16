@@ -333,7 +333,8 @@ let smtlib_sort_of_grass_sort srt =
   | Set srt ->
       FreeSort ((set_sort_string, 0), [csort srt])
   | Map (dsrts, rsrt) ->
-      FreeSort ((map_sort_string, 0), List.map csort dsrts @ [csort rsrt])
+      let k = List.length dsrts in
+      FreeSort ((map_sort_string, k), List.map csort dsrts @ [csort rsrt])
   | Array srt ->
       FreeSort (("Grass" ^ array_sort_string, 0), [csort srt])
   | ArrayCell srt ->
@@ -356,7 +357,10 @@ let declare_sorts has_int session free_srts =
   then declare_sort session set_sort_string 1;
   if !Config.encode_fields_as_arrays 
   then writeln session ("(define-sort " ^ map_sort_string ^ " (X Y) (Array X Y))")
-  else declare_sort session map_sort_string 2;
+  else begin
+    declare_sort session (map_sort_string ^ "_1") 2;
+    declare_sort session (map_sort_string ^ "_2") 3
+  end;
   if not !Config.use_bitvector
   then declare_sort session ("GrassByte") 0
 
