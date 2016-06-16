@@ -102,8 +102,9 @@ let instantiate_and_prove session fs =
     let equations = List.filter (fun f -> is_horn false [f]) fs_inst in
     let ground_fs = List.filter is_ground fs_inst in
     let eqs = instantiate_with_terms true equations classes in
-    let gts1 = TermSet.union (ground_terms ~include_atoms:true (mk_and eqs)) gts_inst in 
-    let classes = CongruenceClosure.congr_classes (List.rev_append eqs fs) gts1 in
+    let gts1 = TermSet.union (ground_terms ~include_atoms:true (mk_and eqs)) gts_inst in
+    let eqs1 = List.filter (fun f -> IdSet.is_empty (fv f)) eqs in
+    let classes = CongruenceClosure.congr_classes (List.rev_append eqs1 fs) gts1 in
     let implied =
       List.fold_left
         (fun acc -> function

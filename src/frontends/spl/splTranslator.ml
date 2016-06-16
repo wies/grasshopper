@@ -381,10 +381,7 @@ let convert cu =
             es
         in
         let ge1 = convert_term locals ge in
-        let gts = GrassUtil.ground_terms (Atom (ge1, [])) in
-        (*let filter id sm =
-           
-        in*)
+        (*let gts = GrassUtil.ground_terms (Atom (ge1, [])) in
         let matches = 
           List.fold_right (fun (e, filters) matches -> 
             let ce = GrassUtil.free_consts_term e in
@@ -424,7 +421,8 @@ let convert cu =
                 ) ce aux_matches
             in
             Match (e, flt) :: aux_matches @ matches) es1 []
-        in
+          in*)
+        let matches = List.map (fun (e, filters) -> Match (e, filters)) es1 in
         GrassUtil.annotate f [TermGenerator (matches, [ge1])]
     | e ->
         let t = convert_term locals e in

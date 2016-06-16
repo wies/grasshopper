@@ -2,16 +2,16 @@ include "def.spl";
 
 /* Find the smallest value >= x in this BTree */
 procedure find(bt: Node, x: T) returns (res: T)
-  requires x != bottom
-  requires acc(bt) -** btree(bt)
-  ensures btree(bt)
+  requires x != bottom && x != top
+  requires btree_root(bt)
+  ensures btree_root(bt)
 {
   var z: T := bottom;
   var n := bt;
   var flag := false;
   while (n != null && !flag)
-    invariant x != bottom
-    invariant (n == null || acc(n)) -** btree(bt)
+    invariant lt(n.lbound, x) && lt(x, n.ubound)
+    invariant (n == null || acc(n)) -** btree_root(bt)
   {
     var i := findIt(n.keys, x);
     if (i < n.keys.length && n.keys[i] == x) {
@@ -29,7 +29,7 @@ procedure find(bt: Node, x: T) returns (res: T)
 }
 
 procedure findIt(a: Array<T>, x: T) returns (idx: Int)
-  requires x != bottom
+  requires x != bottom && x != top
   requires a.length == b
   requires acc(a)
   requires key_arrayseg(a, 0, a.length)

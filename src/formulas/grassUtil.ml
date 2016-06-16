@@ -356,7 +356,10 @@ let mk_subseteq s t = mk_atom SubsetEq [s; t]
 let mk_disjoint_term s t = mk_app Bool Disjoint [s; t]
 
 (** Constructor for disjointness constraints.*)
-let mk_disjoint s t = mk_atom Disjoint [s; t]
+let mk_disjoint s t =
+    if s = t
+    then mk_false
+    else mk_atom Disjoint [s; t]
 
 (** Term constructor for frame predicates.*)
 let mk_frame_term x a f f' = mk_app Bool Frame [x; a; f; f']
@@ -549,7 +552,7 @@ let smk_disjoint s t =
   match s, t with
   | App (Empty, _, _), _
   | _, App (Empty, _, _) -> mk_true
-  | _ -> mk_atom Disjoint [s; t]
+  | _ -> mk_disjoint s t
     
 (** {6 Normal form computation} *)
 
@@ -610,23 +613,26 @@ let mk_iff a b =
 
 (** {6 Generic formula manipulation and substitution functions} *)
 
+(** Check whether term [t] is ground *)
+
+let rec is_ground_term = function
+  | Var _ -> false
+  | App (_, ts, _) -> List.for_all is_ground_term ts
+
 (** Check whether formula [f] is ground *)
 let is_ground =
-  let rec gt = function
-    | Var _ -> false
-    | App (_, ts, _) -> List.for_all gt ts
-  in
   let rec gf = function
    | Binder (_, [], f, _) -> gf f
    | Binder (_, _, _, _) -> false
    | BoolOp (_, fs) -> List.for_all gf fs
-   | Atom (t, _) -> gt t
+   | Atom (t, an) -> is_ground_term t
   in gf
     
 (** Fold all terms appearing in the formula [f] using catamorphism [fn] and initial value [init] *)
 let fold_terms fn init f =
   let fa acc = function
     | Pattern (t, _) -> fn acc t
+    | Label (_, t) -> fn acc t
     | _ -> acc
   in
   let rec ft acc = function
@@ -657,6 +663,7 @@ let map_terms fn f =
 let fold_terms_with_bound fn init f =
   let fa bv acc = function
     | Pattern (t, _) -> fn bv acc t
+    | Label (_, t) -> fn bv acc t
     | _ -> acc
   in
   let rec ft bv acc = function
@@ -699,7 +706,7 @@ let sorted_fv_term_acc svars t =
 
 (** Smart constructor for binder [b], binding variables [bv] in formula [f]. *)
 let smk_binder ?(ann=[]) b bv f =
-  let fv_f = fv f in
+  let fv_f = fv (annotate f ann) in
   let bv1 = List.filter (fun (x, _) -> IdSet.mem x fv_f) bv in
   mk_binder ~ann:ann b bv1 f
 
@@ -766,6 +773,19 @@ let free_symbols_term t = free_symbols_term_acc IdSet.empty t
 let free_symbols f =
   fold_terms free_symbols_term_acc IdSet.empty f
 
+(** Computes the set of subterms of a term [t].
+ ** Takes accumulator [terms] as additional arguments *)
+let subterms_term_acc terms t =
+  let rec st terms t =
+    let terms1 = TermSet.add t terms in
+    match t with
+    | App (_, ts, _) ->
+	List.fold_left st terms1 ts
+    | _ -> terms1
+  in
+  st terms t
+  
+    
 (** Computes the set of all ground terms in term [t].
  ** Takes accumulator [terms] as additional arguments *)
 let ground_terms_term_acc ?(include_atoms=false) terms t =
@@ -1029,6 +1049,20 @@ let subst_funs_term fct t =
 let subst_funs fct f =
   map_terms (subst_funs_term fct) f
 
+(** Substitutes all free variables in an annotation with terms according to substitution map [subst_map].
+ ** This operation is capture avoiding. *)
+let subst_annot subst_map = function
+    | TermGenerator (guards, gen_terms) -> 
+        let guards1 = 
+          List.map 
+            (function Match (t, f) -> Match (subst_term subst_map t, f))
+            guards
+        in
+        TermGenerator (guards1, List.map (subst_term subst_map) gen_terms)
+    | Pattern (t, fs) -> Pattern (subst_term subst_map t, fs)
+    | Label (pol, t) -> Label (pol, subst_term subst_map t)
+    | a -> a
+    
 (** Substitutes all free variables in formula [f] with terms according to substitution map [subst_map].
  ** This operation is capture avoiding. *)
 let subst subst_map f =
@@ -1047,24 +1081,12 @@ let subst subst_map f =
 	vs ([], sm1)
     in vs1, sm2
   in
-  let suba bvs1 sm = function
-    | TermGenerator (guards, gen_terms) -> 
-        let guards1 = 
-          List.map 
-            (function Match (t, f) -> Match (subst_term sm t, f))
-            guards
-        in
-        TermGenerator (guards1, List.map (subst_term sm) gen_terms)
-    | Pattern (t, fs) -> Pattern (subst_term sm t, fs)
-    | Label (pol, t) -> Label (pol, subst_term sm t)
-    | a -> a
-  in
   let rec sub sm = function 
     | BoolOp (op, fs) -> BoolOp (op, List.map (sub sm) fs)
-    | Atom (t, a) -> Atom (subst_term sm t, List.map (suba [] sm) a)
+    | Atom (t, a) -> Atom (subst_term sm t, List.map (subst_annot sm) a)
     | Binder (b, vs, f, a) ->
         let vs1, sm1 = rename_vars vs sm in
-        Binder (b, vs1, sub sm1 f, List.map (suba vs1 sm1) a)
+        Binder (b, vs1, sub sm1 f, List.map (subst_annot sm1) a)
   in sub subst_map f
 
 
@@ -1150,7 +1172,7 @@ let propagate_binder_up b f =
         let f1, vs2 = prop vs1 (subst sm f) in
         (match a with 
         | [] -> f1, vs2
-        | _ -> Binder (b1, [], f1, a), vs2)
+        | _ -> Binder (b1, [], f1, List.map (subst_annot sm) a), vs2)
     | Binder (b1, vs, f, a) when b1 <> b ->
         (match vs with
         | [] -> 
@@ -1174,6 +1196,29 @@ let propagate_exists_up f = propagate_binder_up Exists f
 (** Propagate universally quantified variables upward in the formula [f].
  ** Assumes that [f] is in negation normal form. *)
 let propagate_forall_up f = propagate_binder_up Forall f
+
+(** Propagate universally quantified variables downward in the formula [f].
+ ** Assumes that [f] is in negation normal form. *)
+let propagate_forall_down f =
+  let rec prop bvs = function
+    | BoolOp (And, fs) ->
+        BoolOp (And, List.map (prop bvs) fs)
+    | BoolOp (Or, fs) ->
+        let fs1, fs2 =
+          List.partition
+            (fun f ->
+              let fv_f = fv f in
+              List.exists (fun (v, _) -> IdSet.mem v fv_f) bvs)
+            fs
+        in
+        mk_or (mk_forall bvs (mk_or (List.map (prop []) fs1)) :: List.map (prop []) fs2)
+    | Binder (b, [], f, ann) ->
+        Binder (b, [], prop bvs f, ann)
+    | Binder (Forall, bvs1, f, ann) ->
+        let f1 = prop (bvs @ bvs1) f in
+        annotate f1 ann
+    | f -> mk_forall bvs f
+  in prop [] f
     
 (** Convert universal quantifiers in formula [f] into existentials where possible. *)
 (** Assumes that [f] is in negation normal form. *)
@@ -1269,7 +1314,111 @@ let foralls_to_exists f =
     | f -> f
   in
   cf f
+    
+(** Convert universal quantifiers in formula [f] into existentials where possible. *)
+(** Assumes that [f] is in negation normal form. *)
+(* BROKEN!!
 
+let foralls_to_exists f =
+  let rec find_defs bvs defs f =
+    let rec find nodefs defs = function
+      | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; Var _ as yt], _), a)])
+          when IdSet.mem x nodefs ->
+            IdSet.remove x nodefs, mk_eq xt yt :: defs, mk_false
+      | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; t], _), a)])
+        when IdSet.mem x nodefs && 
+          IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
+            IdSet.remove x nodefs, mk_eq xt t :: defs, mk_false
+      | BoolOp (Not, [Atom (App (Eq, [t; Var (x, srt) as xt], _), a)])
+        when IdSet.mem x nodefs && 
+          IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
+            IdSet.remove x nodefs, mk_eq xt t :: defs, mk_false
+      | BoolOp (Or, fs) ->
+          let nodefs, defs, gs =
+            List.fold_right 
+              (fun f (nodefs, defs, gs) -> 
+                let nodefs, defs, g = find nodefs defs f in
+                nodefs, defs, g :: gs)
+              fs (nodefs, defs, [])
+          in
+          nodefs, defs, mk_or gs
+      | Binder (b, [], f, a) ->
+          let nodefs, defs, g = find nodefs defs f in
+          nodefs, defs, Binder (b, [], g, a)
+      | f ->
+          nodefs, defs, f
+    in 
+    let nodefs, defs, g = find bvs defs f in
+    if IdSet.subset bvs nodefs 
+    then begin
+      let defs, sm =
+        List.fold_right (fun f (defs, sm) ->
+          match f with
+          | Atom (App (Eq, [Var (v, _); t], _), a) ->
+              let t1 = subst_term sm t in
+              let smv = IdMap.singleton v t1 in
+              let sm = IdMap.fold (fun w tw -> IdMap.add w (subst_term smv tw)) sm IdMap.empty in
+              defs, IdMap.add v t1 sm
+          | f -> f :: defs, sm)
+          defs ([], IdMap.empty)
+      in
+      nodefs, List.map (subst sm) defs, subst sm g, sm
+    end
+    else find_defs nodefs defs g
+  in
+  let rec distribute_and bvs a gs = function
+    | BoolOp (And, fs) :: gs1 ->
+        let fs1 = List.map (fun f -> smk_or (List.rev_append gs (f :: gs1))) fs in
+        cf (mk_forall ~ann:a bvs (smk_and fs1))
+    | Binder (_, [], BoolOp (And, fs), a1) :: gs1 ->
+        let fs1 = List.map (fun f -> smk_or (List.rev_append gs (f :: gs1))) fs in
+        cf (mk_forall ~ann:(a @ a1) bvs (smk_and fs1))
+    | BoolOp (Or, gs2) :: gs1 ->
+        distribute_and bvs a gs (gs2 @ gs1)
+    | Binder (_, [], BoolOp (Or, gs2), a1) :: gs1 ->
+        distribute_and bvs a gs (List.map (fun f -> annotate f a1) gs2 @ gs1)
+    | [Binder (b, [], g, a1)] ->
+        distribute_and bvs (a @ a1) gs [g]
+    (*| Binder (_, [], g, a1) :: gs1 ->
+        (*assert (List.for_all (function TermGenerator _ -> false | _ -> true) a);*)
+        distribute_and bvs a gs (g :: gs1)*)
+    | g :: gs1 -> distribute_and bvs a (g :: gs) gs1
+    | [] -> smk_forall ~ann:a bvs (mk_or (List.rev gs))
+  and cf = function
+    | Binder (b, [], f, a) ->
+        Binder (b, [], cf f, a)
+    | Binder (Forall, bvs, BoolOp (And, fs), a) ->
+        let fs1 = List.map (fun f -> cf (Binder (Forall, bvs, f, a))) fs in
+        smk_and fs1
+    | Binder (Forall, _, BoolOp (Or, _), _) as f ->
+        (match propagate_forall_up f with
+        | Binder (Forall, bvs, (BoolOp (Or, fs) as f), a) ->
+            let bvs_set = id_set_of_list (List.map fst bvs) in
+            let nodefs, defs, g, sm = find_defs bvs_set [] f in
+            let a = List.map (subst_annot sm) a in
+            let ubvs, ebvs = List.partition (fun (x, _) -> IdSet.mem x nodefs) bvs in
+            (match ebvs with
+            | [] ->
+                (*assert (List.for_all (function TermGenerator _ -> false | _ -> true) a);*)
+                distribute_and bvs a [] [g]                
+            | _ -> 
+                let g1 = cf (mk_forall ubvs g) in
+                smk_exists ~ann:a ebvs (mk_and (defs @ [g1]))
+            )              
+        | _ -> f)
+    | Binder (Forall, bvs1, Binder (Forall, bvs2, f2, a2), a1) ->
+        cf (Binder (Forall, bvs1 @ bvs2, f2, a1 @ a2))
+    | Binder (Exists, bvs, f, a) ->
+        smk_exists ~ann:a bvs (cf f)
+    | BoolOp (And as op, fs)
+    | BoolOp (Or as op, fs) ->
+        let fs1 = List.map cf fs in
+        BoolOp (op, fs1)
+    | f -> f
+  in
+  cf f
+ *)
+    
 (** Skolemize formula [f]. 
  ** Assumes that [f] is in negation normal form. *)
 let skolemize f =
@@ -1282,7 +1431,9 @@ let skolemize f =
 	in
 	Binder (Forall, bvs, sk vs1 f, a)
     | Binder (Exists, bvs, f, a) ->
-	let ts = IdMap.fold (fun id srt ts -> mk_var srt id :: ts) vs [] in
+        let fv_f = fv f in
+        let rel_vs = IdMap.filter (fun id _ -> IdSet.mem id fv_f) vs in
+	let ts = IdMap.fold (fun id srt ts -> mk_var srt id :: ts) rel_vs [] in
 	let sm = List.fold_left 
 	    (fun sm (id, srt) -> 
 	      let sk_fn = FreeSym (fresh_ident ("sk_" ^ (name id))) in
