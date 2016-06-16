@@ -142,6 +142,9 @@ let generate_terms generators ground_terms =
       ground_terms TermSet.empty
   in
   let find_matches candidates t1 sm =
+    if is_ground_term t1 then
+      if TermSet.mem t1 candidates then [t1, sm] else [] 
+    else 
     let rec mt sm t1 t2 =
       match t1, t2 with 
       | App (sym1, ts1, srt1), App (sym2, ts2, srt2) 

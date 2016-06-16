@@ -455,7 +455,7 @@ and pr_annot ppf a =
     | [(m, f)] ->
         fprintf ppf "%a%a" pr_term m pr_filter f
     | (m, f) :: ms ->
-        fprintf ppf "%a%a,@ %a" pr_term m pr_filter f pr_match_list ms
+        fprintf ppf "%a%a@ and@ %a" pr_term m pr_filter f pr_match_list ms
   in
   let rec pr_generators ppf = function
     | (ms, ts) :: gen ->
