@@ -293,31 +293,35 @@ let add_read_write_axioms fs =
           let ivars2 = List.map (fun srt -> mk_var srt (fresh_ident "?j")) dsrts in
           (* f = g, x.f -> x.g *)
           ([Match (mk_eq_term fld1 fld2, []);
-            Match (mk_read fld1 (loc1 :: ivars1), [])],
+            Match (mk_read fld1 (loc1 :: ivars1), []);
+            ],
            [mk_read fld2 (loc1 :: ivars1)]) ::
           (* f = g, x.g -> x.f *)
           ([Match (mk_eq_term fld1 fld2, []);
-            Match (mk_read fld2 (loc1 :: ivars1), [])],
+            Match (mk_read fld2 (loc1 :: ivars1), []);
+            Match (loc1, [FilterNotNull])],
            [mk_read fld1 (loc1 :: ivars1)]) :: 
           (* f [x := d], y.(f [x := d]) -> y.f *)
           ([Match (mk_write fld1 (loc1 :: ivars1) dvar, []);
             Match (mk_read (mk_write fld1 (loc1 :: ivars1) dvar) (loc2 :: ivars2), []);
+            Match (loc1, [FilterNotNull]);
             Match (loc2, [FilterNotNull])],
            [mk_read fld1 (loc2 :: ivars2)]) ::
           (* f [x := d], y.f -> y.(f [x := d]) *)
           ([Match (mk_write fld1 (loc1 :: ivars1) dvar, []);
             Match (mk_read fld1 (loc2 :: ivars2), []);
+            Match (loc1, [FilterNotNull]);
             Match (loc2, [FilterNotNull])],
            [mk_read (mk_write fld1 (loc1 :: ivars1) dvar) (loc2 :: ivars2)]) ::
           (* Frame (x, a, f, g), y.g -> y.f *)
           ([Match (mk_frame_term set1 set2 fld1 fld2, []);
             Match (mk_read fld2 (loc1 :: ivars1), []);
-            Match (loc1, [FilterNotNull])],
+            Match (loc2, [FilterNotNull])],
            [mk_read fld1 (loc1 :: ivars1)]) ::
           (* Frame (x, a, f, g), y.f -> y.g *)
           ([Match (mk_frame_term set1 set2 fld1 fld2, []);
             Match (mk_read fld1 (loc1 :: ivars1), []);
-            ],
+            Match (loc2, [FilterNotNull])],
            [mk_read fld2 (loc1 :: ivars1)]) ::
           propagators
       | _ -> fun propagators -> propagators)
