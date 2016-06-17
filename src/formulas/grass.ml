@@ -178,11 +178,6 @@ type form =
   | BoolOp of bool_op * form list
   | Binder of binder * (ident * sort) list * form * annot list
 
-module FormSet = Set.Make(struct
-    type t = form
-    let compare = compare
-  end)
-
 (** {6 Pretty printing} *)
 
 (** {5 Infix Notation} *)

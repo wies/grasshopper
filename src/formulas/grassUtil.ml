@@ -75,6 +75,53 @@ let compare_src_pos pos1 pos2 =
     else -1
   else 1
 
+(** {6 Equality on formulas} *)
+
+(** Equality test on formulas. Compares formulas modulo alpha renaming, stripping of annotations, etc. *)
+let equal f1 f2 =
+  let rec eqt sm t1 t2 =
+    match t1, t2 with
+    | Var (x1, srt1), Var (x2, srt2) when srt1 = srt2 ->
+	let x1' = 
+	  try IdMap.find x1 sm
+	  with Not_found -> x1
+	in x1' = x2
+    | App (sym1, ts1, srt1), App (sym2, ts2, srt2) ->
+        sym1 = sym2 &&
+        srt1 = srt2 &&
+        (try List.for_all2 (eqt sm) ts1 ts2
+        with Invalid_argument _ -> false)
+    | _ -> false
+  in
+  let rec eq sm f1 f2 =
+    match f1, f2 with
+    | BoolOp (op1, fs1), BoolOp (op2, fs2) ->
+        op1 = op2 &&
+        (try List.for_all2 (eq sm) fs1 fs2
+        with Invalid_argument _ -> false)
+    | Binder (b1, vs1, f1, _), Binder (b2, vs2, f2, _) ->
+        b1 = b2 &&
+        (try
+          let sm1 =
+            List.fold_left2
+              (fun sm1 (v1, _) (v2, _) -> IdMap.add v1 v2 sm1)
+              sm vs1 vs2
+          in
+          List.for_all2 (fun (_, srt1) (_, srt2) -> srt1 = srt2) vs1 vs2 &&
+          eq sm1 f1 f2
+        with Invalid_argument _ -> false)
+    | Atom (t1, _), Atom (t2, _) ->
+        eqt sm t1 t2
+    | _ -> false
+  in
+  eq IdMap.empty f1 f2
+    
+module FormSet = Set.Make(struct
+    type t = form
+    let compare f1 f2 =
+      if equal f1 f2 then 0 else compare f1 f2
+  end)
+      
 (** {6 List to set conversion functions} *)
 
 let form_set_of_list fs =
@@ -487,6 +534,7 @@ let mk_srcpos pos f = annotate f [SrcPos pos]
 
 (** Annotate [f] with pattern [t] and filter [ft]. *)
 let mk_pattern t ft f = annotate f [Pattern (mk_known t, ft)]
+
    
 (** Smart constructor for Boolean operation [op] taking arguments [fs].*)
 let smk_op op fs =
