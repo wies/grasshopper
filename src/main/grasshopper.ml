@@ -118,20 +118,28 @@ let parse_spl_program main_file =
 let check_spl_program spl_prog proc =
   let prog = SplTranslator.to_program spl_prog in
   let simple_prog = Verifier.simplify prog in
-  let check simple_prog proc =
-    if !Config.typeonly then () else
-    let errors = Verifier.check_proc simple_prog proc in
-    List.iter 
-      (fun (pp, error_msg, model) ->
+  let check simple_prog first proc =
+    let errors =
+      if !Config.typeonly then []
+      else Verifier.check_proc simple_prog proc
+    in
+    List.fold_left
+      (fun first (pp, error_msg, model) ->
         output_trace simple_prog proc (pp, model);
-        if !Config.robust 
-        then ProgError.print_error pp error_msg
-        else ProgError.error pp error_msg;
+        let _ =
+          if !Config.robust
+          then begin
+            (if not first then print_newline ());
+            ProgError.print_error pp error_msg
+          end
+          else ProgError.error pp error_msg
+        in
+        false
       )
-      errors
+      first errors
   in
   match proc with
-  | None -> Prog.iter_procs check simple_prog
+  | None -> Prog.fold_procs (check simple_prog) true simple_prog
   | Some p ->
     let procs =
       Prog.find_proc_with_deps simple_prog (p, 0)
@@ -147,7 +155,7 @@ let check_spl_program spl_prog proc =
       failwith ("Could not find a procedure named " ^ p ^ 
                 ". Available procedures are:\n" ^ available)
     end;
-    List.iter (check simple_prog) procs
+    List.fold_left (check simple_prog) true procs
 
 
 (** Get current time *)
@@ -191,10 +199,10 @@ let _ =
     then cmd_line_error "input file missing"
     else begin
       let spl_prog = parse_spl_program !main_file in
-      check_spl_program spl_prog !Config.procedure;
+      let res = check_spl_program spl_prog !Config.procedure in
       print_stats start_time; 
       print_c_program spl_prog;
-      if !Config.verify then
+      if !Config.verify && res then
         Debug.info (fun () -> "Program successfully verified.\n")
     end
   with  
