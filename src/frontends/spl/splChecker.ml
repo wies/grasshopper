@@ -189,7 +189,7 @@ let resolve_names cu =
               | SetType _ -> 
                   PredApp (AccessPred, [re locals tbl arg], pos)
               | ty ->
-                  PredApp (AccessPred, [Setenum (ty, [re locals tbl arg], pos)], pos))
+                  PredApp (AccessPred, [Setenum (resolve_typ types pos tbl ty, [re locals tbl arg], pos)], pos))
           | [map; idx] ->
               (match type_of_expr cu locals map with
               | ArrayType typ ->
