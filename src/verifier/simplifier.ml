@@ -38,6 +38,26 @@ let elim_loops (prog : program) =
             )
             locals ([], [], IdMap.singleton first_iter_id (first_iter_decl pp.pp_pos))
         in
+        let globals =
+          IdSet.filter
+            (fun id -> IdMap.mem id prog.prog_vars)
+            pp.pp_accesses
+        in
+        let formals, old_formals, old_sm, locals =
+          IdSet.fold
+            (fun id (formals, old_formals, old_sm, locals) ->
+              let decl = Prog.find_var prog proc id in
+              let oid = fresh_ident (name decl.var_name) in
+              let odecl = { decl with var_name = oid } in
+              odecl.var_name :: formals,
+              oldify id :: old_formals,
+              IdMap.add (oldify id) (mk_free_const odecl.var_sort oid) old_sm,
+              IdMap.add oid odecl locals
+            )
+            globals (formals, formals, IdMap.empty, locals)
+        in
+        let formals = first_iter_id :: formals in
+        let old_formals = old_formals in
         let subst_returns, returns, creturns, locals =
           List.fold_right
             (fun decl (sm, ids, cids, locals) -> 
@@ -51,9 +71,11 @@ let elim_loops (prog : program) =
               else sm, ids, cids, locals)
             formal_decls (IdMap.empty, [], [], locals)
         in    
-        let formals = first_iter_id :: formals in
         let id_to_term id =
-          let decl = IdMap.find id locals in
+          let decl =
+            try IdMap.find id locals
+            with Not_found -> IdMap.find (unoldify id) prog.prog_vars
+          in
           mk_free_const decl.var_sort id
         in
         let ids_to_terms ids = List.map id_to_term ids in
@@ -65,7 +87,7 @@ let elim_loops (prog : program) =
             }
           in
           let returns = if first then creturns else returns in
-          let call = mk_call_cmd returns proc_name (mk_bool_term first :: ids_to_terms (List.tl formals)) pos in
+          let call = mk_call_cmd returns proc_name (mk_bool_term first :: ids_to_terms old_formals) pos in
           update_ppoint pp_call call
         in
         let loop_end_pos = end_pos pp.pp_pos in
@@ -107,6 +129,8 @@ let elim_loops (prog : program) =
           dep_procs2,
 	  prebody
         in
+        let subst_old t = t |> elim_old_term globals |> subst_consts_term old_sm in
+        let body = map_terms_cmd subst_old body in
         (* loop exit condition *)
         let loop_exit =
           let name = "loop exit condition of " ^ (string_of_ident proc_name) in
@@ -123,8 +147,12 @@ let elim_loops (prog : program) =
             contr_footprint_sorts = footprint_sorts_proc proc;
             contr_returns = returns;
             contr_locals = locals;
-            contr_precond = lc.loop_inv;
-            contr_postcond = List.map (subst_id_spec subst_returns) postcond;
+            contr_precond = List.map (map_terms_spec subst_old) lc.loop_inv;
+            contr_postcond =
+              List.map (fun sf -> sf |>
+                subst_id_spec subst_returns |>
+                map_terms_spec subst_old)
+              postcond;
             contr_pos = pp.pp_pos;
           }
         in
@@ -490,6 +518,14 @@ let elim_state prog =
               let subst_implicits, locals = 
                 fresh callee_decl IdMap.empty locals pp.pp_pos implicit_formals 
               in
+              (* substitution map for old versions of global variables *)
+              let subst_old =
+                IdMap.fold 
+                  (fun id decl old_subst ->
+                    IdMap.add (oldify id) (mk_free_const decl.var_sort id) old_subst)
+                  prog.prog_vars IdMap.empty
+              in
+              (* substitution map for formals to actuals *)
               let subst_pre = 
                 to_term_subst_merge subst_implicits locals subst_pre_explicit
               in
@@ -507,10 +543,17 @@ let elim_state prog =
                     (fun sf -> IdSet.is_empty (IdSet.inter (free_consts (form_of_spec sf)) implicitss)) 
                     checked_preconds
                 in
+                let preconds_wo_implicits =
+                  List.map (map_spec_fol_form (subst_consts subst_old)) preconds_wo_implicits
+                in
                 let assume_precond_implicits = 
                   List.map 
                     (fun sf -> 
-                      let sf1 = map_spec_fol_form strip_error_msgs sf in
+                      let sf1 =
+                        sf |>
+                        map_spec_fol_form strip_error_msgs |>
+                        map_spec_fol_form (subst_consts subst_old)
+                      in
                       mk_assume_cmd sf1 pp.pp_pos) 
                     preconds_w_implicits
                 in
@@ -535,7 +578,7 @@ let elim_state prog =
                             let decl = IdMap.find id locals in
                             (id, decl.var_sort) :: implicits_w_sorts,
                             IdMap.add id (mk_var decl.var_sort id) implicits_var_subst) 
-                          ([], IdMap.empty) implicits
+                          ([], subst_old) implicits
                       in
                       let f_pos = mk_exists implicits_w_sorts (subst_consts implicits_var_subst (mk_and fs)) in
                       mk_spec_form (FOL f_pos) name msg pos)
@@ -566,7 +609,7 @@ let elim_state prog =
                 let subst_wo_old_mods_formals =
                   List.fold_left 
                     (fun sm id ->
-                      IdMap.add (oldify id) (IdMap.find id subst_pre) sm)
+                      IdMap.add (oldify id) (subst_consts_term subst_old (IdMap.find id subst_pre)) sm)
                     subst_pre callee_formals
                 in
                 (* substitute formal return parameters to actual return parameters *)

@@ -544,7 +544,8 @@ let elim_sl prog =
         SimplifyGrass.simplify_one_sets |>
         mk_not |>
         nnf |>
-        foralls_to_exists 
+        foralls_to_exists |>
+        elim_old_form (var_ids prog) 
       in
       f |> round |> round |> propagate_exists_up
     in
@@ -710,8 +711,7 @@ let elim_sl prog =
             sl_nonpure |>
             SlToGrass.to_grass (pred_to_form final_footprint_sets) final_footprint_sets |>
             (fun f -> mk_and (f :: sl_pure)) |>
-            post_process_form |>
-            elim_old_form modifies
+            post_process_form
           in
           let final_footprint_postcond =
             mk_spec_form (FOL f_eq_final_footprint) name msg pos
@@ -725,7 +725,7 @@ let elim_sl prog =
     in
     let other_postcond =
       List.map
-        (map_spec_fol_form (fun f -> f |> post_process_form |> elim_old_form modifies))
+        (map_spec_fol_form (fun f -> f |> post_process_form))
         other_postcond
     in
     (* generate frame condition by applying the frame rule *) 

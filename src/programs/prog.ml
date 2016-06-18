@@ -271,6 +271,8 @@ let preds prog = IdMap.fold (fun _ pred preds -> pred :: preds) prog.prog_preds 
 
 let vars prog = IdMap.fold (fun _ var vars -> var :: vars) prog.prog_vars []
 
+let var_ids prog = IdMap.fold (fun id _ ids -> IdSet.add id ids) prog.prog_vars IdSet.empty 
+    
 let find_proc prog name =
   try IdMap.find name prog.prog_procs 
   with Not_found -> 
@@ -425,6 +427,11 @@ let form_of_spec sf =
   | FOL f -> f
   | SL _ -> failwith "expected FOL specification in Prog.form_of_spec"
 
+let map_terms_spec fn sf =
+  match sf.spec_form with
+  | FOL f -> { sf with spec_form = FOL (map_terms fn f) }
+  | SL f -> { sf with spec_form = SL (SlUtil.map_terms fn f) }
+        
 (** Substitute all occurrences of identifiers in [sf] according to substitution map [sm] *)
 let subst_id_spec sm sf =
   match sf.spec_form with
@@ -445,8 +452,7 @@ let subst_spec sm sf =
       }
   | SL _ -> failwith "elim_assign: found SL formula that should have been desugared."
 
-      
-let old_id = fresh_ident "old"
+        
 let old_prefix = "$old_"
 
 let oldify (name, num) = (old_prefix ^ name, num)
@@ -498,20 +504,22 @@ let elim_old_term vars t =
 
 let elim_old_form vars f =
   map_terms (elim_old_term vars) f
-        
-let old_to_fun f =
-  let rec o2f = function
-    | App (FreeSym (name, num as id), [], srt) ->
-        let old_name = Str.regexp (Str.quote old_prefix ^ "\\(.*\\)") in
-        if Str.string_match old_name name 0 
-        then
-          let id1 = (Str.matched_group 1 name, num) in
-          App (FreeSym old_id, [App (FreeSym id1, [], srt)], srt)
-        else App (FreeSym id, [], srt)
-    | App (sym, ts, srt) -> 
-        App (sym, List.map o2f ts, srt)
-    | t -> t
-  in map_terms o2f f
+
+let rec old_to_fun_term = function
+  | App (FreeSym (name, num as id), [], srt) ->
+      let old_name = Str.regexp (Str.quote old_prefix ^ "\\(.*\\)") in
+      if Str.string_match old_name name 0 
+      then
+        let id1 = (Str.matched_group 1 name, num) in
+        App (Old, [App (FreeSym id1, [], srt)], srt)
+      else App (FreeSym id, [], srt)
+  | App (sym, ts, srt) -> 
+      App (sym, List.map old_to_fun_term ts, srt)
+  | t -> t
+    
+let old_to_fun_form f = map_terms old_to_fun_term f
+
+let old_to_fun_sl_form f = SlUtil.map_terms old_to_fun_term f
 
 let unoldify =
   let old_name = Str.regexp (Str.quote old_prefix ^ "\\(.*\\)") in
@@ -847,8 +855,49 @@ let mk_ite cond cond_pos then_cmd else_cmd then_msg else_msg pos =
   let e_block = mk_seq_cmd [e_assume; else_cmd] (source_pos else_cmd) in
   mk_choice_cmd [t_block; e_block] pos
 
- 
+let rec map_terms_cmd fn =
+  let map_terms_basic_cmd = function
+    | Assign ac ->
+        let ac1 =
+          { ac with assign_rhs = List.map fn ac.assign_rhs }
+        in
+        Assign ac1
+    | Return rc ->
+        let rc1 =
+          { return_args = List.map fn rc.return_args }
+        in
+        Return rc1
+    | Call cc ->
+        let cc1 =
+          { cc with call_args = List.map fn cc.call_args }
+        in
+        Call cc1
+    | New nc ->
+        let nc1 =
+          { nc with new_args = List.map fn nc.new_args }
+        in
+        New nc1
+    | Dispose dc ->
+        let dc1 = { dispose_arg = fn dc.dispose_arg } in
+        Dispose dc1
+    | Havoc hc -> Havoc hc
+    | Assert sf ->
+        Assert (map_terms_spec fn sf)
+    | Assume sf ->
+        Assume (map_terms_spec fn sf)
+  in
+  function
+  | Basic (bc, pp) -> mk_basic_cmd (map_terms_basic_cmd bc) pp.pp_pos
+  | Seq (cs, pp) -> mk_seq_cmd (List.map (map_terms_cmd fn) cs) pp.pp_pos
+  | Choice (cs, pp) -> mk_choice_cmd (List.map (map_terms_cmd fn) cs) pp.pp_pos
+  | Loop (lc, pp) ->
+      let loop_test = map_terms fn lc.loop_test in
+      let loop_prebody = map_terms_cmd fn lc.loop_prebody in
+      let loop_postbody = map_terms_cmd fn lc.loop_postbody in
+      let loop_inv = List.map (map_terms_spec fn) lc.loop_inv in
+      mk_loop_cmd loop_inv loop_prebody loop_test lc.loop_test_pos loop_postbody pp.pp_pos
 
+ 
 let rec fold_basic_cmds f acc = function
   | Loop (lc, pp) ->
       let lpre, acc = fold_basic_cmds f acc lc.loop_prebody in
@@ -877,6 +926,7 @@ let map_basic_cmds f c =
   let c1, _ = fold_basic_cmds (fun c _ -> f c, ()) () c in
   c1
 
+    
 (** Auxiliary function for predicates *)
 
 let subst_id_var_decl map vd =
@@ -924,10 +974,19 @@ let result_sort_of_pred pred =
 
 open Format
 
+let pr_term ppf t =
+  Grass.pr_term ppf (old_to_fun_term t)
+
+let pr_term_list = Grass.pr_list pr_term
+
+let pr_sl_form ppf f = Sl.pr_form ppf (old_to_fun_sl_form f)
+    
+let pr_form ppf f = Grass.pr_form ppf (old_to_fun_form f)
+    
 let pr_spec_form ppf sf =
   match sf.spec_form with
-  | SL f -> Sl.pr_form ppf f
-  | FOL f -> Grass.pr_form ppf (old_to_fun f)
+  | SL f -> pr_sl_form ppf f
+  | FOL f -> pr_form ppf f
 
 let pr_basic_cmd ppf = function
   | Assign ac -> 
@@ -968,7 +1027,7 @@ let pr_basic_cmd ppf = function
             pr_ident cc.call_name 
             pr_term_list cc.call_args
       | _ ->
-          fprintf ppf "@[<2>call@ %a@ :=@ @[%a(@[%a@])@]@]" 
+          fprintf ppf "@[<2>%a@ :=@ @[%a(@[%a@])@]@]" 
             pr_ident_list cc.call_lhs 
             pr_ident cc.call_name 
             pr_term_list cc.call_args
