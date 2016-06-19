@@ -159,7 +159,7 @@ let add_pred_insts prog f =
             in
             if (no_var_reads || is_set_sort srt) && IdSet.subset fvs bvs && not @@ IdSet.is_empty fvs
             then TermSet.add t acc else acc
-        | App (_, ts, _) ->
+        | App (_, ts, Bool) ->
             List.fold_left ft acc ts
         | _ -> acc
       in

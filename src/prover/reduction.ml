@@ -278,6 +278,21 @@ let add_read_write_axioms fs =
             (* a = b, b.cells[i].f -> a.cells[i].f *)
             Match (mk_read fld [mk_read (mk_array_cells b) [idx]], [])],
            [mk_read fld [mk_read (mk_array_cells a) [idx]]]) :: propagators
+      | Loc (Array srt) -> fun propagators ->
+          let f = fresh_ident "?f", Map ([Loc (Array srt); Int], srt) in
+          let fld = mk_var (snd f) (fst f) in
+          let a = Axioms.loc1 (Array srt) in
+          let b = Axioms.loc2 (Array srt) in
+          let i = fresh_ident "?i" in
+          let idx = mk_var Int i in
+          (* a = b, a[i].f -> b[i].f *)
+          ([Match (mk_eq_term a b, []);
+            Match (mk_read fld [a; idx], [])],
+           [mk_read fld [b; idx]]) ::
+          ([Match (mk_eq_term a b, []);
+            (* a = b, b.cells[i].f -> a.cells[i].f *)
+            Match (mk_read fld [mk_read (mk_array_cells b) [idx]], [])],
+           [mk_read fld [mk_read (mk_array_cells a) [idx]]]) :: propagators
       | Map (Loc ssrt :: dsrts, srt) as fldsrt -> fun propagators ->
           let f1 = fresh_ident "?f", fldsrt in
           let fld1 = mk_var (snd f1) (fst f1) in
