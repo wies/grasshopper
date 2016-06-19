@@ -13,56 +13,67 @@ struct ConcList {
 }
 
 
-function previous(next: Map<Node, Node>, n: Node, h: Node) returns (p: Node) {
-  (!Reach(next, h, n) ==> p == null) &&
-  (h == n ==> p == h) &&
-  (forall x: Node :: Btwn(next, h, x, n) && x != n && h != n ==>
-   Btwn(next, x, p, n) && p != n)
-  @(matching n yields previous(next, n, h))
-}
+function previous(next: Map<Node, Node>, n: Node, h: Node)
+  returns (p: Node)
+  requires acc({z: Node :: Btwn(next, h, z, n)})
+  ensures (!Reach(next, h, n) ==> p == null) &&
+    (h == n ==> p == h) &&
+    (forall x: Node :: Btwn(next, h, x, n) && x != n && h != n ==>
+     Btwn(next, x, p, n) && p != n)
+/* TODO not needed?  @(matching n yields previous(next, n, h)) */
 
-function inset(data: Map<Node, Int>, next: Map<Node, Node>, n: Node, h: Node) returns (I: Set<Int>) {
-  (!Reach(next, h, n) ==> I == {}) &&
-  /* If head.data were MININT, this would be unnecessary: */
-  (h == n ==> I == {x: Int :: true}) &&
-  (Reach(next, h, n) && h != n ==> I == {x: Int :: previous(next, n, h).data < x})
-}
+
+function inset(data: Map<Node, Int>, next: Map<Node, Node>, n: Node, h: Node)
+  returns (I: Set<Int>)
+  requires acc({z: Node :: Btwn(next, h, z, n)})
+  ensures (!Reach(next, h, n) ==> I == {}) &&
+    /* If head.data were MININT, this would be unnecessary: */
+    (h == n ==> I == {x: Int :: true}) &&
+    (Reach(next, h, n) && h != n ==> I == {x: Int :: previous(next, n, h).data < x})
 /* TODO parametrize with ConcList instead of head Node? Fewer instances? */
+/* TODO check if we don't need to explicitly take fields anymore */
 
-function keyset(n: Node, h: Node) returns (K: Set<Int>) {
-  /* Again, if head were MININT, this would be unnecessary: */
-  (h == n ==> K == {}) &&
-  (h != n ==> K == inset(data, next, n, h) -- {x: Int :: n.data < x})
-}
+function keyset(n: Node, h: Node)
+  returns (K: Set<Int>)
+  requires acc({z: Node :: Btwn(next, h, z, n)})
+  ensures
+    /* Again, if head were MININT, this would be unnecessary: */
+    (h == n ==> K == {}) &&
+    (h != n ==> K == inset(data, next, n, h) -- {x: Int :: n.data < x})
 
 
 /* A sorted linked list, with sentinal head and tail nodes */
-predicate conc_list_set(c: ConcList, C: Set<Int>)(FP_C: Set<ConcList>, FP_N: Set<Node>) {
-  FP_C == {c} &&
-  c.head != null && c.tail != null && c.head != c.tail &&
-  lseg(c.head, null, FP_N) &&
-  Btwn(next, c.head, c.tail, null) &&
-  /* tail is the last element in the list */
-  c.tail.next == null &&
-  lseg_strictly_increasing(c.head, FP_N) &&
-  C == content(FP_N) &&
-  /* The head is smallest */
-  (forall n in FP_N :: n == c.head || c.head.data < n.data) &&
-  /* The tail is largest */
-  (forall n in FP_N :: n == c.tail || c.tail.data > n.data)
-  /* TODO use MININT/MAXINT here instead? */
+predicate conc_list_set(c: ConcList, C: Set<Int>) {
+  exists FP_N: Set<Node> ::
+    acc(c) &*&
+    lseg(c.head, null) && acc(FP_N) &*&
+
+    c.head != null && c.tail != null && c.head != c.tail &&
+    Btwn(next, c.head, c.tail, null) &&
+    /* tail is the last element in the list */
+    c.tail.next == null &&
+    lseg_strictly_increasing(c.head, FP_N) &&
+    C == content(FP_N) &&
+    /* The head is smallest */
+    (forall n in FP_N :: n == c.head || c.head.data < n.data) &&
+    /* The tail is largest */
+    (forall n in FP_N :: n == c.tail || c.tail.data > n.data)
+    /* TODO use MININT/MAXINT here instead? */
 }
 
 
 /* ---------- Proof that conc_list_set encodes a good state ---------- */
 
-function next_greater(x: Int, h: Node, t: Node) returns (n: Node) {
-  ((!Reach(next, h, t) || h == null) ==> n == null) &&
-  (Reach(next, h, t) && h != null && h == t && h.data < x ==> n == null) &&
-  (Reach(next, h, t) && x <= h.data ==> n == h) &&
-  (Reach(next, h, t) && h != null && h != t && h.data < x
-   ==> n == next_greater(x, h.next, t))
-}
+function next_greater(x: Int, h: Node, t: Node)
+  returns (n: Node)
+  requires acc({z: Node :: Btwn(next, h, z, t)})
+  ensures
+    ((!Reach(next, h, t) || h == null) ==> n == null) &&
+    (Reach(next, h, t) && h != null && h == t && h.data < x ==> n == null) &&
+    (Reach(next, h, t) && x <= h.data ==> n == h) &&
+    (Reach(next, h, t) && h != null && h != t && h.data < x
+     ==> n == next_greater(x, h.next, t))
+
 
 /* Since we cannot prove this property, as it needs induction, we add as axiom */
 /* TODO prove this property by induction */
@@ -72,8 +83,9 @@ axiom (forall x: Int, h: Node, t: Node, n: Node, FP: Set<Node> ::
        ==>
        Btwn(next, h, n, null) && n != null && x <= n.data && previous(next, n, h).data < x);
 
-procedure good_state(c: ConcList, implicit ghost C: Set<Int>, implicit ghost FP_C: Set<ConcList>, FP_N: Set<Node>)
-  requires conc_list_set(c, C, FP_C, FP_N)
+/* TODO this proc currently is timing out */
+procedure good_state(c: ConcList, implicit ghost C: Set<Int>, FP_N: Set<Node>)
+  requires conc_list_set(c, C) && (acc(c) &*& acc(FP_N))
 {
   /* keysets of all nodes are disjoint */
   pure assert (forall n1 in FP_N, n2 in FP_N, x: Int :: x in keyset(n1, c.head) && x in keyset(n2, c.head) ==> n1 == n2 @(matching n1 yields keyset(n1, c.head)) @(matching keyset(n1, c.head) yields inset(data, next, n1, c.head)));
@@ -118,6 +130,7 @@ procedure traverse(c: ConcList, implicit ghost C: Set<Int>)
 }
 
 
+/* TODO this proc is currently timing out */
 procedure delete(c: ConcList, x: Int, implicit ghost C: Set<Int>, ghost L: Set<Node>)
   requires conc_list_set(c, C) &*& c.head.data < x &*& x < c.tail.data
   ensures conc_list_set(c, C -- {x})
@@ -238,6 +251,7 @@ procedure delete_b1(c: ConcList, x: Int, pred: Node, curr: Node,
   return L, pred, curr;
 }
 
+
 /* -------------------- Hand-over-hand list: Take 2 -------------------- */
 
 /* The idea is to wrap each line of the delete procedure in a separate function
@@ -278,8 +292,8 @@ procedure havoc_S(c: ConcList, L: Set<Node>, S: Set<Node>, implicit ghost C: Set
 		acc(S1) -** (acc(L) &+& conc_list_set(c, C1))
   pure ensures Frame(S, S ++ L, old(next), next) && Frame(S, S ++ L, old(data), data)
   /* Global invariants: */
-  /* Don't change inset of anything you don't hold lock on */
-  pure ensures (forall n: Node :: n in L ==> inset(data, next, n, c.head) == old(inset(data, next, n, c.head)) @(matching n yields inset(data, next, n, c.head)))
+  /* Don't shrink inset of anything you don't hold lock on */
+  pure ensures forall n: Node, y: Int :: n in L && y in old(inset(data, next, n, c.head)) ==> y in inset(data, next, n, c.head) @(matching n yields inset(data, next, n, c.head))
   /* Sentinel head & tail are not modified */
   pure ensures (c.head == old(c.head) && c.head.data == old(c.head.data) && c.tail == old(c.tail) && c.tail.data == old(c.tail.data))
 
@@ -409,6 +423,7 @@ procedure delete04_env(c: ConcList, x: Int, pred: Node, curr: Node,
   return L, pred, curr;
 }
 
+/* TODO this proc is currently timing out */
 /* Prove loop invariant holds on entry */
 procedure delete05(c: ConcList, x: Int, pred: Node, curr: Node,
 		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
@@ -425,7 +440,7 @@ procedure delete05(c: ConcList, x: Int, pred: Node, curr: Node,
   return L, pred, curr;
 }
 
-/* This takes 99m but goes through in no_content version */
+/* TODO this proc is currently timing out (used to take 99min) */
 procedure delete05_env(c: ConcList, x: Int, pred: Node, curr: Node,
 		       C: Set<Int>, L: Set<Node>, S: Set<Node>)
   returns (L1: Set<Node>, pred1: Node, curr1: Node)
@@ -518,6 +533,7 @@ procedure delete07_env(c: ConcList, x: Int, pred: Node, curr: Node,
   return L, pred, curr;
 }
 
+/* TODO this should go through but isn't. Incompleteness bug? */
 procedure delete08(c: ConcList, x: Int, pred: Node, curr: Node,
 		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
   returns (L1: Set<Node>, pred1: Node, curr1: Node)
@@ -526,7 +542,8 @@ procedure delete08(c: ConcList, x: Int, pred: Node, curr: Node,
   requires (acc(L) &+& (conc_list_set(c, C)))
 
   pure ensures L1 == {pred1}
-  pure ensures (c.head.data < x && x < c.tail.data && x in inset(data, next, curr1, c.head) && pred.data < x && Reach(next, c.head, pred1) && pred1.next == curr1)
+  pure ensures (c.head.data < x && x < c.tail.data && pred.data < x && Reach(next, c.head, pred1) && pred1 == curr1)
+  pure ensures x in inset(data, next, curr1.next, c.head)
   ensures (acc(L1) &+& (conc_list_set(c, C)))
 
   /* Global invariants: */
@@ -535,7 +552,6 @@ procedure delete08(c: ConcList, x: Int, pred: Node, curr: Node,
   /* Sentinel head & tail are not modified */
   pure ensures (c.head == old(c.head) && c.head.data == old(c.head.data) && c.tail == old(c.tail) && c.tail.data == old(c.tail.data))
 {
-  curr := curr.next;
   return L, pred, curr;
 }
 
@@ -563,16 +579,16 @@ procedure delete09(c: ConcList, x: Int, pred: Node, curr: Node,
 		   implicit ghost C: Set<Int>, ghost L: Set<Node>)
   returns (L1: Set<Node>, pred1: Node, curr1: Node)
   pure requires L == {pred}
-  pure requires Reach(next, c.head, pred) && pred.next == curr && x in inset(head, data, next, curr, c) && (c.head.data < x && x < c.tail.data && pred.data < x)
+  pure requires Reach(next, c.head, pred) && pred.next == curr && x in inset(data, next, curr, c.head) && (c.head.data < x && x < c.tail.data && pred.data < x)
   requires (acc(L) &+& conc_list_set(c, C))
 
   pure ensures L1 == {pred1, curr1}
-  pure ensures Reach(next, c.head, pred1) && pred1.next == curr1 && x in inset(head, data, next, curr1, c) && (c.head.data < x && x < c.tail.data && pred1.data < x)
+  pure ensures Reach(next, c.head, pred1) && pred1.next == curr1 && x in inset(data, next, curr1, c.head) && (c.head.data < x && x < c.tail.data && pred1.data < x)
   ensures exists C1: Set<Int> :: (acc(L) &+& conc_list_set(c, C1))
 
   /* Global invariants: */
   /* Don't change inset of anything you don't hold lock on */
-  pure ensures (forall n: Node :: n !in L ==> inset(head, data, next, n, c) == old(inset(head, data, next, n, c)))
+  pure ensures (forall n: Node :: n !in L ==> inset(data, next, n, c.head) == old(inset(data, next, n, c.head)))
   /* Sentinel head & tail are not modified */
   pure ensures (c.head == old(c.head) && c.head.data == old(c.head.data) && c.tail == old(c.tail) && c.tail.data == old(c.tail.data))
 {
