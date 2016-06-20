@@ -1,0 +1,133 @@
+include "def.spl";
+include "find.spl";
+include "array_utils.spl";
+
+/* is a node full */
+procedure is_full(u: Node) returns (res: Bool)
+  requires btree_node(u)
+  ensures  btree_node(u)
+  ensures  forall i: Int :: 0 <= i && i < b ==> !res || u.keys[i] != bottom
+{
+  if (u.keys[b - 1] != bottom) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+/* is a node a leaf */
+procedure is_leaf(u: Node) returns (res: Bool)
+  requires btree_node(u)
+  ensures  btree_node(u)
+  ensures  forall i: Int :: 0 <= i && i <= b ==> !res || u.children[i] == null
+{
+  if (u.children[0] == null) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+procedure size(u: Node) returns (res: Int)
+  requires btree_node(u)
+  ensures  btree_node(u)
+  ensures  res >= 0 && res <= b
+  ensures  forall i: Int :: i >= 0 && i < res ==> u.keys[i] != bottom
+  ensures  forall i: Int :: i >= res && i < b ==> u.keys[i] == bottom
+{
+  var lo := 0;
+  var hi := b;
+  while (hi != lo)
+    invariant acc(u) &*& acc(u.keys)
+    invariant hi >= lo && lo >= 0 && hi <= b && u.keys.length == b
+    invariant forall i: Int, j: Int :: 0 <= i && i <= j && j < u.keys.length && u.keys[i] == bottom ==> u.keys[j] == bottom
+    invariant forall i: Int :: i >= hi && i < b ==> u.keys[i] == bottom
+    invariant forall i: Int :: i >= 0 && i < lo ==> u.keys[i] != bottom
+  {
+    var m := (hi+lo)/2;
+    if (u.keys[m] == bottom) {
+      hi := m;
+    } else {
+      lo := m+1;
+    }
+  }
+  return lo;
+}
+
+/* Add the value x to this block
+ * @param x     the value to add
+ * @param ci    the child associated with x
+ * @return      true on success or false if x was not added
+ */
+procedure addNode(u: Node, x: T, ci: Node) returns (res: Bool)
+  requires btree(u) &*& btree(ci)
+  requires u != null && (ci == null || ci.parent == null)
+  requires (ci != null || u.children[0] == null) // inserting null only when the node is a leaf
+  requires x != bottom
+  requires forall i: Int :: 0 <= i && i < u.keys.length ==> u.keys[i] != x
+  ensures  btree(u)
+{
+  pure assume u.keys[u.keys.length - 1] == bottom;
+  var i := findIt(u.keys, x);
+  if (i < u.keys.length-1) {
+    key_arraymove(u.keys, i, i+1, b-i-1);
+  }
+  u.keys[i] := x;
+  if (i < u.keys.length-1) {
+    node_arraymove(u.children, i+1, i+2, b-i-1);
+  }
+  u.children[i+1] := ci;
+  if (ci != null) { ci.parent := u; }
+  return true;
+}
+
+/* Remove the i'th value from this block - don't affect this block's children
+ * @param i     the index of the element to remove
+ * @return      the value of the element removed
+ */
+procedure removeNode(u: Node, i: Int) returns (res: T)
+  requires btree_node(u)
+  requires 0 <= i && i < u.keys.length
+  ensures  btree_node(u)
+  //TODO this is not right. we change the key but not the values!
+{
+  var y := u.keys[i];
+  key_arraymove(u.keys, i+1, i, b-i-1);
+  u.keys[u.keys.length-1] := bottom;
+  return y;
+}
+
+procedure newNode() returns (res: Node)
+  requires  emp
+  ensures   btree_node(res)
+  ensures   res.parent == null
+  ensures   forall i: Int :: 0 <= i && i < b ==> res.keys[i] == bottom
+  ensures   forall i: Int :: 0 <= i && i <= b ==> res.children[i] == null
+{
+  var w := new Node();
+  w.keys := new Array<T>(b);
+  w.children := new Array<Node>(b+1);
+  w.parent := null;
+  w.lbound := bottom;
+  w.ubound := top;
+  var i := 0;
+  while (i < b)
+    invariant 0 <= i && i <= b
+    invariant acc(w) &*& acc(w.keys) &*& acc(w.children)
+    invariant w.keys.length == b && w.children.length == b+1
+    invariant forall j: Int :: 0 <= j && j < i ==> w.keys[j] == bottom && w.children[j] == null
+  {
+    w.keys[i] := bottom;
+    w.children[i] := null;
+    i := i + 1;
+  }
+  w.children[b] := null;
+  return w;
+}
+
+procedure newTree() returns (res: Node)
+  requires  emp
+  ensures   btree(res)
+{
+  return newNode();
+}

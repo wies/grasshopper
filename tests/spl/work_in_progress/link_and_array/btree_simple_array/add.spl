@@ -1,0 +1,96 @@
+include "def.spl";
+include "find.spl";
+include "node_utils.spl";
+include "array_utils.spl";
+
+procedure splitNode(leftNode: Node) returns (splitValue: T, rightNode: Node)
+  requires  btree(leftNode)
+  requires  leftNode != null
+  requires  leftNode.keys[b-1] != bottom
+  ensures   splitValue == old(leftNode.keys[b/2])
+  // state of the left node
+  ensures   btree(leftNode)
+  ensures   leftNode != null && leftNode.parent == old(leftNode.parent)
+  ensures   leftNode.lbound == old(leftNode.lbound) && leftNode.ubound == splitValue
+  ensures   forall i: Int :: 0 <= i && i < b/2 ==> leftNode.keys[i] == old(leftNode.keys[i])
+  ensures   forall i: Int :: 0 <= i && i <= b/2 ==> leftNode.children[i] == old(leftNode.children[i])
+  ensures   forall i: Int :: b/2 <= i && i < b ==> leftNode.keys[i] == bottom
+  ensures   forall i: Int :: b/2 < i && i < b ==> leftNode.children[i] == null
+  // state of the rightNode node
+  ensures   btree(rightNode)
+  ensures   rightNode != null && rightNode.parent == null
+  ensures   rightNode.ubound == old(leftNode.ubound) && rightNode.lbound == rightNode.keys[0]
+  ensures   forall i: Int :: 0 <= i && i < b/2 ==> rightNode.keys[i] == old(leftNode.keys[i + b/2])
+  ensures   forall i: Int :: 0 <= i && i <= b/2 ==> rightNode.children[i] == old(leftNode.children[i + b/2])
+  ensures   forall i: Int :: b/2 <= i && i < b ==> rightNode.keys[i] == bottom
+  ensures   forall i: Int :: b/2 < i && i < b ==> rightNode.children[i] == null
+{
+  rightNode := newNode();
+  var j := b/2;
+  // move the keys
+  key_arraycopy(leftNode.keys, j+1, rightNode.keys, 0, b-j-1);
+  key_fill(leftNode.keys, j+1, b, bottom);
+  // move the children
+  node_arraycopy(leftNode.children, j+1, rightNode.children, 0, b-j);
+  node_fill(leftNode.children, j+1, b+1, null);
+  // extract the middle value
+  splitValue := leftNode.keys[j];
+  leftNode.keys[j] := bottom;
+  // set the bounds
+  rightNode.ubound := leftNode.ubound;
+  rightNode.lbound := rightNode.keys[0];
+  leftNode.ubound := splitValue;
+}
+
+procedure addRecursive(x: T, u: Node) returns (split: T, res: Node)
+  requires  btree(u) &*& u != null
+  ensures   btree(u) &*& btree(res)
+  ensures   u != null && u.lbound == old(u.lbound)
+  ensures   res == null ==> u.ubound == old(u.ubound)
+  ensures   res != null ==>
+                split != bottom && res.parent == null &&
+                lt(u.ubound, res.lbound) && res.ubound == old(u.ubound)
+{
+  var i := findIt(u.keys, x);
+  if (i < u.keys.length && u.keys[i] == x) {
+    //throw new DuplicateValueException();
+    return bottom, null;
+  }
+  if (is_leaf(u)) { // leaf node, just add it
+    var added := addNode(u, x, null);
+    pure assert(added); // XXX
+  } else {
+    var s: T, w: Node;
+    s, w := addRecursive(x, u.children[i]);
+    if (w != null) {  // child was split, w is new child 
+      var added := addNode(u, s, w);
+      pure assert(added); // XXX
+    }
+  }
+  if (is_full(u)) {
+    var s: T, n: Node;
+    s, n := splitNode(u);
+    return s, n;
+  } else {
+    return bottom, null;
+  }
+}
+
+procedure add(bt: Node, x: T) returns (res: Node)
+  requires  btree_root(bt)
+  ensures   btree_root(res)
+{
+  var s: T, w: Node;
+  s, w := addRecursive(x, bt);
+  if (w != null) {   // root was split, make new root
+    var newroot := newNode();
+    newroot.children[0] := bt;
+    bt.parent := newroot;
+    newroot.keys[0] := s;
+    newroot.children[1] := w;
+    w.parent := newroot;
+    return newroot;
+  } else {
+    return bt;
+  }
+}
