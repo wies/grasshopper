@@ -1,7 +1,5 @@
 include "def.spl";
 
-function aux_old_a2(idx: Int) returns (val: T)
-
 procedure key_arraymove(a: Array<T>, srcPos: Int, dstPos: Int, length: Int)
   requires acc(a) &*& (key_arrayseg(a, srcPos, srcPos + length) &+& key_arrayseg(a, dstPos, dstPos + length))
   ensures  acc(a) &*& (key_arrayseg(a, srcPos, srcPos + length) &+& key_arrayseg(a, dstPos, dstPos + length))
@@ -9,16 +7,16 @@ procedure key_arraymove(a: Array<T>, srcPos: Int, dstPos: Int, length: Int)
   ensures  forall i: Int :: srcPos <= i && i < srcPos + length && (i < dstPos || dstPos + length <= i) ==> a[i] == old(a[i])
   ensures  forall i: Int :: 0 <= i && i < length ==> a[dstPos + i] == old(a[srcPos + i])
 {
-  pure assume forall j: Int :: srcPos <= j && j < srcPos + length ==> a[j] == aux_old_a2(j);
   if (srcPos < dstPos) {
     var i := length - 1;
     while (i >= 0)
       invariant srcPos < dstPos
       invariant acc(a) &*& (key_arrayseg(a, srcPos, srcPos + length) &+& key_arrayseg(a, dstPos, dstPos + length))
       invariant -1 <= i && i < length
-      invariant forall j: Int :: srcPos <= j && j < srcPos + length && j <= dstPos + i ==> a[j] == aux_old_a2(j)
-      invariant forall j: Int :: i < j && j < length ==> a[dstPos + j] == aux_old_a2(srcPos + j)
-                @(matching j yields aux_old_a2(j))
+      invariant forall j: Int :: srcPos <= j && j < srcPos + length && j <= dstPos + i ==> a[j] == old(a[j])
+        @(matching a[dstPos + j] yields old(a[srcPos + j]))
+      invariant forall j: Int :: i < j && j < length ==> a[dstPos + j] == old(a[srcPos + j])
+        @(matching j yields old(a[j]))
     {
       a[dstPos + i] := a[srcPos + i];
       i := i - 1;
@@ -29,17 +27,16 @@ procedure key_arraymove(a: Array<T>, srcPos: Int, dstPos: Int, length: Int)
       invariant srcPos > dstPos
       invariant acc(a) &*& (key_arrayseg(a, srcPos, srcPos + length) &+& key_arrayseg(a, dstPos, dstPos + length))
       invariant 0 <= i && i <= length 
-      invariant forall j: Int :: srcPos <= j && j < srcPos + length && dstPos + i <= j ==> a[j] == aux_old_a2(j)
-      invariant forall j: Int :: 0 <= j && j < i ==> a[dstPos + j] == aux_old_a2(srcPos + j)
-                @(matching j yields aux_old_a2(j))
+      invariant forall j: Int :: srcPos <= j && j < srcPos + length && dstPos + i <= j ==> a[j] == old(a[j])
+        @(matching a[dstPos + j] yields old(a[srcPos + j]))
+      invariant forall j: Int :: 0 <= j && j < i ==> a[dstPos + j] == old(a[srcPos + j])
+        @(matching j yields old(a[j]))
     {
       a[dstPos + i] := a[srcPos + i];
       i := i + 1;
     }
   }
 }
-
-function aux_old_a(idx: Int) returns (val: Node)
 
 procedure node_arraymove(a: Array<Node>, srcPos: Int, dstPos: Int, length: Int)
   requires acc(a) &*& (node_arrayseg(a, srcPos, srcPos + length) &+& node_arrayseg(a, dstPos, dstPos + length))
@@ -48,16 +45,16 @@ procedure node_arraymove(a: Array<Node>, srcPos: Int, dstPos: Int, length: Int)
   ensures  forall i: Int :: srcPos <= i && i < srcPos + length && (i < dstPos || dstPos + length <= i) ==> a[i] == old(a[i])
   ensures  forall i: Int :: 0 <= i && i < length ==> a[dstPos + i] == old(a[srcPos + i])
 {
-  pure assume forall j: Int :: srcPos <= j && j < srcPos + length ==> a[j] == aux_old_a(j);
   if (srcPos < dstPos) {
     var i := length - 1;
     while (i >= 0)
       invariant srcPos < dstPos
       invariant acc(a) &*& (node_arrayseg(a, srcPos, srcPos + length) &+& node_arrayseg(a, dstPos, dstPos + length))
       invariant -1 <= i && i < length
-      invariant forall j: Int :: srcPos <= j && j < srcPos + length && j <= dstPos + i ==> a[j] == aux_old_a(j)
-      invariant forall j: Int :: i < j && j < length ==> a[dstPos + j] == aux_old_a(srcPos + j)
-                @(matching j yields aux_old_a(j))
+      invariant forall j: Int :: srcPos <= j && j < srcPos + length && j <= dstPos + i ==> a[j] == old(a[j])
+        @(matching a[dstPos + j] yields old(a[srcPos + j]))
+      invariant forall j: Int :: i < j && j < length ==> a[dstPos + j] == old(a[srcPos + j])
+        @(matching j yields old(a[j]))
     {
       a[dstPos + i] := a[srcPos + i];
       i := i - 1;
@@ -68,9 +65,10 @@ procedure node_arraymove(a: Array<Node>, srcPos: Int, dstPos: Int, length: Int)
       invariant srcPos > dstPos
       invariant acc(a) &*& (node_arrayseg(a, srcPos, srcPos + length) &+& node_arrayseg(a, dstPos, dstPos + length))
       invariant 0 <= i && i <= length 
-      invariant forall j: Int :: srcPos <= j && j < srcPos + length && dstPos + i <= j ==> a[j] == aux_old_a(j)
-      invariant forall j: Int :: 0 <= j && j < i ==> a[dstPos + j] == aux_old_a(srcPos + j)
-                @(matching j yields aux_old_a(j))
+      invariant forall j: Int :: srcPos <= j && j < srcPos + length && dstPos + i <= j ==> a[j] == old(a[j])
+        @(matching a[dstPos + j] yields old(a[srcPos + j]))
+      invariant forall j: Int :: 0 <= j && j < i ==> a[dstPos + j] == old(a[srcPos + j])
+        @(matching j yields old(a[j]))
     {
       a[dstPos + i] := a[srcPos + i];
       i := i + 1;
@@ -86,14 +84,12 @@ procedure key_arraycopy(a: Array<T>, srcPos: Int, b: Array<T>, dstPos: Int, leng
   ensures  acc(b) &*& key_arrayseg(b, dstPos, dstPos + length)
   ensures  forall i: Int :: 0 <= i && i < length ==> a[srcPos + i] == old(a[srcPos + i]) && b[dstPos + i] == a[srcPos + i]
 {
-  pure assume forall j: Int :: 0 <= j && j < length ==> a[srcPos + j] == aux_old_a2(srcPos + j);
   var i := 0;
   while (i < length)
     invariant acc(a) &*& key_arrayseg(a, srcPos, srcPos + length)
     invariant acc(b) &*& key_arrayseg(b, dstPos, dstPos + length)
     invariant 0 <= i && i <= length
-    invariant forall j: Int :: 0 <= j && j < length ==> a[srcPos + j] == aux_old_a2(srcPos + j)
-              @(matching j yields aux_old_a2(j))
+    invariant forall j: Int :: 0 <= j && j < length ==> a[srcPos + j] == old(a[srcPos + j])
     invariant forall j: Int :: 0 <= j && j < i ==> b[dstPos + j] == a[srcPos + j]
   {
     b[dstPos + i] := a[srcPos + i];
@@ -109,14 +105,12 @@ procedure node_arraycopy(a: Array<Node>, srcPos: Int, b: Array<Node>, dstPos: In
   ensures  acc(b) &*& node_arrayseg(b, dstPos, dstPos + length)
   ensures  forall i: Int :: 0 <= i && i < length ==> a[srcPos + i] == old(a[srcPos + i]) && b[dstPos + i] == a[srcPos + i]
 {
-  pure assume forall j: Int :: 0 <= j && j < length ==> a[srcPos + j] == aux_old_a(srcPos + j);
   var i := 0;
   while (i < length)
     invariant acc(a) &*& node_arrayseg(a, srcPos, srcPos + length)
     invariant acc(b) &*& node_arrayseg(b, dstPos, dstPos + length)
     invariant 0 <= i && i <= length
-    invariant forall j: Int :: 0 <= j && j < length ==> a[srcPos + j] == aux_old_a(srcPos + j)
-              @(matching j yields aux_old_a(j))
+    invariant forall j: Int :: 0 <= j && j < length ==> a[srcPos + j] == old(a[srcPos + j])
     invariant forall j: Int :: 0 <= j && j < i ==> b[dstPos + j] == a[srcPos + j]
   {
     b[dstPos + i] := a[srcPos + i];
