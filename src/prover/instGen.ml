@@ -148,7 +148,7 @@ let generate_terms generators ground_terms =
       let rec mt sm t1 t2 =
       match t1, t2 with 
       | App (sym1, ts1, srt1), App (sym2, ts2, srt2) 
-        when sym1 = sym2 && srt1 = srt2 ->
+        when sym1 = sym2 && srt1 = srt2 && List.length ts1 = List.length ts2 ->
           List.fold_left2 (fun sm_opt t1 t2 -> 
             match sm_opt with 
             | None -> None
