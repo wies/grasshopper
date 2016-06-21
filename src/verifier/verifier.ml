@@ -146,15 +146,21 @@ let add_match_filters =
 (** Expand predicate definitions for all predicates in formula [f] according to program [prog] *)
 let add_pred_insts prog f =
   let add_generators aux_match f =
+    let aux_vs =
+      Opt.fold (fun aux_vs -> function Match (t, _) -> fv_term_acc aux_vs t)
+        IdSet.empty aux_match
+    in
     let fun_terms bvs f =
       let rec ft acc = function
         | App (sym, (_ :: _ as ts), srt) as t
-          when sym <> Read && (is_free_symbol sym || sym = Disjoint || sym = SubsetEq || srt <> Bool) ->
+          when (sym <> Read || IdSet.subset (fv_term t) aux_vs) &&
+            (is_free_symbol sym || sym = Disjoint || sym = SubsetEq || srt <> Bool) ->
             let fvs = fv_term t in
             let sts = List.fold_left subterms_term_acc TermSet.empty ts in
             let no_var_reads =
               TermSet.for_all (function
-                | App (Read, _ :: Var _ :: _, _) -> false
+                | App (Read, _ :: _ :: Var (x, _) :: _, _) -> IdSet.mem x aux_vs
+                | App (Read, _ :: Var (x, _) :: _, _) -> IdSet.mem x aux_vs
                 | _ -> true) sts
             in
             if (no_var_reads || is_set_sort srt) && IdSet.subset fvs bvs && not @@ IdSet.is_empty fvs
@@ -188,7 +194,7 @@ let add_pred_insts prog f =
           let generators =
             (match ft with
             | [] -> []
-            | _ -> [TermGenerator (Opt.to_list aux_match @ ms, ft)])
+            | _ -> [TermGenerator (ms, ft)])
           in
           Binder (Forall, vs, ag bvs f, generators @ ann)
       | f -> f
@@ -229,7 +235,7 @@ let add_pred_insts prog f =
           BoolOp (op, List.map add_match fs)
       | f -> f
     in
-    annotate (add_match (add_generators None f)) generate_knowns
+    annotate (add_match (add_generators (Some m) f)) generate_knowns
   in
   (* Expands definition of predicate [p] for arguments [ts] assuming polarity of occurrence [pol] *)
   let expand_pred pos p ts =
