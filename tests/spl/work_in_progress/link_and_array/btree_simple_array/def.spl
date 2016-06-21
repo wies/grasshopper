@@ -141,10 +141,12 @@ predicate btree(bt: Node) {
     // keys and lbound, ubound
     (forall x in FP_N, i: Int :: i <= 0 && i < x.keys.length && x.keys[i] != bottom ==> lt(x.lbound, x.keys[i]) && lt(x.keys[i], x.ubound)) &&
     // children lbound, ubound, and keys
-    (forall n in FP_N :: n.children[0] != null ==> n.children[0].lbound == n.lbound) &&
+    (forall n in FP_N :: n.children[0] != null ==> n.children[0].lbound == n.lbound
+        @(matching n.children[0] yields n.children[0].lbound)) &&
     (forall n in FP_N, i: Int, j: Int :: 0 <= i && i < n.children.length && n.children[i] != null && (i == n.keys.length || n.keys[i] == bottom) ==>
                                            n.children[i].ubound == n.ubound) &&
-    (forall n in FP_N, i: Int, j: Int :: 0 <= i && i < n.keys.length && n.children[i] != null ==> n.children[i].ubound == n.keys[i]) &&
+    (forall n in FP_N, i: Int, j: Int :: 0 <= i && i < n.keys.length && n.children[i] != null ==> n.children[i].ubound == n.keys[i]
+        @(matching n.children[i].ubound yields n.keys[i])) &&
     (forall n in FP_N, i: Int :: 0 < i && i < n.children.length && n.children[i] != null
       ==> n.children[i].lbound == n.keys[i-1]) && // XXX not local
     // ...

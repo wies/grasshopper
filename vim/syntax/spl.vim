@@ -12,7 +12,7 @@ endif
 " case is significant
 " syn case ignore
 " spl Keywords
-syn keyword splStatement	include procedure returns if else while return new var
+syn keyword splStatement	include procedure returns if else while return new var free
 syn keyword splStatement	axiom assert assume requires ensures invariant matching yields
 syn keyword splStatement	struct function predicate pure ghost implicit type
 syn keyword splTodo         contained TODO ToDo Todo todo XXX FIXME
