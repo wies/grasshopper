@@ -506,6 +506,23 @@ let flatten_exprs cu =
         let e21, aux1, locals = flatten_expr scope aux locals e2 in
         let e11, aux2, locals = flatten_expr scope aux1 locals e1 in
         BinaryOp (e11, op, e21, ty, pos), aux2, locals
+    | Annot (e, PatternAnnot p, pos) ->
+        let e1, aux1, locals = flatten_expr scope aux locals e in
+        let p1, aux2, locals = flatten_expr scope aux1 locals p in
+        Annot (e1, PatternAnnot p1, pos), aux2, locals
+    | Annot (e, GeneratorAnnot (es, ge), pos) ->
+        let es1, aux1, locals =
+          List.fold_right (fun (e, id) (es1, aux1, locals) ->
+            let e1, aux1, locals = flatten_expr scope aux locals e in
+            (e1, id) :: es1, aux1, locals)
+            es ([], aux, locals)
+        in
+        let ge1, aux2, locals = flatten_expr scope aux1 locals ge in
+        let e1, aux3, locals = flatten_expr scope aux2 locals e in
+        Annot (e1, GeneratorAnnot (es1, ge1), pos), aux3, locals
+    | Annot (e, ann, pos) ->
+        let e1, aux1, locals = flatten_expr scope aux locals e in
+        Annot (e1, ann, pos), aux1, locals
     | e -> e, aux, locals
   in
   let rec flatten scope locals aux_funs returns = function

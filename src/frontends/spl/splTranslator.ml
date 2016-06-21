@@ -248,6 +248,8 @@ let convert cu =
         let tset1 = convert_term locals set1 in
         let tset2 = convert_term locals set2 in
         GrassUtil.mk_disjoint_term tset1 tset2
+    | Binder (SetComp, _, _, pos) ->
+        failwith ("set comprehension should have been desugared at " ^ string_of_src_pos pos)
     | e -> failwith ("unexpected expression at " ^ string_of_src_pos (pos_of_expr e))
   in
   let rec convert_grass_form locals = function
