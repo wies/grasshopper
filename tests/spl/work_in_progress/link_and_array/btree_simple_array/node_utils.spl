@@ -100,7 +100,7 @@ procedure removeNode(u: Node, i: Int) returns (res: T)
 procedure newNode() returns (res: Node)
   requires  emp
   ensures   btree_node(res)
-  ensures   res.parent == null
+  ensures   res.parent == null && res.lbound == bottom && res.ubound == top
   ensures   forall i: Int :: 0 <= i && i < b ==> res.keys[i] == bottom
   ensures   forall i: Int :: 0 <= i && i <= b ==> res.children[i] == null
 {
@@ -129,5 +129,26 @@ procedure newTree() returns (res: Node)
   requires  emp
   ensures   btree(res)
 {
-  return newNode();
+  // does work because too few terms
+  // var n := newNode();
+  // return n;
+  var w := new Node();
+  w.keys := new Array<T>(b);
+  w.children := new Array<Node>(b+1);
+  w.parent := null;
+  w.lbound := bottom;
+  w.ubound := top;
+  var i := 0;
+  while (i < b)
+    invariant 0 <= i && i <= b
+    invariant acc(w) &*& acc(w.keys) &*& acc(w.children)
+    invariant w.keys.length == b && w.children.length == b+1
+    invariant forall j: Int :: 0 <= j && j < i ==> w.keys[j] == bottom && w.children[j] == null
+  {
+    w.keys[i] := bottom;
+    w.children[i] := null;
+    i := i + 1;
+  }
+  w.children[b] := null;
+  return w;
 }
