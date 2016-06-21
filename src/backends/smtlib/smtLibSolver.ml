@@ -226,7 +226,9 @@ let add_running_pid,
       match Hashtbl.find handlers sig_num with
       | Signal_handle handler -> handler sig_num
       | Signal_ignore -> ()
-      | Signal_default -> exit (128 - sig_num)
+      | Signal_default ->
+          Debug.warn (fun () -> Printf.sprintf "Received signal %d from SMT solver. Aborting.\n" sig_num);
+          exit (128 - sig_num)
     with Not_found -> exit (128 - sig_num)
   in
   let add_handler sig_num = 
