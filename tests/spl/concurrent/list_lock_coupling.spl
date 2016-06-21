@@ -28,8 +28,9 @@ function inset(data: Map<Node, Int>, next: Map<Node, Node>, n: Node, h: Node)
   requires acc({z: Node :: Btwn(next, h, z, n)})
   ensures (!Reach(next, h, n) ==> I == {}) &&
     /* If head.data were MININT, this would be unnecessary: */
-    (h == n ==> I == {x: Int :: true}) &&
-    (Reach(next, h, n) && h != n ==> I == {x: Int :: previous(next, n, h).data < x})
+  (h == n ==> I == {x: Int :: true}) &&
+  ((Reach(next, h, n) && h != n ==> I == {x: Int :: previous(next, n, h).data < x })
+   @(matching inset(data, next, n, h) yields previous(next, n, h).data))
 /* TODO parametrize with ConcList instead of head Node? Fewer instances? */
 /* TODO check if we don't need to explicitly take fields anymore */
 
