@@ -42,7 +42,6 @@ function keyset(n: Node, h: Node)
     (h == n ==> K == {}) &&
     (h != n ==> K == inset(data, next, n, h) -- {x: Int :: n.data < x})
 
-
 /* A sorted linked list, with sentinal head and tail nodes */
 predicate conc_list_set(c: ConcList, C: Set<Int>) {
   exists FP_N: Set<Node> ::
