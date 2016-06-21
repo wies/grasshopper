@@ -850,8 +850,10 @@ let convert_model session smtModel =
     let id = name ^ "_" ^ string_of_int num in
     let z3_val_re = Str.regexp "\\([^!]*\\)!val!\\([0-9]*\\)" in
     let cvc4_val_re = Str.regexp "@uc__\\(.*\\)__\\([0-9]*\\)$" in
+    let cvc4_val_simple_re = Str.regexp "@uc_\\(.*\\)_\\([0-9]*\\)$" in
     if Str.string_match z3_val_re id 0 || 
-       Str.string_match cvc4_val_re id 0
+    Str.string_match cvc4_val_re id 0 ||
+    Str.string_match cvc4_val_simple_re id 0
     then 
       let srt = convert_sort (FreeSort ((Str.matched_group 1 id, 0), [])) in
       let index = int_of_string (Str.matched_group 2 id) in
