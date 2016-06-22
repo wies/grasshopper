@@ -19,6 +19,7 @@ let simplify prog =
   dump_if 0 |>
   info "Inferring accesses, eliminating loops, arrays, new/dispose, and global dependencies.\n" |>
   elim_arrays |>
+  annotate_heap_checks |>
   elim_new_dispose |>
   Analyzer.infer_accesses |>
   elim_loops |>
@@ -28,7 +29,6 @@ let simplify prog =
   elim_sl |>
   (*(fun prog -> if !Config.abstract_preds then annotate_frame_axioms prog else prog) |> *)
   (*annotate_term_generators |>*)
-  annotate_heap_checks |>
   dump_if 2 |>
   info "Eliminating return statements and transforming to SSA form.\n" |>
   elim_return |>
