@@ -1,6 +1,6 @@
 ;;; spl-mode.el -- Emacs mode for GRASShopper programs.
 
-;; Copyright (c) 2013, 2014 Thomas Wies <wies@cs.nyu.edu>>
+;; Copyright (c) 2013-2016 Thomas Wies <wies@cs.nyu.edu>>
 ;;
 ;; Author: Thomas Wies
 ;; URL: http://cs.nyu.edu/wies/software/grasshopper
@@ -253,7 +253,8 @@
   (flycheck-define-checker spl-proc-verifier
     "On-the-fly verifier for GRASShopper programs."
     :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) "-smtsolver" "z3+cvc4"
-              "-procedure" (eval spl-current-procedure) 
+              "-procedure" (eval spl-current-procedure)
+              "-model" "/tmp/model.html"
               "-lint" source)
     :error-patterns
     ((info line-start (file-name) ":" line ":" column (optional "-" end-column) ":Trace Information:" (message) line-end)
@@ -264,6 +265,11 @@
     ;((error line-start (file-name) ":" line ":" column ":" (message) line-end))
     :modes (spl-mode))
 
+  (defun spl-show-model ()
+    "Show counterexample model of the most recent failed verification attempt."
+    (interactive)
+    (browse-url-of-file "/tmp/model.html"))
+  
   ;; Register keyboard shortcuts for verifier
   (defun spl-verify-buffer ()
     "Verify current buffer using GRASShopper."
@@ -276,8 +282,9 @@
     "Verify current procedure using GRASShopper."
     (interactive)
     (save-excursion
-      (while (< 0 (current-column))
-        (beginning-of-defun))
+      (forward-line 0)
+      (while (and (< 1 (string-to-number (format-mode-line "%l"))) (not (looking-at-p "[ \t]*procedure")))
+        (forward-line (- 1)))
       (if (looking-at "[ \t]*procedure[ \t]+\\([^\s-(]+\\)")
           (let* ((proc-name (match-string 1)))
             (progn (message "Verifying procedure %s..." proc-name)
@@ -289,7 +296,8 @@
   (add-hook 'spl-mode-hook
             (lambda () 
               (local-set-key (kbd "C-c C-v") 'spl-verify-buffer)
-              (local-set-key (kbd "C-c C-p") 'spl-verify-procedure))))
+              (local-set-key (kbd "C-c C-p") 'spl-verify-procedure)
+              (local-set-key (kbd "C-c C-m") 'spl-show-model))))
 
 (add-hook 'compilation-finish-functions
            (lambda (buf str)
