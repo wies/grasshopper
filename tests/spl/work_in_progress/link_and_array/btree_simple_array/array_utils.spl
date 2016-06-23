@@ -5,9 +5,8 @@ procedure key_arraymove(a: Array<T>, srcPos: Int, dstPos: Int, length: Int)
   requires 0 <= srcPos && srcPos + length <= a.length && 0 <= dstPos && dstPos + length <= a.length
   requires length >= 0
   ensures  acc(a)
-  ensures forall i: Int :: srcPos <= i && i < srcPos + length && (i < dstPos || dstPos + length <= i) ==> a[i] == old(a[i])
+  ensures forall i: Int :: 0 <= i && i < a.length && (i < dstPos || dstPos + length <= i) ==> a[i] == old(a[i])
   ensures forall i: Int :: 0 <= i && i < length ==> a[dstPos + i] == old(a[srcPos + i])
-  ensures forall i: Int :: 0 <= i && i < a.length && !(srcPos <= i && i < srcPos + length || dstPos <= i && i < dstPos + length) ==> a[i] == old(a[i])
 {
   if (srcPos < dstPos) {
     var i := length - 1;
@@ -15,10 +14,9 @@ procedure key_arraymove(a: Array<T>, srcPos: Int, dstPos: Int, length: Int)
       invariant srcPos < dstPos && 0 <= srcPos && srcPos + length <= a.length && 0 <= dstPos && dstPos + length <= a.length
       invariant acc(a)
       invariant -1 <= i && i < length
-      invariant forall j: Int :: srcPos <= j && j < srcPos + length && j <= dstPos + i ==> a[j] == old(a[j])
+      invariant forall j: Int :: 0 <= j && j < a.length && (j <= dstPos + i || dstPos + length <= j) ==> a[j] == old(a[j])
       invariant forall j: Int :: i < j && j < length ==> a[dstPos + j] == old(a[srcPos + j])
         @(matching a[dstPos + j] yields old(a[srcPos + j]))
-      invariant forall j: Int :: 0 <= j && j < a.length && !(srcPos <= j && j < srcPos + length || dstPos <= j && j < dstPos + length) ==> a[j] == old(a[j])
     {
       a[dstPos + i] := a[srcPos + i];
       i := i - 1;
@@ -29,10 +27,9 @@ procedure key_arraymove(a: Array<T>, srcPos: Int, dstPos: Int, length: Int)
       invariant srcPos > dstPos && 0 <= srcPos && srcPos + length <= a.length && 0 <= dstPos && dstPos + length <= a.length
       invariant acc(a)
       invariant 0 <= i && i <= length 
-      invariant forall j: Int :: srcPos <= j && j < srcPos + length && dstPos + i <= j ==> a[j] == old(a[j])
-        @(matching a[dstPos + j] yields old(a[srcPos + j]))
+      invariant forall j: Int :: 0 <= j && j < a.length && (j < dstPos || dstPos + i <= j) ==> a[j] == old(a[j])
       invariant forall j: Int :: 0 <= j && j < i ==> a[dstPos + j] == old(a[srcPos + j])
-      invariant forall j: Int :: 0 <= j && j < a.length && !(srcPos <= j && j < srcPos + length || dstPos <= j && j < dstPos + length) ==> a[j] == old(a[j])
+        @(matching a[dstPos + j] yields old(a[srcPos + j]))
     {
       a[dstPos + i] := a[srcPos + i];
       i := i + 1;
@@ -45,9 +42,8 @@ procedure node_arraymove(a: Array<Node>, srcPos: Int, dstPos: Int, length: Int)
   requires 0 <= srcPos && srcPos + length <= a.length && 0 <= dstPos && dstPos + length <= a.length
   requires length >= 0
   ensures  acc(a)
-  ensures forall i: Int :: srcPos <= i && i < srcPos + length && (i < dstPos || dstPos + length <= i) ==> a[i] == old(a[i])
+  ensures forall i: Int :: 0 <= i && i < a.length && (i < dstPos || dstPos + length <= i) ==> a[i] == old(a[i])
   ensures forall i: Int :: 0 <= i && i < length ==> a[dstPos + i] == old(a[srcPos + i])
-  ensures forall i: Int :: 0 <= i && i < a.length && !(srcPos <= i && i < srcPos + length || dstPos <= i && i < dstPos + length) ==> a[i] == old(a[i])
 {
   if (srcPos < dstPos) {
     var i := length - 1;
@@ -55,10 +51,9 @@ procedure node_arraymove(a: Array<Node>, srcPos: Int, dstPos: Int, length: Int)
       invariant srcPos < dstPos && 0 <= srcPos && srcPos + length <= a.length && 0 <= dstPos && dstPos + length <= a.length
       invariant acc(a)
       invariant -1 <= i && i < length
-      invariant forall j: Int :: srcPos <= j && j < srcPos + length && j <= dstPos + i ==> a[j] == old(a[j])
+      invariant forall j: Int :: 0 <= j && j < a.length && (j <= dstPos + i || dstPos + length <= j) ==> a[j] == old(a[j])
       invariant forall j: Int :: i < j && j < length ==> a[dstPos + j] == old(a[srcPos + j])
         @(matching a[dstPos + j] yields old(a[srcPos + j]))
-      invariant forall j: Int :: 0 <= j && j < a.length && !(srcPos <= j && j < srcPos + length || dstPos <= j && j < dstPos + length) ==> a[j] == old(a[j])
     {
       a[dstPos + i] := a[srcPos + i];
       i := i - 1;
@@ -69,10 +64,9 @@ procedure node_arraymove(a: Array<Node>, srcPos: Int, dstPos: Int, length: Int)
       invariant srcPos > dstPos && 0 <= srcPos && srcPos + length <= a.length && 0 <= dstPos && dstPos + length <= a.length
       invariant acc(a)
       invariant 0 <= i && i <= length 
-      invariant forall j: Int :: srcPos <= j && j < srcPos + length && dstPos + i <= j ==> a[j] == old(a[j])
-        @(matching a[dstPos + j] yields old(a[srcPos + j]))
+      invariant forall j: Int :: 0 <= j && j < a.length && (j < dstPos || dstPos + i <= j) ==> a[j] == old(a[j])
       invariant forall j: Int :: 0 <= j && j < i ==> a[dstPos + j] == old(a[srcPos + j])
-      invariant forall j: Int :: 0 <= j && j < a.length && !(srcPos <= j && j < srcPos + length || dstPos <= j && j < dstPos + length) ==> a[j] == old(a[j])
+        @(matching a[dstPos + j] yields old(a[srcPos + j]))
     {
       a[dstPos + i] := a[srcPos + i];
       i := i + 1;
