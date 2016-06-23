@@ -236,6 +236,7 @@ let add_running_pid,
     Hashtbl.add handlers sig_num old_handler
   in
   add_handler sigint;
+  add_handler sigpipe;
   let add_running_pid pid = 
     running_pids := IntSet.add pid !running_pids
   in
