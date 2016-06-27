@@ -7,6 +7,8 @@ procedure key_arraymove(a: Array<T>, srcPos: Int, dstPos: Int, length: Int)
   ensures  acc(a)
   ensures forall i: Int :: 0 <= i && i < a.length && (i < dstPos || dstPos + length <= i) ==> a[i] == old(a[i])
   ensures forall i: Int :: 0 <= i && i < length ==> a[dstPos + i] == old(a[srcPos + i])
+  @(matching a[i] yields a[srcPos + (i - dstPos)])
+  @(matching a[i] yields a[dstPos + (i - dstPos)])
 {
   if (srcPos < dstPos) {
     var i := length - 1;
