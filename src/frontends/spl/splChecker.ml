@@ -176,7 +176,7 @@ let resolve_names cu =
                 let decl, tbl1 = declare_var types decl tbl in
                 (UnguardedVar decl), (IdMap.add decl.v_name decl locals, tbl1)
               )
-              (locals, tbl)
+              (locals, SymbolTbl.push tbl)
               decls
           in
           let f1 = re locals1 tbl1 f in
