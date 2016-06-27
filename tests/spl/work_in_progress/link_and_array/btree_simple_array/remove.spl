@@ -96,7 +96,7 @@ procedure checkUnderflowZero(u: Node)
 {
   var w := u.children[0]; // w is child of u
   if (size(w) < B-1) {  // underflow at w
-    var v := u.children[1]; // v right of w
+    var v := u.children[1]; // v right of w     XXX how do we know it is not null
     if (size(v) > B) { // w can borrow from v
       shiftRL(u, 0, v, w);
     } else { // w will absorb w
@@ -108,9 +108,13 @@ procedure checkUnderflowZero(u: Node)
 
 procedure merge(u: Node, i: Int, v: Node, w: Node)
   requires (btree(v) &*& btree(w)) -** btree(u)
-  requires u != null && v!= null && w != null
+  requires u != null && v != null && w != null
   requires v == u.children[i] && w == u.children[i+1]
-  ensures  btree(v) -** btree(u) //TODO more
+  requires v.parent == u && w.parent == u
+  // XXX (size(v) ≤ B && size(w) ≤ ?) ||
+  //     (size(v) ≤ ? && size(w) ≤ B)
+  // XXX what is the fill factor of trees ?
+  ensures  btree(u)
 {
   var sw := size(w);
   var sv := size(v);

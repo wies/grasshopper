@@ -136,15 +136,19 @@ procedure node_arraycopy(a: Array<Node>, srcPos: Int, b: Array<Node>, dstPos: In
 
 procedure key_fill(a: Array<T>, from: Int, to: Int, value: T)
   requires acc(a)
-  requires from >= 0 && to < a.length && from <= to
+  requires from >= 0 && to <= a.length && from <= to
   ensures  acc(a)
   ensures  forall i: Int :: from <= i && i < to ==> a[i] == value
+  ensures  forall i: Int :: 0 <= i && i < from ==> a[i] == old(a[i])
+  ensures  forall i: Int :: to <= i && i < a.length ==> a[i] == old(a[i])
 {
   var i := from;
   while(i < to)
     invariant acc(a)
-    invariant from >= 0 && to < a.length && from <= i && i <= to
+    invariant from >= 0 && to <= a.length && from <= i && i <= to
     invariant forall j: Int :: from <= j && j < i ==> a[j] == value
+    invariant forall j: Int :: 0 <= j && j < from ==> a[j] == old(a[j])
+    invariant forall j: Int :: to <= j && j < a.length ==> a[j] == old(a[j])
   {
     a[i] := value;
     i := i + 1;
@@ -153,15 +157,19 @@ procedure key_fill(a: Array<T>, from: Int, to: Int, value: T)
 
 procedure node_fill(a: Array<Node>, from: Int, to: Int, value: Node)
   requires acc(a)
-  requires from >= 0 && to < a.length && from <= to
+  requires from >= 0 && to <= a.length && from <= to
   ensures  acc(a)
   ensures  forall i: Int :: from <= i && i < to ==> a[i] == value
+  ensures  forall i: Int :: 0 <= i && i < from ==> a[i] == old(a[i])
+  ensures  forall i: Int :: to <= i && i < a.length ==> a[i] == old(a[i])
 {
   var i := from;
   while(i < to)
     invariant acc(a)
-    invariant from >= 0 && to < a.length && from <= i && i <= to
+    invariant from >= 0 && to <= a.length && from <= i && i <= to
     invariant forall j: Int :: from <= j && j < i ==> a[j] == value
+    invariant forall j: Int :: 0 <= j && j < from ==> a[j] == old(a[j])
+    invariant forall j: Int :: to <= j && j < a.length ==> a[j] == old(a[j])
   {
     a[i] := value;
     i := i + 1;

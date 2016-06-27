@@ -59,7 +59,7 @@ procedure size(u: Node) returns (res: Int)
  * @param ci    the child associated with x
  * @return      true on success or false if x was not added
  */
-procedure addNode(u: Node, x: T, ci: Node) returns (res: Bool)
+procedure addNode(u: Node, x: T, ci: Node)
   requires btree(u) &*& btree(ci)
   requires u != null && (ci == null || ci.parent == null)
   requires (ci != null || u.children[0] == null) // inserting null only when the node is a leaf
@@ -78,7 +78,6 @@ procedure addNode(u: Node, x: T, ci: Node) returns (res: Bool)
   }
   u.children[i+1] := ci;
   if (ci != null) { ci.parent := u; }
-  return true;
 }
 
 /* Remove the i'th value from this block - don't affect this block's children

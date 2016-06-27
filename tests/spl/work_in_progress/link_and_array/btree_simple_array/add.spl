@@ -44,6 +44,7 @@ procedure splitNode(leftNode: Node) returns (splitValue: T, rightNode: Node)
 
 procedure addRecursive(x: T, u: Node) returns (split: T, res: Node)
   requires  btree(u) &*& u != null
+  requires  lt(u.lbound, x) && lt(x, u.ubound)
   ensures   btree(u) &*& btree(res)
   ensures   u != null && u.lbound == old(u.lbound)
   ensures   res == null ==> u.ubound == old(u.ubound)
@@ -57,14 +58,12 @@ procedure addRecursive(x: T, u: Node) returns (split: T, res: Node)
     return bottom, null;
   }
   if (is_leaf(u)) { // leaf node, just add it
-    var added := addNode(u, x, null);
-    pure assert(added); // XXX
+    addNode(u, x, null);
   } else {
     var s: T, w: Node;
     s, w := addRecursive(x, u.children[i]);
     if (w != null) {  // child was split, w is new child 
-      var added := addNode(u, s, w);
-      pure assert(added); // XXX
+      addNode(u, s, w);
     }
   }
   if (is_full(u)) {
