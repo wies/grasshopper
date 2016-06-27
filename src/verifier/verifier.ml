@@ -122,11 +122,11 @@ let add_match_filters =
           let aux_matches =
             let g = List.hd (List.rev ge) in
             match sort_of g with
-            | Int | Loc _ ->
+            | Int | Loc _ | FreeSrt _ ->
               IdMap.fold
                 (fun id srt aux_matches ->
                   match srt with
-                  | Int | Loc _ as rsrt ->
+                  | Int | FreeSrt _ | Loc _ as rsrt ->
                       Match (GrassUtil.mk_known (GrassUtil.mk_var rsrt id), []) :: aux_matches
                   | _ -> aux_matches
                 ) ce aux_matches
@@ -284,7 +284,7 @@ let add_pred_insts prog f =
               | None -> a
             in
             let f1 = expand_neg (Some p_msg) (IdSet.add p seen) pbody in
-            annotate (annotate_aux_msg p_msg f1) a1
+            annotate (annotate_aux_msg p_msg (mk_and [(*mk_not (Atom (mk_free_fun Bool p ts, []));*) f1])) a1
       | f -> f
     in
     f |>
