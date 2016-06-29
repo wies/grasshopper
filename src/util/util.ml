@@ -283,13 +283,16 @@ let print_measures () =
 let read_file file =
   let chan = open_in file in
   let rec read acc =
-    try
-      read (input_line chan :: acc)
-    with End_of_file ->
-      begin
+    let line =
+      try
+        Some (input_line chan)
+      with End_of_file ->
         close_in chan;
-        List.rev acc
-      end
+        None
+    in
+    match line with
+    | Some l -> read (l :: acc)
+    | None -> List.rev acc
   in
   String.concat "\n" (read [])
 
