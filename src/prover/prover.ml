@@ -203,9 +203,9 @@ let dump_model session f =
     let model = Opt.get (SmtLibSolver.get_model session) in
     let model_chan = open_out !Config.model_file in
     if Str.string_match (Str.regexp ".*\\.html$") !Config.model_file 0 then
-      Model.output_html model_chan (Model.complete model) gts
+      ModelPrinting.output_html model_chan (Model.complete model) gts
     else
-      Model.output_graph model_chan (Model.complete model) gts;
+      ModelPrinting.output_graph model_chan (Model.complete model) gts;
     close_out model_chan;
   end
 
