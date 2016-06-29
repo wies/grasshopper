@@ -26,7 +26,7 @@ let output_trace prog proc (pp, model) =
       Printf.fprintf trace_chan 
         "{\"position\": {\"line_no\": %d, \"column_no_start\": %d, \"column_no_stop\": %d}, \"state\": "
         pos.Grass.sp_start_line pos.Grass.sp_start_col pos.Grass.sp_end_col;
-      Model.output_json trace_chan state;
+      ModelPrinting.output_json trace_chan state;
       output_string trace_chan "}"
     in
     output_string trace_chan "[";
