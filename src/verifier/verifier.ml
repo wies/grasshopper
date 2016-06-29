@@ -405,7 +405,7 @@ let vcgen prog proc =
                 s.spec_name pp.pp_pos.sp_start_line pp.pp_pos.sp_start_col
             in
             (match s.spec_form with
-              | FOL f -> acc, [mk_name name f]
+              | FOL f -> acc, [mk_name name (unoldify_form f)]
               | _ -> failwith "vcgen: found SL formula that should have been desugared")
         | Assert s ->
             let name = 
