@@ -145,7 +145,7 @@ let instantiate_and_prove session fs =
     let classes = CongruenceClosure.congr_classes (rev_concat [fs_inst; fs]) gts2 in
     instantiate_with_terms ~stratify:true true fs1 classes, gts2, classes
   in
-  let round3 fs_inst gts_inst classes =
+  (*let round3 fs_inst gts_inst classes =
     let generators =
       List.map (fun (ms, ts) ->
         let ms1 =
@@ -162,7 +162,7 @@ let instantiate_and_prove session fs =
     let gts_inst = generate_terms (btwn_gen @ generators) (TermSet.union (ground_terms ~include_atoms:true (mk_and fs_inst)) gts_inst) in
     let classes = CongruenceClosure.congr_classes (rev_concat [fs_inst; fs]) gts_inst in
     instantiate_with_terms true fs1 classes, gts_inst, classes
-  in
+  in*)
   let do_rounds rounds =
     let dr (k, result, fs_asserted, fs_inst, gts_inst, classes) r =
     match result with
@@ -186,7 +186,7 @@ let instantiate_and_prove session fs =
     | _ -> k, result, fs_asserted, fs_inst, gts_inst, classes
     in List.fold_left dr (1, None, FormSet.empty, fs1, gts1, classes) rounds
   in
-  let _, result, _, fs_inst, _, _ = do_rounds [round1; round2; round3] in
+  let _, result, _, fs_inst, _, _ = do_rounds [round1; round2(*; round3*)] in
   result, session, fs_inst
 
 
