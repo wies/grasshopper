@@ -293,6 +293,11 @@ let mixed_graphviz_html =
             c.classList.add('highlighted');
           }
         });
+        iterateOverTableCells(1, function(c) {
+          if (contains(c.innerHTML, cell.innerHTML)) {
+            c.classList.add('highlighted');
+          }
+        });
         cell.classList.remove('highlighted');
         cell.classList.add('selected');
       }
@@ -328,8 +333,8 @@ let mixed_graphviz_html =
       });
     }
     window.onload=function() {
-      iterateOverTableCells(1, function(c) { c.onclick=function(){ highlight(this.innerHTML); } });
       iterateOverTableCells(0, function(c) { c.onclick=function(){ highlightRelated(this); } });
+      iterateOverTableCells(1, function(c) { c.onclick=function(){ highlightRelated(this); } });
       iterateOverNodes(function(n) { n.onclick=function(){ highlightNode(this); } });
       var PanZoomGraph = svgPanZoom(\"#heapgraph\");
       setTooltip();
