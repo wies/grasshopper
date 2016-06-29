@@ -45,8 +45,8 @@ let loc5 struct_srt = mk_var (snd (l5 struct_srt)) (fst (l5 struct_srt))
 let fld1 struct_srt = mk_var (snd (f1 struct_srt)) (fst (f1 struct_srt))
 let fld2 struct_srt = mk_var (snd (f2 struct_srt)) (fst (f2 struct_srt))
 let fld3 struct_srt = mk_var (snd (f3 struct_srt)) (fst (f3 struct_srt))
-let dfld1 struct_srt res_srt = mk_var (Map ([Loc struct_srt], res_srt)) d
-let dfld2 struct_srt res_srt = mk_var (Map ([Loc struct_srt], res_srt)) e 
+let dfld1 struct_srt ind_srts res_srt = mk_var (Map (Loc struct_srt :: ind_srts, res_srt)) d
+let dfld2 struct_srt ind_srts res_srt = mk_var (Map (Loc struct_srt :: ind_srts, res_srt)) e 
 let set1 struct_srt = mk_var (snd (s1 struct_srt)) (fst (s1 struct_srt))
 let set2 struct_srt = mk_var (snd (s2 struct_srt)) (fst (s2 struct_srt))
 let set3 struct_srt = mk_var (snd (s3 struct_srt)) (fst (s3 struct_srt))
@@ -377,8 +377,8 @@ let frame_axioms =
     axioms
   in
   let data_frame () =
-    let fld1 = dfld1 struct_srt res_srt in
-    let fld2 = dfld2 struct_srt res_srt in
+    let fld1 = dfld1 struct_srt ind_srts res_srt in
+    let fld2 = dfld2 struct_srt ind_srts res_srt in
     [read_frame fld1 fld2]
   in
   if res_srt = Loc struct_srt
