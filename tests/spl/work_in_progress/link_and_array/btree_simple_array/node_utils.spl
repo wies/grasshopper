@@ -69,15 +69,41 @@ procedure addNode(u: Node, x: T, ci: Node)
 {
   pure assume u.keys[u.keys.length - 1] == bottom;
   var i := findIt(u.keys, x);
-  if (i < u.keys.length-1) {
+  if (i < u.keys.length - 1) {
     key_arraymove(u.keys, i, i+1, b-i-1);
   }
   u.keys[i] := x;
   if (i < u.keys.length-1) {
     node_arraymove(u.children, i+1, i+2, b-i-1);
   }
+  pure assert i < u.keys.length;
+  pure assume u.keys[i] != bottom;
+  //pure assert u.children[i+1] != null;
   u.children[i+1] := ci;
+  var a: Array<Node>;
+  var FP_A_N := array_node_fp(node_footprint(u));
+  pure assume a in FP_A_N;
+  var k: Int, j: Int;
+  pure assume 0 <= k && k < i;
+  pure assume old(u.keys[j-1]) == old(u.keys[j-1]);
+  pure assume u.keys[j-1] == u.keys[j-1];
+  pure assume old(u.keys[k-1]) == old(u.keys[k-1]);
+  pure assume forall i : Int, j: Int :: 0 <= i && i < u.keys.length && 0 <= j && j < u.children.length && u.keys[i] != bottom && j <= i && u.children[0] != null ==> u.children[j] != null;
+  pure assert 0 <= k && k <= j && j < u.children.length && u.children[k] == null ==> u.children[j] == null;
+  assume false;
   if (ci != null) { ci.parent := u; }
+  /*var n: Node;
+  var FP_N := node_footprint(u);
+  pure assume n in FP_N;
+  pure assume n != u;
+  //pure assert n.children != u.children;
+  pure assume n.children[0] != null;
+  //pure assume old(n.children[0]) == old(n.children[0]);
+  //pure assume old(n.children[0].lbound) == old(n.children[0].lbound);
+  pure assert n.lbound == old(n.lbound);
+  pure assert n.children[0] != null ==> n.children[0].lbound == n.lbound;
+  assume false;*/
+
 }
 
 /* Remove the i'th value from this block - don't affect this block's children

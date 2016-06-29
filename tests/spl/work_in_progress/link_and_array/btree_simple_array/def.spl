@@ -49,16 +49,26 @@ function node_footprint(r: Node)
   ensures forall x: Node :: x in FP == (Btwn(parent, x, r, r) && r != null)
 
 function key_array_owner(a: Array<T>, FP_N: Set<Node>) returns (n: Node)
-
+  requires acc(FP_N)
+  ensures forall n in FP_N :: n == key_array_owner(n.keys, FP_N)
+  ensures forall X: Set<Node>, Y: Set<Node>, n: Node ::
+               n in X && n in Y ==> key_array_owner(n.keys, X) == key_array_owner(n.keys, Y) 
+  
 function array_int_fp(FP_N: Set<Node>)
   returns (FP_A_I: Set<Array<T>>)
+  requires acc(FP_N)
   ensures forall n: Node :: n in FP_N ==> n.keys in FP_A_I
             @(matching n yields n.keys)
   ensures forall a: Array<T> :: a in FP_A_I ==> key_array_owner(a, FP_N) in FP_N && key_array_owner(a, FP_N).keys == a
             @(matching a without array_node_owner yields key_array_owner(a, FP_N).keys)
+  ensures forall a: Array<T> :: a !in FP_A_I ==> key_array_owner(a, FP_N) == null
 
 function array_node_owner(a: Array<Node>, FP_N: Set<Node>)
   returns (n: Node)
+  requires acc(FP_N)
+  ensures forall n in FP_N :: n == array_node_owner(n.children, FP_N)
+  ensures forall X: Set<Node>, Y: Set<Node>, n: Node ::
+               n in X && n in Y ==> array_node_owner(n.children, X) == array_node_owner(n.children, Y) 
 
 function array_node_fp(FP_N: Set<Node>)
   returns (FP_A_N: Set<Array<Node>>)
@@ -66,6 +76,7 @@ function array_node_fp(FP_N: Set<Node>)
             @(matching n yields n.children)
   ensures forall a: Array<Node> :: a in FP_A_N ==> array_node_owner(a, FP_N) in FP_N && array_node_owner(a, FP_N).children == a
             @(matching a without key_array_owner yields array_node_owner(a, FP_N).children)
+  ensures forall a: Array<Node> :: a !in FP_A_N ==> array_node_owner(a, FP_N) == null
 
 
 predicate btree_node(n: Node) {
@@ -94,6 +105,13 @@ predicate btree_node(n: Node) {
   (forall i: Int :: i <= 0 && i < n.keys.length && n.keys[i] != bottom ==> lt(n.lbound, n.keys[i]) && lt(n.keys[i], n.ubound))
 }
 
+procedure lemma(b: Node, implicit ghost N: Set<Node>)
+  requires btree(b) && acc(N);
+  ensures btree(b)
+  ensures forall n in N, j: Int, k: Int :: n.children[0] != null &&
+  0 <= j && j < n.keys.length && n.keys[j] != bottom && 0 <= k && k < j ==> n.children[k] != null
+    {}
+
 predicate btree(bt: Node) {
   exists FP_N: Set<Node>, FP_A_I: Set<Array<T>>, FP_A_N: Set<Array<Node>> ::
     acc(FP_N) &*& acc(FP_A_I) &*& acc(FP_A_N) &*&
@@ -105,7 +123,7 @@ predicate btree(bt: Node) {
     (forall n: Node :: n in FP_N ==> n.children.length == b+1 && n.keys.length == b) &&
   
     /* Structural properties of arrays */
-    // keys arrays are partitioned into non-null/null halfs
+    // keys arrays are partitioned into non-bottom/bottom halfs
     (forall a in FP_A_I, i: Int, j: Int :: 0 <= i && i <= j && j < a.length && a[i] == bottom ==> a[j] == bottom) &&
     // children arrays are partitioned into non-null/null halfs
     (forall a in FP_A_N, i: Int, j: Int :: 0 <= i && i <= j && j < a.length && a[i] == null ==> a[j] == null) &&
@@ -116,7 +134,7 @@ predicate btree(bt: Node) {
       ==>
         n.children[i] == null || //leaf: no children
         (n.children[j] != null || n.keys[j-1] == bottom) //non-leaf: child entry is null then, so is the corresponding key entry
-    ) &&
+     @(matching n.children[j] yields n.keys[j-1])) &&
     (forall n in FP_N, i: Int, j: Int :: 0 <= i && i < n.keys.length && 0 <= j && j < n.children.length &&
                                           n.keys[i] == bottom && j > i ==> n.children[j] == null) &&
     // the keys are sorted
@@ -128,6 +146,9 @@ predicate btree(bt: Node) {
         Reach(parent, a[i], array_node_owner(a, FP_N)) && a[i] != array_node_owner(a, FP_N) ) &&
     (forall a in FP_A_N, x: Node, i: Int :: 0 <= i && i < a.length && a[i] != null && Btwn(parent, a[i], x, array_node_owner(a, FP_N)) ==>
         x == array_node_owner(a, FP_N) || a[i] == x) &&
+    // key and children arrays  are all distinct
+    (forall n in FP_N, m in FP_N :: n == m || n.keys != m.keys) &&
+    (forall n in FP_N, m in FP_N :: n == m || n.children != m.children) &&
     // child array entries are all distinct
     (forall a in FP_A_N, i: Int, j: Int :: 0 <= i && i < j && j < a.length ==> a[i] == null || a[i] != a[j]) &&
     // ancestor nodes must be reachable via correct child
