@@ -184,6 +184,7 @@ let mixed_graphviz_html =
     }
     .selected { background: rgba(100,200,100,0.5) }
     .highlighted { background: rgba(200,100,100,0.5) }
+    .indirect { background: rgba(100,100,200,0.5) }
    #heapgraph-container {
      height: 500px;
      width: 100%;
@@ -215,12 +216,17 @@ let mixed_graphviz_html =
         callback(elements[i]);
       }
     }
-    function iterateOverTableCells(col, fct) {
+    function iterateOverTableRows(fct) {
       forEachByTag('table', function(t) {
         for(var j = 1; j< t.rows.length; j++){
-          if (t.rows[j].cells.length > col) {
-            fct(t.rows[j].cells[col])
-          }
+          fct(t.rows[j]);
+        }
+      });
+    }
+    function iterateOverTableCells(col, fct) {
+      iterateOverTableRows(function(row){
+        if (rows.cells.length > col) {
+          fct(rows.cells[col]);
         }
       });
     }
@@ -253,9 +259,13 @@ let mixed_graphviz_html =
         elements[i].style.fill = \"none\";
       }
     }
-    function resetCells() {
+    function resetHighlight() {
       //clean the current highlight
-      var elements = document.getElementsByClassName('selected');
+      var elements = document.getElementsByClassName('indirect');
+      for (var i = 0; i < elements.length; i++) {
+        elements[i].classList.remove('indirect');
+      }
+      elements = document.getElementsByClassName('selected');
       for (var i = 0; i < elements.length; i++) {
         elements[i].classList.remove('selected');
       }
@@ -263,59 +273,51 @@ let mixed_graphviz_html =
       for (var i = 0; i < elements.length; i++) {
         elements[i].classList.remove('highlighted');
       }
+      iterateOverNodes(resetNode);
     }
-    var lastHighlight = \"\";
-    function highlight(terms){
-      resetCells();
-      if (terms === lastHighlight) {
-        terms = \"\";
-      }
-      lastHighlight = terms;
+    function highlightNodes(terms){
       iterateOverNodes(function(n) {
         if (contains(terms, nodeLabel(n))) {
           fillNode(n);
-        } else {
-          resetNode(n);
+        }
+      });
+    }
+    function traverseCells( content, clazz, clazzRm) {
+      iterateOverTableRows(function(r) {
+        for(var j = 0; j < r.cells.length; j++){
+          var c = r.cells[j];
+          if (contains(c.innerHTML, content)) {
+            if (clazzRm !== undefined) {
+              c.classList.remove(clazzRm);
+            }
+            c.classList.add(clazz);
+          }
         }
       });
     }
     var lastSelected = undefined;
-    function highlightRelated(cell) {
-      resetCells();
+    function highlightRelated(cell, valueCell) {
+      resetHighlight();
+      resetHighlight();
       if (cell === lastSelected) {
-        highlight(\"\");
         lastSelected = undefined;
       } else {
-        highlight(cell.innerHTML);//TODO should expand the defs ???
         lastSelected = cell;
-        iterateOverTableCells(0, function(c) {
-          if (contains(c.innerHTML, cell.innerHTML)) {
-            c.classList.add('highlighted');
-          }
-        });
-        iterateOverTableCells(1, function(c) {
-          if (contains(c.innerHTML, cell.innerHTML)) {
-            c.classList.add('highlighted');
-          }
-        });
+        if (valueCell !== undefined) {
+          highlightNodes(valueCell.innerHTML);
+          traverseCells(valueCell.innerHTML, 'indirect', undefined);
+        }
+        highlightNodes(cell.innerHTML);
+        traverseCells(cell.innerHTML, 'highlighted', 'indirect');
         cell.classList.remove('highlighted');
         cell.classList.add('selected');
       }
     }
     function highlightNode(node) {
-      resetCells();
+      resetHighlight();
+      resetHighlight();
       var l = nodeLabel(node);
-      iterateOverTableCells(1, function(c) {
-        if (contains(c.innerHTML, l)) {
-          c.classList.add('highlighted');
-        }
-      });
-      iterateOverTableCells(0, function(c) {
-        if (contains(c.innerHTML, l)) {
-          c.classList.add('highlighted');
-        }
-      });
-      iterateOverNodes(resetNode);
+      traverseCells(l, 'highlighted', undefined);
       fillNode(node);
     }
     function setTooltip(){
@@ -333,8 +335,20 @@ let mixed_graphviz_html =
       });
     }
     window.onload=function() {
-      iterateOverTableCells(0, function(c) { c.onclick=function(){ highlightRelated(this); } });
-      iterateOverTableCells(1, function(c) { c.onclick=function(){ highlightRelated(this); } });
+      iterateOverTableRows(function(r) {
+        if (r.cells.length > 0) {
+          if (r.cells.length > 1) {
+            r.cells[0].onclick=function(){
+              highlightRelated(this, r.cells[1]);
+            };
+          } else {
+            r.cells[0].onclick=function(){ highlightRelated(this, undefined); };
+          }
+        }
+        if (r.cells.length > 1) {
+          r.cells[1].onclick=function(){ highlightRelated(this, undefined); };
+        }
+      });
       iterateOverNodes(function(n) { n.onclick=function(){ highlightNode(this); } });
       var PanZoomGraph = svgPanZoom(\"#heapgraph\");
       setTooltip();
