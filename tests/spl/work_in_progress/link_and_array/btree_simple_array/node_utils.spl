@@ -62,7 +62,7 @@ procedure size(u: Node) returns (res: Int)
  */
 procedure addNode(u: Node, x: T, ci: Node)
   requires btree(u) &*& btree(ci)
-  requires u != null && (ci == null || ci.parent == null && ci.ubound == x)
+  requires u != null && (ci == null || ci.parent == null && ci.lbound == x)
   requires (ci == null) == (u.children[0] == null) // inserting null iff u is a leaf
   requires x != bottom && x != top
   requires forall i: Int :: 0 <= i && i < u.keys.length ==> u.keys[i] != x
@@ -81,8 +81,10 @@ procedure addNode(u: Node, x: T, ci: Node)
   u.children[i+1] := ci;
   if (ci != null) { ci.parent := u; }
   // update bounds
-  if (u.keys[i + 1] == bottom) {
+  if (i + 1 == u.keys.length || u.keys[i + 1] == bottom) {
     u.ubound := x;
+  } else {
+    ci.ubound := u.keys[i + 1];
   }
   var n: Node;
   var FP_N := node_footprint(u);
