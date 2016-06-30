@@ -91,7 +91,10 @@ procedure addNode(u: Node, x: T, ci: Node)
   var FP_A_N := array_node_fp(FP_N);
   pure assume a in FP_A_N;
   var j: Int;
+  pure assume a == u.children;
+  pure assume j == i + 1;
   pure assert 0 <= j && j < a.length && a[j] != null && Reach(parent, n, array_node_owner(a, FP_N)) &&
+              n != array_node_owner(a, FP_N) &&
               le(a[j].lbound, n.lbound) && le(n.ubound, a[j].ubound) ==>
                 Btwn(parent, n, a[j], array_node_owner(a, FP_N));
   assume false;

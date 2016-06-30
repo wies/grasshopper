@@ -153,8 +153,8 @@ predicate btree(bt: Node) {
     (forall a in FP_A_N, i: Int, j: Int :: 0 <= i && i < j && j < a.length ==> a[i] == null || a[i] != a[j]) &&
     // ancestor nodes must be reachable via correct child
     (forall x in FP_N, a in FP_A_N, i: Int :: 0 <= i && i < a.length && a[i] != null && Reach(parent, x, array_node_owner(a, FP_N)) &&
-                                              le(a[i].lbound, x.lbound) && le(x.ubound, a[i].ubound) ==>
-        Btwn(parent, x, a[i], array_node_owner(a, FP_N)) @(matching x yields x.lbound) @(matching x yields x.ubound)) &&
+       x != array_node_owner(a, FP_N) && le(a[i].lbound, x.lbound) && le(x.ubound, a[i].ubound) ==>
+         Btwn(parent, x, a[i], array_node_owner(a, FP_N)) @(matching x yields x.lbound) @(matching x yields x.ubound)) &&
     // keys of ancestor nodes include keys of decendants
     (forall x in FP_N, y in FP_N :: Reach(parent, x, y) ==> le(y.lbound, x.lbound) && le(x.ubound, y.ubound)) &&
     // key bounds of nodes are consistent
