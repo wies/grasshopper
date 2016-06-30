@@ -2,7 +2,8 @@
  *
  * Only checking memory safety.
  *
- * Status: with -noep, everything goes through.
+ * Status: Trying to push through contains. Haven't added content to other
+ * procedures yet.
 */
 
 include "../../include/bstree.spl";
@@ -18,14 +19,36 @@ predicate ext_tree(r: Node) {
     tree(r) && acc(X) &*& two_or_bust(X)
 }
 
-procedure contains(root: Node, val: Int)
+function leaves(X: Set<Node>) returns (L: Set<Node>)
+  requires acc(X)
+  ensures forall n: Node :: n in L == (n in X && n.left == null && n.right == null)
+  @(matching n yields n.left) @(matching n yields n.right)
+
+predicate tree_bst_prop(FP: Set<Node>)
+  requires acc(FP)
+{
+  (forall x in FP, y in FP :: Btwn(parent, x, y.left, y) ==> x.data < y.data
+   @(matching y.left yields y.data)) &&
+  (forall x in FP, y in FP :: Btwn(parent, x, y.right, y) ==> x.data >= y.data
+   @(matching y.right yields y.data))  
+}
+
+predicate ext_bst_set(r: Node, C: Set<Int>) {
+  exists X: Set<Node>, L: Set<Node> ::
+    tree(r) && acc(X) &*& two_or_bust(X)
+    &*& tree_bst_prop(X)
+    &*& C == content(L) && L == leaves(X)
+}
+
+procedure contains(root: Node, val: Int, implicit ghost C: Set<Int>)
   returns (res: Bool)
-  requires ext_tree(root)
-  ensures ext_tree(root)
+  requires ext_bst_set(root, C) &*& root != null
+  ensures ext_bst_set(root, C) &*& res == val in C
 {
   var curr := root;
   while (curr.left != null && curr.right != null)
-    invariant ext_tree(curr) -** ext_tree(root)
+    invariant exists C1: Set<Int> :: ext_bst_set(curr, C1) -** ext_bst_set(root, C)
+      &*& (val in C == val in C1)
   {
     if (val < curr.data)
       curr := curr.left;
@@ -33,21 +56,20 @@ procedure contains(root: Node, val: Int)
       curr := curr.right;
   }
 
-  pure assert curr.left == null && curr.right == null;
   if (curr.data == val)
     return true;
   else
     return false;
 }
 
-procedure insert(root: Node, val: Int)
-  requires ext_tree(root) &*& root.left != null
-  ensures ext_tree(root)
+procedure insert(root: Node, val: Int, implicit ghost C: Set<Int>)
+  requires ext_bst_set(root, C) &*& root.left != null
+  ensures ext_bst_set(root, C ++ {val})
 {
   var par: Node := null;
   var curr := root;
   while (curr.left != null && curr.right != null)
-    invariant ext_tree(curr) -** ext_tree(root)
+    invariant exists C1: Set<Int> :: ext_bst_set(curr, C1) -** ext_bst_set(root, C)
     invariant curr == root && par == null || par == curr.parent
     invariant curr != null
   {
