@@ -74,6 +74,7 @@ procedure addNode(u: Node, x: T, ci: Node)
   if (i < u.keys.length - 1) {
     key_arraymove(u.keys, i, i+1, b-i-1);
   }
+  var n: Node;
   u.keys[i] := x;
   if (i < u.keys.length-1) {
     node_arraymove(u.children, i+1, i+2, b-i-1);
@@ -83,23 +84,26 @@ procedure addNode(u: Node, x: T, ci: Node)
   // update bounds
   if (i + 1 == u.keys.length || u.keys[i + 1] == bottom) {
     u.ubound := x;
-  } else {
+  } else if (ci != null) {
     ci.ubound := u.keys[i + 1];
   }
-  var n: Node;
+  // check that lbound of j-th child is equal to j-1-th key.
   var FP_N := node_footprint(u);
   pure assume n in FP_N;
-  var a: Array<Node>;
+  var j: Int;
+  pure assume n == u;
+  pure assert 0 < j && j < n.children.length && n.children[j] != null ==> n.children[j].lbound == n.keys[j-1];
+  pure assume false;
+  /*var a: Array<Node>;
   var FP_A_N := array_node_fp(FP_N);
   pure assume a in FP_A_N;
-  var j: Int;
   pure assume a == u.children;
   pure assume j == i + 1;
   pure assert 0 <= j && j < a.length && a[j] != null && Reach(parent, n, array_node_owner(a, FP_N)) &&
               n != array_node_owner(a, FP_N) &&
               le(a[j].lbound, n.lbound) && le(n.ubound, a[j].ubound) ==>
                 Btwn(parent, n, a[j], array_node_owner(a, FP_N));
-  assume false;
+  assume false;*/
 }
 
 /* Remove the i'th value from this block - don't affect this block's children
