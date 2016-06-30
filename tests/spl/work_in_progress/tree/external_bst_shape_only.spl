@@ -123,6 +123,7 @@ procedure delete(root: Node, val: Int)
     }
     sib.parent := gpar;
 
+    curr.parent := null;
     par.parent := null;
     free par;
     free curr;
