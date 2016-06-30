@@ -1,0 +1,130 @@
+/* External Binary Search Tree
+ *
+ * Only checking memory safety.
+ *
+ * Status: with -noep, contains and insert go through. Delete fails at
+ * ghost_field_invariant - debug this.
+*/
+
+include "../../include/bstree.spl";
+
+predicate two_or_bust(FP: Set<Node>)
+  requires acc(FP)
+{
+  forall x in FP:: (x.left == null && x.right == null) || (x.left != null && x.right != null)
+}
+
+predicate ext_tree(r: Node) {
+  exists X: Set<Node> ::
+    tree(r) && acc(X) &*& two_or_bust(X)
+}
+
+procedure contains(root: Node, val: Int)
+  returns (res: Bool)
+  requires ext_tree(root)
+  ensures ext_tree(root)
+{
+  var curr := root;
+  while (curr.left != null && curr.right != null)
+    invariant ext_tree(curr) -** ext_tree(root)
+  {
+    if (val < curr.data)
+      curr := curr.left;
+    else
+      curr := curr.right;
+  }
+
+  pure assert curr.left == null && curr.right == null;
+  if (curr.data == val)
+    return true;
+  else
+    return false;
+}
+
+procedure insert(root: Node, val: Int)
+  requires ext_tree(root) &*& root.left != null
+  ensures ext_tree(root)
+{
+  var par: Node := null;
+  var curr := root;
+  while (curr.left != null && curr.right != null)
+    invariant ext_tree(curr) -** ext_tree(root)
+    invariant curr == root && par == null || par == curr.parent
+    invariant curr != null
+  {
+    par := curr;
+    if (val < curr.data)
+      curr := curr.left;
+    else
+      curr := curr.right;
+  }
+
+  if (curr.data != val) {
+    var newExt := new Node;
+    var newInt := new Node;
+    newExt.left := null;
+    newExt.right := null;
+    newExt.parent := newInt;
+
+    if (curr.data < val) {
+      newInt.left := curr;
+      newInt.right := newExt;
+      newInt.data := val;
+    } else {
+      newInt.left := newExt;
+      newInt.right := curr;
+      newInt.data := curr.data;
+    }
+    curr.parent := newInt;
+
+    if (par.left == curr) {
+      par.left := newInt;
+    } else {
+      par.right := newInt;
+    }
+    newInt.parent := par;
+  }
+}
+
+procedure delete(root: Node, val: Int)
+  requires ext_tree(root)
+/* Ugly cardinality constraints to avoid corner cases */
+  &*& root.left != null && root.left.left != null && root.right.left != null
+  ensures ext_tree(root)
+{
+  var gpar: Node := null;
+  var par: Node := null;
+  var curr := root;
+  while (curr.left != null && curr.right != null)
+    invariant ext_tree(curr) -** ext_tree(root)
+    invariant curr == root && par == null && gpar == null
+      || par == root && par == curr.parent && gpar == null
+      || par == curr.parent && gpar == par.parent
+    invariant curr != null
+  {
+    gpar := par;
+    par := curr;
+    if (val < curr.data)
+      curr := curr.left;
+    else
+      curr := curr.right;
+  }
+  pure assert par != root;
+
+  if (curr.data == val) {
+    var sib: Node;
+    if (par.left == curr) sib := par.right;
+    else sib := par.left;
+
+    if (gpar.left == par) {
+      gpar.left := sib;
+    } else {
+      gpar.right := sib;
+    }
+    sib.parent := gpar;
+
+    par.parent := null;
+    free par;
+    free curr;
+  }
+}
