@@ -518,11 +518,12 @@ let print_graph output chan model terms =
   let output_freesyms () =
     let (_, funs) = TermSet.fold
       (fun t (seen, acc) -> match t with
-        | App (FreeSym id, args, srt) when args <> [] ->
+        | App ((FreeSym _ as sym), args, srt)
+        | App (sym, args, (FreeSrt _ as srt)) when args <> [] ->
             (try
               let str_of a = str_of_t (sort_of a) (eval model a) in
               let args_str = List.map str_of args in
-              let lhs = (string_of_ident id) ^ "(" ^ (String.concat ", " args_str) ^ ")" in
+              let lhs = (string_of_symbol sym) ^ "(" ^ (String.concat ", " args_str) ^ ")" in
                 if StringSet.mem lhs seen then
                   (seen, acc)
                 else
