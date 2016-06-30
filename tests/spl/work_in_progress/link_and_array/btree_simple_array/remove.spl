@@ -127,6 +127,8 @@ procedure merge(u: Node, i: Int, v: Node, w: Node)
   u.keys[b-1] := bottom;
   node_arraymove(u.children, i+2, i+1, b-i-1);
   u.children[b] := null;
+  // update the bound
+  v.ubound := w.ubound;
   // reclaim memory
   w.parent := null;
   free(w);
@@ -157,6 +159,10 @@ procedure shiftLR(u: Node, i: Int, v: Node, w: Node)
 
   node_arraycopy(v.children, sv-shift+1, w.children, 0, shift);
   node_fill(v.children, sv-shift+1, sv+1, null);
+
+  // update the bounds
+  v.ubound := u.keys[i];
+  w.lbound := u.keys[i];
 }
   
 procedure shiftRL(u: Node, i: Int, v: Node, w: Node)
@@ -185,4 +191,8 @@ procedure shiftRL(u: Node, i: Int, v: Node, w: Node)
 
   node_arraymove(v.children, shift, 0, b-shift+1);
   node_fill(v.children, sv-shift+1, b+1, null);
+  
+  // update the bounds
+  v.lbound := u.keys[i];
+  w.ubound := u.keys[i];
 }
