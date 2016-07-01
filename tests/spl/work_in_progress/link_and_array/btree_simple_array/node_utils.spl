@@ -1,4 +1,3 @@
-include "def.spl";
 include "find.spl";
 include "array_utils.spl";
 
@@ -69,8 +68,13 @@ procedure addNode(u: Node, x: T, ci: Node)
   requires lt(u.lbound, x) && le(u.ubound, x)
   ensures  btree(u)
 {
-  pure assume u.keys[u.keys.length - 1] == bottom;
+  pure assume u.keys[u.keys.length - 1] == top;
   var i := findIt(u.keys, x);
+  pure assert u.keys[i] != top || i == 0 || u.keys[i-1] != top;
+  pure assert forall k: Int :: 0 <= k && k < i ==> u.keys[k] != top;
+  var k: Int;
+  pure assert ci != null && u.keys[i] == top ==> first_top(u) == i;
+  pure assert ci != null && u.keys[i] == top ==> u.children[i] != null;
   if (i < u.keys.length - 1) {
     key_arraymove(u.keys, i, i+1, b-i-1);
   }
@@ -82,28 +86,38 @@ procedure addNode(u: Node, x: T, ci: Node)
   u.children[i+1] := ci;
   if (ci != null) { ci.parent := u; }
   // update bounds
-  if (i + 1 == u.keys.length || u.keys[i + 1] == bottom) {
+  if (i + 1 == u.keys.length || u.keys[i + 1] == top) {
     u.ubound := x;
   } else if (ci != null) {
     ci.ubound := u.keys[i + 1];
   }
-  // check that lbound of j-th child is equal to j-1-th key.
   var FP_N := node_footprint(u);
-  pure assume n in FP_N;
+  //pure assume n in FP_N;
   var j: Int;
-  pure assume n == u;
-  pure assert 0 < j && j < n.children.length && n.children[j] != null ==> n.children[j].lbound == n.keys[j-1];
-  pure assume false;
-  /*var a: Array<Node>;
+  //pure assume n == u;
+  //pure assume n.children[(i + 1) + (j - (i + 2))] == n.children[(i + 1) + (j - (i + 2))];
+  //pure assume n.keys[(i + 1) + (j - (i + 2)) - 1] == n.keys[(i + 1) + (j - (i + 2)) - 1];
+  //pure assert 0 < j && j < n.children.length && n.children[j] != null ==> n.children[j].lbound == n.keys[j-1];
+  //pure assume false;
+  var a: Array<Node>;
   var FP_A_N := array_node_fp(FP_N);
+  var FP_A_I := array_int_fp(FP_N);
   pure assume a in FP_A_N;
   pure assume a == u.children;
-  pure assume j == i + 1;
-  pure assert 0 <= j && j < a.length && a[j] != null && Reach(parent, n, array_node_owner(a, FP_N)) &&
-              n != array_node_owner(a, FP_N) &&
-              le(a[j].lbound, n.lbound) && le(n.ubound, a[j].ubound) ==>
-                Btwn(parent, n, a[j], array_node_owner(a, FP_N));
-  assume false;*/
+  pure assert u.keys[i] != top;
+  pure assume a[(i + 1) + (j - (i + 2))] == a[(i + 1) + (j - (i + 2))];
+  pure assume a[(i + 2) + (j - (i + 2))] == a[(i + 2) + (j - (i + 2))];
+  pure assume a[(i + 1) + (k - (i + 2))] == a[(i + 1) + (k - (i + 2))];
+  pure assume a[(i + 2) + (k - (i + 2))] == a[(i + 2) + (k - (i + 2))];
+  pure assume u.keys[k] == u.keys[k];
+  pure assume u.keys[j] == u.keys[j];
+  pure assume ci != null;
+  pure assert 0 < i ==> u.children[i-1] != null;
+  pure assume 0 < i ==> u.children[i-1] != null;
+  pure assume 0 < i ==> u.keys[i-1] != top;
+  // children arrays are partitioned into non-null/null halfs
+  pure assert 0 <= k && k <= j && j < a.length && a[k] == null ==> a[j] == null;
+  assume false;
 }
 
 /* Remove the i'th value from this block - don't affect this block's children

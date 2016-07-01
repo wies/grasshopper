@@ -1,4 +1,4 @@
-include "def.spl";
+include "def_local.spl";
 
 /* Find the smallest value >= x in this BTree */
 procedure find(bt: Node, x: T) returns (res: T)
@@ -19,7 +19,7 @@ procedure find(bt: Node, x: T) returns (res: T)
       flag := true;  /* Found x, so return */
     } else {
       /* n.keys[i] is smallest value > x, go to child[i] if exists */
-      if (i < n.keys.length && n.keys[i] != bottom) {
+      if (i < n.keys.length && n.keys[i] != top) {
         z := n.keys[i];
       }
       n := n.children[i];
@@ -32,17 +32,15 @@ procedure findIt(a: Array<T>, x: T) returns (idx: Int)
   requires x != bottom && x != top
   requires a.length == b
   requires acc(a)
-  requires forall i: Int, j: Int :: 0 <= i && i < j && j < a.length ==> a[i] == bottom || a[j] == bottom || lt(a[i], a[j])
-  requires forall i: Int, j: Int :: 0 <= i && i <= j && j < a.length && a[i] == bottom ==> a[j] == bottom
+  requires forall i: Int, j: Int :: 0 <= i && i < j && j < a.length ==> lt(a[i], a[j])
   ensures a.length == b
   ensures acc(a)
-  ensures forall i: Int, j: Int :: 0 <= i && i < j && j < a.length ==> a[i] == bottom || a[j] == bottom || lt(a[i], a[j])
-  ensures forall i: Int, j: Int :: 0 <= i && i <= j && j < a.length && a[i] == bottom ==> a[j] == bottom
+  ensures forall i: Int, j: Int :: 0 <= i && i < j && j < a.length ==> lt(a[i], a[j])
   // what we actually care about
   ensures 0 <= idx && idx <= a.length
-  ensures idx == a.length || a[idx] == x || a[idx] == bottom || lt(x, a[idx])
-  ensures forall i: Int :: 0 <= i && i < idx ==> a[i] != bottom && lt(a[i], x)
-  ensures forall i: Int :: idx < i && i < a.length ==> a[i] == bottom || lt(x, a[i])
+  ensures idx == a.length || a[idx] == x || lt(x, a[idx])
+  ensures forall i: Int :: 0 <= i && i < idx ==> lt(a[i], x)
+  ensures forall i: Int :: idx < i && i < a.length ==> lt(x, a[i])
 {
   var lo := 0;
   var hi := a.length;
@@ -50,20 +48,15 @@ procedure findIt(a: Array<T>, x: T) returns (idx: Int)
   while (hi != lo)
     invariant a.length > 0
     invariant acc(a)
-    invariant forall i: Int, j: Int :: 0 <= i && i < j && j < a.length ==> a[i] == bottom || a[j] == bottom || lt(a[i], a[j])
-    invariant forall i: Int, j: Int :: 0 <= i && i <= j && j < a.length && a[i] == bottom ==> a[j] == bottom
+    invariant forall i: Int, j: Int :: 0 <= i && i < j && j < a.length ==> lt(a[i], a[j])
     // what we actually care about
     invariant 0 <= lo && lo <= hi && hi <= a.length
-    invariant forall i: Int :: 0 <= i && i < lo ==> a[i] != bottom && lt(a[i], x)
-    invariant forall i: Int :: hi < i && i < a.length ==> a[i] == bottom || lt(x, a[i])
+    invariant forall i: Int :: 0 <= i && i < lo ==> lt(a[i], x)
+    invariant forall i: Int :: hi < i && i < a.length ==> lt(x, a[i])
   {
     var m := (hi + lo) / 2;
     var cmp: Int;
-    if (a[m] == bottom) {
-      cmp := -1;
-    } else {
-      cmp := compare(x, a[m]);
-    }
+    cmp := compare(x, a[m]);
     if (cmp < 0) {
       hi := m;      // look in first half
     } else if (cmp > 0) {
