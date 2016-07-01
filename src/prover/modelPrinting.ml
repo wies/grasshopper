@@ -681,19 +681,24 @@ let print_graph output chan model terms =
             | App (Read, [array_state; arr ; idx], s) when s = esrt && sort_of arr = (Loc srt) ->
               (try
                 let i = eval model idx in
-                let _src = eval model arr in
-                let src = get_node srt _src in
-                let _dst = eval model t in
-                let dst = get_node inner _dst in
-                let astate = eval model array_state in
-                let label = (string_of_value astate) ^ ", " ^ (string_of_value i) in
-                let id = (string_of_sorted_value srt _src) ^ (string_of_sorted_value inner _dst) ^ label in
-                if not (StringSet.mem id seen) then
+                if (Int64.compare (int_of_value i) Int64.zero) >= 0 then
                   begin
-                    let color = try List.nth colors2 (Int64.to_int (int_of_value astate))
-                                with Failure "nth" | Undefined -> "black" in
-                    edges := (src, dst, label, Solid, color) :: !edges;
-                    StringSet.add id seen
+                    let _src = eval model arr in
+                    let src = get_node srt _src in
+                    let _dst = eval model t in
+                    let dst = get_node inner _dst in
+                    let astate = eval model array_state in
+                    let label = (string_of_value astate) ^ ", " ^ (string_of_value i) in
+                    let id = (string_of_sorted_value srt _src) ^ (string_of_sorted_value inner _dst) ^ label in
+                    if not (StringSet.mem id seen) then
+                      begin
+                        let color = try List.nth colors2 (Int64.to_int (int_of_value astate))
+                                    with Failure "nth" | Undefined -> "black" in
+                        edges := (src, dst, label, Solid, color) :: !edges;
+                        StringSet.add id seen
+                      end
+                    else
+                      seen
                   end
                 else
                   seen
