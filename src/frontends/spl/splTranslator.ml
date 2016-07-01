@@ -654,15 +654,15 @@ let convert cu =
           Opt.map (type_of_expr cu decl.pr_locals) |>
           Opt.get_or_else BoolType
         in
-        let body, locals, outputs =
+        let opt_body, locals, outputs =
           match rtype with
           | BoolType ->
-              let body = Opt.get_or_else (BoolVal (true, decl.pr_pos)) decl.pr_body in
-              let cbody = convert_grass_form decl.pr_locals body in
-              SL (Pure (cbody, Some (pos_of_expr body))), decl.pr_locals, decl.pr_outputs              
+              Opt.map (fun body ->
+                let cbody = convert_grass_form decl.pr_locals body in
+                SL (Pure (cbody, Some (pos_of_expr body)))) decl.pr_body,
+              decl.pr_locals, decl.pr_outputs              
           | PermType ->
-              let body = Opt.get_or_else (BoolVal (true, decl.pr_pos)) decl.pr_body in
-              SL (convert_sl_form decl.pr_locals body), decl.pr_locals, decl.pr_outputs
+              Opt.map (fun body -> SL (convert_sl_form decl.pr_locals body)) decl.pr_body, decl.pr_locals, decl.pr_outputs
           | rtype ->
               let ret_id, locals =
                 match decl.pr_outputs with
@@ -682,20 +682,20 @@ let convert cu =
                     res_id, IdMap.add res_id rdecl decl.pr_locals
               in
               let r = Ident (ret_id, decl.pr_pos) in
-              let body = match decl.pr_body with
-              | Some (Binder (SetComp, vs, f, pos)) ->
-                  let v_decl =
-                    match vs with
-                    | [UnguardedVar decl] -> decl
-                    | _ -> failwith "unexpected set comprehension"
-                  in
-                  let v = Ident (v_decl.v_name, v_decl.v_pos) in
-                  Binder (Forall, [UnguardedVar v_decl], BinaryOp (BinaryOp (v, OpIn, r, BoolType, pos), OpEq, f, BoolType, pos), pos)
-              | Some e ->
-                  BinaryOp (r, OpEq, e, BoolType, pos_of_expr e)
-              | None -> BoolVal (true, decl.pr_pos)
+              let opt_body = Opt.map (function 
+                | Binder (SetComp, vs, f, pos) ->
+                    let v_decl =
+                      match vs with
+                      | [UnguardedVar decl] -> decl
+                      | _ -> failwith "unexpected set comprehension"
+                    in
+                    let v = Ident (v_decl.v_name, v_decl.v_pos) in
+                    Binder (Forall, [UnguardedVar v_decl], BinaryOp (BinaryOp (v, OpIn, r, BoolType, pos), OpEq, f, BoolType, pos), pos)
+                | e ->
+                    BinaryOp (r, OpEq, e, BoolType, pos_of_expr e))
+                  decl.pr_body
               in
-              FOL (convert_grass_form locals body), locals, [ret_id]
+              Opt.map (fun body -> FOL (convert_grass_form locals body)) opt_body, locals, [ret_id]
         in
         let locals = IdMap.map convert_var_decl locals in
         let body_pos =
@@ -714,7 +714,7 @@ let convert cu =
         in
         let pred_decl = 
           { pred_contract = contract;
-            pred_body = mk_spec_form body (string_of_ident id) None body_pos;
+            pred_body = Opt.map (fun body -> mk_spec_form body (string_of_ident id) None body_pos) opt_body;
             pred_accesses = IdSet.empty;
           }
         in

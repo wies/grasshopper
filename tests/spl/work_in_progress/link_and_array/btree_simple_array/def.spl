@@ -168,8 +168,8 @@ predicate btree(bt: Node) {
                                            n.children[i].ubound == n.ubound) &&
     (forall n in FP_N, i: Int, j: Int :: 0 <= i && i < n.keys.length && n.children[i] != null ==> n.children[i].ubound == n.keys[i]
         @(matching n.children[i].ubound yields n.keys[i])) &&
-    (forall n in FP_N, i: Int :: 0 < i && i < n.children.length && n.children[i] != null
-      ==> n.children[i].lbound == n.keys[i-1]
+    (forall n in FP_N, m: Node, i: Int :: 0 < i && i < n.children.length && n.children[i] != null && n.children[i] == m
+      ==> m.lbound == n.keys[i-1]
      @(matching n.children[i] yields n.keys[i-1])) && // XXX not local
     // ...
     

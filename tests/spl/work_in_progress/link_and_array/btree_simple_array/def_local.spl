@@ -101,11 +101,12 @@ predicate btree_node(n: Node) {
   (forall i: Int :: i <= 0 && i < n.keys.length && n.keys[i] != top ==> lt(n.lbound, n.keys[i]) && lt(n.keys[i], n.ubound))
 }
 
+// index of first top-valued key entry of node n
 function first_top(n: Node) returns (res: Int)
   requires acc(n) &*& acc(n.keys)
-  ensures forall i: Int :: 0 <= i && i < res ==> n.keys[i] != top
   ensures res < n.keys.length ==> n.keys[res] == top
   ensures 0 <= res && res <= n.keys.length
+  ensures forall i: Int :: 0 <= i && i < res ==> n.keys[i] != top
 
 predicate btree(bt: Node) {
   exists FP_N: Set<Node>, FP_A_I: Set<Array<T>>, FP_A_N: Set<Array<Node>> ::
@@ -119,18 +120,20 @@ predicate btree(bt: Node) {
   
     /* Structural properties of arrays */
     // children arrays are partitioned into non-null/null halfs
-    //(forall a in FP_A_N, i: Int, j: Int :: 0 <= i && i <= j && j < a.length && a[i] == null ==> a[j] == null) &&
+    (forall a in FP_A_N, i: Int, j: Int :: 0 <= i && i <= j && j < a.length && a[i] == null ==> a[j] == null) &&
     // children and keys
-  (forall n in FP_N, i: Int, j: Int :: 0 <= i && i < j && j < n.children.length ==>
-   n.children[i] == null || n.children[j] != null || first_top(n) < j
-   @(matching n yields n.keys[first_top(n)])) &&
-    (forall n in FP_N, i: Int, j: Int, k: Int ::
+    // if a node is not a leaf, all its children after first_top are null
+    (forall n in FP_N, i: Int, j: Int :: 0 <= i && i < j && j < n.children.length ==>
+      n.children[i] == null || n.children[j] != null || first_top(n) < j
+      @(matching n yields n.keys[first_top(n)])) &&
+    /*(forall n in FP_N, i: Int, j: Int, k: Int ::
         0 <= i && i <= j && j < n.children.length &&
         0 <= k && k <= j 
       ==>
         n.children[i] == null || //leaf: no children
      (n.children[k] != null || n.keys[j] == top)
-     @(matching n.children[j] yields n.keys[j])) && //non-leaf: child entry is null then, so is the corresponding key entry
+    @(matching n.children[j] yields n.keys[j])) && //non-leaf: child entry is null then, so is the corresponding key entry*/
+    // all children after a top key are null
     (forall n in FP_N, i: Int, j: Int :: 0 <= i && i < j && j < n.children.length &&
                                           n.keys[i] == top ==> n.children[j] == null) &&
     // the keys are sorted

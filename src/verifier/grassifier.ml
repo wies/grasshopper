@@ -91,7 +91,7 @@ let add_ghost_field_invariants prog =
     in
     let pred = 
       { pred_contract = contract;  
-        pred_body = body;
+        pred_body = Some body;
         pred_accesses = IdSet.empty;
       }
     in
@@ -306,7 +306,7 @@ let elim_arrays prog =
           | _ -> elem_sorts)
         (locals_of_pred pred) elem_sorts
     in
-    let body = compile_spec pred.pred_body in
+    let body = Util.Opt.map compile_spec pred.pred_body in
     let precond1 = List.map compile_spec (precond_of_pred pred) in
     let postcond1 = List.map compile_spec (postcond_of_pred pred) in
     let contract1 =
@@ -484,9 +484,13 @@ let elim_sl prog =
     let kind = Util.Opt.get_or_else Checked kind_opt in
     SlUtil.mk_sep_star_lst ~pos:pos fs, kind, name, msg, pos
   in
-  let is_pure pred = match pred.pred_body.spec_form with
-  | FOL _ | SL (Sl.Pure _) -> true
-  | _ -> false
+  let is_pure pred =
+    match pred.pred_body with
+    | None -> true
+    | Some sf ->
+        match sf.spec_form with
+        | FOL _ | SL (Sl.Pure _) -> true
+        | _ -> false
   in
   let pred_to_form fp_context p args domains = 
     let decl = find_pred prog p in
@@ -872,7 +876,7 @@ let elim_sl prog =
     let pred1 =
       { pred with
         pred_contract = contract;
-        pred_body = translate_body pred.pred_body
+        pred_body = Util.Opt.map translate_body pred.pred_body
       }
     in
     IdMap.add pname pred1 preds, frame_axioms @ axioms

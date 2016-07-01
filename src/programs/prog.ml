@@ -143,7 +143,7 @@ type proc_decl = {
 (** Predicate declaration *)
 type pred_decl = {
     pred_contract: contract; (** contract *)
-    pred_body: spec; (** predicate body *)
+    pred_body: spec option; (** predicate body *)
     pred_accesses: IdSet.t; (** accessed variables *)
   } 
 
@@ -944,7 +944,7 @@ let subst_id_pred map pred =
       (locals_of_pred pred)
       IdMap.empty
   in
-  let body = subst_id_spec map pred.pred_body in
+  let body = Util.Opt.map (subst_id_spec map) pred.pred_body in
   let accesses =
     IdSet.fold
       (fun id acc -> IdSet.add (try_subst id) acc)
@@ -1168,21 +1168,28 @@ let pr_pred ppf pred =
     let decl = IdMap.find id (locals_of_pred pred) in
     (decl.var_is_implicit, decl.var_is_ghost, (id, decl.var_sort)))
   in
+  let pr_header ppf pred =
   match returns_of_pred pred with
   | [] ->
-      fprintf ppf "@[<2>predicate %a(@[<0>%a@])%a@]@ {@[<1>@\n%a@]@\n}@\n@\n"
+      fprintf ppf "@[<2>predicate %a(@[<0>%a@])%a@]@ "
         pr_ident (name_of_pred pred)
         pr_id_srt_list (add_srts (formals_of_pred pred))
         pr_contract pred.pred_contract
-        pr_spec_form pred.pred_body
   | _ ->
-      fprintf ppf "@[<2>function %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a@]@\n{@[<1>@\n%a@]@\n}@\n@\n"
+      fprintf ppf "@[<2>function %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a@]@\n"
         pr_ident (name_of_pred pred)
         pr_id_srt_list (add_srts (formals_of_pred pred))
         pr_id_srt_list (add_srts (returns_of_pred pred))
         pr_contract pred.pred_contract
-        pr_spec_form pred.pred_body
-
+  in
+  let pr_body ppf pred =
+    match pred.pred_body with
+    | Some sf ->
+        fprintf ppf "{@[<1>@\n%a@]@\n}@\n@\n" pr_spec_form sf
+    | None -> fprintf ppf "@\n@\n"
+  in
+  fprintf ppf "%a%a" pr_header pred pr_body pred
+    
 let rec pr_preds ppf = function
   | [] -> ()
   | pred :: preds ->

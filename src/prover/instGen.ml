@@ -398,7 +398,7 @@ let instantiate_with_terms ?(force=false) ?(stratify=(!Config.stratify)) local a
               print_endline ("Class " ^ string_of_int num ^ ": " ^ (string_of_sort (sort_of (List.hd cl))));
               List.iter (fun t -> print_endline ("    " ^ (string_of_term t))) cl; 
               print_newline ();
-              num + 1) 1 classes)
+              num + 1) 1 (List.sort compare classes))
       in
       (* choose representatives for instantiation *)
       let reps_f, egraph = choose_rep_terms classes in

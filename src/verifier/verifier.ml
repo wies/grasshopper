@@ -255,12 +255,16 @@ let add_pred_insts prog f =
     let sm =
       match returns with
       | [] -> sm
-      | [id] -> 
+      | [id] ->
           let var = IdMap.find id locals in
           IdMap.add id (mk_free_fun var.var_sort p ts) sm
       | _ -> failwith "Functions may only have a single return value."
     in
-    let body = subst_consts sm (form_of_spec pred.pred_body) in
+    let body =
+      pred.pred_body |> Opt.map form_of_spec |>
+      Opt.get_or_else (Atom (mk_free_fun Bool p ts, []))
+    in
+    let body = subst_consts sm body in
     if pos then body else nnf (mk_not body)
   in
   let f_inst = 
@@ -319,7 +323,7 @@ let add_pred_insts prog f =
     let defs =
       List.map
         (fun f -> f |> form_of_spec |> strip_error_msgs)
-        (pred.pred_body :: postcond_of_pred pred)
+        (Opt.to_list pred.pred_body @ postcond_of_pred pred)
     in
     let defs =
       let rec split acc = function

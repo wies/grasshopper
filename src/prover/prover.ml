@@ -125,7 +125,7 @@ let instantiate_and_prove session fs =
       let gts_a = (*terms_from_neg_assert*) ground_terms (mk_and fs) in
       TermSet.fold (fun t acc ->
         match sort_of t with
-        | Loc _ | Int -> TermSet.add (mk_known t) acc
+        | Loc _ | Int | FreeSrt _ -> TermSet.add (mk_known t) acc
         | _ -> acc)
         gts_a TermSet.empty
     in

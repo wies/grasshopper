@@ -42,7 +42,8 @@ let elim_exists =
   List.map (fun f -> 
     let f1 = elim_neq [] f in
     let f2 = propagate_exists_up f1 in
-    skolemize f2)
+    let f3 = skolemize f2 in
+    f3)
 
 (** Hoist all universally quantified subformulas to top level.
  ** Assumes that formulas [fs] are in negation normal form. *)
@@ -306,38 +307,43 @@ let add_read_write_axioms fs =
           let set2 = Axioms.set2 ssrt in
           let ivars1 = List.map (fun srt -> mk_var srt (fresh_ident "?i")) dsrts in
           let ivars2 = List.map (fun srt -> mk_var srt (fresh_ident "?j")) dsrts in
-          (* f = g, x.f -> x.g *)
-          ([Match (mk_eq_term fld1 fld2, []);
-            Match (mk_read fld1 (loc1 :: ivars1), []);
+          let mk_generators wrap =
+            ([Match (mk_eq_term fld1 fld2, []);
+              Match (wrap (mk_read fld1 (loc1 :: ivars1)), []);
             ],
-           [mk_read fld2 (loc1 :: ivars1)]) ::
-          (* f = g, x.g -> x.f *)
-          ([Match (mk_eq_term fld1 fld2, []);
-            Match (mk_read fld2 (loc1 :: ivars1), []);
-            Match (loc1, [FilterNotNull])],
-           [mk_read fld1 (loc1 :: ivars1)]) :: 
-          (* f [x := d], y.(f [x := d]) -> y.f *)
-          ([Match (mk_write fld1 (loc1 :: ivars1) dvar, []);
-            Match (mk_read (mk_write fld1 (loc1 :: ivars1) dvar) (loc2 :: ivars2), []);
-            (*Match (loc1, [FilterNotNull]);*)
-            Match (loc2, [FilterNotNull])],
-           [mk_read fld1 (loc2 :: ivars2)]) ::
-          (* f [x := d], y.f -> y.(f [x := d]) *)
-          ([Match (mk_write fld1 (loc1 :: ivars1) dvar, []);
-            Match (mk_read fld1 (loc2 :: ivars2), []);
-            (*Match (loc1, [FilterNotNull]);*)
-            Match (loc2, [FilterNotNull])],
-           [mk_read (mk_write fld1 (loc1 :: ivars1) dvar) (loc2 :: ivars2)]) ::
-          (* Frame (x, a, f, g), y.g -> y.f *)
-          ([Match (mk_frame_term set1 set2 fld1 fld2, []);
-            Match (mk_read fld2 (loc1 :: ivars1), []);
-            Match (loc1, [FilterNotNull])],
-           [mk_read fld1 (loc1 :: ivars1)]) ::
-          (* Frame (x, a, f, g), y.f -> y.g *)
-          ([Match (mk_frame_term set1 set2 fld1 fld2, []);
-            Match (mk_read fld1 (loc1 :: ivars1), [])],
-           [mk_read fld2 (loc1 :: ivars1)]) ::
-          propagators
+             [wrap (mk_read fld2 (loc1 :: ivars1))]) ::
+            ([Match (mk_eq_term fld1 fld2, []);
+              Match (wrap (mk_read fld1 (loc1 :: ivars1)), []);
+            ],
+             [wrap (mk_read fld2 (loc1 :: ivars1))]) ::
+            (* f = g, x.g -> x.f *)
+            ([Match (mk_eq_term fld1 fld2, []);
+              Match (wrap (mk_read fld2 (loc1 :: ivars1)), []);
+              Match (loc1, [FilterNotNull])],
+             [wrap (mk_read fld1 (loc1 :: ivars1))]) :: 
+            (* f [x := d], y.(f [x := d]) -> y.f *)
+            ([Match (mk_write fld1 (loc1 :: ivars1) dvar, []);
+              Match (wrap (mk_read (mk_write fld1 (loc1 :: ivars1) dvar) (loc2 :: ivars2)), []);
+              (*Match (loc1, [FilterNotNull]);*)
+              (*Match (loc2, [FilterNotNull])*)],
+             [wrap (mk_read fld1 (loc2 :: ivars2))]) ::
+            (* f [x := d], y.f -> y.(f [x := d]) *)
+            ([Match (mk_write fld1 (loc1 :: ivars1) dvar, []);
+              Match (wrap (mk_read fld1 (loc2 :: ivars2)), []);
+              (*Match (loc1, [FilterNotNull]);*)
+            (*Match (loc2, [FilterNotNull])*)],
+             [wrap (mk_read (mk_write fld1 (loc1 :: ivars1) dvar) (loc2 :: ivars2))]) ::
+            (* Frame (x, a, f, g), y.g -> y.f *)
+            ([Match (mk_frame_term set1 set2 fld1 fld2, []);
+              Match (wrap (mk_read fld2 (loc1 :: ivars1)), []);
+              Match (loc1, [FilterNotNull])],
+             [wrap (mk_read fld1 (loc1 :: ivars1))]) ::
+            (* Frame (x, a, f, g), y.f -> y.g *)
+            [([Match (mk_frame_term set1 set2 fld1 fld2, []);
+               Match (wrap (mk_read fld1 (loc1 :: ivars1)), [])],
+              [wrap (mk_read fld2 (loc1 :: ivars1))])]
+          in
+          mk_generators (fun t -> t) (*@ mk_generators (fun t -> mk_known t)*) @ propagators
       | _ -> fun propagators -> propagators)
       field_sorts []
   in
@@ -453,6 +459,9 @@ let reduce f =
   let fs = add_array_axioms fs in
   let fs = if !Config.named_assertions then fs else List.map strip_names fs in
   let fs = fs |> split_ands in
+  (*let fs = add_terms fs gts in*)
+  (*let fs = encode_labels fs in*)
+  (*let fs = add_split_lemmas fs gts in*)
   let _ =
     if Debug.is_debug 1 then begin
       print_endline "VC before instantiation:";
@@ -460,7 +469,4 @@ let reduce f =
       print_newline ()
     end
   in
-  (*let fs = add_terms fs gts in*)
-  (*let fs = encode_labels fs in*)
-  (*let fs = add_split_lemmas fs gts in*)
   fs

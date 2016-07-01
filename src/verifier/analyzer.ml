@@ -85,7 +85,7 @@ let infer_accesses prog =
         let fps = footprint_sorts_spec_form_acc prog fps sf in
         acc_preds, accs, fps)
         (IdSet.empty, IdSet.empty, SortSet.empty)
-        (pred.pred_body :: pred.pred_contract.contr_precond @ pred.pred_contract.contr_postcond)        
+        (Opt.to_list pred.pred_body @ pred.pred_contract.contr_precond @ pred.pred_contract.contr_postcond)        
     in
     let accs, fps = 
       IdSet.fold (fun p (accs, fps) -> 

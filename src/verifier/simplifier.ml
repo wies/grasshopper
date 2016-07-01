@@ -281,7 +281,7 @@ let elim_global_deps prog =
   let elim_pred pred =
     let precond1 = List.map elim_spec (precond_of_pred pred) in
     let postcond1 = List.map elim_spec (postcond_of_pred pred) in
-    let body1 = elim_spec pred.pred_body in
+    let body1 = Util.Opt.map elim_spec pred.pred_body in
     let accesses = pred.pred_accesses in
     let formals1 = IdSet.elements accesses @ formals_of_pred pred in
     let locals1 = 
@@ -455,8 +455,9 @@ let elim_state prog =
           sm_join, locals, mk_choice_cmd cs2 pp.pp_pos
       | Basic (bc, pp) ->
           match bc with
-          | Assume sf -> 
-              sm, locals, Basic (Assume (subst_id_spec sm sf), pp)
+          | Assume sf ->
+              let sf1 = unoldify_spec (subst_id_spec sm sf) in
+              sm, locals, Basic (Assume sf1, pp)
           | Assert sf ->
               let sf1 = unoldify_spec (subst_id_spec sm sf) in
               sm, locals, Basic (Assert sf1, pp)
