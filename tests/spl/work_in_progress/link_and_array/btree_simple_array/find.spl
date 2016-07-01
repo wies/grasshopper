@@ -10,7 +10,8 @@ procedure find(bt: Node, x: T) returns (res: T)
   var n := bt;
   var flag := false;
   while (n != null && !flag)
-    invariant lt(n.lbound, x) && lt(x, n.ubound)
+    invariant x != bottom && x != top
+    //invariant lt(n.lbound, x) && lt(x, n.ubound)
     invariant (n == null || acc(n)) -** btree_root(bt)
   {
     var i := findIt(n.keys, x);
@@ -51,6 +52,7 @@ procedure findIt(a: Array<T>, x: T) returns (idx: Int)
     invariant forall i: Int, j: Int :: 0 <= i && i < j && j < a.length ==> lt(a[i], a[j])
     // what we actually care about
     invariant 0 <= lo && lo <= hi && hi <= a.length
+    invariant hi == a.length || a[lo] == x || lt(x, a[hi])
     invariant forall i: Int :: 0 <= i && i < lo ==> lt(a[i], x)
     invariant forall i: Int :: hi < i && i < a.length ==> lt(x, a[i])
   {
