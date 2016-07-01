@@ -23,6 +23,7 @@ function leaves(X: Set<Node>) returns (L: Set<Node>)
   requires acc(X)
   ensures forall n: Node :: n in L == (n in X && n.left == null && n.right == null)
   @(matching n yields n.left) @(matching n yields n.right)
+  ensures forall x: Node, y: Node :: Reach(parent, x, y) && y in L ==> x == y
 
 predicate tree_bst_prop(FP: Set<Node>)
   requires acc(FP)
@@ -47,7 +48,7 @@ procedure contains(root: Node, val: Int, implicit ghost C: Set<Int>)
 {
   var curr := root;
   while (curr.left != null && curr.right != null)
-    invariant exists C1: Set<Int> :: ext_bst_set(curr, C1) -** ext_bst_set(root, C)
+    invariant exists C1: Set<Int> :: acc(curr) -** ext_bst_set(curr, C1) -** ext_bst_set(root, C)
       &*& (val in C == val in C1)
   {
     if (val < curr.data)
@@ -55,7 +56,6 @@ procedure contains(root: Node, val: Int, implicit ghost C: Set<Int>)
     else
       curr := curr.right;
   }
-
   if (curr.data == val)
     return true;
   else
