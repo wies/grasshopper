@@ -326,7 +326,7 @@ let add_pred_insts prog f =
         | Binder (Forall, vs, BoolOp (And, fs), a) :: ofs ->
             split acc (List.map (fun f -> Binder (Forall, vs, f, a)) fs @ ofs)
         | BoolOp (And, fs) :: ofs ->
-            split ofs (fs @ ofs)
+            split acc (fs @ ofs)
         | f :: ofs -> split (f :: acc) ofs
         | [] -> List.rev acc
       in split [] defs
