@@ -1,20 +1,19 @@
 include "../include/slslist.spl";
 
 procedure split(x: Node, y: Node, lb: Int, ub: Int) returns (pivot: Node)
-  requires blseg(x, y, lb, ub) &*& x != y;
-  ensures blseg(x, pivot, lb, pivot.data);
-  ensures blseg(pivot, y, pivot.data, ub) &*& pivot != y;
-  ensures pivot.data >= lb &*& pivot.data <= ub;
+  requires blseg(x, y, lb, ub) &*& x != y
+  ensures blseg(x, pivot, lb, pivot.data)
+  ensures blseg(pivot, y, pivot.data, ub) &*& pivot != y
+  ensures pivot.data >= lb &*& pivot.data <= ub
 //ensures Btwn(next, x, pivot, y);
 
 
 procedure quicksort(x: Node, y: Node, ghost lb: Int, ghost ub: Int)
-  requires blseg(x, y, lb, ub);
-  ensures bslseg(x, y, lb, ub);
+  requires blseg(x, y, lb, ub)
+  ensures bslseg(x, y, lb, ub)
 {
   if (x != y && x.next != y) {
-    var pivot: Node;
-    pivot := split(x, y, lb, ub);
+    var pivot := split(x, y, lb, ub);
     quicksort(x, pivot, lb, pivot.data);
     quicksort(pivot.next, y, pivot.data, ub);
   }
