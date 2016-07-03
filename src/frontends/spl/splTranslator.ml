@@ -248,12 +248,6 @@ let convert cu =
         let tset1 = convert_term locals set1 in
         let tset2 = convert_term locals set2 in
         GrassUtil.mk_disjoint_term tset1 tset2
-    | Binder (SetComp, _, _, pos) ->
-        failwith ("set comprehension should have been desugared at " ^ string_of_src_pos pos)
-    | e -> failwith ("unexpected expression at " ^ string_of_src_pos (pos_of_expr e))
-  in
-  let rec convert_grass_form locals = function
-    | BoolVal (b, pos) -> GrassUtil.mk_srcpos pos (GrassUtil.mk_bool b)
     | PredApp (BtwnPred, args, pos)
     | PredApp (ReachPred, args, pos) ->
         let fld, x, y, z =
@@ -266,7 +260,13 @@ let convert cu =
         let tx = convert_term locals x in
         let ty = convert_term locals y in
         let tz = convert_term locals z in
-        GrassUtil.mk_srcpos pos (GrassUtil.mk_btwn tfld tx ty tz)
+        GrassUtil.mk_btwn_term tfld tx ty tz
+    | Binder (SetComp, _, _, pos) ->
+        failwith ("set comprehension should have been desugared at " ^ string_of_src_pos pos)
+    | e -> failwith ("unexpected expression at " ^ string_of_src_pos (pos_of_expr e))
+  in
+  let rec convert_grass_form locals = function
+    | BoolVal (b, pos) -> GrassUtil.mk_srcpos pos (GrassUtil.mk_bool b)
     | Binder (q, decls, f, pos) ->
         let mk_guard = match q with
         | Forall -> GrassUtil.mk_implies
