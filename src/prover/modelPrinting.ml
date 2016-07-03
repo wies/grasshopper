@@ -532,8 +532,7 @@ let print_graph output chan model terms =
   let output_freesyms () =
     let (_, funs) = TermSet.fold
       (fun t (seen, acc) -> match t with
-        | App ((FreeSym _ as sym), args, srt)
-        | App (sym, args, (FreeSrt _ as srt)) when args <> [] ->
+        | App ((FreeSym _ as sym), args, srt) when args <> [] ->
             (try
               let str_of a = str_of_t (sort_of a) (eval model a) in
               let args_str = List.map str_of args in
@@ -595,13 +594,22 @@ let print_graph output chan model terms =
             let fld_str = string_of_symbol fld in
             let m, d = find_map_value model f [Loc srt] rsrt in
             let v = fun_app model (MapVal (m, d)) [loc] in
-            (fld_str, (string_of_value v)) :: acc
+            (fld_str, (string_of_sorted_value rsrt v)) :: acc
           with Undefined -> acc)
         (get_symbols_of_sort model ([], field_sort srt rsrt)) []
     in
+    let data_fields_sort =
+      SortSet.fold
+        (fun k acc -> match k with
+        | FreeSrt _ -> k :: acc
+        | _ -> acc
+        )
+        (get_sorts model) [Int;Bool]
+    in
     List.iter
       (fun loc ->
-        let values = (output_data_fields loc) Int @ (output_data_fields loc Bool) in
+        let values = List.flatten (List.map (output_data_fields loc) data_fields_sort) in
+
         let _ = declare_value srt loc values in ())
       locs
   in

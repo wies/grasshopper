@@ -163,7 +163,7 @@ procedure removeNode(u: Node, i: Int) returns (res: T)
   requires forall j: Int :: 0 <= j && j <= b ==> u.children[j] == null // is_leaf
   ensures  btree_node(u)
   ensures  res == old(u.keys[i])
-  ensures forall j: Int :: 0 <= j && j <= b ==> u.children[j] == null
+  ensures  forall j: Int :: 0 <= j && j <= b ==> u.children[j] == null
 {
   var y := u.keys[i];
   key_arraymove(u.keys, i+1, i, b-i-1);
