@@ -101,13 +101,32 @@ predicate btree_node(n: Node) {
   (forall i: Int :: i <= 0 && i < n.keys.length && n.keys[i] != top ==> lt(n.lbound, n.keys[i]) && lt(n.keys[i], n.ubound))
 }
 
-// index of first top-valued key entry of node n
+// Returns index of first top-valued key entry of node n
 function first_top(n: Node) returns (res: Int)
   requires acc(n) &*& acc(n.keys)
   ensures res < n.keys.length ==> n.keys[res] == top
   ensures 0 <= res && res <= n.keys.length
   ensures forall i: Int :: 0 <= i && i < res ==> n.keys[i] != top
 
+predicate sorted_key_array(a: Array<T>)
+{
+  acc(a) &*&
+  (forall i: Int, j: Int :: 0 <= i && i < j && j < a.length ==> lt(a[i], a[j])) &&
+  a.length > 0
+}
+
+// Returns index of key x in array a, if a contains x.
+// Otherwise, returns the index of the smallest key in a that is larger than x.
+function indexOfKey(a: Array<T>, x: T) returns (idx: Int)
+  requires sorted_key_array(a)
+  requires x != bottom && x != top
+  ensures 0 <= idx && idx <= a.length
+  ensures idx == a.length || a[idx] == x || lt(x, a[idx])
+  ensures forall i: Int :: 0 <= i && i < idx ==> lt(a[i], x)
+  ensures forall i: Int :: idx < i && i < a.length ==> lt(x, a[i])
+
+
+  
 predicate btree(bt: Node) {
   exists FP_N: Set<Node>, FP_A_I: Set<Array<T>>, FP_A_N: Set<Array<Node>> ::
     acc(FP_N) &*& acc(FP_A_I) &*& acc(FP_A_N) &*&
@@ -141,19 +160,19 @@ predicate btree(bt: Node) {
     
     /* Tree invariants */
     // parent is inverse of child array 
-    (forall a in FP_A_N, i: Int :: 0 <= i && i < a.length && a[i] != null ==>
-        Reach(parent, a[i], array_node_owner(a, FP_N)) && a[i] != array_node_owner(a, FP_N) ) &&
-    (forall a in FP_A_N, x: Node, i: Int :: 0 <= i && i < a.length && a[i] != null && Btwn(parent, a[i], x, array_node_owner(a, FP_N)) ==>
-        x == array_node_owner(a, FP_N) || a[i] == x) &&
+    (forall n in FP_N, i: Int :: 0 <= i && i < n.children.length && n.children[i] != null ==>
+        Reach(parent, n.children[i], n) && n.children[i] != n ) &&
+    (forall n in FP_N, m: Node, i: Int :: 0 <= i && i < n.children.length && n.children[i] != null && Btwn(parent, n.children[i], m, n) ==>
+        m == n || n.children[i] == m) &&
     // key and children arrays are all distinct
     (forall n in FP_N, m in FP_N :: n == m || n.keys != m.keys) &&
     (forall n in FP_N, m in FP_N :: n == m || n.children != m.children) &&
     // child array entries are all distinct
     (forall a in FP_A_N, i: Int, j: Int :: 0 <= i && i < j && j < a.length ==> a[i] == null || a[i] != a[j]) &&
     // ancestor nodes must be reachable via correct child
-    (forall x in FP_N, a in FP_A_N, i: Int :: 0 <= i && i < a.length && a[i] != null && Reach(parent, x, array_node_owner(a, FP_N)) &&
-       x != array_node_owner(a, FP_N) && le(a[i].lbound, x.lbound) && le(x.ubound, a[i].ubound) ==>
-         Btwn(parent, x, a[i], array_node_owner(a, FP_N)) @(matching x yields x.lbound) @(matching x yields x.ubound)) &&
+    (forall n in FP_N, m in FP_N, i: Int :: 0 <= i && i < m.children.length && m.children[i] != null && Reach(parent, n, m) &&
+       n != m && le(m.children[i].lbound, n.lbound) && le(n.ubound, m.children[i].ubound) ==>
+         Btwn(parent, n, m.children[i], m) @(matching n yields n.lbound) @(matching n yields n.ubound)) &&
     // keys of ancestor nodes include keys of decendants
     (forall x in FP_N, y in FP_N :: Reach(parent, x, y) ==> le(y.lbound, x.lbound) && le(x.ubound, y.ubound)) &&
     // key bounds of nodes are consistent
@@ -164,7 +183,8 @@ predicate btree(bt: Node) {
     //(forall n in FP_N :: n.children[0] != null ==> n.children[0].lbound == n.lbound) &&
     //(forall n in FP_N, i: Int, j: Int :: 0 <= i && i < n.children.length && n.children[i] != null && (i == n.keys.length || n.keys[i] == bottom) ==>
     //                                       n.children[i].ubound == n.ubound) &&
-    //(forall n in FP_N, i: Int, j: Int :: 0 <= i && i <= j && j < n.keys.length && n.children[i] != null ==> le(n.children[i].ubound, n.keys[j])) &&
+   (forall n in FP_N, i: Int, j: Int :: 0 <= i && i <= j && j < n.keys.length && n.children[i] != null ==> le(n.children[i].ubound, n.keys[j])) &&
+  (forall n in FP_N, i: Int, j: Int :: 0 <= i && i < j && j < n.keys.length && n.children[j] != null ==> le(n.children[j].lbound, n.keys[i])) &&
     //(forall n in FP_N, m: Node, i: Int, j: Int :: 0 < i && i < j && j < n.children.length && n.children[j] != null && n.children[j] == m
     // ==> le(n.keys[i], m.lbound)) &&
     // ...

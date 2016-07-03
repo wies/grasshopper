@@ -53,6 +53,18 @@ procedure size(u: Node) returns (res: Int)
   return lo;
 }
 
+procedure lemma(u: Node)
+  requires btree(u) &*& u != null
+{
+  var i: Int, j: Int;
+  var FP_N := node_footprint(u);
+  var n: Node, m: Node;
+  pure assume n in FP_N;
+  pure assume m in FP_N;
+  pure assert Reach(parent, n, m) ==> le(m.lbound, n.lbound) && le(n.ubound, m.ubound);
+  pure assume false;
+}
+
 /* Add the value x to the node u
  * @param u     the node to insert into
  * @param x     the value to add
@@ -63,6 +75,8 @@ procedure addNode(u: Node, x: T, ci: Node)
   requires btree(u) &*& btree(ci)
   requires u != null && (ci == null || ci.parent == null && ci.lbound == x)
   requires (ci == null) == (u.children[0] == null) // inserting null iff u is a leaf
+  requires u.children[indexOfKey(u.keys, x)] != null ==> le(u.children[indexOfKey(u.keys, x)].ubound, x)
+  requires u.children[indexOfKey(u.keys, x) + 1] != null ==> lt(x, u.children[indexOfKey(u.keys, x) + 1].lbound)
   requires x != bottom && x != top
   requires forall i: Int :: 0 <= i && i < u.keys.length ==> u.keys[i] != x
   requires lt(u.lbound, x) && le(u.ubound, x)
@@ -73,7 +87,7 @@ procedure addNode(u: Node, x: T, ci: Node)
   var i := findIt(u.keys, x);
   //pure assert u.keys[i] != top || i == 0 || u.keys[i-1] != top;
   //pure assert forall k: Int :: 0 <= k && k < i ==> u.keys[k] != top;
-  //var k: Int, j: Int;
+  var k: Int, j: Int;
   //pure assert forall i: Int :: 0 <= i && i < first_top(u) ==> u.keys[i] != top;
   //pure assert first_top(u) < u.keys.length ==> u.keys[first_top(u)] == top;
   //pure assert forall i: Int :: first_top(u) <= i && i < u.keys.length ==> u.keys[i] == top;
@@ -86,15 +100,7 @@ procedure addNode(u: Node, x: T, ci: Node)
   if (i < u.keys.length-1) {
     node_arraymove(u.children, i+1, i+2, b-i-1);
   }
-  /*var n: Node;
-  var FP_N := node_footprint(u);
   u.children[i+1] := ci;
-  pure assume n in FP_N;
-  pure assume n == u;
-  pure assume ci == null;
-  pure assume u.keys[first_top(n)] == u.keys[first_top(n)];
-  pure assert 0 <= k && k < j && j < n.children.length ==>
-  n.children[k] == null || n.children[j] != null || first_top(n) < j;*/
   if (ci != null) { ci.parent := u; }
   // update bounds
   if (i + 1 == u.keys.length || u.keys[i + 1] == top) {
@@ -102,32 +108,39 @@ procedure addNode(u: Node, x: T, ci: Node)
   } else if (ci != null) {
     ci.ubound := u.keys[i + 1];
   }
-  //pure assume n == u;
-  //pure assume n.children[(i + 1) + (j - (i + 2))] == n.children[(i + 1) + (j - (i + 2))];
-  //pure assume n.keys[(i + 1) + (j - (i + 2)) - 1] == n.keys[(i + 1) + (j - (i + 2)) - 1];
-  //pure assert 0 < j && j < n.children.length && n.children[j] != null ==> n.children[j].lbound == n.keys[j-1];
-  //pure assume false;
-  /*var a: Array<Node>;
-  var FP_A_N := array_node_fp(FP_N);
-  var FP_A_I := array_int_fp(FP_N);
-  pure assume a in FP_A_N;
-  pure assume a == u.children;
-  pure assert u.keys[i] != top;
-  pure assume a[(i + 1) + (j - (i + 2))] == a[(i + 1) + (j - (i + 2))];
-  pure assume a[(i + 2) + (j - (i + 2))] == a[(i + 2) + (j - (i + 2))];
-  pure assume a[(i + 1) + (k - (i + 2))] == a[(i + 1) + (k - (i + 2))];
-  pure assume a[(i + 2) + (k - (i + 2))] == a[(i + 2) + (k - (i + 2))];
-  pure assume u.keys[k] == u.keys[k];
-  pure assume u.keys[j] == u.keys[j];
-  pure assume ci != null;
-  pure assert 0 < i ==> u.children[i-1] != null;
-  pure assume 0 < i ==> u.children[i-1] != null;
-  pure assume 0 < i ==> u.keys[i-1] != top;
-  // children arrays are partitioned into non-null/null halfs
-  pure assert 0 <= k && k <= j && j < a.length && a[k] == null ==> a[j] == null;*/
-
-  /*pure assert (forall i: Int, j: Int :: 0 <= i && i < j && j < u.children.length && u.children[i] == null ==> u.children[j] == null);
-  assume false;*/
+  //var a: Array<Node>;
+  var FP_N := node_footprint(u);
+  var n: Node, m: Node;
+  pure assume n in FP_N;
+  pure assume m in FP_N;
+  //pure assume array_node_owner(a, FP_N) == n;
+  //var FP_A_N := array_node_fp(FP_N);
+  pure assume m == u;
+  pure assume old(m.children[j]) == null;
+  pure assume n != m;
+  pure assume Reach(old(parent), n, m);
+  //var n1: Node, n2: Node, n3: Node, n4: Node, n5: Node, n6: Node, n7: Node;
+  //pure assume FP_N == {n1} ++ {n2} ++ {n3} ++ {n4};
+  //pure assume Reach(parent, array_node_owner(a, FP_N), u);
+  //pure assume ci != null ==> i < first_top(u);
+  //pure assume array_node_owner(a, FP_N).keys == array_node_owner(a, FP_N).keys;
+  //pure assume m.children[(i + 2) + (j - (i + 2))] == m.children[(i + 2) + (j - (i + 2))];
+  //pure assume m.children[(i + 1) + (j - (i + 2))] == m.children[(i + 1) + (j - (i + 2))];
+  //pure assert Reach(parent, n, m) ==> old(Reach(parent, n, m));
+  //pure assert le(m.children[j].lbound, n.lbound) ==> le(old(m.children[j - 1].lbound), n.lbound);
+  //pure assume le(m.children[j].lbound, n.lbound) ==> le(old(m.children[j - 1].lbound), n.lbound);
+  //pure assert le(m.children[j].lbound, n.lbound) ==> le(old(m.children[j - 1].lbound), n.lbound);
+  //pure assume le(n.ubound, m.children[j].ubound) ==> le(n.ubound, old(m.children[j - 1].ubound));
+  //pure assume i + 1 < j && j <= b - 1;
+  pure assume m.children[j - 1].ubound == m.children[j - 1].ubound;
+  //pure assume old(m.children[j - 1].ubound) == old(m.children[j - 1].ubound);
+  //assume false;
+  //assume false;
+  // Problem: decendent must go through one of the children
+  pure assert 0 <= j && j < m.children.length && m.children[j] != null && Reach(parent, n, m) &&
+       n != m && le(m.children[j].lbound, n.lbound) && le(n.ubound, m.children[j].ubound) ==>
+               Btwn(parent, n, m.children[j], m);
+  assume false;
 }
 
 /* Remove the i'th value from this block - don't affect this block's children

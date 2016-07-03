@@ -2,8 +2,8 @@ include "def_local.spl";
 
 /* Find the smallest value >= x in this BTree */
 procedure find(bt: Node, x: T) returns (res: T)
+  requires btree_root(bt) 
   requires x != bottom && x != top
-  requires btree_root(bt)
   ensures btree_root(bt)
 {
   var z: T := bottom;
@@ -30,26 +30,17 @@ procedure find(bt: Node, x: T) returns (res: T)
 }
 
 procedure findIt(a: Array<T>, x: T) returns (idx: Int)
+  requires sorted_key_array(a)
   requires x != bottom && x != top
-  requires a.length == b
-  requires acc(a)
-  requires forall i: Int, j: Int :: 0 <= i && i < j && j < a.length ==> lt(a[i], a[j])
-  ensures a.length == b
-  ensures acc(a)
-  ensures forall i: Int, j: Int :: 0 <= i && i < j && j < a.length ==> lt(a[i], a[j])
+  ensures sorted_key_array(a)
   // what we actually care about
-  ensures 0 <= idx && idx <= a.length
-  ensures idx == a.length || a[idx] == x || lt(x, a[idx])
-  ensures forall i: Int :: 0 <= i && i < idx ==> lt(a[i], x)
-  ensures forall i: Int :: idx < i && i < a.length ==> lt(x, a[i])
+  ensures idx == indexOfKey(a, x)
 {
   var lo := 0;
   var hi := a.length;
 
   while (hi != lo)
-    invariant a.length > 0
-    invariant acc(a)
-    invariant forall i: Int, j: Int :: 0 <= i && i < j && j < a.length ==> lt(a[i], a[j])
+    invariant sorted_key_array(a)
     // what we actually care about
     invariant 0 <= lo && lo <= hi && hi <= a.length
     invariant hi == a.length || a[lo] == x || lt(x, a[hi])
