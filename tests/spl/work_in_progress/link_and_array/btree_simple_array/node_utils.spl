@@ -58,10 +58,20 @@ procedure lemma(u: Node)
 {
   var i: Int, j: Int;
   var FP_N := node_footprint(u);
-  var n: Node, m: Node;
+   var n: Node, m: Node;
+  pure assert (forall n in FP_N, m in FP_N, i: Int :: 0 <= i && i < m.children.length && Btwn(parent, n, m.children[i], m) ==>
+               le(m.children[i].lbound, n.lbound) && le(n.ubound, m.children[i].ubound));
+  pure assume false;
   pure assume n in FP_N;
   pure assume m in FP_N;
-  pure assert Reach(parent, n, m) ==> le(m.lbound, n.lbound) && le(n.ubound, m.ubound);
+  pure assume m != n;
+  pure assume 0 <= i && i < m.children.length;
+  pure assume 0 <= j && j < i;
+  pure assume m.children[i] == null;
+  pure assume lt(m.keys[i], n.lbound);
+  pure assert !Reach(parent, n, m);
+  //pure assume u.children[0] == null;
+  //pure assert n != u ==> !Reach(parent, n, u);
   pure assume false;
 }
 
@@ -75,9 +85,9 @@ procedure addNode(u: Node, x: T, ci: Node)
   requires btree(u) &*& btree(ci)
   requires u != null && (ci == null || ci.parent == null && ci.lbound == x)
   requires (ci == null) == (u.children[0] == null) // inserting null iff u is a leaf
+  requires x != bottom && x != top
   requires u.children[indexOfKey(u.keys, x)] != null ==> le(u.children[indexOfKey(u.keys, x)].ubound, x)
   requires u.children[indexOfKey(u.keys, x) + 1] != null ==> lt(x, u.children[indexOfKey(u.keys, x) + 1].lbound)
-  requires x != bottom && x != top
   requires forall i: Int :: 0 <= i && i < u.keys.length ==> u.keys[i] != x
   requires lt(u.lbound, x) && le(u.ubound, x)
   ensures  btree(u)
