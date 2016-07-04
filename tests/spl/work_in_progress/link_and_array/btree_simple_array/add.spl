@@ -4,7 +4,7 @@ include "node_utils.spl";
 include "array_utils.spl";
 
 procedure splitNode(leftNode: Node) returns (splitValue: T, rightNode: Node)
-  requires  btree(leftNode)
+  requires  btree_root_possibly_full(leftNode)
   requires  leftNode != null
   requires  leftNode.keys[b-1] != bottom
   ensures   splitValue == old(leftNode.keys[b/2])

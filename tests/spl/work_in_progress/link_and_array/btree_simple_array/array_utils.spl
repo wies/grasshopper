@@ -7,9 +7,9 @@ procedure key_arraymove(a: Array<T>, srcPos: Int, dstPos: Int, length: Int)
   ensures  acc(a)
   ensures forall i: Int :: 0 <= i && i < a.length && (i < dstPos || dstPos + length <= i) ==> a[i] == old(a[i])
   ensures forall b: Array<T>, i: Int :: 0 <= i && i < length ==> a[dstPos + i] == old(a[srcPos + i])
-                     @(matching b[i] yields b[srcPos + (i - dstPos)])
+  //@(matching b[i] yields b[srcPos + (i - dstPos)])
                      @(matching b[i] yields a[srcPos + (i - dstPos)])
-                     @(matching b[i] yields b[dstPos + (i - dstPos)])
+  //@(matching b[i] yields b[dstPos + (i - dstPos)])
                      @(matching b[i] yields a[dstPos + (i - dstPos)])
 {
   if (srcPos < dstPos) {
@@ -48,10 +48,12 @@ procedure node_arraymove(a: Array<Node>, srcPos: Int, dstPos: Int, length: Int)
   ensures  acc(a)
   ensures forall i: Int :: 0 <= i && i < a.length && (i < dstPos || dstPos + length <= i) ==> a[i] == old(a[i])
   ensures forall b: Array<Node>, i: Int :: 0 <= i && i < length ==> a[dstPos + i] == old(a[srcPos + i])
-          @(matching b[i] yields b[srcPos + (i - dstPos)])
-          @(matching b[i] yields a[srcPos + (i - dstPos)])
-          @(matching b[i] yields b[dstPos + (i - dstPos)])
-          @(matching b[i] yields a[dstPos + (i - dstPos)])
+  //@(matching b[i] yields b[srcPos + (i - dstPos)])
+  @(matching b[i] yields old(a[srcPos + (i - dstPos)].lbound))
+  @(matching b[i] yields old(a[srcPos + (i - dstPos)].ubound))
+ //@(matching b[i] yields b[dstPos + (i - dstPos)])
+  @(matching b[i] yields old(a[dstPos + (i - dstPos)].lbound))
+  @(matching b[i] yields old(a[dstPos + (i - dstPos)].ubound))
 {
   if (srcPos < dstPos) {
     var i := length - 1;
