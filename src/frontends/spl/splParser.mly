@@ -1,4 +1,5 @@
 %{
+open Util
 open Prog
 open Grass
 open SplSyntax
@@ -579,17 +580,41 @@ pts_expr:
 | add_expr { $1 }
 | pts_expr PTS add_expr { BinaryOp ($1, OpPts, $3, PermType, mk_position 1 3) }
 ;
-
+  
 rel_expr:
-| pts_expr { $1 }
-| rel_expr LT pts_expr { BinaryOp ($1, OpLt, $3, BoolType, mk_position 1 3) }
-| rel_expr GT pts_expr { BinaryOp ($1, OpGt, $3, BoolType, mk_position 1 3) }
-| rel_expr LEQ pts_expr { BinaryOp ($1, OpLeq, $3, BoolType, mk_position 1 3) }
-| rel_expr GEQ pts_expr { BinaryOp ($1, OpGeq, $3, BoolType, mk_position 1 3) }
+| comp_seq {
+  match $1 with
+  | e, [] -> e
+  | _, comps ->
+      List.fold_right
+        (fun l r_opt ->
+          r_opt |>
+          Opt.map
+            (fun r -> BinaryOp (l, OpAnd, r, BoolType, GrassUtil.merge_src_pos (pos_of_expr l) (pos_of_expr r))) |>
+            Opt.some l)
+        comps None |>
+        Opt.get
+}
 | rel_expr IN pts_expr { BinaryOp ($1, OpIn, $3, BoolType, mk_position 1 3) }
 | rel_expr NOTIN pts_expr { UnaryOp (OpNot, BinaryOp ($1, OpIn, $3, BoolType, mk_position 1 3), mk_position 1 3) }
 ;
 
+comp_op:
+| LT { OpLt }
+| GT { OpGt }
+| LEQ { OpLeq }
+| GEQ { OpGeq }
+;
+
+comp_seq:
+| pts_expr { ($1, []) }
+| pts_expr comp_op comp_seq {
+  let arg2, comps = $3 in
+  let arg1_pos = mk_position 1 1 in
+  ($1, BinaryOp ($1, $2, arg2, BoolType, GrassUtil.merge_src_pos arg1_pos (pos_of_expr arg2)) :: comps)
+}
+;
+  
 eq_expr:
 | rel_expr { $1 }
 | eq_expr EQ eq_expr { BinaryOp ($1, OpEq, $3, BoolType, mk_position 1 3) }
