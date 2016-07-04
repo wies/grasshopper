@@ -204,6 +204,8 @@ let resolve_names cu =
           (match GrassUtil.name init_id with
           | "old" ->
               UnaryOp (OpOld, List.hd args1, pos)
+          | "known" ->
+              UnaryOp (OpKnown, List.hd args1, pos)
           | "Btwn" ->
               PredApp (BtwnPred, args1, pos)
           | "Reach" ->

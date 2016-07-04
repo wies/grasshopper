@@ -155,6 +155,9 @@ let convert cu =
     | UnaryOp (OpOld, e, pos) ->
         let t = convert_term locals e in
         GrassUtil.mk_old t
+    | UnaryOp (OpKnown, e, pos) ->
+        let t = convert_term locals e in
+        GrassUtil.mk_known t
     | UnaryOp (OpLength, e, pos) ->
         let t = convert_term locals e in
         GrassUtil.mk_length t

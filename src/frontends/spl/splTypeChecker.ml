@@ -126,7 +126,7 @@ let type_of_expr cu locals e =
         | MapType (_, ty) -> ty
         | ArrayType ty -> ty
         | _ -> AnyType)
-    | UnaryOp (OpOld, e, _) -> te e        
+    | UnaryOp ((OpOld | OpKnown), e, _) -> te e        
     | UnaryOp (OpLength, map, _) -> IntType
     | UnaryOp (OpArrayOfCell, c, _) ->
         (match te c with
@@ -330,9 +330,9 @@ let infer_types cu locals ty e =
         in
         let ty1 = match_types pos ty nty in
         New (ty1, es1, pos), ty1
-    | UnaryOp (OpOld, e, pos) ->
+    | UnaryOp ((OpOld | OpKnown as op), e, pos) ->
         let e1, ty1 = it locals ty e in
-        UnaryOp(OpOld, e1, pos), ty1
+        UnaryOp(op, e1, pos), ty1
     | UnaryOp (OpLength, map, pos) ->
         let map1, _ = it locals (ArrayType AnyType) map in
         UnaryOp (OpLength, map1, pos), match_types pos ty IntType

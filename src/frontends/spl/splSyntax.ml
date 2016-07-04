@@ -156,6 +156,7 @@ and un_op =
   | OpBvNot | OpToInt | OpToByte
   | OpNot
   | OpOld
+  | OpKnown
       
 and pred_sym =
   | AccessPred | BtwnPred | DisjointPred | FramePred | ReachPred | Pred of ident
