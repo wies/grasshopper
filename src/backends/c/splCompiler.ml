@@ -193,7 +193,7 @@ let convert oc cu =
       | (OpToInt, e1) -> fprintf ppf "((int) %a)" pr_c_expr e1
       | (OpToByte, e1) -> fprintf ppf "%a" pr_c_expr e1
       | (OpUPlus, e1) -> fprintf ppf "((char) %a)" pr_c_expr e1
-      | ((OpLength | OpOld | OpArrayCells | OpArrayOfCell | OpIndexOfCell), _)  ->
+      | ((OpLength | OpOld | OpKnown | OpArrayCells | OpArrayOfCell | OpIndexOfCell), _)  ->
           fprintf ppf "/* ERROR: no such unary operator. */"
     and pr_bin_op ppf = function
       | (e1, OpMinus, e2) -> fprintf ppf "(%a - %a)"  pr_c_expr e1 pr_c_expr e2
