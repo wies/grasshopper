@@ -31,21 +31,22 @@ procedure find(bt: Node, x: T) returns (res: T)
 
 procedure findIt(a: Array<T>, x: T) returns (idx: Int)
   requires sorted_key_array(a)
-  requires x != bottom && x != top
+  requires x != top
   ensures sorted_key_array(a)
   // what we actually care about
-  ensures idx == indexOfKey(a, x)
+  ensures idx == index_of_key(a, x)
 {
   var lo := 0;
   var hi := a.length;
 
   while (hi != lo)
+    invariant x != top
     invariant sorted_key_array(a)
     // what we actually care about
     invariant 0 <= lo && lo <= hi && hi <= a.length
     invariant hi == a.length || a[lo] == x || lt(x, a[hi])
-    invariant forall i: Int :: 0 <= i && i < lo ==> lt(a[i], x)
-    invariant forall i: Int :: hi < i && i < a.length ==> lt(x, a[i])
+    invariant forall i: Int :: 0 <= i < lo ==> lt(a[i], x)
+    invariant forall i: Int :: hi < i < a.length ==> lt(x, a[i])
   {
     var m := (hi + lo) / 2;
     var cmp: Int;

@@ -5,7 +5,6 @@ include "array_utils.spl";
 
 procedure splitNode(leftNode: Node) returns (splitValue: T, rightNode: Node)
   requires  btree_root_possibly_full(leftNode)
-  requires  leftNode != null
   requires  leftNode.keys[b-1] != bottom
   ensures   splitValue == old(leftNode.keys[b/2])
   // state of the left node
@@ -43,9 +42,9 @@ procedure splitNode(leftNode: Node) returns (splitValue: T, rightNode: Node)
 }
 
 procedure addRecursive(x: T, u: Node) returns (split: T, res: Node)
-  requires  btree(u) &*& u != null
+  requires  btree(u)
   requires  lt(u.lbound, x) && lt(x, u.ubound)
-  ensures   btree(u) &*& btree(res)
+  ensures   btree(u) &*& (btree(res) || res == null)
   ensures   u != null && u.lbound == old(u.lbound)
   ensures   res == null ==> u.ubound == old(u.ubound)
   ensures   res != null ==>
@@ -55,7 +54,7 @@ procedure addRecursive(x: T, u: Node) returns (split: T, res: Node)
   var i := findIt(u.keys, x);
   if (i < u.keys.length && u.keys[i] == x) {
     //throw new DuplicateValueException();
-    return bottom, null;
+    return top, null;
   }
   if (is_leaf(u)) { // leaf node, just add it
     addNode(u, x, null);
@@ -71,7 +70,7 @@ procedure addRecursive(x: T, u: Node) returns (split: T, res: Node)
     s, n := splitNode(u);
     return s, n;
   } else {
-    return bottom, null;
+    return top, null;
   }
 }
 

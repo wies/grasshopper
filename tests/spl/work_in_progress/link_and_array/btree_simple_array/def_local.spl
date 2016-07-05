@@ -101,23 +101,23 @@ predicate btree_node(n: Node) {
   (forall i: Int :: i <= 0 && i < n.keys.length && n.keys[i] != top ==> lt(n.lbound, n.keys[i]) && lt(n.keys[i], n.ubound))
 }
 
-// Returns index of first top-valued key entry of node n
-function first_top(n: Node) returns (res: Int)
+// Returns size of n, i.e. index of first top-valued key entry of node n
+function size(n: Node) returns (res: Int)
   requires acc(n) &*& acc(n.keys)
-  ensures res < n.keys.length ==> n.keys[res] == top
-  ensures 0 <= res && res <= n.keys.length
-  ensures forall i: Int :: 0 <= i && i < res ==> n.keys[i] != top
+  ensures res < n.keys.length ==> n.keys[res] == top 
+  ensures 0 <= res <= n.keys.length
+  ensures forall i: Int :: 0 <= i && i < res ==> n.keys[i] != top @(matching n yields n.keys[res]) @(matching n yields n.keys[0])
 
 predicate sorted_key_array(a: Array<T>)
 {
   acc(a) &*&
-  (forall i: Int, j: Int :: 0 <= i && i < j && j < a.length ==> lt(a[i], a[j])) &&
+  (forall i: Int, j: Int :: 0 <= i < j < a.length ==> a[j] == top || lt(a[i], a[j])) &&
   a.length > 0
 }
 
 // Returns index of key x in array a, if a contains x.
 // Otherwise, returns the index of the smallest key in a that is larger than x.
-function indexOfKey(a: Array<T>, x: T) returns (idx: Int)
+function index_of_key(a: Array<T>, x: T) returns (idx: Int)
   requires sorted_key_array(a)
   requires x != bottom && x != top
   ensures 0 <= idx && idx <= a.length
@@ -130,6 +130,7 @@ function indexOfKey(a: Array<T>, x: T) returns (idx: Int)
 predicate btree_possibly_full(bt: Node) {
   exists FP_N: Set<Node>, FP_A_I: Set<Array<T>>, FP_A_N: Set<Array<Node>> ::
     acc(FP_N) &*& acc(FP_A_I) &*& acc(FP_A_N) &*&
+    bt != null &&
     FP_N == node_footprint(bt) &&
     FP_A_I == array_int_fp(FP_N) &&
     FP_A_N == array_node_fp(FP_N) &&
@@ -143,13 +144,13 @@ predicate btree_possibly_full(bt: Node) {
     // children and keys
     // if a node is not a leaf, all its children before first_top are non-null
     (forall n in FP_N, i: Int, j: Int :: 0 <= i < j < n.children.length ==>
-        n.children[i] == null || n.children[j] != null || first_top(n) < j
-     @(matching n yields n.keys[first_top(n)])) &&
+        n.children[i] == null || n.children[j] != null || size(n) < j
+     @(matching n yields n.keys[size(n)])) &&
     // all children after a top key are null
     (forall n in FP_N, i: Int, j: Int :: 0 <= i < j < n.children.length &&
                                           n.keys[i] == top ==> n.children[j] == null) &&
     // the keys are sorted
-    (forall n in FP_N, i: Int, j: Int :: 0 <= i < j < n.keys.length ==> lt(n.keys[i], n.keys[j])) &&
+    (forall n in FP_N, i: Int, j: Int :: 0 <= i < j < n.keys.length ==> n.keys[j] == top || lt(n.keys[i], n.keys[j])) &&
     
     /* Tree invariants */
     // parent is inverse of child array 
@@ -161,7 +162,7 @@ predicate btree_possibly_full(bt: Node) {
     (forall n in FP_N, m in FP_N :: n == m || n.keys != m.keys) &&
     (forall n in FP_N, m in FP_N :: n == m || n.children != m.children) &&
     // child array entries are all distinct
-    (forall a in FP_A_N, i: Int, j: Int :: 0 <= i < j < a.length ==> a[i] == null || a[i] != a[j]) &&
+    (forall n in FP_N, i: Int, j: Int :: 0 <= i < j < n.children.length ==> n.children[i] == null || n.children[i] != n.children[j]) &&
     // ancestor nodes must be reachable via correct child
     (forall n in FP_N, m in FP_N, i: Int :: 0 <= i < m.children.length && m.children[i] != null && Reach(parent, n, m) &&
        n != m && le(m.children[i].lbound, n.lbound) && le(n.ubound, m.children[i].ubound) ==>
@@ -184,18 +185,18 @@ predicate btree_possibly_full(bt: Node) {
 
 predicate btree_root_possibly_full(bt: Node) {
   btree_possibly_full(bt) &*&
-  (forall n in node_footprint(bt) :: n == bt || first_top(n) < b)
+  (forall n in node_footprint(bt) :: n == bt || size(n) < b)
 }
 
 predicate btree(bt: Node) {
   btree_possibly_full(bt) &*&
-  (forall n in node_footprint(bt) :: first_top(n) < b)
+  (forall n in node_footprint(bt) :: size(n) < b)
 }
 
 
 predicate btree_root(root: Node) {
   btree(root) &*&
-  root != null &&
   root.lbound == bottom &&
   root.ubound == top
 }
+

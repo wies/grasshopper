@@ -2,79 +2,43 @@ include "find.spl";
 include "array_utils.spl";
 
 /* is a node full */
-procedure is_full(u: Node) returns (res: Bool)
-  requires btree_node(u)
-  ensures  btree_node(u)
-  ensures  forall i: Int :: 0 <= i && i < b ==> !res || u.keys[i] != bottom
+function is_full(u: Node) returns (res: Bool)
+  requires acc(u) &*& acc(u.keys)
 {
-  if (u.keys[b - 1] != bottom) {
-    return true;
-  } else {
-    return false;
-  }
+  u.keys[b - 1] != top
 }
 
 /* is a node a leaf */
-procedure is_leaf(u: Node) returns (res: Bool)
-  requires btree_node(u)
-  ensures  btree_node(u)
-  ensures  forall i: Int :: 0 <= i && i <= b ==> !res || u.children[i] == null
+function is_leaf(u: Node) returns (res: Bool)
+  requires acc(u) &*& acc(u.children)
 {
-  if (u.children[0] == null) {
-    return true;
-  } else {
-    return false;
-  }
+  u.children[0] == null
 }
 
-procedure size(u: Node) returns (res: Int)
-  requires btree_node(u)
-  ensures  btree_node(u)
-  ensures  res >= 0 && res <= b
-  ensures  forall i: Int :: i >= 0 && i < res ==> u.keys[i] != bottom
-  ensures  forall i: Int :: i >= res && i < b ==> u.keys[i] == bottom
+procedure get_size(u: Node) returns (res: Int)
+  requires acc(u) &*& sorted_key_array(u.keys)
+  ensures acc(u) &*& sorted_key_array(u.keys)
+  ensures res == size(u)
 {
   var lo := 0;
-  var hi := b;
+  var hi := u.keys.length;
   while (hi != lo)
-    invariant acc(u) &*& acc(u.keys)
-    invariant hi >= lo && lo >= 0 && hi <= b && u.keys.length == b
-    invariant forall i: Int, j: Int :: 0 <= i && i <= j && j < u.keys.length && u.keys[i] == bottom ==> u.keys[j] == bottom
-    invariant forall i: Int :: i >= hi && i < b ==> u.keys[i] == bottom
-    invariant forall i: Int :: i >= 0 && i < lo ==> u.keys[i] != bottom
+    invariant acc(u) &*& sorted_key_array(u.keys)
+    invariant u.keys.length >= hi >= lo >= 0
+    invariant forall i: Int :: hi <= i < u.keys.length ==> u.keys[i] == top
+    invariant forall i: Int :: 0 <= i < lo ==> u.keys[i] != top
   {
-    var m := (hi+lo)/2;
-    if (u.keys[m] == bottom) {
+    var m := (hi + lo) / 2;
+    if (u.keys[m] == top) {
       hi := m;
     } else {
-      lo := m+1;
+      lo := m + 1;
     }
   }
+  pure assume u.keys[lo] == u.keys[lo]; // needed for instantiation
   return lo;
 }
 
-procedure lemma(u: Node)
-  requires btree(u) &*& u != null
-{
-  var i: Int, j: Int;
-  var FP_N := node_footprint(u);
-   var n: Node, m: Node;
-  pure assert (forall n in FP_N, i: Int, j: Int :: 0 <= i < j < n.children.length ==>
-      n.children[i] == null || n.children[j] != null || first_top(n) < j
-               @(matching n yields n.keys[first_top(n)]));
-  pure assume false;
-  pure assume n in FP_N;
-  pure assume m in FP_N;
-  pure assume m != n;
-  pure assume 0 <= i && i < m.children.length;
-  pure assume 0 <= j && j < i;
-  pure assume m.children[i] == null;
-  pure assume lt(m.keys[i], n.lbound);
-  pure assert !Reach(parent, n, m);
-  //pure assume u.children[0] == null;
-  //pure assert n != u ==> !Reach(parent, n, u);
-  pure assume false;
-}
 
 /* Add the value x to the node u
  * @param u     the node to insert into
@@ -83,18 +47,18 @@ procedure lemma(u: Node)
  * @return      true on success or false if x was not added
  */
 procedure addNode(u: Node, x: T, ci: Node)
-  requires btree(u) &*& btree(ci)
+  requires btree(u) &*& (btree(ci) || ci == null)
   requires u != null && (ci == null || ci.parent == null && ci.lbound == x)
   requires (ci == null) == (u.children[0] == null) // inserting null iff u is a leaf
   requires x != bottom && x != top
-  requires u.children[indexOfKey(u.keys, x)] != null ==> lt(u.keys[indexOfKey(u.keys, x)], ci.lbound)
-  requires u.children[indexOfKey(u.keys, x) + 1] != null ==> lt(ci.ubound, u.keys[indexOfKey(u.keys, x) + 1])
+  requires u.children[index_of_key(u.keys, x)] != null ==> lt(u.keys[index_of_key(u.keys, x)], ci.lbound)
+  requires u.children[index_of_key(u.keys, x) + 1] != null ==> lt(ci.ubound, u.keys[index_of_key(u.keys, x) + 1])
   requires forall n in node_footprint(u) :: n == u || lt(n.ubound, ci.lbound) || lt(ci.ubound, n.lbound)
   requires forall i: Int :: 0 <= i < u.keys.length ==> u.keys[i] != x
   requires lt(u.lbound, x)
   requires ci == null ==> lt(x, u.ubound)
   requires ci != null ==> lt(ci.ubound, u.ubound)
-  ensures  btree_root_possibly_full(u)
+  ensures btree_root_possibly_full(u)
 {
   var i := findIt(u.keys, x);
 
@@ -124,25 +88,25 @@ procedure addNode(u: Node, x: T, ci: Node)
  * @return      the value of the element removed
  */
 procedure removeNode(u: Node, i: Int) returns (res: T)
-  requires btree_node(u)
-  requires 0 <= i && i < u.keys.length
-  requires forall j: Int :: 0 <= j && j <= b ==> u.children[j] == null // is_leaf
-  ensures  btree_node(u)
-  ensures  res == old(u.keys[i])
-  ensures  forall j: Int :: 0 <= j && j <= b ==> u.children[j] == null
+  requires btree_root_possibly_full(u) &*& is_leaf(u)
+  requires 0 <= i < u.keys.length
+  //requires forall j: Int :: 0 <= j && j <= b ==> u.children[j] == null // is_leaf
+  ensures btree(u) &*& is_leaf(u)
+  ensures res == old(u.keys[i])
+  //ensures  forall j: Int :: 0 <= j && j <= b ==> u.children[j] == null
 {
   var y := u.keys[i];
   key_arraymove(u.keys, i+1, i, b-i-1);
-  u.keys[b-1] := bottom;
+  u.keys[b-1] := top;
   return y;
 }
 
 procedure newNode() returns (res: Node)
   requires  emp
-  ensures   btree_node(res)
-  ensures   res.parent == null && res.lbound == bottom && res.ubound == top
-  ensures   forall i: Int :: 0 <= i && i < b ==> res.keys[i] == bottom
-  ensures   forall i: Int :: 0 <= i && i <= b ==> res.children[i] == null
+  ensures acc(res) -** btree(res)
+  ensures res.parent == null && res.lbound == bottom && res.ubound == top
+  ensures forall i: Int :: 0 <= i < b ==> res.keys[i] == top
+  ensures forall i: Int :: 0 <= i <= b ==> res.children[i] == null
 {
   var w := new Node();
   w.keys := new Array<T>(b);
@@ -152,12 +116,13 @@ procedure newNode() returns (res: Node)
   w.ubound := top;
   var i := 0;
   while (i < b)
-    invariant 0 <= i && i <= b
+    invariant 0 <= i <= b
     invariant acc(w) &*& acc(w.keys) &*& acc(w.children)
     invariant w.keys.length == b && w.children.length == b+1
-    invariant forall j: Int :: 0 <= j && j < i ==> w.keys[j] == bottom && w.children[j] == null
+    invariant forall j: Int, n: Node :: 0 <= j < i && n in {w} ==> n.keys[j] == top
+    invariant forall j: Int, n: Node :: 0 <= j < i && n in {w} ==> n.children[j] == null
   {
-    w.keys[i] := bottom;
+    w.keys[i] := top;
     w.children[i] := null;
     i := i + 1;
   }
@@ -167,28 +132,7 @@ procedure newNode() returns (res: Node)
 
 procedure newTree() returns (res: Node)
   requires  emp
-  ensures   btree_root(res)
+  ensures btree_root(res)
 {
-  // does work because too few terms
-  // var n := newNode();
-  // return n;
-  var w := new Node();
-  w.keys := new Array<T>(b);
-  w.children := new Array<Node>(b+1);
-  w.parent := null;
-  w.lbound := bottom;
-  w.ubound := top;
-  var i := 0;
-  while (i < b)
-    invariant 0 <= i && i <= b
-    invariant acc(w) &*& acc(w.keys) &*& acc(w.children)
-    invariant w.keys.length == b && w.children.length == b+1
-    invariant forall j: Int :: 0 <= j && j < i ==> w.keys[j] == bottom && w.children[j] == null
-  {
-    w.keys[i] := bottom;
-    w.children[i] := null;
-    i := i + 1;
-  }
-  w.children[b] := null;
-  return w;
+  return newNode();
 }
