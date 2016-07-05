@@ -91,10 +91,8 @@ procedure removeNode(u: Node, i: Int) returns (res: T)
   requires btree_root_possibly_full(u) &*& is_leaf(u)
   requires 0 <= i < u.keys.length
   //requires forall j: Int :: 0 <= j && j <= b ==> u.children[j] == null // is_leaf
-  ensures btree(u)
-  //ensures is_leaf(u)
-  //ensures res == old(u.keys[i])
-  //ensures  forall j: Int :: 0 <= j && j <= b ==> u.children[j] == null
+  ensures btree(u) &*& is_leaf(u)
+  ensures res == old(u.keys[i])
 {
   var y := u.keys[i];
   key_arraymove(u.keys, i+1, i, b-i-1);
@@ -103,9 +101,6 @@ procedure removeNode(u: Node, i: Int) returns (res: T)
   pure assume size(u) < b;
   pure assert forall n in node_footprint(u) :: size(n) < b;
   pure assume forall n in node_footprint(u) :: size(n) < b;
-  assert btree(u);
-  //assert btree_root_possibly_full(u) &*& (forall n in node_footprint(u) :: size(n) < b);
-  //assume false;
   return y;
 }
 
