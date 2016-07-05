@@ -92,9 +92,11 @@ procedure key_arraycopy(a: Array<T>, srcPos: Int, b: Array<T>, dstPos: Int, leng
   ensures  forall i: Int :: 0 <= i && i < a.length ==> a[i] == old(a[i])
   ensures  forall i: Int :: 0 <= i && i < dstPos ==> b[i] == old(b[i])
   ensures  forall i: Int :: dstPos + length <= i && i < b.length ==> b[i] == old(b[i])
-  ensures  forall i: Int :: 0 <= i && i < length ==> b[dstPos + i] == a[srcPos + i]
-                      @(matching a[i] yields a[srcPos + (i - dstPos)])
-                      @(matching a[i] yields a[dstPos + (i - dstPos)])
+  ensures  forall i: Int, c: Array<T> :: 0 <= i && i < length ==> b[dstPos + i] == a[srcPos + i]
+                      @(matching c[i] yields a[srcPos + (i - dstPos)])
+                      @(matching c[i] yields a[dstPos + (i - dstPos)])
+                      @(matching c[i] yields b[srcPos + (i - dstPos)])
+                      @(matching c[i] yields b[dstPos + (i - dstPos)])
 {
   var i := 0;
   while (i < length)
@@ -120,9 +122,15 @@ procedure node_arraycopy(a: Array<Node>, srcPos: Int, b: Array<Node>, dstPos: In
   ensures  forall i: Int :: 0 <= i && i < a.length ==> a[i] == old(a[i])
   ensures  forall i: Int :: 0 <= i && i < dstPos ==> b[i] == old(b[i])
   ensures  forall i: Int :: dstPos + length <= i && i < b.length ==> b[i] == old(b[i])
-  ensures  forall i: Int :: 0 <= i && i < length ==> b[dstPos + i] == a[srcPos + i]
-                        @(matching a[i] yields a[srcPos + (i - dstPos)])
-                        @(matching a[i] yields a[dstPos + (i - dstPos)])
+  ensures  forall i: Int, c: Array<Node> :: 0 <= i && i < length ==> b[dstPos + i] == a[srcPos + i]
+                        @(matching c[i] yields old(a[srcPos + (i - dstPos)].lbound))
+                        @(matching c[i] yields old(a[srcPos + (i - dstPos)].ubound))
+                        @(matching c[i] yields old(a[dstPos + (i - dstPos)].lbound))
+                        @(matching c[i] yields old(a[dstPos + (i - dstPos)].ubound))
+                        @(matching c[i] yields old(b[srcPos + (i - dstPos)].lbound))
+                        @(matching c[i] yields old(b[srcPos + (i - dstPos)].ubound))
+                        @(matching c[i] yields old(b[dstPos + (i - dstPos)].lbound))
+                        @(matching c[i] yields old(b[dstPos + (i - dstPos)].ubound))
 {
   var i := 0;
   while (i < length)

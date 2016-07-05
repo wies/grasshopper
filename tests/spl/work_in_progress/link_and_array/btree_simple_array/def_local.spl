@@ -79,6 +79,7 @@ function array_node_fp(FP_N: Set<Node>)
   ensures forall a: Array<Node> :: a !in FP_A_N ==> array_node_owner(a, FP_N) == null
 
 
+  /*
 predicate btree_node(n: Node) {
   acc(n) &*& acc(n.keys) &*& acc(n.children) &*&
   // size of keys/children
@@ -100,13 +101,14 @@ predicate btree_node(n: Node) {
   // keys and lbound, ubound
   (forall i: Int :: i <= 0 && i < n.keys.length && n.keys[i] != top ==> lt(n.lbound, n.keys[i]) && lt(n.keys[i], n.ubound))
 }
-
+  */
+  
 // Returns size of n, i.e. index of first top-valued key entry of node n
 function size(n: Node) returns (res: Int)
   requires acc(n) &*& acc(n.keys)
   ensures res < n.keys.length ==> n.keys[res] == top 
   ensures 0 <= res <= n.keys.length
-  ensures forall i: Int :: 0 <= i && i < res ==> n.keys[i] != top @(matching n yields n.keys[res]) @(matching n yields n.keys[0])
+  ensures forall i: Int :: 0 <= i < res ==> n.keys[i] != top @(matching n yields n.keys[res]) @(matching n yields n.keys[0])
 
 predicate sorted_key_array(a: Array<T>)
 {

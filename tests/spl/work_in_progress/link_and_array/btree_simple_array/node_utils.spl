@@ -2,14 +2,14 @@ include "find.spl";
 include "array_utils.spl";
 
 /* is a node full */
-function is_full(u: Node) returns (res: Bool)
+predicate is_full(u: Node)
   requires acc(u) &*& acc(u.keys)
 {
   u.keys[b - 1] != top
 }
 
 /* is a node a leaf */
-function is_leaf(u: Node) returns (res: Bool)
+predicate is_leaf(u: Node)
   requires acc(u) &*& acc(u.children)
 {
   u.children[0] == null
@@ -91,13 +91,19 @@ procedure removeNode(u: Node, i: Int) returns (res: T)
   requires btree_root_possibly_full(u) &*& is_leaf(u)
   requires 0 <= i < u.keys.length
   //requires forall j: Int :: 0 <= j && j <= b ==> u.children[j] == null // is_leaf
-  ensures btree(u) &*& is_leaf(u)
-  ensures res == old(u.keys[i])
+  ensures btree(u)
+  //ensures is_leaf(u)
+  //ensures res == old(u.keys[i])
   //ensures  forall j: Int :: 0 <= j && j <= b ==> u.children[j] == null
 {
   var y := u.keys[i];
   key_arraymove(u.keys, i+1, i, b-i-1);
   u.keys[b-1] := top;
+  pure assume size(u) == size(u);
+  pure assume u.keys[b-1] == top;
+  assert btree(u);
+  //assert btree_root_possibly_full(u) &*& (forall n in node_footprint(u) :: size(n) < b);
+  //assume false;
   return y;
 }
 
