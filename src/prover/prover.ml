@@ -143,7 +143,7 @@ let instantiate_and_prove session fs =
     then fs2, gts_inst, classes
     else
     let classes = CongruenceClosure.congr_classes (rev_concat [fs_inst; fs]) gts2 in
-    instantiate_with_terms ~stratify:true true fs1 classes, gts2, classes
+    instantiate_with_terms true fs1 classes, gts2, classes
   in
   (*let round3 fs_inst gts_inst classes =
     let generators =
