@@ -49,7 +49,7 @@ rerror:
 ;
 
 rmodel:
-| LPAREN MODEL cmnd_list RPAREN { $3 }
+| LPAREN MODEL cmnd_list_opt RPAREN { $3 }
 ;
 
 names:
@@ -86,6 +86,10 @@ cmnd_list:
 | term { [mk_assert ~pos:(mk_position 1 1) $1] }
 ;
 
+cmnd_list_opt:
+| cmnd_list { $1 }
+| /* empty */ { [] }
+  
 sort_list_opt:
 | sort_list { $1 }
 | /* empty */ { [] }
