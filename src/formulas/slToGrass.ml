@@ -155,7 +155,7 @@ let to_form pred_to_form domains f =
   process_bool f
     
 
-let to_grass pred_to_form domain f =
-  let translated = to_form pred_to_form domain (prenex_form f) in
+let to_grass pred_to_form domains f =
+  let translated = to_form pred_to_form domains (prenex_form f) in
   close translated
 

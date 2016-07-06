@@ -8,12 +8,36 @@ open Prog
 (** Infer sets of accessed and modified variables for all procedures and predicates in program [prog] *)
 (* TODO: the implementation of the fix-point loop is brain damaged - rather use a top. sort of the call graph *)
 let infer_accesses prog =
-  let rec pm prog = function
+  let process_spec_forms prog sfs =
+    let accs_preds, accs, fps =
+      List.fold_left (fun (acc_preds, accs, fps) sf ->
+        let acc_preds =
+          IdSet.union acc_preds
+            (IdSet.filter (fun p -> IdMap.mem p prog.prog_preds)
+               (fold_spec_form free_symbols SlUtil.free_symbols sf))
+        in
+        let accs =
+          IdSet.union accs (fold_spec_form free_consts SlUtil.free_consts sf)
+        in
+        let fps = footprint_sorts_spec_form_acc prog fps sf in
+        acc_preds, accs, fps)
+        (IdSet.empty, IdSet.empty, SortSet.empty)
+        sfs        
+    in
+    IdSet.fold (fun p (accs, fps) -> 
+      let opred = find_pred prog p in
+      IdSet.union opred.pred_accesses accs,
+      SortSet.union (footprint_sorts_pred opred) fps)
+      accs_preds (accs, fps)
+  in
+  let rec pm prog =
+    function
     | Loop (lc, pp) ->
         let has_new1, fps1, prebody1 = pm prog lc.loop_prebody in
         let has_new2, fps2, postbody1 = pm prog lc.loop_postbody in
+        let _, fps3 = process_spec_forms prog lc.loop_inv in
         has_new1 || has_new2,
-        SortSet.union fps1 fps2,
+        SortSet.union (SortSet.union fps1 fps2) fps3,
         mk_loop_cmd lc.loop_inv prebody1 lc.loop_test lc.loop_test_pos postbody1 pp.pp_pos
     | Choice (cs, pp) ->
         let has_new, mods, accs, fps, cs1 = 
@@ -72,27 +96,9 @@ let infer_accesses prog =
     | Basic(bc, _) as c ->  false, footprint_sorts_basic_cmd prog bc, c
   in
   let pm_pred prog pred =
-    let accs_preds, body_accs, body_fps =
-      List.fold_left (fun (acc_preds, accs, fps) sf ->
-        let acc_preds =
-          IdSet.union acc_preds
-              (IdSet.filter (fun p -> IdMap.mem p prog.prog_preds)
-                 (fold_spec_form free_symbols SlUtil.free_symbols sf))
-        in
-        let accs =
-          IdSet.union accs (fold_spec_form free_consts SlUtil.free_consts sf)
-        in
-        let fps = footprint_sorts_spec_form_acc prog fps sf in
-        acc_preds, accs, fps)
-        (IdSet.empty, IdSet.empty, SortSet.empty)
-        (Opt.to_list pred.pred_body @ pred.pred_contract.contr_precond @ pred.pred_contract.contr_postcond)        
-    in
-    let accs, fps = 
-      IdSet.fold (fun p (accs, fps) -> 
-        let opred = find_pred prog p in
-        IdSet.union opred.pred_accesses accs,
-        SortSet.union (footprint_sorts_pred opred) fps)
-        accs_preds (body_accs, body_fps)
+    let accs, fps =
+      process_spec_forms prog
+        (Opt.to_list pred.pred_body @ pred.pred_contract.contr_precond @ pred.pred_contract.contr_postcond)
     in
     let global_accs = 
       IdSet.filter (fun id -> IdMap.mem id prog.prog_vars) accs
