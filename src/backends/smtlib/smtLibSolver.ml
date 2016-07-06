@@ -912,7 +912,7 @@ let convert_model session smtModel =
       let msg = 
         ProgError.error_to_string pos
           "Encountered unexpected definition during model conversion" 
-      in fail session msg
+      in failwith msg
     in
     let add_val pos model arg_map v =
       if IdMap.is_empty arg_map && args <> []
@@ -1145,7 +1145,11 @@ let convert_model session smtModel =
             let cres_srt = convert_sort res_srt in
             let cargs = List.map (fun (x, srt) -> x, convert_sort srt) args in
             let carg_srts = List.map snd cargs in
-            process_def model sym (carg_srts, cres_srt) cargs (SmtLibSyntax.unletify def)
+            (try 
+              process_def model sym (carg_srts, cres_srt) cargs (SmtLibSyntax.unletify def)
+            with Failure s ->
+              Debug.warn (fun () -> "Warning: " ^ s ^ "\n\n");
+              model)
         | _ -> model)
       model1 smtModel 
   in
