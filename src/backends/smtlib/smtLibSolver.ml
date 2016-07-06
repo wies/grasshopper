@@ -866,7 +866,7 @@ let convert_model session smtModel =
   (* remove suffix from overloaded identifiers *)
   let normalize_ident =
     let name_re = Str.regexp "\\([^\\$]*\\)\\$[0-9]+$" in
-    let num_re = Str.regexp "\\(.*\\)_\\([0-9]+\\)$" in
+    let num_re = Str.regexp "\\(.*\\)^\\([0-9]+\\)$" in
     fun ((name, num) as id) -> 
       if Str.string_match name_re name 0 then
         let nname = Str.matched_group 1 name in

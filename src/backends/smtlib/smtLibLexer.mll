@@ -90,7 +90,7 @@ rule token = parse
 | "#b" (('0' | '1')* as bits) { INT (int_of_bits bits) }
 | "#x" (['A'-'F''a'-'f''0'-'9']* as hex) { INT (Int64.to_int (SplLexer.hexa_to_int hex)) }
 | ('-'? digitchar*) as num { INT(int_of_string num) }
-| ident as name '_' (digitchar* as num) { IDENT(name, if num <> "" then int_of_string num else 0) }
+| ident as name '^' (digitchar* as num) { IDENT(name, if num <> "" then int_of_string num else 0) }
 | ident as kw
     { try
         Hashtbl.find keyword_table kw

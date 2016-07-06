@@ -194,11 +194,11 @@ let string_of_src_pos pos =
       pos.sp_file pos.sp_start_line pos.sp_start_col pos.sp_end_line pos.sp_end_col
 
 let string_of_ident0 (name, n) =
-  Printf.sprintf "%s_%d" name n
+  Printf.sprintf "%s^%d" name n
 
 let string_of_ident (name, n) =
   if n = 0 then name else
-  Printf.sprintf "%s_%d" name n
+  Printf.sprintf "%s^%d" name n
 
 let string_of_symbol = function
   (* function symbols *)
