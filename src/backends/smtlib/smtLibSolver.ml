@@ -362,7 +362,7 @@ let declare_sorts has_int session free_srts =
   then writeln session ("(define-sort " ^ map_sort_string ^ " (X Y) (Array X Y))")
   else begin
     declare_sort session (map_sort_string) 2;
-    declare_sort session (map_sort_string ^ "_1") 3
+    declare_sort session (map_sort_string ^ "^1") 3
   end;
   if not !Config.use_bitvector
   then declare_sort session ("GrassByte") 0
