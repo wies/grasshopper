@@ -89,10 +89,10 @@ procedure key_arraycopy(a: Array<T>, srcPos: Int, b: Array<T>, dstPos: Int, leng
   requires length >= 0
   requires 0 <= srcPos && srcPos + length <= a.length && 0 <= dstPos && dstPos + length <= b.length
   ensures  acc(a) &*& acc(b)
-  ensures  forall i: Int :: 0 <= i && i < a.length ==> a[i] == old(a[i])
-  ensures  forall i: Int :: 0 <= i && i < dstPos ==> b[i] == old(b[i])
-  ensures  forall i: Int :: dstPos + length <= i && i < b.length ==> b[i] == old(b[i])
-  ensures  forall i: Int, c: Array<T> :: 0 <= i && i < length ==> b[dstPos + i] == a[srcPos + i]
+  ensures  forall i: Int :: 0 <= i < a.length ==> a[i] == old(a[i])
+  ensures  forall i: Int :: 0 <= i < dstPos ==> b[i] == old(b[i])
+  ensures  forall i: Int :: dstPos + length <= i < b.length ==> b[i] == old(b[i])
+  ensures  forall i: Int, c: Array<T> :: 0 <= i < length ==> b[dstPos + i] == a[srcPos + i]
                       @(matching c[i] yields a[srcPos + (i - dstPos)])
                       @(matching c[i] yields a[dstPos + (i - dstPos)])
                       @(matching c[i] yields b[srcPos + (i - dstPos)])
@@ -104,10 +104,10 @@ procedure key_arraycopy(a: Array<T>, srcPos: Int, b: Array<T>, dstPos: Int, leng
     invariant 0 <= srcPos && srcPos + length <= a.length && 0 <= dstPos && dstPos + length <= b.length
     invariant length >= 0
     invariant 0 <= i && i <= length
-    invariant forall j: Int :: 0 <= j && j < a.length ==> a[j] == old(a[j])
-    invariant forall j: Int :: 0 <= j && j < dstPos ==> b[j] == old(b[j])
-    invariant forall j: Int :: dstPos + length <= j && j < b.length ==> b[j] == old(b[j])
-    invariant forall j: Int :: 0 <= j && j < i ==> b[dstPos + j] == a[srcPos + j]
+    invariant forall j: Int :: 0 <= j < a.length ==> a[j] == old(a[j])
+    invariant forall j: Int :: 0 <= j < dstPos ==> b[j] == old(b[j])
+    invariant forall j: Int :: dstPos + length <= j < b.length ==> b[j] == old(b[j])
+    invariant forall j: Int :: 0 <= j < i ==> b[dstPos + j] == a[srcPos + j]
   {
     b[dstPos + i] := a[srcPos + i];
     i := i + 1;
@@ -135,13 +135,12 @@ procedure node_arraycopy(a: Array<Node>, srcPos: Int, b: Array<Node>, dstPos: In
   var i := 0;
   while (i < length)
     invariant acc(a) &*& acc(b)
-    invariant 0 <= srcPos && srcPos + length <= a.length && 0 <= dstPos && dstPos + length <= b.length
-    invariant length >= 0
-    invariant 0 <= i && i <= length
-    invariant forall j: Int :: 0 <= j && j < a.length ==> a[j] == old(a[j])
-    invariant forall j: Int :: 0 <= j && j < dstPos ==> b[j] == old(b[j])
-    invariant forall j: Int :: dstPos + length <= j && j < b.length ==> b[j] == old(b[j])
-    invariant forall j: Int :: 0 <= j && j < i ==> b[dstPos + j] == a[srcPos + j]
+    invariant 0 <= srcPos <= srcPos + length <= a.length && 0 <= dstPos <= dstPos + length <= b.length
+    invariant 0 <= i <= length
+    invariant forall j: Int :: 0 <= j < a.length ==> a[j] == old(a[j])
+    invariant forall j: Int :: 0 <= j < dstPos ==> b[j] == old(b[j])
+    invariant forall j: Int :: dstPos + length <= j < b.length ==> b[j] == old(b[j])
+    invariant forall j: Int :: 0 <= j < i ==> b[dstPos + j] == a[srcPos + j]
   {
     b[dstPos + i] := a[srcPos + i];
     i := i + 1;
@@ -150,19 +149,19 @@ procedure node_arraycopy(a: Array<Node>, srcPos: Int, b: Array<Node>, dstPos: In
 
 procedure key_fill(a: Array<T>, from: Int, to: Int, value: T)
   requires acc(a)
-  requires from >= 0 && to <= a.length && from <= to
+  requires 0 <= from <= to <= a.length
   ensures  acc(a)
-  ensures  forall i: Int :: from <= i && i < to ==> a[i] == value
-  ensures  forall i: Int :: 0 <= i && i < from ==> a[i] == old(a[i])
-  ensures  forall i: Int :: to <= i && i < a.length ==> a[i] == old(a[i])
+  ensures  forall i: Int :: from <= i < to ==> a[i] == value
+  ensures  forall i: Int :: 0 <= i < from ==> a[i] == old(a[i])
+  ensures  forall i: Int :: to <= i < a.length ==> a[i] == old(a[i])
 {
   var i := from;
   while(i < to)
     invariant acc(a)
-    invariant from >= 0 && to <= a.length && from <= i && i <= to
-    invariant forall j: Int :: from <= j && j < i ==> a[j] == value
-    invariant forall j: Int :: 0 <= j && j < from ==> a[j] == old(a[j])
-    invariant forall j: Int :: to <= j && j < a.length ==> a[j] == old(a[j])
+    invariant 0 <= from <= i <= to <= a.length
+    invariant forall j: Int :: from <= j < i ==> a[j] == value
+    invariant forall j: Int :: 0 <= j < from ==> a[j] == old(a[j])
+    invariant forall j: Int :: to <= j < a.length ==> a[j] == old(a[j])
   {
     a[i] := value;
     i := i + 1;
@@ -171,19 +170,19 @@ procedure key_fill(a: Array<T>, from: Int, to: Int, value: T)
 
 procedure node_fill(a: Array<Node>, from: Int, to: Int, value: Node)
   requires acc(a)
-  requires from >= 0 && to <= a.length && from <= to
+  requires 0 <= from <= to <= a.length
   ensures  acc(a)
-  ensures  forall i: Int :: from <= i && i < to ==> a[i] == value
-  ensures  forall i: Int :: 0 <= i && i < from ==> a[i] == old(a[i])
-  ensures  forall i: Int :: to <= i && i < a.length ==> a[i] == old(a[i])
+  ensures  forall i: Int :: from <= i < to ==> a[i] == value
+  ensures  forall i: Int :: 0 <= i < from ==> a[i] == old(a[i])
+  ensures  forall i: Int :: to <= i < a.length ==> a[i] == old(a[i])
 {
   var i := from;
   while(i < to)
     invariant acc(a)
-    invariant from >= 0 && to <= a.length && from <= i && i <= to
-    invariant forall j: Int :: from <= j && j < i ==> a[j] == value
-    invariant forall j: Int :: 0 <= j && j < from ==> a[j] == old(a[j])
-    invariant forall j: Int :: to <= j && j < a.length ==> a[j] == old(a[j])
+    invariant 0 <= from <= i <= to <= a.length
+    invariant forall j: Int :: from <= j < i ==> a[j] == value
+    invariant forall j: Int :: 0 <= j < from ==> a[j] == old(a[j])
+    invariant forall j: Int :: to <= j < a.length ==> a[j] == old(a[j])
   {
     a[i] := value;
     i := i + 1;

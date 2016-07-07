@@ -3,39 +3,66 @@ include "node_utils.spl";
 include "array_utils.spl";
 
 procedure splitNode(leftNode: Node) returns (splitValue: T, rightNode: Node)
-  requires  btree_possibly_full(leftNode)
+  requires  btree_possibly_full(leftNode) &*& is_full(leftNode);
   ensures   splitValue == old(leftNode.keys[b/2])
   // state of the left node
   ensures   btree(leftNode)
   ensures   leftNode.parent == old(leftNode.parent)
-  ensures   leftNode.lbound == old(leftNode.lbound) && lt(leftNode.ubound, splitValue)
-  ensures   forall i: Int :: 0 <= i < b/2 ==> leftNode.keys[i] == old(leftNode.keys[i])
-  ensures   forall i: Int :: 0 <= i <= b/2 ==> leftNode.children[i] == old(leftNode.children[i])
-  ensures   size(leftNode) == b/2
+  ensures   leftNode.lbound == old(leftNode.lbound) && le(leftNode.ubound, splitValue)
+  ensures   forall i: Int :: 0 <= i < b/2 - 1 ==> leftNode.keys[i] == old(leftNode.keys[i])
+  ensures   forall i: Int :: 0 <= i <= b/2 - 1 ==> leftNode.children[i] == old(leftNode.children[i])
+  ensures   size(leftNode) == b/2 - 1;
   // state of the rightNode node
   ensures   btree(rightNode)
   ensures   rightNode.parent == null
   ensures   rightNode.ubound == old(leftNode.ubound) && lt(splitValue, rightNode.lbound)
   ensures   forall i: Int :: 0 <= i < b/2 ==> rightNode.keys[i] == old(leftNode.keys[i + b/2])
   ensures   forall i: Int :: 0 <= i <= b/2 ==> rightNode.children[i] == old(leftNode.children[i + b/2])
-  ensures   size(rightNode) == b/2
+  ensures   size(rightNode) == b/2;
 {
-  pure assert leftNode.keys[b - 1] == top;
   rightNode := newNode();
   var j := b/2;
   // move the keys
-  key_arraycopy(leftNode.keys, j+1, rightNode.keys, 0, b-j-1);
-  key_fill(leftNode.keys, j+1, b, top);
+  key_arraycopy(leftNode.keys, j, rightNode.keys, 0, j);
+  key_fill(leftNode.keys, j, b, top);
   // move the children
-  node_arraycopy(leftNode.children, j+1, rightNode.children, 0, b-j);
-  node_fill(leftNode.children, j+1, b+1, null);
+  node_arraycopy(leftNode.children, j, rightNode.children, 0, j+1);
+  node_fill(leftNode.children, j, b+1, null);
   // extract the middle value
-  splitValue := leftNode.keys[j];
-  leftNode.keys[j] := top;
+  splitValue := leftNode.keys[j - 1];
+  leftNode.keys[j - 1] := top;
   // set the bounds
   rightNode.ubound := leftNode.ubound;
   rightNode.lbound := rightNode.keys[0];
-  leftNode.ubound := leftNode.keys[j - 1];
+  leftNode.ubound := splitValue;
+  var i := 0;
+  while (i < j)
+    invariant 0 <= i <= j
+    //invariant ...     
+  {
+    rightNode.children[i].parent := rightNode;
+    i := i + 1;
+  }
+  var FP_N: Set<Node>, FP_A_T: Set<Array<T>>, FP_A_N: Set<Array<Node>>;
+  assume acc(FP_N) &*& acc(FP_A_T) &*& acc(FP_A_N);
+  pure assume leftNode.keys[b/2 - 1] == leftNode.keys[b/2 - 1];
+  pure assert size(rightNode) == b/2;
+  pure assume size(rightNode) == b/2;
+  pure assert size(leftNode) == b/2 - 1;
+  pure assume size(leftNode) == b/2 - 1;
+  pure assert
+    (forall n in FP_N, c: Map<Node, Array<Node>>, i: Int ::  n.c == n.children && 0 <= i < n.c.length && n.c[i] != null ==>
+       Reach(parent, n.c[i], n) && n.c[i] != n ) &&
+    //(forall n in FP_N, c: Map<Node, Array<Node>>, m: Node, i: Int ::  n.c == n.children &&
+    //   0 <= i < n.c.length && n.c[i] != null && Btwn(parent, n.c[i], m, n) ==>  m == n || n.c[i] == m) &&
+    true;
+  assume false;
+  //assert btree_possibly_full(leftNode) -** acc(FP_N) &*& acc(FP_A_T) &*& acc(FP_A_N);
+  pure assert forall i: Int :: 0 <= i < b/2 - 1 ==> leftNode.keys[i] == old(leftNode.keys[i]);
+  pure assert forall i: Int :: 0 <= i <= b/2 - 1 ==> leftNode.children[i] == old(leftNode.children[i]);
+  pure assume leftNode.keys[b/2 - 1] == leftNode.keys[b/2 - 1];
+  pure assert size(leftNode) == b/2 - 1;
+  assume false;
 }
 
 procedure addRecursive(x: T, u: Node) returns (split: T, res: Node)

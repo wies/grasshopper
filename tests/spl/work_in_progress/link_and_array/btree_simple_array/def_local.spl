@@ -30,7 +30,7 @@ axiom forall a: T :: !lt(top, a);
 var B: Int;
 var b: Int;
 axiom B >= 2;
-axiom b == 2*B - 1;
+axiom b == 2*B;
 
 struct Node {
   var keys: Array<T>;
@@ -51,8 +51,6 @@ function node_footprint(r: Node)
 function key_array_owner(a: Array<T>, FP_N: Set<Node>) returns (n: Node)
   requires acc(FP_N)
   ensures forall n in FP_N :: n == key_array_owner(n.keys, FP_N)
-  ensures forall X: Set<Node>, Y: Set<Node>, n: Node ::
-               n in X && n in Y ==> key_array_owner(n.keys, X) == key_array_owner(n.keys, Y) 
   
 function array_int_fp(FP_N: Set<Node>)
   returns (FP_A_I: Set<Array<T>>)
@@ -67,8 +65,6 @@ function array_node_owner(a: Array<Node>, FP_N: Set<Node>)
   returns (n: Node)
   requires acc(FP_N)
   ensures forall n in FP_N :: n == array_node_owner(n.children, FP_N)
-  ensures forall X: Set<Node>, Y: Set<Node>, n: Node ::
-               n in X && n in Y ==> array_node_owner(n.children, X) == array_node_owner(n.children, Y) 
 
 function array_node_fp(FP_N: Set<Node>)
   returns (FP_A_N: Set<Array<Node>>)
@@ -108,7 +104,7 @@ function size(n: Node) returns (res: Int)
   requires acc(n) &*& acc(n.keys)
   ensures res < n.keys.length ==> n.keys[res] == top 
   ensures 0 <= res <= n.keys.length
-  ensures forall i: Int :: 0 <= i < res ==> n.keys[i] != top @(matching n yields n.keys[res]) @(matching n yields n.keys[0])
+  ensures forall i: Int, k: Map<Node, Array<T>> :: 0 <= i < res && n.k == n.keys ==> n.k[i] != top @(matching n.k yields n.k[res]) @(matching n.k yields n.k[0])
 
 predicate sorted_key_array(a: Array<T>)
 {
@@ -138,48 +134,55 @@ predicate btree_possibly_full(bt: Node) {
     FP_A_N == array_node_fp(FP_N) &&
  
     /* keys and children arrays are of size 2B */
-    (forall n: Node :: n in FP_N ==> n.children.length == b+1 && n.keys.length == b) &&
+    (forall n in FP_N, c: Map<Node, Array<Node>>:: n.c == n.children ==> n.c.length == b+1) &&
+    (forall n in FP_N, k: Map<Node, Array<T>> :: n.k == n.keys ==> n.keys.length == b) &&
   
     /* Structural properties of arrays */
     // children arrays are partitioned into non-null/null halfs
-    (forall n in FP_N, i: Int, j: Int :: 0 <= i <= j < n.children.length && n.children[i] == null ==> n.children[j] == null) &&
+    (forall n in FP_N, c: Map<Node, Array<Node>>, i: Int, j: Int :: n.c == n.children && 0 <= i <= j < n.c.length && n.c[i] == null ==> n.c[j] == null) &&
     // children and keys
     // if a node is not a leaf, all its children before first_top are non-null
-    (forall n in FP_N, i: Int, j: Int :: 0 <= i < j < n.children.length ==>
-        n.children[i] == null || n.children[j] != null || size(n) < j
-     @(matching n yields n.keys[size(n)])) &&
+    (forall n in FP_N, c: Map<Node, Array<Node>>, i: Int, j: Int :: n.c == n.children && 0 <= i < j < n.c.length ==>
+        n.c[i] == null || n.c[j] != null || size(n) < j) &&
     // all children after a top key are null
-    (forall n in FP_N, i: Int, j: Int :: 0 <= i < j < n.children.length &&
-                                          n.keys[i] == top ==> n.children[j] == null) &&
+    (forall n in FP_N, c: Map<Node, Array<Node>>, k: Map<Node, Array<T>>, i: Int, j: Int :: n.c == n.children && n.k == n.keys &&
+       0 <= i < j < n.c.length && n.k[i] == top ==> n.c[j] == null) &&
     // the keys are sorted
-    (forall n in FP_N, i: Int, j: Int :: 0 <= i < j < n.keys.length ==> n.keys[j] == top || lt(n.keys[i], n.keys[j])) &&
+    (forall n in FP_N, k: Map<Node, Array<T>>, i: Int, j: Int :: n.k == n.keys &&
+       0 <= i < j < n.k.length ==> n.k[j] == top || lt(n.k[i], n.k[j])) &&
     
     /* Tree invariants */
     // parent is inverse of child array 
-    (forall n in FP_N, i: Int :: 0 <= i < n.children.length && n.children[i] != null ==>
-        Reach(parent, n.children[i], n) && n.children[i] != n ) &&
-    (forall n in FP_N, m: Node, i: Int :: 0 <= i < n.children.length && n.children[i] != null && Btwn(parent, n.children[i], m, n) ==>
-        m == n || n.children[i] == m) &&
+    (forall n in FP_N, c: Map<Node, Array<Node>>, i: Int ::  n.c == n.children && 0 <= i < n.c.length && n.c[i] != null ==>
+       Reach(parent, n.c[i], n) && n.c[i] != n ) &&
+    (forall n in FP_N, c: Map<Node, Array<Node>>, m: Node, i: Int ::  n.c == n.children &&
+       0 <= i < n.c.length && n.c[i] != null && Btwn(parent, n.c[i], m, n) ==>  m == n || n.c[i] == m) &&
     // key and children arrays are all distinct
-    (forall n in FP_N, m in FP_N :: n == m || n.keys != m.keys) &&
-    (forall n in FP_N, m in FP_N :: n == m || n.children != m.children) &&
+    (forall n in FP_N, m in FP_N, k: Map<Node, Array<T>> :: n.k == n.keys && m.k == m.keys ==> n == m || n.k != m.k) &&
+    (forall n in FP_N, m in FP_N, c: Map<Node, Array<Node>> :: n.c == n.children && m.c == m.children ==> n == m || n.children != m.children) &&
     // child array entries are all distinct
-    (forall n in FP_N, i: Int, j: Int :: 0 <= i < j < n.children.length ==> n.children[i] == null || n.children[i] != n.children[j]) &&
+    (forall n in FP_N, c: Map<Node, Array<Node>>, i: Int, j: Int :: n.c == n.children &&
+       0 <= i < j < n.c.length ==> n.c[i] == null || n.c[i] != n.c[j]) &&
     // ancestor nodes must be reachable via correct child
-    (forall n in FP_N, m in FP_N, i: Int :: 0 <= i < m.children.length && m.children[i] != null && Reach(parent, n, m) &&
-       n != m && le(m.children[i].lbound, n.lbound) && le(n.ubound, m.children[i].ubound) ==>
-         Btwn(parent, n, m.children[i], m) @(matching n yields n.lbound) @(matching n yields n.ubound)) &&  
+    (forall n in FP_N, m in FP_N, c: Map<Node, Array<Node>>, i: Int :: m.c == m.children &&
+       0 <= i < m.c.length && m.c[i] != null && Reach(parent, n, m) &&
+       n != m && le(m.c[i].lbound, n.lbound) && le(n.ubound, m.c[i].ubound) ==>
+         Btwn(parent, n, m.c[i], m) @(matching n yields n.lbound) @(matching n yields n.ubound)) &&  
     // keys of ancestor nodes include keys of decendants
     (forall n in FP_N, m in FP_N :: Reach(parent, n, m) ==> le(m.lbound, n.lbound) && le(n.ubound, m.ubound)) &&
     // key bounds of nodes are consistent
     (forall n in FP_N :: le(n.lbound, n.ubound)) &&
     // keys and lbound, ubound
-    (forall n in FP_N, i: Int :: 0 <= i < n.keys.length && n.keys[i] != top ==> le(n.lbound, n.keys[i]) && le(n.keys[i], n.ubound)) &&
+    (forall n in FP_N, k: Map<Node, Array<T>>, i: Int :: n.k == n.keys &&
+       0 <= i < n.k.length && n.k[i] != top ==> le(n.lbound, n.k[i]) && le(n.k[i], n.ubound)) &&
     // children lbound, ubound, and keys
-    (forall n in FP_N, i: Int, j: Int :: 0 <= i <= j < n.keys.length && n.children[i] != null ==> lt(n.children[i].ubound, n.keys[j])) &&
-    (forall n in FP_N, i: Int, j: Int :: 0 <= i < j < n.keys.length && n.children[j] != null ==> lt(n.keys[i], n.children[j].lbound)) &&
+    (forall n in FP_N, c: Map<Node, Array<Node>>, k: Map<Node, Array<T>>, i: Int, j: Int :: n.c == n.children && n.k == n.keys &&
+       0 <= i <= j < n.k.length && n.c[i] != null ==> lt(n.c[i].ubound, n.k[j])) &&
+    (forall n in FP_N, c: Map<Node, Array<Node>>, k: Map<Node, Array<T>>, i: Int, j: Int :: n.c == n.children && n.k == n.keys &&
+       0 <= i < j < n.k.length && n.c[j] != null ==> lt(n.k[i], n.c[j].lbound)) &&
     //(forall n in FP_N, m in FP_N :: first_top(n) > 0 && Reach(parent, m, n) ==> m == n || lt(m.ubound, n.keys[first_top(n)])) &&
-    (forall n in FP_N, m in FP_N :: n.children[0] == null && Reach(parent, m, n) ==> n == m) && 
+    (forall n in FP_N, c: Map<Node, Array<Node>>, m in FP_N :: n.c == n.children &&
+       n.c[0] == null && Reach(parent, m, n) ==> n == m) && 
     // ...
     
     true

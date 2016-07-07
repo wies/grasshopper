@@ -36,6 +36,7 @@ procedure get_size(u: Node) returns (res: Int)
     }
   }
   pure assume u.keys[lo] == u.keys[lo]; // needed for instantiation
+  pure assert size(u) <= lo;
   return lo;
 }
 
@@ -108,7 +109,7 @@ procedure newNode() returns (res: Node)
   requires  emp
   ensures acc(res) -** btree(res)
   ensures res.parent == null && res.lbound == bottom && res.ubound == top
-  ensures forall i: Int :: 0 <= i < b ==> res.keys[i] == top
+  ensures forall i: Int, k: Map<Node, Array<T>> :: res.k == res.keys && 0 <= i < b ==> res.k[i] == top
   ensures forall i: Int :: 0 <= i <= b ==> res.children[i] == null
 {
   var w := new Node();
