@@ -1,0 +1,23 @@
+include "bstree.spl";
+  
+// Predicates for tree sets
+
+function data_witness(v: Int, FP: Set<Node>)
+  returns (res: Node)
+  requires acc(FP)
+  ensures forall x in FP :: x == data_witness(x.data, FP)
+
+function content(FP: Set<Node>) returns (C: Set<Int>)
+  requires acc(FP)
+  ensures forall v: Int :: v !in C ==> data_witness(v, FP) == null
+  ensures forall x in FP :: x.data in content(FP)
+  ensures forall v in C :: data_witness(v, FP) in FP;
+  ensures forall v in C :: v == data_witness(v, FP).data
+    @(matching v yields data_witness(v, FP).data);
+
+                                                                                          
+predicate tree_set(r: Node, C: Set<Int>) {
+  exists X: Set<Node> ::
+    bstree(r) && acc(X) &*&
+    C == content(X)
+}
