@@ -623,7 +623,7 @@ let flatten_exprs cu =
         let preb1, locals, aux_funs = flatten pos locals aux_funs returns preb in
         let cond1, (aux_cmds, aux_funs), locals = flatten_expr pos ([], aux_funs) locals cond in
         let postb1, locals, aux_funs = flatten pos locals aux_funs returns postb in
-        Loop (inv, mk_block pos ([preb1] @ aux_cmds), cond1, postb1, pos), locals, aux_funs
+        Loop (inv1, mk_block pos ([preb1] @ aux_cmds), cond1, postb1, pos), locals, aux_funs
     | Return ([ProcCall (id, args, cpos)], pos) ->
         let args1, aux1, locals = flatten_expr_list scope ([], aux_funs) locals args in
         let rts = List.map (fun id -> Ident (id, cpos)) returns in
