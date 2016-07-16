@@ -22,8 +22,8 @@ function nlseg_inner_footprint(x: OuterNode, y: OuterNode, X: Set<OuterNode>)
   ensures forall z in FP, zh: OuterNode :: zh == z.head ==>
    /* z in lseg_footprint(zh.down, null) */
      Btwn(inext, zh.down, z, null) && z != null
-     @(matching z yields z.head)
-     @(matching zh yields zh.down)
+     @(matching z yields z.head.down)
+     @(matching zh yields zh.down.head)
   ensures forall zh in X, z: InnerNode :: Btwn(inext, zh.down, z, null) && z != null ==> z in FP
 
 
