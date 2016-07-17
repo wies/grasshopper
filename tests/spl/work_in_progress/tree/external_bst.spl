@@ -1,13 +1,12 @@
 /* External Binary Search Tree
  *
- * Only checking memory safety.
+ * Checking memory safety as well as functional correctness.
  *
- * Status: Trying to push through contains. Haven't added content to other
- * procedures yet.
+ * Status: Contains goes through with -noep. Working on other procedures.
 */
 
 include "../../include/bstree.spl";
-  
+
 function data_witness(v: Int, FP: Set<Node>)
   returns (res: Node)
   requires acc(FP)
@@ -39,15 +38,15 @@ function leaves(X: Set<Node>) returns (L: Set<Node>)
   requires acc(X)
   ensures forall n: Node :: n in L == (n.left == null && n.right == null && n in X)
     @(matching n yields n.left) @(matching n yields n.right)
-  ensures forall x: Node, y: Node :: Reach(parent, x, y) && y in L ==> x == y    
-  
+  ensures forall x: Node, y: Node :: Reach(parent, x, y) && y in L ==> x == y
+
 predicate tree_bst_prop(FP: Set<Node>)
   requires acc(FP)
 {
   (forall x in FP, y in FP :: Btwn(parent, x, y.left, y) ==> x.data < y.data
    @(matching y.left yields y.data)) &&
   (forall x in FP, y in FP :: Btwn(parent, x, y.right, y) ==> x.data >= y.data
-   @(matching y.right yields y.data))  
+   @(matching y.right yields y.data))
 }
 
 predicate ext_bst_set(r: Node, C: Set<Int>) {
@@ -87,9 +86,12 @@ procedure insert(root: Node, val: Int, implicit ghost C: Set<Int>)
   var par: Node := null;
   var curr := root;
   while (curr.left != null && curr.right != null)
-    invariant exists C1: Set<Int> :: ext_bst_set(curr, C1) -** ext_bst_set(root, C)
+    invariant exists C1: Set<Int> :: (acc(curr) -** ext_bst_set(curr, C1) -** ext_bst_set(root, C))
     invariant curr == root && par == null || par == curr.parent
-    invariant curr != null
+    invariant forall x: Node :: Btwn(parent, curr, x.left, x) &&
+      Btwn(parent, x, root, root) ==> x.data > val
+    invariant forall x: Node :: Btwn(parent, curr, x.right, x) &&
+      Btwn(parent, x, root, root) ==> x.data <= val
   {
     par := curr;
     if (val < curr.data)
