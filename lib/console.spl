@@ -1,4 +1,4 @@
-include "../tests/spl/array/byte_array.spl";
+include "../tests/spl/include/byte_array.spl";
 
 procedure gputs(buffer: Array<Byte>) returns (success: Bool)
     requires byte_array(buffer)

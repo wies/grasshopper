@@ -1,14 +1,14 @@
-include "../tests/spl/array/byte_array.spl";
+include "../tests/spl/include/byte_array.spl";
 
 //using this requires adding "#include <fcntl.h>" to the generated C file
 
-O_CREAT: Int
-O_APPEND: Int
-O_TRUNC: Int
+var O_CREAT: Int;
+var O_APPEND: Int;
+var O_TRUNC: Int;
 
-O_RDONLY: Int
-O_WRONLY: Int
-O_RDWR: Int
+var O_RDONLY: Int;
+var O_WRONLY: Int;
+var O_RDWR: Int;
 
 procedure gopen(pathname: Array<Byte>, flags: Int) returns (fd: Int)
     requires byte_array(pathname)

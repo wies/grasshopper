@@ -9,10 +9,6 @@ include "askIP.spl";
 
 procedure connectTo(addr: SocketAddressIP4)
   returns (fd: Int)
-  //  requires (ip == null || byte_array(ip)) &*& byte_array(port)
-     //ensures (ip == null || byte_array(ip)) &*& byte_array(port)
-     //ensures ip == old(ip) && port == old(port) && port.length == old(port.length)
-  //ensures ip == null || ip.length == old(ip.length)
   requires socket_addr_4(addr)
   ensures socket_addr_4(addr)
   ensures fd >= -1
@@ -21,16 +17,10 @@ procedure connectTo(addr: SocketAddressIP4)
   if (fd == -1) {
     return -1;
   }
-  //  var addr := get_address4(ip, port); //null should return localhost
-  //  if (addr == null) {
-    //    return -1;
-    // }
 
   if (connect4(fd, addr)) {
-    //   free(addr);
     return fd;
   } else {
-    //    free(addr);
     return -1;
   }
 }
@@ -47,30 +37,21 @@ procedure setupDataConnection(cmdFd: Int, address: SocketAddressIP4, port: Array
   ensures socket_addr_4(address)
 {
 
-  //  var dataAddr := askIP(port);
-  // if (dataAddr == null){
-    //   return -1;
-    // }
   var dataFD := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (dataFD == -1){
-    // free(dataAddr);
     return -1;
   }
-  // var bound := bind4(dataFD, dataAddr);
   var bound := bind4(dataFD, address);
   if (!bound) {
-    //    free(dataAddr);
     return -1;
   }
   var datalistening := glisten(dataFD, 10);
   //we don't need a big backlog here, as the only connection should be to the server
   if (!datalistening){
-    //   free(dataAddr);
     return -1;
   }
   //we tell the server what port we are setting the data connection on
   if ((port.length < 0) || (port.length > (65535 - 6))){ //this is to cover for the max length of an array, as set in byte_array.spl  We subtract 6 to account for PORT
-    //    free(dataAddr);
     return -1;
   }
   var portMsg := new Array<Byte>(6 + port.length);
@@ -79,15 +60,12 @@ procedure setupDataConnection(cmdFd: Int, address: SocketAddressIP4, port: Array
   var sent := tcp_send(cmdFd, portMsg, portMsg.length);
   if (sent != portMsg.length) {
     free(portMsg);
-    //    free(dataAddr);
     return -1;
   }
   free(portMsg);
 
   //now we wait for the server to connect to us on the data connection
-  //  connectedDataFD := accept4(dataFD, dataAddr);
   connectedDataFD := accept4(dataFD, address);
-  //  free(dataAddr);
   var closeData := gclose(dataFD);
   return connectedDataFD;
 }
@@ -109,12 +87,6 @@ procedure authenticate(cmdFd: Int)
   if (!checked) {
     return false;
   }
-      /*  var ack := atoi(okMsg);
-  if ((ack != 200) && (ack != 230) && (ack != 234) && (ack != 300) && (ack != 331)) {
-    free(okMsg);
-    return false;
-    }*/
-  // free(okMsg);
 
   var passMsg := new Array<Byte>(15);
   passMsg := "PASS anonymous";
@@ -128,12 +100,6 @@ procedure authenticate(cmdFd: Int)
   if (!checked) {
     return false;
   }
-/*  ack := atoi(okMsg);
-  if ((ack != 200) && (ack != 202) && (ack != 230) && (ack != 234)) {
-    free(okMsg);
-    return false;
-  }
-  free(okMsg);*/
   return true;
 }
 

@@ -1,4 +1,4 @@
-include "../tests/spl/array/byte_array.spl";
+include "../tests/spl/include/byte_array.spl";
 
 ///////////////
 // Constants //
@@ -6,14 +6,14 @@ include "../tests/spl/array/byte_array.spl";
 
 //using this requires adding "#include <netinet/in.h>" to the generated C file
 
-PF_INET: Int
-PF_INET6: Int
+var PF_INET: Int;
+var PF_INET6: Int;
 
-SOCK_DGRAM: Int
-SOCK_STREAM: Int
+var SOCK_DGRAM: Int;
+var SOCK_STREAM: Int;
 
-IPPROTO_TCP: Int
-IPPROTO_UDP: Int
+var IPPROTO_TCP: Int;
+var IPPROTO_UDP: Int;
 
 
 ////////////
@@ -24,8 +24,6 @@ struct SocketAddressIP4 {
   //var sin4_family: Int; = AF_INET
   var sin4_port: Int;
   var sin4_addr: Int;
-  //var sin4_addr_lower: Int;
-  //var sin4_addr_upper: Int;
 }
 
 struct SocketAddressIP6 {
@@ -40,19 +38,15 @@ struct SocketAddressIP6 {
 // Predicates //
 ////////////////
 
-predicate socket_addr_4( address: SocketAddressIP4)(FP: Set<SocketAddressIP4>) {
-  FP == Set<SocketAddressIP4>(address) &&
-  address.sin4_port >= 0 &&
-  address.sin4_port < 65536 
+predicate socket_addr_4( address: SocketAddressIP4) {
+  address.sin4_port >= 0 && address.sin4_port < 65536 &*&
+  acc(address)
 }
 
-predicate socket_addr_6( address: SocketAddressIP6)(FP0: Set<SocketAddressIP6>, FP1: Set<Array<Byte>>, FP2: Set<ArrayCell<Byte>>) {
-  FP0 == Set<SocketAddressIP6>(address) &&
-  FP1 == Set<Array<Byte>>(address.sin6_addr) &&
-  byte_arrayseg(address.sin6_addr, 0, address.sin6_addr.length, FP2) &&
-  address.sin6_addr.length == 16 &&
-  address.sin6_port >= 0 &&
-  address.sin6_port < 65536 
+predicate socket_addr_6( address: SocketAddressIP6) {
+  address.sin6_addr.length == 16 && address.sin6_port >= 0 && address.sin6_port < 65536 &*&
+  acc(address) &*& acc(address.sin6_addr) &*&
+  byte_arrayseg(address.sin6_addr, 0, address.sin6_addr.length)
 }
 
 ////////////////

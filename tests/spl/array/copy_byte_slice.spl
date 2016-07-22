@@ -1,4 +1,4 @@
-include "byte_array.spl";
+include "../include/byte_array.spl";
 
 
 procedure copy_byte_slice(a: Array<Byte>, start: Int, end: Int)

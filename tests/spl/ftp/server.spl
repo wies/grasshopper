@@ -13,13 +13,10 @@ procedure connectMeCommand(cmdFd: Int, cmdAddr: SocketAddressIP4) returns (res: 
 {
   var listening := glisten(cmdFd, 10);
   if (!listening) {
-    //    free(cmdAddr);
     return -1;
   }
   
   var connFd := accept4(cmdFd, cmdAddr);
-  //  free(cmdAddr);
-  //  var closed := gclose(cmdFd);
   return connFd;
 }
 
@@ -39,7 +36,6 @@ procedure recvDataConnection(cmdFd: Int, addr: SocketAddressIP4) returns (res: I
   var portArray := copy_byte_slice(resp, 5, 10);
   free(resp);
 
-  //  var addr := get_address4(null, portArray);
   addr.sin4_port := atoiG(portArray);
   free(portArray);
   if (addr.sin4_port < 0 || addr.sin4_port >= 65536) {
@@ -276,15 +272,12 @@ procedure process_string(thing:Array<Byte>) returns (out: Array<Byte>)
   requires byte_array(thing) &*& thing.length == 4
   ensures byte_array(out) &*& out.length == 5
 {
-  //if (thing[thing.length-1] != int2byte(0)){
-    out := new Array<Byte>(thing.length + 1);
-    out[0] := int2byte(0);
-    var copied := gstrcat(thing, out);
-    free(thing);
-    out[out.length -1] := int2byte(0);
-    return out;
-  //}
-  //return thing;
+  out := new Array<Byte>(thing.length + 1);
+  out[0] := int2byte(0);
+  var copied := gstrcat(thing, out);
+  free(thing);
+  out[out.length -1] := int2byte(0);
+  return out;
 }
 
 procedure is_stor(cmd: Array<Byte>) returns (is: Bool)
@@ -395,18 +388,13 @@ procedure server() returns (res:Int)
     invariant cmdFd >= -1
     invariant socket_addr_4(cmdAddr)
     invariant tempCmdFd >= 0
-      //    invariant byte_array(port)
   {
     cmdFd := connectMeCommand(tempCmdFd, cmdAddr);
   }
   var closedTemp := gclose(tempCmdFd);
 
-  //  if (cmdFd <= -1) {
-    //  return -1;
-    // }
   var dataFd := recvDataConnection(cmdFd, cmdAddr);
   free(cmdAddr); 
-  //  free(port);
   if (dataFd <= -1) {
     var closed := gclose(cmdFd);
     return -1;
@@ -491,13 +479,6 @@ procedure server() returns (res:Int)
     free(final);
   }
  
-  //  var quitBuff := new Array<Byte>(5);
-  //var recv := tcp_recv(cmdFd, quitBuff);
-  //var quit := new Array<Byte>(5);
-  // quit := "QUIT";
-  //if (gstrcmp(quitBuff, quit) == 0) {
-    //  free(quit);
-    //free(quitBuff);
   var closed := gclose(cmdFd);
   closed := gclose(dataFd);
 
@@ -505,8 +486,6 @@ procedure server() returns (res:Int)
     return 0;
   }
   else {
-    //  free(quit);
-    //free(quitBuff);
     return -1;
   }
 }

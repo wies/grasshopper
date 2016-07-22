@@ -1,4 +1,4 @@
-include "byte_array.spl";
+include "../include/byte_array.spl";
 
 procedure copyByte(a: Array<Byte>)
   returns (b: Array<Byte>)
