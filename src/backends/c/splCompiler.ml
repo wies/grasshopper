@@ -186,10 +186,6 @@ let convert oc cu =
       | (IntVal (i, _), _)         -> fprintf ppf "%s" (Int64.to_string i)
       | (BoolVal (b, _), _)        -> fprintf ppf (if b then "true" else "false")
       | (Read (from, index, _), cur_proc) -> pr_c_read ppf (from, index, cur_proc)
-      | (Length (idexp, _), cur_proc)     -> 
-        fprintf ppf "(%a->%s)" 
-          pr_c_expr (idexp, cur_proc)
-          array_len_field
       | (ProcCall (id, es, _), cur_proc)  ->
         fprintf ppf "%s(%a)"
           (string_of_ident id)
@@ -197,7 +193,7 @@ let convert oc cu =
       | (UnaryOp (OpLength, idexp, _), cur_proc) -> 
         fprintf ppf "(%a->%s)" 
           pr_c_expr (idexp, cur_proc)
-          len_field
+          array_len_field
       | (UnaryOp  (op, e, _), cur_proc)          -> pr_un_op  ppf (op, (e, cur_proc))
       | (BinaryOp (e1, op1, e2, _, _), cur_proc) -> 
         pr_bin_op ppf ((e1, cur_proc), op1, (e2, cur_proc))

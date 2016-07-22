@@ -120,14 +120,6 @@ procedure server(host: Array<Byte>)
   if (sent != toSend.length) {
     return;
   } 
-  //  var flags := 0;
-  // var fd := gopen(host, flags);
-
-  //  var buffer := new Array<Byte>(12);
-  //  var temp := gread(fd, buffer);
-  // if( checkPacket(buffer) != 0 ){
-    //  temp := gwrite(fd, constructPacket(buffer));
-    // }
 }
 
 procedure Main(args: Array<Byte>)

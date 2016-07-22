@@ -45,8 +45,6 @@ let removeGhost cu =
 
     | Read (expr1, expr2, _) | BinaryOp (expr1, _, expr2, _, _) -> List.exists has_stateful [expr1;expr2]
 
-    | Old (expr, _) | Length (expr, _) | ArrayOfCell (expr, _)
-    | IndexOfCell (expr, _) | ArrayCells (expr, _) | Quant (_, _, expr, _)
     | UnaryOp (_, expr, _) | Annot (expr, _, _) -> has_stateful expr
 
     | _ -> false
@@ -61,18 +59,13 @@ let removeGhost cu =
     | BoolVal (b, p) -> BoolVal (b, p)
     | New (t, exprs, p) -> New (t, (List.map (process_expr scope) exprs), p)
     | Read (fld, idx, p) -> Read ((process_expr scope fld), (process_expr scope idx), p) (*TODO ghost fields*)
-    | Old (expr, p) -> Old ((process_expr scope expr), p)
-    | Length (expr, p) -> Length ((process_expr scope expr), p)
-    | ArrayOfCell (expr, p) -> ArrayOfCell ((process_expr scope expr), p)
-    | IndexOfCell (expr, p) -> IndexOfCell ((process_expr scope expr), p)
-    | ArrayCells (expr, p) -> ArrayCells ((process_expr scope expr), p)
     | ProcCall (id, args, p) ->
       let formals = (IdMap.find id cu.proc_decls).p_formals in
       ProcCall (id, (process_args scope id formals args), p)
     | PredApp (ps, exprs, p) -> PredApp (ps, (List.map (process_expr scope) exprs), p)
-    | Quant (qkind, qvars, expr, p) -> Quant (qkind, qvars, (process_expr scope expr), p)
     | UnaryOp (op, expr, p) -> UnaryOp (op, (process_expr scope expr), p)
     | BinaryOp (expr1, op, expr2, t, p) -> BinaryOp ((process_expr scope expr1), op, (process_expr scope expr2), t, p)
+    | Binder (qkind, qvars, expr, p) -> Binder (qkind, qvars, (process_expr scope expr), p)
     | Ident (id, p) ->
       if is_ghost scope id then
         begin
@@ -101,7 +94,7 @@ let removeGhost cu =
             true
         )
         paired
-    in
+        in
     List.map (fun (_, e) -> process_expr current_scope e) nonGhost
   in
 
@@ -169,8 +162,8 @@ let removeGhost cu =
 
   let cu2 = 
     { includes = cu.includes;
+      type_decls = cu.type_decls;
       var_decls = IdMap.filter (fun _ v -> not v.v_ghost) cu.var_decls;
-      struct_decls = cu.struct_decls;
       proc_decls = IdMap.map process_proc cu.proc_decls;
       pred_decls = IdMap.empty;
       background_theory = [];
