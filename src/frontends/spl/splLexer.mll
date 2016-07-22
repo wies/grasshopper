@@ -110,7 +110,7 @@ rule token = parse
 | '\n' { Lexing.new_line lexbuf; token lexbuf }
 | "//" [^ '\n']* { token lexbuf }
 | "/*" { comments 0 lexbuf }
-| "\"" ([^ '"']* as str) "\"" { STRINGVAL str }
+| "\"" (( ("\\" _) | [^ '"'] )* as str) "\"" { STRINGVAL (Scanf.unescaped str) }
 | "==>" { IMPLIES }
 | "<=>" { IFF }
 | "==" { EQ }

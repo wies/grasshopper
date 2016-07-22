@@ -23,20 +23,19 @@ procedure equals(first: Array<Byte>, second: Array<Byte>)
   else return false;
 }
 
-/*
 //inspired from http://en.wikibooks.org/wiki/C_Programming/Strings#The_strcmp_function
-procedure strcmp(s1: Array<Byte>, s2: Array<Byte>)
+procedure gstrcmp(s1: Array<Byte>, s2: Array<Byte>)
   returns (res: Int)
   requires byte_array(s1) &+& byte_array(s2)
   ensures byte_array(s1) &+& byte_array(s2)
+  ensures old(s1.length) == s1.length
+  ensures old(s2.length) == s2.length
   ensures (res == 0) == (s1.length == s2.length && (forall i: Int:: 0 <= i && i < s1.length ==> s1[i] == s2[i]))
 {
   var i := 0; 
   /* Move s1 and s2 to the s1 differing characters in each string,
      or the ends of the strings if they are identical.  */
-  //pure assume s1.length < 256*256;
   while (i < s1.length && i < s2.length && s1[i] == s2[i])
-    //invariant s1.length < 256*256
     invariant byte_array(s1) &+& byte_array(s2)
     invariant 0 <= i && i <= s1.length && i <= s2.length
     invariant forall j: Int:: 0 <= j && j < i ==> s1[j] == s2[j]
@@ -56,25 +55,228 @@ procedure strcmp(s1: Array<Byte>, s2: Array<Byte>)
     return 1;
 }
                  
-procedure strdup(str: Array<Byte>)
+procedure gstrdup(str: Array<Byte>)
   returns (res: Array<Byte>)
   requires byte_array(str)
   ensures byte_array(str) &*& byte_array(res)
   ensures str.length == res.length
-  ensures forall i: Int:: 0 <= i && i < str.length ==> str[i] == res[i]
+  ensures old(str.length) == str.length
+  ensures forall i: Int:: 0 <= i && i < str.length ==> str[i] == res[i] //&& str[i] == old(str[i])
 {
   var copy := new Array<Byte>(str.length);
   var i := 0;
-  //pure assume str.length < 256*256;
   while(i < str.length)
-    //invariant str.length < 256*256
     invariant byte_array(str) &*& byte_array(copy)
     invariant 0 <= i && i <= str.length && str.length == copy.length
     invariant forall j: Int:: 0 <= j && j < i ==> str[j] == copy[j]
+    //invariant forall j: Int:: 0 <= j && j < str.length ==> str[j] == old(str[j])
   {
     copy[i] := str[i];
     i := i + 1;
   }
   return copy;
 }
-*/
+
+procedure gstrlen(str: Array<Byte>)
+  returns (res: Int)
+  requires byte_array(str)
+  ensures byte_array(str)
+  ensures str.length >= res && res >= 0
+  ensures old(str.length) == str.length
+  //ensures forall i: Int:: 0 <= i && i < str.length ==> str[i] == old(str[i])
+{
+  var i := 0;
+  while(i < str.length && str[i] != int2byte(0))
+    invariant byte_array(str)
+    invariant i >= 0
+    invariant i <= str.length
+  {
+    i := i + 1;
+  }
+  return i;
+}
+
+procedure concat(str1: Array<Byte>, str2: Array<Byte>)
+  returns (res: Array<Byte>)
+  requires byte_array(str1) &*& byte_array(str2)
+  requires str1.length + str2.length >= 0
+  ensures byte_array(str1) &*& byte_array(str2) &*& byte_array(res)
+  ensures res.length == str1.length + str2.length
+  ensures forall j: Int:: 0 <= j && j < str1.length ==> str1[j] == res[j]
+  //ensures forall k: Int:: 0 <= k && k < str2.length ==> str2[k] == res[k+str1.length] //XXX strange, this should be the same as the next line
+  ensures forall j: Int:: str1.length <= j && j < str1.length + str2.length ==> str2[j-str1.length] == res[j]
+{
+  pure assume(str1.length + str2.length < 65535); //TODO fix that
+  var copy := new Array<Byte>(str1.length + str2.length);
+  var i := 0;
+  while(i < str1.length)
+    invariant byte_array(str1) &*& byte_array(str2) &*& byte_array(copy)
+    invariant 0 <= i && i <= str1.length
+    invariant copy.length == str1.length + str2.length
+    invariant forall j: Int:: 0 <= j && j < i ==> str1[j] == copy[j]
+  {
+    copy[i] := str1[i];
+    i := i + 1;
+  }
+  while(i < str1.length + str2.length)
+    invariant byte_array(str1) &*& byte_array(str2) &*& byte_array(copy)
+    invariant str1.length <= i && i <= str1.length + str2.length 
+    invariant copy.length == str1.length + str2.length
+    invariant forall j: Int:: 0 <= j && j < str1.length ==> str1[j] == copy[j]
+    invariant forall j: Int:: str1.length <= j && j < i ==> str2[j-str1.length] == copy[j]
+  {
+    copy[i] := str2[i-str1.length];
+    i := i + 1;
+  }
+  return copy;
+}
+
+//TODO stronger spec
+procedure strconcat(str1: Array<Byte>, str2: Array<Byte>)
+  returns (res: Array<Byte>)
+  requires byte_array(str1) &*& byte_array(str2)
+  requires str1.length + str2.length >= 0
+  ensures byte_array(str1) &*& byte_array(str2) &*& byte_array(res)
+  ensures res.length <= str1.length + str2.length
+{
+  var l1 := gstrlen(str1);
+  var l2 := gstrlen(str2);
+  pure assume(str1.length + str2.length < 65535); //TODO fix that
+  var copy := new Array<Byte>(l1 + l2);
+  var i := 0;
+  while(i < l1)
+    invariant byte_array(str1) &*& byte_array(str2) &*& byte_array(copy)
+    invariant 0 <= i && i <= l1
+    invariant copy.length == l1 + l2
+    invariant 0 <= l1 && l1 <= str1.length
+    invariant 0 <= l2 && l2 <= str2.length
+    invariant forall j: Int:: 0 <= j && j < i ==> str1[j] == copy[j]
+  {
+    copy[i] := str1[i];
+    i := i + 1;
+  }
+  while(i < l1 + l2)
+    invariant byte_array(str1) &*& byte_array(str2) &*& byte_array(copy)
+    invariant l1 <= i && i <= l1 + l2
+    invariant copy.length == l1 + l2
+    invariant 0 <= l1 && l1 <= str1.length
+    invariant 0 <= l2 && l2 <= str2.length
+    invariant forall j: Int::  0 <= j && j < l1 ==> str1[j] == copy[j]
+    invariant forall j: Int:: l1 <= j && j < i ==> str2[j-l1] == copy[j]
+  {
+    copy[i] := str2[i-l1];
+    i := i + 1;
+  }
+  return copy;
+
+}
+
+//TODO stronger spec
+procedure gstrcat(str1: Array<Byte>, str2: Array<Byte>)
+  returns (res: Int)
+  requires byte_array(str1) &*& byte_array(str2)
+  ensures  byte_array(str1) &*& byte_array(str2)
+  ensures  0 <= res && res <= str1.length
+{
+  var l1 := gstrlen(str1);
+  var l2 := gstrlen(str2);
+  var copy_size := str2.length - l2;
+  if (copy_size > l1) {
+    copy_size := l1;
+  }
+  var i := 0;
+  while(i < copy_size)
+    invariant byte_array(str1) &*& byte_array(str2)
+    invariant 0 <= copy_size
+    invariant 0 <= i && i <= copy_size
+    invariant copy_size <= str1.length
+    invariant l2 + copy_size <= str2.length
+    //XXX next the two lines needed to avoid overflow (currently depends on max array size)
+    invariant l2 + copy_size >= 0
+    invariant l2 >= 0
+  {
+    str2[i+l2] := str1[i];
+    i := i + 1;
+  }
+  if (l2 + copy_size < str2.length) {
+    str2[l2 + copy_size] := int2byte(0);
+  }
+  return copy_size;
+}
+
+//use the content_witness to show that the array did not change
+procedure atoiFrom(str: Array<Byte>, startIdx: Int /*, implicit ghost content_witness: Map<Int,Byte>*/)
+  returns (res: Int)
+  requires byte_array(str)
+  requires startIdx >= 0
+  //requires forall i: Int :: 0 <= i && i < str.length ==> i.content_witness == str[i]
+  ensures byte_array(str)
+  ensures old(str.length) == str.length
+  //ensures forall i: Int :: 0 <= i && i < str.length ==> i.content_witness == str[i]
+{
+  res := 0;
+  var i := startIdx;
+  if (i > str.length) {
+    i := str.length;
+  }
+  var foundStart := false;
+  var foundEnd := false;
+  var isPositive := true;
+
+  while (i < str.length && !foundStart)
+    invariant byte_array(str)
+    invariant 0 <= i && i <= str.length
+    //invariant forall j: Int :: 0 <= j && j < str.length ==> str[j] == j.content_witness
+  {
+    if (str[i] == int2byte( 9) || // \t
+        str[i] == int2byte(10) || // \n
+        str[i] == int2byte(11) || // \v
+        str[i] == int2byte(12) || // \f
+        str[i] == int2byte(13) || // \r
+        str[i] == int2byte(32)    // ' '
+       ) {
+      i := i + 1;
+    } else {
+      foundStart := true;
+    }
+  }
+
+  if (i < str.length) {
+    if (str[i] == '-') {
+      isPositive := false;
+      i := i + 1;
+    }
+  }
+
+  while (i < str.length && !foundEnd)
+    invariant byte_array(str)
+    invariant 0 <= i && i <= str.length
+    //invariant forall j: Int :: 0 <= j && j < str.length ==> str[j] == j.content_witness
+  {
+    if (str[i] >= '0' && str[i] <= '9') {
+      var digit := byte2int(str[i] - '0');
+      res := res * 10;
+      res := res + digit;
+      i := i + 1;
+    } else {
+      foundEnd := true;
+    }
+  }
+
+  if (!isPositive) {
+    res := -1 * res;
+  }
+
+  return res;
+}
+
+procedure atoiG(str: Array<Byte> /*, implicit ghost content_witness: Map<Int,Byte>*/)
+  returns (res: Int)
+  requires byte_array(str)
+  //requires forall i: Int :: 0 <= i && i < str.length ==> i.content_witness == str[i]
+  ensures byte_array(str)
+  ensures old(str.length) == str.length
+  //ensures forall i: Int :: 0 <= i && i < str.length ==> i.content_witness == str[i]
+{
+  return atoiFrom(str, 0);
+}

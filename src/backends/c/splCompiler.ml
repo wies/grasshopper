@@ -7,49 +7,14 @@ open Grass
 open SplSyntax
 open SplTypeChecker
 open Format
+open RemoveGhost
+open Predef
 
 
 (** Converts abstract syntax into a C program string and print it to output channel [oc].
  *  Assumes that [cu] has been type-checked and flattened. *)
 let convert oc cu = 
   let idmap_to_list fs = (List.rev (IdMap.fold (fun k v a -> v :: a) fs [])) in
-  (** Struct wrapper for SPL arrays implemented in C *)
-  let arr_string = "SPLArray" in
-  let arr_field  = "arr"      in
-  let len_field  = "length"   in 
-  let arr_type   = "struct " ^ arr_string in 
-  let arr_struct = 
-    "typedef struct " ^ arr_string ^ " {\n" ^ 
-    "  int " ^ len_field ^ ";\n" ^ 
-    "  void* " ^ arr_field ^ "[];\n" ^
-    "} " ^ arr_string ^ ";\n"
-  in
-  (** Procedure for freeing struct wrapper and contents *)
-  let free_SPLArray_proc_string = "freeSPLArray" in
-  let free_SPLArray_proc_decl = 
-    "void " ^ free_SPLArray_proc_string ^" (" ^ arr_string ^ "* a) {\n" ^
-    "  free(a->" ^ arr_field ^");\n" ^
-    "  free(a);\n" ^
-    "}"
-  in
-  let rec string_of_c_type  = function
-     | AnyRefType -> "void*" 
-     | BoolType -> "bool"
-     | IntType -> "int"
-     | ByteType -> "char"
-     | StructType id -> "struct " ^ (string_of_ident id)
-     | ArrayType _ -> "struct " ^ arr_string 
-     | MapType _| SetType _ -> "/* ERROR: Maps and Sets are not implemented yet. */"
-     | _ -> "/* ERROR: no C equivalent (yet?). */"
-  in
-  (** Since, within the program, structs and arrays are referred to by reference
-   *  the type of a field or argument will be a reference if it is for a struct
-   *  or an array. This is why a special method for printing the "passing type"
-   *  of a value is created below. *)
-  let rec string_of_c_pass_type = function
-    | (StructType _|ArrayType _)  as t -> (string_of_c_type t) ^ "*"
-    | _ as t -> (string_of_c_type t)
-  in
   (** Forward declarations for structs in order to allow mutual recursion. *)
   let pr_c_struct_fwd_decls ppf cu =
     let tds = cu.type_decls in
@@ -73,7 +38,7 @@ let convert oc cu =
   let pr_c_struct_decls ppf cu =
     let pr_c_field ppf v = 
       fprintf ppf "%s %s;" 
-        (string_of_c_pass_type v.v_type)
+        (string_of_c_type v.v_type)
         (string_of_ident v.v_name)
     in
     let rec pr_c_fields ppf = function
@@ -102,8 +67,8 @@ let convert oc cu =
    *  elegantly implemented puts together a list of strings that describe
    *  a procedure's arguments and the variables it returns (since, in the
    *  implementation, return variables are actually passed by reference into
-   *  the function) and then this list is concatnetated into a string using a
-   *  comma and space as a delimter. However, if the procedure has only one 
+   *  the function) and then this list is concatenated into a string using a
+   *  comma and space as a delimiter. However, if the procedure has only one 
    *  return value, only the "true" arguments are printed, because the C
    *  return value is used in that case. *)
   let pr_c_proc_args ppf p =
@@ -112,7 +77,7 @@ let convert oc cu =
         ", " 
         (List.fold_right 
           (fun v a -> 
-            ((string_of_c_pass_type (IdMap.find v p.p_locals).v_type ) ^ 
+            ((string_of_c_type (IdMap.find v p.p_locals).v_type ) ^ 
             " " ^ 
             (string_of_ident v))
             :: a) 
@@ -122,7 +87,7 @@ let convert oc cu =
           else
             (List.fold_right 
               (fun v a -> 
-                ((string_of_c_pass_type (IdMap.find v p.p_locals).v_type) ^ 
+                ((string_of_c_type (IdMap.find v p.p_locals).v_type) ^ 
                 "* " ^ (* Star operator used because return variables are passed in by reference *) 
                 (string_of_ident v))
                 :: a) 
@@ -136,7 +101,7 @@ let convert oc cu =
         (if ((List.length p.p_returns) != 1) then
           "void"
         else
-          (string_of_c_pass_type (IdMap.find (List.hd p.p_returns) p.p_locals).v_type))
+          (string_of_c_type (IdMap.find (List.hd p.p_returns) p.p_locals).v_type))
         (string_of_ident p.p_name) 
         pr_c_proc_args p
     in
@@ -165,24 +130,21 @@ let convert oc cu =
                 "(%a->%a)"
                 pr_c_expr (index, cur_proc)
                 pr_c_expr (idExpr, cur_proc)
-            | ArrayType(t1) ->
+            | ArrayType t1 ->
              (* The match statement in the following lines is required 
                  * because Arrays are stored as references while other values
                  * are not, so Arrays should be dereferenced one time less. *)
-              if (match t1 with 
-                   | ArrayType(_)|StructType(_) -> true
-                   | _                          -> false) then
-                fprintf ppf "(((%s) (%a->%s))[%a])"
-                  ((string_of_c_type t1) ^ "**")
+              if is_primitive t1 then 
+                fprintf ppf "(%a->%s[%a])"
                   pr_c_expr (idExpr, cur_proc)
-                  arr_field
+                  array_arr_field
                   pr_c_expr (index, cur_proc)
               else
                 fprintf ppf
-                  "*(((%s) (%a->%s))[%a])"
+                  "((%s)(%a->%s[%a]))"
                   ((string_of_c_type t1) ^ "**")
                   pr_c_expr (idExpr, cur_proc)
-                  arr_field
+                  array_arr_field
                   pr_c_expr (index, cur_proc)
             | _             -> fprintf ppf "/* ERROR: can't address such an object with Read. */")
         | _                 -> fprintf ppf "/* ERROR: can't address such an object with Read */")
@@ -231,7 +193,7 @@ let convert oc cu =
       | (UnaryOp (OpLength, idexp, _), cur_proc) -> 
         fprintf ppf "(%a->%s)" 
           pr_c_expr (idexp, cur_proc)
-          len_field
+          array_len_field
       | (UnaryOp  (op, e, _), cur_proc)          -> pr_un_op  ppf (op, (e, cur_proc))
       | (BinaryOp (e1, op1, e2, _, _), cur_proc) -> 
         pr_bin_op ppf ((e1, cur_proc), op1, (e2, cur_proc))
@@ -267,61 +229,20 @@ let convert oc cu =
             else  
                (string_of_ident id))
           in
+          let type_stringc = (string_of_c_type_for_creation t) in
           let type_string = (string_of_c_type t) in
           (match (t, args) with 
             | (StructType _, [])  ->
-              fprintf ppf "%s = ((%s*) malloc(sizeof(%s)));" 
+              fprintf ppf "%s = ((%s) malloc(sizeof(%s)));" 
                 usable_id_string
                 type_string
-                type_string
+                type_stringc
             | (ArrayType(t_sub), l :: []) ->
-              (** index_name is set to a variable name that will not shadow
-               *  any variables that are used for initialization in the current
-               *  scope. *)
-              let index_name = 
-                let l1 = String.length (string_of_ident id) in
-                let l2 = (String.length type_string) - (String.length "struct ") in
-                if ((l1 != 1) && (l2 != 1)) then
-                  "i"
-                else if ((l1 != 2) && (l2 != 2)) then
-                  "ic"
-                else
-                  "inc" 
-              in
-              let pr_init_wrapper ppf () =
-                fprintf ppf 
-                  "%s = (%s*) malloc(sizeof(%s) + (sizeof(void*) * %a));@\n%s->%s = %a;"
-                  usable_id_string
-                  arr_type
-                  arr_type
-                  pr_c_expr (l, cur_proc)
-                  usable_id_string
-                  len_field
-                  pr_c_expr (l, cur_proc)
-              in
-              let pr_malloc_loop ppf () =
-                let pr_looper ppf () =
-                  fprintf ppf "for (int %s = 0; %s < %a; %s++)"
-                    index_name
-                    index_name 
-                    pr_c_expr (l, cur_proc)
-                    index_name 
-                in 
-                let pr_body ppf () =
-                    fprintf ppf "(%s->%s)[%s] = (%s*) malloc(sizeof(%s));"
-                      usable_id_string
-                      arr_field
-                      index_name
-                      (string_of_c_type t_sub)
-                      (string_of_c_type t_sub)
-                in
-                fprintf ppf "%a {@\n  @[%a@]@\n}@\n"
-                  pr_looper ()
-                  pr_body   ()
-              in
-              fprintf ppf "%a@\n{@\n  @[%a@]@\n}"
-                pr_init_wrapper ()
-                pr_malloc_loop  () 
+              fprintf ppf 
+                "%s = %s( %a);"
+                usable_id_string
+                (array_new_proc_name t_sub)
+                pr_c_expr (l, cur_proc)
             | _ -> fprintf ppf "/* ERROR: badly formed New expression. */"              
           )  
       in
@@ -373,13 +294,9 @@ let convert oc cu =
       in
       let pr_c_dispose ppf = function (e, cur_proc) -> match e with
         | (Ident _ | New  _ | Read _ | ProcCall _) as e -> (match (SplTypeChecker.type_of_expr cu cur_proc.p_locals e) with
-          | StructType _ ->
+          | StructType _ | ArrayType _ ->
             fprintf ppf "free(%a);@\n"
               pr_c_expr (e, cur_proc) 
-          | ArrayType _  -> 
-            fprintf ppf "%s(%a);@\n"
-              free_SPLArray_proc_string
-              pr_c_expr (e, cur_proc)
           | _ -> fprintf ppf "/* ERROR: a variable of such a type cannot be disposed. */" 
         )
         | BinaryOp _ -> fprintf ppf "/* ERROR: freeing the result of binary operation will possibly be implemented in the future for freeing Sets. */" 
@@ -455,7 +372,7 @@ let convert oc cu =
               if (List.mem k do_not_decl_list) then
                 acc
               else
-                ((string_of_c_pass_type v.v_type) ^ " " ^ 
+                ((string_of_c_type v.v_type) ^ " " ^ 
                   (string_of_ident v.v_name) ^ ";" ) :: acc
             )
             p.p_locals 
@@ -488,11 +405,11 @@ let convert oc cu =
         let pr_c_decl_return_var ppf p =
             let ret_var = (IdMap.find (List.hd p.p_returns) p.p_locals) in 
             fprintf ppf "%s %s;@\n"
-            (string_of_c_pass_type ret_var.v_type)
+            (string_of_c_type ret_var.v_type)
             (string_of_ident ret_var.v_name)
         in
         fprintf ppf "%s %s (%a) {@\n  @[%a%a%a@]@\n}"
-          (string_of_c_pass_type ((IdMap.find (List.hd p.p_returns) p.p_locals).v_type))
+          (string_of_c_type ((IdMap.find (List.hd p.p_returns) p.p_locals).v_type))
           (string_of_ident p.p_name) 
           pr_c_proc_args p
           pr_c_decl_return_var p
@@ -516,18 +433,21 @@ let convert oc cu =
    *  (e.g. imports, structs, procs) completely so they can be integrated into
    *  the program total. *)
   let pr_c_import_section ppf () =
-    fprintf ppf "%s@\n%s@\n%s\n"
-      "/*\n * Includes\n */"
-      "#include <stdbool.h>"
-      "#include <stdlib.h>"
+    fprintf ppf "%s@\n"
+      "/*\n * Includes\n */";
+    List.iter (fprintf ppf "%s@\n") includes
   in
   (** A section for structs and functions in C that form the base
    *  implementation of SPL. *) 
   let pr_c_preloaded_section ppf () =
-    fprintf ppf "@\n%s@\n%s@\n%s@\n"
-      "/*\n * Preloaded Code\n */"
-      arr_struct
-      free_SPLArray_proc_decl
+    fprintf ppf "@\n%s@\n"
+      "/*\n * Preloaded Code\n */";
+    List.iter
+      (fun t ->
+        fprintf ppf "@\n%s@\n%s@\n"
+          (array_decl t)
+          (array_new_decl t) ) 
+      [IntType; BoolType; ByteType; AnyRefType]
   in
   let pr_c_struct_section ppf cu =
     if (IdMap.is_empty cu.type_decls) then
@@ -542,15 +462,25 @@ let convert oc cu =
     if (IdMap.is_empty cu.proc_decls) then
       ()
     else
-      fprintf ppf "@\n@\n%s@\n%a@\n@\n%a"
-        "/*\n * Procedures\n */"
-        pr_c_proc_fwd_decls cu
-        pr_c_proc_decls cu
+      begin
+        let cu_no_ghost = removeGhost cu in
+        let has_body _ p = match p.p_body with
+          | Skip _ -> false
+          | _ -> true
+        in
+        (* remove the functions which does not have body *)
+        let cu_no_skip = {cu_no_ghost with proc_decls = IdMap.filter has_body cu_no_ghost.proc_decls} in
+          fprintf ppf "@\n@\n%s@\n%a@\n@\n%a"
+            "/*\n * Procedures\n */"
+            pr_c_proc_fwd_decls cu_no_ghost
+            pr_c_proc_decls cu_no_skip
+      end
   in
   (** This is just so it will compile for testing purposes. *)
   let pr_c_main_section ppf () =
-    fprintf ppf "@\n@\n%s@\nint main() {@\n  return 0;@\n}@\n"
+    fprintf ppf "@\n@\n%s@\n%s@\n@\n"
     "/*\n * Main Function, here for compilability\n */"
+    wrap_c_main
   in
   (** The actual work - feed-in the printing of the sections to the given out channel. *)
   let ppf = formatter_of_out_channel oc in

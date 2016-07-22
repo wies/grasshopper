@@ -1,0 +1,5 @@
+
+
+
+procedure fork() returns (result: Int)
+  ensures result >= -1

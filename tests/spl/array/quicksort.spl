@@ -26,10 +26,10 @@ procedure quicksort1(a: Array<Int>, lower: Int, upper: Int, ghost content: Set<I
     swap(a, pivotIdx, upper);
     var idx := lower;
     var i := lower;
-    var C1 := Set<Int>();
-    var C2 := Set<Int>();
+    var ghost C1 := Set<Int>();
+    var ghost C2 := Set<Int>();
     //var C3 := content -- Set(a[upper]); //only true for multiset
-    var C3: Set<Int>;
+    var ghost C3: Set<Int>;
     pure assume(C3 == content || C3 == content -- Set(a[upper]));
     while (i < upper)
       invariant idx >= lower && i <= upper && i >= idx
@@ -49,7 +49,7 @@ procedure quicksort1(a: Array<Int>, lower: Int, upper: Int, ghost content: Set<I
         C2 := C2 ++ Set(a[i]);
       }
       //C3 := C3 -- Set(a[i]); //only true for multiset!
-      var tmp := C3;
+      var ghost tmp := C3;
       havoc(C3);
       pure assume(C3 == tmp || C3 == tmp -- Set(a[i]));
       //

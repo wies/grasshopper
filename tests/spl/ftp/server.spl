@@ -1,0 +1,500 @@
+include "../../../lib/socket.spl";
+include "../../../lib/file.spl";
+include "../../../lib/console.spl";
+include "../array/string.spl";
+include "../array/copy_byte_slice.spl";
+include "../../../lib/makeStr.spl";
+
+procedure connectMeCommand(cmdFd: Int, cmdAddr: SocketAddressIP4) returns (res: Int)
+  requires socket_addr_4(cmdAddr)
+  requires cmdFd >= 0
+  ensures socket_addr_4(cmdAddr)
+  ensures res >= -1
+{
+  var listening := glisten(cmdFd, 10);
+  if (!listening) {
+    return -1;
+  }
+  
+  var connFd := accept4(cmdFd, cmdAddr);
+  return connFd;
+}
+
+procedure recvDataConnection(cmdFd: Int, addr: SocketAddressIP4) returns (res: Int)
+  requires cmdFd >= 0
+  requires socket_addr_4(addr)
+  ensures socket_addr_4(addr)
+{
+  var resp := new Array<Byte>(11);
+  var response := tcp_recv(cmdFd, resp);
+  
+  var fd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (fd == -1) {
+    free(resp);
+    return -1;
+  }
+  var portArray := copy_byte_slice(resp, 5, 10);
+  free(resp);
+
+  addr.sin4_port := atoiG(portArray);
+  free(portArray);
+  if (addr.sin4_port < 0 || addr.sin4_port >= 65536) {
+    addr.sin4_port := 0;
+    var closing := gclose(fd);
+    return -1;
+  }
+
+  if (connect4(fd, addr)) {
+    return fd;
+  } else {
+    var closing := gclose(fd);
+    return -1;
+  }
+}
+
+procedure handleAuth(cmdFd: Int)
+  returns (success: Bool)
+  requires cmdFd >= 0
+{
+  var userName := new Array<Byte>(12); //we're capping the username message out at 12
+  var recvUser := tcp_recv(cmdFd, userName);
+  free(userName);
+  var response := new Array<Byte>(4);
+  response := "331"; //we don't actually do anything with the username
+  var sent := tcp_send(cmdFd, response, 4);
+  free(response);
+
+  var sentPassword := new Array<Byte>(15);
+  var recvpass := tcp_recv(cmdFd, sentPassword);
+
+  var pass := new Array<Byte>(15);
+  pass := "PASS anonymous";
+  var isOkay := false;
+  if (gstrcmp(pass, sentPassword) == 0) {
+    isOkay := true;
+  }
+  free(sentPassword);
+  free(pass);
+
+  response := new Array<Byte>(4);
+  if (isOkay) {
+    response := "230";
+    var sent := tcp_send(cmdFd, response, 4);
+    free(response);
+    return true;
+  } else {
+    response := "530";
+    var sent := tcp_send(cmdFd, response, 4);
+    free(response);
+    return false;
+  }
+}
+
+procedure accept_incoming_file(dataFd: Int, filename: Array<Byte>, allo_size: Int) returns (res:Int)
+  requires dataFd >= 0
+  requires allo_size >= 0
+  requires allo_size <= 65535
+  requires byte_array(filename)
+  ensures byte_array(filename)
+  ensures res >= -1
+{
+  var buffer := new Array<Byte>(allo_size);
+  var recv := tcp_recv(dataFd, buffer);
+  if (recv < 0) {
+    free(buffer);
+    return -1;
+  }
+  var fileFd := gopen(filename, O_CREAT | O_TRUNC | O_WRONLY);
+  if (fileFd < 0) {
+    free(buffer);
+    return -1;
+  }
+  var written := gwrite(fileFd, buffer);
+  free(buffer);
+  var closed := gclose(fileFd);
+  if (written < 0 || closed < 0) {
+    return -1;
+  }
+  return 1;
+}
+procedure send_outgoing_file(dataFd: Int, filename: Array<Byte>) returns (res: Bool)
+  requires dataFd >= 0
+  requires byte_array(filename)
+  ensures byte_array(filename)
+{
+  var fileFd := gopen(filename, O_CREAT | O_RDONLY);
+  var flag := false;
+  if (fileFd < 0){
+    flag := true;
+  }
+  var fileS := fileSize(filename);
+  if (fileS < 0 || fileS > 65535) { //FIXME
+    fileS := 0; //we need it to be zero in order to allocate the array
+    flag := true;
+  }
+  var buffer := new Array<Byte>(fileS);
+
+  if (!flag) {
+    var read := gread(fileFd, buffer);
+    var closed := gclose(fileFd);
+    if (read < 0 || closed < 0){
+      flag := true;
+    } 
+  }
+  if (!flag) {
+    var sent := tcp_send(dataFd, buffer, fileS);
+    if (sent < 0) {
+      flag := true;
+    }
+  }
+  free(buffer);
+  //we want to return !flag
+  if (flag) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
+procedure store_help(cmdFd: Int, dataFd: Int, filename: Array<Byte>, allo_size: Int) returns (fail: Bool)
+  requires cmdFd >= 0;
+  requires dataFd >= 0;
+  requires allo_size >= 1;
+  requires allo_size <= 65535;
+  requires byte_array(filename);
+  ensures byte_array(filename);
+{
+  var ok := new Array<Byte>(4);
+  ok := "150";
+  var sent := tcp_send(cmdFd, ok, 4);
+  free(ok);
+  var stored := accept_incoming_file(dataFd, filename, allo_size);
+  if (stored < 0) {
+    var notOk := new Array<Byte>(4);
+    notOk := "550";
+    sent := tcp_send(cmdFd, notOk, 4);
+    free(notOk);
+    return true;
+  }
+  var goodPacket := new Array<Byte>(4);
+  goodPacket := "250";
+  sent := tcp_send(cmdFd, goodPacket, 4);
+  free(goodPacket);
+  return false;
+}
+
+
+procedure allo_help(cmdFd:Int, sizeB: Array<Byte>) returns (allo_size: Int)
+  requires byte_array(sizeB);
+  ensures byte_array(sizeB);
+  requires cmdFd >= 0;
+  ensures allo_size >= -1;
+  ensures allo_size <= 65535;
+{
+  if (sizeB.length < 2) {
+    var notOkay := new Array<Byte>(4);
+    notOkay := "552";
+    var sent := tcp_send(cmdFd, notOkay, 4);
+    free(notOkay);
+    return -1;
+  }    
+  var allo_size_arr := copy_byte_slice(sizeB, 0, 1);
+  allo_size := byte2int(allo_size_arr[0]);
+  free(allo_size_arr);
+  if ((allo_size < 1) || (allo_size > 65535)) {
+    var notOkay := new Array<Byte>(4);
+    notOkay := "552";
+    var sent := tcp_send(cmdFd, notOkay, 4);
+    free(notOkay);
+    return -1;
+  }
+  var goodPacket := new Array<Byte>(4);
+  goodPacket := "200"; 
+  var sent := tcp_send(cmdFd, goodPacket, 4);
+  free(goodPacket);
+  return allo_size;
+}
+
+procedure size_help(cmdFd: Int, filename: Array<Byte>) returns (fail: Bool)
+  requires cmdFd >= 0;
+  requires byte_array(filename);
+  ensures byte_array(filename);
+{
+  var sizeF := fileSize(filename); //an int
+  if (sizeF < 0) {
+    //file doesn't exist, or we can't get at it
+    var badPacket := new Array<Byte>(4);
+    badPacket := "550";
+    var sent := tcp_send(cmdFd, badPacket, 4);
+    free(badPacket);
+    return true;
+  }
+  var sizePacket := new Array<Byte>(2);
+  //  sizePacket[0] := int2byte(sizeF);
+  sizePacket[0] := makeStrFromInt(sizeF);
+  sizePacket[1] := int2byte(0);
+  var goodPacket := new Array<Byte>(6);
+  goodPacket := "213 "; 
+  var finished := gstrcat(sizePacket, goodPacket);
+  var sent := tcp_send(cmdFd, goodPacket, 6);
+  free(sizePacket);
+  free(goodPacket);
+  return false;
+}
+
+procedure retr_help(cmdFd: Int, dataFd: Int, filename: Array<Byte>) returns (fail: Bool)
+  requires cmdFd >= 0;
+  requires dataFd >= 0;
+  requires byte_array(filename);
+  ensures byte_array(filename);
+{
+  var ok := new Array<Byte>(4);
+  ok := "150";
+  var sent := tcp_send(cmdFd, ok, 4);
+  free(ok);
+  var done := send_outgoing_file(dataFd, filename);
+  if (!done){
+    //we failed
+    var notOk := new Array<Byte>(4);
+    notOk := "550";
+    sent := tcp_send(cmdFd, notOk, 4);
+    free(notOk);
+    return true;
+  }
+  var goodPacket := new Array<Byte>(4);
+  goodPacket := "250";
+  sent := tcp_send(cmdFd, goodPacket, 4);
+  free(goodPacket);
+  return false;
+}
+
+procedure process_string(thing:Array<Byte>) returns (out: Array<Byte>)
+  requires byte_array(thing) &*& thing.length == 4
+  ensures byte_array(out) &*& out.length == 5
+{
+  out := new Array<Byte>(thing.length + 1);
+  out[0] := int2byte(0);
+  var copied := gstrcat(thing, out);
+  free(thing);
+  out[out.length -1] := int2byte(0);
+  return out;
+}
+
+procedure is_stor(cmd: Array<Byte>) returns (is: Bool)
+  requires byte_array(cmd) &*& cmd.length == 5
+  ensures  byte_array(cmd) &*& cmd.length == 5
+{
+  var stor := new Array<Byte>(5);
+  stor := "STOR";
+  if (gstrcmp(cmd, stor) == 0) {
+    free(stor);
+    return true;
+  } else {
+    free(stor);
+    return false;
+  }
+}
+
+procedure is_size(cmd: Array<Byte>) returns (is: Bool)
+  requires byte_array(cmd) &*& cmd.length == 5
+  ensures  byte_array(cmd) &*& cmd.length == 5
+{
+  var size := new Array<Byte>(5);
+  size := "SIZE";
+  if (gstrcmp(cmd, size) == 0) {
+    free(size);
+    return true;
+  } else {
+    free(size);
+    return false;
+  }
+}
+
+procedure is_allo(cmd: Array<Byte>) returns (is: Bool)
+  requires byte_array(cmd) &*& cmd.length == 5
+  ensures  byte_array(cmd) &*& cmd.length == 5
+{
+  var allo := new Array<Byte>(5);
+  allo := "ALLO";
+  if (gstrcmp(cmd, allo) == 0) {
+    free(allo);
+    return true;
+  } else {
+    free(allo);
+    return false;
+  }
+}
+
+procedure is_retr(cmd: Array<Byte>) returns (is: Bool)
+  requires byte_array(cmd) &*& cmd.length == 5
+  ensures  byte_array(cmd) &*& cmd.length == 5
+{
+  var retr := new Array<Byte>(5);
+  retr := "RETR";
+  if (gstrcmp(cmd, retr) == 0) {
+    free(retr);
+    return true;
+  } else {
+    free(retr);
+    return false;
+  }
+}
+
+procedure is_quit(cmd: Array<Byte>) returns (is: Bool)
+  requires byte_array(cmd) &*& cmd.length == 5
+  ensures byte_array(cmd) &*& cmd.length == 5
+{
+  var quit := new Array<Byte>(5);
+  quit := "QUIT";
+  if (gstrcmp(cmd, quit) == 0) {
+    free(quit);
+    return true;
+  } else {
+    free(quit);
+    return false;
+  }
+}
+
+procedure server() returns (res:Int)
+  ensures res >= -1;
+{
+  var port := new Array<Byte>(5);
+  port := "4444";
+
+  var cmdFd := -1;
+  if (port.length > 65535) {
+    return -1;
+  }
+
+  var cmdAddr := get_address4(null, port);
+  free(port);
+  if (cmdAddr == null) {
+    return -1;
+  }
+
+  var tempCmdFd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (tempCmdFd < 0) {
+    free(cmdAddr);
+    return -1;
+  }
+  var bound := bind4(tempCmdFd, cmdAddr);
+  if (!bound) {
+    free(cmdAddr);
+    var closed := gclose(tempCmdFd);
+    return -1;
+  }
+
+  while(cmdFd < 0) 
+    invariant cmdFd >= -1
+    invariant socket_addr_4(cmdAddr)
+    invariant tempCmdFd >= 0
+  {
+    cmdFd := connectMeCommand(tempCmdFd, cmdAddr);
+  }
+  var closedTemp := gclose(tempCmdFd);
+
+  var dataFd := recvDataConnection(cmdFd, cmdAddr);
+  free(cmdAddr); 
+  if (dataFd <= -1) {
+    var closed := gclose(cmdFd);
+    return -1;
+  }
+ 
+  //if handleAuth fails, abort.
+  var authenticated := handleAuth(cmdFd);
+  if (!authenticated){
+    var closed := gclose(cmdFd);
+    closed := gclose(dataFd);
+    return -1;
+  }
+  
+  var iQuit := false;
+  var properQuit := false;
+  var allo_size := 65535;
+
+  while (!iQuit)
+    invariant cmdFd >= 0
+    invariant dataFd >= 0
+  {
+    //upped from 100 to 150
+    var request := new Array<Byte>(150); // it needs to be so big to hold the filename
+    var recd := tcp_recv(cmdFd, request);
+    //   var typeCom := new Array<Byte>(5);
+    var typeCom := copy_byte_slice(request, 0, 4);
+    var final := process_string(typeCom);
+    var filename := copy_byte_slice(request, 5, (request.length -1));
+    free(request);
+
+    if (is_allo(final)) {
+      allo_size := allo_help(cmdFd, filename);
+      if ((allo_size < 1) || (allo_size > 65535)) {
+        allo_size := 65535;
+	free(final);
+        iQuit := true;
+      }
+    }
+    else if (is_stor(final)) {
+      if ((allo_size < 1) || (allo_size > 65535)){
+	free(filename);
+	free(final);
+        iQuit := true;
+      }
+      else {
+	var temp := store_help(cmdFd, dataFd, filename, allo_size);
+	if (temp) {
+	  free(filename);
+	  free(final);
+	}
+        iQuit := temp;
+      }
+    }
+    else if (is_size(final)) {
+      var temp := size_help(cmdFd, filename);
+      if (temp) {
+	free(filename);
+	free(final);
+      }
+      iQuit := temp;
+    }
+    else if (is_retr(final)) {
+      var temp := retr_help(cmdFd, dataFd, filename);
+      if (temp) {
+	free(filename);
+	free(final);
+      }
+      iQuit := temp;
+    }
+    else if (is_quit(final)) {
+      properQuit := true;
+      iQuit := true;
+    } else {
+      var badPacket := new Array<Byte>(4);
+      badPacket := "500";
+      var sent := tcp_send(cmdFd, badPacket, 4);
+      free(badPacket);
+      iQuit := true;
+      //something we did not expect
+    }
+    free(filename);
+    free(final);
+  }
+ 
+  var closed := gclose(cmdFd);
+  closed := gclose(dataFd);
+
+  if (properQuit){
+    return 0;
+  }
+  else {
+    return -1;
+  }
+}
+
+procedure Main(args: Array<Byte>)
+  returns (res:Int)
+  requires byte_array(args)
+  ensures byte_array(args)
+{
+  res := server();
+  return res;
+}

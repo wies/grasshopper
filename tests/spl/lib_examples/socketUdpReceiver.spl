@@ -1,0 +1,60 @@
+include "../../../lib/socket.spl";
+include "../../../lib/file.spl";
+
+procedure Main(arg: Array<Byte>) returns (res: Int)
+    requires byte_array(arg)
+    ensures  byte_array(arg)
+{
+    var port := new Array<Byte>(5);
+    port := "4444";
+    var addr := get_address4(null, port); //null should return localhost
+    free(port);
+    if (addr == null) {
+        return 1;
+    }
+
+    var fd := create_socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (fd==-1) {
+        free(addr);
+        return 2;
+    }
+    
+    var bound := bind4(fd, addr);
+    if (!bound) {
+        return 3;
+    }
+
+    var content := new Array<Byte>(128);
+
+    var received := udp_recv4(fd, content, addr);
+    var closed := gclose(fd);
+        
+    free(addr);
+    
+    if (received != 13) {
+        free(content);
+        return 4;
+    }
+    
+    if (content[ 0] != 'h' ||
+        content[ 1] != 'e' ||
+        content[ 2] != 'l' ||
+        content[ 3] != 'l' ||
+        content[ 4] != 'o' ||
+        content[ 5] != ' ' ||
+        content[ 6] != 'w' ||
+        content[ 7] != 'o' ||
+        content[ 8] != 'r' ||
+        content[ 9] != 'l' ||
+        content[10] != 'd' ||
+        content[11] != '!' ||
+        content[12] != int2byte( 10) )  // \n
+    {
+        free(content);
+        return -6;
+    } else {
+        free(content);
+        return 0;
+    }
+
+}

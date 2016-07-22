@@ -1,0 +1,36 @@
+include "../../../lib/socket.spl";
+include "../../../lib/file.spl";
+
+procedure Main(arg: Array<Byte>) returns (res: Int)
+    requires byte_array(arg)
+    ensures  byte_array(arg)
+{
+    var port := new Array<Byte>(5);
+    port := "4444";
+    var addr := get_address4(null, port); //null should return localhost
+    free(port);
+    if (addr == null) {
+        return 1;
+    }
+
+    var fd := create_socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (fd==-1) {
+        free(addr);
+        return 2;
+    }
+    
+    var content := new Array<Byte>(13);
+    content := "hello world!";
+    content[12] := int2byte( 10); // \n
+
+    var sent := udp_send4(fd, content, 13, addr);
+    var closed := gclose(fd);
+    free(addr);
+    free(content);
+    
+    if (sent != 13) {
+        return 3;
+    } else {
+        return 0;
+    }
+}

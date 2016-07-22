@@ -1,0 +1,449 @@
+include "../../../lib/socket.spl";
+include "../../../lib/file.spl";
+include "../../../lib/console.spl";
+include "../array/string.spl";
+include "response.spl";
+include "doWeUpload.spl";
+include "../array/copy_byte_slice.spl";
+include "askIP.spl";
+
+procedure connectTo(addr: SocketAddressIP4)
+  returns (fd: Int)
+  requires socket_addr_4(addr)
+  ensures socket_addr_4(addr)
+  ensures fd >= -1
+{
+  fd := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (fd == -1) {
+    return -1;
+  }
+
+  if (connect4(fd, addr)) {
+    return fd;
+  } else {
+    return -1;
+  }
+}
+
+procedure setupDataConnection(cmdFd: Int, address: SocketAddressIP4, port: Array<Byte>)
+  returns (connectedDataFD: Int)
+  requires cmdFd >= 0
+  requires port.length == 5;
+  requires byte_array(port)
+  requires socket_addr_4(address)
+  ensures byte_array(port)
+  ensures port == old(port) && port.length == old(port.length)
+  ensures connectedDataFD >= -1
+  ensures socket_addr_4(address)
+{
+
+  var dataFD := create_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (dataFD == -1){
+    return -1;
+  }
+  var bound := bind4(dataFD, address);
+  if (!bound) {
+    return -1;
+  }
+  var datalistening := glisten(dataFD, 10);
+  //we don't need a big backlog here, as the only connection should be to the server
+  if (!datalistening){
+    return -1;
+  }
+  //we tell the server what port we are setting the data connection on
+  if ((port.length < 0) || (port.length > (65535 - 6))){ //this is to cover for the max length of an array, as set in byte_array.spl  We subtract 6 to account for PORT
+    return -1;
+  }
+  var portMsg := new Array<Byte>(6 + port.length);
+  portMsg := "PORT ";
+  var copied := gstrcat(port, portMsg);
+  var sent := tcp_send(cmdFd, portMsg, portMsg.length);
+  if (sent != portMsg.length) {
+    free(portMsg);
+    return -1;
+  }
+  free(portMsg);
+
+  //now we wait for the server to connect to us on the data connection
+  connectedDataFD := accept4(dataFD, address);
+  var closeData := gclose(dataFD);
+  return connectedDataFD;
+}
+
+procedure authenticate(cmdFd: Int)
+  returns (success: Bool)
+  requires cmdFd >= 0
+{
+  var userMsg := new Array<Byte>(12);
+  userMsg := "USER potato"; //it's anonymous login, so you can put whatever here.  It's not checked
+  var sent := tcp_send(cmdFd, userMsg, 12);
+  free(userMsg);
+  //receive confirmation by the server
+  var okMsg := new Array<Byte>(4);
+  var ok := tcp_recv(cmdFd, okMsg);
+  //valid responses are 200, 230, 234, 300, 331
+  var checked := checkServerResponseUSER(okMsg);
+  free(okMsg);
+  if (!checked) {
+    return false;
+  }
+
+  var passMsg := new Array<Byte>(15);
+  passMsg := "PASS anonymous";
+  sent := tcp_send(cmdFd, passMsg, 15);
+  free(passMsg);
+  //receive confirmation by the server.  Acceptable responses include 200, 230, 202, 234
+  okMsg := new Array<Byte>(4);
+  ok := tcp_recv(cmdFd, okMsg);
+  checked := checkServerResponsePASS(okMsg);
+  free(okMsg);
+  if (!checked) {
+    return false;
+  }
+  return true;
+}
+
+procedure askFilename()
+  returns (fn: Array<Byte>)
+  ensures fn == null || (byte_array(fn) &*& fn.length == 100)
+{
+  var filename := new Array<Byte>(100); //we decide max filename length is 100
+
+  var text := new Array<Byte>(24);
+  text := "input the file name:";
+  var putted := gputs(text);
+  free(text);
+  if (!putted) {
+    free(filename);
+    return null;
+  }
+  var numChars := ggets(filename);
+
+  if (numChars >= 100 || numChars <= 1){ //switched to 1 to catch the newline character at the end of the line
+    free(filename);
+    return null;
+  }
+  filename[numChars -1] := int2byte(0);
+  return filename;
+
+}
+
+procedure allo_help(size:Int, cmdFd:Int) returns (success:Bool)
+  requires cmdFd >= 0
+  requires ((size >= 0) && (size <= 65535))
+{
+
+  var alloSize := new Array<Byte>(2);
+  alloSize[0] := int2byte(size);
+  alloSize[1] := int2byte(0);
+  var sendMsg := new Array<Byte>(6);
+  sendMsg := "ALLO ";
+  var copied := gstrcat(alloSize, sendMsg);
+  var sent := tcp_send(cmdFd, sendMsg, 7);
+  free(sendMsg);
+  free(alloSize);
+  //Get confirmation from the server
+  var okMsg := new Array<Byte>(4);
+  var ok := tcp_recv(cmdFd, okMsg);
+
+  var checked := checkServerResponse_200(okMsg);
+  free(okMsg);
+  if (!checked) {
+    return false;
+  }
+  return true;
+}
+
+procedure store_send_help(cmdFd: Int, filename: Array<Byte>) returns (success: Bool)
+  requires cmdFd >= 0
+  requires byte_array(filename) &*& filename.length <= (65535 - 6)
+  ensures byte_array(filename)
+{
+  var commandSize := filename.length + 6; //7??
+  var sendMsg := new Array<Byte>(commandSize);
+  sendMsg := "STOR ";
+  var copied := gstrcat(filename, sendMsg);
+  var sent := tcp_send(cmdFd, sendMsg, commandSize);
+  free(sendMsg);
+  //Get confirmation from the server
+  var okMsg := new Array<Byte>(4);
+  var ok := tcp_recv(cmdFd, okMsg);
+
+  var checked := checkServerResponse_200_150(okMsg);
+  free(okMsg);
+  if (!checked) {
+    return false;
+  }
+  return true;
+}
+
+procedure uploadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
+  returns (success: Bool)
+  requires cmdFd >= 0 && dataFD >= 0
+  requires byte_array(filename) &*& filename.length <= (65535 - 6)
+  ensures byte_array(filename)
+{
+  var size := fileSize(filename);
+  if ((size < 0) || (size > 65535)){
+    return false;
+  }
+
+  var allo_check := allo_help(size, cmdFd);
+  if (!allo_check){
+    return false;
+  }
+
+  var opened := gopen(filename, O_CREAT | O_RDONLY);
+  if (opened < 0){
+    return false;
+  }
+  var buffer := new Array<Byte>(size);
+  var read := gread(opened, buffer);
+  if (read < 0){
+    free(buffer);
+    return false;
+  }
+
+  var stored := store_send_help(cmdFd, filename);
+  if (!stored){
+    free(buffer);
+    return false;
+  }
+
+  var sentData := tcp_send(dataFD, buffer, size);
+  //get confirmation from the server (200, 226, 250)
+  var okMsg := new Array<Byte>(4);
+  var ok := tcp_recv(cmdFd, okMsg);
+
+  var checked := checkServerResponse_200_226_250(okMsg);
+  free(okMsg);
+  free(buffer);
+  if (!checked) {
+    return false;
+  }
+
+  var close := gclose(opened);
+  if (sentData == size) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+procedure sizeHelp(cmdFd: Int, filename: Array<Byte>, cmdSize: Int) returns (success: Int)
+  requires cmdFd >= 0
+  requires byte_array(filename)
+  requires ((cmdSize >= 6) && (cmdSize <= 65535))
+  ensures byte_array(filename)
+  ensures ((success >= -1) && (success <= 65535))
+{
+  var sizeMsg := new Array<Byte>(cmdSize);
+  sizeMsg := "SIZE ";
+  var copied := gstrcat(filename, sizeMsg);
+  var sent := tcp_send(cmdFd, sizeMsg, cmdSize);
+  //We get confirmation from the server when it sends us the size back.  
+  free(sizeMsg); 
+  var sizeBuff := new Array<Byte>(128); //this could probably be smaller
+  var recvData := tcp_recv(cmdFd, sizeBuff); //response gets sent on command buffer
+
+  var checked := checkServerResponse_213(sizeBuff);
+  if (!checked) {
+    free(sizeBuff);
+    return -1;
+  }
+  //this ensures we receive a valid size response
+  var size := atoiFrom(sizeBuff, 4);
+  free(sizeBuff);
+  if ((size <= 0) || (size > 65535)) { //maybe we should include zero as well.  65535-6 comes from byte_array.spl's max length.  We subtract 6 because we add 6 later on.  
+    return -1;
+  }
+  return size;
+}
+
+procedure retrHelp(cmdFd: Int, filename: Array<Byte>, cmdSize: Int) returns (success: Bool)
+  requires cmdFd >= 0
+  requires byte_array(filename)
+  requires ((cmdSize >= 6) && (cmdSize <= 65535))
+  ensures byte_array(filename)
+{
+  var recvMsg := new Array<Byte>(cmdSize);
+  recvMsg := "RETR ";
+  var copied := gstrcat(filename, recvMsg); 
+  var sent := tcp_send(cmdFd, recvMsg, cmdSize);
+  free(recvMsg);
+
+  var okMsg := new Array<Byte>(4);
+  var ok := tcp_recv(cmdFd, okMsg);
+
+  var checked := checkServerResponse_200_150(okMsg);
+  free(okMsg);
+  if (!checked) {
+    return false;
+  }
+  return true;
+}
+
+
+procedure downloadFile(cmdFd: Int, dataFD: Int, filename: Array<Byte>)
+  returns (success: Bool)
+  requires cmdFd >= 0 && dataFD >= 0
+  requires byte_array(filename)
+  ensures byte_array(filename)
+{
+  if ((filename.length <= 0) || (filename.length > (65535-6))) { //maybe we should include zero as well.  65535-6 comes from byte_array.spl's max length.  We subtract 6 because we add 6 later on.  
+    return false;
+  }
+  var cmdSize := 6 + filename.length;
+
+  var size := sizeHelp(cmdFd, filename, cmdSize);
+  if (size < 0){
+    return false;
+  }
+
+  var buffer := new Array<Byte>(size);
+
+  var retrDone := retrHelp(cmdFd, filename, cmdSize);
+  if (!retrDone) {
+    free(buffer);
+    return false;
+  }
+
+  var recvData := tcp_recv(dataFD, buffer);
+  //get response
+  var okMsg := new Array<Byte>(4);
+  var ok := tcp_recv(cmdFd, okMsg);
+
+  var checked := checkServerResponse_200_226_250(okMsg);
+  free(okMsg);
+
+  if (!checked) {
+    free(buffer);
+    return false;
+  }
+
+  if (recvData < 0){
+    free(buffer);
+    return false;
+  }
+
+  var saveFD := gopen(filename, O_CREAT | O_WRONLY | O_TRUNC); //here we save the file under the same name as it is stored on the server.  We use O_TRUNC to wipe the file before we overwrite it  
+  if (saveFD < 0){
+    free(buffer);
+    return false;
+  }
+  var written := gwrite(saveFD, buffer);
+  free(buffer);
+  if (written < 0){
+    return false;
+  }
+  var close := gclose(saveFD);
+  return true;
+}
+
+procedure client(upload: Bool) 
+  returns (res: Int)
+  requires emp;
+  ensures  emp;
+{
+//if store is 1, then we store a file STOR
+// else we download it RETR
+
+  var port := new Array<Byte>(5);
+  port := "4444";
+
+  //we get the ip the first time
+  var remoteAddr := askIP(port);
+  if (remoteAddr == null){
+    free(port);
+    return -1;
+  }
+
+  //  var fd := connectTo(null, port);
+  var fd := connectTo(remoteAddr);
+  free(remoteAddr);
+  if (fd == -1) {
+    free(port);
+    return -1;
+  }
+
+  //we set up the data connection
+  port := "4440";
+  //we ask again
+  var dataAddr := get_address4(null, port);//askIP(port);
+  if (dataAddr == null){
+    free(port);
+    return -1;
+  }
+  var connectedDataFD := setupDataConnection(fd, dataAddr, port);
+  free(port);
+  free(dataAddr);
+  if (connectedDataFD == -1) {
+    var closed := gclose(fd);
+    return 3;
+  }
+  //now we can receive a bunch of data
+
+  //Note that at this point:
+  //-fd is the command file descriptor
+  //-connectedDataFD is the data file descriptor.
+
+  var authenticated := authenticate(fd);
+  if (!authenticated) {
+    var closed := gclose(fd);
+    closed := gclose(connectedDataFD);
+    return 4;
+  }
+
+  var filename := askFilename();
+  
+  if (filename == null) {
+    var closed := gclose(fd);
+    closed := gclose(connectedDataFD);
+    return 5;
+  }
+
+  var success := false;
+  if (upload){
+    //we store the file
+    success := uploadFile(fd, connectedDataFD, filename);
+  } else {
+    //we retrieve the file
+    success := downloadFile(fd, connectedDataFD, filename);
+  }
+  free(filename);
+  if (!success) {
+    var closed := gclose(fd);
+    closed := gclose(connectedDataFD);
+    return 6;
+  }
+  var closeConn := gclose(connectedDataFD);
+  if (closeConn < 0){
+    return 22;
+  }
+  var quitMsg := new Array<Byte>(5);
+  quitMsg := "QUIT";
+  var sent := tcp_send(fd, quitMsg, 5);
+  free(quitMsg);
+  //we can check for the correct quitting response or not.  
+  var closeFD := gclose(fd);
+  if (closeFD < 0){
+    return 21;
+  }
+  return 0;
+}
+
+procedure Main(args: Array<Byte>)
+  returns (res: Int)
+  requires byte_array(args)
+  ensures  byte_array(args)
+{
+  var upload := doWeUpload();
+  if (upload == 1){
+    res := client(true);
+  } else if (upload == 0){
+    res := client(false);
+  } else {
+    res := -1;
+  }
+  return res;
+}

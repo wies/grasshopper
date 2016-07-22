@@ -38,6 +38,11 @@ let fst3 (v, _, _) = v
 let snd3 (_, v, _) = v
 let trd3 (_, _, v) = v
 
+
+type rhs_string_maybe =
+  | StringRHS of string
+  | NormalRHS of exprs
+
 %}
 
 %token <string> IDENT
@@ -380,8 +385,33 @@ stmt_wo_trailing_substmt:
   Assign ([], [$1], mk_position 1 1)
 }
 /* assignment */
-| assign_lhs_list COLONEQ expr_list SEMICOLON {
-  Assign ($1, $3, mk_position 1 4)
+| assign_lhs_list COLONEQ expr_list_string SEMICOLON {
+  let lhs = $1 in
+  match $3 with
+  | NormalRHS es -> Assign (lhs, es, mk_position 1 4)
+  | StringRHS str ->
+    assert (List.length lhs = 1);
+    let lhs = List.hd lhs in
+    let pos1 = mk_position 1 4 in
+    let pos2 = mk_position 3 3 in
+    let pos3 = mk_position 1 1 in
+    let char_to_byte c =
+      UnaryOp (OpToByte, IntVal(Int64.of_int (int_of_char c), pos2), pos2)
+    in
+    let mk_assign idx value =
+      let lhs_read = Read (lhs, IntVal(Int64.of_int idx, pos3), pos3) in
+      Assign([lhs_read], [value], pos1)
+    in
+    let rec to_list n = 
+      if n >= (String.length str) then 
+        let v = UnaryOp (OpToByte, IntVal(Int64.zero, pos2), pos2) in
+        [mk_assign n v]
+      else
+        let v = char_to_byte (String.get str n) in
+        let a = mk_assign n v in
+        a :: (to_list (n+1))
+    in
+    Block (to_list 0, pos1)
 }
 /* havoc */
 | HAVOC expr_list_opt SEMICOLON { 
@@ -707,6 +737,11 @@ expr_list_opt:
 expr_list:
 | expr COMMA expr_list { $1 :: $3 }
 | expr { [$1] }
+;
+
+expr_list_string:
+| STRINGVAL { StringRHS $1 }
+| expr_list { NormalRHS $1 }
 ;
 
 annot:
