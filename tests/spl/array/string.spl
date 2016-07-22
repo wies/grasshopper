@@ -23,7 +23,6 @@ procedure equals(first: Array<Byte>, second: Array<Byte>)
   else return false;
 }
 
-/*
 //inspired from http://en.wikibooks.org/wiki/C_Programming/Strings#The_strcmp_function
 procedure gstrcmp(s1: Array<Byte>, s2: Array<Byte>)
   returns (res: Int)
@@ -77,7 +76,6 @@ procedure gstrdup(str: Array<Byte>)
   }
   return copy;
 }
-*/
 
 procedure gstrlen(str: Array<Byte>)
   returns (res: Int)

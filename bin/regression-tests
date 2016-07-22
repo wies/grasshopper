@@ -65,10 +65,10 @@ array_initialize        tests/spl/array/initialize.spl          pass
 array_maximum           tests/spl/array/maximum.spl             pass
 array_reverse           tests/spl/array/reverse.spl             pass
 array_selection_sort    tests/spl/array/selection_sort.spl      pass
-array_string            tests/spl/array/string.spl              pass
 array_test              tests/spl/array/test.spl                pass
 array_traverse_with_nodes tests/spl/array/traverse_with_nodes.spl pass
 "
-
+# string use Byte and requires -bitvector
+# array_string            tests/spl/array/string.spl              pass
 
 OPTIONS=$@ time -f "Elapsed user time: %Us.\nElapsed real time: %es." ./bin/run-tests $TESTS
