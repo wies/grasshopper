@@ -280,6 +280,11 @@ let mk_eq_term s t =
 
 let mk_eq ?(ann=[]) s t = mk_atom ~ann:ann Eq [s; t]
 
+let mk_lt_term s t = mk_app Bool Lt [s; t]
+let mk_gt_term s t = mk_app Bool Gt [s; t]
+let mk_leq_term s t = mk_app Bool LtEq [s; t]
+let mk_geq_term s t = mk_app Bool GtEq [s; t]
+
 let mk_lt s t = mk_atom Lt [s; t]
 let mk_gt s t = mk_atom Gt [s; t]
 let mk_leq s t = mk_atom LtEq [s; t]
@@ -397,6 +402,7 @@ let smk_elem ?(ann=[]) e = function
   | s -> mk_elem ~ann:ann e s
 
 (** Constructor for subset constraints.*)
+let mk_subseteq_term s t = mk_app Bool SubsetEq [s; t]
 let mk_subseteq s t = mk_atom SubsetEq [s; t]
 
 (** Term constructor for disjointness constraints.*)
@@ -1272,18 +1278,36 @@ let propagate_forall_down f =
 (** Assumes that [f] is in negation normal form. *)
 let foralls_to_exists f =
   let rec find_defs bvs defs f =
+    let rec disjoints acc = function
+      | BoolOp (Not, [Atom (App (Disjoint, [t1; t2], _), _)]) :: fs ->
+          let acc1 =
+            if compare t1 t2 < 0 then (t1, t2) :: acc else (t2, t1) :: acc
+          in disjoints acc1 fs
+      | BoolOp (Or, gs) :: fs ->
+          disjoints acc (gs @ fs)
+      | Binder (_, [], f, _) :: fs -> disjoints acc (f :: fs)
+      | _ :: fs -> disjoints acc fs
+      | [] -> acc
+    in
+    let dcs = disjoints [] [f] in
     let rec find nodefs defs = function
       | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; Var _ as yt], _), a)])
           when IdSet.mem x nodefs ->
-            IdSet.remove x nodefs, mk_eq xt yt :: defs, mk_false
+            IdSet.remove x nodefs, mk_eq ~ann:a xt yt :: defs, mk_false
       | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; t], _), a)])
         when IdSet.mem x nodefs && 
           IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
-            IdSet.remove x nodefs, mk_eq xt t :: defs, mk_false
+            IdSet.remove x nodefs, mk_eq ~ann:a xt t :: defs, mk_false
       | BoolOp (Not, [Atom (App (Eq, [t; Var (x, srt) as xt], _), a)])
         when IdSet.mem x nodefs && 
           IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
-            IdSet.remove x nodefs, mk_eq xt t :: defs, mk_false
+            IdSet.remove x nodefs, mk_eq ~ann:a xt t :: defs, mk_false
+      | BoolOp (Not, [Atom (App (Eq, [t1; App (Union, [t2; (Var (x, _) as xt)], _)], _), _)])
+      | BoolOp (Not, [Atom (App (Eq, [t1; App (Union, [(Var (x, _) as xt); t2], _)], _), _)])
+        when false && IdSet.mem x nodefs &&
+          (List.mem (xt, t2) dcs || List.mem (t2, xt) dcs) &&
+          IdSet.is_empty (IdSet.inter nodefs (fv_term_acc (fv_term t1) t2)) ->
+            IdSet.remove x nodefs, mk_eq xt (mk_diff t1 t2) :: defs, mk_not (mk_subseteq t2 t1)
       | BoolOp (Or, fs) ->
           let nodefs, defs, gs =
             List.fold_right 
@@ -1298,22 +1322,22 @@ let foralls_to_exists f =
           nodefs, defs, Binder (b, [], g, a)
       | f ->
           nodefs, defs, f
-    in 
+    in
     let nodefs, defs, g = find bvs defs f in
     if IdSet.subset bvs nodefs 
     then begin
-      let defs, sm =
-        List.fold_right (fun f (defs, sm) ->
+      let defs, sm, anns =
+        List.fold_right (fun f (defs, sm, anns) ->
           match f with
           | Atom (App (Eq, [Var (v, _); t], _), a) ->
               let t1 = subst_term sm t in
               let smv = IdMap.singleton v t1 in
               let sm = IdMap.fold (fun w tw -> IdMap.add w (subst_term smv tw)) sm IdMap.empty in
-              defs, IdMap.add v t1 sm
-          | f -> f :: defs, sm)
-          defs ([], IdMap.empty)
+              defs, IdMap.add v t1 sm, a @ anns
+          | f -> f :: defs, sm, anns)
+          defs ([], IdMap.empty, [])
       in
-      nodefs, List.map (subst sm) defs, subst sm g
+      nodefs, List.map (subst sm) defs, annotate (subst sm g) anns
     end
     else find_defs nodefs defs g
   in
