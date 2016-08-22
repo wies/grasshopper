@@ -1,0 +1,66 @@
+include "../../../lib/file.spl";
+
+procedure Main(arg: Array<Byte>) returns (res: Int)
+    requires byte_array(arg)
+    ensures  byte_array(arg)
+{
+    if (arg.length == 0) {
+        return 1;
+    }
+    var fd := gopen(arg, O_CREAT | O_WRONLY | O_TRUNC);
+    if (fd == -1) {
+        return 2;
+    }
+
+    var content := new Array<Byte>(14);
+    content := "hello world!\n";
+
+    if (gwrite2(fd, content, 13) != 13) {
+        free(content);
+        return 3;
+    }
+
+    var closed := gclose(fd);
+    var i := 0;
+    while (i < 13)
+        invariant i >= 0 && i <= 13
+        invariant byte_array(content)
+        invariant content.length == 14
+    {
+        content[i] := int2byte(0);
+        i := i + 1;
+    }
+
+    fd := gopen(arg, O_RDONLY);
+    if (fd == -1) {
+        free(content);
+        return 4;
+    }
+
+    var read := gread(fd, content);
+    if (read != 13) {
+        free(content);
+        return 5;
+    }
+
+    if (content[ 0] != 'h' ||
+        content[ 1] != 'e' ||
+        content[ 2] != 'l' ||
+        content[ 3] != 'l' ||
+        content[ 4] != 'o' ||
+        content[ 5] != ' ' ||
+        content[ 6] != 'w' ||
+        content[ 7] != 'o' ||
+        content[ 8] != 'r' ||
+        content[ 9] != 'l' ||
+        content[10] != 'd' ||
+        content[11] != '!' ||
+        content[12] != int2byte( 10) )  // \n
+    {
+        free(content);
+        return 6;
+    }
+
+    free(content);
+    return 0;
+}

@@ -1,0 +1,34 @@
+include "../../../lib/console.spl";
+include "../array/copy_byte_slice.spl";
+include "../array/string.spl";
+include "../../../lib/socket.spl";
+
+procedure askIP(port: Array<Byte>)
+  returns (ip: SocketAddressIP4)
+  requires byte_array(port)
+  ensures byte_array(port)
+  ensures port == old(port) && port.length == old(port.length)
+  ensures ip == null || socket_addr_4(ip)
+{
+  var writtenPrompt := new Array<Byte>(46);
+  writtenPrompt := "Enter IP of server (hit enter for localhost):";
+  
+  var written := gputs(writtenPrompt);
+  free(writtenPrompt);
+  var getip := new Array<Byte>(50);
+
+  var numChars := ggets(getip);
+  var dataAddr: SocketAddressIP4 := null;
+  if (numChars < 1) {
+    free(getip);
+    return dataAddr;
+  }
+  getip[numChars-1] := int2byte(0);
+  if (numChars != 1){
+    dataAddr := get_address4(getip, port);
+  } else {
+    dataAddr := get_address4(null, port);
+  }
+  free(getip);
+  return dataAddr;
+}

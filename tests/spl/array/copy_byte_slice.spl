@@ -1,0 +1,37 @@
+include "../include/byte_array.spl";
+
+
+procedure copy_byte_slice(a: Array<Byte>, start: Int, end: Int)
+  returns (b: Array<Byte>)
+  requires byte_array(a)
+  requires start >= 0
+  requires end > 0
+  requires end <= a.length
+  requires start < a.length
+  requires end > start
+  ensures byte_array(a) &*& byte_array(b)
+  ensures a.length >= b.length
+  ensures b.length == end - start
+  ensures forall i: Int:: i >= 0 && i < (end-start) ==> b[i] == a[i+start]
+{
+  var finalLength := end - start;
+  b := new Array<Byte>(finalLength);
+
+  var i := 0;
+
+  while (i < finalLength)
+    invariant byte_array(a) &*& byte_array(b)
+    invariant i >= 0 && i <= finalLength
+    invariant finalLength == end - start
+    invariant end > start
+    invariant start >= 0
+    invariant end <= a.length
+    invariant b.length == finalLength
+    invariant forall j: Int:: j >= 0 && j < i ==> a[j+start] == b[j]
+  {
+    b[i] := a[i+start];
+    i := i + 1;
+  }
+
+  return b;
+}

@@ -1,0 +1,15 @@
+include "../tests/spl/include/byte_array.spl";
+
+procedure gputs(buffer: Array<Byte>) returns (success: Bool)
+    requires byte_array(buffer)
+    ensures byte_array(buffer)
+    ensures buffer == old(buffer)
+    ensures buffer.length == old(buffer.length)
+    ensures forall i: Int :: i >= 0 && i <= buffer.length ==> buffer[i] == old(buffer[i])
+
+procedure ggets(buffer: Array<Byte>) returns (nChars: Int)
+    requires byte_array(buffer)
+    ensures byte_array(buffer)
+    ensures buffer == old(buffer)
+    ensures buffer.length == old(buffer.length)
+    ensures nChars >= -1 && nChars <= buffer.length
