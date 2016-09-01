@@ -544,7 +544,9 @@ let elim_sl prog =
         propagate_exists_up |>
         mk_not |>
         nnf |>
+        (*(fun f -> print_endline (" (before):"); print_form stdout f; print_newline (); f) |>*)
         foralls_to_exists |>
+        (*(fun f -> print_endline (" (after):"); print_form stdout f; print_newline (); f) |>*)
         SimplifyGrass.simplify_one_sets |>
         mk_not |>
         nnf |>

@@ -241,6 +241,33 @@ let convert cu =
         let t1 = convert_term locals e1 in
         let t2 = convert_term locals e2 in
         GrassUtil.mk_elem_term t1 t2
+    | BinaryOp (e1, (OpGt as op), e2, ty, pos)
+    | BinaryOp (e1, (OpLt as op), e2, ty, pos)
+    | BinaryOp (e1, (OpGeq as op), e2, ty, pos)
+    | BinaryOp (e1, (OpLeq as op), e2, ty, pos) ->
+        let mk_int_term =
+          match op with
+          | OpGt -> GrassUtil.mk_gt_term
+          | OpLt -> GrassUtil.mk_lt_term
+          | OpGeq -> GrassUtil.mk_geq_term
+          | OpLeq -> GrassUtil.mk_leq_term
+          | _ -> failwith "unexpected operator"
+        in
+        let mk_set_term =
+          match op with
+          (*| OpGt -> (fun s t -> GrassUtil.mk_strict_subset t s)
+          | OpLt -> GrassUtil.mk_strict_subset*)
+          | OpGeq -> (fun s t -> GrassUtil.mk_subseteq_term t s)
+          | OpLeq -> GrassUtil.mk_subseteq_term
+          | _ -> (fun s t -> failwith "unexpected operator")
+        in
+        let t1 = convert_term locals e1 in
+        let t2 = convert_term locals e2 in
+        (match type_of_expr cu locals e1 with
+        | IntType | ByteType -> mk_int_term t1 t2
+        | SetType _ ->
+            mk_set_term t1 t2
+        | ty -> failwith "unexpected type") 
     | PredApp (FramePred, [set1; set2; fld1; fld2], pos) ->
         let tset1 = convert_term locals set1 in
         let tset2 = convert_term locals set2 in
@@ -266,7 +293,8 @@ let convert cu =
         GrassUtil.mk_btwn_term tfld tx ty tz
     | Binder (SetComp, _, _, pos) ->
         failwith ("set comprehension should have been desugared at " ^ string_of_src_pos pos)
-    | e -> failwith ("unexpected expression at " ^ string_of_src_pos (pos_of_expr e))
+    | e ->
+        failwith ("unexpected expression at " ^ string_of_src_pos (pos_of_expr e))
   in
   let rec convert_grass_form locals = function
     | BoolVal (b, pos) -> GrassUtil.mk_srcpos pos (GrassUtil.mk_bool b)
@@ -327,32 +355,6 @@ let convert cu =
             let t1 = convert_term locals e1 in
             let t2 = convert_term locals e2 in
             GrassUtil.mk_srcpos pos (GrassUtil.mk_eq t1 t2))
-    | BinaryOp (e1, (OpGt as op), e2, ty, pos)
-    | BinaryOp (e1, (OpLt as op), e2, ty, pos)
-    | BinaryOp (e1, (OpGeq as op), e2, ty, pos)
-    | BinaryOp (e1, (OpLeq as op), e2, ty, pos) ->
-        let mk_int_form =
-          match op with
-          | OpGt -> GrassUtil.mk_gt
-          | OpLt -> GrassUtil.mk_lt
-          | OpGeq -> GrassUtil.mk_geq
-          | OpLeq -> GrassUtil.mk_leq
-          | _ -> failwith "unexpected operator"
-        in
-        let mk_set_form =
-          match op with
-          | OpGt -> (fun s t -> GrassUtil.mk_strict_subset t s)
-          | OpLt -> GrassUtil.mk_strict_subset
-          | OpGeq -> (fun s t -> GrassUtil.mk_subseteq t s)
-          | OpLeq -> GrassUtil.mk_subseteq
-          | _ -> failwith "unexpected operator"
-        in
-        let t1 = convert_term locals e1 in
-        let t2 = convert_term locals e2 in
-        (match type_of_expr cu locals e1 with
-        | IntType | ByteType -> GrassUtil.mk_srcpos pos (mk_int_form t1 t2)
-        | SetType _ -> GrassUtil.mk_srcpos pos (mk_set_form t1 t2)
-        | ty -> failwith "unexpected type") 
     | UnaryOp (OpNot, e, pos) ->
         let f = convert_grass_form locals e in
         GrassUtil.mk_not f
@@ -386,47 +388,6 @@ let convert cu =
             es
         in
         let ge1 = convert_term locals ge in
-        (*let gts = GrassUtil.ground_terms (Atom (ge1, [])) in
-        let matches = 
-          List.fold_right (fun (e, filters) matches -> 
-            let ce = GrassUtil.free_consts_term e in
-            let ce_srts = GrassUtil.sign_term e in
-            let ce_occur_below ts =
-              List.exists 
-                (function App (FreeSym id, [], _) -> IdSet.mem id ce | _ -> false)
-                ts
-               in
-            (*let rec ce_occur_below = function
-              | App (FreeSym id, [], _) -> IdSet.mem id ce
-              | App (_, ts, _) as t ->
-                  t <> e && List.exists ce_occur_below ts
-              | _ -> false
-            in*)
-            let flt, aux_matches = 
-              TermSet.fold 
-                (fun t (flt, aux_matches) -> match t with
-                | App (FreeSym sym, (_ :: _ as ts), _)
-                  when symbol_of e <> Some (FreeSym sym) && ce_occur_below ts ->
-                    (FilterSymbolNotOccurs (FreeSym sym)) :: flt, aux_matches
-                | App (Read, ([App (FreeSym sym, [], srt); l] as ts), _)
-                  when symbol_of e <> Some (FreeSym sym) && ce_occur_below ts ->
-                    (FilterReadNotOccurs (GrassUtil.name sym, ([], srt))) :: flt,
-                    Match (l, [FilterNotNull]) :: aux_matches
-                | _ -> flt, aux_matches)
-                gts (filters, [])
-            in
-            let aux_matches =
-              IdSet.fold
-                (fun id aux_matches ->
-                  let srt = SymbolMap.find (FreeSym id) ce_srts in
-                  match srt with
-                  | ([], (Int | Loc _ as rsrt)) ->
-                      Match (GrassUtil.mk_known (GrassUtil.mk_free_const rsrt id), []) :: aux_matches
-                  | _ -> aux_matches
-                ) ce aux_matches
-            in
-            Match (e, flt) :: aux_matches @ matches) es1 []
-          in*)
         let matches = List.map (fun (e, filters) -> Match (e, filters)) es1 in
         GrassUtil.annotate f [TermGenerator (matches, [ge1])]
     | e ->

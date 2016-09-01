@@ -199,11 +199,15 @@ let _ =
     then cmd_line_error "input file missing"
     else begin
       let spl_prog = parse_spl_program !main_file in
-      let res = check_spl_program spl_prog !Config.procedure in
-      print_stats start_time; 
-      print_c_program spl_prog;
-      if !Config.verify && res then
-        Debug.info (fun () -> "Program successfully verified.\n")
+      if !Config.simplify then
+        SplSyntax.print_cu stdout spl_prog
+      else begin
+        let res = check_spl_program spl_prog !Config.procedure in
+        print_stats start_time; 
+        print_c_program spl_prog;
+        if !Config.verify && res then
+          Debug.info (fun () -> "Program successfully verified.\n")
+      end
     end
   with  
   | Sys_error s -> 

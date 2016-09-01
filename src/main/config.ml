@@ -44,6 +44,8 @@ let named_assertions = ref false
 let verify = ref true
 (* Flat that controls whether the program is only type-checked. *)
 let typeonly = ref false
+(* Flat that controls whether the program is only simplified. *)
+let simplify = ref false
 (* Flag that controls whether to stop after the first VC that cannot be proved. *)
 let robust = ref false
 (* Flag that enables error messages for on-the-fly checking *)
@@ -87,6 +89,7 @@ let cmd_options =
    ("-dumpcores", Arg.Set unsat_cores, " Produce unsat cores with every unsat SMT query\n\nOptions for controlling what is checked:");
    ("-procedure", Arg.String (fun p -> procedure := Some p), "<string>  Only check the specified procedure");
    ("-typeonly", Arg.Set typeonly, " Only type-check the program");
+   ("-simplify", Arg.Set simplify, " Only type-check the program and output a simplified version of the input program");
    ("-noverify", Arg.Clear verify, " Only type-check the program and generate verification conditions without checking");
    ("-robust", Arg.Set robust, " Continue even if some verification condition cannot be checked\n\nOptions for controlling verification condition generation:");
    ("-nomodifiesopt", Arg.Clear opt_field_mod, " Disable mod set analysis optimization for fields\n\nOptions for controlling the GRASS prover:");

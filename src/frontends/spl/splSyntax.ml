@@ -185,7 +185,7 @@ let pos_of_expr = function
   | UnaryOp (_, _, p)
   | BinaryOp (_, _, _, _, p)
   | Ident (_, p) -> p
-  | Annot (_, _, p) -> p  
+  | Annot (_, _, p) -> p
 
 let free_vars e =
   let rec fv bv acc = function
@@ -216,7 +216,8 @@ let free_vars e =
     | _ -> acc
   in fv IdSet.empty IdSet.empty e
           
-let pos_of_stmt = function
+let pos_of_stmt =
+  function
   | Skip pos
   | Block (_, pos)
   | LocalVars (_, _, pos)
@@ -322,7 +323,7 @@ let mk_block pos = function
 (** Pretty printing *)
 
 open Format
-
+ 
 let rec pr_type ppf = function
   | AnyRefType -> fprintf ppf "AnyRef" 
   | BoolType -> fprintf ppf "%s" bool_sort_string
@@ -337,5 +338,340 @@ let rec pr_type ppf = function
   | PermType -> fprintf ppf "Permission"
   | AnyType -> fprintf ppf "Any"
 
-let string_of_type t = pr_type str_formatter t; flush_str_formatter ()
+let pr_ghost ppf = function
+  | true -> fprintf ppf "ghost "
+  | false -> ()
+
+let pr_implicit ppf = function
+  | true -> fprintf ppf "implicit "
+  | false -> ()
+
+let pr_id_srt ppf (implicit, ghost, id, srt) =
+  fprintf ppf "%a%a%a: %a" 
+    pr_implicit implicit
+    pr_ghost ghost
+    pr_ident id 
+    pr_type srt
+
+let rec pr_id_srt_list ppf = function
+  | [] -> ()
+  | [v] -> pr_id_srt ppf v
+  | v :: iss -> 
+      fprintf ppf "%a,@ @,%a" 
+        pr_id_srt v
+        pr_id_srt_list iss
+
+let pr_var ppf var =
+  pr_id_srt ppf (var.v_implicit, var.v_ghost, var.v_name, var.v_type)
+
+let pr_var_list = Util.pr_list_comma pr_var
+
+let string_of_pred = function
+  | AccessPred -> "acc"
+  | BtwnPred -> "Btwn"
+  | DisjointPred -> "Disjoint"
+  | FramePred -> "Frame"
+  | ReachPred -> "Reach"
+  | Pred p -> string_of_ident p
+
+let prio_of_expr = function
+  | Null _ | Emp _ | IntVal _ | BoolVal _ | Ident _ -> 0
+  | Read _ | ProcCall _ | PredApp _ | New _ | Setenum _ |
+    Binder (SetComp, _, _, _) -> 1
+  | UnaryOp ((OpArrayCells | OpIndexOfCell | OpArrayOfCell |
+    OpLength | OpToInt | OpToByte | OpOld | OpKnown), _, _) -> 1
+  | UnaryOp ((OpUMinus | OpUPlus | OpBvNot | OpNot), _, _) -> 2
+  | BinaryOp (_, (OpMult | OpDiv | OpMod), _, _, _) -> 3
+  | BinaryOp (_, (OpMinus | OpPlus), _, _, _) -> 4
+  | BinaryOp (_, (OpBvShiftL | OpBvShiftR), _, _, _) -> 5
+  | BinaryOp (_, (OpDiff | OpUn | OpInt), _, _, _) -> 6
+  | BinaryOp (_, (OpGt | OpLt | OpGeq | OpLeq | OpIn | OpPts), _, _, _) -> 7
+  | BinaryOp (_, OpEq, _, _, _) -> 8
+  | BinaryOp (_, OpBvAnd, _, _, _) -> 9
+  | BinaryOp (_, OpBvOr, _, _, _) -> 10
+  | BinaryOp (_, OpAnd, _, _, _) -> 11
+  | BinaryOp (_, OpSepStar, _, _, _) -> 12
+  | BinaryOp (_, OpSepPlus, _, _, _) -> 13
+  | BinaryOp (_, OpSepIncl, _, _, _) -> 14
+  | BinaryOp (_, OpOr, _, _, _) -> 15
+  | BinaryOp (_, OpImpl, _, _, _) -> 16
+  | Binder _ -> 17
+  | Annot _ -> 18
+
+let is_left_assoc = function _ -> true
+        
+let rec pr_expr ppf =
+  function
+  | Ident (x, _) -> pr_ident ppf x
+  | Null _ -> fprintf ppf "null"
+  | Emp _ -> fprintf ppf "emp"
+  | Setenum (ty, es, _) ->
+      fprintf ppf "%s<%a>(@[%a@])"
+        Grass.set_sort_string
+        pr_type ty pr_expr_list es
+  | IntVal (n, _) ->
+      fprintf ppf "%s" (Int64.to_string n)
+  | BoolVal (b, _) ->
+      fprintf ppf "%b" b
+  | New (ty, [], _) ->
+      fprintf ppf "new %a" pr_type ty
+  | New (ty, es, _) ->
+      fprintf ppf "new %a(%a)" pr_type ty pr_expr_list es
+  | Read (e1, e2, _) ->
+      fprintf ppf "%a.%a" pr_expr e2 pr_expr e1
+  | ProcCall (p, es, _) ->
+      fprintf ppf "%a(@[%a@])" pr_ident p pr_expr_list es
+  | PredApp (p, es, _) ->
+      fprintf ppf "%s(@[%a@])" (string_of_pred p) pr_expr_list es
+  | UnaryOp (op, e1, _) as e ->
+      (match op with
+      | OpArrayCells ->
+          fprintf ppf "%a.cells" pr_expr e1
+      | OpIndexOfCell ->
+          fprintf ppf "%a.index" pr_expr e1
+      | OpArrayOfCell ->
+          fprintf ppf "%a.array" pr_expr e1
+      | OpLength ->
+          fprintf ppf "%a.length" pr_expr e1
+      | OpUMinus | OpBvNot | OpUPlus | OpNot ->
+          let op_str = match op with
+          | OpUMinus -> "-"
+          | OpUPlus -> "+"
+          | OpBvNot -> "~"
+          | OpNot -> "!"
+          | _ -> ""
+          in
+          if prio_of_expr e < prio_of_expr e1
+          then fprintf ppf "%s(@[%a@])" op_str pr_expr e1
+          else fprintf ppf "%s%a" op_str pr_expr e1
+      | OpOld ->
+          fprintf ppf "old(@[%a@])" pr_expr e
+      | OpKnown ->
+          fprintf ppf "Known(@[%a@])" pr_expr e
+      | OpToInt ->
+          fprintf ppf "byte2int(@[%a@])" pr_expr e
+      | OpToByte ->
+          fprintf ppf "int2byte(@[%a@])" pr_expr e)
+  | BinaryOp (e1, op, e2, _, _) as e ->
+      let op_str = match op with
+      | OpDiff -> "--"
+      | OpUn -> "++"
+      | OpInt -> "**"
+      | OpMinus -> "-"
+      | OpPlus -> "+"
+      | OpMult -> "*"
+      | OpDiv -> "/"
+      | OpMod -> "%"
+      | OpEq -> "=="
+      | OpGt -> ">"
+      | OpLt -> "<"
+      | OpGeq -> ">="
+      | OpLeq -> "<="
+          (*(match ty with IntType -> "<=" | _ -> "subsetof")*)
+      | OpIn -> "in"
+      | OpPts -> "|->"
+      | OpSepStar -> "&*&"
+      | OpSepPlus -> "&+&"
+      | OpSepIncl -> "-**"
+      | OpBvAnd -> "&"
+      | OpBvOr -> "|"
+      | OpBvShiftL -> "<-<"
+      | OpBvShiftR -> ">->"
+      | OpAnd -> "&&"
+      | OpOr -> "||"
+      | OpImpl -> "==>"
+      in
+      let paran1, paran2 =
+        if is_left_assoc op
+        then
+          (prio_of_expr e < prio_of_expr e1,
+          prio_of_expr e <= prio_of_expr e2)
+        else
+          (prio_of_expr e < prio_of_expr e1,
+          prio_of_expr e <= prio_of_expr e2)
+      in
+      let pr_paran paran ppf e =
+        if paran
+        then fprintf ppf "(%a)" pr_expr e
+        else fprintf ppf "%a" pr_expr e
+      in
+      fprintf ppf "@[%a %s@ %a@]"
+        (pr_paran paran1) e1
+        op_str
+        (pr_paran paran2) e2
+        
+  | Binder (b, vs, e, _) ->
+      let pr_bound_var ppf = function
+        | GuardedVar (x, e) ->
+            fprintf ppf "%a@ in@ %a" pr_ident x pr_expr e
+        | UnguardedVar v ->
+            pr_var ppf v
+      in
+      (match b with
+      | SetComp ->
+          fprintf ppf "{ @[<2>%a ::@ %a@] }"
+            (Util.pr_list_comma pr_bound_var) vs pr_expr e
+      | _ ->
+          let pr_binder = function
+            | Forall -> "forall"
+            | Exists -> "exists"
+            | _ -> "???"
+          in
+          fprintf ppf "@[<2>%s %a ::@ %a@]"
+            (pr_binder b) (Util.pr_list_comma pr_bound_var) vs pr_expr e
+      )
+  | Annot (e, _, _) -> pr_expr ppf e
+and pr_expr_list es = Util.pr_list_comma pr_expr es
+    
+let pr_var_decl ppf (id, decl) =
+  fprintf ppf "@[<2>var@ %a@];" 
+    pr_id_srt (decl.v_implicit, decl.v_ghost, id, decl.v_type)
+
+let pr_var_decls = Util.pr_list_nl pr_var_decl
+        
+let pr_type_decl ppf (_, tyd) =
+  match tyd.t_def with
+  | FreeTypeDef -> fprintf ppf "type@ @[%a@];@\n" pr_ident tyd.t_name
+  | StructTypeDef sfields ->
+      fprintf ppf "struct %a {@\n@[<2>  %a@]@\n}@\n"
+        pr_ident tyd.t_name pr_var_decls (IdMap.bindings sfields)
+
+let pr_contract ppf = function
+  | Requires (e, p) ->
+      fprintf ppf "@[<2>%srequires@ %a@]"
+        (if p then "pure " else "") pr_expr e
+  | Ensures (e, p) ->
+      fprintf ppf "@[<2>%sensures@ %a@]"
+        (if p then "pure " else "") pr_expr e
+
+let pr_contracts ppf cs =
+  match cs with
+  | [] -> ()
+  | _ -> fprintf ppf "@\n%a" (Util.pr_list_nl pr_contract) cs
+
+let pr_pred_decl ppf pred =
+  let lookup = List.map (fun id -> IdMap.find id pred.pr_locals) in
+  let pr_header ppf pred =
+  match pred.pr_outputs with
+  | [] ->
+      fprintf ppf "@[<2>predicate %a(@[<0>%a@])%a@]@ "
+        pr_ident pred.pr_name
+        pr_var_list (lookup pred.pr_formals)
+        pr_contracts pred.pr_contracts
+  | _ ->
+      fprintf ppf "@[<2>function %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a@]@\n"
+        pr_ident pred.pr_name
+        pr_var_list (lookup pred.pr_formals)
+        pr_var_list (lookup pred.pr_outputs)
+        pr_contracts pred.pr_contracts
+  in
+  let pr_body ppf pred =
+    match pred.pr_body with
+    | Some sf ->
+        fprintf ppf "{@[<1>@\n%a@]@\n}@\n" pr_expr sf
+    | None -> fprintf ppf "@\n"
+  in
+  fprintf ppf "%a%a" pr_header pred pr_body pred
+
+let rec pr_stmt ppf =
+  let pr_invariant ppf =
+    function Invariant (e, p) ->
+      fprintf ppf "%sinvariant @[<2>%a@]"
+        (if p then "pure " else "") pr_expr e
+  in
+  function
+  | Skip _ -> fprintf ppf "{ }"
+  | Block (sts, _) ->
+      fprintf ppf "{@\n@[<2>  %a@]@\n}" pr_stmt_list sts
+  | LocalVars (vs, None, _) ->
+      fprintf ppf "var @[<2>%a];" pr_var_list vs
+  | LocalVars (vs, Some es, _) ->
+      fprintf ppf "var @[<2>%a :=@ %a@];" pr_var_list vs pr_expr_list es
+  | Assume (e, p, _) ->
+      fprintf ppf "%sassume @[<2>%a@];" (if p then "pure " else "") pr_expr e
+  | Assert (e, p, _) ->
+      fprintf ppf "%sassert @[<2>%a@];" (if p then "pure " else "") pr_expr e
+  | Assign ([], es, _) ->
+      fprintf ppf "@[<2>%a@];" pr_expr_list es
+  | Assign (vs, es, _) ->
+      fprintf ppf "@[<2>%a :=@ %a@];" pr_expr_list vs pr_expr_list es
+  | Dispose (e, _) ->
+      fprintf ppf "free @[<2>%a@];" pr_expr e
+  | Havoc (es, _) ->
+      Util.pr_list_nl (fun ppf -> fprintf ppf "havoc %a;" pr_expr) ppf es
+  | If (e, st1, Skip _, _) ->
+      fprintf ppf "if (@[%a@]) %a"
+        pr_expr e pr_stmt st1
+  | If (e, st1, st2, _) ->
+      fprintf ppf "if (@[%a@]) %a else %a"
+        pr_expr e pr_stmt st1 pr_stmt st2
+  | Loop (invs, Skip _, cond, postb, _) ->
+      fprintf ppf "while (@[%a@])@\n@[<2>  %a@]@\n%a"
+        pr_expr cond (Util.pr_list_nl pr_invariant) invs pr_stmt postb
+  | Loop (invs, preb, cond, postb, _) ->
+      fprintf ppf "do %a while (@[%a@])@\n@[<2>  %a@]@\n%a"
+        pr_stmt preb pr_expr cond
+        (Util.pr_list_nl pr_invariant) invs
+        pr_stmt postb
+  | Return (es, _) ->
+      fprintf ppf "return @[<2>%a@];" pr_expr_list es
+and pr_stmt_list sts = Util.pr_list_nl pr_stmt sts 
+    
+let pr_proc_body locals ppf = function
+  | Skip _ -> ()
+  | st ->
+      let sts = match st with
+      | Block (sts, _) -> sts
+      | _ -> [st]
+      in
+      fprintf ppf "{@[<1>@\n%a@\n%a@]@\n}"
+        pr_var_decls locals
+        (Util.pr_list_nl pr_stmt) sts 
+    
+let pr_proc_decl ppf proc =
+  let lookup = List.map (fun id -> IdMap.find id proc.p_locals) in
+  let locals = IdMap.fold (fun id decl locals ->
+    if List.mem id (proc.p_returns @ proc.p_formals)
+    then locals
+    else (id, decl) :: locals) proc.p_locals []
+  in
+  fprintf ppf "@[<2>%s %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a@]@\n%a@\n"
+    "procedure"
+    pr_ident proc.p_name
+    pr_var_list (lookup proc.p_formals)
+    pr_var_list (lookup proc.p_returns)
+    pr_contracts proc.p_contracts
+    (pr_proc_body locals) proc.p_body
+
+  
+    
+let pr_axiom ppf (e, _) =
+  fprintf ppf "@[<2>axiom@ %a@];@\n"
+    pr_expr e 
+    
+let pr_cu ppf cu =
+  let fld_ids =
+    IdMap.fold (fun _ tdecl fld_ids ->
+      match tdecl.t_def with
+      | FreeTypeDef -> fld_ids
+      | StructTypeDef fields ->
+          IdMap.fold (fun id _ fld_ids -> IdSet.add id fld_ids) fields fld_ids)
+      cu.type_decls IdSet.empty
+  in
+  let globals =
+    IdMap.filter
+      (fun id _ -> not @@ IdSet.mem id fld_ids) cu.var_decls
+  in
+  fprintf ppf "%a@\n%a@\n%a@\n%a@\n%a"
+    (Util.pr_list_nl pr_type_decl) (IdMap.bindings cu.type_decls)
+    (Util.pr_list_nl pr_var_decl) (IdMap.bindings globals)
+    (Util.pr_list_nl pr_axiom) cu.background_theory
+    (Util.pr_list_nl pr_pred_decl) (List.map snd (IdMap.bindings cu.pred_decls))
+    (Util.pr_list_nl pr_proc_decl) (List.map snd (IdMap.bindings cu.proc_decls))
+
+    
+let print_cu out_ch prog = Util.print_of_format pr_cu prog out_ch
+
+        
+let string_of_type t = Util.string_of_format pr_type t
 

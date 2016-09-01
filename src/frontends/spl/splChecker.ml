@@ -460,8 +460,22 @@ let flatten_exprs cu =
               | _ -> failwith "unexpected set comprehension"
             in
             let sc_id = GrassUtil.fresh_ident "set_compr" in
-            let sc_locals = IdMap.add v_decl.v_name v_decl IdMap.empty in
             let fv = IdSet.elements (free_vars e) in
+            let res_id = GrassUtil.fresh_ident "res" in
+            let res_decl = 
+              { v_name = res_id;
+                v_type = SetType v_decl.v_type;
+                v_ghost = false;
+                v_implicit = false;
+                v_aux = true;
+                v_pos = pos;
+                v_scope = pos;
+              }
+            in
+            let sc_locals =
+              IdMap.add v_decl.v_name v_decl
+                (IdMap.singleton res_id res_decl)
+            in
             let formals = List.filter (fun id -> IdMap.mem id locals) fv in
             let sc_locals =
               List.fold_left
@@ -471,7 +485,7 @@ let flatten_exprs cu =
             let sc_decl =
               { pr_name = sc_id;
                 pr_formals = formals;
-                pr_outputs = [];
+                pr_outputs = [res_id];
                 pr_locals = sc_locals;
                 pr_contracts = [];
                 pr_body = Some e;

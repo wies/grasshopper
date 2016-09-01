@@ -977,7 +977,7 @@ open Format
 let pr_term ppf t =
   Grass.pr_term ppf (old_to_fun_term t)
 
-let pr_term_list = Grass.pr_list pr_term
+let pr_term_list = Util.pr_list_comma pr_term
 
 let pr_sl_form ppf f = Sl.pr_form ppf (old_to_fun_sl_form f)
     

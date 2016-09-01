@@ -396,6 +396,7 @@ let add_array_axioms fs =
   axioms @ fs
            
 
+             
 let add_terms fs gts =
   if not !Config.smtpatterns && !Config.instantiate then fs else
   (*let gts_fs = ground_terms (mk_and fs) in*)
@@ -408,7 +409,7 @@ let add_terms fs gts =
           mk_pred ("inst-closure", 0) [t] :: fs1)
       extra_gts fs
   in fs1
-
+   
 let add_split_lemmas fs gts =
   if not !Config.split_lemmas then fs else
   let structs =

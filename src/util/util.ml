@@ -299,3 +299,24 @@ let read_file file =
 let rec remove_duplicates lst = match lst with
   | x :: xs -> x :: remove_duplicates (List.filter (fun y -> y <> x) xs)
   | [] -> []
+
+(** Pretty printing utility functions *)
+
+open Format
+
+let rec pr_list_comma pr_x ppf = function
+  | [] -> ()
+  | [x] -> fprintf ppf "%a" pr_x x
+  | x :: xs -> fprintf ppf "%a,@ %a" pr_x x (pr_list_comma pr_x) xs
+
+let rec pr_list_nl pr_x ppf = function
+  | [] -> ()
+  | [x] -> fprintf ppf "%a" pr_x x
+  | x :: xs -> fprintf ppf "%a@\n%a" pr_x x (pr_list_nl pr_x) xs
+
+            
+let print_of_format pr x out_ch = fprintf (formatter_of_out_channel out_ch) "%a@?" pr x
+
+        
+let string_of_format pr t = pr str_formatter t; flush_str_formatter ()
+

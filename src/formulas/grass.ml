@@ -285,11 +285,6 @@ let name_of_sort = function
   | FreeSrt id -> string_of_ident id
     
 let pr_sym ppf sym = fprintf ppf "%s" (string_of_symbol sym)
-
-let rec pr_list pr_x ppf = function
-  | [] -> ()
-  | [x] -> fprintf ppf "%a" pr_x x
-  | x :: xs -> fprintf ppf "%a,@ %a" pr_x x (pr_list pr_x) xs
   
 let rec pr_sort ppf srt = match srt with
   | Bool
@@ -305,12 +300,12 @@ let rec pr_sort ppf srt = match srt with
         
 and pr_sorts ppf = function
   | [srt] ->  fprintf ppf "%a" pr_sort srt
-  | srts -> fprintf ppf "(%a)" (pr_list pr_sort) srts
+  | srts -> fprintf ppf "(%a)" (pr_list_comma pr_sort) srts
         
 let pr_var ppf (x, srt) =
   fprintf ppf "@[%a: %a@]" pr_ident x pr_sort srt
 
-let rec pr_vars = pr_list pr_var
+let rec pr_vars = pr_list_comma pr_var
 
 let rec pr_term0 ppf t =
   match t with
@@ -353,7 +348,7 @@ and pr_term ppf = function
   | App (SetEnum, ts, _) -> fprintf ppf "{@[%a@]}" pr_term_list ts
   | App (sym, ts, _) -> fprintf ppf "%a(@[%a@])" pr_sym sym pr_term_list ts
 
-and pr_term_list ppf = pr_list pr_term ppf
+and pr_term_list ppf = pr_list_comma pr_term ppf
 
 and pr_inter ppf = function
   | [] -> fprintf ppf "Univ"
