@@ -12,3 +12,5 @@ script:
   - bash build.sh
   - bash build.sh tests
 os: linux
+notifications:
+  slack: grasshopper-tool:XSTpOLbUL9oeQcdiIZ5BFBpa
