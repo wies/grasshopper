@@ -1,0 +1,16 @@
+language: c
+sudo: required
+install:
+  - wget https://github.com/Z3Prover/z3/releases/download/z3-4.4.1/z3-4.4.1-x64-ubuntu-14.04.zip -O ~/z3.zip
+  - unzip ~/z3.zip -d ~/z3
+  - z3 --version
+  - wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-ocaml.sh
+  - bash -ex .travis-ocaml.sh
+env:
+  - OCAML_VERSION=4.03 PATH="$HOME/z3/z3-4.4.1-x64-ubuntu-14.04/bin/:$PATH"
+script:
+  - bash build.sh
+  - bash build.sh tests
+os: linux
+notifications:
+  slack: grasshopper-tool:XSTpOLbUL9oeQcdiIZ5BFBpa
