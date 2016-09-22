@@ -1,0 +1,113 @@
+/* Singly linked list of trees.
+ *
+ * Checking memory safety only. No data.
+ *
+ * Status: Traverse goes through.
+*/
+
+/* Structure and predicates for the tree */
+
+struct TNode {
+  var left: TNode;
+  var right: TNode;
+  var ghost parent: TNode;
+}
+
+function tree_parent(r: TNode) returns (p: TNode)
+  requires r == null || acc(r)
+  ensures r != null ==> p == r.parent
+  ensures r == null ==> p == null
+
+predicate parent_equal_left_child(FP: Set<TNode>)
+  requires acc(FP)
+{
+  (forall x in FP :: x.left == null || Reach(parent, x.left, x) && x.left != x) &&
+  (forall x in FP, y in FP :: x.left in FP && Btwn(parent, x.left, y, x) ==> x == y || x.left == y)
+}
+
+predicate parent_equal_right_child(FP: Set<TNode>)
+  requires acc(FP)
+{
+  (forall x in FP :: x.right == null || Reach(parent, x.right, x) && x.right != x) &&
+  (forall x in FP, y in FP :: x.right in FP && Btwn(parent, x.right, y, x) ==> x == y || x.right == y)
+}
+
+predicate left_right_distinct(FP: Set<TNode>)
+  requires acc(FP)
+{
+  (forall x in FP :: x.left == x.right ==> x.left == null 
+    @(matching x.right yields x.left)
+    @(matching x.left yields x.right))
+}
+
+predicate reach_via_left_right(FP: Set<TNode>)
+  requires acc(FP)
+{
+  forall x in FP, y in FP :: Btwn(parent, y, x, x) ==>
+      x == y || Btwn(parent, y, x.left, x) || Btwn(parent, y, x.right, x)
+}
+
+predicate tree(r: TNode) {
+  exists X: Set<TNode> ::
+    acc({ x: TNode :: Reach(parent, x, r) && r != null}) && acc(X) &*&
+    parent_equal_left_child(X) &&
+    parent_equal_right_child(X) &&
+    left_right_distinct(X) &&
+    reach_via_left_right(X)
+}
+
+/* Structure and predicates for the list */
+  
+struct LNode {
+  var next: LNode;
+  var data: TNode;
+}
+ 
+function witness(t: TNode, FP_L: Set<LNode>) returns (l: LNode)
+  requires acc(FP_L)
+  /* The witness function is correct */
+  ensures (l in FP_L && Reach(parent, t, l.data) && l.data != null && t != null)
+  || (l == null && t == null)
+  @(matching t yields witness(t, FP_L))
+
+  
+function inner_footprint(FP_L: Set<LNode>) returns (FP_T: Set<TNode>)
+  requires acc(FP_L)
+  /* The witness of every tree node is in the list node set */
+  ensures forall t in FP_T :: witness(t, FP_L) in FP_L
+  /* For every list node, the tree nodes hanging off it are in the tree node set */
+  ensures forall l in FP_L, t: TNode :: Reach(parent, t, l.data) && l.data != null ==> t in FP_T
+  /* Disjointness: the only thing that can reach a tree node is its witness */
+  ensures forall l in FP_L, t: TNode :: Reach(parent, t, l.data) && l.data != null ==> l == witness(t, FP_L)
+
+predicate lseg_of_trees(x: LNode, y: LNode) {
+  exists L: Set<LNode> ::
+    acc({ z: LNode :: Btwn(next, x, z, y) && z != y }) && acc(L) &*&
+    acc(inner_footprint(L)) &*&
+    Reach(next, x, y)
+}
+
+/* Procedures */
+
+procedure traverse_tree(t: TNode)
+  requires tree(t)
+  ensures tree(t)
+{
+  if (t != null && t.left != null)
+  {
+    traverse_tree(t.left);
+  }
+}
+
+procedure traverse(l: LNode)
+  requires lseg_of_trees(l, null)
+{
+  var oc := l;
+  while (oc != null)
+    invariant lseg_of_trees(l, oc) &*& lseg_of_trees(oc, null)
+  {
+    var ic := l.data;
+    traverse_tree(ic);
+    oc := oc.next;
+  }
+}
