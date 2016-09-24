@@ -1,0 +1,22 @@
+// Structure and predicate declarations for binary search trees
+
+struct Node {
+  var left: Node;
+  var right: Node;
+  var data: Int;
+  var ghost parent: Node;
+}
+
+predicate tree(r: Node) {
+  r == null ||
+  r != null &*& acc(r) &*& tree(r.left) &*& tree(r.right)
+}
+
+predicate bst(r: Node) {
+  r == null ||
+  (exists FP_L: Set<Node>, FP_R: Set<Node> ::
+   r != null &*& acc(r) &*& (bst(r.left) && acc(FP_L)) &*& (bst(r.right) && acc(FP_R))
+   &*& (forall x in FP_L :: x.data <= r.data)
+   &*& (forall x in FP_R :: r.data <= x.data)
+   )
+}
