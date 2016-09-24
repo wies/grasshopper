@@ -974,8 +974,8 @@ let elim_sl prog =
           in
           let name = "(extra) frame of " ^ string_of_ident pname in
           let axiom_form = Axioms.mk_axiom name form in
-          Debug.debug print_endline name;
-          Debug.debug (string_of_form axiom_form);
+          Debug.debug (fun () -> name);
+          Debug.debug (fun () -> string_of_form axiom_form);
           [mk_free_spec_form (FOL axiom_form) name None pos]
         end
     in
