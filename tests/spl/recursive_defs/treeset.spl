@@ -1,0 +1,138 @@
+include "../include/bstree_rec.spl";
+
+procedure contains(root: Node, val: Int, implicit ghost content: Set<Int>)
+  returns (res: Bool)
+  requires tree_set(root, content)
+  ensures  tree_set(root, content)
+  ensures  res == val in content
+{
+  if (root == null) {
+    return false;
+  } else { 
+    if (val == root.data) {
+      return true;
+    } else if (val < root.data) {
+      res := contains(root.left, val);
+      return res;
+    } else {
+      res := contains(root.right, val);
+      return res;
+    }
+  }
+}
+
+procedure traverse(root: Node, implicit ghost content: Set<Int>)
+  requires tree_set(root, content);
+  ensures tree_set(root, content);
+{
+  if (root != null) {
+    traverse(root.left);
+    traverse(root.right);
+  }
+}
+
+procedure extract_max(root: Node, implicit ghost content: Set<Int>)
+returns (new_root: Node, max: Node)
+  requires tree_set(root, content) &*& root != null
+  ensures tree_set(new_root, content -- {max.data}) &*& acc(max)
+  ensures max.right == null && max.data in content
+  ensures (forall z in (content -- {max.data}) :: z < max.data)
+{
+  if (root.right != null) {
+    var c: Node, m: Node;
+    c, m := extract_max(root.right);
+    root.right := c;
+    return root, m;
+  } else {
+    var c := root.left;
+    return c, root;
+  }
+}
+
+procedure insert(root: Node, value: Int, implicit ghost content: Set<Int>)
+  returns (new_root: Node)
+  requires tree_set(root, content)
+  ensures  tree_set(new_root, content ++ {value})
+{
+  if (root == null) {
+    var t := new Node;
+    t.left := null;
+    t.right := null;
+    t.data := value;
+    return t;
+  } else { 
+    var n: Node;
+    if (root.data > value) {
+      n := insert(root.left, value);
+      root.left := n;
+      return root;
+    } else if (root.data < value) {
+      n := insert(root.right, value);
+      root.right := n;
+      return root;
+    }
+    return root;
+  }
+}
+
+procedure remove(root: Node, value: Int, implicit ghost content: Set<Int>)
+  returns (res: Node)
+  requires tree_set(root, content)
+  ensures tree_set(res, content -- {value})
+{
+  if (root == null) {
+    return null;
+  } else if (root.data == value) {
+    if (root.left == null && root.right == null) {
+      free(root);
+      return null;
+    } else if (root.left != null && root.right == null) {
+      res := root.left;
+      free(root);
+      return res;
+    } else if (root.left == null && root.right != null) {
+      res := root.right;
+      free(root);
+      return res;
+    } else {
+      var l: Node, m: Node;
+      l, m := extract_max(root.left);
+      m.left := l;
+      m.right := root.right;
+      free(root);
+      return m;
+    }
+  } else if (root.data > value) {
+    root.left := remove(root.left, value);
+    return root;
+  } else {
+    root.right := remove(root.right, value);
+    return root;
+  }
+}
+
+procedure rotate_left(h: Node, implicit ghost content: Set<Int>) 
+  returns (res: Node)
+  requires tree_set(h, content)
+  requires h != null && h.right != null
+  ensures  tree_set(res, content)
+{
+  var x: Node;
+  x := h.right;
+  h.right := x.left;
+  x.left := h;
+  return x;
+}
+
+procedure rotate_right(h: Node, implicit ghost content: Set<Int>) 
+  returns (res: Node)
+  requires tree_set(h, content)
+  requires h != null && h.left != null
+  ensures  tree_set(res, content)
+{
+  var x: Node;
+  x := h.left;
+  h.left := x.right;
+  x.right := h;
+  return x;
+}

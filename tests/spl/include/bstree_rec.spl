@@ -1,0 +1,47 @@
+// Structure and predicate declarations for binary search trees
+
+struct Node {
+  var left: Node;
+  var right: Node;
+  var data: Int;
+}
+
+predicate tree(r: Node) {
+  r == null ||
+  r != null &*& acc(r) &*& tree(r.left) &*& tree(r.right)
+}
+
+predicate bst(r: Node) {
+  r == null ||
+  (exists FP_L: Set<Node>, FP_R: Set<Node> ::
+   r != null &*& acc(r) &*& (bst(r.left) && acc(FP_L)) &*& (bst(r.right) && acc(FP_R))
+   &*& (forall x in FP_L :: x.data <= r.data)
+   &*& (forall x in FP_R :: r.data <= x.data)
+   )
+}
+
+
+function data_witness(v: Int, FP: Set<Node>)
+  returns (res: Node)
+  requires acc(FP)
+  ensures forall x in FP :: x == data_witness(x.data, FP)
+
+function content(FP: Set<Node>) returns (C: Set<Int>)
+  requires acc(FP)
+  ensures forall v: Int :: v !in C ==> data_witness(v, FP) == null
+  ensures forall x in FP :: x.data in content(FP)
+  ensures forall v in C :: data_witness(v, FP) in FP;
+  ensures forall v in C :: v == data_witness(v, FP).data
+    @(matching v yields data_witness(v, FP).data);
+
+predicate tree_set(r: Node, Content: Set<Int>) {
+  r == null && Content == {} ||
+  (exists FP_L: Set<Node>, FP_R: Set<Node>, C_L: Set<Int>, C_R: Set<Int> ::
+   r != null &*& acc(r) &*& (tree_set(r.left, C_L) && acc(FP_L)) &*& (tree_set(r.right, C_R) && acc(FP_R))
+   &*& (forall x in FP_L :: x.data <= r.data)
+   &*& (forall x in FP_R :: r.data <= x.data)
+   &*& Content == {r.data} ++ C_L ++ C_R
+   &*& C_L == content(FP_L)
+   &*& C_R == content(FP_R)
+   )
+}

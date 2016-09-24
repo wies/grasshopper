@@ -30,14 +30,14 @@ procedure bubble_one_pass(a: Array<Int>, high: Int, ghost lb: Int, ghost ub: Int
 }
 
 
-procedure bubble_sort(a: Array<Int>, implicit ghost content: Set<Int>, implicit ghost lb: Int, implicit ghost ub: Int)
+procedure bubble_sort(a: Array<Int>, implicit ghost lb: Int, implicit ghost ub: Int)
   requires array_bnd(a, lb, ub)
   ensures sorted_array_bnd(a, lb, ub)
 {
   var high := a.length;
 
   while (high > 0)
-    invariant acc(a) //TODO when this was not there is still went through!!
+    invariant acc(a)
     invariant (high == a.length &*& arrayseg_bnd(a, 0, high, lb, ub)) ||
               (high < a.length &*& a[high] >= lb &*& arrayseg_bnd(a, 0, high, lb, a[high]+1))
     invariant sorted_arrayseg_bnd(a, high, a.length, a[high], ub)

@@ -105,9 +105,3 @@ predicate heap(r: Node) {
     heap_property(X)
 }
 
-predicate heap_set(r: Node, C: Set<Int>) {
-  exists X: Set<Node> ::
-    tree(r) && acc(X) &*&
-    heap_property(X) &&
-    C == content(X)
-}
