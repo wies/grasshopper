@@ -38,7 +38,16 @@ procedure splitNode(leftNode: Node) returns (splitValue: T, rightNode: Node)
   var i := 0;
   while (i < j)
     invariant 0 <= i <= j
-    //invariant ...     
+    invariant j == b / 2
+    invariant acc(rightNode)
+    invariant acc(rightNode.children)
+    invariant rightNode.children.length == b+1
+    invariant rightNode.parent == null
+    invariant acc(array_content(rightNode.children, 0, j))
+    invariant forall k: Int :: i <= k < j ==> rightNode.children[k].parent == leftNode
+    invariant forall k: Int :: 0 <= k < i ==> rightNode.children[k].parent == rightNode
+    invariant forall k: Int :: j <= k <= b ==> rightNode.children[k] == null
+    // XXX ghost_field_invariant_for_parent
   {
     rightNode.children[i].parent := rightNode;
     i := i + 1;

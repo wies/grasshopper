@@ -74,6 +74,19 @@ function array_node_fp(FP_N: Set<Node>)
             @(matching a without key_array_owner yields array_node_owner(a, FP_N).children)
   ensures forall a: Array<Node> :: a !in FP_A_N ==> array_node_owner(a, FP_N) == null
 
+function contentWitness(v: Node, a: Array<Node>)
+  returns (res: Int) 
+  requires acc(a)
+  ensures forall i: Int :: i == contentWitness(a[i], a)
+        
+function array_content(a: Array<Node>, lb: Int, ub: Int)
+  returns (C: Set<Node>)
+  requires acc(a)
+  requires 0 <= lb <= ub <= a.length
+  ensures forall i: Int :: lb <= i && i < ub ==> a[i] in C
+  ensures forall v in C :: lb <= contentWitness(v, a) && contentWitness(v, a) < ub
+  ensures forall v in C :: v == a[contentWitness(v, a)]
+    @(matching v yields a[contentWitness(v, a)])
 
   /*
 predicate btree_node(n: Node) {

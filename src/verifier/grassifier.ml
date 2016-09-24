@@ -342,27 +342,28 @@ let elim_arrays prog =
 (*
 let annotate_frame_axioms prog =
   let process_pred frame_axioms pred =
+    let find_decl id = IdMap.find id (locals_of_pred pred) in
     let footprints =
       List.fold_left (fun footprints id ->
-        let decl = IdMap.find id pred.pred_locals in
+        let decl = find_decl id in
         let struct_srt = struct_sort_of_sort (element_sort_of_sort decl.var_sort) in
         SortMap.add decl.var_sort
           (mk_var decl.var_sort id,
            mk_var decl.var_sort (alloc_id (struct_srt)),
            mk_var decl.var_sort (footprint_id (struct_srt)))
           footprints)
-        SortMap.empty pred.pred_footprints
+        SortMap.empty pred.pred_footprints (* XXX pred_footprints is no more ... *)
     in
     let res_srt = Prog.result_sort_of_pred pred in
     let old_args =
       List.map (fun id ->
-        let decl = IdMap.find id pred.pred_locals in
+        let decl = find_decl id in
         mk_var decl.var_sort id)
-        (pred.pred_formals @ pred.pred_footprints)
+        ((formals_of_pred pred) @ pred.pred_footprints) (* XXX pred_footprints is no more ... *)
     in
     let old_pred = mk_free_app res_srt pred.pred_name old_args in
     let footprints =
-      if pred.pred_is_footprint (* self-framing function? *)
+      if pred.pred_is_self_framing
       then
         let struct_srt = struct_sort_of_sort (element_sort_of_sort res_srt) in
         SortMap.add res_srt
@@ -382,7 +383,7 @@ let annotate_frame_axioms prog =
               IdMap.add id1 (id2, Loc dsrt, rsrt) loc_fields
             else loc_fields
         | _ -> loc_fields)
-        IdMap.empty pred.pred_formals
+        IdMap.empty (formals_of_pred pred)
     in
     let new_args =
       List.map (fun id ->
@@ -390,9 +391,9 @@ let annotate_frame_axioms prog =
           let id2, srt1, srt2 = IdMap.find id loc_fields in
           mk_var (Map (srt1, srt2)) id2
         with Not_found ->
-          let decl = IdMap.find id pred.pred_locals in
+          let decl = IdMap.find id (locals_of_pred pred) in
           mk_var decl.var_sort id)
-        (pred.pred_formals @ pred.pred_footprints)
+        ((formals_of_pred pred) @ pred.pred_footprints) (* XXX pred_footprints is no more ... *)
     in
     let new_pred = mk_free_app res_srt pred.pred_name new_args in
     let frame_pred_terms =
@@ -408,7 +409,7 @@ let annotate_frame_axioms prog =
         mk_subseteq fr a :: mk_disjoint fr fp :: guards)
         footprints frame_preds
     in
-    let name = "frame of " ^ string_of_ident pred.pred_name in
+    let name = "frame of " ^ string_of_ident (name_of_pred pred) in
     let pred_frames =
       let generators =
         let match_frame_preds =
@@ -882,7 +883,103 @@ let elim_sl prog =
         pred_body = Util.Opt.map translate_body pred.pred_body
       }
     in
-    IdMap.add pname pred1 preds, frame_axioms @ axioms
+    let pred_frame_axioms =
+      if !Config.with_ep || SortSet.is_empty pred.pred_contract.contr_footprint_sorts
+      then []
+      else
+        begin
+(* we need:
+    ∀ new/old_field_1/2 FP frame old_alloc params.
+      Frame(frame, old_alloc, old_field_1, new_field_1) ∨ old_field_1 == new_field_1 ⇒
+      Frame(frame, old_alloc, old_field_2, new_field_2) ∨ old_field_2 == new_field_2 ⇒
+      FP ⊆ frame ∧ FP ⊆ old_alloc ⇒
+        pred(old_field_1, old_field_2, params, FP) == pred(new_field_1, old_field_1, params, FP)
+*)
+          let is_fp srt = SortSet.mem srt pred.pred_contract.contr_footprint_sorts in
+          let id_fp id = 
+            let decl = IdMap.find id locals in
+            match decl.var_sort with
+            | Set (Loc srt) -> id = footprint_id srt || id = footprint_caller_id srt
+            | _ -> false
+          in
+          let res_srt = Prog.result_sort_of_pred pred in
+          let mk_old_arg id =
+            let decl = IdMap.find id locals in
+            mk_var decl.var_sort id
+          in
+          let old_pred =
+            mk_free_app res_srt pname (List.map mk_old_arg formals)
+          in
+          let new_arg_ids =
+            List.fold_left (fun new_args id1 ->
+              let decl = IdMap.find id1 locals in
+              let id2 =
+                match decl.var_sort with
+                | Map ([Loc srt], _) when is_fp srt -> fresh_ident (name id1)
+                | _ -> id1
+              in
+              IdMap.add id1 (id2, decl.var_sort) new_args)
+              IdMap.empty formals
+          in
+          let mk_new_arg id1 = 
+            let id2, srt = IdMap.find id1 new_arg_ids in
+            mk_var srt id2
+          in
+          let new_pred =
+            mk_free_app res_srt pname (List.map mk_new_arg formals)
+          in
+          let sorts = SortSet.elements (pred.pred_contract.contr_footprint_sorts) in
+          let frames_and_allocs =
+            List.fold_left
+              (fun acc s ->
+                let str = string_of_sort s in
+                let f = mk_var (Set s) (fresh_ident ("Modified_" ^ str)) in
+                let a = mk_var (Set s) (fresh_ident ("Alloc_" ^ str)) in
+                SortMap.add (Set (Loc s)) (f, a) acc)
+              SortMap.empty sorts
+          in
+          let in_frame =
+            List.flatten (
+              List.map
+                (fun id ->
+                  let srt = (IdMap.find id locals).var_sort in
+                  let modif, alloc = SortMap.find srt frames_and_allocs in
+                  [ mk_disjoint (mk_old_arg id) modif ;
+                    mk_subseteq (mk_old_arg id) alloc ]
+                )
+                (List.filter id_fp formals)
+            )
+          in
+          let loc_fields =
+            List.fold_left (fun loc_fields id1 ->
+              let decl = IdMap.find id1 (locals_of_pred pred) in
+              match decl.var_sort with
+              | Map ([Loc dsrt], _) when is_fp dsrt -> (id1, dsrt) :: loc_fields
+              | _ -> loc_fields)
+              [] (formals_of_pred pred)
+          in
+          let loc_fields_modified = List.map
+            (fun (id, srt) ->
+              let modif, alloc = SortMap.find (Set (Loc srt)) frames_and_allocs in
+              let new_field = mk_new_arg id in
+              let old_field = mk_old_arg id in
+              mk_or [ mk_frame modif alloc old_field new_field ;
+                      mk_eq new_field old_field ]
+            )
+            loc_fields
+          in
+          let form = mk_sequent
+            (loc_fields_modified @ in_frame)
+            [mk_eq old_pred new_pred]
+          in
+          let name = "(extra) frame of " ^ string_of_ident pname in
+          let axiom_form = Axioms.mk_axiom name form in
+          Debug.debug print_endline name;
+          Debug.debug (string_of_form axiom_form);
+          [mk_free_spec_form (FOL axiom_form) name None pos]
+        end
+    in
+    IdMap.add pname pred1 preds, pred_frame_axioms @ frame_axioms @ axioms
   in
   let axioms = List.map (map_spec_fol_form post_process_form) prog.prog_axioms in
   let preds, axioms = fold_preds translate_pred (IdMap.empty, axioms) prog in
