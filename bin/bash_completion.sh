@@ -1,9 +1,3 @@
-#
-#  Completion for foo:
-#
-#  foo file [filename]
-#  foo hostname [hostname]
-#
 _grasshopper() 
 {
     local cur prev words cword split
@@ -31,7 +25,6 @@ _grasshopper()
 			return 0
 			;;
         *)
-            #COMPREPLY=( $(compgen -f ${cur}) )
             _filedir
 			return 0
 			;;
