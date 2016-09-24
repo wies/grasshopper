@@ -145,6 +145,7 @@ type pred_decl = {
     pred_contract: contract; (** contract *)
     pred_body: spec option; (** predicate body *)
     pred_accesses: IdSet.t; (** accessed variables *)
+    pred_is_self_framing: bool; (** predicate is a footprint function *)
   } 
 
 (** Program *)
@@ -959,9 +960,10 @@ let subst_id_pred map pred =
       contr_locals = locals;
     }
   in
-  { pred_contract = contract;
-    pred_body = body;
-    pred_accesses = accesses }
+  {pred with
+   pred_contract = contract;
+   pred_body = body;
+   pred_accesses = accesses }
 
 let result_sort_of_pred pred =
   match returns_of_pred pred with

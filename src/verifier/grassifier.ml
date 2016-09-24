@@ -93,6 +93,7 @@ let add_ghost_field_invariants prog =
       { pred_contract = contract;  
         pred_body = Some body;
         pred_accesses = IdSet.empty;
+        pred_is_self_framing = false;
       }
     in
     pred :: preds,

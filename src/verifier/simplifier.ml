@@ -300,6 +300,7 @@ let elim_global_deps prog =
     { pred_contract = contract1;
       pred_body = body1; 
       pred_accesses = IdSet.empty;
+      pred_is_self_framing = false;
     } 
   in
   let prog1 = map_procs elim_proc prog in
