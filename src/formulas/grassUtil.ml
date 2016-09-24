@@ -1278,18 +1278,23 @@ let propagate_forall_down f =
 (** Assumes that [f] is in negation normal form. *)
 let foralls_to_exists f =
   let rec find_defs bvs defs f =
-    let rec disjoints acc = function
+    let orient t1 t2 = if compare t1 t2 < 0 then (t1, t2) else (t2, t1) in
+    let rec disjoints_and_subsets dcs scs = function
+      | BoolOp (Not, [Atom (App (SubsetEq, [t1; t2], _), _)]) :: fs ->
+          let scs1 = orient t1 t2 :: scs in
+          disjoints_and_subsets dcs scs1 fs
       | BoolOp (Not, [Atom (App (Disjoint, [t1; t2], _), _)]) :: fs ->
-          let acc1 =
-            if compare t1 t2 < 0 then (t1, t2) :: acc else (t2, t1) :: acc
-          in disjoints acc1 fs
+          let dcs1 = orient t1 t2 :: dcs in
+          disjoints_and_subsets dcs1 scs fs
       | BoolOp (Or, gs) :: fs ->
-          disjoints acc (gs @ fs)
-      | Binder (_, [], f, _) :: fs -> disjoints acc (f :: fs)
-      | _ :: fs -> disjoints acc fs
-      | [] -> acc
+          disjoints_and_subsets dcs scs (gs @ fs)
+      | Binder (_, [], f, _) :: fs ->
+          disjoints_and_subsets dcs scs (f :: fs)
+      | _ :: fs ->
+          disjoints_and_subsets dcs scs fs
+      | [] -> dcs, scs
     in
-    let dcs = disjoints [] [f] in
+    let dcs, scs = disjoints_and_subsets [] [] [f] in
     let rec find nodefs defs = function
       | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; Var _ as yt], _), a)])
           when IdSet.mem x nodefs ->
@@ -1304,10 +1309,23 @@ let foralls_to_exists f =
             IdSet.remove x nodefs, mk_eq ~ann:a xt t :: defs, mk_false
       | BoolOp (Not, [Atom (App (Eq, [t1; App (Union, [t2; (Var (x, _) as xt)], _)], _), _)])
       | BoolOp (Not, [Atom (App (Eq, [t1; App (Union, [(Var (x, _) as xt); t2], _)], _), _)])
-        when false && IdSet.mem x nodefs &&
-          (List.mem (xt, t2) dcs || List.mem (t2, xt) dcs) &&
+        when IdSet.mem x nodefs &&
+          List.mem (orient xt t2) dcs &&
           IdSet.is_empty (IdSet.inter nodefs (fv_term_acc (fv_term t1) t2)) ->
             IdSet.remove x nodefs, mk_eq xt (mk_diff t1 t2) :: defs, mk_not (mk_subseteq t2 t1)
+      | BoolOp (Not, [Atom (App (Eq, [(App (Diff, [xt; _], _) as t2); t1], _), _)])
+      | BoolOp (Not, [Atom (App (Eq, [t1; (App (Diff, [xt; _], _) as t2)], _), _)])
+        when not (IdSet.is_empty @@ IdSet.inter (fv_term xt) nodefs) &&
+          IdSet.is_empty (IdSet.inter nodefs (fv_term t1)) ->
+            let rec undiff ot t = match ot, t with
+            | Some t, (Var (x, _) as xt) ->
+                IdSet.remove x nodefs, mk_eq xt t :: defs, mk_false
+            | Some t, App (Diff, [t1; t2], _) when
+                List.mem (orient t1 t2) scs && IdSet.is_empty (IdSet.inter nodefs (fv_term t2)) ->
+                  undiff (Some (mk_union [t; t2])) t1
+            | _ -> nodefs, defs, f
+            in    
+            undiff (Some t1) t2
       | BoolOp (Or, fs) ->
           let nodefs, defs, gs =
             List.fold_right 

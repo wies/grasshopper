@@ -130,6 +130,7 @@ let ematch filters t rep_terms egraph subst_maps =
   List.filter (fun sm -> filter_term filters (subst_term sm t) sm) subst_maps1 
 
 let generate_terms generators ground_terms =
+  let generators = remove_duplicates generators in
   let rec add_terms new_terms t =
     if TermSet.mem t new_terms then new_terms else
     match t with
@@ -176,16 +177,12 @@ let generate_terms generators ground_terms =
   in
   let rec generate round new_terms old_terms = function
     | (guards, gen_terms) :: generators1 ->
-        (*
-        print_endline "======";
-        List.iter (fun t -> print_endline ("  generator: " ^ string_of_term t)) gen_terms;
-        *)
+        (*print_endline "======";
+        List.iter (fun t -> print_endline ("  generator: " ^ string_of_term t)) gen_terms;*)
         let subst_maps =
           List.fold_left (fun subst_maps -> function Match (t, filters) -> 
-            (*
-            print_endline ("  matching " ^ (string_of_term t));
-            List.iter (fun f -> print_endline ("    subject to " ^ (string_of_filter f))) filters;
-            *)
+            (*print_endline ("  matching " ^ (string_of_term t));
+            List.iter (fun f -> print_endline ("    subject to " ^ (string_of_filter f))) filters;*)
             let new_subst_maps =
               List.fold_left 
                 (fun new_subst_maps sm ->
@@ -213,12 +210,13 @@ let generate_terms generators ground_terms =
             new_terms subst_maps
         in
         generate round new_terms1 old_terms generators1
-    | [] -> 
+    | [] ->
+        (*Printf.printf "Round: %d\n" round;*)
         if round < !Config.term_gen_max_rounds && new_terms <> old_terms 
         then generate (round + 1) new_terms new_terms generators
         else new_terms
   in
-  generate 0 new_terms ground_terms generators
+  generate 1 new_terms ground_terms generators
 
 
 let generate_instances stratify useLocalInst axioms rep_terms egraph = 

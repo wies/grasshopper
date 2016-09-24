@@ -92,7 +92,7 @@ let add_labels vc =
 let add_match_filters =
   let add_filters = function
     | TermGenerator (_, [App (Known, _, _)]) as a -> a
-    | TermGenerator (ms, ge) ->
+    | TermGenerator (ms, (_ :: _ as ge)) ->
         let gts =
           ge |>
           List.fold_left subterms_term_acc TermSet.empty |>
@@ -228,7 +228,7 @@ let add_pred_insts prog f =
     let rec add_match = function
       | Binder (b, vs, f, annots) ->
           let annots1 =
-            List.map (function TermGenerator (ms, ts) -> TermGenerator (m :: ms, ts) | a -> a) annots
+            List.map (function TermGenerator (ms, ts) -> TermGenerator (m :: ms, List.filter ((<>) pred_match_term) ts) | a -> a) annots
           in
           Binder (b, vs, add_match f, annots1)
       | BoolOp (op, fs) ->

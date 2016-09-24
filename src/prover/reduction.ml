@@ -173,6 +173,12 @@ let add_set_axioms fs =
     | t -> t
   in
   let rec simplify = function
+    | BoolOp (Not, [Atom (App (Disjoint, [t1; t2], _), a)]) when not !Config.abstract_preds ->
+        let srt = element_sort_of_set t1 in
+        let t11 = unflatten t1 in
+        let t21 = unflatten t2 in
+        mk_or [mk_not (mk_disjoint t11 t21);
+               mk_not (Atom (mk_eq_term (mk_empty (Set srt)) (mk_inter [t11; t21]), a))]
     | BoolOp (op, fs) -> BoolOp (op, List.map simplify fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, simplify f, a)
     | Atom (App (Disjoint, [t1; t2], _), a) when not !Config.abstract_preds ->
