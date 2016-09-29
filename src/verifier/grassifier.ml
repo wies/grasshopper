@@ -455,6 +455,7 @@ let annotate_frame_axioms prog =
   in
   { prog with prog_axioms = frame_axioms @ prog.prog_axioms }
 *)
+let fp_func_id_of_pred_id pname sort = mk_ident @@ (fst pname) ^ "_fp_" ^ (string_of_sort sort)
   
 (** Desugare SL specification to FOL specifications. 
  ** Assumes that loops have been transformed to tail-recursive procedures. *)
@@ -519,7 +520,22 @@ let elim_sl prog =
       else fp_args, footprint_sorts
     in
     let eqs = mk_empty_except p_footprints in
-    smk_and (mk_pred p (args @ fp_caller_args @ fp_args) :: eqs)
+    let fp_eqs =
+      fp_args
+      |> List.map (fun fp_arg ->
+        let sort =
+          match fp_arg with
+          | Var (_, Set (Loc s))
+          | App (_, _, Set (Loc s)) -> s
+          | App (_, _, s)
+          | Var (_, s) -> failwith @@ Printf.sprintf "FP arg %s had unexpected type %s" (string_of_term fp_arg) (string_of_sort s)
+        in
+        let fp_func_name = fp_func_id_of_pred_id p sort in
+        let fp_func = App (FreeSym fp_func_name, args, Set (Loc sort)) in
+        Atom (App (Eq, [fp_arg; fp_func], Bool), [])
+      )
+    in
+    smk_and (mk_pred p (args @ fp_caller_args) :: eqs @ fp_eqs)
   in
   (* post process term *)
   let add_footprint_args sym ts srt =
@@ -564,12 +580,24 @@ let elim_sl prog =
   let translate_contract contr is_proc is_tailrec is_pure modifies =
     let pos = contr.contr_pos in
     let footprint_sorts = contr.contr_footprint_sorts in
+    (** For predicates, call footprint func instead of using a FP set *)
+    let footprint_set ssrt =
+      if is_proc then footprint_set ssrt
+      else
+        begin
+          let formal_vars =
+            contr.contr_formals
+            |> List.map (fun id -> mk_free_const (IdMap.find id contr.contr_locals).var_sort id)
+          in
+          App (FreeSym (fp_func_id_of_pred_id contr.contr_name ssrt), formal_vars, Set (Loc ssrt))
+        end
+    in
     (* add auxiliary set variables *)
     let locals, footprint_formals, footprint_caller_formals, footprint_caller_returns =
       SortSet.fold
         (fun ssrt (locals, footprint_formals, footprint_caller_formals, footprint_caller_returns) ->          
           let locals1, footprint_formals1 =
-            if not is_proc && is_pure then locals, footprint_formals
+            if not is_proc then locals, footprint_formals
             else 
               let footprint_id = footprint_id ssrt in
               let footprint_decl = mk_loc_set_decl ssrt footprint_id pos in
@@ -877,6 +905,61 @@ let elim_sl prog =
       | FOL f -> FOL (post_process_form f)
       in { sf with spec_form = f1 }
     in
+    let make_fp_funcs pred pred1 =
+      let make_for_sort sort =
+        let func_name = fp_func_id_of_pred_id pname sort in
+        let ret_var_id = mk_ident @@ "FP_" ^ (string_of_sort sort) in
+        let ret_var = mk_loc_set_decl sort ret_var_id dummy_position in
+        (* Convert the predicate body to the footprint function body *)
+        let pred_body =
+          match pred1.pred_body with
+          | None -> None
+          | Some spec ->
+            (* Go through the formula and remove all predicates calls *)
+            let rec process_term t =
+              match t with
+              | Var (x, s) -> t
+              | App (FreeSym id, ts, Bool) -> App (BoolConst true, [], Bool)
+              | App (sym, ts, s) -> t
+            in
+            let rec process_form = function
+              | Atom (t, annots) -> Atom (process_term t, annots)
+              | BoolOp (op, fs) -> BoolOp (op, List.map process_form fs)
+              | Binder (b, vs, f, annots) -> Binder (b, vs, process_form f, annots)
+            in
+            let spec_form =
+              match spec.spec_form with
+              | SL _ -> failwith "Expected SL to be eliminated already"
+              | FOL f -> FOL (process_form f)
+            in
+            Some { spec with spec_form = spec_form}
+        in
+        let fp_func_contract =
+          {
+            contr_name = func_name;
+            contr_formals = pred.pred_contract.contr_formals;
+            contr_returns = [ret_var_id];
+            contr_locals = IdMap.add ret_var_id ret_var pred.pred_contract.contr_locals; (* TODO find the set of locals used here *)
+            contr_precond = [];
+            contr_postcond = [];
+            contr_footprint_sorts = SortSet.empty;
+            contr_pos = dummy_position;
+          }
+        in
+        let footprint_func =
+          {
+            pred_contract = fp_func_contract;
+            pred_body = pred_body;
+            pred_accesses = IdSet.empty; (* TODO confirm *)
+            pred_is_self_framing = true;
+          }
+        in
+        func_name, footprint_func
+      in
+      pred.pred_contract.contr_footprint_sorts
+      |> SortSet.elements
+      |> List.map make_for_sort
+    in
     let pred1 =
       { pred with
         pred_contract = contract;
@@ -888,13 +971,13 @@ let elim_sl prog =
       then []
       else
         begin
-(* we need:
-    ∀ new/old_field_1/2 FP frame old_alloc params.
-      Frame(frame, old_alloc, old_field_1, new_field_1) ∨ old_field_1 == new_field_1 ⇒
-      Frame(frame, old_alloc, old_field_2, new_field_2) ∨ old_field_2 == new_field_2 ⇒
-      FP ⊆ frame ∧ FP ⊆ old_alloc ⇒
-        pred(old_field_1, old_field_2, params, FP) == pred(new_field_1, old_field_1, params, FP)
-*)
+          (* we need:
+              ∀ new/old_field_1/2 FP frame old_alloc params.
+                Frame(frame, old_alloc, old_field_1, new_field_1) ∨ old_field_1 == new_field_1 ⇒
+                Frame(frame, old_alloc, old_field_2, new_field_2) ∨ old_field_2 == new_field_2 ⇒
+                FP ⊆ frame ∧ FP ⊆ old_alloc ⇒
+                  pred(old_field_1, old_field_2, params, FP) == pred(new_field_1, old_field_1, params, FP)
+          *)
           let is_fp srt = SortSet.mem srt pred.pred_contract.contr_footprint_sorts in
           let id_fp id = 
             let decl = IdMap.find id locals in
@@ -978,6 +1061,16 @@ let elim_sl prog =
           Debug.debug (fun () -> string_of_form axiom_form);
           [mk_free_spec_form (FOL axiom_form) name None pos]
         end
+    in
+    (* Add functions for the footprints *)
+    let preds =
+      if pred1.pred_contract.contr_returns = [] then
+        (* Only add for predicates, not for functions *)
+        make_fp_funcs pred pred1
+        |> List.fold_left (fun preds (func_name, func) ->
+          IdMap.add func_name func preds
+          ) preds
+      else preds
     in
     IdMap.add pname pred1 preds, pred_frame_axioms @ frame_axioms @ axioms
   in
