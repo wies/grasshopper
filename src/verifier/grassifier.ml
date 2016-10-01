@@ -3,6 +3,7 @@
 open Grass
 open GrassUtil
 open Prog
+open Util
 
 (** Auxiliary variables for desugaring SL specifications *)
 let footprint_id = mk_name_generator "FP"
@@ -589,7 +590,7 @@ let elim_sl prog =
             contr.contr_formals
             |> List.map (fun id -> mk_free_const (IdMap.find id contr.contr_locals).var_sort id)
           in
-          App (FreeSym (fp_func_id_of_pred_id contr.contr_name ssrt), formal_vars, Set (Loc ssrt))
+          mk_free_app (Set (Loc ssrt)) (fp_func_id_of_pred_id contr.contr_name ssrt) formal_vars
         end
     in
     (* add auxiliary set variables *)
@@ -624,14 +625,13 @@ let elim_sl prog =
     let aux_formals = footprint_caller_formals @ footprint_formals in
     let returns = contr.contr_returns @ footprint_caller_returns in
     let formals = contr.contr_formals @ aux_formals in
-    let footprint_ids, footprint_sets, footprint_context =
+    let footprint_sets, footprint_context =
       SortSet.fold
-        (fun ssrt (ids, sets, context) ->
-          (if is_pure then ids else footprint_id ssrt :: ids),
+        (fun ssrt (sets, context) ->
           SortMap.add ssrt (footprint_set ssrt) sets,
           SortMap.add ssrt (footprint_caller_set ssrt) context
         )
-        footprint_sorts ([], SortMap.empty, SortMap.empty)
+        footprint_sorts (SortMap.empty, SortMap.empty)
     in
     let rec split_sep pure_fs = function
       | Sl.SepOp ((Sl.SepStar | Sl.SepPlus | Sl.SepIncl), Sl.Pure (f, _), slf, _)
@@ -915,11 +915,12 @@ let elim_sl prog =
           match pred1.pred_body with
           | None -> None
           | Some spec ->
-            (* Go through the formula and remove all predicates calls *)
+            (* Go through the formula and remove all predicates calls and HACK Disjoint preds *)
             let rec process_term t =
               match t with
               | Var (x, s) -> t
-              | App (FreeSym id, ts, Bool) -> App (BoolConst true, [], Bool)
+              | App (FreeSym _, _, Bool)
+              | App (Disjoint, _, Bool) -> App (BoolConst true, [], Bool)
               | App (sym, ts, s) -> t
             in
             let rec process_form = function
@@ -967,22 +968,31 @@ let elim_sl prog =
       }
     in
     let pred_frame_axioms =
-      if !Config.with_ep || SortSet.is_empty pred.pred_contract.contr_footprint_sorts
+      if SortSet.is_empty pred.pred_contract.contr_footprint_sorts
       then []
       else
         begin
           (* we need:
-              ∀ new/old_field_1/2 FP frame old_alloc params.
-                Frame(frame, old_alloc, old_field_1, new_field_1) ∨ old_field_1 == new_field_1 ⇒
-                Frame(frame, old_alloc, old_field_2, new_field_2) ∨ old_field_2 == new_field_2 ⇒
-                FP ⊆ frame ∧ FP ⊆ old_alloc ⇒
-                  pred(old_field_1, old_field_2, params, FP) == pred(new_field_1, old_field_1, params, FP)
+              ∀ new/old_field_1/2 frame old_alloc FP_Caller params.
+                Frame(modified, old_alloc, old_field_1, new_field_1) ∨ old_field_1 == new_field_1 ⇒
+                Frame(modified, old_alloc, old_field_2, new_field_2) ∨ old_field_2 == new_field_2 ⇒
+                Disjoint(pred_fp(old_fields, params), modified) ∧ pred_fp(old_fields, params) ⊆ old_alloc ⇒
+                Disjoint(FP_Caller, modified) ∧ FP_Caller ⊆ old_alloc ⇒
+                  pred(old_field_1, old_field_2, params) == pred(new_field_1, new_field_2, params)
+            
+            Also, since pred_fp() is self framing, we add:
+              ∀ new/old_field_1/2 frame old_alloc FP_Caller params.
+                Frame(modified, old_alloc, old_field_1, new_field_1) ∨ old_field_1 == new_field_1 ⇒
+                Frame(modified, old_alloc, old_field_2, new_field_2) ∨ old_field_2 == new_field_2 ⇒
+                Disjoint(pred_fp(old_fields, params), modified) ∧ pred_fp(old_fields, params) ⊆ old_alloc ⇒
+                Disjoint(FP_Caller, modified) ∧ FP_Caller ⊆ old_alloc ⇒
+                  pred_fp(old_fields, params) == pred_fp(new_fields, params)
           *)
           let is_fp srt = SortSet.mem srt pred.pred_contract.contr_footprint_sorts in
           let id_fp id = 
             let decl = IdMap.find id locals in
             match decl.var_sort with
-            | Set (Loc srt) -> id = footprint_id srt || id = footprint_caller_id srt
+            | Set (Loc srt) -> id = footprint_caller_id srt
             | _ -> false
           in
           let res_srt = Prog.result_sort_of_pred pred in
@@ -1021,18 +1031,33 @@ let elim_sl prog =
                 SortMap.add (Set (Loc s)) (f, a) acc)
               SortMap.empty sorts
           in
-          let in_frame =
+          (* Generate Disjoint & Subset conditions for both footprints and "reads" footprints *)
+          let mk_fp_func args sort =
+            mk_free_app (Set (Loc sort)) (fp_func_id_of_pred_id pname sort) args in
+          let original_formals = formals |> List.filter ((~~) id_fp) in
+          let old_fp_terms =
+            let old_args = original_formals |> List.map mk_old_arg in
+            sorts |> List.map (mk_fp_func old_args)
+          in
+          let new_fp_terms =
+            let new_args = original_formals |> List.map mk_new_arg in
+            sorts |> List.map (mk_fp_func new_args)
+          in
+          let reads_terms = formals |> List.filter id_fp |> List.map mk_old_arg in
+          let in_frame terms =
             List.flatten (
               List.map
-                (fun id ->
-                  let srt = (IdMap.find id locals).var_sort in
+                (fun t ->
+                  let srt = sort_of t in
                   let modif, alloc = SortMap.find srt frames_and_allocs in
-                  [ mk_disjoint (mk_old_arg id) modif ;
-                    mk_subseteq (mk_old_arg id) alloc ]
+                  [ mk_disjoint t modif ;
+                    mk_subseteq t alloc ]
                 )
-                (List.filter id_fp formals)
+                terms
             )
           in
+          let fps_in_frame = in_frame old_fp_terms in
+          let reads_in_frame = in_frame reads_terms in
           let loc_fields =
             List.fold_left (fun loc_fields id1 ->
               let decl = IdMap.find id1 (locals_of_pred pred) in
@@ -1041,25 +1066,42 @@ let elim_sl prog =
               | _ -> loc_fields)
               [] (formals_of_pred pred)
           in
-          let loc_fields_modified = List.map
-            (fun (id, srt) ->
+          let loc_fields_modified, frame_terms =
+            loc_fields
+            |> List.map (fun (id, srt) ->
               let modif, alloc = SortMap.find (Set (Loc srt)) frames_and_allocs in
               let new_field = mk_new_arg id in
               let old_field = mk_old_arg id in
               mk_or [ mk_frame modif alloc old_field new_field ;
-                      mk_eq new_field old_field ]
+                      mk_eq new_field old_field ],
+                mk_frame_term modif alloc old_field new_field
             )
-            loc_fields
+            |> List.split
           in
-          let form = mk_sequent
-            (loc_fields_modified @ in_frame)
+          let pred_form = mk_sequent
+            (loc_fields_modified @ fps_in_frame @ reads_in_frame)
             [mk_eq old_pred new_pred]
           in
+          let add_frame_pattern f =
+            let frame_patterns = frame_terms |> List.map (fun t -> Pattern (t, [])) in
+            annotate f frame_patterns
+          in
           let name = "(extra) frame of " ^ string_of_ident pname in
-          let axiom_form = Axioms.mk_axiom name form in
+          let axiom_form = Axioms.mk_axiom name pred_form |> add_frame_pattern in
+          let fp_func_axiom_name = "frame for footprint funcs of " ^ string_of_ident pname in
+          let fp_func_axiom =
+            Axioms.mk_axiom
+              fp_func_axiom_name
+              (mk_sequent
+                (loc_fields_modified @ fps_in_frame)
+                (List.combine old_fp_terms new_fp_terms
+                  |> List.map (fun (t1, t2) -> mk_eq t1 t2)))
+            |> add_frame_pattern
+          in
           Debug.debug (fun () -> name);
           Debug.debug (fun () -> string_of_form axiom_form);
-          [mk_free_spec_form (FOL axiom_form) name None pos]
+          [mk_free_spec_form (FOL axiom_form) name None pos;
+            mk_free_spec_form (FOL fp_func_axiom) fp_func_axiom_name None pos]
         end
     in
     (* Add functions for the footprints *)
