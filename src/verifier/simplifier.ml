@@ -487,7 +487,6 @@ let elim_state prog =
                     let aux = match e with
                     | App (Write, [fld; idx; _], Map([Loc srt], _)) ->
                         let alloc = alloc_id srt in
-                        print_endline (string_of_ident alloc);
                         let alloc_decl = find_var prog proc alloc in
                         let alloc1_id = try IdMap.find alloc sm1 with Not_found -> alloc in
                         let alloc1 = mk_free_const alloc_decl.var_sort alloc1_id in

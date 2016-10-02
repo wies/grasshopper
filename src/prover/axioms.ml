@@ -420,8 +420,15 @@ let ep_axioms struct_srt =
         | _ -> false
       with Not_found -> false
     in
+    let filter =
+      (* do not generate ep terms for Frames that come from field writes *)
+      FilterGeneric (fun sm t ->
+        match IdMap.find (fst (s1 struct_srt)) sm with
+        | App (SetEnum, _, _) -> false 
+        | _ -> true)
+    in
     [([Match (mk_known fld1, []);
-       Match (mk_frame_term set1 set2 fld1 fld2, []);
+       Match (mk_frame_term set1 set2 fld1 fld2, [filter]);
        Match (mk_btwn_term fld3 loc1 loc3 loc4, [FilterGeneric (field_filter (fst f1) (fst f3))]);
        Match (loc1, [FilterNotNull; FilterSymbolNotOccurs EntPnt])], 
       [mk_ep fld1 set1 loc1]);
@@ -436,11 +443,11 @@ let ep_axioms struct_srt =
          count 0 t < 2
        in*)
        [Match (mk_known fld1, []);
-        Match (mk_frame_term set1 set2 fld1 fld2, []);
+        Match (mk_frame_term set1 set2 fld1 fld2, [filter]);
         Match (loc1, [FilterNotNull; FilterSymbolNotOccurs EntPnt])]
       else
        [Match (mk_known fld1, []);
-        Match (mk_frame_term set1 set2 fld1 fld2, []);
+        Match (mk_frame_term set1 set2 fld1 fld2, [filter]);
         (*Match (mk_btwn_term fld3 loc2 loc3 loc4, [FilterGeneric (field_filter (fst f1) (fst f3))]);*)
         Match (mk_elem_term loc1 set3, []);
         Match (loc1, [FilterNotNull; FilterSymbolNotOccurs EntPnt])]), 

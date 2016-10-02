@@ -130,7 +130,11 @@ let ematch filters t rep_terms egraph subst_maps =
   List.filter (fun sm -> filter_term filters (subst_term sm t) sm) subst_maps1 
 
 let generate_terms generators ground_terms =
-  let generators = remove_duplicates generators in
+  let generators =
+    let remove_generic_filters (ms, ts) =
+      List.map (function Match (m, fs) -> (m, List.filter (function FilterGeneric _ -> false | _ -> true) fs)) ms, ts 
+    in
+    remove_duplicates (fun g1 g2 -> remove_generic_filters g1 = remove_generic_filters g2) generators in
   let rec add_terms new_terms t =
     if TermSet.mem t new_terms then new_terms else
     match t with
