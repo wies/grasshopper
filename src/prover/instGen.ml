@@ -118,7 +118,7 @@ let ematch filters t rep_terms egraph subst_maps =
             else IdMap.add x t2 sm :: out_subst_maps)
           [] subst_maps
     | _ ->
-        (*print_string (string_of_sort (sort_of t1) ^ " " ^ string_of_sort (sort_of t2) ^ " fail 2");*)
+        (*print_endline (string_of_sort (sort_of t1) ^ " " ^ string_of_sort (sort_of t2) ^ " fail 2");*)
         []
   in
   let terms = 
