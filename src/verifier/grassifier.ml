@@ -1026,8 +1026,8 @@ let elim_sl prog =
             List.fold_left
               (fun acc s ->
                 let str = string_of_sort s in
-                let f = mk_var (Set s) (fresh_ident ("Modified_" ^ str)) in
-                let a = mk_var (Set s) (fresh_ident ("Alloc_" ^ str)) in
+                let f = mk_var (Set (Loc s)) (fresh_ident ("Modified_" ^ str)) in
+                let a = mk_var (Set (Loc s)) (alloc_id (Loc s)) in
                 SortMap.add (Set (Loc s)) (f, a) acc)
               SortMap.empty sorts
           in
@@ -1083,7 +1083,7 @@ let elim_sl prog =
             [mk_eq old_pred new_pred]
           in
           let add_frame_pattern f =
-            let frame_patterns = frame_terms |> List.map (fun t -> Pattern (t, [])) in
+            let frame_patterns = frame_terms |> List.map (fun t -> Pattern (mk_known t, [])) in
             annotate f frame_patterns
           in
           let name = "(extra) frame of " ^ string_of_ident pname in
