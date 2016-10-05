@@ -1003,14 +1003,11 @@ let elim_sl prog =
           let old_pred =
             mk_free_app res_srt pname (List.map mk_old_arg formals)
           in
+          (* To make the axioms linear, create fresh variables for the new predicate term *)
           let new_arg_ids =
             List.fold_left (fun new_args id1 ->
               let decl = IdMap.find id1 locals in
-              let id2 =
-                match decl.var_sort with
-                | Map ([Loc srt], _) when is_fp srt -> fresh_ident (name id1)
-                | _ -> id1
-              in
+              let id2 = fresh_ident (name id1) in
               IdMap.add id1 (id2, decl.var_sort) new_args)
               IdMap.empty formals
           in
@@ -1078,8 +1075,17 @@ let elim_sl prog =
             )
             |> List.split
           in
+          let args_are_equal =
+            original_formals
+            (* Only take the non-fields *)
+            |> List.filter (fun id ->
+              match (IdMap.find id locals).var_sort with
+              | Map ([Loc srt], _) -> is_fp srt |> not
+              | _ -> true)
+            |> List.map (fun f -> mk_eq (mk_old_arg f) (mk_new_arg f))
+          in
           let pred_form = mk_sequent
-            (loc_fields_modified @ fps_in_frame @ reads_in_frame)
+            (args_are_equal @ loc_fields_modified @ fps_in_frame @ reads_in_frame)
             [mk_eq old_pred new_pred]
           in
           let add_frame_pattern f =
@@ -1087,13 +1093,18 @@ let elim_sl prog =
             annotate f frame_patterns
           in
           let name = "(extra) frame of " ^ string_of_ident pname in
-          let axiom_form = Axioms.mk_axiom name pred_form |> add_frame_pattern in
+          let axiom_form =
+            Axioms.mk_axiom name pred_form
+            |> add_frame_pattern
+            (* TODO do we need to do this?
+            |> fun f -> annotate f [Pattern (mk_known (old_pred), []); Pattern (mk_known (new_pred), [])] *)
+          in
           let fp_func_axiom_name = "frame for footprint funcs of " ^ string_of_ident pname in
           let fp_func_axiom =
             Axioms.mk_axiom
               fp_func_axiom_name
               (mk_sequent
-                (loc_fields_modified @ fps_in_frame)
+                (args_are_equal @ loc_fields_modified @ fps_in_frame)
                 (List.combine old_fp_terms new_fp_terms
                   |> List.map (fun (t1, t2) -> mk_eq t1 t2)))
             |> add_frame_pattern
