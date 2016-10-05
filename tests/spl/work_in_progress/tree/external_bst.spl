@@ -15,7 +15,7 @@ function data_witness(v: Int, FP: Set<Node>)
 function content(FP: Set<Node>) returns (C: Set<Int>)
   requires acc(FP)
   ensures forall v: Int :: v !in C ==> data_witness(v, FP) == null
-  ensures forall x in FP :: x.data in content(FP)
+  ensures forall x in FP :: x.data in C
   ensures forall v in C :: data_witness(v, FP) in FP;
   ensures forall v in C :: v == data_witness(v, FP).data
     @(matching v yields data_witness(v, FP).left)
@@ -64,8 +64,6 @@ procedure contains(root: Node, val: Int, implicit ghost C: Set<Int>)
   var curr := root;
   while (curr.left != null && curr.right != null)
     invariant exists C1: Set<Int>, X: Set<Node> :: (acc(curr) -** (ext_bst_set(curr, C1) && acc(X)) -** ext_bst_set(root, C))
-      /* TODO Why isn't this term generated? */
-    //&*& data_witness(val, leaves(X)) == data_witness(val, leaves(X))
       &*& (val in C == val in C1)
   {
     if (val < curr.data)
