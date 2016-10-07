@@ -649,6 +649,34 @@ let rec cnf =
     | BoolOp (Or, fs) -> cnf_or [] (List.rev_map cnf fs)
     | f -> f
 
+(** Compute disjunctive normal form of a formula *)
+(* Todo: avoid exponential blow-up *)
+let rec dnf = 
+  let rec dnf_or acc = function
+    | [] -> mk_or acc
+    | BoolOp (And, []) :: _ -> BoolOp (And, [])
+    | BoolOp (Or, fs) :: fs1 -> dnf_or acc (fs @ fs1)
+    (* Pass through empty binders *)
+    | Binder (_, [], f, _) :: fs1 -> dnf_or acc (f :: fs1)
+    | f :: fs -> dnf_or (f :: acc) fs
+  in
+  let rec dnf_and acc = function
+    | BoolOp (Or, []) :: _ -> BoolOp (Or, [])
+    | [] -> mk_and acc
+    | BoolOp(And, fs) :: fs1 -> dnf_and acc (fs @ fs1)
+    | BoolOp (Or, fs) :: fs1 -> 
+      let fs_and = acc @ fs1 in
+      let fs_or = List.map (fun f -> mk_and (f :: fs_and)) fs in
+      dnf (mk_or fs_or)
+    (* Pass through empty binders *)
+    | Binder (_, [], f, _) :: fs1 -> dnf_and acc (f :: fs1)
+    | f :: fs -> dnf_and (f :: acc) fs  
+  in
+  function
+    | BoolOp(Or, fs) -> dnf_or [] (List.rev_map dnf fs)
+    | BoolOp (And, fs) -> dnf_and [] (List.rev_map dnf fs)
+    | f -> f
+
 (** Construtor for implications. *)
 let mk_implies f g =
   match g with

@@ -457,6 +457,7 @@ let annotate_frame_axioms prog =
   { prog with prog_axioms = frame_axioms @ prog.prog_axioms }
 *)
 let fp_func_id_of_pred_id pname sort = mk_ident @@ (fst pname) ^ "_fp_" ^ (string_of_sort sort)
+let is_fp_func_id pname (str, _) = Str.string_match (Str.regexp @@ (fst pname) ^ "_fp_.*") str 0 
   
 (** Desugare SL specification to FOL specifications. 
  ** Assumes that loops have been transformed to tail-recursive procedures. *)
@@ -918,17 +919,43 @@ let elim_sl prog =
           match pred1.pred_body with
           | None -> None
           | Some spec ->
-            (* Go through the formula and remove all predicates calls and HACK Disjoint preds *)
-            let rec process_term t =
-              match t with
-              | Var (x, s) -> t
-              | App (FreeSym _, _, Bool)
-              | App (Disjoint, _, Bool) -> App (BoolConst true, [], Bool)
-              | App (sym, ts, s) -> t
+            (* Go through the formula and keep only things that define the footprint *)
+            let equals_fp_func = function
+              | App (FreeSym id, _, _) when is_fp_func_id pname id -> true
+              | _ -> false
             in
-            let rec process_form = function
-              | Atom (t, annots) -> Atom (process_term t, annots)
-              | BoolOp (op, fs) -> BoolOp (op, List.map process_form fs)
+            (** True for atoms that may be used to split cases
+                Right now looks to see if this atom or its negation appears in all disjuncts *)
+            let is_case_split_atom =
+              let disjuncts =
+                match spec.spec_form with
+                | SL _ -> failwith "Expected SL to be eliminated already"
+                | FOL f ->
+                  let f = f |> nnf |> dnf in
+                  (match f with
+                  | BoolOp (Or, fs) -> fs
+                  | _ -> [f])
+              in
+              fun atom ->
+                disjuncts
+                |> List.for_all (fun disjunct ->
+                  match disjunct with
+                  | BoolOp (And, fs) ->
+                    fs |> List.exists (fun f ->
+                      equal f atom || equal f (mk_not atom))
+                  | _ -> equal disjunct atom || equal disjunct (mk_not atom)
+                  )
+            in
+            let rec process_form f = 
+              match f with
+              (* Equalities with fp() on one side *)
+              | Atom(App(Eq, [t1; t2], Bool), _) when equals_fp_func t1 || equals_fp_func t2 -> f
+              (* Atoms used for case splitting *)
+              | Atom (_, _) when is_case_split_atom f -> f
+              (* Remove all other atoms *)
+              | Atom (t, annots) -> Atom(App (BoolConst true, [], Bool), [])
+              | BoolOp (op, fs) -> smk_op op (List.map process_form fs)
+              (* TODO should we allow quantified formulas?? *)
               | Binder (b, vs, f, annots) -> Binder (b, vs, process_form f, annots)
             in
             let spec_form =
