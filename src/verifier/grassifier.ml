@@ -579,11 +579,14 @@ let elim_sl prog =
     simplify
   in
   let translate_contract contr is_proc is_tailrec is_pure modifies =
+    let is_func = contr.contr_returns <> [] in
     let pos = contr.contr_pos in
     let footprint_sorts = contr.contr_footprint_sorts in
     (** For predicates, call footprint func instead of using a FP set *)
     let footprint_set ssrt =
-      if is_proc then footprint_set ssrt
+      if is_proc || is_func then
+        (* Procedures and functions still get FP sets *)
+        footprint_set ssrt
       else
         begin
           let formal_vars =
@@ -598,7 +601,7 @@ let elim_sl prog =
       SortSet.fold
         (fun ssrt (locals, footprint_formals, footprint_caller_formals, footprint_caller_returns) ->          
           let locals1, footprint_formals1 =
-            if not is_proc then locals, footprint_formals
+            if not (is_proc || is_func) then locals, footprint_formals
             else 
               let footprint_id = footprint_id ssrt in
               let footprint_decl = mk_loc_set_decl ssrt footprint_id pos in
@@ -969,6 +972,7 @@ let elim_sl prog =
     in
     let pred_frame_axioms =
       if SortSet.is_empty pred.pred_contract.contr_footprint_sorts
+        || pred1.pred_contract.contr_returns <> []  (* No extra frame axioms for functions *)
       then []
       else
         begin
