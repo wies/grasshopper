@@ -1,5 +1,27 @@
 include "../include/sllist_rec.spl";
 
+procedure lemma(x: Node, y: Node, z: Node)
+  requires exists X: Set<Node> :: (lseg(x, y) &*& lseg(y, z)) && acc(X) &*& z !in X
+  ensures lseg(x, z)
+{
+  if (x == y) {
+  } else {
+    assert acc(x) &*& x != y &*& lseg(x.next, y) &*& lseg(y, z);
+    lemma(x.next, y, z);
+  }
+}  
+
+procedure test(x: Node, y: Node, z1: Node, z2: Node)
+  requires x.next |-> z1 &*& lseg(y, null);
+  ensures x.next |-> z2 &*& lseg(y, null);
+{
+  x.next := z2;
+  var X: Set<Node>;
+  assume acc(X);
+  assert lseg(y, null) -** acc(X);
+  assume false;
+} 
+
 procedure traverse(x: Node)
   requires lseg(x, null)
   ensures lseg(x, null)
@@ -10,7 +32,10 @@ procedure traverse(x: Node)
   while (y != null)
     invariant lseg(x, y) &*& lseg(y, null)
   {
+    assert lseg(x, y) &*& acc(y) &*& lseg(y.next, null);
+    assert lseg(x, y) &*& lseg(y, y.next) &*& lseg(y.next, null);
     y := y.next;
+    lemma(x, y, null);
   }
 }
 
