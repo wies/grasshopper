@@ -537,10 +537,10 @@ let elim_sl prog =
         Atom (App (Eq, [fp_arg; fp_func], Bool), [])
       )
     in
-    smk_and (mk_pred p (args @ fp_caller_args) :: eqs @ fp_eqs)
+    smk_and (mk_pred p args :: eqs @ fp_eqs)
   in
   (* post process term *)
-  let add_footprint_args sym ts srt =
+  (*let add_footprint_args sym ts srt =
     match sym with
     | FreeSym p when IdMap.mem p prog.prog_preds ->
         let decl = find_pred prog p in
@@ -553,11 +553,11 @@ let elim_sl prog =
           in
           mk_app srt sym (ts @ fps) 
     | _ -> mk_app srt sym ts 
-  in
-  let post_process_term t = subst_funs_term add_footprint_args t in
+  in*)
+  let post_process_term t = (*subst_funs_term add_footprint_args*) t in
   (* post process formula *)
   let post_process_form f =
-    let subst_preds f = subst_funs add_footprint_args f in
+    let subst_preds f = (*subst_funs add_footprint_args*) f in
     let simplify f =
       let round f =
         f |>
@@ -602,7 +602,7 @@ let elim_sl prog =
       SortSet.fold
         (fun ssrt (locals, footprint_formals, footprint_caller_formals, footprint_caller_returns) ->          
           let locals1, footprint_formals1 =
-            if not (is_proc || is_func) then locals, footprint_formals
+            if not is_proc then locals, footprint_formals
             else 
               let footprint_id = footprint_id ssrt in
               let footprint_decl = mk_loc_set_decl ssrt footprint_id pos in
@@ -619,9 +619,15 @@ let elim_sl prog =
           in
           let footprint_caller_id = footprint_caller_id ssrt in
           let footprint_caller_decl = mk_loc_set_decl ssrt footprint_caller_id pos in
-          IdMap.add footprint_caller_id footprint_caller_decl locals1,
+          let locals1, footprint_caller_formals1 =
+            if not is_proc then locals1, footprint_caller_formals
+            else
+              IdMap.add footprint_caller_id footprint_caller_decl locals1,
+              footprint_caller_id :: footprint_caller_formals
+          in
+          locals1,
           footprint_formals1,
-          footprint_caller_id :: footprint_caller_formals,
+          footprint_caller_formals1,
           footprint_caller_returns1
         )
         footprint_sorts (contr.contr_locals, [], [], [])    
@@ -1020,12 +1026,12 @@ let elim_sl prog =
                   pred_fp(old_fields, params) == pred_fp(new_fields, params)
           *)
           let is_fp srt = SortSet.mem srt pred.pred_contract.contr_footprint_sorts in
-          let id_fp id = 
+          (*let id_fp id = 
             let decl = IdMap.find id locals in
             match decl.var_sort with
             | Set (Loc srt) -> id = footprint_caller_id srt
             | _ -> false
-          in
+          in*)
           let res_srt = Prog.result_sort_of_pred pred in
           let mk_old_arg id =
             let decl = IdMap.find id locals in
@@ -1062,16 +1068,15 @@ let elim_sl prog =
           (* Generate Disjoint & Subset conditions for both footprints and "reads" footprints *)
           let mk_fp_func args sort =
             mk_free_app (Set (Loc sort)) (fp_func_id_of_pred_id pname sort) args in
-          let original_formals = formals |> List.filter ((~~) id_fp) in
           let old_fp_terms =
-            let old_args = original_formals |> List.map mk_old_arg in
+            let old_args = formals |> List.map mk_old_arg in
             sorts |> List.map (mk_fp_func old_args)
           in
           let new_fp_terms =
-            let new_args = original_formals |> List.map mk_new_arg in
+            let new_args = formals |> List.map mk_new_arg in
             sorts |> List.map (mk_fp_func new_args)
           in
-          let reads_terms = formals |> List.filter id_fp |> List.map mk_old_arg in
+          (*let reads_terms = formals |> List.filter id_fp |> List.map mk_old_arg in*)
           let in_frame terms =
             List.flatten (
               List.map
@@ -1085,7 +1090,7 @@ let elim_sl prog =
             )
           in
           let fps_in_frame = in_frame old_fp_terms in
-          let reads_in_frame = in_frame reads_terms in
+          (*let reads_in_frame = in_frame reads_terms in*)
           let loc_fields =
             List.fold_left (fun loc_fields id1 ->
               let decl = IdMap.find id1 (locals_of_pred pred) in
@@ -1107,7 +1112,7 @@ let elim_sl prog =
             |> List.split
           in
           let args_are_equal =
-            original_formals
+            formals
             (* Only take the non-fields *)
             |> List.filter (fun id ->
               match (IdMap.find id locals).var_sort with
@@ -1116,7 +1121,7 @@ let elim_sl prog =
             |> List.map (fun f -> mk_eq (mk_old_arg f) (mk_new_arg f))
           in
           let pred_form = mk_sequent
-            (args_are_equal @ loc_fields_modified @ fps_in_frame @ reads_in_frame)
+            (args_are_equal @ loc_fields_modified @ fps_in_frame (*@ reads_in_frame*))
             [mk_eq old_pred new_pred]
           in
           let add_frame_pattern f =
