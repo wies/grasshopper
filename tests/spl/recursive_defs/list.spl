@@ -22,6 +22,29 @@ procedure test(x: Node, y: Node, z1: Node, z2: Node)
   assume false;
 } 
 
+procedure lemma2(x: Node, y: Node, z: Node)
+  requires lseg(x, y) &*& y.next |-> z &*& lseg(z, null)
+  ensures lseg(x, z) &*& lseg(z, null)
+{
+  if (x == y) {
+    assert acc(y) &*& lseg(y.next, z) &*& y != z &*& lseg(z, null);
+    assume acc(y) &*& lseg(y.next, z) &*& y != z &*& lseg(z, null);
+  } else {
+    lemma2(x.next, y, z);
+  }
+}
+
+procedure lemma3(x: Node, y: Node, z: Node)
+  requires exists X: Set<Node> :: (lseg(x, y) &*& acc(y)) && acc(X) &*& y.next == z &*& z !in X
+  ensures lseg(x, z)
+{
+  if (x == y) {
+    assert acc(y) &*& lseg(y.next, z) &*& y != z;
+  } else {
+    lemma3(x.next, y, z);
+  }
+}
+
 procedure traverse(x: Node)
   requires lseg(x, null)
   ensures lseg(x, null)
@@ -32,11 +55,16 @@ procedure traverse(x: Node)
   while (y != null)
     invariant lseg(x, y) &*& lseg(y, null)
   {
-    assert lseg(x, y) &*& acc(y) &*& lseg(y.next, null);
-    assert lseg(x, y) &*& lseg(y, y.next) &*& lseg(y.next, null);
     y := y.next;
-    lemma(x, y, null);
+    lemma3(x, y, null);
   }
+}
+
+procedure test_frame(x: Node, y: Node, z1: Node, z2: Node)
+  requires x.next |-> z1 &*& lseg(y, null)
+  ensures x.next |-> z2 &*& lseg(y, null)
+{
+  x.next := z2;
 }
 
 procedure copy(lst: Node) returns (res: Node)
@@ -48,6 +76,7 @@ procedure copy(lst: Node) returns (res: Node)
     invariant lseg(lst, curr) &*& lseg(curr, null)
     invariant lseg(cp, null)
   {
+    lemma3(lst, curr, curr.next);
     var old_cp := cp;
     cp := new Node;
     cp.next := old_cp;
