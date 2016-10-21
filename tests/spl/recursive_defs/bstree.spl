@@ -1,22 +1,93 @@
-// Structure and predicate declarations for binary search trees
+include "../include/bstree_rec.spl";
 
-struct Node {
-  var left: Node;
-  var right: Node;
-  var data: Int;
-  var ghost parent: Node;
+procedure destroy(root: Node)
+  requires tree(root);
+  ensures emp;
+{
+  if (root != null) {
+    destroy(root.left);
+    destroy(root.right);
+    free root;
+  }
 }
 
-predicate tree(r: Node) {
-  r == null ||
-  r != null &*& acc(r) &*& tree(r.left) &*& tree(r.right)
+procedure extract_max(root: Node)
+  returns (others: Node, max: Node)
+  requires tree(root) &*& root != null;
+  ensures tree(others) &*& acc(max);
+  ensures max.right == null
+{
+  if (root.right != null) {
+    var c: Node, m: Node;
+    c, m := extract_max(root.right); 
+    root.right := c;
+    return root, m;
+  } else {
+    var c: Node;
+    c := root.left;
+    return c, root;
+  }
 }
 
-predicate bst(r: Node) {
-  r == null ||
-  (exists FP_L: Set<Node>, FP_R: Set<Node> ::
-   r != null &*& acc(r) &*& (bst(r.left) && acc(FP_L)) &*& (bst(r.right) && acc(FP_R))
-   &*& (forall x in FP_L :: x.data <= r.data)
-   &*& (forall x in FP_R :: r.data <= x.data)
-   )
+procedure insert(root: Node, value: Int)
+  returns (new_root: Node)
+  requires tree(root);
+  ensures tree(new_root);
+{
+  if (root == null) {
+    var t: Node;
+    t := new Node;
+    t.left := null;
+    t.right := null;
+    t.data := value;
+    return t;
+  } else { 
+    var n: Node;
+    if (root.data > value) {
+      n := insert(root.left, value);
+      root.left := n;
+      return root;
+    } else if (root.data < value) {
+      n := insert(root.right, value);
+      root.right := n;
+      return root;
+    }
+    return root;
+  }
+}
+
+procedure remove(root: Node, value: Int)
+  returns (res: Node)
+  requires tree(root);
+  ensures tree(res);
+{
+  if (root == null) {
+    return null;
+  } else if (root.data == value) {
+    if (root.left == null && root.right == null) {
+      free(root);
+      return null;
+    } else if (root.left != null && root.right == null) {
+      res := root.left;
+      free(root);
+      return res;
+    } else if (root.left == null && root.right != null) {
+      res := root.right;
+      free(root);
+      return res;
+    } else {
+      var l: Node, m: Node;
+      l, m := extract_max(root.left);
+      m.left := l;
+      m.right := root.right;
+      free(root);
+      return m;
+    }
+  } else if (root.data > value) {
+    root.left := remove(root.left, value);
+    return root;
+  } else {
+    root.right := remove(root.right, value);
+    return root;
+  }
 }

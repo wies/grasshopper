@@ -55,6 +55,9 @@ procedure traverse(x: Node)
   while (y != null)
     invariant lseg(x, y) &*& lseg(y, null)
   {
+    //assert lseg(x, y) &*& acc(y) &*& lseg(y.next, null);
+    //assert lseg(x, y) &*& lseg(y, y.next) &*& lseg(y.next, null);
+    //lemma(x, y, y.next);
     y := y.next;
     lemma3(x, y, null);
   }
