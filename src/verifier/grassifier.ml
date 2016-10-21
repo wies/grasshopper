@@ -457,6 +457,7 @@ let annotate_frame_axioms prog =
   { prog with prog_axioms = frame_axioms @ prog.prog_axioms }
 *)
 let fp_func_id_of_pred_id pname sort = mk_ident @@ (fst pname) ^ "_fp_" ^ (string_of_sort sort)
+let is_fp_func_id pname (str, _) = Str.string_match (Str.regexp @@ (fst pname) ^ "_fp_.*") str 0 
   
 (** Desugare SL specification to FOL specifications. 
  ** Assumes that loops have been transformed to tail-recursive procedures. *)
@@ -579,11 +580,14 @@ let elim_sl prog =
     simplify
   in
   let translate_contract contr is_proc is_tailrec is_pure modifies =
+    let is_func = contr.contr_returns <> [] in
     let pos = contr.contr_pos in
     let footprint_sorts = contr.contr_footprint_sorts in
     (** For predicates, call footprint func instead of using a FP set *)
     let footprint_set ssrt =
-      if is_proc then footprint_set ssrt
+      if is_proc || is_func then
+        (* Procedures and functions still get FP sets *)
+        footprint_set ssrt
       else
         begin
           let formal_vars =
@@ -598,7 +602,7 @@ let elim_sl prog =
       SortSet.fold
         (fun ssrt (locals, footprint_formals, footprint_caller_formals, footprint_caller_returns) ->          
           let locals1, footprint_formals1 =
-            if not is_proc then locals, footprint_formals
+            if not (is_proc || is_func) then locals, footprint_formals
             else 
               let footprint_id = footprint_id ssrt in
               let footprint_decl = mk_loc_set_decl ssrt footprint_id pos in
@@ -915,17 +919,43 @@ let elim_sl prog =
           match pred1.pred_body with
           | None -> None
           | Some spec ->
-            (* Go through the formula and remove all predicates calls and HACK Disjoint preds *)
-            let rec process_term t =
-              match t with
-              | Var (x, s) -> t
-              | App (FreeSym _, _, Bool)
-              | App (Disjoint, _, Bool) -> App (BoolConst true, [], Bool)
-              | App (sym, ts, s) -> t
+            (* Go through the formula and keep only things that define the footprint *)
+            let equals_fp_func = function
+              | App (FreeSym id, _, _) when is_fp_func_id pname id -> true
+              | _ -> false
             in
-            let rec process_form = function
-              | Atom (t, annots) -> Atom (process_term t, annots)
-              | BoolOp (op, fs) -> BoolOp (op, List.map process_form fs)
+            (** True for atoms that may be used to split cases
+                Right now looks to see if this atom or its negation appears in all disjuncts *)
+            let is_case_split_atom =
+              let disjuncts =
+                match spec.spec_form with
+                | SL _ -> failwith "Expected SL to be eliminated already"
+                | FOL f ->
+                  let f = f |> nnf |> dnf in
+                  (match f with
+                  | BoolOp (Or, fs) -> fs
+                  | _ -> [f])
+              in
+              fun atom ->
+                disjuncts
+                |> List.for_all (fun disjunct ->
+                  match disjunct with
+                  | BoolOp (And, fs) ->
+                    fs |> List.exists (fun f ->
+                      equal f atom || equal f (mk_not atom))
+                  | _ -> equal disjunct atom || equal disjunct (mk_not atom)
+                  )
+            in
+            let rec process_form f = 
+              match f with
+              (* Equalities with fp() on one side *)
+              | Atom(App(Eq, [t1; t2], Bool), _) when equals_fp_func t1 || equals_fp_func t2 -> f
+              (* Atoms used for case splitting *)
+              | Atom (_, _) when is_case_split_atom f -> f
+              (* Remove all other atoms *)
+              | Atom (t, annots) -> Atom(App (BoolConst true, [], Bool), [])
+              | BoolOp (op, fs) -> smk_op op (List.map process_form fs)
+              (* TODO should we allow quantified formulas?? *)
               | Binder (b, vs, f, annots) -> Binder (b, vs, process_form f, annots)
             in
             let spec_form =
@@ -969,6 +999,7 @@ let elim_sl prog =
     in
     let pred_frame_axioms =
       if SortSet.is_empty pred.pred_contract.contr_footprint_sorts
+        || pred1.pred_contract.contr_returns <> []  (* No extra frame axioms for functions *)
       then []
       else
         begin
