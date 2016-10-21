@@ -3,6 +3,7 @@ include "../include/dllist.spl";
 // Insertion into a doubly-linked list.
 // The bug is that the procedure might not return the head of the list when elt is inserted before a.
 
+  /*
 procedure soundness3(a: Node, b: Node, elt: Node) returns (c: Node, d: Node)
     requires dlseg(a, null, null, b) &*& elt.next |-> null;
     ensures dlseg(c, null, null, d);
@@ -33,4 +34,21 @@ procedure soundness3(a: Node, b: Node, elt: Node) returns (c: Node, d: Node)
     elt.prev := prv;
     return c, d;
   }
+}
+  */
+  
+procedure soundness3(a: Node, b: Node, elt: Node, c: Node, d: Node, curr: Node, prv: Node)
+  returns (c1: Node)
+  requires curr != null &*& dlseg(c, null, curr, prv) &*& dlseg(curr, prv, null, d) &*& elt.next |-> null;
+  ensures dlseg(c1, null, null, d);
+{
+  elt.next := curr;
+  curr.prev := elt;
+  if (prv != null) {
+    prv.next := elt;
+  } else {
+    //c1 := elt;
+  }
+  elt.prev := prv;
+  return c1;
 }
