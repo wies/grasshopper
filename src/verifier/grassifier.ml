@@ -602,7 +602,7 @@ let elim_sl prog =
       SortSet.fold
         (fun ssrt (locals, footprint_formals, footprint_caller_formals, footprint_caller_returns) ->          
           let locals1, footprint_formals1 =
-            if not (is_proc || is_func) then locals, footprint_formals
+            if not is_proc then locals, footprint_formals
             else 
               let footprint_id = footprint_id ssrt in
               let footprint_decl = mk_loc_set_decl ssrt footprint_id pos in
