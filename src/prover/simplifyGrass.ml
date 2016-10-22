@@ -133,7 +133,11 @@ let rec simplify_sets fs =
       (match s1', s2' with
       | App (Empty, _, _), _ | _, App (Empty, _, _) -> mk_true_term
       | _ -> mk_disjoint_term s1' s2')
-    (*| App (SetEnum, ts, srt) -> ...*)
+        (*| App (SetEnum, ts, srt) -> ...*)
+    | App (Elem, [t; s], _) ->
+        (match simp s with
+        | App (SetEnum, [st], _) -> mk_eq_term (simp t) st
+        | s1 -> mk_elem_term (simp t) s1)
     | App (sym, ts, srt) -> 
         App (sym, List.map simp ts, srt)
     | Var _ -> t
