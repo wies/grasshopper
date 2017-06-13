@@ -53,6 +53,42 @@ let btwn_field_generators fs =
   in
   List.fold_left make_generators [] fs 
 
+
+(** Lineraize axioms *)
+let linearize fs =
+  let lin_fold fn seen eqs es =
+    List.fold_right (fun e (seen, eqs, es1) ->
+      let seen, eqs, e1 = fn seen eqs e in
+      seen, eqs, e1 :: es1)
+      es (seen, eqs, [])
+  in
+  let rec lin_term seen eqs = function
+    | Var (x, srt) as t when IdSet.mem x seen ->
+        let x1 = fresh_ident (name x) in
+        let t1 = Var (x1, srt) in
+        seen, mk_neq t t1 :: eqs, t1
+    | Var (x, srt) as t -> IdSet.add x seen, eqs, t
+    | App (sym, ts, srt) ->
+        let seen, eqs, ts1 = lin_fold lin_term seen eqs ts in
+        seen, eqs, App (sym, ts1, srt)
+  in
+  let rec lin_form seen eqs = function
+    | BoolOp (op, fs) ->
+      let seen, eqs, fs1 = lin_fold lin_form seen eqs fs in
+      seen, eqs, BoolOp (op, fs1)
+    | Binder (b, [], f, anns) ->
+        let seen, eqs, f1 = lin_form seen eqs f in
+        seen, eqs, Binder (b, [], f1, anns)
+    | Atom (App (sym, ts, srt), anns) ->
+        let seen, eqs, ts1 = lin_fold (fun _ -> lin_term IdSet.empty) seen eqs ts in
+        seen, eqs, Atom (App (sym, ts1, srt), anns)
+    | f -> seen, eqs, f 
+  in
+  List.map (fun f ->
+    let _, eqs, f1 = lin_form IdSet.empty [] f in
+    mk_or (f1 :: eqs))
+    fs
+          
 (** Generate local instances of all axioms of [fs] in which variables occur below function symbols *)
 let instantiate_and_prove session fs =
   let fs1 = encode_labels fs in
@@ -143,7 +179,7 @@ let instantiate_and_prove session fs =
     then fs2, gts_inst, classes
     else
     let classes = CongruenceClosure.congr_classes (rev_concat [fs_inst; fs]) gts2 in
-    instantiate_with_terms true fs1 classes, gts2, classes
+    instantiate_with_terms true (linearize fs1) classes, gts2, classes
   in
   (*let round3 fs_inst gts_inst classes =
     let generators =

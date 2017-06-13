@@ -230,7 +230,10 @@ let resolve_names cu =
           BinaryOp (re locals tbl e1, op, re locals tbl e2, ty, pos)
       | Ident (init_id, pos) ->
           let id = lookup_id init_id tbl pos in
-          Ident (id, pos)
+          if IdMap.mem id preds0 then
+            PredApp (Pred id, [], pos)
+          else
+            Ident (id, pos)
       | Annot (e, PatternAnnot p, pos) ->
           Annot (re locals tbl e, PatternAnnot (re locals tbl p), pos)
       | Annot (e, GeneratorAnnot (es, ge), pos) ->
