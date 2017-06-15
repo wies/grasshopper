@@ -276,11 +276,20 @@ let iter_solvers session fn =
     (fun (solver, state) -> fn solver state)
     session.solvers
 
+
 let read_from_chan session chan =
   let lexbuf = Lexing.from_channel chan in
   SmtLibLexer.set_file_name lexbuf session.log_file_name; 
-  SmtLibParser.output SmtLibLexer.token lexbuf
-
+  try
+    SmtLibParser.output SmtLibLexer.token lexbuf
+  with ProgError.Prog_error (pos, _) ->
+    let tok = Lexing.lexeme lexbuf in
+    let tail = SmtLibLexer.ruleTail "" lexbuf in
+    let msg = 
+      "failed to parse SMT solver response while parsing: " ^ tok ^ tail
+    in
+    ProgError.syntax_error pos (Some msg)
+      
 let read session = 
   let in_descrs = 
     Util.flat_map 
@@ -673,7 +682,7 @@ let extract_name ann =
       (function Name id -> string_of_ident id | _ -> "")
       ann 
   in
-  Str.global_replace (Str.regexp " \\|(\\|)\\|<\\|>") "-" (String.concat "-" (List.rev names))
+  Str.global_replace (Str.regexp " \\|(\\|)\\|<\\|>") "_" (String.concat "-" (List.rev names))
 
 let smtlib_form_of_grass_form solver_info signs f =
   let f = if !Config.use_bitvector then bitvecorize_grass_formula f else f in

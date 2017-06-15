@@ -110,3 +110,7 @@ rule token = parse
       in
       ProgError.lexical_error spos
     }
+
+and ruleTail acc = parse
+  | '\n' { acc }
+  | [^'\n']* as str { ruleTail (acc^str) lexbuf }
