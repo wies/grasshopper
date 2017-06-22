@@ -490,7 +490,7 @@ let elim_state prog =
                         let alloc_decl = find_var prog proc alloc in
                         let alloc1_id = try IdMap.find alloc sm1 with Not_found -> alloc in
                         let alloc1 = mk_free_const alloc_decl.var_sort alloc1_id in
-                        [mk_frame (mk_setenum [idx]) alloc1 (subst_id_term sm fld) x1]
+                        [mk_frame (mk_setenum [subst_id_term sm idx]) alloc1 (subst_id_term sm fld) x1]
                     | _ -> []
                     in
                     match sort_of e1 with
