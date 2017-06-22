@@ -428,6 +428,12 @@ let form_of_spec sf =
   | FOL f -> f
   | SL _ -> failwith "expected FOL specification in Prog.form_of_spec"
 
+let sl_of_spec sf =
+  match sf.spec_form with
+  | SL f -> f
+  | FOL _ -> failwith "expected SL specification in Prog.sl_of_spec"
+    
+        
 let map_terms_spec fn sf =
   match sf.spec_form with
   | FOL f -> { sf with spec_form = FOL (map_terms fn f) }
