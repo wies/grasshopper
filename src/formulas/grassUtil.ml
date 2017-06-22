@@ -77,44 +77,80 @@ let compare_src_pos pos1 pos2 =
 
 (** {6 Equality on formulas} *)
 
-(** Equality test on formulas. Compares formulas modulo alpha renaming, stripping of annotations, etc. *)
+(** Equality test on formulas. Compares formulas modulo alpha renaming, 
+  * stripping of annotations, etc. *)
 let equal f1 f2 =
-  let rec eqt sm t1 t2 =
+  (* The pair of maps (sm1, sm2) represents a bijection between the 
+   * bound variables in f1 and f2. This bijection is constructed on the fly 
+   * to prove alpha equivalence. *)
+  let rec forall2 fn sm1 sm2 xs ys =
+    match xs, ys with
+    | x :: xs, y :: ys ->
+        let sm1, sm2, b = fn sm1 sm2 x y in
+        if b then forall2 fn sm1 sm2 xs ys
+        else sm1, sm2, b
+    | [], [] -> sm1, sm2, true
+    | _, _ -> sm1, sm2, false
+  in
+  let rec eqt sm1 sm2 t1 t2 =
     match t1, t2 with
     | Var (x1, srt1), Var (x2, srt2) when srt1 = srt2 ->
-	let x1' = 
-	  try IdMap.find x1 sm
-	  with Not_found -> x1
-	in x1' = x2
-    | App (sym1, ts1, srt1), App (sym2, ts2, srt2) ->
-        sym1 = sym2 &&
-        srt1 = srt2 &&
-        (try List.for_all2 (eqt sm) ts1 ts2
-        with Invalid_argument _ -> false)
-    | _ -> false
-  in
-  let rec eq sm f1 f2 =
-    match f1, f2 with
-    | BoolOp (op1, fs1), BoolOp (op2, fs2) ->
-        op1 = op2 &&
-        (try List.for_all2 (eq sm) fs1 fs2
-        with Invalid_argument _ -> false)
-    | Binder (b1, vs1, f1, _), Binder (b2, vs2, f2, _) ->
-        b1 = b2 &&
+        let sm1, sm2, b = 
         (try
-          let sm1 =
-            List.fold_left2
-              (fun sm1 (v1, _) (v2, _) -> IdMap.add v1 v2 sm1)
-              sm vs1 vs2
-          in
-          List.for_all2 (fun (_, srt1) (_, srt2) -> srt1 = srt2) vs1 vs2 &&
-          eq sm1 f1 f2
-        with Invalid_argument _ -> false)
-    | Atom (t1, _), Atom (t2, _) ->
-        eqt sm t1 t2
-    | _ -> false
+          sm1, sm2, IdMap.find x1 sm1 = x2
+        with Not_found ->
+          if IdMap.mem x2 sm2
+          then sm1, sm2, false
+          else IdMap.add x1 x2 sm1, IdMap.add x2 x1 sm2, true)
+        in
+        sm1, sm2, b         
+    | App (sym1, ts1, srt1), App (sym2, ts2, srt2)
+      when sym1 = sym2 && srt1 = srt2 ->
+        forall2 eqt sm1 sm2 ts1 ts2
+    | _ -> sm1, sm2, false
   in
-  eq IdMap.empty f1 f2
+  let same_capture vs1 vs2 sm1 =
+    List.for_all (fun (v1, _) ->
+      not (IdMap.mem v1 sm1) ||
+      List.mem_assoc (IdMap.find v1 sm1) vs2)
+      vs1
+  in
+  let rec eq sm1 sm2 f1 f2 =
+    match f1, f2 with
+    | BoolOp (op1, fs1), BoolOp (op2, fs2) when op1 = op2 ->
+        forall2 eq sm1 sm2 fs1 fs2
+    | Binder (b1, vs1, f1, _), Binder (b2, vs2, f2, _)
+      when b1 = b2 && same_capture vs1 vs2 sm1 && same_capture vs2 vs1 sm2 ->
+        let remove_bindings sm1 sm2 vs1 =
+          List.fold_left 
+            (fun (sm1b, sm2b) (v1, _) ->
+              if IdMap.mem v1 sm1b then
+                let v2 = IdMap.find v1 sm1b in
+                IdMap.remove v1 sm1b,
+                IdMap.remove v2 sm2b
+              else sm1b, sm2b)
+            (sm1, sm2) vs1
+        in
+        let sm1b, sm2b = remove_bindings sm1 sm2 vs1 in
+        let sm1b, sm2b, b = eq sm1b sm2b f1 f2 in
+        let merge_bindings vs sm smb =
+          IdMap.merge (fun v a b ->
+            match a, b with
+            | a, _ when List.mem_assoc v vs -> a
+            | _, b when not (List.mem_assoc v vs) -> b                
+            | _ -> None)
+            sm smb
+        in
+        merge_bindings vs1 sm1 sm1b,
+        merge_bindings vs2 sm2 sm2b,
+        b && same_capture vs1 vs2 sm1b && same_capture vs2 vs1 sm2b
+    | Atom (t1, _), Atom (t2, _) ->
+        eqt sm1 sm2 t1 t2
+    | _ -> sm1, sm2, false
+  in
+  let sm1, _, b = eq IdMap.empty IdMap.empty f1 f2 in
+  (* formulas are structurally equal and all free variables are matched *)
+  b && IdMap.for_all (fun x y -> x == y) sm1
     
 module FormSet = Set.Make(struct
     type t = form
@@ -693,8 +729,11 @@ let mk_iff a b =
   smk_or [smk_and [a; b]; smk_and [nnf (mk_not a); nnf (mk_not b)]]
 
 
-(** {6 Generic formula manipulation and substitution functions} *)
+(** {6 Generic term and formula manipulation, substitution functions} *)
 
+(** Orient terms *)
+let orient_terms t1 t2 = if compare t1 t2 < 0 then (t1, t2) else (t2, t1)
+    
 (** Check whether term [t] is ground *)
 
 let rec is_ground_term = function
@@ -739,6 +778,18 @@ let map_terms fn f =
     | Atom (t, a) -> Atom (fn t, ma a)
     | BoolOp (op, fs) -> BoolOp (op, List.map mt fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, mt f, ma a)
+  in mt f
+
+(** Apply the function fn to all atoms appearing in [f] *)
+let map_atoms fn f =
+  let rec mt = function
+    | Atom (t, a) -> annotate (fn t) a
+    | BoolOp (Not, [Atom (t, a)]) ->
+        (match annotate (fn t) a with
+        | BoolOp (Not, [f]) -> f
+        | f1 -> BoolOp (Not, [f1]))
+    | BoolOp (op, fs) -> BoolOp (op, List.map mt fs)
+    | Binder (b, vs, f, a) -> Binder (b, vs, mt f, a)
   in mt f
 
 (** Like {!fold_terms} except that [fn] takes the set of bound variables of the given context as additional argument *)
@@ -1172,6 +1223,7 @@ let subst subst_map f =
   in sub subst_map f
 
 
+(** Split top-level conjunctions into conjuncts *) 
 let split_ands fs =
   let rec split acc = function
     | BoolOp(And, fs) :: gs -> 
@@ -1306,13 +1358,15 @@ let propagate_forall_down f =
 (** Assumes that [f] is in negation normal form. *)
 let foralls_to_exists f =
   let rec find_defs bvs defs f =
-    let orient t1 t2 = if compare t1 t2 < 0 then (t1, t2) else (t2, t1) in
     let rec disjoints_and_subsets dcs scs = function
       | BoolOp (Not, [Atom (App (SubsetEq, [t1; t2], _), _)]) :: fs ->
-          let scs1 = orient t1 t2 :: scs in
+          let scs1 = orient_terms t1 t2 :: scs in
+          disjoints_and_subsets dcs scs1 fs
+      | BoolOp (Not, [Atom (App (Elem, [t1; t2], _), _)]) :: fs ->
+          let scs1 = orient_terms (mk_setenum [t1]) t2 :: scs in
           disjoints_and_subsets dcs scs1 fs
       | BoolOp (Not, [Atom (App (Disjoint, [t1; t2], _), _)]) :: fs ->
-          let dcs1 = orient t1 t2 :: dcs in
+          let dcs1 = orient_terms t1 t2 :: dcs in
           disjoints_and_subsets dcs1 scs fs
       | BoolOp (Or, gs) :: fs ->
           disjoints_and_subsets dcs scs (gs @ fs)
@@ -1338,7 +1392,7 @@ let foralls_to_exists f =
       | BoolOp (Not, [Atom (App (Eq, [t1; App (Union, [t2; (Var (x, _) as xt)], _)], _), _)])
       | BoolOp (Not, [Atom (App (Eq, [t1; App (Union, [(Var (x, _) as xt); t2], _)], _), _)])
         when IdSet.mem x nodefs &&
-          List.mem (orient xt t2) dcs &&
+          List.mem (orient_terms xt t2) dcs &&
           IdSet.is_empty (IdSet.inter nodefs (fv_term_acc (fv_term t1) t2)) ->
             IdSet.remove x nodefs, mk_eq xt (mk_diff t1 t2) :: defs, mk_not (mk_subseteq t2 t1)
       | BoolOp (Not, [Atom (App (Eq, [(App (Diff, [xt; _], _) as t2); t1], _), _)])
@@ -1349,7 +1403,7 @@ let foralls_to_exists f =
             | Some t, (Var (x, _) as xt) ->
                 IdSet.remove x nodefs, mk_eq xt t :: defs, mk_false
             | Some t, App (Diff, [t1; t2], _) when
-                List.mem (orient t1 t2) scs && IdSet.is_empty (IdSet.inter nodefs (fv_term t2)) ->
+                List.mem (orient_terms t1 t2) scs && IdSet.is_empty (IdSet.inter nodefs (fv_term t2)) ->
                   undiff (Some (mk_union [t; t2])) t1
             | _ -> nodefs, defs, f
             in    
@@ -1387,36 +1441,44 @@ let foralls_to_exists f =
     end
     else find_defs nodefs defs g
   in
-  let rec distribute_and bvs gs = function
+  let rec distribute_and gs = function
     | BoolOp (And, fs) :: gs1 ->
         let fs1 = List.map (fun f -> mk_or (List.rev_append gs (f :: gs1))) fs in
-        cf (mk_forall bvs (mk_and fs1))
+        let f1 = mk_and fs1 in
+        (*print_endline "\nafter:";
+        print_endline (string_of_form (mk_and fs));*)
+        f1
     | BoolOp (Or, gs2) :: gs1 ->
-        distribute_and bvs gs (gs2 @ gs1)
+        distribute_and gs (gs2 @ gs1)
     | [Binder (b, [], g, a)] ->
-        let g1 = distribute_and bvs gs [g] in
+        let g1 = distribute_and gs [g] in
         Binder (b, [], g1, a)
     | Binder (_, [], g, a) :: gs1 ->
         (*assert (List.for_all (function TermGenerator _ -> false | _ -> true) a);*)
-        distribute_and bvs gs (g :: gs1)
-    | g :: gs1 -> distribute_and bvs (g :: gs) gs1
-    | [] -> smk_forall bvs (mk_or (List.rev gs))
-  and cf = function
+        distribute_and gs (g :: gs1)
+    | g :: gs1 -> distribute_and (g :: gs) gs1
+    | [] -> mk_or (List.rev gs)
+  in
+  let rec cf = function
     | Binder (b, [], f, a) ->
         Binder (b, [], cf f, a)
     | Binder (Forall, bvs, BoolOp (And, fs), a) ->
-        let fs1 = List.map (fun f -> cf (Binder (Forall, bvs, f, a))) fs in
+        let fs1 =
+          List.rev
+            (List.rev_map (fun f -> cf (Binder (Forall, bvs, f, a))) fs)
+        in
         smk_and fs1
     | Binder (Forall, _, BoolOp (Or, _), _) as f ->
         (match propagate_forall_up f with
-        | Binder (Forall, bvs, (BoolOp (Or, fs) as f), a) ->
+        | Binder (Forall, bvs, (BoolOp (Or, fs) as g0), a) ->
             let bvs_set = id_set_of_list (List.map fst bvs) in
-            let nodefs, defs, g = find_defs bvs_set [] f in
+            let nodefs, defs, g = find_defs bvs_set [] g0 in
             let ubvs, ebvs = List.partition (fun (x, _) -> IdSet.mem x nodefs) bvs in
             (match ebvs with
             | [] ->
                 (*assert (List.for_all (function TermGenerator _ -> false | _ -> true) a);*)
-                annotate (distribute_and bvs [] [g]) a
+                let f1 = mk_forall ~ann:a bvs (distribute_and [] [g]) in               
+                if equal f f1 then f1 else cf f1
             | _ -> 
                 let g1 = cf (mk_forall ubvs g) in
                 smk_exists ~ann:a ebvs (mk_and (defs @ [g1])))
@@ -1609,3 +1671,30 @@ module Clauses = struct
   let to_form cs = smk_and (List.map smk_or cs)
 
 end
+
+
+(** Unit tests for GrassUtil.equal *)
+
+(*let _ =
+  let x = mk_ident "x" in
+  let xvar = mk_var Int x in
+  let y = mk_ident "y" in
+  let yvar = mk_var Int y in
+  let z = mk_ident "z" in
+  let zvar = mk_var Int z in
+  let p = mk_ident "p" in
+  let f1 = mk_forall [x, Int] (mk_pred p [xvar]) in
+  let f2 = mk_forall [y, Int] (mk_pred p [yvar]) in
+  let f3 = mk_forall [y, Int] (mk_pred p [zvar]) in
+  let h1 = mk_forall [(x, Int); (y, Int)] (mk_pred p [xvar; yvar]) in
+  let h2 = mk_forall [(z, Int); (y, Int)] (mk_pred p [yvar; zvar]) in
+  let h3 = mk_forall [(z, Int)] (mk_pred p [yvar; xvar]) in
+  let h4 = mk_forall [(y, Int)] (mk_pred p [xvar; zvar]) in
+  assert (equal f1 f1);
+  assert (equal f1 f2);
+  assert (equal f2 f1);
+  assert (not @@ equal f1 f3);
+  assert (equal h1 h2);
+  assert (not @@ equal h3 h4)
+*)
+
