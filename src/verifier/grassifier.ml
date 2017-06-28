@@ -676,9 +676,9 @@ let elim_sl prog =
           let f = mk_or [mk_pred first_iter_id []; 
                          mk_error_msg (pos, error_msg ssrt)
                            (mk_srcpos pos
-                              (mk_subseteq
-                                 (footprint_set ssrt)
-                                 (footprint_caller_set ssrt)))]
+                              (mk_subseteq                                 
+                                 (footprint_caller_set ssrt)
+                                 (footprint_set ssrt)))]
           in
           mk_spec_form (FOL f) "invariant" (Some msg) pos :: fs)
           footprint_sorts
