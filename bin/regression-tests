@@ -7,6 +7,9 @@ soudness0               tests/spl/soundness/soundness0.spl      fail
 soudness1               tests/spl/soundness/soundness1.spl      fail
 soudness2               tests/spl/soundness/soundness2.spl      fail
 soudness3               tests/spl/soundness/soundness3.spl      fail
+soudness5               tests/spl/soundness/soundness5.spl      fail
+soudness7               tests/spl/soundness/soundness7.spl      fail
+soudness8               tests/spl/soundness/soundness8.spl      fail
 sl_traverse             tests/spl/sl/sl_traverse.spl            pass
 sl_dispose              tests/spl/sl/sl_dispose.spl             pass
 sl_copy                 tests/spl/sl/sl_copy.spl                pass
