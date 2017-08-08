@@ -107,6 +107,9 @@ let removeGhost cu =
       let caseTrue2 = process_stmt scope caseTrue in
       let caseFalse2 = process_stmt scope caseFalse in
       If (cond2, caseTrue2, caseFalse2, p)
+    | Choice (_, _) ->
+        error (fun () -> "cannot compile nondeterministic choice statements\n");
+        failwith "compiling nondeterministic choice"
     | Loop (contracts, pre, cond, body, p) ->
       let pre2 = process_stmt scope pre in
       let cond2 = process_expr scope cond in

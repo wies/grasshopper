@@ -29,6 +29,8 @@ let fix_scopes stmnt =
         Block (List.map (fs pos) stmnts, pos)
     | If (cond, t, e, pos) ->
         If (cond, fs scope t, fs scope e, pos)
+    | Choice (stmnts, pos) ->
+        Choice (List.map (fs scope) stmnts, pos)
     | Loop (inv, preb, cond, postb, pos) ->
         Loop (inv, fs scope preb, cond, fs scope postb, pos)
     | stmnt -> stmnt
@@ -45,13 +47,13 @@ type rhs_string_maybe =
 
 %}
 
-%token <string> IDENT
+%token <string * int> IDENT
 %token <Int64.t> INTVAL
 %token <char> CHARVAL
 %token <bool> BOOLVAL
 %token <string> STRINGVAL
 %token LPAREN RPAREN LBRACE RBRACE LBRACKET RBRACKET
-%token COLON COLONEQ COLONCOLON SEMICOLON DOT PIPE
+%token COR, CHOOSE COLON COLONEQ COLONCOLON SEMICOLON DOT PIPE
 %token UMINUS PLUS MINUS DIV TIMES MOD
 %token UNION INTER DIFF
 %token EQ NEQ LEQ GEQ LT GT IN NOTIN AT
@@ -70,6 +72,9 @@ type rhs_string_maybe =
 %nonassoc COLONEQ 
 %nonassoc ASSUME ASSERT
 %nonassoc NEW FREE
+
+%nonassoc LOWER_THAN_COR
+%nonassoc COR  
 
 %left SEMICOLON
 %left OR
@@ -124,7 +129,7 @@ background_th:
   
 type_decl:
 | TYPE IDENT SEMICOLON {
-  { t_name = ($2, 0);
+  { t_name = $2;
     t_def = FreeTypeDef;
     t_pos = mk_position 2 2 }
 }
@@ -151,7 +156,7 @@ proc_header:
       $6 ([], locals0)
   in
   let decl = 
-    { p_name = ($2, 0);
+    { p_name = $2;
       p_formals = formals;  
       p_returns = returns; 
       p_locals = locals;
@@ -170,14 +175,15 @@ contracts:
 ;
 
 contract:
-| pure_opt REQUIRES expr semicolon_opt { Requires ($3, $1) }
-| pure_opt ENSURES expr semicolon_opt { Ensures ($3, $1) }
+| contract_mods REQUIRES expr semicolon_opt { Requires ($3, fst $1, snd $1) }
+| contract_mods ENSURES expr semicolon_opt { Ensures ($3, fst $1, snd $1) }
 ;
 
-pure_opt:
-| PURE { true }
-| /* empty */ { false }
-
+contract_mods:
+| PURE contract_mods { (true, snd $2) }
+| FREE contract_mods { (fst $2, true) }
+| /* empty */ { (false, false) }
+    
 semicolon_opt:
 | SEMICOLON {}
 | /* empty */ {}
@@ -197,7 +203,7 @@ pred_decl:
       $4 ([], IdMap.empty)
   in
   let decl =
-    { pr_name = ($2, 0);
+    { pr_name = $2;
       pr_formals = formals;
       pr_outputs = [];
       pr_locals = locals;
@@ -225,10 +231,10 @@ function_header:
       $8 ([], locals)
   in
   let contracts =
-    List.map (function Ensures (e, _) -> Ensures (e, true) | c -> c) $10
+    List.map (function Ensures (e, _, free) -> Ensures (e, true, free) | c -> c) $10
   in
   let decl =
-    { pr_name = ($2, 0);
+    { pr_name = $2;
       pr_formals = formals;
       pr_outputs = outputs;
       pr_locals = locals;
@@ -260,7 +266,7 @@ var_decl_list:
 var_decl:
 | var_modifier IDENT COLON var_type { 
   let decl = 
-    { v_name = ($2, 0);
+    { v_name = $2;
       v_type = $4;
       v_ghost = snd $1;
       v_implicit = fst $1;
@@ -288,7 +294,7 @@ var_decl_opt_type_list:
 var_decl_opt_type:
 | var_modifier IDENT { 
   let decl = 
-    { v_name = ($2, 0);
+    { v_name = $2;
       v_type = AnyType;
       v_ghost = snd $1;
       v_implicit = fst $1;
@@ -308,7 +314,7 @@ var_modifier:
 ; 
 
 var_type:
-| LOC LT IDENT GT { StructType ($3, 0) }
+| LOC LT IDENT GT { StructType $3 }
 | INT { IntType }
 | BOOL { BoolType }
 | BYTE { ByteType }
@@ -316,7 +322,7 @@ var_type:
 | ARRAYCELL LT var_type GT { ArrayCellType $3 }
 | SET LT var_type GT { SetType $3 }
 | MAP LT var_type COMMA var_type GT { MapType ($3, $5) }
-| IDENT { IdentType ($1, 0) }
+| IDENT { IdentType $1 }
 ;
 
 proc_returns:
@@ -332,7 +338,7 @@ struct_decl:
       IdMap.empty $4
   in
   let decl = 
-    { t_name = ($2, 0);
+    { t_name = $2;
       t_def = StructTypeDef fields;
       t_pos = mk_position 2 2;
     }
@@ -360,12 +366,14 @@ stmt:
 | if_then_stmt { $1 }
 | if_then_else_stmt { $1 }
 | while_stmt { $1 }
+| choice_stmt { $1 }
 ;
 
 stmt_no_short_if:
 | stmt_wo_trailing_substmt { $1 }
 | if_then_else_stmt_no_short_if  { $1 }
 | while_stmt_no_short_if  { $1 }
+| choice_stmt_no_short_if { $1 }
 ;
 
 stmt_wo_trailing_substmt:
@@ -418,12 +426,12 @@ stmt_wo_trailing_substmt:
   Havoc ($2, mk_position 1 3)
 }
 /* assume */
-| pure_opt ASSUME expr SEMICOLON {
-  Assume ($3, $1, mk_position 1 4)
+| contract_mods ASSUME expr SEMICOLON {
+  Assume ($3, fst $1, mk_position 1 4)
 }
 /* assert */
-| pure_opt ASSERT expr SEMICOLON { 
-  Assert ($3, $1, mk_position 1 4)
+| contract_mods ASSERT expr SEMICOLON { 
+  Assert ($3, fst $1, mk_position 1 4)
 }
 /* return */
 | RETURN expr_list_opt SEMICOLON { 
@@ -460,6 +468,28 @@ if_then_else_stmt_no_short_if:
 }
 ;
 
+choice_stmt:
+| CHOOSE or_stmts {
+  Choice ($2, mk_position 1 2)
+}
+;
+
+or_stmts:
+| stmt COR or_stmts { $1 :: $3 }
+| stmt { [$1] } %prec LOWER_THAN_COR
+;
+
+choice_stmt_no_short_if:
+| CHOOSE or_stmts_no_short_if {
+  Choice ($2, mk_position 1 2)
+}
+;
+
+or_stmts_no_short_if:
+| stmt COR or_stmts_no_short_if { $1 :: $3 }
+| stmt_no_short_if { [$1] }
+; 
+  
 while_stmt:
 | WHILE LPAREN expr RPAREN loop_contracts LBRACE block RBRACE {
   Loop ($5, Skip GrassUtil.dummy_position, $3, Block ($7, mk_position 6 8), mk_position 1 8)
@@ -481,7 +511,7 @@ loop_contracts:
 ;
 
 loop_contract:
-| pure_opt INVARIANT expr semicolon_opt { Invariant ($3, $1) }
+| contract_mods INVARIANT expr semicolon_opt { Invariant ($3, fst $1) }
 ;
 
 primary:
@@ -496,6 +526,7 @@ primary:
 | alloc { $1 }
 | proc_call { $1 }
 | field_access { $1 }
+| field_write { $1 }
 | array_access { $1 }
 | cast { $1 }
     ;
@@ -529,11 +560,11 @@ proc_call:
 | SET LT var_type GT LPAREN expr_list_opt RPAREN { Setenum ($3, $6, mk_position 1 6) }
 | SET LPAREN expr_list_opt RPAREN { Setenum (AnyType, $3, mk_position 1 4) }
 /*| MAP LT var_type, var_type GT LPAREN expr_list_opt RPAREN {*/
-| IDENT LPAREN expr_list_opt RPAREN { ProcCall (($1, 0), $3, mk_position 1 4) }
+| IDENT LPAREN expr_list_opt RPAREN { ProcCall ($1, $3, mk_position 1 4) }
 ;
                                                              
 ident: 
-| IDENT { Ident (($1, 0), mk_position 1 1) }
+| IDENT { Ident ($1, mk_position 1 1) }
 ;
 
 field_access:
@@ -546,6 +577,12 @@ field_access_no_set:
 | primary_no_set DOT ident { Read ($3, $1, mk_position 1 3) }
 ;
 
+field_write:
+| ident LBRACKET expr COLONEQ expr RBRACKET {
+  Write ($1, $3, $5, mk_position 1 6)
+}
+;
+  
 array_access:
 | ident LBRACKET expr RBRACKET { Read ($1, $3, mk_position 1 4) }
 | primary LBRACKET expr RBRACKET { Read ($1, $3, mk_position 1 4) }
@@ -693,14 +730,14 @@ annot_expr:
 
 quant_var:
 | IDENT IN annot_expr {
-    GuardedVar (($1, 0), $3)
+    GuardedVar ($1, $3)
   }
 | simple_bound_var { $1 }
 ;
   
 simple_bound_var:      
 | IDENT COLON var_type {
-    let decl = { v_name = ($1, 0);
+    let decl = { v_name = $1;
                  v_type = $3;
                  v_ghost = false;
                  v_implicit = false;
@@ -755,4 +792,4 @@ ematch_list:
 
 ematch:
 | expr { ($1, []) }
-| expr WITHOUT IDENT { ($1, [($3, 0)]) }
+| expr WITHOUT IDENT { ($1, [$3]) }

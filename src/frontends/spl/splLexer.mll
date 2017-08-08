@@ -17,6 +17,7 @@ let _ =
       ("assert", ASSERT);
       ("assume", ASSUME);
       ("Bool", BOOL);
+      ("choose", CHOOSE);
       ("comment", COMMENT);
       ("else", ELSE);
       ("emp", EMP);
@@ -40,6 +41,7 @@ let _ =
       ("matching", MATCHING);
       ("new", NEW);
       ("null", NULL);
+      ("or", COR);
       ("outputs", OUTPUTS);
       ("pattern", PATTERN);
       ("predicate", PREDICATE);
@@ -102,7 +104,7 @@ let hexa_to_int num =
 
 let digitchar = ['0'-'9']
 let idchar = ['A'-'Z''a'-'z''_']
-let ident = idchar (idchar | digitchar)*
+let ident = ('?' idchar | idchar) (idchar | digitchar)* 
 let digits = digitchar+
 
 rule token = parse
@@ -155,11 +157,12 @@ rule token = parse
 | '~' { BNOT }
 | "<-<" { BSL }
 | ">->" { BSR }
+| ident as name '^' (digitchar+ as num) { IDENT(name, int_of_string num) }
 | ident as kw
     { try
-        Hashtbl.find keyword_table kw
-      with Not_found ->
-        IDENT (kw)
+      Hashtbl.find keyword_table kw
+    with Not_found ->
+      IDENT (kw, 0)
     }
 | "0x" (['A'-'F''a'-'f''0'-'9']+ as num) { INTVAL (hexa_to_int num) }
 | digits as num { INTVAL (Int64.of_string num) }

@@ -7,7 +7,7 @@ let arguments_to_string d =
   if d = 1 then "one argument" else Printf.sprintf "%d arguments" d
   
 let unknown_ident_error id pos =
-  ProgError.error pos ("Unknown identifier " ^ GrassUtil.name id ^ ".")
+  ProgError.error pos ("Unknown identifier " ^ string_of_ident id ^ ".")
 
 let not_a_type_error id pos =
   ProgError.error pos 

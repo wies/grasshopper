@@ -68,6 +68,16 @@ let make_conditionals_lazy cu =
 	    ss ([], locals)
         in
        Block (ss, p), locals
+    | Choice (ss, p) ->
+                let ss, locals =
+          List.fold_right
+	    (fun s (s_list, locals) ->
+	      let new_s, locals = process_stmt scope locals s
+	      in
+	      (new_s :: s_list), locals)
+	    ss ([], locals)
+        in
+       Choice (ss, p), locals
     | stmt -> stmt, locals
   in
   let procs =
@@ -152,6 +162,11 @@ let convert cu =
         let tmap = convert_term locals map in
         let tidx = convert_term locals idx in
         GrassUtil.mk_read tmap [tidx]
+    | Write (map, idx, upd, pos) ->
+        let tmap = convert_term locals map in
+        let tidx = convert_term locals idx in
+        let tupd = convert_term locals upd in
+        GrassUtil.mk_write tmap [tidx] tupd
     | UnaryOp (OpOld, e, pos) ->
         let t = convert_term locals e in
         GrassUtil.mk_old t
@@ -470,13 +485,13 @@ let convert cu =
         let f = convert_grass_form locals e in
         Pure (f, Some (pos_of_expr e))
   in
-  let convert_spec_form pure locals e name msg =
+  let convert_spec_form pure free locals e name msg =
     let f = 
       if pure 
       then FOL (convert_grass_form locals e)
       else SL (convert_sl_form locals e)
     in
-    mk_spec_form f name msg (pos_of_expr e)
+    (if free then mk_free_spec_form else mk_spec_form) f name msg (pos_of_expr e)
   in
   let convert_loop_contract proc_name locals contract =
     List.map
@@ -494,7 +509,7 @@ let convert cu =
              ProgError.mk_error_info "This is the loop invariant that might not be maintained")
         in
         (*let pos = pos_of_expr e in*)
-        convert_spec_form pure locals e "invariant" (Some msg)
+        convert_spec_form pure false locals e "invariant" (Some msg)
       )
       contract
   in
@@ -522,10 +537,10 @@ let convert cu =
           let cmds = List.map (convert_stmt proc) stmts in
           mk_seq_cmd cmds pos
       | Assume (e, pure, pos) ->
-          let sf = convert_spec_form pure proc.p_locals e "assume" None in
+          let sf = convert_spec_form pure false proc.p_locals e "assume" None in
           mk_assume_cmd sf pos
       | Assert (e, pure, pos) ->
-          let sf = convert_spec_form pure proc.p_locals e "assert" None in
+          let sf = convert_spec_form pure false proc.p_locals e "assert" None in
           mk_assert_cmd sf pos
       | Assign (lhs, [ProcCall (id, es, cpos)], pos) ->
           let args = 
@@ -572,6 +587,9 @@ let convert cu =
           let t_msg = "The 'then' branch of this conditional has been taken on the error trace" in
           let e_msg = "The 'else' branch of this conditional has been taken on the error trace" in
           mk_ite cond (pos_of_expr c) t_cmd e_cmd t_msg e_msg pos
+      | Choice (stmts, pos) ->
+          let cmds = List.map (convert_stmt proc) stmts in
+          mk_choice_cmd cmds pos
       | Loop (contract, preb, cond, postb, pos) ->
           let preb_cmd = convert_stmt proc preb in
           let cond_pos = pos_of_expr cond in
@@ -588,7 +606,7 @@ let convert cu =
   let convert_contract name locals contract =
     List.fold_right 
       (function 
-        | Requires (e, pure) -> fun (pre, post) -> 
+        | Requires (e, pure, free) -> fun (pre, post) -> 
             let mk_msg caller =
               Printf.sprintf 
                 "A precondition for this call of %s might not hold"
@@ -596,8 +614,8 @@ let convert cu =
               ProgError.mk_error_info "This is the precondition that might not hold"
             in
             let name = "precondition of " ^ string_of_ident name in
-            convert_spec_form pure locals e name (Some mk_msg) :: pre, post
-        | Ensures (e, pure) -> fun (pre, post) ->
+            convert_spec_form pure free locals e name (Some mk_msg) :: pre, post
+        | Ensures (e, pure, free) -> fun (pre, post) ->
             let mk_msg caller =
               Printf.sprintf 
                 "A postcondition of %s might not hold at this return point"
@@ -605,7 +623,7 @@ let convert cu =
               ProgError.mk_error_info "This is the postcondition that might not hold"
             in 
             let name = "postcondition of " ^ string_of_ident name in
-            pre, convert_spec_form pure locals e name (Some mk_msg) :: post)
+            pre, convert_spec_form pure free locals e name (Some mk_msg) :: post)
       contract ([], [])
   in
   (* Convert predicates *)
@@ -724,7 +742,7 @@ let convert cu =
     let specs =
       List.map
         ( fun (e, pos) ->
-          convert_spec_form true IdMap.empty e "axiom" None
+          convert_spec_form true false IdMap.empty e "axiom" None
         )
         cu.background_theory
     in

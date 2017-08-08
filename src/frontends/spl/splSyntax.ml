@@ -95,8 +95,8 @@ and type_def =
 and typedecls = typedecl IdMap.t
       
 and contract =
-  | Requires of expr * bool
-  | Ensures of expr * bool
+  | Requires of expr * bool * bool
+  | Ensures of expr * bool * bool
 
 and contracts = contract list
 
@@ -110,6 +110,7 @@ and stmt =
   | Havoc of exprs * pos
   | Dispose of expr * pos
   | If of expr * stmt * stmt * pos
+  | Choice of stmts * pos
   | Loop of loop_contracts * stmt * expr * stmt * pos
   | Return of exprs * pos
 
@@ -132,6 +133,7 @@ and expr =
   | BoolVal of bool * pos
   | New of typ * exprs * pos
   | Read of expr * expr * pos
+  | Write of expr * expr * expr * pos
   | ProcCall of ident * exprs * pos
   | PredApp of pred_sym * exprs * pos
   | Binder of binder_kind * bound_var list * expr * pos
@@ -179,6 +181,7 @@ let pos_of_expr = function
   | Setenum (_, _, p)
   | New (_, _, p)
   | Read (_, _, p)
+  | Write (_, _, _, p)
   | Binder (_, _, _, p)
   | ProcCall (_, _, p)
   | PredApp (_, _, p)
@@ -227,6 +230,7 @@ let pos_of_stmt =
   | Dispose (_, pos)
   | Havoc (_, pos)
   | If (_, _, _, pos)
+  | Choice (_, pos)
   | Loop (_, _, _, _, pos)
   | Return (_, pos) -> pos
 
@@ -376,7 +380,7 @@ let string_of_pred = function
 
 let prio_of_expr = function
   | Null _ | Emp _ | IntVal _ | BoolVal _ | Ident _ -> 0
-  | Read _ | ProcCall _ | PredApp _ | New _ | Setenum _ |
+  | Read _ | Write _ | ProcCall _ | PredApp _ | New _ | Setenum _ |
     Binder (SetComp, _, _, _) -> 1
   | UnaryOp ((OpArrayCells | OpIndexOfCell | OpArrayOfCell |
     OpLength | OpToInt | OpToByte | OpOld | OpKnown), _, _) -> 1
@@ -419,6 +423,8 @@ let rec pr_expr ppf =
       fprintf ppf "new %a(%a)" pr_type ty pr_expr_list es
   | Read (e1, e2, _) ->
       fprintf ppf "%a.%a" pr_expr e2 pr_expr e1
+  | Write (e1, e2, e3, p) ->
+      fprintf ppf "%a[%a := %a]" pr_expr e1 pr_expr e2 pr_expr e3
   | ProcCall (p, es, _) ->
       fprintf ppf "%a(@[%a@])" pr_ident p pr_expr_list es
   | PredApp (p, es, _) ->
@@ -537,12 +543,16 @@ let pr_type_decl ppf (_, tyd) =
         pr_ident tyd.t_name pr_var_decls (IdMap.bindings sfields)
 
 let pr_contract ppf = function
-  | Requires (e, p) ->
-      fprintf ppf "@[<2>%srequires@ %a@]"
-        (if p then "pure " else "") pr_expr e
-  | Ensures (e, p) ->
-      fprintf ppf "@[<2>%sensures@ %a@]"
-        (if p then "pure " else "") pr_expr e
+  | Requires (e, pure, free) ->
+      fprintf ppf "@[<2>%s%srequires@ %a@]"
+        (if pure then "pure " else "")
+        (if free then "free " else "")
+        pr_expr e
+  | Ensures (e, pure, free) ->
+      fprintf ppf "@[<2>%s%sensures@ %a@]"
+        (if pure then "pure " else "")
+        (if free then "free " else "")
+        pr_expr e
 
 let pr_contracts ppf cs =
   match cs with
@@ -572,7 +582,7 @@ let pr_pred_decl ppf pred =
     | None -> fprintf ppf "@\n"
   in
   fprintf ppf "%a%a" pr_header pred pr_body pred
-
+    
 let rec pr_stmt ppf =
   let pr_invariant ppf =
     function Invariant (e, p) ->
@@ -605,6 +615,8 @@ let rec pr_stmt ppf =
   | If (e, st1, st2, _) ->
       fprintf ppf "if (@[%a@]) %a else %a"
         pr_expr e pr_stmt st1 pr_stmt st2
+  | Choice (stmts, _) ->
+      fprintf ppf "@<-3>%s@ %a" "choose" pr_choice stmts
   | Loop (invs, Skip _, cond, postb, _) ->
       fprintf ppf "while (@[%a@])@\n@[<2>  %a@]@\n%a"
         pr_expr cond (Util.pr_list_nl pr_invariant) invs pr_stmt postb
@@ -616,6 +628,12 @@ let rec pr_stmt ppf =
   | Return (es, _) ->
       fprintf ppf "return @[<2>%a@];" pr_expr_list es
 and pr_stmt_list sts = Util.pr_list_nl pr_stmt sts 
+
+and pr_choice ppf = function
+  | [] -> ()
+  | [stmt] -> pr_stmt ppf stmt
+  | stmt :: stmts -> fprintf ppf "%a@ @<-3>%s@ %a" pr_stmt stmt "or" pr_choice stmts
+
     
 let pr_proc_body locals ppf = function
   | Skip _ -> ()

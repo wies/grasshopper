@@ -183,13 +183,14 @@ let is_free_symbol = function
     
 let fresh_ident =
   let used_names = Hashtbl.create 0 in
-  fun (name : string) ->
+  fun  ?(id=0) (name : string) ->
     let last_index = 
       try Hashtbl.find used_names name 
       with Not_found -> -1
-    in 
-    Hashtbl.replace used_names name (last_index + 1);
-    (name, last_index + 1)
+    in
+    let new_max = max (last_index + 1) id in
+    Hashtbl.replace used_names name new_max;
+    (name, new_max)
 
 let dualize_op op = 
   match op with

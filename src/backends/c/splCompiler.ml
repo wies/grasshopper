@@ -208,7 +208,7 @@ let convert oc cu =
       | (New (t, args, _), _)             ->
         fprintf ppf "/* ERROR: New expression only allowed directly within an Assign or Free stmt. */"
       | ((Emp _|Setenum _|PredApp _|
-        Binder _| Annot _), _) ->
+        Binder _| Annot _ | Write _), _) ->
         fprintf ppf "/* ERROR: expression type not yet implemented. */"
     in
     let rec pr_c_stmt ppf = 
@@ -301,7 +301,7 @@ let convert oc cu =
         )
         | BinaryOp _ -> fprintf ppf "/* ERROR: freeing the result of binary operation will possibly be implemented in the future for freeing Sets. */" 
         | (Null _ | Emp _ | Setenum _ | IntVal _ | BoolVal _ | PredApp _ | Binder _
-        | UnaryOp _ | Annot _) ->
+        | UnaryOp _ | Annot _ | Write _) ->
             fprintf ppf "/* ERROR: expression cannot be dispsosed */"
       in 
       (** Because SPL allows multiple return variables but C does not, yet in
@@ -344,7 +344,7 @@ let convert oc cu =
           fprintf ppf "if (%a) {@\n  @[%a@]@\n} else {@\n  @[%a@]@\n}"
             pr_c_expr (cond, cur_proc)
             pr_c_stmt (b1,   cur_proc)
-            pr_c_stmt (b2,   cur_proc))
+              pr_c_stmt (b2,   cur_proc))
       | (Loop (_, pre, cond, body, _), cur_proc) -> 
         fprintf ppf "while (true) {@\n  @[%s%aif (!(%a)) {@\n  break;@\n}@\n%a@]@\n}"
           (match pre with 
@@ -354,7 +354,7 @@ let convert oc cu =
           pr_c_expr (cond, cur_proc)
           pr_c_stmt (body, cur_proc)
       | ((Return _) as r, cur_proc) -> pr_c_return ppf (r, cur_proc, cur_proc.p_returns)
-      | (((Assume _)|(Assert _)|(Havoc _)), _) -> ()
+      | (((Assume _)|(Assert _)|(Havoc _)|(Choice _)), _) -> ()
       | (LocalVars _, _) -> fprintf ppf "/* ERROR: all LocalVars statements should have been removed by name resolution phase. */"
     in
     let pr_c_proc ppf p =

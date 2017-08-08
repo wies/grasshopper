@@ -1,34 +1,34 @@
 open Util
 
-type t = (Grass.ident StringMap.t) list
+type t = (Grass.ident Grass.IdMap.t) list
 
-let empty = [StringMap.empty]
+let empty = [Grass.IdMap.empty]
 
-let push tbl = StringMap.empty :: tbl 
+let push tbl = Grass.IdMap.empty :: tbl 
 
 let pop tbl = List.tl tbl
 
 let add tbl name id =
-  StringMap.add name id (List.hd tbl) :: List.tl tbl
+  Grass.IdMap.add name id (List.hd tbl) :: List.tl tbl
 
 let remove tbl name =
-  StringMap.remove name (List.hd tbl) :: List.tl tbl
+  Grass.IdMap.remove name (List.hd tbl) :: List.tl tbl
                                           
 let declared_in_current tbl name =
-  StringMap.mem name (List.hd tbl)
+  Grass.IdMap.mem name (List.hd tbl)
 
 let find_local tbl name =
   match tbl with
   | [] -> None
   | t :: _ -> 
-      try Some (StringMap.find name t)
+      try Some (Grass.IdMap.find name t)
       with Not_found -> None
 
 let find tbl name =
   let rec find = function
     | [] -> None
     | t :: ts ->
-        try Some (StringMap.find name t)
+        try Some (Grass.IdMap.find name t)
         with Not_found -> find ts
   in find tbl
 

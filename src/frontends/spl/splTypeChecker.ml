@@ -126,6 +126,7 @@ let type_of_expr cu locals e =
         | MapType (_, ty) -> ty
         | ArrayType ty -> ty
         | _ -> AnyType)
+    | Write (map, _, _, _) -> te map
     | UnaryOp ((OpOld | OpKnown), e, _) -> te e        
     | UnaryOp (OpLength, map, _) -> IntType
     | UnaryOp (OpArrayOfCell, c, _) ->
@@ -385,6 +386,17 @@ let infer_types cu locals ty e =
         let idx1, dty = it locals dty idx in
         let map2, mty = it locals (MapType (dty, rty)) map1 in
         Read (map2, idx1, pos), rty
+    | Write (map, idx, upd, pos) ->
+        let map1, mty = it locals ty map in
+        let dty, rty = match mty with
+        | MapType (dty, rty) -> dty, rty
+        | ArrayType rty -> IntType, rty
+        | _ -> failwith "impossible"
+        in
+        let idx1, dty = it locals dty idx in
+        let upd1, rty = it locals rty upd in
+        let map2, mty = it locals (MapType (dty, rty)) map1 in
+        Write (map2, idx1, upd1, pos), mty
     | Null (nty, pos) ->
         let ty = match_types pos ty nty in
         Null (ty, pos), ty

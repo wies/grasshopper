@@ -12,8 +12,7 @@ open SplTypeChecker
 (** Resolve names of identifiers in compilation unit [cu] so that all identifiers have unique names.*)
 let resolve_names cu = 
   let lookup_id init_id tbl pos =
-    let name = GrassUtil.name init_id in
-    match SymbolTbl.find tbl name with
+    match SymbolTbl.find tbl init_id with
     | Some (id, _) -> id
     | None -> unknown_ident_error init_id pos
   in 
@@ -56,11 +55,11 @@ let resolve_names cu =
   in
   let declare_name pos init_id scope tbl =
     let name = GrassUtil.name init_id in
-    match SymbolTbl.find_local tbl name with
+    match SymbolTbl.find_local tbl init_id with
     | Some _ -> redeclaration_error init_id pos
     | None ->
-        let id = GrassUtil.fresh_ident name in
-        (id, SymbolTbl.add tbl name (id, scope))
+        let id = GrassUtil.fresh_ident ~id:(snd init_id) name in
+        (id, SymbolTbl.add tbl init_id (id, scope))
   in
   let declare_var types decl tbl =
     let id, tbl = declare_name decl.v_pos decl.v_name decl.v_scope tbl in
@@ -164,6 +163,8 @@ let resolve_names cu =
           | _ -> Read (re locals tbl map, idx1, pos))
       | Read (map, idx, pos) ->
           Read (re locals tbl map, re locals tbl idx, pos)
+      | Write (map, idx, upd, pos) ->
+          Write (re locals tbl map, re locals tbl idx, re locals tbl upd, pos)
       | Binder (q, decls, f, pos) ->
           let (decls1, (locals1, tbl1)) = 
             Util.fold_left_map
@@ -187,9 +188,9 @@ let resolve_names cu =
           | [arg] ->
               (match type_of_expr cu locals arg with
               | SetType _ -> 
-                  PredApp (AccessPred, [re locals tbl arg], pos)
+                  PredApp (AccessPred, [arg], pos)
               | ty ->
-                  PredApp (AccessPred, [Setenum (resolve_typ types pos tbl ty, [re locals tbl arg], pos)], pos))
+                  PredApp (AccessPred, [Setenum (resolve_typ types pos tbl ty, [arg], pos)], pos))
           | [map; idx] ->
               (match type_of_expr cu locals map with
               | ArrayType typ ->
@@ -319,6 +320,16 @@ let resolve_names cu =
         let t1, locals, _ = resolve_stmt false in_loop locals tbl t in
         let e1, locals, _ = resolve_stmt false in_loop locals tbl e in
         If (resolve_expr locals tbl cond, t1, e1, pos), locals, tbl
+    | Choice (stmts0, pos) ->
+        let stmts, locals = 
+          List.fold_left
+            (fun (stmts, locals) stmt0  ->
+              let stmt, locals, _ = resolve_stmt false in_loop locals tbl stmt0 in
+              stmt :: stmts, locals
+            ) 
+            ([], locals) stmts0
+        in
+        Choice (List.rev stmts, pos), locals, tbl
     | Loop (inv, preb, cond, postb, pos) ->
         let inv1 = 
           List.fold_right 
@@ -341,14 +352,14 @@ let resolve_names cu =
       List.fold_left
         (fun (pre_locals, pre_tbl) id ->
           IdMap.remove id pre_locals,
-          SymbolTbl.remove pre_tbl (GrassUtil.name id))
+          SymbolTbl.remove pre_tbl id)
         (locals, tbl)
         returns
     in
     List.map 
       (function 
-        | Requires (e, pure) -> Requires (resolve_expr pre_locals pre_tbl e, pure)
-        | Ensures (e, pure) -> Ensures (resolve_expr locals tbl e, pure)
+        | Requires (e, pure, free) -> Requires (resolve_expr pre_locals pre_tbl e, pure, free)
+        | Ensures (e, pure, free) -> Ensures (resolve_expr locals tbl e, pure, free)
       )
       contracts
   in
@@ -443,6 +454,11 @@ let flatten_exprs cu =
         let map1, aux1, locals = flatten_expr scope aux locals map in
         let idx1, aux2, locals = flatten_expr scope aux1 locals idx in
         Read (map1, idx1, pos), aux2, locals
+    | Write (map, idx, upd, pos) ->
+        let map1, aux1, locals = flatten_expr scope aux locals map in
+        let idx1, aux2, locals = flatten_expr scope aux1 locals idx in
+        let upd1, aux3, locals = flatten_expr scope aux2 locals upd in
+        Write (map1, idx1, upd1, pos), aux3, locals
     | Binder (b, vars, f, pos) as e ->
         let vars1, aux, locals =
           List.fold_right (fun v (vars1, aux, locals) ->
@@ -629,6 +645,15 @@ let flatten_exprs cu =
         let t1, locals, aux_funs = flatten scope locals aux_funs returns t in
         let e1, locals, aux_funs = flatten scope locals aux_funs returns e in
         mk_block pos (aux_cmds @ [If (cond1, t1, e1, pos)]), locals, aux_funs
+    | Choice (stmts0, pos) ->
+        let stmts, locals, aux_funs = 
+          List.fold_left
+            (fun (stmts, locals, aux_funs) stmt0  ->
+              let stmt, locals, aux_funs = flatten pos locals aux_funs returns stmt0 in
+              stmt :: stmts, locals, aux_funs
+            ) 
+            ([], locals, aux_funs) stmts0
+        in Choice (List.rev stmts, pos), locals, aux_funs        
     | Loop (inv, preb, cond, postb, pos) ->
         let inv1, aux_funs, locals = 
           List.fold_right
@@ -664,12 +689,12 @@ let flatten_exprs cu =
           | cmd :: _ -> illegal_side_effect_error (pos_of_stmt cmd) "specifications"
         in
         match c with
-        | Requires (e, pure) -> 
+        | Requires (e, pure, free) -> 
             let e1, aux_funs, locals = flatten_spec e in
-            Requires (e1, pure) :: contracts, aux_funs, locals
-        | Ensures (e, pure) ->
+            Requires (e1, pure, free) :: contracts, aux_funs, locals
+        | Ensures (e, pure, free) ->
             let e1, aux_funs, locals = flatten_spec e in
-            Ensures (e1, pure) :: contracts, aux_funs, locals)
+            Ensures (e1, pure, free) :: contracts, aux_funs, locals)
       contracts ([], aux_funs, locals)
   in
   let procs, aux_funs =
@@ -798,6 +823,8 @@ let infer_types cu =
         let t1 = check_stmt proc t in
         let e1 = check_stmt proc e in
         If (cond1, t1, e1, pos)
+    | Choice (stmts, pos) ->
+        Choice (List.map (check_stmt proc) stmts, pos)
     | Loop (inv, preb, cond, postb, pos) ->
         let inv1 = 
           List.map 
@@ -833,8 +860,10 @@ let infer_types cu =
         in
         let contracts =
           List.map (function
-            | Requires (e, pure) -> Requires (check_spec pred.pr_locals pure e, pure)
-            | Ensures (e, pure) -> Ensures (check_spec pred.pr_locals pure e, pure)) pred.pr_contracts
+            | Requires (e, pure, free) ->
+                Requires (check_spec pred.pr_locals pure e, pure, free)
+            | Ensures (e, pure, free) ->
+                Ensures (check_spec pred.pr_locals pure e, pure, free)) pred.pr_contracts
         in
         let body =
           Opt.map (infer_types cu pred.pr_locals rtype) pred.pr_body
@@ -853,8 +882,10 @@ let infer_types cu =
       (fun _ proc procs ->
         let contracts =
           List.map (function
-            | Requires (e, pure) -> Requires (check_spec proc.p_locals pure e, pure)
-            | Ensures (e, pure) -> Ensures (check_spec proc.p_locals pure e, pure)) proc.p_contracts
+            | Requires (e, pure, free) ->
+                Requires (check_spec proc.p_locals pure e, pure, free)
+            | Ensures (e, pure, free) ->
+                Ensures (check_spec proc.p_locals pure e, pure, free)) proc.p_contracts
         in
         let body = check_stmt proc proc.p_body in
         let proc1 = { proc with p_contracts = contracts; p_body = body } in
