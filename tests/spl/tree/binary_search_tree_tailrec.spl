@@ -1,4 +1,4 @@
-include "../include/bstree.spl";
+include "../include/treeset.spl";
 
 procedure contains(root: Node, val: Int, implicit ghost content: Set<Int>)
   returns (res: Bool)

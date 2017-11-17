@@ -54,8 +54,7 @@ procedure find(x: Node, implicit ghost X: Set<Node>)
   returns (res: Node)
   requires eqclass(x, X)
   ensures eqclass(x, X)
-  ensures res == rep(x)
-  ensures rep(x) == old(rep(x))
+  ensures res == rep(x) && rep(x) == old(rep(x))
 {
   var n: Node;
   n := x.next;

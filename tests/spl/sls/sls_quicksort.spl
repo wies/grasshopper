@@ -4,7 +4,7 @@ procedure split(x: Node, y: Node, lb: Int, ub: Int) returns (pivot: Node)
   requires blseg(x, y, lb, ub) &*& x != y
   ensures  blseg(x, pivot, lb, pivot.data)
   ensures  blseg(pivot, y, pivot.data, ub) &*& pivot != y
-  ensures  lb <= pivot.data &*& pivot.data <= ub
+  ensures  lb <= pivot.data <= ub
   ensures  Btwn(next, x, pivot, y)
 {
   var curr := x.next;
@@ -14,7 +14,7 @@ procedure split(x: Node, y: Node, lb: Int, ub: Int) returns (pivot: Node)
     invariant blseg(x, pivot, lb, pivot.data)
     invariant blseg(pivot, curr, pivot.data, ub) &*& pivot != curr
     invariant blseg(curr, y, lb, ub)
-    invariant lb <= pivot.data &*& pivot.data <= ub
+    invariant lb <= pivot.data <= ub
     invariant Btwn(next, x, pivot, y)
     invariant Btwn(next, pivot, curr, y)
   {
