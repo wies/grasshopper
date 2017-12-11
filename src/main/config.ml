@@ -29,27 +29,39 @@ let use_bitvector = ref false
 
 (** Flag that controls whether we are instantiating the axioms or relying on the prover. *)
 let instantiate = ref true
+
 let stratify = ref true
+
 (** Flag that controls whether predicates are treated as abstract *)
 let abstract_preds = ref false
+
 (** Flag that controls whether split lemmas are added *)
 let split_lemmas = ref false
+
 (** Flag that controls whether unsat cores are dumped for each VC *)
 let unsat_cores = ref false
+
 (** Flag that controls whether the generated VCs are dumped to files. *)
 let dump_smt_queries = ref false
+
 (** Flag that controls whether the generated VCs use named assertions. *)
 let named_assertions = ref false
+
 (** Flag that controls whether the generated VCs are checked. *)
 let verify = ref true
+
 (** Flag that controls whether the program is only type-checked. *)
 let typeonly = ref false
+
 (** Flag that controls whether the program is only simplified. *)
 let simplify = ref false
+
 (** Flag to use symbolic execution instead of standard GRASS translation. *)
 let symbexec = ref false
+
 (** Flag that controls whether to stop after the first VC that cannot be proved. *)
 let robust = ref false
+
 (** Flag that enables error messages for on-the-fly checking *)
 let flycheck_mode = ref false
 
