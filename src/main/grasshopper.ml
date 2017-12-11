@@ -117,15 +117,24 @@ let parse_spl_program main_file =
 (** Check SPL program in main file [file] and procedure [proc] *)
 let check_spl_program spl_prog proc =
   let prog = SplTranslator.to_program spl_prog in
-  let simple_prog = Verifier.simplify prog in
+  let simple_prog =
+    if !Config.symbexec then
+      prog
+      |> Analyzer.infer_accesses
+      |> Simplifier.elim_loops
+      |> Simplifier.elim_global_deps
+    else Verifier.simplify prog in
   let check simple_prog first proc =
     let errors =
       if !Config.typeonly then []
+      else
+      if !Config.symbexec then
+        SymbExec.check simple_prog proc
       else Verifier.check_proc simple_prog proc
     in
     List.fold_left
       (fun first (pp, error_msg, model) ->
-        output_trace simple_prog proc (pp, model);
+        if not !Config.symbexec then output_trace simple_prog proc (pp, model);
         let _ =
           if !Config.robust
           then begin

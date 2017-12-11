@@ -1,18 +1,18 @@
-(* Version string *)
+(** Version string *)
 let version = "0.4 alpha"
 
-(* Base directory for includes *)
+(** Base directory for includes *)
 let base_dir = ref ""
 
-(* Name of procedure that is to be checked *)
+(** Name of procedure that is to be checked *)
 let procedure = ref None
 
-(* File name where counterexample model is saved. *)
+(** File name where counterexample model is saved. *)
 let model_file = ref ""
-(* Display the edges going to null in the model *)
+(** Display the edges going to null in the model *)
 let model_null_edge = ref false
 
-(* File name where counterexample trace is saved. *)
+(** File name where counterexample trace is saved. *)
 let trace_file = ref ""
 
 (* Flags controlling the axioms generation *)
@@ -24,55 +24,57 @@ let full_ep = ref false
 let use_set_theory = ref false
 let simple_arrays = ref false
     
-(* Flag to switch between integer and bitvectors *)
+(** Flag to switch between integer and bitvectors *)
 let use_bitvector = ref false
 
-(* Flag that controls whether we are instantiating the axioms or relying on the prover. *)
+(** Flag that controls whether we are instantiating the axioms or relying on the prover. *)
 let instantiate = ref true
 let stratify = ref true
-(* Flag that controls whether predicates are treated as abstract *)
+(** Flag that controls whether predicates are treated as abstract *)
 let abstract_preds = ref false
-(* Flag that controls whether split lemmas are added *)
+(** Flag that controls whether split lemmas are added *)
 let split_lemmas = ref false
-(* Flag that controls whether unsat cores are dumped for each VC *)
+(** Flag that controls whether unsat cores are dumped for each VC *)
 let unsat_cores = ref false
-(* Flag that controls whether the generated VCs are dumped to files. *)
+(** Flag that controls whether the generated VCs are dumped to files. *)
 let dump_smt_queries = ref false
-(* Flag that controls whether the generated VCs use named assertions. *)
+(** Flag that controls whether the generated VCs use named assertions. *)
 let named_assertions = ref false
-(* Flag that controls whether the generated VCs are checked. *)
+(** Flag that controls whether the generated VCs are checked. *)
 let verify = ref true
-(* Flat that controls whether the program is only type-checked. *)
+(** Flag that controls whether the program is only type-checked. *)
 let typeonly = ref false
-(* Flat that controls whether the program is only simplified. *)
+(** Flag that controls whether the program is only simplified. *)
 let simplify = ref false
-(* Flag that controls whether to stop after the first VC that cannot be proved. *)
+(** Flag to use symbolic execution instead of standard GRASS translation. *)
+let symbexec = ref false
+(** Flag that controls whether to stop after the first VC that cannot be proved. *)
 let robust = ref false
-(* Flag that enables error messages for on-the-fly checking *)
+(** Flag that enables error messages for on-the-fly checking *)
 let flycheck_mode = ref false
 
-(* Print internal representation of program at specified stage *)
+(** Print internal representation of program at specified stage *)
 let dump_ghp = ref (-1)
 
-(* Flag that controls whether statistics are printed. *)
+(** Flag that controls whether statistics are printed. *)
 let print_stats = ref false
 
-(* The SMT solver that is used for checking VCs. *)
+(** The SMT solver that is used for checking VCs. *)
 let smtsolver = ref "Z3"
 
-(* Always add trigger annotations for quantifiers in SMT queries *)
+(** Always add trigger annotations for quantifiers in SMT queries *)
 let smtpatterns = ref false
 
-(* The file that the SPL program converted into C is written to *)
+(** The file that the SPL program converted into C is written to *)
 let compile_to = ref ""
 
-(* optmisation: oldify fields only if modified *)
+(** optmisation: oldify fields only if modified *)
 let opt_field_mod = ref true
 
-(* compute the congruence closure as a fixed point (horn clauses) *)
+(** compute the congruence closure as a fixed point (horn clauses) *)
 let ccFixedPoint = ref true
 
-(* maximal number of term generation rounds *)
+(** maximal number of term generation rounds *)
 let term_gen_max_rounds = ref 2
 
 let cmd_options =
@@ -90,6 +92,7 @@ let cmd_options =
    ("-procedure", Arg.String (fun p -> procedure := Some p), "<string>  Only check the specified procedure");
    ("-typeonly", Arg.Set typeonly, " Only type-check the program");
    ("-simplify", Arg.Set simplify, " Only type-check the program and output a simplified version of the input program");
+   ("-symbexec", Arg.Set symbexec, " Use symbolic execution to check the program");
    ("-noverify", Arg.Clear verify, " Only type-check the program and generate verification conditions without checking");
    ("-robust", Arg.Set robust, " Continue even if some verification condition cannot be checked\n\nOptions for controlling verification condition generation:");
    ("-nomodifiesopt", Arg.Clear opt_field_mod, " Disable mod set analysis optimization for fields\n\nOptions for controlling the GRASS prover:");

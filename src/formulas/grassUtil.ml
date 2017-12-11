@@ -1200,6 +1200,10 @@ let subst_annot subst_map = function
 (** Substitutes all free variables in formula [f] with terms according to substitution map [subst_map].
  ** This operation is capture avoiding. *)
 let subst subst_map f =
+  (** Given a list of bound variables [vs] and a substitution map [sm], discards mappings
+    of variables that are bound and renames bound variables that conflict with terms in
+    the RHS of substitutions.
+  *)
   let rename_vars vs sm =
     let not_bound id _ = not (List.mem_assoc id vs) in
     let sm1 = IdMap.filter not_bound sm in 
