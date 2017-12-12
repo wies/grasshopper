@@ -5,3 +5,44 @@ procedure assign(x: Int)
   x := 5;
   x := 10;
 }
+
+procedure assign2(x: Int, y: Int)
+  requires x == 0 && y == 1
+  ensures x == 10 && y == 5
+{
+  x := 5;
+  y := 3;
+  x := x;
+  x := 10;
+  y := 5;
+}
+
+struct Node {
+  var next: Node;
+}
+
+procedure assign_heap(x: Node)
+  requires x.next |-> null
+  ensures x.next |-> x
+{
+  x.next := x;
+  x.next := null;
+  x.next := x;
+}
+
+procedure assign_heap2(x: Node, y: Node)
+  requires x.next |-> null &*& y.next |-> x
+  ensures x.next |-> x &*& y.next |-> null
+{
+  x.next := x;
+  x.next := null;
+  y.next := null;
+  x.next := x;
+}
+
+procedure read_heap(x: Node) returns (y: Node)
+  requires x.next |-> null
+  ensures x.next |-> y
+{
+  y := x.next;
+}
