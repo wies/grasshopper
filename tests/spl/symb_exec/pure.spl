@@ -1,0 +1,7 @@
+procedure assign(x: Int)
+  requires x == 0
+  ensures x == 10
+{
+  x := 5;
+  x := 10;
+}

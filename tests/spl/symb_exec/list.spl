@@ -1,0 +1,14 @@
+struct Node {
+  var next: Node;
+}
+ 
+predicate lseg(x: Node, y: Node) {
+  true
+}
+
+procedure test_unfold(x: Node) returns (y: Node)
+  requires lseg(x, null) &*& x != null
+  ensures x.next |-> y &*& lseg(y, null)
+{
+  y := x.next;
+}
