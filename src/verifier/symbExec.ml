@@ -4,12 +4,10 @@ open Util
 open Grass
 open GrassUtil
 open Prog
+open Printf
 
 exception NotYetImplemented
 let todo () = raise NotYetImplemented
-
-
-let string_of_id_term_map sm = (IdMap.fold (fun x t str -> str ^ (Printf.sprintf "  %s -> %s" (string_of_ident x) (string_of_term t))) sm "")
 
 
 (** ----------- Symbolic state and manipulators ---------- *)
@@ -24,15 +22,23 @@ type spatial_pred =
  *)
 type state = form * spatial_pred list
 
-let state_empty = (mk_true, [])
+(** Equalities derived so far in the symbolic execution, as a map: ident -> term,
+  kept so that they can be substituted into the command and the post. *)
+type equalities = term IdMap.t
+
+
+let empty_state = (mk_true, [])
+
+let empty_eqs = IdMap.empty
+
 
 let string_of_spatial_pred = function
   | PointsTo (x, fs) ->
-    Printf.sprintf "%s |-> (%s)" (string_of_term x)
+    sprintf "%s |-> (%s)" (string_of_term x)
       (fs |> List.map (fun (id, t) -> (string_of_ident id) ^ ": " ^ (string_of_term t))
         |> String.concat ", ")
   | Pred (id, ts) ->
-    Printf.sprintf "%s(%s)" (string_of_ident id)
+    sprintf "%s(%s)" (string_of_ident id)
       (ts |> List.map string_of_term |> String.concat ", ")
 
 let string_of_state ((pure, spatial): state) =
@@ -41,7 +47,7 @@ let string_of_state ((pure, spatial): state) =
     | [] -> "emp"
     | spatial -> spatial |> List.map string_of_spatial_pred |> String.concat " * "
   in
-  Printf.sprintf "%s : %s" (string_of_form pure) spatial
+  sprintf "%s : %s" (string_of_form pure) spatial
 
 let print_state src_pos eqs state =
   let eqs_str = IdMap.bindings eqs
@@ -49,9 +55,15 @@ let print_state src_pos eqs state =
     |> String.concat " && "
   in
   Debug.info (fun () ->
-      Printf.sprintf "\nState at %s:\n  %s : %s\n"
+      sprintf "\nState at %s:\n  %s : %s\n"
         (string_of_src_pos src_pos) eqs_str (string_of_state state)
   )
+
+let string_of_equalities eqs =
+  IdMap.bindings eqs
+  |> List.map (fun (x, t) -> (string_of_ident x) ^ ": " ^ (string_of_term t))
+  |> String.concat ", "
+  |> sprintf "{%s}"
 
 
 (** Convert a specification into a symbolic state.
@@ -114,7 +126,7 @@ let state_of_spec_list specs : state =
         match spec.spec_form with
         | SL slform -> convert_sl_form state slform
         | FOL form -> convert_form state form
-      ) state_empty specs
+      ) empty_state specs
   in
   let reads = !reads in
   (* Put collected read terms from pure part into spatial part *)
@@ -129,8 +141,6 @@ let state_of_spec_list specs : state =
       )
       spatial
   in
-  reads |> TermMap.bindings |> List.map (fun (x, fm) -> (string_of_term x) ^ " : " ^ (string_of_id_term_map fm)) |> String.concat "\n" |> print_endline;
-  print_state dummy_position IdMap.empty (pure, spatial);
   (* TODO check the following in presence of x.next.next etc *)
   (* If we have a points-to info without a corresponding acc(), fail *)
   let alloc_terms = List.fold_left (fun s p ->
@@ -188,7 +198,6 @@ let rec remove_trivial_equalities = function
 
 let simplify eqs ((pure, spatial): state) =
   let eqs = find_equalities eqs pure in
-  Printf.printf "\nFound equalities: %s\n" (string_of_id_term_map eqs);
   let (pure, spatial) = subst_state eqs (pure, spatial) in
   eqs, (remove_trivial_equalities pure, spatial)
 
@@ -218,7 +227,7 @@ let extract_lemmas prog : lemma list =
           IdMap.empty
           proc.proc_contract.contr_formals
       in
-      Printf.printf "\n----Universals in lemma %s:%s\n" (proc |> name_of_proc |> fst) (string_of_id_term_map universals_sm);
+      printf "\n----Universals in lemma %s:%s\n" (proc |> name_of_proc |> fst) (string_of_equalities universals_sm);
       let lhs = subst_state universals_sm lhs in
       let rhs = subst_state universals_sm rhs in
       (lhs, rhs) :: ls
@@ -229,23 +238,19 @@ let extract_lemmas prog : lemma list =
 
 (** ----------- Symbolic Execution ---------- *)
 
-(* The following functions pass around a pair of (eqs, state)
-  where eqs is a map: ident -> term, keeping track of equalities derived from
-  pre, kept so that they can be substituted into the commands *)
-
-let empty_eqs = IdMap.empty
-
 let check_entailment eqs (p1, sp1) (p2, sp2) =
-  Printf.printf "\n----Checking entailment\n";
+  Debug.info (fun () ->
+    sprintf "\nChecking entailment, with eqs: %s\n" (string_of_equalities eqs)
+  );
   let eqs, (p1, sp1) = simplify eqs (p1, sp1) in
   let eqs, (p2, sp2) = simplify eqs (p2, sp2) in
-  Printf.printf "%s\n    |=\n%s\n"
+  printf "%s\n    |=\n%s\n"
     (string_of_state (p1, sp1)) (string_of_state (p2, sp2));
 
   match sp2 with
   | [] -> (* If RHS spatial is emp, then pure part must be true *)
     if p2 = mk_true then begin
-      Printf.printf "RHS is true | emp.\n";
+      printf "RHS is true | emp.\n";
       [] end
     else
       (* TODO call SMT solver here? :) *)
@@ -262,14 +267,46 @@ let rec symb_exec (eqs, state) comm =
   let mk_var_term id = mk_free_const (FreeSrt ("TODO", 0)) id in
   match comm with
   | Basic (Assign {assign_lhs=[x];
-      assign_rhs=[App (Read, [App (FreeSym fld, [], _); App (FreeSym loc, [], _)], srt)]}, _) ->
-    
-    todo ()
+      assign_rhs=[App (Read, [App (FreeSym fld, [], _); App (FreeSym _, [], _) as loc], srt)]}, _) ->
+    Debug.info (fun () ->
+      sprintf "\nExecuting lookup: %s := %s.%s;\n" (string_of_ident x)
+        (string_of_term loc) (string_of_ident fld)
+    );
+
+    let loc = subst_term eqs loc in
+    (** Returns [(fs, spatial')] s.t. [spatial] = [loc] |-> [fs] :: [spatial'] *)
+    let find_ptsto loc spatial =
+      let sp1, sp2 =
+        List.partition (function | PointsTo (x, fs) -> x = loc | Pred _ -> false) spatial
+      in
+      match sp1 with
+      | [PointsTo (_, fs)] -> Some (fs, sp2)
+      | [] -> None
+      | _ ->
+        failwith @@ "find_ptsto was confused by " ^
+          (sp1 |> List.map string_of_spatial_pred |> String.concat " &*& ")
+    in
+    (match find_ptsto loc (snd state) with
+    | Some (fs, spatial') ->
+      (* lookup fld in fs. now loc |-> fs' and (fld, e) is in fs' *)
+      let e, fs' =
+        try List.assoc fld fs, fs
+        with Not_found -> let e = mk_fresh_var srt "v" in e, (fld, e) :: fs
+      in
+      let spatial' = PointsTo (loc, fs') :: spatial' in
+      let x' = fresh_ident (name x) in
+      let sm = IdMap.singleton x (mk_var_term x') in
+      let e = subst_term sm e in
+      let state = subst_state sm (fst state, spatial') in
+      let eqs = IdMap.add x e (subst_eqs eqs sm) in
+      eqs, state
+    | None -> failwith @@ "Invalid lookup: " ^ (comm |> source_pos |> string_of_src_pos)
+    )
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, _) ->
     (* TODO simultaneous assignments can't touch heap, so do all at once *)
     List.combine ids ts
     |> List.fold_left (fun (eqs, state) (id, t) ->
-        Printf.printf "\nExecuting assignment: %s := %s;\n" (string_of_ident id) (string_of_term t);
+        printf "\nExecuting assignment: %s := %s;\n" (string_of_ident id) (string_of_term t);
         let id' = fresh_ident (name id) in
         let sm = IdMap.singleton id (mk_var_term id') in
         let t' = subst_term sm t in
@@ -287,12 +324,15 @@ let check prog proc =
   Debug.info (fun () ->
       "Checking procedure " ^ string_of_ident (name_of_proc proc) ^ "...\n");
 
-  let _ = extract_lemmas prog in
-
   match proc.proc_body with
   | Some comm ->
     let precond = state_of_spec_list proc.proc_contract.contr_precond in
     let postcond = state_of_spec_list proc.proc_contract.contr_postcond in
+    Debug.info (fun () ->
+      sprintf "  Precondition: %s\n  Postcondition: %s\n"
+        (string_of_state precond) (string_of_state postcond)
+    );
+
     let eqs = empty_eqs in
     let eqs, state = symb_exec (eqs, precond) comm in
     print_state (comm |> source_pos |> end_pos) eqs state;

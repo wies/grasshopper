@@ -21,6 +21,13 @@ struct Node {
   var next: Node;
 }
 
+procedure lookup_heap(x: Node) returns (y: Node)
+  requires x.next |-> null
+  ensures x.next |-> y
+{
+ y := x.next;
+}
+
 procedure assign_heap(x: Node)
   requires x.next |-> null
   ensures x.next |-> x
