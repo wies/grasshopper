@@ -14,53 +14,130 @@ let string_of_id_term_map sm = (IdMap.fold (fun x t str -> str ^ (Printf.sprintf
 
 (** ----------- Symbolic state and manipulators ---------- *)
 
+type spatial_pred =
+  | PointsTo of ident * (ident * term) list  (** x |-> [f1: E1, ..] *)
+  | Pred of ident * term list
+
+let string_of_spatial_pred = function
+  | PointsTo (id, fs) ->
+    Printf.sprintf "%s |-> (%s)" (string_of_ident id)
+      (fs |> List.map (fun (id, t) -> (string_of_ident id) ^ ": " ^ (string_of_term t))
+        |> String.concat ", ")
+  | Pred (id, ts) ->
+    Printf.sprintf "%s(%s)" (string_of_ident id)
+      (ts |> List.map string_of_term |> String.concat ", ")
+
+
 (** A symbolic state is a (pure formula, a list of spatial predicates) *)
-type state = form * (Sl.pred_symbol * term list) list
+type state = form * spatial_pred list
 
 let state_empty = (mk_true, [])
 
-(** Convert a specification into a symbolic state. *)
+(** Convert a specification into a symbolic state.
+  This also moves field read terms from pure formula to points-to predicates.
+*)
 let state_of_spec_list specs : state =
-  let rec state_of_sl_form (pure, spatial) = function
-    | Sl.Pure (f, _) -> state_of_form (pure, spatial) f
-    | Sl.Atom (p, ts, _) -> pure, (p, ts) :: spatial
+  (** [reads] is a map: location -> field -> new var, for ever field read *)
+  let rec state_of_sl_form (pure, spatial) reads = function
+    | Sl.Pure (f, _) ->
+      state_of_form (pure, spatial) reads f
+    | Sl.Atom (Sl.Emp, ts, _) ->
+      (pure, spatial), reads
+    | Sl.Atom (Sl.Region, [(App (SetEnum, [App (FreeSym x, [], _)], _))], _) -> (* acc(x) *)
+      (pure, PointsTo (x, []) :: spatial), reads
+    | Sl.Atom (Sl.Region, ts, _) -> todo ()
+    | Sl.Atom (Sl.Pred p, ts, _) ->
+      (pure, Pred (p, ts) :: spatial), reads
     | Sl.SepOp (Sl.SepStar, f1, f2, _) ->
-      let pure, spatial = state_of_sl_form (pure, spatial) f2 in
-      state_of_sl_form (pure, spatial) f1
+      let (pure, spatial), pts = state_of_sl_form (pure, spatial) reads f2 in
+      state_of_sl_form (pure, spatial) pts f1
     | Sl.SepOp (Sl.SepIncl, _, _, _) -> todo ()
     | Sl.SepOp (Sl.SepPlus, _, _, _) -> todo ()
     | Sl.BoolOp _ -> todo ()
     | Sl.Binder _ -> todo ()
-    (* Note: if you allow binders, make substitutious capture avoiding! *)
-  and state_of_form (pure, spatial) f =
+    (* Note: if you allow binders, make substitutions capture avoiding! *)
+  and state_of_form (pure, spatial) reads f =
     let f = filter_annotations (fun _ -> false) f in
-    smk_and [f; pure], spatial
+    (* TODO map and fold at same time? *)
+    let rec find_reads reads = function
+      | Var _ -> reads
+      | App (Read, [App (FreeSym fld, [], _); App (FreeSym loc, [], _)], srt) ->
+        if (IdMap.mem loc reads |> not) then
+          IdMap.add loc (IdMap.singleton fld (mk_fresh_var srt "v")) reads
+        else if (IdMap.mem fld (IdMap.find loc reads) |> not) then
+          IdMap.add loc (IdMap.add fld (mk_fresh_var srt "v") (IdMap.find loc reads)) reads
+        else reads
+      | App (Read, _, _) as t ->
+        failwith @@ "Unmatched read term " ^ (string_of_term t)
+      | App (_, ts, _) -> List.fold_left find_reads reads ts
+    in
+    let rec subst_reads reads = function
+      | Var _ as t -> t
+      | App (Read, [App (FreeSym fld, [], _); App (FreeSym loc, [], _)], srt) ->
+        IdMap.find fld (IdMap.find loc reads)
+      | App (sym, ts, srt) -> App (sym, List.map (subst_reads reads) ts, srt)
+    in
+    let reads = fold_terms find_reads reads f in
+    let f = map_terms (subst_reads reads) f in
+    (smk_and [f; pure], spatial), reads
   in
-  List.fold_left (fun state spec ->
-      match spec.spec_form with
-      | SL slform -> state_of_sl_form state slform
-      | FOL form -> state_of_form state form
-    ) state_empty specs
+  (* Convert all the specs into a state *)
+  let (pure, spatial), reads =
+    List.fold_left (fun (state, pts) spec ->
+        match spec.spec_form with
+        | SL slform -> state_of_sl_form state pts slform
+        | FOL form -> state_of_form state pts form
+      ) (state_empty, IdMap.empty) specs
+  in
+  (* Put collected read terms from pure part into spatial part *)
+  let spatial =
+    List.map (function
+        | PointsTo (x, fs) ->
+          let fs' = try IdMap.find x reads |> IdMap.bindings with Not_found -> [] in
+          PointsTo (x, fs @ fs')
+        | Pred _ as p -> p
+      )
+      spatial
+  in
+  (* If we have a points-to info without a corresponding acc(), fail *)
+  let acc_ids = List.fold_left (fun s p ->
+    match p with
+    | PointsTo (x, _) -> IdSet.add x s
+    | _ -> s) IdSet.empty spatial
+  in
+  if IdMap.exists (fun id _ -> IdSet.mem id acc_ids |> not) reads then
+    failwith "state_of_spec_list: couldn't find corresponding acc"
+  else
+    (pure, spatial)
+
+let string_of_spatial_pred = function
+  | PointsTo (id, fs) ->
+    Printf.sprintf "%s |-> (%s)" (string_of_ident id)
+      (fs |> List.map (fun (id, t) -> (string_of_ident id) ^ ": " ^ (string_of_term t))
+        |> String.concat ", ")
+  | Pred (id, ts) ->
+    Printf.sprintf "%s(%s)" (string_of_ident id)
+      (ts |> List.map string_of_term |> String.concat ", ")
 
 let string_of_state ((pure, spatial): state) =
   let spatial =
     match spatial with
     | [] -> "emp"
-    | spatial ->
-      spatial
-      |> List.map (fun (p, ts) -> Sl.Atom (p, ts, None) |> Sl.string_of_form)
-      |> String.concat " * "
+    | spatial -> spatial |> List.map string_of_spatial_pred |> String.concat " * "
   in
   Printf.sprintf "%s : %s" (string_of_form pure) spatial
+
+let subst_spatial_pred sm = function
+  | PointsTo (id, fs) ->
+    PointsTo (id, List.map (fun (id, t) -> id, subst_consts_term sm t) fs)
+  | Pred (id, ts) ->
+    Pred (id, List.map (subst_consts_term sm) ts)
 
 (** Substitute all variables (encoded as constants) in state [(pure, spatial)] with terms 
   according to substitution map [sm].
   This operation is not capture avoiding. *)
 let subst_state sm ((pure, spatial): state) : state =
-  let spatial =
-    List.map (fun (p, ts) -> (p, List.map (subst_consts_term sm) ts)) spatial
-  in
-  (subst_consts sm pure, spatial)
+  (subst_consts sm pure, List.map (subst_spatial_pred sm) spatial)
 
 
 let print_state src_pos state =
