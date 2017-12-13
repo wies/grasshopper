@@ -742,6 +742,14 @@ let infer_types cu =
         let e1 = infer_types cu locals AnyType e in
         Assign (lhs1, [e1], pos)
     | Assign (lhs, rhs, pos) ->
+        let _ = List.fold_left (fun seen -> function
+          | Ident (x, pos) ->
+              if List.mem x seen
+              then assignment_multiple_error pos
+              else x :: seen
+          | _ -> seen)
+            [] lhs
+        in
         let rhs1, tys =
           Util.map_split (fun e ->
             let e1 = infer_types cu locals AnyType e in

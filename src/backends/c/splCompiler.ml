@@ -10,6 +10,9 @@ open Format
 open RemoveGhost
 open Predef
 
+let c_string_of_ident (name, n) =
+  if n = 0 then name else
+  Printf.sprintf "%s_%d" name n
 
 (** Converts abstract syntax into a C program string and print it to output channel [oc].
  *  Assumes that [cu] has been type-checked and flattened. *)
@@ -20,7 +23,7 @@ let convert oc cu =
     let tds = cu.type_decls in
     let string_of_type_fwd_decl t_def t_id = 
       match t_def with
-      | StructTypeDef _ -> "struct " ^ (string_of_ident t_id) ^ ";"
+      | StructTypeDef _ -> "struct " ^ (c_string_of_ident t_id) ^ ";"
       | _ ->
           (* TODO: better error handling *)
           failwith "Cannot compile programs with undefined types"
@@ -39,7 +42,7 @@ let convert oc cu =
     let pr_c_field ppf v = 
       fprintf ppf "%s %s;" 
         (string_of_c_type v.v_type)
-        (string_of_ident v.v_name)
+        (c_string_of_ident v.v_name)
     in
     let rec pr_c_fields ppf = function
       | []      -> ()
@@ -50,9 +53,9 @@ let convert oc cu =
       match s.t_def with
       | StructTypeDef fields ->
           fprintf ppf "typedef struct %s {@\n  @[%a@]@\n} %s;" 
-            (string_of_ident s.t_name) 
+            (c_string_of_ident s.t_name) 
             pr_c_fields (idmap_to_list fields)
-            (string_of_ident s.t_name)
+            (c_string_of_ident s.t_name)
       | _ -> ()
     in
     let rec pr_c_structs ppf = function 
@@ -79,7 +82,7 @@ let convert oc cu =
           (fun v a -> 
             ((string_of_c_type (IdMap.find v p.p_locals).v_type ) ^ 
             " " ^ 
-            (string_of_ident v))
+            (c_string_of_ident v))
             :: a) 
           p.p_formals 
           (if ((List.length p.p_returns) <= 1) then
@@ -89,7 +92,7 @@ let convert oc cu =
               (fun v a -> 
                 ((string_of_c_type (IdMap.find v p.p_locals).v_type) ^ 
                 "* " ^ (* Star operator used because return variables are passed in by reference *) 
-                (string_of_ident v))
+                (c_string_of_ident v))
                 :: a) 
               p.p_returns 
               []))))
@@ -102,7 +105,7 @@ let convert oc cu =
           "void"
         else
           (string_of_c_type (IdMap.find (List.hd p.p_returns) p.p_locals).v_type))
-        (string_of_ident p.p_name) 
+        (c_string_of_ident p.p_name) 
         pr_c_proc_args p
     in
     let rec pr_c_fwd_procs ppf = function
@@ -188,7 +191,7 @@ let convert oc cu =
       | (Read (from, index, _), cur_proc) -> pr_c_read ppf (from, index, cur_proc)
       | (ProcCall (id, es, _), cur_proc)  ->
         fprintf ppf "%s(%a)"
-          (string_of_ident id)
+          (c_string_of_ident id)
           pr_c_expr_args (es, cur_proc)
       | (UnaryOp (OpLength, idexp, _), cur_proc) -> 
         fprintf ppf "(%a->%s)" 
@@ -199,12 +202,12 @@ let convert oc cu =
         pr_bin_op ppf ((e1, cur_proc), op1, (e2, cur_proc))
       | (Ident (id, _), {p_returns=p_returns})   ->
           if ((List.length p_returns) == 1) then
-            fprintf ppf "%s" (string_of_ident id)
+            fprintf ppf "%s" (c_string_of_ident id)
           else
             if (List.exists (fun lid -> lid == id) p_returns) then
-              fprintf ppf "(*%s)" (string_of_ident id)
+              fprintf ppf "(*%s)" (c_string_of_ident id)
             else
-              fprintf ppf "%s"    (string_of_ident id)
+              fprintf ppf "%s"    (c_string_of_ident id)
       | (New (t, args, _), _)             ->
         fprintf ppf "/* ERROR: New expression only allowed directly within an Assign or Free stmt. */"
       | ((Emp _|Setenum _|PredApp _|
@@ -225,9 +228,9 @@ let convert oc cu =
         | (id, t, args, cur_proc) ->
           let usable_id_string =
             (if (List.exists (fun lid -> lid == id) cur_proc.p_returns) then 
-              "(*" ^ (string_of_ident id) ^ ")"
+              "(*" ^ (c_string_of_ident id) ^ ")"
             else  
-               (string_of_ident id))
+               (c_string_of_ident id))
           in
           let type_stringc = (string_of_c_type_for_creation t) in
           let type_string = (string_of_c_type t) in
@@ -237,7 +240,7 @@ let convert oc cu =
                 usable_id_string
                 type_string
                 type_stringc
-            | (ArrayType(t_sub), l :: []) ->
+            | (ArrayType (t_sub), [l]) ->
               fprintf ppf 
                 "%s = %s( %a);"
                 usable_id_string
@@ -247,19 +250,19 @@ let convert oc cu =
           )  
       in
       let rec pr_c_assign ppf = function
-        | (Assign(Ident(id, _) :: [], New(t, args, _) :: [], _), cur_proc) ->
+        | (Assign ([Ident (id, _)], [New (t, args, _)], _), cur_proc) ->
           pr_c_assign_new ppf (id, t, args, cur_proc)
         (* This branch is necessary because the next branch's pattern captures
          * all calls to procedures, but is only equipped to handle procedures
          * with multiple return values. *)
-        | (Assign (v :: [], e :: [], _),cur_proc) -> 
+        | (Assign ([v], [e], _),cur_proc) -> 
           fprintf ppf "%a = %a;" 
             pr_c_expr (v, cur_proc)
             pr_c_expr (e, cur_proc)
         (* This branch passes in multiple return variables by reference
          * into the appropriate function in order to facilitate
          * multiple return variables within a C program. *)
-        | (Assign (vs, ProcCall(id, es, _) :: [], _), cur_proc) ->
+        | (Assign (vs, [ProcCall(id, es, _)], _), cur_proc) ->
           let p = (IdMap.find id cu.proc_decls) in
           let rec pr_args_in ppf = function 
             | []      -> ()
@@ -284,12 +287,47 @@ let convert oc cu =
                 fprintf ppf "%a, %a" pr_args_in es pr_args_out vs
           in
           fprintf ppf "%s(%a);"
-            (string_of_ident p.p_name)
+            (c_string_of_ident p.p_name)
             pr_args_total (es, vs)
-        | (Assign (v :: vs, e :: es, apos), cur_proc) -> 
-          fprintf ppf "%a@\n%a"
-            pr_c_stmt (Assign ([v], [e], apos), cur_proc)
-            pr_c_stmt (Assign (vs,  es,  apos), cur_proc)
+        | (Assign (ls, rs, apos), cur_proc) ->
+            let lvs, rvs =
+              List.fold_left2 (fun (lvs, rvs) l r ->
+                let lv = match l with
+                | Ident (v, _) -> IdSet.singleton v
+                | _ -> IdSet.empty
+                in
+                IdSet.union lv lvs,
+                IdSet.union rvs @@ IdSet.diff (free_vars r) lv)
+                (IdSet.empty, IdSet.empty) ls rs
+            in
+            let rvs = IdSet.inter lvs rvs in
+            let sm =
+              IdSet.fold
+                (fun v ->
+                  let vdecl = IdMap.find v cur_proc.p_locals in
+                  let v' = GrassUtil.fresh_ident (GrassUtil.name v) in
+                  fprintf ppf "%s@ %s;@\n" (string_of_c_type vdecl.v_type) (c_string_of_ident v');
+                  IdMap.add v v')
+                rvs IdMap.empty
+            in
+            let rs = List.map (SplSyntax.subst_id sm) rs in
+            let lin_ls, lin_rs =
+              IdMap.fold
+                (fun v v' (aux_ls, aux_rs) -> Ident (v', apos) :: aux_ls, Ident (v, apos) :: aux_rs)
+                sm (ls, rs)
+            in
+            let rec pr_sim_assign ppf = function
+              | l :: ls, r :: rs ->
+                  fprintf ppf "%a@ %a"
+                    pr_c_stmt (Assign ([l], [r], apos), cur_proc)
+                    pr_sim_assign (ls, rs)
+              | [], [] -> ()
+              | _ -> fprintf ppf "/* ERROR: badly formed Assign statement */"
+            in
+            pr_sim_assign ppf (lin_ls, lin_rs)
+          (*fprintf ppf "%a@\n%a"
+            pr_c_stmt (Assign ([r], [l], apos), cur_proc)
+            pr_c_stmt (Assign (rs,  ls,  apos), cur_proc)*)
         | _ -> fprintf ppf "/* ERROR: badly formed Assign statement */"
       in
       let pr_c_dispose ppf = function (e, cur_proc) -> match e with
@@ -302,7 +340,7 @@ let convert oc cu =
         | BinaryOp _ -> fprintf ppf "/* ERROR: freeing the result of binary operation will possibly be implemented in the future for freeing Sets. */" 
         | (Null _ | Emp _ | Setenum _ | IntVal _ | BoolVal _ | PredApp _ | Binder _
         | UnaryOp _ | Annot _) ->
-            fprintf ppf "/* ERROR: expression cannot be dispsosed */"
+            fprintf ppf "/* ERROR: expression cannot be disposed */"
       in 
       (** Because SPL allows multiple return variables but C does not, yet in
        *  SPL only procedures with only one return value can be embedded in
@@ -319,13 +357,13 @@ let convert oc cu =
             pr_c_expr (e, cur_proc)
         | (Return(e1 :: e2 :: [], _), cur_proc, r1 :: r2 :: []) ->
           fprintf ppf "*%s = %a;@\n*%s = %a;@\nreturn;"
-            (string_of_ident r1)
+            (c_string_of_ident r1)
             pr_c_expr (e1, cur_proc)
-            (string_of_ident r2)
+            (c_string_of_ident r2)
             pr_c_expr (e2, cur_proc)
         | (Return(e :: es, p), cur_proc, r :: rs) ->
           fprintf ppf "*%s = %a;@\n%a"
-            (string_of_ident r)
+            (c_string_of_ident r)
             pr_c_expr (e, cur_proc)
             pr_c_return (Return(es,  p), cur_proc, rs)
         | _ -> fprintf ppf "/* ERROR: badly formed Return statement. */"
@@ -373,7 +411,7 @@ let convert oc cu =
                 acc
               else
                 ((string_of_c_type v.v_type) ^ " " ^ 
-                  (string_of_ident v.v_name) ^ ";" ) :: acc
+                  (c_string_of_ident v.v_name) ^ ";" ) :: acc
             )
             p.p_locals 
             []
@@ -406,18 +444,18 @@ let convert oc cu =
             let ret_var = (IdMap.find (List.hd p.p_returns) p.p_locals) in 
             fprintf ppf "%s %s;@\n"
             (string_of_c_type ret_var.v_type)
-            (string_of_ident ret_var.v_name)
+            (c_string_of_ident ret_var.v_name)
         in
         fprintf ppf "%s %s (%a) {@\n  @[%a%a%a@]@\n}"
           (string_of_c_type ((IdMap.find (List.hd p.p_returns) p.p_locals).v_type))
-          (string_of_ident p.p_name) 
+          (c_string_of_ident p.p_name) 
           pr_c_proc_args p
           pr_c_decl_return_var p
           pr_c_decl_locals p
           pr_c_stmt ((force_return p).p_body, p)
       else
         fprintf ppf "void %s (%a) {@\n  @[%a%a@]@\n}" 
-          (string_of_ident p.p_name) 
+          (c_string_of_ident p.p_name) 
           pr_c_proc_args p
           pr_c_decl_locals p
           pr_c_stmt (p.p_body, p)
