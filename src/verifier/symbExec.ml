@@ -15,18 +15,8 @@ let string_of_id_term_map sm = (IdMap.fold (fun x t str -> str ^ (Printf.sprintf
 (** ----------- Symbolic state and manipulators ---------- *)
 
 type spatial_pred =
-  | PointsTo of ident * (ident * term) list  (** x |-> [f1: E1, ..] *)
+  | PointsTo of term * (ident * term) list  (** x |-> [f1: E1, ..] *)
   | Pred of ident * term list
-
-let string_of_spatial_pred = function
-  | PointsTo (id, fs) ->
-    Printf.sprintf "%s |-> (%s)" (string_of_ident id)
-      (fs |> List.map (fun (id, t) -> (string_of_ident id) ^ ": " ^ (string_of_term t))
-        |> String.concat ", ")
-  | Pred (id, ts) ->
-    Printf.sprintf "%s(%s)" (string_of_ident id)
-      (ts |> List.map string_of_term |> String.concat ", ")
-
 
 (** A symbolic state is a (pure formula, a list of spatial predicates).
   Note: program vars are represented as FreeSymb constants,
@@ -36,86 +26,9 @@ type state = form * spatial_pred list
 
 let state_empty = (mk_true, [])
 
-(** Convert a specification into a symbolic state.
-  This also moves field read terms from pure formula to points-to predicates.
-*)
-let state_of_spec_list specs : state =
-  (** [reads] is a map: location -> field -> new var, for ever field read *)
-  let rec state_of_sl_form (pure, spatial) reads = function
-    | Sl.Pure (f, _) ->
-      state_of_form (pure, spatial) reads f
-    | Sl.Atom (Sl.Emp, ts, _) ->
-      (pure, spatial), reads
-    | Sl.Atom (Sl.Region, [(App (SetEnum, [App (FreeSym x, [], _)], _))], _) -> (* acc(x) *)
-      (pure, PointsTo (x, []) :: spatial), reads
-    | Sl.Atom (Sl.Region, ts, _) -> todo ()
-    | Sl.Atom (Sl.Pred p, ts, _) ->
-      (pure, Pred (p, ts) :: spatial), reads
-    | Sl.SepOp (Sl.SepStar, f1, f2, _) ->
-      let (pure, spatial), pts = state_of_sl_form (pure, spatial) reads f2 in
-      state_of_sl_form (pure, spatial) pts f1
-    | Sl.SepOp (Sl.SepIncl, _, _, _) -> todo ()
-    | Sl.SepOp (Sl.SepPlus, _, _, _) -> todo ()
-    | Sl.BoolOp _ -> todo ()
-    | Sl.Binder _ -> todo ()
-    (* Note: if you allow binders, make substitutions capture avoiding! *)
-  and state_of_form (pure, spatial) reads f =
-    let f = filter_annotations (fun _ -> false) f in
-    (* TODO map and fold at same time? *)
-    let rec find_reads reads = function
-      | Var _ -> reads
-      | App (Read, [App (FreeSym fld, [], _); App (FreeSym loc, [], _)], srt) ->
-        if (IdMap.mem loc reads |> not) then
-          IdMap.add loc (IdMap.singleton fld (mk_fresh_var srt "v")) reads
-        else if (IdMap.mem fld (IdMap.find loc reads) |> not) then
-          IdMap.add loc (IdMap.add fld (mk_fresh_var srt "v") (IdMap.find loc reads)) reads
-        else reads
-      | App (Read, _, _) as t ->
-        failwith @@ "Unmatched read term " ^ (string_of_term t)
-      | App (_, ts, _) -> List.fold_left find_reads reads ts
-    in
-    let rec subst_reads reads = function
-      | Var _ as t -> t
-      | App (Read, [App (FreeSym fld, [], _); App (FreeSym loc, [], _)], srt) ->
-        IdMap.find fld (IdMap.find loc reads)
-      | App (sym, ts, srt) -> App (sym, List.map (subst_reads reads) ts, srt)
-    in
-    let reads = fold_terms find_reads reads f in
-    let f = map_terms (subst_reads reads) f in
-    (smk_and [f; pure], spatial), reads
-  in
-  (* Convert all the specs into a state *)
-  let (pure, spatial), reads =
-    List.fold_left (fun (state, pts) spec ->
-        match spec.spec_form with
-        | SL slform -> state_of_sl_form state pts slform
-        | FOL form -> state_of_form state pts form
-      ) (state_empty, IdMap.empty) specs
-  in
-  (* Put collected read terms from pure part into spatial part *)
-  let spatial =
-    List.map (function
-        | PointsTo (x, fs) ->
-          let fs' = try IdMap.find x reads |> IdMap.bindings with Not_found -> [] in
-          PointsTo (x, fs @ fs')
-        | Pred _ as p -> p
-      )
-      spatial
-  in
-  (* If we have a points-to info without a corresponding acc(), fail *)
-  let acc_ids = List.fold_left (fun s p ->
-    match p with
-    | PointsTo (x, _) -> IdSet.add x s
-    | _ -> s) IdSet.empty spatial
-  in
-  if IdMap.exists (fun id _ -> IdSet.mem id acc_ids |> not) reads then
-    failwith "state_of_spec_list: couldn't find corresponding acc"
-  else
-    (pure, spatial)
-
 let string_of_spatial_pred = function
-  | PointsTo (id, fs) ->
-    Printf.sprintf "%s |-> (%s)" (string_of_ident id)
+  | PointsTo (x, fs) ->
+    Printf.sprintf "%s |-> (%s)" (string_of_term x)
       (fs |> List.map (fun (id, t) -> (string_of_ident id) ^ ": " ^ (string_of_term t))
         |> String.concat ", ")
   | Pred (id, ts) ->
@@ -139,6 +52,96 @@ let print_state src_pos eqs state =
       Printf.sprintf "\nState at %s:\n  %s : %s\n"
         (string_of_src_pos src_pos) eqs_str (string_of_state state)
   )
+
+
+(** Convert a specification into a symbolic state.
+  This also moves field read terms from pure formula to points-to predicates.
+*)
+let state_of_spec_list specs : state =
+  (** [reads] is a map: location -> field -> new var, for every field read
+    Sorry for using refs, but didn't know how to map and fold terms simultaneously
+  *)
+  let reads = ref TermMap.empty in
+  let rec convert_term = function
+    | Var _ as t -> t
+    | App (Read, [App (FreeSym fld, [], _); loc], srt) -> (* loc.fld *)
+      let loc = convert_term loc in
+      if (TermMap.mem loc !reads |> not) then begin
+        let new_var = (mk_fresh_var srt "v") in
+        reads := TermMap.add loc (IdMap.singleton fld new_var) !reads;
+        new_var
+      end
+      else if (IdMap.mem fld (TermMap.find loc !reads) |> not) then begin
+        let new_var = (mk_fresh_var srt "v") in
+        let flds_of_loc = IdMap.add fld (mk_fresh_var srt "v") (TermMap.find loc !reads) in
+        reads := TermMap.add loc flds_of_loc !reads;
+        new_var
+      end else IdMap.find fld (TermMap.find loc !reads)
+    | App (Read, _, _) as t ->
+      failwith @@ "Unmatched read term " ^ (string_of_term t)
+    | App (s, ts, srt) -> App (s, List.map convert_term ts, srt)
+  in
+  let convert_form (pure, spatial) f =
+    let f = filter_annotations (fun _ -> false) f in
+    let f = map_terms convert_term f in
+    (smk_and [f; pure], spatial)
+  in
+  let rec convert_sl_form (pure, spatial) f =
+    let fail () = failwith @@ "Unsupported formula " ^ (Sl.string_of_form f) in
+    match f with
+    | Sl.Pure (f, _) ->
+      convert_form (pure, spatial) f
+    | Sl.Atom (Sl.Emp, ts, _) ->
+      (pure, spatial)
+    | Sl.Atom (Sl.Region, [(App (SetEnum, [x], _))], _) -> (* acc(x) *)
+      let x = convert_term x in
+      (pure, PointsTo (x, []) :: spatial)
+    | Sl.Atom (Sl.Region, ts, _) -> fail ()
+    | Sl.Atom (Sl.Pred p, ts, _) ->
+      (pure, Pred (p, ts) :: spatial)
+    | Sl.SepOp (Sl.SepStar, f1, f2, _) ->
+      let (pure, spatial) = convert_sl_form (pure, spatial) f2 in
+      convert_sl_form (pure, spatial) f1
+    | Sl.SepOp (Sl.SepIncl, _, _, _) -> fail ()
+    | Sl.SepOp (Sl.SepPlus, _, _, _) -> fail ()
+    | Sl.BoolOp _ -> fail ()
+    | Sl.Binder _ -> fail ()
+    (* Note: if you allow binders, make substitutions capture avoiding! *)
+  in
+  (* Convert all the specs into a state *)
+  let (pure, spatial) =
+    List.fold_left (fun state spec ->
+        match spec.spec_form with
+        | SL slform -> convert_sl_form state slform
+        | FOL form -> convert_form state form
+      ) state_empty specs
+  in
+  let reads = !reads in
+  (* Put collected read terms from pure part into spatial part *)
+  let spatial =
+    List.map (function
+        | PointsTo (x, fs) ->
+          let fs' =
+            try TermMap.find x reads |> IdMap.bindings with Not_found -> []
+          in
+          PointsTo (x, fs @ fs')
+        | Pred _ as p -> p
+      )
+      spatial
+  in
+  reads |> TermMap.bindings |> List.map (fun (x, fm) -> (string_of_term x) ^ " : " ^ (string_of_id_term_map fm)) |> String.concat "\n" |> print_endline;
+  print_state dummy_position IdMap.empty (pure, spatial);
+  (* TODO check the following in presence of x.next.next etc *)
+  (* If we have a points-to info without a corresponding acc(), fail *)
+  let alloc_terms = List.fold_left (fun s p ->
+    match p with
+    | PointsTo (x, _) -> TermSet.add x s
+    | _ -> s) TermSet.empty spatial
+  in
+  if TermMap.exists (fun t _ -> TermSet.mem t alloc_terms |> not) reads then
+    failwith "state_of_spec_list: couldn't find corresponding acc"
+  else
+    (pure, spatial)
 
 
 let subst_term sm = subst_consts_term sm >> subst_term sm
@@ -292,7 +295,7 @@ let check prog proc =
     let postcond = state_of_spec_list proc.proc_contract.contr_postcond in
     let eqs = empty_eqs in
     let eqs, state = symb_exec (eqs, precond) comm in
-    print_state (comm |> source_pos |> end_pos) state;
+    print_state (comm |> source_pos |> end_pos) eqs state;
     check_entailment eqs state postcond
   | None ->
     []

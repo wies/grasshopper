@@ -1,6 +1,6 @@
-procedure assign(x: Int)
-  requires x == 0
-  ensures x == 10
+procedure assign(x: Int, y: Int)
+  requires x == 0 && y == x
+  ensures x == 10 && y == 0
 {
   x := 5;
   x := 10;
@@ -39,6 +39,25 @@ procedure assign_heap2(x: Node, y: Node)
   y.next := null;
   x.next := x;
 }
+
+procedure assign_heap3(x: Node, y: Node)
+  requires x.next |-> null &*& y == x
+  ensures x.next |-> x
+{
+  y.next := x;
+}
+
+procedure assign_heap4(x: Node, y: Node)
+  requires x.next |-> y &*& x.next.next |-> null
+  ensures x.next |-> x &*& y.next |-> null
+{
+  y.next := x;
+}
+
+procedure assign_heap5(x: Node, y: Node)
+  requires acc(x) &*& acc(x.next) &*& x.next == y
+  ensures x.next |-> y &*& acc(y)
+{}
 
 procedure read_heap(x: Node) returns (y: Node)
   requires x.next |-> null
