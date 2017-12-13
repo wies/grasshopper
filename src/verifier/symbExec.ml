@@ -28,7 +28,10 @@ let string_of_spatial_pred = function
       (ts |> List.map string_of_term |> String.concat ", ")
 
 
-(** A symbolic state is a (pure formula, a list of spatial predicates) *)
+(** A symbolic state is a (pure formula, a list of spatial predicates).
+  Note: program vars are represented as FreeSymb constants,
+  existential vars are represented as Var variables.
+ *)
 type state = form * spatial_pred list
 
 let state_empty = (mk_true, [])
@@ -127,40 +130,52 @@ let string_of_state ((pure, spatial): state) =
   in
   Printf.sprintf "%s : %s" (string_of_form pure) spatial
 
+let print_state src_pos eqs state =
+  let eqs_str = IdMap.bindings eqs
+    |> List.map (fun (x, t) -> (string_of_ident x) ^ " == " ^ (string_of_term t))
+    |> String.concat " && "
+  in
+  Debug.info (fun () ->
+      Printf.sprintf "\nState at %s:\n  %s : %s\n"
+        (string_of_src_pos src_pos) eqs_str (string_of_state state)
+  )
+
+
+let subst_term sm = subst_consts_term sm >> subst_term sm
+
 let subst_spatial_pred sm = function
   | PointsTo (id, fs) ->
-    PointsTo (id, List.map (fun (id, t) -> id, subst_consts_term sm t) fs)
+    PointsTo (id, List.map (fun (id, t) -> id, subst_term sm t) fs)
   | Pred (id, ts) ->
-    Pred (id, List.map (subst_consts_term sm) ts)
+    Pred (id, List.map (subst_term sm) ts)
+
+(** Substitute all variables (Vars and constants) in derived equalities [eqs],
+  according to substitution [sm] *)
+let subst_eqs eqs sm =
+  IdMap.map (subst_term sm) eqs
 
 (** Substitute all variables (encoded as constants) in state [(pure, spatial)] with terms 
   according to substitution map [sm].
   This operation is not capture avoiding. *)
 let subst_state sm ((pure, spatial): state) : state =
+  (* TODO also substitute vars *)
   (subst_consts sm pure, List.map (subst_spatial_pred sm) spatial)
-
-
-let print_state src_pos state =
-  Debug.info (fun () ->
-      Printf.sprintf "\nState at %s:\n  %s\n"
-        (string_of_src_pos src_pos) (string_of_state state)
-  )
 
 
 (** ----------- Re-arrangement and normalization rules ---------- *)
 
-let find_equalities (pure: form) =
+let find_equalities eqs (pure: form) =
   let rec find_eq sm = function
     | Atom (App (Eq, [t2; (App (FreeSym id, [],  _))], _), _)
     | Atom (App (Eq, [(App (FreeSym id, [],  _)); t2], _), _) ->
-      (* TODO don't add equalities with field read terms! *)
+      (* TODO also gather Var equalities *)
       (* TODO do some kind of normalization to avoid checking both cases *)
       IdMap.add id t2 sm
     | BoolOp (And, fs) ->
       List.fold_left find_eq sm fs
     | _ -> sm
   in
-  find_eq IdMap.empty pure
+  find_eq eqs pure
 
 let rec remove_trivial_equalities = function
   | Atom (App (Eq, [t1; t2], _), _) as f -> if t1 = t2 then mk_true else f
@@ -168,6 +183,11 @@ let rec remove_trivial_equalities = function
   | Binder (b, vs, f, anns) -> Binder (b, vs, remove_trivial_equalities f, anns)
   | f -> f
 
+let simplify eqs ((pure, spatial): state) =
+  let eqs = find_equalities eqs pure in
+  Printf.printf "\nFound equalities: %s\n" (string_of_id_term_map eqs);
+  let (pure, spatial) = subst_state eqs (pure, spatial) in
+  eqs, (remove_trivial_equalities pure, spatial)
 
 (** ----------- Lemmas for proving entailments ---------- *)
 
@@ -206,18 +226,18 @@ let extract_lemmas prog : lemma list =
 
 (** ----------- Symbolic Execution ---------- *)
 
-let check_entailment (p1, sp1) (p2, sp2) =
-  Printf.printf "\n----Checking entailment:\n%s\n    |=\n%s\n" (string_of_state (p1, sp1)) (string_of_state (p2, sp2));
+(* The following functions pass around a pair of (eqs, state)
+  where eqs is a map: ident -> term, keeping track of equalities derived from
+  pre, kept so that they can be substituted into the commands *)
 
-  (* Find equalities in LHS and substitute in RHS *)
-  let eq_sm = find_equalities p1 in
-  Printf.printf "\nFound equalities to substitute: %s\n" (string_of_id_term_map eq_sm);
-  let (p1, sp1) = subst_state eq_sm (p1, sp1) in
-  let (p2, sp2) = subst_state eq_sm (p2, sp2) in
-  Printf.printf "\nNew RHS: %s\n" (string_of_state (p2, sp2));
+let empty_eqs = IdMap.empty
 
-  (* Remove trivial equalities *)
-  let (p1, p2) = remove_trivial_equalities p1, remove_trivial_equalities p2 in
+let check_entailment eqs (p1, sp1) (p2, sp2) =
+  Printf.printf "\n----Checking entailment\n";
+  let eqs, (p1, sp1) = simplify eqs (p1, sp1) in
+  let eqs, (p2, sp2) = simplify eqs (p2, sp2) in
+  Printf.printf "%s\n    |=\n%s\n"
+    (string_of_state (p1, sp1)) (string_of_state (p2, sp2));
 
   match sp2 with
   | [] -> (* If RHS spatial is emp, then pure part must be true *)
@@ -231,25 +251,31 @@ let check_entailment (p1, sp1) (p2, sp2) =
 
 
 (** Symbolically execute command [comm] on state [state] and return final state. *)
-let rec symb_exec state comm =
-  (* TODO get the type from the program somehow? *)
+let rec symb_exec (eqs, state) comm =
+  (* First, simplify the pre state *)
+  let eqs, state = simplify eqs state in
+  print_state (source_pos comm) eqs state;
+  (* TODO get the type from the program *)
   let mk_var_term id = mk_free_const (FreeSrt ("TODO", 0)) id in
   match comm with
+  | Basic (Assign {assign_lhs=[x];
+      assign_rhs=[App (Read, [App (FreeSym fld, [], _); App (FreeSym loc, [], _)], srt)]}, _) ->
+    
+    todo ()
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, _) ->
-    (* TODO this is incorrect for field assignments! *)
     (* TODO simultaneous assignments can't touch heap, so do all at once *)
     List.combine ids ts
-    |> List.fold_left (fun state (id, t) ->
+    |> List.fold_left (fun (eqs, state) (id, t) ->
         Printf.printf "\nExecuting assignment: %s := %s;\n" (string_of_ident id) (string_of_term t);
         let id' = fresh_ident (name id) in
         let sm = IdMap.singleton id (mk_var_term id') in
-        let t' = subst_consts_term sm t in
+        let t' = subst_term sm t in
         let (pure, spatial) = subst_state sm state in
-        print_state (source_pos comm) state;
-        smk_and [(mk_eq (mk_var_term id) t'); pure], spatial
-      ) state
+        let eqs = IdMap.add id t' (subst_eqs eqs sm) in
+        eqs, (pure, spatial)
+      ) (eqs, state)
   | Seq (comms, _) ->
-    List.fold_left symb_exec state comms
+    List.fold_left symb_exec (eqs, state) comms
   | _ -> todo ()
 
 
@@ -264,9 +290,9 @@ let check prog proc =
   | Some comm ->
     let precond = state_of_spec_list proc.proc_contract.contr_precond in
     let postcond = state_of_spec_list proc.proc_contract.contr_postcond in
-    print_state (comm |> source_pos |> start_pos) precond;
-    let state = symb_exec precond comm in
+    let eqs = empty_eqs in
+    let eqs, state = symb_exec (eqs, precond) comm in
     print_state (comm |> source_pos |> end_pos) state;
-    check_entailment state postcond
+    check_entailment eqs state postcond
   | None ->
     []
