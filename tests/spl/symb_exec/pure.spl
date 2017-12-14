@@ -28,6 +28,13 @@ procedure lookup_heap(x: Node) returns (y: Node)
  y := x.next;
 }
 
+procedure lookup_heap2(x: Node, y: Node, z: Node)
+  requires x.next |-> null &*& x == y &*& y == z
+  ensures x.next |-> null &*& y == null
+{
+ y := y.next;
+}
+
 procedure assign_heap(x: Node)
   requires x.next |-> null
   ensures x.next |-> x

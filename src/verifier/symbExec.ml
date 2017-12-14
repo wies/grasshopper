@@ -196,10 +196,13 @@ let rec remove_trivial_equalities = function
   | Binder (b, vs, f, anns) -> Binder (b, vs, remove_trivial_equalities f, anns)
   | f -> f
 
+let apply_equalities eqs state =
+  let (pure, spatial) = subst_state eqs state in
+  remove_trivial_equalities pure, spatial
+
 let simplify eqs ((pure, spatial): state) =
   let eqs = find_equalities eqs pure in
-  let (pure, spatial) = subst_state eqs (pure, spatial) in
-  eqs, (remove_trivial_equalities pure, spatial)
+  eqs, apply_equalities eqs (pure, spatial)
 
 (** ----------- Lemmas for proving entailments ---------- *)
 
@@ -243,7 +246,7 @@ let check_entailment eqs (p1, sp1) (p2, sp2) =
     sprintf "\nChecking entailment, with eqs: %s\n" (string_of_equalities eqs)
   );
   let eqs, (p1, sp1) = simplify eqs (p1, sp1) in
-  let eqs, (p2, sp2) = simplify eqs (p2, sp2) in
+  let (p2, sp2) = apply_equalities eqs (p2, sp2) in
   printf "%s\n    |=\n%s\n"
     (string_of_state (p1, sp1)) (string_of_state (p2, sp2));
 
