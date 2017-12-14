@@ -1,4 +1,4 @@
-<img align="right" width="200" src="logo.png"/>
+<img align="right" width="300" src="logo.png"/>
 
 GRASShopper
 =======
