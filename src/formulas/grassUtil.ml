@@ -1278,7 +1278,7 @@ let propagate_forall_down f =
 (** Assumes that [f] is in negation normal form. *)
 let foralls_to_exists f =
   let rec find_defs bvs defs f =
-    let rec disjoints acc = function
+    (*let rec disjoints acc = function
       | BoolOp (Not, [Atom (App (Disjoint, [t1; t2], _), _)]) :: fs ->
           let acc1 =
             if compare t1 t2 < 0 then (t1, t2) :: acc else (t2, t1) :: acc
@@ -1289,7 +1289,7 @@ let foralls_to_exists f =
       | _ :: fs -> disjoints acc fs
       | [] -> acc
     in
-    let dcs = disjoints [] [f] in
+    let dcs = disjoints [] [f] in*)
     let rec find nodefs defs = function
       | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; Var _ as yt], _), a)])
           when IdSet.mem x nodefs ->
@@ -1302,12 +1302,12 @@ let foralls_to_exists f =
         when IdSet.mem x nodefs && 
           IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
             IdSet.remove x nodefs, mk_eq ~ann:a xt t :: defs, mk_false
-      | BoolOp (Not, [Atom (App (Eq, [t1; App (Union, [t2; (Var (x, _) as xt)], _)], _), _)])
+      (*| BoolOp (Not, [Atom (App (Eq, [t1; App (Union, [t2; (Var (x, _) as xt)], _)], _), _)])
       | BoolOp (Not, [Atom (App (Eq, [t1; App (Union, [(Var (x, _) as xt); t2], _)], _), _)])
         when false && IdSet.mem x nodefs &&
           (List.mem (xt, t2) dcs || List.mem (t2, xt) dcs) &&
           IdSet.is_empty (IdSet.inter nodefs (fv_term_acc (fv_term t1) t2)) ->
-            IdSet.remove x nodefs, mk_eq xt (mk_diff t1 t2) :: defs, mk_not (mk_subseteq t2 t1)
+            IdSet.remove x nodefs, mk_eq xt (mk_diff t1 t2) :: defs, mk_not (mk_subseteq t2 t1)*)
       | BoolOp (Or, fs) ->
           let nodefs, defs, gs =
             List.fold_right 

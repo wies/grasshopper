@@ -19,7 +19,9 @@ details.
 
 Installation Requirements
 -------------------------
-- OCaml, version >= 4.01
+- OCaml, version >= 4.05
+
+- OCaml Findlib, version >= 1.6.2
 
 - Z3, version >= 3.2, and/or
 
