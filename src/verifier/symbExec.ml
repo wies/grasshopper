@@ -23,7 +23,10 @@ type spatial_pred =
 type state = form * spatial_pred list
 
 (** Equalities derived so far in the symbolic execution, as a map: ident -> term,
-  kept so that they can be substituted into the command and the post. *)
+  kept so that they can be substituted into the command and the post.
+  Invariant: if map is {x1: E1, ...} then xi are distinct and xi is not in Ej for i != j.
+  ASSUMES: vars and constants do not share names!
+  *)
 type equalities = term IdMap.t
 
 
@@ -154,36 +157,60 @@ let state_of_spec_list specs : state =
     (pure, spatial)
 
 
+(** Substitute both vars and constants in a term according to [sm]. *)
 let subst_term sm = subst_consts_term sm >> subst_term sm
+
+(** Substitute both vars and constants in a form according to [sm]. *)
+let subst_form sm = subst_consts sm >> subst sm
 
 let subst_spatial_pred sm = function
   | PointsTo (id, fs) ->
-    PointsTo (id, List.map (fun (id, t) -> id, subst_term sm t) fs)
+    PointsTo (subst_term sm id, List.map (fun (id, t) -> id, subst_term sm t) fs)
   | Pred (id, ts) ->
     Pred (id, List.map (subst_term sm) ts)
 
-(** Substitute all variables (Vars and constants) in derived equalities [eqs],
-  according to substitution [sm] *)
-let subst_eqs eqs sm =
-  IdMap.map (subst_term sm) eqs
+(** Substitute all (Vars and constants) in derived equalities [eqs],
+  according to substitution [sm]
+  TODO check this preserves equalities invariant! *)
+let subst_eqs sm eqs =
+  eqs |> IdMap.bindings
+  |> List.fold_left (fun eqs (id, t) -> 
+    let t' = subst_term sm t in
+    match IdMap.find_opt id sm with
+    | Some (Var (id', _))
+    | Some (App (FreeSym id', _, _)) -> IdMap.add id' t' eqs
+    | None -> IdMap.add id t' eqs
+    | _ -> failwith "huh?"
+  ) IdMap.empty
 
-(** Substitute all variables (encoded as constants) in state [(pure, spatial)] with terms 
+(** Substitute all variables and constants in state [(pure, spatial)] with terms 
   according to substitution map [sm].
   This operation is not capture avoiding. *)
 let subst_state sm ((pure, spatial): state) : state =
-  (* TODO also substitute vars *)
-  (subst_consts sm pure, List.map (subst_spatial_pred sm) spatial)
+  (subst_form sm pure, List.map (subst_spatial_pred sm) spatial)
+
+
+(** Add [id] = [t] to equalities [eqs] while preserving invariant. *)
+let add_eq id t eqs =
+  (* Make sure things are not added twice *)
+  if IdMap.mem id eqs then
+    failwith @@ sprintf "Tried to add %s twice to eqs %s"
+        (string_of_ident id) (string_of_equalities eqs)
+  else
+    let eqs = subst_eqs (IdMap.singleton id t) eqs in
+    IdMap.add id t eqs
 
 
 (** ----------- Re-arrangement and normalization rules ---------- *)
 
 let find_equalities eqs (pure: form) =
   let rec find_eq sm = function
-    | Atom (App (Eq, [t2; (App (FreeSym id, [],  _))], _), _)
+    | Atom (App (Eq, [Var (id, _); t2], _), _)
     | Atom (App (Eq, [(App (FreeSym id, [],  _)); t2], _), _) ->
-      (* TODO also gather Var equalities *)
-      (* TODO do some kind of normalization to avoid checking both cases *)
-      IdMap.add id t2 sm
+      add_eq id t2 sm
+    | Atom (App (Eq, [t2; (App (FreeSym id, [],  _))], _), _)
+    | Atom (App (Eq, [t2; Var (id, _)], _), _) ->
+      add_eq id t2 sm
     | BoolOp (And, fs) ->
       List.fold_left find_eq sm fs
     | _ -> sm
@@ -266,7 +293,7 @@ let rec symb_exec (eqs, state) comm =
   (* First, simplify the pre state *)
   let eqs, state = simplify eqs state in
   print_state (source_pos comm) eqs state;
-  (* TODO get the type from the program *)
+  (* TODO get the type from the program - also make it a var not a const!*)
   let mk_var_term id = mk_free_const (FreeSrt ("TODO", 0)) id in
   match comm with
   | Basic (Assign {assign_lhs=[x];
@@ -301,7 +328,7 @@ let rec symb_exec (eqs, state) comm =
       let sm = IdMap.singleton x (mk_var_term x') in
       let e = subst_term sm e in
       let state = subst_state sm (fst state, spatial') in
-      let eqs = IdMap.add x e (subst_eqs eqs sm) in
+      let eqs = add_eq x e (subst_eqs sm eqs) in
       eqs, state
     | None -> failwith @@ "Invalid lookup: " ^ (comm |> source_pos |> string_of_src_pos)
     )
@@ -314,7 +341,7 @@ let rec symb_exec (eqs, state) comm =
         let sm = IdMap.singleton id (mk_var_term id') in
         let t' = subst_term sm t in
         let (pure, spatial) = subst_state sm state in
-        let eqs = IdMap.add id t' (subst_eqs eqs sm) in
+        let eqs = add_eq id t' (subst_eqs sm eqs) in
         eqs, (pure, spatial)
       ) (eqs, state)
   | Seq (comms, _) ->
