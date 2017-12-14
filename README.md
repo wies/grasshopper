@@ -1,10 +1,11 @@
+<img align="right" width="200" src="logo.png"/>
+
 GRASShopper
 =======
 ![Version 0.4 alpha](https://img.shields.io/badge/version-0.4_alpha-green.svg)
 [![BSD licensed](https://img.shields.io/badge/license-BSD-blue.svg)](https://raw.githubusercontent.com/wies/grasshopper/master/LICENSE)
 [![Build Status](https://travis-ci.org/wies/grasshopper.svg?branch=master)](https://travis-ci.org/wies/grasshopper)
 
-<img align="right" width="200" src="logo.png"/>
 GRASShopper is an experimental verification tool for programs that
 manipulate dynamically allocated data structures. GRASShopper programs
 can be annotated with specifications expressed in a decidable
