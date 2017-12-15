@@ -207,19 +207,29 @@ let add_eq id t eqs =
 
 (** ----------- Re-arrangement and normalization rules ---------- *)
 
+(** Find equalities of the form const == exp in [pure] and add to [eqs] *)
 let find_equalities eqs (pure: form) =
   let rec find_eq sm = function
-    | Atom (App (Eq, [Var (id, _); t2], _), _)
-    | Atom (App (Eq, [(App (FreeSym id, [],  _)); t2], _), _) ->
-      add_eq id t2 sm
-    | Atom (App (Eq, [t2; (App (FreeSym id, [],  _))], _), _)
-    | Atom (App (Eq, [t2; Var (id, _)], _), _) ->
+    | Atom (App (Eq, [(App (FreeSym id, [],  _)); t2], _), _)
+    | Atom (App (Eq, [t2; (App (FreeSym id, [],  _))], _), _) ->
       add_eq id t2 sm
     | BoolOp (And, fs) ->
       List.fold_left find_eq sm fs
     | _ -> sm
   in
   find_eq eqs pure
+
+(** Find equalities of the form var == exp in [pure] and return id -> exp map. *)
+let find_var_equalities (pure: form) =
+  let rec find_eq sm = function
+    | Atom (App (Eq, [Var (id, _); t2], _), _)
+    | Atom (App (Eq, [t2; Var (id, _)], _), _) ->
+      add_eq id t2 sm
+    | BoolOp (And, fs) ->
+      List.fold_left find_eq sm fs
+    | _ -> sm
+  in
+  find_eq IdMap.empty pure
 
 let rec remove_trivial_equalities = function
   | Atom (App (Eq, [t1; t2], _), _) as f -> if t1 = t2 then mk_true else f
@@ -231,7 +241,13 @@ let apply_equalities eqs state =
   let (pure, spatial) = subst_state eqs state in
   remove_trivial_equalities pure, spatial
 
-let simplify eqs ((pure, spatial): state) =
+let remove_useless_existentials ((pure, spatial) as state : state) : state =
+  apply_equalities (find_var_equalities pure) state
+
+(** Kill useless existential vars in [state], find equalities between constants,
+  add to [eqs] and simplify. *)
+let simplify eqs state =
+  let (pure, spatial) = remove_useless_existentials state in
   let eqs = find_equalities eqs pure in
   eqs, apply_equalities eqs (pure, spatial)
 
@@ -286,14 +302,14 @@ let find_ptsto loc spatial =
 
 let check_pure_entail p1 p2 =
   if p2 = mk_true then true
-  else
+  else (* TODO call SMT solver here? :) *)
     todo ()
 
 
 (** Find a frame for state1 * fr |= state2, and an instantiation for TODO? *)
 let rec find_frame ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
   Debug.info (fun () ->
-    sprintf "\n  Finding frame, with eqs %s for:\n    %s &*& ?? |= %s\n" 
+    sprintf "\n  Finding frame for:\n    %s : %s &*& ?? |= %s\n" 
       (string_of_equalities eqs)
       (string_of_state (p1, sp1)) (string_of_state (p2, sp2))
   );
@@ -345,21 +361,17 @@ let check_entailment eqs (p1, sp1) (p2, sp2) =
       (string_of_state (p1, sp1)) (string_of_state (p2, sp2))
   );
   let eqs, (p1, sp1) = simplify eqs (p1, sp1) in
-  let (p2, sp2) = apply_equalities eqs (p2, sp2) in
+  let (p2, sp2) = apply_equalities eqs (p2, sp2) |> remove_useless_existentials in
   Debug.info (fun () ->
     sprintf "\n  After equality reasoning:\n  %s : %s\n  |=\n  %s\n" (string_of_equalities eqs)
       (string_of_state (p1, sp1)) (string_of_state (p2, sp2))
   );
 
-  match sp2 with
-  | [] -> (* If RHS spatial is emp, then pure part must be true *)
-    if p2 = mk_true then begin
-      printf "RHS is true | emp.\n";
-      [] end
-    else
-      (* TODO call SMT solver here? :) *)
-      todo ()
-  | _ -> todo ()
+  (* Check if find_frame returns empt *)
+  let fr, inst = find_frame eqs (p1, sp1) (p2, sp2) in
+  match fr with
+  | [] -> []
+  | _ -> failwith @@ sprintf "Frame was not empty: %s" (string_of_state (mk_true, fr))
 
 
 (** Symbolically execute command [comm] on state [state] and return final state. *)
