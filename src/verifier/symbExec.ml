@@ -53,21 +53,17 @@ let string_of_state ((pure, spatial): state) =
   let pure = (string_of_form pure |> String.map (function | '\n' -> ' ' | c -> c)) in
   sprintf "%s : %s" pure spatial
 
-let print_state src_pos eqs state =
-  let eqs_str = IdMap.bindings eqs
-    |> List.map (fun (x, t) -> (string_of_ident x) ^ " == " ^ (string_of_term t))
-    |> String.concat " && "
-  in
-  Debug.info (fun () ->
-      sprintf "\nState at %s:\n  %s : %s\n"
-        (string_of_src_pos src_pos) eqs_str (string_of_state state)
-  )
-
 let string_of_equalities eqs =
   IdMap.bindings eqs
-  |> List.map (fun (x, t) -> (string_of_ident x) ^ ": " ^ (string_of_term t))
+  |> List.map (fun (x, t) -> (string_of_ident x) ^ " = " ^ (string_of_term t))
   |> String.concat ", "
   |> sprintf "{%s}"
+
+let print_state src_pos eqs state =
+  Debug.info (fun () ->
+      sprintf "\nState at %s:\n  %s : %s\n"
+        (string_of_src_pos src_pos) (string_of_equalities eqs) (string_of_state state)
+  )
 
 
 (** Convert a specification into a symbolic state.
@@ -276,6 +272,18 @@ let extract_lemmas prog : lemma list =
 
 (** ----------- Symbolic Execution ---------- *)
 
+(** Returns [(fs, spatial')] s.t. [spatial] = [loc] |-> [fs] :: [spatial'] *)
+let find_ptsto loc spatial =
+  let sp1, sp2 =
+    List.partition (function | PointsTo (x, fs) -> x = loc | Pred _ -> false) spatial
+  in
+  match sp1 with
+  | [PointsTo (_, fs)] -> Some (fs, sp2)
+  | [] -> None
+  | _ ->
+    failwith @@ "find_ptsto was confused by " ^
+      (sp1 |> List.map string_of_spatial_pred |> String.concat " &*& ")
+
 let check_pure_entail p1 p2 =
   if p2 = mk_true then true
   else
@@ -283,31 +291,63 @@ let check_pure_entail p1 p2 =
 
 
 (** Find a frame for state1 * fr |= state2, and an instantiation for TODO? *)
-let find_frame eqs (p1, sp1) (p2, sp2) =
+let rec find_frame ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
+  Debug.info (fun () ->
+    sprintf "\n  Finding frame, with eqs %s for:\n    %s &*& ?? |= %s\n" 
+      (string_of_equalities eqs)
+      (string_of_state (p1, sp1)) (string_of_state (p2, sp2))
+  );
   let fail () =
     failwith @@ sprintf "Could not find frame for entailment:\n%s\n|=\n%s\n"
       (string_of_state (p1, sp1)) (string_of_state (p2, sp2))
   in
-  let inst = empty_eqs in
   match sp2 with
   | [] ->
     (* Check if p2 is implied by p1 *)
     if check_pure_entail p1 p2 then
       sp1, inst
     else fail ()
+  | PointsTo (x, fs2) :: sp2' ->
+    (match find_ptsto x sp1 with
+    | Some (fs1, sp1') ->
+      let match_up_fields inst fs1 fs2 =
+        let fs1, fs2 = List.sort compare fs1, List.sort compare fs2 in
+        let rec match_up inst = function
+        | (_, []) -> inst
+        | ([], (f, e)::fs2') ->
+          (* f not in LHS, so only okay if e is an ex. var not appearing anywhere else *)
+          (* So create new const c, add e -> c to inst, and sub fs2' with inst *)
+          todo ()
+        | (fe1 :: fs1', fe2 :: fs2') when fe1 = fe2 -> match_up inst (fs1', fs2')
+        | ((f1, e1) :: fs1', (f2, e2) :: fs2') when f1 = f2 ->
+          (* e1 != e2, so only okay if e2 is ex. var *)
+          (* add e2 -> e1 to inst and sub in fs2' to make sure e2 has uniform value *)
+          todo ()
+        | ((f1, e1) :: fs1', (f2, e2) :: fs2') when f1 <> f2 ->
+          (* RHS doesn't need to have all fields, so drop (f1, e1) *)
+          match_up inst (fs1', (f2, e2) :: fs2')
+        | _ -> (* should be unreachable? *) assert false
+        in
+        match_up inst (fs1, fs2)
+      in
+      let inst = match_up_fields inst fs1 fs2 in
+      let p2', sp2'' = subst_state inst (p2, sp2') in
+      find_frame ~inst:inst eqs (p1, sp1') (p2', sp2'')
+    | None -> fail ()
+    )
   | _ ->
     todo ()
 
 
 let check_entailment eqs (p1, sp1) (p2, sp2) =
   Debug.info (fun () ->
-    sprintf "\nChecking entailment, with eqs: %s\n  %s\n  |=\n  %s\n" (string_of_equalities eqs)
+    sprintf "\nChecking entailment:\n  %s : %s\n  |=\n  %s\n" (string_of_equalities eqs)
       (string_of_state (p1, sp1)) (string_of_state (p2, sp2))
   );
   let eqs, (p1, sp1) = simplify eqs (p1, sp1) in
   let (p2, sp2) = apply_equalities eqs (p2, sp2) in
   Debug.info (fun () ->
-    sprintf "\nAfter equality reasoning: %s\n  %s\n  |=\n  %s\n" (string_of_equalities eqs)
+    sprintf "\n  After equality reasoning:\n  %s : %s\n  |=\n  %s\n" (string_of_equalities eqs)
       (string_of_state (p1, sp1)) (string_of_state (p2, sp2))
   );
 
@@ -341,18 +381,6 @@ let rec symb_exec prog (eqs, state) comm =
         (string_of_term loc) (string_of_ident fld)
     );
     let loc = subst_term eqs loc in
-    (** Returns [(fs, spatial')] s.t. [spatial] = [loc] |-> [fs] :: [spatial'] *)
-    let find_ptsto loc spatial =
-      let sp1, sp2 =
-        List.partition (function | PointsTo (x, fs) -> x = loc | Pred _ -> false) spatial
-      in
-      match sp1 with
-      | [PointsTo (_, fs)] -> Some (fs, sp2)
-      | [] -> None
-      | _ ->
-        failwith @@ "find_ptsto was confused by " ^
-          (sp1 |> List.map string_of_spatial_pred |> String.concat " &*& ")
-    in
     (match find_ptsto loc (snd state) with
     | Some (fs, spatial') ->
       (* lookup fld in fs. now loc |-> fs' and (fld, e) is in fs' *)
@@ -404,11 +432,14 @@ let rec symb_exec prog (eqs, state) comm =
       pre, post
     in
     Debug.info (fun () ->
-      sprintf "Found contract:\n  precondition: %s\n  postcondition: %s\n"
+      sprintf "  Found contract:\n    precondition: %s\n    postcondition: %s\n"
         (string_of_state foo_pre) (string_of_state foo_post)
     );
     let foo_pre = apply_equalities eqs foo_pre in
     let frame, inst = find_frame eqs state foo_pre in
+    Debug.info (fun () -> sprintf "\n  Found frame: %s\n"
+        (frame |> List.map string_of_spatial_pred |> String.concat " &*& ")
+    );
     (* Then, create vars for old vals of all x in lhs, and substitute in eqs & frame *)
     let sm =
       lhs |> List.fold_left (fun sm id ->
@@ -417,10 +448,15 @@ let rec symb_exec prog (eqs, state) comm =
     in
     let eqs = subst_eqs sm eqs in
     let frame = List.map (subst_spatial_pred sm) frame in
-    (* TODO also sub inst using sm and apply it to post *)
+    if IdMap.is_empty inst |> not then
+      failwith "TODO also sub inst using sm and apply it to post";
     let (pure, spatial) = state in
     let (post_pure, post_spatial) = foo_post in
-    eqs, (smk_and [pure; post_pure], post_spatial @ frame)
+    let state = (smk_and [pure; post_pure], post_spatial @ frame) in
+    Debug.info (fun () -> sprintf "\n  New state: %s : %s\n"
+      (string_of_equalities eqs) (string_of_state state)
+    );
+    eqs, state
   | Seq (comms, _) ->
     List.fold_left (symb_exec prog) (eqs, state) comms
   | _ -> todo ()
@@ -442,7 +478,6 @@ let check prog proc =
 
     let eqs = empty_eqs in
     let eqs, state = symb_exec prog (eqs, precond) comm in
-    print_state (comm |> source_pos |> end_pos) eqs state;
     check_entailment eqs state postcond
   | None ->
     []
