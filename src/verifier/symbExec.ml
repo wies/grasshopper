@@ -302,7 +302,7 @@ let find_ptsto loc spatial =
       (sp1 |> List.map string_of_spatial_pred |> String.concat " &*& ")
 
 let check_pure_entail p1 p2 =
-  if p2 = mk_true then true
+  if p1 = p2 || p2 = mk_true then true
   else (* TODO call SMT solver here? :) *)
     failwith @@ sprintf "Could not prove %s" (string_of_form p2)
 
@@ -358,6 +358,11 @@ let rec find_frame ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
       find_frame ~inst:inst eqs (p1, sp1') (p2', sp2'')
     | None -> fail ()
     )
+  | pred :: sp2' when List.exists ((=) pred) sp1 -> (* match and remove equal preds *)
+    let sp1a, sp1b = List.partition ((=) pred) sp1 in
+    (match sp1a with
+    | [pred'] -> find_frame ~inst:inst eqs (p1, sp1b) (p2, sp2')
+    | _ -> fail ())
   | _ ->
     todo ()
 

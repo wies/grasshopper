@@ -6,14 +6,17 @@ predicate lseg(x: Node, y: Node) {
   true
 }
 
-procedure lemma_unfold_lseg(x: Node) returns (y: Node)
-  requires lseg(x, null) &*& x != null
-  ensures x.next |-> y &*& lseg(y, null)
+procedure lemma_unfold_lseg(x: Node, y: Node) returns (z: Node)
+  requires lseg(x, y) &*& x != y
+  ensures x.next |-> z &*& lseg(z, y)
 
+     //procedure lemma_fold_lseg(x: Node, y: Node)
+     //  requires 
 
 procedure test_unfold(x: Node) returns (y: Node)
   requires lseg(x, null) &*& x != null
   ensures x.next |-> y &*& lseg(y, null)
 {
+  var z := lemma_unfold_lseg(x, null);
   y := x.next;
 }
