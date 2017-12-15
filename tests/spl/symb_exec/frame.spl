@@ -1,0 +1,67 @@
+procedure foo(a: Int) returns (b: Int)
+  requires a == 2
+  ensures b == 4
+
+procedure pure_call(c: Int, d:Int)
+  requires c == 2 && d == c
+  ensures c == 4
+{
+  c := foo(c);
+}
+
+procedure pure_call2(c: Int, d:Int)
+  requires c == 2 && d == c
+  ensures c == 2 && d == 4
+{
+  d := foo(c);
+}
+
+procedure foo3(a: Int) returns (b: Int)
+  requires a == 2
+  ensures b == 4 && a == 3
+
+procedure pure_call3(c: Int, d:Int)
+  requires c == 2 && d == c
+  ensures c == 3 && d == 4
+{
+  d := foo3(c);
+}
+
+
+struct Node {
+  var next: Node;
+  var data: Int;
+}
+
+procedure clear(x: Node)
+  requires acc(x)
+  ensures x.next |-> null
+
+procedure fun_call(y: Node, z: Node)
+  requires z.next |-> z &*& y == z
+  ensures z.next |-> null &*& y == z
+{
+  clear(y);
+}
+
+procedure bar(x: Node, y: Node)
+  requires x.next == y.next &*& y.next == null &*& acc(x) &*& acc(y)
+  ensures x.next |-> x &*& y.next |-> y
+
+procedure fun_call2(u: Node, v: Node)
+  requires u.next |-> null &*& v.next |-> null
+  ensures u.next |-> u &*& v.next |-> v
+{
+  bar(u, v);
+}
+
+procedure bar3(x: Node, y: Node)
+  requires x.next == y.next &*& acc(x) &*& acc(y)
+  ensures x.next |-> x &*& y.next |-> y
+
+procedure fun_call3(u: Node, v: Node)
+  requires u.next |-> null &*& v.next |-> null
+  ensures u.next |-> u &*& v.next |-> v
+{
+  bar3(u, v);
+}

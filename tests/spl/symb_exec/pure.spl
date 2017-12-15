@@ -15,6 +15,7 @@ procedure assign2(x: Int, y: Int)
   x := x;
   x := 10;
   y := 5;
+  y := y;
 }
 
 struct Node {
@@ -30,7 +31,7 @@ procedure lookup_heap(x: Node) returns (y: Node)
 
 procedure lookup_heap2(x: Node, y: Node, z: Node)
   requires x.next |-> null &*& x == y &*& y == z
-  ensures x.next |-> null &*& y == null
+  ensures x.next |-> null &*& y == null &*& x == z
 {
  y := y.next;
 }
@@ -72,10 +73,3 @@ procedure assign_heap5(x: Node, y: Node)
   requires acc(x) &*& acc(x.next) &*& x.next == y
   ensures x.next |-> y &*& acc(y)
 {}
-
-procedure read_heap(x: Node) returns (y: Node)
-  requires x.next |-> null
-  ensures x.next |-> y
-{
-  y := x.next;
-}
