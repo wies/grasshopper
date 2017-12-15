@@ -3,15 +3,18 @@ struct Node {
 }
  
 predicate lseg(x: Node, y: Node) {
-  true
+  true // Assuming: x == y && emp || exists z: Node :: x != y &*& x.next |-> z &*& lseg(z, y)
 }
+
 
 procedure lemma_unfold_lseg(x: Node, y: Node) returns (z: Node)
   requires lseg(x, y) &*& x != y
   ensures x.next |-> z &*& lseg(z, y)
 
-     //procedure lemma_fold_lseg(x: Node, y: Node)
-     //  requires 
+procedure lemma_fold_lseg(x: Node, z: Node, y: Node)
+  requires x.next |-> z &*& lseg(z, y) &*& x != y
+  ensures lseg(x, y)
+
 
 procedure test_unfold(x: Node) returns (y: Node)
   requires lseg(x, null) &*& x != null
@@ -19,4 +22,12 @@ procedure test_unfold(x: Node) returns (y: Node)
 {
   var z := lemma_unfold_lseg(x, null);
   y := x.next;
+}
+
+procedure append_front(x: Node, y: Node)
+  requires acc(x) &*& lseg(y, null)
+  ensures lseg(x, null)
+{
+  x.next := y;
+  lemma_fold_lseg(x, y, null);
 }
