@@ -7,6 +7,7 @@ install:
   - wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-ocaml.sh
   - bash -ex .travis-ocaml.sh
   - opam install ocamlbuild
+  - opam install ocamlfind
 env:
   - OCAML_VERSION=4.04 PATH="$HOME/z3/z3-4.4.1-x64-ubuntu-14.04/bin/:$PATH"
 script:
