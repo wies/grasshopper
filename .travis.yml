@@ -5,9 +5,9 @@ install:
   - unzip ~/z3.zip -d ~/z3
   - z3 --version
   - wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-ocaml.sh
+  - opam install -y ocamlfind
   - bash -ex .travis-ocaml.sh
   - opam install -y ocamlbuild
-  - opam install -y ocamlfind
 env:
   - OCAML_VERSION=4.04 PATH="$HOME/z3/z3-4.4.1-x64-ubuntu-14.04/bin/:$PATH"
 script:
