@@ -29,6 +29,15 @@ Installation Requirements
 
 GRASShopper has been tested on Linux, Mac OS, and Windows/Cygwin.
 
+The easiest way to satisfy all OCaml-related installation requirements
+is to install the OCaml package manager OPAM and then execute the
+following commands
+```bash
+opam switch 4.05.0
+opam install -y ocamlfind
+opam install -y ocamlbuild
+eval $(opam config env)
+```
 
 Installation Instructions 
 -------------------------
