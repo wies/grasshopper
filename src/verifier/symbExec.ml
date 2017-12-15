@@ -242,6 +242,7 @@ let apply_equalities eqs state =
   remove_trivial_equalities pure, spatial
 
 let remove_useless_existentials ((pure, spatial) as state : state) : state =
+  (* Note: can also use GrassUtil.foralls_to_exists for this *)
   apply_equalities (find_var_equalities pure) state
 
 (** Kill useless existential vars in [state], find equalities between constants,
@@ -303,14 +304,14 @@ let find_ptsto loc spatial =
 let check_pure_entail p1 p2 =
   if p2 = mk_true then true
   else (* TODO call SMT solver here? :) *)
-    todo ()
+    failwith @@ sprintf "Could not prove %s" (string_of_form p2)
 
 
 (** Find a frame for state1 * fr |= state2, and an instantiation for TODO? *)
 let rec find_frame ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
   Debug.info (fun () ->
-    sprintf "\n  Finding frame for:\n    %s : %s &*& ?? |= %s\n" 
-      (string_of_equalities eqs)
+    sprintf "\n  Finding frame with %s for:\n    %s : %s &*& ??\n    |= %s\n" 
+      (string_of_equalities inst) (string_of_equalities eqs)
       (string_of_state (p1, sp1)) (string_of_state (p2, sp2))
   );
   let fail () =
@@ -338,7 +339,13 @@ let rec find_frame ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
         | ((f1, e1) :: fs1', (f2, e2) :: fs2') when f1 = f2 ->
           (* e1 != e2, so only okay if e2 is ex. var *)
           (* add e2 -> e1 to inst and sub in fs2' to make sure e2 has uniform value *)
-          todo ()
+          (match e2 with
+          | Var (e2_id, _) ->
+            let sm = IdMap.singleton e2_id e1 in
+            let fs2' = List.map (fun (f, e) -> (f, subst_term sm e)) fs2' in
+            match_up (IdMap.add e2_id e1 inst) (fs1', fs2')
+          | _ -> fail ()
+          )
         | ((f1, e1) :: fs1', (f2, e2) :: fs2') when f1 <> f2 ->
           (* RHS doesn't need to have all fields, so drop (f1, e1) *)
           match_up inst (fs1', (f2, e2) :: fs2')
@@ -386,8 +393,8 @@ let rec symb_exec prog (eqs, state) comm =
   let mk_var_term id = mk_var (lookup_type id) id in
   let mk_const_term id = mk_free_const (lookup_type id) id in
   match comm with
-  | Basic (Assign {assign_lhs=[x];
-      assign_rhs=[App (Read, [App (FreeSym fld, [], _); App (FreeSym _, [], _) as loc], srt)]}, _) ->
+  | Basic (Assign {assign_lhs=[x]; assign_rhs=[App (Read, [App (FreeSym fld, [], _);
+      App (FreeSym _, [], _) as loc], srt)]}, _) ->
     Debug.info (fun () ->
       sprintf "\nExecuting lookup: %s := %s.%s;\n" (string_of_ident x)
         (string_of_term loc) (string_of_ident fld)
@@ -441,7 +448,7 @@ let rec symb_exec prog (eqs, state) comm =
           sm c.contr_returns lhs
       in
       let post = c.contr_postcond |> state_of_spec_list |> subst_state sm in
-      pre, post
+      remove_useless_existentials pre, remove_useless_existentials post
     in
     Debug.info (fun () ->
       sprintf "  Found contract:\n    precondition: %s\n    postcondition: %s\n"
@@ -461,7 +468,7 @@ let rec symb_exec prog (eqs, state) comm =
     let eqs = subst_eqs sm eqs in
     let frame = List.map (subst_spatial_pred sm) frame in
     if IdMap.is_empty inst |> not then
-      failwith "TODO also sub inst using sm and apply it to post";
+      printf "WARNING: Ignoring inst from find_frame: %s" (string_of_equalities inst);
     let (pure, spatial) = state in
     let (post_pure, post_spatial) = foo_post in
     let state = (smk_and [pure; post_pure], post_spatial @ frame) in
