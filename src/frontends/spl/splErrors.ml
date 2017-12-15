@@ -40,6 +40,9 @@ let assignment_mismatch_error pos =
   ProgError.error pos 
     "Mismatch in number of expressions on left and right side of assignment"                
 
+let assignment_multiple_error pos =
+  ProgError.error pos (Printf.sprintf "Simultaneous assignment of the same variable is not allowed.")
+
 let abstract_initializer_error pos id =
   ProgError.error pos
     ("Unable to infer unique type from initializer of variable " ^ GrassUtil.name id ^ ". Type annotation required.")
@@ -75,7 +78,7 @@ let proc_arg_mismatch_error pos id expected =
   ProgError.error pos 
     (Printf.sprintf "Procedure %s expects %s." 
        (GrassUtil.name id) (arguments_to_string @@ List.length expected))
-
+    
 let type_error pos exp_ty fnd_ty =
   let ty_str ty = "expression of type " ^ string_of_type ty in
   ProgError.type_error pos

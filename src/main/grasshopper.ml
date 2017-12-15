@@ -194,7 +194,7 @@ let _ =
     Arg.parse Config.cmd_options set_main_file usage_message;
     if !Config.unsat_cores then Config.named_assertions := true;
     Debug.info (fun () -> greeting);
-    SmtLibSolver.select_solver (String.uppercase !Config.smtsolver);
+    SmtLibSolver.select_solver (String.uppercase_ascii !Config.smtsolver);
     if !main_file = ""
     then cmd_line_error "input file missing"
     else begin

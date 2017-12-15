@@ -11,7 +11,7 @@ let pull_up_equalities fs =
    * be careful about pulling eq with literals and/or pulling more than one eq *)
   let rec find id elts = match elts with
     (* pull out at most one eq per candidate *)
-    | (Atom (App (Eq, [App (FreeSym id1, [], _); e], _), _) as x) :: xs 
+    | (Atom (App (Eq, [App (FreeSym id1, [], _); e], _), _) as x) :: xs when id1 = id -> [x], xs
     | (Atom (App (Eq, [e; App (FreeSym id1, [], _)], _), _) as x) :: xs when id1 = id -> [x], xs
     | x :: xs ->
       let y, ys = find id xs in

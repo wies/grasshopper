@@ -218,9 +218,44 @@ let free_vars e =
         fv bv acc e
     | _ -> acc
   in fv IdSet.empty IdSet.empty e
-          
-let pos_of_stmt =
-  function
+
+(** Variable substitution for expressions (not capture avoiding) *)
+let subst_id sm =
+  let rec s bv = function
+    | Ident (x, pos) as e ->
+        if IdSet.mem x bv || not @@ IdMap.mem x sm
+        then e
+        else Ident (IdMap.find x sm, pos)
+    | Setenum (ty, es, pos) ->
+        Setenum (ty, List.map (s bv) es, pos)
+    | New (ty, es, pos) ->
+        New (ty, List.map (s bv) es, pos)
+    | ProcCall (p, es, pos) ->
+        ProcCall (p, List.map (s bv) es, pos)
+    | PredApp (p, es, pos) ->
+        PredApp (p, List.map (s bv) es, pos)
+    | UnaryOp (op, e, pos) ->
+        UnaryOp (op, s bv e, pos)
+    | Annot (e, a, pos) ->
+        Annot (s bv e, a, pos) (* TODO: substitute in a *)
+    | Read (e1, e2, pos) ->
+        Read (s bv e1, s bv e2, pos)
+    | BinaryOp (e1, op, e2, ty, pos) ->
+        BinaryOp (s bv e1, op, s bv e2, ty, pos)
+    | Binder (b, vs, e, pos) ->
+        let bv =
+          List.fold_left (fun bv -> function
+            | UnguardedVar v ->
+                IdSet.add v.v_name bv
+            | GuardedVar (x, e) ->
+                IdSet.add x bv)
+            bv vs
+        in
+        Binder (b, vs, s bv e, pos)
+    | e -> e
+  in s IdSet.empty
+    
+let pos_of_stmt = function
   | Skip pos
   | Block (_, pos)
   | LocalVars (_, _, pos)
