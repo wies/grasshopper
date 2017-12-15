@@ -1,0 +1,37 @@
+type FlowDom;
+type NodeDom;
+type Interface;
+
+struct Node {
+}
+
+
+predicate Gr(I: Interface) {
+  true
+}
+
+predicate N(x: Node, I: Interface) {
+  true
+}
+
+function nodeInInterface(x: Node, I: Interface) returns (b: Bool)
+
+
+procedure lemma_decomp(I: Interface, x: Node) returns (I1: Interface, I2: Interface)
+  requires Gr(I) &*& nodeInInterface(x, I)
+  ensures N(x, I1) &*& Gr(I2)
+
+
+procedure simpl(r: Node, I: Interface)
+  requires Gr(I)
+  ensures Gr(I)
+{ 
+simpl(r, I);
+}
+
+procedure test(r: Node, I: Interface) returns (I1: Interface, I2: Interface)
+  requires Gr(I) &*& nodeInInterface(r, I)
+  ensures N(r, I1) &*& Gr(I2)
+{
+  I1, I2 := lemma_decomp(I, r);
+}
