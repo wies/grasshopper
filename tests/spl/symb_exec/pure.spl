@@ -64,12 +64,12 @@ procedure assign_heap3(x: Node, y: Node)
 
 procedure assign_heap4(x: Node, y: Node)
   requires x.next |-> y &*& x.next.next |-> null
-  ensures x.next |-> x &*& y.next |-> null
+  ensures x.next |-> y &*& y.next |-> x
 {
   y.next := x;
 }
 
-procedure assign_heap5(x: Node, y: Node)
+procedure acc_to_ptsto(x: Node, y: Node)
   requires acc(x) &*& acc(x.next) &*& x.next == y
   ensures x.next |-> y &*& acc(y)
 {}

@@ -416,8 +416,29 @@ let rec symb_exec prog (eqs, state) comm =
       eqs, state
     | None -> failwith @@ "Invalid lookup: " ^ (comm |> source_pos |> string_of_src_pos)
     )
+  | Basic (Assign {assign_lhs=[fld]; assign_rhs=[App (Write, [App (FreeSym fld', [], _); 
+      App (FreeSym _, [], _) as loc; rhs], srt)]}, _) when fld = fld' ->
+    Debug.info (fun () ->
+      sprintf "\nExecuting mutate: %s.%s := %s;\n" (string_of_term loc)
+        (string_of_ident fld) (string_of_term rhs)
+    );
+    let (pure, spatial) = state in
+    (* First, substitute eqs on loc and rhs *)
+    let loc = subst_term eqs loc and rhs = subst_term eqs rhs in
+    (match find_ptsto loc spatial with
+    | Some (fs, spatial') ->
+      (* mutate fs to fs' so that it contains (fld, rhs) *)
+      let fs' =
+        if List.exists (fst >> (=) fld) fs
+        then List.map (fun (f, e) -> (f, if f = fld then rhs else e)) fs
+        else (fld, rhs) :: fs
+      in
+      eqs, (pure, PointsTo (loc, fs') :: spatial')
+    | None -> failwith @@ "Invalid write: " ^ (comm |> source_pos |> string_of_src_pos)
+    )
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, _) ->
     (* TODO simultaneous assignments can't touch heap, so do all at once *)
+    (* TODO make sure these have no Read/Write terms *)
     List.combine ids ts
     |> List.fold_left (fun (eqs, state) (id, t) ->
         printf "\nExecuting assignment: %s := %s;\n" (string_of_ident id) (string_of_term t);
