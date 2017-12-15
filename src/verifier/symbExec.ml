@@ -50,7 +50,8 @@ let string_of_state ((pure, spatial): state) =
     | [] -> "emp"
     | spatial -> spatial |> List.map string_of_spatial_pred |> String.concat " * "
   in
-  sprintf "%s : %s" (string_of_form pure) spatial
+  let pure = (string_of_form pure |> String.map (function | '\n' -> ' ' | c -> c)) in
+  sprintf "%s : %s" pure spatial
 
 let print_state src_pos eqs state =
   let eqs_str = IdMap.bindings eqs
@@ -190,8 +191,15 @@ let subst_state sm ((pure, spatial): state) : state =
   (subst_form sm pure, List.map (subst_spatial_pred sm) spatial)
 
 
+(** Given two lists of idents and terms, create an equalities/subst map out of them. *)
+let mk_eqs ids terms =
+  List.combine ids terms
+  |> List.fold_left (fun eqs (id, t) -> IdMap.add id t eqs) empty_eqs
+
 (** Add [id] = [t] to equalities [eqs] while preserving invariant. *)
 let add_eq id t eqs =
+  (* Apply current substitutions to t *)
+  let t = subst_term eqs t in
   (* Make sure things are not added twice *)
   if IdMap.mem id eqs then
     failwith @@ sprintf "Tried to add %s twice to eqs %s"
@@ -268,14 +276,40 @@ let extract_lemmas prog : lemma list =
 
 (** ----------- Symbolic Execution ---------- *)
 
+let check_pure_entail p1 p2 =
+  if p2 = mk_true then true
+  else
+    todo ()
+
+
+(** Find a frame for state1 * fr |= state2, and an instantiation for TODO? *)
+let find_frame eqs (p1, sp1) (p2, sp2) =
+  let fail () =
+    failwith @@ sprintf "Could not find frame for entailment:\n%s\n|=\n%s\n"
+      (string_of_state (p1, sp1)) (string_of_state (p2, sp2))
+  in
+  let inst = empty_eqs in
+  match sp2 with
+  | [] ->
+    (* Check if p2 is implied by p1 *)
+    if check_pure_entail p1 p2 then
+      sp1, inst
+    else fail ()
+  | _ ->
+    todo ()
+
+
 let check_entailment eqs (p1, sp1) (p2, sp2) =
   Debug.info (fun () ->
-    sprintf "\nChecking entailment, with eqs: %s\n" (string_of_equalities eqs)
+    sprintf "\nChecking entailment, with eqs: %s\n  %s\n  |=\n  %s\n" (string_of_equalities eqs)
+      (string_of_state (p1, sp1)) (string_of_state (p2, sp2))
   );
   let eqs, (p1, sp1) = simplify eqs (p1, sp1) in
   let (p2, sp2) = apply_equalities eqs (p2, sp2) in
-  printf "%s\n    |=\n%s\n"
-    (string_of_state (p1, sp1)) (string_of_state (p2, sp2));
+  Debug.info (fun () ->
+    sprintf "\nAfter equality reasoning: %s\n  %s\n  |=\n  %s\n" (string_of_equalities eqs)
+      (string_of_state (p1, sp1)) (string_of_state (p2, sp2))
+  );
 
   match sp2 with
   | [] -> (* If RHS spatial is emp, then pure part must be true *)
@@ -289,12 +323,16 @@ let check_entailment eqs (p1, sp1) (p2, sp2) =
 
 
 (** Symbolically execute command [comm] on state [state] and return final state. *)
-let rec symb_exec (eqs, state) comm =
+let rec symb_exec prog (eqs, state) comm =
   (* First, simplify the pre state *)
   let eqs, state = simplify eqs state in
   print_state (source_pos comm) eqs state;
-  (* TODO get the type from the program - also make it a var not a const!*)
-  let mk_var_term id = mk_free_const (FreeSrt ("TODO", 0)) id in
+
+  let lookup_type id = (* TODO get the type from the program *)
+    FreeSrt ("TODO", 0)
+  in
+  let mk_var_term id = mk_var (lookup_type id) id in
+  let mk_const_term id = mk_free_const (lookup_type id) id in
   match comm with
   | Basic (Assign {assign_lhs=[x];
       assign_rhs=[App (Read, [App (FreeSym fld, [], _); App (FreeSym _, [], _) as loc], srt)]}, _) ->
@@ -302,7 +340,6 @@ let rec symb_exec (eqs, state) comm =
       sprintf "\nExecuting lookup: %s := %s.%s;\n" (string_of_ident x)
         (string_of_term loc) (string_of_ident fld)
     );
-
     let loc = subst_term eqs loc in
     (** Returns [(fs, spatial')] s.t. [spatial] = [loc] |-> [fs] :: [spatial'] *)
     let find_ptsto loc spatial =
@@ -344,8 +381,48 @@ let rec symb_exec (eqs, state) comm =
         let eqs = add_eq id t' (subst_eqs sm eqs) in
         eqs, (pure, spatial)
       ) (eqs, state)
+  | Basic (Call {call_lhs=lhs; call_name=foo; call_args=args}, _) ->
+    Debug.info (fun () ->
+      sprintf "\nExecuting function call: %s := %s(%s);\n"
+        (lhs |> List.map string_of_ident |> String.concat ", ")
+        (string_of_ident foo) (args |> List.map string_of_term |> String.concat ", ")
+    );
+    (* Look up pre/post of foo *)
+    let foo_pre, foo_post =
+      (* TODO optimize by precomputing this. *)
+      let c = (find_proc prog foo).proc_contract in
+      (* Substitute formal params -> actual params in foo_pre/post *)
+      let sm = mk_eqs c.contr_formals args in
+      let pre = c.contr_precond |> state_of_spec_list |> subst_state sm in
+      (* TODO: unsound if ints passed by value? *)
+      (* Also substitute return vars -> lhs vars in post *)
+      let sm =
+        List.fold_left2 (fun sm r l -> IdMap.add r (mk_const_term l) sm)
+          sm c.contr_returns lhs
+      in
+      let post = c.contr_postcond |> state_of_spec_list |> subst_state sm in
+      pre, post
+    in
+    Debug.info (fun () ->
+      sprintf "Found contract:\n  precondition: %s\n  postcondition: %s\n"
+        (string_of_state foo_pre) (string_of_state foo_post)
+    );
+    let foo_pre = apply_equalities eqs foo_pre in
+    let frame, inst = find_frame eqs state foo_pre in
+    (* Then, create vars for old vals of all x in lhs, and substitute in eqs & frame *)
+    let sm =
+      lhs |> List.fold_left (fun sm id ->
+          IdMap.add id (id |> name |> fresh_ident |> mk_var_term) sm)
+        IdMap.empty
+    in
+    let eqs = subst_eqs sm eqs in
+    let frame = List.map (subst_spatial_pred sm) frame in
+    (* TODO also sub inst using sm and apply it to post *)
+    let (pure, spatial) = state in
+    let (post_pure, post_spatial) = foo_post in
+    eqs, (smk_and [pure; post_pure], post_spatial @ frame)
   | Seq (comms, _) ->
-    List.fold_left symb_exec (eqs, state) comms
+    List.fold_left (symb_exec prog) (eqs, state) comms
   | _ -> todo ()
 
 
@@ -364,7 +441,7 @@ let check prog proc =
     );
 
     let eqs = empty_eqs in
-    let eqs, state = symb_exec (eqs, precond) comm in
+    let eqs, state = symb_exec prog (eqs, precond) comm in
     print_state (comm |> source_pos |> end_pos) eqs state;
     check_entailment eqs state postcond
   | None ->
