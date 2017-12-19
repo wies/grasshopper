@@ -387,15 +387,16 @@ let check_entailment eqs (p1, sp1) (p2, sp2) =
 
 
 (** Symbolically execute command [comm] on state [state] and return final state. *)
-let rec symb_exec prog (eqs, state) comm =
+let rec symb_exec prog proc (eqs, state) comm =
   (* First, simplify the pre state *)
   let eqs, state = simplify eqs state in
   print_state (source_pos comm) eqs state;
 
-  let lookup_type id = (* TODO get the type from the program *)
-    FreeSrt ("TODO", 0)
+  let lookup_type id = (find_local_var proc id).var_sort in
+  let mk_var_like id =
+    let id' = fresh_ident (name id) in
+    mk_var (lookup_type id) id'
   in
-  let mk_var_term id = mk_var (lookup_type id) id in
   let mk_const_term id = mk_free_const (lookup_type id) id in
   match comm with
   | Basic (Assign {assign_lhs=[x]; assign_rhs=[App (Read, [App (FreeSym fld, [], _);
@@ -413,8 +414,7 @@ let rec symb_exec prog (eqs, state) comm =
         with Not_found -> let e = mk_fresh_var srt "v" in e, (fld, e) :: fs
       in
       let spatial' = PointsTo (loc, fs') :: spatial' in
-      let x' = fresh_ident (name x) in
-      let sm = IdMap.singleton x (mk_var_term x') in
+      let sm = IdMap.singleton x (mk_var_like x) in
       let e = subst_term sm e in
       let state = subst_state sm (fst state, spatial') in
       let eqs = add_eq x e (subst_eqs sm eqs) in
@@ -447,8 +447,7 @@ let rec symb_exec prog (eqs, state) comm =
     List.combine ids ts
     |> List.fold_left (fun (eqs, state) (id, t) ->
         printf "\nExecuting assignment: %s := %s;\n" (string_of_ident id) (string_of_term t);
-        let id' = fresh_ident (name id) in
-        let sm = IdMap.singleton id (mk_var_term id') in
+        let sm = IdMap.singleton id (mk_var_like id) in
         let t' = subst_term sm t in
         let (pure, spatial) = subst_state sm state in
         let eqs = add_eq id t' (subst_eqs sm eqs) in
@@ -490,7 +489,7 @@ let rec symb_exec prog (eqs, state) comm =
     (* Then, create vars for old vals of all x in lhs, and substitute in eqs & frame *)
     let sm =
       lhs |> List.fold_left (fun sm id ->
-          IdMap.add id (id |> name |> fresh_ident |> mk_var_term) sm)
+          IdMap.add id (mk_var_like id) sm)
         IdMap.empty
     in
     let eqs = subst_eqs sm eqs in
@@ -505,7 +504,7 @@ let rec symb_exec prog (eqs, state) comm =
     );
     eqs, state
   | Seq (comms, _) ->
-    List.fold_left (symb_exec prog) (eqs, state) comms
+    List.fold_left (symb_exec prog proc) (eqs, state) comms
   | _ -> todo ()
 
 
@@ -524,7 +523,7 @@ let check prog proc =
     );
 
     let eqs = empty_eqs in
-    let eqs, state = symb_exec prog (eqs, precond) comm in
+    let eqs, state = symb_exec prog proc (eqs, precond) comm in
     check_entailment eqs state postcond
   | None ->
     []
