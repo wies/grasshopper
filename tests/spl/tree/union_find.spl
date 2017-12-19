@@ -3,6 +3,16 @@ struct Node {
   var ghost gnext: Node;
 }
 
+function rep(x: Node) returns (res: Node)
+  requires acc({y: Node :: Reach(next, x, y) && y != null})
+  ensures
+     Reach(next, x, null) && x != null ==>
+       Reach(next, x, res) && res != null &&
+       res.next == null
+  ensures
+    !Reach(next, x, null) || x == null ==> res == null
+    @(matching x yields rep(rep(x)))
+  
 predicate next_eq_gnext(X: Set<Node>)
   requires acc(X)
 {
@@ -11,39 +21,62 @@ predicate next_eq_gnext(X: Set<Node>)
       Btwn(next, x, y, z) == Btwn(gnext, x, y, z)
 }
 
-predicate eqclass(r: Node) {
-  exists X: Set<Node> ::
-    acc(X) &*&
-    X == { x: Node :: Btwn(gnext, x, r, r) && r != null } &&
-    r != null && r.next == null && r.gnext == null &&
+predicate eqclass(x: Node, X: Set<Node>) {
+  acc(X) &*&
+    X == { z: Node :: Reach(gnext, z, rep(x)) } &&
+    rep(x).gnext == null &&
+    x in X &&
     next_eq_gnext(X)
 }
 
-procedure find(x: Node, ghost root_x: Node, implicit ghost X: Set<Node>) 
+procedure lemma_rep_is_idempotent(x: Node)
+  requires acc({y: Node :: Reach(next, x, y) && y != null})
+  ensures acc({y: Node :: Reach(next, x, y) && y != null})
+  ensures rep(x) == rep(rep(x))
+{
+}
+
+procedure lemma_rep_non_null(x: Node, X: Set<Node>)
+  requires eqclass(x, X)
+  ensures eqclass(x, X)
+  ensures rep(x) != null
+{
+}
+
+procedure lemma_rep_has_same_eqclass(x: Node, X: Set<Node>, Y: Set<Node>)
+  requires eqclass(x, X)
+  ensures eqclass(rep(x), X)
+{
+}
+
+  
+procedure find(x: Node, implicit ghost X: Set<Node>) 
   returns (res: Node)
-  requires x in X &*& eqclass(root_x) && acc(X)
-  ensures  res == root_x &*& eqclass(root_x) && acc(X)
+  requires eqclass(x, X)
+  ensures eqclass(x, X)
+  ensures res == rep(x) && rep(x) == old(rep(x))
 {
   var n: Node;
   n := x.next;
   if (n != null) {
-    res := find(n, root_x);
+    res := find(n);
     x.next := res;
     x.gnext := res;
+    return res;
   } else {
-    res := x;
+    return x;
   }
 }
 
-procedure union(x: Node, y: Node, ghost root_x: Node, ghost root_y: Node,
-                implicit ghost X: Set<Node>, implicit ghost Y: Set<Node>)
-  requires eqclass(root_x) && acc(X) &+& eqclass(root_y) && acc(Y)
-  requires x in X && y in Y
-  ensures eqclass(root_y) && acc(X ++ Y)
+procedure union(x: Node, y: Node,
+                implicit ghost X: Set<Node>,
+                implicit ghost Y: Set<Node>)
+  requires eqclass(x, X) &+& eqclass(y, Y)
+  ensures eqclass(y, X ++ Y)
 {
   var t: Node, s: Node;
-  t := find(x, root_x);
-  s := find(y, root_y);
+  t := find(x);
+  s := find(y);
   if (t != s) {
     t.next := s;
     t.gnext := s;
@@ -51,7 +84,7 @@ procedure union(x: Node, y: Node, ghost root_x: Node, ghost root_y: Node,
 }
 
 procedure create() returns (res: Node)
-  ensures eqclass(res) && acc(res)
+  ensures eqclass(res, {res})
 {
   res := new Node;
   res.next := null;

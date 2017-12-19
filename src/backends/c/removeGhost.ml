@@ -59,6 +59,7 @@ let removeGhost cu =
     | BoolVal (b, p) -> BoolVal (b, p)
     | New (t, exprs, p) -> New (t, (List.map (process_expr scope) exprs), p)
     | Read (fld, idx, p) -> Read ((process_expr scope fld), (process_expr scope idx), p) (*TODO ghost fields*)
+    | Write (fld, idx, v, p) -> Write ((process_expr scope fld), (process_expr scope idx), (process_expr scope v), p) (*TODO ghost fields*)
     | ProcCall (id, args, p) ->
       let formals = (IdMap.find id cu.proc_decls).p_formals in
       ProcCall (id, (process_args scope id formals args), p)

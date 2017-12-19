@@ -367,8 +367,17 @@ let resolve_names cu =
     IdMap.fold
       (fun _ decl procs ->
         let locals0, tbl0 = declare_vars decl.p_locals types (SymbolTbl.push tbl) in
-        let formals = List.map (fun id -> lookup_id id tbl0 decl.p_pos) decl.p_formals in
-        let returns = List.map (fun id -> lookup_id id tbl0 decl.p_pos) decl.p_returns in
+        let process_params params seen =
+          List.fold_right
+            (fun id (params, seen) ->
+              let nid = lookup_id id tbl0 decl.p_pos in
+              if IdSet.mem id seen
+              then redeclaration_error id (IdMap.find id decl.p_locals).v_pos
+              else nid :: params, IdSet.add id seen)
+            params ([], seen)
+        in
+        let formals, seen = process_params decl.p_formals IdSet.empty in
+        let returns, _ = process_params decl.p_returns seen in
         let contracts = resolve_contracts decl.p_contracts returns locals0 tbl0 in
         let body, locals, _ = resolve_stmt true false locals0 tbl0 decl.p_body in
         let decl1 = 
@@ -781,6 +790,14 @@ let infer_types cu =
         let e1 = infer_types cu locals AnyType e in
         Assign (lhs1, [e1], pos)
     | Assign (lhs, rhs, pos) ->
+        let _ = List.fold_left (fun seen -> function
+          | Ident (x, pos) ->
+              if List.mem x seen
+              then assignment_multiple_error pos
+              else x :: seen
+          | _ -> seen)
+            [] lhs
+        in
         let rhs1, tys =
           Util.map_split (fun e ->
             let e1 = infer_types cu locals AnyType e in

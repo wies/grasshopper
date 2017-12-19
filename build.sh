@@ -11,7 +11,7 @@ OCAMLBUILD=ocamlbuild
 
 ocb()
 {
-    $OCAMLBUILD $FLAGS $*
+    $OCAMLBUILD -use-ocamlfind $FLAGS $*
 }
 
 if [ $# -eq 0 ]; then

@@ -550,7 +550,7 @@ let elim_sl prog =
   (* post process term *)
   (*let add_footprint_args sym ts srt =
     match sym with
-    | FreeSym p when IdMap.mem p prog.prog_preds ->
+    | FreeSym p when IdMap.mem p prog.prog_preds && not (is_pure (find_pred prog p)) ->
         let decl = find_pred prog p in
         if List.length (formals_of_pred decl) <> List.length ts
             then mk_app srt sym ts else
@@ -644,7 +644,7 @@ let elim_sl prog =
         )
         footprint_sorts (contr.contr_locals, [], [], [])    
     in
-    let aux_formals = footprint_caller_formals @ footprint_formals in
+    let aux_formals = (if is_pure then [] else footprint_caller_formals) @ footprint_formals in
     let returns = contr.contr_returns @ footprint_caller_returns in
     let formals = contr.contr_formals @ aux_formals in
     let footprint_sets, footprint_context =

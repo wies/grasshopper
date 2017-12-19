@@ -701,7 +701,7 @@ let print_graph output chan model terms =
                     if not (StringSet.mem id seen) then
                       begin
                         let color = try List.nth colors2 (Int64.to_int (int_of_value astate))
-                                    with Failure "nth" | Undefined -> "black" in
+                                    with Failure _ | Undefined -> "black" in
                         edges := (src, dst, label, Solid, color) :: !edges;
                         StringSet.add id seen
                       end

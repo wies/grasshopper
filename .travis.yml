@@ -6,8 +6,11 @@ install:
   - z3 --version
   - wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-ocaml.sh
   - bash -ex .travis-ocaml.sh
+  - opam install -y ocamlfind
+  - opam install -y ocamlbuild
+  - eval $(opam config env)
 env:
-  - OCAML_VERSION=4.03 PATH="$HOME/z3/z3-4.4.1-x64-ubuntu-14.04/bin/:$PATH"
+  - OCAML_VERSION=4.05 PATH="$HOME/z3/z3-4.4.1-x64-ubuntu-14.04/bin/:$PATH"
 script:
   - bash build.sh
   - bash build.sh tests

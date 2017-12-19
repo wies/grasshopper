@@ -1382,7 +1382,7 @@ let foralls_to_exists f =
       | [] -> dcs, scs
     in
     let dcs, scs = disjoints_and_subsets [] [] [f] in
-    let rec find nodefs defs = function
+    let rec find nodefs defs = function [@warning "-57"]
       | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; Var _ as yt], _), a)])
           when IdSet.mem x nodefs ->
             IdSet.remove x nodefs, mk_eq ~ann:a xt yt :: defs, mk_false
