@@ -456,8 +456,10 @@ let rec symb_exec prog (eqs, state) comm =
       ) (eqs, state)
   | Basic (Call {call_lhs=lhs; call_name=foo; call_args=args}, _) ->
     Debug.info (fun () ->
-      sprintf "\nExecuting function call: %s := %s(%s);\n"
-        (lhs |> List.map string_of_ident |> String.concat ", ")
+      sprintf "\nExecuting function call: %s%s(%s);\n"
+        (match (lhs |> List.map string_of_ident |> String.concat ", ") with
+        | "" -> ""
+        | str -> str ^ " := ")
         (string_of_ident foo) (args |> List.map string_of_term |> String.concat ", ")
     );
     (* Look up pre/post of foo *)
