@@ -1,37 +1,29 @@
-type FlowDom;
-type NodeDom;
-type Interface;
-
 struct Node {
+  var next: Node;
 }
 
 
-predicate Gr(I: Interface) {
-  true
+predicate gamma(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FPo: Set<Node>) {
+  acc(x) &*& x.i == 1 &*& (FPo == {} || FPo == {x.next}/* && x.next.(x.f) == 1*/)
 }
 
-predicate N(x: Node, I: Interface) {
-  true
-}
+predicate Gr(i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>) { true }
 
-function nodeInInterface(x: Node, I: Interface) returns (b: Bool)
+predicate N(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>) { true }
 
 
-procedure lemma_decomp(I: Interface, x: Node) returns (I1: Interface, I2: Interface)
-  requires Gr(I) &*& nodeInInterface(x, I)
-  ensures N(x, I1) &*& Gr(I2)
+procedure lemma_conc(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>)
+  returns ()
+  requires N(x, i, f, FP, FPo)
+  ensures Dirty(i, f, FP, FPo, gamma(x, i, f, FPo)) && FP == {x}
 
 
-procedure simpl(r: Node, I: Interface)
-  requires Gr(I)
-  ensures Gr(I)
-{ 
-simpl(r, I);
-}
-
-procedure test(r: Node, I: Interface) returns (I1: Interface, I2: Interface)
-  requires Gr(I) &*& nodeInInterface(r, I)
-  ensures N(r, I1) &*& Gr(I2)
+procedure test(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>) returns (f1: Map<Node, Map<Node, Int>>, FPo1: Set<Node>)
+  requires N(x, i, f, FP, FPo)
+  ensures N(x, i, f1, FP, FPo1)
 {
-  I1, I2 := lemma_decomp(I, r);
+  lemma_conc(x, i, f, FP, FPo);
+  x.next := null;
+  lemma_abs(x, i, f1, FP, FPo1);
+  sync()
 }
