@@ -303,8 +303,12 @@ let find_ptsto loc spatial =
 
 let check_pure_entail p1 p2 =
   if p1 = p2 || p2 = mk_true then true
-  else (* TODO call SMT solver here? :) *)
-    failwith @@ sprintf "Could not prove %s" (string_of_form p2)
+  else
+    let f = smk_and [p1; mk_not p2] in
+    match Prover.get_model f with
+    | None -> true
+    | Some model ->
+      failwith @@ sprintf "Could not prove %s" (string_of_form p2)
 
 
 (** Find a frame for state1 * fr |= state2, and an instantiation for TODO? *)

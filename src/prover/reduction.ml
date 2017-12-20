@@ -446,7 +446,7 @@ let add_split_lemmas fs gts =
   in
   SortSet.fold add_lemmas structs fs
     
-(** Reduces the given formula to the target theory fragment, as specified b the configuration. *)
+(** Reduces the given formula to the target theory fragment, as specified by the configuration. *)
 let reduce f =
   (* split f into conjuncts and eliminate all existential quantifiers *)
   let f1 = nnf f in

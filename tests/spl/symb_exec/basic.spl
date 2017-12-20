@@ -73,3 +73,12 @@ procedure acc_to_ptsto(x: Node, y: Node)
   requires acc(x) &*& acc(x.next) &*& x.next == y
   ensures x.next |-> y &*& acc(y)
 {}
+
+procedure pure1(x: Int)
+  requires x == 0
+  ensures x == 10
+{
+  x := 2;
+  x := x + 5;
+  x := x + 3;
+}
