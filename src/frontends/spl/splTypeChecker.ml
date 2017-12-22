@@ -112,6 +112,7 @@ let type_of_expr cu locals e =
     | BinaryOp (_, OpPts, _, _, _)
     | BinaryOp (_, OpSepIncl, _, _, _)
     | PredApp (AccessPred, _, _)
+    | Dirty _
     | Emp _ -> PermType
     (* Permission or Bool types *)
     | Binder ((Forall | Exists), _, f, _) ->
@@ -259,6 +260,10 @@ let infer_types cu locals ty e =
             let e, _ = it locals (SetType AnyRefType) e in
             PredApp (AccessPred, [e], pos), match_types pos ty PermType
         | _ -> pred_arg_mismatch_error pos ("acc", 0) 1)
+    | Dirty (e, es, pos) ->
+        let e, _ = it locals PermType e in
+        let es = List.map (it locals AnyType >> fst) es in
+        Dirty (e, es, pos), match_types pos ty PermType
     | BinaryOp (e1, (OpSepStar as op), e2, _, pos)
     | BinaryOp (e1, (OpSepPlus as op), e2, _, pos)
     | BinaryOp (e1, (OpSepIncl as op), e2, _, pos) ->

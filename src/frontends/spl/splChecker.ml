@@ -249,7 +249,9 @@ let resolve_names cu =
           Annot (re locals tbl e, GeneratorAnnot (es1, re locals tbl ge), pos)
       | Annot (e, ann, pos) ->
           Annot (re locals tbl e, ann, pos)
-      | e -> e
+      | Dirty (e, es, pos) ->
+          Dirty (re locals tbl e, List.map (re locals tbl) es, pos)
+      | (Null _ as e) | (Emp _ as e) | (IntVal _ as e) | (BoolVal _ as e) -> e
     in
     re locals tbl e
   in
@@ -567,7 +569,12 @@ let flatten_exprs cu =
     | Annot (e, ann, pos) ->
         let e1, aux1, locals = flatten_expr scope aux locals e in
         Annot (e1, ann, pos), aux1, locals
-    | e -> e, aux, locals
+    | Dirty (e, es, pos) ->
+        let e, aux, locals = flatten_expr scope aux locals e in
+        let es, aux, locals = flatten_expr_list scope aux locals es in
+        Dirty (e, es, pos), aux, locals
+    | (Null _ as e) | (Emp _ as e) | (IntVal _ as e)
+    | (BoolVal _ as e) | (Ident _ as e ) -> e, aux, locals
   in
   let rec flatten scope locals aux_funs returns = function
     | Skip pos -> Skip pos, locals, aux_funs

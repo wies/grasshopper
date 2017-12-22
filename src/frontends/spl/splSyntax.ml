@@ -141,6 +141,7 @@ and expr =
   | BinaryOp of expr * bin_op * expr * typ * pos
   | Ident of ident * pos
   | Annot of expr * annotation * pos
+  | Dirty of expr * exprs * pos  (** Dirty region/formula for Flows *)
 
 and exprs = expr list
 
@@ -187,8 +188,9 @@ let pos_of_expr = function
   | PredApp (_, _, p)
   | UnaryOp (_, _, p)
   | BinaryOp (_, _, _, _, p)
-  | Ident (_, p) -> p
-  | Annot (_, _, p) -> p
+  | Ident (_, p)
+  | Annot (_, _, p)
+  | Dirty (_, _, p) -> p
 
 let free_vars e =
   let rec fv bv acc = function
@@ -215,6 +217,9 @@ let free_vars e =
                 IdSet.add x bv, acc)
             (bv, acc) vs
         in
+        fv bv acc e
+    | Dirty (e, es, _) ->
+        let acc = List.fold_left (fv bv) acc es in
         fv bv acc e
     | _ -> acc
   in fv IdSet.empty IdSet.empty e
@@ -252,6 +257,8 @@ let subst_id sm =
             bv vs
         in
         Binder (b, vs, s bv e, pos)
+    | Dirty (e, es, pos) ->
+        Dirty (s bv e, List.map (s bv) es, pos)
     | e -> e
   in s IdSet.empty
     
@@ -415,7 +422,7 @@ let string_of_pred = function
 
 let prio_of_expr = function
   | Null _ | Emp _ | IntVal _ | BoolVal _ | Ident _ -> 0
-  | Read _ | Write _ | ProcCall _ | PredApp _ | New _ | Setenum _ |
+  | Read _ | Write _ | ProcCall _ | PredApp _ | New _ | Setenum _ | Dirty _ |
     Binder (SetComp, _, _, _) -> 1
   | UnaryOp ((OpArrayCells | OpIndexOfCell | OpArrayOfCell |
     OpLength | OpToInt | OpToByte | OpOld | OpKnown), _, _) -> 1
@@ -562,6 +569,9 @@ let rec pr_expr ppf =
             (pr_binder b) (Util.pr_list_comma pr_bound_var) vs pr_expr e
       )
   | Annot (e, _, _) -> pr_expr ppf e
+  | Dirty (e, es, _) ->
+    fprintf ppf "[@[<2>%a@]]_(@[%a@])" pr_expr e pr_expr_list es
+
 and pr_expr_list es = Util.pr_list_comma pr_expr es
     
 let pr_var_decl ppf (id, decl) =

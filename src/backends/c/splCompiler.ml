@@ -210,7 +210,7 @@ let convert oc cu =
               fprintf ppf "%s"    (c_string_of_ident id)
       | (New (t, args, _), _)             ->
         fprintf ppf "/* ERROR: New expression only allowed directly within an Assign or Free stmt. */"
-      | ((Emp _|Setenum _|PredApp _|
+      | ((Emp _|Setenum _|PredApp _| Dirty _ |
         Binder _| Annot _ | Write _), _) ->
         fprintf ppf "/* ERROR: expression type not yet implemented. */"
     in
@@ -338,7 +338,7 @@ let convert oc cu =
           | _ -> fprintf ppf "/* ERROR: a variable of such a type cannot be disposed. */" 
         )
         | BinaryOp _ -> fprintf ppf "/* ERROR: freeing the result of binary operation will possibly be implemented in the future for freeing Sets. */" 
-        | (Null _ | Emp _ | Setenum _ | IntVal _ | BoolVal _ | PredApp _ | Binder _
+        | (Null _ | Emp _ | Setenum _ | IntVal _ | BoolVal _ | PredApp _ | Binder _  | Dirty _
         | UnaryOp _ | Annot _ | Write _) ->
             fprintf ppf "/* ERROR: expression cannot be disposed */"
       in 

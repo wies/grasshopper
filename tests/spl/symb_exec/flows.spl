@@ -11,11 +11,11 @@ predicate Gr(i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo
 
 predicate N(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>) { true }
 
-
 procedure lemma_conc(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>)
   returns ()
   requires N(x, i, f, FP, FPo)
-  ensures Dirty(i, f, FP, FPo, gamma(x, i, f, FPo)) && FP == {x}
+  ensures gamma(x, i, f, FPo) && FP == {x}
+//  ensures [gamma(x, i, f, FPo)](i, f, FP, FPo) && FP == {x}
 
 
 procedure test(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>) returns (f1: Map<Node, Map<Node, Int>>, FPo1: Set<Node>)
@@ -24,6 +24,6 @@ procedure test(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set
 {
   lemma_conc(x, i, f, FP, FPo);
   x.next := null;
-  lemma_abs(x, i, f1, FP, FPo1);
-  sync()
+  //  lemma_abs(x, i, f1, FP, FPo1);
+  //  sync();
 }

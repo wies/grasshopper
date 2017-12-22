@@ -1,0 +1,22 @@
+struct Node {
+  var next: Node;
+}
+
+
+procedure lemma_clean(x: Node)
+  requires [x.next |-> null](x)
+  ensures x.next |-> null
+
+procedure test1(x: Node, y: Node)
+  requires [x.next |-> null](x) &*& acc(y)
+  ensures acc(x) &*& acc(y)
+{
+  lemma_clean(x);
+}
+
+procedure write_dirty(x: Node)
+  requires [x.next |-> null](x)
+  ensures [x.next |-> x](x)
+{
+  x.next := x;
+}

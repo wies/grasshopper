@@ -15,6 +15,7 @@ let todo () = raise NotYetImplemented
 type spatial_pred =
   | PointsTo of term * (ident * term) list  (** x |-> [f1: E1, ..] *)
   | Pred of ident * term list
+  | Dirty of spatial_pred list * term list  (** Dirty region: [f1 * ..]_(e1, ..) *)
 
 (** A symbolic state is a (pure formula, a list of spatial predicates).
   Note: program vars are represented as FreeSymb constants,
@@ -35,7 +36,8 @@ let empty_state = (mk_true, [])
 let empty_eqs = IdMap.empty
 
 
-let string_of_spatial_pred = function
+(* TODO use Format formatters for these *)
+let rec string_of_spatial_pred = function
   | PointsTo (x, fs) ->
     sprintf "%s |-> (%s)" (string_of_term x)
       (fs |> List.map (fun (id, t) -> (string_of_ident id) ^ ": " ^ (string_of_term t))
@@ -43,12 +45,17 @@ let string_of_spatial_pred = function
   | Pred (id, ts) ->
     sprintf "%s(%s)" (string_of_ident id)
       (ts |> List.map string_of_term |> String.concat ", ")
+  | Dirty (fs, ts) ->
+    sprintf "[%s]_(%s)" (string_of_spatial_pred_list fs) (ts |> List.map string_of_term |> String.concat ", ")
+
+and string_of_spatial_pred_list sps =
+  sps |> List.map string_of_spatial_pred |> String.concat " * "
 
 let string_of_state ((pure, spatial): state) =
   let spatial =
     match spatial with
     | [] -> "emp"
-    | spatial -> spatial |> List.map string_of_spatial_pred |> String.concat " * "
+    | spatial -> string_of_spatial_pred_list spatial
   in
   let pure = (string_of_form pure |> String.map (function | '\n' -> ' ' | c -> c)) in
   sprintf "%s : %s" pure spatial
@@ -119,6 +126,9 @@ let state_of_spec_list specs : state =
     | Sl.BoolOp _ -> fail ()
     | Sl.Binder _ -> fail ()
     (* Note: if you allow binders, make substitutions capture avoiding! *)
+    | Sl.Dirty (f, ts, _) ->
+      let pure1, spatial1 = convert_sl_form empty_state f in
+      smk_and [pure1; pure], Dirty (spatial1, ts) :: spatial
   in
   (* Convert all the specs into a state *)
   let (pure, spatial) =
@@ -131,22 +141,26 @@ let state_of_spec_list specs : state =
   let reads = !reads in
   (* Put collected read terms from pure part into spatial part *)
   let spatial =
-    List.map (function
-        | PointsTo (x, fs) ->
-          let fs' =
-            try TermMap.find x reads |> IdMap.bindings with Not_found -> []
-          in
-          PointsTo (x, fs @ fs')
-        | Pred _ as p -> p
-      )
-      spatial
+    let rec put_reads = function
+      | PointsTo (x, fs) ->
+        let fs' =
+          try TermMap.find x reads |> IdMap.bindings with Not_found -> []
+        in
+        PointsTo (x, fs @ fs')
+      | Pred _ as p -> p
+      | Dirty (sps, ts) -> Dirty (List.map put_reads sps, ts)
+    in
+    List.map put_reads spatial
   in
   (* TODO check the following in presence of x.next.next etc *)
-  (* If we have a points-to info without a corresponding acc(), fail *)
-  let alloc_terms = List.fold_left (fun s p ->
-    match p with
-    | PointsTo (x, _) -> TermSet.add x s
-    | _ -> s) TermSet.empty spatial
+  (* If we have a points-to atom without a corresponding acc() in reads, fail *)
+  let alloc_terms =
+    let rec collect_allocs allocs = function
+    | PointsTo (x, _) -> TermSet.add x allocs
+    | Pred _ -> allocs
+    | Dirty (sps, ts) -> List.fold_left collect_allocs allocs sps
+    in
+    List.fold_left collect_allocs TermSet.empty spatial
   in
   if TermMap.exists (fun t _ -> TermSet.mem t alloc_terms |> not) reads then
     failwith "state_of_spec_list: couldn't find corresponding acc"
@@ -160,11 +174,13 @@ let subst_term sm = subst_consts_term sm >> subst_term sm
 (** Substitute both vars and constants in a form according to [sm]. *)
 let subst_form sm = subst_consts sm >> subst sm
 
-let subst_spatial_pred sm = function
+let rec subst_spatial_pred sm = function
   | PointsTo (id, fs) ->
     PointsTo (subst_term sm id, List.map (fun (id, t) -> id, subst_term sm t) fs)
   | Pred (id, ts) ->
     Pred (id, List.map (subst_term sm) ts)
+  | Dirty (sps, ts) ->
+    Dirty (List.map (subst_spatial_pred sm) sps, List.map (subst_term sm) ts)
 
 (** Substitute all (Vars and constants) in derived equalities [eqs],
   according to substitution [sm]
@@ -292,7 +308,8 @@ let extract_lemmas prog : lemma list =
 (** Returns [(fs, spatial')] s.t. [spatial] = [loc] |-> [fs] :: [spatial'] *)
 let find_ptsto loc spatial =
   let sp1, sp2 =
-    List.partition (function | PointsTo (x, fs) -> x = loc | Pred _ -> false) spatial
+    List.partition (function | PointsTo (x, fs) -> x = loc | Pred _ | Dirty _-> false)
+      spatial
   in
   match sp1 with
   | [PointsTo (_, fs)] -> Some (fs, sp2)

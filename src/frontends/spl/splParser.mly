@@ -688,9 +688,13 @@ eq_expr:
 | eq_expr NEQ eq_expr { UnaryOp (OpNot, BinaryOp ($1, OpEq, $3, BoolType, mk_position 1 3), mk_position 1 3) }
 ;
 
-and_expr:
+dirty_expr:
 | eq_expr { $1 }
-| and_expr AND eq_expr { BinaryOp ($1, OpAnd, $3, AnyType, mk_position 1 3) }
+| LBRACKET expr RBRACKET LPAREN expr_list RPAREN { Dirty ($2, $5, mk_position 1 6) }
+
+and_expr:
+| dirty_expr { $1 }
+| and_expr AND dirty_expr { BinaryOp ($1, OpAnd, $3, AnyType, mk_position 1 3) }
 ;
 
 sep_star_expr:
