@@ -14,9 +14,16 @@ procedure test1(x: Node, y: Node)
   lemma_clean(x);
 }
 
-procedure write_dirty(x: Node)
-  requires [x.next |-> null](x)
-  ensures [x.next |-> x](x)
+procedure write_dirty(x: Node, y: Node, z: Node)
+  requires [x.next |-> null &*& acc(z)](x) &*& y.next |-> x
+  ensures [x.next |-> x &*& acc(z)](x) &*& y.next |-> x
+{
+  x.next := x;
+}
+
+procedure write_dirty2(x: Node, y: Node, z: Node)
+  requires [[x.next |-> null](x) &*& acc(z)](x) &*& y.next |-> x
+  ensures [[x.next |-> x](x) &*& acc(z)](x) &*& y.next |-> x
 {
   x.next := x;
 }

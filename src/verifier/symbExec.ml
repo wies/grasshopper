@@ -305,6 +305,7 @@ let extract_lemmas prog : lemma list =
 
 (** ----------- Symbolic Execution ---------- *)
 
+
 (** Returns [(fs, spatial')] s.t. [spatial] = [loc] |-> [fs] :: [spatial'] *)
 let find_ptsto loc spatial =
   let sp1, sp2 =
@@ -317,6 +318,27 @@ let find_ptsto loc spatial =
   | _ ->
     failwith @@ "find_ptsto was confused by " ^
       (sp1 |> List.map string_of_spatial_pred |> String.concat " &*& ")
+
+(** Finds a points-to predicate at location [loc] in [spatial], including in dirty regions.
+  If found, returns [(Some fs, repl_fn)] such that
+  [loc] |-> [fs] appears in [spatial]
+  and [repl_fn fs'] returns [spatial] with [fs] replaced by [fs'] *)
+let rec find_ptsto_dirty loc spatial =
+  match spatial with
+  | [] -> None, (fun fs' -> spatial)
+  | PointsTo (x, fs) :: spatial' when x = loc ->
+    Some fs, (fun fs' -> PointsTo (x, fs') :: spatial')
+  | Dirty (f, ts) as sp :: spatial' ->
+    let res, repl_fn = find_ptsto_dirty loc f in
+    (match res with
+    | Some fs -> Some fs, (fun fs' -> Dirty (repl_fn fs', ts) :: spatial')
+    | None -> 
+      let res, repl_fn = find_ptsto_dirty loc spatial' in
+      res, (fun fs' -> sp :: repl_fn fs')
+    )
+  | sp :: spatial' ->
+    let res, repl_fn = find_ptsto_dirty loc spatial' in
+    res, (fun fs' -> sp :: repl_fn fs')
 
 let check_pure_entail p1 p2 =
   if p1 = p2 || p2 = mk_true then true
@@ -427,20 +449,20 @@ let rec symb_exec prog proc (eqs, state) comm =
         (string_of_term loc) (string_of_ident fld)
     );
     let loc = subst_term eqs loc in
-    (match find_ptsto loc (snd state) with
-    | Some (fs, spatial') ->
+    (match find_ptsto_dirty loc (snd state) with
+    | Some fs, mk_spatial' ->
       (* lookup fld in fs. now loc |-> fs' and (fld, e) is in fs' *)
       let e, fs' =
         try List.assoc fld fs, fs
         with Not_found -> let e = mk_fresh_var srt "v" in e, (fld, e) :: fs
       in
-      let spatial' = PointsTo (loc, fs') :: spatial' in
+      let spatial' = mk_spatial' fs' in
       let sm = IdMap.singleton x (mk_var_like x) in
       let e = subst_term sm e in
       let state = subst_state sm (fst state, spatial') in
       let eqs = add_eq x e (subst_eqs sm eqs) in
       eqs, state
-    | None -> failwith @@ "Invalid lookup: " ^ (comm |> source_pos |> string_of_src_pos)
+    | None, _ -> failwith @@ "Invalid lookup: " ^ (comm |> source_pos |> string_of_src_pos)
     )
   | Basic (Assign {assign_lhs=[fld]; assign_rhs=[App (Write, [App (FreeSym fld', [], _); 
       App (FreeSym _, [], _) as loc; rhs], srt)]}, _) when fld = fld' ->
@@ -451,16 +473,16 @@ let rec symb_exec prog proc (eqs, state) comm =
     let (pure, spatial) = state in
     (* First, substitute eqs on loc and rhs *)
     let loc = subst_term eqs loc and rhs = subst_term eqs rhs in
-    (match find_ptsto loc spatial with
-    | Some (fs, spatial') ->
+    (match find_ptsto_dirty loc spatial with
+    | Some fs, mk_spatial' ->
       (* mutate fs to fs' so that it contains (fld, rhs) *)
       let fs' =
         if List.exists (fst >> (=) fld) fs
         then List.map (fun (f, e) -> (f, if f = fld then rhs else e)) fs
         else (fld, rhs) :: fs
       in
-      eqs, (pure, PointsTo (loc, fs') :: spatial')
-    | None -> failwith @@ "Invalid write: " ^ (comm |> source_pos |> string_of_src_pos)
+      eqs, (pure, mk_spatial' fs')
+    | None, _ -> failwith @@ "Invalid write: " ^ (comm |> source_pos |> string_of_src_pos)
     )
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, _) ->
     (* TODO simultaneous assignments can't touch heap, so do all at once *)
