@@ -3,21 +3,18 @@ struct Node {
 }
 
 
-predicate gamma(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FPo: Set<Node>) {
-  acc(x) &*& x.i == 1 &*& (FPo == {} || FPo == {x.next}/* && x.next.(x.f) == 1*/)
-}
-
 predicate Gr(i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>) { true }
 
 predicate N(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>) { true }
 
+
+/** Hard-coded gamma for singly linked list */
 procedure lemma_conc(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>)
   returns ()
   requires N(x, i, f, FP, FPo)
-  ensures gamma(x, i, f, FPo) && FP == {x}
-//  ensures [gamma(x, i, f, FPo)](i, f, FP, FPo) && FP == {x}
+  ensures [acc(x) &*& x.i == 1 &*& (FPo == {} || FPo == {x.next}/*TODO && x.next.(x.f) == 1*/)](i, f, FP, FPo) &*& FP == {x}
 
-
+// TODO continue: lemma_abs, figure out how to write flow map.
 procedure test(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>) returns (f1: Map<Node, Map<Node, Int>>, FPo1: Set<Node>)
   requires N(x, i, f, FP, FPo)
   ensures N(x, i, f1, FP, FPo1)
