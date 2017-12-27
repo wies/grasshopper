@@ -1,0 +1,15 @@
+datatype List = cons(hd: Int, tl: List) | nil;
+
+procedure reverse(l: List) returns (r: List)
+  ensures l != nil <=> r != nil
+{
+  if (l == nil) return nil;
+  else return append(reverse(l.tl), cons(l.hd, nil));
+}
+
+procedure append(l1: List, l2: List) returns (r: List)
+  ensures (l1 != nil || l2 != nil) ==> r != nil
+{
+  if (l1 == nil) return l2;
+  else return cons(l1.hd, append(l1.tl, l2));
+}
