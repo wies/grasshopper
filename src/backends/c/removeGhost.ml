@@ -60,6 +60,8 @@ let removeGhost cu =
     | New (t, exprs, p) -> New (t, (List.map (process_expr scope) exprs), p)
     | Read (fld, idx, p) -> Read ((process_expr scope fld), (process_expr scope idx), p) (*TODO ghost fields*)
     | Write (fld, idx, v, p) -> Write ((process_expr scope fld), (process_expr scope idx), (process_expr scope v), p) (*TODO ghost fields*)
+    | ConstrApp (id, args, p) -> ConstrApp (id, List.map (process_expr scope) args, p)
+    | DestrApp (id, e, p) -> DestrApp (id, process_expr scope e, p)
     | ProcCall (id, args, p) ->
       let formals = (IdMap.find id cu.proc_decls).p_formals in
       ProcCall (id, (process_args scope id formals args), p)
@@ -170,6 +172,7 @@ let removeGhost cu =
       var_decls = IdMap.filter (fun _ v -> not v.v_ghost) cu.var_decls;
       proc_decls = IdMap.map process_proc cu.proc_decls;
       pred_decls = IdMap.empty;
+      fun_decls = IdMap.empty;
       background_theory = [];
     }
   in

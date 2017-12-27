@@ -29,11 +29,23 @@ module Opt = struct
 
   let get = function
     | Some x -> x
-    | None -> failwith "Util.unopt applied to None"
+    | None -> failwith "Opt.get applied to None"
 
   let get_or_else default = function
     | Some x -> x
     | None -> default
+
+  let lazy_get_or_else default = function
+    | Some x -> x
+    | None -> default ()
+
+  let or_else default = function
+    | Some x -> Some x
+    | None -> Some default
+
+  let lazy_or_else default = function
+    | Some x -> Some x
+    | None -> default ()
 
   let fold f init = function
     | Some x -> f init x
@@ -43,6 +55,10 @@ module Opt = struct
     | Some x -> Some (f x)
     | None -> None
 
+  let flat_map f = function
+    | Some x -> f x
+    | None -> None
+          
   let iter f = function
     | Some x -> f x
     | None -> ()
@@ -102,9 +118,9 @@ let flat_map f ls = List.flatten (List.map f ls)
 
 let find_index elt ls =
   let rec traverse i lst = match lst with
-    | x :: xs when elt = x -> i
+    | x :: xs when elt = x -> Some i
     | _ :: xs -> traverse (i+1) xs
-    | [] -> raise Not_found
+    | [] -> None
   in
   traverse 0 ls
 

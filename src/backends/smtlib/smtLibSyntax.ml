@@ -9,8 +9,11 @@ type pos = Grass.source_position
 type sort = 
   | IntSort | BoolSort
   | BvSort of int
+  | AdtSort of ident * adt_constr list
   | FreeSort of ident * sort list
 
+and adt_constr = ident * (ident * sort) list
+        
 type symbol =
   | BoolConst of bool
   | IntConst of int
@@ -42,6 +45,7 @@ type command =
   | SetOption of string * string * pos option
   | SetLogic of string * pos option
   | DeclareSort of ident * int * pos option
+  | DeclareDatatypes of (ident * ((ident * (ident * sort) list) list)) list * pos option
   | DefineSort of ident * ident list * sort * pos option
   | DeclareFun of ident * sort list * sort * pos option
   | DefineFun of ident * (ident * sort) list * sort * term * pos option
@@ -88,6 +92,8 @@ let mk_set_option ?pos o v = SetOption (o, v, pos)
 let mk_set_info ?pos i v = SetInfo (i, v, pos)
 
 let mk_declare_sort ?pos id arity = DeclareSort (id, arity, pos)
+    
+let mk_declare_datatypes ?pos adts = DeclareDatatypes (adts, pos)
 
 let mk_declare_fun ?pos id arg_srts res_srt = DeclareFun (id, arg_srts, res_srt, pos)
 
@@ -304,6 +310,7 @@ let rec pr_idents ppf = function
   | id :: ids -> fprintf ppf "%a@ %a" pr_ident id pr_idents ids
 
 let rec pr_sort ppf = function
+  | AdtSort  (id, _) -> pr_ident ppf id
   | FreeSort (id, []) -> pr_ident ppf id
   | FreeSort (id, srts) -> fprintf ppf "@[<2>(%s@ %a)@]" (string_of_ident id) pr_sorts srts
   | BoolSort -> fprintf ppf "Bool"
@@ -368,6 +375,22 @@ and pr_annot ppf (t, a) =
 
 let print_term out_ch t = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_term t
 
+let rec pr_adt_args ppf = function
+  | [] -> ()
+  | (id, srt) :: args ->
+      fprintf ppf "@ (%a@ %a)%a" pr_ident id pr_sort srt pr_adt_args args
+    
+let rec pr_adt_constrs ppf = function
+  | [] -> ()
+  | (id, args) :: cnstrs ->
+      fprintf ppf "@ (%a%a)%a" pr_ident id pr_adt_args args pr_adt_constrs cnstrs
+
+let rec pr_adts ppf = function
+  | [] -> ()
+  | (id, cnstrs) :: adts ->
+      fprintf ppf "@ (%a%a)%a" pr_ident id pr_adt_constrs cnstrs pr_adts adts
+
+        
 let pr_command ppf = function
   | SetInfo (i, v, _) ->
       fprintf ppf "@[<10>(set-info@ %s@ %s)@]@\n" i v
@@ -377,6 +400,8 @@ let pr_command ppf = function
       fprintf ppf "@[<11>(set-logic@ %s)@]@\n" l
   | DeclareSort (id, n, _) ->
       fprintf ppf "@[<14>(declare-sort@ %a@ %d)@]@\n" pr_ident id n
+  | DeclareDatatypes (adts, _) ->
+      fprintf ppf "@[<19>(declare-datatypes@ () @[<2>(%a)@])@]@\n" pr_adts adts
   | DefineSort (id, svs, srt, _) ->
       fprintf ppf "@[<13>(define-sort@ %a@ (%a)@ %a)@]@\n" pr_ident id pr_idents svs pr_sort srt
   | DeclareFun (id, srts, srt, _) ->

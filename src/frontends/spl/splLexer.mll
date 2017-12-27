@@ -19,6 +19,7 @@ let _ =
       ("Bool", BOOL);
       ("choose", CHOOSE);
       ("comment", COMMENT);
+      ("datatype", DATATYPE);
       ("else", ELSE);
       ("emp", EMP);
       ("ensures", ENSURES);
@@ -152,9 +153,9 @@ rule token = parse
 | "&*&" { SEPSTAR }
 | "&+&" { SEPPLUS }
 | "|->" { PTS }
-| '&' { BAND }
-| '|' { BOR }
-| '~' { BNOT }
+| '&' { AMP }
+| '|' { PIPE }
+| '~' { TILDE }
 | "<-<" { BSL }
 | ">->" { BSR }
 | ident as name '^' (digitchar+ as num) { IDENT(name, int_of_string num) }

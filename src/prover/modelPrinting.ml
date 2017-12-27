@@ -14,7 +14,7 @@ let string_of_sorted_value srt v =
     | srt -> srt
   in
   match srt with
-  | Int | Bool -> string_of_value v
+  | Int | Bool | Adt _ -> string_of_value v
   | _ ->
       let srt_str = string_of_sort (elim_loc srt) in
       srt_str ^ "!" ^ string_of_value v

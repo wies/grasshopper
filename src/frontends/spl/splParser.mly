@@ -57,14 +57,14 @@ type rhs_string_maybe =
 %token UMINUS PLUS MINUS DIV TIMES MOD
 %token UNION INTER DIFF
 %token EQ NEQ LEQ GEQ LT GT IN NOTIN AT
-%token BOR BAND BNOT BSL BSR INT2BYTE BYTE2INT
+%token AMP TILDE BSL BSR INT2BYTE BYTE2INT
 %token PTS EMP NULL
 %token SEPSTAR SEPPLUS SEPINCL AND OR IMPLIES IFF NOT COMMA
 %token <SplSyntax.binder_kind> QUANT
 %token ASSUME ASSERT CALL FREE HAVOC NEW RETURN
 %token IF ELSE WHILE
 %token GHOST IMPLICIT VAR STRUCT PURE PROCEDURE PREDICATE FUNCTION INCLUDE AXIOM TYPE
-%token OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
+%token DATATYPE OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token LOC INT BOOL BYTE SET MAP ARRAY ARRAYCELL
 %token MATCHING YIELDS WITHOUT COMMENT PATTERN
 %token EOF
@@ -133,6 +133,7 @@ type_decl:
     t_def = FreeTypeDef;
     t_pos = mk_position 2 2 }
 }
+| datatype_decl { $1 }
 | struct_decl { $1 }
 ;
 
@@ -183,7 +184,8 @@ contract_mods:
 | PURE contract_mods { (true, snd $2) }
 | FREE contract_mods { (fst $2, true) }
 | /* empty */ { (false, false) }
-    
+;
+  
 semicolon_opt:
 | SEMICOLON {}
 | /* empty */ {}
@@ -251,7 +253,7 @@ pred_impl:
   Some $2
 }
 | /* empty */ { None }
-
+;
   
 var_decls:
 | var_decl var_decl_list { $1 :: $2 }
@@ -330,6 +332,33 @@ proc_returns:
 | /* empty */ { [] }
 ;
 
+datatype_decl:
+| DATATYPE IDENT EQ constr_decls SEMICOLON {
+  { t_name = $2;
+    t_def = ADTypeDef $4;
+    t_pos = mk_position 1 5;
+  }
+};
+
+constr_decls:
+| constr_decl { [$1] }
+| constr_decl PIPE constr_decls { $1 :: $3 }
+;
+  
+constr_decl:
+| IDENT { { c_name = $1; c_args = []; c_pos = mk_position 1 1 } }
+| IDENT LPAREN constr_args RPAREN { { c_name = $1; c_args = $3; c_pos = mk_position 1 1 } }
+;
+
+constr_args:
+| constr_arg { [$1] }
+| constr_arg COMMA constr_args { $1 :: $3 }
+;
+
+constr_arg:
+| IDENT COLON var_type { var_decl $1 $3 false false (mk_position 1 3) GrassUtil.global_scope } 
+;
+  
 struct_decl:
 | STRUCT IDENT LBRACE field_decls RBRACE {
   let fields =
@@ -616,7 +645,7 @@ unary_expr:
 
 unary_expr_not_plus_minus:
 | NOT unary_expr  { UnaryOp (OpNot, $2, mk_position 1 2) }
-| BNOT unary_expr  { UnaryOp (OpBvNot, $2, mk_position 1 2) }
+| TILDE unary_expr  { UnaryOp (OpBvNot, $2, mk_position 1 2) }
 ;
 
 diff_expr:
@@ -632,7 +661,7 @@ mult_expr:
 | mult_expr DIV diff_expr { BinaryOp ($1, OpDiv, $3, IntType, mk_position 1 3) }
 | mult_expr MOD diff_expr { BinaryOp ($1, OpMod, $3, IntType, mk_position 1 3) }
 | mult_expr INTER diff_expr { BinaryOp ($1, OpInt, $3, SetType AnyType, mk_position 1 3) }
-| mult_expr BAND diff_expr { BinaryOp ($1, OpBvAnd, $3, IntType, mk_position 1 3) }
+| mult_expr AMP diff_expr { BinaryOp ($1, OpBvAnd, $3, IntType, mk_position 1 3) }
 ;
 
 add_expr:
@@ -640,7 +669,7 @@ add_expr:
 | add_expr PLUS mult_expr { BinaryOp ($1, OpPlus, $3, IntType, mk_position 1 3) }
 | add_expr MINUS mult_expr { BinaryOp ($1, OpMinus, $3, IntType, mk_position 1 3) }
 | add_expr UNION mult_expr { BinaryOp ($1, OpUn, $3, SetType AnyType, mk_position 1 3) }
-| add_expr BOR mult_expr { BinaryOp ($1, OpBvOr, $3, IntType, mk_position 1 3) }
+| add_expr PIPE mult_expr { BinaryOp ($1, OpBvOr, $3, IntType, mk_position 1 3) }
 ;
 
 pts_expr:

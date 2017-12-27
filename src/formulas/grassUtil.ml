@@ -1026,14 +1026,8 @@ let overloaded_sign f : (arity list SymbolMap.t) =
   let rec signt (decls : arity list SymbolMap.t) t = match t with
     | Var _ -> decls
     | App (sym, args, res_srt) ->
-	let arg_srts = 
-	  List.map
-	    (function 
-	      |	Var (_, srt) 
-	      | App (_, _, srt) -> srt 
-	    )
-	    args
-	in List.fold_left signt (add_to_sign sym (arg_srts, res_srt) decls) args
+	let arg_srts = List.map sort_of args in
+	List.fold_left signt (add_to_sign sym (arg_srts, res_srt) decls) args
   in 
   fold_terms signt SymbolMap.empty f
 

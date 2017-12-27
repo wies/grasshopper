@@ -109,10 +109,24 @@ let convert cu =
       ProgError.error pos 
         ("Struct " ^ fst id ^ " does not have a field named " ^ fst fld_id)*)
   in
-  let convert_type ty pos =
+  let rec convert_type ?(first=true) ty pos =
     let rec ct = function
       | IdentType id -> FreeSrt id
       | StructType id -> Loc (FreeSrt id)
+      | ADType id ->
+          if first then
+            let tdecl = IdMap.find id cu.type_decls in
+            (match tdecl.t_def with
+            | ADTypeDef cnsts ->
+                let cnsts =
+                  List.map (fun cdecl ->
+                    cdecl.c_name,
+                    List.map (fun adecl -> adecl.v_name, convert_type ~first:false adecl.v_type adecl.v_pos) cdecl.c_args)
+                    cnsts
+                in
+                Adt (id, cnsts)
+            | _ -> failwith "unexpected type declaration")
+          else FreeSrt id
       | AnyRefType -> Loc (FreeSrt ("Null", 0))
       | MapType (dtyp, rtyp) -> Map ([ct dtyp], ct rtyp)
       | SetType typ -> Set (ct typ)
@@ -167,6 +181,14 @@ let convert cu =
         let tidx = convert_term locals idx in
         let tupd = convert_term locals upd in
         GrassUtil.mk_write tmap [tidx] tupd
+    | ConstrApp (id, es, pos) ->
+        let decl = IdMap.find id cu.fun_decls in
+        let ts = List.map (convert_term locals) es in
+        App (Constructor id, ts, convert_type decl.f_res pos)
+    | DestrApp (id, e, pos) ->
+        let decl = IdMap.find id cu.fun_decls in
+        let t = convert_term locals e in
+        App (Destructor id, [t], convert_type decl.f_res pos)
     | UnaryOp (OpOld, e, pos) ->
         let t = convert_term locals e in
         GrassUtil.mk_old t

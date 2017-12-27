@@ -36,9 +36,11 @@ type sort =
   | Map of sort list * sort (** maps *)
   | Array of sort (** arrays *)
   | ArrayCell of sort (** array cells *)
+  | Adt of ident * adt_constr list (** algebraic data types *)
   | Pat (** patterns *)
   | FreeSrt of ident (** uninterpreted sorts *)
-
+and adt_constr = ident * (ident * sort) list (** data type constructor *)
+        
 module IdSrtSet = Set.Make(struct
     type t = ident * sort
     let compare = compare
@@ -76,6 +78,8 @@ type symbol =
   | LtEq | GtEq | Lt | Gt
   | Btwn | Frame
   | Elem | SubsetEq | Disjoint
+  (* constructors and destructors *)
+  | Constructor of ident | Destructor of ident    
   (* uninterpreted constants, functions, and predicates *)
   | FreeSym of ident
   (* oldification *)
@@ -248,6 +252,9 @@ let string_of_symbol = function
   | SubsetEq -> "subset"
   | Disjoint -> "Disjoint"
   | Frame -> "Frame"
+  (* constructors and destructors *)
+  | Constructor id 
+  | Destructor id -> string_of_ident id 
   (* uninterpreted symbols *)
   | FreeSym id -> string_of_ident id
   (* oldification *)
@@ -281,6 +288,7 @@ let name_of_sort = function
   | Map _ -> map_sort_string
   | Array _ -> array_sort_string
   | ArrayCell _ -> array_cell_sort_string
+  | Adt (id, _) -> string_of_ident id
   | Pat -> pat_sort_string
   | FreeSrt id -> string_of_ident id
     
@@ -295,8 +303,20 @@ let rec pr_sort ppf srt = match srt with
   | Set e
   | Array e
   | ArrayCell e -> fprintf ppf "%s<@[%a@]>" (name_of_sort srt) pr_sort e
+  | Adt (id, cnsts) -> fprintf ppf "mu %s.@[%a@]" (string_of_ident id) pr_adt_constrs cnsts
   | FreeSrt id -> pr_ident ppf id
   | Map (ds, r) -> fprintf ppf "%s<@[%a,@ %a@]>" map_sort_string pr_sorts ds pr_sort r
+
+and pr_adt_constrs ppf = function
+  | [] -> ()
+  | [c] -> pr_adt_constr ppf c
+  | c :: cs -> fprintf ppf "%a | %a" pr_adt_constr c pr_adt_constrs cs
+
+and pr_adt_constr ppf = function
+  | (id, args) -> fprintf ppf "%s(%a)" (string_of_ident id) (pr_list_comma pr_adt_arg) args
+
+and pr_adt_arg ppf = function
+  | (id, srt) -> fprintf ppf "%s: %a" (string_of_ident id) pr_sort srt
         
 and pr_sorts ppf = function
   | [srt] ->  fprintf ppf "%a" pr_sort srt
