@@ -14,7 +14,7 @@ predicate lseg_strictly_increasing(x: Node, FP: Set<Node>) {
 }
 
 function key_witness(k: Int, ks: Map<Node, Int>, FP: Set<Node>)
-    returns (res: Node) 
+  returns (res: Node) 
 
 function content(FP: Set<Node>)
   returns (C: Set<Int>)
