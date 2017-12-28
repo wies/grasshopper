@@ -1,0 +1,7 @@
+datatype Pair = pair(fst: Int, snd: Int);
+
+procedure test(p: Pair)
+  requires p == pair(5, 2)
+  ensures p.fst != 5
+{
+}

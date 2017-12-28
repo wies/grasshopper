@@ -13,6 +13,7 @@ type names = name list
 type typ =
   | IdentType of ident
   | StructType of ident
+  | ADType of ident
   | MapType of typ * typ
   | ArrayType of typ
   | ArrayCellType of typ
@@ -35,6 +36,7 @@ type spl_program =
       var_decls: vars;
       proc_decls: procs;
       pred_decls: preds;
+      fun_decls: fundecls;
       background_theory: (expr * pos) list; 
     }
 
@@ -91,8 +93,24 @@ and typedecl =
 and type_def =
   | FreeTypeDef
   | StructTypeDef of vars
-      
+  | ADTypeDef of constrs
+
+and constrs = constr list
+and constr =
+    { c_name: ident;
+      c_args: var list;
+      c_pos: pos;
+    }
+        
 and typedecls = typedecl IdMap.t
+
+and fundecl =
+    { f_name: ident;
+      f_args: typ list;
+      f_res: typ;
+    }
+
+and fundecls = fundecl IdMap.t
       
 and contract =
   | Requires of expr * bool * bool
@@ -134,6 +152,8 @@ and expr =
   | New of typ * exprs * pos
   | Read of expr * expr * pos
   | Write of expr * expr * expr * pos
+  | ConstrApp of ident * exprs * pos
+  | DestrApp of ident * expr * pos
   | ProcCall of ident * exprs * pos
   | PredApp of pred_sym * exprs * pos
   | Binder of binder_kind * bound_var list * expr * pos
@@ -183,6 +203,8 @@ let pos_of_expr = function
   | New (_, _, p)
   | Read (_, _, p)
   | Write (_, _, _, p)
+  | ConstrApp (_, _, p)
+  | DestrApp (_, _, p)
   | Binder (_, _, _, p)
   | ProcCall (_, _, p)
   | PredApp (_, _, p)
@@ -199,12 +221,14 @@ let free_vars e =
     | Setenum (_, es, _)
     | New (_, es, _)
     | ProcCall (_, es, _)
+    | ConstrApp (_, es, _)
     | PredApp (_, es, _) ->
         List.fold_left (fv bv) acc es
     | UnaryOp (_, e, _)
+    | DestrApp (_, e, _)
     | Annot (e, _, _) ->
         fv bv acc e
-    | Read (e1, e2, _) 
+    | Read (e1, e2, _)
     | BinaryOp (e1, _, e2, _, _) ->
         fv bv (fv bv acc e1) e2
     | Binder (_, vs, e, _) ->
@@ -239,6 +263,10 @@ let subst_id sm =
         ProcCall (p, List.map (s bv) es, pos)
     | PredApp (p, es, pos) ->
         PredApp (p, List.map (s bv) es, pos)
+    | ConstrApp (c, es, pos) ->
+        ConstrApp(c, List.map (s bv) es, pos)
+    | DestrApp (d, e, pos) ->
+        DestrApp (d, s bv e, pos)
     | UnaryOp (op, e, pos) ->
         UnaryOp (op, s bv e, pos)
     | Annot (e, a, pos) ->
@@ -315,6 +343,7 @@ let extend_spl_program incls decls bg_th prog =
     var_decls = vdecls; 
     proc_decls = pdecls;
     pred_decls = prdecls;
+    fun_decls = IdMap.empty;
     background_theory = bg_th @ prog.background_theory;
   }
 
@@ -358,6 +387,7 @@ let empty_spl_program =
     var_decls = IdMap.empty;
     proc_decls = IdMap.empty;
     pred_decls = IdMap.empty;
+    fun_decls = IdMap.empty;
     background_theory = [];
   }
     
@@ -376,7 +406,7 @@ let rec pr_type ppf = function
   | IntType -> fprintf ppf "%s" int_sort_string
   | ByteType -> fprintf ppf "%s" byte_sort_string
   | UnitType -> fprintf ppf "Unit"
-  | StructType id | IdentType id -> pr_ident ppf id
+  | StructType id | IdentType id | ADType id -> pr_ident ppf id
   | ArrayType e -> fprintf ppf "%s<@[%a@]>" array_sort_string pr_type e
   | ArrayCellType e -> fprintf ppf "%s<@[%a@]>" array_cell_sort_string pr_type e
   | MapType (d, r) -> fprintf ppf "%s<@[%a,@ %a@]>" map_sort_string pr_type d pr_type r
@@ -422,7 +452,8 @@ let string_of_pred = function
 
 let prio_of_expr = function
   | Null _ | Emp _ | IntVal _ | BoolVal _ | Ident _ -> 0
-  | Read _ | Write _ | ProcCall _ | PredApp _ | New _ | Setenum _ | Dirty _ |
+  | Read _ | Write _ | ProcCall _ | PredApp _ | New _ | Setenum _
+  | ConstrApp _ | DestrApp _ | Dirty _ |
     Binder (SetComp, _, _, _) -> 1
   | UnaryOp ((OpArrayCells | OpIndexOfCell | OpArrayOfCell |
     OpLength | OpToInt | OpToByte | OpOld | OpKnown), _, _) -> 1
@@ -465,10 +496,13 @@ let rec pr_expr ppf =
       fprintf ppf "new %a(%a)" pr_type ty pr_expr_list es
   | Read (e1, e2, _) ->
       fprintf ppf "%a.%a" pr_expr e2 pr_expr e1
-  | Write (e1, e2, e3, p) ->
+  | Write (e1, e2, e3, _) ->
       fprintf ppf "%a[%a := %a]" pr_expr e1 pr_expr e2 pr_expr e3
-  | ProcCall (p, es, _) ->
-      fprintf ppf "%a(@[%a@])" pr_ident p pr_expr_list es
+  | DestrApp (id, e, _) ->
+      fprintf ppf "%a.%a" pr_expr e pr_ident id 
+  | ConstrApp (id, es, _)
+  | ProcCall (id, es, _) ->
+      fprintf ppf "%a(@[%a@])" pr_ident id pr_expr_list es
   | PredApp (p, es, _) ->
       fprintf ppf "%s(@[%a@])" (string_of_pred p) pr_expr_list es
   | UnaryOp (op, e1, _) as e ->
@@ -579,14 +613,27 @@ let pr_var_decl ppf (id, decl) =
     pr_id_srt (decl.v_implicit, decl.v_ghost, id, decl.v_type)
 
 let pr_var_decls = Util.pr_list_nl pr_var_decl
-        
+
+let pr_adt_arg ppf (id, typ) =
+  fprintf ppf "%a:@ %a" pr_ident id pr_type typ
+    
+let pr_adt_constr ppf cnst =
+  fprintf ppf "%a(%a)" pr_ident cnst.c_name pr_var_list cnst.c_args
+    
+let rec pr_adt_constrs ppf = function
+  | [] -> ()
+  | [c] -> pr_adt_constr ppf c
+  | c :: cs -> fprintf ppf "%a@ |@ %a" pr_adt_constr c pr_adt_constrs cs
+    
 let pr_type_decl ppf (_, tyd) =
   match tyd.t_def with
   | FreeTypeDef -> fprintf ppf "type@ @[%a@];@\n" pr_ident tyd.t_name
   | StructTypeDef sfields ->
       fprintf ppf "struct %a {@\n@[<2>  %a@]@\n}@\n"
         pr_ident tyd.t_name pr_var_decls (IdMap.bindings sfields)
-
+  | ADTypeDef cnsts ->
+      fprintf ppf "datatype %a = @[%a@];@\n" pr_ident tyd.t_name pr_adt_constrs cnsts
+        
 let pr_contract ppf = function
   | Requires (e, pure, free) ->
       fprintf ppf "@[<2>%s%srequires@ %a@]"
@@ -706,7 +753,11 @@ let pr_proc_decl ppf proc =
     pr_contracts proc.p_contracts
     (pr_proc_body locals) proc.p_body
 
-  
+let pr_fun_decl ppf fdecl =
+  fprintf ppf "@[<2>%a(%a): %a;@]"
+    pr_ident fdecl.f_name
+    (Util.pr_list_comma pr_type) fdecl.f_args
+    pr_type fdecl.f_res
     
 let pr_axiom ppf (e, _) =
   fprintf ppf "@[<2>axiom@ %a@];@\n"
@@ -718,7 +769,8 @@ let pr_cu ppf cu =
       match tdecl.t_def with
       | FreeTypeDef -> fld_ids
       | StructTypeDef fields ->
-          IdMap.fold (fun id _ fld_ids -> IdSet.add id fld_ids) fields fld_ids)
+          IdMap.fold (fun id _ fld_ids -> IdSet.add id fld_ids) fields fld_ids
+      | ADTypeDef _ -> fld_ids)
       cu.type_decls IdSet.empty
   in
   let globals =

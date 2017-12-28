@@ -78,6 +78,17 @@ let proc_arg_mismatch_error pos id expected =
   ProgError.error pos 
     (Printf.sprintf "Procedure %s expects %s." 
        (GrassUtil.name id) (arguments_to_string @@ List.length expected))
+
+let constr_arg_mismatch_error pos id expected =
+  ProgError.error pos 
+    (Printf.sprintf "Constructor %s expects %s." 
+       (GrassUtil.name id) (arguments_to_string @@ List.length expected))
+
+let destr_arg_mismatch_error pos id expected =
+  ProgError.error pos 
+    (Printf.sprintf "Expected destructor but found constructor %s." 
+       (GrassUtil.name id))
+
     
 let type_error pos exp_ty fnd_ty =
   let ty_str ty = "expression of type " ^ string_of_type ty in

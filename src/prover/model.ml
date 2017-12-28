@@ -9,7 +9,8 @@ exception Undefined
 type value =
   | I of Int64.t
   | B of bool
-
+  | ADT of ident * value list
+        
 module ValueMap = 
   Map.Make(struct
     type t = value
@@ -68,9 +69,14 @@ let int_of_value = function
   | I i -> i
   | _ -> raise Undefined
 
-let string_of_value = function
+let rec string_of_value = function
   | I i -> Int64.to_string i
   | B b -> string_of_bool b
+  | ADT (id, vs) ->
+      Printf.sprintf "%s(%s)"
+        (string_of_ident id)
+        (List.map string_of_value vs |>
+        String.concat ", ")
 
 type interpretation = (value ValueListMap.t * ext_value) SortedSymbolMap.t
 
@@ -317,7 +323,7 @@ let rec eval model = function
       (match eval model c with
         | B true -> eval model t
         | B false -> eval model e
-        | I _ -> failwith "ITE expects a boolean condition"
+        | _ -> failwith "ITE expects a boolean condition"
       )
    | App (sym, args, srt) ->
       let arg_srts, arg_vals = 
@@ -326,24 +332,24 @@ let rec eval model = function
       let arity = arg_srts, srt in
       interp_symbol model sym arity arg_vals 
 
-and interp_symbol model sym arity args = 
-  try 
-    let m, d = SortedSymbolMap.find (sym, arity) model.intp in
-    fun_app model (MapVal (m, d)) args
-  with Not_found -> 
-    begin
-      if Debug.is_debug 2 then
-        begin
-          print_string "Model.interp_symbol: symbol not found '";
-          print_string (string_of_symbol sym);
-          print_string "' of type ";
-          print_string (string_of_arity arity);
-          print_endline " in:";
-          SortedSymbolMap.iter (fun (s,a) _ -> print_endline ("  " ^ (string_of_symbol s) ^ ": " ^ string_of_arity a)) model.intp;
-          flush_all ()
-        end;
-      raise Undefined
-    end
+and interp_symbol model sym arity args =
+  match sym with
+  | Constructor id -> ADT (id, args)
+  | _ ->
+      SortedSymbolMap.find_opt (sym, arity) model.intp |>
+      Opt.map (fun (m, d) -> fun_app model (MapVal (m, d)) args) |>
+      Opt.lazy_get_or_else (fun () ->
+        if Debug.is_debug 2 then
+          begin
+            print_string "Model.interp_symbol: symbol not found '";
+            print_string (string_of_symbol sym);
+            print_string "' of type ";
+            print_string (string_of_arity arity);
+            print_endline " in:";
+            SortedSymbolMap.iter (fun (s,a) _ -> print_endline ("  " ^ (string_of_symbol s) ^ ": " ^ string_of_arity a)) model.intp;
+            flush_all ()
+          end;
+        raise Undefined)
 
 and fun_app model funv args =
   let default = function

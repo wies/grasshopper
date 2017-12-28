@@ -40,7 +40,7 @@
    '("\\(//[^\n]*\\)" 1 
      font-lock-comment-face)
 
-   '("\\<\\(i\\(f\\|nclude\\)\\|c\\(hoose\\|omment\\)\\|else\\|f\\(ree\\|unction\\)\\|havoc\\|matching\\|new\\|or\\|p\\(attern\\|r\\(ocedure\\|edicate\\)\\)\\|return\\(s\\|\\)\\|struct\\|\\(data\\)?type\\|var\\|w\\(ithout\\|hile\\)\\|yields\\)\\>"
+   '("\\<\\(i\\(f\\|nclude\\)\\|c\\(hoose\\|omment\\)\\|else\\|f\\(ree\\|unction\\)\\|havoc\\|matching\\|new\\|or\\|p\\(attern\\|r\\(ocedure\\|edicate\\)\\)\\|return\\(s\\|\\)\\|struct\\|type\\|var\\|w\\(ithout\\|hile\\)\\|yields\\)\\>"
          1 font-lock-keyword-face)
 
    '("\\<\\(a\\(xiom\\|ss\\(ert\\|ume\\)\\)\\|ensures\\|i\\(mplicit\\|nvariant\\)\\|pure\\|requires\\|ghost\\|footprint\\)\\>"
@@ -220,15 +220,64 @@
             (push '(">=" . ?≥) prettify-symbols-alist)
             (prettify-symbols-mode)))
 
+
 ;; Flycheck mode specific settings
 (when (require 'flycheck nil :noerror)
+  (cl-defstruct (flycheck-irony-error
+                 (:include flycheck-error)
+                 (:constructor flycheck-spl-error-new-at (line column
+                                                                 &optional level message
+                                                                 &key checker id
+                                                                 (filename (buffer-file-name))
+                                                                 (buffer (current-buffer))
+                                                                 &optional column-end
+                                                                 )))
+    "Structure representing an error reported by the SPL checkers.
+     Added slots:
+     `column-end' The column number the error ends on, as number."
+    column-end)
+
+  (defun flycheck-spl-error-region (orig-fun &rest args)
+    "Finding region for error.  If we have the end column, we have all we need.
+     If we don't have the end column, just call flycheck's ORIG-FUN with ARGS."
+    (let ((err (nth 0 args))
+          (start 0)
+          (end 0))
+      (when (string-equal (symbol-name (flycheck-error-checker err)) "spl")
+        (let ((column (- (flycheck-spl-error-column err) 1))
+              (column-end (- (flycheck-spl-error-column-end err) 1)))
+          (when (> column-end 0)
+            (flycheck-error-with-buffer err
+              (save-restriction
+                (save-excursion
+                  (widen)
+                  (goto-char (point-min))
+                  (forward-line (- (flycheck-spl-error-line err) 1))
+                  (setq start (+ (point) column))
+                  (setq end (+ (point) column-end))))))))
+      (if (and (> start 0) (> end 0))
+          (cons start end)
+        (progn
+          (if (fboundp 'add-function)
+              (apply orig-fun args)
+            nil)))))
+  
+  (if (fboundp 'add-function)
+      (add-function :around (symbol-function 'flycheck-error-region-for-mode) 'flycheck-spl--error-region)
+    (defadvice flycheck-error-region-for-mode (around flycheck-spl-error-region-advice (err mode) activate)
+      "Finding region for error using GRASShopper supplied end column.  Else call standard Flycheck function."
+      (let (region (flycheck-spl-error-region 'flycheck-error-region-for-mode err mode))
+      (if region
+          region
+        ad-do-it))))
+
   ;; Define syntax and type checker
   (flycheck-define-checker spl-reporter
     "Syntax and type checker for GRASShopper programs."
     :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) "-lint" "-typeonly" source)
     :error-patterns
-    ((warning line-start (file-name) ":" line ":" column (optional "-" end-column) ":Related Location:" (message) line-end)
-     (error line-start (file-name) ":" line ":" column (optional "-" end-column) ":" (message) line-end))
+    ((warning line-start (file-name) ":" line ":" column (optional "-" column-end) ":Related Location:" (message) line-end)
+     (error line-start (file-name) ":" line ":" column (optional "-" column-end) ":" (message) line-end))
     ;((error line-start (file-name) ":" line ":" column ":" (message) line-end))
     :modes (spl-mode))
 
@@ -243,9 +292,9 @@
     "On-the-fly verifier for GRASShopper programs."
     :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) "-lint" source "-smtsolver" "z3+cvc4")
     :error-patterns
-   ((info line-start (file-name) ":" line ":" column (optional "-" end-column) ":Trace Information:" (message) line-end)
-     (warning line-start (file-name) ":" line ":" column (optional "-" end-column) ":Related Location:" (message) line-end)
-     (error line-start (file-name) ":" line ":" column (optional "-" end-column) ":" (message) line-end))
+   ((info line-start (file-name) ":" line ":" column (optional "-" column-end) ":Trace Information:" (message) line-end)
+     (warning line-start (file-name) ":" line ":" column (optional "-" column-end) ":Related Location:" (message) line-end)
+     (error line-start (file-name) ":" line ":" column (optional "-" column-end) ":" (message) line-end))
     ;((error line-start (file-name) ":" line ":" column ":" (message) line-end))
    :modes (spl-mode))
 
@@ -258,9 +307,9 @@
               "-model" "/tmp/model.html"
               "-lint" source)
     :error-patterns
-    ((info line-start (file-name) ":" line ":" column (optional "-" end-column) ":Trace Information:" (message) line-end)
-     (warning line-start (file-name) ":" line ":" column (optional "-" end-column) ":Related Location:" (message) line-end)
-     (error line-start (file-name) ":" line ":" column (optional "-" end-column) ":" (message) line-end))
+    ((info line-start (file-name) ":" line ":" column (optional "-" column-end) ":Trace Information:" (message) line-end)
+     (warning line-start (file-name) ":" line ":" column (optional "-" column-end) ":Related Location:" (message) line-end)
+     (error line-start (file-name) ":" line ":" column (optional "-" column-end) ":" (message) line-end))
     ;((warning line-start "File \"" (file-name) "\", line " line ", columns " column (optional "-" end-column) ":" line-end "Related Location: " (message) line-end)
      ;(error line-start "File \"" (file-name) "\", line " line ", columns " column (optional "-" end-column) ":" line-end (message) line-end))
     ;((error line-start (file-name) ":" line ":" column ":" (message) line-end))

@@ -16,7 +16,7 @@ let mk_position s e =
 %}
 
 %token SET_LOGIC SET_OPTION
-%token DECLARE_SORT DECLARE_FUN DEFINE_SORT DEFINE_FUN
+%token DECLARE_SORT DECLARE_DATATYPES DECLARE_FUN DEFINE_SORT DEFINE_FUN
 %token <SmtLibSyntax.symbol> SYMBOL
 %token <SmtLibSyntax.sort> SORT
 %token <SmtLibSyntax.binder> BINDER
@@ -64,6 +64,9 @@ rcore:
 cmnd:
 | DECLARE_SORT IDENT INT { 
   mk_declare_sort ~pos:(mk_position 1 3) $2 $3 
+}
+| DECLARE_DATATYPES LPAREN RPAREN LPAREN adt_list_opt RPAREN {
+  mk_declare_datatypes ~pos:(mk_position 1 6) $5
 }
 | DECLARE_FUN IDENT LPAREN sort_list_opt RPAREN sort { 
   mk_declare_fun ~pos:(mk_position 1 6) $2 $4 $6
@@ -122,6 +125,24 @@ ident_sort_list_opt:
 | /* empty */ { [] }
 ;
 
+adt_list_opt:
+| LPAREN IDENT adt_constr_list_opt RPAREN adt_list_opt { ($2, $3) :: $5 }
+| /* empty */ { [] }
+;
+
+adt_constr_list_opt:
+| LPAREN IDENT adt_constr_arg_list_opt RPAREN adt_constr_list_opt {
+  ($2, $3) :: $5
+}
+| /* empty */ { [] }
+;
+
+adt_constr_arg_list_opt:
+| LPAREN IDENT sort RPAREN adt_constr_arg_list_opt { ($2, $3) :: $5 }
+| /* empty */ { [] }
+;
+    
+  
 symbol:
 | SYMBOL { $1 }
 | IDENT { Ident $1 }

@@ -14,6 +14,7 @@ let _ =
       "set-option", SET_OPTION;
       (* declarations and definitions *)
       "declare-sort", DECLARE_SORT;
+      "declare-datatypes", DECLARE_DATATYPES;
       "declare-fun", DECLARE_FUN;
       "define-sort", DEFINE_SORT;
       "define-fun", DEFINE_FUN;

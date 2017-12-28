@@ -44,7 +44,8 @@ let resolve_names cu =
         let decl = IdMap.find id types in
         (match decl.t_def with
         | StructTypeDef _ -> StructType id
-        | FreeTypeDef -> IdentType id)
+        | ADTypeDef _ -> ADType id
+        | _ -> IdentType id)
     | ArrayType ty -> ArrayType (r ty)
     | ArrayCellType ty -> ArrayCellType (r ty)
     | MapType (ty1, ty2) -> MapType (r ty1, r ty2)
@@ -85,9 +86,9 @@ let resolve_names cu =
   (* resolve global variables *)
   let globals0, tbl = declare_vars cu.var_decls types0 tbl in
   (* declare struct fields *)
-  let types, globals, tbl =
+  let types, globals, funs, tbl =
     IdMap.fold
-      (fun id decl (types, globals, tbl) ->
+      (fun id decl (types, globals, funs, tbl) ->
         match decl.t_def with
         | StructTypeDef fields0 ->
             let fields, globals, tbl =
@@ -103,11 +104,50 @@ let resolve_names cu =
                 fields0 (IdMap.empty, globals, tbl)
             in
             IdMap.add id { decl with t_def = StructTypeDef fields } types, 
-            globals, 
+            globals,
+            funs,
             tbl
-        | _ -> IdMap.add id decl types, globals, tbl
+        | ADTypeDef consts0 ->
+            let consts, funs, tbl =
+              List.fold_right
+                (fun cnst (consts, funs, tbl) ->
+                  let cid, tbl = declare_name decl.t_pos cnst.c_name GrassUtil.global_scope tbl in
+                  let args, funs, tbl =
+                    List.fold_right
+                      (fun adecl (args, funs, tbl) ->
+                        let aid, tbl = declare_name decl.t_pos adecl.v_name GrassUtil.global_scope tbl in
+                        let ty = resolve_typ types0 decl.t_pos tbl adecl.v_type in
+                        let fun_decl = { f_name = id; f_args = [ADType id]; f_res = ty; } in
+                        { adecl with v_name = aid; v_type = ty } :: args,
+                        IdMap.add aid fun_decl funs,
+                        tbl
+                      )
+                      cnst.c_args ([], funs, tbl)
+                  in
+                  let arg_tys =
+                    List.map
+                      (fun adecl -> resolve_typ types0 adecl.v_pos tbl adecl.v_type)
+                      cnst.c_args
+                  in
+                  let fun_decl =
+                    { f_name = cid;
+                      f_args = arg_tys;
+                      f_res = ADType id;
+                    }
+                  in
+                  { cnst with c_name = cid; c_args = args } :: consts,
+                  IdMap.add cid fun_decl funs,
+                  tbl
+                )
+                consts0 ([], funs, tbl)
+            in
+            IdMap.add id { decl with t_def = ADTypeDef consts } types,
+            globals,
+            funs,
+            tbl
+        | _ -> IdMap.add id decl types, globals, funs, tbl
       )
-      types0 (IdMap.empty, globals0, tbl)
+      types0 (IdMap.empty, globals0, IdMap.empty, tbl)
   in
   (* declare procedure names *)
   let procs0, tbl =
@@ -129,6 +169,7 @@ let resolve_names cu =
       type_decls = types; 
       proc_decls = procs0;
       pred_decls = preds0;
+      fun_decls = funs;
     }
   in
   let resolve_expr locals tbl e =
@@ -161,10 +202,21 @@ let resolve_names cu =
           (match type_of_expr cu locals idx1 with
           | ArrayCellType _ | AnyType -> UnaryOp (OpIndexOfCell, idx1, pos)
           | _ -> Read (re locals tbl map, idx1, pos))
+      | Read (Ident (init_id, map_pos), idx, pos) ->
+          let id = lookup_id init_id tbl map_pos in
+          let idx1 = re locals tbl idx in
+          let map1 = Ident (id, map_pos) in
+          if IdMap.mem id cu.fun_decls
+          then DestrApp (id, idx1, pos)
+          else Read (map1, idx1, pos)
       | Read (map, idx, pos) ->
           Read (re locals tbl map, re locals tbl idx, pos)
       | Write (map, idx, upd, pos) ->
           Write (re locals tbl map, re locals tbl idx, re locals tbl upd, pos)
+      | ConstrApp (id, es, pos) ->
+          ConstrApp (id, List.map (re locals tbl) es, pos)
+      | DestrApp (id, e, pos) ->
+          DestrApp (id, re locals tbl e, pos)
       | Binder (q, decls, f, pos) ->
           let (decls1, (locals1, tbl1)) = 
             Util.fold_left_map
@@ -217,14 +269,17 @@ let resolve_names cu =
               PredApp (DisjointPred, args1, pos)
           | _ ->
               let id = lookup_id init_id tbl pos in
-              try 
-                check_proc id procs0 pos;
-                ProcCall (id, args1, pos)
+              try
+                if IdMap.mem id cu.fun_decls
+                then ConstrApp (id, args1, pos)
+                else 
+                  (check_proc id procs0 pos;
+                   ProcCall (id, args1, pos))
               with ProgError.Prog_error _ ->
                 check_pred id preds0 pos;
                 PredApp (Pred id, args1, pos))
       | PredApp (sym, args, pos) ->
-          PredApp (sym, List.map (re locals tbl) args, pos)              
+          PredApp (sym, List.map (re locals tbl) args, pos)
       | UnaryOp (op, e, pos) ->
           UnaryOp (op, re locals tbl e, pos)
       | BinaryOp (e1, op, e2, ty, pos) ->
@@ -233,7 +288,9 @@ let resolve_names cu =
           let id = lookup_id init_id tbl pos in
           if IdMap.mem id preds0 then
             PredApp (Pred id, [], pos)
-          else
+          else if IdMap.mem id funs then
+            ConstrApp (id, [], pos)
+          else 
             Ident (id, pos)
       | Annot (e, PatternAnnot p, pos) ->
           Annot (re locals tbl e, PatternAnnot (re locals tbl p), pos)
@@ -470,6 +527,12 @@ let flatten_exprs cu =
         let idx1, aux2, locals = flatten_expr scope aux1 locals idx in
         let upd1, aux3, locals = flatten_expr scope aux2 locals upd in
         Write (map1, idx1, upd1, pos), aux3, locals
+    | ConstrApp (id, args, pos) ->
+        let args1, aux1, locals = flatten_expr_list scope aux locals args in
+        ConstrApp (id, args1, pos), aux1, locals
+    | DestrApp (id, arg, pos) ->
+        let arg1, aux1, locals = flatten_expr scope aux locals arg in
+        DestrApp (id, arg1, pos), aux1, locals
     | Binder (b, vars, f, pos) as e ->
         let vars1, aux, locals =
           List.fold_right (fun v (vars1, aux, locals) ->

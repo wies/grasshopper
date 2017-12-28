@@ -128,6 +128,9 @@ let type_of_expr cu locals e =
         | ArrayType ty -> ty
         | _ -> AnyType)
     | Write (map, _, _, _) -> te map
+    | ConstrApp (id, _, _) | DestrApp (id, _, _) ->
+        let decl = IdMap.find id cu.fun_decls in
+        decl.f_res
     | UnaryOp ((OpOld | OpKnown), e, _) -> te e        
     | UnaryOp (OpLength, map, _) -> IntType
     | UnaryOp (OpArrayOfCell, c, _) ->
@@ -302,10 +305,10 @@ let infer_types cu locals ty e =
                   in
                   let decl = var_decl id idty false false pos pos in
                   GuardedVar (id, e1),
-                  (IdMap.add id decl locals, Some (Opt.get_or_else ety vty_opt))
+                  (IdMap.add id decl locals, Opt.or_else ety vty_opt)
               | UnguardedVar v ->
                   UnguardedVar v,
-                  (IdMap.add v.v_name v locals, Some (Opt.get_or_else v.v_type vty_opt))
+                  (IdMap.add v.v_name v locals, Opt.or_else v.v_type vty_opt)
             )
             (locals, None)
             decls
@@ -402,6 +405,28 @@ let infer_types cu locals ty e =
         let upd1, rty = it locals rty upd in
         let map2, mty = it locals (MapType (dty, rty)) map1 in
         Write (map2, idx1, upd1, pos), mty
+    | ConstrApp (id, args, pos) ->
+        let decl = IdMap.find id cu.fun_decls in
+        let ty = match_types pos ty decl.f_res in
+        let atys = decl.f_args in
+        let args1 =
+          try
+            List.map2 (fun ty e -> fst (it locals ty e)) atys args
+          with Invalid_argument _ ->
+            constr_arg_mismatch_error pos id atys
+        in
+        ConstrApp (id, args1, pos), ty
+    | DestrApp (id, arg, pos) ->
+        let decl = IdMap.find id cu.fun_decls in
+        let ty = match_types pos ty decl.f_res in
+        let atys = decl.f_args in
+        let args1 =
+          try
+            List.map2 (fun ty e -> fst (it locals ty e)) atys [arg]
+          with Invalid_argument _ ->
+            destr_arg_mismatch_error pos id atys
+        in
+        ConstrApp (id, args1, pos), ty
     | Null (nty, pos) ->
         let ty = match_types pos ty nty in
         Null (ty, pos), ty
@@ -523,7 +548,7 @@ let infer_types cu locals ty e =
           with Not_found ->
             try IdMap.find id cu.var_decls
             with Not_found ->
-              ProgError.error pos ("Unknown identifier " ^ (string_of_ident id))
+              unknown_ident_error id pos
         in
         e, match_types pos ty decl.v_type
     | Annot (e, a, pos) ->
