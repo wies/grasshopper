@@ -129,7 +129,7 @@ let check_spl_program spl_prog proc =
       if !Config.typeonly then []
       else
       if !Config.symbexec then
-        SymbExec.check simple_prog proc
+        SymbExec.check spl_prog simple_prog proc
       else Verifier.check_proc simple_prog proc
     in
     List.fold_left

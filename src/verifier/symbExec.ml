@@ -75,16 +75,18 @@ let print_state src_pos eqs state =
 
 (** Convert a specification into a symbolic state.
   This also moves field read terms from pure formula to points-to predicates.
+  Assumes [fields] is a set of field identifiers, all other maps are treated as
+  functions.
 *)
-let state_of_spec_list specs : state =
+let state_of_spec_list fields specs : state =
   (** [reads] is a map: location -> field -> new var, for every field read
     Sorry for using refs, but didn't know how to map and fold terms simultaneously
   *)
-  (* TODO: pass in the spl_prog and use that to look up here whether a Read is a field or a function! *)
   let reads = ref TermMap.empty in
   let rec convert_term = function
     | Var _ as t -> t
-    | App (Read, [App (FreeSym fld, [], _); loc], srt) -> (* loc.fld *)
+    | App (Read, [App (FreeSym fld, [], _); loc], srt) 
+        when IdSet.mem fld fields -> (* loc.fld *)
       let loc = convert_term loc in
       if (TermMap.mem loc !reads |> not) then begin
         let new_var = (mk_fresh_var srt "v") in
@@ -273,40 +275,6 @@ let simplify eqs state =
   let eqs = find_equalities eqs pure in
   eqs, apply_equalities eqs (pure, spatial)
 
-(** ----------- Lemmas for proving entailments ---------- *)
-
-(** A lemma is of the form: pure /\ spatial |= pure /\ spatial.
-  Universals are represented as Var terms, and existentials as FreeSymb consts.
-*)
-type lemma = state * state
-
-
-(** Extract all lemmas (procedures named "lemma_*") from a program.
-  procedure (x1, .. xN) returns (y1, .. yM)
-    requires phi
-    ensures psi
-  is the lemma: forall x1, .. xN. phi |= exists y1, .. yM psi *)
-let extract_lemmas prog : lemma list =
-  let try_add_lemma ls proc =
-    if Str.string_match (Str.regexp "lemma_*") (proc |> name_of_proc |> fst) 0
-    then begin
-      let lhs = state_of_spec_list proc.proc_contract.contr_precond in
-      let rhs = state_of_spec_list proc.proc_contract.contr_postcond in
-      (* Take formals (x1, .. xN) and create substitution map to make them vars *)
-      let universals_sm =
-        let dummy_srt = (FreeSrt ("TODO", 0)) in  (* TODO need to find actual sort? *)
-        List.fold_left (fun sm id -> IdMap.add id (mk_var dummy_srt id) sm)
-          IdMap.empty
-          proc.proc_contract.contr_formals
-      in
-      printf "\n----Universals in lemma %s:%s\n" (proc |> name_of_proc |> fst) (string_of_equalities universals_sm);
-      let lhs = subst_state universals_sm lhs in
-      let rhs = subst_state universals_sm rhs in
-      (lhs, rhs) :: ls
-    end else ls
-  in
-  fold_procs try_add_lemma [] prog
-
 
 (** ----------- Symbolic Execution ---------- *)
 
@@ -435,7 +403,7 @@ let check_entailment eqs (p1, sp1) (p2, sp2) =
 
 
 (** Symbolically execute command [comm] on state [state] and return final state. *)
-let rec symb_exec prog proc (eqs, state) comm =
+let rec symb_exec prog flds proc (eqs, state) comm =
   (* First, simplify the pre state *)
   let eqs, state = simplify eqs state in
   print_state (source_pos comm) eqs state;
@@ -515,14 +483,14 @@ let rec symb_exec prog proc (eqs, state) comm =
       let c = (find_proc prog foo).proc_contract in
       (* Substitute formal params -> actual params in foo_pre/post *)
       let sm = mk_eqs c.contr_formals args in
-      let pre = c.contr_precond |> state_of_spec_list |> subst_state sm in
+      let pre = c.contr_precond |> state_of_spec_list flds |> subst_state sm in
       (* TODO: unsound if ints passed by value? *)
       (* Also substitute return vars -> lhs vars in post *)
       let sm =
         List.fold_left2 (fun sm r l -> IdMap.add r (mk_const_term l) sm)
           sm c.contr_returns lhs
       in
-      let post = c.contr_postcond |> state_of_spec_list |> subst_state sm in
+      let post = c.contr_postcond |> state_of_spec_list flds |> subst_state sm in
       remove_useless_existentials pre, remove_useless_existentials post
     in
     Debug.info (fun () ->
@@ -552,26 +520,35 @@ let rec symb_exec prog proc (eqs, state) comm =
     );
     eqs, state
   | Seq (comms, _) ->
-    List.fold_left (symb_exec prog proc) (eqs, state) comms
+    List.fold_left (symb_exec prog flds proc) (eqs, state) comms
   | _ -> todo ()
 
 
 (** Check procedure [proc] in program [prog] using symbolic execution. *)
-let check prog proc =
+let check spl_prog prog proc =
   Debug.info (fun () ->
       "Checking procedure " ^ string_of_ident (name_of_proc proc) ^ "...\n");
 
+  (* Extract the list of field names from the spl_prog. *)
+  let flds =
+    IdMap.fold (fun _ tdecl flds ->
+      match tdecl.SplSyntax.t_def with
+      | SplSyntax.StructTypeDef vs ->
+        IdMap.fold (fun id _ flds -> IdSet.add id flds) vs flds
+      | _ -> flds
+    ) spl_prog.SplSyntax.type_decls IdSet.empty
+  in
   match proc.proc_body with
   | Some comm ->
-    let precond = state_of_spec_list proc.proc_contract.contr_precond in
-    let postcond = state_of_spec_list proc.proc_contract.contr_postcond in
+    let precond = state_of_spec_list flds proc.proc_contract.contr_precond in
+    let postcond = state_of_spec_list flds proc.proc_contract.contr_postcond in
     Debug.info (fun () ->
       sprintf "  Precondition: %s\n  Postcondition: %s\n"
         (string_of_state precond) (string_of_state postcond)
     );
 
     let eqs = empty_eqs in
-    let eqs, state = symb_exec prog proc (eqs, precond) comm in
+    let eqs, state = symb_exec prog flds proc (eqs, precond) comm in
     check_entailment eqs state postcond
   | None ->
     []
