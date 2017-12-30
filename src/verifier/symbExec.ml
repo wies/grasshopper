@@ -313,9 +313,11 @@ let rec find_ptsto_dirty loc spatial =
     let res, repl_fn = find_ptsto_dirty loc spatial' in
     res, (fun fs' -> sp :: repl_fn fs')
 
-let check_pure_entail p1 p2 =
+let check_pure_entail eqs p1 p2 =
+  let (p2, _) = apply_equalities eqs (p2, []) |> remove_useless_existentials in
   if p1 = p2 || p2 = mk_true then true
   else
+    (* TODO bind the variables appropriately: forall for p1 and exists for p2 *)
     let f = smk_and [p1; mk_not p2] in
     match Prover.get_model f with
     | None -> true
@@ -337,7 +339,7 @@ let rec find_frame ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
   match sp2 with
   | [] ->
     (* Check if p2 is implied by p1 *)
-    if check_pure_entail p1 p2 then
+    if check_pure_entail (IdMap.union (fun _ -> failwith "") eqs inst) p1 p2 then
       sp1, inst
     else fail ()
   | PointsTo (x, fs2) :: sp2' ->
@@ -379,11 +381,24 @@ let rec find_frame ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
     (match sp1a with
     | [pred'] -> find_frame ~inst:inst eqs (p1, sp1b) (p2, sp2')
     | _ -> fail ())
+  | Dirty (sp2a, ts) :: sp2b ->
+    (* Find a Dirty region in sp1 with same interface ts *)
+    let sp1a, sp1b =
+      List.partition (function | Dirty (_, ts') when ts = ts' -> true | _ -> false) sp1
+    in
+    (match sp1a with
+    | [Dirty (sp1a, _)] ->
+      let res, inst = check_entailment ~inst:inst eqs (mk_true, sp1a) (mk_true, sp2a) in
+      if res = [] then
+        find_frame ~inst:inst eqs (p1, sp1b) (p2, sp2b)
+      else failwith @@ sprintf "find_frame: couldn't match up the inside of the dirty region"
+    | _ -> todo ()
+    )
   | _ ->
     todo ()
 
 
-let check_entailment eqs (p1, sp1) (p2, sp2) =
+and check_entailment ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
   Debug.info (fun () ->
     sprintf "\nChecking entailment:\n  %s : %s\n  |=\n  %s\n" (string_of_equalities eqs)
       (string_of_state (p1, sp1)) (string_of_state (p2, sp2))
@@ -398,7 +413,7 @@ let check_entailment eqs (p1, sp1) (p2, sp2) =
   (* Check if find_frame returns empt *)
   let fr, inst = find_frame eqs (p1, sp1) (p2, sp2) in
   match fr with
-  | [] -> []
+  | [] -> [], inst
   | _ -> failwith @@ sprintf "Frame was not empty: %s" (string_of_state (mk_true, fr))
 
 
@@ -510,8 +525,6 @@ let rec symb_exec prog flds proc (eqs, state) comm =
     in
     let eqs = subst_eqs sm eqs in
     let frame = List.map (subst_spatial_pred sm) frame in
-    if IdMap.is_empty inst |> not then
-      printf "WARNING: Ignoring inst from find_frame: %s" (string_of_equalities inst);
     let (pure, spatial) = state in
     let (post_pure, post_spatial) = foo_post in
     let state = (smk_and [pure; post_pure], post_spatial @ frame) in
@@ -549,6 +562,6 @@ let check spl_prog prog proc =
 
     let eqs = empty_eqs in
     let eqs, state = symb_exec prog flds proc (eqs, precond) comm in
-    check_entailment eqs state postcond
+    check_entailment eqs state postcond |> fst
   | None ->
     []
