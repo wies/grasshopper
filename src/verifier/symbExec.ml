@@ -80,6 +80,7 @@ let state_of_spec_list specs : state =
   (** [reads] is a map: location -> field -> new var, for every field read
     Sorry for using refs, but didn't know how to map and fold terms simultaneously
   *)
+  (* TODO: pass in the spl_prog and use that to look up here whether a Read is a field or a function! *)
   let reads = ref TermMap.empty in
   let rec convert_term = function
     | Var _ as t -> t
@@ -96,6 +97,10 @@ let state_of_spec_list specs : state =
         reads := TermMap.add loc flds_of_loc !reads;
         new_var
       end else IdMap.find fld (TermMap.find loc !reads)
+    | App (Read, [f; arg], srt) -> (* function application: f(arg) *)
+      (* Assuming f itself does not contain field reads terms
+        - i.e. can't store functions in heap *)
+      App (Read, [f; convert_term arg], srt)
     | App (Read, _, _) as t ->
       failwith @@ "Unmatched read term " ^ (string_of_term t)
     | App (s, ts, srt) -> App (s, List.map convert_term ts, srt)

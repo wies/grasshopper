@@ -18,12 +18,12 @@ procedure lemma_N_is_Gr(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>
 procedure lemma_conc(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>)
   returns ()
   requires N(x, i, f, FP, FPo)
-  ensures [acc(x) &*& x.i == 1 &*& (FPo == {} || FPo == {x.next}/*TODO && x.next.(x.f) == 1*/)](i, f, FP, FPo) &*& FP == {x}
+  ensures [acc(x) &*& i[x] == 1 &*& (FPo == {} || FPo == {x.next} && f[x][x.next] == 1)](i, f, FP, FPo) &*& FP == {x}
 
 procedure lemma_abs(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>, i1: Map<Node, Int>, f1: Map<Node, Map<Node, Int>>, FP1: Set<Node>, FPo1: Set<Node>)
   returns ()
-  requires [acc(x) &*& x.i1 == 1 &*& (FPo1 == {} || FPo1 == {x.next}/*TODO && x.next.(x.f) == 1*/)](i, f, FP, FPo) &*& FP1 == {x}
-  ensures [N(x, i, f, FP, FPo)](i, f, FP, FPo)
+  requires [acc(x) &*& i1[x] == 1 &*& (FPo1 == {} || FPo1 == {x.next} && f[x][x.next] == 1)](i, f, FP, FPo) &*& FP1 == {x}
+  ensures [N(x, i1, f1, FP1, FPo1)](i, f, FP, FPo)
 {}
 
 function intLeq(i1: Map<Node, Int>, f1: Map<Node, Map<Node, Int>>, FP1: Set<Node>, FPo1: Set<Node>, i2: Map<Node, Int>, f2: Map<Node, Map<Node, Int>>, FP2: Set<Node>, FPo2: Set<Node>) returns (res: Bool)
@@ -34,25 +34,16 @@ procedure sync(i1: Map<Node, Int>, f1: Map<Node, Map<Node, Int>>, FP1: Set<Node>
   ensures Gr(i2, f2, FP2, FPo2)
 
 
-procedure test(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>, f2: Map<Node, Map<Node, Int>>)
+procedure test(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>)
   returns (f1: Map<Node, Map<Node, Int>>, FPo1: Set<Node>)
-  requires N(x, i, f, FP, FPo) &*& f == f2
+  requires N(x, i, f, FP, FPo)
   ensures N(x, i, f1, FP, FPo1)
 {
   lemma_conc(x, i, f, FP, FPo);
-  x.next := null;
+  var y := x.next;
+  x.next := y;
   //  var f1: Map<Node, Map<Node, Int>>, FPo1: Set<Node>;
   //  pure assume f1 == TODO && FPo1 == TODO;
-  //  lemma_abs(x, i, f1, FP, FPo1);
+  lemma_abs(x, i, f, FP, FPo, i, f, FP, FPo);
   //  sync();
 }
-
-procedure foo(f1: Map<Node, Map<Node, Int>>, n: Node)
-  requires n.n.next == null
-  ensures n.n.next == null
-{}
-
-procedure bar(f1: Map<Node, Map<Node, Int>>, f2: Map<Node, Map<Node, Int>>, n: Node)
-  requires acc(n) &*& n.f1 == n.f1
-  ensures acc(n) &*& n.f2 == n.f2
-{}
