@@ -604,8 +604,8 @@ let modifies_basic_cmd = function
 let accesses_spec_form_acc acc sf =
   IdSet.union acc 
     (match sf.spec_form with
-    | FOL f -> free_consts f
-    | SL f -> SlUtil.free_consts f)
+    | FOL f -> free_symbols f
+    | SL f -> SlUtil.free_symbols f)
 
 let accesses_spec_form sf = 
   accesses_spec_form_acc IdSet.empty sf
@@ -620,31 +620,42 @@ let accesses_proc prog proc =
     | Some cmd -> accesses_cmd cmd
     | None -> IdSet.empty
   in
-  IdSet.filter 
-    (fun id -> IdMap.mem id prog.prog_vars)
-    (accesses_contract_acc body_accs proc.proc_contract)
-
+  let accs =
+    IdSet.filter 
+      (fun id ->
+        IdMap.mem id prog.prog_vars ||
+        IdMap.mem id prog.prog_procs ||
+        IdMap.mem id prog.prog_preds)
+      (accesses_contract_acc body_accs proc.proc_contract)
+  in
+  IdMap.fold (fun id pred accs ->
+    if IdMap.mem id prog.prog_preds
+    then IdSet.union accs pred.pred_accesses
+    else accs)
+    prog.prog_preds accs
+    
 let accesses_pred pred =
   pred.pred_accesses
 
 let accesses_basic_cmd = function
   | Assign ac -> 
       let rhs_accesses = 
-        List.fold_left free_consts_term_acc IdSet.empty ac.assign_rhs 
+        List.fold_left free_symbols_term_acc IdSet.empty ac.assign_rhs 
       in
       IdSet.union (id_set_of_list ac.assign_lhs) rhs_accesses
   | Havoc hc -> id_set_of_list hc.havoc_args
   | New nc ->
       let arg_accesses =
-        List.fold_left free_consts_term_acc IdSet.empty nc.new_args 
+        List.fold_left free_symbols_term_acc IdSet.empty nc.new_args 
       in
       IdSet.add nc.new_lhs arg_accesses
-  | Dispose dc -> free_consts_term dc.dispose_arg
+  | Dispose dc -> free_symbols_term dc.dispose_arg
   | Assume sf
   | Assert sf -> accesses_spec_form sf
-  | Return rc -> List.fold_left free_consts_term_acc IdSet.empty rc.return_args
+  | Return rc -> List.fold_left free_symbols_term_acc IdSet.empty rc.return_args
   | Call cc -> 
-      List.fold_left free_consts_term_acc (id_set_of_list cc.call_lhs) cc.call_args
+      List.fold_left
+        free_symbols_term_acc (id_set_of_list (cc.call_name :: cc.call_lhs)) cc.call_args
 
 let rec footprint_sorts_acc acc = function
   | (Loc srt)
@@ -830,7 +841,7 @@ let mk_loop_cmd inv preb cond cond_pos postb pos =
   let accs = 
     IdSet.union
       (IdSet.union (accesses_cmd preb) (accesses_cmd postb))
-      (List.fold_left (accesses_spec_form_acc) (free_consts cond) inv)
+      (List.fold_left (accesses_spec_form_acc) (free_symbols cond) inv)
   in
   let pp1 = 
     { pp with

@@ -17,7 +17,7 @@ let infer_accesses prog =
                (fold_spec_form free_symbols SlUtil.free_symbols sf))
         in
         let accs =
-          IdSet.union accs (fold_spec_form free_consts SlUtil.free_consts sf)
+          IdSet.union accs (fold_spec_form free_symbols SlUtil.free_symbols sf)
         in
         let fps = footprint_sorts_spec_form_acc prog fps sf in
         acc_preds, accs, fps)
@@ -101,7 +101,12 @@ let infer_accesses prog =
         (Opt.to_list pred.pred_body @ pred.pred_contract.contr_precond @ pred.pred_contract.contr_postcond)
     in
     let global_accs = 
-      IdSet.filter (fun id -> IdMap.mem id prog.prog_vars) accs
+      IdSet.filter
+        (fun id ->
+          IdMap.mem id prog.prog_vars ||
+          IdMap.mem id prog.prog_preds ||
+          IdMap.mem id prog.prog_procs
+        ) accs
     in
     let fps = SortSet.union fps (footprint_sorts_pred pred) in
     not (IdSet.subset global_accs pred.pred_accesses) ||
@@ -130,31 +135,36 @@ let infer_accesses prog =
     }
   in
   let rec pm_prog prog = 
-    let procs = procs prog in
-    let has_new, procs1 =
-      List.fold_left 
-        (fun (has_new, procs1) proc ->
-          let has_new1, proc1 = pm_proc prog proc in
-              (has_new || has_new1, proc1 :: procs1))
-        (false, []) procs
-    in 
-    let procs2 = 
-      List.fold_left 
-      (fun procs2 proc -> IdMap.add (name_of_proc proc) proc procs2) 
-      IdMap.empty procs1
-    in
     let preds = preds prog in
     let has_new, preds1 = 
       List.fold_left 
         (fun (has_new, preds1) pred ->
           let has_new1, pred1 = pm_pred prog pred in
           (has_new || has_new1, pred1 :: preds1))
-        (has_new, []) preds
+        (false, []) preds
     in
     let preds2 = 
       List.fold_left 
         (fun preds2 pred -> IdMap.add (name_of_pred pred) pred preds2)
         IdMap.empty preds1
+    in
+    let prog = 
+      { prog with 
+        prog_preds = preds2 
+      }
+    in
+    let procs = procs prog in
+    let has_new, procs1 =
+      List.fold_left 
+        (fun (has_new, procs1) proc ->
+          let has_new1, proc1 = pm_proc prog proc in
+              (has_new || has_new1, proc1 :: procs1))
+        (has_new, []) procs
+    in 
+    let procs2 = 
+      List.fold_left 
+      (fun procs2 proc -> IdMap.add (name_of_proc proc) proc procs2) 
+      IdMap.empty procs1
     in
     let prog1 = 
       { prog with 

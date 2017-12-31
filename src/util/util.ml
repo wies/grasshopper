@@ -336,3 +336,4 @@ let print_of_format pr x out_ch = fprintf (formatter_of_out_channel out_ch) "%a@
         
 let string_of_format pr t = pr str_formatter t; flush_str_formatter ()
 
+let print_list out_ch pr xs = print_of_format (pr_list_comma pr) xs out_ch

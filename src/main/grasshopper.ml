@@ -117,7 +117,7 @@ let parse_spl_program main_file =
 (** Check SPL program in main file [file] and procedure [proc] *)
 let check_spl_program spl_prog proc =
   let prog = SplTranslator.to_program spl_prog in
-  let simple_prog = Verifier.simplify prog in
+  let simple_prog = Verifier.simplify proc prog in
   let check simple_prog first proc =
     let errors =
       if !Config.typeonly then []
