@@ -2,48 +2,63 @@ struct Node {
   var next: Node;
 }
 
+datatype Interface =
+  int(inf: Map<Node, Int>,
+      fm: Map<Node, Map<Node, Int>>,
+      FP: Set<Node>,
+      FPo: Set<Node>);
 
-predicate Gr(i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>) { true }
+predicate Gr(I: Interface) { true }
 
-predicate N(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>) { true }
+predicate N(x: Node, I: Interface) { true }
 
 
 /** Lemmas */
 
-procedure lemma_N_is_Gr(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>)
+procedure lemma_N_is_Gr(x: Node, I: Interface)
   returns ()
-  requires N(x, i, f, FP, FPo)
-  ensures Gr(i, f, FP, FPo)
+  requires N(x, I)
+  ensures Gr(I)
 
-procedure lemma_conc(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>)
+procedure lemma_dirty_N_is_Gr(x: Node, I1: Interface, I2: Interface)
   returns ()
-  requires N(x, i, f, FP, FPo)
-  ensures [acc(x) &*& i[x] == 1 &*& (FPo == {} || FPo == {x.next} && f[x][x.next] == 1)](i, f, FP, FPo) &*& FP == {x}
+  requires [N(x, I1)](I2)
+  ensures [Gr(I1)](I2)
 
-procedure lemma_abs(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>, i1: Map<Node, Int>, f1: Map<Node, Map<Node, Int>>, FP1: Set<Node>, FPo1: Set<Node>)
+procedure lemma_conc(x: Node, I: Interface)
   returns ()
-  requires [acc(x) &*& i1[x] == 1 &*& (FPo1 == {} || FPo1 == {x.next} && f[x][x.next] == 1)](i, f, FP, FPo) &*& FP1 == {x}
-  ensures [N(x, i1, f1, FP1, FPo1)](i, f, FP, FPo)
+  requires N(x, I)
+  ensures [acc(x) &*& I.inf[x] == 1 &*& (I.FPo == {} || I.FPo == {x.next} && I.fm[x][x.next] == 1)](I) &*& I.FP == {x}
+
+procedure lemma_abs(x: Node, I: Interface, I1: Interface)
+  returns ()
+  requires [acc(x) &*& I1.inf[x] == 1 &*& (I1.FPo == {} || I1.FPo == {x.next} && I1.fm[x][x.next] == 1)](I) &*& I1.FP == {x}
+  ensures [N(x, I1)](I)
 {}
 
-function intLeq(i1: Map<Node, Int>, f1: Map<Node, Map<Node, Int>>, FP1: Set<Node>, FPo1: Set<Node>, i2: Map<Node, Int>, f2: Map<Node, Map<Node, Int>>, FP2: Set<Node>, FPo2: Set<Node>) returns (res: Bool)
+function intLeq(I1: Interface, I2: Interface) returns (res: Bool)
+  ensures forall I3: Interface :: intLeq(I3, I3)
 
-procedure sync(i1: Map<Node, Int>, f1: Map<Node, Map<Node, Int>>, FP1: Set<Node>, FPo1: Set<Node>, i2: Map<Node, Int>, f2: Map<Node, Map<Node, Int>>, FP2: Set<Node>, FPo2: Set<Node>)
+procedure sync(I1: Interface, I2: Interface)
   returns ()
-  requires [Gr(i2, f2, FP2, FPo2)](i1, f1, FP1, FPo1) &*& intLeq(i1, f1, FP1, FPo1, i2, f2, FP2, FPo2)
-  ensures Gr(i2, f2, FP2, FPo2)
+  requires [Gr(I2)](I1) &*& intLeq(I1, I2) == true
+  ensures Gr(I2)
 
 
-procedure test(x: Node, i: Map<Node, Int>, f: Map<Node, Map<Node, Int>>, FP: Set<Node>, FPo: Set<Node>)
+procedure test(x: Node, I: Interface)
   returns (f1: Map<Node, Map<Node, Int>>, FPo1: Set<Node>)
-  requires N(x, i, f, FP, FPo)
-  ensures N(x, i, f1, FP, FPo1)
+  requires N(x, I)
+  ensures N(x, I)
 {
-  lemma_conc(x, i, f, FP, FPo);
+  lemma_conc(x, I);
   var y := x.next;
   x.next := y;
   //  var f1: Map<Node, Map<Node, Int>>, FPo1: Set<Node>;
   //  pure assume f1 == TODO && FPo1 == TODO;
-  lemma_abs(x, i, f, FP, FPo, i, f, FP, FPo);
-  //  sync();
+  lemma_abs(x, I, I);
+  lemma_dirty_N_is_Gr(x, I, I);
+  sync(I, I);
 }
+
+// TODO recognize pure atoms like intLeq() - or write == true
+// TODO bind vars before calling SMT solver
