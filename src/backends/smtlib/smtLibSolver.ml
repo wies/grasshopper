@@ -379,18 +379,6 @@ let smtlib_sort_of_grass_sort srt =
   csort srt
     
 let declare_sorts has_int session =
-  IdMap.iter
-    (fun _ -> function
-      | FreeSrt id -> declare_sort session (string_of_ident id) 0
-      | Adt (id, cnstrs) ->
-          let cnstrs =
-            List.map (fun (id, args) ->
-              (id, List.map (fun (id, srt) -> (id, smtlib_sort_of_grass_sort srt)) args))
-              cnstrs
-          in
-          declare_datatypes session id cnstrs
-      | _ -> ())
-    session.user_sorts;
   declare_sort session ("Grass" ^ pat_sort_string) 0;
   declare_sort session ("Grass" ^ array_sort_string) 1;
   declare_sort session array_cell_sort_string 1;
@@ -404,7 +392,24 @@ let declare_sorts has_int session =
     declare_sort session (map_sort_string ^ "^1") 3
   end;
   if not !Config.use_bitvector
-  then declare_sort session ("GrassByte") 0
+  then declare_sort session ("GrassByte") 0;
+    IdMap.iter
+    (fun _ -> function
+      | FreeSrt id -> declare_sort session (string_of_ident id) 0
+      | _ -> ())
+    session.user_sorts;
+  IdMap.iter
+    (fun _ -> function
+      | Adt (id, cnstrs) ->
+          let cnstrs =
+            List.map (fun (id, args) ->
+              (id, List.map (fun (id, srt) -> (id, smtlib_sort_of_grass_sort srt)) args))
+              cnstrs
+          in
+          declare_datatypes session id cnstrs
+      | _ -> ())
+    session.user_sorts
+
 
 let start_with_solver session_name sat_means solver produce_models produce_unsat_cores = 
   let log_file_name = (string_of_ident (fresh_ident session_name)) ^ ".smt2" in
@@ -488,18 +493,26 @@ let init_session session sign =
   in
   (* collect the user-defined sorts *)
   let user_srts =
-    let rec add acc srt = match srt with
-    | FreeSrt id -> IdMap.add id srt acc
-    | Adt (id, _) -> IdMap.add id srt acc
-    | Set srt | ArrayCell srt | Array srt | Loc srt -> add acc srt
-    | Map (dsrts, rsrt) -> List.fold_left add acc (rsrt :: dsrts)
+    let rec add seen acc srt = match srt with
+    | FreeSrt id when not @@ IdSet.mem id seen -> IdMap.add id srt acc
+    | Adt (id, cnstrs) when not @@ IdSet.mem id seen ->
+        let acc1 = IdMap.add id srt acc in
+        let seen1 = IdSet.add id seen in
+        List.fold_left
+          (fun acc (_, args) ->
+            List.fold_left
+              (fun acc (_, srt) -> add seen1 acc srt)
+              acc args)
+          acc1 cnstrs
+    | Set srt | ArrayCell srt | Array srt | Loc srt -> add seen acc srt
+    | Map (dsrts, rsrt) -> List.fold_left (add seen) acc (rsrt :: dsrts)
     | _ -> acc
     in
     SymbolMap.fold
       (fun _ funSig acc ->
         List.fold_left
-          (fun acc (args,ret) ->
-            List.fold_left add (add acc ret) args
+          (fun acc (args, ret) ->
+            List.fold_left (add IdSet.empty) (add IdSet.empty acc ret) args
           )
           acc
           funSig
