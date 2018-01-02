@@ -36,12 +36,12 @@ procedure lemma_abs(x: Node, I: Interface, I1: Interface)
   ensures [N(x, I1)](I)
 {}
 
-function intLeq(I1: Interface, I2: Interface) returns (res: Bool)
-  ensures forall I3: Interface :: intLeq(I3, I3)
-
 procedure sync(I1: Interface, I2: Interface)
   returns ()
-  requires [Gr(I2)](I1) &*& intLeq(I1, I2) == true
+  requires [Gr(I2)](I1)
+  requires I1.FP == I2.FP && I1.FPo == I2.FPo
+  requires forall n in I1.FP :: I1.inf[n] == I2.inf[n]
+  requires forall n in I1.FP, o in I1.FPo :: I1.inf[n] != 0 ==> I1.fm[n][o] == I2.fm[n][o]
   ensures Gr(I2)
 
 
@@ -60,5 +60,7 @@ procedure test(x: Node, I: Interface)
   sync(I, I);
 }
 
-// TODO recognize pure atoms like intLeq() - or write == true
-// TODO bind vars before calling SMT solver
+// TODO look into why sync precondition is becoming true
+// TODO where do we compute composition of flow maps for multiple nodes?
+  // need some way to lift lemmas to use them inside dirty regions?
+// TODO recognize pure atoms like intLeq() - instead of writing intLeq() == true

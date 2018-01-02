@@ -82,3 +82,11 @@ procedure pure1(x: Int)
   x := x + 5;
   x := x + 3;
 }
+
+procedure pure2(x: Int, y: Int)
+  requires x == y
+  ensures x == y + 8
+{
+  x := x + 5;
+  x := x + 3;
+}
