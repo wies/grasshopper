@@ -126,7 +126,7 @@
     ;; lineup loop invariants
     (save-excursion
       (beginning-of-line)
-      (if (looking-at "[ \t]*\\(invariant\\|//\\)")
+      (if (looking-at "[ \t]*\\(invariant\\|while\\|//\\)")
           0
         (if (progn (goto-char (cdr langelem))
                    (looking-at "[ \t]*\\(function\\|predicate\\|{\\)"))
@@ -170,7 +170,7 @@
   (defun spl-lineup-topmost (langelem)
     (save-excursion
       (beginning-of-line)
-      (if (looking-at "[ \t]*\\(axiom\\|procedure\\|function\\|predicate\\|struct\\|type\\)")
+      (if (looking-at "[ \t]*\\(axiom\\|procedure\\|function\\|predicate\\|struct\\|\\(data\\)?type\\)")
           0
         c-basic-offset)))
   (c-set-offset 'statement-cont 'spl-lineup-statement-cont)
@@ -253,7 +253,7 @@
   (defvar spl-current-procedure nil)
   (flycheck-define-checker spl-proc-verifier
     "On-the-fly verifier for GRASShopper programs."
-    :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) "-smtsolver" "z3+cvc4"
+    :command ("grasshopper" "-basedir" (eval (flycheck-d-base-directory)) "-smtsolver" "z3+cvc4" 
               "-procedure" (eval spl-current-procedure)
               "-model" "/tmp/model.html"
               "-lint" source)

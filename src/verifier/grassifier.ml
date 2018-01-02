@@ -883,7 +883,7 @@ let elim_sl prog =
       post_process_form |>
       fun f -> FOL f
     in
-    let mk_arg id =
+    (*let mk_arg id =
       let decl = IdMap.find id locals in
       mk_var decl.var_sort id
     in
@@ -926,7 +926,7 @@ let elim_sl prog =
         [Axioms.mk_axiom name (mk_eq old_pred new_pred) |> fun f -> annotate f annot]
       in
       List.map (fun axiom -> mk_free_spec_form (FOL axiom) name None pos) axiom_forms
-    in
+    in*)
     let translate_body sf =
       let f1 = match sf.spec_form with
       | SL f -> translate_sl_body f
@@ -1222,8 +1222,8 @@ let elim_sl prog =
                   |> List.map (fun (t1, t2) -> mk_eq t1 t2)))
             |> add_frame_pattern
           in
-          Debug.debug (fun () -> name);
-          Debug.debug (fun () -> string_of_form axiom_form);
+          (*Debug.debug (fun () -> name);
+          Debug.debug (fun () -> string_of_form axiom_form);*)
           [mk_free_spec_form (FOL axiom_form) name None pos;
             mk_free_spec_form (FOL fp_func_axiom) fp_func_axiom_name None pos]
         end
@@ -1240,7 +1240,8 @@ let elim_sl prog =
             preds
       else preds
     in
-    IdMap.add pname pred1 preds, pred_frame_axioms @ frame_axioms @ axioms
+    IdMap.add pname pred1 preds,
+    (if !Config.abstract_preds then pred_frame_axioms else []) @ axioms
   in
   let axioms = List.map (map_spec_fol_form post_process_form) prog.prog_axioms in
   let preds, axioms = fold_preds translate_pred (IdMap.empty, axioms) prog in

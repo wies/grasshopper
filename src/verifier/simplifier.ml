@@ -4,6 +4,31 @@ open Grass
 open GrassUtil
 open Prog
 
+(** Prune predicates/procedures that are not called. *)
+let prune_uncalled init_procs prog =
+  let accessed =
+    IdMap.fold (fun id proc accessed ->
+      if IdSet.mem id init_procs then
+        IdSet.union (accesses_proc prog proc) accessed
+      else accessed) prog.prog_procs init_procs
+  in
+  let accessed_with_implicit =
+    List.fold_left
+      (fun implicit sf -> accesses_spec_form_acc implicit sf)
+      accessed prog.prog_axioms
+  in
+  let pruned_preds =
+    IdMap.filter (fun id _ -> IdSet.mem id accessed_with_implicit) prog.prog_preds
+  in
+  let pruned_procs =
+    IdMap.filter (fun id _ -> IdSet.mem id accessed_with_implicit) prog.prog_procs
+  in
+  { prog with
+    prog_preds = pruned_preds;
+    prog_procs = pruned_procs;
+  }
+
+  
 (** Transform loops into tail recursive procedures. *)
 let elim_loops (prog : program) =
   let first_iter_id = fresh_ident "first_iter" in
@@ -212,7 +237,7 @@ let elim_loops (prog : program) =
 let elim_global_deps prog =
   let get_tas p =
     let decl = find_pred prog p in
-    let accs = decl.pred_accesses in
+    let accs = IdSet.filter (fun id -> IdMap.mem id prog.prog_vars) decl.pred_accesses in
     let tas = 
       List.map 
         (fun id ->
@@ -282,7 +307,7 @@ let elim_global_deps prog =
     let precond1 = List.map elim_spec (precond_of_pred pred) in
     let postcond1 = List.map elim_spec (postcond_of_pred pred) in
     let body1 = Util.Opt.map elim_spec pred.pred_body in
-    let accesses = pred.pred_accesses in
+    let accesses = IdSet.filter (fun id -> IdMap.mem id prog.prog_vars) pred.pred_accesses in
     let formals1 = IdSet.elements accesses @ formals_of_pred pred in
     let locals1 = 
       IdSet.fold 

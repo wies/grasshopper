@@ -8,11 +8,17 @@ open Simplifier
 open Grassifier
 
 (** Simplify the given program [prog] by applying all transformation steps. *)
-let simplify prog =
+let simplify proc prog =
   let dump_if n prog = 
     if !Config.dump_ghp == n 
     then (print_prog stdout prog; prog)
     else prog
+  in
+  let init_procs =
+    match proc with
+    | None ->
+        IdMap.fold (fun id _ -> IdSet.add id) prog.prog_procs IdSet.empty
+    | Some p -> IdSet.singleton (p, 0)
   in
   let info msg prog = Debug.info (fun () -> msg); prog in
   prog |>
@@ -22,6 +28,7 @@ let simplify prog =
   annotate_heap_checks |>
   elim_new_dispose |>
   Analyzer.infer_accesses |>
+  Simplifier.prune_uncalled init_procs |>
   elim_loops |>
   elim_global_deps |>
   dump_if 1 |>
