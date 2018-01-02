@@ -316,9 +316,10 @@ let rec find_ptsto_dirty loc spatial =
 let check_pure_entail eqs p1 p2 =
   let (p2, _) = apply_equalities eqs (p2, []) |> remove_useless_existentials in
   if p1 = p2 || p2 = mk_true then true
-  else
-    (* TODO bind the variables appropriately: forall for p1 and exists for p2 *)
-    let f = smk_and [p1; mk_not p2] in
+  else (* Dump it to an SMT solver *)
+    (* Close the formulas: Assuming all free variables are existential *)
+    let close f = smk_exists (IdSrtSet.elements (sorted_free_vars f)) f in
+    let f = smk_and [close p1; mk_not (close p2)] in
     match Prover.get_model f with
     | None -> true
     | Some model ->
