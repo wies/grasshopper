@@ -968,18 +968,31 @@ let convert_model session smtModel =
   let solver_info = (fst (List.hd session.solvers)).info in
   let to_sym = grass_symbol_of_smtlib_symbol signs solver_info in
   (* detect Z3/CVC4 identifiers that represent values of uninterpreted sorts *)
-  let to_val (name, num) =
-    let id = name ^ "_" ^ string_of_int num in
-    let z3_val_re = Str.regexp "\\([^!]*\\)!val!\\([0-9]*\\)" in
-    let cvc4_val_re = Str.regexp "@uc__\\(.*\\)__\\([0-9]*\\)$" in
-    let cvc4_val_simple_re = Str.regexp "@uc_\\(.*\\)_\\([0-9]*\\)$" in
-    if Str.string_match z3_val_re id 0 || 
-    Str.string_match cvc4_val_re id 0 ||
-    Str.string_match cvc4_val_simple_re id 0
-    then 
-      let index = int_of_string (Str.matched_group 2 id) in
-      Some index
-    else None
+  let rec to_val t = match t with
+  | SmtLibSyntax.App (SmtLibSyntax.BoolConst b, [], _) -> Some (Model.value_of_bool b)
+  | SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _) -> Some (Model.value_of_int i)
+  | SmtLibSyntax.App (SmtLibSyntax.Ident id, args, _) ->
+    (match to_sym id with
+    | Constructor id ->
+        List.fold_right
+          (fun arg ->
+            Opt.flat_map (fun vargs -> Opt.map (fun v -> v :: vargs) (to_val arg)))
+          args (Some []) |>
+        Opt.map (fun vargs -> Model.ADT (id, vargs))
+    | _ ->
+        let name, num = id in
+        let id = name ^ "_" ^ string_of_int num in
+        let z3_val_re = Str.regexp "\\([^!]*\\)!val!\\([0-9]*\\)" in
+        let cvc4_val_re = Str.regexp "@uc__\\(.*\\)__\\([0-9]*\\)$" in
+        let cvc4_val_simple_re = Str.regexp "@uc_\\(.*\\)_\\([0-9]*\\)$" in
+        if Str.string_match z3_val_re id 0 || 
+        Str.string_match cvc4_val_re id 0 ||
+        Str.string_match cvc4_val_simple_re id 0
+        then 
+          let index = int_of_string (Str.matched_group 2 id) in
+          Some (Model.value_of_int index)
+        else None)
+  | _ -> None
   in
   (* remove suffix from overloaded identifiers *)
   let normalize_ident =
@@ -1144,22 +1157,18 @@ let convert_model session smtModel =
     in
     let rec pcond arg_map = function
       | SmtLibSyntax.App 
-          (SmtLibSyntax.Eq, [SmtLibSyntax.App (Ident id1, [], _); 
-                             SmtLibSyntax.App (Ident id2, [], _)], pos) ->
-          (match to_val id1, to_val id2 with
-          | Some index, None ->
-              IdMap.add id2 (Model.value_of_int index) arg_map
-          | None, Some index ->
-              IdMap.add id1 (Model.value_of_int index) arg_map
+          (SmtLibSyntax.Eq, [SmtLibSyntax.App (Ident id1, [], _) as t1; 
+                             SmtLibSyntax.App (Ident id2, [], _) as t2], pos) ->
+          (match to_val t1, to_val t2 with
+          | Some v, None ->
+              IdMap.add id2 v arg_map
+          | None, Some v ->
+              IdMap.add id1 v arg_map
           | _ -> raise Complex_ite)
       | SmtLibSyntax.App
-          (SmtLibSyntax.Eq, [SmtLibSyntax.App (Ident id, [], _); 
-                             SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _)], pos) ->
-          IdMap.add id (Model.value_of_int i) arg_map
-      | SmtLibSyntax.App
-          (SmtLibSyntax.Eq, [SmtLibSyntax.App (Ident id, [], _); 
-                             SmtLibSyntax.App (SmtLibSyntax.BoolConst b, [], _)], pos) ->
-          IdMap.add id (Model.value_of_bool b) arg_map
+          (SmtLibSyntax.Eq, [SmtLibSyntax.App (Ident id, [], _); t], pos) ->
+            Opt.map (fun v -> IdMap.add id v arg_map) (to_val t) |>
+            Opt.lazy_get_or_else (fun () -> raise Complex_ite)
       | SmtLibSyntax.App (SmtLibSyntax.And, conds, _) ->
           List.fold_left pcond arg_map conds
       | SmtLibSyntax.Annot (def, _, _) -> 
@@ -1172,8 +1181,8 @@ let convert_model session smtModel =
       | SmtLibSyntax.App (Ident (name, _), [], pos) when name = "#unspecified" ->
           model
       | SmtLibSyntax.App (Ident id, [], pos) as t ->
-          to_val id |>
-          Opt.map (fun index -> add_val pos model arg_map (Model.value_of_int index)) |>
+          to_val t |>
+          Opt.map (add_val pos model arg_map) |>
           Opt.lazy_or_else
             (fun () ->
               let t1 = convert_term [] t in
