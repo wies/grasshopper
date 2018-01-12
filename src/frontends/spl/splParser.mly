@@ -63,7 +63,7 @@ type rhs_string_maybe =
 %token <SplSyntax.binder_kind> QUANT
 %token ASSUME ASSERT CALL FREE HAVOC NEW RETURN
 %token IF ELSE WHILE
-%token GHOST IMPLICIT VAR STRUCT PURE PROCEDURE PREDICATE FUNCTION INCLUDE AXIOM TYPE
+%token GHOST IMPLICIT VAR STRUCT PURE LEMMA PROCEDURE PREDICATE FUNCTION INCLUDE AXIOM TYPE
 %token DATATYPE OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token LOC INT BOOL BYTE SET MAP ARRAY ARRAYCELL
 %token MATCHING YIELDS WITHOUT COMMENT PATTERN
@@ -145,31 +145,42 @@ proc_decl:
 ;
 
 proc_header:
-| PROCEDURE IDENT LPAREN var_decls RPAREN proc_returns contracts {  
+| proc_head {
+  let name, formals0, returns0, contracts, pos, is_lemma = $1 in
   let formals, locals0 =
     List.fold_right (fun decl (formals, locals0) ->
       decl.v_name :: formals, IdMap.add decl.v_name decl locals0)
-      $4 ([], IdMap.empty)
+      formals0 ([], IdMap.empty)
   in
   let returns, locals =
     List.fold_right (fun decl (returns, locals) ->
       decl.v_name :: returns, IdMap.add decl.v_name decl locals)
-      $6 ([], locals0)
+      returns0 ([], locals0)
   in
   let decl = 
-    { p_name = $2;
+    { p_name = name;
       p_formals = formals;  
       p_returns = returns; 
       p_locals = locals;
-      p_contracts = $7;
-      p_body = Skip GrassUtil.dummy_position; 
-      p_pos = mk_position 2 2;
+      p_contracts = contracts;
+      p_is_lemma = is_lemma;
+      p_body = Skip GrassUtil.dummy_position;
+      p_pos = pos;
     }
   in 
   decl
-} 
+}
 ;
 
+proc_head:
+| PROCEDURE IDENT LPAREN var_decls RPAREN proc_returns contracts {
+  ($2, $4, $6, $7, mk_position 2 2, false)
+}
+| LEMMA IDENT LPAREN var_decls RPAREN contracts {
+  ($2, $4, [], $6, mk_position 2 2, true)
+}
+;
+  
 contracts:
 | contract contracts { $1 :: $2 }
 | /* empty */ { [] }

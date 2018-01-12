@@ -17,6 +17,7 @@ let _ =
       ("assert", ASSERT);
       ("assume", ASSUME);
       ("Bool", BOOL);
+      ("Byte", BYTE);
       ("choose", CHOOSE);
       ("comment", COMMENT);
       ("datatype", DATATYPE);
@@ -33,10 +34,10 @@ let _ =
       ("if", IF);
       ("in", IN);
       ("Int", INT);
-      ("Byte", BYTE);
       ("invariant", INVARIANT);
       ("include", INCLUDE);
       ("implicit", IMPLICIT);
+      ("lemma", LEMMA);
       ("Loc", LOC);
       ("Map", MAP);
       ("matching", MATCHING);

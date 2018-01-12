@@ -54,6 +54,7 @@ and proc =
       p_returns: idents;
       p_locals: vars;
       p_contracts: contracts;
+      p_is_lemma: bool;
       p_body: stmt; 
       p_pos: pos;
     }
@@ -734,11 +735,15 @@ let pr_proc_decl ppf proc =
     then locals
     else (id, decl) :: locals) proc.p_locals []
   in
-  fprintf ppf "@[<2>%s %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a@]@\n%a@\n"
-    "procedure"
+  let pr_returns ppf = function
+    | [] -> ()
+    | returns -> fprintf ppf "returns (@[<0>%a@])" pr_var_list (lookup returns)
+  in
+  fprintf ppf "@[<2>%s %a(@[<0>%a@])@\n%a%a@]@\n%a@\n"
+    (if proc.p_is_lemma then "lemma" else "procedure")
     pr_ident proc.p_name
     pr_var_list (lookup proc.p_formals)
-    pr_var_list (lookup proc.p_returns)
+    pr_returns proc.p_returns
     pr_contracts proc.p_contracts
     (pr_proc_body locals) proc.p_body
 

@@ -161,16 +161,25 @@ let removeGhost cu =
       p_returns = List.filter (fun v -> not (is_ghost proc.p_name v)) proc.p_returns;
       p_locals = IdMap.filter (fun _ v -> not v.v_ghost) proc.p_locals;
       p_contracts = [];
+      p_is_lemma = false;
       p_body = process_stmt proc.p_name proc.p_body;
       p_pos = proc.p_pos;
     }
   in
 
+  let procs =
+    IdMap.fold
+      (fun id proc procs ->
+        if proc.p_is_lemma then procs
+        else IdMap.add id (process_proc proc) procs)
+      cu.proc_decls IdMap.empty
+  in
+  
   let cu2 = 
     { includes = cu.includes;
       type_decls = cu.type_decls;
       var_decls = IdMap.filter (fun _ v -> not v.v_ghost) cu.var_decls;
-      proc_decls = IdMap.map process_proc cu.proc_decls;
+      proc_decls = procs;
       pred_decls = IdMap.empty;
       fun_decls = IdMap.empty;
       background_theory = [];
