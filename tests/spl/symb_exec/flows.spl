@@ -12,6 +12,7 @@ predicate Gr(I: Interface) { true }
 
 predicate N(x: Node, I: Interface) { true }
 
+function intComp(I1: Interface, I2: Interface) returns (I: Interface)
 
 /** Lemmas */
 
@@ -20,10 +21,24 @@ procedure lemma_N_is_Gr(x: Node, I: Interface)
   requires N(x, I)
   ensures Gr(I)
 
-procedure lemma_dirty_N_is_Gr(x: Node, I1: Interface, I2: Interface)
+procedure lemma_Gr_is_N(x: Node, I: Interface)
   returns ()
+  requires Gr(I) &*& I.FP == {x}
+  ensures N(x, I)
+
+procedure lemma_decomp(x: Node, I: Interface)
+  returns (I1: Interface, I2: Interface)
+  requires Gr(I) &*& x in I.FP
+    ensures N(x, I1) &*& Gr(I2) &*& I == intComp(I1, I2)
+
+procedure lemma_dirty_N_is_Gr(x: Node, I1: Interface, I2: Interface)
   requires [N(x, I1)](I2)
   ensures [Gr(I1)](I2)
+
+procedure lemma_dirty_comp(x: Node, xn: Node, Ix: Interface, y: Node, yn: Node, Iy: Interface)
+  returns (I: Interface)
+  requires [x.next |-> xn](Ix) &*& [y.next |-> yn](Iy)
+    ensures [x.next |-> xn &*& y.next |-> yn](I) &*& I == intComp(Ix, Iy)
 
 procedure lemma_conc(x: Node, I: Interface)
   returns ()
@@ -45,22 +60,46 @@ procedure sync(I1: Interface, I2: Interface)
   ensures Gr(I2)
 
 
-procedure test(x: Node, I: Interface)
-  returns (f1: Map<Node, Map<Node, Int>>, FPo1: Set<Node>)
+procedure no_op(x: Node, I: Interface)
   requires N(x, I)
   ensures N(x, I)
 {
   lemma_conc(x, I);
   var y := x.next;
   x.next := y;
-  //  var f1: Map<Node, Map<Node, Int>>, FPo1: Set<Node>;
-  //  pure assume f1 == TODO && FPo1 == TODO;
   lemma_abs(x, I, I);
   lemma_dirty_N_is_Gr(x, I, I);
   sync(I, I);
+  lemma_Gr_is_N(x, I);
 }
 
-// TODO look into why sync precondition is becoming true
+// Insert node x after node y
+procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
+  returns (I1: Interface)
+  requires [acc(x)](Ix) &*& Gr(I)
+  requires Ix.FP == {x} &*& Ix.inf[x] == 0 &*& Ix.FPo == {} &*& y in I.FP &*& I.inf[y] == 1
+  ensures Gr(I1) &*& x in I1.FP &*& y in I1.FP &*& I1.inf[y] == 1
+{
+  var Iy: Interface, I2: Interface;
+  Iy, I2 := lemma_decomp(y, I);
+  // [x |-> ?](Ix) &*& N(y, Iy) &*& Gr(I2)
+  lemma_conc(y, Iy);
+  // [x |-> ?](Ix) &*& [y |-> ?v](Iy) &*& Gr(I2)
+  x.next := y.next;
+  y.next := x;
+  // [x |-> ?v](Ix) &*& [y |-> x](Iy) &*& Gr(I2)
+  
+  //  var yn := y.next;
+  //  var Ixy := lemma_dirty_comp(x, y, Ix, y, yn, Iy);
+  // [x |-> y &*& y |-> yn](Ixy) &*& Gr(I2)
+  
+  //  var f1: Map<Node, Map<Node, Int>>, FPo1: Set<Node>;
+  //  pure assume f1 == TODO && FPo1 == TODO;
+  //  lemma_abs(x, I, I);
+  //  lemma_dirty_N_is_Gr(x, I, I);
+  //  sync(I, I);
+  //  lemma_Gr_is_N(x, I);
+}
 // TODO where do we compute composition of flow maps for multiple nodes?
   // need some way to lift lemmas to use them inside dirty regions?
 // TODO recognize pure atoms like intLeq() - instead of writing intLeq() == true
