@@ -69,6 +69,13 @@ procedure assign_heap4(x: Node, y: Node)
   y.next := x;
 }
 
+procedure assign_lookup(x: Node, y: Node)
+  requires acc(x) &*& y.next |-> y
+  ensures x.next |-> y &*& y.next |-> y
+{
+  x.next := y.next;
+}
+
 procedure acc_to_ptsto(x: Node, y: Node)
   requires acc(x) &*& acc(x.next) &*& x.next == y
   ensures x.next |-> y &*& acc(y)
@@ -89,4 +96,11 @@ procedure pure2(x: Int, y: Int)
 {
   x := x + 5;
   x := x + 3;
+}
+
+procedure havoc1(x: Int, y: Int, z: Int)
+  requires y == x && z == x
+  ensures y == z
+{
+  havoc(x);
 }

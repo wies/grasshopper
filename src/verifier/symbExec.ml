@@ -418,6 +418,28 @@ and check_entailment ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
   | _ -> failwith @@ sprintf "Frame was not empty: %s" (string_of_state (mk_true, fr))
 
 
+(** Evaluate term at [state] by looking up all field reads *)
+let eval_term (eqs, state) = function
+  | App (Read, [App (FreeSym fld, [], _); App (FreeSym _, [], _) as loc], srt) as t ->
+    (* TODO recurse on loc to handle x.next.next etc *)
+    Debug.info (fun () -> sprintf "\nExecuting lookup: %s\n" (string_of_term t));
+    let loc = subst_term eqs loc in
+    (match find_ptsto_dirty loc (snd state) with
+    | Some fs, mk_spatial' ->
+      (* lookup fld in fs, so that loc |-> fs' and (fld, e) is in fs' *)
+      let e, fs' =
+        try List.assoc fld fs, fs
+        with Not_found -> let e = mk_fresh_var srt "v" in e, (fld, e) :: fs
+      in
+      let spatial' = mk_spatial' fs' in
+      (fst state, spatial'), e
+    | None, _ -> failwith "Invalid lookup"
+    )
+  | App (Write, _, _) as t ->
+    failwith @@ "eval_term called on write " ^ (string_of_term t)
+  | t -> (state, t)
+
+
 (** Symbolically execute command [comm] on state [state] and return final state. *)
 let rec symb_exec prog flds proc (eqs, state) comm =
   (* First, simplify the pre state *)
@@ -431,37 +453,18 @@ let rec symb_exec prog flds proc (eqs, state) comm =
   in
   let mk_const_term id = mk_free_const (lookup_type id) id in
   match comm with
-  | Basic (Assign {assign_lhs=[x]; assign_rhs=[App (Read, [App (FreeSym fld, [], _);
-      App (FreeSym _, [], _) as loc], srt)]}, _) ->
-    Debug.info (fun () ->
-      sprintf "\nExecuting lookup: %s := %s.%s;\n" (string_of_ident x)
-        (string_of_term loc) (string_of_ident fld)
-    );
-    let loc = subst_term eqs loc in
-    (match find_ptsto_dirty loc (snd state) with
-    | Some fs, mk_spatial' ->
-      (* lookup fld in fs. now loc |-> fs' and (fld, e) is in fs' *)
-      let e, fs' =
-        try List.assoc fld fs, fs
-        with Not_found -> let e = mk_fresh_var srt "v" in e, (fld, e) :: fs
-      in
-      let spatial' = mk_spatial' fs' in
-      let sm = IdMap.singleton x (mk_var_like x) in
-      let e = subst_term sm e in
-      let state = subst_state sm (fst state, spatial') in
-      let eqs = add_eq x e (subst_eqs sm eqs) in
-      eqs, state
-    | None, _ -> failwith @@ "Invalid lookup: " ^ (comm |> source_pos |> string_of_src_pos)
-    )
-  | Basic (Assign {assign_lhs=[fld]; assign_rhs=[App (Write, [App (FreeSym fld', [], _); 
-      App (FreeSym _, [], _) as loc; rhs], srt)]}, _) when fld = fld' ->
+  | Basic (Assign {assign_lhs=[fld];
+      assign_rhs=[App (Write, [App (FreeSym fld', [], _); 
+        App (FreeSym _, [], _) as loc; rhs], srt)]}, _) when fld = fld' ->
     Debug.info (fun () ->
       sprintf "\nExecuting mutate: %s.%s := %s;\n" (string_of_term loc)
         (string_of_ident fld) (string_of_term rhs)
     );
-    let (pure, spatial) = state in
     (* First, substitute eqs on loc and rhs *)
     let loc = subst_term eqs loc and rhs = subst_term eqs rhs in
+    (* Then, evaluate rhs in case it contains lookups *)
+    let (pure, spatial), rhs = eval_term (eqs, state) rhs in
+    (* Find the node to mutate *)
     (match find_ptsto_dirty loc spatial with
     | Some fs, mk_spatial' ->
       (* mutate fs to fs' so that it contains (fld, rhs) *)
@@ -475,10 +478,11 @@ let rec symb_exec prog flds proc (eqs, state) comm =
     )
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, _) ->
     (* TODO simultaneous assignments can't touch heap, so do all at once *)
-    (* TODO make sure these have no Read/Write terms *)
     List.combine ids ts
     |> List.fold_left (fun (eqs, state) (id, t) ->
         printf "\nExecuting assignment: %s := %s;\n" (string_of_ident id) (string_of_term t);
+        (* Eval t in case it has field lookups *)
+        let state, t = eval_term (eqs, state) t in
         let sm = IdMap.singleton id (mk_var_like id) in
         let t' = subst_term sm t in
         let (pure, spatial) = subst_state sm state in
@@ -535,7 +539,24 @@ let rec symb_exec prog flds proc (eqs, state) comm =
     eqs, state
   | Seq (comms, _) ->
     List.fold_left (symb_exec prog flds proc) (eqs, state) comms
-  | _ -> todo ()
+  | Basic (Havoc {havoc_args=vars}, _) ->
+    (* Just substitute all occurrances of v for new var v' in symbolic state *)
+    Debug.info (fun () ->
+      sprintf "\nExecuting havoc: havoc(%s);\n"
+        (vars |> List.map string_of_ident |> String.concat ", ")
+    );
+    let sm =
+      List.fold_left (fun sm v -> IdMap.add v (mk_var_like v) sm) 
+        IdMap.empty vars
+    in
+    (subst_eqs sm eqs, subst_state sm state)
+  | Basic (New _, _) -> failwith "TODO New command"
+  | Basic (Dispose _, _) -> failwith "TODO Dispose command"
+  | Basic (Assume _, _) -> failwith "TODO Assume command"
+  | Basic (Assert _, _) -> failwith "TODO Assert command"
+  | Basic (Return _, _) -> failwith "TODO Return command"
+  | Loop _ -> failwith "TODO Loop command"
+  | Choice _ -> failwith "TODO Choice command"
 
 
 (** Check procedure [proc] in program [prog] using symbolic execution. *)
