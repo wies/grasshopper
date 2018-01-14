@@ -69,6 +69,13 @@ procedure assign_heap4(x: Node, y: Node)
   y.next := x;
 }
 
+procedure assign_heap5(x: Node) returns (y: Node)
+  requires x.next |-> null
+  ensures x.next |-> y
+{
+  next := next[x := y];
+}
+
 procedure assign_lookup(x: Node, y: Node)
   requires acc(x) &*& y.next |-> y
   ensures x.next |-> y &*& y.next |-> y

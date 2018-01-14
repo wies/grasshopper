@@ -418,12 +418,14 @@ and check_entailment ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
   | _ -> failwith @@ sprintf "Frame was not empty: %s" (string_of_state (mk_true, fr))
 
 
-(** Evaluate term at [state] by looking up all field reads *)
-let eval_term (eqs, state) = function
-  | App (Read, [App (FreeSym fld, [], _); App (FreeSym _, [], _) as loc], srt) as t ->
-    (* TODO recurse on loc to handle x.next.next etc *)
+(** Evaluate term at [state] by looking up all field reads.
+  Assumes term has already been normalized w.r.t eqs *)
+let rec eval_term fields state = function
+  | Var _ as t -> (t, state)
+  | App (Read, [App (FreeSym fld, [], _); App (FreeSym _, [], _) as loc], srt)
+      as t when IdSet.mem fld fields ->
     Debug.info (fun () -> sprintf "\nExecuting lookup: %s\n" (string_of_term t));
-    let loc = subst_term eqs loc in
+    let loc, state = eval_term fields state loc in
     (match find_ptsto_dirty loc (snd state) with
     | Some fs, mk_spatial' ->
       (* lookup fld in fs, so that loc |-> fs' and (fld, e) is in fs' *)
@@ -432,12 +434,14 @@ let eval_term (eqs, state) = function
         with Not_found -> let e = mk_fresh_var srt "v" in e, (fld, e) :: fs
       in
       let spatial' = mk_spatial' fs' in
-      (fst state, spatial'), e
+      e, (fst state, spatial')
     | None, _ -> failwith "Invalid lookup"
     )
   | App (Write, _, _) as t ->
     failwith @@ "eval_term called on write " ^ (string_of_term t)
-  | t -> (state, t)
+  | App (s, ts, srt) ->
+    let ts, state = fold_left_map (eval_term fields) state ts in
+    App (s, ts, srt), state
 
 
 (** Symbolically execute command [comm] on state [state] and return final state. *)
@@ -463,7 +467,7 @@ let rec symb_exec prog flds proc (eqs, state) comm =
     (* First, substitute eqs on loc and rhs *)
     let loc = subst_term eqs loc and rhs = subst_term eqs rhs in
     (* Then, evaluate rhs in case it contains lookups *)
-    let (pure, spatial), rhs = eval_term (eqs, state) rhs in
+    let rhs, (pure, spatial) = eval_term flds state rhs in
     (* Find the node to mutate *)
     (match find_ptsto_dirty loc spatial with
     | Some fs, mk_spatial' ->
@@ -482,7 +486,7 @@ let rec symb_exec prog flds proc (eqs, state) comm =
     |> List.fold_left (fun (eqs, state) (id, t) ->
         printf "\nExecuting assignment: %s := %s;\n" (string_of_ident id) (string_of_term t);
         (* Eval t in case it has field lookups *)
-        let state, t = eval_term (eqs, state) t in
+        let t, state = eval_term flds state t in
         let sm = IdMap.singleton id (mk_var_like id) in
         let t' = subst_term sm t in
         let (pure, spatial) = subst_state sm state in
@@ -550,9 +554,18 @@ let rec symb_exec prog flds proc (eqs, state) comm =
         IdMap.empty vars
     in
     (subst_eqs sm eqs, subst_state sm state)
+  | Basic (Assume {spec_form=FOL spec}, _) ->
+    (* Pure assume statements are just added to pure part of state *)
+    let spec = spec |> filter_annotations (fun _ -> false) |> subst_form eqs in
+    Debug.info (fun () ->
+      sprintf "\nExecuting assume: assume(%s);\n" (string_of_form spec)
+    );
+    let (pure, spatial) = state in
+    let spec, state = fold_map_terms (eval_term flds) state spec in
+    (eqs, (smk_and [pure; spec], spatial))
+  | Basic (Assume _, _) -> failwith "TODO Assume SL command"
   | Basic (New _, _) -> failwith "TODO New command"
   | Basic (Dispose _, _) -> failwith "TODO Dispose command"
-  | Basic (Assume _, _) -> failwith "TODO Assume command"
   | Basic (Assert _, _) -> failwith "TODO Assert command"
   | Basic (Return _, _) -> failwith "TODO Return command"
   | Loop _ -> failwith "TODO Loop command"
@@ -584,6 +597,7 @@ let check spl_prog prog proc =
 
     let eqs = empty_eqs in
     let eqs, state = symb_exec prog flds proc (eqs, precond) comm in
+    Debug.info (fun () -> "\nChecking postcondition...\n");
     check_entailment eqs state postcond |> fst
   | None ->
     []

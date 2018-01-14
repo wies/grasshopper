@@ -43,11 +43,11 @@ procedure lemma_dirty_comp(x: Node, xn: Node, Ix: Interface, y: Node, yn: Node, 
 procedure lemma_conc(x: Node, I: Interface)
   returns ()
   requires N(x, I)
-  ensures [acc(x) &*& I.inf[x] == 1 &*& (I.FPo == {} || I.FPo == {x.next} && I.fm[x][x.next] == 1)](I) &*& I.FP == {x}
+  ensures [acc(x) &*& I.inf[x] == 1 &*& (x.next == null && I.FPo == {} || x.next != null && I.FPo == {x.next} && I.fm[x][x.next] == 1)](I) &*& I.FP == {x}
 
 procedure lemma_abs(x: Node, I: Interface, I1: Interface)
   returns ()
-  requires [acc(x) &*& I1.inf[x] == 1 &*& (I1.FPo == {} || I1.FPo == {x.next} && I1.fm[x][x.next] == 1)](I) &*& I1.FP == {x}
+  requires [acc(x) &*& I1.inf[x] == 1 &*& (x.next == null && I1.FPo == {} || x.next != null && I1.FPo == {x.next} && I1.fm[x][x.next] == 1)](I) &*& I1.FP == {x}
   ensures [N(x, I1)](I)
 {}
 
@@ -88,7 +88,15 @@ procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
   x.next := y.next;
   y.next := x;
   // [x |-> ?v](Ix) &*& [y |-> x](Iy) &*& Gr(I2)
-  
+  var Ix1: Interface;    // TODO change grammar to allow assignment
+  pure assume Ix1.FP == {x} && Ix1.inf[x] == 1 && (x.next == null && Ix1.FPo == {} || x.next != null && Ix1.FPo == {x.next} && Ix1.fm[x][x.next] == 1);
+  lemma_abs(x, Ix, Ix1);
+  // [N(x, Ix1)](Ix) &*& [y |-> x](Iy) &*& Gr(I2)
+  var Iy1: Interface;
+  pure assume Iy1.FP == {y} && Iy1.inf[y] == 1 && Iy1.FPo == {x} && Iy1.fm[y][x] == 1 && x != null;
+  lemma_abs(y, Iy, Iy1);
+  // [N(x, Ix1)](Ix) &*& [N(y, Iy1)](Iy) &*& Gr(I2)
+
   //  var yn := y.next;
   //  var Ixy := lemma_dirty_comp(x, y, Ix, y, yn, Iy);
   // [x |-> y &*& y |-> yn](Ixy) &*& Gr(I2)
