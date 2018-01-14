@@ -13,7 +13,7 @@ let todo () = raise NotYetImplemented
 (** ----------- Symbolic state and manipulators ---------- *)
 
 type spatial_pred =
-  | PointsTo of term * (ident * term) list  (** x |-> [f1: E1, ..] *)
+  | PointsTo of term * sort * (ident * term) list  (** x |-> [f1: E1, ..] *)
   | Pred of ident * term list
   | Dirty of spatial_pred list * term list  (** Dirty region: [f1 * ..]_(e1, ..) *)
 
@@ -38,7 +38,7 @@ let empty_eqs = IdMap.empty
 
 (* TODO use Format formatters for these *)
 let rec string_of_spatial_pred = function
-  | PointsTo (x, fs) ->
+  | PointsTo (x, _, fs) ->
     sprintf "%s |-> (%s)" (string_of_term x)
       (fs |> List.map (fun (id, t) -> (string_of_ident id) ^ ": " ^ (string_of_term t))
         |> String.concat ", ")
@@ -119,9 +119,9 @@ let state_of_spec_list fields specs : state =
       convert_form (pure, spatial) f
     | Sl.Atom (Sl.Emp, ts, _) ->
       (pure, spatial)
-    | Sl.Atom (Sl.Region, [(App (SetEnum, [x], _))], _) -> (* acc(x) *)
+    | Sl.Atom (Sl.Region, [(App (SetEnum, [x], Set Loc srt))], _) -> (* acc(x) *)
       let x = convert_term x in
-      (pure, PointsTo (x, []) :: spatial)
+      (pure, PointsTo (x, srt, []) :: spatial)
     | Sl.Atom (Sl.Region, ts, _) -> fail ()
     | Sl.Atom (Sl.Pred p, ts, _) ->
       (pure, Pred (p, ts) :: spatial)
@@ -149,11 +149,11 @@ let state_of_spec_list fields specs : state =
   (* Put collected read terms from pure part into spatial part *)
   let spatial =
     let rec put_reads = function
-      | PointsTo (x, fs) ->
+      | PointsTo (x, s, fs) ->
         let fs' =
           try TermMap.find x reads |> IdMap.bindings with Not_found -> []
         in
-        PointsTo (x, fs @ fs')
+        PointsTo (x, s, fs @ fs')
       | Pred _ as p -> p
       | Dirty (sps, ts) -> Dirty (List.map put_reads sps, ts)
     in
@@ -163,7 +163,7 @@ let state_of_spec_list fields specs : state =
   (* If we have a points-to atom without a corresponding acc() in reads, fail *)
   let alloc_terms =
     let rec collect_allocs allocs = function
-    | PointsTo (x, _) -> TermSet.add x allocs
+    | PointsTo (x, _, _) -> TermSet.add x allocs
     | Pred _ -> allocs
     | Dirty (sps, ts) -> List.fold_left collect_allocs allocs sps
     in
@@ -182,8 +182,8 @@ let subst_term sm = subst_consts_term sm >> subst_term sm
 let subst_form sm = subst_consts sm >> subst sm
 
 let rec subst_spatial_pred sm = function
-  | PointsTo (id, fs) ->
-    PointsTo (subst_term sm id, List.map (fun (id, t) -> id, subst_term sm t) fs)
+  | PointsTo (id, s, fs) ->
+    PointsTo (subst_term sm id, s, List.map (fun (id, t) -> id, subst_term sm t) fs)
   | Pred (id, ts) ->
     Pred (id, List.map (subst_term sm) ts)
   | Dirty (sps, ts) ->
@@ -275,6 +275,28 @@ let simplify eqs state =
   let eqs = find_equalities eqs pure in
   eqs, apply_equalities eqs (pure, spatial)
 
+(** Add implicit disequalities from spatial to pure. Assumes normalized by eq. *)
+let add_neq_constraints (pure, spatial) =
+  let allocated =
+    let rec find_alloc = function
+    | PointsTo (x, s, _) -> [(x, s)]
+    | Dirty (sp', _) -> List.map find_alloc sp' |> rev_concat
+    | Pred _ -> []
+    in
+    List.map find_alloc spatial |> rev_concat
+  in
+  let not_nil = List.map (fun (x, s) -> mk_neq x (mk_null s)) allocated in
+  let star_neq =
+    let rec f acc = function
+      | [] -> []
+      | (x, _) :: l ->
+        let acc = List.fold_left (fun neqs (y, _) -> mk_neq x y :: neqs) acc l in
+        f acc l
+    in
+    f [] allocated
+  in
+  (smk_and (pure :: not_nil @ star_neq), spatial)
+
 
 (** ----------- Symbolic Execution ---------- *)
 
@@ -282,11 +304,11 @@ let simplify eqs state =
 (** Returns [(fs, spatial')] s.t. [spatial] = [loc] |-> [fs] :: [spatial'] *)
 let find_ptsto loc spatial =
   let sp1, sp2 =
-    List.partition (function | PointsTo (x, fs) -> x = loc | Pred _ | Dirty _-> false)
+    List.partition (function | PointsTo (x, _, _) -> x = loc | Pred _ | Dirty _-> false)
       spatial
   in
   match sp1 with
-  | [PointsTo (_, fs)] -> Some (fs, sp2)
+  | [PointsTo (_, s, fs)] -> Some (fs, sp2)
   | [] -> None
   | _ ->
     failwith @@ "find_ptsto was confused by " ^
@@ -299,8 +321,8 @@ let find_ptsto loc spatial =
 let rec find_ptsto_dirty loc spatial =
   match spatial with
   | [] -> None, (fun fs' -> spatial)
-  | PointsTo (x, fs) :: spatial' when x = loc ->
-    Some fs, (fun fs' -> PointsTo (x, fs') :: spatial')
+  | PointsTo (x, s, fs) :: spatial' when x = loc ->
+    Some fs, (fun fs' -> PointsTo (x, s, fs') :: spatial')
   | Dirty (f, ts) as sp :: spatial' ->
     let res, repl_fn = find_ptsto_dirty loc f in
     (match res with
@@ -343,7 +365,7 @@ let rec find_frame ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
     if check_pure_entail (IdMap.union (fun _ -> failwith "") eqs inst) p1 p2 then
       sp1, inst
     else fail ()
-  | PointsTo (x, fs2) :: sp2' ->
+  | PointsTo (x, _, fs2) :: sp2' ->
     (match find_ptsto x sp1 with
     | Some (fs1, sp1') ->
       let match_up_fields inst fs1 fs2 =
@@ -521,6 +543,9 @@ let rec symb_exec prog flds proc (eqs, state) comm =
       sprintf "  Found contract:\n    precondition: %s\n    postcondition: %s\n"
         (string_of_state foo_pre) (string_of_state foo_post)
     );
+    (* Add derived equalities before checking for frame & entailment *)
+    (* TODO do this by keeping disequalities in state? *)
+    let state = add_neq_constraints state in
     let foo_pre = apply_equalities eqs foo_pre in
     let frame, inst = find_frame eqs state foo_pre in
     Debug.info (fun () -> sprintf "\n  Found frame: %s\n"
@@ -598,6 +623,8 @@ let check spl_prog prog proc =
     let eqs = empty_eqs in
     let eqs, state = symb_exec prog flds proc (eqs, precond) comm in
     Debug.info (fun () -> "\nChecking postcondition...\n");
+    (* TODO do this better *)
+    let state = add_neq_constraints state in
     check_entailment eqs state postcond |> fst
   | None ->
     []
