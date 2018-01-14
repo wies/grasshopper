@@ -781,6 +781,36 @@ let map_terms fn f =
     | Binder (b, vs, f, a) -> Binder (b, vs, mt f, ma a)
   in mt f
 
+(** Fold and map all terms appearing in the formula [f]
+  using [fn] and initial value [init] *)
+let fold_map_terms fn init f =
+  let fa acc = function
+    | Pattern (t, fs) ->
+      let t, acc = fn acc t in
+      Pattern(t, fs), acc
+    | Label (b, t) -> let t, acc = fn acc t in Label (b, t), acc
+    | TermGenerator (gs, ts) ->
+      let gs, acc =  (* TODO should we also apply it to terms in filters? *)
+        fold_left_map (fun acc -> function Match (t, fs) ->
+          let t, acc = fn acc t in Match (t, fs), acc) acc gs
+      in
+      TermGenerator (gs, ts), acc
+    | Comment _ | SrcPos _ | Name _ | ErrorMsg _ as a -> a, acc
+  in
+  let rec ft acc = function
+    | Atom (t, a) ->
+      let a, acc = fold_left_map fa acc a in
+      let t, acc = fn acc t in
+      Atom (t, a), acc
+    | BoolOp (op, fs) ->
+      let fs, acc = fold_left_map ft acc fs in
+      BoolOp (op, fs), acc
+    | Binder (b, vs, f, a) ->
+      let a, acc = fold_left_map fa acc a in
+      let f, acc = ft acc f in
+      Binder (b, vs, f, a), acc
+  in ft init f
+
 (** Apply the function fn to all atoms appearing in [f] *)
 let map_atoms fn f =
   let rec mt = function
