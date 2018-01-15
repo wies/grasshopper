@@ -340,6 +340,7 @@ let check_pure_entail eqs p1 p2 =
   if p1 = p2 || p2 = mk_true then true
   else (* Dump it to an SMT solver *)
     (* Close the formulas: Assuming all free variables are existential *)
+    (* TODO nnf? *)
     let close f = smk_exists (IdSrtSet.elements (sorted_free_vars f)) f in
     let f = smk_and [close p1; mk_not (close p2)] in
     match Prover.get_model f with
