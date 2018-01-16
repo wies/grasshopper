@@ -131,8 +131,13 @@ let state_of_spec_list fields specs : state =
     | Sl.SepOp (Sl.SepIncl, _, _, _) -> fail ()
     | Sl.SepOp (Sl.SepPlus, _, _, _) -> fail ()
     | Sl.BoolOp _ -> fail ()
-    | Sl.Binder _ -> fail ()
-    (* Note: if you allow binders, make substitutions capture avoiding! *)
+    | Sl.Binder (b, vs, f, _) ->
+      print_endline "\n\nWARNING: TODO: make substitutions capture avoiding!\n";
+      let pure1, spatial1 = convert_sl_form empty_state f in
+      (match spatial1 with
+      | [] -> (smk_and [smk_binder b vs pure1; pure], spatial)
+      | _ ->
+        failwith @@ "Confused by spatial under binder: " ^ (Sl.string_of_form f))
     | Sl.Dirty (f, ts, _) ->
       let pure1, spatial1 = convert_sl_form empty_state f in
       smk_and [pure1; pure], Dirty (spatial1, ts) :: spatial
