@@ -1,0 +1,15 @@
+struct Node {
+  var next: Node;
+}
+
+datatype Interface =
+  int(inf: Map<Node, Int>,
+      fm: Map<Node, Map<Node, Int>>,
+      FP: Set<Node>,
+      FPo: Set<Node>);
+
+procedure test_model(x: Node, Ix: Interface, y: Node)
+  requires Ix.FP == {x} && Ix.inf[x] == 1 && Ix.FPo == {y} && Ix.fm[x][y] == 1
+  requires forall I: Interface, n: Node, n1: Node :: (n !in I.FP ==> I.inf[n] == 0 && I.fm[n][n1] == 0) && (n1 !in I.FPo ==> I.fm[n][n1] == 0)
+  ensures forall n in Ix.FPo :: Ix.fm[x][n] == 0
+{}
