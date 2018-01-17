@@ -3,58 +3,59 @@ struct Node {
 }
 
 datatype Interface =
-  int(inf: Map<Node, Int>,
+  int(Inf: Set<Map<Node, Int>>,  // TODO have one elem inf to eliminate exists?
       fm: Map<Node, Map<Node, Int>>,
       FP: Set<Node>,
-      FPo: Set<Node>);
+      FPo: Set<Node>) | intUndef;
 
 predicate Gr(I: Interface)
 
 predicate N(x: Node, I: Interface)
 
-// A relational semantics for interface composition
-function intComp(I: Interface, I1: Interface, I2: Interface) returns (res: Bool)
+// A functional semantics for interface composition
+function intComp(I1: Interface, I2: Interface) returns (I: Interface)
 
 /** Gamma is hardcoded into these two lemmas */
 
 procedure lemma_conc(x: Node, I: Interface)
   returns ()
   requires N(x, I)
-  ensures [acc(x) &*& I.inf[x] == 1 &*& (x.next == null && I.FPo == {} || x.next != null && I.FPo == {x.next} && I.fm[x][x.next] == 1)](I) &*& I.FP == {x}
+  ensures [acc(x) &*& (exists inf in I.Inf :: inf[x] == 1 && I.Inf == {inf}) &*& (x.next == null && I.FPo == {} || x.next != null && I.FPo == {x.next} && I.fm[x][x.next] == 1)](I) &*& I.FP == {x}
 
 procedure lemma_abs(x: Node, I: Interface, I1: Interface)
   returns ()
-  requires [acc(x) &*& I1.inf[x] == 1 &*& (x.next == null && I1.FPo == {} || x.next != null && I1.FPo == {x.next} && I1.fm[x][x.next] == 1)](I) &*& I1.FP == {x}
+  requires [acc(x) &*& (exists inf in I.Inf :: inf[x] == 1 && I.Inf == {inf}) &*& (x.next == null && I1.FPo == {} || x.next != null && I1.FPo == {x.next} && I1.fm[x][x.next] == 1)](I) &*& I1.FP == {x}
   ensures [N(x, I1)](I)
 {}
 
 /** Lemmas */
 
-// TODO where to enforce properties like forall I. Disj(I.FP, I.FPo)?
+  // TODO where to enforce properties like forall I. Disj(I.FP, I.FPo)?
   
 // Sufficient condition for intComp(I, Ix, Iy), when Ix, Iy are singletons
 procedure lemma_int_comp_fold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
-  requires Ix.FP == {x} && Iy.FP == {y} && x != y
-  requires I.FP == {x, y}
+  requires Ix.FP == {x} && Iy.FP == {y} && x != y && I.FP == {x, y}
+  requires Ix != intUndef && Iy != intUndef && I != intUndef
   requires I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
-  requires Ix.inf[x] == I.inf[x] + Iy.inf[y] * Iy.fm[y][x]
-  requires Iy.inf[y] == I.inf[y] + Ix.inf[x] * Ix.fm[x][y]
-    // TODO how to instantiate inner forall? If we can, don't need to provide I
-    //  requires exists Cxx: Int, Cxy: Int, Cyx: Int, Cyy: Int :: // Capacity values
-    //    (forall n in I.FPo :: I.fm[x][n] == Cxx * Ix.fm[x][n] + Cxy * Iy.fm[y][n]
-    //     && I.fm[y][n] == Cyy * Iy.fm[y][n] + Cyx * Ix.fm[x][n])
+  requires (exists infx: Map<Node, Int>, infy: Map<Node, Int>, inf: Map<Node, Int> ::
+            Ix.Inf == {infx} && Iy.Inf == {infy} && I.Inf == {inf}
+            && infx[x] == inf[x] + infy[y] * Iy.fm[y][x]
+            && infy[y] == inf[y] + infx[x] * Ix.fm[x][y])
   requires x !in Iy.FPo  // In this case, easier to check new flow map:
   requires (forall n in I.FPo :: I.fm[x][n] == Ix.fm[x][n] + Ix.fm[x][y] * Iy.fm[y][n])
   requires (forall n in I.FPo :: I.fm[y][n] == Iy.fm[y][n] + Iy.fm[y][x] * Ix.fm[x][n])
-  ensures intComp(I, Ix, Iy) == true
+  ensures intComp(Ix, Iy) == I
 
 procedure lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
-  requires intComp(I, Ix, Iy) == true && x != y
+  requires intComp(Ix, Iy) == I && x != y
+  requires Ix != intUndef && Iy != intUndef && I != intUndef
   requires Ix.FP == {x} && Iy.FP == {y}
   ensures I.FP == {x, y}
   ensures I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
-  ensures Ix.inf[x] == I.inf[x] + Iy.inf[y] * Iy.fm[y][x]
-  ensures Iy.inf[y] == I.inf[y] + Ix.inf[x] * Ix.fm[x][y]
+  ensures (exists infx: Map<Node, Int>, infy: Map<Node, Int>, inf: Map<Node, Int> ::
+            Ix.Inf == {infx} && Iy.Inf == {infy} && I.Inf == {inf}
+           && infx[x] == inf[x] + infy[y] * Iy.fm[y][x]
+           && infy[y] == inf[y] + infx[x] * Ix.fm[x][y])
   ensures exists Cxx: Int, Cxy: Int, Cyx: Int, Cyy: Int :: // Capacity values
     Cxx == Cxy * Iy.fm[y][x] && Cyy == Cyx * Ix.fm[x][y]
     && Cxy == Cxx * Ix.fm[x][y] && Cyx == Cyy * Iy.fm[y][x]
@@ -78,27 +79,30 @@ procedure lemma_Gr_is_N(x: Node, I: Interface)
 procedure lemma_Gr_comp(Ix: Interface, Iy: Interface)
   returns (I: Interface)
   requires Gr(Ix) &*& Gr(Iy)
-  ensures Gr(I) &*& intComp(I, Ix, Iy) == true
+  ensures Gr(I) &*& intComp(Ix, Iy) == I
 
 procedure lemma_dirty_Gr_comp(Ix: Interface, Iy: Interface, I: Interface)
   returns (I1: Interface)
   requires [Gr(Ix) &*& Gr(Iy)](I)
-  ensures [Gr(I1)](I) &*& intComp(I1, Ix, Iy) == true
+  ensures [Gr(I1)](I) &*& intComp(Ix, Iy) == I1
 
-procedure lemma_comp(Ix: Interface, Ix1: Interface, Iy: Interface, Iy1: Interface, I1:  Interface)
+procedure lemma_comp(Ix: Interface, Ix1: Interface, Iy: Interface, Iy1: Interface)
   returns (I: Interface)
-  requires [Gr(Ix1)](Ix) &*& [Gr(Iy1)](Iy) &*& intComp(I1, Ix1, Iy1) == true
-  ensures [Gr(Ix1) &*& Gr(Iy1)](I) &*& intComp(I, Ix, Iy) == true
+  requires [Gr(Ix1)](Ix) &*& [Gr(Iy1)](Iy) &*& intComp(Ix1, Iy1) != intUndef
+  ensures [Gr(Ix1) &*& Gr(Iy1)](I) &*& intComp(Ix, Iy) == I
 
 procedure lemma_decomp(x: Node, I: Interface)
   returns (I1: Interface, I2: Interface)
   requires Gr(I) &*& x in I.FP
-  ensures N(x, I1) &*& Gr(I2) &*& intComp(I, I1, I2) == true
+  ensures N(x, I1) &*& Gr(I2) &*& intComp(I1, I2) == I
 
 procedure sync(I1: Interface, I2: Interface)
   returns ()
   requires [Gr(I2)](I1)
   requires I1.FP == I2.FP && I1.FPo == I2.FPo
+  //  requires forall inf in I1.Inf :: inf in I2.Inf -- need functionality
+  //  requires forall inf1 in I1.Inf :: exists inf2 in I2.Inf :: forall n in I1.FP :: inf1[n] == inf2[n]
+  requires // TODO?
   requires forall n in I1.FP :: I1.inf[n] == I2.inf[n]
   requires forall n in I1.FP, o in I1.FPo :: I1.inf[n] != 0 ==> I1.fm[n][o] == I2.fm[n][o]
   ensures Gr(I2)
@@ -116,7 +120,7 @@ procedure no_op(x: Node, I: Interface)
   sync(I, I);
   lemma_Gr_is_N(x, I);
 }
-
+/*
 procedure test_int_comp1(x: Node, Ix: Interface, y: Node, Iy: Interface)
   returns (Ixy: Interface)
   requires N(x, Ix) &*& N(y, Iy) &*& x != y; // TODO infer this!!
@@ -166,8 +170,9 @@ procedure test_int_comp3(x: Node, Ix: Interface, y: Node, Iy: Interface, z: Node
 procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
   returns (I1: Interface)
   requires [acc(x)](Ix) &*& Gr(I)
-  requires Ix.FP == {x} &*& Ix.inf[x] == 0 &*& Ix.FPo == {}
-  requires y in I.FP &*& I.inf[y] == 1 &*& I.FPo == {}
+  requires Ix.FP == {x} &*& Ix.FPo == {} &*& y in I.FP &*& I.FPo == {}
+  requires exists infx in Ix.Inf :: infx[x] == 0 && Ix.Inf == {infx}
+  requires exists inf in I.Inf :: inf[y] == 1 && I.Inf == {inf}
   ensures Gr(I1)
     //  TODO properties of intLeq for these?
     //  ensures x in I1.FP &*& y in I1.FP
@@ -226,3 +231,4 @@ procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
 }
 // TODO need some way to lift lemmas to use them inside dirty regions?
 // TODO recognize pure atoms like intComp() - instead of writing intComp() == true
+*/
