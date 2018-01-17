@@ -226,3 +226,18 @@ procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
 }
 // TODO need some way to lift lemmas to use them inside dirty regions?
 // TODO recognize pure atoms like intComp() - instead of writing intComp() == true
+
+//// The problem with proving I1.FPo = {}:
+
+// Initially: [_](Ix) &*& Gr(I)
+// (Comp): intComp(I1, Ix, I)
+// (Decomp): [_](Ix) &*& (N(y, Iy) &*& Gr(I2)) &*& intComp(I, Iy, I2)
+// (Assoc): [_](Ix) &*& N(y, Iy) &*& Gr(I2) &*& intComp(Ixy1, Ix, Iy) &*& intComp(I, Ixy1, I2)
+// ...
+// [N(x, Ix1)](Ix) &*& [N(y, Iy1)](Iy) &*& Gr(I2)
+// (Comp): [N(x, Ix1) &*& N(y, Iy1)](Ixy2) &*& Gr(I2)
+// ... : [Gr(Ixy3)](Ixy2) &*& Gr(I2) &*& intLeq(Ixy2, Ixy3)
+// sync(Ixy3)
+// Gr(Ixy3) &*& Gr(I2)
+// (GrComp): intComp(I3, Ixy3, I2)
+// Want: intLeq(I1, I3)
