@@ -799,7 +799,7 @@ quant_vars:
 
 quant_expr: 
 | annot_expr { $1 }
-| QUANT quant_vars COLONCOLON annot_expr { Binder ($1, $2, $4, mk_position 1 4) }
+| QUANT quant_vars COLONCOLON quant_expr { Binder ($1, $2, $4, mk_position 1 4) }
 ;
 
 expr:
