@@ -1186,7 +1186,7 @@ let convert_model session smtModel =
     let rec p model arg_map = function
       | SmtLibSyntax.App (Ident (name, _), [], pos) when name = "#unspecified" ->
           model
-      | SmtLibSyntax.App (Ident id, [], pos) as t ->
+      | SmtLibSyntax.App (Ident id, ts, pos) as t ->
           to_val t |>
           Opt.map (add_val pos model arg_map) |>
           Opt.lazy_or_else
@@ -1194,7 +1194,7 @@ let convert_model session smtModel =
               let t1 = convert_term [] t in
               Some (add_term pos model arg_map t1)
             ) |>
-          Opt.lazy_get_or_else (fun () -> print_endline ("Failed to match " ^ name id); fail pos)
+            Opt.lazy_get_or_else (fun () -> print_endline ("Failed to match " ^ name id); fail pos)
       | SmtLibSyntax.App (SmtLibSyntax.BoolConst b, [], pos) ->
           add_val pos model arg_map (Model.value_of_bool b)
       | SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], pos) -> 
@@ -1256,11 +1256,11 @@ let convert_model session smtModel =
             let cres_srt = convert_sort res_srt in
             let cargs = List.map (fun (x, srt) -> x, convert_sort srt) args in
             let carg_srts = List.map snd cargs in
-            (try
+            (*(try*)
               process_def model sym (carg_srts, cres_srt) cargs (SmtLibSyntax.unletify def)
-            with Failure s -> 
+            (*with Failure s -> 
               Debug.warn (fun () -> "Warning: " ^ s ^ "\n\n");
-              model)
+              model)*)
         | _ -> model)
       model0 smtModel 
   in
