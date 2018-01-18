@@ -85,7 +85,7 @@ procedure lemma_dirty_Gr_comp(Ix: Interface, Iy: Interface, I: Interface)
   requires [Gr(Ix) &*& Gr(Iy)](I)
   ensures [Gr(I1)](I) &*& intComp(I1, Ix, Iy) == true
 
-procedure lemma_comp(Ix: Interface, Ix1: Interface, Iy: Interface, Iy1: Interface, I1:  Interface)
+procedure lemma_comp(Ix: Interface, Ix1: Interface, Iy: Interface, Iy1: Interface, I1: Interface)
   returns (I: Interface)
   requires [Gr(Ix1)](Ix) &*& [Gr(Iy1)](Iy) &*& intComp(I1, Ix1, Iy1) == true
   ensures [Gr(Ix1) &*& Gr(Iy1)](I) &*& intComp(I, Ix, Iy) == true
@@ -171,7 +171,7 @@ procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
   ensures Gr(I1)
     //  TODO properties of intLeq for these?
     //  ensures x in I1.FP &*& y in I1.FP
-    //  ensures I1.inf[y] == 1 &*& I1.Fpo == {}
+    //  ensures I1.inf[y] == 1 &*& I1.FPo == {}
 {
   var Iy: Interface, I2: Interface;
   Iy, I2 := lemma_decomp(y, I);
@@ -187,7 +187,7 @@ procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
   // TODO add as an axiom instead
   pure assume forall I: Interface, n: Node, n1: Node :: (n !in I.FP ==> I.inf[n] == 0 && I.fm[n][n1] == 0) && (n1 !in I.FPo ==> I.fm[n][n1] == 0);
   pure assume forall I: Interface, I1: Interface, I2: Interface :: intComp(I, I1, I2) == intComp(I, I2, I1);
-  // TODO possible unsoundness - ensure this is true when interfaces are created!!
+  // TODO possible unsoundness - ensure this is true when interfaces are created!!  // Have a lemma that takes components, checks condition and returns the interface!!
   pure assume forall I: Interface, n: Node :: n !in I.FP || n !in I.FPo;
 
   var Ix1: Interface;    // TODO change grammar to allow assignment?
@@ -232,7 +232,7 @@ procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
 // Initially: [_](Ix) &*& Gr(I)
 // (Comp): intComp(I1, Ix, I)
 // (Decomp): [_](Ix) &*& (N(y, Iy) &*& Gr(I2)) &*& intComp(I, Iy, I2)
-// (Assoc): [_](Ix) &*& N(y, Iy) &*& Gr(I2) &*& intComp(Ixy1, Ix, Iy) &*& intComp(I, Ixy1, I2)
+// (Assoc): [_](Ix) &*& N(y, Iy) &*& Gr(I2) &*& intComp(Ixy1, Ix, Iy) &*& intComp(I1, Ixy1, I2)
 // ...
 // [N(x, Ix1)](Ix) &*& [N(y, Iy1)](Iy) &*& Gr(I2)
 // (Comp): [N(x, Ix1) &*& N(y, Iy1)](Ixy2) &*& Gr(I2)
