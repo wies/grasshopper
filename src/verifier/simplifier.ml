@@ -307,12 +307,12 @@ let elim_global_deps prog =
     let precond1 = List.map elim_spec (precond_of_pred pred) in
     let postcond1 = List.map elim_spec (postcond_of_pred pred) in
     let body1 = Util.Opt.map elim_spec pred.pred_body in
-    let accesses = IdSet.filter (fun id -> IdMap.mem id prog.prog_vars) pred.pred_accesses in
-    let formals1 = IdSet.elements accesses @ formals_of_pred pred in
+    let new_formals, accesses = IdSet.partition (fun id -> IdMap.mem id prog.prog_vars) pred.pred_accesses in
+    let formals1 = IdSet.elements new_formals @ formals_of_pred pred in
     let locals1 = 
       IdSet.fold 
         (fun id locals -> IdMap.add id (find_global prog id) locals) 
-        accesses (locals_of_pred pred)
+        new_formals (locals_of_pred pred)
     in
     let contract1 =
       { pred.pred_contract with
@@ -324,7 +324,7 @@ let elim_global_deps prog =
     in
     { pred_contract = contract1;
       pred_body = body1; 
-      pred_accesses = IdSet.empty;
+      pred_accesses = accesses;
       pred_is_self_framing = false;
     } 
   in
