@@ -343,8 +343,24 @@ let congr_classes_fixed_point fs gts =
     | [] ->
       if changed then loop false toSimplify []
   in
+  (* Add disequalities between ADT terms with different top-level constructors *)
+  let cterms =
+    TermSet.filter
+      (function App (Constructor _, _, _) -> true | _ -> false) gterms
+  in
+  TermSet.iter (function
+    | App (Constructor id1, _, srt1) as t1 ->
+        TermSet.iter (function
+          | App (Constructor id2, _, srt2) as t2 when srt1 = srt2 && id1 <> id2 ->
+              cc_graph#add_neq t1 t2
+          | _ -> ())
+          cterms
+    | _ -> ()) cterms;
+  (* Add disequality between true and false *)
   cc_graph#add_neq GrassUtil.mk_true_term GrassUtil.mk_false_term;
+  (* Add top-level disequality unit clauses in fs *)
   loop false fs [];
+  (* Compute congruence classes *)
   cc_graph#get_cc
 
 let congr_classes_simple fs gterms =
