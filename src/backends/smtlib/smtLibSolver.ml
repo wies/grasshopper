@@ -344,10 +344,10 @@ let declare_fun session sym_name arg_sorts res_sort =
 let declare_sort session sort_name num_of_params =
   writeln session (Printf.sprintf "(declare-sort %s %d)" sort_name num_of_params)
 
-let declare_datatypes session id cnsts =
+let declare_datatypes session adts =
   iter_solvers session
     (fun solver state ->
-      SmtLibSyntax.print_command state.out_chan (mk_declare_datatypes [(id, cnsts)]))
+      SmtLibSyntax.print_command state.out_chan (mk_declare_datatypes adts))
     
 let smtlib_sort_of_grass_sort srt =
   let rec csort = function
@@ -398,17 +398,23 @@ let declare_sorts has_int session =
       | FreeSrt id -> declare_sort session (string_of_ident id) 0
       | _ -> ())
     session.user_sorts;
-  IdMap.iter
-    (fun _ -> function
+  let adts = 
+    IdMap.fold
+    (fun _ srt adts -> match srt with
       | Adt (id, cnstrs) ->
           let cnstrs =
             List.map (fun (id, args) ->
               (id, List.map (fun (id, srt) -> (id, smtlib_sort_of_grass_sort srt)) args))
               cnstrs
           in
-          declare_datatypes session id cnstrs
-      | _ -> ())
-    session.user_sorts
+          (id, cnstrs) :: adts
+      | _ -> adts)
+      session.user_sorts []
+  in
+  match adts with
+  | [] -> ()
+  | _ -> declare_datatypes session adts
+
 
 
 let start_with_solver session_name sat_means solver produce_models produce_unsat_cores = 
