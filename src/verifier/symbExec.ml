@@ -345,16 +345,16 @@ let check_pure_entail eqs p1 p2 =
   if p1 = p2 || p2 = mk_true then true
   else (* Dump it to an SMT solver *)
     (* Close the formulas: Assuming all free variables are existential *)
-    (* TODO nnf? *)
     let close f = smk_exists (IdSrtSet.elements (sorted_free_vars f)) f in
-    let f = smk_and [close p1; mk_not (close p2)] in
+    let f = smk_and [close p1; mk_not (close p2)] |> nnf in
     match Prover.get_model f with
     | None -> true
     | Some model ->
       failwith @@ sprintf "Could not prove %s" (string_of_form p2)
 
 
-(** Find a frame for state1 * fr |= state2, and an instantiation for TODO? *)
+(** Find a frame for state1 * fr |= state2.
+  inst accumulates an instantiation for existential variables in state2. *)
 let rec find_frame ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
   Debug.info (fun () ->
     sprintf "\n  Finding frame with %s for:\n    %s : %s &*& ??\n    |= %s\n" 
@@ -511,10 +511,12 @@ let rec symb_exec prog flds proc (eqs, state) comm =
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, _) ->
     (* TODO simultaneous assignments can't touch heap, so do all at once *)
     List.combine ids ts
-    |> List.fold_left (fun (eqs, state) (id, t) ->
-        printf "\nExecuting assignment: %s := %s;\n" (string_of_ident id) (string_of_term t);
+    |> List.fold_left (fun (eqs, state) (id, rhs) ->
+        printf "\nExecuting assignment: %s := %s;\n" (string_of_ident id) (string_of_term rhs);
+        (* First, substitute eqs on t *)
+        let rhs = subst_term eqs rhs in
         (* Eval t in case it has field lookups *)
-        let t, state = eval_term flds state t in
+        let t, state = eval_term flds state rhs in
         let sm = IdMap.singleton id (mk_var_like id) in
         let t' = subst_term sm t in
         let (pure, spatial) = subst_state sm state in
@@ -522,6 +524,7 @@ let rec symb_exec prog flds proc (eqs, state) comm =
         eqs, (pure, spatial)
       ) (eqs, state)
   | Basic (Call {call_lhs=lhs; call_name=foo; call_args=args}, _) ->
+    (* TODO check assignment handling for x := foo(x); case! *)
     Debug.info (fun () ->
       sprintf "\nExecuting function call: %s%s(%s);\n"
         (match (lhs |> List.map string_of_ident |> String.concat ", ") with

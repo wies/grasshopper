@@ -1,5 +1,14 @@
 include "lemmas.spl";
 
+function domPlus(p1: Int, p2: Int) returns (p: Int)
+  ensures p == p1 + p2
+
+function domMult(p1: Int, p2: Int) returns (p: Int)
+  ensures p == p1 * p2
+
+function domZero() returns(p: Int)
+  ensures p == 0
+  
 struct Node {
   var next: Node;
 }
@@ -24,7 +33,7 @@ procedure lemma_abs(x: Node, I: Interface, I1: Interface)
   requires I != intUndef && I1 != intUndef
   requires [acc(x) &*& I1.inf[x] == 1 &*& (x.next == null && I1.FPo == {} || x.next != null && I1.FPo == {x.next} && I1.fm[x][x.next] == 1)](I) &*& I1.FP == {x}
   ensures [N(x, I1)](I)
-{}
+
 
 /** Lemmas */
 
@@ -59,7 +68,7 @@ procedure lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, 
        && I.fm[y][n] == Cyy * Iy.fm[y][n] + Cyx * Ix.fm[x][n])
 
 procedure no_op(x: Node, I: Interface)
-  requires N(x, I)
+  requires N(x, I) &*& I != intUndef
   ensures N(x, I)
 {
   lemma_conc(x, I);
@@ -67,6 +76,7 @@ procedure no_op(x: Node, I: Interface)
   x.next := y;
   lemma_abs(x, I, I);
   lemma_dirty_N_is_Gr(x, I, I);
+  lemma_int_leq_fold(I, I);
   sync(I, I);
   lemma_Gr_is_N(x, I);
 }
