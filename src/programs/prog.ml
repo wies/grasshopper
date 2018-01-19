@@ -629,7 +629,7 @@ let accesses_proc prog proc =
       (accesses_contract_acc body_accs proc.proc_contract)
   in
   IdMap.fold (fun id pred accs ->
-    if IdMap.mem id prog.prog_preds
+    if IdSet.mem id accs
     then IdSet.union accs pred.pred_accesses
     else accs)
     prog.prog_preds accs
