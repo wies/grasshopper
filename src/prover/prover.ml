@@ -54,7 +54,7 @@ let btwn_field_generators fs =
   List.fold_left make_generators [] fs 
 
 
-(** Lineraize axioms *)
+(** Linearize axioms *)
 let linearize fs =
   let lin_fold fn seen eqs es =
     List.fold_right (fun e (seen, eqs, es1) ->
@@ -88,7 +88,46 @@ let linearize fs =
     let _, eqs, f1 = lin_form IdSet.empty [] f in
     mk_or (f1 :: eqs))
     fs
-          
+
+let flatten fs =
+  let flat_fold fn eqs es =
+    List.fold_right (fun e (eqs, es1) ->
+      let eqs, e1 = fn eqs e in
+      eqs, e1 :: es1)
+      es (eqs, [])
+  in
+  let rec flat_term flatten eqs t = match t with
+  | App (sym, ts, srt) ->
+      let flatten1 = match sym, srt with
+      | (Constructor _ | Destructor _), _
+      | _, Adt _ -> fv_term t <> IdSet.empty
+      | _ -> false
+      in
+      let eqs, ts1 = flat_fold (flat_term flatten1) eqs ts in
+      if flatten then
+        let x = mk_var srt (fresh_ident "x") in
+        mk_neq x (mk_app srt sym ts1) :: eqs, x
+      else eqs, App (sym, ts1, srt)
+  | _ -> eqs, t
+  in
+  let rec flat_form eqs = function
+    | BoolOp (op, fs) ->
+      let eqs, fs1 = flat_fold flat_form eqs fs in
+      eqs, BoolOp (op, fs1)
+    | Binder (b, [], f, anns) ->
+        let eqs, f1 = flat_form eqs f in
+        eqs, Binder (b, [], f1, anns)
+    | Atom (App (sym, ts, srt), anns) ->
+        let eqs, ts1 = flat_fold (flat_term false) eqs ts in
+        eqs, Atom (App (sym, ts1, srt), anns)
+    | f -> eqs, f 
+  in
+  List.map (fun f ->
+    let eqs, f1 = flat_form [] f in
+    mk_or (f1 :: eqs))
+    fs
+      
+    
 (** Generate local instances of all axioms of [fs] in which variables occur below function symbols *)
 let instantiate_and_prove session fs =
   let fs1 = encode_labels fs in
@@ -179,7 +218,7 @@ let instantiate_and_prove session fs =
     then fs2, gts_inst, classes
     else
     let classes = CongruenceClosure.congr_classes (rev_concat [fs_inst; fs]) gts2 in
-    instantiate_with_terms true (linearize fs1) classes, gts2, classes
+    instantiate_with_terms true (flatten @@ linearize fs1) classes, gts2, classes
   in
   (*let round3 fs_inst gts_inst classes =
     let generators =

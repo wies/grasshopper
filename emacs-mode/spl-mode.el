@@ -18,7 +18,7 @@
 
 ;; Keyboard shortcuts:
 ;; C-c C-v -- Verify current buffer
-;; C-c C-p -- Verify enclosing procedure of position in current buffer
+;; C-c C-p -- Verify enclosing procedure/lemma of position in current buffer
 
 ;;; Code:
 
@@ -40,7 +40,7 @@
    '("\\(//[^\n]*\\)" 1 
      font-lock-comment-face)
 
-   '("\\<\\(i\\(f\\|nclude\\)\\|c\\(hoose\\|omment\\)\\|else\\|f\\(ree\\|unction\\)\\|havoc\\|matching\\|new\\|or\\|p\\(attern\\|r\\(ocedure\\|edicate\\)\\)\\|return\\(s\\|\\)\\|struct\\|\\(data\\)?type\\|var\\|w\\(ithout\\|hile\\)\\|yields\\)\\>"
+   '("\\<\\(i\\(f\\|nclude\\)\\|c\\(hoose\\|omment\\)\\|else\\|f\\(ree\\|unction\\)\\|havoc\\|lemma\\|matching\\|new\\|or\\|p\\(attern\\|r\\(ocedure\\|edicate\\)\\)\\|return\\(s\\|\\)\\|struct\\|\\(data\\)?type\\|var\\|w\\(ithout\\|hile\\)\\|yields\\)\\>"
          1 font-lock-keyword-face)
 
    '("\\<\\(a\\(xiom\\|ss\\(ert\\|ume\\)\\)\\|ensures\\|i\\(mplicit\\|nvariant\\)\\|pure\\|requires\\|ghost\\|footprint\\)\\>"
@@ -170,7 +170,7 @@
   (defun spl-lineup-topmost (langelem)
     (save-excursion
       (beginning-of-line)
-      (if (looking-at "[ \t]*\\(axiom\\|procedure\\|function\\|predicate\\|struct\\|\\(data\\)?type\\)")
+      (if (looking-at "[ \t]*\\(axiom\\|lemma\\|procedure\\|function\\|predicate\\|struct\\|\\(data\\)?type\\)")
           0
         c-basic-offset)))
   (c-set-offset 'statement-cont 'spl-lineup-statement-cont)
@@ -284,10 +284,10 @@
     (interactive)
     (save-excursion
       (forward-line 0)
-      (while (and (< 1 (string-to-number (format-mode-line "%l"))) (not (looking-at-p "[ \t]*procedure")))
+      (while (and (< 1 (string-to-number (format-mode-line "%l"))) (not (looking-at-p "[ \t]*\\(procedure\\|lemma\\)")))
         (forward-line (- 1)))
-      (if (looking-at "[ \t]*procedure[ \t]+\\([^\s-(]+\\)")
-          (let* ((proc-name (match-string 1)))
+      (if (looking-at "[ \t]*\\(procedure\\|lemma\\)[ \t]+\\([^\s-(]+\\)")
+          (let* ((proc-name (match-string 2)))
             (progn (message "Verifying procedure %s..." proc-name)
                    (setq spl-current-procedure proc-name)
                    (flycheck-select-checker 'spl-proc-verifier)
