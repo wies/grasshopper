@@ -111,3 +111,24 @@ procedure havoc1(x: Int, y: Int, z: Int)
 {
   havoc(x);
 }
+
+procedure if1(x: Int)
+  requires true
+  ensures x > 2
+{
+  if (x < 2) {
+    x := 3;
+  } else {
+    x := x + 1;
+  }
+}
+
+procedure if2(x: Node, y: Node)
+  requires acc(x) &*& acc(y)
+  ensures x.next |-> x &*& y.next |-> x
+{
+  if (x.next != x) {
+    x.next := x;
+  }
+  y.next := x;
+}
