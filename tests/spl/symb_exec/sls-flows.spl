@@ -1,0 +1,80 @@
+include "lemmas.spl";
+
+datatype Pair = pair(fst: Int, snd: Int);
+
+function domPlus(p1: Pair, p2: Pair) returns (p: Pair)
+  ensures p.fst == p1.fst + p2.fst && p.snd == p1.snd + p2.snd
+
+function domMult(p1: Pair, p2: Pair) returns (p: Pair)
+  ensures p.fst == p1.fst * p2.fst && p.snd == p1.snd * p2.snd
+
+function domZero() returns(p: Pair)
+  ensures p == pair(0, 0)
+  
+struct Node {
+  var next: Node;
+  var data: Int;
+}
+
+datatype Interface =
+  int(inf: Map<Node, Pair>,
+      fm: Map<Node, Map<Node, Pair>>,
+      FP: Set<Node>,
+      FPo: Set<Node>)
+  | intUndef; // All interfaces with > 1 inflow are undefined
+
+/** Gamma is hardcoded into these two lemmas */
+
+procedure lemma_conc(x: Node, I: Interface)
+  returns ()
+  requires N(x, I)
+  ensures [acc(x) &*& I.inf[x].fst == 1 &*& I.inf[x].snd < x.data &*& (x.next == null && I.FPo == {} || x.next != null && I.FPo == {x.next} && I.fm[x][x.next] == pair(1, x.data))](I) &*& I.FP == {x}
+
+procedure lemma_abs(x: Node, I: Interface, I1: Interface)
+  returns ()
+  requires [acc(x) &*& I1.inf[x].fst == 1 &*& I1.inf[x].snd < x.data &*& (x.next == null && I1.FPo == {} || x.next != null && I1.FPo == {x.next} && I1.fm[x][x.next] == pair(1, x.data))](I) &*& I1.FP == {x}
+  ensures [N(x, I1)](I)
+
+/** Lemmas */
+
+// Sufficient condition for intComp(I, Ix, Iy), when Ix, Iy are singletons
+procedure lemma_int_comp_fold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
+  requires Ix != intUndef && Iy != intUndef && I != intUndef
+  requires Ix.FP == {x} && Iy.FP == {y} && x != y && I.FP == {x, y}
+  requires I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
+  requires Ix.inf[x] == domPlus(I.inf[x], domMult(Iy.inf[y], Iy.fm[y][x]))
+  requires Iy.inf[y] == domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y]))
+  requires x !in Iy.FPo  // In this case, easier to check new flow map:
+  requires (forall n in I.FPo ::
+            I.fm[x][n] == domPlus(Ix.fm[x][n], domMult(Ix.fm[x][y], Iy.fm[y][n])))
+  requires (forall n in I.FPo ::
+            I.fm[y][n] == domPlus(Iy.fm[y][n], domMult(Iy.fm[y][x], Ix.fm[x][n])))
+  ensures intComp(Ix, Iy) == I
+
+procedure lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
+  requires Ix != intUndef && Iy != intUndef && I != intUndef
+  requires intComp(Ix, Iy) == I && x != y
+  requires Ix.FP == {x} && Iy.FP == {y}
+  ensures I.FP == {x, y}
+  ensures I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
+  ensures Ix.inf[x] == domPlus(I.inf[x], domMult(Iy.inf[y], Iy.fm[y][x]))
+  ensures Iy.inf[y] == domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y]))
+  ensures exists Cxx: Pair, Cxy: Pair, Cyx: Pair, Cyy: Pair :: // Capacity values
+    Cxx == domMult(Cxy, Iy.fm[y][x]) && Cyy == domMult(Cyx, Ix.fm[x][y])
+    && Cxy == domMult(Cxx, Ix.fm[x][y]) && Cyx == domMult(Cyy, Iy.fm[y][x])
+    && (forall n in I.FPo ::
+       I.fm[x][n] == domPlus(domMult(Cxx, Ix.fm[x][n]), domMult(Cxy, Iy.fm[y][n]))
+       && I.fm[y][n] == domPlus(domMult(Cyy, Iy.fm[y][n]), domMult(Cyx, Ix.fm[x][n])))
+
+procedure no_op(x: Node, I: Interface)
+  requires N(x, I)
+  ensures N(x, I)
+{
+  lemma_conc(x, I);
+  var y := x.next;
+  x.next := y;
+  lemma_abs(x, I, I);
+  lemma_dirty_N_is_Gr(x, I, I);
+  sync(I, I);
+  lemma_Gr_is_N(x, I);
+}
