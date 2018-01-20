@@ -132,3 +132,34 @@ procedure if2(x: Node, y: Node)
   }
   y.next := x;
 }
+
+
+struct DNode {
+  var data: Int;
+}
+
+procedure loop0(x: DNode)
+  requires x.data |-> 0
+  ensures x.data |-> 10
+{
+  var i := 1;
+  while (i < 11)
+    invariant x.data |-> i - 1 &*& i <= 11
+  {
+    x.data := i;
+    i := i + 1;
+  }
+}
+
+procedure loop1(x: Node)
+  requires x.next |-> x
+  ensures x.next |-> null
+{
+  var i := 0;
+  while (i < 10)
+    invariant acc(x) &*& (i > 6 ==> x.next == null)
+  {
+    if (i > 5) x.next := null;
+    i := i + 1;
+  }
+}

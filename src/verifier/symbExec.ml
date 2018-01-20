@@ -235,14 +235,16 @@ let add_eq id t eqs =
 
 (** ----------- Re-arrangement and normalization rules ---------- *)
 
-(** Find equalities of the form const == exp in [pure] and add to [eqs] *)
+(** Find equalities of the form const == var/const in [pure] and add to [eqs] *)
 let find_equalities eqs (pure: form) =
   let rec find_eq sm = function
-    | Atom (App (Eq, [(App (FreeSym id, [],  _)); t2], _), _)
-    | Atom (App (Eq, [t2; (App (FreeSym id, [],  _))], _), _) ->
+    | Atom (App (Eq, [(App (FreeSym id, [],  _)); App (FreeSym _, [],  _) as t2], _), _)
+    | Atom (App (Eq, [(App (FreeSym id, [],  _)); Var _ as t2], _), _)
+    | Atom (App (Eq, [Var _ as t2; (App (FreeSym id, [],  _))], _), _) ->
       add_eq id t2 sm
     | BoolOp (And, fs) ->
       List.fold_left find_eq sm fs
+    | Binder (_, [], f, _) -> find_eq sm f
     | _ -> sm
   in
   find_eq eqs pure
@@ -250,11 +252,13 @@ let find_equalities eqs (pure: form) =
 (** Find equalities of the form var == exp in [pure] and return id -> exp map. *)
 let find_var_equalities (pure: form) =
   let rec find_eq sm = function
-    | Atom (App (Eq, [Var (id, _); t2], _), _)
-    | Atom (App (Eq, [t2; Var (id, _)], _), _) ->
+    | Atom (App (Eq, [Var (id, _); Var _ as t2], _), _)
+    | Atom (App (Eq, [Var (id, _); App (FreeSym _, [], _) as t2], _), _)
+    | Atom (App (Eq, [App (FreeSym _, [], _) as t2; Var (id, _)], _), _) ->
       add_eq id t2 sm
     | BoolOp (And, fs) ->
       List.fold_left find_eq sm fs
+    | Binder (_, [], f, _) -> find_eq sm f
     | _ -> sm
   in
   find_eq IdMap.empty pure
