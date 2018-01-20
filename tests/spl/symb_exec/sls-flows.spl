@@ -3,13 +3,12 @@ include "lemmas.spl";
 datatype Pair = pair(fst: Int, snd: Int);
 
 function domPlus(p1: Pair, p2: Pair) returns (p: Pair)
-  ensures p.fst == p1.fst + p2.fst && p.snd == p1.snd + p2.snd
+{ pair(p1.fst + p2.fst, p1.snd + p2.snd) }
 
 function domMult(p1: Pair, p2: Pair) returns (p: Pair)
-  ensures p.fst == p1.fst * p2.fst && p.snd == p1.snd * p2.snd
+{ pair(p1.fst * p2.fst, p1.snd * p2.snd) }
 
-function domZero() returns(p: Pair)
-  ensures p == pair(0, 0)
+function domZero() returns(p: Pair) { pair(0, 0) }
   
 struct Node {
   var next: Node;
@@ -30,8 +29,9 @@ procedure lemma_conc(x: Node, I: Interface)
   requires N(x, I)
   ensures [acc(x) &*& I.inf[x].fst == 1 &*& I.inf[x].snd < x.data &*& (x.next == null && I.FPo == {} || x.next != null && I.FPo == {x.next} && I.fm[x][x.next] == pair(1, x.data))](I) &*& I.FP == {x}
 
-procedure lemma_abs(x: Node, I: Interface, I1: Interface)
+procedure lemma_abs(x: Node, I: Interface, I1: Interface, p: Pair)
   returns ()
+  requires p.fst == 1 + 0 && p.snd == 2 - 1
   requires [acc(x) &*& I1.inf[x].fst == 1 &*& I1.inf[x].snd < x.data &*& (x.next == null && I1.FPo == {} || x.next != null && I1.FPo == {x.next} && I1.fm[x][x.next] == pair(1, x.data))](I) &*& I1.FP == {x}
   ensures [N(x, I1)](I)
 
@@ -73,7 +73,8 @@ procedure no_op(x: Node, I: Interface)
   lemma_conc(x, I);
   var y := x.next;
   x.next := y;
-  lemma_abs(x, I, I);
+  var p: Pair; pure assume p.fst == 2 - 1 && p.snd == 1 + 0;
+  lemma_abs(x, I, I, p);
   lemma_dirty_N_is_Gr(x, I, I);
   sync(I, I);
   lemma_Gr_is_N(x, I);

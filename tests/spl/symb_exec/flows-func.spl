@@ -1,13 +1,10 @@
 include "lemmas.spl";
 
-function domPlus(p1: Int, p2: Int) returns (p: Int)
-  ensures p == p1 + p2
+function domPlus(p1: Int, p2: Int) returns (p: Int) { p1 + p2 }
 
-function domMult(p1: Int, p2: Int) returns (p: Int)
-  ensures p == p1 * p2
+function domMult(p1: Int, p2: Int) returns (p: Int) { p1 * p2 }
 
-function domZero() returns(p: Int)
-  ensures p == 0
+function domZero() returns(p: Int) { 0 }
   
 struct Node {
   var next: Node;
@@ -118,8 +115,8 @@ procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
     intComp(I1, I2) == intComp(I2, I1);
   pure assume forall I1: Interface, I2: Interface, I3: Interface ::
     intComp(I1, intComp(I2, I3)) == intComp(intComp(I1, I2), I3);
-  pure assume forall I: Interface, I1: Interface, I2: Interface ::
-    intComp(I1, I2) == I ==> (I != intUndef && I1 != intUndef && I2 != intUndef);
+  pure assume forall I1: Interface, I2: Interface ::
+    intComp(I1, I2) != intUndef ==> (I1 != intUndef && I2 != intUndef);
   // TODO possible unsoundness - ensure this is true when interfaces are created!!
   pure assume forall I: Interface, n: Node :: n !in I.FP || n !in I.FPo;
 
@@ -144,6 +141,7 @@ procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
     && (x.next == null && Ix1.FPo == {}
        || x.next != null && Ix1.FPo == {x.next} && Ix1.fm[x][x.next] == 1);
   lemma_abs(x, Ix, Ix1);
+  assert false;
   lemma_dirty_N_is_Gr(x, Ix1, Ix);
   // [Gr(Ix1)](Ix) &*& [y |-> x](Iy) &*& Gr(I2)
 
