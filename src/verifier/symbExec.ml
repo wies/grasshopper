@@ -341,13 +341,17 @@ let rec find_ptsto_dirty loc spatial =
     let res, repl_fn = find_ptsto_dirty loc spatial' in
     res, (fun fs' -> sp :: repl_fn fs')
 
-let check_pure_entail eqs p1 p2 =
+let check_pure_entail prog eqs p1 p2 =
   let (p2, _) = apply_equalities eqs (p2, []) |> remove_useless_existentials in
   if p1 = p2 || p2 = mk_true then true
   else (* Dump it to an SMT solver *)
-    (* Close the formulas: Assuming all free variables are existential *)
+    (* Close the formulas: assuming all free variables are existential *)
     let close f = smk_exists (IdSrtSet.elements (sorted_free_vars f)) f in
-    let f = smk_and [p1; mk_not p2] |> close |> nnf in
+    let f =
+      smk_and [p1; mk_not p2] |> close |> nnf
+      (* Add definitions of all referenced predicates and functions *)
+      (* |> Verifier.add_pred_insts prog *)
+    in
     match Prover.get_model f with
     | None -> true
     | Some model ->
@@ -356,7 +360,7 @@ let check_pure_entail eqs p1 p2 =
 
 (** Find a frame for state1 * fr |= state2.
   inst accumulates an instantiation for existential variables in state2. *)
-let rec find_frame ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
+let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
   Debug.info (fun () ->
     sprintf "\n  Finding frame with %s for:\n    %s : %s &*& ??\n    |= %s\n" 
       (string_of_equalities inst) (string_of_equalities eqs)
@@ -369,7 +373,7 @@ let rec find_frame ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
   match sp2 with
   | [] ->
     (* Check if p2 is implied by p1 *)
-    if check_pure_entail (IdMap.union (fun _ -> failwith "") eqs inst) p1 p2 then
+    if check_pure_entail prog (IdMap.union (fun _ -> failwith "") eqs inst) p1 p2 then
       sp1, inst
     else fail ()
   | PointsTo (x, _, fs2) :: sp2' ->
@@ -403,13 +407,13 @@ let rec find_frame ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
       in
       let inst = match_up_fields inst fs1 fs2 in
       let p2', sp2'' = subst_state inst (p2, sp2') in
-      find_frame ~inst:inst eqs (p1, sp1') (p2', sp2'')
+      find_frame prog ~inst:inst eqs (p1, sp1') (p2', sp2'')
     | None -> fail ()
     )
   | pred :: sp2' when List.exists ((=) pred) sp1 -> (* match and remove equal preds *)
     let sp1a, sp1b = List.partition ((=) pred) sp1 in
     (match sp1a with
-    | [pred'] -> find_frame ~inst:inst eqs (p1, sp1b) (p2, sp2')
+    | [pred'] -> find_frame prog ~inst:inst eqs (p1, sp1b) (p2, sp2')
     | _ -> fail ())
   | Dirty (sp2a, ts) :: sp2b ->
     (* Find a Dirty region in sp1 with same interface ts *)
@@ -418,9 +422,9 @@ let rec find_frame ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
     in
     (match sp1a with
     | [Dirty (sp1a, _)] ->
-      let res, inst = check_entailment ~inst:inst eqs (mk_true, sp1a) (mk_true, sp2a) in
+      let res, inst = check_entailment prog ~inst:inst eqs (mk_true, sp1a) (mk_true, sp2a) in
       if res = [] then
-        find_frame ~inst:inst eqs (p1, sp1b) (p2, sp2b)
+        find_frame prog ~inst:inst eqs (p1, sp1b) (p2, sp2b)
       else failwith @@ sprintf "find_frame: couldn't match up the inside of the dirty region"
     | _ -> todo ()
     )
@@ -428,7 +432,7 @@ let rec find_frame ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
     todo ()
 
 
-and check_entailment ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
+and check_entailment prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
   Debug.info (fun () ->
     sprintf "\nChecking entailment:\n  %s : %s\n  |=\n  %s\n" (string_of_equalities eqs)
       (string_of_state (p1, sp1)) (string_of_state (p2, sp2))
@@ -441,7 +445,7 @@ and check_entailment ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
   );
 
   (* Check if find_frame returns empt *)
-  let fr, inst = find_frame eqs (p1, sp1) (p2, sp2) in
+  let fr, inst = find_frame prog eqs (p1, sp1) (p2, sp2) in
   match fr with
   | [] -> [], inst
   | _ -> failwith @@ sprintf "Frame was not empty: %s" (string_of_state (mk_true, fr))
@@ -491,7 +495,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     Debug.info (fun () -> "\nChecking postcondition...\n");
     (* TODO do this better *)
     let state = add_neq_constraints state in
-    check_entailment eqs state postcond |> fst
+    check_entailment prog eqs state postcond |> fst
   | Basic (Assign {assign_lhs=[fld];
         assign_rhs=[App (Write, [App (FreeSym fld', [], _); 
           App (FreeSym _, [], _) as loc; rhs], srt)]}, _) :: comms'
@@ -566,7 +570,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     (* TODO do this by keeping disequalities in state? *)
     let state = add_neq_constraints state in
     let foo_pre = apply_equalities eqs foo_pre in
-    let frame, inst = find_frame eqs state foo_pre in
+    let frame, inst = find_frame prog eqs state foo_pre in
     Debug.info (fun () -> sprintf "\n  Found frame: %s\n"
         (frame |> List.map string_of_spatial_pred |> String.concat " &*& ")
     );
@@ -633,6 +637,19 @@ let check spl_prog prog proc =
       | _ -> flds
     ) spl_prog.SplSyntax.type_decls IdSet.empty
   in
+  (* Make sure FOL predicates are not of the form SL (Pure fol_formula)) *)
+  let prog = prog |>
+    map_preds (fun pred ->
+      {pred with pred_body =
+        pred.pred_body
+        |> Opt.map (fun spec -> {spec with spec_form =
+          match spec.spec_form with
+          | SL (Sl.Pure (f, pos)) -> FOL f
+          | f -> f }
+        )}
+    )
+  in
+
   match proc.proc_body with
   | Some comm ->
     let precond = state_of_spec_list flds proc.proc_contract.contr_precond in
