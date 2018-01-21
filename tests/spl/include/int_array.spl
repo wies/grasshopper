@@ -12,14 +12,17 @@ function contentWitness(v: Int, FP: Set<ArrayCell<Int>>)
   returns (res: ArrayCell<Int>) 
   ensures forall c in FP :: c == contentWitness(c[], FP)
   ensures forall c: ArrayCell<Int> :: c !in FP ==> null == contentWitness(c[], FP)
-  
+
 function array_content(FP: Set<ArrayCell<Int>>)
   returns (C: Set<Int>)
   ensures forall c in FP :: c[] in C
   ensures forall v in C :: contentWitness(v, FP) in FP
   ensures forall v in C :: v == contentWitness(v, FP)[]
              @(matching v yields contentWitness(v, FP)[])
-
+/*{
+  { v: Int :: exists c in FP :: c[] == v }
+}*/
+  
 predicate arrayseg_cnt(a: Array<Int>, i: Int, j: Int, C: Set<Int>) {
   exists X: Set<ArrayCell<Int>> ::
     arrayseg(a, i, j) && acc(X) &*&

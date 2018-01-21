@@ -14,29 +14,16 @@ function content(FP: Set<Node>)
   ensures forall v in C :: data_witness(v, FP) in FP
   ensures forall v: Int :: v !in C ==> data_witness(v, FP) == null
   ensures forall v in C :: v == data_witness(v, FP).data @(matching v yields data_witness(v, FP).data)
-  
-/*
-axiom forall FP: Set<Node>, d: Map<Node, Int>, x in FP :: x == data_witness(x.d, d, FP);
-
-axiom forall FP: Set<Node>, d: Map<Node, Int>, x in FP :: x.d in content(FP, d);
-
-axiom forall FP: Set<Node>, d: Map<Node, Int>, v in content(FP, d) :: data_witness(v, d, FP) in FP;
-
-axiom forall FP: Set<Node>, d: Map<Node, Int>, v: Int :: v !in content(FP, d) ==> data_witness(v, d, FP) == null;
-
-axiom forall FP: Set<Node>, d: Map<Node, Int>, v in content(FP, d) :: v == data_witness(v, d, FP).d
-  @(matching v, content(FP, d) yields data_witness(v, d, FP).d);
-*/
 
 /*
-{ v: Int :: exists x: Node :: x in FP && x.data == v }
-
--->
-
-  forall v in C :: f(v, data, FP) in FP && f(v, data, FP).data == v
-  forall x, v :: x in FP && x.data == v ==> v in C
+function content(FP: Set<Node>)
+  returns (C: Set<Int>)
+  requires acc(FP)
+{
+  { v: Int :: exists x: Node :: x in FP && x.data == v }
+}
 */
- 
+
 predicate list_set(x: Node, y: Node, C: Set<Int>) {
   exists X: Set<Node> ::
     lseg(x, y) && acc(X) &*&
