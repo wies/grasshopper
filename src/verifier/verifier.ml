@@ -98,7 +98,7 @@ let add_labels vc =
 
 let add_match_filters =
   let add_filters = function
-    | TermGenerator (_, [App (Known, _, _)]) as a -> a
+    (*| TermGenerator (_, [App (Known, _, _)]) as a -> a*)
     | TermGenerator (ms, (_ :: _ as ge)) ->
         let gts =
           ge |>
@@ -106,38 +106,42 @@ let add_match_filters =
           TermSet.filter (function App (_, _, Bool) | App (Known, _, _) -> false | _ -> true)
         in
         let matches = 
-        List.fold_right (function Match (e, filters) -> fun matches -> 
-          let ce = sorted_fv_term_acc IdMap.empty e in
-          let ce_occur_below ts =
-            List.exists 
-              (function Var (id, _) -> IdMap.mem id ce | _ -> false)
-              ts
-          in
-          let flt, aux_matches = 
-            TermSet.fold 
-              (fun t (flt, aux_matches) -> match t with
-              | App (FreeSym sym, (_ :: _ as ts), srt)
-                when symbol_of e <> Some (FreeSym sym) && ce_occur_below ts ->
-                  (FilterSymbolNotOccurs (FreeSym sym)) :: flt, aux_matches
-              | App (Read, ([App (FreeSym sym, [], srt); l] as ts), _)
-                when symbol_of e <> Some (FreeSym sym) && ce_occur_below ts ->
-                  (FilterReadNotOccurs (GrassUtil.name sym, ([], srt))) :: flt,
-                  Match (l, [FilterNotNull]) :: aux_matches
-              | _ -> flt, aux_matches)
-              gts (filters, [])
-          in
-          let aux_matches =
-            let g = List.hd (List.rev ge) in
-            match sort_of g with
-            | Int | Loc _ | FreeSrt _ ->
-              IdMap.fold
-                (fun id srt aux_matches ->
-                  match srt with
-                  | Int | FreeSrt _ | Loc _ as rsrt ->
-                      Match (GrassUtil.mk_known (GrassUtil.mk_var rsrt id), []) :: aux_matches
-                  | _ -> aux_matches
-                ) ce aux_matches
-            | _ -> aux_matches
+          List.fold_right (function Match (e, filters) -> fun matches -> 
+            let sym_of_e = match e with
+            | App (Known, [e], _) -> symbol_of e
+            | _ -> symbol_of e
+            in
+            let ce = sorted_fv_term_acc IdMap.empty e in
+            let ce_occur_below ts =
+              List.exists 
+                (function Var (id, _) -> IdMap.mem id ce | _ -> false)
+                ts
+            in
+            let flt, aux_matches = 
+              TermSet.fold 
+                (fun t (flt, aux_matches) -> match t with
+                | App (FreeSym sym, (_ :: _ as ts), srt)
+                  when sym_of_e <> Some (FreeSym sym) && ce_occur_below ts ->
+                    (FilterSymbolNotOccurs (FreeSym sym)) :: flt, aux_matches
+                | App (Read, ([App (FreeSym sym, [], srt); l] as ts), _)
+                  when sym_of_e <> Some (FreeSym sym) && ce_occur_below ts ->
+                    (FilterReadNotOccurs (GrassUtil.name sym, ([], srt))) :: flt,
+                    Match (l, [FilterNotNull]) :: aux_matches
+                | _ -> flt, aux_matches)
+                gts (filters, [])
+            in
+            let aux_matches =
+              let g = List.hd (List.rev ge) in
+              match sort_of g with
+              | Int | Loc _ | FreeSrt _ | Set _ ->
+                  IdMap.fold
+                    (fun id srt aux_matches ->
+                      match srt with
+                      | Int | FreeSrt _ | Loc _ as rsrt ->
+                          Match (GrassUtil.mk_known (GrassUtil.mk_var rsrt id), []) :: aux_matches
+                      | _ -> aux_matches
+                    ) ce aux_matches
+              | _ -> aux_matches
           in
           Match (e, flt) :: aux_matches @ matches) ms []
       in
@@ -152,9 +156,9 @@ let add_match_filters =
     
 (** Expand predicate definitions for all predicates in formula [f] according to program [prog] *)
 let add_pred_insts prog f =
-  let add_generators aux_match f =
+    let add_generators aux_match f =
     let aux_vs =
-      Opt.fold (fun aux_vs -> function Match (t, _) -> fv_term_acc aux_vs t)
+      Opt.fold (fun aux_vs -> function (_, Match (t, _)) -> fv_term_acc aux_vs t)
         IdSet.empty aux_match
     in
     let fun_terms bvs f =
@@ -191,6 +195,14 @@ let add_pred_insts prog f =
               (function
                 | App (Disjoint, [t1; t2], _) -> mk_inter [t1; t2]
                 | App (SubsetEq, [t1; t2], _) -> mk_union [t1; t2]
+                | App (FreeSym id, _ :: _, _) as t ->
+                    IdMap.find_opt id prog.prog_preds |>
+                    Opt.flat_map (fun decl ->
+                      Opt.flat_map (fun (pid, _) ->
+                        if IdSet.mem pid (accesses_pred decl) then None
+                        else Some (mk_known t))
+                        aux_match) |>
+                    Opt.get_or_else t
                 | t -> t)
           in
           let ms =
@@ -225,24 +237,32 @@ let add_pred_insts prog f =
     let pred_match_term, generate_knowns = match returns with
     | [] ->
         let mt = mk_free_fun Bool name pred_vs in
-        mt, [TermGenerator ([Match (mt, [])], [mk_known mt])]
+        mt,
+        if IdSet.mem name (accesses_pred pred)
+        then []
+        else [TermGenerator ([Match (mt, [])], [mk_known mt])]
     | [x] ->
         let var = IdMap.find x locals in
         mk_free_fun var.var_sort name pred_vs, []
     | _ -> failwith "Functions may only have a single return value."
     in
-    let m = Match (pred_match_term, []) in
+    let m = Match (mk_known pred_match_term, []) in
     let rec add_match = function
       | Binder (b, vs, f, annots) ->
           let annots1 =
-            List.map (function TermGenerator (ms, ts) -> TermGenerator (m :: ms, List.filter ((<>) pred_match_term) ts) | a -> a) annots
+            List.map
+              (function
+                | TermGenerator (ms, ts) ->
+                    TermGenerator (m :: ms, List.filter ((<>) pred_match_term &&& (<>) (mk_known pred_match_term)) ts)
+                | a -> a)
+              annots
           in
           Binder (b, vs, add_match f, annots1)
       | BoolOp (op, fs) ->
           BoolOp (op, List.map add_match fs)
       | f -> f
     in
-    annotate (add_match (add_generators (Some m) f)) generate_knowns
+    annotate (add_match (add_generators (Some (name, m)) f)) generate_knowns
   in
   (* Expands definition of predicate [p] for arguments [ts] assuming polarity of occurrence [pol] *)
   let expand_pred pos p ts =
@@ -295,7 +315,12 @@ let add_pred_insts prog f =
               | None -> a
             in
             let f1 = expand_neg (Some p_msg) (IdSet.add p seen) pbody in
-            annotate (annotate_aux_msg p_msg (mk_and [(*mk_not (Atom (mk_free_fun Bool p ts, []));*) f1])) a1
+            let f2 =
+              if !Config.abstract_preds
+              then mk_and [mk_not (Atom (mk_free_fun Bool p ts, [])); f1]
+              else f1
+            in
+            annotate (annotate_aux_msg p_msg f2) a1
       | f -> f
     in
     f |>
@@ -366,7 +391,9 @@ let add_pred_insts prog f =
       skolemize |>
       (*propagate_forall |>*)
       annotate_term_generators pred |>
-      add_match_filters)
+      (if IdSet.mem name (accesses_pred pred)
+      then (fun f -> f)
+      else add_match_filters))
       defs
       (*(fun fs -> print_forms stdout fs; print_newline (); fs)*)
   in

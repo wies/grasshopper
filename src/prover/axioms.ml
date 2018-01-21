@@ -449,7 +449,7 @@ let ep_axioms struct_srt =
        [Match (mk_known fld1, []);
         Match (mk_frame_term set1 set2 fld1 fld2, [filter]);
         (*Match (mk_btwn_term fld3 loc2 loc3 loc4, [FilterGeneric (field_filter (fst f1) (fst f3))]);*)
-        Match (mk_elem_term loc1 set3, []);
+        Match (mk_known (mk_elem_term loc1 set3), []);
         Match (loc1, [FilterNotNull; FilterSymbolNotOccurs EntPnt])]), 
       [mk_ep fld1 set1 loc1])
    ]
