@@ -1,15 +1,101 @@
 datatype List = cons(hd: Int, tl: List) | nil;
 
-procedure reverse(l: List) returns (r: List)
-  ensures l != nil <=> r != nil
+function append(l1 : List, l2 : List) returns (res : List)
+  ensures l1 == nil ==> res == l2
+  ensures l1 != nil ==> res == cons(l1.hd, append(l1.tl, l2))
+
+function length(l: List) returns (res: Int)
+  ensures l == nil ==> res == 0
+  ensures l != nil ==> res == 1 + length(l.tl)
+
+function reverse(l: List) returns (r: List)
+  ensures l == nil ==> r == nil
+  ensures l != nil ==> r == append(reverse(l.tl), cons(l.hd, nil))
+
+function reverse_tailrec_helper(l1: List, l2: List, ghost l3: List) returns (res: List)
+  requires append(reverse(l1), l2) == reverse(l3)
+  ensures res == reverse(l3)
+  ensures l2 == nil ==> res == l1
+  ensures l2 != nil ==> res == reverse_tailrec_helper(cons(l2.hd, l1), l2.tl, l3)
+
+function reverse_tailrec(l: List) returns (res: List)
+  ensures res == reverse(l)
 {
-  if (l == nil) return nil;
-  else return append(reverse(l.tl), cons(l.hd, nil));
+  reverse_tailrec_helper(nil, l, l)
 }
 
-procedure append(l1: List, l2: List) returns (r: List)
-  ensures (l1 != nil || l2 != nil) ==> r != nil
+lemma append_nil(l1: List, l2: List)
+  ensures (l1 != nil || l2 != nil) <=> append(l1, l2) != nil
 {
-  if (l1 == nil) return l2;
-  else return cons(l1.hd, append(l1.tl, l2));
 }
+
+lemma append_right_idempotent(l: List)
+  ensures append(l, nil) == l
+{
+  if (l == nil) {
+    return;
+  } else {
+    append_right_idempotent(l.tl);
+  }
+}
+  
+lemma append_associative(l1: List, l2: List, l3: List)
+  ensures append(l1, append(l2, l3)) == append(append(l1, l2), l3);
+{
+  if (l1 == nil) {
+    return;
+  } else {
+    append_associative(l1.tl, l2, l3);
+  }
+}
+
+
+lemma reverse_nil(l: List)
+  ensures l != nil <=> reverse(l) != nil
+{
+}
+
+lemma reverse_append(l1: List, l2: List)
+  ensures reverse(append(l1 , l2)) == append(reverse(l2), reverse(l1))
+{
+  if (l1 == nil) {
+    append_right_idempotent(reverse(l2));
+    return;
+  } else {
+    reverse_append(l1.tl, l2);
+    append_associative(reverse(l2), reverse(l1.tl), cons(l1.hd, nil));
+  }
+}
+
+lemma reverse_reverse(l: List)
+  ensures reverse(reverse(l)) == l
+{
+  if (l == nil) {
+    return;
+  } else {
+    reverse_append(reverse(l.tl), cons(l.hd, nil));
+    reverse_reverse(l.tl);
+  }
+}
+
+lemma length_append(l1: List, l2: List)
+  ensures length(append(l1, l2)) == length(l1) + length(l2)
+{
+  if (l1 == nil) {
+    return;
+  } else {
+    length_append(l1.tl, l2);
+  }
+}
+  
+lemma reverse_preserves_length(l: List)
+  ensures length(reverse(l)) == length(l)
+{
+  if (l == nil) {
+    return;
+  } else {
+    length_append(reverse(l.tl), cons(l.hd, nil));
+    reverse_preserves_length(l.tl);
+  }
+}
+
