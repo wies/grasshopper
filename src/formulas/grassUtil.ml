@@ -653,9 +653,9 @@ let rec nnf = function
   | BoolOp (Not, [BoolOp (op, fs)]) -> 
       smk_op (dualize_op op) (List.map (fun f -> nnf (mk_not f)) fs)
   | BoolOp (Not, [Binder (b, [], f, a)]) ->
-      Binder (b, [], nnf (mk_not f), a)
+      mk_binder ~ann:a b [] (nnf (mk_not f))
   | BoolOp (Not, [Binder (b, vs, f, a)]) -> 
-      Binder (dualize_binder b, vs, nnf (mk_not f), a)
+      mk_binder ~ann:a (dualize_binder b) vs (nnf (mk_not f))
   | BoolOp (Not, [Atom (App (BoolConst b, [], _), _)]) ->
       mk_bool (not b)
   | BoolOp (op, fs) -> smk_op op (List.map nnf fs)

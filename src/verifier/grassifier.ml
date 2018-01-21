@@ -1197,7 +1197,7 @@ let elim_sl prog =
             [mk_eq old_pred new_pred]
           in
           let add_frame_pattern f =
-            let frame_patterns = frame_terms |> List.map (fun t -> Pattern (mk_known t, [])) in
+            let frame_patterns = (*frame_terms |> List.map (fun t -> Pattern (mk_known t, []))*) [] in
             annotate f frame_patterns
           in
           let add_generators f =

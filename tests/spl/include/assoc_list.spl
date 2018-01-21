@@ -15,20 +15,30 @@ predicate lseg_strictly_increasing(x: Node, FP: Set<Node>) {
 
 function key_witness(k: Int, ks: Map<Node, Int>, FP: Set<Node>)
   returns (res: Node) 
-
-function content(FP: Set<Node>)
-  returns (C: Set<Int>)
   requires acc(FP)
   ensures forall x in FP :: x == key_witness(x.key, key, FP)
-  ensures forall x in FP :: x.key  in C
-  ensures forall v in C :: key_witness(v, key, FP) in FP
-  ensures forall v: Int :: v !in C ==> key_witness(v, key, FP) == null
-  ensures forall v in C :: v == key_witness(v, key, FP).key @(matching v yields key_witness(v, key, FP).key)
 
+function keys(FP: Set<Node>)
+  returns (K: Set<Int>)
+  requires acc(FP)
+  ensures forall x in FP :: x.key in K
+  ensures forall v in K :: key_witness(v, key, FP) in FP
+  ensures forall v: Int :: v !in K ==> key_witness(v, key, FP) == null
+  ensures forall v in K :: v == key_witness(v, key, FP).key @(matching v yields key_witness(v, key, FP).key)
+
+/*
+function keys(FP: Set<Node>)
+  returns (K: Set<Int>)
+  requires acc(FP)
+{
+  { v: Int :: exists x: Node :: x in FP && x.key == v }
+}
+*/
+  
 predicate list_map(x: Node, y: Node, D: Set<Int>, C: Map<Int,Int>) {
   exists FP: Set<Node> ::
     lseg(x, y) && acc(FP) &*&
     lseg_strictly_increasing(x, FP) &*&
-    D == content(FP) &*&
+    D == keys(FP) &*&
     (forall n in FP :: n.key.C == n.data  @(matching n.data yields n.key.C) )
 }

@@ -1,7 +1,7 @@
-datatype Pair = pair(fst: Int, snd: Int);
+datatype Pair = pair(fst: Int, snd: Int) | c(a: T);
 
 procedure test(p: Pair)
   requires p == pair(5, 2)
-  ensures p.fst != 5
+  ensures p.fst == 5
 {
 }

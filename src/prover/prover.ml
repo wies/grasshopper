@@ -126,7 +126,6 @@ let flatten fs =
     let eqs, f1 = flat_form [] f in
     mk_or (f1 :: eqs))
     fs
-      
     
 (** Generate local instances of all axioms of [fs] in which variables occur below function symbols *)
 let instantiate_and_prove session fs =
@@ -168,9 +167,21 @@ let instantiate_and_prove session fs =
     | _ :: _ -> false
     | [] -> true
   in
+  let generate_knowns gts =
+    TermSet.fold
+      (fun t gts ->
+        match t with
+        | App (FreeSym _, _ :: _, _) ->
+            TermSet.add (mk_known t) gts
+        | App (Elem, e :: _, _) when is_loc_sort (sort_of e) ->
+            TermSet.add (mk_known t) gts
+        | _ -> gts)
+      gts gts
+  in
   let fs1, generators = open_axioms isFunVar fs1 in
   let btwn_gen = btwn_field_generators fs in
   let gts = ground_terms ~include_atoms:true (mk_and fs) in
+  (*let gts = generate_knowns gts in*)
   let gts1 = generate_terms (btwn_gen @ generators) gts in
   let classes = CongruenceClosure.congr_classes fs gts1 in
   let round1 fs_inst gts_inst classes =
@@ -195,6 +206,8 @@ let instantiate_and_prove session fs =
   let round2 fs_inst gts_inst classes =
     (* the following seemingly redundant instantiation round is a workaround for not using the -fullep option *)
     let fs2 = instantiate_with_terms ~stratify:false true fs1 classes in
+    let gts_known = generate_knowns gts in
+    let gts_inst = TermSet.union gts_inst gts_known in
     let gts_inst = generate_terms generators (TermSet.union gts_inst (ground_terms ~include_atoms:true (mk_and fs2))) in
     let core_terms =
       let gts_a = (*terms_from_neg_assert*) ground_terms (mk_and fs) in
@@ -218,7 +231,7 @@ let instantiate_and_prove session fs =
     then fs2, gts_inst, classes
     else
     let classes = CongruenceClosure.congr_classes (rev_concat [fs_inst; fs]) gts2 in
-    instantiate_with_terms true (flatten @@ linearize fs1) classes, gts2, classes
+    instantiate_with_terms true ((*flatten @@*) linearize fs1) classes, gts2, classes
   in
   (*let round3 fs_inst gts_inst classes =
     let generators =

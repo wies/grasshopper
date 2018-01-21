@@ -25,6 +25,7 @@ procedure extract_max(root: Node)
   } else {
     var c: Node;
     c := root.left;
+    assert tree(c) &*& tree(root.right) &*& acc(root);
     return c, root;
   }
 }
@@ -46,10 +47,12 @@ procedure insert(root: Node, value: Int)
     if (root.data > value) {
       n := insert(root.left, value);
       root.left := n;
+      assert acc(root) &*& tree(root.left) &*& tree(root.right);
       return root;
     } else if (root.data < value) {
       n := insert(root.right, value);
       root.right := n;
+      assert acc(root) &*& tree(root.left) &*& tree(root.right);
       return root;
     }
     return root;
@@ -70,10 +73,12 @@ procedure remove(root: Node, value: Int)
     } else if (root.left != null && root.right == null) {
       res := root.left;
       free(root);
+      assert tree(root.left) &*& tree(root.right);
       return res;
     } else if (root.left == null && root.right != null) {
       res := root.right;
       free(root);
+      assert tree(root.left) &*& tree(root.right);
       return res;
     } else {
       var l: Node, m: Node;
@@ -85,6 +90,7 @@ procedure remove(root: Node, value: Int)
     }
   } else if (root.data > value) {
     root.left := remove(root.left, value);
+    assert acc(root) &*& tree(root.left) &*& tree(root.right);
     return root;
   } else {
     root.right := remove(root.right, value);
