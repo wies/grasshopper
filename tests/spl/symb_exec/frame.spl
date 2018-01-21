@@ -22,7 +22,7 @@ procedure foo3(a: Int) returns (b: Int)
 
 procedure pure_call3(c: Int, d:Int)
   requires c == 2 && d == c
-  ensures c == 2 && d == 4
+  ensures false
 {
   d := foo3(c);
 }
