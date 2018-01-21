@@ -281,7 +281,7 @@ let remove_useless_existentials ((pure, spatial) as state : state) : state =
   add to [eqs] and simplify. *)
 let simplify eqs (pure, spatial) =
   (* TODO: why is this strange double nnf needed? (see basic.spl:if2) *)
-  let (pure, spatial) = remove_useless_existentials (pure |> nnf |> nnf, spatial) in
+  let (pure, spatial) = remove_useless_existentials (pure |> nnf, spatial) in
   let eqs = find_equalities eqs pure in
   eqs, apply_equalities eqs (pure, spatial)
 

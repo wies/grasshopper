@@ -117,7 +117,7 @@ procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
     intComp(I1, intComp(I2, I3)) == intComp(intComp(I1, I2), I3);
   pure assume forall I1: Interface, I2: Interface ::
     intComp(I1, I2) != intUndef ==> (I1 != intUndef && I2 != intUndef);
-  // TODO possible unsoundness - ensure this is true when interfaces are created!!
+  // TODO possible unsoundness - have an intValid() relation that enforces this
   pure assume forall I: Interface, n: Node :: n !in I.FP || n !in I.FPo;
 
   var I0 := lemma_comp_sing_int(x, Ix, I);
