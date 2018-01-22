@@ -301,7 +301,7 @@ let add_neq_constraints (pure, spatial) =
   let not_nil = List.map (fun (x, s) -> mk_neq x (mk_null s)) allocated in
   let star_neq =
     let rec f acc = function
-      | [] -> []
+      | [] -> acc
       | (x, _) :: l ->
         let acc = List.fold_left (fun neqs (y, _) -> mk_neq x y :: neqs) acc l in
         f acc l
@@ -384,9 +384,9 @@ let check_pure_entail prog eqs p1 p2 =
   inst accumulates an instantiation for existential variables in state2. *)
 let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
   Debug.debugl 1 (fun () ->
-    sprintf "\n  Finding frame with %s for:\n    %s : %s &*& ??\n    |= %s\n" 
-      (string_of_equalities inst) (string_of_equalities eqs)
-      (string_of_state (p1, sp1)) (string_of_state (p2, sp2))
+    sprintf "\nFinding frame with %s for:\n%s &*& ??\n|=\n%s\n" 
+      (string_of_equalities inst)
+      (string_of_eqs_state eqs (p1, sp1)) (string_of_state (p2, sp2))
   );
   let fail () =
     failwith @@ sprintf "Could not find frame for entailment:\n%s\n|=\n%s\n"

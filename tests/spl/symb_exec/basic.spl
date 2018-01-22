@@ -163,3 +163,8 @@ procedure loop1(x: Node)
     i := i + 1;
   }
 }
+
+procedure spatial_neq(x: Node, y: Node)
+  requires acc(x) &*& acc(y)
+  ensures acc(x) &*& acc(y) &*& x != y
+{}
