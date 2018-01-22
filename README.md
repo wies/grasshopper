@@ -19,7 +19,7 @@ details.
 
 Installation Requirements
 -------------------------
-- OCaml, version >= 4.05
+- OCaml, version >= 4.06
 
 - OCaml Findlib, version >= 1.6.2
 
@@ -33,7 +33,7 @@ The easiest way to satisfy all OCaml-related installation requirements
 is to install the OCaml package manager OPAM and then execute the
 following commands
 ```bash
-opam switch 4.05.0
+opam switch 4.06.0
 opam install -y ocamlfind
 opam install -y ocamlbuild
 eval $(opam config env)

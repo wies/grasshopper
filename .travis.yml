@@ -10,7 +10,7 @@ install:
   - opam install -y ocamlbuild
   - eval $(opam config env)
 env:
-  - OCAML_VERSION=4.05 PATH="$HOME/z3/z3-4.6.0-x64-ubuntu-14.04/bin/:$PATH"
+  - OCAML_VERSION=4.06 PATH="$HOME/z3/z3-4.6.0-x64-ubuntu-14.04/bin/:$PATH"
 script:
   - bash build.sh
   - bash build.sh tests
