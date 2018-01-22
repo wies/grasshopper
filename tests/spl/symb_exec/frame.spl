@@ -65,3 +65,14 @@ procedure fun_call3(u: Node, v: Node)
 {
   bar3(u, v);
 }
+
+procedure bar4(x: Node, y: Node)
+  requires acc(x) &*& acc(y)
+  ensures x.next |-> x &*& y.next |-> y
+
+procedure aafun_call4(u: Node, v: Node)
+  requires u.next |-> v &*& v.next |-> null
+  ensures u.next |-> u &*& v.next |-> v
+{
+  bar4(u, u.next);
+}

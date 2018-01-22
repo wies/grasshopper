@@ -383,6 +383,11 @@ let check_pure_entail prog eqs p1 p2 =
 (** Find a frame for state1 * fr |= state2.
   inst accumulates an instantiation for existential variables in state2. *)
 let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
+  Debug.debugl 1 (fun () ->
+    sprintf "\n  Finding frame with %s for:\n    %s : %s &*& ??\n    |= %s\n" 
+      (string_of_equalities inst) (string_of_equalities eqs)
+      (string_of_state (p1, sp1)) (string_of_state (p2, sp2))
+  );
   let fail () =
     failwith @@ sprintf "Could not find frame for entailment:\n%s\n|=\n%s\n"
       (string_of_state (p1, sp1)) (string_of_state (p2, sp2))
@@ -542,14 +547,14 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     let (eqs', state') =
       List.combine ids ts
       |> List.fold_left (fun (eqs, state) (id, rhs) ->
-          (* First, substitute eqs on t *)
+          (* First, substitute eqs on rhs *)
           let rhs = subst_term eqs rhs in
-          (* Eval t in case it has field lookups *)
-          let t, state = eval_term flds state rhs in
+          (* Eval rhs in case it has field lookups *)
+          let rhs, state = eval_term flds state rhs in
           let sm = IdMap.singleton id (mk_var_like id) in
-          let t' = subst_term sm t in
+          let rhs' = subst_term sm rhs in
           let (pure, spatial) = subst_state sm state in
-          let eqs = add_eq id t' (subst_eqs sm eqs) in
+          let eqs = add_eq id rhs' (subst_eqs sm eqs) in
           eqs, (pure, spatial)
         ) (eqs, state)
     in
@@ -561,9 +566,14 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
         lineSep (string_of_eqs_state eqs state)
     );
+    (* First, substitute eqs and eval args *)
+    let args, state = args
+      |> List.map (subst_term eqs)
+      |> fold_left_map (eval_term flds) state
+    in
+    Debug.debug (fun () -> sprintf "\nOn args: %s\n" (string_of_format pr_term_list args));
     (* Look up pre/post of foo *)
     let foo_pre, foo_post =
-      (* TODO optimize by precomputing this. *)
       let c = (find_proc prog foo).proc_contract in
       (* Substitute formal params -> actual params in foo_pre/post *)
       let sm = mk_eqs c.contr_formals args in
@@ -578,7 +588,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       remove_useless_existentials pre, remove_useless_existentials post
     in
     Debug.debug (fun () ->
-      sprintf "\nFound contract:\nPrecondition:\n%s\nPostcondition:\n%s\n"
+      sprintf "\nPrecondition:\n%s\n\nPostcondition:\n%s\n"
         (string_of_state foo_pre) (string_of_state foo_post)
     );
     (* Add derived equalities before checking for frame & entailment *)
