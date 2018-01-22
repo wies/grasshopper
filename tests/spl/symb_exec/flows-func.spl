@@ -25,26 +25,32 @@ procedure lemma_conc(x: Node, I: Interface)
   requires N(x, I)
   ensures [acc(x) &*& I.inf[x] == 1 &*& (x.next == null && I.FPo == {} || x.next != null && I.FPo == {x.next} && I.fm[x][x.next] == 1)](I) &*& I.FP == {x}
 
+procedure lemma_singleton_int(x: Node, xn: Node)
+  returns (I1: Interface)
+  ensures I1 != intUndef && I1.FP == {x} && I1.inf[x] == 1
+  ensures (xn == null && I1.FPo == {}
+       || xn != null && I1.FPo == {xn} && I1.fm[x][xn] == 1)
+  ensures forall n: Node, n1: Node ::
+    (n !in I1.FP ==> I1.inf[n] == 0 && I1.fm[n][n1] == 0)
+    && (n1 !in I1.FPo ==> I1.fm[n][n1] == 0)
+
 procedure lemma_abs(x: Node, I: Interface, I1: Interface)
   returns ()
-  requires I != intUndef && I1 != intUndef
+  requires I != intUndef && I1 != intUndef && intValid(I1)
   requires [acc(x) &*& I1.inf[x] == 1 &*& (x.next == null && I1.FPo == {} || x.next != null && I1.FPo == {x.next} && I1.fm[x][x.next] == 1)](I) &*& I1.FP == {x}
   ensures [N(x, I1)](I)
 
 
 /** Lemmas */
 
-// Sufficient condition for intComp(I, Ix, Iy), when Ix, Iy are singletons
+// TODO move these two to lemmas.spl too
+// Sufficient condition for intComp(I, Ix, Iy), when no edge from y to x
 procedure lemma_int_comp_fold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
   requires Ix != intUndef && Iy != intUndef && I != intUndef
   requires Ix.FP == {x} && Iy.FP == {y} && x != y && I.FP == {x, y}
   requires I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
   requires Ix.inf[x] == I.inf[x] + Iy.inf[y] * Iy.fm[y][x]
   requires Iy.inf[y] == I.inf[y] + Ix.inf[x] * Ix.fm[x][y]
-    // TODO how to instantiate inner forall? If we can, don't need to provide I
-    //  requires exists Cxx: Int, Cxy: Int, Cyx: Int, Cyy: Int :: // Capacity values
-    //    (forall n in I.FPo :: I.fm[x][n] == Cxx * Ix.fm[x][n] + Cxy * Iy.fm[y][n]
-    //     && I.fm[y][n] == Cyy * Iy.fm[y][n] + Cyx * Ix.fm[x][n])
   requires x !in Iy.FPo  // In this case, easier to check new flow map:
   requires (forall n in I.FPo :: I.fm[x][n] == Ix.fm[x][n] + Ix.fm[x][y] * Iy.fm[y][n])
   requires (forall n in I.FPo :: I.fm[y][n] == Iy.fm[y][n] + Iy.fm[y][x] * Ix.fm[x][n])
@@ -63,6 +69,18 @@ procedure lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, 
     && Cxy == Cxx * Ix.fm[x][y] && Cyx == Cyy * Iy.fm[y][x]
     && (forall n in I.FPo :: I.fm[x][n] == Cxx * Ix.fm[x][n] + Cxy * Iy.fm[y][n]
        && I.fm[y][n] == Cyy * Iy.fm[y][n] + Cyx * Ix.fm[x][n])
+
+procedure test_abs(x: Node, I: Interface, y: Node)
+  returns (I1: Interface)
+  requires [acc(x)](I) &*& x != y
+  requires I != intUndef && intValid(I) == true
+  ensures [N(x, I1)](I)
+{
+  x.next := y;
+  I1 := lemma_singleton_int(x, x.next);
+  lemma_int_valid_fold(I1);
+  lemma_abs(x, I, I1);
+}
 
 procedure no_op(x: Node, I: Interface)
   requires N(x, I) &*& I != intUndef
@@ -101,25 +119,12 @@ procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
   requires [acc(x)](Ix) &*& Gr(I)
   requires Ix.FP == {x} &*& Ix.inf[x] == 0 &*& Ix.FPo == {}
   requires y in I.FP &*& I.inf[y] == 1 &*& I.FPo == {}
-  requires Ix != intUndef &*& I != intUndef
+  requires Ix != intUndef && I != intUndef
   ensures Gr(I1) &*& intLeq(intComp(Ix, I), I1) == true
     //  TODO properties of intLeq imply these:
     //  ensures x in I1.FP &*& y in I1.FP
     //  ensures I1.inf[y] == 1 &*& I1.FPo == {}
 {
-   // TODO add as axioms instead:
-  pure assume forall I: Interface, n: Node, n1: Node ::
-    (n !in I.FP ==> I.inf[n] == 0 && I.fm[n][n1] == 0)
-    && (n1 !in I.FPo ==> I.fm[n][n1] == 0);
-  pure assume forall I: Interface, I1: Interface, I2: Interface ::
-    intComp(I1, I2) == intComp(I2, I1);
-  pure assume forall I1: Interface, I2: Interface, I3: Interface ::
-    intComp(I1, intComp(I2, I3)) == intComp(intComp(I1, I2), I3);
-  pure assume forall I1: Interface, I2: Interface ::
-    intComp(I1, I2) != intUndef ==> (I1 != intUndef && I2 != intUndef);
-  // TODO possible unsoundness - have an intValid() relation that enforces this
-  pure assume forall I: Interface, n: Node :: n !in I.FP || n !in I.FPo;
-
   var I0 := lemma_comp_sing_int(x, Ix, I);
   // I0 == intComp(Ix, I)
 
@@ -136,31 +141,39 @@ procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
   y.next := x;
   // [x |-> z](Ix) &*& [y |-> x](Iy) &*& Gr(I2)
 
-  var Ix1: Interface;    // TODO change grammar to allow assignment?
-  pure assume Ix1 != intUndef && Ix1.FP == {x} && Ix1.inf[x] == 1
-    && (x.next == null && Ix1.FPo == {}
-       || x.next != null && Ix1.FPo == {x.next} && Ix1.fm[x][x.next] == 1);
+  // TODO how do we know x != z? Need conditional, (Step), and Gr footprint
+  pure assume x != z;
+
+  var Ix1 := lemma_singleton_int(x, x.next);
+  lemma_int_valid_fold(Ix1);
+
+  var Iy1 := lemma_singleton_int(y, y.next);
+  lemma_int_valid_fold(Iy1);
+
   lemma_abs(x, Ix, Ix1);
-  assert false;
   lemma_dirty_N_is_Gr(x, Ix1, Ix);
   // [Gr(Ix1)](Ix) &*& [y |-> x](Iy) &*& Gr(I2)
 
-  var Iy1: Interface;
-  pure assume Iy1 != intUndef && Iy1.FP == {y} && Iy1.inf[y] == 1 && Iy1.FPo == {x}
-    && Iy1.fm[y][x] == 1;
   lemma_abs(y, Iy, Iy1);
   lemma_dirty_N_is_Gr(y, Iy1, Iy);
   // [Gr(Ix1)](Ix) &*& [Gr(Iy1)](Iy) &*& Gr(I2)
-
-  // TODO how do we know x != z? Need conditional, (Step), and Gr footprint
-  pure assume x != z;
 
   var Ixy1: Interface;
   pure assume Ixy1 != intUndef && Ixy1.FP == {x, y}
     && Ixy1.inf[x] == 0 && Ixy1.inf[y] == 1
     && (z != null && Ixy1.FPo == {z} && Ixy1.fm[x][z] == 1 && Ixy1.fm[y][z] == 1
-       || z == null && Ixy1.FPo == {});
+       || z == null && Ixy1.FPo == {})
+    && (forall n: Node, n1: Node ::
+       (n !in Ixy1.FP ==> Ixy1.inf[n] == 0 && Ixy1.fm[n][n1] == 0)
+       && (n1 !in Ixy1.FPo ==> Ixy1.fm[n][n1] == 0));
+  lemma_int_valid_unfold(Ix1);
+  lemma_int_valid_unfold(Iy1);
+  lemma_int_valid_unfold(Iy);
+  pure assume z !in Ixy1.FP; // TODO why can't it infer this?
+  lemma_int_valid_fold(Ixy1);
+  lemma_int_valid_unfold(Ixy1);
   lemma_int_comp_fold(y, Iy1, x, Ix1, Ixy1);
+  assert false;
 
   var Ixy := lemma_comp(Ix, Ix1, Iy, Iy1);
   // [Gr(Ix1) &*& Gr(Iy1)](Ixy) &*& Gr(I2) &*& Ixy == intComp(Ix, Iy)
