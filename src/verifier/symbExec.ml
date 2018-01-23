@@ -512,7 +512,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
   match comms with
   | [] ->
     Debug.debug (fun () ->
-      sprintf "\nChecking postcondition: %s\n" (string_of_state postcond));
+      sprintf "%sChecking postcondition: %s%s\n" lineSep (string_of_state postcond) lineSep);
     (* TODO do this better *)
     let state = add_neq_constraints state in
     check_entailment prog eqs state postcond |> fst
@@ -610,7 +610,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     in
     let eqs = subst_eqs sm eqs in
     let frame = List.map (subst_spatial_pred sm) frame in
-    let (pure, spatial) = state in
+    let pure = state |> fst |> subst_form sm in
     let (post_pure, post_spatial) = foo_post in
     let state = (smk_and [pure; post_pure], post_spatial @ frame) in
     symb_exec prog flds proc (eqs, state) postcond comms'

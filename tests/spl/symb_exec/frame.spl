@@ -9,6 +9,15 @@ procedure pure_call(c: Int, d:Int)
   c := foo(c);
 }
 
+// Expect to fail
+procedure pure_call1(c: Int, d:Int)
+  requires c == 2 && d == c
+  ensures c == 4
+{
+  c := foo(c);
+  assert false;
+}
+
 procedure pure_call2(c: Int, d:Int)
   requires c == 2 && d == c
   ensures c == 2 && d == 4
