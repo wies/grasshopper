@@ -168,3 +168,16 @@ procedure spatial_neq(x: Node, y: Node)
   requires acc(x) &*& acc(y)
   ensures acc(x) &*& acc(y) &*& x != y
 {}
+
+procedure assert1(x: Node, y: Node)
+  requires x.next |-> null &*& y.next |-> x
+  ensures x.next |-> x &*& y.next |-> null
+{
+  x.next := x;
+  assert x.next |-> x &*& y.next |-> x;
+  x.next := null;
+  assert x.next |-> null &*& y.next |-> x;
+  y.next := null;
+  pure assert x != y;
+  x.next := x;
+}

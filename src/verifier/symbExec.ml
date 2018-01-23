@@ -374,7 +374,10 @@ let check_pure_entail prog eqs p1 p2 =
       (* Add labels *)
       |> Verifier.add_labels 
     in
-    match Prover.get_model f with
+    let name = fresh_ident "form" |> string_of_ident in
+    Debug.debug (fun () ->
+      sprintf "\n\nCalling prover with name %s\n" name);
+    match Prover.get_model ~session_name:name f with
     | None -> true
     | Some model ->
       failwith @@ sprintf "Could not prove %s" (string_of_form p2)
@@ -639,10 +642,19 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     List.fold_left (fun errors comm ->
       symb_exec prog flds proc (eqs, state) postcond (comm :: comms') @ errors)
       [] comms
+  | Basic (Assert spec, pp) as comm :: comms' ->
+    Debug.debug (fun () ->
+      sprintf "%sExecuting assert: %d: %s%sCurrent state:\n%s\n"
+        lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+        lineSep (string_of_eqs_state eqs state)
+    );
+    let spec_st = state_of_spec_list flds [spec] in
+    let state' = add_neq_constraints state in
+    let _ = find_frame prog eqs state' spec_st in
+    symb_exec prog flds proc (eqs, state) postcond comms'
   | Basic (Assume _, _) :: _ -> failwith "TODO Assume SL command"
   | Basic (New _, _) :: _ -> failwith "TODO New command"
   | Basic (Dispose _, _) :: _ -> failwith "TODO Dispose command"
-  | Basic (Assert _, _) :: _ -> failwith "TODO Assert command"
   | Basic (Return _, _) :: _ -> failwith "TODO Return command"
   | Loop _ :: _ -> failwith "TODO Loop command"
 
