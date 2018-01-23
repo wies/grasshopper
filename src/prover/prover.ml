@@ -234,7 +234,7 @@ let instantiate_and_prove session fs =
     let classes = CongruenceClosure.congr_classes (rev_concat [fs_inst; fs]) gts2 in
     let implied = get_implied_equalities classes in
     let fs3 = instantiate_with_terms true ((*flatten @@*) linearize fs1) classes in
-    rev_concat [implied; fs3], gts2, classes
+    rev_concat [fs3; implied], gts2, classes
   in
   (*let round3 fs_inst gts_inst classes =
     let generators =

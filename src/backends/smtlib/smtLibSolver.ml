@@ -344,10 +344,44 @@ let declare_fun session sym_name arg_sorts res_sort =
 let declare_sort session sort_name num_of_params =
   writeln session (Printf.sprintf "(declare-sort %s %d)" sort_name num_of_params)
 
-let declare_datatypes session adts =
-  iter_solvers session
-    (fun solver state ->
-      SmtLibSyntax.print_command state.out_chan (mk_declare_datatypes adts))
+let declare_datatypes =
+  let module G = Graph.Make(struct
+    type t = ident
+    let compare = compare
+    let hash = Hashtbl.hash
+    let equal = (=)
+  end)(IdSet)
+  in
+  let rec free_srts acc = function
+    | FreeSort (id, srts) -> 
+        List.fold_left free_srts (IdSet.add id acc) srts
+    | _ -> acc
+  in
+  fun session adts ->
+    (* compute strongly connected components of ADT definitions *)
+    let g =
+      List.fold_left
+        (fun g (id, _) -> G.add_vertex g id)
+        G.empty adts 
+    in
+    let g =
+      List.fold_left
+        (fun g (src, cnstrs) ->
+          List.fold_left (fun g (_, args) ->
+            List.fold_left (fun g (_, srt) ->
+              let srts = free_srts IdSet.empty srt in
+              G.add_edges g src (IdSet.inter (G.vertices g) srts))
+              g args)
+            g cnstrs)
+        g adts
+    in
+    let adt_sscs = G.topsort g in
+    List.iter (fun ids ->
+      let adt_defs = List.map (fun id -> (id, List.assoc id adts)) ids in
+      iter_solvers session
+        (fun solver state ->
+          SmtLibSyntax.print_command state.out_chan (mk_declare_datatypes adt_defs)))
+      adt_sscs
     
 let smtlib_sort_of_grass_sort srt =
   let rec csort = function
@@ -360,14 +394,15 @@ let smtlib_sort_of_grass_sort srt =
   | Map (dsrts, rsrt) ->
       let k = List.length dsrts - 1 in
       FreeSort ((map_sort_string, k), List.map csort dsrts @ [csort rsrt])
-  | Adt (id, cs) ->
-      let cs1 =
+  | Adt (id, adts) ->
+      let adts1 =
         List.map
-          (fun (id, args) ->
-            (id, List.map (fun (id, srt) -> (id, csort srt)) args))
-          cs
+          (fun (id, cnsts) ->
+            (id, List.map (fun (id, args) ->
+              (id, List.map (fun (id, srt) -> (id, csort srt)) args)) cnsts))
+          adts
       in
-      AdtSort (id, cs1)
+      AdtSort (id, adts1)
   | Array srt ->
       FreeSort (("Grass" ^ array_sort_string, 0), [csort srt])
   | ArrayCell srt ->
@@ -401,19 +436,18 @@ let declare_sorts has_int session =
   let adts = 
     IdMap.fold
     (fun _ srt adts -> match srt with
-      | Adt (id, cnstrs) ->
-          let cnstrs =
-            List.map (fun (id, args) ->
-              (id, List.map (fun (id, srt) -> (id, smtlib_sort_of_grass_sort srt)) args))
-              cnstrs
+      | Adt (id, adts) ->
+          let adts =
+            List.map (fun (id, cnstrs) ->
+              (id, List.map (fun (id, args) ->
+                (id, List.map (fun (id, srt) -> (id, smtlib_sort_of_grass_sort srt)) args))
+                 cnstrs)) adts
           in
-          (id, cnstrs) :: adts
+          Some adts
       | _ -> adts)
-      session.user_sorts []
+      session.user_sorts None
   in
-  match adts with
-  | [] -> ()
-  | _ -> declare_datatypes session adts
+  Opt.iter (declare_datatypes session) adts
 
 
 
@@ -484,11 +518,13 @@ let init_session session sign =
       | Int -> true
       | Set srt | Loc srt | Array srt | ArrayCell srt -> hi srt
       | Map (dsrts, rsrt) -> List.exists hi dsrts || hi rsrt
-      | Adt (_, cnsts) ->
+      | Adt (_, adts) ->
           List.exists
-            (fun (_, args) ->
-              List.exists (fun (_, srt) -> hi srt) args)
-            cnsts
+            (fun (_, cnsts) ->
+              List.exists
+                (fun (_, args) ->
+                  List.exists (fun (_, srt) -> hi srt) args)
+                cnsts) adts
       | _ -> false
     in
     SymbolMap.exists 
@@ -501,15 +537,16 @@ let init_session session sign =
   let user_srts =
     let rec add seen acc srt = match srt with
     | FreeSrt id when not @@ IdSet.mem id seen -> IdMap.add id srt acc
-    | Adt (id, cnstrs) when not @@ IdSet.mem id seen ->
-        let acc1 = IdMap.add id srt acc in
-        let seen1 = IdSet.add id seen in
-        List.fold_left
-          (fun acc (_, args) ->
+    | Adt (id, adts) when not @@ IdSet.mem id seen ->
+        let acc1 = IdMap.add id (Adt (id, adts)) acc in
+        let seen1 = List.fold_left (fun seen1 (id, _) -> IdSet.add id seen1) seen adts in
+        List.fold_left (fun acc (_, cnstrs) ->
+          List.fold_left (fun acc (_, args) ->
             List.fold_left
               (fun acc (_, srt) -> add seen1 acc srt)
               acc args)
-          acc1 cnstrs
+            acc cnstrs)
+          acc1 adts
     | Set srt | ArrayCell srt | Array srt | Loc srt -> add seen acc srt
     | Map (dsrts, rsrt) -> List.fold_left (add seen) acc (rsrt :: dsrts)
     | _ -> acc
@@ -538,7 +575,8 @@ let init_session session sign =
       | srt -> srt
     in
     IdMap.fold (fun _ srt sign -> match srt with
-    | Adt (id, cnsts) ->
+    | Adt (id, adts) ->
+        let cnsts = List.assoc id adts in
         List.fold_left
           (fun sign (id, args) ->
             let arg_srts = List.map (fun (_, srt) -> subst_sort srt) args in
@@ -943,14 +981,15 @@ let convert_model session smtModel =
       if i = 8 then Byte
       else if i = 32 then Int
       else failwith ("no equivalent for bitvector of size " ^ (string_of_int i))
-    | AdtSort (id, cs) ->
-        let cs1 =
-          List.map
-            (fun (id, args) ->
-              (id, List.map (fun (id, srt) -> (id, convert_sort srt)) args))
-            cs
+    | AdtSort (id, adts) ->
+        let adts1 =
+          List.map (fun (id, cs) ->
+            (id, List.map
+               (fun (id, args) ->
+                 (id, List.map (fun (id, srt) -> (id, convert_sort srt)) args))
+               cs)) adts
         in
-        Adt (id, cs1)
+        Adt (id, adts1)
     | FreeSort ((name, num), srts) ->
         let csrts = List.map convert_sort srts in
         match name, csrts with

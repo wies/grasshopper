@@ -6,8 +6,8 @@ open Axioms
 
 let mk_name_generator base_name =
   let set_ids = Hashtbl.create 0 in
-  fun srt ->
-    let name = base_name ^ "_" ^ (name_of_sort srt) in
+  fun ?(aux_name="") srt ->
+    let name = base_name ^ aux_name ^ "_" ^ (name_of_sort srt) in
     try Hashtbl.find set_ids (name, srt)
     with Not_found ->
       let id = fresh_ident name in

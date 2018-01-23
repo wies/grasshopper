@@ -36,10 +36,10 @@ type sort =
   | Map of sort list * sort (** maps *)
   | Array of sort (** arrays *)
   | ArrayCell of sort (** array cells *)
-  | Adt of ident * adt_constr list (** algebraic data types *)
+  | Adt of ident * adt_def list (** algebraic data types *)
   | Pat (** patterns *)
   | FreeSrt of ident (** uninterpreted sorts *)
-and adt_constr = ident * (ident * sort) list (** data type constructor *)
+and adt_def = ident * (ident * (ident * sort) list) list (** data type constructor *)
         
 module IdSrtSet = Set.Make(struct
     type t = ident * sort
@@ -303,11 +303,11 @@ let rec pr_sort ppf srt = match srt with
   | Set e
   | Array e
   | ArrayCell e -> fprintf ppf "%s<@[%a@]>" (name_of_sort srt) pr_sort e
-  | Adt (id, cnsts) -> fprintf ppf "mu %s.@[%a@]" (string_of_ident id) pr_adt_constrs cnsts
+  | Adt (id, cnsts) -> fprintf ppf "%a" pr_ident id
   | FreeSrt id -> pr_ident ppf id
   | Map (ds, r) -> fprintf ppf "%s<@[%a,@ %a@]>" map_sort_string pr_sorts ds pr_sort r
 
-and pr_adt_constrs ppf = function
+(*and pr_adt_constrs ppf = function
   | [] -> ()
   | [c] -> pr_adt_constr ppf c
   | c :: cs -> fprintf ppf "%a | %a" pr_adt_constr c pr_adt_constrs cs
@@ -316,7 +316,7 @@ and pr_adt_constr ppf = function
   | (id, args) -> fprintf ppf "%s(%a)" (string_of_ident id) (pr_list_comma pr_adt_arg) args
 
 and pr_adt_arg ppf = function
-  | (id, srt) -> fprintf ppf "%s: %a" (string_of_ident id) pr_sort srt
+  | (id, srt) -> fprintf ppf "%s: %a" (string_of_ident id) pr_ident id*)
         
 and pr_sorts ppf = function
   | [srt] ->  fprintf ppf "%a" pr_sort srt

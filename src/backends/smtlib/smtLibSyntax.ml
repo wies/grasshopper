@@ -9,10 +9,10 @@ type pos = Grass.source_position
 type sort = 
   | IntSort | BoolSort
   | BvSort of int
-  | AdtSort of ident * adt_constr list
+  | AdtSort of ident * adt_def list
   | FreeSort of ident * sort list
 
-and adt_constr = ident * (ident * sort) list
+and adt_def = ident * (ident * (ident * sort) list) list
         
 type symbol =
   | BoolConst of bool
@@ -45,7 +45,7 @@ type command =
   | SetOption of string * string * pos option
   | SetLogic of string * pos option
   | DeclareSort of ident * int * pos option
-  | DeclareDatatypes of (ident * ((ident * (ident * sort) list) list)) list * pos option
+  | DeclareDatatypes of adt_def list * pos option
   | DefineSort of ident * ident list * sort * pos option
   | DeclareFun of ident * sort list * sort * pos option
   | DefineFun of ident * (ident * sort) list * sort * term * pos option
