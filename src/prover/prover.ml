@@ -184,6 +184,16 @@ let instantiate_and_prove session fs =
   (*let gts = generate_knowns gts in*)
   let gts1 = generate_terms (btwn_gen @ generators) gts in
   let classes = CongruenceClosure.congr_classes fs gts1 in
+  let get_implied_equalities classes =
+    List.fold_left
+      (fun acc -> function
+        | c :: cls when sort_of c <> Bool && sort_of c <> Pat -> 
+            let eq = List.map (fun t -> GrassUtil.mk_eq c t) cls in
+            List.rev_append eq acc
+        | _ -> acc)
+      []
+      classes
+  in
   let round1 fs_inst gts_inst classes =
     let equations = List.filter (fun f -> is_horn false [f]) fs_inst in
     let ground_fs = List.filter is_ground fs_inst in
@@ -191,16 +201,7 @@ let instantiate_and_prove session fs =
     let gts1 = TermSet.union (ground_terms ~include_atoms:true (mk_and eqs)) gts_inst in
     let eqs1 = List.filter (fun f -> IdSet.is_empty (fv f)) eqs in
     let classes = CongruenceClosure.congr_classes (List.rev_append eqs1 fs) gts1 in
-    let implied =
-      List.fold_left
-        (fun acc -> function
-        | c :: cls when sort_of c <> Bool && sort_of c <> Pat -> 
-            let eq = List.map (fun t -> GrassUtil.mk_eq c t) cls in
-            List.rev_append eq acc
-        | _ -> acc)
-        []
-      classes
-    in
+    let implied = get_implied_equalities classes in
     rev_concat [eqs; ground_fs; implied], gts1, classes
   in
   let round2 fs_inst gts_inst classes =
@@ -231,7 +232,9 @@ let instantiate_and_prove session fs =
     then fs2, gts_inst, classes
     else
     let classes = CongruenceClosure.congr_classes (rev_concat [fs_inst; fs]) gts2 in
-    instantiate_with_terms true ((*flatten @@*) linearize fs1) classes, gts2, classes
+    let implied = get_implied_equalities classes in
+    let fs3 = instantiate_with_terms true ((*flatten @@*) linearize fs1) classes in
+    rev_concat [implied; fs3], gts2, classes
   in
   (*let round3 fs_inst gts_inst classes =
     let generators =
