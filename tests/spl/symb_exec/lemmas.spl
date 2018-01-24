@@ -12,8 +12,12 @@ function intComp(I1: Interface, I2: Interface) returns (I: Interface)
 // Interface contextual extension, encoded as a function
 function intLeq(I1: Interface, I2: Interface) returns (res: Bool)
 
+// Encoding of well defined interfaces
+function intValid(I: Interface) returns (res: Bool)
+
+
 // Associativity, commutativity of intComp
-axiom forall I: Interface, I1: Interface, I2: Interface ::
+axiom forall I1: Interface, I2: Interface ::
   intComp(I1, I2) == intComp(I2, I1);
 axiom forall I1: Interface, I2: Interface, I3: Interface ::
   intComp(I1, intComp(I2, I3)) == intComp(intComp(I1, I2), I3);
@@ -22,9 +26,18 @@ axiom forall I1: Interface, I2: Interface, I3: Interface ::
 axiom forall I1: Interface, I2: Interface ::
   intComp(I1, I2) != intUndef ==> (I1 != intUndef && I2 != intUndef);
 
-// Encoding of well defined interfaces
-function intValid(I: Interface) returns (res: Bool)
+// Valid interfaces are not undefined
+axiom forall I: Interface :: intValid(I) ==> I != intUndef;
 
+axiom forall I1: Interface, I2: Interface ::
+  intValid(I1) && intValid(I2) && intComp(I1, I2) != intUndef ==> intValid(intComp(I1, I2));
+
+axiom forall I1: Interface, I2: Interface ::
+  (! intValid(I1) || ! intValid(I2)) ==> intComp(I1, I2) == intUndef;
+    
+// Note: we assume that Gr(I) ==> intValid(I) in the following lemmas (TODO automate?)
+
+    
 procedure lemma_int_valid_unfold(I: Interface)
   requires intValid(I) == true
   ensures forall n: Node, n1: Node ::
@@ -33,6 +46,7 @@ procedure lemma_int_valid_unfold(I: Interface)
   ensures forall n: Node :: n !in I.FP || n !in I.FPo
 
 procedure lemma_int_valid_fold(I: Interface)
+  requires I != intUndef // TODO why? See test_valid2
   requires forall n: Node, n1: Node ::
     (n !in I.FP ==> I.inf[n] == 0 && I.fm[n][n1] == 0)
     && (n1 !in I.FPo ==> I.fm[n][n1] == 0)
@@ -57,7 +71,7 @@ procedure lemma_Gr_is_N(x: Node, I: Interface)
 procedure lemma_Gr_comp(Ix: Interface, Iy: Interface)
   returns (I: Interface)
   requires Gr(Ix) &*& Gr(Iy)
-  ensures Gr(I) &*& intComp(Ix, Iy) == I
+  ensures Gr(I) &*& intComp(Ix, Iy) == I &*& I != intUndef
 
 procedure lemma_dirty_Gr_comp(Ix: Interface, Iy: Interface, I: Interface)
   returns (I1: Interface)
@@ -66,19 +80,18 @@ procedure lemma_dirty_Gr_comp(Ix: Interface, Iy: Interface, I: Interface)
 
 procedure lemma_comp(Ix: Interface, Ix1: Interface, Iy: Interface, Iy1: Interface)
   returns (I: Interface)
-  requires [Gr(Ix1)](Ix) &*& [Gr(Iy1)](Iy) &*& intComp(Ix1, Iy1) != intUndef
-  ensures [Gr(Ix1) &*& Gr(Iy1)](I) &*& intComp(Ix, Iy) == I
+  requires [Gr(Ix1)](Ix) &*& [Gr(Iy1)](Iy) &*& intValid(intComp(Ix1, Iy1)) == true
+  ensures [Gr(Ix1) &*& Gr(Iy1)](I) &*& intComp(Ix, Iy) == I &*& I != intUndef
 
 procedure lemma_comp_sing_int(x: Node, Ix: Interface, I2: Interface)
   returns (I: Interface)
   requires [acc(x)](Ix) &*& Gr(I2)
-  ensures [acc(x)](Ix) &*& Gr(I2) &*& intComp(Ix, I2) == I
+  ensures [acc(x)](Ix) &*& Gr(I2) &*& intComp(Ix, I2) == I &*& I != intUndef
 
 procedure lemma_decomp(x: Node, I: Interface)
   returns (I1: Interface, I2: Interface)
   requires Gr(I) &*& x in I.FP
   ensures N(x, I1) &*& Gr(I2) &*& intComp(I1, I2) == I
-  ensures intValid(I1) == true && intValid(I2) == true
 
 procedure lemma_int_leq_fold(I1: Interface, I2: Interface)
   requires I1.FP == I2.FP && I1.FPo == I2.FPo

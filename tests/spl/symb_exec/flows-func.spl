@@ -5,7 +5,7 @@ function domPlus(p1: Int, p2: Int) returns (p: Int) { p1 + p2 }
 function domMult(p1: Int, p2: Int) returns (p: Int) { p1 * p2 }
 
 function domZero() returns(p: Int) { 0 }
-  
+
 struct Node {
   var next: Node;
 }
@@ -46,7 +46,7 @@ procedure lemma_abs(x: Node, I: Interface, I1: Interface)
 // TODO move these two to lemmas.spl too
 // Sufficient condition for intComp(I, Ix, Iy), when no edge from y to x
 procedure lemma_int_comp_fold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
-  requires Ix != intUndef && Iy != intUndef && I != intUndef
+  requires intValid(Ix) == true && intValid(Iy) == true && intValid(I) == true
   requires Ix.FP == {x} && Iy.FP == {y} && x != y && I.FP == {x, y}
   requires I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
   requires Ix.inf[x] == I.inf[x] + Iy.inf[y] * Iy.fm[y][x]
@@ -57,7 +57,7 @@ procedure lemma_int_comp_fold(x: Node, Ix: Interface, y: Node, Iy: Interface, I:
   ensures intComp(Ix, Iy) == I
 
 procedure lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
-  requires Ix != intUndef && Iy != intUndef && I != intUndef
+  requires intValid(Ix) == true && intValid(Iy) == true && intValid(I) == true
   requires intComp(Ix, Iy) == I && x != y
   requires Ix.FP == {x} && Iy.FP == {y}
   ensures I.FP == {x, y}
@@ -119,7 +119,7 @@ procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
   requires [acc(x)](Ix) &*& Gr(I)
   requires Ix.FP == {x} &*& Ix.inf[x] == 0 &*& Ix.FPo == {}
   requires y in I.FP &*& I.inf[y] == 1 &*& I.FPo == {}
-  requires Ix != intUndef && I != intUndef
+  requires intValid(Ix) && intValid(I)
   ensures Gr(I1) &*& intLeq(intComp(Ix, I), I1) == true
     //  TODO properties of intLeq imply these:
     //  ensures x in I1.FP &*& y in I1.FP
@@ -169,11 +169,10 @@ procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
   lemma_int_valid_unfold(Ix1);
   lemma_int_valid_unfold(Iy1);
   lemma_int_valid_unfold(Iy);
-  pure assume z !in Ixy1.FP; // TODO why can't it infer this?
   lemma_int_valid_fold(Ixy1);
   lemma_int_valid_unfold(Ixy1);
   lemma_int_comp_fold(y, Iy1, x, Ix1, Ixy1);
-  assert false;
+  // Ixy1 == intComp(Ix1, Iy1)
 
   var Ixy := lemma_comp(Ix, Ix1, Iy, Iy1);
   // [Gr(Ix1) &*& Gr(Iy1)](Ixy) &*& Gr(I2) &*& Ixy == intComp(Ix, Iy)
@@ -193,11 +192,3 @@ procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
 
   lemma_int_leq_comp(I0, Ixy, I2, Ixy1, I1);
 }
-  // I0 == intComp(Ix, I) &*& I == intComp(Iy, I2)
- // Ixy == intComp(Ix, Iy)
- // I1 == intComp(Ixy1, I2)
- // intLeq(Ixy, Ixy1)
-
- // I0 == intComp(Ixy, I2) ==> intLeq(I0, I1)
-
- 
