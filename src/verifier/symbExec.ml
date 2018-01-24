@@ -349,7 +349,7 @@ let rec find_ptsto_dirty loc spatial =
     res, (fun fs' -> sp :: repl_fn fs')
 
 let check_pure_entail prog eqs p1 p2 =
-  let (p2, _) = apply_equalities eqs (p2, []) |> remove_useless_existentials in
+  let (p2, _) = apply_equalities eqs (p2, []) in
   if p1 = p2 || p2 = mk_true then true
   else (* Dump it to an SMT solver *)
     let axioms = 
@@ -619,8 +619,9 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
   | Basic (Havoc {havoc_args=vars}, pp) as comm :: comms' ->
     (* Just substitute all occurrances of v for new var v' in symbolic state *)
     Debug.debug (fun () ->
-      sprintf "%sExecuting havoc: %d: %s%sCurrent state:\n%s\n" lineSep (pp.pp_pos.sp_start_line) lineSep
-        (string_of_format pr_cmd comm) (string_of_eqs_state eqs state)
+      sprintf "%sExecuting havoc: %d: %s%sCurrent state:\n%s\n"
+        lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+        lineSep (string_of_eqs_state eqs state)
     );
     let sm =
       List.fold_left (fun sm v -> IdMap.add v (mk_var_like v) sm) 

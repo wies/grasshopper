@@ -181,3 +181,13 @@ procedure assert1(x: Node, y: Node)
   pure assert x != y;
   x.next := x;
 }
+
+// Expect to fail
+procedure useless_existentials(x: Node, y: Node, z: Node)
+  requires acc(x) &*& acc(y)
+  ensures acc(x) &*& acc(z)
+{
+  z := y;
+  y := x.next;
+  pure assert y == x;
+}
