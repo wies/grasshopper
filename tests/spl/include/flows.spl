@@ -37,19 +37,32 @@ axiom forall I1: Interface, I2: Interface ::
     
 // Note: we assume that Gr(I) ==> intValid(I) in the following lemmas (TODO automate?)
 
-    
+// Sufficient condition for intComp(I, Ix, Iy), when no edge from y to x
+procedure lemma_int_comp_fold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
+  requires intValid(Ix) == true && intValid(Iy) == true && intValid(I) == true
+  requires Ix.FP == {x} && Iy.FP == {y} && x != y && I.FP == {x, y}
+  requires I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
+  requires Ix.inf[x] == domPlus(I.inf[x], domMult(Iy.inf[y], Iy.fm[y][x]))
+  requires Iy.inf[y] == domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y]))
+  requires x !in Iy.FPo  // In this case, easier to check new flow map:
+  requires (forall n in I.FPo ::
+            I.fm[x][n] == domPlus(Ix.fm[x][n], domMult(Ix.fm[x][y], Iy.fm[y][n])))
+  requires (forall n in I.FPo ::
+            I.fm[y][n] == domPlus(Iy.fm[y][n], domMult(Iy.fm[y][x], Ix.fm[x][n])))
+  ensures intComp(Ix, Iy) == I
+
 procedure lemma_int_valid_unfold(I: Interface)
   requires intValid(I) == true
   ensures forall n: Node, n1: Node ::
-    (n !in I.FP ==> I.inf[n] == 0 && I.fm[n][n1] == 0)
-    && (n1 !in I.FPo ==> I.fm[n][n1] == 0)
+    (n !in I.FP ==> I.inf[n] == domZero() && I.fm[n][n1] == domZero())
+    && (n1 !in I.FPo ==> I.fm[n][n1] == domZero())
   ensures forall n: Node :: n !in I.FP || n !in I.FPo
 
 procedure lemma_int_valid_fold(I: Interface)
   requires I != intUndef // TODO why? See test_valid2
   requires forall n: Node, n1: Node ::
-    (n !in I.FP ==> I.inf[n] == 0 && I.fm[n][n1] == 0)
-    && (n1 !in I.FPo ==> I.fm[n][n1] == 0)
+    (n !in I.FP ==> I.inf[n] == domZero() && I.fm[n][n1] == domZero())
+    && (n1 !in I.FPo ==> I.fm[n][n1] == domZero())
   requires forall n: Node :: n !in I.FP || n !in I.FPo
   ensures intValid(I) == true
   
@@ -116,4 +129,4 @@ procedure newNode()
   returns (x: Node, Ix: Interface)
   requires emp
   ensures [acc(x)](Ix)
-  ensures intValid(Ix) && Ix.FP == {x} && Ix.inf[x] == 0 && Ix.FPo == {}
+  ensures intValid(Ix) && Ix.FP == {x} && Ix.inf[x] == domZero() && Ix.FPo == {}

@@ -1,4 +1,4 @@
-include "lemmas.spl";
+include "../include/flows.spl";
 
 datatype Pair = pair(fst: Int, snd: Int);
 
@@ -29,27 +29,12 @@ procedure lemma_conc(x: Node, I: Interface)
   requires N(x, I)
   ensures [acc(x) &*& I.inf[x].fst == 1 &*& I.inf[x].snd < x.data &*& (x.next == null && I.FPo == {} || x.next != null && I.FPo == {x.next} && I.fm[x][x.next] == pair(1, x.data))](I) &*& I.FP == {x}
 
-procedure lemma_abs(x: Node, I: Interface, I1: Interface, p: Pair)
+procedure lemma_abs(x: Node, I: Interface, I1: Interface)
   returns ()
-  requires p.fst == 1 + 0 && p.snd == 2 - 1
   requires [acc(x) &*& I1.inf[x].fst == 1 &*& I1.inf[x].snd < x.data &*& (x.next == null && I1.FPo == {} || x.next != null && I1.FPo == {x.next} && I1.fm[x][x.next] == pair(1, x.data))](I) &*& I1.FP == {x}
   ensures [N(x, I1)](I)
 
 /** Lemmas */
-
-// Sufficient condition for intComp(I, Ix, Iy), when Ix, Iy are singletons
-procedure lemma_int_comp_fold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
-  requires Ix != intUndef && Iy != intUndef && I != intUndef
-  requires Ix.FP == {x} && Iy.FP == {y} && x != y && I.FP == {x, y}
-  requires I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
-  requires Ix.inf[x] == domPlus(I.inf[x], domMult(Iy.inf[y], Iy.fm[y][x]))
-  requires Iy.inf[y] == domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y]))
-  requires x !in Iy.FPo  // In this case, easier to check new flow map:
-  requires (forall n in I.FPo ::
-            I.fm[x][n] == domPlus(Ix.fm[x][n], domMult(Ix.fm[x][y], Iy.fm[y][n])))
-  requires (forall n in I.FPo ::
-            I.fm[y][n] == domPlus(Iy.fm[y][n], domMult(Iy.fm[y][x], Ix.fm[x][n])))
-  ensures intComp(Ix, Iy) == I
 
 procedure lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
   requires Ix != intUndef && Iy != intUndef && I != intUndef
@@ -67,15 +52,15 @@ procedure lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, 
        && I.fm[y][n] == domPlus(domMult(Cyy, Iy.fm[y][n]), domMult(Cyx, Ix.fm[x][n])))
 
 procedure no_op(x: Node, I: Interface)
-  requires N(x, I)
+  requires N(x, I) &*& intValid(I) == true
   ensures N(x, I)
 {
   lemma_conc(x, I);
   var y := x.next;
   x.next := y;
-  var p: Pair; pure assume p.fst == 2 - 1 && p.snd == 1 + 0;
-  lemma_abs(x, I, I, p);
+  lemma_abs(x, I, I);
   lemma_dirty_N_is_Gr(x, I, I);
+  lemma_int_leq_fold(I, I);
   sync(I, I);
   lemma_Gr_is_N(x, I);
 }

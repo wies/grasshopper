@@ -44,17 +44,6 @@ procedure lemma_abs(x: Node, I: Interface, I1: Interface)
 /** Lemmas */
 
 // TODO move these two to lemmas.spl too
-// Sufficient condition for intComp(I, Ix, Iy), when no edge from y to x
-procedure lemma_int_comp_fold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
-  requires intValid(Ix) == true && intValid(Iy) == true && intValid(I) == true
-  requires Ix.FP == {x} && Iy.FP == {y} && x != y && I.FP == {x, y}
-  requires I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
-  requires Ix.inf[x] == I.inf[x] + Iy.inf[y] * Iy.fm[y][x]
-  requires Iy.inf[y] == I.inf[y] + Ix.inf[x] * Ix.fm[x][y]
-  requires x !in Iy.FPo  // In this case, easier to check new flow map:
-  requires (forall n in I.FPo :: I.fm[x][n] == Ix.fm[x][n] + Ix.fm[x][y] * Iy.fm[y][n])
-  requires (forall n in I.FPo :: I.fm[y][n] == Iy.fm[y][n] + Iy.fm[y][x] * Ix.fm[x][n])
-  ensures intComp(Ix, Iy) == I
 
 procedure lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
   requires intValid(Ix) == true && intValid(Iy) == true && intValid(I) == true
@@ -82,8 +71,8 @@ procedure test_abs(x: Node, I: Interface, y: Node)
   lemma_abs(x, I, I1);
 }
 
-procedure no_op(x: Node, I: Interface) // TODO debug next two
-  requires N(x, I) &*& I != intUndef
+procedure no_op(x: Node, I: Interface)
+  requires N(x, I) &*& intValid(I) == true
   ensures N(x, I)
 {
   lemma_conc(x, I);
@@ -96,6 +85,7 @@ procedure no_op(x: Node, I: Interface) // TODO debug next two
   lemma_Gr_is_N(x, I);
 }
 
+// TODO debug
 procedure test_int_comp3(x: Node, Ix: Interface, y: Node, Iy: Interface, z: Node)
   returns (Ixy: Interface)
   requires N(x, Ix) &*& N(y, Iy) &*& z != x &*& x != y;

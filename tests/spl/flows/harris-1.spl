@@ -50,18 +50,7 @@ procedure lemma_abs(x: Node, I: Interface, I1: Interface)
 /** Lemmas */
 
 // TODO move these two to lemmas.spl too
-// Sufficient condition for intComp(I, Ix, Iy), when no edge from y to x
-procedure lemma_int_comp_fold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
-  requires intValid(Ix) == true && intValid(Iy) == true && intValid(I) == true
-  requires Ix.FP == {x} && Iy.FP == {y} && x != y && I.FP == {x, y}
-  requires I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
-  requires Ix.inf[x] == I.inf[x] + Iy.inf[y] * Iy.fm[y][x]
-  requires Iy.inf[y] == I.inf[y] + Ix.inf[x] * Ix.fm[x][y]
-  requires x !in Iy.FPo  // In this case, easier to check new flow map:
-  requires (forall n in I.FPo :: I.fm[x][n] == Ix.fm[x][n] + Ix.fm[x][y] * Iy.fm[y][n])
-  requires (forall n in I.FPo :: I.fm[y][n] == Iy.fm[y][n] + Iy.fm[y][x] * Ix.fm[x][n])
-  ensures intComp(Ix, Iy) == I
-
+// This one needs to stay until we can infer the type of Cxx automatically
 procedure lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
   requires intValid(Ix) == true && intValid(Iy) == true && intValid(I) == true
   requires intComp(Ix, Iy) == I && x != y
@@ -203,5 +192,5 @@ procedure insert(hd: Node, I: Interface)
 
   }
 
-  assert false; // TODO intLeq lemmas for postcondition
+  pure assert false; // TODO intLeq lemmas for postcondition
 }
