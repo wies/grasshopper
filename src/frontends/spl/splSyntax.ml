@@ -109,6 +109,7 @@ and fundecl =
     { f_name: ident;
       f_args: typ list;
       f_res: typ;
+      f_is_destr: bool;
     }
 
 and fundecls = fundecl IdMap.t
