@@ -883,10 +883,14 @@ let free_consts_term_acc consts t =
 (** Computes the set of free constants occuring in term [t]. *)
 let free_consts_term t = free_consts_term_acc IdSet.empty t
 
+(** Computes the set of free constants occuring in formula [f].
+ ** Takes accumulator [consts] as additional argument. *)
+let free_consts_acc consts f = fold_terms free_consts_term_acc consts f
+
 (** Computes the set of free constants occuring in formula [f]. *)
 let free_consts f =
   fold_terms free_consts_term_acc IdSet.empty f
-
+    
 (** Computes the set of free symbols occuring in term [t].
  ** Takes accumulator [acc] as additional argument. *)
 let free_symbols_term_acc acc t =

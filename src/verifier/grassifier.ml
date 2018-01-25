@@ -19,6 +19,7 @@ let footprint_fun_id =
   let gen = mk_name_generator @@ "footprint_of_" in
   fun pname -> gen ~aux_name:(string_of_ident pname)
 let is_fp_func_id pname (str, _) = Str.string_match (Str.regexp @@  "footprint_of_" ^ (string_of_ident pname) ^ ".*") str 0 
+let is_fp_func pred = Str.string_match (Str.regexp "footprint_of_.*") (name_of_pred pred |> name) 0
     
 (** Auxiliary variables for desugaring arrays *)
 
@@ -359,7 +360,7 @@ let add_frame_axioms prog =
     let formals = formals_of_pred pred in
     let pos = pos_of_pred pred in
     let pred_frame_axioms =
-      if SortSet.is_empty pred.pred_contract.contr_footprint_sorts
+      if SortSet.is_empty pred.pred_contract.contr_footprint_sorts || is_fp_func pred
         (*|| pred1.pred_contract.contr_returns <> []*)  (* No extra frame axioms for functions *)
       then []
       else
@@ -410,6 +411,24 @@ let add_frame_axioms prog =
           let new_pred =
             mk_free_app res_srt pname (List.map mk_new_arg formals)
           in
+          let mk_fp_funcs sort =
+            let fp_fun_name =
+              footprint_fun_id pname sort
+            in
+            let fp_pred = find_pred prog fp_fun_name in
+            let old_fp_args, new_fp_args =
+              let rec loop (old_fp_args, new_fp_args) = function
+                | x :: xs, y :: ys when x = y ->
+                    loop (mk_old_arg y :: old_fp_args, mk_new_arg y :: new_fp_args) (xs, ys)
+                | xs, y :: ys ->
+                    loop (old_fp_args, new_fp_args) (xs, ys)
+                | _ -> List.rev old_fp_args, List.rev new_fp_args
+              in
+              loop ([], []) (formals_of_pred fp_pred, formals)
+            in
+            mk_free_app (Set (Loc sort)) fp_fun_name old_fp_args,
+            mk_free_app (Set (Loc sort)) fp_fun_name new_fp_args
+          in
           let sorts = SortSet.elements (pred.pred_contract.contr_footprint_sorts) in
           let frames_and_allocs =
             List.fold_left
@@ -421,15 +440,8 @@ let add_frame_axioms prog =
               SortMap.empty sorts
           in
           (* Generate Disjoint & Subset conditions for both footprints and "reads" footprints *)
-          let mk_fp_func args sort =
-            mk_free_app (Set (Loc sort)) (footprint_fun_id pname sort) args in
-          let old_fp_terms =
-            let old_args = formals |> List.map mk_old_arg in
-            sorts |> List.map (mk_fp_func old_args)
-          in
-          let new_fp_terms =
-            let new_args = formals |> List.map mk_new_arg in
-            sorts |> List.map (mk_fp_func new_args)
+          let old_fp_terms, new_fp_terms =
+            sorts |> List.map mk_fp_funcs |> Util.unzip
           in
           (*let reads_terms = formals |> List.filter id_fp |> List.map mk_old_arg in*)
           let in_frame terms =
@@ -518,6 +530,120 @@ let add_frame_axioms prog =
   in
   { prog with prog_axioms = frame_axioms @ prog.prog_axioms }
 
+
+(** Eliminate unused formal parameters of predicates (needed for better frame axioms).
+ ** Assumes that all SL specifications have been desugared. *)
+
+let elim_unused_formals prog =
+  let process_term new_preds t =
+    let rec strip_args = function
+      | Var _ as t -> t
+      | App (FreeSym p, ts, srt) when IdMap.mem p new_preds ->
+          let rec loop ts1 = function
+            | x :: xs, y :: ys, t :: ts when x = y ->
+                loop (strip_args t :: ts1) (xs, ys, ts)
+            | x :: xs, ys, t :: ts ->
+                loop ts1 (xs, ys, ts)
+            | _ -> ts1
+          in
+          let old_p = find_pred prog p in
+          let new_p = IdMap.find p new_preds in
+          let old_formals = formals_of_pred old_p in
+          let new_formals = formals_of_pred new_p in
+          let ts1 = List.rev (loop [] (old_formals, new_formals, ts)) in
+          App (FreeSym p, ts1, srt)
+      | App (sym, ts, srt) ->
+          let ts1 = List.map strip_args ts in
+          App (sym, ts1, srt)
+    in
+    strip_args t
+  in
+  let process_spec_form new_preds = map_terms_spec (process_term new_preds) in
+  let process_pred new_preds pred =
+    (*print_endline @@ "Processing " ^ string_of_ident (name_of_pred pred);*)
+    let process_sf = process_spec_form new_preds in
+    let new_precond = List.map process_sf (precond_of_pred pred) in
+    let new_postcond = List.map process_sf (postcond_of_pred pred) in
+    let new_body = Opt.map process_sf pred.pred_body in
+    let used_vars =
+      List.fold_left
+        (fun used_vars sf ->
+          match sf.spec_form with
+          | FOL f ->
+              let f1 =
+                subst_funs (fun sym ts srt ->
+                  if sym = FreeSym (name_of_pred pred)
+                  then
+                    let ts1 =
+                      List.fold_right
+                        (fun t ts1 -> match t with
+                        | App (FreeSym id, _, _) when IdMap.mem id (locals_of_pred pred) -> ts1
+                        | _ -> t :: ts1)
+                        ts []
+                    in
+                    mk_app srt sym ts1
+                  else mk_app srt sym ts) f
+              in
+              free_consts_acc used_vars f1
+          | _ -> used_vars)
+        (id_set_of_list @@ returns_of_pred pred)
+        (Opt.to_list new_body @ new_precond @ new_postcond)
+    in
+    let new_locals =
+      IdMap.filter (fun id _ -> IdSet.mem id used_vars) (locals_of_pred pred)
+    in
+    let new_formals = List.filter (fun id -> IdSet.mem id used_vars) (formals_of_pred pred) in
+    let new_contract =
+      { pred.pred_contract with
+        contr_formals = new_formals;
+        contr_locals = new_locals;
+        contr_precond = new_precond;
+        contr_postcond = new_postcond;
+      }
+    in
+    let temp_new_pred =
+      { pred with
+        pred_contract = new_contract;
+        pred_body = new_body;
+      }
+    in
+    let temp_new_preds = IdMap.add (name_of_pred pred) temp_new_pred new_preds in
+    let final_body = Opt.map (process_spec_form temp_new_preds) pred.pred_body in
+    let new_pred =
+      { temp_new_pred with pred_body = final_body }
+    in
+    IdMap.add (name_of_pred pred) new_pred new_preds
+  in
+  let g = IdMap.fold (fun id _ g -> IdGraph.add_vertex g id) prog.prog_preds IdGraph.empty in
+  let old_preds = IdGraph.vertices g in
+  let g =
+    IdMap.fold
+      (fun id pred g -> IdGraph.add_edges g id (IdSet.inter old_preds @@ accesses_pred pred)) prog.prog_preds g in
+  let sccs = IdGraph.topsort g in
+  let sorted_old_preds = List.map (Prog.find_pred prog) (List.flatten sccs) in
+  let new_preds = List.fold_left process_pred IdMap.empty sorted_old_preds in
+  let process_spec_form = process_spec_form new_preds in
+  let prog1 =
+    Prog.map_procs
+      (fun proc ->
+        let new_precond = List.map process_spec_form (precond_of_proc proc) in
+        let new_postcond = List.map process_spec_form (postcond_of_proc proc) in
+        let new_body = Opt.map (map_terms_cmd (process_term new_preds)) proc.proc_body in
+        let new_contract =
+          { proc.proc_contract with
+            contr_precond = new_precond;
+            contr_postcond = new_postcond;
+          }
+        in
+        { proc with
+          proc_contract = new_contract;
+          proc_body = new_body;
+        })
+            prog
+  in
+  { prog1 with
+    prog_preds = new_preds;
+  }
   
 (** Desugare SL specification to FOL specifications. 
  ** Assumes that loops have been transformed to tail-recursive procedures. *)
@@ -941,6 +1067,17 @@ let elim_sl prog =
         let func_name = footprint_fun_id pname sort in
         let ret_var_id = mk_ident @@ "FP_" ^ (string_of_sort sort) in
         let ret_var = mk_loc_set_decl sort ret_var_id dummy_position in
+        let fp_func_term =
+          let formals =
+            List.map
+              (fun id ->
+                let decl = IdMap.find id  (locals_of_pred pred) in
+                mk_free_const decl.var_sort id 
+              )
+              (formals_of_pred pred)
+          in
+          mk_free_app ret_var.var_sort func_name formals
+        in
         (* Convert the predicate body to the footprint function body *)
         let pred_body =
           let fp_form =
@@ -961,7 +1098,8 @@ let elim_sl prog =
           | Some spec ->
             (* Go through the formula and keep only things that define the footprint *)
             let equals_fp_func = function
-              | App (FreeSym id, _, _) when is_fp_func_id pname id -> true
+              | App (FreeSym id, _, srt) ->
+                  is_fp_func_id pname id && srt = ret_var.var_sort
               | _ -> false
             in
             (* True for atoms that may be used to split cases
@@ -995,18 +1133,38 @@ let elim_sl prog =
             let rec process_form subsets defs f =
               match f with
               (* Equalities with fp() on one side *)
-              | Atom (App (Eq, [t1; t2], _), _)
+              | Atom (App (Eq, [t1; t2], _), a)
                 when equals_fp_func t1 || equals_fp_func t2 ->
-                    subsets, defs, f
+                  let t1 =
+                    if t1 = fp_func_term
+                    then mk_free_const sort ret_var_id
+                    else t1
+                  in
+                  let t2 =
+                    if t2 = fp_func_term
+                    then mk_free_const sort ret_var_id
+                    else t2
+                  in
+                  subsets, defs, mk_eq ~ann:a t1 t2
               (* Set differences that can be rewritten into a definition of fp() *)
               | Atom (App (Eq, [App (Diff, [t1; t2], _); t3], _), a)
                 when equals_fp_func t1 ->
+                  let t1 =
+                    if t1 = fp_func_term
+                    then mk_free_const sort ret_var_id
+                    else t1
+                  in
                   if List.mem (t2, t1) subsets
                   then subsets, defs, mk_eq ~ann:a t1 (mk_union [t2; t3])
                   else subsets, ((t1, t2), mk_union [t2; t3]) :: defs, mk_true
               (* Susbet atoms *)
               | Atom (App (SubsetEq, [t1; t2], _), _)
                 when equals_fp_func t2 ->
+                  let t2 =
+                    if t2 = fp_func_term
+                    then mk_free_const sort ret_var_id
+                    else t2
+                  in
                   (t1, t2) :: subsets, defs,
                   if List.mem_assoc (t2, t1) defs
                   then mk_eq t1 (List.assoc (t2, t1) defs)
@@ -1042,7 +1200,7 @@ let elim_sl prog =
               match spec.spec_form with
               | SL _ -> failwith "Expected SL to be eliminated already"
               | FOL f ->
-                  FOL (f |> nnf |> nnf |> process_form [] [] |> function (_, _, f) -> f)
+                  FOL (f |> nnf |> nnf |> process_form [] [] |> function (_, _, f) -> post_process_form f)
             in
             Some { spec with spec_form = spec_form}
         in

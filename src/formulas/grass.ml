@@ -26,8 +26,16 @@ module IdSet = Set.Make(struct
 module IdMap = Map.Make(struct
     type t = ident
     let compare = compare
-  end)
+end)
 
+module IdGraph = Graph.Make(struct
+    type t = ident
+    let compare = compare
+    let hash = Hashtbl.hash
+    let equal = (=)
+  end)(IdSet)
+
+    
 (** sorts *)
 type sort =
   | Bool | Byte | Int (** basic sorts *)

@@ -345,13 +345,6 @@ let declare_sort session sort_name num_of_params =
   writeln session (Printf.sprintf "(declare-sort %s %d)" sort_name num_of_params)
 
 let declare_datatypes =
-  let module G = Graph.Make(struct
-    type t = ident
-    let compare = compare
-    let hash = Hashtbl.hash
-    let equal = (=)
-  end)(IdSet)
-  in
   let rec free_srts acc = function
     | FreeSort (id, srts) -> 
         List.fold_left free_srts (IdSet.add id acc) srts
@@ -361,8 +354,8 @@ let declare_datatypes =
     (* compute strongly connected components of ADT definitions *)
     let g =
       List.fold_left
-        (fun g (id, _) -> G.add_vertex g id)
-        G.empty adts 
+        (fun g (id, _) -> IdGraph.add_vertex g id)
+        IdGraph.empty adts 
     in
     let g =
       List.fold_left
@@ -370,12 +363,12 @@ let declare_datatypes =
           List.fold_left (fun g (_, args) ->
             List.fold_left (fun g (_, srt) ->
               let srts = free_srts IdSet.empty srt in
-              G.add_edges g src (IdSet.inter (G.vertices g) srts))
+              IdGraph.add_edges g src (IdSet.inter (IdGraph.vertices g) srts))
               g args)
             g cnstrs)
         g adts
     in
-    let adt_sscs = G.topsort g in
+    let adt_sscs = IdGraph.topsort g in
     List.iter (fun ids ->
       let adt_defs = List.map (fun id -> (id, List.assoc id adts)) ids in
       iter_solvers session

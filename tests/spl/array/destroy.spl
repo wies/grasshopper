@@ -15,8 +15,8 @@ procedure destroy(a: Array<Node>, implicit ghost N: Set<Node>)
       exists N2: Set<Node> ::
        (arrayseg_with_content(a, i, a.length, N2) -** array(a)) &*& acc(N2)
   {
-    free(a[i]);
+    free a[i];
     i := i + 1;
   }
-  free(a);
+  free a;
 }

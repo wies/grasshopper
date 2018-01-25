@@ -173,6 +173,13 @@ let rec for_all2 fn xs ys =
   | x :: xs1, y :: ys1 -> 
       fn x y && for_all2 fn xs1 ys1
 
+(** Unzip a list of pairs into a pair of lists *)
+let unzip xys =
+  let rec uz (xs, ys) = function
+    | (x, y) :: xys -> uz (x :: xs, y :: ys) xys
+    | [] -> List.rev xs, List.rev ys
+  in
+  uz ([], []) xys
 
 (** Tail-recursive concatenation of lists *)
 let rev_concat lists = List.fold_left (List.fold_left (fun acc f -> f :: acc)) [] lists

@@ -34,6 +34,8 @@ let simplify proc prog =
   dump_if 1 |>
   info "Eliminating SL, adding frame axioms.\n" |>
   elim_sl |>
+  Analyzer.infer_accesses |>
+  elim_unused_formals |>
   add_frame_axioms |>
   (*(fun prog -> if !Config.abstract_preds then annotate_frame_axioms prog else prog) |> *)
   (*annotate_term_generators |>*)
