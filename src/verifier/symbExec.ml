@@ -99,7 +99,7 @@ let state_of_spec_list fields specs : state =
       end
       else if (IdMap.mem fld (TermMap.find loc !reads) |> not) then begin
         let new_var = (mk_fresh_var srt "v") in
-        let flds_of_loc = IdMap.add fld (mk_fresh_var srt "v") (TermMap.find loc !reads) in
+        let flds_of_loc = IdMap.add fld new_var (TermMap.find loc !reads) in
         reads := TermMap.add loc flds_of_loc !reads;
         new_var
       end else IdMap.find fld (TermMap.find loc !reads)
