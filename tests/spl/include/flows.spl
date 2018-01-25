@@ -93,6 +93,10 @@ procedure lemma_decomp(x: Node, I: Interface)
   requires Gr(I) &*& x in I.FP
   ensures N(x, I1) &*& Gr(I2) &*& intComp(I1, I2) == I
 
+procedure lemma_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Node)
+  requires intComp(I1, I2) == I && x in I1.FP && y in I1.FPo && I.FPo == {}
+  ensures y in I2.FP
+
 procedure lemma_int_leq_fold(I1: Interface, I2: Interface)
   requires I1.FP == I2.FP && I1.FPo == I2.FPo
   requires forall n in I1.FP :: I1.inf[n] == I2.inf[n]
@@ -105,7 +109,11 @@ procedure lemma_int_leq_comp(I: Interface, Ix: Interface, Iy: Interface, Ix1: In
     
 procedure sync(I1: Interface, I2: Interface)
   returns ()
-    requires [Gr(I2)](I1) &*& intLeq(I1, I2) == true
+  requires [Gr(I2)](I1) &*& intLeq(I1, I2) == true &*& intValid(I2) == true
   ensures Gr(I2)
 
-
+procedure newNode()
+  returns (x: Node, Ix: Interface)
+  requires emp
+  ensures [acc(x)](Ix)
+  ensures intValid(Ix) && Ix.FP == {x} && Ix.inf[x] == 0 && Ix.FPo == {}

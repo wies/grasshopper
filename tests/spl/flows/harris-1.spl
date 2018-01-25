@@ -1,0 +1,207 @@
+/** No-data, single list, sequential version of Harris' list. */
+
+include "../include/flows.spl";
+
+
+/** Flow domain definitions */
+
+function domPlus(p1: Int, p2: Int) returns (p: Int) { p1 + p2 }
+
+function domMult(p1: Int, p2: Int) returns (p: Int) { p1 * p2 }
+
+function domZero() returns(p: Int) { 0 }
+
+struct Node {
+  var next: Node;
+}
+
+datatype Interface =
+  int(inf: Map<Node, Int>,
+      fm: Map<Node, Map<Node, Int>>,
+      FP: Set<Node>,
+      FPo: Set<Node>)
+  | intUndef; // All interfaces with > 1 inflow are undefined
+
+
+/** Definition of good condition, gamma */
+
+procedure lemma_conc(x: Node, I: Interface)
+  returns ()
+  requires I != intUndef
+  requires N(x, I)
+  ensures [acc(x) &*& I.inf[x] == 1 &*& (x.next == null && I.FPo == {} || x.next != null && I.FPo == {x.next} && I.fm[x][x.next] == 1)](I) &*& I.FP == {x}
+
+procedure lemma_singleton_int(x: Node, xn: Node)
+  returns (I1: Interface)
+  ensures I1 != intUndef && I1.FP == {x} && I1.inf[x] == 1
+  ensures (xn == null && I1.FPo == {}
+       || xn != null && I1.FPo == {xn} && I1.fm[x][xn] == 1)
+  ensures forall n: Node, n1: Node ::
+    (n !in I1.FP ==> I1.inf[n] == 0 && I1.fm[n][n1] == 0)
+    && (n1 !in I1.FPo ==> I1.fm[n][n1] == 0)
+
+procedure lemma_abs(x: Node, I: Interface, I1: Interface)
+  returns ()
+  requires I != intUndef && I1 != intUndef && intValid(I1)
+  requires [acc(x) &*& I1.inf[x] == 1 &*& (x.next == null && I1.FPo == {} || x.next != null && I1.FPo == {x.next} && I1.fm[x][x.next] == 1)](I) &*& I1.FP == {x}
+  ensures [N(x, I1)](I)
+
+
+/** Lemmas */
+
+// TODO move these two to lemmas.spl too
+// Sufficient condition for intComp(I, Ix, Iy), when no edge from y to x
+procedure lemma_int_comp_fold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
+  requires intValid(Ix) == true && intValid(Iy) == true && intValid(I) == true
+  requires Ix.FP == {x} && Iy.FP == {y} && x != y && I.FP == {x, y}
+  requires I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
+  requires Ix.inf[x] == I.inf[x] + Iy.inf[y] * Iy.fm[y][x]
+  requires Iy.inf[y] == I.inf[y] + Ix.inf[x] * Ix.fm[x][y]
+  requires x !in Iy.FPo  // In this case, easier to check new flow map:
+  requires (forall n in I.FPo :: I.fm[x][n] == Ix.fm[x][n] + Ix.fm[x][y] * Iy.fm[y][n])
+  requires (forall n in I.FPo :: I.fm[y][n] == Iy.fm[y][n] + Iy.fm[y][x] * Ix.fm[x][n])
+  ensures intComp(Ix, Iy) == I
+
+procedure lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
+  requires intValid(Ix) == true && intValid(Iy) == true && intValid(I) == true
+  requires intComp(Ix, Iy) == I && x != y
+  requires Ix.FP == {x} && Iy.FP == {y}
+  ensures I.FP == {x, y}
+  ensures I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
+  ensures Ix.inf[x] == I.inf[x] + Iy.inf[y] * Iy.fm[y][x]
+  ensures Iy.inf[y] == I.inf[y] + Ix.inf[x] * Ix.fm[x][y]
+  ensures exists Cxx: Int, Cxy: Int, Cyx: Int, Cyy: Int :: // Capacity values
+    Cxx == Cxy * Iy.fm[y][x] && Cyy == Cyx * Ix.fm[x][y]
+    && Cxy == Cxx * Ix.fm[x][y] && Cyx == Cyy * Iy.fm[y][x]
+    && (forall n in I.FPo :: I.fm[x][n] == Cxx * Ix.fm[x][n] + Cxy * Iy.fm[y][n]
+       && I.fm[y][n] == Cyy * Iy.fm[y][n] + Cyx * Ix.fm[x][n])
+
+
+/** Begin programs */
+
+procedure insert(hd: Node, I: Interface)
+  returns (hd1: Node, I1: Interface)
+  requires Gr(I) &*& intValid(I) == true
+  requires hd in I.FP && I.inf[hd] == 1 && (forall n: Node :: n != hd ==> I.inf[n] == 0)
+    && I.FPo == {}
+  ensures Gr(I1) &*& intValid(I1) == true
+  ensures hd1 in I1.FP && I1.inf[hd1] == 1 && (forall n: Node :: n != hd1 ==> I1.inf[n] == 0)
+    && I1.FPo == {}
+{
+  var nondet: Bool;
+  var l := hd;
+
+  var Il: Interface, I2: Interface;
+  Il, I2 := lemma_decomp(l, I);
+  lemma_conc(l, Il);
+
+  var r := l.next;
+
+  lemma_abs(l, Il, Il);
+  lemma_dirty_N_is_Gr(l, Il, Il);
+  lemma_int_leq_fold(Il, Il);
+  sync(Il, Il);
+  lemma_Gr_is_N(l, Il);
+
+  while (nondet && r != null)
+    invariant N(l, Il) &*& Gr(I2)
+    invariant intValid(Il) && intValid(I2) && Il.FP == {l} && Il.inf[l] == 1 // TODO infer from N(l, Il)
+    invariant intComp(Il, I2) == I && (r != null ==> Il.FPo == {r} && Il.fm[l][r] == 1)
+    invariant hd in I.FP && I.inf[hd] == 1 && (forall n: Node :: n != hd ==> I.inf[n] == 0)
+      && I.FPo == {}
+  {
+    var p := l;
+
+    havoc nondet;
+    l := r;
+    // N(p, Il) &*& Gr(I2)
+
+    lemma_step(Il, I2, I, p, r);
+    var Ir: Interface, I3: Interface;
+    Ir, I3 := lemma_decomp(r, I2);
+    // N(p, Il) &*& N(r, Ir) &*& Gr(I3)
+    lemma_conc(r, Ir);
+    // N(p, Il) &*& [r |-> _](Ir) &*& Gr(I3)
+
+    r := l.next;
+
+    var Ip := Il; Il := Ir;
+    // N(p, Ip) &*& [l |-> _](Il) &*& Gr(I3)
+    lemma_abs(l, Il, Il);
+    lemma_dirty_N_is_Gr(l, Il, Il);
+    lemma_int_leq_fold(Il, Il);
+    sync(Il, Il);
+    lemma_Gr_is_N(l, Il);
+    // N(p, Ip) &*& N(l, Il) &*& Gr(I3)
+    lemma_N_is_Gr(p, Ip);
+    // Gr(Ip) &*& N(l, Il) &*& Gr(I3)
+    I2 := lemma_Gr_comp(Ip, I3);
+
+    // Introduce some terms: TODO term gens
+    pure assume intLeq(intComp(I3, Ir), intComp(I3, Ir))
+         && intLeq(intComp(intComp(Ip, I3), Ir), intComp(intComp(Ip, I3), Ir));
+  }
+
+  var n: Node, In: Interface;
+  n, In := newNode();  // TODO use mark()?
+  n.next := r;
+
+  // TODO how do we know n != r? Need conditional, (Step), and Gr footprint
+  pure assume n != r;
+  lemma_conc(l, Il);
+
+  if (r == l.next) {  // CAS(l.next, r, n);
+
+    l.next := n;
+    // [l |-> n](Il) * [n |-> r](In) * Gr(I2)
+
+    var In1 := lemma_singleton_int(n, n.next);
+    lemma_int_valid_fold(In1);
+
+    var Il1 := lemma_singleton_int(l, l.next);
+    lemma_int_valid_fold(Il1);
+
+    lemma_abs(n, In, In1);
+    lemma_dirty_N_is_Gr(n, In1, In);
+    // [Gr(In1)](In) &*& [l |-> n](Il) &*& Gr(I2)
+
+    lemma_abs(l, Il, Il1);
+    lemma_dirty_N_is_Gr(l, Il1, Il);
+    // [Gr(In1)](In) &*& [Gr(Il1)](Il) &*& Gr(I2)
+
+    var Inl1: Interface;
+    pure assume Inl1 != intUndef && Inl1.FP == {n, l}
+      && Inl1.inf[n] == 0 && Inl1.inf[l] == 1
+      && (r != null && Inl1.FPo == {r} && Inl1.fm[n][r] == 1 && Inl1.fm[l][r] == 1
+         || r == null && Inl1.FPo == {})
+      && (forall n: Node, n1: Node ::
+         (n !in Inl1.FP ==> Inl1.inf[n] == 0 && Inl1.fm[n][n1] == 0)
+         && (n1 !in Inl1.FPo ==> Inl1.fm[n][n1] == 0));
+    lemma_int_valid_unfold(In1);
+    lemma_int_valid_unfold(Il1);
+    lemma_int_valid_unfold(Il);
+    lemma_int_valid_fold(Inl1);
+    lemma_int_valid_unfold(Inl1);
+    lemma_int_comp_fold(l, Il1, n, In1, Inl1);
+    // Inl1 == intComp(In1, Il1)
+
+    var Inl := lemma_comp(In, In1, Il, Il1);
+    // [Gr(In1) &*& Gr(Il1)](Inl) &*& Gr(I2) &*& Inl == intComp(In, Il)
+
+    Inl1 := lemma_dirty_Gr_comp(In1, Il1, Inl);
+    // [Gr(Inl1)](Inl) &*& Gr(I2)
+
+    lemma_int_comp_unfold(n, In, l, Il, Inl);
+    lemma_int_comp_unfold(n, In1, l, Il1, Inl1);
+    lemma_int_leq_fold(Inl, Inl1);
+
+    sync(Inl, Inl1);
+    // Gr(Inl1) &*& Gr(I2)
+
+    I1 := lemma_Gr_comp(Inl1, I2);
+    // Gr(I1) &*& I1 == intComp(Inl1, I2)
+
+  }
+
+  assert false; // TODO intLeq lemmas for postcondition
+}
