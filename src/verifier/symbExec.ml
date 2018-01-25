@@ -49,7 +49,7 @@ let rec string_of_spatial_pred = function
     sprintf "%s(%s)" (string_of_ident id)
       (ts |> List.map string_of_term |> String.concat ", ")
   | Dirty (fs, ts) ->
-    sprintf "[%s]_(%s)" (string_of_spatial_pred_list fs) (ts |> List.map string_of_term |> String.concat ", ")
+    sprintf "[%s](%s)" (string_of_spatial_pred_list fs) (ts |> List.map string_of_term |> String.concat ", ")
 
 and string_of_spatial_pred_list sps =
   sps |> List.map string_of_spatial_pred |> String.concat " * "
@@ -512,7 +512,8 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
   match comms with
   | [] ->
     Debug.debug (fun () ->
-      sprintf "%sChecking postcondition: %s%s\n" lineSep (string_of_state postcond) lineSep);
+      sprintf "%sExecuting check postcondition: %s%s\n"
+        lineSep (string_of_state postcond) lineSep);
     (* TODO do this better *)
     let state = add_neq_constraints state in
     check_entailment prog eqs state postcond |> fst
@@ -649,10 +650,22 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
         lineSep (string_of_eqs_state eqs state)
     );
-    let spec_st = state_of_spec_list flds [spec] in
-    let state' = add_neq_constraints state in
-    let _ = find_frame prog eqs state' spec_st in
-    symb_exec prog flds proc (eqs, state) postcond comms'
+    (match spec.spec_form with
+    | SL _ ->
+      let spec_st = state_of_spec_list flds [spec] in
+      let state' = add_neq_constraints state in
+      let _ = find_frame prog eqs state' spec_st in
+      (match check_entailment prog eqs state' spec_st with
+      | [], _ ->
+        symb_exec prog flds proc (eqs, state) postcond comms'
+      | errs, _ -> errs)
+    | FOL spec_form ->
+      let spec_form, state =
+        spec_form |> subst_form eqs |> fold_map_terms (eval_term flds) state
+      in
+      let _ = find_frame prog eqs state (spec_form, []) in
+      symb_exec prog flds proc (eqs, state) postcond comms'
+    )
   | Basic (Assume _, _) :: _ -> failwith "TODO Assume SL command"
   | Basic (New _, _) :: _ -> failwith "TODO New command"
   | Basic (Dispose _, _) :: _ -> failwith "TODO Dispose command"
