@@ -1,4 +1,4 @@
-include "lemmas.spl";
+include "../include/flows.spl";
 
 function domPlus(p1: Int, p2: Int) returns (p: Int) { p1 + p2 }
 
@@ -82,7 +82,7 @@ procedure test_abs(x: Node, I: Interface, y: Node)
   lemma_abs(x, I, I1);
 }
 
-procedure no_op(x: Node, I: Interface)
+procedure no_op(x: Node, I: Interface) // TODO debug next two
   requires N(x, I) &*& I != intUndef
   ensures N(x, I)
 {
