@@ -1,0 +1,43 @@
+include "../include/flows.spl";
+
+function domPlus(p1: Int, p2: Int) returns (p: Int) { p1 + p2 }
+
+function domMult(p1: Int, p2: Int) returns (p: Int) { p1 * p2 }
+
+function domZero() returns(p: Int) { 0 }
+  
+struct Node {
+  var next: Node;
+}
+
+datatype Interface =
+  int(inf: Map<Node, Int>,
+      fm: Map<Node, Map<Node, Int>>,
+      FP: Set<Node>,
+      FPo: Set<Node>)
+  | intUndef; // All interfaces with > 1 inflow are undefined
+
+
+procedure test_valid1(I1: Interface, I2: Interface)
+  requires ! intValid(I1) && intValid(intComp(I1, I2))
+  ensures false
+{}
+
+// Expect this to fail
+procedure test_valid2(I: Interface, x: Node)
+  requires I == intUndef && I.FP == {x} && I.FPo == {} && (forall n: Node, o: Node :: I.inf[n] == 0 && I.fm[n][o] == 0)
+  ensures intValid(I) == true
+{
+  lemma_int_valid_fold(I);
+}
+
+procedure test_decomp(x: Node, I: Interface)
+  returns (I1: Interface, I2: Interface)
+  requires Gr(I) &*& x in I.FP
+  requires intValid(I) == true
+  ensures N(x, I1) &*& Gr(I2)
+  ensures intValid(I1) == true && intValid(I2) == true
+{
+  I1, I2 := lemma_decomp(x, I);
+}
+
