@@ -109,24 +109,14 @@ let convert cu =
       ProgError.error pos 
         ("Struct " ^ fst id ^ " does not have a field named " ^ fst fld_id)*)
   in
-  let rec convert_type ?(first=true) ty pos =
+  let rec convert_type adt_defs ty pos =
     let rec ct = function
       | IdentType id -> FreeSrt id
       | StructType id -> Loc (FreeSrt id)
       | ADType id ->
-          if first then
-            let tdecl = IdMap.find id cu.type_decls in
-            (match tdecl.t_def with
-            | ADTypeDef cnsts ->
-                let cnsts =
-                  List.map (fun cdecl ->
-                    cdecl.c_name,
-                    List.map (fun adecl -> adecl.v_name, convert_type ~first:false adecl.v_type adecl.v_pos) cdecl.c_args)
-                    cnsts
-                in
-                Adt (id, cnsts)
-            | _ -> failwith "unexpected type declaration")
-          else FreeSrt id
+          (match adt_defs with
+          | [] -> FreeSrt id
+          | _ -> Adt (id, adt_defs))
       | AnyRefType -> Loc (FreeSrt ("Null", 0))
       | MapType (dtyp, rtyp) -> Map ([ct dtyp], ct rtyp)
       | SetType typ -> Set (ct typ)
@@ -139,6 +129,21 @@ let convert cu =
     in
     ct ty
   in
+  let adt_defs =
+    IdMap.fold (fun id tdecl adt_defs ->
+      match tdecl.t_def with
+      | ADTypeDef cnsts ->
+          let cnsts =
+            List.map (fun cdecl ->
+              cdecl.c_name,
+              List.map (fun adecl -> adecl.v_name, convert_type [] adecl.v_type adecl.v_pos) cdecl.c_args)
+              cnsts
+          in
+          (id, cnsts) :: adt_defs
+      | _ -> adt_defs)
+      cu.type_decls []
+  in
+  let convert_type = convert_type adt_defs in
   let convert_var_decl decl = 
     { var_name = decl.v_name;
       var_orig_name = fst decl.v_name;

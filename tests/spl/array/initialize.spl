@@ -16,6 +16,5 @@ procedure initialize()
     invariant forall k: Int :: 0 <= k && k < i ==> a[k] == k
   {
     a[i] := i;
-    i := i + 1;
-  }
+    i := i + 1;}
 }

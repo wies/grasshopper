@@ -14,7 +14,6 @@ function node_witness(x: Node, FP0: Set<ArrayCell<Node>>)
   returns (res: ArrayCell<Node>)
   requires acc(FP0)
   ensures forall c in FP0 :: c == node_witness(c[], FP0)
-  ensures forall c: ArrayCell<Node> :: c !in FP0 ==> null == node_witness(c[], FP0)
 
 /*function array_state() returns (m: Map<ArrayCell<Node>, Node>)
 ensures (forall c: ArrayCell<Node> :: c.m == c[] @(matching c yields c.m))*/
@@ -24,6 +23,7 @@ function arrayseg_content(a: Array<Node>, FP0: Set<ArrayCell<Node>>) returns (N:
   ensures forall c in FP0 :: c[] in N
   ensures forall x in N :: x == node_witness(x, FP0)[] @(matching x yields node_witness(x, FP0)[])
   ensures forall x in N :: node_witness(x, FP0) in FP0
+  ensures forall x: Node :: x !in N ==> null == node_witness(x, FP0)
 
 
 predicate arrayseg_with_content(a: Array<Node>, lo: Int, hi: Int, N: Set<Node>)

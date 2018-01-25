@@ -117,7 +117,7 @@ let resolve_names cu =
                       (fun adecl (args, funs, tbl) ->
                         let aid, tbl = declare_name decl.t_pos adecl.v_name GrassUtil.global_scope tbl in
                         let ty = resolve_typ types0 decl.t_pos tbl adecl.v_type in
-                        let fun_decl = { f_name = id; f_args = [ADType id]; f_res = ty; } in
+                        let fun_decl = { f_name = id; f_args = [ADType id]; f_res = ty; f_is_destr = true} in
                         { adecl with v_name = aid; v_type = ty } :: args,
                         IdMap.add aid fun_decl funs,
                         tbl
@@ -133,6 +133,7 @@ let resolve_names cu =
                     { f_name = cid;
                       f_args = arg_tys;
                       f_res = ADType id;
+                      f_is_destr = false;
                     }
                   in
                   { cnst with c_name = cid; c_args = args } :: consts,
@@ -270,11 +271,18 @@ let resolve_names cu =
           | _ ->
               let id = lookup_id init_id tbl pos in
               try
-                if IdMap.mem id cu.fun_decls
-                then ConstrApp (id, args1, pos)
-                else 
-                  (check_proc id procs0 pos;
-                   ProcCall (id, args1, pos))
+                let f_decl_opt = IdMap.find_opt id cu.fun_decls in
+                f_decl_opt |>
+                Opt.map (fun f_decl ->
+                  if f_decl.f_is_destr
+                  then begin
+                    match args1 with
+                    | [arg1] -> DestrApp (id, arg1, pos)
+                    | _ -> destr_arg_mismatch_error pos id (List.length args1)
+                  end else ConstrApp (id, args1, pos)) |>
+                Opt.lazy_get_or_else (fun () ->
+                  check_proc id procs0 pos;
+                  ProcCall (id, args1, pos))
               with ProgError.Prog_error _ ->
                 check_pred id preds0 pos;
                 PredApp (Pred id, args1, pos))

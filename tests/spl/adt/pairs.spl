@@ -1,4 +1,4 @@
-datatype Pair = pair(fst: Int, snd: Int) | c(a: T);
+datatype Pair = pair(fst: Int, snd: Int);
 
 procedure test(p: Pair)
   requires p == pair(5, 2)
