@@ -525,6 +525,7 @@ let set_axioms elem_srts =
     let set1 = mk_var (Set t) (mk_ident "X") in
     let set2 = mk_var (Set t) (mk_ident "Y") in
     let set3 = mk_var (Set t) (mk_ident "Z") in
+    let x = mk_var t (mk_ident "x") in
     let empty = 
       (* don't use the smart constructor smk_elem for set membership here *)
       mk_not (mk_elem elt1 (mk_empty (Set t)))
@@ -612,6 +613,11 @@ let set_axioms elem_srts =
       mk_sequent [mk_disjoint set1 set2]
         [mk_disjoint (mk_inter [set3; set1]) set2]
     in
+    let disjoint_singleton =
+      mk_sequent [mk_not (mk_elem x set1)]
+        [mk_disjoint (mk_setenum [x]) set1;
+         mk_disjoint set1 (mk_setenum [x])]
+    in
     let disjoint_def_inter =
       nnf (mk_iff (mk_eq (mk_inter [set1; set2]) (mk_empty (Set t)))
              (mk_disjoint set1 set2))
@@ -665,6 +671,7 @@ let set_axioms elem_srts =
          mk_axiom ("Disjoint subset1" ^ ssrt) disjoint_subset1;
          mk_axiom ("Disjoint subset2" ^ ssrt) disjoint_subset2;
          mk_axiom ("Disjoint subset3" ^ ssrt) disjoint_subset3;
+         mk_axiom ("Disjoint singleton" ^ ssrt) disjoint_singleton;
        ] else []
   in
   Util.flat_map mk_set_axioms elem_srts
