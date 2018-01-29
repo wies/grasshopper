@@ -23,6 +23,9 @@ let replace_lt_gt str =
   Str.global_replace (Str.regexp "<") "&lt;"
     (Str.global_replace (Str.regexp ">") "&gt;" str)
 
+let replace_newlines str =
+  Str.global_replace (Str.regexp "\n") "<br>" str
+
 let output_json chan model =
   let string_of_sorted_value srt v = 
     "\"" ^ replace_lt_gt (string_of_sorted_value srt v) ^ "\""
@@ -425,7 +428,8 @@ let mixed_graphviz_html =
               Printf.fprintf
               chan
               "    <tr><td>%s</td><td>%s</td></tr>\n"
-              (replace_lt_gt k) (replace_lt_gt v)
+              (* Alternatively, use <pre> block for k and v? *)
+              (replace_lt_gt k) (replace_lt_gt v |> replace_newlines)
             )
             assoc;
           print_table_footer ()
@@ -476,6 +480,33 @@ let print_graph output chan model terms =
   let ep_colors = Util.fold_left2 (fun acc fld color -> (fld, color)::acc) [] all_flds colors2 in
   let get_color fsrt fld = try List.assoc (fsrt, fld) fld_colors with Not_found -> "black" in
   let out_tbl = output.table chan in
+  (* Utils to pretty print sets and maps *)
+  let rec pr_sorted_value ppf (term, srt) =
+    try
+      (match srt with
+      | Set s ->
+        let cnt = find_set_value model term s in
+        Format.fprintf ppf "{@[<hv 2>%a@]}" pr_sorted_value_list
+          (ValueSet.elements cnt |> List.map (fun v -> (v, s)));
+      | Map (arg_s, res_s) ->
+        let map_val, def_val = find_map_value model term arg_s res_s in
+        (* TODO print def_val. *)
+        Format.fprintf ppf "%a" (pr_map (arg_s, res_s)) map_val
+      | _ ->
+        Format.fprintf ppf "%s" (string_of_sorted_value srt term))
+    with Undefined ->
+        Format.fprintf ppf "%s" (string_of_sorted_value srt term)
+  and pr_sorted_value_list ppf svals =
+    pr_list_comma pr_sorted_value ppf svals
+  and pr_map (arg_s, res_s) ppf map =
+    let pr_map_elem ppf (args, v) = 
+      Format.fprintf ppf "%a: %a" pr_sorted_value_list (List.combine args arg_s)
+        pr_sorted_value (v, res_s)
+    in
+    Format.fprintf ppf "{@[<hv 2>%a@]}" (pr_list_comma pr_map_elem)
+      (ValueListMap.bindings map)
+  in
+  let str_of_t srt term = string_of_format pr_sorted_value (term, srt) in
   let output_constants () =
     let sorts =
       SortSet.filter
@@ -489,7 +520,7 @@ let print_graph output chan model terms =
       SortSet.fold
         (fun srt acc ->
           let syms = get_symbols_of_sort model ([], srt) in
-            SymbolSet.fold
+          SymbolSet.fold
               (fun sym acc ->
                 let str = string_of_symbol sym in
                 let value = interp_symbol model sym ([], srt) [] in
@@ -501,15 +532,86 @@ let print_graph output chan model terms =
     in
       out_tbl "constants" rows
   in
-  (* utils to pretty print sets *)
-  let rec str_of_t srt term =
-    match srt with
-    | Set s ->
-      let cnt = find_set_value model term s in
-      let vals = List.map (str_of_t s) (ValueSet.elements cnt) in
-        "{" ^ (String.concat ", " vals) ^ "}"
-    | _ ->
-      string_of_sorted_value srt term
+  let output_adts () =
+    let str_adt (adt_defs, cons, cons_def, args) =
+      let str_one_arg (v, (destr, srt)) =
+        (* Convert FreeSyms in srt to Adts *)
+        let rec convert = function
+          | (Bool | Int | Byte | Pat) as s -> s
+          | Loc e -> Loc (convert e)
+          | Set e -> Set (convert e)
+          | Array e -> Array (convert e)
+          | ArrayCell e -> ArrayCell (convert e)
+          | Adt (id, defs) -> Adt (id, defs)
+          | Map (ds, r) -> Map (List.map convert ds, convert r)
+          | FreeSrt id ->
+            if List.mem_assoc id adt_defs then
+              Adt (id, adt_defs)
+            else FreeSrt id
+        in
+        Printf.sprintf "%s: %s" (string_of_ident destr) (string_of_format pr_sorted_value (v, convert srt))
+      in
+      Printf.sprintf "%s(%s)" (string_of_ident cons)
+        (List.map str_one_arg (List.combine args cons_def) |> String.concat ", ")
+    in
+    (* TODO why doesn't this work? *)
+    (* let pr_adt ppf (adt_defs, cons, cons_def, args) =
+      let pr_one_arg ppf (v, (destr, srt)) =
+        (* Convert FreeSyms in srt to Adts *)
+        let rec convert = function
+          | (Bool | Int | Byte | Pat) as s -> s
+          | Loc e -> Loc (convert e)
+          | Set e -> Set (convert e)
+          | Array e -> Array (convert e)
+          | ArrayCell e -> ArrayCell (convert e)
+          | Adt (id, defs) -> Adt (id, defs)
+          | Map (ds, r) -> Map (List.map convert ds, convert r)
+          | FreeSrt id ->
+            if List.mem_assoc id adt_defs then
+              Adt (id, adt_defs)
+            else FreeSrt id
+        in
+        Format.fprintf ppf "@[%a@]: @[%a@]" pr_ident destr pr_sorted_value (v, convert srt)
+      in
+      Format.fprintf ppf "@[%a(@[%a@])@]" pr_ident cons (pr_list_comma pr_one_arg)
+        (List.combine args cons_def)
+    in
+    let string_of_adt adt_defs cons cons_def args =
+      Util.string_of_format pr_adt (adt_defs, cons, cons_def, args)
+    in *)
+    let string_of_adt adt_defs cons cons_def args =
+      str_adt (adt_defs, cons, cons_def, args)
+    in
+    let rows_of_srt acc srt =
+      let row_of_sym adt_defs t_def sym =
+        let str = string_of_symbol sym in
+        let value = interp_symbol model sym ([], srt) [] in
+        let value_str =
+          (match value with
+          | ADT (cons, args) ->
+            let cons_def = List.assoc cons t_def in
+            let res = string_of_adt adt_defs cons cons_def args in
+            Printf.printf "\n\nADT printing for %s = (%s):\n%s\n" (string_of_symbol sym)
+              (args |> List.map string_of_value |> String.concat ", ")
+              res;
+            res
+          | _ ->
+            failwith @@ "Expected ADT value but got " ^ (string_of_value value))
+        in
+        str, value_str
+      in
+      match srt with
+      | Adt (t, adt_defs) -> 
+        (* Find the defn of ADT t *)
+        let t_def = List.assoc t adt_defs in
+        let syms = get_symbols_of_sort model ([], srt) in
+        SymbolSet.fold (fun sym acc -> (row_of_sym adt_defs t_def sym) :: acc) syms acc
+      | _ -> []
+    in
+    let rows =
+      SortSet.fold (fun srt acc -> rows_of_srt acc srt) (get_sorts model) []
+    in
+    out_tbl "ADTs" rows
   in
   let output_sets () =
     let print_sets srt =
@@ -763,6 +865,7 @@ let print_graph output chan model terms =
   output.graph chan !nodes !edges;
   (* TODO array of non-loc stuff *)
   output_constants ();
+  output_adts ();
   output_sets ();
   output_freesyms ();
   output.footer chan
