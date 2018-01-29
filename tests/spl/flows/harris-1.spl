@@ -94,8 +94,8 @@ procedure insert(hd: Node, I: Interface)
 
   while (nondet && r != null)
     invariant N(l, Il) &*& Gr(I2)
-    invariant intValid(Il) && intValid(I2) && Il.FP == {l} && Il.inf[l] == 1 // TODO infer from N(l, Il)
-    invariant intComp(Il, I2) == I && (r != null ==> Il.FPo == {r} && Il.fm[l][r] == 1)
+    invariant intValid(Il) && intValid(I2) && Il.FP == {l} // TODO infer from N(l, Il)
+    invariant intComp(Il, I2) == I && (r != null ==> r in Il.FPo)
     invariant hd in I.FP && I.inf[hd] == 1 && (forall n: Node :: n != hd ==> I.inf[n] == 0)
       && I.FPo == {}
   {
