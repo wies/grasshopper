@@ -590,11 +590,7 @@ let print_graph output chan model terms =
           (match value with
           | ADT (cons, args) ->
             let cons_def = List.assoc cons t_def in
-            let res = string_of_adt adt_defs cons cons_def args in
-            Printf.printf "\n\nADT printing for %s = (%s):\n%s\n" (string_of_symbol sym)
-              (args |> List.map string_of_value |> String.concat ", ")
-              res;
-            res
+            string_of_adt adt_defs cons cons_def args
           | _ ->
             failwith @@ "Expected ADT value but got " ^ (string_of_value value))
         in
