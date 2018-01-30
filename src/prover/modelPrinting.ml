@@ -481,7 +481,15 @@ let print_graph output chan model terms =
   let get_color fsrt fld = try List.assoc (fsrt, fld) fld_colors with Not_found -> "black" in
   let out_tbl = output.table chan in
   (* Utils to pretty print sets and maps *)
-  let rec pr_sorted_value ppf (term, srt) =
+  let rec pr_ext_val ppf ext_val =
+    match ext_val with
+    | BaseVal v -> Format.fprintf ppf "%s" (string_of_value v)
+    | MapVal (m, d) -> Format.fprintf ppf "Map<TODO>"
+    | SetVal s -> Format.fprintf ppf "Set<TODO>"
+    | TermVal (vs, t) -> Format.fprintf ppf "Term<TODO>"
+    | FormVal (vs, t) -> Format.fprintf ppf "Form<TODO>"
+    | Undef -> Format.fprintf ppf "Undef"
+  and pr_sorted_value ppf (term, srt) =
     try
       (match srt with
       | Set s ->
@@ -490,21 +498,20 @@ let print_graph output chan model terms =
           (ValueSet.elements cnt |> List.map (fun v -> (v, s)));
       | Map (arg_s, res_s) ->
         let map_val, def_val = find_map_value model term arg_s res_s in
-        (* TODO print def_val. *)
-        Format.fprintf ppf "%a" (pr_map (arg_s, res_s)) map_val
+        Format.fprintf ppf "%a" (pr_map (arg_s, res_s)) (map_val, def_val)
       | _ ->
         Format.fprintf ppf "%s" (string_of_sorted_value srt term))
     with Undefined ->
         Format.fprintf ppf "%s" (string_of_sorted_value srt term)
   and pr_sorted_value_list ppf svals =
     pr_list_comma pr_sorted_value ppf svals
-  and pr_map (arg_s, res_s) ppf map =
+  and pr_map (arg_s, res_s) ppf (map, def_val) =
     let pr_map_elem ppf (args, v) = 
       Format.fprintf ppf "%a: %a" pr_sorted_value_list (List.combine args arg_s)
         pr_sorted_value (v, res_s)
     in
-    Format.fprintf ppf "{@[<hv 2>%a@]}" (pr_list_comma pr_map_elem)
-      (ValueListMap.bindings map)
+    Format.fprintf ppf "{@[<hv 2>%a@]}(__default: %a)" (pr_list_comma pr_map_elem)
+      (ValueListMap.bindings map) pr_ext_val def_val
   in
   let str_of_t srt term = string_of_format pr_sorted_value (term, srt) in
   let output_constants () =
