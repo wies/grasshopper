@@ -145,10 +145,12 @@ let get_result_sort model sym arg_srts =
       
 
 let find_map_value model v arg_srts res_srt = 
-  match SortedValueMap.find (v, Map (arg_srts, res_srt)) model.vals with
-  | MapVal (m, d) -> m, d
-  | Undef -> ValueListMap.empty, Undef
-  | _ -> raise Undefined
+  try
+    match SortedValueMap.find (v, Map (arg_srts, res_srt)) model.vals with
+    | MapVal (m, d) -> m, d
+    | Undef -> ValueListMap.empty, Undef
+    | _ -> raise Undefined
+  with Not_found -> raise Undefined
 
 let find_set_value model v srt =
   try
@@ -421,6 +423,22 @@ let is_defined model sym arity args =
 let get_values_of_sort model srt =
   let vals = 
     SortedSymbolMap.fold (fun (sym, (arg_srts, res_srt)) (m, d) vals ->
+      (* make a list of indices of arg_srts that = srt *)
+      let indices =
+        let indices = ref IntSet.empty in
+        arg_srts |> List.iteri (fun i a -> if a = srt then indices := IntSet.add i !indices);
+        !indices
+      in
+      (* now go through keys of m and add projection to indices to vals *)
+      let vals =
+        ValueListMap.fold (fun args _ vals ->
+            let res = ref ValueSet.empty in
+            args |> List.iteri (fun i a ->
+              if IntSet.mem i indices then res := ValueSet.add a !res);
+            ValueSet.union !res vals
+          ) m vals
+      in
+      (* Then if res_srt = srt, also take d and the range of m *)
       if res_srt = srt 
       then 
         let map_vals = 
@@ -456,7 +474,13 @@ let get_set_sorts model =
 let get_map_sorts model =
   SortedSymbolMap.fold
     (function
-      | (_, (_, (Map _ as srt))) -> fun _ srts -> SortSet.add srt srts
+      | (_, (arg_srts, (Map _ as srt))) -> fun _ srts ->
+        let srts = 
+          List.fold_left (fun srts ->
+              (function | Map _ as s -> SortSet.add s srts | _ -> srts)
+            ) srts arg_srts 
+        in
+        SortSet.add srt srts
       | _ -> fun _ srts -> srts)
     model.intp SortSet.empty
 

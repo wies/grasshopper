@@ -70,6 +70,7 @@ array_reverse           tests/spl/array/reverse.spl             pass
 array_selection_sort    tests/spl/array/selection_sort.spl      pass
 array_test              tests/spl/array/test.spl                pass
 array_traverse_with_nodes tests/spl/array/traverse_with_nodes.spl pass
+adt_lists               tests/spl/adt/lists.spl                 pass
 "
 # string use Byte and requires -bitvector
 # array_string            tests/spl/array/string.spl              pass
