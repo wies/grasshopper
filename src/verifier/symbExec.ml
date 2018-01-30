@@ -380,7 +380,6 @@ let check_pure_entail prog eqs p1 p2 =
     match Prover.get_model ~session_name:name f with
     | None -> true
     | Some model ->
-      Debug.debugl 1 (fun () -> "\nFailing VC:\n\n" ^ (string_of_form f));
       failwith @@ sprintf "Could not prove %s" (string_of_form p2)
 
 
