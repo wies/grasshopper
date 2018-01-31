@@ -108,7 +108,8 @@ procedure lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, 
        @(matching Ix.fm[x][n], Iy.fm[y][n]
          yields domPlus(domMult(Cyy, Iy.fm[y][n]), domMult(Cyx, Ix.fm[x][n])))
        )
-
+ // Ask Thomas why these aren't automatically generated
+ // Also about conservative term gen for Read terms?
 
 /** Begin programs */
 
