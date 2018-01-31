@@ -201,6 +201,7 @@ let mixed_graphviz_html =
      min-width: inherit;
      min-height: inherit;
    }
+   body {font-family: monospace;}
   </style>
   <script src=\"http://ariutta.github.io/svg-pan-zoom/dist/svg-pan-zoom.min.js\"></script>
 </head>
@@ -635,27 +636,24 @@ let print_graph output chan model terms =
   in
   (* functions and pred *)
   let output_freesyms () =
-    let (_, funs) = TermSet.fold
-      (fun t (seen, acc) -> match t with
+    (* Get the functions and predicates from ground terms *)
+    let funs = TermSet.fold
+      (fun t acc -> match t with
         | App ((FreeSym _ as sym), args, srt) when args <> [] ->
-            (try
-              let str_of a = str_of_t (sort_of a) (eval model a) in
-              let args_str = List.map str_of args in
-              let lhs = (string_of_symbol sym) ^ "(" ^ (String.concat ", " args_str) ^ ")" in
-                if StringSet.mem lhs seen then
-                  (seen, acc)
-                else
-                  begin
-                    let res = eval model t in
-                    let rhs = str_of_t srt res in
-                     (StringSet.add lhs seen, (lhs, rhs) :: acc)
-                  end
-            with _ -> (seen,acc))
-        | _ ->
-            (seen,acc)
-      ) terms (StringSet.empty, []) 
+          let arity = List.map sort_of args, srt in
+          SortedSymbolSet.add (sym, arity) acc
+        | _ -> acc
+      ) terms SortedSymbolSet.empty
     in
-    out_tbl "predicates and functions" funs
+    let rows =
+      let row_of_func (func, arity) =
+        let m, d = SortedSymbolMap.find (func, arity) model.intp in
+        let val_str = string_of_format (pr_map arity) (m, d) in
+        (string_of_symbol func, val_str)
+      in
+      SortedSymbolSet.fold (fun func acc -> (row_of_func func) :: acc) funs []
+    in
+    out_tbl "predicates and functions" rows
   in
   let node_counter = ref 0 in
   let sorted_value_to_node = Hashtbl.create 64 in
