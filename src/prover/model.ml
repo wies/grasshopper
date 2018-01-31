@@ -420,6 +420,12 @@ let is_defined model sym arity args =
   with Undefined -> false
 
 
+(* TODO: precompute/cache this?
+  We could have an eval function that takes a (value, sort) and returns the GRASS
+  value. It could use the ext_interpretation to cache these?
+  Right now code is repeated here and in ModelPrinting to evaluate 
+  sets/functions/adts.
+*)
 let get_values_of_sort model srt =
   let vals = 
     SortedSymbolMap.fold (fun (sym, (arg_srts, res_srt)) (m, d) vals ->
@@ -439,15 +445,34 @@ let get_values_of_sort model srt =
           ) m vals
       in
       (* Then if res_srt = srt, also take d and the range of m *)
-      if res_srt = srt 
-      then 
-        let map_vals = 
-          ValueListMap.fold (fun _ -> ValueSet.add) m vals
-        in 
-        match arg_srts, d with
-        | _, BaseVal v -> ValueSet.add v map_vals
-        | _, _ -> map_vals
-      else vals)
+      let vals =
+        if res_srt = srt 
+        then 
+          let map_vals = 
+            ValueListMap.fold (fun _ -> ValueSet.add) m vals
+          in 
+          match arg_srts, d with
+          | _, BaseVal v -> ValueSet.add v map_vals
+          | _, _ -> map_vals
+        else vals
+      in
+      (* If sym is a constant value of an ADT type, also check its components *)
+      match d, res_srt with
+      | BaseVal v, Adt (ty, adt_defs) ->
+        let ty_def = List.assoc ty adt_defs in
+        (try
+          (match interp_symbol model sym ([], res_srt) [] with
+          | ADT (cons, args) ->
+            let cons_def = List.assoc cons ty_def in
+            List.combine args cons_def
+            |> List.fold_left
+                (fun vals (v, (_, v_srt)) ->
+                  if v_srt = srt then ValueSet.add v vals else vals)
+                vals
+          | _ -> failwith "Expected ADT value")
+        with Undefined -> vals)
+      | _ -> vals
+      )
       model.intp ValueSet.empty
   in
   ValueSet.elements vals

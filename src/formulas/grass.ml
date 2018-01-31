@@ -117,6 +117,11 @@ module SymbolMap = Map.Make(struct
     let compare = compare
   end)
 
+module SortedSymbolSet = Set.Make(struct
+    type t = symbol * arity
+    let compare = compare
+  end)
+
 module SortedSymbolMap = Map.Make(struct
     type t = symbol * arity
     let compare = compare
