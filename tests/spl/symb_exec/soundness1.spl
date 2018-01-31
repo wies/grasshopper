@@ -1,0 +1,15 @@
+// Expect these tests to fail
+
+struct Node {
+  var next: Node;
+  var data: Int;
+}
+
+procedure useless_existentials(x: Node, y: Node, z: Node)
+  requires acc(x) &*& acc(y)
+  ensures acc(x) &*& acc(z)
+{
+  z := y;
+  y := x.next;
+  pure assert y == x;
+}
