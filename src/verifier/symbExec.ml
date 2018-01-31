@@ -663,7 +663,8 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       let spec_form, state =
         spec_form |> subst_form eqs |> fold_map_terms (eval_term flds) state
       in
-      let _ = find_frame prog eqs state (spec_form, []) in
+      let state' = add_neq_constraints state in
+      let _ = find_frame prog eqs state' (spec_form, []) in
       symb_exec prog flds proc (eqs, state) postcond comms'
     )
   | Basic (Assume _, _) :: _ -> failwith "TODO Assume SL command"
