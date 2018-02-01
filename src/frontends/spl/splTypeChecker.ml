@@ -421,7 +421,7 @@ let infer_types cu locals ty e =
           with Invalid_argument _ ->
             destr_arg_mismatch_error pos id atys
         in
-        ConstrApp (id, args1, pos), ty
+        DestrApp (id, List.hd args1, pos), ty
     | Null (nty, pos) ->
         let ty = match_types pos ty nty in
         Null (ty, pos), ty
