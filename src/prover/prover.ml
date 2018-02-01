@@ -278,7 +278,7 @@ let instantiate_and_prove session fs =
           Debug.debugl 1 (fun () ->
             "\nSMT called with:\n\n"
             ^ ((FormSet.elements fs_asserted1 @ fs_inst1_assert)
-                |> smk_and |> string_of_form))
+                |> smk_and |> string_of_form) ^ "\n\n")
         | Some false -> ());
         k + 1, result1, fs_asserted1, fs_inst1, gts_inst1, classes1
     | _ -> k, result, fs_asserted, fs_inst, gts_inst, classes
@@ -326,6 +326,7 @@ let dump_core session =
       in
       let core = Opt.get (SmtLibSolver.get_unsat_core session) in
       let core = minimize core in
+      Debug.debugl 1 (fun () -> "\n\nCore:\n" ^ (string_of_form (smk_and core) ^ "\n\n"));
       let config = !Config.dump_smt_queries in
       Config.dump_smt_queries := true;
       let s = SmtLibSolver.start core_name session.SmtLibSolver.sat_means in
