@@ -112,17 +112,17 @@ let cmd_options =
    ("-noreach", Arg.Clear with_reach_axioms, " Omit axioms for reachability predicates");
    ("-noep", Arg.Clear with_ep, " Omit axioms for entry points");
    ("-fullep", Arg.Set full_ep, " Generates more ep terms");
+   ("-simplearrays", Arg.Set simple_arrays, " Use simple array encoding");
+   ("-abspreds", Arg.Set abstract_preds, " Treat predicates as abstract");
    ("-noinst", Arg.Clear instantiate, " Let the SMT solver deal with the quantifiers without prior instantiation");
    ("-termgen", Arg.Set_int term_gen_max_rounds, "<num> Number of rounds to run the term generation procedure");
+   ("-nofixedpoint", Arg.Clear ccFixedPoint, " Do not do a fixed point with unit propagation for the congruence closure");
    ("-nostratify", Arg.Clear stratify, " Instantiate quantifiers that satisfy stratified sort restrictions\n\nOptions for controlling backend solver:");
-   ("-nofixedpoint", Arg.Clear ccFixedPoint, " Do not use fixed point for the congruence-closure");
-   ("-abspreds", Arg.Set abstract_preds, " Treat predicates as abstract.");
    ("-splitlemmas", Arg.Set split_lemmas, " Add split lemmas for all terms of sort Loc");
    ("-smtsolver", Arg.Set_string smtsolver, "<solver> Choose SMT solver (z3, cvc4, cvc4mf), e.g., 'z3+cvc4mf'");
    ("-smtpatterns", Arg.Set smtpatterns, " Always add pattern annotations to quantifiers in SMT queries");
    ("-smtsets", Arg.Set use_set_theory, " Use solver's set theory to encode sets (if supported)");
    ("-smtarrays", Arg.Set encode_fields_as_arrays, " Use solver's array theory to encode fields");
    ("-bitvector", Arg.Set use_bitvector, " Use bitvector theory for integers\n\nOptions for compiler:");
-   ("-simplearrays", Arg.Set simple_arrays, " Use simple array encoding");
-   ("-compile", Arg.Set_string compile_to, "<filename> Compile SPL program to a C program outputed as a file with the given name.");
+   ("-compile", Arg.Set_string compile_to, "<filename> Compile SPL program to a C program outputed as a file with the given name.\n\nOptions for help:");
   ]
