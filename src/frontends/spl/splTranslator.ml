@@ -664,15 +664,15 @@ let convert cu =
           Opt.get_or_else BoolType
         in
         let opt_body, locals, outputs =
-          match rtype with
-          | BoolType ->
+          match rtype, decl.pr_outputs with
+          | BoolType, [] ->
               Opt.map (fun body ->
                 let cbody = convert_grass_form decl.pr_locals body in
                 SL (Pure (cbody, Some (pos_of_expr body)))) decl.pr_body,
               decl.pr_locals, decl.pr_outputs              
-          | PermType ->
+          | PermType, _ ->
               Opt.map (fun body -> SL (convert_sl_form decl.pr_locals body)) decl.pr_body, decl.pr_locals, decl.pr_outputs
-          | rtype ->
+          | rtype, _ ->
               let ret_id, locals =
                 match decl.pr_outputs with
                 | [r] -> r, decl.pr_locals
