@@ -171,6 +171,7 @@ let instantiate_and_prove session fs =
     TermSet.fold
       (fun t gts ->
         match t with
+        | App (FreeSym _, [], Loc _)
         | App (FreeSym _, _ :: _, _) ->
             TermSet.add (mk_known t) gts
         | App (Elem, e :: _, _) when is_loc_sort (sort_of e) ->
@@ -208,8 +209,13 @@ let instantiate_and_prove session fs =
     (* the following seemingly redundant instantiation round is a workaround for not using the -fullep option *)
     let fs2 = instantiate_with_terms ~stratify:false true fs1 classes in
     let gts_known = generate_knowns gts in
-    let gts_inst = TermSet.union gts_inst gts_known in
-    let gts_inst = generate_terms generators (TermSet.union gts_inst (ground_terms ~include_atoms:true (mk_and fs2))) in
+    let gts_inst0 = TermSet.union gts_inst gts_known in
+    let gts2_atoms = TermSet.filter (function
+      | App (_, ts, Bool) -> List.for_all (fun t -> TermSet.mem t gts_inst) ts
+      | _ -> false)
+        (ground_terms ~include_atoms:true (mk_and fs2))
+    in
+    let gts_inst = generate_terms generators (TermSet.union gts_inst0 gts2_atoms) in
     let core_terms =
       let gts_a = (*terms_from_neg_assert*) ground_terms (mk_and fs) in
       TermSet.fold (fun t acc ->
