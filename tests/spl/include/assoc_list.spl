@@ -13,19 +13,20 @@ predicate lseg_strictly_increasing(x: Node, FP: Set<Node>) {
   forall y: Node, z: Node :: y in FP && z in FP && Btwn(next,x,y,z) ==> y.key < z.key || y == z
 }
 
-function key_witness(k: Int, ks: Map<Node, Int>, FP: Set<Node>)
+function key_witness(k: Int, FP: Set<Node>)
   returns (res: Node) 
   requires acc(FP)
-  ensures forall x in FP :: x == key_witness(x.key, key, FP)
+  ensures forall x in FP :: x == key_witness(x.key, FP)
 
 function keys(FP: Set<Node>)
   returns (K: Set<Int>)
   requires acc(FP)
   ensures forall x in FP :: x.key in K
-  ensures forall v in K :: key_witness(v, key, FP) in FP
-  ensures forall v: Int :: v !in K ==> key_witness(v, key, FP) == null
-  ensures forall v in K :: v == key_witness(v, key, FP).key @(matching v yields key_witness(v, key, FP).key)
-
+  ensures forall v in K :: key_witness(v, FP) in FP
+  ensures forall v: Int :: v !in K ==> key_witness(v, FP) == null
+  ensures forall v in K :: v == key_witness(v, FP).key @(matching v yields key_witness(v, FP).key)
+ ensures forall v in K, FP1: Set<Node> :: key_witness(v, FP) in FP1 ==> key_witness(v, FP) == key_witness(v, FP1) 
+  
 /*
 function keys(FP: Set<Node>)
   returns (K: Set<Int>)
