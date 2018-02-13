@@ -615,8 +615,7 @@ let set_axioms elem_srts =
     in
     let disjoint_singleton =
       mk_sequent [mk_not (mk_elem x set1)]
-        [mk_disjoint (mk_setenum [x]) set1;
-         mk_disjoint set1 (mk_setenum [x])]
+        [mk_disjoint (mk_setenum [x]) set1]
     in
     let disjoint_def_inter =
       nnf (mk_iff (mk_eq (mk_inter [set1; set2]) (mk_empty (Set t)))
