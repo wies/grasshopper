@@ -120,15 +120,16 @@ let add_match_filters =
                 (function Var (id, _) -> IdMap.mem id ce | _ -> false)
                 ts
             in
+            let add f fs = if List.mem f fs then fs else f :: fs in
             let flt, aux_matches = 
               TermSet.fold 
                 (fun t (flt, aux_matches) -> match t with
-                | App (FreeSym sym, (_ :: _ as ts), srt)
-                  when sym_of_e <> Some (FreeSym sym) && ce_occur_below ts ->
-                    (FilterSymbolNotOccurs (FreeSym sym)) :: flt, aux_matches
+                | App ((FreeSym _ | Constructor _ as sym), (_ :: _ as ts), srt)
+                  when sym_of_e <> Some sym && ce_occur_below ts ->
+                    add (FilterSymbolNotOccurs sym) flt, aux_matches
                 | App (Read, ([App (FreeSym sym, [], srt); l] as ts), _)
                   when sym_of_e <> Some (FreeSym sym) && ce_occur_below ts ->
-                    (FilterReadNotOccurs (GrassUtil.name sym, ([], srt))) :: flt,
+                    add (FilterReadNotOccurs (GrassUtil.name sym, ([], srt))) flt,
                     Match (l, [FilterNotNull]) :: aux_matches
                 | _ -> flt, aux_matches)
                 gts (filters, [])
