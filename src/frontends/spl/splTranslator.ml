@@ -726,6 +726,7 @@ let convert cu =
             pred_body = Opt.map (fun body -> mk_spec_form body (string_of_ident id) None body_pos) opt_body;
             pred_accesses = IdSet.empty;
             pred_is_self_framing = false;
+            pred_was_sl_pred = false;
           }
         in
         declare_pred prog pred_decl

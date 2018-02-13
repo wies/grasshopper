@@ -1,3 +1,4 @@
+open Util
 open Grass
 open GrassUtil
 open Axioms
@@ -146,6 +147,7 @@ type pred_decl = {
     pred_body: spec option; (** predicate body *)
     pred_accesses: IdSet.t; (** accessed variables *)
     pred_is_self_framing: bool; (** predicate is a footprint function *)
+    pred_was_sl_pred: bool; (** predicate is a translated SL predicate *)
   } 
 
 (** Program *)
@@ -423,6 +425,17 @@ let is_sl_spec sf =
   | SL _ -> true
   | FOL _ -> false
 
+let is_pure_spec sf =
+  match sf.spec_form with
+  | FOL _ | SL (Sl.Pure _) -> true
+  | _ -> false
+
+let is_pure_pred pred =
+  List.for_all is_pure_spec (Opt.to_list pred.pred_body @ precond_of_pred pred)
+
+let is_sl_pred pred =
+  not (Opt.get_or_else true (Opt.map is_pure_spec pred.pred_body))
+        
 let form_of_spec sf =
   match sf.spec_form with
   | FOL f -> f
