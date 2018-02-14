@@ -8,6 +8,8 @@ predicate N(x: Node, I: Interface)
 
 // A functional semantics for interface composition
 function intComp(I1: Interface, I2: Interface) returns (I: Interface)
+  ensures I.FP == I1.FP ++ I2.FP
+  ensures I.FPo == (I1.FPo -- I2.FP) ++ (I2.FPo -- I1.FP)
 
 // Interface contextual extension, encoded as a function
 function intLeq(I1: Interface, I2: Interface) returns (res: Bool)
@@ -110,11 +112,21 @@ procedure lemma_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Nod
   requires intComp(I1, I2) == I && x in I1.FP && y in I1.FPo && I.FPo == {}
   ensures y in I2.FP
 
+procedure lemma_add_in(I: Interface, n: Node, In: Interface, I1: Interface)
+  requires I1 == intComp(I, In) && In.FP == {n} && In.inf[n] == domZero()
+  ensures forall n1: Node :: I.inf[n1] == I1.inf[n1]
+
 procedure lemma_int_leq_fold(I1: Interface, I2: Interface)
   requires I1.FP == I2.FP && I1.FPo == I2.FPo
   requires forall n in I1.FP :: I1.inf[n] == I2.inf[n]
   requires forall n in I1.FP, o in I1.FPo :: I1.inf[n] != domZero() ==> I1.fm[n][o] == I2.fm[n][o]
   ensures intLeq(I1, I2) == true
+
+procedure lemma_int_leq_unfold(I1: Interface, I2: Interface)
+  requires intLeq(I1, I2) == true
+  ensures I1.FP == I2.FP && I1.FPo == I2.FPo
+  ensures forall n in I1.FP :: I1.inf[n] == I2.inf[n]
+  ensures forall n in I1.FP, o in I1.FPo :: I1.inf[n] != domZero() ==> I1.fm[n][o] == I2.fm[n][o]
 
 procedure lemma_repl(I: Interface, Ix: Interface, Iy: Interface, Ix1: Interface, I1: Interface)
   requires I == intComp(Ix, Iy) && I1 == intComp(Ix1, Iy) && intLeq(Ix, Ix1) == true

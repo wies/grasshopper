@@ -69,16 +69,15 @@ procedure lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, 
 /** Begin programs */
 
 procedure insert(hd: Node, I: Interface, n: Node, In: Interface)
-  returns (hd1: Node, I1: Interface)
+  returns (I1: Interface)
   requires Gr(I) &*& intValid(I) == true
   requires I.inf[hd] == 1 && (forall n: Node :: n != hd ==> I.inf[n] == 0)
     && I.FPo == {}
   requires [acc(n)](In)
   requires intValid(In) && In.FP == {n} && In.inf[n] == domZero() && In.FPo == {}
   ensures Gr(I1) &*& intValid(I1) == true &*& intLeq(intComp(In, I), I1) == true
- // TODO intLeq lemmas for postcondition - or can they be inferred from definition?
- //  ensures hd1 in I1.FP && I1.inf[hd1] == 1 && (forall n: Node :: n != hd1 ==> I1.inf[n] == 0)
-   //    && I1.FPo == {}
+  ensures hd in I1.FP && I1.inf[hd] == 1 && (forall n: Node :: n != hd ==> I1.inf[n] == 0)
+    && I1.FPo == {}
 {
   var I0 := lemma_comp_sing_int(n, In, I);
 
@@ -193,6 +192,9 @@ procedure insert(hd: Node, I: Interface, n: Node, In: Interface)
 
     I1 := lemma_Gr_comp(Inl1, I2);
     lemma_repl(I0, Inl, I2, Inl1, I1);
+    lemma_int_leq_unfold(intComp(In, I), I1);
+    lemma_add_in(I, n, In, intComp(I, In));
+    lemma_int_valid_unfold(I1);
   } else {
     lemma_abs(l, Il, Il);
     lemma_dirty_N_is_Gr(l, Il, Il);
@@ -200,6 +202,6 @@ procedure insert(hd: Node, I: Interface, n: Node, In: Interface)
     sync(Il, Il);
     I := lemma_Gr_comp(Il, I2);
 
-    hd1, I1 := insert(hd, I, n, In);
+    I1 := insert(hd, I, n, In);
   }
 }
