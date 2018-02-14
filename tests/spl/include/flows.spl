@@ -114,7 +114,7 @@ procedure lemma_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Nod
 
 procedure lemma_add_in(I: Interface, n: Node, In: Interface, I1: Interface)
   requires I1 == intComp(I, In) && In.FP == {n} && In.inf[n] == domZero()
-  ensures forall n1: Node :: I.inf[n1] == I1.inf[n1]
+     ensures forall n1: Node :: I.inf[n1] == I1.inf[n1] @(matching n1 yields I.inf[n1]) @(matching n1 yields I1.inf[n1])
 
 procedure lemma_int_leq_fold(I1: Interface, I2: Interface)
   requires I1.FP == I2.FP && I1.FPo == I2.FPo
