@@ -118,8 +118,6 @@ procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
   var I0 := lemma_comp_sing_int(x, Ix, I);
   // I0 == intComp(Ix, I)
 
-  // TODO why doesn't this work?
-  // var Iy, I2 := lemma_decomp(y, I);
   var Iy: Interface, I2: Interface;
   Iy, I2 := lemma_decomp(y, I);
   // [x |-> ?](Ix) &*& N(y, Iy) &*& Gr(I2) &*& I == intComp(Iy, I2)
@@ -180,5 +178,5 @@ procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
   I1 := lemma_Gr_comp(Ixy1, I2);
   // Gr(I1) &*& I1 == intComp(Ixy1, I2)
 
-  lemma_int_leq_comp(I0, Ixy, I2, Ixy1, I1);
+  lemma_repl(I0, Ixy, I2, Ixy1, I1);
 }

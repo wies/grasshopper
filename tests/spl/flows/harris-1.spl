@@ -68,18 +68,24 @@ procedure lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, 
 
 /** Begin programs */
 
-procedure insert(hd: Node, I: Interface)
+procedure insert(hd: Node, I: Interface, n: Node, In: Interface)
   returns (hd1: Node, I1: Interface)
   requires Gr(I) &*& intValid(I) == true
-  requires hd in I.FP && I.inf[hd] == 1 && (forall n: Node :: n != hd ==> I.inf[n] == 0)
+  requires I.inf[hd] == 1 && (forall n: Node :: n != hd ==> I.inf[n] == 0)
     && I.FPo == {}
-  ensures Gr(I1) &*& intValid(I1) == true
-  ensures hd1 in I1.FP && I1.inf[hd1] == 1 && (forall n: Node :: n != hd1 ==> I1.inf[n] == 0)
-    && I1.FPo == {}
+  requires [acc(n)](In)
+  requires intValid(In) && In.FP == {n} && In.inf[n] == domZero() && In.FPo == {}
+  ensures Gr(I1) &*& intValid(I1) == true &*& intLeq(intComp(In, I), I1) == true
+ // TODO intLeq lemmas for postcondition - or can they be inferred from definition?
+ //  ensures hd1 in I1.FP && I1.inf[hd1] == 1 && (forall n: Node :: n != hd1 ==> I1.inf[n] == 0)
+   //    && I1.FPo == {}
 {
+  var I0 := lemma_comp_sing_int(n, In, I);
+
   var nondet: Bool;
   var l := hd;
 
+  lemma_int_valid_unfold(I);
   var Il: Interface, I2: Interface;
   Il, I2 := lemma_decomp(l, I);
   lemma_conc(l, Il);
@@ -95,7 +101,7 @@ procedure insert(hd: Node, I: Interface)
   while (nondet && r != null)
     invariant N(l, Il) &*& Gr(I2)
     invariant intValid(Il) && intValid(I2) && Il.FP == {l} // TODO infer from N(l, Il)
-    invariant intComp(Il, I2) == I && (r != null ==> r in Il.FPo)
+    invariant intComp(Il, I2) == I && intComp(In, I) == I0 && (r != null ==> r in Il.FPo)
     invariant hd in I.FP && I.inf[hd] == 1 && (forall n: Node :: n != hd ==> I.inf[n] == 0)
       && I.FPo == {}
   {
@@ -131,8 +137,6 @@ procedure insert(hd: Node, I: Interface)
          && intLeq(intComp(intComp(Ip, I3), Ir), intComp(intComp(Ip, I3), Ir));
   }
 
-  var n: Node, In: Interface;
-  n, In := newNode();  // TODO use mark()?
   n.next := r;
 
   // TODO how do we know n != r? Need conditional, (Step), and Gr footprint
@@ -188,9 +192,14 @@ procedure insert(hd: Node, I: Interface)
     // Gr(Inl1) &*& Gr(I2)
 
     I1 := lemma_Gr_comp(Inl1, I2);
-    // Gr(I1) &*& I1 == intComp(Inl1, I2)
+    lemma_repl(I0, Inl, I2, Inl1, I1);
+  } else {
+    lemma_abs(l, Il, Il);
+    lemma_dirty_N_is_Gr(l, Il, Il);
+    lemma_int_leq_fold(Il, Il);
+    sync(Il, Il);
+    I := lemma_Gr_comp(Il, I2);
 
+    hd1, I1 := insert(hd, I, n, In);
   }
-
-  pure assert false; // TODO intLeq lemmas for postcondition
 }
