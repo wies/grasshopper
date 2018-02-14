@@ -73,16 +73,16 @@ let add_ghost_field_invariants prog =
     let null = mk_null struct_srt in
     let body_form =
       mk_and 
-        [ mk_name "field_eventually_null" 
-            (mk_forall [l1] (mk_reach fld loc1 null));
-          mk_name "field_nonalloc_null"
-            (mk_forall [l1; l2]
-               (mk_sequent
-                  [mk_reach fld loc1 loc2]
-                  [mk_eq loc1 loc2; mk_and [mk_elem loc1 alloc_set;
-                                            mk_elem loc2 alloc_set];
-                   mk_eq loc2 null]));
-          ]
+        [mk_name "field_eventually_null" 
+           (mk_forall [l1] (mk_reach fld loc1 null));
+         mk_name "field_nonalloc_null"
+           (mk_forall [l1; l2]
+              (mk_sequent
+                 [mk_reach fld loc1 loc2]
+                 [mk_eq loc1 loc2; mk_and [mk_elem loc1 alloc_set;
+                                           mk_elem loc2 alloc_set];
+                  mk_eq loc2 null]));
+        ]
     in
     let pred_id = fresh_ident "ghost_field_invariant" in
     let name = "ghost field invariant for " ^ string_of_ident decl.var_name in
@@ -105,6 +105,7 @@ let add_ghost_field_invariants prog =
         pred_body = Some body;
         pred_accesses = IdSet.empty;
         pred_is_self_framing = false;
+        pred_was_sl_pred = false;
       }
     in
     pred :: preds,
@@ -363,8 +364,7 @@ let add_frame_axioms prog =
     let formals = formals_of_pred pred in
     let pos = pos_of_pred pred in
     let pred_frame_axioms =
-      if SortSet.is_empty pred.pred_contract.contr_footprint_sorts || is_fp_func pred
-        (*|| pred1.pred_contract.contr_returns <> []*)  (* No extra frame axioms for functions *)
+      if not pred.pred_was_sl_pred
       then []
       else
         begin
@@ -536,7 +536,6 @@ let add_frame_axioms prog =
 
 (** Eliminate unused formal parameters of predicates (needed for better frame axioms).
  ** Assumes that all SL specifications have been desugared. *)
-
 let elim_unused_formals prog =
   let process_term new_preds t =
     let rec strip_args = function
@@ -589,7 +588,7 @@ let elim_unused_formals prog =
               in
               free_consts_acc used_vars f1
           | _ -> used_vars)
-        (id_set_of_list @@ returns_of_pred pred)
+        (id_set_of_list @@ returns_of_pred pred @ if new_body = None then formals_of_pred pred else [])
         (Opt.to_list new_body @ new_precond @ new_postcond)
     in
     let new_locals =
@@ -678,17 +677,6 @@ let elim_sl prog =
     let kind = Util.Opt.get_or_else Checked kind_opt in
     SlUtil.mk_sep_star_lst ~pos:pos fs, kind, name, msg, pos
   in
-  let is_pure_spec sf =
-    match sf.spec_form with
-    | FOL _ | SL (Sl.Pure _) -> true
-    | _ -> false
-  in
-  let is_sl_pred pred =
-    not (Opt.get_or_else true (Opt.map is_pure_spec pred.pred_body))
-  in
-  let is_pure_pred pred =
-    List.for_all is_pure_spec (Opt.to_list pred.pred_body @ precond_of_pred pred)
-  in
   let pred_to_form fp_context p args domains = 
     let decl = find_pred prog p in
     let mk_empty_except ssrts =
@@ -729,21 +717,6 @@ let elim_sl prog =
     in
     smk_and (mk_pred p args :: eqs @ fp_eqs)
   in
-  (* post process term *)
-  (*let add_footprint_args sym ts srt =
-    match sym with
-    | FreeSym p when IdMap.mem p prog.prog_preds && not (is_pure (find_pred prog p)) ->
-        let decl = find_pred prog p in
-        if List.length (formals_of_pred decl) <> List.length ts
-            then mk_app srt sym ts else
-          let fps =
-            SortSet.fold
-              (fun ssrt fps -> footprint_caller_set ssrt :: fps)
-              (footprint_sorts_pred decl) []
-          in
-          mk_app srt sym (ts @ fps) 
-    | _ -> mk_app srt sym ts 
-  in*)
   let post_process_term t = (*subst_funs_term add_footprint_args*) t in
   (* post process formula *)
   let post_process_form f =
@@ -1046,7 +1019,7 @@ let elim_sl prog =
   let translate_pred preds pred =
     let is_pure = is_pure_pred pred in
     let pname = name_of_pred pred in
-    (* print_endline @@ "translating predicate " ^ string_of_ident pname; *)
+    (*print_endline @@ "translating predicate " ^ string_of_ident pname;*)
     let contract, footprint_sets, footprint_context =
       translate_contract pred.pred_contract false false is_pure IdSet.empty
     in
@@ -1208,8 +1181,7 @@ let elim_sl prog =
             Some { spec with spec_form = spec_form}
         in
         let fp_func_contract =
-          {
-            contr_name = func_name;
+          { contr_name = func_name;
             contr_formals = pred.pred_contract.contr_formals;
             contr_returns = [ret_var_id];
             contr_locals = IdMap.add ret_var_id ret_var pred.pred_contract.contr_locals; (* TODO find the set of locals used here *)
@@ -1220,23 +1192,24 @@ let elim_sl prog =
           }
         in
         let footprint_func =
-          {
-            pred_contract = fp_func_contract;
+          { pred_contract = fp_func_contract;
             pred_body = pred_body;
             pred_accesses = IdSet.empty; (* TODO confirm *)
             pred_is_self_framing = true;
+            pred_was_sl_pred = false;
           }
         in
         func_name, footprint_func
       in
-      pred.pred_contract.contr_footprint_sorts
+      (if is_sl_pred pred then pred.pred_contract.contr_footprint_sorts else SortSet.empty)
       |> SortSet.elements
       |> List.map make_for_sort
     in (* end of make_fp_funcs *)
     let pred1 =
       { pred with
         pred_contract = contract;
-        pred_body = Util.Opt.map translate_body pred.pred_body
+        pred_body = Util.Opt.map translate_body pred.pred_body;
+        pred_was_sl_pred = is_sl_pred pred;
       }
     in
     (* Add functions for the footprints *)

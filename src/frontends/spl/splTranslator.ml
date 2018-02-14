@@ -666,15 +666,15 @@ let convert cu =
           Opt.get_or_else BoolType
         in
         let opt_body, locals, outputs =
-          match rtype with
-          | BoolType ->
+          match rtype, decl.pr_outputs with
+          | BoolType, [] ->
               Opt.map (fun body ->
                 let cbody = convert_grass_form decl.pr_locals body in
                 SL (Pure (cbody, Some (pos_of_expr body)))) decl.pr_body,
               decl.pr_locals, decl.pr_outputs              
-          | PermType ->
+          | PermType, _ ->
               Opt.map (fun body -> SL (convert_sl_form decl.pr_locals body)) decl.pr_body, decl.pr_locals, decl.pr_outputs
-          | rtype ->
+          | rtype, _ ->
               let ret_id, locals =
                 match decl.pr_outputs with
                 | [r] -> r, decl.pr_locals
@@ -728,6 +728,7 @@ let convert cu =
             pred_body = Opt.map (fun body -> mk_spec_form body (string_of_ident id) None body_pos) opt_body;
             pred_accesses = IdSet.empty;
             pred_is_self_framing = false;
+            pred_was_sl_pred = false;
           }
         in
         declare_pred prog pred_decl

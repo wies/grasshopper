@@ -14,7 +14,8 @@ function content(FP: Set<Node>)
   ensures forall v in C :: data_witness(v, FP) in FP
   ensures forall v: Int :: v !in C ==> data_witness(v, FP) == null
   ensures forall v in C :: v == data_witness(v, FP).data @(matching v yields data_witness(v, FP).data)
-
+  ensures forall v in C, FP1: Set<Node> :: data_witness(v, FP) in FP1 ==> data_witness(v, FP) == data_witness(v, FP1) 
+  
 /*
 function content(FP: Set<Node>)
   returns (C: Set<Int>)

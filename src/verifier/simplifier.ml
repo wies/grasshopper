@@ -322,10 +322,10 @@ let elim_global_deps prog =
         contr_postcond = postcond1;
       }
     in
-    { pred_contract = contract1;
+    { pred with
+      pred_contract = contract1;
       pred_body = body1; 
       pred_accesses = accesses;
-      pred_is_self_framing = false;
     } 
   in
   let prog1 = map_procs elim_proc prog in
@@ -515,7 +515,9 @@ let elim_state prog =
                         let alloc_decl = find_var prog proc alloc in
                         let alloc1_id = try IdMap.find alloc sm1 with Not_found -> alloc in
                         let alloc1 = mk_free_const alloc_decl.var_sort alloc1_id in
-                        [mk_frame (mk_setenum [subst_id_term sm idx]) alloc1 (subst_id_term sm fld) x1]
+                        if !Config.abstract_preds then
+                          [mk_frame (mk_setenum [subst_id_term sm idx]) alloc1 (subst_id_term sm fld) x1]
+                        else []
                     | _ -> []
                     in
                     match sort_of e1 with

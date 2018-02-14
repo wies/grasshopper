@@ -428,7 +428,7 @@ let declare_sorts has_int session =
     session.user_sorts;
   let adts = 
     IdMap.fold
-    (fun _ srt adts -> match srt with
+      (fun _ srt adts -> match srt with
       | Adt (id, adts) ->
           let adts =
             List.map (fun (id, cnstrs) ->
@@ -736,7 +736,7 @@ let grass_symbol_of_smtlib_symbol signs solver_info =
       else None) |>
     Opt.get_or_else (FreeSym id)
 
-let bitvecorize_grass_formula formula =
+let bitvectorize_grass_formula formula =
   let rec process_term t = match t with
     | Var _ -> t
     | App (sym, ts, srt) ->
@@ -816,7 +816,7 @@ let extract_name ann =
   Str.global_replace (Str.regexp " \\|(\\|)\\|<\\|>") "_" (String.concat "-" (List.rev names))
 
 let smtlib_form_of_grass_form solver_info signs f =
-  let f = if !Config.use_bitvector then bitvecorize_grass_formula f else f in
+  let f = if !Config.use_bitvector then bitvectorize_grass_formula f else f in
   let osym sym sign =
     if is_interpreted solver_info sym 
     then smtlib_symbol_of_grass_symbol solver_info sym
@@ -1105,7 +1105,7 @@ let convert_model session smtModel =
             get_result_sort model sym ts_srts |>
             Opt.lazy_or_else (fun () -> List.assoc_opt id args) |>
             Opt.lazy_or_else (fun () -> List.assoc_opt id bvs) |>
-            Opt.lazy_get_or_else (fun () -> print_endline (string_of_symbol sym); fail pos)
+            Opt.lazy_get_or_else (fun () -> snd arity)
           in
           if List.exists (fun (id2, _) -> id = id2) bvs 
           then mk_var res_srt id
@@ -1193,7 +1193,7 @@ let convert_model session smtModel =
           convert_form bvs t
       | SmtLibSyntax.Let (_, _, pos) -> fail pos
     in
-    let rec pcond arg_map = function
+    let rec convert_cond arg_map = function
       | SmtLibSyntax.App 
           (SmtLibSyntax.Eq, [SmtLibSyntax.App (Ident id1, [], _) as t1; 
                              SmtLibSyntax.App (Ident id2, [], _) as t2], pos) ->
@@ -1208,14 +1208,14 @@ let convert_model session smtModel =
             Opt.map (fun v -> IdMap.add id v arg_map) (to_val t) |>
             Opt.lazy_get_or_else (fun () -> raise Complex_ite)
       | SmtLibSyntax.App (SmtLibSyntax.And, conds, _) ->
-          List.fold_left pcond arg_map conds
+          List.fold_left convert_cond arg_map conds
       | SmtLibSyntax.Annot (def, _, _) -> 
-          pcond arg_map def
+          convert_cond arg_map def
       | SmtLibSyntax.App (_, _, pos) 
       | SmtLibSyntax.Binder (_, _, _, pos)
       | SmtLibSyntax.Let (_, _, pos) -> raise Complex_ite
     in 
-    let rec p model arg_map = function
+    let rec convert_defun_body model arg_map = function
       | SmtLibSyntax.App (Ident (name, _), [], pos) when name = "#unspecified" ->
           model
       | SmtLibSyntax.App (Ident id, ts, pos) as t ->
@@ -1232,13 +1232,13 @@ let convert_model session smtModel =
       | SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], pos) -> 
           add_val pos model arg_map (Model.value_of_int i)
       | SmtLibSyntax.App (SmtLibSyntax.Ite, [cond; t; e], _) ->
-          let arg_map1 = pcond arg_map cond in
-          let model1 = p model arg_map e in
-          p model1 arg_map1 t
+          let arg_map1 = convert_cond arg_map cond in
+          let model1 = convert_defun_body model arg_map e in
+          convert_defun_body model1 arg_map1 t
       | SmtLibSyntax.App (SmtLibSyntax.Eq, _, pos) as cond ->
           let t = SmtLibSyntax.App (SmtLibSyntax.BoolConst true, [], pos) in
           let e = SmtLibSyntax.App (SmtLibSyntax.BoolConst false, [], pos) in
-          p model arg_map (SmtLibSyntax.App (SmtLibSyntax.Ite, [cond; t; e], pos))
+          convert_defun_body model arg_map (SmtLibSyntax.App (SmtLibSyntax.Ite, [cond; t; e], pos))
       | SmtLibSyntax.App (asym, _, pos) as t ->
           (match asym with
           | SmtLibSyntax.And
@@ -1265,14 +1265,14 @@ let convert_model session smtModel =
                     add_term pos model arg_map t1
               | t1 -> add_term pos model arg_map t1))
       | SmtLibSyntax.Annot (def, _, _) -> 
-          p model arg_map def
+          convert_defun_body model arg_map def
       | SmtLibSyntax.Binder (_, _, _, pos) as t ->
           let f = convert_form [] t in
           add_form pos model arg_map f
       | SmtLibSyntax.Let (_, _, pos) -> fail pos
     in
     try
-      p model IdMap.empty def
+      convert_defun_body model IdMap.empty def
     with
       | Complex_ite ->
         let t = convert_term [] def in
