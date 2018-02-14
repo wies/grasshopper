@@ -87,6 +87,6 @@ flows:soundness1        tests/spl/flows/test_soundness1.spl     fail
 "
 
 res=0
-#OPTIONS=$@ time -f "Elapsed user time: %Us.\nElapsed real time: %es." ./bin/run-tests $TESTS || res=$?
+OPTIONS=$@ time -f "Elapsed user time: %Us.\nElapsed real time: %es." ./bin/run-tests $TESTS || res=$?
 OPTIONS="-symbexec $@" time -f "Elapsed user time: %Us.\nElapsed real time: %es." ./bin/run-tests $SYMB_EXEC_TESTS || res=$?
 exit $res
