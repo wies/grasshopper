@@ -533,12 +533,13 @@ let init_session session sign =
     | Adt (id, adts) when not @@ IdSet.mem id seen ->
         let acc1 = IdMap.add id (Adt (id, adts)) acc in
         let seen1 = List.fold_left (fun seen1 (id, _) -> IdSet.add id seen1) seen adts in
-        List.fold_left (fun acc (_, cnstrs) ->
+        List.fold_left (fun acc (id, cnstrs) ->
+          let acc1 = IdMap.add id (Adt (id, adts)) acc in
           List.fold_left (fun acc (_, args) ->
             List.fold_left
               (fun acc (_, srt) -> add seen1 acc srt)
               acc args)
-            acc cnstrs)
+            acc1 cnstrs)
           acc1 adts
     | Set srt | ArrayCell srt | Array srt | Loc srt -> add seen acc srt
     | Map (dsrts, rsrt) -> List.fold_left (add seen) acc (rsrt :: dsrts)
