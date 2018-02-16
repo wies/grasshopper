@@ -16,10 +16,10 @@ function domMult(p1: Pair, p2: Pair) returns (p: Pair)
 function domZero() returns(p: Pair) { pair(0, 0) }
 
 function domLt(p1: Pair, p2: Pair) returns (res: Bool)
-{ res == (p1.fst < p2.fst && p1.snd < p2.snd) }
+{ p1.fst < p2.fst && p1.snd < p2.snd }
 
 function domLeq(p1: Pair, p2: Pair) returns (res: Bool)
-{ res == (p1.fst <= p2.fst && p1.snd <= p2.snd) }
+{ p1.fst <= p2.fst && p1.snd <= p2.snd }
 
 struct Node {
   var next: Node;
