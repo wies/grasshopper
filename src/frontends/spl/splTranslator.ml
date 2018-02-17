@@ -657,21 +657,23 @@ let convert cu =
   let prog =
     IdMap.fold 
       (fun id decl prog ->
-        let pre, post = convert_contract decl.pr_name decl.pr_locals decl.pr_contracts in
         let rtype =
-          decl.pr_body |>
-          Opt.map (type_of_expr cu decl.pr_locals) |>
-          Opt.get_or_else BoolType
+          match decl.pr_outputs with
+          | [r] -> (IdMap.find r decl.pr_locals).v_type
+          | _ -> decl.pr_body |>
+            Opt.map (type_of_expr cu decl.pr_locals) |>
+            Opt.get_or_else BoolType
         in
-        let opt_body, locals, outputs =
+        let opt_body, locals, outputs, contracts =
           match rtype, decl.pr_outputs with
           | BoolType, [] ->
               Opt.map (fun body ->
                 let cbody = convert_grass_form decl.pr_locals body in
                 SL (Pure (cbody, Some (pos_of_expr body)))) decl.pr_body,
-              decl.pr_locals, decl.pr_outputs              
+              decl.pr_locals, decl.pr_outputs, decl.pr_contracts              
           | PermType, _ ->
-              Opt.map (fun body -> SL (convert_sl_form decl.pr_locals body)) decl.pr_body, decl.pr_locals, decl.pr_outputs
+              Opt.map (fun body -> SL (convert_sl_form decl.pr_locals body)) decl.pr_body,
+              decl.pr_locals, decl.pr_outputs, decl.pr_contracts
           | rtype, _ ->
               let ret_id, locals =
                 match decl.pr_outputs with
@@ -704,8 +706,18 @@ let convert cu =
                     BinaryOp (r, OpEq, e, BoolType, pos_of_expr e))
                   decl.pr_body
               in
-              Opt.map (fun body -> FOL (convert_grass_form locals body)) opt_body, locals, [ret_id]
+              let contracts = match rtype with
+              | BoolType ->
+                  List.map (function
+                    | Ensures (e, pure, free) ->
+                        Ensures (BinaryOp (r, OpImpl, e, BoolType, pos_of_expr e), pure, free)
+                    | c -> c)
+                    decl.pr_contracts
+              | _ -> decl.pr_contracts
+              in
+              Opt.map (fun body -> FOL (convert_grass_form locals body)) opt_body, locals, [ret_id], contracts
         in
+        let pre, post = convert_contract decl.pr_name decl.pr_locals contracts in
         let locals = IdMap.map convert_var_decl locals in
         let body_pos =
           Opt.map pos_of_expr decl.pr_body |> Opt.get_or_else decl.pr_pos
