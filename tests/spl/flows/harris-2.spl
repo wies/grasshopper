@@ -15,20 +15,25 @@ function domMult(p1: Pair, p2: Pair) returns (p: Pair)
 
 function domZero() returns(p: Pair) { pair(0, 0) }
 
-function domLt(p1: Pair, p2: Pair) returns (res: Bool)
-{ p1.fst < p2.fst && p1.snd < p2.snd }
+predicate domLt(p1: Pair, p2: Pair)
+{ p1.fst <= p2.fst && p1.snd <= p2.snd && p1 != p2 }
 
-function domLeq(p1: Pair, p2: Pair) returns (res: Bool)
+predicate domLeq(p1: Pair, p2: Pair)
 { p1.fst <= p2.fst && p1.snd <= p2.snd }
 
+datatype Mark = unmarked | marked(markId: Int) | markTop;
+
+datatype MarkedPtr = mp(mark: Bool, ptr: Node);
+
 struct Node {
-  var next: Node;
+  var next: MarkedPtr;
   var fnext: Node;
   var data: Int;
 }
 
 datatype Interface =
   int(inf: Map<Node, Pair>,
+      na: Mark,
       fm: Map<Node, Map<Node, Pair>>,
       FP: Set<Node>,
       FPo: Set<Node>)
@@ -42,20 +47,23 @@ procedure lemma_conc(x: Node, I: Interface)
   requires I != intUndef
   requires N(x, I)
   ensures [acc(x)](I) &*& I.FP == {x}
-  ensures domLt(pair(0, 0), I.inf[x]) && domLeq(I.inf[x], pair(1, 1))
+  ensures I.na != markTop && (x.next.mark == (I.na != unmarked))
+    && (I.inf[x].snd >= 1 ==> I.na != unmarked)
+  ensures domLt(pair(0, 0), I.inf[x]) == true && domLeq(I.inf[x], pair(1, 1)) == true
   ensures I.inf[x] == pair(1, 0) ==> x.fnext == null
-  ensures (x.next == null
+  ensures (x.next.ptr == null
            && (x.fnext == null && I.FPo == {}
               || x.fnext != null && I.FPo == {x.fnext} && I.fm[x][x.fnext] == pair(0, 1))
-           || x.next != null && I.fm[x][x.next] == pair(1, 0)
-             && (x.fnext == null && I.FPo == {x.next}
-                || x.fnext != null && I.FPo == {x.next, x.fnext}
+           || x.next.ptr != null && I.fm[x][x.next.ptr] == pair(1, 0)
+             && (x.fnext == null && I.FPo == {x.next.ptr}
+                || x.fnext != null && I.FPo == {x.next.ptr, x.fnext}
                   && I.fm[x][x.fnext] == pair(0, 1)))
 
 // TODO check this doesn't introduce unsoundness
-procedure lemma_singleton_int(x: Node, xn: Node, xf: Node, pinf: Pair)
+procedure lemma_singleton_int(x: Node, xn: Node, xf: Node, pinf: Pair, xm: Bool, tid: Int)
   returns (I1: Interface)
   ensures I1 != intUndef && I1.FP == {x} && I1.inf[x] == pinf
+  ensures (xm && I1.na == marked(tid) || !xm && I1.na == unmarked)
   ensures (xn == null
            && (xf == null && I1.FPo == {}
               || xf != null && I1.FPo == {xf} && I1.fm[x][xf] == pair(0, 1))
@@ -71,14 +79,16 @@ procedure lemma_abs(x: Node, I: Interface, I1: Interface)
   returns ()
   requires I != intUndef && I1 != intUndef && intValid(I1)
   requires [acc(x)](I) &*& I1.FP == {x}
-  requires domLt(pair(0, 0), I1.inf[x]) && domLeq(I1.inf[x], pair(1, 1))
+  requires I1.na != markTop && (x.next.mark == (I1.na != unmarked))
+    && (I1.inf[x].snd >= 1 ==> I1.na != unmarked)
+  requires domLt(pair(0, 0), I1.inf[x]) == true && domLeq(I1.inf[x], pair(1, 1)) == true
   requires I1.inf[x] == pair(1, 0) ==> x.fnext == null
-  requires (x.next == null
+  requires (x.next.ptr == null
            && (x.fnext == null && I1.FPo == {}
               || x.fnext != null && I1.FPo == {x.fnext} && I1.fm[x][x.fnext] == pair(0, 1))
-           || x.next != null && I1.fm[x][x.next] == pair(1, 0)
-             && (x.fnext == null && I1.FPo == {x.next}
-                || x.fnext != null && I1.FPo == {x.next, x.fnext}
+           || x.next.ptr != null && I1.fm[x][x.next.ptr] == pair(1, 0)
+             && (x.fnext == null && I1.FPo == {x.next.ptr}
+                || x.fnext != null && I1.FPo == {x.next.ptr, x.fnext}
                   && I1.fm[x][x.fnext] == pair(0, 1)))
   ensures [N(x, I1)](I)
 
@@ -133,7 +143,7 @@ procedure insert(mh: Node, fh: Node, I: Interface, n: Node, In: Interface)
   Il, I2 := lemma_decomp(l, I);
   lemma_conc(l, Il);
 
-  var r := l.next;
+  var r := l.next.ptr;
 
   lemma_abs(l, Il, Il);
   lemma_dirty_N_is_Gr(l, Il, Il);
@@ -161,7 +171,7 @@ procedure insert(mh: Node, fh: Node, I: Interface, n: Node, In: Interface)
     lemma_conc(r, Ir);
     // N(p, Il) &*& [r |-> _](Ir) &*& Gr(I3)
 
-    r := l.next;
+    r := l.next.ptr;
 
     var Ip := Il; Il := Ir;
     // N(p, Ip) &*& [l |-> _](Il) &*& Gr(I3)
@@ -180,22 +190,22 @@ procedure insert(mh: Node, fh: Node, I: Interface, n: Node, In: Interface)
          && intLeq(intComp(intComp(Ip, I3), Ir), intComp(intComp(Ip, I3), Ir));
   }
 
-  n.next := r;
+  n.next := mp(false, r);
   n.fnext := null;
 
   // TODO how do we know n != r? Need conditional, (Step), and Gr footprint
   pure assume n != r;
   lemma_conc(l, Il);
 
-  if (r == l.next) {  // CAS(l.next, r, n);
+  if (l.next.ptr == r && l.next.mark == false) {  // CAS(l.next, r, n);
 
-    l.next := n;
+    l.next := mp(false, n);
     // [l |-> n](Il) * [n |-> r](In) * Gr(I2)
 
-    var In1 := lemma_singleton_int(n, n.next, n.fnext, pair(1, 0));
+    var In1 := lemma_singleton_int(n, n.next.ptr, n.fnext, pair(1, 0), false, 0);
     lemma_int_valid_fold(In1);
 
-    var Il1 := lemma_singleton_int(l, l.next, l.fnext, Il.inf[l]);
+    var Il1 := lemma_singleton_int(l, l.next.ptr, l.fnext, Il.inf[l], false, 0);
     lemma_int_valid_unfold(Il);
     lemma_int_valid_fold(Il1);
 
