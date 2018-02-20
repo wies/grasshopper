@@ -1,6 +1,14 @@
 /* -- Lemma library for flows. Independent of Flow domain. -- */
 
 
+datatype Interface =
+  int(inf: Map<Node, FlowDom>,
+      na: NodeDom,
+      fm: Map<Node, Map<Node, FlowDom>>,
+      FP: Set<Node>,
+      FPo: Set<Node>)
+  | intUndef; // All interfaces with > 1 inflow are undefined
+
 predicate Gr(I: Interface)
 
 predicate N(x: Node, I: Interface)
@@ -52,6 +60,30 @@ procedure lemma_int_comp_fold(x: Node, Ix: Interface, y: Node, Iy: Interface, I:
   requires (forall n in I.FPo ::
             I.fm[y][n] == domPlus(Iy.fm[y][n], domMult(Iy.fm[y][x], Ix.fm[x][n])))
   ensures intComp(Ix, Iy) == I
+
+procedure lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
+  requires Ix != intUndef && Iy != intUndef && I != intUndef
+  requires intComp(Ix, Iy) == I && x != y
+  requires Ix.FP == {x} && Iy.FP == {y}
+  ensures I.FP == {x, y}
+  ensures I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
+  ensures Ix.inf[x] == domPlus(I.inf[x], domMult(Iy.inf[y], Iy.fm[y][x]))
+  ensures Iy.inf[y] == domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y]))
+  ensures exists Cxx: FlowDom, Cxy: FlowDom, Cyx: FlowDom, Cyy: FlowDom ::
+    Cxx == domMult(Cxy, Iy.fm[y][x]) && Cyy == domMult(Cyx, Ix.fm[x][y])
+    && Cxy == domMult(Cxx, Ix.fm[x][y]) && Cyx == domMult(Cyy, Iy.fm[y][x])
+    && (forall n in I.FPo ::
+       I.fm[x][n] == domPlus(domMult(Cxx, Ix.fm[x][n]), domMult(Cxy, Iy.fm[y][n]))
+       && I.fm[y][n] == domPlus(domMult(Cyy, Iy.fm[y][n]), domMult(Cyx, Ix.fm[x][n]))
+       @(matching n yields I.fm[x][n]) @(matching n yields I.fm[y][n])
+       @(matching n yields Ix.fm[x][n]) @(matching n yields Iy.fm[y][n])
+       @(matching Ix.fm[x][n], Iy.fm[y][n]
+         yields domPlus(domMult(Cxx, Ix.fm[x][n]), domMult(Cxy, Iy.fm[y][n])))
+       @(matching Ix.fm[x][n], Iy.fm[y][n]
+         yields domPlus(domMult(Cyy, Iy.fm[y][n]), domMult(Cyx, Ix.fm[x][n])))
+       )
+ // TODO Ask Thomas why these aren't automatically generated
+ // Also about conservative term gen for Read terms?
 
 procedure lemma_int_valid_unfold(I: Interface)
   requires intValid(I) == true
