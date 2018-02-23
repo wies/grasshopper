@@ -1,26 +1,27 @@
 include "../include/flows.spl";
 
-function domPlus(p1: Int, p2: Int) returns (p: Int) { p1 + p2 }
+/** Flow domain definitions */
 
-function domMult(p1: Int, p2: Int) returns (p: Int) { p1 * p2 }
+datatype FlowDom = fd(pc: Int);
 
-function domZero() returns(p: Int) { 0 }
-  
+datatype NodeDom = nd;
+
+function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+{ fd(p1.pc + p2.pc) }
+
+function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+{ fd(p1.pc * p2.pc) }
+
+function domZero() returns(p: FlowDom) { fd(0) }
+
 struct Node {
   var next: Node;
 }
 
-datatype Interface =
-  int(inf: Map<Node, Int>,
-      fm: Map<Node, Map<Node, Int>>,
-      FP: Set<Node>,
-      FPo: Set<Node>)
-  | intUndef; // All interfaces with > 1 inflow are undefined
-
 
 // Expect this to fail
 procedure test_valid2(I: Interface, x: Node)
-  requires I == intUndef && I.FP == {x} && I.FPo == {} && (forall n: Node, o: Node :: I.inf[n] == 0 && I.fm[n][o] == 0)
+  requires I == intUndef && I.FP == {x} && I.FPo == {} && (forall n: Node, o: Node :: I.inf[n] == fd(0) && I.fm[n][o] == fd(0))
   ensures intValid(I) == true
 {
   lemma_int_valid_fold(I);

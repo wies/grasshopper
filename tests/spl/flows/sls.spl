@@ -1,26 +1,24 @@
 include "../include/flows.spl";
 
-datatype Pair = pair(fst: Int, snd: Int);
+/** Flow domain definitions */
 
-function domPlus(p1: Pair, p2: Pair) returns (p: Pair)
+datatype FlowDom = pair(fst: Int, snd: Int);
+
+datatype NodeDom = nd;
+
+function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 { pair(p1.fst + p2.fst, p1.snd + p2.snd) }
 
-function domMult(p1: Pair, p2: Pair) returns (p: Pair)
+function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 { pair(p1.fst * p2.fst, p1.snd * p2.snd) }
 
-function domZero() returns(p: Pair) { pair(0, 0) }
+function domZero() returns(p: FlowDom) { pair(0, 0) }
   
 struct Node {
   var next: Node;
   var data: Int;
 }
 
-datatype Interface =
-  int(inf: Map<Node, Pair>,
-      fm: Map<Node, Map<Node, Pair>>,
-      FP: Set<Node>,
-      FPo: Set<Node>)
-  | intUndef; // All interfaces with > 1 inflow are undefined
 
 /** Gamma is hardcoded into these two lemmas */
 
@@ -35,21 +33,6 @@ procedure lemma_abs(x: Node, I: Interface, I1: Interface)
   ensures [N(x, I1)](I)
 
 /** Lemmas */
-
-procedure lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
-  requires Ix != intUndef && Iy != intUndef && I != intUndef
-  requires intComp(Ix, Iy) == I && x != y
-  requires Ix.FP == {x} && Iy.FP == {y}
-  ensures I.FP == {x, y}
-  ensures I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
-  ensures Ix.inf[x] == domPlus(I.inf[x], domMult(Iy.inf[y], Iy.fm[y][x]))
-  ensures Iy.inf[y] == domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y]))
-  ensures exists Cxx: Pair, Cxy: Pair, Cyx: Pair, Cyy: Pair :: // Capacity values
-    Cxx == domMult(Cxy, Iy.fm[y][x]) && Cyy == domMult(Cyx, Ix.fm[x][y])
-    && Cxy == domMult(Cxx, Ix.fm[x][y]) && Cyx == domMult(Cyy, Iy.fm[y][x])
-    && (forall n in I.FPo ::
-       I.fm[x][n] == domPlus(domMult(Cxx, Ix.fm[x][n]), domMult(Cxy, Iy.fm[y][n]))
-       && I.fm[y][n] == domPlus(domMult(Cyy, Iy.fm[y][n]), domMult(Cyx, Ix.fm[x][n])))
 
 procedure no_op(x: Node, I: Interface)
   requires N(x, I) &*& intValid(I) == true
