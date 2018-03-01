@@ -52,6 +52,7 @@ let _ =
       ("requires", REQUIRES);
       ("return", RETURN);
       ("returns", RETURNS);
+      ("split", SPLIT);
       ("struct", STRUCT);
       ("subsetof", LEQ);
       ("Set", SET);

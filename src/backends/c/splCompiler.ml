@@ -393,7 +393,7 @@ let convert oc cu =
           pr_c_expr (cond, cur_proc)
           pr_c_stmt (body, cur_proc)
       | ((Return _) as r, cur_proc) -> pr_c_return ppf (r, cur_proc, cur_proc.p_returns)
-      | (((Assume _)|(Assert _)|(Havoc _)|(Choice _)), _) -> ()
+      | (((Assume _)|(Assert _)|(Split _)|(Havoc _)|(Choice _)), _) -> ()
       | (LocalVars _, _) -> fprintf ppf "/* ERROR: all LocalVars statements should have been removed by name resolution phase. */"
     in
     let pr_c_proc ppf p =

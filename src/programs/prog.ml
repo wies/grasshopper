@@ -83,6 +83,7 @@ type basic_command =
   | Dispose of dispose_command
   | Assume of spec
   | Assert of spec
+  | Split of spec
   | Call of call_command
   | Return of return_command
 
@@ -612,6 +613,7 @@ let modifies_basic_cmd = function
         struct_sorts
   | Assume _
   | Assert _
+  | Split _
   | Return _ -> IdSet.empty
 
 let accesses_spec_form_acc acc sf =
@@ -664,7 +666,8 @@ let accesses_basic_cmd = function
       IdSet.add nc.new_lhs arg_accesses
   | Dispose dc -> free_symbols_term dc.dispose_arg
   | Assume sf
-  | Assert sf -> accesses_spec_form sf
+  | Assert sf
+  | Split sf -> accesses_spec_form sf
   | Return rc -> List.fold_left free_symbols_term_acc IdSet.empty rc.return_args
   | Call cc -> 
       List.fold_left
@@ -726,7 +729,8 @@ let footprint_sorts_basic_cmd prog = function
       List.fold_left (footprint_sorts_term_acc prog) SortSet.empty nc.new_args 
   | Dispose dc -> footprint_sorts_term prog dc.dispose_arg
   | Assume sf
-  | Assert sf -> footprint_sorts_spec_form prog sf
+  | Assert sf
+  | Split sf -> footprint_sorts_spec_form prog sf
   | Return rc -> List.fold_left (footprint_sorts_term_acc prog) SortSet.empty rc.return_args
   | Call cc ->
       let decl = find_proc prog cc.call_name in
@@ -764,6 +768,9 @@ let mk_assume_cmd sf pos =
 
 let mk_assert_cmd sf pos =
   mk_basic_cmd (Assert sf) pos
+
+let mk_split_cmd sf pos =
+  mk_basic_cmd (Split sf) pos
 
 let mk_return_cmd args pos = 
   let rc = { return_args = args } in
@@ -916,6 +923,8 @@ let rec map_terms_cmd fn =
         Assert (map_terms_spec fn sf)
     | Assume sf ->
         Assume (map_terms_spec fn sf)
+    | Split sf ->
+        Split (map_terms_spec fn sf)
   in
   function
   | Basic (bc, pp) -> mk_basic_cmd (map_terms_basic_cmd bc) pp.pp_pos
@@ -1049,6 +1058,10 @@ let pr_basic_cmd ppf = function
       fprintf ppf "/* %s */@\n@[<2>%sassert@ %a@]" 
         sf.spec_name
         (fold_spec_form (fun _ -> "pure ") (fun _ -> "") sf)
+        pr_spec_form sf
+  | Split sf ->
+      fprintf ppf "/* %s */@\n@[<2>split@ %a@]" 
+        sf.spec_name
         pr_spec_form sf
   | Return rc -> 
       fprintf ppf "@[<2>return@ %a@]" pr_term_list rc.return_args

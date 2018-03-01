@@ -61,7 +61,7 @@ type rhs_string_maybe =
 %token PTS EMP NULL
 %token SEPSTAR SEPPLUS SEPINCL AND OR IMPLIES IFF NOT COMMA
 %token <SplSyntax.binder_kind> QUANT
-%token ASSUME ASSERT CALL FREE HAVOC NEW RETURN
+%token ASSUME ASSERT SPLIT CALL FREE HAVOC NEW RETURN
 %token IF ELSE WHILE
 %token GHOST IMPLICIT VAR STRUCT PURE LEMMA PROCEDURE PREDICATE FUNCTION INCLUDE AXIOM TYPE
 %token DATATYPE OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
@@ -70,7 +70,7 @@ type rhs_string_maybe =
 %token EOF
 
 %nonassoc COLONEQ 
-%nonassoc ASSUME ASSERT
+%nonassoc ASSUME ASSERT SPLIT
 %nonassoc NEW FREE
 
 %nonassoc LOWER_THAN_COR
@@ -472,6 +472,10 @@ stmt_wo_trailing_substmt:
 /* assert */
 | contract_mods ASSERT expr SEMICOLON { 
   Assert ($3, fst $1, mk_position 1 4)
+}
+/* split */
+| SPLIT expr SEMICOLON { 
+  Split ($2, mk_position 1 3)
 }
 /* return */
 | RETURN expr_list_opt SEMICOLON { 

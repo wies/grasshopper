@@ -1,5 +1,9 @@
 open Unix
 
+
+let (>>) f g x = g (f x)
+
+
 module IntSet = Set.Make(struct
     type t = int
     let compare = compare

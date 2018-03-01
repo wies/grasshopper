@@ -569,6 +569,9 @@ let convert cu =
       | Assert (e, pure, pos) ->
           let sf = convert_spec_form pure false proc.p_locals e "assert" None in
           mk_assert_cmd sf pos
+      | Split (e, pos) ->
+          let sf = convert_spec_form false false proc.p_locals e "assert" None in
+          mk_split_cmd sf pos
       | Assign (lhs, [ProcCall (id, es, cpos)], pos) ->
           let args = 
             List.map (convert_term proc.p_locals) es

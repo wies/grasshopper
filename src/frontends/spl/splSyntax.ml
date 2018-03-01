@@ -126,6 +126,7 @@ and stmt =
   | LocalVars of var list * exprs option * pos
   | Assume of expr * bool * pos
   | Assert of expr * bool * pos
+  | Split of expr * pos
   | Assign of exprs * exprs * pos
   | Havoc of exprs * pos
   | Dispose of expr * pos
@@ -291,6 +292,7 @@ let pos_of_stmt = function
   | LocalVars (_, _, pos)
   | Assume (_, _, pos)
   | Assert (_, _, pos)
+  | Split (_, pos)
   | Assign (_, _, pos)
   | Dispose (_, pos)
   | Havoc (_, pos)
@@ -684,6 +686,8 @@ let rec pr_stmt ppf =
       fprintf ppf "%sassume @[<2>%a@];" (if p then "pure " else "") pr_expr e
   | Assert (e, p, _) ->
       fprintf ppf "%sassert @[<2>%a@];" (if p then "pure " else "") pr_expr e
+  | Split (e, _) ->
+      fprintf ppf "split @[<2>%a@]" pr_expr e
   | Assign ([], es, _) ->
       fprintf ppf "@[<2>%a@];" pr_expr_list es
   | Assign (vs, es, _) ->

@@ -372,6 +372,8 @@ let resolve_names cu =
         Assume (resolve_expr locals tbl e, pure, pos), locals, tbl
     | Assert (e, pure, pos) ->
         Assert (resolve_expr locals tbl e, pure, pos), locals, tbl
+    | Split (e, pos) ->
+        Split (resolve_expr locals tbl e, pos), locals, tbl
     | Assign (lhs, rhs, pos) ->
         let lhs1 = List.map (resolve_expr locals tbl) lhs in
         let rhs1 = List.map (resolve_expr locals tbl) rhs in
@@ -659,6 +661,9 @@ let flatten_exprs cu =
     | Assert (e, pure, pos) ->
         let e1, aux1, locals = flatten_expr scope ([], aux_funs) locals e in
         Assert (e1, pure, pos), locals, snd aux1
+    | Split (e, pos) ->
+        let e1, aux1, locals = flatten_expr scope ([], aux_funs) locals e in
+        Split (e1, pos), locals, snd aux1
     | Assign (lhs, [ProcCall (id, args, cpos)], pos) ->
         let args1, aux1, locals = flatten_expr_list scope ([], aux_funs) locals args in 
         begin
@@ -843,6 +848,8 @@ let infer_types cu =
         Assume (check_spec locals pure e, pure, pos)
     | Assert (e, pure, pos) ->
         Assert (check_spec locals pure e, pure, pos)
+    | Split (e, pos) ->
+        Split (check_spec locals false e, pos)
     | Assign (lhs, [ProcCall (id, args, cpos) as e], pos) ->
         let decl = IdMap.find id cu.proc_decls in
         let rtys =
