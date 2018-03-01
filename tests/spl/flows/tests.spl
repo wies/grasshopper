@@ -33,3 +33,10 @@ procedure test_decomp(x: Node, I: Interface)
 {
   I1, I2 := lemma_decomp(x, I);
 }
+
+procedure test_return1(x: Int, y: Int) returns (z: Int)
+  requires x < 3 && y >= 4
+  ensures x < z && z < y
+{
+  return 3;
+}

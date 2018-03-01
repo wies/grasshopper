@@ -667,10 +667,22 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       let _ = find_frame prog eqs state' (spec_form, []) in
       symb_exec prog flds proc (eqs, state) postcond comms'
     )
+  | Basic (Return {return_args=xs}, pp) as comm :: _ ->
+    Debug.debug (fun () ->
+      sprintf "%sExecuting return: %d: %s%sCurrent state:\n%s\n"
+        lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+        lineSep (string_of_eqs_state eqs state)
+    );
+    (* Substitute xs for return vars in postcond and throw away rest of comms *)
+    let ret_vars = proc.proc_contract.contr_returns in
+    let sm =
+      List.combine ret_vars xs
+      |> List.fold_left (fun sm (v, x) -> IdMap.add v x sm) IdMap.empty in
+    let postcond = subst_state sm postcond in
+    symb_exec prog flds proc (eqs, state) postcond []
   | Basic (Assume _, _) :: _ -> failwith "TODO Assume SL command"
   | Basic (New _, _) :: _ -> failwith "TODO New command"
   | Basic (Dispose _, _) :: _ -> failwith "TODO Dispose command"
-  | Basic (Return _, _) :: _ -> failwith "TODO Return command"
   | Loop _ :: _ -> failwith "TODO Loop command"
 
 
