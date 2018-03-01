@@ -167,7 +167,7 @@ procedure insert(mh: Node, fh: Node, I: Interface, n: Node, In: Interface)
     // [l |-> n](Il) * [n |-> r](In) * Gr(I2)
 
     var In1 := lemma_singleton_int(n, n.next.ptr, n.fnext, pair(1, 0), false, 0);
-    lemma_int_valid_fold(In1);
+    lemma_int_valid_fold(In1);  // TODO use TID var instead of 0?
 
     var Il1 := lemma_singleton_int(l, l.next.ptr, l.fnext, Il.inf[l], false, 0);
     lemma_int_valid_unfold(Il);
@@ -230,17 +230,19 @@ procedure insert(mh: Node, fh: Node, I: Interface, n: Node, In: Interface)
 }
 
 
+var ft: Node;
+
+
 procedure delete(mh: Node, fh: Node, I: Interface)
   returns (I1: Interface)
   requires Gr(I) &*& intValid(I) == true
   requires mh in I.FP && fh in I.FP && I.inf[mh] == pair(1, 0) && I.inf[fh] == pair(0, 1)
   requires (forall n: Node :: n != mh && n != fh ==> I.inf[n] == domZero()) && I.FPo == {}
   ensures Gr(I1) &*& intValid(I1) == true
-  ensures mh in I1.FP && fh in I1.FP && I1.inf[mh] == pair(1, 0) && I1.inf[fh] == pair(0, 1)
+  ensures mh in I1.FP && fh in I1.FP && I1.inf[mh] == pair(1, 0)
+    && I1.inf[fh] == pair(0, 1)
   ensures (forall n: Node :: n != mh && n != fh ==> I1.inf[n] == domZero()) && I1.FPo == {}
 {
-  var I0 := lemma_comp_sing_int(n, In, I);
-
   var nondet: Bool;
   var l := mh;
 
@@ -259,7 +261,7 @@ procedure delete(mh: Node, fh: Node, I: Interface)
   while (nondet && r != null)
     invariant N(l, Il) &*& Gr(I2)
     invariant intValid(Il) && intValid(I2) && Il.FP == {l} // TODO infer from N(l, Il)
-    invariant intComp(Il, I2) == I && intComp(In, I) == I0 && (r != null ==> r in Il.FPo) // TODO not stable
+    invariant intComp(Il, I2) == I && (r != null ==> r in Il.FPo) // TODO not stable
     invariant mh in I.FP && fh in I.FP && I.inf[mh] == pair(1, 0) && I.inf[fh] == pair(0, 1)
     invariant (forall n: Node :: n != mh && n != fh ==> I.inf[n] == domZero()) && I.FPo == {}
   {
@@ -295,22 +297,82 @@ procedure delete(mh: Node, fh: Node, I: Interface)
          && intLeq(intComp(intComp(Ip, I3), Ir), intComp(intComp(Ip, I3), Ir));
   }
 
-  if (r == null) return I;
+  if (r == null) {
+    lemma_N_is_Gr(l, Il);
+    I := lemma_Gr_comp(Il, I2);
+    return I;
+  }
+  pure assume r != null;  // TODO infer?
+
+  lemma_step(Il, I2, I, l, r);
+  var Ir: Interface, I3: Interface;
+  Ir, I3 := lemma_decomp(r, I2);
+  lemma_conc(r, Ir);
+  // N(l, Il) &*& [r |-> _](Ir) &*& Gr(I3)
 
   var x := r.next.ptr;
 
+  lemma_abs(r, Ir, Ir);
+  lemma_dirty_N_is_Gr(r, Ir, Ir);
+  lemma_int_leq_fold(Ir, Ir);
+  sync(Ir, Ir);
+  lemma_Gr_is_N(r, Ir);
+  // N(l, Il) &*& N(r, Ir) &*& Gr(I3)
+
+  // Mark the node
   var b: Bool;
+  lemma_conc(r, Ir); var Ir1: Interface;
   if (r.next.ptr == x && !r.next.mark) {  // b := CAS(r.next, u(x), M(x))
-    r.next.mark := true;
+    r.next := mp(true, x);
+
+    Ir1 := lemma_singleton_int(r, x, r.fnext, Ir.inf[r], true, 0);
+    lemma_int_valid_unfold(Ir);
+    lemma_int_valid_fold(Ir1);
     b := true;
   } else {
+    Ir1 := Ir;
     b := false;
   }
+  lemma_abs(r, Ir, Ir1);
+  lemma_dirty_N_is_Gr(r, Ir1, Ir);
+  lemma_int_leq_fold(Ir, Ir1);
+  sync(Ir, Ir1);
+  lemma_Gr_is_N(r, Ir1);
+  // N(l, Il) &*& N(r, Ir) &*& Gr(I3)
 
+  // Link it to the free list
   if (b) {
-    
+    var c := false;
+    while (!c)
+      invariant N(l, Il) &*& N(r, Ir1) &*& Gr(I3) &*& N(ft, Ift)
+      invariant intValid(Ift) == true
+    {
+      lemma_conc(ft, Ift); var Ift1: Interface;
+      if (ft.fnext == null) { // c := CAS(ft.fnext, null, r)
+        ft.fnext := r;
+
+        Ift1 := lemma_singleton_int(ft, ft.next.ptr, r, Ift.inf[ft], ft.next.mark, 0);
+        lemma_int_valid_unfold(Ift);
+        lemma_int_valid_fold(Ift1);
+        c := true;
+      } else {
+        Ift1 := Ift;
+        c := false;
+      }
+      lemma_abs(ft, Ift, Ift1);
+      lemma_dirty_N_is_Gr(ft, Ift1, Ift);
+      lemma_int_leq_fold(Ift, Ift1);
+      sync(Ift, Ift1);
+      lemma_Gr_is_N(ft, Ift1);
+    }
+    ft := r;
+
+    // Unlink from main list
+    if (l.next.ptr == r && !l.next.mark) {  // CAS(l.next, r, x)
+      l.next := mp(false, x);
+    }
   } else {
     I1 := delete(mh, fh, I);
     return I1;
   }
-
+}
