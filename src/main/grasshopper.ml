@@ -105,13 +105,13 @@ let parse_spl_program main_file =
     if !Config.base_dir <> "" then norm_dir
     else Filename.dirname main_file
   in
-  let prog =
-    parse
-      StringSet.empty
-      [(main_dir, main_file, GrassUtil.dummy_position)]
-      SplSyntax.empty_spl_program
-  in
-  SplChecker.check (SplSyntax.add_alloc_decl prog)
+  parse
+    StringSet.empty
+    [(main_dir, main_file, GrassUtil.dummy_position)]
+    SplSyntax.empty_spl_program
+  |> SplSyntax.replace_macros
+  |> SplSyntax.add_alloc_decl
+  |> SplChecker.check
 
    
 (** Check SPL program in main file [file] and procedure [proc] *)

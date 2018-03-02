@@ -275,6 +275,8 @@ let elim_global_deps prog =
         mk_assert_cmd (elim_spec sf) pp.pp_pos
     | (Assume sf, pp) ->
         mk_assume_cmd (elim_spec sf) pp.pp_pos
+    | (Split sf, pp) ->
+        mk_split_cmd (elim_spec sf) pp.pp_pos
     | (Assign ac, pp) ->
         mk_assign_cmd ac.assign_lhs (List.map subst_terms ac.assign_rhs) pp.pp_pos
     | (Return rc, pp) ->
@@ -389,7 +391,7 @@ let elim_return prog =
  ** Assumes that:
  ** - all loops have been eliminated 
  ** - all SL formulas have been desugared
- ** - the only remaining basic commands are assume/assert/assign/havoc/call. *)
+ ** - the only remaining basic commands are assume/assert/split/assign/havoc/call. *)
 let elim_state prog =
   let elim_proc proc =
     let fresh_decl proc id pos =
@@ -487,6 +489,9 @@ let elim_state prog =
           | Assert sf ->
               let sf1 = unoldify_spec (subst_id_spec sm sf) in
               sm, locals, mk_seq_cmd [Basic (Assert sf1, pp); Basic (Assume sf1, pp)] pp.pp_pos
+          | Split sf ->
+              let sf1 = unoldify_spec (subst_id_spec sm sf) in
+              sm, locals, Basic (Split sf1, pp)
           | Havoc hc ->
               let sm1, locals1 = fresh proc sm locals pp.pp_pos hc.havoc_args in
               let eqs = 

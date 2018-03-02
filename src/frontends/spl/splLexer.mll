@@ -20,6 +20,7 @@ let _ =
       ("Byte", BYTE);
       ("choose", CHOOSE);
       ("comment", COMMENT);
+      ("define", DEFINE);
       ("datatype", DATATYPE);
       ("else", ELSE);
       ("emp", EMP);
@@ -52,6 +53,7 @@ let _ =
       ("requires", REQUIRES);
       ("return", RETURN);
       ("returns", RETURNS);
+      ("split", SPLIT);
       ("struct", STRUCT);
       ("subsetof", LEQ);
       ("Set", SET);

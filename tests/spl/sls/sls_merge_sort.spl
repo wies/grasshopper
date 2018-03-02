@@ -38,7 +38,7 @@ procedure merge(a: Node, b: Node) returns (res: Node)
   return res;
 }
 
-procedure split(x: Node) returns (y: Node, z: Node)
+procedure split_list(x: Node) returns (y: Node, z: Node)
   requires lseg(x, null)
   ensures lseg(y, null) &*& lseg(z, null)
 {
@@ -68,7 +68,7 @@ procedure merge_sort(x: Node) returns (res: Node)
   ensures slseg(res, null)
 {
   var x1: Node, x2: Node;
-  x1, x2 := split(x);
+  x1, x2 := split_list(x);
   var res1 := merge_sort(x1);
   var res2 := merge_sort(x2);
   return merge(res1, res2);

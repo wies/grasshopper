@@ -257,6 +257,9 @@ let elim_arrays prog =
     | Basic (Assert sf, pp) ->
         let sf1 = compile_spec sf in
         mk_assert_cmd sf1 pp.pp_pos
+    | Basic (Split sf, pp) ->
+        let sf1 = compile_spec sf in
+        mk_split_cmd sf1 pp.pp_pos
     | Basic (Return rc, pp) ->
         let args1 = List.map compile_term rc.return_args in
         mk_return_cmd args1 pp.pp_pos
@@ -269,7 +272,7 @@ let elim_arrays prog =
     | Basic (Dispose dc, pp) ->
         let arg = compile_term dc.dispose_arg in
         mk_dispose_cmd arg pp.pp_pos
-    | c -> c
+    | Basic (Havoc _, _) as c -> c
   in
   let compile_proc (elem_sorts, procs) proc =
     let all_locals =
@@ -1278,6 +1281,20 @@ let elim_sl prog =
 	     let f1 = post_process_form f in
 	     let sf1 = mk_spec_form (FOL f1) sf.spec_name sf.spec_msg sf.spec_pos in
              mk_assert_cmd sf1 pp.pp_pos)
+      | (Split sf, pp) ->
+        (match sf.spec_form with
+        | SL f ->
+          let f1 =
+            f |>
+            SlToGrass.to_grass (pred_to_form footprint_sets) footprint_sets |>
+            post_process_form
+          in
+          let sf1 = mk_spec_form (FOL f1) sf.spec_name sf.spec_msg sf.spec_pos in
+          mk_split_cmd sf1 pp.pp_pos
+        | FOL f ->
+          let f1 = post_process_form f in
+          let sf1 = mk_spec_form (FOL f1) sf.spec_name sf.spec_msg sf.spec_pos in
+          mk_split_cmd sf1 pp.pp_pos)
       | (Call cc, pp) ->
           let decl = find_proc prog cc.call_name in
           let footprint_ids, footprint_sets =

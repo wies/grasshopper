@@ -103,7 +103,7 @@ let removeGhost cu =
   in
 
   let rec process_stmt scope s = match s with
-    | Skip p | Assume (_, _, p) | Assert (_, _, p) | Havoc (_, p) -> Skip p
+    | Skip p | Assume (_, _, p) | Assert (_, _, p) | Split (_, p) | Havoc (_, p) -> Skip p
     | Block (stmts, p) -> Block ((List.map (process_stmt scope) stmts), p)
     | Dispose (expr, p) -> Dispose ((process_expr scope expr), p)
     | If (cond, caseTrue, caseFalse, p) ->
@@ -183,6 +183,7 @@ let removeGhost cu =
       proc_decls = procs;
       pred_decls = IdMap.empty;
       fun_decls = IdMap.empty;
+      macro_decls = IdMap.empty;
       background_theory = [];
     }
   in
