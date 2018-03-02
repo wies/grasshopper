@@ -181,3 +181,26 @@ procedure assert1(x: Node, y: Node)
   pure assert x != y;
   x.next := x;
 }
+
+procedure split1(x: Int, y: Int)
+  requires x == 0 && y == x
+  ensures x == 10 && y < x
+{
+  x := 5;
+  split 5 > y;
+  x := 10;
+}
+
+procedure split2(x: Node, y: Node)
+  requires x.next |-> null &*& y.next |-> x
+  ensures x.next |-> x &*& y.next |-> null
+{
+  x.next := x;
+  split x.next |-> x &*& y.next |-> x;
+  x.next := null;
+  split acc(x) &*& acc(y);
+  y.next := null;
+  pure assert x != y;
+  x.next := x;
+}
+

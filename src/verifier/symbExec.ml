@@ -680,6 +680,19 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       |> List.fold_left (fun sm (v, x) -> IdMap.add v x sm) IdMap.empty in
     let postcond = subst_state sm postcond in
     symb_exec prog flds proc (eqs, state) postcond []
+  | Basic (Split spec, pp) as comm :: comms' ->
+    Debug.debug (fun () ->
+      sprintf "%sExecuting split: %d: %s%sCurrent state:\n%s\n"
+        lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+        lineSep (string_of_eqs_state eqs state)
+    );
+    (* First assert the spec, then assume spec as new state *)
+    let spec_st = state_of_spec_list flds [spec] in
+    let state' = add_neq_constraints state in
+    (match check_entailment prog eqs state' spec_st with
+    | [], _ ->
+      symb_exec prog flds proc (empty_eqs, spec_st) postcond comms'
+    | errs, _ -> errs)
   | Basic (Assume _, _) :: _ -> failwith "TODO Assume SL command"
   | Basic (New _, _) :: _ -> failwith "TODO New command"
   | Basic (Dispose _, _) :: _ -> failwith "TODO Dispose command"
