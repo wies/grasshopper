@@ -343,6 +343,8 @@ let subst sm =
             bv vs
         in
         Binder (b, vs, s bv e, pos)
+    | Dirty (e, es, pos) ->
+        Dirty (s bv e, List.map (s bv) es, pos)
     | (Null _ | Emp _ | IntVal _ | BoolVal _) as e -> e
   in s IdSet.empty
     
@@ -491,6 +493,8 @@ let replace_macros prog =
       BinaryOp (repl_expr e1, op, repl_expr e2, ty, pos)
     | Annot (e, a, pos) ->
       Annot (repl_expr e, a, pos)
+    | Dirty (e, es, pos) ->
+        Dirty (repl_expr e, List.map repl_expr es, pos)
   in
   let rec repl_stmt = function
     | Skip _ as s -> s
