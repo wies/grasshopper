@@ -20,6 +20,7 @@ let _ =
       ("Byte", BYTE);
       ("choose", CHOOSE);
       ("comment", COMMENT);
+      ("define", DEFINE);
       ("datatype", DATATYPE);
       ("else", ELSE);
       ("emp", EMP);

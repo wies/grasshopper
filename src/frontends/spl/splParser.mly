@@ -64,7 +64,7 @@ type rhs_string_maybe =
 %token ASSUME ASSERT SPLIT CALL FREE HAVOC NEW RETURN
 %token IF ELSE WHILE
 %token GHOST IMPLICIT VAR STRUCT PURE LEMMA PROCEDURE PREDICATE FUNCTION INCLUDE AXIOM TYPE
-%token DATATYPE OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
+%token DEFINE DATATYPE OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token LOC INT BOOL BYTE SET MAP ARRAY ARRAYCELL
 %token MATCHING YIELDS WITHOUT COMMENT PATTERN
 %token EOF
@@ -113,6 +113,8 @@ declarations:
   { (fst3 $2, ProcDecl $1 :: snd3 $2, trd3 $2) }
 | pred_decl declarations 
   { (fst3 $2, PredDecl $1 :: snd3 $2, trd3 $2) }
+| macro_decl declarations
+  { (fst3 $2, MacroDecl $1 :: snd3 $2, trd3 $2) }
 | VAR var_decl SEMICOLON declarations
   { (fst3 $4, VarDecl $2 :: snd3 $4, trd3 $4) }
 | /* empty */ { ([], [], []) }
@@ -135,6 +137,26 @@ type_decl:
 }
 | datatype_decl { $1 }
 | struct_decl { $1 }
+;
+
+ident_list_opt:
+| ident_list { $1 }
+| /* empty */ { [] }
+;
+
+ident_list:
+| IDENT COMMA ident_list { $1 :: $3 }
+| IDENT { [$1] }
+;
+
+macro_decl:
+| DEFINE IDENT LPAREN ident_list_opt RPAREN LBRACE expr RBRACE SEMICOLON {
+  { m_name = $2;
+    m_args = $4;
+    m_body = $7;
+    m_pos = mk_position 1 8;
+  }
+}
 ;
 
 proc_decl:

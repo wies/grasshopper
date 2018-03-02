@@ -37,6 +37,7 @@ type spl_program =
       proc_decls: procs;
       pred_decls: preds;
       fun_decls: fundecls;
+      macro_decls: macros;
       background_theory: (expr * pos) list; 
     }
 
@@ -45,6 +46,7 @@ and decl =
   | VarDecl of var
   | ProcDecl of proc
   | PredDecl of pred
+  | MacroDecl of macro
 
 and decls = decl list
 
@@ -113,6 +115,15 @@ and fundecl =
     }
 
 and fundecls = fundecl IdMap.t
+
+and macro =
+    { m_name: ident;
+      m_args: idents;
+      m_body: expr;
+      m_pos: pos;
+    }
+
+and macros = macro IdMap.t
       
 and contract =
   | Requires of expr * bool * bool
@@ -285,6 +296,48 @@ let subst_id sm =
         Binder (b, vs, s bv e, pos)
     | e -> e
   in s IdSet.empty
+
+(** General (id -> expr) substitution for expressions (not capture avoiding) *)
+let subst sm =
+  let rec s bv = function
+    | Ident (x, pos) as e ->
+        if IdSet.mem x bv || not @@ IdMap.mem x sm
+        then e
+        else IdMap.find x sm
+    | Setenum (ty, es, pos) ->
+        Setenum (ty, List.map (s bv) es, pos)
+    | New (ty, es, pos) ->
+        New (ty, List.map (s bv) es, pos)
+    | ProcCall (p, es, pos) ->
+        ProcCall (p, List.map (s bv) es, pos)
+    | PredApp (p, es, pos) ->
+        PredApp (p, List.map (s bv) es, pos)
+    | ConstrApp (c, es, pos) ->
+        ConstrApp(c, List.map (s bv) es, pos)
+    | DestrApp (d, e, pos) ->
+        DestrApp (d, s bv e, pos)
+    | UnaryOp (op, e, pos) ->
+        UnaryOp (op, s bv e, pos)
+    | Annot (e, a, pos) ->
+        Annot (s bv e, a, pos) (* TODO: substitute in a *)
+    | Read (e1, e2, pos) ->  (* TODO Thomas, why no substitution for Write? *)
+        Read (s bv e1, s bv e2, pos)
+    | Write (e1, e2, e3, pos) ->
+        Write (s bv e1, s bv e2, s bv e3, pos)
+    | BinaryOp (e1, op, e2, ty, pos) ->
+        BinaryOp (s bv e1, op, s bv e2, ty, pos)
+    | Binder (b, vs, e, pos) ->
+        let bv =
+          List.fold_left (fun bv -> function
+            | UnguardedVar v ->
+                IdSet.add v.v_name bv
+            | GuardedVar (x, e) ->
+                IdSet.add x bv)
+            bv vs
+        in
+        Binder (b, vs, s bv e, pos)
+    | (Null _ | Emp _ | IntVal _ | BoolVal _) as e -> e
+  in s IdSet.empty
     
 let pos_of_stmt = function
   | Skip pos
@@ -314,25 +367,30 @@ let pred_decl hdr body =
   { hdr with pr_body = body }
 
 let extend_spl_program incls decls bg_th prog =
-  let check_uniqueness id pos (tdecls, vdecls, pdecls, prdecls) =
+  let check_uniqueness id pos (tdecls, vdecls, pdecls, prdecls, mdecls) =
     if IdMap.mem id tdecls || IdMap.mem id vdecls || IdMap.mem id pdecls || IdMap.mem id prdecls
+        || IdMap.mem id mdecls
     then ProgError.error pos ("redeclaration of identifier " ^ (fst id) ^ ".");
   in
-  let tdecls, vdecls, pdecls, prdecls =
-    List.fold_left (fun (tdecls, vdecls, pdecls, prdecls as decls) -> function
+  let tdecls, vdecls, pdecls, prdecls, mdecls =
+    List.fold_left (fun (tdecls, vdecls, pdecls, prdecls, mdecls as decls) -> function
       | TypeDecl decl -> 
           check_uniqueness decl.t_name decl.t_pos decls;
-          IdMap.add decl.t_name decl tdecls, vdecls, pdecls, prdecls
+          IdMap.add decl.t_name decl tdecls, vdecls, pdecls, prdecls, mdecls
       | VarDecl decl -> 
           check_uniqueness decl.v_name decl.v_pos decls;
-          tdecls, IdMap.add decl.v_name decl vdecls, pdecls, prdecls
+          tdecls, IdMap.add decl.v_name decl vdecls, pdecls, prdecls, mdecls
       | ProcDecl decl -> 
           check_uniqueness decl.p_name decl.p_pos decls;
-          tdecls, vdecls, IdMap.add decl.p_name decl pdecls, prdecls
+          tdecls, vdecls, IdMap.add decl.p_name decl pdecls, prdecls, mdecls
       | PredDecl decl -> 
           check_uniqueness decl.pr_name decl.pr_pos decls;
-          tdecls, vdecls, pdecls, IdMap.add decl.pr_name decl prdecls)
-      (prog.type_decls, prog.var_decls, prog.proc_decls, prog.pred_decls)
+          tdecls, vdecls, pdecls, IdMap.add decl.pr_name decl prdecls, mdecls
+      | MacroDecl decl ->
+          check_uniqueness decl.m_name decl.m_pos decls;
+          tdecls, vdecls, pdecls, prdecls, IdMap.add decl.m_name decl mdecls
+      )
+      (prog.type_decls, prog.var_decls, prog.proc_decls, prog.pred_decls, prog.macro_decls)
       decls
   in
   { includes = incls @ prog.includes;
@@ -341,21 +399,17 @@ let extend_spl_program incls decls bg_th prog =
     proc_decls = pdecls;
     pred_decls = prdecls;
     fun_decls = IdMap.empty;
+    macro_decls = mdecls;
     background_theory = bg_th @ prog.background_theory;
   }
 
 let merge_spl_programs prog1 prog2 =
-  let tdecls =
-    IdMap.fold (fun _ decl acc -> TypeDecl decl :: acc) prog1.type_decls []
-  in
-  let vdecls =
-    IdMap.fold (fun _ decl acc -> VarDecl decl :: acc) prog1.var_decls tdecls
-  in
-  let prdecls =
-    IdMap.fold (fun _ decl acc -> PredDecl decl :: acc) prog1.pred_decls vdecls
-  in
-  let decls =
-    IdMap.fold (fun _ decl acc -> ProcDecl decl :: acc) prog1.proc_decls prdecls
+  let decls = []
+    |> IdMap.fold (fun _ decl acc -> TypeDecl decl :: acc) prog1.type_decls
+    |> IdMap.fold (fun _ decl acc -> VarDecl decl :: acc) prog1.var_decls
+    |> IdMap.fold (fun _ decl acc -> PredDecl decl :: acc) prog1.pred_decls
+    |> IdMap.fold (fun _ decl acc -> ProcDecl decl :: acc) prog1.proc_decls
+    |> IdMap.fold (fun _ decl acc -> MacroDecl decl :: acc) prog1.macro_decls
   in
   extend_spl_program prog1.includes decls prog1.background_theory prog2
 
@@ -385,6 +439,7 @@ let empty_spl_program =
     proc_decls = IdMap.empty;
     pred_decls = IdMap.empty;
     fun_decls = IdMap.empty;
+    macro_decls = IdMap.empty;
     background_theory = [];
   }
     
@@ -392,6 +447,96 @@ let mk_block pos = function
   | [] -> Skip pos
   | [stmt] -> stmt
   | stmts -> Block (stmts, pos)
+
+(** Replace all macro occurrences with macro body *)
+let replace_macros prog =
+  let rec repl_expr = function
+    | ProcCall (p, es, pos) ->
+      (match IdMap.find_opt p prog.macro_decls with
+      | Some macro ->
+        let sm =
+          List.combine macro.m_args es
+          |> List.fold_left (fun sm (v, e) -> IdMap.add v e sm) IdMap.empty
+        in
+        subst sm macro.m_body
+      | None ->
+        ProcCall (p, List.map (repl_expr) es, pos))
+    | (Null _ | Emp _ | IntVal _ | BoolVal _ | Ident _) as e -> e
+    | Setenum (ty, es, pos) ->
+      Setenum (ty, List.map (repl_expr) es, pos)
+    | New (ty, es, pos) ->
+      New (ty, List.map (repl_expr) es, pos)
+    | Read (e1, e2, pos) ->
+      Read (repl_expr e1, repl_expr e2, pos)
+    | Write (e1, e2, e3, pos) ->
+      Write (repl_expr e1, repl_expr e2, repl_expr e3, pos)
+    | ConstrApp (c, es, pos) ->
+      ConstrApp(c, List.map (repl_expr) es, pos)
+    | DestrApp (d, e, pos) ->
+      DestrApp (d, repl_expr e, pos)
+    | PredApp (p, es, pos) ->
+      PredApp (p, List.map (repl_expr) es, pos)
+    | Binder (b, vs, e, pos) ->
+      Binder (b, vs, repl_expr e, pos)
+    | UnaryOp (op, e, pos) ->
+      UnaryOp (op, repl_expr e, pos)
+    | BinaryOp (e1, op, e2, ty, pos) ->
+      BinaryOp (repl_expr e1, op, repl_expr e2, ty, pos)
+    | Annot (e, a, pos) ->
+      Annot (repl_expr e, a, pos)
+  in
+  let rec repl_stmt = function
+    | Skip _ as s -> s
+    | Block (sts, p) ->
+      Block (List.map repl_stmt sts, p)
+    | LocalVars (vs, es, p) ->
+      LocalVars (vs, Util.Opt.map (List.map repl_expr) es, p)
+    | Assume (e, b, p) ->
+      Assume (repl_expr e, b, p)
+    | Assert (e, b, p) ->
+      Assert (repl_expr e, b, p)
+    | Split (e, p) ->
+      Split (repl_expr e, p)
+    | Assign (vs, es, p) ->
+      Assign (List.map repl_expr vs, List.map repl_expr es, p)
+    | Dispose (e, p) ->
+      Dispose (repl_expr e, p)
+    | Havoc (es, p) ->
+      Havoc (List.map repl_expr es, p)
+    | If (e, st1, st2, p) ->
+      If (repl_expr e, repl_stmt st1, repl_stmt st2, p)
+    | Choice (stmts, p) ->
+      Choice (List.map repl_stmt stmts, p)
+    | Loop (invs, preb, cond, postb, p) ->
+      let repl_loop_c = (function
+        | Invariant (e, b) -> Invariant (repl_expr e, b))
+      in
+      Loop (List.map repl_loop_c invs, repl_stmt preb, repl_expr cond, repl_stmt postb, p)
+    | Return (es, p) ->
+      Return (List.map repl_expr es, p)
+  in
+  let repl_contr = function
+    | Requires (e, b1, b2) -> Requires (repl_expr e, b1, b2)
+    | Ensures (e, b1, b2) -> Ensures (repl_expr e, b1, b2)
+  in
+  let repl_proc proc =
+    { proc with
+      p_contracts = List.map repl_contr proc.p_contracts;
+      p_body = repl_stmt proc.p_body;
+    }
+  in
+  let repl_pred pred =
+    { pred with
+      pr_contracts = List.map repl_contr pred.pr_contracts;
+      pr_body = Util.Opt.map repl_expr pred.pr_body;
+    }
+  in
+
+  { prog with
+    proc_decls = IdMap.map repl_proc prog.proc_decls;
+    pred_decls = IdMap.map repl_pred prog.pred_decls;
+  }
+
 
 (** Pretty printing *)
 

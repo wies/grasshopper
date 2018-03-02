@@ -182,6 +182,7 @@ let removeGhost cu =
       proc_decls = procs;
       pred_decls = IdMap.empty;
       fun_decls = IdMap.empty;
+      macro_decls = IdMap.empty;
       background_theory = [];
     }
   in
