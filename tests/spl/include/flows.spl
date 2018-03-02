@@ -28,7 +28,7 @@ function intValid(I: Interface) returns (res: Bool)
 
 // Associativity, commutativity of intComp
 axiom forall I1: Interface, I2: Interface ::
-  intComp(I1, I2) == intComp(I2, I1);
+  intComp(I1, I2) == intComp(I2, I1) @(matching intComp(I1, I2) yields intComp(I2, I1));
 axiom forall I1: Interface, I2: Interface, I3: Interface ::
   intComp(I1, intComp(I2, I3)) == intComp(intComp(I1, I2), I3);
 
