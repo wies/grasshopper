@@ -198,8 +198,8 @@ proc_head:
 | PROCEDURE IDENT LPAREN var_decls RPAREN proc_returns contracts {
   ($2, $4, $6, $7, mk_position 2 2, false)
 }
-| LEMMA IDENT LPAREN var_decls RPAREN contracts {
-  ($2, $4, [], $6, mk_position 2 2, true)
+| LEMMA IDENT LPAREN var_decls RPAREN proc_returns contracts {
+  ($2, $4, $6, $7, mk_position 2 2, true)
 }
 ;
   
