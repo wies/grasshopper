@@ -776,6 +776,7 @@ let convert cu =
             proc_body = convert_body decl;
             proc_deps = [];
             proc_is_tailrec = false;
+            proc_is_lemma = decl.p_is_lemma;
           } 
         in
         declare_proc prog proc_decl

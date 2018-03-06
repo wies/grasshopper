@@ -140,6 +140,7 @@ type proc_decl = {
     proc_body: command option; (** procedure body *)
     proc_deps: ident list; (** names of dependant procedures *)
     proc_is_tailrec: bool; (** whether the procedure is tail recursive *)
+    proc_is_lemma: bool;  (** whether this procedure is a lemma *)
   }
 
 (** Predicate declaration *)
@@ -235,6 +236,7 @@ let dummy_proc name =
     proc_body = None;
     proc_deps = [];
     proc_is_tailrec = false;
+    proc_is_lemma = false;
   }
 
 let name_of_pred decl = decl.pred_contract.contr_name
