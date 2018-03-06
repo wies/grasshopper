@@ -9,6 +9,7 @@ open Printf
 exception NotYetImplemented
 let todo () = raise NotYetImplemented
 
+exception FrameNotFound
 
 let lineSep = "\n--------------------\n"
 
@@ -19,6 +20,7 @@ type spatial_pred =
   | PointsTo of term * sort * (ident * term) list  (** x |-> [f1: E1, ..] *)
   | Pred of ident * term list
   | Dirty of spatial_pred list * term list  (** Dirty region: [f1 * ..]_(e1, ..) *)
+  | Conj of spatial_pred list list  (** Conjunction of spatial states *)
 
 (** A symbolic state is a (pure formula, a list of spatial predicates).
   Note: program vars are represented as FreeSymb constants,
@@ -50,6 +52,12 @@ let rec string_of_spatial_pred = function
       (ts |> List.map string_of_term |> String.concat ", ")
   | Dirty (fs, ts) ->
     sprintf "[%s](%s)" (string_of_spatial_pred_list fs) (ts |> List.map string_of_term |> String.concat ", ")
+  | Conj fss ->
+    List.map (function
+        | [p] -> string_of_spatial_pred p
+        | ps -> "(" ^ string_of_spatial_pred_list ps ^ ")"
+      ) fss
+    |> String.concat " && "
 
 and string_of_spatial_pred_list sps =
   sps |> List.map string_of_spatial_pred |> String.concat " * "
@@ -111,46 +119,52 @@ let state_of_spec_list fields specs : state =
       failwith @@ "Unmatched read term " ^ (string_of_term t)
     | App (s, ts, srt) -> App (s, List.map convert_term ts, srt)
   in
-  let convert_form (pure, spatial) f =
-    let f = map_terms convert_term f in
-    (smk_and [f; pure], spatial)
-  in
-  let rec convert_sl_form (pure, spatial) f =
+  let convert_form f = (map_terms convert_term f, []) in
+  let rec convert_sl_form f =
     let fail () = failwith @@ "Unsupported formula " ^ (Sl.string_of_form f) in
     match f with
     | Sl.Pure (f, _) ->
-      convert_form (pure, spatial) f
+      convert_form f
     | Sl.Atom (Sl.Emp, ts, _) ->
-      (pure, spatial)
+      (mk_true, [])
     | Sl.Atom (Sl.Region, [(App (SetEnum, [x], Set Loc srt))], _) -> (* acc(x) *)
       let x = convert_term x in
-      (pure, PointsTo (x, srt, []) :: spatial)
+      (mk_true, [PointsTo (x, srt, [])])
     | Sl.Atom (Sl.Region, ts, _) -> fail ()
     | Sl.Atom (Sl.Pred p, ts, _) ->
-      (pure, Pred (p, ts) :: spatial)
+      (mk_true, [Pred (p, ts)])
     | Sl.SepOp (Sl.SepStar, f1, f2, _) ->
-      let (pure, spatial) = convert_sl_form (pure, spatial) f2 in
-      convert_sl_form (pure, spatial) f1
+      let (pure1, spatial1) = convert_sl_form f1 in
+      let (pure2, spatial2) = convert_sl_form f2 in
+      (smk_and [pure1; pure2], spatial1 @ spatial2)
     | Sl.SepOp (Sl.SepIncl, _, _, _) -> fail ()
     | Sl.SepOp (Sl.SepPlus, _, _, _) -> fail ()
+    | Sl.BoolOp (And, fs, _) ->
+      let pures, spatials = List.map convert_sl_form fs |> List.split in
+      (match spatials with
+      | [spatial] -> smk_and pures, spatial
+      | _ -> smk_and pures, [Conj spatials])
     | Sl.BoolOp _ -> fail ()
     | Sl.Binder (b, vs, f, _) ->
       print_endline "\n\nWARNING: TODO: make substitutions capture avoiding!\n";
-      let pure1, spatial1 = convert_sl_form empty_state f in
+      let pure1, spatial1 = convert_sl_form f in
       (match spatial1 with
-      | [] -> (smk_and [smk_binder b vs pure1; pure], spatial)
+      | [] -> (smk_binder b vs pure1, [])
       | _ ->
         failwith @@ "Confused by spatial under binder: " ^ (Sl.string_of_form f))
     | Sl.Dirty (f, ts, _) ->
-      let pure1, spatial1 = convert_sl_form empty_state f in
-      smk_and [pure1; pure], Dirty (spatial1, ts) :: spatial
+      let pure1, spatial1 = convert_sl_form f in
+      pure1, [Dirty (spatial1, ts)]
   in
   (* Convert all the specs into a state *)
   let (pure, spatial) =
-    List.fold_left (fun state spec ->
-        match spec.spec_form with
-        | SL slform -> convert_sl_form state slform
-        | FOL form -> convert_form state form
+    List.fold_left (fun (pure, spatial) spec ->
+        let pure1, spatial1 =
+          match spec.spec_form with
+          | SL slform -> convert_sl_form slform
+          | FOL form -> convert_form form
+        in
+        smk_and [pure1; pure], spatial1 @ spatial
       ) empty_state specs
   in
   let reads = !reads in
@@ -164,6 +178,7 @@ let state_of_spec_list fields specs : state =
         PointsTo (x, s, fs @ fs')
       | Pred _ as p -> p
       | Dirty (sps, ts) -> Dirty (List.map put_reads sps, ts)
+      | Conj spss -> Conj (List.map (List.map put_reads) spss)
     in
     List.map put_reads spatial
   in
@@ -174,6 +189,7 @@ let state_of_spec_list fields specs : state =
     | PointsTo (x, _, _) -> TermSet.add x allocs
     | Pred _ -> allocs
     | Dirty (sps, ts) -> List.fold_left collect_allocs allocs sps
+    | Conj spss -> List.fold_left (List.fold_left collect_allocs) allocs spss
     in
     List.fold_left collect_allocs TermSet.empty spatial
   in
@@ -196,6 +212,8 @@ let rec subst_spatial_pred sm = function
     Pred (id, List.map (subst_term sm) ts)
   | Dirty (sps, ts) ->
     Dirty (List.map (subst_spatial_pred sm) sps, List.map (subst_term sm) ts)
+  | Conj spss ->
+    Conj (List.map (List.map (subst_spatial_pred sm)) spss)
 
 (** Substitute all (Vars and constants) in derived equalities [eqs],
   according to substitution [sm]
@@ -295,6 +313,7 @@ let add_neq_constraints (pure, spatial) =
     | PointsTo (x, s, _) -> [(x, s)]
     | Dirty (sp', _) -> List.map find_alloc sp' |> rev_concat
     | Pred _ -> []
+    | Conj spss -> List.map (List.map find_alloc) spss |> List.map rev_concat |> rev_concat
     in
     List.map find_alloc spatial |> rev_concat
   in
@@ -317,7 +336,7 @@ let add_neq_constraints (pure, spatial) =
 (** Returns [(fs, spatial')] s.t. [spatial] = [loc] |-> [fs] :: [spatial'] *)
 let find_ptsto loc spatial =
   let sp1, sp2 =
-    List.partition (function | PointsTo (x, _, _) -> x = loc | Pred _ | Dirty _-> false)
+    List.partition (function | PointsTo (x, _, _) -> x = loc | Pred _ | Dirty _ | Conj _-> false)
       spatial
   in
   match sp1 with
@@ -383,18 +402,15 @@ let check_pure_entail prog eqs p1 p2 =
       failwith @@ sprintf "Could not prove %s" (string_of_form p2)
 
 
-(** Find a frame for state1 * fr |= state2.
+(** Returns (fr, inst) s.t. state1 |= state2 * fr, and
   inst accumulates an instantiation for existential variables in state2. *)
 let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
   Debug.debugl 1 (fun () ->
-    sprintf "\nFinding frame with %s for:\n%s &*& ??\n|=\n%s\n" 
+    sprintf "\nFinding frame with %s for:\n%s\n|=\n%s &*& ??\n" 
       (string_of_equalities inst)
       (string_of_eqs_state eqs (p1, sp1)) (string_of_state (p2, sp2))
   );
-  let fail () =
-    failwith @@ sprintf "Could not find frame for entailment:\n%s\n|=\n%s\n"
-      (string_of_state (p1, sp1)) (string_of_state (p2, sp2))
-  in
+  let fail () = raise FrameNotFound in
   match sp2 with
   | [] ->
     (* Check if p2 is implied by p1 *)
@@ -470,6 +486,53 @@ and check_entailment prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
   match fr with
   | [] -> [], inst
   | _ -> failwith @@ sprintf "Frame was not empty: %s" (string_of_state (mk_true, fr))
+
+
+
+(** Finds a call site for a function that's completely contained inside a conjunct.
+  If found, [find_frame_conj p e state1 state2] returns a function [repl_fn] s.t.
+  [repl_fn sm state2'] is the result of replacing [state2] inside [state1] with [state2'],
+  and applying the substitution map [sm] on the remaining parts of [state1].
+*)
+let find_frame_conj prog eqs (pure, spatial) state2 =
+  let find_frame_opt p e s1 s2 =
+    (try Some (find_frame p e s1 s2) with FrameNotFound -> None)
+  in
+  let rec find_frame_inside_conj = function
+    | [] -> None
+    | sps :: spss ->
+      (match find_frame_opt prog eqs (pure, sps) state2 with
+      | Some (frame, _) -> 
+        Some (fun sm foo_post ->
+          let frame = List.map (subst_spatial_pred sm) frame in
+          let spss = List.map (List.map (subst_spatial_pred sm)) spss in
+          (foo_post @ frame) :: spss)
+      | None ->
+        (match find_frame_inside_conj spss with
+        | Some repl_fn ->
+          Some (fun sm foo_post ->
+            let sps = List.map (subst_spatial_pred sm) sps in
+            sps :: (repl_fn sm foo_post)
+          )
+        | None -> None))
+  in
+  let rec find_frame_conj = function
+    | [] -> failwith "Couldn't find frame."
+    | Conj spss :: spatial' ->
+      (match find_frame_inside_conj spss with
+      | Some repl_fn ->
+        (fun sm foo_post ->
+          Conj (repl_fn sm foo_post) :: (List.map (subst_spatial_pred sm) spatial'))
+      | None ->
+        let repl_fn = find_frame_conj spatial' in
+        (fun sm foo_post ->
+          let spss = List.map (List.map (subst_spatial_pred sm)) spss in
+          Conj spss :: (repl_fn sm foo_post)))
+    | sp :: spatial' ->
+      let repl_fn = find_frame_conj spatial' in
+      (fun sm foo_post -> (subst_spatial_pred sm sp) :: (repl_fn sm foo_post))
+  in
+  find_frame_conj spatial
 
 
 (** Evaluate term at [state] by looking up all field reads.
@@ -582,7 +645,6 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       (* Substitute formal params -> actual params in foo_pre/post *)
       let sm = mk_eqs c.contr_formals args in
       let pre = c.contr_precond |> state_of_spec_list flds |> subst_state sm in
-      (* TODO: unsound if ints passed by value? *)
       (* Also substitute return vars -> lhs vars in post *)
       let sm =
         List.fold_left2 (fun sm r l -> IdMap.add r (mk_const_term l) sm)
@@ -599,21 +661,26 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     (* TODO do this by keeping disequalities in state? *)
     let state = add_neq_constraints state in
     let foo_pre = apply_equalities eqs foo_pre in
-    let frame, inst = find_frame prog eqs state foo_pre in
-    Debug.debug (fun () -> sprintf "\nFound frame: %s\n"
-        (frame |> List.map string_of_spatial_pred |> String.concat " &*& ")
-    );
-    (* Then, create vars for old vals of all x in lhs, and substitute in eqs & frame *)
     let sm =
       lhs |> List.fold_left (fun sm id ->
           IdMap.add id (mk_var_like id) sm)
         IdMap.empty
     in
+    let repl_fn =
+      try
+        let frame, _ = find_frame prog eqs state foo_pre in
+        let frame = List.map (subst_spatial_pred sm) frame in
+        (fun sm foo_post -> foo_post @ frame)
+      with FrameNotFound -> (* Try to see if a lemma can be applied inside a conjunct *)
+        if (find_proc prog foo).proc_is_lemma then
+          find_frame_conj prog eqs state foo_pre
+        else failwith "Could not find frame."
+    in
+    (* Then, create vars for old vals of all x in lhs, and substitute in eqs & frame *)
     let eqs = subst_eqs sm eqs in
-    let frame = List.map (subst_spatial_pred sm) frame in
     let pure = state |> fst |> subst_form sm in
     let (post_pure, post_spatial) = foo_post in
-    let state = (smk_and [pure; post_pure], post_spatial @ frame) in
+    let state = (smk_and [pure; post_pure], repl_fn sm post_spatial) in
     symb_exec prog flds proc (eqs, state) postcond comms'
   | Seq (comms, _) :: comms' ->
     symb_exec prog flds proc (eqs, state) postcond (comms @ comms')
