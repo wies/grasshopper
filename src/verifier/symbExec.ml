@@ -371,7 +371,7 @@ let check_pure_entail prog eqs p1 p2 =
   let (p2, _) = apply_equalities eqs (p2, []) in
   if p1 = p2 || p2 = mk_true then true
   else (* Dump it to an SMT solver *)
-    let axioms = 
+    let axioms =  (* Collect all program axioms *)
       Util.flat_map 
         (fun sf -> 
           let name = 
@@ -380,6 +380,7 @@ let check_pure_entail prog eqs p1 p2 =
           in
           match sf.spec_form with FOL f -> [mk_name name f] | SL _ -> [])
         prog.prog_axioms
+      |> List.map (subst_form eqs) (* Apply equalities in eqs *)
     in
     let p2 = Verifier.annotate_aux_msg "TODO" p2 in
     (* Close the formulas: assuming all free variables are existential *)
@@ -470,7 +471,7 @@ let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
     | _ -> todo ()
     )
   | _ ->
-    todo ()
+    fail ()
 
 
 and check_entailment prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
