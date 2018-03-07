@@ -12,6 +12,7 @@ datatype Interface =
 predicate Gr(I: Interface)
 
 predicate N(x: Node, I: Interface)
+    // TODO use macro for this to eliminate lemma_N_is_Gr etc?
 
 
 // A functional semantics for interface composition
@@ -169,6 +170,18 @@ lemma lemma_Gr_comp_uniq(I: Interface, I1: Interface, I2: Interface)
   requires Gr(I) && (Gr(I1) &*& Gr(I2))
   ensures Gr(I1) &*& Gr(I2) &*& I == intComp(I1, I2)
     
+lemma lemma_Gr_uniq(I1: Interface, I2: Interface)
+  requires Gr(I1) && (Gr(I2) &*& I2 == I2)  // Hack to force this to be spatial
+  ensures Gr(I1) &*& I1 == I2
+
+lemma lemma_add_singl(I: Interface, x: Node, Ix: Interface, I1: Interface)
+  requires I1 == intComp(I, Ix) && Ix.FP == {x} && Ix.inf[x] == domZero()
+     && Ix.FPo == {}
+  ensures I1.FPo == I.FPo
+  ensures forall n: Node :: n in I.FP && I1.inf[n] == I.inf[n]
+                    || n !in I.FP && I1.inf[n] == domZero()
+    @(matching I.inf[n] yields I1.inf[n]) @(matching I1.inf[n] yields I.inf[n])
+
 lemma lemma_disj()
 
     
