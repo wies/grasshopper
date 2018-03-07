@@ -567,7 +567,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
   let lookup_type id = (find_local_var proc id).var_sort in
   let mk_var_like id =
     let id' = fresh_ident (name id) in
-    mk_var (lookup_type id) id'
+    mk_free_const (lookup_type id) id'
   in
   let mk_const_term id = mk_free_const (lookup_type id) id in
 
