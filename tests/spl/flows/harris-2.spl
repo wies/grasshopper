@@ -232,7 +232,7 @@ procedure insert(mh: Node, fh: Node, I: Interface, n: Node, In: Interface)
 
 var ft: Node;
 
-
+/* TODO
 procedure delete(mh: Node, fh: Node, I: Interface)
   returns (I1: Interface)
   requires Gr(I) &*& intValid(I) == true
@@ -376,3 +376,4 @@ procedure delete(mh: Node, fh: Node, I: Interface)
     return I1;
   }
 }
+*/

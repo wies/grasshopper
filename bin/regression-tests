@@ -84,6 +84,8 @@ symb_exec:soundness     tests/spl/symb_exec/soundness.spl       fail
 flows:tests             tests/spl/flows/tests.spl               pass
 flows:sls               tests/spl/flows/sls.spl                 pass
 flows:soundness1        tests/spl/flows/test_soundness1.spl     fail
+flows:harris-1          tests/spl/flows/harris-1.spl            pass
+flows:harris-2          tests/spl/flows/harris-2.spl            pass
 "
 
 res=0

@@ -175,7 +175,6 @@ procedure insert(hd: Node, I: Interface, n: Node, In: Interface)
     lemma_int_leq_unfold(intComp(In, I), I1);
     lemma_add_in(I, n, In, intComp(I, In));
     lemma_int_valid_unfold(I1);
-    pure assert false;
   } else {
     lemma_abs(l, Il, Il);
     lemma_dirty_N_is_Gr(l, Il, Il);
