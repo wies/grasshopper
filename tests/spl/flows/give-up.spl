@@ -159,11 +159,9 @@ procedure dictionaryOp(k: Int, I: Interface) returns (res: Bool, I1: Interface)
         var In: Interface, I3: Interface, I4: Interface;
         lemma_int_leq_unfold(Ic, Ic1);
         lemma_int_valid_unfold(Ic);
-        pure assume Ic1.FP == {c};  // TODO
         lemma_step(Ic1, I2, I, c, n);
         In, I3 := lemma_decomp(n, I2);
         // N(c, Ic) &*& N(n, In) &*& Gr(I3)
-        lemma_N_is_Gr(c, Ic1);
         I4 := lemma_Gr_comp(Ic1, I3);
         // N(n, In) &*& Gr(I4)
         Ic, I2 := In, I4;
@@ -183,7 +181,6 @@ procedure dictionaryOp(k: Int, I: Interface) returns (res: Bool, I1: Interface)
       Ic1, I := unlock(c, Ic, I2, I);
 
       // Drop N(c, Ic), and decomp to get N(n, In)
-      lemma_N_is_Gr(c, Ic1);
       I := lemma_Gr_comp(Ic1, I2);
       Ic, I2 := lemma_decomp(n, I);
 
@@ -200,7 +197,6 @@ procedure dictionaryOp(k: Int, I: Interface) returns (res: Bool, I1: Interface)
 
   split spl_state_01(c, Ic, I2, I);
 
-  lemma_N_is_Gr(c, Ic);
   I := lemma_Gr_comp(Ic, I2);
   return res, I;
 }
@@ -208,7 +204,7 @@ procedure dictionaryOp(k: Int, I: Interface) returns (res: Bool, I1: Interface)
 /** Intermediate assertions */
 
 define spl_state_01(c, Ic, I2, I) {
-  N(c, Ic) &*& Gr(I2) &*& (I == intComp(Ic, I2) && globalInt(I)) &*& Ic.FP == {c} // TODO
+  N(c, Ic) &*& Gr(I2) &*& (I == intComp(Ic, I2) && globalInt(I))
 };
 
 define spl_state_02(c, Ic, I2, I) {
@@ -243,7 +239,7 @@ define spl_state_06(c, Ic, I2, I) {
 /** Actions */
 
 define action_lock_pre(x, Ix) {
-  N(x, Ix) &*& (Ix.FP == {x} && Ix.na.lockinfo == {unlocked})
+  N(x, Ix) &*& Ix.na.lockinfo == {unlocked}
 };
 
 define action_lock_post(x, Ix, Ix1, t) {
@@ -272,7 +268,7 @@ procedure action_sync(I: Interface, t: Int) returns (I1: Interface)
 define action_alloc_pre() { emp };
 
 define action_alloc_post(x, Ix, t) {
-  N(x, Ix) &*& (Ix.FP == {x} && Ix.inf[x] == domZero() && Ix.FPo == {}
+  N(x, Ix) &*& (Ix.inf[x] == domZero() && Ix.FPo == {}
               && Ix.na.contents == {} && Ix.na.lockinfo == {dirtylock(t)})
 };
 
@@ -287,13 +283,10 @@ procedure stability_pre_lock(I: Interface, x: Node, Ix: Interface, I2: Interface
   requires (Gr(I) &*& globalInt(I)) && (action_lock_pre(x, Ix) &*& Gr(I2)) &*& t != TID
   ensures Gr(I1) &*& globalInt(I1)
 {
-  lemma_N_is_Gr(x, Ix);
   lemma_Gr_comp_uniq(I, Ix, I2);
-  lemma_Gr_is_N(x, Ix);
 
   var Ix1 := action_lock(x, Ix, t);
 
-  lemma_N_is_Gr(x, Ix1);
   I1 := lemma_Gr_comp(Ix1, I2);
   lemma_int_leq_fold(Ix, Ix1);
   lemma_repl(I, Ix, I2, Ix1, I1);
@@ -326,7 +319,6 @@ procedure stability_pre_alloc(I: Interface, I2: Interface, t: Int)
   var x: Node, Ix: Interface;
   x, Ix := action_alloc(t);
 
-  lemma_N_is_Gr(x, Ix);
   I1 := lemma_Gr_comp(Ix, I);
   lemma_add_singl(I, x, Ix, I1);
 }
@@ -337,15 +329,11 @@ procedure stability_01_lock(c: Node, Ic: Interface, I2: Interface, I: Interface,
   requires spl_state_01(c, Ic, I2, I) && (action_lock_pre(x, Ix) &*& Gr(Io)) &*& t != TID
   ensures spl_state_01(c, Ic1, I21, I1)
 {
-  lemma_N_is_Gr(x, Ix);
-  lemma_N_is_Gr(c, Ic);
   I := lemma_Gr_comp(Ic, I2);
   lemma_Gr_comp_uniq(I, Ix, Io);
-  lemma_Gr_is_N(x, Ix);
 
   var Ix1 := action_lock(x, Ix, t);
 
-  lemma_N_is_Gr(x, Ix1);
   I1 := lemma_Gr_comp(Ix1, Io);
   lemma_int_leq_fold(Ix, Ix1);
   lemma_repl(I, Ix, Io, Ix1, I1);
@@ -360,7 +348,6 @@ procedure stability_01_sync(c: Node, Ic: Interface, I2: Interface, I: Interface,
   requires spl_state_01(c, Ic, I2, I) && (action_sync_pre(Ix, t) &*& Gr(Io)) &*& t != TID
   ensures spl_state_01(c, Ic1, I21, I1)
 {
-  lemma_N_is_Gr(c, Ic);
   I := lemma_Gr_comp(Ic, I2);
   lemma_Gr_comp_uniq(I, Ix, Io);
 
@@ -389,6 +376,3 @@ procedure stability_inv_lock(c: Node, Ic: Interface, I2: Interface, I: Interface
            &*& (n == null ==> Ic1.na.lockinfo == {locked(TID)}
                             && k in Ic1.inf[c].ks
                             && (forall y: Node :: k !in Ic1.fm[c][y].ks)))
-{
-
-}

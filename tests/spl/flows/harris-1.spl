@@ -72,14 +72,12 @@ procedure insert(hd: Node, I: Interface, n: Node, In: Interface)
   var r := l.next;
 
   lemma_abs(l, Il, Il);
-  lemma_dirty_N_is_Gr(l, Il, Il);
   lemma_int_leq_fold(Il, Il);
   sync(Il, Il);
-  lemma_Gr_is_N(l, Il);
 
   while (nondet && r != null)
     invariant N(l, Il) &*& Gr(I2)
-    invariant intValid(Il) && intValid(I2) && Il.FP == {l} // TODO infer from N(l, Il)
+    invariant intValid(Il) && intValid(I2)
     invariant intComp(Il, I2) == I && intComp(In, I) == I0 && (r != null ==> r in Il.FPo)
     invariant hd in I.FP && I.inf[hd] == fd(1) && (forall n: Node :: n != hd ==> I.inf[n] == fd(0))
       && I.FPo == {}
@@ -102,13 +100,9 @@ procedure insert(hd: Node, I: Interface, n: Node, In: Interface)
     var Ip := Il; Il := Ir;
     // N(p, Ip) &*& [l |-> _](Il) &*& Gr(I3)
     lemma_abs(l, Il, Il);
-    lemma_dirty_N_is_Gr(l, Il, Il);
     lemma_int_leq_fold(Il, Il);
     sync(Il, Il);
-    lemma_Gr_is_N(l, Il);
     // N(p, Ip) &*& N(l, Il) &*& Gr(I3)
-    lemma_N_is_Gr(p, Ip);
-    // Gr(Ip) &*& N(l, Il) &*& Gr(I3)
     I2 := lemma_Gr_comp(Ip, I3);
 
     // Introduce some terms: TODO term gens
@@ -134,11 +128,9 @@ procedure insert(hd: Node, I: Interface, n: Node, In: Interface)
     lemma_int_valid_fold(Il1);
 
     lemma_abs(n, In, In1);
-    lemma_dirty_N_is_Gr(n, In1, In);
     // [Gr(In1)](In) &*& [l |-> n](Il) &*& Gr(I2)
 
     lemma_abs(l, Il, Il1);
-    lemma_dirty_N_is_Gr(l, Il1, Il);
     // [Gr(In1)](In) &*& [Gr(Il1)](Il) &*& Gr(I2)
 
     var Inl1: Interface;
@@ -177,7 +169,6 @@ procedure insert(hd: Node, I: Interface, n: Node, In: Interface)
     lemma_int_valid_unfold(I1);
   } else {
     lemma_abs(l, Il, Il);
-    lemma_dirty_N_is_Gr(l, Il, Il);
     lemma_int_leq_fold(Il, Il);
     sync(Il, Il);
     I := lemma_Gr_comp(Il, I2);

@@ -79,10 +79,8 @@ procedure no_op(x: Node, I: Interface)
   var y := x.next;
   x.next := y;
   lemma_abs(x, I, I);
-  lemma_dirty_N_is_Gr(x, I, I);
   lemma_int_leq_fold(I, I);
   sync(I, I);
-  lemma_Gr_is_N(x, I);
 }
 
 // TODO debug
@@ -139,11 +137,9 @@ procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
   lemma_int_valid_fold(Iy1);
 
   lemma_abs(x, Ix, Ix1);
-  lemma_dirty_N_is_Gr(x, Ix1, Ix);
   // [Gr(Ix1)](Ix) &*& [y |-> x](Iy) &*& Gr(I2)
 
   lemma_abs(y, Iy, Iy1);
-  lemma_dirty_N_is_Gr(y, Iy1, Iy);
   // [Gr(Ix1)](Ix) &*& [Gr(Iy1)](Iy) &*& Gr(I2)
 
   var Ixy1: Interface;

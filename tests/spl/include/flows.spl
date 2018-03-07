@@ -11,8 +11,7 @@ datatype Interface =
 
 predicate Gr(I: Interface)
 
-predicate N(x: Node, I: Interface)
-    // TODO use macro for this to eliminate lemma_N_is_Gr etc?
+define N(x, I) { Gr(I) &*& I.FP == {x} };
 
 
 // A functional semantics for interface composition
@@ -101,20 +100,6 @@ lemma lemma_int_valid_fold(I: Interface)
   requires forall n: Node :: n !in I.FP || n !in I.FPo
   ensures intValid(I) == true
   
-
-lemma lemma_N_is_Gr(x: Node, I: Interface)
-  returns ()
-  requires N(x, I)
-  ensures Gr(I)
-
-lemma lemma_dirty_N_is_Gr(x: Node, I1: Interface, I2: Interface)
-  requires [N(x, I1)](I2)
-  ensures [Gr(I1)](I2)
-
-lemma lemma_Gr_is_N(x: Node, I: Interface)
-  returns ()
-  requires Gr(I) &*& I.FP == {x}
-  ensures N(x, I)
 
 lemma lemma_Gr_comp(Ix: Interface, Iy: Interface)
   returns (I: Interface)
