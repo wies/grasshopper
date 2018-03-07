@@ -467,7 +467,7 @@ let replace_macros prog =
           List.combine macro.m_args es
           |> List.fold_left (fun sm (v, e) -> IdMap.add v e sm) IdMap.empty
         in
-        subst sm macro.m_body
+        subst sm macro.m_body |> repl_expr
       | None ->
         ProcCall (p, List.map (repl_expr) es, pos))
     | (Null _ | Emp _ | IntVal _ | BoolVal _ | Ident _) as e -> e
