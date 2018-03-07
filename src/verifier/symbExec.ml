@@ -32,6 +32,7 @@ type state = form * spatial_pred list
   kept so that they can be substituted into the command and the post.
   Invariant: if map is {x1: E1, ...} then xi are distinct and xi is not in Ej for i != j.
   ASSUMES: vars and constants do not share names!
+  TODO: can we make it ident IdMap.t now?
   *)
 type equalities = term IdMap.t
 
@@ -256,12 +257,10 @@ let add_eq id t eqs =
 
 (** ----------- Re-arrangement and normalization rules ---------- *)
 
-(** Find equalities of the form const == var/const in [pure] and add to [eqs] *)
+(** Find equalities of the form const == const in [pure] and add to [eqs] *)
 let find_equalities eqs (pure: form) =
   let rec find_eq sm = function
-    | Atom (App (Eq, [(App (FreeSym id, [],  _)); App (FreeSym _, [],  _) as t2], _), _)
-    | Atom (App (Eq, [(App (FreeSym id, [],  _)); Var _ as t2], _), _)
-    | Atom (App (Eq, [Var _ as t2; (App (FreeSym id, [],  _))], _), _) ->
+    | Atom (App (Eq, [(App (FreeSym id, [],  _)); App (FreeSym _, [],  _) as t2], _), _) ->
       add_eq id t2 sm
     | BoolOp (And, fs) ->
       List.fold_left find_eq sm fs
