@@ -257,6 +257,12 @@ let add_eq id t eqs =
 
 (** ----------- Re-arrangement and normalization rules ---------- *)
 
+(** Normalize a Conj by some kind of sorting *)
+let sort_conj = function
+  | Conj spss ->
+    Conj (spss |> List.map (List.stable_sort compare) |> List.stable_sort compare)
+  | sp -> sp
+
 (** Find equalities of the form const == const in [pure] and add to [eqs] *)
 let find_equalities eqs (pure: form) =
   let rec find_eq sm = function
@@ -451,10 +457,11 @@ let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
       find_frame prog ~inst:inst eqs (p1, sp1') (p2', sp2'')
     | None -> fail ()
     )
-  | pred :: sp2' when List.exists ((=) pred) sp1 -> (* match and remove equal preds *)
-    let sp1a, sp1b = List.partition ((=) pred) sp1 in
+  | pred :: sp2' when List.exists (sort_conj >> ((=) (sort_conj pred))) sp1 ->
+    (* match and remove equal elements (for Conj, do some normalization) *)
+    let sp1a, sp1b = List.partition (sort_conj >> ((=) (sort_conj pred))) sp1 in
     (match sp1a with
-    | [pred'] -> find_frame prog ~inst:inst eqs (p1, sp1b) (p2, sp2')
+    | [_] -> find_frame prog ~inst:inst eqs (p1, sp1b) (p2, sp2')
     | _ -> fail ())
   | Dirty (sp2a, ts) :: sp2b ->
     (* Find a Dirty region in sp1 with same interface ts *)
