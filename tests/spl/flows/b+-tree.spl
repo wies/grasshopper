@@ -1,0 +1,118 @@
+/** B+ tree implementation of the give-up template for linearizable dictionaries. */
+
+include "../include/flows.spl";
+
+
+/** Flow domain definitions */
+
+datatype FlowDom = fd(ks: Set<Int>);
+
+function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+{ fd(p1.ks ++ p2.ks) }
+
+function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+{ fd(p1.ks ** p2.ks) }
+
+function domZero() returns(p: FlowDom) { fd({}) }
+
+datatype LockInfo = unlocked | locked(tid: Int) | dirtylock(dtid: Int);
+
+datatype NodeDom = nd(contents: Set<Int>, lockinfo: Set<LockInfo>);
+// TODO can do with LockInfo instead of Set<LockInfo>?
+
+predicate ndLeq(a1: NodeDom, a2: NodeDom) {
+  (forall x: Int :: x in a1.contents ==> x in a2.contents)
+    && (forall l: LockInfo :: l in a1.lockinfo ==> l in a2.lockinfo)
+}
+
+
+struct Node {
+  var lock: Int;
+  var len: Int;
+  var rangeLb: Int;
+  var rangeUb: Int;
+  var keys: Array<Int>;
+  var ptrs: Array<Node>;
+}
+
+
+/** Definition of good condition, gamma */
+
+define gammaG(x, I) {
+  acc(x)
+    &*& (I.inf[x] == fd({k: Int :: x.rangeLb <= k && k < x.rangeUb}))
+};
+
+predicate gammaB(x: Node, I: Interface)
+
+
+procedure lemma_conc(x: Node, I: Interface)
+  returns ()
+  requires I != intUndef
+  requires N(x, I)
+  ensures [gammaG(x, I)](I) &*& I.FP == {x}
+  ensures forall k: Int :: k in I.na.contents ==> k in I.inf[x].ks
+  ensures forall k: Int, y: Node :: k !in I.na.contents || k !in I.fm[x][y].ks
+  ensures forall k: Int, y: Node, z: Node :: k !in I.fm[x][y].ks || k !in I.fm[x][z].ks
+
+procedure lemma_abs(x: Node, I: Interface, I1: Interface)
+  returns ()
+  requires I != intUndef && I1 != intUndef && intValid(I1)
+  requires [gammaG(x, I1)](I) &*& I1.FP == {x}
+  requires forall k: Int :: k in I1.na.contents ==> k in I1.inf[x].ks
+  requires forall k: Int, y: Node :: k !in I1.na.contents || k !in I1.fm[x][y].ks
+  requires forall k: Int, y: Node, z: Node :: k !in I1.fm[x][y].ks || k !in I1.fm[x][z].ks
+  ensures [N(x, I1)](I)
+
+
+/** Begin programs */
+
+var TID: Int;
+
+
+define globalInt(I) {
+  intValid(I) == true && r in I.FP && (forall k: Int :: k in I.inf[r].ks)
+  && (forall n: Node :: n != r ==> I.inf[n] == domZero()) && I.FPo == {}
+};
+
+var r: Node;
+axiom r != null; // TODO move to intValid. Should follow from r in I.FP
+
+
+procedure inRange(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
+  returns (res: Bool)
+  requires N(x, Ix) &*& Gr(I2)
+  requires intValid(Ix) == true && intValid(I2) == true
+  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == {locked(TID)}
+  ensures N(x, Ix) &*& Gr(I2)
+  ensures intValid(Ix) == true && intValid(I2) == true
+  ensures intComp(Ix, I2) == I && globalInt(I) && (res ==> k in Ix.inf[x].ks)
+{
+  lemma_conc(x, Ix);
+
+  if (k >= x.keys[0]) {
+    return true;
+  }
+
+/*
+  var res1 := x.rangeLb <= k;
+  var res2 := x.rangeUb > k;
+
+  if (res1 && res2)
+    return true;
+  else
+    return false;
+*/
+}
+
+
+procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
+  returns (n: Node)
+  requires N(x, Ix) &*& Gr(I2)
+  requires intValid(Ix) == true && intValid(I2) == true
+  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == {locked(TID)}
+  ensures N(x, Ix) &*& Gr(I2)
+  ensures intValid(Ix) == true && intValid(I2) == true
+  ensures intComp(Ix, I2) == I && globalInt(I)
+  ensures (n != null && k in Ix.fm[x][n].ks
+           || n == null && (forall y: Node :: k !in Ix.fm[x][y].ks))
