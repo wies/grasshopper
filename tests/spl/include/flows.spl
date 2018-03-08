@@ -44,7 +44,7 @@ axiom forall I1: Interface, I2: Interface ::
 
 axiom forall I1: Interface, I2: Interface ::
   (! intValid(I1) || ! intValid(I2)) ==> intComp(I1, I2) == intUndef;
-    
+
 // Note: we assume that Gr(I) ==> intValid(I) in the following lemmas (TODO automate?)
 
 // Sufficient condition for intComp(I, Ix, Iy), when no edge from y to x
@@ -99,12 +99,17 @@ lemma lemma_int_valid_fold(I: Interface)
     && (n1 !in I.FPo ==> I.fm[n][n1] == domZero())
   requires forall n: Node :: n !in I.FP || n !in I.FPo
   ensures intValid(I) == true
-  
+
 
 lemma lemma_Gr_comp(Ix: Interface, Iy: Interface)
   returns (I: Interface)
   requires Gr(Ix) &*& Gr(Iy)
   ensures Gr(I) &*& intComp(Ix, Iy) == I &*& I != intUndef
+
+lemma lemma_Gr_comp_int(Ix: Interface, Iy: Interface)
+  returns (I: Interface)
+  requires Gr(Ix) &*& Gr(Iy)
+  ensures Gr(Ix) &*& Gr(Iy) &*& intComp(Ix, Iy) == I &*& I != intUndef
 
 lemma lemma_dirty_Gr_comp(Ix: Interface, Iy: Interface, I: Interface)
   returns (I1: Interface)
@@ -154,7 +159,7 @@ lemma lemma_repl(I: Interface, Ix: Interface, Iy: Interface, Ix1: Interface, I1:
 lemma lemma_Gr_comp_uniq(I: Interface, I1: Interface, I2: Interface)
   requires Gr(I) && (Gr(I1) &*& Gr(I2))
   ensures Gr(I1) &*& Gr(I2) &*& I == intComp(I1, I2)
-    
+
 lemma lemma_Gr_uniq(I1: Interface, I2: Interface)
   requires Gr(I1) && (Gr(I2) &*& I2 == I2)  // Hack to force this to be spatial
   ensures Gr(I1) &*& I1 == I2
@@ -167,9 +172,14 @@ lemma lemma_add_singl(I: Interface, x: Node, Ix: Interface, I1: Interface)
                     || n !in I.FP && I1.inf[n] == domZero()
     @(matching I.inf[n] yields I1.inf[n]) @(matching I1.inf[n] yields I.inf[n])
 
-lemma lemma_disj()
+lemma lemma_disj(I1: Interface, I2: Interface,
+                 x: Node, Ix: Interface, I3: Interface)
+  returns (I4: Interface)
+  requires (Gr(I1) &*& Gr(I2)) && (N(x, Ix) &*& Gr(I3)) &*& ndLeq(Ix.na, I1.na) == false
+  ensures Gr(I1) &*& N(x, Ix) &*& Gr(I4)
+    &*& I2 == intComp(Ix, I4) &*& I3 == intComp(I1, I4)
 
-    
+
 procedure sync(I1: Interface, I2: Interface)
   returns ()
   requires [Gr(I2)](I1) &*& intLeq(I1, I2) == true &*& intValid(I2) == true

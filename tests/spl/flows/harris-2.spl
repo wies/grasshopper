@@ -25,6 +25,8 @@ datatype NodeDom = unmarked | marked(markId: Int) | markTop;
 
 datatype MarkedPtr = mp(mark: Bool, ptr: Node);
 
+predicate ndLeq(a1: NodeDom, a2: NodeDom)
+
 struct Node {
   var next: MarkedPtr;
   var fnext: Node;
