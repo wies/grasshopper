@@ -1,0 +1,50 @@
+procedure read1(a: Array<Int>) returns (x: Int)
+  requires acc(a) &*& a.length == 2 &*& (forall j: Int :: 0 <= j && j < a.length ==> a[j] == 0)
+  ensures acc(a) &*& x == 0
+{
+  x := a[1];
+}
+
+procedure write1(a: Array<Int>)
+  requires acc(a) &*& a.length == 2 &*& (forall j: Int :: 0 <= j && j < a.length ==> a[j] == 0)
+  ensures acc(a) &*& (forall j: Int :: 0 <= j && j < a.length ==> a[j] == j)
+{
+  a[0] := 0;
+  a[1] := 0 + 2 - 1;
+}
+
+procedure write2(a: Array<Int>)
+  requires acc(a) &*& a.length == 2
+  ensures acc(a) &*&  (forall j: Int :: 0 < j && j < a.length ==> a[j-1] <= a[j])
+{
+  if (a[1] < a[0]) {
+    var x := a[0];
+    a[0] := a[1];
+    a[1] := x;
+  }
+}
+
+procedure maximum(a: Array<Int>)
+  returns (max_i: Int)
+  requires acc(a)
+  ensures acc(a)
+  ensures a.length == 0 || (0 <= max_i && max_i < a.length)
+  ensures forall j: Int :: 0 <= j && j < a.length ==> a[j] <= a[max_i]
+{
+  var i := 0;
+  max_i := 0;
+
+  while (i < a.length)
+    invariant 0 <= i
+    invariant acc(a)
+    invariant forall j: Int :: 0 <= j && j < i ==> a[j] <= a[max_i]
+    invariant a.length == 0 || (0 <= max_i && max_i < a.length)
+  {
+    if (a[i] > a[max_i])
+    {
+      max_i := i;
+    }
+    i := i + 1;
+  }
+  return max_i;
+}

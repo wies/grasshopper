@@ -1,0 +1,7 @@
+procedure read_fail(a: Array<Int>) returns (x: Int)
+  requires acc(a) &*& a.length == 2 &*& (forall j: Int :: 0 <= j && j < a.length ==> a[j] == 0)
+  ensures acc(a)
+{
+  x := a[3];
+  a[0] := 0;
+}

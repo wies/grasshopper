@@ -27,6 +27,7 @@ type spatial_pred =
   existential vars are represented as Var variables.
  *)
 type state = form * spatial_pred list
+(* TODO also add prog, flds, eqs, etc to state *)
 
 (** Equalities derived so far in the symbolic execution, as a map: ident -> term,
   kept so that they can be substituted into the command and the post.
@@ -112,6 +113,12 @@ let state_of_spec_list fields specs : state =
         reads := TermMap.add loc flds_of_loc !reads;
         new_var
       end else IdMap.find fld (TermMap.find loc !reads)
+    | App (Read, [f; a; idx], srt) when f = (Grassifier.array_state true srt) ->
+      (* Array reads *)
+      print_endline "\n\nTODO state_of_spec_list: check we have access to array";
+      App (Read, [f; convert_term a; convert_term idx], srt)
+    | App (Read, [f; _], srt) when f = (Grassifier.array_state false srt) ->
+      failwith "Please use flag -simplearrays for array programs."
     | App (Read, [f; arg], srt) -> (* function application: f(arg) *)
       (* Assuming f itself does not contain field reads terms
         - i.e. can't store functions in heap *)
@@ -544,6 +551,8 @@ let find_frame_conj prog eqs (pure, spatial) state2 =
 
 (** Evaluate term at [state] by looking up all field reads.
   Assumes term has already been normalized w.r.t eqs *)
+(** TODO re-write state_of_spec_list to use this by first collecting all spatials
+  then fold_map_terms this?*)
 let rec eval_term fields state = function
   | Var _ as t -> (t, state)
   | App (Read, [App (FreeSym fld, [], _); App (FreeSym _, [], _) as loc], srt)
@@ -567,10 +576,45 @@ let rec eval_term fields state = function
     App (s, ts, srt), state
 
 
+(** Check that we have permission to the array, and that index is in bounds *)
+let have_array_acc prog eqs (pure, spatial) arr idx =
+  let is_ptsto loc = function
+    | PointsTo (x, _, []) -> x = loc
+    | PointsTo _ | Pred _ | Dirty _ | Conj _-> false
+  in
+  match List.find_opt (is_ptsto arr) spatial with
+  | Some _ ->
+     let idx_in_bds = smk_and [(mk_leq (mk_int 0) idx); (mk_lt idx (mk_length arr))] in
+     check_pure_entail prog eqs pure idx_in_bds
+  | None -> false
+
+
+(** Check that all array read terms in [t] are safe on state [state] *)
+let check_array_reads prog eqs (t, state) =
+  let rec check = function
+    | Var _ as t -> t
+    | App (Read, [f; a; idx], srt) as t when f = (Grassifier.array_state true srt) ->
+       (* Array reads *)
+       if have_array_acc prog eqs state a idx then
+         App (Read, [f; check a; check idx], srt)
+       else
+         failwith @@ "Invalid array read: " ^ (string_of_term t)
+    | App (s, ts, srt) -> App (s, List.map check ts, srt)
+  in
+  (check t, state)
+
+
+(** Process term by substituting eqs, looking up field reads, and checking array reads. *)
+let process prog fields eqs state =
+  subst_term eqs
+  >> eval_term fields state
+  >> check_array_reads prog eqs
+
+
 (** Symbolically execute command [comm] on state [state] and check [postcond]. *)
 let rec symb_exec prog flds proc (eqs, state) postcond comms =
   (* Some helpers *)
-  let lookup_type id = (find_local_var proc id).var_sort in
+  let lookup_type id = (find_var prog proc id).var_sort in
   let mk_var_like id =
     let id' = fresh_ident (name id) in
     mk_free_const (lookup_type id) id'
@@ -596,10 +640,9 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
         lineSep (string_of_eqs_state eqs state)
     );
-    (* First, substitute eqs on loc and rhs *)
-    let loc = subst_term eqs loc and rhs = subst_term eqs rhs in
-    (* Then, evaluate rhs in case it contains lookups *)
-    let rhs, (pure, spatial) = eval_term flds state rhs in
+    (* First, process/check loc and rhs *)
+    let loc, state = process prog flds eqs state loc in
+    let rhs, (pure, spatial) = process prog flds eqs state rhs in
     (* Find the node to mutate *)
     (match find_ptsto_dirty loc spatial with
     | Some fs, mk_spatial' ->
@@ -611,6 +654,49 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       in
       symb_exec prog flds proc (eqs, (pure, mk_spatial' fs')) postcond comms'
     | None, _ -> failwith @@ "Write to invalid location: " ^ (string_of_term loc))
+  | Basic (Assign {assign_lhs=[f];
+        assign_rhs=[App (Write, [array_state; arr; idx; rhs], srt)]}, pp) as comm :: comms'
+      when array_state = (Grassifier.array_state true (sort_of rhs)) ->
+    Debug.debug (fun () ->
+      sprintf "%sExecuting array write: %d: %s%sCurrent state:\n%s\n"
+        lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+        lineSep (string_of_eqs_state eqs state)
+    );
+    let arr, state = process prog flds eqs state arr in
+    let idx, state = process prog flds eqs state idx in
+    let rhs, (pure, spatial) = process prog flds eqs state rhs in
+    (* Check that we have permission to the array, and that index is in bounds *)
+    if have_array_acc prog eqs (pure, spatial) arr idx then
+      (* Create a new variable array_state_old and substitute for the current array state *)
+      let array_state_id = (Grassifier.array_state_id (sort_of rhs)) in
+      let array_state' = (mk_var_like array_state_id) in
+      let sm = IdMap.singleton array_state_id array_state' in
+      let idx, rhs = idx |> subst_term sm, rhs |> subst_term sm in
+      let (pure, spatial) = subst_state sm (pure, spatial) in
+      let pure =
+        let arr'_id = fresh_ident "a" and idx'_id = fresh_ident "idx" in
+        let arr'_srt = sort_of arr and idx'_srt = sort_of idx in
+        let arr' = mk_var arr'_srt arr'_id and idx' = mk_var idx'_srt idx'_id in
+        let f1 = (* Add a frame axiom that all other arrays and indices are unchanged *)
+          let gens = [
+              ([Match (mk_read array_state' [arr'; idx'], [])],
+               [(mk_read array_state [arr'; idx'])]);
+              ([Match (mk_read array_state [arr'; idx'], [])],
+               [(mk_read array_state' [arr'; idx'])]); ]
+          in
+          (mk_implies (smk_or [mk_neq arr' arr; mk_neq idx' idx])
+             (mk_eq (mk_read array_state' [arr'; idx'])
+                (mk_read array_state [arr'; idx'])))
+          |> Axioms.mk_axiom ~gen:gens "array_write"
+        in
+        let f2 = (* And one that array_state(arr, idx) = rhs *)
+          mk_eq (mk_read array_state [arr; idx]) rhs
+        in
+        smk_and [f1; f2; pure] in
+      symb_exec prog flds proc (eqs, (pure, spatial)) postcond comms'
+    else
+      failwith @@ sprintf "Don't have permission for array write %s[%s]"
+                    (string_of_term arr) (string_of_term idx)
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, pp) as comm :: comms' ->
     Debug.debug (fun () ->
       sprintf "%sExecuting assignment: %d: %s%sCurrent state:\n%s\n"
@@ -621,10 +707,8 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     let (eqs', state') =
       List.combine ids ts
       |> List.fold_left (fun (eqs, state) (id, rhs) ->
-          (* First, substitute eqs on rhs *)
-          let rhs = subst_term eqs rhs in
-          (* Eval rhs in case it has field lookups *)
-          let rhs, state = eval_term flds state rhs in
+          (* First, substitute/eval/check rhs *)
+          let rhs, state = process prog flds eqs state rhs in
           let sm = IdMap.singleton id (mk_var_like id) in
           let rhs' = subst_term sm rhs in
           let (pure, spatial) = subst_state sm state in
@@ -642,8 +726,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     );
     (* First, substitute eqs and eval args *)
     let args, state = args
-      |> List.map (subst_term eqs)
-      |> fold_left_map (eval_term flds) state
+      |> fold_left_map (process prog flds eqs) state
     in
     Debug.debug (fun () -> sprintf "\nOn args: %s\n" (string_of_format pr_term_list args));
     (* Look up pre/post of foo *)
@@ -706,13 +789,12 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     symb_exec prog flds proc (eqs', state') postcond comms'
   | Basic (Assume {spec_form=FOL spec}, pp) as comm :: comms' ->
     (* Pure assume statements are just added to pure part of state *)
-    let spec = spec |> subst_form eqs in
     Debug.debug (fun () ->
       sprintf "%sExecuting assume: %d: %s%sCurrent state:\n%s\n"
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
         lineSep (string_of_eqs_state eqs state)
     );
-    let spec, (pure, spatial) = fold_map_terms (eval_term flds) state spec in
+    let spec, (pure, spatial) = fold_map_terms (process prog flds eqs) state spec in
     symb_exec prog flds proc (eqs, (smk_and [pure; spec], spatial)) postcond comms'
   | Choice (comms, _) :: comms' ->
     List.fold_left (fun errors comm ->
@@ -735,7 +817,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       | errs, _ -> errs)
     | FOL spec_form ->
       let spec_form, state =
-        spec_form |> subst_form eqs |> fold_map_terms (eval_term flds) state
+        fold_map_terms (process prog flds eqs) state spec_form
       in
       let state' = add_neq_constraints state in
       let _ = find_frame prog eqs state' (spec_form, []) in
@@ -748,6 +830,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
         lineSep (string_of_eqs_state eqs state)
     );
     (* Substitute xs for return vars in postcond and throw away rest of comms *)
+    let xs, state = fold_left_map (process prog flds eqs) state xs in
     let ret_vars = proc.proc_contract.contr_returns in
     let sm =
       List.combine ret_vars xs

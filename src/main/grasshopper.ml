@@ -120,6 +120,7 @@ let check_spl_program spl_prog proc =
   let simple_prog =
     if !Config.symbexec then
       prog
+      |> Grassifier.elim_arrays
       |> Analyzer.infer_accesses
       |> Simplifier.elim_loops
       |> Simplifier.elim_global_deps
