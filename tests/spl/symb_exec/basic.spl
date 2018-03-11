@@ -204,3 +204,21 @@ procedure split2(x: Node, y: Node)
   x.next := x;
 }
 
+
+/* Bugs to be fixed:
+
+// TODO fix this bug by also calling eval_term on loc at line 555.
+procedure boo(x: Node, y: Node)
+  requires x.next |-> y &*& y.next |-> null
+  ensures  x.next |-> y &*& y.next |-> x
+{
+  x.next.next := x;
+}
+
+// TODO fix this bug by subst_eqs while converting spec?
+procedure boo(x: Node, y: Node)
+  requires acc(x) &*& x == y &*& y.next == null
+  ensures acc(x)
+{}
+
+*/

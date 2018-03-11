@@ -70,9 +70,42 @@ procedure bar4(x: Node, y: Node)
   requires acc(x) &*& acc(y)
   ensures x.next |-> x &*& y.next |-> y
 
-procedure aafun_call4(u: Node, v: Node)
+procedure fun_call4(u: Node, v: Node)
   requires u.next |-> v &*& v.next |-> null
   ensures u.next |-> u &*& v.next |-> v
 {
   bar4(u, u.next);
 }
+
+procedure bar5(x: Node, z: Node) returns (y: Node)
+  requires x.next |-> x &*& x == z
+  ensures y.next |-> y &*& y == z
+
+procedure aafun_call5(u: Node, v: Node)
+  requires u.next |-> u &*& u == v &*& v == null
+  ensures acc(u) &*& u == v &*& v == null
+{
+  u := bar5(u, v);
+}
+
+predicate poo(x: Node)
+
+lemma lemma_1(x: Node, y: Node)
+  requires x.next |-> x &*& acc(y)
+  ensures poo(x) &*& acc(y)
+
+/* TODO
+procedure test_conj1(x: Node, y: Node, z: Node)
+  requires (y.next |-> y &*& acc(x)) && (acc(z) &*& acc(y))
+  ensures (poo(y) &*& acc(x)) && (acc(z) &*& acc(y))
+{
+  lemma_1(y, x);
+}
+
+procedure test_conj2(x: Node, y: Node, z: Node)
+  requires (y.next |-> y &*& acc(x)) && (acc(z) &*& acc(y))
+  ensures (acc(x) &*& poo(y)) && (acc(z) &*& acc(y))
+{
+  lemma_1(y, x);
+}
+*/
