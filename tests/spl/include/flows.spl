@@ -131,9 +131,22 @@ lemma lemma_decomp(x: Node, I: Interface)
   requires Gr(I) &*& x in I.FP
   ensures N(x, I1) &*& Gr(I2) &*& intComp(I1, I2) == I
 
+
 lemma lemma_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Node)
   requires intComp(I1, I2) == I && x in I1.FP && y in I1.FPo && I.FPo == {}
   ensures y in I2.FP
+
+
+lemma lemma_conc(x: Node, I: Interface)
+  requires I != intUndef
+  requires N(x, I)
+  ensures [gamma(x, I)](I)
+
+procedure lemma_abs(x: Node, I: Interface, I1: Interface)
+  requires I != intUndef && I1 != intUndef && intValid(I1)
+  requires [gamma(x, I1)](I) &*& I1.FP == {x}
+  ensures [N(x, I1)](I)
+
 
 lemma lemma_add_in(I: Interface, n: Node, In: Interface, I1: Interface)
   requires I1 == intComp(I, In) && In.FP == {n} && In.inf[n] == domZero()

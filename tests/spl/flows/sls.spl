@@ -22,17 +22,13 @@ struct Node {
 }
 
 
-/** Gamma is hardcoded into these two lemmas */
+/** Definition of good condition, gamma */
 
-procedure lemma_conc(x: Node, I: Interface)
-  returns ()
-  requires N(x, I)
-  ensures [acc(x) &*& I.inf[x].fst == 1 &*& I.inf[x].snd < x.data &*& (x.next == null && I.FPo == {} || x.next != null && I.FPo == {x.next} && I.fm[x][x.next] == pair(1, x.data))](I) &*& I.FP == {x}
-
-procedure lemma_abs(x: Node, I: Interface, I1: Interface)
-  returns ()
-  requires [acc(x) &*& I1.inf[x].fst == 1 &*& I1.inf[x].snd < x.data &*& (x.next == null && I1.FPo == {} || x.next != null && I1.FPo == {x.next} && I1.fm[x][x.next] == pair(1, x.data))](I) &*& I1.FP == {x}
-  ensures [N(x, I1)](I)
+define gamma(x, I) {
+  acc(x) &*& I.inf[x].fst == 1 &*& I.inf[x].snd < x.data
+    &*& (x.next == null && I.FPo == {}
+        || x.next != null && I.FPo == {x.next} && I.fm[x][x.next] == pair(1, x.data))
+};
 
 /** Lemmas */
 

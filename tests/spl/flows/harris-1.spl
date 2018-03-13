@@ -26,11 +26,11 @@ struct Node {
 
 /** Definition of good condition, gamma */
 
-procedure lemma_conc(x: Node, I: Interface)
-  returns ()
-  requires I != intUndef
-  requires N(x, I)
-  ensures [acc(x) &*& I.inf[x] == fd(1) &*& (x.next == null && I.FPo == {} || x.next != null && I.FPo == {x.next} && I.fm[x][x.next] == fd(1))](I) &*& I.FP == {x}
+define gamma(x, I) {
+  acc(x) &*& I.inf[x] == fd(1)
+    &*& (x.next == null && I.FPo == {}
+        || x.next != null && I.FPo == {x.next} && I.fm[x][x.next] == fd(1))
+};
 
 procedure lemma_singleton_int(x: Node, xn: Node)
   returns (I1: Interface)
@@ -40,12 +40,6 @@ procedure lemma_singleton_int(x: Node, xn: Node)
   ensures forall n: Node, n1: Node ::
     (n !in I1.FP ==> I1.inf[n] == fd(0) && I1.fm[n][n1] == fd(0))
     && (n1 !in I1.FPo ==> I1.fm[n][n1] == fd(0))
-
-procedure lemma_abs(x: Node, I: Interface, I1: Interface)
-  returns ()
-  requires I != intUndef && I1 != intUndef && intValid(I1)
-  requires [acc(x) &*& I1.inf[x] == fd(1) &*& (x.next == null && I1.FPo == {} || x.next != null && I1.FPo == {x.next} && I1.fm[x][x.next] == fd(1))](I) &*& I1.FP == {x}
-  ensures [N(x, I1)](I)
 
 
 /** Begin programs */

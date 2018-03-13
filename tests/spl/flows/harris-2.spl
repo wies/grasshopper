@@ -36,22 +36,21 @@ struct Node {
 
 /** Definition of good condition, gamma */
 
-procedure lemma_conc(x: Node, I: Interface)
-  returns ()
-  requires I != intUndef
-  requires N(x, I)
-  ensures [acc(x)](I) &*& I.FP == {x}
-  ensures I.na != markTop && (x.next.mark == (I.na != unmarked))
-    && (I.inf[x].snd >= 1 ==> I.na != unmarked)
-  ensures domLt(pair(0, 0), I.inf[x]) == true && domLeq(I.inf[x], pair(1, 1)) == true
-  ensures I.inf[x] == pair(1, 0) ==> x.fnext == null
-  ensures (x.next.ptr == null
-           && (x.fnext == null && I.FPo == {}
+define gamma(x, I) {
+  acc(x) &*& (
+          I.na != markTop && (x.next.mark == (I.na != unmarked))
+          && (I.inf[x].snd >= 1 ==> I.na != unmarked)
+          && domLt(pair(0, 0), I.inf[x]) == true && domLeq(I.inf[x], pair(1, 1)) == true
+          && (I.inf[x] == pair(1, 0) ==> x.fnext == null)
+          && (x.next.ptr == null
+             && (x.fnext == null && I.FPo == {}
               || x.fnext != null && I.FPo == {x.fnext} && I.fm[x][x.fnext] == pair(0, 1))
-           || x.next.ptr != null && I.fm[x][x.next.ptr] == pair(1, 0)
+             || x.next.ptr != null && I.fm[x][x.next.ptr] == pair(1, 0)
              && (x.fnext == null && I.FPo == {x.next.ptr}
                 || x.fnext != null && I.FPo == {x.next.ptr, x.fnext}
-                  && I.fm[x][x.fnext] == pair(0, 1)))
+                  && I.fm[x][x.fnext] == pair(0, 1)))  
+            )
+};
 
 // TODO check this doesn't introduce unsoundness
 procedure lemma_singleton_int(x: Node, xn: Node, xf: Node, pinf: FlowDom, xm: Bool, tid: Int)
@@ -68,23 +67,6 @@ procedure lemma_singleton_int(x: Node, xn: Node, xf: Node, pinf: FlowDom, xm: Bo
   ensures forall n: Node, n1: Node ::
     (n !in I1.FP ==> I1.inf[n] == domZero() && I1.fm[n][n1] == domZero())
     && (n1 !in I1.FPo ==> I1.fm[n][n1] == domZero())
-
-procedure lemma_abs(x: Node, I: Interface, I1: Interface)
-  returns ()
-  requires I != intUndef && I1 != intUndef && intValid(I1)
-  requires [acc(x)](I) &*& I1.FP == {x}
-  requires I1.na != markTop && (x.next.mark == (I1.na != unmarked))
-    && (I1.inf[x].snd >= 1 ==> I1.na != unmarked)
-  requires domLt(pair(0, 0), I1.inf[x]) == true && domLeq(I1.inf[x], pair(1, 1)) == true
-  requires I1.inf[x] == pair(1, 0) ==> x.fnext == null
-  requires (x.next.ptr == null
-           && (x.fnext == null && I1.FPo == {}
-              || x.fnext != null && I1.FPo == {x.fnext} && I1.fm[x][x.fnext] == pair(0, 1))
-           || x.next.ptr != null && I1.fm[x][x.next.ptr] == pair(1, 0)
-             && (x.fnext == null && I1.FPo == {x.next.ptr}
-                || x.fnext != null && I1.FPo == {x.next.ptr, x.fnext}
-                  && I1.fm[x][x.fnext] == pair(0, 1)))
-  ensures [N(x, I1)](I)
 
 
 /** Begin programs */
