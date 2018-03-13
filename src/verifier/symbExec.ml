@@ -334,7 +334,10 @@ let add_neq_constraints (pure, spatial) =
     let rec f acc = function
       | [] -> acc
       | (x, _) :: l ->
-        let acc = List.fold_left (fun neqs (y, _) -> mk_neq x y :: neqs) acc l in
+        let acc = List.fold_left (fun neqs (y, _) ->
+            if sort_of x = sort_of y then mk_neq x y :: neqs else neqs)
+          acc l
+        in
         f acc l
     in
     f [] allocated
