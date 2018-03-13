@@ -81,7 +81,7 @@ procedure bar5(x: Node, z: Node) returns (y: Node)
   requires x.next |-> x &*& x == z
   ensures y.next |-> y &*& y == z
 
-procedure aafun_call5(u: Node, v: Node)
+procedure fun_call5(u: Node, v: Node)
   requires u.next |-> u &*& u == v &*& v == null
   ensures acc(u) &*& u == v &*& v == null
 {
@@ -89,6 +89,29 @@ procedure aafun_call5(u: Node, v: Node)
 }
 
 predicate poo(x: Node)
+
+procedure bar6(x: Node, y: Node, z: Node)
+  requires ([acc(x)](x) && acc(y)) &*& poo(z) &*& x.data < 3
+  ensures [acc(x)](x) &*& poo(z)
+
+procedure fun_call6(u: Node, v: Node, w: Node, i: Int)
+  requires poo(w) &*& (acc(v) && [acc(u)](u)) &*& i == u.data &*& i < 2
+  ensures poo(w) &*& [acc(u)](u)
+{
+  bar6(u, v, w);
+}
+
+procedure bar7(x: Node, y: Node, z: Node)
+  requires ([acc(x)](x) && acc(y) &*& poo(z)) &*& x.data == y.data &*& x.data < 3
+  ensures [acc(x)](x) &*& poo(z)
+
+procedure fun_call7(u: Node, v: Node, w: Node, i: Int, j: Int)
+  requires (poo(w) &*& acc(v) && [acc(u)](u)) &*& i == u.data &*& i == v.data &*& i < 2
+  ensures poo(w) &*& [acc(u)](u)
+{
+  bar7(u, v, w);
+}
+
 
 lemma lemma_1(x: Node, y: Node)
   requires x.next |-> x &*& acc(y)

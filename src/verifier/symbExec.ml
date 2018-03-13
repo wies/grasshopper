@@ -317,7 +317,7 @@ let simplify eqs (pure, spatial) =
   eqs, apply_equalities eqs (pure, spatial)
 
 (** Add implicit disequalities from spatial to pure. Assumes normalized by eq. *)
-let add_neq_constraints (pure, spatial) =
+let add_neq_constraints (pure, spatial) =  (* TODO CHECK Conj case!! *)
   let allocated =
     let rec find_alloc = function
     | PointsTo (x, s, _) -> [(x, s)]
@@ -442,28 +442,20 @@ let check_pure_entail prog eqs p1 p2 =
 
 
 (** Returns (fr, inst) s.t. state1 |= state2 * fr, and
-  inst accumulates an instantiation for existential variables in state2. *)
-let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
+  inst accumulates an instantiation for existential variables in state2.
+  Assumes that both states have been normalized w.r.t eqs and inst. *)
+let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sps1) (p2, sps2) =
   Debug.debugl 1 (fun () ->
     sprintf "\nFinding frame with %s for:\n%s\n|=\n%s &*& ??\n"
       (string_of_equalities inst)
-      (string_of_spatial_pred_list sp1) (string_of_spatial_pred_list sp2)
+      (string_of_spatial_pred_list sps1) (string_of_spatial_pred_list sps2)
   );
-  match sp2 with
-  | [] ->
-    (* Check if p2 is implied by p1 *)
-    if check_pure_entail prog (IdMap.union (fun _ -> failwith "") eqs inst) p1 p2 then
-      Some (sp1, inst)
-    else None
-  | pred :: sp2' when List.exists (sort_conj >> ((=) (sort_conj pred))) sp1 ->
-    (* match and remove equal elements (for Conj, do some normalization) *)
-    let sp1a, sp1b = List.partition (sort_conj >> ((=) (sort_conj pred))) sp1 in
-    (match sp1a with
-    | [_] -> find_frame prog ~inst:inst eqs (p1, sp1b) (p2, sp2')
-    | _ -> None)
-  | PointsTo (x, _, fs2) :: sp2' ->
-    (match find_ptsto x sp1 with
-    | Some (fs1, sp1') ->
+  let match_up_sp inst sp2 sp1 =
+    match sp2, sp1 with
+    | sp2, sp1 when (sort_conj sp2) = (sort_conj sp1) ->
+      (* match equal elements (for Conj, do some normalization) *)
+      Some inst
+    | PointsTo (x, _, fs2), PointsTo (x', _, fs1) when x = x' ->
       let match_up_fields inst fs1 fs2 =
         let fs1, fs2 = List.sort compare fs1, List.sort compare fs2 in
         let rec match_up inst = function
@@ -480,6 +472,7 @@ let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
             | Var (e2_id, _) ->
               let sm = IdMap.singleton e2_id e1 in
               let fs2' = List.map (fun (f, e) -> (f, subst_term sm e)) fs2' in
+              assert (IdMap.mem e2_id inst |> not);
               match_up (IdMap.add e2_id e1 inst) (fs1', fs2')
             | _ -> None
             )
@@ -490,77 +483,53 @@ let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
         in
         match_up inst (fs1, fs2)
       in
-      (match match_up_fields inst fs1 fs2 with
-      | Some inst ->
-        let p2', sp2'' = subst_state inst (p2, sp2') in
-        find_frame prog ~inst:inst eqs (p1, sp1') (p2', sp2'')
-      | None -> None)
-    | None -> None
-    )
-  | Dirty (sp2a, ts) :: sp2b ->
-    (* Find a Dirty region in sp1 with same interface ts *)
-    let sp1a, sp1b =
-      List.partition (function | Dirty (_, ts') when ts = ts' -> true | _ -> false) sp1
-    in
-    (match sp1a with
-    | [Dirty (sp1a, _)] ->
-      (match check_entailment prog ~inst:inst eqs (mk_true, sp1a) (mk_true, sp2a) with
-      | Some inst ->
-        find_frame prog ~inst:inst eqs (p1, sp1b) (p2, sp2b)
-      | _ ->
-        failwith @@ sprintf "find_frame: couldn't match up the inside of the dirty region")
-    | _ -> todo ()
-    )
-  | Conj spss2 :: sp2b ->
-    (* Find a match for sps2 inside spss1, with spss1a used as accumulator. *)
-    let rec find_conjunct inst sps2 spss1a spss1 =
-      printf "\nTrying to match %s\n" (string_of_spatial_pred_list sps2);
-      match spss1 with
-      | sps1 :: spss1b ->
-        printf "  with %s\n" (string_of_spatial_pred_list sps1);
-        (match check_entailment prog ~inst:inst eqs (mk_true, sps1) (mk_true, sps2) with
-        | Some inst -> Some (spss1a @ spss1b, inst)
-        | _ -> find_conjunct inst sps2 (sps1 :: spss1a) spss1b)
-      | [] -> None
-    in
-    (* Take every conjunct in spss2 and try to match with some conjunct in spss1 *)
-    let rec try_match_conj inst spss1 = function
-      | sps2 :: spss2 ->
-        (match find_conjunct inst sps2 [] spss1 with
-        | Some (spss1', inst) ->
-          try_match_conj inst spss1' spss2
-        | None -> None)
-      | [] ->
-        (match spss1 with (* Only allow when spss1 and spss2 are same len. TODO?!?! *)
-        | [] -> Some inst
-        | _ -> None)
-    in
-    (* Try to find a Conj in sp1 that matches with (Conj sp2as) *)
-    let rec find_conj sp1a = function
-      | [] -> None
-      | Conj spss1 :: sp1b ->
-        (match try_match_conj inst spss1 spss2 with
-        | Some inst ->
-          find_frame prog ~inst:inst eqs (p1, sp1a @ sp1b) (p2, sp2b)
-        | None ->
-          find_conj (Conj spss1 :: sp1a) sp1b)
-      | sp1 :: sp1b -> find_conj (sp1 :: sp1a) sp1b
-    in
-    find_conj [] sp1
-  | _ ->
-    None
+      match_up_fields inst fs1 fs2
+    | Dirty (sp2a, ts), Dirty (sp1a, ts') when ts = ts' ->
+      check_entailment prog ~inst:inst eqs (mk_true, sp1a) (mk_true, sp2a)
+    | Conj spss2, Conj spss1 ->
+      let match_up_conjunct inst sps2 sps1 =
+        check_entailment prog ~inst:inst eqs (mk_true, sps1) (mk_true, sps2)
+      in
+      let match_up_conj inst spss2 spss1 =
+        List.fold_left (fun acc sps2 ->
+          match acc with
+          | Some (inst, spss1) ->
+            find_map_res (match_up_conjunct inst sps2) spss1
+          | None -> None)
+          (Some (inst, spss1)) spss2
+      in
+      (match match_up_conj inst spss2 spss1 with
+      | Some (inst, []) -> Some inst (* Only allow when spss1 and spss2 are same len. TODO?!?! *)
+      | _ -> None)
+    | _ -> None
+  in
+  match sps2 with
+  | [] ->
+    (* Check if p2 is implied by p1 *)
+    if check_pure_entail prog (IdMap.union (fun _ -> failwith "") eqs inst) p1 p2 then
+      Some (sps1, inst)
+    else None
+  | sp2 :: sps2' ->
+    (match find_map_res (match_up_sp inst sp2) sps1 with
+    | Some (inst, sps1') ->
+      let p2, sps2 = subst_state inst (p2, sps2') in
+      find_frame prog ~inst:inst eqs (p1, sps1') (p2, sps2)
+    | None -> None)
 
 (** Returns [Some inst] if [(p1, sp1)] |= [(p2, sp2)], else None. *)
 and check_entailment prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
   let eqs, (p1, sp1) = simplify eqs (p1, sp1) in
-  let (p2, sp2) = apply_equalities eqs (p2, sp2) |> remove_useless_existentials in
+  let (p2, sp2) =
+    (p2, sp2)
+    |> apply_equalities eqs |> apply_equalities inst |> remove_useless_existentials
+  in
   Debug.debug (fun () ->
     sprintf "\nChecking entailment:\n%s\n|=\n%s\n"
       (string_of_eqs_state eqs (p1, sp1)) (string_of_state (p2, sp2))
   );
 
   (* Check if find_frame returns empt *)
-  match find_frame prog eqs (p1, sp1) (p2, sp2) with
+  match find_frame ~inst:inst prog eqs (p1, sp1) (p2, sp2) with
   | Some ([], inst) -> Some inst
   | _ -> None
 
@@ -869,7 +838,6 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     | SL _ ->
       let spec_st = state_of_spec_list flds [spec] in
       let state' = add_neq_constraints state in
-      let _ = find_frame prog eqs state' spec_st in
       (match check_entailment prog eqs state' spec_st with
       | Some _ ->
         symb_exec prog flds proc (eqs, state) postcond comms'

@@ -1,0 +1,17 @@
+struct Node {
+  var next: Node;
+  var data: Int;
+}
+
+predicate poo(x: Node)
+
+procedure bar(x: Node, y: Node, z: Node)
+  requires ([acc(x)](x) && acc(y)) &*& poo(z) &*& x.data == y.data &*& x.data < 3
+  ensures [acc(x)](x) &*& poo(z)
+
+procedure fun_call(u: Node, v: Node, w: Node, i: Int, j: Int)
+  requires poo(w) &*& (acc(v) && [acc(u)](u)) &*& i == u.data &*& j == v.data &*& i < 2
+  ensures poo(w) &*& [acc(u)](u)
+{
+  bar(u, v, w);
+}

@@ -118,6 +118,19 @@ let rec find_map fn = function
       | None -> find_map fn xs
       | v -> v
 
+(** Returns [Some (res, xs')] if [xs] can be re-arranged as [x :: xs'] and [fn x] = [Some res].
+  Else returns [None].
+  Note: this does not preserve order of elements in [xs]! *)
+let rec find_map_res fn xs =
+  let rec fmr xs1 = function
+    | [] -> None
+    | x :: xs ->
+        match fn x with
+        | None -> fmr (x :: xs1) xs
+        | Some v -> Some (v, xs1 @ xs)
+  in
+  fmr [] xs
+
 let flat_map f ls = List.flatten (List.map f ls)
 
 let find_index elt ls =
