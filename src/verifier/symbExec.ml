@@ -72,7 +72,7 @@ let string_of_state ((pure, spatial): state) =
   in
   let pure = pure
     |> filter_annotations (fun _ -> false)
-    |> string_of_form 
+    |> string_of_form
     (* |> String.map (function | '\n' -> ' ' | c -> c) *)
   in
   sprintf "Pure: %s\nSpatial: %s" pure spatial
@@ -99,7 +99,7 @@ let state_of_spec_list fields specs : state =
   let reads = ref TermMap.empty in
   let rec convert_term = function
     | Var _ as t -> t
-    | App (Read, [App (FreeSym fld, [], _); loc], srt) 
+    | App (Read, [App (FreeSym fld, [], _); loc], srt)
         when IdSet.mem fld fields -> (* loc.fld *)
       let loc = convert_term loc in
       if (TermMap.mem loc !reads |> not) then begin
@@ -228,7 +228,7 @@ let rec subst_spatial_pred sm = function
   TODO check this preserves equalities invariant! *)
 let subst_eqs sm eqs =
   eqs |> IdMap.bindings
-  |> List.fold_left (fun eqs (id, t) -> 
+  |> List.fold_left (fun eqs (id, t) ->
     let t' = subst_term sm t in
     match IdMap.find_opt id sm with
     | Some (Var (id', _))
@@ -237,7 +237,7 @@ let subst_eqs sm eqs =
     | _ -> failwith "huh?"
   ) IdMap.empty
 
-(** Substitute all variables and constants in state [(pure, spatial)] with terms 
+(** Substitute all variables and constants in state [(pure, spatial)] with terms
   according to substitution map [sm].
   This operation is not capture avoiding. *)
 let subst_state sm ((pure, spatial): state) : state =
@@ -362,35 +362,60 @@ let find_ptsto loc spatial =
       (sp1 |> List.map string_of_spatial_pred |> String.concat " &*& ")
 
 (** Finds a points-to predicate at location [loc] in [spatial], including in dirty regions.
-  If found, returns [(Some fs, repl_fn)] such that
+  If found, returns [(Some fs, repl_fn_rd, repl_fn_wr)] such that
   [loc] |-> [fs] appears in [spatial]
-  and [repl_fn fs'] returns [spatial] with [fs] replaced by [fs'] *)
+  [repl_fn_rd fs'] returns [spatial] with [fs] replaced by [fs']
+  and [repl_fn_wr fs'] returns [spatial] with [fs] replaced by [fs'],
+    but if [fs] appears in a Conj, then it drops all other conjuncts *)
 let rec find_ptsto_dirty loc spatial =
   match spatial with
-  | [] -> None, (fun fs' -> spatial)
+  | [] ->
+    let repl_fn = (fun fs' -> spatial) in
+    None, repl_fn, repl_fn
   | PointsTo (x, s, fs) :: spatial' when x = loc ->
-    Some fs, (fun fs' -> PointsTo (x, s, fs') :: spatial')
+    let repl_fn = (fun fs' -> PointsTo (x, s, fs') :: spatial') in
+    Some fs, repl_fn, repl_fn
   | Dirty (f, ts) as sp :: spatial' ->
-    let res, repl_fn = find_ptsto_dirty loc f in
-    (match res with
-    | Some fs -> Some fs, (fun fs' -> Dirty (repl_fn fs', ts) :: spatial')
-    | None -> 
-      let res, repl_fn = find_ptsto_dirty loc spatial' in
-      res, (fun fs' -> sp :: repl_fn fs')
+    (match find_ptsto_dirty loc f with
+    | Some fs, repl_fn_rd, repl_fn_wr  ->
+      let repl_fn_rd = (fun fs' -> Dirty (repl_fn_rd fs', ts) :: spatial') in
+      let repl_fn_wr = (fun fs' -> Dirty (repl_fn_wr fs', ts) :: spatial') in
+      Some fs, repl_fn_rd, repl_fn_wr
+    | None, _, _ ->
+      let res, repl_fn_rd, repl_fn_wr = find_ptsto_dirty loc spatial' in
+      res, (fun fs' -> sp :: repl_fn_rd fs'), (fun fs' -> sp :: repl_fn_wr fs')
+    )
+  | Conj spss as sp :: spatial' ->
+    let rec find_conj spss1 = function
+      | sps :: spss2 ->
+        (match find_ptsto_dirty loc sps with
+        | Some fs, repl_fn_rd, repl_fn_wr ->
+          let repl_fn_rd = (fun fs' -> Conj (repl_fn_rd fs' :: spss1 @ spss2) :: spatial') in
+          let repl_fn_wr = (fun fs' -> repl_fn_wr fs' @ spatial') in
+          Some fs, repl_fn_rd, repl_fn_wr
+        | None, _, _ ->
+          find_conj (sps :: spss1) spss2)
+      | [] -> todo ()
+    in
+    (match find_conj [] spss with
+    | Some _, _, _ as res -> res
+    | None, _, _ ->
+      let res, repl_fn_rd, repl_fn_wr = find_ptsto_dirty loc spatial' in
+      res, (fun fs' -> sp :: repl_fn_rd fs'), (fun fs' -> sp :: repl_fn_wr fs')
     )
   | sp :: spatial' ->
-    let res, repl_fn = find_ptsto_dirty loc spatial' in
-    res, (fun fs' -> sp :: repl_fn fs')
+    let res, repl_fn_rd, repl_fn_wr = find_ptsto_dirty loc spatial' in
+    res, (fun fs' -> sp :: repl_fn_rd fs'), (fun fs' -> sp :: repl_fn_wr fs')
 
 let check_pure_entail prog eqs p1 p2 =
   let (p2, _) = apply_equalities eqs (p2, []) in
   if p1 = p2 || p2 = mk_true then true
   else (* Dump it to an SMT solver *)
     let axioms =  (* Collect all program axioms *)
-      Util.flat_map 
-        (fun sf -> 
-          let name = 
-            Printf.sprintf "%s_%d_%d" 
+      Util.flat_map
+        (fun sf ->
+          let name =
+            Printf.sprintf "%s_%d_%d"
               sf.spec_name sf.spec_pos.sp_start_line sf.spec_pos.sp_start_col
           in
           match sf.spec_form with FOL f -> [mk_name name f] | SL _ -> [])
@@ -407,7 +432,7 @@ let check_pure_entail prog eqs p1 p2 =
       (* Add axioms *)
       |> (fun f -> smk_and (f :: axioms))
       (* Add labels *)
-      |> Verifier.add_labels 
+      |> Verifier.add_labels
     in
     let name = fresh_ident "form" |> string_of_ident in
     Debug.debug (fun () ->
@@ -519,7 +544,7 @@ let find_frame_conj prog eqs (pure, spatial) state2 =
     | [] -> None
     | sps :: spss ->
       (match find_frame_opt prog eqs (pure, sps) state2 with
-      | Some (frame, _) -> 
+      | Some (frame, _) ->
         Some (fun sm foo_post ->
           let frame = List.map (subst_spatial_pred sm) frame in
           let spss = List.map (List.map (subst_spatial_pred sm)) spss in
@@ -562,7 +587,7 @@ let rec eval_term fields state = function
       when IdSet.mem fld fields ->
     let loc, state = eval_term fields state loc in
     (match find_ptsto_dirty loc (snd state) with
-    | Some fs, mk_spatial' ->
+    | Some fs, mk_spatial', _ ->
       (* lookup fld in fs, so that loc |-> fs' and (fld, e) is in fs' *)
       let e, fs' =
         try List.assoc fld fs, fs
@@ -570,7 +595,7 @@ let rec eval_term fields state = function
       in
       let spatial' = mk_spatial' fs' in
       e, (fst state, spatial')
-    | None, _ -> failwith "Invalid lookup"
+    | None, _, _ -> failwith "Invalid lookup"
     )
   | App (Write, _, _) as t ->
     failwith @@ "eval_term called on write " ^ (string_of_term t)
@@ -581,15 +606,12 @@ let rec eval_term fields state = function
 
 (** Check that we have permission to the array, and that index is in bounds *)
 let have_array_acc prog eqs (pure, spatial) arr idx =
-  let is_ptsto loc = function
-    | PointsTo (x, _, []) -> x = loc
-    | PointsTo _ | Pred _ | Dirty _ | Conj _-> false
-  in
-  match List.find_opt (is_ptsto arr) spatial with
-  | Some _ ->
+  match find_ptsto_dirty arr spatial with
+  | Some _, _, _ ->
      let idx_in_bds = smk_and [(mk_leq (mk_int 0) idx); (mk_lt idx (mk_length arr))] in
+     Debug.debug (fun () -> "\n\nChecking array index is in bounds:\n");
      check_pure_entail prog eqs pure idx_in_bds
-  | None -> false
+  | None, _, _ -> false
 
 
 (** Check that all array read terms in [t] are safe on state [state] *)
@@ -635,7 +657,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     let state = add_neq_constraints state in
     check_entailment prog eqs state postcond |> fst
   | Basic (Assign {assign_lhs=[fld];
-        assign_rhs=[App (Write, [App (FreeSym fld', [], _); 
+        assign_rhs=[App (Write, [App (FreeSym fld', [], _);
           App (FreeSym _, [], _) as loc; rhs], srt)]}, pp) as comm :: comms'
       when fld = fld' ->
     Debug.debug (fun () ->
@@ -648,7 +670,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     let rhs, (pure, spatial) = process prog flds eqs state rhs in
     (* Find the node to mutate *)
     (match find_ptsto_dirty loc spatial with
-    | Some fs, mk_spatial' ->
+    | Some fs, _, mk_spatial' ->
       (* mutate fs to fs' so that it contains (fld, rhs) *)
       let fs' =
         if List.exists (fst >> (=) fld) fs
@@ -656,7 +678,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
         else (fld, rhs) :: fs
       in
       symb_exec prog flds proc (eqs, (pure, mk_spatial' fs')) postcond comms'
-    | None, _ -> failwith @@ "Write to invalid location: " ^ (string_of_term loc))
+    | None, _, _ -> failwith @@ "Write to invalid location: " ^ (string_of_term loc))
   | Basic (Assign {assign_lhs=[f];
         assign_rhs=[App (Write, [array_state; arr; idx; rhs], srt)]}, pp) as comm :: comms'
       when array_state = (Grassifier.array_state true (sort_of rhs)) ->
@@ -785,7 +807,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
         lineSep (string_of_eqs_state eqs state)
     );
     let sm =
-      List.fold_left (fun sm v -> IdMap.add v (mk_var_like v) sm) 
+      List.fold_left (fun sm v -> IdMap.add v (mk_var_like v) sm)
         IdMap.empty vars
     in
     let eqs', state' = (subst_eqs sm eqs, subst_state sm state) in
