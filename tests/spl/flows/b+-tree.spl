@@ -16,6 +16,7 @@ function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 function domZero() returns(p: FlowDom) { fd({}) }
 
 datatype LockInfo = unlocked | locked(tid: Int) | dirtylock(dtid: Int);
+// TODO just use locked, since we can use conjunction to say gamma is satisfied?
 
 datatype NodeDom = nd(contents: Set<Int>, lockinfo: Set<LockInfo>);
 // TODO can do with LockInfo instead of Set<LockInfo>?
@@ -39,44 +40,41 @@ struct Node {
 /** Definition of good condition, gamma */
 
 define gammaG(x, I) {
-  acc(x)
-    &*& (I.inf[x] == fd({k: Int :: x.rangeLb <= k && k < x.rangeUb}))
+  0 <= x.len && x.len < x.keys.length && x.len < x.ptrs.length
+    && (forall k: Int :: k in I.inf[x].ks == (x.rangeLb <= k && k < x.rangeUb))
+    && (forall i: Int :: 0 < i && i < x.len ==> x.keys[i-1] < x.keys[i])
+    && (x.ptrs[0] == null && I.FPo == {}  // Leaf
+       && (forall i: Int :: 0 <= i && i < x.ptrs.length ==> x.ptrs[i] == null)
+       || x.ptrs[0] != null  // Internal
+       && (forall i: Int, k: Int :: 0 <= i && i <= x.len ==> x.ptrs[i] != null && x.ptrs[i] in I.FPo
+          && (k in I.fm[x][x.ptrs[i]].ks == ((i == 0 || x.keys[i-1] <= k) && (i == x.len || k < x.keys[i])))))
 };
 
-predicate gammaB(x: Node, I: Interface)
+define gammaB(x, I) { true };
 
-
-procedure lemma_conc(x: Node, I: Interface)
-  returns ()
-  requires I != intUndef
-  requires N(x, I)
-  ensures [gammaG(x, I)](I) &*& I.FP == {x}
-  ensures forall k: Int :: k in I.na.contents ==> k in I.inf[x].ks
-  ensures forall k: Int, y: Node :: k !in I.na.contents || k !in I.fm[x][y].ks
-  ensures forall k: Int, y: Node, z: Node :: k !in I.fm[x][y].ks || k !in I.fm[x][z].ks
-
-procedure lemma_abs(x: Node, I: Interface, I1: Interface)
-  returns ()
-  requires I != intUndef && I1 != intUndef && intValid(I1)
-  requires [gammaG(x, I1)](I) &*& I1.FP == {x}
-  requires forall k: Int :: k in I1.na.contents ==> k in I1.inf[x].ks
-  requires forall k: Int, y: Node :: k !in I1.na.contents || k !in I1.fm[x][y].ks
-  requires forall k: Int, y: Node, z: Node :: k !in I1.fm[x][y].ks || k !in I1.fm[x][z].ks
-  ensures [N(x, I1)](I)
+define gamma(x, I) {
+  acc(x) &*& acc(x.keys) &*& acc(x.ptrs)
+    &*& ((gammaG(x, I) && I.na.lockinfo == {locked(TID)}
+         || gammaB(x, I) && I.na.lockinfo == {dirtylock(TID)})
+/* Should we prove the above implies these? Or at least not unsat? */
+       && (forall k: Int :: k in I.na.contents ==> k in I.inf[x].ks)
+       && (forall k: Int, y: Node :: k !in I.na.contents || k !in I.fm[x][y].ks)
+       && (forall k: Int, y: Node, z: Node :: y == z || k !in I.fm[x][y].ks || k !in I.fm[x][z].ks))
+};
 
 
 /** Begin programs */
 
 var TID: Int;
 
+var r: Node;
+axiom r != null; // TODO move to intValid. Should follow from r in I.FP
+
 
 define globalInt(I) {
   intValid(I) == true && r in I.FP && (forall k: Int :: k in I.inf[r].ks)
   && (forall n: Node :: n != r ==> I.inf[n] == domZero()) && I.FPo == {}
 };
-
-var r: Node;
-axiom r != null; // TODO move to intValid. Should follow from r in I.FP
 
 
 procedure inRange(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
@@ -90,19 +88,18 @@ procedure inRange(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
 {
   lemma_conc(x, Ix);
 
-  if (k >= x.keys[0]) {
-    return true;
-  }
-
-/*
   var res1 := x.rangeLb <= k;
+  // TODO re-use stability proofs from give-up.spl here
   var res2 := x.rangeUb > k;
+
+  lemma_abs(x, Ix, Ix);
+  lemma_int_leq_fold(Ix, Ix);
+  sync(Ix, Ix);
 
   if (res1 && res2)
     return true;
   else
     return false;
-*/
 }
 
 
@@ -116,3 +113,34 @@ procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   ensures intComp(Ix, I2) == I && globalInt(I)
   ensures (n != null && k in Ix.fm[x][n].ks
            || n == null && (forall y: Node :: k !in Ix.fm[x][y].ks))
+{
+  lemma_N_is_conj(x, Ix);
+  
+  if (x.ptrs[0] == null) {  // Leaf node
+    lemma_conj_is_N(x, Ix);
+    lemma_int_valid_unfold(Ix);
+    pure assert false;
+    return null;
+  }
+
+  var i := 0;
+  var flag := true;
+
+  while (flag)
+    invariant (N(x, Ix) && [gamma(x, Ix)](Ix)) &*& Gr(I2)
+    invariant intValid(Ix) == true && intValid(I2) == true
+    invariant intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == {locked(TID)}
+    invariant !flag ==> (i >= x.len || k < x.keys[i])
+    invariant (i == 0 || x.keys[i-1] <= k) && 0 <= i && i <= x.len
+  {
+    if (i < x.len && x.keys[i] <= k) {
+      i := i + 1;
+    } else {
+      flag := false;
+    }
+  }
+
+  n := x.ptrs[i];
+  lemma_conj_is_N(x, Ix);
+  // return n;
+}

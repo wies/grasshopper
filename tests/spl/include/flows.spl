@@ -169,6 +169,14 @@ lemma lemma_repl(I: Interface, Ix: Interface, Iy: Interface, Ix1: Interface, I1:
   requires I == intComp(Ix, Iy) && I1 == intComp(Ix1, Iy) && intLeq(Ix, Ix1) == true
   ensures intLeq(I, I1) == true
 
+lemma lemma_N_is_conj(x: Node, Ix: Interface)
+  requires N(x, Ix)
+  ensures N(x, Ix) && [gamma(x, Ix)](Ix)
+
+lemma lemma_conj_is_N(x: Node, Ix: Interface)
+  requires N(x, Ix) && [gamma(x, Ix)](Ix)
+  ensures N(x, Ix)
+
 lemma lemma_Gr_comp_uniq(I: Interface, I1: Interface, I2: Interface)
   requires Gr(I) && (Gr(I1) &*& Gr(I2))
   ensures Gr(I1) &*& Gr(I2) &*& I == intComp(I1, I2)
