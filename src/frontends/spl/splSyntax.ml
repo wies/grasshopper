@@ -30,6 +30,26 @@ type var_decl_id =
   | IdentDecl of ident
   | ArrayDecl of var_decl_id
 
+type spl_program = 
+    { modules: (name * pos) list;
+    }
+
+and spl_module = 
+    { spl_module_name: ident;
+      includes: (name * pos) list;
+      type_decls: typedecls;
+      var_decls: vars;
+      proc_decls: procs;
+      pred_decls: preds;
+      fun_decls: fundecls;
+      macro_decls: macros;
+      background_theory: (expr * pos) list; 
+    }
+
+and spl_modules = spl_module list
+
+(* keeping this for reference purposes for now *)
+(*
 type spl_program =
     { includes: (name * pos) list;
       type_decls: typedecls;
@@ -40,6 +60,7 @@ type spl_program =
       macro_decls: macros;
       background_theory: (expr * pos) list; 
     }
+*)
 
 and decl =
   | TypeDecl of typedecl
