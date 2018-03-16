@@ -46,7 +46,7 @@ and spl_module =
       background_theory: (expr * pos) list; 
     }
 
-and spl_modules = spl_module list
+and spl_modules = spl_module IdMap.t
 
 (* keeping this for reference purposes for now *)
 (*
