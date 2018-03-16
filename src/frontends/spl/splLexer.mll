@@ -66,6 +66,8 @@ let _ =
       ("axiom", AXIOM);
       ("int2byte", INT2BYTE);
       ("byte2int", BYTE2INT);
+      ("module", MODULE);
+      ("open", OPEN);
    ])
 
 let lexical_error lexbuf msg =
