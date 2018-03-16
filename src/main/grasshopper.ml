@@ -201,6 +201,8 @@ let _ =
       let spl_prog = parse_spl_program !main_file in
       if !Config.simplify then
         SplSyntax.print_cu stdout spl_prog
+      (* commenting this out for now *)
+      (*
       else begin
         let res = check_spl_program spl_prog !Config.procedure in
         print_stats start_time; 
@@ -208,6 +210,7 @@ let _ =
         if !Config.verify && res then
           Debug.info (fun () -> "Program successfully verified.\n")
       end
+  	  *)
     end
   with  
   | Sys_error s -> 
