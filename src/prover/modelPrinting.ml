@@ -487,7 +487,7 @@ let print_graph output chan model terms =
     | BaseVal v -> Format.fprintf ppf "%s" (string_of_value v)
     | MapVal (m, d) -> Format.fprintf ppf "Map<TODO>"
     | SetVal s -> Format.fprintf ppf "Set<TODO>"
-    | TermVal (vs, t) -> Format.fprintf ppf "Term<TODO>"
+    | TermVal (vs, t) -> Grass.pr_term ppf t
     | FormVal (vs, t) -> Format.fprintf ppf "Form<TODO>"
     | Undef -> Format.fprintf ppf "Undef"
   and pr_sorted_value ppf (term, srt) =

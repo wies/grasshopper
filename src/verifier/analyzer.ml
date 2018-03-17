@@ -86,13 +86,19 @@ let infer_accesses prog =
           not (IdSet.subset mods pp.pp_modifies) ||  
           not (IdSet.subset accs pp.pp_accesses)
         in
+        let cc1 =
+          { cc with
+            call_modifies = mods;
+            call_accesses = accs;
+          }
+        in
         let pp1 =
           { pp with
             pp_modifies = mods;
             pp_accesses = accs;
           }
         in
-        has_new, fps, Basic (Call cc, pp1)
+        has_new, fps, Basic (Call cc1, pp1)
     | Basic(bc, _) as c ->  false, footprint_sorts_basic_cmd prog bc, c
   in
   let pm_pred prog pred =

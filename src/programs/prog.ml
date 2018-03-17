@@ -68,6 +68,8 @@ type call_command = {
     call_lhs: ident list; (** x_1,...,x_n *)
     call_name: ident; (** p *)
     call_args: term list; (** e_1,...,e_m *)
+    call_modifies: IdSet.t;
+    call_accesses: IdSet.t;
   } 
 
 (** Return from procedure *)
@@ -601,7 +603,8 @@ let modifies_basic_cmd = function
         (fun mods srt -> IdSet.add (alloc_id srt) mods)
         (IdSet.singleton nc.new_lhs)
         struct_sorts
-  | Call cc -> id_set_of_list cc.call_lhs
+  | Call cc ->
+      IdSet.union (id_set_of_list cc.call_lhs) cc.call_modifies
   | Dispose dc ->
       let struct_sorts =
         match sort_of dc.dispose_arg with
@@ -671,7 +674,8 @@ let accesses_basic_cmd = function
   | Assert sf
   | Split sf -> accesses_spec_form sf
   | Return rc -> List.fold_left free_symbols_term_acc IdSet.empty rc.return_args
-  | Call cc -> 
+  | Call cc ->
+      IdSet.union cc.call_accesses @@
       List.fold_left
         free_symbols_term_acc (id_set_of_list (cc.call_name :: cc.call_lhs)) cc.call_args
 
@@ -779,7 +783,14 @@ let mk_return_cmd args pos =
   mk_basic_cmd (Return rc) pos
 
 let mk_call_cmd ?(prog=None) lhs name args pos =
-  let cc = {call_lhs = lhs; call_name = name; call_args = args} in
+  let cc =
+    { call_lhs = lhs;
+      call_name = name;
+      call_args = args;
+      call_modifies = IdSet.empty;
+      call_accesses = IdSet.empty
+    }
+  in
   let accs = accesses_basic_cmd (Call cc) in
   let mods = modifies_basic_cmd (Call cc) in
   let pp = mk_ppoint pos in

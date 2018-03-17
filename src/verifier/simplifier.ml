@@ -456,7 +456,7 @@ let elim_state prog =
                   sm1 sm2
               )
               IdMap.empty sms
-          in
+          in          
           (* add missing equalities to commands cs according to joined substitution map *)
           let cs2 =
             List.fold_right2 (fun sm_c c cs2 ->
