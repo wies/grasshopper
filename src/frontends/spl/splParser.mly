@@ -122,15 +122,15 @@ declarations:
 ;
 
 include_cmd:
-| INCLUDE STRINGVAL SEMICOLON { $2 }
+| INCLUDE STRINGVAL semicolon_opt { $2 }
 ;
   
 background_th:
-| AXIOM expr SEMICOLON { $2 }
+| AXIOM expr semicolon_opt { $2 }
 ;
   
 type_decl:
-| TYPE IDENT SEMICOLON {
+| TYPE IDENT semicolon_opt {
   { t_name = $2;
     t_def = FreeTypeDef;
     t_pos = mk_position 2 2 }
@@ -150,7 +150,7 @@ ident_list:
 ;
 
 macro_decl:
-| DEFINE IDENT LPAREN ident_list_opt RPAREN LBRACE expr RBRACE SEMICOLON {
+| DEFINE IDENT LPAREN ident_list_opt RPAREN LBRACE expr RBRACE {
   { m_name = $2;
     m_args = $4;
     m_body = $7;
@@ -489,11 +489,11 @@ stmt_wo_trailing_substmt:
 }
 /* assume */
 | contract_mods ASSUME expr SEMICOLON {
-  Assume ($3, fst $1, mk_position 1 4)
+  Assume ($3, fst $1, mk_position (if $1 <> (false, false) then 1 else 2) 4)
 }
 /* assert */
 | contract_mods ASSERT expr SEMICOLON { 
-  Assert ($3, fst $1, mk_position 1 4)
+  Assert ($3, fst $1, mk_position (if $1 <> (false, false) then 1 else 2) 4)
 }
 /* split */
 | SPLIT expr SEMICOLON { 
