@@ -106,6 +106,19 @@ let infer_accesses prog =
       process_spec_forms prog
         (Opt.to_list pred.pred_body @ pred.pred_contract.contr_precond @ pred.pred_contract.contr_postcond)
     in
+    let fps = SortSet.union fps (footprint_sorts_pred pred) in
+    (* missing body? assume worst case *)
+    let accs =
+      match pred.pred_body with
+      | None ->
+          IdMap.fold
+            (fun id decl accs ->
+              match decl.var_sort with
+              | Map (Loc _ :: _, _) -> IdSet.add id accs
+              | _ -> accs)
+            prog.prog_vars accs
+      | Some _ -> accs
+    in
     let global_accs = 
       IdSet.filter
         (fun id ->
@@ -114,7 +127,6 @@ let infer_accesses prog =
           IdMap.mem id prog.prog_procs
         ) accs
     in
-    let fps = SortSet.union fps (footprint_sorts_pred pred) in
     not (IdSet.subset global_accs pred.pred_accesses) ||
     not (SortSet.subset fps (footprint_sorts_pred pred)),
     { pred with

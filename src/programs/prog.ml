@@ -436,10 +436,11 @@ let is_pure_spec sf =
   | _ -> false
 
 let is_pure_pred pred =
-  List.for_all is_pure_spec (Opt.to_list pred.pred_body @ precond_of_pred pred)
+  List.for_all is_pure_spec (Opt.to_list pred.pred_body @ precond_of_pred pred) &&
+  (pred.pred_body <> None || pred.pred_contract.contr_returns <> [])
 
 let is_sl_pred pred =
-  not (Opt.get_or_else true (Opt.map is_pure_spec pred.pred_body))
+  not (Opt.get_or_else (pred.pred_contract.contr_returns <> []) (Opt.map is_pure_spec pred.pred_body))
         
 let form_of_spec sf =
   match sf.spec_form with
@@ -741,7 +742,8 @@ let footprint_sorts_basic_cmd prog = function
   | Call cc ->
       let decl = find_proc prog cc.call_name in
       List.fold_left (footprint_sorts_term_acc prog) (footprint_sorts_proc decl) cc.call_args
-      
+
+        
 (** Smart constructors for commands *)
 
 let mk_basic_cmd bcmd pos =

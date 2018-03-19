@@ -516,8 +516,7 @@ let add_frame_axioms prog =
               fp_func_axiom_name
               (mk_sequent
                 (args_are_equal @ loc_fields_modified @ fps_in_frame)
-                (List.combine old_fp_terms new_fp_terms
-                  |> List.map (fun (t1, t2) -> mk_eq t1 t2)))
+                 [mk_and (List.combine old_fp_terms new_fp_terms |> List.map (fun (t1, t2) -> mk_eq t1 t2))])
             |> add_frame_pattern
           in
           (*Debug.debug (fun () -> name);
@@ -999,8 +998,7 @@ let elim_sl prog =
                              (mk_free_const srt fld)) ::
             frames
           )
-          all_fields
-          []
+          all_fields []
       in
       final_footprint_caller_postconds @ final_null_alloc @ frame_preds
     in
@@ -1214,7 +1212,7 @@ let elim_sl prog =
     in
     (* Add functions for the footprints *)
     let preds =
-      if is_pure_pred pred1
+      if not (is_pure_pred pred)
       then
         (* Only add for predicates, not for functions *)
         make_fp_funcs pred pred1
