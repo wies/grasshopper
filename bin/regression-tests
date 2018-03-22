@@ -2,76 +2,79 @@
 
 source bin/osx_gnu.sh
 
+# Format: <test name> <spl file> <options> <expected result>
 TESTS="
-soudness0               tests/spl/soundness/soundness0.spl      fail
-soudness1               tests/spl/soundness/soundness1.spl      fail
-soudness2               tests/spl/soundness/soundness2.spl      fail
-soudness3               tests/spl/soundness/soundness3.spl      fail
-soudness5               tests/spl/soundness/soundness5.spl      fail
-soudness7               tests/spl/soundness/soundness7.spl      fail
-soudness8               tests/spl/soundness/soundness8.spl      fail
-sl_traverse             tests/spl/sl/sl_traverse.spl            pass
-sl_dispose              tests/spl/sl/sl_dispose.spl             pass
-sl_copy                 tests/spl/sl/sl_copy.spl                pass
-sl_reverse              tests/spl/sl/sl_reverse.spl             pass
-sl_concat               tests/spl/sl/sl_concat.spl              pass
-sl_filter               tests/spl/sl/sl_filter.spl              pass
-sl_remove               tests/spl/sl/sl_remove.spl              pass
-sl_insert               tests/spl/sl/sl_insert.spl              pass
-recursive_traverse      tests/spl/sl/rec_traverse.spl           pass
-recursive_dispose       tests/spl/sl/rec_dispose.spl            pass
-recursive_copy          tests/spl/sl/rec_copy.spl               pass
-recursive_reverse       tests/spl/sl/rec_reverse.spl            pass
-recursive_concat        tests/spl/sl/rec_concat.spl             pass
-recursive_filter        tests/spl/sl/rec_filter.spl             pass
-recursive_remove        tests/spl/sl/rec_remove.spl             pass
-recursive_insert        tests/spl/sl/rec_insert.spl             pass
-dl_traverse             tests/spl/dl/dl_traverse.spl            pass
-dl_dispose              tests/spl/dl/dl_dispose.spl             pass
-dl_copy                 tests/spl/dl/dl_copy.spl                pass
-dl_reverse              tests/spl/dl/dl_reverse.spl             pass
-dl_concat               tests/spl/dl/dl_concat.spl              pass
-dl_filter               tests/spl/dl/dl_filter.spl              pass
-dl_remove               tests/spl/dl/dl_remove.spl              pass
-dl_insert               tests/spl/dl/dl_insert.spl              pass
-sls_traverse            tests/spl/sls/sls_traverse.spl          pass
-sls_dispose             tests/spl/sls/sls_dispose.spl           pass
-sls_copy                tests/spl/sls/sls_copy.spl              pass
-sls_reverse             tests/spl/sls/sls_reverse.spl           pass
-sls_concat              tests/spl/sls/sls_concat.spl            pass
-sls_filter              tests/spl/sls/sls_filter.spl            pass
-sls_remove              tests/spl/sls/sls_remove.spl            pass
-sls_insert              tests/spl/sls/sls_insert.spl            pass
-sls_insertion_sort      tests/spl/sls/sls_insertion_sort.spl    pass
-sls_merge_sort          tests/spl/sls/sls_merge_sort.spl        pass
-sls_quicksort           tests/spl/sls/sls_quicksort.spl         pass
-sls_strand_sort         tests/spl/sls/sls_strand_sort.spl       pass
-union_find              tests/spl/sl/union_find.spl             pass
-list_set_contains       tests/spl/list_set/contains.spl         pass
-list_set_delete         tests/spl/list_set/delete.spl           pass
-list_set_difference     tests/spl/list_set/difference.spl       pass
-list_set_insert         tests/spl/list_set/insert.spl           pass
-list_set_traverse       tests/spl/list_set/traverse.spl         pass
-list_set_union          tests/spl/list_set/union.spl            pass
-assoc_list_contains     tests/spl/assoc/contains.spl            pass
-assoc_list_insert       tests/spl/assoc/insert.spl              pass
-assoc_list_lookup       tests/spl/assoc/lookup.spl              pass
-assoc_list_remove       tests/spl/assoc/remove.spl              pass
-array_bsearch           tests/spl/array/bsearch.spl             pass
-array_bubble            tests/spl/array/bubble.spl              pass
-array_checkSorted       tests/spl/array/checkSorted.spl         pass
-array_clamp             tests/spl/array/clamp.spl               pass
-array_copy              tests/spl/array/copy.spl                pass
-array_destroy           tests/spl/array/destroy.spl             pass
-array_free              tests/spl/array/free.spl                pass
-array_initialize        tests/spl/array/initialize.spl          pass
-array_maximum           tests/spl/array/maximum.spl             pass
-array_reverse           tests/spl/array/reverse.spl             pass
-array_selection_sort    tests/spl/array/selection_sort.spl      pass
-array_test              tests/spl/array/test.spl                pass
-array_traverse_with_nodes tests/spl/array/traverse_with_nodes.spl pass
-adt_lists               tests/spl/adt/lists.spl                 pass
+soudness0               tests/spl/soundness/soundness0.spl              ''      fail
+soudness1               tests/spl/soundness/soundness1.spl              ''      fail
+soudness2               tests/spl/soundness/soundness2.spl              ''      fail
+soudness3               tests/spl/soundness/soundness3.spl              ''      fail
+soudness5               tests/spl/soundness/soundness5.spl              ''      fail
+soudness7               tests/spl/soundness/soundness7.spl              ''      fail
+soudness8               tests/spl/soundness/soundness8.spl              ''      fail
+sl_traverse             tests/spl/sl/sl_traverse.spl                    ''      pass
+sl_dispose              tests/spl/sl/sl_dispose.spl                     ''      pass
+sl_copy                 tests/spl/sl/sl_copy.spl                        ''      pass
+sl_reverse              tests/spl/sl/sl_reverse.spl                     ''      pass
+sl_concat               tests/spl/sl/sl_concat.spl                      ''      pass
+sl_filter               tests/spl/sl/sl_filter.spl                      ''      pass
+sl_remove               tests/spl/sl/sl_remove.spl                      ''      pass
+sl_insert               tests/spl/sl/sl_insert.spl                      ''      pass
+recursive_traverse      tests/spl/sl/rec_traverse.spl                   ''      pass
+recursive_dispose       tests/spl/sl/rec_dispose.spl                    ''      pass
+recursive_copy          tests/spl/sl/rec_copy.spl                       ''      pass
+recursive_reverse       tests/spl/sl/rec_reverse.spl                    ''      pass
+recursive_concat        tests/spl/sl/rec_concat.spl                     ''      pass
+recursive_filter        tests/spl/sl/rec_filter.spl                     ''      pass
+recursive_remove        tests/spl/sl/rec_remove.spl                     ''      pass
+recursive_insert        tests/spl/sl/rec_insert.spl                     ''      pass
+dl_traverse             tests/spl/dl/dl_traverse.spl                    ''      pass
+dl_dispose              tests/spl/dl/dl_dispose.spl                     ''      pass
+dl_copy                 tests/spl/dl/dl_copy.spl                        ''      pass
+dl_reverse              tests/spl/dl/dl_reverse.spl                     ''      pass
+dl_concat               tests/spl/dl/dl_concat.spl                      ''      pass
+dl_filter               tests/spl/dl/dl_filter.spl                      ''      pass
+dl_remove               tests/spl/dl/dl_remove.spl                      ''      pass
+dl_insert               tests/spl/dl/dl_insert.spl                      ''      pass
+sls_traverse            tests/spl/sls/sls_traverse.spl                  ''      pass
+sls_dispose             tests/spl/sls/sls_dispose.spl                   ''      pass
+sls_copy                tests/spl/sls/sls_copy.spl                      ''      pass
+sls_reverse             tests/spl/sls/sls_reverse.spl                   ''      pass
+sls_concat              tests/spl/sls/sls_concat.spl                    ''      pass
+sls_filter              tests/spl/sls/sls_filter.spl                    ''      pass
+sls_remove              tests/spl/sls/sls_remove.spl                    ''      pass
+sls_insert              tests/spl/sls/sls_insert.spl                    ''      pass
+sls_insertion_sort      tests/spl/sls/sls_insertion_sort.spl            ''      pass
+sls_merge_sort          tests/spl/sls/sls_merge_sort.spl                ''      pass
+sls_quicksort           tests/spl/sls/sls_quicksort.spl                 ''      pass
+sls_strand_sort         tests/spl/sls/sls_strand_sort.spl               ''      pass
+union_find              tests/spl/sl/union_find.spl                     ''      pass
+list_set_contains       tests/spl/list_set/contains.spl                 ''      pass
+list_set_delete         tests/spl/list_set/delete.spl                   ''      pass
+list_set_difference     tests/spl/list_set/difference.spl               ''      pass
+list_set_insert         tests/spl/list_set/insert.spl                   ''      pass
+list_set_traverse       tests/spl/list_set/traverse.spl                 ''      pass
+list_set_union          tests/spl/list_set/union.spl                    ''      pass
+assoc_list_contains     tests/spl/assoc/contains.spl                    ''      pass
+assoc_list_insert       tests/spl/assoc/insert.spl                      ''      pass
+assoc_list_lookup       tests/spl/assoc/lookup.spl                      ''      pass
+assoc_list_remove       tests/spl/assoc/remove.spl                      ''      pass
+array_bsearch           tests/spl/array/bsearch.spl                     ''      pass
+array_bubble            tests/spl/array/bubble.spl                      ''      pass
+array_checkSorted       tests/spl/array/checkSorted.spl                 ''      pass
+array_clamp             tests/spl/array/clamp.spl                       ''      pass
+array_copy              tests/spl/array/copy.spl                        ''      pass
+array_destroy           tests/spl/array/destroy.spl                     ''      pass
+array_free              tests/spl/array/free.spl                        ''      pass
+array_initialize        tests/spl/array/initialize.spl                  ''      pass
+array_maximum           tests/spl/array/maximum.spl                     ''      pass
+array_reverse           tests/spl/array/reverse.spl                     ''      pass
+array_selection_sort    tests/spl/array/selection_sort.spl              ''      pass
+array_test              tests/spl/array/test.spl                        ''      pass
+array_traverse_with_nodes tests/spl/array/traverse_with_nodes.spl       ''      pass
+recursive_def_lists     tests/spl/recursive_defs/list.spl               '-abspreds'      pass
+adt_lists               tests/spl/adt/lists.spl                         ''      pass
 "
+
 # string use Byte and requires -bitvector
 # array_string            tests/spl/array/string.spl              pass
 
