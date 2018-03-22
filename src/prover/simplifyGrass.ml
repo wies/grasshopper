@@ -10,41 +10,42 @@ let pull_up_equalities fs =
   (* identifies the constants/ground terms that are only in one disjunct
    * be careful about pulling eq with literals and/or pulling more than one eq *)
   let rec find id elts = match elts with
-    (* pull out at most one eq per candidate *)
-    | (Atom (App (Eq, [App (FreeSym id1, [], _); e], _), _) as x) :: xs when id1 = id -> [x], xs
-    | (Atom (App (Eq, [e; App (FreeSym id1, [], _)], _), _) as x) :: xs when id1 = id -> [x], xs
-    | x :: xs ->
+  (* pull out at most one eq per candidate *)
+  | (Atom (App (Eq, [App (FreeSym id1, [], _); e], _), _) as x) :: xs when id1 = id -> [x], xs
+  | (Atom (App (Eq, [e; App (FreeSym id1, [], _)], _), _) as x) :: xs when id1 = id -> [x], xs
+  | x :: xs ->
       let y, ys = find id xs in
-        y, x :: xs
-    | [] -> [], []
+      y, x :: xs
+  | [] -> [], []
   in
   let find_eq candidates f = match f with
-    | BoolOp (And, conjuncts) ->
+  | BoolOp (And, conjuncts) ->
       let pulled, conjs =
         IdSet.fold
           (fun id (pulled, eqs) ->
             let p, eqs = find id eqs in
-              (p @ pulled, eqs) )
+            (p @ pulled, eqs) )
           candidates
           ([], conjuncts)
       in
-        pulled, smk_and conjs
-    | f -> [] , f
+      pulled, smk_and conjs
+  | f -> [] , f
   in
-  let process_disj disj gts =
-    let rec p pulled pre post = match post with
-      | x :: xs ->
-        let other_free_cst = IdSet.union (free_consts (mk_and pre)) (free_consts (mk_and xs)) in
-        let candidates = IdSet.diff (free_consts x) other_free_cst in
+  let process_disj disj free_cst =
+    let rec p free_cst pulled pre post = match post with
+    | x :: xs ->
+        let other_free_cst = IdSet.union free_cst (free_consts (mk_or xs)) in
+        let x_free_cst = free_consts x in
+        let candidates = IdSet.diff x_free_cst other_free_cst in
         let eqs, fs = find_eq candidates x in
-          p (eqs @ pulled) (fs :: pre) xs
-      | [] -> pulled, pre
+        p (IdSet.union free_cst x_free_cst) (eqs @ pulled) (fs :: pre) xs
+    | [] -> pulled, pre
     in
-    let pulled, disj = p [] [] disj in
-      (smk_or disj) :: pulled
+    let pulled, disj = p free_cst [] [] disj in
+    (smk_or disj) :: pulled
   in
   let rec process pre post = match post with
-    | x :: xs ->
+  | x :: xs ->
       begin
         match x with
         | BoolOp (Or, disjuncts) ->
@@ -52,12 +53,12 @@ let pull_up_equalities fs =
           let pre_free_cst = free_consts (mk_and pre) in
           let post_free_cst = free_consts (mk_and xs) in
           let new_fs = process_disj disjuncts (IdSet.union pre_free_cst post_free_cst) in
-            process (new_fs @ pre) xs
-        | _ -> process (x::pre) xs
+          process (new_fs @ pre) xs
+        | _ -> process (x :: pre) xs
       end
-    | [] -> pre
+  | [] -> pre
   in
-    process [] fs
+  process [] fs
 
 (** Eliminate certain field reads using reachability predicates *)   
 let massage_field_reads fs = 
