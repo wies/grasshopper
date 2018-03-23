@@ -155,6 +155,12 @@ let convert cu =
         var_scope = decl.v_scope;
     }
   in
+  let struct_sorts =
+    IdMap.fold
+      (fun id tdef acc -> match tdef.t_def with
+      | StructTypeDef _ -> SortSet.add (FreeSrt id) acc
+      | _ -> acc) cu.type_decls SortSet.empty
+  in
   (** convert global variables *)
   let prog, globals =
     IdMap.fold
@@ -224,7 +230,7 @@ let convert cu =
             let res_ty =
               decl.pr_body |>
               Opt.map (type_of_expr cu decl.pr_locals) |>
-              Opt.get_or_else BoolType
+              Opt.get_or_else PermType
             in
             let res_srt = convert_type res_ty pos in
             GrassUtil.mk_free_fun res_srt id ts
@@ -665,7 +671,7 @@ let convert cu =
           | [r] -> (IdMap.find r decl.pr_locals).v_type
           | _ -> decl.pr_body |>
             Opt.map (type_of_expr cu decl.pr_locals) |>
-            Opt.get_or_else BoolType
+            Opt.get_or_else PermType
         in
         let opt_body, locals, outputs, contracts =
           match rtype, decl.pr_outputs with
@@ -725,11 +731,15 @@ let convert cu =
         let body_pos =
           Opt.map pos_of_expr decl.pr_body |> Opt.get_or_else decl.pr_pos
         in
+        let footprint_sorts = match decl.pr_body with
+        | None -> struct_sorts
+        | Some _ -> SortSet.empty
+        in
         let contract =
           { contr_name = id;
             contr_formals = decl.pr_formals;
             contr_returns = outputs;
-            contr_footprint_sorts = SortSet.empty;
+            contr_footprint_sorts = footprint_sorts;
             contr_locals = locals;
             contr_precond = pre;
             contr_postcond = post;

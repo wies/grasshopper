@@ -1,0 +1,20 @@
+struct T {
+  var g: T;
+}
+
+struct S {}
+
+predicate p(x: T)
+  
+procedure bar(x: T)
+  requires p(x)
+  ensures emp
+  
+procedure foo(x: T, y: T)
+  requires p(x) &*& p(y)
+  ensures p(y)
+{
+  bar(x);
+}
+
+

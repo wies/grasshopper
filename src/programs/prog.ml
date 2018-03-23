@@ -68,6 +68,8 @@ type call_command = {
     call_lhs: ident list; (** x_1,...,x_n *)
     call_name: ident; (** p *)
     call_args: term list; (** e_1,...,e_m *)
+    call_modifies: IdSet.t;
+    call_accesses: IdSet.t;
   } 
 
 (** Return from procedure *)
@@ -434,10 +436,11 @@ let is_pure_spec sf =
   | _ -> false
 
 let is_pure_pred pred =
-  List.for_all is_pure_spec (Opt.to_list pred.pred_body @ precond_of_pred pred)
+  List.for_all is_pure_spec (Opt.to_list pred.pred_body @ precond_of_pred pred) &&
+  (pred.pred_body <> None || pred.pred_contract.contr_returns <> [])
 
 let is_sl_pred pred =
-  not (Opt.get_or_else true (Opt.map is_pure_spec pred.pred_body))
+  not (Opt.get_or_else (pred.pred_contract.contr_returns <> []) (Opt.map is_pure_spec pred.pred_body))
         
 let form_of_spec sf =
   match sf.spec_form with
@@ -601,7 +604,8 @@ let modifies_basic_cmd = function
         (fun mods srt -> IdSet.add (alloc_id srt) mods)
         (IdSet.singleton nc.new_lhs)
         struct_sorts
-  | Call cc -> id_set_of_list cc.call_lhs
+  | Call cc ->
+      IdSet.union (id_set_of_list cc.call_lhs) cc.call_modifies
   | Dispose dc ->
       let struct_sorts =
         match sort_of dc.dispose_arg with
@@ -671,7 +675,8 @@ let accesses_basic_cmd = function
   | Assert sf
   | Split sf -> accesses_spec_form sf
   | Return rc -> List.fold_left free_symbols_term_acc IdSet.empty rc.return_args
-  | Call cc -> 
+  | Call cc ->
+      IdSet.union cc.call_accesses @@
       List.fold_left
         free_symbols_term_acc (id_set_of_list (cc.call_name :: cc.call_lhs)) cc.call_args
 
@@ -737,7 +742,8 @@ let footprint_sorts_basic_cmd prog = function
   | Call cc ->
       let decl = find_proc prog cc.call_name in
       List.fold_left (footprint_sorts_term_acc prog) (footprint_sorts_proc decl) cc.call_args
-      
+
+        
 (** Smart constructors for commands *)
 
 let mk_basic_cmd bcmd pos =
@@ -779,7 +785,14 @@ let mk_return_cmd args pos =
   mk_basic_cmd (Return rc) pos
 
 let mk_call_cmd ?(prog=None) lhs name args pos =
-  let cc = {call_lhs = lhs; call_name = name; call_args = args} in
+  let cc =
+    { call_lhs = lhs;
+      call_name = name;
+      call_args = args;
+      call_modifies = IdSet.empty;
+      call_accesses = IdSet.empty
+    }
+  in
   let accs = accesses_basic_cmd (Call cc) in
   let mods = modifies_basic_cmd (Call cc) in
   let pp = mk_ppoint pos in
