@@ -38,7 +38,7 @@ type spl_program =
     }
 
 (* note: change naming, consistency *)
-and module_decl = 
+and moduledecl = 
     { mod_name: ident;
       mod_pos: pos;
       mod_includes: (name * pos) list;
@@ -51,7 +51,7 @@ and module_decl =
       mod_background_theory: (expr * pos) list; 
     }
 
-and module_decls = module_decl IdMap.t
+and module_decls = moduledecl IdMap.t
 
 (* keeping this for reference purposes for now *)
 (*
@@ -66,6 +66,9 @@ type spl_program =
       background_theory: (expr * pos) list; 
     }
 *)
+
+and module_decl =
+  | ModuleDecl of moduledecl
 
 and decl =
   | TypeDecl of typedecl
@@ -171,7 +174,7 @@ and stmt =
   | Choice of stmts * pos
   | Loop of loop_contracts * stmt * expr * stmt * pos
   | Return of exprs * pos
-  | Module of qualified_ident * pos
+  | Open of qualified_ident * pos
 
 and stmts = stmt list
 
@@ -202,7 +205,6 @@ and expr =
   | BinaryOp of expr * bin_op * expr * typ * pos
   | Ident of ident * pos
   | Annot of expr * annotation * pos
-  | Open of ident * pos
 
 and exprs = expr list
 
@@ -365,7 +367,7 @@ let subst sm =
             bv vs
         in
         Binder (b, vs, s bv e, pos)
-    | (Open _ | Null _ | Emp _ | IntVal _ | BoolVal _) as e -> e
+    | (Null _ | Emp _ | IntVal _ | BoolVal _) as e -> e
   in s IdSet.empty
     
 let pos_of_stmt = function
@@ -381,8 +383,8 @@ let pos_of_stmt = function
   | If (_, _, _, pos)
   | Choice (_, pos)
   | Loop (_, _, _, _, pos)
+  | Open (_, pos)
   | Return (_, pos) -> pos
-  | Module (_, pos) -> pos
 
 let proc_decl hdr body =
   { hdr with p_body = body }
@@ -410,7 +412,7 @@ let extend_spl_program prog prog_mod =
   in
   { spl_modules = pmod; }
 
-let process_module incls decls bg_th prog_mod mod_name mod_pos =
+let extend_spl_module incls decls bg_th prog_mod mod_name mod_pos =
   let check_uniqueness id pos (tdecls, vdecls, pdecls, prdecls, mdecls) =
     if IdMap.mem id tdecls || IdMap.mem id vdecls || IdMap.mem id pdecls || IdMap.mem id prdecls
         || IdMap.mem id mdecls
@@ -450,16 +452,13 @@ let process_module incls decls bg_th prog_mod mod_name mod_pos =
   }
 
 let merge_spl_programs prog1 prog2 =
-  let decls = []
-    |> IdMap.fold (fun _ decl acc -> TypeDecl decl :: acc) prog1.type_decls
-    |> IdMap.fold (fun _ decl acc -> VarDecl decl :: acc) prog1.var_decls
-    |> IdMap.fold (fun _ decl acc -> PredDecl decl :: acc) prog1.pred_decls
-    |> IdMap.fold (fun _ decl acc -> ProcDecl decl :: acc) prog1.proc_decls
-    |> IdMap.fold (fun _ decl acc -> MacroDecl decl :: acc) prog1.macro_decls
+  let spl_mods = []
+    |> IdMap.fold (fun _ decl acc -> ModuleDecl decl :: acc) prog2.spl_modules
   in
-  extend_spl_program prog1.includes decls prog1.background_theory prog2
+  let merge_modules id spl_mod =
+    extend_spl_program prog1 spl_mod in List.iter merge_modules spl_mods.iter
 
-let add_alloc_decl prog =
+let add_alloc_decl prog_mod =
   let alloc_decls =
     IdMap.fold
       (fun _ decl acc ->
@@ -473,10 +472,10 @@ let add_alloc_decl prog =
             let vdecl = VarDecl (var_decl id tpe true false pos scope) in
             vdecl :: acc
         | _ -> acc)
-      prog.type_decls
+      prog_mod.mod_type_decls
       []
   in
-    extend_spl_program [] alloc_decls [] prog
+    extend_spl_module [] alloc_decls [] prog_mod prog_mod.mod_name prog_mod.mod_pos
 
 let empty_spl_program =
   {
@@ -489,10 +488,10 @@ let mk_block pos = function
   | stmts -> Block (stmts, pos)
 
 (** Replace all macro occurrences with macro body *)
-let replace_macros prog =
+let replace_macros prog_mod =
   let rec repl_expr = function
     | ProcCall (p, es, pos) ->
-      (match IdMap.find_opt p prog.macro_decls with
+      (match IdMap.find_opt p prog_mod.mod_macro_decls with
       | Some macro ->
         let sm =
           List.combine macro.m_args es
@@ -554,10 +553,8 @@ let replace_macros prog =
       Loop (List.map repl_loop_c invs, repl_stmt preb, repl_expr cond, repl_stmt postb, p)
     | Return (es, p) ->
       Return (List.map repl_expr es, p)
-    | Module (qi, p) ->
-      Module()
-    | Open(qi, p) ->
-      Open()
+    | Open (iq, p) ->
+      Open (iq, p)
   in
   let repl_contr = function
     | Requires (e, b1, b2) -> Requires (repl_expr e, b1, b2)
@@ -576,9 +573,9 @@ let replace_macros prog =
     }
   in
 
-  { prog with
-    proc_decls = IdMap.map repl_proc prog.proc_decls;
-    pred_decls = IdMap.map repl_pred prog.pred_decls;
+  { prog_mod with
+    mod_proc_decls = IdMap.map repl_proc prog_mod.mod_proc_decls;
+    mod_pred_decls = IdMap.map repl_pred prog_mod.mod_pred_decls;
   }
 
 
