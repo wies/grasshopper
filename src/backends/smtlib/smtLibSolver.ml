@@ -661,6 +661,17 @@ let push session =
 
 let grass_smtlib_prefix = "grass_" 
 
+let string_of_symbol = function
+  | Div -> "div"
+  | Mod -> "mod"
+  | Empty -> "emptyset"
+  | Elem -> "member"
+  | SubsetEq -> "subset"
+  | Union -> "union"
+  | Inter -> "intersection"
+  | Diff -> "setminus"
+  | sym -> Grass.string_of_symbol sym
+    
 let smtlib_symbol_of_grass_symbol_no_bv solver_info sym = match sym with 
   | FreeSym id -> SmtLibSyntax.Ident id
   | Plus -> SmtLibSyntax.Plus
