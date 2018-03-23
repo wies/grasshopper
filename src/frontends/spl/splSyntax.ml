@@ -10,7 +10,7 @@ type name = string
 
 type names = name list
 
-(* this needs to be incorporated below, expand usage don't change old *)
+(* this needs to be incorporated below *)
 type qualified_ident = ident * ident
 
 type typ =
@@ -68,6 +68,7 @@ type spl_program =
 *)
 
 and decl =
+  | ModuleDecl of module_decl
   | TypeDecl of typedecl
   | VarDecl of var
   | ProcDecl of proc
@@ -399,8 +400,10 @@ let var_decl vname vtype vghost vimpl vpos vscope =
 let pred_decl hdr body =
   { hdr with pr_body = body }
 
-let module_decl mname mpos = 
-  { mod_name = mname; m_pos = mpos; }(* I AM HERE)}
+(*
+let module_decl mname mpos mbody = 
+  { mbody with mod_name = mname; m_pos = mpos; }
+*)
 
 let extend_spl_program incls decls bg_th prog =
   let check_uniqueness id pos (tdecls, vdecls, pdecls, prdecls, mdecls) =
@@ -408,8 +411,11 @@ let extend_spl_program incls decls bg_th prog =
         || IdMap.mem id mdecls
     then ProgError.error pos ("redeclaration of identifier " ^ (fst id) ^ ".");
   in
-  let tdecls, vdecls, pdecls, prdecls, mdecls =
-    List.fold_left (fun (tdecls, vdecls, pdecls, prdecls, mdecls as decls) -> function
+  let module_decls, tdecls, vdecls, pdecls, prdecls, mdecls =
+    List.fold_left (fun (module_decls, tdecls, vdecls, pdecls, prdecls, mdecls as decls) -> function
+      | ModuleDecl delc ->
+          check_uniqueness decl.mod_name decl.mod_pos decls;
+          (* ??? *)
       | TypeDecl decl -> 
           check_uniqueness decl.t_name decl.t_pos decls;
           IdMap.add decl.t_name decl tdecls, vdecls, pdecls, prdecls, mdecls
@@ -441,6 +447,8 @@ let extend_spl_program incls decls bg_th prog =
 
 let merge_spl_programs prog1 prog2 =
   let decls = []
+    (* ??? *)
+    |> IdMap.fold (fun _ decl acc -> ModuleDecl decl :: acc) prog1.module_decls
     |> IdMap.fold (fun _ decl acc -> TypeDecl decl :: acc) prog1.type_decls
     |> IdMap.fold (fun _ decl acc -> VarDecl decl :: acc) prog1.var_decls
     |> IdMap.fold (fun _ decl acc -> PredDecl decl :: acc) prog1.pred_decls
@@ -559,6 +567,10 @@ let replace_macros prog =
       Loop (List.map repl_loop_c invs, repl_stmt preb, repl_expr cond, repl_stmt postb, p)
     | Return (es, p) ->
       Return (List.map repl_expr es, p)
+    | Module (qi, p) ->
+      Module()
+    | Open(qi, p) ->
+      Open()
   in
   let repl_contr = function
     | Requires (e, b1, b2) -> Requires (repl_expr e, b1, b2)
