@@ -24,12 +24,9 @@ procedure dl_insert(a: Node, b: Node, elt: Node) returns (c: Node, d: Node)
     elt.prev := prv;
     if (prv != null) {
       prv.next := elt;
-      //return c, d;
     } else {
-      //return elt, d;
       c := elt;
     }
-    //assert false;
     return c, d;
   }
 }
