@@ -34,21 +34,21 @@ type var_decl_id =
   | ArrayDecl of var_decl_id
 
 type spl_program = 
-    { modules: module_decls;
-      includes: (name * pos) list;
+    { spl_modules: module_decls;
     }
 
 (* note: change naming, consistency *)
 and module_decl = 
     { mod_name: ident;
       mod_pos: pos;
-      type_decls: typedecls;
-      var_decls: vars;
-      proc_decls: procs;
-      pred_decls: preds;
-      fun_decls: fundecls;
-      macro_decls: macros;
-      background_theory: (expr * pos) list; 
+      mod_includes: (name * pos) list;
+      mod_type_decls: typedecls;
+      mod_var_decls: vars;
+      mod_proc_decls: procs;
+      mod_pred_decls: preds;
+      mod_fun_decls: fundecls;
+      mod_macro_decls: macros;
+      mod_background_theory: (expr * pos) list; 
     }
 
 and module_decls = module_decl IdMap.t
@@ -68,7 +68,6 @@ type spl_program =
 *)
 
 and decl =
-  | ModuleDecl of module_decl
   | TypeDecl of typedecl
   | VarDecl of var
   | ProcDecl of proc
@@ -172,10 +171,7 @@ and stmt =
   | Choice of stmts * pos
   | Loop of loop_contracts * stmt * expr * stmt * pos
   | Return of exprs * pos
-  (* addition of Module and Open statements *)
   | Module of qualified_ident * pos
-  | Open of qualified_ident * pos
-  (* quotes to identify addition *)
 
 and stmts = stmt list
 
@@ -206,6 +202,7 @@ and expr =
   | BinaryOp of expr * bin_op * expr * typ * pos
   | Ident of ident * pos
   | Annot of expr * annotation * pos
+  | Open of ident * pos
 
 and exprs = expr list
 
@@ -256,6 +253,7 @@ let pos_of_expr = function
   | BinaryOp (_, _, _, _, p)
   | Ident (_, p) -> p
   | Annot (_, _, p) -> p
+  | Open (_, p) -> p
 
 let free_vars e =
   let rec fv bv acc = function
@@ -367,7 +365,7 @@ let subst sm =
             bv vs
         in
         Binder (b, vs, s bv e, pos)
-    | (Null _ | Emp _ | IntVal _ | BoolVal _) as e -> e
+    | (Open _ | Null _ | Emp _ | IntVal _ | BoolVal _) as e -> e
   in s IdSet.empty
     
 let pos_of_stmt = function
@@ -384,9 +382,7 @@ let pos_of_stmt = function
   | Choice (_, pos)
   | Loop (_, _, _, _, pos)
   | Return (_, pos) -> pos
-  (* addition of Module and Open here *)
   | Module (_, pos) -> pos
-  | Open (_, pos) -> pos
 
 let proc_decl hdr body =
   { hdr with p_body = body }
@@ -400,22 +396,28 @@ let var_decl vname vtype vghost vimpl vpos vscope =
 let pred_decl hdr body =
   { hdr with pr_body = body }
 
-(*
+(* maybe i'll need this, maybe i wont *)
 let module_decl mname mpos mbody = 
-  { mbody with mod_name = mname; m_pos = mpos; }
-*)
+  { mbody with mod_name = mname; mod_pos = mpos }
 
-let extend_spl_program incls decls bg_th prog =
+let extend_spl_program prog prog_mod =
+  let check_uniqueness id pos pmodules =
+    if IdMap.mem id pmodules then ProgError.error pos ("redeclaration of identifier " ^ (fst id) ^ ".");
+  in
+  let pmod =
+    check_uniqueness prog_mod.mod_name prog_mod.mod_pos prog.spl_modules;
+    IdMap.add prog_mod.mod_name prog_mod prog.spl_modules
+  in
+  { spl_modules = pmod; }
+
+let process_module incls decls bg_th prog_mod mod_name mod_pos =
   let check_uniqueness id pos (tdecls, vdecls, pdecls, prdecls, mdecls) =
     if IdMap.mem id tdecls || IdMap.mem id vdecls || IdMap.mem id pdecls || IdMap.mem id prdecls
         || IdMap.mem id mdecls
     then ProgError.error pos ("redeclaration of identifier " ^ (fst id) ^ ".");
   in
-  let module_decls, tdecls, vdecls, pdecls, prdecls, mdecls =
-    List.fold_left (fun (module_decls, tdecls, vdecls, pdecls, prdecls, mdecls as decls) -> function
-      | ModuleDecl delc ->
-          check_uniqueness decl.mod_name decl.mod_pos decls;
-          (* ??? *)
+  let tdecls, vdecls, pdecls, prdecls, mdecls =
+    List.fold_left (fun (tdecls, vdecls, pdecls, prdecls, mdecls as decls) -> function
       | TypeDecl decl -> 
           check_uniqueness decl.t_name decl.t_pos decls;
           IdMap.add decl.t_name decl tdecls, vdecls, pdecls, prdecls, mdecls
@@ -432,23 +434,23 @@ let extend_spl_program incls decls bg_th prog =
           check_uniqueness decl.m_name decl.m_pos decls;
           tdecls, vdecls, pdecls, prdecls, IdMap.add decl.m_name decl mdecls
       )
-      (prog.type_decls, prog.var_decls, prog.proc_decls, prog.pred_decls, prog.macro_decls)
+      (prog_mod.mod_type_decls, prog_mod.mod_var_decls, prog_mod.mod_proc_decls, prog_mod.mod_pred_decls, prog_mod.mod_macro_decls)
       decls
   in
-  { includes = incls @ prog.includes;
-    type_decls = tdecls;
-    var_decls = vdecls; 
-    proc_decls = pdecls;
-    pred_decls = prdecls;
-    fun_decls = IdMap.empty;
-    macro_decls = mdecls;
-    background_theory = bg_th @ prog.background_theory;
+  { mod_name = mod_name;
+    mod_pos = mod_pos;
+    mod_includes = incls @ prog_mod.mod_includes;
+    mod_type_decls = tdecls;
+    mod_var_decls = vdecls; 
+    mod_proc_decls = pdecls;
+    mod_pred_decls = prdecls;
+    mod_fun_decls = IdMap.empty;
+    mod_macro_decls = mdecls;
+    mod_background_theory = bg_th @ prog_mod.mod_background_theory;
   }
 
 let merge_spl_programs prog1 prog2 =
   let decls = []
-    (* ??? *)
-    |> IdMap.fold (fun _ decl acc -> ModuleDecl decl :: acc) prog1.module_decls
     |> IdMap.fold (fun _ decl acc -> TypeDecl decl :: acc) prog1.type_decls
     |> IdMap.fold (fun _ decl acc -> VarDecl decl :: acc) prog1.var_decls
     |> IdMap.fold (fun _ decl acc -> PredDecl decl :: acc) prog1.pred_decls
@@ -478,24 +480,9 @@ let add_alloc_decl prog =
 
 let empty_spl_program =
   {
-    modules = IdMap.empty;
-    includes = [];
+    spl_modules = IdMap.empty;
   }
 
-(* keeping this here for reference purposes *)
-(*
-let empty_spl_program =
-  { includes = [];
-    type_decls = IdMap.empty;
-    var_decls = IdMap.empty;
-    proc_decls = IdMap.empty;
-    pred_decls = IdMap.empty;
-    fun_decls = IdMap.empty;
-    macro_decls = IdMap.empty;
-    background_theory = [];
-  }
-*)
-    
 let mk_block pos = function
   | [] -> Skip pos
   | [stmt] -> stmt
