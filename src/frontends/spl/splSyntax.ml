@@ -616,7 +616,7 @@ let prio_of_expr = function
   | Binder _ -> 17
   | Annot _ -> 18
 
-let is_left_assoc = function _ -> true
+let is_left_assoc = function OpImpl -> false | _ -> true
         
 let rec pr_expr ppf =
   function
@@ -710,8 +710,8 @@ let rec pr_expr ppf =
           (prio_of_expr e < prio_of_expr e1,
           prio_of_expr e <= prio_of_expr e2)
         else
-          (prio_of_expr e < prio_of_expr e1,
-          prio_of_expr e <= prio_of_expr e2)
+          (prio_of_expr e <= prio_of_expr e1,
+          prio_of_expr e < prio_of_expr e2)
       in
       let pr_paran paran ppf e =
         if paran
