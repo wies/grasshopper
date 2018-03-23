@@ -1,5 +1,5 @@
 (* Version string *)
-let version = "0.4"
+let version = "0.5 pre"
 
 (* Base directory for includes *)
 let base_dir = ref ""
