@@ -10,6 +10,9 @@ type name = string
 
 type names = name list
 
+(* this needs to be incorporated below, expand usage don't change old *)
+type qualified_ident = ident * ident
+
 type typ =
   | IdentType of ident
   | StructType of ident
@@ -31,12 +34,14 @@ type var_decl_id =
   | ArrayDecl of var_decl_id
 
 type spl_program = 
-    { modules: (name * pos) list;
+    { modules: module_decls;
+      includes: (name * pos) list;
     }
 
-and spl_module = 
-    { spl_module_name: ident;
-      includes: (name * pos) list;
+(* note: change naming, consistency *)
+and module_decl = 
+    { mod_name: ident;
+      mod_pos: pos;
       type_decls: typedecls;
       var_decls: vars;
       proc_decls: procs;
@@ -46,7 +51,7 @@ and spl_module =
       background_theory: (expr * pos) list; 
     }
 
-and spl_modules = spl_module IdMap.t
+and module_decls = module_decl IdMap.t
 
 (* keeping this for reference purposes for now *)
 (*
@@ -166,6 +171,10 @@ and stmt =
   | Choice of stmts * pos
   | Loop of loop_contracts * stmt * expr * stmt * pos
   | Return of exprs * pos
+  (* addition of Module and Open statements *)
+  | Module of qualified_ident * pos
+  | Open of qualified_ident * pos
+  (* quotes to identify addition *)
 
 and stmts = stmt list
 
@@ -374,6 +383,9 @@ let pos_of_stmt = function
   | Choice (_, pos)
   | Loop (_, _, _, _, pos)
   | Return (_, pos) -> pos
+  (* addition of Module and Open here *)
+  | Module (_, pos) -> pos
+  | Open (_, pos) -> pos
 
 let proc_decl hdr body =
   { hdr with p_body = body }
@@ -386,6 +398,9 @@ let var_decl vname vtype vghost vimpl vpos vscope =
 
 let pred_decl hdr body =
   { hdr with pr_body = body }
+
+let module_decl mname mpos = 
+  { mod_name = mname; m_pos = mpos; }(* I AM HERE)}
 
 let extend_spl_program incls decls bg_th prog =
   let check_uniqueness id pos (tdecls, vdecls, pdecls, prdecls, mdecls) =
@@ -454,6 +469,14 @@ let add_alloc_decl prog =
     extend_spl_program [] alloc_decls [] prog
 
 let empty_spl_program =
+  {
+    modules = IdMap.empty;
+    includes = [];
+  }
+
+(* keeping this here for reference purposes *)
+(*
+let empty_spl_program =
   { includes = [];
     type_decls = IdMap.empty;
     var_decls = IdMap.empty;
@@ -463,6 +486,7 @@ let empty_spl_program =
     macro_decls = IdMap.empty;
     background_theory = [];
   }
+*)
     
 let mk_block pos = function
   | [] -> Skip pos
