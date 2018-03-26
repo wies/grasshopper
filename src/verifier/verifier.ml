@@ -544,7 +544,10 @@ let check_proc prog proc =
       end
     in check_one vc0
   in
-  let _ = Debug.info (fun () -> "Checking procedure " ^ string_of_ident (name_of_proc proc) ^ "...\n") in
+  let _ = Debug.info (fun () ->
+    "Checking " ^ (if proc.proc_is_lemma then "lemma " else "procedure ") ^
+    string_of_ident (name_of_proc proc) ^ "...\n")
+  in
   let vcs = vcgen prog proc in
   List.fold_left check_vc [] vcs
 

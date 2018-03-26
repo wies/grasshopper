@@ -529,8 +529,8 @@ and pr_not ppf = function
       fprintf ppf "@[(@[%a@]@ !in@ @[<2>%a@]%a)@]" pr_term t1 pr_term t2 pr_annot a
   | f ->
       if prio_of_form (BoolOp (Not, [f]))  < prio_of_form f
-      then fprintf ppf "!@[%a@]" pr_form f
-      else fprintf ppf "!(@[%a@])" pr_form f
+      then fprintf ppf "!(@[%a@])" pr_form f
+      else fprintf ppf "!@[%a@]" pr_form f
 
 and pr_quantifier ppf = function
   | (_, [], f) -> fprintf ppf "%a" pr_form f
