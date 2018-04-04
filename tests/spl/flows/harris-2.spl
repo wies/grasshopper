@@ -82,7 +82,7 @@ procedure insert(mh: Node, fh: Node, I: Interface, n: Node, In: Interface)
   requires (forall n: Node :: n != mh && n != fh ==> I.inf[n] == domZero()) && I.FPo == {}
   requires [acc(n)](In)
   requires intValid(In) && In.FP == {n} && In.inf[n] == domZero() && In.FPo == {}
-  ensures Gr(I1) &*& (intValid(I1) && intEq(intComp(In, I), I1))
+  ensures Gr(I1) &*& intValid(I1) == true &*& intEq(intComp(In, I), I1) == true
   ensures mh in I1.FP && fh in I1.FP && I1.inf[mh] == pair(1, 0) && I1.inf[fh] == pair(0, 1)
   ensures (forall n: Node :: n != mh && n != fh ==> I1.inf[n] == domZero()) && I1.FPo == {}
 {

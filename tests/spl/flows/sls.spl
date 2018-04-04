@@ -4,7 +4,9 @@ include "../include/flows.spl";
 
 datatype FlowDom = pair(fst: Int, snd: Int);
 
-datatype NodeDom = nd;
+predicate domEq(p1: FlowDom, p2: FlowDom) {
+  p1.fst == p2.fst && p1.snd == p2.snd
+}
 
 function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 { pair(p1.fst + p2.fst, p1.snd + p2.snd) }
@@ -13,6 +15,8 @@ function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 { pair(p1.fst * p2.fst, p1.snd * p2.snd) }
 
 function domZero() returns(p: FlowDom) { pair(0, 0) }
+
+datatype NodeDom = nd;
   
 predicate ndLeq(a1: NodeDom, a2: NodeDom)
 
@@ -40,6 +44,5 @@ procedure no_op(x: Node, I: Interface)
   var y := x.next;
   x.next := y;
   lemma_abs(x, I, I);
-  lemma_int_leq_fold(I, I);
   sync(I, I);
 }

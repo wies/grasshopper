@@ -26,9 +26,9 @@ predicate intValid(I: Interface)
 // Equivalent interfaces (node labels can be different) -- precondition of sync
 predicate intEq(I1: Interface, I2: Interface) {
   I1.FP == I2.FP && I1.FPo == I2.FPo
-  && (forall x: Node :: domEq(I1.inf[x], I2.inf[x])
+  && (forall x: Node :: domEq(I1.inf[x], I2.inf[x]) == true
      @(matching x yields I1.inf[x]) @(matching x yields I2.inf[x]))
-  && (forall x: Node, y: Node :: domEq(I1.fm[x][y], I2.fm[x][y]))
+  && (forall x: Node, y: Node :: domEq(I1.fm[x][y], I2.fm[x][y]) == true)
 }
 
 
