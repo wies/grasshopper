@@ -277,15 +277,12 @@ let instantiate_and_prove session fs =
         in
         SmtLibSolver.assert_forms session fs_inst1_assert;
         Debug.debug (fun () -> Printf.sprintf "Calling SMT solver in instantiation round %d...\n" k);
+        Debug.debugl 1 (fun () ->
+          "\nSMT called with:\n\n"
+          ^ ((FormSet.elements fs_asserted1 @ fs_inst1_assert)
+              |> smk_and |> string_of_form) ^ "\n\n");
         let result1 = SmtLibSolver.is_sat session in
         Debug.debug (fun () -> "Solver done.\n");
-        (match result1 with
-        | Some true | None ->
-          Debug.debugl 1 (fun () ->
-            "\nSMT called with:\n\n"
-            ^ ((FormSet.elements fs_asserted1 @ fs_inst1_assert)
-                |> smk_and |> string_of_form) ^ "\n\n")
-        | Some false -> ());
         k + 1, result1, fs_asserted1, fs_inst1, gts_inst1, classes1
     | _ -> k, result, fs_asserted, fs_inst, gts_inst, classes
     in List.fold_left dr (1, None, FormSet.empty, fs1, gts1, classes) rounds
