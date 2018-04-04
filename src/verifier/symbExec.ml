@@ -117,10 +117,8 @@ let state_of_spec_list fields specs : state =
       App (Read, [f; convert_term a; convert_term idx], srt)
     | App (Read, [f; _], srt) when f = (Grassifier.array_state false srt) ->
       failwith "Please use flag -simplearrays for array programs."
-    | App (Read, [f; arg], srt) -> (* function application: f(arg) *)
-      (* Assuming f itself does not contain field reads terms
-        - i.e. can't store functions in heap *)
-      App (Read, [f; convert_term arg], srt)
+    | App (Read, [f; arg], srt) -> (* function application or map read *)
+      App (Read, [convert_term f; convert_term arg], srt)
     | App (Read, _, _) as t ->
       failwith @@ "Unmatched read term " ^ (string_of_term t)
     | App (s, ts, srt) -> App (s, List.map convert_term ts, srt)
