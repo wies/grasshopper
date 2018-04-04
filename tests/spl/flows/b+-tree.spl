@@ -5,15 +5,21 @@ include "../include/flows.spl";
 
 /** Flow domain definitions */
 
-datatype FlowDom = fd(ks: Set<Int>);
+datatype FlowDom = fd(ks: Map<Int, Int>);
+
+predicate domEq(p1: FlowDom, p2: FlowDom) {
+  forall k: Int :: p1.ks[k] == p2.ks[k]
+    @(matching k yields p1.ks[k]) @(matching k yields p2.ks[k])
+}
 
 function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-{ fd(p1.ks ++ p2.ks) }
+  ensures forall k: Int :: p.ks[k] == p1.ks[k] + p2.ks[k]
 
 function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-{ fd(p1.ks ** p2.ks) }
+  ensures forall k: Int :: p.ks[k] == p1.ks[k] * p2.ks[k]
 
-function domZero() returns(p: FlowDom) { fd({}) }
+function domZero() returns(p: FlowDom)
+  ensures forall k: Int :: p.ks[k] == 0
 
 datatype LockInfo = unlocked | locked(tid: Int) | dirtylock(dtid: Int);
 // TODO just use locked, since we can use conjunction to say gamma is satisfied?
@@ -41,13 +47,16 @@ struct Node {
 
 define gammaG(x, I) {
   0 <= x.len && x.len < x.keys.length && x.len < x.ptrs.length
-    && (forall k: Int :: k in I.inf[x].ks == (x.rangeLb <= k && k < x.rangeUb))
+    && (forall k: Int :: (I.inf[x].ks[k] >= 1) == (x.rangeLb <= k && k < x.rangeUb))
     && (forall i: Int :: 0 < i && i < x.len ==> x.keys[i-1] < x.keys[i])
     && (x.ptrs[0] == null && I.FPo == {}  // Leaf
        && (forall i: Int :: 0 <= i && i < x.ptrs.length ==> x.ptrs[i] == null)
        || x.ptrs[0] != null  // Internal
        && (forall i: Int, k: Int :: 0 <= i && i <= x.len ==> x.ptrs[i] != null && x.ptrs[i] in I.FPo
-          && (k in I.fm[x][x.ptrs[i]].ks == ((i == 0 || x.keys[i-1] <= k) && (i == x.len || k < x.keys[i])))))
+          && ((I.fm[x][x.ptrs[i]].ks[k] >= 1) == ((i <= 0 || x.keys[i-1] <= k) && (i >= x.len || k < x.keys[i])))
+          @(matching x.ptrs[i] yields x.keys[i-1])
+          @(matching x.ptrs[i] yields x.keys[i])
+          ))
 };
 
 define gammaB(x, I) { true };
@@ -57,9 +66,9 @@ define gamma(x, I) {
     &*& ((gammaG(x, I) && I.na.lockinfo == {locked(TID)}
          || gammaB(x, I) && I.na.lockinfo == {dirtylock(TID)})
 /* Should we prove the above implies these? Or at least not unsat? */
-       && (forall k: Int :: k in I.na.contents ==> k in I.inf[x].ks)
-       && (forall k: Int, y: Node :: k !in I.na.contents || k !in I.fm[x][y].ks)
-       && (forall k: Int, y: Node, z: Node :: y == z || k !in I.fm[x][y].ks || k !in I.fm[x][z].ks))
+       && (forall k: Int :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
+       && (forall k: Int, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
+       && (forall k: Int, y: Node, z: Node :: y == z || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0))
 };
 
 
@@ -72,8 +81,10 @@ axiom r != null; // TODO move to intValid. Should follow from r in I.FP
 
 
 define globalInt(I) {
-  intValid(I) == true && r in I.FP && (forall k: Int :: k in I.inf[r].ks)
-  && (forall n: Node :: n != r ==> I.inf[n] == domZero()) && I.FPo == {}
+  intValid(I) == true && r in I.FP && (forall k: Int :: I.inf[r].ks[k] == 1)
+    && (forall n: Node :: n != r ==> domEq(I.inf[n], domZero())
+       @(matching n yields I.inf[n]))  // TODO ask Thomas
+    && I.FPo == {}
 };
 
 
@@ -84,7 +95,7 @@ procedure inRange(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == {locked(TID)}
   ensures N(x, Ix) &*& Gr(I2)
   ensures intValid(Ix) == true && intValid(I2) == true
-  ensures intComp(Ix, I2) == I && globalInt(I) && (res ==> k in Ix.inf[x].ks)
+  ensures intComp(Ix, I2) == I && globalInt(I) && (res ==> Ix.inf[x].ks[k] >= 1)
 {
   lemma_conc(x, Ix);
 
@@ -93,7 +104,6 @@ procedure inRange(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   var res2 := x.rangeUb > k;
 
   lemma_abs(x, Ix, Ix);
-  lemma_int_leq_fold(Ix, Ix);
   sync(Ix, Ix);
 
   if (res1 && res2)
@@ -101,7 +111,6 @@ procedure inRange(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   else
     return false;
 }
-
 
 procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   returns (n: Node)
@@ -111,15 +120,14 @@ procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   ensures N(x, Ix) &*& Gr(I2)
   ensures intValid(Ix) == true && intValid(I2) == true
   ensures intComp(Ix, I2) == I && globalInt(I)
-  ensures (n != null && k in Ix.fm[x][n].ks
-           || n == null && (forall y: Node :: k !in Ix.fm[x][y].ks))
+  ensures (n != null && Ix.fm[x][n].ks[k] >= 1
+           || n == null && (forall y: Node :: Ix.fm[x][y].ks[k] == 0))
 {
   lemma_N_is_conj(x, Ix);
   
   if (x.ptrs[0] == null) {  // Leaf node
     lemma_conj_is_N(x, Ix);
     lemma_int_valid_unfold(Ix);
-    pure assert false;
     return null;
   }
 
