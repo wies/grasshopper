@@ -628,6 +628,13 @@ let check_array_reads prog eqs (t, state) =
   (check t, state)
 
 
+(** Process term by substituting eqs, looking up field reads. *)
+(* TODO: this is because assume/assert may have array reads under binders which have guards.
+  So for now we are not checking them. Better way to do this? *)
+let process_no_array prog fields eqs state =
+  subst_term eqs
+  >> eval_term fields state
+
 (** Process term by substituting eqs, looking up field reads, and checking array reads. *)
 let process prog fields eqs state =
   subst_term eqs
@@ -820,7 +827,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
         lineSep (string_of_eqs_state eqs state)
     );
-    let spec, (pure, spatial) = fold_map_terms (process prog flds eqs) state spec in
+    let spec, (pure, spatial) = fold_map_terms (process_no_array prog flds eqs) state spec in
     symb_exec prog flds proc (eqs, (smk_and [pure; spec], spatial)) postcond comms'
   | Choice (comms, _) :: comms' ->
     List.fold_left (fun errors comm ->
@@ -842,7 +849,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       | None -> failwith "This assert may not hold")
     | FOL spec_form ->
       let spec_form, state =
-        fold_map_terms (process prog flds eqs) state spec_form
+        fold_map_terms (process_no_array prog flds eqs) state spec_form
       in
       let state' = add_neq_constraints state in
       let _ = find_frame prog eqs state' (spec_form, []) in
