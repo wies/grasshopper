@@ -794,6 +794,7 @@ let fold_map_terms fn init f =
         fold_left_map (fun acc -> function Match (t, fs) ->
           let t, acc = fn acc t in Match (t, fs), acc) acc gs
       in
+      let ts, acc = fold_left_map fn acc ts in
       TermGenerator (gs, ts), acc
     | Comment _ | SrcPos _ | Name _ | ErrorMsg _ as a -> a, acc
   in
