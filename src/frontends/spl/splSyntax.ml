@@ -53,20 +53,6 @@ and moduledecl =
 
 and module_decls = moduledecl IdMap.t
 
-(* keeping this for reference purposes for now *)
-(*
-type spl_program =
-    { includes: (name * pos) list;
-      type_decls: typedecls;
-      var_decls: vars;
-      proc_decls: procs;
-      pred_decls: preds;
-      fun_decls: fundecls;
-      macro_decls: macros;
-      background_theory: (expr * pos) list; 
-    }
-*)
-
 and module_decl =
   | ModuleDecl of moduledecl
 
@@ -174,7 +160,7 @@ and stmt =
   | Choice of stmts * pos
   | Loop of loop_contracts * stmt * expr * stmt * pos
   | Return of exprs * pos
-  | Open of qualified_ident * pos
+  | Open of stmt * pos
 
 and stmts = stmt list
 
@@ -255,7 +241,6 @@ let pos_of_expr = function
   | BinaryOp (_, _, _, _, p)
   | Ident (_, p) -> p
   | Annot (_, _, p) -> p
-  | Open (_, p) -> p
 
 let free_vars e =
   let rec fv bv acc = function
@@ -452,12 +437,8 @@ let extend_spl_module incls decls bg_th prog_mod mod_name mod_pos =
   }
 
 let merge_spl_programs prog1 prog2 =
-  let spl_mods = []
-    |> IdMap.fold (fun _ decl acc -> ModuleDecl decl :: acc) prog2.spl_modules
-  in
-  let merge_modules id spl_mod =
-    extend_spl_program prog1 spl_mod in List.iter merge_modules spl_mods.iter
-
+  extend_spl_program prog1 prog2
+  
 let add_alloc_decl prog_mod =
   let alloc_decls =
     IdMap.fold
@@ -900,6 +881,8 @@ let rec pr_stmt ppf =
         pr_stmt postb
   | Return (es, _) ->
       fprintf ppf "return @[<2>%a@];" pr_expr_list es
+  | Open (st, _) ->
+      fprintf ppf "open %a;" pr_stmt st
 and pr_stmt_list sts = Util.pr_list_nl pr_stmt sts 
 
 and pr_choice ppf = function
@@ -947,8 +930,17 @@ let pr_fun_decl ppf fdecl =
 let pr_axiom ppf (e, _) =
   fprintf ppf "@[<2>axiom@ %a@];@\n"
     pr_expr e 
-    
+
+(* something is here
 let pr_cu ppf cu =
+  let mu_list = []
+    |> IdMap.fold (fun _ prog_mod acc -> prog_mod :: acc) cu.module_decls
+  in
+  List.map (fun mu -> pr_mu mu) module_decls
+*)
+
+(* mu := module unit *)
+let pr_mu ppf mu =
   let fld_ids =
     IdMap.fold (fun _ tdecl fld_ids ->
       match tdecl.t_def with
@@ -956,22 +948,19 @@ let pr_cu ppf cu =
       | StructTypeDef fields ->
           IdMap.fold (fun id _ fld_ids -> IdSet.add id fld_ids) fields fld_ids
       | ADTypeDef _ -> fld_ids)
-      cu.type_decls IdSet.empty
+      mu.mod_type_decls IdSet.empty
   in
   let globals =
     IdMap.filter
-      (fun id _ -> not @@ IdSet.mem id fld_ids) cu.var_decls
+      (fun id _ -> not @@ IdSet.mem id fld_ids) mu.mod_var_decls
   in
   fprintf ppf "%a@\n%a@\n%a@\n%a@\n%a"
-    (Util.pr_list_nl pr_type_decl) (IdMap.bindings cu.type_decls)
+    (Util.pr_list_nl pr_type_decl) (IdMap.bindings mu.mod_type_decls)
     (Util.pr_list_nl pr_var_decl) (IdMap.bindings globals)
-    (Util.pr_list_nl pr_axiom) cu.background_theory
-    (Util.pr_list_nl pr_pred_decl) (List.map snd (IdMap.bindings cu.pred_decls))
-    (Util.pr_list_nl pr_proc_decl) (List.map snd (IdMap.bindings cu.proc_decls))
-
+    (Util.pr_list_nl pr_axiom) mu.mod_background_theory
+    (Util.pr_list_nl pr_pred_decl) (List.map snd (IdMap.bindings mu.mod_pred_decls))
+    (Util.pr_list_nl pr_proc_decl) (List.map snd (IdMap.bindings mu.mod_proc_decls))
     
-let print_cu out_ch prog = Util.print_of_format pr_cu prog out_ch
+let print_cu out_ch prog = Util.print_of_format pr_mu prog out_ch
 
-        
 let string_of_type t = Util.string_of_format pr_type t
-
