@@ -435,8 +435,7 @@ let check_pure_entail prog eqs p1 p2 =
       sprintf "\n\nCalling prover with name %s\n" name);
     match Prover.get_model ~session_name:name f with
     | None -> true
-    | Some model ->
-      failwith @@ sprintf "Could not prove %s" (string_of_form p2)
+    | Some model -> false
 
 
 (** Returns (fr, inst) s.t. state1 |= state2 * fr, and
@@ -558,20 +557,22 @@ let find_frame_conj prog eqs (pure, spatial) state2 =
         | None -> None))
   in
   let rec find_frame_conj = function
-    | [] -> failwith "Couldn't find frame."
+    | [] -> None
     | Conj spss :: spatial' ->
       (match find_frame_inside_conj spss with
       | Some repl_fn ->
-        (fun sm foo_post ->
+        Some (fun sm foo_post ->
           Conj (repl_fn sm foo_post) :: (List.map (subst_spatial_pred sm) spatial'))
       | None ->
-        let repl_fn = find_frame_conj spatial' in
-        (fun sm foo_post ->
-          let spss = List.map (List.map (subst_spatial_pred sm)) spss in
-          Conj spss :: (repl_fn sm foo_post)))
+        find_frame_conj spatial'
+        |> Opt.map (fun repl_fn ->
+            (fun sm foo_post ->
+              let spss = List.map (List.map (subst_spatial_pred sm)) spss in
+              Conj spss :: (repl_fn sm foo_post))))
     | sp :: spatial' ->
-      let repl_fn = find_frame_conj spatial' in
-      (fun sm foo_post -> (subst_spatial_pred sm sp) :: (repl_fn sm foo_post))
+      find_frame_conj spatial'
+      |> Opt.map (fun repl_fn ->
+        (fun sm foo_post -> (subst_spatial_pred sm sp) :: (repl_fn sm foo_post)))
   in
   find_frame_conj spatial
 
@@ -663,7 +664,9 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     let state = add_neq_constraints state in
     (match check_entailment prog eqs state postcond with
     | Some _ -> []
-    | None -> failwith "This postcondition may not hold.")
+    | None ->
+      (* TODO to get line numbers, convert returns into asserts *)
+      [(dummy_position, "A postcondition may not hold", Model.empty)])
   | Basic (Assign {assign_lhs=[fld];
         assign_rhs=[App (Write, [App (FreeSym fld', [], _);
           App (FreeSym _, [], _) as loc; rhs], srt)]}, pp) as comm :: comms'
@@ -686,7 +689,8 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
         else (fld, rhs) :: fs
       in
       symb_exec prog flds proc (eqs, (pure, mk_spatial' fs')) postcond comms'
-    | None, _, _ -> failwith @@ "Write to invalid location: " ^ (string_of_term loc))
+    | None, _, _ ->
+      [(pp.pp_pos, "Possible invalid heap mutation", Model.empty)])
   | Basic (Assign {assign_lhs=[f];
         assign_rhs=[App (Write, [array_state; arr; idx; rhs], srt)]}, pp) as comm :: comms'
       when array_state = (Grassifier.array_state true (sort_of rhs)) ->
@@ -728,8 +732,10 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
         smk_and [f1; f2; pure] in
       symb_exec prog flds proc (eqs, (pure, spatial)) postcond comms'
     else
-      failwith @@ sprintf "Don't have permission for array write %s[%s]"
+      let msg = sprintf "Don't have permission for array write %s[%s]"
                     (string_of_term arr) (string_of_term idx)
+      in
+      [(pp.pp_pos, msg, Model.empty)]
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, pp) as comm :: comms' ->
     Debug.debug (fun () ->
       sprintf "%sExecuting assignment: %d: %s%sCurrent state:\n%s\n"
@@ -793,18 +799,22 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       match find_frame prog eqs state foo_pre with
       | Some (frame, _) ->
         let frame = List.map (subst_spatial_pred sm) frame in
-        (fun sm foo_post -> foo_post @ frame)
+        Some (fun sm foo_post -> foo_post @ frame)
       | None -> (* Try to see if a lemma can be applied inside a conjunct *)
         if (find_proc prog foo).proc_is_lemma then
           find_frame_conj prog eqs state foo_pre
-        else failwith "Could not find frame."
+        else None
     in
     (* Then, create vars for old vals of all x in lhs, and substitute in eqs & frame *)
-    let eqs = subst_eqs sm eqs in
-    let pure = state |> fst |> subst_form sm in
-    let (post_pure, post_spatial) = foo_post in
-    let state = (smk_and [pure; post_pure], repl_fn sm post_spatial) in
-    symb_exec prog flds proc (eqs, state) postcond comms'
+    (match repl_fn with
+    | Some repl_fn ->
+      let eqs = subst_eqs sm eqs in
+      let pure = state |> fst |> subst_form sm in
+      let (post_pure, post_spatial) = foo_post in
+      let state = (smk_and [pure; post_pure], repl_fn sm post_spatial) in
+      symb_exec prog flds proc (eqs, state) postcond comms'
+    | None ->
+      [(pp.pp_pos, "The precondition of this function call may not hold", Model.empty)])
   | Seq (comms, _) :: comms' ->
     symb_exec prog flds proc (eqs, state) postcond (comms @ comms')
   | Basic (Havoc {havoc_args=vars}, pp) as comm :: comms' ->
@@ -846,15 +856,16 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       (match check_entailment prog eqs state' spec_st with
       | Some _ ->
         symb_exec prog flds proc (eqs, state) postcond comms'
-      | None -> failwith "This assert may not hold")
+      | None -> [(pp.pp_pos, "This assert may not hold", Model.empty)])
     | FOL spec_form ->
       let spec_form, state =
         fold_map_terms (process_no_array prog flds eqs) state spec_form
       in
       let state' = add_neq_constraints state in
-      let _ = find_frame prog eqs state' (spec_form, []) in
-      symb_exec prog flds proc (eqs, state) postcond comms'
-    )
+      (match find_frame prog eqs state' (spec_form, []) with
+      | Some _ ->
+        symb_exec prog flds proc (eqs, state) postcond comms'
+      | None -> [(pp.pp_pos, "This assert may not hold", Model.empty)]))
   | Basic (Return {return_args=xs}, pp) as comm :: _ ->
     Debug.debug (fun () ->
       sprintf "%sExecuting return: %d: %s%sCurrent state:\n%s\n"
@@ -881,7 +892,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     (match check_entailment prog eqs state' spec_st with
     | Some _ ->
       symb_exec prog flds proc (empty_eqs, spec_st) postcond comms'
-    | None -> failwith "This split may not hold")
+    | None -> [(pp.pp_pos, "This split may not hold", Model.empty)])
   | Basic (Assume _, _) :: _ -> failwith "TODO Assume SL command"
   | Basic (New _, _) :: _ -> failwith "TODO New command"
   | Basic (Dispose _, _) :: _ -> failwith "TODO Dispose command"
