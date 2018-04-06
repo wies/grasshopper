@@ -9,7 +9,7 @@ datatype FlowDom = fd(ks: Map<Int, Int>);
 
 predicate domEq(p1: FlowDom, p2: FlowDom) {
   forall k: Int :: p1.ks[k] == p2.ks[k]
-    @(matching k yields p1.ks[k]) @(matching k yields p2.ks[k])
+    @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k])
 }
 
 function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
@@ -53,22 +53,20 @@ define gammaG(x, I) {
   0 <= x.len && x.len < x.keys.length && x.len < x.ptrs.length
     && (forall k: Int :: (I.inf[x].ks[k] >= 1) == (x.rangeLb <= k && k < x.rangeUb))
     && (forall i: Int, j: Int :: 0 <= i && i < j && j < x.len ==> x.keys[i] < x.keys[j])
-  // TODO move these 2 to leaf case
-    && (forall i: Int :: 0 <= i && i < x.len ==> x.keys[i] in I.na.contents)
-    && (forall k: Int :: k in I.na.contents
-       ==> (k == x.keys[cont_witness(x, I, k)]
-          && 0 <= cont_witness(x, I, k) && cont_witness(x, I, k) < x.len)
-       @(matching k without cont_witness yields x.keys[cont_witness(x, I, k)]))
     && (x.ptrs[0] == null && I.FPo == {}  // Leaf
        && (forall i: Int :: 0 <= i && i < x.ptrs.length ==> x.ptrs[i] == null)
+       && (forall i: Int :: 0 <= i && i < x.len ==> x.keys[i] in I.na.contents)
+       && (forall k: Int :: k in I.na.contents
+          ==> (k == x.keys[cont_witness(x, I, k)]
+             && 0 <= cont_witness(x, I, k) && cont_witness(x, I, k) < x.len)
+          @(matching k without cont_witness yields x.keys[cont_witness(x, I, k)]))
        || x.ptrs[0] != null  // Internal
        && (forall i: Int, k: Int :: 0 <= i && i <= x.len ==>
           x.ptrs[i] != null && x.ptrs[i] in I.FPo
           && ((I.fm[x][x.ptrs[i]].ks[k] >= 1) ==
              ((i <= 0 || x.keys[i-1] <= k) && (i >= x.len || k < x.keys[i])))
           @(matching x.ptrs[i] yields x.keys[i-1])
-          @(matching x.ptrs[i] yields x.keys[i])
-          ))
+          @(matching x.ptrs[i] yields x.keys[i])))
 };
 
 define gammaB(x, I) {
@@ -88,32 +86,6 @@ define gamma(x, I) {
 
 /** Lemmas to deal with conjunction */
 
-lemma lemma_N_is_conj(x: Node, Ix: Interface)
-  requires N(x, Ix)
-  ensures N(x, Ix) && [gamma(x, Ix)](Ix)
-
-lemma lemma_conj_is_N(x: Node, Ix: Interface)
-  requires N(x, Ix) && [gamma(x, Ix)](Ix)
-  ensures N(x, Ix)
-
-lemma lemma_conj_is_gamma(x: Node, xlock: Int, xlen: Int, xrangeLb: Int, xrangeUb: Int, xkeys: Array<Int>, xptrs: Array<Node>, Ix: Interface)
-  requires N(x, Ix) && [acc(x) &*& acc(xkeys) &*& acc(xptrs)](Ix)
-  requires x.lock == xlock && x.len == xlen && x.rangeLb == xrangeLb
-           && x.rangeUb == xrangeUb && x.keys == xkeys && x.ptrs == xptrs
-  ensures [acc(x) &*& acc(xkeys) &*& acc(xptrs)](Ix)
-  ensures x.lock == xlock && x.len == xlen && x.rangeLb == xrangeLb
-          && x.rangeUb == xrangeUb && x.keys == xkeys && x.ptrs == xptrs
-          // TODO this can be simplified with old() terms
-
-// This follows from reverse (Conc) and introduction of conjunction
-lemma lemma_gamma_is_conj(x: Node, xlock: Int, xlen: Int, xrangeLb: Int, xrangeUb: Int, xkeys: Array<Int>, xptrs: Array<Node>, Ix: Interface)
-  requires [gamma(x, Ix)](Ix)
-  requires x.lock == xlock && x.len == xlen && x.rangeLb == xrangeLb
-          && x.rangeUb == xrangeUb && x.keys == xkeys && x.ptrs == xptrs
-  ensures N(x, Ix) && [gamma(x, Ix)](Ix)
-  ensures x.lock == xlock && x.len == xlen && x.rangeLb == xrangeLb
-           && x.rangeUb == xrangeUb && x.keys == xkeys && x.ptrs == xptrs
-
 // This follows from semantics of sync not modifying heap
 procedure gamma_sync(x: Node, xlock: Int, xlen: Int, xrangeLb: Int, xrangeUb: Int, xkeys: Array<Int>, xptrs: Array<Node>, Ix: Interface, Ix1: Interface)
   returns ()
@@ -130,6 +102,18 @@ lemma lemma_gamma_comp_sing_int(x: Node, xlock: Int, xlen: Int, xrangeLb: Int, x
   requires x.lock == xlock && x.len == xlen && x.rangeLb == xrangeLb
           && x.rangeUb == xrangeUb && x.keys == xkeys && x.ptrs == xptrs
   ensures [gamma(x, Ix)](Ix) &*& Gr(I2) &*& intComp(Ix, I2) == I &*& I != intUndef
+  ensures x.lock == xlock && x.len == xlen && x.rangeLb == xrangeLb
+           && x.rangeUb == xrangeUb && x.keys == xkeys && x.ptrs == xptrs
+
+lemma lemma_disj_gamma(I1: Interface, I2: Interface,
+                       x: Node, xlock: Int, xlen: Int, xrangeLb: Int, xrangeUb: Int, xkeys: Array<Int>, xptrs: Array<Node>, Ix: Interface, I3: Interface)
+  returns (I4: Interface)
+  requires (Gr(I1) &*& Gr(I2)) && ([gamma(x, Ix)](Ix) &*& Gr(I3))
+  requires ndLeq(Ix.na, I1.na) == false
+  requires x.lock == xlock && x.len == xlen && x.rangeLb == xrangeLb
+          && x.rangeUb == xrangeUb && x.keys == xkeys && x.ptrs == xptrs
+  ensures Gr(I1) &*& [gamma(x, Ix)](Ix) &*& Gr(I4)
+    &*& I2 == intComp(Ix, I4) &*& I3 == intComp(I1, I4)
   ensures x.lock == xlock && x.len == xlen && x.rangeLb == xrangeLb
            && x.rangeUb == xrangeUb && x.keys == xkeys && x.ptrs == xptrs
 
@@ -162,7 +146,7 @@ procedure inRange(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   lemma_conc(x, Ix);
 
   var res1 := x.rangeLb <= k;
-  // TODO re-use stability proofs from give-up.spl here
+  // TODO add split here
   var res2 := x.rangeUb > k;
 
   lemma_abs(x, Ix, Ix);
@@ -185,10 +169,10 @@ procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   ensures (n != null && Ix.fm[x][n].ks[k] >= 1
            || n == null && (forall y: Node :: Ix.fm[x][y].ks[k] == 0))
 {
-  lemma_N_is_conj(x, Ix);
+  lemma_conc(x, Ix);
   
   if (x.ptrs[0] == null) {  // Leaf node
-    lemma_conj_is_N(x, Ix);
+    lemma_conc_rev(x, Ix);
     lemma_int_valid_unfold(Ix);
     return null;
   }
@@ -197,7 +181,7 @@ procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   var flag := true;
 
   while (flag)
-    invariant (N(x, Ix) && [gamma(x, Ix)](Ix)) &*& Gr(I2)
+    invariant [gamma(x, Ix)](Ix) &*& Gr(I2)
     invariant intValid(Ix) == true && intValid(I2) == true
     invariant intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == {locked(TID)}
     invariant !flag ==> (i >= x.len || k < x.keys[i])
@@ -211,7 +195,7 @@ procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   }
 
   n := x.ptrs[i];
-  lemma_conj_is_N(x, Ix);
+  lemma_conc_rev(x, Ix);
   // return n;
 }
 
@@ -231,17 +215,15 @@ procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   // decisiveOpSpec(x, Ix1, res, k):
   ensures Ix1.na.contents == Ix.na.contents -- {k} && (res == k in Ix.na.contents)
 {
+  lemma_conc(x, Ix);
+  pure assume x.ptrs[0] == null; // x is a leaf.
+  // TODO prove using induction from gamma & k !in any outgoing edgeset
+    
   var i := 0;
   var flag := true;
 
-  lemma_N_is_conj(x, Ix);
   while (flag)
-    invariant (N(x, Ix) && [gamma(x, Ix)](Ix)) &*& Gr(I2)
-    invariant intValid(Ix) == true && intValid(I2) == true
-    invariant intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == {locked(TID)}
-    invariant Ix.inf[x].ks[k] >= 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
-    invariant !flag ==> (i >= x.len || k <= x.keys[i])
-    invariant (i == 0 || x.keys[i-1] < k) && 0 <= i && i <= x.len
+    invariant spl_state_ad(x, Ix, I2, I, k, i, flag)
   {
     if (i < x.len && x.keys[i] < k) {
       i := i + 1;
@@ -251,54 +233,47 @@ procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   }
 
   if (i == x.len || x.keys[i] != k) {
-    lemma_conj_is_N(x, Ix);
+    lemma_conc_rev(x, Ix);
     return false, Ix, I;
   } else {
-    pure assume x.ptrs[0] == null; // x is a leaf.
-    // TODO prove using induction from gamma & k !in any outgoing edgeset
-    
-    lemma_conj_is_gamma(x, x.lock, x.len, x.rangeLb, x.rangeUb, x.keys, x.ptrs, Ix);
     // Change nodel label to allow breaking gammaG
     var Ix2: Interface;
     pure assume Ix2 != intUndef && Ix2.na.lockinfo == {dirtylock(TID)}
       && Ix2.na.contents == Ix.na.contents
-      && Ix2.FP == Ix.FP && Ix2.FPo == Ix.FPo && Ix2.inf == Ix.inf && Ix2.fm == Ix.fm;
+      && Ix2.FP == Ix.FP && Ix2.FPo == Ix.FPo && Ix2.inf == Ix.inf && Ix2.fm == Ix.fm
+      // TODO needed to prove intValid(Ix2);
+      && (forall n: Node, n1: Node :: n !in Ix.FP ==> domEq(domZero(), Ix.inf[n])
+         @(matching Ix2.inf[n] yields Ix.inf[n].ks)
+         @(matching Ix2.fm[n][n1] yields Ix.fm[n][n1].ks));
     lemma_int_valid_unfold(Ix);
     lemma_int_valid_fold(Ix2);
     gamma_sync(x, x.lock, x.len, x.rangeLb, x.rangeUb, x.keys, x.ptrs, Ix, Ix2);
     var I3 := lemma_gamma_comp_sing_int(x, x.lock, x.len, x.rangeLb, x.rangeUb, x.keys, x.ptrs, Ix2, I2);
     lemma_repl(I, Ix, I2, Ix2, I3);
-    lemma_gamma_is_conj(x, x.lock, x.len, x.rangeLb, x.rangeUb, x.keys, x.ptrs, Ix2);
 
     var j := i;
     pure assume forall k1: Int :: cw(x, Ix2, j, k1) == cont_witness(x, Ix, k1)
-      @(matching cw(x, Ix2, j, k1) yields cont_witness(x, Ix, k1)) // TODO needed?
       @(matching cw(x, Ix2, j, k1) yields x.keys[cont_witness(x, Ix, k1)]);
 
     while (j < x.len - 1)
       invariant spl_state_ab(x, Ix, Ix2, I2, I3, i, j, k)
     {
-      lemma_conj_is_gamma(x, x.lock, x.len, x.rangeLb, x.rangeUb, x.keys, x.ptrs, Ix2);
-
       x.keys[j] := x.keys[j + 1];
       j := j + 1;
 
       pure assume forall k1: Int :: k1 != x.keys[j] && cw(x, Ix2, j, k1) == cw(x, Ix2, j-1, k1)
         || k1 == x.keys[j] && cw(x, Ix2, j, k1) == j-1;
-      lemma_gamma_is_conj(x, x.lock, x.len, x.rangeLb, x.rangeUb, x.keys, x.ptrs, Ix2);
     }
-    lemma_conj_is_gamma(x, x.lock, x.len, x.rangeLb, x.rangeUb, x.keys, x.ptrs, Ix2);
     x.len := x.len - 1; // TODO add this to paper!!
 
     // Change node label back, remove k from contents
     havoc Ix1;
     pure assume Ix1 != intUndef && Ix1.na.lockinfo == {locked(TID)}
-    // TODO check if this is still necessary?
-                && (forall k1: Int :: k1 in Ix1.na.contents == (k1 in Ix2.na.contents && k1 != k))
+                && Ix1.na.contents == Ix2.na.contents -- {k}
                 && Ix1.FP == Ix2.FP && Ix1.FPo == Ix2.FPo
                 && Ix1.inf == Ix2.inf && Ix1.fm == Ix2.fm
                 && (forall k1: Int :: cont_witness(x, Ix1, k1) == cw(x, Ix2, j, k1)
-                   @(matching cont_witness(x, Ix, k1) yields // TODO necessary?
+                   @(matching cont_witness(x, Ix, k1) yields // Needed for lemma_abs
                      x.keys[cw(x, Ix2, j, k1)]));
     lemma_int_valid_unfold(Ix2);
     lemma_int_valid_fold(Ix1);
@@ -311,29 +286,27 @@ procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   }
 }
 
+
+/* Intermediate states */
+
 define spl_state_ac(x, Ix, I2, I) {
-  (N(x, Ix2) && [gamma(x, Ix2)](Ix2)) &*& Gr(I2)
-    &*& (intValid(Ix2) == true && intValid(I2) == true && intEq(Ix, Ix2) == true)
+  [gamma(x, Ix)](Ix) &*& Gr(I2)
+    &*& (intValid(Ix) == true && intValid(I2) == true && intComp(Ix, I2) == I
+       && globalInt(I))
 };
 
-define spl_state_aa(x, Ix, Ix2, I2, I3, i, k) {
-  (N(x, Ix2) && [gamma(x, Ix2)](Ix2)) &*& Gr(I2)
-    &*& (intValid(Ix2) == true && intValid(I2) == true && intEq(Ix, Ix2) == true
-       && intComp(Ix2, I2) == I3 && globalInt(I3) && Ix2.na.lockinfo == {dirtylock(TID)}
-       && 0 <= i && i <= x.len - 1 && x.keys[i] == k
-       && (forall k: Int :: (Ix2.inf[x].ks[k] >= 1) == (x.rangeLb <= k && k < x.rangeUb))
-       && (forall i: Int, j: Int :: 0 <= i && i < j && j < x.len ==> x.keys[i] < x.keys[j])
-       && (forall i: Int :: 0 <= i && i < x.ptrs.length ==> x.ptrs[i] == null) && Ix2.FPo == {}
-       && Ix2.na.contents == Ix.na.contents && k in Ix.na.contents
-       && (forall i: Int :: 0 <= i && i < x.len ==> x.keys[i] in Ix2.na.contents)
-       )
+define spl_state_ad(x, Ix, I2, I, k, i, flag) {
+  spl_state_ac(x, Ix, I2, I)
+    &*& (Ix.inf[x].ks[k] >= 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
+       && (!flag ==> (i >= x.len || k <= x.keys[i]))
+       && (i == 0 || x.keys[i-1] < k) && 0 <= i && i <= x.len
+       && Ix.na.lockinfo == {locked(TID)})
 };
 
 define spl_state_ab(x, Ix, Ix2, I2, I3, i, j, k) {
-  (N(x, Ix2) && [gamma(x, Ix2)](Ix2)) &*& Gr(I2)
-    &*& (intValid(Ix2) == true && intValid(I2) == true && intEq(Ix, Ix2) == true
-       && intComp(Ix2, I2) == I3 && globalInt(I3)
-       && 0 <= j && j <= x.len - 1 && Ix2.na.lockinfo == {dirtylock(TID)}
+  spl_state_ac(x, Ix2, I2, I3)
+    &*& (intEq(Ix, Ix2) == true && Ix2.na.lockinfo == {dirtylock(TID)}
+       && 0 <= j && j <= x.len - 1
        && (forall k: Int :: (Ix2.inf[x].ks[k] >= 1) == (x.rangeLb <= k && k < x.rangeUb))
        && (forall l1: Int, l2: Int ::
           (0 <= l1 && l1 < l2 && l2 < j || j <= l1 && l1 < l2 && l2 < x.len)
@@ -349,8 +322,65 @@ define spl_state_ab(x, Ix, Ix2, I2, I3, i, j, k) {
        )
     };
 
-procedure foo(Ix1: Interface, Ix2: Interface)
-  requires Ix1 != intUndef && Ix2 != intUndef && Ix1.FP == Ix2.FP && Ix1.FPo == Ix2.FPo
-  requires Ix1.inf == Ix2.inf && Ix1.fm == Ix2.fm
-  ensures intEq(Ix1, Ix2) == true
-{}
+
+/** Actions */
+
+define action_lock_pre(x, Ix) {
+  N(x, Ix) &*& Ix.na.lockinfo == {unlocked}
+};
+
+define action_lock_post(x, Ix, Ix1, t) {
+  N(x, Ix1) &*& (Ix1.FP == Ix.FP && Ix1.FPo == Ix.FPo && Ix1.inf == Ix.inf
+              && Ix1.fm == Ix.fm && Ix1.na.contents == Ix.na.contents
+              && (Ix1.na.lockinfo == {locked(t)} || Ix1.na.lockinfo == {dirtylock(t)}))
+};
+
+procedure action_lock(x: Node, Ix: Interface, t: Int) returns (Ix1: Interface)
+  requires action_lock_pre(x, Ix)
+  ensures action_lock_post(x, Ix, Ix1, t)
+
+define action_sync_pre(I, t) {
+  Gr(I) &*& (I.na.lockinfo == {locked(t)} || I.na.lockinfo == {dirtylock(t)})
+};
+
+define action_sync_post(I, I1, t) {
+  Gr(I1) &*& (I1.na.lockinfo == {unlocked} || I1.na.lockinfo == {locked(t)} || I1.na.lockinfo == {dirtylock(t)})
+    &*& intEq(I, I1) == true
+};
+
+procedure action_sync(I: Interface, t: Int) returns (I1: Interface)
+  requires action_sync_pre(I, t)
+  ensures action_sync_post(I, I1, t)
+
+define action_alloc_pre() { emp };
+
+define action_alloc_post(x, Ix, t) {
+  N(x, Ix) &*& (Ix.inf[x] == domZero() && Ix.FPo == {}
+              && Ix.na.contents == {} && Ix.na.lockinfo == {dirtylock(t)})
+};
+
+procedure action_alloc(t: Int) returns (x: Node, Ix: Interface)
+  requires action_alloc_pre()
+  ensures action_alloc_post(x, Ix, t)
+
+
+/** Stability proofs */
+
+procedure stability_ac_lock(c: Node, Ic: Interface, I2: Interface, I: Interface,
+                            x: Node, Ix: Interface, Io: Interface, t: Int)
+  returns (I21: Interface, I1: Interface)
+  requires spl_state_ac(c, Ic, I2, I) && (action_lock_pre(x, Ix) &*& Gr(Io)) &*& t != TID
+  ensures spl_state_ac(c, Ic, I21, I1)
+{
+  var I3 := lemma_disj_gamma(Ix, Io, c, c.lock, c.len, c.rangeLb, c.rangeUb, c.keys, c.ptrs, Ic, I2);
+
+  var Ix1 := action_lock(x, Ix, t);
+  // N(c, Ic) &*& N(x, Ix1) &*& Gr(I3)
+
+  I21 := lemma_Gr_comp(Ix1, I3);
+  I1 := lemma_gamma_comp_sing_int(c, c.lock, c.len, c.rangeLb, c.rangeUb, c.keys, c.ptrs, Ic, I21);
+  // N(c, Ic) &*& Gr(I21)
+  lemma_repl(I, Ix, Io, Ix1, I1);
+  lemma_int_valid_unfold(I1);
+}
+

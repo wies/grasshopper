@@ -98,8 +98,6 @@ lemma lemma_int_valid_unfold(I: Interface)
   ensures forall n: Node, n1: Node ::
     (n !in I.FP ==> domEq(I.inf[n], domZero()) && domEq(I.fm[n][n1], domZero()))
     && (n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero()))
-     @(matching n yields I.inf[n]) @(matching n, n1 yields I.fm[n][n1])
-   // TODO added these to prove that Ix2 is valid (b+-tree.spl), but overkill!!
   ensures forall n: Node :: n !in I.FP || n !in I.FPo
 
 lemma lemma_int_valid_fold(I: Interface)
@@ -151,6 +149,11 @@ lemma lemma_conc(x: Node, I: Interface)
   requires I != intUndef
   requires N(x, I)
   ensures [gamma(x, I)](I)
+
+lemma lemma_conc_rev(x: Node, I: Interface)
+  requires I != intUndef
+  requires [gamma(x, I)](I)
+  ensures N(x, I)
 
 procedure lemma_abs(x: Node, I: Interface, I1: Interface)
   requires I != intUndef && I1 != intUndef && intValid(I1)

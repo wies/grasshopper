@@ -9,7 +9,7 @@ datatype FlowDom = fd(ks: Map<Int, Int>);
 
 predicate domEq(p1: FlowDom, p2: FlowDom) {
   forall k: Int :: p1.ks[k] == p2.ks[k]
-    @(matching k yields p1.ks[k]) @(matching k yields p2.ks[k])
+    @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k])
 }
 
 function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
