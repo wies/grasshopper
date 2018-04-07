@@ -204,6 +204,33 @@ procedure split2(x: Node, y: Node)
   x.next := x;
 }
 
+procedure old1(x: Node, y: Node)
+  requires acc(x) &*& acc(y)
+  ensures x.next |-> old(y.next) &*& y.next |-> old(x.next)
+{
+  var z := x.next;
+  x.next := y.next;
+  y.next := z;
+}
+
+procedure old2(x: Node, y: Node)
+  requires x.next |-> null &*& y.next |-> x
+  ensures x.next |-> x &*& y.next |-> null
+{
+  old1(y, x);
+}
+
+lemma lemma_swap(x: Node, y: Node)
+  requires acc(x) &*& acc(y)
+  ensures x.next |-> old(y.next) &*& y.next |-> old(x.next)
+
+procedure old3(x: Node, y: Node)
+  requires x.next |-> null &*& y.next |-> x
+  ensures x.next |-> x &*& y.next |-> null
+{
+  lemma_swap(y, x);
+}
+
 
 /* Bugs to be fixed:
 

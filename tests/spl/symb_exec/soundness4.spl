@@ -1,0 +1,7 @@
+procedure foo3(a: Int) returns (b: Int)
+  requires a == 2
+  ensures b == 4 && a == 3
+{
+  a := 3;
+  b := 4;
+}

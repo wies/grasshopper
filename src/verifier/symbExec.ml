@@ -121,6 +121,8 @@ let state_of_spec_list fields specs : state =
       App (Read, [convert_term f; convert_term arg], srt)
     | App (Read, _, _) as t ->
       failwith @@ "Unmatched read term " ^ (string_of_term t)
+    | App (Old, [t], srt) -> (* Dont eval under old! To be done later *)
+      App (Old, [t], srt)
     | App (s, ts, srt) -> App (s, List.map convert_term ts, srt)
   in
   let convert_form f = (map_terms convert_term f, []) in
@@ -542,37 +544,50 @@ let find_frame_conj prog eqs (pure, spatial) state2 =
     | [] -> None
     | sps :: spss ->
       (match find_frame prog eqs (pure, sps) state2 with
-      | Some (frame, _) ->
-        Some (fun sm foo_post ->
+      | Some (frame, inst) ->
+        let repl_fn = (fun sm foo_post ->
           let frame = List.map (subst_spatial_pred sm) frame in
           let spss = List.map (List.map (subst_spatial_pred sm)) spss in
           (foo_post @ frame) :: spss)
+        in
+        Some (repl_fn, inst)
       | None ->
         (match find_frame_inside_conj spss with
-        | Some repl_fn ->
-          Some (fun sm foo_post ->
+        | Some (repl_fn, inst) ->
+          let repl_fn = (fun sm foo_post ->
             let sps = List.map (subst_spatial_pred sm) sps in
-            sps :: (repl_fn sm foo_post)
-          )
+            sps :: (repl_fn sm foo_post))
+          in
+          Some (repl_fn, inst)
         | None -> None))
   in
   let rec find_frame_conj = function
     | [] -> None
     | Conj spss :: spatial' ->
       (match find_frame_inside_conj spss with
-      | Some repl_fn ->
-        Some (fun sm foo_post ->
+      | Some (repl_fn, inst) ->
+        let repl_fn = (fun sm foo_post ->
           Conj (repl_fn sm foo_post) :: (List.map (subst_spatial_pred sm) spatial'))
+        in
+        Some (repl_fn, inst)
       | None ->
-        find_frame_conj spatial'
-        |> Opt.map (fun repl_fn ->
+        (match find_frame_conj spatial' with
+        | Some (repl_fn, inst) ->
+          let repl_fn =
             (fun sm foo_post ->
               let spss = List.map (List.map (subst_spatial_pred sm)) spss in
-              Conj spss :: (repl_fn sm foo_post))))
+              Conj spss :: (repl_fn sm foo_post))
+          in
+          Some (repl_fn, inst)
+        | None -> None))
     | sp :: spatial' ->
-      find_frame_conj spatial'
-      |> Opt.map (fun repl_fn ->
-        (fun sm foo_post -> (subst_spatial_pred sm sp) :: (repl_fn sm foo_post)))
+      (match find_frame_conj spatial' with
+      | Some (repl_fn, inst) ->
+        let repl_fn =
+          (fun sm foo_post -> (subst_spatial_pred sm sp) :: (repl_fn sm foo_post))
+        in
+        Some (repl_fn, inst)
+      | None -> None)
   in
   find_frame_conj spatial
 
@@ -643,6 +658,19 @@ let process prog fields eqs state =
   >> check_array_reads prog eqs
 
 
+(** Replace old(x) terms with appropriate terms *)
+let process_olds fields pre (post_p, post_sp) =
+  let rec process_term pre = function
+    | App (Old, [t], srt) -> eval_term fields pre t
+    | App (s, ts, srt) ->
+      let ts, pre = fold_left_map process_term pre ts in
+      App (s, ts, srt), pre
+    | Var _ as t -> t, pre
+  in
+  let post_p, pre = fold_map_terms process_term pre post_p in
+  pre, (post_p, post_sp)
+
+
 (** Symbolically execute command [comm] on state [state] and check [postcond]. *)
 let rec symb_exec prog flds proc (eqs, state) postcond comms =
   (* Some helpers *)
@@ -660,6 +688,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     Debug.debug (fun () ->
       sprintf "%sExecuting check postcondition: %s%s\n"
         lineSep (string_of_state postcond) lineSep);
+    let state, postcond = process_olds flds state postcond in
     (* TODO do this better *)
     let state = add_neq_constraints state in
     (match check_entailment prog eqs state postcond with
@@ -743,17 +772,18 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
         lineSep (string_of_eqs_state eqs state)
     );
     (* TODO simultaneous assignments can't touch heap, so do all at once *)
-    let (eqs', state') =
+    let (eqs', state', postcond) =
       List.combine ids ts
-      |> List.fold_left (fun (eqs, state) (id, rhs) ->
+      |> List.fold_left (fun (eqs, state, postcond) (id, rhs) ->
           (* First, substitute/eval/check rhs *)
           let rhs, state = process prog flds eqs state rhs in
           let sm = IdMap.singleton id (mk_var_like id) in
           let rhs' = subst_term sm rhs in
           let (pure, spatial) = subst_state sm state in
+          let postcond = subst_state sm postcond in
           let eqs = add_eq id rhs' (subst_eqs sm eqs) in
-          eqs, (pure, spatial)
-        ) (eqs, state)
+          eqs, (pure, spatial), postcond
+        ) (eqs, state, postcond)
     in
     symb_exec prog flds proc (eqs', state') postcond comms'
   | Basic (Call {call_lhs=lhs; call_name=foo; call_args=args}, pp) as comm :: comms' ->
@@ -780,6 +810,8 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
           sm c.contr_returns lhs
       in
       let post = c.contr_postcond |> state_of_spec_list flds |> subst_state sm in
+      (* Replace old(x) terms appropriately *)
+      let pre, post = process_olds flds pre post in
       remove_useless_existentials pre, remove_useless_existentials post
     in
     Debug.debug (fun () ->
@@ -790,6 +822,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     (* TODO do this by keeping disequalities in state? *)
     let state = add_neq_constraints state in
     let foo_pre = apply_equalities eqs foo_pre in
+    (* Replace lhs vars with fresh vars *)
     let sm =
       lhs |> List.fold_left (fun sm id ->
           IdMap.add id (mk_var_like id) sm)
@@ -797,9 +830,9 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     in
     let repl_fn =
       match find_frame prog eqs state foo_pre with
-      | Some (frame, _) ->
+      | Some (frame, inst) ->
         let frame = List.map (subst_spatial_pred sm) frame in
-        Some (fun sm foo_post -> foo_post @ frame)
+        Some ((fun sm foo_post -> foo_post @ frame), inst)
       | None -> (* Try to see if a lemma can be applied inside a conjunct *)
         if (find_proc prog foo).proc_is_lemma then
           find_frame_conj prog eqs state foo_pre
@@ -807,11 +840,13 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     in
     (* Then, create vars for old vals of all x in lhs, and substitute in eqs & frame *)
     (match repl_fn with
-    | Some repl_fn ->
+    | Some (repl_fn, inst) ->
       let eqs = subst_eqs sm eqs in
       let pure = state |> fst |> subst_form sm in
       let (post_pure, post_spatial) = foo_post in
       let state = (smk_and [pure; post_pure], repl_fn sm post_spatial) in
+      (* This is to apply equalities derived during frame inference *)
+      let state = subst_state inst state in
       symb_exec prog flds proc (eqs, state) postcond comms'
     | None ->
       [(pp.pp_pos, "The precondition of this function call may not hold", Model.empty)])
