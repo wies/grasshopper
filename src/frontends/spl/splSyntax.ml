@@ -244,6 +244,8 @@ let free_vars e =
     | Read (e1, e2, _)
     | BinaryOp (e1, _, e2, _, _) ->
         fv bv (fv bv acc e1) e2
+    | Write (e1, e2, e3, _) ->
+        fv bv (fv bv (fv bv acc e1) e2) e3
     | Binder (_, vs, e, _) ->
         let bv, acc =
           List.fold_left (fun (bv, acc) -> function
@@ -255,7 +257,7 @@ let free_vars e =
             (bv, acc) vs
         in
         fv bv acc e
-    | _ -> acc
+    | Null _ | Emp _ | IntVal _ | BoolVal _ -> acc
   in fv IdSet.empty IdSet.empty e
 
 (** Variable substitution for expressions (not capture avoiding) *)
@@ -283,6 +285,8 @@ let subst_id sm =
         Annot (s bv e, a, pos) (* TODO: substitute in a *)
     | Read (e1, e2, pos) ->
         Read (s bv e1, s bv e2, pos)
+    | Write (e1, e2, e3, pos) ->
+        Write (s bv e1, s bv e2, s bv e3, pos)
     | BinaryOp (e1, op, e2, ty, pos) ->
         BinaryOp (s bv e1, op, s bv e2, ty, pos)
     | Binder (b, vs, e, pos) ->
@@ -295,7 +299,7 @@ let subst_id sm =
             bv vs
         in
         Binder (b, vs, s bv e, pos)
-    | e -> e
+    | (Null _ | Emp _ | IntVal _ | BoolVal _ as e) -> e
   in s IdSet.empty
 
 (** General (id -> expr) substitution for expressions (not capture avoiding) *)
@@ -321,7 +325,7 @@ let subst sm =
         UnaryOp (op, s bv e, pos)
     | Annot (e, a, pos) ->
         Annot (s bv e, a, pos) (* TODO: substitute in a *)
-    | Read (e1, e2, pos) ->  (* TODO Thomas, why no substitution for Write? *)
+    | Read (e1, e2, pos) ->
         Read (s bv e1, s bv e2, pos)
     | Write (e1, e2, e3, pos) ->
         Write (s bv e1, s bv e2, s bv e3, pos)
