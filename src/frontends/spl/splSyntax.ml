@@ -282,7 +282,7 @@ let subst_id sm =
     | UnaryOp (op, e, pos) ->
         UnaryOp (op, s bv e, pos)
     | Annot (e, a, pos) ->
-        Annot (s bv e, a, pos) (* TODO: substitute in a *)
+        Annot (s bv e, s_annot bv a, pos)
     | Read (e1, e2, pos) ->
         Read (s bv e1, s bv e2, pos)
     | Write (e1, e2, e3, pos) ->
@@ -300,6 +300,13 @@ let subst_id sm =
         in
         Binder (b, vs, s bv e, pos)
     | (Null _ | Emp _ | IntVal _ | BoolVal _ as e) -> e
+  and s_annot bv = function
+    | GeneratorAnnot (ms, e) ->
+      let ms = List.map (fun (e, is) -> (s bv e, is)) ms in
+      GeneratorAnnot (ms, s bv e)
+    | PatternAnnot e -> PatternAnnot (s bv e)
+    | CommentAnnot _ as a -> a
+    | Position -> Position
   in s IdSet.empty
 
 (** General (id -> expr) substitution for expressions (not capture avoiding) *)
@@ -325,7 +332,7 @@ let subst sm =
         UnaryOp (op, s bv e, pos)
     | Annot (e, a, pos) ->
         Annot (s bv e, s_annot bv a, pos)
-    | Read (e1, e2, pos) ->  (* TODO Thomas, why no substitution for Write? *)
+    | Read (e1, e2, pos) ->
         Read (s bv e1, s bv e2, pos)
     | Write (e1, e2, e3, pos) ->
         Write (s bv e1, s bv e2, s bv e3, pos)
