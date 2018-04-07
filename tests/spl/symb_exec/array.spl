@@ -48,3 +48,41 @@ procedure maximum(a: Array<Int>)
   }
   return max_i;
 }
+
+procedure foo1(a: Array<Int>)
+  requires acc(a) &*& a[0] == 0
+  ensures acc(a) &*& a[0] == 1
+
+procedure frame1(c: Array<Int>, d: Array<Int>)
+  requires acc(c) &*& c[0] == 0 &*& acc(d) &*& d[0] == 22 &*& c.length == 1
+  ensures acc(c) &*& c[0] == 1 &*& acc(d) &*& d[0] == 22
+{
+  foo1(c);
+}
+
+/* TODO support old(array) terms
+procedure foo2(a: Array<Int>)
+  requires acc(a) &*& a.length >= 1
+  ensures acc(a) &*& a[0] == old(a[0]) + 1
+
+procedure frame2(c: Array<Int>, d: Array<Int>)
+  requires acc(c) &*& c[0] == 0 &*& acc(d) &*& d[0] == 22 &*& c.length == 1 &*& d.length == 2
+  ensures acc(c) &*& c[0] == 1 &*& acc(d) &*& d[0] == 24
+{
+  foo2(c);
+  pure assert false;
+  foo2(d);
+  foo2(d);
+}*/
+
+procedure foo3(a: Array<Int>) returns (b: Array<Int>)
+  requires acc(a) &*& a.length >= 1 &*& a[0] == 0
+  ensures acc(b) &*& b.length >= 1 &*& b[0] == 1
+
+procedure frame3(c: Array<Int>, d: Array<Int>)
+  requires acc(c) &*& c[0] == 0 &*& acc(d) &*& d[0] == 0 &*& c.length == 1 &*& d.length == 2
+  ensures acc(c) &*& c[0] == 1 &*& acc(d) &*& d[0] == 1
+{
+  c := foo3(c);
+  foo1(d);
+}

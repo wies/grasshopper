@@ -672,7 +672,15 @@ let process prog fields eqs state =
 (** Replace old(x) terms with appropriate terms *)
 let process_olds fields pre (post_p, post_sp) =
   let rec process_term pre = function
-    | App (Old, [t], srt) -> eval_term fields pre t
+    | App (Old, [t], srt) ->
+      let rec contains_array = function
+        | App (Read, [f; a; idx], srt) when f = (Grassifier.array_state true srt) ->
+          failwith "TODO: support old(_) terms containing array reads"
+        | App (_, ts, _) -> List.iter contains_array ts
+        | Var _ -> ()
+      in
+      contains_array t;
+      eval_term fields pre t
     | App (s, ts, srt) ->
       let ts, pre = fold_left_map process_term pre ts in
       App (s, ts, srt), pre
@@ -733,7 +741,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       [(pp.pp_pos, "Possible invalid heap mutation", Model.empty)])
   | Basic (Assign {assign_lhs=[f];
         assign_rhs=[App (Write, [array_state; arr; idx; rhs], srt)]}, pp) as comm :: comms'
-      when array_state = (Grassifier.array_state true (sort_of rhs)) ->
+      when array_state = Grassifier.array_state true (sort_of rhs) ->
     Debug.debug (fun () ->
       sprintf "%sExecuting array write: %d: %s%sCurrent state:\n%s\n"
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
@@ -745,8 +753,8 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     (* Check that we have permission to the array, and that index is in bounds *)
     if have_array_acc prog eqs (pure, spatial) arr idx then
       (* Create a new variable array_state_old and substitute for the current array state *)
-      let array_state_id = (Grassifier.array_state_id (sort_of rhs)) in
-      let array_state' = (mk_var_like array_state_id) in
+      let array_state_id = Grassifier.array_state_id (sort_of rhs) in
+      let array_state' = mk_var_like array_state_id in
       let sm = IdMap.singleton array_state_id array_state' in
       let idx, rhs = idx |> subst_term sm, rhs |> subst_term sm in
       let (pure, spatial) = subst_state sm (pure, spatial) in
@@ -848,6 +856,48 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
         if (find_proc prog foo).proc_is_lemma then
           find_frame_conj prog eqs state foo_pre
         else None
+    in
+    (* Bump array_state and add frame axiom for arrays not in foo's footprint *)
+    let modified_arrs =
+      List.fold_left (fun acc -> function
+          | PointsTo (x, _) ->
+            (match sort_of x with
+            | Loc (Array s) -> 
+              let locs = match SortMap.find_opt s acc with
+                | Some locs -> locs
+                | None -> []
+              in
+              SortMap.add s (x :: locs) acc
+            | _ -> acc)
+          | _ -> acc)
+        SortMap.empty (snd foo_pre)
+    in
+    let array_frame, array_sm = (* One frame for every sort *)
+      SortMap.fold (fun s xs (fs, sm) ->
+        let array_state_id = Grassifier.array_state_id s in
+        let array_state = Grassifier.array_state true s in
+        let array_state' = mk_var_like array_state_id in
+        let arr = mk_var (Loc (Array s)) (fresh_ident "a") in
+        let idx = mk_var Int (fresh_ident "idx") in
+        let gens = [
+            ([Match (mk_read array_state' [arr; idx], [])],
+              [(mk_read array_state [arr; idx])]);
+            ([Match (mk_read array_state [arr; idx], [])],
+              [(mk_read array_state' [arr; idx])]); ]
+        in
+        let guard = xs |> List.map (fun x -> mk_neq arr x) |> smk_and in
+        let frame =
+        (mk_implies guard
+            (mk_eq (mk_read array_state' [arr; idx]) (mk_read array_state [arr; idx])))
+        |> Axioms.mk_axiom ~gen:gens "array_write"
+        in
+        let sm = IdMap.add array_state_id array_state' sm in
+        (frame :: fs, sm))
+      modified_arrs ([], IdMap.empty)
+    in
+    let state =
+      let (pure, spatial) = subst_state array_sm state in
+      (smk_and @@ pure :: array_frame, spatial)
     in
     (* Then, create vars for old vals of all x in lhs, and substitute in eqs & frame *)
     (match repl_fn with
