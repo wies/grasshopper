@@ -164,10 +164,22 @@ procedure loop1(x: Node)
   }
 }
 
-procedure spatial_neq(x: Node, y: Node)
+procedure spatial_neq1(x: Node, y: Node)
   requires acc(x) &*& acc(y)
   ensures acc(x) &*& acc(y) &*& x != y
 {}
+
+predicate ls(x: Node)
+
+procedure spatial_neq2(x1: Node, x2: Node, x3: Node, x4: Node, x5: Node,
+                       x6: Node, x7: Node)
+  requires acc(x1) &*& (ls(x7) && acc(x2))
+  &*& ((acc(x3) &*& ls(x4)) && (ls(x6) &*& [acc(x5)](x5)))
+  ensures acc(x1) &*& (ls(x7) && acc(x2))
+  &*& ((acc(x3) &*& ls(x4)) && (ls(x6) &*& [acc(x5)](x5)))
+{
+  pure assert x1 != x5 && x2 != x3;
+}
 
 procedure assert1(x: Node, y: Node)
   requires x.next |-> null &*& y.next |-> x

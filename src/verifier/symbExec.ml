@@ -15,7 +15,7 @@ let lineSep = "\n--------------------\n"
 (** ----------- Symbolic state and manipulators ---------- *)
 
 type spatial_pred =
-  | PointsTo of term * sort * (ident * term) list  (** x |-> [f1: E1, ..] *)
+  | PointsTo of term * (ident * term) list  (** x |-> [f1: E1, ..] *)
   | Pred of ident * term list
   | Dirty of spatial_pred list * term list  (** Dirty region: [f1 * ..]_(e1, ..) *)
   | Conj of spatial_pred list list  (** Conjunction of spatial states *)
@@ -43,7 +43,7 @@ let empty_eqs = IdMap.empty
 
 (* TODO use Format formatters for these *)
 let rec string_of_spatial_pred = function
-  | PointsTo (x, _, fs) ->
+  | PointsTo (x, fs) ->
     sprintf "%s |-> (%s)" (string_of_term x)
       (fs |> List.map (fun (id, t) -> (string_of_ident id) ^ ": " ^ (string_of_term t))
         |> String.concat ", ")
@@ -135,7 +135,7 @@ let state_of_spec_list fields specs : state =
       (mk_true, [])
     | Sl.Atom (Sl.Region, [(App (SetEnum, [x], Set Loc srt))], _) -> (* acc(x) *)
       let x = convert_term x in
-      (mk_true, [PointsTo (x, srt, [])])
+      (mk_true, [PointsTo (x, [])])
     | Sl.Atom (Sl.Region, ts, _) -> fail ()
     | Sl.Atom (Sl.Pred p, ts, _) ->
       (mk_true, [Pred (p, ts)])
@@ -177,11 +177,11 @@ let state_of_spec_list fields specs : state =
   (* Put collected read terms from pure part into spatial part *)
   let spatial =
     let rec put_reads = function
-      | PointsTo (x, s, fs) ->
+      | PointsTo (x, fs) ->
         let fs' =
           try TermMap.find x reads |> IdMap.bindings with Not_found -> []
         in
-        PointsTo (x, s, fs @ fs')
+        PointsTo (x, fs @ fs')
       | Pred _ as p -> p
       | Dirty (sps, ts) -> Dirty (List.map put_reads sps, ts)
       | Conj spss -> Conj (List.map (List.map put_reads) spss)
@@ -192,7 +192,7 @@ let state_of_spec_list fields specs : state =
   (* If we have a points-to atom without a corresponding acc() in reads, fail *)
   let alloc_terms =
     let rec collect_allocs allocs = function
-    | PointsTo (x, _, _) -> TermSet.add x allocs
+    | PointsTo (x, _) -> TermSet.add x allocs
     | Pred _ -> allocs
     | Dirty (sps, ts) -> List.fold_left collect_allocs allocs sps
     | Conj spss -> List.fold_left (List.fold_left collect_allocs) allocs spss
@@ -212,8 +212,8 @@ let subst_term sm = subst_consts_term sm >> subst_term sm
 let subst_form sm = subst_consts sm >> subst sm
 
 let rec subst_spatial_pred sm = function
-  | PointsTo (id, s, fs) ->
-    PointsTo (subst_term sm id, s, List.map (fun (id, t) -> id, subst_term sm t) fs)
+  | PointsTo (id, fs) ->
+    PointsTo (subst_term sm id, List.map (fun (id, t) -> id, subst_term sm t) fs)
   | Pred (id, ts) ->
     Pred (id, List.map (subst_term sm) ts)
   | Dirty (sps, ts) ->
@@ -317,30 +317,41 @@ let simplify eqs (pure, spatial) =
   eqs, apply_equalities eqs (pure, spatial)
 
 (** Add implicit disequalities from spatial to pure. Assumes normalized by eq. *)
-let add_neq_constraints (pure, spatial) =  (* TODO CHECK Conj case!! *)
-  let allocated =
-    let rec find_alloc = function
-    | PointsTo (x, s, _) -> [(x, s)]
-    | Dirty (sp', _) -> List.map find_alloc sp' |> rev_concat
-    | Pred _ -> []
-    | Conj spss -> List.map (List.map find_alloc) spss |> List.map rev_concat |> rev_concat
-    in
-    List.map find_alloc spatial |> rev_concat
+let add_neq_constraints (pure, spatial) =
+  let rec f acc locs = function
+    | PointsTo (x, _) :: sps ->
+      let acc1 = TermSet.fold (fun y acc ->
+          if sort_of x = sort_of y then mk_neq x y :: acc else acc)
+        locs acc 
+      in
+      f acc1 (TermSet.add x locs) sps
+    | Dirty (sp', _) :: sps ->
+      let acc, locs = f acc locs sp' in
+      f acc locs sps
+    | Pred _ :: sps ->
+      f acc locs sps
+    | Conj spss :: sps ->
+      let acc, locs =
+        List.fold_left (fun (acc, locs') sps ->
+            let acc, locs1 = f acc locs sps in
+            acc, TermSet.union locs' locs1)
+          (acc, locs) spss
+      in
+      f acc locs sps
+    | [] -> acc, locs
   in
-  let not_nil = List.map (fun (x, s) -> mk_neq x (mk_null s)) allocated in
-  let star_neq =
-    let rec f acc = function
-      | [] -> acc
-      | (x, _) :: l ->
-        let acc = List.fold_left (fun neqs (y, _) ->
-            if sort_of x = sort_of y then mk_neq x y :: neqs else neqs)
-          acc l
-        in
-        f acc l
-    in
-    f [] allocated
+  let neqs, locs = f [] TermSet.empty spatial in
+  (* Also add x != nil for every location x *)
+  let get_sort x = match sort_of x with
+    | Loc s -> s
+    | s ->
+      failwith @@ sprintf "Spatial location %s has non Loc sort %s"
+        (string_of_term x) (string_of_sort s)
   in
-  (smk_and (pure :: not_nil @ star_neq), spatial)
+  let neqs =
+    TermSet.fold (fun x acc -> mk_neq x (mk_null (get_sort x)) :: acc) locs neqs
+  in
+  (smk_and (pure :: neqs), spatial)
 
 
 (** ----------- Symbolic Execution ---------- *)
@@ -349,11 +360,11 @@ let add_neq_constraints (pure, spatial) =  (* TODO CHECK Conj case!! *)
 (** Returns [(fs, spatial')] s.t. [spatial] = [loc] |-> [fs] :: [spatial'] *)
 let find_ptsto loc spatial =
   let sp1, sp2 =
-    List.partition (function | PointsTo (x, _, _) -> x = loc | Pred _ | Dirty _ | Conj _-> false)
+    List.partition (function | PointsTo (x, _) -> x = loc | Pred _ | Dirty _ | Conj _-> false)
       spatial
   in
   match sp1 with
-  | [PointsTo (_, s, fs)] -> Some (fs, sp2)
+  | [PointsTo (_, fs)] -> Some (fs, sp2)
   | [] -> None
   | _ ->
     failwith @@ "find_ptsto was confused by " ^
@@ -370,8 +381,8 @@ let rec find_ptsto_dirty loc spatial =
   | [] ->
     let repl_fn = (fun fs' -> spatial) in
     None, repl_fn, repl_fn
-  | PointsTo (x, s, fs) :: spatial' when x = loc ->
-    let repl_fn = (fun fs' -> PointsTo (x, s, fs') :: spatial') in
+  | PointsTo (x, fs) :: spatial' when x = loc ->
+    let repl_fn = (fun fs' -> PointsTo (x, fs') :: spatial') in
     Some fs, repl_fn, repl_fn
   | Dirty (f, ts) as sp :: spatial' ->
     (match find_ptsto_dirty loc f with
@@ -454,7 +465,7 @@ let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sps1) (p2, sps2) =
     | sp2, sp1 when (sort_conj sp2) = (sort_conj sp1) ->
       (* match equal elements (for Conj, do some normalization) *)
       Some inst
-    | PointsTo (x, _, fs2), PointsTo (x', _, fs1) when x = x' ->
+    | PointsTo (x, fs2), PointsTo (x', fs1) when x = x' ->
       let match_up_fields inst fs1 fs2 =
         let fs1, fs2 = List.sort compare fs1, List.sort compare fs2 in
         let rec match_up inst = function
