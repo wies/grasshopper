@@ -39,25 +39,24 @@ let make_conditionals_lazy cu =
         let aux_id, locals = decl_aux_var "loop_cond" BoolType pos scope locals in
         let preb, locals = process_stmt scope locals preb in
         let postb, locals = process_stmt scope locals postb in
-        Loop (Invariant (BinaryOp (Ident (aux_id, pos),
-				   OpEq,
-				   BinaryOp (e1, OpOr, e2, BoolType, pos1),
-				   BoolType,
-				   pos),
-			 true) :: invs,
-	      Block (
-	      [preb;
+        let invs1 =
+          Invariant
+            (BinaryOp (Ident (aux_id, pos),
+	               OpEq, BinaryOp (e1, OpOr, e2, BoolType, pos1),
+	               BoolType, pos),
+	     true) :: invs
+        in
+        let preb1 =
+          [preb;
 	       If (e1,
 		   Assign ([Ident (aux_id, pos)], [BoolVal (true, pos)], pos),
 		   If (e2,
 		       Assign ([Ident (aux_id, pos)], [BoolVal (true, pos)], pos),
 		       Assign ([Ident (aux_id, pos)], [BoolVal (false, pos)], pos),
 		       pos),
-		   pos)],
-		                 pos),
-	      Ident (aux_id, pos1),
-	      postb,
-	      pos), locals
+		   pos)]
+        in
+        Loop (invs1, Block (preb1, pos), Ident (aux_id, pos1), postb, pos), locals
     | Block (ss, p) ->
         let ss, locals =
           List.fold_right
