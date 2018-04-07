@@ -201,6 +201,7 @@ and binder_kind =
   | Forall | Exists | SetComp
 
 and annotation =
+  | Position
   | GeneratorAnnot of (expr * ident list) list * expr
   | PatternAnnot of expr
   | CommentAnnot of string
@@ -934,3 +935,4 @@ let print_cu out_ch prog = Util.print_of_format pr_cu prog out_ch
         
 let string_of_type t = Util.string_of_format pr_type t
 
+let string_of_expr e = Util.string_of_format pr_expr e

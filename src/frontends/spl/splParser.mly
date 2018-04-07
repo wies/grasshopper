@@ -283,7 +283,7 @@ function_header:
   
 pred_impl:
 | LBRACE expr RBRACE {
-  Some $2
+  Some (Annot ($2, Position, mk_position 1 3))
 }
 | /* empty */ { None }
 ;

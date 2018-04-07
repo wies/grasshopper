@@ -1185,6 +1185,7 @@ let elim_sl prog =
         let fp_func_locals =
           IdMap.add ret_var_id ret_var pred.pred_contract.contr_locals
         in
+        let pos = pred.pred_body |> Opt.map (fun sf -> sf.spec_pos) |> Opt.get_or_else (pos_of_pred pred) in
         let fp_func_contract =
           { contr_name = func_name;
             contr_formals = pred.pred_contract.contr_formals;
@@ -1193,7 +1194,7 @@ let elim_sl prog =
             contr_precond = [];
             contr_postcond = [];
             contr_footprint_sorts = SortSet.empty;
-            contr_pos = dummy_position;
+            contr_pos = pos;
           }
         in
         let footprint_func =
@@ -1219,7 +1220,6 @@ let elim_sl prog =
               let msg _ =
                 "Footprint of " ^ (string_of_ident @@ name_of_pred pred) ^ " may not be precise for type " ^ (string_of_sort sort), ""
               in
-              let pos = pos_of_pred pred in
               let check_precond_specs = List.map (fun f -> mk_spec_form (FOL f) "" None pos) check_preconds in
               let check_postcond_spec = mk_spec_form check_postcond "preciseness" (Some msg) pos in 
               let contract =
@@ -1230,12 +1230,12 @@ let elim_sl prog =
                   contr_precond = check_precond_specs;
                   contr_postcond = [check_postcond_spec];
                   contr_footprint_sorts = SortSet.empty;
-                  contr_pos = pred.pred_contract.contr_pos;
+                  contr_pos = pos;
                 }
               in
               let fp_precise_lemma =
                 { proc_contract = contract;
-                  proc_body = Some (Seq ([], mk_ppoint contract.contr_pos));
+                  proc_body = Some (Seq ([], mk_ppoint pos));
                   proc_is_lemma = true;
                   proc_is_tailrec = false;
                   proc_deps = [];

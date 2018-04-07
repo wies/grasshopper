@@ -341,6 +341,8 @@ let convert cu =
         GrassUtil.mk_btwn_term tfld tx ty tz
     | Binder (SetComp, _, _, pos) ->
         failwith ("set comprehension should have been desugared at " ^ string_of_src_pos pos)
+    | Annot (e, Position, pos) ->
+        convert_term locals e
     | e ->
         failwith ("unexpected expression at " ^ string_of_src_pos (pos_of_expr e))
   in
@@ -438,6 +440,9 @@ let convert cu =
         let ge1 = convert_term locals ge in
         let matches = List.map (fun (e, filters) -> Match (e, filters)) es1 in
         GrassUtil.annotate f [TermGenerator (matches, [ge1])]
+    | Annot (e, Position, pos) ->
+        let f = convert_grass_form locals e in
+        GrassUtil.annotate f [SrcPos pos]
     | e ->
         let t = convert_term locals e in
         Grass.Atom (t, [SrcPos (pos_of_expr e)])
@@ -514,6 +519,9 @@ let convert cu =
         let f1 = convert_sl_form locals1 f in
         let f2 = SlUtil.subst_consts subst f1 in
         mk_quant ~pos:pos vars f2
+    | Annot (e, Position, pos) ->
+        let f = convert_sl_form locals e in
+        SlUtil.mk_exists ~pos:pos [] f
     | e ->
         let f = convert_grass_form locals e in
         Pure (f, Some (pos_of_expr e))
