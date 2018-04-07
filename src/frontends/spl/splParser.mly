@@ -366,7 +366,7 @@ proc_returns:
 ;
 
 datatype_decl:
-| DATATYPE IDENT EQ constr_decls SEMICOLON {
+| DATATYPE IDENT EQ constr_decls semicolon_opt {
   { t_name = $2;
     t_def = ADTypeDef $4;
     t_pos = mk_position 1 5;
