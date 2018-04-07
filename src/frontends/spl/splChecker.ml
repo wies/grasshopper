@@ -944,9 +944,10 @@ let infer_types cu =
         in
         Return (es1, pos)
   in
-  let preds =
+  (* infer types of predicates *)
+  let cu =
     IdMap.fold
-      (fun id pred preds ->
+      (fun id pred cu ->
         let rtype =
           match pred.pr_outputs with
           | [res_id] ->
@@ -969,9 +970,11 @@ let infer_types cu =
             pr_body = body
           }
         in
-        IdMap.add id pred1 preds)
-      cu.pred_decls IdMap.empty
+        let pred_decls1 = IdMap.add id pred1 cu.pred_decls in
+        { cu with pred_decls = pred_decls1 })
+      cu.pred_decls cu
   in
+  (* infer types of procedures/lemmas *)
   let procs =
     IdMap.fold
       (fun _ proc procs ->
@@ -992,7 +995,7 @@ let infer_types cu =
       (fun (e, pos) -> (check_spec IdMap.empty true e, pos) )
       cu.background_theory
   in
-  { cu with pred_decls = preds; proc_decls = procs; background_theory = bg_theory; }
+  { cu with proc_decls = procs; background_theory = bg_theory; }
 
 (** Check compilation unit [cu]. *)
 let check cu =
