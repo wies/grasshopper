@@ -34,7 +34,7 @@ define gamma(x, I) {
   acc(x) &*& I.inf[x] == fd(1)
     &*& (x.next == null && I.FPo == {}
         || x.next != null && I.FPo == {x.next} && I.fm[x][x.next] == fd(1))
-};
+}
 
 procedure lemma_singleton_int(x: Node, xn: Node)
   returns (I1: Interface)

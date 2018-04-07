@@ -24,7 +24,7 @@ struct Node {
   var next: Node;
 }
 
-define gamma(x, I) { true };
+define gamma(x, I) { true }
 
 procedure test_valid1(I1: Interface, I2: Interface)
   requires ! intValid(I1) && intValid(intComp(I1, I2))

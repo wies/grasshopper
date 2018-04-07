@@ -43,6 +43,10 @@ struct Node {
   var ptrs: Array<Node>;
 }
 
+define unchanged(x) {
+  x.lock == old(x.lock) && x.len == old(x.len) && x.rangeLb == old(x.rangeLb)
+    && x.rangeUb == old(x.rangeUb) && x.keys == old(x.keys) && x.ptrs == old(x.ptrs)
+}
 
 /** Definition of good condition, gamma */
 
@@ -67,11 +71,11 @@ define gammaG(x, I) {
              ((i <= 0 || x.keys[i-1] <= k) && (i >= x.len || k < x.keys[i])))
           @(matching x.ptrs[i] yields x.keys[i-1])
           @(matching x.ptrs[i] yields x.keys[i])))
-};
+}
 
 define gammaB(x, I) {
   0 <= x.len && x.len < x.keys.length && x.len < x.ptrs.length
-};
+}
 
 define gamma(x, I) {
   acc(x) &*& acc(x.keys) &*& acc(x.ptrs)
@@ -81,7 +85,7 @@ define gamma(x, I) {
        && (forall k: Int :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
        && (forall k: Int, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
        && (forall k: Int, y: Node, z: Node :: y == z || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0))
-};
+}
 
 
 /** Lemmas to deal with conjunction */
@@ -90,32 +94,22 @@ define gamma(x, I) {
 procedure gamma_sync(x: Node, xlock: Int, xlen: Int, xrangeLb: Int, xrangeUb: Int, xkeys: Array<Int>, xptrs: Array<Node>, Ix: Interface, Ix1: Interface)
   returns ()
   requires [gamma(x, Ix1)](Ix) &*& intValid(Ix1) == true &*& intEq(Ix, Ix1) == true
-  requires x.lock == xlock && x.len == xlen && x.rangeLb == xrangeLb
-          && x.rangeUb == xrangeUb && x.keys == xkeys && x.ptrs == xptrs
-  ensures [gamma(x, Ix1)](Ix1)
-  ensures x.lock == xlock && x.len == xlen && x.rangeLb == xrangeLb
-           && x.rangeUb == xrangeUb && x.keys == xkeys && x.ptrs == xptrs
+  ensures [gamma(x, Ix1)](Ix1) &*& unchanged(x)
 
 lemma lemma_gamma_comp_sing_int(x: Node, xlock: Int, xlen: Int, xrangeLb: Int, xrangeUb: Int, xkeys: Array<Int>, xptrs: Array<Node>, Ix: Interface, I2: Interface)
   returns (I: Interface)
   requires [gamma(x, Ix)](Ix) &*& Gr(I2)
-  requires x.lock == xlock && x.len == xlen && x.rangeLb == xrangeLb
-          && x.rangeUb == xrangeUb && x.keys == xkeys && x.ptrs == xptrs
   ensures [gamma(x, Ix)](Ix) &*& Gr(I2) &*& intComp(Ix, I2) == I &*& I != intUndef
-  ensures x.lock == xlock && x.len == xlen && x.rangeLb == xrangeLb
-           && x.rangeUb == xrangeUb && x.keys == xkeys && x.ptrs == xptrs
+  ensures unchanged(x)
 
 lemma lemma_disj_gamma(I1: Interface, I2: Interface,
                        x: Node, xlock: Int, xlen: Int, xrangeLb: Int, xrangeUb: Int, xkeys: Array<Int>, xptrs: Array<Node>, Ix: Interface, I3: Interface)
   returns (I4: Interface)
   requires (Gr(I1) &*& Gr(I2)) && ([gamma(x, Ix)](Ix) &*& Gr(I3))
   requires ndLeq(Ix.na, I1.na) == false
-  requires x.lock == xlock && x.len == xlen && x.rangeLb == xrangeLb
-          && x.rangeUb == xrangeUb && x.keys == xkeys && x.ptrs == xptrs
   ensures Gr(I1) &*& [gamma(x, Ix)](Ix) &*& Gr(I4)
     &*& I2 == intComp(Ix, I4) &*& I3 == intComp(I1, I4)
-  ensures x.lock == xlock && x.len == xlen && x.rangeLb == xrangeLb
-           && x.rangeUb == xrangeUb && x.keys == xkeys && x.ptrs == xptrs
+  ensures unchanged(x)
 
 
 /** Begin programs */
@@ -131,7 +125,7 @@ define globalInt(I) {
     && (forall n: Node :: n != r ==> domEq(I.inf[n], domZero())
        @(matching n yields I.inf[n]))  // TODO ask Thomas -- field Read exceptions?
     && I.FPo == {}
-};
+}
 
 
 procedure inRange(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
@@ -293,7 +287,7 @@ define spl_state_ac(x, Ix, I2, I) {
   [gamma(x, Ix)](Ix) &*& Gr(I2)
     &*& (intValid(Ix) == true && intValid(I2) == true && intComp(Ix, I2) == I
        && globalInt(I))
-};
+}
 
 define spl_state_ad(x, Ix, I2, I, k, i, flag) {
   spl_state_ac(x, Ix, I2, I)
@@ -301,7 +295,7 @@ define spl_state_ad(x, Ix, I2, I, k, i, flag) {
        && (!flag ==> (i >= x.len || k <= x.keys[i]))
        && (i == 0 || x.keys[i-1] < k) && 0 <= i && i <= x.len
        && Ix.na.lockinfo == {locked(TID)})
-};
+}
 
 define spl_state_ab(x, Ix, Ix2, I2, I3, i, j, k) {
   spl_state_ac(x, Ix2, I2, I3)
@@ -320,20 +314,20 @@ define spl_state_ab(x, Ix, Ix2, I2, I3, i, j, k) {
           && 0 <= cw(x, Ix2, j, k1) && cw(x, Ix2, j, k1) < x.len)
        && (forall l: Int :: 0 <= l && l < j ==> x.keys[l] != k)
        )
-    };
+}
 
 
 /** Actions */
 
 define action_lock_pre(x, Ix) {
   N(x, Ix) &*& Ix.na.lockinfo == {unlocked}
-};
+}
 
 define action_lock_post(x, Ix, Ix1, t) {
   N(x, Ix1) &*& (Ix1.FP == Ix.FP && Ix1.FPo == Ix.FPo && Ix1.inf == Ix.inf
               && Ix1.fm == Ix.fm && Ix1.na.contents == Ix.na.contents
               && (Ix1.na.lockinfo == {locked(t)} || Ix1.na.lockinfo == {dirtylock(t)}))
-};
+}
 
 procedure action_lock(x: Node, Ix: Interface, t: Int) returns (Ix1: Interface)
   requires action_lock_pre(x, Ix)
@@ -341,23 +335,23 @@ procedure action_lock(x: Node, Ix: Interface, t: Int) returns (Ix1: Interface)
 
 define action_sync_pre(I, t) {
   Gr(I) &*& (I.na.lockinfo == {locked(t)} || I.na.lockinfo == {dirtylock(t)})
-};
+}
 
 define action_sync_post(I, I1, t) {
   Gr(I1) &*& (I1.na.lockinfo == {unlocked} || I1.na.lockinfo == {locked(t)} || I1.na.lockinfo == {dirtylock(t)})
     &*& intEq(I, I1) == true
-};
+}
 
 procedure action_sync(I: Interface, t: Int) returns (I1: Interface)
   requires action_sync_pre(I, t)
   ensures action_sync_post(I, I1, t)
 
-define action_alloc_pre() { emp };
+define action_alloc_pre() { emp }
 
 define action_alloc_post(x, Ix, t) {
   N(x, Ix) &*& (Ix.inf[x] == domZero() && Ix.FPo == {}
               && Ix.na.contents == {} && Ix.na.lockinfo == {dirtylock(t)})
-};
+}
 
 procedure action_alloc(t: Int) returns (x: Node, Ix: Interface)
   requires action_alloc_pre()

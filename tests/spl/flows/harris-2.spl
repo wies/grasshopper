@@ -54,7 +54,7 @@ define gamma(x, I) {
                 || x.fnext != null && I.FPo == {x.next.ptr, x.fnext}
                   && I.fm[x][x.fnext] == pair(0, 1)))  
             )
-};
+}
 
 // TODO check this doesn't introduce unsoundness
 procedure lemma_singleton_int(x: Node, xn: Node, xf: Node, pinf: FlowDom, xm: Bool, tid: Int)

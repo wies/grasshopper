@@ -32,7 +32,7 @@ define gamma(x, I) {
   acc(x) &*& I.inf[x].fst == 1 &*& I.inf[x].snd < x.data
     &*& (x.next == null && I.FPo == {}
         || x.next != null && I.FPo == {x.next} && I.fm[x][x.next] == pair(1, x.data))
-};
+}
 
 /** Lemmas */
 

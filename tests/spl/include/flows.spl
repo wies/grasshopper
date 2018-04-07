@@ -13,7 +13,7 @@ datatype Interface =
 
 predicate Gr(I: Interface)
 
-define N(x, I) { Gr(I) &*& I.FP == {x} };
+define N(x, I) { Gr(I) &*& I.FP == {x} }
 
 
 function intComp(I1: Interface, I2: Interface) returns (I: Interface)
