@@ -1,3 +1,6 @@
+// TODO how to prevent this from verifying?
+  // Substitute assignments in post also? But then can't use return vars in body
+  // Only if not return var?
 procedure foo3(a: Int) returns (b: Int)
   requires a == 2
   ensures b == 4 && a == 3

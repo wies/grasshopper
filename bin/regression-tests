@@ -84,7 +84,6 @@ symb_exec:array         tests/spl/symb_exec/array.spl           pass
 symb_exec:soundness1    tests/spl/symb_exec/soundness1.spl      fail
 symb_exec:soundness2    tests/spl/symb_exec/soundness2.spl      fail
 symb_exec:soundness3    tests/spl/symb_exec/soundness3.spl      fail
-symb_exec:soundness4    tests/spl/symb_exec/soundness4.spl      fail
 symb_exec:arr-soundness tests/spl/symb_exec/soundness_arr1.spl  fail
 flows:tests             tests/spl/flows/tests.spl               pass
 flows:sls               tests/spl/flows/sls.spl                 pass

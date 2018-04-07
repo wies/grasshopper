@@ -780,7 +780,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
           let sm = IdMap.singleton id (mk_var_like id) in
           let rhs' = subst_term sm rhs in
           let (pure, spatial) = subst_state sm state in
-          let postcond = subst_state sm postcond in
+          (* let postcond = subst_state sm postcond in *)
           let eqs = add_eq id rhs' (subst_eqs sm eqs) in
           eqs, (pure, spatial), postcond
         ) (eqs, state, postcond)
