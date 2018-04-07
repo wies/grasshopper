@@ -415,7 +415,7 @@ field_decls:
 ;
 
 field_decl:
-| VAR var_decl SEMICOLON { $2 }
+| VAR var_decl semicolon_opt { $2 }
 ;
 
 block:
