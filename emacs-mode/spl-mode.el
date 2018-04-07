@@ -221,7 +221,7 @@
             (prettify-symbols-mode)))
 
 ;; Flycheck mode specific settings
-(when (require 'flycheck nil :noerror)
+(when nil ;;(require 'flycheck nil :noerror)
   ;; Define syntax and type checker
   (flycheck-define-checker spl-reporter
     "Syntax and type checker for GRASShopper programs."
