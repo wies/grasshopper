@@ -28,7 +28,9 @@ function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 
 function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
   ensures forall k: Int :: p.ks[k] == p1.ks[k] * p2.ks[k]
+   @(matching p.ks[k] yields p1.ks[k] * p2.ks[k])
   ensures forall k: Int :: p.ir[k] == p1.ir[k] * p2.ir[k]
+   @(matching p.ir[k] yields p1.ir[k] * p2.ir[k])
 
 function domZero() returns(p: FlowDom)
   ensures forall k: Int :: p.ks[k] == 0 && p.ir[k] == 0
@@ -39,7 +41,7 @@ datatype NodeDom = nd(contents: Set<Int>, lockinfo: LockInfo);
 
 predicate ndLeq(a1: NodeDom, a2: NodeDom) {
   (forall x: Int :: x in a1.contents ==> x in a2.contents)
-    && (a1.lockinfo == unlocked || a2.lockinfo == lockTop)
+    && (a1.lockinfo == a2.lockinfo || a2.lockinfo == lockTop)
 }
 
 
@@ -55,10 +57,12 @@ predicate gammaG(x: Node, I: Interface)
 predicate gammaB(x: Node, I: Interface)
 
 define gamma(x, I) {
-  gammaG(x, I)
+  (gammaG(x, I) && I.na.lockinfo == locked(TID)
+   || gammaB(x, I) && I.na.lockinfo == dirtylock(TID))
     &*& ((forall k: Int :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
        && (forall k: Int, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
-       && (forall k: Int, y: Node, z: Node :: I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0)
+       && (forall k: Int, y: Node, z: Node :: y == z
+          || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0)
        // Inreach keyset \subseteq inset
        && (forall k: Int :: I.inf[x].ir[k] < 1 || (I.fm[x][sk_ir(x, I, k)].ir[k] > 0)
           || I.inf[x].ks[k] >= 1
@@ -68,7 +72,7 @@ define gamma(x, I) {
        && (forall k: Int, y: Node :: I.fm[x][y].ir[k] <= I.fm[x][y].ks[k])
        // If k in inreach, then inreach edgeset is same as normal edgeset (for step)
        && (forall k: Int, y: Node :: I.inf[x].ir[k] >= 1 && I.inf[x].ks[k] <= 0
-          && I.fm[x][y].ks[k] == 1 ==> I.fm[x][y].ir[k] == 1))
+          && I.fm[x][y].ks[k] >= 1 ==> I.fm[x][y].ir[k] >= 1))
 }
 
 
@@ -165,9 +169,9 @@ procedure dictionaryOp(k: Int, I: Interface) returns (res: Bool, I1: Interface)
       lemma_int_valid_unfold(Ic);
       lemma_int_valid_unfold(Ic1);
       lemma_step(Ic1, I2, I, c, n);
-      In, I3 := lemma_decomp(n, I2);
       lemma_conc(c, Ic1); // TODO Make N macro for [gamma]
       lemma_conc_rev(c, Ic1);
+      In, I3 := lemma_decomp(n, I2);
       lemma_int_comp_inf_leq(n, In, I3, I2);
       // N(c, Ic1) &*& N(n, In) &*& Gr(I3)
       I4 := lemma_Gr_comp(Ic1, I3);

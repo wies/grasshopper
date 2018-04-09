@@ -25,16 +25,15 @@ function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 function domZero() returns(p: FlowDom)
   ensures forall k: Int :: p.ks[k] == 0
 
-datatype LockInfo = unlocked | locked(tid: Int) | dirtylock(dtid: Int);
+datatype LockInfo = unlocked | locked(tid: Int) | dirtylock(dtid: Int) | lockTop;
 // Need dirtylock because every intermediate state must imply Gr(I),
 // but when node is locked all conditions of gamma need not hold
   
-datatype NodeDom = nd(contents: Set<Int>, lockinfo: Set<LockInfo>);
-// TODO can do with LockInfo instead of Set<LockInfo>?
+datatype NodeDom = nd(contents: Set<Int>, lockinfo: LockInfo);
 
 predicate ndLeq(a1: NodeDom, a2: NodeDom) {
   (forall x: Int :: x in a1.contents ==> x in a2.contents)
-    && (forall l: LockInfo :: l in a1.lockinfo ==> l in a2.lockinfo)
+    && (a1.lockinfo == a2.lockinfo || a2.lockinfo == lockTop)
 }
 
 
@@ -83,12 +82,13 @@ define gammaB(x, I) {
 
 define gamma(x, I) {
   acc(x) &*& acc(x.keys) &*& acc(x.ptrs)
-    &*& ((gammaG(x, I) && I.na.lockinfo == {locked(TID)}
-         || gammaB(x, I) && I.na.lockinfo == {dirtylock(TID)})
+    &*& ((gammaG(x, I) && I.na.lockinfo == locked(TID)
+         || gammaB(x, I) && I.na.lockinfo == dirtylock(TID))
 /* TODO have a create B+ tree function to check this isn't unsat */
        && (forall k: Int :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
        && (forall k: Int, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
-       && (forall k: Int, y: Node, z: Node :: y == z || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0))
+       && (forall k: Int, y: Node, z: Node :: y == z
+          || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0))
 }
 
 
@@ -136,7 +136,7 @@ procedure inRange(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   returns (res: Bool)
   requires N(x, Ix) &*& Gr(I2)
   requires intValid(Ix) == true && intValid(I2) == true
-  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == {locked(TID)}
+  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
   ensures N(x, Ix) &*& Gr(I2)
   ensures intValid(Ix) == true && intValid(I2) == true
   ensures intComp(Ix, I2) == I && globalInt(I) && (res ==> Ix.inf[x].ks[k] >= 1)
@@ -160,7 +160,7 @@ procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   returns (n: Node)
   requires N(x, Ix) &*& Gr(I2)
   requires intValid(Ix) == true && intValid(I2) == true
-  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == {locked(TID)}
+  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
   ensures N(x, Ix) &*& Gr(I2)
   ensures intValid(Ix) == true && intValid(I2) == true
   ensures intComp(Ix, I2) == I && globalInt(I)
@@ -181,7 +181,7 @@ procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   while (flag)
     invariant [gamma(x, Ix)](Ix) &*& Gr(I2)
     invariant intValid(Ix) == true && intValid(I2) == true
-    invariant intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == {locked(TID)}
+    invariant intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
     invariant !flag ==> (i >= x.len || k < x.keys[i])
     invariant (i == 0 || x.keys[i-1] <= k) && 0 <= i && i <= x.len
   {
@@ -204,11 +204,11 @@ procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   returns (res: Bool, Ix1: Interface, I1: Interface)
   requires N(x, Ix) &*& Gr(I2)
   requires intValid(Ix) == true && intValid(I2) == true
-  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == {locked(TID)}
+  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
   requires Ix.inf[x].ks[k] >= 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
   ensures N(x, Ix1) &*& Gr(I2)
   ensures intValid(Ix1) == true && intValid(I2) == true
-  ensures intComp(Ix1, I2) == I1 && globalInt(I1) && Ix1.na.lockinfo == {locked(TID)}
+  ensures intComp(Ix1, I2) == I1 && globalInt(I1) && Ix1.na.lockinfo == locked(TID)
   ensures intEq(Ix, Ix1) == true
   // decisiveOpSpec(x, Ix1, res, k):
   ensures Ix1.na.contents == Ix.na.contents -- {k} && (res == k in Ix.na.contents)
@@ -236,7 +236,7 @@ procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   } else {
     // Change nodel label to allow breaking gammaG
     var Ix2: Interface;
-    pure assume Ix2 != intUndef && Ix2.na.lockinfo == {dirtylock(TID)}
+    pure assume Ix2 != intUndef && Ix2.na.lockinfo == dirtylock(TID)
       && Ix2.na.contents == Ix.na.contents
       && Ix2.FP == Ix.FP && Ix2.FPo == Ix.FPo && Ix2.inf == Ix.inf && Ix2.fm == Ix.fm
       // TODO needed to prove intValid(Ix2);
@@ -266,7 +266,7 @@ procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
 
     // Change node label back, remove k from contents
     havoc Ix1;
-    pure assume Ix1 != intUndef && Ix1.na.lockinfo == {locked(TID)}
+    pure assume Ix1 != intUndef && Ix1.na.lockinfo == locked(TID)
                 && Ix1.na.contents == Ix2.na.contents -- {k}
                 && Ix1.FP == Ix2.FP && Ix1.FPo == Ix2.FPo
                 && Ix1.inf == Ix2.inf && Ix1.fm == Ix2.fm
@@ -298,12 +298,12 @@ define spl_state_ad(x, Ix, I2, I, k, i, flag) {
     &*& (Ix.inf[x].ks[k] >= 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
        && (!flag ==> (i >= x.len || k <= x.keys[i]))
        && (i == 0 || x.keys[i-1] < k) && 0 <= i && i <= x.len
-       && Ix.na.lockinfo == {locked(TID)})
+       && Ix.na.lockinfo == locked(TID))
 }
 
 define spl_state_ab(x, Ix, Ix2, I2, I3, i, j, k) {
   spl_state_ac(x, Ix2, I2, I3)
-    &*& (intEq(Ix, Ix2) == true && Ix2.na.lockinfo == {dirtylock(TID)}
+    &*& (intEq(Ix, Ix2) == true && Ix2.na.lockinfo == dirtylock(TID)
        && 0 <= j && j <= x.len - 1
        && (forall k: Int :: (Ix2.inf[x].ks[k] >= 1) == (x.rangeLb <= k && k < x.rangeUb))
        && (forall l1: Int, l2: Int ::
@@ -324,13 +324,13 @@ define spl_state_ab(x, Ix, Ix2, I2, I3, i, j, k) {
 /** Actions */
 
 define action_lock_pre(x, Ix) {
-  N(x, Ix) &*& Ix.na.lockinfo == {unlocked}
+  N(x, Ix) &*& Ix.na.lockinfo == unlocked
 }
 
 define action_lock_post(x, Ix, Ix1, t) {
   N(x, Ix1) &*& (Ix1.FP == Ix.FP && Ix1.FPo == Ix.FPo && Ix1.inf == Ix.inf
               && Ix1.fm == Ix.fm && Ix1.na.contents == Ix.na.contents
-              && (Ix1.na.lockinfo == {locked(t)} || Ix1.na.lockinfo == {dirtylock(t)}))
+              && (Ix1.na.lockinfo == locked(t) || Ix1.na.lockinfo == dirtylock(t)))
 }
 
 procedure action_lock(x: Node, Ix: Interface, t: Int) returns (Ix1: Interface)
@@ -338,11 +338,11 @@ procedure action_lock(x: Node, Ix: Interface, t: Int) returns (Ix1: Interface)
   ensures action_lock_post(x, Ix, Ix1, t)
 
 define action_sync_pre(I, t) {
-  Gr(I) &*& (I.na.lockinfo == {locked(t)} || I.na.lockinfo == {dirtylock(t)})
+  Gr(I) &*& (I.na.lockinfo == locked(t) || I.na.lockinfo == dirtylock(t))
 }
 
 define action_sync_post(I, I1, t) {
-  Gr(I1) &*& (I1.na.lockinfo == {unlocked} || I1.na.lockinfo == {locked(t)} || I1.na.lockinfo == {dirtylock(t)})
+  Gr(I1) &*& (I1.na.lockinfo == unlocked || I1.na.lockinfo == locked(t) || I1.na.lockinfo == dirtylock(t))
     &*& intEq(I, I1) == true
 }
 
@@ -354,7 +354,7 @@ define action_alloc_pre() { emp }
 
 define action_alloc_post(x, Ix, t) {
   N(x, Ix) &*& (Ix.inf[x] == domZero() && Ix.FPo == {}
-              && Ix.na.contents == {} && Ix.na.lockinfo == {dirtylock(t)})
+              && Ix.na.contents == {} && Ix.na.lockinfo == dirtylock(t))
 }
 
 procedure action_alloc(t: Int) returns (x: Node, Ix: Interface)

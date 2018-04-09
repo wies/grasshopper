@@ -25,14 +25,13 @@ function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 function domZero() returns(p: FlowDom)
   ensures forall k: Int :: p.ks[k] == 0
 
-datatype LockInfo = unlocked | locked(tid: Int) | dirtylock(dtid: Int);
+datatype LockInfo = unlocked | locked(tid: Int) | dirtylock(dtid: Int) | lockTop;
 
-datatype NodeDom = nd(contents: Set<Int>, lockinfo: Set<LockInfo>);
-// TODO can do with LockInfo instead of Set<LockInfo>?
+datatype NodeDom = nd(contents: Set<Int>, lockinfo: LockInfo);
 
 predicate ndLeq(a1: NodeDom, a2: NodeDom) {
   (forall x: Int :: x in a1.contents ==> x in a2.contents)
-    && (forall l: LockInfo :: l in a1.lockinfo ==> l in a2.lockinfo)
+    && (a1.lockinfo == a2.lockinfo || a2.lockinfo == lockTop)
 }
 
 
@@ -46,10 +45,12 @@ predicate gammaG(x: Node, I: Interface)
 predicate gammaB(x: Node, I: Interface)
 
 define gamma(x, I) {
-  gammaG(x, I)  // TODO or gammaB based on lockinfo!!
+  (gammaG(x, I) && I.na.lockinfo == locked(TID)
+   || gammaB(x, I) && I.na.lockinfo == dirtylock(TID))
     &*& ((forall k: Int :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
        && (forall k: Int, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
-       && (forall k: Int, y: Node, z: Node :: I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0))
+       && (forall k: Int, y: Node, z: Node :: y == z
+          || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0))
 }
 
 
@@ -76,14 +77,14 @@ procedure lock(x: Node, Ix: Interface, I2: Interface, I: Interface)
   ensures N(x, Ix1) &*& Gr(I2)
   ensures intValid(Ix1) == true && intValid(I2) == true
   ensures intComp(Ix1, I2) == I1 && globalInt(I1) && intEq(Ix, Ix1) == true
-  ensures Ix1.na.lockinfo == {locked(TID)}
+  ensures Ix1.na.lockinfo == locked(TID)
 
 
 procedure unlock(x: Node, Ix: Interface, I2: Interface, I: Interface)
   returns (Ix1: Interface, I1: Interface)
   requires N(x, Ix) &*& Gr(I2)
   requires intValid(Ix) == true && intValid(I2) == true
-  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == {locked(TID)}
+  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
   ensures N(x, Ix1) &*& Gr(I2)
   ensures intValid(Ix1) == true && intValid(I2) == true
   ensures intComp(Ix1, I2) == I1 && globalInt(I1) && intEq(Ix, Ix1) == true
@@ -93,7 +94,7 @@ procedure inRange(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   returns (res: Bool)
   requires N(x, Ix) &*& Gr(I2)
   requires intValid(Ix) == true && intValid(I2) == true
-  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == {locked(TID)}
+  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
   ensures N(x, Ix) &*& Gr(I2)
   ensures intValid(Ix) == true && intValid(I2) == true
   ensures intComp(Ix, I2) == I && globalInt(I) && (res ==> Ix.inf[x].ks[k] >= 1)
@@ -103,7 +104,7 @@ procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   returns (n: Node)
   requires N(x, Ix) &*& Gr(I2)
   requires intValid(Ix) == true && intValid(I2) == true
-  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == {locked(TID)}
+  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
   ensures N(x, Ix) &*& Gr(I2)
   ensures intValid(Ix) == true && intValid(I2) == true
   ensures intComp(Ix, I2) == I && globalInt(I)
@@ -118,11 +119,11 @@ procedure decisiveOp(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   returns (res: Bool, Ix1: Interface, I1: Interface)
   requires N(x, Ix) &*& Gr(I2)
   requires intValid(Ix) == true && intValid(I2) == true
-  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == {locked(TID)}
+  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
   requires Ix.inf[x].ks[k] >= 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
   ensures N(x, Ix1) &*& Gr(I2)
   ensures intValid(Ix1) == true && intValid(I2) == true
-  ensures intComp(Ix1, I2) == I1 && globalInt(I1) && Ix1.na.lockinfo == {locked(TID)}
+  ensures intComp(Ix1, I2) == I1 && globalInt(I1) && Ix1.na.lockinfo == locked(TID)
   ensures intEq(Ix, Ix1) == true // TODO why needed?
   ensures decisiveOpSpec(x, Ix1, res, k) == true
 
@@ -214,7 +215,7 @@ define spl_state_01(c, Ic, I2, I) {
 
 define spl_state_02(c, Ic, I2, I) {
   N(c, Ic) &*& Gr(I2)
-    &*& (I == intComp(Ic, I2) && globalInt(I) && Ic.na.lockinfo == {locked(TID)})
+    &*& (I == intComp(Ic, I2) && globalInt(I) && Ic.na.lockinfo == locked(TID))
 }
 
 define spl_state_03(c, Ic, I2, I, k) {
@@ -246,20 +247,20 @@ define spl_state_08(c, Ic, I2, I, n) {
 
 define spl_state_inv(c, Ic, I2, I, k, n) {
   spl_state_01(c, Ic, I2, I)
-    &*& (n == null ==> Ic.na.lockinfo == {locked(TID)}
+    &*& (n == null ==> Ic.na.lockinfo == locked(TID)
                      && Ic.inf[c].ks[k] >= 1 && (forall y: Node :: Ic.fm[c][y].ks[k] == 0))
 }
 
 /** Actions */
 
 define action_lock_pre(x, Ix) {
-  N(x, Ix) &*& Ix.na.lockinfo == {unlocked}
+  N(x, Ix) &*& Ix.na.lockinfo == unlocked
 }
 
 define action_lock_post(x, Ix, Ix1, t) {
   N(x, Ix1) &*& (Ix1.FP == Ix.FP && Ix1.FPo == Ix.FPo && Ix1.inf == Ix.inf
               && Ix1.fm == Ix.fm && Ix1.na.contents == Ix.na.contents
-              && (Ix1.na.lockinfo == {locked(t)} || Ix1.na.lockinfo == {dirtylock(t)}))
+              && (Ix1.na.lockinfo == locked(t) || Ix1.na.lockinfo == dirtylock(t)))
 }
 
 procedure action_lock(x: Node, Ix: Interface, t: Int) returns (Ix1: Interface)
@@ -267,11 +268,11 @@ procedure action_lock(x: Node, Ix: Interface, t: Int) returns (Ix1: Interface)
   ensures action_lock_post(x, Ix, Ix1, t)
 
 define action_sync_pre(I, t) {
-  Gr(I) &*& (I.na.lockinfo == {locked(t)} || I.na.lockinfo == {dirtylock(t)})
+  Gr(I) &*& (I.na.lockinfo == locked(t) || I.na.lockinfo == dirtylock(t))
 }
 
 define action_sync_post(I, I1, t) {
-  Gr(I1) &*& (I1.na.lockinfo == {unlocked} || I1.na.lockinfo == {locked(t)} || I1.na.lockinfo == {dirtylock(t)})
+  Gr(I1) &*& (I1.na.lockinfo == unlocked || I1.na.lockinfo == locked(t) || I1.na.lockinfo == dirtylock(t))
     &*& intEq(I, I1) == true
 }
 
@@ -283,7 +284,7 @@ define action_alloc_pre() { emp }
 
 define action_alloc_post(x, Ix, t) {
   N(x, Ix) &*& (Ix.inf[x] == domZero() && Ix.FPo == {}
-              && Ix.na.contents == {} && Ix.na.lockinfo == {dirtylock(t)})
+              && Ix.na.contents == {} && Ix.na.lockinfo == dirtylock(t))
 }
 
 procedure action_alloc(t: Int) returns (x: Node, Ix: Interface)
