@@ -1,0 +1,242 @@
+/** Link technique template for linearizable dictionaries. */
+
+include "../include/flows.spl";
+
+
+/** Flow domain definitions */
+
+datatype FlowDom = fd(ks: Map<Int, Int>, ir: Map<Int, Int>);
+
+predicate domEq(p1: FlowDom, p2: FlowDom) {
+  (forall k: Int :: p1.ks[k] == p2.ks[k]
+   @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
+    && (forall k: Int :: p1.ir[k] == p2.ir[k]
+       @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
+
+}
+
+predicate domLeq(p1: FlowDom, p2: FlowDom) {
+  (forall k: Int :: p1.ks[k] <= p2.ks[k]
+   @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
+    && (forall k: Int :: p1.ir[k] <= p2.ir[k]
+       @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
+}
+
+function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+  ensures forall k: Int :: p.ks[k] == p1.ks[k] + p2.ks[k]
+  ensures forall k: Int :: p.ir[k] == p1.ir[k] + p2.ir[k]
+
+function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+  ensures forall k: Int :: p.ks[k] == p1.ks[k] * p2.ks[k]
+  ensures forall k: Int :: p.ir[k] == p1.ir[k] * p2.ir[k]
+
+function domZero() returns(p: FlowDom)
+  ensures forall k: Int :: p.ks[k] == 0 && p.ir[k] == 0
+
+datatype LockInfo = unlocked | locked(tid: Int) | dirtylock(dtid: Int) | lockTop;
+
+datatype NodeDom = nd(contents: Set<Int>, lockinfo: LockInfo);
+
+predicate ndLeq(a1: NodeDom, a2: NodeDom) {
+  (forall x: Int :: x in a1.contents ==> x in a2.contents)
+    && (a1.lockinfo == unlocked || a2.lockinfo == lockTop)
+}
+
+
+struct Node {}
+
+
+/** Definition of good condition, gamma */
+
+function sk_ir(x: Node, I: Interface, k: Int) returns (y: Node)
+
+predicate gammaG(x: Node, I: Interface)
+
+predicate gammaB(x: Node, I: Interface)
+
+define gamma(x, I) {
+  gammaG(x, I)
+    &*& ((forall k: Int :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
+       && (forall k: Int, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
+       && (forall k: Int, y: Node, z: Node :: I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0)
+       // Inreach keyset \subseteq inset
+       && (forall k: Int :: I.inf[x].ir[k] < 1 || (I.fm[x][sk_ir(x, I, k)].ir[k] > 0)
+          || I.inf[x].ks[k] >= 1
+          @(matching I.inf[x].ir[k] yields I.fm[x][sk_ir(x, I, k)].ir[k])
+          @(matching I.inf[x].ir[k] yields I.fm[x][sk_ir(x, I, k)].ks[k]))
+       // Inreach edgesets \subseteq normal edgesets
+       && (forall k: Int, y: Node :: I.fm[x][y].ir[k] <= I.fm[x][y].ks[k])
+       // If k in inreach, then inreach edgeset is same as normal edgeset (for step)
+       && (forall k: Int, y: Node :: I.inf[x].ir[k] >= 1 && I.inf[x].ks[k] <= 0
+          && I.fm[x][y].ks[k] == 1 ==> I.fm[x][y].ir[k] == 1))
+}
+
+
+/** Begin programs */
+
+var TID: Int;
+var r: Node;
+
+define globalInt(I) {
+  intValid(I) == true && r in I.FP && (forall k: Int :: I.inf[r].ks[k] == 1)
+    && (forall n: Node, k: Int :: n != r ==> I.inf[n].ks[k] == 0)
+    && I.FPo == {} && r != null
+}
+
+procedure lock(x: Node, Ix: Interface, I2: Interface, I: Interface)
+  returns (Ix1: Interface, I1: Interface)
+  requires N(x, Ix) &*& Gr(I2)
+  requires intValid(Ix) == true && intValid(I2) == true
+  requires intComp(Ix, I2) == I && globalInt(I)
+  ensures N(x, Ix1) &*& Gr(I2)
+  ensures intValid(Ix1) == true && intValid(I2) == true
+  ensures intComp(Ix1, I2) == I1 && globalInt(I1) && intEq(Ix, Ix1) == true
+  ensures Ix1.na.lockinfo == locked(TID)
+
+
+procedure unlock(x: Node, Ix: Interface, I2: Interface, I: Interface)
+  returns (Ix1: Interface, I1: Interface)
+  requires N(x, Ix) &*& Gr(I2)
+  requires intValid(Ix) == true && intValid(I2) == true
+  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
+  ensures N(x, Ix1) &*& Gr(I2)
+  ensures intValid(Ix1) == true && intValid(I2) == true
+  ensures intComp(Ix1, I2) == I1 && globalInt(I1) && intEq(Ix, Ix1) == true
+
+
+procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
+  returns (n: Node)
+  requires N(x, Ix) &*& Gr(I2)
+  requires intValid(Ix) == true && intValid(I2) == true
+  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
+  ensures N(x, Ix) &*& Gr(I2)
+  ensures intValid(Ix) == true && intValid(I2) == true
+  ensures intComp(Ix, I2) == I && globalInt(I)
+  ensures (n != null && Ix.fm[x][n].ks[k] >= 1
+           || n == null && (forall y: Node :: Ix.fm[x][y].ks[k] == 0))
+
+
+// To be filled-in by implementation:
+predicate decisiveOpSpec(x: Node, Ix1: Interface, res: Bool, k: Int)
+
+procedure decisiveOp(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
+  returns (res: Bool, Ix1: Interface, I1: Interface)
+  requires N(x, Ix) &*& Gr(I2)
+  requires intValid(Ix) == true && intValid(I2) == true
+  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
+  requires Ix.inf[x].ks[k] >= 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
+  ensures N(x, Ix1) &*& Gr(I2)
+  ensures intValid(Ix1) == true && intValid(I2) == true
+  ensures intComp(Ix1, I2) == I1 && globalInt(I1) && Ix1.na.lockinfo == locked(TID)
+  ensures decisiveOpSpec(x, Ix1, res, k) == true
+
+
+procedure dictionaryOp(k: Int, I: Interface) returns (res: Bool, I1: Interface)
+  requires Gr(I) &*& globalInt(I)
+  ensures Gr(I1) &*& globalInt(I1)
+{
+  var c := r;
+
+  var Ic: Interface, I2: Interface;
+  Ic, I2 := lemma_decomp(c, I);
+  lemma_int_comp_inf_leq(c, Ic, I2, I);
+  split spl_state_07(c, Ic, I2, I);
+
+  var n := c;
+  while (n != null)
+    invariant spl_state_inv(c, Ic, I2, I, k, n)
+  {
+    Ic, I := lock(c, Ic, I2, I);
+
+    split spl_state_03(c, Ic, I2, I);
+
+    n := findNext(c, k, Ic, I2, I);
+
+    split spl_state_04(c, Ic, I2, I, k, n);
+
+    if (n != null) {
+      split spl_state_05(c, Ic, I2, I, k, n);
+
+      var Ic1: Interface;
+      Ic1, I := unlock(c, Ic, I2, I);
+
+      // Step to n
+      var In: Interface, I3: Interface, I4: Interface;
+      lemma_int_valid_unfold(Ic);
+      lemma_int_valid_unfold(Ic1);
+      lemma_step(Ic1, I2, I, c, n);
+      In, I3 := lemma_decomp(n, I2);
+      lemma_conc(c, Ic1); // TODO Make N macro for [gamma]
+      lemma_conc_rev(c, Ic1);
+      lemma_int_comp_inf_leq(n, In, I3, I2);
+      // N(c, Ic1) &*& N(n, In) &*& Gr(I3)
+      I4 := lemma_Gr_comp(Ic1, I3);
+      // N(n, In) &*& Gr(I4)
+      Ic, I2 := In, I4;
+
+      split spl_state_06(n, Ic, I2, I);
+
+      c := n;
+    }
+  }
+  lemma_conc(c, Ic);
+  lemma_conc_rev(c, Ic);
+  res, Ic, I := decisiveOp(c, k, Ic, I2, I);
+
+  split spl_state_02(c, Ic, I2, I);
+
+  Ic, I := unlock(c, Ic, I2, I);
+
+  split spl_state_01(c, Ic, I2, I);
+
+  I := lemma_Gr_comp(Ic, I2);
+  return res, I;
+}
+
+
+/** Intermediate assertions */
+
+define spl_state_01(c, Ic, I2, I) {
+  N(c, Ic) &*& Gr(I2)
+    &*& (I == intComp(Ic, I2) && globalInt(I))
+}
+
+define spl_state_02(c, Ic, I2, I) {
+  N(c, Ic) &*& Gr(I2)
+    &*& (I == intComp(Ic, I2) && globalInt(I) && Ic.na.lockinfo == locked(TID))
+}
+
+define spl_state_03(c, Ic, I2, I) {
+  spl_state_02(c, Ic, I2, I)
+    &*& (Ic.inf[c].ks[k] >= 1 || Ic.inf[c].ir[k] >= 1)
+}
+
+define spl_state_04(c, Ic, I2, I, k, n) {
+  spl_state_02(c, Ic, I2, I)
+    &*& (n != null && Ic.fm[c][n].ks[k] >= 1
+       || n == null && (forall y: Node :: Ic.fm[c][y].ks[k] == 0))
+    &*& (Ic.inf[c].ks[k] >= 1 || Ic.inf[c].ir[k] >= 1)
+}
+
+define spl_state_05(c, Ic, I2, I, k, n) {
+  spl_state_02(c, Ic, I2, I)
+    &*& (n != null && Ic.fm[c][n].ks[k] >= 1
+       && (Ic.inf[c].ks[k] >= 1 || Ic.inf[c].ir[k] >= 1))
+}
+
+define spl_state_06(c, Ic, I2, I) {
+  spl_state_01(c, Ic, I2, I)
+    &*& (c != null && (Ic.inf[c].ks[k] >= 1 || Ic.inf[c].ir[k] >= 1))
+}
+
+define spl_state_07(c, Ic, I2, I) {
+  spl_state_01(c, Ic, I2, I)
+    &*& (r == c && (Ic.inf[c].ks[k] >= 1 || Ic.inf[c].ir[k] >= 1))
+}
+
+define spl_state_inv(c, Ic, I2, I, k, n) {
+  spl_state_01(c, Ic, I2, I)
+    &*& (n == null ==> Ic.na.lockinfo == locked(TID)
+       && (forall y: Node :: Ic.fm[c][y].ks[k] == 0))
+    &*& (Ic.inf[c].ks[k] >= 1 || Ic.inf[c].ir[k] >= 1)
+}

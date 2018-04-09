@@ -1,4 +1,4 @@
-/** Give-up template for linearizable dictionaries. */
+/** Give-up technique template for linearizable dictionaries. */
 
 include "../include/flows.spl";
 
@@ -39,14 +39,13 @@ struct Node {}
 
 predicate gammaG(x: Node, I: Interface)
 
-predicate gammaB(x: Node, I: Interface)  // TODO why did we need two?
+predicate gammaB(x: Node, I: Interface)
 
 define gamma(x, I) {
-  gammaG(x, I) &*& (
-                  (forall k: Int :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
-                  && (forall k: Int, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
-                  && (forall k: Int, y: Node, z: Node :: I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0)
-                  )
+  gammaG(x, I)  // TODO or gammaB based on lockinfo!!
+    &*& ((forall k: Int :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
+       && (forall k: Int, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
+       && (forall k: Int, y: Node, z: Node :: I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0))
 }
 
 
