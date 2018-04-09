@@ -1,0 +1,127 @@
+/** Hash table implementation of the link template for linearizable dictionaries. */
+
+include "../include/flows.spl";
+
+
+/** Flow domain definitions */
+
+datatype FlowDom = fd(ks: Map<Int, Int>, ir: Map<Int, Int>);
+
+predicate domEq(p1: FlowDom, p2: FlowDom) {
+  (forall k: Int :: p1.ks[k] == p2.ks[k]
+   @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
+    && (forall k: Int :: p1.ir[k] == p2.ir[k]
+       @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
+
+}
+
+predicate domLeq(p1: FlowDom, p2: FlowDom) {
+  (forall k: Int :: p1.ks[k] <= p2.ks[k]
+   @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
+    && (forall k: Int :: p1.ir[k] <= p2.ir[k]
+       @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
+}
+
+function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+  ensures forall k: Int :: p.ks[k] == p1.ks[k] + p2.ks[k]
+  ensures forall k: Int :: p.ir[k] == p1.ir[k] + p2.ir[k]
+
+function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+  ensures forall k: Int :: p.ks[k] == p1.ks[k] * p2.ks[k]
+  ensures forall k: Int :: p.ir[k] == p1.ir[k] * p2.ir[k]
+
+function domZero() returns(p: FlowDom)
+  ensures forall k: Int :: p.ks[k] == 0 && p.ir[k] == 0
+
+datatype LockInfo = unlocked | locked(tid: Int) | dirtylock(dtid: Int) | lockTop;
+
+datatype NodeType = root | bucket | nodeTop;
+
+datatype NodeDom = nd(contents: Set<Int>, lockinfo: LockInfo, nodetype: NodeType);
+
+predicate ndLeq(a1: NodeDom, a2: NodeDom) {
+  (forall x: Int :: x in a1.contents ==> x in a2.contents)
+    && (a1.lockinfo == a2.lockinfo || a2.lockinfo == lockTop)
+    && (a1.nodetype == a2.nodetype || a2.nodetype == nodeTop)
+}
+
+
+struct Node {
+  var lock: Int;
+  var arr: Array<Node>;
+  var keys: Array<Int>;
+  var next: Node;
+}
+
+
+/** Definition of good condition, gamma */
+
+function hash(x: Node, k: Int) returns (i: Int)
+  ensures forall k: Int :: 0 <= hash(x, k) && hash(x, k) < x.arr.length
+
+function sk_ir(x: Node, I: Interface, k: Int) returns (y: Node)
+
+define gammaG(x, I) {
+  (I.na.nodetype == root
+   && (forall i: Int :: 0 <= i && i < x.arr.length ==> x.arr[i] != null)
+   && (forall y: Node, k: Int :: y == x.arr[hash(x, k)] ==> I.fm[x][y].ks[k] == 1))
+    || (I.na.nodetype == bucket)
+}
+
+define gammaB(x, I) { true }
+
+define gamma(x, I) {
+  acc(x) &*& acc(x.arr) &*& acc(x.keys)
+    &*& (gammaG(x, I) && I.na.lockinfo == locked(TID)
+       || gammaB(x, I) && I.na.lockinfo == dirtylock(TID))
+    &*& ((forall k: Int :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
+       && (forall k: Int, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
+       && (forall k: Int, y: Node, z: Node :: y == z
+          || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0)
+       // Inreach keyset \subseteq inset
+       && (forall k: Int :: I.inf[x].ir[k] < 1 || (I.fm[x][sk_ir(x, I, k)].ir[k] > 0)
+          || I.inf[x].ks[k] >= 1
+          @(matching I.inf[x].ir[k] yields I.fm[x][sk_ir(x, I, k)].ir[k])
+          @(matching I.inf[x].ir[k] yields I.fm[x][sk_ir(x, I, k)].ks[k]))
+       // Inreach edgesets \subseteq normal edgesets
+       && (forall k: Int, y: Node :: I.fm[x][y].ir[k] <= I.fm[x][y].ks[k])
+       // If k in inreach, then inreach edgeset is same as normal edgeset (for step)
+       && (forall k: Int, y: Node :: I.inf[x].ir[k] >= 1 && I.inf[x].ks[k] <= 0
+          && I.fm[x][y].ks[k] >= 1 ==> I.fm[x][y].ir[k] >= 1))
+}
+
+
+/** Begin programs */
+
+var TID: Int;
+var r: Node;
+
+define globalInt(I) {
+  intValid(I) == true && r in I.FP && (forall k: Int :: I.inf[r].ks[k] == 1)
+    && (forall n: Node, k: Int :: n != r ==> I.inf[n].ks[k] == 0)
+    && I.FPo == {} && r != null
+}
+
+
+procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
+  returns (n: Node)
+  requires N(x, Ix) &*& Gr(I2)
+  requires intValid(Ix) == true && intValid(I2) == true
+  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
+  ensures N(x, Ix) &*& Gr(I2)
+  ensures intValid(Ix) == true && intValid(I2) == true
+  ensures intComp(Ix, I2) == I && globalInt(I)
+  ensures (n != null && Ix.fm[x][n].ks[k] >= 1
+           || n == null && (forall y: Node :: Ix.fm[x][y].ks[k] == 0))
+{
+  lemma_conc(x, Ix);
+  if (Ix.na.nodetype == root) {
+    n := x.arr[hash(x, k)];
+    lemma_conc_rev(x, Ix);
+    return n;
+  } else if (Ix.na.nodetype == bucket) {
+    lemma_conc_rev(x, Ix);
+    pure assume false;
+  }
+}
+
