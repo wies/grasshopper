@@ -11,6 +11,12 @@ predicate domEq(p1: FlowDom, p2: FlowDom) {
   p1.fst == p2.fst && p1.snd == p2.snd
 }
 
+predicate domLt(p1: FlowDom, p2: FlowDom)
+{ p1.fst <= p2.fst && p1.snd <= p2.snd && p1 != p2 }
+
+predicate domLeq(p1: FlowDom, p2: FlowDom)
+{ p1.fst <= p2.fst && p1.snd <= p2.snd }
+
 function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 { pair(p1.fst + p2.fst, p1.snd + p2.snd) }
 
@@ -18,12 +24,6 @@ function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 { pair(p1.fst * p2.fst, p1.snd * p2.snd) }
 
 function domZero() returns(p: FlowDom) { pair(0, 0) }
-
-predicate domLt(p1: FlowDom, p2: FlowDom)
-{ p1.fst <= p2.fst && p1.snd <= p2.snd && p1 != p2 }
-
-predicate domLeq(p1: FlowDom, p2: FlowDom)
-{ p1.fst <= p2.fst && p1.snd <= p2.snd }
 
 datatype NodeDom = unmarked | marked(markId: Int) | markTop;
 
@@ -113,7 +113,7 @@ procedure insert(mh: Node, fh: Node, I: Interface, n: Node, In: Interface)
     l := r;
     // N(p, Il) &*& Gr(I2)
 
-    lemma_step(Il, I2, I, r);
+    lemma_step(Il, I2, I, l, r);
     var Ir: Interface, I3: Interface;
     Ir, I3 := lemma_decomp(r, I2);
     // N(p, Il) &*& N(r, Ir) &*& Gr(I3)

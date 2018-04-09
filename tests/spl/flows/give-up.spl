@@ -12,6 +12,10 @@ predicate domEq(p1: FlowDom, p2: FlowDom) {
     @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k])
 }
 
+predicate domLeq(p1: FlowDom, p2: FlowDom) {
+  forall k: Int :: p1.ks[k] <= p2.ks[k]
+}
+
 function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
   ensures forall k: Int :: p.ks[k] == p1.ks[k] + p2.ks[k]
 
@@ -160,7 +164,7 @@ procedure dictionaryOp(k: Int, I: Interface) returns (res: Bool, I1: Interface)
         lemma_int_valid_unfold(Ic1);
         //        pure assume domZero().ks[k] <= domZero().ks[k];
         //        pure assume !domEq(Ic1.fm[c][n], domZero());
-        lemma_step(Ic1, I2, I, n);
+        lemma_step(Ic1, I2, I, c, n);
         In, I3 := lemma_decomp(n, I2);
         // N(c, Ic) &*& N(n, In) &*& Gr(I3)
         I4 := lemma_Gr_comp(Ic1, I3);

@@ -11,6 +11,10 @@ predicate domEq(p1: FlowDom, p2: FlowDom) {
   p1.pc == p2.pc
 }
 
+predicate domLeq(p1: FlowDom, p2: FlowDom) {
+  p1.pc <= p2.pc
+}
+
 function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 { fd(p1.pc + p2.pc) }
 
@@ -87,7 +91,7 @@ procedure insert(hd: Node, I: Interface, n: Node, In: Interface)
     l := r;
     // N(p, Il) &*& Gr(I2)
 
-    lemma_step(Il, I2, I, r);
+    lemma_step(Il, I2, I, l, r);
     var Ir: Interface, I3: Interface;
     Ir, I3 := lemma_decomp(r, I2);
     // N(p, Il) &*& N(r, Ir) &*& Gr(I3)

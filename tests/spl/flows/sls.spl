@@ -8,6 +8,10 @@ predicate domEq(p1: FlowDom, p2: FlowDom) {
   p1.fst == p2.fst && p1.snd == p2.snd
 }
 
+predicate domLeq(p1: FlowDom, p2: FlowDom) {
+  p1.fst <= p2.snd && p1.snd <= p2.snd
+}
+
 function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 { pair(p1.fst + p2.fst, p1.snd + p2.snd) }
 
