@@ -818,35 +818,42 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     in
     Debug.debug (fun () -> sprintf "\nOn args: %s\n" (string_of_format pr_term_list args));
     (* Look up pre/post of foo *)
+    let c = (find_proc prog foo).proc_contract in
     let foo_pre, foo_post =
-      let c = (find_proc prog foo).proc_contract in
-      (* Substitute formal params -> actual params in foo_pre/post *)
-      let sm = mk_eqs c.contr_formals args in
-      let pre = c.contr_precond |> state_of_spec_list flds |> subst_state sm in
-      (* Also substitute return vars -> lhs vars in post *)
-      let sm =
-        List.fold_left2 (fun sm r l -> IdMap.add r (mk_const_term l) sm)
-          sm c.contr_returns lhs
-      in
-      let post = c.contr_postcond |> state_of_spec_list flds |> subst_state sm in
+      let pre = c.contr_precond |> state_of_spec_list flds in
+      let post = c.contr_postcond |> state_of_spec_list flds in
       (* Replace old(x) terms appropriately *)
       let pre, post = process_olds flds pre post in
       remove_useless_existentials pre, remove_useless_existentials post
     in
-    Debug.debug (fun () ->
-      sprintf "\nPrecondition:\n%s\n\nPostcondition:\n%s\n"
-        (string_of_state foo_pre) (string_of_state foo_post)
-    );
-    (* Add derived equalities before checking for frame & entailment *)
-    (* TODO do this by keeping disequalities in state? *)
-    let state = add_neq_constraints state in
-    let foo_pre = apply_equalities eqs foo_pre in
-    (* Replace lhs vars with fresh vars *)
+    let foo_pre =
+      (* Substitute formal params -> actual params in foo_pre/post *)
+      foo_pre |> subst_state (mk_eqs c.contr_formals args)
+    in
+    (* Replace lhs vars with fresh vars. For every part of new state *)
     let sm =
       lhs |> List.fold_left (fun sm id ->
           IdMap.add id (mk_var_like id) sm)
         IdMap.empty
     in
+    (* Substitute formal params -> actual params & return vars -> lhs vars in foo_post *)
+    let foo_post =
+      (* args will be part of foo_post, so substitute here too *)
+      let args = List.map (subst_term sm) args in
+      let sm = mk_eqs c.contr_formals args in
+      let sm = List.fold_left2 (fun sm r l -> IdMap.add r (mk_const_term l) sm)
+        sm c.contr_returns lhs
+      in
+      foo_post |> subst_state sm
+    in
+    (* Add derived equalities before checking for frame & entailment *)
+    (* TODO do this by keeping disequalities in state? *)
+    let state = add_neq_constraints state in
+    let foo_pre = apply_equalities eqs foo_pre in
+    Debug.debug (fun () ->
+      sprintf "\nPrecondition:\n%s\n\nPostcondition:\n%s\n"
+        (string_of_state foo_pre) (string_of_state foo_post)
+    );
     let repl_fn =
       match find_frame prog eqs state foo_pre with
       | Some (frame, inst) ->

@@ -1,0 +1,10 @@
+procedure foo(x: Int) returns (y: Int)
+  requires x == 3
+  ensures y == x + 1
+
+procedure boo(x: Int, y: Int)
+  requires x == 3 && x == y + 1
+  ensures false
+{
+  x := foo(x);
+}

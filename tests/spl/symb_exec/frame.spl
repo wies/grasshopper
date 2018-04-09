@@ -27,6 +27,18 @@ procedure pure_call3(c: Int, d:Int)
   d := foo3(c);
 }
 
+procedure foo4(x: Int) returns (y: Int)
+  requires x == 3
+  ensures y == x + 1
+
+procedure pure_call4(x: Int, y: Int)
+  requires x == 3 && x == y + 1
+  ensures true
+{
+  x := foo4(x);
+  assert x == y + 2;
+}
+
 
 struct Node {
   var next: Node;
@@ -110,6 +122,55 @@ procedure fun_call7(u: Node, v: Node, w: Node, i: Int, j: Int)
   ensures poo(w) &*& [acc(u)](u)
 {
   bar7(u, v, w);
+}
+
+
+procedure bar8(x: Node) returns (y: Node)
+  requires acc(x)
+  ensures acc(y)
+
+procedure boo8(x: Node, y: Node, z: Node)
+  requires acc(x) &*& acc(y) &*& y == z
+  ensures acc(y) &*& acc(z)
+{
+  y := bar8(x);
+}
+
+procedure bar9(x: Node) returns (y: Node)
+  requires acc(x)
+  ensures acc(x) &*& acc(y)
+
+procedure boo9(x: Node, y: Node, z: Node)
+  requires acc(x) &*& acc(y) &*& x == z
+  ensures acc(z) &*& acc(x) &*& acc(y)
+{
+  x := bar9(x);
+}
+
+procedure bar10(x: Node) returns (y: Node, z: Node)
+  requires acc(x)
+  ensures acc(y) &*& acc(z)
+
+procedure boo10(x: Node, y: Node, z: Node)
+  requires acc(x)
+  ensures acc(x) &*& acc(y)
+{
+  x, y := bar10(x);
+}
+
+procedure bar11(x: Node) returns (y: Node)
+  requires acc(x)
+  ensures acc(y)
+
+procedure boo11(x: Node, y: Node)
+  requires acc(x)
+  ensures acc(x)
+{
+  while (true)
+    invariant acc(x)
+  {
+    x := bar11(x);
+  }
 }
 
 
