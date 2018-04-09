@@ -944,7 +944,10 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     symb_exec prog flds proc (eqs, (smk_and [pure; spec], spatial)) postcond comms'
   | Choice (comms, _) :: comms' ->
     List.fold_left (fun errors comm ->
-      symb_exec prog flds proc (eqs, state) postcond (comm :: comms') @ errors)
+        match errors with
+        | [] ->
+          symb_exec prog flds proc (eqs, state) postcond (comm :: comms')
+        | _ -> errors)
       [] comms
   | Basic (Assert spec, pp) as comm :: comms' ->
     Debug.debug (fun () ->
