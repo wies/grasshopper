@@ -116,7 +116,7 @@ type generic_graph_output = {
   }
 
 let graphviz_output =
-  let header chan = output_string chan "digraph Model {\ngraph[rankdir=LR];\n" in
+  let header chan = output_string chan "digraph Model {\ngraph[];\n" in
   let footer chan = output_string chan "}\n" in
   let l = ref 0 in
   let out_tbl chan name assoc =
