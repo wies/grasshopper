@@ -9,6 +9,9 @@ open Printf
 exception NotYetImplemented
 let todo () = raise NotYetImplemented
 
+exception SymbExecFail of string
+let raise_err str = raise (SymbExecFail str)
+
 let lineSep = "\n--------------------\n"
 
 
@@ -199,9 +202,10 @@ let state_of_spec_list fields specs : state =
     in
     List.fold_left collect_allocs TermSet.empty spatial
   in
-  if TermMap.exists (fun t _ -> TermSet.mem t alloc_terms |> not) reads then
-    failwith "state_of_spec_list: couldn't find corresponding acc"
-  else
+  match TermMap.find_first_opt (fun t -> TermSet.mem t alloc_terms |> not) reads with
+  | Some (t, _) ->
+    failwith @@ "state_of_spec_list: couldn't find corresponding acc for term" ^ (string_of_term t)
+  | None ->
     (pure, spatial)
 
 
@@ -416,9 +420,10 @@ let rec find_ptsto_dirty loc spatial =
     let res, repl_fn_rd, repl_fn_wr = find_ptsto_dirty loc spatial' in
     res, (fun fs' -> sp :: repl_fn_rd fs'), (fun fs' -> sp :: repl_fn_wr fs')
 
+(* Returns None if the entailment holds, otherwise Some (list of error messages) *)
 let check_pure_entail prog eqs p1 p2 =
   let (p2, _) = apply_equalities eqs (p2, []) in
-  if p1 = p2 || p2 = mk_true then true
+  if p1 = p2 || p2 = mk_true then None
   else (* Dump it to an SMT solver *)
     let axioms =  (* Collect all program axioms *)
       Util.flat_map
@@ -434,7 +439,7 @@ let check_pure_entail prog eqs p1 p2 =
     let p2 = Verifier.annotate_aux_msg "TODO" p2 in
     (* Close the formulas: assuming all free variables are existential *)
     let close f = smk_exists (IdSrtSet.elements (sorted_free_vars f)) f in
-    let _, f =
+    let labels, f =
       smk_and [p1; mk_not p2] |> close |> nnf
       (* Add definitions of all referenced predicates and functions *)
       |> Verifier.add_pred_insts prog
@@ -447,8 +452,8 @@ let check_pure_entail prog eqs p1 p2 =
     Debug.debug (fun () ->
       sprintf "\n\nCalling prover with name %s\n" name);
     match Prover.get_model ~session_name:name f with
-    | None -> true
-    | Some model -> false
+    | None -> None
+    | Some model -> Some (Verifier.get_err_msg_from_labels model labels)
 
 
 (** Returns (fr, inst) s.t. state1 |= state2 * fr, and
@@ -495,10 +500,14 @@ let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sps1) (p2, sps2) =
       in
       match_up_fields inst fs1 fs2
     | Dirty (sp2a, ts), Dirty (sp1a, ts') when ts = ts' ->
-      check_entailment prog ~inst:inst eqs (mk_true, sp1a) (mk_true, sp2a)
+      (match check_entailment prog ~inst:inst eqs (mk_true, sp1a) (mk_true, sp2a) with
+      | Ok inst -> Some inst
+      | Error _ -> None)
     | Conj spss2, Conj spss1 ->
       let match_up_conjunct inst sps2 sps1 =
-        check_entailment prog ~inst:inst eqs (mk_true, sps1) (mk_true, sps2)
+        (match check_entailment prog ~inst:inst eqs (mk_true, sps1) (mk_true, sps2) with
+        | Ok inst -> Some inst
+        | Error _ -> None)
       in
       let match_up_conj inst spss2 spss1 =
         List.fold_left (fun acc sps2 ->
@@ -516,18 +525,19 @@ let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sps1) (p2, sps2) =
   match sps2 with
   | [] ->
     (* Check if p2 is implied by p1 *)
-    if check_pure_entail prog (IdMap.union (fun _ -> failwith "") eqs inst) p1 p2 then
-      Some (sps1, inst)
-    else None
+    (match check_pure_entail prog (IdMap.union (fun _ -> failwith "") eqs inst) p1 p2 with
+    | None ->
+      Ok (sps1, inst)
+    | Some errs -> Error errs)
   | sp2 :: sps2' ->
     (match find_map_res (match_up_sp inst sp2) sps1 with
     | Some (inst, sps1') ->
       let p2, sps2 = subst_state inst (p2, sps2') in
       find_frame prog ~inst:inst eqs (p1, sps1') (p2, sps2)
-    | None -> None)
+    | None -> Error []) (* TODO get errors? *)
 
-(** Returns [Some inst] if [(p1, sp1)] |= [(p2, sp2)], else None. *)
-and check_entailment prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
+(** Returns [Ok inst] if [(p1, sp1)] |= [(p2, sp2)], else Error (error messages). *)
+and check_entailment prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) : (term IdMap.t, string list) result =
   let eqs, (p1, sp1) = simplify eqs (p1, sp1) in
   let (p2, sp2) =
     (p2, sp2)
@@ -540,8 +550,9 @@ and check_entailment prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
 
   (* Check if find_frame returns empt *)
   match find_frame ~inst:inst prog eqs (p1, sp1) (p2, sp2) with
-  | Some ([], inst) -> Some inst
-  | _ -> None
+  | Ok ([], inst) -> Ok inst
+  | Ok _ -> Error ["The frame was not empty for this entailment check"]
+  | Error errs -> Error errs
 
 
 
@@ -552,53 +563,55 @@ and check_entailment prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
 *)
 let find_frame_conj prog eqs (pure, spatial) state2 =
   let rec find_frame_inside_conj = function
-    | [] -> None
+    | [] -> Error []
     | sps :: spss ->
       (match find_frame prog eqs (pure, sps) state2 with
-      | Some (frame, inst) ->
+      | Ok (frame, inst) ->
         let repl_fn = (fun sm foo_post ->
           let frame = List.map (subst_spatial_pred sm) frame in
           let spss = List.map (List.map (subst_spatial_pred sm)) spss in
           (foo_post @ frame) :: spss)
         in
-        Some (repl_fn, inst)
-      | None ->
+        Ok (repl_fn, inst)
+      | Error errs1 ->
         (match find_frame_inside_conj spss with
-        | Some (repl_fn, inst) ->
+        | Ok (repl_fn, inst) ->
           let repl_fn = (fun sm foo_post ->
             let sps = List.map (subst_spatial_pred sm) sps in
             sps :: (repl_fn sm foo_post))
           in
-          Some (repl_fn, inst)
-        | None -> None))
+          Ok (repl_fn, inst)
+        | Error [] -> Error errs1
+        | Error errs -> Error errs))
   in
   let rec find_frame_conj = function
-    | [] -> None
+    | [] -> Error []
     | Conj spss :: spatial' ->
       (match find_frame_inside_conj spss with
-      | Some (repl_fn, inst) ->
+      | Ok (repl_fn, inst) ->
         let repl_fn = (fun sm foo_post ->
           Conj (repl_fn sm foo_post) :: (List.map (subst_spatial_pred sm) spatial'))
         in
-        Some (repl_fn, inst)
-      | None ->
+        Ok (repl_fn, inst)
+      | Error errs ->
         (match find_frame_conj spatial' with
-        | Some (repl_fn, inst) ->
+        | Ok (repl_fn, inst) ->
           let repl_fn =
             (fun sm foo_post ->
               let spss = List.map (List.map (subst_spatial_pred sm)) spss in
               Conj spss :: (repl_fn sm foo_post))
           in
-          Some (repl_fn, inst)
-        | None -> None))
+          Ok (repl_fn, inst)
+        | Error [] -> Error errs
+        | Error errs -> Error errs))
     | sp :: spatial' ->
       (match find_frame_conj spatial' with
-      | Some (repl_fn, inst) ->
+      | Ok (repl_fn, inst) ->
         let repl_fn =
           (fun sm foo_post -> (subst_spatial_pred sm sp) :: (repl_fn sm foo_post))
         in
-        Some (repl_fn, inst)
-      | None -> None)
+        Ok (repl_fn, inst)
+      | Error errs -> Error errs)
   in
   find_frame_conj spatial
 
@@ -621,8 +634,7 @@ let rec eval_term fields state = function
       in
       let spatial' = mk_spatial' fs' in
       e, (fst state, spatial')
-    | None, _, _ -> failwith "Invalid lookup"
-    )
+    | None, _, _ -> raise_err @@ "Possible invalid heap lookup: " ^ (string_of_term loc))
   | App (Write, _, _) as t ->
     failwith @@ "eval_term called on write " ^ (string_of_term t)
   | App (s, ts, srt) ->
@@ -631,25 +643,26 @@ let rec eval_term fields state = function
 
 
 (** Check that we have permission to the array, and that index is in bounds *)
-let have_array_acc prog eqs (pure, spatial) arr idx =
+let check_array_acc prog eqs (pure, spatial) arr idx =
   match find_ptsto_dirty arr spatial with
   | Some _, _, _ ->
      let idx_in_bds = smk_and [(mk_leq (mk_int 0) idx); (mk_lt idx (mk_length arr))] in
      Debug.debug (fun () -> "\n\nChecking array index is in bounds:\n");
-     check_pure_entail prog eqs pure idx_in_bds
-  | None, _, _ -> false
+     (match check_pure_entail prog eqs pure idx_in_bds with
+     | None -> ()
+     | Some errs -> raise_err "Possible array index out of bounds error")
+  | None, _, _ ->
+    raise_err "Possible invalid array read"
 
 
 (** Check that all array read terms in [t] are safe on state [state] *)
 let check_array_reads prog eqs (t, state) =
   let rec check = function
     | Var _ as t -> t
-    | App (Read, [f; a; idx], srt) as t when f = (Grassifier.array_state true srt) ->
+    | App (Read, [f; a; idx], srt) when f = (Grassifier.array_state true srt) ->
        (* Array reads *)
-       if have_array_acc prog eqs state a idx then
+      check_array_acc prog eqs state a idx;
          App (Read, [f; check a; check idx], srt)
-       else
-         failwith @@ "Invalid array read: " ^ (string_of_term t)
     | App (s, ts, srt) -> App (s, List.map check ts, srt)
   in
   (check t, state)
@@ -699,10 +712,14 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     mk_free_const (lookup_type id) id'
   in
   let mk_const_term id = mk_free_const (lookup_type id) id in
+  let mk_error msg errs pos =
+    [(pos, String.concat "\n\n" (msg :: errs), Model.empty)]
+  in
 
   (* First, simplify the pre state *)
   let eqs, state = simplify eqs state in
-  match comms with
+
+  let se = function
   | [] ->
     Debug.debug (fun () ->
       sprintf "%sExecuting check postcondition: %s%s\n"
@@ -711,10 +728,10 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     (* TODO do this better *)
     let state = add_neq_constraints state in
     (match check_entailment prog eqs state postcond with
-    | Some _ -> []
-    | None ->
+      | Ok _ -> []
+      | Error errs ->
       (* TODO to get line numbers, convert returns into asserts *)
-      [(dummy_position, "A postcondition may not hold", Model.empty)])
+        mk_error "A postcondition may not hold" errs dummy_position)
   | Basic (Assign {assign_lhs=[fld];
         assign_rhs=[App (Write, [App (FreeSym fld', [], _);
           App (FreeSym _, [], _) as loc; rhs], srt)]}, pp) as comm :: comms'
@@ -751,7 +768,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     let idx, state = process prog flds eqs state idx in
     let rhs, (pure, spatial) = process prog flds eqs state rhs in
     (* Check that we have permission to the array, and that index is in bounds *)
-    if have_array_acc prog eqs (pure, spatial) arr idx then
+      check_array_acc prog eqs (pure, spatial) arr idx;
       (* Create a new variable array_state_old and substitute for the current array state *)
       let array_state_id = Grassifier.array_state_id (sort_of rhs) in
       let array_state' = mk_var_like array_state_id in
@@ -779,11 +796,6 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
         in
         smk_and [f1; f2; pure] in
       symb_exec prog flds proc (eqs, (pure, spatial)) postcond comms'
-    else
-      let msg = sprintf "Don't have permission for array write %s[%s]"
-                    (string_of_term arr) (string_of_term idx)
-      in
-      [(pp.pp_pos, msg, Model.empty)]
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, pp) as comm :: comms' ->
     Debug.debug (fun () ->
       sprintf "%sExecuting assignment: %d: %s%sCurrent state:\n%s\n"
@@ -856,13 +868,13 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     );
     let repl_fn =
       match find_frame prog eqs state foo_pre with
-      | Some (frame, inst) ->
+        | Ok (frame, inst) ->
         let frame = List.map (subst_spatial_pred sm) frame in
-        Some ((fun sm foo_post -> foo_post @ frame), inst)
-      | None -> (* Try to see if a lemma can be applied inside a conjunct *)
+          Ok ((fun sm foo_post -> foo_post @ frame), inst)
+        | Error errs -> (* Try to see if a lemma can be applied inside a conjunct *)
         if (find_proc prog foo).proc_is_lemma then
           find_frame_conj prog eqs state foo_pre
-        else None
+          else Error errs
     in
     (* Bump array_state and add frame axiom for arrays not in foo's footprint *)
     let modified_arrs =
@@ -908,7 +920,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     in
     (* Then, create vars for old vals of all x in lhs, and substitute in eqs & frame *)
     (match repl_fn with
-    | Some (repl_fn, inst) ->
+      | Ok (repl_fn, inst) ->
       let eqs = subst_eqs sm eqs in
       let pure = state |> fst |> subst_form sm in
       let (post_pure, post_spatial) = foo_post in
@@ -916,8 +928,8 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       (* This is to apply equalities derived during frame inference *)
       let state = subst_state inst state in
       symb_exec prog flds proc (eqs, state) postcond comms'
-    | None ->
-      [(pp.pp_pos, "The precondition of this function call may not hold", Model.empty)])
+      | Error errs ->
+        mk_error "The precondition of this function call may not hold" errs pp.pp_pos)
   | Seq (comms, _) :: comms' ->
     symb_exec prog flds proc (eqs, state) postcond (comms @ comms')
   | Basic (Havoc {havoc_args=vars}, pp) as comm :: comms' ->
@@ -960,18 +972,18 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       let spec_st = state_of_spec_list flds [spec] in
       let state' = add_neq_constraints state in
       (match check_entailment prog eqs state' spec_st with
-      | Some _ ->
+        | Ok _ ->
         symb_exec prog flds proc (eqs, state) postcond comms'
-      | None -> [(pp.pp_pos, "This assert may not hold", Model.empty)])
+        | Error errs -> mk_error "This assert may not hold" errs pp.pp_pos)
     | FOL spec_form ->
       let spec_form, state =
         fold_map_terms (process_no_array prog flds eqs) state spec_form
       in
       let state' = add_neq_constraints state in
       (match find_frame prog eqs state' (spec_form, []) with
-      | Some _ ->
+        | Ok _ ->
         symb_exec prog flds proc (eqs, state) postcond comms'
-      | None -> [(pp.pp_pos, "This assert may not hold", Model.empty)]))
+        | Error errs -> mk_error "This assert may not hold" errs pp.pp_pos))
   | Basic (Return {return_args=xs}, pp) as comm :: _ ->
     Debug.debug (fun () ->
       sprintf "%sExecuting return: %d: %s%sCurrent state:\n%s\n"
@@ -996,13 +1008,22 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     let spec_st = state_of_spec_list flds [spec] in
     let state' = add_neq_constraints state in
     (match check_entailment prog eqs state' spec_st with
-    | Some _ ->
+      | Ok _ ->
       symb_exec prog flds proc (empty_eqs, spec_st) postcond comms'
-    | None -> [(pp.pp_pos, "This split may not hold", Model.empty)])
+      | Error errs -> mk_error "This split may not hold" errs pp.pp_pos)
   | Basic (Assume _, _) :: _ -> failwith "TODO Assume SL command"
   | Basic (New _, _) :: _ -> failwith "TODO New command"
   | Basic (Dispose _, _) :: _ -> failwith "TODO Dispose command"
   | Loop _ :: _ -> failwith "TODO Loop command"
+  in
+  try
+    se comms
+  with SymbExecFail msg ->
+    let pos = match comms with
+      | Basic (_, pp) :: _ -> pp.pp_pos
+      | _ -> dummy_position
+    in
+    mk_error msg [] pos
 
 
 (** Check procedure [proc] in program [prog] using symbolic execution. *)
