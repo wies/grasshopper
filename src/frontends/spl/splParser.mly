@@ -53,7 +53,7 @@ type rhs_string_maybe =
 %token <bool> BOOLVAL
 %token <string> STRINGVAL
 %token LPAREN RPAREN LBRACE RBRACE LBRACKET RBRACKET
-%token COR, CHOOSE COLON COLONEQ COLONCOLON SEMICOLON DOT PIPE
+%token COR, CHOOSE COLON COLONEQ COLONCOLON SEMICOLON DOT PIPE QMARK
 %token UMINUS PLUS MINUS DIV TIMES MOD
 %token UNION INTER DIFF
 %token EQ NEQ LEQ GEQ LT GT IN NOTIN AT
@@ -789,8 +789,13 @@ iff_expr:
 | iff_expr IFF iff_expr { BinaryOp ($1, OpEq, $3, BoolType, mk_position 1 3) }
 ;
 
-annot_expr:
+ite_expr:
 | iff_expr { $1 }
+| ite_expr QMARK iff_expr COLON iff_expr { Ite ($1, $3, $5, mk_position 1 5) }
+;
+    
+annot_expr:
+| ite_expr { $1 }
 | annot_expr AT LPAREN annot RPAREN { Annot ($1, $4, mk_position 1 5) }
 
 

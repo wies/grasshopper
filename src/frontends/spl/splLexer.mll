@@ -168,6 +168,7 @@ rule token = parse
     with Not_found ->
       IDENT (kw, 0)
     }
+| "?" { QMARK }
 | "0x" (['A'-'F''a'-'f''0'-'9']+ as num) { INTVAL (hexa_to_int num) }
 | digits as num { INTVAL (Int64.of_string num) }
 | "'" (_ as c) "'" { CHARVAL c }

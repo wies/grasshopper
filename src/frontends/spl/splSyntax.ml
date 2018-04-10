@@ -166,6 +166,7 @@ and expr =
   | New of typ * exprs * pos
   | Read of expr * expr * pos
   | Write of expr * expr * expr * pos
+  | Ite of expr * expr * expr * pos
   | ConstrApp of ident * exprs * pos
   | DestrApp of ident * expr * pos
   | ProcCall of ident * exprs * pos
@@ -217,6 +218,7 @@ let pos_of_expr = function
   | New (_, _, p)
   | Read (_, _, p)
   | Write (_, _, _, p)
+  | Ite (_, _, _, p)
   | ConstrApp (_, _, p)
   | DestrApp (_, _, p)
   | Binder (_, _, _, p)
@@ -244,7 +246,8 @@ let free_vars e =
     | Read (e1, e2, _)
     | BinaryOp (e1, _, e2, _, _) ->
         fv bv (fv bv acc e1) e2
-    | Write (e1, e2, e3, _) ->
+    | Write (e1, e2, e3, _)
+    | Ite (e1, e2, e3, _) ->
         fv bv (fv bv (fv bv acc e1) e2) e3
     | Binder (_, vs, e, _) ->
         let bv, acc =
@@ -287,6 +290,8 @@ let subst_id sm =
         Read (s bv e1, s bv e2, pos)
     | Write (e1, e2, e3, pos) ->
         Write (s bv e1, s bv e2, s bv e3, pos)
+    | Ite (e1, e2, e3, pos) ->
+        Ite (s bv e1, s bv e2, s bv e3, pos)
     | BinaryOp (e1, op, e2, ty, pos) ->
         BinaryOp (s bv e1, op, s bv e2, ty, pos)
     | Binder (b, vs, e, pos) ->
@@ -336,6 +341,8 @@ let subst sm =
         Read (s bv e1, s bv e2, pos)
     | Write (e1, e2, e3, pos) ->
         Write (s bv e1, s bv e2, s bv e3, pos)
+    | Ite (e1, e2, e3, pos) ->
+        Ite (s bv e1, s bv e2, s bv e3, pos)
     | BinaryOp (e1, op, e2, ty, pos) ->
         BinaryOp (s bv e1, op, s bv e2, ty, pos)
     | Binder (b, vs, e, pos) ->
@@ -489,6 +496,8 @@ let replace_macros prog =
       Read (repl_expr e1, repl_expr e2, pos)
     | Write (e1, e2, e3, pos) ->
       Write (repl_expr e1, repl_expr e2, repl_expr e3, pos)
+    | Ite (e1, e2, e3, pos) ->
+      Ite (repl_expr e1, repl_expr e2, repl_expr e3, pos)
     | ConstrApp (c, es, pos) ->
       ConstrApp(c, List.map (repl_expr) es, pos)
     | DestrApp (d, e, pos) ->
@@ -632,8 +641,9 @@ let prio_of_expr = function
   | BinaryOp (_, OpSepIncl, _, _, _) -> 14
   | BinaryOp (_, OpOr, _, _, _) -> 15
   | BinaryOp (_, OpImpl, _, _, _) -> 16
-  | Binder _ -> 17
-  | Annot _ -> 18
+  | Ite (_, _, _, _) -> 17
+  | Binder _ -> 18
+  | Annot _ -> 19
 
 let is_left_assoc = function OpImpl -> false | _ -> true
         
@@ -658,6 +668,8 @@ let rec pr_expr ppf =
       fprintf ppf "%a.%a" pr_expr e2 pr_expr e1
   | Write (e1, e2, e3, _) ->
       fprintf ppf "%a[%a := %a]" pr_expr e1 pr_expr e2 pr_expr e3
+  | Ite (e1, e2, e3, _) ->
+      fprintf ppf "%a ? %a : %a" pr_expr e1 pr_expr e2 pr_expr e3
   | DestrApp (id, e, _) ->
       fprintf ppf "%a.%a" pr_expr e pr_ident id 
   | ConstrApp (id, es, _)

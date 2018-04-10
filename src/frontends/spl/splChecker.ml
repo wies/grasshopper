@@ -214,6 +214,8 @@ let resolve_names cu =
           Read (re locals tbl map, re locals tbl idx, pos)
       | Write (map, idx, upd, pos) ->
           Write (re locals tbl map, re locals tbl idx, re locals tbl upd, pos)
+      | Ite (cond, t, e, pos) ->
+          Ite (re locals tbl cond, re locals tbl t, re locals tbl e, pos)
       | ConstrApp (id, es, pos) ->
           ConstrApp (id, List.map (re locals tbl) es, pos)
       | DestrApp (id, e, pos) ->
@@ -535,6 +537,11 @@ let flatten_exprs cu =
         let idx1, aux2, locals = flatten_expr scope aux1 locals idx in
         let upd1, aux3, locals = flatten_expr scope aux2 locals upd in
         Write (map1, idx1, upd1, pos), aux3, locals
+    | Ite (cond, t, e, pos) ->
+        let cond1, aux1, locals = flatten_expr scope aux locals cond in
+        let t1, aux2, locals = flatten_expr scope aux1 locals t in
+        let e1, aux3, locals = flatten_expr scope aux2 locals e in
+        Ite (cond1, t1, e1, pos), aux3, locals
     | ConstrApp (id, args, pos) ->
         let args1, aux1, locals = flatten_expr_list scope aux locals args in
         ConstrApp (id, args1, pos), aux1, locals

@@ -127,9 +127,6 @@ let type_of_expr cu locals e =
         | ArrayType ty -> ty
         | _ -> AnyType)
     | Write (map, _, _, _) -> te map
-    | ConstrApp (id, _, _) | DestrApp (id, _, _) ->
-        let decl = IdMap.find id cu.fun_decls in
-        decl.f_res
     | UnaryOp ((OpOld | OpKnown), e, _) -> te e        
     | UnaryOp (OpLength, map, _) -> IntType
     | UnaryOp (OpArrayOfCell, c, _) ->
@@ -141,6 +138,12 @@ let type_of_expr cu locals e =
         (match te map with
         | ArrayType srt -> MapType (IntType, ArrayCellType srt)
         | _ -> AnyType)
+    (* Algebraic data types *)
+    | ConstrApp (id, _, _) | DestrApp (id, _, _) ->
+        let decl = IdMap.find id cu.fun_decls in
+        decl.f_res
+    (* If-then-else *)
+    | Ite (_, e, _, _) -> te e     
     (* Other stuff *)
     | Null (ty, _) -> ty
     | ProcCall (id, _, _) ->
@@ -253,6 +256,11 @@ let infer_types cu locals ty e =
     (* Boolean constants *)
     | BoolVal (_, pos) as e ->
         e, match_types pos ty BoolType
+    (* If-then-else *)
+    | Ite (e1, e2, e3, pos) ->
+        let e1, _ = it locals BoolType e1 in
+        let e2, e3, ty = itp locals ty e2 e3 in
+        Ite (e1, e2, e3, pos), ty
     (* Permissions *)
     | Emp pos as e ->
         e, match_types pos ty PermType

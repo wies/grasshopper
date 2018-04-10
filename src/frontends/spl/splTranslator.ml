@@ -718,6 +718,14 @@ let convert cu =
                     in
                     let v = Ident (v_decl.v_name, v_decl.v_pos) in
                     Binder (Forall, [UnguardedVar v_decl], BinaryOp (BinaryOp (v, OpIn, r, BoolType, pos), OpEq, f, BoolType, pos), pos)
+                | Annot (Ite (cond, t, e, pos), a, pos2) ->
+                    let body =
+                      BinaryOp (BinaryOp (cond, OpImpl, BinaryOp (r, OpEq, t, BoolType, pos), BoolType, pos),
+                                OpAnd,
+                                BinaryOp (UnaryOp (OpNot, cond, pos), OpImpl, BinaryOp (r, OpEq, e, BoolType, pos), BoolType, pos),
+                                BoolType, pos)
+                    in
+                    Annot (body, a, pos2)
                 | e ->
                     BinaryOp (r, OpEq, e, BoolType, pos_of_expr e))
                   decl.pr_body
