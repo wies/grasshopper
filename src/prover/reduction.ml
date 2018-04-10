@@ -24,6 +24,10 @@ let elim_exists =
 	    let ve = mk_var srt e in
 	    mk_exists [(e, srt)] (smk_or [smk_and [smk_elem ~ann:a ve s1; mk_not (smk_elem ~ann:a ve s2)];
 					 smk_and [smk_elem ~ann:a ve s2; mk_not (smk_elem ~ann:a ve s1)]])
+        | Map (dsrts, rsrt) ->
+            let vs = List.map (fun srt -> fresh_ident "?i", srt) dsrts in
+            let vts = List.map (fun (v, srt) -> mk_var srt v) vs in
+            mk_exists vs (mk_neq (mk_read s1 vts) (mk_read s2 vts))
 	| _ -> f)
     | BoolOp (Not, [Atom (App (Disjoint, [s1; s2], _), a)]) when bvs = [] ->
         let srt = element_sort_of_set s1 in
@@ -264,7 +268,7 @@ let add_read_write_axioms fs =
   let field_sorts = TermSet.fold (fun t srts ->
     match sort_of t with
     | Loc (ArrayCell _) as srt -> SortSet.add srt srts
-    | Map (Loc _ :: _, _) as srt -> SortSet.add srt srts
+    | Map (_ :: _, _) as srt -> SortSet.add srt srts
     | _ -> srts)
       gts SortSet.empty
   in
@@ -293,62 +297,75 @@ let add_read_write_axioms fs =
           let b = Axioms.loc2 (Array srt) in
           let i = fresh_ident "?i" in
           let idx = mk_var Int i in
-          (* a = b, a[i].f -> b[i].f *)
+          (* a = b, a.f[i] -> b.f[i] *)
           ([Match (mk_eq_term a b, []);
             Match (mk_read fld [a; idx], [])],
            [mk_read fld [b; idx]]) ::
+          (* a = b, b.cells[i].f -> a.cells[i].f *)
           ([Match (mk_eq_term a b, []);
-            (* a = b, b.cells[i].f -> a.cells[i].f *)
             Match (mk_read fld [mk_read (mk_array_cells b) [idx]], [])],
            [mk_read fld [mk_read (mk_array_cells a) [idx]]]) :: propagators
-      | Map (Loc ssrt :: dsrts, srt) as fldsrt -> fun propagators ->
+      | Map (dsrts, srt) as fldsrt -> fun propagators ->
           let f1 = fresh_ident "?f", fldsrt in
           let fld1 = mk_var (snd f1) (fst f1) in
           let f2 = fresh_ident "?g", fldsrt in
           let fld2 = mk_var (snd f2) (fst f2) in
           let d = fresh_ident "?d" in
           let dvar = mk_var srt d in
-          let loc1 = Axioms.loc1 ssrt in
-          let loc2 = Axioms.loc2 ssrt in
-          let set1 = Axioms.set1 ssrt in
-          let set2 = Axioms.set2 ssrt in
+          let ssrt_opt = match dsrts with
+          | Loc ssrt :: _ -> Some ssrt
+          | _ -> None
+          in
           let ivars1 = List.map (fun srt -> mk_var srt (fresh_ident "?i")) dsrts in
           let ivars2 = List.map (fun srt -> mk_var srt (fresh_ident "?j")) dsrts in
+          let match_ivar1 =
+            ssrt_opt |>
+            Opt.map (fun _ -> Match (List.hd ivars1, [FilterNotNull])) |>
+            Opt.to_list
+          in
+          let gen_frame wrap =
+            ssrt_opt |>
+            Opt.map (fun ssrt ->
+              let set1 = Axioms.set1 ssrt in
+              let set2 = Axioms.set2 ssrt in
+              [(* Frame (x, a, f, g), y.g -> y.f *)
+               ([Match (mk_frame_term set1 set2 fld1 fld2, []);
+                 Match (wrap (mk_read fld2 (ivars1)), [])] @
+                match_ivar1,
+               [wrap (mk_read fld1 (ivars1))]);
+               (* Frame (x, a, f, g), y.f -> y.g *)
+               ([Match (mk_frame_term set1 set2 fld1 fld2, []);
+                 Match (wrap (mk_read fld1 (ivars1)), [])],
+                [wrap (mk_read fld2 (ivars1))])
+              ]) |>
+            Opt.get_or_else []
+          in
           let mk_generators wrap =
             ([Match (mk_eq_term fld1 fld2, []);
-              Match (wrap (mk_read fld1 (loc1 :: ivars1)), []);
+              Match (wrap (mk_read fld1 (ivars1)), []);
             ],
-             [wrap (mk_read fld2 (loc1 :: ivars1))]) ::
+             [wrap (mk_read fld2 (ivars1))]) ::
             ([Match (mk_eq_term fld1 fld2, []);
-              Match (wrap (mk_read fld1 (loc1 :: ivars1)), []);
+              Match (wrap (mk_read fld1 (ivars1)), [])
             ],
-             [wrap (mk_read fld2 (loc1 :: ivars1))]) ::
+             [wrap (mk_read fld2 (ivars1))]) ::
             (* f = g, x.g -> x.f *)
             ([Match (mk_eq_term fld1 fld2, []);
-              Match (wrap (mk_read fld2 (loc1 :: ivars1)), []);
-              Match (loc1, [FilterNotNull])],
-             [wrap (mk_read fld1 (loc1 :: ivars1))]) :: 
+              Match (wrap (mk_read fld2 (ivars1)), [])] @ match_ivar1,
+             [wrap (mk_read fld1 (ivars1))]) :: 
             (* f [x := d], y.(f [x := d]) -> y.f *)
-            ([Match (mk_write fld1 (loc1 :: ivars1) dvar, []);
-              Match (wrap (mk_read (mk_write fld1 (loc1 :: ivars1) dvar) (loc2 :: ivars2)), []);
+            ([Match (mk_write fld1 ivars1 dvar, []);
+              Match (wrap (mk_read (mk_write fld1 ivars1 dvar) ivars2), []);
               (*Match (loc1, [FilterNotNull]);*)
               (*Match (loc2, [FilterNotNull])*)],
-             [wrap (mk_read fld1 (loc2 :: ivars2))]) ::
+             [wrap (mk_read fld1 ivars2)]) ::
             (* f [x := d], y.f -> y.(f [x := d]) *)
-            ([Match (mk_write fld1 (loc1 :: ivars1) dvar, []);
-              Match (wrap (mk_read fld1 (loc2 :: ivars2)), []);
+            ([Match (mk_write fld1 ivars1 dvar, []);
+              Match (wrap (mk_read fld1 (ivars2)), []);
               (*Match (loc1, [FilterNotNull]);*)
             (*Match (loc2, [FilterNotNull])*)],
-             [wrap (mk_read (mk_write fld1 (loc1 :: ivars1) dvar) (loc2 :: ivars2))]) ::
-            (* Frame (x, a, f, g), y.g -> y.f *)
-            ([Match (mk_frame_term set1 set2 fld1 fld2, []);
-              Match (wrap (mk_read fld2 (loc1 :: ivars1)), []);
-              Match (loc1, [FilterNotNull])],
-             [wrap (mk_read fld1 (loc1 :: ivars1))]) ::
-            (* Frame (x, a, f, g), y.f -> y.g *)
-            [([Match (mk_frame_term set1 set2 fld1 fld2, []);
-               Match (wrap (mk_read fld1 (loc1 :: ivars1)), [])],
-              [wrap (mk_read fld2 (loc1 :: ivars1))])]
+             [wrap (mk_read (mk_write fld1 (ivars1) dvar) (ivars2))]) ::
+            gen_frame wrap
           in
           mk_generators (fun t -> t) (*@ mk_generators (fun t -> mk_known t)*) @ propagators
       | _ -> fun propagators -> propagators)
