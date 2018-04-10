@@ -1402,8 +1402,8 @@ let elim_sl prog =
   let prog = List.fold_left add_proc prog aux_lemmas in
   add_ghost_field_invariants prog
 
-(** Annotate safety checks for heap accesses *)
-let annotate_heap_checks prog =
+(** Annotate safety checks for runtime errors (memory safety, divisiton by zero, etc.) *)
+let annotate_runtime_checks prog =
   let rec checks acc = function
     | App (Read, map :: idx :: _, _) ->
         let acc1 =

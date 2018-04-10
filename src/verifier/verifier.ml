@@ -25,7 +25,7 @@ let simplify proc prog =
   dump_if 0 |>
   info "Inferring accesses, eliminating loops, arrays, new/dispose, and global dependencies.\n" |>
   elim_arrays |>
-  annotate_heap_checks |>
+  annotate_runtime_checks |>
   elim_new_dispose |>
   Analyzer.infer_accesses |>
   Simplifier.prune_uncalled init_procs |>
