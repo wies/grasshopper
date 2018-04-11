@@ -29,7 +29,7 @@ let _ =
       ("forall", QUANT(SplSyntax.Forall));
       ("exists", QUANT(SplSyntax.Exists));
       ("free", FREE);
-      ("function", FUNCTION);
+      ("function", FUNCTION false);
       ("ghost", GHOST);
       ("havoc", HAVOC);
       ("if", IF);
@@ -47,7 +47,7 @@ let _ =
       ("or", COR);
       ("outputs", OUTPUTS);
       ("pattern", PATTERN);
-      ("predicate", PREDICATE);
+      ("predicate", PREDICATE false);
       ("procedure", PROCEDURE);
       ("pure", PURE);
       ("requires", REQUIRES);
@@ -161,6 +161,8 @@ rule token = parse
 | '~' { TILDE }
 | "<-<" { BSL }
 | ">->" { BSR }
+| "pure" [' ' '\t' '\n'] "function" { FUNCTION true } (* What a hack... *)
+| "pure" [' ' '\t' '\n'] "predicate" { PREDICATE true } (* What a hack... *)
 | ident as name '^' (digitchar+ as num) { IDENT(name, int_of_string num) }
 | ident as kw
     { try

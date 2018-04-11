@@ -229,7 +229,7 @@ let convert cu =
             let res_ty =
               decl.pr_body |>
               Opt.map (type_of_expr cu decl.pr_locals) |>
-              Opt.get_or_else PermType
+              Opt.get_or_else (if decl.pr_is_pure then BoolType else PermType)
             in
             let res_srt = convert_type res_ty pos in
             GrassUtil.mk_free_fun res_srt id ts
@@ -338,8 +338,8 @@ let convert cu =
         let ty = convert_term locals y in
         let tz = convert_term locals z in
         GrassUtil.mk_btwn_term tfld tx ty tz
-    | Binder (SetComp, _, _, pos) ->
-        failwith ("set comprehension should have been desugared at " ^ string_of_src_pos pos)
+    | Binder (Comp, _, _, pos) ->
+        failwith ("comprehension should have been desugared at " ^ string_of_src_pos pos)
     | Annot (e, Position, pos) ->
         convert_term locals e
     | e ->
@@ -351,7 +351,7 @@ let convert cu =
         let mk_guard = match q with
         | Forall -> GrassUtil.mk_implies
         | Exists -> fun f g -> GrassUtil.mk_and [f; g]
-        | SetComp -> failwith "unexpected type"
+        | Comp -> failwith "unexpected binder"
         in
         let mk_quant vs f =
           let f0, ann = match f with
@@ -361,7 +361,7 @@ let convert cu =
           let f1 = match q with
             | Forall -> GrassUtil.mk_forall vs f0
             | Exists -> GrassUtil.mk_exists vs f0
-            | SetComp -> failwith "unexpected type"
+            | Comp -> failwith "unexpected binder"
           in
           GrassUtil.annotate f1 ann
         in
@@ -501,7 +501,7 @@ let convert cu =
               let ty = decl.v_type in
               (id, convert_type ty pos) :: vars, 
               IdMap.add id decl locals1
-            | GuardedVar _ -> failwith "unexpected Guarded variable"
+            | GuardedVar _ -> failwith "unexpected guarded variable"
             )
             decls ([], locals)
         in
@@ -513,7 +513,7 @@ let convert cu =
         let mk_quant = match q with
         | Forall -> SlUtil.mk_forall 
         | Exists -> SlUtil.mk_exists
-        | SetComp -> failwith "unexpected type"
+        | Comp -> failwith "unexpected binder"
         in
         let f1 = convert_sl_form locals1 f in
         let f2 = SlUtil.subst_consts subst f1 in
@@ -678,7 +678,7 @@ let convert cu =
           | [r] -> (IdMap.find r decl.pr_locals).v_type
           | _ -> decl.pr_body |>
             Opt.map (type_of_expr cu decl.pr_locals) |>
-            Opt.get_or_else PermType
+            Opt.get_or_else (if decl.pr_is_pure then BoolType else PermType)
         in
         let opt_body, locals, outputs, contracts =
           match rtype, decl.pr_outputs with
@@ -709,25 +709,30 @@ let convert cu =
                     res_id, IdMap.add res_id rdecl decl.pr_locals
               in
               let r = Ident (ret_id, decl.pr_pos) in
+              let rec desugar_ite r = function
+                | Annot (e, a, pos2) ->
+                    Annot (desugar_ite r e, a, pos2)
+                | Ite (cond, t, e, pos) ->
+                    BinaryOp (BinaryOp (cond, OpImpl, BinaryOp (r, OpEq, t, BoolType, pos), BoolType, pos),
+                              OpAnd,
+                              BinaryOp (UnaryOp (OpNot, cond, pos), OpImpl, BinaryOp (r, OpEq, e, BoolType, pos), BoolType, pos),
+                              BoolType, pos)
+                | e -> BinaryOp (r, OpEq, e, BoolType, pos_of_expr e)
+              in
               let opt_body = Opt.map (function 
-                | Binder (SetComp, vs, f, pos) ->
+                | Binder (Comp, vs, e, pos) ->
                     let v_decl =
                       match vs with
                       | [UnguardedVar decl] -> decl
-                      | _ -> failwith "unexpected set comprehension"
+                      | _ -> failwith "unexpected comprehension"
                     in
                     let v = Ident (v_decl.v_name, v_decl.v_pos) in
-                    Binder (Forall, [UnguardedVar v_decl], BinaryOp (BinaryOp (v, OpIn, r, BoolType, pos), OpEq, f, BoolType, pos), pos)
-                | Annot (Ite (cond, t, e, pos), a, pos2) ->
-                    let body =
-                      BinaryOp (BinaryOp (cond, OpImpl, BinaryOp (r, OpEq, t, BoolType, pos), BoolType, pos),
-                                OpAnd,
-                                BinaryOp (UnaryOp (OpNot, cond, pos), OpImpl, BinaryOp (r, OpEq, e, BoolType, pos), BoolType, pos),
-                                BoolType, pos)
+                    let rv = match rtype with
+                    | SetType _ -> BinaryOp (v, OpIn, r, BoolType, pos)
+                    | _ -> Read (r, v, pos)
                     in
-                    Annot (body, a, pos2)
-                | e ->
-                    BinaryOp (r, OpEq, e, BoolType, pos_of_expr e))
+                    Binder (Forall, [UnguardedVar v_decl], desugar_ite rv e, pos)
+                | e -> desugar_ite r e)
                   decl.pr_body
               in
               let contracts = match rtype with
@@ -747,8 +752,8 @@ let convert cu =
           Opt.map pos_of_expr decl.pr_body |> Opt.get_or_else decl.pr_pos
         in
         let footprint_sorts = match decl.pr_body with
-        | None -> struct_sorts
-        | Some _ -> SortSet.empty
+        | None when not decl.pr_is_pure -> struct_sorts
+        | _ -> SortSet.empty
         in
         let contract =
           { contr_name = id;
@@ -758,6 +763,7 @@ let convert cu =
             contr_locals = locals;
             contr_precond = pre;
             contr_postcond = post;
+            contr_is_pure = decl.pr_is_pure;
             contr_pos = decl.pr_pos;
          }
         in
@@ -789,6 +795,7 @@ let convert cu =
             contr_footprint_sorts = SortSet.empty;
             contr_returns = decl.p_returns;
             contr_locals = IdMap.map convert_var_decl decl.p_locals;
+            contr_is_pure = false;
             contr_precond = pre;
             contr_postcond = post;
             contr_pos = decl.p_pos;

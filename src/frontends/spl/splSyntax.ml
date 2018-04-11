@@ -69,6 +69,7 @@ and pred =
       pr_outputs: idents;
       pr_locals: vars;
       pr_contracts: contracts;
+      pr_is_pure: bool;
       pr_body: expr option; 
       pr_pos: pos;
     }
@@ -199,7 +200,7 @@ and pred_sym =
   | AccessPred | BtwnPred | DisjointPred | FramePred | ReachPred | Pred of ident
       
 and binder_kind =
-  | Forall | Exists | SetComp
+  | Forall | Exists | Comp
 
 and annotation =
   | Position
@@ -623,7 +624,7 @@ let string_of_pred = function
 let prio_of_expr = function
   | Null _ | Emp _ | IntVal _ | BoolVal _ | Ident _ -> 0
   | Read _ | Write _ | ProcCall _ | PredApp _ | ConstrApp _ | DestrApp _ | New _ | Setenum _ |
-    Binder (SetComp, _, _, _) -> 1
+    Binder (Comp, _, _, _) -> 1
   | UnaryOp ((OpArrayCells | OpIndexOfCell | OpArrayOfCell |
     OpLength | OpToInt | OpToByte | OpOld | OpKnown), _, _) -> 1
   | UnaryOp ((OpUMinus | OpUPlus | OpBvNot | OpNot), _, _) -> 2
@@ -762,7 +763,7 @@ let rec pr_expr ppf =
             pr_var ppf v
       in
       (match b with
-      | SetComp ->
+      | Comp ->
           fprintf ppf "{ @[<2>%a ::@ %a@] }"
             (Util.pr_list_comma pr_bound_var) vs pr_expr e
       | _ ->
@@ -825,12 +826,14 @@ let pr_pred_decl ppf pred =
   let pr_header ppf pred =
   match pred.pr_outputs with
   | [] ->
-      fprintf ppf "@[<2>predicate %a(@[<0>%a@])%a@]@ "
+      fprintf ppf "@[<2>%spredicate %a(@[<0>%a@])%a@]@ "
+        (if pred.pr_is_pure then "pure " else "")
         pr_ident pred.pr_name
         pr_var_list (lookup pred.pr_formals)
         pr_contracts pred.pr_contracts
   | _ ->
-      fprintf ppf "@[<2>function %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a@]@\n"
+      fprintf ppf "@[<2>%sfunction %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a@]@\n"
+        (if pred.pr_is_pure then "pure " else "")
         pr_ident pred.pr_name
         pr_var_list (lookup pred.pr_formals)
         pr_var_list (lookup pred.pr_outputs)

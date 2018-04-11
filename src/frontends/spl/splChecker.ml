@@ -242,7 +242,7 @@ let resolve_names cu =
           (match args1 with
           | [arg] ->
               (match type_of_expr cu locals arg with
-              | SetType _ -> 
+              | SetType _ | MapType _ -> 
                   PredApp (AccessPred, [arg], pos)
               | ty ->
                   PredApp (AccessPred, [Setenum (resolve_typ types pos tbl ty, [arg], pos)], pos))
@@ -495,7 +495,7 @@ let resolve_names cu =
     background_theory = bg_theory;
   }
 
-(** Flatten procedure calls and new expressions in compilation unit [cu].*)
+(** Flatten procedure calls, comprehensions, and new expressions in compilation unit [cu].*)
 let flatten_exprs cu =
   let decl_aux_var name vtype pos scope locals =
     let aux_id = GrassUtil.fresh_ident name in
@@ -561,18 +561,23 @@ let flatten_exprs cu =
         let f1, aux, locals = flatten_expr scope aux locals f in          
         (match b with
         | Exists | Forall -> Binder (b, vars1, f1, pos), aux, locals
-        | SetComp ->
+        | Comp ->
             let v_decl =
               match vars1 with
               | [UnguardedVar decl] -> decl
               | _ -> failwith "unexpected set comprehension"
             in
-            let sc_id = GrassUtil.fresh_ident "set_compr" in
+            let c_id = GrassUtil.fresh_ident "compr" in
             let fv = IdSet.elements (free_vars e) in
             let res_id = GrassUtil.fresh_ident "res" in
+            let res_ty =
+              match type_of_expr cu locals f1 with
+              | BoolType -> SetType v_decl.v_type
+              | rty -> MapType (v_decl.v_type, rty)
+            in
             let res_decl = 
               { v_name = res_id;
-                v_type = SetType v_decl.v_type;
+                v_type = res_ty;
                 v_ghost = false;
                 v_implicit = false;
                 v_aux = true;
@@ -580,30 +585,31 @@ let flatten_exprs cu =
                 v_scope = pos;
               }
             in
-            let sc_locals =
+            let c_locals =
               IdMap.add v_decl.v_name v_decl
                 (IdMap.singleton res_id res_decl)
             in
             let formals = List.filter (fun id -> IdMap.mem id locals) fv in
-            let sc_locals =
+            let c_locals =
               List.fold_left
-                (fun sc_locals id -> IdMap.add id (IdMap.find id locals) sc_locals)
-                sc_locals formals
+                (fun c_locals id -> IdMap.add id (IdMap.find id locals) c_locals)
+                c_locals formals
             in
-            let sc_decl =
-              { pr_name = sc_id;
+            let c_decl =
+              { pr_name = c_id;
                 pr_formals = formals;
                 pr_outputs = [res_id];
-                pr_locals = sc_locals;
+                pr_locals = c_locals;
                 pr_contracts = [];
+                pr_is_pure = false;
                 pr_body = Some e;
                 pr_pos = pos;
               }
             in
             let actuals = List.map (fun id -> Ident (id, pos)) formals in
-            let sc_app = PredApp (Pred sc_id, actuals, pos) in
+            let c_app = PredApp (Pred c_id, actuals, pos) in
             let aux_cmds, aux_funs = aux in
-            sc_app, (aux_cmds, sc_decl :: aux_funs), locals
+            c_app, (aux_cmds, c_decl :: aux_funs), locals
         )
     | ProcCall (id, args, pos) ->
         let pdecl = IdMap.find id cu.proc_decls in
@@ -819,6 +825,13 @@ let flatten_exprs cu =
               let body, aux, locals = flatten_expr decl.pr_pos ([], aux_funs) decl.pr_locals body in
               Some body, aux, locals
           | None -> None, ([], aux_funs), locals
+        in
+        (* if auxiliary function comes from top-level expression in body then undo the flattening *)
+        let body, aux_funs =
+          match body, aux_funs with
+          | Some (PredApp (Pred id, _, _) | Annot(PredApp (Pred id, _, _), _, _)), aux_decl :: aux_decls
+            when id = aux_decl.pr_name -> aux_decl.pr_body, aux_decls
+          | _ -> body, aux_funs
         in
         match aux_cmds with
         | cmd :: _ ->

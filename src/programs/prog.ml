@@ -133,6 +133,7 @@ type contract = {
     contr_precond: spec list; (** precondition *)
     contr_postcond: spec list; (** postcondition *)
     contr_footprint_sorts: SortSet.t; (** footprint sorts *)
+    contr_is_pure: bool; (** has no state dependencies *)
     contr_pos: source_position; (** position of declaration *)
   }
       
@@ -230,6 +231,7 @@ let trivial_contract name =
     contr_pos = dummy_position;
     contr_precond = [];
     contr_postcond = [];
+    contr_is_pure = false;
     contr_footprint_sorts = SortSet.empty;
   }
     
@@ -1243,12 +1245,14 @@ let pr_pred ppf pred =
   let pr_header ppf pred =
   match returns_of_pred pred with
   | [] ->
-      fprintf ppf "@\n@[<2>predicate %a(@[<0>%a@])%a@]@ "
+      fprintf ppf "@\n@[<2>%spredicate %a(@[<0>%a@])%a@]@ "
+        (if pred.pred_contract.contr_is_pure then "pure " else "")
         pr_ident (name_of_pred pred)
         pr_id_srt_list (add_srts (formals_of_pred pred))
         pr_contract pred.pred_contract
   | _ ->
-      fprintf ppf "@\n@[<2>function %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a@]@\n"
+      fprintf ppf "@\n@[<2>%sfunction %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a@]@\n"
+        (if pred.pred_contract.contr_is_pure then "pure " else "")
         pr_ident (name_of_pred pred)
         pr_id_srt_list (add_srts (formals_of_pred pred))
         pr_id_srt_list (add_srts (returns_of_pred pred))

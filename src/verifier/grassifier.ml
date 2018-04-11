@@ -96,6 +96,7 @@ let add_ghost_field_invariants prog =
         contr_locals = IdMap.add decl.var_name decl locals;
         contr_precond = [];
         contr_postcond = [];
+        contr_is_pure = false;
         contr_footprint_sorts = SortSet.empty;
         contr_pos = decl.var_pos;
       }
@@ -1193,6 +1194,7 @@ let elim_sl prog =
             contr_locals = fp_func_locals;
             contr_precond = [];
             contr_postcond = [];
+            contr_is_pure = false;
             contr_footprint_sorts = SortSet.empty;
             contr_pos = pos;
           }
@@ -1230,6 +1232,7 @@ let elim_sl prog =
                   contr_precond = check_precond_specs;
                   contr_postcond = [check_postcond_spec];
                   contr_footprint_sorts = SortSet.empty;
+                  contr_is_pure = false;
                   contr_pos = pos;
                 }
               in

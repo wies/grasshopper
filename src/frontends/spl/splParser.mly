@@ -63,7 +63,9 @@ type rhs_string_maybe =
 %token <SplSyntax.binder_kind> QUANT
 %token ASSUME ASSERT SPLIT CALL FREE HAVOC NEW RETURN
 %token IF ELSE WHILE
-%token GHOST IMPLICIT VAR STRUCT PURE LEMMA PROCEDURE PREDICATE FUNCTION INCLUDE AXIOM TYPE
+%token <bool> FUNCTION
+%token <bool> PREDICATE
+%token GHOST IMPLICIT VAR STRUCT PURE LEMMA PROCEDURE INCLUDE AXIOM TYPE
 %token DEFINE DATATYPE OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token LOC INT BOOL BYTE SET MAP ARRAY ARRAYCELL
 %token MATCHING YIELDS WITHOUT COMMENT PATTERN
@@ -243,6 +245,7 @@ pred_decl:
       pr_outputs = [];
       pr_locals = locals;
       pr_contracts = $6;
+      pr_is_pure = $1;
       pr_body = $7;
       pr_pos = mk_position 2 2;
     }
@@ -274,6 +277,7 @@ function_header:
       pr_outputs = outputs;
       pr_locals = locals;
       pr_contracts = contracts;
+      pr_is_pure = $1;
       pr_body = None;
       pr_pos = mk_position 2 2;
     }
@@ -614,7 +618,7 @@ primary_no_set:
 
 set_expr:
 | LBRACE expr_list_opt RBRACE { Setenum (AnyType, $2, mk_position 1 3) }
-| LBRACE simple_bound_var COLONCOLON expr RBRACE { Binder (SetComp, [$2], $4, mk_position 1 5) }
+| LBRACE simple_bound_var COLONCOLON expr RBRACE { Binder (Comp, [$2], $4, mk_position 1 5) }
 ;
   
 alloc:

@@ -178,6 +178,7 @@ let elim_loops (prog : program) =
                 subst_id_spec subst_returns |>
                 map_terms_spec subst_old)
               postcond;
+            contr_is_pure = false;
             contr_pos = pp.pp_pos;
           }
         in
