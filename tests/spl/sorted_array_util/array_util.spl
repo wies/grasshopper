@@ -18,12 +18,11 @@ lemma extend_right(m: Map<Int, K>, i: Int, j: Int)
   }
 }
 
-// 
 lemma in_set_of_map(m: Map<Int, K>, i: Int, j: Int)
   requires 0 <= i <= j
   ensures forall k: Int :: i <= k < j ==> m[k] in set_of_map(m, i, j)
 {
-  if (i == j) {
+  if (i >= j) {
   } else {
     in_set_of_map(m, i + 1, j);
   }
@@ -50,16 +49,22 @@ lemma frame_set_of_map(m: Map<Int, K>, i: Int, j: Int)
   }
 }
 
-lemma not_in_sorted_seg(a: Array<K>, i: Int, len: Int, k: K)
-  requires acc(a) &*& sorted_array_seg(a, i, len)
-  requires 0 <= i <= len
-  requires i < len ==> lt(k, a[i])
-  ensures acc(a) &*& sorted_array_seg(a, i, len)
-  ensures k !in set_of_array(a, i, len)
+lemma not_in_sorted_seg(a: Array<K>, i: Int, j: Int, k: K)
+  requires acc(a) &*& sorted_array_seg(a, i, j)
+  ensures acc(a) &*& sorted_array_seg(a, i, j)
+  ensures i >= j || lt(k, a[i]) || lt(a[j-1], k) ==> k !in set_of_array(a, i, j)
 {
-  if (i == len) {
-  } else {
-    not_in_sorted_seg(a, i + 1, len, k);
+  if (i >= j) return;
+
+  if (lt(a[j - 1], k)) {
+    extend_right(map_of_array(a), i, j - 1);
+    not_in_sorted_seg(a, i, j - 1, k);
+    return;
+  }
+
+  if (lt(k, a[i])) {
+    not_in_sorted_seg(a, i + 1, j, k);    
+    return;
   }
 }
 
@@ -73,27 +78,83 @@ function map_of_array(a: Array<K>) returns (res: Map<Int, K>)
 predicate sorted_array_seg(a: Array<K>, i: Int, j: Int)
   requires acc(a)
 {
-  0 <= i <= j <= a.length &*&
+  0 <= i && j <= a.length &*&
     (forall i1: Int, i2: Int :: i <= i1 < i2 < j ==> lt(a[i1], a[i2]))
 }
 
 function set_of_array(a: Array<K>, i: Int, j: Int) returns (res: Set<K>)
-  requires acc(a) &*& 0 <= i <= j <= a.length
+  requires acc(a) &*& 0 <= i && j <= a.length
 {
   set_of_map(map_of_array(a), i, j)
 }
   
 predicate array_seg_with_content(a: Array<K>, i: Int, j: Int, C: Set<K>)
-  requires acc(a) &*& 0 <= i <= j <= a.length
+  requires acc(a)
 {
-  sorted_array_seg(a, i, j) &*& C == set_of_map(map_of_array(a), i, j)
+  sorted_array_seg(a, i, j) &*& C == set_of_array(a, i, j)
 }
 
 predicate array_with_content(a: Array<K>, len: Int, C: Set<K>)
 {
+  0 <= len &*&
   acc(a) &*& array_seg_with_content(a, 0, len, C)
 }
-  
+
+
+procedure find(a: Array<K>, len: Int, k: K, implicit ghost C: Set<K>)
+  returns (found: Bool, idx: Int)
+  requires array_with_content(a, len, C)
+  requires 0 <= len <= a.length
+  ensures array_with_content(a, len, C)
+  // what we actually care about
+  ensures 0 <= idx <= len
+  ensures found == (k in C)
+  ensures found ==> a[idx] == k
+  ensures !found ==> idx == len || lt(k, a[idx])
+  ensures 0 < idx ==> lt(a[idx - 1], k)
+  ensures k !in set_of_array(a, 0, idx)
+  ensures k !in set_of_array(a, idx + 1, len)
+{
+  var lo := 0;
+  var hi := len;
+
+  while (hi != lo)
+    invariant array_with_content(a, len, C)
+    // what we actually care about
+    invariant 0 <= lo <= hi <= len <= a.length
+    invariant hi == len || a[lo] == k || lt(k, a[hi])
+    invariant 0 < lo ==> lt(a[lo - 1], k)
+    invariant hi < len - 1 ==> lt(k, a[hi + 1])
+  {
+    var m := (hi + lo) / 2;
+    var cmp: Int;
+    cmp := compare(k, a[m]);
+    if (cmp < 0) {
+      hi := m;      // look in first half
+    } else if (cmp > 0) {
+      lo := m+1;    // look in second half
+    } else {
+      // found it
+      hi := m;
+      lo := m;
+    }
+  }
+
+  idx := lo;
+  if (idx == len || lt(k, a[lo])) {
+    found := false;
+  } else {
+    found := true;
+  }
+  // prove k !in set_of_array(a, 0, idx);
+  not_in_sorted_seg(a, 0, idx, k);
+  // prove k !in set_of_array(a, idx + 1, len);
+  not_in_sorted_seg(a, idx + 1, len, k);
+  // prove found == (k in C)
+  set_of_map_split(map_of_array(a), 0, idx, len);
+}
+
+
 procedure insert(a: Array<K>, k: K, len: Int, implicit ghost C: Set<K>)
   returns (new_len: Int)
   requires array_with_content(a, len, C)
@@ -102,31 +163,15 @@ procedure insert(a: Array<K>, k: K, len: Int, implicit ghost C: Set<K>)
   ensures k in C ==> new_len == len
   ensures k !in C ==> new_len == len + 1
 {
-  var i := 0;
-
   // find position for insertion
-  while (i < len && lt(a[i], k))
-    invariant array_with_content(a, len, C)
-    invariant 0 <= i <= len < a.length
-    invariant 0 < i < len ==> lt(a[i - 1], a[i])
-    invariant 0 < i ==> lt(a[i - 1], k)
-    invariant k !in set_of_array(a, 0, i)
-  {
-    extend_right(map_of_array(a), 0, i);
-    i := i + 1;
-  }
-
+  var i: Int, found: Bool;
+  found, i := find(a, len, k);
+  
   // k already in C?
-  if (i < len && a[i] == k) {
-    var ghost m := map_of_array(a);
-    in_set_of_map(m, 0, len);
+  if (found) {
     return len;
   }
 
-  // prove k !in C
-  not_in_sorted_seg(a, i, len, k);
-  set_of_map_split(map_of_array(a), 0, i, len);
-  
   // shift array entries a[j..len] by 1 entry to the right 
   var j := len;
   
@@ -163,6 +208,6 @@ procedure insert(a: Array<K>, k: K, len: Int, implicit ghost C: Set<K>)
   frame_set_of_map(m, i + 1, len + 1);
   set_of_map_split(map_of_array(a), 0, i, len + 1);
 
-  return len + 1;  
+  return len + 1;
 }
 
