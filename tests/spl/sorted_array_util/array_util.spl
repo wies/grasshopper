@@ -1,0 +1,168 @@
+include "../include/ordered_type.spl"
+
+// project map segment m[i..j] to set of its elements
+function set_of_map(m: Map<Int, K>, i: Int, j: Int)
+  returns (res: Set<K>)
+  requires 0 <= i <= j
+{
+  i < j ? {m[i]} ++ set_of_map(m, i + 1, j) : {}
+}
+
+lemma extend_right(m: Map<Int, K>, i: Int, j: Int)
+  requires i <= j
+  pure ensures set_of_map(m, i, j) ++ {m[j]} == set_of_map(m, i, j + 1)
+{
+  if (i == j) {
+  } else {
+    extend_right(m, i + 1, j);
+  }
+}
+
+// 
+lemma in_set_of_map(m: Map<Int, K>, i: Int, j: Int)
+  requires 0 <= i <= j
+  ensures forall k: Int :: i <= k < j ==> m[k] in set_of_map(m, i, j)
+{
+  if (i == j) {
+  } else {
+    in_set_of_map(m, i + 1, j);
+  }
+}
+
+lemma set_of_map_split(m: Map<Int, K>, i: Int, j: Int, k: Int)
+  requires i <= j <= k
+  ensures set_of_map(m, i, k) == set_of_map(m, i, j) ++ set_of_map(m, j, k)
+{
+  if (j == k) {
+  } else {
+    extend_right(m, i, j);
+    set_of_map_split(m, i, j + 1, k);
+  }
+}
+
+lemma frame_set_of_map(m: Map<Int, K>, i: Int, j: Int)
+  requires i <= j
+  ensures forall i1: Int, k: K :: i1 < i || j <= i1 ==> set_of_map(m, i, j) == set_of_map(m[i1 := k], i, j)
+{
+  if (i == j) {
+  } else {
+    frame_set_of_map(m, i + 1, j);
+  }
+}
+
+lemma not_in_sorted_seg(a: Array<K>, i: Int, len: Int, k: K)
+  requires acc(a) &*& sorted_array_seg(a, i, len)
+  requires 0 <= i <= len
+  requires i < len ==> lt(k, a[i])
+  ensures acc(a) &*& sorted_array_seg(a, i, len)
+  ensures k !in set_of_array(a, i, len)
+{
+  if (i == len) {
+  } else {
+    not_in_sorted_seg(a, i + 1, len, k);
+  }
+}
+
+function map_of_array(a: Array<K>) returns (res: Map<Int, K>)
+  requires acc(a)
+{
+  { i: Int :: a[i] @(matching res[i] yields a[i]) @(matching a[i] yields res[i]) }
+}
+
+ 
+predicate sorted_array_seg(a: Array<K>, i: Int, j: Int)
+  requires acc(a)
+{
+  0 <= i <= j <= a.length &*&
+    (forall i1: Int, i2: Int :: i <= i1 < i2 < j ==> lt(a[i1], a[i2]))
+}
+
+function set_of_array(a: Array<K>, i: Int, j: Int) returns (res: Set<K>)
+  requires acc(a) &*& 0 <= i <= j <= a.length
+{
+  set_of_map(map_of_array(a), i, j)
+}
+  
+predicate array_seg_with_content(a: Array<K>, i: Int, j: Int, C: Set<K>)
+  requires acc(a) &*& 0 <= i <= j <= a.length
+{
+  sorted_array_seg(a, i, j) &*& C == set_of_map(map_of_array(a), i, j)
+}
+
+predicate array_with_content(a: Array<K>, len: Int, C: Set<K>)
+{
+  acc(a) &*& array_seg_with_content(a, 0, len, C)
+}
+  
+procedure insert(a: Array<K>, k: K, len: Int, implicit ghost C: Set<K>)
+  returns (new_len: Int)
+  requires array_with_content(a, len, C)
+  requires len < a.length
+  ensures array_with_content(a, new_len, C ++ {k})
+  ensures k in C ==> new_len == len
+  ensures k !in C ==> new_len == len + 1
+{
+  var i := 0;
+
+  // find position for insertion
+  while (i < len && lt(a[i], k))
+    invariant array_with_content(a, len, C)
+    invariant 0 <= i <= len < a.length
+    invariant 0 < i < len ==> lt(a[i - 1], a[i])
+    invariant 0 < i ==> lt(a[i - 1], k)
+    invariant k !in set_of_array(a, 0, i)
+  {
+    extend_right(map_of_array(a), 0, i);
+    i := i + 1;
+  }
+
+  // k already in C?
+  if (i < len && a[i] == k) {
+    var ghost m := map_of_array(a);
+    in_set_of_map(m, 0, len);
+    return len;
+  }
+
+  // prove k !in C
+  not_in_sorted_seg(a, i, len, k);
+  set_of_map_split(map_of_array(a), 0, i, len);
+  
+  // shift array entries a[j..len] by 1 entry to the right 
+  var j := len;
+  
+  while (j > i)
+    invariant acc(a) &*& sorted_array_seg(a, 0, j) &*& sorted_array_seg(a, j + 1, len + 1)
+    invariant 0 <= i <= j <= len
+    invariant i < len ==> lt(k, a[i])
+    invariant 0 < i ==> lt(a[i - 1], k)
+    invariant i <= j < len ==> a[j] == a[j + 1]
+    invariant 0 < j < len ==> lt(a[j - 1], a[j])
+    invariant C == set_of_array(a, 0, j) ++ set_of_array(a, j + 1, len + 1)
+  {
+    var ghost m := map_of_array(a);
+
+    var tmp := a[j - 1];
+    a[j] := tmp;
+
+    // prove C == set_of_array(a, 0, j - 1) ++ set_of_array(a, j, len + 1)
+    pure assert map_of_array(a) == m[j := tmp];
+    frame_set_of_map(m, 0, j - 1);
+    frame_set_of_map(m, j + 1, len + 1);
+    extend_right(m, 0, j - 1);
+
+    j := j - 1;
+  }
+
+  var ghost m := map_of_array(a);
+  
+  a[i] := k;
+
+  // prove C == set_of_array(a, 0, i) ++ {k} ++ set_of_array(a, i + 1, len + 1)
+  pure assert map_of_array(a) == m[i := k];
+  frame_set_of_map(m, 0, i);
+  frame_set_of_map(m, i + 1, len + 1);
+  set_of_map_split(map_of_array(a), 0, i, len + 1);
+
+  return len + 1;  
+}
+

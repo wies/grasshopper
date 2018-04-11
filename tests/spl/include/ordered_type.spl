@@ -1,0 +1,9 @@
+// An ordered type
+type K
+    
+pure predicate lt(x: K, y: K)
+
+axiom forall a: K :: !lt(a, a);
+axiom forall a: K, b: K :: !lt(a, b) || !lt(b, a);
+axiom forall a: K, b: K :: lt(a, b) || lt(b, a) || a == b;
+axiom forall a: K, b: K, c: K :: lt(a, b) && lt(b, c) ==> lt(a, c);
