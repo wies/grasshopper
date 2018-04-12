@@ -48,24 +48,34 @@ predicate ndLeq(a1: NodeDom, a2: NodeDom) {
 
 struct Node {
   var lock: Int;
+  var len: Int;
   var arr: Array<Node>;
   var keys: Array<Int>;
   var next: Node;
 }
 
+procedure newNode(xlock: Int, xlen: Int, xkeyslen: Int, xnext: Node)
+  returns (x: Node, Ix: Interface)
+  requires emp
+  ensures [acc(x) &*& acc(x.arr) &*& acc(x.keys)](Ix)
+  ensures x.lock == xlock && x.len == xlen && x.keys.length == xkeyslen && x.next == xnext
+  ensures intValid(Ix) && Ix.FP == {x} && domEq(Ix.inf[x], domZero()) == true && Ix.FPo == {}
+
 
 /** Definition of good condition, gamma */
 
 function hash(x: Node, k: Int) returns (i: Int)
-  ensures forall k: Int :: 0 <= hash(x, k) && hash(x, k) < x.arr.length
 
 function sk_ir(x: Node, I: Interface, k: Int) returns (y: Node)
 
 define gammaG(x, I) {
   (I.na.nodetype == root
    && (forall i: Int :: 0 <= i && i < x.arr.length ==> x.arr[i] != null)
-   && (forall y: Node, k: Int :: y == x.arr[hash(x, k)] ==> I.fm[x][y].ks[k] == 1))
-    || (I.na.nodetype == bucket)
+   && (forall y: Node, k: Int :: y == x.arr[hash(x, k)] ==> I.fm[x][y].ks[k] == 1)
+   && (forall k: Int :: 0 <= hash(x, k) && hash(x, k) < x.arr.length))
+    || (I.na.nodetype == bucket
+       && (x.next == null && I.FPo == {}
+          || x.next != null && (forall k: Int :: I.fm[x][x.next].ks[k] == 1) && I.FPo == {x.next}))
 }
 
 define gammaB(x, I) { true }
@@ -117,11 +127,76 @@ procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   lemma_conc(x, Ix);
   if (Ix.na.nodetype == root) {
     n := x.arr[hash(x, k)];
-    lemma_conc_rev(x, Ix);
-    return n;
   } else if (Ix.na.nodetype == bucket) {
-    lemma_conc_rev(x, Ix);
-    pure assume false;
+    if (x.next == null) {
+      n := null;
+      lemma_int_valid_unfold(Ix);
+    } else {
+      n := x.next;
+    }
   }
+  lemma_conc_rev(x, Ix);
+  //    return n;
 }
 
+
+procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
+  returns (res: Bool, Ix1: Interface, I1: Interface)
+  requires N(x, Ix) &*& Gr(I2)
+  requires intValid(Ix) == true && intValid(I2) == true
+  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
+  requires Ix.inf[x].ks[k] >= 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
+  ensures N(x, Ix1) &*& Gr(I2)
+  ensures intValid(Ix1) == true && intValid(I2) == true
+  ensures intComp(Ix1, I2) == I1 && globalInt(I1) && Ix1.na.lockinfo == locked(TID)
+ //ensures decisiveOpSpec(x, Ix1, res, k) == true
+
+procedure copyNode(x: Node, Ix: Interface, I2: Interface, I: Interface)
+  returns (I1: Interface)
+  requires [gamma(x, Ix)](Ix) &*& Gr(I2)
+  requires intValid(Ix) == true && intValid(I2) == true
+  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
+  requires Ix.na.nodetype == bucket && x.len == x.keys.length
+  ensures Gr(I1) &*& globalInt(I)
+{
+  var y: Node, Iy: Interface;
+  y, Iy := newNode(0, x.len, 2 * x.keys.length, null);
+
+  var i := 0;
+  while (i < x.len)
+    invariant [gamma(x, Ix)](Ix) &*& [acc(y) &*& acc(y.arr) &*& acc(y.keys)](Iy) &*& Gr(I2)
+    invariant intValid(Ix) == true && intValid(Iy) == true && intValid(I2) == true
+    invariant intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
+    invariant Ix.na.nodetype == bucket && x.len == x.keys.length
+    invariant 0<= i && i <= x.len && y.keys.length == 2 * x.len && y.next == null
+    invariant forall j: Int :: 0 <= j < i ==> y.keys[j] == x.keys[j]
+  {
+    y.keys[i] := x.keys[i];
+  }
+
+  x.next := y;
+
+  var Ix1: Interface;
+  pure assume Ix1.inf == Ix.inf && Ix1.na.contents == {}
+  && Ix1.na.lockinfo == Ix.na.lockinfo && Ix1.na.nodetype == Ix.na.nodetype
+  && (forall k: Int :: Ix1.fm[x][y].ks[k] == 1) && (forall k: Int :: Ix1.fm[x][y].ir[k] == 0)
+  && (forall z: Node :: domEq(Ix1.fm[x][y], domZero()) == true)
+  && Ix1.FP == Ix.FP && Ix1.FPo == {y};
+  // TODO  var Ix1 := int(Ix.inf, nd({}, Ix.na.lockinfo, Ix.na.nodetype), )
+
+  var Iy1: Interface;
+  pure assume Iy1.inf == Ix.inf && Iy1.na.contents == Ix.na.contents
+  && Iy1.na.nodetype == bucket && Iy1.FP == Iy.FP && Iy1.FPo == Iy.FPo
+  && (forall z: Node :: domEq(Iy1.fm[y][z], domZero()) == true);
+
+  lemma_int_valid_fold(Ix1);
+  lemma_abs(x, Ix, Ix1);
+  lemma_int_valid_fold(Iy1);
+  lemma_int_valid_unfold(Iy);
+  lemma_abs(y, Iy, Iy1);
+
+  var Ixy1 := lemma_int_comp_fold(x, Ix, y, Iy);
+  //  var I0 := lemma_comp_sing_int(y, Iy, I);
+
+  // sync();
+}
