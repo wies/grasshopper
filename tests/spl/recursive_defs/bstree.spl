@@ -1,5 +1,11 @@
 include "../include/bstree_rec.spl";
 
+lemma unfold(r: Node)
+  requires tree(r) &*& r != null
+  ensures acc(r) &*& tree(r.left) &*& tree(r.right)
+{
+}
+
 procedure destroy(root: Node)
   requires tree(root);
   ensures emp;
@@ -25,7 +31,7 @@ procedure extract_max(root: Node)
   } else {
     var c: Node;
     c := root.left;
-    assert tree(c) &*& tree(root.right) &*& acc(root);
+    unfold(root);
     return c, root;
   }
 }
@@ -36,8 +42,7 @@ procedure insert(root: Node, value: Int)
   ensures tree(new_root);
 {
   if (root == null) {
-    var t: Node;
-    t := new Node;
+    var t := new Node;
     t.left := null;
     t.right := null;
     t.data := value;
@@ -47,14 +52,12 @@ procedure insert(root: Node, value: Int)
     if (root.data > value) {
       n := insert(root.left, value);
       root.left := n;
-      assert acc(root) &*& tree(root.left) &*& tree(root.right);
       return root;
     } else if (root.data < value) {
       n := insert(root.right, value);
       root.right := n;
-      assert acc(root) &*& tree(root.left) &*& tree(root.right);
       return root;
-    }
+    } 
     return root;
   }
 }

@@ -9,9 +9,8 @@ procedure dl_insert(a: Node, b: Node, elt: Node) returns (c: Node, d: Node)
     elt.next := null;
     return elt, elt;
   } else {
-    var curr: Node;
     c, d := a, b;
-    curr := c;
+    var curr := c;
     var nondet: Bool;
     while (nondet && curr.next != null) 
       invariant acc(curr) -** dlseg(c, null, null, d);
@@ -20,15 +19,14 @@ procedure dl_insert(a: Node, b: Node, elt: Node) returns (c: Node, d: Node)
       havoc nondet;
     }
     elt.next := curr;
-    var prv: Node;
-    prv := curr.prev;
+    var prv := curr.prev;
     curr.prev := elt;
     elt.prev := prv;
     if (prv != null) {
       prv.next := elt;
-      return c, d;
     } else {
-      return elt, d;
+      c := elt;
     }
+    return c, d;
   }
 }

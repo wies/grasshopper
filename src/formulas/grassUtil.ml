@@ -410,7 +410,15 @@ let mk_setenum ts =
 let mk_inter sets = 
   if List.exists (function App (Empty, [], _) -> true | _ -> false) sets
   then mk_empty (sort_ofs sets)
-  else mk_app (sort_ofs sets) Inter sets
+  else
+    let rec mi = function
+      | [] -> mk_app (sort_ofs sets) Inter []
+      | [s] -> s
+      | s1 :: sets ->
+          let s2 = mi sets in
+          mk_app (sort_of s1) Inter [s1; s2]
+    in
+    mi sets
 
 (** Constructor for set union.*)
 let mk_union sets = 
@@ -419,11 +427,15 @@ let mk_union sets =
       (function App (Empty, [], _) -> false | _ -> true) 
       sets
   in
-  match sets1 with
+  let rec mu = function
   | [] -> mk_empty (sort_ofs sets)
   | [s] -> s
-  | _ -> mk_app (sort_ofs sets) Union sets1
-
+  | s1 :: sets ->
+      let s2 = mu sets in
+      mk_app (sort_of s1) Union [s1; s2]
+  in
+  mu sets1
+    
 (** Construtor for set difference.*)
 let mk_diff s t = mk_app (sort_of s) Diff [s; t]
 

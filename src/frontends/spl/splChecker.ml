@@ -214,6 +214,8 @@ let resolve_names cu =
           Read (re locals tbl map, re locals tbl idx, pos)
       | Write (map, idx, upd, pos) ->
           Write (re locals tbl map, re locals tbl idx, re locals tbl upd, pos)
+      | Ite (cond, t, e, pos) ->
+          Ite (re locals tbl cond, re locals tbl t, re locals tbl e, pos)
       | ConstrApp (id, es, pos) ->
           ConstrApp (id, List.map (re locals tbl) es, pos)
       | DestrApp (id, e, pos) ->
@@ -240,7 +242,7 @@ let resolve_names cu =
           (match args1 with
           | [arg] ->
               (match type_of_expr cu locals arg with
-              | SetType _ -> 
+              | SetType _ | MapType _ -> 
                   PredApp (AccessPred, [arg], pos)
               | ty ->
                   PredApp (AccessPred, [Setenum (resolve_typ types pos tbl ty, [arg], pos)], pos))
@@ -495,7 +497,7 @@ let resolve_names cu =
     background_theory = bg_theory;
   }
 
-(** Flatten procedure calls and new expressions in compilation unit [cu].*)
+(** Flatten procedure calls, comprehensions, and new expressions in compilation unit [cu].*)
 let flatten_exprs cu =
   let decl_aux_var name vtype pos scope locals =
     let aux_id = GrassUtil.fresh_ident name in
@@ -537,6 +539,11 @@ let flatten_exprs cu =
         let idx1, aux2, locals = flatten_expr scope aux1 locals idx in
         let upd1, aux3, locals = flatten_expr scope aux2 locals upd in
         Write (map1, idx1, upd1, pos), aux3, locals
+    | Ite (cond, t, e, pos) ->
+        let cond1, aux1, locals = flatten_expr scope aux locals cond in
+        let t1, aux2, locals = flatten_expr scope aux1 locals t in
+        let e1, aux3, locals = flatten_expr scope aux2 locals e in
+        Ite (cond1, t1, e1, pos), aux3, locals
     | ConstrApp (id, args, pos) ->
         let args1, aux1, locals = flatten_expr_list scope aux locals args in
         ConstrApp (id, args1, pos), aux1, locals
@@ -556,18 +563,23 @@ let flatten_exprs cu =
         let f1, aux, locals = flatten_expr scope aux locals f in          
         (match b with
         | Exists | Forall -> Binder (b, vars1, f1, pos), aux, locals
-        | SetComp ->
+        | Comp ->
             let v_decl =
               match vars1 with
               | [UnguardedVar decl] -> decl
               | _ -> failwith "unexpected set comprehension"
             in
-            let sc_id = GrassUtil.fresh_ident "set_compr" in
+            let c_id = GrassUtil.fresh_ident "compr" in
             let fv = IdSet.elements (free_vars e) in
             let res_id = GrassUtil.fresh_ident "res" in
+            let res_ty =
+              match type_of_expr cu locals f1 with
+              | BoolType -> SetType v_decl.v_type
+              | rty -> MapType (v_decl.v_type, rty)
+            in
             let res_decl = 
               { v_name = res_id;
-                v_type = SetType v_decl.v_type;
+                v_type = res_ty;
                 v_ghost = false;
                 v_implicit = false;
                 v_aux = true;
@@ -575,30 +587,31 @@ let flatten_exprs cu =
                 v_scope = pos;
               }
             in
-            let sc_locals =
+            let c_locals =
               IdMap.add v_decl.v_name v_decl
                 (IdMap.singleton res_id res_decl)
             in
             let formals = List.filter (fun id -> IdMap.mem id locals) fv in
-            let sc_locals =
+            let c_locals =
               List.fold_left
-                (fun sc_locals id -> IdMap.add id (IdMap.find id locals) sc_locals)
-                sc_locals formals
+                (fun c_locals id -> IdMap.add id (IdMap.find id locals) c_locals)
+                c_locals formals
             in
-            let sc_decl =
-              { pr_name = sc_id;
+            let c_decl =
+              { pr_name = c_id;
                 pr_formals = formals;
                 pr_outputs = [res_id];
-                pr_locals = sc_locals;
+                pr_locals = c_locals;
                 pr_contracts = [];
+                pr_is_pure = false;
                 pr_body = Some e;
                 pr_pos = pos;
               }
             in
             let actuals = List.map (fun id -> Ident (id, pos)) formals in
-            let sc_app = PredApp (Pred sc_id, actuals, pos) in
+            let c_app = PredApp (Pred c_id, actuals, pos) in
             let aux_cmds, aux_funs = aux in
-            sc_app, (aux_cmds, sc_decl :: aux_funs), locals
+            c_app, (aux_cmds, c_decl :: aux_funs), locals
         )
     | ProcCall (id, args, pos) ->
         let pdecl = IdMap.find id cu.proc_decls in
@@ -820,6 +833,13 @@ let flatten_exprs cu =
               Some body, aux, locals
           | None -> None, ([], aux_funs), locals
         in
+        (* if auxiliary function comes from top-level expression in body then undo the flattening *)
+        let body, aux_funs =
+          match body, aux_funs with
+          | Some (PredApp (Pred id, _, _) | Annot(PredApp (Pred id, _, _), _, _)), aux_decl :: aux_decls
+            when id = aux_decl.pr_name -> aux_decl.pr_body, aux_decls
+          | _ -> body, aux_funs
+        in
         match aux_cmds with
         | cmd :: _ ->
             illegal_side_effect_error (pos_of_stmt cmd) "function and procedure bodies"
@@ -951,9 +971,10 @@ let infer_types cu =
         in
         Return (es1, pos)
   in
-  let preds =
+  (* infer types of predicates *)
+  let cu =
     IdMap.fold
-      (fun id pred preds ->
+      (fun id pred cu ->
         let rtype =
           match pred.pr_outputs with
           | [res_id] ->
@@ -976,9 +997,11 @@ let infer_types cu =
             pr_body = body
           }
         in
-        IdMap.add id pred1 preds)
-      cu.pred_decls IdMap.empty
+        let pred_decls1 = IdMap.add id pred1 cu.pred_decls in
+        { cu with pred_decls = pred_decls1 })
+      cu.pred_decls cu
   in
+  (* infer types of procedures/lemmas *)
   let procs =
     IdMap.fold
       (fun _ proc procs ->
@@ -999,7 +1022,7 @@ let infer_types cu =
       (fun (e, pos) -> (check_spec IdMap.empty true e, pos) )
       cu.background_theory
   in
-  { cu with pred_decls = preds; proc_decls = procs; background_theory = bg_theory; }
+  { cu with proc_decls = procs; background_theory = bg_theory; }
 
 (** Check compilation unit [cu]. *)
 let check cu =

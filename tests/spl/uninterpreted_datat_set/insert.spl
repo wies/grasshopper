@@ -5,7 +5,7 @@ struct Node {
   var data: Data;
 }
 
-predicate lt(x: Data, y: Data)
+function lt(x: Data, y: Data) returns (res: Bool)
 
 axiom forall a: Data :: !lt(a, a);
 axiom forall a: Data, b: Data :: !lt(a, b) || !lt(b, a);

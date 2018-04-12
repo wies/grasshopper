@@ -60,6 +60,7 @@ let removeGhost cu =
     | New (t, exprs, p) -> New (t, (List.map (process_expr scope) exprs), p)
     | Read (fld, idx, p) -> Read ((process_expr scope fld), (process_expr scope idx), p) (*TODO ghost fields*)
     | Write (fld, idx, v, p) -> Write ((process_expr scope fld), (process_expr scope idx), (process_expr scope v), p) (*TODO ghost fields*)
+    | Ite (cond, t, e, p) -> Ite ((process_expr scope cond), (process_expr scope t), (process_expr scope e), p)
     | ConstrApp (id, args, p) -> ConstrApp (id, List.map (process_expr scope) args, p)
     | DestrApp (id, e, p) -> DestrApp (id, process_expr scope e, p)
     | ProcCall (id, args, p) ->

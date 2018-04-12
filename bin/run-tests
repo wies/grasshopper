@@ -36,13 +36,13 @@ run_test()
 {
     echo -ne "Checking benchmark ${1}..."
     ulimit -St 600
-    ./grasshopper.native $2 $OPTIONS 2> /dev/null
+    ./grasshopper.native $2 ${3//\'/} $OPTIONS 2> /dev/null
     res=$?
     ulimit -St unlimited
     if [ $res -gt 128 ]; then
         exit 1
     fi
-    if [ $3 == "pass" ]; then
+    if [ $4 == "pass" ]; then
         ensure_verifies $res $1
     else
         ensure_fails $res $1
@@ -52,7 +52,7 @@ run_test()
 while (( "$#" )); do
     # UNIX timestamp concatenated with nanoseconds
     T="$(date +%s%N)"
-    run_test ${1} ${2} ${3}
+    run_test ${1} ${2} ${3} ${4}
     # Time interval in nanoseconds
     T="$(($(date +%s%N)-T))"
     # Seconds
@@ -60,6 +60,7 @@ while (( "$#" )); do
     # Milliseconds
     M="$((($T+500000)/1000000))"
     printf "\r\t\t\t\t\t%02d:%02d (%04dms)\n" "$((S/60%60))" "$((S%60))" "${M}"
+    shift
     shift
     shift
     shift

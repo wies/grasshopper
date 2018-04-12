@@ -129,10 +129,10 @@ let isFunVar f =
 
 (** Array read over write axioms *)
 let read_write_axioms fld1 =
-  let struct_srt, ind_srts, res_srt = 
+  let ind_srts, res_srt = 
     match sort_of fld1 with
-    | Map (Loc sid :: ind_srts, srt) -> (sid, ind_srts, srt)
-    | _ -> failwith "expected field in read_write_axioms"
+    | Map (ind_srts, srt) -> (ind_srts, srt)
+    | _ -> failwith "expected map in read_write_axioms"
   in
   let srt_string = string_of_sort res_srt in
   let d = fresh_ident "?d" in
@@ -140,9 +140,9 @@ let read_write_axioms fld1 =
   (*let g = fresh_ident "?g" in
     let g1 = g, Fld res_srt in*)
   let mk_inds () = List.map (fun srt -> mk_var srt (fresh_ident "?i")) ind_srts in
-  let loc1 = loc1 struct_srt :: mk_inds () in
-  let loc2 = loc2 struct_srt :: mk_inds () in
-  let loc3 = loc3 struct_srt :: mk_inds () in
+  let loc1 = mk_inds () in
+  let loc2 = mk_inds () in
+  let loc3 = mk_inds () in
   let new_fld1 = mk_write fld1 loc1 dvar in
   let f x = mk_read fld1 x in
   let g x = mk_read new_fld1 x in

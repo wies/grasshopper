@@ -53,7 +53,7 @@ type rhs_string_maybe =
 %token <bool> BOOLVAL
 %token <string> STRINGVAL
 %token LPAREN RPAREN LBRACE RBRACE LBRACKET RBRACKET
-%token COR, CHOOSE COLON COLONEQ COLONCOLON SEMICOLON DOT PIPE
+%token COR, CHOOSE COLON COLONEQ COLONCOLON SEMICOLON DOT PIPE QMARK
 %token UMINUS PLUS MINUS DIV TIMES MOD
 %token UNION INTER DIFF
 %token EQ NEQ LEQ GEQ LT GT IN NOTIN AT
@@ -63,7 +63,9 @@ type rhs_string_maybe =
 %token <SplSyntax.binder_kind> QUANT
 %token ASSUME ASSERT SPLIT CALL FREE HAVOC NEW RETURN
 %token IF ELSE WHILE
-%token GHOST IMPLICIT VAR STRUCT PURE LEMMA PROCEDURE PREDICATE FUNCTION INCLUDE AXIOM TYPE
+%token <bool> FUNCTION
+%token <bool> PREDICATE
+%token GHOST IMPLICIT VAR STRUCT PURE LEMMA PROCEDURE INCLUDE AXIOM TYPE
 %token DEFINE DATATYPE OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token LOC INT BOOL BYTE SET MAP ARRAY ARRAYCELL
 %token MATCHING YIELDS WITHOUT COMMENT PATTERN
@@ -243,6 +245,7 @@ pred_decl:
       pr_outputs = [];
       pr_locals = locals;
       pr_contracts = $6;
+      pr_is_pure = $1;
       pr_body = $7;
       pr_pos = mk_position 2 2;
     }
@@ -274,6 +277,7 @@ function_header:
       pr_outputs = outputs;
       pr_locals = locals;
       pr_contracts = contracts;
+      pr_is_pure = $1;
       pr_body = None;
       pr_pos = mk_position 2 2;
     }
@@ -283,7 +287,7 @@ function_header:
   
 pred_impl:
 | LBRACE expr RBRACE {
-  Some $2
+  Some (Annot ($2, Position, mk_position 1 3))
 }
 | /* empty */ { None }
 ;
@@ -366,7 +370,7 @@ proc_returns:
 ;
 
 datatype_decl:
-| DATATYPE IDENT EQ constr_decls SEMICOLON {
+| DATATYPE IDENT EQ constr_decls semicolon_opt {
   { t_name = $2;
     t_def = ADTypeDef $4;
     t_pos = mk_position 1 5;
@@ -415,7 +419,7 @@ field_decls:
 ;
 
 field_decl:
-| VAR var_decl SEMICOLON { $2 }
+| VAR var_decl semicolon_opt { $2 }
 ;
 
 block:
@@ -614,7 +618,7 @@ primary_no_set:
 
 set_expr:
 | LBRACE expr_list_opt RBRACE { Setenum (AnyType, $2, mk_position 1 3) }
-| LBRACE simple_bound_var COLONCOLON expr RBRACE { Binder (SetComp, [$2], $4, mk_position 1 5) }
+| LBRACE simple_bound_var COLONCOLON expr RBRACE { Binder (Comp, [$2], $4, mk_position 1 5) }
 ;
   
 alloc:
@@ -793,8 +797,13 @@ iff_expr:
 | iff_expr IFF iff_expr { BinaryOp ($1, OpEq, $3, BoolType, mk_position 1 3) }
 ;
 
-annot_expr:
+ite_expr:
 | iff_expr { $1 }
+| ite_expr QMARK iff_expr COLON iff_expr { Ite ($1, $3, $5, mk_position 1 5) }
+;
+    
+annot_expr:
+| ite_expr { $1 }
 | annot_expr AT LPAREN annot RPAREN { Annot ($1, $4, mk_position 1 5) }
 
 

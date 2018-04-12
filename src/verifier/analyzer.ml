@@ -86,19 +86,38 @@ let infer_accesses prog =
           not (IdSet.subset mods pp.pp_modifies) ||  
           not (IdSet.subset accs pp.pp_accesses)
         in
+        let cc1 =
+          { cc with
+            call_modifies = mods;
+            call_accesses = accs;
+          }
+        in
         let pp1 =
           { pp with
             pp_modifies = mods;
             pp_accesses = accs;
           }
         in
-        has_new, fps, Basic (Call cc, pp1)
+        has_new, fps, Basic (Call cc1, pp1)
     | Basic(bc, _) as c ->  false, footprint_sorts_basic_cmd prog bc, c
   in
   let pm_pred prog pred =
     let accs, fps =
       process_spec_forms prog
         (Opt.to_list pred.pred_body @ pred.pred_contract.contr_precond @ pred.pred_contract.contr_postcond)
+    in
+    let fps = SortSet.union fps (footprint_sorts_pred pred) in
+    (* missing body and not pure? assume worst case *)
+    let accs =
+      match pred.pred_body with
+      | None when not pred.pred_contract.contr_is_pure ->
+          IdMap.fold
+            (fun id decl accs ->
+              match decl.var_sort with
+              | Map (Loc _ :: _, _) -> IdSet.add id accs
+              | _ -> accs)
+            prog.prog_vars accs
+      | _ -> accs
     in
     let global_accs = 
       IdSet.filter
@@ -108,7 +127,6 @@ let infer_accesses prog =
           IdMap.mem id prog.prog_procs
         ) accs
     in
-    let fps = SortSet.union fps (footprint_sorts_pred pred) in
     not (IdSet.subset global_accs pred.pred_accesses) ||
     not (SortSet.subset fps (footprint_sorts_pred pred)),
     { pred with
