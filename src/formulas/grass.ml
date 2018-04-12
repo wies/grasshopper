@@ -368,8 +368,8 @@ let rec pr_term ppf = function
   | App (Inter, [], _) -> fprintf ppf "Univ"
   | App (sym, [], _) -> fprintf ppf "%a" pr_sym sym
   | App (Read, [map; t], _) ->
-      (match sort_of t with
-      | Loc _ -> fprintf ppf "%a.%a" pr_term t pr_term map
+      (match map, sort_of t with
+      | App (FreeSym _, [], _), Loc _ -> fprintf ppf "%a.%a" pr_term t pr_term map
       | _ -> fprintf ppf "%a[%a]" pr_term map pr_term t)
   | App (Read, map :: t :: ts, _) ->
       fprintf ppf "%a[%a].%a" pr_term t pr_term_list ts pr_term map
@@ -390,6 +390,7 @@ let rec pr_term ppf = function
   | App (Length, [t], _) -> fprintf ppf "%a.%s" pr_term t (string_of_symbol Length)
   | App (ArrayCells, [t], _) -> fprintf ppf "%a.%s" pr_term t (string_of_symbol ArrayCells)
   | App (SetEnum, ts, _) -> fprintf ppf "{@[%a@]}" pr_term_list ts
+  | App (Destructor d, [t], _) -> fprintf ppf "%a.%a" pr_term t pr_ident d
   | App (sym, ts, _) -> fprintf ppf "%a(@[%a@])" pr_sym sym pr_term_list ts
 
 and pr_term_paran ppf t = fprintf ppf "(%a)" pr_term t        
