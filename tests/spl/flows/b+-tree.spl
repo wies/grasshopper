@@ -7,22 +7,22 @@ include "../include/flows.spl";
 
 datatype FlowDom = fd(ks: Map<Int, Int>);
 
-predicate domEq(p1: FlowDom, p2: FlowDom) {
+pure predicate domEq(p1: FlowDom, p2: FlowDom) {
   forall k: Int :: p1.ks[k] == p2.ks[k]
     @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k])
 }
 
-predicate domLeq(p1: FlowDom, p2: FlowDom) {
+pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
   forall k: Int :: p1.ks[k] <= p2.ks[k]
 }
 
-function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
   ensures forall k: Int :: p.ks[k] == p1.ks[k] + p2.ks[k]
 
-function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
   ensures forall k: Int :: p.ks[k] == p1.ks[k] * p2.ks[k]
 
-function domZero() returns(p: FlowDom)
+pure function domZero() returns(p: FlowDom)
   ensures forall k: Int :: p.ks[k] == 0
 
 datatype LockInfo = unlocked | locked(tid: Int) | dirtylock(dtid: Int) | lockTop;
@@ -31,7 +31,7 @@ datatype LockInfo = unlocked | locked(tid: Int) | dirtylock(dtid: Int) | lockTop
   
 datatype NodeDom = nd(contents: Set<Int>, lockinfo: LockInfo);
 
-predicate ndLeq(a1: NodeDom, a2: NodeDom) {
+pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
   (forall x: Int :: x in a1.contents ==> x in a2.contents)
     && (a1.lockinfo == a2.lockinfo || a2.lockinfo == lockTop)
 }
@@ -198,7 +198,7 @@ procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
 }
 
 // A content witness for each loop iteration of delete
-function cw(x: Node, Ix: Interface, j: Int, k: Int) returns (idx: Int)
+pure function cw(x: Node, Ix: Interface, j: Int, k: Int) returns (idx: Int)
 
 procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   returns (res: Bool, Ix1: Interface, I1: Interface)

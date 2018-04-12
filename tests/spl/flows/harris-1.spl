@@ -7,25 +7,25 @@ include "../include/flows.spl";
 
 datatype FlowDom = fd(pc: Int);
 
-predicate domEq(p1: FlowDom, p2: FlowDom) {
+pure predicate domEq(p1: FlowDom, p2: FlowDom) {
   p1.pc == p2.pc
 }
 
-predicate domLeq(p1: FlowDom, p2: FlowDom) {
+pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
   p1.pc <= p2.pc
 }
 
-function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 { fd(p1.pc + p2.pc) }
 
-function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 { fd(p1.pc * p2.pc) }
 
-function domZero() returns(p: FlowDom) { fd(0) }
+pure function domZero() returns(p: FlowDom) { fd(0) }
 
 datatype NodeDom = nd;
 
-predicate ndLeq(a1: NodeDom, a2: NodeDom)
+pure predicate ndLeq(a1: NodeDom, a2: NodeDom)
 
 struct Node {
   var next: Node;

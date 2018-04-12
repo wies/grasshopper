@@ -21,7 +21,7 @@ function intComp(I1: Interface, I2: Interface) returns (I: Interface)
   ensures I.FPo == (I1.FPo -- I2.FP) ++ (I2.FPo -- I1.FP)
 
 // Encoding of well defined interfaces
-predicate intValid(I: Interface)
+pure predicate intValid(I: Interface)
 
 // Equivalent interfaces (node labels can be different) -- precondition of sync
 predicate intEq(I1: Interface, I2: Interface) {

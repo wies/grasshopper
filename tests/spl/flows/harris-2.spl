@@ -7,29 +7,29 @@ include "../include/flows.spl";
 
 datatype FlowDom = pair(fst: Int, snd: Int); // TODO N \cup {\infty}?
 
-predicate domEq(p1: FlowDom, p2: FlowDom) {
+pure predicate domEq(p1: FlowDom, p2: FlowDom) {
   p1.fst == p2.fst && p1.snd == p2.snd
 }
 
-predicate domLt(p1: FlowDom, p2: FlowDom)
+pure predicate domLt(p1: FlowDom, p2: FlowDom)
 { p1.fst <= p2.fst && p1.snd <= p2.snd && p1 != p2 }
 
-predicate domLeq(p1: FlowDom, p2: FlowDom)
+pure predicate domLeq(p1: FlowDom, p2: FlowDom)
 { p1.fst <= p2.fst && p1.snd <= p2.snd }
 
-function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 { pair(p1.fst + p2.fst, p1.snd + p2.snd) }
 
-function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 { pair(p1.fst * p2.fst, p1.snd * p2.snd) }
 
-function domZero() returns(p: FlowDom) { pair(0, 0) }
+pure function domZero() returns(p: FlowDom) { pair(0, 0) }
 
 datatype NodeDom = unmarked | marked(markId: Int) | markTop;
 
 datatype MarkedPtr = mp(mark: Bool, ptr: Node);
 
-predicate ndLeq(a1: NodeDom, a2: NodeDom)
+pure predicate ndLeq(a1: NodeDom, a2: NodeDom)
 
 struct Node {
   var next: MarkedPtr;

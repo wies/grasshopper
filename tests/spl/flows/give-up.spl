@@ -7,29 +7,29 @@ include "../include/flows.spl";
 
 datatype FlowDom = fd(ks: Map<Int, Int>);
 
-predicate domEq(p1: FlowDom, p2: FlowDom) {
+pure predicate domEq(p1: FlowDom, p2: FlowDom) {
   forall k: Int :: p1.ks[k] == p2.ks[k]
     @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k])
 }
 
-predicate domLeq(p1: FlowDom, p2: FlowDom) {
+pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
   forall k: Int :: p1.ks[k] <= p2.ks[k]
 }
 
-function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
   ensures forall k: Int :: p.ks[k] == p1.ks[k] + p2.ks[k]
 
-function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
   ensures forall k: Int :: p.ks[k] == p1.ks[k] * p2.ks[k]
 
-function domZero() returns(p: FlowDom)
+pure function domZero() returns(p: FlowDom)
   ensures forall k: Int :: p.ks[k] == 0
 
 datatype LockInfo = unlocked | locked(tid: Int) | dirtylock(dtid: Int) | lockTop;
 
 datatype NodeDom = nd(contents: Set<Int>, lockinfo: LockInfo);
 
-predicate ndLeq(a1: NodeDom, a2: NodeDom) {
+pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
   (forall x: Int :: x in a1.contents ==> x in a2.contents)
     && (a1.lockinfo == a2.lockinfo || a2.lockinfo == lockTop)
 }
@@ -40,14 +40,17 @@ struct Node {}
 
 /** Definition of good condition, gamma */
 
-predicate gammaG(x: Node, I: Interface)
+predicate gammaSpatial(x: Node, I: Interface)
+  
+pure predicate gammaG(x: Node, I: Interface)
 
-predicate gammaB(x: Node, I: Interface)
+pure predicate gammaB(x: Node, I: Interface)
 
 define gamma(x, I) {
-  (gammaG(x, I) && I.na.lockinfo == locked(TID)
-   || gammaB(x, I) && I.na.lockinfo == dirtylock(TID))
-    &*& ((forall k: Int :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
+  gammaSpatial(x, I)
+    &*& ((gammaG(x, I) && I.na.lockinfo == locked(TID)
+        || gammaB(x, I) && I.na.lockinfo == dirtylock(TID))
+       && (forall k: Int :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
        && (forall k: Int, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
        && (forall k: Int, y: Node, z: Node :: y == z
           || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0))
@@ -113,7 +116,7 @@ procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
 
 
 // To be filled-in by implementation:
-predicate decisiveOpSpec(x: Node, Ix1: Interface, res: Bool, k: Int)
+pure predicate decisiveOpSpec(x: Node, Ix1: Interface, res: Bool, k: Int)
 
 procedure decisiveOp(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   returns (res: Bool, Ix1: Interface, I1: Interface)
