@@ -121,7 +121,7 @@ let check_spl_program spl_prog proc =
     if !Config.symbexec then
       prog
       |> Grassifier.elim_arrays
-      |> Analyzer.infer_accesses
+      |> Analyzer.infer_accesses true
       |> Simplifier.elim_loops
       |> Simplifier.elim_global_deps
     else Verifier.simplify proc prog in

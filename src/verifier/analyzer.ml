@@ -5,9 +5,10 @@ open Grass
 open GrassUtil
 open Prog
 
-(** Infer sets of accessed and modified variables for all procedures and predicates in program [prog] *)
+(** Infer sets of accessed and modified variables for all procedures and predicates in program [prog]
+  [abspred]: if true, does not add all global vars to accesses field of body-less predicates *)
 (* TODO: the implementation of the fix-point loop is brain damaged - rather use a top. sort of the call graph *)
-let infer_accesses prog =
+let infer_accesses abspred prog =
   let process_spec_forms prog sfs =
     let accs_preds, accs, fps =
       List.fold_left (fun (acc_preds, accs, fps) sf ->
@@ -107,10 +108,12 @@ let infer_accesses prog =
         (Opt.to_list pred.pred_body @ pred.pred_contract.contr_precond @ pred.pred_contract.contr_postcond)
     in
     let fps = SortSet.union fps (footprint_sorts_pred pred) in
-    (* missing body and not pure? assume worst case *)
+    (* missing body and not pure? assume worst case, unless abspred flag is on *)
     let accs =
+      (* But still add global dependencies for functions *)
+      let abspred = abspred && List.length pred.pred_contract.contr_returns = 0 in
       match pred.pred_body with
-      | None when not pred.pred_contract.contr_is_pure ->
+      | None when not pred.pred_contract.contr_is_pure && not abspred->
           IdMap.fold
             (fun id decl accs ->
               match decl.var_sort with
