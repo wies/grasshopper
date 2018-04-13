@@ -108,48 +108,65 @@ let add_match_filters =
           List.fold_left subterms_term_acc TermSet.empty |>
           TermSet.filter (function App (_, _, Bool) | App (Known, _, _) -> false | _ -> true)
         in
-        let matches = 
-          List.fold_right (function Match (e, filters) -> fun matches -> 
-            let sym_of_e = match e with
-            | App (Known, [e], _) -> symbol_of e
-            | _ -> symbol_of e
-            in
-            let ce = sorted_fv_term_acc IdMap.empty e in
-            let ce_occur_below ts =
-              List.exists 
-                (function Var (id, _) -> IdMap.mem id ce | _ -> false)
-                ts
-            in
-            let add f fs = if List.mem f fs then fs else f :: fs in
-            let flt, aux_matches = 
-              TermSet.fold 
-                (fun t (flt, aux_matches) -> match t with
-                | App ((FreeSym _ | Constructor _ as sym), (_ :: _ as ts), srt)
-                  when sym_of_e <> Some sym && ce_occur_below ts ->
-                    add (FilterSymbolNotOccurs sym) flt, aux_matches
-                | App (Read, ([App (FreeSym sym, [], srt); l] as ts), _)
-                  when sym_of_e <> Some (FreeSym sym) && ce_occur_below ts ->
-                    add (FilterReadNotOccurs (GrassUtil.name sym, ([], srt))) flt,
-                    Match (l, [FilterNotNull]) :: aux_matches
-                | _ -> flt, aux_matches)
-                gts (filters, [])
-            in
-            let aux_matches =
-              let g = List.hd (List.rev ge) in
-              match sort_of g with
-              | Int | Loc _ | FreeSrt _ | Set _ ->
-                  IdMap.fold
-                    (fun id srt aux_matches ->
-                      match srt with
-                      | Int | FreeSrt _ | Loc _ as rsrt ->
-                          Match (GrassUtil.mk_known (GrassUtil.mk_var rsrt id), []) :: aux_matches
-                      | _ -> aux_matches
-                    ) ce aux_matches
-              | _ -> aux_matches
+        let process_match (e, filters) matches =
+          let sym_of_e = match e with
+          | App (Known, [e], _) -> symbol_of e
+          | _ -> symbol_of e
           in
-          Match (e, flt) :: aux_matches @ matches) ms []
-      in
-      TermGenerator (matches, ge)
+          let var_terms_of_e = sorted_fv_term_acc IdMap.empty e in
+          let occurs_below_var_terms_of_e ts =
+            List.exists 
+              (function Var (id, _) -> IdMap.mem id var_terms_of_e | _ -> false)
+              ts
+          in
+          let add f fs = if List.mem f fs then fs else f :: fs in
+          let flt, aux_matches = 
+            TermSet.fold 
+              (fun t (flt, aux_matches) -> match t with
+              | App ((FreeSym _ | Constructor _ as sym), (_ :: _ as ts), srt)
+                when sym_of_e <> Some sym && occurs_below_var_terms_of_e ts ->
+                  add (FilterSymbolNotOccurs sym) flt, aux_matches
+              | App (Read, ([App (FreeSym sym, [], srt); l] as ts), _)
+                when sym_of_e <> Some (FreeSym sym) && occurs_below_var_terms_of_e ts ->
+                  add (FilterReadNotOccurs (GrassUtil.name sym, ([], srt))) flt,
+                  Match (l, [FilterNotNull]) :: aux_matches
+              | _ -> flt, aux_matches)
+              gts (filters, [])
+          in
+          (** add `known` guards for variables and yield terms of certain sorts *)
+          let aux_matches =
+            let g = List.hd (List.rev ge) in
+            match sort_of g with
+            | Int | Loc _ | FreeSrt _ | Set _ ->
+                IdMap.fold
+                  (fun id srt aux_matches ->
+                    match srt with
+                    | Int | FreeSrt _ | Loc _ as rsrt ->
+                        Match (GrassUtil.mk_known (GrassUtil.mk_var rsrt id), []) :: aux_matches
+                    | _ -> aux_matches
+                  )
+                  var_terms_of_e aux_matches
+            | _ -> aux_matches
+          in
+          Match (e, flt) :: aux_matches @ matches
+        in
+        let matches = 
+          List.fold_right (function Match (e, filters) -> process_match (e, filters)) ms []
+        in
+        (** make sure that all free variables in the yield term ge are matched by some match clause *)
+        let extra_guards =
+          let fv_ge = List.fold_left sorted_fv_term_acc IdMap.empty ge in
+          let fv_matches =
+            List.fold_left
+              (fun acc -> function Match (e, _) -> sorted_fv_term_acc acc e)
+              IdMap.empty matches
+          in
+          IdMap.fold (fun id srt extra_guards ->
+            if IdMap.mem id fv_matches then extra_guards
+            else Match (GrassUtil.mk_known (GrassUtil.mk_var srt id), []) :: extra_guards)
+            fv_ge []
+        in
+        TermGenerator (matches @ extra_guards, ge)
   | a -> a
   in
   let rec pf = function
