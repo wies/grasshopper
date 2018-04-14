@@ -453,7 +453,7 @@ let rec pr_form ppf = function
             then pr_form_paran ppf f2
             else pr_form ppf f2
         | f2, fs ->
-            pr_form ppf (BoolOp (And, f2 :: fs))
+            pr_form ppf (BoolOp (bop, f2 :: fs))
       in
       fprintf ppf "@[<2>%a@] %s@ %a" pr_f1 f1 (string_of_bop bop) pr_f2 (f2, fs)
   | BoolOp (Not, [f]) -> pr_not ppf f
