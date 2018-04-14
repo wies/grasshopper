@@ -420,7 +420,7 @@ let rec find_ptsto_dirty loc spatial =
     let res, repl_fn_rd, repl_fn_wr = find_ptsto_dirty loc spatial' in
     res, (fun fs' -> sp :: repl_fn_rd fs'), (fun fs' -> sp :: repl_fn_wr fs')
 
-(* Returns None if the entailment holds, otherwise Some (list of error messages) *)
+(* Returns None if the entailment holds, otherwise Some (list of error messages, model) *)
 let check_pure_entail prog eqs p1 p2 =
   let (p2, _) = apply_equalities eqs (p2, []) in
   if p1 = p2 || p2 = mk_true then None
@@ -453,7 +453,7 @@ let check_pure_entail prog eqs p1 p2 =
       sprintf "\n\nCalling prover with name %s\n" name);
     match Prover.get_model ~session_name:name f with
     | None -> None
-    | Some model -> Some (Verifier.get_err_msg_from_labels model labels)
+    | Some model -> Some (Verifier.get_err_msg_from_labels model labels, model)
 
 
 (** Returns (fr, inst) s.t. state1 |= state2 * fr, and
@@ -534,10 +534,10 @@ let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sps1) (p2, sps2) =
     | Some (inst, sps1') ->
       let p2, sps2 = subst_state inst (p2, sps2') in
       find_frame prog ~inst:inst eqs (p1, sps1') (p2, sps2)
-    | None -> Error []) (* TODO get errors? *)
+    | None -> Error ([], Model.empty)) (* TODO get errors? *)
 
 (** Returns [Ok inst] if [(p1, sp1)] |= [(p2, sp2)], else Error (error messages). *)
-and check_entailment prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) : (term IdMap.t, string list) result =
+and check_entailment prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
   let eqs, (p1, sp1) = simplify eqs (p1, sp1) in
   let (p2, sp2) =
     (p2, sp2)
@@ -551,7 +551,8 @@ and check_entailment prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) : (term IdMa
   (* Check if find_frame returns empt *)
   match find_frame ~inst:inst prog eqs (p1, sp1) (p2, sp2) with
   | Ok ([], inst) -> Ok inst
-  | Ok _ -> Error ["The frame was not empty for this entailment check"]
+  | Ok _ ->
+    Error (["The frame was not empty for this entailment check"], Model.empty)
   | Error errs -> Error errs
 
 
@@ -563,7 +564,7 @@ and check_entailment prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) : (term IdMa
 *)
 let find_frame_conj prog eqs (pure, spatial) state2 =
   let rec find_frame_inside_conj = function
-    | [] -> Error []
+    | [] -> Error ([], Model.empty)
     | sps :: spss ->
       (match find_frame prog eqs (pure, sps) state2 with
       | Ok (frame, inst) ->
@@ -581,11 +582,11 @@ let find_frame_conj prog eqs (pure, spatial) state2 =
             sps :: (repl_fn sm foo_post))
           in
           Ok (repl_fn, inst)
-        | Error [] -> Error errs1
+        | Error ([], _) -> Error errs1
         | Error errs -> Error errs))
   in
   let rec find_frame_conj = function
-    | [] -> Error []
+    | [] -> Error ([], Model.empty)
     | Conj spss :: spatial' ->
       (match find_frame_inside_conj spss with
       | Ok (repl_fn, inst) ->
@@ -602,7 +603,7 @@ let find_frame_conj prog eqs (pure, spatial) state2 =
               Conj spss :: (repl_fn sm foo_post))
           in
           Ok (repl_fn, inst)
-        | Error [] -> Error errs
+        | Error ([], _) -> Error errs
         | Error errs -> Error errs))
     | sp :: spatial' ->
       (match find_frame_conj spatial' with
@@ -712,8 +713,8 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     mk_free_const (lookup_type id) id'
   in
   let mk_const_term id = mk_free_const (lookup_type id) id in
-  let mk_error msg errs pos =
-    [(pos, String.concat "\n\n" (msg :: errs), Model.empty)]
+  let mk_error msg errs model pos =
+    [(pos, String.concat "\n\n" (msg :: errs), model)]
   in
 
   (* First, simplify the pre state *)
@@ -729,9 +730,9 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     let state = add_neq_constraints state in
     (match check_entailment prog eqs state postcond with
       | Ok _ -> []
-      | Error errs ->
+      | Error (errs, m) ->
       (* TODO to get line numbers, convert returns into asserts *)
-        mk_error "A postcondition may not hold" errs dummy_position)
+        mk_error "A postcondition may not hold" errs m dummy_position)
   | Basic (Assign {assign_lhs=[fld];
         assign_rhs=[App (Write, [App (FreeSym fld', [], _);
           App (FreeSym _, [], _) as loc; rhs], srt)]}, pp) as comm :: comms'
@@ -928,8 +929,8 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       (* This is to apply equalities derived during frame inference *)
       let state = subst_state inst state in
       symb_exec prog flds proc (eqs, state) postcond comms'
-      | Error errs ->
-        mk_error "The precondition of this function call may not hold" errs pp.pp_pos)
+      | Error (errs, m) ->
+        mk_error "The precondition of this function call may not hold" errs m pp.pp_pos)
   | Seq (comms, _) :: comms' ->
     symb_exec prog flds proc (eqs, state) postcond (comms @ comms')
   | Basic (Havoc {havoc_args=vars}, pp) as comm :: comms' ->
@@ -974,7 +975,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       (match check_entailment prog eqs state' spec_st with
         | Ok _ ->
         symb_exec prog flds proc (eqs, state) postcond comms'
-        | Error errs -> mk_error "This assert may not hold" errs pp.pp_pos)
+        | Error (errs, m) -> mk_error "This assert may not hold" errs m pp.pp_pos)
     | FOL spec_form ->
       let spec_form, state =
         fold_map_terms (process_no_array prog flds eqs) state spec_form
@@ -983,7 +984,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       (match find_frame prog eqs state' (spec_form, []) with
         | Ok _ ->
         symb_exec prog flds proc (eqs, state) postcond comms'
-        | Error errs -> mk_error "This assert may not hold" errs pp.pp_pos))
+        | Error (errs, m) -> mk_error "This assert may not hold" errs m pp.pp_pos))
   | Basic (Return {return_args=xs}, pp) as comm :: _ ->
     Debug.debug (fun () ->
       sprintf "%sExecuting return: %d: %s%sCurrent state:\n%s\n"
@@ -1010,7 +1011,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     (match check_entailment prog eqs state' spec_st with
       | Ok _ ->
       symb_exec prog flds proc (empty_eqs, spec_st) postcond comms'
-      | Error errs -> mk_error "This split may not hold" errs pp.pp_pos)
+      | Error (errs, m) -> mk_error "This split may not hold" errs m pp.pp_pos)
   | Basic (Assume _, _) :: _ -> failwith "TODO Assume SL command"
   | Basic (New _, _) :: _ -> failwith "TODO New command"
   | Basic (Dispose _, _) :: _ -> failwith "TODO Dispose command"
@@ -1023,7 +1024,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       | Basic (_, pp) :: _ -> pp.pp_pos
       | _ -> dummy_position
     in
-    mk_error msg [] pos
+    mk_error msg [] Model.empty pos
 
 
 (** Check procedure [proc] in program [prog] using symbolic execution. *)
