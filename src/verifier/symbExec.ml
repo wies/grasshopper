@@ -155,7 +155,6 @@ let state_of_spec_list fields specs : state =
       | _ -> smk_and pures, [Conj spatials])
     | Sl.BoolOp _ -> fail ()
     | Sl.Binder (b, vs, f, _) ->
-      print_endline "\n\nWARNING: TODO: make substitutions capture avoiding!\n";
       let pure1, spatial1 = convert_sl_form f in
       (match spatial1 with
       | [] -> (smk_binder b vs pure1, [])
@@ -819,7 +818,6 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     in
     symb_exec prog flds proc (eqs', state') postcond comms'
   | Basic (Call {call_lhs=lhs; call_name=foo; call_args=args}, pp) as comm :: comms' ->
-    (* TODO check assignment handling for x := foo(x); case! *)
     Debug.debug (fun () ->
       sprintf "%sExecuting function call: %d: %s%sCurrent state:\n%s\n"
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
