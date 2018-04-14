@@ -1308,7 +1308,13 @@ let convert_model session smtModel =
         | _ -> model)
       model0 smtModel 
   in
-  Model.finalize_values model1
+  let model2 = 
+    match session.signature with
+    | Some signature ->
+      { model1 with sign = signature }
+    | None -> failwith "convert_model: expected session to have a signature"
+  in
+  (Model.finalize_values model2)
 
 let rec get_model session = 
   let gm state =

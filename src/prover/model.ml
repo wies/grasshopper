@@ -40,7 +40,6 @@ module SortedValueListMap =
     type t = (value * sort) list
     let compare = compare
   end)
-
     
 module SortedValueSet =
   Set.Make(struct
@@ -78,6 +77,21 @@ let rec string_of_value = function
         (List.map string_of_value vs |>
         String.concat ", ")
 
+let string_of_sorted_value srt v =
+  let rec elim_loc = function
+    | Loc srt -> elim_loc srt
+    | Set srt -> Set (elim_loc srt)
+    | Array srt -> Array (elim_loc srt)
+    | ArrayCell srt -> ArrayCell (elim_loc srt)
+    | Map (dsrts, rsrt) -> Map (List.map elim_loc dsrts, elim_loc rsrt)
+    | srt -> srt
+  in
+  match srt with
+  | Int | Bool | Adt _ -> string_of_value v
+  | _ ->
+      let srt_str = string_of_sort (elim_loc srt) in
+      srt_str ^ "!" ^ string_of_value v
+
 type interpretation = (value ValueListMap.t * ext_value) SortedSymbolMap.t
 
 type ext_interpretation = ext_value SortedValueMap.t
@@ -86,12 +100,14 @@ type model =
   { mutable card: int SortMap.t;
     mutable intp: interpretation;
     mutable vals: ext_interpretation;
+    sign: arity list SymbolMap.t;
   }
 
 let empty : model = 
   { card = SortMap.empty;
     intp = SortedSymbolMap.empty;
-    vals = SortedValueMap.empty
+    vals = SortedValueMap.empty;
+    sign = SymbolMap.empty;
   }
 
 (*let get_arity model sym = SymbolMap.find sym m*)
@@ -337,6 +353,27 @@ let rec eval model = function
 and interp_symbol model sym arity args =
   match sym with
   | Constructor id -> ADT (id, args)
+  | Destructor id ->
+    (match args with
+    | [ADT (cons, args)] ->
+      (* Find the defn of constructor cons *)
+      let adt_defs =
+        (match arity with
+        | ([Adt(_, adt_defs)], _) -> adt_defs
+        | _ -> failwith "Destructor has unexpected sort");
+      in
+      let cons_def =
+        find_map (fun (a, adt_def) ->
+          find_map (fun (id, def) ->
+            if id = cons then Some def else None) adt_def)
+          adt_defs
+        |> Opt.lazy_get_or_else (fun () -> failwith "Couldn't find constructor")
+      in
+      (* Look for the position corresponding to destructor id *)
+      List.combine cons_def args
+      |> List.find (fun ((des_id, _), v) -> des_id = id)
+      |> snd
+    | _ -> failwith "Destructor applied to non-ADT args")
   | _ ->
       SortedSymbolMap.find_opt (sym, arity) model.intp |>
       Opt.map (fun (m, d) -> fun_app model (MapVal (m, d)) args) |>
@@ -857,3 +894,53 @@ let finalize_values model =
   SortSet.iter generate_fields (get_map_sorts model);
   model
 
+
+(** Utils to pretty print sets and maps *)
+
+let rec pr_sorted_value model ppf (term, srt) =
+  try
+    (match srt with
+    | Set s ->
+      let cnt = find_set_value model term s in
+      pr_set model s ppf cnt
+    | Map (arg_s, res_s) ->
+      let map_val, def_val = find_map_value model term arg_s res_s in
+      pr_map model (arg_s, res_s) ppf (map_val, def_val)
+    | _ ->
+      Format.fprintf ppf "%s" (string_of_sorted_value srt term))
+  with Undefined ->
+      Format.fprintf ppf "%s" (string_of_sorted_value srt term)
+
+and pr_sorted_value_list model ppf svals =
+  pr_list_comma (pr_sorted_value model) ppf svals
+
+and pr_sorted_ext_value model srt ppf = function
+  | BaseVal v -> pr_sorted_value model ppf (v, srt)
+  | MapVal (m, d) ->
+    (match srt with
+    | Map (s1, s2) -> pr_map model (s1, s2) ppf (m, d)
+    | _ -> failwith "Got map value with non-map sort")
+  | SetVal v ->
+    (match srt with
+    | Set srt -> pr_set model srt ppf v
+    | _ -> failwith "Got set value with non-set sort")
+  | TermVal _
+  | FormVal _
+  | Undef -> Format.fprintf ppf "Undef"
+
+and pr_map model (arg_s, res_s) ppf (map, def_val) =
+  let pr_map_elem ppf (args, v) = 
+    Format.fprintf ppf "%a: %a"
+      (pr_sorted_value_list model) (List.combine args arg_s)
+      (pr_sorted_value model) (v, res_s)
+  in
+  Format.fprintf ppf "{@[<hv 2>%a@]}(__default: %a)"
+    (pr_list_comma pr_map_elem) (ValueListMap.bindings map)
+    (pr_sorted_ext_value model res_s) def_val
+
+and pr_set model srt ppf vs =
+  Format.fprintf ppf "{@[<hv 2>%a@]}" (pr_sorted_value_list model)
+    (ValueSet.elements vs |> List.map (fun v -> (v, srt)))
+
+let string_of_eval model srt v =
+  string_of_format (pr_sorted_value model) (v, srt)

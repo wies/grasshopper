@@ -96,6 +96,8 @@ type rhs_string_maybe =
 
 %start main
 %type <SplSyntax.spl_program> main
+%start expr
+%type <SplSyntax.expr> expr
 %%
 
 main:

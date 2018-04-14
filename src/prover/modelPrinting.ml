@@ -4,21 +4,6 @@ open Grass
 open GrassUtil
 open Model
 
-let string_of_sorted_value srt v =
-  let rec elim_loc = function
-    | Loc srt -> elim_loc srt
-    | Set srt -> Set (elim_loc srt)
-    | Array srt -> Array (elim_loc srt)
-    | ArrayCell srt -> ArrayCell (elim_loc srt)
-    | Map (dsrts, rsrt) -> Map (List.map elim_loc dsrts, elim_loc rsrt)
-    | srt -> srt
-  in
-  match srt with
-  | Int | Bool | Adt _ -> string_of_value v
-  | _ ->
-      let srt_str = string_of_sort (elim_loc srt) in
-      srt_str ^ "!" ^ string_of_value v
-
 let replace_lt_gt str =
   Str.global_replace (Str.regexp "<") "&lt;"
     (Str.global_replace (Str.regexp ">") "&gt;" str)
@@ -481,40 +466,6 @@ let print_graph output chan model terms =
   let ep_colors = Util.fold_left2 (fun acc fld color -> (fld, color)::acc) [] all_flds colors2 in
   let get_color fsrt fld = try List.assoc (fsrt, fld) fld_colors with Not_found -> "black" in
   let out_tbl = output.table chan in
-  (* Utils to pretty print sets and maps *)
-  let rec pr_ext_val ppf ext_val =
-    match ext_val with
-    | BaseVal v -> Format.fprintf ppf "%s" (string_of_value v)
-    | MapVal (m, d) -> Format.fprintf ppf "Map<TODO>"
-    | SetVal s -> Format.fprintf ppf "Set<TODO>"
-    | TermVal (vs, t) -> Grass.pr_term ppf t
-    | FormVal (vs, t) -> Format.fprintf ppf "Form<TODO>"
-    | Undef -> Format.fprintf ppf "Undef"
-  and pr_sorted_value ppf (term, srt) =
-    try
-      (match srt with
-      | Set s ->
-        let cnt = find_set_value model term s in
-        Format.fprintf ppf "{@[<hv 2>%a@]}" pr_sorted_value_list
-          (ValueSet.elements cnt |> List.map (fun v -> (v, s)));
-      | Map (arg_s, res_s) ->
-        let map_val, def_val = find_map_value model term arg_s res_s in
-        Format.fprintf ppf "%a" (pr_map (arg_s, res_s)) (map_val, def_val)
-      | _ ->
-        Format.fprintf ppf "%s" (string_of_sorted_value srt term))
-    with Undefined ->
-        Format.fprintf ppf "%s" (string_of_sorted_value srt term)
-  and pr_sorted_value_list ppf svals =
-    pr_list_comma pr_sorted_value ppf svals
-  and pr_map (arg_s, res_s) ppf (map, def_val) =
-    let pr_map_elem ppf (args, v) = 
-      Format.fprintf ppf "%a: %a" pr_sorted_value_list (List.combine args arg_s)
-        pr_sorted_value (v, res_s)
-    in
-    Format.fprintf ppf "{@[<hv 2>%a@]}(__default: %a)" (pr_list_comma pr_map_elem)
-      (ValueListMap.bindings map) pr_ext_val def_val
-  in
-  let str_of_t srt term = string_of_format pr_sorted_value (term, srt) in
   let output_constants () =
     let sorts =
       SortSet.filter
@@ -557,7 +508,8 @@ let print_graph output chan model terms =
               Adt (id, adt_defs)
             else FreeSrt id
         in
-        Printf.sprintf "%s: %s" (string_of_ident destr) (string_of_format pr_sorted_value (v, convert srt))
+        Printf.sprintf "%s: %s" (string_of_ident destr)
+          (string_of_eval model (convert srt) v)
       in
       Printf.sprintf "%s(%s)" (string_of_ident cons)
         (List.map str_one_arg (List.combine args cons_def) |> String.concat ", ")
@@ -624,7 +576,7 @@ let print_graph output chan model terms =
           | App (FreeSym _, _, Set srt1) as set_t when srt = srt1 ->
               (try
                 let set = eval model set_t in
-                let set_rep = str_of_t (Set srt1) set in
+                let set_rep = string_of_eval model (Set srt1) set in
                 ((string_of_term set_t), set_rep) :: acc
               with Failure _ | Undefined -> acc)
           | _ -> acc)
@@ -648,7 +600,7 @@ let print_graph output chan model terms =
     let rows =
       let row_of_func (func, arity) =
         let m, d = SortedSymbolMap.find (func, arity) model.intp in
-        let val_str = string_of_format (pr_map arity) (m, d) in
+        let val_str = string_of_format (pr_map model arity) (m, d) in
         (string_of_symbol func, val_str)
       in
       SortedSymbolSet.fold (fun func acc -> (row_of_func func) :: acc) funs []
