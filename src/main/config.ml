@@ -60,6 +60,9 @@ let simplify = ref false
 (** Flag to use symbolic execution instead of standard GRASS translation. *)
 let symbexec = ref false
 
+(** Flag to check if intermediate states are unsat in symbolic execution. *)
+let check_unsat = ref false
+
 (** Flag that controls whether to stop after the first VC that cannot be proved. *)
 let robust = ref false
 
@@ -107,6 +110,7 @@ let cmd_options =
    ("-typeonly", Arg.Set typeonly, " Only type-check the program");
    ("-simplify", Arg.Set simplify, " Only type-check the program and output a simplified version of the input program");
    ("-symbexec", Arg.Set symbexec, " Use symbolic execution to check the program");
+   ("-check-unsat", Arg.Set check_unsat, " Check if intermediate states are unsat");
    ("-noverify", Arg.Clear verify, " Only type-check the program and generate verification conditions without checking");
    ("-robust", Arg.Set robust, " Continue even if some verification condition cannot be checked\n\nOptions for controlling verification condition generation:");
    ("-nomodifiesopt", Arg.Clear opt_field_mod, " Disable mod set analysis optimization for fields\n\nOptions for controlling the GRASS prover:");

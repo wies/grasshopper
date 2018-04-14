@@ -715,9 +715,24 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
   let mk_error msg errs model pos =
     [(pos, String.concat "\n\n" (msg :: errs), model)]
   in
+  let pos = match comms with
+    | Basic (_, pp) :: _ -> pp.pp_pos
+    | _ -> dummy_position
+  in
 
   (* First, simplify the pre state *)
   let eqs, state = simplify eqs state in
+
+  (* If flag is set, check that current state isn't unsat *)
+  if !Config.check_unsat then begin
+    Debug.debug (fun () -> "Checking if current state is unsat:\n");
+    let state' = add_neq_constraints state in
+    match find_frame prog eqs state' (mk_false, []) with
+    | Ok _ ->
+      failwith @@ (string_of_src_pos pos) ^ "\nIntermediate state was unsat"
+    | Error _ ->
+      Debug.debug (fun () -> "State is satisfiable.\n")
+  end;
 
   let se = function
   | [] ->
@@ -1018,10 +1033,6 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
   try
     se comms
   with SymbExecFail msg ->
-    let pos = match comms with
-      | Basic (_, pp) :: _ -> pp.pp_pos
-      | _ -> dummy_position
-    in
     mk_error msg [] Model.empty pos
 
 
