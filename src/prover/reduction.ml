@@ -27,7 +27,7 @@ let elim_exists =
         | Map (dsrts, rsrt) ->
             let vs = List.map (fun srt -> fresh_ident "?i", srt) dsrts in
             let vts = List.map (fun (v, srt) -> mk_var srt v) vs in
-            mk_exists vs (mk_neq (mk_read s1 vts) (mk_read s2 vts))
+            mk_exists vs (annotate (mk_neq (mk_read s1 vts) (mk_read s2 vts)) a)
 	| _ -> f)
     | BoolOp (Not, [Atom (App (Disjoint, [s1; s2], _), a)]) when bvs = [] ->
         let srt = element_sort_of_set s1 in

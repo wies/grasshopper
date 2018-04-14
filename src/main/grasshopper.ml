@@ -137,12 +137,12 @@ let check_spl_program spl_prog proc =
       (fun first (pp, error_msg, model) ->
         if not !Config.symbexec then output_trace simple_prog proc (pp, model);
         let _ =
-          if !Config.robust
-          then begin
-            (if not first then print_newline ());
-            ProgError.print_error pp error_msg
-          end
-          else ProgError.error pp error_msg
+          if !Config.robust || !Config.model_repl
+          then ((if not first then print_newline ()); ProgError.print_error pp error_msg);
+          if !Config.model_repl then ModelRepl.repl model;
+          if not !Config.robust
+          then ProgError.error pp error_msg
+          else ()
         in
         false
       )
