@@ -121,4 +121,12 @@ let parse_options options =
   Debug.info (fun () -> "Setting options: " ^ options ^ "\n");
   let options = Sys.argv.(0) :: Str.split_delim (Str.regexp "[ \t\n]+") options |> Array.of_list in
   let current = ref 0 in
-  Arg.parse_argv ~current:current options cmd_options_spec (fun _ -> ()) "invalid option"
+  try Arg.parse_argv ~current:current options cmd_options_spec (fun _ -> ()) ""
+  with Arg.Bad full_msg ->
+    let regexp = Sys.argv.(0) ^ ": \\([^\\.]*\\)" in
+    let matched = Str.string_match (Str.regexp regexp) full_msg 0 in
+    let msg =
+      if matched then Str.matched_group 1 full_msg 
+      else "invalid option"
+    in
+    raise (Invalid_argument msg)

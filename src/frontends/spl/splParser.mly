@@ -134,14 +134,8 @@ include_cmd:
 options_cmd:
 | OPTIONS STRINGVAL semicolon_opt {
   try Config.parse_options $2
-  with Arg.Bad full_msg ->
-    let regexp = Sys.argv.(0) ^ ": \\([^\\.]*\\)" in
-    let matched = Str.string_match (Str.regexp regexp) full_msg 0 in
-    let msg =
-      if matched then Str.matched_group 1 full_msg 
-      else "invalid option"
-    in
-    ProgError.error (mk_position 2 2) msg    
+  with Invalid_argument msg ->
+    ProgError.error (mk_position 2 2) msg
 }
 ;
 
