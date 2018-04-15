@@ -4,7 +4,7 @@ struct Node {
   var left: Node;
   var right: Node;
   var data: Int;
-  var ghost parent: Node;
+  ghost var parent: Node;
 }
     
 // Predicates for tree shapes

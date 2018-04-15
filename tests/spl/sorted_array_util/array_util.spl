@@ -59,7 +59,7 @@ lemma not_in_sorted_seg(m: Map<Int, K>, i: Int, j: Int, k: K, implicit ghost C: 
   ensures i >= j || lt(k, m[i]) || lt(m[j-1], k) ==> k !in C
 {
   if (i >= j) return;
-
+  
   if (lt(m[j - 1], k)) {
     extend_right(m, i, j - 1);
     not_in_sorted_seg(m, i, j - 1, k);
@@ -79,14 +79,17 @@ function shift_map(m: Map<Int, K>, src: Int, dst: Int, len: Int)
 {
   { i: Int :: i < dst || dst + len <= i ? m[i] : m[src + (i - dst)]
     @(matching res[i] yields m[src + (i - dst)])
-    @(matching res[i] yields m[i]) }
+    @(matching res[i] yields m[i])
+  }
 }
 
-function copy_map(m1: Map<Int, K>, m2: Map<Int, K>, src: Int, dst: Int, len: Int) returns (res: Map<Int, K>)
+function copy_map(m1: Map<Int, K>, m2: Map<Int, K>, src: Int, dst: Int, len: Int)
+  returns (res: Map<Int, K>)
 {
   { i: Int :: dst <= i < dst + len ? m2[src + (i - dst)] : m1[i]
     @(matching res[i] yields m2[src + (i - dst)])
-    @(matching res[i] yields m1[i]) }
+    @(matching res[i] yields m1[i])
+  }
 }
 
 function map_of_array(a: Array<K>) returns (res: Map<Int, K>)
@@ -94,14 +97,15 @@ function map_of_array(a: Array<K>) returns (res: Map<Int, K>)
 {
   { i: Int :: 0 <= i < a.length ? a[i] : bottom
     @(matching res[i] yields a[i])
-    @(matching a[i] yields res[i]) }
+    @(matching a[i] yields res[i])
+  }
 }
 
 predicate sorted_map_seg(m: Map<Int, K>, i: Int, j: Int)
 {
   forall i1: Int, i2: Int :: i <= i1 < i2 < j ==> lt(m[i1], m[i2])
 }
- 
+
 predicate sorted_array_seg(a: Array<K>, i: Int, j: Int)
   requires acc(a)
 {
@@ -117,14 +121,13 @@ function set_of_array(a: Array<K>, i: Int, j: Int) returns (res: Set<K>)
 predicate sorted_array_seg_with_content(a: Array<K>, i: Int, j: Int, C: Set<K>)
   requires acc(a)
 {
-  
   sorted_array_seg(a, i, j) && C == set_of_array(a, i, j)
 }
 
 predicate sorted_array_with_content(a: Array<K>, len: Int, C: Set<K>)
 {
   0 <= len &*&
-  acc(a) &*& sorted_array_seg_with_content(a, 0, len, C)
+    acc(a) &*& sorted_array_seg_with_content(a, 0, len, C)
 }
 
 
@@ -135,11 +138,11 @@ procedure shift(a: Array<K>, src: Int, dst: Int, len: Int)
   ensures acc(a)
   ensures map_of_array(a) == shift_map(old(map_of_array(a)), src, dst, len)
 {
-  var ghost m := map_of_array(a);
-
+  ghost var m := map_of_array(a);
+  
   if (src < dst) {
     var i := len - 1;
-
+    
     while (i >= 0) 
       invariant acc(a)
       invariant src < dst
@@ -148,7 +151,7 @@ procedure shift(a: Array<K>, src: Int, dst: Int, len: Int)
       invariant -1 <= i < len
       invariant shift_map(m, src + i + 1, dst + i + 1, len - i - 1) == map_of_array(a)
     {
-      var ghost m1 := map_of_array(a);
+      ghost var m1 := map_of_array(a);
       var tmp := a[src + i];
       a[dst + i] := tmp;
       pure assert map_of_array(a) == m1[dst + i := tmp];
@@ -164,7 +167,7 @@ procedure shift(a: Array<K>, src: Int, dst: Int, len: Int)
       invariant 0 <= i <= len 
       invariant shift_map(m, src, dst, i) == map_of_array(a)
     {
-      var ghost m1 := map_of_array(a);
+      ghost var m1 := map_of_array(a);
       var tmp := a[src + i];
       a[dst + i] := a[src + i];
       pure assert map_of_array(a) == m1[dst + i := tmp];
@@ -182,10 +185,10 @@ procedure copy(a: Array<K>, b: Array<K>, src: Int, dst: Int, len: Int)
   ensures map_of_array(a) == old(map_of_array(a))
   ensures map_of_array(b) == copy_map(old(map_of_array(b)), map_of_array(a), src, dst, len)
 {
-  var ghost mb := map_of_array(b);
-  var ghost ma := map_of_array(a);
+  ghost var mb := map_of_array(b);
+  ghost var ma := map_of_array(a);
   var i := 0;
-
+  
   while (i < len)
     invariant acc(a) &*& acc(b)
     invariant 0 <= i <= len
@@ -194,7 +197,7 @@ procedure copy(a: Array<K>, b: Array<K>, src: Int, dst: Int, len: Int)
     invariant map_of_array(a) == ma
     invariant map_of_array(b) == copy_map(mb, ma, src, dst, i)
   {
-    var ghost m1 := map_of_array(b);
+    ghost var m1 := map_of_array(b);
     var tmp := a[src + i];
     b[dst + i] := tmp;
     pure assert map_of_array(b) == m1[dst + i := tmp];
@@ -219,7 +222,7 @@ procedure find(a: Array<K>, len: Int, k: K, implicit ghost C: Set<K>)
 {
   var lo := 0;
   var hi := len;
-
+  
   while (hi != lo)
     invariant sorted_array_with_content(a, len, C)
     // what we actually care about
@@ -241,15 +244,15 @@ procedure find(a: Array<K>, len: Int, k: K, implicit ghost C: Set<K>)
       lo := m;
     }
   }
-
+  
   idx := lo;
-
+  
   if (idx == len || lt(k, a[lo])) {
     found := false;
   } else {
     found := true;
   }
-
+  
   // prove k !in set_of_array(a, 0, idx)
   not_in_sorted_seg(map_of_array(a), 0, idx, k);
   // prove k !in set_of_array(a, idx + 1, len)
@@ -262,22 +265,23 @@ procedure find(a: Array<K>, len: Int, k: K, implicit ghost C: Set<K>)
 // insert `k` into `a[0..len+1]` while preserving sortedness.
 // If `k` is already contained in `a[0..len]`, then do not modify `a`.                                                       
 procedure insert(a: Array<K>, k: K, len: Int, implicit ghost C: Set<K>)
-  returns (new_len: Int)
+  returns (idx: Int, new_len: Int)
   requires sorted_array_with_content(a, len, C)
   requires len < a.length
   ensures sorted_array_with_content(a, new_len, C ++ {k})
   ensures k in C ==> new_len == len
   ensures k !in C ==> new_len == len + 1
+  ensures 0 <= idx < new_len && a[idx] == k
 {
   // find position for insertion
   var i: Int, found: Bool;
   found, i := find(a, len, k);
   
   // k already in C?
-  if (found) return len;
+  if (found) return i, len;
 
   // shift array entries a[i..len] by 1 entry to the right 
-  var ghost m := map_of_array(a);
+  ghost var m := map_of_array(a);
   shift(a, i, i + 1, len - i);
 
   // prove C == set_of_array(a, 0, i) ++ set_of_array(a, i + 1, len + 1);
@@ -285,7 +289,7 @@ procedure insert(a: Array<K>, k: K, len: Int, implicit ghost C: Set<K>)
   set_of_map_equal(m, map_of_array(a), 0, 0, i);
   set_of_map_equal(m, map_of_array(a), i, i + 1, len - i);
 
-  var ghost m1 := map_of_array(a);
+  ghost var m1 := map_of_array(a);
   
   a[i] := k;
 
@@ -295,7 +299,7 @@ procedure insert(a: Array<K>, k: K, len: Int, implicit ghost C: Set<K>)
   frame_set_of_map(m1, i + 1, len + 1);
   set_of_map_split(map_of_array(a), 0, i, len + 1);
 
-  return len + 1;
+  return i, len + 1;
 }
 
 // Given a sorted array segment `a[0..len]`,
@@ -316,7 +320,7 @@ procedure delete(a: Array<K>, k: K, len: Int, implicit ghost C: Set<K>)
   if (!found) return len;
 
   // shift array entries a[i+1..len] by 1 entry to the left 
-  var ghost m := map_of_array(a);
+  ghost var m := map_of_array(a);
   shift(a, i + 1, i, len - (i + 1));
 
   // prove C -- {k} == set_of_array(a, 0, i - 1) ++ set_of_array(a, i - 1, len)

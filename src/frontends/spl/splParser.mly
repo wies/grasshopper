@@ -119,8 +119,8 @@ declarations:
   { (fst3 $2, PredDecl $1 :: snd3 $2, trd3 $2) }
 | macro_decl declarations
   { (fst3 $2, MacroDecl $1 :: snd3 $2, trd3 $2) }
-| VAR var_decl SEMICOLON declarations
-  { (fst3 $4, VarDecl $2 :: snd3 $4, trd3 $4) }
+| ghost_modifier VAR var_decl semicolon_opt declarations
+  { (fst3 $5, VarDecl { $3 with v_ghost = $1 } :: snd3 $5, trd3 $5) }
 | /* empty */ { ([], [], []) }
 | error { ProgError.syntax_error (mk_position 1 1) None }
 ;
@@ -199,10 +199,10 @@ proc_header:
 ;
 
 proc_head:
-| PROCEDURE IDENT LPAREN var_decls RPAREN proc_returns contracts {
+| PROCEDURE IDENT LPAREN var_decls_with_modifiers RPAREN proc_returns contracts {
   ($2, $4, $6, $7, mk_position 2 2, false)
 }
-| LEMMA IDENT LPAREN var_decls RPAREN proc_returns contracts {
+| LEMMA IDENT LPAREN var_decls_with_modifiers RPAREN proc_returns contracts {
   ($2, $4, $6, $7, mk_position 2 2, true)
 }
 ;
@@ -235,7 +235,7 @@ proc_impl:
 ;
 
 pred_decl:
-| PREDICATE IDENT LPAREN var_decls RPAREN contracts pred_impl {
+| PREDICATE IDENT LPAREN var_decls_with_modifiers RPAREN contracts pred_impl {
   let formals, locals =
     List.fold_right (fun decl (formals, locals) ->
       decl.v_name :: formals, IdMap.add decl.v_name decl locals)
@@ -259,7 +259,7 @@ pred_decl:
 ;
 
 function_header:
-| FUNCTION IDENT LPAREN var_decls RPAREN RETURNS LPAREN var_decls RPAREN contracts {
+| FUNCTION IDENT LPAREN var_decls_with_modifiers RPAREN RETURNS LPAREN var_decls_with_modifiers RPAREN contracts {
   let formals, locals =
     List.fold_right (fun decl (formals, locals) ->
       decl.v_name :: formals, IdMap.add decl.v_name decl locals)
@@ -294,17 +294,17 @@ pred_impl:
 | /* empty */ { None }
 ;
   
-var_decls:
-| var_decl var_decl_list { $1 :: $2 }
+var_decls_with_modifiers:
+| var_decl_with_modifiers var_decl_with_modifiers_list { $1 :: $2 }
 | /* empty */ { [] }
 ;
 
-var_decl_list:
-| COMMA var_decl var_decl_list { $2 :: $3 }
+var_decl_with_modifiers_list:
+| COMMA var_decl_with_modifiers var_decl_with_modifiers_list { $2 :: $3 }
 | /* empty */ { [] }
 ;
 
-var_decl:
+var_decl_with_modifiers:
 | var_modifier IDENT COLON var_type { 
   let decl = 
     { v_name = $2;
@@ -320,10 +320,34 @@ var_decl:
 }
 ;
 
+var_decl:
+| IDENT COLON var_type { 
+  let decl = 
+    { v_name = $1;
+      v_type = $3;
+      v_ghost = false;
+      v_implicit = false;
+      v_aux = false;
+      v_pos = mk_position 1 1;
+      v_scope = GrassUtil.global_scope; (* scope is fixed later *)
+    } 
+  in
+  decl
+}
+;
+  
+var_decls:
+| var_decl var_decl_list { $1 :: $2 }
+
+
+var_decl_list:
+| COMMA var_decl var_decl_list { $2 :: $3 }
+| /* empty */ { [] }
+;
+
 var_decls_opt_type:
 | var_decl var_decl_opt_type_list { $1 :: $2 }
 | var_decl_opt_type var_decl_opt_type_list { $1 :: $2 }
-| /* empty */ { [] }
 ;
 
 var_decl_opt_type_list:
@@ -333,14 +357,14 @@ var_decl_opt_type_list:
 ;
 
 var_decl_opt_type:
-| var_modifier IDENT { 
+| IDENT { 
   let decl = 
-    { v_name = $2;
+    { v_name = $1;
       v_type = AnyType;
-      v_ghost = snd $1;
-      v_implicit = fst $1;
+      v_ghost = false;
+      v_implicit = false;
       v_aux = false;
-      v_pos = mk_position 2 2;
+      v_pos = mk_position 1 1;
       v_scope = GrassUtil.global_scope; (* scope is fixed later *)
     } 
   in
@@ -348,10 +372,14 @@ var_decl_opt_type:
 }
 ;
 
+ghost_modifier:
+| GHOST { true }
+| /* empty */ { false }
+;
+  
 var_modifier:
 | IMPLICIT GHOST { true, true }
-| GHOST { false, true }
-| /* empty */ { false, false }
+| ghost_modifier { false, $1 }
 ; 
 
 var_type:
@@ -367,7 +395,7 @@ var_type:
 ;
 
 proc_returns:
-| RETURNS LPAREN var_decls RPAREN { $3 }
+| RETURNS LPAREN var_decls_with_modifiers RPAREN { $3 }
 | /* empty */ { [] }
 ;
 
@@ -421,7 +449,7 @@ field_decls:
 ;
 
 field_decl:
-| VAR var_decl semicolon_opt { $2 }
+| ghost_modifier VAR var_decl semicolon_opt { { $3 with v_ghost = $1 } }
 ;
 
 block:
@@ -446,8 +474,14 @@ stmt_no_short_if:
 
 stmt_wo_trailing_substmt:
 /* variable declaration */
-| VAR var_decls SEMICOLON { LocalVars ($2, None, mk_position 1 3) }
-| VAR var_decls_opt_type COLONEQ expr_list SEMICOLON { LocalVars ($2, Some $4, mk_position 1 5) }
+| ghost_modifier VAR var_decls SEMICOLON {
+  let decls = List.map (fun decl -> { decl with v_ghost = $1 }) $3 in
+  LocalVars (decls, None, mk_position 1 4)
+}
+| ghost_modifier VAR var_decls_opt_type COLONEQ expr_list SEMICOLON {
+  let decls = List.map (fun decl -> { decl with v_ghost = $1 }) $3 in
+  LocalVars (decls, Some $5, mk_position 1 6)
+}
 /* nested block */
 | LBRACE block RBRACE { 
   Block ($2, mk_position 1 3) 
