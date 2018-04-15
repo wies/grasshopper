@@ -791,20 +791,21 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       let idx, rhs = idx |> subst_term sm, rhs |> subst_term sm in
       let (pure, spatial) = subst_state sm (pure, spatial) in
       let pure =
-        let arr'_id = fresh_ident "a" and idx'_id = fresh_ident "idx" in
-        let arr'_srt = sort_of arr and idx'_srt = sort_of idx in
-        let arr' = mk_var arr'_srt arr'_id and idx' = mk_var idx'_srt idx'_id in
+        let arr' = mk_var (sort_of arr) (fresh_ident "a") in
+        let idx' = mk_var (sort_of idx) (fresh_ident "idx") in
         let f1 = (* Add a frame axiom that all other arrays and indices are unchanged *)
           let gens = [
-              ([Match (mk_read array_state' [arr'; idx'], [])],
+              TermGenerator ([Match (mk_read array_state' [arr'; idx'], [])],
                [(mk_read array_state [arr'; idx'])]);
-              ([Match (mk_read array_state [arr'; idx'], [])],
+              TermGenerator ([Match (mk_read array_state [arr'; idx'], [])],
                [(mk_read array_state' [arr'; idx'])]); ]
           in
+          let annots = Name (fresh_ident "array_write") :: gens in
+          let bvars = mk_eq arr' idx' |> sorted_free_vars |> IdSrtSet.elements in
           (mk_implies (smk_or [mk_neq arr' arr; mk_neq idx' idx])
              (mk_eq (mk_read array_state' [arr'; idx'])
                 (mk_read array_state [arr'; idx'])))
-          |> Axioms.mk_axiom ~gen:gens "array_write"
+          |> mk_forall ~ann:annots bvars
         in
         let f2 = (* And one that array_state(arr, idx) = rhs *)
           mk_eq (mk_read array_state [arr; idx]) rhs
@@ -912,17 +913,19 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
         let array_state' = mk_var_like array_state_id in
         let arr = mk_var (Loc (Array s)) (fresh_ident "a") in
         let idx = mk_var Int (fresh_ident "idx") in
+        let bvars = mk_eq arr idx |> sorted_free_vars |> IdSrtSet.elements in
         let gens = [
-            ([Match (mk_read array_state' [arr; idx], [])],
+            TermGenerator ([Match (mk_read array_state' [arr; idx], [])],
               [(mk_read array_state [arr; idx])]);
-            ([Match (mk_read array_state [arr; idx], [])],
+            TermGenerator ([Match (mk_read array_state [arr; idx], [])],
               [(mk_read array_state' [arr; idx])]); ]
         in
+        let annots = Name (fresh_ident "array_write") :: gens in
         let guard = xs |> List.map (fun x -> mk_neq arr x) |> smk_and in
         let frame =
         (mk_implies guard
             (mk_eq (mk_read array_state' [arr; idx]) (mk_read array_state [arr; idx])))
-        |> Axioms.mk_axiom ~gen:gens "array_write"
+        |> mk_forall ~ann:annots bvars
         in
         let sm = IdMap.add array_state_id array_state' sm in
         (frame :: fs, sm))
