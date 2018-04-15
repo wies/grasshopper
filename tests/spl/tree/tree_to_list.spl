@@ -4,7 +4,7 @@ struct LNode {
   var ldata: Int;
 }
 
-footprint function lseg_footprint(x: LNode, y: LNode) returns (FP: Set<LNode>) {
+function lseg_footprint(x: LNode, y: LNode) returns (FP: Set<LNode>) {
   forall z: LNode :: z in FP == (Btwn(next, x, z, y) && z != y)
 }
 
@@ -29,7 +29,7 @@ predicate list_set(x: LNode, y: LNode, C: Set<Int>)(FP: Set<LNode>) {
 struct TNode {
   var left: TNode;
   var right: TNode;
-  var ghost parent: TNode;
+  ghost var parent: TNode;
   var tdata: Int;
 }
 
@@ -121,8 +121,8 @@ procedure insertL(lst: LNode, val: Int,
   var curr: LNode, prev: LNode;
   curr := lst;
   prev := null;
-  var ghost c1 := content;
-  var ghost c2 := Set<Int>();
+  ghost var c1 := content;
+  ghost var c2 := Set<Int>();
 
   while (curr != null && curr.ldata < val)
     invariant prev == null && curr == lst && c2 == Set<Int>() || 

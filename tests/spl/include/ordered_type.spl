@@ -12,8 +12,8 @@ pure function compare(x: K, y: K) returns (res: Int)
   ensures lt(x, y) == (res < 0)
   ensures lt(y, x) == (res > 0)
 
-var bottom: K;
-var top: K;
+var bottom: K
+var top: K
 
 axiom forall a: K :: !lt(a, bottom)
 axiom forall a: K :: !lt(top, a)

@@ -1,5 +1,5 @@
 struct Counter {
-  var ghost n: Int;
+  ghost var n: Int;
   var c: Cell;
 }
 
