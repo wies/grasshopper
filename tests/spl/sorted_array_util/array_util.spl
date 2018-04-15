@@ -1,3 +1,5 @@
+options "-simplearrays"
+
 include "../include/ordered_type.spl"
 
 // project map segment m[i..j] to set of its elements
@@ -263,7 +265,7 @@ procedure find(a: Array<K>, len: Int, k: K, implicit ghost C: Set<K>)
 
 // Given a sorted array segment `a[0..len]`,
 // insert `k` into `a[0..len+1]` while preserving sortedness.
-// If `k` is already contained in `a[0..len]`, then do not modify `a`.                                                       
+// If `k` is already contained in `a[0..len]`, then do not modify `a`.
 procedure insert(a: Array<K>, k: K, len: Int, implicit ghost C: Set<K>)
   returns (idx: Int, new_len: Int)
   requires sorted_array_with_content(a, len, C)
@@ -304,7 +306,7 @@ procedure insert(a: Array<K>, k: K, len: Int, implicit ghost C: Set<K>)
 
 // Given a sorted array segment `a[0..len]`,
 // delete `k` from the segment while preserving sortedness.
-// If `k` is already contained in `a[0..len]`, then do not modify `a`.                                                       
+// If `k` is already contained in `a[0..len]`, then do not modify `a`.
 procedure delete(a: Array<K>, k: K, len: Int, implicit ghost C: Set<K>)
  returns (new_len: Int)
   requires sorted_array_with_content(a, len, C)

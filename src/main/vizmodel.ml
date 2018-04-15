@@ -9,7 +9,7 @@ let usage_message =
   " <input file> [options]\n"
 
 let cmd_line_error msg =
-  Arg.usage Config.cmd_options usage_message;
+  Arg.usage Config.cmd_options_spec usage_message;
   failwith ("Command line option error: " ^ msg)
 
 let parse_input file =
@@ -39,7 +39,7 @@ let vizmodel file =
 
 let _ =
   try
-    Arg.parse Config.cmd_options (fun s -> input_file := s) usage_message;
+    Arg.parse Config.cmd_options_spec (fun s -> input_file := s) usage_message;
     SmtLibSolver.select_solver (String.uppercase_ascii !Config.smtsolver);
     if !input_file = ""
     then cmd_line_error "input file missing"

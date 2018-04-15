@@ -1,6 +1,6 @@
 (* Version string *)
 let version = "0.5 pre"
-
+    
 (* Base directory for includes *)
 let base_dir = ref ""
 
@@ -78,7 +78,7 @@ let ccFixedPoint = ref true
 (* maximal number of term generation rounds *)
 let term_gen_max_rounds = ref 2
 
-let cmd_options =
+let cmd_options_spec =
   [("-basedir", Arg.Set_string base_dir, "<string>  Base directory for resolving include directives. Default: current working directory\n\nOptions for controlling error reporting and debug output:");
    ("-v", Arg.Unit Debug.more_verbose, " Display more messages");
    ("-q", Arg.Unit Debug.less_verbose, " Display fewer messages");
@@ -115,3 +115,10 @@ let cmd_options =
    ("-bitvector", Arg.Set use_bitvector, " Use bitvector theory for integers\n\nOptions for compiler:");
    ("-compile", Arg.Set_string compile_to, "<filename> Compile SPL program to a C program outputed as a file with the given name.\n\nOptions for help:");
   ]
+
+(* Parse auxiliary 'command line options' that are set during parsing of the input file *)
+let parse_options options =
+  Debug.info (fun () -> "Setting options: " ^ options ^ "\n");
+  let options = Sys.argv.(0) :: Str.split_delim (Str.regexp "[ \t\n]+") options |> Array.of_list in
+  let current = ref 0 in
+  Arg.parse_argv ~current:current options cmd_options_spec (fun _ -> ()) "invalid option"

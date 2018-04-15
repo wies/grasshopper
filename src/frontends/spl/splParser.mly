@@ -65,7 +65,7 @@ type rhs_string_maybe =
 %token IF ELSE WHILE
 %token <bool> FUNCTION
 %token <bool> PREDICATE
-%token GHOST IMPLICIT VAR STRUCT PURE LEMMA PROCEDURE INCLUDE AXIOM TYPE
+%token GHOST IMPLICIT VAR STRUCT PURE LEMMA PROCEDURE INCLUDE OPTIONS AXIOM TYPE
 %token DEFINE DATATYPE OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token LOC INT BOOL BYTE SET MAP ARRAY ARRAYCELL
 %token MATCHING YIELDS WITHOUT COMMENT PATTERN
@@ -109,6 +109,8 @@ main:
 declarations:
 | background_th declarations
   { (fst3 $2, snd3 $2, ($1, mk_position 1 1) :: trd3 $2) }
+| options_cmd declarations 
+  { fst3 $2, snd3 $2, trd3 $2 }
 | include_cmd declarations 
   { (($1, mk_position 1 1) :: fst3 $2, snd3 $2, trd3 $2) }
 | type_decl declarations
@@ -128,6 +130,21 @@ declarations:
 include_cmd:
 | INCLUDE STRINGVAL semicolon_opt { $2 }
 ;
+
+options_cmd:
+| OPTIONS STRINGVAL semicolon_opt {
+  try Config.parse_options $2
+  with Arg.Bad full_msg ->
+    let regexp = Sys.argv.(0) ^ ": \\([^\\.]*\\)" in
+    let matched = Str.string_match (Str.regexp regexp) full_msg 0 in
+    let msg =
+      if matched then Str.matched_group 1 full_msg 
+      else "invalid option"
+    in
+    ProgError.error (mk_position 2 2) msg    
+}
+;
+
   
 background_th:
 | AXIOM expr semicolon_opt { $2 }

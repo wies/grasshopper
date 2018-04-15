@@ -12,7 +12,7 @@ let usage_message =
   " <input file> [options]\n"
 
 let cmd_line_error msg =
-  Arg.usage (Arg.align Config.cmd_options) usage_message;
+  Arg.usage (Arg.align Config.cmd_options_spec) usage_message;
   failwith ("Command line option error: " ^ msg)
 
 (** Output JSON file with error trace *)
@@ -191,7 +191,7 @@ let _ =
   in
   let start_time = current_time () in
   try
-    Arg.parse Config.cmd_options set_main_file usage_message;
+    Arg.parse Config.cmd_options_spec set_main_file usage_message;
     if !Config.unsat_cores then Config.named_assertions := true;
     Debug.info (fun () -> greeting);
     SmtLibSolver.select_solver (String.uppercase_ascii !Config.smtsolver);

@@ -44,6 +44,7 @@ let _ =
       ("matching", MATCHING);
       ("new", NEW);
       ("null", NULL);
+      ("options", OPTIONS);
       ("or", COR);
       ("outputs", OUTPUTS);
       ("pattern", PATTERN);
