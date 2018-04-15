@@ -9,6 +9,7 @@ datatype FlowDom = fd(pc: Int);
 
 pure predicate domEq(p1: FlowDom, p2: FlowDom) {
   p1.pc == p2.pc
+    @(matching domEq(p1, p2) yields p1.pc) @(matching domEq(p1, p2) yields p2.pc)
 }
 
 pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
@@ -16,10 +17,11 @@ pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
 }
 
 pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-{ fd(p1.pc + p2.pc) }
+  ensures p == fd(p1.pc + p2.pc) @(matching domPlus(p1, p2) yields fd(p1.pc + p2.pc))
+  // TODO why can't I put term gen inside function definition?
 
 pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-{ fd(p1.pc * p2.pc) }
+  ensures p == fd(p1.pc * p2.pc) @(matching domMult(p1, p2) yields fd(p1.pc * p2.pc))
 
 pure function domZero() returns(p: FlowDom) { fd(0) }
 
@@ -82,6 +84,7 @@ procedure insert(hd: Node, I: Interface, n: Node, In: Interface)
     invariant N(l, Il) &*& Gr(I2)
     invariant intValid(Il) && intValid(I2)
     invariant intComp(Il, I2) == I && intComp(In, I) == I0 && (r != null ==> r in Il.FPo)
+    invariant intValid(In) && In.FP == {n} && In.inf[n] == domZero() && In.FPo == {}
     invariant hd in I.FP && I.inf[hd] == fd(1) && (forall n: Node :: n != hd ==> I.inf[n] == fd(0))
       && I.FPo == {}
   {
@@ -135,20 +138,10 @@ procedure insert(hd: Node, I: Interface, n: Node, In: Interface)
     lemma_abs(l, Il, Il1);
     // [Gr(In1)](In) &*& [Gr(Il1)](Il) &*& Gr(I2)
 
-    var Inl1: Interface;
-    pure assume Inl1 != intUndef && Inl1.FP == {n, l}
-      && Inl1.inf[n] == fd(0) && Inl1.inf[l] == fd(1)
-      && (r != null && Inl1.FPo == {r} && Inl1.fm[n][r] == fd(1) && Inl1.fm[l][r] == fd(1)
-         || r == null && Inl1.FPo == {})
-      && (forall n: Node, n1: Node ::
-         (n !in Inl1.FP ==> Inl1.inf[n] == fd(0) && Inl1.fm[n][n1] == fd(0))
-         && (n1 !in Inl1.FPo ==> Inl1.fm[n][n1] == fd(0)));
     lemma_int_valid_unfold(In1);
     lemma_int_valid_unfold(Il1);
     lemma_int_valid_unfold(Il);
-    lemma_int_valid_fold(Inl1);
-    lemma_int_valid_unfold(Inl1);
-    lemma_int_comp_fold(l, Il1, n, In1, Inl1);
+    var Inl1 := lemma_int_comp_fold(l, Il1, n, In1);
     // Inl1 == intComp(In1, Il1)
 
     var Inl := lemma_comp(In, In1, Il, Il1);
@@ -157,9 +150,11 @@ procedure insert(hd: Node, I: Interface, n: Node, In: Interface)
     Inl1 := lemma_dirty_Gr_comp(In1, Il1, Inl);
     // [Gr(Inl1)](Inl) &*& Gr(I2)
 
-    lemma_int_comp_unfold(n, In, l, Il, Inl);
-    lemma_int_comp_unfold(n, In1, l, Il1, Inl1);
+    lemma_int_comp_unfold(l, Il, n, In, Inl);
+    lemma_int_comp_unfold(l, Il1, n, In1, Inl1);
+    lemma_int_valid_unfold(In);
     lemma_int_valid_unfold(Inl);
+    lemma_int_valid_unfold(Inl1);
 
     sync(Inl, Inl1);
     // Gr(Inl1) &*& Gr(I2)

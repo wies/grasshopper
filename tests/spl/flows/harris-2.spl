@@ -159,21 +159,10 @@ procedure insert(mh: Node, fh: Node, I: Interface, n: Node, In: Interface)
     lemma_abs(l, Il, Il1);
     // [Gr(In1)](In) &*& [Gr(Il1)](Il) &*& Gr(I2)
 
-    var Inl1: Interface;
-    pure assume Inl1 != intUndef && Inl1.FP == {n, l}
-      && Inl1.inf[n] == domZero() && Inl1.inf[l] == Il.inf[l]
-      && Inl1.FPo == (In1.FPo -- Il1.FP) ++ (Il1.FPo -- In1.FP)
-      && (forall o: Node :: Inl1.fm[l][o] == Il.fm[l][o] @(matching Inl1.fm[l][o] yields Il.fm[l][o]))
-      && (forall o: Node :: (o != r || r == null) ==> Inl1.fm[n][o] == domZero)
-      && (r != null ==> Inl1.fm[n][r] == pair(1, 0))
-      && (forall n: Node, n1: Node ::
-         (n !in Inl1.FP ==> Inl1.inf[n] == domZero() && Inl1.fm[n][n1] == domZero())
-         && (n1 !in Inl1.FPo ==> Inl1.fm[n][n1] == domZero()));
     lemma_int_valid_unfold(In1);
     lemma_int_valid_unfold(Il1);
-    lemma_int_valid_fold(Inl1);
-    lemma_int_valid_unfold(Inl1);
-    lemma_int_comp_fold(l, Il1, n, In1, Inl1);
+    lemma_int_valid_unfold(Il);
+    var Inl1 := lemma_int_comp_fold(l, Il1, n, In1);
     // Inl1 == intComp(In1, Il1)
 
     var Inl := lemma_comp(In, In1, Il, Il1);
@@ -183,9 +172,10 @@ procedure insert(mh: Node, fh: Node, I: Interface, n: Node, In: Interface)
     // [Gr(Inl1)](Inl) &*& Gr(I2)
 
     lemma_int_comp_unfold(n, In, l, Il, Inl);
-    lemma_int_comp_unfold(n, In1, l, Il1, Inl1);
+    lemma_int_comp_unfold(l, Il1, n, In1, Inl1);
     lemma_int_valid_unfold(In);
     lemma_int_valid_unfold(Inl);
+    lemma_int_valid_unfold(Inl1);
 
     sync(Inl, Inl1);
     // Gr(Inl1) &*& Gr(I2)

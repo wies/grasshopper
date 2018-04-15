@@ -28,7 +28,10 @@ predicate intEq(I1: Interface, I2: Interface) {
   I1.FP == I2.FP && I1.FPo == I2.FPo
   && (forall x: Node :: domEq(I1.inf[x], I2.inf[x]) == true
      @(matching x yields I1.inf[x]) @(matching x yields I2.inf[x]))
-  && (forall x: Node, y: Node :: domEq(I1.fm[x][y], I2.fm[x][y]) == true)
+  && (forall x: Node, y: Node ::
+     domEq(domMult(I1.inf[x], I1.fm[x][y]), domMult(I2.inf[x], I2.fm[x][y])) == true
+     @(matching I2.fm[x][y] yields known(domMult(I1.inf[x], I1.fm[x][y])))
+     @(matching I2.fm[x][y] yields known(domMult(I2.inf[x], I2.fm[x][y]))))
 }
 
 
@@ -54,44 +57,34 @@ axiom forall I1: Interface, I2: Interface ::
 // Note: we assume that Gr(I) ==> intValid(I) in the following lemmas (TODO automate?)
 
 // Sufficient condition for intComp(I, Ix, Iy), when no edge from y to x
-lemma lemma_int_comp_fold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
-  requires intValid(Ix) == true && intValid(Iy) == true && intValid(I) == true
-  requires Ix.FP == {x} && Iy.FP == {y} && x != y && I.FP == {x, y}
-  requires I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
-  requires domEq(Ix.inf[x], domPlus(I.inf[x], domMult(Iy.inf[y], Iy.fm[y][x]))) == true
-  requires domEq(Iy.inf[y], domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y]))) == true
-  requires x !in Iy.FPo  // In this case, easier to check new flow map:
-  requires (forall n in I.FPo ::
-            domEq(I.fm[x][n], domPlus(Ix.fm[x][n], domMult(Ix.fm[x][y], Iy.fm[y][n]))) == true)
-  requires (forall n in I.FPo ::
-            domEq(I.fm[y][n], domPlus(Iy.fm[y][n], domMult(Iy.fm[y][x], Ix.fm[x][n]))) == true)
-  ensures intComp(Ix, Iy) == I
+lemma lemma_int_comp_fold(x: Node, Ix: Interface, y: Node, Iy: Interface)
+  returns (I: Interface)
+  requires intValid(Ix) == true && intValid(Iy) == true
+  requires Ix.FP == {x} && Iy.FP == {y} && x != y
+  requires domLeq(domMult(Iy.inf[y], Iy.fm[y][x]), Ix.inf[x]) == true
+  requires domLeq(domMult(Ix.inf[x], Ix.fm[x][y]), Iy.inf[y]) == true
+  requires x !in Iy.FPo
+  ensures intComp(Ix, Iy) == I && intValid(I) == true && I.FP == {x, y}
 
 lemma lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
   requires Ix != intUndef && Iy != intUndef && I != intUndef
-  requires intComp(Ix, Iy) == I && x != y
-  requires Ix.FP == {x} && Iy.FP == {y}
+  requires intComp(Ix, Iy) == I && x != y && x !in Iy.FPo && Ix.FP == {x} && Iy.FP == {y}
   ensures I.FP == {x, y}
   ensures I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
-  ensures domEq(Ix.inf[x], domPlus(I.inf[x], domMult(Iy.inf[y], Iy.fm[y][x]))) == true
+  ensures domEq(Ix.inf[x], I.inf[x]) == true
   ensures domEq(Iy.inf[y], domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y]))) == true
-  ensures exists Cxx: FlowDom, Cxy: FlowDom, Cyx: FlowDom, Cyy: FlowDom ::
-    domEq(Cxx, domMult(Cxy, Iy.fm[y][x])) == true
-    && domEq(Cyy, domMult(Cyx, Ix.fm[x][y])) == true
-    && domEq(Cxy, domMult(Cxx, Ix.fm[x][y])) == true
-    && domEq(Cyx, domMult(Cyy, Iy.fm[y][x])) == true
-    && (forall n in I.FPo ::
-       domEq(I.fm[x][n], domPlus(domMult(Cxx, Ix.fm[x][n]), domMult(Cxy, Iy.fm[y][n]))) == true
-     && domEq(I.fm[y][n], domPlus(domMult(Cyy, Iy.fm[y][n]), domMult(Cyx, Ix.fm[x][n]))) == true
-       @(matching n yields I.fm[x][n]) @(matching n yields I.fm[y][n])
-       @(matching n yields Ix.fm[x][n]) @(matching n yields Iy.fm[y][n])
-       @(matching Ix.fm[x][n], Iy.fm[y][n]
-         yields domPlus(domMult(Cxx, Ix.fm[x][n]), domMult(Cxy, Iy.fm[y][n])))
-       @(matching Ix.fm[x][n], Iy.fm[y][n]
-         yields domPlus(domMult(Cyy, Iy.fm[y][n]), domMult(Cyx, Ix.fm[x][n])))
-       )
- // TODO Ask Thomas why these aren't automatically generated
- // Also about conservative term gen for Read terms?
+  ensures (forall n: Node, n1: Node ::
+           n !in Ix.FP || n1 == y
+           || (domEq(I.fm[n][n1],
+                    domPlus(Ix.fm[n][n1], domMult(Ix.fm[n][y], Iy.fm[y][n1]))) == true)
+           @(matching I.fm[n][n1]
+             yields known(domPlus(Ix.fm[n][n1], domMult(Ix.fm[n][y], Iy.fm[y][n1]))))
+           @(matching I.fm[n][n1]
+             yields known(domMult(Ix.fm[n][y], Iy.fm[y][n1])))
+           )
+    ensures (forall n: Node, n1: Node :: n !in Iy.FP || n1 == x
+             || (domEq(I.fm[n][n1], Iy.fm[n][n1]) == true)
+             @(matching I.fm[n][n1] yields Iy.fm[n][n1]))
 
 lemma lemma_int_valid_unfold(I: Interface)
   requires intValid(I) == true
@@ -99,6 +92,8 @@ lemma lemma_int_valid_unfold(I: Interface)
     (n !in I.FP ==> domEq(I.inf[n], domZero()) && domEq(I.fm[n][n1], domZero()))
     && (n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero()))
   ensures forall n: Node :: n !in I.FP || n !in I.FPo
+  ensures forall n: Node :: domLeq(domZero(), I.inf[n])
+  ensures forall n: Node, n1: Node :: domLeq(domZero(), I.fm[n][n1])
 
 lemma lemma_int_valid_fold(I: Interface)
   requires I != intUndef // TODO why? See test_valid2
@@ -106,6 +101,8 @@ lemma lemma_int_valid_fold(I: Interface)
     (n !in I.FP ==> domEq(I.inf[n], domZero()) && domEq(I.fm[n][n1], domZero()))
     && (n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero()))
   requires forall n: Node :: n !in I.FP || n !in I.FPo
+  requires forall n: Node :: domLeq(domZero(), I.inf[n])
+  requires forall n: Node, n1: Node :: domLeq(domZero(), I.fm[n][n1])
   ensures intValid(I) == true
 
 
@@ -204,9 +201,3 @@ procedure sync(I1: Interface, I2: Interface)
   returns ()
   requires [Gr(I2)](I1) &*& intValid(I2) == true &*& intEq(I1, I2) == true
   ensures Gr(I2)
-
-procedure newNode()
-  returns (x: Node, Ix: Interface)
-  requires emp
-  ensures [acc(x)](Ix)
-  ensures intValid(Ix) && Ix.FP == {x} && domEq(Ix.inf[x], domZero()) && Ix.FPo == {}
