@@ -47,11 +47,15 @@ let rec term_of_expr model e =
     let t = term_of_expr model t in
     mk_read map [t]
   | ProcCall (id, ts, _)
-  | PredApp (Pred id, ts, _) ->
+  | PredApp (Pred id, ts, _) -> (* Function application *)
     let ts = List.map (term_of_expr model ) ts in
     let sym = FreeSym id in
     let (arg_srts, res_srt) = get_sign sym in
     mk_app res_srt sym ts
+  | BinaryOp (e1, OpIn, e2, _, _) ->
+    mk_elem_term (term_of_expr model e1) (term_of_expr model e2)
+  | BinaryOp (e1, OpEq, e2, _, _) ->
+    mk_eq_term (term_of_expr model e1) (term_of_expr model e2)
   | e -> fail ("TODO: can't yet handle: " ^ string_of_expr e)
 
 let repl model =
@@ -88,7 +92,11 @@ let repl model =
       Parsing.clear_parser ();
       repl_loop ()
     | Undefined ->
-      print_string "Model: Undefined.\n";
+      print_string "Error: Model says undefined.\n";
+      Parsing.clear_parser ();
+      repl_loop ()
+    | Not_found ->
+      print_string "Error: Model says Not_found.\n";
       Parsing.clear_parser ();
       repl_loop ()
     | End_of_file -> print_endline "\n";
