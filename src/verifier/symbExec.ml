@@ -546,14 +546,12 @@ and check_entailment prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
     sprintf "\nChecking entailment:\n%s\n|=\n%s\n"
       (string_of_eqs_state eqs (p1, sp1)) (string_of_state (p2, sp2))
   );
-
   (* Check if find_frame returns empt *)
   match find_frame ~inst:inst prog eqs (p1, sp1) (p2, sp2) with
   | Ok ([], inst) -> Ok inst
   | Ok _ ->
     Error (["The frame was not empty for this entailment check"], Model.empty)
   | Error errs -> Error errs
-
 
 
 (** Finds a call site for a function that's completely contained inside a conjunct.
@@ -614,6 +612,39 @@ let find_frame_conj prog eqs (pure, spatial) state2 =
       | Error errs -> Error errs)
   in
   find_frame_conj spatial
+
+
+(** Finds a call site for a function that's completely contained inside a dirty
+  region.
+  [state2] must have only PointsTos - no predicates allowed.*)
+let find_frame_dirty prog eqs (p1, sp1) (p2, sp2) =
+  let find_inside_dirty = function
+    | Dirty (sp1a, ts) ->
+      (match find_frame prog eqs (p1, sp1a) (p2, sp2) with
+      | Ok (fr, inst) ->
+        let repl_fn sm post =
+          Dirty ((List.map (subst_spatial_pred sm) fr) @ post, ts)
+        in
+        Ok (repl_fn, inst)
+      | Error (msgs, m) -> Error (msgs, m))
+    | sp -> Error ([], Model.empty)
+  in
+  (* Cycle through sp1 looking for a dirty that works, keeping seen stuff in sp1a *)
+  let rec find_dirty sp1a = function
+    | sp :: sp1b ->
+      (match find_inside_dirty sp with
+      | Ok (rf, inst) ->
+        let repl_fn sm post =
+          (rf sm post) :: (List.map (subst_spatial_pred sm) (sp1a @ sp1b))
+        in
+        Ok (repl_fn, inst)
+      | Error ([], m) -> find_dirty (sp :: sp1a) sp1b
+      | Error (msgs, m) -> Error (msgs, m))
+    | [] -> Error ([], Model.empty)
+  in
+  match List.exists (function PointsTo _ -> false | _ -> true) sp2 with
+  | true -> Error ([], Model.empty) (* Only PointsTos allowed *)
+  | false -> find_dirty [] sp1
 
 
 (** Evaluate term at [state] by looking up all field reads.
@@ -884,12 +915,17 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     let repl_fn =
       match find_frame prog eqs state foo_pre with
         | Ok (frame, inst) ->
-        let frame = List.map (subst_spatial_pred sm) frame in
+          let frame = List.map (subst_spatial_pred sm) frame in
           Ok ((fun sm foo_post -> foo_post @ frame), inst)
-        | Error errs -> (* Try to see if a lemma can be applied inside a conjunct *)
-        if (find_proc prog foo).proc_is_lemma then
-          find_frame_conj prog eqs state foo_pre
-          else Error errs
+        | Error ([], m) ->
+          (match find_frame_dirty prog eqs state foo_pre with
+          | Error ([], m) ->
+            (* Try to see if a lemma can be applied inside a conjunct *)
+            if (find_proc prog foo).proc_is_lemma then
+              find_frame_conj prog eqs state foo_pre
+            else Error ([], m)
+          | e -> e)
+        | Error (msgs, m) as e -> e
     in
     (* Bump array_state and add frame axiom for arrays not in foo's footprint *)
     let modified_arrs =
