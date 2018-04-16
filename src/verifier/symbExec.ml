@@ -474,11 +474,8 @@ let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sps1) (p2, sps2) =
         let fs1, fs2 = List.sort compare fs1, List.sort compare fs2 in
         let rec match_up inst = function
           | (_, []) -> Some inst
-          | ([], (f, e)::fs2') ->
-            (* f not in LHS, so only okay if e is an ex. var not appearing anywhere else *)
-            (* So create new const c, add e -> c to inst, and sub fs2' with inst *)
-            todo ()
-          | (fe1 :: fs1', fe2 :: fs2') when fe1 = fe2 -> match_up inst (fs1', fs2')
+          | (fe1 :: fs1', fe2 :: fs2') when fe1 = fe2 -> (* Remove equal stuff *)
+            match_up inst (fs1', fs2')
           | ((f1, e1) :: fs1', (f2, e2) :: fs2') when f1 = f2 ->
             (* e1 != e2, so only okay if e2 is ex. var *)
             (* add e2 -> e1 to inst and sub in fs2' to make sure e2 has uniform value *)
@@ -488,12 +485,22 @@ let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sps1) (p2, sps2) =
               let fs2' = List.map (fun (f, e) -> (f, subst_term sm e)) fs2' in
               assert (IdMap.mem e2_id inst |> not);
               match_up (IdMap.add e2_id e1 inst) (fs1', fs2')
-            | _ -> None
-            )
-          | ((f1, e1) :: fs1', (f2, e2) :: fs2') when f1 <> f2 ->
+            | _ -> None)
+          | ((f1, e1) :: fs1', (f2, e2) :: fs2')
+              when compare (f1, e1) (f2, e2) < 0 ->
             (* RHS doesn't need to have all fields, so drop (f1, e1) *)
             match_up inst (fs1', (f2, e2) :: fs2')
-          | _ -> (* should be unreachable? *) assert false
+          | (fs1, (f2, e2)::fs2') ->
+            (* f not in LHS, so only okay if e is an ex. var *)
+            (match e2 with
+            | Var (e, s) ->
+              (* So create new const c, add e -> c to inst, and sub fs2' with inst *)
+              let c = mk_free_const s (fresh_ident "c") in
+              let fs2' = fs2' |>
+                List.map (fun (f, t) -> (f, subst_term (IdMap.singleton e c) t)) 
+              in
+              match_up (IdMap.add e c inst) (fs1, fs2')
+            | _ -> None)
         in
         match_up inst (fs1, fs2)
       in

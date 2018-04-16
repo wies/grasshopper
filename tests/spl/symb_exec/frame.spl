@@ -173,6 +173,22 @@ procedure boo11(x: Node, y: Node)
   }
 }
 
+struct Rec {
+  var a: Int;
+  var b: Int;
+  var c: Int;
+}
+
+procedure bar12(x: Rec)
+  requires acc(x)
+  ensures acc(x) &*& old(x.a) <= x.a &*& old(x.b) <= x.b
+
+procedure boo12(y: Rec)
+  requires acc(y) &*& y.b == 3
+  ensures acc(y) &*& 2 < y.b
+{
+  bar12(y);
+}
 
 lemma lemma_1(x: Node, y: Node)
   requires x.next |-> x &*& acc(y)
