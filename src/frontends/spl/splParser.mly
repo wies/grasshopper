@@ -698,6 +698,9 @@ field_write:
 | ident LBRACKET expr COLONEQ expr RBRACKET {
   Write ($1, $3, $5, mk_position 1 6)
 }
+| primary LBRACKET expr COLONEQ expr RBRACKET {
+  Write ($1, $3, $5, mk_position 1 6)
+}
 ;
   
 array_access:
