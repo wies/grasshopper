@@ -126,6 +126,20 @@ lemma lemma_comp(Ix: Interface, Ix1: Interface, Iy: Interface, Iy1: Interface)
   requires [Gr(Ix1)](Ix) &*& [Gr(Iy1)](Iy) &*& intValid(intComp(Ix1, Iy1)) == true
   ensures [Gr(Ix1) &*& Gr(Iy1)](I) &*& intComp(Ix, Iy) == I &*& I != intUndef
 
+lemma lemma_comp_sl(x: Node, Ix: Interface, y: Node, Iy: Interface)
+  returns (I: Interface)
+  requires [gammaSpatial(x)](Ix) &*& [gammaSpatial(y)](Iy)
+  ensures [gammaSpatial(x) &*& gammaSpatial(y)](I) &*& intComp(Ix, Iy) == I
+  ensures I != intUndef && unchanged(x) && unchanged(y)
+
+lemma lemma_comp_sl_3(x: Node, Ix: Interface, y: Node, Iy: Interface,
+                      z: Node, Iz: Interface)
+  returns (I: Interface)
+  requires [gammaSpatial(x)](Ix) &*& [gammaSpatial(y)](Iy) &*& [gammaSpatial(z)](Iz)
+  ensures [gammaSpatial(x) &*& gammaSpatial(y) &*& gammaSpatial(z)](I)
+  ensures I != intUndef &&  intComp(Ix, intComp(Iy, Iz)) == I
+  ensures unchanged(x) && unchanged(y) && unchanged(z)
+
 lemma lemma_comp_sing_int(x: Node, Ix: Interface, I2: Interface)
   returns (I: Interface)
   requires [acc(x)](Ix) &*& Gr(I2)

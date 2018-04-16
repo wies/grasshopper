@@ -1,0 +1,240 @@
+/* This file is a spec-only copy of tests/spl/sorted_array_utils/array_util.spl */
+/* Also, instantiated K -> Int */
+
+// include "../include/ordered_type.spl"
+define lt(x, y) {x < y}
+define bottom() { 0 }
+
+// project map segment m[i..j] to set of its elements
+function set_of_map(m: Map<Int, Int>, i: Int, j: Int)
+  returns (res: Set<Int>)
+  requires 0 <= i <= j
+{
+  i < j ? {m[i]} ++ set_of_map(m, i + 1, j) : {}
+}
+
+lemma extend_right(m: Map<Int, Int>, i: Int, j: Int)
+  requires i <= j
+  pure ensures set_of_map(m, i, j) ++ {m[j]} == set_of_map(m, i, j + 1)
+{
+  if (i < j) {
+    extend_right(m, i + 1, j);
+  }
+}
+
+lemma in_set_of_map(m: Map<Int, Int>, i: Int, j: Int)
+  requires 0 <= i <= j
+  ensures forall k: Int :: i <= k < j ==> m[k] in set_of_map(m, i, j)
+{
+  if (i < j) {
+    in_set_of_map(m, i + 1, j);
+  }
+}
+
+lemma set_of_map_split(m: Map<Int, Int>, i: Int, j: Int, k: Int)
+  requires i <= j <= k
+  ensures set_of_map(m, i, k) == set_of_map(m, i, j) ++ set_of_map(m, j, k)
+{
+  if (j < k) {
+    extend_right(m, i, j);
+    set_of_map_split(m, i, j + 1, k);
+  }
+}
+
+lemma set_of_map_equal(m1: Map<Int, Int>, m2: Map<Int, Int>, i1: Int, i2: Int, len: Int)
+  requires forall j: Int :: i1 <= j < i1 + len ==> m1[j] == m2[j + (i2 - i1)] @(matching m1[j] yields m2[j + (i2 - i1)])
+  ensures set_of_map(m1, i1, i1 + len) == set_of_map(m2, i2, i2 + len)
+{
+  if (0 < len) {
+    set_of_map_equal(m1, m2, i1 + 1, i2 + 1, len - 1);
+  }
+}
+
+lemma frame_set_of_map(m: Map<Int, Int>, i: Int, j: Int)
+  requires i <= j
+  ensures forall i1: Int, k: Int :: i1 < i || j <= i1 ==> set_of_map(m, i, j) == set_of_map(m[i1 := k], i, j)
+{
+  if (i < j) {
+    frame_set_of_map(m, i + 1, j);
+  }
+}
+
+lemma not_in_sorted_seg(m: Map<Int, Int>, i: Int, j: Int, k: Int, implicit ghost C: Set<Int>)
+  requires sorted_map_seg(m, i, j) && C == set_of_map(m, i, j)
+  ensures i >= j || lt(k, m[i]) || lt(m[j-1], k) ==> k !in C
+{
+  if (i >= j) return;
+  
+  if (lt(m[j - 1], k)) {
+    extend_right(m, i, j - 1);
+    not_in_sorted_seg(m, i, j - 1, k);
+    return;
+  }
+
+  if (lt(k, m[i])) {
+    not_in_sorted_seg(m, i + 1, j, k);    
+    return;
+  }
+  
+}
+
+function shift_map(m: Map<Int, Int>, src: Int, dst: Int, len: Int)
+  returns (res: Map<Int, Int>)
+  requires 0 <= len
+{
+  { i: Int :: i < dst || dst + len <= i ? m[i] : m[src + (i - dst)]
+    @(matching res[i] yields m[src + (i - dst)])
+    @(matching res[i] yields m[i])
+  }
+}
+
+function copy_map(m1: Map<Int, Int>, m2: Map<Int, Int>, src: Int, dst: Int, len: Int)
+  returns (res: Map<Int, Int>)
+{
+  { i: Int :: dst <= i < dst + len ? m2[src + (i - dst)] : m1[i]
+    @(matching res[i] yields m2[src + (i - dst)])
+    @(matching res[i] yields m1[i])
+  }
+}
+
+function map_of_array(a: Array<Int>) returns (res: Map<Int, Int>)
+  requires acc(a)
+{
+  { i: Int :: 0 <= i < a.length ? a[i] : bottom()
+    @(matching res[i] yields a[i])
+    @(matching a[i] yields res[i])
+  }
+}
+
+function shift_map_node(m: Map<Int, Node>, src: Int, dst: Int, len: Int)
+  returns (res: Map<Int, Node>)
+  requires 0 <= len
+{
+  { i: Int :: i < dst || dst + len <= i ? m[i] : m[src + (i - dst)]
+    @(matching res[i] yields m[src + (i - dst)])
+    @(matching res[i] yields m[i])
+  }
+}
+
+function copy_map_node(m1: Map<Int, Node>, m2: Map<Int, Node>, src: Int, dst: Int, len: Int)
+  returns (res: Map<Int, Node>)
+{
+  { i: Int :: dst <= i < dst + len ? m2[src + (i - dst)] : m1[i]
+    @(matching res[i] yields m2[src + (i - dst)])
+    @(matching res[i] yields m1[i])
+  }
+}
+
+function map_of_array_node(a: Array<Node>) returns (res: Map<Int, Node>)
+  requires acc(a)
+{
+  { i: Int :: 0 <= i < a.length ? a[i] : null
+    @(matching res[i] yields a[i])
+    @(matching a[i] yields res[i])
+  }
+}
+
+predicate sorted_map_seg(m: Map<Int, Int>, i: Int, j: Int)
+{
+  forall i1: Int, i2: Int :: i <= i1 < i2 < j ==> lt(m[i1], m[i2])
+}
+
+predicate sorted_array_seg(a: Array<Int>, i: Int, j: Int)
+  requires acc(a)
+{
+  0 <= i && j <= a.length && sorted_map_seg(map_of_array(a), i, j)
+}
+
+function set_of_array(a: Array<Int>, i: Int, j: Int) returns (res: Set<Int>)
+  requires acc(a) &*& 0 <= i && j <= a.length
+{
+  set_of_map(map_of_array(a), i, j)
+}
+  
+predicate sorted_array_seg_with_content(a: Array<Int>, i: Int, j: Int, C: Set<Int>)
+  requires acc(a)
+{
+  sorted_array_seg(a, i, j) && C == set_of_array(a, i, j)
+}
+
+define sorted_array_with_content(a, len, C)
+{
+  0 <= len &*&
+    acc(a) &*& sorted_array_seg_with_content(a, 0, len, C) == true
+}
+
+
+// Shift a[src..src+len] to a[dst..dst+len]
+procedure arr_shift(a: Array<Int>, src: Int, dst: Int, len: Int)
+  requires acc(a)
+  requires 0 <= src <= src + len <= a.length && 0 <= dst <= dst + len <= a.length
+  ensures acc(a)
+  ensures map_of_array(a) == shift_map(old(map_of_array(a)), src, dst, len)
+
+
+// Shift a[src..src+len] to a[dst..dst+len]
+procedure arr_shift_node(a: Array<Node>, src: Int, dst: Int, len: Int)
+  requires acc(a)
+  requires 0 <= src <= src + len <= a.length && 0 <= dst <= dst + len <= a.length
+  ensures acc(a)
+  ensures map_of_array_node(a) == shift_map_node(old(map_of_array_node(a)), src, dst, len)
+
+
+// Copy a[src..src+len] to b[dst..dst+len]
+procedure arr_copy(a: Array<Int>, b: Array<Int>, src: Int, dst: Int, len: Int)
+  requires acc(a) &*& acc(b)
+  requires 0 <= src <= src + len <= a.length
+  requires 0 <= dst <= dst + len <= b.length
+  ensures acc(a) &*& acc(b)
+  ensures map_of_array(a) == old(map_of_array(a))
+  ensures map_of_array(b) == copy_map(old(map_of_array(b)), map_of_array(a), src, dst, len)
+
+
+// Copy a[src..src+len] to b[dst..dst+len]
+procedure arr_copy_node(a: Array<Node>, b: Array<Node>, src: Int, dst: Int, len: Int)
+  requires acc(a) &*& acc(b)
+  requires 0 <= src <= src + len <= a.length
+  requires 0 <= dst <= dst + len <= b.length
+  ensures acc(a) &*& acc(b)
+  ensures map_of_array_node(a) == old(map_of_array_node(a))
+  ensures map_of_array_node(b) == copy_map_node(old(map_of_array_node(b)), map_of_array_node(a), src, dst, len)
+
+
+// Find key `k` in sorted array segment `a[0..len]` using binary search
+procedure arr_find(a: Array<Int>, len: Int, k: Int, implicit ghost C: Set<Int>)
+  returns (found: Bool, idx: Int)
+  requires sorted_array_with_content(a, len, C)
+  requires 0 <= len <= a.length
+  ensures sorted_array_with_content(a, len, C)
+  // what we actually care about
+  ensures 0 <= idx <= len
+  ensures found == (k in C)
+  ensures found ==> a[idx] == k
+  ensures !found ==> idx == len || lt(k, a[idx])
+  ensures 0 < idx ==> lt(a[idx - 1], k)
+  ensures k !in set_of_array(a, 0, idx)
+  ensures k !in set_of_array(a, idx + 1, len)
+
+
+// Given a sorted array segment `a[0..len]`,
+// insert `k` into `a[0..len+1]` while preserving sortedness.
+// If `k` is already contained in `a[0..len]`, then do not modify `a`.
+procedure arr_insert(a: Array<Int>, k: Int, len: Int, ghost C: Set<Int>)
+  returns (idx: Int, new_len: Int)
+  requires sorted_array_with_content(a, len, C)
+  requires len < a.length
+  ensures sorted_array_with_content(a, new_len, C ++ {k})
+  ensures k in C ==> new_len == len
+  ensures k !in C ==> new_len == len + 1
+  ensures 0 <= idx < new_len && a[idx] == k
+
+
+// Given a sorted array segment `a[0..len]`,
+// delete `k` from the segment while preserving sortedness.
+// If `k` is already contained in `a[0..len]`, then do not modify `a`.                                                       
+procedure arr_delete(a: Array<Int>, k: Int, len: Int, implicit ghost C: Set<Int>)
+ returns (new_len: Int)
+  requires sorted_array_with_content(a, len, C)
+  ensures sorted_array_with_content(a, new_len, C -- {k})
+  ensures k !in C ==> new_len == len
+  ensures k in C ==> new_len == len - 1

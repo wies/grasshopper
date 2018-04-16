@@ -1,6 +1,7 @@
 /** B+ tree implementation of the give-up template for linearizable dictionaries. */
 
 include "../include/flows.spl";
+include "array_util.spl";
 
 
 /** Flow domain definitions */
@@ -51,24 +52,33 @@ define unchanged(x) {
     && x.rangeUb == old(x.rangeUb) && x.keys == old(x.keys) && x.ptrs == old(x.ptrs)
 }
 
+
 /** Definition of good condition, gamma */
+
+var B: Int;
+axiom B > 1;
 
 function cont_witness(x: Node, Ix: Interface, k: Int)
   returns(idx: Int)
 
+define gammaSpatial(x) {
+  acc(x) &*& acc(x.keys) &*& acc(x.ptrs)  
+}
+
 define gammaG(x, I) {
-  0 <= x.len && x.len < x.keys.length && x.len < x.ptrs.length
-    && (forall k: Int :: (I.inf[x].ks[k] >= 1) == (x.rangeLb <= k && k < x.rangeUb))
-    && (forall i: Int, j: Int :: 0 <= i && i < j && j < x.len ==> x.keys[i] < x.keys[j])
+  0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
+    && (forall k: Int :: (I.inf[x].ks[k] >= 1) == (x.rangeLb <= k < x.rangeUb))
+    && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> x.keys[i] < x.keys[j])
     && (x.ptrs[0] == null && I.FPo == {}  // Leaf
-       && (forall i: Int :: 0 <= i && i < x.ptrs.length ==> x.ptrs[i] == null)
-       && (forall i: Int :: 0 <= i && i < x.len ==> x.keys[i] in I.na.contents)
+       && (forall i: Int :: 0 <= i < x.ptrs.length ==> x.ptrs[i] == null)
+       && (forall i: Int :: 0 <= i < x.len ==> x.keys[i] in I.na.contents)
        && (forall k: Int :: k in I.na.contents
           ==> (k == x.keys[cont_witness(x, I, k)]
              && 0 <= cont_witness(x, I, k) && cont_witness(x, I, k) < x.len)
           @(matching k without cont_witness yields x.keys[cont_witness(x, I, k)]))
        || x.ptrs[0] != null  // Internal
-       && (forall i: Int, k: Int :: 0 <= i && i <= x.len ==>
+       && I.na.contents == {}
+       && (forall i: Int, k: Int :: 0 <= i <= x.len ==>
           x.ptrs[i] != null && x.ptrs[i] in I.FPo
           && ((I.fm[x][x.ptrs[i]].ks[k] >= 1) ==
              ((i <= 0 || x.keys[i-1] <= k) && (i >= x.len || k < x.keys[i])))
@@ -77,11 +87,11 @@ define gammaG(x, I) {
 }
 
 define gammaB(x, I) {
-  0 <= x.len && x.len < x.keys.length && x.len < x.ptrs.length
+  0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
 }
 
 define gamma(x, I) {
-  acc(x) &*& acc(x.keys) &*& acc(x.ptrs)
+  gammaSpatial(x) &*& I.FP == {x} // TODO where to put this?
     &*& ((gammaG(x, I) && I.na.lockinfo == locked(TID)
          || gammaB(x, I) && I.na.lockinfo == dirtylock(TID))
 /* TODO have a create B+ tree function to check this isn't unsat */
@@ -90,6 +100,15 @@ define gamma(x, I) {
        && (forall k: Int, y: Node, z: Node :: y == z
           || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0))
 }
+
+procedure newNode(xlock: Int, xlen: Int, xrangeLb: Int, xrangeUb: Int)
+  returns (x: Node, Ix: Interface)
+  requires emp
+  ensures [acc(x) &*& acc(x.ptrs) &*& acc(x.keys)](Ix)
+  ensures x.lock == xlock && x.len == xlen && x.rangeLb == xrangeLb
+  ensures x.rangeUb == xrangeUb && x.keys.length == 2*B && x.ptrs.length == 2*B
+  ensures intValid(Ix) == true
+  ensures Ix.FP == {x} && domEq(Ix.inf[x], domZero()) == true && Ix.FPo == {}
 
 
 /** Lemmas to deal with conjunction */
@@ -114,6 +133,25 @@ lemma lemma_disj_gamma(I1: Interface, I2: Interface,
   ensures Gr(I1) &*& [gamma(x, Ix)](Ix) &*& Gr(I4)
     &*& I2 == intComp(Ix, I4) &*& I3 == intComp(I1, I4)
   ensures unchanged(x)
+
+
+// TODO apply lemmas inside dirty regions
+procedure lemma_abs_1(x: Node, Ix: Interface, y: Node, z: Node, I: Interface)
+  requires I != intUndef && Ix != intUndef && intValid(Ix)
+  requires [gamma(x, Ix) &*& gammaSpatial(y) &*& gammaSpatial(z)](I) &*& Ix.FP == {x}
+  ensures [N(x, Ix) &*& gammaSpatial(y) &*& gammaSpatial(z)](I)
+
+procedure lemma_abs_2(x: Node, Ix: Interface, y: Node, Iy: Interface,
+                      z: Node, I: Interface)
+  requires I != intUndef && Iy != intUndef && intValid(Iy) && Iy.FP == {y}
+  requires [N(x, Ix) &*& gamma(y, Iy) &*& gammaSpatial(z)](I)
+  ensures [N(x, Ix) &*& N(y, Iy) &*& gammaSpatial(z)](I)
+
+procedure lemma_abs_3(x: Node, Ix: Interface, y: Node, Iy: Interface, z: Node,
+                      Iz: Interface, I: Interface)
+  requires I != intUndef && Iz != intUndef && intValid(Iz) && Iz.FP == {z}
+  requires [N(x, Ix) &*& N(y, Iy) &*& gamma(z, Iz)](I)
+  ensures [N(x, Ix) &*& N(y, Iy) &*& N(z, Iz)](I)
 
 
 /** Begin programs */
@@ -282,6 +320,61 @@ procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
     lemma_repl(I3, Ix2, I2, Ix1, I4);
     return true, Ix1, I4;
   }
+}
+
+
+procedure aasplit(p: Node, Ip: Interface, c: Node, Ic: Interface,
+                  Io: Interface, I: Interface)
+  returns (I1: Interface)
+  requires [gamma(p, Ip)](Ip) &*& [gamma(c, Ic)](Ic) &*& Gr(Io)
+  requires intValid(Ip) == true && intValid(Ic) == true && intValid(Io) == true
+  requires intComp(Ip, intComp(Ic, Io)) == I && globalInt(I)
+  requires Ip.na.lockinfo == locked(TID) && Ic.na.lockinfo == locked(TID)
+  requires 0 < c.len // Or that it's 2B - 1?
+  requires p.len < p.keys.length - 1
+  ensures Gr(I1) // and TODO
+{
+  var m := (c.len / 2) + 1;
+  var k := c.keys[m - 1];
+  
+  var n: Node, In: Interface;
+  n, In := newNode(0, m - 1, k, c.rangeUb);
+
+  var Ipcn := lemma_comp_sl_3(p, Ip, c, Ic, n, In);
+
+  arr_copy(c.keys, n.keys, m, 0, c.len - m);
+  arr_copy_node(c.ptrs, n.ptrs, m, 0, c.len - m + 1);
+
+  c.len := m - 1;
+  c.rangeUb := k;
+
+  // Shift keys in parent and insert link to n
+  var k_idx: Int, new_len: Int;
+  var ghost_C := set_of_array(p.keys, 0, p.len); // TODO handle implicit params in function calls
+  k_idx, new_len := arr_insert(p.keys, k, p.len, ghost_C);
+  arr_shift_node(p.ptrs, k_idx + 1, k_idx + 2, p.len - k_idx);
+  p.ptrs[k_idx + 1] := n;
+  p.len := new_len;
+
+  // Show that nodes are good with new interfaces
+  var Ip1fm: Map<Node, Map<Node, FlowDom>>;
+  // TODO how to say this without skolems?
+  // { n: Node :: n != p ? { n1: Node :: domZero() } : { n1: Node :: }}
+
+  //  var Ip1 := int(Ip.inf, Ip.na, Ip1fm, Ip.FP, Ip.FPo ++ {n}); TODO expand in symbexec
+  var Ip1: Interface;
+  pure assume Ip1 != intUndef && Ip1.inf == Ip.inf && Ip1.na == Ip.na// && Ip1.fm == Ip1fm
+    && Ip1.FP == Ip.FP && Ip1.FPo == Ip.FPo ++ {n};
+  pure assume (forall i: Int, k: Int :: 0 <= i <= p.len
+                 && (i <= 0 || p.keys[i-1] <= k) && (i >= p.len || k < p.keys[i])
+                 ==> Ip1.fm[p][p.ptrs[i]].ks[k] == 1);
+  pure assume (forall n: Node, n1: Node :: n1 !in Ip1.FPo ==> Ip1.fm[n][n1] == domZero());
+  pure assume (forall n: Node, n1: Node :: n !in Ip1.FP ==> Ip1.fm[n][n1] == domZero());
+  pure assume (forall n: Node :: n in Ip1.FPo ==> (exists i: Int :: 0 <= i <= p.len && n == p.ptrs[i]
+    @(matching n yields p.ptrs[i])));
+  lemma_int_valid_unfold(Ip);
+  lemma_int_valid_fold(Ip1);
+  lemma_abs_1(p, Ip1, c, n, Ipcn);
 }
 
 
