@@ -335,6 +335,12 @@ let resolve_names cu =
     | LocalVars (vars, es_opt, pos) ->
         let es_opt1, tys =
           match es_opt with
+          | Some [ProcCall (init_id, _, _) as e] ->
+              let e1 = resolve_expr locals tbl e in
+              let id = lookup_id init_id tbl pos in
+              let decl = IdMap.find id cu.proc_decls in
+              let tys = List.map (fun v -> (IdMap.find v decl.p_locals).v_type) decl.p_returns in
+              Some [e1], tys
           | Some es ->
               let es1, tys = 
                 Util.map_split (fun e -> 
@@ -663,7 +669,7 @@ let flatten_exprs cu =
             (fun (stmts, locals, aux_funs) stmt0  ->
               let stmt, locals, aux_funs = flatten pos locals aux_funs returns stmt0 in
               stmt :: stmts, locals, aux_funs
-            ) 
+            )
             ([], locals, aux_funs) stmts0
         in Block (List.rev stmts, pos), locals, aux_funs
     | LocalVars (_, _, pos) ->

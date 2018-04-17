@@ -487,11 +487,11 @@ stmt_wo_trailing_substmt:
 /* variable declaration */
 | ghost_modifier VAR var_decls SEMICOLON {
   let decls = List.map (fun decl -> { decl with v_ghost = $1 }) $3 in
-  LocalVars (decls, None, mk_position 1 4)
+  LocalVars (decls, None, mk_position (if $1 then 1 else 2) 4)
 }
 | ghost_modifier VAR var_decls_opt_type COLONEQ expr_list SEMICOLON {
   let decls = List.map (fun decl -> { decl with v_ghost = $1 }) $3 in
-  LocalVars (decls, Some $5, mk_position 1 6)
+  LocalVars (decls, Some $5, mk_position (if $1 then 1 else 2) 6)
 }
 /* nested block */
 | LBRACE block RBRACE { 
