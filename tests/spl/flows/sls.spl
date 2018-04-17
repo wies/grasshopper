@@ -29,11 +29,14 @@ struct Node {
   var data: Int;
 }
 
+define unchanged(x) { x.next == old(x.next) && x.data == old(x.data) }
 
 /** Definition of good condition, gamma */
 
+define gammaSpatial(x) { acc(x) }
+
 define gamma(x, I) {
-  acc(x) &*& I.inf[x].fst == 1 &*& I.inf[x].snd < x.data
+  gammaSpatial(x) &*& I.inf[x].fst == 1 &*& I.inf[x].snd < x.data
     &*& (x.next == null && I.FPo == {}
         || x.next != null && I.FPo == {x.next} && I.fm[x][x.next] == pair(1, x.data))
 }

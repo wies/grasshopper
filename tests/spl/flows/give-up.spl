@@ -37,17 +37,18 @@ pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
 
 struct Node {}
 
+define unchanged(x) { true }
 
 /** Definition of good condition, gamma */
 
-predicate gammaSpatial(x: Node, I: Interface)
+predicate gammaSpatial(x: Node)
   
 pure predicate gammaG(x: Node, I: Interface)
 
 pure predicate gammaB(x: Node, I: Interface)
 
 define gamma(x, I) {
-  gammaSpatial(x, I)
+  gammaSpatial(x)
     &*& ((gammaG(x, I) && I.na.lockinfo == locked(TID)
         || gammaB(x, I) && I.na.lockinfo == dirtylock(TID))
        && (forall k: Int :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)

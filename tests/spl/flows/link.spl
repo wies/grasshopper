@@ -47,19 +47,21 @@ pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
 
 struct Node {}
 
+define unchanged(x) { true }
+
 
 /** Definition of good condition, gamma */
 
 function sk_ir(x: Node, I: Interface, k: Int) returns (y: Node)
 
-predicate gammaSpatial(x: Node, I: Interface)
+predicate gammaSpatial(x: Node)
   
 pure predicate gammaG(x: Node, I: Interface)
 
 pure predicate gammaB(x: Node, I: Interface)
 
 define gamma(x, I) {
-  gammaSpatial(x, I)
+  gammaSpatial(x)
     &*& ((gammaG(x, I) && I.na.lockinfo == locked(TID)
         || gammaB(x, I) && I.na.lockinfo == dirtylock(TID))
        && (forall k: Int :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
@@ -166,6 +168,9 @@ procedure dictionaryOp(k: Int, I: Interface) returns (res: Bool, I1: Interface)
 
       var Ic1: Interface;
       Ic1, I := unlock(c, Ic, I2, I);
+      // Prove that k still in ks(c) or ir(c)
+      pure assert (Ic1.inf[c].ks[k] >= 1 || Ic1.inf[c].ir[k] >= 1);
+      pure assume (Ic1.inf[c].ks[k] >= 1 || Ic1.inf[c].ir[k] >= 1); // TODO assume asserts
 
       // Step to n
       var In: Interface, I3: Interface, I4: Interface;
@@ -174,6 +179,8 @@ procedure dictionaryOp(k: Int, I: Interface) returns (res: Bool, I1: Interface)
       lemma_step(Ic1, I2, I, c, n);
       lemma_conc(c, Ic1); // TODO Make N macro for [gamma]
       lemma_conc_rev(c, Ic1);
+      pure assert I2.inf[n].ks[k] >= 1 || I2.inf[n].ir[k] >= 1;
+      pure assume I2.inf[n].ks[k] >= 1 || I2.inf[n].ir[k] >= 1;
       In, I3 := lemma_decomp(n, I2);
       lemma_int_comp_inf_leq(n, In, I3, I2);
       // N(c, Ic1) &*& N(n, In) &*& Gr(I3)

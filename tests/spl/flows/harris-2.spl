@@ -37,11 +37,15 @@ struct Node {
   var data: Int;
 }
 
+define unchanged(x) { x.next == old(x.next) && x.fnext == old(x.fnext) && x.data == old(x.data) }
+
 
 /** Definition of good condition, gamma */
 
+define gammaSpatial(x) { acc(x) }
+
 define gamma(x, I) {
-  acc(x) &*& (
+  gammaSpatial(x) &*& (
           I.na != markTop && (x.next.mark == (I.na != unmarked))
           && (I.inf[x].snd >= 1 ==> I.na != unmarked)
           && domLt(pair(0, 0), I.inf[x]) == true && domLeq(I.inf[x], pair(1, 1)) == true
@@ -128,10 +132,6 @@ procedure insert(mh: Node, fh: Node, I: Interface, n: Node, In: Interface)
     sync(Il, Il);
     // N(p, Ip) &*& N(l, Il) &*& Gr(I3)
     I2 := lemma_Gr_comp(Ip, I3);
-
-    // Introduce some terms: TODO term gens
-    pure assume intComp(I3, Ir) == intComp(intComp(Ip, I3), Ir)
-         || intComp(I3, Ir) != intComp(intComp(Ip, I3), Ir);
   }
 
   n.next := mp(false, r);

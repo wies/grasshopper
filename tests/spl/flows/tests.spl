@@ -28,6 +28,10 @@ struct Node {
   var next: Node;
 }
 
+define unchanged(x) { x.next == old(x.next) }
+
+define gammaSpatial(x) { true }
+
 define gamma(x, I) { true }
 
 procedure test_valid1(I1: Interface, I2: Interface)
