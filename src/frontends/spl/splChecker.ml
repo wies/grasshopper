@@ -331,11 +331,22 @@ let resolve_names cu =
         let es_opt1, tys =
           match es_opt with
           (* var x1, ..., xn  := p(e1, ..., em); *)
-          | Some [ProcCall (init_id, _, _) as e] ->
+          | Some [ProcCall (_, _, _) as e] ->
               let e1 = resolve_expr locals tbl e in
-              let id = lookup_id init_id tbl pos in
-              let decl = IdMap.find id cu.proc_decls in
-              let tys = List.map (fun v -> (IdMap.find v decl.p_locals).v_type) decl.p_returns in
+              let tys = match e1 with
+              | ProcCall (id, _, _)
+              | PredApp (Pred id, _, _) ->
+                  let returns, locals =
+                    try 
+                      let decl = IdMap.find id cu.proc_decls in
+                      decl.p_returns, decl.p_locals
+                    with Not_found ->
+                      let decl = IdMap.find id cu.pred_decls in
+                      decl.pr_outputs, decl.pr_locals
+                  in
+                  List.map (fun v -> (IdMap.find v locals).v_type) returns
+              | e -> [type_of_expr cu locals e1]
+              in
               Some [e1], tys
           (* var x1, ..., xn  := e1, ..., en; *)
           | Some es ->
