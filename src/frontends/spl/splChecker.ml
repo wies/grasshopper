@@ -20,13 +20,6 @@ let resolve_names cu =
     if not (IdMap.mem id types) then
       not_a_type_error id pos
   in
-  (*let check_struct id types pos =
-    check_type id types pos;
-    let decl = IdMap.find id types in
-    match decl.t_def with
-    | StructTypeDef _ -> ()
-    | _ -> not_a_struct_error id pos
-  in*)
   let check_proc id procs pos =
     if not (IdMap.mem id procs) then
       not_a_proc_error id pos
@@ -173,6 +166,7 @@ let resolve_names cu =
       fun_decls = funs;
     }
   in
+  (* declare and resolve local variables in given expression *)
   let resolve_expr locals tbl e =
     let rec re locals tbl = function
       | Setenum (ty, args, pos) ->
@@ -320,6 +314,7 @@ let resolve_names cu =
     in
     re locals tbl e
   in
+  (* declare and resolve local variables in given statement *)
   let rec resolve_stmt first_block in_loop locals tbl = function
     | Skip pos -> Skip pos, locals, tbl
     | Block (stmts0, pos) ->
@@ -335,12 +330,14 @@ let resolve_names cu =
     | LocalVars (vars, es_opt, pos) ->
         let es_opt1, tys =
           match es_opt with
+          (* var x1, ..., xn  := p(e1, ..., em); *)
           | Some [ProcCall (init_id, _, _) as e] ->
               let e1 = resolve_expr locals tbl e in
               let id = lookup_id init_id tbl pos in
               let decl = IdMap.find id cu.proc_decls in
               let tys = List.map (fun v -> (IdMap.find v decl.p_locals).v_type) decl.p_returns in
               Some [e1], tys
+          (* var x1, ..., xn  := e1, ..., en; *)
           | Some es ->
               let es1, tys = 
                 Util.map_split (fun e -> 
@@ -348,6 +345,7 @@ let resolve_names cu =
                     e1, type_of_expr cu locals e1) es
               in
               Some es1, tys
+          (* var x1: T1, ..., xn: Tn; *)
           | None ->
               None, List.map (fun decl -> decl.v_type) vars
         in
@@ -421,7 +419,7 @@ let resolve_names cu =
         if in_loop then return_in_loop_error pos;
         Return (List.map (resolve_expr locals tbl) es, pos), locals, tbl
   in
-  (* declare and resolve local variables *)
+  (* declare and resolve local variables in given contracts *)
   let resolve_contracts contracts returns locals tbl =
     let pre_locals, pre_tbl =
       List.fold_left
@@ -438,6 +436,7 @@ let resolve_names cu =
       )
       contracts
   in
+  (* declare and resolve local variables in all procedures *)
   let procs =
     IdMap.fold
       (fun _ decl procs ->
@@ -467,6 +466,7 @@ let resolve_names cu =
       )
       procs0 IdMap.empty 
   in
+  (* declare and resolve local variables in all predicates *)
   let preds =
     IdMap.fold
       (fun _ decl preds ->
@@ -488,6 +488,7 @@ let resolve_names cu =
       )
       preds0 IdMap.empty 
   in
+  (* declare and resolve local variables in all axioms *)
   let bg_theory =
     List.map
       (fun (e, pos) -> resolve_expr globals tbl e, pos)
@@ -568,6 +569,7 @@ let flatten_exprs cu =
         (match b with
         | Exists | Forall -> Binder (b, vars1, f1, pos), aux, locals
         | Comp ->
+            (* create auxiliary function for set/map comprehension *)
             let v_decl =
               match vars1 with
               | [UnguardedVar decl] -> decl
@@ -862,6 +864,7 @@ let infer_types cu =
     let ty = if pure then BoolType else PermType in
     infer_types cu locals ty e
   in
+  (* infer types within given statement *)
   let rec check_stmt proc =
     let locals = proc.p_locals in
     function
