@@ -58,9 +58,6 @@ define unchanged(x) {
 var B: Int;
 axiom B > 1;
 
-function cont_witness(x: Node, Ix: Interface, k: Int)
-  returns(idx: Int)
-
 define gammaSpatial(x) {
   acc(x) &*& acc(x.keys) &*& acc(x.ptrs)  
 }
@@ -71,12 +68,8 @@ define gammaG(x, I) {
     && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> x.keys[i] < x.keys[j])
     && (x.ptrs[0] == null && I.FPo == {}  // Leaf
        && (forall i: Int :: 0 <= i < x.ptrs.length ==> x.ptrs[i] == null)
-       && (forall i: Int :: 0 <= i < x.len ==> x.keys[i] in I.na.contents)
-       && (forall k: Int :: k in I.na.contents
-          ==> (k == x.keys[cont_witness(x, I, k)]
-             && 0 <= cont_witness(x, I, k) && cont_witness(x, I, k) < x.len)
-          @(matching k without cont_witness yields x.keys[cont_witness(x, I, k)]))
-       || x.ptrs[0] != null  // Internal
+       && I.na.contents == set_of_array(x.keys, 0, x.len)
+     || x.ptrs[0] != null  // Internal
        && I.na.contents == {}
        && (forall i: Int, k: Int :: 0 <= i <= x.len ==>
           x.ptrs[i] != null && x.ptrs[i] in I.FPo
@@ -235,9 +228,6 @@ procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   // return n;
 }
 
-// A content witness for each loop iteration of delete
-pure function cw(x: Node, Ix: Interface, j: Int, k: Int) returns (idx: Int)
-
 procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   returns (res: Bool, Ix1: Interface, I1: Interface)
   requires N(x, Ix) &*& Gr(I2)
@@ -255,76 +245,50 @@ procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   pure assume x.ptrs[0] == null; // x is a leaf.
   // TODO prove using induction from gamma & k !in any outgoing edgeset
     
-  var i := 0;
-  var flag := true;
+  // Change nodel label to allow breaking gammaG
+  var Ix2: Interface;
+  pure assume Ix2 != intUndef && Ix2.na.lockinfo == dirtylock(TID)
+    && Ix2.na.contents == Ix.na.contents
+    && Ix2.FP == Ix.FP && Ix2.FPo == Ix.FPo && Ix2.inf == Ix.inf && Ix2.fm == Ix.fm
+    // TODO needed to prove intValid(Ix2);
+    && (forall n: Node, n1: Node :: n !in Ix.FP ==> domEq(domZero(), Ix.inf[n])
+       @(matching Ix2.inf[n] yields Ix.inf[n].ks)
+       @(matching Ix2.fm[n][n1] yields Ix.fm[n][n1].ks));
+  lemma_int_valid_unfold(Ix);
+  lemma_int_valid_fold(Ix2);
+  gamma_sync(x, x.lock, x.len, x.rangeLb, x.rangeUb, x.keys, x.ptrs, Ix, Ix2);
+  var I3 := lemma_gamma_comp_sing_int(x, x.lock, x.len, x.rangeLb, x.rangeUb, x.keys,
+    x.ptrs, Ix2, I2);
+  lemma_repl(I, Ix, I2, Ix2, I3);
 
-  while (flag)
-    invariant spl_state_ad(x, Ix, I2, I, k, i, flag)
-  {
-    if (i < x.len && x.keys[i] < k) {
-      i := i + 1;
-    } else {
-      flag := false;
-    }
-  }
+  ghost var m := map_of_array(x.keys);
+  var new_len: Int, idx: Int, m1: Map<Int, Int>;
 
-  if (i == x.len || x.keys[i] != k) {
-    lemma_conc_rev(x, Ix);
-    return false, Ix, I;
-  } else {
-    // Change nodel label to allow breaking gammaG
-    var Ix2: Interface;
-    pure assume Ix2 != intUndef && Ix2.na.lockinfo == dirtylock(TID)
-      && Ix2.na.contents == Ix.na.contents
-      && Ix2.FP == Ix.FP && Ix2.FPo == Ix.FPo && Ix2.inf == Ix.inf && Ix2.fm == Ix.fm
-      // TODO needed to prove intValid(Ix2);
-      && (forall n: Node, n1: Node :: n !in Ix.FP ==> domEq(domZero(), Ix.inf[n])
-         @(matching Ix2.inf[n] yields Ix.inf[n].ks)
-         @(matching Ix2.fm[n][n1] yields Ix.fm[n][n1].ks));
-    lemma_int_valid_unfold(Ix);
-    lemma_int_valid_fold(Ix2);
-    gamma_sync(x, x.lock, x.len, x.rangeLb, x.rangeUb, x.keys, x.ptrs, Ix, Ix2);
-    var I3 := lemma_gamma_comp_sing_int(x, x.lock, x.len, x.rangeLb, x.rangeUb, x.keys, x.ptrs, Ix2, I2);
-    lemma_repl(I, Ix, I2, Ix2, I3);
+  new_len, idx, m1 := arr_delete(x.keys, k, x.len, m);
 
-    var j := i;
-    pure assume forall k1: Int :: cw(x, Ix2, j, k1) == cont_witness(x, Ix, k1)
-      @(matching cw(x, Ix2, j, k1) yields x.keys[cont_witness(x, Ix, k1)]);
+  arr_delete_content_set(m, m1, x.len, new_len, idx, k);
 
-    while (j < x.len - 1)
-      invariant spl_state_ab(x, Ix, Ix2, I2, I3, i, j, k)
-    {
-      x.keys[j] := x.keys[j + 1];
-      j := j + 1;
+  x.len := new_len;
 
-      pure assume forall k1: Int :: k1 != x.keys[j] && cw(x, Ix2, j, k1) == cw(x, Ix2, j-1, k1)
-        || k1 == x.keys[j] && cw(x, Ix2, j, k1) == j-1;
-    }
-    x.len := x.len - 1; // TODO add this to paper!!
+  // Change node label back, remove k from contents
+  pure assume Ix1 != intUndef && Ix1.na.lockinfo == locked(TID)
+    && Ix1.na.contents == Ix2.na.contents -- {k}
+    && Ix1.FP == Ix2.FP && Ix1.FPo == Ix2.FPo
+    && Ix1.inf == Ix2.inf && Ix1.fm == Ix2.fm;
+  lemma_int_valid_unfold(Ix2);
+  lemma_int_valid_fold(Ix1);
 
-    // Change node label back, remove k from contents
-    havoc Ix1;
-    pure assume Ix1 != intUndef && Ix1.na.lockinfo == locked(TID)
-                && Ix1.na.contents == Ix2.na.contents -- {k}
-                && Ix1.FP == Ix2.FP && Ix1.FPo == Ix2.FPo
-                && Ix1.inf == Ix2.inf && Ix1.fm == Ix2.fm
-                && (forall k1: Int :: cont_witness(x, Ix1, k1) == cw(x, Ix2, j, k1)
-                   @(matching cont_witness(x, Ix, k1) yields // Needed for lemma_abs
-                     x.keys[cw(x, Ix2, j, k1)]));
-    lemma_int_valid_unfold(Ix2);
-    lemma_int_valid_fold(Ix1);
+  lemma_abs(x, Ix2, Ix1);
+  sync(Ix2, Ix1);
+  var I4 := lemma_Gr_comp_int(Ix1, I2);
+  lemma_repl(I3, Ix2, I2, Ix1, I4);
 
-    lemma_abs(x, Ix2, Ix1);
-    sync(Ix2, Ix1);
-    var I4 := lemma_Gr_comp_int(Ix1, I2);
-    lemma_repl(I3, Ix2, I2, Ix1, I4);
-    return true, Ix1, I4;
-  }
+  return (k in Ix2.na.contents), Ix1, I4;
 }
 
-
-procedure aasplit(p: Node, Ip: Interface, c: Node, Ic: Interface,
-                  Io: Interface, I: Interface)
+/*
+procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface,
+                     Io: Interface, I: Interface)
   returns (I1: Interface)
   requires [gamma(p, Ip)](Ip) &*& [gamma(c, Ic)](Ic) &*& Gr(Io)
   requires intValid(Ip) == true && intValid(Ic) == true && intValid(Io) == true
@@ -376,6 +340,7 @@ procedure aasplit(p: Node, Ip: Interface, c: Node, Ic: Interface,
   lemma_int_valid_fold(Ip1);
   lemma_abs_1(p, Ip1, c, n, Ipcn);
 }
+*/
 
 
 /* Intermediate states */
@@ -397,18 +362,15 @@ define spl_state_ad(x, Ix, I2, I, k, i, flag) {
 define spl_state_ab(x, Ix, Ix2, I2, I3, i, j, k) {
   spl_state_ac(x, Ix2, I2, I3)
     &*& (intEq(Ix, Ix2) == true && Ix2.na.lockinfo == dirtylock(TID)
-       && 0 <= j && j <= x.len - 1
+       && 0 <= j <= x.len - 1
        && (forall k: Int :: (Ix2.inf[x].ks[k] >= 1) == (x.rangeLb <= k && k < x.rangeUb))
        && (forall l1: Int, l2: Int ::
-          (0 <= l1 && l1 < l2 && l2 < j || j <= l1 && l1 < l2 && l2 < x.len)
+          (0 <= l1 < l2 < j || j <= l1 < l2 < x.len)
           ==> x.keys[l1] < x.keys[l2])
        && (j == 0 || x.keys[j-1] <= x.keys[j])
        && (forall l: Int :: 0 <= l && l < x.ptrs.length ==> x.ptrs[l] == null) && Ix2.FPo == {}
        && Ix2.na.contents == Ix.na.contents && k in Ix.na.contents
        && (forall l: Int :: 0 <= l && l < x.len ==> x.keys[l] in Ix2.na.contents)
-       && (forall k1: Int :: (k1 in Ix2.na.contents || k1 == k && j == i)
-          ==> (k1 == x.keys[cw(x, Ix2, j, k1)])
-          && 0 <= cw(x, Ix2, j, k1) && cw(x, Ix2, j, k1) < x.len)
        && (forall l: Int :: 0 <= l && l < j ==> x.keys[l] != k)
        )
 }

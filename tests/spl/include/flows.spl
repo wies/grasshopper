@@ -16,7 +16,7 @@ predicate Gr(I: Interface)
 define N(x, I) { Gr(I) &*& I.FP == {x} }
 
 
-function intComp(I1: Interface, I2: Interface) returns (I: Interface)
+pure function intComp(I1: Interface, I2: Interface) returns (I: Interface)
   ensures I.FP == I1.FP ++ I2.FP  // TODO only when I != intUndef
   ensures I.FPo == (I1.FPo -- I2.FP) ++ (I2.FPo -- I1.FP)
 
@@ -24,7 +24,7 @@ function intComp(I1: Interface, I2: Interface) returns (I: Interface)
 pure predicate intValid(I: Interface)
 
 // Equivalent interfaces (node labels can be different) -- precondition of sync
-predicate intEq(I1: Interface, I2: Interface) {
+pure predicate intEq(I1: Interface, I2: Interface) {
   I1.FP == I2.FP && I1.FPo == I2.FPo
   && (forall x: Node :: domEq(I1.inf[x], I2.inf[x]) == true
      @(matching x yields I1.inf[x]) @(matching x yields I2.inf[x]))
