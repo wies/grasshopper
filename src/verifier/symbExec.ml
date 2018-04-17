@@ -203,7 +203,7 @@ let state_of_spec_list fields specs : state =
   in
   match TermMap.find_first_opt (fun t -> TermSet.mem t alloc_terms |> not) reads with
   | Some (t, _) ->
-    failwith @@ "state_of_spec_list: couldn't find corresponding acc for term" ^ (string_of_term t)
+    failwith @@ "state_of_spec_list: couldn't find corresponding acc for term " ^ (string_of_term t)
   | None ->
     (pure, spatial)
 
@@ -828,6 +828,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       let sm = IdMap.singleton array_state_id array_state' in
       let idx, rhs = idx |> subst_term sm, rhs |> subst_term sm in
       let (pure, spatial) = subst_state sm (pure, spatial) in
+      let eqs = subst_eqs sm eqs in
       let pure =
         let arr' = mk_var (sort_of arr) (fresh_ident "a") in
         let idx' = mk_var (sort_of idx) (fresh_ident "idx") in
@@ -978,6 +979,7 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       let (pure, spatial) = subst_state array_sm state in
       (smk_and @@ pure :: array_frame, spatial)
     in
+    let eqs = subst_eqs array_sm eqs in
     (* Then, create vars for old vals of all x in lhs, and substitute in eqs & frame *)
     (match repl_fn with
       | Ok (repl_fn, inst) ->
