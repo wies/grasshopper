@@ -36,7 +36,7 @@
 
 
 (defconst spl-defuns '("define" "function" "predicate" "lemma" "procedure" "struct" "type" "datatype" 
-                         "pure function" "pure predicate" "include" "var"))
+                         "pure function" "pure predicate" "include" "options" "var"))
 
 (defconst spl-specifiers '("axiom" "ensures" "free" "invariant" "requires" "pure" "assert" "assume" "split" "returns"))
 

@@ -1,4 +1,6 @@
-include "../include/sllist_rec.spl";
+options "-abspreds"
+
+include "../include/sllist_rec.spl"
 
 predicate lseg_grass(x: Node, y: Node) {
   acc({ z: Node :: Btwn(next, x, z, y) && z != y }) &*& Reach(next, x, y)

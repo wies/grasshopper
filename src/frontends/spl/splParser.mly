@@ -65,7 +65,7 @@ type rhs_string_maybe =
 %token IF ELSE WHILE
 %token <bool> FUNCTION
 %token <bool> PREDICATE
-%token GHOST IMPLICIT VAR STRUCT PURE LEMMA PROCEDURE INCLUDE AXIOM TYPE
+%token GHOST IMPLICIT VAR STRUCT PURE LEMMA PROCEDURE INCLUDE OPTIONS AXIOM TYPE
 %token DEFINE DATATYPE OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token LOC INT BOOL BYTE SET MAP ARRAY ARRAYCELL
 %token MATCHING YIELDS WITHOUT COMMENT PATTERN
@@ -109,6 +109,8 @@ main:
 declarations:
 | background_th declarations
   { (fst3 $2, snd3 $2, ($1, mk_position 1 1) :: trd3 $2) }
+| options_cmd declarations 
+  { fst3 $2, snd3 $2, trd3 $2 }
 | include_cmd declarations 
   { (($1, mk_position 1 1) :: fst3 $2, snd3 $2, trd3 $2) }
 | type_decl declarations
@@ -128,6 +130,15 @@ declarations:
 include_cmd:
 | INCLUDE STRINGVAL semicolon_opt { $2 }
 ;
+
+options_cmd:
+| OPTIONS STRINGVAL semicolon_opt {
+  try Config.parse_options $2
+  with Invalid_argument msg ->
+    ProgError.error (mk_position 2 2) msg
+}
+;
+
   
 background_th:
 | AXIOM expr semicolon_opt { $2 }
@@ -476,11 +487,11 @@ stmt_wo_trailing_substmt:
 /* variable declaration */
 | ghost_modifier VAR var_decls SEMICOLON {
   let decls = List.map (fun decl -> { decl with v_ghost = $1 }) $3 in
-  LocalVars (decls, None, mk_position 1 4)
+  LocalVars (decls, None, mk_position (if $1 then 1 else 2) 4)
 }
 | ghost_modifier VAR var_decls_opt_type COLONEQ expr_list SEMICOLON {
   let decls = List.map (fun decl -> { decl with v_ghost = $1 }) $3 in
-  LocalVars (decls, Some $5, mk_position 1 6)
+  LocalVars (decls, Some $5, mk_position (if $1 then 1 else 2) 6)
 }
 /* nested block */
 | LBRACE block RBRACE { 
@@ -685,6 +696,9 @@ field_access_no_set:
 
 field_write:
 | ident LBRACKET expr COLONEQ expr RBRACKET {
+  Write ($1, $3, $5, mk_position 1 6)
+}
+| primary LBRACKET expr COLONEQ expr RBRACKET {
   Write ($1, $3, $5, mk_position 1 6)
 }
 ;
