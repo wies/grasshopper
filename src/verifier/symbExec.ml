@@ -867,8 +867,8 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
           let rhs' = subst_term sm rhs in
           let (pure, spatial) = subst_state sm state in
           (* let postcond = subst_state sm postcond in *)
-          let eqs = add_eq id rhs' (subst_eqs sm eqs) in
-          eqs, (pure, spatial), postcond
+          let eqs = subst_eqs sm eqs in
+          eqs, (smk_and [(mk_eq (mk_const_term id) rhs'); pure], spatial), postcond
         ) (eqs, state, postcond)
     in
     symb_exec prog flds proc (eqs', state') postcond comms'
