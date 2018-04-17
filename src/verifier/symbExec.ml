@@ -777,7 +777,6 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     Debug.debug (fun () ->
       sprintf "%sExecuting check postcondition: %s%s\n"
         lineSep (string_of_state postcond) lineSep);
-    let state, postcond = process_olds flds state postcond in
     (* TODO do this better *)
     let state = add_neq_constraints state in
     (match check_entailment prog eqs state postcond with
@@ -1115,6 +1114,7 @@ let check spl_prog prog proc =
   | Some comm ->
     let precond = state_of_spec_list flds proc.proc_contract.contr_precond in
     let postcond = state_of_spec_list flds proc.proc_contract.contr_postcond in
+    let precond, postcond = process_olds flds precond postcond in
     Debug.debug (fun () ->
       sprintf "\nPrecondition:\n%s\n\nPostcondition:\n%s\n"
         (string_of_state precond) (string_of_state postcond)
