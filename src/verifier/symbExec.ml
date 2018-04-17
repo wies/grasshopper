@@ -88,6 +88,14 @@ let string_of_eqs_state eqs state =
   sprintf "Eqs: %s\n%s" (string_of_equalities eqs) (string_of_state state)
 
 
+let warned = ref false
+let warn_array_acc_check () =
+  if not !warned then begin
+    warned := true;
+    print_endline "\nTODO state_of_spec_list: check we have access to array\n"
+  end
+
+
 (** Convert a specification into a symbolic state.
   This also moves field read terms from pure formula to points-to predicates.
   Assumes [fields] is a set of field identifiers, all other maps are treated as
@@ -116,7 +124,7 @@ let state_of_spec_list fields specs : state =
       end else IdMap.find fld (TermMap.find loc !reads)
     | App (Read, [f; a; idx], srt) when f = (Grassifier.array_state true srt) ->
       (* Array reads *)
-      print_endline "\n\nTODO state_of_spec_list: check we have access to array";
+      warn_array_acc_check ();
       App (Read, [f; convert_term a; convert_term idx], srt)
     | App (Read, [f; _], srt) when f = (Grassifier.array_state false srt) ->
       failwith "Please use flag -simplearrays for array programs."
@@ -765,11 +773,14 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
   if !Config.check_unsat then begin
     Debug.debug (fun () -> "Checking if current state is unsat:\n");
     let state' = add_neq_constraints state in
-    match find_frame prog eqs state' (mk_false, []) with
-    | Ok _ ->
-      failwith @@ (string_of_src_pos pos) ^ "\nIntermediate state was unsat"
-    | Error _ ->
-      Debug.debug (fun () -> "State is satisfiable.\n")
+    try
+      (match find_frame prog eqs state' (mk_false, []) with
+      | Ok _ ->
+        print_endline @@ (string_of_src_pos pos) ^ "\nWarning: Intermediate state was unsat"
+      | Error _ ->
+        Debug.debug (fun () -> "State is satisfiable.\n"))
+    with _ ->
+      print_endline @@ (string_of_src_pos pos) ^ "\nWarning: unsat check hit exception"
   end;
 
   let se = function
