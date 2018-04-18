@@ -190,7 +190,7 @@ lemma map_find_content_set(m: Map<Int, Int>, i: Int, j: Int, idx: Int, k: Int)
 }
 
 // Find key `k` in sorted array segment `a[0..len]` using binary search
-procedure arr_find(a: Array<Int>, len: Int, k: Int, implicit ghost m: Map<Int, Int>)
+procedure arr_find(a: Array<Int>, len: Int, k: Int, ghost m: Map<Int, Int>)
   returns (found: Bool, idx: Int)
   requires sorted_array_with_content(a, len, m)
   requires 0 <= len <= a.length
@@ -200,7 +200,7 @@ procedure arr_find(a: Array<Int>, len: Int, k: Int, implicit ghost m: Map<Int, I
   ensures found == (k in set_of_map(m, 0, len))
 
 lemma map_insert_content_set(m: Map<Int, Int>, m1: Map<Int, Int>, idx: Int, k: Int, len: Int, new_len: Int)
-  requires sorted_map_seg(m, 0, len)
+  requires sorted_map_seg(m, 0, len) == true
   requires idx == map_find(m, 0, len, k)
   requires k in set_of_map(m, 0, len) ==> new_len == len && m1 == m
   requires k !in set_of_map(m, 0, len) ==> new_len == len + 1 && m1 == map_shift(m, idx, idx + 1, len - idx)[idx := k]
@@ -230,7 +230,7 @@ lemma map_insert_content_set(m: Map<Int, Int>, m1: Map<Int, Int>, idx: Int, k: I
 // insert `k` into `a[0..len+1]` while preserving sortedness.
 // If `k` is already contained in `a[0..len]`, then do not modify `a`.
 procedure arr_insert(a: Array<Int>, k: Int, len: Int, ghost m: Map<Int, Int>)
-  returns (idx: Int, new_len: Int, implicit ghost m1: Map<Int, Int>)
+  returns (idx: Int, new_len: Int, ghost m1: Map<Int, Int>)
   requires sorted_array_with_content(a, len, m)
   requires len < a.length
   ensures sorted_array_with_content(a, new_len, m1)

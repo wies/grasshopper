@@ -228,6 +228,97 @@ procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   // return n;
 }
 
+
+procedure member(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
+  returns (res: Bool, Ix1: Interface, I1: Interface)
+  requires N(x, Ix) &*& Gr(I2)
+  requires intValid(Ix) == true && intValid(I2) == true
+  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
+  requires Ix.inf[x].ks[k] >= 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
+  ensures N(x, Ix1) &*& Gr(I2)
+  ensures intValid(Ix1) == true && intValid(I2) == true
+  ensures intComp(Ix1, I2) == I1 && globalInt(I1) && Ix1.na.lockinfo == locked(TID)
+  ensures intEq(Ix, Ix1) == true
+  // decisiveOpSpec(x, Ix1, res, k):
+  ensures Ix1.na.contents == Ix.na.contents && (res == k in Ix.na.contents)
+{
+  lemma_conc(x, Ix);
+  pure assume x.ptrs[0] == null; // x is a leaf.
+  // TODO prove using induction from gamma & k !in any outgoing edgeset
+
+  ghost var m := map_of_array(x.keys);
+
+  var idx: Int;
+  res, idx := arr_find(x.keys, x.len, k, m);
+
+  lemma_conc_rev(x, Ix);
+
+  return res, Ix, I;
+}
+
+
+procedure insert(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
+  returns (res: Bool, Ix1: Interface, I1: Interface)
+  requires N(x, Ix) &*& Gr(I2)
+  requires intValid(Ix) == true && intValid(I2) == true
+  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
+  requires Ix.inf[x].ks[k] >= 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
+  ensures N(x, Ix1) &*& Gr(I2)
+  ensures intValid(Ix1) == true && intValid(I2) == true
+  ensures intComp(Ix1, I2) == I1 && globalInt(I1) && Ix1.na.lockinfo == locked(TID)
+  ensures intEq(Ix, Ix1) == true
+  // decisiveOpSpec(x, Ix1, res, k):
+  ensures Ix1.na.contents == Ix.na.contents ++ {k} && (res == k !in Ix.na.contents)
+{
+  lemma_conc(x, Ix);
+  pure assume x.ptrs[0] == null; // x is a leaf.
+  // TODO prove using induction from gamma & k !in any outgoing edgeset
+
+  pure assume x.len < 2*B - 1; // TODO allow insert to give up if full
+  
+  // Change nodel label to allow breaking gammaG
+  var Ix2: Interface;
+  pure assume Ix2 != intUndef && Ix2.na.lockinfo == dirtylock(TID)
+    && Ix2.na.contents == Ix.na.contents
+    && Ix2.FP == Ix.FP && Ix2.FPo == Ix.FPo && Ix2.inf == Ix.inf && Ix2.fm == Ix.fm
+    // TODO needed to prove intValid(Ix2);
+    && (forall n: Node, n1: Node :: n !in Ix.FP ==> domEq(domZero(), Ix.inf[n])
+       @(matching Ix2.inf[n] yields Ix.inf[n].ks)
+       @(matching Ix2.fm[n][n1] yields Ix.fm[n][n1].ks));
+  lemma_int_valid_unfold(Ix);
+  lemma_int_valid_fold(Ix2);
+  gamma_sync(x, x.lock, x.len, x.rangeLb, x.rangeUb, x.keys, x.ptrs, Ix, Ix2);
+  var I3 := lemma_gamma_comp_sing_int(x, x.lock, x.len, x.rangeLb, x.rangeUb, x.keys,
+    x.ptrs, Ix2, I2);
+  lemma_repl(I, Ix, I2, Ix2, I3);
+
+  ghost var m := map_of_array(x.keys);
+
+  var idx, new_len, m1 := arr_insert(x.keys, k, x.len, m); // TODO argument order consistent
+
+  map_insert_content_set(m, m1, idx, k, x.len, new_len);
+
+  x.len := new_len;
+
+  // Change node label back, remove k from contents
+  pure assume Ix1 != intUndef && Ix1.na.lockinfo == locked(TID)
+    && Ix1.na.contents == Ix2.na.contents ++ {k}
+    && Ix1.FP == Ix2.FP && Ix1.FPo == Ix2.FPo
+    && Ix1.inf == Ix2.inf && Ix1.fm == Ix2.fm;
+  lemma_int_valid_unfold(Ix2);
+  lemma_int_valid_fold(Ix1);
+  lemma_abs(x, Ix2, Ix1);
+  sync(Ix2, Ix1);
+  var I4 := lemma_Gr_comp_int(Ix1, I2);
+  lemma_repl(I3, Ix2, I2, Ix1, I4);
+
+  if (k in Ix.na.contents)  // TODO why?
+    return false, Ix1, I4;
+  else
+    return true, Ix1, I4;
+}
+
+
 procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   returns (res: Bool, Ix1: Interface, I1: Interface)
   requires N(x, Ix) &*& Gr(I2)
@@ -262,9 +353,8 @@ procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   lemma_repl(I, Ix, I2, Ix2, I3);
 
   ghost var m := map_of_array(x.keys);
-  var new_len: Int, idx: Int, m1: Map<Int, Int>;
 
-  new_len, idx, m1 := arr_delete(x.keys, k, x.len, m);
+  var new_len, idx, m1 := arr_delete(x.keys, k, x.len, m);
 
   arr_delete_content_set(m, m1, x.len, new_len, idx, k);
 
@@ -277,7 +367,6 @@ procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
     && Ix1.inf == Ix2.inf && Ix1.fm == Ix2.fm;
   lemma_int_valid_unfold(Ix2);
   lemma_int_valid_fold(Ix1);
-
   lemma_abs(x, Ix2, Ix1);
   sync(Ix2, Ix1);
   var I4 := lemma_Gr_comp_int(Ix1, I2);
@@ -285,6 +374,7 @@ procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
 
   return (k in Ix2.na.contents), Ix1, I4;
 }
+
 
 /*
 procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface,
