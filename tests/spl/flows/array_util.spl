@@ -59,9 +59,9 @@ lemma frame_set_of_map(m: Map<Int, Int>, i: Int, j: Int)
   }
 }
 
-lemma not_in_sorted_seg(m: Map<Int, Int>, i: Int, j: Int, k: Int, implicit ghost C: Set<Int>)
-  requires sorted_map_seg(m, i, j) && C == set_of_map(m, i, j)
-  ensures i >= j || lt(k, m[i]) || lt(m[j-1], k) ==> k !in C
+lemma not_in_sorted_seg(m: Map<Int, Int>, i: Int, j: Int, k: Int)
+  requires sorted_map_seg(m, i, j) == true
+  ensures i >= j || lt(k, m[i]) || lt(m[j-1], k) ==> k !in set_of_map(m, i, j)
 {
   if (i >= j) return;
   
@@ -156,7 +156,7 @@ procedure arr_copy(a: Array<Int>, b: Array<Int>, src: Int, dst: Int, len: Int)
 
 function map_find(m: Map<Int, Int>, i: Int, j: Int, k: Int) returns (idx: Int)
   requires i <= j
-  requires sorted_map_seg(m, i, j)
+  requires sorted_map_seg(m, i, j) == true
   ensures i <= idx <= j
   ensures m[idx] == k || idx == j || lt(k, m[idx])
   ensures i < idx ==> lt(m[idx - 1], k)
@@ -166,7 +166,7 @@ function map_find(m: Map<Int, Int>, i: Int, j: Int, k: Int) returns (idx: Int)
 
 lemma map_find_in_set(m: Map<Int, Int>, i: Int, j: Int, k: Int)
   requires i <= j
-  requires sorted_map_seg(m, i, j)
+  requires sorted_map_seg(m, i, j) == true
   ensures k in set_of_map(m, i, j) ==> map_find(m, i, j, k) < j && m[map_find(m, i, j, k)] == k
   ensures k !in set_of_map(m, i, j) ==> map_find(m, i, j, k) == j || lt(k, m[map_find(m, i, j, k)])
 {
@@ -178,7 +178,7 @@ lemma map_find_in_set(m: Map<Int, Int>, i: Int, j: Int, k: Int)
 
 lemma map_find_content_set(m: Map<Int, Int>, i: Int, j: Int, idx: Int, k: Int)
   requires i <= j
-  requires sorted_map_seg(m, i, j)
+  requires sorted_map_seg(m, i, j) == true
   requires idx == map_find(m, i, j, k)
   ensures k !in set_of_map(m, i, idx)
   ensures k !in set_of_map(m, idx + 1, j)
