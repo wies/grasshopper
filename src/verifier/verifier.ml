@@ -23,25 +23,34 @@ let simplify proc prog =
   let info msg prog = Debug.info (fun () -> msg); prog in
   prog |>
   dump_if 0 |>
-  info "Inferring accesses, eliminating loops, arrays, new/dispose, and global dependencies.\n" |>
+  info "Encoding arrays.\n" |>
   elim_arrays |>
+  info "Adding checks for run-time errors.\n" |>
   annotate_runtime_checks |>
+  info "Eliminating new/free.\n" |>
   elim_new_dispose |>
+  info "Inferring accesses.\n" |>
   Analyzer.infer_accesses |>
+  info "Pruning uncalled procedures and predicates.\n" |>
   Simplifier.prune_uncalled init_procs |>
+  info "Eliminating loops.\n" |>
   elim_loops |>
+  info "Eliminating dependencies on global state.\n" |>
   elim_global_deps |>
   dump_if 1 |>
-  info "Eliminating SL, adding frame axioms.\n" |>
+  info "Eliminating SL specifications.\n" |>
   elim_sl |>
   Analyzer.infer_accesses |>
+  info "Eliminating unused formal parameters.\n" |>
   elim_unused_formals |>
+  info "Adding frame axioms.\n" |>
   add_frame_axioms |>
   (*(fun prog -> if !Config.abstract_preds then annotate_frame_axioms prog else prog) |> *)
   (*annotate_term_generators |>*)
   dump_if 2 |>
-  info "Eliminating return statements and transforming to SSA form.\n" |>
+  info "Eliminating return statements.\n" |>
   elim_return |>
+  info "Transforming to SSA.\n" |>
   elim_state |>
   dump_if 3
 
@@ -507,7 +516,7 @@ let check_proc prog proc =
   let check_vc errors (vc_name, (vc_msg, pp), vc0, labels) =
     let check_one vc =
       if errors <> [] && not !Config.robust then errors else begin
-        Debug.info (fun () -> "Checking VC: " ^ vc_name ^ ".\n");
+        Debug.info (fun () -> "\t" ^ vc_name ^ ".\n");
         Debug.debug (fun () -> (string_of_form vc) ^ "\n");
       (*IdMap.iter (fun id (pos, c) -> Printf.printf ("%s -> %s: %s\n") 
          (string_of_ident id) (string_of_src_pos pos) c) labels;*)

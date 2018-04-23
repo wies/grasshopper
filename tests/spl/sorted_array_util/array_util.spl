@@ -331,7 +331,7 @@ procedure arr_insert(a: Array<K>, k: K, len: Int, implicit ghost m: Map<Int, K>)
   map_find_in_set(m, 0, len, k);
   
   // k already in C?
-  if (found) return i, len, map_of_array(a);
+  if (found) return i, len;
   
   arr_shift(a, i, i + 1, len - i);
 
@@ -341,7 +341,7 @@ procedure arr_insert(a: Array<K>, k: K, len: Int, implicit ghost m: Map<Int, K>)
 
   pure assert map_of_array(a) == ms[i := k];
  
-  return i, len + 1, map_of_array(a);
+  return i, len + 1;
 }
 
 lemma arr_delete_content_set(m: Map<Int, K>, m1: Map<Int, K>, len: Int, new_len: Int, idx: Int, k: K)
@@ -387,12 +387,12 @@ procedure arr_delete(a: Array<K>, k: K, len: Int, implicit ghost m: Map<Int, K>)
   
   // k !in C?
   if (!found) {
-    return len, idx, m;
+    return len, idx;
   }
   
   // shift array entries a[i+1..len] by 1 entry to the left 
   //ghost var m := map_of_array(a);
   arr_shift(a, idx + 1, idx, len - (idx + 1));
   
-  return len - 1, idx, map_of_array(a);
+  return len - 1, idx;
 }

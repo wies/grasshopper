@@ -336,6 +336,40 @@ let elim_global_deps prog =
   let prog2 = map_preds elim_pred prog1 in
   { prog2 with prog_axioms = List.map elim_spec prog2.prog_axioms }
 
+
+(** Helper function that existentially quantifies the variables in [vs] that are implicits 
+  * according to local variable map [locals] in the spec forms [sfs] *)
+let quantify_implicits_in_specs locals vs sfs =
+  let implicits =
+    List.filter 
+      (fun id -> (IdMap.find id locals).var_is_implicit) 
+      vs
+  in
+  let implicits_w_sorts, implicits_var_subst =
+    List.fold_left 
+      (fun (implicits_w_sorts, implicits_var_subst) id ->
+        let decl = IdMap.find id locals in
+        (id, decl.var_sort) :: implicits_w_sorts,
+        IdMap.add id (mk_var decl.var_sort id) implicits_var_subst) 
+      ([], IdMap.empty) implicits
+  in
+  let fs, aux = 
+    List.fold_left (fun (fs, aux) sf ->
+      let new_aux =
+        match aux with
+        | Some (_, _, p) ->
+            Some (sf.spec_name, sf.spec_msg, merge_src_pos p sf.spec_pos)
+        | None -> Some (sf.spec_name, sf.spec_msg, sf.spec_pos)
+      in
+      form_of_spec sf :: fs, new_aux)
+      ([], None) sfs
+  in        
+  List.map 
+    (fun (name, msg, pos) ->
+      let f_pos = mk_exists implicits_w_sorts (subst_consts implicits_var_subst (mk_and fs)) in
+      mk_spec_form (FOL f_pos) name msg pos) (Util.Opt.to_list aux)
+
+    
 (** Eliminate all return commands.
  ** Assumes that all SL formulas have been desugared. *)
 let elim_return prog =
@@ -362,7 +396,9 @@ let elim_return prog =
             | FOL f -> oldify_spec (id_set_of_list (formals_of_proc proc)) sf
             | SL _ -> failwith "elim_return: Found SL formula that should have been desugared.")
           (postcond_of_proc proc)
-      in fun pos -> List.map (fun sf -> mk_assert_cmd sf pos) posts
+      in fun pos ->
+        let posts = quantify_implicits_in_specs (locals_of_proc proc) (returns_of_proc proc) posts in
+        List.map (fun sf -> mk_assert_cmd sf pos) posts
     in
     let body = 
       (* add final check of postcondition at the end of procedure body *)
@@ -381,8 +417,8 @@ let elim_return prog =
             mk_seq_cmd (body :: mk_postcond_check return_pos) (prog_point body).pp_pos) 
           proc.proc_body
       in
-      Util.Opt.map (map_basic_cmds (elim (returns_of_proc proc) mk_postcond_check)) body1
-         
+      let returns = List.filter (fun x -> not (IdMap.find x (locals_of_proc proc)).var_is_implicit) (returns_of_proc proc) in
+      Util.Opt.map (map_basic_cmds (elim returns mk_postcond_check)) body1         
     in
     { proc with proc_body = body }
   in
@@ -402,7 +438,7 @@ let elim_state prog =
       let decl1 = 
         { decl with 
           var_name = id1;
-          var_is_implicit = false;
+          (*var_is_implicit = false;*)
           (*var_is_aux = true;*)
           var_pos = pos;
         }
@@ -602,33 +638,8 @@ let elim_state prog =
                       mk_assume_cmd sf1 pp.pp_pos) 
                     preconds_w_implicits
                 in
-                (* skolemize implicits *)
-                let preconds_w_implicits =
-                  let fs, aux = 
-                    List.fold_left (fun (fs, aux) sf ->
-                      let new_aux =
-                        match aux with
-                        | Some (_, _, p) ->
-                            Some (sf.spec_name, sf.spec_msg, merge_src_pos p sf.spec_pos)
-                        | None -> Some (sf.spec_name, sf.spec_msg, sf.spec_pos)
-                      in
-                      form_of_spec sf :: fs, new_aux)
-                      ([], None) preconds_w_implicits
-                  in
-                  List.map 
-                    (fun (name, msg, pos) ->
-                      let implicits_w_sorts, implicits_var_subst =
-                        List.fold_left 
-                          (fun (implicits_w_sorts, implicits_var_subst) id ->
-                            let decl = IdMap.find id locals in
-                            (id, decl.var_sort) :: implicits_w_sorts,
-                            IdMap.add id (mk_var decl.var_sort id) implicits_var_subst) 
-                          ([], subst_old) implicits
-                      in
-                      let f_pos = mk_exists implicits_w_sorts (subst_consts implicits_var_subst (mk_and fs)) in
-                      mk_spec_form (FOL f_pos) name msg pos)
-                    (Util.Opt.to_list aux)
-                in
+                (* quantify implicits *)
+                let preconds_w_implicits = quantify_implicits_in_specs locals implicits preconds_w_implicits in                  
                 List.map (fun sf -> mk_assert_cmd sf pp.pp_pos) (preconds_wo_implicits @ preconds_w_implicits),
                 assume_precond_implicits
               in
@@ -648,9 +659,9 @@ let elim_state prog =
                 let sf = mk_spec_form (FOL (mk_and eqs)) "havoc" None pp.pp_pos in
                 [mk_assume_cmd sf pp.pp_pos]
               in
-              (* compute substitution for postcondition *)
-              let subst_post = 
-                (* substitute formal parameters to actual parameters *)
+              (* compute postcondition with all formals substituted by actuals *)
+              let postconds = 
+                (* substitute formal parameters to actual parameters *)         
                 let subst_wo_old_mods_formals =
                   List.fold_left 
                     (fun sm id ->
@@ -658,39 +669,64 @@ let elim_state prog =
                     subst_pre callee_formals
                 in
                 (* substitute formal return parameters to actual return parameters *)
-                let subst_wo_old_mods = 
+                let implicit_returns, explicit_returns =
+                  List.partition 
+                    (fun id -> (IdMap.find id callee_locals).var_is_implicit) 
+                    callee_returns
+                in
+                let subst_post_explicit = 
                   List.fold_left2
                     (fun sm id rtn_id -> 
                       let decl = IdMap.find rtn_id locals in
                       IdMap.add id (mk_free_const decl.var_sort rtn_id) sm)
                     subst_wo_old_mods_formals
-                    callee_returns 
+                    explicit_returns 
                     (List.map (fun id -> IdMap.find id sm1) cc.call_lhs)
+                in
+                (* substitution map for implicit return parameters *)
+                let subst_implicits, locals = 
+                  fresh callee_decl IdMap.empty locals pp.pp_pos implicit_returns 
+                in
+                (* substitution map for formals to actuals *)
+                let subst_post = 
+                  to_term_subst_merge subst_implicits locals subst_post_explicit
                 in
                 (* TODO: I currently have no idea what this was supposed to do. Is this redundant? *)
                 let subst_wo_old =
                   List.fold_left (fun sm id -> 
                     IdMap.add id (IdMap.find id (to_term_subst sm1 locals)) sm)
-                    subst_wo_old_mods
+                    subst_post
                     mods
                 in
                 (* substitute old versions of global variables *)
-                IdMap.fold 
-                  (fun id decl subst_post ->
-                    let old_id = try IdMap.find id sm with Not_found -> id in
-                    IdMap.add (oldify id) (mk_free_const decl.var_sort old_id) subst_post)
-                   prog.prog_vars subst_wo_old
+                let subst_post =
+                  IdMap.fold 
+                    (fun id decl subst_post ->
+                      let old_id = try IdMap.find id sm with Not_found -> id in
+                      IdMap.add (oldify id) (mk_free_const decl.var_sort old_id) subst_post)
+                    prog.prog_vars subst_wo_old
+                in
+                (* apply substitution to post conditions *)
+                let postconds =
+                  List.map
+                    (fun sf -> 
+                      let old_sf = oldify_spec (id_set_of_list callee_formals) sf in
+                      let sf1 = subst_spec subst_post old_sf in
+                      map_spec_fol_form strip_error_msgs sf1)
+                    (postcond_of_proc callee_decl)
+                in
+                let implicits = List.map (fun id -> IdMap.find id subst_implicits) implicit_returns in
+                let implicitss = id_set_of_list implicits in
+                let postconds_wo_implicits, postconds_w_implicits =
+                  List.partition 
+                    (fun sf -> IdSet.is_empty (IdSet.inter (free_consts (form_of_spec sf)) implicitss)) 
+                    postconds
+                in
+                (* quantify implicit returns *)
+                postconds_wo_implicits @ quantify_implicits_in_specs locals implicits postconds_w_implicits
               in
               (* assume updated postcondition *)
-              let assume_postcond =
-                List.map
-                  (fun sf -> 
-                    let old_sf = oldify_spec (id_set_of_list callee_formals) sf in
-                    let sf1 = subst_spec subst_post old_sf in
-                    let sf2 = map_spec_fol_form strip_error_msgs sf1 in
-                    mk_assume_cmd sf2 pp.pp_pos)
-                  (postcond_of_proc callee_decl)
-              in
+              let assume_postcond = List.map (fun postcond -> mk_assume_cmd postcond pp.pp_pos) postconds in
               sm1, locals, mk_seq_cmd (assert_precond @ assume_precond_implicits @ mods_havoc @ assume_postcond) pp.pp_pos
           | _ -> sm, locals, Basic (bc, pp)
     in
