@@ -42,6 +42,8 @@ let rec term_of_expr model e =
       fail (sprintf "Symbol %s has arity %s but was applied to %s: %s"
         (string_of_ident id) (string_of_arity arity)
         (string_of_term t) (sort_of t |> string_of_sort)))
+  | Read ((Ident (("length", _), _)), idx, _) ->
+    mk_length (term_of_expr model idx)
   | Read (map, t, _) ->
     let map = term_of_expr model map in
     let t = term_of_expr model t in
