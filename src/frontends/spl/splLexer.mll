@@ -109,7 +109,7 @@ let hexa_to_int num =
 
 let digitchar = ['0'-'9']
 let idchar = ['A'-'Z''a'-'z''_']
-let ident = ('?' idchar | idchar) (idchar | digitchar)* 
+let ident = (idchar | digitchar)* ('?' idchar | idchar) (idchar | digitchar)* 
 let digits = digitchar+
 
 rule token = parse
