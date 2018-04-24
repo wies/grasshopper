@@ -97,7 +97,7 @@ var TID: Int;
 axiom TID > 0;
 var r: Node;
 
-
+/** lock */
 procedure lock(x: Node, Ix: Interface, I2: Interface, I: Interface)
   returns (Ix1: Interface, I1: Interface)
   requires spl_state_aa(x, Ix, I2, I)
@@ -122,6 +122,7 @@ procedure lock(x: Node, Ix: Interface, I2: Interface, I: Interface)
   }
 }
 
+/** unlock */
 procedure unlock(x: Node, Ix: Interface, I2: Interface, I: Interface)
   returns (Ix1: Interface, I1: Interface)
   requires spl_state_ab(x, Ix, I2, I)
@@ -140,6 +141,7 @@ procedure unlock(x: Node, Ix: Interface, I2: Interface, I: Interface)
   lemma_repl(I, Ix, I2, Ix1, I1);
 }
 
+/** inRange */
 procedure inRange(x: Node, k: Int, Ix: Interface)
   returns (res: Bool)
   requires gamma(x, Ix) &*& Ix.na.lockinfo == locked(TID)
@@ -151,6 +153,7 @@ procedure inRange(x: Node, k: Int, Ix: Interface)
     return false;
 }
 
+/** findNext */
 procedure findNext(x: Node, k: Int, Ix: Interface)
   returns (n: Node)
   requires gamma(x, Ix)
@@ -164,31 +167,21 @@ procedure findNext(x: Node, k: Int, Ix: Interface)
     return null;
   }
 
-  var i := 0;
-  var flag := true;
-
-  while (flag) // TODO need binary search upper bound in array_util.spl for this
-    invariant gamma(x, Ix) &*& Ix.na.lockinfo == locked(TID)
-    invariant !flag ==> (i >= x.len || k < x.keys[i])
-    invariant (i == 0 || x.keys[i-1] <= k) && 0 <= i && i <= x.len
-  {
-    if (i < x.len && x.keys[i] <= k) {
-      i := i + 1;
-    } else {
-      flag := false;
-    }
-  }
+  ghost var m := map_of_array(x.keys);
+  var found, i := arr_find(x.keys, x.len, k+1, m);
 
   n := x.ptrs[i];
   // return n;
 }
 
 
+/** member */
 procedure member(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   returns (res: Bool, Ix1: Interface, I1: Interface)
   requires N(x, Ix) &*& Gr(I2)
   requires intValid(Ix) == true && intValid(I2) == true
   requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
+  requires Ix.inf[x].ks[k] >= 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
   ensures N(x, Ix1) &*& Gr(I2)
   ensures intValid(Ix1) == true && intValid(I2) == true
   ensures intComp(Ix1, I2) == I1 && globalInt(I1) && Ix1.na.lockinfo == locked(TID)
@@ -211,6 +204,7 @@ procedure member(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
 }
 
 
+/** insert */
 procedure insert(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   returns (res: Bool, Ix1: Interface, I1: Interface)
   requires N(x, Ix) &*& Gr(I2)
@@ -272,6 +266,7 @@ procedure insert(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
 }
 
 
+/** delete */
 procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   returns (res: Bool, Ix1: Interface, I1: Interface)
   requires N(x, Ix) &*& Gr(I2)
@@ -341,13 +336,19 @@ define spl_state_ab(x, Ix, I2, I) {
     && Ix.na.lockinfo == locked(TID))
 }
 
+
+define spl_state_ba(x, Ix, I2, I, k) {
+  spl_state_ab(x, Ix, I2, I) &*& (Ix.inf[x].ks[k] >= 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0))
+}
+
+
+/** Stability proofs */
+
+/*
+
 define spl_state_ac(x, Ix, I2, I) {
   [gamma(x, Ix)](Ix) &*& Gr(I2)
     &*& (intValid(Ix) == true && intValid(I2) == true && intComp(Ix, I2) == I && globalInt(I))
-}
-
-define spl_state_ba(x, Ix, I2, I, k) {
-  spl_state_aa(x, Ix, I2, I) &*& (Ix.inf[x].ks[k] >= 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0))
 }
 
 
@@ -360,9 +361,6 @@ define spl_state_ad(x, Ix, I2, I, k, i, flag) {
 }
 
 
-/** Stability proofs */
-
-/*
 procedure stability_ac_lock(c: Node, Ic: Interface, I2: Interface, I: Interface,
                             x: Node, Ix: Interface, Io: Interface, t: Int)
   returns (I21: Interface, I1: Interface)
