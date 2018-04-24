@@ -133,6 +133,91 @@ predicate sorted_array_with_content(a: Array<K>, len: Int, m: Map<Int, K>)
 }
 
 
+function map_find(m: Map<Int, K>, i: Int, j: Int, k: K) returns (idx: Int)
+  requires i <= j
+  requires sorted_map_seg(m, i, j)
+  ensures i <= idx <= j
+  ensures m[idx] == k || idx == j || lt(k, m[idx])
+  ensures i < idx ==> lt(m[idx - 1], k)
+{
+  i < j && lt(m[i], k) ? map_find(m, i + 1, j, k) : i
+}
+
+lemma map_find_in_set(m: Map<Int, K>, i: Int, j: Int, k: K)
+  requires i <= j
+  requires sorted_map_seg(m, i, j)
+  ensures k in set_of_map(m, i, j) ==> map_find(m, i, j, k) < j && m[map_find(m, i, j, k)] == k
+  ensures k !in set_of_map(m, i, j) ==> map_find(m, i, j, k) == j || lt(k, m[map_find(m, i, j, k)])
+{
+  var idx := map_find(m, i, j, k);
+  map_find_content_set(m, i, j, idx, k);
+  set_of_map_split(m, i, idx, j);
+}
+
+lemma map_find_content_set(m: Map<Int, K>, i: Int, j: Int, idx: Int, k: K)
+  requires i <= j
+  requires sorted_map_seg(m, i, j)
+  requires idx == map_find(m, i, j, k)
+  ensures k !in set_of_map(m, i, idx)
+  ensures k !in set_of_map(m, idx + 1, j)
+{
+  // prove k !in set_of_map(a, 0, idx)
+  not_in_sorted_seg(m, i, idx, k);
+  // prove: k !in set_of_map(a, idx + 1, len)
+  not_in_sorted_seg(m, idx + 1, j, k);
+}
+
+lemma map_insert_content_set(m: Map<Int, K>, m1: Map<Int, K>, idx: Int, k: K, len: Int, new_len: Int)
+  requires sorted_map_seg(m, 0, len)
+  requires idx == map_find(m, 0, len, k)
+  requires k in set_of_map(m, 0, len) ==> new_len == len && m1 == m
+  requires k !in set_of_map(m, 0, len) ==> new_len == len + 1 && m1 == map_shift(m, idx, idx + 1, len - idx)[idx := k]
+  ensures set_of_map(m1, 0, new_len) == set_of_map(m, 0, len) ++ {k}
+{
+  if (m[idx] == k && idx < len) {
+    in_set_of_map(m, 0, len);
+    return;
+  }
+  
+  var ms := map_shift(m, idx, idx + 1, len - idx);
+
+  // prove set_of_map(m, 0, len) == set_of_map(ms, 0, idx) ++ set_of_array(ms, idx + 1, len + 1);
+  set_of_map_split(m, 0, idx, len);
+  set_of_map_equal(m, ms, 0, 0, idx);
+  set_of_map_equal(m, ms, idx, idx + 1, len - idx);
+
+  // prove set_of_map(m1, 0, new_len) == set_of_array(ms, 0, idx) ++ {k} ++ set_of_map(ms, idx + 1, len + 1)
+  frame_set_of_map(ms, 0, idx);
+  frame_set_of_map(ms, idx + 1, len + 1);  
+  set_of_map_split(m1, 0, idx, len + 1);
+}
+
+lemma arr_delete_content_set(m: Map<Int, K>, m1: Map<Int, K>, len: Int, new_len: Int, idx: Int, k: K)
+  requires sorted_map_seg(m, 0, len)
+  requires idx == map_find(m, 0, len, k)
+  requires k !in set_of_map(m, 0, len) ==> new_len == len && m1 == m
+  requires k in set_of_map(m, 0, len) ==> new_len == len - 1 && m1 == map_shift(m, idx + 1, idx, len - (idx + 1))
+  ensures set_of_map(m1, 0, new_len) == set_of_map(m, 0, len) -- {k}
+{
+  map_find_content_set(m, 0, len, idx, k);
+  set_of_map_split(m, 0, idx, len);
+    
+  if (idx == len || m[idx] != k) {
+    return;
+  }
+  
+  // prove: set_of_map(m, 0, len) -- {k} == set_of_map(m1, 0, idx - 1) ++ set_of_map(m1, idx - 1, len - 1)
+  set_of_map_equal(m, m1, 0, 0, idx);
+  set_of_map_equal(m, m1, idx + 1, idx, len - (idx + 1));
+
+  not_in_sorted_seg(m, 0, idx - 1, k);
+  not_in_sorted_seg(m, idx + 1, len, k);
+  
+  set_of_map_split(m1, 0, idx, len - 1);
+}
+
+/** Programs */
+
 // Shift a[src..src+len] to a[dst..dst+len]
 procedure arr_shift(a: Array<K>, src: Int, dst: Int, len: Int)
   requires acc(a)
@@ -207,40 +292,6 @@ procedure arr_copy(a: Array<K>, b: Array<K>, src: Int, dst: Int, len: Int)
   }
 }
 
-function map_find(m: Map<Int, K>, i: Int, j: Int, k: K) returns (idx: Int)
-  requires i <= j
-  requires sorted_map_seg(m, i, j)
-  ensures i <= idx <= j
-  ensures m[idx] == k || idx == j || lt(k, m[idx])
-  ensures i < idx ==> lt(m[idx - 1], k)
-{
-  i < j && lt(m[i], k) ? map_find(m, i + 1, j, k) : i
-}
-
-lemma map_find_in_set(m: Map<Int, K>, i: Int, j: Int, k: K)
-  requires i <= j
-  requires sorted_map_seg(m, i, j)
-  ensures k in set_of_map(m, i, j) ==> map_find(m, i, j, k) < j && m[map_find(m, i, j, k)] == k
-  ensures k !in set_of_map(m, i, j) ==> map_find(m, i, j, k) == j || lt(k, m[map_find(m, i, j, k)])
-{
-  var idx := map_find(m, i, j, k);
-  map_find_content_set(m, i, j, idx, k);
-  set_of_map_split(m, i, idx, j);
-}
-
-lemma map_find_content_set(m: Map<Int, K>, i: Int, j: Int, idx: Int, k: K)
-  requires i <= j
-  requires sorted_map_seg(m, i, j)
-  requires idx == map_find(m, i, j, k)
-  ensures k !in set_of_map(m, i, idx)
-  ensures k !in set_of_map(m, idx + 1, j)
-{
-  // prove k !in set_of_map(a, 0, idx)
-  not_in_sorted_seg(m, i, idx, k);
-  // prove: k !in set_of_map(a, idx + 1, len)
-  not_in_sorted_seg(m, idx + 1, j, k);
-}
-
 // Find key `k` in sorted array segment `a[0..len]` using binary search
 procedure arr_find(a: Array<K>, len: Int, k: K, implicit ghost m: Map<Int, K>)
   returns (found: Bool, idx: Int)
@@ -287,31 +338,6 @@ procedure arr_find(a: Array<K>, len: Int, k: K, implicit ghost m: Map<Int, K>)
   map_find_in_set(m, 0, len, k);
 }
 
-lemma map_insert_content_set(m: Map<Int, K>, m1: Map<Int, K>, idx: Int, k: K, len: Int, new_len: Int)
-  requires sorted_map_seg(m, 0, len)
-  requires idx == map_find(m, 0, len, k)
-  requires k in set_of_map(m, 0, len) ==> new_len == len && m1 == m
-  requires k !in set_of_map(m, 0, len) ==> new_len == len + 1 && m1 == map_shift(m, idx, idx + 1, len - idx)[idx := k]
-  ensures set_of_map(m1, 0, new_len) == set_of_map(m, 0, len) ++ {k}
-{
-  if (m[idx] == k && idx < len) {
-    in_set_of_map(m, 0, len);
-    return;
-  }
-  
-  var ms := map_shift(m, idx, idx + 1, len - idx);
-
-  // prove set_of_map(m, 0, len) == set_of_map(ms, 0, idx) ++ set_of_array(ms, idx + 1, len + 1);
-  set_of_map_split(m, 0, idx, len);
-  set_of_map_equal(m, ms, 0, 0, idx);
-  set_of_map_equal(m, ms, idx, idx + 1, len - idx);
-
-  // prove set_of_map(m1, 0, new_len) == set_of_array(ms, 0, idx) ++ {k} ++ set_of_map(ms, idx + 1, len + 1)
-  frame_set_of_map(ms, 0, idx);
-  frame_set_of_map(ms, idx + 1, len + 1);  
-  set_of_map_split(m1, 0, idx, len + 1);
-}
-
 // Given a sorted array segment `a[0..len]`,
 // insert `k` into `a[0..len+1]` while preserving sortedness.
 // If `k` is already contained in `a[0..len]`, then do not modify `a`.
@@ -331,7 +357,7 @@ procedure arr_insert(a: Array<K>, k: K, len: Int, implicit ghost m: Map<Int, K>)
   map_find_in_set(m, 0, len, k);
   
   // k already in C?
-  if (found) return i, len, map_of_array(a);
+  if (found) return i, len;
   
   arr_shift(a, i, i + 1, len - i);
 
@@ -341,31 +367,7 @@ procedure arr_insert(a: Array<K>, k: K, len: Int, implicit ghost m: Map<Int, K>)
 
   pure assert map_of_array(a) == ms[i := k];
  
-  return i, len + 1, map_of_array(a);
-}
-
-lemma arr_delete_content_set(m: Map<Int, K>, m1: Map<Int, K>, len: Int, new_len: Int, idx: Int, k: K)
-  requires sorted_map_seg(m, 0, len)
-  requires idx == map_find(m, 0, len, k)
-  requires k !in set_of_map(m, 0, len) ==> new_len == len && m1 == m
-  requires k in set_of_map(m, 0, len) ==> new_len == len - 1 && m1 == map_shift(m, idx + 1, idx, len - (idx + 1))
-  ensures set_of_map(m1, 0, new_len) == set_of_map(m, 0, len) -- {k}
-{
-  map_find_content_set(m, 0, len, idx, k);
-  set_of_map_split(m, 0, idx, len);
-    
-  if (idx == len || m[idx] != k) {
-    return;
-  }
-  
-  // prove: set_of_map(m, 0, len) -- {k} == set_of_map(m1, 0, idx - 1) ++ set_of_map(m1, idx - 1, len - 1)
-  set_of_map_equal(m, m1, 0, 0, idx);
-  set_of_map_equal(m, m1, idx + 1, idx, len - (idx + 1));
-
-  not_in_sorted_seg(m, 0, idx - 1, k);
-  not_in_sorted_seg(m, idx + 1, len, k);
-  
-  set_of_map_split(m1, 0, idx, len - 1);
+  return i, len + 1;
 }
 
 // Given a sorted array segment `a[0..len]`,
@@ -387,12 +389,12 @@ procedure arr_delete(a: Array<K>, k: K, len: Int, implicit ghost m: Map<Int, K>)
   
   // k !in C?
   if (!found) {
-    return len, idx, m;
+    return len, idx;
   }
   
   // shift array entries a[i+1..len] by 1 entry to the left 
   //ghost var m := map_of_array(a);
   arr_shift(a, idx + 1, idx, len - (idx + 1));
   
-  return len - 1, idx, map_of_array(a);
+  return len - 1, idx;
 }

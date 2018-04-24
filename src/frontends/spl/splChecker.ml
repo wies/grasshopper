@@ -341,7 +341,8 @@ let resolve_names cu =
                   let returns, locals =
                     try 
                       let decl = IdMap.find id cu.proc_decls in
-                      decl.p_returns, decl.p_locals
+                      let returns = List.filter (fun p -> not (IdMap.find p decl.p_locals).v_implicit) decl.p_returns in
+                      returns, decl.p_locals
                     with Not_found ->
                       let decl = IdMap.find id cu.pred_decls in
                       decl.pr_outputs, decl.pr_locals
@@ -634,8 +635,9 @@ let flatten_exprs cu =
         )
     | ProcCall (id, args, pos) ->
         let pdecl = IdMap.find id cu.proc_decls in
+        let returns = List.filter (fun p -> not (IdMap.find p pdecl.p_locals).v_implicit) pdecl.p_returns in
         let res_type = 
-          match pdecl.p_returns with
+          match returns with
           | [res] ->
               let rdecl = IdMap.find res pdecl.p_locals in
               rdecl.v_type
@@ -899,17 +901,18 @@ let infer_types cu =
         Split (check_spec locals false e, pos)
     | Assign (lhs, [ProcCall (id, args, cpos) as e], pos) ->
         let decl = IdMap.find id cu.proc_decls in
+        let returns = List.filter (fun p -> not (IdMap.find p decl.p_locals).v_implicit) decl.p_returns in
         let rtys =
           List.map (fun fid ->
             let vdecl = IdMap.find fid decl.p_locals in
             vdecl.v_type)
-            decl.p_returns
+            returns
         in
         let lhs1 =
           try List.map2 (infer_types cu locals) rtys lhs
           with Invalid_argument _ -> 
             ProgError.error cpos 
-              (Printf.sprintf "Procedure %s has %d return value(s)" 
+              (Printf.sprintf "Procedure %s has %d explicit return value(s)" 
                  (fst id) (List.length rtys))
         in
         let e1 = infer_types cu locals AnyType e in
@@ -979,14 +982,15 @@ let infer_types cu =
         let postb1 = check_stmt proc postb in
         Loop (inv1, preb1, cond1, postb1, pos)
     | Return (es, pos) ->
+        let returns = List.filter (fun x -> not (IdMap.find x proc.p_locals).v_implicit) proc.p_returns in
         let rtys =
-          List.map (fun id -> (IdMap.find id locals).v_type) proc.p_returns
+          List.map (fun id -> (IdMap.find id locals).v_type) returns
         in
         let es1 =
           try List.map2 (infer_types cu locals) rtys es
           with Invalid_argument _ ->
             ProgError.error pos 
-              (Printf.sprintf "Procedure %s returns %d values(s), found %d" 
+              (Printf.sprintf "Procedure %s returns %d explicit values(s), found %d" 
                  (fst proc.p_name) (List.length rtys) (List.length es))
         in
         Return (es1, pos)
