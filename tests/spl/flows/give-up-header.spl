@@ -19,6 +19,7 @@ pure predicate domEq(p1: FlowDom, p2: FlowDom) {
 
 pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
   forall k: Int :: p1.ks[k] <= p2.ks[k]
+    @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k])
 }
 
 pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)

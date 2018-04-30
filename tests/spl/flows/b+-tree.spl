@@ -1,5 +1,7 @@
 /** B+ tree implementation of the give-up template for linearizable dictionaries. */
 
+options "-simplearrays -symbexec"
+
 include "give-up-header.spl";
 include "array_util.spl";
 
@@ -47,6 +49,7 @@ define gammaG(x, I) {
        && I.na.contents == set_of_array(x.keys, 0, x.len)
      || x.ptrs[0] != null  // Internal
        && I.na.contents == {}
+       && (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i])
        && (forall i: Int, k: Int :: 0 <= i <= x.len ==>
           x.ptrs[i] != null && x.ptrs[i] in I.FPo
           && ((I.fm[x][x.ptrs[i]].ks[k] >= 1) ==
@@ -67,6 +70,62 @@ procedure newNode(xtid: Int, xlen: Int, xrangeLb: Int, xrangeUb: Int)
   ensures Ix.FP == {x} && domEq(Ix.inf[x], domZero()) == true && Ix.FPo == {}
 
 
+pure function fm_of_node(x: Node, kys: Array<Int>, ps: Array<Node>, lenn: Int, i: Int)
+  returns (f: Map<Node, Map<Node, FlowDom>>)
+  ensures forall n: Node, n1: Node :: i <= 0 ==> f[n][n1] == domZero()
+  ensures forall n: Node, n1: Node :: i > 0 && n != x ==> f[n][n1] == domZero()
+  ensures forall n: Node, n1: Node, k: Int :: i > 0 && n in {x} && n1 != ps[i] ==>
+  // TODO why not known?    (domEq(f[n][n1], fm_of_node(x, kys, ps, lenn, i-1)[n][n1]) == true)
+  f[n][n1].ks[k] == fm_of_node(x, kys, ps, lenn, i-1)[n][n1].ks[k]
+    @(matching f[n][n1].ks[k] yields fm_of_node(x, kys, ps, lenn, i-1)[n][n1].ks[k])
+  ensures forall n: Node, n1: Node, k: Int :: i > 0 && n in {x} && n1 in {ps[i]} ==>
+  // TODO  (f[n][n1].ks[k] == ((i <= 0 || kys[i-1] <= k) && (i >= lenn || k < kys[i])) ? 1 : 0)
+    (f[n][n1].ks[k] == 1 && (i <= 0 || kys[i-1] <= k) && (i >= lenn || k < kys[i])
+    || f[n][n1].ks[k] == 0 && !((i <= 0 || kys[i-1] <= k) && (i >= lenn || k < kys[i])))
+
+/* TODO issue #29
+{
+  i <= 0 ?
+    { n: Node :: { n1: Node :: domZero() } }
+    : { n: Node :: n != x ? { n1: Node :: domZero() } :
+        { n1: Node :: n1 == ps[i] ?
+          fd({ k: Int :: (i <= 0 || kys[i-1] <= k) && (i >= lenn || k < kys[i]) ? 1 : 0 })
+          : fm_of_node(x, kys, ps, lenn, i-1)[n][n1] } }
+} */
+
+pure function fpo_of_node(x: Node, kys: Array<Int>, ps: Array<Node>, lenn: Int, i: Int)
+  returns (X: Set<Node>)
+  requires forall i: Int :: 0 <= i <= lenn ==> x != ps[i]
+  ensures x !in X
+{
+  i <= 0 ? {} : fpo_of_node(x, kys, ps, lenn, i-1) ++ {ps[i]}
+}
+
+// TODO rename
+lemma fm_of_node_correct(x: Node, kys: Array<Int>, ps: Array<Node>, lenn: Int, i: Int)
+/* TODO why isn't domLeq defn getting instantiated?
+  ensures forall n: Node, n1: Node :: domLeq(domZero(), fm_of_node(x, kys, ps, lenn, i)[n][n1])
+  @(matching domLeq(domZero(), fm_of_node(x, kys, ps, lenn, i)[n][n1]) yields
+  known(domLeq(domZero(), fm_of_node(x, kys, ps, lenn, i)[n][n1])))
+ */
+  requires forall i: Int :: 0 <= i <= lenn ==> x != ps[i]
+  ensures forall n: Node, n1: Node, k: Int ::
+    domZero().ks[k] <= fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k]
+    @(matching domZero().ks[k] yields fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k])
+    @(matching fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k] yields domZero().ks[k])
+  ensures forall n: Node, n1: Node, k: Int ::
+    n !in {x} ==> fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k] == domZero().ks[k]
+  ensures forall n: Node, n1: Node, k: Int ::
+    n1 !in fpo_of_node(x, kys, ps, lenn, i)
+       ==> (fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k] == domZero().ks[k])
+  ensures x !in fpo_of_node(x, kys, ps, lenn, i)
+{
+  if (i > 0) {
+    fm_of_node_correct(x, kys, ps, lenn, i-1);
+  }
+}
+
+  
 /** Lemmas to deal with conjunction */
 
 // This follows from semantics of sync not modifying heap
@@ -320,6 +379,63 @@ procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   lemma_repl(I3, Ix2, I2, Ix1, I4);
 
   return (k in Ix2.na.contents), Ix1, I4;
+}
+
+
+/** split */
+procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface,
+                     n: Node, In: Interface, Ipcn: Interface)
+  returns (Ip1: Interface, Ic1: Interface, In1: Interface, Ipcn1: Interface)
+  requires gamma(p, Ip) &*& gamma(c, Ic) &*& (acc(n) &*& acc(n.ptrs) &*& acc(n.keys))
+  requires In.FP == {n} && domEq(In.inf[n], domZero()) == true && In.FPo == {}
+  requires intValid(Ip) == true && intValid(Ic) == true && intValid(In) == true
+  requires Ip.na.lockinfo == locked(TID) && Ic.na.lockinfo == locked(TID)
+  requires intComp(Ip, intComp(Ic, In)) == Ipcn
+  requires n.keys.length == 2*B && n.ptrs.length == 2*B
+  requires p.len < p.keys.length - 1 && 0 < c.len // Or that it's 2B - 1?
+
+  ensures gamma(p, Ip1) &*& gamma(c, Ic1) &*& gamma(n, In1)
+  ensures intValid(Ip1) == true && intValid(Ic1) == true && intValid(In1) == true
+  ensures Ip1.na.lockinfo == locked(TID) && Ic1.na.lockinfo == locked(TID)
+  ensures intComp(Ip1, intComp(Ic1, In1)) == Ipcn1 && intEq(Ipcn, Ipcn1) == true
+  ensures Ipcn.na.contents == Ipcn1.na.contents
+{
+  var m := (c.len / 2) + 1;
+  var k := c.keys[m - 1];
+  
+  n.locktid := 0;
+  n.len := m - 1;
+  n.rangeLb := k;
+  n.rangeUb := c.rangeUb;
+
+  arr_copy(c.keys, n.keys, m, 0, c.len - m);
+  arr_copy_node(c.ptrs, n.ptrs, m, 0, c.len - m + 1);
+
+  c.len := m - 1;
+  c.rangeUb := k;
+
+  // Shift keys in parent and insert link to n
+  var p_key_map := map_of_array(p.keys);
+  var k_idx, new_len, p_key_map_1 := arr_insert(p.keys, k, p.len, p_key_map);
+  pure assert forall i: Int :: 0 <= i <= p.len ==> p != p.ptrs[i];
+  arr_shift_node(p.ptrs, k_idx + 1, k_idx + 2, p.len - k_idx);
+  pure assert forall i: Int :: 0 <= i <= p.len ==> p != p.ptrs[i];
+  p.ptrs[k_idx + 1] := n;
+  p.len := new_len;
+
+  // Show that nodes are good with new interfaces
+  // TODO how to say this without skolems?
+  // { n: Node :: n != p ? { n1: Node :: domZero() } : { n1: Node :: }}
+
+  //  var Ip1 := int(Ip.inf, Ip.na, Ip1fm, Ip.FP, Ip.FPo ++ {n}); TODO expand in symbexec
+  pure assume Ip1 != intUndef && Ip1.inf == Ip.inf && Ip1.na == Ip.na
+    && Ip1.fm == fm_of_node(p, p.keys, p.ptrs, p.len, p.len)
+    && Ip1.FP == Ip.FP && Ip1.FPo == fpo_of_node(p, p.keys, p.ptrs, p.len, p.len); //Ip1.FPo == Ip.FPo ++ {n};
+    //  pure assume (forall n: Node :: n in Ip1.FPo ==> (exists i: Int :: 0 <= i <= p.len && n == p.ptrs[i]
+    //    @(matching n yields p.ptrs[i])));
+  lemma_int_valid_unfold(Ip);
+  fm_of_node_correct(p, p.keys, p.ptrs, p.len, p.len);
+  lemma_int_valid_fold(Ip1);
 }
 
 

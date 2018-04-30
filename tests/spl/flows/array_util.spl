@@ -88,8 +88,27 @@ function map_shift(m: Map<Int, Int>, src: Int, dst: Int, len: Int)
   }
 }
 
+function map_shift_node(m: Map<Int, Node>, src: Int, dst: Int, len: Int)
+  returns (res: Map<Int, Node>)
+  requires 0 <= len
+{
+  { i: Int :: i < dst || dst + len <= i ? m[i] : m[src + (i - dst)]
+    @(matching res[i] yields m[src + (i - dst)])
+    @(matching res[i] yields m[i])
+  }
+}
+
 function map_copy(m1: Map<Int, Int>, m2: Map<Int, Int>, src: Int, dst: Int, len: Int)
   returns (res: Map<Int, Int>)
+{
+  { i: Int :: dst <= i < dst + len ? m2[src + (i - dst)] : m1[i]
+    @(matching res[i] yields m2[src + (i - dst)])
+    @(matching res[i] yields m1[i])
+  }
+}
+
+function map_copy_node(m1: Map<Int, Node>, m2: Map<Int, Node>, src: Int, dst: Int, len: Int)
+  returns (res: Map<Int, Node>)
 {
   { i: Int :: dst <= i < dst + len ? m2[src + (i - dst)] : m1[i]
     @(matching res[i] yields m2[src + (i - dst)])
@@ -101,6 +120,15 @@ function map_of_array(a: Array<Int>) returns (res: Map<Int, Int>)
   requires acc(a)
 {
   { i: Int :: 0 <= i < a.length ? a[i] : bottom()
+    @(matching res[i] yields a[i])
+    @(matching a[i] yields res[i])
+  }
+}
+
+function map_of_array_node(a: Array<Node>) returns (res: Map<Int, Node>)
+  requires acc(a)
+{
+  { i: Int :: 0 <= i < a.length ? a[i] : null
     @(matching res[i] yields a[i])
     @(matching a[i] yields res[i])
   }
@@ -143,6 +171,12 @@ procedure arr_shift(a: Array<Int>, src: Int, dst: Int, len: Int)
   ensures acc(a)
   ensures map_of_array(a) == map_shift(old(map_of_array(a)), src, dst, len)
 
+procedure arr_shift_node(a: Array<Node>, src: Int, dst: Int, len: Int)
+  requires acc(a)
+  requires 0 <= src <= src + len <= a.length && 0 <= dst <= dst + len <= a.length
+  ensures acc(a)
+  ensures map_of_array_node(a) == map_shift_node(old(map_of_array_node(a)), src, dst, len)
+
 
 // Copy a[src..src+len] to b[dst..dst+len]
 procedure arr_copy(a: Array<Int>, b: Array<Int>, src: Int, dst: Int, len: Int)
@@ -152,6 +186,14 @@ procedure arr_copy(a: Array<Int>, b: Array<Int>, src: Int, dst: Int, len: Int)
   ensures acc(a) &*& acc(b)
   ensures map_of_array(a) == old(map_of_array(a))
   ensures map_of_array(b) == map_copy(old(map_of_array(b)), map_of_array(a), src, dst, len)
+
+procedure arr_copy_node(a: Array<Node>, b: Array<Node>, src: Int, dst: Int, len: Int)
+  requires acc(a) &*& acc(b)
+  requires 0 <= src <= src + len <= a.length
+  requires 0 <= dst <= dst + len <= b.length
+  ensures acc(a) &*& acc(b)
+  ensures map_of_array_node(a) == old(map_of_array_node(a))
+  ensures map_of_array_node(b) == map_copy_node(old(map_of_array_node(b)), map_of_array_node(a), src, dst, len)
 
 
 function map_find(m: Map<Int, Int>, i: Int, j: Int, k: Int) returns (idx: Int)
