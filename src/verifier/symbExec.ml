@@ -795,13 +795,15 @@ let check_array_acc prog eqs (pure, spatial) arr idx =
 
 
 (** Check that all array read terms in [t] are safe on state [state] *)
-let check_array_reads prog eqs state t =
+let check_array_reads prog fields eqs state t =
   let rec check = function
     | Var _ as t -> t
   | App (Read, [f; a; idx], srt)
   | App (Read, [f; App (Read, [App (ArrayCells, [a], _); idx], _)], srt)
       when f = (Grassifier.array_state true srt) || f = (Grassifier.array_state false srt) ->
       (* Array reads *)
+      let a, _ = eval_term_no_olds fields state a in
+      let idx, _ = eval_term_no_olds fields state idx in
       check_array_acc prog eqs state a idx;
       App (Read, [f; check a; check idx], srt)
     | App (s, ts, srt) -> App (s, List.map check ts, srt)
@@ -819,7 +821,7 @@ let process_no_array prog fields eqs state =
 (** Process term by substituting eqs, looking up field reads, and checking array reads. *)
 let process prog fields eqs state =
   subst_term eqs
-  >> check_array_reads prog eqs state
+  >> check_array_reads prog fields eqs state
   >> (fun (t, state) -> eval_term_no_olds fields state t)
 
 
