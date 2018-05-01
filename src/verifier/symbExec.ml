@@ -798,10 +798,12 @@ let check_array_acc prog eqs (pure, spatial) arr idx =
 let check_array_reads prog eqs state t =
   let rec check = function
     | Var _ as t -> t
-    | App (Read, [f; a; idx], srt) when f = (Grassifier.array_state true srt) ->
-       (* Array reads *)
+  | App (Read, [f; a; idx], srt)
+  | App (Read, [f; App (Read, [App (ArrayCells, [a], _); idx], _)], srt)
+      when f = (Grassifier.array_state true srt) || f = (Grassifier.array_state false srt) ->
+      (* Array reads *)
       check_array_acc prog eqs state a idx;
-         App (Read, [f; check a; check idx], srt)
+      App (Read, [f; check a; check idx], srt)
     | App (s, ts, srt) -> App (s, List.map check ts, srt)
   in
   (check t, state)
@@ -867,6 +869,33 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       | Error (errs, m) ->
       (* TODO to get line numbers, convert returns into asserts *)
         mk_error "A postcondition may not hold" errs m dummy_position)
+  | (Basic (Assign {assign_lhs=[f];
+        assign_rhs=[App (Write, [array_state; arr; idx; rhs], srt)]}, pp) as comm) :: comms'
+  | (Basic (Assign {assign_lhs=[f];
+        assign_rhs=[App (Write, [array_state;
+                    App (Read, [App (ArrayCells, [arr], _); idx], _); rhs], srt)]}, pp)
+        as comm) :: comms'
+      when array_state = Grassifier.array_state true (sort_of rhs)
+        || array_state = Grassifier.array_state false (sort_of rhs) ->
+    Debug.debug (fun () ->
+      sprintf "%sExecuting array write: %d: %s%sCurrent state:\n%s\n"
+        lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+        lineSep (string_of_eqs_state eqs state)
+    );
+    let arr, state = process prog flds eqs state arr in
+    let idx, state = process prog flds eqs state idx in
+    let rhs, (pure, spatial) = process prog flds eqs state rhs in
+    (* Check that we have permission to the array, and that index is in bounds *)
+    check_array_acc prog eqs (pure, spatial) arr idx;
+    (* Find the map for arr and bump it up *)
+    (match find_array arr spatial with
+    | Some (_, (App (FreeSym m_id, [], _) as m)), mk_spatial' ->
+      let m' = mk_free_const (sort_of m) m_id in
+      let pure = smk_and [mk_eq m (mk_write m' [idx] rhs); pure] in
+      symb_exec prog flds proc (eqs, (pure, spatial)) postcond comms'
+    | Some _, _ -> failwith "Array map was not a const term"
+    | None, _ ->
+      [(pp.pp_pos, "Possible invalid array write", Model.empty)])
   | Basic (Assign {assign_lhs=[fld];
         assign_rhs=[App (Write, [App (FreeSym fld', [], _);
           loc; rhs], srt)]}, pp) as comm :: comms'
@@ -890,28 +919,6 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       in
       symb_exec prog flds proc (eqs, (pure, mk_spatial' fs')) postcond comms'
     | None, _, _ ->
-      [(pp.pp_pos, "Possible invalid heap mutation", Model.empty)])
-  | Basic (Assign {assign_lhs=[f];
-        assign_rhs=[App (Write, [array_state; arr; idx; rhs], srt)]}, pp) as comm :: comms'
-      when array_state = Grassifier.array_state true (sort_of rhs) ->
-    Debug.debug (fun () ->
-      sprintf "%sExecuting array write: %d: %s%sCurrent state:\n%s\n"
-        lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
-        lineSep (string_of_eqs_state eqs state)
-    );
-    let arr, state = process prog flds eqs state arr in
-    let idx, state = process prog flds eqs state idx in
-    let rhs, (pure, spatial) = process prog flds eqs state rhs in
-    (* Check that we have permission to the array, and that index is in bounds *)
-      check_array_acc prog eqs (pure, spatial) arr idx;
-    (* Find the map for arr and bump it up *)
-    (match find_array arr spatial with
-    | Some (_, (App (FreeSym m_id, [], _) as m)), mk_spatial' ->
-      let m' = mk_free_const (sort_of m) m_id in
-      let pure = smk_and [mk_eq m (mk_write m' [idx] rhs); pure] in
-      symb_exec prog flds proc (eqs, (pure, spatial)) postcond comms'
-    | Some _, _ -> failwith "Array map was not a const term"
-    | None, _ ->
       [(pp.pp_pos, "Possible invalid heap mutation", Model.empty)])
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, pp) as comm :: comms' ->
     Debug.debug (fun () ->
