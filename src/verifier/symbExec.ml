@@ -667,6 +667,12 @@ let rec find_frame st ?(inst=empty_eqs) (p1, sps1) (p2, sps2) =
       | _ -> None)
     | _ -> None
   in
+  (* Sort sps2 so that acc(v)/arr(v) where v is a var (i.e. like x.next) are in the end *)
+  let sps2 =
+    sps2 |> List.partition
+      (function PointsTo (Var _, _) | Arr (Var _, _, _) -> false | _ -> true)
+    |> (fun (x, y) -> x @ y)
+  in
   match sps2 with
   | [] ->
     let st = {st with se_eqs = IdMap.union (fun _ -> failwith "") st.se_eqs inst} in
