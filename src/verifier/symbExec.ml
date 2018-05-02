@@ -770,7 +770,7 @@ let find_frame_conj st (pure, spatial) state2 =
 
 (** Finds a call site for a function that's completely contained inside a dirty
   region.
-  [state2] must have only PointsTos - no predicates allowed.*)
+  [state2] must have only PointsTo/Arr - no predicates allowed.*)
 let find_frame_dirty st (p1, sp1) (p2, sp2) =
   let find_inside_dirty = function
     | Dirty (sp1a, ts) ->
@@ -796,7 +796,7 @@ let find_frame_dirty st (p1, sp1) (p2, sp2) =
       | Error (msgs, m) -> Error (msgs, m))
     | [] -> Error ([], Model.empty)
   in
-  match List.exists (function PointsTo _ -> false | _ -> true) sp2 with
+  match List.exists (function PointsTo _ | Arr _ -> false | _ -> true) sp2 with
   | true -> Error ([], Model.empty) (* Only PointsTos allowed *)
   | false -> find_dirty [] sp1
 
