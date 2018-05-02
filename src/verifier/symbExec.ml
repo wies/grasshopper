@@ -35,7 +35,6 @@ type spatial_pred =
   existential vars are represented as Var variables.
  *)
 type state = form * spatial_pred list
-(* TODO also add prog, flds, eqs, etc to state *)
 
 (** Equalities derived so far in the symbolic execution, as a map: ident -> term,
   kept so that they can be substituted into the command and the post.
@@ -45,11 +44,23 @@ type state = form * spatial_pred list
   *)
 type equalities = term IdMap.t
 
+(** The state of the symbolic execution engine *)
+type symb_exec_state = {
+  se_state: state;
+  se_prog: program;
+  se_proc: proc_decl;
+  se_fields: IdSet.t;
+  se_eqs: equalities;
+}
+
 
 let empty_state = (mk_true, [])
 
 let empty_eqs = IdMap.empty
 
+
+(** Add two states *)
+let add_state (p1, sp1) (p2, sp2) = (smk_and [p1; p2], sp1 @ sp2)
 
 (* TODO use Format formatters for these *)
 let rec string_of_spatial_pred = function
@@ -93,8 +104,8 @@ let string_of_equalities eqs =
   |> String.concat ", "
   |> sprintf "{%s}"
 
-let string_of_eqs_state eqs state =
-  sprintf "Eqs: %s\n%s" (string_of_equalities eqs) (string_of_state state)
+let string_of_se_state st =
+  sprintf "Eqs: %s\n%s" (string_of_equalities st.se_eqs) (string_of_state st.se_state)
 
 
 (** Finds a points-to predicate at location [loc] in [spatial], including in dirty regions.
@@ -285,9 +296,7 @@ let eval_term_no_olds fields state term =
 *)
 let state_of_spec_list fields old_state specs : state * state =
   let eval_term = eval_term fields in
-  let add (pure, spatial) (pure', spatial') =
-    (smk_and [pure; pure'], spatial @ spatial')
-  in
+  let add = add_state in
   (* [spatial'] is a list of outstanding spatial_preds needed to eval [state] *)
   let convert_form (old_state, state, spatial') f =
     let f, (old_state, state, spatial') =
@@ -413,10 +422,14 @@ let subst_eqs sm eqs =
   ) IdMap.empty
 
 (** Substitute all variables and constants in state [(pure, spatial)] with terms
-  according to substitution map [sm].
-  This operation is not capture avoiding. *)
+  according to substitution map [sm]. *)
 let subst_state sm ((pure, spatial): state) : state =
   (subst_form sm pure, List.map (subst_spatial_pred sm) spatial)
+
+(** Substitute all variables and constants in state [st] with terms
+  according to substitution map [sm]. *)
+let subst_se_state sm st =
+  {st with se_eqs = subst_eqs sm st.se_eqs; se_state = subst_state sm st.se_state}
 
 
 (** Given two lists of idents and terms, create an equalities/subst map out of them. *)
@@ -486,15 +499,15 @@ let remove_useless_existentials ((pure, spatial) as state : state) : state =
   (* Note: can also use GrassUtil.foralls_to_exists for this *)
   apply_equalities (find_var_equalities pure) state
 
-(** Kill useless existential vars in [state], find equalities between constants,
-  add to [eqs] and simplify. *)
-let simplify eqs (pure, spatial) =
-  let (pure, spatial) = remove_useless_existentials (pure |> nnf, spatial) in
-  let eqs = find_equalities eqs pure in
-  eqs, apply_equalities eqs (pure, spatial)
+(** Kill useless existential vars in state [st], find equalities between constants,
+  add to [st.se_eqs] and simplify. *)
+let simplify st =
+  let (p, sp) = remove_useless_existentials (fst st.se_state |> nnf, snd st.se_state) in
+  let eqs = find_equalities st.se_eqs p in
+  {st with se_eqs = eqs; se_state = apply_equalities eqs (p, sp)}
 
 (** Add implicit disequalities from spatial to pure. Assumes normalized by eq. *)
-let add_neq_constraints (pure, spatial) =
+let add_neq_constraints st =
   let rec f acc locs = function
     | PointsTo (x, _) :: sps | Arr (x, _, _) :: sps ->
       let acc1 = TermSet.fold (fun y acc ->
@@ -517,6 +530,7 @@ let add_neq_constraints (pure, spatial) =
       f acc locs sps
     | [] -> acc, locs
   in
+  let (pure, spatial) = st.se_state in
   let neqs, locs = f [] TermSet.empty spatial in
   (* Also add x != nil for every location x *)
   let get_sort x = match sort_of x with
@@ -528,15 +542,15 @@ let add_neq_constraints (pure, spatial) =
   let neqs =
     TermSet.fold (fun x acc -> mk_neq x (mk_null (get_sort x)) :: acc) locs neqs
   in
-  (smk_and (pure :: neqs), spatial)
+  {st with se_state = (smk_and (pure :: neqs), spatial)}
 
 
 (** ----------- Symbolic Execution ---------- *)
 
 
 (* Returns None if the entailment holds, otherwise Some (list of error messages, model) *)
-let check_pure_entail prog eqs p1 p2 =
-  let (p2, _) = apply_equalities eqs (p2, []) in
+let check_pure_entail st p1 p2 =
+  let (p2, _) = apply_equalities st.se_eqs (p2, []) in
   if p1 = p2 || p2 = mk_true then None
   else (* Dump it to an SMT solver *)
     let axioms =  (* Collect all program axioms *)
@@ -547,8 +561,8 @@ let check_pure_entail prog eqs p1 p2 =
               sf.spec_name sf.spec_pos.sp_start_line sf.spec_pos.sp_start_col
           in
           match sf.spec_form with FOL f -> [mk_name name f] | SL _ -> [])
-        prog.prog_axioms
-      |> List.map (subst_form eqs) (* Apply equalities in eqs *)
+        st.se_prog.prog_axioms
+      |> List.map (subst_form st.se_eqs) (* Apply equalities in eqs *)
     in
     let p2 = Verifier.annotate_aux_msg "Related location" p2 in
     (* Close the formulas: assuming all free variables are existential *)
@@ -556,7 +570,7 @@ let check_pure_entail prog eqs p1 p2 =
     let labels, f =
       smk_and [p1; mk_not p2] |> close |> nnf
       (* Add definitions of all referenced predicates and functions *)
-      |> Verifier.add_pred_insts prog
+      |> Verifier.add_pred_insts st.se_prog
       (* Add axioms *)
       |> (fun f -> smk_and (f :: axioms))
       (* Add labels *)
@@ -573,7 +587,7 @@ let check_pure_entail prog eqs p1 p2 =
 (** Returns (fr, inst) s.t. state1 |= state2 * fr, and
   inst accumulates an instantiation for existential variables in state2.
   Assumes that both states have been normalized w.r.t eqs and inst. *)
-let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sps1) (p2, sps2) =
+let rec find_frame st ?(inst=empty_eqs) (p1, sps1) (p2, sps2) =
   Debug.debugl 1 (fun () ->
     sprintf "\nFinding frame with %s for:\n%s\n|=\n%s &*& ??\n"
       (string_of_equalities inst)
@@ -631,12 +645,12 @@ let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sps1) (p2, sps2) =
         Some inst
       | _ -> None)
     | Dirty (sp2a, ts), Dirty (sp1a, ts') when ts = ts' ->
-      (match check_entailment prog ~inst:inst eqs (mk_true, sp1a) (mk_true, sp2a) with
+      (match check_entailment st ~inst:inst (mk_true, sp1a) (mk_true, sp2a) with
       | Ok inst -> Some inst
       | Error _ -> None)
     | Conj spss2, Conj spss1 ->
       let match_up_conjunct inst sps2 sps1 =
-        (match check_entailment prog ~inst:inst eqs (mk_true, sps1) (mk_true, sps2) with
+        (match check_entailment st ~inst:inst (mk_true, sps1) (mk_true, sps2) with
         | Ok inst -> Some inst
         | Error _ -> None)
       in
@@ -655,8 +669,9 @@ let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sps1) (p2, sps2) =
   in
   match sps2 with
   | [] ->
+    let st = {st with se_eqs = IdMap.union (fun _ -> failwith "") st.se_eqs inst} in
     (* Check if p2 is implied by p1 *)
-    (match check_pure_entail prog (IdMap.union (fun _ -> failwith "") eqs inst) p1 p2 with
+    (match check_pure_entail st p1 p2 with
     | None ->
       Ok (sps1, inst)
     | Some errs -> Error errs)
@@ -664,22 +679,23 @@ let rec find_frame prog ?(inst=empty_eqs) eqs (p1, sps1) (p2, sps2) =
     (match find_map_res (match_up_sp inst sp2) sps1 with
     | Some (inst, sps1') ->
       let p2, sps2 = subst_state inst (p2, sps2') in
-      find_frame prog ~inst:inst eqs (p1, sps1') (p2, sps2)
+      find_frame st ~inst:inst (p1, sps1') (p2, sps2)
     | None -> Error ([], Model.empty)) (* TODO get errors? *)
 
-(** Returns [Ok inst] if [(p1, sp1)] |= [(p2, sp2)], else Error (error messages). *)
-and check_entailment prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
-  let eqs, (p1, sp1) = simplify eqs (p1, sp1) in
+(** Returns [Ok inst] if [(p1, sp1)] |= [(p2, sp2)], else [Error (error messages)]. *)
+and check_entailment st ?(inst=empty_eqs) (p1, sp1) (p2, sp2) =
+  let st1 = simplify {st with se_state = (p1, sp1)} in
+  let eqs, (p1, sp1) = st1.se_eqs, st1.se_state in
   let (p2, sp2) =
     (p2, sp2)
     |> apply_equalities eqs |> apply_equalities inst |> remove_useless_existentials
   in
   Debug.debug (fun () ->
     sprintf "\nChecking entailment:\n%s\n|=\n%s\n"
-      (string_of_eqs_state eqs (p1, sp1)) (string_of_state (p2, sp2))
+      (string_of_se_state st1) (string_of_state (p2, sp2))
   );
   (* Check if find_frame returns empt *)
-  match find_frame ~inst:inst prog eqs (p1, sp1) (p2, sp2) with
+  match find_frame st ~inst:inst (p1, sp1) (p2, sp2) with
   | Ok ([], inst) -> Ok inst
   | Ok _ ->
     Error (["The frame was not empty for this entailment check"], Model.empty)
@@ -691,11 +707,11 @@ and check_entailment prog ?(inst=empty_eqs) eqs (p1, sp1) (p2, sp2) =
   [repl_fn sm state2'] is the result of replacing [state2] inside [state1] with [state2'],
   and applying the substitution map [sm] on the remaining parts of [state1].
 *)
-let find_frame_conj prog eqs (pure, spatial) state2 =
+let find_frame_conj st (pure, spatial) state2 =
   let rec find_frame_inside_conj = function
     | [] -> Error ([], Model.empty)
     | sps :: spss ->
-      (match find_frame prog eqs (pure, sps) state2 with
+      (match find_frame st (pure, sps) state2 with
       | Ok (frame, inst) ->
         let repl_fn = (fun sm foo_post ->
           let frame = List.map (subst_spatial_pred sm) frame in
@@ -749,10 +765,10 @@ let find_frame_conj prog eqs (pure, spatial) state2 =
 (** Finds a call site for a function that's completely contained inside a dirty
   region.
   [state2] must have only PointsTos - no predicates allowed.*)
-let find_frame_dirty prog eqs (p1, sp1) (p2, sp2) =
+let find_frame_dirty st (p1, sp1) (p2, sp2) =
   let find_inside_dirty = function
     | Dirty (sp1a, ts) ->
-      (match find_frame prog eqs (p1, sp1a) (p2, sp2) with
+      (match find_frame st (p1, sp1a) (p2, sp2) with
       | Ok (fr, inst) ->
         let repl_fn sm post =
           Dirty ((List.map (subst_spatial_pred sm) fr) @ post, ts)
@@ -780,53 +796,55 @@ let find_frame_dirty prog eqs (p1, sp1) (p2, sp2) =
 
 
 (** Check that we have permission to the array, and that index is in bounds *)
-let check_array_acc prog eqs (pure, spatial) arr idx =
+let check_array_acc st arr idx =
+  let (pure, spatial) = st.se_state in
   match find_array arr spatial with
   | Some (l, _), _ ->
      let idx_in_bds = smk_and [(mk_leq (mk_int 0) idx); (mk_lt idx l)] in
      Debug.debug (fun () -> "\n\nChecking array index is in bounds:\n");
-     (match check_pure_entail prog eqs pure idx_in_bds with
+     (match check_pure_entail st pure idx_in_bds with
      | None -> ()
      | Some errs -> raise_err "Possible array index out of bounds error")
   | None, _ ->
     raise_err "Possible invalid array read"
 
 
-(** Check that all array read terms in [t] are safe on state [state] *)
-let check_array_reads prog fields eqs state t =
+(** Check that all array read terms in [t] are safe on state [st] *)
+let check_array_reads st t =
   let rec check = function
     | Var _ as t -> t
   | App (Read, [f; a; idx], srt)
   | App (Read, [f; App (Read, [App (ArrayCells, [a], _); idx], _)], srt)
       when f = (Grassifier.array_state true srt) || f = (Grassifier.array_state false srt) ->
       (* Array reads *)
-      let a, _ = eval_term_no_olds fields state a in
-      let idx, _ = eval_term_no_olds fields state idx in
-      check_array_acc prog eqs state a idx;
+      let a, _ = eval_term_no_olds st.se_fields st.se_state a in
+      let idx, _ = eval_term_no_olds st.se_fields st.se_state idx in
+      check_array_acc st a idx;
       App (Read, [f; check a; check idx], srt)
     | App (s, ts, srt) -> App (s, List.map check ts, srt)
   in
-  (check t, state)
+  check t
 
 
 (** Process term by substituting eqs, looking up field reads. *)
 (* TODO: this is because assume/assert may have array reads under binders which have guards.
   So for now we are not checking them. Better way to do this? *)
-let process_no_array prog fields eqs state =
-  subst_term eqs
-  >> eval_term_no_olds fields state
+let process_no_array st t =
+  let t = subst_term st.se_eqs t in
+  let t, state = eval_term_no_olds st.se_fields st.se_state t in
+  t, {st with se_state = state}
 
 (** Process term by substituting eqs, looking up field reads, and checking array reads. *)
-let process prog fields eqs state =
-  subst_term eqs
-  >> check_array_reads prog fields eqs state
-  >> (fun (t, state) -> eval_term_no_olds fields state t)
+let process st t =
+  let t = t |> subst_term st.se_eqs |> check_array_reads st in
+  let t, state = eval_term_no_olds st.se_fields st.se_state t in
+  t, {st with se_state = state}
 
 
-(** Symbolically execute command [comm] on state [state] and check [postcond]. *)
-let rec symb_exec prog flds proc (eqs, state) postcond comms =
+(** Symbolically execute commands [comms] on state [st] and check [postcond]. *)
+let rec symb_exec st postcond comms =
   (* Some helpers *)
-  let lookup_type id = (find_var prog proc id).var_sort in
+  let lookup_type id = (find_var st.se_prog st.se_proc id).var_sort in
   let mk_var_like id =
     let id' = fresh_ident (name id) in
     mk_free_const (lookup_type id) id'
@@ -841,14 +859,14 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
   in
 
   (* First, simplify the pre state *)
-  let eqs, state = simplify eqs state in
+  let st = simplify st in
 
   (* If flag is set, check that current state isn't unsat *)
   if !Config.check_unsat then begin
     Debug.debug (fun () -> "Checking if current state is unsat:\n");
-    let state' = add_neq_constraints state in
+    let st' = add_neq_constraints st in
     try
-      (match find_frame prog eqs state' (mk_false, []) with
+      (match find_frame st st'.se_state (mk_false, []) with
       | Ok _ ->
         print_endline @@ (string_of_src_pos pos) ^ "\nWarning: Intermediate state was unsat"
       | Error _ ->
@@ -863,8 +881,8 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
       sprintf "%sExecuting check postcondition: %s%s\n"
         lineSep (string_of_state postcond) lineSep);
     (* TODO do this better *)
-    let state = add_neq_constraints state in
-    (match check_entailment prog eqs state postcond with
+    let st = add_neq_constraints st in
+    (match check_entailment st st.se_state postcond with
       | Ok _ -> []
       | Error (errs, m) ->
       (* TODO to get line numbers, convert returns into asserts *)
@@ -880,19 +898,19 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     Debug.debug (fun () ->
       sprintf "%sExecuting array write: %d: %s%sCurrent state:\n%s\n"
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
-        lineSep (string_of_eqs_state eqs state)
+        lineSep (string_of_se_state st)
     );
-    let arr, state = process prog flds eqs state arr in
-    let idx, state = process prog flds eqs state idx in
-    let rhs, (pure, spatial) = process prog flds eqs state rhs in
+    let arr, st = process st arr in
+    let idx, st = process st idx in
+    let rhs, st = process st rhs in
     (* Check that we have permission to the array, and that index is in bounds *)
-    check_array_acc prog eqs (pure, spatial) arr idx;
+    check_array_acc st arr idx;
     (* Find the map for arr and bump it up *)
-    (match find_array arr spatial with
+    (match find_array arr (snd st.se_state) with
     | Some (_, (App (FreeSym m_id, [], _) as m)), mk_spatial' ->
       let m' = mk_free_const (sort_of m) m_id in
-      let pure = smk_and [mk_eq m (mk_write m' [idx] rhs); pure] in
-      symb_exec prog flds proc (eqs, (pure, spatial)) postcond comms'
+      let pure = smk_and [mk_eq m (mk_write m' [idx] rhs); fst st.se_state] in
+      symb_exec {st with se_state = (pure, snd st.se_state)} postcond comms'
     | Some _, _ -> failwith "Array map was not a const term"
     | None, _ ->
       [(pp.pp_pos, "Possible invalid array write", Model.empty)])
@@ -903,13 +921,13 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     Debug.debug (fun () ->
       sprintf "%sExecuting mutate: %d: %s%sCurrent state:\n%s\n"
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
-        lineSep (string_of_eqs_state eqs state)
+        lineSep (string_of_se_state st)
     );
     (* First, process/check loc and rhs *)
-    let loc, state = process prog flds eqs state loc in
-    let rhs, (pure, spatial) = process prog flds eqs state rhs in
+    let loc, st = process st loc in
+    let rhs, st = process st rhs in
     (* Find the node to mutate *)
-    (match find_ptsto loc spatial with
+    (match find_ptsto loc (snd st.se_state) with
     | Some fs, _, mk_spatial' ->
       (* mutate fs to fs' so that it contains (fld, rhs) *)
       let fs' =
@@ -917,46 +935,42 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
         then List.map (fun (f, e) -> (f, if f = fld then rhs else e)) fs
         else (fld, rhs) :: fs
       in
-      symb_exec prog flds proc (eqs, (pure, mk_spatial' fs')) postcond comms'
+      symb_exec {st with se_state = (fst st.se_state, mk_spatial' fs')} postcond comms'
     | None, _, _ ->
       [(pp.pp_pos, "Possible invalid heap mutation", Model.empty)])
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, pp) as comm :: comms' ->
     Debug.debug (fun () ->
       sprintf "%sExecuting assignment: %d: %s%sCurrent state:\n%s\n"
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
-        lineSep (string_of_eqs_state eqs state)
+        lineSep (string_of_se_state st)
     );
     (* TODO simultaneous assignments can't touch heap, so do all at once *)
-    let (eqs', state', postcond) =
+    let st =
       List.combine ids ts
-      |> List.fold_left (fun (eqs, state, postcond) (id, rhs) ->
+      |> List.fold_left (fun st (id, rhs) ->
           (* First, substitute/eval/check rhs *)
-          let rhs, state = process prog flds eqs state rhs in
+          let rhs, st = process st rhs in
           let sm = IdMap.singleton id (mk_var_like id) in
           let rhs' = subst_term sm rhs in
-          let (pure, spatial) = subst_state sm state in
-          (* let postcond = subst_state sm postcond in *)
-          let eqs = subst_eqs sm eqs in
-          eqs, (smk_and [(mk_eq (mk_const_term id) rhs'); pure], spatial), postcond
-        ) (eqs, state, postcond)
+          let st = subst_se_state sm st in
+          {st with se_state = add_state (mk_eq (mk_const_term id) rhs', []) st.se_state}
+        ) st
     in
-    symb_exec prog flds proc (eqs', state') postcond comms'
+    symb_exec st postcond comms'
   | Basic (Call {call_lhs=lhs; call_name=foo; call_args=args}, pp) as comm :: comms' ->
     Debug.debug (fun () ->
       sprintf "%sExecuting function call: %d: %s%sCurrent state:\n%s\n"
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
-        lineSep (string_of_eqs_state eqs state)
+        lineSep (string_of_se_state st)
     );
     (* First, substitute eqs and eval args *)
-    let args, state = args
-      |> fold_left_map (process prog flds eqs) state
-    in
+    let args, st = args |> fold_left_map process st in
     Debug.debug (fun () -> sprintf "\nOn args: %s\n" (string_of_format pr_term_list args));
     (* Look up pre/post of foo *)
-    let c = (find_proc prog foo).proc_contract in
+    let c = (find_proc st.se_prog foo).proc_contract in
     let foo_pre, foo_post =
-      let _, pre = c.contr_precond |> state_of_spec_list flds None  in
-      let pre, post = c.contr_postcond |> state_of_spec_list flds (Some pre) in
+      let _, pre = c.contr_precond |> state_of_spec_list st.se_fields None  in
+      let pre, post = c.contr_postcond |> state_of_spec_list st.se_fields (Some pre) in
       remove_useless_existentials pre, remove_useless_existentials post
     in
     let foo_pre =
@@ -981,23 +995,23 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     in
     (* Add derived equalities before checking for frame & entailment *)
     (* TODO do this by keeping disequalities in state? *)
-    let state = add_neq_constraints state in
-    let foo_pre = apply_equalities eqs foo_pre in
+    let st = add_neq_constraints st in
+    let foo_pre = apply_equalities st.se_eqs foo_pre in
     Debug.debug (fun () ->
       sprintf "\nPrecondition:\n%s\n\nPostcondition:\n%s\n"
         (string_of_state foo_pre) (string_of_state foo_post)
     );
     let repl_fn =
-      match find_frame prog eqs state foo_pre with
+      match find_frame st st.se_state foo_pre with
         | Ok (frame, inst) ->
           let frame = List.map (subst_spatial_pred sm) frame in
           Ok ((fun sm foo_post -> foo_post @ frame), inst)
         | Error ([], m) ->
-          (match find_frame_dirty prog eqs state foo_pre with
+          (match find_frame_dirty st st.se_state foo_pre with
           | Error ([], m) ->
             (* Try to see if a lemma can be applied inside a conjunct *)
-            if (find_proc prog foo).proc_is_lemma then
-              find_frame_conj prog eqs state foo_pre
+            if (find_proc st.se_prog foo).proc_is_lemma then
+              find_frame_conj st st.se_state foo_pre
             else Error ([], m)
           | e -> e)
         | Error (msgs, m) as e -> e
@@ -1005,95 +1019,93 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
     (* Then, create vars for old vals of all x in lhs, and substitute in eqs & frame *)
     (match repl_fn with
       | Ok (repl_fn, inst) ->
-      let eqs = subst_eqs sm eqs in
-      let pure = state |> fst |> subst_form sm in
+      let eqs = subst_eqs sm st.se_eqs in
+      let pure = st.se_state |> fst |> subst_form sm in
       let (post_pure, post_spatial) = foo_post in
       let state = (smk_and [pure; post_pure], repl_fn sm post_spatial) in
       (* This is to apply equalities derived during frame inference *)
       let state = subst_state inst state in
-      symb_exec prog flds proc (eqs, state) postcond comms'
+      symb_exec {st with se_eqs = eqs; se_state = state} postcond comms'
       | Error (errs, m) ->
         mk_error "The precondition of this function call may not hold" errs m pp.pp_pos)
   | Seq (comms, _) :: comms' ->
-    symb_exec prog flds proc (eqs, state) postcond (comms @ comms')
+    symb_exec st postcond (comms @ comms')
   | Basic (Havoc {havoc_args=vars}, pp) as comm :: comms' ->
     (* Just substitute all occurrances of v for new var v' in symbolic state *)
     Debug.debug (fun () ->
       sprintf "%sExecuting havoc: %d: %s%sCurrent state:\n%s\n"
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
-        lineSep (string_of_eqs_state eqs state)
+        lineSep (string_of_se_state st)
     );
     let sm =
       List.fold_left (fun sm v -> IdMap.add v (mk_var_like v) sm)
         IdMap.empty vars
     in
-    let eqs', state' = (subst_eqs sm eqs, subst_state sm state) in
-    symb_exec prog flds proc (eqs', state') postcond comms'
+    let st = subst_se_state sm st in
+    symb_exec st postcond comms'
   | Basic (Assume {spec_form=FOL spec}, pp) as comm :: comms' ->
     (* Pure assume statements are just added to pure part of state *)
     Debug.debug (fun () ->
       sprintf "%sExecuting assume: %d: %s%sCurrent state:\n%s\n"
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
-        lineSep (string_of_eqs_state eqs state)
+        lineSep (string_of_se_state st)
     );
-    let spec, (pure, spatial) = fold_map_terms (process_no_array prog flds eqs) state spec in
-    symb_exec prog flds proc (eqs, (smk_and [pure; spec], spatial)) postcond comms'
+    let spec, st = fold_map_terms process_no_array st spec in
+    symb_exec {st with se_state = add_state (spec, []) st.se_state} postcond comms'
   | Choice (comms, _) :: comms' ->
     List.fold_left (fun errors comm ->
         match errors with
         | [] ->
-          symb_exec prog flds proc (eqs, state) postcond (comm :: comms')
+          symb_exec st postcond (comm :: comms')
         | _ -> errors)
       [] comms
   | Basic (Assert spec, pp) as comm :: comms' ->
     Debug.debug (fun () ->
       sprintf "%sExecuting assert: %d: %s%sCurrent state:\n%s\n"
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
-        lineSep (string_of_eqs_state eqs state)
+        lineSep (string_of_se_state st)
     );
     (match spec.spec_form with
     | SL _ ->
-      let _, spec_st = state_of_spec_list flds None [spec] in
-      let state' = add_neq_constraints state in
-      (match check_entailment prog eqs state' spec_st with
+      let _, spec_st = state_of_spec_list st.se_fields None [spec] in
+      let st' = add_neq_constraints st in
+      (match check_entailment st st'.se_state spec_st with
         | Ok _ ->
-        symb_exec prog flds proc (eqs, state) postcond comms'
+        symb_exec st postcond comms'
         | Error (errs, m) -> mk_error "This assert may not hold" errs m pp.pp_pos)
     | FOL spec_form ->
-      let spec_form, state =
-        fold_map_terms (process_no_array prog flds eqs) state spec_form
-      in
-      let state' = add_neq_constraints state in
-      (match find_frame prog eqs state' (spec_form, []) with
+      let spec_form, st = fold_map_terms process_no_array st spec_form in
+      let st' = add_neq_constraints st in
+      (match find_frame st st'.se_state (spec_form, []) with
         | Ok _ ->
-        symb_exec prog flds proc (eqs, state) postcond comms'
+        symb_exec st postcond comms'
         | Error (errs, m) -> mk_error "This assert may not hold" errs m pp.pp_pos))
   | Basic (Return {return_args=xs}, pp) as comm :: _ ->
     Debug.debug (fun () ->
       sprintf "%sExecuting return: %d: %s%sCurrent state:\n%s\n"
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
-        lineSep (string_of_eqs_state eqs state)
+        lineSep (string_of_se_state st)
     );
     (* Substitute xs for return vars in postcond and throw away rest of comms *)
-    let xs, state = fold_left_map (process prog flds eqs) state xs in
-    let ret_vars = proc.proc_contract.contr_returns in
+    let xs, st = fold_left_map process st xs in
+    let ret_vars = st.se_proc.proc_contract.contr_returns in
     let sm =
       List.combine ret_vars xs
       |> List.fold_left (fun sm (v, x) -> IdMap.add v x sm) IdMap.empty in
     let postcond = subst_state sm postcond in
-    symb_exec prog flds proc (eqs, state) postcond []
+    symb_exec st postcond []
   | Basic (Split spec, pp) as comm :: comms' ->
     Debug.debug (fun () ->
       sprintf "%sExecuting split: %d: %s%sCurrent state:\n%s\n"
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
-        lineSep (string_of_eqs_state eqs state)
+        lineSep (string_of_se_state st)
     );
     (* First assert the spec, then assume spec as new state *)
-    let _, spec_st = state_of_spec_list flds None [spec] in
-    let state' = add_neq_constraints state in
-    (match check_entailment prog eqs state' spec_st with
+    let _, spec_st = state_of_spec_list st.se_fields None [spec] in
+    let st' = add_neq_constraints st in
+    (match check_entailment st st'.se_state spec_st with
       | Ok _ ->
-      symb_exec prog flds proc (empty_eqs, spec_st) postcond comms'
+      symb_exec {st with se_eqs = empty_eqs; se_state = spec_st} postcond comms'
       | Error (errs, m) -> mk_error "This split may not hold" errs m pp.pp_pos)
   | Basic (Assume _, _) :: _ -> failwith "TODO Assume SL command"
   | Basic (New _, _) :: _ -> failwith "TODO New command"
@@ -1110,7 +1122,6 @@ let rec symb_exec prog flds proc (eqs, state) postcond comms =
 let check spl_prog prog proc =
   Debug.info (fun () ->
       "Checking procedure " ^ string_of_ident (name_of_proc proc) ^ "...\n");
-
   (* Extract the list of field names from the spl_prog. *)
   let flds =
     IdMap.fold (fun _ tdecl flds ->
@@ -1132,7 +1143,6 @@ let check spl_prog prog proc =
         )}
     )
   in
-
   match proc.proc_body with
   | Some comm ->
     let pre =
@@ -1155,9 +1165,11 @@ let check spl_prog prog proc =
           sprintf "\nPrecondition:\n%s\n\nPostcondition:\n%s\n"
             (string_of_state pre) (string_of_state post)
         );
-
-        let eqs = empty_eqs in
-        symb_exec prog flds proc (eqs, pre) post [comm]
+        let st =
+          {se_state = pre; se_prog = prog; se_proc = proc;
+           se_fields = flds; se_eqs = empty_eqs}
+        in
+        symb_exec st post [comm]
       | Error errs -> errs)
     | Error errs -> errs)
   | None ->
