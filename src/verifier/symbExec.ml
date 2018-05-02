@@ -260,8 +260,6 @@ let rec eval_term fields (old_state, state, spatial') = function
         l, Arr (a, l, m) :: spatial'))
     in
     l, (old_state, state, spatial')
-  | App (Write, _, _) as t ->
-    failwith @@ "eval_term called on write " ^ (string_of_term t)
   | App (Old, [t], srt) as t' ->
     (* Eval t using old_state as state *)
     (match old_state with
