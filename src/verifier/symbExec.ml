@@ -851,10 +851,11 @@ let process st t =
 let rec symb_exec st postcond comms =
   (* Some helpers *)
   let lookup_type id = (find_var st.se_prog st.se_proc id).var_sort in
-  let mk_var_like id =
+  let mk_var_like srt id =
     let id' = fresh_ident (name id) in
-    mk_free_const (lookup_type id) id'
+    mk_free_const srt id'
   in
+  let mk_var_like_id id = mk_var_like (lookup_type id) id in
   let mk_const_term id = mk_free_const (lookup_type id) id in
   let mk_error msg errs model pos =
     [(pos, String.concat "\n\n" (msg :: errs), model)]
@@ -914,9 +915,12 @@ let rec symb_exec st postcond comms =
     (* Find the map for arr and bump it up *)
     (match find_array arr (snd st.se_state) with
     | Some (_, (App (FreeSym m_id, [], _) as m)), mk_spatial' ->
-      let m' = mk_free_const (sort_of m) m_id in
+      let m' = mk_var_like (sort_of m) m_id in
+      let sm = IdMap.singleton m_id m' in
+      let idx, rhs = idx |> subst_term sm, rhs |> subst_term sm in
+      let st = subst_se_state sm st in
       let pure = smk_and [mk_eq m (mk_write m' [idx] rhs); fst st.se_state] in
-      symb_exec {st with se_state = (pure, snd st.se_state)} postcond comms'
+      symb_exec {st with se_state = (pure, mk_spatial' m)} postcond comms'
     | Some _, _ -> failwith "Array map was not a const term"
     | None, _ ->
       [(pp.pp_pos, "Possible invalid array write", Model.empty)])
@@ -956,7 +960,7 @@ let rec symb_exec st postcond comms =
       |> List.fold_left (fun st (id, rhs) ->
           (* First, substitute/eval/check rhs *)
           let rhs, st = process st rhs in
-          let sm = IdMap.singleton id (mk_var_like id) in
+          let sm = IdMap.singleton id (mk_var_like_id id) in
           let rhs' = subst_term sm rhs in
           let st = subst_se_state sm st in
           {st with se_state = add_state (mk_eq (mk_const_term id) rhs', []) st.se_state}
@@ -986,7 +990,7 @@ let rec symb_exec st postcond comms =
     (* Replace lhs vars with fresh vars. For every part of new state *)
     let sm =
       lhs |> List.fold_left (fun sm id ->
-          IdMap.add id (mk_var_like id) sm)
+          IdMap.add id (mk_var_like_id id) sm)
         IdMap.empty
     in
     (* Substitute formal params -> actual params & return vars -> lhs vars in foo_post *)
@@ -1044,7 +1048,7 @@ let rec symb_exec st postcond comms =
         lineSep (string_of_se_state st)
     );
     let sm =
-      List.fold_left (fun sm v -> IdMap.add v (mk_var_like v) sm)
+      List.fold_left (fun sm v -> IdMap.add v (mk_var_like_id v) sm)
         IdMap.empty vars
     in
     let st = subst_se_state sm st in
