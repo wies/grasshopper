@@ -801,6 +801,25 @@ let find_frame_dirty st (p1, sp1) (p2, sp2) =
   | false -> find_dirty [] sp1
 
 
+(** Matches up arrays in pre and post of a function call and adds a pure formula to post
+  that enforces that the lengths are the same. *)
+let force_array_lengths_equal (pre_p, pre_sp) (post_p, post_sp) =
+  let length_axiom = 
+    List.fold_left (fun acc -> function
+        | Arr (a, l, m) ->
+          let f =
+            match List.find_opt (function Arr (a', l', _) -> a = a' | _ -> false) pre_sp with
+            | Some (Arr (_, l', _)) -> mk_eq l l'
+            | _ -> mk_true
+          in
+          f :: acc
+        | _ -> acc)
+      [] post_sp
+  in
+  (smk_and (post_p :: length_axiom), post_sp)
+
+
+
 (** Check that we have permission to the array, and that index is in bounds *)
 let check_array_acc st arr idx =
   let (pure, spatial) = st.se_state in
@@ -981,6 +1000,8 @@ let rec symb_exec st postcond comms =
     let foo_pre, foo_post =
       let _, pre = c.contr_precond |> state_of_spec_list st.se_fields None  in
       let pre, post = c.contr_postcond |> state_of_spec_list st.se_fields (Some pre) in
+      (* Since nothing can change array lengths, make them equal *)
+      let post = force_array_lengths_equal pre post in
       remove_useless_existentials pre, remove_useless_existentials post
     in
     let foo_pre =
