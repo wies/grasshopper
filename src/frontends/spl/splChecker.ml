@@ -182,6 +182,11 @@ let resolve_names cu =
           (match type_of_expr cu locals idx1 with
           | ArrayType _ | AnyType -> UnaryOp (OpLength, idx1, pos)
           | ty -> Read (re locals tbl map, idx1, pos))
+      | Read ((Ident (("map", _), _) as map), arr, pos) ->
+          let arr = re locals tbl arr in
+          (match type_of_expr cu locals arr with
+          | ArrayType _ | AnyType -> UnaryOp (OpArrayMap, arr, pos)
+          | ty -> Read (re locals tbl map, arr, pos))
       | Read ((Ident (("cells", _), _) as map), idx, pos) ->
           let idx1 = re locals tbl idx in
           (match type_of_expr cu locals idx1 with

@@ -2,7 +2,9 @@ open Util
 open Grass
 open SplSyntax
 open SplErrors
-  
+
+(** Checks if expected type [oty1] is compatible with actual/found type [oty2].
+    Returns ?? *)
 let match_types pos oty1 oty2 =
   let rec mt ty1 ty2 =
     match ty1, ty2 with
@@ -145,6 +147,10 @@ let type_of_expr cu locals e =
         (match te map with
         | ArrayType srt -> MapType (IntType, ArrayCellType srt)
         | _ -> AnyType)
+    | UnaryOp (OpArrayMap, arr, _) ->
+        (match te arr with
+        | ArrayType srt -> MapType (IntType, srt)
+        | _ -> MapType (IntType, AnyType))
     (* Algebraic data types *)
     | ConstrApp (id, _, _) | DestrApp (id, _, _) ->
         let decl = IdMap.find id cu.fun_decls in
@@ -398,6 +404,19 @@ let infer_types cu locals ty e =
           | _ -> ety
         in
         UnaryOp (OpArrayCells, map1, pos), match_types pos ty (MapType (IntType, ArrayCellType ety))
+    | UnaryOp (OpArrayMap, arr, pos) ->
+        let arr_ety =
+          match ty with
+          | MapType (IntType, ety) -> ety
+          | _ -> AnyType
+        in
+        let arr, arr_ty = it locals (ArrayType arr_ety) arr in
+        let arr_ety =
+          match arr_ty with
+          | MapType (IntType, ety) -> ety
+          | _ -> AnyType
+        in
+        UnaryOp (OpArrayMap, arr, pos), match_types pos ty (MapType (IntType, arr_ety))
      (*| Dot (e, id, pos) ->
         let decl = IdMap.find id cu.var_decls in
         let dty, rty =

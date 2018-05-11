@@ -189,7 +189,7 @@ and bin_op =
   | OpAnd | OpOr | OpImpl 
 
 and un_op =
-  | OpArrayCells | OpIndexOfCell | OpArrayOfCell | OpLength
+  | OpArrayCells | OpIndexOfCell | OpArrayOfCell | OpLength | OpArrayMap
   | OpUMinus | OpUPlus
   | OpBvNot | OpToInt | OpToByte
   | OpNot
@@ -625,7 +625,7 @@ let prio_of_expr = function
   | Null _ | Emp _ | IntVal _ | BoolVal _ | Ident _ -> 0
   | Read _ | Write _ | ProcCall _ | PredApp _ | ConstrApp _ | DestrApp _ | New _ | Setenum _ |
     Binder (Comp, _, _, _) -> 1
-  | UnaryOp ((OpArrayCells | OpIndexOfCell | OpArrayOfCell |
+  | UnaryOp ((OpArrayCells | OpIndexOfCell | OpArrayOfCell | OpArrayMap |
     OpLength | OpToInt | OpToByte | OpOld | OpKnown), _, _) -> 1
   | UnaryOp ((OpUMinus | OpUPlus | OpBvNot | OpNot), _, _) -> 2
   | BinaryOp (_, (OpMult | OpDiv | OpMod), _, _, _) -> 3
@@ -688,6 +688,8 @@ let rec pr_expr ppf =
           fprintf ppf "%a.array" pr_expr e1
       | OpLength ->
           fprintf ppf "%a.length" pr_expr e1
+      | OpArrayMap ->
+          fprintf ppf "%a.map" pr_expr e1
       | OpUMinus | OpBvNot | OpUPlus | OpNot ->
           let op_str = match op with
           | OpUMinus -> "-"
