@@ -208,6 +208,9 @@ let convert cu =
     | UnaryOp (OpLength, e, pos) ->
         let t = convert_term locals e in
         GrassUtil.mk_length t
+    | UnaryOp (OpArrayMap, e, pos) ->
+        let t = convert_term locals e in
+        GrassUtil.mk_array_map t
     | UnaryOp (OpArrayOfCell, e, pos) ->
         let t = convert_term locals e in
         GrassUtil.mk_array_of_cell t

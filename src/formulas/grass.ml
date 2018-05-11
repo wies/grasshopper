@@ -78,7 +78,7 @@ type symbol =
   | UMinus | Plus | Minus | Mult | Div | Mod (* Int *)
   | BitAnd | BitOr | BitNot | ShiftLeft | ShiftRight (* Bit Vector *)
   | Empty | SetEnum | Union | Inter | Diff  (* Set *)
-  | Length | IndexOfCell | ArrayOfCell | ArrayCells
+  | Length | IndexOfCell | ArrayOfCell | ArrayCells | ArrayMap
   | ByteToInt | IntToByte (* explicit conversion *)
   | Ite (* if-then-else *)
   (* interpreted predicate symbols *)
@@ -235,6 +235,7 @@ let string_of_symbol = function
   | IndexOfCell -> "index"
   | ArrayOfCell -> "array"
   | ArrayCells -> "cells"
+  | ArrayMap -> "map"
   | UMinus -> "-"
   | Plus -> "+"
   | Minus -> "-"
@@ -282,7 +283,7 @@ let string_of_bop = function
 
 let prio_of_symbol = function
   | Null | Empty | IntConst _ | BoolConst _ -> 0
-  | Read | Write | Constructor _ | Destructor _ | Old | SetEnum
+  | Read | Write | Constructor _ | Destructor _ | Old | SetEnum | ArrayMap
   | Length | IndexOfCell | ArrayOfCell | ArrayCells | EntPnt | ByteToInt | IntToByte
   | Btwn | Frame | Disjoint | Known | FreeSym _ -> 1
   | UMinus | BitNot -> 2 

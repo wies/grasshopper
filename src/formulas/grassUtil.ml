@@ -366,6 +366,9 @@ let mk_read_form map ind =
 let mk_length map =
   mk_app Int Length [map]
 
+let mk_array_map arr =
+  mk_app (Map ([Int], element_sort_of_array arr)) ArrayMap [arr]
+
 let mk_array_of_cell c =
   mk_app (Loc (Array (element_sort_of_cell c))) ArrayOfCell [c]
 
