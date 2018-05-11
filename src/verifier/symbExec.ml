@@ -271,6 +271,22 @@ let rec eval_term fields (old_state, state, spatial') = function
         l, Arr (a, l, m) :: spatial'))
     in
     l, (old_state, state, spatial')
+  | App (ArrayMap, [a], _) ->
+    let a, (old_state, state, spatial') = eval_term fields (old_state, state, spatial') a in
+    let m, spatial' =
+    (match find_array a (snd state) with
+    | Some (_, m), _ -> m, spatial'
+    | None, _ -> (* If you can't find a in spatial, look in/add it to spatial' *)
+      (match find_arr_spatial' a spatial' with
+      | Some ((l, m), spatial') ->
+        m, Arr (a, l, m) :: spatial'
+      | None ->
+        let l = fresh_array_length () in
+        let srt = match (sort_of a) with | Loc Array s -> s | _ -> assert false in
+        let m = fresh_array_map srt in
+        m, Arr (a, l, m) :: spatial'))
+    in
+    m, (old_state, state, spatial')
   | App (Old, [t], srt) as t' ->
     (* Eval t using old_state as state *)
     (match old_state with
@@ -312,17 +328,17 @@ let state_of_spec_list fields old_state specs : state * state =
     | Sl.Atom (Sl.Region, [(App (SetEnum, [x], Set Loc Array srt))], _) -> (* arr(x) *)
       let x, (old_state, state, spatial') = eval_term (old_state, state, spatial') x in
       (* First check if we've already created it in spatial' *)
-      let sp, l, spatial' =
+      let l, m, spatial' =
         (match find_arr_spatial' x spatial' with
         | Some ((l, m), spatial') ->
-          Arr (x, l, m), l, spatial'
+          l, m, spatial'
         | None ->
           let l = fresh_array_length () in
           let m = fresh_array_map srt in
-          Arr (x, l, m), l, spatial')
+          l, m, spatial')
       in
       let len_axiom = mk_leq (mk_int 0) l in
-      old_state, add (len_axiom, [sp]) state, spatial'
+      old_state, add (len_axiom, [Arr (x, l, m)]) state, spatial'
     | Sl.Atom (Sl.Region, [(App (SetEnum, [x], Set Loc _))], _) -> (* acc(x) *)
       let x, (old_state, state, spatial') = eval_term (old_state, state, spatial') x in
       (* First check if we've already created it in spatial' *)
