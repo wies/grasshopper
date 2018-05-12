@@ -20,6 +20,8 @@ struct Node {
 define unchanged(x) {
   x.locktid == old(x.locktid) && x.len == old(x.len) && x.rangeLb == old(x.rangeLb)
     && x.rangeUb == old(x.rangeUb) && x.keys == old(x.keys) && x.ptrs == old(x.ptrs)
+    && x.keys.length == old(x.keys.length) && x.keys.map == old(x.keys.map)
+    && x.ptrs.length == old(x.ptrs.length) && x.ptrs.map == old(x.ptrs.map)
 }
 
 
@@ -46,7 +48,7 @@ define gammaG(x, I) {
     && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> x.keys[i] < x.keys[j])
     && (x.ptrs[0] == null && I.FPo == {}  // Leaf
        && (forall i: Int :: 0 <= i < x.ptrs.length ==> x.ptrs[i] == null)
-       && I.na.contents == set_of_array(x.keys, 0, x.len)
+       && I.na.contents == set_of_map(x.keys.map, 0, x.len)
      || x.ptrs[0] != null  // Internal
        && I.na.contents == {}
        && (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i])
@@ -70,10 +72,10 @@ procedure newNode(xtid: Int, xlen: Int, xrangeLb: Int, xrangeUb: Int)
   ensures Ix.FP == {x} && domEq(Ix.inf[x], domZero()) == true && Ix.FPo == {}
 
 
-pure function fm_of_node(x: Node, kys: Array<Int>, ps: Array<Node>, lenn: Int, i: Int)
+pure function fm_of_node(x: Node, kys: Map<Int, Int>, ps: Map<Int, Node>, lenn: Int, i: Int)
   returns (f: Map<Node, Map<Node, FlowDom>>)
-  ensures forall n: Node, n1: Node :: i <= 0 ==> f[n][n1] == domZero()
-  ensures forall n: Node, n1: Node :: i > 0 && n != x ==> f[n][n1] == domZero()
+  ensures forall n: Node, n1: Node, k: Int :: i <= 0 ==> f[n][n1].ks[k] == 0
+  ensures forall n: Node, n1: Node, k: Int :: i > 0 && n != x ==> f[n][n1].ks[k] == 0
   ensures forall n: Node, n1: Node, k: Int :: i > 0 && n in {x} && n1 != ps[i] ==>
   // TODO why not known?    (domEq(f[n][n1], fm_of_node(x, kys, ps, lenn, i-1)[n][n1]) == true)
   f[n][n1].ks[k] == fm_of_node(x, kys, ps, lenn, i-1)[n][n1].ks[k]
@@ -93,7 +95,7 @@ pure function fm_of_node(x: Node, kys: Array<Int>, ps: Array<Node>, lenn: Int, i
           : fm_of_node(x, kys, ps, lenn, i-1)[n][n1] } }
 } */
 
-pure function fpo_of_node(x: Node, kys: Array<Int>, ps: Array<Node>, lenn: Int, i: Int)
+pure function fpo_of_node(x: Node, kys: Map<Int, Int>, ps: Map<Int, Node>, lenn: Int, i: Int)
   returns (X: Set<Node>)
   requires forall i: Int :: 0 <= i <= lenn ==> x != ps[i]
   ensures x !in X
@@ -101,27 +103,45 @@ pure function fpo_of_node(x: Node, kys: Array<Int>, ps: Array<Node>, lenn: Int, 
   i <= 0 ? {} : fpo_of_node(x, kys, ps, lenn, i-1) ++ {ps[i]}
 }
 
-// TODO rename
-lemma fm_of_node_correct(x: Node, kys: Array<Int>, ps: Array<Node>, lenn: Int, i: Int)
+
+lemma lemma_fm_of_node_correct(x: Node, kys: Map<Int, Int>, ps: Map<Int, Node>, lenn: Int, i: Int)
 /* TODO why isn't domLeq defn getting instantiated?
   ensures forall n: Node, n1: Node :: domLeq(domZero(), fm_of_node(x, kys, ps, lenn, i)[n][n1])
   @(matching domLeq(domZero(), fm_of_node(x, kys, ps, lenn, i)[n][n1]) yields
   known(domLeq(domZero(), fm_of_node(x, kys, ps, lenn, i)[n][n1])))
  */
   requires forall i: Int :: 0 <= i <= lenn ==> x != ps[i]
+  requires forall i: Int, j: Int :: 0 <= i < j < lenn ==> kys[i] < kys[j]
+  // All fm values are >= 0
   ensures forall n: Node, n1: Node, k: Int ::
     domZero().ks[k] <= fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k]
     @(matching domZero().ks[k] yields fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k])
     @(matching fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k] yields domZero().ks[k])
+  // fm from nodes != x are 0
   ensures forall n: Node, n1: Node, k: Int ::
     n !in {x} ==> fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k] == domZero().ks[k]
+  // fm to nodes !in FPo are 0
   ensures forall n: Node, n1: Node, k: Int ::
     n1 !in fpo_of_node(x, kys, ps, lenn, i)
        ==> (fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k] == domZero().ks[k])
   ensures x !in fpo_of_node(x, kys, ps, lenn, i)
+  // helper invariant for next property
+  ensures forall n: Node, n1: Node, k: Int :: n in {x} && i < lenn && kys[i] <= k
+    ==> fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k] == 0
+  // fm to different nodes are disjoint
+  ensures forall n: Node, n1: Node, n2: Node, k: Int :: n !in {x} || n1 == n2 || i > lenn
+    || fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k] == 0
+    || fm_of_node(x, kys, ps, lenn, i)[n][n2].ks[k] == 0
+  // fm satisfies gammaG
+  ensures forall n: Node, n1: Node, j: Int, k: Int :: n in {x} && n1 in {ps[j]} && 0 <= j <= i ==>
+  //          ps[j] != null && ps[j] in fpo_of_node(x, kys, ps, lenn, i)
+          ((fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k] >= 1) ==
+             ((j <= 0 || kys[j-1] <= k) && (j >= lenn || k < kys[j])))
+          @(matching ps[j] yields kys[j-1])
+          @(matching ps[j] yields kys[j])
 {
   if (i > 0) {
-    fm_of_node_correct(x, kys, ps, lenn, i-1);
+    lemma_fm_of_node_correct(x, kys, ps, lenn, i-1);
   }
 }
 
@@ -226,8 +246,7 @@ procedure findNext(x: Node, k: Int, Ix: Interface)
     return null;
   }
 
-  ghost var m := map_of_array(x.keys);
-  var found, i := arr_find(x.keys, x.len, k+1, m);
+  var found, i := arr_find(x.keys, x.len, k+1);
 
   n := x.ptrs[i];
   // return n;
@@ -252,10 +271,8 @@ procedure member(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   pure assume x.ptrs[0] == null; // x is a leaf.
   // TODO prove using induction from gamma & k !in any outgoing edgeset
 
-  ghost var m := map_of_array(x.keys);
-
   var idx: Int;
-  res, idx := arr_find(x.keys, x.len, k, m);
+  res, idx := arr_find(x.keys, x.len, k);
 
   lemma_conc_rev(x, Ix);
 
@@ -298,11 +315,11 @@ procedure insert(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   var I3 := lemma_gamma_comp_sing_int(x, Ix2, I2);
   lemma_repl(I, Ix, I2, Ix2, I3);
 
-  ghost var m := map_of_array(x.keys);
+  ghost var m := x.keys.map;
 
-  var idx, new_len, m1 := arr_insert(x.keys, k, x.len, m); // TODO argument order consistent
+  var idx, new_len := arr_insert(x.keys, k, x.len); // TODO argument order consistent
 
-  map_insert_content_set(m, m1, idx, k, x.len, new_len);
+  map_insert_content_set(m, x.keys.map, idx, k, x.len, new_len);
 
   x.len := new_len;
 
@@ -358,11 +375,11 @@ procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   var I3 := lemma_gamma_comp_sing_int(x, Ix2, I2);
   lemma_repl(I, Ix, I2, Ix2, I3);
 
-  ghost var m := map_of_array(x.keys);
+  ghost var m := x.keys.map;
 
-  var new_len, idx, m1 := arr_delete(x.keys, k, x.len, m);
+  var new_len, idx := arr_delete(x.keys, k, x.len);
 
-  arr_delete_content_set(m, m1, x.len, new_len, idx, k);
+  map_delete_content_set(m, x.keys.map, x.len, new_len, idx, k);
 
   x.len := new_len;
 
@@ -393,6 +410,7 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface,
   requires intComp(Ip, intComp(Ic, In)) == Ipcn
   requires n.keys.length == 2*B && n.ptrs.length == 2*B
   requires p.len < p.keys.length - 1 && 0 < c.len // Or that it's 2B - 1?
+  requires p.ptrs[0] != null  // p is an internal node. TODO?
 
   ensures gamma(p, Ip1) &*& gamma(c, Ic1) &*& gamma(n, In1)
   ensures intValid(Ip1) == true && intValid(Ic1) == true && intValid(In1) == true
@@ -402,24 +420,23 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface,
 {
   var m := (c.len / 2) + 1;
   var k := c.keys[m - 1];
-  
+
+  // Create a new node n
   n.locktid := 0;
   n.len := m - 1;
   n.rangeLb := k;
   n.rangeUb := c.rangeUb;
 
+  // Copy half the contents from c to n
   arr_copy(c.keys, n.keys, m, 0, c.len - m);
   arr_copy_node(c.ptrs, n.ptrs, m, 0, c.len - m + 1);
 
   c.len := m - 1;
   c.rangeUb := k;
 
-  // Shift keys in parent and insert link to n
-  var p_key_map := map_of_array(p.keys);
-  var k_idx, new_len, p_key_map_1 := arr_insert(p.keys, k, p.len, p_key_map);
-  pure assert forall i: Int :: 0 <= i <= p.len ==> p != p.ptrs[i];
+  // Shift keys of p and insert link to n
+  var k_idx, new_len := arr_insert(p.keys, k, p.len);
   arr_shift_node(p.ptrs, k_idx + 1, k_idx + 2, p.len - k_idx);
-  pure assert forall i: Int :: 0 <= i <= p.len ==> p != p.ptrs[i];
   p.ptrs[k_idx + 1] := n;
   p.len := new_len;
 
@@ -429,13 +446,14 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface,
 
   //  var Ip1 := int(Ip.inf, Ip.na, Ip1fm, Ip.FP, Ip.FPo ++ {n}); TODO expand in symbexec
   pure assume Ip1 != intUndef && Ip1.inf == Ip.inf && Ip1.na == Ip.na
-    && Ip1.fm == fm_of_node(p, p.keys, p.ptrs, p.len, p.len)
-    && Ip1.FP == Ip.FP && Ip1.FPo == fpo_of_node(p, p.keys, p.ptrs, p.len, p.len); //Ip1.FPo == Ip.FPo ++ {n};
+    && Ip1.fm == fm_of_node(p, p.keys.map, p.ptrs.map, p.len, p.len)
+    && Ip1.FP == Ip.FP && Ip1.FPo == fpo_of_node(p, p.keys.map, p.ptrs.map, p.len, p.len); //Ip1.FPo == Ip.FPo ++ {n};
     //  pure assume (forall n: Node :: n in Ip1.FPo ==> (exists i: Int :: 0 <= i <= p.len && n == p.ptrs[i]
     //    @(matching n yields p.ptrs[i])));
   lemma_int_valid_unfold(Ip);
-  fm_of_node_correct(p, p.keys, p.ptrs, p.len, p.len);
+  lemma_fm_of_node_correct(p, p.keys.map, p.ptrs.map, p.len, p.len);
   lemma_int_valid_fold(Ip1);
+  assert gamma(p, Ip1) &*& gammaSpatial(c) &*& gammaSpatial(n);
 }
 
 
