@@ -263,7 +263,7 @@ let free_vars e =
         fv bv acc e
     | Null _ | Emp _ | IntVal _ | BoolVal _ -> acc
   in fv IdSet.empty IdSet.empty e
-
+    
 (** Variable substitution for expressions (not capture avoiding) *)
 let subst_id sm =
   let rec s bv = function
