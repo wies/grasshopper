@@ -44,6 +44,7 @@ define gammaG(x, I) {
   0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B && x.locktid >= 0
     && ((x.locktid == 0) == (I.na.lockinfo == unlocked))
     && (x.locktid > 0) == (I.na.lockinfo == locked(x.locktid) || I.na.lockinfo == dirtylock(x.locktid))
+    && x.rangeLb <= x.keys[0] && x.keys[x.len-1] < x.rangeUb
     && (forall k: Int :: (I.inf[x].ks[k] >= 1) == (x.rangeLb <= k < x.rangeUb))
     && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> x.keys[i] < x.keys[j])
     && (x.ptrs[0] == null && I.FPo == {}  // Leaf
@@ -52,6 +53,7 @@ define gammaG(x, I) {
      || x.ptrs[0] != null  // Internal
        && I.na.contents == {}
        && (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i])
+       && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j])
        && (forall i: Int, k: Int :: 0 <= i <= x.len ==>
           x.ptrs[i] != null && x.ptrs[i] in I.FPo
           && ((I.fm[x][x.ptrs[i]].ks[k] >= 1) ==
@@ -74,13 +76,14 @@ procedure newNode(xtid: Int, xlen: Int, xrangeLb: Int, xrangeUb: Int)
 
 pure function fm_of_node(x: Node, kys: Map<Int, Int>, ps: Map<Int, Node>, lenn: Int, i: Int)
   returns (f: Map<Node, Map<Node, FlowDom>>)
-  ensures forall n: Node, n1: Node, k: Int :: i <= 0 ==> f[n][n1].ks[k] == 0
-  ensures forall n: Node, n1: Node, k: Int :: i > 0 && n != x ==> f[n][n1].ks[k] == 0
-  ensures forall n: Node, n1: Node, k: Int :: i > 0 && n in {x} && n1 != ps[i] ==>
+  ensures forall n: Node, n1: Node, k: Int :: ps[0] == null ==> f[n][n1].ks[k] == 0
+  ensures forall n: Node, n1: Node, k: Int :: ps[0] != null && i < 0 ==> f[n][n1].ks[k] == 0
+  ensures forall n: Node, n1: Node, k: Int :: ps[0] != null && i >= 0 && n != x ==> f[n][n1].ks[k] == 0
+  ensures forall n: Node, n1: Node, k: Int :: ps[0] != null && i >= 0 && n in {x} && n1 != ps[i] ==>
   // TODO why not known?    (domEq(f[n][n1], fm_of_node(x, kys, ps, lenn, i-1)[n][n1]) == true)
   f[n][n1].ks[k] == fm_of_node(x, kys, ps, lenn, i-1)[n][n1].ks[k]
     @(matching f[n][n1].ks[k] yields fm_of_node(x, kys, ps, lenn, i-1)[n][n1].ks[k])
-  ensures forall n: Node, n1: Node, k: Int :: i > 0 && n in {x} && n1 in {ps[i]} ==>
+  ensures forall n: Node, n1: Node, k: Int :: ps[0] != null && i >= 0 && n in {x} && n1 in {ps[i]} ==>
   // TODO  (f[n][n1].ks[k] == ((i <= 0 || kys[i-1] <= k) && (i >= lenn || k < kys[i])) ? 1 : 0)
     (f[n][n1].ks[k] == 1 && (i <= 0 || kys[i-1] <= k) && (i >= lenn || k < kys[i])
     || f[n][n1].ks[k] == 0 && !((i <= 0 || kys[i-1] <= k) && (i >= lenn || k < kys[i])))
@@ -100,48 +103,69 @@ pure function fpo_of_node(x: Node, kys: Map<Int, Int>, ps: Map<Int, Node>, lenn:
   requires forall i: Int :: 0 <= i <= lenn ==> x != ps[i]
   ensures x !in X
 {
-  i <= 0 ? {} : fpo_of_node(x, kys, ps, lenn, i-1) ++ {ps[i]}
+  i < 0 || ps[0] == null ? {} : fpo_of_node(x, kys, ps, lenn, i-1) ++ {ps[i]}
 }
 
+pure function cont_of_node(x: Node, kys: Map<Int, Int>, ps: Map<Int, Node>, lenn: Int, i: Int)
+  returns (C: Set<Int>)
+{
+  i < 0 || ps[0] != null ? {} : cont_of_node(x, kys, ps, lenn, i-1) ++ {kys[i]}
+}
 
-lemma lemma_fm_of_node_correct(x: Node, kys: Map<Int, Int>, ps: Map<Int, Node>, lenn: Int, i: Int)
+pure function inf_of_node(x: Node, l: Int, u: Int)
+  returns (d: Map<Node, FlowDom>)
+  ensures forall n: Node, k: Int :: n in {x} ==> (d[n].ks[k] == 1 && l <= k < u)
+    || (d[n].ks[k] == 0 && !(l <= k < u))
+  ensures forall n: Node, k: Int :: n !in {x} ==> d[n].ks[k] == 0
+
+
+lemma lemma_int_of_node(x: Node, i: Int)
 /* TODO why isn't domLeq defn getting instantiated?
-  ensures forall n: Node, n1: Node :: domLeq(domZero(), fm_of_node(x, kys, ps, lenn, i)[n][n1])
-  @(matching domLeq(domZero(), fm_of_node(x, kys, ps, lenn, i)[n][n1]) yields
-  known(domLeq(domZero(), fm_of_node(x, kys, ps, lenn, i)[n][n1])))
+  ensures forall n: Node, n1: Node :: domLeq(domZero(), fm_of_node(x, x.keys, x.ptrs, x.len, i)[n][n1])
+  @(matching domLeq(domZero(), fm_of_node(x, x.keys, x.ptrs, x.len, i)[n][n1]) yields
+  known(domLeq(domZero(), fm_of_node(x, x.keys, x.ptrs, x.len, i)[n][n1])))
  */
-  requires forall i: Int :: 0 <= i <= lenn ==> x != ps[i]
-  requires forall i: Int, j: Int :: 0 <= i < j < lenn ==> kys[i] < kys[j]
+  requires gammaSpatial(x)
+  requires 0 <= x.len
+  requires forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i]
+  requires forall i: Int, j: Int :: 0 <= i < j < x.len ==> x.keys[i] < x.keys[j]
+  requires forall i: Int, j: Int :: x.ptrs[0] != null && 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j]
+  ensures gammaSpatial(x) &*& unchanged(x)
   // All fm values are >= 0
   ensures forall n: Node, n1: Node, k: Int ::
-    domZero().ks[k] <= fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k]
-    @(matching domZero().ks[k] yields fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k])
-    @(matching fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k] yields domZero().ks[k])
+    domZero().ks[k] <= fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k]
+    @(matching domZero().ks[k] yields fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k])
+    @(matching fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] yields domZero().ks[k])
   // fm from nodes != x are 0
   ensures forall n: Node, n1: Node, k: Int ::
-    n !in {x} ==> fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k] == domZero().ks[k]
+    n !in {x} ==> fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] == domZero().ks[k]
   // fm to nodes !in FPo are 0
   ensures forall n: Node, n1: Node, k: Int ::
-    n1 !in fpo_of_node(x, kys, ps, lenn, i)
-       ==> (fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k] == domZero().ks[k])
-  ensures x !in fpo_of_node(x, kys, ps, lenn, i)
+    n1 !in fpo_of_node(x, x.keys.map, x.ptrs.map, x.len, i)
+       ==> (fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] == domZero().ks[k])
+  ensures x !in fpo_of_node(x, x.keys.map, x.ptrs.map, x.len, i)
   // helper invariant for next property
-  ensures forall n: Node, n1: Node, k: Int :: n in {x} && i < lenn && kys[i] <= k
-    ==> fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k] == 0
+  ensures forall n: Node, n1: Node, k: Int :: n in {x} && i < x.len && x.keys[i] <= k
+    ==> fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] == 0
   // fm to different nodes are disjoint
-  ensures forall n: Node, n1: Node, n2: Node, k: Int :: n !in {x} || n1 == n2 || i > lenn
-    || fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k] == 0
-    || fm_of_node(x, kys, ps, lenn, i)[n][n2].ks[k] == 0
+  ensures forall n: Node, n1: Node, n2: Node, k: Int :: n !in {x} || n1 == n2 || i > x.len
+    || fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] == 0
+    || fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n2].ks[k] == 0
   // fm satisfies gammaG
-  ensures forall n: Node, n1: Node, j: Int, k: Int :: n in {x} && n1 in {ps[j]} && 0 <= j <= i ==>
-  //          ps[j] != null && ps[j] in fpo_of_node(x, kys, ps, lenn, i)
-          ((fm_of_node(x, kys, ps, lenn, i)[n][n1].ks[k] >= 1) ==
-             ((j <= 0 || kys[j-1] <= k) && (j >= lenn || k < kys[j])))
-          @(matching ps[j] yields kys[j-1])
-          @(matching ps[j] yields kys[j])
+  ensures forall n: Node, n1: Node, j: Int, k: Int ::
+    x.ptrs[0] != null && n in {x} && n1 in {x.ptrs[j]} && 0 <= j <= i <= x.len ==>
+          n1 in fpo_of_node(x, x.keys.map, x.ptrs.map, x.len, i)
+          && ((fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] >= 1) ==
+              ((j <= 0 || x.keys[j-1] <= k) && (j >= x.len || k < x.keys[j])))
+          @(matching x.ptrs[j] yields x.keys[j-1]) // TODO remove if not needed
+          @(matching x.ptrs[j] yields x.keys[j])
+  // contents are within range
+  requires x.ptrs[0] != null || x.rangeLb <= x.keys[0] && x.keys[x.len-1] < x.rangeUb
+  ensures forall k: Int :: k in cont_of_node(x, x.keys.map, x.ptrs.map, x.len, i) && i < x.len
+    ==> inf_of_node(x, x.rangeLb, x.rangeUb)[x].ks[k] >= 1
 {
-  if (i > 0) {
-    lemma_fm_of_node_correct(x, kys, ps, lenn, i-1);
+  if (i >= 0) {
+    lemma_int_of_node(x, i-1);
   }
 }
 
@@ -411,6 +435,7 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface,
   requires n.keys.length == 2*B && n.ptrs.length == 2*B
   requires p.len < p.keys.length - 1 && 0 < c.len // Or that it's 2B - 1?
   requires p.ptrs[0] != null  // p is an internal node. TODO?
+  requires forall i: Int :: 0 <= i <= p.len ==> p.ptrs[i] != n;  // TODO create and mark node - inflow will be 0, so nothing else can point to it
 
   ensures gamma(p, Ip1) &*& gamma(c, Ic1) &*& gamma(n, In1)
   ensures intValid(Ip1) == true && intValid(Ic1) == true && intValid(In1) == true
@@ -434,28 +459,49 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface,
   c.len := m - 1;
   c.rangeUb := k;
 
+  pure assert p.rangeLb <= p.keys[0] && p.keys[p.len-1] < p.rangeUb;
   // Shift keys of p and insert link to n
   var k_idx, new_len := arr_insert(p.keys, k, p.len);
+
   arr_shift_node(p.ptrs, k_idx + 1, k_idx + 2, p.len - k_idx);
   p.ptrs[k_idx + 1] := n;
   p.len := new_len;
 
   // Show that nodes are good with new interfaces
-  // TODO how to say this without skolems?
-  // { n: Node :: n != p ? { n1: Node :: domZero() } : { n1: Node :: }}
 
   //  var Ip1 := int(Ip.inf, Ip.na, Ip1fm, Ip.FP, Ip.FPo ++ {n}); TODO expand in symbexec
   pure assume Ip1 != intUndef && Ip1.inf == Ip.inf && Ip1.na == Ip.na
     && Ip1.fm == fm_of_node(p, p.keys.map, p.ptrs.map, p.len, p.len)
-    && Ip1.FP == Ip.FP && Ip1.FPo == fpo_of_node(p, p.keys.map, p.ptrs.map, p.len, p.len); //Ip1.FPo == Ip.FPo ++ {n};
-    //  pure assume (forall n: Node :: n in Ip1.FPo ==> (exists i: Int :: 0 <= i <= p.len && n == p.ptrs[i]
-    //    @(matching n yields p.ptrs[i])));
+    && Ip1.FP == Ip.FP && Ip1.FPo == fpo_of_node(p, p.keys.map, p.ptrs.map, p.len, p.len);
   lemma_int_valid_unfold(Ip);
-  lemma_fm_of_node_correct(p, p.keys.map, p.ptrs.map, p.len, p.len);
+  lemma_int_of_node(p, p.len);
   lemma_int_valid_fold(Ip1);
   assert gamma(p, Ip1) &*& gammaSpatial(c) &*& gammaSpatial(n);
+
+  pure assume Ic1 != intUndef && Ic1.na.lockinfo == Ic.na.lockinfo
+    && Ic1.na.contents == cont_of_node(c, c.keys, c.ptrs, c.len, c.len-1)
+    && Ic1.FP == Ic.FP
+    && Ic1.inf == inf_of_node(c, c.rangeLb, c.rangeUb)
+    && Ic1.fm == fm_of_node(c, c.keys.map, c.ptrs.map, c.len, c.len)
+    && Ic1.FPo == fpo_of_node(c, c.keys.map, c.ptrs.map, c.len, c.len);    
+  lemma_int_valid_unfold(Ic);
+  lemma_int_of_node(c, c.len);
+  lemma_int_valid_fold(Ic1);
+  assert gamma(p, Ip1) &*& gamma(c, Ic1) &*& gammaSpatial(n);
+  assert Gr(Ip);
 }
 
+/*
+procedure foo(a: Array<Int>, lenn: Int, k: Int, u: Int)
+  returns (idx: Int, new_len: Int)
+  requires lenn < a.length
+  requires m[lenn-1] < u
+  ensures m1[new_len-1] < u
+{
+  new_len := lenn + 1;
+  m1 := map_shift(m, idx, idx + 1, lenn - idx);
+}
+ */
 
 /* Intermediate states */
 
