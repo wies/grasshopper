@@ -2,34 +2,16 @@
 
 /* Files using this must define:
    - Node, unchanged(x), gammaSpatial(x), gammaG(x, I), gammaB(x, I)
+   - FlowDom, domEq, domLeq, domPlus, domMult, domZero
  */
 
+
+options "-symbexec"
 
 include "../include/flows.spl";
 
 
 /** Flow domain definitions */
-
-datatype FlowDom = fd(ks: Map<Int, Int>);
-
-pure predicate domEq(p1: FlowDom, p2: FlowDom) {
-  forall k: Int :: p1.ks[k] == p2.ks[k]
-    @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k])
-}
-
-pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
-  forall k: Int :: p1.ks[k] <= p2.ks[k]
-    @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k])
-}
-
-pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-  ensures forall k: Int :: p.ks[k] == p1.ks[k] + p2.ks[k]
-
-pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-  ensures forall k: Int :: p.ks[k] == p1.ks[k] * p2.ks[k]
-
-pure function domZero() returns(p: FlowDom)
-  ensures forall k: Int :: p.ks[k] == 0
 
 datatype LockInfo = unlocked | locked(tid: Int) | dirtylock(dtid: Int) | lockTop;
 

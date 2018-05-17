@@ -1,5 +1,7 @@
 /** No-data, single list, sequential version of Harris' list. */
 
+options "-symbexec"
+
 include "../include/flows.spl";
 
 
@@ -9,7 +11,6 @@ datatype FlowDom = fd(pc: Int);
 
 pure predicate domEq(p1: FlowDom, p2: FlowDom) {
   p1.pc == p2.pc
-    @(matching domEq(p1, p2) yields p1.pc) @(matching domEq(p1, p2) yields p2.pc)
 }
 
 pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
@@ -19,6 +20,7 @@ pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
 pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
   ensures p == fd(p1.pc + p2.pc) @(matching domPlus(p1, p2) yields fd(p1.pc + p2.pc))
   // TODO why can't I put term gen inside function definition?
+  // TODO are these term gens even needed?
 
 pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
   ensures p == fd(p1.pc * p2.pc) @(matching domMult(p1, p2) yields fd(p1.pc * p2.pc))

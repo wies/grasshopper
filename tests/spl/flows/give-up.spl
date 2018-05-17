@@ -1,8 +1,31 @@
 /** Give-up technique template for linearizable dictionaries. */
 
+options "-symbexec"
+
 include "give-up-header.spl"
 
   
+datatype FlowDom = fd(ks: Map<Int, Int>);
+
+pure predicate domEq(p1: FlowDom, p2: FlowDom) {
+  forall k: Int :: p1.ks[k] == p2.ks[k]
+    @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k])
+}
+
+pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
+  forall k: Int :: p1.ks[k] <= p2.ks[k]
+    @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k])
+}
+
+pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+  ensures forall k: Int :: p.ks[k] == p1.ks[k] + p2.ks[k]
+
+pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+  ensures forall k: Int :: p.ks[k] == p1.ks[k] * p2.ks[k]
+
+pure function domZero() returns(p: FlowDom)
+  ensures forall k: Int :: p.ks[k] == 0
+
 struct Node {}
 
 define unchanged(x) { true }
