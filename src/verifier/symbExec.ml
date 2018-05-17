@@ -1121,11 +1121,11 @@ let rec symb_exec st postcond comms =
         symb_exec st postcond comms'
         | Error (errs, m) -> mk_error "This assert may not hold" errs m pp.pp_pos)
     | FOL spec_form ->
-      let spec_form, st = fold_map_terms process_no_array st spec_form in
+      let spec, st = fold_map_terms process_no_array st spec_form in
       let st' = add_neq_constraints st in
-      (match find_frame st st'.se_state (spec_form, []) with
+      (match find_frame st st'.se_state (spec, []) with
         | Ok _ ->
-        symb_exec st postcond comms'
+        symb_exec {st with se_state = add_state (spec, []) st.se_state} postcond comms'
         | Error (errs, m) -> mk_error "This assert may not hold" errs m pp.pp_pos))
   | Basic (Return {return_args=xs}, pp) as comm :: _ ->
     Debug.debug (fun () ->
