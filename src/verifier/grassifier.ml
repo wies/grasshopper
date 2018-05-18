@@ -178,6 +178,12 @@ let elim_arrays prog =
         | Loc (Array srt) ->
             mk_read (array_state simple srt) [map; idx]
         | _ -> mk_read map1 [idx1])
+    | App (ArrayMap, [arr], msrt) ->
+        let arr1 = compile_term arr in
+        (match sort_of arr with
+        | Loc (Array srt) ->
+            App (ArrayMap, [array_state simple srt; arr], msrt)
+        | _ -> mk_array_map arr1)
     | App (sym, ts, srt) ->
         let ts1 = List.map compile_term ts in
         App (sym, ts1, srt)
