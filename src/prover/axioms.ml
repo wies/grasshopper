@@ -93,7 +93,7 @@ let open_axioms ?(force=false) open_cond axioms =
   let rec open_axiom generators = function
     | Binder (b, [], f, a) ->
         let f1, generators1 = open_axiom generators f in
-        let generators2, a1 = extract_generators generators a in
+        let generators2, a1 = extract_generators generators1 a in
         Binder (b, [], f1, a1), generators2
     | Binder (b, vs, f, a) -> 
         (* extract term generators *)
