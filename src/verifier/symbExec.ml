@@ -368,6 +368,7 @@ let state_of_spec_list fields old_state specs : state * state =
       let spatials = List.filter (function [] -> false | _ -> true) spatials in
       (match spatials with
       | [] -> old_state, add (smk_and pures, []) state, spatial'
+      | [sp] -> old_state, add (smk_and pures, sp) state, spatial'
       | _ -> old_state, add (smk_and pures, [Conj spatials]) state, spatial')
     | Sl.BoolOp _ -> fail ()
     | Sl.Binder (b, vs, f, _) ->
@@ -924,11 +925,24 @@ let rec symb_exec st postcond comms =
         lineSep (string_of_state postcond) lineSep);
     (* TODO do this better *)
     let st = add_neq_constraints st in
+    (* First, check if current state is unsat *)
+    (try
+      (match find_frame st st.se_state (mk_false, []) with
+      | Ok _ -> (* Unsat, so forget checking postcondition *)
+        []
+      | Error _ ->
     (match check_entailment st st.se_state postcond with
       | Ok _ -> []
       | Error (errs, m) ->
       (* TODO to get line numbers, convert returns into asserts *)
-        mk_error "A postcondition may not hold" errs m dummy_position)
+            mk_error "A postcondition may not hold" errs m dummy_position))
+    with _ ->
+      print_endline @@ (string_of_src_pos pos) ^ "\nWarning: unsat check hit exception";
+    (match check_entailment st st.se_state postcond with
+      | Ok _ -> []
+      | Error (errs, m) ->
+      (* TODO to get line numbers, convert returns into asserts *)
+            mk_error "A postcondition may not hold" errs m dummy_position))
   | (Basic (Assign {assign_lhs=[f];
         assign_rhs=[App (Write, [array_state; arr; idx; rhs], srt)]}, pp) as comm) :: comms'
   | (Basic (Assign {assign_lhs=[f];
