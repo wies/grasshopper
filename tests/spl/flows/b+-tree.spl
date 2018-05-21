@@ -63,6 +63,7 @@ define gammaB(x, I) {
     && (x.locktid > 0) == (I.na.lockinfo == locked(x.locktid) || I.na.lockinfo == dirtylock(x.locktid))
     && (x.locktid == 0) == (I.na.lockinfo == unlocked)
     && (forall n: Node, n1: Node, k: Int :: I.fm[n][n1].ks[k] <= I.fm[n][n1].pc)  // edgeset != {} ==> pc >= 1
+    && (forall k: Int :: I.inf[x].ks[k] >= 1 ==> I.inf[x].pc == 1)  // inset != {} ==> pc == 1
 }
 
 define gammaG(x, I) {
@@ -70,6 +71,7 @@ define gammaG(x, I) {
     && ((x.locktid == 0) == (I.na.lockinfo == unlocked))
     && (x.locktid > 0) == (I.na.lockinfo == locked(x.locktid) || I.na.lockinfo == dirtylock(x.locktid))
     && (forall n: Node, n1: Node, k: Int :: I.fm[n][n1].ks[k] <= I.fm[n][n1].pc)  // edgeset != {} ==> pc >= 1
+    && (forall k: Int :: I.inf[x].ks[k] >= 1 ==> I.inf[x].pc == 1)  // inset != {} ==> pc == 1
     && x.rangeLb <= x.keys[0] && x.keys[x.len-1] < x.rangeUb
     && (forall k: Int :: (I.inf[x].ks[k] >= 1) == (x.rangeLb <= k < x.rangeUb))
     && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> x.keys[i] < x.keys[j])
@@ -152,17 +154,13 @@ pure function fpo_of_node(x: Node, kys: Map<Int, Int>, ps: Map<Int, Node>, lenn:
   i < 0 || ps[0] == null ? {} : fpo_of_node(x, kys, ps, lenn, i-1) ++ {ps[i]}
 }
 
-pure function cont_of_node(x: Node, kys: Map<Int, Int>, ps: Map<Int, Node>, lenn: Int, i: Int)
-  returns (C: Set<Int>)
-{
-  i < 0 || ps[0] != null ? {} : cont_of_node(x, kys, ps, lenn, i-1) ++ {kys[i]}
-}
-
 pure function inf_of_node(x: Node, l: Int, u: Int)
   returns (d: Map<Node, FlowDom>)
   ensures forall n: Node, k: Int :: n in {x} ==> (d[n].ks[k] == 1 && l <= k < u)
     || (d[n].ks[k] == 0 && !(l <= k < u))
   ensures forall n: Node, k: Int :: n !in {x} ==> d[n].ks[k] == 0
+  ensures forall n: Node, k: Int :: n in {x} ==> (d[n].pc == 1 && l < u) || (d[n].pc == 0 && !(l < u))
+  ensures forall n: Node, k: Int :: n !in {x} ==> d[n].pc == 0
 
 
 lemma lemma_int_of_node(x: Node, i: Int)
@@ -210,18 +208,22 @@ lemma lemma_int_of_node(x: Node, i: Int)
           @(matching x.ptrs[j] yields x.keys[j-1]) // TODO remove if not needed
           @(matching x.ptrs[j] yields x.keys[j])
   ensures forall n: Node, n1: Node, j: Int ::
-    x.ptrs[0] != null && n in {x} && n1 in {x.ptrs[j]} && 0 <= j <= i <= x.len
+    x.ptrs[0] != null && {n} == {x} && n1 in {x.ptrs[j]} && 0 <= j <= i <= x.len
     ==> fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].pc == 1
-    // TODO this is a hack to get around the fact that simplification removes n
-    @(matching fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].pc
-    yields fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[x][n1].pc)
+    // TODO simplification removes n -- disable?
   // contents are within range
   requires x.ptrs[0] != null || x.rangeLb <= x.keys[0] && x.keys[x.len-1] < x.rangeUb
-  ensures forall k: Int :: k in cont_of_node(x, x.keys.map, x.ptrs.map, x.len, i) && i < x.len
+  ensures forall k: Int :: x.ptrs[0] == null && i <= x.len && k in set_of_map(x.keys.map, 0, i)
     ==> inf_of_node(x, x.rangeLb, x.rangeUb)[x].ks[k] >= 1
+  // edgeset != {} ==> pc >= 1
+  ensures forall n: Node, n1: Node, k: Int ::
+    fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k]
+    <= fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].pc
 {
   if (i >= 0) {
     lemma_int_of_node(x, i-1);
+    if (i > 0)
+      extend_right(x.keys.map, 0, i-1);
   }
 }
 
@@ -233,6 +235,16 @@ procedure gamma_sync(x: Node, Ix: Interface, Ix1: Interface)
   returns ()
   requires [gamma(x, Ix1)](Ix) &*& intValid(Ix1) == true &*& intEq(Ix, Ix1) == true
   ensures [gamma(x, Ix1)](Ix1) &*& unchanged(x)
+
+// This lemma depends on the flow domain being a function domain -- generalize?
+lemma lemma_pred(k: Int, x: Node, Ix: Interface, I2: Interface, I: Interface)
+  returns (y: Node, Iy: Interface, I3: Interface)
+  requires Gr(I2)
+  requires intComp(Ix, I2) == I && Ix.FP == {x}
+  requires Ix.inf[x].ks[k] > 0 && I.inf[x].ks[k] == 0
+  ensures N(y, Iy) &*& Gr(I3)
+  ensures I2 == intComp(Iy, I3)
+  ensures Iy.inf[y].ks[k] > 0 && Iy.fm[y][x].ks[k] > 0
 
 lemma lemma_gamma_comp_sing_int(x: Node, Ix: Interface, I2: Interface)
   returns (I: Interface)
@@ -482,20 +494,28 @@ procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
 /** split */
 
 // Lemma that all keys in a node come from its parent
-lemma lemma_inheritance(k: Int, p: Node, Ip: Interface, c: Node, Ic: Interface,
+lemma lemma_inheritance(k: Int, k1: Int, p: Node, Ip: Interface, c: Node, Ic: Interface,
                         I2: Interface, I: Interface)
   requires N(p, Ip) &*& N(c, Ic) &*& Gr(I2)
   requires I == intComp(Ip, intComp(Ic, I2)) &*& globalInt(I)
   requires Ic.inf[c].ks[k] >= 1 && c != r
+  requires Ip.inf[p].ks[k1] >= 1 && Ip.fm[p][c].ks[k1] >= 1
   ensures N(p, Ip) &*& N(c, Ic) &*& Gr(I2)
   ensures Ip.inf[p].ks[k] >= 1 && Ip.fm[p][c].ks[k] >= 1
 {
-  var y, Iy, I3 := lemma_pred(c, Ic, intComp(Ip, I2), I);
+  lemma_intro_conj_2(Ip, I2);
+  var I3 := lemma_Gr_comp(Ip, I2);
+  var y, Iy, I4 := lemma_pred(k, c, Ic, I3, I);
   if (y != p) {
-    pure assert intComp(Ip, intComp(Ic, I2)) == intComp(Ic, intComp(Ip, I2));
-    pure assert y in I2.FP;
-    var Iy, I4 := lemma_decomp(y, I2);
+    var I5 := lemma_disj_fp(Iy, I4, Ip, I2);
+    lemma_conc(c, Ic);
+    lemma_conc(p, Ip);
+    lemma_conc(y, Iy);
+    lemma_inf_geq(c, Ic, p, Ip, y, Iy, intComp(Ic, intComp(Ip, Iy)));
+
     pure assert false;
+  } else {
+    lemma_disj_eq(Iy, I4, Ip, I2);
   }
 }
 
@@ -511,7 +531,11 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface,
   requires n.keys.length == 2*B && n.ptrs.length == 2*B
   requires p.len < p.keys.length - 1 && c.len == 2 * B - 1
   requires p.ptrs[0] != null  // p is an internal node. TODO?
-  requires forall i: Int :: 0 <= i <= p.len ==> p.ptrs[i] != n;  // TODO create and mark node - inflow will be 0, so nothing else can point to it
+  // This follows from lemma_inheritance
+  requires forall k: Int :: Ic.inf[c].ks[k] >= 1 ==> Ip.inf[p].ks[k] >= 1 && Ip.fm[p][c].ks[k] >= 1
+  // TODO create and mark node - inflow will be 0, so nothing else can point to it
+  requires forall i: Int :: 0 <= i <= p.len ==> p.ptrs[i] != n;
+  requires forall i: Int :: 0 <= i <= c.len ==> c.ptrs[i] != n;
 
   ensures gamma(p, Ip1) &*& gamma(c, Ic1) &*& gamma(n, In1)
   ensures intValid(Ip1) == true && intValid(Ic1) == true && intValid(In1) == true
@@ -552,11 +576,12 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface,
   lemma_int_valid_unfold(Ip);
   lemma_int_of_node(p, p.len);
   lemma_int_valid_fold(Ip1);
-  pure assume p.rangeLb <= k < p.rangeUb;  // TODO CONTINUE
-  assert gamma(p, Ip1) &*& gammaSpatial(c) &*& gammaSpatial(n);
+  pure assert Ic.inf[c].ks[k] >= 1 && Ip.inf[p].ks[k] >= 1;
+  // assert gamma(p, Ip1) &*& gammaSpatial(c) &*& gammaSpatial(n);
 
   pure assume Ic1 != intUndef && Ic1.na.lockinfo == Ic.na.lockinfo
-    && Ic1.na.contents == cont_of_node(c, c.keys, c.ptrs, c.len, c.len-1)
+    && (Ic1.na.contents == set_of_map(c.keys.map, 0, c.len) && c.ptrs[0] == null
+       || Ic1.na.contents == {} && c.ptrs[0] != null)
     && Ic1.FP == Ic.FP
     && Ic1.inf == inf_of_node(c, c.rangeLb, c.rangeUb)
     && Ic1.fm == fm_of_node(c, c.keys.map, c.ptrs.map, c.len, c.len)
@@ -564,7 +589,23 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface,
   lemma_int_valid_unfold(Ic);
   lemma_int_of_node(c, c.len);
   lemma_int_valid_fold(Ic1);
-  assert gamma(p, Ip1) &*& gamma(c, Ic1) &*& gammaSpatial(n);
+  // assert gamma(p, Ip1) &*& gamma(c, Ic1) &*& gammaSpatial(n);
+
+  pure assume In1 != intUndef && In1.na.lockinfo == unlocked
+    && (In1.na.contents == set_of_map(n.keys.map, 0, n.len) && n.ptrs[0] == null
+       || In1.na.contents == {} && n.ptrs[0] != null)
+    && In1.FP == In.FP
+    && In1.inf == inf_of_node(n, n.rangeLb, n.rangeUb)
+    && In1.fm == fm_of_node(n, n.keys.map, n.ptrs.map, n.len, n.len)
+    && In1.FPo == fpo_of_node(n, n.keys.map, n.ptrs.map, n.len, n.len);    
+  lemma_int_valid_unfold(In);
+  lemma_int_of_node(n, n.len);
+  lemma_int_valid_fold(In1);
+  assert gamma(p, Ip1) &*& gamma(c, Ic1) &*& gamma(n, In1);
+
+  // Compose the new interfaces
+  Ipcn1 := lemma_int_comp_fold_3(p, Ip1, c, Ic1, n, In1);
+  // Show that interface of region is contextually extended
   assert Gr(Ip);
 }
 
