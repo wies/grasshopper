@@ -97,7 +97,6 @@ flows:harris-1          tests/spl/flows/harris-1.spl            ''     pass
 flows:harris-2          tests/spl/flows/harris-2.spl            ''     pass
 flows:give-up           tests/spl/flows/give-up.spl             ''     pass
 flows:b+tree            tests/spl/flows/b+-tree.spl             ''     pass
-flows:link              tests/spl/flows/link.spl                ''     pass
 "
 
 res=0
