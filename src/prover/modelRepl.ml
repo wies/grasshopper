@@ -54,10 +54,28 @@ let rec term_of_expr model e =
     let sym = FreeSym id in
     let (arg_srts, res_srt) = get_sign sym in
     mk_app res_srt sym ts
-  | BinaryOp (e1, OpIn, e2, _, _) ->
-    mk_elem_term (term_of_expr model e1) (term_of_expr model e2)
-  | BinaryOp (e1, OpEq, e2, _, _) ->
-    mk_eq_term (term_of_expr model e1) (term_of_expr model e2)
+  | BinaryOp (e1, op, e2, _, _) as e ->
+    let mk_t = match op with
+      | OpDiff -> mk_diff
+      | OpInt -> fun t1 t2 -> mk_inter [t1; t2]
+      | OpMinus -> mk_minus
+      | OpPlus -> mk_plus
+      | OpMult -> mk_mult
+      | OpDiv -> mk_div
+      | OpMod -> mk_mod
+      | OpEq -> mk_eq_term
+      | OpGt -> mk_gt_term
+      | OpLt -> mk_lt_term
+      | OpGeq -> mk_geq_term
+      | OpLeq -> mk_leq_term
+      | OpIn -> mk_elem_term
+      | OpBvAnd -> GrassUtil.mk_bv_and
+      | OpBvOr -> GrassUtil.mk_bv_or
+      | OpBvShiftL -> GrassUtil.mk_bv_shift_left
+      | OpBvShiftR -> GrassUtil.mk_bv_shift_right
+      | _ -> fail ("TODO: can't yet handle: " ^ string_of_expr e)
+    in
+    mk_t (term_of_expr model e1) (term_of_expr model e2)
   | e -> fail ("TODO: can't yet handle: " ^ string_of_expr e)
 
 let repl model =
