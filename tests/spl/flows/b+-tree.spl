@@ -216,7 +216,7 @@ lemma lemma_int_of_node(x: Node, i: Int)
     ==> fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].pc == 1
     // TODO simplification removes n -- disable?
   // contents are within range
-  requires x.ptrs[0] != null || x.rangeLb <= x.keys[0] && x.keys[x.len-1] < x.rangeUb
+  requires x.len != 0 ==> x.rangeLb <= x.keys[0] && x.keys[x.len-1] < x.rangeUb
   ensures forall k: Int :: x.ptrs[0] == null && i <= x.len && k in set_of_map(x.keys.map, 0, i)
     ==> inf_of_node(x, x.rangeLb, x.rangeUb)[x].ks[k] >= 1
   // edgeset != {} ==> pc >= 1
@@ -232,6 +232,33 @@ lemma lemma_int_of_node(x: Node, i: Int)
 }
 
 
+lemma lemma_calculate_int(x: Node)
+  returns (Ix: Interface)
+  requires gammaSpatial(x)
+  requires 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B && x.locktid >= 0
+  requires forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x != x.ptrs[i] && x.ptrs[i] != null
+  requires forall i: Int, j: Int :: 0 <= i < j < x.len ==> x.keys[i] < x.keys[j]
+  requires forall i: Int, j: Int :: x.ptrs[0] != null && 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j]
+  requires x.len != 0 ==> x.rangeLb <= x.keys[0] && x.keys[x.len-1] < x.rangeUb
+  ensures gamma(x, Ix) &*& unchanged(x)
+  ensures Ix != intUndef && intValid(Ix) == true
+{
+  // TODO use assignment here instead
+  pure assume Ix != intUndef
+    && (x.locktid == TID && Ix.na.lockinfo == dirtylock(x.locktid)
+       || x.locktid == 0 && Ix.na.lockinfo == unlocked)
+    && (Ix.na.contents == set_of_map(x.keys.map, 0, x.len) && x.ptrs[0] == null
+       || Ix.na.contents == {} && x.ptrs[0] != null)
+    && Ix.FP == {x}
+    && Ix.inf == inf_of_node(x, x.rangeLb, x.rangeUb)
+    && Ix.fm == fm_of_node(x, x.keys.map, x.ptrs.map, x.len, x.len)
+    && Ix.FPo == fpo_of_node(x, x.keys.map, x.ptrs.map, x.len, x.len);    
+  lemma_int_of_node(x, x.len);
+  lemma_int_valid_fold(Ix);
+}
+
+
+  
 /** Lemmas to deal with conjunction */
 
 // This follows from semantics of sync not modifying heap
@@ -570,7 +597,6 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface, c_idx: Int,
   c.len := m - 1;
   c.rangeUb := k;
 
-  pure assert p.rangeLb <= p.keys[0] && p.keys[p.len-1] < p.rangeUb;
   var old_p_keys := p.keys.map;
   // Shift keys of p and insert link to n
   var k_idx, new_len := arr_insert(p.keys, k, p.len);
@@ -587,45 +613,17 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface, c_idx: Int,
 
   // Show that nodes are good with new interfaces
 
-  //  var Ip1 := int(Ip.inf, Ip.na, Ip1fm, Ip.FP, Ip.FPo ++ {n}); TODO expand in symbexec
-  pure assume Ip1 != intUndef && Ip1.inf == Ip.inf && Ip1.na == Ip.na
-    && Ip1.fm == fm_of_node(p, p.keys.map, p.ptrs.map, p.len, p.len)
-    && Ip1.FP == Ip.FP && Ip1.FPo == fpo_of_node(p, p.keys.map, p.ptrs.map, p.len, p.len);
-  lemma_int_valid_unfold(Ip);
-  lemma_int_of_node(p, p.len);
-  lemma_int_valid_fold(Ip1);
-  pure assert Ic.inf[c].ks[k] == 1 && Ip.inf[p].ks[k] == 1;
-  //  assert gamma(p, Ip1) &*& gammaSpatial(c) &*& gammaSpatial(n);
+  pure assert Ic.inf[c].ks[k] == 1 && Ip.inf[p].ks[k] == 1;  // To show that p.rangeLb <= k
+  Ip1 := lemma_calculate_int(p);
+  Ic1 := lemma_calculate_int(c);
+  In1 := lemma_calculate_int(n);
 
-  pure assume Ic1 != intUndef && Ic1.na.lockinfo == Ic.na.lockinfo
-    && (Ic1.na.contents == set_of_map(c.keys.map, 0, c.len) && c.ptrs[0] == null
-       || Ic1.na.contents == {} && c.ptrs[0] != null)
-    && Ic1.FP == Ic.FP
-    && Ic1.inf == inf_of_node(c, c.rangeLb, c.rangeUb)
-    && Ic1.fm == fm_of_node(c, c.keys.map, c.ptrs.map, c.len, c.len)
-    && Ic1.FPo == fpo_of_node(c, c.keys.map, c.ptrs.map, c.len, c.len);    
-  lemma_int_valid_unfold(Ic);
-  lemma_int_of_node(c, c.len);
-  lemma_int_valid_fold(Ic1);
-  // assert gammaSpatial(p) &*& gamma(c, Ic1) &*& gammaSpatial(n);
-
-  pure assume In1 != intUndef && In1.na.lockinfo == unlocked
-    && (In1.na.contents == set_of_map(n.keys.map, 0, n.len) && n.ptrs[0] == null
-       || In1.na.contents == {} && n.ptrs[0] != null)
-    && In1.FP == In.FP
-    && In1.inf == inf_of_node(n, n.rangeLb, n.rangeUb)
-    && In1.fm == fm_of_node(n, n.keys.map, n.ptrs.map, n.len, n.len)
-    && In1.FPo == fpo_of_node(n, n.keys.map, n.ptrs.map, n.len, n.len);    
-  lemma_int_valid_unfold(In);
-  lemma_int_of_node(n, n.len);
-  lemma_int_valid_fold(In1);
-  // assert gammaSpatial(p) &*& gammaSpatial(c) &*& gamma(n, In1);
-
-  //  assert gamma(p, Ip1) &*& gamma(c, Ic1) &*& gamma(n, In1);
+  assert gamma(p, Ip1) &*& gamma(c, Ic1) &*& gamma(n, In1);
 
   // Compose the new interfaces
+  lemma_int_valid_unfold(In);
   lemma_int_comp_unfold_3(p, Ip, c, Ic, n, In, Ipcn);
-  pure assert domLeq(domMult(Ip1.inf[p], Ip1.fm[p][c]), Ic1.inf[c]) == true;
+  //  pure assert domLeq(domMult(Ip1.inf[p], Ip1.fm[p][c]), Ic1.inf[c]) == true;
   //  Ipcn1 := lemma_int_comp_fold_3(p, Ip1, c, Ic1, n, In1);
   // Show that interface of region is contextually extended
   pure assume false;
