@@ -17,7 +17,7 @@ define N(x, I) { Gr(I) &*& I.FP == {x} }
 
 
 pure function intComp(I1: Interface, I2: Interface) returns (I: Interface)
-  ensures I.FP == I1.FP ++ I2.FP  // TODO only when I != intUndef
+  ensures I != intUndef ==> I.FP == I1.FP ++ I2.FP
   ensures forall n: Node :: I == intUndef || n !in I1.FP || n !in I2.FP
   ensures I.FPo == (I1.FPo -- I2.FP) ++ (I2.FPo -- I1.FP)
 
@@ -74,7 +74,8 @@ lemma lemma_int_comp_fold_3(x: Node, Ix: Interface, y: Node, Iy: Interface, z: N
   returns (I: Interface)
   requires intValid(Ix) == true && intValid(Iy) == true && intValid(Iz) == true
   requires Ix.FP == {x} && Iy.FP == {y} && Iz.FP == {z} && x != y && x != z && z != y
-  requires x !in Iy.FPo && x !in Iz.FPo && y !in Iz.FPo
+  requires domEq(Iy.fm[y][x], domZero()) == true
+  requires domEq(Iz.fm[z][x], domZero()) == true && domEq(Iz.fm[z][y], domZero()) == true
   requires domLeq(domMult(Ix.inf[x], Ix.fm[x][y]), Iy.inf[y]) == true
   requires domLeq(domPlus(domMult(Ix.inf[x], Ix.fm[x][z]), domMult(Iy.inf[y], Iy.fm[y][z])),
     Iz.inf[z]) == true
@@ -105,6 +106,23 @@ lemma lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: I
     ensures (forall n: Node, n1: Node :: n !in Iy.FP || n1 == x
              || (domEq(I.fm[n][n1], Iy.fm[n][n1]) == true)
              @(matching I.fm[n][n1] yields Iy.fm[n][n1]))
+
+lemma lemma_int_comp_unfold_3(x: Node, Ix: Interface, y: Node, Iy: Interface,
+                              z: Node, Iz: Interface, I: Interface)
+  requires intValid(I) == true && intComp(Ix, intComp(Iy, Iz)) == I
+  requires Ix.FP == {x} && Iy.FP == {y} && Iz.FP == {z} && x != y && x != z && z != y
+  requires domEq(Iy.fm[y][x], domZero()) == true
+  requires domEq(Iz.fm[z][x], domZero()) == true && domEq(Iz.fm[z][y], domZero()) == true
+  ensures domLeq(domMult(Ix.inf[x], Ix.fm[x][y]), Iy.inf[y]) == true
+  ensures domLeq(domPlus(domMult(Ix.inf[x], Ix.fm[x][z]), domMult(Iy.inf[y], Iy.fm[y][z])),
+    Iz.inf[z]) == true
+  ensures domEq(Ix.inf[x], I.inf[x]) == true
+  ensures domEq(Iy.inf[y], domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y]))) == true
+  ensures domEq(Iz.inf[z],
+    domPlus(I.inf[z], domPlus(domMult(Ix.inf[x], Ix.fm[x][z]), domMult(Iy.inf[y], Iy.fm[y][z]))))
+    == true
+  // TODO continue this for flow map
+  //  ensures forall n: Node, n1: Node :: n in Ix.FP && n1 !in 
 
 lemma lemma_int_valid_unfold(I: Interface)
   requires intValid(I) == true

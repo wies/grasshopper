@@ -22,11 +22,15 @@ pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
 
 pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
   ensures p.pc == p1.pc + p2.pc
+    @(matching p.pc yields p1.pc + p2.pc)
   ensures forall k: Int :: p.ks[k] == p1.ks[k] + p2.ks[k]
+    @(matching p.ks[k] yields p1.ks[k] + p2.ks[k])
 
 pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
   ensures p.pc == p1.pc * p2.pc
+    @(matching p.pc yields p1.pc * p2.pc)
   ensures forall k: Int :: p.ks[k] == p1.ks[k] * p2.ks[k]
+    @(matching p.ks[k] yields p1.ks[k] * p2.ks[k])
 
 pure function domZero() returns(p: FlowDom)
   ensures p.pc == 0
@@ -227,7 +231,7 @@ lemma lemma_int_of_node(x: Node, i: Int)
   }
 }
 
-  
+
 /** Lemmas to deal with conjunction */
 
 // This follows from semantics of sync not modifying heap
@@ -520,17 +524,20 @@ lemma lemma_inheritance(k: Int, k1: Int, p: Node, Ip: Interface, c: Node, Ic: In
 }
 
 
-procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface,
+procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface, c_idx: Int,
                      n: Node, In: Interface, Ipcn: Interface)
   returns (Ip1: Interface, Ic1: Interface, In1: Interface, Ipcn1: Interface)
   requires gamma(p, Ip) &*& gamma(c, Ic) &*& (acc(n) &*& acc(n.ptrs) &*& acc(n.keys))
   requires In.FP == {n} && domEq(In.inf[n], domZero()) == true && In.FPo == {}
   requires intValid(Ip) == true && intValid(Ic) == true && intValid(In) == true
   requires Ip.na.lockinfo == locked(TID) && Ic.na.lockinfo == locked(TID)
-  requires intComp(Ip, intComp(Ic, In)) == Ipcn
+  requires intComp(Ip, intComp(Ic, In)) == Ipcn && intValid(Ipcn) == true
   requires n.keys.length == 2*B && n.ptrs.length == 2*B
   requires 0 < p.len < p.keys.length - 1 && c.len == 2 * B - 1
   requires p.ptrs[0] != null  // p is an internal node. TODO?
+  requires 0 <= c_idx < p.len && p.ptrs[c_idx] == c
+  // Consequence of acyclicity
+  requires domEq(Ic.fm[c][p], domZero()) == true
   // This follows from lemma_inheritance
   requires forall k: Int :: Ic.inf[c].ks[k] == 1 ==> Ip.inf[p].ks[k] == 1 && Ip.fm[p][c].ks[k] == 1
   // TODO create and mark node - inflow will be 0, so nothing else can point to it
@@ -548,25 +555,35 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface,
 
   // Create a new node n
   n.locktid := 0;
-  n.len := m - 1;
   n.rangeLb := k;
   n.rangeUb := c.rangeUb;
 
-  // Copy half the contents from c to n
-  arr_copy(c.keys, n.keys, m, 0, c.len - m);
-  arr_copy_node(c.ptrs, n.ptrs, m, 0, c.len - m + 1);
-
+  if (c.ptrs[0] == null) {  // Leaf
+    arr_copy(c.keys, n.keys, m - 1, 0, c.len - m + 1);
+    n.ptrs[0] := null;
+    n.len := m;
+  } else {  // Internal node
+    arr_copy(c.keys, n.keys, m, 0, c.len - m);
+    arr_copy_node(c.ptrs, n.ptrs, m, 0, c.len - m + 1);
+    n.len := m - 1;
+  }
   c.len := m - 1;
   c.rangeUb := k;
 
   pure assert p.rangeLb <= p.keys[0] && p.keys[p.len-1] < p.rangeUb;
+  var old_p_keys := p.keys.map;
   // Shift keys of p and insert link to n
   var k_idx, new_len := arr_insert(p.keys, k, p.len);
 
-  // TODO CONTINUE: need to do different stuff for leaf and internal node!!
+  // Prove c_idx == k_idx
+  pure assert Ic.inf[c].ks[k] == 1 && Ip.fm[p][c].ks[k] == 1 && c == p.ptrs[c_idx];
+  pure assert Ic.inf[c].ks[c.keys[0]] == 1 && Ip.fm[p][c].ks[c.keys[0]] == 1 && c == p.ptrs[c_idx];
+  pure assert k_idx == c_idx;
+
   arr_shift_node(p.ptrs, k_idx + 1, k_idx + 2, p.len - k_idx);
   p.ptrs[k_idx + 1] := n;
   p.len := new_len;
+
 
   // Show that nodes are good with new interfaces
 
@@ -592,9 +609,6 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface,
   lemma_int_valid_fold(Ic1);
   // assert gammaSpatial(p) &*& gamma(c, Ic1) &*& gammaSpatial(n);
 
-  if (c.ptrs[0] == null) { // TODO best place to put this?
-    n.ptrs[0] := null;
-  }
   pure assume In1 != intUndef && In1.na.lockinfo == unlocked
     && (In1.na.contents == set_of_map(n.keys.map, 0, n.len) && n.ptrs[0] == null
        || In1.na.contents == {} && n.ptrs[0] != null)
@@ -607,9 +621,11 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface,
   lemma_int_valid_fold(In1);
   // assert gammaSpatial(p) &*& gammaSpatial(c) &*& gamma(n, In1);
 
-  assert gamma(p, Ip1) &*& gamma(c, Ic1) &*& gamma(n, In1);
+  //  assert gamma(p, Ip1) &*& gamma(c, Ic1) &*& gamma(n, In1);
 
   // Compose the new interfaces
+  lemma_int_comp_unfold_3(p, Ip, c, Ic, n, In, Ipcn);
+  pure assert domLeq(domMult(Ip1.inf[p], Ip1.fm[p][c]), Ic1.inf[c]) == true;
   //  Ipcn1 := lemma_int_comp_fold_3(p, Ip1, c, Ic1, n, In1);
   // Show that interface of region is contextually extended
   pure assume false;
