@@ -66,30 +66,34 @@ define gammaB(x, I) {
   x.locktid >= 0
     && (x.locktid > 0) == (I.na.lockinfo == locked(x.locktid) || I.na.lockinfo == dirtylock(x.locktid))
     && (x.locktid == 0) == (I.na.lockinfo == unlocked)
-    && (forall n: Node, n1: Node, k: Int :: I.fm[n][n1].ks[k] <= I.fm[n][n1].pc)  // edgeset != {} ==> pc >= 1
-    && (forall k: Int :: I.inf[x].ks[k] >= 1 ==> I.inf[x].pc == 1)  // inset != {} ==> pc == 1
+    // edgeset != {} ==> pc == 1
+    && (forall n: Node, n1: Node, k: Int :: I.fm[n][n1].ks[k] >= 1 ==> I.fm[n][n1].pc == 1)
+    && (x.rangeLb < x.rangeUb ==> I.inf[x].pc == 1)  // inset != {} ==> pc == 1
 }
 
 define gammaG(x, I) {
   0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B && x.locktid >= 0
     && ((x.locktid == 0) == (I.na.lockinfo == unlocked))
     && (x.locktid > 0) == (I.na.lockinfo == locked(x.locktid) || I.na.lockinfo == dirtylock(x.locktid))
-    && (forall n: Node, n1: Node, k: Int :: I.fm[n][n1].ks[k] <= I.fm[n][n1].pc)  // edgeset != {} ==> pc >= 1
-    && (forall k: Int :: I.inf[x].ks[k] >= 1 ==> I.inf[x].pc == 1)  // inset != {} ==> pc == 1
+    // edgeset != {} ==> pc == 1
+    && (forall n: Node, n1: Node, k: Int :: I.fm[n][n1].ks[k] >= 1 ==> I.fm[n][n1].pc == 1)
+    && (x.rangeLb < x.rangeUb ==> I.inf[x].pc == 1)  // inset != {} ==> pc == 1
     && (x.len != 0 ==> x.rangeLb <= x.keys[0] && x.keys[x.len-1] < x.rangeUb)
-    && (forall k: Int :: (I.inf[x].ks[k] == 1) == (x.rangeLb <= k < x.rangeUb))
+    && (forall k: Int :: I.inf[x].ks[k] == 1 && x.rangeLb <= k < x.rangeUb
+       || I.inf[x].ks[k] == 0 && !(x.rangeLb <= k < x.rangeUb))
     && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> x.keys[i] < x.keys[j])
     && (x.ptrs[0] == null && I.FPo == {}  // Leaf
-    //       && (forall i: Int :: 0 <= i <= x.len ==> x.ptrs[i] == null)
        && I.na.contents == set_of_map(x.keys.map, 0, x.len)
      || x.ptrs[0] != null  // Internal
        && I.na.contents == {}
        && (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i])
        && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j])
+       && (forall i: Int, k: Int :: 0 <= i <= x.len ==> x.ptrs[i] != null && x.ptrs[i] in I.FPo)
        && (forall i: Int, k: Int :: 0 <= i <= x.len ==>
-          x.ptrs[i] != null && x.ptrs[i] in I.FPo
-          && ((I.fm[x][x.ptrs[i]].ks[k] == 1) ==
-             ((i <= 0 || x.keys[i-1] <= k) && (i >= x.len || k < x.keys[i])))
+          (I.fm[x][x.ptrs[i]].ks[k] == 1
+             && ((i <= 0 || x.keys[i-1] <= k) && (i >= x.len || k < x.keys[i]))
+           || I.fm[x][x.ptrs[i]].ks[k] == 0
+             && !((i <= 0 || x.keys[i-1] <= k) && (i >= x.len || k < x.keys[i])))
           @(matching x.ptrs[i] yields x.keys[i-1])
           @(matching x.ptrs[i] yields x.keys[i])))
 }
@@ -207,8 +211,10 @@ lemma lemma_int_of_node(x: Node, i: Int)
   ensures forall n: Node, n1: Node, j: Int, k: Int ::
     x.ptrs[0] != null && n in {x} && n1 in {x.ptrs[j]} && 0 <= j <= i <= x.len ==>
           n1 in fpo_of_node(x, x.keys.map, x.ptrs.map, x.len, i)
-          && ((fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] == 1) ==
-              ((j <= 0 || x.keys[j-1] <= k) && (j >= x.len || k < x.keys[j])))
+          && (fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] == 1
+             && ((i <= 0 || x.keys[i-1] <= k) && (i >= x.len || k < x.keys[i]))
+           || fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] == 0
+             && !((i <= 0 || x.keys[i-1] <= k) && (i >= x.len || k < x.keys[i])))
           @(matching x.ptrs[j] yields x.keys[j-1]) // TODO remove if not needed
           @(matching x.ptrs[j] yields x.keys[j])
   ensures forall n: Node, n1: Node, j: Int ::
@@ -221,8 +227,8 @@ lemma lemma_int_of_node(x: Node, i: Int)
     ==> inf_of_node(x, x.rangeLb, x.rangeUb)[x].ks[k] >= 1
   // edgeset != {} ==> pc >= 1
   ensures forall n: Node, n1: Node, k: Int ::
-    fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k]
-    <= fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].pc
+    fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] >= 1
+    ==> fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].pc == 1
 {
   if (i >= 0) {
     lemma_int_of_node(x, i-1);
@@ -242,10 +248,12 @@ lemma lemma_calculate_int(x: Node)
   requires x.len != 0 ==> x.rangeLb <= x.keys[0] && x.keys[x.len-1] < x.rangeUb
   ensures gamma(x, Ix) &*& unchanged(x)
   ensures Ix != intUndef && intValid(Ix) == true
+  ensures (x.locktid == TID && Ix.na.lockinfo == locked(x.locktid)
+       || x.locktid == 0 && Ix.na.lockinfo == unlocked)
 {
   // TODO use assignment here instead
   pure assume Ix != intUndef
-    && (x.locktid == TID && Ix.na.lockinfo == dirtylock(x.locktid)
+    && (x.locktid == TID && Ix.na.lockinfo == locked(x.locktid)
        || x.locktid == 0 && Ix.na.lockinfo == unlocked)
     && (Ix.na.contents == set_of_map(x.keys.map, 0, x.len) && x.ptrs[0] == null
        || Ix.na.contents == {} && x.ptrs[0] != null)
@@ -612,18 +620,25 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface, c_idx: Int,
 
 
   // Show that nodes are good with new interfaces
-
   pure assert Ic.inf[c].ks[k] == 1 && Ip.inf[p].ks[k] == 1;  // To show that p.rangeLb <= k
   Ip1 := lemma_calculate_int(p);
   Ic1 := lemma_calculate_int(c);
   In1 := lemma_calculate_int(n);
 
-  assert gamma(p, Ip1) &*& gamma(c, Ic1) &*& gamma(n, In1);
-
   // Compose the new interfaces
   lemma_int_valid_unfold(In);
   lemma_int_comp_unfold_3(p, Ip, c, Ic, n, In, Ipcn);
-  //  pure assert domLeq(domMult(Ip1.inf[p], Ip1.fm[p][c]), Ic1.inf[c]) == true;
+  pure assert c == p.ptrs[c_idx] && old_p_keys[c_idx - 1] == p.keys[c_idx - 1];
+  pure assert Ip1.fm[p][c].ks[c.keys[0]] == 1;
+
+  pure assert domMult(Ip1.inf[p], Ip1.fm[p][c]).pc <= Ic1.inf[c].pc
+    && (forall k: Int :: domMult(Ip1.inf[p], Ip1.fm[p][c]).ks[k] <= Ic1.inf[c].ks[k]
+    @(matching domMult(Ip1.inf[p], Ip1.fm[p][c]).ks[k] yields domMult(Ip.inf[p], Ip.fm[p][c]).ks[k]));
+
+  pure assert domLeq(domMult(Ip1.inf[p], Ip1.fm[p][c]), Ic1.inf[c]) == true;
+
+  // TODO CONTINUE, show this to allow next lemma
+  //  pure assert domEq(Ic1.fm[c][p], domZero()) == true;
   //  Ipcn1 := lemma_int_comp_fold_3(p, Ip1, c, Ic1, n, In1);
   // Show that interface of region is contextually extended
   pure assume false;
