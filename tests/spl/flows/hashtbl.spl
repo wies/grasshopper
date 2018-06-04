@@ -1,6 +1,8 @@
 /** Hash table implementation of the link template for linearizable dictionaries. */
 
-include "../include/flows.spl";
+options "-symbexec"
+
+include "link-header.spl";
 
 
 /** Flow domain definitions */
@@ -33,32 +35,31 @@ function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 function domZero() returns(p: FlowDom)
   ensures forall k: Int :: p.ks[k] == 0 && p.ir[k] == 0
 
-datatype LockInfo = unlocked | locked(tid: Int) | dirtylock(dtid: Int) | lockTop;
-
 datatype NodeType = root | bucket | nodeTop;
-
-datatype NodeDom = nd(contents: Set<Int>, lockinfo: LockInfo, nodetype: NodeType);
-
-predicate ndLeq(a1: NodeDom, a2: NodeDom) {
-  (forall x: Int :: x in a1.contents ==> x in a2.contents)
-    && (a1.lockinfo == a2.lockinfo || a2.lockinfo == lockTop)
-    && (a1.nodetype == a2.nodetype || a2.nodetype == nodeTop)
-}
 
 
 struct Node {
-  var lock: Int;
+  var locktid: Int;
   var len: Int;
-  var arr: Array<Node>;
+  var bkts: Array<Node>;
   var keys: Array<Int>;
   var next: Node;
+  ghost var typ: NodeType;
 }
+
+define unchanged(x) {
+  x.locktid == old(x.locktid) && x.len == old(x.len) && x.bkts == old(x.bkts)
+    && x.keys == old(x.keys) && x.next == old(x.next) && x.typ == old(x.typ)
+    && x.bkts.length == old(x.bkts.length) && x.bkts.map == old(x.bkts.map)
+    && x.keys.length == old(x.keys.length) && x.keys.map == old(x.keys.map)
+}
+
 
 procedure newNode(xlock: Int, xlen: Int, xkeyslen: Int, xnext: Node)
   returns (x: Node, Ix: Interface)
   requires emp
-  ensures [acc(x) &*& acc(x.arr) &*& acc(x.keys)](Ix)
-  ensures x.lock == xlock && x.len == xlen && x.keys.length == xkeyslen && x.next == xnext
+  ensures [acc(x) &*& acc(x.bkts) &*& acc(x.keys)](Ix)
+  ensures x.locktid == xlock && x.len == xlen && x.keys.length == xkeyslen && x.next == xnext
   ensures intValid(Ix) && Ix.FP == {x} && domEq(Ix.inf[x], domZero()) == true && Ix.FPo == {}
 
 
@@ -66,50 +67,63 @@ procedure newNode(xlock: Int, xlen: Int, xkeyslen: Int, xnext: Node)
 
 function hash(x: Node, k: Int) returns (i: Int)
 
-function sk_ir(x: Node, I: Interface, k: Int) returns (y: Node)
-
-define gammaG(x, I) {
-  (I.na.nodetype == root
-   && (forall i: Int :: 0 <= i && i < x.arr.length ==> x.arr[i] != null)
-   && (forall y: Node, k: Int :: y == x.arr[hash(x, k)] ==> I.fm[x][y].ks[k] == 1)
-   && (forall k: Int :: 0 <= hash(x, k) && hash(x, k) < x.arr.length))
-    || (I.na.nodetype == bucket
-       && (x.next == null && I.FPo == {}
-          || x.next != null && (forall k: Int :: I.fm[x][x.next].ks[k] == 1) && I.FPo == {x.next}))
+define gammaSpatial(x) {
+  acc(x) &*& acc(x.bkts)  &*& acc(x.keys)
 }
 
-define gammaB(x, I) { true }
+define gammaB(x, I) {
+  x.locktid >= 0
+    && (x.locktid > 0) == (I.na.lockinfo == locked(x.locktid) || I.na.lockinfo == dirtylock(x.locktid))
+    && (x.locktid == 0) == (I.na.lockinfo == unlocked)
+}
 
-define gamma(x, I) {
-  acc(x) &*& acc(x.arr) &*& acc(x.keys)
-    &*& (gammaG(x, I) && I.na.lockinfo == locked(TID)
-       || gammaB(x, I) && I.na.lockinfo == dirtylock(TID))
-    &*& ((forall k: Int :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
-       && (forall k: Int, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
-       && (forall k: Int, y: Node, z: Node :: y == z
-          || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0)
-       // Inreach keyset \subseteq inset
-       && (forall k: Int :: I.inf[x].ir[k] < 1 || (I.fm[x][sk_ir(x, I, k)].ir[k] > 0)
-          || I.inf[x].ks[k] >= 1
-          @(matching I.inf[x].ir[k] yields I.fm[x][sk_ir(x, I, k)].ir[k])
-          @(matching I.inf[x].ir[k] yields I.fm[x][sk_ir(x, I, k)].ks[k]))
-       // Inreach edgesets \subseteq normal edgesets
-       && (forall k: Int, y: Node :: I.fm[x][y].ir[k] <= I.fm[x][y].ks[k])
-       // If k in inreach, then inreach edgeset is same as normal edgeset (for step)
-       && (forall k: Int, y: Node :: I.inf[x].ir[k] >= 1 && I.inf[x].ks[k] <= 0
-          && I.fm[x][y].ks[k] >= 1 ==> I.fm[x][y].ir[k] >= 1))
+define gammaG(x, I) {
+  x.locktid >= 0
+    && (x.locktid > 0) == (I.na.lockinfo == locked(x.locktid) || I.na.lockinfo == dirtylock(x.locktid))
+    && (x.locktid == 0) == (I.na.lockinfo == unlocked)
+    && ((x.typ == root
+        && (forall i: Int :: 0 <= i && i < x.bkts.length ==> x.bkts[i] != null)
+        && (forall y: Node, k: Int :: y == x.bkts[hash(x, k)] ==> I.fm[x][y].ks[k] == 1)
+        && (forall k: Int :: 0 <= hash(x, k) && hash(x, k) < x.bkts.length))
+     || (x.typ == bucket
+        && (x.next == null && I.FPo == {}
+        || x.next != null && (forall k: Int :: I.fm[x][x.next].ks[k] == 1) && I.FPo == {x.next})))
 }
 
 
 /** Begin programs */
 
 var TID: Int;
-var r: Node;
+axiom TID > 0;
 
-define globalInt(I) {
-  intValid(I) == true && r in I.FP && (forall k: Int :: I.inf[r].ks[k] == 1)
-    && (forall n: Node, k: Int :: n != r ==> I.inf[n].ks[k] == 0)
-    && I.FPo == {} && r != null
+
+procedure lock(x: Node, Ix: Interface, I2: Interface, I: Interface)
+  returns (Ix1: Interface, I1: Interface)
+  requires N(x, Ix) &*& Gr(I2)
+  requires intValid(Ix) == true && intValid(I2) == true
+  requires intComp(Ix, I2) == I && globalInt(I)
+  ensures N(x, Ix1) &*& Gr(I2)
+  ensures intValid(Ix1) == true && intValid(I2) == true
+  ensures intComp(Ix1, I2) == I1 && globalInt(I1) && intEq(Ix, Ix1) == true
+  ensures Ix1.na.lockinfo == locked(TID)
+{
+  lemma_conc(x, Ix);
+
+  // CAS(x.locktid, 0, TID)
+  if (x.locktid == 0) {
+    x.locktid := TID;
+
+    pure assume Ix1 != intUndef && Ix1.inf == Ix.inf && Ix1.na.contents == Ix.na.contents && Ix1.na.lockinfo == locked(TID) && Ix1.fm == Ix.fm && Ix1.FP == Ix.FP && Ix1.FPo == Ix.FPo;
+    lemma_int_valid_unfold(Ix);
+    lemma_int_valid_fold(Ix1);
+    lemma_abs(x, Ix, Ix1);
+    sync(Ix, Ix1);
+    I1 := lemma_Gr_comp_int(Ix1, I2);
+    lemma_repl(I, Ix, I2, Ix1, I1);
+  } else {
+    lemma_conc_rev(x, Ix);
+    Ix1, I1 := lock(x, Ix, I2, I);
+  }
 }
 
 
@@ -125,9 +139,10 @@ procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
            || n == null && (forall y: Node :: Ix.fm[x][y].ks[k] == 0))
 {
   lemma_conc(x, Ix);
-  if (Ix.na.nodetype == root) {
-    n := x.arr[hash(x, k)];
-  } else if (Ix.na.nodetype == bucket) {
+  if (x.typ == root) {
+    n := x.bkts[hash(x, k)];
+  } else {
+    pure assert x.typ == bucket;
     if (x.next == null) {
       n := null;
       lemma_int_valid_unfold(Ix);
@@ -156,7 +171,7 @@ procedure copyNode(x: Node, Ix: Interface, I2: Interface, I: Interface)
   requires [gamma(x, Ix)](Ix) &*& Gr(I2)
   requires intValid(Ix) == true && intValid(I2) == true
   requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
-  requires Ix.na.nodetype == bucket && x.len == x.keys.length
+  requires x.typ == bucket && x.len == x.keys.length
   ensures Gr(I1) &*& globalInt(I)
 {
   var y: Node, Iy: Interface;
@@ -164,10 +179,10 @@ procedure copyNode(x: Node, Ix: Interface, I2: Interface, I: Interface)
 
   var i := 0;
   while (i < x.len)
-    invariant [gamma(x, Ix)](Ix) &*& [acc(y) &*& acc(y.arr) &*& acc(y.keys)](Iy) &*& Gr(I2)
+    invariant [gamma(x, Ix)](Ix) &*& [acc(y) &*& acc(y.bkts) &*& acc(y.keys)](Iy) &*& Gr(I2)
     invariant intValid(Ix) == true && intValid(Iy) == true && intValid(I2) == true
     invariant intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
-    invariant Ix.na.nodetype == bucket && x.len == x.keys.length
+    invariant x.typ == bucket && x.len == x.keys.length
     invariant 0<= i && i <= x.len && y.keys.length == 2 * x.len && y.next == null
     invariant forall j: Int :: 0 <= j < i ==> y.keys[j] == x.keys[j]
   {
@@ -178,15 +193,15 @@ procedure copyNode(x: Node, Ix: Interface, I2: Interface, I: Interface)
 
   var Ix1: Interface;
   pure assume Ix1.inf == Ix.inf && Ix1.na.contents == {}
-  && Ix1.na.lockinfo == Ix.na.lockinfo && Ix1.na.nodetype == Ix.na.nodetype
+  && Ix1.na.lockinfo == Ix.na.lockinfo
   && (forall k: Int :: Ix1.fm[x][y].ks[k] == 1) && (forall k: Int :: Ix1.fm[x][y].ir[k] == 0)
   && (forall z: Node :: domEq(Ix1.fm[x][y], domZero()) == true)
   && Ix1.FP == Ix.FP && Ix1.FPo == {y};
-  // TODO  var Ix1 := int(Ix.inf, nd({}, Ix.na.lockinfo, Ix.na.nodetype), )
+  // TODO  var Ix1 := int(Ix.inf, nd({}, Ix.na.lockinfo, x.typ), )
 
   var Iy1: Interface;
   pure assume Iy1.inf == Ix.inf && Iy1.na.contents == Ix.na.contents
-  && Iy1.na.nodetype == bucket && Iy1.FP == Iy.FP && Iy1.FPo == Iy.FPo
+  && Iy1.FP == Iy.FP && Iy1.FPo == Iy.FPo
   && (forall z: Node :: domEq(Iy1.fm[y][z], domZero()) == true);
 
   lemma_int_valid_fold(Ix1);

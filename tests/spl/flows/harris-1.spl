@@ -100,7 +100,7 @@ procedure insert(hd: Node, I: Interface, n: Node, In: Interface)
     l := r;
     // N(p, Il) &*& Gr(I2)
 
-    lemma_step(Il, I2, I, l, r);
+    lemma_step(Il, I2, I, p, r);
     var Ir: Interface, I3: Interface;
     Ir, I3 := lemma_decomp(r, I2);
     // N(p, Il) &*& N(r, Ir) &*& Gr(I3)
