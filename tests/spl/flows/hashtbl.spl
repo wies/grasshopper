@@ -3,13 +3,14 @@
 options "-symbexec"
 
 include "link-header.spl";
+include "array_util.spl";
 
 
 /** Flow domain definitions */
 
 datatype FlowDom = fd(ks: Map<Int, Int>, ir: Map<Int, Int>);
 
-predicate domEq(p1: FlowDom, p2: FlowDom) {
+pure predicate domEq(p1: FlowDom, p2: FlowDom) {
   (forall k: Int :: p1.ks[k] == p2.ks[k]
    @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
     && (forall k: Int :: p1.ir[k] == p2.ir[k]
@@ -17,22 +18,22 @@ predicate domEq(p1: FlowDom, p2: FlowDom) {
 
 }
 
-predicate domLeq(p1: FlowDom, p2: FlowDom) {
+pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
   (forall k: Int :: p1.ks[k] <= p2.ks[k]
    @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
     && (forall k: Int :: p1.ir[k] <= p2.ir[k]
        @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
 }
 
-function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
   ensures forall k: Int :: p.ks[k] == p1.ks[k] + p2.ks[k]
   ensures forall k: Int :: p.ir[k] == p1.ir[k] + p2.ir[k]
 
-function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
   ensures forall k: Int :: p.ks[k] == p1.ks[k] * p2.ks[k]
   ensures forall k: Int :: p.ir[k] == p1.ir[k] * p2.ir[k]
 
-function domZero() returns(p: FlowDom)
+pure function domZero() returns(p: FlowDom)
   ensures forall k: Int :: p.ks[k] == 0 && p.ir[k] == 0
 
 datatype NodeType = root | bucket | nodeTop;
@@ -78,14 +79,17 @@ define gammaB(x, I) {
 }
 
 define gammaG(x, I) {
-  x.locktid >= 0
+  x.locktid >= 0 && 0 <= x.len && x.len < x.keys.length
     && (x.locktid > 0) == (I.na.lockinfo == locked(x.locktid) || I.na.lockinfo == dirtylock(x.locktid))
     && (x.locktid == 0) == (I.na.lockinfo == unlocked)
     && ((x.typ == root
         && (forall i: Int :: 0 <= i && i < x.bkts.length ==> x.bkts[i] != null)
         && (forall y: Node, k: Int :: y == x.bkts[hash(x, k)] ==> I.fm[x][y].ks[k] == 1)
-        && (forall k: Int :: 0 <= hash(x, k) && hash(x, k) < x.bkts.length))
+        && (forall k: Int :: 0 <= hash(x, k) && hash(x, k) < x.bkts.length)
+        && (forall k: Int :: I.inf[x].ks[k] == 1 && k in outset(x, I.fm)))
      || (x.typ == bucket
+        && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> x.keys[i] < x.keys[j])
+        && I.na.contents == set_of_map(x.keys.map, 0, x.len)
         && (x.next == null && I.FPo == {}
         || x.next != null && (forall k: Int :: I.fm[x][x.next].ks[k] == 1) && I.FPo == {x.next})))
 }
@@ -127,6 +131,29 @@ procedure lock(x: Node, Ix: Interface, I2: Interface, I: Interface)
 }
 
 
+procedure unlock(x: Node, Ix: Interface, I2: Interface, I: Interface)
+  returns (Ix1: Interface, I1: Interface)
+  requires N(x, Ix) &*& Gr(I2)
+  requires intValid(Ix) == true && intValid(I2) == true
+  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
+  ensures N(x, Ix1) &*& Gr(I2)
+  ensures intValid(Ix1) == true && intValid(I2) == true
+  ensures intComp(Ix1, I2) == I1 && globalInt(I1) && intEq(Ix, Ix1) == true
+{
+  lemma_conc(x, Ix);
+
+  x.locktid := 0;
+
+  pure assume Ix1 != intUndef && Ix1.inf == Ix.inf && Ix1.na.contents == Ix.na.contents && Ix1.na.lockinfo == unlocked && Ix1.fm == Ix.fm && Ix1.FP == Ix.FP && Ix1.FPo == Ix.FPo;
+  lemma_int_valid_unfold(Ix);
+  lemma_int_valid_fold(Ix1);
+  lemma_abs(x, Ix, Ix1);
+  sync(Ix, Ix1);
+  I1 := lemma_Gr_comp_int(Ix1, I2);
+  lemma_repl(I, Ix, I2, Ix1, I1);
+}
+
+
 procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   returns (n: Node)
   requires N(x, Ix) &*& Gr(I2)
@@ -136,7 +163,7 @@ procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   ensures intValid(Ix) == true && intValid(I2) == true
   ensures intComp(Ix, I2) == I && globalInt(I)
   ensures (n != null && Ix.fm[x][n].ks[k] >= 1
-           || n == null && (forall y: Node :: Ix.fm[x][y].ks[k] == 0))
+           || n == null && k !in outset(x, Ix.fm))
 {
   lemma_conc(x, Ix);
   if (x.typ == root) {
@@ -155,17 +182,87 @@ procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
 }
 
 
+/** member */
+procedure member(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
+  returns (res: Bool, Ix1: Interface, I1: Interface)
+  requires N(x, Ix) &*& Gr(I2)
+  requires intValid(Ix) == true && intValid(I2) == true
+  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
+  requires Ix.inf[x].ks[k] >= 1 && k !in outset(x, Ix.fm)
+  ensures N(x, Ix1) &*& Gr(I2)
+  ensures intValid(Ix1) == true && intValid(I2) == true
+  ensures intComp(Ix1, I2) == I1 && globalInt(I1) && Ix1.na.lockinfo == locked(TID)
+  ensures intEq(Ix, Ix1) == true
+  // decisiveOpSpec(x, Ix1, res, k):
+  ensures Ix1.na.contents == Ix.na.contents && (res == k in Ix.na.contents)
+{
+  lemma_conc(x, Ix);
+
+  var idx: Int;
+  res, idx := arr_find(x.keys, x.len, k);
+
+  lemma_conc_rev(x, Ix);
+
+  return res, Ix, I;
+}
+
+
+/** delete */
 procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   returns (res: Bool, Ix1: Interface, I1: Interface)
   requires N(x, Ix) &*& Gr(I2)
   requires intValid(Ix) == true && intValid(I2) == true
   requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
-  requires Ix.inf[x].ks[k] >= 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
+  requires Ix.inf[x].ks[k] >= 1 && k !in outset(x, Ix.fm)
   ensures N(x, Ix1) &*& Gr(I2)
   ensures intValid(Ix1) == true && intValid(I2) == true
   ensures intComp(Ix1, I2) == I1 && globalInt(I1) && Ix1.na.lockinfo == locked(TID)
  //ensures decisiveOpSpec(x, Ix1, res, k) == true
+  ensures Ix1.na.contents == Ix.na.contents -- {k} && (res == k in Ix.na.contents)
+{
+  lemma_conc(x, Ix);
+    
+  // Change nodel label to allow breaking gammaG
+  var Ix2: Interface;
+  pure assume Ix2 != intUndef && Ix2.na.lockinfo == dirtylock(TID)
+    && Ix2.na.contents == Ix.na.contents
+    && Ix2.FP == Ix.FP && Ix2.FPo == Ix.FPo && Ix2.inf == Ix.inf && Ix2.fm == Ix.fm
+    // TODO needed to prove intValid(Ix2);
+    && (forall n: Node, n1: Node :: n !in Ix.FP ==> domEq(domZero(), Ix.inf[n])
+       @(matching Ix2.inf[n] yields Ix.inf[n].ks)
+       @(matching Ix2.fm[n][n1] yields Ix.fm[n][n1].ks));
+  lemma_int_valid_unfold(Ix);
+  lemma_int_valid_fold(Ix2);
+  gamma_sync(x, Ix, Ix2);
+  var I3 := lemma_comp_sing_int(x, Ix2, I2);
+  lemma_repl(I, Ix, I2, Ix2, I3);
 
+  ghost var m := x.keys.map;
+
+  var new_len, idx := arr_delete(x.keys, k, x.len);
+
+  map_delete_content_set(m, x.keys.map, x.len, new_len, idx, k);
+
+  x.len := new_len;
+
+  // Change node label back, remove k from contents
+  pure assume Ix1 != intUndef && Ix1.na.lockinfo == locked(TID)
+    && Ix1.na.contents == Ix2.na.contents -- {k}
+    && Ix1.FP == Ix2.FP && Ix1.FPo == Ix2.FPo
+    && Ix1.inf == Ix2.inf && Ix1.fm == Ix2.fm;
+  lemma_int_valid_unfold(Ix2);
+  lemma_int_valid_fold(Ix1);
+  lemma_abs(x, Ix2, Ix1);
+  sync(Ix2, Ix1);
+  var I4 := lemma_Gr_comp_int(Ix1, I2);
+  lemma_repl(I3, Ix2, I2, Ix1, I4);
+
+  return (k in Ix2.na.contents), Ix1, I4;
+}
+
+
+
+/*
 procedure copyNode(x: Node, Ix: Interface, I2: Interface, I: Interface)
   returns (I1: Interface)
   requires [gamma(x, Ix)](Ix) &*& Gr(I2)
@@ -215,3 +312,4 @@ procedure copyNode(x: Node, Ix: Interface, I2: Interface, I: Interface)
 
   // sync();
 }
+ */

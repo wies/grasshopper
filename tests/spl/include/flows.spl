@@ -126,9 +126,10 @@ lemma lemma_int_comp_unfold_3(x: Node, Ix: Interface, y: Node, Iy: Interface,
 
 lemma lemma_int_valid_unfold(I: Interface)
   requires intValid(I) == true
-  ensures forall n: Node, n1: Node ::
-    (n !in I.FP ==> domEq(I.inf[n], domZero()) && domEq(I.fm[n][n1], domZero()))
-    && (n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero()))
+  ensures forall n: Node, n1: Node :: n !in I.FP ==> domEq(I.inf[n], domZero()) == true
+  ensures forall n: Node, n1: Node :: n !in I.FP ==> domEq(I.fm[n][n1], domZero()) == true
+    @(matching I.fm[n][n1] yields known(domEq(I.fm[n][n1], domZero())))  // TODO why?
+  ensures forall n: Node, n1: Node :: n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero()) == true
   ensures forall n: Node :: n !in I.FP || n !in I.FPo
   ensures forall n: Node :: domLeq(domZero(), I.inf[n])
   ensures forall n: Node, n1: Node :: domLeq(domZero(), I.fm[n][n1])
@@ -180,8 +181,9 @@ lemma lemma_comp_sl_3(x: Node, Ix: Interface, y: Node, Iy: Interface,
 
 lemma lemma_comp_sing_int(x: Node, Ix: Interface, I2: Interface)
   returns (I: Interface)
-  requires [acc(x)](Ix) &*& Gr(I2)
-  ensures [acc(x)](Ix) &*& Gr(I2) &*& intComp(Ix, I2) == I &*& I != intUndef
+  requires [gammaSpatial(x)](Ix) &*& Gr(I2)
+  ensures [gammaSpatial(x)](Ix) &*& Gr(I2) &*& intComp(Ix, I2) == I &*& I != intUndef
+  ensures unchanged(x)
 
 lemma lemma_decomp(x: Node, I: Interface)
   returns (I1: Interface, I2: Interface)
@@ -281,3 +283,9 @@ procedure sync(I1: Interface, I2: Interface)
   returns ()
   requires [Gr(I2)](I1) &*& intValid(I2) == true &*& intEq(I1, I2) == true
   ensures Gr(I2)
+
+// This follows from semantics of sync not modifying heap
+procedure gamma_sync(x: Node, Ix: Interface, Ix1: Interface)
+  returns ()
+  requires [gamma(x, Ix1)](Ix) &*& intValid(Ix1) == true &*& intEq(Ix, Ix1) == true
+  ensures [gamma(x, Ix1)](Ix1) &*& unchanged(x)

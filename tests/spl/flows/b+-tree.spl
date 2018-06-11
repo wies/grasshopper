@@ -267,13 +267,7 @@ lemma lemma_calculate_int(x: Node)
 
 
   
-/** Lemmas to deal with conjunction */
-
-// This follows from semantics of sync not modifying heap
-procedure gamma_sync(x: Node, Ix: Interface, Ix1: Interface)
-  returns ()
-  requires [gamma(x, Ix1)](Ix) &*& intValid(Ix1) == true &*& intEq(Ix, Ix1) == true
-  ensures [gamma(x, Ix1)](Ix1) &*& unchanged(x)
+/** Extra lemmas needed for this proof */
 
 // This lemma depends on the flow domain being a function domain -- generalize?
 lemma lemma_pred(k: Int, x: Node, Ix: Interface, I2: Interface, I: Interface)
@@ -284,12 +278,6 @@ lemma lemma_pred(k: Int, x: Node, Ix: Interface, I2: Interface, I: Interface)
   ensures N(y, Iy) &*& Gr(I3)
   ensures I2 == intComp(Iy, I3)
   ensures Iy.inf[y].ks[k] > 0 && Iy.fm[y][x].ks[k] > 0
-
-lemma lemma_gamma_comp_sing_int(x: Node, Ix: Interface, I2: Interface)
-  returns (I: Interface)
-  requires [gamma(x, Ix)](Ix) &*& Gr(I2)
-  ensures [gamma(x, Ix)](Ix) &*& Gr(I2) &*& intComp(Ix, I2) == I &*& I != intUndef
-  ensures unchanged(x)
 
 lemma lemma_disj_gamma(I1: Interface, I2: Interface,
                        x: Node, Ix: Interface, I3: Interface)
@@ -443,7 +431,7 @@ procedure insert(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   lemma_int_valid_unfold(Ix);
   lemma_int_valid_fold(Ix2);
   gamma_sync(x, Ix, Ix2);
-  var I3 := lemma_gamma_comp_sing_int(x, Ix2, I2);
+  var I3 := lemma_comp_sing_int(x, Ix2, I2);
   lemma_repl(I, Ix, I2, Ix2, I3);
 
   ghost var m := x.keys.map;
@@ -503,7 +491,7 @@ procedure delete(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   lemma_int_valid_unfold(Ix);
   lemma_int_valid_fold(Ix2);
   gamma_sync(x, Ix, Ix2);
-  var I3 := lemma_gamma_comp_sing_int(x, Ix2, I2);
+  var I3 := lemma_comp_sing_int(x, Ix2, I2);
   lemma_repl(I, Ix, I2, Ix2, I3);
 
   ghost var m := x.keys.map;
@@ -706,7 +694,7 @@ procedure stability_ac_lock(c: Node, Ic: Interface, I2: Interface, I: Interface,
   // N(c, Ic) &*& N(x, Ix1) &*& Gr(I3)
 
   I21 := lemma_Gr_comp(Ix1, I3);
-  I1 := lemma_gamma_comp_sing_int(c, Ic, I21);
+  I1 := lemma_comp_sing_int(c, Ic, I21);
   // N(c, Ic) &*& Gr(I21)
   lemma_repl(I, Ix, Io, Ix1, I1);
   lemma_int_valid_unfold(I1);

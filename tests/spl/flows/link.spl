@@ -85,7 +85,7 @@ procedure findNext(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   ensures intValid(Ix) == true && intValid(I2) == true
   ensures intComp(Ix, I2) == I && globalInt(I)
   ensures (n != null && Ix.fm[x][n].ks[k] >= 1
-           || n == null && (forall y: Node :: Ix.fm[x][y].ks[k] == 0))
+           || n == null && k !in outset(x, Ix.fm))
 
 
 // To be filled-in by implementation:
@@ -96,18 +96,12 @@ procedure decisiveOp(x: Node, k: Int, Ix: Interface, I2:Interface, I: Interface)
   requires N(x, Ix) &*& Gr(I2)
   requires intValid(Ix) == true && intValid(I2) == true
   requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
-  requires Ix.inf[x].ks[k] >= 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
+  requires Ix.inf[x].ks[k] >= 1 && k !in outset(x, Ix.fm)
   ensures N(x, Ix1) &*& Gr(I2)
   ensures intValid(Ix1) == true && intValid(I2) == true
   ensures intComp(Ix1, I2) == I1 && globalInt(I1) && Ix1.na.lockinfo == locked(TID)
   ensures decisiveOpSpec(x, Ix1, res, k) == true
 
-
-procedure aaa(x: Node, k: Int, Ix: Interface, outset: Set<Int>)
-  requires (forall y: Node :: Ix.fm[x][y].ks[k] == 0) && Ix != intUndef
-  requires forall k: Int :: (exists y: Node :: Ix.fm[x][y].ks[k] > 0 @(matching k yields Ix.fm[x][y].ks[k])) || k !in outset
-  ensures k !in outset
-{}
 
 procedure dictionaryOp(k: Int, I: Interface) returns (res: Bool, I1: Interface)
   requires Gr(I) &*& globalInt(I)
@@ -196,7 +190,7 @@ define spl_state_03(c, Ic, I2, I) {
 define spl_state_04(c, Ic, I2, I, k, n) {
   spl_state_02(c, Ic, I2, I)
     &*& (n != null && Ic.fm[c][n].ks[k] >= 1
-       || n == null && (forall y: Node :: Ic.fm[c][y].ks[k] == 0))
+       || n == null && k !in outset(c, Ic.fm))
     &*& (Ic.inf[c].ks[k] >= 1 || Ic.inf[c].ir[k] >= 1)
 }
 
@@ -219,6 +213,6 @@ define spl_state_07(c, Ic, I2, I) {
 define spl_state_inv(c, Ic, I2, I, k, n) {
   spl_state_01(c, Ic, I2, I)
     &*& (n == null ==> Ic.na.lockinfo == locked(TID)
-       && (forall y: Node :: Ic.fm[c][y].ks[k] == 0))
+       && k !in outset(c, Ic.fm))
     &*& (Ic.inf[c].ks[k] >= 1 || Ic.inf[c].ir[k] >= 1)
 }
