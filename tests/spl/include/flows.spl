@@ -11,11 +11,6 @@ datatype Interface =
       FPo: Set<Node>)
   | intUndef; // For when compositions don't exist
 
-predicate Gr(I: Interface)
-
-define N(x, I) { Gr(I) &*& I.FP == {x} }
-
-
 pure function intComp(I1: Interface, I2: Interface) returns (I: Interface)
   ensures I != intUndef ==> I.FP == I1.FP ++ I2.FP
   ensures forall n: Node :: I == intUndef || n !in I1.FP || n !in I2.FP
@@ -56,8 +51,6 @@ axiom forall I1: Interface, I2: Interface ::
 
 axiom forall I1: Interface, I2: Interface ::
   (! intValid(I1) || ! intValid(I2)) ==> intComp(I1, I2) == intUndef;
-
-// Note: we assume that Gr(I) ==> intValid(I) in the following lemmas (TODO automate?)
 
 // Sufficient condition for intComp(I, Ix, Iy), when no edge from y to x
 lemma lemma_int_comp_fold(x: Node, Ix: Interface, y: Node, Iy: Interface)
@@ -145,6 +138,16 @@ lemma lemma_int_valid_fold(I: Interface)
   ensures intValid(I) == true
 
 
+procedure copy_interface(I: Interface, a: NodeDom)
+  returns (I1: Interface)
+  ensures I1 != intUndef
+  ensures I.FP == I1.FP && I.FPo == I1.FPo && I.inf == I1.inf && I.fm == I1.fm
+  ensures I1.na == a
+{
+  I1 := int(I.inf, a, I.fm, I.FP, I.FPo);
+}
+
+/*
 lemma lemma_Gr_comp(Ix: Interface, Iy: Interface)
   returns (I: Interface)
   requires Gr(Ix) &*& Gr(Iy)
@@ -268,11 +271,6 @@ lemma lemma_disj_eq(I1: Interface, I2: Interface,
   ensures Gr(I1) &*& Gr(I2) &*& I1 == I3 && I2 == I4
 
 
-/* Lemmas or instances of lemma schemas to deal with conjunction */
-lemma lemma_intro_conj_2(I1: Interface, I2: Interface)
-  requires Gr(I1) &*& Gr(I2)
-  ensures (Gr(I1) &*& Gr(I2)) && (Gr(I1) &*& Gr(I2))
-
 
 lemma lemma_repl(I: Interface, Ix: Interface, Iy: Interface, Ix1: Interface, I1: Interface)
   requires I == intComp(Ix, Iy) && I1 == intComp(Ix1, Iy) && intEq(Ix, Ix1) == true
@@ -289,3 +287,4 @@ procedure gamma_sync(x: Node, Ix: Interface, Ix1: Interface)
   returns ()
   requires [gamma(x, Ix1)](Ix) &*& intValid(Ix1) == true &*& intEq(Ix, Ix1) == true
   ensures [gamma(x, Ix1)](Ix1) &*& unchanged(x)
+*/

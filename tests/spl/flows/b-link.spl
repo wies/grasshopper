@@ -1,12 +1,12 @@
-/** Hash table implementation of the link template for linearizable dictionaries. */
+/** B+ tree implementation of the link template for linearizable dictionaries. */
 
-options "-symbexec"
+options "-simplearrays -symbexec"
 
 include "../include/flows.spl";
 include "array_util.spl";
 
 
-/** Flow domain definitions */
+/** Flow and node domain definitions */
 
 datatype FlowDom = fd(ks: Map<Int, Int>, ir: Map<Int, Int>);
 
@@ -50,76 +50,112 @@ pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
 
 /** Definition of a node */
 
-datatype NodeType = root | bucket | nodeTop;
-
 struct Node {
   var locktid: Int;
   var len: Int;
-  var bkts: Array<Node>;
   var keys: Array<Int>;
+  var ptrs: Array<Node>;
   var next: Node;
-  ghost var typ: NodeType;
 }
 
 define unchanged(x) {
-  x.locktid == old(x.locktid) && x.len == old(x.len) && x.bkts == old(x.bkts)
-    && x.keys == old(x.keys) && x.next == old(x.next) && x.typ == old(x.typ)
-    && x.bkts.length == old(x.bkts.length) && x.bkts.map == old(x.bkts.map)
+  x.locktid == old(x.locktid) && x.len == old(x.len) && x.next == old(x.next)
+    && x.keys == old(x.keys) && x.ptrs == old(x.ptrs)
     && x.keys.length == old(x.keys.length) && x.keys.map == old(x.keys.map)
+    && x.ptrs.length == old(x.ptrs.length) && x.ptrs.map == old(x.ptrs.map)
 }
 
 
-procedure newNode(xlock: Int, xlen: Int, xkeyslen: Int, xnext: Node)
-  returns (x: Node, Ix: Interface)
-  requires emp
-  ensures [acc(x) &*& acc(x.bkts) &*& acc(x.keys)](Ix)
-  ensures x.locktid == xlock && x.len == xlen && x.keys.length == xkeyslen && x.next == xnext
-  ensures intValid(Ix) && Ix.FP == {x} && domEq(Ix.inf[x], domZero()) == true && Ix.FPo == {}
+/** Definition of heap representation, hrep */
 
-
-/** Definition of good condition, gamma */
-
-function hash(x: Node, k: Int) returns (i: Int)
+var B: Int;
+axiom B > 1;
 
 define hrepSpatial(x) {
-  acc(x) &*& acc(x.bkts)  &*& acc(x.keys)
+  acc(x) &*& acc(x.keys) &*& acc(x.ptrs)
 }
 
 define hrep(x, I) {
-  hrepSpatial(x) &*& I.FP == {x}
-  && 0 <= x.len && x.len < x.keys.length
-    && ((x.typ == root
-        && (forall i: Int :: 0 <= i && i < x.bkts.length ==> x.bkts[i] != null)
-        && (forall y: Node, k: Int :: y == x.bkts[hash(x, k)] ==> I.fm[x][y].ks[k] == 1)
-        && (forall k: Int :: 0 <= hash(x, k) && hash(x, k) < x.bkts.length)
-        && (forall k: Int :: I.inf[x].ks[k] == 1 /* && k in outset(x, I.fm)*/))
-     || (x.typ == bucket
-        && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> x.keys[i] < x.keys[j])
-        && I.na.contents == set_of_map(x.keys.map, 0, x.len)
-        && (x.next == null && I.FPo == {}
-        || x.next != null && (forall k: Int :: I.fm[x][x.next].ks[k] == 1) && I.FPo == {x.next})))
+  hrepSpatial(x) &*& I.FP == {x} // TODO where to put this?
+    && 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
+    && (x.rangeLb < x.rangeUb ==> I.inf[x].pc == 1)  // inset != {} ==> pc == 1
+    // edgeset != {} ==> pc == 1
+    && (forall n: Node, n1: Node, k: Int :: I.fm[n][n1].ks[k] >= 1 ==> I.fm[n][n1].pc == 1)
+    // The keys are within the range
+    && (x.len != 0 ==> x.rangeLb <= x.keys[0] && x.keys[x.len-1] < x.rangeUb)
+    // The range defines the inset
+    && (forall k: Int :: I.inf[x].ks[k] == 1 && x.rangeLb <= k < x.rangeUb
+       || I.inf[x].ks[k] == 0 && !(x.rangeLb <= k < x.rangeUb))
+    // Keys are sorted
+    && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> x.keys[i] < x.keys[j])
+    && (x.ptrs[0] == null && I.FPo == {}  // Leaf
+       && I.na.contents == set_of_map(x.keys.map, 0, x.len)
+     || x.ptrs[0] != null  // Internal
+       && I.na.contents == {}
+       && (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i])
+       && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j])
+       && (forall i: Int, k: Int :: 0 <= i <= x.len ==> x.ptrs[i] != null && x.ptrs[i] in I.FPo)
+       && (forall i: Int, k: Int :: 0 <= i <= x.len ==>
+          (I.fm[x][x.ptrs[i]].ks[k] == 1
+             && ((i <= 0 || x.keys[i-1] <= k) && (i >= x.len || k < x.keys[i]))
+           || I.fm[x][x.ptrs[i]].ks[k] == 0
+             && !((i <= 0 || x.keys[i-1] <= k) && (i >= x.len || k < x.keys[i])))
+          @(matching x.ptrs[i] yields x.keys[i-1])
+          @(matching x.ptrs[i] yields x.keys[i])))
 }
+/* TODO have a create B+ tree function to check this isn't unsat */
 
-lemma keyset_implies_bucket(x: Node, Ix: Interface, k: Int)
+
+procedure newNode(xtid: Int, xlen: Int, xrangeLb: Int, xrangeUb: Int)
+  returns (x: Node, Ix: Interface)
+  requires emp
+  ensures [acc(x) &*& acc(x.ptrs) &*& acc(x.keys)](Ix)
+  ensures x.locktid == xtid && x.len == xlen && x.rangeLb == xrangeLb
+  ensures x.rangeUb == xrangeUb && x.keys.length == 2*B && x.ptrs.length == 2*B
+  ensures intValid(Ix) == true
+  ensures Ix.FP == {x} && domEq(Ix.inf[x], domZero()) == true && Ix.FPo == {}
+
+lemma keyset_implies_leaf(x: Node, Ix: Interface, k: Int, i: Int)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
+  requires (i <= 0 || x.keys[i-1] <= k) && 0 <= i <= x.len
   ensures hrep(x, Ix) &*& unchanged(x)
-  ensures x.typ == bucket
+  ensures x.ptrs[0] == null  // x is a leaf
 {
-  if (x.typ == root) {
-    var y := x.bkts[hash(x, k)];
-    pure assert Ix.fm[x][y].ks[k] == 1;
+  if (x.ptrs[0] != null) {
+    if (i < x.len) {
+      if (k < x.keys[i]) {
+        pure assert Ix.fm[x][x.ptrs[i]].ks[k] == 1;
+      } else {
+        keyset_implies_leaf(x, Ix, k, i + 1);
+      }
+    } else {
+      pure assert Ix.fm[x][x.ptrs[i]].ks[k] == 1;
+    }
   }
 }
-
 
 /** Begin programs */
 
 var TID: Int;
 axiom TID > 0;
+var r: Node;
 
 
-/** findNext **/
+/** inRange */
+procedure inRange(x: Node, k: Int, Ix: Interface)
+  returns (res: Bool)
+  requires hrep(x, Ix)
+  ensures hrep(x, Ix) &*& (res ==> Ix.inf[x].ks[k] >= 1)
+{
+  if (x.rangeLb <= k && x.rangeUb > k)
+    return true;
+  else
+    return false;
+}
+
+
+/** findNext */
 procedure findNext(x: Node, k: Int, Ix: Interface)
   returns (n: Node)
   requires hrep(x, Ix) &*& intValid(Ix) == true
@@ -127,18 +163,15 @@ procedure findNext(x: Node, k: Int, Ix: Interface)
   ensures (n != null && Ix.fm[x][n].ks[k] >= 1
            || n == null && (forall y: Node :: Ix.fm[x][y].ks[k] == 0))
 {
-  if (x.typ == root) {
-    n := x.bkts[hash(x, k)];
-  } else {
-    pure assert x.typ == bucket;
-    if (x.next == null) {
-      n := null;
-      lemma_int_valid_unfold(Ix);
-    } else {
-      n := x.next;
-    }
+  if (x.ptrs[0] == null) {  // Leaf node
+    lemma_int_valid_unfold(Ix);
+    return null;
   }
-  //    return n;
+
+  var found, i := arr_find(x.keys, x.len, k+1);
+
+  n := x.ptrs[i];
+  // return n;
 }
 
 
@@ -152,8 +185,8 @@ procedure member(x: Node, k: Int, Ix: Interface)
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (Ix1.na.contents == Ix.na.contents && (res == k in Ix.na.contents))
 {
-  keyset_implies_bucket(x, Ix, k);
-  
+  keyset_implies_leaf(x, Ix, k, 0);
+
   var idx: Int;
   res, idx := arr_find(x.keys, x.len, k);
 
@@ -171,9 +204,9 @@ procedure insert(x: Node, k: Int, Ix: Interface)
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (Ix1.na.contents == Ix.na.contents ++ {k} && (res == k !in Ix.na.contents))
 {
-  keyset_implies_bucket(x, Ix, k);
+  keyset_implies_leaf(x, Ix, k, 0);
 
-  if (x.len < x.keys.length - 1) {
+  if (x.len < 2*B - 1) {
   
     ghost var m := x.keys.map;
 
@@ -185,7 +218,7 @@ procedure insert(x: Node, k: Int, Ix: Interface)
     x.len := new_len;
 
     // Define Ix1 to be Ix, but with k added to contents
-    Ix1 := copy_interface(Ix, nd(Ix.na.contents ++ {k}, Ix.na.inr));
+    Ix1 := copy_interface(Ix, nd(Ix.na.contents ++ {k}));
     lemma_int_valid_unfold(Ix);
     lemma_int_valid_fold(Ix1);
 
@@ -209,7 +242,7 @@ procedure delete(x: Node, k: Int, Ix: Interface)
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (Ix1.na.contents == Ix.na.contents -- {k} && (res == k in Ix.na.contents))
 {
-  keyset_implies_bucket(x, Ix, k);
+  keyset_implies_leaf(x, Ix, k, 0);
 
   ghost var m := x.keys.map;
 
@@ -220,62 +253,10 @@ procedure delete(x: Node, k: Int, Ix: Interface)
   x.len := new_len;
 
   // Define Ix1 to be Ix, but with k removed from contents
-  Ix1 := copy_interface(Ix, nd(Ix.na.contents -- {k}, Ix.na.inr));
+  Ix1 := copy_interface(Ix, nd(Ix.na.contents -- {k}));
   lemma_int_valid_unfold(Ix);
   lemma_int_valid_fold(Ix1);
 
   return true, (k in Ix.na.contents), Ix1;
 }
 
-
-/*
-procedure copyNode(x: Node, Ix: Interface, I2: Interface, I: Interface)
-  returns (I1: Interface)
-  requires [gamma(x, Ix)](Ix) &*& Gr(I2)
-  requires intValid(Ix) == true && intValid(I2) == true
-  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
-  requires x.typ == bucket && x.len == x.keys.length
-  ensures Gr(I1) &*& globalInt(I)
-{
-  var y: Node, Iy: Interface;
-  y, Iy := newNode(0, x.len, 2 * x.keys.length, null);
-
-  var i := 0;
-  while (i < x.len)
-    invariant [gamma(x, Ix)](Ix) &*& [acc(y) &*& acc(y.bkts) &*& acc(y.keys)](Iy) &*& Gr(I2)
-    invariant intValid(Ix) == true && intValid(Iy) == true && intValid(I2) == true
-    invariant intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
-    invariant x.typ == bucket && x.len == x.keys.length
-    invariant 0<= i && i <= x.len && y.keys.length == 2 * x.len && y.next == null
-    invariant forall j: Int :: 0 <= j < i ==> y.keys[j] == x.keys[j]
-  {
-    y.keys[i] := x.keys[i];
-  }
-
-  x.next := y;
-
-  var Ix1: Interface;
-  pure assume Ix1.inf == Ix.inf && Ix1.na.contents == {}
-  && Ix1.na.lockinfo == Ix.na.lockinfo
-  && (forall k: Int :: Ix1.fm[x][y].ks[k] == 1) && (forall k: Int :: Ix1.fm[x][y].ir[k] == 0)
-  && (forall z: Node :: domEq(Ix1.fm[x][y], domZero()) == true)
-  && Ix1.FP == Ix.FP && Ix1.FPo == {y};
-  // TODO  var Ix1 := int(Ix.inf, nd({}, Ix.na.lockinfo, x.typ), )
-
-  var Iy1: Interface;
-  pure assume Iy1.inf == Ix.inf && Iy1.na.contents == Ix.na.contents
-  && Iy1.FP == Iy.FP && Iy1.FPo == Iy.FPo
-  && (forall z: Node :: domEq(Iy1.fm[y][z], domZero()) == true);
-
-  lemma_int_valid_fold(Ix1);
-  lemma_abs(x, Ix, Ix1);
-  lemma_int_valid_fold(Iy1);
-  lemma_int_valid_unfold(Iy);
-  lemma_abs(y, Iy, Iy1);
-
-  var Ixy1 := lemma_int_comp_fold(x, Ix, y, Iy);
-  //  var I0 := lemma_comp_sing_int(y, Iy, I);
-
-  // sync();
-}
- */
