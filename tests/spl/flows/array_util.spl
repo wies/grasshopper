@@ -1,6 +1,6 @@
 /* This file is a copy of tests/spl/sorted_array_utils/array_util.spl with K -> Int */
 
-options "-symbexec"
+options "-symbexec";
 
 /* include "../include/ordered_type.spl" */
 define lt(x, y) {x < y}
