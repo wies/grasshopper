@@ -76,44 +76,71 @@ define hrepSpatial(x) {
 }
 
 define hrep(x, I) {
-  hrepSpatial(x) &*& I.FP == {x} // TODO where to put this?
+  hrepSpatial(x) &*& I.FP == {x} &*& x.next != x
     && 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
-    && (x.rangeLb < x.rangeUb ==> I.inf[x].pc == 1)  // inset != {} ==> pc == 1
-    // edgeset != {} ==> pc == 1
-    && (forall n: Node, n1: Node, k: Int :: I.fm[n][n1].ks[k] >= 1 ==> I.fm[n][n1].pc == 1)
-    // The keys are within the range
-    && (x.len != 0 ==> x.rangeLb <= x.keys[0] && x.keys[x.len-1] < x.rangeUb)
-    // The range defines the inset
-    && (forall k: Int :: I.inf[x].ks[k] == 1 && x.rangeLb <= k < x.rangeUb
-       || I.inf[x].ks[k] == 0 && !(x.rangeLb <= k < x.rangeUb))
     // Keys are sorted
     && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> x.keys[i] < x.keys[j])
-    && (x.ptrs[0] == null && I.FPo == {}  // Leaf
+    && (x.ptrs[0] == null  // Leaf
        && I.na.contents == set_of_map(x.keys.map, 0, x.len)
+       && (x.next == null && I.FPo == {}
+          || x.next != null && I.FPo == {x.next}
+           && (forall k: Int :: x.keys[x.len] <= k ==> I.fm[x][x.next].ks[k] == 1)
+           && (forall k: Int :: x.keys[x.len] > k ==> I.fm[x][x.next].ks[k] == 0)
+             )
      || x.ptrs[0] != null  // Internal
        && I.na.contents == {}
        && (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i])
        && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j])
        && (forall i: Int, k: Int :: 0 <= i <= x.len ==> x.ptrs[i] != null && x.ptrs[i] in I.FPo)
-       && (forall i: Int, k: Int :: 0 <= i <= x.len ==>
+       && (forall i: Int, k: Int :: 0 <= i < x.len ==>
           (I.fm[x][x.ptrs[i]].ks[k] == 1
              && ((i <= 0 || x.keys[i-1] <= k) && (i >= x.len || k < x.keys[i]))
            || I.fm[x][x.ptrs[i]].ks[k] == 0
              && !((i <= 0 || x.keys[i-1] <= k) && (i >= x.len || k < x.keys[i])))
-          @(matching x.ptrs[i] yields x.keys[i-1])
-          @(matching x.ptrs[i] yields x.keys[i])))
+          @(matching x.ptrs[i] yields I.fm[x][x.ptrs[i]].ks[k])
+          @(matching x.keys[i] yields I.fm[x][x.ptrs[i]].ks[k]))
+        && (x.next == null
+            && (forall k: Int :: 
+               (I.fm[x][x.ptrs[x.len]].ks[k] == 1
+               && (x.len <= 0 || x.keys[x.len-1] <= k)
+               || I.fm[x][x.ptrs[x.len]].ks[k] == 0
+               && !(x.len <= 0 || x.keys[x.len-1] <= k)))
+               && x.next !in I.FPo
+            || x.next != null
+              && (forall k: Int :: 
+                 (I.fm[x][x.ptrs[x.len]].ks[k] == 1
+                 && (x.len <= 0 || x.keys[x.len-1] <= k) && (k < x.keys[x.len])
+                 || I.fm[x][x.ptrs[x.len]].ks[k] == 0
+                 && !((x.len <= 0 || x.keys[x.len-1] <= k) && (k < x.keys[x.len]))))
+              && (forall k: Int ::
+                 I.fm[x][x.next].ks[k] == 1 && x.keys[x.len] <= k
+                 || I.fm[x][x.next].ks[k] == 0 && x.keys[x.len] > k
+                 )
+            )
+      )
 }
 /* TODO have a create B+ tree function to check this isn't unsat */
 
 
-procedure newNode(xtid: Int, xlen: Int, xrangeLb: Int, xrangeUb: Int)
-  returns (x: Node, Ix: Interface)
-  requires emp
-  ensures [acc(x) &*& acc(x.ptrs) &*& acc(x.keys)](Ix)
-  ensures x.locktid == xtid && x.len == xlen && x.rangeLb == xrangeLb
-  ensures x.rangeUb == xrangeUb && x.keys.length == 2*B && x.ptrs.length == 2*B
-  ensures intValid(Ix) == true
-  ensures Ix.FP == {x} && domEq(Ix.inf[x], domZero()) == true && Ix.FPo == {}
+procedure aaa_test(x: Node, c0: Node, c1: Node, n: Node, I: Interface)
+  requires x != c0 && x != c1 && x != n && c0 != c1 && c0 != n && c1 != n
+  requires x != null && c0 != null && c1 != null && n != null
+  requires x.len == 1 && x.ptrs.length == 4 && x.keys.length == 4 && B == 2
+  requires x.next == n && x.ptrs[0] == c0 && x.ptrs[1] == c1
+  requires x.keys[0] == 1 && x.keys[1] == 5
+  requires acc(x) &*& acc(x.keys) &*& acc(x.ptrs)
+  requires I.FP == {x} && I.FPo == {c0, c1, n} && I.na.contents == {}
+  requires forall n: Node, n1: Node, k: Int :: n != x ==> I.fm[n][n1].ks[k] == 0
+  requires forall n: Node, k: Int :: n !in I.FPo ==> I.fm[x][n].ks[k] == 0
+  requires forall n: Node, k: Int :: n in {c0} && k < 1 ==> I.fm[x][n].ks[k] == 1
+  requires forall n: Node, k: Int :: n in {c0} && k >= 1 ==> I.fm[x][n].ks[k] == 0
+  @(matching n yields I.fm[x][n].ks[k])
+  requires forall n: Node, k: Int :: n in {c1} && 1 <= k < 5 ==> I.fm[x][n].ks[k] == 1
+  requires forall n: Node, k: Int :: n in {c1} && !(1 <= k < 5) ==> I.fm[x][n].ks[k] == 0
+  requires forall y: Node, k: Int :: y in {n} && 5 <= k ==> I.fm[x][y].ks[k] == 1
+  requires forall y: Node, k: Int :: y in {n} && !(5 <= k) ==> I.fm[x][y].ks[k] == 0
+  ensures hrep(x, I)
+{}
 
 lemma keyset_implies_leaf(x: Node, Ix: Interface, k: Int, i: Int)
   requires hrep(x, Ix) &*& intValid(Ix) == true
@@ -142,19 +169,6 @@ axiom TID > 0;
 var r: Node;
 
 
-/** inRange */
-procedure inRange(x: Node, k: Int, Ix: Interface)
-  returns (res: Bool)
-  requires hrep(x, Ix)
-  ensures hrep(x, Ix) &*& (res ==> Ix.inf[x].ks[k] >= 1)
-{
-  if (x.rangeLb <= k && x.rangeUb > k)
-    return true;
-  else
-    return false;
-}
-
-
 /** findNext */
 procedure findNext(x: Node, k: Int, Ix: Interface)
   returns (n: Node)
@@ -164,13 +178,28 @@ procedure findNext(x: Node, k: Int, Ix: Interface)
            || n == null && (forall y: Node :: Ix.fm[x][y].ks[k] == 0))
 {
   if (x.ptrs[0] == null) {  // Leaf node
-    lemma_int_valid_unfold(Ix);
-    return null;
+    if (x.next == null) {
+      lemma_int_valid_unfold(Ix);
+      return null;
+    }
+    if (x.keys[x.len] <= k) {
+      return x.next;
+    } else {
+      lemma_int_valid_unfold(Ix);
+      return null;
+    }
   }
 
   var found, i := arr_find(x.keys, x.len, k+1);
 
-  n := x.ptrs[i];
+  if (i == x.len && x.next != null) {
+    if (k < x.keys[i])
+      n := x.ptrs[i];
+    else
+      n := x.next;
+  } else {
+    n := x.ptrs[i];
+  }
   // return n;
 }
 
@@ -218,7 +247,7 @@ procedure insert(x: Node, k: Int, Ix: Interface)
     x.len := new_len;
 
     // Define Ix1 to be Ix, but with k added to contents
-    Ix1 := copy_interface(Ix, nd(Ix.na.contents ++ {k}));
+    Ix1 := copy_interface(Ix, nd(Ix.na.contents ++ {k}, Ix.na.inr));
     lemma_int_valid_unfold(Ix);
     lemma_int_valid_fold(Ix1);
 
@@ -253,7 +282,7 @@ procedure delete(x: Node, k: Int, Ix: Interface)
   x.len := new_len;
 
   // Define Ix1 to be Ix, but with k removed from contents
-  Ix1 := copy_interface(Ix, nd(Ix.na.contents -- {k}));
+  Ix1 := copy_interface(Ix, nd(Ix.na.contents -- {k}, Ix.na.inr));
   lemma_int_valid_unfold(Ix);
   lemma_int_valid_fold(Ix1);
 
