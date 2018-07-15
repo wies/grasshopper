@@ -219,6 +219,44 @@ lemma map_delete_content_set(m: Map<Int, Int>, m1: Map<Int, Int>, len: Int, new_
 
 /** Programs */
 
+// Initialize a[0..len] with value x
+procedure arr_init(a: Array<Int>, len: Int, x: Int)
+  requires acc(a)
+  requires 0 <= len <= a.length
+  ensures acc(a)
+  ensures forall i: Int :: 0 <= i < len ==> a.map[i] == x
+{
+  var i := 0;
+
+  while (i < len)
+    invariant acc(a)
+    invariant 0 <= i <= len <= a.length
+    invariant forall k: Int :: 0 <= k < i ==> a.map[k] == x
+  {
+    a[i] := x;
+    i := i + 1;
+  }
+}
+
+// Initialize a[0..len] with value x
+procedure arr_init_node(a: Array<Node>, len: Int, x: Node)
+  requires acc(a)
+  requires 0 <= len <= a.length
+  ensures acc(a)
+  ensures forall i: Int :: 0 <= i < len ==> a.map[i] == x
+{
+  var i := 0;
+
+  while (i < len)
+    invariant acc(a)
+    invariant 0 <= i <= len <= a.length
+    invariant forall k: Int :: 0 <= k < i ==> a.map[k] == x
+  {
+    a[i] := x;
+    i := i + 1;
+  }
+}
+
 // Shift a[src..src+len] to a[dst..dst+len]
 procedure arr_shift(a: Array<Int>, src: Int, dst: Int, len: Int)
   requires acc(a)
