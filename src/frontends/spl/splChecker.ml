@@ -607,8 +607,15 @@ let flatten_exprs cu =
         in
         let locals = extend_locals cu vars1 locals scope in
         let f1, aux, new_locals = flatten_expr scope aux new_locals locals f in          
+        let cu =
+          List.fold_left
+            (fun cu decl ->
+              { cu with pred_decls = IdMap.add decl.pr_name decl cu.pred_decls }
+            ) cu (snd aux)
+        in
+        let e1 = Binder (b, vars1, f1, pos) in
         (match b with
-        | Exists | Forall -> Binder (b, vars1, f1, pos), aux, new_locals
+        | Exists | Forall -> e1, aux, new_locals
         | Comp ->
             (* create auxiliary function for set/map comprehension *)
             let v_decl =
@@ -651,7 +658,7 @@ let flatten_exprs cu =
                 pr_locals = c_locals;
                 pr_contracts = [];
                 pr_is_pure = false;
-                pr_body = Some e;
+                pr_body = Some e1;
                 pr_pos = pos;
               }
             in
