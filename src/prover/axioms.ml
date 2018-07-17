@@ -36,6 +36,8 @@ let i1 = fresh_ident "?i", Int
 let i2 = fresh_ident "?j", Int
 let d = fresh_ident "?d"
 let e = fresh_ident "?e"
+let arrs = fresh_ident "?array_state"
+let witness = fresh_ident "witness"
     
 let loc1 struct_srt = mk_var (snd (l1 struct_srt)) (fst (l1 struct_srt))
 let loc2 struct_srt = mk_var (snd (l2 struct_srt)) (fst (l2 struct_srt))
@@ -53,7 +55,8 @@ let set3 struct_srt = mk_var (snd (s3 struct_srt)) (fst (s3 struct_srt))
 let intset1 = mk_var (snd is1) (fst is1)
 let int1 = mk_var (snd i1) (fst i1)
 let int2 = mk_var (snd i2) (fst i2)
-
+let arrst1 srt = mk_var (Map ([Loc (Array srt); Int], srt)) arrs
+    
 let reachwo_Fld f u v w = 
   mk_or [mk_btwn f u v w; mk_and [mk_reach f u v; mk_not (mk_reach f u w)]]
   
@@ -467,8 +470,18 @@ let array_axioms elem_srt =
   let a = loc1 (Array elem_srt) in
   let c = loc2 (ArrayCell elem_srt) in
   let i = int1 in
+  let arrstate = arrst1 elem_srt in
   let array_length =
     mk_or [mk_eq a (mk_null (Array elem_srt)); mk_leq (mk_int 0) (mk_length a)]
+  in
+  let array_map_simple1 =
+    mk_or [mk_lt i (mk_int 0);
+           mk_geq i (mk_length a);
+           mk_eq (mk_read arrstate [a; i]) (mk_read (App (ArrayMap, [arrstate; a], Map ([Int], elem_srt))) [i])] 
+  in
+  let array_map_simple2 =
+    mk_or [mk_and [mk_geq i (mk_int 0); mk_lt i (mk_length a)];
+           mk_eq (mk_read (App (ArrayMap, [arrstate; a], Map ([Int], elem_srt))) [i]) (mk_free_const (elem_srt) witness)] 
   in
   let array_cells1 =
     mk_eq (mk_array_of_cell (mk_read (mk_array_cells a) [i])) a 
@@ -487,6 +500,10 @@ let array_axioms elem_srt =
     mk_sequent [mk_eq (mk_array_of_cell c) a; mk_eq (mk_index_of_cell c) i] [mk_eq (mk_read (mk_array_cells a) i) c]
   in
    *)
+  let array_map_gen =
+    [([Match (mk_read arrstate [a; i], [])], [mk_read (App (ArrayMap, [arrstate; a], Map ([Int], elem_srt))) [i]]);
+     ([Match (mk_read (App (ArrayMap, [arrstate; a], Map ([Int], elem_srt))) [i], [])], [mk_read arrstate [a; i]])]
+  in
   let array_cell_gen =
     ([Match (c, [FilterSymbolNotOccurs ArrayOfCell;
                  FilterSymbolNotOccurs IndexOfCell;
@@ -510,7 +527,9 @@ let array_axioms elem_srt =
     ([Match (a, [])], [mk_length a])
   in
   if !Config.simple_arrays then
-    [mk_axiom ~gen:[array_length_gen] "array-length" array_length]
+    [mk_axiom ~gen:[array_length_gen] "array-length" array_length;
+     mk_axiom ~gen:array_map_gen "array-map1" array_map_simple1;
+     mk_axiom "array-map2" array_map_simple2]
   else 
     [mk_axiom ~gen:[index_of_cell_gen; array_of_cell_gen; array_cells_gen; array_cell_gen] "array-cells1" array_cells1;
      mk_axiom "array-cells2" array_cells2;
