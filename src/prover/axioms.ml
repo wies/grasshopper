@@ -361,7 +361,7 @@ let frame_axioms =
        mk_axiom fld1 fld2 "reach_frame1"
          (mk_pattern fld1 []
             (mk_sequent
-               [reachwo_f1 loc1 loc2 (ep loc1)]
+               [reachwo_f1 loc1 loc3 (ep loc1)]
                [(mk_iff 
                    (reach_f1 loc1 loc2 loc3)
                    (reach_f2 loc1 loc2 loc3))]));
