@@ -139,6 +139,38 @@ var TID: Int;
 axiom TID > 0;
 var r: Node;
 
+procedure new_node() returns (x: Node)
+  requires emp
+  ensures acc(x)
+
+procedure new_int_array(l: Int) returns (a: Array<Int>)
+  requires emp
+  ensures acc(a) &*& a.length == l
+
+procedure new_node_array(l: Int) returns (a: Array<Node>)
+  requires emp
+  ensures acc(a) &*& a.length == l
+  
+procedure init() returns (x: Node, I: Interface)
+  ensures hrep(x, I)
+{
+  x := new_node();
+  x.keys := new_int_array(2*B);
+  x.ptrs := new_node_array(2*B);
+  arr_init_node(x.ptrs, 2*B, null);
+  x.len := 0;
+  x.rangeLb := -1000;
+  x.rangeUb := 1000;
+  x.locktid := 0;
+  
+  var xkc := { k: Int :: -1000 <= k < 1000 ? 1 : 0 };
+  var xfm := { n: Node :: { n1: Node :: domZero } };
+  I := int({ n: Node :: n == x ? fd(xkc, 1) : domZero },
+            nd({}), xfm, {x}, {});
+
+  assert forall k: Int :: I.inf[x].ks[k] == 1 && x.rangeLb <= k < x.rangeUb
+    || I.inf[x].ks[k] == 0 && !(x.rangeLb <= k < x.rangeUb);
+}
 
 /** inRange */
 procedure inRange(x: Node, k: Int, Ix: Interface)
