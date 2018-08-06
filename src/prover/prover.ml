@@ -186,7 +186,7 @@ let instantiate_and_prove session fs =
           let adt = List.assoc ty_id adts in
           let destrs = List.assoc id adt in
           List.fold_left2
-            (fun acc arg (d_id, d_srt) ->
+            (fun (fs, gts) arg (d_id, d_srt) ->
               let d_srt = match d_srt with
               | FreeSrt sid ->
                   List.assoc_opt sid adts |>
