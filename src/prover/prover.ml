@@ -183,17 +183,23 @@ let instantiate_and_prove session fs =
     TermSet.fold
       (fun t (fs, gts) -> match t with
       | App (Constructor id, ts, Adt (ty_id, adts)) ->
+          let rec subst srt = match srt with
+          | FreeSrt sid ->
+              List.assoc_opt sid adts |>
+              Util.Opt.map (fun _ -> Adt (sid, adts)) |>
+              Util.Opt.get_or_else srt
+          | Map (asrts, rsrt) -> Map (List.map subst asrts, subst rsrt)
+          | Set ssrt -> Set (subst ssrt)
+          | Loc lsrt -> Loc (subst lsrt)
+          | Array asrt -> Array (subst asrt)
+          | ArrayCell asrt -> ArrayCell asrt
+          | _ -> srt
+          in              
           let adt = List.assoc ty_id adts in
           let destrs = List.assoc id adt in
           List.fold_left2
             (fun (fs, gts) arg (d_id, d_srt) ->
-              let d_srt = match d_srt with
-              | FreeSrt sid ->
-                  List.assoc_opt sid adts |>
-                  Util.Opt.map (fun _ -> Adt (sid, adts)) |>
-                  Util.Opt.get_or_else d_srt
-              | _ -> d_srt 
-              in
+              let d_srt = subst d_srt in
               let d = GrassUtil.mk_app d_srt (Destructor d_id) [t] in
               GrassUtil.mk_eq arg d :: fs, TermSet.add d gts)
             (fs, TermSet.add t gts) ts destrs
@@ -221,9 +227,11 @@ let instantiate_and_prove session fs =
     let ground_fs = List.filter is_ground fs_inst in
     let eqs = instantiate_with_terms true equations classes in
     let gts1 = TermSet.union (ground_terms ~include_atoms:true (mk_and eqs)) gts_inst in
+    let fs, gts1 = generate_adt_terms fs gts1 in
     let eqs1 = List.filter (fun f -> IdSet.is_empty (fv f)) eqs in
     let classes = CongruenceClosure.congr_classes (List.rev_append eqs1 fs) gts1 in
     let implied = get_implied_equalities classes in
+    let gts1 = TermSet.union (ground_terms ~include_atoms:true (mk_and implied)) gts1 in
     rev_concat [eqs; ground_fs; implied], gts1, classes
   in
   let round2 fs_inst gts_inst classes =
