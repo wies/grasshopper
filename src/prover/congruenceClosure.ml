@@ -178,7 +178,7 @@ class dag = fun expr ->
     (*print_endline ("CC adding: " ^ (string_of_term expr));*)
     match expr with
     | Var (v, _) -> failwith "CC: term not ground" (* create_and_add var (FreeSym v) []*)
-    | App (c, [], _) as cst -> create_and_add cst c []
+    | App (c, [], _) as cst -> create_and_add cst c [] (* TODO: redundant? *)
     | App (f, args, _) as appl ->
       let node_args = (List.map convert_exp args) in
       let new_node  = create_and_add appl f node_args in
@@ -287,6 +287,7 @@ class dag = fun expr ->
 
   end
 
+  
 (* TODO need implied equalities and watch lists *)
 let congr_classes_fixed_point fs gts =
   let gterms = TermSet.add GrassUtil.mk_true_term (TermSet.add GrassUtil.mk_false_term gts) in

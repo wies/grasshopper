@@ -179,6 +179,27 @@ let instantiate_and_prove session fs =
         | _ -> gts)
       gts gts
   in
+  let generate_adt_terms fs gts =
+    TermSet.fold
+      (fun t (fs, gts) -> match t with
+      | App (Constructor id, ts, Adt (ty_id, adts)) ->
+          let adt = List.assoc ty_id adts in
+          let destrs = List.assoc id adt in
+          List.fold_left2
+            (fun acc arg (d_id, d_srt) ->
+              let d_srt = match d_srt with
+              | FreeSrt sid ->
+                  List.assoc_opt sid adts |>
+                  Util.Opt.map (fun _ -> Adt (sid, adts)) |>
+                  Util.Opt.get_or_else d_srt
+              | _ -> d_srt 
+              in
+              let d = GrassUtil.mk_app d_srt (Destructor d_id) [t] in
+              GrassUtil.mk_eq arg d :: fs, TermSet.add d gts)
+            (fs, TermSet.add t gts) ts destrs
+      | t -> fs, TermSet.add t gts
+      ) gts (fs, gts)
+  in
   let fs1, generators = open_axioms isFunVar fs1 in
   let btwn_gen = btwn_field_generators fs in
   let gts = ground_terms ~include_atoms:true (mk_and fs) in
@@ -224,7 +245,8 @@ let instantiate_and_prove session fs =
         | _ -> acc)
         gts_a TermSet.empty
     in
-    let gts2 = generate_terms (btwn_gen @ generators) (TermSet.union gts_inst core_terms) in
+    let fs, gts2 = generate_adt_terms fs (TermSet.union gts_inst core_terms) in
+    let gts2 = generate_terms (btwn_gen @ generators) gts2 in
     let _ =
       if Debug.is_debug 1 then
         begin
@@ -234,13 +256,13 @@ let instantiate_and_prove session fs =
         TermSet.iter (fun t -> print_endline ("  " ^ (string_of_term t))) (TermSet.diff gts2 gts)
       end
     in
-    if TermSet.subset gts2 gts_inst
+    if TermSet.subset gts2 gts_inst0
     then fs2, gts_inst, classes
     else
-    let classes = CongruenceClosure.congr_classes (rev_concat [fs_inst; fs]) gts2 in
-    let implied = get_implied_equalities classes in
-    let fs3 = instantiate_with_terms true ((*flatten @@*) linearize fs1) classes in
-    rev_concat [fs3; implied], gts2, classes
+      let classes = CongruenceClosure.congr_classes (rev_concat [fs_inst; fs]) gts2 in
+      let implied = get_implied_equalities classes in
+      let fs3 = instantiate_with_terms true ((*flatten @@*) linearize fs1) classes in
+      rev_concat [fs3; implied], gts2, classes
   in
   (*let round3 fs_inst gts_inst classes =
     let generators =
