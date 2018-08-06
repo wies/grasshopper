@@ -32,7 +32,10 @@ procedure insert(lst: Node, val: Int, implicit ghost C: Set<Int>)
   }
   
   var n: Node;
-  n := append(val, curr);
+  //n := append(val, curr);
+  n := new Node;
+  n.next := curr;
+  n.data := val;
   
   if (prev == null) {
     return n;
