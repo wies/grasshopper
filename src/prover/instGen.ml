@@ -376,7 +376,7 @@ let generate_instances stratify useLocalInst axioms rep_terms egraph =
   in
   List.fold_left instantiate epr_axioms axioms
   
-let instantiate_with_terms ?(force=false) ?(stratify=(!Config.stratify)) local axioms classes =
+let instantiate_with_terms ?(force=false) ?(stratify=(!Config.stratify)) local axioms classes0 =
     if !Config.instantiate || force then
       (* remove theory atoms from congruence classes *)
       let filter_term t =
@@ -390,7 +390,7 @@ let instantiate_with_terms ?(force=false) ?(stratify=(!Config.stratify)) local a
              (symbol_of t))
       in
       let classes =
-        let classes2 = List.map (List.filter filter_term) classes in
+        let classes2 = List.map (List.filter filter_term) classes0 in
         List.filter (fun x -> x <> []) classes2
       in
       let _ = 
