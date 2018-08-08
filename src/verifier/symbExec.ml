@@ -213,14 +213,15 @@ let find_arr_spatial' x =
 let rec eval_term fields (old_state, state, spatial') = function
   | Var _ as t -> t, (old_state, state, spatial')
   | App (Read, [App (FreeSym fld, [], _); loc], srt)
-      when IdSet.mem fld fields -> (* Field reads *)
+    when IdSet.mem fld fields -> (* Field reads *)
     let loc, (old_state, state, spatial') = eval_term fields (old_state, state, spatial') loc in
     (match find_ptsto loc (snd state) with
     | Some fs, mk_spatial, _ ->
       (* lookup fld in fs, so that loc |-> fs' and (fld, e) is in fs' *)
       let e, fs' =
         try List.assoc fld fs, fs
-        with Not_found -> let e = fresh_const srt in e, (fld, e) :: fs
+        with Not_found ->
+          let e = fresh_const srt in e, (fld, e) :: fs
       in
       let spatial = mk_spatial fs' in
       e, (old_state, (fst state, spatial), spatial')
@@ -230,16 +231,16 @@ let rec eval_term fields (old_state, state, spatial') = function
         (* lookup fld in fs, so that loc |-> fs' and (fld, e) is in fs' *)
         let e, fs' =
           try List.assoc fld fs, fs
-          with Not_found -> let e = fresh_const srt in e, (fld, e) :: fs
+          with Not_found ->
+            let e = fresh_const srt in e, (fld, e) :: fs
         in
         e, (old_state, state, PointsTo (loc, fs') :: spatial')
       | None -> (* Add loc to spatial' to indicate we need an acc(loc) in the future *)
         let e = fresh_const srt in
         e, (old_state, state, PointsTo (loc, [fld, e]) :: spatial')))
   | App (Read, [a; idx], srt)
-  (*| App (Read, [f; App (Read, [App (ArrayCells, [a], _); idx], _)], srt)*)
-      when sort_of a = Array srt ->
-    (* Array reads *)
+      when sort_of a = Loc (Array srt) ->
+        (* Array reads *)
     let a, (old_state, state, spatial') = eval_term fields (old_state, state, spatial') a in
     let idx, (old_state, state, spatial') = eval_term fields (old_state, state, spatial') idx in
     let m, spatial' =
@@ -857,7 +858,7 @@ let check_array_reads st t =
     | Var _ as t -> t
     | App (Read, [a; idx], srt)
         (*| App (Read, [f; App (Read, [App (ArrayCells, [a], _); idx], _)], srt)*)
-      when sort_of a = Array srt ->
+      when sort_of a = Loc (Array srt) ->
       (* Array reads *)
       let a, _ = eval_term_no_olds st.se_fields st.se_state a in
       let idx, _ = eval_term_no_olds st.se_fields st.se_state idx in
@@ -943,8 +944,8 @@ let rec symb_exec st postcond comms =
       | Error (errs, m) ->
       (* TODO to get line numbers, convert returns into asserts *)
             mk_error "A postcondition may not hold" errs m dummy_position))
-  | (Basic (Assign {assign_lhs=[f];
-                    assign_rhs=[App (Write, [arr; idx; rhs], Array _)]}, pp) as comm) :: comms' ->
+  | (Basic (Assign {assign_lhs=[_];
+                    assign_rhs=[App (Write, [arr; idx; rhs], Loc (Array _))]}, pp) as comm) :: comms' ->
   (*| (Basic (Assign {assign_lhs=[f];
         assign_rhs=[App (Write, [array_state;
                     App (Read, [App (ArrayCells, [arr], _); idx], _); rhs], srt)]}, pp)
