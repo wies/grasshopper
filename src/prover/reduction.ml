@@ -248,23 +248,8 @@ let add_ep_axioms fs =
   in
   let axioms = SortSet.fold (fun srt axioms -> Axioms.ep_axioms srt @ axioms) struct_sorts [] in
   axioms @ fs
- 
-let add_read_write_axioms fs =
-  let gts = ground_terms ~include_atoms:true (mk_and fs) in
-  let has_loc_field_sort = function
-    | App (_, _, Map([Loc id1], Loc id2)) -> (*id1 = id2*) true
-    | _ -> false
-  in
-  let basic_pt_flds = TermSet.filter (has_loc_field_sort &&& is_free_const) gts in
-  let basic_structs = struct_sorts_of_fields basic_pt_flds in
-  (* instantiate null axioms *)
-  let axioms = SortSet.fold (fun srt axioms -> Axioms.null_axioms srt @ axioms) basic_structs [] in
-  let null_ax, _ = open_axioms ~force:true isFld axioms in
-  let classes = CongruenceClosure.congr_classes fs gts in
-  (* CAUTION: not forcing the instantiation here would yield an inconsistency with the read/write axioms *)
-  let null_ax1 = instantiate_with_terms ~force:true false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
-  let fs1 = null_ax1 @ fs in
-  let gts = TermSet.union (ground_terms ~include_atoms:true (mk_and null_ax1)) gts in
+
+let get_read_propagators gts =
   let field_sorts = TermSet.fold (fun t srts ->
     match sort_of t with
     | Loc (ArrayCell _) as srt -> SortSet.add srt srts
@@ -272,7 +257,6 @@ let add_read_write_axioms fs =
     | _ -> srts)
       gts SortSet.empty
   in
-  (* propagate read terms *)
   let read_propagators =
     SortSet.fold (function
       | Loc (ArrayCell srt) -> fun propagators ->
@@ -371,6 +355,25 @@ let add_read_write_axioms fs =
       | _ -> fun propagators -> propagators)
       field_sorts []
   in
+  read_propagators
+    
+let add_read_write_axioms fs =
+  let gts = ground_terms ~include_atoms:true (mk_and fs) in
+  let has_loc_field_sort = function
+    | App (_, _, Map([Loc id1], Loc id2)) -> (*id1 = id2*) true
+    | _ -> false
+  in
+  let basic_pt_flds = TermSet.filter (has_loc_field_sort &&& is_free_const) gts in
+  let basic_structs = struct_sorts_of_fields basic_pt_flds in
+  (* instantiate null axioms *)
+  let axioms = SortSet.fold (fun srt axioms -> Axioms.null_axioms srt @ axioms) basic_structs [] in
+  let null_ax, _ = open_axioms ~force:true isFld axioms in
+  let classes = CongruenceClosure.congr_classes fs gts in
+  (* CAUTION: not forcing the instantiation here would yield an inconsistency with the read/write axioms *)
+  let null_ax1 = instantiate_with_terms ~force:true false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
+  let fs1 = null_ax1 @ fs in
+  let gts = TermSet.union (ground_terms ~include_atoms:true (mk_and null_ax1)) gts in
+  (* propagate read terms *)
   (* generate instances of all read over write axioms *)
   let read_write_ax = 
     let generators_and_axioms =
@@ -383,7 +386,7 @@ let add_read_write_axioms fs =
     generators_and_axioms 
   in
   let read_propagators = 
-    List.map (fun (ms, t) -> TermGenerator (ms, t)) read_propagators
+    List.map (fun (ms, t) -> TermGenerator (ms, t)) (get_read_propagators gts)
   in
   let fs1 =
     match fs1 with

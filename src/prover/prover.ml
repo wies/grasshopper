@@ -139,22 +139,6 @@ let instantiate_and_prove session fs =
       fs
     else fs
   in
-  (*let terms_from_neg_assert fs =
-    let has_label = List.exists (function Label _ -> true | _ -> false) in
-    let rec process_form terms = function
-      | Atom (_, anns) as f ->
-          if has_label anns then
-            ground_terms ~include_atoms:true f |> TermSet.union terms
-          else terms
-      | BoolOp (_, fs) -> process_forms terms fs
-      | Binder (_, _, f1, anns) as f ->
-          if has_label anns then
-            ground_terms ~include_atoms:true f |> TermSet.union terms
-          else process_form terms f1
-    and process_forms terms fs = List.fold_left process_form terms fs
-    in
-    process_forms TermSet.empty fs
-  in*)
   let rec is_horn seen_pos = function
     | BoolOp (Or, fs) :: gs -> is_horn seen_pos (fs @ gs)
     | Binder (Forall, [], f, _) :: gs -> is_horn seen_pos (f :: gs)
@@ -236,60 +220,52 @@ let instantiate_and_prove session fs =
   in
   let round2 fs_inst gts_inst classes =
     (* the following seemingly redundant instantiation round is a workaround for not using the -fullep option *)
-    let fs2 = instantiate_with_terms ~stratify:false true fs1 classes in
+    let fs_inst0 = (*instantiate_with_terms ~stratify:false true fs1 classes*) fs_inst in
     let gts_known = generate_knowns gts in
     let gts_inst0 = TermSet.union gts_inst gts_known in
-    let gts2_atoms = TermSet.filter (function
-      | App (_, ts, Bool) -> List.for_all (fun t -> TermSet.mem t gts_inst) ts
-      | _ -> false)
-        (ground_terms ~include_atoms:true (mk_and fs2))
-    in
-    let gts_inst = generate_terms generators (TermSet.union gts_inst0 gts2_atoms) in
+    (*let gts_inst = generate_terms generators (TermSet.union gts_inst0 gts2_atoms) in*)
     let core_terms =
-      let gts_a = (*terms_from_neg_assert*) ground_terms (mk_and fs) in
+      let gts_a = ground_terms (mk_and fs) in
       TermSet.fold (fun t acc ->
         match sort_of t with
         | Loc _ | Int | FreeSrt _ -> TermSet.add (mk_known t) acc
         | _ -> acc)
         gts_a TermSet.empty
     in
-    let fs, gts2 = generate_adt_terms fs (TermSet.union gts_inst core_terms) in
-    let gts2 = generate_terms (btwn_gen @ generators) gts2 in
+    let fs1 = linearize fs1 in
+    let rec saturate i fs_inst gts_inst0 classes =
+      (*Printf.printf "Saturate iteration %d\n" i; flush stdout;*)
+      let gts_inst = TermSet.union gts_inst0 core_terms in
+      let gts_atoms = (*TermSet.filter (function
+        | App (_, ts, Bool) -> List.for_all (fun t -> TermSet.mem t gts_inst) ts
+        | _ -> false)*)
+          (ground_terms ~include_atoms:true (mk_and fs_inst))
+      in
+      let gts_inst = TermSet.union gts_inst gts_atoms in
+      let fs, gts_inst = generate_adt_terms fs gts_inst in
+      let implied_eqs = get_implied_equalities classes in
+      let gts_inst = TermSet.union (ground_terms ~include_atoms:true (mk_and implied_eqs)) gts_inst in
+      let generators = if i > 1 then Reduction.get_read_propagators gts_inst else btwn_gen @ generators in
+      let gts_inst = generate_terms generators gts_inst in
+      if i > 1 && not !Config.propagate_reads || TermSet.subset gts_inst gts_inst0 then 
+        rev_concat [fs_inst; implied_eqs], gts_inst, classes
+      else
+        let classes = CongruenceClosure.congr_classes (rev_concat [fs_inst; fs]) gts_inst in
+        let fs_inst = instantiate_with_terms true fs1 classes in
+        saturate (i + 1) fs_inst gts_inst classes
+    in
+    let fs, gts_inst, classes = saturate 1 fs_inst0 gts_inst0 classes in
     let _ =
       if Debug.is_debug 1 then
         begin
           print_endline "ground terms:";
           TermSet.iter (fun t -> print_endline ("  " ^ (string_of_term t))) gts;
           print_endline "generated terms:";
-        TermSet.iter (fun t -> print_endline ("  " ^ (string_of_term t))) (TermSet.diff gts2 gts)
-      end
+          TermSet.iter (fun t -> print_endline ("  " ^ (string_of_term t))) (TermSet.diff gts_inst gts)
+        end
     in
-    if TermSet.subset gts2 gts_inst0
-    then fs2, gts_inst, classes
-    else
-      let classes = CongruenceClosure.congr_classes (rev_concat [fs_inst; fs]) gts2 in
-      let implied = get_implied_equalities classes in
-      let fs3 = instantiate_with_terms true ((*flatten @@*) linearize fs1) classes in
-      rev_concat [fs3; implied], gts2, classes
+    fs, gts_inst, classes
   in
-  (*let round3 fs_inst gts_inst classes =
-    let generators =
-      List.map (fun (ms, ts) ->
-        let ms1 =
-          List.filter (function
-            | Match (App (Known, [t], _), _) ->
-                (match sort_of t with
-                | Int | Loc _ -> false
-                | _ -> true)
-            | _ -> true)
-            ms
-        in (ms1, ts))
-        generators
-    in
-    let gts_inst = generate_terms (btwn_gen @ generators) (TermSet.union (ground_terms ~include_atoms:true (mk_and fs_inst)) gts_inst) in
-    let classes = CongruenceClosure.congr_classes (rev_concat [fs_inst; fs]) gts_inst in
-    instantiate_with_terms true fs1 classes, gts_inst, classes
-  in*)
   let do_rounds rounds =
     let dr (k, result, fs_asserted, fs_inst, gts_inst, classes) r =
     match result with
@@ -313,7 +289,7 @@ let instantiate_and_prove session fs =
     | _ -> k, result, fs_asserted, fs_inst, gts_inst, classes
     in List.fold_left dr (1, None, FormSet.empty, fs1, gts1, classes) rounds
   in
-  let _, result, _, fs_inst, _, _ = do_rounds [round1; round2(*; round3*)] in
+  let _, result, _, fs_inst, _, _ = do_rounds [round1; round2] in
   result, session, fs_inst
 
 

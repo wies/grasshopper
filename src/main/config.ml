@@ -26,6 +26,7 @@ let with_ep = ref true
 let full_ep = ref false
 let use_set_theory = ref false
 let simple_arrays = ref false
+let propagate_reads = ref false
     
 (* Flag to switch between integer and bitvectors *)
 let use_bitvector = ref false
@@ -107,6 +108,7 @@ let cmd_options_spec =
    ("-termgen", Arg.Set_int term_gen_max_rounds, "<num> Number of rounds to run the term generation procedure");
    ("-nofixedpoint", Arg.Clear ccFixedPoint, " Do not do a fixed point with unit propagation for the congruence closure");
    ("-stratify", Arg.Set stratify, " Do not instantiate quantifiers that satisfy stratified sort restrictions\n\nOptions for controlling backend solver:");
+   ("-propreads", Arg.Set propagate_reads, " Propagate field reads over inferred field equalities");
    ("-splitlemmas", Arg.Set split_lemmas, " Add split lemmas for all terms of sort Loc");
    ("-smtsolver", Arg.Set_string smtsolver, "<solver> Choose SMT solver (z3, cvc4, cvc4mf), e.g., 'z3+cvc4mf'");
    ("-smtpatterns", Arg.Set smtpatterns, " Always add pattern annotations to quantifiers in SMT queries");
