@@ -236,9 +236,9 @@ let rec eval_term fields (old_state, state, spatial') = function
       | None -> (* Add loc to spatial' to indicate we need an acc(loc) in the future *)
         let e = fresh_const srt in
         e, (old_state, state, PointsTo (loc, [fld, e]) :: spatial')))
-  | App (Read, [f; a; idx], srt)
-  | App (Read, [f; App (Read, [App (ArrayCells, [a], _); idx], _)], srt)
-      when f = (Grassifier.array_state true srt) || f = (Grassifier.array_state false srt) ->
+  | App (Read, [a; idx], srt)
+  (*| App (Read, [f; App (Read, [App (ArrayCells, [a], _); idx], _)], srt)*)
+      when sort_of a = Array srt ->
     (* Array reads *)
     let a, (old_state, state, spatial') = eval_term fields (old_state, state, spatial') a in
     let idx, (old_state, state, spatial') = eval_term fields (old_state, state, spatial') idx in
@@ -855,14 +855,14 @@ let check_array_acc st arr idx =
 let check_array_reads st t =
   let rec check = function
     | Var _ as t -> t
-  | App (Read, [f; a; idx], srt)
-  | App (Read, [f; App (Read, [App (ArrayCells, [a], _); idx], _)], srt)
-      when f = (Grassifier.array_state true srt) || f = (Grassifier.array_state false srt) ->
+    | App (Read, [a; idx], srt)
+        (*| App (Read, [f; App (Read, [App (ArrayCells, [a], _); idx], _)], srt)*)
+      when sort_of a = Array srt ->
       (* Array reads *)
       let a, _ = eval_term_no_olds st.se_fields st.se_state a in
       let idx, _ = eval_term_no_olds st.se_fields st.se_state idx in
       check_array_acc st a idx;
-      App (Read, [f; check a; check idx], srt)
+      App (Read, [check a; check idx], srt)
     | App (s, ts, srt) -> App (s, List.map check ts, srt)
   in
   check t
@@ -944,13 +944,13 @@ let rec symb_exec st postcond comms =
       (* TODO to get line numbers, convert returns into asserts *)
             mk_error "A postcondition may not hold" errs m dummy_position))
   | (Basic (Assign {assign_lhs=[f];
-        assign_rhs=[App (Write, [array_state; arr; idx; rhs], srt)]}, pp) as comm) :: comms'
-  | (Basic (Assign {assign_lhs=[f];
+                    assign_rhs=[App (Write, [arr; idx; rhs], Array _)]}, pp) as comm) :: comms' ->
+  (*| (Basic (Assign {assign_lhs=[f];
         assign_rhs=[App (Write, [array_state;
                     App (Read, [App (ArrayCells, [arr], _); idx], _); rhs], srt)]}, pp)
         as comm) :: comms'
       when array_state = Grassifier.array_state true (sort_of rhs)
-        || array_state = Grassifier.array_state false (sort_of rhs) ->
+        || array_state = Grassifier.array_state false (sort_of rhs) ->*)
     Debug.debug (fun () ->
       sprintf "%sExecuting array write: %d: %s%sCurrent state:\n%s\n"
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
@@ -1018,7 +1018,7 @@ let rec symb_exec st postcond comms =
     symb_exec st postcond comms'
   | Basic (Call {call_lhs=lhs; call_name=foo; call_args=args}, pp) as comm :: comms' ->
     Debug.debug (fun () ->
-      sprintf "%sExecuting function call: %d: %s%sCurrent state:\n%s\n"
+      sprintf "%sExecuting procedure call: %d: %s%sCurrent state:\n%s\n"
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
         lineSep (string_of_se_state st)
     );
@@ -1088,7 +1088,7 @@ let rec symb_exec st postcond comms =
       let state = subst_state inst state in
       symb_exec {st with se_eqs = eqs; se_state = state} postcond comms'
       | Error (errs, m) ->
-        mk_error "The precondition of this function call may not hold" errs m pp.pp_pos)
+        mk_error "The precondition of this procedure call may not hold" errs m pp.pp_pos)
   | Seq (comms, _) :: comms' ->
     symb_exec st postcond (comms @ comms')
   | Basic (Havoc {havoc_args=vars}, pp) as comm :: comms' ->
@@ -1133,14 +1133,14 @@ let rec symb_exec st postcond comms =
       (match check_entailment st st'.se_state spec_st with
         | Ok _ ->
         symb_exec st postcond comms'
-        | Error (errs, m) -> mk_error "This assert may not hold" errs m pp.pp_pos)
+        | Error (errs, m) -> mk_error "This assertion may not hold" errs m pp.pp_pos)
     | FOL spec_form ->
       let spec, st = fold_map_terms process_no_array st spec_form in
       let st' = add_neq_constraints st in
       (match find_frame st st'.se_state (spec, []) with
         | Ok _ ->
         symb_exec {st with se_state = add_state (spec, []) st.se_state} postcond comms'
-        | Error (errs, m) -> mk_error "This assert may not hold" errs m pp.pp_pos))
+        | Error (errs, m) -> mk_error "This assertion may not hold" errs m pp.pp_pos))
   | Basic (Return {return_args=xs}, pp) as comm :: _ ->
     Debug.debug (fun () ->
       sprintf "%sExecuting return: %d: %s%sCurrent state:\n%s\n"
