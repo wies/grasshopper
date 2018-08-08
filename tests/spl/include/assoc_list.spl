@@ -25,7 +25,7 @@ function keys(FP: Set<Node>)
   ensures forall v in K :: key_witness(v, FP) in FP
   ensures forall v: Int :: v !in K ==> key_witness(v, FP) == null
   ensures forall v in K :: v == key_witness(v, FP).key @(matching v yields key_witness(v, FP).key)
- ensures forall v in K, FP1: Set<Node> :: key_witness(v, FP) in FP1 ==> key_witness(v, FP) == key_witness(v, FP1) 
+  ensures forall v in K, FP1: Set<Node> :: key_witness(v, FP) in FP1 ==> key_witness(v, FP) == key_witness(v, FP1) 
   
 /*
 function keys(FP: Set<Node>)
