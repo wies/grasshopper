@@ -1,48 +1,48 @@
 /** B+ tree implementation of the link template for linearizable dictionaries. */
 
-options "-simplearrays -symbexec"
+options "-simplearrays -symbexec -propreads"
 
-include "../include/flows.spl";
-include "array_util.spl";
+include "../include/flows.spl"
+include "array_util.spl"
 
 
 /** Flow and node domain definitions */
 
-datatype FlowDom = fd(ks: Map<Int, Int>, ir: Map<Int, Int>);
+datatype FlowDom = fd(ks: Map<K, Int>, ir: Map<K, Int>)
 
 pure predicate domEq(p1: FlowDom, p2: FlowDom) {
-  (forall k: Int :: p1.ks[k] == p2.ks[k]
+  (forall k: K :: p1.ks[k] == p2.ks[k]
    @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
-    && (forall k: Int :: p1.ir[k] == p2.ir[k]
+    && (forall k: K :: p1.ir[k] == p2.ir[k]
        @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
 
 }
 
 pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
-  (forall k: Int :: p1.ks[k] <= p2.ks[k]
+  (forall k: K :: p1.ks[k] <= p2.ks[k]
    @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
-    && (forall k: Int :: p1.ir[k] <= p2.ir[k]
+    && (forall k: K :: p1.ir[k] <= p2.ir[k]
        @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
 }
 
 pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-  ensures forall k: Int :: p.ks[k] == p1.ks[k] + p2.ks[k]
-  ensures forall k: Int :: p.ir[k] == p1.ir[k] + p2.ir[k]
+  ensures forall k: K :: p.ks[k] == p1.ks[k] + p2.ks[k]
+  ensures forall k: K :: p.ir[k] == p1.ir[k] + p2.ir[k]
 
 pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-  ensures forall k: Int :: p.ks[k] == p1.ks[k] * p2.ks[k]
-  ensures forall k: Int :: p.ir[k] == p1.ir[k] * p2.ir[k]
+  ensures forall k: K :: p.ks[k] == p1.ks[k] * p2.ks[k]
+  ensures forall k: K :: p.ir[k] == p1.ir[k] * p2.ir[k]
 
 pure function domZero() returns(p: FlowDom)
-  ensures forall k: Int :: p.ks[k] == 0 && p.ir[k] == 0
+  ensures forall k: K :: p.ks[k] == 0 && p.ir[k] == 0
 
 
-datatype InrFn = inrfnC(inrfn: Map<Node, Set<Int>>, inrdom: Set<Node>) | inrfnUndef;
+datatype InrFn = inrfnC(inrfn: Map<Node, Set<K>>, inrdom: Set<Node>) | inrfnUndef;
   
-datatype NodeDom = nd(contents: Set<Int>, inr: InrFn);
+datatype NodeDom = nd(contents: Set<K>, inr: InrFn);
 
 pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
-  (forall x: Int :: x in a1.contents ==> x in a2.contents)
+  (forall k: K :: k in a1.contents ==> k in a2.contents)
     && (a2.inr == inrfnUndef || a1.inr != inrfnUndef && a2.inr != inrfnUndef
        && (forall x: Node :: x in a1.inr.inrdom ==> x in a2.inr.inrdom && a1.inr.inrfn[x] == a2.inr.inrfn[x]))
 }
@@ -53,7 +53,7 @@ pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
 struct Node {
   var locktid: Int;
   var len: Int;
-  var keys: Array<Int>;
+  var keys: Array<K>;
   var ptrs: Array<Node>;
   var next: Node;
 }
@@ -68,8 +68,8 @@ define unchanged(x) {
 
 /** Definition of heap representation, hrep */
 
-var B: Int;
-axiom B > 1;
+var B: Int
+axiom B > 1
 
 define hrepSpatial(x) {
   acc(x) &*& acc(x.keys) &*& acc(x.ptrs)
@@ -79,49 +79,49 @@ define hrep(x, I) {
   hrepSpatial(x) &*& I.FP == {x} &*& x.next != x
     && 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
     // Keys are sorted
-    && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> x.keys[i] < x.keys[j])
+    && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> lt(x.keys[i], x.keys[j]))
     && (x.ptrs[0] == null  // Leaf
        && I.na.contents == set_of_map(x.keys.map, 0, x.len)
        && (x.next == null && I.FPo == {}
           || x.next != null && I.FPo == {x.next}
-           && (forall k: Int :: x.keys[x.len] <= k ==> I.fm[x][x.next].ks[k] == 1)
-           && (forall k: Int :: x.keys[x.len] > k ==> I.fm[x][x.next].ks[k] == 0)
+          && (forall k: K :: le(x.keys[x.len], k) ==> I.fm[x][x.next].ks[k] == 1)
+          && (forall k: K :: lt(k, x.keys[x.len]) ==> I.fm[x][x.next].ks[k] == 0)
              )
      || x.ptrs[0] != null  // Internal
        && I.na.contents == {}
        && (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i])
        && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j])
-       && (forall i: Int, k: Int :: 0 <= i <= x.len ==> x.ptrs[i] != null && x.ptrs[i] in I.FPo)
-       && (forall i: Int, k: Int :: 0 <= i < x.len ==>
+       && (forall i: Int, k: K :: 0 <= i <= x.len ==> x.ptrs[i] != null && x.ptrs[i] in I.FPo)
+       && (forall i: Int, k: K :: 0 <= i < x.len ==>
           (I.fm[x][x.ptrs[i]].ks[k] == 1
-             && ((i <= 0 || x.keys[i-1] <= k) && (i >= x.len || k < x.keys[i]))
+          && ((i <= 0 || le(x.keys[i-1], k)) && (i >= x.len || lt(k, x.keys[i])))
            || I.fm[x][x.ptrs[i]].ks[k] == 0
-             && !((i <= 0 || x.keys[i-1] <= k) && (i >= x.len || k < x.keys[i])))
+           && !((i <= 0 || le(x.keys[i-1], k)) && (i >= x.len || lt(k, x.keys[i]))))
           @(matching x.ptrs[i] yields I.fm[x][x.ptrs[i]].ks[k])
           @(matching x.keys[i] yields I.fm[x][x.ptrs[i]].ks[k]))
         && (x.next == null
-            && (forall k: Int :: 
+            && (forall k: K :: 
                (I.fm[x][x.ptrs[x.len]].ks[k] == 1
-               && (x.len <= 0 || x.keys[x.len-1] <= k)
+               && (x.len <= 0 || le(x.keys[x.len-1], k))
                || I.fm[x][x.ptrs[x.len]].ks[k] == 0
-               && !(x.len <= 0 || x.keys[x.len-1] <= k)))
+               && !(x.len <= 0 || le(x.keys[x.len-1], k))))
                && x.next !in I.FPo
             || x.next != null
-              && (forall k: Int :: 
+              && (forall k: K :: 
                  (I.fm[x][x.ptrs[x.len]].ks[k] == 1
-                 && (x.len <= 0 || x.keys[x.len-1] <= k) && (k < x.keys[x.len])
+                 && (x.len <= 0 || le(x.keys[x.len-1], k)) && lt(k, x.keys[x.len])
                  || I.fm[x][x.ptrs[x.len]].ks[k] == 0
-                 && !((x.len <= 0 || x.keys[x.len-1] <= k) && (k < x.keys[x.len]))))
-              && (forall k: Int ::
-                 I.fm[x][x.next].ks[k] == 1 && x.keys[x.len] <= k
-                 || I.fm[x][x.next].ks[k] == 0 && x.keys[x.len] > k
+                  && !((x.len <= 0 || le(x.keys[x.len-1], k)) && lt(k, x.keys[x.len]))))
+              && (forall k: K ::
+                   I.fm[x][x.next].ks[k] == 1 && le(x.keys[x.len], k)
+                 || I.fm[x][x.next].ks[k] == 0 && lt(k, x.keys[x.len])
                  )
             )
       )
 }
 /* TODO have a create B+ tree function to check this isn't unsat */
 
-
+/*
 procedure aaa_test(x: Node, c0: Node, c1: Node, n: Node, I: Interface)
   requires x != c0 && x != c1 && x != n && c0 != c1 && c0 != n && c1 != n
   requires x != null && c0 != null && c1 != null && n != null
@@ -130,29 +130,30 @@ procedure aaa_test(x: Node, c0: Node, c1: Node, n: Node, I: Interface)
   requires x.keys[0] == 1 && x.keys[1] == 5
   requires acc(x) &*& acc(x.keys) &*& acc(x.ptrs)
   requires I.FP == {x} && I.FPo == {c0, c1, n} && I.na.contents == {}
-  requires forall n: Node, n1: Node, k: Int :: n != x ==> I.fm[n][n1].ks[k] == 0
-  requires forall n: Node, k: Int :: n !in I.FPo ==> I.fm[x][n].ks[k] == 0
-  requires forall n: Node, k: Int :: n in {c0} && k < 1 ==> I.fm[x][n].ks[k] == 1
-  requires forall n: Node, k: Int :: n in {c0} && k >= 1 ==> I.fm[x][n].ks[k] == 0
+  requires forall n: Node, n1: Node, k: K :: n != x ==> I.fm[n][n1].ks[k] == 0
+  requires forall n: Node, k: K :: n !in I.FPo ==> I.fm[x][n].ks[k] == 0
+  requires forall n: Node, k: K :: n in {c0} && k < 1 ==> I.fm[x][n].ks[k] == 1
+  requires forall n: Node, k: K :: n in {c0} && k >= 1 ==> I.fm[x][n].ks[k] == 0
   @(matching n yields I.fm[x][n].ks[k])
-  requires forall n: Node, k: Int :: n in {c1} && 1 <= k < 5 ==> I.fm[x][n].ks[k] == 1
-  requires forall n: Node, k: Int :: n in {c1} && !(1 <= k < 5) ==> I.fm[x][n].ks[k] == 0
-  requires forall y: Node, k: Int :: y in {n} && 5 <= k ==> I.fm[x][y].ks[k] == 1
-  requires forall y: Node, k: Int :: y in {n} && !(5 <= k) ==> I.fm[x][y].ks[k] == 0
+  requires forall n: Node, k: K :: n in {c1} && 1 <= k < 5 ==> I.fm[x][n].ks[k] == 1
+  requires forall n: Node, k: K :: n in {c1} && !(1 <= k < 5) ==> I.fm[x][n].ks[k] == 0
+  requires forall y: Node, k: K :: y in {n} && 5 <= k ==> I.fm[x][y].ks[k] == 1
+  requires forall y: Node, k: K :: y in {n} && !(5 <= k) ==> I.fm[x][y].ks[k] == 0
   ensures hrep(x, I)
 {}
+ */
 
 // TODO update
-lemma keyset_implies_leaf(x: Node, Ix: Interface, k: Int, i: Int)
+lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
-  requires (i <= 0 || x.keys[i-1] <= k) && 0 <= i <= x.len
+  requires (i <= 0 || le(x.keys[i-1], k)) && 0 <= i <= x.len
   ensures hrep(x, Ix) &*& unchanged(x)
   ensures x.ptrs[0] == null  // x is a leaf
 {
   if (x.ptrs[0] != null) {
     if (i < x.len) {
-      if (k < x.keys[i]) {
+      if (lt(k, x.keys[i])) {
         pure assert Ix.fm[x][x.ptrs[i]].ks[k] == 1;
       } else {
         keyset_implies_leaf(x, Ix, k, i + 1);
@@ -165,13 +166,13 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: Int, i: Int)
 
 /** Begin programs */
 
-var TID: Int;
-axiom TID > 0;
-var r: Node;
+//var TID: Int
+//axiom TID > 0
+//var r: Node
 
 
 /** findNext */
-procedure findNext(x: Node, k: Int, Ix: Interface)
+procedure findNext(x: Node, k: K, Ix: Interface)
   returns (n: Node)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   ensures hrep(x, Ix)
@@ -183,7 +184,7 @@ procedure findNext(x: Node, k: Int, Ix: Interface)
       lemma_int_valid_unfold(Ix);
       return null;
     }
-    if (x.keys[x.len] <= k) {
+    if (le(x.keys[x.len], k)) {
       return x.next;
     } else {
       lemma_int_valid_unfold(Ix);
@@ -191,10 +192,14 @@ procedure findNext(x: Node, k: Int, Ix: Interface)
     }
   }
 
-  var found, i := arr_find(x.keys, x.len, k+1);
+  var found, i := arr_find(x.keys, x.len, k);
+
+  if (i == 0 && k == x.keys[i]) {
+    i := i + 1;
+  }
 
   if (i == x.len && x.next != null) {
-    if (k < x.keys[i])
+    if (lt(k, x.keys[i]))
       n := x.ptrs[i];
     else
       n := x.next;
@@ -206,7 +211,7 @@ procedure findNext(x: Node, k: Int, Ix: Interface)
 
 
 /** member */
-procedure member(x: Node, k: Int, Ix: Interface)
+procedure member(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
@@ -225,7 +230,7 @@ procedure member(x: Node, k: Int, Ix: Interface)
 
 
 /** insert */
-procedure insert(x: Node, k: Int, Ix: Interface)
+procedure insert(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
@@ -235,7 +240,7 @@ procedure insert(x: Node, k: Int, Ix: Interface)
   ensures succ ==> (Ix1.na.contents == Ix.na.contents ++ {k} && (res == k !in Ix.na.contents))
 {
   keyset_implies_leaf(x, Ix, k, 0);
-  pure assume k < x.keys[x.len]; // TODO Follows from k !in outset
+  pure assume lt(k, x.keys[x.len]); // TODO Follows from k !in outset
 
   if (x.len < 2*B - 1) {
 
@@ -263,7 +268,7 @@ procedure insert(x: Node, k: Int, Ix: Interface)
 
 
 /** delete */
-procedure delete(x: Node, k: Int, Ix: Interface)
+procedure delete(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)

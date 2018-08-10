@@ -2,8 +2,8 @@
 
 options "-simplearrays -propreads -symbexec"
 
-include "../include/flows.spl";
-include "array_util.spl";
+include "../include/flows.spl"
+include "array_util.spl"
 
 
 /** Flow and node domain definitions */
@@ -66,8 +66,8 @@ define unchanged(x) {
 
 /** Definition of heap representation, hrep */
 
-var B: Int;
-axiom B > 1;
+var B: Int
+axiom B > 1
 
 define hrepSpatial(x) {
   acc(x) &*& acc(x.keys) &*& acc(x.ptrs)
@@ -135,9 +135,9 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
 
 /** Begin programs */
 
-var TID: Int;
-axiom TID > 0;
-var r: Node;
+//var TID: Int;
+//axiom TID > 0;
+//var r: Node;
 
 procedure new_node() returns (x: Node)
   requires emp
