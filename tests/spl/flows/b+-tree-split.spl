@@ -1,4 +1,6 @@
-/** Extra lemmas needed for split proof */
+include "b+-tree.spl";
+
+/** These extra lemmas need to go into ReLoC
 
 // This lemma depends on the flow domain being a function domain -- generalize?
 lemma lemma_pred(k: Int, x: Node, Ix: Interface, I2: Interface, I: Interface)
@@ -35,6 +37,7 @@ lemma lemma_inheritance(k: Int, k1: Int, p: Node, Ip: Interface, c: Node, Ic: In
     lemma_disj_eq(Iy, I4, Ip, I2);
   }
 }
+ */
 
 // Lemmas to calculate/define new interfaces of nodes
 pure function fm_of_node(x: Node, kys: Map<Int, Int>, ps: Map<Int, Node>, lenn: Int, i: Int)
@@ -139,9 +142,9 @@ lemma lemma_int_of_node(x: Node, i: Int)
     x.ptrs[0] != null && n in {x} && n1 in {x.ptrs[j]} && 0 <= j <= i <= x.len ==>
           n1 in fpo_of_node(x, x.keys.map, x.ptrs.map, x.len, i)
           && (fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] == 1
-             && ((i <= 0 || x.keys[i-1] <= k) && (i >= x.len || k < x.keys[i]))
+             && ((j <= 0 || x.keys[j-1] <= k) && (j >= x.len || k < x.keys[j]))
            || fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] == 0
-             && !((i <= 0 || x.keys[i-1] <= k) && (i >= x.len || k < x.keys[i])))
+             && !((j <= 0 || x.keys[j-1] <= k) && (j >= x.len || k < x.keys[j])))
           @(matching x.ptrs[j] yields x.keys[j-1]) // TODO remove if not needed
           @(matching x.ptrs[j] yields x.keys[j])
   ensures forall n: Node, n1: Node, j: Int ::
@@ -168,20 +171,16 @@ lemma lemma_int_of_node(x: Node, i: Int)
 lemma lemma_calculate_int(x: Node)
   returns (Ix: Interface)
   requires hrepSpatial(x)
-  requires 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B && x.locktid >= 0
+  requires 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
   requires forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x != x.ptrs[i] && x.ptrs[i] != null
   requires forall i: Int, j: Int :: 0 <= i < j < x.len ==> x.keys[i] < x.keys[j]
   requires forall i: Int, j: Int :: x.ptrs[0] != null && 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j]
   requires x.len != 0 ==> x.rangeLb <= x.keys[0] && x.keys[x.len-1] < x.rangeUb
   ensures hrep(x, Ix) &*& unchanged(x)
   ensures Ix != intUndef && intValid(Ix) == true
-  ensures (x.locktid == TID && Ix.na.lockinfo == locked(x.locktid)
-       || x.locktid == 0 && Ix.na.lockinfo == unlocked)
 {
   // TODO use assignment here instead
   pure assume Ix != intUndef
-    && (x.locktid == TID && Ix.na.lockinfo == locked(x.locktid)
-       || x.locktid == 0 && Ix.na.lockinfo == unlocked)
     && (Ix.na.contents == set_of_map(x.keys.map, 0, x.len) && x.ptrs[0] == null
        || Ix.na.contents == {} && x.ptrs[0] != null)
     && Ix.FP == {x}
@@ -202,7 +201,6 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface, c_idx: Int,
   requires hrep(p, Ip) &*& hrep(c, Ic) &*& (acc(n) &*& acc(n.ptrs) &*& acc(n.keys))
   requires In.FP == {n} && domEq(In.inf[n], domZero()) == true && In.FPo == {}
   requires intValid(Ip) == true && intValid(Ic) == true && intValid(In) == true
-  requires Ip.na.lockinfo == locked(TID) && Ic.na.lockinfo == locked(TID)
   requires intComp(Ip, intComp(Ic, In)) == Ipcn && intValid(Ipcn) == true
   requires n.keys.length == 2*B && n.ptrs.length == 2*B
   requires 0 < p.len < p.keys.length - 1 && c.len == 2 * B - 1
@@ -210,15 +208,15 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface, c_idx: Int,
   requires 0 <= c_idx < p.len && p.ptrs[c_idx] == c
   // Consequence of acyclicity
   requires domEq(Ic.fm[c][p], domZero()) == true
-  // This follows from lemma_inheritance
+  // These follow from lemma_inheritance
   requires forall k: Int :: Ic.inf[c].ks[k] == 1 ==> Ip.inf[p].ks[k] == 1 && Ip.fm[p][c].ks[k] == 1
+  requires (c_idx == 0 || p.keys[c_idx-1] == c.rangeLb) && c.rangeUb == p.keys[c_idx]
   // TODO create and mark node - inflow will be 0, so nothing else can point to it
-  requires forall i: Int :: 0 <= i <= p.len ==> p.ptrs[i] != n;
-  requires forall i: Int :: 0 <= i <= c.len ==> c.ptrs[i] != n;
+  requires forall i: Int :: 0 <= i <= p.len ==> p.ptrs[i] != n
+  requires n !in Ic.FPo
 
   ensures hrep(p, Ip1) &*& hrep(c, Ic1) &*& hrep(n, In1)
   ensures intValid(Ip1) == true && intValid(Ic1) == true && intValid(In1) == true
-  ensures Ip1.na.lockinfo == locked(TID) && Ic1.na.lockinfo == locked(TID)
   ensures intComp(Ip1, intComp(Ic1, In1)) == Ipcn1 && intEq(Ipcn, Ipcn1) == true
   ensures Ipcn.na.contents == Ipcn1.na.contents
 {
@@ -226,7 +224,6 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface, c_idx: Int,
   var k := c.keys[m - 1];
 
   // Create a new node n
-  n.locktid := 0;
   n.rangeLb := k;
   n.rangeUb := c.rangeUb;
 
@@ -257,11 +254,23 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface, c_idx: Int,
 
 
   // Show that nodes are good with new interfaces
+  lemma_int_valid_unfold(Ip); // may not be needed here
   pure assert Ic.inf[c].ks[k] == 1 && Ip.inf[p].ks[k] == 1;  // To show that p.rangeLb <= k
   Ip1 := lemma_calculate_int(p);
   Ic1 := lemma_calculate_int(c);
   In1 := lemma_calculate_int(n);
 
+  // Show that In1's inflow is correct
+  pure assert n !in Ic1.FPo;
+  lemma_int_valid_unfold(Ic1);
+  lemma_int_valid_unfold(In1);
+  pure assert Ic1.fm[c][n].pc == 0 && (forall k: Int :: Ic1.fm[c][n].ks[k] == 0);
+  pure assert domEq(domMult(Ic1.inf[c], Ic1.fm[c][n]), domZero()) == true;
+  pure assert p.keys[k_idx] == k && n.rangeLb == k && p.keys[k_idx + 1] == n.rangeUb;
+  pure assert forall k: Int :: Ip1.inf[p].ks[k] * Ip1.fm[p][n].ks[k] <= In1.inf[n].ks[k];
+  pure assert Ip1.inf[p].pc * Ip1.fm[p][n].pc <= In1.inf[n].pc;
+  pure assert domLeq(domMult(Ip1.inf[p], Ip1.fm[p][n]), In1.inf[n]) == true;
+  
   // Compose the new interfaces
   lemma_int_valid_unfold(In);
   lemma_int_comp_unfold_3(p, Ip, c, Ic, n, In, Ipcn);
@@ -275,8 +284,10 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface, c_idx: Int,
   pure assert domLeq(domMult(Ip1.inf[p], Ip1.fm[p][c]), Ic1.inf[c]) == true;
 
   // TODO CONTINUE, show this to allow next lemma
-  //  pure assert domEq(Ic1.fm[c][p], domZero()) == true;
-  //  Ipcn1 := lemma_int_comp_fold_3(p, Ip1, c, Ic1, n, In1);
+  // lemma_acyclic_2(p, I)
+  pure assume domEq(Ic1.fm[c][p], domZero()) == true;
+  pure assume domEq(In1.fm[n][p], domZero()) == true && domEq(In1.fm[n][c], domZero()) == true;
+  Ipcn1 := lemma_int_comp_fold_3(p, Ip1, c, Ic1, n, In1);
   // Show that interface of region is contextually extended
   pure assume false;
 }

@@ -99,7 +99,9 @@ define hrep(x, I) {
            || I.fm[x][x.ptrs[i]].ks[k] == 0
            && !((i <= 0 || le(x.keys[i-1], k)) && (i >= x.len || lt(k, x.keys[i]))))
           @(matching x.ptrs[i] yields x.keys[i - 1])
-          @(matching x.ptrs[i] yields x.keys[i])))
+          @(matching x.ptrs[i] yields x.keys[i]))
+          //       && (forall i: Int :: 0 <= i <= x.len ==> I.fm[x][x.ptrs[i]].pc == 1)
+       )
 }
 /* TODO have a create B+ tree function to check this isn't unsat */
 
