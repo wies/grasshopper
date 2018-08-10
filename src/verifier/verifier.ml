@@ -200,8 +200,8 @@ let add_pred_insts prog f =
             let sts = List.fold_left subterms_term_acc TermSet.empty ts in
             let no_var_reads =
               TermSet.for_all (function
-                | App (Read, _ :: _ :: Var (x, _) :: _, _) -> IdSet.mem x aux_vs
-                | App (Read, _ :: Var (x, _) :: _, _) -> IdSet.mem x aux_vs
+                | App (Read, _ :: _ :: (Var (x, _) | App ((Plus | Minus), [Var (x, _); _], _)) :: _, _) -> IdSet.mem x aux_vs
+                | App (Read, _ :: (Var (x, _) | App ((Plus | Minus), [Var (x, _); _], _)) :: _, _) -> IdSet.mem x aux_vs
                 | _ -> true) sts
             in
             if (no_var_reads || is_set_sort srt) && IdSet.subset fvs bvs && not @@ IdSet.is_empty fvs
