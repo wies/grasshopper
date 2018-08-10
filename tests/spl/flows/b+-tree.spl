@@ -1,6 +1,6 @@
 /** B+ tree implementation of the give-up template for linearizable dictionaries. */
 
-options "-simplearrays -propreads"
+options "-simplearrays -propreads -symbexec"
 
 include "../include/flows.spl";
 include "array_util.spl";
