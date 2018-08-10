@@ -1,7 +1,8 @@
 (** SPL abstract syntax. *)
 
 open Grass
-
+open Util
+  
 type idents = ident list
 
 type pos = source_position
@@ -394,15 +395,19 @@ let pred_decl hdr body =
   { hdr with pr_body = body }
 
 let extend_spl_program incls decls bg_th prog =
+  let redeclaration_error id pos =
+    ProgError.error pos ("Identifier " ^ GrassUtil.name id ^ " has already been declared in this scope.")
+  in
   let check_uniqueness id pos (tdecls, vdecls, pdecls, prdecls, mdecls) =
     if IdMap.mem id tdecls || IdMap.mem id vdecls || IdMap.mem id pdecls || IdMap.mem id prdecls
         || IdMap.mem id mdecls
-    then ProgError.error pos ("redeclaration of identifier " ^ (fst id) ^ ".");
+    then redeclaration_error id pos
   in
   let tdecls, vdecls, pdecls, prdecls, mdecls =
     List.fold_left (fun (tdecls, vdecls, pdecls, prdecls, mdecls as decls) -> function
-      | TypeDecl decl -> 
-          check_uniqueness decl.t_name decl.t_pos decls;
+      | TypeDecl decl ->
+          IdMap.find_opt decl.t_name tdecls |>
+          Opt.iter (function { t_def = FreeTypeDef; _ } -> () | _ -> redeclaration_error decl.t_name decl.t_pos);
           IdMap.add decl.t_name decl tdecls, vdecls, pdecls, prdecls, mdecls
       | VarDecl decl -> 
           check_uniqueness decl.v_name decl.v_pos decls;

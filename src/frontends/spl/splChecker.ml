@@ -46,18 +46,20 @@ let resolve_names cu =
     in
     r
   in
-  let declare_name pos init_id scope tbl =
+  let declare_name ?(allow_redecl=false) pos init_id scope tbl =
     let name = GrassUtil.name init_id in
-    match SymbolTbl.find_local tbl init_id with
-    | Some _ -> redeclaration_error init_id pos
+    let id = match SymbolTbl.find_local tbl init_id with
+    | Some (id, _) ->
+        if allow_redecl then id else redeclaration_error init_id pos
     | None ->
-        let id = GrassUtil.fresh_ident ~id:(snd init_id) name in
-        (id, SymbolTbl.add tbl init_id (id, scope))
+        GrassUtil.fresh_ident ~id:(snd init_id) name 
+    in
+    (id, SymbolTbl.add tbl init_id (id, scope))  
   in
   let declare_var types decl tbl =
     let id, tbl = declare_name decl.v_pos decl.v_name decl.v_scope tbl in
-        let ty = resolve_typ types decl.v_pos tbl decl.v_type in
-        { decl with v_name = id; v_type = ty }, tbl
+    let ty = resolve_typ types decl.v_pos tbl decl.v_type in
+    { decl with v_name = id; v_type = ty }, tbl
   in
   let declare_vars vars structs tbl = 
     IdMap.fold 
@@ -68,11 +70,12 @@ let resolve_names cu =
   in
   let tbl = SymbolTbl.empty in
   (* resolve type names *)
+  
   let types0, tbl =
     IdMap.fold 
-      (fun init_id decl (structs, tbl) ->
+      (fun init_id decl (types, tbl) ->
         let id, tbl = declare_name decl.t_pos init_id GrassUtil.global_scope tbl in
-        IdMap.add id { decl with t_name = id } structs, tbl)
+        IdMap.add id { decl with t_name = id } types, tbl)
       cu.type_decls (IdMap.empty, tbl)
   in
   (* resolve global variables *)
