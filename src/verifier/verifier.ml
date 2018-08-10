@@ -200,8 +200,8 @@ let add_pred_insts prog f =
             let sts = List.fold_left subterms_term_acc TermSet.empty ts in
             let no_var_reads =
               TermSet.for_all (function
-                | App (Read, _ :: _ :: Var (x, _) :: _, _) -> IdSet.mem x aux_vs
-                | App (Read, _ :: Var (x, _) :: _, _) -> IdSet.mem x aux_vs
+                | App (Read, _ :: _ :: (Var (x, _) | App ((Plus | Minus), [Var (x, _); _], _)) :: _, _) -> IdSet.mem x aux_vs
+                | App (Read, _ :: (Var (x, _) | App ((Plus | Minus), [Var (x, _); _], _)) :: _, _) -> IdSet.mem x aux_vs
                 | _ -> true) sts
             in
             if (no_var_reads || is_set_sort srt) && IdSet.subset fvs bvs && not @@ IdSet.is_empty fvs
@@ -511,6 +511,40 @@ let vcgen prog proc =
   | Some body -> List.rev (fst (vcs [] [] body))
   | None -> []
 
+(** Generate error message from labels in the model *)
+let get_err_msg_from_labels model labels =
+  let add_msg pos msg error_msgs =
+    let filtered_msgs = 
+      List.filter 
+        (fun (pos2, _) -> not (contained_in_src_pos pos pos2))
+        error_msgs
+    in
+    (pos, msg) :: filtered_msgs
+  in
+  let error_msgs = 
+    IdMap.fold 
+      (fun id (pos, msg) error_msgs ->
+        let p = mk_free_const Bool id in
+        match Model.eval_bool_opt model p with
+        | Some true ->
+            add_msg pos msg error_msgs
+        | _ -> error_msgs
+      ) 
+      labels []
+  in
+  let sorted_error_msgs = 
+    List.sort
+      (fun (pos1, msg1) (pos2, msg2) -> 
+        let mc = 
+          compare (String.get msg1 0) (String.get msg2 0) 
+        in
+        if mc = 0 then compare_src_pos pos1 pos2 else mc) 
+      error_msgs
+  in
+  List.map 
+    (fun (pos, msg) -> ProgError.error_to_string pos msg) 
+    sorted_error_msgs
+
 (** Generate verification conditions for procedure [proc] of program [prog] and check them. *)
 let check_proc prog proc =
   let check_vc errors (vc_name, (vc_msg, pp), vc0, labels) =
@@ -529,42 +563,8 @@ let check_proc prog proc =
         match Prover.get_model ~session_name:session_name ~sat_means:sat_means vc with
         | None -> errors
         | Some model -> 
-          (* generate error message from model *)
-            let add_msg pos msg error_msgs =
-              let filtered_msgs = 
-                List.filter 
-                  (fun (pos2, _) -> not (contained_in_src_pos pos pos2))
-                  error_msgs
-              in
-              (pos, msg) :: filtered_msgs
-            in
-            let error_msgs = 
-              IdMap.fold 
-                (fun id (pos, msg) error_msgs ->
-                  let p = mk_free_const Bool id in
-                  match Model.eval_bool_opt model p with
-                  | Some true ->
-                      add_msg pos msg error_msgs
-                  | _ -> error_msgs
-                ) 
-                labels []
-            in
-            let sorted_error_msgs = 
-              List.sort
-                (fun (pos1, msg1) (pos2, msg2) -> 
-                  let mc = 
-                    compare (String.get msg1 0) (String.get msg2 0) 
-                  in
-                  if mc = 0 then compare_src_pos pos1 pos2 else mc) 
-                error_msgs
-            in
-            let error_msg_strings = 
-              List.map 
-                (fun (pos, msg) -> ProgError.error_to_string pos msg) 
-                sorted_error_msgs
-            in
             let error_msg =
-              String.concat "\n\n" (vc_msg :: error_msg_strings)
+              String.concat "\n\n" (vc_msg :: get_err_msg_from_labels model labels)
             in
             (pp, error_msg, model) :: errors
       end
