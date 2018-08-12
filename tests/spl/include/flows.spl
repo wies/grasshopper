@@ -120,6 +120,7 @@ lemma lemma_int_comp_unfold_3(x: Node, Ix: Interface, y: Node, Iy: Interface,
 lemma lemma_int_valid_unfold(I: Interface)
   requires intValid(I) == true
   ensures forall n: Node, n1: Node :: n !in I.FP ==> domEq(I.inf[n], domZero()) == true
+    @(matching I.inf[n] yields known(domEq(I.inf[n], domZero())))  // TODO why?
   ensures forall n: Node, n1: Node :: n !in I.FP ==> domEq(I.fm[n][n1], domZero()) == true
     @(matching I.fm[n][n1] yields known(domEq(I.fm[n][n1], domZero())))  // TODO why?
   ensures forall n: Node, n1: Node :: n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero()) == true
@@ -140,10 +141,10 @@ lemma lemma_int_valid_fold(I: Interface)
 
 procedure copy_interface(I: Interface, a: NodeDom)
   returns (I1: Interface)
-  //ensures I1 != intUndef
-  //ensures I.FP == I1.FP && I.FPo == I1.FPo && I.inf == I1.inf && I.fm == I1.fm
-  //ensures I1.na == a
-  ensures I1 == int(I.inf, a, I.fm, I.FP, I.FPo)
+  ensures I1 != intUndef
+  ensures I.FP == I1.FP && I.FPo == I1.FPo && I.inf == I1.inf && I.fm == I1.fm
+  ensures I1.na == a
+  //ensures I1 == int(I.inf, a, I.fm, I.FP, I.FPo)
 {
   I1 := int(I.inf, a, I.fm, I.FP, I.FPo);
 }

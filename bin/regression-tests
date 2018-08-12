@@ -90,14 +90,10 @@ symb_exec:soundness3    tests/spl/symb_exec/soundness3.spl      ''     fail
 symb_exec:soundness5    tests/spl/symb_exec/soundness5.spl      ''     fail
 symb_exec:soundness6    tests/spl/symb_exec/soundness6.spl      ''     fail
 symb_exec:arr-soundness tests/spl/symb_exec/soundness_arr1.spl  ''     fail
-flows:tests             tests/spl/flows/tests.spl               ''     pass
-flows:sls               tests/spl/flows/sls.spl                 ''     pass
-flows:soundness1        tests/spl/flows/test_soundness1.spl     ''     fail
-flows:harris-1          tests/spl/flows/harris-1.spl            ''     pass
-flows:harris-2          tests/spl/flows/harris-2.spl            ''     pass
-flows:give-up           tests/spl/flows/give-up.spl             ''     pass
 flows:b+tree            tests/spl/flows/b+-tree.spl             ''     pass
-flows:link              tests/spl/flows/link.spl                ''     pass
+flows:b-link-tree       tests/spl/flows/b-link.spl              ''     pass
+flows:hashtbl           tests/spl/flows/hashtbl.spl             ''     pass
+flows:hashtbl-give-up   tests/spl/flows/hashtbl-give-up.spl     ''     pass
 "
 
 res=0

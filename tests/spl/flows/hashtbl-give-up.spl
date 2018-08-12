@@ -8,32 +8,32 @@ include "array_util.spl";
 
 /** Flow domain definitions */
 
-datatype FlowDom = fd(ks: Map<Int, Int>);
+datatype FlowDom = fd(ks: Map<K, Int>);
 
 pure predicate domEq(p1: FlowDom, p2: FlowDom) {
-  forall k: Int :: p1.ks[k] == p2.ks[k]
+  forall k: K :: p1.ks[k] == p2.ks[k]
     @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k])
 }
 
 pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
-  forall k: Int :: p1.ks[k] <= p2.ks[k]
+  forall k: K :: p1.ks[k] <= p2.ks[k]
     @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k])
 }
 
 pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-  ensures forall k: Int :: p.ks[k] == p1.ks[k] + p2.ks[k]
+  ensures forall k: K :: p.ks[k] == p1.ks[k] + p2.ks[k]
 
 pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-  ensures forall k: Int :: p.ks[k] == p1.ks[k] * p2.ks[k]
+  ensures forall k: K :: p.ks[k] == p1.ks[k] * p2.ks[k]
 
 pure function domZero() returns(p: FlowDom)
-  ensures forall k: Int :: p.ks[k] == 0
+  ensures forall k: K :: p.ks[k] == 0
 
 
-datatype NodeDom = nd(contents: Set<Int>);
+datatype NodeDom = nd(contents: Set<K>);
 
 pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
-  (forall x: Int :: x in a1.contents ==> x in a2.contents)
+  (forall k: K :: k in a1.contents ==> k in a2.contents)
 }
 
 
@@ -45,9 +45,9 @@ struct Node {
   var locktid: Int;
   var len: Int;
   var bkts: Array<Node>;
-  var rangeLb: Int;
-  var rangeUb: Int;
-  var keys: Array<Int>;
+  var rangeLb: K;
+  var rangeUb: K;
+  var keys: Array<K>;
   var next: Node;
   ghost var typ: NodeType;
 }
@@ -71,7 +71,7 @@ procedure newNode(xlock: Int, xlen: Int, xkeyslen: Int, xnext: Node)
 
 /** Definition of heap representation, hrep */
 
-function hash(x: Node, k: Int) returns (i: Int)
+function hash(x: Node, k: K) returns (i: Int)
 
 define hrepSpatial(x) {
   acc(x) &*& acc(x.bkts)  &*& acc(x.keys)
@@ -82,22 +82,22 @@ define hrep(x, I) {
   && 0 <= x.len && x.len < x.keys.length
     && ((x.typ == root
         && (forall i: Int :: 0 <= i && i < x.bkts.length ==> x.bkts[i] != null)
-        && (forall y: Node, k: Int :: y == x.bkts[hash(x, k)] ==> I.fm[x][y].ks[k] == 1)
-        && (forall k: Int :: 0 <= hash(x, k) && hash(x, k) < x.bkts.length)
-        && (forall k: Int :: I.inf[x].ks[k] == 1 /* && k in outset(x, I.fm)*/))
+        && (forall y: Node, k: K :: y == x.bkts[hash(x, k)] ==> I.fm[x][y].ks[k] == 1)
+        && (forall k: K :: 0 <= hash(x, k) && hash(x, k) < x.bkts.length)
+        && (forall k: K :: I.inf[x].ks[k] == 1 /* && k in outset(x, I.fm)*/))
      || (x.typ == bucket
         // The keys are within the range
-        && (x.len != 0 ==> x.rangeLb <= x.keys[0] && x.keys[x.len-1] < x.rangeUb)
+        && (x.len != 0 ==> le(x.rangeLb, x.keys[0]) && lt(x.keys[x.len-1], x.rangeUb))
         // The range defines the inset
-        && (forall k: Int :: I.inf[x].ks[k] == 1 && x.rangeLb <= k < x.rangeUb
-           || I.inf[x].ks[k] == 0 && !(x.rangeLb <= k < x.rangeUb))
-        && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> x.keys[i] < x.keys[j])
+        && (forall k: K :: I.inf[x].ks[k] == 1 && le(x.rangeLb, k) && lt(k, x.rangeUb)
+           || I.inf[x].ks[k] == 0 && !(le(x.rangeLb, k) && lt(k, x.rangeUb)))
+        && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> lt(x.keys[i], x.keys[j]))
         && I.na.contents == set_of_map(x.keys.map, 0, x.len)
         && (x.next == null && I.FPo == {}
-        || x.next != null && (forall k: Int :: I.fm[x][x.next].ks[k] == 1) && I.FPo == {x.next})))
+        || x.next != null && (forall k: K :: I.fm[x][x.next].ks[k] == 1) && I.FPo == {x.next})))
 }
 
-lemma keyset_implies_bucket(x: Node, Ix: Interface, k: Int)
+lemma keyset_implies_bucket(x: Node, Ix: Interface, k: K)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
   ensures hrep(x, Ix) &*& unchanged(x)
@@ -117,7 +117,7 @@ axiom TID > 0;
 
 
 /** inRange */
-procedure inRange(x: Node, k: Int, Ix: Interface)
+procedure inRange(x: Node, k: K, Ix: Interface)
   returns (res: Bool)
   requires hrep(x, Ix)
   ensures hrep(x, Ix) &*& (res ==> Ix.inf[x].ks[k] >= 1)
@@ -125,7 +125,7 @@ procedure inRange(x: Node, k: Int, Ix: Interface)
   if (x.typ == root) {
     return true;
   } else {
-    if (x.rangeLb <= k && x.rangeUb > k)
+    if (le(x.rangeLb, k) && lt(k, x.rangeUb))
       return true;
     else
       return false;
@@ -134,7 +134,7 @@ procedure inRange(x: Node, k: Int, Ix: Interface)
 
 
 /** findNext **/
-procedure findNext(x: Node, k: Int, Ix: Interface)
+procedure findNext(x: Node, k: K, Ix: Interface)
   returns (n: Node)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   ensures hrep(x, Ix)
@@ -157,7 +157,7 @@ procedure findNext(x: Node, k: Int, Ix: Interface)
 
 
 /** member */
-procedure member(x: Node, k: Int, Ix: Interface)
+procedure member(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
@@ -176,7 +176,7 @@ procedure member(x: Node, k: Int, Ix: Interface)
 
 
 /** insert */
-procedure insert(x: Node, k: Int, Ix: Interface)
+procedure insert(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
@@ -214,7 +214,7 @@ procedure insert(x: Node, k: Int, Ix: Interface)
 
 
 /** delete */
-procedure delete(x: Node, k: Int, Ix: Interface)
+procedure delete(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)

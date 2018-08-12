@@ -150,7 +150,7 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
   requires (i <= 0 || le(x.keys[i-1], k)) && 0 <= i <= x.len
   ensures hrep(x, Ix) &*& unchanged(x)
   ensures x.ptrs[0] == null  // x is a leaf
-{
+/*{
   if (x.ptrs[0] != null) {
     if (i < x.len) {
       if (lt(k, x.keys[i])) {
@@ -162,7 +162,7 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
       pure assert Ix.fm[x][x.ptrs[i]].ks[k] == 1;
     }
   }
-}
+   }*/
 
 /** Begin programs */
 

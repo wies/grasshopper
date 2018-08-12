@@ -8,41 +8,41 @@ include "array_util.spl";
 
 /** Flow domain definitions */
 
-datatype FlowDom = fd(ks: Map<Int, Int>, ir: Map<Int, Int>);
+datatype FlowDom = fd(ks: Map<K, Int>, ir: Map<K, Int>);
 
 pure predicate domEq(p1: FlowDom, p2: FlowDom) {
-  (forall k: Int :: p1.ks[k] == p2.ks[k]
+  (forall k: K :: p1.ks[k] == p2.ks[k]
    @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
-    && (forall k: Int :: p1.ir[k] == p2.ir[k]
+    && (forall k: K :: p1.ir[k] == p2.ir[k]
        @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
 
 }
 
 pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
-  (forall k: Int :: p1.ks[k] <= p2.ks[k]
+  (forall k: K :: p1.ks[k] <= p2.ks[k]
    @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
-    && (forall k: Int :: p1.ir[k] <= p2.ir[k]
+    && (forall k: K :: p1.ir[k] <= p2.ir[k]
        @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
 }
 
 pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-  ensures forall k: Int :: p.ks[k] == p1.ks[k] + p2.ks[k]
-  ensures forall k: Int :: p.ir[k] == p1.ir[k] + p2.ir[k]
+  ensures forall k: K :: p.ks[k] == p1.ks[k] + p2.ks[k]
+  ensures forall k: K :: p.ir[k] == p1.ir[k] + p2.ir[k]
 
 pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-  ensures forall k: Int :: p.ks[k] == p1.ks[k] * p2.ks[k]
-  ensures forall k: Int :: p.ir[k] == p1.ir[k] * p2.ir[k]
+  ensures forall k: K :: p.ks[k] == p1.ks[k] * p2.ks[k]
+  ensures forall k: K :: p.ir[k] == p1.ir[k] * p2.ir[k]
 
 pure function domZero() returns(p: FlowDom)
-  ensures forall k: Int :: p.ks[k] == 0 && p.ir[k] == 0
+  ensures forall k: K :: p.ks[k] == 0 && p.ir[k] == 0
 
 
-datatype InrFn = inrfnC(inrfn: Map<Node, Set<Int>>, inrdom: Set<Node>) | inrfnUndef;
+datatype InrFn = inrfnC(inrfn: Map<Node, Set<K>>, inrdom: Set<Node>) | inrfnUndef;
   
-datatype NodeDom = nd(contents: Set<Int>, inr: InrFn);
+datatype NodeDom = nd(contents: Set<K>, inr: InrFn);
 
 pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
-  (forall x: Int :: x in a1.contents ==> x in a2.contents)
+  (forall k: K :: k in a1.contents ==> k in a2.contents)
     && (a2.inr == inrfnUndef || a1.inr != inrfnUndef && a2.inr != inrfnUndef
        && (forall x: Node :: x in a1.inr.inrdom ==> x in a2.inr.inrdom && a1.inr.inrfn[x] == a2.inr.inrfn[x]))
 }
@@ -56,7 +56,7 @@ struct Node {
   var locktid: Int;
   var len: Int;
   var bkts: Array<Node>;
-  var keys: Array<Int>;
+  var keys: Array<K>;
   var next: Node;
   ghost var typ: NodeType;
 }
@@ -79,7 +79,7 @@ procedure newNode(xlock: Int, xlen: Int, xkeyslen: Int, xnext: Node)
 
 /** Definition of good condition, gamma */
 
-function hash(x: Node, k: Int) returns (i: Int)
+function hash(x: Node, k: K) returns (i: Int)
 
 define hrepSpatial(x) {
   acc(x) &*& acc(x.bkts)  &*& acc(x.keys)
@@ -90,17 +90,17 @@ define hrep(x, I) {
   && 0 <= x.len && x.len < x.keys.length
     && ((x.typ == root
         && (forall i: Int :: 0 <= i && i < x.bkts.length ==> x.bkts[i] != null)
-        && (forall y: Node, k: Int :: y == x.bkts[hash(x, k)] ==> I.fm[x][y].ks[k] == 1)
-        && (forall k: Int :: 0 <= hash(x, k) && hash(x, k) < x.bkts.length)
-        && (forall k: Int :: I.inf[x].ks[k] == 1 /* && k in outset(x, I.fm)*/))
+        && (forall y: Node, k: K :: y == x.bkts[hash(x, k)] ==> I.fm[x][y].ks[k] == 1)
+        && (forall k: K :: 0 <= hash(x, k) && hash(x, k) < x.bkts.length)
+        && (forall k: K :: I.inf[x].ks[k] == 1 /* && k in outset(x, I.fm)*/))
      || (x.typ == bucket
-        && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> x.keys[i] < x.keys[j])
+        && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> lt(x.keys[i], x.keys[j]))
         && I.na.contents == set_of_map(x.keys.map, 0, x.len)
         && (x.next == null && I.FPo == {}
-        || x.next != null && (forall k: Int :: I.fm[x][x.next].ks[k] == 1) && I.FPo == {x.next})))
+        || x.next != null && (forall k: K :: I.fm[x][x.next].ks[k] == 1) && I.FPo == {x.next})))
 }
 
-lemma keyset_implies_bucket(x: Node, Ix: Interface, k: Int)
+lemma keyset_implies_bucket(x: Node, Ix: Interface, k: K)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
   ensures hrep(x, Ix) &*& unchanged(x)
@@ -120,7 +120,7 @@ axiom TID > 0;
 
 
 /** findNext **/
-procedure findNext(x: Node, k: Int, Ix: Interface)
+procedure findNext(x: Node, k: K, Ix: Interface)
   returns (n: Node)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   ensures hrep(x, Ix)
@@ -143,7 +143,7 @@ procedure findNext(x: Node, k: Int, Ix: Interface)
 
 
 /** member */
-procedure member(x: Node, k: Int, Ix: Interface)
+procedure member(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
@@ -162,7 +162,7 @@ procedure member(x: Node, k: Int, Ix: Interface)
 
 
 /** insert */
-procedure insert(x: Node, k: Int, Ix: Interface)
+procedure insert(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
@@ -200,7 +200,7 @@ procedure insert(x: Node, k: Int, Ix: Interface)
 
 
 /** delete */
-procedure delete(x: Node, k: Int, Ix: Interface)
+procedure delete(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
@@ -257,7 +257,7 @@ procedure copyNode(x: Node, Ix: Interface, I2: Interface, I: Interface)
   var Ix1: Interface;
   pure assume Ix1.inf == Ix.inf && Ix1.na.contents == {}
   && Ix1.na.lockinfo == Ix.na.lockinfo
-  && (forall k: Int :: Ix1.fm[x][y].ks[k] == 1) && (forall k: Int :: Ix1.fm[x][y].ir[k] == 0)
+  && (forall k: K :: Ix1.fm[x][y].ks[k] == 1) && (forall k: K :: Ix1.fm[x][y].ir[k] == 0)
   && (forall z: Node :: domEq(Ix1.fm[x][y], domZero()) == true)
   && Ix1.FP == Ix.FP && Ix1.FPo == {y};
   // TODO  var Ix1 := int(Ix.inf, nd({}, Ix.na.lockinfo, x.typ), )
