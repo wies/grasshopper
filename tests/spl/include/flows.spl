@@ -141,10 +141,10 @@ lemma lemma_int_valid_fold(I: Interface)
 
 procedure copy_interface(I: Interface, a: NodeDom)
   returns (I1: Interface)
-  ensures I1 != intUndef
-  ensures I.FP == I1.FP && I.FPo == I1.FPo && I.inf == I1.inf && I.fm == I1.fm
-  ensures I1.na == a
-  //ensures I1 == int(I.inf, a, I.fm, I.FP, I.FPo)
+  //ensures I1 != intUndef
+  //ensures I.FP == I1.FP && I.FPo == I1.FPo && I.inf == I1.inf && I.fm == I1.fm
+  //ensures I1.na == a
+  ensures I1 == int(I.inf, a, I.fm, I.FP, I.FPo)
 {
   I1 := int(I.inf, a, I.fm, I.FP, I.FPo);
 }
