@@ -692,7 +692,12 @@ let flatten_exprs cu =
         let args1, aux1, new_locals = flatten_expr_list ~flatten_bool:flatten_bool scope aux new_locals locals args in
         PredApp(p, args1, pos), aux1, new_locals
     | UnaryOp (op, e, pos) ->
-        let e1, aux1, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux new_locals locals e in
+        let flatten_bool_rec =
+          match op with
+          | OpNot -> false
+          | _ -> flatten_bool
+        in
+        let e1, aux1, new_locals = flatten_expr ~flatten_bool:flatten_bool_rec scope aux new_locals locals e in
         let e2 = UnaryOp (op, e1, pos) in
         (match op with
         | OpNot when flatten_bool ->
@@ -702,8 +707,13 @@ let flatten_exprs cu =
             mk_aux_cmd mk_cmd BoolType pos aux1 new_locals e1
         | _ -> e2, aux1, new_locals)
     | BinaryOp (e1, op, e2, ty, pos) ->
-        let e21, aux1, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux new_locals locals e2 in
-        let e11, aux2, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux1 new_locals locals e1 in
+        let flatten_bool_rec =
+          match op with
+          | OpAnd | OpOr -> false
+          | _ -> flatten_bool
+        in
+        let e21, aux1, new_locals = flatten_expr ~flatten_bool:flatten_bool_rec scope aux new_locals locals e2 in
+        let e11, aux2, new_locals = flatten_expr ~flatten_bool:flatten_bool_rec scope aux1 new_locals locals e1 in
         let e2 = BinaryOp (e11, op, e21, ty, pos) in
         (match op with
         | (OpAnd | OpOr) when flatten_bool ->
