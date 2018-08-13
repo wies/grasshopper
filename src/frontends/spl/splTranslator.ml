@@ -221,7 +221,10 @@ let convert cu =
         let t = convert_term locals e in
         GrassUtil.mk_array_cells t
     | PredApp (Pred id, es, pos) ->
-        let decl = IdMap.find id cu.pred_decls in
+        let decl = 
+          IdMap.find_opt id cu.pred_decls |>
+          Opt.lazy_get_or_else (fun () -> unknown_ident_error id pos)
+        in
         let ts = List.map (convert_term locals) es in
         (match decl.pr_outputs with
         | [res] ->

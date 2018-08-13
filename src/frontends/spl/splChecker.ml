@@ -560,41 +560,46 @@ let flatten_exprs cu =
     let locals1 = IdMap.add aux_id decl locals in
     aux_id, locals1
   in
-  let rec flatten_expr_list scope aux new_locals locals es =
+  let rec flatten_expr_list ?(flatten_bool=false) scope aux new_locals locals es =
      List.fold_right (fun e (es1, aux1, new_locals) ->
-       let e1, aux1, new_locals = flatten_expr scope aux1 new_locals locals e in
+       let e1, aux1, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux1 new_locals locals e in
        e1 :: es1, aux1, new_locals)
       es ([], aux, new_locals)
-  and flatten_expr scope aux new_locals locals = function
+  and flatten_expr ?(flatten_bool=false) scope aux new_locals locals =
+    let mk_aux_cmd mk_cmd typ pos aux new_locals e =
+      let aux_id, new_locals = decl_aux_var "tmp" typ pos scope new_locals in
+      let aux_var = Ident (aux_id, pos) in
+      let assign = mk_cmd aux_var e pos in
+      let aux_cmds, aux_funs = aux in
+      aux_var, (aux_cmds @ [assign], aux_funs), new_locals  
+    in
+    let mk_aux_assign = mk_aux_cmd (fun aux_var e pos -> Assign ([aux_var], [e], pos)) in
+    function
     | Setenum (ty, args, pos) ->
-        let args1, aux1, new_locals = flatten_expr_list scope aux new_locals locals args in
+        let args1, aux1, new_locals = flatten_expr_list ~flatten_bool:flatten_bool scope aux new_locals locals args in
         Setenum (ty, args1, pos), aux1, new_locals
     | New (ty, args, pos) ->
-        let aux_id, new_locals = decl_aux_var "tmp" ty pos scope new_locals in
-        let args1, aux1, new_locals = flatten_expr_list scope aux new_locals locals args in
-        let aux_var = Ident (aux_id, pos) in
-        let alloc = Assign ([aux_var], [New (ty, args1, pos)], pos) in
-        let aux_cmds, aux_funs = aux1 in
-        aux_var, (alloc :: aux_cmds, aux_funs), new_locals
+        let args1, aux1, new_locals = flatten_expr_list ~flatten_bool:true scope aux new_locals locals args in
+        mk_aux_assign ty pos aux1 new_locals (New (ty, args1, pos))
     | Read (map, idx, pos) ->
-        let map1, aux1, new_locals = flatten_expr scope aux new_locals locals map in
-        let idx1, aux2, new_locals = flatten_expr scope aux1 new_locals locals idx in
+        let map1, aux1, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux new_locals locals map in
+        let idx1, aux2, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux1 new_locals locals idx in
         Read (map1, idx1, pos), aux2, new_locals
     | Write (map, idx, upd, pos) ->
-        let map1, aux1, new_locals = flatten_expr scope aux new_locals locals map in
-        let idx1, aux2, new_locals = flatten_expr scope aux1 new_locals locals idx in
-        let upd1, aux3, new_locals = flatten_expr scope aux2 new_locals locals upd in
+        let map1, aux1, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux new_locals locals map in
+        let idx1, aux2, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux1 new_locals locals idx in
+        let upd1, aux3, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux2 new_locals locals upd in
         Write (map1, idx1, upd1, pos), aux3, new_locals
     | Ite (cond, t, e, pos) ->
         let cond1, aux1, new_locals = flatten_expr scope aux new_locals locals cond in
-        let t1, aux2, new_locals = flatten_expr scope aux1 new_locals locals t in
-        let e1, aux3, new_locals = flatten_expr scope aux2 new_locals locals e in
+        let t1, aux2, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux1 new_locals locals t in
+        let e1, aux3, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux2 new_locals locals e in
         Ite (cond1, t1, e1, pos), aux3, new_locals
     | ConstrApp (id, args, pos) ->
-        let args1, aux1, new_locals = flatten_expr_list scope aux new_locals locals args in
+        let args1, aux1, new_locals = flatten_expr_list ~flatten_bool:flatten_bool scope aux new_locals locals args in
         ConstrApp (id, args1, pos), aux1, new_locals
     | DestrApp (id, arg, pos) ->
-        let arg1, aux1, new_locals = flatten_expr scope aux new_locals locals arg in
+        let arg1, aux1, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux new_locals locals arg in
         DestrApp (id, arg1, pos), aux1, new_locals
     | Binder (b, vars, f, pos) as e ->
         let vars1, aux, new_locals =
@@ -678,30 +683,41 @@ let flatten_exprs cu =
               rdecl.v_type
           | _ -> invalid_nested_proc_call_error pdecl.p_name pos
         in
-        let aux_id, new_locals = decl_aux_var "tmp" res_type pos scope new_locals in
-        let args1, aux1, new_locals = flatten_expr_list scope aux new_locals locals args in
-        let aux_var = Ident (aux_id, pos) in
-        let call = Assign ([aux_var], [ProcCall (id, args1, pos)], pos) in
-        let aux_cmds, aux_funs = aux1 in
-        aux_var, (aux_cmds @ [call], aux_funs), new_locals
+        let args1, aux1, new_locals = flatten_expr_list ~flatten_bool:true scope aux new_locals locals args in
+        let call = ProcCall (id, args1, pos) in
+        mk_aux_assign res_type pos aux1 new_locals call
     | PredApp (p, args, pos) ->
-        let args1, aux1, new_locals = flatten_expr_list scope aux new_locals locals args in
+        let args1, aux1, new_locals = flatten_expr_list ~flatten_bool:flatten_bool scope aux new_locals locals args in
         PredApp(p, args1, pos), aux1, new_locals
     | UnaryOp (op, e, pos) ->
-        let e1, aux1, new_locals = flatten_expr scope aux new_locals locals e in
-        UnaryOp (op, e1, pos), aux1, new_locals
+        let e1, aux1, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux new_locals locals e in
+        let e2 = UnaryOp (op, e1, pos) in
+        (match op with
+        | OpNot when flatten_bool ->
+            let mk_cmd aux_var e pos =
+              If (e2, Assign ([aux_var], [BoolVal (true, pos)], pos), Assign ([aux_var], [BoolVal (false, pos)], pos), pos)
+            in
+            mk_aux_cmd mk_cmd BoolType pos aux1 new_locals e1
+        | _ -> e2, aux1, new_locals)
     | BinaryOp (e1, op, e2, ty, pos) ->
-        let e21, aux1, new_locals = flatten_expr scope aux new_locals locals e2 in
-        let e11, aux2, new_locals = flatten_expr scope aux1 new_locals locals e1 in
-        BinaryOp (e11, op, e21, ty, pos), aux2, new_locals
+        let e21, aux1, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux new_locals locals e2 in
+        let e11, aux2, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux1 new_locals locals e1 in
+        let e2 = BinaryOp (e11, op, e21, ty, pos) in
+        (match op with
+        | (OpAnd | OpOr) when flatten_bool ->
+            let mk_cmd aux_var e pos =
+              If (e2, Assign ([aux_var], [BoolVal (true, pos)], pos), Assign ([aux_var], [BoolVal (false, pos)], pos), pos)
+            in
+            mk_aux_cmd mk_cmd BoolType pos aux2 new_locals e1
+        | _ -> e2, aux2, new_locals)
     | Annot (e, PatternAnnot p, pos) ->
-        let e1, aux1, new_locals = flatten_expr scope aux new_locals locals e in
+        let e1, aux1, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux new_locals locals e in
         let p1, aux2, new_locals = flatten_expr scope aux1 new_locals locals p in
         Annot (e1, PatternAnnot p1, pos), aux2, new_locals
     | Annot (e, GeneratorAnnot (es, ge), pos) ->
         let es1, aux1, new_locals =
           List.fold_right (fun (e, id) (es1, aux1, new_locals) ->
-            let e1, aux1, new_locals = flatten_expr scope aux new_locals locals e in
+            let e1, aux1, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux new_locals locals e in
             (e1, id) :: es1, aux1, new_locals)
             es ([], aux, new_locals)
         in
@@ -709,7 +725,7 @@ let flatten_exprs cu =
         let e1, aux3, new_locals = flatten_expr scope aux2 new_locals locals e in
         Annot (e1, GeneratorAnnot (es1, ge1), pos), aux3, new_locals
     | Annot (e, ann, pos) ->
-        let e1, aux1, new_locals = flatten_expr scope aux new_locals locals e in
+        let e1, aux1, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux new_locals locals e in
         Annot (e1, ann, pos), aux1, new_locals
     | e -> e, aux, new_locals
   in
@@ -736,7 +752,7 @@ let flatten_exprs cu =
         let e1, aux1, locals = flatten_expr scope ([], aux_funs) locals locals e in
         Split (e1, pos), locals, snd aux1
     | Assign (lhs, [ProcCall (id, args, cpos)], pos) ->
-        let args1, aux1, locals = flatten_expr_list scope ([], aux_funs) locals locals args in 
+        let args1, aux1, locals = flatten_expr_list ~flatten_bool:true scope ([], aux_funs) locals locals args in 
         begin
           match lhs with
           | [Read (map, idx, opos)] ->
@@ -756,7 +772,7 @@ let flatten_exprs cu =
               let lhs1, aux2, locals = 
                 List.fold_right 
                   (fun e (es, aux, locals) ->
-                    let e1, aux1, locals = flatten_expr scope aux locals locals e in
+                    let e1, aux1, locals = flatten_expr ~flatten_bool:true scope aux locals locals e in
                     e1 :: es, aux1, locals
                   ) 
                   lhs ([], aux1, locals)
@@ -765,7 +781,7 @@ let flatten_exprs cu =
               mk_block pos (aux_cmds @ [Assign (lhs1, [ProcCall (id, args1, cpos)], pos)]), locals, aux_funs
         end
     | Assign (lhs, rhs, pos) ->
-        let rhs1, aux1, locals = flatten_expr_list scope ([], aux_funs) locals locals rhs in
+        let rhs1, aux1, locals = flatten_expr_list ~flatten_bool:true scope ([], aux_funs) locals locals rhs in
         let lhs1, aux2, locals = 
           List.fold_right 
             (fun e (es, aux, locals) ->
@@ -790,10 +806,10 @@ let flatten_exprs cu =
         let aux_cmds, aux_funs = aux2 in
         mk_block pos (aux_cmds @ [Assign (lhs1, rhs1, pos)]), locals, aux_funs
     | Dispose (e, pos) -> 
-        let e1, aux, locals = flatten_expr scope ([], aux_funs) locals locals e in
+        let e1, aux, locals = flatten_expr ~flatten_bool:true scope ([], aux_funs) locals locals e in
         mk_block pos (fst aux @ [Dispose (e1, pos)]), locals, snd aux
     | Havoc (es, pos) -> 
-        let es1, aux1, locals = flatten_expr_list scope ([], aux_funs) locals locals es in
+        let es1, aux1, locals = flatten_expr_list ~flatten_bool:true scope ([], aux_funs) locals locals es in
         let aux_cmds, aux_funs = aux1 in
         mk_block pos (aux_cmds @ [Havoc (es1, pos)]), locals, aux_funs
     | If (cond, t, e, pos) ->
@@ -823,14 +839,14 @@ let flatten_exprs cu =
         let postb1, locals, aux_funs = flatten pos locals aux_funs returns postb in
         Loop (inv1, mk_block pos ([preb1] @ aux_cmds), cond1, postb1, pos), locals, aux_funs
     | Return ([ProcCall (id, args, cpos)], pos) ->
-        let args1, aux1, locals = flatten_expr_list scope ([], aux_funs) locals locals args in
+        let args1, aux1, locals = flatten_expr_list ~flatten_bool:true scope ([], aux_funs) locals locals args in
         let rts = List.map (fun id -> Ident (id, cpos)) returns in
         let assign = Assign (rts, [ProcCall (id, args1, cpos)], pos) in
         let ret = Return (rts, pos) in
         let aux_cmds, aux_funs = aux1 in
         mk_block pos (aux_cmds @ [assign; ret]), locals, aux_funs
     | Return (es, pos) ->
-        let es1, (aux_cmds, aux_funs), locals = flatten_expr_list scope ([], aux_funs) locals locals es in
+        let es1, (aux_cmds, aux_funs), locals = flatten_expr_list ~flatten_bool:true scope ([], aux_funs) locals locals es in
         mk_block pos (aux_cmds @ [Return (es1, pos)]), locals, aux_funs
   in
   let flatten_contracts aux_funs locals contracts =
