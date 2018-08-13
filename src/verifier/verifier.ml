@@ -6,14 +6,9 @@ open GrassUtil
 open Prog
 open Simplifier
 open Grassifier
-
+    
 (** Simplify the given program [prog] by applying all transformation steps. *)
 let simplify proc prog =
-  let dump_if n prog = 
-    if !Config.dump_ghp == n 
-    then (print_prog stdout prog; prog)
-    else prog
-  in
   let init_procs =
     match proc with
     | None ->
