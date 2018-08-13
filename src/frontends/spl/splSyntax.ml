@@ -707,13 +707,13 @@ let rec pr_expr ppf =
           then fprintf ppf "%s(@[%a@])" op_str pr_expr e1
           else fprintf ppf "%s%a" op_str pr_expr e1
       | OpOld ->
-          fprintf ppf "old(@[%a@])" pr_expr e
+          fprintf ppf "old(@[%a@])" pr_expr e1
       | OpKnown ->
-          fprintf ppf "Known(@[%a@])" pr_expr e
+          fprintf ppf "Known(@[%a@])" pr_expr e1
       | OpToInt ->
-          fprintf ppf "byte2int(@[%a@])" pr_expr e
+          fprintf ppf "byte2int(@[%a@])" pr_expr e1
       | OpToByte ->
-          fprintf ppf "int2byte(@[%a@])" pr_expr e)
+          fprintf ppf "int2byte(@[%a@])" pr_expr e1)
   | BinaryOp (e1, op, e2, _, _) as e ->
       let op_str = match op with
       | OpDiff -> "--"
