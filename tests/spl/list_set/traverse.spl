@@ -1,5 +1,7 @@
 include "../include/slsset.spl";
 
+options "-stratify"
+
 procedure traverse(lst: Node, implicit ghost C: Set<Int>)
   requires list_set(lst, null, C)
   ensures list_set(lst, null, C)

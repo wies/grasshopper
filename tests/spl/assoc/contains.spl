@@ -1,5 +1,7 @@
 include "../include/assoc_list.spl";
 
+options "-stratify"
+
 procedure contains(lst: Node, val: Int, implicit ghost C: Set<Int>, implicit ghost D: Map<Int,Int>)
   returns (res: Bool)
   requires list_map(lst, null, C, D)

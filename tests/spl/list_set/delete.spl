@@ -1,5 +1,7 @@
 include "../include/slsset.spl";
 
+options "-stratify"
+
 procedure delete(lst: Node, val: Int, implicit ghost C: Set<Int>)
   returns (res: Node)
   requires list_set(lst, null, C)

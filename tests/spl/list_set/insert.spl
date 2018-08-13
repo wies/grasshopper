@@ -1,5 +1,7 @@
 include "../include/slsset.spl";
 
+options "-stratify"
+
 procedure append(val: Int, x: Node, implicit ghost C: Set<Int>) 
   returns (res: Node)
   requires list_set(x, null, C)

@@ -1,5 +1,7 @@
 include "../include/slsset.spl";
 
+options "-stratify"
+
 procedure union(lst1: Node, lst2: Node,
                 implicit ghost C1: Set<Int>, implicit ghost C2: Set<Int>)
   returns (res: Node)
