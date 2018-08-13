@@ -1,5 +1,7 @@
 include "../include/slsset.spl";
 
+options "-stratify"
+
 procedure contains(lst: Node, val: Int, implicit ghost C: Set<Int>)
   returns (res: Bool)
   requires list_set(lst, null, C)

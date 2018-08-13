@@ -1,5 +1,7 @@
 include "../include/slsset.spl";
 
+options "-stratify"
+
 procedure intersect(x: Node, y: Node, implicit ghost x_content: Set<Int>, 
                     implicit ghost y_content: Set<Int>)
   returns (res: Node)

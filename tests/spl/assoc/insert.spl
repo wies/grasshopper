@@ -1,5 +1,7 @@
 include "../include/assoc_list.spl";
 
+options "-stratify"
+
 procedure insert(lst: Node, k: Int, v: Int,
                  implicit ghost C: Set<Int>,
                  implicit ghost D1: Map<Int,Int>,

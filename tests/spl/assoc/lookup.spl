@@ -1,5 +1,7 @@
 include "../include/assoc_list.spl";
 
+options "-stratify"
+
 procedure lookup(lst: Node, val: Int, implicit ghost C: Set<Int>, implicit ghost D: Map<Int,Int>)
   returns (res: Int)
   requires list_map(lst, null, C, D) &*& val in C

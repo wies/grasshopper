@@ -1,5 +1,7 @@
 include "../include/assoc_list.spl";
 
+options "-stratify"
+
 procedure remove(lst: Node, k: Int,
                  implicit ghost C: Set<Int>,
                  implicit ghost D1: Map<Int,Int>,
