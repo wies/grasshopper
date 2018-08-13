@@ -1166,11 +1166,44 @@ let rec symb_exec st postcond comms =
     let _, spec_st = state_of_spec_list st.se_fields None [spec] in
     let st' = add_neq_constraints st in
     (match check_entailment st st'.se_state spec_st with
-      | Ok _ ->
-      symb_exec {st with se_eqs = empty_eqs; se_state = spec_st} postcond comms'
-      | Error (errs, m) -> mk_error "This split may not hold" errs m pp.pp_pos)
+    | Ok _ ->
+        symb_exec {st with se_eqs = empty_eqs; se_state = spec_st} postcond comms'
+    | Error (errs, m) -> mk_error "This split may not hold" errs m pp.pp_pos)
+  | Basic (New {new_lhs=id; new_sort=srt; new_args=ts}, pp) as comm :: comms' ->
+      Debug.debug
+        (fun () ->
+          sprintf "%sExecuting new command: %d: %s%sCurrent state:\n%s\n"
+            lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+            lineSep (string_of_se_state st)
+        );
+      let sm = IdMap.singleton id (mk_var_like_id id) in
+      let vts = List.map (fun t -> fresh_const (sort_of t)) ts in
+      let st =
+      List.combine vts ts
+      |> List.fold_left (fun st (v, t) ->
+          (* First, eval/check t *)
+          let t, st = process st t in
+          let t' = subst_term sm t in
+          {st with se_state = add_state (mk_eq v t', []) st.se_state}
+        ) st
+      in
+      let st = subst_se_state sm st in
+      let new_cell = match srt with
+      | Loc (FreeSrt _) -> PointsTo (mk_const_term id, [])
+      | Loc (Array srt) ->
+          let m = fresh_const (Map ([Int], srt)) in
+          let l = List.hd vts in
+          let length_ok = mk_leq (mk_int 0) l in
+          Debug.debug (fun () -> "\n\nChecking that array length is nonnegative:\n");
+          (match check_pure_entail st (fst st.se_state) length_ok with
+          | None -> ()
+          | Some errs -> raise_err "Possibly attempting to create an array of negative length");
+          Arr (mk_const_term id, List.hd vts, m)
+      | _ -> failwith "unexpected new command"
+      in
+      let st = {st with se_state = add_state (mk_true, [new_cell]) st.se_state} in
+      symb_exec st postcond comms'
   | Basic (Assume _, _) :: _ -> failwith "TODO Assume SL command"
-  | Basic (New _, _) :: _ -> failwith "TODO New command"
   | Basic (Dispose _, _) :: _ -> failwith "TODO Dispose command"
   | Loop _ :: _ -> failwith "TODO Loop command"
   in
