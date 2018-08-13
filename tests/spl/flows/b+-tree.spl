@@ -166,10 +166,7 @@ procedure inRange(x: Node, k: K, Ix: Interface)
   requires hrep(x, Ix)
   ensures hrep(x, Ix) &*& (res ==> Ix.inf[x].ks[k] >= 1)
 {
-  if (le(x.rangeLb, k) && lt(k, x.rangeUb))
-    return true;
-  else
-    return false;
+  return le(x.rangeLb, k) && lt(k, x.rangeUb);
 }
 
 
@@ -245,10 +242,7 @@ procedure insert(x: Node, k: K, Ix: Interface)
     lemma_int_valid_unfold(Ix);
     lemma_int_valid_fold(Ix1);
 
-    if (k in Ix.na.contents)  // TODO why?
-      return true, false, Ix1;
-    else
-      return true, true, Ix1;
+    return true, k !in Ix.na.contents, Ix1; 
   } else {
     return false, false, Ix;
   }
