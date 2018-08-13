@@ -2,7 +2,7 @@
 
 source bin/osx_gnu.sh
 
-# Format: <test name> <spl file> <options> <expected result>
+# Format: <test name> <spl file> <procedure> <expected result>
 TESTS="
 soudness0               tests/spl/soundness/soundness0.spl              ''      fail
 soudness1               tests/spl/soundness/soundness1.spl              ''      fail
@@ -48,16 +48,16 @@ sls_merge_sort          tests/spl/sls/sls_merge_sort.spl                ''      
 sls_quicksort           tests/spl/sls/sls_quicksort.spl                 ''      pass
 sls_strand_sort         tests/spl/sls/sls_strand_sort.spl               ''      pass
 union_find              tests/spl/sl/union_find.spl                     ''      pass
-list_set_contains       tests/spl/list_set/contains.spl                 '-stratify'      pass
-list_set_delete         tests/spl/list_set/delete.spl                   '-stratify'      pass
-list_set_difference     tests/spl/list_set/difference.spl               '-stratify'      pass
-list_set_insert         tests/spl/list_set/insert.spl                   '-stratify'      pass
-list_set_traverse       tests/spl/list_set/traverse.spl                 '-stratify'      pass
-list_set_union          tests/spl/list_set/union.spl                    '-stratify'      pass
-assoc_list_contains     tests/spl/assoc/contains.spl                    '-stratify'      pass
-assoc_list_insert       tests/spl/assoc/insert.spl                      '-stratify'      pass
-assoc_list_lookup       tests/spl/assoc/lookup.spl                      '-stratify'      pass
-assoc_list_remove       tests/spl/assoc/remove.spl                      '-stratify'      pass
+list_set_contains       tests/spl/list_set/contains.spl                 ''      pass
+list_set_delete         tests/spl/list_set/delete.spl                   ''      pass
+list_set_difference     tests/spl/list_set/difference.spl               ''      pass
+list_set_insert         tests/spl/list_set/insert.spl                   ''      pass
+list_set_traverse       tests/spl/list_set/traverse.spl                 ''      pass
+list_set_union          tests/spl/list_set/union.spl                    ''      pass
+assoc_list_contains     tests/spl/assoc/contains.spl                    ''      pass
+assoc_list_insert       tests/spl/assoc/insert.spl                      ''      pass
+assoc_list_lookup       tests/spl/assoc/lookup.spl                      ''      pass
+assoc_list_remove       tests/spl/assoc/remove.spl                      ''      pass
 array_bsearch           tests/spl/array/bsearch.spl                     ''      pass
 array_bubble            tests/spl/array/bubble.spl                      ''      pass
 array_checkSorted       tests/spl/array/checkSorted.spl                 ''      pass
@@ -71,7 +71,7 @@ array_reverse           tests/spl/array/reverse.spl                     ''      
 array_selection_sort    tests/spl/array/selection_sort.spl              ''      pass
 array_test              tests/spl/array/test.spl                        ''      pass
 array_traverse_with_nodes tests/spl/array/traverse_with_nodes.spl       ''      pass
-recursive_def_lists     tests/spl/recursive_defs/list.spl               '-abspreds'      pass
+recursive_def_lists     tests/spl/recursive_defs/list.spl               ''      pass
 adt_lists               tests/spl/adt/lists.spl                         ''      pass
 "
 
