@@ -13,8 +13,9 @@ datatype FlowDom = fd(ks: Map<K, Int>, pc: Int);
    parent. This is needed by the split maintenance operation. */
 
 function domEq(p1: FlowDom, p2: FlowDom) returns (res: Bool) {
-  p1.pc == p2.pc && (forall k: K :: p1.ks[k] == p2.ks[k]
-    @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
+  p1.pc == p2.pc && p1.ks == p2.ks
+    //  (forall k: K :: p1.ks[k] == p2.ks[k]
+    //  @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
 }
 
 function domLeq(p1: FlowDom, p2: FlowDom) returns (res: Bool) {
