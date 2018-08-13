@@ -1,6 +1,6 @@
 /** Hash table implementation of the link template for linearizable dictionaries. */
 
-options "-symbexec"
+options "-simplearrays -symbexec -propreads -abspreds"
 
 include "../include/flows.spl";
 include "array_util.spl";

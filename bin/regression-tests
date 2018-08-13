@@ -90,10 +90,30 @@ symb_exec:soundness3    tests/spl/symb_exec/soundness3.spl      ''     fail
 symb_exec:soundness5    tests/spl/symb_exec/soundness5.spl      ''     fail
 symb_exec:soundness6    tests/spl/symb_exec/soundness6.spl      ''     fail
 symb_exec:arr-soundness tests/spl/symb_exec/soundness_arr1.spl  ''     fail
-flows:b+tree            tests/spl/flows/b+-tree.spl             ''     pass
-flows:b-link-tree       tests/spl/flows/b-link.spl              ''     pass
-flows:hashtbl           tests/spl/flows/hashtbl.spl             ''     pass
-flows:hashtbl-give-up   tests/spl/flows/hashtbl-give-up.spl     ''     pass
+symb_exec:array_util    tests/spl/flows/array_util.spl          ''     pass
+flows:b+tree_inRange    tests/spl/flows/b+-tree.spl             'inRange'  pass
+flows:b+tree_init       tests/spl/flows/b+-tree.spl             'init'     pass
+flows:b+tree_findNext   tests/spl/flows/b+-tree.spl             'findNext' pass
+flows:b+tree_member     tests/spl/flows/b+-tree.spl             'member'   pass
+flows:b+tree_insert     tests/spl/flows/b+-tree.spl             'insert'   pass
+flows:b+tree_delete     tests/spl/flows/b+-tree.spl             'delete'   pass
+flows:b+tree_keyset     tests/spl/flows/b+-tree.spl             'keyset_implies_leaf'     pass
+flows:b-link-tree_findNext tests/spl/flows/b-link.spl           'findNext' pass
+flows:b-link-tree_member   tests/spl/flows/b-link.spl           'member'   pass
+flows:b-link-tree_insert   tests/spl/flows/b-link.spl           'insert'   pass
+flows:b-link-tree_delete   tests/spl/flows/b-link.spl           'delete'   pass
+flows:b-link-tree_keyset   tests/spl/flows/b-link.spl           'keyset_implies_leaf'     pass
+flows:hashtbl_findNext  tests/spl/flows/hashtbl.spl             'findNext' pass
+flows:hashtbl_member    tests/spl/flows/hashtbl.spl             'member'   pass
+flows:hashtbl_insert    tests/spl/flows/hashtbl.spl             'insert'   pass
+flows:hashtbl_delete    tests/spl/flows/hashtbl.spl             'delete'   pass
+flows:hashtbl_keyset    tests/spl/flows/hashtbl.spl             'keyset_implies_bucket'   pass
+flows:hashtbl-give-up_inRange  tests/spl/flows/hashtbl-give-up.spl     'inRange'  pass
+flows:hashtbl-give-up_findNext tests/spl/flows/hashtbl-give-up.spl     'findNext' pass
+flows:hashtbl-give-up_member   tests/spl/flows/hashtbl-give-up.spl     'member'   pass
+flows:hashtbl-give-up_insert   tests/spl/flows/hashtbl-give-up.spl     'insert'   pass
+flows:hashtbl-give-up_delete   tests/spl/flows/hashtbl-give-up.spl     'delete'   pass
+flows:hashtbl-give-up_keyset   tests/spl/flows/hashtbl-give-up.spl     'keyset_implies_bucket'   pass
 "
 
 res=0

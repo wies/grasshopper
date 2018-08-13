@@ -1,6 +1,6 @@
 /** B+ tree implementation of the link template for linearizable dictionaries. */
 
-options "-simplearrays -symbexec -propreads"
+options "-abspreds -simplearrays -symbexec -propreads"
 
 include "../include/flows.spl"
 include "array_util.spl"
@@ -11,18 +11,19 @@ include "array_util.spl"
 datatype FlowDom = fd(ks: Map<K, Int>, ir: Map<K, Int>)
 
 pure predicate domEq(p1: FlowDom, p2: FlowDom) {
-  (forall k: K :: p1.ks[k] == p2.ks[k]
-   @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
-    && (forall k: K :: p1.ir[k] == p2.ir[k]
-       @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
+  p1.ks == p2.ks && p1.ir == p2.ir
+  //  (forall k: K :: p1.ks[k] == p2.ks[k]
+  //   @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
+  //    && (forall k: K :: p1.ir[k] == p2.ir[k]
+  //     @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
 
 }
 
 pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
-  (forall k: K :: p1.ks[k] <= p2.ks[k]
-   @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
-    && (forall k: K :: p1.ir[k] <= p2.ir[k]
-       @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
+  (forall k: K :: p1.ks[k] <= p2.ks[k])
+    //@(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
+    && (forall k: K :: p1.ir[k] <= p2.ir[k])
+    //@(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
 }
 
 pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
@@ -94,13 +95,13 @@ define hrep(x, I) {
        && (forall i: Int, k: K :: 0 <= i <= x.len ==> x.ptrs[i] != null && x.ptrs[i] in I.FPo)
        && (forall i: Int, k: K :: 0 <= i < x.len ==>
           (I.fm[x][x.ptrs[i]].ks[k] == 1
-          && ((i <= 0 || le(x.keys[i-1], k)) && (i >= x.len || lt(k, x.keys[i])))
+          && ((i <= 0 || le(x.keys[i-1], k)) && lt(k, x.keys[i]))
            || I.fm[x][x.ptrs[i]].ks[k] == 0
-           && !((i <= 0 || le(x.keys[i-1], k)) && (i >= x.len || lt(k, x.keys[i]))))
+           && !((i <= 0 || le(x.keys[i-1], k)) && lt(k, x.keys[i])))
           @(matching x.ptrs[i] yields I.fm[x][x.ptrs[i]].ks[k])
           @(matching x.keys[i] yields I.fm[x][x.ptrs[i]].ks[k]))
-        && (x.next == null
-            && (forall k: K :: 
+       && (x.next == null
+          && (forall k: K :: 
                (I.fm[x][x.ptrs[x.len]].ks[k] == 1
                && (x.len <= 0 || le(x.keys[x.len-1], k))
                || I.fm[x][x.ptrs[x.len]].ks[k] == 0
