@@ -299,6 +299,8 @@ let congr_classes_fixed_point fs gts =
     | Atom (App (Lt, [e1; e2], _), _) 
     | Atom (App (Gt, [e1; e2], _), _) ->
       if cc_graph#entails_eq e1 e2 then GrassUtil.mk_false else f
+    | Atom (App (Elem, [e1; e2], _), _) ->
+        if cc_graph#entails_eq e2 (GrassUtil.mk_empty (sort_of e2)) then GrassUtil.mk_false else f
     | Atom (pred, _) ->
       if cc_graph#entails_eq pred GrassUtil.mk_false_term then GrassUtil.mk_false else f
     | BoolOp (Not, [Atom (pred, _)]) ->
@@ -306,7 +308,7 @@ let congr_classes_fixed_point fs gts =
     | BoolOp (And, fs) ->
       GrassUtil.smk_and (List.map remove_false1 fs)
     | BoolOp (Or, fs) ->
-      GrassUtil.smk_or (List.map remove_false1 fs)
+        GrassUtil.smk_or (List.map remove_false1 fs)
     | other -> other
   in
   let remove_false f = match f with

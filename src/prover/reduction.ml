@@ -252,13 +252,36 @@ let add_ep_axioms fs =
 let get_read_propagators gts =
   let field_sorts = TermSet.fold (fun t srts ->
     match sort_of t with
-    | Loc (ArrayCell _) as srt -> SortSet.add srt srts
-    | Map (_ :: _, _) as srt -> SortSet.add srt srts
+    | (Loc ArrayCell _ | Map (_ :: _, _)) as srt -> SortSet.add srt srts
+    | Adt (_, _) as srt -> SortSet.add srt srts
     | _ -> srts)
       gts SortSet.empty
   in
   let read_propagators =
     SortSet.fold (function
+      | Adt (_, adts) -> fun propagators ->
+          let s = fresh_ident "?s" in
+          let t = fresh_ident "?t" in
+          List.fold_left
+            (fun propagators (id, cstrs) ->
+              let adt_srt = Adt (id, adts) in
+              let s = mk_var adt_srt s in
+              let t = mk_var adt_srt t in
+              let destrs = flat_map (fun (_, destrs) -> destrs) cstrs in
+              List.fold_left
+                (fun propagators (destr, srt) ->
+                  ([Match (mk_eq_term s t, []);
+                    (* s == t, s.destr -> t.destr *)
+                    Match (mk_destr srt destr s, [])],
+                   [mk_destr srt destr t]) ::
+                  ([Match (mk_eq_term s t, []);
+                    (* s == t, t.destr -> s.destr *)
+                    Match (mk_destr srt destr t, [])],
+                   [mk_destr srt destr s]) :: propagators
+                )
+                propagators destrs
+            )
+            propagators adts
       | Loc (ArrayCell srt) -> fun propagators ->
           let f = fresh_ident "?f", field_sort (ArrayCell srt) srt in
           let fld = mk_var (snd f) (fst f) in
@@ -266,12 +289,12 @@ let get_read_propagators gts =
           let b = Axioms.loc2 (Array srt) in
           let i = fresh_ident "?i" in
           let idx = mk_var Int i in
-          (* a = b, a.cells[i].f -> b.cells[i].f *)
+          (* a == b, a.cells[i].f -> b.cells[i].f *)
           ([Match (mk_eq_term a b, []);
             Match (mk_read fld [mk_read (mk_array_cells a) [idx]], [])],
            [mk_read fld [mk_read (mk_array_cells b) [idx]]]) ::
           ([Match (mk_eq_term a b, []);
-            (* a = b, b.cells[i].f -> a.cells[i].f *)
+            (* a == b, b.cells[i].f -> a.cells[i].f *)
             Match (mk_read fld [mk_read (mk_array_cells b) [idx]], [])],
            [mk_read fld [mk_read (mk_array_cells a) [idx]]]) :: propagators
       | Loc (Array srt) -> fun propagators ->
@@ -281,11 +304,11 @@ let get_read_propagators gts =
           let b = Axioms.loc2 (Array srt) in
           let i = fresh_ident "?i" in
           let idx = mk_var Int i in
-          (* a = b, a.f[i] -> b.f[i] *)
+          (* a == b, a.f[i] -> b.f[i] *)
           ([Match (mk_eq_term a b, []);
             Match (mk_read fld [a; idx], [])],
            [mk_read fld [b; idx]]) ::
-          (* a = b, b.cells[i].f -> a.cells[i].f *)
+          (* a == b, b.cells[i].f -> a.cells[i].f *)
           ([Match (mk_eq_term a b, []);
             Match (mk_read fld [mk_read (mk_array_cells b) [idx]], [])],
            [mk_read fld [mk_read (mk_array_cells a) [idx]]]) :: propagators
@@ -333,7 +356,7 @@ let get_read_propagators gts =
               Match (wrap (mk_read fld1 (ivars1)), [])
             ],
              [wrap (mk_read fld2 (ivars1))]) ::
-            (* f = g, x.g -> x.f *)
+            (* f == g, x.g -> x.f *)
             ([Match (mk_eq_term fld1 fld2, []);
               Match (wrap (mk_read fld2 (ivars1)), [])] @ match_ivar1,
              [wrap (mk_read fld1 (ivars1))]) :: 
