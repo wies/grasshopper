@@ -38,7 +38,7 @@ define gamma(x, I) {
 define globalInt(I) {
   intValid(I) == true && r in I.FP && (forall k: Int :: I.inf[r].ks[k] == 1)
     && (forall n: Node :: n != r ==> domEq(I.inf[n], domZero())
-       @(matching n yields I.inf[n]))  // TODO ask Thomas
+       @(matching n yields known(domEq(I.inf[n], domZero()))))
     && I.FPo == {} && r != null // TODO move to intValid. Should follow from r in I.FP
 }
 

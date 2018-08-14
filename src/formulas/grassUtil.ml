@@ -499,6 +499,12 @@ let mk_old t = mk_app (sort_of t) Old [t]
     
 (** Constructor for patterns. *)
 let mk_known t = mk_app Pat Known [t]
+
+(** Constructor for ADT destructor terms. *)
+let mk_constr srt constr ts = mk_app srt (Constructor constr) ts
+
+(** Constructor for ADT destructor terms. *)
+let mk_destr srt destr t = mk_app srt (Destructor destr) [t]
     
 (** Constructor for binder [b], binding variables [bv] in formula [f]. 
  *  Annotations [ann] are optional.

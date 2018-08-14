@@ -122,8 +122,9 @@ lemma lemma_int_valid_unfold(I: Interface)
   ensures forall n: Node, n1: Node :: n !in I.FP ==> domEq(I.inf[n], domZero()) == true
   //@(matching I.inf[n] yields known(domEq(I.inf[n], domZero())))  // TODO why?
   ensures forall n: Node, n1: Node :: n !in I.FP ==> domEq(I.fm[n][n1], domZero()) == true
-    @(matching I.fm[n][n1] yields known(domEq(I.fm[n][n1], domZero())))  // TODO why?
+    @(matching I.fm[n][n1] yields known(domEq(I.fm[n][n1], domZero())))
   ensures forall n: Node, n1: Node :: n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero()) == true
+    @(matching I.fm[n][n1] yields known(domEq(I.fm[n][n1], domZero())))
   ensures forall n: Node :: n !in I.FP || n !in I.FPo
   ensures forall n: Node :: domLeq(domZero(), I.inf[n])
   ensures forall n: Node, n1: Node :: domLeq(domZero(), I.fm[n][n1])
