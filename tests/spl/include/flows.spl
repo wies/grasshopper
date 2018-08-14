@@ -21,9 +21,6 @@ pure predicate intValid(I: Interface)
 
 define domEq(p1, p2) {
   p1 == p2
-    //p1.pc == p2.pc && p1.ks == p2.ks
-    //  (forall k: K :: p1.ks[k] == p2.ks[k]
-    //  @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
 }
 
 // Equivalent interfaces (node labels can be different) -- precondition of sync
