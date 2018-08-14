@@ -2,7 +2,7 @@
 
 options "-simplearrays -propreads -symbexec"
 
-include "../include/flows.spl"
+include "flows.spl"
 include "array_util.spl"
 
 
