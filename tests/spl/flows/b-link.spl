@@ -176,11 +176,6 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
 
 /** Begin programs */
 
-//var TID: Int
-//axiom TID > 0
-//var r: Node
-
-
 /** findNext */
 procedure findNext(x: Node, k: K, Ix: Interface)
   returns (n: Node)

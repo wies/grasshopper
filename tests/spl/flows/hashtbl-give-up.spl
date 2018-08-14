@@ -2,13 +2,13 @@
 
 options "-simplearrays -symbexec -propreads -abspreds"
 
-include "../include/flows.spl";
-include "array_util.spl";
+include "../include/flows.spl"
+include "array_util.spl"
 
 
 /** Flow domain definitions */
 
-datatype FlowDom = fd(ks: Map<K, Int>);
+datatype FlowDom = fd(ks: Map<K, Int>)
 
 /*
 pure predicate domEq(p1: FlowDom, p2: FlowDom) {
@@ -115,10 +115,6 @@ lemma keyset_implies_bucket(x: Node, Ix: Interface, k: K)
 
 
 /** Begin programs */
-
-var TID: Int;
-axiom TID > 0;
-
 
 /** inRange */
 procedure inRange(x: Node, k: K, Ix: Interface)
