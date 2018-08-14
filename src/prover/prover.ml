@@ -202,6 +202,19 @@ let instantiate_and_prove session fs =
         | c :: cls when sort_of c <> Bool && sort_of c <> Pat -> 
             let eq = List.map (fun t -> GrassUtil.mk_eq c t) cls in
             List.rev_append eq acc
+        (*| c :: _ as cls when sort_of c = Bool ->
+            let mk_form =
+              if List.mem mk_true_term cls then
+                function
+                  | App (BoolConst _, _, _) -> []
+                  | t -> [Atom (t, [])]
+              else if List.mem mk_false_term cls then
+                function
+                  | App (BoolConst _, _, _) -> []
+                  | t -> [mk_not (Atom (t, []))]
+              else fun _ -> []
+            in
+            List.rev_append (flat_map mk_form cls) acc*)
         | _ -> acc)
       []
       classes
@@ -244,6 +257,8 @@ let instantiate_and_prove session fs =
       let gts_inst = TermSet.union gts_inst gts_atoms in
       let fs, gts_inst = generate_adt_terms fs gts_inst in
       let implied_eqs = get_implied_equalities classes in
+      (*print_endline "Implied equalities:";
+      print_endline (string_of_form (mk_and implied_eqs));*)
       let gts_inst = TermSet.union (ground_terms ~include_atoms:true (mk_and implied_eqs)) gts_inst in
       let generators = if i > 1 then Reduction.get_read_propagators gts_inst else btwn_gen @ generators in
       let gts_inst = generate_terms generators gts_inst in

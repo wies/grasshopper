@@ -181,8 +181,9 @@ let generate_terms generators ground_terms =
   in
   let rec generate round new_terms old_terms = function
     | (guards, gen_terms) :: generators1 ->
-        (*print_endline "======";
-        List.iter (fun t -> print_endline ("  generator: " ^ string_of_term t)) gen_terms;*)
+        (*print_string "======\nGenerator:";
+        print_of_format pr_annot [TermGenerator (guards, gen_terms)] stdout;
+        print_newline ();*)
         let subst_maps =
           List.fold_left (fun subst_maps -> function Match (t, filters) -> 
             (*print_endline ("  matching " ^ (string_of_term t));
