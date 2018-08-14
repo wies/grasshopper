@@ -1,0 +1,28 @@
+include "../include/flows.spl";
+
+/** Flow domain definitions */
+
+datatype FlowDom = fd(pc: Int);
+
+datatype NodeDom = nd;
+
+function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+{ fd(p1.pc + p2.pc) }
+
+function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+{ fd(p1.pc * p2.pc) }
+
+function domZero() returns(p: FlowDom) { fd(0) }
+
+struct Node {
+  var next: Node;
+}
+
+
+// Expect this to fail
+procedure test_valid2(I: Interface, x: Node)
+  requires I == intUndef && I.FP == {x} && I.FPo == {} && (forall n: Node, o: Node :: I.inf[n] == fd(0) && I.fm[n][o] == fd(0))
+  ensures intValid(I) == true
+{
+  lemma_int_valid_fold(I);
+}

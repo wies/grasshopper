@@ -1,0 +1,108 @@
+/** Threaded tree delete/pop from Ramifications paper. */
+
+include "../include/flows.spl";
+
+
+/** Flow domain definitions */
+
+datatype FlowDom = pair(lpc: Int, tpc: Int); // TODO N \cup {\infty}?
+
+function domPlus(p1: Pair, p2: Pair) returns (p: Pair)
+{ pair(p1.lpc + p2.lpc, p1.tpc + p2.tpc) }
+
+function domMult(p1: Pair, p2: Pair) returns (p: Pair)
+{ pair(p1.lpc * p2.lpc, p1.tpc * p2.tpc) }
+
+function domZero() returns (p: Pair) { pair(0, 0) }
+
+predicate domLt(p1: Pair, p2: Pair)
+{ p1.lpc <= p2.lpc && p1.tpc <= p2.tpc && p1 != p2 }
+
+predicate domLeq(p1: Pair, p2: Pair)
+{ p1.lpc <= p2.lpc && p1.tpc <= p2.tpc }
+
+datatype NodeDom = nodeDom;
+
+struct Node {
+  var next: Node;
+  var left: Node;
+  var right: Node;
+}
+
+
+/** Definition of good condition, gamma */
+
+procedure lemma_conc(x: Node, I: Interface)
+  returns ()
+  requires I != intUndef
+  requires N(x, I)
+  ensures [acc(x)](I) &*& I.FP == {x}
+  ensures I.inf[x] == pair(1, 1)
+  ensures I.FPo == {z: Node :: (z == x.next || z == x.left || z == x.right) && z != null}
+  ensures (x.next != null ==>
+           ((x.next == x.left || x.next == x.right) && I.fm[x][x.next] == pair(1, 1)
+            || x.next != x.left && x.next != x.right && I.fm[x][x.next] == pair(1, 0)))
+  ensures x.left != x.right
+  ensures x.left != null && x.left != x.next ==> I.fm[x][x.left] == pair(0, 1)
+  ensures x.right != null && x.right != x.next ==> I.fm[x][x.right] == pair(0, 1)
+
+// TODO check this doesn't introduce unsoundness
+procedure lemma_singleton_int(x: Node, xn: Node, xl: Node, xr: Node)
+  returns (I1: Interface)
+  requires xl != xr
+  ensures I1 != intUndef && I1.FP == {x} && I1.inf[x] == pair(1, 1)
+  ensures I.FPo == {z: Node :: (z == xn || z == xl || z == xr) && z != null}
+  ensures (xn != null ==>
+           ((xn == xl || xn == xr) && I.fm[x][xn] == pair(1, 1)
+            || xn != xl && xn != xr && I.fm[x][xn] == pair(1, 0)))
+  ensures xl != null && xl != xn ==> I.fm[x][xl] == pair(0, 1)
+  ensures xr != null && xr != xn ==> I.fm[x][xr] == pair(0, 1)
+  ensures forall n: Node, n1: Node ::
+    (n !in I1.FP ==> I1.inf[n] == domZero() && I1.fm[n][n1] == domZero())
+    && (n1 !in I1.FPo ==> I1.fm[n][n1] == domZero())
+
+procedure lemma_abs(x: Node, I: Interface, I1: Interface)
+  returns ()
+  requires I != intUndef && I1 != intUndef && intValid(I1)
+  requires [acc(x)](I) &*& I1.FP == {x}
+  requires I1.inf[x] == pair(1, 1)
+  requires I1.FPo == {z: Node :: (z == x.next || z == x.left || z == x.right) && z != null}
+  requires (x.next != null ==>
+           ((x.next == x.left || x.next == x.right) && I1.fm[x][x.next] == pair(1, 1)
+            || x.next != x.left && x.next != x.right && I1.fm[x][x.next] == pair(1, 0)))
+  requires x.left != x.right
+  requires x.left != null && x.left != x.next ==> I1.fm[x][x.left] == pair(0, 1)
+  requires x.right != null && x.right != x.next ==> I1.fm[x][x.right] == pair(0, 1)
+  ensures [N(x, I1)](I)
+
+
+/** Program */
+
+procedure tree_delete(th: Node, x: Node, I: Interface, lh: Node)
+  returns (lh1: Node, th1: Node, Ix: Interface)
+  requires Gr(I) &*& intValid(I) == true &*& x in I.FP
+  requires lh == th && I.inf[lh] == pair(1, 1)
+    || lh != th && I.inf[lh] == pair(1, 0) && I.inf[th] == pair(0, 1)
+  requires (forall n: Node :: n != lh && n != th ==> I.inf[n] == domZero()) && I.FPo == {}
+  ensures Gr(I1) &*& [acc(x)](Ix)
+  ensures intValid(I1) == true && intValid(Ix) == true // && intLeq(I, I1) == true
+  ensures lh1 == th1 && I1.inf[lh1] == pair(1, 1)
+    || lh1 != th1 && I1.inf[lh1] == pair(1, 0) && I1.inf[th1] == pair(0, 1)
+  ensures (forall n: Node :: n != lh1 && n != th1 ==> I1.inf[n] == domZero()) && I1.FPo == {}
+
+procedure delete(lh: Node, th: Node, I: Interface)
+  returns (lh1: Node, th1: Node, I1: Interface)
+  requires Gr(I) &*& intValid(I) == true
+  requires lh == th && I.inf[lh] == pair(1, 1)
+    || lh != th && I.inf[lh] == pair(1, 0) && I.inf[th] == pair(0, 1)
+  requires (forall n: Node :: n != lh && n != th ==> I.inf[n] == domZero()) && I.FPo == {}
+  ensures Gr(I1) &*& intValid(I1) == true
+  ensures lh1 == th1 && I1.inf[lh1] == pair(1, 1)
+    || lh1 != th1 && I1.inf[lh1] == pair(1, 0) && I1.inf[th1] == pair(0, 1)
+  ensures (forall n: Node :: n != lh1 && n != th1 ==> I1.inf[n] == domZero()) && I1.FPo == {}
+{
+  var x := lh;
+  lh := x.next;
+  tree_delete(th, x);
+  freeNode(x);
+}

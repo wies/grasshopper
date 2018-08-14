@@ -6,6 +6,14 @@ open GrassUtil
 open Prog
 open Printf
 
+let simplify proc prog =
+  prog |>
+  dump_if 0 |>
+  Analyzer.infer_accesses true |>
+  Simplifier.elim_loops |>
+  Simplifier.elim_global_deps |>
+  dump_if 1 
+  
 exception NotYetImplemented
 let todo () = raise NotYetImplemented
 
@@ -519,7 +527,7 @@ let remove_useless_existentials ((pure, spatial) as state : state) : state =
 
 (** Kill useless existential vars in state [st], find equalities between constants,
   add to [st.se_eqs] and simplify. *)
-let simplify st =
+let simplify_state st =
   let (p, sp) = remove_useless_existentials (fst st.se_state |> nnf, snd st.se_state) in
   let eqs = find_equalities st.se_eqs p in
   {st with se_eqs = eqs; se_state = apply_equalities eqs (p, sp)}
@@ -708,7 +716,7 @@ let rec find_frame st ?(inst=empty_eqs) (p1, sps1) (p2, sps2) =
 
 (** Returns [Ok inst] if [(p1, sp1)] |= [(p2, sp2)], else [Error (error messages)]. *)
 and check_entailment st ?(inst=empty_eqs) (p1, sp1) (p2, sp2) =
-  let st1 = simplify {st with se_state = (p1, sp1)} in
+  let st1 = simplify_state {st with se_state = (p1, sp1)} in
   let eqs, (p1, sp1) = st1.se_eqs, st1.se_state in
   let (p2, sp2) =
     (p2, sp2)
@@ -902,8 +910,8 @@ let rec symb_exec st postcond comms =
     | _ -> dummy_position
   in
 
-  (* First, simplify the pre state *)
-  let st = simplify st in
+  (* First, simplify_state the pre state *)
+  let st = simplify_state st in
 
   (* If flag is set, check that current state isn't unsat *)
   if !Config.check_unsat then begin

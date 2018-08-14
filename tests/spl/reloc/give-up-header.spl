@@ -1,0 +1,84 @@
+/** Header for give-up technique template for linearizable dictionaries. */
+
+/* Files using this must define:
+   - Node, unchanged(x), gammaSpatial(x), gammaG(x, I), gammaB(x, I)
+   - FlowDom, domEq, domLeq, domPlus, domMult, domZero
+ */
+
+
+options "-symbexec"
+
+include "../include/flows.spl";
+
+
+/** Node domain definitions */
+
+datatype LockInfo = unlocked | locked(tid: Int) | dirtylock(dtid: Int) | lockTop;
+
+datatype NodeDom = nd(contents: Set<Int>, lockinfo: LockInfo);
+
+pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
+  (forall x: Int :: x in a1.contents ==> x in a2.contents)
+    && (a1.lockinfo == a2.lockinfo || a2.lockinfo == lockTop)
+}
+
+
+/** Definition of good condition, gamma, and global invariant */
+
+define gamma(x, I) {
+  gammaSpatial(x) &*& I.FP == {x} // TODO where to put this?
+    &*& ((gammaG(x, I) && (I.na.lockinfo == locked(TID) || I.na.lockinfo == unlocked)
+        || gammaB(x, I) && I.na.lockinfo == dirtylock(TID))
+      && (forall k: Int :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
+      && (forall k: Int, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
+      && (forall k: Int, y: Node, z: Node :: y == z
+        || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0))
+}
+
+define globalInt(I) {
+  intValid(I) == true && r in I.FP && (forall k: Int :: I.inf[r].ks[k] == 1)
+    && (forall n: Node :: n != r ==> domEq(I.inf[n], domZero())
+       @(matching n yields known(domEq(I.inf[n], domZero()))))
+    && I.FPo == {} && r != null // TODO move to intValid. Should follow from r in I.FP
+}
+
+
+/** Actions */
+
+define action_lock_pre(x, Ix) {
+  N(x, Ix) &*& Ix.na.lockinfo == unlocked
+}
+
+define action_lock_post(x, Ix, Ix1, t) {
+  N(x, Ix1) &*& (Ix1.FP == Ix.FP && Ix1.FPo == Ix.FPo && Ix1.inf == Ix.inf
+              && Ix1.fm == Ix.fm && Ix1.na.contents == Ix.na.contents
+              && (Ix1.na.lockinfo == locked(t) || Ix1.na.lockinfo == dirtylock(t)))
+}
+
+procedure action_lock(x: Node, Ix: Interface, t: Int) returns (Ix1: Interface)
+  requires action_lock_pre(x, Ix)
+  ensures action_lock_post(x, Ix, Ix1, t)
+
+define action_sync_pre(I, t) {
+  Gr(I) &*& (I.na.lockinfo == locked(t) || I.na.lockinfo == dirtylock(t))
+}
+
+define action_sync_post(I, I1, t) {
+  Gr(I1) &*& (I1.na.lockinfo == unlocked || I1.na.lockinfo == locked(t) || I1.na.lockinfo == dirtylock(t))
+    &*& intEq(I, I1) == true
+}
+
+procedure action_sync(I: Interface, t: Int) returns (I1: Interface)
+  requires action_sync_pre(I, t)
+  ensures action_sync_post(I, I1, t)
+
+define action_alloc_pre() { emp }
+
+define action_alloc_post(x, Ix, t) {
+  N(x, Ix) &*& (Ix.inf[x] == domZero() && Ix.FPo == {}
+              && Ix.na.contents == {} && Ix.na.lockinfo == dirtylock(t))
+}
+
+procedure action_alloc(t: Int) returns (x: Node, Ix: Interface)
+  requires action_alloc_pre()
+  ensures action_alloc_post(x, Ix, t)

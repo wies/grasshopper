@@ -527,9 +527,11 @@ let array_axioms elem_srt =
     ([Match (a, [])], [mk_length a])
   in
   if !Config.simple_arrays then
-    [mk_axiom ~gen:[array_length_gen] "array-length" array_length;
-     mk_axiom ~gen:array_map_gen "array-map1" array_map_simple1;
-     mk_axiom "array-map2" array_map_simple2]
+    [mk_axiom ~gen:[array_length_gen] "array-length" array_length] @
+    if not !Config.symbexec then
+      [mk_axiom ~gen:array_map_gen "array-map1" array_map_simple1;
+       mk_axiom "array-map2" array_map_simple2]
+    else []
   else 
     [mk_axiom ~gen:[index_of_cell_gen; array_of_cell_gen; array_cells_gen; array_cell_gen] "array-cells1" array_cells1;
      mk_axiom "array-cells2" array_cells2;

@@ -1,0 +1,300 @@
+/* -- Lemma library for flows. Independent of Flow domain. -- */
+
+
+// Acyclic graphs, so single inflow and interface composition is a function
+
+datatype Interface =
+  int(inf: Map<Node, FlowDom>,
+      na: NodeDom,
+      fm: Map<Node, Map<Node, FlowDom>>,
+      FP: Set<Node>,
+      FPo: Set<Node>)
+  | intUndef; // For when compositions don't exist
+
+pure function intComp(I1: Interface, I2: Interface) returns (I: Interface)
+  ensures I != intUndef ==> I.FP == I1.FP ++ I2.FP
+  ensures forall n: Node :: I == intUndef || n !in I1.FP || n !in I2.FP
+  ensures I.FPo == (I1.FPo -- I2.FP) ++ (I2.FPo -- I1.FP)
+
+// Encoding of well defined interfaces
+pure predicate intValid(I: Interface)
+
+define domEq(p1, p2) {
+  p1 == p2
+}
+
+// Equivalent interfaces (node labels can be different) -- precondition of sync
+pure predicate intEq(I1: Interface, I2: Interface) {
+  I1.FP == I2.FP && I1.FPo == I2.FPo
+  && (forall x: Node :: domEq(I1.inf[x], I2.inf[x])
+     @(matching x yields I1.inf[x]) @(matching x yields I2.inf[x]))
+  && (forall x: Node, y: Node ::
+     domEq(domMult(I1.inf[x], I1.fm[x][y]), domMult(I2.inf[x], I2.fm[x][y]))
+     @(matching I2.fm[x][y] yields known(domMult(I1.inf[x], I1.fm[x][y])))
+     @(matching I2.fm[x][y] yields known(domMult(I2.inf[x], I2.fm[x][y]))))
+}
+
+
+// Associativity, commutativity, cancellativity of intComp
+axiom forall I1: Interface, I2: Interface, I3: Interface ::
+  intComp(I1, intComp(I2, I3)) == intComp(intComp(I1, I2), I3);
+axiom forall I1: Interface, I2: Interface ::
+  intComp(I1, I2) == intComp(I2, I1) @(matching intComp(I1, I2) yields intComp(I2, I1));
+axiom forall I1: Interface, I2: Interface, I3: Interface ::
+  intComp(I1, I2) == intComp(I1, I3) ==> I2 == I3
+
+// Composition of undef with anything is undef
+axiom forall I1: Interface, I2: Interface ::
+  intComp(I1, I2) != intUndef ==> (I1 != intUndef && I2 != intUndef);
+
+// Valid interfaces are not undefined
+axiom forall I: Interface :: intValid(I) ==> I != intUndef;
+
+axiom forall I1: Interface, I2: Interface ::
+  intValid(I1) && intValid(I2) && intComp(I1, I2) != intUndef ==> intValid(intComp(I1, I2));
+
+axiom forall I1: Interface, I2: Interface ::
+  (! intValid(I1) || ! intValid(I2)) ==> intComp(I1, I2) == intUndef;
+
+// Sufficient condition for intComp(I, Ix, Iy), when no edge from y to x
+lemma lemma_int_comp_fold(x: Node, Ix: Interface, y: Node, Iy: Interface)
+  returns (I: Interface)
+  requires intValid(Ix) == true && intValid(Iy) == true
+  requires Ix.FP == {x} && Iy.FP == {y} && x != y
+  requires domLeq(domMult(Iy.inf[y], Iy.fm[y][x]), Ix.inf[x]) == true
+  requires domLeq(domMult(Ix.inf[x], Ix.fm[x][y]), Iy.inf[y]) == true
+  requires x !in Iy.FPo
+  ensures intComp(Ix, Iy) == I && intValid(I) == true && I.FP == {x, y}
+
+// Computes Ix + Iy + Iz when {x, y, z} is a topological ordering
+lemma lemma_int_comp_fold_3(x: Node, Ix: Interface, y: Node, Iy: Interface, z: Node, Iz: Interface)
+  returns (I: Interface)
+  requires intValid(Ix) == true && intValid(Iy) == true && intValid(Iz) == true
+  requires Ix.FP == {x} && Iy.FP == {y} && Iz.FP == {z} && x != y && x != z && z != y
+  requires domEq(Iy.fm[y][x], domZero())
+  requires domEq(Iz.fm[z][x], domZero()) && domEq(Iz.fm[z][y], domZero())
+  requires domLeq(domMult(Ix.inf[x], Ix.fm[x][y]), Iy.inf[y]) == true
+  requires domLeq(domPlus(domMult(Ix.inf[x], Ix.fm[x][z]), domMult(Iy.inf[y], Iy.fm[y][z])),
+    Iz.inf[z]) == true
+  ensures intComp(Ix, intComp(Iy, Iz)) == I && intValid(I) == true && I.FP == {x, y, z}
+  ensures domEq(Ix.inf[x], I.inf[x])
+  ensures domEq(Iy.inf[y], domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])))
+  ensures domEq(Iz.inf[z],
+    domPlus(I.inf[z], domPlus(domMult(Ix.inf[x], Ix.fm[x][z]), domMult(Iy.inf[y], Iy.fm[y][z]))))
+    // TODO fm?  ensures forall n: Node, n1: Node ::
+
+lemma lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
+  requires Ix != intUndef && Iy != intUndef && I != intUndef
+  requires intComp(Ix, Iy) == I && x != y && x !in Iy.FPo && Ix.FP == {x} && Iy.FP == {y}
+  ensures I.FP == {x, y}
+  ensures I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
+  ensures domEq(Ix.inf[x], I.inf[x])
+  ensures domEq(Iy.inf[y], domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])))
+  ensures (forall n: Node, n1: Node ::
+           n !in Ix.FP || n1 == y
+           || (domEq(I.fm[n][n1],
+                    domPlus(Ix.fm[n][n1], domMult(Ix.fm[n][y], Iy.fm[y][n1]))))
+           @(matching I.fm[n][n1]
+             yields known(domPlus(Ix.fm[n][n1], domMult(Ix.fm[n][y], Iy.fm[y][n1]))))
+           @(matching I.fm[n][n1]
+             yields known(domMult(Ix.fm[n][y], Iy.fm[y][n1])))
+           )
+    ensures (forall n: Node, n1: Node :: n !in Iy.FP || n1 == x
+             || (domEq(I.fm[n][n1], Iy.fm[n][n1]))
+             @(matching I.fm[n][n1] yields Iy.fm[n][n1]))
+
+lemma lemma_int_comp_unfold_3(x: Node, Ix: Interface, y: Node, Iy: Interface,
+                              z: Node, Iz: Interface, I: Interface)
+  requires intValid(I) == true && intComp(Ix, intComp(Iy, Iz)) == I
+  requires Ix.FP == {x} && Iy.FP == {y} && Iz.FP == {z} && x != y && x != z && z != y
+  requires domEq(Iy.fm[y][x], domZero())
+  requires domEq(Iz.fm[z][x], domZero()) && domEq(Iz.fm[z][y], domZero())
+  ensures domLeq(domMult(Ix.inf[x], Ix.fm[x][y]), Iy.inf[y]) == true
+  ensures domLeq(domPlus(domMult(Ix.inf[x], Ix.fm[x][z]), domMult(Iy.inf[y], Iy.fm[y][z])),
+    Iz.inf[z]) == true
+  ensures domEq(Ix.inf[x], I.inf[x])
+  ensures domEq(Iy.inf[y], domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])))
+  ensures domEq(Iz.inf[z],
+    domPlus(I.inf[z], domPlus(domMult(Ix.inf[x], Ix.fm[x][z]), domMult(Iy.inf[y], Iy.fm[y][z]))))
+  // TODO continue this for flow map
+  //  ensures forall n: Node, n1: Node :: n in Ix.FP && n1 !in 
+
+lemma lemma_int_valid_unfold(I: Interface)
+  requires intValid(I) == true
+  ensures forall n: Node, n1: Node :: n !in I.FP ==> domEq(I.inf[n], domZero())
+  //@(matching I.inf[n] yields known(domEq(I.inf[n], domZero())))  // TODO why?
+  ensures forall n: Node, n1: Node :: n !in I.FP ==> domEq(I.fm[n][n1], domZero())
+  //@(matching I.fm[n][n1] yields known(domEq(I.fm[n][n1], domZero())))
+  ensures forall n: Node, n1: Node :: n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero())
+  //@(matching I.fm[n][n1] yields known(domEq(I.fm[n][n1], domZero())))
+  ensures forall n: Node :: n !in I.FP || n !in I.FPo
+  ensures forall n: Node :: domLeq(domZero(), I.inf[n])
+  ensures forall n: Node, n1: Node :: domLeq(domZero(), I.fm[n][n1])
+
+lemma lemma_int_valid_fold(I: Interface)
+  requires I != intUndef // TODO why? See test_valid2
+  requires forall n: Node, n1: Node ::
+    (n !in I.FP ==> domEq(I.inf[n], domZero()) && domEq(I.fm[n][n1], domZero()))
+    && (n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero()))
+  requires forall n: Node :: n !in I.FP || n !in I.FPo
+  requires forall n: Node :: domLeq(domZero(), I.inf[n])
+  requires forall n: Node, n1: Node :: domLeq(domZero(), I.fm[n][n1])
+  ensures intValid(I) == true
+
+
+procedure copy_interface(I: Interface, a: NodeDom)
+  returns (I1: Interface)
+  //ensures I1 != intUndef
+  //ensures I.FP == I1.FP && I.FPo == I1.FPo && I.inf == I1.inf && I.fm == I1.fm
+  //ensures I1.na == a
+  ensures I1 == int(I.inf, a, I.fm, I.FP, I.FPo)
+{
+  I1 := int(I.inf, a, I.fm, I.FP, I.FPo);
+}
+
+lemma lemma_acyclic_2(x: Node, Ix: Interface, y: Node, Iy: Interface)
+  requires intValid(intComp(Ix, Iy)) == true
+  requires !domLeq(Ix.fm[x][y], domZero()) == true
+  ensures domEq(Ix.fm[y][x], domZero())
+
+/*
+lemma lemma_Gr_comp(Ix: Interface, Iy: Interface)
+  returns (I: Interface)
+  requires Gr(Ix) &*& Gr(Iy)
+  ensures Gr(I) &*& intComp(Ix, Iy) == I &*& I != intUndef
+
+lemma lemma_Gr_comp_int(Ix: Interface, Iy: Interface)
+  returns (I: Interface)
+  requires Gr(Ix) &*& Gr(Iy)
+  ensures Gr(Ix) &*& Gr(Iy) &*& intComp(Ix, Iy) == I &*& I != intUndef
+
+lemma lemma_dirty_Gr_comp(Ix: Interface, Iy: Interface, I: Interface)
+  returns (I1: Interface)
+  requires [Gr(Ix) &*& Gr(Iy)](I)
+  ensures [Gr(I1)](I) &*& intComp(Ix, Iy) == I1
+
+lemma lemma_comp(Ix: Interface, Ix1: Interface, Iy: Interface, Iy1: Interface)
+  returns (I: Interface)
+  requires [Gr(Ix1)](Ix) &*& [Gr(Iy1)](Iy) &*& intValid(intComp(Ix1, Iy1)) == true
+  ensures [Gr(Ix1) &*& Gr(Iy1)](I) &*& intComp(Ix, Iy) == I &*& I != intUndef
+
+lemma lemma_comp_sl(x: Node, Ix: Interface, y: Node, Iy: Interface)
+  returns (I: Interface)
+  requires [gammaSpatial(x)](Ix) &*& [gammaSpatial(y)](Iy)
+  ensures [gammaSpatial(x) &*& gammaSpatial(y)](I) &*& intComp(Ix, Iy) == I
+  ensures I != intUndef && unchanged(x) && unchanged(y)
+
+lemma lemma_comp_sl_3(x: Node, Ix: Interface, y: Node, Iy: Interface,
+                      z: Node, Iz: Interface)
+  returns (I: Interface)
+  requires [gammaSpatial(x)](Ix) &*& [gammaSpatial(y)](Iy) &*& [gammaSpatial(z)](Iz)
+  ensures [gammaSpatial(x) &*& gammaSpatial(y) &*& gammaSpatial(z)](I)
+  ensures I != intUndef &&  intComp(Ix, intComp(Iy, Iz)) == I
+  ensures unchanged(x) && unchanged(y) && unchanged(z)
+
+lemma lemma_comp_sing_int(x: Node, Ix: Interface, I2: Interface)
+  returns (I: Interface)
+  requires [gammaSpatial(x)](Ix) &*& Gr(I2)
+  ensures [gammaSpatial(x)](Ix) &*& Gr(I2) &*& intComp(Ix, I2) == I &*& I != intUndef
+  ensures unchanged(x)
+
+lemma lemma_decomp(x: Node, I: Interface)
+  returns (I1: Interface, I2: Interface)
+  requires Gr(I) &*& x in I.FP
+  ensures N(x, I1) &*& Gr(I2) &*& intComp(I1, I2) == I
+
+lemma lemma_int_comp_inf_leq(x: Node, Ix: Interface, Iy: Interface,
+                             I: Interface)
+  requires Ix != intUndef && Iy != intUndef && I != intUndef
+  requires intComp(Ix, Iy) == I && x in Ix.FP
+  ensures domLeq(I.inf[x], Ix.inf[x]) == true
+
+
+lemma lemma_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Node)
+  requires intComp(I1, I2) == I && x in I1.FP && y in I1.FPo && I.FPo == {}
+  ensures y in I2.FP && domLeq(domMult(I1.inf[x], I1.fm[x][y]), I2.inf[y]) == true
+
+lemma lemma_inf_geq(x: Node, Ix: Interface, y: Node, Iy: Interface,
+                    z: Node, Iz: Interface, I: Interface)
+  requires I == intComp(Ix, intComp(Iy, Iz)) && Ix.FP == {x} && Iy.FP == {y} && Iz.FP == {z}
+  ensures domLeq(
+    domPlus(domMult(Iy.inf[y], Iy.fm[y][x]), domMult(Iz.inf[z], Iz.fm[z][x])),
+    Ix.inf[x]) == true
+
+
+lemma lemma_conc(x: Node, I: Interface)
+  requires I != intUndef
+  requires N(x, I)
+  ensures [gamma(x, I)](I)
+
+lemma lemma_conc_rev(x: Node, I: Interface)
+  requires I != intUndef
+  requires [gamma(x, I)](I)
+  ensures N(x, I)
+
+procedure lemma_abs(x: Node, I: Interface, I1: Interface)
+  requires I != intUndef && I1 != intUndef && intValid(I1)
+  requires [gamma(x, I1)](I) &*& I1.FP == {x}
+  ensures [N(x, I1)](I)
+
+
+lemma lemma_add_in(I: Interface, n: Node, In: Interface, I1: Interface)
+  requires I1 == intComp(I, In) && In.FP == {n} && domEq(In.inf[n], domZero()) == true
+  ensures forall n1: Node :: domEq(I.inf[n1], I1.inf[n1]) == true
+    @(matching n1 yields I.inf[n1]) @(matching n1 yields I1.inf[n1])
+
+lemma lemma_add_singl(I: Interface, x: Node, Ix: Interface, I1: Interface)
+  requires I1 == intComp(I, Ix) && Ix.FP == {x} && domEq(Ix.inf[x], domZero())
+     && Ix.FPo == {}
+  ensures I1.FPo == I.FPo
+  ensures forall n: Node :: n in I.FP && domEq(I1.inf[n], I.inf[n])
+                    || n !in I.FP && domEq(I1.inf[n], domZero())
+    @(matching n yields I1.inf[n]) @(matching n yields I.inf[n])
+
+lemma lemma_Gr_comp_uniq(I: Interface, I1: Interface, I2: Interface)
+  requires Gr(I) && (Gr(I1) &*& Gr(I2))
+  ensures Gr(I1) &*& Gr(I2) &*& I == intComp(I1, I2)
+
+lemma lemma_Gr_uniq(I1: Interface, I2: Interface)
+  requires Gr(I1) && (Gr(I2) &*& I2 == I2)  // Hack to force this to be spatial
+  ensures Gr(I1) &*& I1 == I2
+
+lemma lemma_disj(I1: Interface, I2: Interface,
+                 x: Node, Ix: Interface, I3: Interface)
+  returns (I4: Interface)
+  requires (Gr(I1) &*& Gr(I2)) && (N(x, Ix) &*& Gr(I3)) &*& ndLeq(Ix.na, I1.na) == false
+  ensures Gr(I1) &*& N(x, Ix) &*& Gr(I4)
+    &*& I2 == intComp(Ix, I4) &*& I3 == intComp(I1, I4)
+
+lemma lemma_disj_fp(I1: Interface, I2: Interface,
+                    I3: Interface, I4: Interface)
+  returns (I5: Interface)
+  requires (Gr(I1) &*& Gr(I2)) && (Gr(I3) &*& Gr(I4))
+  requires forall x: Node :: x !in I1.FP || x !in I3.FP
+  ensures Gr(I1) &*& Gr(I3) &*& Gr(I5)
+  ensures intComp(I1, intComp(I3, I5)) == intComp(I1, I2)
+  ensures intComp(I1, intComp(I3, I5)) == intComp(I3, I4)
+
+lemma lemma_disj_eq(I1: Interface, I2: Interface,
+                    I3: Interface, I4: Interface)
+  requires (Gr(I1) &*& Gr(I2)) && (Gr(I3) &*& Gr(I4)) && I1.FP == I3.FP
+  ensures Gr(I1) &*& Gr(I2) &*& I1 == I3 && I2 == I4
+
+
+
+lemma lemma_repl(I: Interface, Ix: Interface, Iy: Interface, Ix1: Interface, I1: Interface)
+  requires I == intComp(Ix, Iy) && I1 == intComp(Ix1, Iy) && intEq(Ix, Ix1) == true
+  ensures intEq(I, I1) == true
+
+
+procedure sync(I1: Interface, I2: Interface)
+  returns ()
+  requires [Gr(I2)](I1) &*& intValid(I2) == true &*& intEq(I1, I2) == true
+  ensures Gr(I2)
+
+// This follows from semantics of sync not modifying heap
+procedure gamma_sync(x: Node, Ix: Interface, Ix1: Interface)
+  returns ()
+  requires [gamma(x, Ix1)](Ix) &*& intValid(Ix1) == true &*& intEq(Ix, Ix1) == true
+  ensures [gamma(x, Ix1)](Ix1) &*& unchanged(x)
+*/

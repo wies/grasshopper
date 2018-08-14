@@ -1292,3 +1292,8 @@ let pr_prog ppf prog =
 let print_prog out_ch prog = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_prog prog
 
 let print_cmd out_ch cmd = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_cmd cmd
+
+let dump_if n prog = 
+  if !Config.dump_ghp == n 
+  then (print_prog stdout prog; prog)
+  else prog

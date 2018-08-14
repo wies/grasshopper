@@ -1,0 +1,175 @@
+/** No-data, single list, sequential version of Harris' list. */
+
+options "-symbexec"
+
+include "../include/flows.spl";
+
+
+/** Flow domain definitions */
+
+datatype FlowDom = fd(pc: Int);
+
+pure predicate domEq(p1: FlowDom, p2: FlowDom) {
+  p1.pc == p2.pc
+}
+
+pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
+  p1.pc <= p2.pc
+}
+
+pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+  ensures p == fd(p1.pc + p2.pc) @(matching domPlus(p1, p2) yields fd(p1.pc + p2.pc))
+  // TODO why can't I put term gen inside function definition?
+  // TODO are these term gens even needed?
+
+pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+  ensures p == fd(p1.pc * p2.pc) @(matching domMult(p1, p2) yields fd(p1.pc * p2.pc))
+
+pure function domZero() returns(p: FlowDom) { fd(0) }
+
+datatype NodeDom = nd;
+
+pure predicate ndLeq(a1: NodeDom, a2: NodeDom)
+
+struct Node {
+  var next: Node;
+}
+
+define unchanged(x) { x.next == old(x.next) }
+
+
+/** Definition of good condition, gamma */
+
+define gammaSpatial(x) { acc(x) }
+
+define gamma(x, I) {
+  gammaSpatial(x) &*& I.inf[x] == fd(1)
+    &*& (x.next == null && I.FPo == {}
+        || x.next != null && I.FPo == {x.next} && I.fm[x][x.next] == fd(1))
+}
+
+procedure lemma_singleton_int(x: Node, xn: Node)
+  returns (I1: Interface)
+  ensures I1 != intUndef && I1.FP == {x} && I1.inf[x] == fd(1)
+  ensures (xn == null && I1.FPo == {}
+       || xn != null && I1.FPo == {xn} && I1.fm[x][xn] == fd(1))
+  ensures forall n: Node, n1: Node ::
+    (n !in I1.FP ==> I1.inf[n] == fd(0) && I1.fm[n][n1] == fd(0))
+    && (n1 !in I1.FPo ==> I1.fm[n][n1] == fd(0))
+
+
+/** Begin programs */
+
+procedure insert(hd: Node, I: Interface, n: Node, In: Interface)
+  returns (I1: Interface)
+  requires Gr(I) &*& intValid(I) == true
+  requires I.inf[hd] == fd(1) && (forall n: Node :: n != hd ==> I.inf[n] == fd(0))
+    && I.FPo == {}
+  requires [acc(n)](In)
+  requires intValid(In) && In.FP == {n} && In.inf[n] == domZero() && In.FPo == {}
+  ensures Gr(I1) &*& intValid(I1) == true
+  ensures hd in I1.FP && I1.inf[hd] == fd(1) && (forall n: Node :: n != hd ==> I1.inf[n] == fd(0))
+    && I1.FPo == {}
+{
+  var I0 := lemma_comp_sing_int(n, In, I);
+
+  var nondet: Bool;
+  var l := hd;
+
+  lemma_int_valid_unfold(I);
+  var Il: Interface, I2: Interface;
+  Il, I2 := lemma_decomp(l, I);
+  lemma_conc(l, Il);
+
+  var r := l.next;
+
+  lemma_abs(l, Il, Il);
+  sync(Il, Il);
+
+  while (nondet && r != null)
+    invariant N(l, Il) &*& Gr(I2)
+    invariant intValid(Il) && intValid(I2)
+    invariant intComp(Il, I2) == I && intComp(In, I) == I0 && (r != null ==> r in Il.FPo)
+    invariant intValid(In) && In.FP == {n} && In.inf[n] == domZero() && In.FPo == {}
+    invariant hd in I.FP && I.inf[hd] == fd(1) && (forall n: Node :: n != hd ==> I.inf[n] == fd(0))
+      && I.FPo == {}
+  {
+    var p := l;
+
+    havoc nondet;
+    l := r;
+    // N(p, Il) &*& Gr(I2)
+
+    lemma_step(Il, I2, I, p, r);
+    var Ir: Interface, I3: Interface;
+    Ir, I3 := lemma_decomp(r, I2);
+    // N(p, Il) &*& N(r, Ir) &*& Gr(I3)
+    lemma_conc(r, Ir);
+    // N(p, Il) &*& [r |-> _](Ir) &*& Gr(I3)
+
+    r := l.next;
+
+    var Ip := Il; Il := Ir;
+    // N(p, Ip) &*& [l |-> _](Il) &*& Gr(I3)
+    lemma_abs(l, Il, Il);
+    sync(Il, Il);
+    // N(p, Ip) &*& N(l, Il) &*& Gr(I3)
+    I2 := lemma_Gr_comp(Ip, I3);
+  }
+
+  n.next := r;
+
+  // TODO how do we know n != r? Need conditional, (Step), and Gr footprint
+  pure assume n != r;
+  lemma_conc(l, Il);
+
+  if (r == l.next) {  // CAS(l.next, r, n);
+
+    l.next := n;
+    // [l |-> n](Il) * [n |-> r](In) * Gr(I2)
+
+    var In1 := lemma_singleton_int(n, n.next);
+    lemma_int_valid_fold(In1);
+
+    var Il1 := lemma_singleton_int(l, l.next);
+    lemma_int_valid_fold(Il1);
+
+    lemma_abs(n, In, In1);
+    // [Gr(In1)](In) &*& [l |-> n](Il) &*& Gr(I2)
+
+    lemma_abs(l, Il, Il1);
+    // [Gr(In1)](In) &*& [Gr(Il1)](Il) &*& Gr(I2)
+
+    lemma_int_valid_unfold(In1);
+    lemma_int_valid_unfold(Il1);
+    lemma_int_valid_unfold(Il);
+    var Inl1 := lemma_int_comp_fold(l, Il1, n, In1);
+    // Inl1 == intComp(In1, Il1)
+
+    var Inl := lemma_comp(In, In1, Il, Il1);
+    // [Gr(In1) &*& Gr(Il1)](Inl) &*& Gr(I2) &*& Inl == intComp(In, Il)
+
+    Inl1 := lemma_dirty_Gr_comp(In1, Il1, Inl);
+    // [Gr(Inl1)](Inl) &*& Gr(I2)
+
+    lemma_int_comp_unfold(l, Il, n, In, Inl);
+    lemma_int_comp_unfold(l, Il1, n, In1, Inl1);
+    lemma_int_valid_unfold(In);
+    lemma_int_valid_unfold(Inl);
+    lemma_int_valid_unfold(Inl1);
+
+    sync(Inl, Inl1);
+    // Gr(Inl1) &*& Gr(I2)
+
+    I1 := lemma_Gr_comp(Inl1, I2);
+    lemma_repl(I0, Inl, I2, Inl1, I1);
+    lemma_add_in(I, n, In, intComp(I, In));
+    lemma_int_valid_unfold(I1);
+  } else {
+    lemma_abs(l, Il, Il);
+    sync(Il, Il);
+    I := lemma_Gr_comp(Il, I2);
+
+    I1 := insert(hd, I, n, In);
+  }
+}

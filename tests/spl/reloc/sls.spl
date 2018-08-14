@@ -1,0 +1,55 @@
+include "../include/flows.spl";
+
+/** Flow domain definitions */
+
+datatype FlowDom = pair(fst: Int, snd: Int);
+
+pure predicate domEq(p1: FlowDom, p2: FlowDom) {
+  p1.fst == p2.fst && p1.snd == p2.snd
+}
+
+pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
+  p1.fst <= p2.snd && p1.snd <= p2.snd
+}
+
+pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+{ pair(p1.fst + p2.fst, p1.snd + p2.snd) }
+
+pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+{ pair(p1.fst * p2.fst, p1.snd * p2.snd) }
+
+pure function domZero() returns(p: FlowDom) { pair(0, 0) }
+
+datatype NodeDom = nd;
+  
+pure predicate ndLeq(a1: NodeDom, a2: NodeDom)
+
+struct Node {
+  var next: Node;
+  var data: Int;
+}
+
+define unchanged(x) { x.next == old(x.next) && x.data == old(x.data) }
+
+/** Definition of good condition, gamma */
+
+define gammaSpatial(x) { acc(x) }
+
+define gamma(x, I) {
+  gammaSpatial(x) &*& I.inf[x].fst == 1 &*& I.inf[x].snd < x.data
+    &*& (x.next == null && I.FPo == {}
+        || x.next != null && I.FPo == {x.next} && I.fm[x][x.next] == pair(1, x.data))
+}
+
+/** Lemmas */
+
+procedure no_op(x: Node, I: Interface)
+  requires N(x, I) &*& intValid(I) == true
+  ensures N(x, I)
+{
+  lemma_conc(x, I);
+  var y := x.next;
+  x.next := y;
+  lemma_abs(x, I, I);
+  sync(I, I);
+}

@@ -1,0 +1,57 @@
+include "../include/flows.spl";
+
+/** Flow domain definitions */
+
+datatype FlowDom = fd(pc: Int);
+
+pure predicate domEq(p1: FlowDom, p2: FlowDom) {
+  p1.pc == p2.pc
+}
+
+pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
+  p1.pc <= p2.pc
+}
+
+pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+{ fd(p1.pc + p2.pc) }
+
+pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+{ fd(p1.pc * p2.pc) }
+
+pure function domZero() returns(p: FlowDom) { fd(0) }
+
+datatype NodeDom = nd;
+
+pure predicate ndLeq(a1: NodeDom, a2: NodeDom)
+
+struct Node {
+  var next: Node;
+}
+
+define unchanged(x) { x.next == old(x.next) }
+
+define gammaSpatial(x) { true }
+
+define gamma(x, I) { true }
+
+procedure test_valid1(I1: Interface, I2: Interface)
+  requires ! intValid(I1) && intValid(intComp(I1, I2))
+  ensures false
+{}
+
+procedure test_decomp(x: Node, I: Interface)
+  returns (I1: Interface, I2: Interface)
+  requires Gr(I) &*& x in I.FP
+  requires intValid(I) == true
+  ensures N(x, I1) &*& Gr(I2)
+  ensures intValid(I1) == true && intValid(I2) == true
+{
+  I1, I2 := lemma_decomp(x, I);
+}
+
+procedure test_return1(x: Int, y: Int) returns (z: Int)
+  requires x < 3 && y >= 4
+  ensures x < z && z < y
+{
+  return 3;
+}

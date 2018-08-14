@@ -118,11 +118,8 @@ let parse_spl_program main_file =
 let check_spl_program spl_prog proc =
   let prog = SplTranslator.to_program spl_prog in
   let simple_prog =
-    if !Config.symbexec then
-      prog
-      |> Analyzer.infer_accesses true
-      |> Simplifier.elim_loops
-      |> Simplifier.elim_global_deps
+    if !Config.symbexec
+    then SymbExec.simplify proc prog
     else Verifier.simplify proc prog in
   let check simple_prog first proc =
     let errors =

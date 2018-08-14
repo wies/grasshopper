@@ -1,0 +1,243 @@
+struct Node {
+  var next: Node;
+}
+
+datatype Interface =
+  int(inf: Map<Node, Int>,
+      fm: Map<Node, Map<Node, Int>>,
+      FP: Set<Node>,
+      FPo: Set<Node>);
+
+predicate Gr(I: Interface)
+
+predicate N(x: Node, I: Interface)
+
+// A relational semantics for interface composition
+function intComp(I: Interface, I1: Interface, I2: Interface) returns (res: Bool)
+
+/** Gamma is hardcoded into these two lemmas */
+
+procedure lemma_conc(x: Node, I: Interface)
+  returns ()
+  requires N(x, I)
+  ensures [acc(x) &*& I.inf[x] == 1 &*& (x.next == null && I.FPo == {} || x.next != null && I.FPo == {x.next} && I.fm[x][x.next] == 1)](I) &*& I.FP == {x}
+
+procedure lemma_abs(x: Node, I: Interface, I1: Interface)
+  returns ()
+  requires [acc(x) &*& I1.inf[x] == 1 &*& (x.next == null && I1.FPo == {} || x.next != null && I1.FPo == {x.next} && I1.fm[x][x.next] == 1)](I) &*& I1.FP == {x}
+  ensures [N(x, I1)](I)
+{}
+
+/** Lemmas */
+
+// TODO where to enforce properties like forall I. Disj(I.FP, I.FPo)?
+  
+// Sufficient condition for intComp(I, Ix, Iy), when Ix, Iy are singletons
+procedure lemma_int_comp_fold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
+  requires Ix.FP == {x} && Iy.FP == {y} && x != y
+  requires I.FP == {x, y}
+  requires I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
+  requires Ix.inf[x] == I.inf[x] + Iy.inf[y] * Iy.fm[y][x]
+  requires Iy.inf[y] == I.inf[y] + Ix.inf[x] * Ix.fm[x][y]
+    // TODO how to instantiate inner forall? If we can, don't need to provide I
+    //  requires exists Cxx: Int, Cxy: Int, Cyx: Int, Cyy: Int :: // Capacity values
+    //    (forall n in I.FPo :: I.fm[x][n] == Cxx * Ix.fm[x][n] + Cxy * Iy.fm[y][n]
+    //     && I.fm[y][n] == Cyy * Iy.fm[y][n] + Cyx * Ix.fm[x][n])
+  requires x !in Iy.FPo  // In this case, easier to check new flow map:
+  requires (forall n in I.FPo :: I.fm[x][n] == Ix.fm[x][n] + Ix.fm[x][y] * Iy.fm[y][n])
+  requires (forall n in I.FPo :: I.fm[y][n] == Iy.fm[y][n] + Iy.fm[y][x] * Ix.fm[x][n])
+  ensures intComp(I, Ix, Iy) == true
+
+procedure lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
+  requires intComp(I, Ix, Iy) == true && x != y
+  requires Ix.FP == {x} && Iy.FP == {y}
+  ensures I.FP == {x, y}
+  ensures I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
+  ensures Ix.inf[x] == I.inf[x] + Iy.inf[y] * Iy.fm[y][x]
+  ensures Iy.inf[y] == I.inf[y] + Ix.inf[x] * Ix.fm[x][y]
+  ensures exists Cxx: Int, Cxy: Int, Cyx: Int, Cyy: Int :: // Capacity values
+    Cxx == Cxy * Iy.fm[y][x] && Cyy == Cyx * Ix.fm[x][y]
+    && Cxy == Cxx * Ix.fm[x][y] && Cyx == Cyy * Iy.fm[y][x]
+    && (forall n in I.FPo :: I.fm[x][n] == Cxx * Ix.fm[x][n] + Cxy * Iy.fm[y][n]
+       && I.fm[y][n] == Cyy * Iy.fm[y][n] + Cyx * Ix.fm[x][n])
+
+procedure lemma_N_is_Gr(x: Node, I: Interface)
+  returns ()
+  requires N(x, I)
+  ensures Gr(I)
+
+procedure lemma_dirty_N_is_Gr(x: Node, I1: Interface, I2: Interface)
+  requires [N(x, I1)](I2)
+  ensures [Gr(I1)](I2)
+
+procedure lemma_Gr_is_N(x: Node, I: Interface)
+  returns ()
+  requires Gr(I) &*& I.FP == {x}
+  ensures N(x, I)
+
+procedure lemma_Gr_comp(Ix: Interface, Iy: Interface)
+  returns (I: Interface)
+  requires Gr(Ix) &*& Gr(Iy)
+  ensures Gr(I) &*& intComp(I, Ix, Iy) == true
+
+procedure lemma_dirty_Gr_comp(Ix: Interface, Iy: Interface, I: Interface)
+  returns (I1: Interface)
+  requires [Gr(Ix) &*& Gr(Iy)](I)
+  ensures [Gr(I1)](I) &*& intComp(I1, Ix, Iy) == true
+
+procedure lemma_comp(Ix: Interface, Ix1: Interface, Iy: Interface, Iy1: Interface, I1: Interface)
+  returns (I: Interface)
+  requires [Gr(Ix1)](Ix) &*& [Gr(Iy1)](Iy) &*& intComp(I1, Ix1, Iy1) == true
+  ensures [Gr(Ix1) &*& Gr(Iy1)](I) &*& intComp(I, Ix, Iy) == true
+
+procedure lemma_decomp(x: Node, I: Interface)
+  returns (I1: Interface, I2: Interface)
+  requires Gr(I) &*& x in I.FP
+  ensures N(x, I1) &*& Gr(I2) &*& intComp(I, I1, I2) == true
+
+procedure sync(I1: Interface, I2: Interface)
+  returns ()
+  requires [Gr(I2)](I1)
+  requires I1.FP == I2.FP && I1.FPo == I2.FPo
+  requires forall n in I1.FP :: I1.inf[n] == I2.inf[n]
+  requires forall n in I1.FP, o in I1.FPo :: I1.inf[n] != 0 ==> I1.fm[n][o] == I2.fm[n][o]
+  ensures Gr(I2)
+
+
+procedure no_op(x: Node, I: Interface)
+  requires N(x, I)
+  ensures N(x, I)
+{
+  lemma_conc(x, I);
+  var y := x.next;
+  x.next := y;
+  lemma_abs(x, I, I);
+  lemma_dirty_N_is_Gr(x, I, I);
+  sync(I, I);
+  lemma_Gr_is_N(x, I);
+}
+
+procedure test_int_comp1(x: Node, Ix: Interface, y: Node, Iy: Interface)
+  returns (Ixy: Interface)
+  requires N(x, Ix) &*& N(y, Iy) &*& x != y; // TODO infer this!!
+  requires Ix.FP == {x} && Ix.inf[x] == 1 && Ix.FPo == {}
+  requires Iy.FP == {y} && Iy.inf[y] == 1 && Iy.FPo == {}
+  ensures N(x, Ix) &*& N(y, Iy) &*& intComp(Ixy, Ix, Iy) == true
+{
+  pure assume Ixy.FP == {x, y} && Ixy.inf[x] == 1 && Ixy.inf[y] == 1 && Ixy.FPo == {};
+
+  pure assume forall I: Interface, n: Node, n1: Node :: (n !in I.FP ==> I.inf[n] == 0 && I.fm[n][n1] == 0) && (n1 !in I.FPo ==> I.fm[n][n1] == 0);
+
+  lemma_int_comp_fold(x, Ix, y, Iy, Ixy);
+}
+
+procedure test_int_comp2(x: Node, Ix: Interface, y: Node, Iy: Interface, z: Node)
+  returns (Ixy: Interface)
+  requires N(x, Ix) &*& N(y, Iy) &*& z != x &*& x != y; // TODO infer this!!
+  requires Ix.FP == {x} && Ix.inf[x] == 1 && Ix.FPo == {y} && Ix.fm[x][y] == 1
+  requires Iy.FP == {y} && Iy.inf[y] == 2 && Iy.FPo == {z} && Iy.fm[y][z] == 1
+  ensures N(x, Ix) &*& N(y, Iy) &*& intComp(Ixy, Ix, Iy) == true
+{
+  pure assume Ixy.FP == {x, y} && Ixy.inf[x] == 1 && Ixy.inf[y] == 1 && Ixy.FPo == {z} && Ixy.fm[x][z] == 1 && Ixy.fm[y][z] == 1;
+
+  pure assume forall I: Interface, n: Node, n1: Node :: (n !in I.FP ==> I.inf[n] == 0 && I.fm[n][n1] == 0) && (n1 !in I.FPo ==> I.fm[n][n1] == 0);
+  pure assume forall I: Interface, n: Node :: n !in I.FP || n !in I.FPo;
+
+  lemma_int_comp_fold(x, Ix, y, Iy, Ixy);
+}
+
+procedure test_int_comp3(x: Node, Ix: Interface, y: Node, Iy: Interface, z: Node)
+  returns (Ixy: Interface)
+  requires N(x, Ix) &*& N(y, Iy) &*& z != x &*& x != y; // TODO infer this!!
+  requires Ix.FP == {x} && Ix.inf[x] == 1 && Ix.FPo == {y, z} && Ix.fm[x][y] == 1 && Ix.fm[x][z] == 1
+  requires Iy.FP == {y} && Iy.inf[y] == 2 && Iy.FPo == {z} && Iy.fm[y][z] == 1
+  ensures N(x, Ix) &*& N(y, Iy) &*& intComp(Ixy, Ix, Iy) == true
+{
+  pure assume Ixy.FP == {x, y} && Ixy.inf[x] == 1 && Ixy.inf[y] == 1 && Ixy.FPo == {z} && Ixy.fm[x][z] == 2 && Ixy.fm[y][z] == 1;
+
+  pure assume forall I: Interface, n: Node, n1: Node :: (n !in I.FP ==> I.inf[n] == 0 && I.fm[n][n1] == 0) && (n1 !in I.FPo ==> I.fm[n][n1] == 0);
+  pure assume forall I: Interface, n: Node :: n !in I.FP || n !in I.FPo;
+
+  lemma_int_comp_fold(x, Ix, y, Iy, Ixy);
+}
+
+
+// Insert node x after node y
+procedure insert(x: Node, Ix: Interface, y: Node, I: Interface)
+  returns (I1: Interface)
+  requires [acc(x)](Ix) &*& Gr(I)
+  requires Ix.FP == {x} &*& Ix.inf[x] == 0 &*& Ix.FPo == {}
+  requires y in I.FP &*& I.inf[y] == 1 &*& I.FPo == {}
+  ensures Gr(I1)
+    //  TODO properties of intLeq for these?
+    //  ensures x in I1.FP &*& y in I1.FP
+    //  ensures I1.inf[y] == 1 &*& I1.FPo == {}
+{
+  var Iy: Interface, I2: Interface;
+  Iy, I2 := lemma_decomp(y, I);
+  // [x |-> ?](Ix) &*& N(y, Iy) &*& Gr(I2)
+  lemma_conc(y, Iy);
+  var z := y.next;
+  // [x |-> ?](Ix) &*& [y |-> z](Iy) &*& Gr(I2)
+
+  x.next := y.next;
+  y.next := x;
+  // [x |-> z](Ix) &*& [y |-> x](Iy) &*& Gr(I2)
+
+  // TODO add as an axiom instead
+  pure assume forall I: Interface, n: Node, n1: Node :: (n !in I.FP ==> I.inf[n] == 0 && I.fm[n][n1] == 0) && (n1 !in I.FPo ==> I.fm[n][n1] == 0);
+  pure assume forall I: Interface, I1: Interface, I2: Interface :: intComp(I, I1, I2) == intComp(I, I2, I1);
+  // TODO possible unsoundness - ensure this is true when interfaces are created!!  // Have a lemma that takes components, checks condition and returns the interface!!
+  pure assume forall I: Interface, n: Node :: n !in I.FP || n !in I.FPo;
+
+  var Ix1: Interface;    // TODO change grammar to allow assignment?
+  pure assume Ix1.FP == {x} && Ix1.inf[x] == 1 && (x.next == null && Ix1.FPo == {} || x.next != null && Ix1.FPo == {x.next} && Ix1.fm[x][x.next] == 1);
+  lemma_abs(x, Ix, Ix1);
+  lemma_dirty_N_is_Gr(x, Ix1, Ix);
+  // [Gr(Ix1)](Ix) &*& [y |-> x](Iy) &*& Gr(I2)
+
+  var Iy1: Interface;
+  pure assume Iy1.FP == {y} && Iy1.inf[y] == 1 && Iy1.FPo == {x} && Iy1.fm[y][x] == 1;
+  lemma_abs(y, Iy, Iy1);
+  lemma_dirty_N_is_Gr(y, Iy1, Iy);
+  // [Gr(Ix1)](Ix) &*& [Gr(Iy1)](Iy) &*& Gr(I2)
+
+  // TODO how do we know x != z? Need conditional, (Step), and Gr footprint
+  pure assume x != z;
+
+  var Ixy1: Interface;
+  pure assume Ixy1.FP == {x, y} && Ixy1.inf[x] == 0 && Ixy1.inf[y] == 1
+    && (z != null && Ixy1.FPo == {z} && Ixy1.fm[x][z] == 1 && Ixy1.fm[y][z] == 1
+       || z == null && Ixy1.FPo == {});
+  lemma_int_comp_fold(y, Iy1, x, Ix1, Ixy1);
+
+  var Ixy := lemma_comp(Ix, Ix1, Iy, Iy1, Ixy1);
+  // [Gr(Ix1) &*& Gr(Iy1)](Ixy) &*& Gr(I2)
+
+  Ixy1 := lemma_dirty_Gr_comp(Ix1, Iy1, Ixy);
+  // [Gr(Ixy1)](Ixy) &*& Gr(I2)
+
+  lemma_int_comp_unfold(x, Ix, y, Iy, Ixy);
+  lemma_int_comp_unfold(x, Ix1, y, Iy1, Ixy1);
+  sync(Ixy, Ixy1);
+  // Gr(Ixy1) &*& Gr(I2)
+
+  I1 := lemma_Gr_comp(Ixy1, I2);
+}
+// TODO need some way to lift lemmas to use them inside dirty regions?
+// TODO recognize pure atoms like intComp() - instead of writing intComp() == true
+
+//// The problem with proving I1.FPo = {}:
+
+// Initially: [_](Ix) &*& Gr(I)
+// (Comp): intComp(I1, Ix, I)
+// (Decomp): [_](Ix) &*& (N(y, Iy) &*& Gr(I2)) &*& intComp(I, Iy, I2)
+// (Assoc): [_](Ix) &*& N(y, Iy) &*& Gr(I2) &*& intComp(Ixy1, Ix, Iy) &*& intComp(I1, Ixy1, I2)
+// ...
+// [N(x, Ix1)](Ix) &*& [N(y, Iy1)](Iy) &*& Gr(I2)
+// (Comp): [N(x, Ix1) &*& N(y, Iy1)](Ixy2) &*& Gr(I2)
+// ... : [Gr(Ixy3)](Ixy2) &*& Gr(I2) &*& intLeq(Ixy2, Ixy3)
+// sync(Ixy3)
+// Gr(Ixy3) &*& Gr(I2)
+// (GrComp): intComp(I3, Ixy3, I2)
+// Want: intLeq(I1, I3)

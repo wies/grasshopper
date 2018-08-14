@@ -3,6 +3,10 @@ type K
     
 pure predicate lt(x: K, y: K)
 
+function le(x: K, y: K) returns (res: Bool) {
+  lt(x, y) || x == y
+}
+
 axiom forall a: K :: !lt(a, a)
 axiom forall a: K, b: K :: !lt(a, b) || !lt(b, a)
 axiom forall a: K, b: K :: lt(a, b) || lt(b, a) || a == b

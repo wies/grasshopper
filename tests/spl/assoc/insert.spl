@@ -26,16 +26,16 @@ procedure insert(lst: Node, k: Int, v: Int,
   if (curr != null && curr.key == k) {
     curr.data := v;
     return lst;
+  } 
+
+  var n := new Node;
+  n.next := curr;
+  n.key := k;
+  n.data := v;
+  if (prev == null) {
+    return n;
   } else {
-    var n := new Node;
-    n.next := curr;
-    n.key := k;
-    n.data := v;
-    if (prev == null) {
-      return n;
-    } else {
-      prev.next := n;
-      return lst;
-    }
+    prev.next := n;
+    return lst;
   }
 }
