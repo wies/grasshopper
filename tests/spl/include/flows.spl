@@ -127,9 +127,11 @@ lemma lemma_int_comp_unfold_3(x: Node, Ix: Interface, y: Node, Iy: Interface,
 lemma lemma_int_valid_unfold(I: Interface)
   requires intValid(I) == true
   ensures forall n: Node, n1: Node :: n !in I.FP ==> domEq(I.inf[n], domZero()) == true
+    @(matching I.inf[n] yields known(domEq(I.inf[n], domZero())))
   ensures forall n: Node, n1: Node :: n !in I.FP ==> domEq(I.fm[n][n1], domZero()) == true
-    @(matching I.fm[n][n1] yields known(domEq(I.fm[n][n1], domZero())))  // TODO why?
+    @(matching I.fm[n][n1] yields known(domEq(I.fm[n][n1], domZero())))
   ensures forall n: Node, n1: Node :: n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero()) == true
+    @(matching I.fm[n][n1] yields known(domEq(I.fm[n][n1], domZero())))
   ensures forall n: Node :: n !in I.FP || n !in I.FPo
   ensures forall n: Node :: domLeq(domZero(), I.inf[n])
   ensures forall n: Node, n1: Node :: domLeq(domZero(), I.fm[n][n1])
