@@ -3,7 +3,7 @@ include "b+-tree.spl";
 /** These extra lemmas need to go into ReLoC
 
 // This lemma depends on the flow domain being a function domain -- generalize?
-lemma lemma_pred(k: Int, x: Node, Ix: Interface, I2: Interface, I: Interface)
+lemma lemma_pred(k: K, x: Node, Ix: Interface, I2: Interface, I: Interface)
   returns (y: Node, Iy: Interface, I3: Interface)
   requires Gr(I2)
   requires intComp(Ix, I2) == I && Ix.FP == {x}
@@ -13,7 +13,7 @@ lemma lemma_pred(k: Int, x: Node, Ix: Interface, I2: Interface, I: Interface)
   ensures Iy.inf[y].ks[k] > 0 && Iy.fm[y][x].ks[k] > 0
 
 // Lemma that all keys in a node come from its parent
-lemma lemma_inheritance(k: Int, k1: Int, p: Node, Ip: Interface, c: Node, Ic: Interface,
+lemma lemma_inheritance(k: K, k1: K, p: Node, Ip: Interface, c: Node, Ic: Interface,
                         I2: Interface, I: Interface)
   requires N(p, Ip) &*& N(c, Ic) &*& Gr(I2)
   requires I == intComp(Ip, intComp(Ic, I2)) &*& globalInt(I)
@@ -40,22 +40,22 @@ lemma lemma_inheritance(k: Int, k1: Int, p: Node, Ip: Interface, c: Node, Ic: In
  */
 
 // Lemmas to calculate/define new interfaces of nodes
-pure function fm_of_node(x: Node, kys: Map<Int, Int>, ps: Map<Int, Node>, lenn: Int, i: Int)
+pure function fm_of_node(x: Node, kys: Map<Int, K>, ps: Map<Int, Node>, lenn: Int, i: Int)
   returns (f: Map<Node, Map<Node, FlowDom>>)
   // TODO need two of each otherwise not instantiated
-  ensures forall n: Node, n1: Node, k: Int ::
+  ensures forall n: Node, n1: Node, k: K ::
     ps[0] == null ==> f[n][n1].ks[k] == 0
   ensures forall n: Node, n1: Node ::
     ps[0] == null ==> f[n][n1].pc == 0
-  ensures forall n: Node, n1: Node, k: Int ::
+  ensures forall n: Node, n1: Node, k: K ::
     ps[0] != null && i < 0 ==> f[n][n1].ks[k] == 0
   ensures forall n: Node, n1: Node ::
     ps[0] != null && i < 0 ==> f[n][n1].pc == 0
-  ensures forall n: Node, n1: Node, k: Int ::
+  ensures forall n: Node, n1: Node, k: K ::
     ps[0] != null && i >= 0 && n != x ==> f[n][n1].ks[k] == 0
   ensures forall n: Node, n1: Node ::
     ps[0] != null && i >= 0 && n != x ==> f[n][n1].pc == 0
-  ensures forall n: Node, n1: Node, k: Int ::
+  ensures forall n: Node, n1: Node, k: K ::
     ps[0] != null && i >= 0 && n in {x} && n1 != ps[i]
     // TODO why not known?    (domEq(f[n][n1], fm_of_node(x, kys, ps, lenn, i-1)[n][n1]) == true)
     ==> f[n][n1].ks[k] == fm_of_node(x, kys, ps, lenn, i-1)[n][n1].ks[k]
@@ -64,12 +64,12 @@ pure function fm_of_node(x: Node, kys: Map<Int, Int>, ps: Map<Int, Node>, lenn: 
     ps[0] != null && i >= 0 && n in {x} && n1 != ps[i]
     ==> f[n][n1].pc == fm_of_node(x, kys, ps, lenn, i-1)[n][n1].pc
     @(matching f[n][n1].pc yields fm_of_node(x, kys, ps, lenn, i-1)[n][n1].pc)
-  ensures forall n: Node, n1: Node, k: Int ::
+  ensures forall n: Node, n1: Node, k: K ::
     ps[0] != null && i >= 0 && n in {x} && n1 in {ps[i]}
     // TODO  (f[n][n1].ks[k] == ((i <= 0 || kys[i-1] <= k) && (i >= lenn || k < kys[i])) ? 1 : 0)
     ==>
-    (f[n][n1].ks[k] == 1 && (i <= 0 || kys[i-1] <= k) && (i >= lenn || k < kys[i])
-      || f[n][n1].ks[k] == 0 && !((i <= 0 || kys[i-1] <= k) && (i >= lenn || k < kys[i])))
+    (f[n][n1].ks[k] == 1 && (i <= 0 || le(kys[i-1], k)) && (i >= lenn || lt(k, kys[i]))
+      || f[n][n1].ks[k] == 0 && !((i <= 0 || le(kys[i-1], k)) && (i >= lenn || lt(k, kys[i]))))
   ensures forall n: Node, n1: Node ::
     ps[0] != null && i >= 0 && n in {x} && n1 in {ps[i]}
     ==> f[n][n1].pc == 1
@@ -80,11 +80,11 @@ pure function fm_of_node(x: Node, kys: Map<Int, Int>, ps: Map<Int, Node>, lenn: 
     { n: Node :: { n1: Node :: domZero() } }
     : { n: Node :: n != x ? { n1: Node :: domZero() } :
         { n1: Node :: n1 == ps[i] ?
-          fd({ k: Int :: (i <= 0 || kys[i-1] <= k) && (i >= lenn || k < kys[i]) ? 1 : 0 })
+          fd({ k: K :: (i <= 0 || kys[i-1] <= k) && (i >= lenn || k < kys[i]) ? 1 : 0 })
           : fm_of_node(x, kys, ps, lenn, i-1)[n][n1] } }
 } */
 
-pure function fpo_of_node(x: Node, kys: Map<Int, Int>, ps: Map<Int, Node>, lenn: Int, i: Int)
+pure function fpo_of_node(x: Node, kys: Map<Int, K>, ps: Map<Int, Node>, lenn: Int, i: Int)
   returns (X: Set<Node>)
   requires forall i: Int :: 0 <= i <= lenn ==> x != ps[i]
   ensures x !in X
@@ -92,13 +92,13 @@ pure function fpo_of_node(x: Node, kys: Map<Int, Int>, ps: Map<Int, Node>, lenn:
   i < 0 || ps[0] == null ? {} : fpo_of_node(x, kys, ps, lenn, i-1) ++ {ps[i]}
 }
 
-pure function inf_of_node(x: Node, l: Int, u: Int)
+pure function inf_of_node(x: Node, l: K, u: K)
   returns (d: Map<Node, FlowDom>)
-  ensures forall n: Node, k: Int :: n in {x} ==> (d[n].ks[k] == 1 && l <= k < u)
-    || (d[n].ks[k] == 0 && !(l <= k < u))
-  ensures forall n: Node, k: Int :: n !in {x} ==> d[n].ks[k] == 0
-  ensures forall n: Node, k: Int :: n in {x} ==> (d[n].pc == 1 && l < u) || (d[n].pc == 0 && !(l < u))
-  ensures forall n: Node, k: Int :: n !in {x} ==> d[n].pc == 0
+  ensures forall n: Node, k: K :: n in {x} ==> (d[n].ks[k] == 1 && le(l, k) && lt(k, u))
+    || (d[n].ks[k] == 0 && !(le(l, k) && lt(k, u)))
+  ensures forall n: Node, k: K :: n !in {x} ==> d[n].ks[k] == 0
+  ensures forall n: Node :: n in {x} ==> (d[n].pc == 1 && lt(l, u)) || (d[n].pc == 0 && !lt(l, u))
+  ensures forall n: Node :: n !in {x} ==> d[n].pc == 0
 
 
 lemma lemma_int_of_node(x: Node, i: Int)
@@ -110,41 +110,41 @@ lemma lemma_int_of_node(x: Node, i: Int)
   requires hrepSpatial(x)
   requires 0 <= x.len
   requires forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x != x.ptrs[i]
-  requires forall i: Int, j: Int :: 0 <= i < j < x.len ==> x.keys[i] < x.keys[j]
+  requires forall i: Int, j: Int :: 0 <= i < j < x.len ==> lt(x.keys[i], x.keys[j])
   requires forall i: Int, j: Int :: x.ptrs[0] != null && 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j]
   ensures hrepSpatial(x) &*& unchanged(x)
   // TODO after fixing issue #24, use domEq, domLeq etc below
   // All fm values are >= 0
-  ensures forall n: Node, n1: Node, k: Int ::
+  ensures forall n: Node, n1: Node, k: K ::
     domZero().ks[k] <= fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k]
     && 0 <= fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].pc
     // TODO write 0 instead of domZero().ks[k] and remove these term gens?
     @(matching domZero().ks[k] yields fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k])
     @(matching fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] yields domZero().ks[k])
   // fm from nodes != x are 0
-  ensures forall n: Node, n1: Node, k: Int :: n !in {x}
+  ensures forall n: Node, n1: Node, k: K :: n !in {x}
     ==> fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] == 0
       && fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].pc == 0
   // fm to nodes !in FPo are 0
-  ensures forall n: Node, n1: Node, k: Int :: n1 !in fpo_of_node(x, x.keys.map, x.ptrs.map, x.len, i)
+  ensures forall n: Node, n1: Node, k: K :: n1 !in fpo_of_node(x, x.keys.map, x.ptrs.map, x.len, i)
     ==> fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] == 0
       && fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].pc == 0
   ensures x !in fpo_of_node(x, x.keys.map, x.ptrs.map, x.len, i)
   // helper invariant for next property
-  ensures forall n: Node, n1: Node, k: Int :: n in {x} && i < x.len && x.keys[i] <= k
+  ensures forall n: Node, n1: Node, k: K :: n in {x} && i < x.len && le(x.keys[i], k)
     ==> fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] == 0
   // fm to different nodes are disjoint
-  ensures forall n: Node, n1: Node, n2: Node, k: Int :: n !in {x} || n1 == n2 || i > x.len
+  ensures forall n: Node, n1: Node, n2: Node, k: K :: n !in {x} || n1 == n2 || i > x.len
     || fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] == 0
     || fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n2].ks[k] == 0
   // fm satisfies hrepG
-  ensures forall n: Node, n1: Node, j: Int, k: Int ::
+  ensures forall n: Node, n1: Node, j: Int, k: K ::
     x.ptrs[0] != null && n in {x} && n1 in {x.ptrs[j]} && 0 <= j <= i <= x.len ==>
           n1 in fpo_of_node(x, x.keys.map, x.ptrs.map, x.len, i)
           && (fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] == 1
-             && ((j <= 0 || x.keys[j-1] <= k) && (j >= x.len || k < x.keys[j]))
+             && ((j <= 0 || le(x.keys[j-1], k)) && (j >= x.len || lt(k, x.keys[j])))
            || fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] == 0
-             && !((j <= 0 || x.keys[j-1] <= k) && (j >= x.len || k < x.keys[j])))
+             && !((j <= 0 || le(x.keys[j-1], k)) && (j >= x.len || lt(k, x.keys[j]))))
           @(matching x.ptrs[j] yields x.keys[j-1]) // TODO remove if not needed
           @(matching x.ptrs[j] yields x.keys[j])
   ensures forall n: Node, n1: Node, j: Int ::
@@ -152,11 +152,11 @@ lemma lemma_int_of_node(x: Node, i: Int)
     ==> fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].pc == 1
     // TODO simplification removes n -- disable?
   // contents are within range
-  requires x.len != 0 ==> x.rangeLb <= x.keys[0] && x.keys[x.len-1] < x.rangeUb
-  ensures forall k: Int :: x.ptrs[0] == null && i <= x.len && k in set_of_map(x.keys.map, 0, i)
+  requires x.len != 0 ==> le(x.rangeLb, x.keys[0]) && lt(x.keys[x.len-1], x.rangeUb)
+  ensures forall k: K :: x.ptrs[0] == null && i <= x.len && k in set_of_map(x.keys.map, 0, i)
     ==> inf_of_node(x, x.rangeLb, x.rangeUb)[x].ks[k] >= 1
   // edgeset != {} ==> pc >= 1
-  ensures forall n: Node, n1: Node, k: Int ::
+  ensures forall n: Node, n1: Node, k: K ::
     fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].ks[k] >= 1
     ==> fm_of_node(x, x.keys.map, x.ptrs.map, x.len, i)[n][n1].pc == 1
 {
@@ -173,9 +173,9 @@ lemma lemma_calculate_int(x: Node)
   requires hrepSpatial(x)
   requires 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
   requires forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x != x.ptrs[i] && x.ptrs[i] != null
-  requires forall i: Int, j: Int :: 0 <= i < j < x.len ==> x.keys[i] < x.keys[j]
+  requires forall i: Int, j: Int :: 0 <= i < j < x.len ==> lt(x.keys[i], x.keys[j])
   requires forall i: Int, j: Int :: x.ptrs[0] != null && 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j]
-  requires x.len != 0 ==> x.rangeLb <= x.keys[0] && x.keys[x.len-1] < x.rangeUb
+  requires x.len != 0 ==> le(x.rangeLb, x.keys[0]) && lt(x.keys[x.len-1], x.rangeUb)
   ensures hrep(x, Ix) &*& unchanged(x)
   ensures Ix != intUndef && intValid(Ix) == true
 {
@@ -209,7 +209,7 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface, c_idx: Int,
   // Consequence of acyclicity
   requires domEq(Ic.fm[c][p], domZero()) == true
   // These follow from lemma_inheritance
-  requires forall k: Int :: Ic.inf[c].ks[k] == 1 ==> Ip.inf[p].ks[k] == 1 && Ip.fm[p][c].ks[k] == 1
+  requires forall k: K :: Ic.inf[c].ks[k] == 1 ==> Ip.inf[p].ks[k] == 1 && Ip.fm[p][c].ks[k] == 1
   requires (c_idx == 0 || p.keys[c_idx-1] == c.rangeLb) && c.rangeUb == p.keys[c_idx]
   // TODO create and mark node - inflow will be 0, so nothing else can point to it
   requires forall i: Int :: 0 <= i <= p.len ==> p.ptrs[i] != n
@@ -264,10 +264,10 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface, c_idx: Int,
   pure assert n !in Ic1.FPo;
   lemma_int_valid_unfold(Ic1);
   lemma_int_valid_unfold(In1);
-  pure assert Ic1.fm[c][n].pc == 0 && (forall k: Int :: Ic1.fm[c][n].ks[k] == 0);
+  pure assert Ic1.fm[c][n].pc == 0 && (forall k: K :: Ic1.fm[c][n].ks[k] == 0);
   pure assert domEq(domMult(Ic1.inf[c], Ic1.fm[c][n]), domZero()) == true;
   pure assert p.keys[k_idx] == k && n.rangeLb == k && p.keys[k_idx + 1] == n.rangeUb;
-  pure assert forall k: Int :: Ip1.inf[p].ks[k] * Ip1.fm[p][n].ks[k] <= In1.inf[n].ks[k];
+  pure assert forall k: K :: Ip1.inf[p].ks[k] * Ip1.fm[p][n].ks[k] <= In1.inf[n].ks[k];
   pure assert Ip1.inf[p].pc * Ip1.fm[p][n].pc <= In1.inf[n].pc;
   pure assert domLeq(domMult(Ip1.inf[p], Ip1.fm[p][n]), In1.inf[n]) == true;
   
@@ -278,7 +278,7 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface, c_idx: Int,
   pure assert Ip1.fm[p][c].ks[c.keys[0]] == 1;
 
   pure assert domMult(Ip1.inf[p], Ip1.fm[p][c]).pc <= Ic1.inf[c].pc
-    && (forall k: Int :: domMult(Ip1.inf[p], Ip1.fm[p][c]).ks[k] <= Ic1.inf[c].ks[k]
+    && (forall k: K :: domMult(Ip1.inf[p], Ip1.fm[p][c]).ks[k] <= Ic1.inf[c].ks[k]
     @(matching domMult(Ip1.inf[p], Ip1.fm[p][c]).ks[k] yields domMult(Ip.inf[p], Ip.fm[p][c]).ks[k]));
 
   pure assert domLeq(domMult(Ip1.inf[p], Ip1.fm[p][c]), Ic1.inf[c]) == true;
