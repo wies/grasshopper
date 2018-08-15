@@ -178,9 +178,8 @@ class dag = fun expr ->
     (*print_endline ("CC adding: " ^ (string_of_term expr));*)
     match expr with
     | Var (v, _) -> failwith "CC: term not ground" (* create_and_add var (FreeSym v) []*)
-    | App (c, [], _) as cst -> create_and_add cst c [] (* TODO: redundant? *)
     | App (f, args, _) as appl ->
-      let node_args = (List.map convert_exp args) in
+      let node_args = List.map convert_exp args in
       let new_node  = create_and_add appl f node_args in
         List.iter (fun n -> n#add_ccparent new_node) node_args;
         new_node
@@ -317,6 +316,7 @@ let congr_classes_fixed_point fs gts =
       GrassUtil.smk_or fs1
     | other -> other
   in
+  let singletons = TermSet.filter (function App (SetEnum, [_], _) -> true | _ -> false) gts in
   let rec loop changed toProcess toSimplify = match toProcess with
     | f :: fs ->
       begin
@@ -327,7 +327,17 @@ let congr_classes_fixed_point fs gts =
           loop changed (fs1 @ fs) toSimplify
         | Atom (App (Eq, [e1; e2], _), _) -> 
           cc_graph#add_eq e1 e2;
-          loop true fs toSimplify
+            loop true fs toSimplify
+        | Atom (App (Elem, [e1; e2], _), _) ->
+            let changed =
+              TermSet.exists (function
+                | App (SetEnum, [e1'], _) as e2' when cc_graph#entails_eq e2 e2' ->
+                    cc_graph#add_eq e1 e1';
+                    true
+                | _ -> false)
+                singletons
+            in
+            loop changed fs toSimplify
         | BoolOp (Not, [Atom (App (Eq, [e1; e2], _), _)])
         | Atom (App (Lt, [e1; e2], _), _) 
         | Atom (App (Gt, [e1; e2], _), _) ->
