@@ -82,7 +82,7 @@ define hrep(x, I) {
   hrepSpatial(x) &*& I.FP == {x} &*& x.next != x
     && 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
     // Keys are sorted
-    && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> lt(x.keys[i], x.keys[j]))
+    && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> lt(x.keys[i], x.keys[j]))
     && (x.ptrs[0] == null  // Leaf
        && I.na.contents == set_of_map(x.keys.map, 0, x.len)
        && (x.next == null && I.FPo == {}
@@ -199,7 +199,7 @@ procedure findNext(x: Node, k: K, Ix: Interface)
 
   var found, i := arr_find(x.keys, x.len, k);
 
-  if (i == 0 && k == x.keys[i]) {
+  if (i < x.len && k == x.keys[i]) {  // arr_find finds upper bound, we want lower
     i := i + 1;
   }
 
@@ -209,8 +209,9 @@ procedure findNext(x: Node, k: K, Ix: Interface)
     else
       n := x.next;
   } else {
+    pure assert i <= 0 || le(x.keys[i-1], k);
     n := x.ptrs[i];
-  }
+   }
   // return n;
 }
 
@@ -245,7 +246,6 @@ procedure insert(x: Node, k: K, Ix: Interface)
   ensures succ ==> (Ix1.na.contents == Ix.na.contents ++ {k} && (res == k !in Ix.na.contents))
 {
   keyset_implies_leaf(x, Ix, k, 0);
-  pure assume lt(k, x.keys[x.len]); // TODO Follows from k !in outset
 
   if (x.len < 2*B - 1) {
 
