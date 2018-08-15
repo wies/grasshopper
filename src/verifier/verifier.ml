@@ -297,31 +297,29 @@ let add_pred_insts prog f =
   (* Expands definition of predicate [p] for arguments [ts] assuming polarity of occurrence [pol] *)
   let expand_pred pos p ts =
     let pred = find_pred prog p in
-    let locals = locals_of_pred pred in
     let formals = formals_of_pred pred in
     let returns = returns_of_pred pred in
     let name = name_of_pred pred in
-    let sm =
-      try
-        List.fold_left2 
-          (fun sm id t -> IdMap.add id t sm)
-          IdMap.empty formals ts
-      with Invalid_argument _ ->
-        failwith ("Fatal error while expanding predicate " ^ string_of_ident name)
-    in
-    let sm =
+    let opt_body =
       match returns with
-      | [] -> sm
-      | [id] ->
-          let var = IdMap.find id locals in
-          IdMap.add id (mk_free_fun var.var_sort p ts) sm
+      | [] ->
+          let sm =
+            try
+              List.fold_left2 
+                (fun sm id t -> IdMap.add id t sm)
+                IdMap.empty formals ts
+            with Invalid_argument _ ->
+              failwith ("Fatal error while expanding predicate " ^ string_of_ident name)
+          in
+          pred.pred_body |>
+          Opt.map form_of_spec |>
+          Opt.map (subst_consts sm)
+      | [id] -> None
       | _ -> failwith "Functions may only have a single return value."
     in
     let body =
-      pred.pred_body |> Opt.map form_of_spec |>
-      Opt.get_or_else (Atom (mk_free_fun Bool p ts, []))
+      Opt.get_or_else (Atom (mk_free_fun Bool p ts, [])) opt_body
     in
-    let body = subst_consts sm body in
     if pos then body else nnf (mk_not body)
   in
   let f_inst = 
