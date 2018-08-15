@@ -298,8 +298,9 @@ let congr_classes_fixed_point fs gts =
     | Atom (App (Lt, [e1; e2], _), _) 
     | Atom (App (Gt, [e1; e2], _), _) ->
       if cc_graph#entails_eq e1 e2 then GrassUtil.mk_false else f
-    | Atom (App (Elem, [e1; e2], _), _) ->
-        if cc_graph#entails_eq e2 (GrassUtil.mk_empty (sort_of e2)) then GrassUtil.mk_false else f
+    | Atom (App (Elem, [e1; e2], _) as pred, _) ->
+        if cc_graph#entails_eq e2 (GrassUtil.mk_empty (sort_of e2)) then GrassUtil.mk_false else
+        if cc_graph#entails_eq pred GrassUtil.mk_false_term then GrassUtil.mk_false else f
     | Atom (pred, _) ->
       if cc_graph#entails_eq pred GrassUtil.mk_false_term then GrassUtil.mk_false else f
     | BoolOp (Not, [Atom (pred, _)]) ->
@@ -328,24 +329,23 @@ let congr_classes_fixed_point fs gts =
         | Atom (App (Eq, [e1; e2], _), _) -> 
           cc_graph#add_eq e1 e2;
             loop true fs toSimplify
-        | Atom (App (Elem, [e1; e2], _), _) ->
-            let changed =
-              TermSet.exists (function
-                | App (SetEnum, [e1'], _) as e2' when cc_graph#entails_eq e2 e2' ->
-                    cc_graph#add_eq e1 e1';
-                    true
-                | _ -> false)
-                singletons
-            in
-            loop changed fs toSimplify
         | BoolOp (Not, [Atom (App (Eq, [e1; e2], _), _)])
         | Atom (App (Lt, [e1; e2], _), _) 
         | Atom (App (Gt, [e1; e2], _), _) ->
           cc_graph#add_neq e1 e2;
           loop true fs toSimplify
         | Atom (pred, _) ->
-          cc_graph#add_eq pred GrassUtil.mk_true_term;
-          loop true fs toSimplify
+            let _ = match pred with
+            | App (Elem, [e1; e2], _) ->
+                TermSet.iter (function
+                  | App (SetEnum, [e1'], _) as e2' when cc_graph#entails_eq e2 e2' ->
+                      cc_graph#add_eq e1 e1'
+                  | _ -> ())
+                  singletons
+            | _ -> ()
+            in
+            cc_graph#add_eq pred GrassUtil.mk_true_term;
+            loop true fs toSimplify
         | BoolOp (Not, [Atom (pred, _)]) ->
           cc_graph#add_eq pred GrassUtil.mk_false_term;
           loop true fs toSimplify
