@@ -122,7 +122,6 @@ define hrep(x, I) {
             )
       )
 }
-/* TODO have a create B+ tree function to check this isn't unsat */
 
 /*
 procedure aaa_test(x: Node, c0: Node, c1: Node, n: Node, I: Interface)
@@ -175,6 +174,25 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
 }
 
 /** Begin programs */
+
+/** Initialize root note */
+procedure init() returns (x: Node, I: Interface)
+  ensures hrep(x, I)
+{
+  x := new Node;
+  x.keys := new Array<K>(2*B);
+  x.ptrs := new Array<Node>(2*B);
+  arr_init_node(x.ptrs, 2*B, null);
+  x.len := 0;
+  x.next := null;
+  x.locktid := 0;
+  
+  var xkc := { k: K :: le(bottom, k) && lt(k, top) ? 1 : 0 };
+  var xir := { k: K :: le(bottom, k) && lt(k, top) ? 1 : 0 };
+  var xfm := { n: Node :: { n1: Node :: domZero } };
+  I := int({ n: Node :: n == x ? fd(xkc, xir) : domZero },
+           nd({}, inrfnUndef), xfm, {x}, {});
+}
 
 /** findNext */
 procedure findNext(x: Node, k: K, Ix: Interface)

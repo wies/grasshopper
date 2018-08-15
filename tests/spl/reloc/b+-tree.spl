@@ -151,6 +151,7 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
 
 /** Begin programs */
 
+/** Initialize root note */
 procedure init() returns (x: Node, I: Interface)
   ensures hrep(x, I)
 {
