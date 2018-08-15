@@ -181,8 +181,8 @@ procedure findNext(x: Node, k: K, Ix: Interface)
   returns (n: Node)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   ensures hrep(x, Ix)
-  ensures (n != null && Ix.fm[x][n].ks[k] >= 1
-           || n == null && (forall y: Node :: Ix.fm[x][y].ks[k] == 0))
+  ensures n != null ==> Ix.fm[x][n].ks[k] >= 1
+  ensures n == null ==> (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
 {
   if (x.ptrs[0] == null) {  // Leaf node
     if (x.next == null) {
@@ -193,6 +193,13 @@ procedure findNext(x: Node, k: K, Ix: Interface)
       return x.next;
     } else {
       lemma_int_valid_unfold(Ix);
+      var y: Node;
+      if (y in Ix.FPo) {
+        pure assert Ix.fm[x][y].ks[k] == 0;
+      } else {
+        pure assert Ix.fm[x][y].ks[k] == 0;
+      }
+      pure assume forall y: Node :: Ix.fm[x][y].ks[k] == 0;
       return null;
     }
   }
@@ -211,7 +218,7 @@ procedure findNext(x: Node, k: K, Ix: Interface)
   } else {
     pure assert i <= 0 || le(x.keys[i-1], k);
     n := x.ptrs[i];
-   }
+  }
   // return n;
 }
 

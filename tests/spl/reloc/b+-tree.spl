@@ -111,7 +111,7 @@ define hrep(x, I) {
        && (forall i: Int :: 0 <= i <= x.len ==> x.ptrs[i] != null && x.ptrs[i] in I.FPo)
        && (forall i: Int, k: K :: 0 <= i <= x.len ==>
           (I.fm[x][x.ptrs[i]].ks[k] == 1
-          && ((i <= 0 || le(x.keys[i-1], k)) && (i >= x.len || lt(k, x.keys[i])))
+          && ((0 < i ==> le(x.keys[i-1], k)) && (i < x.len ==> lt(k, x.keys[i])))
            || I.fm[x][x.ptrs[i]].ks[k] == 0
            && !((i <= 0 || le(x.keys[i-1], k)) && (i >= x.len || lt(k, x.keys[i]))))
           @(matching x.ptrs[i] yields x.keys[i - 1])
@@ -119,8 +119,6 @@ define hrep(x, I) {
           //       && (forall i: Int :: 0 <= i <= x.len ==> I.fm[x][x.ptrs[i]].pc == 1)
        )
 }
-/* TODO have a create B+ tree function to check this isn't unsat */
-
 
 procedure newNode(xtid: Int, xlen: Int, xrangeLb: K, xrangeUb: K)
   returns (x: Node, Ix: Interface)
@@ -191,13 +189,12 @@ procedure findNext(x: Node, k: K, Ix: Interface)
 {
   if (x.ptrs[0] == null) {  // Leaf node
     lemma_int_valid_unfold(Ix);
-    pure assert forall y: Node :: Ix.fm[x][y].ks[k] == 0;
     return null;
   }
   
   var found, i := arr_find(x.keys, x.len, k);
 
-  if (i == 0 && k == x.keys[i]) {
+  if (i < x.len && k == x.keys[i]) {
     i := i + 1;
   }
   
