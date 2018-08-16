@@ -719,9 +719,9 @@ let convert cu =
                 | Annot (e, a, pos2) ->
                     Annot (desugar_ite r e, a, pos2)
                 | Ite (cond, t, e, pos) ->
-                    BinaryOp (BinaryOp (cond, OpImpl, BinaryOp (r, OpEq, t, BoolType, pos), BoolType, pos),
+                    BinaryOp (BinaryOp (cond, OpImpl, desugar_ite r t, BoolType, pos),
                               OpAnd,
-                              BinaryOp (UnaryOp (OpNot, cond, pos), OpImpl, BinaryOp (r, OpEq, e, BoolType, pos), BoolType, pos),
+                              BinaryOp (UnaryOp (OpNot, cond, pos), OpImpl, desugar_ite r e, BoolType, pos),
                               BoolType, pos)
                 | e -> BinaryOp (r, OpEq, e, BoolType, pos_of_expr e)
               in
