@@ -42,8 +42,33 @@ type spatial_pred =
   Note: program vars are represented as FreeSymb constants,
   existential vars are represented as Var variables.
  *)
-type state = form * spatial_pred list
+type state = {
+    pure: form;
+    spatial: spatial_pred list
+  }
 
+let mk_pure_state p = { pure = p; spatial = [] }
+let mk_spatial_state sp = { pure = mk_true; spatial = sp }
+    
+let empty_state = { pure = mk_true; spatial = [] }
+
+let map_state_pure fn state =
+  { state with pure = fn state.pure }
+let map_state_spatial fn state =
+  { state with spatial = fn state.spatial }
+let map_state pfn sfn state =
+  { pure = pfn state.pure; spatial = sfn state.spatial }
+
+let strengthen_pure_state fs state =
+  map_state_pure (fun pure -> smk_and (pure :: fs)) state
+    
+(** conjoin two states *)
+let add_state s1 s2 =
+  { pure = smk_and [s1.pure; s2.pure];
+    spatial = s1.spatial @ s2.spatial
+  }
+
+    
 (** Equalities derived so far in the symbolic execution, as a map: ident -> term,
   kept so that they can be substituted into the command and the post.
   Invariant: if map is {x1: E1, ...} then xi are distinct and xi is not in Ej for i != j.
@@ -61,14 +86,9 @@ type symb_exec_state = {
   se_eqs: equalities;
 }
 
-
-let empty_state = (mk_true, [])
-
 let empty_eqs = IdMap.empty
 
-
-(** Add two states *)
-let add_state (p1, sp1) (p2, sp2) = (smk_and [p1; p2], sp1 @ sp2)
+let update_se_state st state = { st with se_state = state }
 
 (* TODO use Format formatters for these *)
 let rec string_of_spatial_pred = function
@@ -93,13 +113,13 @@ let rec string_of_spatial_pred = function
 and string_of_spatial_pred_list sps =
   sps |> List.map string_of_spatial_pred |> String.concat " * "
 
-let string_of_state ((pure, spatial): state) =
+let string_of_state (s: state) =
   let spatial =
-    match spatial with
+    match s.spatial with
     | [] -> "emp"
     | spatial -> string_of_spatial_pred_list spatial
   in
-  let pure = pure
+  let pure = s.pure
     |> filter_annotations (fun _ -> false)
     |> string_of_form
     (* |> String.map (function | '\n' -> ' ' | c -> c) *)
@@ -218,12 +238,12 @@ let find_arr_spatial' x =
 (** Evaluate term at [state] by looking up all field reads.
   [old_state] is the state with which to evaluate old(x) terms.
   [spatial'] is the list of spatial preds needed to evaluate everything in [t]. *)
-let rec eval_term fields (old_state, state, spatial') = function
+let rec eval_term fields (old_state, (state: state), spatial') = function
   | Var _ as t -> t, (old_state, state, spatial')
   | App (Read, [App (FreeSym fld, [], _); loc], srt)
     when IdSet.mem fld fields -> (* Field reads *)
     let loc, (old_state, state, spatial') = eval_term fields (old_state, state, spatial') loc in
-    (match find_ptsto loc (snd state) with
+    (match find_ptsto loc state.spatial with
     | Some fs, mk_spatial, _ ->
       (* lookup fld in fs, so that loc |-> fs' and (fld, e) is in fs' *)
       let e, fs' =
@@ -231,8 +251,8 @@ let rec eval_term fields (old_state, state, spatial') = function
         with Not_found ->
           let e = fresh_const srt in e, (fld, e) :: fs
       in
-      let spatial = mk_spatial fs' in
-      e, (old_state, (fst state, spatial), spatial')
+      let state' = map_state_spatial (fun _ -> mk_spatial fs') state in
+      e, (old_state, state', spatial')
     | None, _, _ ->
       (match find_ptsto_spatial' loc spatial' with
       | Some (fs, spatial') -> 
@@ -252,7 +272,7 @@ let rec eval_term fields (old_state, state, spatial') = function
     let a, (old_state, state, spatial') = eval_term fields (old_state, state, spatial') a in
     let idx, (old_state, state, spatial') = eval_term fields (old_state, state, spatial') idx in
     let m, spatial' =
-    (match find_array a (snd state) with
+    (match find_array a state.spatial with
     | Some (_, m), _ -> m, spatial'
     | None, _ -> (* If you can't find a in spatial, look in/add it to spatial' *)
       (match find_arr_spatial' a spatial' with
@@ -267,7 +287,7 @@ let rec eval_term fields (old_state, state, spatial') = function
   | App (Length, [a], _) ->
     let a, (old_state, state, spatial') = eval_term fields (old_state, state, spatial') a in
     let l, spatial' =
-    (match find_array a (snd state) with
+    (match find_array a state.spatial with
     | Some (l, _), _ -> l, spatial'
     | None, _ -> (* If you can't find a in spatial, look in/add it to spatial' *)
       (match find_arr_spatial' a spatial' with
@@ -283,7 +303,7 @@ let rec eval_term fields (old_state, state, spatial') = function
   | App (ArrayMap, [a], _) ->
     let a, (old_state, state, spatial') = eval_term fields (old_state, state, spatial') a in
     let m, spatial' =
-    (match find_array a (snd state) with
+    (match find_array a state.spatial with
     | Some (_, m), _ -> m, spatial'
     | None, _ -> (* If you can't find a in spatial, look in/add it to spatial' *)
       (match find_arr_spatial' a spatial' with
@@ -321,15 +341,15 @@ let eval_term_no_olds fields state term =
 *)
 let state_of_spec_list fields old_state specs : state * state =
   let eval_term = eval_term fields in
-  let add = add_state in
+  let add (pure, spatial) = add_state { pure = pure; spatial = spatial } in
   (* [spatial'] is a list of outstanding spatial_preds needed to eval [state] *)
   let convert_form (old_state, state, spatial') f =
-    let f, (old_state, state, spatial') =
+    let f, (old_state, (state: state), spatial') =
       fold_map_terms eval_term (old_state, state, spatial') f
     in
     (old_state, add (f, []) state, spatial')
   in
-  let rec convert_sl_form (old_state, state, spatial') f =
+  let rec convert_sl_form (old_state, (state: state), spatial') f =
     let fail () = failwith @@ "Unsupported formula " ^ (Sl.string_of_form f) in
     match f with
     | Sl.Pure (f, _) -> convert_form (old_state, state, spatial') f
@@ -373,7 +393,11 @@ let state_of_spec_list fields old_state specs : state * state =
             old_state, state' :: conj_states, spatial')
           (old_state, [], spatial') fs
       in
-      let pures, spatials = List.split conj_states in
+      let pures, spatials =
+        conj_states |>
+        List.map (function {pure = p; spatial = s; _ } -> (p, s)) |>
+        List.split
+      in
       let spatials = List.filter (function [] -> false | _ -> true) spatials in
       (match spatials with
       | [] -> old_state, add (smk_and pures, []) state, spatial'
@@ -381,19 +405,18 @@ let state_of_spec_list fields old_state specs : state * state =
       | _ -> old_state, add (smk_and pures, [Conj spatials]) state, spatial')
     | Sl.BoolOp _ -> fail ()
     | Sl.Binder (b, vs, f, _) ->
-      let pure, spatial = state in
-      let old_state, (pure1, spatial1), spatial' =
-        convert_sl_form (old_state, (mk_true, spatial), spatial') f
+      let old_state, state1, spatial' =
+        convert_sl_form (old_state, mk_spatial_state state.spatial, spatial') f
       in
-      if spatial1 = spatial then
-        old_state, add (smk_binder b vs pure1, []) (pure, spatial), spatial'
+      if state1.spatial = state.spatial then
+        old_state, add (smk_binder b vs state1.pure, []) state, spatial'
       else
         failwith @@ "Confused by spatial under binder: " ^ (Sl.string_of_form f)
     | Sl.Dirty (f, ts, _) ->
-      let old_state, (pure1, spatial1), spatial' =
+      let old_state, state1, spatial' =
         convert_sl_form (old_state, empty_state, spatial') f
       in
-      old_state, add (pure1, [Dirty (spatial1, ts)]) state, spatial'
+      old_state, add (state1.pure, [Dirty (state1.spatial, ts)]) state, spatial'
   in
   (* Convert all the specs into a state *)
   let (old_state, state, spatial') =
@@ -449,8 +472,9 @@ let subst_eqs sm eqs =
 
 (** Substitute all variables and constants in state [(pure, spatial)] with terms
   according to substitution map [sm]. *)
-let subst_state sm ((pure, spatial): state) : state =
-  (subst_form sm pure, List.map (subst_spatial_pred sm) spatial)
+let subst_state sm {pure = pure; spatial = spatial; _} : state =
+  { pure = subst_form sm pure;
+    spatial = List.map (subst_spatial_pred sm) spatial }
 
 (** Substitute all variables and constants in state [st] with terms
   according to substitution map [sm]. *)
@@ -484,8 +508,8 @@ let sort_conj = function
     Conj (spss |> List.map (List.stable_sort compare) |> List.stable_sort compare)
   | sp -> sp
 
-(** Find equalities of the form const == const in [pure] and add to [eqs] *)
-let find_equalities eqs (pure: form) =
+(** Find equalities of the form const == const in [state] and add to [eqs] *)
+let find_equalities eqs state =
   let rec find_eq sm = function
     | Atom (App (Eq, [(App (FreeSym id, [],  _)); App (FreeSym _, [],  _) as t2], _), _) ->
       add_eq id t2 sm
@@ -494,7 +518,7 @@ let find_equalities eqs (pure: form) =
     | Binder (_, [], f, _) -> find_eq sm f
     | _ -> sm
   in
-  find_eq eqs pure
+  find_eq eqs state.pure
 
 (** Find equalities of the form var == exp in [pure] and return id -> exp map. *)
 let find_var_equalities (pure: form) =
@@ -518,19 +542,24 @@ let rec remove_trivial_equalities = function
   | f -> f
 
 let apply_equalities eqs state =
-  let (pure, spatial) = subst_state eqs state in
-  remove_trivial_equalities pure, spatial
+  state |>
+  subst_state eqs |>
+  map_state_pure remove_trivial_equalities
 
-let remove_useless_existentials ((pure, spatial) as state : state) : state =
+let remove_useless_existentials state : state =
   (* Note: can also use GrassUtil.foralls_to_exists for this *)
-  apply_equalities (find_var_equalities pure) state
+  apply_equalities (find_var_equalities state.pure) state
 
 (** Kill useless existential vars in state [st], find equalities between constants,
   add to [st.se_eqs] and simplify. *)
 let simplify_state st =
-  let (p, sp) = remove_useless_existentials (fst st.se_state |> nnf, snd st.se_state) in
-  let eqs = find_equalities st.se_eqs p in
-  {st with se_eqs = eqs; se_state = apply_equalities eqs (p, sp)}
+  let state =
+    st.se_state |>
+    map_state_pure nnf |>
+    remove_useless_existentials
+  in
+  let eqs = find_equalities st.se_eqs state in
+  {st with se_eqs = eqs; se_state = apply_equalities eqs state}
 
 (** Add implicit disequalities from spatial to pure. Assumes normalized by eq. *)
 let add_neq_constraints st =
@@ -556,7 +585,7 @@ let add_neq_constraints st =
       f acc locs sps
     | [] -> acc, locs
   in
-  let (pure, spatial) = st.se_state in
+  let { pure = pure; spatial = spatial; _ } = st.se_state in
   let neqs, locs = f [] TermSet.empty spatial in
   (* Also add x != nil for every location x *)
   let get_sort x = match sort_of x with
@@ -568,7 +597,9 @@ let add_neq_constraints st =
   let neqs =
     TermSet.fold (fun x acc -> mk_neq x (mk_null (get_sort x)) :: acc) locs neqs
   in
-  {st with se_state = (smk_and (pure :: neqs), spatial)}
+  let new_se_state = strengthen_pure_state neqs st.se_state in
+  update_se_state st new_se_state
+
 
 
 (** ----------- Symbolic Execution ---------- *)
@@ -576,7 +607,7 @@ let add_neq_constraints st =
 
 (* Returns None if the entailment holds, otherwise Some (list of error messages, model) *)
 let check_pure_entail st p1 p2 =
-  let (p2, _) = apply_equalities st.se_eqs (p2, []) in
+  let { pure = p2; _ } = apply_equalities st.se_eqs (mk_pure_state p2) in
   if p1 = p2 || p2 = mk_true then None
   else (* Dump it to an SMT solver *)
     let axioms =  (* Collect all program axioms *)
@@ -613,11 +644,11 @@ let check_pure_entail st p1 p2 =
 (** Returns (fr, inst) s.t. state1 |= state2 * fr, and
   inst accumulates an instantiation for existential variables in state2.
   Assumes that both states have been normalized w.r.t eqs and inst. *)
-let rec find_frame st ?(inst=empty_eqs) (p1, sps1) (p2, sps2) =
+let rec find_frame st ?(inst=empty_eqs) state1 state2 =
   Debug.debugl 1 (fun () ->
     sprintf "\nFinding frame with %s for:\n%s\n|=\n%s &*& ??\n"
       (string_of_equalities inst)
-      (string_of_spatial_pred_list sps1) (string_of_spatial_pred_list sps2)
+      (string_of_spatial_pred_list state1.spatial) (string_of_spatial_pred_list state2.spatial)
   );
   let match_up_sp inst sp2 sp1 =
     match sp2, sp1 with
@@ -671,12 +702,12 @@ let rec find_frame st ?(inst=empty_eqs) (p1, sps1) (p2, sps2) =
         Some inst
       | _ -> None)
     | Dirty (sp2a, ts), Dirty (sp1a, ts') when ts = ts' ->
-      (match check_entailment st ~inst:inst (mk_true, sp1a) (mk_true, sp2a) with
+      (match check_entailment st ~inst:inst (mk_spatial_state sp1a) (mk_spatial_state sp2a) with
       | Ok inst -> Some inst
       | Error _ -> None)
     | Conj spss2, Conj spss1 ->
       let match_up_conjunct inst sps2 sps1 =
-        (match check_entailment st ~inst:inst (mk_true, sps1) (mk_true, sps2) with
+        (match check_entailment st ~inst:inst (mk_spatial_state sps1) (mk_spatial_state sps2) with
         | Ok inst -> Some inst
         | Error _ -> None)
       in
@@ -695,7 +726,7 @@ let rec find_frame st ?(inst=empty_eqs) (p1, sps1) (p2, sps2) =
   in
   (* Sort sps2 so that acc(v)/arr(v) where v is a var (i.e. like x.next) are in the end *)
   let sps2 =
-    sps2 |> List.partition
+    state2.spatial |> List.partition
       (function PointsTo (Var _, _) | Arr (Var _, _, _) -> false | _ -> true)
     |> (fun (x, y) -> x @ y)
   in
@@ -703,31 +734,34 @@ let rec find_frame st ?(inst=empty_eqs) (p1, sps1) (p2, sps2) =
   | [] ->
     let st = {st with se_eqs = IdMap.union (fun _ -> failwith "") st.se_eqs inst} in
     (* Check if p2 is implied by p1 *)
-    (match check_pure_entail st p1 p2 with
+    (match check_pure_entail st state1.pure state2.pure with
     | None ->
-      Ok (sps1, inst)
+      Ok (state1.spatial, inst)
     | Some errs -> Error errs)
   | sp2 :: sps2' ->
-    (match find_map_res (match_up_sp inst sp2) sps1 with
+    (match find_map_res (match_up_sp inst sp2) state1.spatial with
     | Some (inst, sps1') ->
-      let p2, sps2 = subst_state inst (p2, sps2') in
-      find_frame st ~inst:inst (p1, sps1') (p2, sps2)
+        let state1' = { state1 with spatial = sps1' } in
+        let state2' = subst_state inst { state2 with spatial = sps2' } in
+        find_frame st ~inst:inst state1' state2'
     | None -> Error ([], Model.empty)) (* TODO get errors? *)
 
-(** Returns [Ok inst] if [(p1, sp1)] |= [(p2, sp2)], else [Error (error messages)]. *)
-and check_entailment st ?(inst=empty_eqs) (p1, sp1) (p2, sp2) =
-  let st1 = simplify_state {st with se_state = (p1, sp1)} in
-  let eqs, (p1, sp1) = st1.se_eqs, st1.se_state in
-  let (p2, sp2) =
-    (p2, sp2)
-    |> apply_equalities eqs |> apply_equalities inst |> remove_useless_existentials
+(** Returns [Ok inst] if [state1] |= [state2], else [Error (error messages)]. *)
+and check_entailment st ?(inst=empty_eqs) state1 (state2: state) =
+  let st1 = simplify_state { st with se_state = state1 } in
+  let eqs, state1 = st1.se_eqs, st1.se_state in
+  let state2 =
+    state2 |>
+    apply_equalities eqs |>
+    apply_equalities inst |>
+    remove_useless_existentials
   in
   Debug.debug (fun () ->
     sprintf "\nChecking entailment:\n%s\n|=\n%s\n"
-      (string_of_se_state st1) (string_of_state (p2, sp2))
+      (string_of_se_state st1) (string_of_state state2)
   );
   (* Check if find_frame returns empt *)
-  match find_frame st ~inst:inst (p1, sp1) (p2, sp2) with
+  match find_frame st ~inst:inst state1 state2 with
   | Ok ([], inst) -> Ok inst
   | Ok _ ->
     Error (["The frame was not empty for this entailment check"], Model.empty)
@@ -739,11 +773,11 @@ and check_entailment st ?(inst=empty_eqs) (p1, sp1) (p2, sp2) =
   [repl_fn sm state2'] is the result of replacing [state2] inside [state1] with [state2'],
   and applying the substitution map [sm] on the remaining parts of [state1].
 *)
-let find_frame_conj st (pure, spatial) state2 =
+let find_frame_conj st state1 state2 =
   let rec find_frame_inside_conj = function
     | [] -> Error ([], Model.empty)
     | sps :: spss ->
-      (match find_frame st (pure, sps) state2 with
+      (match find_frame st { state1 with spatial = sps } state2 with
       | Ok (frame, inst) ->
         let repl_fn = (fun sm foo_post ->
           let frame = List.map (subst_spatial_pred sm) frame in
@@ -791,16 +825,16 @@ let find_frame_conj st (pure, spatial) state2 =
         Ok (repl_fn, inst)
       | Error errs -> Error errs)
   in
-  find_frame_conj spatial
+  find_frame_conj state1.spatial
 
 
 (** Finds a call site for a function that's completely contained inside a dirty
   region.
   [state2] must have only PointsTo/Arr - no predicates allowed.*)
-let find_frame_dirty st (p1, sp1) (p2, sp2) =
+let find_frame_dirty st state1 state2 =
   let find_inside_dirty = function
     | Dirty (sp1a, ts) ->
-      (match find_frame st (p1, sp1a) (p2, sp2) with
+      (match find_frame st { state1 with spatial = sp1a } state2 with
       | Ok (fr, inst) ->
         let repl_fn sm post =
           Dirty ((List.map (subst_spatial_pred sm) fr) @ post, ts)
@@ -822,38 +856,37 @@ let find_frame_dirty st (p1, sp1) (p2, sp2) =
       | Error (msgs, m) -> Error (msgs, m))
     | [] -> Error ([], Model.empty)
   in
-  match List.exists (function PointsTo _ | Arr _ -> false | _ -> true) sp2 with
+  match List.exists (function PointsTo _ | Arr _ -> false | _ -> true) state2.spatial with
   | true -> Error ([], Model.empty) (* Only PointsTos allowed *)
-  | false -> find_dirty [] sp1
+  | false -> find_dirty [] state1.spatial
 
 
 (** Matches up arrays in pre and post of a function call and adds a pure formula to post
   that enforces that the lengths are the same. *)
-let force_array_lengths_equal (pre_p, pre_sp) (post_p, post_sp) =
+let force_array_lengths_equal pre post =
   let length_axiom = 
     List.fold_left (fun acc -> function
         | Arr (a, l, m) ->
           let f =
-            match List.find_opt (function Arr (a', l', _) -> a = a' | _ -> false) pre_sp with
+            match List.find_opt (function Arr (a', l', _) -> a = a' | _ -> false) pre.spatial with
             | Some (Arr (_, l', _)) -> mk_eq l l'
             | _ -> mk_true
           in
           f :: acc
         | _ -> acc)
-      [] post_sp
+      [] post.spatial
   in
-  (smk_and (post_p :: length_axiom), post_sp)
-
+  strengthen_pure_state length_axiom post
 
 
 (** Check that we have permission to the array, and that index is in bounds *)
 let check_array_acc st arr idx =
-  let (pure, spatial) = st.se_state in
-  match find_array arr spatial with
+  let state = st.se_state in
+  match find_array arr state.spatial with
   | Some (l, _), _ ->
      let idx_in_bds = smk_and [(mk_leq (mk_int 0) idx); (mk_lt idx l)] in
      Debug.debug (fun () -> "\n\nChecking array index is in bounds:\n");
-     (match check_pure_entail st pure idx_in_bds with
+     (match check_pure_entail st state.pure idx_in_bds with
      | None -> ()
      | Some errs -> raise_err "Possible array index out of bounds error")
   | None, _ ->
@@ -918,7 +951,7 @@ let rec symb_exec st postcond comms =
     Debug.debug (fun () -> "Checking if current state is unsat:\n");
     let st' = add_neq_constraints st in
     try
-      (match find_frame st st'.se_state (mk_false, []) with
+      (match find_frame st st'.se_state (mk_pure_state mk_false) with
       | Ok _ ->
         print_endline @@ (string_of_src_pos pos) ^ "\nWarning: Intermediate state was unsat"
       | Error _ ->
@@ -936,7 +969,7 @@ let rec symb_exec st postcond comms =
     let st = add_neq_constraints st in
     (* First, check if current state is unsat *)
     (try
-      (match find_frame st st.se_state (mk_false, []) with
+      (match find_frame st st.se_state (mk_pure_state mk_false) with
       | Ok _ -> (* Unsat, so forget checking postcondition *)
         []
       | Error _ ->
@@ -971,14 +1004,15 @@ let rec symb_exec st postcond comms =
     (* Check that we have permission to the array, and that index is in bounds *)
     check_array_acc st arr idx;
     (* Find the map for arr and bump it up *)
-    (match find_array arr (snd st.se_state) with
+    (match find_array arr st.se_state.spatial with
     | Some (_, (App (FreeSym m_id, [], _) as m)), mk_spatial' ->
       let m' = mk_var_like (sort_of m) m_id in
       let sm = IdMap.singleton m_id m' in
       let idx, rhs = idx |> subst_term sm, rhs |> subst_term sm in
       let st = subst_se_state sm st in
-      let pure = smk_and [mk_eq m (mk_write m' [idx] rhs); fst st.se_state] in
-      symb_exec {st with se_state = (pure, mk_spatial' m)} postcond comms'
+      let pure = smk_and [mk_eq m (mk_write m' [idx] rhs); st.se_state.pure] in
+      let st' = update_se_state st { pure = pure; spatial = mk_spatial' m } in
+      symb_exec st' postcond comms'
     | Some _, _ -> failwith "Array map was not a const term"
     | None, _ ->
       [(pp.pp_pos, "Possible invalid array write", Model.empty)])
@@ -995,7 +1029,7 @@ let rec symb_exec st postcond comms =
     let loc, st = process st loc in
     let rhs, st = process st rhs in
     (* Find the node to mutate *)
-    (match find_ptsto loc (snd st.se_state) with
+    (match find_ptsto loc st.se_state.spatial with
     | Some fs, _, mk_spatial' ->
       (* mutate fs to fs' so that it contains (fld, rhs) *)
       let fs' =
@@ -1003,7 +1037,8 @@ let rec symb_exec st postcond comms =
         then List.map (fun (f, e) -> (f, if f = fld then rhs else e)) fs
         else (fld, rhs) :: fs
       in
-      symb_exec {st with se_state = (fst st.se_state, mk_spatial' fs')} postcond comms'
+      let st' = update_se_state st { pure = st.se_state.pure; spatial = mk_spatial' fs' } in
+      symb_exec st' postcond comms'
     | None, _, _ ->
       [(pp.pp_pos, "Possible invalid heap mutation", Model.empty)])
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, pp) as comm :: comms' ->
@@ -1021,7 +1056,8 @@ let rec symb_exec st postcond comms =
           let sm = IdMap.singleton id (mk_var_like_id id) in
           let rhs' = subst_term sm rhs in
           let st = subst_se_state sm st in
-          {st with se_state = add_state (mk_eq (mk_const_term id) rhs', []) st.se_state}
+          let state' = add_state (mk_pure_state (mk_eq (mk_const_term id) rhs')) st.se_state in
+          update_se_state st state'
         ) st
     in
     symb_exec st postcond comms'
@@ -1090,9 +1126,8 @@ let rec symb_exec st postcond comms =
     (match repl_fn with
       | Ok (repl_fn, inst) ->
       let eqs = subst_eqs sm st.se_eqs in
-      let pure = st.se_state |> fst |> subst_form sm in
-      let (post_pure, post_spatial) = foo_post in
-      let state = (smk_and [pure; post_pure], repl_fn sm post_spatial) in
+      let pure = st.se_state.pure |> subst_form sm in
+      let state = { pure = smk_and [pure; foo_post.pure]; spatial = repl_fn sm foo_post.spatial } in
       (* This is to apply equalities derived during frame inference *)
       let state = subst_state inst state in
       symb_exec {st with se_eqs = eqs; se_state = state} postcond comms'
@@ -1121,7 +1156,7 @@ let rec symb_exec st postcond comms =
         lineSep (string_of_se_state st)
     );
     let spec, st = fold_map_terms process_no_array st spec in
-    symb_exec {st with se_state = add_state (spec, []) st.se_state} postcond comms'
+    symb_exec {st with se_state = add_state (mk_pure_state spec) st.se_state} postcond comms'
   | Choice (comms, _) :: comms' ->
     List.fold_left (fun errors comm ->
         match errors with
@@ -1146,9 +1181,9 @@ let rec symb_exec st postcond comms =
     | FOL spec_form ->
       let spec, st = fold_map_terms process_no_array st spec_form in
       let st' = add_neq_constraints st in
-      (match find_frame st st'.se_state (spec, []) with
+      (match find_frame st st'.se_state (mk_pure_state spec) with
         | Ok _ ->
-        symb_exec {st with se_state = add_state (spec, []) st.se_state} postcond comms'
+        symb_exec {st with se_state = add_state (mk_pure_state spec) st.se_state} postcond comms'
         | Error (errs, m) -> mk_error "This assertion may not hold" errs m pp.pp_pos))
   | Basic (Return {return_args=xs}, pp) as comm :: _ ->
     Debug.debug (fun () ->
@@ -1192,7 +1227,7 @@ let rec symb_exec st postcond comms =
           (* First, eval/check t *)
           let t, st = process st t in
           let t' = subst_term sm t in
-          {st with se_state = add_state (mk_eq v t', []) st.se_state}
+          {st with se_state = add_state (mk_pure_state (mk_eq v t')) st.se_state}
         ) st
       in
       let st = subst_se_state sm st in
@@ -1203,13 +1238,13 @@ let rec symb_exec st postcond comms =
           let l = List.hd vts in
           let length_ok = mk_leq (mk_int 0) l in
           Debug.debug (fun () -> "\n\nChecking that array length is nonnegative:\n");
-          (match check_pure_entail st (fst st.se_state) length_ok with
+          (match check_pure_entail st (st.se_state.pure) length_ok with
           | None -> ()
           | Some errs -> raise_err "Possibly attempting to create an array of negative length");
           Arr (mk_const_term id, List.hd vts, m)
       | _ -> failwith "unexpected new command"
       in
-      let st = {st with se_state = add_state (mk_true, [new_cell]) st.se_state} in
+      let st = {st with se_state = add_state (mk_spatial_state [new_cell]) st.se_state} in
       symb_exec st postcond comms'
   | Basic (Assume _, _) :: _ -> failwith "TODO Assume SL command"
   | Basic (Dispose _, _) :: _ -> failwith "TODO Dispose command"
