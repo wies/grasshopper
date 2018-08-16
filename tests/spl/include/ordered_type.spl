@@ -3,17 +3,23 @@ type K
     
 pure predicate lt(x: K, y: K)
 
+const bottom: K
+const top: K
+
+axiom forall a: K :: !lt(a, bottom)
+axiom forall a: K :: !lt(top, a)
+
 axiom forall a: K :: !lt(a, a)
 axiom forall a: K, b: K :: !lt(a, b) || !lt(b, a)
 axiom forall a: K, b: K :: lt(a, b) || lt(b, a) || a == b
 axiom forall a: K, b: K, c: K :: lt(a, b) && lt(b, c) ==> lt(a, c)
-pure function compare(x: K, y: K) returns (res: Int)
-  ensures (x == y) == (res == 0)
-  ensures lt(x, y) == (res < 0)
-  ensures lt(y, x) == (res > 0)
 
-var bottom: K
-var top: K
+function le(x: K, y: K) returns (res: Bool) {
+  lt(x, y) || x == y
+}
 
-axiom forall a: K :: !lt(a, bottom)
-axiom forall a: K :: !lt(top, a)
+function compare(x: K, y: K) returns (res: Int)
+{
+  x == y ? 0 : (lt(x, y) ? -1 : 1)
+}
+
