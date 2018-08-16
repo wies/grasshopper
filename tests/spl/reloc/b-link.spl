@@ -88,8 +88,8 @@ define hrep(x, I) {
        && (x.next == null && I.FPo == {}
           || x.next != null && I.FPo == {x.next}
           && (forall k: K :: le(x.keys[x.len], k) ==> I.fm[x][x.next].ks[k] == 1)
-          && (forall k: K :: lt(k, x.keys[x.len]) ==> I.fm[x][x.next].ks[k] == 0)
-             )
+          && (forall k: K :: lt(k, x.keys[x.len]) ==> I.fm[x][x.next].ks[k] == 0
+          @(matching x.next yields I.fm[x][x.next].ks[k])))
      || x.ptrs[0] != null  // Internal
        && I.na.contents == {}
        && (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i])
@@ -152,24 +152,8 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
   ensures hrep(x, Ix) &*& unchanged(x)
   ensures x.ptrs[0] == null  // x is a leaf
 {
-  if (x.ptrs[0] != null) {
-    if (i < x.len) {
-      if (lt(k, x.keys[i])) {
-        pure assert Ix.fm[x][x.ptrs[i]].ks[k] == 1;
-      } else {
-        keyset_implies_leaf(x, Ix, k, i + 1);
-      }
-    } else {
-      if (x.next == null) {
-        pure assert Ix.fm[x][x.ptrs[i]].ks[k] == 1;
-      } else {
-        if (lt(k, x.keys[i])) {
-          pure assert Ix.fm[x][x.ptrs[i]].ks[k] == 1;
-        } else {
-          pure assert Ix.fm[x][x.next].ks[k] == 1;
-        }
-      }
-    }
+  if (x.ptrs[0] != null && i < x.len && !lt(k, x.keys[i])) {
+    keyset_implies_leaf(x, Ix, k, i + 1); 
   }
 }
 
