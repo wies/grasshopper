@@ -65,7 +65,7 @@ type rhs_string_maybe =
 %token IF ELSE WHILE
 %token <bool> FUNCTION
 %token <bool> PREDICATE
-%token GHOST IMPLICIT VAR STRUCT PURE LEMMA PROCEDURE INCLUDE OPTIONS AXIOM TYPE
+%token GHOST IMPLICIT VAR CONST STRUCT PURE LEMMA PROCEDURE INCLUDE OPTIONS AXIOM TYPE
 %token DEFINE DATATYPE OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token LOC INT BOOL BYTE SET MAP ARRAY ARRAYCELL
 %token MATCHING YIELDS WITHOUT COMMENT PATTERN
@@ -267,6 +267,7 @@ pred_decl:
 | function_header pred_impl {
   pred_decl $1 $2
 }
+| const_decl { $1 }
 ;
 
 function_header:
@@ -304,6 +305,33 @@ pred_impl:
 }
 | /* empty */ { None }
 ;
+
+const_decl:
+| CONST IDENT COLON var_type semicolon_opt {
+  let res = ("res", 0) in
+  let res_decl = {
+    v_name = res;
+    v_type = $4;
+    v_ghost = false;
+    v_implicit = false;
+    v_aux = false;
+    v_pos = mk_position 2 2;
+    v_scope = GrassUtil.global_scope; (* scope is fixed later *)
+  }
+  in
+  let decl =
+    { pr_name = $2;
+      pr_formals = [];
+      pr_outputs = [res];
+      pr_locals = IdMap.singleton res res_decl;
+      pr_contracts = [];
+      pr_is_pure = true;
+      pr_body = None;
+      pr_pos = mk_position 2 2
+   }
+  in
+  decl
+}
   
 var_decls_with_modifiers:
 | var_decl_with_modifiers var_decl_with_modifiers_list { $1 :: $2 }
