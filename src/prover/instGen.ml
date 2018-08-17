@@ -223,6 +223,8 @@ let generate_terms generators ground_terms =
   in
   generate 1 new_terms ground_terms generators
 
+let generate_terms generators =
+  measure_call "InstGen.generate_terms" (generate_terms generators)
 
 let generate_instances stratify useLocalInst axioms rep_terms egraph = 
   (* *)
@@ -376,7 +378,10 @@ let generate_instances stratify useLocalInst axioms rep_terms egraph =
       (fun acc subst_map -> (subst subst_map f) :: acc) acc subst_maps
   in
   List.fold_left instantiate epr_axioms axioms
-  
+
+let generate_instances stratify useLocalInst axioms rep_terms =
+  measure_call "InstGen.generate_instances" (generate_instances stratify useLocalInst axioms rep_terms)
+
 let instantiate_with_terms ?(force=false) ?(stratify=(!Config.stratify)) local axioms classes0 =
     if !Config.instantiate || force then
       (* remove theory atoms from congruence classes *)
@@ -409,3 +414,5 @@ let instantiate_with_terms ?(force=false) ?(stratify=(!Config.stratify)) local a
         else
           axioms
             
+let instantiate_with_terms ?(force=false) ?(stratify=(!Config.stratify)) local axioms =
+  measure_call "InstGen.instantiate_with_terms" (instantiate_with_terms ~force:force ~stratify:stratify local axioms)

@@ -314,9 +314,10 @@ let measure_call (id: string) fn arg =
     raise e
 
 let print_measures () =
+  if Hashtbl.length measures > 0 then print_endline "Profiling:";
   Hashtbl.iter
     (fun id (calls, time) ->
-      print_endline (id ^ ": " ^ (string_of_int calls) ^ " call(s), " ^ (string_of_float time) ^ " s")
+      print_endline ("  " ^ id ^ ": " ^ (string_of_int calls) ^ " call(s), " ^ (string_of_float time) ^ " s")
     )
     measures
 

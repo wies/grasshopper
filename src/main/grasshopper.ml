@@ -177,8 +177,7 @@ let print_stats start_time =
     print_endline "Statistics: ";
     Printf.printf "  running time for analysis: %.2fs\n" total_time;
     Printf.printf "  # VCs: %d\n" !SmtLibSolver.num_of_sat_queries;
-    Printf.printf "  measured time: %.2fs\n" !Util.measured_time;
-    Printf.printf "  # measured calls: %.2d\n" !Util.measured_calls
+    print_measures ()
 
 (** Print C program equivalent *)
 let print_c_program spl_prog =
