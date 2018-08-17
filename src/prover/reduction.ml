@@ -352,6 +352,7 @@ let get_read_propagators gts =
               Match (wrap (mk_read fld1 (ivars1)), []);
             ],
              [wrap (mk_read fld2 (ivars1))]) ::
+            (* f == g, x.f -> x.g *)
             ([Match (mk_eq_term fld1 fld2, []);
               Match (wrap (mk_read fld1 (ivars1)), [])
             ],
@@ -391,7 +392,7 @@ let add_read_write_axioms fs =
   (* instantiate null axioms *)
   let axioms = SortSet.fold (fun srt axioms -> Axioms.null_axioms srt @ axioms) basic_structs [] in
   let null_ax, _ = open_axioms ~force:true isFld axioms in
-  let classes = CongruenceClosure.congr_classes fs gts in
+  let classes = CongruenceClosure.congruence_classes fs in
   (* CAUTION: not forcing the instantiation here would yield an inconsistency with the read/write axioms *)
   let null_ax1 = instantiate_with_terms ~force:true false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
   let fs1 = null_ax1 @ fs in
@@ -431,8 +432,7 @@ let add_reach_axioms fs =
       | _ -> struct_sorts)
       (sorts (mk_and fs)) SortSet.empty
   in  
-  let gts = ground_terms ~include_atoms:true (mk_and fs) in
-  let classes = CongruenceClosure.congr_classes fs gts in
+  let classes = CongruenceClosure.congruence_classes fs in
   let axioms =
     SortSet.fold
       (fun srt axioms -> Axioms.reach_axioms classes srt @ Axioms.reach_write_axioms srt @ axioms)
@@ -469,7 +469,12 @@ let add_split_lemmas fs gts =
       | _ -> structs)
       gts SortSet.empty
   in
-  let classes = CongruenceClosure.congr_classes fs (generated_ground_terms fs) in
+  let classes =
+    CongruenceClosure.create () |>
+    CongruenceClosure.add_terms (generated_ground_terms fs) |>
+    CongruenceClosure.add_conjuncts fs |>
+    CongruenceClosure.get_classes
+  in
   let add_lemmas srt fs1 =
     let loc_gts =
       TermSet.filter (fun t -> sort_of t = Loc srt) gts
