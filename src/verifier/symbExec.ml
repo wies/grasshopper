@@ -62,7 +62,7 @@ let map_state pfn sfn state =
 let strengthen_pure_state fs state =
   map_state_pure (fun pure -> smk_and (pure :: fs)) state
     
-(** conjoin two states *)
+(** Conjoin two states *)
 let add_state s1 s2 =
   { pure = smk_and [s1.pure; s2.pure];
     spatial = s1.spatial @ s2.spatial
@@ -484,8 +484,7 @@ let subst_se_state sm st =
 
 (** Given two lists of idents and terms, create an equalities/subst map out of them. *)
 let mk_eqs ids terms =
-  List.combine ids terms
-  |> List.fold_left (fun eqs (id, t) -> IdMap.add id t eqs) empty_eqs
+  List.fold_left2 (fun eqs id t -> IdMap.add id t eqs) empty_eqs ids terms
 
 (** Add [id] = [t] to equalities [eqs] while preserving invariant. *)
 let add_eq id t eqs =
@@ -747,7 +746,7 @@ let rec find_frame st ?(inst=empty_eqs) state1 state2 =
     | None -> Error ([], Model.empty)) (* TODO get errors? *)
 
 (** Returns [Ok inst] if [state1] |= [state2], else [Error (error messages)]. *)
-and check_entailment st ?(inst=empty_eqs) state1 (state2: state) =
+and check_entailment st ?(inst=empty_eqs) state1 state2 =
   let st1 = simplify_state { st with se_state = state1 } in
   let eqs, state1 = st1.se_eqs, st1.se_state in
   let state2 =
