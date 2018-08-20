@@ -110,25 +110,6 @@ module rec Node : sig
               p2)
             p1
         end
-    
-    (** return pairs of nodes whose equality comes from congruence*)
-    (*method merge_with_applied (that: node) =
-      if self#find <> that#find then
-        begin
-          let p1 = self#ccpar in
-          let p2 = that#ccpar in
-            self#union that;
-            let to_test = 
-              List.flatten (List.map (fun x -> List.map (fun y -> (x,y)) p2) p1)
-            in
-              let cong = List.filter (fun (x,y) -> x#find <> y#find && x#congruent y) to_test in
-                List.fold_left
-                  (fun acc (x,y) -> if x#find <> y#find then
-                    (x#merge_with_applied y) @ ((x,y)::acc)
-                  else 
-                    acc) [] cong
-        end
-      else []*)
   end
 
   let create sym terms: t = new node sym terms
