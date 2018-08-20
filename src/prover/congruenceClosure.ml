@@ -1,5 +1,6 @@
 (** DZ: this is a copy-pasted version from csisat, just adaped to the current types *)
 
+open Util
 open Grass
 open GrassUtil
   
@@ -87,7 +88,7 @@ module rec Node : sig
       &&
         self#get_arity = that#get_arity
       &&
-        List.for_all (fun (a,b) -> a#find = b#find) (List.rev_map2 (fun x y -> (x,y)) (self#get_args) (that#get_args))
+        List.for_all2 (fun a b -> a#find = b#find) self#get_args that#get_args
 
     (** return pairs of nodes whose equality may change the result of the 'congruent' method*)
     (*method may_be_congruent (that: node) =
@@ -100,13 +101,14 @@ module rec Node : sig
     method merge (that: node) =
       if self#find <> that#find then
         begin
-          let p1 = NodeSet.elements self#ccpar in
-          let p2 = NodeSet.elements that#ccpar in
-            self#union that;
-            let to_test =
-              List.flatten (List.map (fun x -> List.map (fun y -> (x,y)) p2) p1)
-            in
-              List.iter (fun (x,y) -> if x#find <> y#find && x#congruent y then x#merge y) to_test
+          let p1 = self#ccpar in
+          let p2 = that#ccpar in
+          self#union that;
+          NodeSet.iter (fun x ->
+            NodeSet.iter
+              (fun y -> if x#find <> y#find && x#congruent y then x#merge y)
+              p2)
+            p1
         end
     
     (** return pairs of nodes whose equality comes from congruence*)
@@ -189,7 +191,10 @@ class dag = fun (terms: TermSet.t) ->
         Buffer.contents buffer
  
     method add_term t =
-      ignore (convert_term t)
+      let n = convert_term t in
+      let arg_opt = List.nth_opt n#get_args 0 in
+      arg_opt |>
+      Opt.iter (fun arg -> NodeSet.iter (fun n' -> if n' <> n && n#congruent n' then n#merge n') arg#ccpar)
        
     method add_eq t1 t2 = 
       let n1 = self#get_node t1 in
@@ -362,7 +367,9 @@ let add_conjuncts fs cc_graph : dag =
     add_conjuncts_simple cc_graph fs
       
 let add_terms gterms cc_graph =
-  let new_terms = TermSet.diff gterms (cc_graph#get_terms) in
+  let old_terms = cc_graph#get_terms in
+  let new_terms = TermSet.diff gterms old_terms in
+  let all_terms = TermSet.union old_terms new_terms in
   (* Add gterms to graph *)
   TermSet.iter (cc_graph#add_term) new_terms;
   (* Add disequalities between ADT terms with different top-level constructors *)
@@ -376,7 +383,7 @@ let add_terms gterms cc_graph =
           | App (Constructor id2, _, srt2) as t2 when srt1 = srt2 && id1 <> id2 ->
               cc_graph#add_neq t1 t2
           | _ -> ())
-          cterms
+          all_terms
     | _ -> ()) cterms;
   cc_graph
 

@@ -163,7 +163,7 @@ let instantiate_and_prove session fs =
         | _ -> gts)
       gts gts
   in
-  let generate_adt_terms gts =
+  let generate_adt_terms fs gts =
     TermSet.fold
       (fun t (fs, gts) -> match t with
       | App (Constructor id, ts, Adt (ty_id, adts)) ->
@@ -188,7 +188,7 @@ let instantiate_and_prove session fs =
               GrassUtil.mk_eq arg d :: fs, TermSet.add d gts)
             (fs, TermSet.add t gts) ts destrs
       | t -> fs, TermSet.add t gts
-      ) gts ([], gts)
+      ) gts (fs, gts)
   in
   let fs1, generators = open_axioms isFunVar fs1 in
   let btwn_gen = btwn_field_generators fs in
@@ -205,16 +205,16 @@ let instantiate_and_prove session fs =
     let ground_fs = List.filter is_ground fs_inst in
     let eqs = instantiate_with_terms true equations (CongruenceClosure.get_classes cc_graph) in
     let gts1 = TermSet.union (ground_terms ~include_atoms:true (mk_and eqs)) gts_inst in
-    let adt_fs, gts1 = generate_adt_terms gts1 in
+    let fs, gts1 = generate_adt_terms fs gts1 in
     let eqs1 = List.filter (fun f -> IdSet.is_empty (fv f)) eqs in
     let cc_graph =
       cc_graph |>
       CongruenceClosure.add_terms gts1 |>
-      CongruenceClosure.add_conjuncts (List.rev_append eqs1 adt_fs)
+      CongruenceClosure.add_conjuncts (List.rev_append eqs1 fs)
     in
     let implied = CongruenceClosure.get_implied_equalities cc_graph in
     let gts1 = TermSet.union (ground_terms ~include_atoms:true (mk_and implied)) gts1 in
-    rev_concat [eqs; adt_fs; ground_fs; implied], gts1, cc_graph
+    rev_concat [eqs; ground_fs; implied], gts1, cc_graph
   in
   let round1 fs_inst gts_inst = measure_call "round1" (round1 fs_inst gts_inst) in
   let round2 fs_inst gts_inst cc_graph =
@@ -241,7 +241,7 @@ let instantiate_and_prove session fs =
           (ground_terms ~include_atoms:true (mk_and fs_inst))
       in
       let gts_inst = TermSet.union gts_inst gts_atoms in
-      let adt_fs, gts_inst = generate_adt_terms gts_inst in
+      let fs, gts_inst = generate_adt_terms fs gts_inst in
       let implied_eqs = CongruenceClosure.get_implied_equalities cc_graph in
       (*print_endline "Implied equalities:";
       print_endline (string_of_form (mk_and implied_eqs));*)
@@ -254,7 +254,7 @@ let instantiate_and_prove session fs =
         let cc_graph =
           cc_graph |>
           measure_call "cc_gen" (fun cc_graph -> cc_graph |> CongruenceClosure.add_terms gts_inst) |>
-          CongruenceClosure.add_conjuncts fs_inst
+          CongruenceClosure.add_conjuncts (rev_concat [fs_inst; fs])
         in
         let fs_inst = instantiate_with_terms true fs1 (CongruenceClosure.get_classes cc_graph) in
         saturate (i + 1) fs_inst gts_inst cc_graph
@@ -296,7 +296,14 @@ let instantiate_and_prove session fs =
     | _ -> k, result, fs_asserted, fs_inst, gts_inst, cc_graph
     in List.fold_left dr (1, None, FormSet.empty, fs1, gts1, cc_graph) rounds
   in
-  let _, result, _, fs_inst, _, _ = do_rounds [round1; round2] in
+  let _, result, fs_asserted, fs_inst, _, _ = do_rounds [round1; round2] in
+  (match result with
+  | Some true | None ->
+    Debug.debugl 1 (fun () ->
+      "\nSMT called with:\n\n"
+      ^ ((FormSet.elements fs_asserted)
+          |> smk_and |> string_of_form) ^ "\n\n")
+  | Some false -> ());
   result, session, fs_inst
 
 let instantiate_and_prove session = measure_call "Prover.instantiate_and_prove" (instantiate_and_prove session)
@@ -339,6 +346,7 @@ let dump_core session =
       in
       let core = Opt.get (SmtLibSolver.get_unsat_core session) in
       let core = minimize core in
+      Debug.debugl 1 (fun () -> "\n\nCore:\n" ^ (string_of_form (smk_and core) ^ "\n\n"));
       let config = !Config.dump_smt_queries in
       Config.dump_smt_queries := true;
       let s = SmtLibSolver.start core_name session.SmtLibSolver.sat_means in
