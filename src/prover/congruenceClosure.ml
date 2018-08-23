@@ -1,4 +1,4 @@
-(** DZ: this is a copy-pasted version from csisat, just adaped to the current types *)
+(** {5 Congruence closure computation} *)
 
 open Util
 open Grass
@@ -6,7 +6,7 @@ open GrassUtil
   
 module rec Node : sig
   type t =
-    < get_fname: symbol;
+    < get_sym: symbol;
       get_args: t list;
       get_arity: int;
       set_ccparent: NodeSet.t -> unit;
@@ -26,7 +26,7 @@ module rec Node : sig
       
   end = struct
   type t =
-    < get_fname: symbol;
+    < get_sym: symbol;
       get_args: t list;
       get_arity: int;
       set_ccparent: NodeSet.t -> unit;
@@ -45,16 +45,14 @@ module rec Node : sig
         
   class node = 
   fun
-    (ffname: symbol) 
-    (aargs: t list) -> 
+    (sym: symbol) 
+    (args: t list) -> 
   object (self)
-    val fname = ffname
-    method get_fname = fname
+    method get_sym = sym
     
-    val args = aargs
     method get_args: node list = args
     
-    val arity = List.length aargs
+    val arity = List.length args
     method get_arity = arity
     
     val mutable ccparent = NodeSet.empty
@@ -84,7 +82,7 @@ module rec Node : sig
     method ccpar: NodeSet.t = (self#find)#get_ccparent
 
     method congruent (that: node) =
-        self#get_fname = that#get_fname
+        self#get_sym = that#get_sym
       &&
         self#get_arity = that#get_arity
       &&
@@ -92,7 +90,7 @@ module rec Node : sig
 
     (** return pairs of nodes whose equality may change the result of the 'congruent' method*)
     (*method may_be_congruent (that: node) =
-      if self#get_fname <> that#get_fname
+      if self#get_sym <> that#get_sym
       || self#get_arity <> that#get_arity
       || self#find = that#find then []
       else

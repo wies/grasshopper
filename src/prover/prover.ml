@@ -167,23 +167,11 @@ let instantiate_and_prove session fs =
     TermSet.fold
       (fun t (fs, gts) -> match t with
       | App (Constructor id, ts, Adt (ty_id, adts)) ->
-          let rec subst srt = match srt with
-          | FreeSrt sid ->
-              List.assoc_opt sid adts |>
-              Util.Opt.map (fun _ -> Adt (sid, adts)) |>
-              Util.Opt.get_or_else srt
-          | Map (asrts, rsrt) -> Map (List.map subst asrts, subst rsrt)
-          | Set ssrt -> Set (subst ssrt)
-          | Loc lsrt -> Loc (subst lsrt)
-          | Array asrt -> Array (subst asrt)
-          | ArrayCell asrt -> ArrayCell asrt
-          | _ -> srt
-          in              
           let adt = List.assoc ty_id adts in
           let destrs = List.assoc id adt in
           List.fold_left2
             (fun (fs, gts) arg (d_id, d_srt) ->
-              let d_srt = subst d_srt in
+              let d_srt = unfold_adts adts d_srt in
               let d = GrassUtil.mk_app d_srt (Destructor d_id) [t] in
               GrassUtil.mk_eq arg d :: fs, TermSet.add d gts)
             (fs, TermSet.add t gts) ts destrs
@@ -246,7 +234,7 @@ let instantiate_and_prove session fs =
       (*print_endline "Implied equalities:";
       print_endline (string_of_form (mk_and implied_eqs));*)
       let gts_inst = TermSet.union (ground_terms ~include_atoms:true (mk_and implied_eqs)) gts_inst in
-      let generators = if i > 1 then Reduction.get_read_propagators gts_inst else btwn_gen @ generators in
+      let generators = if i > 1 && false then Reduction.get_read_propagators gts_inst else btwn_gen @ generators in
       let gts_inst = generate_terms generators gts_inst in
       if i > 1 && not !Config.propagate_reads || TermSet.subset gts_inst gts_inst0 then 
         rev_concat [fs_inst; implied_eqs], gts_inst, cc_graph
