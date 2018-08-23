@@ -892,6 +892,22 @@ let sorts f =
   in
   fold_terms s SortSet.empty f
 
+(** Unfold the sort variables standing for ADTs [adts] in sort [srt] *)
+let unfold_adts adts srt =
+  let rec unfold srt = match srt with
+  | FreeSrt sid ->
+    List.assoc_opt sid adts |>
+    Util.Opt.map (fun _ -> Adt (sid, adts)) |>
+    Util.Opt.get_or_else srt
+  | Map (asrts, rsrt) -> Map (List.map unfold asrts, unfold rsrt)
+  | Set ssrt -> Set (unfold ssrt)
+  | Loc lsrt -> Loc (unfold lsrt)
+  | Array asrt -> Array (unfold asrt)
+  | ArrayCell asrt -> ArrayCell asrt
+  | _ -> srt
+  in 
+  unfold srt
+    
 (** Computes the set of free constants occuring in term [t].
  ** Takes accumulator [consts] as additional argument. *)
 let free_consts_term_acc consts t =
@@ -1180,11 +1196,20 @@ let subst_consts subst_map f =
  ** This operation is not capture avoiding. *)
 let subst_term subst_map t =
   let sub_id id t =
-    try IdMap.find id subst_map with Not_found -> t
+    IdMap.find_opt id subst_map |>
+    Opt.get_or_else t
   in
   let rec sub = function
-    | (Var (id, srt) as t) -> sub_id id t 
-    | App (sym, ts, srt) -> App (sym, List.map sub ts, srt)
+    | Var (id, srt) as t -> sub_id id t 
+    | App (sym, ts, srt) as t ->
+        let changed, ts1 =
+          List.fold_right (fun t (changed, ts1) ->
+            let t1 = sub t in
+            changed || t != t1, t1 :: ts1) ts (false, [])
+        in
+        if changed 
+        then App (sym, ts1, srt)
+        else t
   in sub t
 
 (** Substitute all function applications in term [t] according to function [fct]. *)
@@ -1207,13 +1232,19 @@ let subst_funs fct f =
 let subst_annot subst_map = function
     | TermGenerator (guards, gen_terms) -> 
         let guards1 = 
-          List.map 
+          List.map
             (function Match (t, f) -> Match (subst_term subst_map t, f))
             guards
         in
-        TermGenerator (guards1, List.map (subst_term subst_map) gen_terms)
-    | Pattern (t, fs) -> Pattern (subst_term subst_map t, fs)
-    | Label (pol, t) -> Label (pol, subst_term subst_map t)
+        let gen_terms1 =
+          List.map (subst_term subst_map)
+            gen_terms
+        in
+        TermGenerator (guards1, gen_terms1)
+    | Pattern (t, fs) ->
+        Pattern (subst_term subst_map t, fs)
+    | Label (pol, t) ->
+        Label (pol, subst_term subst_map t)
     | a -> a
     
 (** Substitutes all free variables in formula [f] with terms according to substitution map [subst_map].
@@ -1223,23 +1254,30 @@ let subst subst_map f =
     let not_bound id _ = not (List.mem_assoc id vs) in
     let sm1 = IdMap.filter not_bound sm in 
     let occuring = IdMap.fold (fun _ t acc -> fv_term_acc acc t) sm IdSet.empty in
-    let vs1, sm2 = 
-      List.fold_right 
-	(fun (x, srt) (vs1, sm2) ->
-	  if IdSet.mem x occuring 
-	  then 
-	    let x1 = fresh_ident (name x) in
-	    (x1, srt) :: vs1, IdMap.add x (Var (x1, srt)) sm2
-	  else (x, srt) :: vs1, sm2)
-	vs ([], sm1)
-    in vs1, sm2
+    List.fold_right 
+      (fun (x, srt) (vs1, sm2) ->
+	if IdSet.mem x occuring 
+	then 
+	  let x1 = fresh_ident (name x) in
+	  (x1, srt) :: vs1, IdMap.add x (Var (x1, srt)) sm2
+	else (x, srt) :: vs1, sm2)
+      vs ([], sm1)
   in
   let rec sub sm = function 
-    | BoolOp (op, fs) -> BoolOp (op, List.map (sub sm) fs)
-    | Atom (t, a) -> Atom (subst_term sm t, List.map (subst_annot sm) a)
-    | Binder (b, vs, f, a) ->
+    | BoolOp (op, fs) ->
+        let fs1 =
+          List.map (sub sm) fs
+        in
+        BoolOp (op, fs1)
+    | Atom (t, aa) ->
+        let t1 = subst_term sm t in
+        let aa1 = List.map (subst_annot sm) aa in
+        Atom (t1, aa1)
+    | Binder (b, vs, bf, aa) ->
         let vs1, sm1 = rename_vars vs sm in
-        Binder (b, vs1, sub sm1 f, List.map (subst_annot sm1) a)
+        let bf1 = sub sm1 bf in
+        let aa1 = List.map (subst_annot sm1) aa in
+        Binder (b, vs1, bf1, aa1)
   in sub subst_map f
 
 

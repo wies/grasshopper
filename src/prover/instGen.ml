@@ -111,11 +111,12 @@ let ematch filters t rep_terms egraph subst_maps =
     | Var (x, srt1) when srt1 = sort_of t2 ->
         List.fold_left 
           (fun out_subst_maps sm ->
-            if IdMap.mem x sm then
-              if IdMap.find x sm = t2 
-              then sm :: out_subst_maps
-              else out_subst_maps
-            else IdMap.add x t2 sm :: out_subst_maps)
+            match IdMap.find_opt x sm with
+            | Some t1 ->
+                if t1 = t2
+                then sm :: out_subst_maps
+                else out_subst_maps
+            | None -> IdMap.add x t2 sm :: out_subst_maps)
           [] subst_maps
     | _ ->
         (*print_endline (string_of_sort (sort_of t1) ^ " " ^ string_of_sort (sort_of t2) ^ " fail 2");*)
@@ -352,7 +353,7 @@ let generate_instances stratify useLocalInst axioms rep_terms egraph =
           else ematch [] (Var (v, srt)) rep_terms egraph subst_maps)
         fvars proto_subst_maps         
     in
-    let subst_maps = (*measure*) subst_maps () in
+    let subst_maps = measure_call "InstGen.subst_maps" subst_maps () in
     let _ = if Debug.is_debug 1 then
       begin
         print_endline "--------------------";
@@ -374,8 +375,8 @@ let generate_instances stratify useLocalInst axioms rep_terms egraph =
       end
     in
     (* generate instances of axiom *)
-    List.fold_left
-      (fun acc subst_map -> (subst subst_map f) :: acc) acc subst_maps
+    measure_call "InstGen.substitute" (List.fold_left
+      (fun acc subst_map -> (subst subst_map f) :: acc) acc) subst_maps
   in
   List.fold_left instantiate epr_axioms axioms
 
@@ -383,7 +384,7 @@ let generate_instances stratify useLocalInst axioms rep_terms =
   measure_call "InstGen.generate_instances" (generate_instances stratify useLocalInst axioms rep_terms)
 
 let instantiate_with_terms ?(force=false) ?(stratify=(!Config.stratify)) local axioms classes0 =
-    if !Config.instantiate || force then
+    if not !Config.instantiate && not force then axioms else
       (* remove theory atoms from congruence classes *)
       let filter_term t =
         sort_of t <> Bool ||
@@ -411,8 +412,6 @@ let instantiate_with_terms ?(force=false) ?(stratify=(!Config.stratify)) local a
       (* choose representatives for instantiation *)
       let reps_f, egraph = choose_rep_terms classes in
       generate_instances stratify local axioms reps_f egraph
-        else
-          axioms
             
 let instantiate_with_terms ?(force=false) ?(stratify=(!Config.stratify)) local axioms =
   measure_call "InstGen.instantiate_with_terms" (instantiate_with_terms ~force:force ~stratify:stratify local axioms)

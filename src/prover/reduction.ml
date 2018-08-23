@@ -17,34 +17,63 @@ let generated_ground_terms fs =
  ** Assumes that [f] is typed and in negation normal form. *)
 let elim_exists =
   let e = fresh_ident "?e" in
-  let rec elim_neq bvs = function
-    | BoolOp (Not, [Atom (App (Eq, [s1; s2], _), a)]) as f when bvs = [] ->
-	(match sort_of s1 with
+  let rec elim_neq seen_adts bvs = function
+    | BoolOp (Not, [Atom (App (Eq, [t1; t2], _), a)]) as f when bvs = [] ->
+	(match sort_of t1 with
 	| Set srt ->
 	    let ve = mk_var srt e in
-	    mk_exists [(e, srt)] (smk_or [smk_and [smk_elem ~ann:a ve s1; mk_not (smk_elem ~ann:a ve s2)];
-					 smk_and [smk_elem ~ann:a ve s2; mk_not (smk_elem ~ann:a ve s1)]])
+	    mk_exists [(e, srt)] (smk_or [smk_and [smk_elem ~ann:a ve t1; mk_not (smk_elem ~ann:a ve t2)];
+					 smk_and [smk_elem ~ann:a ve t2; mk_not (smk_elem ~ann:a ve t1)]])
         | Map (dsrts, rsrt) ->
             let vs = List.map (fun srt -> fresh_ident "?i", srt) dsrts in
             let vts = List.map (fun (v, srt) -> mk_var srt v) vs in
-            mk_exists vs (annotate (mk_neq (mk_read s1 vts) (mk_read s2 vts)) a)
+            mk_exists vs (annotate (mk_neq (mk_read t1 vts) (mk_read t2 vts)) a)
+        | Adt (id, adts) when not @@ IdSet.mem id seen_adts ->
+            let cstrs = List.assoc id adts in
+            let expand new_vs = function
+              | App (Constructor cid, ts, _) -> new_vs, [(cid, mk_true, ts)]
+              | t ->
+                  List.fold_left
+                    (fun (new_vs, cases) (cid, dstrs) ->
+                      let vs = List.map (fun (id, srt) -> fresh_ident "?x", unfold_adts adts srt) dstrs in
+                      let vts = List.map (fun (v, srt) -> mk_var srt v) vs in
+                      vs @ new_vs, (cid, mk_eq t (mk_constr (Adt (id, adts)) cid vts), vts) :: cases
+                    ) (new_vs, []) cstrs
+            in
+            let new_vs1, t1_cases = expand [] t1 in
+            let new_vs2, t2_cases = expand new_vs1 t2 in
+            let cases = List.fold_left
+              (fun cases (cid1, def_t1, args1) ->
+                List.fold_left
+                  (fun cases (cid2, def_t2, args2) ->
+                    if cid1 = cid2 then
+                      let seen_adts1 = IdSet.add id seen_adts in
+                      let sub_cases =
+                        List.map2 (fun arg1 arg2 -> elim_neq seen_adts1 bvs (mk_neq arg1 arg2)) args1 args2
+                      in
+                      mk_and [def_t1; def_t2; mk_or sub_cases] :: cases
+                    else mk_and [def_t1; def_t2] :: cases
+                  ) cases t2_cases
+              ) [] t1_cases
+            in
+            mk_exists ~ann:a new_vs2 (mk_or cases)
 	| _ -> f)
     | BoolOp (Not, [Atom (App (Disjoint, [s1; s2], _), a)]) when bvs = [] ->
         let srt = element_sort_of_set s1 in
-        elim_neq bvs (mk_not (Atom (App (Eq, [mk_inter [s1; s2]; mk_empty (Set srt)], Bool), a)))
+        elim_neq seen_adts bvs (mk_not (Atom (App (Eq, [mk_inter [s1; s2]; mk_empty (Set srt)], Bool), a)))
     | BoolOp (Not, [Atom (App (SubsetEq, [s1; s2], _), a)]) when bvs = [] ->
 	let srt = element_sort_of_set s1 in
 	let ve = mk_var srt e in
 	mk_exists [(e, srt)] (annotate (smk_and [smk_elem ve s1; mk_not (smk_elem ve s2)]) a)
-    | BoolOp (op, fs) -> smk_op op (List.map (elim_neq bvs) fs)
+    | BoolOp (op, fs) -> smk_op op (List.map (elim_neq IdSet.empty bvs) fs)
     | Binder (Exists, vs, f, a) ->
-        mk_exists ~ann:a vs (elim_neq bvs f)
+        mk_exists ~ann:a vs (elim_neq seen_adts bvs f)
     | Binder (Forall, vs, f, a) ->
-        mk_forall ~ann:a vs (elim_neq (bvs @ vs) f)
+        mk_forall ~ann:a vs (elim_neq seen_adts (bvs @ vs) f)
     | f -> f 
   in
   List.map (fun f -> 
-    let f1 = elim_neq [] f in
+    let f1 = elim_neq IdSet.empty [] f in
     let f2 = propagate_exists_up f1 in
     let f3 = skolemize f2 in
     f3)
