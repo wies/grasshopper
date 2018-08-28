@@ -227,11 +227,11 @@ let generate_terms generators ground_terms =
 let generate_terms generators =
   measure_call "InstGen.generate_terms" (generate_terms generators)
 
-let generate_instances stratify useLocalInst axioms rep_terms egraph = 
+let generate_instances stratify axioms rep_terms egraph = 
   (* *)
   let epr_axioms, axioms = 
     List.partition 
-      (fun f -> useLocalInst && IdSrtSet.is_empty (vars_in_fun_terms f)) 
+      (fun f -> IdSrtSet.is_empty (vars_in_fun_terms f)) 
       axioms
   in
   (*print_endline "EPR:";
@@ -240,11 +240,7 @@ let generate_instances stratify useLocalInst axioms rep_terms egraph =
     let _ = print_forms stdout axioms in*)
   let instantiate acc f =
     let fvars0 = sorted_free_vars f in
-    let fvars =
-      if useLocalInst 
-      then IdSrtSet.inter fvars0 (vars_in_fun_terms f)
-      else fvars0
-    in
+    let fvars = IdSrtSet.inter fvars0 (vars_in_fun_terms f) in
     (* filter out stratified variables *)
     let fvars, strat_vars =
       let merge_map k a b = match (a,b) with
@@ -266,7 +262,7 @@ let generate_instances stratify useLocalInst axioms rep_terms egraph =
           (fun_terms_with_vars f)
           IdMap.empty
       in
-        if stratify && useLocalInst then
+        if stratify then
           IdSrtSet.partition
             (fun (id, srt) ->
               try
@@ -284,7 +280,6 @@ let generate_instances stratify useLocalInst axioms rep_terms egraph =
     let strat_var_ids = IdSrtSet.fold (fun (id, _) acc -> IdSet.add id acc) strat_vars IdSet.empty in 
     (* collect all terms in which free variables appear below function symbols *)
     let fun_terms, fun_vars, strat_terms = 
-      if not useLocalInst then TermSet.empty, IdSet.empty, TermSet.empty else
       let rec tt (fun_terms, fun_vars, strat_terms) t =
         match t with
         | App (sym, _ :: _, srt) when srt <> Bool ->
@@ -335,7 +330,7 @@ let generate_instances stratify useLocalInst axioms rep_terms egraph =
     (* generate substitution maps *)
     let subst_maps () =
       (* generate substitution maps for variables that appear below function symbols *)
-      let proto_subst_maps =
+      let subst_maps =
         List.fold_left
           (fun subst_maps (t, fs) ->
             (*print_endline ("Matching term " ^ string_of_term t);*)
@@ -345,13 +340,7 @@ let generate_instances stratify useLocalInst axioms rep_terms egraph =
           )
           [IdMap.empty] fun_terms_with_filters 
       in
-      (* complete substitution maps for remaining variables *)
-      IdSrtSet.fold 
-        (fun (v, srt) subst_maps -> 
-          if IdSet.mem v fun_vars
-          then subst_maps
-          else ematch [] (Var (v, srt)) rep_terms egraph subst_maps)
-        fvars proto_subst_maps         
+      subst_maps
     in
     let subst_maps = measure_call "InstGen.subst_maps" subst_maps () in
     let _ = if Debug.is_debug 1 then
@@ -380,10 +369,10 @@ let generate_instances stratify useLocalInst axioms rep_terms egraph =
   in
   List.fold_left instantiate epr_axioms axioms
 
-let generate_instances stratify useLocalInst axioms rep_terms =
-  measure_call "InstGen.generate_instances" (generate_instances stratify useLocalInst axioms rep_terms)
+let generate_instances stratify axioms rep_terms =
+  measure_call "InstGen.generate_instances" (generate_instances stratify axioms rep_terms)
 
-let instantiate_with_terms ?(force=false) ?(stratify=(!Config.stratify)) local axioms classes0 =
+let instantiate_with_terms ?(force=false) ?(stratify=(!Config.stratify)) axioms classes0 =
     if not !Config.instantiate && not force then axioms else
       (* remove theory atoms from congruence classes *)
       let filter_term t =
@@ -411,7 +400,7 @@ let instantiate_with_terms ?(force=false) ?(stratify=(!Config.stratify)) local a
       in
       (* choose representatives for instantiation *)
       let reps_f, egraph = choose_rep_terms classes in
-      generate_instances stratify local axioms reps_f egraph
+      generate_instances stratify axioms reps_f egraph
             
-let instantiate_with_terms ?(force=false) ?(stratify=(!Config.stratify)) local axioms =
-  measure_call "InstGen.instantiate_with_terms" (instantiate_with_terms ~force:force ~stratify:stratify local axioms)
+let instantiate_with_terms ?(force=false) ?(stratify=(!Config.stratify)) axioms =
+  measure_call "InstGen.instantiate_with_terms" (instantiate_with_terms ~force:force ~stratify:stratify axioms)

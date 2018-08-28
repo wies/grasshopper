@@ -981,10 +981,17 @@ let ground_terms_term_acc ?(include_atoms=false) terms t =
   in
   fst (gt terms t)
 
-(** Computes the set of all ground terms in term [t].
- ** Takes accumulator [terms] as additional arguments *)
+(** Computes the set of all ground terms in term [t]. *)
 let ground_terms_term ?(include_atoms=false) t =
   ground_terms_term_acc ~include_atoms:include_atoms TermSet.empty t
+
+(** Computes the set of ground terms appearing in [f].
+ ** Free variables are treated as implicitly universally quantified.
+ ** Takes accumulator [terms] as additional argument. *)
+let ground_terms_acc ?(include_atoms=false) terms f =
+   fold_terms
+    (ground_terms_term_acc ~include_atoms:include_atoms) 
+    terms f
     
 (** Computes the set of ground terms appearing in [f].
  ** Free variables are treated as implicitly universally quantified *)

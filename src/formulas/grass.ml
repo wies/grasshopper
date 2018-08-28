@@ -67,7 +67,7 @@ module SortMap = Map.Make(struct
 type sorted_ident = ident * sort
 
 type arity = sort list * sort
-
+      
 (** symbols *)
 type symbol =
   (* interpreted constant symbols *)
@@ -95,6 +95,8 @@ type symbol =
   (* for patterns *)
   | Known
 
+type sorted_symbol = symbol * arity
+      
 let symbols = 
   [BoolConst true; BoolConst false; 
    Null; Read; Write; EntPnt;
@@ -118,12 +120,12 @@ module SymbolMap = Map.Make(struct
   end)
 
 module SortedSymbolSet = Set.Make(struct
-    type t = symbol * arity
+    type t = sorted_symbol
     let compare = compare
   end)
 
 module SortedSymbolMap = Map.Make(struct
-    type t = symbol * arity
+    type t = sorted_symbol
     let compare = compare
   end)
 
@@ -141,9 +143,13 @@ let symbol_of = function
   | App (sym, _, _) -> Some sym
         
 let sort_of = function
-  | Var (_, s) 
-  | App (_, _, s) -> s
+  | Var (_, srt) 
+  | App (_, _, srt) -> srt
 
+let sorted_symbol_of = function
+  | Var _ -> None
+  | App (sym, ts, srt) -> Some (sym, (List.map sort_of ts, srt))
+        
 let rec sort_ofs = function
   | [] -> failwith "tried to extract sort from empty list of terms"
   | t :: ts -> sort_of t
