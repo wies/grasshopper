@@ -343,7 +343,7 @@ let generate_instances stratify axioms rep_terms egraph =
       subst_maps
     in
     let subst_maps = measure_call "InstGen.subst_maps" subst_maps () in
-    let _ = if Debug.is_debug 1 then
+    let _ = if Debug.is_debug 1 && subst_maps <> [IdMap.empty] then
       begin
         print_endline "--------------------";
         print_endline (string_of_form f);
