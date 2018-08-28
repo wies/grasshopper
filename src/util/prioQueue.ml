@@ -158,6 +158,23 @@ module Make(K: OrderedType)(P: OrderedType) = struct
   let extract_min t =
     let k, p, l, m = get_winner t in
     k, p, second_best l m
-              
+
+  let rec fold fn init = function
+    | Leaf -> init
+    | Node (_, k, p, l, _, r) ->
+        let rinit = fold fn (fn init k p) l in
+        fold fn rinit r
+
+  let rec find_opt k = function
+    | Leaf -> None
+    | t ->
+        if size t = 1 then
+          let k2, p = get_singleton t in
+          if K.compare k k2 = 0 then Some p else None
+        else
+          let l, r = get_play t in
+          if K.compare k (max_key l) <= 0
+          then find_opt k l
+          else find_opt k r
 end
 

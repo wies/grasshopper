@@ -396,11 +396,15 @@ let create () : dag =
   cc_graph#add_neq mk_true_term mk_false_term;
   cc_graph
 
+let rep_of_term cc_graph t = (cc_graph#get_node t)#find
+
+let term_of_rep cc_graph n = cc_graph#get_term n
+    
 let get_classes cc_graph = cc_graph#get_cc
     
-let congruence_classes fs =
+let congruence_classes gts fs =
   create () |>
-  add_terms (ground_terms ~include_atoms:true (mk_and fs)) |>
+  add_terms (ground_terms_acc ~include_atoms:true gts (mk_and fs)) |>
   add_conjuncts fs |>
   get_classes
       
@@ -408,3 +412,4 @@ let class_of t classes = List.find (List.mem t) classes
 
 let restrict_classes classes ts =
   List.filter (fun cc -> List.exists (fun t -> TermSet.mem t ts) cc) classes
+

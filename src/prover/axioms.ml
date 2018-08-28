@@ -315,7 +315,11 @@ let reach_axioms classes struct_srt =
 let null_axioms struct_srt1 =
   let n = mk_null struct_srt1 in
   let nll = mk_eq (f n) n in
-  [mk_axiom "read_null" nll]
+  let generator =
+    [Match (fld1 struct_srt1, [])], 
+    [f n]
+  in
+  [mk_axiom ~gen:[generator] "read_null" nll]
 
 
 (** Frame axioms *)

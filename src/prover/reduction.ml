@@ -420,10 +420,15 @@ let add_read_write_axioms fs =
   let basic_structs = struct_sorts_of_fields basic_pt_flds in
   (* instantiate null axioms *)
   let axioms = SortSet.fold (fun srt axioms -> Axioms.null_axioms srt @ axioms) basic_structs [] in
-  let null_ax, _ = open_axioms ~force:true isFld axioms in
-  let classes = CongruenceClosure.congruence_classes fs in
+  let null_ax, generators = open_axioms ~force:true isFld axioms in
+  let generators = match generators with
+  | [[Match (v, _)], t] -> [[Match (v, [FilterGeneric (fun sm t -> TermSet.mem (subst_term sm v) basic_pt_flds)])], t]
+  | gs -> gs
+  in
+  let gts = generate_terms generators gts in
+  let classes = CongruenceClosure.congruence_classes gts fs in
   (* CAUTION: not forcing the instantiation here would yield an inconsistency with the read/write axioms *)
-  let null_ax1 = instantiate_with_terms ~force:true false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
+  let null_ax1 = instantiate_with_terms ~force:true null_ax classes in
   let fs1 = null_ax1 @ fs in
   let gts = TermSet.union (ground_terms ~include_atoms:true (mk_and null_ax1)) gts in
   (* propagate read terms *)
@@ -461,7 +466,7 @@ let add_reach_axioms fs =
       | _ -> struct_sorts)
       (sorts (mk_and fs)) SortSet.empty
   in  
-  let classes = CongruenceClosure.congruence_classes fs in
+  let classes = CongruenceClosure.congruence_classes TermSet.empty fs in
   let axioms =
     SortSet.fold
       (fun srt axioms -> Axioms.reach_axioms classes srt @ Axioms.reach_write_axioms srt @ axioms)

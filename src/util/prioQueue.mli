@@ -36,5 +36,6 @@ module Make(K: OrderedType)(P: OrderedType): sig
 
   val adjust: (P.t -> P.t) -> K.t -> t -> t
     (* runs in O(log n) *)
- 
+
+  val find_opt: K.t -> t -> P.t option
 end
