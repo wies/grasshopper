@@ -27,9 +27,9 @@ let empty: 'a t = 0
 (** Compute index of [x] into bit array. *)
 let get_index x =
   let rec get_index h salt =
-    if h = max then get_index (hash_with_salt x salt) (salt + 1) else h
+    if h = max then get_index (hash_with_salt x salt land max) (salt + 1) else h
   in
-  get_index (hash x) 1
+  get_index (hash x land max) 1
     
 (** Create the singleton approximate from element [x]. *)
 let singleton x =
