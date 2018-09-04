@@ -81,6 +81,8 @@ let generate_list (f : int -> 'a) (n : int) : 'a list =
     else mk_tl (n - 1) (f (n - 1) :: acc) 
   in mk_tl n []
 
+(** Tail-recursive concatenation of lists *)
+let rev_concat lists = List.fold_left (List.fold_left (fun acc f -> f :: acc)) [] lists
 
 (** Composition of [List.map] and [List.filter] *)
 let filter_map p f xs =
@@ -89,7 +91,6 @@ let filter_map p f xs =
 (** Composition of [List.filter] and [List.rev_map] *)
 let filter_rev_map p f xs =
   List.fold_left (fun ys x -> if p x then f x :: ys else ys) [] xs
-
     
 (** Composition of [List.map] and [List.partition] *)
 let partition_map p f xs =
@@ -117,8 +118,11 @@ let rec find_map fn = function
       match fn x with
       | None -> find_map fn xs
       | v -> v
-
-let flat_map f ls = List.flatten (List.map f ls)
+            
+let flat_map f ls =
+  ls |>
+  List.rev_map (fun l -> f l |> List.rev) |>
+  rev_concat
 
 let find_index elt ls =
   let rec traverse i lst = match lst with
@@ -184,9 +188,6 @@ let unzip xys =
     | [] -> List.rev xs, List.rev ys
   in
   uz ([], []) xys
-
-(** Tail-recursive concatenation of lists *)
-let rev_concat lists = List.fold_left (List.fold_left (fun acc f -> f :: acc)) [] lists
 
 let iteri fct lst =
   let rec iter idx lst =
@@ -332,15 +333,16 @@ let rec remove_duplicates eq lst = match lst with
 
 open Format
 
-let rec pr_list_comma pr_x ppf = function
+let rec pr_list i pr_sep pr_x ppf = function
   | [] -> ()
-  | [x] -> fprintf ppf "%a" pr_x x
-  | x :: xs -> fprintf ppf "%a,@ %a" pr_x x (pr_list_comma pr_x) xs
+  | [x] -> fprintf ppf "%a" (pr_x i) x
+  | x :: xs -> fprintf ppf "%a%a%a" (pr_x i) x pr_sep () (pr_list (i + 1) pr_sep pr_x) xs
+  
+let rec pr_list_comma pr_x ppf =
+  pr_list 0 (fun ppf _ -> fprintf ppf ",@ ") (fun _ -> pr_x) ppf 
 
-let rec pr_list_nl pr_x ppf = function
-  | [] -> ()
-  | [x] -> fprintf ppf "%a" pr_x x
-  | x :: xs -> fprintf ppf "%a@\n%a" pr_x x (pr_list_nl pr_x) xs
+let rec pr_list_nl pr_x ppf = 
+  pr_list 0 (fun ppf _ -> fprintf ppf "@\n") (fun _ -> pr_x) ppf 
 
             
 let print_of_format pr x out_ch = fprintf (formatter_of_out_channel out_ch) "%a@?" pr x
@@ -349,3 +351,4 @@ let print_of_format pr x out_ch = fprintf (formatter_of_out_channel out_ch) "%a@
 let string_of_format pr t = pr str_formatter t; flush_str_formatter ()
 
 let print_list out_ch pr xs = print_of_format (pr_list_comma pr) xs out_ch
+

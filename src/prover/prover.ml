@@ -191,7 +191,9 @@ let instantiate_and_prove session fs =
   let round1 fs_inst gts_inst cc_graph =
     let equations = List.filter (fun f -> is_horn false [f]) fs_inst in
     let ground_fs = List.filter is_ground fs_inst in
-    let eqs = instantiate_with_terms equations (CongruenceClosure.get_classes cc_graph) in
+    let code, patterns = EMatching.generate_ematch_code_from_axioms equations in
+    let eqs = EMatching.instantiate_axioms_from_code patterns code cc_graph in
+    (*let eqs = instantiate_with_terms equations (CongruenceClosure.get_classes cc_graph) in*)
     let gts1 = TermSet.union (ground_terms ~include_atoms:true (mk_and eqs)) gts_inst in
     let fs, gts1 = generate_adt_terms fs gts1 in
     let eqs1 = List.filter (fun f -> IdSet.is_empty (fv f)) eqs in
@@ -220,6 +222,13 @@ let instantiate_and_prove session fs =
         gts_a TermSet.empty
     in
     let fs1 = linearize fs1 in
+    let code, patterns = EMatching.generate_ematch_code_from_axioms fs1 in
+    (*let _ =
+      print_endline "E-matching code:";
+      EMatching.print_ematch_code
+        (fun ppf (f, _, _, _, _, _) -> pr_form ppf f) stdout code;
+      print_newline ()
+    in*)
     let rec saturate i fs_inst gts_inst0 cc_graph =
       (*Printf.printf "Saturate iteration %d\n" i; flush stdout;*)
       let gts_inst = TermSet.union gts_inst0 core_terms in
@@ -244,7 +253,8 @@ let instantiate_and_prove session fs =
           measure_call "cc_gen" (fun cc_graph -> cc_graph |> CongruenceClosure.add_terms gts_inst) |>
           CongruenceClosure.add_conjuncts (rev_concat [fs_inst; fs])
         in
-        let fs_inst = instantiate_with_terms fs1 (CongruenceClosure.get_classes cc_graph) in
+        (*let fs_inst = instantiate_with_terms fs1 (CongruenceClosure.get_classes cc_graph) in*)
+        let fs_inst = EMatching.instantiate_axioms_from_code patterns code cc_graph in
         saturate (i + 1) fs_inst gts_inst cc_graph
     in
     let saturate i fs_inst gts_inst0 = measure_call "saturate" (saturate i fs_inst gts_inst0) in
