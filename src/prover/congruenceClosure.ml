@@ -6,7 +6,7 @@ open GrassUtil
   
 module rec Node : sig
   type t =
-    < get_sym: symbol;
+    < get_sym: sorted_symbol;
       get_args: t list;
       get_arity: int;
       set_ccparent: NodeSet.t -> unit;
@@ -14,6 +14,8 @@ module rec Node : sig
       get_ccparent: NodeSet.t;
       get_parent: t option;
       set_parent: t -> unit;
+      get_funs: sorted_symbol BloomFilter.t;
+      set_funs: sorted_symbol BloomFilter.t -> unit;
       find: t;
       union: t -> unit;
       ccpar: NodeSet.t;
@@ -22,11 +24,11 @@ module rec Node : sig
     >
 
   val compare: t -> t -> int
-  val create: symbol -> t list -> t
+  val create: sorted_symbol -> t list -> t
       
   end = struct
   type t =
-    < get_sym: symbol;
+    < get_sym: sorted_symbol;
       get_args: t list;
       get_arity: int;
       set_ccparent: NodeSet.t -> unit;
@@ -34,6 +36,8 @@ module rec Node : sig
       get_ccparent: NodeSet.t;
       get_parent: t option;
       set_parent: t -> unit;
+      get_funs: sorted_symbol BloomFilter.t;
+      set_funs: sorted_symbol BloomFilter.t -> unit;
       find: t;
       union: t -> unit;
       ccpar: NodeSet.t;
@@ -45,7 +49,7 @@ module rec Node : sig
         
   class node = 
   fun
-    (sym: symbol) 
+    (sym: sorted_symbol) 
     (args: t list) -> 
   object (self)
     method get_sym = sym
@@ -61,8 +65,11 @@ module rec Node : sig
     method get_ccparent = ccparent
     
     val mutable parent: node option = None
+        
     method get_parent: node option = parent
+        
     method set_parent (n: node) = parent <- Some n
+        
     method find: node = match parent with
       | None -> (self :> node)
       | Some n ->
@@ -72,19 +79,31 @@ module rec Node : sig
             p
         end
 
+    val mutable funs: sorted_symbol BloomFilter.t =
+      match args with
+      | [] -> BloomFilter.empty
+      | _ -> BloomFilter.singleton sym
+      
+    method get_funs: sorted_symbol BloomFilter.t = funs
+    method set_funs symbols = funs <- symbols
+            
     method union (that: node) = 
       let n1 = self#find in
       let n2 = that#find in
-        n1#set_parent n2;
-        n2#set_ccparent (NodeSet.union n1#get_ccparent n2#get_ccparent);
-        n1#set_ccparent NodeSet.empty
+      let n1, n2 =
+        if n1#get_arity <> 0 && n2#get_arity = 0
+        then n1, n2
+        else n2, n1
+      in
+      n1#set_parent n2;
+      n2#set_ccparent (NodeSet.union n1#get_ccparent n2#get_ccparent);
+      n1#set_ccparent NodeSet.empty;
+      n2#set_funs (BloomFilter.union n1#get_funs n2#get_funs)
 
     method ccpar: NodeSet.t = (self#find)#get_ccparent
 
     method congruent (that: node) =
         self#get_sym = that#get_sym
-      &&
-        self#get_arity = that#get_arity
       &&
         List.for_all2 (fun a b -> a#find = b#find) self#get_args that#get_args
 
@@ -113,7 +132,19 @@ module rec Node : sig
   let create sym terms: t = new node sym terms
   end
 and NodeSet: Set.S with type elt = Node.t = Set.Make(Node)
-        
+
+
+module NodeListSet = Set.Make(struct
+    type t = Node.t list
+    let compare = compare
+  end)
+    
+module EGraph = Map.Make(struct
+    type t = Node.t * sorted_symbol
+    let compare = compare
+  end)
+
+      
 class dag = fun (terms: TermSet.t) ->
   let table1 = Hashtbl.create 53 in
   let table2 = Hashtbl.create 53 in
@@ -132,9 +163,9 @@ class dag = fun (terms: TermSet.t) ->
     (*print_endline ("CC adding: " ^ (string_of_term t));*)
     match t with
     | Var (v, _) -> failwith "CC: term not ground" (* create_and_add var (FreeSym v) []*)
-    | App (sym, args, _) as appl ->
+    | App (_, args, _) as appl ->
       let node_args = List.map convert_term args in
-      let new_node  = create_and_add appl sym node_args in
+      let new_node  = create_and_add appl (sorted_symbol_of appl |> Opt.get) node_args in
         List.iter (fun n -> n#add_ccparent new_node) node_args;
         new_node
   in
@@ -215,6 +246,23 @@ class dag = fun (terms: TermSet.t) ->
           ) nodes;
         Hashtbl.fold (fun _ cc acc -> cc::acc) node_to_cc []
 
+    method get_egraph =
+      let egraph = 
+        Hashtbl.fold (fun _ n egraph -> 
+          let n_rep = n#find in
+          let arg_reps =
+            List.map (fun n -> n#find) n#get_args
+          in
+          let other_args_reps =
+            EGraph.find_opt (n_rep, n#get_sym) egraph |>
+            Opt.get_or_else NodeListSet.empty
+          in
+          EGraph.add (n_rep, n#get_sym) (NodeListSet.add arg_reps other_args_reps) egraph)
+          nodes EGraph.empty
+      in
+      egraph
+          
+        
     (* Returns a function that tests if two terms must be different *)
     method get_conflicts =
       let repr = self#get_term in
@@ -399,17 +447,28 @@ let create () : dag =
 let rep_of_term cc_graph t = (cc_graph#get_node t)#find
 
 let term_of_rep cc_graph n = cc_graph#get_term n
+
+let funs_of_rep ccgraph n = n#get_funs
+    
+let get_egraph cc_graph = cc_graph#get_egraph
     
 let get_classes cc_graph = cc_graph#get_cc
     
 let congruence_classes gts fs =
   create () |>
   add_terms (ground_terms_acc ~include_atoms:true gts (mk_and fs)) |>
-  add_conjuncts fs |>
-  get_classes
+  add_conjuncts fs
       
 let class_of t classes = List.find (List.mem t) classes
 
+let print_classes cc_graph =
+  ignore
+    (List.fold_left (fun num cl ->
+      print_endline ("Class " ^ string_of_int num ^ ": " ^ (string_of_sort (sort_of (List.hd cl))));
+      List.iter (fun t -> print_endline ("    " ^ (string_of_term t))) cl; 
+      print_newline ();
+      num + 1) 1 (List.sort compare (cc_graph#get_cc)))
+    
 let restrict_classes classes ts =
   List.filter (fun cc -> List.exists (fun t -> TermSet.mem t ts) cc) classes
 

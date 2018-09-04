@@ -159,12 +159,6 @@ module Make(K: OrderedType)(P: OrderedType) = struct
     let k, p, l, m = get_winner t in
     k, p, second_best l m
 
-  let rec fold fn init = function
-    | Leaf -> init
-    | Node (_, k, p, l, _, r) ->
-        let rinit = fold fn (fn init k p) l in
-        fold fn rinit r
-
   let rec find_opt k = function
     | Leaf -> None
     | t ->
@@ -176,5 +170,22 @@ module Make(K: OrderedType)(P: OrderedType) = struct
           if K.compare k (max_key l) <= 0
           then find_opt k l
           else find_opt k r
+
+  let rec fold fn t init = match t with
+  | Leaf -> init
+  | Node (_, k, p, l, _, r) ->
+      let rinit = fold fn l (fn k p init) in
+      fold fn r rinit
+
+  let rec exists fn = function
+    | Leaf -> false
+    | Node (_, k, p, l, _, r) ->
+        fn k p || exists fn l || exists fn r
+
+  let rec forall fn = function
+    | Leaf -> true
+    | Node (_, k, p, l, _, r) ->
+        fn k p && forall fn l && forall fn r
+
 end
 

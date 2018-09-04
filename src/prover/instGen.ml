@@ -376,7 +376,7 @@ let instantiate_with_terms ?(force=false) ?(stratify=(!Config.stratify)) axioms 
     if not !Config.instantiate && not force then axioms else
       (* remove theory atoms from congruence classes *)
       let filter_term t =
-        sort_of t <> Bool ||
+        true || sort_of t <> Bool ||
         Opt.get_or_else false
           (Opt.map
              (((=) Frame) |||

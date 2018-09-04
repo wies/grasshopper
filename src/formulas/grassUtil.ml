@@ -551,6 +551,10 @@ let filter_annotations fn f =
         Binder (b, vs, f1, List.filter fn ann)
   in fa f
 
+(** Remove all annotations from formula [f]. *)
+let strip_annotations f =
+  filter_annotations (fun _ -> false) f
+    
 (** Remove all comments from formula [f]. *)
 let strip_comments f = 
   filter_annotations 

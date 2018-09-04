@@ -469,31 +469,32 @@ let rec pr_form ppf = function
   | Atom (t, a) -> fprintf ppf "@[(%a%a)@]" pr_term t pr_annot a
 
 and pr_form_paran ppf f = fprintf ppf "(%a)" pr_form f
-        
+    
+and pr_filter ppf fs =
+  let ids =
+    List.fold_right
+      (fun f ids -> match f with
+      | FilterSymbolNotOccurs sym ->
+          string_of_symbol sym :: ids
+      | FilterReadNotOccurs (name, _) ->
+          name :: ids
+      | FilterNotNull ->
+          string_of_symbol Null :: ids
+      | _ ->
+          ids)
+      fs []
+  in
+  match ids with
+  | [] -> ()
+  | _ -> fprintf ppf "@ without@ %s" (String.concat ", " ids)
+  
+    
 and pr_annot ppf a =
   let gen = extract_gens a in
   let name = extract_name a in
   let pos = extract_src_pos a in
   let lbl = extract_label a in
   let pat = extract_patterns a in
-  let pr_filter ppf fs =
-    let ids =
-      List.fold_right
-        (fun f ids -> match f with
-          | FilterSymbolNotOccurs sym ->
-              string_of_symbol sym :: ids
-          | FilterReadNotOccurs (name, _) ->
-              name :: ids
-          | FilterNotNull ->
-              string_of_symbol Null :: ids
-          | _ ->
-              ids)
-        fs []
-    in
-    match ids with
-    | [] -> ()
-    | _ -> fprintf ppf "@ without@ %s" (String.concat ", " ids)
-  in
   let rec pr_match_list ppf = function
     | [] -> ()
     | [(m, f)] ->
@@ -573,10 +574,10 @@ let string_of_arity arity =
 
 
 (** Print term [t] to out channel [out_chan]. *)
-let print_term out_ch t = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_term t
+let print_term out_ch t = print_of_format pr_term t out_ch
 
 (** Print formula [f] to out channel [out_chan]. *)
-let print_form out_ch f = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_form f
+let print_form out_ch f = print_of_format pr_form f out_ch
 
 let print_forms ch fs = 
   List.iter (fun f -> print_form ch f;  output_string ch "\n") fs
