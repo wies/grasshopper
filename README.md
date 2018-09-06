@@ -39,6 +39,9 @@ opam install -y ocamlbuild
 eval $(opam config env)
 ```
 
+To run the tests (see below) you will also need the `gtime, gdate` commands,
+which can be installed in Mac OS using homebrew (`brew install coreutils`).
+
 Installation Instructions 
 -------------------------
 - To produce native code compiled executables, run 
