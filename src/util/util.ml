@@ -72,6 +72,37 @@ module Opt = struct
     | o -> o
 end
 
+(** The Either type to represent values of two possible types. *)
+module Either = struct
+  type ('a, 'b) t =
+    | First of 'a
+    | Second of 'b
+
+  let first a = First a
+
+  let second b = Second b
+          
+  let is_first = function
+    | First _ -> true
+    | Second _ -> false
+
+  let is_second = function
+    | First _ -> false
+    | Second _ -> true
+
+  let map f s = function
+    | First a -> First (f a)
+    | Second b -> Second (s b)
+
+  let value_map f s = function
+    | First a -> f a
+    | Second b -> s b 
+          
+  let value = function
+    | First a
+    | Second a -> a
+end
+    
 (** Utility functions on lists *)
 
 (** generate a list of length [n] using generator [f] *)
