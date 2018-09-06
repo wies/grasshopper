@@ -191,7 +191,7 @@ let instantiate_and_prove session fs =
   let round1 fs_inst gts_inst cc_graph =
     let equations = List.filter (fun f -> is_horn false [f]) fs_inst in
     let ground_fs = List.filter is_ground fs_inst in
-    let code, patterns = EMatching.generate_ematch_code_from_axioms equations in
+    let code, patterns = EMatching.compile_axioms_to_ematch_code equations in
     let eqs = EMatching.instantiate_axioms_from_code patterns code cc_graph in
     (*let eqs = instantiate_with_terms equations (CongruenceClosure.get_classes cc_graph) in*)
     let gts1 = TermSet.union (ground_terms ~include_atoms:true (mk_and eqs)) gts_inst in
@@ -222,11 +222,11 @@ let instantiate_and_prove session fs =
         gts_a TermSet.empty
     in
     let fs1 = linearize fs1 in
-    let code, patterns = EMatching.generate_ematch_code_from_axioms fs1 in
+    let code, patterns = EMatching.compile_axioms_to_ematch_code fs1 in
     (*let _ =
       print_endline "E-matching code:";
       EMatching.print_ematch_code
-        (fun ppf (f, _, _, _, _, _) -> pr_form ppf f) stdout code;
+        (fun ppf (f, _) -> pr_form ppf f) stdout code;
       print_newline ()
     in*)
     let rec saturate i fs_inst gts_inst0 cc_graph =

@@ -154,6 +154,10 @@ let rec sort_ofs = function
   | [] -> failwith "tried to extract sort from empty list of terms"
   | t :: ts -> sort_of t
 
+let args_of = function
+  | Var _ -> []
+  | App (_, args, _) -> args
+        
 type subst_map = term IdMap.t
 
 module TermSet = Set.Make(struct
