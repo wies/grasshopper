@@ -30,11 +30,15 @@ type state = TermSet.t
  *)
 type step = (TermSet.t, (term * term) list) Either.t
 
+(** Maps to keep track of register/symbol pairs that should be pruned after init/bind *)
 type prune_map = (int * sorted_symbol) list TermMap.t
+
+(** Inverted paths of symbol/argument position pairs from subterms to parent terms *)
+type inv_path = (sorted_symbol * int) list
       
 (** E-matching code trees for instantiating templates of some type 'a *)
 type 'a ematch_code =
-  | Init of step * esymbol * int * prune_map * 'a ematch_code
+  | Init of step * esymbol * (int * inv_path) option * int * prune_map * 'a ematch_code
   | Bind of int * sorted_symbol * int * prune_map * 'a ematch_code
   | Check of int * term * 'a ematch_code
   | Compare of int * int * 'a ematch_code
@@ -62,9 +66,17 @@ let pr_ematch_code pr_inst ppf =
   let rec pr_ematch_code ppf = function
     | Choose cs ->
         fprintf ppf "@<-3>%s@ %a" "choose" pr_choose cs
-    | Init (step, sym, i, pm, next) ->
+    | Init (step, sym, None, i, pm, next) ->
         fprintf ppf "init(@[%a,@ %d@])@\n%a@\n%a"
           pr_step step i
+          (pr_list 0 (fun ppf _ -> fprintf ppf "@\n") pr_prune) (TermMap.bindings pm)
+          pr_ematch_code next
+    | Init (step, sym, Some (i, path), o, pm, next) ->
+        fprintf ppf "join(@[%a,@ %d,@ [%a],@ %d@])@\n%a@\n%a"
+          pr_step step
+          i
+          (pr_list_comma (fun ppf (sym, i) -> fprintf ppf "(%a,@ %d)" pr_sym (fst sym) i)) path
+          o
           (pr_list 0 (fun ppf _ -> fprintf ppf "@\n") pr_prune) (TermMap.bindings pm)
           pr_ematch_code next
     | Bind (i, sym, o, pm, next) ->
@@ -115,7 +127,7 @@ let print_ematch_code string_of_inst out_ch code =
 
 (** Get the continuation of the first command *)
 let continuation = function
-  | Init (_, _, _, _, next)
+  | Init (_, _, _, _, _, next)
   | Bind (_, _, _, _, next)
   | Check (_, _, next)
   | Compare (_, _, next)
@@ -126,7 +138,7 @@ let continuation = function
 (** Get the maximum register in code tree c, yields -1 if c uses no registers *)
 let max_reg c =
   let rec mr m = function
-    | Init (_, _, i, _, c) 
+    | Init (_, _, _, i, _, c)
     | Check (i, _, c)
     | ChooseTerm (_, i, c, _, _) -> mr (max m i) c
     | Filter (_, c)
@@ -159,7 +171,7 @@ module WQ = PrioQueue.Make
       let compare t1 t2 =
         (* Rational for the following definition: 
          * Entries i -> x and i -> t where t is ground should be processed before entries i -> f(t_1, ..., t_n).
-         * This is to delay the creation of branching nodes that introduce backtracking points. *)
+         * This is to delay the creation of e-matching code that introduces backtracking points. *)
         if is_ground_term t1 && not @@ is_ground_term t2 then -1
         else match t1, t2 with
         | Var _, App _ -> -1
@@ -206,7 +218,7 @@ let compile (patterns: ('a pattern) list): 'a ematch_code =
       if c1 = 0 then
         (* next, prioritize terms that occur more often across many patterns *)
         let c2 = compare (get_count t2) (get_count t1) in
-        if c2 = 0 then compare t1 t2
+        if c2 = 0 then compare t2 t1
         else c2
       else c1
     in
@@ -241,12 +253,38 @@ let compile (patterns: ('a pattern) list): 'a ematch_code =
         TermMap.add t (template :: t_templates) fs, gs
     | None -> fs, template :: gs
   in
+  (* Get shortest inverted path from some variable x bound 
+   * in v that is a subterm of t, if such x exists. *)
+  let get_path v t =
+    let rec gp shortest path = function
+      | App (_, [], _) -> shortest
+      | Var (x, _) ->
+          let smaller =
+            shortest |>
+            Opt.fold (fun _ (_, p) -> List.length path < List.length p) true
+          in
+          if smaller then
+            IdMap.find_opt x v |>
+            Opt.map (fun i -> (i, path)) |>
+            Opt.lazy_or_else (fun () -> shortest)
+          else shortest
+      | App (_, args, _) as t ->
+          let sym = sorted_symbol_of t |> Opt.get in
+          let new_shortest, _ =
+            List.fold_left
+              (fun (ns, k) arg -> gp ns ((sym, k) :: path) arg, k + 1)
+              (shortest, 0) args
+          in
+          new_shortest
+    in
+    gp None [] t
+  in
   (* Compile a multi-pattern into a code tree.
    * f: info about current term of the multi-pattern that is being processed.
    * pattern: remaining trigger terms of the multi-pattern that still need to be processed.
    * w: work queue of subterms of [f] that still need to be processed.
    * v: accumulated map of variable to register bindings.
-   * o: number of next unused register.
+   * o: index of next unused register.
    *)
   let rec compile f pattern w v o =
     let rec c w v o =
@@ -285,7 +323,10 @@ let compile (patterns: ('a pattern) list): 'a ematch_code =
           | Some (t, _) -> Either.second [t, t']
           | None -> Either.first @@ TermSet.singleton t'
           in
-          Init (ts, esymbol_of t', o, TermMap.singleton t' pl, next)
+          let pm = TermMap.singleton t' pl in
+          let esym = esymbol_of t' in
+          let path = get_path v t' in
+          Init (ts, esym, path, o, pm, next)
     in
     match t_filters_opt with
     | Some (t, (_ :: _ as fs)) ->
@@ -295,7 +336,7 @@ let compile (patterns: ('a pattern) list): 'a ematch_code =
   in
   let seq cs fchild =
     let rec s = function
-      | Init (ts, sym, o, pm, c) :: cs -> Init (ts, sym, o, pm, s cs)
+      | Init (ts, sym, path, o, pm, c) :: cs -> Init (ts, sym, path, o, pm, s cs)
       | Check (i, t, c) :: cs -> Check (i, t, s cs)
       | Compare (i, j, c) :: cs -> Compare (i, j, s cs)
       | Bind (i, sym, o, pm, c) :: cs -> Bind (i, sym, o, pm, s cs)
@@ -327,7 +368,7 @@ let compile (patterns: ('a pattern) list): 'a ematch_code =
    * If yes, return updated values [(code', w', v', f', pattern')]. *)
   let compatible f pattern w v code = 
     match code with
-    | Init (ts, sym, o, pm, next) ->
+    | Init (ts, sym, path, o, pm, next) ->
         (* Has w been fully processed? *)
         let v', fully_processed = check_if_queue_processed w v in
         if fully_processed then
@@ -347,7 +388,7 @@ let compile (patterns: ('a pattern) list): 'a ematch_code =
                     Opt.get_or_else (TermSet.singleton t' |> Either.first))
               in
               let pm' = TermMap.add t' (prune args o) pm in
-              let code' = Init (ts', sym, o, pm', next) in
+              let code' = Init (ts', sym, path, o, pm', next) in
               Some (code', w', v', f', pattern')
           | _ -> None
         else None
@@ -463,36 +504,39 @@ let compile (patterns: ('a pattern) list): 'a ematch_code =
  *  Yields a hash table mapping templates of type 'a to the computed variable substitutions. 
  *)
 let run (code: 'a ematch_code) ccgraph : ('a, subst_map) Hashtbl.t =
-  let egraph = CC.get_egraph ccgraph in
+  let egrapha, egraphp = CC.get_egraph ccgraph in
   (* some utility functions for working with the e-graph *)
   let get_apps sym =
-    CC.EGraph.fold
+    CC.EGraphA.fold
       (fun (n, sym') n_apps apps ->
         if sym = sym'
         then CC.NodeListSet.union n_apps apps
         else apps)
-      egraph CC.NodeListSet.empty |>
+      egrapha CC.NodeListSet.empty |>
     CC.NodeListSet.elements
   in
   let get_reps srt =
-    CC.EGraph.fold
+    CC.EGraphA.fold
       (fun (n, sym) _ reps ->
         if snd @@ snd sym = srt
         then CC.NodeListSet.add [n] reps
         else reps)
-      egraph CC.NodeListSet.empty |>
+      egrapha CC.NodeListSet.empty |>
       CC.NodeListSet.elements
   in
   let get_apps_of_node n sym =
-    CC.EGraph.find_opt (n, sym) egraph |>
+    CC.EGraphA.find_opt (n, sym) egrapha |>
     Opt.get_or_else CC.NodeListSet.empty |>
     CC.NodeListSet.elements
+  in
+  let get_parents n sym k =
+    CC.EGraphP.find_opt (n, sym, k) egraphp |>
+    Opt.get_or_else (CC.NodeListSet.empty, CC.NodeSet.empty)
   in
   (* initialize registers *)
   let regs = Array.make (max_reg code + 1) (CC.rep_of_term ccgraph mk_true_term) in
   (* create result table *)
   let insts = Hashtbl.create 1000 in
-  (* the actual machine *)
   let prune pm ts =
     TermSet.filter (fun t ->
       TermMap.find_opt t pm |>
@@ -503,26 +547,53 @@ let run (code: 'a ematch_code) ccgraph : ('a, subst_map) Hashtbl.t =
           BloomFilter.mem sym funs_n) pl) |>
       Opt.get_or_else true) ts
   in
+  let take_step step ts =
+    step |>
+    Either.value_map
+      (fun ts' -> ts')
+      (fun tts ->
+        List.fold_left (fun ts' (t, t') ->
+          if TermSet.mem t ts then TermSet.add t' ts'
+          else ts')
+          TermSet.empty tts)
+  in
+  (* collect nodes containing one of the nodes in [terms] following the given inverted path *)
+  let rec collect (esym: esymbol) args terms = function
+    | [] ->
+        esym |>
+        Either.map
+          (fun _ -> CC.NodeSet.fold (fun n acc -> [n] :: acc) terms [])
+          (fun _ -> CC.NodeListSet.elements args) |>
+        Either.value
+    | (sym, k) :: path' ->
+        let args', terms' =
+          CC.NodeSet.fold
+            (fun n (args', terms') ->
+              let n_args, n_terms = get_parents n sym k in
+              CC.NodeListSet.union n_args args',
+              CC.NodeSet.union n_terms terms'
+            )
+            terms (CC.NodeListSet.empty, CC.NodeSet.empty)
+        in
+        collect esym args' terms' path'
+  in
+  (* the actual machine *)
   let rec run state = function
-    | Init (step, esym, o, pm, next) :: stack ->
+    | Init (step, esym, path_opt, o, pm, next) :: stack ->
         let ts = state in
-        (*print_endline ("init " ^ (esym |> Either.value_map string_of_sort (fun sym -> string_of_symbol (fst sym))));
+        (*Printf.printf "init %s\n" (esym |> Either.value_map string_of_sort (fun sym -> string_of_symbol (fst sym)));
         Printf.printf "active terms: ";
         print_list stdout pr_term (TermSet.elements ts);
-        print_newline ();*)
+        Printf.printf "\n";*)
         let terms =
-          esym |> Either.map get_reps get_apps |> Either.value
+          path_opt |>
+          Opt.map
+            (fun (i, path) ->
+              collect esym CC.NodeListSet.empty (CC.NodeSet.singleton regs.(i)) path) |>
+          Opt.lazy_get_or_else
+            (fun () -> esym |> Either.map get_reps get_apps |> Either.value)
         in
-        let ts' =
-          step |>
-          Either.value_map
-            (fun ts' -> ts')
-            (fun tts ->
-              List.fold_left (fun ts' (t, t') ->
-                if TermSet.mem t ts then TermSet.add t' ts'
-                else ts')
-                TermSet.empty tts)
-        in
+        let ts' = take_step step ts in
         run ts' (ChooseTerm (ts', o, next, pm, terms) :: stack)
     | Bind (i, sym, o, pm, next) :: stack ->
         (*Printf.printf "bind(%d, %s)\n" i (string_of_symbol @@ fst sym);*)
