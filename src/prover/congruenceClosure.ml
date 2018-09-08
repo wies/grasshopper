@@ -134,16 +134,25 @@ module rec Node : sig
 and NodeSet: Set.S with type elt = Node.t = Set.Make(Node)
 
 
-module NodeListSet = Set.Make(struct
+module NodeListSet =
+  Set.Make(struct
     type t = Node.t list
     let compare = compare
   end)
     
-module EGraph = Map.Make(struct
+module EGraphA =
+  Map.Make(struct
     type t = Node.t * sorted_symbol
     let compare = compare
   end)
 
+module EGraphP =
+  Map.Make(struct
+    type t = Node.t * sorted_symbol * int
+    let compare = compare
+  end)
+
+type egraph = NodeListSet.t EGraphA.t * (NodeListSet.t * NodeSet.t) EGraphP.t
       
 class dag = fun (terms: TermSet.t) ->
   let table1 = Hashtbl.create 53 in
@@ -246,19 +255,35 @@ class dag = fun (terms: TermSet.t) ->
           ) nodes;
         Hashtbl.fold (fun _ cc acc -> cc::acc) node_to_cc []
 
-    method get_egraph =
+    method get_egraph: egraph =
       let egraph = 
-        Hashtbl.fold (fun _ n egraph -> 
+        Hashtbl.fold (fun _ n (egrapha, egraphp) -> 
           let n_rep = n#find in
           let arg_reps =
             List.map (fun n -> n#find) n#get_args
           in
           let other_args_reps =
-            EGraph.find_opt (n_rep, n#get_sym) egraph |>
+            EGraphA.find_opt (n_rep, n#get_sym) egrapha |>
             Opt.get_or_else NodeListSet.empty
           in
-          EGraph.add (n_rep, n#get_sym) (NodeListSet.add arg_reps other_args_reps) egraph)
-          nodes EGraph.empty
+          let egrapha' =
+            EGraphA.add (n_rep, n#get_sym) (NodeListSet.add arg_reps other_args_reps) egrapha
+          in
+          let egraphp', _ =
+            List.fold_left
+              (fun (egraphp', k) arg_rep ->
+                let other_args, other_parents =
+                  EGraphP.find_opt (arg_rep, n#get_sym, k) egraphp' |>
+                  Opt.get_or_else (NodeListSet.empty, NodeSet.empty)
+                in
+                let args' = NodeListSet.add arg_reps other_args in
+                let parents' = NodeSet.add n_rep other_parents in
+                EGraphP.add (arg_rep, n#get_sym, k) (args', parents') egraphp',
+                k + 1)
+              (egraphp, 0) arg_reps
+          in
+          egrapha', egraphp')
+          nodes (EGraphA.empty, EGraphP.empty)
       in
       egraph
           
