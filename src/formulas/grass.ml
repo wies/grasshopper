@@ -380,7 +380,7 @@ let rec pr_term ppf = function
   | App (sym, [], _) -> fprintf ppf "%a" pr_sym sym
   | App (Read, [map; t], _) ->
       (match map, sort_of t with
-      | App (FreeSym _, [], _), Loc _ -> fprintf ppf "%a.%a" pr_term t pr_term map
+      | (App (FreeSym _, [], _) | Var _), Loc _ -> fprintf ppf "%a.%a" pr_term t pr_term map
       | _ -> fprintf ppf "%a[%a]" pr_term map pr_term t)
   | App (Read, map :: t :: ts, _) ->
       fprintf ppf "%a[%a].%a" pr_term t pr_term_list ts pr_term map

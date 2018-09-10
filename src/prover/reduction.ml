@@ -266,15 +266,17 @@ let array_sorts fs =
 (** Adds theory axioms for the entry point function to formulas [fs].
  ** Assumes that all frame predicates have been reduced in formulas [fs]. *)
 let add_ep_axioms fs =
-  let gts = generated_ground_terms fs in
-  let struct_sorts =
-    TermSet.fold
-      (fun t struct_sorts -> match t with
-      | App (_, _, Map([Loc srt1], Loc srt2)) 
-      | Var (_, Map([Loc srt1], srt2)) when srt1 = srt2 -> SortSet.add srt1 struct_sorts
-      | _ -> struct_sorts)
-      gts SortSet.empty
+  (*let gts = generated_ground_terms fs in*)
+  let rec get_struct_sorts acc = function
+    | App (_, ts, srt) ->
+        let acc = List.fold_left get_struct_sorts acc ts in
+        (match srt with
+        | Map([Loc srt1], Loc srt2) when srt1 = srt2 -> SortSet.add srt1 acc
+        | _ -> acc)
+    | Var (_, Map([Loc srt1], srt2)) when srt1 = srt2 -> SortSet.add srt1 acc
+    | Var _ -> acc
   in
+  let struct_sorts = fold_terms get_struct_sorts SortSet.empty (mk_and fs) in
   let axioms = SortSet.fold (fun srt axioms -> Axioms.ep_axioms srt @ axioms) struct_sorts [] in
   axioms @ fs
 
@@ -425,12 +427,15 @@ let add_read_write_axioms fs =
   | [[Match (v, _)], t] -> [[Match (v, [FilterGeneric (fun sm t -> TermSet.mem (subst_term sm v) basic_pt_flds)])], t]
   | gs -> gs
   in
-  let gts = generate_terms generators gts in
   let ccgraph = CongruenceClosure.congruence_classes gts fs in
+  let _ =
+    let tgcode = EMatching.compile_term_generators_to_ematch_code generators in
+    EMatching.generate_terms_from_code tgcode ccgraph
+  in
   (* CAUTION: not forcing the instantiation here would yield an inconsistency with the read/write axioms *)
   let null_ax1 = EMatching.instantiate_axioms ~force:true null_ax ccgraph in
   let fs1 = null_ax1 @ fs in
-  let gts = TermSet.union (ground_terms ~include_atoms:true (mk_and null_ax1)) gts in
+  let gts = TermSet.union (ground_terms ~include_atoms:true (mk_and null_ax1)) (CongruenceClosure.get_terms ccgraph) in
   (* propagate read terms *)
   (* generate instances of all read over write axioms *)
   let read_write_ax = 
@@ -496,41 +501,7 @@ let add_terms fs gts =
           mk_pred ("inst-closure", 0) [t] :: fs1)
       extra_gts fs
   in fs1
-   
-let add_split_lemmas fs gts =
-  if not !Config.split_lemmas then fs else
-  let structs =
-    TermSet.fold (fun t structs ->
-      match sort_of t with
-      | Loc srt -> SortSet.add srt structs
-      | _ -> structs)
-      gts SortSet.empty
-  in
-  let classes =
-    CongruenceClosure.create () |>
-    CongruenceClosure.add_terms (generated_ground_terms fs) |>
-    CongruenceClosure.add_conjuncts fs |>
-    CongruenceClosure.get_classes
-  in
-  let add_lemmas srt fs1 =
-    let loc_gts =
-      TermSet.filter (fun t -> sort_of t = Loc srt) gts
-    in
-    let classes = CongruenceClosure.restrict_classes classes loc_gts in
-    let rec lem fs1 = function
-      | [] -> fs1
-      | c :: cs ->
-          let t = List.hd c in
-          List.fold_left
-            (fun fs1 c ->
-              let t1 = List.hd c in
-              mk_or [mk_eq t t1; mk_neq t t1] :: fs1)
-            fs1 cs
-    in
-    lem fs1 classes
-  in
-  SortSet.fold add_lemmas structs fs
-    
+       
 (** Reduces the given formula to the target theory fragment, as specified b the configuration. *)
 let reduce f =
   (* split f into conjuncts and eliminate all existential quantifiers *)
