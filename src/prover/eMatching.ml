@@ -279,6 +279,10 @@ let compile (patterns: ('a pattern) list): 'a ematch_code =
     in
     gp None [] t
   in
+  let args_of = function
+    | Var _ as t -> [t]
+    | App (_, args, _) -> args
+  in
   (* Compile a multi-pattern into a code tree.
    * f: info about current term of the multi-pattern that is being processed.
    * pattern: remaining trigger terms of the multi-pattern that still need to be processed.
@@ -373,7 +377,7 @@ let compile (patterns: ('a pattern) list): 'a ematch_code =
         let v', fully_processed = check_if_queue_processed w v in
         if fully_processed then
           match pattern with
-          | (t', filters') :: pattern' when esymbol_of t' = sym ->
+          | (t', filters') :: pattern' when esymbol_of t' = sym && get_path v' t' = path ->
               let args = args_of t' in
               let w', _ = add_args_to_queue WQ.empty o args in
               let f' = (fst f, Some (t', filters')) in
@@ -530,8 +534,14 @@ let run (code: 'a ematch_code) ccgraph : ('a, subst_map) Hashtbl.t =
     CC.NodeListSet.elements
   in
   let get_parents n sym k =
+    (* Printf.printf "get_parents (%s, %s, %d)...\n"
+      (CC.term_of_rep ccgraph n |> string_of_term)
+      (fst sym |> string_of_symbol)
+      k
+      ;*)
     CC.EGraphP.find_opt (n, sym, k) egraphp |>
-    Opt.get_or_else (CC.NodeListSet.empty, CC.NodeSet.empty)
+    Opt.get_or_else (CC.NodeListSet.empty, CC.NodeSet.empty) (*|>
+    (fun (ps, ns) -> print_list stdout pr_term (List.map (CC.term_of_rep ccgraph) (CC.NodeSet.elements ns)); (ps, ns))*)
   in
   (* initialize registers *)
   let regs = Array.make (max_reg code + 1) (CC.rep_of_term ccgraph mk_true_term) in
@@ -581,10 +591,6 @@ let run (code: 'a ematch_code) ccgraph : ('a, subst_map) Hashtbl.t =
   let rec run state = function
     | Init (step, esym, path_opt, o, pm, next) :: stack ->
         let ts = state in
-        (*Printf.printf "init %s\n" (esym |> Either.value_map string_of_sort (fun sym -> string_of_symbol (fst sym)));
-        Printf.printf "active terms: ";
-        print_list stdout pr_term (TermSet.elements ts);
-        Printf.printf "\n";*)
         let terms =
           path_opt |>
           Opt.map
@@ -594,6 +600,19 @@ let run (code: 'a ematch_code) ccgraph : ('a, subst_map) Hashtbl.t =
             (fun () -> esym |> Either.map get_reps get_apps |> Either.value)
         in
         let ts' = take_step step ts in
+        (*print_of_format (fun ppf esym -> fprintf ppf "init %s: [%a] -> %a\n"
+            (esym |> Either.value_map string_of_sort (fun sym -> string_of_symbol (fst sym)))
+            pr_sorts 
+            (esym |> Either.value_map (fun _ -> []) (fun sym -> fst @@ snd sym))
+            pr_sort
+            (esym |> Either.value_map (fun srt -> srt) (fun sym -> snd @@ snd sym))) esym stdout
+          ;
+        Printf.printf "active terms: ";
+        print_list stdout pr_term (TermSet.elements ts');
+        Printf.printf "\n";
+        Printf.printf "choosing from: ";
+        print_list stdout (fun ppf ns -> fprintf ppf "[%a]" pr_term_list (List.map (CC.term_of_rep ccgraph) ns)) terms; 
+        Printf.printf "\n";*)
         run ts' (ChooseTerm (ts', o, next, pm, terms) :: stack)
     | Bind (i, sym, o, pm, next) :: stack ->
         (*Printf.printf "bind(%d, %s)\n" i (string_of_symbol @@ fst sym);*)
@@ -623,6 +642,9 @@ let run (code: 'a ematch_code) ccgraph : ('a, subst_map) Hashtbl.t =
     | Yield (vs, fs, gs) :: stack ->
         let ts = state in
         let sm = IdMap.map (fun i -> CC.term_of_rep ccgraph regs.(i)) vs in
+        (*Printf.printf "yield\n";
+        print_list stdout (fun ppf (x, t) -> fprintf ppf "%s -> %a" (string_of_ident x) pr_term t) (IdMap.bindings sm);
+        print_newline ();*)
         TermSet.iter (fun t ->
           TermMap.find_opt t fs |>
           Opt.iter (List.iter (fun f -> Hashtbl.add insts f sm))) ts;
@@ -645,15 +667,16 @@ let run (code: 'a ematch_code) ccgraph : ('a, subst_map) Hashtbl.t =
         then run state stack
         else run ts' (next :: stack)
     | ChooseTerm (state', o, next, pm, args :: apps) :: stack ->
-        (* Printf.printf "choosing app: ";*)
+        (*Printf.printf "choosing app: ";
+        print_of_format (fun ppf args -> fprintf ppf "[%a]" pr_term_list (List.map (CC.term_of_rep ccgraph) args)) args stdout;
+        print_newline ();*)
         let _ =
           List.fold_left
             (fun i arg ->
-              (* Printf.printf "%d -> %s, " i (string_of_term @@ CC.term_of_rep ccgraph arg);*)
+              (*Printf.printf "%d -> %s, " i (string_of_term @@ CC.term_of_rep ccgraph arg);*)
               regs.(i) <- arg; i + 1)
             o args
         in
-        (*print_newline ();*)
         let ts' = prune pm state' in
         if TermSet.is_empty ts'
         then run state (ChooseTerm (state', o, next, pm, apps) :: stack)
@@ -832,3 +855,44 @@ let instantiate_axioms ?(force=false) ?(stratify=(!Config.stratify)) axioms ccgr
   let code, patterns = compile_axioms_to_ematch_code ~force:force ~stratify:stratify axioms in
   instantiate_axioms_from_code patterns code ccgraph
     
+
+let compile_term_generators_to_ematch_code generators =
+  let generators =
+    let remove_generic_filters (ms, ts) =
+      List.map (function Match (m, fs) -> (m, List.filter (function FilterGeneric _ -> false | _ -> true) fs)) ms, ts 
+    in
+    remove_duplicates (fun g1 g2 -> remove_generic_filters g1 = remove_generic_filters g2) generators
+  in
+  let generate_pattern patterns (guards, ts) =
+    match ts with
+    | [] -> patterns
+    | _ -> 
+        let triggers = List.map (function Match (t, filters) -> (t, filters)) guards in
+        (ts, triggers) :: patterns
+  in
+  let patterns = List.fold_left generate_pattern [] generators in
+  compile patterns
+
+let generate_terms_from_code code ccgraph =
+  let rec round i reps =
+    (*Printf.printf "Generating terms, round %d...\n" i;
+    CC.print_classes ccgraph;*)
+    let insts = run code ccgraph in
+    let new_terms =
+      Hashtbl.fold (fun ts sm new_terms ->
+        List.fold_left (fun new_terms gen_term ->
+          let t = subst_term sm gen_term in
+          (*let _ = print_endline ("  Adding generated term " ^ string_of_term t); flush stdout in *)
+          TermSet.add t new_terms) new_terms ts)
+        insts TermSet.empty
+    in
+    let _ = CC.add_terms new_terms ccgraph in
+    let new_reps = TermSet.fold (fun t -> CC.NodeSet.add (CC.rep_of_term ccgraph t)) new_terms CC.NodeSet.empty in
+    let reps = CC.NodeSet.fold (fun n -> CC.NodeSet.add (CC.find_rep ccgraph n)) reps CC.NodeSet.empty in
+    if CC.NodeSet.subset new_reps reps then reps else round (i + 1) (CC.NodeSet.union new_reps reps)
+  in
+  let reps = round 0 (CC.get_reps ccgraph) in
+  reps
+
+let generate_terms_from_code code ccgraph =
+  measure_call "EMatching.generate_terms_from_code" (generate_terms_from_code code) ccgraph

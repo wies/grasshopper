@@ -20,7 +20,7 @@ module rec Node : sig
       union: t -> unit;
       ccpar: NodeSet.t;
       congruent: t -> bool;
-      merge: t -> unit
+      merge: t -> bool;
     >
 
   val compare: t -> t -> int
@@ -42,7 +42,7 @@ module rec Node : sig
       union: t -> unit;
       ccpar: NodeSet.t;
       congruent: t -> bool;
-      merge: t -> unit
+      merge: t -> bool;
     >
 
   let compare = compare
@@ -116,17 +116,18 @@ module rec Node : sig
         List.filter (fun (a,b) -> a#find <> b#find) (List.rev_map2 (fun x y -> (x,y)) (self#get_args) (that#get_args))*)
 
     method merge (that: node) =
-      if self#find <> that#find then
-        begin
-          let p1 = self#ccpar in
-          let p2 = that#ccpar in
-          self#union that;
-          NodeSet.iter (fun x ->
-            NodeSet.iter
-              (fun y -> if x#find <> y#find && x#congruent y then x#merge y)
-              p2)
-            p1
-        end
+      self#find <> that#find &&
+      begin
+        let p1 = self#ccpar in
+        let p2 = that#ccpar in
+        self#union that;
+        NodeSet.iter (fun x ->
+          NodeSet.iter
+            (fun y -> if x#find <> y#find && x#congruent y then ignore (x#merge y))
+            p2)
+          p1;
+        true
+      end
   end
 
   let create sym terms: t = new node sym terms
@@ -171,7 +172,7 @@ class dag = fun (terms: TermSet.t) ->
   let rec convert_term t =
     (*print_endline ("CC adding: " ^ (string_of_term t));*)
     match t with
-    | Var (v, _) -> failwith "CC: term not ground" (* create_and_add var (FreeSym v) []*)
+    | Var (v, _) -> failwith ("CC: term not ground " ^ string_of_term t) (* create_and_add var (FreeSym v) []*)
     | App (_, args, _) as appl ->
       let node_args = List.map convert_term args in
       let new_node  = create_and_add appl (sorted_symbol_of appl |> Opt.get) node_args in
@@ -180,10 +181,15 @@ class dag = fun (terms: TermSet.t) ->
   in
   let _ = TermSet.iter (fun t -> ignore (convert_term t)) terms in
   object (self)
+    val mutable _has_mods: bool = true
     val mutable neqs: (Node.t * Node.t) list = []
     val nodes: (term, Node.t) Hashtbl.t = table1
     val node_to_term: (Node.t, term) Hashtbl.t = table2
 
+    method has_mods = _has_mods
+
+    method reset = _has_mods <- false
+        
     method get_node t =
       try Hashtbl.find nodes t
       with Not_found -> failwith ("CC: cannot find " ^ (string_of_term t))
@@ -213,12 +219,13 @@ class dag = fun (terms: TermSet.t) ->
       let n = convert_term t in
       let arg_opt = List.nth_opt n#get_args 0 in
       arg_opt |>
-      Opt.iter (fun arg -> NodeSet.iter (fun n' -> if n' <> n && n#congruent n' then n#merge n') arg#ccpar)
+      Opt.iter (fun arg -> NodeSet.iter (fun n' -> if n' <> n && n#congruent n' then ignore @@ n#merge n') arg#ccpar);
+      _has_mods <- n#find = n;
        
     method add_eq t1 t2 = 
       let n1 = self#get_node t1 in
       let n2 = self#get_node t2 in
-      n1#merge n2
+      _has_mods <- n1#merge n2
 
     method add_neq t1 t2 = 
       let n1 = self#get_node t1 in
@@ -242,6 +249,11 @@ class dag = fun (terms: TermSet.t) ->
     (** Returns a method that maps a term to its representative *)
     method get_repr = (fun t -> self#get_term (self#get_node t)#find)
 
+    method get_reps =
+        Hashtbl.fold
+        (fun _ n reps -> NodeSet.add (n#find) reps)
+        nodes NodeSet.empty
+        
     (** Gets a list of list of equal expressions (connected components). *)
     method get_cc =
       let node_to_cc = Hashtbl.create (Hashtbl.length nodes) in
@@ -471,6 +483,8 @@ let create () : dag =
 
 let rep_of_term cc_graph t = (cc_graph#get_node t)#find
 
+let get_terms cc_graph = cc_graph#get_terms
+    
 let term_of_rep cc_graph n = cc_graph#get_term n
 
 let funs_of_rep ccgraph n = n#get_funs
@@ -478,6 +492,8 @@ let funs_of_rep ccgraph n = n#get_funs
 let get_egraph cc_graph = cc_graph#get_egraph
     
 let get_classes cc_graph = cc_graph#get_cc
+
+let get_reps cc_graph = cc_graph#get_reps
     
 let congruence_classes gts fs =
   create () |>
@@ -486,6 +502,12 @@ let congruence_classes gts fs =
       
 let class_of t classes = List.find (List.mem t) classes
 
+let find_rep ccgraph n = n#find
+
+let has_mods ccgraph = ccgraph#has_mods
+
+let reset ccgraph = ccgraph#reset; ccgraph
+    
 let print_classes cc_graph =
   ignore
     (List.fold_left (fun num cl ->

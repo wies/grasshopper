@@ -182,12 +182,18 @@ let instantiate_and_prove session fs =
   let btwn_gen = btwn_field_generators fs in
   let gts = ground_terms ~include_atoms:true (mk_and fs) in
   (*let gts = generate_knowns gts in*)
-  let gts1 = generate_terms (btwn_gen @ generators) gts in
+  let tgcode = EMatching.compile_term_generators_to_ematch_code (btwn_gen @ generators) in
+  (*let _ =
+    print_endline "Term Generator code:";
+    EMatching.print_ematch_code pr_term_list stdout tgcode;
+    print_newline ()
+  in*)
   let cc_graph =
     CongruenceClosure.create () |>
-    CongruenceClosure.add_terms gts1 |>
+    CongruenceClosure.add_terms gts |>
     CongruenceClosure.add_conjuncts fs
   in
+  let _ = EMatching.generate_terms_from_code tgcode cc_graph in
   let round1 fs_inst gts_inst cc_graph =
     let equations = List.filter (fun f -> is_horn false [f]) fs_inst in
     let ground_fs = List.filter is_ground fs_inst in
@@ -208,10 +214,8 @@ let instantiate_and_prove session fs =
   in
   let round1 fs_inst gts_inst = measure_call "round1" (round1 fs_inst gts_inst) in
   let round2 fs_inst gts_inst cc_graph =
-    (* the following seemingly redundant instantiation round is a workaround for not using the -fullep option *)
-    let fs_inst0 = (*instantiate_with_terms ~stratify:false true fs1 classes*) fs_inst in
+    let fs_inst0 = fs_inst in
     let gts_known = generate_knowns gts in
-    let gts_inst0 = TermSet.union gts_inst gts_known in
     (*let gts_inst = generate_terms generators (TermSet.union gts_inst0 gts2_atoms) in*)
     let core_terms =
       let gts_a = ground_terms (mk_and fs) in
@@ -219,8 +223,10 @@ let instantiate_and_prove session fs =
         match sort_of t with
         | Loc _ | Int | FreeSrt _ -> TermSet.add (mk_known t) acc
         | _ -> acc)
-        gts_a TermSet.empty
+        gts_a gts_known
     in
+    let gts_inst0 = TermSet.union gts_inst core_terms in
+    let cc_graph = CongruenceClosure.add_terms gts_inst0 cc_graph in
     let fs1 = linearize fs1 in
     let code, patterns = EMatching.compile_axioms_to_ematch_code fs1 in
     (*let _ =
@@ -231,31 +237,27 @@ let instantiate_and_prove session fs =
     in*)
     let rec saturate i fs_inst gts_inst0 cc_graph =
       (*Printf.printf "Saturate iteration %d\n" i; flush stdout;*)
-      let gts_inst = TermSet.union gts_inst0 core_terms in
-      let gts_atoms = (*TermSet.filter (function
-        | App (_, ts, Bool) -> List.for_all (fun t -> TermSet.mem t gts_inst) ts
-        | _ -> false)*)
-          (ground_terms ~include_atoms:true (mk_and fs_inst))
-      in
-      let gts_inst = TermSet.union gts_inst gts_atoms in
+      let gts_inst = ground_terms_acc ~include_atoms:true gts_inst0 (mk_and fs_inst) in
       let fs, gts_inst = generate_adt_terms fs gts_inst in
-      let implied_eqs = CongruenceClosure.get_implied_equalities cc_graph in
       (*print_endline "Implied equalities:";
       print_endline (string_of_form (mk_and implied_eqs));*)
+      let implied_eqs = CongruenceClosure.get_implied_equalities cc_graph in
       let gts_inst = TermSet.union (ground_terms ~include_atoms:true (mk_and implied_eqs)) gts_inst in
-      let generators = if i > 1 && false then Reduction.get_read_propagators gts_inst else btwn_gen @ generators in
-      let gts_inst = generate_terms generators gts_inst in
-      if i > 1 && not !Config.propagate_reads || TermSet.subset gts_inst gts_inst0 then 
+      let cc_graph = CongruenceClosure.add_terms gts_inst cc_graph in
+      (*let generators = if i > 1 && false then Reduction.get_read_propagators gts_inst else btwn_gen @ generators in*)
+      let _ = EMatching.generate_terms_from_code tgcode cc_graph in
+      let gts_inst = CongruenceClosure.get_terms cc_graph in 
+      if i > 1 && (not !Config.propagate_reads || CongruenceClosure.has_mods cc_graph) then 
         rev_concat [fs_inst; implied_eqs], gts_inst, cc_graph
       else
         let cc_graph =
           cc_graph |>
-          measure_call "cc_gen" (fun cc_graph -> cc_graph |> CongruenceClosure.add_terms gts_inst) |>
+          (*measure_call "cc_gen" (fun cc_graph -> cc_graph |> CongruenceClosure.add_terms gts_inst) |>*)
           CongruenceClosure.add_conjuncts (rev_concat [fs_inst; fs])
         in
         (*let fs_inst = instantiate_with_terms fs1 (CongruenceClosure.get_classes cc_graph) in*)
         let fs_inst = EMatching.instantiate_axioms_from_code patterns code cc_graph in
-        saturate (i + 1) fs_inst gts_inst cc_graph
+        saturate (i + 1) fs_inst gts_inst (CongruenceClosure.reset cc_graph)
     in
     let saturate i fs_inst gts_inst0 = measure_call "saturate" (saturate i fs_inst gts_inst0) in
     let fs, gts_inst, cc_graph = saturate 1 fs_inst0 gts_inst0 cc_graph in
@@ -292,7 +294,7 @@ let instantiate_and_prove session fs =
         Debug.debug (fun () -> "Solver done.\n");
         k + 1, result1, fs_asserted1, fs_inst1, gts_inst1, classes1
     | _ -> k, result, fs_asserted, fs_inst, gts_inst, cc_graph
-    in List.fold_left dr (1, None, FormSet.empty, fs1, gts1, cc_graph) rounds
+    in List.fold_left dr (1, None, FormSet.empty, fs1, cc_graph#get_terms, cc_graph) rounds
   in
   let _, result, fs_asserted, fs_inst, _, _ = do_rounds [round1; round2] in
   (match result with
