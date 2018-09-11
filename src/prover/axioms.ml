@@ -7,19 +7,7 @@ open Util
 
   
 (** {6 Variable and short-hand declarations} *)
-  
-let mk_loc_var name = 
-  let id = fresh_ident name in
-  fun struct_srt -> id, Loc struct_srt
-
-let mk_loc_field_var name =
-  let id = fresh_ident name in
-  fun struct_srt -> id, loc_field_sort struct_srt
-
-let mk_loc_set_var name =
-  let id = fresh_ident name in
-  fun struct_srt -> id, Set (Loc struct_srt)
-      
+        
 let l1 = mk_loc_var "?x"
 let l2 = mk_loc_var "?y"
 let l3 = mk_loc_var "?z"

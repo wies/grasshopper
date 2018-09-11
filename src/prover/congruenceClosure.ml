@@ -176,7 +176,7 @@ class dag = fun (terms: TermSet.t) ->
     | App (_, args, _) as appl ->
       let node_args = List.map convert_term args in
       let new_node  = create_and_add appl (sorted_symbol_of appl |> Opt.get) node_args in
-        List.iter (fun n -> n#add_ccparent new_node) node_args;
+        List.iter (fun n -> n#find#add_ccparent new_node) node_args;
         new_node
   in
   let _ = TermSet.iter (fun t -> ignore (convert_term t)) terms in
@@ -215,17 +215,32 @@ class dag = fun (terms: TermSet.t) ->
         Hashtbl.iter (fun _ n -> print_node n) nodes;
         Buffer.contents buffer
  
-    method add_term t =
+    method add_term t = 
+      (*Printf.printf "Adding term to cc: %s\n" (string_of_term t);*)
       let n = convert_term t in
       let arg_opt = List.nth_opt n#get_args 0 in
-      arg_opt |>
-      Opt.iter (fun arg -> NodeSet.iter (fun n' -> if n' <> n && n#congruent n' then ignore @@ n#merge n') arg#ccpar);
-      _has_mods <- n#find = n;
-       
+      let has_mod =
+        arg_opt |>
+        Opt.fold
+          (fun _ arg ->
+            (*Printf.printf "Getting parents of %s\n" (string_of_term @@ self#get_term (arg#find));*)
+            NodeSet.exists (fun n' ->
+              (*Printf.printf "Checking congruence with: %s %b\n"
+                (string_of_term @@ self#get_term n') (n#congruent n');*)
+              n' <> n && n#congruent n' && n'#merge n) arg#ccpar)
+          true
+      in
+      _has_mods <- _has_mods || has_mod
+        
     method add_eq t1 t2 = 
       let n1 = self#get_node t1 in
       let n2 = self#get_node t2 in
-      _has_mods <- n1#merge n2
+      let has_mod =
+        if size_of_term t1 > size_of_term t2
+        then n2#merge n1
+        else n1#merge n2
+      in
+      _has_mods <- _has_mods || has_mod 
 
     method add_neq t1 t2 = 
       let n1 = self#get_node t1 in
@@ -336,6 +351,14 @@ class dag = fun (terms: TermSet.t) ->
 
   end
 
+let print_classes cc_graph =
+  ignore
+    (List.fold_left (fun num cl ->
+      print_endline ("Class " ^ string_of_int num ^ ": " ^ (string_of_sort (sort_of (List.hd cl))));
+      List.iter (fun t -> print_endline ("    " ^ (string_of_term t))) cl; 
+      print_newline ();
+      num + 1) 1 (List.sort compare (cc_graph#get_cc)))
+    
   
 (* TODO need implied equalities and watch lists *)
 let add_conjuncts_fixed_point cc_graph fs : dag =
@@ -435,7 +458,12 @@ let add_terms gterms cc_graph =
   let new_terms = TermSet.diff gterms old_terms in
   let all_terms = TermSet.union old_terms new_terms in
   (* Add gterms to graph *)
-  TermSet.iter (cc_graph#add_term) new_terms;
+  TermSet.iter (fun t ->
+    let st = SimplifyGrass.simplify_term t in
+    if st <> t && not @@ TermSet.mem st old_terms then cc_graph#add_term st;
+    cc_graph#add_term t;
+    cc_graph#add_eq st t)
+    new_terms;
   (* Add disequalities between ADT terms with different top-level constructors *)
   let cterms =
     TermSet.filter
@@ -507,14 +535,6 @@ let find_rep ccgraph n = n#find
 let has_mods ccgraph = ccgraph#has_mods
 
 let reset ccgraph = ccgraph#reset; ccgraph
-    
-let print_classes cc_graph =
-  ignore
-    (List.fold_left (fun num cl ->
-      print_endline ("Class " ^ string_of_int num ^ ": " ^ (string_of_sort (sort_of (List.hd cl))));
-      List.iter (fun t -> print_endline ("    " ^ (string_of_term t))) cl; 
-      print_newline ();
-      num + 1) 1 (List.sort compare (cc_graph#get_cc)))
     
 let restrict_classes classes ts =
   List.filter (fun cc -> List.exists (fun t -> TermSet.mem t ts) cc) classes

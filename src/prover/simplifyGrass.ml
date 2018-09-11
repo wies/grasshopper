@@ -80,8 +80,8 @@ let massage_field_reads fs =
         | Map ([Loc s], _) -> s
         | _ -> failwith "massage_field_reads: field has not Map<Loc _, _> type"
       in
-      let l1 = Axioms.l1 sid in
-      let loc1 = Axioms.loc1 sid in
+      let l1 = mk_loc_var "?x" sid in
+      let loc1 = mk_var (snd l1) (fst l1) in
       let f1 = 
         annotate
           (mk_and [mk_btwn fld arg t t;
@@ -155,10 +155,51 @@ let rec simplify_sets fs =
   if IdMap.is_empty submap then fs2 else 
   simplify_sets (List.map (subst_consts submap) fs2)
 
+let simplify_int_term t =
+  let rec simp t has_simp = match t with
+  | App ((Plus | Mult as sym1), [App ((Plus | Mult as sym2), [t1; App (IntConst i1, [], _)], _);
+                                 App (IntConst i2, [], _)], srt) when sym1 = sym2
+    ->
+      let op = match sym1 with
+      | Plus -> Int64.add
+      | Mult -> Int64.mul
+      | _ -> assert false
+      in
+      simp (App (sym1, [t1; App (IntConst (op i1 i2), [], srt)], srt)) has_simp
+  | App ((Plus | Minus | Mult | Div as sym), [App (IntConst i1, [], _); App (IntConst i2, [], _)], srt) ->
+      let op = match sym with
+      | Plus -> Int64.add
+      | Minus -> fun i1 i2 -> Int64.add i1 (Int64.neg i2)
+      | Mult -> Int64.mul
+      | Div -> Int64.div
+      | _ -> assert false
+      in
+      App (IntConst (op i1 i2), [], srt), true
+  | App (sym, ts, srt) ->
+      let ts1, has_simp1 = List.fold_right (fun t (ts1, has_simp1) ->
+        let t1, has_simp1 = simp t has_simp1 in
+        t1 :: ts1, has_simp1)
+          ts ([], false)
+      in
+      if has_simp1 then simp (App (sym, ts1, srt)) has_simp
+      else App (sym, ts1, srt), has_simp
+  | _ -> t, has_simp
+  in
+  simp t false |> fst
+
+let simplify_term t = simplify_int_term t
+    
+let simplify_ints fs =
+  let fs1 = List.map (fun f -> map_terms simplify_int_term f) fs in
+  fs1
+      
 let simplify_one_sets f =
   split_ands [f] |>
   simplify_sets |>
   mk_and
   
     
-let simplify fs = simplify_sets fs
+let simplify fs =
+  fs |>
+  simplify_sets |>
+  simplify_ints

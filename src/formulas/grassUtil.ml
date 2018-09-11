@@ -283,6 +283,18 @@ let symbol_of_ident =
 
 (** {6 (Smart) constructors} *)
 
+let mk_loc_var name = 
+  let id = fresh_ident name in
+  fun struct_srt -> id, Loc struct_srt
+
+let mk_loc_field_var name =
+  let id = fresh_ident name in
+  fun struct_srt -> id, loc_field_sort struct_srt
+
+let mk_loc_set_var name =
+  let id = fresh_ident name in
+  fun struct_srt -> id, Set (Loc struct_srt)
+      
 let mk_true = BoolOp (And, [])
 let mk_false = BoolOp (Or, [])
 let mk_bool b = if b then mk_true else mk_false
@@ -906,6 +918,13 @@ let smk_forall ?(ann=[]) bv f = smk_binder ~ann:ann Forall bv f
 (** Smart constructor for existential quantifiers.*)
 let smk_exists ?(ann=[]) bv f = smk_binder ~ann:ann Exists bv f
 
+(** Computes the size of the term [t] (in number of function applications) *)
+let size_of_term t =
+  let rec s acc = function
+  | Var _ -> acc
+  | App (_, ts, _) -> List.fold_left s (acc + 1) ts
+  in s 0 t
+    
 (** Computes the set of free variables of formula [f] together with their sorts. *)
 let sorted_free_vars f = 
   let rec fvt bv vars = function

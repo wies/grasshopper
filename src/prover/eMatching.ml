@@ -404,7 +404,7 @@ let compile (patterns: ('a pattern) list): 'a ematch_code =
                 (fun i t v -> match t with
                 | Var (x, _) -> IdMap.add x i v
                 | _ -> v)
-                w IdMap.empty
+                w v
             in
             let filters'_opt =
               (* Make sure that there is no entry for t in filters, respectively, that the entry is compatible *)
@@ -502,12 +502,45 @@ let compile (patterns: ('a pattern) list): 'a ematch_code =
       code'
     )
     (Choose []) patterns
+
+let filter_term filters t sm = 
+  List.for_all
+    (fun f -> match f with
+    | FilterNotNull ->
+        (match t with
+        | App (Null, [], _) -> false
+        | _ -> true)
+    | FilterSymbolNotOccurs sym ->
+        let rec not_occurs = function
+          | App (EntPnt, _, _) -> sym <> EntPnt
+          | App (sym1, _, _) when sym1 = sym -> false
+          | App (_, ts, _) -> List.for_all not_occurs ts
+          | _ -> true
+        in not_occurs t
+    | FilterReadNotOccurs (name, (arg_srts, res_srt)) ->
+        let rec not_occurs = function
+          | App (EntPnt, _, _) -> true
+          | App ((Read | ArrayCells), (App (FreeSym (name1, _), arg_ts, res_srt1) :: _ as ts), _) ->
+              let ok =
+                try
+                  name1 <> name ||
+                  res_srt1 <> res_srt ||
+                  List.fold_left2 (fun acc t1 srt -> acc || sort_of t1 <> srt) false arg_ts arg_srts
+                with Invalid_argument _ -> true
+              in ok && List.for_all not_occurs ts
+          | App (_, ts, _) -> List.for_all not_occurs ts
+          | _ -> true
+        in not_occurs t
+    | FilterGeneric fn -> fn sm t
+    )
+    filters
+
     
 (** The E-matching abstract machine.
  *  Runs the given E-matching code tree [code] on the E-graph [ccgraph]. 
  *  Yields a hash table mapping templates of type 'a to the computed variable substitutions. 
  *)
-let run (code: 'a ematch_code) ccgraph : ('a, subst_map) Hashtbl.t =
+let run ?(pr_tpl = (fun ppf _ -> ())) (code: 'a ematch_code) ccgraph : ('a, subst_map) Hashtbl.t =
   let egrapha, egraphp = CC.get_egraph ccgraph in
   (* some utility functions for working with the e-graph *)
   let get_apps sym =
@@ -647,7 +680,9 @@ let run (code: 'a ematch_code) ccgraph : ('a, subst_map) Hashtbl.t =
         print_newline ();*)
         TermSet.iter (fun t ->
           TermMap.find_opt t fs |>
-          Opt.iter (List.iter (fun f -> Hashtbl.add insts f sm))) ts;
+          Opt.iter (List.iter (fun f ->
+            (*print_of_format (fun ppf f -> fprintf ppf "  for %a\n" pr_tpl f) f stdout;*)
+            Hashtbl.add insts f sm))) ts;
         List.iter (fun f -> Hashtbl.add insts f sm) gs;
         run state stack
     | Filter (filters, next) :: stack ->
@@ -659,10 +694,14 @@ let run (code: 'a ematch_code) ccgraph : ('a, subst_map) Hashtbl.t =
               match t_filters with
               | Some (vs, fs) ->
                   let sm = IdMap.map (fun i -> CC.term_of_rep ccgraph regs.(i)) vs in
-                  InstGen.filter_term fs (subst_term sm t) sm
+                  (*Printf.printf "Filtering %d, %s...\n" (IdMap.cardinal vs) (string_of_term (subst_term sm t));*)
+                  filter_term fs (subst_term sm t) sm
               | None -> true)
             ts
         in
+        (*Printf.printf "filter;\nactive terms: ";
+        print_list stdout pr_term (TermSet.elements ts');
+        Printf.printf "\n";*)
         if TermSet.is_empty ts'
         then run state stack
         else run ts' (next :: stack)
@@ -874,25 +913,28 @@ let compile_term_generators_to_ematch_code generators =
   compile patterns
 
 let generate_terms_from_code code ccgraph =
-  let rec round i reps =
-    (*Printf.printf "Generating terms, round %d...\n" i;
-    CC.print_classes ccgraph;*)
-    let insts = run code ccgraph in
+  let rec round i has_mods ccgraph =
+    (*Printf.printf "Generating terms, round %d...\n" i; flush stdout;
+      CC.print_classes ccgraph;*)
+    (*let terms = CC.get_terms ccgraph in*)
+    let insts = run ~pr_tpl:pr_term_list code ccgraph in
     let new_terms =
       Hashtbl.fold (fun ts sm new_terms ->
         List.fold_left (fun new_terms gen_term ->
           let t = subst_term sm gen_term in
-          (*let _ = print_endline ("  Adding generated term " ^ string_of_term t); flush stdout in *)
+          (*let _ =
+            if not @@ TermSet.mem t terms then
+            print_endline ("  Adding generated term " ^ string_of_term gen_term ^ " -> " ^ string_of_term t); flush stdout
+          in*)
           TermSet.add t new_terms) new_terms ts)
         insts TermSet.empty
     in
-    let _ = CC.add_terms new_terms ccgraph in
-    let new_reps = TermSet.fold (fun t -> CC.NodeSet.add (CC.rep_of_term ccgraph t)) new_terms CC.NodeSet.empty in
-    let reps = CC.NodeSet.fold (fun n -> CC.NodeSet.add (CC.find_rep ccgraph n)) reps CC.NodeSet.empty in
-    if CC.NodeSet.subset new_reps reps then reps else round (i + 1) (CC.NodeSet.union new_reps reps)
+    Hashtbl.clear insts;
+    let ccgraph = CC.add_terms new_terms ccgraph in
+    if not @@ CC.has_mods ccgraph then has_mods, ccgraph
+    else round (i + 1) true (CC.reset ccgraph)
   in
-  let reps = round 0 (CC.get_reps ccgraph) in
-  reps
+  round 0 false ccgraph
 
 let generate_terms_from_code code ccgraph =
   measure_call "EMatching.generate_terms_from_code" (generate_terms_from_code code) ccgraph
