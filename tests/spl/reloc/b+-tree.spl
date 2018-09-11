@@ -12,14 +12,14 @@ datatype FlowDom = fd(ks: Map<K, Int>, pc: Int)
 /* We use an extra path counting flow domain to prove that all keys of a node come from its
    parent. This is needed by the split maintenance operation. */
 
+
 /*
 define domEq(p1, p2) {
-  //p1 == p2
   p1.pc == p2.pc && p1.ks == p2.ks
-    //  (forall k: K :: p1.ks[k] == p2.ks[k]
-    //  @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
-}
- */
+  (forall k: K :: p1.ks[k] == p2.ks[k]
+  @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
+} */
+
 
 function domLeq(p1: FlowDom, p2: FlowDom) returns (res: Bool) {
   p1.pc <= p2.pc && (forall k: K :: p1.ks[k] <= p2.ks[k]
@@ -27,28 +27,33 @@ function domLeq(p1: FlowDom, p2: FlowDom) returns (res: Bool) {
 }
 
 function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-  //ensures p.pc == p1.pc + p2.pc
-  //  @(matching p.pc yields p1.pc + p2.pc)
-  //ensures forall k: K :: p.ks[k] == p1.ks[k] + p2.ks[k]
-  //  @(matching p.ks[k] yields p1.ks[k] + p2.ks[k])
-{
-  fd({k: K :: p1.ks[k] + p2.ks[k]}, p1.pc + p2.pc)
-}
-
+ensures p.pc == p1.pc + p2.pc
+  @(matching p.pc yields p1.pc + p2.pc)
+ensures forall k: K :: p.ks[k] == p1.ks[k] + p2.ks[k]
+  @(matching p.ks[k] yields p1.ks[k] + p2.ks[k])
+  //{
+  //  fd({k: K :: p1.ks[k] + p2.ks[k]}, p1.pc + p2.pc)
+  //}
+  //
     
-function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-  //ensures p.pc == p1.pc * p2.pc
-    //@(matching p.pc yields p1.pc * p2.pc)
-  //ensures forall k: K :: p.ks[k] == p1.ks[k] * p2.ks[k]
-    //@(matching p.ks[k] yields p1.ks[k] * p2.ks[k])
-{
-  fd({ k: K :: p1.ks[k] * p2.ks[k] }, p1.pc * p2.pc)
-}
+pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+  ensures p.pc == p1.pc * p2.pc
+    @(matching p.pc yields p1.pc * p2.pc)
+  ensures forall k: K :: p.ks[k] == p1.ks[k] * p2.ks[k]
+    @(matching p.ks[k] yields p1.ks[k] * p2.ks[k])
+    // {
+    //  fd({ k: K :: p1.ks[k] * p2.ks[k]}, p1.pc * p2.pc)
+    // }
 
-    
-function domZero() returns(p: FlowDom)
-  //ensures p.pc == 0
-  //ensures forall k: K :: p.ks[k] == 0
+procedure aaa_test(Ip1: Interface, In1: Interface, c: Node, n: Node, p: Node, k: K)
+  requires Ip1.inf[p].pc * Ip1.fm[p][n].pc <= In1.inf[n].pc;
+  requires forall k: K :: Ip1.inf[p].ks[k] * Ip1.fm[p][n].ks[k] <= In1.inf[n].ks[k];
+{ assert domLeq(domMult(Ip1.inf[p], Ip1.fm[p][n]), In1.inf[n]) == true; }
+
+
+pure function domZero() returns(p: FlowDom)
+  //  ensures p.pc == 0
+  //  ensures forall k: K :: p.ks[k] == 0
 {
   fd({k: K :: 0}, 0)
 }

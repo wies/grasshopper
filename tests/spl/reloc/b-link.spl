@@ -28,6 +28,7 @@ pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
     //@(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
 }
 
+// TODO do as in b+ tree
 pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
   ensures forall k: K :: p.ks[k] == p1.ks[k] + p2.ks[k]
   ensures forall k: K :: p.ir[k] == p1.ir[k] + p2.ir[k]

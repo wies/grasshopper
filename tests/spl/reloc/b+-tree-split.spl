@@ -268,7 +268,7 @@ procedure split_node(p: Node, Ip: Interface, c: Node, Ic: Interface, c_idx: Int,
   pure assert domEq(domMult(Ic1.inf[c], Ic1.fm[c][n]), domZero()) == true;
   pure assert p.keys[k_idx] == k && n.rangeLb == k && p.keys[k_idx + 1] == n.rangeUb;
   pure assert forall k: K :: Ip1.inf[p].ks[k] * Ip1.fm[p][n].ks[k] <= In1.inf[n].ks[k];
-  pure assert Ip1.inf[p].pc * Ip1.fm[p][n].pc <= In1.inf[n].pc;
+  pure assert Ip1.fm[p][n].ks[k] == 1 && Ip1.inf[p].pc * Ip1.fm[p][n].pc <= In1.inf[n].pc;
   pure assert domLeq(domMult(Ip1.inf[p], Ip1.fm[p][n]), In1.inf[n]) == true;
   
   // Compose the new interfaces

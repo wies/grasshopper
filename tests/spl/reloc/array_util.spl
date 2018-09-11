@@ -1,4 +1,5 @@
-/* This file is a copy of tests/spl/sorted_array_utils/array_util.spl with K -> Int */
+/* This file is a copy of tests/spl/sorted_array_utils/array_util.spl
+   with copies for arrays of nodes. */
 
 options "-simplearrays"
 
