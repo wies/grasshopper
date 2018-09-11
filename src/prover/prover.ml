@@ -2,7 +2,6 @@ open Grass
 open GrassUtil
 open Util
 open Axioms
-open InstGen
 
 let encode_labels fs =
   let mk_label annots f = 
@@ -193,7 +192,7 @@ let instantiate_and_prove session fs =
     CongruenceClosure.add_terms gts |>
     CongruenceClosure.add_conjuncts fs
   in
-  let _ = EMatching.generate_terms_from_code tgcode cc_graph in
+  let _, cc_graph = EMatching.generate_terms_from_code tgcode cc_graph in
   let round1 fs_inst gts_inst cc_graph =
     let equations = List.filter (fun f -> is_horn false [f]) fs_inst in
     let ground_fs = List.filter is_ground fs_inst in
@@ -237,26 +236,35 @@ let instantiate_and_prove session fs =
     in*)
     let rec saturate i fs_inst gts_inst0 cc_graph =
       (*Printf.printf "Saturate iteration %d\n" i; flush stdout;*)
+      let has_mods2, cc_graph =
+        cc_graph |>
+        EMatching.generate_terms_from_code tgcode
+      in
+      let implied_eqs = CongruenceClosure.get_implied_equalities cc_graph in
+      let fs_inst = EMatching.instantiate_axioms_from_code patterns code cc_graph in
       let gts_inst = ground_terms_acc ~include_atoms:true gts_inst0 (mk_and fs_inst) in
       let fs, gts_inst = generate_adt_terms fs gts_inst in
+      let gts_inst = TermSet.union (ground_terms ~include_atoms:true (mk_and implied_eqs)) gts_inst in
+      let cc_graph =
+        cc_graph |>
+        CongruenceClosure.add_terms gts_inst |>
+        CongruenceClosure.add_conjuncts (rev_concat [fs_inst; fs])
+      in
+      let has_mods1 = CongruenceClosure.has_mods cc_graph in
       (*print_endline "Implied equalities:";
       print_endline (string_of_form (mk_and implied_eqs));*)
-      let implied_eqs = CongruenceClosure.get_implied_equalities cc_graph in
-      let gts_inst = TermSet.union (ground_terms ~include_atoms:true (mk_and implied_eqs)) gts_inst in
-      let cc_graph = CongruenceClosure.add_terms gts_inst cc_graph in
-      (*let generators = if i > 1 && false then Reduction.get_read_propagators gts_inst else btwn_gen @ generators in*)
-      let _ = EMatching.generate_terms_from_code tgcode cc_graph in
       let gts_inst = CongruenceClosure.get_terms cc_graph in 
-      if i > 1 && (not !Config.propagate_reads || CongruenceClosure.has_mods cc_graph) then 
+      (*let generators = if i > 1 && false then Reduction.get_read_propagators gts_inst else btwn_gen @ generators in*)
+      if not !Config.propagate_reads || not (has_mods1 || has_mods2)
+      then
+        (*let _ =
+          if not @@ TermSet.subset gts_inst gts_inst0
+          then print_list stdout pr_term (TermSet.diff gts_inst gts_inst0 |> TermSet.elements)
+        in
+        let _ = assert (TermSet.subset gts_inst gts_inst0) in*)
         rev_concat [fs_inst; implied_eqs], gts_inst, cc_graph
       else
-        let cc_graph =
-          cc_graph |>
-          (*measure_call "cc_gen" (fun cc_graph -> cc_graph |> CongruenceClosure.add_terms gts_inst) |>*)
-          CongruenceClosure.add_conjuncts (rev_concat [fs_inst; fs])
-        in
         (*let fs_inst = instantiate_with_terms fs1 (CongruenceClosure.get_classes cc_graph) in*)
-        let fs_inst = EMatching.instantiate_axioms_from_code patterns code cc_graph in
         saturate (i + 1) fs_inst gts_inst (CongruenceClosure.reset cc_graph)
     in
     let saturate i fs_inst gts_inst0 = measure_call "saturate" (saturate i fs_inst gts_inst0) in

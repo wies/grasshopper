@@ -3,15 +3,8 @@
 open Util
 open Grass
 open GrassUtil
-open InstGen
 open Axioms
 open SimplifyGrass
-
-(** Compute the set of generated ground terms for formulas [fs] *)
-let generated_ground_terms fs =
-  let _, generators = open_axioms isFunVar fs in
-  let gts = generate_terms generators (ground_terms ~include_atoms:true (mk_and fs)) in
-  gts
   
 (** Eliminate all implicit and explicit existential quantifiers using skolemization.
  ** Assumes that [f] is typed and in negation normal form. *)

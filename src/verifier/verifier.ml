@@ -132,7 +132,7 @@ let add_match_filters =
           let flt, aux_matches = 
             TermSet.fold 
               (fun t (flt, aux_matches) -> match t with
-              | App ((FreeSym _ | Constructor _ as sym), (_ :: _ as ts), srt)
+              | App ((ArrayOfCell | IndexOfCell | FreeSym _ | Constructor _ as sym), (_ :: _ as ts), srt)
                 when sym_of_e <> Some sym && occurs_below_var_terms_of_e ts ->
                   add (FilterSymbolNotOccurs sym) flt, aux_matches
               | App (Read, ([App (FreeSym sym, [], srt); l] as ts), _)

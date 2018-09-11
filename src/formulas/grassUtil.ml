@@ -283,6 +283,18 @@ let symbol_of_ident =
 
 (** {6 (Smart) constructors} *)
 
+let mk_loc_var name = 
+  let id = fresh_ident name in
+  fun struct_srt -> id, Loc struct_srt
+
+let mk_loc_field_var name =
+  let id = fresh_ident name in
+  fun struct_srt -> id, loc_field_sort struct_srt
+
+let mk_loc_set_var name =
+  let id = fresh_ident name in
+  fun struct_srt -> id, Set (Loc struct_srt)
+      
 let mk_true = BoolOp (And, [])
 let mk_false = BoolOp (Or, [])
 let mk_bool b = if b then mk_true else mk_false
@@ -806,6 +818,37 @@ let map_terms fn f =
     | Binder (b, vs, f, a) -> Binder (b, vs, mt f, ma a)
   in mt f
 
+(** Fold and map all terms appearing in the formula [f]
+  using [fn] and initial value [init] *)
+let fold_map_terms fn init f =
+  let fa acc = function
+    | Pattern (t, fs) ->
+      let t, acc = fn acc t in
+      Pattern(t, fs), acc
+    | Label (b, t) -> let t, acc = fn acc t in Label (b, t), acc
+    | TermGenerator (gs, ts) ->
+      let gs, acc =  (* TODO should we also apply it to terms in filters? *)
+        fold_left_map (fun acc -> function Match (t, fs) ->
+          let t, acc = fn acc t in Match (t, fs), acc) acc gs
+      in
+      let ts, acc = fold_left_map fn acc ts in
+      TermGenerator (gs, ts), acc
+    | Comment _ | SrcPos _ | Name _ | ErrorMsg _ as a -> a, acc
+  in
+  let rec ft acc = function
+    | Atom (t, a) ->
+      let a, acc = fold_left_map fa acc a in
+      let t, acc = fn acc t in
+      Atom (t, a), acc
+    | BoolOp (op, fs) ->
+      let fs, acc = fold_left_map ft acc fs in
+      BoolOp (op, fs), acc
+    | Binder (b, vs, f, a) ->
+      let a, acc = fold_left_map fa acc a in
+      let f, acc = ft acc f in
+      Binder (b, vs, f, a), acc
+  in ft init f
+
 (** Apply the function fn to all atoms appearing in [f] *)
 let map_atoms fn f =
   let rec mt = function
@@ -875,6 +918,13 @@ let smk_forall ?(ann=[]) bv f = smk_binder ~ann:ann Forall bv f
 (** Smart constructor for existential quantifiers.*)
 let smk_exists ?(ann=[]) bv f = smk_binder ~ann:ann Exists bv f
 
+(** Computes the size of the term [t] (in number of function applications) *)
+let size_of_term t =
+  let rec s acc = function
+  | Var _ -> acc
+  | App (_, ts, _) -> List.fold_left s (acc + 1) ts
+  in s 0 t
+    
 (** Computes the set of free variables of formula [f] together with their sorts. *)
 let sorted_free_vars f = 
   let rec fvt bv vars = function
@@ -1261,6 +1311,10 @@ let subst_annot subst_map = function
 (** Substitutes all free variables in formula [f] with terms according to substitution map [subst_map].
  ** This operation is capture avoiding. *)
 let subst subst_map f =
+  (** Given a list of bound variables [vs] and a substitution map [sm], discards mappings
+    of variables that are bound and renames bound variables that conflict with terms in
+    the RHS of substitutions.
+  *)
   let rename_vars vs sm =
     let not_bound id _ = not (List.mem_assoc id vs) in
     let sm1 = IdMap.filter not_bound sm in 
