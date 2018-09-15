@@ -1,0 +1,57 @@
+/** Header for link technique template for linearizable dictionaries. */
+
+/* Files using this must define:
+   - Node, unchanged(x), gammaSpatial(x), gammaG(x, I), gammaB(x, I)
+   - FlowDom, domEq, domLeq, domPlus, domMult, domZero
+ */
+
+
+options "-symbexec"
+
+include "../include/flows.spl";
+
+
+/** Node domain definitions */
+
+datatype LockInfo = unlocked | locked(tid: Int) | dirtylock(dtid: Int) | lockTop;
+
+datatype NodeDom = nd(contents: Set<Int>, lockinfo: LockInfo);
+
+pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
+  (forall x: Int :: x in a1.contents ==> x in a2.contents)
+    && (a1.lockinfo == a2.lockinfo || a2.lockinfo == lockTop)
+}
+
+
+/** Definition of good condition, gamma */
+
+pure function outset(x: Node, flmp: Map<Node, Map<Node, FlowDom>>) returns (O: Set<Int>)
+  ensures forall k: Int :: k in O ==> (exists y: Node :: flmp[x][y].ks[k] > 0 @(matching O yields flmp[x][y].ks[k]))
+  //{ { k: Int :: exists y: Node :: flmp[x][y].ks[k] > 0 } }  // TODO why not? (see hashtbl.findNext)
+
+define gamma(x, I) {
+  gammaSpatial(x)
+    &*& ((gammaG(x, I) && (I.na.lockinfo == locked(TID) || I.na.lockinfo == unlocked)
+        || gammaB(x, I) && I.na.lockinfo == dirtylock(TID))
+       && (forall k: Int :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
+       && (forall k: Int, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
+       && (forall k: Int, y: Node, z: Node :: y == z
+          || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0)
+       // Inreach keyset \subseteq inset
+       && (forall k: Int :: I.inf[x].ir[k] >= 1 && k !in outset(x, I.fm) ==> I.inf[x].ks[k] >= 1)
+       // Inreach edgesets \subseteq normal edgesets
+       && (forall k: Int, y: Node :: I.fm[x][y].ir[k] <= I.fm[x][y].ks[k])
+       // If k in inreach, then inreach edgeset is same as normal edgeset (for step)
+       && (forall k: Int, y: Node :: I.inf[x].ir[k] >= 1 && I.inf[x].ks[k] <= 0
+          && I.fm[x][y].ks[k] >= 1 ==> I.fm[x][y].ir[k] >= 1))
+}
+
+
+var r: Node;
+
+define globalInt(I) {
+  intValid(I) == true && r in I.FP && (forall k: Int :: I.inf[r].ks[k] == 1)
+    && (forall n: Node, k: Int :: n != r ==> I.inf[n].ks[k] == 0)
+    && I.FPo == {} && r != null
+}
+
