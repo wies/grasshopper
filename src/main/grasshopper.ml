@@ -141,20 +141,24 @@ let check_spl_program spl_prog proc =
   match proc with
   | None -> Prog.fold_procs (check simple_prog) true simple_prog
   | Some p ->
+    (* Split string to get names of multiple procedures *)
     let procs =
-      Prog.find_proc_with_deps simple_prog (p, 0)
+      p |> String.split_on_char ' '
+      |> List.map (fun p ->
+        match Prog.find_proc_with_deps simple_prog (p, 0) with
+        | [] ->
+          let available =
+            Prog.fold_procs 
+              (fun acc proc ->
+                let name = Prog.name_of_proc proc in
+                "\t" ^ Grass.string_of_ident name ^ "\n" ^ acc) 
+              "" prog
+          in
+          failwith ("Could not find a procedure named " ^ p ^ 
+                    ". Available procedures are:\n" ^ available)
+        | ps -> ps)
+      |> List.concat |> List.sort_uniq compare
     in
-    if procs = [] then begin
-      let available =
-        Prog.fold_procs 
-          (fun acc proc ->
-            let name = Prog.name_of_proc proc in
-            "\t" ^ Grass.string_of_ident name ^ "\n" ^ acc) 
-          "" prog
-      in
-      failwith ("Could not find a procedure named " ^ p ^ 
-                ". Available procedures are:\n" ^ available)
-    end;
     List.fold_left (check simple_prog) true procs
 
 
