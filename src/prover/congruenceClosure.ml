@@ -475,8 +475,14 @@ let add_terms gterms cc_graph =
           | App (Constructor id2, _, srt2) as t2 when srt1 = srt2 && id1 <> id2 ->
               cc_graph#add_neq t1 t2
           | _ -> ())
-          all_terms
-    | _ -> ()) cterms;
+          cterms
+    | App (Destructor did, [App (Constructor cid, args, Adt (adt, adts))], _) as t ->
+        let cnstrs = List.assoc adt adts in
+        let destrs = List.assoc cid cnstrs in
+        List.combine destrs args |>
+        List.find_opt (fun ((did', _), _) -> did = did') |>
+        Opt.iter (fun (_, arg) -> cc_graph#add_eq t arg)
+    | _ -> ()) all_terms;
   cc_graph
 
 let get_implied_equalities cc_graph =
