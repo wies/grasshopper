@@ -46,7 +46,6 @@ pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
 datatype NodeType = root | bucket | nodeTop;
 
 struct Node {
-  var locktid: Int;
   var len: Int;
   var bkts: Array<Node>;
   var rangeLb: K;
@@ -57,7 +56,7 @@ struct Node {
 }
 
 define unchanged(x) {
-  x.locktid == old(x.locktid) && x.len == old(x.len) && x.bkts == old(x.bkts)
+  x.len == old(x.len) && x.bkts == old(x.bkts)
     && x.keys == old(x.keys) && x.next == old(x.next) && x.typ == old(x.typ)
     && x.bkts.length == old(x.bkts.length) && x.bkts.map == old(x.bkts.map)
     && x.keys.length == old(x.keys.length) && x.keys.map == old(x.keys.map)
@@ -65,11 +64,11 @@ define unchanged(x) {
 }
 
 
-procedure newNode(xlock: Int, xlen: Int, xkeyslen: Int, xnext: Node)
+procedure newNode(xlen: Int, xkeyslen: Int, xnext: Node)
   returns (x: Node, Ix: Interface)
   requires emp
   ensures [acc(x) &*& acc(x.bkts) &*& acc(x.keys)](Ix)
-  ensures x.locktid == xlock && x.len == xlen && x.keys.length == xkeyslen && x.next == xnext
+  ensures x.len == xlen && x.keys.length == xkeyslen && x.next == xnext
   ensures intValid(Ix) && Ix.FP == {x} && Ix.inf[x] == domZero && Ix.FPo == {}
 
 
@@ -101,6 +100,17 @@ define hrep(x, I) {
         || x.next != null && (forall k: K :: I.fm[x][x.next].ks[k] == 1) && I.FPo == {x.next})))
 }
 
+// The good condition
+define nu(x, I) {
+  hrep(x, I)
+    // Contents subsetof keyset
+    && (forall k: K :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
+    && (forall k: K, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
+    // Edgesets are disjoint
+    && (forall k: K, y: Node, z: Node :: y == z
+       || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0)
+}
+
 lemma keyset_implies_bucket(x: Node, Ix: Interface, k: K)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
@@ -119,8 +129,8 @@ lemma keyset_implies_bucket(x: Node, Ix: Interface, k: K)
 /** inRange */
 procedure inRange(x: Node, k: K, Ix: Interface)
   returns (res: Bool)
-  requires hrep(x, Ix)
-  ensures hrep(x, Ix) &*& (res ==> Ix.inf[x].ks[k] >= 1)
+  requires nu(x, Ix)
+  ensures nu(x, Ix) &*& (res ==> Ix.inf[x].ks[k] >= 1)
 {
   return x.typ == root || le(x.rangeLb, k) && lt(k, x.rangeUb);
 }
@@ -129,8 +139,8 @@ procedure inRange(x: Node, k: K, Ix: Interface)
 /** findNext **/
 procedure findNext(x: Node, k: K, Ix: Interface)
   returns (n: Node)
-  requires hrep(x, Ix) &*& intValid(Ix) == true
-  ensures hrep(x, Ix)
+  requires nu(x, Ix) &*& intValid(Ix) == true
+  ensures nu(x, Ix)
   ensures (n != null && Ix.fm[x][n].ks[k] >= 1
            || n == null && (forall y: Node :: Ix.fm[x][y].ks[k] == 0))
 {
@@ -152,9 +162,9 @@ procedure findNext(x: Node, k: K, Ix: Interface)
 /** member */
 procedure member(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
-  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires nu(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
-  ensures hrep(x, Ix)
+  ensures nu(x, Ix)
   ensures intEq(Ix, Ix1) == true
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (Ix1.na.contents == Ix.na.contents && (res == k in Ix.na.contents))
@@ -171,9 +181,9 @@ procedure member(x: Node, k: K, Ix: Interface)
 /** insert */
 procedure insert(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
-  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires nu(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
-  ensures hrep(x, Ix1)
+  ensures nu(x, Ix1)
   ensures intEq(Ix, Ix1) == true
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (Ix1.na.contents == Ix.na.contents ++ {k} && (res == k !in Ix.na.contents))
@@ -206,9 +216,9 @@ procedure insert(x: Node, k: K, Ix: Interface)
 /** delete */
 procedure delete(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
-  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires nu(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
-  ensures hrep(x, Ix1)
+  ensures nu(x, Ix1)
   ensures intEq(Ix, Ix1) == true
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (Ix1.na.contents == Ix.na.contents -- {k} && (res == k in Ix.na.contents))

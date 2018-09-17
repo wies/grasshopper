@@ -55,7 +55,6 @@ pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
 /** Definition of a node */
 
 struct Node {
-  var locktid: Int;
   var len: Int;
   var keys: Array<K>;
   var ptrs: Array<Node>;
@@ -63,7 +62,7 @@ struct Node {
 }
 
 define unchanged(x) {
-  x.locktid == old(x.locktid) && x.len == old(x.len) && x.next == old(x.next)
+  x.len == old(x.len) && x.next == old(x.next)
     && x.keys == old(x.keys) && x.ptrs == old(x.ptrs)
     && x.keys.length == old(x.keys.length) && x.keys.map == old(x.keys.map)
     && x.ptrs.length == old(x.ptrs.length) && x.ptrs.map == old(x.ptrs.map)
@@ -124,33 +123,38 @@ define hrep(x, I) {
       )
 }
 
-/*
-procedure aaa_test(x: Node, c0: Node, c1: Node, n: Node, I: Interface)
-  requires x != c0 && x != c1 && x != n && c0 != c1 && c0 != n && c1 != n
-  requires x != null && c0 != null && c1 != null && n != null
-  requires x.len == 1 && x.ptrs.length == 4 && x.keys.length == 4 && B == 2
-  requires x.next == n && x.ptrs[0] == c0 && x.ptrs[1] == c1
-  requires x.keys[0] == 1 && x.keys[1] == 5
-  requires acc(x) &*& acc(x.keys) &*& acc(x.ptrs)
-  requires I.FP == {x} && I.FPo == {c0, c1, n} && I.na.contents == {}
-  requires forall n: Node, n1: Node, k: K :: n != x ==> I.fm[n][n1].ks[k] == 0
-  requires forall n: Node, k: K :: n !in I.FPo ==> I.fm[x][n].ks[k] == 0
-  requires forall n: Node, k: K :: n in {c0} && k < 1 ==> I.fm[x][n].ks[k] == 1
-  requires forall n: Node, k: K :: n in {c0} && k >= 1 ==> I.fm[x][n].ks[k] == 0
-  @(matching n yields I.fm[x][n].ks[k])
-  requires forall n: Node, k: K :: n in {c1} && 1 <= k < 5 ==> I.fm[x][n].ks[k] == 1
-  requires forall n: Node, k: K :: n in {c1} && !(1 <= k < 5) ==> I.fm[x][n].ks[k] == 0
-  requires forall y: Node, k: K :: y in {n} && 5 <= k ==> I.fm[x][y].ks[k] == 1
-  requires forall y: Node, k: K :: y in {n} && !(5 <= k) ==> I.fm[x][y].ks[k] == 0
-  ensures hrep(x, I)
-{}
- */
+pure function outset(x: Node, flmp: Map<Node, Map<Node, FlowDom>>) returns (O: Set<K>)
+  ensures forall k: K :: k in O ==> (exists y: Node :: flmp[x][y].ks[k] > 0 @(matching O yields flmp[x][y].ks[k]))
+  //{ { k: K :: exists y: Node :: flmp[x][y].ks[k] > 0 } }  // TODO why not? (see hashtbl.findNext)
+
+// The good condition
+define nu(x, I) {
+  hrep(x, I)
+    // Contents subsetof keyset
+    && (forall k: K :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
+    && (forall k: K, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
+    // Edgesets are disjoint
+    && (forall k: K, y: Node, z: Node :: y == z
+       || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0)
+    // Inreach keyset subsetof inset
+    && (forall k: K :: I.inf[x].ir[k] >= 1 && k !in outset(x, I.fm) ==> I.inf[x].ks[k] >= 1)
+    // Inreach edgesets subsetof normal edgesets
+    && (forall k: K, y: Node :: I.fm[x][y].ir[k] <= I.fm[x][y].ks[k])
+    // If k ∈ inreach, then inreach edgeset is same as normal edgeset (for step)
+    && (forall k: K, y: Node :: I.inf[x].ir[k] >= 1 && I.inf[x].ks[k] <= 0
+       && I.fm[x][y].ks[k] >= 1 ==> I.fm[x][y].ir[k] >= 1)
+    // The node label stores the actual inreach
+    && I.na.inr.inrdom == {x}
+    && (forall k: K :: (k in I.na.inr.inrfn[x]) ==> (I.inf[x].ks[k] >= 1 || I.inf[x].ir[k] >= 1))
+    && (forall k: K :: (I.inf[x].ks[k] >= 1 || I.inf[x].ir[k] >= 1) ==> (k in I.na.inr.inrfn[x]))
+}
+
 
 lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
-  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires nu(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
   requires (i <= 0 || le(x.keys[i-1], k)) && 0 <= i <= x.len
-  ensures hrep(x, Ix) &*& unchanged(x)
+  ensures nu(x, Ix) &*& unchanged(x)
   ensures x.ptrs[0] == null  // x is a leaf
 {
   if (x.ptrs[0] != null && i < x.len && !lt(k, x.keys[i])) {
@@ -162,7 +166,7 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
 
 /** Initialize root note */
 procedure init() returns (x: Node, I: Interface)
-  ensures hrep(x, I)
+  ensures nu(x, I)
 {
   x := new Node;
   x.keys := new Array<K>(2*B);
@@ -170,20 +174,21 @@ procedure init() returns (x: Node, I: Interface)
   arr_init_node(x.ptrs, 2*B, null);
   x.len := 0;
   x.next := null;
-  x.locktid := 0;
   
   var xkc := { k: K :: le(bottom, k) && lt(k, top) ? 1 : 0 };
   var xir := { k: K :: le(bottom, k) && lt(k, top) ? 1 : 0 };
   var xfm := { n: Node :: { n1: Node :: domZero } };
-  I := int({ n: Node :: n == x ? fd(xkc, xir) : domZero },
-           nd({}, inrfnUndef), xfm, {x}, {});
+  var xinf := { n: Node :: n == x ? fd(xkc, xir) : domZero };
+  var inrSet: Set<K> := { k: K :: xinf[x].ks[k] >= 1 || xinf[x].ir[k] >= 1 };
+  var i := inrfnC({ n: Node :: n == x ? inrSet : {} }, {x});
+  I := int(xinf, nd({}, i), xfm, {x}, {});
 }
 
 /** findNext */
 procedure findNext(x: Node, k: K, Ix: Interface)
   returns (n: Node)
-  requires hrep(x, Ix) &*& intValid(Ix) == true
-  ensures hrep(x, Ix)
+  requires nu(x, Ix) &*& intValid(Ix) == true
+  ensures nu(x, Ix)
   ensures n != null ==> Ix.fm[x][n].ks[k] >= 1
   ensures n == null ==> (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
 {
@@ -229,9 +234,9 @@ procedure findNext(x: Node, k: K, Ix: Interface)
 /** member */
 procedure member(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
-  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires nu(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
-  ensures hrep(x, Ix)
+  ensures nu(x, Ix)
   ensures intEq(Ix, Ix1) == true
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (Ix1.na.contents == Ix.na.contents && (res == k in Ix.na.contents))
@@ -248,9 +253,9 @@ procedure member(x: Node, k: K, Ix: Interface)
 /** insert */
 procedure insert(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
-  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires nu(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
-  ensures hrep(x, Ix1)
+  ensures nu(x, Ix1)
   ensures intEq(Ix, Ix1) == true
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (Ix1.na.contents == Ix.na.contents ++ {k} && (res == k !in Ix.na.contents))
@@ -282,9 +287,9 @@ procedure insert(x: Node, k: K, Ix: Interface)
 /** delete */
 procedure delete(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
-  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires nu(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
-  ensures hrep(x, Ix1)
+  ensures nu(x, Ix1)
   ensures intEq(Ix, Ix1) == true
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (Ix1.na.contents == Ix.na.contents -- {k} && (res == k in Ix.na.contents))

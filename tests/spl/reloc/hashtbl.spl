@@ -40,7 +40,7 @@ pure function domZero() returns(p: FlowDom)
 
 
 datatype InrFn = inrfnC(inrfn: Map<Node, Set<K>>, inrdom: Set<Node>) | inrfnUndef;
-  
+
 datatype NodeDom = nd(contents: Set<K>, inr: InrFn);
 
 pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
@@ -55,7 +55,6 @@ pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
 datatype NodeType = root | bucket | nodeTop;
 
 struct Node {
-  var locktid: Int;
   var len: Int;
   var bkts: Array<Node>;
   var keys: Array<K>;
@@ -64,18 +63,18 @@ struct Node {
 }
 
 define unchanged(x) {
-  x.locktid == old(x.locktid) && x.len == old(x.len) && x.bkts == old(x.bkts)
+  x.len == old(x.len) && x.bkts == old(x.bkts)
     && x.keys == old(x.keys) && x.next == old(x.next) && x.typ == old(x.typ)
     && x.bkts.length == old(x.bkts.length) && x.bkts.map == old(x.bkts.map)
     && x.keys.length == old(x.keys.length) && x.keys.map == old(x.keys.map)
 }
 
 
-procedure newNode(xlock: Int, xlen: Int, xkeyslen: Int, xnext: Node)
+procedure newNode(xlen: Int, xkeyslen: Int, xnext: Node)
   returns (x: Node, Ix: Interface)
   requires emp
   ensures [acc(x) &*& acc(x.bkts) &*& acc(x.keys)](Ix)
-  ensures x.locktid == xlock && x.len == xlen && x.keys.length == xkeyslen && x.next == xnext
+  ensures x.len == xlen && x.keys.length == xkeyslen && x.next == xnext
   ensures intValid(Ix) && Ix.FP == {x} && Ix.inf[x] == domZero && Ix.FPo == {}
 
 
@@ -89,7 +88,7 @@ define hrepSpatial(x) {
 
 define hrep(x, I) {
   hrepSpatial(x) &*& I.FP == {x}
-  && 0 <= x.len && x.len < x.keys.length
+  && 0 <= x.len < x.keys.length
     && ((x.typ == root
         && (forall i: Int :: 0 <= i && i < x.bkts.length ==> x.bkts[i] != null)
         && (forall y: Node, k: K :: y == x.bkts[hash(x, k)] ==> I.fm[x][y].ks[k] == 1)
@@ -102,10 +101,35 @@ define hrep(x, I) {
         || x.next != null && (forall k: K :: I.fm[x][x.next].ks[k] == 1) && I.FPo == {x.next})))
 }
 
+pure function outset(x: Node, flmp: Map<Node, Map<Node, FlowDom>>) returns (O: Set<K>)
+  //  ensures forall k: K :: k in O ==> (exists y: Node :: flmp[x][y].ks[k] > 0 @(matching O yields flmp[x][y].ks[k]))
+{ { k: K :: exists y: Node :: flmp[x][y].ks[k] > 0 } }
+
+// The good condition
+define nu(x, I) {
+  hrep(x, I)
+    // Contents subsetof keyset
+    && (forall k: K :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
+    && (forall k: K, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
+    // Edgesets are disjoint
+    && (forall k: K, y: Node, z: Node :: y == z
+       || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0)
+    // Inreach keyset subsetof inset
+    && (forall k: K :: I.inf[x].ir[k] >= 1 && k !in outset(x, I.fm) ==> I.inf[x].ks[k] >= 1)
+    // Inreach edgesets subsetof normal edgesets
+    && (forall k: K, y: Node :: I.fm[x][y].ir[k] <= I.fm[x][y].ks[k])
+    // If k ∈ inreach, then inreach edgeset is same as normal edgeset (for step)
+    && (forall k: K, y: Node :: I.inf[x].ir[k] >= 1 && I.inf[x].ks[k] <= 0
+       && I.fm[x][y].ks[k] >= 1 ==> I.fm[x][y].ir[k] >= 1)
+    // The node label stores the actual inreach
+    && I.na.inr.inrdom == {x}
+    && (forall k: K :: (k in I.na.inr.inrfn[x]) == (I.inf[x].ks[k] >= 1 || I.inf[x].ir[k] >= 1))
+}
+
 lemma keyset_implies_bucket(x: Node, Ix: Interface, k: K)
-  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires nu(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
-  ensures hrep(x, Ix) &*& unchanged(x)
+  ensures nu(x, Ix) &*& unchanged(x)
   ensures x.typ == bucket
 {
   if (x.typ == root) {
@@ -120,8 +144,8 @@ lemma keyset_implies_bucket(x: Node, Ix: Interface, k: K)
 /** findNext **/
 procedure findNext(x: Node, k: K, Ix: Interface)
   returns (n: Node)
-  requires hrep(x, Ix) &*& intValid(Ix) == true
-  ensures hrep(x, Ix)
+  requires nu(x, Ix) &*& intValid(Ix) == true
+  ensures nu(x, Ix)
   ensures (n != null && Ix.fm[x][n].ks[k] >= 1
            || n == null && (forall y: Node :: Ix.fm[x][y].ks[k] == 0))
 {
@@ -143,15 +167,15 @@ procedure findNext(x: Node, k: K, Ix: Interface)
 /** member */
 procedure member(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
-  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires nu(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
-  ensures hrep(x, Ix)
+  ensures nu(x, Ix)
   ensures intEq(Ix, Ix1) == true
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (Ix1.na.contents == Ix.na.contents && (res == k in Ix.na.contents))
 {
   keyset_implies_bucket(x, Ix, k);
-  
+
   var idx: Int;
   res, idx := arr_find(x.keys, x.len, k);
 
@@ -162,31 +186,31 @@ procedure member(x: Node, k: K, Ix: Interface)
 /** insert */
 procedure insert(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
-  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires nu(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
-  ensures hrep(x, Ix1)
+  ensures nu(x, Ix1)
   ensures intEq(Ix, Ix1) == true
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (Ix1.na.contents == Ix.na.contents ++ {k} && (res == k !in Ix.na.contents))
 {
   keyset_implies_bucket(x, Ix, k);
-  
+
   if (x.len < x.keys.length - 1) {
-    
+
     ghost var m := x.keys.map;
-    
+
     var idx, new_len := arr_insert(x.keys, k, x.len);
     // TODO argument order consistent
-    
+
     map_insert_content_set(m, x.keys.map, idx, k, x.len, new_len);
 
     x.len := new_len;
-    
+
     // Define Ix1 to be Ix, but with k added to contents
     Ix1 := copy_interface(Ix, nd(Ix.na.contents ++ {k}, Ix.na.inr));
     lemma_int_valid_unfold(Ix);
     lemma_int_valid_fold(Ix1);
-    
+
     return true, k !in Ix.na.contents, Ix1;
   } else {
     return false, false, Ix;
@@ -197,23 +221,23 @@ procedure insert(x: Node, k: K, Ix: Interface)
 /** delete */
 procedure delete(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
-  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires nu(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
-  ensures hrep(x, Ix1)
+  ensures nu(x, Ix1)
   ensures intEq(Ix, Ix1) == true
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (Ix1.na.contents == Ix.na.contents -- {k} && (res == k in Ix.na.contents))
 {
   keyset_implies_bucket(x, Ix, k);
-  
+
   ghost var m := x.keys.map;
-  
+
   var new_len, idx := arr_delete(x.keys, k, x.len);
-  
+
   map_delete_content_set(m, x.keys.map, x.len, new_len, idx, k);
-  
+
   x.len := new_len;
-  
+
   // Define Ix1 to be Ix, but with k removed from contents
   Ix1 := copy_interface(Ix, nd(Ix.na.contents -- {k}, Ix.na.inr));
   lemma_int_valid_unfold(Ix);

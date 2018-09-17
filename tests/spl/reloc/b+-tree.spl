@@ -9,8 +9,8 @@ include "array_util.spl"
 /** Flow and node domain definitions */
 
 datatype FlowDom = fd(ks: Map<K, Int>, pc: Int)
-/* We use an extra path counting flow domain to prove that all keys of a node come from its
-   parent. This is needed by the split maintenance operation. */
+/* We use an extra path counting flow domain to prove that all keys of a node
+   come from its parent. This is needed by the split maintenance operation. */
 
 
 /*
@@ -45,12 +45,6 @@ pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
     //  fd({ k: K :: p1.ks[k] * p2.ks[k]}, p1.pc * p2.pc)
     // }
 
-procedure aaa_test(Ip1: Interface, In1: Interface, c: Node, n: Node, p: Node, k: K)
-  requires Ip1.inf[p].pc * Ip1.fm[p][n].pc <= In1.inf[n].pc;
-  requires forall k: K :: Ip1.inf[p].ks[k] * Ip1.fm[p][n].ks[k] <= In1.inf[n].ks[k];
-{ assert domLeq(domMult(Ip1.inf[p], Ip1.fm[p][n]), In1.inf[n]) == true; }
-
-
 pure function domZero() returns(p: FlowDom)
   //  ensures p.pc == 0
   //  ensures forall k: K :: p.ks[k] == 0
@@ -69,7 +63,6 @@ pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
 /** Definition of a node */
 
 struct Node {
-  var locktid: Int;
   var len: Int;
   var rangeLb: K;
   var rangeUb: K;
@@ -78,7 +71,7 @@ struct Node {
 }
 
 define unchanged(x) {
-  x.locktid == old(x.locktid) && x.len == old(x.len) && x.rangeLb == old(x.rangeLb)
+  x.len == old(x.len) && x.rangeLb == old(x.rangeLb)
     && x.rangeUb == old(x.rangeUb) && x.keys == old(x.keys) && x.ptrs == old(x.ptrs)
     && x.keys.length == old(x.keys.length) && x.keys.map == old(x.keys.map)
     && x.ptrs.length == old(x.ptrs.length) && x.ptrs.map == old(x.ptrs.map)
@@ -125,11 +118,22 @@ define hrep(x, I) {
        )
 }
 
-procedure newNode(xtid: Int, xlen: Int, xrangeLb: K, xrangeUb: K)
+// The good condition
+define nu(x, I) {
+  hrep(x, I)
+    // Contents subsetof keyset
+    && (forall k: K :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
+    && (forall k: K, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
+    // Edgesets are disjoint
+    && (forall k: K, y: Node, z: Node :: y == z
+       || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0)
+}
+
+procedure newNode(xlen: Int, xrangeLb: K, xrangeUb: K)
   returns (x: Node, Ix: Interface)
   requires emp
   ensures [acc(x) &*& acc(x.ptrs) &*& acc(x.keys)](Ix)
-  ensures x.locktid == xtid && x.len == xlen && x.rangeLb == xrangeLb
+  ensures x.len == xlen && x.rangeLb == xrangeLb
   ensures x.rangeUb == xrangeUb && x.keys.length == 2*B && x.ptrs.length == 2*B
   ensures intValid(Ix) == true
   ensures Ix.FP == {x} && Ix.inf[x] == domZero && Ix.FPo == {}
@@ -167,7 +171,6 @@ procedure init() returns (x: Node, I: Interface)
   x.len := 0;
   x.rangeLb := bottom;
   x.rangeUb := top;
-  x.locktid := 0;
   
   var xkc := { k: K :: le(bottom, k) && lt(k, top) ? 1 : 0 };
   var xfm := { n: Node :: { n1: Node :: domZero } };
