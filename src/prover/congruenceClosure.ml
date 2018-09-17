@@ -476,6 +476,14 @@ let add_terms gterms cc_graph =
               cc_graph#add_neq t1 t2
           | _ -> ())
           all_terms
+    | App (Destructor did, [App (Constructor cid, args, Adt (adt, adts))], _) as t ->
+        let cnstrs = List.assoc adt adts in
+        let destrs = List.assoc cid cnstrs in
+        let _, arg =
+          List.combine destrs args |>
+          List.find (fun ((did', _), _) -> did = did')
+        in
+        cc_graph#add_eq t arg
     | _ -> ()) cterms;
   cc_graph
 

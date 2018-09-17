@@ -503,6 +503,7 @@ let compile (patterns: ('a pattern) list): 'a ematch_code =
     )
     (Choose []) patterns
 
+(** Check whether term [t] and substitution [sm] satisfy the filters [filters]. *)
 let filter_term filters t sm = 
   List.for_all
     (fun f -> match f with
@@ -894,7 +895,7 @@ let instantiate_axioms ?(force=false) ?(stratify=(!Config.stratify)) axioms ccgr
   let code, patterns = compile_axioms_to_ematch_code ~force:force ~stratify:stratify axioms in
   instantiate_axioms_from_code patterns code ccgraph
     
-
+(** Compile term generators [generators] into an E-matching code tree. *)
 let compile_term_generators_to_ematch_code generators =
   let generators =
     let remove_generic_filters (ms, ts) =
@@ -912,6 +913,9 @@ let compile_term_generators_to_ematch_code generators =
   let patterns = List.fold_left generate_pattern [] generators in
   compile patterns
 
+(** Generate new terms according to term generators encoded in [code] and E-graph [ccgraph].
+ *  The new terms are added to the E-graph. Returns a Boolean indicating whether new terms 
+ *  were derived (modulo equality) and the new E-graph. *)
 let generate_terms_from_code code ccgraph =
   let rec round i has_mods ccgraph =
     (*Printf.printf "Generating terms, round %d...\n" i; flush stdout;
@@ -929,7 +933,6 @@ let generate_terms_from_code code ccgraph =
           TermSet.add t new_terms) new_terms ts)
         insts TermSet.empty
     in
-    Hashtbl.clear insts;
     let ccgraph = CC.add_terms new_terms ccgraph in
     if not @@ CC.has_mods ccgraph then has_mods, ccgraph
     else round (i + 1) true (CC.reset ccgraph)

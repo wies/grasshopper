@@ -162,20 +162,20 @@ let instantiate_and_prove session fs =
         | _ -> gts)
       gts gts
   in
-  let generate_adt_terms fs gts =
+  let generate_adt_terms gts =
     TermSet.fold
-      (fun t (fs, gts) -> match t with
+      (fun t gts -> match t with
       | App (Constructor id, ts, Adt (ty_id, adts)) ->
           let adt = List.assoc ty_id adts in
           let destrs = List.assoc id adt in
           List.fold_left2
-            (fun (fs, gts) arg (d_id, d_srt) ->
+            (fun gts arg (d_id, d_srt) ->
               let d_srt = unfold_adts adts d_srt in
               let d = GrassUtil.mk_app d_srt (Destructor d_id) [t] in
-              GrassUtil.mk_eq arg d :: fs, TermSet.add d gts)
-            (fs, TermSet.add t gts) ts destrs
-      | t -> fs, TermSet.add t gts
-      ) gts (fs, gts)
+              TermSet.add d gts)
+            (TermSet.add t gts) ts destrs
+      | t -> TermSet.add t gts
+      ) gts gts
   in
   let fs1, generators = open_axioms isFunVar fs1 in
   let btwn_gen = btwn_field_generators fs in
@@ -200,7 +200,7 @@ let instantiate_and_prove session fs =
     let eqs = EMatching.instantiate_axioms_from_code patterns code cc_graph in
     (*let eqs = instantiate_with_terms equations (CongruenceClosure.get_classes cc_graph) in*)
     let gts1 = TermSet.union (ground_terms ~include_atoms:true (mk_and eqs)) gts_inst in
-    let fs, gts1 = generate_adt_terms fs gts1 in
+    let gts1 = generate_adt_terms gts1 in
     let eqs1 = List.filter (fun f -> IdSet.is_empty (fv f)) eqs in
     let cc_graph =
       cc_graph |>
@@ -215,7 +215,6 @@ let instantiate_and_prove session fs =
   let round2 fs_inst gts_inst cc_graph =
     let fs_inst0 = fs_inst in
     let gts_known = generate_knowns gts in
-    (*let gts_inst = generate_terms generators (TermSet.union gts_inst0 gts2_atoms) in*)
     let core_terms =
       let gts_a = ground_terms (mk_and fs) in
       TermSet.fold (fun t acc ->
@@ -240,10 +239,12 @@ let instantiate_and_prove session fs =
         cc_graph |>
         EMatching.generate_terms_from_code tgcode
       in
-      let implied_eqs = CongruenceClosure.get_implied_equalities cc_graph in
       let fs_inst = EMatching.instantiate_axioms_from_code patterns code cc_graph in
       let gts_inst = ground_terms_acc ~include_atoms:true gts_inst0 (mk_and fs_inst) in
-      let fs, gts_inst = generate_adt_terms fs gts_inst in
+      let gts_inst = generate_adt_terms gts_inst in
+      let implied_eqs = CongruenceClosure.get_implied_equalities cc_graph in
+      (*print_endline "Implied equalities:";
+      print_endline (string_of_form (mk_and implied_eqs));*)
       let gts_inst = TermSet.union (ground_terms ~include_atoms:true (mk_and implied_eqs)) gts_inst in
       let cc_graph =
         cc_graph |>
@@ -251,20 +252,11 @@ let instantiate_and_prove session fs =
         CongruenceClosure.add_conjuncts (rev_concat [fs_inst; fs])
       in
       let has_mods1 = CongruenceClosure.has_mods cc_graph in
-      (*print_endline "Implied equalities:";
-      print_endline (string_of_form (mk_and implied_eqs));*)
       let gts_inst = CongruenceClosure.get_terms cc_graph in 
-      (*let generators = if i > 1 && false then Reduction.get_read_propagators gts_inst else btwn_gen @ generators in*)
       if not !Config.propagate_reads || not (has_mods1 || has_mods2)
       then
-        (*let _ =
-          if not @@ TermSet.subset gts_inst gts_inst0
-          then print_list stdout pr_term (TermSet.diff gts_inst gts_inst0 |> TermSet.elements)
-        in
-        let _ = assert (TermSet.subset gts_inst gts_inst0) in*)
         rev_concat [fs_inst; implied_eqs], gts_inst, cc_graph
       else
-        (*let fs_inst = instantiate_with_terms fs1 (CongruenceClosure.get_classes cc_graph) in*)
         saturate (i + 1) fs_inst gts_inst (CongruenceClosure.reset cc_graph)
     in
     let saturate i fs_inst gts_inst0 = measure_call "saturate" (saturate i fs_inst gts_inst0) in

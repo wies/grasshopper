@@ -22,7 +22,7 @@ let global_scope =
   }
 
 let merge_src_pos pos1 pos2 =
-  assert (pos1.sp_file = "" || pos2.sp_file = "" || pos1.sp_file = pos2.sp_file);
+  (*assert (pos1.sp_file = "" || pos2.sp_file = "" || pos1.sp_file = pos2.sp_file);*)
   let file = max pos1.sp_file pos2.sp_file in
   let start_line, start_col =
     if pos1.sp_start_line < pos2.sp_start_line 
