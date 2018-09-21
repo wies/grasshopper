@@ -119,7 +119,7 @@ lemma lemma_int_comp_unfold_3(x: Node, Ix: Interface, y: Node, Iy: Interface,
   // TODO continue this for flow map
   //  ensures forall n: Node, n1: Node :: n in Ix.FP && n1 !in 
 
-lemma lemma_int_valid_unfold(I: Interface)
+lemma lemma_int_valid_unfold(x: Node, I: Interface)
   requires intValid(I) == true
   ensures forall n: Node, n1: Node :: n !in I.FP ==> domEq(I.inf[n], domZero())
   //@(matching I.inf[n] yields known(domEq(I.inf[n], domZero())))  // TODO why?
@@ -130,8 +130,9 @@ lemma lemma_int_valid_unfold(I: Interface)
   ensures forall n: Node :: n !in I.FP || n !in I.FPo
   ensures forall n: Node :: domLeq(domZero(), I.inf[n])
   ensures forall n: Node, n1: Node :: domLeq(domZero(), I.fm[n][n1])
+  ensures nu(x, I)
 
-lemma lemma_int_valid_fold(I: Interface)
+lemma lemma_int_valid_fold(x: Node, I: Interface)
   requires I != intUndef // TODO why? See test_valid2
   requires forall n: Node, n1: Node ::
     (n !in I.FP ==> domEq(I.inf[n], domZero()) && domEq(I.fm[n][n1], domZero()))
@@ -139,6 +140,7 @@ lemma lemma_int_valid_fold(I: Interface)
   requires forall n: Node :: n !in I.FP || n !in I.FPo
   requires forall n: Node :: domLeq(domZero(), I.inf[n])
   requires forall n: Node, n1: Node :: domLeq(domZero(), I.fm[n][n1])
+  requires nu(x, I)
   ensures intValid(I) == true
 
 

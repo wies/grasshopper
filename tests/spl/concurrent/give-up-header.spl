@@ -8,7 +8,7 @@
 
 options "-symbexec"
 
-include "../include/flows.spl";
+include "flows.spl";
 
 
 /** Node domain definitions */

@@ -21,12 +21,12 @@ define domEq(p1, p2) {
 } */
 
 
-function domLeq(p1: FlowDom, p2: FlowDom) returns (res: Bool) {
+pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
   p1.pc <= p2.pc && (forall k: K :: p1.ks[k] <= p2.ks[k]
     @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
 }
 
-function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 ensures p.pc == p1.pc + p2.pc
   @(matching p.pc yields p1.pc + p2.pc)
 ensures forall k: K :: p.ks[k] == p1.ks[k] + p2.ks[k]
@@ -120,9 +120,8 @@ define hrep(x, I) {
 
 // The good condition
 define nu(x, I) {
-  hrep(x, I)
     // Contents subsetof keyset
-    && (forall k: K :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
+    (forall k: K :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
     && (forall k: K, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
     // Edgesets are disjoint
     && (forall k: K, y: Node, z: Node :: y == z
@@ -197,7 +196,7 @@ procedure findNext(x: Node, k: K, Ix: Interface)
   ensures n == null ==> (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
 {
   if (x.ptrs[0] == null) {  // Leaf node
-    lemma_int_valid_unfold(Ix);
+    lemma_int_valid_unfold(x, Ix);
     return null;
   }
   
@@ -256,8 +255,8 @@ procedure insert(x: Node, k: K, Ix: Interface)
 
     // Define Ix1 to be Ix, but with k added to contents
     Ix1 := copy_interface(Ix, nd(Ix.na.contents ++ {k}));
-    lemma_int_valid_unfold(Ix);
-    lemma_int_valid_fold(Ix1);
+    lemma_int_valid_unfold(x, Ix);
+    lemma_int_valid_fold(x, Ix1);
 
     return true, k !in Ix.na.contents, Ix1; 
   } else {
@@ -288,8 +287,8 @@ procedure delete(x: Node, k: K, Ix: Interface)
 
   // Define Ix1 to be Ix, but with k removed from contents
   Ix1 := copy_interface(Ix, nd(Ix.na.contents -- {k}));
-  lemma_int_valid_unfold(Ix);
-  lemma_int_valid_fold(Ix1);
+  lemma_int_valid_unfold(x, Ix);
+  lemma_int_valid_fold(x, Ix1);
 
   return true, (k in Ix.na.contents), Ix1;
 }

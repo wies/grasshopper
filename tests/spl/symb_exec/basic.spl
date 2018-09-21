@@ -1,3 +1,5 @@
+options "-symbexec"
+
 procedure assign(x: Int, y: Int)
   requires x == 0 && y == x
   ensures x == 10 && y == 0

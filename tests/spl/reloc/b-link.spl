@@ -28,7 +28,6 @@ pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
     //@(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
 }
 
-// TODO do as in b+ tree
 pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
   ensures forall k: K :: p.ks[k] == p1.ks[k] + p2.ks[k]
   ensures forall k: K :: p.ir[k] == p1.ir[k] + p2.ir[k]
@@ -129,9 +128,8 @@ pure function outset(x: Node, flmp: Map<Node, Map<Node, FlowDom>>) returns (O: S
 
 // The good condition
 define nu(x, I) {
-  hrep(x, I)
     // Contents subsetof keyset
-    && (forall k: K :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
+    (forall k: K :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
     && (forall k: K, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
     // Edgesets are disjoint
     && (forall k: K, y: Node, z: Node :: y == z
@@ -151,10 +149,10 @@ define nu(x, I) {
 
 
 lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
-  requires nu(x, Ix) &*& intValid(Ix) == true
+  requires hrep(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
   requires (i <= 0 || le(x.keys[i-1], k)) && 0 <= i <= x.len
-  ensures nu(x, Ix) &*& unchanged(x)
+  ensures hrep(x, Ix) &*& unchanged(x)
   ensures x.ptrs[0] == null  // x is a leaf
 {
   if (x.ptrs[0] != null && i < x.len && !lt(k, x.keys[i])) {
@@ -166,7 +164,7 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
 
 /** Initialize root note */
 procedure init() returns (x: Node, I: Interface)
-  ensures nu(x, I)
+  ensures hrep(x, I)
 {
   x := new Node;
   x.keys := new Array<K>(2*B);
@@ -187,20 +185,20 @@ procedure init() returns (x: Node, I: Interface)
 /** findNext */
 procedure findNext(x: Node, k: K, Ix: Interface)
   returns (n: Node)
-  requires nu(x, Ix) &*& intValid(Ix) == true
-  ensures nu(x, Ix)
+  requires hrep(x, Ix) &*& intValid(Ix) == true
+  ensures hrep(x, Ix)
   ensures n != null ==> Ix.fm[x][n].ks[k] >= 1
   ensures n == null ==> (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
 {
   if (x.ptrs[0] == null) {  // Leaf node
     if (x.next == null) {
-      lemma_int_valid_unfold(Ix);
+      lemma_int_valid_unfold(x, Ix);
       return null;
     }
     if (le(x.keys[x.len], k)) {
       return x.next;
     } else {
-      lemma_int_valid_unfold(Ix);
+      lemma_int_valid_unfold(x, Ix);
       var y: Node;
       if (y in Ix.FPo) {
         pure assert Ix.fm[x][y].ks[k] == 0;
@@ -234,9 +232,9 @@ procedure findNext(x: Node, k: K, Ix: Interface)
 /** member */
 procedure member(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
-  requires nu(x, Ix) &*& intValid(Ix) == true
+  requires hrep(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
-  ensures nu(x, Ix)
+  ensures hrep(x, Ix)
   ensures intEq(Ix, Ix1) == true
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (Ix1.na.contents == Ix.na.contents && (res == k in Ix.na.contents))
@@ -253,9 +251,9 @@ procedure member(x: Node, k: K, Ix: Interface)
 /** insert */
 procedure insert(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
-  requires nu(x, Ix) &*& intValid(Ix) == true
+  requires hrep(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
-  ensures nu(x, Ix1)
+  ensures hrep(x, Ix1)
   ensures intEq(Ix, Ix1) == true
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (Ix1.na.contents == Ix.na.contents ++ {k} && (res == k !in Ix.na.contents))
@@ -274,8 +272,8 @@ procedure insert(x: Node, k: K, Ix: Interface)
 
     // Define Ix1 to be Ix, but with k added to contents
     Ix1 := copy_interface(Ix, nd(Ix.na.contents ++ {k}, Ix.na.inr));
-    lemma_int_valid_unfold(Ix);
-    lemma_int_valid_fold(Ix1);
+    lemma_int_valid_unfold(x, Ix);
+    lemma_int_valid_fold(x, Ix1);
 
     return true, k !in Ix.na.contents, Ix1;
   } else {
@@ -287,9 +285,9 @@ procedure insert(x: Node, k: K, Ix: Interface)
 /** delete */
 procedure delete(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
-  requires nu(x, Ix) &*& intValid(Ix) == true
+  requires hrep(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
-  ensures nu(x, Ix1)
+  ensures hrep(x, Ix1)
   ensures intEq(Ix, Ix1) == true
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (Ix1.na.contents == Ix.na.contents -- {k} && (res == k in Ix.na.contents))
@@ -310,8 +308,8 @@ procedure delete(x: Node, k: K, Ix: Interface)
 
   // Define Ix1 to be Ix, but with k removed from contents
   Ix1 := copy_interface(Ix, nd(Ix.na.contents -- {k}, Ix.na.inr));
-  lemma_int_valid_unfold(Ix);
-  lemma_int_valid_fold(Ix1);
+  lemma_int_valid_unfold(x, Ix);
+  lemma_int_valid_fold(x, Ix1);
 
   return true, (k in Ix.na.contents), Ix1;
 }
