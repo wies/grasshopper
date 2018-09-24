@@ -53,7 +53,7 @@ open Format
 
 let pr_var_binding ppf (x, i) =
   fprintf ppf "%a -> %d" pr_ident x i
-
+ 
 let pr_ematch_code pr_inst ppf =
   let pr_step ppf = function
     | Either.First ts -> pr_term_list ppf (TermSet.elements ts)
