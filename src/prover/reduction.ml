@@ -277,51 +277,51 @@ let get_read_propagators gts =
   let field_sorts = TermSet.fold (fun t srts ->
     match sort_of t with
     | (Loc ArrayCell _ | Map (_ :: _, _)) as srt -> SortSet.add srt srts
-    | Adt (_, _) as srt -> SortSet.add srt srts
+    | Adt (_, adts) ->
+        List.fold_left
+          (fun srts (id, _) -> SortSet.add (Adt (id, adts)) srts)
+          srts adts
     | _ -> srts)
       gts SortSet.empty
   in
   let read_propagators =
     SortSet.fold (function
-      | Adt (_, adts) -> fun propagators ->
+      | Adt (id, adts) -> fun propagators ->
           let s = fresh_ident "?s" in
           let t = fresh_ident "?t" in
-          List.fold_left
-            (fun propagators (id, cstrs) ->
-              let adt_srt = Adt (id, adts) in
-              let s = mk_var adt_srt s in
-              let t = mk_var adt_srt t in
-              let destrs = flat_map (fun (_, destrs) -> destrs) cstrs in
-              let propagators =
-                List.fold_left
-                  (fun propagators (destr, srt) ->
-                    let srt = unfold_adts adts srt in
-                    ([Match (mk_eq_term s t, []);
-                      (* s == t, s.destr -> t.destr *)
-                      Match (mk_destr srt destr s, [])],
-                     [mk_destr srt destr t]) ::
-                    ([Match (mk_eq_term s t, []);
-                      (* s == t, t.destr -> s.destr *)
-                      Match (mk_destr srt destr t, [])],
-                     [mk_destr srt destr s]) :: propagators
-                  )
-                  propagators destrs
-              in
-              List.fold_left (fun propagators (cid, destrs) ->
-                let args =
-                  List.map (fun (destr, srt) ->
-                    let srt = unfold_adts adts srt in
-                    mk_var srt (fresh_ident "?v"))
-                    destrs
-                in
-                let t = mk_constr adt_srt cid args in
-                let gen_terms =
-                  List.map (fun (destr, srt) -> mk_destr srt destr t) destrs
-                in
-                ([Match (t, [])], gen_terms) :: propagators)
-                propagators cstrs
-            )
-            propagators adts
+          let cstrs = List.assoc id adts in
+          let adt_srt = Adt (id, adts) in
+          let s = mk_var adt_srt s in
+          let t = mk_var adt_srt t in
+          let destrs = flat_map (fun (_, destrs) -> destrs) cstrs in
+          let propagators =
+            List.fold_left
+              (fun propagators (destr, srt) ->
+                let srt = unfold_adts adts srt in
+                ([Match (mk_eq_term s t, []);
+                  (* s == t, s.destr -> t.destr *)
+                  Match (mk_destr srt destr s, [])],
+                 [mk_destr srt destr t]) ::
+                ([Match (mk_eq_term s t, []);
+                  (* s == t, t.destr -> s.destr *)
+                  Match (mk_destr srt destr t, [])],
+                 [mk_destr srt destr s]) :: propagators
+              )
+              propagators destrs
+          in
+          List.fold_left (fun propagators (cid, destrs) ->
+            let args =
+              List.map (fun (destr, srt) ->
+                let srt = unfold_adts adts srt in
+                mk_var srt (fresh_ident "?v"))
+                destrs
+            in
+            let t = mk_constr adt_srt cid args in
+            let gen_terms =
+              List.map (fun (destr, srt) -> mk_destr (unfold_adts adts srt) destr t) destrs
+            in
+            ([Match (t, [])], gen_terms) :: propagators)
+            propagators cstrs
       | Loc (ArrayCell srt) -> fun propagators ->
           let f = fresh_ident "?f", field_sort (ArrayCell srt) srt in
           let fld = mk_var (snd f) (fst f) in
