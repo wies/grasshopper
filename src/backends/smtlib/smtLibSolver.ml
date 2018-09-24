@@ -593,7 +593,8 @@ let init_session session sign =
       (if !Config.encode_fields_as_arrays then "A" else "") ^
       "UF" ^
       (if has_adt then solver.info.dt_logic_string else "") ^
-      (if !Config.use_bitvector then "BV" else if has_int then "LIA" else "") ^
+      (if !Config.use_bitvector then "BV" else
+       if has_int then if has_adt then "LIA" else "NIA" else "") ^
       (if solver.info.has_set_theory && !Config.use_set_theory then "FS" else "")
     in
     set_logic state.out_chan logic_str;
