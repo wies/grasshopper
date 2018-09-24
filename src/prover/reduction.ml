@@ -292,18 +292,34 @@ let get_read_propagators gts =
               let s = mk_var adt_srt s in
               let t = mk_var adt_srt t in
               let destrs = flat_map (fun (_, destrs) -> destrs) cstrs in
-              List.fold_left
-                (fun propagators (destr, srt) ->
-                  ([Match (mk_eq_term s t, []);
-                    (* s == t, s.destr -> t.destr *)
-                    Match (mk_destr srt destr s, [])],
-                   [mk_destr srt destr t]) ::
-                  ([Match (mk_eq_term s t, []);
-                    (* s == t, t.destr -> s.destr *)
-                    Match (mk_destr srt destr t, [])],
-                   [mk_destr srt destr s]) :: propagators
-                )
-                propagators destrs
+              let propagators =
+                List.fold_left
+                  (fun propagators (destr, srt) ->
+                    let srt = unfold_adts adts srt in
+                    ([Match (mk_eq_term s t, []);
+                      (* s == t, s.destr -> t.destr *)
+                      Match (mk_destr srt destr s, [])],
+                     [mk_destr srt destr t]) ::
+                    ([Match (mk_eq_term s t, []);
+                      (* s == t, t.destr -> s.destr *)
+                      Match (mk_destr srt destr t, [])],
+                     [mk_destr srt destr s]) :: propagators
+                  )
+                  propagators destrs
+              in
+              List.fold_left (fun propagators (cid, destrs) ->
+                let args =
+                  List.map (fun (destr, srt) ->
+                    let srt = unfold_adts adts srt in
+                    mk_var srt (fresh_ident "?v"))
+                    destrs
+                in
+                let t = mk_constr adt_srt cid args in
+                let gen_terms =
+                  List.map (fun (destr, srt) -> mk_destr srt destr t) destrs
+                in
+                ([Match (t, [])], gen_terms) :: propagators)
+                propagators cstrs
             )
             propagators adts
       | Loc (ArrayCell srt) -> fun propagators ->
