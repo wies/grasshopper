@@ -24,15 +24,14 @@ pure function intComp(I1: Interface, I2: Interface) returns (I: Interface)
 // Encoding of well defined interfaces
 pure predicate intValid(I: Interface)
 
-// Equivalent interfaces (node labels can be different) -- precondition of sync
+// Equivalent interfaces (node labels can be different)
+// Contextual extension when inflows are not changed
 pure predicate intEq(I1: Interface, I2: Interface) {
   I1.FP == I2.FP && I1.FPo == I2.FPo
   && (forall x: Node :: domEq(I1.inf[x], I2.inf[x]) == true
      @(matching x yields I1.inf[x]) @(matching x yields I2.inf[x]))
-  && (forall x: Node, y: Node ::
-     domEq(domMult(I1.inf[x], I1.fm[x][y]), domMult(I2.inf[x], I2.fm[x][y])) == true
-     @(matching I2.fm[x][y] yields known(domMult(I1.inf[x], I1.fm[x][y])))
-     @(matching I2.fm[x][y] yields known(domMult(I2.inf[x], I2.fm[x][y]))))
+  && (forall x: Node, y: Node :: !domLeq(I1.inf[x], domZero()) ==>
+     domEq(I1.fm[x][y], I2.fm[x][y]) == true)
 }
 
 
