@@ -174,10 +174,27 @@ class dag = fun (terms: TermSet.t) ->
     match t with
     | Var (v, _) -> failwith ("CC: term not ground " ^ string_of_term t) (* create_and_add var (FreeSym v) []*)
     | App (_, args, _) as appl ->
-      let node_args = List.map convert_term args in
+        let has_mod_args, node_args =
+          List.fold_right (fun arg (has_mod_args, node_args) ->
+            let has_mod, n = convert_term arg in
+            has_mod || has_mod_args, n :: node_args)
+            args (false, [])
+        in
       let new_node  = create_and_add appl (sorted_symbol_of appl |> Opt.get) node_args in
-        List.iter (fun n -> n#find#add_ccparent new_node) node_args;
-        new_node
+      List.iter (fun n -> n#find#add_ccparent new_node) node_args;
+      let arg_opt = List.nth_opt new_node#get_args 0 in
+      let has_mod =
+        arg_opt |>
+        Opt.fold
+          (fun _ arg ->
+            (*Printf.printf "Getting parents of %s\n" (string_of_term @@ self#get_term (arg#find));*)
+            NodeSet.exists (fun n' ->
+              (*Printf.printf "Checking congruence with: %s %b\n"
+                (string_of_term @@ self#get_term n') (n#congruent n');*)
+              n' <> new_node && new_node#congruent n' && n'#merge new_node) arg#ccpar)
+          true
+      in
+      has_mod_args || has_mod, new_node
   in
   let _ = TermSet.iter (fun t -> ignore (convert_term t)) terms in
   object (self)
@@ -217,19 +234,7 @@ class dag = fun (terms: TermSet.t) ->
  
     method add_term t = 
       (*Printf.printf "Adding term to cc: %s\n" (string_of_term t);*)
-      let n = convert_term t in
-      let arg_opt = List.nth_opt n#get_args 0 in
-      let has_mod =
-        arg_opt |>
-        Opt.fold
-          (fun _ arg ->
-            (*Printf.printf "Getting parents of %s\n" (string_of_term @@ self#get_term (arg#find));*)
-            NodeSet.exists (fun n' ->
-              (*Printf.printf "Checking congruence with: %s %b\n"
-                (string_of_term @@ self#get_term n') (n#congruent n');*)
-              n' <> n && n#congruent n' && n'#merge n) arg#ccpar)
-          true
-      in
+      let has_mod, n = convert_term t in
       _has_mods <- _has_mods || has_mod
         
     method add_eq t1 t2 = 
