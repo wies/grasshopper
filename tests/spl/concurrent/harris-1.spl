@@ -58,13 +58,16 @@ procedure lemma_singleton_int(x: Node, xn: Node)
     && (n1 !in I1.FPo ==> I1.fm[n][n1] == fd(0))
 
 
-procedure aaa_test(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface, z: Node)
+procedure test(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface, z: Node)
   requires x != y && y != z && Ix.FP == {x} && Iy.FP == {y}
   requires Ix.fm[x][z] == fd(1) && Ix.fm[x][y] == fd(0) && Iy.fm[y][z] == fd(0)
   requires (forall n: Node, n1: Node ::
            n !in Ix.FP || n1 == y
            || (domEq(I.fm[n][n1],
                     domPlus(Ix.fm[n][n1], domMult(Ix.fm[n][y], Iy.fm[y][n1]))) == true)
+           @(matching I.fm[n][n1]
+             yields known(domEq(I.fm[n][n1],
+             domPlus(Ix.fm[n][n1], domMult(Ix.fm[n][y], Iy.fm[y][n1])))))
            @(matching I.fm[n][n1]
              yields known(domPlus(Ix.fm[n][n1], domMult(Ix.fm[n][y], Iy.fm[y][n1]))))
            @(matching I.fm[n][n1]

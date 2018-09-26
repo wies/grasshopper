@@ -98,10 +98,12 @@ lemma lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: I
            || (domEq(I.fm[n][n1],
                     domPlus(Ix.fm[n][n1], domMult(Ix.fm[n][y], Iy.fm[y][n1]))) == true)
            @(matching I.fm[n][n1]
+             yields known(domEq(I.fm[n][n1],
+             domPlus(Ix.fm[n][n1], domMult(Ix.fm[n][y], Iy.fm[y][n1])))))
+           @(matching I.fm[n][n1]
              yields known(domPlus(Ix.fm[n][n1], domMult(Ix.fm[n][y], Iy.fm[y][n1]))))
            @(matching I.fm[n][n1]
-             yields known(domMult(Ix.fm[n][y], Iy.fm[y][n1])))
-           )
+             yields known(domMult(Ix.fm[n][y], Iy.fm[y][n1]))))
     ensures (forall n: Node, n1: Node :: n !in Iy.FP || n1 == x
              || (domEq(I.fm[n][n1], Iy.fm[n][n1]) == true)
              @(matching I.fm[n][n1] yields Iy.fm[n][n1]))
