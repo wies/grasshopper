@@ -1,0 +1,66 @@
+include "b-link.spl";
+
+procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interface)
+  returns (Ic1: Interface, Ix1: Interface, Icx1: Interface)
+  requires hrep(c, Ic) &*& hrepSpatial(x)
+  requires Ix.FP == {x} && domEq(Ix.inf[x], domZero()) == true && Ix.FPo == {}
+  requires intValid(Ic) == true && intValid(Ix) == true
+  requires intComp(Ic, Ix) == Icx && intValid(Icx) == true
+  requires x.keys.length == 2*B && x.ptrs.length == 2*B
+  requires c.len == 2 * B - 1
+  requires x !in Ic.FPo
+
+  ensures hrep(c, Ic1) &*& hrep(x, Ix1)
+  ensures intValid(Ic1) == true && intValid(Ix1) == true
+  ensures intComp(Ic1, Ix1) == Icx1 && intEq(Icx, Icx1) == true
+  ensures Icx.na.contents == Icx1.na.contents
+{
+  var m := (c.len / 2) + 1;
+  var k := c.keys[m - 1];
+
+  if (c.ptrs[0] == null) {  // Leaf
+    arr_copy(c.keys, x.keys, m, 0, c.len - m + 1);
+    x.ptrs[0] := null;
+    x.len := m - 1;
+    x.next := c.next;
+    c.len := m;
+    c.next := x;
+
+    // x's new interface
+    var xkc := { k: K :: le(x.keys[0], k) && Ic.inf[c].ks[k] >= 1 ? 1 : 0 };
+    var xir := { k: K :: 0 };
+    var xinf := { n: Node :: n == x ? fd(xkc, xir) : domZero };
+
+    // TODO why doesn't this work?
+    //var xfmxnextkc := { k: K :: le(x.keys[x.len], k) ? 1 : 0 };
+    //var xfmxnextir := { k: K :: 0 };
+    //var xfmxnext := fd(xfmxnextkc, xfmxnextir);
+    //var xfmx := { n: Node :: n == x.next && n != null ? xfmxnext : domZero };
+    //var xfm := { n: Node :: n == x ? xfmx : { n1: Node :: domZero } };
+    var xfm: Map<Node, Map<Node, FlowDom>>;
+    pure assume (forall n: Node, n1: Node :: n != x ==> xfm[n][n1] == domZero)
+      && (x.next == null && (forall n: Node, n1: Node :: n in {x} ==> xfm[n][n1] == domZero)
+          || x.next != null && (forall n: Node, n1: Node :: n in {x} && n1 != x.next ==> xfm[n][n1] == domZero)
+          && (forall k: K :: le(x.keys[x.len], k) ==> xfm[x][x.next].ks[k] == 1)
+          && (forall k: K :: lt(k, x.keys[x.len]) ==> xfm[x][x.next].ks[k] == 0
+             @(matching x.next yields xfm[x][x.next].ks[k])));
+
+    var xinrSet: Set<K> := { k: K :: xinf[x].ks[k] >= 1 || xinf[x].ir[k] >= 1 };
+    var xi := inrfnC({ n: Node :: n == x ? xinrSet : {} }, {x});
+    var xfpo: Set<Node>;
+    if (x.next == null) xfpo := {}; else xfpo := {x.next};
+    Ix1 := int(xinf, nd(set_of_map(x.keys.map, 0, x.len), xi), xfm, {x}, xfpo);
+
+    assert hrepSpatial(c) &*& hrep(x, Ix1);
+    //    pure assert intValid(Ix1); // TODO next
+    pure assume false;
+
+    
+  } else {  // Internal node
+    arr_copy(c.keys, x.keys, m, 0, c.len - m + 1);
+    arr_copy_node(c.ptrs, x.ptrs, m, 0, c.len - m + 1);
+    x.len := m - 1;
+    c.len := m - 1;
+    pure assume false;
+  }
+}
