@@ -29,7 +29,9 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     // x's new interface
     var xkc := { k: K :: le(x.keys[0], k) && Ic.inf[c].ks[k] >= 1 ? 1 : 0 };
     var xir := { k: K :: 0 };
-    var xinf := { n: Node :: n == x ? fd(xkc, xir) : domZero };
+    var xinf := { n: Node :: n == x ? fd(xkc, xir) : domZero() };
+
+    pure assume domLeq(domZero(), xinf[x]);
 
     // TODO why doesn't this work?
     //var xfmxnextkc := { k: K :: le(x.keys[x.len], k) ? 1 : 0 };
@@ -51,8 +53,14 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     if (x.next == null) xfpo := {}; else xfpo := {x.next};
     Ix1 := int(xinf, nd(set_of_map(x.keys.map, 0, x.len), xi), xfm, {x}, xfpo);
 
+    pure assume set_of_map(x.keys.map, 0, x.len) == set_of_map(c.keys.map, m, c.len + 1);
+    pure assert forall i: Int :: 0 <= i < x.len ==> le(x.keys[0], x.keys[i]);
+    
+    pure assert (forall k: K :: k in Ix1.na.contents ==> Ix1.inf[x].ks[k] >= 1);
+      
+    lemma_int_valid_unfold(c, Ic);
+    lemma_int_valid_fold(x, Ix1);
     assert hrepSpatial(c) &*& hrep(x, Ix1);
-    //    pure assert intValid(Ix1); // TODO next
     pure assume false;
 
     
