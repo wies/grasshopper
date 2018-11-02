@@ -1147,10 +1147,32 @@ let map_id_term fct t =
 
 (** Map all identifiers occuring in formula [f] to new identifiers according to function [fct] *)
 let map_id fct f =
+  let mapt = map_id_term fct in
+  let mapf f = match f with
+    | FilterSymbolNotOccurs (FreeSym id) ->
+        (try FilterSymbolNotOccurs (FreeSym (fct id))
+        with Not_found -> f)
+          (*| FilterTermNotOccurs t ->
+             FilterTermNotOccurs (subt t)*)
+    | f -> f
+  in
+  let mapg g = match g with
+  | Match (t, fs) ->
+      let t1 = mapt t in
+      let fs1 = List.map mapf fs in
+      Match (t1, fs1)
+  in
+  let mapa a = match a with
+    | TermGenerator (guards, gen_terms) -> 
+        TermGenerator (List.map mapg guards, List.map mapt gen_terms)
+    | Pattern (t, fs) -> Pattern (mapt t, List.map mapf fs)
+    | Label (pol, t) -> Label (pol, mapt t)
+    | a -> a
+  in
   let rec sub = function 
     | BoolOp (op, fs) -> BoolOp (op, List.map sub fs)
-    | Atom (t, a) -> Atom (map_id_term fct t, a)
-    | Binder (b, vs, f, a) -> Binder (b, vs, sub f, a)
+    | Atom (t, a) -> Atom (map_id_term fct t, List.map mapa a)
+    | Binder (b, vs, f, a) -> Binder (b, vs, sub f, List.map mapa a)
   in sub f
 
 (** Substitutes all identifiers in term [t] with other identifiers according to substitution map [subst_map] *)
@@ -1158,38 +1180,15 @@ let subst_id_term subst_map t =
   let sub_id id =
     try IdMap.find id subst_map with Not_found -> id
   in
-    map_id_term sub_id t
+  map_id_term sub_id t
 
 (** Substitutes all identifiers in formula [f] with other identifiers according to substitution map [subst_map].
  ** This operation is not capture avoiding. *)
 let subst_id subst_map f =
-  let subt = subst_id_term subst_map in
-  let subf f = match f with
-    | FilterSymbolNotOccurs (FreeSym id) ->
-        (try FilterSymbolNotOccurs (FreeSym (IdMap.find id subst_map))
-        with Not_found -> f)
-          (*| FilterTermNotOccurs t ->
-             FilterTermNotOccurs (subt t)*)
-    | f -> f
+  let sub_id id =
+    try IdMap.find id subst_map with Not_found -> id
   in
-  let subg g = match g with
-  | Match (t, fs) ->
-      let t1 = subt t in
-      let fs1 = List.map subf fs in
-      Match (t1, fs1)
-  in
-  let suba a = match a with
-    | TermGenerator (guards, gen_terms) -> 
-        TermGenerator (List.map subg guards, List.map subt gen_terms)
-    | Pattern (t, fs) -> Pattern (subt t, List.map subf fs)
-    | Label (pol, t) -> Label (pol, subt t)
-    | a -> a
-  in
-  let rec sub = function 
-    | BoolOp (op, fs) -> BoolOp (op, List.map sub fs)
-    | Atom (t, a) -> Atom (subt t, List.map suba a)
-    | Binder (b, vs, f, a) -> Binder (b, vs, sub f, List.map suba a)
-  in sub f
+  map_id sub_id f
 
 (** Substitutes all constants in term [t] with other terms according to substitution function [subst_fun]. *)
 let subst_consts_fun_term subst_fun t =
