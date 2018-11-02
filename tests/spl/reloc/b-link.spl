@@ -1,6 +1,6 @@
 /** B+ tree implementation of the link template for linearizable dictionaries. */
 
-options "-abspreds -simplearrays -symbexec -propreads"
+options "-abspreds -simplearrays -propreads"
 
 include "flows.spl"
 include "array_util.spl"
@@ -77,6 +77,52 @@ define hrepSpatial(x) {
   acc(x) &*& acc(x.keys) &*& acc(x.ptrs)
 }
 
+
+function fm_child(x: Node, i: Int) returns (f: FlowDom)
+  requires 0 <= i <= x.len
+{
+  fd({ k : K ::
+      i < x.len ?
+        ((i == 0 || le(x.keys[i-1], k)) && lt(k, x.keys[i]) ? 1 : 0)
+        : (i == x.len && x.next == null ?
+            ((i == 0 || le(x.keys[i-1], k)) ? 1 : 0)
+            : (i == x.len && x.next != null ?
+                ((i == 0 || le(x.keys[i-1], k)) && lt(k, x.keys[i]) ? 1 : 0)
+                : 0)) },
+      { k : K :: 0 } )
+}
+
+function fm_next(x: Node, inff: Map<Node, FlowDom>) returns (f: FlowDom)
+{
+  fd({ k: K :: x.next == null ? 0 : (le(x.keys[x.len], k) ? 1 : 0) },
+    {k: K :: inff[x].ir[k] >= 1 && inff[x].ks[k] <= 0 && x.next != null && le(x.keys[x.len], k) ? 1 : 0 })
+}
+
+
+function fm_ind(x: Node, inff: Map<Node, FlowDom>, i: Int)
+  returns (f: Map<Node, Map<Node, FlowDom>>)
+{
+  { n: Node :: { n1: Node ::
+    i < 0 ? domZero()
+    : (n != x ? domZero()
+       : (i <= x.len && n1 == x.ptrs[i] ? fm_child(x, i)
+          : (i == x.len + 1 && n1 == x.next ? fm_next(x, inff)
+             : fm_ind(x, inff, i - 1)[n][n1])))
+   }
+        @(matching f[n] yields fm_child(x, i))
+        @(matching f[n] yields fm_next(x, inff))
+          @(matching f[n] yields fm_ind(x, inff, i - 1)[n])
+  }
+}
+
+function FPo_ind(x: Node, i: Int) returns (X: Set<Node>)
+{
+  i < 0 ? {}
+    : (i <= x.len ? {x.ptrs[i]} ++ FPo_ind(x, i - 1)
+       : (i == x.len + 1 && x.next != null ? {x.next} ++ FPo_ind(x, i - 1)
+          : FPo_ind(x, i - 1)))
+}
+
 define hrep(x, I) {
   hrepSpatial(x) &*& I.FP == {x} &*& x.next != x
     && 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
@@ -94,34 +140,31 @@ define hrep(x, I) {
        && (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i])
        && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j])
        && (forall i: Int, k: K :: 0 <= i <= x.len ==> x.ptrs[i] != null && x.ptrs[i] in I.FPo)
-       && (forall i: Int, k: K :: 0 <= i < x.len ==>
-          (I.fm[x][x.ptrs[i]].ks[k] == 1
-          && ((i <= 0 || le(x.keys[i-1], k)) && lt(k, x.keys[i]))
-           || I.fm[x][x.ptrs[i]].ks[k] == 0
-           && !((i <= 0 || le(x.keys[i-1], k)) && lt(k, x.keys[i])))
-          @(matching x.ptrs[i] yields I.fm[x][x.ptrs[i]].ks[k])
-          @(matching x.keys[i] yields I.fm[x][x.ptrs[i]].ks[k]))
-       && (x.next == null
-          && (forall k: K :: 
-               (I.fm[x][x.ptrs[x.len]].ks[k] == 1
-               && (x.len <= 0 || le(x.keys[x.len-1], k))
-               || I.fm[x][x.ptrs[x.len]].ks[k] == 0
-               && !(x.len <= 0 || le(x.keys[x.len-1], k))))
-               && x.next !in I.FPo
-            || x.next != null
-              && (forall k: K :: 
-                 (I.fm[x][x.ptrs[x.len]].ks[k] == 1
-                 && (x.len <= 0 || le(x.keys[x.len-1], k)) && lt(k, x.keys[x.len])
-                 || I.fm[x][x.ptrs[x.len]].ks[k] == 0
-                  && !((x.len <= 0 || le(x.keys[x.len-1], k)) && lt(k, x.keys[x.len]))))
-              && (forall k: K ::
-                   I.fm[x][x.next].ks[k] == 1 && le(x.keys[x.len], k)
-                 || I.fm[x][x.next].ks[k] == 0 && lt(k, x.keys[x.len])
-                 )
-            )
+       && I.fm == fm_ind(x, I.inf, x.len + 1)
+       && I.FPo == FPo_ind(x, x.len + 1)
       )
 }
 
+lemma lemma_fm(x: Node, Ix: Interface, k: K, i: Int, j: Int)
+  requires hrep(x, Ix) &*& x.ptrs[0] != null
+  ensures hrepSpatial(x) &*& unchanged(x)
+  ensures i <= j && 0 <= i < x.len && (i == 0 || le(x.keys[i-1], k)) && lt(k, x.keys[i])
+    ==> fm_ind(x, Ix.inf, j)[x][x.ptrs[i]].ks[k] >= 1
+  ensures i <= j && i == x.len && x.next == null && (i == 0 || le(x.keys[i-1], k))
+    ==> fm_ind(x, Ix.inf, j)[x][x.ptrs[i]].ks[k] >= 1
+  ensures i <= j && i == x.len && x.next != null && (i == 0 || le(x.keys[i-1], k)) && lt(k, x.keys[i])
+    ==> fm_ind(x, Ix.inf, j)[x][x.ptrs[i]].ks[k] >= 1
+  ensures x.len + 1 <= j && x.next != null && le(x.keys[x.len], k)
+    ==> fm_ind(x, Ix.inf, j)[x][x.next].ks[k] >= 1
+{
+  if (j >= 0) {
+    lemma_fm(x, Ix, k, i, j - 1);
+    pure assume false;  // TODO
+  }
+}
+
+
+// TODO probably define this inductively too
 pure function outset(x: Node, flmp: Map<Node, Map<Node, FlowDom>>) returns (O: Set<K>)
   ensures forall k: K :: k in O ==> (exists y: Node :: flmp[x][y].ks[k] > 0 @(matching O yields flmp[x][y].ks[k]))
   //{ { k: K :: exists y: Node :: flmp[x][y].ks[k] > 0 } }  // TODO why not? (see hashtbl.findNext)
@@ -174,7 +217,7 @@ procedure init() returns (x: Node, I: Interface)
   x.next := null;
   
   var xkc := { k: K :: le(bottom, k) && lt(k, top) ? 1 : 0 };
-  var xir := { k: K :: le(bottom, k) && lt(k, top) ? 1 : 0 };
+  var xir := { k: K :: le(bottom, k) && lt(k, top) ? 1 : 0 }; // TODO, really?
   var xfm := { n: Node :: { n1: Node :: domZero } };
   var xinf := { n: Node :: n == x ? fd(xkc, xir) : domZero };
   var inrSet: Set<K> := { k: K :: xinf[x].ks[k] >= 1 || xinf[x].ir[k] >= 1 };
@@ -216,6 +259,7 @@ procedure findNext(x: Node, k: K, Ix: Interface)
     i := i + 1;
   }
 
+  lemma_fm(x, Ix, k, i, x.len + 1);
   if (i == x.len && x.next != null) {
     if (lt(k, x.keys[i]))
       n := x.ptrs[i];
