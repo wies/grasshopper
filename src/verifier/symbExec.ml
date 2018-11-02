@@ -1018,7 +1018,7 @@ let rec symb_exec st postcond comms =
   | Basic (Assign {assign_lhs=[fld];
         assign_rhs=[App (Write, [App (FreeSym fld', [], _);
           loc; rhs], srt)]}, pp) as comm :: comms'
-      when fld = fld' ->
+      when fld = fld' && IdSet.mem fld st.se_fields ->
     Debug.debug (fun () ->
       sprintf "%sExecuting mutate: %d: %s%sCurrent state:\n%s\n"
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
