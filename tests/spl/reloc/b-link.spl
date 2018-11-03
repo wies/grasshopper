@@ -198,8 +198,11 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
   ensures hrep(x, Ix) &*& unchanged(x)
   ensures x.ptrs[0] == null  // x is a leaf
 {
-  if (x.ptrs[0] != null && i < x.len && !lt(k, x.keys[i])) {
-    keyset_implies_leaf(x, Ix, k, i + 1); 
+  if (x.ptrs[0] != null) {
+    lemma_fm(x, Ix, k, i, x.len + 1);
+    if (i < x.len && !lt(k, x.keys[i])) {
+      keyset_implies_leaf(x, Ix, k, i + 1);
+    }
   }
 }
 
