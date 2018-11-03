@@ -2,6 +2,7 @@
 
 open Util
 open SplCompiler
+open Grass
     
 let greeting =
   "GRASShopper version " ^ Config.version ^ "\n"
@@ -25,7 +26,7 @@ let output_trace prog proc (pp, model) =
     let print_pos (pos, state) =
       Printf.fprintf trace_chan 
         "{\"position\": {\"line_no\": %d, \"column_no_start\": %d, \"column_no_stop\": %d}, \"state\": "
-        pos.Grass.sp_start_line pos.Grass.sp_start_col pos.Grass.sp_end_col;
+        pos.sp_start_line pos.sp_start_col pos.sp_end_col;
       ModelPrinting.output_json trace_chan state;
       output_string trace_chan "}"
     in
@@ -117,7 +118,15 @@ let parse_spl_program main_file =
 (** Check SPL program in main file [file] and procedure [proc] *)
 let check_spl_program spl_prog proc =
   let prog = SplTranslator.to_program spl_prog in
-  let simple_prog = Verifier.simplify proc prog in
+  let procs =  (* Split proc string to get names of multiple procedures *)
+    match proc with
+    | Some p ->
+      p |> String.split_on_char ' '
+      |> List.fold_left (fun ps s -> IdSet.add (s, 0) ps) IdSet.empty
+    | None ->
+      IdMap.fold (fun id _ -> IdSet.add id) prog.prog_procs IdSet.empty
+  in
+  let simple_prog = Verifier.simplify procs prog in
   let check simple_prog first proc =
     let errors =
       if !Config.typeonly then []
@@ -138,28 +147,23 @@ let check_spl_program spl_prog proc =
       )
       first errors
   in
-  match proc with
-  | None -> Prog.fold_procs (check simple_prog) true simple_prog
-  | Some p ->
-    (* Split string to get names of multiple procedures *)
-    let procs =
-      p |> String.split_on_char ' '
-      |> List.map (fun p ->
-        match Prog.find_proc_with_deps simple_prog (p, 0) with
-        | [] ->
-          let available =
-            Prog.fold_procs 
-              (fun acc proc ->
-                let name = Prog.name_of_proc proc in
-                "\t" ^ Grass.string_of_ident name ^ "\n" ^ acc) 
-              "" prog
-          in
-          failwith ("Could not find a procedure named " ^ p ^ 
-                    ". Available procedures are:\n" ^ available)
-        | ps -> ps)
-      |> List.concat |> List.sort_uniq compare
-    in
-    List.fold_left (check simple_prog) true procs
+  let procs =
+    IdSet.fold (fun p procs ->
+      match Prog.find_proc_with_deps simple_prog p with
+      | [] ->
+        let available =
+          Prog.fold_procs 
+            (fun acc proc ->
+              let name = Prog.name_of_proc proc in
+              "\t" ^ string_of_ident name ^ "\n" ^ acc) 
+            "" prog
+        in
+        failwith ("Could not find a procedure named " ^ (string_of_ident p) ^ 
+                  ". Available procedures are:\n" ^ available)
+      | ps -> ps :: procs) procs []
+    |> List.concat |> List.sort_uniq compare
+  in
+  List.fold_left (check simple_prog) true procs
 
 
 (** Get current time *)
