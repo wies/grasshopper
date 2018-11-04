@@ -222,10 +222,16 @@ let add_pred_insts prog f =
                 | App (FreeSym id, _ :: _, _) as t ->
                     IdMap.find_opt id prog.prog_preds |>
                     Opt.flat_map (fun decl ->
+                      aux_match |>
                       Opt.flat_map (fun (pid, _) ->
-                        if IdSet.mem pid (accesses_pred decl) then None
-                        else Some (mk_known t))
-                        aux_match) |>
+                        (* Add generator for propagating known terms to force unfolding of predicate definitions *)
+                        (* Only do this if id is not the entry point into an SCC in the predicate call graph *)
+                        let pdecl = Prog.find_pred prog pid in
+                        if pdecl.pred_contract.contr_name = decl.pred_contract.contr_name ||
+                           IdSet.mem pid (accesses_pred decl) &&
+                           not (contained_in_src_pos decl.pred_contract.contr_pos pdecl.pred_contract.contr_pos)
+                        then None
+                        else Some (mk_known t))) |>
                     Opt.get_or_else t
                 | t -> t)
           in
