@@ -1,3 +1,5 @@
+options "-symbexec"
+
 procedure foo(a: Int) returns (b: Int)
   requires a == 2
   ensures b == 4

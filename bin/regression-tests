@@ -84,11 +84,12 @@ symb_exec:dirty         tests/spl/symb_exec/dirty.spl           ''     pass
 symb_exec:frame         tests/spl/symb_exec/frame.spl           ''     pass
 symb_exec:list          tests/spl/symb_exec/list.spl            ''     pass
 symb_exec:array         tests/spl/symb_exec/array.spl           ''     pass
-symb_exec:soundness1    tests/spl/symb_exec/soundness1.spl      ''     fail
-symb_exec:soundness2    tests/spl/symb_exec/soundness2.spl      ''     fail
-symb_exec:soundness3    tests/spl/symb_exec/soundness3.spl      ''     fail
-symb_exec:soundness5    tests/spl/symb_exec/soundness5.spl      ''     fail
-symb_exec:soundness6    tests/spl/symb_exec/soundness6.spl      ''     fail
+symb_exec:soundness0    tests/spl/symb_exec/soundness.spl       'useless_existentials'     fail
+symb_exec:soundness1    tests/spl/symb_exec/soundness.spl       'pure_call1'     fail
+symb_exec:soundness2    tests/spl/symb_exec/soundness.spl       'fun_call'     fail
+symb_exec:soundness3    tests/spl/symb_exec/soundness.spl       'spatial_neq2'     fail
+symb_exec:soundness4    tests/spl/symb_exec/soundness.spl       'boo4'     fail
+symb_exec:soundness5    tests/spl/symb_exec/soundness.spl       'boo2'     fail
 symb_exec:arr-soundness tests/spl/symb_exec/soundness_arr1.spl  ''     fail
 symb_exec:array_util    tests/spl/reloc/array_util.spl          ''     pass
 flows:b+tree_inRange    tests/spl/reloc/b+-tree.spl             'inRange'  pass
@@ -118,5 +119,5 @@ flows:hashtbl-give-up_keyset   tests/spl/reloc/hashtbl-give-up.spl     'keyset_i
 
 res=0
 OPTIONS=$@ time -f "Elapsed user time: %Us.\nElapsed real time: %es." ./bin/run-tests $TESTS || res=$?
-OPTIONS="-symbexec -simplearrays $@" time -f "Elapsed user time: %Us.\nElapsed real time: %es." ./bin/run-tests $SYMB_EXEC_TESTS || res=$?
+OPTIONS="$@" time -f "Elapsed user time: %Us.\nElapsed real time: %es." ./bin/run-tests $SYMB_EXEC_TESTS || res=$?
 exit $res

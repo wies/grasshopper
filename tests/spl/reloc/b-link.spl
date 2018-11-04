@@ -1,6 +1,6 @@
 /** B+ tree implementation of the link template for linearizable dictionaries. */
 
-options "-abspreds -simplearrays -propreads"
+options "-abspreds -simplearrays -propreads -symbexec"
 
 include "flows.spl"
 include "array_util.spl"

@@ -1,0 +1,139 @@
+options "-symbexec"
+
+// Expect these tests to fail
+
+struct Node {
+  var next: Node;
+  var data: Int;
+}
+
+// ----------
+
+procedure useless_existentials(x: Node, y: Node, z: Node)
+  requires acc(x) &*& acc(y)
+  ensures acc(x) &*& acc(z)
+{
+  z := y;
+  y := x.next;
+  pure assert y == x;
+}
+
+// ----------
+
+procedure foo(a: Int) returns (b: Int)
+  requires a == 2
+  ensures b == 4
+
+procedure pure_call1(c: Int, d:Int)
+  requires c == 2 && d == c
+  ensures c == 4
+{
+  c := foo(c);
+  assert false;
+}
+
+// ----------
+
+predicate poo(x: Node)
+
+procedure bar(x: Node, y: Node, z: Node)
+  requires ([acc(x)](x) && acc(y)) &*& poo(z) &*& x.data == y.data &*& x.data < 3
+  ensures [acc(x)](x) &*& poo(z)
+
+procedure fun_call(u: Node, v: Node, w: Node, i: Int, j: Int)
+  requires poo(w) &*& (acc(v) && [acc(u)](u)) &*& i == u.data &*& j == v.data &*& i < 2
+  ensures poo(w) &*& [acc(u)](u)
+{
+  bar(u, v, w);
+}
+
+// ----------
+
+// TODO how to prevent this from verifying?
+  // Substitute assignments in post also? But then can't use return vars in body
+  // Only if not return var?
+procedure foo3(a: Int) returns (b: Int)
+  requires a == 2
+  ensures b == 4 && a == 3
+{
+  a := 3;
+  b := 4;
+}
+
+// ----------
+
+predicate ls(x: Node)
+
+procedure spatial_neq2(x1: Node, x2: Node, x3: Node, x4: Node, x5: Node,
+                       x6: Node, x7: Node)
+  requires acc(x1) &*& (ls(x7) && acc(x2))
+  &*& ((acc(x3) &*& ls(x4)) && (ls(x6) &*& [acc(x5)](x5)))
+  ensures acc(x1) &*& (ls(x7) && acc(x2))
+  &*& ((acc(x3) &*& ls(x4)) && (ls(x6) &*& [acc(x5)](x5)))
+{
+  pure assert x3 != x5;
+}
+
+// ----------
+
+procedure foo4(x: Int) returns (y: Int)
+  requires x == 3
+  ensures y == x + 1
+
+procedure boo4(x: Int, y: Int)
+  requires x == 3 && x == y + 1
+  ensures false
+{
+  x := foo4(x);
+}
+
+// ----------
+
+procedure foo2(x: Int) returns (y: Int)
+  requires x == 3
+  ensures y == x + 1
+
+procedure boo2(x: Int, y: Int)
+  requires x == 3 && x == y + 1
+  ensures false
+{
+  x := foo2(x);
+}
+
+// ----------
+// TODO: The next two need a different way of handling equalities among fields
+// or variables when framing
+
+struct Rec {
+  var a: Int;
+  var b: Int;
+  var c: Int;
+}
+
+procedure bar01(x: Rec)
+  requires acc(x) &*& x.a == x.b
+  ensures acc(x)
+
+procedure boo01(y: Rec)
+  requires acc(y) &*& y.b == 3
+  ensures acc(y)
+{
+  bar01(y);
+}
+
+// ----------
+
+procedure bar02(x: Rec)
+  requires acc(x) &*& x.a <= 5
+  ensures acc(x)
+
+procedure boo02(y: Rec)
+  requires acc(y) &*& y.b == 6
+  ensures acc(y)
+{
+  bar02(y);
+}
+
+
+
+

@@ -1,3 +1,5 @@
+options "-symbexec"
+
 struct Node {
   var next: Node;
 }
