@@ -227,9 +227,14 @@ let add_pred_insts prog f =
                         (* Add generator for propagating known terms to force unfolding of predicate definitions *)
                         (* Only do this if id is not the entry point into an SCC in the predicate call graph *)
                         let pdecl = Prog.find_pred prog pid in
+                        let ppos =
+                          pdecl.pred_body |>
+                          Opt.map (fun s -> s.spec_pos) |>
+                          Opt.get_or_else dummy_position
+                        in
                         if pdecl.pred_contract.contr_name = decl.pred_contract.contr_name ||
                            IdSet.mem pid (accesses_pred decl) &&
-                           not (contained_in_src_pos decl.pred_contract.contr_pos pdecl.pred_contract.contr_pos)
+                           not (contained_in_src_pos decl.pred_contract.contr_pos ppos)
                         then None
                         else Some (mk_known t))) |>
                     Opt.get_or_else t
