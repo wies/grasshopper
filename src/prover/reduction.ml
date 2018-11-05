@@ -284,9 +284,8 @@ let get_read_propagators gts =
     | _ -> srts)
       gts SortSet.empty
   in
-  let read_propagators =
-    SortSet.fold (function
-      | Adt (id, adts) -> fun propagators ->
+  let add_propagators = function
+    | Adt (id, adts) -> fun propagators ->
           let s = fresh_ident "?s" in
           let t = fresh_ident "?t" in
           let cstrs = List.assoc id adts in
@@ -352,22 +351,72 @@ let get_read_propagators gts =
           ([Match (mk_eq_term a b, []);
             Match (mk_read fld [mk_read (mk_array_cells b) [idx]], [])],
            [mk_read fld [mk_read (mk_array_cells a) [idx]]]) :: propagators
-      | Map (dsrts, srt) as fldsrt -> fun propagators ->
-          let f1 = fresh_ident "?f", fldsrt in
-          let fld1 = mk_var (snd f1) (fst f1) in
-          let f2 = fresh_ident "?g", fldsrt in
-          let fld2 = mk_var (snd f2) (fst f2) in
+      | Map (dsrts, srt) as mapsrt -> fun propagators ->
+          let f = fresh_ident "?f", mapsrt in
+          let fvar = mk_var (snd f) (fst f) in
+          let g = fresh_ident "?g", mapsrt in
+          let gvar = mk_var (snd g) (fst g) in
           let d = fresh_ident "?d" in
           let dvar = mk_var srt d in
+          let xvars = List.map (fun srt -> mk_var srt (fresh_ident "?i")) dsrts in
+          let yvars = List.map (fun srt -> mk_var srt (fresh_ident "?j")) dsrts in
+          let propagators =
+            match srt with
+            | Adt (id, adts) -> 
+                let cstrs = List.assoc id adts in
+                let destrs = flat_map (fun (_, destrs) -> destrs) cstrs in
+                let propagators =
+                  List.fold_left
+                    (fun propagators -> function
+                      | (destr, (Map ([dsrt2], _) as srt)) ->
+                          let srt = unfold_adts adts srt in
+                          let zvar = mk_var (unfold_adts adts dsrt2) (fresh_ident "?z") in
+                          (* f[x := d], f[y].destr[z] -> f[x := d][y].destr[z] *)
+                          ([Match (mk_write fvar xvars dvar, []);
+                            Match (mk_read (mk_destr srt destr (mk_read fvar yvars)) [zvar], [])],
+                           [mk_read (mk_destr srt destr (mk_read (mk_write fvar xvars dvar) yvars)) [zvar]]) ::
+                          (* f[x := d].destr[z] -> f[y].destr[z] *)
+                          ([Match (mk_read (mk_destr srt destr (mk_read (mk_write fvar xvars dvar) yvars)) [zvar], [])],
+                           [mk_read (mk_destr srt destr (mk_read fvar yvars)) [zvar]])
+                          :: propagators
+                      | _ -> propagators
+                    )
+                    propagators destrs
+                in
+                propagators
+            | Map (dsrts2, Adt (id, adts)) ->
+                let cstrs = List.assoc id adts in
+                let destrs = flat_map (fun (_, destrs) -> destrs) cstrs in
+                let uvars = List.map (fun srt -> mk_var srt (fresh_ident "?u")) dsrts2 in
+                let propagators =
+                  List.fold_left
+                    (fun propagators -> function
+                      | (destr, (Map ([dsrt2], _) as srt)) ->
+                          let srt = unfold_adts adts srt in
+                          let zvar = mk_var (unfold_adts adts dsrt2) (fresh_ident "?z") in
+                          (* f[x := d], f[y][u].destr[z] -> f[x := d][y][u].destr[z] *)
+                          ([Match (mk_write fvar xvars dvar, []);
+                            Match (mk_read (mk_destr srt destr (mk_read (mk_read fvar yvars) uvars)) [zvar], [])],
+                           [mk_read (mk_destr srt destr (mk_read (mk_read (mk_write fvar xvars dvar) yvars) uvars)) [zvar]]) ::
+                          (* f[x := d][u].destr[z], f[y] -> f[y][u].destr[z] *)
+                          ([Match (mk_read fvar yvars, []);
+                            Match (mk_read (mk_destr srt destr (mk_read (mk_read (mk_write fvar xvars dvar) yvars) uvars)) [zvar], [])],
+                           [mk_read (mk_destr srt destr (mk_read (mk_read fvar yvars) uvars)) [zvar]])
+                          :: propagators
+                      | _ -> propagators
+                    )
+                    propagators destrs
+                in
+                propagators
+            | _ -> propagators
+          in
           let ssrt_opt = match dsrts with
           | Loc ssrt :: _ -> Some ssrt
           | _ -> None
           in
-          let ivars1 = List.map (fun srt -> mk_var srt (fresh_ident "?i")) dsrts in
-          let ivars2 = List.map (fun srt -> mk_var srt (fresh_ident "?j")) dsrts in
           let match_ivar1 =
             ssrt_opt |>
-            Opt.map (fun _ -> Match (List.hd ivars1, [FilterNotNull])) |>
+            Opt.map (fun _ -> Match (List.hd xvars, [FilterNotNull])) |>
             Opt.to_list
           in
           let gen_frame wrap =
@@ -376,50 +425,49 @@ let get_read_propagators gts =
               let set1 = Axioms.set1 ssrt in
               let set2 = Axioms.set2 ssrt in
               [(* Frame (x, a, f, g), y.g -> y.f *)
-               ([Match (mk_frame_term set1 set2 fld1 fld2, []);
-                 Match (wrap (mk_read fld2 (ivars1)), [])] @
+               ([Match (mk_frame_term set1 set2 fvar gvar, []);
+                 Match (wrap (mk_read gvar (xvars)), [])] @
                 match_ivar1,
-               [wrap (mk_read fld1 (ivars1))]);
+               [wrap (mk_read fvar (xvars))]);
                (* Frame (x, a, f, g), y.f -> y.g *)
-               ([Match (mk_frame_term set1 set2 fld1 fld2, []);
-                 Match (wrap (mk_read fld1 (ivars1)), [])],
-                [wrap (mk_read fld2 (ivars1))])
+               ([Match (mk_frame_term set1 set2 fvar gvar, []);
+                 Match (wrap (mk_read fvar (xvars)), [])],
+                [wrap (mk_read gvar (xvars))])
               ]) |>
             Opt.get_or_else []
           in
           let mk_generators wrap =
-            ([Match (mk_eq_term fld1 fld2, []);
-              Match (wrap (mk_read fld1 (ivars1)), []);
+            ([Match (mk_eq_term fvar gvar, []);
+              Match (wrap (mk_read fvar (xvars)), []);
             ],
-             [wrap (mk_read fld2 (ivars1))]) ::
+             [wrap (mk_read gvar (xvars))]) ::
             (* f == g, x.f -> x.g *)
-            ([Match (mk_eq_term fld1 fld2, []);
-              Match (wrap (mk_read fld1 (ivars1)), [])
+            ([Match (mk_eq_term fvar gvar, []);
+              Match (wrap (mk_read fvar (xvars)), [])
             ],
-             [wrap (mk_read fld2 (ivars1))]) ::
+             [wrap (mk_read gvar (xvars))]) ::
             (* f == g, x.g -> x.f *)
-            ([Match (mk_eq_term fld1 fld2, []);
-              Match (wrap (mk_read fld2 (ivars1)), [])] @ match_ivar1,
-             [wrap (mk_read fld1 (ivars1))]) :: 
+            ([Match (mk_eq_term fvar gvar, []);
+              Match (wrap (mk_read gvar (xvars)), [])] @ match_ivar1,
+             [wrap (mk_read fvar (xvars))]) :: 
             (* f [x := d], y.(f [x := d]) -> y.f *)
-            ([Match (mk_write fld1 ivars1 dvar, []);
-              Match (wrap (mk_read (mk_write fld1 ivars1 dvar) ivars2), []);
+            ([Match (mk_write fvar xvars dvar, []);
+              Match (wrap (mk_read (mk_write fvar xvars dvar) yvars), []);
               (*Match (loc1, [FilterNotNull]);*)
               (*Match (loc2, [FilterNotNull])*)],
-             [wrap (mk_read fld1 ivars2)]) ::
+             [wrap (mk_read fvar yvars)]) ::
             (* f [x := d], y.f -> y.(f [x := d]) *)
-            ([Match (mk_write fld1 ivars1 dvar, []);
-              Match (wrap (mk_read fld1 (ivars2)), []);
+            ([Match (mk_write fvar xvars dvar, []);
+              Match (wrap (mk_read fvar (yvars)), []);
               (*Match (loc1, [FilterNotNull]);*)
             (*Match (loc2, [FilterNotNull])*)],
-             [wrap (mk_read (mk_write fld1 (ivars1) dvar) (ivars2))]) ::
+             [wrap (mk_read (mk_write fvar (xvars) dvar) (yvars))]) ::
             gen_frame wrap
           in
           mk_generators (fun t -> t) (*@ mk_generators (fun t -> mk_known t)*) @ propagators
-      | _ -> fun propagators -> propagators)
-      field_sorts []
+      | _ -> fun propagators -> propagators
   in
-  read_propagators
+  SortSet.fold add_propagators field_sorts []
     
 let add_read_write_axioms fs =
   let gts = ground_terms ~include_atoms:true (mk_and fs) in

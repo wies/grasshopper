@@ -185,8 +185,8 @@ let fresh_ident =
   let used_names = Hashtbl.create 0 in
   fun  ?(id=0) (name : string) ->
     let last_index = 
-      try Hashtbl.find used_names name 
-      with Not_found -> -1
+      Hashtbl.find_opt used_names name |>
+      Opt.get_or_else (-1)
     in
     let new_max = max (last_index + 1) id in
     Hashtbl.replace used_names name new_max;
@@ -277,8 +277,8 @@ let eq_name id1 id2 = name id1 = name id2
 let symbol_of_ident =
   let symbol_map = List.map (fun sym -> (string_of_symbol sym, sym)) symbols in
   fun ((name, _) as id) ->
-  try List.assoc name symbol_map
-  with Not_found -> FreeSym id
+    List.assoc_opt name symbol_map |>
+    Opt.get_or_else (FreeSym id)
  
 
 (** {6 (Smart) constructors} *)
@@ -1121,7 +1121,7 @@ let sign f : signature =
 (** Extracts the signature of formula [f]. *)
 let overloaded_sign f : (arity list SymbolMap.t) =
   let add_to_sign sym tpe decls =
-    let old = try SymbolMap.find sym decls with Not_found -> [] in
+    let old = SymbolMap.find_opt sym decls |> Opt.get_or_else [] in
       if List.mem tpe old then decls
       else SymbolMap.add sym (tpe :: old) decls
   in
@@ -1147,49 +1147,48 @@ let map_id_term fct t =
 
 (** Map all identifiers occuring in formula [f] to new identifiers according to function [fct] *)
 let map_id fct f =
-  let rec sub = function 
-    | BoolOp (op, fs) -> BoolOp (op, List.map sub fs)
-    | Atom (t, a) -> Atom (map_id_term fct t, a)
-    | Binder (b, vs, f, a) -> Binder (b, vs, sub f, a)
-  in sub f
-
-(** Substitutes all identifiers in term [t] with other identifiers according to substitution map [subst_map] *)
-let subst_id_term subst_map t =
-  let sub_id id =
-    try IdMap.find id subst_map with Not_found -> id
-  in
-    map_id_term sub_id t
-
-(** Substitutes all identifiers in formula [f] with other identifiers according to substitution map [subst_map].
- ** This operation is not capture avoiding. *)
-let subst_id subst_map f =
-  let subt = subst_id_term subst_map in
-  let subf f = match f with
+  let mapt = map_id_term fct in
+  let mapf f = match f with
     | FilterSymbolNotOccurs (FreeSym id) ->
-        (try FilterSymbolNotOccurs (FreeSym (IdMap.find id subst_map))
+        (try FilterSymbolNotOccurs (FreeSym (fct id))
         with Not_found -> f)
           (*| FilterTermNotOccurs t ->
              FilterTermNotOccurs (subt t)*)
     | f -> f
   in
-  let subg g = match g with
+  let mapg g = match g with
   | Match (t, fs) ->
-      let t1 = subt t in
-      let fs1 = List.map subf fs in
+      let t1 = mapt t in
+      let fs1 = List.map mapf fs in
       Match (t1, fs1)
   in
-  let suba a = match a with
+  let mapa a = match a with
     | TermGenerator (guards, gen_terms) -> 
-        TermGenerator (List.map subg guards, List.map subt gen_terms)
-    | Pattern (t, fs) -> Pattern (subt t, List.map subf fs)
-    | Label (pol, t) -> Label (pol, subt t)
+        TermGenerator (List.map mapg guards, List.map mapt gen_terms)
+    | Pattern (t, fs) -> Pattern (mapt t, List.map mapf fs)
+    | Label (pol, t) -> Label (pol, mapt t)
     | a -> a
   in
   let rec sub = function 
     | BoolOp (op, fs) -> BoolOp (op, List.map sub fs)
-    | Atom (t, a) -> Atom (subt t, List.map suba a)
-    | Binder (b, vs, f, a) -> Binder (b, vs, sub f, List.map suba a)
+    | Atom (t, a) -> Atom (map_id_term fct t, List.map mapa a)
+    | Binder (b, vs, f, a) -> Binder (b, vs, sub f, List.map mapa a)
   in sub f
+
+(** Substitutes all identifiers in term [t] with other identifiers according to substitution map [subst_map] *)
+let subst_id_term subst_map t =
+  let sub_id id =
+    IdMap.find_opt id subst_map |> Opt.get_or_else id
+  in
+  map_id_term sub_id t
+
+(** Substitutes all identifiers in formula [f] with other identifiers according to substitution map [subst_map].
+ ** This operation is not capture avoiding. *)
+let subst_id subst_map f =
+  let sub_id id =
+    IdMap.find_opt id subst_map |> Opt.get_or_else id
+  in
+  map_id sub_id f
 
 (** Substitutes all constants in term [t] with other terms according to substitution function [subst_fun]. *)
 let subst_consts_fun_term subst_fun t =
@@ -1209,7 +1208,7 @@ let subst_consts_fun subst_fun f =
 (** Substitutes all constants in term [t] with other terms according to substitution map [subst_map]. *)
 let subst_consts_term subst_map t =
   let sub_id id t =
-    try IdMap.find id subst_map with Not_found -> t
+    IdMap.find_opt id subst_map |> Opt.get_or_else t
   in
   subst_consts_fun_term sub_id t
 
@@ -1218,12 +1217,10 @@ let subst_consts_term subst_map t =
 let subst_consts subst_map f =
   let subst_filter f = match f with
     | FilterSymbolNotOccurs (FreeSym id) ->
-        (try
-          match IdMap.find id subst_map with
-          | App (FreeSym id1, [], _) ->
+        (match IdMap.find_opt id subst_map with
+          | Some (App (FreeSym id1, [], _)) ->
               FilterSymbolNotOccurs (FreeSym id1)
-          | _ -> f
-        with Not_found -> f)
+          | _ -> f)
     | f -> f
   in
   let subst_annot = function

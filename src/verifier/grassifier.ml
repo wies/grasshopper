@@ -1426,7 +1426,16 @@ let annotate_runtime_checks prog =
     | App (Length, [map], _) -> TermSet.add map acc
     | App (ArrayCells, [map], _) -> TermSet.add map acc
     | App (Write, fld :: loc :: ts, _) ->
-        List.fold_left checks (TermSet.add loc acc) (fld :: loc :: ts)
+        let acc1 =
+          match fld with
+          | App (FreeSym id, [], _) ->
+              (try 
+                let _ = IdMap.mem id prog.prog_vars in
+                TermSet.add loc acc
+              with Not_found -> acc)
+          | _ -> acc
+        in
+        List.fold_left checks acc1 (fld :: loc :: ts)
     | App ((Div | Mod), [t1; t2], _) ->
         List.fold_left checks (TermSet.add t2 acc) [t1; t2]
     | App (_, ts, _) -> 
