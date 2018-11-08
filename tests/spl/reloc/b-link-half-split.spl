@@ -1,5 +1,18 @@
 include "b-link.spl";
 
+options "-symbexec"
+
+procedure aaa(c: Node, x: Node) returns (I: Interface)
+  requires hrepSpatial(x)
+  ensures hrepSpatial(x)
+{
+  var xfm: Map<Node, Map<Node, FlowDom>>;
+  xfm := { n: Node :: { n1: Node :: domZero() } };
+  xfm := xfm[x := xfm[x][x.next := fd({ k: K :: 0 }, { k: K :: 0 })]];
+  I := int(I.inf, I.na, xfm, I.FP, I.FPo);
+  pure assert forall n: Node, n1: Node, k: K :: I.fm[n][n1].ks[k] == 0;
+}
+
 procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interface)
   returns (Ic1: Interface, Ix1: Interface, Icx1: Interface)
   requires hrep(c, Ic) &*& hrepSpatial(x)
@@ -15,7 +28,7 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
   ensures intComp(Ic1, Ix1) == Icx1 && intEq(Icx, Icx1) == true
   ensures Icx.na.contents == Icx1.na.contents
 {
-  var m := (c.len / 2) + 1;
+  var m := (c.len + 1) / 2;
   var k := c.keys[m - 1];
 
   if (c.ptrs[0] == null) {  // Leaf
@@ -26,41 +39,61 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     c.len := m;
     c.next := x;
 
+    lemma_int_valid_unfold(c, Ic);
+    
+    // c's new interface
+    var cfm := { n: Node :: { n1: Node :: domZero() } };
+    // TODO make both components of edgeset equal. For x too.
+    cfm := cfm[c := cfm[c][x := fd({ k: K :: le(c.keys[c.len], k) ? 1 : 0 }, { k: K :: 0 })]];
+    Ic1 := int(Ic.inf, nd(set_of_map(c.keys.map, 0, c.len), Ic.na.inr), cfm, {c}, {x});
+
+    // TODO things to prove
+    // Prove by induction on keys and definition of outset
+    pure assume forall k: K :: k in outset(c, Ic.fm) ==> k in outset(c, Ic1.fm);
+    // Prove by induction using arr_copy definition:
+    pure assume forall k: K :: k in set_of_map(c.keys.map, 0, c.len)
+    ==> k in Ic.na.contents // == set_of_map(old(c.keys.map), 0, old(c.len))
+         @(matching k in Ic1.na.contents yields Ic.inf[c].ks[k]);
+
+    
+    lemma_int_valid_fold(c, Ic1);
+    assert hrepSpatial(x) &*& hrep(c, Ic1);
+    
+
     // x's new interface
     var xkc := { k: K :: le(x.keys[0], k) && Ic.inf[c].ks[k] >= 1 ? 1 : 0 };
     var xir := { k: K :: 0 };
     var xinf := { n: Node :: n == x ? fd(xkc, xir) : domZero() };
-
-    pure assume domLeq(domZero(), xinf[x]);
-
-    // TODO why doesn't this work?
-    //var xfmxnextkc := { k: K :: le(x.keys[x.len], k) ? 1 : 0 };
-    //var xfmxnextir := { k: K :: 0 };
-    //var xfmxnext := fd(xfmxnextkc, xfmxnextir);
-    //var xfmx := { n: Node :: n == x.next && n != null ? xfmxnext : domZero };
-    //var xfm := { n: Node :: n == x ? xfmx : { n1: Node :: domZero } };
-    var xfm: Map<Node, Map<Node, FlowDom>>;
-    pure assume (forall n: Node, n1: Node :: n != x ==> xfm[n][n1] == domZero)
-      && (x.next == null && (forall n: Node, n1: Node :: n in {x} ==> xfm[n][n1] == domZero)
-          || x.next != null && (forall n: Node, n1: Node :: n in {x} && n1 != x.next ==> xfm[n][n1] == domZero)
-          && (forall k: K :: le(x.keys[x.len], k) ==> xfm[x][x.next].ks[k] == 1)
-          && (forall k: K :: lt(k, x.keys[x.len]) ==> xfm[x][x.next].ks[k] == 0
-             @(matching x.next yields xfm[x][x.next].ks[k])));
-
+    var xfpo: Set<Node>;
+    var xfm := { n: Node :: { n1: Node :: domZero() } };
+    if (x.next == null) {
+      xfpo := {};
+    } else {
+      xfm := xfm[x := xfm[x][x.next := fd({ k: K :: le(x.keys[x.len], k) ? 1 : 0 }, { k: K :: 0 })]];
+      xfpo := {x.next};
+    }
     var xinrSet: Set<K> := { k: K :: xinf[x].ks[k] >= 1 || xinf[x].ir[k] >= 1 };
     var xi := inrfnC({ n: Node :: n == x ? xinrSet : {} }, {x});
-    var xfpo: Set<Node>;
-    if (x.next == null) xfpo := {}; else xfpo := {x.next};
     Ix1 := int(xinf, nd(set_of_map(x.keys.map, 0, x.len), xi), xfm, {x}, xfpo);
 
-    pure assume set_of_map(x.keys.map, 0, x.len) == set_of_map(c.keys.map, m, c.len + 1);
-    pure assert forall i: Int :: 0 <= i < x.len ==> le(x.keys[0], x.keys[i]);
-    
-    pure assert (forall k: K :: k in Ix1.na.contents ==> Ix1.inf[x].ks[k] >= 1);
-      
-    lemma_int_valid_unfold(c, Ic);
+    // TODO things to prove
+    // Should follow from definition of Ix1:
+    pure assume domLeq(domZero(), Ix1.inf[x]);
+    pure assume forall k: K :: le(x.keys[0], k) && Ic.inf[c].ks[k] >= 1 ==> Ix1.inf[x].ks[k] >= 1;
+    pure assume forall k: K :: x.next != null && le(x.keys[x.len], k) ==> Ix1.fm[x][x.next].ks[k] == 1;
+    pure assume forall k: K :: x.next != null && !le(x.keys[x.len], k) ==> Ix1.fm[x][x.next].ks[k] == 0;
+    // Prove by induction using arr_copy definition:
+    pure assume forall k: K :: k in set_of_map(x.keys.map, 0, x.len)
+      ==> k in Ic.na.contents // == set_of_map(c.keys.map, 0, old(c.len))
+         @(matching k in Ix1.na.contents yields Ic.inf[c].ks[k]);
+    // Prove by induction using set_of_map definition
+    pure assume forall k: K :: k in Ix1.na.contents ==> le(x.keys[0], k);
+    pure assume forall k: K :: k in Ix1.na.contents ==> lt(k, x.keys[x.len]);
+
     lemma_int_valid_fold(x, Ix1);
     assert hrepSpatial(c) &*& hrep(x, Ix1);
+
+
     pure assume false;
 
     

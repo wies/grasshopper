@@ -105,7 +105,7 @@ function fm_ind(x: Node, inff: Map<Node, FlowDom>, i: Int)
   { n: Node :: { n1: Node ::
     i < 0 ? domZero()
     : (n != x ? domZero()
-       : (i <= x.len && n1 == x.ptrs[i] ? fm_child(x, i)
+       : (i <= x.len && {n1} == {x.ptrs[i]} ? fm_child(x, i)
           : (i == x.len + 1 && n1 == x.next ? fm_next(x, inff)
              : fm_ind(x, inff, i - 1)[n][n1])))
    }
@@ -159,7 +159,6 @@ lemma lemma_fm(x: Node, Ix: Interface, k: K, i: Int, j: Int)
 {
   if (j >= 0) {
     lemma_fm(x, Ix, k, i, j - 1);
-    pure assume false;  // TODO
   }
 }
 
@@ -181,7 +180,7 @@ define nu(x, I) {
     && (forall k: K :: I.inf[x].ir[k] >= 1 && k !in outset(x, I.fm) ==> I.inf[x].ks[k] >= 1)
     // Inreach edgesets subsetof normal edgesets
     && (forall k: K, y: Node :: I.fm[x][y].ir[k] <= I.fm[x][y].ks[k])
-    // If k ∈ inreach, then inreach edgeset is same as normal edgeset (for step)
+    // If k ∈ inreach \ inset, then inreach edgeset is same as normal edgeset (for step)
     && (forall k: K, y: Node :: I.inf[x].ir[k] >= 1 && I.inf[x].ks[k] <= 0
        && I.fm[x][y].ks[k] >= 1 ==> I.fm[x][y].ir[k] >= 1)
     // The node label stores the actual inreach
@@ -202,6 +201,7 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
     lemma_fm(x, Ix, k, i, x.len + 1);
     if (i < x.len && !lt(k, x.keys[i])) {
       keyset_implies_leaf(x, Ix, k, i + 1);
+      pure assume false; // TODO
     }
   }
 }
