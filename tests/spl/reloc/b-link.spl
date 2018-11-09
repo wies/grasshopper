@@ -159,13 +159,15 @@ lemma lemma_fm(x: Node, Ix: Interface, k: K, i: Int, j: Int)
 {
   if (j >= 0) {
     lemma_fm(x, Ix, k, i, j - 1);
+    pure assume false; // TODO
   }
 }
 
 
 // TODO probably define this inductively too
+// TODO findNext's spec should use this. Also, make sure you can prove whatever Coq relies on this.
 pure function outset(x: Node, flmp: Map<Node, Map<Node, FlowDom>>) returns (O: Set<K>)
-  ensures forall k: K :: k in O ==> (exists y: Node :: flmp[x][y].ks[k] > 0 @(matching O yields flmp[x][y].ks[k]))
+  //  ensures forall k: K :: k in O ==> (exists y: Node :: flmp[x][y].ks[k] > 0 @(matching O yields flmp[x][y].ks[k]))
   //{ { k: K :: exists y: Node :: flmp[x][y].ks[k] > 0 } }  // TODO why not? (see hashtbl.findNext)
 
 // The good condition
@@ -201,7 +203,6 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
     lemma_fm(x, Ix, k, i, x.len + 1);
     if (i < x.len && !lt(k, x.keys[i])) {
       keyset_implies_leaf(x, Ix, k, i + 1);
-      pure assume false; // TODO
     }
   }
 }
