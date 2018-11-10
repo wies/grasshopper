@@ -225,7 +225,6 @@ let instantiate_and_prove session fs =
       in
       let fs_inst = EMatching.instantiate_axioms_from_code patterns code cc_graph in
       let gts_inst = ground_terms ~include_atoms:true (mk_and fs_inst) in
-      (*let implied_eqs = CongruenceClosure.get_implied_equalities cc_graph in*)
       (*let gts_inst = ground_terms_acc ~include_atoms:true gts_inst (mk_and implied_eqs) in*)
       (*print_endline "Implied equalities:";
       print_endline (string_of_form (mk_and implied_eqs));*)
@@ -237,7 +236,8 @@ let instantiate_and_prove session fs =
       let has_mods1 = CongruenceClosure.has_mods cc_graph in
       if not !Config.propagate_reads || not (has_mods1 || has_mods2)
       then
-        rev_concat [fs_inst(*; implied_eqs*)], cc_graph
+        let implied_eqs = CongruenceClosure.get_implied_equalities cc_graph in
+        rev_concat [fs_inst; implied_eqs], cc_graph
       else
         saturate (i + 1) fs_inst (CongruenceClosure.reset cc_graph)
     in
