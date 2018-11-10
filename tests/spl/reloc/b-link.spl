@@ -154,7 +154,7 @@ define hrep(x, I) {
        && I == int_ind(x, x.len)
        && (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i] && x.ptrs[i] != x.next)
        && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j])
-       && (forall i: Int :: 0 <= i <= x.len ==> x.ptrs[i] != null && x.ptrs[i] in I.FPo)
+       && (forall i: Int :: 0 <= i <= x.len ==> x.ptrs[i] != null)
       )
 }
 
@@ -244,12 +244,11 @@ lemma compute_int(x: Node) returns (I: Interface)
       xfpo := {x.next};
     }
     I := int(inflow(x), nodeabs(x, inflow(x), set_of_map(x.keys.map, 0, x.len)), xfm, {x}, xfpo);
-    pure assume I.na.contents == set_of_map(x.keys.map, 0, x.len); // TODO issue 30
     pure assert x.next != null ==> (forall k: K :: le(x.keys[x.len], k) ==> I.fm[x][x.next].ks[k] == 1);
+    pure assert x.next != null ==> (forall k: K :: lt(k, x.keys[x.len]) ==> I.fm[x][x.next].ks[k] == 0);
   } else {
     I := int_ind(x, x.len);
   }
-  pure assume false;
 }
 
 
