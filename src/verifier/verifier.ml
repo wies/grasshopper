@@ -180,16 +180,23 @@ let add_match_filters =
     
 (** Expand predicate definitions for all predicates in formula [f] according to program [prog] *)
 let add_pred_insts prog f =
-    let add_generators aux_match f =
+  (* Create term generators for formula [f]. If [f] is the definition of a predicate, 
+     then aux_match is is [Some (pid, m)] where [pid] is the name of the predicate and
+     and [m] is the associated matching trigger.
+   *)
+  let add_generators aux_match f =
+    (* if f defines a predicate, collect parameter variables of that predicate *)
     let aux_vs =
-      Opt.fold (fun aux_vs -> function (_, Match (t, _)) -> fv_term_acc aux_vs t)
+      Opt.fold (fun aux_vs -> function (pid, Match (t, _)) -> fv_term_acc aux_vs t)
         IdSet.empty aux_match
     in
+    (* collect all function terms in [f] that contain quantified variables and for which we want term generators *)
     let fun_terms bvs f =
       let rec ft acc = function
         | App (sym, (_ :: _ as ts), srt) as t
           when (sym <> Read || IdSet.subset (fv_term t) aux_vs) &&
             (is_free_symbol sym || sym = Disjoint || sym = SubsetEq || srt <> Bool) ->
+            let acc =  List.fold_left ft acc ts in
             let fvs = fv_term t in
             let sts = List.fold_left subterms_term_acc TermSet.empty ts in
             let no_var_reads =
@@ -202,43 +209,96 @@ let add_pred_insts prog f =
             then TermSet.add t acc else acc
         | App (_, ts, Bool) ->
             List.fold_left ft acc ts
-        | _ -> acc
+        | App (t, ts, _) ->
+            List.fold_left ft acc ts
+        | _ -> acc              
       in
       fold_terms ft TermSet.empty f
     in
+    let read_vars =
+      aux_match |>
+      Opt.fold (fun _ -> function
+        | (_, Match (App (_, [App (_, _, Map (dsrts, _))], _), _)) ->
+            List.map (fun srt -> mk_var srt (fresh_ident "?i")) dsrts
+        | _ -> []) []
+    in
+    (* create term generators for the relevant function terms *)
     let rec ag bvs = function
       | BoolOp (op, fs) ->
           BoolOp (op, List.map (ag bvs) fs)
       | Binder (Forall, vs, f, ann) ->
           let bvs = List.fold_left (fun bvs (v, _) -> IdSet.add v bvs) bvs vs in
-          let ft =
+          let ft, read_gens =
             f |>
             fun_terms bvs |>
             TermSet.elements |>
-            List.map
-              (function
-                | App (Disjoint, [t1; t2], _) -> mk_inter [t1; t2]
-                | App (SubsetEq, [t1; t2], _) -> mk_union [t1; t2]
-                | App (FreeSym id, _ :: _, _) as t ->
-                    IdMap.find_opt id prog.prog_preds |>
-                    Opt.flat_map (fun decl ->
-                      aux_match |>
-                      Opt.flat_map (fun (pid, _) ->
-                        (* Add generator for propagating known terms to force unfolding of predicate definitions *)
-                        (* Only do this if id is not the entry point into an SCC in the predicate call graph *)
-                        let pdecl = Prog.find_pred prog pid in
-                        let ppos =
-                          pdecl.pred_body |>
-                          Opt.map (fun s -> s.spec_pos) |>
-                          Opt.get_or_else dummy_position
-                        in
-                        if pdecl.pred_contract.contr_name = decl.pred_contract.contr_name ||
-                           IdSet.mem pid (accesses_pred decl) &&
-                           not (contained_in_src_pos decl.pred_contract.contr_pos ppos)
-                        then None
-                        else Some (mk_known t))) |>
-                    Opt.get_or_else t
-                | t -> t)
+            (*List.map (fun t -> print_endline (string_of_term t); t) |>*)
+            List.map (function
+              | App (Disjoint, [t1; t2], _) -> mk_inter [t1; t2], []
+              | App (SubsetEq, [t1; t2], _) -> mk_union [t1; t2], []
+              | (App (Read, App (FreeSym id, _ :: _, _) :: _, srt) 
+              | App (FreeSym id, _ :: _, srt)) as t ->
+                  IdMap.find_opt id prog.prog_preds |>
+                  Opt.flat_map (fun decl ->
+                    aux_match |>
+                    Opt.flat_map (function (pid, Match (pt, _)) ->
+                      (* Add generator for propagating known terms to force unfolding of predicate definitions *)
+                      (* Only do this if id is not the entry point into an SCC in the predicate call graph *)
+                      let pdecl = Prog.find_pred prog pid in
+                      let ppos =
+                        pdecl.pred_body |>
+                        Opt.map (fun s -> s.spec_pos) |>
+                        Opt.get_or_else dummy_position
+                      in
+                      let read_gens =
+                        match srt, pt with
+                        | Map (dsrts, rsrt), App (Known, [App (_, _, Map (ret_dsrts, ret_rsrt)) as ptm], _)
+                          when dsrts = ret_dsrts && rsrt = ret_rsrt ->
+                            let read_pt = mk_read ptm read_vars in
+                            let read_t = mk_read t read_vars in
+                            [read_pt, read_t]
+                        | Adt (tid, adts), App (Known, [App (_, _, Map (ret_dsrts, Adt (ret_tid, _))) as ptm], _)
+                          when tid = ret_tid ->
+                            let cstrs = List.assoc tid adts in
+                            let destrs = flat_map (fun (_, destrs) -> destrs) cstrs in
+                            List.fold_left
+                              (fun read_gens (destr, srt) ->
+                                let srt = unfold_adts adts srt in
+                                match srt with
+                                | Map (dsrts, rsrt) ->
+                                    let read_vars =
+                                      List.map (fun srt -> mk_var srt (fresh_ident "?i")) dsrts
+                                    in
+                                    let read_ret_vars =
+                                      List.map (fun srt -> mk_var srt (fresh_ident "?j")) ret_dsrts
+                                    in
+                                    let read_t = mk_read (mk_destr srt destr t) read_vars in
+                                    let read_pt = mk_read (mk_destr srt destr (mk_read ptm read_ret_vars)) read_vars in
+                                    (read_pt, read_t) :: read_gens
+                                | _ -> read_gens
+                              )                             
+                              [] destrs
+                        | _ ->
+                            []
+                      in
+                      if pdecl.pred_contract.contr_name = decl.pred_contract.contr_name ||
+                         IdSet.mem pid (accesses_pred decl) &&
+                         not (contained_in_src_pos decl.pred_contract.contr_pos ppos)
+                      then Some (t, read_gens)
+                      else Some (mk_known t, read_gens))) |>
+                      Opt.get_or_else (t, [])
+                    | t -> t, []) |>
+             List.split         
+          in
+          let read_gens =
+            List.flatten read_gens |>
+            List.map (fun (read_pt, read_t) ->
+              let ms =
+                IdMap.fold (fun id srt ms -> Match (mk_var srt id, []) :: ms)
+                  (sorted_fv_term_acc IdMap.empty read_t)
+                  []
+              in
+              TermGenerator (Match (read_pt, []) :: ms, [read_t]))
           in
           let ms =
             IdMap.fold (fun id srt ms -> Match (mk_var srt id, []) :: ms)
@@ -247,14 +307,15 @@ let add_pred_insts prog f =
           in
           let generators =
             (match ft with
-            | [] -> []
-            | _ -> [TermGenerator (ms, ft)])
+            | [] -> read_gens
+            | _ -> TermGenerator (ms, ft) :: read_gens)
           in
           Binder (Forall, vs, ag bvs f, generators @ ann)
       | f -> f
     in
     ag IdSet.empty f
-  in
+    (* end of add_generators *)
+  in 
   (* Annotates term generators in predicate bodies *)
   let annotate_term_generators pred f =
     let locals = locals_of_pred pred in
