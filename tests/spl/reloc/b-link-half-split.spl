@@ -65,7 +65,7 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
       xfpo := {};
     } else {
       xfm := xfm[x := xfm[x][x.next := fd({ k: K :: le(x.keys[x.len], k) ? 1 : 0 },
-                                          { k: K :: le(c.keys[c.len], k) ? 1 : 0 })]];
+                                          { k: K :: le(x.keys[x.len], k) ? 1 : 0 })]];
       xfpo := {x.next};
     }
     var xinrSet: Set<K> := { k: K :: xinf[x].ks[k] >= 1 || xinf[x].ir[k] >= 1 };

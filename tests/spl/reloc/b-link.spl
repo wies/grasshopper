@@ -1,6 +1,6 @@
 /** B+ tree implementation of the link template for linearizable dictionaries. */
 
-options "-abspreds -simplearrays -propreads -symbexec"
+options "-abspreds -simplearrays -propreads"
 
 include "flows.spl"
 include "array_util.spl"
@@ -58,6 +58,9 @@ struct Node {
   var keys: Array<K>;
   var ptrs: Array<Node>;
   var next: Node;
+  // Ghost fields:
+  var isFirst: Bool;
+  var rangeUb: K;
 }
 
 define unchanged(x) {
@@ -95,7 +98,7 @@ function fm_child(x: Node, i: Int) returns (f: FlowDom)
 function fm_next(x: Node, inff: Map<Node, FlowDom>) returns (f: FlowDom)
 {
   fd({ k: K :: x.next == null ? 0 : (le(x.keys[x.len], k) ? 1 : 0) },
-    {k: K :: inff[x].ir[k] >= 1 && inff[x].ks[k] <= 0 && x.next != null && le(x.keys[x.len], k) ? 1 : 0 })
+     { k: K :: inff[x].ir[k] >= 1 && inff[x].ks[k] <= 0 && x.next != null && le(x.keys[x.len], k) ? 1 : 0 })
 }
 
 
@@ -103,24 +106,36 @@ function fm_ind(x: Node, inff: Map<Node, FlowDom>, i: Int)
   returns (f: Map<Node, Map<Node, FlowDom>>)
 {
   { n: Node :: { n1: Node ::
-    i < 0 ? domZero()
-    : (n != x ? domZero()
+    n != x ? domZero()
+    : (i < 0 ? (n1 == x.next ? fm_next(x, inff) : domZero())
        : (i <= x.len && {n1} == {x.ptrs[i]} ? fm_child(x, i)
-          : (i == x.len + 1 && n1 == x.next ? fm_next(x, inff)
-             : fm_ind(x, inff, i - 1)[n][n1])))
+             : fm_ind(x, inff, i - 1)[n][n1]))
    }
-        @(matching f[n] yields fm_child(x, i))
-        @(matching f[n] yields fm_next(x, inff))
-          @(matching f[n] yields fm_ind(x, inff, i - 1)[n])
   }
 }
 
 function FPo_ind(x: Node, i: Int) returns (X: Set<Node>)
 {
-  i < 0 ? {}
+  i < 0 ? (x.next != null ? {x.next} : {})
     : (i <= x.len ? {x.ptrs[i]} ++ FPo_ind(x, i - 1)
-       : (i == x.len + 1 && x.next != null ? {x.next} ++ FPo_ind(x, i - 1)
-          : FPo_ind(x, i - 1)))
+       : FPo_ind(x, i - 1))
+}
+
+function inflow(x: Node) returns (i: Map<Node, FlowDom>)
+{
+  { n: Node :: n != x ? domZero()
+      : fd({k: K :: (x.isFirst || le(x.keys[0], k)) && (x.next == null || lt(k, x.rangeUb)) ? 1 : 0},
+           {k: K :: (x.isFirst || le(x.keys[0], k)) ? 1 : 0}) }
+}
+
+function nodeabs(x: Node, inff: Map<Node, FlowDom>, C: Set<K>) returns (a: NodeDom)
+{
+  nd(C, inrfnC({n: Node :: n != x ? {} : {k: K :: inff[x].ks[k] >= 1 || inff[x].ir[k] >= 1}}, {x}))
+}
+
+function int_ind(x: Node, i: Int) returns (I: Interface)
+{
+  int(inflow(x), nodeabs(x, inflow(x), {}), fm_ind(x, inflow(x), i), {x}, FPo_ind(x, i))
 }
 
 define hrep(x, I) {
@@ -136,31 +151,29 @@ define hrep(x, I) {
           && (forall k: K :: lt(k, x.keys[x.len]) ==> I.fm[x][x.next].ks[k] == 0
           @(matching x.next yields I.fm[x][x.next].ks[k])))
      || x.ptrs[0] != null  // Internal
-       && I.na.contents == {}
-       && (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i])
+       && I == int_ind(x, x.len)
+       && (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i] && x.ptrs[i] != x.next)
        && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j])
-       && (forall i: Int, k: K :: 0 <= i <= x.len ==> x.ptrs[i] != null && x.ptrs[i] in I.FPo)
-       && I.fm == fm_ind(x, I.inf, x.len + 1)
-       && I.FPo == FPo_ind(x, x.len + 1)
+       && (forall i: Int :: 0 <= i <= x.len ==> x.ptrs[i] != null && x.ptrs[i] in I.FPo)
       )
 }
 
 lemma lemma_fm(x: Node, Ix: Interface, k: K, i: Int, j: Int)
   requires hrep(x, Ix) &*& x.ptrs[0] != null
   ensures hrepSpatial(x) &*& unchanged(x)
+  ensures x.next != null && le(x.keys[x.len], k)
+    ==> fm_ind(x, Ix.inf, j)[x][x.next].ks[k] >= 1
   ensures i <= j && 0 <= i < x.len && (i == 0 || le(x.keys[i-1], k)) && lt(k, x.keys[i])
     ==> fm_ind(x, Ix.inf, j)[x][x.ptrs[i]].ks[k] >= 1
   ensures i <= j && i == x.len && x.next == null && (i == 0 || le(x.keys[i-1], k))
     ==> fm_ind(x, Ix.inf, j)[x][x.ptrs[i]].ks[k] >= 1
   ensures i <= j && i == x.len && x.next != null && (i == 0 || le(x.keys[i-1], k)) && lt(k, x.keys[i])
     ==> fm_ind(x, Ix.inf, j)[x][x.ptrs[i]].ks[k] >= 1
-  ensures x.len + 1 <= j && x.next != null && le(x.keys[x.len], k)
-    ==> fm_ind(x, Ix.inf, j)[x][x.next].ks[k] >= 1
 {
   if (j >= 0) {
     lemma_fm(x, Ix, k, i, j - 1);
-    pure assume false; // TODO
   }
+  pure assume false; // TODO
 }
 
 
@@ -200,12 +213,45 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
   ensures x.ptrs[0] == null  // x is a leaf
 {
   if (x.ptrs[0] != null) {
-    lemma_fm(x, Ix, k, i, x.len + 1);
+    lemma_fm(x, Ix, k, i, x.len);
     if (i < x.len && !lt(k, x.keys[i])) {
       keyset_implies_leaf(x, Ix, k, i + 1);
     }
   }
 }
+
+lemma compute_int(x: Node) returns (I: Interface)
+  requires hrepSpatial(x)
+  requires x.next != x
+    && 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
+    && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> lt(x.keys[i], x.keys[j]))
+    && (x.ptrs[0] != null ==>  // Internal
+       (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i] && x.ptrs[i] != x.next)
+       && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j])
+       && (forall i: Int :: 0 <= i <= x.len ==> x.ptrs[i] != null))
+  ensures hrep(x, I) &*& unchanged(x)
+  //  ensures intValid(I) == true
+{
+  if (x.ptrs[0] == null) {
+    var xfpo: Set<Node>;
+    var xfm := { n: Node :: { n1: Node :: domZero() } };
+    if (x.next == null) {
+      xfpo := {};
+    } else {
+      var f := fd({ k: K :: le(x.keys[x.len], k) ? 1 : 0 },
+                  { k: K :: le(x.keys[x.len], k) ? 1 : 0 });
+      xfm := xfm[x := xfm[x][x.next := f]];
+      xfpo := {x.next};
+    }
+    I := int(inflow(x), nodeabs(x, inflow(x), set_of_map(x.keys.map, 0, x.len)), xfm, {x}, xfpo);
+    pure assume I.na.contents == set_of_map(x.keys.map, 0, x.len); // TODO issue 30
+    pure assert x.next != null ==> (forall k: K :: le(x.keys[x.len], k) ==> I.fm[x][x.next].ks[k] == 1);
+  } else {
+    I := int_ind(x, x.len);
+  }
+  pure assume false;
+}
+
 
 /** Begin programs */
 
@@ -263,7 +309,7 @@ procedure findNext(x: Node, k: K, Ix: Interface)
     i := i + 1;
   }
 
-  lemma_fm(x, Ix, k, i, x.len + 1);
+  lemma_fm(x, Ix, k, i, x.len);
   if (i == x.len && x.next != null) {
     if (lt(k, x.keys[i]))
       n := x.ptrs[i];
