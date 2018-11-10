@@ -487,6 +487,9 @@ let replace_macros prog =
       (match IdMap.find_opt p prog.macro_decls with
       | Some macro ->
         let sm =
+          if List.length macro.m_args <> List.length es then
+            ProgError.error pos ("Wrong number of arguments to macro"
+              ^ (string_of_ident macro.m_name) ^ ".");
           List.combine macro.m_args es
           |> List.fold_left (fun sm (v, e) -> IdMap.add v e sm) IdMap.empty
         in
