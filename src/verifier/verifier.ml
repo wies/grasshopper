@@ -196,6 +196,7 @@ let add_pred_insts prog f =
         | App (sym, (_ :: _ as ts), srt) as t
           when (sym <> Read || IdSet.subset (fv_term t) aux_vs) &&
             (is_free_symbol sym || sym = Disjoint || sym = SubsetEq || srt <> Bool) ->
+            let acc =  List.fold_left ft acc ts in
             let fvs = fv_term t in
             let sts = List.fold_left subterms_term_acc TermSet.empty ts in
             let no_var_reads =
