@@ -1,6 +1,10 @@
 /** B+ tree implementation of the link template for linearizable dictionaries. */
 
 options "-abspreds -simplearrays -propreads"
+  // TODO: -symbexec doesn't work anymore because function definitions have field reads inside!!
+  // And normal mode doesn't work because things like lemma_int_valid_unfold take x as
+  // parameter and then it thinks x is part of the footprint or something?
+  // TODO try using the definition of the predicate intValid instead
 
 include "flows.spl"
 include "array_util.spl"
@@ -64,7 +68,7 @@ struct Node {
 }
 
 define unchanged(x) {
-  x.len == old(x.len) && x.next == old(x.next)
+  x.len == old(x.len) && x.next == old(x.next) && x.rangeUb == old(x.rangeUb)
     && x.keys == old(x.keys) && x.ptrs == old(x.ptrs)
     && x.keys.length == old(x.keys.length) && x.keys.map == old(x.keys.map)
     && x.ptrs.length == old(x.ptrs.length) && x.ptrs.map == old(x.ptrs.map)
@@ -143,6 +147,8 @@ define hrep(x, I) {
     && 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
     // Keys are sorted
     && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> lt(x.keys[i], x.keys[j]))
+    // Keys are less than rangeUb
+    && (forall i: Int :: 0 <= i < x.len ==> lt(x.keys[i], x.rangeUb))
     && (x.ptrs[0] == null  // Leaf
        && I.na.contents == set_of_map(x.keys.map, 0, x.len)
        && (x.next == null && I.FPo == {}
@@ -226,12 +232,13 @@ lemma compute_int(x: Node) returns (I: Interface)
   requires x.next != x
     && 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
     && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> lt(x.keys[i], x.keys[j]))
+    && (forall i: Int :: 0 <= i < x.len ==> lt(x.keys[i], x.rangeUb))
     && (x.ptrs[0] != null ==>  // Internal
        (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i] && x.ptrs[i] != x.next)
        && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j])
        && (forall i: Int :: 0 <= i <= x.len ==> x.ptrs[i] != null))
   ensures hrep(x, I) &*& unchanged(x)
-  //  ensures intValid(I) == true
+  ensures intValid(I) == true
 {
   if (x.ptrs[0] == null) {
     var xfpo: Set<Node>;
@@ -245,12 +252,52 @@ lemma compute_int(x: Node) returns (I: Interface)
       xfpo := {x.next};
     }
     I := int(inflow(x), nodeabs(x, inflow(x), set_of_map(x.keys.map, 0, x.len)), xfm, {x}, xfpo);
-    pure assert x.next != null ==> (forall k: K :: le(x.keys[x.len], k) ==> I.fm[x][x.next].ks[k] == 1);
-    pure assert x.next != null ==> (forall k: K :: lt(k, x.keys[x.len]) ==> I.fm[x][x.next].ks[k] == 0);
+
+    // TODO from definition of xfm
+    pure assume x.next != null ==> (forall k: K :: le(x.keys[x.len], k) ==> I.fm[x][x.next].ks[k] == 1);
+    pure assume x.next != null ==> (forall k: K :: lt(k, x.keys[x.len]) ==> I.fm[x][x.next].ks[k] == 0);
+    // TODO define outset inductively, and prove this from that definition
+    pure assume (forall k: K :: I.inf[x].ir[k] >= 1 && k !in outset(x, I.fm) ==> I.inf[x].ks[k] >= 1);
+    // TODO by induction, from keys sorted
+    pure assume forall k in set_of_map(x.keys.map, 0, x.len) :: le(x.keys[0], k) && lt(k, x.keys[x.len]);
+    // TODO by induction, from keys < x.rangeUb
+    pure assume forall k in set_of_map(x.keys.map, 0, x.len) :: lt(k, x.rangeUb);
+    // TODO from definition of inflow
+    pure assume forall k: K :: (x.isFirst || le(x.keys[0], k)) && (x.next == null || lt(k, x.rangeUb))
+      ==> I.inf[x].ks[k] == 1;
   } else {
     I := int_ind(x, x.len);
+    lemma_int_props(x, x.len);
+
+    // TODO define outset inductively, and prove this from that definition
+    pure assume (forall k: K :: I.inf[x].ir[k] >= 1 && k !in outset(x, I.fm) ==> I.inf[x].ks[k] >= 1);
   }
+  // TODO should follow from definition of nodeabs
+  pure assume (forall k: K :: (k in I.na.inr.inrfn[x]) == (I.inf[x].ks[k] >= 1 || I.inf[x].ir[k] >= 1));
+  // TODO should follow from definition of inflow
+  pure assume forall n: Node :: domLeq(domZero(), I.inf[n]);
+
+  
+  lemma_int_valid_fold(x, I);
 }
+
+// TODO by induction
+lemma lemma_int_props(x: Node, i: Int)
+  requires hrepSpatial(x)
+  requires (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i]) && x.next != x
+
+  ensures hrepSpatial(x) &*& unchanged(x)
+  ensures (forall k: K, y: Node :: fm_ind(x, inflow(x), i)[x][y].ir[k]
+    <= fm_ind(x, inflow(x), i)[x][y].ks[k])
+  ensures (forall k: K, y: Node, z: Node :: y == z
+    || fm_ind(x, inflow(x), i)[x][y].ks[k] == 0 || fm_ind(x, inflow(x), i)[x][z].ks[k] == 0)
+  ensures (forall k: K, y: Node :: inflow(x)[x].ir[k] >= 1 && inflow(x)[x].ks[k] <= 0
+     && fm_ind(x, inflow(x), i)[x][y].ks[k] >= 1 ==> fm_ind(x, inflow(x), i)[x][y].ir[k] >= 1)
+  ensures forall n: Node, n1: Node :: domLeq(domZero(), fm_ind(x, inflow(x), i)[n][n1])
+  ensures forall n: Node, n1: Node ::
+    (n !in {x} ==> domEq(fm_ind(x, inflow(x), i)[n][n1], domZero()))
+    && (n1 !in FPo_ind(x, i) ==> domEq(fm_ind(x, inflow(x), i)[n][n1], domZero()))
+  ensures forall n: Node :: n !in {x} || n !in FPo_ind(x, i)
 
 
 /** Begin programs */

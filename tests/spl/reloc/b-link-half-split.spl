@@ -7,11 +7,13 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
   returns (Ic1: Interface, Ix1: Interface, Icx1: Interface)
   requires hrep(c, Ic) &*& hrepSpatial(x)
   requires Ix.FP == {x} && domEq(Ix.inf[x], domZero()) == true && Ix.FPo == {}
+  requires Ix.na == nd({}, inrfnC({n: Node :: {}}, {x}))
   requires intValid(Ic) == true && intValid(Ix) == true
   requires intComp(Ic, Ix) == Icx && intValid(Icx) == true
   requires x.keys.length == 2*B && x.ptrs.length == 2*B
   requires c.len == 2 * B - 1
-  requires x !in Ic.FPo
+  // Follows from x being allocated freshly
+  requires x !in Ic.FPo && c.next != x && (forall i: Int :: 0 <= i <= c.len ==> x != c.ptrs[i])
 
   ensures hrep(c, Ic1) &*& hrep(x, Ix1)
   ensures intValid(Ic1) == true && intValid(Ix1) == true
@@ -28,8 +30,10 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     x.next := c.next;
     c.len := m;
     c.next := x;
+    x.rangeUb := c.rangeUb;
 
     lemma_int_valid_unfold(c, Ic);
+    pure assume false; // TODO
     
     // c's new interface
     var cfm := { n: Node :: { n1: Node :: domZero() } };
@@ -100,6 +104,21 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     arr_copy_node(c.ptrs, x.ptrs, m, 0, c.len - m + 1);
     x.len := m - 1;
     c.len := m - 1;
-    pure assume false;
+    x.next := c.next;
+    c.next := x;
+    x.rangeUb := c.rangeUb;
+
+    Ic1 := compute_int(c);
+    Ix1 := compute_int(x);
+    Icx1 := intComp(Ic1, Ix1);
+
+    pure assert Ic.na.contents == {} && Ix.na.contents == {};
+    pure assert Ic1.na.contents == {} && Ix1.na.contents == {};
+
+    // TODO have an ndJoin function and add this to definition of intComp
+    pure assume (forall Ic: Interface, Ix: Interface, Icx1: Interface ::
+      Icx == intComp(Ic, Ix) ==> Icx.na.contents == Ic.na.contents ++ Ix.na.contents);
+    // TODO continue
+    pure assume intEq(Icx, Icx1) == true;
   }
 }
