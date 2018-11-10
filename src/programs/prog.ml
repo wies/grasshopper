@@ -591,7 +591,8 @@ let modifies_proc prog proc =
         IdMap.fold 
           (fun id _ mods -> IdSet.add id mods) 
           prog.prog_vars IdSet.empty
-  | None -> 
+  | None ->
+      if proc.proc_is_lemma then IdSet.empty else
       IdMap.fold (fun id _ acc -> IdSet.add id acc) prog.prog_vars IdSet.empty
 
 let modifies_basic_cmd = function
