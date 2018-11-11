@@ -29,6 +29,7 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     c.len := m;
     c.next := x;
     x.rangeUb := c.rangeUb;
+    x.isFirst := false;
 
     lemma_int_valid_unfold(c, Ic);
     pure assume false; // TODO
@@ -105,6 +106,7 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     x.next := c.next;
     c.next := x;
     x.rangeUb := c.rangeUb;
+    x.isFirst := false;
 
     Ic1 := compute_int(c);
     Ix1 := compute_int(x);
@@ -128,7 +130,7 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
 // TODO
 lemma lemma_Icx1_eq_Icx(c: Node, x: Node, Ix: Interface, i: Int)
   returns (Icx: Interface, Icx1: Interface)
-  requires emptyInt(x, Ix) // TODO doesn't work even though the assert above works
+  //  requires emptyInt(x, Ix) // TODO doesn't work even though the assert above works
   requires hrepSpatial(c) &*& hrepSpatial(x)
   ensures hrepSpatial(c) &*& hrepSpatial(x) &*& unchanged(c) &*& unchanged(x)
   ensures Icx == intComp(int_ind(c, 2*B-1, i), Ix)

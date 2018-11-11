@@ -1,6 +1,6 @@
 /** B+ tree implementation of the link template for linearizable dictionaries. */
 
-options "-abspreds -simplearrays -propreads -symbexec"
+options "-abspreds -simplearrays -propreads"
   // TODO: -symbexec doesn't work anymore because function definitions have field reads inside!!
   // And normal mode doesn't work because things like lemma_int_valid_unfold take x as
   // parameter and then it thinks x is part of the footprint or something?
@@ -67,13 +67,14 @@ struct Node {
   var keys: Array<K>;
   var ptrs: Array<Node>;
   var next: Node;
-  // Ghost fields:
-  var isFirst: Bool;
-  var rangeUb: K;
+  ghost var isFirst: Bool;
+  ghost var rangeLb: K;
+  ghost var rangeUb: K;
 }
 
 define unchanged(x) {
-  x.len == old(x.len) && x.next == old(x.next) && x.rangeUb == old(x.rangeUb)
+  x.len == old(x.len) && x.next == old(x.next)
+    && x.rangeLb == old(x.rangeLb) && x.rangeUb == old(x.rangeUb)
     && x.keys == old(x.keys) && x.ptrs == old(x.ptrs)
     && x.keys.length == old(x.keys.length) && x.keys.map == old(x.keys.map)
     && x.ptrs.length == old(x.ptrs.length) && x.ptrs.map == old(x.ptrs.map)
@@ -133,8 +134,8 @@ function FPo_ind(x: Node, lenn: Int, i: Int) returns (X: Set<Node>)
 function inflow(x: Node) returns (i: Map<Node, FlowDom>)
 {
   { n: Node :: n != x ? domZero()
-      : fd({k: K :: (x.isFirst || le(x.keys[0], k)) && (x.next == null || lt(k, x.rangeUb)) ? 1 : 0},
-           {k: K :: (x.isFirst || le(x.keys[0], k)) ? 1 : 0}) }
+      : fd({k: K :: (x.isFirst || le(x.rangeLb, k)) && (x.next == null || lt(k, x.rangeUb)) ? 1 : 0},
+           {k: K :: (x.isFirst || le(x.rangeLb, k)) ? 1 : 0}) }
 }
 
 function nodeabs(x: Node, inff: Map<Node, FlowDom>, C: Set<K>) returns (a: NodeDom)
@@ -152,9 +153,11 @@ define hrep(x, I) {
     && 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
     // Keys are sorted
     && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> lt(x.keys[i], x.keys[j]))
-    // Keys are less than rangeUb
-    && (forall i: Int :: 0 <= i < x.len ==> lt(x.keys[i], x.rangeUb))
+    // Keys are in the range
+    && (forall i: Int :: 0 <= i < x.len && !x.isFirst ==> le(x.rangeLb, x.keys[i]))
+    && (forall i: Int :: 0 <= i < x.len && x.next != null ==> lt(x.keys[i], x.rangeUb))
     && (x.ptrs[0] == null  // Leaf
+       && I.inf == inflow(x)
        && I.na.contents == set_of_map(x.keys.map, 0, x.len)
        && (x.next == null && I.FPo == {}
           || x.next != null && I.FPo == {x.next}
@@ -237,7 +240,8 @@ lemma compute_int(x: Node) returns (I: Interface)
   requires x.next != x
     && 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
     && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> lt(x.keys[i], x.keys[j]))
-    && (forall i: Int :: 0 <= i < x.len ==> lt(x.keys[i], x.rangeUb))
+    && (forall i: Int :: 0 <= i < x.len && !x.isFirst ==> le(x.rangeLb, x.keys[i]))
+    && (forall i: Int :: 0 <= i < x.len && x.next != null ==> lt(x.keys[i], x.rangeUb))
     && (x.ptrs[0] != null ==>  // Internal
        (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i] && x.ptrs[i] != x.next)
        && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j])
@@ -266,7 +270,7 @@ lemma compute_int(x: Node) returns (I: Interface)
     // TODO by induction, from keys sorted
     pure assume forall k in set_of_map(x.keys.map, 0, x.len) :: le(x.keys[0], k) && lt(k, x.keys[x.len]);
     // TODO by induction, from keys < x.rangeUb
-    pure assume forall k in set_of_map(x.keys.map, 0, x.len) :: lt(k, x.rangeUb);
+    pure assume forall k in set_of_map(x.keys.map, 0, x.len) :: x.next == null || lt(k, x.rangeUb);
     // TODO from definition of inflow
     pure assume forall k: K :: (x.isFirst || le(x.keys[0], k)) && (x.next == null || lt(k, x.rangeUb))
       ==> I.inf[x].ks[k] == 1;
@@ -427,6 +431,8 @@ procedure insert(x: Node, k: K, Ix: Interface)
     lemma_int_valid_unfold(x, Ix);
     lemma_int_valid_fold(x, Ix1);
 
+    // TODO the problem with this is again that symbexec can't handle it when function bodies
+    // access the heap. Try standard backend.
     return true, k !in Ix.na.contents, Ix1;
   } else {
     return false, false, Ix;
