@@ -326,14 +326,9 @@ procedure init() returns (x: Node, I: Interface)
   arr_init_node(x.ptrs, 2*B, null);
   x.len := 0;
   x.next := null;
+  x.isFirst := true;
   
-  var xkc := { k: K :: le(bottom, k) && lt(k, top) ? 1 : 0 };
-  var xir := { k: K :: le(bottom, k) && lt(k, top) ? 1 : 0 }; // TODO, really?
-  var xfm := { n: Node :: { n1: Node :: domZero } };
-  var xinf := { n: Node :: n == x ? fd(xkc, xir) : domZero };
-  var inrSet: Set<K> := { k: K :: xinf[x].ks[k] >= 1 || xinf[x].ir[k] >= 1 };
-  var i := inrfnC({ n: Node :: n == x ? inrSet : {} }, {x});
-  I := int(xinf, nd({}, i), xfm, {x}, {});
+  I := compute_int(x);
 }
 
 /** findNext */
