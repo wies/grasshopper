@@ -104,6 +104,8 @@ flows:b-link-tree_member   tests/spl/reloc/b-link.spl           'member'   pass
 flows:b-link-tree_insert   tests/spl/reloc/b-link.spl           'insert'   pass
 flows:b-link-tree_delete   tests/spl/reloc/b-link.spl           'delete'   pass
 flows:b-link-tree_keyset   tests/spl/reloc/b-link.spl           'keyset_implies_leaf'     pass
+flows:b-link-tree_lemma_fm   tests/spl/reloc/b-link.spl         'lemma_fm'     pass
+flows:b-link-tree_compute_int   tests/spl/reloc/b-link.spl      'compute_int'     pass
 flows:hashtbl_findNext  tests/spl/reloc/hashtbl.spl             'findNext' pass
 flows:hashtbl_member    tests/spl/reloc/hashtbl.spl             'member'   pass
 flows:hashtbl_insert    tests/spl/reloc/hashtbl.spl             'insert'   pass

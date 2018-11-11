@@ -262,16 +262,7 @@ lemma compute_int(x: Node) returns (I: Interface)
       // TODO define outset inductively, and prove this from that definition
       pure assume (forall k: K :: I.inf[x].ir[k] >= 1 && k !in outset(x, I.fm) ==> I.inf[x].ks[k] >= 1);
 
-      //  lemma_int_valid_fold(x, I);
-      pure assert I != intUndef
-        && (forall n: Node, n1: Node ::
-           (n !in I.FP ==> domEq(I.inf[n], domZero()) && domEq(I.fm[n][n1], domZero()))
-           && (n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero())))
-        && (forall n: Node :: n !in I.FP || n !in I.FPo)
-        && (forall n: Node :: domLeq(domZero(), I.inf[n]))
-        && (forall n: Node, n1: Node :: domLeq(domZero(), I.fm[n][n1]))
-        && nu(x, I);
-      pure assume intValid(I) == true;
+      lemma_int_valid_fold(x, I);
       return I;
     } else {
       var f := fd({ k: K :: le(x.keys[x.len], k) ? 1 : 0 },
@@ -283,16 +274,7 @@ lemma compute_int(x: Node) returns (I: Interface)
       // TODO define outset inductively, and prove this from that definition
       pure assume (forall k: K :: I.inf[x].ir[k] >= 1 && k !in outset(x, I.fm) ==> I.inf[x].ks[k] >= 1);
 
-      //  lemma_int_valid_fold(x, I);
-      pure assert I != intUndef
-        && (forall n: Node, n1: Node ::
-           (n !in I.FP ==> domEq(I.inf[n], domZero()) && domEq(I.fm[n][n1], domZero()))
-           && (n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero())))
-        && (forall n: Node :: n !in I.FP || n !in I.FPo)
-        && (forall n: Node :: domLeq(domZero(), I.inf[n]))
-        && (forall n: Node, n1: Node :: domLeq(domZero(), I.fm[n][n1]))
-        && nu(x, I);
-      pure assume intValid(I) == true;
+      lemma_int_valid_fold(x, I);
       return I;
     }
   } else {
@@ -302,16 +284,7 @@ lemma compute_int(x: Node) returns (I: Interface)
     // TODO define outset inductively, and prove this from that definition
     pure assume (forall k: K :: I.inf[x].ir[k] >= 1 && k !in outset(x, I.fm) ==> I.inf[x].ks[k] >= 1);
 
-    //  lemma_int_valid_fold(x, I);
-    pure assert I != intUndef
-    && (forall n: Node, n1: Node ::
-       (n !in I.FP ==> domEq(I.inf[n], domZero()) && domEq(I.fm[n][n1], domZero()))
-       && (n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero())))
-    && (forall n: Node :: n !in I.FP || n !in I.FPo)
-    && (forall n: Node :: domLeq(domZero(), I.inf[n]))
-    && (forall n: Node, n1: Node :: domLeq(domZero(), I.fm[n][n1]))
-    && nu(x, I);
-    pure assume intValid(I) == true;
+    lemma_int_valid_fold(x, I);
     return I;
   }
 }
