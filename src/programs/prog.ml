@@ -593,7 +593,11 @@ let modifies_proc prog proc =
           prog.prog_vars IdSet.empty
   | None ->
       if proc.proc_is_lemma then IdSet.empty else
-      IdMap.fold (fun id _ acc -> IdSet.add id acc) prog.prog_vars IdSet.empty
+      IdMap.fold (fun id decl acc ->
+        match decl.var_sort with
+        | Set (Loc srt) when id = alloc_id srt && not @@ SortSet.mem srt proc.proc_contract.contr_footprint_sorts ->
+            acc
+        | _ -> IdSet.add id acc) prog.prog_vars IdSet.empty
 
 let modifies_basic_cmd = function
   | Assign ac -> id_set_of_list ac.assign_lhs
