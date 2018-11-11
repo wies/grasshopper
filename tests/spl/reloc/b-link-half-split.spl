@@ -18,6 +18,10 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
   ensures intComp(Ic1, Ix1) == Icx1 && intEq(Icx, Icx1) == true
   ensures Icx.na.contents == Icx1.na.contents
 {
+  // Save old values of c
+  var cnext, ckeys, cptrs, clen, crangeLb, crangeUb :=
+    c.next, c.keys.map, c.ptrs.map, c.len, c.rangeLb, c.rangeUb;
+
   var m := (c.len + 1) / 2;
   var k := c.keys[m - 1];
 
@@ -30,81 +34,18 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     c.next := x;
     x.rangeUb := c.rangeUb;
     x.isFirst := false;
-
-    lemma_int_valid_unfold(c, Ic);
-    pure assume false; // TODO
-    
-    // c's new interface
-    var cfm := { n: Node :: { n1: Node :: domZero() } };
-    cfm := cfm[c := cfm[c][x := fd({ k: K :: le(c.keys[c.len], k) ? 1 : 0 },
-                                   { k: K :: le(c.keys[c.len], k) ? 1 : 0 })]];
-    Ic1 := int(Ic.inf, nd(set_of_map(c.keys.map, 0, c.len), Ic.na.inr), cfm, {c}, {x});
-
-    // TODO things to prove
-    // Should follow from definition of Ic1:
-    pure assume forall k: K :: le(c.keys[c.len], k) ==> Ic1.fm[c][c.next].ks[k] == 1;
-    pure assume forall k: K :: !le(c.keys[c.len], k) ==> Ic1.fm[c][c.next].ks[k] == 0;
-    // Prove by induction on keys and definition of outset
-    pure assume forall k: K :: k in outset(c, Ic.fm) ==> k in outset(c, Ic1.fm);
-    // Prove by induction using arr_copy definition:
-    pure assume forall k: K :: k in set_of_map(c.keys.map, 0, c.len)
-    ==> k in Ic.na.contents // == set_of_map(old(c.keys.map), 0, old(c.len))
-         @(matching k in Ic1.na.contents yields Ic.inf[c].ks[k]);
-    // Prove by induction using set_of_map definition
-    //    pure assume forall k: K :: k in Ic1.na.contents ==> le(x.keys[0], k);
-    pure assume forall k: K :: k in Ic1.na.contents ==> lt(k, c.keys[c.len]);
-
-    lemma_int_valid_fold(c, Ic1);
-    assert hrepSpatial(x) &*& hrep(c, Ic1);
-    
-
-    // x's new interface
-    var xkc := { k: K :: le(x.keys[0], k) && Ic.inf[c].ks[k] >= 1 ? 1 : 0 };
-    var xir := { k: K :: 0 };
-    var xinf := { n: Node :: n == x ? fd(xkc, xir) : domZero() };
-    var xfpo: Set<Node>;
-    var xfm := { n: Node :: { n1: Node :: domZero() } };
-    if (x.next == null) {
-      xfpo := {};
-    } else {
-      xfm := xfm[x := xfm[x][x.next := fd({ k: K :: le(x.keys[x.len], k) ? 1 : 0 },
-                                          { k: K :: le(x.keys[x.len], k) ? 1 : 0 })]];
-      xfpo := {x.next};
-    }
-    var xinrSet: Set<K> := { k: K :: xinf[x].ks[k] >= 1 || xinf[x].ir[k] >= 1 };
-    var xi := inrfnC({ n: Node :: n == x ? xinrSet : {} }, {x});
-    Ix1 := int(xinf, nd(set_of_map(x.keys.map, 0, x.len), xi), xfm, {x}, xfpo);
-
-    // TODO things to prove
-    // Should follow from definition of Ix1:
-    pure assume domLeq(domZero(), Ix1.inf[x]);
-    pure assume forall k: K :: le(x.keys[0], k) && Ic.inf[c].ks[k] >= 1 ==> Ix1.inf[x].ks[k] >= 1;
-    pure assume forall k: K :: x.next != null && le(x.keys[x.len], k) ==> Ix1.fm[x][x.next].ks[k] == 1;
-    pure assume forall k: K :: x.next != null && !le(x.keys[x.len], k) ==> Ix1.fm[x][x.next].ks[k] == 0;
-    pure assume forall k: K :: x.next != null && le(x.keys[x.len], k) ==> Ix1.fm[x][x.next].ir[k] == 1;
-    pure assume forall k: K :: x.next != null && !le(x.keys[x.len], k) ==> Ix1.fm[x][x.next].ir[k] == 0;
-    // Prove by induction using arr_copy definition:
-    pure assume forall k: K :: k in set_of_map(x.keys.map, 0, x.len)
-      ==> k in Ic.na.contents // == set_of_map(c.keys.map, 0, old(c.len))
-         @(matching k in Ix1.na.contents yields Ic.inf[c].ks[k]);
-    // Prove by induction using set_of_map definition
-    pure assume forall k: K :: k in Ix1.na.contents ==> le(x.keys[0], k);
-    pure assume forall k: K :: k in Ix1.na.contents ==> lt(k, x.keys[x.len]);
-
-    lemma_int_valid_fold(x, Ix1);
-    assert hrepSpatial(c) &*& hrep(x, Ix1);
-
-
     pure assume false;
-
-    
   } else {  // Internal node
+    lemma_int_stable(c, 2*B);
+    pure assert Ic == int_ind(c, cnext, ckeys, cptrs, clen, crangeLb, crangeUb, 2*B);
+    
     arr_copy(c.keys, x.keys, m, 0, c.len - m + 1);
     arr_copy_node(c.ptrs, x.ptrs, m, 0, c.len - m + 1);
     x.len := m - 1;
     c.len := m - 1;
     x.next := c.next;
     c.next := x;
+    x.rangeLb := x.keys[0];
     x.rangeUb := c.rangeUb;
     x.isFirst := false;
 
@@ -113,28 +54,35 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
 
     pure assert Ix.na == nd({}, inrfnC({n: Node :: {}}, {x}));
 
-    Icx, Icx1 := lemma_Icx1_eq_Icx(c, x, Ix, 2*B);
-    lemma_int_stable(c, 2*B);
-    lemma_int_stable(x, B);
-    pure assert Icx1 == intComp(Ic1, Ix1);
+    Ic, Ic1, Ix1, Icx, Icx1 := lemma_Icx1_eq_Icx(c, cnext, ckeys, cptrs, clen,
+      crangeLb, crangeUb, x, Ix, 2*B-1);
+    lemma_int_stable(c, 2*B-1);
+    lemma_int_stable(x, B-1);
 
     // TODO have an ndJoin function and add this to definition of intComp
-    pure assume (forall Ic: Interface, Ix: Interface, Icx1: Interface ::
-      Icx == intComp(Ic, Ix) ==> Icx.na.contents == Ic.na.contents ++ Ix.na.contents);
-
-    // TODO continue
-    pure assume intEq(Icx, Icx1) == true;
+    pure assume Icx.na.contents == Ic.na.contents ++ Ix.na.contents
+    && Icx1.na.contents == Ic1.na.contents ++ Ix1.na.contents;
   }
 }
 
+// The fields cnext etc are the old values
 // TODO
-lemma lemma_Icx1_eq_Icx(c: Node, x: Node, Ix: Interface, i: Int)
-  returns (Icx: Interface, Icx1: Interface)
+lemma lemma_Icx1_eq_Icx(c: Node, cnext: Node, ckeys: Map<Int, K>, cptrs: Map<Int, Node>, clen: Int,
+                        crangeLb: K, crangeUb: K, x: Node, Ix: Interface, i: Int)
+  returns (Ic: Interface, Ic1: Interface, Ix1: Interface, Icx: Interface, Icx1: Interface)
   //  requires emptyInt(x, Ix) // TODO doesn't work even though the assert above works
   requires hrepSpatial(c) &*& hrepSpatial(x)
+
   ensures hrepSpatial(c) &*& hrepSpatial(x) &*& unchanged(c) &*& unchanged(x)
-  ensures Icx == intComp(int_ind(c, 2*B-1, i), Ix)
-  ensures Icx1 == intComp(int_ind(c, c.len, i), int_ind(x, x.len, i - B))
+
+  ensures Ic == int_ind(c, cnext, ckeys, cptrs, clen, crangeLb, crangeUb, i)
+  ensures Ic1 == int_ind(c, c.next, c.keys.map, c.ptrs.map, c.len, c.rangeLb, c.rangeUb, i)
+  ensures Ix1 == int_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, x.rangeLb, x.rangeUb, i - B)
+  ensures Icx == intComp(Ic, Ix) && Icx != intUndef
+  ensures Icx1 == intComp(Ic1, Ix1) && Icx1 != intUndef
+
+  ensures x !in Ic1.FPo && c !in Ix1.FPo
+  ensures Ic.FPo == Ic1.FPo ++ Ix1.FPo
   ensures (forall x: Node :: domEq(Icx.inf[x], Icx1.inf[x]))
   ensures (forall x: Node, y: Node ::
     domEq(domMult(Icx.inf[x], Icx.fm[x][y]), domMult(Icx1.inf[x], Icx1.fm[x][y])))
