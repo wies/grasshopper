@@ -5,9 +5,7 @@ options "-symbexec"
 
 procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interface)
   returns (Ic1: Interface, Ix1: Interface, Icx1: Interface)
-  requires hrep(c, Ic) &*& hrepSpatial(x)
-  requires Ix.FP == {x} && domEq(Ix.inf[x], domZero()) == true && Ix.FPo == {}
-  requires Ix.na == nd({}, inrfnC({n: Node :: {}}, {x}))
+  requires hrep(c, Ic) &*& hrepSpatial(x) &*& emptyInt(x, Ix)
   requires intValid(Ic) == true && intValid(Ix) == true
   requires intComp(Ic, Ix) == Icx && intValid(Icx) == true
   requires x.keys.length == 2*B && x.ptrs.length == 2*B
@@ -110,15 +108,31 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
 
     Ic1 := compute_int(c);
     Ix1 := compute_int(x);
-    Icx1 := intComp(Ic1, Ix1);
 
-    pure assert Ic.na.contents == {} && Ix.na.contents == {};
-    pure assert Ic1.na.contents == {} && Ix1.na.contents == {};
+    pure assert Ix.na == nd({}, inrfnC({n: Node :: {}}, {x}));
+
+    Icx, Icx1 := lemma_Icx1_eq_Icx(c, x, Ix, 2*B);
+    lemma_int_stable(c, 2*B);
+    lemma_int_stable(x, B);
+    pure assert Icx1 == intComp(Ic1, Ix1);
 
     // TODO have an ndJoin function and add this to definition of intComp
     pure assume (forall Ic: Interface, Ix: Interface, Icx1: Interface ::
       Icx == intComp(Ic, Ix) ==> Icx.na.contents == Ic.na.contents ++ Ix.na.contents);
+
     // TODO continue
     pure assume intEq(Icx, Icx1) == true;
   }
 }
+
+// TODO
+lemma lemma_Icx1_eq_Icx(c: Node, x: Node, Ix: Interface, i: Int)
+  returns (Icx: Interface, Icx1: Interface)
+  requires emptyInt(x, Ix) // TODO doesn't work even though the assert above works
+  requires hrepSpatial(c) &*& hrepSpatial(x)
+  ensures hrepSpatial(c) &*& hrepSpatial(x) &*& unchanged(c) &*& unchanged(x)
+  ensures Icx == intComp(int_ind(c, 2*B-1, i), Ix)
+  ensures Icx1 == intComp(int_ind(c, c.len, i), int_ind(x, x.len, i - B))
+  ensures (forall x: Node :: domEq(Icx.inf[x], Icx1.inf[x]))
+  ensures (forall x: Node, y: Node ::
+    domEq(domMult(Icx.inf[x], Icx.fm[x][y]), domMult(Icx1.inf[x], Icx1.fm[x][y])))

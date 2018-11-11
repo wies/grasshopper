@@ -1,6 +1,6 @@
 /** B+ tree implementation of the link template for linearizable dictionaries. */
 
-options "-abspreds -simplearrays -propreads"
+options "-abspreds -simplearrays -propreads -symbexec"
   // TODO: -symbexec doesn't work anymore because function definitions have field reads inside!!
   // And normal mode doesn't work because things like lemma_int_valid_unfold take x as
   // parameter and then it thinks x is part of the footprint or something?
@@ -52,6 +52,11 @@ pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
   (forall k: K :: k in a1.contents ==> k in a2.contents)
     && (a2.inr == inrfnUndef || a1.inr != inrfnUndef && a2.inr != inrfnUndef
        && (forall x: Node :: x in a1.inr.inrdom ==> x in a2.inr.inrdom && a1.inr.inrfn[x] == a2.inr.inrfn[x]))
+}
+
+define emptyInt(x, Ix) {
+  Ix.FP == {x} && domEq(Ix.inf[x], domZero()) == true && Ix.FPo == {}
+  && Ix.na == nd({}, inrfnC({n: Node :: {}}, {x}))
 }
 
 
@@ -106,23 +111,23 @@ function fm_next(x: Node, inff: Map<Node, FlowDom>) returns (f: FlowDom)
 }
 
 
-function fm_ind(x: Node, inff: Map<Node, FlowDom>, i: Int)
+function fm_ind(x: Node, inff: Map<Node, FlowDom>, lenn: Int, i: Int)
   returns (f: Map<Node, Map<Node, FlowDom>>)
 {
   { n: Node :: { n1: Node ::
     n != x ? domZero()
     : (i < 0 ? (n1 == x.next ? fm_next(x, inff) : domZero())
        : (i <= x.len && {n1} == {x.ptrs[i]} ? fm_child(x, i)
-             : fm_ind(x, inff, i - 1)[n][n1]))
+          : fm_ind(x, inff, lenn, i - 1)[n][n1]))
    }
   }
 }
 
-function FPo_ind(x: Node, i: Int) returns (X: Set<Node>)
+function FPo_ind(x: Node, lenn: Int, i: Int) returns (X: Set<Node>)
 {
   i < 0 ? (x.next != null ? {x.next} : {})
-    : (i <= x.len ? {x.ptrs[i]} ++ FPo_ind(x, i - 1)
-       : FPo_ind(x, i - 1))
+    : (i <= x.len ? {x.ptrs[i]} ++ FPo_ind(x, lenn, i - 1)
+       : FPo_ind(x, lenn, i - 1))
 }
 
 function inflow(x: Node) returns (i: Map<Node, FlowDom>)
@@ -137,9 +142,9 @@ function nodeabs(x: Node, inff: Map<Node, FlowDom>, C: Set<K>) returns (a: NodeD
   nd(C, inrfnC({n: Node :: n != x ? {} : {k: K :: inff[x].ks[k] >= 1 || inff[x].ir[k] >= 1}}, {x}))
 }
 
-function int_ind(x: Node, i: Int) returns (I: Interface)
+function int_ind(x: Node, lenn: Int, i: Int) returns (I: Interface)
 {
-  int(inflow(x), nodeabs(x, inflow(x), {}), fm_ind(x, inflow(x), i), {x}, FPo_ind(x, i))
+  int(inflow(x), nodeabs(x, inflow(x), {}), fm_ind(x, inflow(x), lenn, i), {x}, FPo_ind(x, x.len, i))
 }
 
 define hrep(x, I) {
@@ -157,7 +162,7 @@ define hrep(x, I) {
           && (forall k: K :: lt(k, x.keys[x.len]) ==> I.fm[x][x.next].ks[k] == 0
           @(matching x.next yields I.fm[x][x.next].ks[k])))
      || x.ptrs[0] != null  // Internal
-       && I == int_ind(x, x.len)
+       && I == int_ind(x, x.len, x.len)
        && (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i] && x.ptrs[i] != x.next)
        && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j])
        && (forall i: Int :: 0 <= i <= x.len ==> x.ptrs[i] != null)
@@ -168,13 +173,13 @@ lemma lemma_fm(x: Node, Ix: Interface, k: K, i: Int, j: Int)
   requires hrep(x, Ix) &*& x.ptrs[0] != null
   ensures hrepSpatial(x) &*& unchanged(x)
   ensures x.next != null && le(x.keys[x.len], k)
-    ==> fm_ind(x, Ix.inf, j)[x][x.next].ks[k] >= 1
+    ==> fm_ind(x, Ix.inf, x.len, j)[x][x.next].ks[k] >= 1
   ensures i <= j && 0 <= i < x.len && (i == 0 || le(x.keys[i-1], k)) && lt(k, x.keys[i])
-    ==> fm_ind(x, Ix.inf, j)[x][x.ptrs[i]].ks[k] >= 1
+    ==> fm_ind(x, Ix.inf, x.len, j)[x][x.ptrs[i]].ks[k] >= 1
   ensures i <= j && i == x.len && x.next == null && (i == 0 || le(x.keys[i-1], k))
-    ==> fm_ind(x, Ix.inf, j)[x][x.ptrs[i]].ks[k] >= 1
+    ==> fm_ind(x, Ix.inf, x.len, j)[x][x.ptrs[i]].ks[k] >= 1
   ensures i <= j && i == x.len && x.next != null && (i == 0 || le(x.keys[i-1], k)) && lt(k, x.keys[i])
-    ==> fm_ind(x, Ix.inf, j)[x][x.ptrs[i]].ks[k] >= 1
+    ==> fm_ind(x, Ix.inf, x.len, j)[x][x.ptrs[i]].ks[k] >= 1
 {
   if (j >= 0) {
     lemma_fm(x, Ix, k, i, j - 1);
@@ -266,7 +271,7 @@ lemma compute_int(x: Node) returns (I: Interface)
     pure assume forall k: K :: (x.isFirst || le(x.keys[0], k)) && (x.next == null || lt(k, x.rangeUb))
       ==> I.inf[x].ks[k] == 1;
   } else {
-    I := int_ind(x, x.len);
+    I := int_ind(x, x.len, x.len);
     lemma_int_props(x, x.len);
 
     // TODO define outset inductively, and prove this from that definition
@@ -287,17 +292,23 @@ lemma lemma_int_props(x: Node, i: Int)
   requires (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i]) && x.next != x
 
   ensures hrepSpatial(x) &*& unchanged(x)
-  ensures (forall k: K, y: Node :: fm_ind(x, inflow(x), i)[x][y].ir[k]
-    <= fm_ind(x, inflow(x), i)[x][y].ks[k])
+  ensures (forall k: K, y: Node :: fm_ind(x, inflow(x), x.len, i)[x][y].ir[k]
+    <= fm_ind(x, inflow(x), x.len, i)[x][y].ks[k])
   ensures (forall k: K, y: Node, z: Node :: y == z
-    || fm_ind(x, inflow(x), i)[x][y].ks[k] == 0 || fm_ind(x, inflow(x), i)[x][z].ks[k] == 0)
+    || fm_ind(x, inflow(x), x.len, i)[x][y].ks[k] == 0 || fm_ind(x, inflow(x), x.len, i)[x][z].ks[k] == 0)
   ensures (forall k: K, y: Node :: inflow(x)[x].ir[k] >= 1 && inflow(x)[x].ks[k] <= 0
-     && fm_ind(x, inflow(x), i)[x][y].ks[k] >= 1 ==> fm_ind(x, inflow(x), i)[x][y].ir[k] >= 1)
-  ensures forall n: Node, n1: Node :: domLeq(domZero(), fm_ind(x, inflow(x), i)[n][n1])
+     && fm_ind(x, inflow(x), x.len, i)[x][y].ks[k] >= 1 ==> fm_ind(x, inflow(x), x.len, i)[x][y].ir[k] >= 1)
+  ensures forall n: Node, n1: Node :: domLeq(domZero(), fm_ind(x, inflow(x), x.len, i)[n][n1])
   ensures forall n: Node, n1: Node ::
-    (n !in {x} ==> domEq(fm_ind(x, inflow(x), i)[n][n1], domZero()))
-    && (n1 !in FPo_ind(x, i) ==> domEq(fm_ind(x, inflow(x), i)[n][n1], domZero()))
-  ensures forall n: Node :: n !in {x} || n !in FPo_ind(x, i)
+    (n !in {x} ==> domEq(fm_ind(x, inflow(x), x.len, i)[n][n1], domZero()))
+    && (n1 !in FPo_ind(x, x.len, i) ==> domEq(fm_ind(x, inflow(x), x.len, i)[n][n1], domZero()))
+  ensures forall n: Node :: n !in {x} || n !in FPo_ind(x, x.len, i)
+
+// TODO by induction
+lemma lemma_int_stable(x: Node, i: Int)
+  requires hrepSpatial(x)
+  ensures hrepSpatial(x) &*& unchanged(x)
+  ensures i > x.len ==> int_ind(x, x.len, i) == int_ind(x, x.len, x.len)
 
 
 /** Begin programs */
