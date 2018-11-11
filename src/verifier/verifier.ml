@@ -257,6 +257,17 @@ let add_pred_insts prog f =
                             let read_pt = mk_read ptm read_vars in
                             let read_t = mk_read t read_vars in
                             [read_pt, read_t]
+                        | Map (dsrts, rsrt), App (Known, [App (_, _, Map (ret_dsrts, ret_rsrt)) as ptm], _)
+                          when srt = ret_rsrt ->
+                            let read_vars =
+                              List.map (fun srt -> mk_var srt (fresh_ident "?i")) dsrts
+                            in        
+                            let read_ret_vars =
+                              List.map (fun srt -> mk_var srt (fresh_ident "?j")) ret_dsrts
+                            in
+                            let read_t = mk_read t read_vars in
+                            let read_pt = mk_read (mk_read ptm read_ret_vars) read_vars in
+                            [read_pt, read_t]
                         | Adt (tid, adts), App (Known, [App (_, _, Map (ret_dsrts, Adt (ret_tid, _))) as ptm], _)
                           when tid = ret_tid ->
                             let cstrs = List.assoc tid adts in
