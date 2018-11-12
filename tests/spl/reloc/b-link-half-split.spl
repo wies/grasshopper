@@ -70,8 +70,9 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
 lemma lemma_Icx1_eq_Icx(c: Node, cnext: Node, ckeys: Map<Int, K>, cptrs: Map<Int, Node>, clen: Int,
                         crangeLb: K, crangeUb: K, x: Node, Ix: Interface, i: Int)
   returns (Ic: Interface, Ic1: Interface, Ix1: Interface, Icx: Interface, Icx1: Interface)
-  //  requires emptyInt(x, Ix) // TODO doesn't work even though the assert above works
+  requires emptyInt(x, Ix) // TODO doesn't work even though the assert above works
   requires hrepSpatial(c) &*& hrepSpatial(x)
+  requires c.ptrs[0] != null && cnext != x && (forall i: Int :: 0 <= i <= clen ==> x != cptrs[i])
 
   ensures hrepSpatial(c) &*& hrepSpatial(x) &*& unchanged(c) &*& unchanged(x)
 
@@ -86,3 +87,18 @@ lemma lemma_Icx1_eq_Icx(c: Node, cnext: Node, ckeys: Map<Int, K>, cptrs: Map<Int
   ensures (forall x: Node :: domEq(Icx.inf[x], Icx1.inf[x]))
   ensures (forall x: Node, y: Node ::
     domEq(domMult(Icx.inf[x], Icx.fm[x][y]), domMult(Icx1.inf[x], Icx1.fm[x][y])))
+{
+  Ic := int_ind(c, cnext, ckeys, cptrs, clen, crangeLb, crangeUb, i);
+  Ic1 := int_ind(c, c.next, c.keys.map, c.ptrs.map, c.len, c.rangeLb, c.rangeUb, i);
+  Ix1 := int_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, x.rangeLb, x.rangeUb, i - B);
+
+  // TODO need to prove that any int_ind is valid
+  Icx := lemma_int_comp_fold(c, Ic, x, Ix);
+  Icx1 := lemma_int_comp_fold(c, Ic1, x, Ix1);
+  
+  if (i >= 0) {
+    var IIc: Interface, IIc1: Interface, IIx1: Interface, IIcx: Interface, IIcx1: Interface;
+    IIc, IIc1, IIx1, IIcx, IIcx1 := lemma_Icx1_eq_Icx(c, cnext, ckeys, cptrs, clen,
+      crangeLb, crangeUb, x, Ix, i - 1);
+  }
+}

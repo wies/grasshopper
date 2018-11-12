@@ -156,7 +156,7 @@ define hrep(x, I) {
   hrepSpatial(x) &*& I.FP == {x} &*& x.next != x
     && 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
     // Keys are sorted
-    && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> lt(x.keys[i], x.keys[j]))
+    && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> lt(x.keys[i], x.keys[j]))
     // Keys are in the range
     && (forall i: Int :: 0 <= i < x.len ==> le(x.rangeLb, x.keys[i]) && lt(x.keys[i], x.rangeUb))
     && (x.ptrs[0] == null  // Leaf
@@ -200,11 +200,15 @@ lemma lemma_fm(x: Node, Ix: Interface, i: Int, j: Int)
 }
 
 
-// TODO probably define this inductively too
 // TODO findNext's spec should use this. Also, make sure you can prove whatever Coq relies on this.
-pure function outset(x: Node, flmp: Map<Node, Map<Node, FlowDom>>) returns (O: Set<K>)
-  //  ensures forall k: K :: k in O ==> (exists y: Node :: flmp[x][y].ks[k] > 0 @(matching O yields flmp[x][y].ks[k]))
-  //{ { k: K :: exists y: Node :: flmp[x][y].ks[k] > 0 } }  // TODO why not? (see hashtbl.findNext)
+pure function outset(x: Node, xnext: Node, xkeys: Map<Int, K>, xlen: Int, i: Int)
+  returns (O: Set<K>)
+{
+  i < 0 ? { k: K :: fm_next(x, xnext, xkeys, xlen).ks[k] == 1 }
+  : (i <= xlen ? { k: K :: fm_child(x, xnext, xkeys, xlen, i).ks[k] == 1 }
+                ++ outset(x, xnext, xkeys, xlen, i - 1)
+     : outset(x, xnext, xkeys, xlen, i - 1))
+}
 
 // The good condition
 define nu(x, I) {
@@ -215,7 +219,8 @@ define nu(x, I) {
     && (forall k: K, y: Node, z: Node :: y == z
        || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0)
     // Inreach keyset subsetof inset
-    && (forall k: K :: I.inf[x].ir[k] >= 1 && k !in outset(x, I.fm) ==> I.inf[x].ks[k] >= 1)
+    && (forall k: K :: I.inf[x].ir[k] >= 1 && k !in outset(x, x.next, x.keys, x.len, x.len)
+       ==> I.inf[x].ks[k] >= 1)
     // Inreach edgesets subsetof normal edgesets
     && (forall k: K, y: Node :: I.fm[x][y].ir[k] <= I.fm[x][y].ks[k])
     // If k ∈ inreach \ inset, then inreach edgeset is same as normal edgeset (for step)
@@ -225,6 +230,54 @@ define nu(x, I) {
     && I.na.inr.inrdom == {x}
     && (forall k: K :: (k in I.na.inr.inrfn[x]) ==> (I.inf[x].ks[k] >= 1 || I.inf[x].ir[k] >= 1))
     && (forall k: K :: (I.inf[x].ks[k] >= 1 || I.inf[x].ir[k] >= 1) ==> (k in I.na.inr.inrfn[x]))
+}
+
+
+lemma lemma_int_ind_is_valid(x: Node, xnext: Node, xkeys: Map<Int, K>, xptrs: Map<Int, Node>,
+  xlen: Int, xrangeLb: K, xrangeUb: K, i: Int)
+  returns (I: Interface)
+  requires (forall i: Int :: 0 <= i <= xlen ==> x != xptrs[i] && xptrs[i] != xnext)
+  requires (forall i: Int, j: Int :: 0 <= i < j <= xlen ==> lt(xkeys[i], xkeys[j]))
+  requires (forall i: Int :: 0 <= i < xlen ==> le(xrangeLb, xkeys[i]) && lt(xkeys[i], xrangeUb))
+  requires xnext == null ==> xrangeUb == top
+  
+  ensures I == int_ind(x, xnext, xkeys, xptrs, xlen, xrangeLb, xrangeUb, i)
+  ensures intValid(I) == true
+
+  ensures x !in I.FPo
+  // To prove edgesets are disjoint -- TODO get this right
+  ensures forall y: Node, k: K :: I.fm[x][y].ks[k] >= 0
+    ==> ((xnext == null && (xlen <= i || lt(k, xkeys[i])))
+       || (xnext != null && 0 <= i <= xlen && lt(k, xkeys[i]))
+       || (xnext != null && le(xkeys[xlen], k)))
+  // To prove the (for step) property
+  // ensures 
+{
+  I := int_ind(x, xnext, xkeys, xptrs, xlen, xrangeLb, xrangeUb, i);
+  if (i >= 0) {
+    var I1 := lemma_int_ind_is_valid(x, xnext, xkeys, xptrs, xlen, xrangeLb, xrangeUb, i - 1);
+    lemma_int_valid_unfold(x, I1);
+    pure assert (forall k: K, y: Node :: y != xptrs[i] ==> I.fm[x][y].ir[k] == I1.fm[x][y].ir[k]
+        @(matching I.fm[x][y].ir[k] yields I1.fm[x][y].ir[k]))
+      && (forall k: K, y: Node :: y != xptrs[i] ==> I.fm[x][y].ks[k] == I1.fm[x][y].ks[k]
+        @(matching I.fm[x][y].ks[k] yields I1.fm[x][y].ks[k]))
+      && (forall k: K ::  I.inf[x].ir[k] == I1.inf[x].ir[k]
+        @(matching I.inf[x].ir[k] yields I1.inf[x].ir[k]))
+      && (forall k: K ::  I.inf[x].ks[k] == I1.inf[x].ks[k]
+        @(matching I.inf[x].ks[k] yields I1.inf[x].ks[k]));
+
+
+    pure assume
+    // Edgesets are disjoint
+    (forall k: K, y: Node, z: Node :: y == z
+       || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0);
+
+    pure assert
+    (forall k: K, y: Node :: I.inf[x].ir[k] >= 1 && I.inf[x].ks[k] <= 0
+       && I.fm[x][y].ks[k] >= 1 ==> I.fm[x][y].ir[k] >= 1);
+      
+    lemma_int_valid_fold(x, I);
+  }
 }
 
 
@@ -268,12 +321,9 @@ lemma compute_int(x: Node) returns (I: Interface)
     var xfm := { n: Node :: { n1: Node :: domZero() } };
     if (x.next == null) {
       xfpo := {};
-    I := int(inflow(x, x.rangeLb, x.rangeUb),
-             nodeabs(x, inflow(x, x.rangeLb, x.rangeUb), set_of_map(x.keys.map, 0, x.len)),
-             xfm, {x}, xfpo);
-
-      // TODO define outset inductively, and prove this from that definition
-      pure assume (forall k: K :: I.inf[x].ir[k] >= 1 && k !in outset(x, I.fm) ==> I.inf[x].ks[k] >= 1);
+      I := int(inflow(x, x.rangeLb, x.rangeUb),
+               nodeabs(x, inflow(x, x.rangeLb, x.rangeUb), set_of_map(x.keys.map, 0, x.len)),
+               xfm, {x}, xfpo);
 
       lemma_int_valid_fold(x, I);
       return I;
@@ -286,18 +336,12 @@ lemma compute_int(x: Node) returns (I: Interface)
                nodeabs(x, inflow(x, x.rangeLb, x.rangeUb), set_of_map(x.keys.map, 0, x.len)),
                xfm, {x}, xfpo);
   
-      // TODO define outset inductively, and prove this from that definition
-      pure assume (forall k: K :: I.inf[x].ir[k] >= 1 && k !in outset(x, I.fm) ==> I.inf[x].ks[k] >= 1);
-
       lemma_int_valid_fold(x, I);
       return I;
     }
   } else {
     I := int_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, x.rangeLb, x.rangeUb, x.len);
     lemma_int_props(x, x.len);
-
-    // TODO define outset inductively, and prove this from that definition
-    pure assume (forall k: K :: I.inf[x].ir[k] >= 1 && k !in outset(x, I.fm) ==> I.inf[x].ks[k] >= 1);
 
     lemma_int_valid_fold(x, I);
     return I;
@@ -458,7 +502,7 @@ procedure insert(x: Node, k: K, Ix: Interface)
     lemma_int_valid_unfold(x, Ix);
     lemma_int_valid_fold(x, Ix1);
 
-    return true, k !in Ix.na.contents, Ix1;
+    return true, k !in Ix.na.contents, Ix1;  // TODO check this again!!
   } else {
     return false, false, Ix;
   }
