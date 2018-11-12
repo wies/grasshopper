@@ -18,9 +18,18 @@ let elim_exists =
 	    mk_exists [(e, srt)] (smk_or [smk_and [smk_elem ~ann:a ve t1; mk_not (smk_elem ~ann:a ve t2)];
 					 smk_and [smk_elem ~ann:a ve t2; mk_not (smk_elem ~ann:a ve t1)]])
         | Map (dsrts, rsrt) ->
-            let vs = List.map (fun srt -> fresh_ident "?i", srt) dsrts in
-            let vts = List.map (fun (v, srt) -> mk_var srt v) vs in
-            mk_exists vs (annotate (mk_neq (mk_read t1 vts) (mk_read t2 vts)) a)
+            let rec curried_domains doms = function
+              | Map (dsrts, rsrt) -> curried_domains (dsrts :: doms) rsrt
+              | _ -> doms
+            in
+            let doms = curried_domains [dsrts] rsrt in
+            let dom_vs = List.map (fun dsrts -> List.map (fun srt -> fresh_ident "?i", srt) dsrts) doms in
+            let dom_vts = List.map (fun vs -> List.map (fun (v, srt) -> mk_var srt v) vs) dom_vs in
+            let mk_reads t = List.fold_left (fun t_read vts -> mk_read t_read vts) t dom_vts in
+            let t1_read = mk_reads t1 in
+            let t2_read = mk_reads t2 in
+            let vs = List.flatten dom_vs in
+            elim_neq seen_adts bvs (mk_exists vs (annotate (mk_neq t1_read t2_read) a))
         | Adt (id, adts) when not @@ IdSet.mem id seen_adts ->
             let cstrs = List.assoc id adts in
             let expand new_vs = function
@@ -58,7 +67,8 @@ let elim_exists =
 	let srt = element_sort_of_set s1 in
 	let ve = mk_var srt e in
 	mk_exists [(e, srt)] (annotate (smk_and [smk_elem ve s1; mk_not (smk_elem ve s2)]) a)
-    | BoolOp (op, fs) -> smk_op op (List.map (elim_neq IdSet.empty bvs) fs)
+    | BoolOp (op, fs) ->
+        smk_op op (List.map (elim_neq IdSet.empty bvs) fs)
     | Binder (Exists, vs, f, a) ->
         mk_exists ~ann:a vs (elim_neq seen_adts bvs f)
     | Binder (Forall, vs, f, a) ->
