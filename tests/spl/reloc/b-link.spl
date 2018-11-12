@@ -175,20 +175,27 @@ define hrep(x, I) {
       )
 }
 
-lemma lemma_fm(x: Node, Ix: Interface, k: K, i: Int, j: Int)
+lemma lemma_fm(x: Node, Ix: Interface, i: Int, j: Int)
   requires hrep(x, Ix) &*& x.ptrs[0] != null
   ensures hrepSpatial(x) &*& unchanged(x)
-  ensures x.next != null && le(x.keys[x.len], k)
+  ensures forall k: K :: x.next != null && le(x.keys[x.len], k)
     ==> fm_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, j)[x][x.next].ks[k] >= 1
-  ensures i <= j && 0 <= i < x.len && (i == 0 || le(x.keys[i-1], k)) && lt(k, x.keys[i])
+    @(matching fm_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, j)[x][x.next].ks[k]
+    yields fm_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, j-1)[x][x.next].ks[k])
+
+  ensures forall k: K :: i <= j && 0 <= i < x.len && (i == 0 || le(x.keys[i-1], k)) && lt(k, x.keys[i])
     ==> fm_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, j)[x][x.ptrs[i]].ks[k] >= 1
-  ensures i <= j && i == x.len && x.next == null && (i == 0 || le(x.keys[i-1], k))
+    @(matching fm_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, j)[x][x.ptrs[i]].ks[k]
+    yields fm_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, j-1)[x][x.ptrs[i]].ks[k])
+
+  ensures forall k: K :: i <= j && i == x.len && x.next == null && (i == 0 || le(x.keys[i-1], k))
     ==> fm_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, j)[x][x.ptrs[i]].ks[k] >= 1
-  ensures i <= j && i == x.len && x.next != null && (i == 0 || le(x.keys[i-1], k)) && lt(k, x.keys[i])
+
+  ensures forall k: K :: i <= j && i == x.len && x.next != null && (i == 0 || le(x.keys[i-1], k)) && lt(k, x.keys[i])
     ==> fm_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, j)[x][x.ptrs[i]].ks[k] >= 1
 {
   if (j >= 0) {
-    lemma_fm(x, Ix, k, i, j - 1);
+    lemma_fm(x, Ix, i, j - 1);
   }
 }
 
@@ -229,10 +236,12 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
   ensures x.ptrs[0] == null  // x is a leaf
 {
   if (x.ptrs[0] != null) {
-    lemma_fm(x, Ix, k, i, x.len);
+    lemma_fm(x, Ix, i, x.len);
     if (i < x.len && !lt(k, x.keys[i])) {
       keyset_implies_leaf(x, Ix, k, i + 1);
     }
+    pure assert i == x.len
+      ==> Ix.fm[x][x.ptrs[i]].ks[k] >= 1;
     pure assert false; // TODO why is this necessary?!
   }
 }
@@ -389,14 +398,14 @@ procedure findNext(x: Node, k: K, Ix: Interface)
     i := i + 1;
   }
 
-  lemma_fm(x, Ix, k, i, x.len);
+  lemma_fm(x, Ix, i, x.len);
   if (i == x.len && x.next != null) {
     if (lt(k, x.keys[i]))
       n := x.ptrs[i];
     else
       n := x.next;
   } else {
-    pure assert i <= 0 || le(x.keys[i-1], k);
+    pure assert Ix.fm[x][x.ptrs[i]].ks[k] >= 1;
     n := x.ptrs[i];
   }
   // return n;
