@@ -413,12 +413,14 @@ let infer_types cu locals ty e =
         let arr_ety =
           match ty with
           | MapType (IntType, ety) -> ety
+          | ArrayType ety -> ety
           | _ -> AnyType
         in
         let arr, arr_ty = it locals (ArrayType arr_ety) arr in
         let arr_ety =
           match arr_ty with
           | MapType (IntType, ety) -> ety
+          | ArrayType ety -> ety
           | _ -> AnyType
         in
         UnaryOp (OpArrayMap, arr, pos), match_types pos ty (MapType (IntType, arr_ety))

@@ -357,17 +357,19 @@ let mk_ite c t e = mk_app (sort_of t) Ite [c; t; e]
 
 let mk_null id = mk_app (Loc id) Null []
 
-let mk_read map inds = 
-  let dom_srts, ran_srt = match sort_of map with
-  | Map (ds,r) -> ds, r
-  | Loc (Array r) -> [Int], r
-  | s -> 
-      failwith 
-	("tried to read from term " ^ 
-         (string_of_term map) ^ " which is of sort " ^ (string_of_sort s) ^ ".\n" ^
-         "Expected sort (Map X Y) for some sorts X, Y.")
-  in 
-  mk_app ran_srt Read (map :: inds)
+let mk_read map = function
+  | [] -> map
+  | inds ->
+      let dom_srts, ran_srt = match sort_of map with
+      | Map (ds,r) -> ds, r
+      | Loc (Array r) -> [Int], r
+      | s -> 
+          failwith 
+	    ("tried to read from term " ^ 
+             (string_of_term map) ^ " which is of sort " ^ (string_of_sort s) ^ ".\n" ^
+             "Expected sort (Map X Y) for some sorts X, Y.")
+      in 
+      mk_app ran_srt Read (map :: inds)
 
 let mk_read_form map ind = 
   match sort_of map with
