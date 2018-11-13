@@ -185,11 +185,17 @@ define heapGood(x, xnext, xkeys, xptrs, xlen, xrangeLb, xrangeUb) {
     // Keys are sorted
     && (forall i: Int, j: Int :: 0 <= i < j <= xlen ==> lt(xkeys[i], xkeys[j]))
     // Keys are in the range
-    && (forall i: Int :: 0 <= i <= xlen ==> le(xrangeLb, xkeys[i]) && lt(xkeys[i], xrangeUb))
-    && (xptrs[0] != null ==> // Internal
-       (forall i: Int :: 0 <= i <= xlen ==> x != xptrs[i] && xptrs[i] != xnext)
-       && (forall i: Int, j: Int :: 0 <= i < j <= xlen ==> xptrs[i] != xptrs[j])
-       && (forall i: Int :: 0 <= i <= xlen ==> xptrs[i] != null))
+    && (forall i: Int :: 0 <= i && (xnext == null && i < xlen || xnext != null && i <= xlen)
+        ==> le(xrangeLb, xkeys[i]) && lt(xkeys[i], xrangeUb))
+    // All outgoing pointers are distinct
+    && (forall i: Int :: xptrs[0] != null && 0 <= i <= xlen
+         ==> x != xptrs[i])
+    && (forall i: Int :: xptrs[0] != null && 0 <= i <= xlen
+         ==> xptrs[i] != xnext)
+    && (forall i: Int, j: Int :: xptrs[0] != null && 0 <= i < j <= xlen
+         ==> xptrs[i] != xptrs[j])
+    // Internal nodes don't point to null
+    && (forall i: Int :: xptrs[0] != null && 0 <= i <= xlen ==> xptrs[i] != null)
 }
 
 define hrep(x, I) {
@@ -359,10 +365,13 @@ procedure init() returns (x: Node, I: Interface)
 {
   x := new Node;
   x.keys := new Array<K>(2*B);
+  x.keys[0] := bottom;
   x.ptrs := new Array<Node>(2*B);
-  arr_init_node(x.ptrs, 2*B, null);
+  x.ptrs[0] := null;
   x.len := 0;
   x.next := null;
+  x.rangeLb := bottom;
+  x.rangeUb := top;
   
   I := compute_int(x);
 }
