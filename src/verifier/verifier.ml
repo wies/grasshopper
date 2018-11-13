@@ -250,29 +250,35 @@ let add_pred_insts prog f =
                       in
                       let rec read_gens seen_adts gens t pt =
                         match sort_of t, sort_of pt with
-                        | Adt (tid, adts), Adt (ret_tid, _)
-                          when tid = ret_tid && not @@ IdSet.mem tid seen_adts ->
+                        | (Map _ | Adt _) as tsrt, Adt (tid, adts)
+                          when not @@ IdSet.mem tid seen_adts ->
                             let cstrs = List.assoc tid adts in
                             let destrs = flat_map (fun (_, destrs) -> destrs) cstrs in
                             let seen_adts1 = IdSet.add tid seen_adts in
                             List.fold_left
                               (fun gens (destr, srt) ->
                                 let srt = unfold_adts adts srt in
-                                let read_t = mk_destr srt destr t in
                                 let read_pt = mk_destr srt destr pt in
-                                read_gens seen_adts1 ((read_pt, read_t) :: gens) read_t read_pt
+                                let gens1, read_t = match tsrt with
+                                | Adt (tid1, _) when tid = tid1 ->
+                                    let read_t = mk_destr srt destr t in
+                                    (read_pt, read_t) :: gens, read_t
+                                | _ -> gens, t
+                                in
+                                read_gens seen_adts1 gens1 read_t read_pt
                               )            
                               gens destrs
-                        | Map (dsrts, rsrt), Map (ret_dsrts, ret_rsrt)
-                          when dsrts = ret_dsrts && rsrt = ret_rsrt ->
+                        | (Map _ | Adt _) as tsrt, Map (dsrts, rsrt) ->
                             let read_vars = mk_read_vars dsrts in
                             let read_pt = mk_read pt read_vars in
-                            let read_t = mk_read t read_vars in
-                            read_gens seen_adts ((read_pt, read_t) :: gens) read_t read_pt
-                        | (Map _ | Adt _), Map (ret_dsrts, ret_srt) ->
-                            let read_vars = mk_read_vars ret_dsrts in
-                            let pt = mk_read pt read_vars in
-                            read_gens seen_adts gens t pt
+                            let gens1, read_t = match tsrt with
+                            | Map (tdsrts, trsrt)
+                              when tdsrts = dsrts && trsrt = rsrt ->
+                                let read_t = mk_read t read_vars in
+                                (read_pt, read_t) :: gens, read_t
+                            | _ -> gens, t
+                            in
+                            read_gens seen_adts gens1 read_t read_pt
                         | _, Pat ->
                             (match pt with
                             | App (_, [pt], _) -> read_gens seen_adts gens t pt
