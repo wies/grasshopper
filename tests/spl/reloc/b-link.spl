@@ -2,7 +2,6 @@
 
 options "-abspreds -simplearrays -propreads"
   // TODO: -symbexec: function definitions with field reads: add equalities to VC!!
-  // CONTINUE: prove intEq by induction for split, then lemmas here
 
 include "flows.spl"
 include "array_util.spl"
@@ -66,7 +65,6 @@ struct Node {
   var keys: Array<K>;
   var ptrs: Array<Node>;
   var next: Node;
-  ghost var isFirst: Bool;
   ghost var rangeLb: K;
   ghost var rangeUb: K;
 }
@@ -86,7 +84,7 @@ var B: Int
 axiom B > 1
 
 define hrepSpatial(x) {
-  acc(x) &*& acc(x.keys) &*& acc(x.ptrs)
+  acc(x) &*& acc(x.keys) &*& acc(x.ptrs) && x.keys.length == 2*B && x.ptrs.length == 2*B
 }
 
 
@@ -118,7 +116,7 @@ function fm_ind(x: Node, xnext: Node, xkeys: Map<Int, K>, xptrs: Map<Int, Node>,
   { n: Node :: { n1: Node ::
     n != x ? domZero()
     : (i < 0 ? (n1 == xnext ? fm_next(x, xnext, xkeys, xlen) : domZero())
-       : (i <= xlen && {n1} == {xptrs[i]} ? fm_child(x, xnext, xkeys, xlen, i)
+       : (i <= xlen && xptrs[0] != null && {n1} == {xptrs[i]} ? fm_child(x, xnext, xkeys, xlen, i)
           : fm_ind(x, xnext, xkeys, xptrs, xlen, i - 1)[n][n1]))
    }
   }
@@ -128,7 +126,7 @@ function FPo_ind(x: Node, xnext: Node, xptrs: Map<Int, Node>, xlen: Int, i: Int)
   returns (X: Set<Node>)
 {
   i < 0 ? (xnext != null ? {xnext} : {})
-    : (i <= xlen ? {xptrs[i]} ++ FPo_ind(x, xnext, xptrs, xlen, i - 1)
+    : (i <= xlen && xptrs[0] != null ? {xptrs[i]} ++ FPo_ind(x, xnext, xptrs, xlen, i - 1)
        : FPo_ind(x, xnext, xptrs, xlen, i - 1))
 }
 
@@ -140,25 +138,36 @@ function inflow(x: Node, xrangeLb: K, xrangeUb: K) returns (i: Map<Node, FlowDom
 }
 
 // TODO findNext's spec should use this. Also, make sure you can prove whatever Coq relies on this.
-pure function outset(x: Node, xnext: Node, xkeys: Map<Int, K>, xlen: Int, i: Int)
+pure function outset(x: Node, xnext: Node, xkeys: Map<Int, K>, xptrs: Map<Int, Node>,
+                     xlen: Int, i: Int)
   returns (O: Set<K>)
 {
   i < 0 ? { k: K :: xnext != null && le(xkeys[xlen], k) }
   // TODO why not fm_next(x, xnext, xkeys, xlen).ks[k] == 1 ?
-  : (i <= xlen ?
+  : (i <= xlen && xptrs[0] != null ?
      { k: K :: (i < xlen && (i == 0 || le(xkeys[i-1], k)) && lt(k, xkeys[i]))
               || (i == xlen && xnext == null && (i == 0 || le(xkeys[i-1], k)))
               || (i == xlen && xnext != null && (i == 0 || le(xkeys[i-1], k)) && lt(k, xkeys[i])) }
-       ++ outset(x, xnext, xkeys, xlen, i - 1)
-     : outset(x, xnext, xkeys, xlen, i - 1))
+       ++ outset(x, xnext, xkeys, xptrs, xlen, i - 1)
+     : outset(x, xnext, xkeys, xptrs, xlen, i - 1))
 }
 
-function nodeabs(x: Node, xnext: Node, xkeys: Map<Int, K>, xlen: Int,
-                 inff: Map<Node, FlowDom>, C: Set<K>, i: Int)
+function cont_ind(x: Node, xkeys: Map<Int, K>, xptrs: Map<Int, Node>, xlen: Int, i: Int)
+  returns (C: Set<K>)
+{
+  xptrs[0] != null ? {}
+    : (i < 0 ? {}
+       : (i < xlen ? {xkeys[i]} ++ cont_ind(x, xkeys, xptrs, xlen, i - 1)
+          : cont_ind(x, xkeys, xptrs, xlen, i - 1)))
+}
+
+function nodeabs(x: Node, xnext: Node, xkeys: Map<Int, K>, xptrs: Map<Int, Node>, xlen: Int,
+                 inff: Map<Node, FlowDom>, i: Int)
   returns (a: NodeDom)
 {
-  nd(C, inrfnC({n: Node :: n != x ? {} : {k: K :: inff[x].ks[k] >= 1 || inff[x].ir[k] >= 1}}, {x}),
-     outset(x, xnext, xkeys, xlen, i))
+  nd(cont_ind(x, xkeys, xptrs, xlen, i),
+     inrfnC({n: Node :: n != x ? {} : {k: K :: inff[x].ks[k] >= 1 || inff[x].ir[k] >= 1}}, {x}),
+     outset(x, xnext, xkeys, xptrs, xlen, i))
 }
 
 function int_ind(x: Node, xnext: Node, xkeys: Map<Int, K>, xptrs: Map<Int, Node>, xlen: Int,
@@ -166,34 +175,26 @@ function int_ind(x: Node, xnext: Node, xkeys: Map<Int, K>, xptrs: Map<Int, Node>
   returns (I: Interface)
 {
   int(inflow(x, xrangeLb, xrangeUb),
-      nodeabs(x, xnext, xkeys, xlen, inflow(x, xrangeLb, xrangeUb), {}, i),
+      nodeabs(x, xnext, xkeys, xptrs, xlen, inflow(x, xrangeLb, xrangeUb), i),
       fm_ind(x, xnext, xkeys, xptrs, xlen, i),
       {x}, FPo_ind(x, xnext, xptrs, xlen, i))
 }
 
-define hrep(x, I) {
-  hrepSpatial(x) &*& I.FP == {x} &*& x.next != x
-    && 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
+define heapGood(x, xnext, xkeys, xptrs, xlen, xrangeLb, xrangeUb) {
+  xnext != x && 0 <= xlen && xlen < 2*B && (xnext == null ==> xrangeUb == top)
     // Keys are sorted
-    && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> lt(x.keys[i], x.keys[j]))
+    && (forall i: Int, j: Int :: 0 <= i < j <= xlen ==> lt(xkeys[i], xkeys[j]))
     // Keys are in the range
-    && (forall i: Int :: 0 <= i < x.len ==> le(x.rangeLb, x.keys[i]) && lt(x.keys[i], x.rangeUb))
-    // I.na.outs stores the outset
-    && I.na.outs == outset(x, x.next, x.keys, x.len, x.len)
-    && (x.ptrs[0] == null  // Leaf
-       && I.inf == inflow(x, x.rangeLb, x.rangeUb)
-       && I.na.contents == set_of_map(x.keys.map, 0, x.len)
-       && (x.next == null && I.FPo == {}
-          || x.next != null && I.FPo == {x.next}
-          && (forall k: K :: le(x.keys[x.len], k) ==> I.fm[x][x.next].ks[k] == 1)
-          && (forall k: K :: lt(k, x.keys[x.len]) ==> I.fm[x][x.next].ks[k] == 0
-          @(matching x.next yields I.fm[x][x.next].ks[k])))
-     || x.ptrs[0] != null  // Internal
-       && I == int_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, x.rangeLb, x.rangeUb, x.len)
-       && (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i] && x.ptrs[i] != x.next)
-       && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j])
-       && (forall i: Int :: 0 <= i <= x.len ==> x.ptrs[i] != null)
-      )
+    && (forall i: Int :: 0 <= i <= xlen ==> le(xrangeLb, xkeys[i]) && lt(xkeys[i], xrangeUb))
+    && (xptrs[0] != null ==> // Internal
+       (forall i: Int :: 0 <= i <= xlen ==> x != xptrs[i] && xptrs[i] != xnext)
+       && (forall i: Int, j: Int :: 0 <= i < j <= xlen ==> xptrs[i] != xptrs[j])
+       && (forall i: Int :: 0 <= i <= xlen ==> xptrs[i] != null))
+}
+
+define hrep(x, I) {
+  hrepSpatial(x) &*& heapGood(x, x.next, x.keys.map, x.ptrs.map, x.len, x.rangeLb, x.rangeUb)
+    &*& I == int_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, x.rangeLb, x.rangeUb, x.len)
 }
 
 lemma lemma_fm(x: Node, Ix: Interface, i: Int, j: Int)
@@ -247,22 +248,23 @@ define nu(x, I) {
 lemma lemma_int_ind_is_valid(x: Node, xnext: Node, xkeys: Map<Int, K>, xptrs: Map<Int, Node>,
   xlen: Int, xrangeLb: K, xrangeUb: K, i: Int)
   returns (I: Interface)
-  requires 0 <= xlen && x != xnext
-  requires (forall i: Int :: 0 <= i <= xlen ==> x != xptrs[i] && xptrs[i] != xnext)
-  requires (forall i: Int, j: Int :: 0 <= i < j <= xlen ==> lt(xkeys[i], xkeys[j]))
-  requires (forall i: Int :: 0 <= i <= xlen ==> le(xrangeLb, xkeys[i]) && lt(xkeys[i], xrangeUb))
-  requires xnext == null ==> xrangeUb == top
+  requires heapGood(x, xnext, xkeys, xptrs, xlen, xrangeLb, xrangeUb)
   
   ensures I == int_ind(x, xnext, xkeys, xptrs, xlen, xrangeLb, xrangeUb, i)
   ensures intValid(I) == true
 
   ensures x !in I.FPo
   // To prove edgesets are disjoint, and other nu properties
-  ensures forall y: Node, k: K :: I.fm[x][y].ks[k] > 0 && i < 0 ==> xnext != null && le(xkeys[xlen], k)
-  ensures forall y: Node, k: K :: I.fm[x][y].ks[k] > 0 && 0 <= i < xlen && xnext == null
-    ==> lt(k, xkeys[i])
-  ensures forall y: Node, k: K :: I.fm[x][y].ks[k] > 0 && 0 <= i <= xlen && xnext != null
-    ==> lt(k, xkeys[i]) || le(xkeys[xlen], k)
+  ensures forall y: Node, k: K :: I.fm[x][y].ks[k] != 0 ==>
+    (xptrs[0] != null && i >= xlen)
+    || (xptrs[0] != null && 0 <= i < xlen && lt(k, xkeys[i]))
+    || (xnext != null && le(xkeys[xlen], k))
+  // Properties of contents
+  ensures (forall k in cont_ind(x, xkeys, xptrs, xlen, i) :: le(xkeys[0], k))
+  ensures (forall k in cont_ind(x, xkeys, xptrs, xlen, i) :: lt(k, xkeys[xlen]))
+    //  ensures (forall k in cont_ind(x, xkeys, xptrs, xlen, i) ::
+    //    i <= xlen && lt(k, xkeys[i]) || i > xlen && lt(k, xkeys[xlen]))
+  ensures (forall k in cont_ind(x, xkeys, xptrs, xlen, i) :: le(xrangeLb, k) && lt(k, xrangeUb))
 {
   I := int_ind(x, xnext, xkeys, xptrs, xlen, xrangeLb, xrangeUb, i);
   if (i >= 0) {
@@ -277,10 +279,20 @@ lemma lemma_int_ind_is_valid(x: Node, xnext: Node, xkeys: Map<Int, K>, xptrs: Ma
       && (forall k: K ::  I.inf[x].ks[k] == I1.inf[x].ks[k]
         @(matching I.inf[x].ks[k] yields I1.inf[x].ks[k]));
 
-    pure assert
-    (forall k: K, y: Node :: I.inf[x].ir[k] >= 1 && I.inf[x].ks[k] <= 0
-       && I.fm[x][y].ks[k] >= 1 ==> I.fm[x][y].ir[k] >= 1);
-
+       if (xptrs[0] == null) {
+         if (xnext == null){
+           pure assert (forall k: K, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0);
+         } else {
+           pure assert (forall k: K, y: Node :: k in I.na.contents
+             ==> lt(k, xkeys[xlen]));
+           pure assert (forall k: K, y: Node :: I.fm[x][y].ks[k] != 0
+             ==> le(xkeys[xlen], k));
+           pure assert (forall k: K, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0);
+         }
+       } else {
+         pure assume (forall k: K :: k !in I.na.contents); // TODO
+       }
+    pure assert (forall k: K, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0);
     lemma_int_valid_fold(x, I);
   } else {
     pure assert (forall n: Node, n1: Node :: n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero()));
@@ -309,76 +321,14 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
   }
 }
 
-
+// TODO SMT lib solver error?
 lemma compute_int(x: Node) returns (I: Interface)
   requires hrepSpatial(x)
-  requires x.next != x
-    && 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
-    && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> lt(x.keys[i], x.keys[j]))
-    && (forall i: Int :: 0 <= i < x.len ==> le(x.rangeLb, x.keys[i]) && lt(x.keys[i], x.rangeUb))
-    && (x.ptrs[0] != null ==>  // Internal
-       (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i] && x.ptrs[i] != x.next)
-       && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j])
-       && (forall i: Int :: 0 <= i <= x.len ==> x.ptrs[i] != null))
+  requires heapGood(x, x.next, x.keys.map, x.ptrs.map, x.len, x.rangeLb, x.rangeUb)
   ensures hrep(x, I) &*& unchanged(x)
   ensures intValid(I) == true
-/*{
-  if (x.ptrs[0] == null) {
-    // TODO by induction, from keys sorted
-    pure assume forall k in set_of_map(x.keys.map, 0, x.len) :: le(x.keys[0], k) && lt(k, x.keys[x.len]);
-    // TODO by induction, from keys in range
-    pure assume forall k in set_of_map(x.keys.map, 0, x.len) :: le(x.rangeLb, k) && lt(k, x.rangeUb);
-    var xfpo: Set<Node>;
-    var xfm := { n: Node :: { n1: Node :: domZero() } };
-    if (x.next == null) {
-      xfpo := {};
-      I := int(inflow(x, x.rangeLb, x.rangeUb),
-               nodeabs(x, inflow(x, x.rangeLb, x.rangeUb), set_of_map(x.keys.map, 0, x.len)),
-               xfm, {x}, xfpo);
-
-      lemma_int_valid_fold(x, I);
-      return I;
-    } else {
-      var f := fd({ k: K :: le(x.keys[x.len], k) ? 1 : 0 },
-                  { k: K :: le(x.keys[x.len], k) ? 1 : 0 });
-      xfm := xfm[x := xfm[x][x.next := f]];
-      xfpo := {x.next};
-      I := int(inflow(x, x.rangeLb, x.rangeUb),
-               nodeabs(x, inflow(x, x.rangeLb, x.rangeUb), set_of_map(x.keys.map, 0, x.len)),
-               xfm, {x}, xfpo);
-  
-      lemma_int_valid_fold(x, I);
-      return I;
-    }
-  } else {
-    I := int_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, x.rangeLb, x.rangeUb, x.len);
-    lemma_int_props(x, x.len);
-
-    lemma_int_valid_fold(x, I);
-    return I;
-  }
-   }*/
-
-lemma lemma_int_props(x: Node, i: Int)
-  requires hrepSpatial(x)
-  requires (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i]) && x.next != x
-
-  ensures hrepSpatial(x) &*& unchanged(x)
-  ensures (forall k: K, y: Node :: fm_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, i)[x][y].ir[k]
-    <= fm_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, i)[x][y].ks[k])
-  ensures (forall k: K, y: Node, z: Node :: y == z
-    || fm_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, i)[x][y].ks[k] == 0
-    || fm_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, i)[x][z].ks[k] == 0)
-  ensures (forall k: K, y: Node :: inflow(x, x.rangeLb, x.rangeUb)[x].ir[k] >= 1 && inflow(x, x.rangeLb, x.rangeUb)[x].ks[k] <= 0
-     && fm_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, i)[x][y].ks[k] >= 1
-     ==> fm_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, i)[x][y].ir[k] >= 1)
-  ensures forall n: Node, n1: Node :: domLeq(domZero(), fm_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, i)[n][n1])
-  ensures forall n: Node, n1: Node ::
-    (n !in {x} ==> domEq(fm_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, i)[n][n1], domZero()))
-    && (n1 !in FPo_ind(x, x.next, x.ptrs.map, x.len, i) ==> domEq(fm_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, i)[n][n1], domZero()))
-  ensures forall n: Node :: n !in {x} || n !in FPo_ind(x, x.next, x.ptrs.map, x.len, i)
 {
-  pure assume false; // TODO
+  I := lemma_int_ind_is_valid(x, x.next, x.keys.map, x.ptrs.map, x.len, x.rangeLb, x.rangeUb, x.len);
 }
 
 lemma lemma_int_stable(x: Node, i: Int)
@@ -397,7 +347,6 @@ lemma lemma_int_stable(x: Node, i: Int)
 {
   if (i > x.len) {
     lemma_int_stable(x, i-1);
-    pure assume false; // TODO
   }
 }
 
@@ -414,7 +363,6 @@ procedure init() returns (x: Node, I: Interface)
   arr_init_node(x.ptrs, 2*B, null);
   x.len := 0;
   x.next := null;
-  x.isFirst := true;
   
   I := compute_int(x);
 }
@@ -513,7 +461,7 @@ procedure insert(x: Node, k: K, Ix: Interface)
     lemma_int_valid_unfold(x, Ix);
     lemma_int_valid_fold(x, Ix1);
 
-    return true, k !in Ix.na.contents, Ix1;  // TODO check this again!!
+    return true, k !in Ix.na.contents, Ix1;
   } else {
     return false, false, Ix;
   }

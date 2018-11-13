@@ -33,7 +33,6 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     c.len := m;
     c.next := x;
     x.rangeUb := c.rangeUb;
-    x.isFirst := false;
     pure assume false;
   } else {  // Internal node
     lemma_int_stable(c, 2*B);
@@ -47,7 +46,6 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     c.next := x;
     x.rangeLb := x.keys[0];
     x.rangeUb := c.rangeUb;
-    x.isFirst := false;
 
     Ic1 := compute_int(c);
     Ix1 := compute_int(x);
