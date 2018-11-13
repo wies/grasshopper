@@ -84,7 +84,7 @@ var B: Int
 axiom B > 1
 
 define hrepSpatial(x) {
-  acc(x) &*& acc(x.keys) &*& acc(x.ptrs) && x.keys.length == 2*B && x.ptrs.length == 2*B
+  acc(x) &*& acc(x.keys) &*& acc(x.ptrs) &*& x.keys.length == 2*B &*& x.ptrs.length == 2*B
 }
 
 
@@ -327,7 +327,6 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
   }
 }
 
-// TODO SMT lib solver error?
 lemma compute_int(x: Node) returns (I: Interface)
   requires hrepSpatial(x)
   requires heapGood(x, x.next, x.keys.map, x.ptrs.map, x.len, x.rangeLb, x.rangeUb)
@@ -372,7 +371,7 @@ procedure init() returns (x: Node, I: Interface)
   x.next := null;
   x.rangeLb := bottom;
   x.rangeUb := top;
-  
+
   I := compute_int(x);
 }
 
