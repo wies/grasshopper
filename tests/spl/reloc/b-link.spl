@@ -291,23 +291,13 @@ lemma lemma_int_ind_is_valid(x: Node, xnext: Node, xkeys: Map<Int, K>, xptrs: Ma
   }
 }
 
-lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
-  requires hrep(x, Ix) &*& intValid(Ix) == true
-  requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
-  requires (i <= 0 || le(x.keys[i-1], k)) && 0 <= i <= x.len
-  ensures hrep(x, Ix) &*& unchanged(x)
-  ensures x.ptrs[0] == null  // x is a leaf
-{
-  if (x.ptrs[0] != null) {
-    lemma_fm(x, Ix, i, x.len);
-    if (i < x.len && !lt(k, x.keys[i])) {
-      keyset_implies_leaf(x, Ix, k, i + 1);
-    }
-    pure assert i == x.len
-      ==> Ix.fm[x][x.ptrs[i]].ks[k] >= 1;
-    pure assert false; // TODO why is this necessary?!
-  }
-}
+lemma lemma_cont_props(x: Node, xkeys: Map<Int, K>, xlen: Int, xrangeLb: K, xrangeUb: K, i: Int)
+  ensures (forall k in set_of_map(xkeys, 0, i) :: le(xkeys[0], k))
+  ensures (forall k in set_of_map(xkeys, 0, i) :: lt(k, xkeys[xlen]))
+    //  ensures (forall k in set_of_map(xkeys, 0, i) ::
+    //    i <= xlen && lt(k, xkeys[i]) || i > xlen && lt(k, xkeys[xlen]))
+  ensures (forall k in set_of_map(xkeys, 0, i) :: le(xrangeLb, k) && lt(k, xrangeUb))
+  
 
 lemma compute_int(x: Node) returns (I: Interface)
   requires hrepSpatial(x)
@@ -316,18 +306,34 @@ lemma compute_int(x: Node) returns (I: Interface)
   ensures intValid(I) == true
 {
   if (x.ptrs[0] == null) { // Leaf
-    /* TODO prove and use these
-      // Properties of contents
-  ensures (forall k in cont_ind(x, xkeys, xptrs, xlen, i) :: le(xkeys[0], k))
-  ensures (forall k in cont_ind(x, xkeys, xptrs, xlen, i) :: lt(k, xkeys[xlen]))
-    //  ensures (forall k in cont_ind(x, xkeys, xptrs, xlen, i) ::
-    //    i <= xlen && lt(k, xkeys[i]) || i > xlen && lt(k, xkeys[xlen]))
-  ensures (forall k in cont_ind(x, xkeys, xptrs, xlen, i) :: le(xrangeLb, k) && lt(k, xrangeUb))
-     */
-    pure assume false;
+    lemma_cont_props(x, x.keys.map, x.len, x.rangeLb, x.rangeUb, x.len);
+    if (x.next == null) {
+      var xfpo: Set<Node> := {};
+      var xfm := { n: Node :: { n1: Node :: domZero() } };
+      I := int(inflow(x, x.rangeLb, x.rangeUb),
+               nodeabs(x, x.next, x.keys.map, x.ptrs.map, x.len,
+                       inflow(x, x.rangeLb, x.rangeUb),
+                       set_of_map(x.keys.map, 0, x.len), x.len),
+               xfm, {x}, xfpo);
+      lemma_int_valid_fold(x, I);
+      return I;
+    } else {
+      var xfpo: Set<Node> := {x.next};
+      var xfm := { n: Node :: { n1: Node ::
+        n != x ? domZero()
+        : (n1 == x.next ? fm_next(x, x.next, x.keys.map, x.len) : domZero())}};
+      I := int(inflow(x, x.rangeLb, x.rangeUb),
+               nodeabs(x, x.next, x.keys.map, x.ptrs.map, x.len,
+                       inflow(x, x.rangeLb, x.rangeUb),
+                       set_of_map(x.keys.map, 0, x.len), x.len),
+               xfm, {x}, xfpo);
+      lemma_int_valid_fold(x, I);
+      return I;
+    }
   } else { // Internal
     I := lemma_int_ind_is_valid(x, x.next, x.keys.map, x.ptrs.map, x.len,
                                 x.rangeLb, x.rangeUb, x.len);
+    return I;
   }
 }
 
@@ -347,6 +353,24 @@ lemma lemma_int_stable(x: Node, i: Int)
 {
   if (i > x.len) {
     lemma_int_stable(x, i-1);
+  }
+}
+
+lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
+  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
+  requires (i <= 0 || le(x.keys[i-1], k)) && 0 <= i <= x.len
+  ensures hrep(x, Ix) &*& unchanged(x)
+  ensures x.ptrs[0] == null  // x is a leaf
+{
+  if (x.ptrs[0] != null) {
+    lemma_fm(x, Ix, i, x.len);
+    if (i < x.len && !lt(k, x.keys[i])) {
+      keyset_implies_leaf(x, Ix, k, i + 1);
+    }
+    pure assert i == x.len
+      ==> Ix.fm[x][x.ptrs[i]].ks[k] >= 1;
+    pure assert false; // TODO why is this necessary?!
   }
 }
 
@@ -393,7 +417,7 @@ procedure findNext(x: Node, k: K, Ix: Interface)
       } else {
         pure assert Ix.fm[x][y].ks[k] == 0;
       }
-      pure assume forall y: Node :: Ix.fm[x][y].ks[k] == 0;
+      pure assume forall y: Node :: Ix.fm[x][y].ks[k] == 0;  // TODO
       return null;
     }
   }
