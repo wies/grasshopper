@@ -8,6 +8,7 @@ const top: K
 
 axiom forall a: K :: !lt(a, bottom)
 axiom forall a: K :: !lt(top, a)
+axiom bottom != top
 
 axiom forall a: K :: !lt(a, a)
 axiom forall a: K, b: K :: !lt(a, b) || !lt(b, a)
