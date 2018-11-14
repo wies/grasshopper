@@ -133,9 +133,9 @@ lemma lemma_int_valid_unfold(x: Node, I: Interface)
 
 lemma lemma_int_valid_fold(x: Node, I: Interface)
   requires I != intUndef // TODO why? See test_valid2
-  requires forall n: Node, n1: Node ::
-    (n !in I.FP ==> domEq(I.inf[n], domZero()) && domEq(I.fm[n][n1], domZero()))
-    && (n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero()))
+  requires forall n: Node, n1: Node :: n !in I.FP ==> domEq(I.inf[n], domZero())
+  requires forall n: Node, n1: Node :: n !in I.FP ==> domEq(I.fm[n][n1], domZero())
+  requires forall n: Node, n1: Node :: n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero())
   requires forall n: Node :: n !in I.FP || n !in I.FPo
   requires forall n: Node :: domLeq(domZero(), I.inf[n])
   requires forall n: Node, n1: Node :: domLeq(domZero(), I.fm[n][n1])
