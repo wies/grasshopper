@@ -291,13 +291,19 @@ lemma lemma_int_ind_is_valid(x: Node, xnext: Node, xkeys: Map<Int, K>, xptrs: Ma
   }
 }
 
-lemma lemma_cont_props(x: Node, xkeys: Map<Int, K>, xlen: Int, xrangeLb: K, xrangeUb: K, i: Int)
-  ensures (forall k in set_of_map(xkeys, 0, i) :: le(xkeys[0], k))
-  ensures (forall k in set_of_map(xkeys, 0, i) :: lt(k, xkeys[xlen]))
-    //  ensures (forall k in set_of_map(xkeys, 0, i) ::
-    //    i <= xlen && lt(k, xkeys[i]) || i > xlen && lt(k, xkeys[xlen]))
-  ensures (forall k in set_of_map(xkeys, 0, i) :: le(xrangeLb, k) && lt(k, xrangeUb))
-  
+lemma lemma_cont_props(x: Node, xnext: Node, xkeys: Map<Int, K>, xlen: Int, xrangeLb: K, xrangeUb: K, i: Int)
+  requires 0 <= i <= xlen
+  requires forall j: Int, k: Int :: i <= j < k <= xlen ==> lt(xkeys[j], xkeys[k])
+  requires forall j: Int :: i <= j && (xnext == null && j < xlen || xnext != null && j <= xlen) 
+        ==> le(xrangeLb, xkeys[j]) && lt(xkeys[j], xrangeUb)
+  ensures (forall k in set_of_map(xkeys, i, xlen) :: le(xkeys[i], k))
+  ensures (forall k in set_of_map(xkeys, i, xlen) :: lt(k, xkeys[xlen]))
+  ensures (forall k in set_of_map(xkeys, i, xlen) :: le(xrangeLb, k) && lt(k, xrangeUb))
+{
+  if (i < xlen) {
+    lemma_cont_props(x, xnext, xkeys, xlen, xrangeLb, xrangeUb, i + 1);
+  }
+}  
 
 lemma compute_int(x: Node) returns (I: Interface)
   requires hrepSpatial(x)
@@ -306,7 +312,7 @@ lemma compute_int(x: Node) returns (I: Interface)
   ensures intValid(I) == true
 {
   if (x.ptrs[0] == null) { // Leaf
-    lemma_cont_props(x, x.keys.map, x.len, x.rangeLb, x.rangeUb, x.len);
+    lemma_cont_props(x, x.next, x.keys.map, x.len, x.rangeLb, x.rangeUb, 0);
     if (x.next == null) {
       var xfpo: Set<Node> := {};
       var xfm := { n: Node :: { n1: Node :: domZero() } };
@@ -411,13 +417,8 @@ procedure findNext(x: Node, k: K, Ix: Interface)
       return x.next;
     } else {
       lemma_int_valid_unfold(x, Ix);
-      var y: Node;
-      if (y in Ix.FPo) {
-        pure assert Ix.fm[x][y].ks[k] == 0;
-      } else {
-        pure assert Ix.fm[x][y].ks[k] == 0;
-      }
-      pure assume forall y: Node :: Ix.fm[x][y].ks[k] == 0;  // TODO
+      pure assert forall y: Node :: y in Ix.FPo ==> Ix.fm[x][y].ks[k] == 0;
+      pure assert forall y: Node :: y !in Ix.FPo ==> Ix.fm[x][y].ks[k] == 0;
       return null;
     }
   }
