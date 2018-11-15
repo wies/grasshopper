@@ -103,7 +103,7 @@ lemma lemma_Icx1_eq_Icx(c: Node, cnext: Node, ckeys: Map<Int, K>, cptrs: Map<Int
   Ix1 := lemma_int_ind_is_valid(x, x.next, x.keys.map, x.ptrs.map, x.len, x.rangeLb, x.rangeUb, i - B);
 
   if (i < 0) {
-    pure assert domLeq(domMult(Ix.inf[x], Ix.fm[x][y]), Iy.inf[y]);  // This fails
+    pure assert domLeq(domMult(Ic1.inf[c], Ic1.fm[c][x]), Ix1.inf[x]);  // This fails
     // The next two asserts help manually unfold domMult
     pure assert
       (forall k: K :: Ic.inf[c].ks[k] * Ic.fm[c][x].ks[k] == domMult(Ic.inf[c], Ic.fm[c][x]).ks[k])
