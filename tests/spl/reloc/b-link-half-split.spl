@@ -103,7 +103,9 @@ lemma lemma_Icx1_eq_Icx(c: Node, cnext: Node, ckeys: Map<Int, K>, cptrs: Map<Int
   Ix1 := lemma_int_ind_is_valid(x, x.next, x.keys.map, x.ptrs.map, x.len, x.rangeLb, x.rangeUb, i - B);
 
   if (i < 0) {
-    pure assert  // TODO why won't it unfold domMult?
+    pure assert domLeq(domMult(Ix.inf[x], Ix.fm[x][y]), Iy.inf[y]);  // This fails
+    // The next two asserts help manually unfold domMult
+    pure assert
       (forall k: K :: Ic.inf[c].ks[k] * Ic.fm[c][x].ks[k] == domMult(Ic.inf[c], Ic.fm[c][x]).ks[k])
       && (forall k: K :: domMult(Ic.inf[c], Ic.fm[c][x]).ks[k] <= Ix.inf[x].ks[k])
       && (forall k: K :: Ic.inf[c].ir[k] * Ic.fm[c][x].ir[k] <= domMult(Ic.inf[c], Ic.fm[c][x]).ir[k])
@@ -119,7 +121,13 @@ lemma lemma_Icx1_eq_Icx(c: Node, cnext: Node, ckeys: Map<Int, K>, cptrs: Map<Int
     lemma_int_comp_unfold(c, Ic, x, Ix, Icx);
     lemma_int_comp_unfold(c, Ic1, x, Ix1, Icx1);
 
-    pure assert (forall x: Node :: domEq(Icx.inf[x], Icx1.inf[x]));
+    pure assert (forall x: Node :: domEq(Icx.inf[x], Icx1.inf[x]));  // This fails too
+
+    pure assert (forall y: Node, k: K :: y == c || y == x || (Icx.inf[y].ks[k] == 0 && Icx.inf[y].ir[k] == 0));
+    pure assert (forall y: Node, k: K :: y == c || y == x || (Icx1.inf[y].ks[k] == 0 && Icx1.inf[y].ir[k] == 0));
+         
+    pure assert (forall x: Node, k: K :: Icx.inf[x].ks[k] == Icx1.inf[x].ks[k]
+      && Icx.inf[x].ir[k] == Icx1.inf[x].ir[k]);
     
     return Ic, Ic1, Ix1, Icx, Icx1;
   } else {
