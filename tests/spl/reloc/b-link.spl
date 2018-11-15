@@ -54,7 +54,7 @@ pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
 
 define emptyInt(x, Ix) {
   Ix.FP == {x} && domEq(Ix.inf[x], domZero()) == true && Ix.FPo == {}
-  && Ix.na == nd({}, inrfnC({n: Node :: {}}, {x}))
+  && Ix.na == nd({}, inrfnC({n: Node :: {}}, {x}), {})
 }
 
 

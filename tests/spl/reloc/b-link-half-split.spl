@@ -1,7 +1,5 @@
 include "b-link.spl";
 
-options "-symbexec"
-
 
 procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interface)
   returns (Ic1: Interface, Ix1: Interface, Icx1: Interface)
@@ -44,13 +42,13 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     c.len := m - 1;
     x.next := c.next;
     c.next := x;
-    x.rangeLb := x.keys[0];
+    x.rangeLb := c.keys[c.len];
     x.rangeUb := c.rangeUb;
 
     Ic1 := compute_int(c);
     Ix1 := compute_int(x);
 
-    pure assert Ix.na == nd({}, inrfnC({n: Node :: {}}, {x}));
+    pure assert Ix.na == nd({}, inrfnC({n: Node :: {}}, {x}), {});
 
     Ic, Ic1, Ix1, Icx, Icx1 := lemma_Icx1_eq_Icx(c, cnext, ckeys, cptrs, clen,
       crangeLb, crangeUb, x, Ix, 2*B-1);
@@ -69,8 +67,22 @@ lemma lemma_Icx1_eq_Icx(c: Node, cnext: Node, ckeys: Map<Int, K>, cptrs: Map<Int
                         crangeLb: K, crangeUb: K, x: Node, Ix: Interface, i: Int)
   returns (Ic: Interface, Ic1: Interface, Ix1: Interface, Icx: Interface, Icx1: Interface)
   requires emptyInt(x, Ix) // TODO doesn't work even though the assert above works
+  requires intValid(Ix) == true
+  requires heapGood(c, cnext, ckeys, cptrs, clen, crangeLb, crangeUb)
+  requires heapGood(c, c.next, c.keys, c.ptrs, c.len, c.rangeLb, c.rangeUb)
+  requires heapGood(x, x.next, x.keys, x.ptrs, x.len, x.rangeLb, x.rangeUb)
   requires hrepSpatial(c) &*& hrepSpatial(x)
-  requires c.ptrs[0] != null && cnext != x && (forall i: Int :: 0 <= i <= clen ==> x != cptrs[i])
+  requires c.ptrs[0] != null && x.ptrs[0] != null && cptrs[0] != null
+
+  requires cnext != x && (forall i: Int :: 0 <= i <= clen ==> x != cptrs[i]) && clen == 2*B - 1
+  requires c.next == x && c.rangeLb == crangeLb && c.rangeUb == crangeUb && c.len == B - 1
+  requires x.next == cnext && x.rangeLb == c.keys[c.len] && x.rangeUb == crangeUb && x.len == B - 1
+  requires forall i: Int :: 0 <= i <= c.len ==> c.keys[i] == ckeys[i]
+  requires forall i: Int :: 0 <= i <= c.len ==> c.ptrs[i] == cptrs[i]
+  requires forall i: Int :: 0 <= i <= x.len ==> x.keys[i] == ckeys[i + B]
+    @(matching x.keys[i] yields ckeys[i + B])
+  requires forall i: Int :: 0 <= i <= x.len ==> x.ptrs[i] == cptrs[i + B]
+    @(matching x.ptrs[i] yields cptrs[i + B])
 
   ensures hrepSpatial(c) &*& hrepSpatial(x) &*& unchanged(c) &*& unchanged(x)
 
@@ -80,23 +92,68 @@ lemma lemma_Icx1_eq_Icx(c: Node, cnext: Node, ckeys: Map<Int, K>, cptrs: Map<Int
   ensures Icx == intComp(Ic, Ix) && Icx != intUndef
   ensures Icx1 == intComp(Ic1, Ix1) && Icx1 != intUndef
 
-  ensures x !in Ic1.FPo && c !in Ix1.FPo
+  ensures x !in Ic.FPo && c !in Ix1.FPo
   ensures Ic.FPo == Ic1.FPo ++ Ix1.FPo
   ensures (forall x: Node :: domEq(Icx.inf[x], Icx1.inf[x]))
   ensures (forall x: Node, y: Node ::
     domEq(domMult(Icx.inf[x], Icx.fm[x][y]), domMult(Icx1.inf[x], Icx1.fm[x][y])))
 {
-  Ic := int_ind(c, cnext, ckeys, cptrs, clen, crangeLb, crangeUb, i);
-  Ic1 := int_ind(c, c.next, c.keys.map, c.ptrs.map, c.len, c.rangeLb, c.rangeUb, i);
-  Ix1 := int_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, x.rangeLb, x.rangeUb, i - B);
+  Ic := lemma_int_ind_is_valid(c, cnext, ckeys, cptrs, clen, crangeLb, crangeUb, i);
+  Ic1 := lemma_int_ind_is_valid(c, c.next, c.keys.map, c.ptrs.map, c.len, c.rangeLb, c.rangeUb, i);
+  Ix1 := lemma_int_ind_is_valid(x, x.next, x.keys.map, x.ptrs.map, x.len, x.rangeLb, x.rangeUb, i - B);
 
-  // TODO need to prove that any int_ind is valid
-  Icx := lemma_int_comp_fold(c, Ic, x, Ix);
-  Icx1 := lemma_int_comp_fold(c, Ic1, x, Ix1);
-  
-  if (i >= 0) {
+  if (i < 0) {
+    pure assert  // TODO why won't it unfold domMult?
+      (forall k: K :: Ic.inf[c].ks[k] * Ic.fm[c][x].ks[k] == domMult(Ic.inf[c], Ic.fm[c][x]).ks[k])
+      && (forall k: K :: domMult(Ic.inf[c], Ic.fm[c][x]).ks[k] <= Ix.inf[x].ks[k])
+      && (forall k: K :: Ic.inf[c].ir[k] * Ic.fm[c][x].ir[k] <= domMult(Ic.inf[c], Ic.fm[c][x]).ir[k])
+      && (forall k: K :: domMult(Ic.inf[c], Ic.fm[c][x]).ir[k] <= Ix.inf[x].ir[k]);
+    pure assert
+      (forall k: K :: Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k] == domMult(Ic1.inf[c], Ic1.fm[c][x]).ks[k])
+      && (forall k: K :: domMult(Ic1.inf[c], Ic1.fm[c][x]).ks[k] <= Ix1.inf[x].ks[k])
+      && (forall k: K :: Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k] <= domMult(Ic1.inf[c], Ic1.fm[c][x]).ir[k])
+      && (forall k: K :: domMult(Ic1.inf[c], Ic1.fm[c][x]).ir[k] <= Ix1.inf[x].ir[k]);
+    
+    Icx := lemma_int_comp_fold(c, Ic, x, Ix);
+    Icx1 := lemma_int_comp_fold(c, Ic1, x, Ix1);
+    lemma_int_comp_unfold(c, Ic, x, Ix, Icx);
+    lemma_int_comp_unfold(c, Ic1, x, Ix1, Icx1);
+
+    pure assert (forall x: Node :: domEq(Icx.inf[x], Icx1.inf[x]));
+    
+    return Ic, Ic1, Ix1, Icx, Icx1;
+  } else {
+    //  if (i >= 0) {
+    // ****************************************
+    pure assume false;  // TODO REMOVE
+    // ****************************************
     var IIc: Interface, IIc1: Interface, IIx1: Interface, IIcx: Interface, IIcx1: Interface;
     IIc, IIc1, IIx1, IIcx, IIcx1 := lemma_Icx1_eq_Icx(c, cnext, ckeys, cptrs, clen,
       crangeLb, crangeUb, x, Ix, i - 1);
+
+    pure assert c !in Ix1.FPo;
+    pure assert x !in Ic.FPo;
+    lemma_int_valid_unfold(c, Ic);
+    lemma_int_valid_unfold(x, Ix);
+    lemma_int_valid_unfold(c, Ic1);
+    lemma_int_valid_unfold(x, Ix1);
+
+    pure assume domLeq(domMult(Ic.inf[c], Ic.fm[c][x]), Ix.inf[x]) == true;  // TODO
+    pure assert (forall k: K :: Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k] <= Ix1.inf[x].ks[k])
+      && (forall k: K :: Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k] <= Ix1.inf[x].ir[k]);
+    pure assume domLeq(domMult(Ic1.inf[c], Ic1.fm[c][x]), Ix1.inf[x]) == true;  // TODO
+
+    Icx := lemma_int_comp_fold(c, Ic, x, Ix);
+    Icx1 := lemma_int_comp_fold(c, Ic1, x, Ix1);
+    lemma_int_comp_unfold(c, Ic, x, Ix, Icx);
+    lemma_int_comp_unfold(c, Ic1, x, Ix1, Icx1);
+
+    //  pure assert forall k: K :: Ix.inf[x].ks[k] == Icx.inf[x].ks[k] + (Ic.inf[c].ks[k] * Ic.fm[c][x].ks[k]);
+    // TODO: try using domMinus to define this, and define domEq with custom triggers?
+    pure assume forall x: Node :: domEq(Icx.inf[x], Icx1.inf[x]);
+    pure assume forall x: Node, y: Node ::
+      domEq(domMult(Icx.inf[x], Icx.fm[x][y]), domMult(Icx1.inf[x], Icx1.fm[x][y]));
+    
+    return Ic, Ic1, Ix1, Icx, Icx1;
   }
 }
