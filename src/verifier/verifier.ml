@@ -196,7 +196,6 @@ let add_pred_insts prog f =
         | App (sym, (_ :: _ as ts), srt) as t
           when (sym <> Read || IdSet.subset (fv_term t) aux_vs) &&
             (is_free_symbol sym || sym = Disjoint || sym = SubsetEq || srt <> Bool) ->
-            let acc =  List.fold_left ft acc ts in
             let fvs = fv_term t in
             let sts = List.fold_left subterms_term_acc TermSet.empty ts in
             let no_var_reads =
@@ -206,7 +205,7 @@ let add_pred_insts prog f =
                 | _ -> true) sts
             in
             if (no_var_reads || is_set_sort srt) && IdSet.subset fvs bvs && not @@ IdSet.is_empty fvs
-            then TermSet.add t acc else acc
+            then List.fold_left ft (TermSet.add t acc) ts else acc
         | App (sym, [], Adt _) as t ->
             TermSet.add t acc
         | App (_, ts, Bool) ->
