@@ -78,7 +78,9 @@ lemma lemma_Icx1_eq_Icx(c: Node, cnext: Node, ckeys: Map<Int, K>, cptrs: Map<Int
   requires c.next == x && c.rangeLb == crangeLb && c.rangeUb == crangeUb && c.len == B - 1
   requires x.next == cnext && x.rangeLb == c.keys[c.len] && x.rangeUb == crangeUb && x.len == B - 1
   requires forall i: Int :: 0 <= i <= c.len ==> c.keys[i] == ckeys[i]
+    @(matching c.keys[i] yields ckeys[i])
   requires forall i: Int :: 0 <= i <= c.len ==> c.ptrs[i] == cptrs[i]
+    @(matching c.ptrs[i] yields cptrs[i])
   requires forall i: Int :: 0 <= i <= x.len ==> x.keys[i] == ckeys[i + B]
     @(matching x.keys[i] yields ckeys[i + B])
   requires forall i: Int :: 0 <= i <= x.len ==> x.ptrs[i] == cptrs[i + B]
@@ -91,9 +93,10 @@ lemma lemma_Icx1_eq_Icx(c: Node, cnext: Node, ckeys: Map<Int, K>, cptrs: Map<Int
   ensures Ix1 == int_ind(x, x.next, x.keys.map, x.ptrs.map, x.len, x.rangeLb, x.rangeUb, i - B)
   ensures Icx == intComp(Ic, Ix) && Icx != intUndef
   ensures Icx1 == intComp(Ic1, Ix1) && Icx1 != intUndef
+  ensures forall k: K :: Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k] <= Ix1.inf[x].ks[k]
+        && Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k] <= Ix1.inf[x].ir[k]
 
   ensures x !in Ic.FPo && c !in Ix1.FPo
-  //  ensures Ic.FPo == Ic1.FPo ++ Ix1.FPo
   ensures (forall x: Node :: domEq(Icx.inf[x], Icx1.inf[x]))
   ensures (forall x: Node, y: Node ::
     domEq(domMult(Icx.inf[x], Icx.fm[x][y]), domMult(Icx1.inf[x], Icx1.fm[x][y])))
@@ -102,7 +105,104 @@ lemma lemma_Icx1_eq_Icx(c: Node, cnext: Node, ckeys: Map<Int, K>, cptrs: Map<Int
   Ic1 := lemma_int_ind_is_valid(c, c.next, c.keys.map, c.ptrs.map, c.len, c.rangeLb, c.rangeUb, i);
   Ix1 := lemma_int_ind_is_valid(x, x.next, x.keys.map, x.ptrs.map, x.len, x.rangeLb, x.rangeUb, i - B);
 
-  if (i < 0) {
+  if (i >= 0) {
+    var IIc: Interface, IIc1: Interface, IIx1: Interface, IIcx: Interface, IIcx1: Interface;
+    IIc, IIc1, IIx1, IIcx, IIcx1 := lemma_Icx1_eq_Icx(c, cnext, ckeys, cptrs, clen,
+      crangeLb, crangeUb, x, Ix, i - 1);
+
+    pure assert Ic1.inf[c] == IIc1.inf[c] && Ic1.fm[c][x] == IIc1.fm[c][x] && Ix1.inf[x] == IIx1.inf[x];
+      
+    pure assert c !in Ix1.FPo;
+    pure assert x !in Ic.FPo;
+    lemma_int_valid_unfold(c, Ic);
+    lemma_int_valid_unfold(x, Ix);
+    lemma_int_valid_unfold(c, Ic1);
+    lemma_int_valid_unfold(x, Ix1);
+
+    pure assert forall k: K :: domMult(Ic1.inf[c], Ic1.fm[c][x]).ks[k] <= Ix1.inf[x].ks[k]
+      && domMult(Ic1.inf[c], Ic1.fm[c][x]).ir[k] <= Ix1.inf[x].ir[k]
+      with {
+        pure assert Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k] == domMult(Ic1.inf[c], Ic1.fm[c][x]).ks[k]
+          && Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k] == domMult(Ic1.inf[c], Ic1.fm[c][x]).ir[k];
+      }
+    pure assert forall k: K :: domMult(Ic.inf[c], Ic.fm[c][x]).ks[k] <= Ix.inf[x].ks[k]
+      && domMult(Ic.inf[c], Ic.fm[c][x]).ir[k] <= Ix.inf[x].ir[k]
+      with {
+        pure assert Ic.inf[c].ks[k] * Ic.fm[c][x].ks[k] == domMult(Ic.inf[c], Ic.fm[c][x]).ks[k]
+          && domMult(Ic.inf[c], Ic.fm[c][x]).ks[k] <= Ix.inf[x].ks[k]
+          && Ic.inf[c].ir[k] * Ic.fm[c][x].ir[k] == domMult(Ic.inf[c], Ic.fm[c][x]).ir[k]
+          && domMult(Ic.inf[c], Ic.fm[c][x]).ir[k] <= Ix.inf[x].ir[k];
+      }
+    
+    Icx := lemma_int_comp_fold(c, Ic, x, Ix);
+    Icx1 := lemma_int_comp_fold(c, Ic1, x, Ix1);
+    lemma_int_comp_unfold(c, Ic, x, Ix, Icx);
+    lemma_int_comp_unfold(c, Ic1, x, Ix1, Icx1);
+
+    // TODO manually prove that if z is c.ptrs[i] then flow maps still equal
+      pure assert (forall y: Node, z: Node, k: K ::
+        Icx.inf[y].ks[k] == Icx1.inf[y].ks[k] && Icx.inf[y].ir[k] == Icx1.inf[y].ir[k]
+        && domMult(Icx.inf[y], Icx.fm[y][z]).ks[k] == domMult(Icx1.inf[y], Icx1.fm[y][z]).ks[k]
+        && domMult(Icx.inf[y], Icx.fm[y][z]).ir[k] == domMult(Icx1.inf[y], Icx1.fm[y][z]).ir[k])
+      with {
+        pure assert Icx.inf[c].ks[k] == Ic.inf[c].ks[k]
+          && Ix.inf[x].ks[k] == domPlus(Icx.inf[x], domMult(Ic.inf[c], Ic.fm[c][x])).ks[k]
+          && (domPlus(Icx.inf[x], domMult(Ic.inf[c], Ic.fm[c][x])).ks[k]
+             == Icx.inf[x].ks[k] + domMult(Ic.inf[c], Ic.fm[c][x]).ks[k])
+          && (domMult(Ic.inf[c], Ic.fm[c][x]).ks[k]
+             == Ic.inf[c].ks[k] * Ic.fm[c][x].ks[k])
+          && (Icx1.inf[c].ks[k] == Ic1.inf[c].ks[k])
+          && (Ix1.inf[x].ks[k] == domPlus(Icx1.inf[x], domMult(Ic1.inf[c], Ic1.fm[c][x])).ks[k])
+          && (domPlus(Icx1.inf[x], domMult(Ic1.inf[c], Ic1.fm[c][x])).ks[k]
+             == Icx1.inf[x].ks[k] + domMult(Ic1.inf[c], Ic1.fm[c][x]).ks[k])
+          && (domMult(Ic1.inf[c], Ic1.fm[c][x]).ks[k]
+             == Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k])
+          && Icx.inf[c].ks[k] == Icx1.inf[c].ks[k]
+          && Icx.inf[c].ir[k] == Ic.inf[c].ir[k]
+          && Ix.inf[x].ir[k] == domPlus(Icx.inf[x], domMult(Ic.inf[c], Ic.fm[c][x])).ir[k]
+          && (domPlus(Icx.inf[x], domMult(Ic.inf[c], Ic.fm[c][x])).ir[k]
+             == Icx.inf[x].ir[k] + domMult(Ic.inf[c], Ic.fm[c][x]).ir[k])
+          && (domMult(Ic.inf[c], Ic.fm[c][x]).ir[k]
+             == Ic.inf[c].ir[k] * Ic.fm[c][x].ir[k])
+          && (Icx1.inf[c].ir[k] == Ic1.inf[c].ir[k])
+          && (Ix1.inf[x].ir[k] == domPlus(Icx1.inf[x], domMult(Ic1.inf[c], Ic1.fm[c][x])).ir[k])
+          && (domPlus(Icx1.inf[x], domMult(Ic1.inf[c], Ic1.fm[c][x])).ir[k]
+             == Icx1.inf[x].ir[k] + domMult(Ic1.inf[c], Ic1.fm[c][x]).ir[k])
+          && (domMult(Ic1.inf[c], Ic1.fm[c][x]).ir[k]
+             == Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k])
+          && Icx.inf[c].ir[k] == Icx1.inf[c].ir[k];
+        pure assert (z != x ==>
+          Icx.fm[c][z].ks[k] == domPlus(Ic.fm[c][z], domMult(Ic.fm[c][x], Ix.fm[x][z])).ks[k]
+          && domPlus(Ic.fm[c][z], domMult(Ic.fm[c][x], Ix.fm[x][z])).ks[k] == Ic.fm[c][z].ks[k] + domMult(Ic.fm[c][x], Ix.fm[x][z]).ks[k]
+          && domMult(Ic.fm[c][x], Ix.fm[x][z]).ks[k] == Ic.fm[c][x].ks[k] * Ix.fm[x][z].ks[k])
+          && (z != c ==> Icx.fm[x][z].ks[k] == Ix.fm[x][z].ks[k])
+          && (z != x ==>
+          Icx1.fm[c][z].ks[k] == domPlus(Ic1.fm[c][z], domMult(Ic1.fm[c][x], Ix1.fm[x][z])).ks[k]
+          && domPlus(Ic1.fm[c][z], domMult(Ic1.fm[c][x], Ix1.fm[x][z])).ks[k] == Ic1.fm[c][z].ks[k] + domMult(Ic1.fm[c][x], Ix1.fm[x][z]).ks[k]
+          && domMult(Ic1.fm[c][x], Ix1.fm[x][z]).ks[k] == Ic1.fm[c][x].ks[k] * Ix1.fm[x][z].ks[k])
+          && (z != c ==> Icx1.fm[x][z].ks[k] == Ix1.fm[x][z].ks[k])
+          && (z != x ==>
+          Icx.fm[c][z].ir[k] == domPlus(Ic.fm[c][z], domMult(Ic.fm[c][x], Ix.fm[x][z])).ir[k]
+          && domPlus(Ic.fm[c][z], domMult(Ic.fm[c][x], Ix.fm[x][z])).ir[k] == Ic.fm[c][z].ir[k] + domMult(Ic.fm[c][x], Ix.fm[x][z]).ir[k]
+          && domMult(Ic.fm[c][x], Ix.fm[x][z]).ir[k] == Ic.fm[c][x].ir[k] * Ix.fm[x][z].ir[k])
+          && (z != c ==> Icx.fm[x][z].ir[k] == Ix.fm[x][z].ir[k])
+          && (z != x ==>
+          Icx1.fm[c][z].ir[k] == domPlus(Ic1.fm[c][z], domMult(Ic1.fm[c][x], Ix1.fm[x][z])).ir[k]
+          && domPlus(Ic1.fm[c][z], domMult(Ic1.fm[c][x], Ix1.fm[x][z])).ir[k] == Ic1.fm[c][z].ir[k] + domMult(Ic1.fm[c][x], Ix1.fm[x][z]).ir[k]
+          && domMult(Ic1.fm[c][x], Ix1.fm[x][z]).ir[k] == Ic1.fm[c][x].ir[k] * Ix1.fm[x][z].ir[k]
+          && Icx1.fm[x][z].ir[k] == Ix1.fm[x][z].ir[k]);
+        pure assert domMult(Icx.inf[y], Icx.fm[y][z]).ks[k] == Icx.inf[y].ks[k] * Icx.fm[y][z].ks[k]
+          && domMult(Icx1.inf[y], Icx1.fm[y][z]).ks[k] == Icx1.inf[y].ks[k] * Icx1.fm[y][z].ks[k]
+          && domMult(Icx.inf[y], Icx.fm[y][z]).ir[k] == Icx.inf[y].ir[k] * Icx.fm[y][z].ir[k]
+          && domMult(Icx1.inf[y], Icx1.fm[y][z]).ir[k] == Icx1.inf[y].ir[k] * Icx1.fm[y][z].ir[k];
+      }
+
+      pure assert (forall x: Node :: domEq(Icx.inf[x], Icx1.inf[x]));
+      pure assert (forall x: Node, y: Node ::
+                   domEq(domMult(Icx.inf[x], Icx.fm[x][y]), domMult(Icx1.inf[x], Icx1.fm[x][y])));
+    
+    return Ic, Ic1, Ix1, Icx, Icx1;
+  } else {
     pure assert forall k: K :: domMult(Ic1.inf[c], Ic1.fm[c][x]).ks[k] <= Ix1.inf[x].ks[k]
       && domMult(Ic1.inf[c], Ic1.fm[c][x]).ir[k] <= Ix1.inf[x].ir[k]
       with {
@@ -185,33 +285,6 @@ lemma lemma_Icx1_eq_Icx(c: Node, cnext: Node, ckeys: Map<Int, K>, cptrs: Map<Int
       pure assert (forall x: Node :: domEq(Icx.inf[x], Icx1.inf[x]));
       pure assert (forall x: Node, y: Node ::
                    domEq(domMult(Icx.inf[x], Icx.fm[x][y]), domMult(Icx1.inf[x], Icx1.fm[x][y])));
-
-    return Ic, Ic1, Ix1, Icx, Icx1;
-  } else {
-    //  if (i >= 0) {
-    // ****************************************
-    pure assume false;  // TODO REMOVE
-    // ****************************************
-    var IIc: Interface, IIc1: Interface, IIx1: Interface, IIcx: Interface, IIcx1: Interface;
-    IIc, IIc1, IIx1, IIcx, IIcx1 := lemma_Icx1_eq_Icx(c, cnext, ckeys, cptrs, clen,
-      crangeLb, crangeUb, x, Ix, i - 1);
-
-    pure assert c !in Ix1.FPo;
-    pure assert x !in Ic.FPo;
-    lemma_int_valid_unfold(c, Ic);
-    lemma_int_valid_unfold(x, Ix);
-    lemma_int_valid_unfold(c, Ic1);
-    lemma_int_valid_unfold(x, Ix1);
-
-    pure assume domLeq(domMult(Ic.inf[c], Ic.fm[c][x]), Ix.inf[x]) == true;  // TODO
-    pure assert (forall k: K :: Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k] <= Ix1.inf[x].ks[k])
-      && (forall k: K :: Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k] <= Ix1.inf[x].ir[k]);
-    pure assume domLeq(domMult(Ic1.inf[c], Ic1.fm[c][x]), Ix1.inf[x]) == true;  // TODO
-
-    Icx := lemma_int_comp_fold(c, Ic, x, Ix);
-    Icx1 := lemma_int_comp_fold(c, Ic1, x, Ix1);
-    lemma_int_comp_unfold(c, Ic, x, Ix, Icx);
-    lemma_int_comp_unfold(c, Ic1, x, Ix1, Icx1);
 
     return Ic, Ic1, Ix1, Icx, Icx1;
   }
