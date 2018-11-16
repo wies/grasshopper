@@ -63,6 +63,7 @@ let _ =
       ("type", TYPE);
       ("var", VAR);
       ("while", WHILE);
+      ("with", WITH);
       ("without", WITHOUT);
       ("yields", YIELDS);
       ("axiom", AXIOM);
