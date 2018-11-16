@@ -158,8 +158,10 @@ procedure copy_interface(I: Interface, a: NodeDom)
 
 lemma lemma_acyclic_2(x: Node, Ix: Interface, y: Node, Iy: Interface)
   requires intValid(intComp(Ix, Iy)) == true
-  requires !domLeq(Ix.fm[x][y], domZero()) == true
-  ensures domEq(Ix.fm[y][x], domZero())
+  requires !domEq(domMult(Ix.inf[x], Ix.fm[x][y]), domZero)
+  //requires !domLeq(Ix.fm[x][y], domZero()) == true
+  //ensures domEq(Ix.fm[y][x], domZero())
+  ensures domEq(Iy.fm[y][x], domZero())
 
 /*
 lemma lemma_Gr_comp(Ix: Interface, Iy: Interface)
