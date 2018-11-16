@@ -1,0 +1,176 @@
+/** Linked list implementation of the lock coupling template for linearizable dictionaries. */
+
+options "-abspreds -simplearrays -symbexec -propreads"
+
+include "flows.spl"
+include "array_util.spl"
+
+
+/** Flow and node domain definitions */
+
+datatype FlowDom = fd(ks: Map<K, Int>)
+
+/*
+pure predicate domEq(p1: FlowDom, p2: FlowDom) {
+  p1.ks == p2.ks && p1.ir == p2.ir
+  //  (forall k: K :: p1.ks[k] == p2.ks[k]
+  //   @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
+  //    && (forall k: K :: p1.ir[k] == p2.ir[k]
+  //     @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
+
+}
+ */
+
+pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
+  (forall k: K :: p1.ks[k] <= p2.ks[k])
+    //@(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
+}
+
+pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+  ensures forall k: K :: p.ks[k] == p1.ks[k] + p2.ks[k]
+
+pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+  ensures forall k: K :: p.ks[k] == p1.ks[k] * p2.ks[k]
+
+pure function domZero() returns(p: FlowDom)
+  ensures forall k: K :: p.ks[k] == 0
+
+
+datatype NodeDom = nd(contents: Set<K>);
+
+pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
+  (forall k: K :: k in a1.contents ==> k in a2.contents)
+}
+
+
+/** Definition of a node */
+
+struct Node {
+  var data: K;
+  var next: Node;
+}
+
+define unchanged(x) {
+  x.data == old(x.data) && x.next == old(x.next)
+}
+
+
+/** Definition of heap representation, hrep */
+
+define hrepSpatial(x) {
+  acc(x)
+}
+
+define hrep(x, I) {
+  hrepSpatial(x) &*& I.FP == {x} &*& x.next != x &*& I.na.contents == {x.data}
+  &*& (x.next == null && I.FPo == {}
+     || x.next != null && I.FPo == {x.next}
+       && (forall k: K :: (I.fm[x][x.next].ks[k] == 1 && lt(x.data, k))
+         && (I.fm[x][x.next].ks[k] == 0 && !lt(x.data, k))
+         @(matching x.next yields I.fm[x][x.next].ks[k])))
+}
+
+// The good condition
+define nu(x, I) {
+    // Contents subsetof keyset
+    (forall k: K :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
+    && (forall k: K, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
+    // Edgesets are disjoint
+    && (forall k: K, y: Node, z: Node :: y == z
+       || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0)
+}
+
+
+/** Begin programs */
+
+/** findNext */
+procedure findNext(x: Node, k: K, Ix: Interface)
+  returns (n: Node)
+  requires hrep(x, Ix) &*& intValid(Ix) == true
+  ensures hrep(x, Ix)
+  ensures n != null ==> Ix.fm[x][n].ks[k] >= 1
+  ensures n == null ==> (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
+{
+  lemma_int_valid_unfold(x, Ix);
+  if (x.next == null) {
+    return null;
+  } else {
+    if (le(k, x.data)) {
+      return null;
+    } else {
+      return x.next;
+    }
+  }
+}
+
+
+/** member */
+procedure member(x: Node, k: K, Ix: Interface)
+  returns (res: Bool, Ix1: Interface)
+  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
+  ensures hrep(x, Ix)
+  ensures intEq(Ix, Ix1) == true
+  // decisiveOpSpec(x, Ix1, res, k):
+  ensures (Ix1.na.contents == Ix.na.contents && (res == k in Ix.na.contents))
+{
+  if (k == x.data)
+    return true, Ix;
+  else
+    return false, Ix;
+}
+
+
+/** insert */
+procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, Im: Interface,
+    Ipnm: Interface)
+  returns (res: Bool, Ip1: Interface, In1: Interface, Im1: Interface, Ipnm1: Interface)
+  requires hrep(p, Ip) &*& hrep(n, In) &*& acc(m)
+  requires intValid(Ip) == true &*& intValid(In) == true &*& Ipnm == intComp(Ip, intComp(In, Im))
+  requires Im.FP == {m} && Im.FPo == {} && (forall k: K, y: Node :: Im.inf[y].ks[k] == 0)
+  requires (forall k: K, x: Node, y: Node :: Im.fm[x][y].ks[k] == 0)
+  requires In.inf[n].ks[k] == 1 && (forall y: Node :: In.fm[n][y].ks[k] == 0)
+  requires k != n.data
+  ensures hrep(p, Ip1) &*& hrep(n, In1) &*& hrep(m, Im1)
+  ensures intValid(Ip1) == true &*& intValid(In1) == true &*& intValid(Im1) == true
+  ensures Ipnm1 == intComp(Ip1, intComp(In1, Im1))
+  ensures intEq(Ipnm, Ipnm1) == true
+  // decisiveOpSpec(x, Ix1, res, k):
+  ensures (Ipnm1.na.contents == Ipnm.na.contents ++ {k} && (res == k !in Ipnm.na.contents))
+{
+  m.data := k;
+  m.next := n;
+  p.next := m;
+
+  lemma_int_valid_unfold(p, Ip);
+
+  var ppfm := { x: Node :: x == m ? fd({ k: K :: 1 }) : domZero };
+  var pfm := { x: Node :: x == p ? ppfm : { y: Node :: domZero } };
+  Ip1 := int(Ip.inf, Ip.na, pfm, {p}, {m});
+
+  var k1: K;
+  if (lt(p.data, k1)) {
+    pure assert Ip1.fm[p][p.next].ks[k1] == 1;
+  } else {
+    pure assert Ip1.fm[p][p.next].ks[k1] == 0;
+  }
+
+  // pure assert (forall k: K :: (Ip1.fm[p][p.next].ks[k] == 1 && lt(p.data, k)) */
+  //        && (Ip1.fm[p][p.next].ks[k] == 0 && !lt(p.data, k)) */
+  //              @(matching p.next yields Ip1.fm[p][p.next].ks[k])); */
+  
+    //  assert hrep(p, Ip1) &*& acc(n) &*& acc(m);
+
+
+  pure assume false;
+}
+
+procedure int_of_node(p: Node, pinfLb: K) returns (Ip: Interface)
+  requires acc(p) &*& p.next != p &*& lt(pinfLb, p.data) &*& p.next != null
+  ensures hrep(p, Ip)
+{
+  var pinf := { x: Node :: x == p ? fd({ k: K :: lt(pinfLb, k) ? 1 : 0 }) : domZero };
+  var ppfm := { x: Node :: x == p.next ? fd({ k: K :: 1 }) : domZero };
+  var pfm := { x: Node :: x == p ? ppfm : { y: Node :: domZero } };
+  Ip := int(pinf, nd({p.data}), pfm, {p}, {p.next});
+}
