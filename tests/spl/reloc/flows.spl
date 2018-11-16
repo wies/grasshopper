@@ -11,10 +11,19 @@ datatype Interface =
       FPo: Set<Node>)
   | intUndef; // For when compositions don't exist
 
+pure function newInt(m: Node) returns (Im: Interface)
+{
+  int({ n: Node :: domZero() },
+      ndBot(),
+      { n: Node :: { n1: Node :: domZero() } },
+      {m}, {})
+}
+
 pure function intComp(I1: Interface, I2: Interface) returns (I: Interface)
   ensures I != intUndef ==> I.FP == I1.FP ++ I2.FP
   ensures forall n: Node :: I == intUndef || n !in I1.FP || n !in I2.FP
   ensures I.FPo == (I1.FPo -- I2.FP) ++ (I2.FPo -- I1.FP)
+  ensures I.na == ndJoin(I1.na, I2.na)
 
 // Encoding of well defined interfaces
 pure predicate intValid(I: Interface)
@@ -91,7 +100,7 @@ predicate int_comp_singl(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Inte
            (domEq(I.fm[x][n1],
                     domPlus(Ix.fm[x][n1], domMult(Ix.fm[x][y], Iy.fm[y][n1])))))
   && (forall n1: Node :: n1 != x ==> (domEq(I.fm[y][n1], Iy.fm[y][n1])))
-  // The following are from validity of I:
+  // The following are from validity of I: // TODO remove these
   && (forall n: Node :: n !in I.FP ==> domEq(I.inf[n], domZero()))
   && (forall n: Node, n1: Node :: n !in I.FP ==> domEq(I.fm[n][n1], domZero()))
   && (forall n: Node, n1: Node :: n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero()))
@@ -99,7 +108,7 @@ predicate int_comp_singl(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Inte
   && (forall n: Node :: domLeq(domZero(), I.inf[n]))
   && (forall n: Node, n1: Node :: domLeq(domZero(), I.fm[n][n1]))
 }
-    
+
 lemma lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
   requires Ix != intUndef && Iy != intUndef && I != intUndef
   requires intComp(Ix, Iy) == I && x != y && x !in Iy.FPo && Ix.FP == {x} && Iy.FP == {y}
@@ -134,6 +143,18 @@ lemma lemma_int_valid_unfold(x: Node, I: Interface)
   ensures forall n: Node, n1: Node :: domLeq(domZero(), I.fm[n][n1])
   ensures nu(x, I)
 
+lemma lemma_int_valid_unfold_I(I: Interface)
+  requires intValid(I) == true
+  ensures forall n: Node :: n !in I.FP ==> domEq(I.inf[n], domZero())
+  //@(matching I.inf[n] yields known(domEq(I.inf[n], domZero())))  // TODO why?
+  ensures forall n: Node, n1: Node :: n !in I.FP ==> domEq(I.fm[n][n1], domZero())
+  //@(matching I.fm[n][n1] yields known(domEq(I.fm[n][n1], domZero())))
+  ensures forall n: Node, n1: Node :: n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero())
+  //@(matching I.fm[n][n1] yields known(domEq(I.fm[n][n1], domZero())))
+  ensures forall n: Node :: n !in I.FP || n !in I.FPo
+  ensures forall n: Node :: domLeq(domZero(), I.inf[n])
+  ensures forall n: Node, n1: Node :: domLeq(domZero(), I.fm[n][n1])
+
 lemma lemma_int_valid_fold(x: Node, I: Interface)
   requires I != intUndef // TODO why? See test_valid2
   requires forall n: Node :: n !in I.FP ==> domEq(I.inf[n], domZero())
@@ -159,9 +180,16 @@ procedure copy_interface(I: Interface, a: NodeDom)
 lemma lemma_acyclic_2(x: Node, Ix: Interface, y: Node, Iy: Interface)
   requires intValid(intComp(Ix, Iy)) == true
   requires !domEq(domMult(Ix.inf[x], Ix.fm[x][y]), domZero)
-  //requires !domLeq(Ix.fm[x][y], domZero()) == true
-  //ensures domEq(Ix.fm[y][x], domZero())
   ensures domEq(Iy.fm[y][x], domZero())
+
+lemma lemma_proj(x: Node, Ix: Interface, Iy: Interface, I: Interface)
+  requires I == intComp(Ix, Iy) && intValid(I) && x in Ix.FP
+  ensures domLeq(I.inf[x], Ix.inf[x]) == true
+
+
+lemma lemma_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Node)
+  requires intComp(I1, I2) == I && x in I1.FP && y in I1.FPo && I.FPo == {}
+  ensures y in I2.FP && domLeq(domMult(I1.inf[x], I1.fm[x][y]), I2.inf[y]) == true
 
 /*
 lemma lemma_Gr_comp(Ix: Interface, Iy: Interface)
@@ -215,10 +243,6 @@ lemma lemma_int_comp_inf_leq(x: Node, Ix: Interface, Iy: Interface,
   requires intComp(Ix, Iy) == I && x in Ix.FP
   ensures domLeq(I.inf[x], Ix.inf[x]) == true
 
-
-lemma lemma_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Node)
-  requires intComp(I1, I2) == I && x in I1.FP && y in I1.FPo && I.FPo == {}
-  ensures y in I2.FP && domLeq(domMult(I1.inf[x], I1.fm[x][y]), I2.inf[y]) == true
 
 lemma lemma_inf_geq(x: Node, Ix: Interface, y: Node, Iy: Interface,
                     z: Node, Iz: Interface, I: Interface)

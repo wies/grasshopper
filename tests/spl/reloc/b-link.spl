@@ -23,10 +23,10 @@ pure predicate domEq(p1: FlowDom, p2: FlowDom) {
  */
 
 pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
-  (forall k: K :: p1.ks[k] <= p2.ks[k])
-    //@(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
-    && (forall k: K :: p1.ir[k] <= p2.ir[k])
-    //@(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
+  (forall k: K :: p1.ks[k] <= p2.ks[k]
+    @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
+    && (forall k: K :: p1.ir[k] <= p2.ir[k]
+    @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
 }
 
 pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
@@ -56,7 +56,32 @@ pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
   && (forall k: K :: k in a1.outs ==> k in a2.contents)
 }
 
-define emptyInt(x, Ix) {
+//pure function ndJoinWitness(a1: NodeDom, a2: NodeDom) returns (n: Node)
+
+pure function ndJoin(a1: NodeDom, a2: NodeDom) returns (a: NodeDom)
+  ensures a.contents == a1.contents ++ a2.contents
+  ensures a.outs == a1.outs ++ a2.outs
+  // Encoding Disjoint(a1.inr.inrdom, a2.inr.inrdom):
+  //  ensures (ndJoinWitness(a1, a2) in a1.inr.inrdom && ndJoinWitness(a1, a2) in a1.inr.inrdom)
+  //    || a.inr == inrfnC({n: Node :: n in a1.inr.inrdom ? a1.inr.inrfn[n] : a2.inr.inrfn[n]},
+  //                      a1.inr.inrdom ++ a1.inr.inrdom)
+  //  ensures a.inr == inrfnUndef || (forall n: Node :: n !in a1.inr.inrdom || n !in a2.inr.inrdom)
+/*{
+  (exists n: Node :: n in a1.inr.inrdom && n in a2.inr.inrdom) ?
+    nd(a1.contents ++ a2.contents, inrfnUndef, a1.outs ++ a2.outs)
+    : nd(a1.contents ++ a2.contents,
+         inrfnC({n: Node :: n in a1.inr.inrdom ? a1.inr.inrfn[n] : a2.inr.inrfn[n]},
+           a1.inr.inrdom ++ a1.inr.inrdom),
+         a1.outs ++ a2.outs)
+}*/
+
+pure function ndBot() returns (a: NodeDom)
+{
+  nd({}, inrfnC({n: Node :: {}}, {}), {})
+}
+
+
+define emptyInt(x, Ix) {  // TODO use newInt instead
   Ix.FP == {x} && domEq(Ix.inf[x], domZero()) == true && Ix.FPo == {}
   && Ix.na == nd({}, inrfnC({n: Node :: {}}, {x}), {})
 }
@@ -247,8 +272,8 @@ define nu(x, I) {
     // Inreach keyset subsetof inset
     && (forall k: K :: I.inf[x].ir[k] >= 1 && k !in I.na.outs
        ==> I.inf[x].ks[k] >= 1)
-    // Inreach edgesets subsetof normal edgesets
-    && (forall k: K, y: Node :: I.fm[x][y].ir[k] <= I.fm[x][y].ks[k])
+    // Inreach edgesets subsetof normal edgesets  // TODO - this is unnecessary?
+    //    && (forall k: K, y: Node :: I.fm[x][y].ir[k] <= I.fm[x][y].ks[k])
     // If k ∈ inreach \ inset, then inreach edgeset is same as normal edgeset (for step)
     && (forall k: K, y: Node :: I.inf[x].ir[k] >= 1 && I.inf[x].ks[k] <= 0
        && I.fm[x][y].ks[k] >= 1 ==> I.fm[x][y].ir[k] >= 1)
@@ -383,6 +408,97 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
     pure assert false; // TODO why is this necessary?!
   }
 }
+
+
+/** Lemmas needed by Coq */
+
+lemma inreach_impl_inset(n: Node, In: Interface, k: K)
+  requires k in In.na.inr.inrfn[n]
+  requires k !in In.na.outs && intValid(In) && In.FP == {n}
+  ensures In.inf[n].ks[k] > 0
+{
+  lemma_int_valid_unfold(n, In);
+  pure assert In.inf[n].ks[k] >= 1 || In.inf[n].ir[k] >= 1;
+}
+
+// TODO not needed for link template
+lemma flowint_inset_step(I: Interface, x: Node, Ix: Interface, y: Node, Iy: Interface, k: K)
+  requires Ix.FP == {x} && Iy.FP == {y} && I == intComp(Ix, Iy) && intValid(I)
+  requires Ix.inf[x].ks[k] >= 1 && Ix.fm[x][y].ks[k] >= 1
+  ensures Iy.inf[y].ks[k] >= 1
+{
+  pure assert !(Ix.fm[x][y].ks[k] <= domZero().ks[k]);
+  lemma_acyclic_2(x, Ix, y, Iy);
+  lemma_int_comp_unfold(x, Ix, y, Iy, I);
+  pure assert Iy.inf[y].ks[k] == domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])).ks[k]
+    && domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])).ks[k]
+      == I.inf[y].ks[k] + domMult(Ix.inf[x], Ix.fm[x][y]).ks[k]
+    && domMult(Ix.inf[x], Ix.fm[x][y]).ks[k] == Ix.inf[x].ks[k] * Ix.fm[x][y].ks[k];
+}
+
+lemma flowint_inreach_step(I: Interface, x: Node, Ix: Interface, y: Node, Iy: Interface, k: K)
+  requires Ix.FP == {x} && Iy.FP == {y} && I == intComp(Ix, Iy) && intValid(I)
+  requires k in Ix.na.inr.inrfn[x] && Ix.fm[x][y].ks[k] >= 1
+  ensures k in Iy.na.inr.inrfn[y]
+{
+  lemma_int_valid_unfold(x, Ix);
+  lemma_int_valid_unfold(y, Iy);
+  lemma_int_valid_unfold_I(I);
+  
+  lemma_acyclic_2(x, Ix, y, Iy);
+  lemma_int_comp_unfold(x, Ix, y, Iy, I);
+
+  pure assert Iy.inf[y].ks[k] == domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])).ks[k]
+    && domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])).ks[k]
+      == I.inf[y].ks[k] + domMult(Ix.inf[x], Ix.fm[x][y]).ks[k]
+    && domMult(Ix.inf[x], Ix.fm[x][y]).ks[k] == Ix.inf[x].ks[k] * Ix.fm[x][y].ks[k];
+  pure assert Iy.inf[y].ir[k] == domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])).ir[k]
+    && domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])).ir[k]
+      == I.inf[y].ir[k] + domMult(Ix.inf[x], Ix.fm[x][y]).ir[k]
+    && domMult(Ix.inf[x], Ix.fm[x][y]).ir[k] == Ix.inf[x].ir[k] * Ix.fm[x][y].ir[k];
+}
+
+lemma flowint_proj(I: Interface, x: Node, Ix: Interface, Iy: Interface, k: K)
+  requires I == intComp(Ix, Iy) && intValid(I) && x in Ix.FP
+  requires I.inf[x].ks[k] >= 1
+  ensures Ix.inf[x].ks[k] >= 1
+{
+  lemma_proj(x, Ix, Iy, I);
+}
+
+lemma flowint_cont(I: Interface, Im: Interface, I1: Interface, m: Node)
+  requires I1 == intComp(I, Im) && Im == newInt(m)
+  ensures I.na.contents == I1.na.contents
+{}
+
+lemma flowint_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Node, k: K)
+  requires I == intComp(I1, I2) && intValid(I) && x in I1.FP && I.FPo == {}
+  requires I1.fm[x][y].ks[k] >= 1
+  ensures y in I2.FP
+{
+  lemma_int_valid_unfold_I(I1);
+  lemma_step(I1, I2, I, x, y);
+}
+
+/*
+// TODO This is a pain, do this on paper for now
+lemma preserve_inreach(I: Interface, In: Interface, Io: Interface, I1: Interface, In1: Interface,
+  n: Node)
+  requires intValid(I) && intValid(I1) && In.FP == {n} && In1.FP == {n}
+  requires I.na.inr != inrfnUndef
+  requires I == intComp(In, Io) && I1 == intComp(In1, Io)
+  requires In.na.inr.inrfn[n] == In1.na.inr.inrfn[n]
+  ensures forall n1 in I1.FP :: I1.na.inr.inrfn[n1] == I.na.inr.inrfn[n1]
+{
+  lemma_int_valid_unfold(n, In);
+  lemma_int_valid_unfold(n, In1);
+  pure assert ndJoinWitness(In.na, Io.na) !in In.na.inr.inrdom
+    || ndJoinWitness(In.na, Io.na) !in Io.na.inr.inrdom;
+  var n1: Node;
+  pure assert (n1 in In.na.inr.inrdom ==> I.na.inr.inrfn[n1] == In.na.inr.inrfn[n1])
+    && (n1 !in In.na.inr.inrdom ==> I.na.inr.inrfn[n1] == Io.na.inr.inrfn[n1]);
+}
+*/
 
 
 /** Begin programs */
