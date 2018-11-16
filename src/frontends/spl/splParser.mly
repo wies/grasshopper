@@ -68,7 +68,7 @@ type rhs_string_maybe =
 %token GHOST IMPLICIT VAR CONST STRUCT PURE LEMMA PROCEDURE INCLUDE OPTIONS AXIOM TYPE
 %token DEFINE DATATYPE OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token LOC INT BOOL BYTE SET MAP ARRAY ARRAYCELL
-%token MATCHING YIELDS WITHOUT COMMENT PATTERN
+%token MATCHING YIELDS WITHOUT WITH COMMENT PATTERN
 %token EOF
 
 %nonassoc COLONEQ 
@@ -571,8 +571,9 @@ stmt_wo_trailing_substmt:
   Assume ($3, fst $1, mk_position (if $1 <> (false, false) then 1 else 2) 4)
 }
 /* assert */
-| contract_mods ASSERT expr SEMICOLON { 
-  Assert ($3, fst $1, mk_position (if $1 <> (false, false) then 1 else 2) 4)
+| contract_mods ASSERT expr with_clause {
+  $4 (fst $1) $3 (mk_position (if $1 <> (false, false) then 1 else 2) 4)
+  (*Assert ($3, fst $1, mk_position (if $1 <> (false, false) then 1 else 2) 4)*)
 }
 /* split */
 | SPLIT expr SEMICOLON { 
@@ -584,6 +585,35 @@ stmt_wo_trailing_substmt:
 }
 ;
 
+with_clause:
+| SEMICOLON { 
+  fun pure e pos -> Assert (e, pure, pos)
+}
+| WITH LBRACE block RBRACE {
+  fun pure e pos ->
+    let vs, e1, pos1 = match e with
+    | Binder (Forall, vars, e1, pos1) when pure ->
+        let vs =
+          List.fold_right (fun bv vs ->
+            match bv with
+            | UnguardedVar v ->
+                v :: vs
+            | GuardedVar (x, e) ->
+                ProgError.syntax_error (pos_of_expr e)
+                  (Some "no guarded variables allowed in 'with' clauses"))
+            vars []
+        in
+        vs, e1, pos1
+    | _ -> [], e, pos
+    in
+    let checks =
+      LocalVars (vs, None, pos) ::
+      List.append $3 [Assert (e1, true, pos1); Assume (BoolVal (false, pos), true, pos)]
+    in
+    Choice ([Assume (e, true, pos); Block (checks, pos)], pos)
+}
+
+  
 assign_lhs_list:
 | assign_lhs COMMA assign_lhs_list { $1 :: $3 }
 | assign_lhs { [$1] }
