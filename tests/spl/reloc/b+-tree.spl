@@ -159,9 +159,9 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
 
 /** Begin programs */
 
-/** Initialize root note */
+/** Initialize root node */
 procedure init() returns (x: Node, I: Interface)
-  ensures hrep(x, I)
+  ensures hrep(x, I) &*& intValid(I) == true
 {
   x := new Node;
   x.keys := new Array<K>(2*B);
@@ -175,6 +175,7 @@ procedure init() returns (x: Node, I: Interface)
   var xfm := { n: Node :: { n1: Node :: domZero } };
   I := int({ n: Node :: n == x ? fd(xkc, 1) : domZero },
             nd({}), xfm, {x}, {});
+  lemma_int_valid_fold(x, I);
 }
 
 /** inRange */

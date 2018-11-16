@@ -389,7 +389,7 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
 
 /** Initialize root note */
 procedure init() returns (x: Node, I: Interface)
-  ensures hrep(x, I)
+  ensures hrep(x, I) &*& intValid(I) == true
 {
   x := new Node;
   x.keys := new Array<K>(2*B);

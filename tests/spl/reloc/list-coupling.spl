@@ -1,6 +1,6 @@
 /** Linked list implementation of the lock coupling template for linearizable dictionaries. */
 
-options "-abspreds -simplearrays -symbexec -propreads"
+options "-abspreds -simplearrays -propreads"
 
 include "flows.spl"
 include "array_util.spl"
@@ -61,27 +61,75 @@ define hrepSpatial(x) {
   acc(x)
 }
 
+define heapGood(x) {
+  x.next != x
+}
+
+function fmap(x: Node) returns (res: Map<Node, Map<Node, FlowDom>>)
+{
+  { n: Node :: { n1: Node ::
+    n != x ? domZero :
+    (n1 != x.next ? domZero :
+    fd({ k: K :: lt(n.data, k) ? 1 : 0 }))
+    }
+  }    
+}
+
+/*
+lemma compute_int(x: Node) returns (I: Interface)
+  requires hrepSpatial(x)
+  requires heapGood(x)
+  ensures hrep(x, I)
+  ensures intValid(I) == true
+{
+  var xkc := { k: K :: 1 };
+  I := int({ n: Node :: n == x ? fd({) : domZero },
+    nd({x.data}), fmap(x), {x}, x.next == null ? {} : {x.next});
+  
+}
+ */
+
 define hrep(x, I) {
-  hrepSpatial(x) &*& I.FP == {x} &*& x.next != x &*& I.na.contents == {x.data}
-  &*& (x.next == null && I.FPo == {}
-     || x.next != null && I.FPo == {x.next}
-       && (forall k: K :: (I.fm[x][x.next].ks[k] == 1 && lt(x.data, k))
-         && (I.fm[x][x.next].ks[k] == 0 && !lt(x.data, k))
-         @(matching x.next yields I.fm[x][x.next].ks[k])))
+  hrepSpatial(x) &*& heapGood(x) &*& I.FP == {x} &*& I.na.contents == {x.data}
+  &*& (x.next == null && x.data == top && I.FPo == {}
+     || x.next != null && I.FPo == {x.next} && I.fm == fmap(x))
+       //(forall k: K :: (I.fm[x][x.next].ks[k] == 1 && lt(x.data, k))
+       //|| (I.fm[x][x.next].ks[k] == 0 && le(k, x.data))
+       //  @(matching x.next yields I.fm[x][x.next].ks[k])))
 }
 
 // The good condition
 define nu(x, I) {
-    // Contents subsetof keyset
-    (forall k: K :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
-    && (forall k: K, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
-    // Edgesets are disjoint
-    && (forall k: K, y: Node, z: Node :: y == z
-       || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0)
+  // Contents subsetof keyset
+  (forall k: K :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
+  && (forall k: K, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
+  // Edgesets are disjoint
+  && (forall k: K, y: Node, z: Node :: y == z
+  || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0)
 }
 
 
 /** Begin programs */
+
+/** Initialize root note */
+procedure init() returns (hd: Node, tl: Node, I: Interface)
+  ensures hrep(hd, I) &*& hrep(tl, I) &*& intValid(I) == true // TODO
+{
+  tl := new Node;
+  tl.next := null;
+  tl.data := top;
+ 
+  hd := new Node;
+  hd.next := tl;
+  hd.data := bottom;
+
+  var xkc := { k: K :: 1 };
+  var xfm := { n: Node :: { n1: Node :: domZero } };
+  //I := int({ n: Node :: n == x ? fd(xkc) : domZero },
+  //          nd({k}), xfm, {x}, {});
+  //lemma_int_valid_fold(x, I);
+  assume false; //TODO
+}
 
 /** findNext */
 procedure findNext(x: Node, k: K, Ix: Interface)
@@ -125,12 +173,13 @@ procedure member(x: Node, k: K, Ix: Interface)
 procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, Im: Interface,
     Ipnm: Interface)
   returns (res: Bool, Ip1: Interface, In1: Interface, Im1: Interface, Ipnm1: Interface)
+  requires lt(bottom, k) && lt(k, top)
   requires hrep(p, Ip) &*& hrep(n, In) &*& acc(m)
   requires intValid(Ip) == true &*& intValid(In) == true &*& Ipnm == intComp(Ip, intComp(In, Im))
   requires Im.FP == {m} && Im.FPo == {} && (forall k: K, y: Node :: Im.inf[y].ks[k] == 0)
   requires (forall k: K, x: Node, y: Node :: Im.fm[x][y].ks[k] == 0)
   requires In.inf[n].ks[k] == 1 && (forall y: Node :: In.fm[n][y].ks[k] == 0)
-  requires k != n.data
+  //requires forall k1 in In.na.contents :: lt(k, k1);
   ensures hrep(p, Ip1) &*& hrep(n, In1) &*& hrep(m, Im1)
   ensures intValid(Ip1) == true &*& intValid(In1) == true &*& intValid(Im1) == true
   ensures Ipnm1 == intComp(Ip1, intComp(In1, Im1))
@@ -143,26 +192,47 @@ procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, 
   p.next := m;
 
   lemma_int_valid_unfold(p, Ip);
+  lemma_int_valid_unfold(n, In);
 
-  var ppfm := { x: Node :: x == m ? fd({ k: K :: 1 }) : domZero };
+  var ppfm := { x: Node :: x == m ? fd({ k: K :: lt(p.data, k) ? 1 : 0 }) : domZero };
   var pfm := { x: Node :: x == p ? ppfm : { y: Node :: domZero } };
-  Ip1 := int(Ip.inf, Ip.na, pfm, {p}, {m});
+  Ip1 := int(Ip.inf, Ip.na, fmap(p), {p}, {m});
 
+  lemma_int_valid_fold(p, Ip1);
+  //assert acc(p) &*& acc(n) &*& acc(m);
+  //pure assert heapGood(p) && Ip1.FP == {p} && Ip1.na.contents == {p.data};
+  //pure assert p.next == null ==> Ip1.FPo == {};
+  //pure assert p.next != null ==> Ip1.FPo == {p.next} && Ip1.fm == fmap(p);
+
+  var minf1 := { n1: Node :: n1 == m ? In.inf[n] : domZero() };
+  Im1 := int(minf1, nd({k}), fmap(m), {m}, {n});
+  
+  lemma_int_valid_fold(m, Im1);
+
+  var ninf1 := { n1: Node :: n1 == n ? fd({ k1: K :: lt(k, k1) ? 1 : 0}) : domZero };
+  In1 := int(ninf1, In.na, fmap(n), In.FP, In.FPo);
+
+  lemma_int_valid_fold(n, In1);
+  
+  //var fm := { x: Node :: x == m ? fd({ k: K :: lt(p.data, k) ? 1 : 0 }) : domZero };
+
+  pure assert In1.FP == {n} && In1.na.contents == {n.data};
+  //pure assert (n.next == null ==> n.data == top && In1.FPo == {});
+  //pure assert n.next != null ==> In1.FPo == {n.next} ;
+  
+  //assert hrep(n, In1) &*& acc(p) &*& acc(m); //&*& hrep(n, In1) &*& hrep(m, Im1);
+  //assert hrep(p, Ip1) &*& acc(n) &*& hrep(m, Im1); //&*& hrep(n, In1) &*& hrep(m, Im1);
+  pure assume false;
+
+  /*
   var k1: K;
   if (lt(p.data, k1)) {
     pure assert Ip1.fm[p][p.next].ks[k1] == 1;
   } else {
     pure assert Ip1.fm[p][p.next].ks[k1] == 0;
   }
+   */
 
-  // pure assert (forall k: K :: (Ip1.fm[p][p.next].ks[k] == 1 && lt(p.data, k)) */
-  //        && (Ip1.fm[p][p.next].ks[k] == 0 && !lt(p.data, k)) */
-  //              @(matching p.next yields Ip1.fm[p][p.next].ks[k])); */
-  
-    //  assert hrep(p, Ip1) &*& acc(n) &*& acc(m);
-
-
-  pure assume false;
 }
 
 procedure int_of_node(p: Node, pinfLb: K) returns (Ip: Interface)
