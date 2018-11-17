@@ -160,6 +160,7 @@ lemma flowint_inset_step(I: Interface, x: Node, Ix: Interface, y: Node, Iy: Inte
   pure assert !domEq(domMult(Ix.inf[x], Ix.fm[x][y]), domZero());
   lemma_acyclic_2(x, Ix, y, Iy);
   lemma_int_comp_unfold(x, Ix, y, Iy, I);
+  lemma_int_valid_unfold_I(I);
   pure assert Iy.inf[y].ks[k] == domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])).ks[k]
     && domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])).ks[k]
       == I.inf[y].ks[k] + domMult(Ix.inf[x], Ix.fm[x][y]).ks[k]

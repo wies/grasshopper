@@ -422,6 +422,7 @@ lemma flowint_inset_step(I: Interface, x: Node, Ix: Interface, y: Node, Iy: Inte
   pure assert !domEq(domMult(Ix.inf[x], Ix.fm[x][y]), domZero());
   lemma_acyclic_2(x, Ix, y, Iy);
   lemma_int_comp_unfold(x, Ix, y, Iy, I);
+  lemma_int_valid_unfold_I(I);
   pure assert Iy.inf[y].ks[k] == domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])).ks[k]
     && domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])).ks[k]
       == I.inf[y].ks[k] + domMult(Ix.inf[x], Ix.fm[x][y]).ks[k]
@@ -475,26 +476,6 @@ lemma flowint_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Node,
   lemma_int_valid_unfold_I(I1);
   lemma_step(I1, I2, I, x, y);
 }
-
-/*
-// TODO This is a pain, do this on paper for now
-lemma preserve_inreach(I: Interface, In: Interface, Io: Interface, I1: Interface, In1: Interface,
-  n: Node)
-  requires intValid(I) && intValid(I1) && In.FP == {n} && In1.FP == {n}
-  requires I.na.inr != inrfnUndef
-  requires I == intComp(In, Io) && I1 == intComp(In1, Io)
-  requires In.na.inr.inrfn[n] == In1.na.inr.inrfn[n]
-  ensures forall n1 in I1.FP :: I1.na.inr.inrfn[n1] == I.na.inr.inrfn[n1]
-{
-  lemma_int_valid_unfold(n, In);
-  lemma_int_valid_unfold(n, In1);
-  pure assert ndJoinWitness(In.na, Io.na) !in In.na.inr.inrdom
-    || ndJoinWitness(In.na, Io.na) !in Io.na.inr.inrdom;
-  var n1: Node;
-  pure assert (n1 in In.na.inr.inrdom ==> I.na.inr.inrfn[n1] == In.na.inr.inrfn[n1])
-    && (n1 !in In.na.inr.inrdom ==> I.na.inr.inrfn[n1] == Io.na.inr.inrfn[n1]);
-}
-*/
 
 
 /** Begin programs */

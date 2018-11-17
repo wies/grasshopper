@@ -86,8 +86,10 @@ lemma lemma_int_comp_fold_3(x: Node, Ix: Interface, y: Node, Iy: Interface, z: N
     Iz.inf[z]) == true
   ensures intComp(Ix, intComp(Iy, Iz)) == I && intValid(I) == true && I.FP == {x, y, z}
 
-predicate int_comp_singl(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface) {
-      I.FP == {x, y}
+lemma lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
+  requires Ix != intUndef && Iy != intUndef && I != intUndef
+  requires intComp(Ix, Iy) == I && x != y && x !in Iy.FPo && Ix.FP == {x} && Iy.FP == {y}
+  ensures I.FP == {x, y}
   && I.FPo == (Ix.FPo -- Iy.FP) ++ (Iy.FPo -- Ix.FP)
   && domEq(Ix.inf[x], I.inf[x])
   && domEq(Iy.inf[y], domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])))
@@ -95,19 +97,6 @@ predicate int_comp_singl(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Inte
            (domEq(I.fm[x][n1],
                     domPlus(Ix.fm[x][n1], domMult(Ix.fm[x][y], Iy.fm[y][n1])))))
   && (forall n1: Node :: n1 != x ==> (domEq(I.fm[y][n1], Iy.fm[y][n1])))
-  // The following are from validity of I: // TODO remove these
-  && (forall n: Node :: n !in I.FP ==> domEq(I.inf[n], domZero()))
-  && (forall n: Node, n1: Node :: n !in I.FP ==> domEq(I.fm[n][n1], domZero()))
-  && (forall n: Node, n1: Node :: n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero()))
-  && (forall n: Node :: n !in I.FP || n !in I.FPo)
-  && (forall n: Node :: domLeq(domZero(), I.inf[n]))
-  && (forall n: Node, n1: Node :: domLeq(domZero(), I.fm[n][n1]))
-}
-
-lemma lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface)
-  requires Ix != intUndef && Iy != intUndef && I != intUndef
-  requires intComp(Ix, Iy) == I && x != y && x !in Iy.FPo && Ix.FP == {x} && Iy.FP == {y}
-  ensures int_comp_singl(x, Ix, y, Iy, I)
 
 lemma lemma_int_comp_unfold_3(x: Node, Ix: Interface, y: Node, Iy: Interface,
                               z: Node, Iz: Interface, I: Interface)
