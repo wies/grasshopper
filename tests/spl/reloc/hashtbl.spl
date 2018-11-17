@@ -140,6 +140,82 @@ lemma keyset_implies_bucket(x: Node, Ix: Interface, k: K)
 }
 
 
+/** Lemmas needed by Coq */
+
+lemma inreach_impl_inset(n: Node, In: Interface, k: K)
+  requires k in In.na.inr.inrfn[n]
+  requires k !in In.na.outs && intValid(In) && In.FP == {n}
+  ensures In.inf[n].ks[k] > 0
+{
+  lemma_int_valid_unfold(n, In);
+  pure assert In.inf[n].ks[k] >= 1 || In.inf[n].ir[k] >= 1;
+}
+
+lemma flowint_inset_step(I: Interface, x: Node, Ix: Interface, y: Node, Iy: Interface, k: K)
+  requires Ix.FP == {x} && Iy.FP == {y} && I == intComp(Ix, Iy) && intValid(I)
+  requires Ix.inf[x].ks[k] >= 1 && Ix.fm[x][y].ks[k] >= 1
+  ensures Iy.inf[y].ks[k] >= 1
+{
+  pure assert domMult(Ix.inf[x], Ix.fm[x][y]).ks[k] == Ix.inf[x].ks[k] * Ix.fm[x][y].ks[k]
+    && Ix.inf[x].ks[k] * Ix.fm[x][y].ks[k] != 0;
+  pure assert !domEq(domMult(Ix.inf[x], Ix.fm[x][y]), domZero());
+  lemma_acyclic_2(x, Ix, y, Iy);
+  lemma_int_comp_unfold(x, Ix, y, Iy, I);
+  pure assert Iy.inf[y].ks[k] == domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])).ks[k]
+    && domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])).ks[k]
+      == I.inf[y].ks[k] + domMult(Ix.inf[x], Ix.fm[x][y]).ks[k]
+    && domMult(Ix.inf[x], Ix.fm[x][y]).ks[k] == Ix.inf[x].ks[k] * Ix.fm[x][y].ks[k];
+}
+
+lemma flowint_inreach_step(I: Interface, x: Node, Ix: Interface, y: Node, Iy: Interface, k: K)
+  requires Ix.FP == {x} && Iy.FP == {y} && I == intComp(Ix, Iy) && intValid(I)
+  requires k in Ix.na.inr.inrfn[x] && Ix.fm[x][y].ks[k] >= 1
+  ensures k in Iy.na.inr.inrfn[y]
+{
+  lemma_int_valid_unfold(x, Ix);
+  lemma_int_valid_unfold(y, Iy);
+  lemma_int_valid_unfold_I(I);
+  
+  pure assert domMult(Ix.inf[x], Ix.fm[x][y]).ks[k] == Ix.inf[x].ks[k] * Ix.fm[x][y].ks[k]
+    &&  domMult(Ix.inf[x], Ix.fm[x][y]).ir[k] == Ix.inf[x].ir[k] * Ix.fm[x][y].ir[k]
+    && (Ix.inf[x].ks[k] * Ix.fm[x][y].ks[k] != 0 || Ix.inf[x].ir[k] * Ix.fm[x][y].ir[k] != 0) ;
+  pure assert !domEq(domMult(Ix.inf[x], Ix.fm[x][y]), domZero());
+  lemma_acyclic_2(x, Ix, y, Iy);
+  lemma_int_comp_unfold(x, Ix, y, Iy, I);
+
+  pure assert Iy.inf[y].ks[k] == domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])).ks[k]
+    && domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])).ks[k]
+      == I.inf[y].ks[k] + domMult(Ix.inf[x], Ix.fm[x][y]).ks[k]
+    && domMult(Ix.inf[x], Ix.fm[x][y]).ks[k] == Ix.inf[x].ks[k] * Ix.fm[x][y].ks[k];
+  pure assert Iy.inf[y].ir[k] == domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])).ir[k]
+    && domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])).ir[k]
+      == I.inf[y].ir[k] + domMult(Ix.inf[x], Ix.fm[x][y]).ir[k]
+    && domMult(Ix.inf[x], Ix.fm[x][y]).ir[k] == Ix.inf[x].ir[k] * Ix.fm[x][y].ir[k];
+}
+
+lemma flowint_proj(I: Interface, x: Node, Ix: Interface, Iy: Interface, k: K)
+  requires I == intComp(Ix, Iy) && intValid(I) && x in Ix.FP
+  requires I.inf[x].ks[k] >= 1
+  ensures Ix.inf[x].ks[k] >= 1
+{
+  lemma_proj(x, Ix, Iy, I);
+}
+
+lemma flowint_cont(I: Interface, Im: Interface, I1: Interface, m: Node)
+  requires I1 == intComp(I, Im) && Im == newInt(m)
+  ensures I.na.contents == I1.na.contents
+{}
+
+lemma flowint_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Node, k: K)
+  requires I == intComp(I1, I2) && intValid(I) && x in I1.FP && I.FPo == {}
+  requires I1.fm[x][y].ks[k] >= 1
+  ensures y in I2.FP
+{
+  lemma_int_valid_unfold_I(I1);
+  lemma_step(I1, I2, I, x, y);
+}
+
+
 /** Begin programs */
 
 /** findNext **/
