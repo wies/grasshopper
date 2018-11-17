@@ -1,6 +1,6 @@
 /** B+ tree implementation of the give-up template for linearizable dictionaries. */
 
-options "-simplearrays -propreads -symbexec"
+options "-simplearrays -propreads"
 
 include "flows.spl"
 include "array_util.spl"
@@ -27,27 +27,17 @@ pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
 }
 
 pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-ensures p.pc == p1.pc + p2.pc
-  @(matching p.pc yields p1.pc + p2.pc)
-ensures forall k: K :: p.ks[k] == p1.ks[k] + p2.ks[k]
-  @(matching p.ks[k] yields p1.ks[k] + p2.ks[k])
-  //{
-  //  fd({k: K :: p1.ks[k] + p2.ks[k]}, p1.pc + p2.pc)
-  //}
-  //
+{
+  fd({k: K :: p1.ks[k] + p2.ks[k]}, p1.pc + p2.pc)
+}
+
     
 pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-  ensures p.pc == p1.pc * p2.pc
-    @(matching p.pc yields p1.pc * p2.pc)
-  ensures forall k: K :: p.ks[k] == p1.ks[k] * p2.ks[k]
-    @(matching p.ks[k] yields p1.ks[k] * p2.ks[k])
-    // {
-    //  fd({ k: K :: p1.ks[k] * p2.ks[k]}, p1.pc * p2.pc)
-    // }
+{
+  fd({ k: K :: p1.ks[k] * p2.ks[k]}, p1.pc * p2.pc)
+}
 
 pure function domZero() returns(p: FlowDom)
-  //  ensures p.pc == 0
-  //  ensures forall k: K :: p.ks[k] == 0
 {
   fd({k: K :: 0}, 0)
 }
@@ -56,7 +46,16 @@ datatype NodeDom = nd(contents: Set<K>);
 
 pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
   a1.contents subsetof a2.contents
-  //(forall k: K :: k in a1.contents ==> k in a2.contents)
+}
+
+pure function ndJoin(a1: NodeDom, a2: NodeDom) returns (a: NodeDom)
+{
+  nd(a1.contents ++ a2.contents)
+}
+
+pure function ndBot() returns (a: NodeDom)
+{
+  nd({})
 }
 
 
@@ -127,15 +126,6 @@ define nu(x, I) {
     && (forall k: K, y: Node, z: Node :: y == z
        || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0)
 }
-
-procedure newNode(xlen: Int, xrangeLb: K, xrangeUb: K)
-  returns (x: Node, Ix: Interface)
-  requires emp
-  ensures [acc(x) &*& acc(x.ptrs) &*& acc(x.keys)](Ix)
-  ensures x.len == xlen && x.rangeLb == xrangeLb
-  ensures x.rangeUb == xrangeUb && x.keys.length == 2*B && x.ptrs.length == 2*B
-  ensures intValid(Ix) == true
-  ensures Ix.FP == {x} && Ix.inf[x] == domZero && Ix.FPo == {}
 
 lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
   requires hrep(x, Ix) &*& intValid(Ix) == true

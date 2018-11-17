@@ -1,6 +1,6 @@
 /** Hash table implementation of the give-up template for linearizable dictionaries. */
 
-options "-simplearrays -symbexec -propreads -abspreds"
+options "-simplearrays -propreads -abspreds"
 
 include "flows.spl"
 include "array_util.spl"
@@ -25,19 +25,35 @@ pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
 }
 
 pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-  ensures forall k: K :: p.ks[k] == p1.ks[k] + p2.ks[k]
+{
+  fd({k: K :: p1.ks[k] + p2.ks[k]})
+}
 
 pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-  ensures forall k: K :: p.ks[k] == p1.ks[k] * p2.ks[k]
+{
+  fd({k: K :: p1.ks[k] * p2.ks[k]})
+}
 
 pure function domZero() returns(p: FlowDom)
-  ensures forall k: K :: p.ks[k] == 0
+{
+  fd({k: K :: 0})
+}
 
 
 datatype NodeDom = nd(contents: Set<K>);
 
 pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
   (forall k: K :: k in a1.contents ==> k in a2.contents)
+}
+
+pure function ndJoin(a1: NodeDom, a2: NodeDom) returns (a: NodeDom)
+{
+  nd(a1.contents ++ a2.contents)
+}
+
+pure function ndBot() returns (a: NodeDom)
+{
+  nd({})
 }
 
 
@@ -63,13 +79,6 @@ define unchanged(x) {
     && x.rangeLb == old(x.rangeLb) && x.rangeUb == old(x.rangeUb)
 }
 
-
-procedure newNode(xlen: Int, xkeyslen: Int, xnext: Node)
-  returns (x: Node, Ix: Interface)
-  requires emp
-  ensures [acc(x) &*& acc(x.bkts) &*& acc(x.keys)](Ix)
-  ensures x.len == xlen && x.keys.length == xkeyslen && x.next == xnext
-  ensures intValid(Ix) && Ix.FP == {x} && Ix.inf[x] == domZero && Ix.FPo == {}
 
 
 /** Definition of heap representation, hrep */

@@ -1,6 +1,6 @@
 /** Hash table implementation of the link template for linearizable dictionaries. */
 
-options "-simplearrays -symbexec -propreads -abspreds"
+options "-simplearrays -propreads -abspreds"
 
 include "flows.spl"
 include "array_util.spl"
@@ -22,26 +22,30 @@ pure predicate domEq(p1: FlowDom, p2: FlowDom) {
 
 pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
   (forall k: K :: p1.ks[k] <= p2.ks[k]
-   @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
+    @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
     && (forall k: K :: p1.ir[k] <= p2.ir[k]
-       @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
+    @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
 }
 
 pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-  ensures forall k: K :: p.ks[k] == p1.ks[k] + p2.ks[k]
-  ensures forall k: K :: p.ir[k] == p1.ir[k] + p2.ir[k]
+{
+  fd({k: K :: p1.ks[k] + p2.ks[k]}, {k: K :: p1.ir[k] + p2.ir[k]})
+}
 
 pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-  ensures forall k: K :: p.ks[k] == p1.ks[k] * p2.ks[k]
-  ensures forall k: K :: p.ir[k] == p1.ir[k] * p2.ir[k]
+{
+  fd({k: K :: p1.ks[k] * p2.ks[k]}, {k: K :: p1.ir[k] * p2.ir[k]})
+}
 
 pure function domZero() returns(p: FlowDom)
-  ensures forall k: K :: p.ks[k] == 0 && p.ir[k] == 0
+{
+  fd({k: K :: 0}, {k: K :: 0})
+}
 
 
 datatype InrFn = inrfnC(inrfn: Map<Node, Set<K>>, inrdom: Set<Node>) | inrfnUndef;
 
-datatype NodeDom = nd(contents: Set<K>, inr: InrFn);
+datatype NodeDom = nd(contents: Set<K>, inr: InrFn, outs: Set<K>);
 
 pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
   (forall k: K :: k in a1.contents ==> k in a2.contents)
@@ -49,7 +53,16 @@ pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
        && (forall x: Node :: x in a1.inr.inrdom ==> x in a2.inr.inrdom && a1.inr.inrfn[x] == a2.inr.inrfn[x]))
 }
 
+pure function ndJoin(a1: NodeDom, a2: NodeDom) returns (a: NodeDom)
+  ensures a.contents == a1.contents ++ a2.contents
+  ensures a.outs == a1.outs ++ a2.outs
 
+pure function ndBot() returns (a: NodeDom)
+{
+  nd({}, inrfnC({n: Node :: {}}, {}), {})
+}
+
+  
 /** Definition of a node */
 
 datatype NodeType = root | bucket | nodeTop;
@@ -68,14 +81,6 @@ define unchanged(x) {
     && x.bkts.length == old(x.bkts.length) && x.bkts.map == old(x.bkts.map)
     && x.keys.length == old(x.keys.length) && x.keys.map == old(x.keys.map)
 }
-
-
-procedure newNode(xlen: Int, xkeyslen: Int, xnext: Node)
-  returns (x: Node, Ix: Interface)
-  requires emp
-  ensures [acc(x) &*& acc(x.bkts) &*& acc(x.keys)](Ix)
-  ensures x.len == xlen && x.keys.length == xkeyslen && x.next == xnext
-  ensures intValid(Ix) && Ix.FP == {x} && Ix.inf[x] == domZero && Ix.FPo == {}
 
 
 /** Definition of good condition, gamma */
@@ -101,10 +106,6 @@ define hrep(x, I) {
         || x.next != null && (forall k: K :: I.fm[x][x.next].ks[k] == 1) && I.FPo == {x.next})))
 }
 
-pure function outset(x: Node, flmp: Map<Node, Map<Node, FlowDom>>) returns (O: Set<K>)
-  //  ensures forall k: K :: k in O ==> (exists y: Node :: flmp[x][y].ks[k] > 0 @(matching O yields flmp[x][y].ks[k]))
-{ { k: K :: exists y: Node :: flmp[x][y].ks[k] > 0 } }
-
 // The good condition
 define nu(x, I) {
     // Contents subsetof keyset
@@ -114,7 +115,8 @@ define nu(x, I) {
     && (forall k: K, y: Node, z: Node :: y == z
        || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0)
     // Inreach keyset subsetof inset
-    && (forall k: K :: I.inf[x].ir[k] >= 1 && k !in outset(x, I.fm) ==> I.inf[x].ks[k] >= 1)
+    && (forall k: K :: I.inf[x].ir[k] >= 1 && k !in I.na.outs
+       ==> I.inf[x].ks[k] >= 1)
     // Inreach edgesets subsetof normal edgesets
     && (forall k: K, y: Node :: I.fm[x][y].ir[k] <= I.fm[x][y].ks[k])
     // If k ∈ inreach, then inreach edgeset is same as normal edgeset (for step)
@@ -206,7 +208,7 @@ procedure insert(x: Node, k: K, Ix: Interface)
     x.len := new_len;
 
     // Define Ix1 to be Ix, but with k added to contents
-    Ix1 := copy_interface(Ix, nd(Ix.na.contents ++ {k}, Ix.na.inr));
+    Ix1 := copy_interface(Ix, nd(Ix.na.contents ++ {k}, Ix.na.inr, Ix.na.outs));
     lemma_int_valid_unfold(x, Ix);
     lemma_int_valid_fold(x, Ix1);
 
@@ -238,62 +240,9 @@ procedure delete(x: Node, k: K, Ix: Interface)
   x.len := new_len;
 
   // Define Ix1 to be Ix, but with k removed from contents
-  Ix1 := copy_interface(Ix, nd(Ix.na.contents -- {k}, Ix.na.inr));
+  Ix1 := copy_interface(Ix, nd(Ix.na.contents -- {k}, Ix.na.inr, Ix.na.outs));
   lemma_int_valid_unfold(x, Ix);
   lemma_int_valid_fold(x, Ix1);
 
   return true, (k in Ix.na.contents), Ix1;
 }
-
-
-/*
-procedure copyNode(x: Node, Ix: Interface, I2: Interface, I: Interface)
-  returns (I1: Interface)
-  requires [gamma(x, Ix)](Ix) &*& Gr(I2)
-  requires intValid(Ix) == true && intValid(I2) == true
-  requires intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
-  requires x.typ == bucket && x.len == x.keys.length
-  ensures Gr(I1) &*& globalInt(I)
-{
-  var y: Node, Iy: Interface;
-  y, Iy := newNode(0, x.len, 2 * x.keys.length, null);
-
-  var i := 0;
-  while (i < x.len)
-    invariant [gamma(x, Ix)](Ix) &*& [acc(y) &*& acc(y.bkts) &*& acc(y.keys)](Iy) &*& Gr(I2)
-    invariant intValid(Ix) == true && intValid(Iy) == true && intValid(I2) == true
-    invariant intComp(Ix, I2) == I && globalInt(I) && Ix.na.lockinfo == locked(TID)
-    invariant x.typ == bucket && x.len == x.keys.length
-    invariant 0<= i && i <= x.len && y.keys.length == 2 * x.len && y.next == null
-    invariant forall j: Int :: 0 <= j < i ==> y.keys[j] == x.keys[j]
-  {
-    y.keys[i] := x.keys[i];
-  }
-
-  x.next := y;
-
-  var Ix1: Interface;
-  pure assume Ix1.inf == Ix.inf && Ix1.na.contents == {}
-  && Ix1.na.lockinfo == Ix.na.lockinfo
-  && (forall k: K :: Ix1.fm[x][y].ks[k] == 1) && (forall k: K :: Ix1.fm[x][y].ir[k] == 0)
-  && (forall z: Node :: domEq(Ix1.fm[x][y], domZero()) == true)
-  && Ix1.FP == Ix.FP && Ix1.FPo == {y};
-  // TODO  var Ix1 := int(Ix.inf, nd({}, Ix.na.lockinfo, x.typ), )
-
-  var Iy1: Interface;
-  pure assume Iy1.inf == Ix.inf && Iy1.na.contents == Ix.na.contents
-  && Iy1.FP == Iy.FP && Iy1.FPo == Iy.FPo
-  && (forall z: Node :: domEq(Iy1.fm[y][z], domZero()) == true);
-
-  lemma_int_valid_fold(Ix1);
-  lemma_abs(x, Ix, Ix1);
-  lemma_int_valid_fold(Iy1);
-  lemma_int_valid_unfold(Iy);
-  lemma_abs(y, Iy, Iy1);
-
-  var Ixy1 := lemma_int_comp_fold(x, Ix, y, Iy);
-  //  var I0 := lemma_comp_sing_int(y, Iy, I);
-
-  // sync();
-}
- */

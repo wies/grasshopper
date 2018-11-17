@@ -166,7 +166,6 @@ function inflow(x: Node, xrangeLb: K, xrangeUb: K) returns (i: Map<Node, FlowDom
            {k: K :: le(xrangeLb, k) && lt(k, top) ? 1 : 0}) }
 }
 
-// TODO findNext's spec should use this. Also, make sure you can prove whatever Coq relies on this.
 pure function outset(x: Node, xnext: Node, xkeys: Map<Int, K>, xptrs: Map<Int, Node>,
                      xlen: Int, i: Int)
   returns (O: Set<K>)
@@ -272,8 +271,6 @@ define nu(x, I) {
     // Inreach keyset subsetof inset
     && (forall k: K :: I.inf[x].ir[k] >= 1 && k !in I.na.outs
        ==> I.inf[x].ks[k] >= 1)
-    // Inreach edgesets subsetof normal edgesets  // TODO - this is unnecessary?
-    //    && (forall k: K, y: Node :: I.fm[x][y].ir[k] <= I.fm[x][y].ks[k])
     // If k ∈ inreach \ inset, then inreach edgeset is same as normal edgeset (for step)
     && (forall k: K, y: Node :: I.inf[x].ir[k] >= 1 && I.inf[x].ks[k] <= 0
        && I.fm[x][y].ks[k] >= 1 ==> I.fm[x][y].ir[k] >= 1)
