@@ -132,8 +132,6 @@ lemma lemma_int_comp_unfold_3(x: Node, Ix: Interface, y: Node, Iy: Interface,
   ensures forall n: Node ::
     domEq(I.fm[x][n], domPlus(Ix.fm[x][n],
     domPlus (domMult(Ix.fm[x][z], Iz.fm[z][n]), domMult(Ix.fm[x][y], I.fm[y][n]))))
-  // TODO continue this for flow map
-  //  ensures forall n: Node, n1: Node :: n in Ix.FP && n1 !in 
 
 lemma lemma_int_valid_unfold(x: Node, I: Interface)
   requires intValid(I) == true && I.FP == {x}
