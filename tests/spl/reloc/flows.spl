@@ -127,6 +127,11 @@ lemma lemma_int_comp_unfold_3(x: Node, Ix: Interface, y: Node, Iy: Interface,
   ensures domEq(Iy.inf[y], domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])))
   ensures domEq(Iz.inf[z],
     domPlus(I.inf[z], domPlus(domMult(Ix.inf[x], Ix.fm[x][z]), domMult(Iy.inf[y], Iy.fm[y][z]))))
+  ensures forall n: Node :: domEq(I.fm[z][n], Iz.fm[z][n])
+  ensures forall n: Node :: domEq(I.fm[y][n], domPlus(Iy.fm[y][n], domMult(Iy.fm[y][z], Iz.fm[z][n])))
+  ensures forall n: Node ::
+    domEq(I.fm[x][n], domPlus(Ix.fm[x][n],
+    domPlus (domMult(Ix.fm[x][z], Iz.fm[z][n]), domMult(Ix.fm[x][y], I.fm[y][n]))))
   // TODO continue this for flow map
   //  ensures forall n: Node, n1: Node :: n in Ix.FP && n1 !in 
 
