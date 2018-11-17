@@ -84,31 +84,13 @@ function fmap(x: Node) returns (res: Map<Node, Map<Node, FlowDom>>)
   }    
 }
 
-/*
-lemma compute_int(x: Node) returns (I: Interface)
-  requires hrepSpatial(x)
-  requires heapGood(x)
-  ensures hrep(x, I)
-  ensures intValid(I) == true
-{
-  var xkc := { k: K :: 1 };
-  I := int({ n: Node :: n == x ? fd({) : domZero },
-    nd({x.data}), fmap(x), {x}, x.next == null ? {} : {x.next});
-  
-}
- */
-
 define hrep(x, I) {
   hrepSpatial(x) &*& heapGood(x) &*& I.FP == {x} &*& I.na.contents == {x.data}
   &*& (forall k: K :: I.inf[x].ks[k] == 1 || I.inf[x].ks[k] == 0)
   &*& (forall k: K :: le(x.data, k) ==> I.inf[x].ks[k] == 1)
   &*& I.fm == fmap(x)
-  //&*& (forall k: K :: lt(x.data, k) ==> I.inf[x].ks[k] == 0)
   &*& (x.next == null && x.data == top && I.FPo == {}
      || x.next != null && x.data != top && I.FPo == {x.next})
-       //(forall k: K :: (I.fm[x][x.next].ks[k] == 1 && lt(x.data, k))
-       //|| (I.fm[x][x.next].ks[k] == 0 && le(k, x.data))
-       //  @(matching x.next yields I.fm[x][x.next].ks[k])))
 }
 
 // The good condition
