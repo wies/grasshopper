@@ -505,7 +505,6 @@ procedure arr_delete(a: Array<K>, k: K, len: Int)
   }
   
   // shift array entries a[i+1..len] by 1 entry to the left 
-  //ghost var m := a.map;
   arr_shift(a, idx + 1, idx, len - (idx + 1));
   
   return len - 1, idx;

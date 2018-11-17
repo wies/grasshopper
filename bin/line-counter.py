@@ -24,8 +24,8 @@ with open(fname, 'r') as fin:
             prog_count, spec_count = 0, 0
             continue
         spec_keywords = [
-            "invariant", "requires", "ensures", "predicate", "function", "==>",
-            "define", "split", "&&", "&*&", "||", "lemma", "forall", "exists", "ghost",
+            "invariant", "requires", "ensures", "predicate", "function", "==>", "axiom", 
+            "define", "split", "&&", "&*&", "||", "pure", "assert", "lemma", "forall", "exists", "ghost",
         ]
         if any(w in line for w in spec_keywords):
             spec_lines.append(line)

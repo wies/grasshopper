@@ -1,0 +1,109 @@
+// use option -abspreds
+
+type Data;
+
+struct Node {
+  var next: Node;
+  var data: Data;
+}
+
+datatype List = cons(hd: Data, tl: List) | nil;
+  
+/*axiom (forall l1: List, l2: List, a: Data :: 
+       l2 == cons(a, l1) ==> hd(l2) == a
+       @(matching l1 without tl yields tl(l1))
+       @(matching l1 without hd yields hd(l1)));
+*/
+
+function append(l1 : List, l2 : List) returns (res : List)
+function reverse(l: List) returns (l: List)
+
+// Definition of append 
+axiom forall l: List :: append(nil, l) == l;
+
+axiom forall a: Data, tl: List, l: List ::
+  append(cons(a, tl), l) == cons(a, append(tl, l));
+
+
+//axiom forall l: List :: append(l, nil) == l;
+
+procedure append_nil(l: List)
+  ensures append(l, nil) == l
+{
+  if (l == nil) {
+    pure assert append(nil, nil) == nil;
+  } else {
+    append_nil(l.tl);
+    pure assert append(cons(l.hd, l.tl), nil) == cons(l.hd, l.tl);
+  }
+}
+
+//axiom forall l1: List, l2: List, l3: List ::
+//  append(l1, append(l2, l3)) == append(append(l1, l2), l3);
+
+procedure append_associative(l1: List, l2: List, l3: List)
+  ensures append(l1, append(l2, l3)) == append(append(l1, l2), l3);
+{
+  if (l1 == nil) {
+    return;
+  } else {
+    assert append(l1, append(l2, l3)) == append(cons(l1.hd, l1.tl), append(l2, l3));
+    //assert append(l1, append(l2, l3)) == cons(l1.hd, append(l1.tl, append(l2, l3)));
+    //append_associative(l1.tl, l2, l3);
+    //assert append(l1, append(l2, l3)) == append(cons(hd(l1), append(l1.tl, l2)), l3);
+    //assert append(l1, append(l2, l3)) == append(append(cons(l1.hd, l1.tl), l2), l3);
+  }
+}
+
+// Definition of reverse
+axiom reverse(nil) = nil;
+axiom forall l: List, a: Data :: reverse(cons(a, l)) = append(reverse(l), cons(a, nil));
+
+predicate lseg(x: Node, y: Node) {
+  acc({ z: Node :: Btwn(next, x, z, y) && z != y}) &*& Reach(next, x, y)
+}
+
+function list(x: Node, y: Node) returns (res: List)
+  requires lseg(x, y)
+  ensures x == y ==> list(x, y) == nil
+  ensures Reach(next, x, y) && list(x, y) == nil ==> x = y;
+  ensures forall x: Node, y: Node, z: Node :: Btwn(next, x, y, z) ==>
+    list(x, z) == append(list(x, y), list(y, z))
+  ensures x != y ==> list(x, y).hd == x.data && list(x, y).tl == list(x.next, y)
+  ensures Reach(next, x, y) || list(x, y) == nil;
+
+//axiom forall next: Map<Node, Node>, data: Map<Node, Data>, x: Node ::
+//  list(next, x, x.next) == cons(x.data, nil);
+
+predicate lseg_model(x: Node, y: Node, m: List) {
+  lseg(x, y) &*& m = list(x, y)
+}
+
+procedure lseg_append(x: Node, y: Node, z: Node, m1: List, m2: List)
+  requires lseg_model(x, y, m1) &*& lseg_model(y, z, m2) &*& z == null
+  ensures lseg_model(x, z, append(m1, m2))
+{}
+
+procedure lseg_not_empty(x: Node, z: Node, a: Data, m: List)
+  requires lseg_model(x, z, cons(a, m))
+  pure ensures x != z
+{}
+
+procedure lseg_open_left(x: Node, z: Node, a: Data, m: List)
+  requires lseg_model(x, z, cons(a, m))
+  ensures acc(x) &*& lseg(x.next, z) &*& m == list(x.next, z) &*& x.data == a
+{}
+
+procedure add_front(a: Data, x: Node, implicit ghost m: List)
+  returns (res: Node)
+  requires lseg_model(x, null, m)
+  ensures lseg_model(res, null, cons(a, m))
+{
+  res := new Node;
+  res.next := x;
+  res.data := a;
+  assert lseg(res, null);
+  
+  pure assert list(x, null) == old(list(x, null));
+  assume false;
+}

@@ -1,0 +1,18 @@
+procedure loop(x: Int) returns (y: Int)
+  requires x > 0
+  ensures y == x * x
+{
+  var n := 0;
+  y := 0;
+
+  while (n < x)
+    invariant n <= x
+    invariant y == n * n
+  {
+    y := 2 * n + y + 1;
+    n := n + 1;
+  }
+
+  return y;
+}
+

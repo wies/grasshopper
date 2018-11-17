@@ -10,20 +10,8 @@ include "array_util.spl"
 
 datatype FlowDom = fd(ks: Map<K, Int>)
 
-/*
-pure predicate domEq(p1: FlowDom, p2: FlowDom) {
-  p1.ks == p2.ks && p1.ir == p2.ir
-  //  (forall k: K :: p1.ks[k] == p2.ks[k]
-  //   @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
-  //    && (forall k: K :: p1.ir[k] == p2.ir[k]
-  //     @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
-
-}
- */
-
 pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
   (forall k: K :: p1.ks[k] <= p2.ks[k])
-    //@(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
 }
 
 pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
@@ -156,8 +144,7 @@ procedure member(x: Node, k: K, Ix: Interface)
 procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, Im: Interface,
     Ipnm: Interface)
   returns (res: Bool, Ip1: Interface, In1: Interface, Im1: Interface, Ipnm1: Interface)
-  requires lt(bottom, k) && lt(k, top) // added
-  requires forall k1 in In.na.contents :: lt(k, k1); // added
+  requires lt(bottom, k) && lt(k, top)
   requires hrep(p, Ip) &*& hrep(n, In) &*& acc(m)
   requires intValid(Ip) == true &*& intValid(In) == true &*& intValid(Im) == true 
   requires Ipnm == intComp(Ip, intComp(In, Im)) &*& intValid(Ipnm)
@@ -165,25 +152,30 @@ procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, 
   requires (forall k: K, x: Node, y: Node :: Im.fm[x][y].ks[k] == 0)
   requires Ip.fm[p][n].ks[k] == 1
   requires In.inf[n].ks[k] == 1 && (forall y: Node :: In.fm[n][y].ks[k] == 0)
-  ensures hrep(p, Ip1) &*& hrep(n, In1) &*& hrep(m, Im1)
+  ensures res ==> hrep(p, Ip1) &*& hrep(n, In1) &*& hrep(m, Im1)
+  ensures !res ==> hrep(p, Ip1) &*& hrep(n, In1) &*& acc(m)
   ensures intValid(Ip1) == true &*& intValid(In1) == true &*& intValid(Im1) == true
   ensures Ipnm1 == intComp(Ip1, intComp(In1, Im1))
   ensures intEq(Ipnm, Ipnm1) == true
   // decisiveOpSpec(x, Ix1, res, k):
   ensures (Ipnm1.na.contents == Ipnm.na.contents ++ {k} && (res == k !in Ipnm.na.contents))
 {
+  lemma_int_valid_unfold(p, Ip);
+  lemma_int_valid_unfold(n, In);
+  lemma_int_valid_unfold(m, Im);
+  lemma_int_valid_unfold_I(Ipnm);
+
   // Actual implementation
+  if (n.data == k) {
+    return false, Ip, In, Im, Ipnm;
+  }
   m.data := k;
   m.next := n;
   p.next := m;  
   res := true;
 
   // Proof - not pretty but almost all of this is just manual expansion of definitions
-  lemma_int_valid_unfold(p, Ip);
-  lemma_int_valid_unfold(n, In);
-  lemma_int_valid_unfold(m, Im);
-  lemma_int_valid_unfold_I(Ipnm);
-
+  
   // Prove precondition of lemma_acyclic_2
   pure assert intComp(intComp(Ip, In), Im) != intUndef;
 
@@ -207,23 +199,20 @@ procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, 
       pure assert Im.inf[m].ks[k] == 0;
     }
   }
-
   
   // Define Ip1
-  var ppfm := { x: Node :: x == m ? fd({ k: K :: lt(p.data, k) ? 1 : 0 }) : domZero };
-  var pfm := { x: Node :: x == p ? ppfm : { y: Node :: domZero } };
   Ip1 := int(Ip.inf, Ip.na, fmap(p), {p}, {m});
 
   lemma_int_valid_fold(p, Ip1);
 
   // Define Im1
-  var minf1 := { n1: Node :: n1 == m ? fd({ k1: K :: lt(p.data, k1) ? 1 : 0}): domZero };
+  ghost var minf1 := { n1: Node :: n1 == m ? fd({ k1: K :: lt(p.data, k1) ? 1 : 0}): domZero };
   Im1 := int(minf1, nd({k}), fmap(m), {m}, {n});
 
   lemma_int_valid_fold(m, Im1);
 
   // Define In1
-  var ninf1 := { n1: Node :: n1 == n ? fd({ k1: K :: In.inf[n].ks[k1] == 1 && le(k1, p.data) || lt(k, k1) ? 1 : 0}) : domZero };
+  ghost var ninf1 := { n1: Node :: n1 == n ? fd({ k1: K :: In.inf[n].ks[k1] == 1 && le(k1, p.data) || lt(k, k1) ? 1 : 0}) : domZero };
 
   //var ninf1 := { n1: Node :: n1 == n ? fd({ k1: K :: lt(k, k1) ? 1 : 0}) : domZero };
   In1 := int(ninf1, In.na, fmap(n), In.FP, In.FPo);
@@ -235,28 +224,20 @@ procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, 
   // Prove precondition of lemma_int_valid_fold(n, In1);
   pure assert forall n: Node, n1: Node :: n1 !in In1.FPo ==> domEq(In1.fm[n][n1], domZero());
   pure assert forall n: Node :: n !in In1.FP ==> domEq(In1.inf[n], domZero());
-  //pure assert forall n: Node, k: K :: domZero.ks[k] <= In.inf[n].ks[k];
   pure assert forall n1: Node, k1: K :: domZero.ks[k1] <= In1.inf[n1].ks[k1] with {
     pure assert n1 != n ==> In1.inf[n1].ks[k1] == domZero.ks[k1];
     pure assert n1 == n && (In.inf[n1].ks[k1] == 1 && le(k1, p.data) || lt(k, k1)) ==> In1.inf[n1].ks[k1] == 1;
     pure assert n1 == n && !(In.inf[n1].ks[k1] == 1 && le(k1, p.data) || lt(k, k1)) ==> In1.inf[n1].ks[k1] == 0;
-    //pure assert domZero.ks[k1] <= In1.inf[n1].ks[k1];
   }
 
   lemma_int_valid_fold(n, In1);
   
-  //pure assert In1.FP == {n} && In1.na.contents == {n.data};
-
   // Prove hrep(n, In1)
   pure assert (forall k1: K :: In1.inf[n].ks[k1] == 1 || In1.inf[n].ks[k1] == 0) with {
     pure assert (In.inf[n].ks[k1] == 1 && le(k1, p.data) || lt(k, k1)) ==> In1.inf[n].ks[k1] == 1;
     pure assert !(In.inf[n].ks[k1] == 1 && le(k1, p.data) || lt(k, k1)) ==> In1.inf[n].ks[k1] == 0;    
   }
   
-  assert hrep(n, In1) &*& acc(p) &*& acc(m);
-  //assert hrep(m, Im1) &*& acc(p) &*& acc(n);
-  assert hrep(n, In1) &*& hrep(p, Ip1) &*& hrep(m, Im1);
-
   // Prove precondition of lemma_int_comp_3_fold(p, Ip1, n, In1, m, Im1);
   pure assert domMult(Ip1.inf[p], Ip1.fm[p][n]) == domZero with {
     pure assert forall k1: K :: domMult(Ip1.inf[p], Ip1.fm[p][n]).ks[k1] == domZero.ks[k1] with {
@@ -264,15 +245,12 @@ procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, 
     }
   }
 
-  pure assert domMult(Ip1.inf[p], Ip1.fm[p][m]) == pfm[p][m] with {
-    pure assert forall k1: K :: domMult(Ip1.inf[p], Ip1.fm[p][m]).ks[k1] == pfm[p][m].ks[k1] with {
-      pure assert Ip1.inf[p].ks[k1] * Ip1.fm[p][m].ks[k1] == pfm[p][m].ks[k1]; 
+  pure assert domMult(Ip1.inf[p], Ip1.fm[p][m]) == fmap(p)[p][m] with {
+    pure assert forall k1: K :: domMult(Ip1.inf[p], Ip1.fm[p][m]).ks[k1] == fmap(p)[p][m].ks[k1] with {
+      pure assert Ip1.inf[p].ks[k1] * Ip1.fm[p][m].ks[k1] == fmap(p)[p][m].ks[k1]; 
     }
   }
 
-  pure assert domLeq(domMult(Ip1.inf[p], Ip1.fm[p][m]), Im1.inf[m]) == true;
-
-  
   pure assert In1.fm[n][m] == domZero with {
     pure assert forall k1: K :: In1.fm[n][m].ks[k1] == domZero.ks[k1] with {
       pure assert Im.inf[m].ks[top] ==
@@ -285,11 +263,7 @@ procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, 
       && In1.inf[n].ks[k1] * In1.fm[n][m].ks[k1] == domZero.ks[k1]; 
     }
   }
-  
-  pure assert domEq(Im1.fm[m][p], domZero()); // just checking
-  
-  pure assert domEq(In1.fm[n][p], domZero()); // just checking
-  
+    
   pure assert domPlus(domMult(Ip1.inf[p], Ip1.fm[p][n]), domMult(Im1.inf[m], Im1.fm[m][n])) == domMult(Im1.inf[m], Im1.fm[m][n]) with {
     pure assert forall k: K :: domPlus(domMult(Ip1.inf[p], Ip1.fm[p][n]), domMult(Im1.inf[m], Im1.fm[m][n])).ks[k] == domMult(Im1.inf[m], Im1.fm[m][n]).ks[k] with {
       pure assert Ip1.inf[p].ks[k] * Ip1.fm[p][n].ks[k] == 0;
@@ -419,10 +393,6 @@ procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, 
     
   }
 
-  
-  // Prove that footprints are equal (not needed?)
-  pure assert Ipnm1.FP = Ipnm.FP;
-  pure assert Ipnm1.FPo = Ipnm.FPo;
   
   // Prove that contents are correct
   pure assert Ipnm1.na.contents == {p.data} ++ ({k} ++ {n.data});

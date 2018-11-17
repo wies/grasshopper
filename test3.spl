@@ -1,0 +1,56 @@
+struct Node {
+  var len: Int;
+  var keys: Array<K>;
+  var ptrs: Array<Node>;
+  var next: Node;
+}
+
+datatype Interface =
+  int(inf: Map<Node, FlowDom>,
+      fm: Map<Node, Map<Node, FlowDom>>)
+  | intUndef
+
+type K
+
+pure predicate lt(x: K, y: K)
+function le(x: K, y: K) returns (res: Bool) {
+  lt(x, y) || x == y
+}
+
+datatype FlowDom = fd(ks: Map<K, Int>, ir: Map<K, Int>)
+
+pure function domZero() returns(p: FlowDom)
+  ensures forall k: K :: p.ks[k] == 0 && p.ir[k] == 0
+
+function fm_next(x: Node, inff: Map<Node, FlowDom>) returns (f: FlowDom)
+{
+  fd({ k: K :: x.next == null ? 0 : (le(x.keys[x.len], k) ? 1 : 0) },
+    {k: K :: inff[x].ir[k] >= 1 && inff[x].ks[k] <= 0 && x.next != null && le(x.keys[x.len], k) ? 1 : 0 })
+}
+
+
+function fm_ind(x: Node, inff: Map<Node, FlowDom>, i: Int)
+  returns (f: Map<Node, Map<Node, FlowDom>>)
+{
+  { n: Node :: { n1: Node ::
+    i < 0 ? domZero()
+    : (i == x.len + 1 && n1 == x.next ? fm_next(x, inff)
+       : fm_ind(x, inff, i - 1)[n][n1])
+   }
+  }
+}
+
+define hrepSpatial(x) {
+  acc(x) &*& acc(x.keys) &*& acc(x.ptrs)
+}
+
+lemma lemma_fm(x: Node, Ix: Interface, k: K, i: Int, j: Int)
+  requires hrepSpatial(x) &*& Ix.fm == fm_ind(x, Ix.inf, x.len + 1)
+  ensures hrepSpatial(x)
+  ensures 0 <= x.len && x.len + 1 <= j && x.next != null && le(x.keys[x.len], k)
+    ==> fm_ind(x, Ix.inf, j)[x][x.next].ks[k] >= 1
+{
+  if (j >= 0) {
+    lemma_fm(x, Ix, k, i, j - 1);
+  } 
+}

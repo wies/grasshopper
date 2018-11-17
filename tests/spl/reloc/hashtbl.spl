@@ -10,16 +10,6 @@ include "array_util.spl"
 
 datatype FlowDom = fd(ks: Map<K, Int>, ir: Map<K, Int>)
 
-/*
-pure predicate domEq(p1: FlowDom, p2: FlowDom) {
-  p1.ks == p2.ks && p1.ir == p2.ir
-  //  (forall k: K :: p1.ks[k] == p2.ks[k]
-  // @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
-  //  && (forall k: K :: p1.ir[k] == p2.ir[k]
-  //     @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
-}
- */
-
 pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
   (forall k: K :: p1.ks[k] <= p2.ks[k]
     @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))

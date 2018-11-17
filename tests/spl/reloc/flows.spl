@@ -85,11 +85,6 @@ lemma lemma_int_comp_fold_3(x: Node, Ix: Interface, y: Node, Iy: Interface, z: N
   requires domLeq(domPlus(domMult(Ix.inf[x], Ix.fm[x][z]), domMult(Iy.inf[y], Iy.fm[y][z])),
     Iz.inf[z]) == true
   ensures intComp(Ix, intComp(Iy, Iz)) == I && intValid(I) == true && I.FP == {x, y, z}
-  ensures domEq(Ix.inf[x], I.inf[x])
-  ensures domEq(Iy.inf[y], domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])))
-  ensures domEq(Iz.inf[z],
-    domPlus(I.inf[z], domPlus(domMult(Ix.inf[x], Ix.fm[x][z]), domMult(Iy.inf[y], Iy.fm[y][z]))))
-    // TODO fm?  ensures forall n: Node, n1: Node ::
 
 predicate int_comp_singl(x: Node, Ix: Interface, y: Node, Iy: Interface, I: Interface) {
       I.FP == {x, y}
@@ -136,11 +131,8 @@ lemma lemma_int_comp_unfold_3(x: Node, Ix: Interface, y: Node, Iy: Interface,
 lemma lemma_int_valid_unfold(x: Node, I: Interface)
   requires intValid(I) == true && I.FP == {x}
   ensures forall n: Node :: n !in I.FP ==> domEq(I.inf[n], domZero())
-  //@(matching I.inf[n] yields known(domEq(I.inf[n], domZero())))
   ensures forall n: Node, n1: Node :: n !in I.FP ==> domEq(I.fm[n][n1], domZero())
-  //@(matching I.fm[n][n1] yields known(domEq(I.fm[n][n1], domZero())))
   ensures forall n: Node, n1: Node :: n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero())
-  //@(matching I.fm[n][n1] yields known(domEq(I.fm[n][n1], domZero())))
   ensures forall n: Node :: n !in I.FP || n !in I.FPo
   ensures forall n: Node :: domLeq(domZero(), I.inf[n])
   ensures forall n: Node, n1: Node :: domLeq(domZero(), I.fm[n][n1])
@@ -149,11 +141,8 @@ lemma lemma_int_valid_unfold(x: Node, I: Interface)
 lemma lemma_int_valid_unfold_I(I: Interface)
   requires intValid(I) == true
   ensures forall n: Node :: n !in I.FP ==> domEq(I.inf[n], domZero())
-  //@(matching I.inf[n] yields known(domEq(I.inf[n], domZero())))
   ensures forall n: Node, n1: Node :: n !in I.FP ==> domEq(I.fm[n][n1], domZero())
-  //@(matching I.fm[n][n1] yields known(domEq(I.fm[n][n1], domZero())))
   ensures forall n: Node, n1: Node :: n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero())
-  //@(matching I.fm[n][n1] yields known(domEq(I.fm[n][n1], domZero())))
   ensures forall n: Node :: n !in I.FP || n !in I.FPo
   ensures forall n: Node :: domLeq(domZero(), I.inf[n])
   ensures forall n: Node, n1: Node :: domLeq(domZero(), I.fm[n][n1])
@@ -189,3 +178,4 @@ lemma lemma_proj(x: Node, Ix: Interface, Iy: Interface, I: Interface)
 lemma lemma_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Node)
   requires intComp(I1, I2) == I && x in I1.FP && y in I1.FPo && I.FPo == {}
   ensures y in I2.FP && domLeq(domMult(I1.inf[x], I1.fm[x][y]), I2.inf[y]) == true
+
