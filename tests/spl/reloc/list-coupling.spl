@@ -106,6 +106,13 @@ define nu(x, I) {
 
 /** Begin programs */
 
+procedure int_of_node(p: Node, pinfLb: K) returns (Ip: Interface)
+  requires acc(p) &*& p.next != p &*& lt(pinfLb, p.data) &*& p.next != null &*& p.data != top
+  ensures hrep(p, Ip) &*& nu(p, Ip)
+{
+  var pinf := { x: Node :: x == p ? fd({ k: K :: lt(pinfLb, k) ? 1 : 0 }) : domZero };
+  Ip := int(pinf, nd({p.data}), fmap(p), {p}, {p.next});
+}
 
 /** findNext */
 procedure findNext(x: Node, k: K, Ix: Interface)
@@ -423,12 +430,4 @@ procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, 
   pure assert Ipnm1.na.contents == Ipnm.na.contents ++ {k};
 }
 
-procedure int_of_node(p: Node, pinfLb: K) returns (Ip: Interface)
-  requires acc(p) &*& p.next != p &*& lt(pinfLb, p.data) &*& p.next != null
-  ensures hrep(p, Ip)
-{
-  var pinf := { x: Node :: x == p ? fd({ k: K :: lt(pinfLb, k) ? 1 : 0 }) : domZero };
-  var ppfm := { x: Node :: x == p.next ? fd({ k: K :: 1 }) : domZero };
-  var pfm := { x: Node :: x == p ? ppfm : { y: Node :: domZero } };
-  Ip := int(pinf, nd({p.data}), pfm, {p}, {p.next});
-}
+
