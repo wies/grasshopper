@@ -1,0 +1,347 @@
+/** B+ tree implementation of the link template for linearizable dictionaries. */
+
+options "-abspreds -simplearrays -propreads"
+
+include "flows.spl"
+include "array_util.spl"
+
+
+/** Flow and node domain definitions */
+
+datatype FlowDom = fd(ks: Map<K, Int>, ir: Map<K, Int>)
+
+/*
+pure predicate domEq(p1: FlowDom, p2: FlowDom) {
+  p1.ks == p2.ks && p1.ir == p2.ir
+  //  (forall k: K :: p1.ks[k] == p2.ks[k]
+  //   @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
+  //    && (forall k: K :: p1.ir[k] == p2.ir[k]
+  //     @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
+
+}
+ */
+
+pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
+  (forall k: K :: p1.ks[k] <= p2.ks[k]
+    @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
+    && (forall k: K :: p1.ir[k] <= p2.ir[k]
+    @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
+}
+
+pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+{
+  fd({k: K :: p1.ks[k] + p2.ks[k]}, {k: K :: p1.ir[k] + p2.ir[k]})
+}
+
+pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+{
+  fd({k: K :: p1.ks[k] * p2.ks[k]}, {k: K :: p1.ir[k] * p2.ir[k]})
+}
+
+pure function domZero() returns(p: FlowDom)
+{
+  fd({k: K :: 0}, {k: K :: 0})
+}
+
+
+datatype InrFn = inrfnC(inrfn: Map<Node, Set<K>>, inrdom: Set<Node>) | inrfnUndef;
+  
+datatype NodeDom = nd(contents: Set<K>, inr: InrFn, outs: Set<K>);
+
+pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
+  (forall k: K :: k in a1.contents ==> k in a2.contents)
+  && (a2.inr == inrfnUndef || a1.inr != inrfnUndef && a2.inr != inrfnUndef
+     && (forall x: Node :: x in a1.inr.inrdom ==> x in a2.inr.inrdom && a1.inr.inrfn[x] == a2.inr.inrfn[x]))
+  && (forall k: K :: k in a1.outs ==> k in a2.contents)
+}
+
+pure function ndJoin(a1: NodeDom, a2: NodeDom) returns (a: NodeDom)
+  ensures a.contents == a1.contents ++ a2.contents
+  ensures a.outs == a1.outs ++ a2.outs
+
+pure function ndBot() returns (a: NodeDom)
+{
+  nd({}, inrfnC({n: Node :: {}}, {}), {})
+}
+
+
+/** Definition of a node */
+
+struct Node {
+  var len: Int;
+  var keys: Array<K>;
+  var ptrs: Array<Node>;
+  var next: Node;
+  ghost var rangeLb: K;
+  ghost var rangeUb: K;
+}
+
+define unchanged(x) {
+  x.len == old(x.len) && x.next == old(x.next)
+    && x.rangeLb == old(x.rangeLb) && x.rangeUb == old(x.rangeUb)
+    && x.keys == old(x.keys) && x.ptrs == old(x.ptrs)
+    && x.keys.length == old(x.keys.length) && x.keys.map == old(x.keys.map)
+    && x.ptrs.length == old(x.ptrs.length) && x.ptrs.map == old(x.ptrs.map)
+}
+
+
+/** Definition of heap representation, hrep */
+
+var B: Int
+axiom B > 1
+
+define hrepSpatial(x) {
+  acc(x) &*& acc(x.keys) &*& acc(x.ptrs) &*& x.keys.length == 2*B &*& x.ptrs.length == 2*B
+}
+
+function inflow(x: Node, xrangeLb: K, xrangeUb: K) returns (i: Map<Node, FlowDom>)
+{
+  { n: Node :: n != x ? domZero()
+      : fd({k: K :: le(xrangeLb, k) && lt(k, xrangeUb) ? 1 : 0},
+           {k: K :: le(xrangeLb, k) && lt(k, top) ? 1 : 0}) }
+}
+
+define hrep(x, I) {
+  hrepSpatial(x) &*& I.FP == {x}
+    && x.next != x && 0 <= x.len && x.len < 2*B && (x.next == null ==> x.rangeUb == top)
+    // Keys are sorted
+    && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> lt(x.keys[i], x.keys[j]))
+    // Keys are in the range
+    && (forall i: Int :: 0 <= i && (x.next == null && i < x.len || x.next != null && i <= x.len)
+        ==> le(x.rangeLb, x.keys[i]) && lt(x.keys[i], x.rangeUb))
+    // All outgoing pointers are distinct
+    && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len
+         ==> x != x.ptrs[i])
+    && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len
+         ==> x.ptrs[i] != x.next)
+    && (forall i: Int, j: Int :: x.ptrs[0] != null && 0 <= i < j <= x.len
+         ==> x.ptrs[i] != x.ptrs[j])
+    // Internal nodes don't point to null
+    && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x.ptrs[i] != null)
+    // inflow
+    && I.inf == inflow(x, x.rangeLb, x.rangeUb)
+    && (x.ptrs[0] == null  // Leaf
+       && I.na.contents == set_of_map(x.keys.map, 0, x.len)
+        && (x.next == null && I.FPo == {}
+          || x.next != null && I.FPo == {x.next}
+          && (forall k: K :: le(x.keys[x.len], k) ==> I.fm[x][x.next].ks[k] == 1)
+          && (forall k: K :: lt(k, x.keys[x.len]) ==> I.fm[x][x.next].ks[k] == 0
+          @(matching x.next yields I.fm[x][x.next].ks[k])))
+     || x.ptrs[0] != null  // Internal
+       && I.na.contents == {}
+       && (forall i: Int, k: K :: 0 <= i <= x.len ==> x.ptrs[i] in I.FPo)
+       && (forall i: Int, k: K :: 0 <= i < x.len ==>
+          (I.fm[x][x.ptrs[i]].ks[k] == 1
+          && ((i <= 0 || le(x.keys[i-1], k)) && lt(k, x.keys[i]))
+           || I.fm[x][x.ptrs[i]].ks[k] == 0
+           && !((i <= 0 || le(x.keys[i-1], k)) && lt(k, x.keys[i])))
+          @(matching x.ptrs[i] yields I.fm[x][x.ptrs[i]].ks[k])
+          @(matching x.keys[i] yields I.fm[x][x.ptrs[i]].ks[k]))
+       && (x.next == null
+          && (forall k: K :: 
+               (I.fm[x][x.ptrs[x.len]].ks[k] == 1
+               && (x.len <= 0 || le(x.keys[x.len-1], k))
+               || I.fm[x][x.ptrs[x.len]].ks[k] == 0
+               && !(x.len <= 0 || le(x.keys[x.len-1], k))))
+               && x.next !in I.FPo
+            || x.next != null
+              && (forall k: K :: 
+                 (I.fm[x][x.ptrs[x.len]].ks[k] == 1
+                 && (x.len <= 0 || le(x.keys[x.len-1], k)) && lt(k, x.keys[x.len])
+                 || I.fm[x][x.ptrs[x.len]].ks[k] == 0
+                  && !((x.len <= 0 || le(x.keys[x.len-1], k)) && lt(k, x.keys[x.len]))))
+              && (forall k: K ::
+                   I.fm[x][x.next].ks[k] == 1 && le(x.keys[x.len], k)
+                 || I.fm[x][x.next].ks[k] == 0 && lt(k, x.keys[x.len])
+                 )
+            )
+      )
+}
+
+
+// The good condition
+define nu(x, I) {
+    // Contents subsetof keyset
+    (forall k: K :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
+    && (forall k: K, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
+    // Edgesets are disjoint
+    && (forall k: K, y: Node, z: Node :: y == z
+       || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0)
+    // Inreach keyset subsetof inset
+    && (forall k: K :: I.inf[x].ir[k] >= 1 && k !in I.na.outs
+       ==> I.inf[x].ks[k] >= 1)
+    // If k ∈ inreach, then inreach edgeset is same as normal edgeset (for step)
+    && (forall k: K, y: Node :: I.inf[x].ir[k] >= 1 && I.inf[x].ks[k] <= 0
+       && I.fm[x][y].ks[k] >= 1 ==> I.fm[x][y].ir[k] >= 1)
+    // The node label stores the actual inreach
+    && I.na.inr.inrdom == {x}
+    && (forall k: K :: (k in I.na.inr.inrfn[x]) == (I.inf[x].ks[k] >= 1 || I.inf[x].ir[k] >= 1))
+}
+
+
+lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
+  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
+  requires (i <= 0 || le(x.keys[i-1], k)) && 0 <= i <= x.len
+  ensures hrep(x, Ix) &*& unchanged(x)
+  ensures x.ptrs[0] == null  // x is a leaf
+{
+  if (x.ptrs[0] != null && i < x.len && !lt(k, x.keys[i])) {
+      keyset_implies_leaf(x, Ix, k, i + 1);
+    }
+}
+
+/** Begin programs */
+
+/** Initialize root note */
+procedure init() returns (x: Node, I: Interface)
+  ensures hrep(x, I) &*& intValid(I) == true
+{
+  x := new Node;
+  x.keys := new Array<K>(2*B);
+  x.keys[0] := bottom;
+  x.ptrs := new Array<Node>(2*B);
+  x.ptrs[0] := null;
+  x.len := 0;
+  x.next := null;
+  x.rangeLb := bottom;
+  x.rangeUb := top;
+
+  var xfm := { n: Node :: { n1: Node :: domZero } };
+  var xinf := inflow(x, x.rangeLb, x.rangeUb);
+  var inrSet: Set<K> := { k: K :: xinf[x].ks[k] >= 1 || xinf[x].ir[k] >= 1 };
+  var i := inrfnC({ n: Node :: n == x ? inrSet : {} }, {x});
+  I := int(xinf, nd({}, i, {}), xfm, {x}, {});
+  lemma_int_valid_fold(x, I);
+}
+
+/** findNext */
+procedure findNext(x: Node, k: K, Ix: Interface)
+  returns (n: Node)
+  requires hrep(x, Ix) &*& intValid(Ix) == true
+  ensures hrep(x, Ix)
+  ensures n != null ==> Ix.fm[x][n].ks[k] >= 1
+  ensures n == null ==> (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
+{
+  if (x.ptrs[0] == null) {  // Leaf node
+    if (x.next == null) {
+      lemma_int_valid_unfold(x, Ix);
+      return null;
+    }
+    if (le(x.keys[x.len], k)) {
+      return x.next;
+    } else {
+      lemma_int_valid_unfold(x, Ix);
+      pure assert forall y: Node :: y in Ix.FPo ==> Ix.fm[x][y].ks[k] == 0;
+      pure assert forall y: Node :: y !in Ix.FPo ==> Ix.fm[x][y].ks[k] == 0;
+      return null;
+    }
+  }
+
+  var found, i := arr_find(x.keys, x.len, k);
+
+  if (i < x.len && k == x.keys[i]) {  // arr_find finds upper bound, we want lower
+    i := i + 1;
+  }
+
+  if (i == x.len && x.next != null) {
+    if (lt(k, x.keys[i]))
+      n := x.ptrs[i];
+    else
+      n := x.next;
+  } else {
+    pure assert i <= 0 || le(x.keys[i-1], k);
+    n := x.ptrs[i];
+  }
+  // return n;
+}
+
+
+/** member */
+procedure member(x: Node, k: K, Ix: Interface)
+  returns (succ: Bool, res: Bool, Ix1: Interface)
+  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
+  ensures hrep(x, Ix)
+  ensures intEq(Ix, Ix1) == true
+  // decisiveOpSpec(x, Ix1, res, k):
+  ensures succ ==> (Ix1.na.contents == Ix.na.contents && (res == k in Ix.na.contents))
+{
+  keyset_implies_leaf(x, Ix, k, 0);
+
+  var idx: Int;
+  res, idx := arr_find(x.keys, x.len, k);
+
+  return true, res, Ix;
+}
+
+
+/** insert */
+procedure insert(x: Node, k: K, Ix: Interface)
+  returns (succ: Bool, res: Bool, Ix1: Interface)
+  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
+  ensures hrep(x, Ix1)
+  ensures intEq(Ix, Ix1) == true
+  // decisiveOpSpec(x, Ix1, res, k):
+  ensures succ ==> (Ix1.na.contents == Ix.na.contents ++ {k} && (res == k !in Ix.na.contents))
+{
+  keyset_implies_leaf(x, Ix, k, 0);
+
+  if (x.len < 2*B - 1) {
+    ghost var m0 := x.keys.map;
+    if (x.next != null) {
+      x.keys[x.len + 1] := x.keys[x.len];
+      set_of_map_equal(m0, x.keys.map, 0, 0, x.len);
+    } else {
+      x.keys[x.len + 1] := top;
+      set_of_map_equal(m0, x.keys.map, 0, 0, x.len);
+    }
+    ghost var m := x.keys.map; var old_len := x.len;
+
+    var idx, new_len := arr_insert(x.keys, k, x.len);
+    x.len := new_len;
+
+    map_insert_content_set(m, x.keys.map, idx, k, old_len, new_len);
+    lemma_int_valid_unfold(x, Ix);
+    Ix1 := copy_interface(Ix, nd(Ix.na.contents ++ {k}, Ix.na.inr, Ix.na.outs));
+    lemma_int_valid_fold(x, Ix1);
+
+    return true, k !in Ix.na.contents, Ix1;
+  } else {
+    return false, false, Ix;
+  }
+}
+
+
+/** delete */
+procedure delete(x: Node, k: K, Ix: Interface)
+  returns (succ: Bool, res: Bool, Ix1: Interface)
+  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
+  ensures hrep(x, Ix1)
+  ensures intEq(Ix, Ix1) == true
+  // decisiveOpSpec(x, Ix1, res, k):
+  ensures succ ==> (Ix1.na.contents == Ix.na.contents -- {k} && (res == k in Ix.na.contents))
+{
+  keyset_implies_leaf(x, Ix, k, 0);
+
+  ghost var m := x.keys.map;
+
+  var new_len, idx := arr_delete(x.keys, k, x.len);
+
+  map_delete_content_set(m, x.keys.map, x.len, new_len, idx, k);
+
+  ghost var m1 := x.keys.map;
+  x.keys[new_len] := x.keys[x.len];
+  set_of_map_equal(m1, x.keys.map, 0, 0, new_len);
+
+  x.len := new_len;
+
+  // Define Ix1 to be Ix, but with k removed from contents
+  Ix1 := copy_interface(Ix, nd(Ix.na.contents -- {k}, Ix.na.inr, Ix.na.outs));
+  lemma_int_valid_unfold(x, Ix);
+  lemma_int_valid_fold(x, Ix1);
+
+  return true, (k in Ix.na.contents), Ix1;
+}
