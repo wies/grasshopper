@@ -1,5 +1,0 @@
-procedure test() {
-  pure assert forall x: Int :: x > 0 ==> x * x > 0 with {
-    assert true;
-  }
-}
