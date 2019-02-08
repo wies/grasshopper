@@ -2,7 +2,9 @@ open Util
 open Grass
 open SplSyntax
 open SplErrors
-  
+
+(** Checks if expected type [oty1] is compatible with actual/found type [oty2].
+    Returns ?? *)
 let match_types pos oty1 oty2 =
   let rec mt ty1 ty2 =
     match ty1, ty2 with
@@ -21,6 +23,8 @@ let match_types pos oty1 oty2 =
         ArrayType (mt ty1 ty2)
     | ArrayCellType ty1, ArrayCellType ty2 ->
         ArrayCellType (mt ty1 ty2)
+    | MapType (ty1, (BoolType | AnyType)), SetType ty2
+    | SetType ty1, MapType (ty2, (BoolType | AnyType))
     | SetType ty1, SetType ty2 ->
         SetType (mt ty1 ty2)
     | MapType (dty1, rty1), MapType (dty2, rty2) ->
@@ -99,11 +103,16 @@ let type_of_expr cu locals e =
     | BinaryOp (e, OpUn, _, _, _)
     | BinaryOp (e, OpInt, _, _, _) ->
         te e
-    | Binder (SetComp, [v], _, _) ->
-        (match v with
-        | GuardedVar (_, e) -> SetType (te e)
-        | UnguardedVar v -> SetType (v.v_type))
-    | Binder (SetComp, _, _, _) -> failwith "invalid set comprehension"        
+    | Binder (Comp, [v], e, _) ->
+        let dty = 
+          match v with
+          | GuardedVar (_, e1) -> te e1
+          | UnguardedVar v -> v.v_type
+        in
+        (match te e with
+        | BoolType -> SetType dty
+        | rty -> MapType (dty, rty))
+    | Binder (Comp, _, _, _) -> failwith "invalid comprehension"        
     | Setenum (ty, _, _) ->
         SetType ty
     (* Permission types *)
@@ -127,9 +136,6 @@ let type_of_expr cu locals e =
         | ArrayType ty -> ty
         | _ -> AnyType)
     | Write (map, _, _, _) -> te map
-    | ConstrApp (id, _, _) | DestrApp (id, _, _) ->
-        let decl = IdMap.find id cu.fun_decls in
-        decl.f_res
     | UnaryOp ((OpOld | OpKnown), e, _) -> te e        
     | UnaryOp (OpLength, map, _) -> IntType
     | UnaryOp (OpArrayOfCell, c, _) ->
@@ -141,6 +147,16 @@ let type_of_expr cu locals e =
         (match te map with
         | ArrayType srt -> MapType (IntType, ArrayCellType srt)
         | _ -> AnyType)
+    | UnaryOp (OpArrayMap, arr, _) ->
+        (match te arr with
+        | ArrayType srt -> MapType (IntType, srt)
+        | _ -> MapType (IntType, AnyType))
+    (* Algebraic data types *)
+    | ConstrApp (id, _, _) | DestrApp (id, _, _) ->
+        let decl = IdMap.find id cu.fun_decls in
+        decl.f_res
+    (* If-then-else *)
+    | Ite (_, e, _, _) -> te e     
     (* Other stuff *)
     | Null (ty, _) -> ty
     | ProcCall (id, _, _) ->
@@ -153,7 +169,7 @@ let type_of_expr cu locals e =
     | PredApp (Pred id, _, _) ->
         let decl = IdMap.find id cu.pred_decls in
         (match decl.pr_outputs with
-        | [] -> decl.pr_body |> Opt.map te |> Opt.get_or_else BoolType
+        | [] -> decl.pr_body |> Opt.map te |> Opt.get_or_else (if decl.pr_is_pure then BoolType else PermType)
         | [rid] -> 
             let rdecl = IdMap.find rid decl.pr_locals in
             rdecl.v_type
@@ -253,6 +269,11 @@ let infer_types cu locals ty e =
     (* Boolean constants *)
     | BoolVal (_, pos) as e ->
         e, match_types pos ty BoolType
+    (* If-then-else *)
+    | Ite (e1, e2, e3, pos) ->
+        let e1, _ = it locals BoolType e1 in
+        let e2, e3, ty = itp locals ty e2 e3 in
+        Ite (e1, e2, e3, pos), ty
     (* Permissions *)
     | Emp pos as e ->
         e, match_types pos ty PermType
@@ -312,9 +333,23 @@ let infer_types cu locals ty e =
           match b with
           | Exists | Forall ->
               it locals1 ty f
-          | SetComp ->
-              fst (it locals1 BoolType f),
-              match_types pos ty (SetType (Opt.get vty_opt))
+          | Comp ->
+              match ty with
+              | SetType _ ->
+                  fst (it locals1 BoolType f),
+                  match_types pos ty (SetType (Opt.get vty_opt))
+              | _ ->
+                  let ty = match_types pos ty (MapType (Opt.get vty_opt, AnyType)) in
+                  let dty, rty = match ty with
+                  | MapType (dty, rty) -> dty, rty
+                  | _ -> failwith "impossible"
+                  in
+                  let f1, rty = it locals1 rty f in
+                  let ty1 = match rty with
+                  | BoolType -> SetType dty
+                  | _ -> MapType (dty, rty)
+                  in
+                  f1, ty1
         in
         Binder (b, decls1, f1, pos), ty
     (* Reference and array types *)
@@ -369,6 +404,21 @@ let infer_types cu locals ty e =
           | _ -> ety
         in
         UnaryOp (OpArrayCells, map1, pos), match_types pos ty (MapType (IntType, ArrayCellType ety))
+    | UnaryOp (OpArrayMap, arr, pos) ->
+        let arr_ety =
+          match ty with
+          | MapType (IntType, ety) -> ety
+          | ArrayType ety -> ety
+          | _ -> AnyType
+        in
+        let arr, arr_ty = it locals (ArrayType arr_ety) arr in
+        let arr_ety =
+          match arr_ty with
+          | MapType (IntType, ety) -> ety
+          | ArrayType ety -> ety
+          | _ -> AnyType
+        in
+        UnaryOp (OpArrayMap, arr, pos), match_types pos ty (MapType (IntType, arr_ety))
      (*| Dot (e, id, pos) ->
         let decl = IdMap.find id cu.var_decls in
         let dty, rty =
@@ -531,7 +581,7 @@ let infer_types cu locals ty e =
               let body_ty =
                 decl.pr_body |>
                 Opt.map (type_of_expr cu locals) |>
-                Opt.get_or_else BoolType
+                Opt.get_or_else (if decl.pr_is_pure then BoolType else PermType)
               in
               match_types pos ty body_ty
         in

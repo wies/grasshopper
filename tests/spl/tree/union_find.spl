@@ -1,6 +1,6 @@
 struct Node {
   var next: Node;
-  var ghost gnext: Node;
+  ghost var gnext: Node;
 }
 
 function rep(x: Node) returns (res: Node)

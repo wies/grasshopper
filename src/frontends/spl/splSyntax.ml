@@ -1,7 +1,8 @@
 (** SPL abstract syntax. *)
 
 open Grass
-
+open Util
+  
 type idents = ident list
 
 type pos = source_position
@@ -69,6 +70,7 @@ and pred =
       pr_outputs: idents;
       pr_locals: vars;
       pr_contracts: contracts;
+      pr_is_pure: bool;
       pr_body: expr option; 
       pr_pos: pos;
     }
@@ -166,6 +168,7 @@ and expr =
   | New of typ * exprs * pos
   | Read of expr * expr * pos
   | Write of expr * expr * expr * pos
+  | Ite of expr * expr * expr * pos
   | ConstrApp of ident * exprs * pos
   | DestrApp of ident * expr * pos
   | ProcCall of ident * exprs * pos
@@ -187,7 +190,7 @@ and bin_op =
   | OpAnd | OpOr | OpImpl 
 
 and un_op =
-  | OpArrayCells | OpIndexOfCell | OpArrayOfCell | OpLength
+  | OpArrayCells | OpIndexOfCell | OpArrayOfCell | OpLength | OpArrayMap
   | OpUMinus | OpUPlus
   | OpBvNot | OpToInt | OpToByte
   | OpNot
@@ -198,9 +201,10 @@ and pred_sym =
   | AccessPred | BtwnPred | DisjointPred | FramePred | ReachPred | Pred of ident
       
 and binder_kind =
-  | Forall | Exists | SetComp
+  | Forall | Exists | Comp
 
 and annotation =
+  | Position
   | GeneratorAnnot of (expr * ident list) list * expr
   | PatternAnnot of expr
   | CommentAnnot of string
@@ -216,6 +220,7 @@ let pos_of_expr = function
   | New (_, _, p)
   | Read (_, _, p)
   | Write (_, _, _, p)
+  | Ite (_, _, _, p)
   | ConstrApp (_, _, p)
   | DestrApp (_, _, p)
   | Binder (_, _, _, p)
@@ -243,7 +248,8 @@ let free_vars e =
     | Read (e1, e2, _)
     | BinaryOp (e1, _, e2, _, _) ->
         fv bv (fv bv acc e1) e2
-    | Write (e1, e2, e3, _) ->
+    | Write (e1, e2, e3, _)
+    | Ite (e1, e2, e3, _) ->
         fv bv (fv bv (fv bv acc e1) e2) e3
     | Binder (_, vs, e, _) ->
         let bv, acc =
@@ -258,7 +264,7 @@ let free_vars e =
         fv bv acc e
     | Null _ | Emp _ | IntVal _ | BoolVal _ -> acc
   in fv IdSet.empty IdSet.empty e
-
+    
 (** Variable substitution for expressions (not capture avoiding) *)
 let subst_id sm =
   let rec s bv = function
@@ -281,11 +287,13 @@ let subst_id sm =
     | UnaryOp (op, e, pos) ->
         UnaryOp (op, s bv e, pos)
     | Annot (e, a, pos) ->
-        Annot (s bv e, a, pos) (* TODO: substitute in a *)
+        Annot (s bv e, s_annot bv a, pos)
     | Read (e1, e2, pos) ->
         Read (s bv e1, s bv e2, pos)
     | Write (e1, e2, e3, pos) ->
         Write (s bv e1, s bv e2, s bv e3, pos)
+    | Ite (e1, e2, e3, pos) ->
+        Ite (s bv e1, s bv e2, s bv e3, pos)
     | BinaryOp (e1, op, e2, ty, pos) ->
         BinaryOp (s bv e1, op, s bv e2, ty, pos)
     | Binder (b, vs, e, pos) ->
@@ -299,6 +307,13 @@ let subst_id sm =
         in
         Binder (b, vs, s bv e, pos)
     | (Null _ | Emp _ | IntVal _ | BoolVal _ as e) -> e
+  and s_annot bv = function
+    | GeneratorAnnot (ms, e) ->
+      let ms = List.map (fun (e, is) -> (s bv e, is)) ms in
+      GeneratorAnnot (ms, s bv e)
+    | PatternAnnot e -> PatternAnnot (s bv e)
+    | CommentAnnot _ as a -> a
+    | Position -> Position
   in s IdSet.empty
 
 (** General (id -> expr) substitution for expressions (not capture avoiding) *)
@@ -323,11 +338,13 @@ let subst sm =
     | UnaryOp (op, e, pos) ->
         UnaryOp (op, s bv e, pos)
     | Annot (e, a, pos) ->
-        Annot (s bv e, a, pos) (* TODO: substitute in a *)
+        Annot (s bv e, s_annot bv a, pos)
     | Read (e1, e2, pos) ->
         Read (s bv e1, s bv e2, pos)
     | Write (e1, e2, e3, pos) ->
         Write (s bv e1, s bv e2, s bv e3, pos)
+    | Ite (e1, e2, e3, pos) ->
+        Ite (s bv e1, s bv e2, s bv e3, pos)
     | BinaryOp (e1, op, e2, ty, pos) ->
         BinaryOp (s bv e1, op, s bv e2, ty, pos)
     | Binder (b, vs, e, pos) ->
@@ -341,6 +358,13 @@ let subst sm =
         in
         Binder (b, vs, s bv e, pos)
     | (Null _ | Emp _ | IntVal _ | BoolVal _) as e -> e
+  and s_annot bv = function
+    | GeneratorAnnot (ms, e) ->
+      let ms = List.map (fun (e, is) -> (s bv e, is)) ms in
+      GeneratorAnnot (ms, s bv e)
+    | PatternAnnot e -> PatternAnnot (s bv e)
+    | CommentAnnot _ as a -> a
+    | Position -> Position
   in s IdSet.empty
     
 let pos_of_stmt = function
@@ -371,15 +395,19 @@ let pred_decl hdr body =
   { hdr with pr_body = body }
 
 let extend_spl_program incls decls bg_th prog =
+  let redeclaration_error id pos =
+    ProgError.error pos ("Identifier " ^ GrassUtil.name id ^ " has already been declared in this scope.")
+  in
   let check_uniqueness id pos (tdecls, vdecls, pdecls, prdecls, mdecls) =
     if IdMap.mem id tdecls || IdMap.mem id vdecls || IdMap.mem id pdecls || IdMap.mem id prdecls
         || IdMap.mem id mdecls
-    then ProgError.error pos ("redeclaration of identifier " ^ (fst id) ^ ".");
+    then redeclaration_error id pos
   in
   let tdecls, vdecls, pdecls, prdecls, mdecls =
     List.fold_left (fun (tdecls, vdecls, pdecls, prdecls, mdecls as decls) -> function
-      | TypeDecl decl -> 
-          check_uniqueness decl.t_name decl.t_pos decls;
+      | TypeDecl decl ->
+          IdMap.find_opt decl.t_name tdecls |>
+          Opt.iter (function { t_def = FreeTypeDef; _ } -> () | _ -> redeclaration_error decl.t_name decl.t_pos);
           IdMap.add decl.t_name decl tdecls, vdecls, pdecls, prdecls, mdecls
       | VarDecl decl -> 
           check_uniqueness decl.v_name decl.v_pos decls;
@@ -459,6 +487,9 @@ let replace_macros prog =
       (match IdMap.find_opt p prog.macro_decls with
       | Some macro ->
         let sm =
+          if List.length macro.m_args <> List.length es then
+            ProgError.error pos ("Wrong number of arguments to macro "
+              ^ (string_of_ident macro.m_name) ^ ".");
           List.combine macro.m_args es
           |> List.fold_left (fun sm (v, e) -> IdMap.add v e sm) IdMap.empty
         in
@@ -474,6 +505,8 @@ let replace_macros prog =
       Read (repl_expr e1, repl_expr e2, pos)
     | Write (e1, e2, e3, pos) ->
       Write (repl_expr e1, repl_expr e2, repl_expr e3, pos)
+    | Ite (e1, e2, e3, pos) ->
+      Ite (repl_expr e1, repl_expr e2, repl_expr e3, pos)
     | ConstrApp (c, es, pos) ->
       ConstrApp(c, List.map (repl_expr) es, pos)
     | DestrApp (d, e, pos) ->
@@ -599,8 +632,8 @@ let string_of_pred = function
 let prio_of_expr = function
   | Null _ | Emp _ | IntVal _ | BoolVal _ | Ident _ -> 0
   | Read _ | Write _ | ProcCall _ | PredApp _ | ConstrApp _ | DestrApp _ | New _ | Setenum _ |
-    Binder (SetComp, _, _, _) -> 1
-  | UnaryOp ((OpArrayCells | OpIndexOfCell | OpArrayOfCell |
+    Binder (Comp, _, _, _) -> 1
+  | UnaryOp ((OpArrayCells | OpIndexOfCell | OpArrayOfCell | OpArrayMap |
     OpLength | OpToInt | OpToByte | OpOld | OpKnown), _, _) -> 1
   | UnaryOp ((OpUMinus | OpUPlus | OpBvNot | OpNot), _, _) -> 2
   | BinaryOp (_, (OpMult | OpDiv | OpMod), _, _, _) -> 3
@@ -617,10 +650,11 @@ let prio_of_expr = function
   | BinaryOp (_, OpSepIncl, _, _, _) -> 14
   | BinaryOp (_, OpOr, _, _, _) -> 15
   | BinaryOp (_, OpImpl, _, _, _) -> 16
-  | Binder _ -> 17
-  | Annot _ -> 18
+  | Ite (_, _, _, _) -> 17
+  | Binder _ -> 18
+  | Annot _ -> 19
 
-let is_left_assoc = function _ -> true
+let is_left_assoc = function OpImpl -> false | _ -> true
         
 let rec pr_expr ppf =
   function
@@ -643,6 +677,8 @@ let rec pr_expr ppf =
       fprintf ppf "%a.%a" pr_expr e2 pr_expr e1
   | Write (e1, e2, e3, _) ->
       fprintf ppf "%a[%a := %a]" pr_expr e1 pr_expr e2 pr_expr e3
+  | Ite (e1, e2, e3, _) ->
+      fprintf ppf "%a ? %a : %a" pr_expr e1 pr_expr e2 pr_expr e3
   | DestrApp (id, e, _) ->
       fprintf ppf "%a.%a" pr_expr e pr_ident id 
   | ConstrApp (id, es, _)
@@ -660,6 +696,8 @@ let rec pr_expr ppf =
           fprintf ppf "%a.array" pr_expr e1
       | OpLength ->
           fprintf ppf "%a.length" pr_expr e1
+      | OpArrayMap ->
+          fprintf ppf "%a.map" pr_expr e1
       | OpUMinus | OpBvNot | OpUPlus | OpNot ->
           let op_str = match op with
           | OpUMinus -> "-"
@@ -672,13 +710,13 @@ let rec pr_expr ppf =
           then fprintf ppf "%s(@[%a@])" op_str pr_expr e1
           else fprintf ppf "%s%a" op_str pr_expr e1
       | OpOld ->
-          fprintf ppf "old(@[%a@])" pr_expr e
+          fprintf ppf "old(@[%a@])" pr_expr e1
       | OpKnown ->
-          fprintf ppf "Known(@[%a@])" pr_expr e
+          fprintf ppf "Known(@[%a@])" pr_expr e1
       | OpToInt ->
-          fprintf ppf "byte2int(@[%a@])" pr_expr e
+          fprintf ppf "byte2int(@[%a@])" pr_expr e1
       | OpToByte ->
-          fprintf ppf "int2byte(@[%a@])" pr_expr e)
+          fprintf ppf "int2byte(@[%a@])" pr_expr e1)
   | BinaryOp (e1, op, e2, _, _) as e ->
       let op_str = match op with
       | OpDiff -> "--"
@@ -714,8 +752,8 @@ let rec pr_expr ppf =
           (prio_of_expr e < prio_of_expr e1,
           prio_of_expr e <= prio_of_expr e2)
         else
-          (prio_of_expr e < prio_of_expr e1,
-          prio_of_expr e <= prio_of_expr e2)
+          (prio_of_expr e <= prio_of_expr e1,
+          prio_of_expr e < prio_of_expr e2)
       in
       let pr_paran paran ppf e =
         if paran
@@ -735,7 +773,7 @@ let rec pr_expr ppf =
             pr_var ppf v
       in
       (match b with
-      | SetComp ->
+      | Comp ->
           fprintf ppf "{ @[<2>%a ::@ %a@] }"
             (Util.pr_list_comma pr_bound_var) vs pr_expr e
       | _ ->
@@ -798,12 +836,14 @@ let pr_pred_decl ppf pred =
   let pr_header ppf pred =
   match pred.pr_outputs with
   | [] ->
-      fprintf ppf "@[<2>predicate %a(@[<0>%a@])%a@]@ "
+      fprintf ppf "@[<2>%spredicate %a(@[<0>%a@])%a@]@ "
+        (if pred.pr_is_pure then "pure " else "")
         pr_ident pred.pr_name
         pr_var_list (lookup pred.pr_formals)
         pr_contracts pred.pr_contracts
   | _ ->
-      fprintf ppf "@[<2>function %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a@]@\n"
+      fprintf ppf "@[<2>%sfunction %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a@]@\n"
+        (if pred.pr_is_pure then "pure " else "")
         pr_ident pred.pr_name
         pr_var_list (lookup pred.pr_formals)
         pr_var_list (lookup pred.pr_outputs)
@@ -938,3 +978,4 @@ let print_cu out_ch prog = Util.print_of_format pr_cu prog out_ch
         
 let string_of_type t = Util.string_of_format pr_type t
 
+let string_of_expr e = Util.string_of_format pr_expr e

@@ -2,6 +2,7 @@
 
 open Util
 open SplCompiler
+open Grass
     
 let greeting =
   "GRASShopper version " ^ Config.version ^ "\n"
@@ -12,7 +13,7 @@ let usage_message =
   " <input file> [options]\n"
 
 let cmd_line_error msg =
-  Arg.usage (Arg.align Config.cmd_options) usage_message;
+  Arg.usage (Arg.align Config.cmd_options_spec) usage_message;
   failwith ("Command line option error: " ^ msg)
 
 (** Output JSON file with error trace *)
@@ -25,7 +26,7 @@ let output_trace prog proc (pp, model) =
     let print_pos (pos, state) =
       Printf.fprintf trace_chan 
         "{\"position\": {\"line_no\": %d, \"column_no_start\": %d, \"column_no_stop\": %d}, \"state\": "
-        pos.Grass.sp_start_line pos.Grass.sp_start_col pos.Grass.sp_end_col;
+        pos.sp_start_line pos.sp_start_col pos.sp_end_col;
       ModelPrinting.output_json trace_chan state;
       output_string trace_chan "}"
     in
@@ -117,7 +118,15 @@ let parse_spl_program main_file =
 (** Check SPL program in main file [file] and procedure [proc] *)
 let check_spl_program spl_prog proc =
   let prog = SplTranslator.to_program spl_prog in
-  let simple_prog = Verifier.simplify proc prog in
+  let procs =  (* Split proc string to get names of multiple procedures *)
+    match proc with
+    | Some p ->
+      p |> String.split_on_char ' '
+      |> List.fold_left (fun ps s -> IdSet.add (s, 0) ps) IdSet.empty
+    | None ->
+      IdMap.fold (fun id _ -> IdSet.add id) prog.prog_procs IdSet.empty
+  in
+  let simple_prog = Verifier.simplify procs prog in
   let check simple_prog first proc =
     let errors =
       if !Config.typeonly then []
@@ -127,35 +136,34 @@ let check_spl_program spl_prog proc =
       (fun first (pp, error_msg, model) ->
         output_trace simple_prog proc (pp, model);
         let _ =
-          if !Config.robust
-          then begin
-            (if not first then print_newline ());
-            ProgError.print_error pp error_msg
-          end
-          else ProgError.error pp error_msg
+          if !Config.robust || !Config.model_repl
+          then ((if not first then print_newline ()); ProgError.print_error pp error_msg);
+          if !Config.model_repl then ModelRepl.repl model;
+          if not !Config.robust
+          then ProgError.error pp error_msg
+          else ()
         in
         false
       )
       first errors
   in
-  match proc with
-  | None -> Prog.fold_procs (check simple_prog) true simple_prog
-  | Some p ->
-    let procs =
-      Prog.find_proc_with_deps simple_prog (p, 0)
-    in
-    if procs = [] then begin
-      let available =
-        Prog.fold_procs 
-          (fun acc proc ->
-            let name = Prog.name_of_proc proc in
-            "\t" ^ Grass.string_of_ident name ^ "\n" ^ acc) 
-          "" prog
-      in
-      failwith ("Could not find a procedure named " ^ p ^ 
-                ". Available procedures are:\n" ^ available)
-    end;
-    List.fold_left (check simple_prog) true procs
+  let procs =
+    IdSet.fold (fun p procs ->
+      match Prog.find_proc_with_deps simple_prog p with
+      | [] ->
+        let available =
+          Prog.fold_procs 
+            (fun acc proc ->
+              let name = Prog.name_of_proc proc in
+              "\t" ^ string_of_ident name ^ "\n" ^ acc) 
+            "" prog
+        in
+        failwith ("Could not find a procedure named " ^ (string_of_ident p) ^ 
+                  ". Available procedures are:\n" ^ available)
+      | ps -> ps :: procs) procs []
+    |> List.concat |> List.sort_uniq compare
+  in
+  List.fold_left (check simple_prog) true procs
 
 
 (** Get current time *)
@@ -171,8 +179,7 @@ let print_stats start_time =
     print_endline "Statistics: ";
     Printf.printf "  running time for analysis: %.2fs\n" total_time;
     Printf.printf "  # VCs: %d\n" !SmtLibSolver.num_of_sat_queries;
-    Printf.printf "  measured time: %.2fs\n" !Util.measured_time;
-    Printf.printf "  # measured calls: %.2d\n" !Util.measured_calls
+    print_measures ()
 
 (** Print C program equivalent *)
 let print_c_program spl_prog =
@@ -191,7 +198,7 @@ let _ =
   in
   let start_time = current_time () in
   try
-    Arg.parse Config.cmd_options set_main_file usage_message;
+    Arg.parse Config.cmd_options_spec set_main_file usage_message;
     if !Config.unsat_cores then Config.named_assertions := true;
     Debug.info (fun () -> greeting);
     SmtLibSolver.select_solver (String.uppercase_ascii !Config.smtsolver);

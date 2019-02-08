@@ -67,7 +67,7 @@ module SortMap = Map.Make(struct
 type sorted_ident = ident * sort
 
 type arity = sort list * sort
-
+      
 (** symbols *)
 type symbol =
   (* interpreted constant symbols *)
@@ -78,7 +78,7 @@ type symbol =
   | UMinus | Plus | Minus | Mult | Div | Mod (* Int *)
   | BitAnd | BitOr | BitNot | ShiftLeft | ShiftRight (* Bit Vector *)
   | Empty | SetEnum | Union | Inter | Diff  (* Set *)
-  | Length | IndexOfCell | ArrayOfCell | ArrayCells
+  | Length | IndexOfCell | ArrayOfCell | ArrayCells | ArrayMap
   | ByteToInt | IntToByte (* explicit conversion *)
   | Ite (* if-then-else *)
   (* interpreted predicate symbols *)
@@ -95,6 +95,8 @@ type symbol =
   (* for patterns *)
   | Known
 
+type sorted_symbol = symbol * arity
+      
 let symbols = 
   [BoolConst true; BoolConst false; 
    Null; Read; Write; EntPnt;
@@ -118,12 +120,12 @@ module SymbolMap = Map.Make(struct
   end)
 
 module SortedSymbolSet = Set.Make(struct
-    type t = symbol * arity
+    type t = sorted_symbol
     let compare = compare
   end)
 
 module SortedSymbolMap = Map.Make(struct
-    type t = symbol * arity
+    type t = sorted_symbol
     let compare = compare
   end)
 
@@ -141,13 +143,21 @@ let symbol_of = function
   | App (sym, _, _) -> Some sym
         
 let sort_of = function
-  | Var (_, s) 
-  | App (_, _, s) -> s
+  | Var (_, srt) 
+  | App (_, _, srt) -> srt
 
+let sorted_symbol_of = function
+  | Var _ -> None
+  | App (sym, ts, srt) -> Some (sym, (List.map sort_of ts, srt))
+        
 let rec sort_ofs = function
   | [] -> failwith "tried to extract sort from empty list of terms"
   | t :: ts -> sort_of t
 
+let args_of = function
+  | Var _ -> []
+  | App (_, args, _) -> args
+        
 type subst_map = term IdMap.t
 
 module TermSet = Set.Make(struct
@@ -235,17 +245,18 @@ let string_of_symbol = function
   | IndexOfCell -> "index"
   | ArrayOfCell -> "array"
   | ArrayCells -> "cells"
+  | ArrayMap -> "map"
   | UMinus -> "-"
   | Plus -> "+"
   | Minus -> "-"
   | Mult -> "*"
-  | Div -> "div"
-  | Mod -> "mod"
-  | Empty -> "emptyset"
+  | Div -> "/"
+  | Mod -> "%"
+  | Empty -> "{}"
   | SetEnum -> "singleton"
-  | Union -> "union"
-  | Inter -> "intersection"
-  | Diff -> "setminus"
+  | Union -> "++"
+  | Inter -> "**"
+  | Diff -> "--"
   | BitAnd -> "&"
   | BitOr -> "|"
   | BitNot -> "!"
@@ -255,14 +266,14 @@ let string_of_symbol = function
   | IntToByte -> "toByte"
   | Ite -> "ite"
   (* predicate symbols *)
-  | Eq -> "="
+  | Eq -> "=="
   | LtEq -> "<="
   | GtEq -> ">="
   | Lt -> "<"
   | Gt -> ">"
   | Btwn -> "Btwn"
-  | Elem -> "member"
-  | SubsetEq -> "subset"
+  | Elem -> "in"
+  | SubsetEq -> "subsetof"
   | Disjoint -> "Disjoint"
   | Frame -> "Frame"
   (* constructors and destructors *)
@@ -274,6 +285,39 @@ let string_of_symbol = function
   | Old -> "old"      
   (* patterns *)
   | Known -> "known"
+
+let string_of_bop = function
+  | And -> "&&"
+  | Or -> "||"
+  | Not -> "!"
+
+let prio_of_symbol = function
+  | Null | Empty | IntConst _ | BoolConst _ -> 0
+  | Read | Write | Constructor _ | Destructor _ | Old | SetEnum | ArrayMap
+  | Length | IndexOfCell | ArrayOfCell | ArrayCells | EntPnt | ByteToInt | IntToByte
+  | Btwn | Frame | Disjoint | Known | FreeSym _ -> 1
+  | UMinus | BitNot -> 2 
+  | Mult | Div | Mod -> 3
+  | Minus | Plus -> 4
+  | ShiftLeft | ShiftRight -> 5
+  | Diff | Union | Inter -> 6
+  | Gt | Lt | GtEq | LtEq | Elem | SubsetEq -> 7
+  | Eq -> 8
+  | BitAnd -> 9
+  | BitOr -> 10
+  | Ite -> 11
+
+let prio_of_term = function
+  | App (sym, _, _) -> prio_of_symbol sym
+  | Var _ -> 0
+        
+let prio_of_form = function
+  | Atom (t, []) -> prio_of_term t
+  | Atom (_, _) -> 0
+  | BoolOp (Not, _) -> 2
+  | BoolOp (And, _) -> 12
+  | BoolOp (Or, _) -> 16
+  | Binder _ -> 18
         
 let pr_ident ppf id = fprintf ppf "%s" (string_of_ident id)
 
@@ -319,17 +363,6 @@ let rec pr_sort ppf srt = match srt with
   | Adt (id, cnsts) -> fprintf ppf "%a" pr_ident id
   | FreeSrt id -> pr_ident ppf id
   | Map (ds, r) -> fprintf ppf "%s<@[%a,@ %a@]>" map_sort_string pr_sorts ds pr_sort r
-
-(*and pr_adt_constrs ppf = function
-  | [] -> ()
-  | [c] -> pr_adt_constr ppf c
-  | c :: cs -> fprintf ppf "%a | %a" pr_adt_constr c pr_adt_constrs cs
-
-and pr_adt_constr ppf = function
-  | (id, args) -> fprintf ppf "%s(%a)" (string_of_ident id) (pr_list_comma pr_adt_arg) args
-
-and pr_adt_arg ppf = function
-  | (id, srt) -> fprintf ppf "%s: %a" (string_of_ident id) pr_ident id*)
         
 and pr_sorts ppf = function
   | [srt] ->  fprintf ppf "%a" pr_sort srt
@@ -340,71 +373,40 @@ let pr_var ppf (x, srt) =
 
 let rec pr_vars = pr_list_comma pr_var
 
-let rec pr_term0 ppf t =
-  match t with
-  | App (sym, _, _) ->
-      (match sym with
-      | Diff | Union | Inter | Plus | Minus | Mult | Div -> 
-          fprintf ppf "(%a)" pr_term t
-      | _ -> pr_term ppf t)
-  | _ -> pr_term ppf t    
-        
-and pr_term ppf = function
+let rec pr_term ppf = function
   | Var (id, _) -> fprintf ppf "%a" pr_ident id
-  | App (Empty, _, _) -> fprintf ppf "{}"
+  | App (Union, [], _) -> fprintf ppf "{}"
+  | App (Inter, [], _) -> fprintf ppf "Univ"
   | App (sym, [], _) -> fprintf ppf "%a" pr_sym sym
   | App (Read, [map; t], _) ->
-      (match sort_of t with
-      | Loc _ -> fprintf ppf "%a.%a" pr_term t pr_term map
+      (match map, sort_of t with
+      | (App (FreeSym _, [], _) | Var _), Loc _ -> fprintf ppf "%a.%a" pr_term t pr_term map
       | _ -> fprintf ppf "%a[%a]" pr_term map pr_term t)
   | App (Read, map :: t :: ts, _) ->
       fprintf ppf "%a[%a].%a" pr_term t pr_term_list ts pr_term map
   | App (Write, [map; t1; t2], _) ->
       fprintf ppf "%a[%a := %a]" pr_term map pr_term t1 pr_term t2
-  | App (Minus, [t1; t2], _) -> fprintf ppf "%a - @[<2>%a@]" pr_term0 t1 pr_term0 t2
-  | App (Plus, [t1; t2], _) -> fprintf ppf "%a + @[<2>%a@]" pr_term0 t1 pr_term0 t2
-  | App (Mult, [t1; t2], _) -> fprintf ppf "%a * @[<2>%a@]" pr_term0 t1 pr_term0 t2
-  | App (Div, [t1; t2], _) -> fprintf ppf "%a / @[<2>%a@]" pr_term0 t1 pr_term0 t2
-  | App (Mod, [t1; t2], _) -> fprintf ppf "%a % @[<2>%a@]" pr_term0 t1 pr_term0 t2
-  | App (Diff, [t1; t2], _) -> fprintf ppf "%a -- @[<2>%a@]" pr_term0 t1 pr_term0 t2
+  | App ((Minus | Plus | Mult | Div | Mod | Diff | Inter | Union | Eq | SubsetEq | LtEq | GtEq | Lt | Gt | Elem as sym), [t1; t2], _) ->
+      let pr_t1 = 
+        if prio_of_symbol sym < prio_of_term t1
+        then pr_term_paran
+        else pr_term
+      in
+      let pr_t2 =
+        if prio_of_symbol sym <= prio_of_term t2
+        then pr_term_paran
+        else pr_term
+      in        
+      fprintf ppf "@[<2>%a %a@ %a@]" pr_t1 t1 pr_sym sym pr_t2 t2
   | App (Length, [t], _) -> fprintf ppf "%a.%s" pr_term t (string_of_symbol Length)
   | App (ArrayCells, [t], _) -> fprintf ppf "%a.%s" pr_term t (string_of_symbol ArrayCells)
-  | App (Inter, ss, _) -> pr_inter ppf ss
-  | App (Union, ss, _) -> pr_union ppf ss
-  | App (Eq, [t1; t2], _) -> fprintf ppf "@[%a@] == @[<2>%a@]" pr_term t1 pr_term t2
-  | App (SubsetEq, [t1; t2], _) -> fprintf ppf "@[%a@] subsetof @[<2>%a@]" pr_term t1 pr_term t2
-  | App (LtEq, [t1; t2], _) -> fprintf ppf "%a <= @[<2>%a@]" pr_term t1 pr_term t2
-  | App (GtEq, [t1; t2], _) -> fprintf ppf "%a >= @[<2>%a@]" pr_term t1 pr_term t2
-  | App (Lt, [t1; t2], _) -> fprintf ppf "%a < @[<2>%a@]" pr_term t1 pr_term t2
-  | App (Gt, [t1; t2], _) -> fprintf ppf "%a > @[<2>%a@]" pr_term t1 pr_term t2
-  | App (Elem, [t1; t2], _) -> fprintf ppf "@[%a@] in @[<2>%a@]" pr_term t1 pr_term t2
   | App (SetEnum, ts, _) -> fprintf ppf "{@[%a@]}" pr_term_list ts
+  | App (Destructor d, [t], _) -> fprintf ppf "%a.%a" pr_term t pr_ident d
   | App (sym, ts, _) -> fprintf ppf "%a(@[%a@])" pr_sym sym pr_term_list ts
 
+and pr_term_paran ppf t = fprintf ppf "(%a)" pr_term t        
+
 and pr_term_list ppf = pr_list_comma pr_term ppf
-
-and pr_inter ppf = function
-  | [] -> fprintf ppf "Univ"
-  | [App (Diff, _, _) as s] -> 
-      fprintf ppf "(@[%a@])" pr_term s
-  | [s] -> pr_term ppf s
-  | App (Inter, ss1, _) :: ss2 -> 
-      pr_inter ppf (ss1 @ ss2)
-  | (App (Union, _, _) as s) :: ss 
-  | (App (Diff, _, _) as s) :: ss -> 
-      fprintf ppf "(@[<2>%a@]) ** %a" pr_term s pr_inter ss
-  | s :: ss -> 
-      fprintf ppf "@[<2>%a@] ** %a" pr_term s pr_inter ss
-
-and pr_union ppf = function
-  | [] -> fprintf ppf "{}"
-  | [App (Diff, _, _) as s] -> 
-      fprintf ppf "(@[%a@])" pr_term s
-  | [s] -> pr_term ppf s
-  | (App (Diff, _, _) as s) :: ss -> 
-      fprintf ppf "(@[<2>%a@]) ++ %a" pr_term s pr_union ss
-  | s :: ss -> 
-      fprintf ppf "@[<2>%a@] ++ %a" pr_term s pr_union ss
 
 let extract_name ann =
   let names = Util.filter_map 
@@ -445,40 +447,58 @@ let pr_binder ppf b =
        
 let rec pr_form ppf = function
   | Binder (b, vs, f, a) -> 
-      fprintf ppf "@[(%a%a)@]" pr_quantifier (b, vs, f) pr_annot a
+      fprintf ppf "@[%a%a@]" pr_quantifier (b, vs, f) pr_annot a
+  | BoolOp (And, []) -> fprintf ppf "true"
+  | BoolOp (Or, []) -> fprintf ppf "false"
   | BoolOp (And, [f])
   | BoolOp (Or, [f]) -> pr_form ppf f
-  | BoolOp (And, fs) -> pr_ands ppf fs
-  | BoolOp (Or, fs) -> pr_ors ppf fs
+  | BoolOp ((And | Or as bop), f1 :: f2 :: fs) as f ->
+      let pr_f1 =
+        if prio_of_form f < prio_of_form f1
+        then pr_form_paran
+        else pr_form
+      in
+      let pr_f2 ppf = function
+        | f2, [] ->
+            if prio_of_form f <= prio_of_form f2
+            then pr_form_paran ppf f2
+            else pr_form ppf f2
+        | f2, fs ->
+            pr_form ppf (BoolOp (bop, f2 :: fs))
+      in
+      fprintf ppf "@[<2>%a@] %s@ %a" pr_f1 f1 (string_of_bop bop) pr_f2 (f2, fs)
   | BoolOp (Not, [f]) -> pr_not ppf f
   | BoolOp (_, _) -> ()
   | Atom (t, []) -> fprintf ppf "@[%a@]" pr_term t
   | Atom (t, a) -> fprintf ppf "@[(%a%a)@]" pr_term t pr_annot a
-     
+
+and pr_form_paran ppf f = fprintf ppf "(%a)" pr_form f
+    
+and pr_filter ppf fs =
+  let ids =
+    List.fold_right
+      (fun f ids -> match f with
+      | FilterSymbolNotOccurs sym ->
+          string_of_symbol sym :: ids
+      | FilterReadNotOccurs (name, _) ->
+          name :: ids
+      | FilterNotNull ->
+          string_of_symbol Null :: ids
+      | _ ->
+          ids)
+      fs []
+  in
+  match ids with
+  | [] -> ()
+  | _ -> fprintf ppf "@ without@ %s" (String.concat ", " ids)
+  
+    
 and pr_annot ppf a =
   let gen = extract_gens a in
   let name = extract_name a in
   let pos = extract_src_pos a in
   let lbl = extract_label a in
   let pat = extract_patterns a in
-  let pr_filter ppf fs =
-    let ids =
-      List.fold_right
-        (fun f ids -> match f with
-          | FilterSymbolNotOccurs sym ->
-              string_of_symbol sym :: ids
-          | FilterReadNotOccurs (name, _) ->
-              name :: ids
-          | FilterNotNull ->
-              string_of_symbol Null :: ids
-          | _ ->
-              ids)
-        fs []
-    in
-    match ids with
-    | [] -> ()
-    | _ -> fprintf ppf "@ without@ %s" (String.concat ", " ids)
-  in
   let rec pr_match_list ppf = function
     | [] -> ()
     | [(m, f)] ->
@@ -511,26 +531,19 @@ and pr_annot ppf a =
   in
   fprintf ppf "%a%a%a" pr_generators gen pr_patterns pat pr_comment (name, pos, lbl)
  
-
-and pr_ands ppf = function
-  | [] -> fprintf ppf "%s" "true"
-  | [f] -> fprintf ppf "(@[<2>%a@])" pr_form f
-  | (BoolOp (Or, _) as f) :: fs -> fprintf ppf "(@[<2>%a@]) &&@ %a" pr_form f pr_ands fs
-  | f :: fs -> fprintf ppf "@[<2>%a@] &&@ %a" pr_form f pr_ands fs
-
-and pr_ors ppf = function
-  | [] -> fprintf ppf "%s" "false"
-  | [f] -> fprintf ppf "@[<2>%a@]" pr_form f
-  | f :: fs -> fprintf ppf "@[<2>%a@] ||@ %a" pr_form f pr_ors fs
-
 and pr_not ppf = function
+  | Atom (App (Eq, [t1; t2], _), []) ->
+      fprintf ppf "@[%a@]@ !=@ @[<2>%a@]" pr_term t1 pr_term t2
+  | Atom (App (Elem, [t1; t2], _), []) ->
+      fprintf ppf "@[%a@]@ !in@ @[<2>%a@]" pr_term t1 pr_term t2
   | Atom (App (Eq, [t1; t2], _), a) ->
       fprintf ppf "@[(@[%a@]@ !=@ @[<2>%a@]%a)@]" pr_term t1 pr_term t2 pr_annot a
   | Atom (App (Elem, [t1; t2], _), a) ->
       fprintf ppf "@[(@[%a@]@ !in@ @[<2>%a@]%a)@]" pr_term t1 pr_term t2 pr_annot a
-  | Atom (App (_, [], _), _) as f -> 
-      fprintf ppf "!@[%a@]" pr_form f
-  | f -> fprintf ppf "!(@[%a@])" pr_form f
+  | f ->
+      if prio_of_form (BoolOp (Not, [f]))  < prio_of_form f
+      then fprintf ppf "!(@[%a@])" pr_form f
+      else fprintf ppf "!@[%a@]" pr_form f
 
 and pr_quantifier ppf = function
   | (_, [], f) -> fprintf ppf "%a" pr_form f
@@ -565,10 +578,10 @@ let string_of_arity arity =
 
 
 (** Print term [t] to out channel [out_chan]. *)
-let print_term out_ch t = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_term t
+let print_term out_ch t = print_of_format pr_term t out_ch
 
 (** Print formula [f] to out channel [out_chan]. *)
-let print_form out_ch f = fprintf (formatter_of_out_channel out_ch) "%a@?" pr_form f
+let print_form out_ch f = print_of_format pr_form f out_ch
 
 let print_forms ch fs = 
   List.iter (fun f -> print_form ch f;  output_string ch "\n") fs

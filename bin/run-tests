@@ -36,7 +36,12 @@ run_test()
 {
     echo -ne "Checking benchmark ${1}..."
     ulimit -St 600
-    ./grasshopper.native $2 ${3//\'/} $OPTIONS 2> /dev/null
+    if [ $3 == "''" ]; then
+        PROC=""
+    else
+        PROC="-procedure ${3//\'/}"
+    fi
+    ./grasshopper.native $2 $PROC $OPTIONS 2> /dev/null
     res=$?
     ulimit -St unlimited
     if [ $res -gt 128 ]; then

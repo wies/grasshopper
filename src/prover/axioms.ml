@@ -7,19 +7,7 @@ open Util
 
   
 (** {6 Variable and short-hand declarations} *)
-  
-let mk_loc_var name = 
-  let id = fresh_ident name in
-  fun struct_srt -> id, Loc struct_srt
-
-let mk_loc_field_var name =
-  let id = fresh_ident name in
-  fun struct_srt -> id, loc_field_sort struct_srt
-
-let mk_loc_set_var name =
-  let id = fresh_ident name in
-  fun struct_srt -> id, Set (Loc struct_srt)
-      
+        
 let l1 = mk_loc_var "?x"
 let l2 = mk_loc_var "?y"
 let l3 = mk_loc_var "?z"
@@ -36,6 +24,8 @@ let i1 = fresh_ident "?i", Int
 let i2 = fresh_ident "?j", Int
 let d = fresh_ident "?d"
 let e = fresh_ident "?e"
+let arrs = fresh_ident "?array_state"
+let witness = fresh_ident "witness"
     
 let loc1 struct_srt = mk_var (snd (l1 struct_srt)) (fst (l1 struct_srt))
 let loc2 struct_srt = mk_var (snd (l2 struct_srt)) (fst (l2 struct_srt))
@@ -53,7 +43,8 @@ let set3 struct_srt = mk_var (snd (s3 struct_srt)) (fst (s3 struct_srt))
 let intset1 = mk_var (snd is1) (fst is1)
 let int1 = mk_var (snd i1) (fst i1)
 let int2 = mk_var (snd i2) (fst i2)
-
+let arrst1 srt = mk_var (Map ([Loc (Array srt); Int], srt)) arrs
+    
 let reachwo_Fld f u v w = 
   mk_or [mk_btwn f u v w; mk_and [mk_reach f u v; mk_not (mk_reach f u w)]]
   
@@ -93,7 +84,7 @@ let open_axioms ?(force=false) open_cond axioms =
   let rec open_axiom generators = function
     | Binder (b, [], f, a) ->
         let f1, generators1 = open_axiom generators f in
-        let generators2, a1 = extract_generators generators a in
+        let generators2, a1 = extract_generators generators1 a in
         Binder (b, [], f1, a1), generators2
     | Binder (b, vs, f, a) -> 
         (* extract term generators *)
@@ -129,10 +120,10 @@ let isFunVar f =
 
 (** Array read over write axioms *)
 let read_write_axioms fld1 =
-  let struct_srt, ind_srts, res_srt = 
+  let ind_srts, res_srt = 
     match sort_of fld1 with
-    | Map (Loc sid :: ind_srts, srt) -> (sid, ind_srts, srt)
-    | _ -> failwith "expected field in read_write_axioms"
+    | Map (ind_srts, srt) -> (ind_srts, srt)
+    | _ -> failwith "expected map in read_write_axioms"
   in
   let srt_string = string_of_sort res_srt in
   let d = fresh_ident "?d" in
@@ -140,9 +131,9 @@ let read_write_axioms fld1 =
   (*let g = fresh_ident "?g" in
     let g1 = g, Fld res_srt in*)
   let mk_inds () = List.map (fun srt -> mk_var srt (fresh_ident "?i")) ind_srts in
-  let loc1 = loc1 struct_srt :: mk_inds () in
-  let loc2 = loc2 struct_srt :: mk_inds () in
-  let loc3 = loc3 struct_srt :: mk_inds () in
+  let loc1 = mk_inds () in
+  let loc2 = mk_inds () in
+  let loc3 = mk_inds () in
   let new_fld1 = mk_write fld1 loc1 dvar in
   let f x = mk_read fld1 x in
   let g x = mk_read new_fld1 x in
@@ -312,7 +303,11 @@ let reach_axioms classes struct_srt =
 let null_axioms struct_srt1 =
   let n = mk_null struct_srt1 in
   let nll = mk_eq (f n) n in
-  [mk_axiom "read_null" nll]
+  let generator =
+    [Match (fld1 struct_srt1, [])], 
+    [f n]
+  in
+  [mk_axiom ~gen:[generator] "read_null" nll]
 
 
 (** Frame axioms *)
@@ -358,7 +353,7 @@ let frame_axioms =
        mk_axiom fld1 fld2 "reach_frame1"
          (mk_pattern fld1 []
             (mk_sequent
-               [reachwo_f1 loc1 loc2 (ep loc1)]
+               [reachwo_f1 loc1 loc3 (ep loc1)]
                [(mk_iff 
                    (reach_f1 loc1 loc2 loc3)
                    (reach_f2 loc1 loc2 loc3))]));
@@ -467,8 +462,18 @@ let array_axioms elem_srt =
   let a = loc1 (Array elem_srt) in
   let c = loc2 (ArrayCell elem_srt) in
   let i = int1 in
+  let arrstate = arrst1 elem_srt in
   let array_length =
     mk_or [mk_eq a (mk_null (Array elem_srt)); mk_leq (mk_int 0) (mk_length a)]
+  in
+  let array_map_simple1 =
+    mk_or [mk_lt i (mk_int 0);
+           mk_geq i (mk_length a);
+           mk_eq (mk_read arrstate [a; i]) (mk_read (App (ArrayMap, [arrstate; a], Map ([Int], elem_srt))) [i])] 
+  in
+  let array_map_simple2 =
+    mk_or [mk_and [mk_geq i (mk_int 0); mk_lt i (mk_length a)];
+           mk_eq (mk_read (App (ArrayMap, [arrstate; a], Map ([Int], elem_srt))) [i]) (mk_free_const (elem_srt) witness)] 
   in
   let array_cells1 =
     mk_eq (mk_array_of_cell (mk_read (mk_array_cells a) [i])) a 
@@ -487,6 +492,10 @@ let array_axioms elem_srt =
     mk_sequent [mk_eq (mk_array_of_cell c) a; mk_eq (mk_index_of_cell c) i] [mk_eq (mk_read (mk_array_cells a) i) c]
   in
    *)
+  let array_map_gen =
+    [([Match (mk_read arrstate [a; i], [])], [mk_read (App (ArrayMap, [arrstate; a], Map ([Int], elem_srt))) [i]]);
+     ([Match (mk_read (App (ArrayMap, [arrstate; a], Map ([Int], elem_srt))) [i], [])], [mk_read arrstate [a; i]])]
+  in
   let array_cell_gen =
     ([Match (c, [FilterSymbolNotOccurs ArrayOfCell;
                  FilterSymbolNotOccurs IndexOfCell;
@@ -510,7 +519,9 @@ let array_axioms elem_srt =
     ([Match (a, [])], [mk_length a])
   in
   if !Config.simple_arrays then
-    [mk_axiom ~gen:[array_length_gen] "array-length" array_length]
+    [mk_axiom ~gen:[array_length_gen] "array-length" array_length;
+     mk_axiom ~gen:array_map_gen "array-map1" array_map_simple1;
+     mk_axiom "array-map2" array_map_simple2]
   else 
     [mk_axiom ~gen:[index_of_cell_gen; array_of_cell_gen; array_cells_gen; array_cell_gen] "array-cells1" array_cells1;
      mk_axiom "array-cells2" array_cells2;

@@ -1,6 +1,6 @@
 (* Version string *)
-let version = "0.4"
-
+let version = "0.5 pre"
+    
 (* Base directory for includes *)
 let base_dir = ref ""
 
@@ -12,7 +12,10 @@ let model_file = ref ""
 (* Display the edges going to null in the model *)
 let model_null_edge = ref false
 
-(* File name where counterexample trace is saved. *)
+(** Enable model REPL after failing VC? *)
+let model_repl = ref false
+
+(** File name where counterexample trace is saved. *)
 let trace_file = ref ""
 
 (* Flags controlling the axioms generation *)
@@ -23,6 +26,7 @@ let with_ep = ref true
 let full_ep = ref false
 let use_set_theory = ref false
 let simple_arrays = ref false
+let propagate_reads = ref false
     
 (* Flag to switch between integer and bitvectors *)
 let use_bitvector = ref false
@@ -75,13 +79,14 @@ let ccFixedPoint = ref true
 (* maximal number of term generation rounds *)
 let term_gen_max_rounds = ref 2
 
-let cmd_options =
+let cmd_options_spec =
   [("-basedir", Arg.Set_string base_dir, "<string>  Base directory for resolving include directives. Default: current working directory\n\nOptions for controlling error reporting and debug output:");
    ("-v", Arg.Unit Debug.more_verbose, " Display more messages");
    ("-q", Arg.Unit Debug.less_verbose, " Display fewer messages");
    ("-stats", Arg.Set print_stats, " Print statistics");
    ("-lint", Arg.Set flycheck_mode, " Print single line error messages for on-the-fly checking");
    ("-model", Arg.Set_string model_file, "<file>  Produce counterexample model for the first failing verification condition");
+   ("-model-repl", Arg.Set model_repl, "Enter interactive mode to query the counterexample model for the first failing verification condition");
    ("-nulledges", Arg.Set model_null_edge, " Show the edges going to null in the model");
    ("-trace", Arg.Set_string trace_file, "<file>  Produce counterexample trace for the first failing verification condition");
    ("-dumpghp", Arg.Set_int dump_ghp, "<num>  Print intermediate program after specified simplification stage (num=0,1,2,3)");
@@ -103,6 +108,7 @@ let cmd_options =
    ("-termgen", Arg.Set_int term_gen_max_rounds, "<num> Number of rounds to run the term generation procedure");
    ("-nofixedpoint", Arg.Clear ccFixedPoint, " Do not do a fixed point with unit propagation for the congruence closure");
    ("-stratify", Arg.Set stratify, " Do not instantiate quantifiers that satisfy stratified sort restrictions\n\nOptions for controlling backend solver:");
+   ("-propreads", Arg.Set propagate_reads, " Propagate field reads over inferred field equalities");
    ("-splitlemmas", Arg.Set split_lemmas, " Add split lemmas for all terms of sort Loc");
    ("-smtsolver", Arg.Set_string smtsolver, "<solver> Choose SMT solver (z3, cvc4, cvc4mf), e.g., 'z3+cvc4mf'");
    ("-smtpatterns", Arg.Set smtpatterns, " Always add pattern annotations to quantifiers in SMT queries");
@@ -111,3 +117,18 @@ let cmd_options =
    ("-bitvector", Arg.Set use_bitvector, " Use bitvector theory for integers\n\nOptions for compiler:");
    ("-compile", Arg.Set_string compile_to, "<filename> Compile SPL program to a C program outputed as a file with the given name.\n\nOptions for help:");
   ]
+
+(* Parse auxiliary 'command line options' that are set during parsing of the input file *)
+let parse_options options =
+  Debug.info (fun () -> "Setting options: " ^ options ^ "\n");
+  let options = Sys.argv.(0) :: Str.split_delim (Str.regexp "[ \t\n]+") options |> Array.of_list in
+  let current = ref 0 in
+  try Arg.parse_argv ~current:current options cmd_options_spec (fun _ -> ()) ""
+  with Arg.Bad full_msg ->
+    let regexp = Sys.argv.(0) ^ ": \\([^\\.]*\\)" in
+    let matched = Str.string_match (Str.regexp regexp) full_msg 0 in
+    let msg =
+      if matched then Str.matched_group 1 full_msg 
+      else "invalid option"
+    in
+    raise (Invalid_argument msg)

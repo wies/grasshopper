@@ -53,7 +53,7 @@ type rhs_string_maybe =
 %token <bool> BOOLVAL
 %token <string> STRINGVAL
 %token LPAREN RPAREN LBRACE RBRACE LBRACKET RBRACKET
-%token COR, CHOOSE COLON COLONEQ COLONCOLON SEMICOLON DOT PIPE
+%token COR, CHOOSE COLON COLONEQ COLONCOLON SEMICOLON DOT PIPE QMARK
 %token UMINUS PLUS MINUS DIV TIMES MOD
 %token UNION INTER DIFF
 %token EQ NEQ LEQ GEQ LT GT IN NOTIN AT
@@ -63,10 +63,12 @@ type rhs_string_maybe =
 %token <SplSyntax.binder_kind> QUANT
 %token ASSUME ASSERT SPLIT CALL FREE HAVOC NEW RETURN
 %token IF ELSE WHILE
-%token GHOST IMPLICIT VAR STRUCT PURE LEMMA PROCEDURE PREDICATE FUNCTION INCLUDE AXIOM TYPE
+%token <bool> FUNCTION
+%token <bool> PREDICATE
+%token GHOST IMPLICIT VAR CONST STRUCT PURE LEMMA PROCEDURE INCLUDE OPTIONS AXIOM TYPE
 %token DEFINE DATATYPE OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token LOC INT BOOL BYTE SET MAP ARRAY ARRAYCELL
-%token MATCHING YIELDS WITHOUT COMMENT PATTERN
+%token MATCHING YIELDS WITHOUT WITH COMMENT PATTERN
 %token EOF
 
 %nonassoc COLONEQ 
@@ -94,6 +96,8 @@ type rhs_string_maybe =
 
 %start main
 %type <SplSyntax.spl_program> main
+%start expr
+%type <SplSyntax.expr> expr
 %%
 
 main:
@@ -105,6 +109,8 @@ main:
 declarations:
 | background_th declarations
   { (fst3 $2, snd3 $2, ($1, mk_position 1 1) :: trd3 $2) }
+| options_cmd declarations 
+  { fst3 $2, snd3 $2, trd3 $2 }
 | include_cmd declarations 
   { (($1, mk_position 1 1) :: fst3 $2, snd3 $2, trd3 $2) }
 | type_decl declarations
@@ -115,8 +121,8 @@ declarations:
   { (fst3 $2, PredDecl $1 :: snd3 $2, trd3 $2) }
 | macro_decl declarations
   { (fst3 $2, MacroDecl $1 :: snd3 $2, trd3 $2) }
-| VAR var_decl SEMICOLON declarations
-  { (fst3 $4, VarDecl $2 :: snd3 $4, trd3 $4) }
+| ghost_modifier VAR var_decl semicolon_opt declarations
+  { (fst3 $5, VarDecl { $3 with v_ghost = $1 } :: snd3 $5, trd3 $5) }
 | /* empty */ { ([], [], []) }
 | error { ProgError.syntax_error (mk_position 1 1) None }
 ;
@@ -124,6 +130,15 @@ declarations:
 include_cmd:
 | INCLUDE STRINGVAL semicolon_opt { $2 }
 ;
+
+options_cmd:
+| OPTIONS STRINGVAL semicolon_opt {
+  try Config.parse_options $2
+  with Invalid_argument msg ->
+    ProgError.error (mk_position 2 2) msg
+}
+;
+
   
 background_th:
 | AXIOM expr semicolon_opt { $2 }
@@ -195,10 +210,10 @@ proc_header:
 ;
 
 proc_head:
-| PROCEDURE IDENT LPAREN var_decls RPAREN proc_returns contracts {
+| PROCEDURE IDENT LPAREN var_decls_with_modifiers RPAREN proc_returns contracts {
   ($2, $4, $6, $7, mk_position 2 2, false)
 }
-| LEMMA IDENT LPAREN var_decls RPAREN proc_returns contracts {
+| LEMMA IDENT LPAREN var_decls_with_modifiers RPAREN proc_returns contracts {
   ($2, $4, $6, $7, mk_position 2 2, true)
 }
 ;
@@ -231,7 +246,7 @@ proc_impl:
 ;
 
 pred_decl:
-| PREDICATE IDENT LPAREN var_decls RPAREN contracts pred_impl {
+| PREDICATE IDENT LPAREN var_decls_with_modifiers RPAREN contracts pred_impl {
   let formals, locals =
     List.fold_right (fun decl (formals, locals) ->
       decl.v_name :: formals, IdMap.add decl.v_name decl locals)
@@ -243,6 +258,7 @@ pred_decl:
       pr_outputs = [];
       pr_locals = locals;
       pr_contracts = $6;
+      pr_is_pure = $1;
       pr_body = $7;
       pr_pos = mk_position 2 2;
     }
@@ -251,10 +267,11 @@ pred_decl:
 | function_header pred_impl {
   pred_decl $1 $2
 }
+| const_decl { $1 }
 ;
 
 function_header:
-| FUNCTION IDENT LPAREN var_decls RPAREN RETURNS LPAREN var_decls RPAREN contracts {
+| FUNCTION IDENT LPAREN var_decls_with_modifiers RPAREN RETURNS LPAREN var_decls_with_modifiers RPAREN contracts {
   let formals, locals =
     List.fold_right (fun decl (formals, locals) ->
       decl.v_name :: formals, IdMap.add decl.v_name decl locals)
@@ -274,6 +291,7 @@ function_header:
       pr_outputs = outputs;
       pr_locals = locals;
       pr_contracts = contracts;
+      pr_is_pure = $1;
       pr_body = None;
       pr_pos = mk_position 2 2;
     }
@@ -283,22 +301,49 @@ function_header:
   
 pred_impl:
 | LBRACE expr RBRACE {
-  Some $2
+  Some (Annot ($2, Position, mk_position 1 3))
 }
 | /* empty */ { None }
 ;
+
+const_decl:
+| CONST IDENT COLON var_type semicolon_opt {
+  let res = ("res", 0) in
+  let res_decl = {
+    v_name = res;
+    v_type = $4;
+    v_ghost = false;
+    v_implicit = false;
+    v_aux = false;
+    v_pos = mk_position 2 2;
+    v_scope = GrassUtil.global_scope; (* scope is fixed later *)
+  }
+  in
+  let decl =
+    { pr_name = $2;
+      pr_formals = [];
+      pr_outputs = [res];
+      pr_locals = IdMap.singleton res res_decl;
+      pr_contracts = [];
+      pr_is_pure = true;
+      pr_body = None;
+      pr_pos = mk_position 2 2
+   }
+  in
+  decl
+}
   
-var_decls:
-| var_decl var_decl_list { $1 :: $2 }
+var_decls_with_modifiers:
+| var_decl_with_modifiers var_decl_with_modifiers_list { $1 :: $2 }
 | /* empty */ { [] }
 ;
 
-var_decl_list:
-| COMMA var_decl var_decl_list { $2 :: $3 }
+var_decl_with_modifiers_list:
+| COMMA var_decl_with_modifiers var_decl_with_modifiers_list { $2 :: $3 }
 | /* empty */ { [] }
 ;
 
-var_decl:
+var_decl_with_modifiers:
 | var_modifier IDENT COLON var_type { 
   let decl = 
     { v_name = $2;
@@ -314,10 +359,34 @@ var_decl:
 }
 ;
 
+var_decl:
+| IDENT COLON var_type { 
+  let decl = 
+    { v_name = $1;
+      v_type = $3;
+      v_ghost = false;
+      v_implicit = false;
+      v_aux = false;
+      v_pos = mk_position 1 1;
+      v_scope = GrassUtil.global_scope; (* scope is fixed later *)
+    } 
+  in
+  decl
+}
+;
+  
+var_decls:
+| var_decl var_decl_list { $1 :: $2 }
+
+
+var_decl_list:
+| COMMA var_decl var_decl_list { $2 :: $3 }
+| /* empty */ { [] }
+;
+
 var_decls_opt_type:
 | var_decl var_decl_opt_type_list { $1 :: $2 }
 | var_decl_opt_type var_decl_opt_type_list { $1 :: $2 }
-| /* empty */ { [] }
 ;
 
 var_decl_opt_type_list:
@@ -327,14 +396,14 @@ var_decl_opt_type_list:
 ;
 
 var_decl_opt_type:
-| var_modifier IDENT { 
+| IDENT { 
   let decl = 
-    { v_name = $2;
+    { v_name = $1;
       v_type = AnyType;
-      v_ghost = snd $1;
-      v_implicit = fst $1;
+      v_ghost = false;
+      v_implicit = false;
       v_aux = false;
-      v_pos = mk_position 2 2;
+      v_pos = mk_position 1 1;
       v_scope = GrassUtil.global_scope; (* scope is fixed later *)
     } 
   in
@@ -342,10 +411,14 @@ var_decl_opt_type:
 }
 ;
 
+ghost_modifier:
+| GHOST { true }
+| /* empty */ { false }
+;
+  
 var_modifier:
 | IMPLICIT GHOST { true, true }
-| GHOST { false, true }
-| /* empty */ { false, false }
+| ghost_modifier { false, $1 }
 ; 
 
 var_type:
@@ -361,12 +434,12 @@ var_type:
 ;
 
 proc_returns:
-| RETURNS LPAREN var_decls RPAREN { $3 }
+| RETURNS LPAREN var_decls_with_modifiers RPAREN { $3 }
 | /* empty */ { [] }
 ;
 
 datatype_decl:
-| DATATYPE IDENT EQ constr_decls SEMICOLON {
+| DATATYPE IDENT EQ constr_decls semicolon_opt {
   { t_name = $2;
     t_def = ADTypeDef $4;
     t_pos = mk_position 1 5;
@@ -415,7 +488,7 @@ field_decls:
 ;
 
 field_decl:
-| VAR var_decl SEMICOLON { $2 }
+| ghost_modifier VAR var_decl semicolon_opt { { $3 with v_ghost = $1 } }
 ;
 
 block:
@@ -440,8 +513,14 @@ stmt_no_short_if:
 
 stmt_wo_trailing_substmt:
 /* variable declaration */
-| VAR var_decls SEMICOLON { LocalVars ($2, None, mk_position 1 3) }
-| VAR var_decls_opt_type COLONEQ expr_list SEMICOLON { LocalVars ($2, Some $4, mk_position 1 5) }
+| ghost_modifier VAR var_decls SEMICOLON {
+  let decls = List.map (fun decl -> { decl with v_ghost = $1 }) $3 in
+  LocalVars (decls, None, mk_position (if $1 then 1 else 2) 4)
+}
+| ghost_modifier VAR var_decls_opt_type COLONEQ expr_list SEMICOLON {
+  let decls = List.map (fun decl -> { decl with v_ghost = $1 }) $3 in
+  LocalVars (decls, Some $5, mk_position (if $1 then 1 else 2) 6)
+}
 /* nested block */
 | LBRACE block RBRACE { 
   Block ($2, mk_position 1 3) 
@@ -492,8 +571,9 @@ stmt_wo_trailing_substmt:
   Assume ($3, fst $1, mk_position (if $1 <> (false, false) then 1 else 2) 4)
 }
 /* assert */
-| contract_mods ASSERT expr SEMICOLON { 
-  Assert ($3, fst $1, mk_position (if $1 <> (false, false) then 1 else 2) 4)
+| contract_mods ASSERT expr with_clause {
+  $4 (fst $1) $3 (mk_position (if $1 <> (false, false) then 1 else 2) 4)
+  (*Assert ($3, fst $1, mk_position (if $1 <> (false, false) then 1 else 2) 4)*)
 }
 /* split */
 | SPLIT expr SEMICOLON { 
@@ -505,6 +585,35 @@ stmt_wo_trailing_substmt:
 }
 ;
 
+with_clause:
+| SEMICOLON { 
+  fun pure e pos -> Assert (e, pure, pos)
+}
+| WITH LBRACE block RBRACE {
+  fun pure e pos ->
+    let vs, e1, pos1 = match e with
+    | Binder (Forall, vars, e1, pos1) when pure ->
+        let vs =
+          List.fold_right (fun bv vs ->
+            match bv with
+            | UnguardedVar v ->
+                v :: vs
+            | GuardedVar (x, e) ->
+                ProgError.syntax_error (pos_of_expr e)
+                  (Some "no guarded variables allowed in 'with' clauses"))
+            vars []
+        in
+        vs, e1, pos1
+    | _ -> [], e, pos
+    in
+    let checks =
+      LocalVars (vs, None, pos) ::
+      List.append $3 [Assert (e1, true, pos1); Assume (BoolVal (false, pos), true, pos)]
+    in
+    Choice ([Assume (e, true, pos); Block (checks, pos)], pos)
+}
+
+  
 assign_lhs_list:
 | assign_lhs COMMA assign_lhs_list { $1 :: $3 }
 | assign_lhs { [$1] }
@@ -614,7 +723,7 @@ primary_no_set:
 
 set_expr:
 | LBRACE expr_list_opt RBRACE { Setenum (AnyType, $2, mk_position 1 3) }
-| LBRACE simple_bound_var COLONCOLON expr RBRACE { Binder (SetComp, [$2], $4, mk_position 1 5) }
+| LBRACE simple_bound_var COLONCOLON expr RBRACE { Binder (Comp, [$2], $4, mk_position 1 5) }
 ;
   
 alloc:
@@ -645,6 +754,9 @@ field_access_no_set:
 
 field_write:
 | ident LBRACKET expr COLONEQ expr RBRACKET {
+  Write ($1, $3, $5, mk_position 1 6)
+}
+| primary LBRACKET expr COLONEQ expr RBRACKET {
   Write ($1, $3, $5, mk_position 1 6)
 }
 ;
@@ -789,8 +901,13 @@ iff_expr:
 | iff_expr IFF iff_expr { BinaryOp ($1, OpEq, $3, BoolType, mk_position 1 3) }
 ;
 
-annot_expr:
+ite_expr:
 | iff_expr { $1 }
+| ite_expr QMARK iff_expr COLON iff_expr { Ite ($1, $3, $5, mk_position 1 5) }
+;
+    
+annot_expr:
+| ite_expr { $1 }
 | annot_expr AT LPAREN annot RPAREN { Annot ($1, $4, mk_position 1 5) }
 
 

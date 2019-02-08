@@ -96,6 +96,7 @@ let add_ghost_field_invariants prog =
         contr_locals = IdMap.add decl.var_name decl locals;
         contr_precond = [];
         contr_postcond = [];
+        contr_is_pure = false;
         contr_footprint_sorts = SortSet.empty;
         contr_pos = decl.var_pos;
       }
@@ -177,6 +178,12 @@ let elim_arrays prog =
         | Loc (Array srt) ->
             mk_read (array_state simple srt) [map; idx]
         | _ -> mk_read map1 [idx1])
+    | App (ArrayMap, [arr], msrt) ->
+        let arr1 = compile_term arr in
+        (match sort_of arr with
+        | Loc (Array srt) ->
+            App (ArrayMap, [array_state simple srt; arr], msrt)
+        | _ -> mk_array_map arr1)
     | App (sym, ts, srt) ->
         let ts1 = List.map compile_term ts in
         App (sym, ts1, srt)
@@ -1014,7 +1021,7 @@ let elim_sl prog =
     contr1, footprint_sets, footprint_context
   in
   (* translate the predicates from SL to GRASS *)
-  let translate_pred preds pred =
+  let translate_pred (preds, aux_lemmas) pred =
     let is_pure = is_pure_pred pred in
     let pname = name_of_pred pred in
     (*print_endline @@ "translating predicate " ^ string_of_ident pname;*)
@@ -1040,7 +1047,10 @@ let elim_sl prog =
       let make_for_sort sort =
         let func_name = footprint_fun_id pname sort in
         let ret_var_id = mk_ident @@ "FP_" ^ (string_of_sort sort) in
+        let ret_var_id1 = (name ret_var_id, 1) in
         let ret_var = mk_loc_set_decl sort ret_var_id dummy_position in
+        let ret_var1 = mk_loc_set_decl sort ret_var_id1 dummy_position in
+        let ssort = Set (Loc sort) in
         let fp_func_term =
           let formals =
             List.map
@@ -1111,12 +1121,12 @@ let elim_sl prog =
                 when equals_fp_func t1 || equals_fp_func t2 ->
                   let t1 =
                     if t1 = fp_func_term
-                    then mk_free_const sort ret_var_id
+                    then mk_free_const ssort ret_var_id
                     else t1
                   in
                   let t2 =
                     if t2 = fp_func_term
-                    then mk_free_const sort ret_var_id
+                    then mk_free_const ssort ret_var_id
                     else t2
                   in
                   subsets, defs, mk_eq ~ann:a t1 t2
@@ -1125,7 +1135,7 @@ let elim_sl prog =
                 when equals_fp_func t1 ->
                   let t1 =
                     if t1 = fp_func_term
-                    then mk_free_const sort ret_var_id
+                    then mk_free_const ssort ret_var_id
                     else t1
                   in
                   if List.mem (t2, t1) subsets
@@ -1136,7 +1146,7 @@ let elim_sl prog =
                 when equals_fp_func t2 ->
                   let t2 =
                     if t2 = fp_func_term
-                    then mk_free_const sort ret_var_id
+                    then mk_free_const ssort ret_var_id
                     else t2
                   in
                   (t1, t2) :: subsets, defs,
@@ -1170,34 +1180,80 @@ let elim_sl prog =
                   | [] -> subsets1, defs1, Binder (b, vs, f1, annots)
                   | _ -> subsets, defs, Binder (b, vs, f1, annots)
             in
-            let spec_form =
+            let func_body =
               match spec.spec_form with
               | SL _ -> failwith "Expected SL to be eliminated already"
               | FOL f ->
-                  FOL (f |> nnf |> nnf |> process_form [] [] |> function (_, _, f) -> post_process_form f)
+                  let f1 = f |> nnf |> process_form [] [] |> function (_, _, f) -> post_process_form f in
+                  FOL f1
             in
-            Some { spec with spec_form = spec_form}
+            Some { spec with spec_form = func_body}
         in
+        let fp_func_locals =
+          IdMap.add ret_var_id ret_var pred.pred_contract.contr_locals
+        in
+        let pos = pred.pred_body |> Opt.map (fun sf -> sf.spec_pos) |> Opt.get_or_else (pos_of_pred pred) in
         let fp_func_contract =
           { contr_name = func_name;
             contr_formals = pred.pred_contract.contr_formals;
             contr_returns = [ret_var_id];
-            contr_locals = IdMap.add ret_var_id ret_var pred.pred_contract.contr_locals; (* TODO find the set of locals used here *)
+            contr_locals = fp_func_locals;
             contr_precond = [];
             contr_postcond = [];
+            contr_is_pure = false;
             contr_footprint_sorts = SortSet.empty;
-            contr_pos = dummy_position;
+            contr_pos = pos;
           }
         in
         let footprint_func =
           { pred_contract = fp_func_contract;
             pred_body = pred_body;
-            pred_accesses = IdSet.empty; (* TODO confirm *)
+            pred_accesses = IdSet.empty; (* access sets will be recomputed after grassification *)
             pred_is_self_framing = true;
             pred_was_sl_pred = false;
           }
         in
-        func_name, footprint_func
+        (* generate lemma for checking that footprint function is precise *)
+        let fp_precise_lemma_opt =
+          match pred_body with
+          | Some sf ->
+              let f = form_of_spec sf in
+              let check_preconds = [f; subst_id (IdMap.singleton ret_var_id ret_var_id1) f] in
+              let fp_check_locals =
+                IdMap.add ret_var_id1 ret_var1 fp_func_locals 
+              in
+              let check_postcond =
+                FOL (mk_eq (mk_free_const ssort ret_var_id) (mk_free_const ssort ret_var_id1))
+              in
+              let msg _ =
+                "Footprint of " ^ (string_of_ident @@ name_of_pred pred) ^ " may not be precise for type " ^ (string_of_sort sort), ""
+              in
+              let check_precond_specs = List.map (fun f -> mk_spec_form (FOL f) "" None pos) check_preconds in
+              let check_postcond_spec = mk_spec_form check_postcond "preciseness" (Some msg) pos in 
+              let contract =
+                { contr_name = fresh_ident ("wf_" ^ name func_name);
+                  contr_formals = ret_var_id :: ret_var_id1 :: pred.pred_contract.contr_formals;
+                  contr_returns = [];
+                  contr_locals = fp_check_locals;
+                  contr_precond = check_precond_specs;
+                  contr_postcond = [check_postcond_spec];
+                  contr_footprint_sorts = SortSet.empty;
+                  contr_is_pure = false;
+                  contr_pos = pos;
+                }
+              in
+              let fp_precise_lemma =
+                { proc_contract = contract;
+                  proc_body = Some (Seq ([], mk_ppoint pos));
+                  proc_is_lemma = true;
+                  proc_is_tailrec = false;
+                  proc_deps = [];
+                }
+              in
+              Some fp_precise_lemma
+          | _ -> None
+        in
+        footprint_func, fp_precise_lemma_opt
       in
       (if is_sl_pred pred then pred.pred_contract.contr_footprint_sorts else SortSet.empty)
       |> SortSet.elements
@@ -1211,21 +1267,22 @@ let elim_sl prog =
       }
     in
     (* Add functions for the footprints *)
-    let preds =
+    let preds, aux_lemmas =
       if not (is_pure_pred pred)
       then
         (* Only add for predicates, not for functions *)
         make_fp_funcs pred pred1
         |> List.fold_left
-            (fun preds (func_name, func) ->
-              IdMap.add func_name func preds)
-            preds
-      else preds
+            (fun (preds, aux_lemmas) (func, check) ->
+              IdMap.add (name_of_pred func) func preds,
+              Opt.to_list check @ aux_lemmas)
+            (preds, aux_lemmas)
+      else preds, aux_lemmas
     in
-    IdMap.add pname pred1 preds
+    IdMap.add pname pred1 preds, aux_lemmas
   in
   let axioms = List.map (map_spec_fol_form post_process_form) prog.prog_axioms in
-  let preds = fold_preds translate_pred IdMap.empty prog in
+  let preds, aux_lemmas = fold_preds translate_pred (IdMap.empty, []) prog in
   let prog = { prog with prog_preds = preds; prog_axioms = axioms } in
   let compile_proc proc =
     let proc_footprints = footprint_sorts_proc proc in
@@ -1350,10 +1407,12 @@ let elim_sl prog =
       proc_body = body;
     } 
   in
-  add_ghost_field_invariants (map_procs compile_proc prog)
+  let prog = map_procs compile_proc prog in
+  let prog = List.fold_left add_proc prog aux_lemmas in
+  add_ghost_field_invariants prog
 
-(** Annotate safety checks for heap accesses *)
-let annotate_heap_checks prog =
+(** Annotate safety checks for runtime errors (memory safety, divisiton by zero, etc.) *)
+let annotate_runtime_checks prog =
   let rec checks acc = function
     | App (Read, map :: idx :: _, _) ->
         let acc1 =
@@ -1365,7 +1424,16 @@ let annotate_heap_checks prog =
     | App (Length, [map], _) -> TermSet.add map acc
     | App (ArrayCells, [map], _) -> TermSet.add map acc
     | App (Write, fld :: loc :: ts, _) ->
-        List.fold_left checks (TermSet.add loc acc) (fld :: loc :: ts)
+        let acc1 =
+          match fld with
+          | App (FreeSym id, [], _) ->
+              (try 
+                let _ = IdMap.mem id prog.prog_vars in
+                TermSet.add loc acc
+              with Not_found -> acc)
+          | _ -> acc
+        in
+        List.fold_left checks acc1 (fld :: loc :: ts)
     | App ((Div | Mod), [t1; t2], _) ->
         List.fold_left checks (TermSet.add t2 acc) [t1; t2]
     | App (_, ts, _) -> 

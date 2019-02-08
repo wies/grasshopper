@@ -1,0 +1,25 @@
+// An ordered type
+type K
+    
+pure predicate lt(x: K, y: K)
+
+const bottom: K
+const top: K
+
+axiom forall a: K :: !lt(a, bottom)
+axiom forall a: K :: !lt(top, a)
+
+axiom forall a: K :: !lt(a, a)
+axiom forall a: K, b: K :: !lt(a, b) || !lt(b, a)
+axiom forall a: K, b: K :: lt(a, b) || lt(b, a) || a == b
+axiom forall a: K, b: K, c: K :: lt(a, b) && lt(b, c) ==> lt(a, c)
+
+function le(x: K, y: K) returns (res: Bool) {
+  lt(x, y) || x == y
+}
+
+function compare(x: K, y: K) returns (res: Int)
+{
+  x == y ? 0 : (lt(x, y) ? -1 : 1)
+}
+

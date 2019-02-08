@@ -158,7 +158,8 @@ let convert oc cu =
       | (OpToInt, e1) -> fprintf ppf "((int) %a)" pr_c_expr e1
       | (OpToByte, e1) -> fprintf ppf "%a" pr_c_expr e1
       | (OpUPlus, e1) -> fprintf ppf "((char) %a)" pr_c_expr e1
-      | ((OpLength | OpOld | OpKnown | OpArrayCells | OpArrayOfCell | OpIndexOfCell), _)  ->
+      | ((OpLength | OpOld | OpKnown | OpArrayCells | OpArrayOfCell
+          | OpIndexOfCell | OpArrayMap), _)  ->
           fprintf ppf "/* ERROR: no such unary operator. */"
     and pr_bin_op ppf = function
       | (e1, OpMinus, e2) -> fprintf ppf "(%a - %a)"  pr_c_expr e1 pr_c_expr e2
@@ -199,7 +200,9 @@ let convert oc cu =
           array_len_field
       | (UnaryOp  (op, e, _), cur_proc)          -> pr_un_op  ppf (op, (e, cur_proc))
       | (BinaryOp (e1, op1, e2, _, _), cur_proc) -> 
-        pr_bin_op ppf ((e1, cur_proc), op1, (e2, cur_proc))
+          pr_bin_op ppf ((e1, cur_proc), op1, (e2, cur_proc))
+      | (Ite (cond, t, e, _), curr_proc) ->
+          fprintf ppf "(%a ? %a : %a)" pr_c_expr (cond, curr_proc) pr_c_expr (t, curr_proc) pr_c_expr (e, curr_proc)
       | (Ident (id, _), {p_returns=p_returns})   ->
           if ((List.length p_returns) == 1) then
             fprintf ppf "%s" (c_string_of_ident id)
@@ -340,7 +343,7 @@ let convert oc cu =
         )
         | BinaryOp _ -> fprintf ppf "/* ERROR: freeing the result of binary operation will possibly be implemented in the future for freeing Sets. */" 
         | (Null _ | Emp _ | Setenum _ | IntVal _ | BoolVal _ | PredApp _ | Binder _
-        | UnaryOp _ | Annot _ | Write _ | ConstrApp _ | DestrApp _) ->
+        | UnaryOp _ | Annot _ | Write _ | Ite _ | ConstrApp _ | DestrApp _) ->
             fprintf ppf "/* ERROR: expression cannot be disposed */"
       in 
       (** Because SPL allows multiple return variables but C does not, yet in

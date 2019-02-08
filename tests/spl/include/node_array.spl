@@ -1,3 +1,5 @@
+type Node;
+
 predicate arrayseg(a: Array<Node>, i: Int, j: Int)
   requires acc(a)
 {

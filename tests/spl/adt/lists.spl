@@ -1,22 +1,23 @@
 datatype List = cons(hd: Int, tl: List) | nil;
 
-function append(l1 : List, l2 : List) returns (res : List)
-  ensures l1 == nil ==> res == l2
-  ensures l1 != nil ==> res == cons(l1.hd, append(l1.tl, l2))
+function append(l1 : List, l2 : List) returns (res : List) {
+  l1 == nil ? l2 : cons(l1.hd, append(l1.tl, l2))
+}
 
-function length(l: List) returns (res: Int)
-  ensures l == nil ==> res == 0
-  ensures l != nil ==> res == 1 + length(l.tl)
+function length(l: List) returns (res: Int) {
+  l == nil ? 0 : 1 + length(l.tl)
+}
 
-function reverse(l: List) returns (r: List)
-  ensures l == nil ==> r == nil
-  ensures l != nil ==> r == append(reverse(l.tl), cons(l.hd, nil))
+function reverse(l: List) returns (r: List) {
+  l == nil ? nil : append(reverse(l.tl), cons(l.hd, nil))
+}
 
 function reverse_tailrec_helper(l1: List, l2: List, ghost l3: List) returns (res: List)
   requires append(reverse(l1), l2) == reverse(l3)
   ensures res == reverse(l3)
-  ensures l2 == nil ==> res == l1
-  ensures l2 != nil ==> res == reverse_tailrec_helper(cons(l2.hd, l1), l2.tl, l3)
+{
+  l2 == nil ? l1 : reverse_tailrec_helper(cons(l2.hd, l1), l2.tl, l3)
+}
 
 function reverse_tailrec(l: List) returns (res: List)
   ensures res == reverse(l)

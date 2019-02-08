@@ -593,7 +593,8 @@ let init_session session sign =
       (if !Config.encode_fields_as_arrays then "A" else "") ^
       "UF" ^
       (if has_adt then solver.info.dt_logic_string else "") ^
-      (if !Config.use_bitvector then "BV" else if has_int then "LIA" else "") ^
+      (if !Config.use_bitvector then "BV" else
+       if has_int then if has_adt then "LIA" else "NIA" else "") ^
       (if solver.info.has_set_theory && !Config.use_set_theory then "FS" else "")
     in
     set_logic state.out_chan logic_str;
@@ -661,6 +662,17 @@ let push session =
 
 let grass_smtlib_prefix = "grass_" 
 
+let string_of_symbol = function
+  | Div -> "div"
+  | Mod -> "mod"
+  | Empty -> "emptyset"
+  | Elem -> "member"
+  | SubsetEq -> "subset"
+  | Union -> "union"
+  | Inter -> "intersection"
+  | Diff -> "setminus"
+  | sym -> Grass.string_of_symbol sym
+    
 let smtlib_symbol_of_grass_symbol_no_bv solver_info sym = match sym with 
   | FreeSym id -> SmtLibSyntax.Ident id
   | Plus -> SmtLibSyntax.Plus
@@ -814,7 +826,7 @@ let extract_name ann =
       (function Name id -> string_of_ident id | _ -> "")
       ann 
   in
-  Str.global_replace (Str.regexp " \\|(\\|)\\|<\\|>") "_" (String.concat "-" (List.rev names))
+  Str.global_replace (Str.regexp " \\|,\\|(\\|)\\|<\\|>") "_" (String.concat "-" (List.rev names))
 
 let smtlib_form_of_grass_form solver_info signs f =
   let f = if !Config.use_bitvector then bitvectorize_grass_formula f else f in
@@ -1297,7 +1309,13 @@ let convert_model session smtModel =
         | _ -> model)
       model0 smtModel 
   in
-  Model.finalize_values model1
+  let model2 = 
+    match session.signature with
+    | Some signature ->
+      { model1 with sign = signature }
+    | None -> failwith "convert_model: expected session to have a signature"
+  in
+  (Model.finalize_values model2)
 
 let rec get_model session = 
   let gm state =

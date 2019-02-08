@@ -3,44 +3,80 @@
 open Util
 open Grass
 open GrassUtil
-open InstGen
 open Axioms
 open SimplifyGrass
-
-(** Compute the set of generated ground terms for formulas [fs] *)
-let generated_ground_terms fs =
-  let _, generators = open_axioms isFunVar fs in
-  let gts = generate_terms generators (ground_terms ~include_atoms:true (mk_and fs)) in
-  gts
   
 (** Eliminate all implicit and explicit existential quantifiers using skolemization.
  ** Assumes that [f] is typed and in negation normal form. *)
 let elim_exists =
   let e = fresh_ident "?e" in
-  let rec elim_neq bvs = function
-    | BoolOp (Not, [Atom (App (Eq, [s1; s2], _), a)]) as f when bvs = [] ->
-	(match sort_of s1 with
+  let rec elim_neq seen_adts bvs = function
+    | BoolOp (Not, [Atom (App (Eq, [t1; t2], _), a)]) as f when bvs = [] ->
+	(match sort_of t1 with
 	| Set srt ->
 	    let ve = mk_var srt e in
-	    mk_exists [(e, srt)] (smk_or [smk_and [smk_elem ~ann:a ve s1; mk_not (smk_elem ~ann:a ve s2)];
-					 smk_and [smk_elem ~ann:a ve s2; mk_not (smk_elem ~ann:a ve s1)]])
+	    mk_exists [(e, srt)] (smk_or [smk_and [smk_elem ~ann:a ve t1; mk_not (smk_elem ~ann:a ve t2)];
+					 smk_and [smk_elem ~ann:a ve t2; mk_not (smk_elem ~ann:a ve t1)]])
+        | Map (dsrts, rsrt) ->
+            let rec curried_domains doms = function
+              | Map (dsrts, rsrt) -> curried_domains (dsrts :: doms) rsrt
+              | _ -> doms
+            in
+            let doms = curried_domains [dsrts] rsrt in
+            let dom_vs = List.map (fun dsrts -> List.map (fun srt -> fresh_ident "?i", srt) dsrts) doms in
+            let dom_vts = List.map (fun vs -> List.map (fun (v, srt) -> mk_var srt v) vs) dom_vs in
+            let mk_reads t = List.fold_left (fun t_read vts -> mk_read t_read vts) t dom_vts in
+            let t1_read = mk_reads t1 in
+            let t2_read = mk_reads t2 in
+            let vs = List.flatten dom_vs in
+            elim_neq seen_adts bvs (mk_exists vs (annotate (mk_neq t1_read t2_read) a))
+        | Adt (id, adts) when not @@ IdSet.mem id seen_adts ->
+            let cstrs = List.assoc id adts in
+            let expand new_vs = function
+              | App (Constructor cid, ts, _) -> new_vs, [(cid, mk_true, ts)]
+              | t ->
+                  List.fold_left
+                    (fun (new_vs, cases) (cid, dstrs) ->
+                      let vs = List.map (fun (id, srt) -> fresh_ident "?x", unfold_adts adts srt) dstrs in
+                      let vts = List.map (fun (v, srt) -> mk_var srt v) vs in
+                      vs @ new_vs, (cid, mk_eq t (mk_constr (Adt (id, adts)) cid vts), vts) :: cases
+                    ) (new_vs, []) cstrs
+            in
+            let new_vs1, t1_cases = expand [] t1 in
+            let new_vs2, t2_cases = expand new_vs1 t2 in
+            let cases = List.fold_left
+              (fun cases (cid1, def_t1, args1) ->
+                List.fold_left
+                  (fun cases (cid2, def_t2, args2) ->
+                    if cid1 = cid2 then
+                      let seen_adts1 = IdSet.add id seen_adts in
+                      let sub_cases =
+                        List.map2 (fun arg1 arg2 -> elim_neq seen_adts1 bvs (mk_neq arg1 arg2)) args1 args2
+                      in
+                      mk_and [def_t1; def_t2; mk_or sub_cases] :: cases
+                    else mk_and [def_t1; def_t2] :: cases
+                  ) cases t2_cases
+              ) [] t1_cases
+            in
+            mk_exists ~ann:a new_vs2 (mk_or cases)
 	| _ -> f)
     | BoolOp (Not, [Atom (App (Disjoint, [s1; s2], _), a)]) when bvs = [] ->
         let srt = element_sort_of_set s1 in
-        elim_neq bvs (mk_not (Atom (App (Eq, [mk_inter [s1; s2]; mk_empty (Set srt)], Bool), a)))
+        elim_neq seen_adts bvs (mk_not (Atom (App (Eq, [mk_inter [s1; s2]; mk_empty (Set srt)], Bool), a)))
     | BoolOp (Not, [Atom (App (SubsetEq, [s1; s2], _), a)]) when bvs = [] ->
 	let srt = element_sort_of_set s1 in
 	let ve = mk_var srt e in
 	mk_exists [(e, srt)] (annotate (smk_and [smk_elem ve s1; mk_not (smk_elem ve s2)]) a)
-    | BoolOp (op, fs) -> smk_op op (List.map (elim_neq bvs) fs)
+    | BoolOp (op, fs) ->
+        smk_op op (List.map (elim_neq IdSet.empty bvs) fs)
     | Binder (Exists, vs, f, a) ->
-        mk_exists ~ann:a vs (elim_neq bvs f)
+        mk_exists ~ann:a vs (elim_neq seen_adts bvs f)
     | Binder (Forall, vs, f, a) ->
-        mk_forall ~ann:a vs (elim_neq (bvs @ vs) f)
+        mk_forall ~ann:a vs (elim_neq seen_adts (bvs @ vs) f)
     | f -> f 
   in
   List.map (fun f -> 
-    let f1 = elim_neq [] f in
+    let f1 = elim_neq IdSet.empty [] f in
     let f2 = propagate_exists_up f1 in
     let f3 = skolemize f2 in
     f3)
@@ -233,18 +269,216 @@ let array_sorts fs =
 (** Adds theory axioms for the entry point function to formulas [fs].
  ** Assumes that all frame predicates have been reduced in formulas [fs]. *)
 let add_ep_axioms fs =
-  let gts = generated_ground_terms fs in
-  let struct_sorts =
-    TermSet.fold
-      (fun t struct_sorts -> match t with
-      | App (_, _, Map([Loc srt1], Loc srt2)) 
-      | Var (_, Map([Loc srt1], srt2)) when srt1 = srt2 -> SortSet.add srt1 struct_sorts
-      | _ -> struct_sorts)
-      gts SortSet.empty
+  (*let gts = generated_ground_terms fs in*)
+  let rec get_struct_sorts acc = function
+    | App (_, ts, srt) ->
+        let acc = List.fold_left get_struct_sorts acc ts in
+        (match srt with
+        | Map([Loc srt1], Loc srt2) when srt1 = srt2 -> SortSet.add srt1 acc
+        | _ -> acc)
+    | Var (_, Map([Loc srt1], srt2)) when srt1 = srt2 -> SortSet.add srt1 acc
+    | Var _ -> acc
   in
+  let struct_sorts = fold_terms get_struct_sorts SortSet.empty (mk_and fs) in
   let axioms = SortSet.fold (fun srt axioms -> Axioms.ep_axioms srt @ axioms) struct_sorts [] in
   axioms @ fs
- 
+
+let get_read_propagators gts =
+  let field_sorts = TermSet.fold (fun t srts ->
+    match sort_of t with
+    | (Loc ArrayCell _ | Map (_ :: _, _)) as srt -> SortSet.add srt srts
+    | Adt (_, adts) ->
+        List.fold_left
+          (fun srts (id, _) -> SortSet.add (Adt (id, adts)) srts)
+          srts adts
+    | _ -> srts)
+      gts SortSet.empty
+  in
+  let add_propagators = function
+    | Adt (id, adts) -> fun propagators ->
+          let s = fresh_ident "?s" in
+          let t = fresh_ident "?t" in
+          let cstrs = List.assoc id adts in
+          let adt_srt = Adt (id, adts) in
+          let s = mk_var adt_srt s in
+          let t = mk_var adt_srt t in
+          let destrs = flat_map (fun (_, destrs) -> destrs) cstrs in
+          let propagators =
+            List.fold_left
+              (fun propagators (destr, srt) ->
+                let srt = unfold_adts adts srt in
+                ([Match (mk_eq_term s t, []);
+                  (* s == t, s.destr -> t.destr *)
+                  Match (mk_destr srt destr s, [])],
+                 [mk_destr srt destr t]) ::
+                ([Match (mk_eq_term s t, []);
+                  (* s == t, t.destr -> s.destr *)
+                  Match (mk_destr srt destr t, [])],
+                 [mk_destr srt destr s]) :: propagators
+              )
+              propagators destrs
+          in
+          List.fold_left (fun propagators (cid, destrs) ->
+            let args =
+              List.map (fun (destr, srt) ->
+                let srt = unfold_adts adts srt in
+                mk_var srt (fresh_ident "?v"))
+                destrs
+            in
+            let t = mk_constr adt_srt cid args in
+            let gen_terms =
+              List.map (fun (destr, srt) -> mk_destr (unfold_adts adts srt) destr t) destrs
+            in
+            ([Match (t, [])], gen_terms) :: propagators)
+            propagators cstrs
+      | Loc (ArrayCell srt) -> fun propagators ->
+          let f = fresh_ident "?f", field_sort (ArrayCell srt) srt in
+          let fld = mk_var (snd f) (fst f) in
+          let a = Axioms.loc1 (Array srt) in
+          let b = Axioms.loc2 (Array srt) in
+          let i = fresh_ident "?i" in
+          let idx = mk_var Int i in
+          (* a == b, a.cells[i].f -> b.cells[i].f *)
+          ([Match (mk_eq_term a b, []);
+            Match (mk_read fld [mk_read (mk_array_cells a) [idx]], [])],
+           [mk_read fld [mk_read (mk_array_cells b) [idx]]]) ::
+          ([Match (mk_eq_term a b, []);
+            (* a == b, b.cells[i].f -> a.cells[i].f *)
+            Match (mk_read fld [mk_read (mk_array_cells b) [idx]], [])],
+           [mk_read fld [mk_read (mk_array_cells a) [idx]]]) :: propagators
+      | Loc (Array srt) -> fun propagators ->
+          let f = fresh_ident "?f", Map ([Loc (Array srt); Int], srt) in
+          let fld = mk_var (snd f) (fst f) in
+          let a = Axioms.loc1 (Array srt) in
+          let b = Axioms.loc2 (Array srt) in
+          let i = fresh_ident "?i" in
+          let idx = mk_var Int i in
+          (* a == b, a.f[i] -> b.f[i] *)
+          ([Match (mk_eq_term a b, []);
+            Match (mk_read fld [a; idx], [])],
+           [mk_read fld [b; idx]]) ::
+          (* a == b, b.cells[i].f -> a.cells[i].f *)
+          ([Match (mk_eq_term a b, []);
+            Match (mk_read fld [mk_read (mk_array_cells b) [idx]], [])],
+           [mk_read fld [mk_read (mk_array_cells a) [idx]]]) :: propagators
+      | Map (dsrts, srt) as mapsrt -> fun propagators ->
+          let f = fresh_ident "?f", mapsrt in
+          let fvar = mk_var (snd f) (fst f) in
+          let g = fresh_ident "?g", mapsrt in
+          let gvar = mk_var (snd g) (fst g) in
+          let d = fresh_ident "?d" in
+          let dvar = mk_var srt d in
+          let xvars = List.map (fun srt -> mk_var srt (fresh_ident "?i")) dsrts in
+          let yvars = List.map (fun srt -> mk_var srt (fresh_ident "?j")) dsrts in
+          let propagators =
+            match srt with
+            | Adt (id, adts) -> 
+                let cstrs = List.assoc id adts in
+                let destrs = flat_map (fun (_, destrs) -> destrs) cstrs in
+                let propagators =
+                  List.fold_left
+                    (fun propagators -> function
+                      | (destr, (Map ([dsrt2], _) as srt)) ->
+                          let srt = unfold_adts adts srt in
+                          let zvar = mk_var (unfold_adts adts dsrt2) (fresh_ident "?z") in
+                          (* f[x := d], f[y].destr[z] -> f[x := d][y].destr[z] *)
+                          ([Match (mk_write fvar xvars dvar, []);
+                            Match (mk_read (mk_destr srt destr (mk_read fvar yvars)) [zvar], [])],
+                           [mk_read (mk_destr srt destr (mk_read (mk_write fvar xvars dvar) yvars)) [zvar]]) ::
+                          (* f[x := d].destr[z] -> f[y].destr[z] *)
+                          ([Match (mk_read (mk_destr srt destr (mk_read (mk_write fvar xvars dvar) yvars)) [zvar], [])],
+                           [mk_read (mk_destr srt destr (mk_read fvar yvars)) [zvar]])
+                          :: propagators
+                      | _ -> propagators
+                    )
+                    propagators destrs
+                in
+                propagators
+            | Map (dsrts2, Adt (id, adts)) ->
+                let cstrs = List.assoc id adts in
+                let destrs = flat_map (fun (_, destrs) -> destrs) cstrs in
+                let uvars = List.map (fun srt -> mk_var srt (fresh_ident "?u")) dsrts2 in
+                let propagators =
+                  List.fold_left
+                    (fun propagators -> function
+                      | (destr, (Map ([dsrt2], _) as srt)) ->
+                          let srt = unfold_adts adts srt in
+                          let zvar = mk_var (unfold_adts adts dsrt2) (fresh_ident "?z") in
+                          (* f[x := d], f[y][u].destr[z] -> f[x := d][y][u].destr[z] *)
+                          ([Match (mk_write fvar xvars dvar, []);
+                            Match (mk_read (mk_destr srt destr (mk_read (mk_read fvar yvars) uvars)) [zvar], [])],
+                           [mk_read (mk_destr srt destr (mk_read (mk_read (mk_write fvar xvars dvar) yvars) uvars)) [zvar]]) ::
+                          (* f[x := d][u].destr[z], f[y] -> f[y][u].destr[z] *)
+                          ([Match (mk_read fvar yvars, []);
+                            Match (mk_read (mk_destr srt destr (mk_read (mk_read (mk_write fvar xvars dvar) yvars) uvars)) [zvar], [])],
+                           [mk_read (mk_destr srt destr (mk_read (mk_read fvar yvars) uvars)) [zvar]])
+                          :: propagators
+                      | _ -> propagators
+                    )
+                    propagators destrs
+                in
+                propagators
+            | _ -> propagators
+          in
+          let ssrt_opt = match dsrts with
+          | Loc ssrt :: _ -> Some ssrt
+          | _ -> None
+          in
+          let match_ivar1 =
+            ssrt_opt |>
+            Opt.map (fun _ -> Match (List.hd xvars, [FilterNotNull])) |>
+            Opt.to_list
+          in
+          let gen_frame wrap =
+            ssrt_opt |>
+            Opt.map (fun ssrt ->
+              let set1 = Axioms.set1 ssrt in
+              let set2 = Axioms.set2 ssrt in
+              [(* Frame (x, a, f, g), y.g -> y.f *)
+               ([Match (mk_frame_term set1 set2 fvar gvar, []);
+                 Match (wrap (mk_read gvar (xvars)), [])] @
+                match_ivar1,
+               [wrap (mk_read fvar (xvars))]);
+               (* Frame (x, a, f, g), y.f -> y.g *)
+               ([Match (mk_frame_term set1 set2 fvar gvar, []);
+                 Match (wrap (mk_read fvar (xvars)), [])],
+                [wrap (mk_read gvar (xvars))])
+              ]) |>
+            Opt.get_or_else []
+          in
+          let mk_generators wrap =
+            ([Match (mk_eq_term fvar gvar, []);
+              Match (wrap (mk_read fvar (xvars)), []);
+            ],
+             [wrap (mk_read gvar (xvars))]) ::
+            (* f == g, x.f -> x.g *)
+            ([Match (mk_eq_term fvar gvar, []);
+              Match (wrap (mk_read fvar (xvars)), [])
+            ],
+             [wrap (mk_read gvar (xvars))]) ::
+            (* f == g, x.g -> x.f *)
+            ([Match (mk_eq_term fvar gvar, []);
+              Match (wrap (mk_read gvar (xvars)), [])] @ match_ivar1,
+             [wrap (mk_read fvar (xvars))]) :: 
+            (* f [x := d], y.(f [x := d]) -> y.f *)
+            ([Match (mk_write fvar xvars dvar, []);
+              Match (wrap (mk_read (mk_write fvar xvars dvar) yvars), []);
+              (*Match (loc1, [FilterNotNull]);*)
+              (*Match (loc2, [FilterNotNull])*)],
+             [wrap (mk_read fvar yvars)]) ::
+            (* f [x := d], y.f -> y.(f [x := d]) *)
+            ([Match (mk_write fvar xvars dvar, []);
+              Match (wrap (mk_read fvar (yvars)), []);
+              (*Match (loc1, [FilterNotNull]);*)
+            (*Match (loc2, [FilterNotNull])*)],
+             [wrap (mk_read (mk_write fvar (xvars) dvar) (yvars))]) ::
+            gen_frame wrap
+          in
+          mk_generators (fun t -> t) (*@ mk_generators (fun t -> mk_known t)*) @ propagators
+      | _ -> fun propagators -> propagators
+  in
+  SortSet.fold add_propagators field_sorts []
+    
 let add_read_write_axioms fs =
   let gts = ground_terms ~include_atoms:true (mk_and fs) in
   let has_loc_field_sort = function
@@ -255,105 +489,21 @@ let add_read_write_axioms fs =
   let basic_structs = struct_sorts_of_fields basic_pt_flds in
   (* instantiate null axioms *)
   let axioms = SortSet.fold (fun srt axioms -> Axioms.null_axioms srt @ axioms) basic_structs [] in
-  let null_ax, _ = open_axioms ~force:true isFld axioms in
-  let classes = CongruenceClosure.congr_classes fs gts in
+  let null_ax, generators = open_axioms ~force:true isFld axioms in
+  let generators = match generators with
+  | [[Match (v, _)], t] -> [[Match (v, [FilterGeneric (fun sm t -> TermSet.mem (subst_term sm v) basic_pt_flds)])], t]
+  | gs -> gs
+  in
+  let ccgraph = CongruenceClosure.congruence_classes gts fs in
+  let _ =
+    let tgcode = EMatching.compile_term_generators_to_ematch_code generators in
+    EMatching.generate_terms_from_code tgcode ccgraph
+  in
   (* CAUTION: not forcing the instantiation here would yield an inconsistency with the read/write axioms *)
-  let null_ax1 = instantiate_with_terms ~force:true false null_ax (CongruenceClosure.restrict_classes classes basic_pt_flds) in
+  let null_ax1 = EMatching.instantiate_axioms ~force:true null_ax ccgraph in
   let fs1 = null_ax1 @ fs in
-  let gts = TermSet.union (ground_terms ~include_atoms:true (mk_and null_ax1)) gts in
-  let field_sorts = TermSet.fold (fun t srts ->
-    match sort_of t with
-    | Loc (ArrayCell _) as srt -> SortSet.add srt srts
-    | Map (Loc _ :: _, _) as srt -> SortSet.add srt srts
-    | _ -> srts)
-      gts SortSet.empty
-  in
+  let gts = TermSet.union (ground_terms ~include_atoms:true (mk_and null_ax1)) (CongruenceClosure.get_terms ccgraph) in
   (* propagate read terms *)
-  let read_propagators =
-    SortSet.fold (function
-      | Loc (ArrayCell srt) -> fun propagators ->
-          let f = fresh_ident "?f", field_sort (ArrayCell srt) srt in
-          let fld = mk_var (snd f) (fst f) in
-          let a = Axioms.loc1 (Array srt) in
-          let b = Axioms.loc2 (Array srt) in
-          let i = fresh_ident "?i" in
-          let idx = mk_var Int i in
-          (* a = b, a.cells[i].f -> b.cells[i].f *)
-          ([Match (mk_eq_term a b, []);
-            Match (mk_read fld [mk_read (mk_array_cells a) [idx]], [])],
-           [mk_read fld [mk_read (mk_array_cells b) [idx]]]) ::
-          ([Match (mk_eq_term a b, []);
-            (* a = b, b.cells[i].f -> a.cells[i].f *)
-            Match (mk_read fld [mk_read (mk_array_cells b) [idx]], [])],
-           [mk_read fld [mk_read (mk_array_cells a) [idx]]]) :: propagators
-      | Loc (Array srt) -> fun propagators ->
-          let f = fresh_ident "?f", Map ([Loc (Array srt); Int], srt) in
-          let fld = mk_var (snd f) (fst f) in
-          let a = Axioms.loc1 (Array srt) in
-          let b = Axioms.loc2 (Array srt) in
-          let i = fresh_ident "?i" in
-          let idx = mk_var Int i in
-          (* a = b, a[i].f -> b[i].f *)
-          ([Match (mk_eq_term a b, []);
-            Match (mk_read fld [a; idx], [])],
-           [mk_read fld [b; idx]]) ::
-          ([Match (mk_eq_term a b, []);
-            (* a = b, b.cells[i].f -> a.cells[i].f *)
-            Match (mk_read fld [mk_read (mk_array_cells b) [idx]], [])],
-           [mk_read fld [mk_read (mk_array_cells a) [idx]]]) :: propagators
-      | Map (Loc ssrt :: dsrts, srt) as fldsrt -> fun propagators ->
-          let f1 = fresh_ident "?f", fldsrt in
-          let fld1 = mk_var (snd f1) (fst f1) in
-          let f2 = fresh_ident "?g", fldsrt in
-          let fld2 = mk_var (snd f2) (fst f2) in
-          let d = fresh_ident "?d" in
-          let dvar = mk_var srt d in
-          let loc1 = Axioms.loc1 ssrt in
-          let loc2 = Axioms.loc2 ssrt in
-          let set1 = Axioms.set1 ssrt in
-          let set2 = Axioms.set2 ssrt in
-          let ivars1 = List.map (fun srt -> mk_var srt (fresh_ident "?i")) dsrts in
-          let ivars2 = List.map (fun srt -> mk_var srt (fresh_ident "?j")) dsrts in
-          let mk_generators wrap =
-            ([Match (mk_eq_term fld1 fld2, []);
-              Match (wrap (mk_read fld1 (loc1 :: ivars1)), []);
-            ],
-             [wrap (mk_read fld2 (loc1 :: ivars1))]) ::
-            ([Match (mk_eq_term fld1 fld2, []);
-              Match (wrap (mk_read fld1 (loc1 :: ivars1)), []);
-            ],
-             [wrap (mk_read fld2 (loc1 :: ivars1))]) ::
-            (* f = g, x.g -> x.f *)
-            ([Match (mk_eq_term fld1 fld2, []);
-              Match (wrap (mk_read fld2 (loc1 :: ivars1)), []);
-              Match (loc1, [FilterNotNull])],
-             [wrap (mk_read fld1 (loc1 :: ivars1))]) :: 
-            (* f [x := d], y.(f [x := d]) -> y.f *)
-            ([Match (mk_write fld1 (loc1 :: ivars1) dvar, []);
-              Match (wrap (mk_read (mk_write fld1 (loc1 :: ivars1) dvar) (loc2 :: ivars2)), []);
-              (*Match (loc1, [FilterNotNull]);*)
-              (*Match (loc2, [FilterNotNull])*)],
-             [wrap (mk_read fld1 (loc2 :: ivars2))]) ::
-            (* f [x := d], y.f -> y.(f [x := d]) *)
-            ([Match (mk_write fld1 (loc1 :: ivars1) dvar, []);
-              Match (wrap (mk_read fld1 (loc2 :: ivars2)), []);
-              (*Match (loc1, [FilterNotNull]);*)
-            (*Match (loc2, [FilterNotNull])*)],
-             [wrap (mk_read (mk_write fld1 (loc1 :: ivars1) dvar) (loc2 :: ivars2))]) ::
-            (* Frame (x, a, f, g), y.g -> y.f *)
-            ([Match (mk_frame_term set1 set2 fld1 fld2, []);
-              Match (wrap (mk_read fld2 (loc1 :: ivars1)), []);
-              Match (loc1, [FilterNotNull])],
-             [wrap (mk_read fld1 (loc1 :: ivars1))]) ::
-            (* Frame (x, a, f, g), y.f -> y.g *)
-            [([Match (mk_frame_term set1 set2 fld1 fld2, []);
-               Match (wrap (mk_read fld1 (loc1 :: ivars1)), [])],
-              [wrap (mk_read fld2 (loc1 :: ivars1))])]
-          in
-          mk_generators (fun t -> t) (*@ mk_generators (fun t -> mk_known t)*) @ propagators
-      | _ -> fun propagators -> propagators)
-      field_sorts []
-  in
   (* generate instances of all read over write axioms *)
   let read_write_ax = 
     let generators_and_axioms =
@@ -366,7 +516,7 @@ let add_read_write_axioms fs =
     generators_and_axioms 
   in
   let read_propagators = 
-    List.map (fun (ms, t) -> TermGenerator (ms, t)) read_propagators
+    List.map (fun (ms, t) -> TermGenerator (ms, t)) (get_read_propagators gts)
   in
   let fs1 =
     match fs1 with
@@ -388,8 +538,10 @@ let add_reach_axioms fs =
       | _ -> struct_sorts)
       (sorts (mk_and fs)) SortSet.empty
   in  
-  let gts = ground_terms ~include_atoms:true (mk_and fs) in
-  let classes = CongruenceClosure.congr_classes fs gts in
+  let classes =
+    CongruenceClosure.congruence_classes TermSet.empty fs |>
+    CongruenceClosure.get_classes
+  in
   let axioms =
     SortSet.fold
       (fun srt axioms -> Axioms.reach_axioms classes srt @ Axioms.reach_write_axioms srt @ axioms)
@@ -416,36 +568,7 @@ let add_terms fs gts =
           mk_pred ("inst-closure", 0) [t] :: fs1)
       extra_gts fs
   in fs1
-   
-let add_split_lemmas fs gts =
-  if not !Config.split_lemmas then fs else
-  let structs =
-    TermSet.fold (fun t structs ->
-      match sort_of t with
-      | Loc srt -> SortSet.add srt structs
-      | _ -> structs)
-      gts SortSet.empty
-  in
-  let classes = CongruenceClosure.congr_classes fs (generated_ground_terms fs) in
-  let add_lemmas srt fs1 =
-    let loc_gts =
-      TermSet.filter (fun t -> sort_of t = Loc srt) gts
-    in
-    let classes = CongruenceClosure.restrict_classes classes loc_gts in
-    let rec lem fs1 = function
-      | [] -> fs1
-      | c :: cs ->
-          let t = List.hd c in
-          List.fold_left
-            (fun fs1 c ->
-              let t1 = List.hd c in
-              mk_or [mk_eq t t1; mk_neq t t1] :: fs1)
-            fs1 cs
-    in
-    lem fs1 classes
-  in
-  SortSet.fold add_lemmas structs fs
-    
+       
 (** Reduces the given formula to the target theory fragment, as specified b the configuration. *)
 let reduce f =
   (* split f into conjuncts and eliminate all existential quantifiers *)

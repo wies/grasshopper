@@ -8,40 +8,43 @@ open Simplifier
 open Grassifier
 
 (** Simplify the given program [prog] by applying all transformation steps. *)
-let simplify proc prog =
+let simplify procs prog =
   let dump_if n prog = 
     if !Config.dump_ghp == n 
     then (print_prog stdout prog; prog)
     else prog
   in
-  let init_procs =
-    match proc with
-    | None ->
-        IdMap.fold (fun id _ -> IdSet.add id) prog.prog_procs IdSet.empty
-    | Some p -> IdSet.singleton (p, 0)
-  in
   let info msg prog = Debug.info (fun () -> msg); prog in
   prog |>
   dump_if 0 |>
-  info "Inferring accesses, eliminating loops, arrays, new/dispose, and global dependencies.\n" |>
+  info "Encoding arrays.\n" |>
   elim_arrays |>
-  annotate_heap_checks |>
+  info "Adding checks for run-time errors.\n" |>
+  annotate_runtime_checks |>
+  info "Eliminating new/free.\n" |>
   elim_new_dispose |>
+  info "Inferring accesses.\n" |>
   Analyzer.infer_accesses |>
-  Simplifier.prune_uncalled init_procs |>
+  info "Pruning uncalled procedures and predicates.\n" |>
+  Simplifier.prune_uncalled procs |>
+  info "Eliminating loops.\n" |>
   elim_loops |>
+  info "Eliminating dependencies on global state.\n" |>
   elim_global_deps |>
   dump_if 1 |>
-  info "Eliminating SL, adding frame axioms.\n" |>
+  info "Eliminating SL specifications.\n" |>
   elim_sl |>
   Analyzer.infer_accesses |>
+  info "Eliminating unused formal parameters.\n" |>
   elim_unused_formals |>
+  info "Adding frame axioms.\n" |>
   add_frame_axioms |>
   (*(fun prog -> if !Config.abstract_preds then annotate_frame_axioms prog else prog) |> *)
   (*annotate_term_generators |>*)
   dump_if 2 |>
-  info "Eliminating return statements and transforming to SSA form.\n" |>
+  info "Eliminating return statements.\n" |>
   elim_return |>
+  info "Transforming to SSA.\n" |>
   elim_state |>
   dump_if 3
 
@@ -123,7 +126,7 @@ let add_match_filters =
           let flt, aux_matches = 
             TermSet.fold 
               (fun t (flt, aux_matches) -> match t with
-              | App ((FreeSym _ | Constructor _ as sym), (_ :: _ as ts), srt)
+              | App ((ArrayOfCell | IndexOfCell | FreeSym _ | Constructor _ as sym), (_ :: _ as ts), srt)
                 when sym_of_e <> Some sym && occurs_below_var_terms_of_e ts ->
                   add (FilterSymbolNotOccurs sym) flt, aux_matches
               | App (Read, ([App (FreeSym sym, [], srt); l] as ts), _)
@@ -177,11 +180,17 @@ let add_match_filters =
     
 (** Expand predicate definitions for all predicates in formula [f] according to program [prog] *)
 let add_pred_insts prog f =
-    let add_generators aux_match f =
+  (* Create term generators for formula [f]. If [f] is the definition of a predicate, 
+     then aux_match is is [Some (pid, m)] where [pid] is the name of the predicate and
+     and [m] is the associated matching trigger.
+   *)
+  let add_generators aux_match f =
+    (* if f defines a predicate, collect parameter variables of that predicate *)
     let aux_vs =
-      Opt.fold (fun aux_vs -> function (_, Match (t, _)) -> fv_term_acc aux_vs t)
+      Opt.fold (fun aux_vs -> function (pid, Match (t, _)) -> fv_term_acc aux_vs t)
         IdSet.empty aux_match
     in
+    (* collect all function terms in [f] that contain quantified variables and for which we want term generators *)
     let fun_terms bvs f =
       let rec ft acc = function
         | App (sym, (_ :: _ as ts), srt) as t
@@ -191,40 +200,113 @@ let add_pred_insts prog f =
             let sts = List.fold_left subterms_term_acc TermSet.empty ts in
             let no_var_reads =
               TermSet.for_all (function
-                | App (Read, _ :: _ :: Var (x, _) :: _, _) -> IdSet.mem x aux_vs
-                | App (Read, _ :: Var (x, _) :: _, _) -> IdSet.mem x aux_vs
+                | App (Read, _ :: _ :: (Var (x, _) | App ((Plus | Minus), [Var (x, _); _], _)) :: _, _) -> IdSet.mem x aux_vs
+                | App (Read, _ :: (Var (x, _) | App ((Plus | Minus), [Var (x, _); _], _)) :: _, _) -> IdSet.mem x aux_vs
                 | _ -> true) sts
             in
             if (no_var_reads || is_set_sort srt) && IdSet.subset fvs bvs && not @@ IdSet.is_empty fvs
-            then TermSet.add t acc else acc
+            then List.fold_left ft (TermSet.add t acc) ts else acc
+        | App (sym, [], Adt _) as t ->
+            TermSet.add t acc
         | App (_, ts, Bool) ->
             List.fold_left ft acc ts
-        | _ -> acc
+        | App (t, ts, _) ->
+            List.fold_left ft acc ts
+        | _ -> acc              
       in
       fold_terms ft TermSet.empty f
     in
+    (* create term generators for the relevant function terms *)
     let rec ag bvs = function
       | BoolOp (op, fs) ->
           BoolOp (op, List.map (ag bvs) fs)
       | Binder (Forall, vs, f, ann) ->
           let bvs = List.fold_left (fun bvs (v, _) -> IdSet.add v bvs) bvs vs in
-          let ft =
+          let ft, read_gens =
             f |>
             fun_terms bvs |>
             TermSet.elements |>
-            List.map
-              (function
-                | App (Disjoint, [t1; t2], _) -> mk_inter [t1; t2]
-                | App (SubsetEq, [t1; t2], _) -> mk_union [t1; t2]
-                | App (FreeSym id, _ :: _, _) as t ->
-                    IdMap.find_opt id prog.prog_preds |>
-                    Opt.flat_map (fun decl ->
-                      Opt.flat_map (fun (pid, _) ->
-                        if IdSet.mem pid (accesses_pred decl) then None
-                        else Some (mk_known t))
-                        aux_match) |>
-                    Opt.get_or_else t
-                | t -> t)
+            (*List.map (fun t -> print_endline (string_of_term t); t) |>*)
+            List.map (function
+              | App (Disjoint, [t1; t2], _) -> mk_inter [t1; t2], []
+              | App (SubsetEq, [t1; t2], _) -> mk_union [t1; t2], []
+              | (App (Read, App (FreeSym id, _ :: _, _) :: _, srt) 
+              | App (FreeSym id, _, srt)) as t ->
+                  IdMap.find_opt id prog.prog_preds |>
+                  Opt.flat_map (fun decl ->
+                    aux_match |>
+                    Opt.flat_map (function (pid, Match (pt, _)) ->
+                      (* Add generator for propagating known terms to force unfolding of predicate definitions *)
+                      (* Only do this if id is not the entry point into an SCC in the predicate call graph *)
+                      let pdecl = Prog.find_pred prog pid in
+                      let ppos =
+                        pdecl.pred_body |>
+                        Opt.map (fun s -> s.spec_pos) |>
+                        Opt.get_or_else dummy_position
+                      in
+                      let mk_read_vars srts =
+                        List.map (fun srt -> mk_var srt (fresh_ident "?i")) srts
+                      in
+                      let rec read_gens seen_adts gens t pt =
+                        match sort_of t, sort_of pt with
+                        | (Map _ | Adt _) as tsrt, Adt (tid, adts)
+                          when not @@ IdSet.mem tid seen_adts ->
+                            let cstrs = List.assoc tid adts in
+                            let destrs = flat_map (fun (_, destrs) -> destrs) cstrs in
+                            let seen_adts1 = IdSet.add tid seen_adts in
+                            List.fold_left
+                              (fun gens (destr, srt) ->
+                                let srt = unfold_adts adts srt in
+                                let read_pt = mk_destr srt destr pt in
+                                let gens1, read_t = match tsrt with
+                                | Adt (tid1, _) when tid = tid1 ->
+                                    let read_t = mk_destr srt destr t in
+                                    (read_pt, read_t) :: gens, read_t
+                                | _ -> gens, t
+                                in
+                                read_gens seen_adts1 gens1 read_t read_pt
+                              )            
+                              gens destrs
+                        | (Map _ | Adt _) as tsrt, Map (dsrts, rsrt) ->
+                            let read_vars = mk_read_vars dsrts in
+                            let read_pt = mk_read pt read_vars in
+                            let gens1, read_t = match tsrt with
+                            | Map (tdsrts, trsrt)
+                              when tdsrts = dsrts && trsrt = rsrt ->
+                                let read_t = mk_read t read_vars in
+                                (read_pt, read_t) :: gens, read_t
+                            | _ -> gens, t
+                            in
+                            read_gens seen_adts gens1 read_t read_pt
+                        | _, Pat ->
+                            (match pt with
+                            | App (_, [pt], _) -> read_gens seen_adts gens t pt
+                            | _ -> gens)
+                        | srt1, srt2 when srt1 = srt2 -> (pt, t) :: gens
+                        | _ -> gens
+                      in
+                      let read_gens =
+                        read_gens IdSet.empty [] t pt |>
+                        List.filter (fun (pt, t) -> pt <> t)
+                      in                      
+                      if pdecl.pred_contract.contr_name = decl.pred_contract.contr_name ||
+                         IdSet.mem pid (accesses_pred decl) &&
+                         not (contained_in_src_pos decl.pred_contract.contr_pos ppos)
+                      then Some (t, read_gens)
+                      else Some (mk_known t, read_gens))) |>
+                      Opt.get_or_else (t, [])
+                    | t -> t, []) |>
+             List.split         
+          in
+          let read_gens =
+            List.flatten read_gens |>
+            List.map (fun (read_pt, read_t) ->
+              let ms =
+                IdMap.fold (fun id srt ms -> Match (mk_var srt id, []) :: ms)
+                  (sorted_fv_term_acc IdMap.empty read_t)
+                  []
+              in
+              TermGenerator (Match (read_pt, []) :: ms, [read_t]))
           in
           let ms =
             IdMap.fold (fun id srt ms -> Match (mk_var srt id, []) :: ms)
@@ -233,14 +315,15 @@ let add_pred_insts prog f =
           in
           let generators =
             (match ft with
-            | [] -> []
-            | _ -> [TermGenerator (ms, ft)])
+            | [] -> read_gens
+            | _ -> TermGenerator (ms, ft) :: read_gens)
           in
           Binder (Forall, vs, ag bvs f, generators @ ann)
       | f -> f
     in
     ag IdSet.empty f
-  in
+    (* end of add_generators *)
+  in 
   (* Annotates term generators in predicate bodies *)
   let annotate_term_generators pred f =
     let locals = locals_of_pred pred in
@@ -288,31 +371,29 @@ let add_pred_insts prog f =
   (* Expands definition of predicate [p] for arguments [ts] assuming polarity of occurrence [pol] *)
   let expand_pred pos p ts =
     let pred = find_pred prog p in
-    let locals = locals_of_pred pred in
     let formals = formals_of_pred pred in
     let returns = returns_of_pred pred in
     let name = name_of_pred pred in
-    let sm =
-      try
-        List.fold_left2 
-          (fun sm id t -> IdMap.add id t sm)
-          IdMap.empty formals ts
-      with Invalid_argument _ ->
-        failwith ("Fatal error while expanding predicate " ^ string_of_ident name)
-    in
-    let sm =
+    let opt_body =
       match returns with
-      | [] -> sm
-      | [id] ->
-          let var = IdMap.find id locals in
-          IdMap.add id (mk_free_fun var.var_sort p ts) sm
+      | [] ->
+          let sm =
+            try
+              List.fold_left2 
+                (fun sm id t -> IdMap.add id t sm)
+                IdMap.empty formals ts
+            with Invalid_argument _ ->
+              failwith ("Fatal error while expanding predicate " ^ string_of_ident name)
+          in
+          pred.pred_body |>
+          Opt.map form_of_spec |>
+          Opt.map (subst_consts sm)
+      | [id] -> None
       | _ -> failwith "Functions may only have a single return value."
     in
     let body =
-      pred.pred_body |> Opt.map form_of_spec |>
-      Opt.get_or_else (Atom (mk_free_fun Bool p ts, []))
+      Opt.get_or_else (Atom (mk_free_fun Bool p ts, [])) opt_body
     in
-    let body = subst_consts sm body in
     if pos then body else nnf (mk_not body)
   in
   let f_inst = 
@@ -502,12 +583,46 @@ let vcgen prog proc =
   | Some body -> List.rev (fst (vcs [] [] body))
   | None -> []
 
+(** Generate error message from labels in the model *)
+let get_err_msg_from_labels model labels =
+  let add_msg pos msg error_msgs =
+    let filtered_msgs = 
+      List.filter 
+        (fun (pos2, _) -> not (contained_in_src_pos pos pos2))
+        error_msgs
+    in
+    (pos, msg) :: filtered_msgs
+  in
+  let error_msgs = 
+    IdMap.fold 
+      (fun id (pos, msg) error_msgs ->
+        let p = mk_free_const Bool id in
+        match Model.eval_bool_opt model p with
+        | Some true ->
+            add_msg pos msg error_msgs
+        | _ -> error_msgs
+      ) 
+      labels []
+  in
+  let sorted_error_msgs = 
+    List.sort
+      (fun (pos1, msg1) (pos2, msg2) -> 
+        let mc = 
+          compare (String.get msg1 0) (String.get msg2 0) 
+        in
+        if mc = 0 then compare_src_pos pos1 pos2 else mc) 
+      error_msgs
+  in
+  List.map 
+    (fun (pos, msg) -> ProgError.error_to_string pos msg) 
+    sorted_error_msgs
+
 (** Generate verification conditions for procedure [proc] of program [prog] and check them. *)
 let check_proc prog proc =
   let check_vc errors (vc_name, (vc_msg, pp), vc0, labels) =
     let check_one vc =
       if errors <> [] && not !Config.robust then errors else begin
-        Debug.info (fun () -> "Checking VC: " ^ vc_name ^ ".\n");
+        Debug.info (fun () -> "\t" ^ vc_name ^ ".\n");
         Debug.debug (fun () -> (string_of_form vc) ^ "\n");
       (*IdMap.iter (fun id (pos, c) -> Printf.printf ("%s -> %s: %s\n") 
          (string_of_ident id) (string_of_src_pos pos) c) labels;*)
@@ -520,48 +635,17 @@ let check_proc prog proc =
         match Prover.get_model ~session_name:session_name ~sat_means:sat_means vc with
         | None -> errors
         | Some model -> 
-          (* generate error message from model *)
-            let add_msg pos msg error_msgs =
-              let filtered_msgs = 
-                List.filter 
-                  (fun (pos2, _) -> not (contained_in_src_pos pos pos2))
-                  error_msgs
-              in
-              (pos, msg) :: filtered_msgs
-            in
-            let error_msgs = 
-              IdMap.fold 
-                (fun id (pos, msg) error_msgs ->
-                  let p = mk_free_const Bool id in
-                  match Model.eval_bool_opt model p with
-                  | Some true ->
-                      add_msg pos msg error_msgs
-                  | _ -> error_msgs
-                ) 
-                labels []
-            in
-            let sorted_error_msgs = 
-              List.sort
-                (fun (pos1, msg1) (pos2, msg2) -> 
-                  let mc = 
-                    compare (String.get msg1 0) (String.get msg2 0) 
-                  in
-                  if mc = 0 then compare_src_pos pos1 pos2 else mc) 
-                error_msgs
-            in
-            let error_msg_strings = 
-              List.map 
-                (fun (pos, msg) -> ProgError.error_to_string pos msg) 
-                sorted_error_msgs
-            in
             let error_msg =
-              String.concat "\n\n" (vc_msg :: error_msg_strings)
+              String.concat "\n\n" (vc_msg :: get_err_msg_from_labels model labels)
             in
             (pp, error_msg, model) :: errors
       end
     in check_one vc0
   in
-  let _ = Debug.info (fun () -> "Checking procedure " ^ string_of_ident (name_of_proc proc) ^ "...\n") in
+  let _ = Debug.info (fun () ->
+    "Checking " ^ (if proc.proc_is_lemma then "lemma " else "procedure ") ^
+    string_of_ident (name_of_proc proc) ^ "...\n")
+  in
   let vcs = vcgen prog proc in
   List.fold_left check_vc [] vcs
 

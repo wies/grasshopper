@@ -36,5 +36,12 @@ module Make(K: OrderedType)(P: OrderedType): sig
 
   val adjust: (P.t -> P.t) -> K.t -> t -> t
     (* runs in O(log n) *)
- 
+
+  val find_opt: K.t -> t -> P.t option
+
+  val fold: (K.t -> P.t -> 'a  -> 'a) -> t -> 'a -> 'a
+
+  val exists: (K.t -> P.t -> bool) -> t -> bool
+
+  val forall: (K.t -> P.t -> bool) -> t -> bool
 end

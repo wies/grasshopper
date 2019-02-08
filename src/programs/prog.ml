@@ -133,6 +133,7 @@ type contract = {
     contr_precond: spec list; (** precondition *)
     contr_postcond: spec list; (** postcondition *)
     contr_footprint_sorts: SortSet.t; (** footprint sorts *)
+    contr_is_pure: bool; (** has no state dependencies *)
     contr_pos: source_position; (** position of declaration *)
   }
       
@@ -230,6 +231,7 @@ let trivial_contract name =
     contr_pos = dummy_position;
     contr_precond = [];
     contr_postcond = [];
+    contr_is_pure = false;
     contr_footprint_sorts = SortSet.empty;
   }
     
@@ -369,6 +371,8 @@ let struct_sorts prog =
     collect_srts (locals_of_proc proc) struct_srts)
     struct_srts prog
 
+let add_proc prog proc =
+  { prog with prog_procs = IdMap.add (name_of_proc proc) proc prog.prog_procs }
     
 (** Auxiliary functions for specifications *)
 
@@ -587,8 +591,13 @@ let modifies_proc prog proc =
         IdMap.fold 
           (fun id _ mods -> IdSet.add id mods) 
           prog.prog_vars IdSet.empty
-  | None -> 
-      IdMap.fold (fun id _ acc -> IdSet.add id acc) prog.prog_vars IdSet.empty
+  | None ->
+      if proc.proc_is_lemma then IdSet.empty else
+      IdMap.fold (fun id decl acc ->
+        match decl.var_sort with
+        | Set (Loc srt) when id = alloc_id srt && not @@ SortSet.mem srt proc.proc_contract.contr_footprint_sorts ->
+            acc
+        | _ -> IdSet.add id acc) prog.prog_vars IdSet.empty
 
 let modifies_basic_cmd = function
   | Assign ac -> id_set_of_list ac.assign_lhs
@@ -1038,6 +1047,11 @@ let pr_term_list = Util.pr_list_comma pr_term
 let pr_sl_form ppf f = Sl.pr_form ppf (old_to_fun_sl_form f)
     
 let pr_form ppf f = Grass.pr_form ppf (old_to_fun_form f)
+
+let pr_comment ppf c =
+  match c with
+  | "" -> ()
+  | _ -> fprintf ppf "/* %s */@\n" c
     
 let pr_spec_form ppf sf =
   match sf.spec_form with
@@ -1065,18 +1079,18 @@ let pr_basic_cmd ppf = function
   | Dispose dc -> 
       fprintf ppf "@[<2>free@ %a@]" pr_term dc.dispose_arg
   | Assume sf ->
-      fprintf ppf "/* %s */@\n@[<2>%sassume@ %a@]" 
-        sf.spec_name
+      fprintf ppf "%a@[<2>%sassume@ %a@]"
+        pr_comment sf.spec_name
         (fold_spec_form (fun _ -> "pure ") (fun _ -> "") sf)
         pr_spec_form sf
   | Assert sf ->
-      fprintf ppf "/* %s */@\n@[<2>%sassert@ %a@]" 
-        sf.spec_name
+      fprintf ppf "%a@[<2>%sassert@ %a@]" 
+        pr_comment sf.spec_name
         (fold_spec_form (fun _ -> "pure ") (fun _ -> "") sf)
         pr_spec_form sf
   | Split sf ->
-      fprintf ppf "/* %s */@\n@[<2>split@ %a@]" 
-        sf.spec_name
+      fprintf ppf "%a@[<2>split@ %a@]" 
+        pr_comment sf.spec_name
         pr_spec_form sf
   | Return rc -> 
       fprintf ppf "@[<2>return@ %a@]" pr_term_list rc.return_args
@@ -1136,8 +1150,8 @@ let pr_spec_kind ppf = function
 let rec pr_precond ppf = function
   | [] -> ()
   | sf :: sfs -> 
-      fprintf ppf "@\n/* %s */@\n@[<2>%a%srequires@ %a@]%a"
-        sf.spec_name
+      fprintf ppf "@\n%a@[<2>%a%srequires@ %a@]%a"
+        pr_comment sf.spec_name
         pr_spec_kind sf.spec_kind
         (fold_spec_form (fun _ -> "pure ") (fun _ -> "") sf)
         pr_spec_form sf 
@@ -1146,8 +1160,8 @@ let rec pr_precond ppf = function
 let rec pr_postcond ppf = function
   | [] -> ()
   | sf :: sfs -> 
-      fprintf ppf "@\n/* %s */@\n@[<2>%a%sensures@ %a@]%a"
-        sf.spec_name
+      fprintf ppf "@\n%a@[<2>%a%sensures@ %a@]%a"
+        pr_comment sf.spec_name
         pr_spec_kind sf.spec_kind
         (fold_spec_form (fun _ -> "pure ") (fun _ -> "") sf)
         pr_spec_form sf 
@@ -1210,11 +1224,16 @@ let pr_proc ppf proc =
     then locals
     else (id, decl) :: locals) (locals_of_proc proc) []
   in
-  fprintf ppf "@[<2>%s %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a@]@\n%a@\n"
-    "procedure"
+  let intro = if proc.proc_is_lemma then "lemma" else "procedure" in
+  let pr_returns ppf returns =
+    if returns = [] then ()
+    else fprintf ppf "@\nreturns (@[<0>%a@])" pr_id_srt_list (add_srts returns)
+  in
+  fprintf ppf "@\n@[<2>%s %a(@[<0>%a@])%a%a@]@\n%a"
+    intro
     pr_ident (name_of_proc proc)
     pr_id_srt_list (add_srts (formals_of_proc proc))
-    pr_id_srt_list (add_srts (returns_of_proc proc))
+    pr_returns (returns_of_proc proc)
     pr_contract proc.proc_contract
     (pr_body locals) proc.proc_body
 
@@ -1231,12 +1250,14 @@ let pr_pred ppf pred =
   let pr_header ppf pred =
   match returns_of_pred pred with
   | [] ->
-      fprintf ppf "@[<2>predicate %a(@[<0>%a@])%a@]@ "
+      fprintf ppf "@\n@[<2>%spredicate %a(@[<0>%a@])%a@]@ "
+        (if pred.pred_contract.contr_is_pure then "pure " else "")
         pr_ident (name_of_pred pred)
         pr_id_srt_list (add_srts (formals_of_pred pred))
         pr_contract pred.pred_contract
   | _ ->
-      fprintf ppf "@[<2>function %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a@]@\n"
+      fprintf ppf "@\n@[<2>%sfunction %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a@]@\n"
+        (if pred.pred_contract.contr_is_pure then "pure " else "")
         pr_ident (name_of_pred pred)
         pr_id_srt_list (add_srts (formals_of_pred pred))
         pr_id_srt_list (add_srts (returns_of_pred pred))
@@ -1245,7 +1266,7 @@ let pr_pred ppf pred =
   let pr_body ppf pred =
     match pred.pred_body with
     | Some sf ->
-        fprintf ppf "{@[<1>@\n%a@]@\n}@\n@\n" pr_spec_form sf
+        fprintf ppf "{@[<1>@\n%a@]@\n}" pr_spec_form sf
     | None -> fprintf ppf "@\n@\n"
   in
   fprintf ppf "%a%a" pr_header pred pr_body pred
@@ -1256,8 +1277,8 @@ let rec pr_preds ppf = function
       fprintf ppf "%a@\n%a" pr_pred pred pr_preds preds
 
 let pr_axiom ppf sf =
-  fprintf ppf "/* %s */@\n@[<2>axiom@ %a@];@\n"
-    sf.spec_name
+  fprintf ppf "%a@[<2>axiom@ %a@];@\n"
+    pr_comment sf.spec_name
     pr_spec_form sf 
     
 

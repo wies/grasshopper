@@ -20,6 +20,7 @@ let _ =
       ("Byte", BYTE);
       ("choose", CHOOSE);
       ("comment", COMMENT);
+      ("const", CONST);
       ("define", DEFINE);
       ("datatype", DATATYPE);
       ("else", ELSE);
@@ -29,7 +30,7 @@ let _ =
       ("forall", QUANT(SplSyntax.Forall));
       ("exists", QUANT(SplSyntax.Exists));
       ("free", FREE);
-      ("function", FUNCTION);
+      ("function", FUNCTION false);
       ("ghost", GHOST);
       ("havoc", HAVOC);
       ("if", IF);
@@ -44,10 +45,11 @@ let _ =
       ("matching", MATCHING);
       ("new", NEW);
       ("null", NULL);
+      ("options", OPTIONS);
       ("or", COR);
       ("outputs", OUTPUTS);
       ("pattern", PATTERN);
-      ("predicate", PREDICATE);
+      ("predicate", PREDICATE false);
       ("procedure", PROCEDURE);
       ("pure", PURE);
       ("requires", REQUIRES);
@@ -61,6 +63,7 @@ let _ =
       ("type", TYPE);
       ("var", VAR);
       ("while", WHILE);
+      ("with", WITH);
       ("without", WITHOUT);
       ("yields", YIELDS);
       ("axiom", AXIOM);
@@ -108,7 +111,7 @@ let hexa_to_int num =
 
 let digitchar = ['0'-'9']
 let idchar = ['A'-'Z''a'-'z''_']
-let ident = ('?' idchar | idchar) (idchar | digitchar)* 
+let ident = (idchar | digitchar)* ('?' idchar | idchar) (idchar | digitchar)* 
 let digits = digitchar+
 
 rule token = parse
@@ -161,6 +164,8 @@ rule token = parse
 | '~' { TILDE }
 | "<-<" { BSL }
 | ">->" { BSR }
+| "pure" [' ' '\t' '\n'] "function" { FUNCTION true } (* What a hack... *)
+| "pure" [' ' '\t' '\n'] "predicate" { PREDICATE true } (* What a hack... *)
 | ident as name '^' (digitchar+ as num) { IDENT(name, int_of_string num) }
 | ident as kw
     { try
@@ -168,6 +173,7 @@ rule token = parse
     with Not_found ->
       IDENT (kw, 0)
     }
+| "?" { QMARK }
 | "0x" (['A'-'F''a'-'f''0'-'9']+ as num) { INTVAL (hexa_to_int num) }
 | digits as num { INTVAL (Int64.of_string num) }
 | "'" (_ as c) "'" { CHARVAL c }
