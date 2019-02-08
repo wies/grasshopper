@@ -2,7 +2,7 @@
 
 GRASShopper
 =======
-![Version 0.5 pre](https://img.shields.io/badge/version-0.5_pre-green.svg)
+![Version 0.5](https://img.shields.io/badge/version-0.5-green.svg)
 [![BSD licensed](https://img.shields.io/badge/license-BSD-blue.svg)](https://raw.githubusercontent.com/wies/grasshopper/master/LICENSE)
 [![Build Status](https://travis-ci.org/wies/grasshopper.svg?branch=master)](https://travis-ci.org/wies/grasshopper)
 
