@@ -53,7 +53,7 @@ pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
   (forall k: K :: k in a1.contents ==> k in a2.contents)
   && (a2.inr == inrfnUndef || a1.inr != inrfnUndef && a2.inr != inrfnUndef
      && (forall x: Node :: x in a1.inr.inrdom ==> x in a2.inr.inrdom && a1.inr.inrfn[x] == a2.inr.inrfn[x]))
-  && (forall k: K :: k in a1.outs ==> k in a2.contents)
+  && (forall k: K :: k in a1.outs ==> k in a2.outs)  // TODO a2.contents should be a2.outs
 }
 
 //pure function ndJoinWitness(a1: NodeDom, a2: NodeDom) returns (n: Node)
