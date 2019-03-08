@@ -1,0 +1,413 @@
+/** Simple sequential linked list, but using flows and iterated separating star. */
+
+options "-abspreds"
+
+/* -------------------- Flows library -------------------- */
+
+// Interfaces
+datatype Interface =
+  int(inf: Map<Node, FlowDom>,
+      fm: Map<Node, Map<Node, FlowDom>>,
+      dom: Set<Node>)
+
+// Interface contextual extension (allows increasing domain)
+pure function intLeq(I1: Interface, I2: Interface) returns (res: Bool)
+  ensures forall I1: Interface, I2:Interface, I3: Interface ::
+    intLeq(I1, I2) && intLeq(I2, I3) ==> intLeq(I1, I3)
+{
+  dom(I1) subsetof dom(I2)
+    && (forall n:Node :: n in dom(I1) ==> fdEq(I1.inf[n], I2.inf[n]))
+    && (forall n:Node :: !(n in dom(I2)) ==> fdEq(I2.inf[n], fdZero()))
+    && (forall n:Node, m:Node ::
+      !fdEq(I1.inf[n], fdZero()) ==> fdEq(I1.fm[n][m], I2.fm[n][m]))
+    && (forall n:Node, m:Node ::
+      n in dom(I1) && !(n in dom(I2)) ==> fdEq(I2.fm[n][m], fdZero()))
+}
+
+// Composition of intf field of a set of nodes
+function intCompSet(X: Set<Node>) returns (I: Interface)
+  requires acc(X)
+  ensures dom(I) == X
+
+// TODO add statement macros to Grasshopper
+
+// define _assume_flow_eqn_global(X) {
+//   // Flow map equation for big region:  // TODO is this actually used anywhere?
+//   pure assume forall x: Node, y: Node ::
+//     x in X && !(y in X)
+//     ==> fdLeq(x.intf.fm[x][y], intCompSet(X).fm[x][y]);
+//   // Flow equation approximations for large interface:
+//   pure assume forall x: Node ::
+//     x in X ==> fdLeq(intCompSet(X).inf[x], x.intf.inf[x]);
+//   pure assume forall x: Node, y: Node ::
+//     x in X && y in X
+//     ==> fdLeq(fdMult(x.intf.inf[x], x.intf.fm[x][y]), y.intf.inf[y]);
+// }
+
+
+/* -------------------- List example specific flows setup -------------------- */
+
+// A single path-counting flow
+datatype FlowDom = fd(pc: Int);
+
+define fdEq(p1, p2) { p1 == p2 }
+
+pure predicate fdLeq(p1: FlowDom, p2:FlowDom) { p1.pc <= p2.pc }
+
+pure function fdPlus(p1: FlowDom, p2:FlowDom) returns (p: FlowDom) {
+  fd(p1.pc + p2.pc)
+}
+
+pure function fdMult(p1: FlowDom, p2:FlowDom) returns (p: FlowDom) {
+  fd(p1.pc * p2.pc)
+}
+
+pure function fdZero() returns (p: FlowDom) { fd(0) }
+
+pure function fdOne() returns (p: FlowDom) { fd(1) }
+
+
+struct Node {
+  var next: Node;
+  ghost var intf: Interface;
+}
+
+
+// Definition of a node and good condition:
+
+pure function fm_of_node(x: Node, y: Node) returns (f: FlowDom)
+  requires hrepSpatial(x)
+{
+  (x.next != null && x.next == y) ? fd(1) : fd(0)
+}
+
+define hrepSpatial(x) { acc(x) }
+
+define hrep(x) {
+  dom(x.intf) == Set(x)
+  && (forall z: Node :: x.intf.fm[x][z] == fm_of_node(x, z))
+  // Example-specific good conditions:
+  // Inflow can be zero to cover unlinked nodes before GC de-allocates them
+  && (x.intf.inf[x] == fd(1) || x.intf.inf[x] == fd(0))
+}
+  
+define globalInt(hd, I) {
+  hd in dom(I) &&
+  I.inf[hd] == fd(1)
+  && (forall x: Node :: x != hd ==> (I.inf[x] == fd(0)))
+  && (forall y: Node ::
+    !(y in dom(I)) ==> fdEq(I.fm[hd][y], fdZero()))
+  // Data structure is closed (no longer follows from above line)
+  && (forall x: Node :: x in dom(I) && x.next != null ==> x.next in dom(I))
+}
+
+
+/* -------------------- Actual list procedures -------------------- */
+ 
+procedure traverse(hd: Node, X: Set<Node>)
+  requires acc(X)
+  requires forall x: Node :: x in X ==> hrep(x)
+  requires globalInt(hd, intCompSet(X))
+  ensures forall x: Node :: x in X ==> hrep(x)
+  ensures globalInt(hd, intCompSet(X))
+{
+  // _assume_flow_eqn_global(X)
+  pure assume forall x: Node ::
+    x in X ==> fdLeq(intCompSet(X).inf[x], x.intf.inf[x]);
+  pure assume forall x: Node, y: Node ::
+    x in X && y in X
+    ==> fdLeq(fdMult(x.intf.inf[x], x.intf.fm[x][y]), y.intf.inf[y]);
+
+  // ---- Actual code:
+
+  var l: Node := hd;
+  var r: Node;
+
+  //  _field_read(l, l.next)
+  r := l.next;
+
+  pure assert fdLeq(intCompSet(X).inf[l], l.intf.inf[l]); // TODO trigger these?
+  pure assert r != null
+    ==> fdLeq(fdMult(l.intf.inf[l], l.intf.fm[l][r]), r.intf.inf[r]);
+
+  var nondet: Bool;
+  while (nondet && r != null)
+    invariant acc(X)
+    invariant forall x: Node :: x in X ==> hrep(x)
+    invariant globalInt(hd, intCompSet(X))
+    invariant l in X && l.intf.inf[l] == fdOne()
+    invariant (r != null ==> r == l.next && r in X && r.intf.inf[r] == fdOne())
+  {
+    //    _assume_flow_eqn_global(X)
+    pure assume forall x: Node ::
+      x in X ==> fdLeq(intCompSet(X).inf[x], x.intf.inf[x]);
+    pure assume forall x: Node, y: Node ::
+      x in X && y in X
+      ==> fdLeq(fdMult(x.intf.inf[x], x.intf.fm[x][y]), y.intf.inf[y]);
+
+    l := r;
+
+    //    _field_read(l, l.next)
+    r := l.next;
+
+    havoc nondet;
+
+    pure assert fdLeq(intCompSet(X).inf[l], l.intf.inf[l]); // TODO trigger these?
+    pure assert r != null
+      ==> fdLeq(fdMult(l.intf.inf[l], l.intf.fm[l][r]), r.intf.inf[r]);
+  }
+
+  pure assume false;
+
+  // Check that we can now call either insert or delete:
+  assert (forall x: Node :: x in X ==> hrep(x))
+    && globalInt(hd, intCompSet(X))
+    && l in X && l.intf.inf[l] == fdOne();
+  if (r != null) {
+    assert (forall x: Node :: x in X ==> hrep(x))
+      && globalInt(hd, intCompSet(X))
+      && l in X && l.next in X;
+  }
+}
+
+/*
+procedure swap(hd: Node, X: Set<Node>, n0: Node)
+  requires acc(X)
+  requires forall x: Node :: x in X ==> hrep(x)
+  requires globalInt(hd, intCompSet(X))
+  requires n0 in X && n0.next in X && n0.next.next in X && n0.intf.inf[n0] == fdOne()
+  ensures forall x: Node :: x in X ==> hrep(x)
+  ensures globalInt(hd, intCompSet(X))
+{
+  // ---- Flows set-up:
+  var FP : Set<Node> := X // or: compute this from the permissions
+
+  var nn : Node
+  var dirty : Set<Node>
+  var dirtyList : List[Node]
+
+  var fms_small: Map<Node, Map<Node,FlowDom>>  // fms_small[n] is fm of {n}
+  var fms_small_new: Map<Node, Map<Node,FlowDom>>
+    // fms_small_new[n] is new fm of {n}
+  var fm_tmp: Map<Node, FlowDom>  // temp flowmap of singletons
+
+  var infs_small: Map<Node, FlowDom>  // infs_small[n] is In.inf[n]
+  var infs_small_new: Map<Node, FlowDom>  // infs_small_new[n] is In'.inf[n]
+  var inf_D: Map<Node, FlowDom>  // inf_D is inflow of interface of dirty region
+
+  _init_vars()
+
+  _assume_flow_eqn_global(X)
+
+  label pre
+  // ---- Actual code:
+
+  _field_read(n0, n0.next)
+  var n1: Node := n0.next
+
+  _field_read(n1, n1.next)
+  var n2: Node := n1.next
+
+  // label pre0
+  _pre_modification(n0)
+  n0.next := n2;
+  //  _post_modification(n0,pre0)  // This was for automatic neighbour computation
+
+  // label pre1
+  _field_read(n2, n2.next)
+  _pre_modification(n1)
+  n1.next := n2.next; 
+  //  _post_modification(n1,pre1)
+
+  // label pre2
+  _pre_modification(n2)
+  n2.next := n1;
+  //  _post_modification(n2,pre2)
+
+
+  // ---- Now prove flow interface preserved before postcondition:
+ 
+  // Summarise infs and fms of singleton interfaces in dirty region
+  _set_infs_and_fms(infs_small, fms_small, fms_small_new)
+
+  // Assume flow equation on pre state
+  _assume_flow_eqn(infs_small, fms_small, inf_D)
+
+  // Assume that dirty region had no cycles
+  _assume_no_cycles(infs_small, fms_small)
+
+  // Check that dirty region has no cycles
+  _assert_no_cycles(inf_D, fms_small_new)
+
+  // Assume flow equation on new state
+  _assume_flow_eqn(infs_small_new, fms_small_new, inf_D)
+
+  // Check equivalence of flow maps
+  label pre_sync
+  // Check hrep for each node in dirty and write new interface to x.intf
+  sync(dirty, dirtyList, inf_D, infs_small_new, fms_small, fms_small_new)
+  // By Replacement Theorem:
+  assume intLeq(old[pre_sync](intCompSet(FP)), intCompSet(FP))
+}
+
+
+// Create a new node and insert it after l in the list
+procedure insert(hd: Node, X: Set<Node>, l: Node) returns (X1: Set<Node>)
+  requires forall x: Node :: x in X ==> hrep(x)
+  requires globalInt(hd, intCompSet(X))
+  requires l in X && l.intf.inf[l] == fdOne()
+  ensures forall x: Node :: x in X1 ==> hrep(x)
+  ensures globalInt(hd, intCompSet(X1))
+{
+  // ---- Flows set-up:
+  var FP : Set<Node> := X // or: compute this from the permissions
+
+  var nn: Node
+  var dirty : Set<Node>
+  var dirtyList : List[Node]
+
+  var fms_small: Map<Node, Map<Node,FlowDom>>  // fms_small[n] is fm of {n}
+  var fms_small_new: Map<Node, Map<Node,FlowDom>>
+    // fms_small_new[n] is new fm of {n}
+  var fm_tmp: Map<Node, FlowDom>  // temp flowmap of singletons
+
+  var infs_small: Map<Node, FlowDom>  // infs_small[n] is In.inf[n]
+  var infs_small_new: Map<Node, FlowDom>  // infs_small_new[n] is In'.inf[n]
+  var inf_D: Map<Node, FlowDom>  // inf_D is inflow of interface of dirty region
+
+  _init_vars()
+
+  _assume_flow_eqn_global(X)
+
+  label pre
+
+  // ---- Actual code:
+  
+  var n: Node
+
+  label pre_alloc_call
+  n := alloc(fdZero())
+
+  // Do some FP computation
+  var FP1: Set<Node>  // SID: why doesn't reassigning to FP work? ALEX: it should.. ?
+  // compute appropriate FP1:
+  assume forall z: Node :: z in FP1 ==> perm(z.intf) == 1/1
+  assume forperm z: Node [z.intf] :: z in FP1
+  // Since all method calls should result in intLeq interfaces, we can safely assume:
+  assume intLeq(old[pre_alloc_call](intCompSet(FP)), intCompSet(FP1))  // Replacement
+  // Also, any new nodes have global inflow given by intf
+  assume forall z: Node ::
+    z in (FP1 setminus FP) ==> intCompSet(FP1).inf[z] == z.intf.inf[z]
+
+  // Added based on field reads to trigger global flow eqn
+  _field_read(l, l.next)
+  var r: Node := l.next
+
+  // label pre0
+  _pre_modification(l)
+  l.next := n;
+  //  _post_modification(l,pre0)
+
+  // label pre1
+  _pre_modification(n)
+  n.next := r;
+  //  _post_modification(n,pre1)
+
+  // ---- Check flow interface preserved:
+
+  // Summarise fms of singleton interfaces in dirty region
+  _set_infs_and_fms(infs_small, fms_small, fms_small_new)
+
+  // Assume flow equation on pre state
+  _assume_flow_eqn(infs_small, fms_small, inf_D)
+
+  // Assume that dirty region had no cycles
+  _assume_no_cycles(infs_small, fms_small)
+
+  // Check that dirty region has no cycles
+  _assert_no_cycles(inf_D, fms_small_new)
+
+  // Assume flow equation on new state
+  _assume_flow_eqn(infs_small_new, fms_small_new, inf_D)
+
+  // Check equivalence of flow maps
+  label pre_sync
+  // Check hrep for each node in dirty and write new interface to x.intf
+  sync(dirty, dirtyList, inf_D, infs_small_new, fms_small, fms_small_new)
+  // Replacement Theorem gives us this for free
+  assume intLeq(old[pre_sync](intCompSet(FP1)), intCompSet(FP1))
+
+  X1 := FP1
+}
+
+
+procedure delete(hd: Node, l: Node, X: Set<Node>)
+  requires forall x: Node :: x in X ==> hrep(x)
+  requires globalInt(hd, intCompSet(X))
+  requires l in X && l.next in X
+  ensures forall x: Node :: x in X ==> hrep(x)
+  ensures globalInt(hd, intCompSet(X))
+{
+  // ---- Flows set-up:
+  var FP : Set<Node> := X // or: compute this from the permissions
+
+  var nn : Node
+  var dirty : Set<Node>
+  var dirtyList : List[Node]
+
+  var fms_small: Map<Node, Map<Node,FlowDom>>  // fms_small[n] is fm of {n}
+  var fms_small_new: Map<Node, Map<Node,FlowDom>>
+    // fms_small_new[n] is new fm of {n}
+  var fm_tmp: Map<Node, FlowDom>  // temp flowmap of singletons
+
+  var infs_small: Map<Node, FlowDom>  // infs_small[n] is In.inf[n]
+  var infs_small_new: Map<Node, FlowDom>  // infs_small_new[n] is In'.inf[n]
+  var inf_D: Map<Node, FlowDom>  // inf_D is inflow of interface of dirty region
+
+  _init_vars()
+
+  _assume_flow_eqn_global(X)
+
+  label pre
+  // ---- Actual code:
+
+  _field_read(l, l.next)
+  var n: Node := l.next
+
+  _field_read(n, n.next)
+  var r: Node := n.next
+
+  // label pre0
+  _pre_modification(l)
+  l.next := r;
+
+  // TODO need to add n to dirty region too
+  _pre_modification(n)
+
+  // ---- Now prove flow interface preserved before postcondition:
+ 
+  // Summarise infs and fms of singleton interfaces in dirty region
+  _set_infs_and_fms(infs_small, fms_small, fms_small_new)
+
+  // Assume flow equation on pre state
+  _assume_flow_eqn(infs_small, fms_small, inf_D)
+
+  // Assume that dirty region had no cycles
+  _assume_no_cycles(infs_small, fms_small)
+
+  // Check that dirty region has no cycles
+  _assert_no_cycles(inf_D, fms_small_new)
+
+  // Assume flow equation on new state
+  _assume_flow_eqn(infs_small_new, fms_small_new, inf_D)
+
+  // Check equivalence of flow maps
+  label pre_sync
+  // Check hrep for each node in dirty and write new interface to x.intf
+  sync(dirty, dirtyList, inf_D, infs_small_new, fms_small, fms_small_new)
+  // By Replacement Theorem:
+  assume intLeq(old[pre_sync](intCompSet(FP)), intCompSet(FP))
+}
+
+
+*/
