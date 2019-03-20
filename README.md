@@ -23,7 +23,7 @@ Installation Requirements
 
 - OCaml Findlib, version >= 1.6.2
 
-- Z3, version >= 3.2, and/or
+- Z3, version >= 4.5, and/or
 
 - CVC4, version >= 1.5
 
