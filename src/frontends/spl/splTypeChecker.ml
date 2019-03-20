@@ -23,8 +23,8 @@ let match_types pos oty1 oty2 =
         ArrayType (mt ty1 ty2)
     | ArrayCellType ty1, ArrayCellType ty2 ->
         ArrayCellType (mt ty1 ty2)
-    | MapType (ty1, (BoolType | AnyType)), SetType ty2
-    | SetType ty1, MapType (ty2, (BoolType | AnyType))
+    (*| MapType (ty1, (BoolType | AnyType)), SetType ty2
+    | SetType ty1, MapType (ty2, (BoolType | AnyType))*)
     | SetType ty1, SetType ty2 ->
         SetType (mt ty1 ty2)
     | MapType (dty1, rty1), MapType (dty2, rty2) ->
