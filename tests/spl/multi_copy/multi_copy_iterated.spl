@@ -91,8 +91,8 @@ struct Node {
 
 pure function func_of_cont(x: Node) returns (m: Map<Int, K>)
 requires hrepSpatial(x)
-ensures forall l: KeyTS :: l in x.contents ==> compare(m[l.key], l.ts) == 0
-ensures forall k: Int :: (forall t: K :: !(pair(k, t) in x.contents)) ==> compare(m[k],top) == 0 
+ensures forall l: KeyTS :: l in x.contents ==> m[l.key] == l.ts
+ensures forall k: Int :: (forall t: K :: !(pair(k, t) in x.contents)) ==> m[k] == top 
 
 pure function fm_of_node(x: Node, y: Node) returns (f: FlowDom)
   requires hrepSpatial(x)
@@ -126,9 +126,13 @@ define globalInt(r, I) {
 procedure checkContents(x: Node, k: Int) returns (r: KeyTS)
   requires acc(x)
   ensures acc(x)
+  ensures old(x.contents) == x.contents
+  ensures old(x.intf) == x.intf
+  ensures old(x.next) == x.next
+  ensures old(x.pred) == x.pred
   ensures r.key == k 
-  ensures lt(bottom,r.ts) ==> r in x.contents && (forall t: K :: pair(k,t) in x.contents ==> le(t,r.ts))
-  ensures (compare(r.ts,bottom) == 0) ==> (forall t: K :: pair(k, t) !in x.contents)
+  ensures lt(bottom,r.ts) ==> r in old(x.contents) && (forall t: K :: pair(k,t) in old(x.contents) ==> le(t,r.ts))
+  ensures (r.ts == bottom) ==> (forall t: K :: pair(k, t) !in old(x.contents))
 /*
 procedure updateContents(x: Node, k: Int)
   ensures (exists t:K :: pair(k, t) in x.contents
@@ -161,20 +165,26 @@ procedure search(r: Node, X: Set<Node>, k: Int) returns (res: KeyTS)
     invariant globalInt(r, intCompSet(X))
     invariant (c == null || c in X)
   {
+
     pure assume forall x: Node ::
       x in X ==> fdLeq(intCompSet(X).inf[x], x.intf.inf[x]);
     pure assume forall x: Node, y: Node ::
       x in X && y in X
       ==> fdLeq(fdMult(x.intf.inf[x], x.intf.fm[x][y]), y.intf.inf[y]);
 
-    pure assert c in X;
+    //pure assert c !in X ==> fdEq(intCompSet(X).fm[r][c], fdZero());
 
     res := checkContents(c,k);
+    pure assert hrep(c);                                     //    Both this 
+    pure assert globalInt(r, intCompSet(X));                 //    assertions violated.
+    //pure assert hrep(c);
 
-    if (compare(res.ts,bottom) == 0) {
+    if (res.ts == bottom) {
       //pure assume false;
-      c := c.next;
+      //pure assert c in X;
+      c := c.next;      
     } else {
+      //pure assert c in X;
       b := true;
     }    
   }
