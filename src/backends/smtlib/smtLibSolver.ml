@@ -60,12 +60,9 @@ let z3_v3 () =
     kind = Process ("z3", ["-smt2"; "-in"]);
   }
 
-let z3_v4_options () = []
-(**  (if not !Config.instantiate then
-    [(":auto-config", "false");
-     (":smt.mbqi", "false")] else
-    [":smt.mbqi", "true"])
-  @ [":smt.ematching", "true"]*)
+let z3_v4_options () =
+  if false && not !Config.instantiate then [(":auto-config", "false"); (":smt.mbqi", "false"); (":smt.ematching", "true")]
+  else []
   
 let z3_v4 () =
   { version = 4;
@@ -887,13 +884,25 @@ let smtlib_form_of_grass_form solver_info signs f =
   | Atom (t, a) -> name (cterm t) a
   | Binder (_, [], f, a) -> name (cform f) a
   | Binder (b, vs, f, a) ->
-      let fun_patterns = find_patterns TermSet.empty f in
+      let is_term_gen_axiom =
+        List.exists (function Comment "term_generator" -> true | _ -> false) a
+      in
+      let fun_patterns =
+        if is_term_gen_axiom
+        then TermSet.empty
+        else find_patterns TermSet.empty f
+      in
+      let annot_patterns =
+        List.fold_left (fun patterns -> function
+          | Pattern (t, _) -> TermSet.add t patterns
+          | _ -> patterns) fun_patterns a
+      in
       let patterns =
         let pvs = 
           TermSet.fold 
             (fun t pvs -> IdSet.union (fv_term t) pvs)
-            fun_patterns IdSet.empty
-        in 
+            annot_patterns IdSet.empty
+        in
         List.fold_left
           (fun patterns (id, srt) ->
             let p =
@@ -904,7 +913,7 @@ let smtlib_form_of_grass_form solver_info signs f =
             if IdSet.mem id pvs 
             then patterns 
             else TermSet.add p patterns)
-          fun_patterns vs
+          annot_patterns vs
       in
       let vs = List.map (fun (id, srt) -> (id, smtlib_sort_of_grass_sort srt)) vs in
       let b = match b with

@@ -794,6 +794,13 @@ let fold_terms fn init f =
   let fa acc = function
     | Pattern (t, _) -> fn acc t
     | Label (_, t) -> fn acc t
+    | TermGenerator (ms, ts) ->
+        let acc1 =
+          List.fold_left
+            (fun acc -> function Match (t, _) -> fn acc t)
+            acc ms
+        in
+        List.fold_left fn acc1 ts
     | _ -> acc
   in
   let rec ft acc = function
@@ -1066,7 +1073,7 @@ let vars_in_fun_terms f =
   in
   let rec ct vars t = 
     match t with
-    | App (_, ts, Bool) -> 
+    | App (_, ts, Bool) | App (Known, ts, _) -> 
 	List.fold_left ct vars ts
     | App _ -> fvt vars t
     | _ -> vars

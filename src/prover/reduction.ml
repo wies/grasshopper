@@ -554,20 +554,6 @@ let add_array_axioms fs =
   let axioms = SortSet.fold (fun srt axioms -> Axioms.array_axioms srt @ axioms) srts [] in
   axioms @ fs
            
-
-             
-let add_terms fs gts =
-  if not !Config.smtpatterns && !Config.instantiate then fs else
-  (*let gts_fs = ground_terms (mk_and fs) in*)
-  let extra_gts = (*TermSet.diff gts gts_fs*) gts in
-  let fs1 = 
-    TermSet.fold (fun t fs1 ->
-      match sort_of t with
-      | Bool -> fs1
-      | srt ->
-          mk_pred ("inst-closure", 0) [t] :: fs1)
-      extra_gts fs
-  in fs1
        
 (** Reduces the given formula to the target theory fragment, as specified b the configuration. *)
 let reduce f =

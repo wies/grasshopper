@@ -3,6 +3,39 @@ open GrassUtil
 open Util
 open Axioms
 
+let mk_inst_closure_term t = mk_free_app Bool ("inst-closure", 0) [t]
+let mk_inst_closure t = mk_pred ("inst-closure", 0) [t]
+  
+let get_signature fs =
+  let sign = overloaded_sign (mk_and fs) in
+  if !Config.instantiate then sign else
+  (* Add known and inst-closure predicates to signature *)
+  let all_srts =
+    SymbolMap.fold
+      (fun _ funSig acc ->
+        List.fold_left
+          (fun acc (args, ret) ->
+              List.fold_left (fun acc srt -> SortSet.add srt acc) (SortSet.add ret acc) args
+          )
+          acc
+          funSig
+      )
+      sign
+      SortSet.empty
+  in
+  let inst_closure_variants =
+    SortSet.fold (fun srt variants -> ([srt], Bool) :: variants) all_srts []
+  in
+  let known_variants =
+    SortSet.fold (fun srt variants -> ([srt], Pat) :: variants) all_srts []
+  in
+  if inst_closure_variants <> [] then
+    sign |>
+    SymbolMap.add (FreeSym ("inst-closure", 0)) inst_closure_variants |>
+    SymbolMap.add Known known_variants
+  else sign
+
+  
 let encode_labels fs =
   let mk_label annots f = 
     let lbls = 
@@ -10,7 +43,7 @@ let encode_labels fs =
         (function 
           | Label (pol, t) ->
               Some (if pol then Atom (t, []) else mk_not (Atom (t, [])))
-          | _ -> None) 
+          | _ -> None)
         annots
     in
     mk_and (f :: lbls)
@@ -26,6 +59,32 @@ let encode_labels fs =
         BoolOp (op, List.map el fs)
   in List.rev_map el fs
 
+let add_inst_closures fs gts =
+  if not !Config.smtpatterns && !Config.instantiate then fs else
+  (*let gts_fs = ground_terms (mk_and fs) in*)
+  let extra_gts = (*TermSet.diff gts gts_fs*) gts in
+  let fs1 = 
+    TermSet.fold (fun t fs1 ->
+      match sort_of t with
+      | Bool -> fs1
+      | srt ->
+          mk_inst_closure t :: fs1)
+      extra_gts fs
+  in fs1
+
+let encode_term_generators fs generators =
+  let process_gen fs = function
+    | ms, (_ :: _ as ts)
+      when List.for_all (function Match (_, []) -> true | _ -> false) ms ->
+        let mk_ic (Match (t, _)) = mk_inst_closure t in
+        let f = mk_sequent (List.map mk_ic ms) [mk_and (List.map mk_inst_closure ts)] in
+        let ps = List.map (function Match (t, _) -> Pattern (mk_inst_closure_term t, [])) ms in
+        let vs = sorted_free_vars f |> IdSrtSet.elements in
+        mk_forall ~ann:(Comment "term_generator" :: ps) vs f :: fs
+    | _ -> fs
+  in
+  List.fold_left process_gen fs generators
+    
 (** Compute term generators for Btwn fields *)
 let btwn_field_generators fs =
   let make_generators acc f =
@@ -129,7 +188,7 @@ let flatten fs =
 (** Generate local instances of all axioms of [fs] in which variables occur below function symbols *)
 let instantiate_and_prove session fs =
   let fs1 = encode_labels fs in
-  let signature = overloaded_sign (mk_and fs1) in
+  let signature = get_signature fs1 in
   let session = SmtLibSolver.declare session signature in
   let rename_forms fs =
     if !Config.named_assertions then
@@ -177,8 +236,8 @@ let instantiate_and_prove session fs =
     CongruenceClosure.add_terms gts |>
     CongruenceClosure.add_conjuncts fs
   in
-  let _, cc_graph = EMatching.generate_terms_from_code tgcode cc_graph in
   let round1 fs_inst cc_graph =
+    let _, cc_graph = EMatching.generate_terms_from_code tgcode cc_graph in
     let equations = List.filter (fun f -> is_horn false [f]) fs_inst in
     let ground_fs = List.filter is_ground fs_inst in
     let code, patterns = EMatching.compile_axioms_to_ematch_code equations in
@@ -227,7 +286,7 @@ let instantiate_and_prove session fs =
       let gts_inst = ground_terms ~include_atoms:true (mk_and fs_inst) in
       (*let gts_inst = ground_terms_acc ~include_atoms:true gts_inst (mk_and implied_eqs) in*)
       (*print_endline "Implied equalities:";
-      print_endline (string_of_form (mk_and implied_eqs));*)
+        print_endline (string_of_form (mk_and implied_eqs));*)
       let cc_graph =
         cc_graph |>
         CongruenceClosure.add_terms gts_inst |>
@@ -279,7 +338,19 @@ let instantiate_and_prove session fs =
     | _ -> k, result, fs_asserted, fs_inst, cc_graph
     in List.fold_left dr (1, None, FormSet.empty, fs1, cc_graph) rounds
   in
-  let _, result, fs_asserted, fs_inst, _ = do_rounds [round1; round2] in
+  let _, result, fs_asserted, fs_inst, _ =
+    if !Config.instantiate
+    then do_rounds [round1; round2]
+    else begin
+      let gts = generate_knowns gts in
+      let fs1 = encode_term_generators fs1 generators in
+      let fs1 = add_inst_closures fs1 gts in
+      let fs1 = rename_forms fs1 in
+      SmtLibSolver.assert_forms session fs1;
+      let result = measure_call "SmtLibSolver.is_sat" SmtLibSolver.is_sat session in
+      (1, result, FormSet.of_list fs1, fs1, cc_graph)
+    end
+  in
   (match result with
   | Some true | None ->
     Debug.debugl 1 (fun () ->
@@ -318,7 +389,7 @@ let dump_core session =
       let rec minimize core =
         Debug.info (fun () -> "minimizing core " ^ (string_of_int (List.length core)) ^ "\n");
         let s = SmtLibSolver.start core_name session.SmtLibSolver.sat_means in
-        let signature = overloaded_sign (mk_and core) in
+        let signature = get_signature core in
         let s = SmtLibSolver.declare s signature in
         SmtLibSolver.assert_forms s core;
         let core2 = Opt.get (SmtLibSolver.get_unsat_core s) in
@@ -333,7 +404,7 @@ let dump_core session =
       let config = !Config.dump_smt_queries in
       Config.dump_smt_queries := true;
       let s = SmtLibSolver.start core_name session.SmtLibSolver.sat_means in
-      let signature = overloaded_sign (mk_and core) in
+      let signature = get_signature core in
       let s = SmtLibSolver.declare s signature in
       SmtLibSolver.assert_forms s core;
       SmtLibSolver.quit s;

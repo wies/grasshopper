@@ -357,7 +357,10 @@ let add_pred_insts prog f =
             List.map
               (function
                 | TermGenerator (ms, ts) ->
-                    TermGenerator (m :: ms, List.filter ((<>) pred_match_term &&& (<>) (mk_known pred_match_term)) ts)
+                    let not_var_match = function Match (t, _) -> not @@ List.mem t pred_vs in
+                    let ms1 = List.filter not_var_match ms in
+                    let ts1 = List.filter ((<>) pred_match_term &&& (<>) (mk_known pred_match_term)) ts in
+                    TermGenerator (m :: ms1, ts1)
                 | a -> a)
               annots
           in

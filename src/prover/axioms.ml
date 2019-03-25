@@ -89,7 +89,7 @@ let open_axioms ?(force=false) open_cond axioms =
     | Binder (b, vs, f, a) -> 
         (* extract term generators *)
         let generators1, a1 = extract_generators generators a in
-        let vs1 = List.filter (~~ (open_cond (annotate f a))) vs in
+        let vs1 = List.filter (~~ (open_cond (annotate f a1))) vs in
         let f1, generators2 = open_axiom generators1 f in
         if !Config.instantiate || force then
           Binder (b, vs1, f1, a1), generators2
@@ -113,7 +113,8 @@ let isFld f = function (_, Map ([Loc _], _)) -> true | _ -> false
 (** Open condition that checks whether the given sorted variable appears below a function symbol. *) 
 let isFunVar f =
   let fvars = vars_in_fun_terms f in
-  fun v -> IdSrtSet.mem v fvars
+  fun v ->
+    IdSrtSet.mem v fvars
 
     
 (** {6 Axioms} *)
