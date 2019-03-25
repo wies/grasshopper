@@ -49,8 +49,8 @@ axiom forall I1: Interface, I2: Interface, I3: Interface ::
   intComp(I1, intComp(I2, I3)) == intComp(intComp(I1, I2), I3);
 axiom forall I1: Interface, I2: Interface ::
   intComp(I1, I2) == intComp(I2, I1) @(matching intComp(I1, I2) yields intComp(I2, I1));
-axiom forall I1: Interface, I2: Interface, I3: Interface ::
-  intComp(I1, I2) == intComp(I1, I3) ==> I2 == I3
+//axiom forall I1: Interface, I2: Interface, I3: Interface :: bad bad bad - adding this is unsound
+  //intComp(I1, I2) == intComp(I1, I3) ==> I2 == I3
 
 // Composition of undef with anything is undef
 axiom forall I1: Interface, I2: Interface ::
