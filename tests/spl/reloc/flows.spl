@@ -22,8 +22,8 @@ pure function newInt(m: Node) returns (Im: Interface)
 pure function intComp(I1: Interface, I2: Interface) returns (I: Interface)
   ensures I != intUndef ==> I.FP == I1.FP ++ I2.FP
   ensures forall n: Node :: I == intUndef || n !in I1.FP || n !in I2.FP
-  ensures I.FPo == (I1.FPo -- I2.FP) ++ (I2.FPo -- I1.FP)
-  ensures I.na == ndJoin(I1.na, I2.na)
+  ensures I != intUndef ==> I.FPo == (I1.FPo -- I2.FP) ++ (I2.FPo -- I1.FP)
+  ensures I != intUndef ==> I.na == ndJoin(I1.na, I2.na)
 
 // Encoding of well defined interfaces
 pure predicate intValid(I: Interface)
