@@ -583,9 +583,17 @@ let print_term out_ch t = print_of_format pr_term t out_ch
 (** Print formula [f] to out channel [out_chan]. *)
 let print_form out_ch f = print_of_format pr_form f out_ch
 
+let print_form_endline ch f = 
+  print_form ch f;
+  print_newline ()
+
 let print_forms ch fs = 
   List.iter (fun f -> print_form ch f;  output_string ch "\n") fs
-  
+
+let print_forms_endline ch fs = 
+  print_forms ch fs;
+  print_newline ()
+
 let print_subst_map subst_map =
   Printf.printf "[";
   IdMap.iter (fun id t -> Printf.printf "  %s -> %s\n" (string_of_ident id) (string_of_term t)) subst_map;
