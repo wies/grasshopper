@@ -533,6 +533,9 @@ let array_axioms elem_srt =
      
 (** Set axioms *)
 let set_axioms elem_srts =
+  let mk_pattern p flts f =
+    if !Config.instantiate then f else mk_pattern p flts f
+  in
   let mk_set_axioms t =
     let elt1 = mk_var t (mk_ident "x") in
     let elt2 = mk_var t (mk_ident "y") in
@@ -545,25 +548,31 @@ let set_axioms elem_srts =
       mk_not (mk_elem elt1 (mk_empty (Set t)))
     in
     let union = 
+      (*mk_pattern (mk_union [set1; set2]) [] @@*)
       mk_iff (mk_elem elt1 (mk_union [set1; set2])) 
         (mk_or [mk_elem elt1 set1; mk_elem elt1 set2])
     in
     let inter =
+      (*mk_pattern (mk_inter [set1; set2]) [] @@*)
       mk_iff (mk_elem elt1 (mk_inter [set1; set2])) 
         (mk_and [mk_elem elt1 set1; mk_elem elt1 set2])
     in
     let diff =
+      (*mk_pattern (mk_diff set1 set2) [] @@*)
       mk_iff (mk_elem elt1 (mk_diff set1 set2)) 
         (mk_and [mk_elem elt1 set1; mk_not (mk_elem elt1 set2)])
     in
     let setenum =
+      (*mk_pattern (mk_setenum [elt2]) [] @@*)
       mk_iff (mk_elem elt1 (mk_setenum [elt2])) 
         (mk_eq elt1 elt2)
     in
     let subset_def =
+      mk_pattern (mk_subseteq_term set1 set2) [] @@
       mk_sequent [mk_subseteq set1 set2; mk_elem elt1 set1] [mk_elem elt1 set2]
     in
     let subset_def_union =
+      (*mk_pattern (mk_union [set1; set2]) [] @@*)
       nnf (mk_iff (mk_subseteq set1 set2) (mk_eq (mk_union [set1; set2]) set2))
     in
     (* Auxiliary subset axioms *)
@@ -571,6 +580,8 @@ let set_axioms elem_srts =
       mk_subseteq set1 set1
     in
     let subset_trans =
+      mk_pattern (mk_subseteq_term set2 set3) [] @@
+      mk_pattern (mk_subseteq_term set1 set2) [] @@
       mk_sequent [mk_subseteq set1 set2; mk_subseteq set2 set3]
         [mk_subseteq set1 set3]
     in
@@ -578,22 +589,27 @@ let set_axioms elem_srts =
       mk_subseteq (mk_empty (Set t)) set1
     in
     let subset_union1 =
+      mk_pattern (mk_subseteq_term (mk_union [set1; set2]) set3) [] @@
       mk_sequent [mk_subseteq (mk_union [set1; set2]) set3]
         [mk_and [mk_subseteq set1 set3; mk_subseteq set2 set3]]
     in
     let subset_union21 =
+      mk_pattern (mk_subseteq_term set1 (mk_union [set2; set3])) [] @@
       mk_sequent [mk_subseteq set1 set2]
         [mk_subseteq set1 (mk_union [set2; set3])]
     in
     let subset_union22 =
+      mk_pattern (mk_subseteq_term set1 (mk_union [set3; set2])) [] @@
       mk_sequent [mk_subseteq set1 set2]
         [mk_subseteq set1 (mk_union [set3; set2])]
     in
     let subset_inter1 =
+      mk_pattern (mk_subseteq_term set1 (mk_inter [set2; set3])) [] @@
       mk_sequent [mk_subseteq set1 (mk_inter [set2; set3])]
         [mk_and [mk_subseteq set1 set2; mk_subseteq set1 set3]]
     in
     let subset_inter21 =
+      mk_pattern (mk_subseteq_term (mk_inter [set1; set3]) set2) [] @@
       mk_sequent [mk_subseteq set1 set2]
         [mk_subseteq (mk_inter [set1; set3]) set2]
     in
@@ -606,6 +622,7 @@ let set_axioms elem_srts =
         [mk_subseteq (mk_diff set1 set3) set2]
     in
     let disjoint_def =
+      mk_pattern (mk_disjoint_term set1 set2) [] @@
       mk_sequent [mk_disjoint set1 set2]
         [mk_not (mk_elem elt1 set1); mk_not (mk_elem elt1 set2)]
     in
@@ -613,17 +630,21 @@ let set_axioms elem_srts =
       mk_disjoint set1 (mk_empty (Set t))
     in
     let disjoint_sym =
+      mk_pattern (mk_disjoint_term set1 set2) [] @@
       mk_sequent [mk_disjoint set1 set2] [mk_disjoint set2 set1]
     in
     let disjoint_union =
+      mk_pattern (mk_disjoint_term (mk_union [set1; set2]) set3) [] @@
       mk_iff (mk_disjoint (mk_union [set1; set2]) set3)
         (mk_and [mk_disjoint set1 set3; mk_disjoint set2 set3])
     in
     let disjoint_inter1 =
+      mk_pattern (mk_disjoint_term set1 set2) [] @@
       mk_sequent [mk_disjoint set1 set2]
         [mk_disjoint (mk_inter [set1; set3]) set2]
     in
     let disjoint_inter2 =
+      mk_pattern (mk_disjoint_term set1 set2) [] @@
       mk_sequent [mk_disjoint set1 set2]
         [mk_disjoint (mk_inter [set3; set1]) set2]
     in
@@ -632,21 +653,27 @@ let set_axioms elem_srts =
         [mk_disjoint (mk_setenum [x]) set1]
     in
     let disjoint_def_inter =
+      mk_pattern (mk_disjoint_term set1 set2) [] @@
       nnf (mk_iff (mk_eq (mk_inter [set1; set2]) (mk_empty (Set t)))
              (mk_disjoint set1 set2))
     in
     let disjoint_diff =
+      mk_pattern (mk_disjoint_term (mk_diff set1 set3) set2) [] @@
       mk_sequent [mk_disjoint set1 set2]
         [mk_disjoint (mk_diff set1 set3) set2]
     in
     let disjoint_subset1 =
+      mk_pattern (mk_subseteq_term set1 set2) [] @@
+      mk_pattern (mk_disjoint_term set2 set3) [] @@
       mk_sequent [mk_subseteq set1 set2; mk_disjoint set2 set3]
         [mk_disjoint set1 set3]
     in
     let disjoint_subset2 =
+      mk_pattern (mk_disjoint_term set1 (mk_diff set3 set2)) [] @@
       mk_sequent [mk_subseteq set1 set2] [mk_disjoint set1 (mk_diff set3 set2)]
     in
     let disjoint_subset3 =
+      mk_pattern (mk_subseteq_term set1 (mk_diff set2 set3)) [] @@
       mk_sequent [mk_subseteq set1 set2; mk_disjoint set1 set3]
         [mk_subseteq set1 (mk_diff set2 set3)]
     in

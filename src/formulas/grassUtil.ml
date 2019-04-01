@@ -1506,53 +1506,54 @@ let foralls_to_exists f =
       | [] -> dcs, scs
     in
     let dcs, scs = disjoints_and_subsets [] [] [f] in
-    let rec find nodefs defs = function [@warning "-57"]
+    let rec find sm nodefs defs = function [@warning "-57"]
       | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; Var _ as yt], _), a)])
           when IdSet.mem x nodefs ->
-            IdSet.remove x nodefs, mk_eq ~ann:a xt yt :: defs, mk_false
+            IdSet.remove x nodefs, mk_eq ~ann:a xt yt :: defs, mk_false, sm
       | BoolOp (Not, [Atom (App (Eq, [Var (x, _) as xt; t], _), a)])
         when IdSet.mem x nodefs && 
           IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
-            IdSet.remove x nodefs, mk_eq ~ann:a xt t :: defs, mk_false
+            IdSet.remove x nodefs, mk_eq ~ann:a xt t :: defs, mk_false, sm
       | BoolOp (Not, [Atom (App (Eq, [t; Var (x, srt) as xt], _), a)])
         when IdSet.mem x nodefs && 
           IdSet.is_empty (IdSet.inter nodefs (fv_term t)) ->
-            IdSet.remove x nodefs, mk_eq ~ann:a xt t :: defs, mk_false
+            IdSet.remove x nodefs, mk_eq ~ann:a xt t :: defs, mk_false, sm
       | BoolOp (Not, [Atom (App (Eq, [t1; App (Union, [t2; (Var (x, _) as xt)], _)], _), _)])
       | BoolOp (Not, [Atom (App (Eq, [t1; App (Union, [(Var (x, _) as xt); t2], _)], _), _)])
         when IdSet.mem x nodefs &&
           List.mem (orient_terms xt t2) dcs &&
           IdSet.is_empty (IdSet.inter nodefs (fv_term_acc (fv_term t1) t2)) ->
-            IdSet.remove x nodefs, mk_eq xt (mk_diff t1 t2) :: defs, mk_not (mk_subseteq t2 t1)
+            IdSet.remove x nodefs, mk_eq xt (mk_diff t1 t2) :: defs, mk_not (mk_subseteq t2 t1), sm
       | BoolOp (Not, [Atom (App (Eq, [(App (Diff, [xt; _], _) as t2); t1], _), _)])
       | BoolOp (Not, [Atom (App (Eq, [t1; (App (Diff, [xt; _], _) as t2)], _), _)])
         when not (IdSet.is_empty @@ IdSet.inter (fv_term xt) nodefs) &&
           IdSet.is_empty (IdSet.inter nodefs (fv_term t1)) ->
             let rec undiff ot t = match ot, t with
             | Some t, (Var (x, _) as xt) ->
-                IdSet.remove x nodefs, mk_eq xt t :: defs, mk_false
+                IdSet.remove x nodefs, mk_eq xt t :: defs, mk_false, sm
             | Some t, App (Diff, [t1; t2], _) when
                 List.mem (orient_terms t1 t2) scs && IdSet.is_empty (IdSet.inter nodefs (fv_term t2)) ->
                   undiff (Some (mk_union [t; t2])) t1
-            | _ -> nodefs, defs, f
+            | _ -> nodefs, defs, f, sm
             in    
             undiff (Some t1) t2
       | BoolOp (Or, fs) ->
-          let nodefs, defs, gs =
+          let nodefs, defs, gs, sm =
             List.fold_right 
-              (fun f (nodefs, defs, gs) -> 
-                let nodefs, defs, g = find nodefs defs f in
-                nodefs, defs, g :: gs)
-              fs (nodefs, defs, [])
+              (fun f (nodefs, defs, gs, sm) -> 
+                let nodefs, defs, g, sm = find sm nodefs defs f in
+                nodefs, defs, g :: gs, sm)
+              fs (nodefs, defs, [], sm)
           in
-          nodefs, defs, mk_or gs
+          nodefs, defs, mk_or gs, sm
       | Binder (b, [], f, a) ->
-          let nodefs, defs, g = find nodefs defs f in
-          nodefs, defs, Binder (b, [], g, a)
+          let nodefs, defs, g, sm = find sm nodefs defs f in
+          let a = List.map (subst_annot sm) a in
+          nodefs, defs, Binder (b, [], g, a), sm
       | f ->
-          nodefs, defs, f
+          nodefs, defs, f, sm
     in
-    let nodefs, defs, g = find bvs defs f in
+    let nodefs, defs, g, sm = find IdMap.empty bvs defs f in
     if IdSet.subset bvs nodefs 
     then begin
       let defs, sm, anns =
@@ -1564,9 +1565,9 @@ let foralls_to_exists f =
               let sm = IdMap.fold (fun w tw -> IdMap.add w (subst_term smv tw)) sm IdMap.empty in
               defs, IdMap.add v t1 sm, a @ anns
           | f -> f :: defs, sm, anns)
-          defs ([], IdMap.empty, [])
+          defs ([], sm, [])
       in
-      nodefs, List.map (subst sm) defs, annotate (subst sm g) anns
+      nodefs, List.map (subst sm) defs, annotate (subst sm g) (List.map (subst_annot sm) anns), sm
     end
     else find_defs nodefs defs g
   in
@@ -1601,7 +1602,8 @@ let foralls_to_exists f =
         (match propagate_forall_up f with
         | Binder (Forall, bvs, (BoolOp (Or, fs) as g0), a) ->
             let bvs_set = id_set_of_list (List.map fst bvs) in
-            let nodefs, defs, g = find_defs bvs_set [] g0 in
+            let nodefs, defs, g, sm = find_defs bvs_set [] g0 in
+            let a = List.map (subst_annot sm) a in
             let ubvs, ebvs = List.partition (fun (x, _) -> IdSet.mem x nodefs) bvs in
             (match ebvs with
             | [] ->
@@ -1646,7 +1648,7 @@ let skolemize f =
 	      IdMap.add id (mk_app srt sk_fn ts) sm) 
 	    IdMap.empty bvs
 	in 
-	annotate (subst sm (sk vs f)) a
+	annotate (subst sm (sk vs f)) (List.map (subst_annot sm) a)
     | f -> f
   in 
   let f1 = propagate_exists_up f in

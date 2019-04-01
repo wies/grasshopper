@@ -432,7 +432,7 @@ let convert cu =
     | Annot (e, PatternAnnot p, pos) ->
         let f = convert_grass_form locals e in
         let p1 = convert_term locals p in
-        GrassUtil.mk_pattern p1 [] f
+        GrassUtil.annotate f [Pattern (p1, [])]
     | Annot (e, GeneratorAnnot (es, ge), pos) ->
         let f = convert_grass_form locals e in
         let es1 =
@@ -746,8 +746,8 @@ let convert cu =
               let contracts = match rtype with
               | BoolType ->
                   List.map (function
-                    | Ensures (e, pure, free) ->
-                        Ensures (BinaryOp (r, OpImpl, e, BoolType, pos_of_expr e), pure, free)
+                    (*| Ensures (e, pure, free) ->
+                        Ensures (BinaryOp (r, OpImpl, e, BoolType, pos_of_expr e), pure, free)*)
                     | c -> c)
                     decl.pr_contracts
               | _ -> decl.pr_contracts

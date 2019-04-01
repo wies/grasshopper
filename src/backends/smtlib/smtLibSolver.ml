@@ -61,7 +61,7 @@ let z3_v3 () =
   }
 
 let z3_v4_options () =
-  if false && not !Config.instantiate then [(":auto-config", "false"); (":smt.mbqi", "false"); (":smt.ematching", "true")]
+  if not !Config.instantiate then [(":auto-config", "false"); (":smt.mbqi", "false"); (":smt.ematching", "true")]
   else []
   
 let z3_v4 () =
@@ -476,7 +476,7 @@ let start_with_solver session_name sat_means solver produce_models produce_unsat
     let options = 
       (if produce_models then [":produce-models", "true"] else []) @
       solver.info.smt_options @
-      (if produce_unsat_cores then [":produce-unsat-cores", "true"] else [])
+      (if produce_unsat_cores then [":produce-unsat-cores", "true"; ":smt.core.minimize", "true"] else [])
     in
     let info = { solver.info with smt_options = options } in
     { solver with info = info },
@@ -856,12 +856,24 @@ let smtlib_form_of_grass_form solver_info signs f =
     | App (_, ts, _) -> List.exists (is_pattern true) ts
     | Var _ -> below_app
   in
+  let rec has_no_plus = function
+    | App ((Plus | Mult), ts, _) -> not @@ List.exists (is_pattern true) ts
+    | App (_, ts, _) -> List.for_all has_no_plus ts
+    | _ -> true
+  in
+  let find_annot_patterns acc a =
+    List.fold_left (fun acc -> function Pattern (t, []) -> TermSet.add t acc | _ -> acc) acc a
+  in
   let rec find_patterns acc = function
     | BoolOp (_, fs) ->
         List.fold_left find_patterns acc fs
+    | Binder (_, [], f, a) ->
+        let acc = find_annot_patterns acc a in
+        find_patterns acc f
     | Binder (_, vs, f, _) -> acc
-    | Atom (App (_, ts, _), _) ->
-        let pts = List.filter (is_pattern false) ts in
+    | Atom (App (_, ts, _), a) ->
+        let acc = find_annot_patterns acc a in
+        let pts = List.filter (is_pattern false &&& has_no_plus) ts in
         List.fold_left (fun acc t -> TermSet.add t acc) acc pts
     | Atom _ -> acc
   in
