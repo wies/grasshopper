@@ -204,8 +204,26 @@ let add_pred_insts prog f =
                 | App (Read, _ :: (Var (x, _) | App ((Plus | Minus), [Var (x, _); _], _)) :: _, _) -> IdSet.mem x aux_vs
                 | _ -> true) sts
             in
+            let expand =
+              match sym with
+              | FreeSym ("lt", _) -> false
+              | FreeSym id ->
+                  IdMap.find_opt id prog.prog_preds |>
+                  Opt.map (fun pred ->
+                    (match pred.pred_contract.contr_returns with
+                    | id :: _ -> (IdMap.find id pred.pred_contract.contr_locals).var_sort <> Bool
+                    | _ -> false) || 
+                    pred.pred_body <> None) |>
+                  Opt.get_or_else true
+              | _ -> true
+            in
+            (*if expand then print_endline ("Expand: " ^ string_of_symbol sym)
+            else print_endline ("Not Expand: " ^ string_of_symbol sym);*)
             if (no_var_reads || is_set_sort srt) && IdSet.subset fvs bvs && not @@ IdSet.is_empty fvs
-            then List.fold_left ft (TermSet.add t acc) ts else acc
+            then
+              let acc1 = if expand then TermSet.add t acc else acc in
+              List.fold_left ft acc1 ts
+            else acc
         | App (sym, [], Adt _) as t ->
             TermSet.add t acc
         | App (_, ts, Bool) ->
@@ -475,7 +493,8 @@ let add_pred_insts prog f =
     let vs = List.map (fun (id, srt) -> Var (id, srt)) sorted_vs in
     let sm, defs =
       match returns with
-      | [] -> sm, List.map (fun f -> mk_implies (mk_pred name vs) f) defs
+      | [] ->
+          sm, List.map (fun f -> mk_implies (mk_pred name vs) f) defs            
       | [id] -> 
           let var = IdMap.find id locals in
           IdMap.add id (mk_free_fun var.var_sort name vs) sm, defs
