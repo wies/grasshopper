@@ -91,7 +91,7 @@ define unchanged(x) {
 const B: Int
 axiom B > 1
 
-define hrepSpatial(x) {
+predicate hrepSpatial(x: Node) {
   acc(x) &*& acc(x.keys) &*& acc(x.ptrs) &*& x.keys.length == 2*B && x.ptrs.length == 2*B
 }
 
@@ -100,21 +100,21 @@ function inflow(x: Node)
   requires acc(x)
 {
   { n: Node :: n != x ? domZero()
-      : fd({k: K :: le(x.rangeLb, k) && lt(k, x.rangeUb) ? 1 : 0},
-           {k: K :: le(x.rangeLb, k) && lt(k, top) ? 1 : 0}) }
+    : fd({k: K :: !lt(k, x.rangeLb) && lt(k, x.rangeUb) ? 1 : 0},
+  {k: K :: !lt(k, x.rangeLb) && lt(k, top) ? 1 : 0}) }
 }
 
 function ks_child(x: Node, u: Node) returns (m: Map<K, Int>)
   requires acc(x)
 {
-  { k: K :: (x.indices[u] == 0 || le(x.keys.map[x.indices[u] - 1], k)) &&
+ { k: K :: (x.indices[u] == 0 || !lt(k, x.keys.map[x.indices[u] - 1])) &&
     (x.indices[u] == x.len && x.next == null && lt(k, top) || lt(k, x.keys.map[x.indices[u]])) ? 1 : 0 }
 }
 
 function map_next(x: Node) returns (m: Map<K, Int>)
   requires acc(x)
 {
-  { k: K :: x.next != null && le(x.keys[x.len], k) && lt(k, top) ? 1 : 0 }
+ { k: K :: x.next != null && !lt(k, x.keys[x.len]) && lt(k, top) ? 1 : 0 }
 }
 
 function flowmap(x: Node)
@@ -143,8 +143,8 @@ function outset(x: Node)
   requires acc(x)
 {
   x.ptrs[0] == null ?
-    { k: K :: x.next != null && le(x.keys[x.len], k) && lt(k, top) } :
-    { k: K :: le(x.rangeLb, k) && lt(k, top) }
+  { k: K :: x.next != null && !lt(k, x.keys[x.len]) && lt(k, top) } :
+  { k: K :: !lt(k, x.rangeLb) && lt(k, top) }
 }
 
 lemma outset_correct1(x: Node, Ix: Interface, k: K, y: Node)
@@ -248,7 +248,7 @@ predicate heapGood(x: Node, I: Interface)
   && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> lt(x.keys[i], x.keys[j]))
   // Keys are in the range
   && (forall i: Int :: 0 <= i && (x.next == null && i < x.len || x.next != null && i <= x.len)
-       ==> le(x.rangeLb, x.keys[i]) && lt(x.keys[i], x.rangeUb))
+     ==> !lt(x.keys[i], x.rangeLb) && lt(x.keys[i], x.rangeUb))
   // All outgoing pointers are distinct
   && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len
        ==> x != x.ptrs[i])
@@ -294,13 +294,27 @@ define nu(x, I) {
 
 lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
   requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires lt(k, top)
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
-  requires (i <= 0 || le(x.keys[i-1], k)) && 0 <= i <= x.len
+  requires (i <= 0 || !lt(k, x.keys[i-1])) && 0 <= i <= x.len
   ensures hrep(x, Ix) &*& unchanged(x)
   ensures x.ptrs[0] == null  // x is a leaf
 {
   if (x.ptrs[0] != null && i < x.len && !lt(k, x.keys[i])) {
+    pure assume false;
     keyset_implies_leaf(x, Ix, k, i + 1);
+    return;
+  } else {
+    pure assert Ix.fm == flowmap(x);
+    if (x.ptrs[0] != null && lt(k, x.keys[i])) {
+      pure assert Ix.fm[x][x.ptrs[i]].ks[k] == 0;
+    } else if (x.ptrs[0] != null && !lt(k, x.keys[i])) {
+      pure assert 0 <= x.indices[x.next] <= x.len ==> x.ptrs[x.indices[x.next]] == x.next;
+      pure assert x.next == null ==> ks_child(x, x.ptrs[i])[k] == 1;
+      pure assert x.next == null ==> Ix.fm[x][x.ptrs[i]].ks == ks_child(x, x.ptrs[i]);
+      pure assert x.next != null ==> Ix.fm[x][x.next].ks == map_next(x);
+    }
+    return;
   }
 }
 
@@ -338,6 +352,7 @@ procedure findNext(x: Node, k: K, Ix: Interface)
   ensures n == null ==> (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
 {
   lemma_int_valid_unfold(x, Ix);
+
   if (x.ptrs[0] == null) {  // Leaf node
     if (x.next == null) {
       pure assert forall y: Node :: y in Ix.FPo ==> Ix.fm[x][y].ks[k] == 0;
@@ -348,7 +363,10 @@ procedure findNext(x: Node, k: K, Ix: Interface)
       pure assert map_next(x)[k] >= 1;
       return x.next;
     } else {
-      pure assert forall y: Node :: y in Ix.FPo ==> Ix.fm[x][y].ks[k] == 0;
+      pure assert forall y: Node :: y in Ix.FPo ==> Ix.fm[x][y].ks[k] == 0 with {
+        pure assert y == x.next ==> map_next(x)[k] == 0;
+        pure assert 0 <= x.indices[y] <= x.len ==> ks_child(x, y)[k] == 0;
+      }
       pure assert forall y: Node :: y !in Ix.FPo ==> Ix.fm[x][y].ks[k] == 0 with {
         if (y !in Ix.FPo) {
           pure assert y != x.next;
@@ -368,15 +386,24 @@ procedure findNext(x: Node, k: K, Ix: Interface)
   if (i == x.len && x.next != null) {
     if (lt(k, x.keys[i])) {
       n := x.ptrs[i];
+      pure assert ks_child(x, n)[k] == 1;
+      pure assert 0 <= x.indices[n] <= x.len;
+      pure assert ks_child(x, n)[k] >= 1;
+      pure assert Ix.fm == flowmap(x);
+      pure assert Ix.fm[x][n].ks[k] == ks_child(x, n)[k];
+      //pure assert Ix.fm[x][n].ks == old(ks_child(x, n));
+      pure assert n != null ==> Ix.fm[x][n].ks[k] >= 1;
       return n;
     } else {
       n := x.next;
       pure assert 0 > x.indices[n] || x.indices[n] > x.len || x.ptrs[x.indices[n]] == n;
+      pure assert Ix.fm == flowmap(x);
       return n;
     }
   } else {
     pure assert i <= 0 || le(x.keys[i-1], k);
     n := x.ptrs[i];
+    pure assert Ix.fm == flowmap(x);
     return n;
   }
   // return n;
@@ -387,6 +414,7 @@ procedure findNext(x: Node, k: K, Ix: Interface)
 procedure member(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
   requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires lt(k, top)
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
   ensures hrep(x, Ix)
   ensures intEq(Ix, Ix1) == true
@@ -406,6 +434,7 @@ procedure member(x: Node, k: K, Ix: Interface)
 procedure insert(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
   requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires lt(k, top)
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
   ensures hrep(x, Ix1)
   ensures intEq(Ix, Ix1) == true
@@ -433,7 +462,13 @@ procedure insert(x: Node, k: K, Ix: Interface)
     Ix1 := interface(x); //copy_interface(Ix, nd(Ix.na.contents ++ {k}, Ix.na.inr));
 
     pure assert forall n: Node, n1: Node :: n1 !in Ix1.FPo ==> domEq(Ix1.fm[n][n1], domZero());
-
+    pure assert forall k: K, y: Node :: k !in Ix1.na.contents || Ix1.fm[x][y].ks[k] == 0 with {
+      if (Ix1.fm[x][y].ks[k] == 1) {
+        pure assert y == x.next ==> map_next(x)[k] == 1;
+        pure assert y == x.next ==> old(map_next(x))[k] == 1;
+        pure assert Ix.fm[x][y].ks[k] == 1;
+      }
+    }
     lemma_int_valid_fold(x, Ix1);
 
     pure assert Ix1.na.contents == Ix.na.contents ++ {k};
@@ -443,6 +478,11 @@ procedure insert(x: Node, k: K, Ix: Interface)
       pure assert forall x1: Node, y: Node :: domMult(Ix.inf[x1], Ix.fm[x1][y]) == domMult(Ix1.inf[x1], Ix1.fm[x1][y]) with {
         pure assert forall k: K :: domMult(Ix.inf[x1], Ix.fm[x1][y]).ks[k] == domMult(Ix1.inf[x1], Ix1.fm[x1][y]).ks[k]
           && domMult(Ix.inf[x1], Ix.fm[x1][y]).ir[k] == domMult(Ix1.inf[x1], Ix1.fm[x1][y]).ir[k] with {
+            pure assert x != x1 ==> Ix1.fm[x1][y].ks[k] == 0;
+            pure assert x != x1 ==> Ix.fm[x1][y].ks[k] == 0;
+            pure assert y == x.next ==> map_next(x)[k] == old(map_next(x))[k];
+            //pure assert y == x.next ==> old(map_next(x))[k] == 0;
+            pure assert Ix1.fm[x1][y].ks[k] == Ix.fm[x1][y].ks[k];
             pure assert Ix.inf[x1].ks[k] * Ix.fm[x1][y].ks[k] == Ix1.inf[x1].ks[k] * Ix1.fm[x1][y].ks[k];
             pure assert Ix.inf[x1].ir[k] * Ix.fm[x1][y].ir[k] == Ix1.inf[x1].ir[k] * Ix1.fm[x1][y].ir[k];
         }
@@ -460,6 +500,7 @@ procedure insert(x: Node, k: K, Ix: Interface)
 procedure delete(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
   requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires lt(k, top)
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
   ensures hrep(x, Ix1)
   ensures intEq(Ix, Ix1) == true
@@ -486,7 +527,13 @@ procedure delete(x: Node, k: K, Ix: Interface)
   lemma_int_valid_unfold(x, Ix);
 
   pure assert forall n: Node, n1: Node :: n1 !in Ix1.FPo ==> domEq(Ix1.fm[n][n1], domZero());
-
+  pure assert forall k: K, y: Node :: k !in Ix1.na.contents || Ix1.fm[x][y].ks[k] == 0 with {
+    if (Ix1.fm[x][y].ks[k] == 1) {
+      pure assert y == x.next ==> map_next(x)[k] == 1;
+      pure assert y == x.next ==> old(map_next(x))[k] == 1;
+      pure assert Ix.fm[x][y].ks[k] == 1;
+    }
+  }
   lemma_int_valid_fold(x, Ix1);
 
   pure assert Ix1.na.contents == Ix.na.contents -- {k};
@@ -496,6 +543,11 @@ procedure delete(x: Node, k: K, Ix: Interface)
     pure assert forall x1: Node, y: Node :: domMult(Ix.inf[x1], Ix.fm[x1][y]) == domMult(Ix1.inf[x1], Ix1.fm[x1][y]) with {
       pure assert forall k: K :: domMult(Ix.inf[x1], Ix.fm[x1][y]).ks[k] == domMult(Ix1.inf[x1], Ix1.fm[x1][y]).ks[k]
         && domMult(Ix.inf[x1], Ix.fm[x1][y]).ir[k] == domMult(Ix1.inf[x1], Ix1.fm[x1][y]).ir[k] with {
+          pure assert x != x1 ==> Ix1.fm[x1][y].ks[k] == 0;
+          pure assert x != x1 ==> Ix.fm[x1][y].ks[k] == 0;
+          pure assert y == x.next ==> map_next(x)[k] == old(map_next(x))[k];
+          //pure assert y == x.next ==> old(map_next(x))[k] == 0;
+          pure assert Ix1.fm[x1][y].ks[k] == Ix.fm[x1][y].ks[k];
           pure assert Ix.inf[x1].ks[k] * Ix.fm[x1][y].ks[k] == Ix1.inf[x1].ks[k] * Ix1.fm[x1][y].ks[k];
           pure assert Ix.inf[x1].ir[k] * Ix.fm[x1][y].ir[k] == Ix1.inf[x1].ir[k] * Ix1.fm[x1][y].ir[k];
         }
@@ -584,7 +636,7 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
       pure assert forall n: Node :: 0 <= x.indices[n] <= x.len ==> x.ptrs.map[x.indices[n]] == n with {
         pure assert m <= old(c.indices[n]) <= old(c.len) ==> old(c.ptrs.map[c.indices[n]]) == n;
         pure assert m <= old(c.indices[n]) <= old(c.len) ==> x.ptrs.map[old(c.indices[n]) - m] == n;
-          }
+      }
     }
 
     pure assert heapGood(c, Ic1) with {
