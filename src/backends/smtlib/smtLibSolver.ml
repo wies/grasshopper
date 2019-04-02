@@ -1325,7 +1325,7 @@ let convert_model session smtModel =
             (try
               process_def model sym (carg_srts, cres_srt) cargs (SmtLibSyntax.unletify def)
             with Failure s -> 
-              Debug.warn (fun () -> "Warning: " ^ s ^ "\n\n");
+              if !Config.model_file <> "" then Debug.warn (fun () -> "Warning: " ^ s ^ "\n\n");
               model)
         | _ -> model)
       model0 smtModel 
