@@ -1322,11 +1322,11 @@ let convert_model session smtModel =
             let cres_srt = convert_sort res_srt in
             let cargs = List.map (fun (x, srt) -> x, convert_sort srt) args in
             let carg_srts = List.map snd cargs in
-            (*(try*)
+            (try
               process_def model sym (carg_srts, cres_srt) cargs (SmtLibSyntax.unletify def)
-            (*with Failure s -> 
+            with Failure s -> 
               Debug.warn (fun () -> "Warning: " ^ s ^ "\n\n");
-              model)*)
+              model)
         | _ -> model)
       model0 smtModel 
   in
@@ -1336,7 +1336,7 @@ let convert_model session smtModel =
       { model1 with sign = signature }
     | None -> failwith "convert_model: expected session to have a signature"
   in
-  (Model.finalize_values model2)
+  (if !Config.model_file = "" then model2 else Model.finalize_values model2)
 
 let rec get_model session = 
   let gm state =
