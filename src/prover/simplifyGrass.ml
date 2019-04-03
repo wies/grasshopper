@@ -175,6 +175,8 @@ let simplify_int_term t =
       | _ -> assert false
       in
       App (IntConst (op i1 i2), [], srt), true
+  | App ((Plus | Minus), [t1; App (IntConst i, [], _)], _) when i = Int64.zero -> simp t1 has_simp
+  | App (Plus, [App (IntConst i, [], _); t1], _) when i = Int64.zero -> simp t1 has_simp
   | App (sym, ts, srt) ->
       let ts1, has_simp1 = List.fold_right (fun t (ts1, has_simp1) ->
         let t1, has_simp1 = simp t has_simp1 in

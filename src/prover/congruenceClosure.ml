@@ -6,7 +6,8 @@ open GrassUtil
   
 module rec Node : sig
   type t =
-    < get_sym: sorted_symbol;
+    < get_id: int;
+      get_sym: sorted_symbol;
       get_args: t list;
       get_arity: int;
       set_ccparent: NodeSet.t -> unit;
@@ -24,11 +25,12 @@ module rec Node : sig
     >
 
   val compare: t -> t -> int
-  val create: sorted_symbol -> t list -> t
+  val create: int -> sorted_symbol -> t list -> t
       
   end = struct
   type t =
-    < get_sym: sorted_symbol;
+    < get_id: int;
+      get_sym: sorted_symbol;
       get_args: t list;
       get_arity: int;
       set_ccparent: NodeSet.t -> unit;
@@ -45,13 +47,15 @@ module rec Node : sig
       merge: t -> bool;
     >
 
-  let compare = compare
-        
+  let compare n1 n2 = n1#get_id - n2#get_id
+      
   class node = 
   fun
+    (id: int)
     (sym: sorted_symbol) 
     (args: t list) -> 
   object (self)
+    method get_id = id          
     method get_sym = sym
     
     method get_args: node list = args
@@ -115,22 +119,23 @@ module rec Node : sig
       else
         List.filter (fun (a,b) -> a#find <> b#find) (List.rev_map2 (fun x y -> (x,y)) (self#get_args) (that#get_args))*)
 
+        
     method merge (that: node) =
-      self#find <> that#find &&
+      self#find != that#find &&
       begin
         let p1 = self#ccpar in
         let p2 = that#ccpar in
         self#union that;
         NodeSet.iter (fun x ->
           NodeSet.iter
-            (fun y -> if x#find <> y#find && x#congruent y then ignore (x#merge y))
+            (fun y -> if x#find != y#find && x#congruent y then ignore (x#merge y))
             p2)
           p1;
         true
       end
   end
 
-  let create sym terms: t = new node sym terms
+  let create id sym terms: t = new node id sym terms
   end
 and NodeSet: Set.S with type elt = Node.t = Set.Make(Node)
 
@@ -156,46 +161,49 @@ module EGraphP =
 type egraph = NodeListSet.t EGraphA.t * (NodeListSet.t * NodeSet.t) EGraphP.t
       
 class dag = fun (terms: TermSet.t) ->
+  let id_count = ref 0 in
   let table1 = Hashtbl.create 53 in
   let table2 = Hashtbl.create 53 in
   let create_and_add t sym args =
     try Hashtbl.find table1 t
     with Not_found ->
       begin
-        let n = Node.create sym args
+        let id = incr id_count; !id_count in
+        let n = Node.create id sym args
         in
           Hashtbl.add table1 t n;
           Hashtbl.add table2 n t;
           n
       end
   in
+  
   let rec convert_term t =
     (*print_endline ("CC adding: " ^ (string_of_term t));*)
     match t with
     | Var (v, _) -> failwith ("CC: term not ground " ^ string_of_term t) (* create_and_add var (FreeSym v) []*)
     | App (_, args, _) as appl ->
         let has_mod_args, node_args =
-          List.fold_right (fun arg (has_mod_args, node_args) ->
+          List.fold_left (fun (has_mod_args, node_args) arg ->
             let has_mod, n = convert_term arg in
             has_mod || has_mod_args, n :: node_args)
-            args (false, [])
+            (false, []) args
         in
-      let new_node  = create_and_add appl (sorted_symbol_of appl |> Opt.get) node_args in
+      let new_node  = create_and_add appl (sorted_symbol_of appl |> Opt.get) (List.rev node_args) in
       List.iter (fun n -> n#find#add_ccparent new_node) node_args;
-      let arg_opt = List.nth_opt new_node#get_args 0 in
-      let has_mod =
-        arg_opt |>
-        Opt.fold
-          (fun _ arg ->
-            (*Printf.printf "Getting parents of %s\n" (string_of_term @@ self#get_term (arg#find));*)
-            NodeSet.exists (fun n' ->
-              (*Printf.printf "Checking congruence with: %s %b\n"
-                (string_of_term @@ self#get_term n') (n#congruent n');*)
-              n' <> new_node && new_node#congruent n' && n'#merge new_node) arg#ccpar)
-          true
+      let has_mod = match new_node#get_args with
+      | [] -> true
+      | arg :: _ ->
+          (*Printf.printf "Getting parents of %s\n" (string_of_term @@ self#get_term (arg#find));*)
+          NodeSet.exists (fun n' ->
+            (*Printf.printf "Checking congruence with: %s %b\n"
+              (string_of_term @@ self#get_term n') (n#congruent n');*)
+            n' != new_node && new_node#congruent n' && n'#merge new_node) arg#ccpar
       in
       has_mod_args || has_mod, new_node
   in
+
+  let convert_term = measure_call "CC.convert_term" convert_term in
+  
   let _ = TermSet.iter (fun t -> ignore (convert_term t)) terms in
   object (self)
     val mutable _has_mods: bool = true
@@ -463,13 +471,18 @@ let add_terms gterms cc_graph =
   let new_terms = TermSet.diff gterms old_terms in
   let all_terms = TermSet.union old_terms new_terms in
   (* Add gterms to graph *)
+  Debug.debugl 1 (fun () -> "CC.add_terms: adding terms\n");
   TermSet.iter (fun t ->
     let st = SimplifyGrass.simplify_term t in
-    if st <> t && not @@ TermSet.mem st old_terms then cc_graph#add_term st;
     cc_graph#add_term t;
-    cc_graph#add_eq st t)
+    if st <> t then begin
+      if not @@ TermSet.mem st old_terms then
+        cc_graph#add_term st;
+      cc_graph#add_eq st t  
+      end)
     new_terms;
   (* Add disequalities between ADT terms with different top-level constructors *)
+  Debug.debugl 1 (fun () -> "CC.add_terms: adding disequalities\n");
   let cterms =
     TermSet.filter
       (function App (Constructor _, _, _) -> true | _ -> false) new_terms
