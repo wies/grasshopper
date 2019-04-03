@@ -583,7 +583,6 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
   var m := (c.len + 1) / 2;
   //pure assert m + m - 1 == c.len;
 
-  
   if (c.ptrs[0] == null) {  // Leaf
     arr_copy(c.keys, x.keys, m, 0, c.len - m + 1);
     x.ptrs[0] := null;
@@ -600,12 +599,13 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     lemma_int_valid_unfold(c, Ic);
     lemma_int_comp_unfold(c, Ic, x, Ix, Icx);
 
-       
+    //pure assert forall k: K, y: Node, z: Node :: y == z || Ix.fm[x][y].ks[k] == 0 || Ix.fm[x][z].ks[k] == 0;       
     pure assume forall k: K :: Ix.inf[x].ks[k] == 0 && Ix.inf[x].ir[k] == 0;
 
     var clen := c.len;
     var cind := c.indices;
     
+
     arr_copy(c.keys, x.keys, m, 0, c.len - m + 1);
     arr_copy_node(c.ptrs, x.ptrs, m, 0, c.len - m + 1);
     x.len := m - 1;
@@ -617,6 +617,7 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     c.indices := { n: Node :: 0 <= cind[n] < m ? cind[n] : -1 };
     x.indices := { n: Node :: m <= cind[n] <= clen ? cind[n] - m : -1 };
 
+
     Ix1 := interface(x);
     Ic1 := interface(c);
 
@@ -625,11 +626,9 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
       pure assert forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x.indices[x.ptrs.map[i]] == i with {
         if (0 <= i <= x.len) {
           var n := old(c.ptrs.map[m + (i - 0)]);
-          pure assume x.ptrs.map[i] == n;
-          pure assume cind[n] == m + (i - 0);
-          pure assume m <= cind[n] <= clen;
+          pure assert x.ptrs.map[i] == n;
+          pure assert cind[n] == m + (i - 0);
           pure assert x.indices[n] == cind[n] - m;
-          //pure assert x.indices[n] == (m + (i - 0)) - m;
         }
       }
 
@@ -660,8 +659,21 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     
     pure assume forall n: Node, n1: Node :: n1 !in Ix1.FPo ==> domEq(Ix1.fm[n][n1], domZero());
 
-    pure assert forall k: K, y: Node, z: Node :: y == z || Ix.fm[x][y].ks[k] == 0 || Ix.fm[x][z].ks[k] == 0 with {
-      pure assert y != z && x.indices[y] != -1 && x.indices[z] != -1 ==> x.ptrs.map[x.indices[y]] != x.ptrs.map[x.indices[z]];
+    pure assert forall k: K, y: Node, z: Node :: Ix1.fm[x][y].ks[k] == 1 ==> y == z || Ix1.fm[x][z].ks[k] == 0 with {
+      if (y != z && Ix1.fm[x][y].ks[k] == 1) {
+        pure assume Ix1.fm == flowmap(x);
+        if (Ix1.fm[x][z].ks[k] == 1) {
+          if (x.next == y) {
+            pure assert 0 <= x.indices[y] <= x.len ==> x.ptrs[x.indices[y]] == y;
+            pure assert 0 <= x.indices[z] <= x.len;
+            pure assert !lt(k, x.keys[x.len]);
+            pure assert lt(k, x.keys[x.indices[z]]);
+            pure assert !lt(x.keys[x.len], x.keys[x.indices[z]]);
+          } else {
+            assume false;
+          }
+        }
+      }
     }
           
     lemma_int_valid_fold(x, Ix1);
