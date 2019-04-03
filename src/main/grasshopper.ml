@@ -222,17 +222,17 @@ let _ =
           Debug.info (fun () -> "Program successfully verified.\n")
       end
     end
-  with  
-  | Sys_error s -> 
-      let bs = if Debug.is_debug 0 then Printexc.get_backtrace () else "" in
-      output_string stderr ("Error: " ^ s ^ "\n" ^ bs); exit 1
-  | Failure s ->
+  with
+  | Sys_error s | Failure s -> 
+      print_stats start_time; 
       let bs = if Debug.is_debug 0 then Printexc.get_backtrace () else "" in
       output_string stderr ("Error: " ^ s ^ "\n" ^ bs); exit 1
   | Parsing.Parse_error -> 
+      print_stats start_time; 
       print_endline "parse error"; 
       exit 1
   | ProgError.Prog_error _ as e ->
+      print_stats start_time; 
       output_string stderr (ProgError.to_string e ^ "\n");
       exit 1
 	
