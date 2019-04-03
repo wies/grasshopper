@@ -563,9 +563,12 @@ let elim_state prog =
                         else []
                     | _ -> []
                     in
-                    match sort_of e1 with
-                    | Bool -> mk_iff (Atom (x1, [])) (Atom (e1, [])) :: aux @ eqs
-                    | _ -> mk_eq x1 e1 :: aux @ eqs)
+                    let f =
+                      match sort_of e1 with
+                      | Bool -> mk_iff (Atom (x1, [])) (Atom (e1, []))
+                      | _ -> mk_eq x1 e1
+                    in
+                    unoldify_form (subst_id sm f) :: aux @ eqs)
                   ac.assign_lhs ac.assign_rhs []
               in
               let sf = mk_spec_form  (FOL (mk_and eqs)) "assign" None pp.pp_pos in

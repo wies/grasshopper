@@ -725,7 +725,10 @@ let elim_sl prog =
     in
     smk_and (mk_pred p args :: eqs @ fp_eqs)
   in
-  let post_process_term t = (*subst_funs_term add_footprint_args*) t in
+  let post_process_term t = (*subst_funs_term add_footprint_args*)
+    t |>
+    elim_old_term (var_ids prog)
+  in
   (* post process formula *)
   let post_process_form f =
     let subst_preds f = (*subst_funs add_footprint_args*) f in
