@@ -559,7 +559,7 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     Ix1 := interface(x);
     Ic1 := interface(c);
 
-    pure assert heapGood(x, Ix1) with {
+    pure assert heapGood(x) with {
       pure assume false;
       pure assert forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x.indices[x.ptrs.map[i]] == i with {
         if (0 <= i <= x.len) {
@@ -576,7 +576,7 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
       }
     }
 
-    pure assert heapGood(c, Ic1) with {
+    pure assert heapGood(c) with {
       pure assume false;
       pure assert forall n: Node :: 0 <= c.indices[n] <= c.len ==> c.ptrs.map[c.indices[n]] == n with {
         pure assert 0 <= old(c.indices[n]) <= c.len ==> old(c.ptrs.map[c.indices[n]]) == n;
