@@ -238,7 +238,7 @@ predicate heapGood(x: Node)
   /* @(matching x.indices[n] yields x.ptrs[x.indices[n]])*/)
   && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x.indices[x.ptrs.map[i]] == i
   /* @(matching x.ptrs[i] yields x.indices[x.ptrs[i]])*/)
-  && (x.ptrs[0] == null ==> (forall n: Node :: x.indices[n] == -1))
+  && (x.ptrs[0] == null ==> (forall n: Node :: x.indices[n] == -1 @(noinst n)))
   && x.indices[x.next] == -1
   && x.indices[x] == -1
   // Internal nodes don't point to null
