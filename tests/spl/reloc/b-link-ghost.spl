@@ -153,28 +153,7 @@ lemma outset_correct1(x: Node, Ix: Interface, k: K, y: Node)
   requires Ix.fm[x][y].ir[k] >= 1 || Ix.fm[x][y].ks[k] >= 1
   pure ensures k in outset(x)
 {
-  //pure assert 0 <= x.indices[y] <= x.len ==> x.ptrs.map[x.indices[y]] == y;
-
-  if (x.ptrs[0] == null) {
-    return;
-  }
-
-  if (x.next == null) {
-    return;
-  }
-
-  //if (0 <= x.indices[y] < x.len) {    
-    //pure assert flowmap(x)[x][y] == fd(ks_child(x, y), mapZero);
-    //pure assert x.indices[y] == 0 || le(x.keys.map[x.indices[y] - 1], k) && lt(k, x.keys.map[x.indices[y]]);
-    //return;
-  //}                
-  //pure assume x.next != null;
-  //pure assume 0 <= x.indices[y] <= x.len;
-  //pure assume y == x.next;
-  //pure assert 0 <= x.indices[y] <= x.len ==> x.ptrs.map[x.indices[y]] == y;
-  //pure assert le(x.rangeLb, k);
- 
-  //pure assert le(x.keys[x.len], k);
+  pure assert flowmap(x)[x][y] == Ix.fm[x][y];
 }
 
 lemma outset_correct2(x: Node, Ix: Interface, k: K)
@@ -184,8 +163,10 @@ lemma outset_correct2(x: Node, Ix: Interface, k: K)
   pure ensures Ix.inf[x].ir[k] >= 1 || Ix.inf[x].ks[k] >= 1
   pure ensures Ix.fm[x][y].ks[k] >= 1
 {
+  pure assert flowmap(x)[x][y] == Ix.fm[x][y] && inflow(x)[x] == Ix.inf[x];
   if (x.ptrs[0] == null) { 
     y := x.next;
+    pure assert Ix.fm[x][y].ks == map_next(x);
     return y;
   } else {
     var i: Int := map_find(x.keys.map, 0, x.len, k);
@@ -201,11 +182,12 @@ lemma outset_correct2(x: Node, Ix: Interface, k: K)
         //pure assert i > 0 ==> lt(x.keys.map[i - 1], x.keys.map[i]);
         //pure assert 0 < i ==> le(x.keys.map[i - 1], k);
         y := x.ptrs[i];
+        pure assert flowmap(x)[x][y] == fd(ks_child(x, y), mapZero);
         return y;
       } else {
         y := x.next;
         pure assert 0 > x.indices[y] || x.indices[y] > x.len || x.ptrs[x.indices[y]] == y;
-        //pure assert Ix.fm[x][y] == fd(map_next(x), map_next(x));
+        pure assert Ix.fm[x][y] == fd(map_next(x), map_next(x));
         return y;
       }
     } else {
@@ -215,6 +197,8 @@ lemma outset_correct2(x: Node, Ix: Interface, k: K)
       //pure assert 0 <= i && (x.next == null && i < x.len || x.next != null && i <= x.len);
       //pure assert x.indices[x.ptrs.map[i]] == i;
       y := x.ptrs[i];
+      pure assert flowmap(x)[x][y] == fd(ks_child(x, y), mapZero);
+      pure assert flowmap(x)[x][y].ks == ks_child(x, y);
       return y;
     }
     return y;
@@ -262,6 +246,7 @@ predicate heapGood(x: Node, I: Interface)
   && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x.indices[x.ptrs.map[i]] == i
   /* @(matching x.ptrs[i] yields x.indices[x.ptrs[i]])*/)
   && (x.ptrs[0] == null ==> (forall n: Node :: x.indices[n] == -1))
+  && x.indices[x.next] == -1
   // Internal nodes don't point to null
   && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x.ptrs[i] != null)
   && I == interface(x)
@@ -558,6 +543,8 @@ procedure delete(x: Node, k: K, Ix: Interface)
   return true, (k in Ix.na.contents), Ix1;
 }
 
+/*
+
 /* Half split */
 
 define emptyInt(x, Ix) {  // TODO use newInt instead
@@ -755,3 +742,5 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     //&& Icx1.na.contents == Ic1.na.contents ++ Ix1.na.contents;
   }
 }
+
+*/
