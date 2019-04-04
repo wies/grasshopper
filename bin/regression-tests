@@ -154,6 +154,6 @@ flows:hashtbl-give-up_step   tests/spl/reloc/hashtbl-give-up.spl      'flowint_s
 # flows:b-link-tree_step   tests/spl/reloc/b-link.spl      'flowint_step'     pass
 
 res=0
-#OPTIONS=$@ time -f "Elapsed user time: %Us.\nElapsed real time: %es." ./bin/run-tests $TESTS || res=$?
+OPTIONS=$@ time -f "Elapsed user time: %Us.\nElapsed real time: %es." ./bin/run-tests $TESTS || res=$?
 OPTIONS="$@" time -f "Elapsed user time: %Us.\nElapsed real time: %es." ./bin/run-tests $SYMB_EXEC_TESTS || res=$?
 exit $res
