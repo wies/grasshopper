@@ -468,7 +468,7 @@ let array_axioms elem_srt =
     mk_or [mk_eq a (mk_null (Array elem_srt)); mk_leq (mk_int 0) (mk_length a)]
   in
   let array_map_simple1 =
-    smk_or ((if false && !Config.instantiate then [] else [mk_lt i (mk_int 0); mk_geq i (mk_length a)]) @
+    smk_or ((if !Config.instantiate then [] else [mk_lt i (mk_int 0); mk_geq i (mk_length a)]) @
            [mk_eq (mk_read arrstate [a; i]) (mk_read (App (ArrayMap, [arrstate; a], Map ([Int], elem_srt))) [i])])
   in
   let array_map_simple2 =

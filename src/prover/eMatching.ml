@@ -676,9 +676,10 @@ let run ?(pr_tpl = (fun ppf _ -> ())) (code: 'a ematch_code) ccgraph : ('a, subs
     | Yield (vs, fs, gs) :: stack ->
         let ts = state in
         let sm = IdMap.map (fun i -> CC.term_of_rep ccgraph regs.(i)) vs in
-        (*Printf.printf "yield\n";
-        print_list stdout (fun ppf (x, t) -> fprintf ppf "%s -> %a" (string_of_ident x) pr_term t) (IdMap.bindings sm);
-        print_newline ();*)
+        Debug.debugl 4 (fun () ->
+          Printf.printf "yield\n";
+          print_list stdout (fun ppf (x, t) -> fprintf ppf "%s -> %a" (string_of_ident x) pr_term t) (IdMap.bindings sm);
+          print_newline (); "");
         TermSet.iter (fun t ->
           TermMap.find_opt t fs |>
           Opt.iter (List.iter (fun f ->
@@ -918,18 +919,18 @@ let compile_term_generators_to_ematch_code generators =
  *  were derived (modulo equality) and the new E-graph. *)
 let generate_terms_from_code code ccgraph =
   let rec round i has_mods ccgraph =
-    (*Printf.printf "Generating terms, round %d...\n" i; flush stdout;
-      CC.print_classes ccgraph;*)
-    (*let terms = CC.get_terms ccgraph in*)
+    Debug.debugl 1 (fun () -> Printf.sprintf "Generating terms, round %d...\n" i); flush stdout;
+    Debug.debugl 1 (fun () -> CC.print_classes ccgraph; "");
+    let terms = CC.get_terms ccgraph in
     let insts = run ~pr_tpl:pr_term_list code ccgraph in
     let new_terms =
       Hashtbl.fold (fun ts sm new_terms ->
         List.fold_left (fun new_terms gen_term ->
           let t = subst_term sm gen_term in
-          (*let _ =
+          let _ =
             if not @@ TermSet.mem t terms then
-            print_endline ("  Adding generated term " ^ string_of_term gen_term ^ " -> " ^ string_of_term t); flush stdout
-          in*)
+            Debug.debugl 1 (fun () -> "  Adding generated term " ^ string_of_term gen_term ^ " -> " ^ string_of_term t ^ "\n"); flush stdout
+          in
           TermSet.add t new_terms) new_terms ts)
         insts TermSet.empty
     in

@@ -283,16 +283,19 @@ let instantiate_and_prove session fs =
       in
       Debug.debugl 1 (fun () -> "Instantiating axioms (round 2)\n");
       let fs_inst = EMatching.instantiate_axioms_from_code patterns code cc_graph in
-      Debug.debugl 1 (fun () -> "Recomputing congruences (round 2)\n");
+      Debug.debugl 1 (fun () -> "Getting gound terms (round 2)\n");
       let gts_inst = ground_terms ~include_atoms:true (mk_and fs_inst) in
       (*let gts_inst = ground_terms_acc ~include_atoms:true gts_inst (mk_and implied_eqs) in*)
       (*print_endline "Implied equalities:";
         print_endline (string_of_form (mk_and implied_eqs));*)
+      Debug.debugl 1 (fun () -> "Recomputing congruences (round 2)\n");
       let cc_graph =
         cc_graph |>
         CongruenceClosure.add_terms gts_inst |>
+        (fun cc_graph -> Debug.debugl 1 (fun () -> "Adding conjuncts (round 2)\n"); cc_graph) |>
         CongruenceClosure.add_conjuncts (rev_concat [fs_inst; fs])
       in
+      Debug.debugl 1 (fun () -> "Done recomputing congruences (round 2)\n");
       let has_mods1 = CongruenceClosure.has_mods cc_graph in
       if not !Config.propagate_reads || not (has_mods1 || has_mods2)
       then
@@ -331,6 +334,7 @@ let instantiate_and_prove session fs =
             (fs_asserted, [])
             fs_inst1
         in
+        Debug.debug (fun () -> Printf.sprintf "Asserting formulas (round %d)...\n" k);
         measure_call "SmtLibSolver.assert_forms" (SmtLibSolver.assert_forms session) fs_inst1_assert;
         Debug.debug (fun () -> Printf.sprintf "Calling SMT solver in instantiation round %d...\n" k);
         let result1 = measure_call "SmtLibSolver.is_sat" SmtLibSolver.is_sat session in
@@ -365,10 +369,9 @@ let instantiate_and_prove session fs =
 let instantiate_and_prove session = measure_call "Prover.instantiate_and_prove" (instantiate_and_prove session)
 
 let prove name sat_means f =
-  (*if name = "b-link-ghost_half_split_assert_612_6" then begin
-    print_endline "reached 612";
+  if false && name = "b-link-ghost_half_split_assert_631_10" then begin
     Debug.more_verbose (); Debug.more_verbose ()
-  end;*)
+  end;
   let fs = Reduction.reduce f in
   let session = SmtLibSolver.start name sat_means in
   let result, session, fs = instantiate_and_prove session fs in

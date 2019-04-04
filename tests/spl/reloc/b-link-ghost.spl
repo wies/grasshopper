@@ -240,6 +240,7 @@ predicate heapGood(x: Node, I: Interface)
   /* @(matching x.ptrs[i] yields x.indices[x.ptrs[i]])*/)
   && (x.ptrs[0] == null ==> (forall n: Node :: x.indices[n] == -1))
   && x.indices[x.next] == -1
+  && x.indices[x] == -1
   // Internal nodes don't point to null
   && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x.ptrs[i] != null)
   && I == interface(x)
@@ -610,9 +611,12 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
       pure assume false;
       pure assert (Ix1.inf[x].ks[k] == 1) == (le(x.rangeLb, k) && lt(k, x.rangeUb));
     }
-    
-    // pure assume forall n: Node, n1: Node :: n1 !in Ix1.FPo ==> domEq(Ix1.fm[n][n1], domZero());
 
+    pure assert forall n: Node, n1: Node :: n1 in Ix1.FP ==> domEq(Ix1.fm[n][n1], domZero()) with {
+      pure assert Ix1.fm == flowmap(x);
+      pure assume false;
+    }
+    
     pure assert forall k: K, y: Node, z: Node :: Ix1.fm[x][y].ks[k] == 1 ==> y == z || Ix1.fm[x][z].ks[k] == 0 with {
       if (y != z && Ix1.fm[x][y].ks[k] == 1) {
         pure assume false;
@@ -665,10 +669,17 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
       }
     }
 
+    pure assert forall n: Node, n1: Node :: n1 in Ix1.FP ==> domEq(Ix1.fm[n][n1], domZero()) with {
+      pure assume false;
+      pure assert Ix1.fm == flowmap(x);
+    }
+    
+    
     lemma_int_valid_fold(c, Ic1);
     
     pure assert domLeq(domMult(Ic1.inf[c], Ic1.fm[c][x]), Ix1.inf[x]) == true with {
-      pure assume false;
+      //pure assume false;
+      pure assert Ix1.fm == flowmap(x) && Ic1.fm == flowmap(c);
       pure assert forall k: K :: domMult(Ic1.inf[c], Ic1.fm[c][x]).ks[k] <= Ix1.inf[x].ks[k] &&
         domMult(Ic1.inf[c], Ic1.fm[c][x]).ir[k] <= Ix1.inf[x].ir[k] with {
         pure assert Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k] <= Ix1.inf[x].ks[k] &&
@@ -684,6 +695,8 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
 
     lemma_int_comp_unfold(c, Ic1, x, Ix1, Icx1);
     lemma_int_valid_unfold_I(Icx1);
+
+    pure assert Ix1.fm == flowmap(x);
 
     pure assert forall z: Node :: domEq(Icx.inf[z], Icx1.inf[z]) with {
       pure assert forall k: K :: Icx.inf[z].ks[k] == Icx1.inf[z].ks[k] && Icx.inf[z].ir[k] == Icx1.inf[z].ir[k] with {
