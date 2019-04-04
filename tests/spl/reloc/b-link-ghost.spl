@@ -550,8 +550,8 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     c.next := x;
     x.rangeLb := c.keys[c.len];
     x.rangeUb := c.rangeUb;
-    c.indices := { n: Node :: 0 <= cind[n] < m ? cind[n] : -1 };
-    x.indices := { n: Node :: m <= cind[n] <= clen ? cind[n] - m : -1 };
+    c.indices := { n: Node :: n != x && 0 <= cind[n] < m ? cind[n] : -1 };
+    x.indices := { n: Node :: n != x && m <= cind[n] <= clen ? cind[n] - m : -1 };
 
 
     Ix1 := interface(x);
@@ -677,23 +677,22 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     lemma_int_comp_unfold(c, Ic1, x, Ix1, Icx1);
     lemma_int_valid_unfold_I(Icx1);
 
-    pure assume Ix1.fm == flowmap(x);
-    // pure assert Ix1.fm == flowmap(x);
+    pure assert Ix1.fm == flowmap(x);
 
-    pure assume forall z: Node :: domEq(Icx.inf[z], Icx1.inf[z]);
-    // pure assert forall z: Node :: domEq(Icx.inf[z], Icx1.inf[z]) with {
-    //   pure assert forall k: K ::
-    //     Icx.inf[z].ks[k] == Icx1.inf[z].ks[k] && Icx.inf[z].ir[k] == Icx1.inf[z].ir[k]
-    //   with {
-    //     // pure assert Ix.inf[x] == domPlus(Icx.inf[x], domMult(Ic.inf[c], Ic.fm[c][x]));
-    //     pure assert Ix.inf[x].ks[k] == Icx.inf[x].ks[k] + domMult(Ic.inf[c], Ic.fm[c][x]).ks[k]
-    //       && Ix.inf[x].ir[k] == Icx.inf[x].ir[k] + domMult(Ic.inf[c], Ic.fm[c][x]).ir[k]
-    //       && Ix.inf[x].ks[k] == Icx.inf[x].ks[k] + Ic.inf[c].ks[k] * Ic.fm[c][x].ks[k]
-    //       && Ix.inf[x].ir[k] == Icx.inf[x].ir[k] + Ic.inf[c].ir[k] * Ic.fm[c][x].ir[k]
-    //       && Ix1.inf[x].ks[k] == Icx1.inf[x].ks[k] + Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k]
-    //       && Ix1.inf[x].ir[k] == Icx1.inf[x].ir[k] + Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k];
-    //   }
-    // }
+    // pure assume forall z: Node :: domEq(Icx.inf[z], Icx1.inf[z]);
+    pure assert forall z: Node :: domEq(Icx.inf[z], Icx1.inf[z]) with {
+      pure assert forall k: K ::
+        Icx.inf[z].ks[k] == Icx1.inf[z].ks[k] && Icx.inf[z].ir[k] == Icx1.inf[z].ir[k]
+      with {
+        // pure assert Ix.inf[x] == domPlus(Icx.inf[x], domMult(Ic.inf[c], Ic.fm[c][x]));
+        pure assert Ix.inf[x].ks[k] == Icx.inf[x].ks[k] + domMult(Ic.inf[c], Ic.fm[c][x]).ks[k]
+          && Ix.inf[x].ir[k] == Icx.inf[x].ir[k] + domMult(Ic.inf[c], Ic.fm[c][x]).ir[k]
+          && Ix.inf[x].ks[k] == Icx.inf[x].ks[k] + Ic.inf[c].ks[k] * Ic.fm[c][x].ks[k]
+          && Ix.inf[x].ir[k] == Icx.inf[x].ir[k] + Ic.inf[c].ir[k] * Ic.fm[c][x].ir[k]
+          && Ix1.inf[x].ks[k] == Icx1.inf[x].ks[k] + Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k]
+          && Ix1.inf[x].ir[k] == Icx1.inf[x].ir[k] + Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k];
+      }
+    }
 
     pure assert forall n: Node, n1: Node ::
       n in Icx.FP && n1 !in Icx.FP ==>
