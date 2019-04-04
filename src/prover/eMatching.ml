@@ -746,6 +746,7 @@ let compile_axioms_to_ematch_code ?(force=false) ?(stratify=(!Config.stratify)) 
   let generate_pattern f =
     let fvars0 = sorted_free_vars f in
     let fvars = IdSrtSet.inter fvars0 (vars_in_fun_terms f) in
+    let noinst_vars = extract_noinsts f in
     (* filter out stratified variables *)
     let fvars, strat_vars =
       let merge_map k a b = match (a,b) with
@@ -767,12 +768,14 @@ let compile_axioms_to_ematch_code ?(force=false) ?(stratify=(!Config.stratify)) 
           (fun_terms_with_vars f)
           IdMap.empty
       in
+      let fvars, strat_vars0 = IdSrtSet.partition (fun (id, srt) -> not @@ IdSet.mem id noinst_vars) fvars in
+      let fvars, strat_vars1 =
         if stratify then
           IdSrtSet.partition
             (fun (id, srt) ->
               try
                 let generating = IdMap.find id gen_map in
-                  not (List.for_all (TypeStrat.is_stratified srt) generating)
+                not (List.for_all (TypeStrat.is_stratified srt) generating)
               with Not_found ->
                 begin
                   Debug.warn (fun () -> "BUG in stratification: " ^ (string_of_ident id) ^ "\n");
@@ -781,6 +784,8 @@ let compile_axioms_to_ematch_code ?(force=false) ?(stratify=(!Config.stratify)) 
             )
             fvars
         else fvars, IdSrtSet.empty
+      in
+      fvars, IdSrtSet.union strat_vars1 strat_vars0
     in
     let strat_var_ids = IdSrtSet.fold (fun (id, _) acc -> IdSet.add id acc) strat_vars IdSet.empty in 
     (* collect all terms in which free variables appear below function symbols *)

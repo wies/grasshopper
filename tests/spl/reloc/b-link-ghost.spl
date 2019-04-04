@@ -222,10 +222,10 @@ predicate heapGood(x: Node, I: Interface)
   I.FP == {x}
   && x.next != x && 0 <= x.len < 2*B && (x.next == null ==> x.rangeUb == top)
   // Keys are sorted (TODO: internal vs. child?)
-  && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> lt(x.keys[i], x.keys[j]))
+  && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> lt(x.keys[i], x.keys[j]) @(noinst i) @(noinst j))
   // Keys are in the range
   && (forall i: Int :: 0 <= i && (x.next == null && i < x.len || x.next != null && i <= x.len)
-     ==> !lt(x.keys[i], x.rangeLb) && lt(x.keys[i], x.rangeUb))
+  ==> !lt(x.keys[i], x.rangeLb) && lt(x.keys[i], x.rangeUb) @(noinst i))
   // All outgoing pointers are distinct
   && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len
        ==> x != x.ptrs[i])

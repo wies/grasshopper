@@ -315,6 +315,9 @@ let resolve_names cu =
               es
           in
           Annot (re locals tbl e, GeneratorAnnot (es1, re locals tbl ge), pos)
+      | Annot (e, NoInstAnnot init_id, pos) ->
+          let id = lookup_id init_id tbl pos in
+          Annot (re locals tbl e, NoInstAnnot id, pos)
       | Annot (e, ann, pos) ->
           Annot (re locals tbl e, ann, pos)
       | Dirty (e, es, pos) ->

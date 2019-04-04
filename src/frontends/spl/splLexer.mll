@@ -44,6 +44,7 @@ let _ =
       ("Map", MAP);
       ("matching", MATCHING);
       ("new", NEW);
+      ("noinst", NOINST);
       ("null", NULL);
       ("options", OPTIONS);
       ("or", COR);

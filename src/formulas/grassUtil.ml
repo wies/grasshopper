@@ -599,7 +599,27 @@ let extract_patterns f =
     | Binder (_, _, f, ann) ->
         ep (extract acc ann) f
   in ep [] f
-  
+
+(** Extract patterns from formula [f].*)
+let extract_noinsts f =
+  let extract acc ann =
+    List.fold_left
+      (fun acc -> function
+        | NoInst xs ->
+            List.fold_right IdSet.add xs acc
+        | _ -> acc)
+      acc ann
+  in
+  let rec ep acc = function
+    | BoolOp (op, fs) ->
+        List.fold_left ep acc fs
+    | Atom (_, ann) ->
+        extract acc ann
+    | Binder (_, _, f, ann) ->
+        ep (extract acc ann) f
+  in ep IdSet.empty f
+
+    
 (** Annotate [f] with comment [c]. *)
 let mk_comment c f = 
   annotate f [Comment c]
@@ -842,7 +862,7 @@ let fold_map_terms fn init f =
       in
       let ts, acc = fold_left_map fn acc ts in
       TermGenerator (gs, ts), acc
-    | Comment _ | SrcPos _ | Name _ | ErrorMsg _ as a -> a, acc
+    | Comment _ | SrcPos _ | Name _ | ErrorMsg _ | NoInst _ as a -> a, acc
   in
   let rec ft acc = function
     | Atom (t, a) ->
@@ -1176,6 +1196,7 @@ let map_id fct f =
         TermGenerator (List.map mapg guards, List.map mapt gen_terms)
     | Pattern (t, fs) -> Pattern (mapt t, List.map mapf fs)
     | Label (pol, t) -> Label (pol, mapt t)
+    | NoInst xs -> NoInst (List.map fct xs)
     | a -> a
   in
   let rec sub = function 
@@ -1312,6 +1333,12 @@ let subst_annot subst_map = function
         Pattern (subst_term subst_map t, fs)
     | Label (pol, t) ->
         Label (pol, subst_term subst_map t)
+    | NoInst xs ->
+        NoInst (List.fold_right (fun x xs1 ->
+          match IdMap.find_opt x subst_map with
+          | Some (App _) -> xs1
+          | Some (Var (x1, _)) -> x1 :: xs1
+          | None -> x :: xs1) xs [])
     | a -> a
     
 (** Substitutes all free variables in formula [f] with terms according to substitution map [subst_map].

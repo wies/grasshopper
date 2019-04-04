@@ -209,6 +209,7 @@ and annotation =
   | GeneratorAnnot of (expr * ident list) list * expr
   | PatternAnnot of expr
   | CommentAnnot of string
+  | NoInstAnnot of ident
 
 (** Utility functions *)
         
@@ -272,11 +273,13 @@ let free_vars e =
     
 (** Variable substitution for expressions (not capture avoiding) *)
 let subst_id sm =
-  let rec s bv = function
-    | Ident (x, pos) as e ->
-        if IdSet.mem x bv || not @@ IdMap.mem x sm
-        then e
-        else Ident (IdMap.find x sm, pos)
+  let si bv x =
+      if IdSet.mem x bv || not @@ IdMap.mem x sm
+      then x else IdMap.find x sm
+    in
+  let rec s bv =
+    function
+    | Ident (x, pos) -> Ident (si bv x, pos)
     | Setenum (ty, es, pos) ->
         Setenum (ty, List.map (s bv) es, pos)
     | New (ty, es, pos) ->
@@ -321,6 +324,7 @@ let subst_id sm =
     | PatternAnnot e -> PatternAnnot (s bv e)
     | CommentAnnot _ as a -> a
     | Position -> Position
+    | NoInstAnnot x -> NoInstAnnot (si bv x)
   in s IdSet.empty
 
 (** General (id -> expr) substitution for expressions (not capture avoiding) *)
@@ -345,7 +349,10 @@ let subst sm =
     | UnaryOp (op, e, pos) ->
         UnaryOp (op, s bv e, pos)
     | Annot (e, a, pos) ->
-        Annot (s bv e, s_annot bv a, pos)
+        let es = s bv e in
+        s_annot bv a |>
+        Opt.map (fun a -> Annot (es, a, pos)) |>
+        Opt.get_or_else es
     | Read (e1, e2, pos) ->
         Read (s bv e1, s bv e2, pos)
     | Write (e1, e2, e3, pos) ->
@@ -370,10 +377,14 @@ let subst sm =
   and s_annot bv = function
     | GeneratorAnnot (ms, e) ->
       let ms = List.map (fun (e, is) -> (s bv e, is)) ms in
-      GeneratorAnnot (ms, s bv e)
-    | PatternAnnot e -> PatternAnnot (s bv e)
-    | CommentAnnot _ as a -> a
-    | Position -> Position
+      Some (GeneratorAnnot (ms, s bv e))
+    | PatternAnnot e -> Some (PatternAnnot (s bv e))
+    | CommentAnnot _ as a -> Some a
+    | Position -> Some Position
+    | NoInstAnnot x ->
+        if IdSet.mem x bv || not @@ IdMap.mem x sm
+        then Some (NoInstAnnot x)
+        else None
   in s IdSet.empty
     
 let pos_of_stmt = function

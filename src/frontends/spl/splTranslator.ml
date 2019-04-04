@@ -448,6 +448,9 @@ let convert cu =
     | Annot (e, Position, pos) ->
         let f = convert_grass_form locals e in
         GrassUtil.annotate f [SrcPos pos]
+    | Annot (e, NoInstAnnot x, pos) ->
+        let f = convert_grass_form locals e in
+        GrassUtil.annotate f [NoInst [x]]
     | e ->
         let t = convert_term locals e in
         Grass.Atom (t, [SrcPos (pos_of_expr e)])

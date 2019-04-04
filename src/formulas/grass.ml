@@ -190,6 +190,7 @@ type annot =
   | Name of ident
   | TermGenerator of guard list * term list
   | Pattern of term * filter list
+  | NoInst of ident list
         
 (** Boolean operators *)
 type bool_op =
@@ -436,6 +437,12 @@ let rec extract_patterns = function
   | Pattern (t, _) :: ann -> t :: extract_patterns ann
   | _ :: ann -> extract_patterns ann
   | [] -> []
+
+let rec extract_noinsts = function
+  | NoInst xs :: ann -> xs @ extract_noinsts ann
+  | _ :: ann -> extract_noinsts ann
+  | [] -> []
+
         
 let pr_binder ppf b =
   let b_str = match b with
@@ -499,6 +506,7 @@ and pr_annot ppf a =
   let pos = extract_src_pos a in
   let lbl = extract_label a in
   let pat = extract_patterns a in
+  let noinsts = extract_noinsts a in
   let rec pr_match_list ppf = function
     | [] -> ()
     | [(m, f)] ->
@@ -529,7 +537,11 @@ and pr_annot ppf a =
           fprintf ppf "@ /* %a -> %s: %s */" pr_form lbl (string_of_src_pos pos) n
       | n, None, _ -> fprintf ppf "@ /* %s */" n)
   in
-  fprintf ppf "%a%a%a" pr_generators gen pr_patterns pat pr_comment (name, pos, lbl)
+  let pr_noinsts ppf = function
+    | [] -> ()
+    | xs -> fprintf ppf "@ @[<3>(noinsts %a)@]" pr_ident_list xs
+  in
+  fprintf ppf "%a%a%a%a" pr_generators gen pr_patterns pat pr_comment (name, pos, lbl) pr_noinsts noinsts
  
 and pr_not ppf = function
   | Atom (App (Eq, [t1; t2], _), []) ->
