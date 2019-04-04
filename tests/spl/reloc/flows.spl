@@ -35,7 +35,7 @@ pure predicate intEq(I1: Interface, I2: Interface) {
   I1.FP == I2.FP
   && (forall x: Node :: domEq(I1.inf[x], I2.inf[x])
      @(matching x yields I1.inf[x]) @(matching x yields I2.inf[x]))
-  && (forall x: Node, y: Node ::
+  && (forall x: Node, y: Node :: x in I1.FP && y !in I1.FP ==>
      domEq(domMult(I1.inf[x], I1.fm[x][y]), domMult(I2.inf[x], I2.fm[x][y]))
      @(matching I2.fm[x][y] yields known(domMult(I1.inf[x], I1.fm[x][y])))
      @(matching I2.fm[x][y] yields known(domMult(I2.inf[x], I2.fm[x][y]))))
