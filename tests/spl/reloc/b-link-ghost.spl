@@ -361,8 +361,8 @@ procedure findNext(x: Node, k: K, Ix: Interface)
     n := x.ptrs[i];
     // return n;
   }
-    return n;
-  }
+  return n;
+}
 
 
 /** member */
@@ -416,29 +416,20 @@ procedure insert(x: Node, k: K, Ix: Interface)
     lemma_int_valid_unfold(x, Ix);
     Ix1 := interface(x); //copy_interface(Ix, nd(Ix.na.contents ++ {k}, Ix.na.inr));
 
-    pure assert forall k: K, y: Node :: k !in Ix1.na.contents || Ix1.fm[x][y].ks[k] == 0 with {
-      if (Ix1.fm[x][y].ks[k] == 1) {
-        pure assert y == x.next ==> map_next(x)[k] == 1;
-        pure assert y == x.next ==> old(map_next(x))[k] == 1;
-        pure assert Ix.fm[x][y].ks[k] == 1;
-      }
-    }
+    pure assert Ix1.fm == flowmap(x) && Ix.fm == old(flowmap(x));
     lemma_int_valid_fold(x, Ix1);
 
-    pure assert Ix1.na.contents == Ix.na.contents ++ {k};
+    // pure assert Ix1.na.contents == Ix.na.contents ++ {k};
 
     pure assert intEq(Ix, Ix1) with {
-      //pure assert forall x1: Node :: I1.inf[x1] == I2.inf[x1];
-      pure assert forall x1: Node, y: Node :: domMult(Ix.inf[x1], Ix.fm[x1][y]) == domMult(Ix1.inf[x1], Ix1.fm[x1][y]) with {
-        pure assert forall k: K :: domMult(Ix.inf[x1], Ix.fm[x1][y]).ks[k] == domMult(Ix1.inf[x1], Ix1.fm[x1][y]).ks[k]
+      pure assert forall x1: Node, y: Node ::
+        domMult(Ix.inf[x1], Ix.fm[x1][y]) == domMult(Ix1.inf[x1], Ix1.fm[x1][y]) with {
+        pure assert forall k: K ::
+          domMult(Ix.inf[x1], Ix.fm[x1][y]).ks[k] == domMult(Ix1.inf[x1], Ix1.fm[x1][y]).ks[k]
           && domMult(Ix.inf[x1], Ix.fm[x1][y]).ir[k] == domMult(Ix1.inf[x1], Ix1.fm[x1][y]).ir[k] with {
-            pure assert x != x1 ==> Ix1.fm[x1][y].ks[k] == 0;
-            pure assert x != x1 ==> Ix.fm[x1][y].ks[k] == 0;
-            pure assert y == x.next ==> map_next(x)[k] == old(map_next(x))[k];
-            //pure assert y == x.next ==> old(map_next(x))[k] == 0;
-            pure assert Ix1.fm[x1][y].ks[k] == Ix.fm[x1][y].ks[k];
-            pure assert Ix.inf[x1].ks[k] * Ix.fm[x1][y].ks[k] == Ix1.inf[x1].ks[k] * Ix1.fm[x1][y].ks[k];
-            pure assert Ix.inf[x1].ir[k] * Ix.fm[x1][y].ir[k] == Ix1.inf[x1].ir[k] * Ix1.fm[x1][y].ir[k];
+            pure assert
+              (Ix.inf[x1].ks[k] * Ix.fm[x1][y].ks[k] == Ix1.inf[x1].ks[k] * Ix1.fm[x1][y].ks[k])
+              && (Ix.inf[x1].ir[k] * Ix.fm[x1][y].ir[k] == Ix1.inf[x1].ir[k] * Ix1.fm[x1][y].ir[k]);
         }
       }
     }
@@ -480,30 +471,21 @@ procedure delete(x: Node, k: K, Ix: Interface)
   
   lemma_int_valid_unfold(x, Ix);
 
-  pure assert forall k: K, y: Node :: k !in Ix1.na.contents || Ix1.fm[x][y].ks[k] == 0 with {
-    if (Ix1.fm[x][y].ks[k] == 1) {
-      pure assert y == x.next ==> map_next(x)[k] == 1;
-      pure assert y == x.next ==> old(map_next(x))[k] == 1;
-      pure assert Ix.fm[x][y].ks[k] == 1;
-    }
-  }
+  pure assert Ix1.fm == flowmap(x) && Ix.fm == old(flowmap(x));
   lemma_int_valid_fold(x, Ix1);
 
-  pure assert Ix1.na.contents == Ix.na.contents -- {k};
+  // pure assert Ix1.na.contents == Ix.na.contents -- {k};
 
   pure assert intEq(Ix, Ix1) with {
-    //pure assert forall x1: Node :: I1.inf[x1] == I2.inf[x1];
-    pure assert forall x1: Node, y: Node :: domMult(Ix.inf[x1], Ix.fm[x1][y]) == domMult(Ix1.inf[x1], Ix1.fm[x1][y]) with {
-      pure assert forall k: K :: domMult(Ix.inf[x1], Ix.fm[x1][y]).ks[k] == domMult(Ix1.inf[x1], Ix1.fm[x1][y]).ks[k]
+    pure assert forall x1: Node, y: Node ::
+      domMult(Ix.inf[x1], Ix.fm[x1][y]) == domMult(Ix1.inf[x1], Ix1.fm[x1][y]) with {
+      pure assert forall k: K ::
+        domMult(Ix.inf[x1], Ix.fm[x1][y]).ks[k] == domMult(Ix1.inf[x1], Ix1.fm[x1][y]).ks[k]
         && domMult(Ix.inf[x1], Ix.fm[x1][y]).ir[k] == domMult(Ix1.inf[x1], Ix1.fm[x1][y]).ir[k] with {
-          pure assert x != x1 ==> Ix1.fm[x1][y].ks[k] == 0;
-          pure assert x != x1 ==> Ix.fm[x1][y].ks[k] == 0;
-          pure assert y == x.next ==> map_next(x)[k] == old(map_next(x))[k];
-          //pure assert y == x.next ==> old(map_next(x))[k] == 0;
-          pure assert Ix1.fm[x1][y].ks[k] == Ix.fm[x1][y].ks[k];
-          pure assert Ix.inf[x1].ks[k] * Ix.fm[x1][y].ks[k] == Ix1.inf[x1].ks[k] * Ix1.fm[x1][y].ks[k];
-          pure assert Ix.inf[x1].ir[k] * Ix.fm[x1][y].ir[k] == Ix1.inf[x1].ir[k] * Ix1.fm[x1][y].ir[k];
-        }
+          pure assert
+            (Ix.inf[x1].ks[k] * Ix.fm[x1][y].ks[k] == Ix1.inf[x1].ks[k] * Ix1.fm[x1][y].ks[k])
+            && (Ix.inf[x1].ir[k] * Ix.fm[x1][y].ir[k] == Ix1.inf[x1].ir[k] * Ix1.fm[x1][y].ir[k]);
+      }
     }
   }
 
