@@ -543,8 +543,6 @@ procedure delete(x: Node, k: K, Ix: Interface)
   return true, (k in Ix.na.contents), Ix1;
 }
 
-/*
-
 /* Half split */
 
 define emptyInt(x, Ix) {  // TODO use newInt instead
@@ -612,7 +610,7 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
       pure assume false;
       pure assert forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x.indices[x.ptrs.map[i]] == i with {
         if (0 <= i <= x.len) {
-          var n := old(c.ptrs.map[m + (i - 0)]);
+          ghost var n := old(c.ptrs.map[m + (i - 0)]);
           pure assert x.ptrs.map[i] == n;
           pure assert cind[n] == m + (i - 0);
           pure assert x.indices[n] == cind[n] - m;
@@ -648,16 +646,24 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
 
     pure assert forall k: K, y: Node, z: Node :: Ix1.fm[x][y].ks[k] == 1 ==> y == z || Ix1.fm[x][z].ks[k] == 0 with {
       if (y != z && Ix1.fm[x][y].ks[k] == 1) {
-        pure assume Ix1.fm == flowmap(x);
+        pure assume false;
+        pure assert Ix1.fm == flowmap(x);
         if (Ix1.fm[x][z].ks[k] == 1) {
-          if (x.next == y) {
-            pure assert 0 <= x.indices[y] <= x.len ==> x.ptrs[x.indices[y]] == y;
-            pure assert 0 <= x.indices[z] <= x.len;
+          if (x.next == y || x.next == z) {
+            ghost var u: Node;
+            if (x.next == y) {
+              u := z;
+            } else {
+              u := y;
+            }
+            pure assert 0 <= x.indices[u] <= x.len;
             pure assert !lt(k, x.keys[x.len]);
-            pure assert lt(k, x.keys[x.indices[z]]);
-            pure assert !lt(x.keys[x.len], x.keys[x.indices[z]]);
-          } else {
-            assume false;
+            pure assert lt(k, x.keys[x.indices[u]]);
+            pure assert !lt(x.keys[x.len], x.keys[x.indices[u]]);
+          } else if (0 <= x.indices[y] <= x.len && 0 <= x.indices[z] <= x.len) {
+            pure assert x.indices[z] == x.indices[y] ==> x.ptrs[x.indices[z]] == y;
+            pure assert x.indices[y] < x.indices[z] && lt(x.keys.map[x.indices[y]], x.keys.map[x.indices[z]]) ||
+              x.indices[z] < x.indices[y] && lt(x.keys.map[x.indices[z]], x.keys.map[x.indices[y]]);
           }
         }
       }
@@ -666,6 +672,31 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     lemma_int_valid_fold(x, Ix1);
 
     pure assume forall n: Node, n1: Node :: n1 !in Ic1.FPo ==> domEq(Ic1.fm[n][n1], domZero());
+
+    pure assert forall k: K, y: Node, z: Node :: Ic1.fm[c][y].ks[k] == 1 ==> y == z || Ic1.fm[c][z].ks[k] == 0 with {
+      if (y != z && Ic1.fm[c][y].ks[k] == 1) {
+        pure assume false;
+        pure assert Ic1.fm == flowmap(c);
+        if (Ic1.fm[c][z].ks[k] == 1) {
+          if (c.next == y || c.next == z) {
+            var u: Node;
+            if (c.next == y) {
+              u := z;
+            } else {
+              u := y;
+            }
+            pure assert 0 <= c.indices[u] <= c.len;
+            pure assert !lt(k, c.keys[c.len]);
+            pure assert lt(k, c.keys[c.indices[u]]);
+            pure assert !lt(c.keys[c.len], c.keys[c.indices[u]]);
+          } else if (0 <= c.indices[y] <= c.len && 0 <= c.indices[z] <= c.len) {
+            pure assert c.indices[z] == c.indices[y] ==> c.ptrs[c.indices[z]] == y;
+            pure assert c.indices[y] < c.indices[z] && lt(c.keys.map[c.indices[y]], c.keys.map[c.indices[z]]) ||
+              c.indices[z] < c.indices[y] && lt(c.keys.map[c.indices[z]], c.keys.map[c.indices[y]]);
+          }
+        }
+      }
+    }
 
     lemma_int_valid_fold(c, Ic1);
     
@@ -692,6 +723,11 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
         //pure assert Ic.inf[c].ks[k] == Ic1.inf[c].ks[k];
         //pure assert Icx.inf[c].ks[k] == Ic.inf[c].ks[k];
         //pure assert Icx1.inf[c].ks[k] == Ic1.inf[c].ks[k];
+        pure assert Ix1.fm == flowmap(x) &&
+                    Ix.fm == old(flowmap(x)) &&
+                    Ic1.fm == flowmap(c) &&
+                    Ic.fm == old(flowmap(c));
+        
         pure assume Icx.inf[c] == Icx1.inf[c];
         
         pure assume Ix.inf[x] == domPlus(Icx.inf[x], domMult(Ic.inf[c], Ic.fm[c][x]));
@@ -743,4 +779,3 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
   }
 }
 
-*/
