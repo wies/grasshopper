@@ -43,7 +43,7 @@ let set3 struct_srt = mk_var (snd (s3 struct_srt)) (fst (s3 struct_srt))
 let intset1 = mk_var (snd is1) (fst is1)
 let int1 = mk_var (snd i1) (fst i1)
 let int2 = mk_var (snd i2) (fst i2)
-let arrst1 srt = mk_var (Map ([Loc (Array srt); Int], srt)) arrs
+let arrst1 srt = mk_var (Map ([Loc (Array srt)], Map([Int], srt))) arrs
     
 let reachwo_Fld f u v w = 
   mk_or [mk_btwn f u v w; mk_and [mk_reach f u v; mk_not (mk_reach f u w)]]
@@ -469,11 +469,13 @@ let array_axioms elem_srt =
   in
   let array_map_simple1 =
     smk_or ((if !Config.instantiate then [] else [mk_lt i (mk_int 0); mk_geq i (mk_length a)]) @
-           [mk_eq (mk_read arrstate [a; i]) (mk_read (App (ArrayMap, [arrstate; a], Map ([Int], elem_srt))) [i])])
+            [mk_eq (mk_read arrstate [a]) (App (ArrayMap, [mk_read arrstate [a]], Map ([Int], elem_srt)))]) |>
+            (fun f -> annotate f [NoInst [fst i1]])
   in
   let array_map_simple2 =
     mk_or [mk_and [mk_geq i (mk_int 0); mk_lt i (mk_length a)];
-           mk_eq (mk_read (App (ArrayMap, [arrstate; a], Map ([Int], elem_srt))) [i]) (mk_free_const (elem_srt) witness)] 
+           mk_eq (mk_read (App (ArrayMap, [mk_read arrstate [a]], Map ([Int], elem_srt))) [i]) (mk_free_const (elem_srt) witness)] |>
+            (fun f -> annotate f [NoInst [fst i1]])
   in
   let array_cells1 =
     mk_eq (mk_array_of_cell (mk_read (mk_array_cells a) [i])) a 
@@ -493,8 +495,8 @@ let array_axioms elem_srt =
   in
    *)
   let array_map_gen =
-    [([Match (mk_read arrstate [a; i], [])], [mk_read (App (ArrayMap, [arrstate; a], Map ([Int], elem_srt))) [i]]);
-     ([Match (mk_read (App (ArrayMap, [arrstate; a], Map ([Int], elem_srt))) [i], [])], [mk_read arrstate [a; i]])]
+    [([Match (mk_read arrstate [a], [])], [App (ArrayMap, [mk_read arrstate [a]], Map ([Int], elem_srt))]);
+     (*([Match (mk_read (App (ArrayMap, [mk_read arrstate [a]], Map ([Int], elem_srt))) [i], [])], [mk_read (mk_read arrstate [a]) [i]])*)]
   in
   let array_cell_gen =
     ([Match (c, [FilterSymbolNotOccurs ArrayOfCell;

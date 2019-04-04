@@ -25,7 +25,7 @@ let is_fp_func pred = Str.string_match (Str.regexp "footprint_of_.*") (name_of_p
 
 let array_state_srt simple srt =
   if simple
-  then Map ([Loc (Array srt); Int], srt)
+  then Map ([Loc (Array srt)], Map ([Int], srt))
   else Map ([Loc (ArrayCell srt)], srt)
 let array_state_id = mk_name_generator "array_state"
 let array_state simple srt =
@@ -176,13 +176,13 @@ let elim_arrays prog =
             in
             mk_read (array_state simple srt) [cell]
         | Loc (Array srt) ->
-            mk_read (array_state simple srt) [map; idx]
+            mk_read (mk_read (array_state simple srt) [map]) [idx]
         | _ -> mk_read map1 [idx1])
     | App (ArrayMap, [arr], msrt) ->
         let arr1 = compile_term arr in
         (match sort_of arr with
         | Loc (Array srt) ->
-            App (ArrayMap, [array_state simple srt; arr], msrt)
+            App (ArrayMap, [mk_read (array_state simple srt) [arr]], msrt)
         | _ -> mk_array_map arr1)
     | App (sym, ts, srt) ->
         let ts1 = List.map compile_term ts in
@@ -246,12 +246,16 @@ let elim_arrays prog =
                   let aux_ac = mk_assign_cmd [id1] [map1] pp.pp_pos in
                   aux_ac :: aux_cmds
                 in
+                let upd =
+                  if simple then mk_write (mk_read (array_state simple srt) [map1]) [idx1] upd1
+                  else upd1
+                in
                 let idx =
-                  if simple then [map1; idx1]
+                  if simple then [map1]
                   else [mk_read (mk_array_cells map1) [idx1]]
                 in
                 array_state_id srt :: lhs1,
-                mk_write (array_state simple srt) idx upd1 :: rhs1,
+                mk_write (array_state simple srt) idx upd :: rhs1,
                 aux_cmds1
             | id, t -> id :: lhs1, compile_term t :: rhs1, aux_cmds)            
             ac.assign_lhs ac.assign_rhs ([], [], [])
