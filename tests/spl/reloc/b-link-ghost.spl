@@ -329,18 +329,14 @@ procedure findNext(x: Node, k: K, Ix: Interface)
 {
   lemma_int_valid_unfold(x, Ix);
 
+  pure assert Ix.fm == flowmap(x);
   if (x.ptrs[0] == null) {  // Leaf node
     if (x.next == null) {
-      pure assert forall y: Node :: Ix.fm[x][y].ks[k] == flowmap(x)[x][y].ks[k]
-        && Ix.fm[x][y].ks[k] == 0;
       return null;
     }
     if (le(x.keys[x.len], k)) {
-      pure assert map_next(x)[k] >= 1;
       return x.next;
     } else {
-      pure assert forall y: Node :: Ix.fm[x][y].ks[k] == flowmap(x)[x][y].ks[k]
-        && Ix.fm[x][y].ks[k] == 0;
       return null;
     }
   }
@@ -354,28 +350,18 @@ procedure findNext(x: Node, k: K, Ix: Interface)
   if (i == x.len && x.next != null) {
     if (lt(k, x.keys[i])) {
       n := x.ptrs[i];
-      pure assert ks_child(x, n)[k] == 1;
-      pure assert 0 <= x.indices[n] <= x.len;
-      pure assert ks_child(x, n)[k] >= 1;
-      pure assert Ix.fm == flowmap(x);
-      pure assert Ix.fm[x][n].ks[k] == ks_child(x, n)[k];
-      //pure assert Ix.fm[x][n].ks == old(ks_child(x, n));
-      pure assert n != null ==> Ix.fm[x][n].ks[k] >= 1;
-      return n;
+      // return n;
     } else {
       n := x.next;
-      pure assert 0 > x.indices[n] || x.indices[n] > x.len || x.ptrs[x.indices[n]] == n;
-      pure assert Ix.fm == flowmap(x);
-      return n;
+      // return n;
     }
   } else {
-    pure assert i <= 0 || le(x.keys[i-1], k);
+    // pure assert i <= 0 || le(x.keys[i-1], k);
     n := x.ptrs[i];
-    pure assert Ix.fm == flowmap(x);
+    // return n;
+  }
     return n;
   }
-  // return n;
-}
 
 
 /** member */
