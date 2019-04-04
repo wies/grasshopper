@@ -77,6 +77,20 @@ define unchanged(x) {
 
 function hash(x: Node, k: K) returns (i: Int)
 
+// function flowmap(x: Node)
+//   returns (res: Map<Node,Map<Node, FlowDom>>)
+//   requires acc(x)
+// {
+//   { n: Node ::
+//     n == x ?
+//       (x.typ == root ?  // TODO ir component?
+//         { u: Node :: fd({ k: K :: u == x.bkts[hash(x, k)] ? 1 : 0 }, {k: K :: 0}) }
+//         : (x.next == null ? { u: Node :: domZero }
+//           : { u: Node :: fd({ k: K :: u == x.next ? 1 : 0 }, { k: K :: 0})}))
+//     : { u: Node :: domZero }
+//   }
+// }
+
 define hrepSpatial(x) {
   acc(x) &*& acc(x.bkts)  &*& acc(x.keys)
 }
@@ -92,8 +106,9 @@ define hrep(x, I) {
      || (x.typ == bucket
         && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> lt(x.keys[i], x.keys[j]))
         && I.na.contents == set_of_map(x.keys.map, 0, x.len)
-        && (x.next == null && I.FPo == {}
-        || x.next != null && (forall k: K :: I.fm[x][x.next].ks[k] == 1) && I.FPo == {x.next})))
+        && (x.next == null && (forall y: Node :: domEq(I.fm[x][y], domZero))
+        || x.next != null && (forall k: K :: I.fm[x][x.next].ks[k] == 1)
+          && (forall y: Node :: y != x.next ==> domEq(I.fm[x][y], domZero)))))
 }
 
 // The good condition
@@ -198,7 +213,8 @@ lemma flowint_cont(I: Interface, Im: Interface, I1: Interface, m: Node)
 {}
 
 lemma flowint_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Node, k: K)
-  requires I == intComp(I1, I2) && intValid(I) && x in I1.FP && I.FPo == {}
+  requires I == intComp(I1, I2) && intValid(I) && x in I1.FP
+  requires forall n: Node, n1: Node :: domEq(I.fm[n][n1], domZero)
   requires I1.fm[x][y].ks[k] >= 1
   ensures y in I2.FP
 {
