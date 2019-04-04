@@ -642,8 +642,15 @@ let elim_state prog =
                     preconds_w_implicits
                 in
                 (* quantify implicits *)
-                let preconds_w_implicits = quantify_implicits_in_specs locals implicits preconds_w_implicits in                  
-                List.map (fun sf -> mk_assert_cmd sf pp.pp_pos) (preconds_wo_implicits @ preconds_w_implicits),
+                let preconds_w_implicits = quantify_implicits_in_specs locals implicits preconds_w_implicits in
+                let assert_precond_combined =
+                  match preconds_wo_implicits @ preconds_w_implicits with
+                  | [] -> []
+                  | fst :: sfs as all ->
+                      let fs = List.map form_of_spec all in
+                      [mk_spec_form (FOL (mk_and fs)) fst.spec_name fst.spec_msg fst.spec_pos]
+                in
+                List.map (fun sf -> mk_assert_cmd sf pp.pp_pos) assert_precond_combined,
                 assume_precond_implicits
               in
               (* compute mod set and final substitution *)

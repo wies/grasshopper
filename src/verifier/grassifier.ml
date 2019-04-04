@@ -861,10 +861,11 @@ let elim_sl prog =
         sl_nonpure |>
         SlToGrass.to_grass (pred_to_form footprint_context) footprint_sets |>
         (fun f -> mk_and (f :: sl_pure @ fp_inclusions)) |>
-        post_process_form
+        post_process_form |>
+        (fun f -> split_ands [f])
         (*|> (fun f -> print_endline (string_of_ident contr.contr_name ^ " (after):"); print_form stdout f; print_newline (); f)*)
       in
-      let precond = mk_spec_form (FOL f_eq_init_footprint) name msg pos in
+      let precond = List.map (fun f -> mk_spec_form (FOL f) name msg pos) f_eq_init_footprint in
       let fp_name = "initial footprint of " ^ string_of_ident contr.contr_name in
       let null_not_in_alloc =
         SortSet.fold
@@ -906,7 +907,7 @@ let elim_sl prog =
           footprint_sorts
           []
       in
-      precond :: free_preconds @ tailrec_precond
+      precond @ free_preconds @ tailrec_precond
     in
     let other_precond = List.map (map_spec_fol_form post_process_form) other_precond in
     (* translate SL postcondition *)
