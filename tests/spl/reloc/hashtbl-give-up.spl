@@ -151,7 +151,7 @@ lemma flowint_proj(I: Interface, x: Node, Ix: Interface, Iy: Interface, k: K)
 }
 
 lemma flowint_cont(I: Interface, Im: Interface, I1: Interface, m: Node)
-  requires I1 == intComp(I, Im) && Im == newInt(m)
+  requires I1 == intComp(I, Im) && intValid(I1) && Im == newInt(m)
   ensures I.na.contents == I1.na.contents
 {}
 
