@@ -588,7 +588,9 @@ let string_of_arity arity =
     (fst arity)
     (string_of_sort (snd arity))
 
-
+(** Print list of identifiers [xs] to out channel [out_chan]. *)
+let print_ident_list out_ch xs = print_of_format pr_ident_list xs out_ch
+    
 (** Print term [t] to out channel [out_chan]. *)
 let print_term out_ch t = print_of_format pr_term t out_ch
 
