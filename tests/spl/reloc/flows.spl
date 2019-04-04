@@ -90,10 +90,10 @@ lemma lemma_int_comp_unfold(x: Node, Ix: Interface, y: Node, Iy: Interface, I: I
   ensures I.FP == {x, y}
   && domEq(Ix.inf[x], I.inf[x])
   && domEq(Iy.inf[y], domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y])))
-  && (forall n1: Node :: n1 != y ==>
+  && (forall n1: Node :: n1 !in I.FP ==>
            (domEq(I.fm[x][n1],
                     domPlus(Ix.fm[x][n1], domMult(Ix.fm[x][y], Iy.fm[y][n1])))))
-  && (forall n1: Node :: n1 != x ==> (domEq(I.fm[y][n1], Iy.fm[y][n1])))
+  && (forall n1: Node :: n1 !in I.FP ==> (domEq(I.fm[y][n1], Iy.fm[y][n1])))
 
 lemma lemma_int_comp_unfold_3(x: Node, Ix: Interface, y: Node, Iy: Interface,
                               z: Node, Iz: Interface, I: Interface)
