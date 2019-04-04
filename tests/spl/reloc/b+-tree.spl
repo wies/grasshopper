@@ -1,6 +1,6 @@
 /** B+ tree implementation of the give-up template for linearizable dictionaries. */
 
-options "-simplearrays -propreads -procedure init"
+options "-simplearrays -propreads"
 
 include "flows.spl"
 include "array_util.spl"
@@ -99,13 +99,14 @@ define hrep(x, I) {
     || I.inf[x].ks[k] == 0 && (lt(k, x.rangeLb) || le(x.rangeUb, k)))
     // Keys are sorted
     && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> lt(x.keys[i], x.keys[j]))
-    && (x.ptrs[0] == null && I.FPo == {}  // Leaf
+    && (x.ptrs[0] == null  // Leaf
+       && (forall n: Node, n1: Node :: domEq(I.fm[n][n1], domZero))
        && I.na.contents == set_of_map(x.keys.map, 0, x.len)
      || x.ptrs[0] != null  // Internal
        && I.na.contents == {}
        && (forall i: Int :: 0 <= i <= x.len ==> x != x.ptrs[i])
        && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> x.ptrs[i] != x.ptrs[j])
-       && (forall i: Int :: 0 <= i <= x.len ==> x.ptrs[i] != null && x.ptrs[i] in I.FPo)
+       && (forall i: Int :: 0 <= i <= x.len ==> x.ptrs[i] != null)
        && (forall i: Int, k: K :: 0 <= i <= x.len ==>
           (I.fm[x][x.ptrs[i]].ks[k] == 1
           && ((0 < i ==> le(x.keys[i-1], k)) && (i < x.len ==> lt(k, x.keys[i])))
@@ -181,7 +182,8 @@ lemma flowint_cont(I: Interface, Im: Interface, I1: Interface, m: Node)
 {}
 
 lemma flowint_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Node, k: K)
-  requires I == intComp(I1, I2) && intValid(I) && x in I1.FP && I.FPo == {}
+  requires I == intComp(I1, I2) && intValid(I) && x in I1.FP
+  requires forall n: Node, n1: Node :: domEq(I.fm[n][n1], domZero)
   requires I1.fm[x][y].ks[k] >= 1
   ensures y in I2.FP
 {
@@ -207,7 +209,7 @@ procedure init() returns (x: Node, I: Interface)
   var xkc := { k: K :: le(bottom, k) && lt(k, top) ? 1 : 0 };
   var xfm := { n: Node :: { n1: Node :: domZero } };
   I := int({ n: Node :: n == x ? fd(xkc, 1) : domZero },
-            nd({}), xfm, {x}, {});
+            nd({}), xfm, {x});
   lemma_int_valid_fold(x, I);
 }
 

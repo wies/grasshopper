@@ -131,13 +131,6 @@ function flowmap(x: Node)
   }
 }
 
-function domout(x: Node)
-  returns (res: Set<Node>)
-  requires acc(x)
-{
- { n: Node :: n == x.next && n != null || 0 <= x.indices[n] <= x.len }
-}
-
 function outset(x: Node)
   returns (res: Set<K>)
   requires acc(x)
@@ -219,7 +212,7 @@ function interface(x: Node)
   returns (res: Interface)
   requires acc(x)
 {
-  int(inflow(x), nodeabs(x, inflow(x)), flowmap(x), {x}, domout(x))
+  int(inflow(x), nodeabs(x, inflow(x)), flowmap(x), {x})
 }
 
 //define heapGood(x, I)
@@ -322,8 +315,6 @@ procedure init() returns (x: Node, I: Interface)
 
   I := interface(x);
     
-  pure assert forall n: Node, n1: Node :: n1 !in I.FPo ==> domEq(I.fm[n][n1], domZero());
-
   lemma_int_valid_fold(x, I);
 }
 
@@ -340,24 +331,16 @@ procedure findNext(x: Node, k: K, Ix: Interface)
 
   if (x.ptrs[0] == null) {  // Leaf node
     if (x.next == null) {
-      pure assert forall y: Node :: y in Ix.FPo ==> Ix.fm[x][y].ks[k] == 0;
-      pure assert forall y: Node :: y !in Ix.FPo ==> Ix.fm[x][y].ks[k] == 0;
+      pure assert forall y: Node :: Ix.fm[x][y].ks[k] == flowmap(x)[x][y].ks[k]
+        && Ix.fm[x][y].ks[k] == 0;
       return null;
     }
     if (le(x.keys[x.len], k)) {
       pure assert map_next(x)[k] >= 1;
       return x.next;
     } else {
-      pure assert forall y: Node :: y in Ix.FPo ==> Ix.fm[x][y].ks[k] == 0 with {
-        pure assert y == x.next ==> map_next(x)[k] == 0;
-        pure assert 0 <= x.indices[y] <= x.len ==> ks_child(x, y)[k] == 0;
-      }
-      pure assert forall y: Node :: y !in Ix.FPo ==> Ix.fm[x][y].ks[k] == 0 with {
-        if (y !in Ix.FPo) {
-          pure assert y != x.next;
-          pure assert Ix.fm[x][y].ks[k] == 0;
-        }
-      }
+      pure assert forall y: Node :: Ix.fm[x][y].ks[k] == flowmap(x)[x][y].ks[k]
+        && Ix.fm[x][y].ks[k] == 0;
       return null;
     }
   }
@@ -446,7 +429,6 @@ procedure insert(x: Node, k: K, Ix: Interface)
     lemma_int_valid_unfold(x, Ix);
     Ix1 := interface(x); //copy_interface(Ix, nd(Ix.na.contents ++ {k}, Ix.na.inr));
 
-    pure assert forall n: Node, n1: Node :: n1 !in Ix1.FPo ==> domEq(Ix1.fm[n][n1], domZero());
     pure assert forall k: K, y: Node :: k !in Ix1.na.contents || Ix1.fm[x][y].ks[k] == 0 with {
       if (Ix1.fm[x][y].ks[k] == 1) {
         pure assert y == x.next ==> map_next(x)[k] == 1;
@@ -511,7 +493,6 @@ procedure delete(x: Node, k: K, Ix: Interface)
   
   lemma_int_valid_unfold(x, Ix);
 
-  pure assert forall n: Node, n1: Node :: n1 !in Ix1.FPo ==> domEq(Ix1.fm[n][n1], domZero());
   pure assert forall k: K, y: Node :: k !in Ix1.na.contents || Ix1.fm[x][y].ks[k] == 0 with {
     if (Ix1.fm[x][y].ks[k] == 1) {
       pure assert y == x.next ==> map_next(x)[k] == 1;
@@ -546,7 +527,8 @@ procedure delete(x: Node, k: K, Ix: Interface)
 /* Half split */
 
 define emptyInt(x, Ix) {  // TODO use newInt instead
-  Ix.FP == {x} && domEq(Ix.inf[x], domZero()) == true && Ix.FPo == {}
+  Ix.FP == {x} && domEq(Ix.inf[x], domZero()) == true
+  && (forall y: Node :: domEq(Ix.fm[x][y], domZero))
   && Ix.na == nd({}, inrfnC({n: Node :: {}}, {x}))
 }
 
@@ -558,7 +540,8 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
   requires x.keys.length == 2*B && x.ptrs.length == 2*B
   requires c.len == 2 * B - 1
   // Follows from x being allocated freshly
-  requires x !in Ic.FPo && c.next != x && (forall i: Int :: 0 <= i <= c.len ==> x != c.ptrs[i])
+  requires domEq(Ic.fm[c][x], domZero) && c.next != x
+    && (forall i: Int :: 0 <= i <= c.len ==> x != c.ptrs[i])
 
   ensures hrep(c, Ic1) &*& hrep(x, Ix1)
   ensures intValid(Ic1) == true && intValid(Ix1) == true
@@ -642,7 +625,7 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
       pure assert (Ix1.inf[x].ks[k] == 1) == (le(x.rangeLb, k) && lt(k, x.rangeUb));
     }
     
-    pure assume forall n: Node, n1: Node :: n1 !in Ix1.FPo ==> domEq(Ix1.fm[n][n1], domZero());
+    // pure assume forall n: Node, n1: Node :: n1 !in Ix1.FPo ==> domEq(Ix1.fm[n][n1], domZero());
 
     pure assert forall k: K, y: Node, z: Node :: Ix1.fm[x][y].ks[k] == 1 ==> y == z || Ix1.fm[x][z].ks[k] == 0 with {
       if (y != z && Ix1.fm[x][y].ks[k] == 1) {
@@ -670,8 +653,6 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     }
           
     lemma_int_valid_fold(x, Ix1);
-
-    pure assume forall n: Node, n1: Node :: n1 !in Ic1.FPo ==> domEq(Ic1.fm[n][n1], domZero());
 
     pure assert forall k: K, y: Node, z: Node :: Ic1.fm[c][y].ks[k] == 1 ==> y == z || Ic1.fm[c][z].ks[k] == 0 with {
       if (y != z && Ic1.fm[c][y].ks[k] == 1) {
