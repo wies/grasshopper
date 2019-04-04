@@ -787,18 +787,20 @@ let compile_axioms_to_ematch_code ?(force=false) ?(stratify=(!Config.stratify)) 
       in
       fvars, IdSrtSet.union strat_vars1 strat_vars0
     in
-    let strat_var_ids = IdSrtSet.fold (fun (id, _) acc -> IdSet.add id acc) strat_vars IdSet.empty in 
+    let strat_var_ids = IdSrtSet.fold (fun (id, _) acc -> IdSet.add id acc) strat_vars IdSet.empty in
     (* collect all terms in which free variables appear below function symbols *)
     let fun_terms, fun_vars, strat_terms = 
       let rec tt (fun_terms, fun_vars, strat_terms) t =
         match t with
-        | App (sym, _ :: _, srt) when srt <> Bool ->
+        | App (sym, (_ :: _ as ts), srt) when srt <> Bool ->
             let tvs = fv_term t in
             if IdSet.is_empty tvs then
               fun_terms, fun_vars, strat_terms
             else if IdSet.is_empty (IdSet.inter strat_var_ids tvs)
             then TermSet.add t fun_terms, IdSet.union tvs fun_vars, strat_terms
-            else fun_terms, fun_vars, TermSet.add t strat_terms
+            else
+              List.fold_left tt 
+                (fun_terms, fun_vars, TermSet.add t strat_terms) ts
         | App (_, ts, _) ->
             List.fold_left tt (fun_terms, fun_vars, strat_terms) ts
         | _ -> fun_terms, fun_vars, strat_terms
