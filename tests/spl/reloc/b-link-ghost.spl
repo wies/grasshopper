@@ -519,14 +519,161 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
   var m := (c.len + 1) / 2;
 
   if (c.ptrs[0] == null) {  // Leaf
+    lemma_int_valid_unfold(x, Ix);
+    lemma_int_valid_unfold(c, Ic);
+    lemma_int_valid_unfold_I(Icx);
+    lemma_int_comp_unfold(c, Ic, x, Ix, Icx);
+    pure assert Ic.fm == old(flowmap(c));
+
     arr_copy(c.keys, x.keys, m, 0, c.len - m + 1);
     x.ptrs[0] := null;
     x.len := m - 1;
     x.next := c.next;
     c.len := m;
     c.next := x;
+    x.rangeLb := c.keys[c.len];
     x.rangeUb := c.rangeUb;
-    pure assume false;
+
+    c.indices := { n: Node :: -1 };
+    x.indices := { n: Node :: -1 };
+
+    Ic1 := interface(c);
+    Ix1 := interface(x);
+
+    // pure assume intValid(Ic1) && intValid(Ix1);
+    // Prove contents subsetof keyset
+    pure assert forall k: K, y: Node :: k in Ic1.na.contents
+        ==> Ic1.inf[c].ks[k] >= 1 && Ic1.fm[c][y].ks[k] == 0
+    with {
+      if (k in Ic1.na.contents) {
+        not_in_sorted_seg(c.keys.map, 0, c.len, k);
+        pure assert le(c.rangeLb, k) && lt(k, c.rangeUb);
+      }
+    }
+    pure assert forall k: K, y: Node :: k in Ix1.na.contents
+        ==> Ix1.inf[x].ks[k] >= 1 && Ix1.fm[x][y].ks[k] == 0
+    with {
+      if (k in Ix1.na.contents) {
+        not_in_sorted_seg(x.keys.map, 0, x.len, k);
+        pure assert le(x.rangeLb, k) && lt(k, x.rangeUb);
+      }
+    }
+    // Prove inreach keyset subsetof inset
+    pure assert forall k: K :: Ix1.inf[x].ir[k] >= 1 && k !in outset(x)
+       ==> Ix1.inf[x].ks[k] >= 1
+    with {
+      if (Ix1.inf[x].ir[k] >= 1) {
+        pure assert !lt(k, x.rangeLb) && lt(k, top);
+        if (le(x.rangeUb, k)) {
+          pure assert x.next != null && !lt(k, x.keys[x.len]) && lt(k, top);
+        }
+      }
+    }
+    lemma_int_valid_fold(c, Ic1);
+    lemma_int_valid_fold(x, Ix1);
+
+    // pure assume domLeq(domMult(Ic1.inf[c], Ic1.fm[c][x]), Ix1.inf[x]);
+    pure assert domLeq(domMult(Ic1.inf[c], Ic1.fm[c][x]), Ix1.inf[x]) with {
+      pure assert Ix1.fm == flowmap(x) && Ic1.fm == flowmap(c);
+      pure assert forall k: K :: domMult(Ic1.inf[c], Ic1.fm[c][x]).ks[k] <= Ix1.inf[x].ks[k] &&
+        domMult(Ic1.inf[c], Ic1.fm[c][x]).ir[k] <= Ix1.inf[x].ir[k] with {
+        pure assert Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k] <= Ix1.inf[x].ks[k] &&
+           Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k] <= Ix1.inf[x].ir[k];
+        pure assert domMult_ks(Ic1.inf[c], Ic1.fm[c][x])[k] <= Ix1.inf[x].ks[k]
+          && domMult_ir(Ic1.inf[c], Ic1.fm[c][x])[k] <= Ix1.inf[x].ir[k];
+        pure assert domMult(Ic1.inf[c], Ic1.fm[c][x]).ks[k] <= Ix1.inf[x].ks[k] &&
+          domMult(Ic1.inf[c], Ic1.fm[c][x]).ir[k] <= Ix1.inf[x].ir[k];
+      }
+    }
+    Icx1 := lemma_int_comp_fold(c, Ic1, x, Ix1);
+
+    lemma_int_comp_unfold(c, Ic1, x, Ix1, Icx1);
+    lemma_int_valid_unfold_I(Icx1);
+
+    // pure assume Icx.na.contents == Icx1.na.contents;
+    pure assert Icx.na.contents == Icx1.na.contents with {
+      set_of_map_split(c.keys.map, 0, c.len, old(c.len));
+      pure assert Icx.na.contents == set_of_map(c.keys.map, 0, old(c.len));
+      pure assert Ic1.na.contents == set_of_map(c.keys.map, 0, c.len);
+      pure assume Ix1.na.contents == set_of_map(c.keys.map, c.len, old(c.len));  // TODO
+      pure assert Icx1.na.contents == Ic1.na.contents ++ Ix1.na.contents;
+    }
+
+    // pure assume forall z: Node :: domEq(Icx.inf[z], Icx1.inf[z]);
+    pure assert forall z: Node :: domEq(Icx.inf[z], Icx1.inf[z]) with {
+      pure assert forall k: K ::
+        Icx.inf[z].ks[k] == Icx1.inf[z].ks[k] && Icx.inf[z].ir[k] == Icx1.inf[z].ir[k]
+      with {
+        pure assert Ix.inf[x].ks[k] == Icx.inf[x].ks[k] + domMult(Ic.inf[c], Ic.fm[c][x]).ks[k]
+          && Ix.inf[x].ir[k] == Icx.inf[x].ir[k] + domMult(Ic.inf[c], Ic.fm[c][x]).ir[k]
+          && Ix.inf[x].ks[k] == Icx.inf[x].ks[k] + Ic.inf[c].ks[k] * Ic.fm[c][x].ks[k]
+          && Ix.inf[x].ir[k] == Icx.inf[x].ir[k] + Ic.inf[c].ir[k] * Ic.fm[c][x].ir[k]
+          && Ix1.inf[x].ks[k] == Icx1.inf[x].ks[k] + Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k]
+          && Ix1.inf[x].ir[k] == Icx1.inf[x].ir[k] + Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k];
+      }
+    }
+
+    // pure assume forall n: Node, n1: Node ::
+    //   n in Icx.FP && n1 !in Icx.FP ==>
+    //   domEq(domMult(Icx.inf[n], Icx.fm[n][n1]), domMult(Icx1.inf[n], Icx1.fm[n][n1]));
+    pure assert forall n: Node, n1: Node ::
+      n in Icx.FP && n1 !in Icx.FP ==>
+      domEq(domMult(Icx.inf[n], Icx.fm[n][n1]), domMult(Icx1.inf[n], Icx1.fm[n][n1]))
+    with {
+      if (n in Icx.FP && n1 !in Icx.FP) {
+        pure assert forall k: K ::
+          domMult(Icx.inf[n], Icx.fm[n][n1]).ks[k] == domMult(Icx1.inf[n], Icx1.fm[n][n1]).ks[k]
+          && domMult(Icx.inf[n], Icx.fm[n][n1]).ir[k] == domMult(Icx1.inf[n], Icx1.fm[n][n1]).ir[k]
+          && Icx.inf[n].ks[k] * Icx.fm[n][n1].ks[k] == Icx1.inf[n].ks[k] * Icx1.fm[n][n1].ks[k]
+          && Icx.inf[n].ir[k] * Icx.fm[n][n1].ir[k] == Icx1.inf[n].ir[k] * Icx1.fm[n][n1].ir[k]
+        with {
+          // First, n == x:
+          // Old and new inflow equations (only for x though)
+          pure assert Ix.inf[x].ks[k] == Icx.inf[x].ks[k] + domMult(Ic.inf[c], Ic.fm[c][x]).ks[k]
+            && Ix.inf[x].ir[k] == Icx.inf[x].ir[k] + domMult(Ic.inf[c], Ic.fm[c][x]).ir[k]
+            && Ix.inf[x].ks[k] == Icx.inf[x].ks[k] + Ic.inf[c].ks[k] * Ic.fm[c][x].ks[k]
+            && Ix.inf[x].ir[k] == Icx.inf[x].ir[k] + Ic.inf[c].ir[k] * Ic.fm[c][x].ir[k]
+            && Ix1.inf[x].ks[k] == Icx1.inf[x].ks[k] + Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k]
+            && Ix1.inf[x].ir[k] == Icx1.inf[x].ir[k] + Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k];
+          pure assert Icx.inf[x].ks[k] == 0 && Icx.inf[x].ir[k] == 0
+            && Icx1.inf[x].ks[k] == 0 && Icx1.inf[x].ir[k] == 0;
+          
+          // Now, n == c:
+          pure assert Icx.inf[c] == Icx1.inf[c] && Icx.inf[x] == Icx1.inf[x]
+            && Ic1.fm[c][x].ks[k] == map_next(c)[k] && Ic.fm[c][x].ks[k] == 0
+            && Ic1.fm[c][x].ir[k] == map_next(c)[k] && Ic.fm[c][x].ir[k] == 0
+            && Ix.fm[x][n1].ks[k] == 0 && Ix.fm[x][n1].ir[k] == 0;
+
+          pure assert
+            // Old flow map equation
+            Icx.fm[c][n1] == domPlus(Ic.fm[c][n1], domMult(Ic.fm[c][x], Ix.fm[x][n1]))
+            && Icx.fm[c][n1].ks[k] == Ic.fm[c][n1].ks[k] + domMult(Ic.fm[c][x], Ix.fm[x][n1]).ks[k]
+            && Icx.fm[c][n1].ir[k] == Ic.fm[c][n1].ir[k] + domMult(Ic.fm[c][x], Ix.fm[x][n1]).ir[k]
+            && Icx.fm[c][n1].ks[k] == Ic.fm[c][n1].ks[k] + Ic.fm[c][x].ks[k] * Ix.fm[x][n1].ks[k]
+            && Icx.fm[c][n1].ir[k] == Ic.fm[c][n1].ir[k] + Ic.fm[c][x].ir[k] * Ix.fm[x][n1].ir[k]
+          // New flow map equation
+            && Icx1.fm[c][n1] == domPlus(Ic1.fm[c][n1], domMult(Ic1.fm[c][x], Ix1.fm[x][n1]))
+            && Icx1.fm[c][n1].ks[k] == Ic1.fm[c][n1].ks[k] + domMult(Ic1.fm[c][x], Ix1.fm[x][n1]).ks[k]
+            && Icx1.fm[c][n1].ir[k] == Ic1.fm[c][n1].ir[k] + domMult(Ic1.fm[c][x], Ix1.fm[x][n1]).ir[k]
+            && Icx1.fm[c][n1].ks[k] == Ic1.fm[c][n1].ks[k] + Ic1.fm[c][x].ks[k] * Ix1.fm[x][n1].ks[k]
+            && Icx1.fm[c][n1].ir[k] == Ic1.fm[c][n1].ir[k] + Ic1.fm[c][x].ir[k] * Ix1.fm[x][n1].ir[k];
+
+          if (n1 == old(c.next)) {  // n1 was c's right sibling
+            pure assert Ic.fm[c][n1].ks[k] == old(map_next(c))[k]
+              && Ic.fm[c][n1].ir[k] == old(map_next(c))[k]
+              && Ic1.fm[c][n1].ks[k] == 0
+              && Ic1.fm[c][n1].ir[k] == 0
+              && Ix1.fm[x][n1].ks[k] == map_next(x)[k]
+              && Ix1.fm[x][n1].ir[k] == map_next(x)[k]
+              && x.keys[x.len] == old(c.keys)[old(c.len)];
+          } else {  // there was no edge from n1 to c
+            pure assert Ic.fm[c][n1].ks[k] == 0 && Ic.fm[c][n1].ir[k] == 0
+                && Ic1.fm[c][n1].ks[k] == 0 && Ic1.fm[c][n1].ir[k] == 0
+                && Ix1.fm[x][n1].ks[k] == 0 && Ix1.fm[x][n1].ir[k] == 0;
+          }
+        }
+      }
+    }
   } else {  // Internal node
     lemma_int_valid_unfold(x, Ix);
     lemma_int_valid_unfold(c, Ic);
