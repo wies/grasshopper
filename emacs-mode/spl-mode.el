@@ -46,7 +46,7 @@
 
 (defconst spl-builtins '("import"  "yields" "exists" "forall" "Btwn" "Reach" "Disjoint" "Frame" "in" "old" "subsetof"))
 
-(defconst spl-keywords '("havoc" "free" "choose" "else" "if" "new" "return" "while" "matching" "yields" "with" "without" "pattern" "known"))
+(defconst spl-keywords '("havoc" "free" "choose" "else" "if" "new" "return" "while" "matching" "yields" "with" "without" "pattern" "noinst" "known"))
 
 ;(defconst dafny-all-keywords (cl-loop for source in '(dafny-defuns dafny-specifiers dafny-modifiers
 ;                                                      dafny-builtins dafny-keywords dafny-types)
