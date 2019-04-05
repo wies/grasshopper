@@ -179,10 +179,6 @@ lemma outset_correct2(x: Node, Ix: Interface, k: K)
 
     if (i == x.len && x.next != null) {
       if (lt(k, x.keys.map[i])) {
-        //pure assert x.indices[x.ptrs[i]] == i;
-        //pure assert lt(k, x.keys.map[i]);
-        //pure assert i > 0 ==> lt(x.keys.map[i - 1], x.keys.map[i]);
-        //pure assert 0 < i ==> le(x.keys.map[i - 1], k);
         y := x.ptrs[i];
         pure assert flowmap(x)[x][y] == fd(ks_child(x, y), mapZero);
         return y;
@@ -194,10 +190,6 @@ lemma outset_correct2(x: Node, Ix: Interface, k: K)
       }
     } else {
       pure assert i <= 0 || le(x.keys.map[i-1], k);
-      //pure assert x.next == null ==> i < x.len;
-      //pure assert lt(k, x.keys.map[i]);
-      //pure assert 0 <= i && (x.next == null && i < x.len || x.next != null && i <= x.len);
-      //pure assert x.indices[x.ptrs.map[i]] == i;
       y := x.ptrs[i];
       pure assert flowmap(x)[x][y] == fd(ks_child(x, y), mapZero);
       pure assert flowmap(x)[x][y].ks == ks_child(x, y);
@@ -368,7 +360,6 @@ procedure findNext(x: Node, k: K, Ix: Interface)
       // return n;
     }
   } else {
-    // pure assert i <= 0 || le(x.keys[i-1], k);
     n := x.ptrs[i];
     // return n;
   }
@@ -426,12 +417,10 @@ procedure insert(x: Node, k: K, Ix: Interface)
 
     map_insert_content_set(m, x.keys.map, idx, k, old_len, new_len);
     lemma_int_valid_unfold(x, Ix);
-    Ix1 := interface(x); //copy_interface(Ix, nd(Ix.na.contents ++ {k}, Ix.na.inr));
+    Ix1 := interface(x);
 
     pure assert Ix1.fm == flowmap(x) && Ix.fm == old(flowmap(x));
     lemma_int_valid_fold(x, Ix1);
-
-    // pure assert Ix1.na.contents == Ix.na.contents ++ {k};
 
     pure assert intEq(Ix, Ix1) with {
       pure assert forall x1: Node, y: Node ::
@@ -486,8 +475,6 @@ procedure delete(x: Node, k: K, Ix: Interface)
 
   pure assert Ix1.fm == flowmap(x) && Ix.fm == old(flowmap(x));
   lemma_int_valid_fold(x, Ix1);
-
-  // pure assert Ix1.na.contents == Ix.na.contents -- {k};
 
   pure assert intEq(Ix, Ix1) with {
     pure assert forall x1: Node, y: Node ::
