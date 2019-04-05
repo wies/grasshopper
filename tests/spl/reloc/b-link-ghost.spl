@@ -281,7 +281,6 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
   ensures x.ptrs[0] == null  // x is a leaf
 {
   if (x.ptrs[0] != null && i < x.len && !lt(k, x.keys[i])) {
-    pure assume false;
     keyset_implies_leaf(x, Ix, k, i + 1);
     return;
   } else {
