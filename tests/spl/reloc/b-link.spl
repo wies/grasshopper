@@ -11,17 +11,6 @@ include "array_util.spl"
 
 datatype FlowDom = fd(ks: Map<K, Int>, ir: Map<K, Int>)
 
-/*
-pure predicate domEq(p1: FlowDom, p2: FlowDom) {
-  p1.ks == p2.ks && p1.ir == p2.ir
-  //  (forall k: K :: p1.ks[k] == p2.ks[k]
-  //   @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
-  //    && (forall k: K :: p1.ir[k] == p2.ir[k]
-  //     @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
-
-}
- */
-
 pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
   (forall k: K :: p1.ks[k] <= p2.ks[k]
     @(matching p1.ks[k] yields p2.ks[k]) @(matching p2.ks[k] yields p1.ks[k]))
@@ -29,17 +18,17 @@ pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
     @(matching p1.ir[k] yields p2.ir[k]) @(matching p2.ir[k] yields p1.ir[k]))
 }
 
-pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 {
   fd({k: K :: p1.ks[k] + p2.ks[k]}, {k: K :: p1.ir[k] + p2.ir[k]})
 }
 
-pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 {
   fd({k: K :: p1.ks[k] * p2.ks[k]}, {k: K :: p1.ir[k] * p2.ir[k]})
 }
 
-pure function domZero() returns(p: FlowDom)
+function domZero() returns(p: FlowDom)
 {
   fd({k: K :: 0}, {k: K :: 0})
 }
@@ -75,7 +64,7 @@ pure function ndJoin(a1: NodeDom, a2: NodeDom) returns (a: NodeDom)
          a1.outs ++ a2.outs)
 }*/
 
-pure function ndBot() returns (a: NodeDom)
+function ndBot() returns (a: NodeDom)
 {
   nd({}, inrfnC({n: Node :: {}}, {}), {})
 }
@@ -160,7 +149,7 @@ function inflow(x: Node, xrangeLb: K, xrangeUb: K) returns (i: Map<Node, FlowDom
            {k: K :: le(xrangeLb, k) && lt(k, top) ? 1 : 0}) }
 }
 
-pure function outset(x: Node, xnext: Node, xkeys: Map<Int, K>, xptrs: Map<Int, Node>,
+function outset(x: Node, xnext: Node, xkeys: Map<Int, K>, xptrs: Map<Int, Node>,
                      xlen: Int, i: Int)
   returns (O: Set<K>)
 {

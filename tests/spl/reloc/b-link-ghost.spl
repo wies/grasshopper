@@ -1,6 +1,6 @@
 /** B+ tree implementation of the link template for linearizable dictionaries. */
 
-options "-abspreds -simplearrays -propreads"
+options "-abspreds -simplearrays -propreads -stratify"
 
 include "flows.spl"
 include "array_util.spl"
@@ -432,7 +432,6 @@ procedure insert(x: Node, k: K, Ix: Interface)
         }
       }
     }
-    
     return true, old_len != new_len, Ix1;
   } else {
     return false, false, Ix;
