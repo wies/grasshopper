@@ -1,6 +1,6 @@
 /** Linked list implementation of the lock coupling template for linearizable dictionaries. */
 
-options "-abspreds -simplearrays -propreads"
+options "-abspreds -simplearrays -propreads -stratify"
 
 include "flows.spl"
 include "array_util.spl"
@@ -14,15 +14,22 @@ pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
   (forall k: K :: p1.ks[k] <= p2.ks[k])
 }
 
-pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-  ensures forall k: K :: p.ks[k] == p1.ks[k] + p2.ks[k]
+function domPlus(p1: FlowDom, p2: FlowDom)
+  returns (p: FlowDom)
+{
+  fd({k: K :: p1.ks[k] + p2.ks[k]})
+}
 
-pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
-  ensures forall k: K :: p.ks[k] == p1.ks[k] * p2.ks[k]
+function domMult(p1: FlowDom, p2: FlowDom)
+  returns (p: FlowDom)
+{
+  fd({k: K :: p1.ks[k] * p2.ks[k]})
+}
 
-pure function domZero() returns(p: FlowDom)
-  ensures forall k: K :: p.ks[k] == 0
-
+function domZero() returns(p: FlowDom)
+{
+  fd({k: K :: 0})
+}
 
 datatype NodeDom = nd(contents: Set<K>);
 
@@ -30,11 +37,11 @@ pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
   (forall k: K :: k in a1.contents ==> k in a2.contents)
 }
 
-pure function ndJoin(a1: NodeDom, a2: NodeDom) returns (a: NodeDom) {
+function ndJoin(a1: NodeDom, a2: NodeDom) returns (a: NodeDom) {
   nd(a1.contents ++ a2.contents)
 }
 
-pure function ndBot() returns (a: NodeDom)
+function ndBot() returns (a: NodeDom)
 {
   nd({})
 }
@@ -77,8 +84,8 @@ define hrep(x, I) {
   &*& (forall k: K :: I.inf[x].ks[k] == 1 || I.inf[x].ks[k] == 0)
   &*& (forall k: K :: le(x.data, k) ==> I.inf[x].ks[k] == 1)
   &*& I.fm == fmap(x)
-  &*& (x.next == null && x.data == top && I.FPo == {}
-     || x.next != null && x.data != top && I.FPo == {x.next})
+  &*& (x.next == null && x.data == top 
+     || x.next != null && x.data != top)
 }
 
 // The good condition
@@ -99,7 +106,7 @@ procedure int_of_node(p: Node, pinfLb: K) returns (Ip: Interface)
   ensures hrep(p, Ip) &*& nu(p, Ip)
 {
   var pinf := { x: Node :: x == p ? fd({ k: K :: lt(pinfLb, k) ? 1 : 0 }) : domZero };
-  Ip := int(pinf, nd({p.data}), fmap(p), {p}, {p.next});
+  Ip := int(pinf, nd({p.data}), fmap(p), {p});
 }
 
 /** findNext */
@@ -148,7 +155,7 @@ procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, 
   requires hrep(p, Ip) &*& hrep(n, In) &*& acc(m)
   requires intValid(Ip) == true &*& intValid(In) == true &*& intValid(Im) == true 
   requires Ipnm == intComp(Ip, intComp(In, Im)) &*& intValid(Ipnm)
-  requires Im.FP == {m} && Im.FPo == {} && (forall k: K, y: Node :: Im.inf[y].ks[k] == 0)
+  requires Im.FP == {m} && (forall k: K, y: Node :: Im.inf[y].ks[k] == 0)
   requires (forall k: K, x: Node, y: Node :: Im.fm[x][y].ks[k] == 0)
   requires Ip.fm[p][n].ks[k] == 1
   requires In.inf[n].ks[k] == 1 && (forall y: Node :: In.fm[n][y].ks[k] == 0)
@@ -192,6 +199,14 @@ procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, 
     pure assert forall k: K :: In.fm[n][p].ks[k] == 0;
   }
 
+  pure assert domEq(Im.fm[m][n], domZero()) with {
+    pure assert forall k: K :: Im.fm[m][n].ks[k] == 0;
+  }
+
+  pure assert domEq(Im.fm[m][p], domZero()) with {
+    pure assert forall k: K :: Im.fm[m][p].ks[k] == 0;
+  }
+
   lemma_int_comp_unfold_3(p, Ip, n, In, m, Im, Ipnm);
 
   pure assert Im.na.contents == {} with {
@@ -201,13 +216,17 @@ procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, 
   }
   
   // Define Ip1
-  Ip1 := int(Ip.inf, Ip.na, fmap(p), {p}, {m});
+  Ip1 := int(Ip.inf, Ip.na, fmap(p), {p});
 
+  pure assert forall n: Node :: n !in Ip1.FP ==> domEq(Ip1.inf[n], domZero()) with {
+    pure assert forall k: K :: n !in Ip1.FP ==> Ip1.inf[n].ks[k] == 0;
+  }
+  
   lemma_int_valid_fold(p, Ip1);
 
   // Define Im1
   ghost var minf1 := { n1: Node :: n1 == m ? fd({ k1: K :: lt(p.data, k1) ? 1 : 0}): domZero };
-  Im1 := int(minf1, nd({k}), fmap(m), {m}, {n});
+  Im1 := int(minf1, nd({k}), fmap(m), {m});
 
   lemma_int_valid_fold(m, Im1);
 
@@ -215,21 +234,27 @@ procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, 
   ghost var ninf1 := { n1: Node :: n1 == n ? fd({ k1: K :: In.inf[n].ks[k1] == 1 && le(k1, p.data) || lt(k, k1) ? 1 : 0}) : domZero };
 
   //var ninf1 := { n1: Node :: n1 == n ? fd({ k1: K :: lt(k, k1) ? 1 : 0}) : domZero };
-  In1 := int(ninf1, In.na, fmap(n), In.FP, In.FPo);
+  In1 := int(ninf1, In.na, fmap(n), In.FP);
 
   // Prove some properties for precondition of lemma_int_valid_fold(n, In1)
   pure assert forall n1: Node, n2: Node, k: K :: old(fmap(n)[n1][n2].ks[k]) == In.fm[n1][n2].ks[k];
   pure assert forall n1: Node, n2: Node, k: K :: In.fm[n1][n2].ks[k] == In1.fm[n1][n2].ks[k];
   
   // Prove precondition of lemma_int_valid_fold(n, In1);
-  pure assert forall n: Node, n1: Node :: n1 !in In1.FPo ==> domEq(In1.fm[n][n1], domZero());
+  //pure assert forall n: Node, n1: Node :: n1 !in In1.FPo ==> domEq(In1.fm[n][n1], domZero());
   pure assert forall n: Node :: n !in In1.FP ==> domEq(In1.inf[n], domZero());
   pure assert forall n1: Node, k1: K :: domZero.ks[k1] <= In1.inf[n1].ks[k1] with {
     pure assert n1 != n ==> In1.inf[n1].ks[k1] == domZero.ks[k1];
     pure assert n1 == n && (In.inf[n1].ks[k1] == 1 && le(k1, p.data) || lt(k, k1)) ==> In1.inf[n1].ks[k1] == 1;
-    pure assert n1 == n && !(In.inf[n1].ks[k1] == 1 && le(k1, p.data) || lt(k, k1)) ==> In1.inf[n1].ks[k1] == 0;
+    pure assert n1 == n && !(In.inf[n1].ks[k1] == 1 && le(k1, p.data) || lt(k, k1)) ==> In1.inf[n1].ks[k1] == 0; // no noinst
   }
 
+  pure assert (forall k1: K :: k1 in In1.na.contents ==> In1.inf[n].ks[k1] >= 1) with {
+    if (k1 in In1.na.contents) {
+      pure assert In.fm[n][n.next].ks[k] == 0; // noinst
+    }
+  }
+  
   lemma_int_valid_fold(n, In1);
   
   // Prove hrep(n, In1)
@@ -253,14 +278,11 @@ procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, 
 
   pure assert In1.fm[n][m] == domZero with {
     pure assert forall k1: K :: In1.fm[n][m].ks[k1] == domZero.ks[k1] with {
-      pure assert Im.inf[m].ks[top] ==
-        domPlus(Ipnm.inf[m], domPlus(domMult(Ip.inf[p], Ip.fm[p][m]), domMult(In.inf[n], In.fm[n][m]))).ks[top]
-      && Im.inf[m].ks[top] ==
-        Ipnm.inf[m].ks[top] + domPlus(domMult(Ip.inf[p], Ip.fm[p][m]), domMult(In.inf[n], In.fm[n][m])).ks[top]
-      && Im.inf[m].ks[top] ==
-        Ipnm.inf[m].ks[top] + (domMult(Ip.inf[p], Ip.fm[p][m]).ks[top] + domMult(In.inf[n], In.fm[n][m]).ks[top])
-      && Ipnm.inf[m].ks[top] + (Ip.inf[p].ks[top] * Ip.fm[p][m].ks[top] + In.inf[n].ks[top] * In.fm[n][m].ks[top]) <= Im.inf[m].ks[top]
-      && In1.inf[n].ks[k1] * In1.fm[n][m].ks[k1] == domZero.ks[k1]; 
+      pure assert true
+        && Im.inf[m].ks[top] == domPlus(Ipnm.inf[m], domPlus(domMult(Ip.inf[p], Ip.fm[p][m]), domMult(In.inf[n], In.fm[n][m]))).ks[top]
+        && Im.inf[m].ks[top] == Ipnm.inf[m].ks[top] + domPlus(domMult(Ip.inf[p], Ip.fm[p][m]), domMult(In.inf[n], In.fm[n][m])).ks[top]
+        && Im.inf[m].ks[top] == Ipnm.inf[m].ks[top] + (domMult(Ip.inf[p], Ip.fm[p][m]).ks[top] + domMult(In.inf[n], In.fm[n][m]).ks[top])
+        && Ipnm.inf[m].ks[top] + (Ip.inf[p].ks[top] * Ip.fm[p][m].ks[top] + In.inf[n].ks[top] * In.fm[n][m].ks[top]) <= Im.inf[m].ks[top];
     }
   }
     
@@ -269,7 +291,9 @@ procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, 
       pure assert Ip1.inf[p].ks[k] * Ip1.fm[p][n].ks[k] == 0;
       pure assert domMult(Ip1.inf[p], Ip1.fm[p][n]).ks[k] == 0;
       pure assert domMult(Ip1.inf[p], Ip1.fm[p][n]).ks[k] + domMult(Im1.inf[m], Im1.fm[m][n]).ks[k] ==
-        domMult(Im1.inf[m], Im1.fm[m][n]).ks[k]; 
+        domMult(Im1.inf[m], Im1.fm[m][n]).ks[k];
+        //pure assert domPlus(domMult(Ip1.inf[p], Ip1.fm[p][n]),        domMult(Im1.inf[m], Im1.fm[m][n])).ks[k] ==
+        //                  domMult(Ip1.inf[p], Ip1.fm[p][n]).ks[k] + domMult(Im1.inf[m], Im1.fm[m][n]).ks[k];
     }
   }
   
@@ -280,9 +304,24 @@ procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, 
     }
 
   }
-  
+
+  pure assert domEq(Im1.fm[m][p], domZero()) with {
+    pure assert forall k: K :: Im1.fm[m][p].ks[k] == 0;
+  }
+
+  pure assert domEq(In1.fm[n][p], domZero()) with {
+    pure assert forall k: K :: In1.fm[n][p].ks[k] == 0;
+  }
+
+  pure assert domEq(In1.fm[n][m], domZero()) with {
+    pure assert forall k: K :: In1.fm[n][m].ks[k] == 0;
+  }
+
   Ipnm1 := lemma_int_comp_fold_3(p, Ip1, m, Im1, n, In1);
   lemma_int_comp_unfold_3(p, Ip1, m, Im1, n, In1, Ipnm1);
+
+  pure assert forall y: Node :: domEq(Ipnm1.fm[p][y], domPlus(Ip1.fm[p][y], domPlus(domMult(Ip1.fm[p][n], In1.fm[n][y]), domMult(Ip1.fm[p][m], Ipnm1.fm[m][y]))));
+        
   lemma_int_valid_unfold_I(Ipnm1);
   
 
@@ -300,11 +339,11 @@ procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, 
   pure assert forall k: K :: Ipnm.inf[m].ks[k] == 0 with {
     pure assert Im.inf[m].ks[k] == 0;
 
-    pure assert domEq(Im.inf[m], domPlus(Ipnm.inf[m], domPlus(domMult(Ip.inf[p], Ip.fm[p][m]), domMult(In.inf[n], In.fm[n][m]))))
-    && Im.inf[m].ks[k] == domPlus(Ipnm.inf[m], domPlus(domMult(Ip.inf[p], Ip.fm[p][m]), domMult(In.inf[n], In.fm[n][m]))).ks[k]
-    && Im.inf[m].ks[k] == Ipnm.inf[m].ks[k] + domPlus(domMult(Ip.inf[p], Ip.fm[p][m]), domMult(In.inf[n], In.fm[n][m])).ks[k]
-    && Im.inf[m].ks[k] == Ipnm.inf[m].ks[k] + (domMult(Ip.inf[p], Ip.fm[p][m]).ks[k] + domMult(In.inf[n], In.fm[n][m]).ks[k])
-    && Im.inf[m].ks[k] == Ipnm.inf[m].ks[k] + (Ip.inf[p].ks[k] * Ip.fm[p][m].ks[k] + In.inf[n].ks[k] * In.fm[n][m].ks[k]);
+    pure assert domEq(Im.inf[m], domPlus(Ipnm.inf[m], domPlus(domMult(Ip.inf[p], Ip.fm[p][m]), domMult(In.inf[n], In.fm[n][m]))));
+    pure assert Im.inf[m].ks[k] == domPlus(Ipnm.inf[m], domPlus(domMult(Ip.inf[p], Ip.fm[p][m]), domMult(In.inf[n], In.fm[n][m]))).ks[k];
+    pure assert Im.inf[m].ks[k] == Ipnm.inf[m].ks[k] + domPlus(domMult(Ip.inf[p], Ip.fm[p][m]), domMult(In.inf[n], In.fm[n][m])).ks[k];
+    pure assert Im.inf[m].ks[k] == Ipnm.inf[m].ks[k] + (domMult(Ip.inf[p], Ip.fm[p][m]).ks[k] + domMult(In.inf[n], In.fm[n][m]).ks[k]);
+    pure assert Im.inf[m].ks[k] == Ipnm.inf[m].ks[k] + (Ip.inf[p].ks[k] * Ip.fm[p][m].ks[k] + In.inf[n].ks[k] * In.fm[n][m].ks[k]);
   }
 
   pure assert forall x: Node :: Ipnm1.inf[x] == Ipnm.inf[x] with {
@@ -367,26 +406,30 @@ procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, 
       pure assert Ipnm.inf[n].ks[k] * Ipnm.fm[n][y].ks[k] == Ipnm1.inf[n].ks[k] * Ipnm1.fm[n][y].ks[k];
       // x == p
 
-      pure assert domEq(Ipnm.fm[p][y], domPlus(Ip.fm[p][y], domPlus(domMult(Ip.fm[p][m], Im.fm[m][y]), domMult(Ip.fm[p][n], Ipnm.fm[n][y]))))
-      && Ipnm.fm[p][y].ks[k] == domPlus(Ip.fm[p][y], domPlus(domMult(Ip.fm[p][m], Im.fm[m][y]), domMult(Ip.fm[p][n], Ipnm.fm[n][y]))).ks[k]
-      && Ipnm.fm[p][y].ks[k] == Ip.fm[p][y].ks[k] + domPlus(domMult(Ip.fm[p][m], Im.fm[m][y]), domMult(Ip.fm[p][n], Ipnm.fm[n][y])).ks[k]
-      && Ipnm.fm[p][y].ks[k] == Ip.fm[p][y].ks[k] + (domMult(Ip.fm[p][m], Im.fm[m][y]).ks[k] + domMult(Ip.fm[p][n], Ipnm.fm[n][y]).ks[k])
-      && Ipnm.fm[p][y].ks[k] == Ip.fm[p][y].ks[k] + (Ip.fm[p][m].ks[k] * Im.fm[m][y].ks[k] + Ip.fm[p][n].ks[k] * Ipnm.fm[n][y].ks[k]);
+      pure assert true
+        && domEq(Ipnm.fm[p][y], domPlus(Ip.fm[p][y], domPlus(domMult(Ip.fm[p][m], Im.fm[m][y]), domMult(Ip.fm[p][n], Ipnm.fm[n][y]))))
+        && Ipnm.fm[p][y].ks[k] == domPlus(Ip.fm[p][y], domPlus(domMult(Ip.fm[p][m], Im.fm[m][y]), domMult(Ip.fm[p][n], Ipnm.fm[n][y]))).ks[k]
+        && Ipnm.fm[p][y].ks[k] == Ip.fm[p][y].ks[k] + domPlus(domMult(Ip.fm[p][m], Im.fm[m][y]), domMult(Ip.fm[p][n], Ipnm.fm[n][y])).ks[k]
+        && Ipnm.fm[p][y].ks[k] == Ip.fm[p][y].ks[k] + (domMult(Ip.fm[p][m], Im.fm[m][y]).ks[k] + domMult(Ip.fm[p][n], Ipnm.fm[n][y]).ks[k])
+        && domMult(Ip.fm[p][m], Im.fm[m][y]).ks[k] == Ip.fm[p][m].ks[k] * Im.fm[m][y].ks[k]
+        && domMult(Ip.fm[p][n], Ipnm.fm[n][y]).ks[k] == Ip.fm[p][n].ks[k] * Ipnm.fm[n][y].ks[k]
+        && Ipnm.fm[p][y].ks[k] == Ip.fm[p][y].ks[k] + (Ip.fm[p][m].ks[k] * Im.fm[m][y].ks[k] + Ip.fm[p][n].ks[k] * Ipnm.fm[n][y].ks[k]);
 
 
-      pure assert domEq(Ipnm1.fm[m][y], domPlus(Im1.fm[m][y], domMult(Im1.fm[m][n], In1.fm[n][y])))
-      && Ipnm1.fm[m][y].ks[k] == domPlus(Im1.fm[m][y], domMult(Im1.fm[m][n], In1.fm[n][y])).ks[k]
-      && Ipnm1.fm[m][y].ks[k] == Im1.fm[m][y].ks[k] + domMult(Im1.fm[m][n], In1.fm[n][y]).ks[k]  
-      && Ipnm1.fm[m][y].ks[k] == Im1.fm[m][y].ks[k] + Im1.fm[m][n].ks[k] * In1.fm[n][y].ks[k]; 
-     
-      pure assert domEq(Ipnm1.fm[p][y], domPlus(Ip1.fm[p][y], domPlus(domMult(Ip1.fm[p][n], In1.fm[n][y]), domMult(Ip1.fm[p][m], Ipnm1.fm[m][y]))))
-      && Ipnm1.fm[p][y].ks[k] == domPlus(Ip1.fm[p][y], domPlus(domMult(Ip1.fm[p][n], In1.fm[n][y]), domMult(Ip1.fm[p][m], Ipnm1.fm[m][y]))).ks[k]
-      && Ipnm1.fm[p][y].ks[k] == Ip1.fm[p][y].ks[k] + domPlus(domMult(Ip1.fm[p][n], In1.fm[n][y]), domMult(Ip1.fm[p][m], Ipnm1.fm[m][y])).ks[k]
-      && Ipnm1.fm[p][y].ks[k] == Ip1.fm[p][y].ks[k] + (domMult(Ip1.fm[p][n], In1.fm[n][y]).ks[k] + domMult(Ip1.fm[p][m], Ipnm1.fm[m][y]).ks[k])
-      && Ipnm1.fm[p][y].ks[k] == Ip1.fm[p][y].ks[k] + (Ip1.fm[p][n].ks[k] * In1.fm[n][y].ks[k] + Ip1.fm[p][m].ks[k] * Ipnm1.fm[m][y].ks[k]); 
+      pure assert true
+        && domEq(Ipnm1.fm[m][y], domPlus(Im1.fm[m][y], domMult(Im1.fm[m][n], In1.fm[n][y])))
+        && Ipnm1.fm[m][y].ks[k] == domPlus(Im1.fm[m][y], domMult(Im1.fm[m][n], In1.fm[n][y])).ks[k]
+        && Ipnm1.fm[m][y].ks[k] == Im1.fm[m][y].ks[k] + domMult(Im1.fm[m][n], In1.fm[n][y]).ks[k] 
+        && Ipnm1.fm[m][y].ks[k] == Im1.fm[m][y].ks[k] + Im1.fm[m][n].ks[k] * In1.fm[n][y].ks[k]; 
+        
+      pure assert domEq(Ipnm1.fm[p][y], domPlus(Ip1.fm[p][y], domPlus(domMult(Ip1.fm[p][n], In1.fm[n][y]), domMult(Ip1.fm[p][m], Ipnm1.fm[m][y]))));
 
-      pure assert Ipnm.inf[p].ks[k] * Ipnm.fm[p][y].ks[k] == Ipnm1.inf[p].ks[k] * Ipnm1.fm[p][y].ks[k];
-      
+      pure assert true
+        && Ipnm1.fm[p][y].ks[k] == domPlus(Ip1.fm[p][y], domPlus(domMult(Ip1.fm[p][n], In1.fm[n][y]), domMult(Ip1.fm[p][m], Ipnm1.fm[m][y]))).ks[k]
+        && Ipnm1.fm[p][y].ks[k] == Ip1.fm[p][y].ks[k] + domPlus(domMult(Ip1.fm[p][n], In1.fm[n][y]), domMult(Ip1.fm[p][m], Ipnm1.fm[m][y])).ks[k]
+        && Ipnm1.fm[p][y].ks[k] == Ip1.fm[p][y].ks[k] + (domMult(Ip1.fm[p][n], In1.fm[n][y]).ks[k] + domMult(Ip1.fm[p][m], Ipnm1.fm[m][y]).ks[k])
+        && Ipnm1.fm[p][y].ks[k] == Ip1.fm[p][y].ks[k] + (Ip1.fm[p][n].ks[k] * In1.fm[n][y].ks[k] + Ip1.fm[p][m].ks[k] * Ipnm1.fm[m][y].ks[k])
+        && Ipnm.inf[p].ks[k] * Ipnm.fm[p][y].ks[k] == Ipnm1.inf[p].ks[k] * Ipnm1.fm[p][y].ks[k];
       
       pure assert Ipnm.inf[x].ks[k] * Ipnm.fm[x][y].ks[k] == Ipnm1.inf[x].ks[k] * Ipnm1.fm[x][y].ks[k];
     }

@@ -120,7 +120,7 @@ function map_copy_node(m1: Map<Int, Node>, m2: Map<Int, Node>, src: Int, dst: In
 
 pure predicate sorted_map_seg(m: Map<Int, K>, i: Int, j: Int)
 {
-  forall i1: Int, i2: Int :: i <= i1 < i2 < j ==> lt(m[i1], m[i2])
+  forall i1: Int, i2: Int :: i <= i1 < i2 < j ==> lt(m[i1], m[i2]) @(noinst i1) @(noinst i2)
 }
 
 define sorted_array_prefix(a, len)
