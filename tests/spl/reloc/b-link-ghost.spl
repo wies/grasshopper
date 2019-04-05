@@ -541,6 +541,7 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     Ix1 := interface(x);
 
     // pure assume intValid(Ic1) && intValid(Ix1);
+    pure assert intValid(Ic1) with {
     // Prove contents subsetof keyset
     pure assert forall k: K, y: Node :: k in Ic1.na.contents
         ==> Ic1.inf[c].ks[k] >= 1 && Ic1.fm[c][y].ks[k] == 0
@@ -550,6 +551,9 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
         pure assert le(c.rangeLb, k) && lt(k, c.rangeUb);
       }
     }
+      lemma_int_valid_fold(c, Ic1);
+    }
+    pure assert intValid(Ix1) with {
     pure assert forall k: K, y: Node :: k in Ix1.na.contents
         ==> Ix1.inf[x].ks[k] >= 1 && Ix1.fm[x][y].ks[k] == 0
     with {
@@ -569,8 +573,8 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
         }
       }
     }
-    lemma_int_valid_fold(c, Ic1);
     lemma_int_valid_fold(x, Ix1);
+    }
 
     // pure assume domLeq(domMult(Ic1.inf[c], Ic1.fm[c][x]), Ix1.inf[x]);
     pure assert domLeq(domMult(Ic1.inf[c], Ic1.fm[c][x]), Ix1.inf[x]) with {
