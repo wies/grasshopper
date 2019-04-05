@@ -539,7 +539,7 @@ and pr_annot ppf a =
   in
   let pr_noinsts ppf = function
     | [] -> ()
-    | xs -> fprintf ppf "@ @[<3>(noinsts %a)@]" pr_ident_list xs
+    | xs -> fprintf ppf "@ @[<3>@@(noinst %a)@]" pr_ident_list xs
   in
   fprintf ppf "%a%a%a%a" pr_generators gen pr_patterns pat pr_comment (name, pos, lbl) pr_noinsts noinsts
  
