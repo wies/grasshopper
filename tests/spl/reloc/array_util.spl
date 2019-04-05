@@ -218,6 +218,19 @@ lemma map_delete_content_set(m: Map<Int, K>, m1: Map<Int, K>, len: Int, new_len:
   set_of_map_split(m1, 0, idx, len - 1);
 }
 
+lemma map_copy_content_set(a: Map<Int, K>, m: Map<Int, K>, m1: Map<Int, K>,
+    src: Int, dst: Int, len: Int, i: Int, j: Int)
+  requires m1 == map_copy(m, a, src, dst, len)
+  requires 0 <= i <= j <= len && 0 <= src <= src + len && 0 <= dst <= dst + len
+  ensures set_of_map(m1, dst + i, dst + j) == set_of_map(a, src + i, src + j)
+{
+  if (i < j) {
+    map_copy_content_set(a, m, m1, src, dst, len, i + 1, j);
+    pure assert m1[dst + i] == a[src + ((dst + i) - dst)];
+  }
+}
+
+
 /** Programs */
 
 // Initialize a[0..len] with value x

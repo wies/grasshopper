@@ -521,7 +521,7 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     lemma_int_comp_unfold(c, Ic, x, Ix, Icx);
     pure assert Ic.fm == old(flowmap(c));
 
-    arr_copy(c.keys, x.keys, m, 0, c.len - m + 1);
+    arr_copy(c.keys, x.keys, m, 0, m);
     x.ptrs[0] := null;
     x.len := m - 1;
     x.next := c.next;
@@ -592,11 +592,8 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
 
     // pure assume Icx.na.contents == Icx1.na.contents;
     pure assert Icx.na.contents == Icx1.na.contents with {
-      set_of_map_split(c.keys.map, 0, c.len, old(c.len));
-      pure assert Icx.na.contents == set_of_map(c.keys.map, 0, old(c.len));
-      pure assert Ic1.na.contents == set_of_map(c.keys.map, 0, c.len);
-      pure assume Ix1.na.contents == set_of_map(c.keys.map, c.len, old(c.len));  // TODO
-      pure assert Icx1.na.contents == Ic1.na.contents ++ Ix1.na.contents;
+      set_of_map_split(c.keys.map, 0, m, old(c.len));
+      map_copy_content_set(c.keys.map, old(x.keys.map), x.keys.map, m, 0, m, 0, m - 1);
     }
 
     // pure assume forall z: Node :: domEq(Icx.inf[z], Icx1.inf[z]);
