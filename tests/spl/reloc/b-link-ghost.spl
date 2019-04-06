@@ -223,7 +223,7 @@ function interface(x: Node)
 predicate heapGood(x: Node)
   requires hrepSpatial(x)
 {
-  x.next != x && 0 <= x.len < 2*B && (x.next == null ==> x.rangeUb == top)
+  x.next != x && 0 <= x.len < 2*B && (x.next == null ==> x.rangeUb == top && x.keys[x.len] == top)
   // Keys are sorted (TODO: internal vs. child?)
   && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> lt(x.keys[i], x.keys[j]) @(noinst i) @(noinst j))
   // Keys are in the range
@@ -239,8 +239,9 @@ predicate heapGood(x: Node)
   // Indices of outgoing pointers are stored in x.indices
   && (forall n: Node :: 0 <= x.indices[n] <= x.len ==> x.ptrs.map[x.indices[n]] == n)
   && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x.indices[x.ptrs.map[i]] == i)
+  && (forall n: Node :: -1 <= x.indices[n] <= x.len)
   && (x.ptrs[0] == null ==> (forall n: Node :: x.indices[n] == -1 @(noinst n)))
-  && x.indices[x.next] == -1
+  && x.indices[x.next] == -1  // TODO these two might be redundant
   && x.indices[x] == -1
   // Internal nodes don't point to null
   && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x.ptrs[i] != null)
@@ -348,7 +349,7 @@ procedure init() returns (x: Node, I: Interface)
 {
   x := new Node;
   x.keys := new Array<K>(2*B);
-  x.keys[0] := bottom;
+  x.keys[0] := top;
   x.ptrs := new Array<Node>(2*B);
   x.ptrs[0] := null;
   x.len := 0;
@@ -836,3 +837,110 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
   }
 }
 
+
+/** Full split */
+
+procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
+    Ipc: Interface, x: Node)
+  returns (Ip1: Interface, Ic1: Interface, Ipc1: Interface)
+  requires hrep(p, Ip) &*& hrep(c, Ic)
+  requires intValid(Ip) && intValid(Ic)
+  requires intComp(Ip, Ic) == Ipc && intValid(Ipc)
+  requires p.ptrs[0] != null && p.ptrs[ci] == c && 0 <= ci <= p.len && c.next == x
+  requires p.len < 2*B - 1 && p.indices[c] == ci
+  // Needed to show sortedness, and in range, of p.keys:
+  requires ks_child(p, c)[c.keys[c.len]] == 1
+    && (ci == 0 && le(p.rangeLb, c.keys[c.len]) || ci > 0 && lt(p.keys[ci - 1], c.keys[c.len]))
+  // Nothing == x:
+  requires c != x && p != x && p.next != x && (forall i: Int :: 0 <= i <= p.len ==> p.ptrs[i] != x)
+    && p.indices[x] == -1
+  requires Ic.fm[c][p] == domZero  // needed for int_comp_unfold
+
+  ensures hrep(p, Ip1) &*& hrep(c, Ic1)
+  ensures intValid(Ip1) && intValid(Ic1)
+  ensures intComp(Ip1, Ic1) == Ipc1 && intEq(Ipc, Ipc1)
+  ensures Ipc.na.contents == Ipc1.na.contents
+{
+  var k := c.keys[c.len];  // everything >= k goes to x
+
+  lemma_int_valid_unfold(p, Ip);
+  lemma_int_valid_unfold(c, Ic);
+  lemma_int_valid_unfold_I(Ipc);
+  lemma_int_comp_unfold(p, Ip, c, Ic, Ipc);
+
+  var pind := p.indices;  // TODO why doesn't old(p.indices) work?
+  var plen := p.len;
+
+  arr_shift(p.keys, ci, ci + 1, p.len + 1 - ci);
+  arr_shift_node(p.ptrs, ci + 1, ci + 2, p.len - ci);
+
+  p.keys[ci] := k;
+  p.ptrs[ci + 1] := x;
+  c.rangeUb := k;
+  p.len := p.len + 1;
+
+  p.indices := { n: Node :: n == x ? ci + 1 : (ci + 1 <= pind[n] <= plen ? pind[n] + 1 : pind[n]) };
+
+  pure assert heapGood(p) with {
+    // pure assume 
+    //   (forall i: Int, j: Int :: 0 <= i < j <= p.len ==> lt(p.keys[i], p.keys[j]) @(noinst i) @(noinst j));
+    pure assert (forall i: Int, j: Int :: 0 <= i < j <= p.len ==> lt(p.keys[i], p.keys[j]) @(noinst i) @(noinst j)) with {  // This works, but takes ages
+      pure assert ci < i <= p.len ==> p.keys[i] == old(p.keys[ci + (i - (ci + 1))]);
+      pure assert ci < j <= p.len ==> p.keys[j] == old(p.keys[ci + (j - (ci + 1))]);
+    }
+    pure assert (forall i: Int :: 0 <= i && (p.next == null && i < p.len || p.next != null && i <= p.len)
+         ==> !lt(p.keys[i], p.rangeLb) && lt(p.keys[i], p.rangeUb) @(noinst i)) with {
+      pure assert ci < i <= p.len ==> p.keys[i] == old(p.keys[ci + (i - (ci + 1))]);
+    }
+    pure assert forall n: Node :: 0 <= p.indices[n] <= p.len ==> p.ptrs.map[p.indices[n]] == n with {
+      pure assert ci + 1 < old(p.indices[n]) <= old(p.len)
+        ==> old(p.ptrs.map[p.indices[n]]) == n;
+      pure assert ci + 1 < old(p.indices[n]) <= old(p.len)
+        ==> p.ptrs[old(p.indices[n]) + 1] == n;
+        // ==> p.ptrs[i] == old(p.ptrs.map)[(ci + 1) + (i - (ci + 2))];
+        if (0 <= p.indices[n] < ci + 1) {
+          // assume false;
+        } else if (p.indices[n] == ci + 1) {
+          // assume false;
+        } else if (ci + 1 < p.indices[n] <= p.len) {
+          pure assert old(p.indices[n]) == p.indices[n] - 1;
+          pure assert p.ptrs.map[p.indices[n]] == old(p.ptrs.map)[p.indices[n] - 1];
+          pure assert 0 <= p.indices[n] - 1 <= old(p.len);
+          assume false; // TODO
+        }
+    }
+    pure assert forall i: Int :: p.ptrs[0] != null && 0 <= i <= p.len ==> p.indices[p.ptrs.map[i]] == i with {
+      pure assert ci + 1 < i <= p.len ==> p.ptrs[i] == old(p.ptrs.map)[(ci + 1) + (i - (ci + 2))];
+    }
+  }
+
+  assume false;
+  
+  pure assert true
+  // && p.next != p && 0 <= p.len < 2*B && (p.next == null ==> p.rangeUb == top && p.keys[p.len] == top)
+  // // Keys are sorted (TODO: internal vs. child?)
+  // && (forall i: Int, j: Int :: 0 <= i < j <= p.len ==> lt(p.keys[i], p.keys[j]) @(noinst i) @(noinst j))
+  // // Keys are in the range
+  // && (forall i: Int :: 0 <= i && (p.next == null && i < p.len || p.next != null && i <= p.len)
+  //      ==> !lt(p.keys[i], p.rangeLb) && lt(p.keys[i], p.rangeUb) @(noinst i))
+  // // All outgoing pointers are distinct
+  // && (forall i: Int :: p.ptrs[0] != null && 0 <= i <= p.len
+  //      ==> p != p.ptrs[i])
+  // && (forall i: Int :: p.ptrs[0] != null && 0 <= i <= p.len
+  //      ==> p.ptrs[i] != p.next)
+  // && (forall i: Int, j: Int :: p.ptrs[0] != null && 0 <= i < j <= p.len
+  //      ==> p.ptrs[i] != p.ptrs[j])
+  // // Indices of outgoing pointers are stored in p.indices
+  // && (forall n: Node :: 0 <= p.indices[n] <= p.len ==> p.ptrs.map[p.indices[n]] == n)
+  && (forall i: Int :: p.ptrs[0] != null && 0 <= i <= p.len ==> p.indices[p.ptrs.map[i]] == i)
+  // && (p.ptrs[0] == null ==> (forall n: Node :: p.indices[n] == -1 @(noinst n)))
+  // && p.indices[p.next] == -1
+  // && p.indices[p] == -1
+  // // Internal nodes don't point to null
+  // && (forall i: Int :: p.ptrs[0] != null && 0 <= i <= p.len ==> p.ptrs[i] != null)
+  ;
+  assume false;
+
+  Ip1 := compute_interface(p);
+  Ic1 := compute_interface(c);
+}
