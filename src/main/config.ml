@@ -7,6 +7,10 @@ let base_dir = ref ""
 (** Name of procedure that is to be checked *)
 let procedure = ref None
 
+(** Name of assertion that is to be checked *)
+let assertion = ref None
+
+    
 (** File name where counterexample model is saved. *)
 let model_file = ref ""
 (** Display the edges going to null in the model *)
@@ -108,6 +112,7 @@ let cmd_options_spec =
    ("-dumpvcs", Arg.Set dump_smt_queries, " Generate SMT-LIB 2 files for all verification conditions");
    ("-dumpcores", Arg.Set unsat_cores, " Produce unsat cores with every unsat SMT query\n\nOptions for controlling what is checked:");
    ("-procedure", Arg.String (fun p -> procedure := Some p), "<string>  Only check the specified procedure");
+   ("-assertion", Arg.String (fun p -> assertion := Some p), "<string>  Only check the specified assertion");
    ("-typeonly", Arg.Set typeonly, " Only type-check the program");
    ("-simplify", Arg.Set simplify, " Only type-check the program and output a simplified version of the input program");
    ("-symbexec", Arg.Set symbexec, " Use symbolic execution to check the program");

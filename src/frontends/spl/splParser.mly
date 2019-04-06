@@ -572,7 +572,10 @@ stmt_wo_trailing_substmt:
 }
 /* assert */
 | contract_mods ASSERT expr with_clause {
-  $4 (fst $1) $3 (mk_position (if $1 <> (false, false) then 1 else 2) 4)
+  $4 (fst $1) $3 (mk_position (if $1 <> (false, false) then 1 else 2) 4) None
+}
+| contract_mods ASSERT STRINGVAL expr with_clause {
+  $5 (fst $1) $4 (mk_position (if $1 <> (false, false) then 1 else 2) 5) (Some $3)
   (*Assert ($3, fst $1, mk_position (if $1 <> (false, false) then 1 else 2) 4)*)
 }
 /* split */
@@ -587,10 +590,10 @@ stmt_wo_trailing_substmt:
 
 with_clause:
 | SEMICOLON { 
-  fun pure e pos -> Assert (e, pure, pos)
+  fun pure e pos name -> Assert (e, pure, name, pos)
 }
 | WITH LBRACE block RBRACE {
-  fun pure e pos ->
+  fun pure e pos name ->
     let vs, e1, pos1 = match e with
     | Binder (Forall, vars, e1, pos1) when pure ->
         let vs =
@@ -608,7 +611,7 @@ with_clause:
     in
     let checks =
       LocalVars (vs, None, pos) ::
-      List.append $3 [Assert (e1, true, pos1); Assume (BoolVal (false, pos), true, pos)]
+      List.append $3 [Assert (e1, true, name, pos1); Assume (BoolVal (false, pos), true, pos)]
     in
     Choice ([Assume (e, true, pos); Block (checks, pos)], pos)
 }

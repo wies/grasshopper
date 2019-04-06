@@ -400,8 +400,8 @@ let resolve_names cu =
             Havoc (ids, pos), locals, tbl)
     | Assume (e, pure, pos) ->
         Assume (resolve_expr locals tbl e, pure, pos), locals, tbl
-    | Assert (e, pure, pos) ->
-        Assert (resolve_expr locals tbl e, pure, pos), locals, tbl
+    | Assert (e, pure, name, pos) ->
+        Assert (resolve_expr locals tbl e, pure, name, pos), locals, tbl
     | Split (e, pos) ->
         Split (resolve_expr locals tbl e, pos), locals, tbl
     | Assign (lhs, rhs, pos) ->
@@ -764,9 +764,9 @@ let flatten_exprs cu =
     | Assume (e, pure, pos) ->
         let e1, aux1, locals = flatten_expr scope ([], aux_funs) locals locals e in
         Assume (e1, pure, pos), locals, snd aux1
-    | Assert (e, pure, pos) ->
+    | Assert (e, pure, name, pos) ->
         let e1, aux1, locals = flatten_expr scope ([], aux_funs) locals locals e in
-        Assert (e1, pure, pos), locals, snd aux1
+        Assert (e1, pure, name, pos), locals, snd aux1
     | Split (e, pos) ->
         let e1, aux1, locals = flatten_expr scope ([], aux_funs) locals locals e in
         Split (e1, pos), locals, snd aux1
@@ -961,8 +961,8 @@ let infer_types cu =
         failwith "infer_types: LocalVars should have been eliminated"
     | Assume (e, pure, pos) ->
         Assume (check_spec locals pure e, pure, pos)
-    | Assert (e, pure, pos) ->
-        Assert (check_spec locals pure e, pure, pos)
+    | Assert (e, pure, name, pos) ->
+        Assert (check_spec locals pure e, pure, name, pos)
     | Split (e, pos) ->
         Split (check_spec locals false e, pos)
     | Assign (lhs, [ProcCall (id, args, cpos) as e], pos) ->

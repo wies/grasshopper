@@ -590,8 +590,9 @@ let convert cu =
       | Assume (e, pure, pos) ->
           let sf = convert_spec_form pure false proc.p_locals e "assume" None in
           mk_assume_cmd sf pos
-      | Assert (e, pure, pos) ->
-          let sf = convert_spec_form pure false proc.p_locals e "assert" None in
+      | Assert (e, pure, name, pos) ->
+          let name = Opt.get_or_else "assert" name in
+          let sf = convert_spec_form pure false proc.p_locals e name None in
           mk_assert_cmd sf pos
       | Split (e, pos) ->
           let sf = convert_spec_form false false proc.p_locals e "assert" None in

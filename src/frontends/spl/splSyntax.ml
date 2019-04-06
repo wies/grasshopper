@@ -138,7 +138,7 @@ and stmt =
   | Block of stmts * pos
   | LocalVars of var list * exprs option * pos
   | Assume of expr * bool * pos
-  | Assert of expr * bool * pos
+  | Assert of expr * bool * string option * pos
   | Split of expr * pos
   | Assign of exprs * exprs * pos
   | Havoc of exprs * pos
@@ -392,7 +392,7 @@ let pos_of_stmt = function
   | Block (_, pos)
   | LocalVars (_, _, pos)
   | Assume (_, _, pos)
-  | Assert (_, _, pos)
+  | Assert (_, _, _, pos)
   | Split (_, pos)
   | Assign (_, _, pos)
   | Dispose (_, pos)
@@ -552,8 +552,8 @@ let replace_macros prog =
       LocalVars (vs, Util.Opt.map (List.map repl_expr) es, p)
     | Assume (e, b, p) ->
       Assume (repl_expr e, b, p)
-    | Assert (e, b, p) ->
-      Assert (repl_expr e, b, p)
+    | Assert (e, b, n, p) ->
+      Assert (repl_expr e, b, n, p)
     | Split (e, p) ->
       Split (repl_expr e, p)
     | Assign (vs, es, p) ->
@@ -899,8 +899,9 @@ let rec pr_stmt ppf =
       fprintf ppf "var @[<2>%a :=@ %a@];" pr_var_list vs pr_expr_list es
   | Assume (e, p, _) ->
       fprintf ppf "%sassume @[<2>%a@];" (if p then "pure " else "") pr_expr e
-  | Assert (e, p, _) ->
-      fprintf ppf "%sassert @[<2>%a@];" (if p then "pure " else "") pr_expr e
+  | Assert (e, p, n, _) ->
+      let name = n |> Opt.map ((^) " ") |> Opt.get_or_else "" in
+      fprintf ppf "%sassert%s @[<2>%a@];" (if p then "pure " else "") name pr_expr e
   | Split (e, _) ->
       fprintf ppf "split @[<2>%a@]" pr_expr e
   | Assign ([], es, _) ->

@@ -570,9 +570,16 @@ let vcgen prog proc =
               | FOL f -> acc, [mk_name name (unoldify_form f)]
               | _ -> failwith "vcgen: found SL formula that should have been desugared")
         | Assert s ->
-            let name = 
-              Printf.sprintf "%s_%d_%d" 
-                s.spec_name pp.pp_pos.sp_start_line pp.pp_pos.sp_start_col
+            let vc_name, name = 
+              if Opt.map ((=) s.spec_name) !Config.assertion |> Opt.get_or_else false
+              then s.spec_name, s.spec_name
+              else
+                let name =
+                  Printf.sprintf "%s_%d_%d" 
+                  s.spec_name pp.pp_pos.sp_start_line pp.pp_pos.sp_start_col
+                in
+                Str.global_replace (Str.regexp " ") "_"
+                  (string_of_ident proc_name ^ "_" ^ name), name
             in
             let vc_msg, vc_aux_msg = 
               match s.spec_msg with
@@ -589,10 +596,6 @@ let vcgen prog proc =
                   let f2 = annotate_aux_msg vc_aux_msg f1 in
                   f2
               | _ -> failwith "vcgen: found SL formula that should have been desugared"
-            in
-            let vc_name = 
-              Str.global_replace (Str.regexp " ") "_"
-                (string_of_ident proc_name ^ "_" ^ name)
             in
             let vc = pre @ [mk_name name f] in
             let vc_and_preds = add_pred_insts prog (smk_and vc) in
@@ -643,7 +646,12 @@ let get_err_msg_from_labels model labels =
 let check_proc prog proc =
   let check_vc errors (vc_name, (vc_msg, pp), vc0, labels) =
     let check_one vc =
-      if errors <> [] && not !Config.robust then errors else begin
+      let is_requested_assert =
+        !Config.assertion |> Opt.map ((=) vc_name) |> Opt.get_or_else true
+      in
+      if errors <> [] && not !Config.robust || not is_requested_assert
+      then errors
+      else begin
         Debug.info (fun () -> "\t" ^ vc_name ^ ".\n");
         Debug.debug (fun () -> (string_of_form vc) ^ "\n");
       (*IdMap.iter (fun id (pos, c) -> Printf.printf ("%s -> %s: %s\n") 
