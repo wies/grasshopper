@@ -407,8 +407,8 @@ procedure findNext(x: Node, k: K, Ix: Interface)
 }
 
 
-/** member */
-procedure member(x: Node, k: K, Ix: Interface)
+/** search */
+procedure search(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   requires lt(k, top)
@@ -688,12 +688,8 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     lemma_int_valid_unfold_I(Icx);
     lemma_int_comp_unfold(c, Ic, x, Ix, Icx);
 
-    // pure assert forall k: K :: Ix.inf[x].ks[k] == 0 && Ix.inf[x].ir[k] == 0;
-    // pure assert Ic.fm == old(flowmap(c));
-
-    var clen := c.len;
-    var cind := c.indices;
-    
+    ghost var clen := c.len;
+    ghost var cind := c.indices;
 
     arr_copy(c.keys, x.keys, m, 0, c.len - m + 1);
     arr_copy_node(c.ptrs, x.ptrs, m, 0, c.len - m + 1);

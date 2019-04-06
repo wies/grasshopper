@@ -1,0 +1,270 @@
+/** Linked list implementation of the lock coupling template for linearizable dictionaries. */
+
+options "-abspreds -simplearrays -smtpatterns -noinst"
+
+include "flows.spl"
+include "array_util.spl"
+
+
+/** Flow and node domain definitions */
+
+datatype FlowDom = fd(ks: Map<K, Int>)
+
+pure predicate domLeq(p1: FlowDom, p2: FlowDom) {
+  (forall k: K :: p1.ks[k] <= p2.ks[k])
+}
+
+pure function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+  ensures forall k: K :: p.ks[k] == p1.ks[k] + p2.ks[k]
+
+pure function domMult(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+  ensures forall k: K :: p.ks[k] == p1.ks[k] * p2.ks[k]
+
+pure function domZero() returns(p: FlowDom)
+  ensures forall k: K :: p.ks[k] == 0
+
+
+datatype NodeDom = nd(contents: Set<K>);
+
+pure predicate ndLeq(a1: NodeDom, a2: NodeDom) {
+  (forall k: K :: k in a1.contents ==> k in a2.contents)
+}
+
+pure function ndJoin(a1: NodeDom, a2: NodeDom) returns (a: NodeDom) {
+  nd(a1.contents ++ a2.contents)
+}
+
+pure function ndBot() returns (a: NodeDom)
+{
+  nd({})
+}
+
+
+/** Definition of a node */
+
+struct Node {
+  var data: K;
+  var next: Node;
+}
+
+define unchanged(x) {
+  x.data == old(x.data) && x.next == old(x.next)
+}
+
+
+/** Definition of heap representation, hrep */
+
+define hrepSpatial(x) {
+  acc(x)
+}
+
+define heapGood(x) {
+  x.next != x
+}
+
+function fmap(x: Node) returns (res: Map<Node, Map<Node, FlowDom>>)
+{
+  { n: Node :: { n1: Node ::
+    n != x ? domZero :
+    (n1 != x.next ? domZero :
+    fd({ k: K :: lt(n.data, k) ? 1 : 0 }))
+    }
+  }    
+}
+
+define hrep(x, I) {
+  hrepSpatial(x) &*& heapGood(x) &*& I.FP == {x} &*& I.na.contents == {x.data}
+  &*& (forall k: K :: I.inf[x].ks[k] == 1 || I.inf[x].ks[k] == 0)
+  &*& (forall k: K :: le(x.data, k) ==> I.inf[x].ks[k] == 1)
+  &*& I.fm == fmap(x)
+  &*& (x.next == null && x.data == top && I.FPo == {}
+     || x.next != null && x.data != top && I.FPo == {x.next})
+}
+
+// The good condition
+define nu(x, I) {
+  // Contents subsetof keyset
+  (forall k: K :: k in I.na.contents ==> I.inf[x].ks[k] >= 1)
+  && (forall k: K, y: Node :: k !in I.na.contents || I.fm[x][y].ks[k] == 0)
+  // Edgesets are disjoint
+  && (forall k: K, y: Node, z: Node :: y == z
+  || I.fm[x][y].ks[k] == 0 || I.fm[x][z].ks[k] == 0)
+}
+
+
+/** Begin programs */
+
+procedure int_of_node(p: Node, pinfLb: K) returns (Ip: Interface)
+  requires acc(p) &*& p.next != p &*& lt(pinfLb, p.data) &*& p.next != null &*& p.data != top
+  ensures hrep(p, Ip) &*& nu(p, Ip)
+{
+  var pinf := { x: Node :: x == p ? fd({ k: K :: lt(pinfLb, k) ? 1 : 0 }) : domZero };
+  Ip := int(pinf, nd({p.data}), fmap(p), {p}, {p.next});
+}
+
+/** findNext */
+procedure findNext(x: Node, k: K, Ix: Interface)
+  returns (n: Node)
+  requires hrep(x, Ix) &*& intValid(Ix) == true
+  ensures hrep(x, Ix)
+  ensures n != null ==> Ix.fm[x][n].ks[k] >= 1
+  ensures n == null ==> (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
+{
+  lemma_int_valid_unfold(x, Ix);
+  if (x.next == null) {
+    return null;
+  } else {
+    if (le(k, x.data)) {
+      return null;
+    } else {
+      return x.next;
+    }
+  }
+}
+
+
+/** member */
+procedure member(x: Node, k: K, Ix: Interface)
+  returns (res: Bool, Ix1: Interface)
+  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
+  ensures hrep(x, Ix)
+  ensures intEq(Ix, Ix1) == true
+  // decisiveOpSpec(x, Ix1, res, k):
+  ensures (Ix1.na.contents == Ix.na.contents && (res == k in Ix.na.contents))
+{
+  if (k == x.data)
+    return true, Ix;
+  else
+    return false, Ix;
+}
+
+
+/** insert */
+procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, Im: Interface,
+    Ipnm: Interface)
+  returns (res: Bool, Ip1: Interface, In1: Interface, Im1: Interface, Ipnm1: Interface)
+  requires lt(bottom, k) && lt(k, top)
+  requires hrep(p, Ip) &*& hrep(n, In) &*& acc(m)
+  requires intValid(Ip) == true &*& intValid(In) == true &*& intValid(Im) == true 
+  requires Ipnm == intComp(Ip, intComp(In, Im)) &*& intValid(Ipnm)
+  requires Im.FP == {m} && Im.FPo == {} && (forall k: K, y: Node :: Im.inf[y].ks[k] == 0)
+  requires (forall k: K, x: Node, y: Node :: Im.fm[x][y].ks[k] == 0)
+  requires Ip.fm[p][n].ks[k] == 1
+  requires In.inf[n].ks[k] == 1 && (forall y: Node :: In.fm[n][y].ks[k] == 0)
+  ensures res ==> hrep(p, Ip1) &*& hrep(n, In1) &*& hrep(m, Im1)
+  ensures !res ==> hrep(p, Ip1) &*& hrep(n, In1) &*& acc(m)
+  ensures intValid(Ip1) == true &*& intValid(In1) == true &*& intValid(Im1) == true
+  ensures Ipnm1 == intComp(Ip1, intComp(In1, Im1))
+  ensures intEq(Ipnm, Ipnm1) == true
+  // decisiveOpSpec(x, Ix1, res, k):
+  ensures (Ipnm1.na.contents == Ipnm.na.contents ++ {k} && (res == k !in Ipnm.na.contents))
+{
+  lemma_int_valid_unfold(p, Ip);
+  lemma_int_valid_unfold(n, In);
+  lemma_int_valid_unfold(m, Im);
+  lemma_int_valid_unfold_I(Ipnm);
+
+  // Actual implementation
+  if (n.data == k) {
+    pure assume false;
+    return false, Ip, In, Im, Ipnm;
+  }
+  
+  m.data := k;
+  m.next := n;
+  p.next := m;  
+  res := true;
+
+  // Proof - not pretty but almost all of this is just manual expansion of definitions
+  
+  // Prove precondition of lemma_acyclic_2
+  pure assert intComp(intComp(Ip, In), Im) != intUndef;
+
+  pure assert intValid(intComp(Ip, In));
+  pure assert !domEq(domMult(Ip.inf[p], Ip.fm[p][n]), domZero);
+  //pure assert false;
+  lemma_acyclic_2(p, Ip, n, In);
+
+  // Prove precondition of lemma_int_comp_unfold_3
+  //pure assert domEq(In.fm[n][p], domZero());
+
+  lemma_int_comp_unfold_3(p, Ip, n, In, m, Im, Ipnm);
+
+  pure assert Im.na.contents == {};
+  
+  // Define Ip1
+  Ip1 := int(Ip.inf, Ip.na, fmap(p), {p}, {m});
+
+  lemma_int_valid_fold(p, Ip1);
+
+  // Define Im1
+  ghost var minf1 := { n1: Node :: n1 == m ? fd({ k1: K :: lt(p.data, k1) ? 1 : 0}): domZero };
+  Im1 := int(minf1, nd({k}), fmap(m), {m}, {n});
+
+  lemma_int_valid_fold(m, Im1);
+
+  // Define In1
+  ghost var ninf1 := { n1: Node :: n1 == n ? fd({ k1: K :: In.inf[n].ks[k1] == 1 && le(k1, p.data) || lt(k, k1) ? 1 : 0}) : domZero };
+
+  //var ninf1 := { n1: Node :: n1 == n ? fd({ k1: K :: lt(k, k1) ? 1 : 0}) : domZero };
+  In1 := int(ninf1, In.na, fmap(n), In.FP, In.FPo);
+
+  // Prove some properties for precondition of lemma_int_valid_fold(n, In1)
+  pure assert forall n1: Node, n2: Node, k: K :: old(fmap(n)[n1][n2].ks[k]) == In.fm[n1][n2].ks[k];
+  pure assert forall n1: Node, n2: Node, k: K :: In.fm[n1][n2].ks[k] == In1.fm[n1][n2].ks[k];
+  
+  // Prove precondition of lemma_int_valid_fold(n, In1);
+  pure assert forall n: Node, n1: Node :: n1 !in In1.FPo ==> domEq(In1.fm[n][n1], domZero());
+  pure assert forall n: Node :: n !in In1.FP ==> domEq(In1.inf[n], domZero());
+  pure assert forall n1: Node, k1: K :: domZero.ks[k1] <= In1.inf[n1].ks[k1];
+
+  lemma_int_valid_fold(n, In1);
+  
+  // Prove hrep(n, In1)
+  pure assert (forall k1: K :: In1.inf[n].ks[k1] == 1 || In1.inf[n].ks[k1] == 0);
+  
+  // Prove precondition of lemma_int_comp_3_fold(p, Ip1, n, In1, m, Im1);
+  //pure assert domMult(Ip1.inf[p], Ip1.fm[p][n]) == domZero;
+
+  //pure assert domMult(Ip1.inf[p], Ip1.fm[p][m]) == fmap(p)[p][m];
+
+  //pure assert In1.fm[n][m] == domZero;
+    
+  //pure assert domPlus(domMult(Ip1.inf[p], Ip1.fm[p][n]), domMult(Im1.inf[m], Im1.fm[m][n])) == domMult(Im1.inf[m], Im1.fm[m][n]);
+  
+  //pure assert domLeq(domPlus(domMult(Ip1.inf[p], Ip1.fm[p][n]), domMult(Im1.inf[m], Im1.fm[m][n])), In1.inf[n]);
+  
+  Ipnm1 := lemma_int_comp_fold_3(p, Ip1, m, Im1, n, In1);
+  lemma_int_comp_unfold_3(p, Ip1, m, Im1, n, In1, Ipnm1);
+  lemma_int_valid_unfold_I(Ipnm1);
+  
+
+  
+  // Prove that old and new inflows of composite interfaces are equal
+  pure assert forall k: K :: Ipnm1.inf[p].ks[k] == Ipnm.inf[p].ks[k];
+
+  pure assert forall k: K :: Ipnm1.inf[m].ks[k] == 0;
+
+  pure assert forall k: K :: Ipnm.inf[m].ks[k] == 0;
+
+  pure assert forall x: Node :: Ipnm1.inf[x] == Ipnm.inf[x];
+
+  // Prove that old and new flows are equal
+  pure assert forall x: Node, y: Node :: domMult(Ipnm.inf[x], Ipnm.fm[x][y]) == domMult(Ipnm1.inf[x], Ipnm1.fm[x][y]);
+
+  
+  // Prove that contents are correct
+  pure assert Ipnm1.na.contents == {p.data} ++ ({k} ++ {n.data});
+  
+  //pure assert false;
+  assert hrep(p, Ip1) &*& hrep(n, In1) &*& hrep(m, Im1);
+  pure assert intValid(Ip1) && intValid(In1) && intValid(Im1);
+  pure assert Ipnm1 == intComp(Ip1, intComp(In1, Im1));
+  pure assert intEq(Ipnm, Ipnm1);
+  pure assert Ipnm1.na.contents == Ipnm.na.contents ++ {k};
+  pure assert res == (k !in Ipnm.na.contents);
+  //assume false;
+}
+
+

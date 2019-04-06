@@ -248,8 +248,8 @@ procedure findNext(x: Node, k: K, Ix: Interface)
 }
 
 
-/** member */
-procedure member(x: Node, k: K, Ix: Interface)
+/** search */
+procedure search(x: Node, k: K, Ix: Interface)
   returns (succ: Bool, res: Bool, Ix1: Interface)
   requires hrep(x, Ix) &*& intValid(Ix) == true
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
