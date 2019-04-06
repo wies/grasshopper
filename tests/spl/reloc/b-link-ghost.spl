@@ -297,6 +297,49 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
   }
 }
 
+lemma compute_interface(x: Node) returns (Ix: Interface)
+  requires hrepSpatial(x)
+  requires heapGood(x)
+  ensures hrep(x, Ix) &*& intValid(Ix)
+{
+  Ix := interface(x);
+
+  pure assert forall k: K, y: Node :: k in Ix.na.contents
+      ==> Ix.inf[x].ks[k] >= 1 && Ix.fm[x][y].ks[k] == 0
+  with {
+    if (k in Ix.na.contents) {
+      not_in_sorted_seg(x.keys.map, 0, x.len, k);
+      pure assert le(x.rangeLb, k) && lt(k, x.rangeUb);
+    }
+  }
+
+  pure assert forall k: K, y: Node, z: Node :: Ix.fm[x][y].ks[k] == 1 ==> y == z || Ix.fm[x][z].ks[k] == 0 with {
+    if (y != z && Ix.fm[x][y].ks[k] == 1) {
+      pure assert Ix.fm == flowmap(x);
+      if (Ix.fm[x][z].ks[k] == 1) {
+        if (x.next == y || x.next == z) {
+          ghost var u: Node;
+          if (x.next == y) {
+            u := z;
+          } else {
+            u := y;
+          }
+          pure assert 0 <= x.indices[u] <= x.len;
+          pure assert !lt(k, x.keys[x.len]);
+          pure assert lt(k, x.keys[x.indices[u]]);
+          pure assert !lt(x.keys[x.len], x.keys[x.indices[u]]);
+        } else if (0 <= x.indices[y] <= x.len && 0 <= x.indices[z] <= x.len) {
+          pure assert x.indices[z] == x.indices[y] ==> x.ptrs[x.indices[z]] == y;
+          pure assert x.indices[y] < x.indices[z] && lt(x.keys.map[x.indices[y]], x.keys.map[x.indices[z]]) ||
+            x.indices[z] < x.indices[y] && lt(x.keys.map[x.indices[z]], x.keys.map[x.indices[y]]);
+        }
+      }
+    }
+  }
+
+  lemma_int_valid_fold(x, Ix);
+}
+
 /** Begin programs */
 
 /** Initialize root note */
@@ -533,56 +576,21 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     c.indices := { n: Node :: -1 };
     x.indices := { n: Node :: -1 };
 
-    Ic1 := interface(c);
-    Ix1 := interface(x);
-
-    // pure assume intValid(Ic1) && intValid(Ix1);
-    pure assert intValid(Ic1) with {
-      // Prove contents subsetof keyset
-      pure assert forall k: K, y: Node :: k in Ic1.na.contents
-          ==> Ic1.inf[c].ks[k] >= 1 && Ic1.fm[c][y].ks[k] == 0
-      with {
-        if (k in Ic1.na.contents) {
-          not_in_sorted_seg(c.keys.map, 0, c.len, k);
-          pure assert le(c.rangeLb, k) && lt(k, c.rangeUb);
-        }
-      }
-      lemma_int_valid_fold(c, Ic1);
-    }
-    pure assert intValid(Ix1) with {
-      pure assert forall k: K, y: Node :: k in Ix1.na.contents
-          ==> Ix1.inf[x].ks[k] >= 1 && Ix1.fm[x][y].ks[k] == 0
-      with {
-        if (k in Ix1.na.contents) {
-          not_in_sorted_seg(x.keys.map, 0, x.len, k);
-          pure assert le(x.rangeLb, k) && lt(k, x.rangeUb);
-        }
-      }
-      // Prove inreach keyset subsetof inset
-      pure assert forall k: K :: Ix1.inf[x].ir[k] >= 1 && k !in outset(x)
-        ==> Ix1.inf[x].ks[k] >= 1
-      with {
-        if (Ix1.inf[x].ir[k] >= 1) {
-          pure assert !lt(k, x.rangeLb) && lt(k, top);
-          if (le(x.rangeUb, k)) {
-            pure assert x.next != null && !lt(k, x.keys[x.len]) && lt(k, top);
-          }
-        }
-      }
-      lemma_int_valid_fold(x, Ix1);
-    }
+    Ic1 := compute_interface(c);
+    Ix1 := compute_interface(x);
 
     // pure assume domLeq(domMult(Ic1.inf[c], Ic1.fm[c][x]), Ix1.inf[x]);
     pure assert domLeq(domMult(Ic1.inf[c], Ic1.fm[c][x]), Ix1.inf[x]) with {
       pure assert Ix1.fm == flowmap(x) && Ic1.fm == flowmap(c);
       pure assert forall k: K :: domMult(Ic1.inf[c], Ic1.fm[c][x]).ks[k] <= Ix1.inf[x].ks[k] &&
         domMult(Ic1.inf[c], Ic1.fm[c][x]).ir[k] <= Ix1.inf[x].ir[k] with {
-        pure assert Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k] <= Ix1.inf[x].ks[k] &&
-           Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k] <= Ix1.inf[x].ir[k];
-        pure assert domMult_ks(Ic1.inf[c], Ic1.fm[c][x])[k] <= Ix1.inf[x].ks[k]
-          && domMult_ir(Ic1.inf[c], Ic1.fm[c][x])[k] <= Ix1.inf[x].ir[k];
-        pure assert domMult(Ic1.inf[c], Ic1.fm[c][x]).ks[k] <= Ix1.inf[x].ks[k] &&
-          domMult(Ic1.inf[c], Ic1.fm[c][x]).ir[k] <= Ix1.inf[x].ir[k];
+        pure assert
+          Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k] <= Ix1.inf[x].ks[k]
+          && Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k] <= Ix1.inf[x].ir[k]
+          && domMult_ks(Ic1.inf[c], Ic1.fm[c][x])[k] <= Ix1.inf[x].ks[k]
+          && domMult_ir(Ic1.inf[c], Ic1.fm[c][x])[k] <= Ix1.inf[x].ir[k]
+          && domMult(Ic1.inf[c], Ic1.fm[c][x]).ks[k] <= Ix1.inf[x].ks[k]
+          && domMult(Ic1.inf[c], Ic1.fm[c][x]).ir[k] <= Ix1.inf[x].ir[k];
       }
     }
     Icx1 := lemma_int_comp_fold(c, Ic1, x, Ix1);
@@ -680,9 +688,8 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     lemma_int_valid_unfold_I(Icx);
     lemma_int_comp_unfold(c, Ic, x, Ix, Icx);
 
-    //pure assert forall k: K, y: Node, z: Node :: y == z || Ix.fm[x][y].ks[k] == 0 || Ix.fm[x][z].ks[k] == 0;       
-    pure assert forall k: K :: Ix.inf[x].ks[k] == 0 && Ix.inf[x].ir[k] == 0;
-    pure assert Ic.fm == old(flowmap(c));
+    // pure assert forall k: K :: Ix.inf[x].ks[k] == 0 && Ix.inf[x].ir[k] == 0;
+    // pure assert Ic.fm == old(flowmap(c));
 
     var clen := c.len;
     var cind := c.indices;
@@ -699,9 +706,6 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     c.indices := { n: Node :: n != x && 0 <= cind[n] < m ? cind[n] : -1 };
     x.indices := { n: Node :: n != x && m <= cind[n] <= clen ? cind[n] - m : -1 };
 
-
-    Ix1 := interface(x);
-    Ic1 := interface(c);
 
     // pure assume heapGood(x);
     pure assert heapGood(x) with {
@@ -727,95 +731,21 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
       }
     }
     
-    // assert hrepSpatial(c) &*& hrepSpatial(x);
-    
-    // pure assume forall k: K :: Ix1.inf[x].ir[k] == Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k];
-    pure assert forall k: K :: Ix1.inf[x].ir[k] == Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k] with {
-      //pure assert (Ix1.inf[x].ir[k] == 1) == (le(x.rangeLb, k) && lt(k, top));
-    }
-    
-    // pure assume forall k: K :: Ix1.inf[x].ks[k] == Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k];
-    pure assert forall k: K :: Ix1.inf[x].ks[k] == Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k] with {
-      pure assert (Ix1.inf[x].ks[k] == 1) == (le(x.rangeLb, k) && lt(k, x.rangeUb));
-    }
-
-    // pure assume forall n: Node, n1: Node :: n1 in Ix1.FP ==> domEq(Ix1.fm[n][n1], domZero());
-    pure assert forall n: Node, n1: Node :: n1 in Ix1.FP ==> domEq(Ix1.fm[n][n1], domZero()) with {
-      pure assert Ix1.fm == flowmap(x);
-    }
-    
-    // pure assume forall k: K, y: Node, z: Node :: Ix1.fm[x][y].ks[k] == 1 ==> y == z || Ix1.fm[x][z].ks[k] == 0;
-    pure assert forall k: K, y: Node, z: Node :: Ix1.fm[x][y].ks[k] == 1 ==> y == z || Ix1.fm[x][z].ks[k] == 0 with {
-      if (y != z && Ix1.fm[x][y].ks[k] == 1) {
-        pure assert Ix1.fm == flowmap(x);
-        if (Ix1.fm[x][z].ks[k] == 1) {
-          if (x.next == y || x.next == z) {
-            ghost var u: Node;
-            if (x.next == y) {
-              u := z;
-            } else {
-              u := y;
-            }
-            pure assert 0 <= x.indices[u] <= x.len;
-            pure assert !lt(k, x.keys[x.len]);
-            pure assert lt(k, x.keys[x.indices[u]]);
-            pure assert !lt(x.keys[x.len], x.keys[x.indices[u]]);
-          } else if (0 <= x.indices[y] <= x.len && 0 <= x.indices[z] <= x.len) {
-            pure assert x.indices[z] == x.indices[y] ==> x.ptrs[x.indices[z]] == y;
-            pure assert x.indices[y] < x.indices[z] && lt(x.keys.map[x.indices[y]], x.keys.map[x.indices[z]]) ||
-              x.indices[z] < x.indices[y] && lt(x.keys.map[x.indices[z]], x.keys.map[x.indices[y]]);
-          }
-        }
-      }
-    }
-          
-    // pure assume intValid(Ix1);
-    lemma_int_valid_fold(x, Ix1);
-
-    // pure assume forall k: K, y: Node, z: Node :: Ic1.fm[c][y].ks[k] == 1 ==> y == z || Ic1.fm[c][z].ks[k] == 0;
-    pure assert forall k: K, y: Node, z: Node :: Ic1.fm[c][y].ks[k] == 1 ==> y == z || Ic1.fm[c][z].ks[k] == 0 with {
-      if (y != z && Ic1.fm[c][y].ks[k] == 1) {
-        pure assert Ic1.fm == flowmap(c);
-        if (Ic1.fm[c][z].ks[k] == 1) {
-          if (c.next == y || c.next == z) {
-            var u: Node;
-            if (c.next == y) {
-              u := z;
-            } else {
-              u := y;
-            }
-            pure assert 0 <= c.indices[u] <= c.len;
-            pure assert !lt(k, c.keys[c.len]);
-            pure assert lt(k, c.keys[c.indices[u]]);
-            pure assert !lt(c.keys[c.len], c.keys[c.indices[u]]);
-          } else if (0 <= c.indices[y] <= c.len && 0 <= c.indices[z] <= c.len) {
-            pure assert c.indices[z] == c.indices[y] ==> c.ptrs[c.indices[z]] == y;
-            pure assert c.indices[y] < c.indices[z] && lt(c.keys.map[c.indices[y]], c.keys.map[c.indices[z]]) ||
-              c.indices[z] < c.indices[y] && lt(c.keys.map[c.indices[z]], c.keys.map[c.indices[y]]);
-          }
-        }
-      }
-    }
-
-    // pure assume forall n: Node, n1: Node :: n1 in Ix1.FP ==> domEq(Ix1.fm[n][n1], domZero());
-    pure assert forall n: Node, n1: Node :: n1 in Ix1.FP ==> domEq(Ix1.fm[n][n1], domZero()) with {
-      pure assert Ix1.fm == flowmap(x);
-    }
-    
-    // pure assume intValid(Ic1);
-    lemma_int_valid_fold(c, Ic1);
+    Ix1 := compute_interface(x);
+    Ic1 := compute_interface(c);
     
     // pure assume domLeq(domMult(Ic1.inf[c], Ic1.fm[c][x]), Ix1.inf[x]) == true;
     pure assert domLeq(domMult(Ic1.inf[c], Ic1.fm[c][x]), Ix1.inf[x]) == true with {
       pure assert Ix1.fm == flowmap(x) && Ic1.fm == flowmap(c);
       pure assert forall k: K :: domMult(Ic1.inf[c], Ic1.fm[c][x]).ks[k] <= Ix1.inf[x].ks[k] &&
         domMult(Ic1.inf[c], Ic1.fm[c][x]).ir[k] <= Ix1.inf[x].ir[k] with {
-        pure assert Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k] <= Ix1.inf[x].ks[k] &&
-           Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k] <= Ix1.inf[x].ir[k];
-        pure assert domMult_ks(Ic1.inf[c], Ic1.fm[c][x])[k] <= Ix1.inf[x].ks[k]
-          && domMult_ir(Ic1.inf[c], Ic1.fm[c][x])[k] <= Ix1.inf[x].ir[k];
-        pure assert domMult(Ic1.inf[c], Ic1.fm[c][x]).ks[k] <= Ix1.inf[x].ks[k] &&
-          domMult(Ic1.inf[c], Ic1.fm[c][x]).ir[k] <= Ix1.inf[x].ir[k];
+        pure assert
+          Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k] <= Ix1.inf[x].ks[k]
+          && Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k] <= Ix1.inf[x].ir[k]
+          && domMult_ks(Ic1.inf[c], Ic1.fm[c][x])[k] <= Ix1.inf[x].ks[k]
+          && domMult_ir(Ic1.inf[c], Ic1.fm[c][x])[k] <= Ix1.inf[x].ir[k]
+          && domMult(Ic1.inf[c], Ic1.fm[c][x]).ks[k] <= Ix1.inf[x].ks[k]
+          && domMult(Ic1.inf[c], Ic1.fm[c][x]).ir[k] <= Ix1.inf[x].ir[k];
       }
     }
     
@@ -844,15 +774,11 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
     with {
       if (n in Icx.FP && n1 !in Icx.FP) {
         pure assert forall k: K ::
-          domMult(Icx.inf[n], Icx.fm[n][n1]).ks[k] == domMult(Icx1.inf[n], Icx1.fm[n][n1]).ks[k] &&
-          domMult(Icx.inf[n], Icx.fm[n][n1]).ir[k] == domMult(Icx1.inf[n], Icx1.fm[n][n1]).ir[k]
+          domMult(Icx.inf[n], Icx.fm[n][n1]).ks[k] == domMult(Icx1.inf[n], Icx1.fm[n][n1]).ks[k]
+          && domMult(Icx.inf[n], Icx.fm[n][n1]).ir[k] == domMult(Icx1.inf[n], Icx1.fm[n][n1]).ir[k]
+          && Icx.inf[n].ks[k] * Icx.fm[n][n1].ks[k] == Icx1.inf[n].ks[k] * Icx1.fm[n][n1].ks[k]
+          && Icx.inf[n].ir[k] * Icx.fm[n][n1].ir[k] == Icx1.inf[n].ir[k] * Icx1.fm[n][n1].ir[k]
         with {
-          pure assert Ix1.fm == flowmap(x) && Ic1.fm == flowmap(c)
-            && Ic.fm == old(flowmap(c))
-            && Ix.fm[x][n1].ks[k] == 0 && Ix.fm[x][n1].ir[k] == 0;
-          pure assert Ic1.fm[c][x].ks[k] == map_next(c)[k] && Ic.fm[c][x].ks[k] == 0
-            && Ic1.fm[c][x].ir[k] == map_next(c)[k] && Ic.fm[c][x].ir[k] == 0;
-
           // Old and new inflow equations (only for x though)
           pure assert Ix.inf[x].ks[k] == Icx.inf[x].ks[k] + domMult(Ic.inf[c], Ic.fm[c][x]).ks[k]
             && Ix.inf[x].ir[k] == Icx.inf[x].ir[k] + domMult(Ic.inf[c], Ic.fm[c][x]).ir[k]
@@ -860,16 +786,6 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
             && Ix.inf[x].ir[k] == Icx.inf[x].ir[k] + Ic.inf[c].ir[k] * Ic.fm[c][x].ir[k]
             && Ix1.inf[x].ks[k] == Icx1.inf[x].ks[k] + Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k]
             && Ix1.inf[x].ir[k] == Icx1.inf[x].ir[k] + Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k];
-
-          // First, n == x:
-          pure assert Icx.inf[x].ks[k] == 0 && Icx.inf[x].ir[k] == 0
-            && Icx1.inf[x].ks[k] == 0 && Icx1.inf[x].ir[k] == 0;
-          pure assert  
-            Icx.inf[x].ks[k] * Icx.fm[x][n1].ks[k] == Icx1.inf[x].ks[k] * Icx1.fm[x][n1].ks[k] &&
-            Icx.inf[x].ir[k] * Icx.fm[x][n1].ir[k] == Icx1.inf[x].ir[k] * Icx1.fm[x][n1].ir[k];
-          
-          // Now, n == c:
-          pure assert Icx.inf[c] == Icx1.inf[c] && Icx.inf[x] == Icx1.inf[x];
 
           // Old flow map equation
           pure assert
@@ -888,60 +804,35 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
             && Icx1.fm[c][n1].ir[k] == Ic1.fm[c][n1].ir[k] + Ic1.fm[c][x].ir[k] * Ix1.fm[x][n1].ir[k];
 
           if (0 <= old(c.indices)[n1] <= old(c.len)) {  // n1 was c's child
-            pure assert
-              Ic.fm[c][n1].ks[k] == old(ks_child(c, n1))[k]
-              && Ic.fm[c][n1].ir[k] == 0;
             if (old(c.indices)[n1] <= c.len) {  // n1 stayed at c
               pure assert c.indices[n1] == old(c.indices)[n1]
                   && Ic1.fm[c][n1].ks[k] == ks_child(c, n1)[k]
                   && Ic1.fm[c][n1].ir[k] == 0
                   && Ix1.fm[x][n1].ks[k] == 0 && Ix1.fm[x][n1].ir[k] == 0;
-        
-              pure assert
-                Icx.inf[c].ks[k] * Icx.fm[c][n1].ks[k] == Icx1.inf[c].ks[k] * Icx1.fm[c][n1].ks[k] &&
-                Icx.inf[c].ir[k] * Icx.fm[c][n1].ir[k] == Icx1.inf[c].ir[k] * Icx1.fm[c][n1].ir[k];
             } else {  // n1 moved to x
               pure assert true
                 && x.ptrs.map[x.indices[n1]] == n1
-                && old(c.ptrs.map)[m + x.indices[n1] - 0] == n1;
-              pure assert old(c.keys.map)[m + x.indices[n1] - 0] == x.keys.map[x.indices[n1]];
-              pure assert x.indices[n1] > 0 ==> old(c.keys.map)[m + (x.indices[n1] - 1) - 0] == x.keys.map[x.indices[n1] - 1];
-              
-              pure assert Ix1.fm[x][n1].ks[k] == 1 && x.indices[n1] != 0 ==> Ic.fm[c][n1].ks[k] == 1;
-              pure assert Icx.inf[c].ks[k] * Icx.fm[c][n1].ks[k] == Icx1.inf[c].ks[k] * Icx1.fm[c][n1].ks[k] &&
-                Icx.inf[c].ir[k] * Icx.fm[c][n1].ir[k] == Icx1.inf[c].ir[k] * Icx1.fm[c][n1].ir[k];
+                && old(c.ptrs.map)[m + x.indices[n1] - 0] == n1
+                && old(c.keys.map)[m + x.indices[n1] - 0] == x.keys.map[x.indices[n1]]
+                && (x.indices[n1] > 0 ==>
+                    old(c.keys.map)[m + (x.indices[n1] - 1) - 0] == x.keys.map[x.indices[n1] - 1])
+                && Ix1.fm[x][n1].ks[k] == 1 && x.indices[n1] != 0 ==> Ic.fm[c][n1].ks[k] == 1;
             }
-
           } else if (n1 == old(c.next)) {  // n1 was c's right sibling
             pure assert true
-                && Ic.fm[c][n1].ks[k] == old(map_next(c))[k]
-                && Ic.fm[c][n1].ir[k] == old(map_next(c))[k]
-                && Ic1.fm[c][n1].ks[k] == 0
-                && Ic1.fm[c][n1].ir[k] == 0
-                && Ix1.fm[x][n1].ks[k] == map_next(x)[k]
-                && Ix1.fm[x][n1].ir[k] == map_next(x)[k];
-            pure assert x.keys[x.len] == old(c.keys)[old(c.len)];
-
-            pure assert Icx.inf[c].ks[k] * Icx.fm[c][n1].ks[k] == Icx1.inf[c].ks[k] * Icx1.fm[c][n1].ks[k] &&
-              Icx.inf[c].ir[k] * Icx.fm[c][n1].ir[k] == Icx1.inf[c].ir[k] * Icx1.fm[c][n1].ir[k];
+              && Ic.fm[c][n1].ks[k] == old(map_next(c))[k]
+              && Ic.fm[c][n1].ir[k] == old(map_next(c))[k]
+              && Ic1.fm[c][n1].ks[k] == 0
+              && Ic1.fm[c][n1].ir[k] == 0
+              && Ix1.fm[x][n1].ks[k] == map_next(x)[k]
+              && Ix1.fm[x][n1].ir[k] == map_next(x)[k]
+              && x.keys[x.len] == old(c.keys)[old(c.len)];
           } else {  // there was no edge from n1 to c
             pure assert Ic.fm[c][n1].ks[k] == 0 && Ic.fm[c][n1].ir[k] == 0
               && Ic1.fm[c][n1].ks[k] == 0 && Ic1.fm[c][n1].ir[k] == 0
               && Ix1.fm[x][n1].ks[k] == 0 && Ix1.fm[x][n1].ir[k] == 0;
-
-            pure assert Icx.inf[c].ks[k] * Icx.fm[c][n1].ks[k] == Icx1.inf[c].ks[k] * Icx1.fm[c][n1].ks[k] &&
-              Icx.inf[c].ir[k] * Icx.fm[c][n1].ir[k] == Icx1.inf[c].ir[k] * Icx1.fm[c][n1].ir[k];
           }
-
-          // Wrap up:
-          pure assert n == c || n == x;
-          pure assert 
-            domMult(Icx.inf[n], Icx.fm[n][n1]).ks[k] == Icx.inf[n].ks[k] * Icx.fm[n][n1].ks[k]
-            && domMult(Icx.inf[n], Icx.fm[n][n1]).ir[k] == Icx.inf[n].ir[k] * Icx.fm[n][n1].ir[k]
-            && domMult(Icx1.inf[n], Icx1.fm[n][n1]).ks[k] == Icx1.inf[n].ks[k] * Icx1.fm[n][n1].ks[k]
-            && domMult(Icx1.inf[n], Icx1.fm[n][n1]).ir[k] == Icx1.inf[n].ir[k] * Icx1.fm[n][n1].ir[k];
         }
-        pure assert domMult(Icx.inf[n], Icx.fm[n][n1]) == domMult(Icx1.inf[n], Icx1.fm[n][n1]);
       }
     }
     
