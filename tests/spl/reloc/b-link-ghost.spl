@@ -301,6 +301,7 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int)
   }
 }
 
+/** Compute interface */
 lemma compute_interface(x: Node) returns (Ix: Interface)
   requires hrepSpatial(x)
   requires heapGood(x)
@@ -535,7 +536,7 @@ procedure delete(x: Node, k: K, Ix: Interface)
   return true, old_len != new_len, Ix1;
 }
 
-/* Half split */
+/** Half split */
 
 define emptyInt(x, Ix) {  // TODO use newInt instead
   Ix.FP == {x} && domEq(Ix.inf[x], domZero()) == true
