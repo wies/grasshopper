@@ -1,0 +1,89 @@
+/* -- Lemma library for flows. Independent of Flow domain. -- */
+
+
+datatype Interface =
+  int(ins: Map<Node, Set<Message>>,
+      out: Map<Node, Set<Message>>,
+      dom: Set<Node>)
+  | intUndef; // For when compositions don't exist
+
+pure function intComp(I1: Interface, I2: Interface) returns (I: Interface)
+  requires I1 != intUndef && I2 != intUndef;
+  requires forall z: Node :: z !in I1.dom ==> I1.ins[z] == {}
+  requires forall z: Node :: z in I1.dom ==> I1.out[z] == {}
+  requires forall z: Node :: z !in I2.dom ==> I2.ins[z] == {}
+  requires forall z: Node :: z in I2.dom ==> I2.out[z] == {}  
+  requires forall n1: Node, n2: Node, d: DataDom ::
+    n1 in I1.dom && n2 in I2.dom ==> (
+    m(n1,d) in I1.out[n2] ==> m(n1,d) in I2.ins[n2] &&
+    m(n1,d) in I2.ins[n2] ==> m(n1,d) in I1.out[n2] &&
+    m(n2,d) in I2.out[n1] ==> m(n2,d) in I1.ins[n1] &&
+    m(n2,d) in I1.ins[n1] ==> m(n2,d) in I2.out[n1])
+  ensures I != intUndef ==> I.dom == I1.dom ++ I2.dom
+  ensures I != intUndef ==> (forall n: Node :: n !in I1.dom || n !in I2.dom)
+  ensures forall z: Node :: z !in I.dom ==> I.ins[z] == {}
+  ensures forall z: Node :: z in I.dom ==> I.out[z] == {}
+  ensures I != intUndef ==> (forall n: Node ::
+    n !in I1.dom ++ I2.dom ==> I.out[n] == I1.out[n] ++ I2.out[n])
+  ensures I != intUndef ==> (forall n: Node ::
+    n in I1.dom ==> I.ins[n] == I1.ins[n] -- I2.out[n] &&
+    n in I2.dom ==> I.ins[n] == I2.ins[n] -- I1.out[n])   
+     
+// Not used anywhere
+lemma intDecomp(x: Node, I: Interface) returns (Ix: Interface, I2: Interface)
+    requires I != intUndef
+    requires x in dom(I)
+    ensures dom(Ix) == {x}
+    ensures I == intComp(Ix, I2)
+    ensures Ix == x.intf
+
+
+    // Encoding of well defined interfaces
+pure predicate intValid(I: Interface)
+
+// Associativity, commutativity, cancellativity of intComp
+axiom forall I1: Interface, I2: Interface, I3: Interface ::
+  intComp(I1, intComp(I2, I3)) == intComp(intComp(I1, I2), I3);
+axiom forall I1: Interface, I2: Interface ::
+  intComp(I1, I2) == intComp(I2, I1) @(matching intComp(I1, I2) yields intComp(I2, I1));
+axiom forall I1: Interface, I2: Interface, I3: Interface ::
+  intComp(I1, I2) == intComp(I1, I3) ==> I2 == I3
+
+// Composition of undef with anything is undef
+axiom forall I1: Interface, I2: Interface ::
+  intComp(I1, I2) != intUndef ==> (I1 != intUndef && I2 != intUndef);
+
+// Valid interfaces are not undefined
+axiom forall I: Interface :: intValid(I) ==> I != intUndef;
+
+axiom forall I1: Interface, I2: Interface ::
+  intValid(I1) && intValid(I2) && intComp(I1, I2) != intUndef ==> intValid(intComp(I1, I2));
+
+axiom forall I1: Interface, I2: Interface ::
+  (! intValid(I1) || ! intValid(I2)) ==> intComp(I1, I2) == intUndef;
+
+// Interface contextual extension (allows increasing domain)
+pure function intLeq(I1: Interface, I2: Interface) returns (res: Bool)
+  ensures forall I1: Interface, I2:Interface, I3: Interface ::
+    intLeq(I1, I2) && intLeq(I2, I3) ==> intLeq(I1, I3)
+{
+  I1.dom subsetof I2.dom
+    && (forall n: Node :: n in I1.dom ==> I1.ins[n] == I2.ins[n])
+    && (forall n: Node :: n !in I2.dom ==> I1.out[n] == I2.out[n])
+    && (forall n: Node :: n in I2.dom -- I1.dom ==> I2.ins[n] == {})
+}
+
+pure function intEq(I1: Interface, I2: Interface) returns (res: Bool)
+  ensures forall I1: Interface, I2:Interface, I3: Interface ::
+    intEq(I1, I2) && intEq(I2, I3) ==> intEq(I1, I3)
+{
+  I1.dom == I2.dom
+  && (forall n: Node :: n in I1.dom ==> I1.ins[n] == I2.ins[n])
+  && (forall n: Node :: n !in I1.dom ==> I1.out[n] == I2.out[n])
+}
+
+
+function intCompSet(X: Set<Node>) returns (I: Interface)
+  requires acc(X)
+  ensures dom(I) == X
+  ensures I != intUndef

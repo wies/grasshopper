@@ -24,3 +24,5 @@ function compare(x: K, y: K) returns (res: Int)
   x == y ? 0 : (lt(x, y) ? -1 : 1)
 }
 
+function increment(x: K) returns (res: K)
+  ensures lt(x, res)
