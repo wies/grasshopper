@@ -30,6 +30,11 @@ define domEq(p1, p2) {
   p1 == p2
 }
 
+pure predicate wf_inflow(x: Node, inflow: Map<Node, FlowDom>) {
+  (forall n: Node :: domLeq(domZero(), inflow[n]))
+  && (forall n: Node :: n != x ==> domEq(inflow[n], domZero()))
+}
+
 // Contextually equivalent interfaces (node labels can be different)
 pure predicate intEq(I1: Interface, I2: Interface) {
   I1.FP == I2.FP
