@@ -967,8 +967,7 @@ procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
   requires ks_child(p, c)[c.keys[c.len]] == 1
   && (ci == 0 || ci > 0 && lt(p.keys[ci - 1], c.keys[c.len]))
   // Nothing == x:
-  requires c != x && p != x && p.next != x && (forall i: Int :: 0 <= i <= p.len ==> p.ptrs[i] != x)
-    && p.indices[x] == -1
+  requires p.next != x && p.indices[x] == -1
   requires Ic.fm[c][p] == domZero  // needed for int_comp_unfold
 
   ensures hrep(p, Ip1) &*& hrep(c, Ic1)
@@ -976,7 +975,7 @@ procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
   ensures intComp(Ip1, Ic1) == Ipc1 && intEq(Ipc, Ipc1)
   ensures Ipc.na.contents == Ipc1.na.contents
 {
-  var k := c.keys[c.len];  // everything >= k goes to x
+  //pure assert p != x && c != x;
 
   lemma_int_valid_unfold(p, Ip);
   lemma_int_valid_unfold(c, Ic);
@@ -989,8 +988,8 @@ procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
   arr_shift(p.keys, ci, ci + 1, p.len + 1 - ci);
   arr_shift_node(p.ptrs, ci + 1, ci + 2, p.len - ci);
 
+  var k := c.keys[c.len];  // everything >= k goes to x
   ghost var c_inflow_ks := { k1: K :: !lt(k1, k) ? Ic.inf[c].ks[k1] - Ip.inf[p].ks[k1] * Ip.fm[p][c].ks[k1] : Ic.inf[c].ks[k1] };
-  //ghost var c_inflow_ir := { k1: K :: Ic.inf[c].ir[k] };
   ghost var c_inflow := { n: Node :: n == c ? fd(c_inflow_ks, Ic.inf[c].ir) : domZero };
   
   p.keys[ci] := k;
@@ -1020,8 +1019,6 @@ procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
         } else if (ci + 1 < p.indices[n] <= p.len) {
           pure assert old(p.indices[n]) == p.indices[n] - 1;
           pure assert p.ptrs.map[p.indices[n]] == old(p.ptrs.map)[p.indices[n] - 1];
-          pure assert 0 <= p.indices[n] - 1 <= old(p.len);
-          pure assert p.ptrs.map[p.indices[n]] == n;
         }
     }
     pure assert forall i: Int :: p.ptrs[0] != null && 0 <= i <= p.len ==> p.indices[p.ptrs.map[i]] == i with {
@@ -1037,14 +1034,14 @@ procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
           pure assert old(p.indices[y]) == p.indices[y] - 1;
           pure assert p.ptrs.map[p.indices[y]] == old(p.ptrs.map)[p.indices[y] - 1];
           pure assert 0 <= p.indices[y] - 1 <= old(p.len);
-          pure assert p.ptrs.map[p.indices[y]] == y;
+          //pure assert p.ptrs.map[p.indices[y]] == y;
         }
       }
   }
 
   Ip1 := compute_interface(p, Ip.inf);
 
-  pure assert (forall k: K :: c_inflow[c].ir[k] >= 1 && k !in outset(c) ==> c_inflow[c].ks[k] >= 1) with {
+  pure assert (forall k: K :: c_inflow[c].ir[k] >= 1 && k !in outset(c) ==> c_inflow[c].ks[k] >= 1 @(noinst k)) with {
     if (c_inflow[c].ir[k] >= 1 && k !in outset(c)) {
       if (Ip.inf[p].ks[k] * Ip.fm[p][c].ks[k] >= 1 && !lt(k, c.keys[c.len])) {
         pure assert Ic.inf[c].ks[k] - Ip.inf[p].ks[k] * Ip.fm[p][c].ks[k] >= 1;
@@ -1052,12 +1049,12 @@ procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
     }
   }
 
-  pure assert forall k : K :: k in nodeabs(c, c_inflow).contents ==> c_inflow[c].ks[k] >= 1 with {
+  pure assert forall k : K :: k in nodeabs(c, c_inflow).contents ==> c_inflow[c].ks[k] >= 1 @(noinst k) with {
     not_in_sorted_seg(c.keys.map, 0, c.len, k);
   }
 
   pure assert wf_inflow(c, c_inflow) with {
-    pure assert forall n: Node, k1: K :: 0 <= c_inflow[n].ks[k1] with {
+    pure assert forall n: Node, k1: K :: 0 <= c_inflow[n].ks[k1] @(noinst n) @(noinst k1) with {
       pure assert
              Ic.inf[c].ks[k1] == Ipc.inf[c].ks[k1] + domMult(Ip.inf[p], Ip.fm[p][c]).ks[k1]
             && Ic.inf[c].ir[k1] == Ipc.inf[c].ir[k1] + domMult(Ip.inf[p], Ip.fm[p][c]).ir[k1]
@@ -1083,13 +1080,13 @@ procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
             && Ic.inf[c].ks[k] == Ipc.inf[c].ks[k] + Ip.inf[p].ks[k] * Ip.fm[p][c].ks[k]
             && Ic.inf[c].ir[k] == Ipc.inf[c].ir[k] + Ip.inf[p].ir[k] * Ip.fm[p][c].ir[k];
       if (ks_child(p, c)[k] >= 1) {
-        pure assert (p.indices[c] == 0 || !lt(k, p.keys.map[p.indices[c] - 1])) &&
-          (p.indices[c] == p.len && p.next == null && lt(k, top) || lt(k, p.keys.map[p.indices[c]]));
+        //pure assert (p.indices[c] == 0 || !lt(k, p.keys.map[p.indices[c] - 1])) &&
+        //  (p.indices[c] == p.len && p.next == null && lt(k, top) || lt(k, p.keys.map[p.indices[c]]));
         pure assert ci < p.indices[c] <= p.len
           ==> p.keys.map[p.indices[c]] == old(p.keys.map)[ci + (p.indices[c] - (ci + 1))];
         pure assert ci < p.indices[c] - 1 <= p.len
           ==> p.keys.map[p.indices[c] - 1] == old(p.keys.map)[ci + ((p.indices[c] - 1) - (ci + 1))];
-        pure assert Ip1.inf[p].ks[k] == Ip.inf[p].ks[k] &&  Ip1.inf[p].ir[k] == Ip.inf[p].ir[k];
+        // pure assert Ip1.inf[p].ks[k] == Ip.inf[p].ks[k] &&  Ip1.inf[p].ir[k] == Ip.inf[p].ir[k];
         pure assert
           Ip1.inf[p].ks[k] * Ip1.fm[p][c].ks[k] <= Ic1.inf[c].ks[k]
           && Ip1.inf[p].ir[k] * Ip1.fm[p][c].ir[k] <= Ic1.inf[c].ir[k]
