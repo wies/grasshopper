@@ -120,30 +120,44 @@ let linearize fs =
       seen, eqs, e1 :: es1)
       es (seen, eqs, [])
   in
-  let rec lin_term seen eqs = function
+  let rec lin_term noinst seen eqs = function
     | Var (x, srt) as t when IdSet.mem x seen ->
         let x1 = fresh_ident (name x) in
         let t1 = Var (x1, srt) in
         seen, mk_neq t t1 :: eqs, t1
-    | Var (x, srt) as t -> IdSet.add x seen, eqs, t
+    | Var (x, srt) as t ->
+        let seen1 =
+          if IdSet.mem x noinst then seen
+          else IdSet.add x seen
+        in
+        seen1, eqs, t
     | App (sym, ts, srt) ->
-        let seen, eqs, ts1 = lin_fold lin_term seen eqs ts in
+        let seen, eqs, ts1 = lin_fold (lin_term noinst) seen eqs ts in
         seen, eqs, App (sym, ts1, srt)
   in
-  let rec lin_form seen eqs = function
+  let collect_noinsts noinst anns =
+    List.fold_left (fun noinst -> function
+      | NoInst ids ->
+          IdSet.of_list ids |> IdSet.union noinst
+      | _ -> noinst)
+      noinst anns
+  in
+  let rec lin_form noinst seen eqs = function
     | BoolOp (op, fs) ->
-      let seen, eqs, fs1 = lin_fold lin_form seen eqs fs in
+      let seen, eqs, fs1 = lin_fold (lin_form noinst) seen eqs fs in
       seen, eqs, BoolOp (op, fs1)
     | Binder (b, [], f, anns) ->
-        let seen, eqs, f1 = lin_form seen eqs f in
+        let noinst = collect_noinsts noinst anns in 
+        let seen, eqs, f1 = lin_form noinst seen eqs f in
         seen, eqs, Binder (b, [], f1, anns)
     | Atom (App (sym, ts, srt), anns) ->
-        let seen, eqs, ts1 = lin_fold (fun _ -> lin_term IdSet.empty) seen eqs ts in
+        let noinst = collect_noinsts noinst anns in 
+        let seen, eqs, ts1 = lin_fold (fun _ -> lin_term noinst IdSet.empty) seen eqs ts in
         seen, eqs, Atom (App (sym, ts1, srt), anns)
     | f -> seen, eqs, f 
   in
   List.map (fun f ->
-    let _, eqs, f1 = lin_form IdSet.empty [] f in
+    let _, eqs, f1 = lin_form IdSet.empty IdSet.empty [] f in
     mk_or (f1 :: eqs))
     fs
 
