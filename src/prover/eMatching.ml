@@ -415,7 +415,7 @@ let compile (patterns: ('a pattern) list): 'a ematch_code =
                   Some (TermMap.add t (v', fs) filters)
               | _ -> None
             in
-            filters'_opt |> Opt.map (fun filters' -> Filter (filters', next), w, v, (inst, None), pattern)
+            filters'_opt |> Opt.map (fun filters' -> Filter (filters', next), w, v, (inst, Some(t, [])), pattern)
         | _, None -> None)
     | Check (i, t, _) ->
         (match WQ.find_opt i w with
@@ -504,7 +504,7 @@ let compile (patterns: ('a pattern) list): 'a ematch_code =
     (Choose []) patterns
 
 (** Check whether term [t] and substitution [sm] satisfy the filters [filters]. *)
-let filter_term filters t sm = 
+let filter_term filters t sm =
   List.for_all
     (fun f -> match f with
     | FilterNotNull ->
@@ -641,7 +641,10 @@ let run ?(pr_tpl = (fun ppf _ -> ())) (code: 'a ematch_code) ccgraph : ('a, subs
             pr_sort
             (esym |> Either.value_map (fun srt -> srt) (fun sym -> snd @@ snd sym))) esym stdout
           ;
-        Printf.printf "active terms: ";
+        Printf.printf "active terms before: ";
+        print_list stdout pr_term (TermSet.elements ts);
+        Printf.printf "\n";
+        Printf.printf "active terms after: ";
         print_list stdout pr_term (TermSet.elements ts');
         Printf.printf "\n";
         Printf.printf "choosing from: ";
@@ -676,19 +679,20 @@ let run ?(pr_tpl = (fun ppf _ -> ())) (code: 'a ematch_code) ccgraph : ('a, subs
     | Yield (vs, fs, gs) :: stack ->
         let ts = state in
         let sm = IdMap.map (fun i -> CC.term_of_rep ccgraph regs.(i)) vs in
-        Debug.debugl 4 (fun () ->
+        Debug.debugl 2 (fun () ->
           Printf.printf "yield\n";
           print_list stdout (fun ppf (x, t) -> fprintf ppf "%s -> %a" (string_of_ident x) pr_term t) (IdMap.bindings sm);
           print_newline (); "");
         TermSet.iter (fun t ->
           TermMap.find_opt t fs |>
-          Opt.iter (List.iter (fun f ->
-            (*print_of_format (fun ppf f -> fprintf ppf "  for %a\n" pr_tpl f) f stdout;*)
-            Hashtbl.add insts f sm))) ts;
+          Opt.iter (List.iter (fun f -> Hashtbl.add insts f sm))) ts;
         List.iter (fun f -> Hashtbl.add insts f sm) gs;
         run state stack
     | Filter (filters, next) :: stack ->
         let ts = state in
+        (*Printf.printf "filter;\nactive terms before: ";
+        print_list stdout pr_term (TermSet.elements ts);
+        Printf.printf "\n";*)
         let ts' =
           TermSet.filter
             (fun t ->
@@ -701,7 +705,7 @@ let run ?(pr_tpl = (fun ppf _ -> ())) (code: 'a ematch_code) ccgraph : ('a, subs
               | None -> true)
             ts
         in
-        (*Printf.printf "filter;\nactive terms: ";
+        (*Printf.printf "active terms after: ";
         print_list stdout pr_term (TermSet.elements ts');
         Printf.printf "\n";*)
         if TermSet.is_empty ts'
