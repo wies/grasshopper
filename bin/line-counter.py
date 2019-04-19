@@ -1,4 +1,5 @@
 import sys
+import re
 
 prog_lines = []
 prog_count = 0
@@ -14,6 +15,9 @@ def print_counts():
 
 fname = sys.argv[1]
 with open(fname, 'r') as fin:
+    spec_context = False
+    scope_level = 0
+    spec_level = 0
     for line in fin:
         line = line.strip()
         if line == "" or line.startswith("//"):
@@ -23,16 +27,27 @@ with open(fname, 'r') as fin:
             last_heading = line
             prog_count, spec_count = 0, 0
             continue
+        
         spec_keywords = [
             "invariant", "requires", "ensures", "predicate", "function", "==>", "axiom", 
             "define", "split", "&&", "&*&", "||", "pure", "assert", "lemma", "forall", "exists", "ghost",
         ]
-        if any(w in line for w in spec_keywords):
+        if not spec_context and re.search("assert.*with\s\{", line):
+            spec_context = True
+            spec_level = scope_level
+            
+        scope_level = scope_level + line.count("{") - line.count("}")
+
+        if spec_context or any(w in line for w in spec_keywords):
             spec_lines.append(line)
             spec_count += 1
         else:
             prog_lines.append(line)
             prog_count += 1
+
+        if spec_context and scope_level <= spec_level:
+            spec_context = False
+        
 print_counts()
 
 if len(sys.argv) > 2 and sys.argv[2] == "debug":
