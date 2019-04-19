@@ -35,12 +35,19 @@ let elim_exists =
             let expand new_vs = function
               | App (Constructor cid, ts, _) -> new_vs, [(cid, mk_true, ts)]
               | t ->
-                  List.fold_left
-                    (fun (new_vs, cases) (cid, dstrs) ->
-                      let vs = List.map (fun (id, srt) -> fresh_ident "?x", unfold_adts adts srt) dstrs in
-                      let vts = List.map (fun (v, srt) -> mk_var srt v) vs in
-                      vs @ new_vs, (cid, mk_eq t (mk_constr (Adt (id, adts)) cid vts), vts) :: cases
-                    ) (new_vs, []) cstrs
+                  match cstrs with
+                  | [cid, dstrs] ->
+                      let ts =
+                        List.map (fun (id, srt) -> mk_destr srt id t) dstrs 
+                      in
+                      (new_vs, [cid, mk_true, ts])
+                  | _ ->
+                      List.fold_left
+                        (fun (new_vs, cases) (cid, dstrs) ->
+                          let vs = List.map (fun (id, srt) -> fresh_ident "?x", unfold_adts adts srt) dstrs in
+                          let vts = List.map (fun (v, srt) -> mk_var srt v) vs in
+                          vs @ new_vs, (cid, mk_eq t (mk_constr (Adt (id, adts)) cid vts), vts) :: cases
+                        ) (new_vs, []) cstrs
             in
             let new_vs1, t1_cases = expand [] t1 in
             let new_vs2, t2_cases = expand new_vs1 t2 in
