@@ -22,41 +22,29 @@ struct Node {
 
 
 pure function func_of_cont(s: Set<KeyTS>) returns (m: Map<Int, K>)
-ensures forall l: KeyTS :: l in s ==> m[l.key] == l.ts
-ensures forall k: Int :: (forall t: K :: !(pair(k, t) in s)) ==> m[k] == top 
+  requires forall kt1: KeyTS, kt2: KeyTS :: kt1.key == kt2.key ==> kt1 !in s || kt2 !in s
+  ensures forall kt: KeyTS :: kt in s ==> m[kt.key] == kt.ts
+  ensures forall k: Int :: (forall t: K :: !(pair(k, t) in s)) ==> m[k] == top
 
 pure function out_of_node(x: Node, y: Node, xn: Node, s: Set<KeyTS>) returns (f: Set<Message>)
 {
   (xn != null && xn == y) ? {m(x, dd(func_of_cont(s)))} : {} 
 }
 
-pure function ins_of_node(x: Node, y: Node, ms: Message) returns (f: Set<Message>)
-{
-    (x == y) ? {ms} : {} 
-}
-
-pure function ret_pred(x: Node, S: Set<KeyTS>) returns (ms: Message)
-{
-  m(x, dd(func_of_cont(S)))
-}
-
 define hrepSpatial(x) { acc(x) }
 
-define hrep(x) {
-  dom(x.intf) == Set(x)
-  && (forall z: Node :: x.intf.out[z] == out_of_node(x, z, x.next, x.contents))
-  && (forall z: Node :: x.intf.ins[z] == ins_of_node(x,z,x.pred))
-  && (forall p: KeyTS :: p in x.contents ==> le(p.ts, x.pred.dt.func[p.key]))
-  && (x == r ==> x.pred.nd == r && (forall k: Int :: x.pred.dt.func[k] == top))
-  // && x.next != x
-  && (forall z: Node :: z != x ==> x.intf.ins[z] == {})
-  && x.intf.out[x] == {}
+define hrep(q) {
+  dom(q.intf) == {q}
+  && (forall w: Node :: q.intf.out[w] == out_of_node(q, w, q.next, q.contents))
+  && (forall w: Node :: w != q ==> q.intf.ins[w] == {} && w == q ==> q.intf.ins[w] == {q.pred})
+  && (forall p: KeyTS :: p in q.contents ==> le(p.ts, q.pred.dt.func[p.key]))
+  && (q == r ==> (forall k: Int :: q.pred.dt.func[k] == top))
 }
  
 define globalInt(r, I) {
   r in dom(I)
-  && (forall x: Node :: I.ins[x] == {})
-  && (forall y: Node :: I.out[y] == {})
+  && (forall x: Node :: x in dom(I) ==> I.ins[x] == {})
+  && (forall x: Node :: x !in dom(I) ==> I.out[x] == {})
   && (forall x: Node :: x in dom(I) && x.next != null ==> x.next in dom(I))
 }
 
@@ -79,16 +67,32 @@ procedure checkContents(x: Node, k: Int) returns (r: KeyTS)
   assume false;
 }
 
-// /*
-procedure updateContents(x: Node, k: Int, t: K)
+procedure updateContents(x:Node, k:Int, t:K)
   requires acc(x)
+  // requires forall kt1: KeyTS, kt2: KeyTS :: kt1.key == kt2.key ==> kt1 !in x.contents || kt2 !in x.contents
   ensures acc(x)
-  ensures ((pair(k, t) in x.contents && 
-                         (forall p: KeyTS :: p in old(x.contents) ==> lt(p.ts,t))))       // Not unique (k,t) pair in the contents.
   ensures old(x.intf) == x.intf
   ensures old(x.pred) == x.pred
   ensures old(x.next) == x.next
-// */
+  ensures pair(k,t) in x.contents
+  // ensures forall kt1: KeyTS, kt2: KeyTS :: kt1.key == kt2.key ==> kt1 !in x.contents || kt2 !in x.contents
+  ensures forall kt:KeyTS :: kt.key != k && kt in old(x.contents) ==> kt in x.contents
+  ensures forall kt:KeyTS :: kt.key != k && kt in x.contents ==> kt in old(x.contents)    
+
+
+/*
+procedure updateContents(x: Node, k: Int, t: K)
+  requires acc(x)
+  ensures acc(x)
+  ensures pair(k, t) in x.contents && (forall p: KeyTS :: p in old(x.contents) ==> lt(p.ts,t))
+  ensures forall kt: KeyTS :: kt.key == k && kt.ts != t ==> kt !in x.contents
+  ensures forall kt: KeyTS :: kt in old(x.contents) && kt.key != k ==> kt in x.contents
+  ensures forall kt: KeyTS :: kt in x.contents && kt.key != k ==> kt in old(x.contents)  
+  ensures old(x.intf) == x.intf
+  ensures old(x.pred) == x.pred
+  ensures old(x.next) == x.next
+  ensures t == old(t)
+*/
 
 /*
 procedure search(r: Node, X: Set<Node>, k: Int) returns (res: KeyTS)
@@ -145,10 +149,10 @@ procedure search(r: Node, X: Set<Node>, k: Int) returns (res: KeyTS)
 // /*
 procedure upsert(r: Node, X: Set<Node>, k:Int) 
   requires acc(X)
-  requires forall x:Node :: x in X ==> hrep(x)
+  requires forall e:Node :: e in X ==> hrep(e)
   requires globalInt(r,intCompSet(X))
   ensures acc(X)
-  ensures forall x: Node :: x in X ==> hrep(x)
+  ensures forall f: Node :: f in X ==> hrep(f)
   ensures globalInt(r, intCompSet(X))
 {
   pure assume forall x: Node ::
@@ -157,89 +161,47 @@ procedure upsert(r: Node, X: Set<Node>, k:Int)
     x in X && y in X
     ==> x.intf.out[y] subsetof y.intf.ins[y];
 
+
   var n := r.next;
-  pure assume n != null && n != r;
+  pure assume n != null;
 
-  var Ir, I2 := intDecomp(r,intCompSet(X));
-  var In, I3 := intDecomp(n, I2);
-  var Id := intComp(Ir, In);
-  pure assume Id != intUndef;
+  var Id := intComp(r.intf, n.intf);
 
-  // pure assert In == n.intf;
-  // pure assume false;
-  // var ms := n.contents;
+  var v := increment(t);
 
-  pure assert forall z: Node :: Ir.out[z] == out_of_node(r,z,r.next,r.contents);
-  pure assert forall z: Node :: In.out[z] == out_of_node(n,z,n.next,n.contents);
+  pure assume forall p: KeyTS, z: Node :: p in z.contents ==> lt(p.ts,v); //assumption that t represents the time
 
-  // pure assert n.next !in dom(Id) ==> Id.out[n.next] == out_of_node(n,n.next,n.next, n.contents);
-  // pure assert n.next !in dom(Id) ==> Ir.out[n.next] == out_of_node(r,n.next,r.next,r.contents);
-  // pure assert n.next !in dom(Id) ==> out_of_node(r,n.next,r.next,r.contents) == {};
-  // pure assert n.next !in dom(Id) ==> Ir.out[n.next] == {};
+  updateContents(r, k, v);
 
-  t := increment(t);
+  n.pred := m(r, dd(func_of_cont(r.contents)));
 
-  pure assume forall p: KeyTS :: p in r.contents ==> lt(p.ts,t); //assumption that t represents the time
+  var rout := {z:Node :: out_of_node(r, z, r.next, r.contents)};
+  var nout := {z:Node :: out_of_node(n, z, n.next, n.contents)};
+  var rins := {z:Node :: Id.ins[z] ++ nout[z]};
+  var nins := {z:Node :: Id.ins[z] ++ rout[z]};
 
-  pure assert forall z: Node :: intCompSet(X).out[z] == {};
+  var Ir1 := int(rins,rout,{r});
+  var In1 := int(nins,nout,{n});
 
-  pure assert (forall p: KeyTS :: p in n.contents ==> le(p.ts, n.pred.dt.func[p.key]));
-
-  // var old_next := next;
-
-  // pure assert false;
-  updateContents(r, k, t);
-
-  pure assert forall z: Node :: z != r ==> z.next == old(z.next);
-  pure assume false;
-  // pure assert intCompSet(X) == intComp(Id, I3);
-  // pure assert forall z: Node :: intCompSet(X).out[z] == {};
-  // pure assert false;
-
-  // pure assert (forall x: Node :: intCompSet(X).ins[x] == {});
-
-
-  // pure assume n.pred.dt.func == func_of_cont(r.contents);
-
-
-  var Ir1: Interface, In1: Interface;
-  pure assume dom(Ir1) == {r} && dom(In1) == {n};
-  var Id1 := intComp(Ir1, In1);
+  var Id1 := intComp(Ir1,In1);
   pure assume Id1 != intUndef;
 
-  // pure assert ms == ms1;
-  pure assume forall z: Node :: Ir1.out[z] == out_of_node(r, z, r.next, r.contents);
+  pure assume forall z:Node :: Id1.ins[z] == Id.ins[z];  // Need to prove
+
+  pure assert forall z:Node :: Id1.out[z] == Ir1.out[z] ++ In1.out[z];
+
+  pure assert forall z:Node :: Ir1.ins[z] == Id1.ins[z] ++ In1.out[z];
+  pure assert forall z:Node :: In1.ins[z] == Id1.ins[z] ++ Ir1.out[z];
   
-  pure assume forall z: Node :: In1.out[z] == out_of_node(n, z, n.next, n.contents);
 
-  pure assert forall z: Node :: Ir1.out[z] == out_of_node(r,z,r.next,r.contents);
-  pure assert forall z: Node :: In1.out[z] == out_of_node(n,z,n.next,n.contents);
-
-
-  pure assume forall z: Node :: Id1.ins[z] == Id.ins[z];
-
-  pure assume Ir1.ins[r] == Id1.ins[r] ++ In1.out[r];
-
-  pure assume In1.ins[n] == Id1.ins[n] ++ Ir1.out[n];
-
-  pure assume forall z: Node :: z !in dom(Id1) ==> Id1.out[z] == Ir1.out[z] ++ In1.out[z];
-
-  // pure assert (forall k: Int :: r.pred.dt.func[k] == top);
-  // pure assert (forall p: KeyTS :: p in r.contents ==> le(p.ts, r.pred.dt.func[p.key]));
-
-  // pure assert (forall p: KeyTS :: p in n.contents ==> le(p.ts, n.pred.dt.func[p.key]));
-
-  // pure assert (forall x: Node :: intCompSet(X).ins[x] == {});
-  
-  pure assert Id == Id1;
-  pure assume r.intf == Ir1;
-  pure assume n.intf == In1;
-  pure assert hrep(r);
-  pure assert hrep(n);   
+  pure assert intEq(Id,Id1); // intEq throws an error.
   // pure assume false;
-  // assert acc(X);
+  r.intf := Ir1;
+  n.intf := In1;
 
-  // assert hrep(n);
+  pure assert hrep(r);
+  pure assert hrep(n);
+  pure assert globalInt(r,intCompSet(X));  
 
 }
 // */

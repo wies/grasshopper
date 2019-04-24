@@ -9,27 +9,27 @@ datatype Interface =
 
 pure function intComp(I1: Interface, I2: Interface) returns (I: Interface)
   requires I1 != intUndef && I2 != intUndef;
-  requires forall z: Node :: z !in I1.dom ==> I1.ins[z] == {}
-  requires forall z: Node :: z in I1.dom ==> I1.out[z] == {}
-  requires forall z: Node :: z !in I2.dom ==> I2.ins[z] == {}
-  requires forall z: Node :: z in I2.dom ==> I2.out[z] == {}  
-  requires forall n1: Node, n2: Node, d: DataDom ::
-    n1 in I1.dom && n2 in I2.dom ==> (
-    m(n1,d) in I1.out[n2] ==> m(n1,d) in I2.ins[n2] &&
-    m(n1,d) in I2.ins[n2] ==> m(n1,d) in I1.out[n2] &&
-    m(n2,d) in I2.out[n1] ==> m(n2,d) in I1.ins[n1] &&
-    m(n2,d) in I1.ins[n1] ==> m(n2,d) in I2.out[n1])
-  ensures I != intUndef ==> I.dom == I1.dom ++ I2.dom
-  ensures I != intUndef ==> (forall n: Node :: n !in I1.dom || n !in I2.dom)
-  ensures forall z: Node :: z !in I.dom ==> I.ins[z] == {}
-  ensures forall z: Node :: z in I.dom ==> I.out[z] == {}
-  ensures I != intUndef ==> (forall n: Node ::
-    n !in I1.dom ++ I2.dom ==> I.out[n] == I1.out[n] ++ I2.out[n])
-  ensures I != intUndef ==> (forall n: Node ::
-    n in I1.dom ==> I.ins[n] == I1.ins[n] -- I2.out[n] &&
-    n in I2.dom ==> I.ins[n] == I2.ins[n] -- I1.out[n])   
-     
-// Not used anywhere
+  // requires forall z: Node :: z !in I1.dom ==> I1.ins[z] == {}    
+  // requires forall z: Node :: z in I1.dom ==> I1.out[z] == {}     // Well-formedness checks
+  // requires forall z: Node :: z !in I2.dom ==> I2.ins[z] == {}
+  // requires forall z: Node :: z in I2.dom ==> I2.out[z] == {}  
+  // requires forall n1: Node, n2: Node, d: DataDom ::
+    // n1 in I1.dom && n2 in I2.dom ==> (
+    // m(n1,d) in I1.out[n2] ==> m(n1,d) in I2.ins[n2] &&
+    // m(n1,d) in I2.ins[n2] ==> m(n1,d) in I1.out[n2] &&           
+    // m(n2,d) in I2.out[n1] ==> m(n2,d) in I1.ins[n1] &&
+    // m(n2,d) in I1.ins[n1] ==> m(n2,d) in I2.out[n1])
+  ensures I.dom == I1.dom ++ I2.dom
+  ensures (forall n: Node :: n !in I1.dom || n !in I2.dom)
+  // ensures forall z: Node :: z !in I.dom ==> I.ins[z] == {}
+  // ensures forall z: Node :: z in I.dom ==> I.out[z] == {}
+  ensures (forall n: Node :: n !in I1.dom ++ I2.dom ==> I.out[n] == I1.out[n] ++ I2.out[n])
+  ensures (forall n: Node :: n in I1.dom ==> I.ins[n] == I1.ins[n] -- I2.out[n]
+                          && n in I2.dom ==> I.ins[n] == I2.ins[n] -- I1.out[n])
+  ensures forall z:Node, m: Message :: m in I.ins[z] ==> z in I.dom && m.nd !in I.dom && m in m.nd.intf.out[z]
+  ensures forall z:Node, m: Message :: m in I.out[z] ==> z !in I.dom && m.nd in I.dom && m in m.nd.intf.out[z]
+
+
 lemma intDecomp(x: Node, I: Interface) returns (Ix: Interface, I2: Interface)
     requires I != intUndef
     requires x in dom(I)
@@ -87,3 +87,7 @@ function intCompSet(X: Set<Node>) returns (I: Interface)
   requires acc(X)
   ensures dom(I) == X
   ensures I != intUndef
+  // ensures forall n:Node :: n !in X ==> I.ins[n] == {} 
+  // ensures forall n:Node :: n in X ==> I.out[n] == {} 
+  ensures forall n:Node, m: Message :: m in I.ins[n] ==> m.nd !in X && m in m.nd.intf.out[n]
+  ensures forall n:Node, m: Message :: m in I.out[n] ==> m.nd in X && m in m.nd.intf.out[n]
