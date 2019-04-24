@@ -49,9 +49,9 @@ pure predicate intEq(I1: Interface, I2: Interface) {
 
 // Associativity, commutativity, cancellativity of intComp
 axiom forall I1: Interface, I2: Interface, I3: Interface ::
-  intComp(I1, intComp(I2, I3)) == intComp(intComp(I1, I2), I3);
+  intComp(I1, intComp(I2, I3)) == intComp(intComp(I1, I2), I3)
 axiom forall I1: Interface, I2: Interface ::
-  intComp(I1, I2) == intComp(I2, I1) @(matching intComp(I1, I2) yields intComp(I2, I1));
+  intComp(I1, I2) == intComp(I2, I1) @(matching intComp(I1, I2) yields intComp(I2, I1))
 //axiom forall I1: Interface, I2: Interface, I3: Interface :: bad bad bad - adding this is unsound
   //intComp(I1, I2) == intComp(I1, I3) ==> I2 == I3
 
@@ -60,7 +60,7 @@ axiom forall I1: Interface, I2: Interface ::
   intComp(I1, I2) != intUndef ==> (I1 != intUndef && I2 != intUndef);
 
 // Valid interfaces are not undefined
-axiom forall I: Interface :: intValid(I) ==> I != intUndef;
+axiom forall I: Interface :: intValid(I) ==> I != intUndef @(pattern intValid(I));
 
 axiom forall I1: Interface, I2: Interface ::
   intValid(I1) && intValid(I2) && intComp(I1, I2) != intUndef ==> intValid(intComp(I1, I2));
