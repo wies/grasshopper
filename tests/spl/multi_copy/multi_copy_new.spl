@@ -42,7 +42,8 @@ define hrep(q) {
 }
  
 define globalInt(r, I) {
-  r in dom(I)
+  true
+  && r in dom(I)
   && (forall x: Node :: x in dom(I) ==> I.ins[x] == {})
   && (forall x: Node :: x !in dom(I) ==> I.out[x] == {})
   && (forall x: Node :: x in dom(I) && x.next != null ==> x.next in dom(I))
@@ -146,6 +147,10 @@ procedure search(r: Node, X: Set<Node>, k: Int) returns (res: KeyTS)
 }
 */
 
+pure function dummy(I1:Interface, I2:Interface) returns (I:Interface)
+  ensures I != intUndef ==> (forall z:Node, m: Message :: m in I.out[z] ==> z !in I.dom && m.nd in I.dom && m in m.nd.intf.out[z])
+
+
 // /*
 procedure upsert(r: Node, X: Set<Node>, k:Int) 
   requires acc(X)
@@ -165,13 +170,33 @@ procedure upsert(r: Node, X: Set<Node>, k:Int)
   var n := r.next;
   pure assume n != null;
 
-  var Id := intComp(r.intf, n.intf);
+  var insr := {z:Node :: r.intf.ins[z]};
+  var outr := {z:Node :: r.intf.out[z]};
+  var insn := {z:Node :: n.intf.ins[z]};
+  var outn := {z:Node :: n.intf.out[z]};
+
+  var Ir: Interface, In:Interface;
+  pure assume Ir == r.intf;
+  pure assume In == n.intf;
+  var Id := intComp(Ir, In);
+  pure assume Id != intUndef;      // To be proven
+
+  pure assert "test" forall z:Node, m:Message :: (m in Id.out[z]) ==> (m.nd in Id.dom && m in m.nd.intf.out[z] && z !in Id.dom);
+  // pure assume false;
 
   var v := increment(t);
 
   pure assume forall p: KeyTS, z: Node :: p in z.contents ==> lt(p.ts,v); //assumption that t represents the time
 
   updateContents(r, k, v);
+
+  pure assert old(r.intf) == r.intf;
+  pure assert old(n.intf) == n.intf;
+  //pure assert old(Id.dom) == Id.dom;
+
+
+  pure assert "test" forall z:Node, m:Message :: (m in Id.out[z]) ==> (m.nd in Id.dom && m in m.nd.intf.out[z] && z !in Id.dom);
+  pure assert false;
 
   n.pred := m(r, dd(func_of_cont(r.contents)));
 
@@ -182,25 +207,47 @@ procedure upsert(r: Node, X: Set<Node>, k:Int)
 
   var Ir1 := int(rins,rout,{r});
   var In1 := int(nins,nout,{n});
-
   var Id1 := intComp(Ir1,In1);
-  pure assume Id1 != intUndef;
+  pure assume Id1 != intUndef;    // To be proven
+
+  // pure assert Id1 == intComp(Ir1,In1);
 
   pure assume forall z:Node :: Id1.ins[z] == Id.ins[z];  // Need to prove
 
-  pure assert forall z:Node :: Id1.out[z] == Ir1.out[z] ++ In1.out[z];
+  pure assert forall z:Node, m:Message :: (m in Id.out[z]) ==> (m.nd in Id.dom && m in m.nd.intf.out[z] && z !in Id.dom);
+  pure assert n.contents == old(n.contents);
+  pure assert forall z:Node, m:Message :: m in Id.out[z] && m.nd == r ==> m in Id1.out[z];
+  pure assume false; 
 
-  pure assert forall z:Node :: Ir1.ins[z] == Id1.ins[z] ++ In1.out[z];
-  pure assert forall z:Node :: In1.ins[z] == Id1.ins[z] ++ Ir1.out[z];
-  
+  pure assert Id1.dom == Id.dom;
+  pure assert (forall z: Node :: z in Id.dom ==> Id1.ins[z] == Id.ins[z]);
+  pure assert (forall z: Node :: z !in Id.dom ==> Id1.out[z] == Id.out[z]);
 
   pure assert intEq(Id,Id1); // intEq throws an error.
   // pure assume false;
+
+  pure assert dom(Ir1) == {r};
+
   r.intf := Ir1;
   n.intf := In1;
 
+  pure assert r.intf == Ir1;
+
+
+  pure assert dom(r.intf) == {r};
+  pure assert (forall w: Node :: r.intf.out[w] == out_of_node(r, w, r.next, r.contents));
+  pure assert (forall w: Node :: w != r ==> r.intf.ins[w] == {} && w == r ==> r.intf.ins[w] == {r.pred});
+  pure assert (forall p: KeyTS :: p in r.contents ==> le(p.ts, r.pred.dt.func[p.key]));
+  pure assert (r == r ==> (forall k: Int :: r.pred.dt.func[k] == top));
   pure assert hrep(r);
-  pure assert hrep(n);
+
+  pure assert dom(n.intf) == {n};
+  pure assert (forall w: Node :: n.intf.out[w] == out_of_node(n, w, n.next, n.contents));
+  pure assert (forall w: Node :: w != n ==> n.intf.ins[w] == {} && w == n ==> n.intf.ins[w] == {n.pred});
+  pure assert (forall p: KeyTS :: p in n.contents ==> le(p.ts, n.pred.dt.func[p.key]));
+  pure assert (n == r ==> (forall k: Int :: n.pred.dt.func[k] == top));
+  pure assert hrep(r);
+
   pure assert globalInt(r,intCompSet(X));  
 
 }

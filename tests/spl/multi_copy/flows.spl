@@ -19,15 +19,14 @@ pure function intComp(I1: Interface, I2: Interface) returns (I: Interface)
     // m(n1,d) in I2.ins[n2] ==> m(n1,d) in I1.out[n2] &&           
     // m(n2,d) in I2.out[n1] ==> m(n2,d) in I1.ins[n1] &&
     // m(n2,d) in I1.ins[n1] ==> m(n2,d) in I2.out[n1])
-  ensures I.dom == I1.dom ++ I2.dom
-  ensures (forall n: Node :: n !in I1.dom || n !in I2.dom)
+  ensures I != intUndef ==> I.dom == I1.dom ++ I2.dom
+  ensures I != intUndef ==> (forall n: Node :: n !in I1.dom || n !in I2.dom)
   // ensures forall z: Node :: z !in I.dom ==> I.ins[z] == {}
   // ensures forall z: Node :: z in I.dom ==> I.out[z] == {}
-  ensures (forall n: Node :: n !in I1.dom ++ I2.dom ==> I.out[n] == I1.out[n] ++ I2.out[n])
-  ensures (forall n: Node :: n in I1.dom ==> I.ins[n] == I1.ins[n] -- I2.out[n]
-                          && n in I2.dom ==> I.ins[n] == I2.ins[n] -- I1.out[n])
-  ensures forall z:Node, m: Message :: m in I.ins[z] ==> z in I.dom && m.nd !in I.dom && m in m.nd.intf.out[z]
-  ensures forall z:Node, m: Message :: m in I.out[z] ==> z !in I.dom && m.nd in I.dom && m in m.nd.intf.out[z]
+  ensures I != intUndef ==> (forall n: Node, m:Message :: n !in I.dom && m in I.out[n] ==> m in I1.out[n] || m in I2.out[n])
+  ensures I != intUndef ==> (forall n: Node, m:Message :: (n in I1.dom && m in I.ins[n] ==> m in I1.ins[n] && m !in I2.out[n]) && (n in I2.dom && m in I.ins[n] ==> m in I2.ins[n] && m !in I1.out[n]))
+  ensures I != intUndef ==> (forall z:Node, m: Message :: m in I.ins[z] ==> z in I.dom && m.nd !in I.dom && m in m.nd.intf.out[z])
+  ensures I != intUndef ==> (forall z:Node, m: Message :: m in I.out[z] ==> z !in I.dom && m.nd in I.dom && m in m.nd.intf.out[z])
 
 
 lemma intDecomp(x: Node, I: Interface) returns (Ix: Interface, I2: Interface)
@@ -74,12 +73,15 @@ pure function intLeq(I1: Interface, I2: Interface) returns (res: Bool)
 }
 
 pure function intEq(I1: Interface, I2: Interface) returns (res: Bool)
-  ensures forall I1: Interface, I2:Interface, I3: Interface ::
-    intEq(I1, I2) && intEq(I2, I3) ==> intEq(I1, I3)
+  // ensures forall I1: Interface, I2:Interface, I3: Interface ::
+    // intEq(I1, I2) && intEq(I2, I3) ==> intEq(I1, I3)
 {
-  I1.dom == I2.dom
-  && (forall n: Node :: n in I1.dom ==> I1.ins[n] == I2.ins[n])
-  && (forall n: Node :: n !in I1.dom ==> I1.out[n] == I2.out[n])
+  true 
+  && I1.dom == I2.dom
+  && (forall n: Node, m:Message :: n in I1.dom && m in I1.ins[n] ==> m in I2.ins[n])
+  && (forall n: Node, m:Message :: n in I1.dom && m in I2.ins[n] ==> m in I1.ins[n])
+  && (forall n: Node, m:Message :: n !in I1.dom && m in I1.out[n] ==> m in I2.out[n])
+  && (forall n: Node, m:Message :: n !in I1.dom && m in I2.out[n] ==> m in I1.out[n])
 }
 
 
