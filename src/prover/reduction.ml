@@ -425,6 +425,27 @@ let get_read_propagators gts =
                     propagators destrs
                 in
                 propagators
+            | Map (dsrts2, Map(dsrts3, rsrt)) ->
+                let uvars = List.map (fun srt -> mk_var srt (fresh_ident "?u")) dsrts2 in
+                let zvars = List.map (fun srt -> mk_var srt (fresh_ident "?z")) dsrts3 in
+                (* f[x := d], f[y][u] -> f[x := d][y][u] *)
+                ([Match (mk_write fvar xvars dvar, []);
+                  Match (mk_read (mk_read (mk_read fvar yvars) uvars) zvars, [])],
+                 [mk_read (mk_read (mk_read (mk_write fvar xvars dvar) yvars) uvars) zvars]) ::
+                (* f[x := d][u].destr[z], f[y] -> f[y][u].destr[z] *)
+                ([Match (mk_read fvar yvars, []);
+                  Match (mk_read (mk_read (mk_read (mk_write fvar xvars dvar) yvars) uvars) zvars, [])],
+                 [mk_read (mk_read (mk_read fvar yvars) uvars) zvars]) :: propagators
+            | Map (dsrts2, rsrt) ->
+                let uvars = List.map (fun srt -> mk_var srt (fresh_ident "?u")) dsrts2 in
+                (* f[x := d], f[y][u] -> f[x := d][y][u] *)
+                ([Match (mk_write fvar xvars dvar, []);
+                  Match (mk_read (mk_read fvar yvars) uvars, [])],
+                 [mk_read (mk_read (mk_write fvar xvars dvar) yvars) uvars]) ::
+                (* f[x := d][u].destr[z], f[y] -> f[y][u].destr[z] *)
+                ([Match (mk_read fvar yvars, []);
+                  Match (mk_read (mk_read (mk_write fvar xvars dvar) yvars) uvars, [])],
+                 [mk_read (mk_read fvar yvars) uvars]) :: propagators
             | _ -> propagators
           in
           let ssrt_opt = match dsrts with
