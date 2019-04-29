@@ -594,6 +594,12 @@ let print_ident_list out_ch xs = print_of_format pr_ident_list xs out_ch
 (** Print term [t] to out channel [out_chan]. *)
 let print_term out_ch t = print_of_format pr_term t out_ch
 
+(** Print term [t] to out channel [out_chan]. *)
+let print_term_endline out_ch t =
+  print_term out_ch t;
+  print_newline ()
+
+    
 (** Print formula [f] to out channel [out_chan]. *)
 let print_form out_ch f = print_of_format pr_form f out_ch
 
