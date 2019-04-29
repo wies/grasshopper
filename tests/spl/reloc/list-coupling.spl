@@ -112,7 +112,7 @@ procedure int_of_node(p: Node, pinfLb: K) returns (Ip: Interface)
 /** findNext */
 procedure findNext(x: Node, k: K, Ix: Interface)
   returns (n: Node)
-  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires hrep(x, Ix) &*& intValid(Ix)
   ensures hrep(x, Ix)
   ensures n != null ==> Ix.fm[x][n].ks[k] >= 1
   ensures n == null ==> (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
@@ -133,10 +133,10 @@ procedure findNext(x: Node, k: K, Ix: Interface)
 /** search */
 procedure search(x: Node, k: K, Ix: Interface)
   returns (res: Bool, Ix1: Interface)
-  requires hrep(x, Ix) &*& intValid(Ix) == true
+  requires hrep(x, Ix) &*& intValid(Ix)
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.fm[x][y].ks[k] == 0)
   ensures hrep(x, Ix)
-  ensures intEq(Ix, Ix1) == true
+  ensures intEq(Ix, Ix1)
   // decisiveOpSpec(x, Ix1, res, k):
   ensures (Ix1.na.contents == Ix.na.contents && (res == k in Ix.na.contents))
 {
@@ -257,57 +257,56 @@ procedure insert(p: Node, n: Node, m: Node, k: K, Ip: Interface, In: Interface, 
   // Prove that old and new inflows of composite interfaces are equal
   pure assert intEq(Ipnm, Ipnm1) with {
   
-  pure assert forall k: K :: Ipnm1.inf[m].ks[k] == 0 with {
-    pure assert Im1.inf[m].ks[k] == Ipnm1.inf[m].ks[k] + Ip1.inf[p].ks[k] * Ip1.fm[p][m].ks[k];
-  }
-
-  pure assert forall k: K :: Ipnm.inf[m].ks[k] == 0 with {
-    pure assert Im.inf[m].ks[k] == Ipnm.inf[m].ks[k] + (Ip.inf[p].ks[k] * Ip.fm[p][m].ks[k] + In.inf[n].ks[k] * In.fm[n][m].ks[k]);
-  }
-  
-  pure assert forall x: Node :: Ipnm1.inf[x] == Ipnm.inf[x] with {
-    pure assert forall k: K :: Ipnm1.inf[x].ks[k] == Ipnm.inf[x].ks[k] with {
-
-      if (x == n || x == m || x == p) {
-        // Expand Ipnm1.inf[n].ks[k]
-        pure assert In1.inf[n].ks[k] == Ipnm1.inf[n].ks[k] + (Ip1.inf[p].ks[k] * Ip1.fm[p][n].ks[k] + Im1.inf[m].ks[k] * Im1.fm[m][n].ks[k]);
-
-        // Expand Ipnm.inf[n].ks[k]
-        pure assert In.inf[n].ks[k] == Ipnm.inf[n].ks[k] + Ip.inf[p].ks[k] * Ip.fm[p][n].ks[k];
-
-        pure assert Ipnm.inf[m].ks[k] == 0;
-      }
-    }
-  }
-
-  // Prove that old and new flows are equal
-  pure assert forall x: Node, y: Node :: domMult(Ipnm.inf[x], Ipnm.fm[x][y]) == domMult(Ipnm1.inf[x], Ipnm1.fm[x][y]) with {
-    pure assert forall k: K :: domMult(Ipnm.inf[x], Ipnm.fm[x][y]).ks[k] == domMult(Ipnm1.inf[x], Ipnm1.fm[x][y]).ks[k] with {
-      // x == m
-      pure assert Ipnm.inf[m].ks[k] == 0;
-      
-      // x == n
-      pure assert true
-        && domEq(Ipnm.fm[n][y], domPlus(In.fm[n][y], domMult(In.fm[n][m], Im.fm[m][y])))
-        && Ipnm.fm[n][y].ks[k] == In.fm[n][y].ks[k] + In.fm[n][m].ks[k] * Im.fm[m][y].ks[k];
-
-      pure assert Ipnm1.fm[n][y].ks[k] == In1.fm[n][y].ks[k];
-
-      // x == p     
-      pure assert true
-        && domEq(Ipnm.fm[p][y], domPlus(Ip.fm[p][y], domPlus(domMult(Ip.fm[p][m], Im.fm[m][y]), domMult(Ip.fm[p][n], Ipnm.fm[n][y]))))
-        && Ipnm.fm[p][y].ks[k] == Ip.fm[p][y].ks[k] + (Ip.fm[p][m].ks[k] * Im.fm[m][y].ks[k] + Ip.fm[p][n].ks[k] * Ipnm.fm[n][y].ks[k]);
-
-      pure assert true
-        && domEq(Ipnm1.fm[m][y], domPlus(Im1.fm[m][y], domMult(Im1.fm[m][n], In1.fm[n][y])))
-        && Ipnm1.fm[m][y].ks[k] == Im1.fm[m][y].ks[k] + Im1.fm[m][n].ks[k] * In1.fm[n][y].ks[k];
-        
-      pure assert true
-        && domEq(Ipnm1.fm[p][y], domPlus(Ip1.fm[p][y], domPlus(domMult(Ip1.fm[p][n], In1.fm[n][y]), domMult(Ip1.fm[p][m], Ipnm1.fm[m][y]))))
-        && Ipnm1.fm[p][y].ks[k] == Ip1.fm[p][y].ks[k] + (Ip1.fm[p][n].ks[k] * In1.fm[n][y].ks[k] + Ip1.fm[p][m].ks[k] * Ipnm1.fm[m][y].ks[k]);      
+    pure assert forall k: K :: Ipnm1.inf[m].ks[k] == 0 with {
+      pure assert Im1.inf[m].ks[k] == Ipnm1.inf[m].ks[k] + Ip1.inf[p].ks[k] * Ip1.fm[p][m].ks[k];
     }
     
-  }
+    pure assert forall k: K :: Ipnm.inf[m].ks[k] == 0 with {
+      pure assert Im.inf[m].ks[k] == Ipnm.inf[m].ks[k] + (Ip.inf[p].ks[k] * Ip.fm[p][m].ks[k] + In.inf[n].ks[k] * In.fm[n][m].ks[k]);
+    }
+  
+    pure assert forall x: Node :: Ipnm1.inf[x] == Ipnm.inf[x] with {
+      pure assert forall k: K :: Ipnm1.inf[x].ks[k] == Ipnm.inf[x].ks[k] with {
+        
+        if (x == n || x == m || x == p) {
+          // Expand Ipnm1.inf[n].ks[k]
+          pure assert In1.inf[n].ks[k] == Ipnm1.inf[n].ks[k] + (Ip1.inf[p].ks[k] * Ip1.fm[p][n].ks[k] + Im1.inf[m].ks[k] * Im1.fm[m][n].ks[k]);
+        
+          // Expand Ipnm.inf[n].ks[k]
+          pure assert In.inf[n].ks[k] == Ipnm.inf[n].ks[k] + Ip.inf[p].ks[k] * Ip.fm[p][n].ks[k];
+
+          pure assert Ipnm.inf[m].ks[k] == 0;
+        }
+      }
+    }
+    
+    // Prove that old and new flows are equal
+    pure assert forall x: Node, y: Node :: domMult(Ipnm.inf[x], Ipnm.fm[x][y]) == domMult(Ipnm1.inf[x], Ipnm1.fm[x][y]) with {
+      pure assert forall k: K :: domMult(Ipnm.inf[x], Ipnm.fm[x][y]).ks[k] == domMult(Ipnm1.inf[x], Ipnm1.fm[x][y]).ks[k] with {
+        // x == m
+        pure assert Ipnm.inf[m].ks[k] == 0;
+        
+        // x == n
+        pure assert true
+          && domEq(Ipnm.fm[n][y], domPlus(In.fm[n][y], domMult(In.fm[n][m], Im.fm[m][y])))
+          && Ipnm.fm[n][y].ks[k] == In.fm[n][y].ks[k] + In.fm[n][m].ks[k] * Im.fm[m][y].ks[k];
+        
+          pure assert Ipnm1.fm[n][y].ks[k] == In1.fm[n][y].ks[k];
+
+          // x == p     
+          pure assert true
+            && domEq(Ipnm.fm[p][y], domPlus(Ip.fm[p][y], domPlus(domMult(Ip.fm[p][m], Im.fm[m][y]), domMult(Ip.fm[p][n], Ipnm.fm[n][y]))))
+            && Ipnm.fm[p][y].ks[k] == Ip.fm[p][y].ks[k] + (Ip.fm[p][m].ks[k] * Im.fm[m][y].ks[k] + Ip.fm[p][n].ks[k] * Ipnm.fm[n][y].ks[k]);
+            
+          pure assert true
+            && domEq(Ipnm1.fm[m][y], domPlus(Im1.fm[m][y], domMult(Im1.fm[m][n], In1.fm[n][y])))
+            && Ipnm1.fm[m][y].ks[k] == Im1.fm[m][y].ks[k] + Im1.fm[m][n].ks[k] * In1.fm[n][y].ks[k];
+        
+          pure assert true
+            && domEq(Ipnm1.fm[p][y], domPlus(Ip1.fm[p][y], domPlus(domMult(Ip1.fm[p][n], In1.fm[n][y]), domMult(Ip1.fm[p][m], Ipnm1.fm[m][y]))))
+            && Ipnm1.fm[p][y].ks[k] == Ip1.fm[p][y].ks[k] + (Ip1.fm[p][n].ks[k] * In1.fm[n][y].ks[k] + Ip1.fm[p][m].ks[k] * Ipnm1.fm[m][y].ks[k]);      
+      }      
+    }
   }
   
   // Prove that contents are correct
