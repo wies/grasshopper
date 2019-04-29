@@ -240,80 +240,92 @@ let add_pred_insts prog f =
           BoolOp (op, List.map (ag bvs) fs)
       | Binder (Forall, vs, f, ann) ->
           let bvs = List.fold_left (fun bvs (v, _) -> IdSet.add v bvs) bvs vs in
+          let aux_info =
+            aux_match |>
+            Opt.map (function (pid, Match (pt, _)) ->
+              let pdecl = Prog.find_pred prog pid in
+              let ppos =
+                pdecl.pred_body |>
+                Opt.map (fun s -> s.spec_pos) |>
+                Opt.get_or_else dummy_position
+              in
+              pid, pt, ppos, pdecl)                         
+          in
+          let mk_read_vars srts =
+            List.map (fun srt -> mk_var srt (fresh_ident "?i")) srts
+          in
+          let rec read_gens seen_adts gens t pt =
+            match sort_of t, sort_of pt with
+            | (Map _ | Adt _) as tsrt, Adt (tid, adts)
+              when not @@ IdSet.mem tid seen_adts ->
+                let cstrs = List.assoc tid adts in
+                let destrs = flat_map (fun (_, destrs) -> destrs) cstrs in
+                let seen_adts1 = IdSet.add tid seen_adts in
+                List.fold_left
+                  (fun gens (destr, srt) ->
+                    let srt = unfold_adts adts srt in
+                    let read_pt = mk_destr srt destr pt in
+                    let gens1, read_t = match tsrt with
+                    | Adt (tid1, _) when tid = tid1 ->
+                        let read_t = mk_destr srt destr t in
+                        (read_pt, read_t) :: gens, read_t
+                    | _ -> gens, t
+                    in
+                    read_gens seen_adts1 gens1 read_t read_pt
+                  )            
+                  gens destrs
+            | (Map _ | Adt _) as tsrt, Map (dsrts, rsrt) ->
+                let read_vars = mk_read_vars dsrts in
+                let read_pt = mk_read pt read_vars in
+                let gens1, read_t = match tsrt with
+                | Map (tdsrts, trsrt)
+                  when tdsrts = dsrts && trsrt = rsrt ->
+                    let read_t = mk_read t read_vars in
+                    (read_pt, read_t) :: gens, read_t
+                | _ -> gens, t
+                in
+                read_gens seen_adts gens1 read_t read_pt
+            | _, Pat ->
+                (match pt with
+                | App (_, [pt], _) -> read_gens seen_adts gens t pt
+                | _ -> gens)
+            | srt1, srt2 when srt1 = srt2 -> (pt, t) :: gens
+            | _ -> gens
+          in
           let ft, read_gens =
             f |>
             fun_terms bvs |>
             TermSet.elements |>
-            (*List.map (fun t -> print_endline (string_of_term t); t) |>*)
+            (*(fun ts -> List.iter (print_term_endline stdout) ts; ts) |>*)
             List.map (function
               | App (Disjoint, [t1; t2], _) -> mk_inter [t1; t2], []
               | App (SubsetEq, [t1; t2], _) -> mk_union [t1; t2], []
-              | (App (Read, App (FreeSym id, _ :: _, _) :: _, srt) 
-              | App (FreeSym id, _, srt)) as t ->
-                  IdMap.find_opt id prog.prog_preds |>
-                  Opt.flat_map (fun decl ->
-                    aux_match |>
-                    Opt.flat_map (function (pid, Match (pt, _)) ->
-                      (* Add generator for propagating known terms to force unfolding of predicate definitions *)
-                      (* Only do this if id is not the entry point into an SCC in the predicate call graph *)
-                      let pdecl = Prog.find_pred prog pid in
-                      let ppos =
-                        pdecl.pred_body |>
-                        Opt.map (fun s -> s.spec_pos) |>
-                        Opt.get_or_else dummy_position
-                      in
-                      let mk_read_vars srts =
-                        List.map (fun srt -> mk_var srt (fresh_ident "?i")) srts
-                      in
-                      let rec read_gens seen_adts gens t pt =
-                        match sort_of t, sort_of pt with
-                        | (Map _ | Adt _) as tsrt, Adt (tid, adts)
-                          when not @@ IdSet.mem tid seen_adts ->
-                            let cstrs = List.assoc tid adts in
-                            let destrs = flat_map (fun (_, destrs) -> destrs) cstrs in
-                            let seen_adts1 = IdSet.add tid seen_adts in
-                            List.fold_left
-                              (fun gens (destr, srt) ->
-                                let srt = unfold_adts adts srt in
-                                let read_pt = mk_destr srt destr pt in
-                                let gens1, read_t = match tsrt with
-                                | Adt (tid1, _) when tid = tid1 ->
-                                    let read_t = mk_destr srt destr t in
-                                    (read_pt, read_t) :: gens, read_t
-                                | _ -> gens, t
-                                in
-                                read_gens seen_adts1 gens1 read_t read_pt
-                              )            
-                              gens destrs
-                        | (Map _ | Adt _) as tsrt, Map (dsrts, rsrt) ->
-                            let read_vars = mk_read_vars dsrts in
-                            let read_pt = mk_read pt read_vars in
-                            let gens1, read_t = match tsrt with
-                            | Map (tdsrts, trsrt)
-                              when tdsrts = dsrts && trsrt = rsrt ->
-                                let read_t = mk_read t read_vars in
-                                (read_pt, read_t) :: gens, read_t
-                            | _ -> gens, t
-                            in
-                            read_gens seen_adts gens1 read_t read_pt
-                        | _, Pat ->
-                            (match pt with
-                            | App (_, [pt], _) -> read_gens seen_adts gens t pt
-                            | _ -> gens)
-                        | srt1, srt2 when srt1 = srt2 -> (pt, t) :: gens
-                        | _ -> gens
-                      in
-                      let read_gens =
-                        read_gens IdSet.empty [] t pt |>
-                        List.filter (fun (pt, t) -> pt <> t)
-                      in                      
-                      if pdecl.pred_contract.contr_name = decl.pred_contract.contr_name ||
-                         IdSet.mem pid (accesses_pred decl) &&
-                         not (contained_in_src_pos decl.pred_contract.contr_pos ppos)
-                      then Some (t, read_gens)
-                      else Some (mk_known t, read_gens))) |>
-                      Opt.get_or_else (t, [])
-                    | t -> t, []) |>
+              | (App (Read, App (FreeSym id, _ :: _, _) :: _, srt)
+              | App (Read, App (Read, Var (id, _) :: _, _) :: _, srt)
+              | App (FreeSym id, _, srt)) as t -> begin
+                  aux_info |>
+                  Opt.map (fun (pid, pt, ppos, pdecl) ->
+                    (*Printf.printf "read_gens %s %s\n" (string_of_term pt) (string_of_term t);*)
+                    let read_gens =
+                      read_gens IdSet.empty [] t pt |>
+                      List.filter (fun (pt, t) -> pt <> t)
+                    in                      
+                    (* Add generator for propagating known terms to force unfolding of predicate definitions *)
+                    (* Only do this if id is a predicate that is not the entry point into an SCC in the predicate call graph *)
+                    let dont_make_known =
+                      IdMap.find_opt id prog.prog_preds |>
+                      Opt.map (fun decl ->
+                        pdecl.pred_contract.contr_name = decl.pred_contract.contr_name ||
+                        IdSet.mem pid (accesses_pred decl) &&
+                        not (contained_in_src_pos decl.pred_contract.contr_pos ppos)) |>
+                      Opt.get_or_else true
+                    in
+                    if dont_make_known
+                    then (t, read_gens)
+                    else (mk_known t, read_gens)) |>
+                  Opt.get_or_else (t, [])                    
+              end
+              | t -> t, []) |>
              List.split         
           in
           let read_gens =
