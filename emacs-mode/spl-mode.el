@@ -59,7 +59,7 @@
 (defconst spl-builtins-regexp   (regexp-opt spl-builtins 'symbols))
 (defconst spl-keywords-regexp   (regexp-opt spl-keywords 'symbols))
 
-(defconst spl-block-heads '("else" "if" "while"))
+(defconst spl-block-heads '("else" "if" "while" "with"))
 (defconst spl-extended-block-head-regexp (concat "\\s-*" (regexp-opt (append spl-block-heads spl-defuns) 'symbols)))
 (defconst spl-extended-defun-regexp (concat "\\s-*" spl-defuns-regexp))
 
