@@ -1106,7 +1106,6 @@ let infer_types cu =
 (** Check compilation unit [cu]. *)
 let check cu =
   let cu1 = resolve_names cu in
-  let _ = print_cu stdout cu1 in
   let cu2 = infer_types cu1 in
   let cu3 = flatten_exprs cu2 in
   cu3
