@@ -16,12 +16,13 @@ module rec Node : sig
       get_parent: t option;
       set_parent: t -> unit;
       get_funs: sorted_symbol BloomFilter.t;
-      set_funs: sorted_symbol BloomFilter.t -> unit;
+      set_funs: sorted_symbol BloomFilter.t -> unit;    
       find: t;
       union: t -> unit;
       ccpar: NodeSet.t;
       congruent: t -> bool;
       merge: t -> bool;
+      to_term: term;
     >
 
   val compare: t -> t -> int
@@ -45,6 +46,7 @@ module rec Node : sig
       ccpar: NodeSet.t;
       congruent: t -> bool;
       merge: t -> bool;
+      to_term: term
     >
 
   let compare n1 n2 = n1#get_id - n2#get_id
@@ -107,6 +109,7 @@ module rec Node : sig
     method ccpar: NodeSet.t = (self#find)#get_ccparent
 
     method congruent (that: node) =
+      (*print_endline "CC congruent %s %s" (string_of_term self#to_term) (string_of_term that#to_term);*)
         self#get_sym = that#get_sym
       &&
         List.for_all2 (fun a b -> a#find = b#find) self#get_args that#get_args
@@ -119,10 +122,15 @@ module rec Node : sig
       else
         List.filter (fun (a,b) -> a#find <> b#find) (List.rev_map2 (fun x y -> (x,y)) (self#get_args) (that#get_args))*)
 
+    method to_term =
+      let sym, (_, srt) = self#get_sym in
+      mk_app srt sym (List.map (fun n -> n#to_term) args)
+      
         
     method merge (that: node) =
       self#find != that#find &&
       begin
+        (*Printf.printf "CC merging %s = %s\n" (string_of_term self#to_term) (string_of_term that#to_term);*)
         let p1 = self#ccpar in
         let p2 = that#ccpar in
         self#union that;
@@ -193,10 +201,10 @@ class dag = fun (terms: TermSet.t) ->
       let has_mod = match new_node#get_args with
       | [] -> true
       | arg :: _ ->
-          (*Printf.printf "Getting parents of %s\n" (string_of_term @@ self#get_term (arg#find));*)
+          (*Printf.printf "Getting parents of %s\n" (string_of_term @@ arg#find#to_term);*)
           NodeSet.exists (fun n' ->
             (*Printf.printf "Checking congruence with: %s %b\n"
-              (string_of_term @@ self#get_term n') (n#congruent n');*)
+              (string_of_term @@ n'#to_term) (new_node#congruent n');*)
             n' != new_node && new_node#congruent n' && n'#merge new_node) arg#ccpar
       in
       has_mod_args || has_mod, new_node
@@ -245,7 +253,8 @@ class dag = fun (terms: TermSet.t) ->
       let has_mod, n = convert_term t in
       _has_mods <- _has_mods || has_mod
         
-    method add_eq t1 t2 = 
+    method add_eq t1 t2 =
+      (*Printf.printf "CC adding equality %s\n" (string_of_term (mk_eq_term t1 t2));*)
       let n1 = self#get_node t1 in
       let n2 = self#get_node t2 in
       let has_mod =
@@ -289,11 +298,12 @@ class dag = fun (terms: TermSet.t) ->
             let parent = n#find in
             let already =
               try Hashtbl.find node_to_cc parent
-              with Not_found -> []
+              with Not_found -> [Hashtbl.find node_to_term parent]
             in
+            if n != parent then
               Hashtbl.replace node_to_cc parent (e::already)
           ) nodes;
-        Hashtbl.fold (fun _ cc acc -> cc::acc) node_to_cc []
+        Hashtbl.fold (fun _ cc acc -> List.rev cc :: acc) node_to_cc []
 
     method get_egraph: egraph =
       let egraph = 
@@ -410,8 +420,8 @@ let add_conjuncts_fixed_point cc_graph fs : dag =
           loop changed (f :: fs) toSimplify
         | BoolOp (And, fs1) ->
           loop changed (fs1 @ fs) toSimplify
-        | Atom (App (Eq, [t1; t2], _), _) -> 
-          cc_graph#add_eq t1 t2;
+        | Atom (App (Eq, [t1; t2], _), _) ->
+            cc_graph#add_eq t1 t2;
             loop true fs toSimplify
         | BoolOp (Not, [Atom (App (Eq, [t1; t2], _), _)])
         | Atom (App (Lt, [t1; t2], _), _) 
@@ -471,7 +481,7 @@ let add_terms gterms cc_graph =
   let new_terms = TermSet.diff gterms old_terms in
   let all_terms = TermSet.union old_terms new_terms in
   (* Add gterms to graph *)
-  Debug.debugl 1 (fun () -> "CC.add_terms: adding terms\n");
+  (*Debug.debugl 1 (fun () -> "CC.add_terms: adding terms\n");*)
   TermSet.iter (fun t ->
     let st = SimplifyGrass.simplify_term t in
     cc_graph#add_term t;
@@ -482,7 +492,7 @@ let add_terms gterms cc_graph =
       end)
     new_terms;
   (* Add disequalities between ADT terms with different top-level constructors *)
-  Debug.debugl 1 (fun () -> "CC.add_terms: adding disequalities\n");
+  (*Debug.debugl 1 (fun () -> "CC.add_terms: adding disequalities\n");*)
   let cterms =
     TermSet.filter
       (function App (Constructor _, _, _) -> true | _ -> false) new_terms
@@ -504,27 +514,21 @@ let add_terms gterms cc_graph =
   cc_graph
 
 let get_implied_equalities cc_graph =
-  List.fold_left
-    (fun acc -> function
-      | c :: cls when sort_of c <> Bool && sort_of c <> Pat -> 
-          let eq = List.map (fun t -> GrassUtil.mk_eq c t) cls in
-          List.rev_append eq acc
-            (*| c :: _ as cls when sort_of c = Bool ->
-            let mk_form =
-              if List.mem mk_true_term cls then
-                function
-                  | App (BoolConst _, _, _) -> []
-                  | t -> [Atom (t, [])]
-              else if List.mem mk_false_term cls then
-                function
-                  | App (BoolConst _, _, _) -> []
-                  | t -> [mk_not (Atom (t, []))]
-              else fun _ -> []
-            in
-              List.rev_append (flat_map mk_form cls) acc*)
-      | _ -> acc)
-    []
-    cc_graph#get_cc
+  let rec get_implied acc = function
+    | (c :: cls) :: ccs when sort_of c <> Bool && sort_of c <> Pat ->
+        let rec get_eq acc = function
+          | t :: cls ->
+              (match t, c with
+              | App (IntConst i2, [], _), App (IntConst i1, [], _) when i1 <> i2 ->
+                  [mk_false]
+              | _ -> get_eq (mk_eq c t :: acc) cls)
+          | [] -> get_implied acc ccs
+        in
+        get_eq acc cls
+    | _ :: ccs -> get_implied acc ccs 
+    | [] -> acc
+  in
+  get_implied [] cc_graph#get_cc
     
 let create () : dag =
   let terms = TermSet.of_list [mk_true_term; mk_false_term] in

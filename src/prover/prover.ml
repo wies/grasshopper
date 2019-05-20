@@ -311,9 +311,9 @@ let instantiate_and_prove session fs =
       in
       Debug.debugl 1 (fun () -> "Done recomputing congruences (round 2)\n");
       let has_mods1 = CongruenceClosure.has_mods cc_graph in
-      if not !Config.propagate_reads || not (has_mods1 || has_mods2)
+      let implied_eqs = CongruenceClosure.get_implied_equalities cc_graph in
+      if implied_eqs = [mk_false] || not !Config.propagate_reads || not (has_mods1 || has_mods2)
       then
-        let implied_eqs = CongruenceClosure.get_implied_equalities cc_graph in
         rev_concat [fs_inst; implied_eqs], cc_graph
       else
         saturate (i + 1) fs_inst (CongruenceClosure.reset cc_graph)
