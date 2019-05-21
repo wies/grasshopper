@@ -8,12 +8,20 @@ ensure_verifies()
 {
   # Function. Parameter 1 is the return code
   # Para. 2 is the name of the benchmark.
+  name="${2}"
+  tabs="\t"  
+  if [ "${#name}" -lt "12" ]; then
+      tabs="$tabs\t"
+  fi
+  if [ "${#name}" -lt "20" ]; then
+      tabs="$tabs\t"
+  fi
   if [ "${1}" -ne "0" ]; then
-    echo -e "\t\t\t\033[31mFailed.\033[0m    "
+    echo -e "$tabs\033[31mFailed.\033[0m    "
     echo -ne "\033[31mERROR: expected benchmark to verify.\033[0m"
     PASSED=0
   else
-    echo -ne "\t\t\t\033[32mPassed.\033[0m    "
+    echo -ne "$tabs\033[32mPassed.\033[0m    "
   fi
 }
 
@@ -21,14 +29,22 @@ ensure_fails()
 {
   # Function. Parameter 1 is the return code
   # Para. 2 is the name of the benchmark.
+  name="${2}"
+  tabs="\t"  
+  if [ "${#name}" -lt "12" ]; then
+      tabs="$tabs\t"
+  fi
+  if [ "${#name}" -lt "20" ]; then
+      tabs="$tabs\t"
+  fi
   if [ "${1}" -ne "1" ]; then
-    echo -e "\t\t\t\033[31mFailed.\033[0m    "
+    echo -e "$tabs\033[31mFailed.\033[0m    "
     echo -e "\033[31m*** SOUNDNESS ERROR ***************************************"
     echo "*** SOUNDNESS ERROR: Expected benchmark to fail."
     echo -e "*** SOUNDNESS ERROR ***************************************\033[0m"
     PASSED=0
   else
-    echo -ne "\t\t\t\033[32mPassed.\033[0m    "
+    echo -ne "$tabs\033[32mPassed.\033[0m    "
   fi
 }
 
