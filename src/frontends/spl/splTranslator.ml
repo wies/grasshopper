@@ -155,10 +155,28 @@ let convert cu =
     }
   in
   let struct_sorts =
+    let rec collect_array_sorts acc pos = function
+      | ArrayType t | ArrayCellType t ->
+          let acc1 = SortSet.add (ArrayCell (convert_type t pos)) acc in
+          collect_array_sorts acc1 pos t
+      | SetType t ->
+          collect_array_sorts acc pos t
+      | MapType (t1, t2) ->
+          collect_array_sorts (collect_array_sorts acc pos t1) pos t2
+      | _ -> acc
+    in
+    let collect_array_sorts_from_locals locals acc =
+      IdMap.fold (fun _ decl acc -> collect_array_sorts acc decl.v_pos decl.v_type) locals acc
+    in
+    SortSet.empty |>
+    IdMap.fold
+      (fun _ proc acc -> collect_array_sorts_from_locals proc.p_locals acc) cu.proc_decls |>
+    IdMap.fold
+      (fun _ pred acc -> collect_array_sorts_from_locals pred.pr_locals acc) cu.pred_decls |>
     IdMap.fold
       (fun id tdef acc -> match tdef.t_def with
       | StructTypeDef _ -> SortSet.add (FreeSrt id) acc
-      | _ -> acc) cu.type_decls SortSet.empty
+      | _ -> acc) cu.type_decls
   in
   (** convert global variables *)
   let prog, globals =

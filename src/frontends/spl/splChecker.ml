@@ -250,9 +250,7 @@ let resolve_names cu =
           | [map; idx] ->
               (match type_of_expr cu locals map with
               | ArrayType typ ->
-                  let map1 = re locals tbl map in
-                  let idx1 = re locals tbl idx in
-                  let cell = Read (UnaryOp (OpArrayCells, map1, pos_of_expr map1), idx1, pos) in
+                  let cell = Read (UnaryOp (OpArrayCells, map, pos_of_expr map), idx, pos) in
                   PredApp (AccessPred, [Setenum (ArrayCellType typ, [cell], pos)], pos)
               | _ -> pred_arg_mismatch_error pos id 1)
           | _ -> pred_arg_mismatch_error pos id 1)

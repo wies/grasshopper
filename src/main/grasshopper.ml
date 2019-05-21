@@ -59,6 +59,7 @@ let normalizeFilename base_dir file_name =
     List.fold_left
       (fun acc -> function
         | "" when acc <> [] -> acc
+        | "." -> acc
         | ".." -> List.tl acc
         | x -> x :: acc
       )
