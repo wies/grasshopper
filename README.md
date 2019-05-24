@@ -2,7 +2,7 @@
 
 GRASShopper
 =======
-![Version 0.5](https://img.shields.io/badge/version-0.5-green.svg)
+![Version 0.6 pre](https://img.shields.io/badge/version-0.6-pre-green.svg)
 [![BSD licensed](https://img.shields.io/badge/license-BSD-blue.svg)](https://raw.githubusercontent.com/wies/grasshopper/master/LICENSE)
 [![Build Status](https://travis-ci.org/wies/grasshopper.svg?branch=master)](https://travis-ci.org/wies/grasshopper)
 
@@ -19,7 +19,7 @@ details.
 
 Installation Requirements
 -------------------------
-- OCaml, version >= 4.06
+- OCaml, version >= 4.07
 
 - OCaml Findlib, version >= 1.6.2
 
@@ -33,7 +33,7 @@ The easiest way to satisfy all OCaml-related installation requirements
 is to install the OCaml package manager OPAM and then execute the
 following commands
 ```bash
-opam switch 4.06.0
+opam switch 4.07.0
 opam install -y ocamlfind
 opam install -y ocamlbuild
 eval $(opam config env)
