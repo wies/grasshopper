@@ -80,7 +80,6 @@ adt_lists               tests/spl/adt/lists.spl                         ''      
 
 SYMB_EXEC_TESTS="
 symb_exec:basic         tests/spl/symb_exec/basic.spl           ''     pass
-symb_exec:dirty         tests/spl/symb_exec/dirty.spl           ''     pass
 symb_exec:frame         tests/spl/symb_exec/frame.spl           ''     pass
 symb_exec:list          tests/spl/symb_exec/list.spl            ''     pass
 symb_exec:array         tests/spl/symb_exec/array.spl           ''     pass
@@ -103,42 +102,42 @@ flows:b+-tree_inset_step   tests/spl/reloc/b+-tree.spl      'flowint_inset_step'
 flows:b+-tree_proj   tests/spl/reloc/b+-tree.spl      'flowint_proj'     pass
 flows:b+-tree_cont   tests/spl/reloc/b+-tree.spl      'flowint_cont'     pass
 flows:b+-tree_step   tests/spl/reloc/b+-tree.spl      'flowint_step'     pass
-flows:b-link-tree_init tests/spl/reloc/b-link.spl           'init' pass
-flows:b-link-tree_findNext tests/spl/reloc/b-link.spl           'findNext' pass
-flows:b-link-tree_search   tests/spl/reloc/b-link.spl           'search'   pass
-flows:b-link-tree_insert   tests/spl/reloc/b-link.spl           'insert'   pass
-flows:b-link-tree_delete   tests/spl/reloc/b-link.spl           'delete'   pass
-flows:b-link-tree_halfSplit   tests/spl/reloc/b-link.spl           'half_split'   pass
-flows:b-link-tree_keyset   tests/spl/reloc/b-link.spl           'keyset_implies_leaf'     pass
-flows:b-link-tree_outset1   tests/spl/reloc/b-link.spl      'outset_correct1'     pass
-flows:b-link-tree_outset2   tests/spl/reloc/b-link.spl      'outset_correct2'     pass
-flows:b-link-tree_edgeset   tests/spl/reloc/b-link.spl      'lemma_edgesets_disjoint'     pass
-flows:b-link-tree_compute_int   tests/spl/reloc/b-link.spl      'compute_interface'     pass
-flows:b-link-tree_inset_step   tests/spl/reloc/b-link.spl      'flowint_inset_step'     pass
-flows:b-link-tree_proj   tests/spl/reloc/b-link.spl      'flowint_proj'     pass
-flows:b-link-tree_cont   tests/spl/reloc/b-link.spl      'flowint_cont'     pass
-flows:b-link-tree_step   tests/spl/reloc/b-link.spl      'flowint_step'     pass
+flows:b-link_init tests/spl/reloc/b-link.spl           'init' pass
+flows:b-link_findNext tests/spl/reloc/b-link.spl           'findNext' pass
+flows:b-link_search   tests/spl/reloc/b-link.spl           'search'   pass
+flows:b-link_insert   tests/spl/reloc/b-link.spl           'insert'   pass
+flows:b-link_delete   tests/spl/reloc/b-link.spl           'delete'   pass
+flows:b-link_halfSplit   tests/spl/reloc/b-link.spl           'half_split'   pass
+flows:b-link_keyset   tests/spl/reloc/b-link.spl           'keyset_implies_leaf'     pass
+flows:b-link_outset1   tests/spl/reloc/b-link.spl      'outset_correct1'     pass
+flows:b-link_outset2   tests/spl/reloc/b-link.spl      'outset_correct2'     pass
+flows:b-link_edgeset   tests/spl/reloc/b-link.spl      'lemma_edgesets_disjoint'     pass
+flows:b-link_compute_int   tests/spl/reloc/b-link.spl      'compute_interface'     pass
+flows:b-link_inset_step   tests/spl/reloc/b-link.spl      'flowint_inset_step'     pass
+flows:b-link_proj   tests/spl/reloc/b-link.spl      'flowint_proj'     pass
+flows:b-link_cont   tests/spl/reloc/b-link.spl      'flowint_cont'     pass
+flows:b-link_step   tests/spl/reloc/b-link.spl      'flowint_step'     pass
 flows:hashtbl_findNext  tests/spl/reloc/hashtbl.spl             'findNext' pass
 flows:hashtbl_search    tests/spl/reloc/hashtbl.spl             'search'   pass
 flows:hashtbl_insert    tests/spl/reloc/hashtbl.spl             'insert'   pass
 flows:hashtbl_delete    tests/spl/reloc/hashtbl.spl             'delete'   pass
 flows:hashtbl_keyset    tests/spl/reloc/hashtbl.spl             'keyset_implies_bucket'   pass
-flows:hashtbl_inreach_impl_inset   tests/spl/reloc/hashtbl.spl      'inreach_impl_inset'     pass
+flows:hashtbl_inreach_inset   tests/spl/reloc/hashtbl.spl      'inreach_impl_inset'     pass
 flows:hashtbl_inset_step   tests/spl/reloc/hashtbl.spl      'flowint_inset_step'     pass
 flows:hashtbl_inreach_step   tests/spl/reloc/hashtbl.spl      'flowint_inreach_step'     pass
 flows:hashtbl_proj   tests/spl/reloc/hashtbl.spl      'flowint_proj'     pass
 flows:hashtbl_cont   tests/spl/reloc/hashtbl.spl      'flowint_cont'     pass
 flows:hashtbl_step   tests/spl/reloc/hashtbl.spl      'flowint_step'     pass
-flows:hashtbl-give-up_inRange  tests/spl/reloc/hashtbl-give-up.spl     'inRange'  pass
-flows:hashtbl-give-up_findNext tests/spl/reloc/hashtbl-give-up.spl     'findNext' pass
-flows:hashtbl-give-up_search   tests/spl/reloc/hashtbl-give-up.spl     'search'   pass
-flows:hashtbl-give-up_insert   tests/spl/reloc/hashtbl-give-up.spl     'insert'   pass
-flows:hashtbl-give-up_delete   tests/spl/reloc/hashtbl-give-up.spl     'delete'   pass
-flows:hashtbl-give-up_keyset   tests/spl/reloc/hashtbl-give-up.spl     'keyset_implies_bucket'   pass
-flows:hashtbl-give-up_inset_step   tests/spl/reloc/hashtbl-give-up.spl      'flowint_inset_step'     pass
-flows:hashtbl-give-up_proj   tests/spl/reloc/hashtbl-give-up.spl      'flowint_proj'     pass
-flows:hashtbl-give-up_cont   tests/spl/reloc/hashtbl-give-up.spl      'flowint_cont'     pass
-flows:hashtbl-give-up_step   tests/spl/reloc/hashtbl-give-up.spl      'flowint_step'     pass
+flows:hashtbl-gu_inRange  tests/spl/reloc/hashtbl-give-up.spl     'inRange'  pass
+flows:hashtbl-gu_findNext tests/spl/reloc/hashtbl-give-up.spl     'findNext' pass
+flows:hashtbl-gu_search   tests/spl/reloc/hashtbl-give-up.spl     'search'   pass
+flows:hashtbl-gu_insert   tests/spl/reloc/hashtbl-give-up.spl     'insert'   pass
+flows:hashtbl-gu_delete   tests/spl/reloc/hashtbl-give-up.spl     'delete'   pass
+flows:hashtbl-gu_keyset   tests/spl/reloc/hashtbl-give-up.spl     'keyset_implies_bucket'   pass
+flows:hashtbl-gu_inset_step   tests/spl/reloc/hashtbl-give-up.spl      'flowint_inset_step'     pass
+flows:hashtbl-gu_proj   tests/spl/reloc/hashtbl-give-up.spl      'flowint_proj'     pass
+flows:hashtbl-gu_cont   tests/spl/reloc/hashtbl-give-up.spl      'flowint_cont'     pass
+flows:hashtbl-gu_step   tests/spl/reloc/hashtbl-give-up.spl      'flowint_step'     pass
 "
 
 # These are the old inductive b-link version that's broken now because it still uses FPo
