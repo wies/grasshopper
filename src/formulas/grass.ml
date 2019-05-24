@@ -80,7 +80,9 @@ type symbol =
   | Empty | SetEnum | Union | Inter | Diff  (* Set *)
   | Length | IndexOfCell | ArrayOfCell | ArrayCells | ArrayMap
   | ByteToInt | IntToByte (* explicit conversion *)
-  | Ite (* if-then-else *)
+  (* symbols for model representation *)
+  | AndTerm | OrTerm | Ite (* if-then-else *)
+  | Undefined | Value of Int64.t 
   (* interpreted predicate symbols *)
   | Eq
   | LtEq | GtEq | Lt | Gt
@@ -170,6 +172,11 @@ module TermMap = Map.Make(struct
     let compare = compare
   end)
 
+module TermListMap = Map.Make(struct
+    type t = term list
+    let compare = compare
+  end)
+    
 (** filters for term generators *)
 type filter =
   | FilterNotNull
@@ -277,6 +284,8 @@ let string_of_symbol = function
   | SubsetEq -> "subsetof"
   | Disjoint -> "Disjoint"
   | Frame -> "Frame"
+  | AndTerm -> "&&"
+  | OrTerm -> "||"
   (* constructors and destructors *)
   | Constructor id 
   | Destructor id -> string_of_ident id 
@@ -286,14 +295,17 @@ let string_of_symbol = function
   | Old -> "old"      
   (* patterns *)
   | Known -> "known"
-
+  (* model values *)
+  | Value i -> Printf.sprintf "!%d" (Int64.to_int i)
+  | Undefined -> "undefined"
+        
 let string_of_bop = function
   | And -> "&&"
   | Or -> "||"
   | Not -> "!"
 
 let prio_of_symbol = function
-  | Null | Empty | IntConst _ | BoolConst _ -> 0
+  | Null | Empty | Undefined | IntConst _ | BoolConst _ | Value _ -> 0
   | Read | Write | Constructor _ | Destructor _ | Old | SetEnum | ArrayMap
   | Length | IndexOfCell | ArrayOfCell | ArrayCells | EntPnt | ByteToInt | IntToByte
   | Btwn | Frame | Disjoint | Known | FreeSym _ -> 1
@@ -306,7 +318,9 @@ let prio_of_symbol = function
   | Eq -> 8
   | BitAnd -> 9
   | BitOr -> 10
-  | Ite -> 11
+  | AndTerm -> 12
+  | OrTerm -> 16
+  | Ite -> 17
 
 let prio_of_term = function
   | App (sym, _, _) -> prio_of_symbol sym
@@ -374,11 +388,20 @@ let pr_var ppf (x, srt) =
 
 let rec pr_vars = pr_list_comma pr_var
 
+let rec strip_loc = function
+  | Loc srt -> strip_loc srt
+  | Map (srts, srt) -> Map (List.map strip_loc srts, strip_loc srt)
+  | Set srt -> Set (strip_loc srt) 
+  | Array srt -> Array (strip_loc srt)
+  | ArrayCell srt -> ArrayCell (strip_loc srt)
+  | srt -> srt
+        
 let rec pr_term ppf = function
   | Var (id, _) -> fprintf ppf "%a" pr_ident id
+  | App (Value i, [], srt) -> fprintf ppf "%a!%d" pr_sort (strip_loc srt) (Int64.to_int i)
   | App (Union, [], _) -> fprintf ppf "{}"
   | App (Inter, [], _) -> fprintf ppf "Univ"
-  | App (sym, [], _) -> fprintf ppf "%a" pr_sym sym
+  | App (sym, [], _) when sym <> SetEnum -> fprintf ppf "%a" pr_sym sym
   | App (Read, [map; t], _) ->
       (match map, sort_of t with
       | (App (FreeSym _, [], _) | Var _), Loc _ -> fprintf ppf "%a.%a" pr_term t pr_term map
@@ -387,7 +410,7 @@ let rec pr_term ppf = function
       fprintf ppf "%a[%a].%a" pr_term t pr_term_list ts pr_term map
   | App (Write, [map; t1; t2], _) ->
       fprintf ppf "%a[%a := %a]" pr_term map pr_term t1 pr_term t2
-  | App ((Minus | Plus | Mult | Div | Mod | Diff | Inter | Union | Eq | SubsetEq | LtEq | GtEq | Lt | Gt | Elem as sym), [t1; t2], _) ->
+  | App ((Minus | Plus | Mult | Div | Mod | Diff | Inter | Union | Eq | SubsetEq | LtEq | GtEq | Lt | Gt | Elem | AndTerm | OrTerm as sym), [t1; t2], _) ->
       let pr_t1 = 
         if prio_of_symbol sym < prio_of_term t1
         then pr_term_paran
@@ -401,7 +424,8 @@ let rec pr_term ppf = function
       fprintf ppf "@[<2>%a %a@ %a@]" pr_t1 t1 pr_sym sym pr_t2 t2
   | App (Length, [t], _) -> fprintf ppf "%a.%s" pr_term t (string_of_symbol Length)
   | App (ArrayCells, [t], _) -> fprintf ppf "%a.%s" pr_term t (string_of_symbol ArrayCells)
-  | App (SetEnum, ts, _) -> fprintf ppf "{@[%a@]}" pr_term_list ts
+  | App (SetEnum, ts, _) -> 
+      fprintf ppf "{@[%a@]}" pr_term_list ts
   | App (Destructor d, [t], _) -> fprintf ppf "%a.%a" pr_term t pr_ident d
   | App (sym, ts, _) -> fprintf ppf "%a(@[%a@])" pr_sym sym pr_term_list ts
 

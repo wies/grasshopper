@@ -4,257 +4,100 @@ open Util
 open Grass
 open GrassUtil
 
-exception Undefined
+let value_of_int srt i = mk_app srt (Value (Int64.of_int i)) []
+let value_of_int64 srt i = mk_app srt (Value i) []
 
-type value =
-  | I of Int64.t
-  | B of bool
-  | ADT of ident * value list
-        
-module ValueMap = 
-  Map.Make(struct
-    type t = value
-    let compare = compare
-  end)
-
-module ValueListMap = 
-  Map.Make(struct
-    type t = value list
-    let compare = compare
-  end)
-
-module ValueSet = 
-  Set.Make(struct
-    type t = value
-    let compare = compare
-  end)
-
-module SortedValueMap =
-  Map.Make(struct
-    type t = value * sort
-    let compare = compare
-  end)
-
-module SortedValueListMap =
-  Map.Make(struct
-    type t = (value * sort) list
-    let compare = compare
-  end)
-    
-module SortedValueSet =
-  Set.Make(struct
-    type t = value * sort
-    let compare = compare
-  end)
-
-type ext_value =
-  | BaseVal of value
-  | MapVal of value ValueListMap.t * ext_value
-  | SetVal of ValueSet.t
-  | TermVal of (ident * sort) list * term
-  | FormVal of (ident * sort) list * form
-  | Undef
-
-let value_of_int i = I (Int64.of_int i)
-let value_of_int64 i = I i
-
-let value_of_bool b = B b
+let bool_opt_of_value = function
+  | App (BoolConst b, _, _) -> Some b
+  | _ -> None
 
 let bool_of_value = function
-  | B b -> b
-  | _ -> raise Undefined
+  | App (BoolConst b, _, _) -> b
+  | _ -> false
 
-let int_of_value = function
-  | I i -> i
-  | _ -> raise Undefined
+        
+let int_opt_of_value = function
+  | App (IntConst i, _, _) -> Some i
+  | _ -> None
 
-let rec string_of_value = function
-  | I i -> Int64.to_string i
-  | B b -> string_of_bool b
-  | ADT (id, vs) ->
-      Printf.sprintf "%s(%s)"
-        (string_of_ident id)
-        (List.map string_of_value vs |>
-        String.concat ", ")
+let string_of_value v = string_of_term v 
 
-let string_of_sorted_value srt v =
-  let rec elim_loc = function
-    | Loc srt -> elim_loc srt
-    | Set srt -> Set (elim_loc srt)
-    | Array srt -> Array (elim_loc srt)
-    | ArrayCell srt -> ArrayCell (elim_loc srt)
-    | Map (dsrts, rsrt) -> Map (List.map elim_loc dsrts, elim_loc rsrt)
-    | srt -> srt
-  in
-  match srt with
-  | Int | Bool | Adt _ -> string_of_value v
-  | _ ->
-      let srt_str = string_of_sort (elim_loc srt) in
-      srt_str ^ "!" ^ string_of_value v
-
-type interpretation = (value ValueListMap.t * ext_value) SortedSymbolMap.t
-
-type ext_interpretation = ext_value SortedValueMap.t
+type definition = (ident * sort) list * term
+    
+type interpretation = definition SortedSymbolMap.t
 
 type model =
-  { mutable card: int SortMap.t;
+  { mutable univ: TermSet.t SortMap.t;
     mutable intp: interpretation;
-    mutable vals: ext_interpretation;
     sign: arity list SymbolMap.t;
+    cache: (sorted_ident * term list, term) Hashtbl.t
   }
 
 let empty : model = 
-  { card = SortMap.empty;
+  { univ = SortMap.empty;
     intp = SortedSymbolMap.empty;
-    vals = SortedValueMap.empty;
     sign = SymbolMap.empty;
+    cache = Hashtbl.create 1024
   }
 
 (*let get_arity model sym = SymbolMap.find sym m*)
 
-let add_card model srt card = 
-  { model with card = SortMap.add srt card model.card }
+let get_values_of_sort model srt =
+  SortMap.find_opt srt model.univ |> Opt.get_or_else TermSet.empty
+    
+let add_univ model t =
+  let srt = sort_of t in
+  let old_univ = get_values_of_sort model srt in
+  let new_univ = TermSet.add t old_univ in
+  model.univ <- SortMap.add srt new_univ model.univ
 
-let add_interp model sym arity def =
-  { model with intp = SortedSymbolMap.add (sym, arity) def model.intp }
+let add_interp model sym arity args def =
+  { model with intp = SortedSymbolMap.add (sym, arity) (args, def) model.intp }
 
 let get_interp model sym arity =
-  try SortedSymbolMap.find (sym, arity) model.intp
-  with Not_found -> ValueListMap.empty, Undef
-
-let add_def model sym arity args v =
-  if Debug.is_debug 2 then print_endline (
-      "add_def: " ^ (string_of_symbol sym) ^ ": " ^ (string_of_arity arity) ^
-      " => " ^ (String.concat "," (List.map string_of_value args)) ^
-      " => " ^ (string_of_value v));
-  let m, d = get_interp model sym arity in
-  let new_m = ValueListMap.add args v m in
-  { model with intp = SortedSymbolMap.add (sym, arity) (new_m, d) model.intp }
-
-let add_default_val model sym arity v =
-  if Debug.is_debug 2 then print_endline (
-      "add_default_val: " ^ (string_of_symbol sym) ^ ": " ^ (string_of_arity arity) ^
-      " => " ^ (string_of_value v));
-  let m, d = get_interp model sym arity in
-  (match d with
-  | Undef -> ()
-  | BaseVal v1 when v = v1 -> ()
-  | _ -> failwith "Model.add_default_val: inconsistent default values in model detected");
-  { model with intp = SortedSymbolMap.add (sym, arity) (m, BaseVal v) model.intp }
-
-let add_default_term model sym arity args t =
-  let m, _ = get_interp model sym arity in
-  let new_map = m, TermVal (args, t) in
-  { model with intp = SortedSymbolMap.add (sym, arity) new_map model.intp }
-
-let add_default_form model sym arity args f =
-  let m, _ = get_interp model sym arity in
-  let new_map = m, FormVal (args, f) in
-  { model with intp = SortedSymbolMap.add (sym, arity) new_map model.intp }
-
+  SortedSymbolMap.find (sym, arity) model.intp
 
 let get_result_sort model sym arg_srts =
   SortedSymbolMap.fold 
     (fun (sym1, (arg_srts1, res_srt1)) _ srt_opt ->
       if sym1 = sym && arg_srts = arg_srts1 then Some res_srt1 else srt_opt)
     model.intp None
-      
-
-let find_map_value model v arg_srts res_srt = 
-  try
-    match SortedValueMap.find (v, Map (arg_srts, res_srt)) model.vals with
-    | MapVal (m, d) -> m, d
-    | Undef -> ValueListMap.empty, Undef
-    | _ -> raise Undefined
-  with Not_found -> raise Undefined
-
-let find_set_value model v srt =
-  try
-    match SortedValueMap.find (v, Set srt) model.vals with
-    | SetVal s -> s
-    | _ -> raise Undefined
-  with Not_found ->
-    begin
-      if Debug.is_debug 1 then
-        begin
-          print_string "Model.find_set_value: not found '";
-          print_string ((string_of_value v) ^ "' of type ");
-          print_endline (string_of_sort (Set srt))
-        end;
-      raise Undefined
-    end
 
 let equal model v1 v2 srt =
-  v1 = v2 ||
-  match srt with
-  | Set _ ->
-      let v1_val = 
-        try SortedValueMap.find (v1, srt) model.vals 
-        with Not_found -> raise Undefined
-      in
-      let v2_val = 
-        try SortedValueMap.find (v2, srt) model.vals
-        with Not_found -> raise Undefined
-      in
-      (match v1_val, v2_val with
-      | SetVal s1, SetVal s2 ->
-          ValueSet.equal s1 s2
-      | _, _ -> false)
-  | _ -> false
-      
+  v1 = v2 
+
 let extend_interp model sym (arity: arity) args res =
-  let _, res_srt = arity in
-  (* update cardinality *)
-  let card =
-    try SortMap.find res_srt model.card
-    with Not_found -> 0
+  (* update interpretation *)
+  let params, def = get_interp model sym arity in
+  let new_def =
+    let cond =
+      List.map2 (fun (id, srt) a -> mk_eq_term (mk_var srt id) a) params args |>
+      mk_app Bool AndTerm
+    in
+    mk_ite cond res def
   in
-  model.card <- SortMap.add res_srt (card + 1) model.card;
-  (* update base value mapping *)
-  let m, d = 
-    try SortedSymbolMap.find (sym, arity) model.intp 
-    with Not_found -> ValueListMap.empty, Undef
-  in
-  let new_sym_intp = ValueListMap.add args (value_of_int card) m, d in
-  model.intp <- SortedSymbolMap.add (sym, arity) new_sym_intp model.intp;
-  (* update extended value mapping *)
-  begin
-    match res_srt with
-    | Map (Loc _ :: _, srt)
-    | Set srt ->
-        model.vals <- SortedValueMap.add (value_of_int card, res_srt) res model.vals
-    | _ -> ()
-  end;
-  value_of_int card
-            
+  model.intp <- SortedSymbolMap.add (sym, arity) (params, new_def) model.intp;
+  model
+  
 let rec eval model = function
   | Var (id, srt) -> 
       interp_symbol model (FreeSym id) ([], srt) []
-  | App (IntConst i, [], _) -> 
-      I i
-  | App (BoolConst b, [], _) -> 
-      B b
+  | App ((IntConst _ | BoolConst _ | Value _), [], _) as t -> t
   | App (Read, [fld; ind], srt) -> 
       let fld_val = eval model fld in
       let ind_val = eval model ind in
       let ind_srt = sort_of ind in
       let arity = [Map ([ind_srt], srt); ind_srt], srt in
-      let res = interp_symbol model Read arity [fld_val; ind_val] in
-      res
+      interp_symbol model Read arity [fld_val; ind_val]
   | App (Write, fld :: (_ :: _ as ind_upd), (Map (dsrts, rsrt) as srt)) ->
       let ind_upd_vals = List.map (eval model) ind_upd in
       let arity = srt :: dsrts @ [rsrt], srt in
       let fld_val = eval model fld in
-      (try interp_symbol model Write arity (fld_val :: ind_upd_vals)
-      with Undefined ->
-        let upd_ind_vals = List.rev ind_upd_vals in
-        let upd_val = List.hd upd_ind_vals in
-        let ind_val = List.rev (List.tl upd_ind_vals) in
-        let m, d = find_map_value model fld_val dsrts srt in
-        let res = MapVal (ValueListMap.add ind_val upd_val m, d) in
-        extend_interp model Write arity (fld_val :: ind_upd_vals) res)
+      interp_symbol model Write arity (fld_val :: ind_upd_vals)
   | App (UMinus, [t], _) ->
-      I (Int64.mul Int64.minus_one (eval_int model t))
+      eval_int model t |>
+      Opt.map (fun i -> mk_int64 (Int64.mul Int64.minus_one i)) |>
+      Opt.get_or_else (mk_undefined Int)
   | App (Plus as intop, [t1; t2], _)
   | App (Minus as intop, [t1; t2], _)
   | App (Mult as intop, [t1; t2], _)
@@ -265,84 +108,46 @@ let rec eval model = function
       | Mult -> Int64.mul
       | Div -> Int64.div
       | _ -> failwith "impossible"
-      in I (f (eval_int model t1) (eval_int model t2))
-  | App (Empty, [], Set srt) -> 
-      let arity = ([], Set srt) in
-      (try interp_symbol model Empty arity []
-      with Undefined ->
-        extend_interp model Empty arity [] (SetVal ValueSet.empty))
-  | App (SetEnum, ts, (Set esrt as srt)) ->
-      let t_vals = List.map (eval model) ts in
-      let arity = [esrt], srt in
-      (try interp_symbol model SetEnum arity t_vals
-      with Undefined ->
-        let res = 
-          List.fold_left (fun s v -> ValueSet.add v s) ValueSet.empty t_vals 
-        in
-        extend_interp model SetEnum arity t_vals (SetVal res))
-  | App (Union, ts, (Set esrt as srt)) ->
-      let t_vals = List.map (eval model) ts in
-      let arity = [srt], srt in
-      (try interp_symbol model Union arity t_vals
-      with Undefined ->
-        let res = 
-          List.fold_left
-            (fun res v -> ValueSet.union res (find_set_value model v esrt)) 
-            ValueSet.empty t_vals
-        in extend_interp model Union arity t_vals (SetVal res))
-  | App (Inter, t :: ts, (Set esrt as srt)) ->
-      let t_val = eval model t in
-      let t_vals = List.map (eval model) ts in
-      let arity = [srt], srt in
-      (try interp_symbol model Inter arity (t_val :: t_vals)
-      with Undefined ->
-        let res = 
-          List.fold_left
-            (fun res v -> ValueSet.inter res (find_set_value model v esrt))
-            (find_set_value model t_val esrt) t_vals
-        in extend_interp model Union arity t_vals (SetVal res))
-  | App (Diff, [t1; t2], (Set esrt as srt)) ->
-      let t1_val = eval model t1 in
-      let t2_val = eval model t2 in
-      let arity = [srt; srt], srt in
-      (try interp_symbol model Diff arity [t1_val; t2_val]
-      with Undefined ->
-        let res = 
-          ValueSet.diff 
-            (find_set_value model t1_val esrt)
-            (find_set_value model t2_val esrt)
-        in extend_interp model Diff arity [t1_val; t2_val] (SetVal res))
+      in
+      eval_int model t1 |> Opt.flat_map (fun
+        i1 -> eval_int model t2 |> Opt.map (fun
+        i2 -> mk_int64 (f i1 i2))) |>
+      Opt.get_or_else (mk_undefined Int)
   | App (Eq, [t1; t2], _) ->
       let res = equal model (eval model t1) (eval model t2) (sort_of t1) in
-      B res
+      mk_bool_term res
   | App (LtEq as rel, [t1; t2], _)
   | App (GtEq as rel, [t1; t2], _)
   | App (Lt as rel, [t1; t2], _)
   | App (Gt as rel, [t1; t2], _) ->
-      let i1 = eval_int model t1 in
-      let i2 = eval_int model t2 in
-      let c = Int64.compare i1 i2 in
-      let r = match rel with
-      | LtEq -> (<=) | GtEq -> (>=) | Lt -> (<) | Gt -> (>)
-      | _ -> failwith "impossible"
-      in 
-      B (r c 0)
-  | App (Elem, [e; s], _) ->
-      let e_val = eval model e in
-      let srt = element_sort_of_set s in
-      let s_val = find_set_value model (eval model s) srt in
-      B (ValueSet.mem e_val s_val)
-  | App (SubsetEq, [s1; s2], _) ->
-      let srt = element_sort_of_set s1 in
-      let s1_val = find_set_value model (eval model s1) srt in
-      let s2_val = find_set_value model (eval model s2) srt in
-      B (ValueSet.subset s1_val s2_val)
+      eval_int model t1 |> Opt.flat_map (fun
+        i1 -> eval_int model t2 |> Opt.map (fun
+        i2 -> 
+          let c = Int64.compare i1 i2 in
+          let r = match rel with
+          | LtEq -> (<=) | GtEq -> (>=) | Lt -> (<) | Gt -> (>)
+          | _ -> failwith "impossible"
+          in 
+          mk_bool_term (r c 0))) |>
+      Opt.get_or_else (mk_undefined Bool)
    | App (Ite, [c; t; e], _) ->
-      (match eval model c with
-        | B true -> eval model t
-        | B false -> eval model e
-        | _ -> failwith "ITE expects a boolean condition"
+      (match eval model c |> bool_opt_of_value with
+        | Some true -> eval model t
+        | Some false -> eval model e
+        | None -> mk_undefined (sort_of e)
       )
+   | App (AndTerm, f1 :: fs, _) ->
+       (match eval model f1 |> bool_opt_of_value with
+       | Some true -> eval model (App (AndTerm, fs, Bool))
+       | Some false -> mk_false_term
+       | None -> mk_undefined Bool)
+   | App (AndTerm, [], _) -> mk_true_term
+   | App (OrTerm, f1 :: fs, _) ->
+       (match eval model f1 |> bool_opt_of_value with
+       | Some false -> eval model (App (OrTerm, fs, Bool))
+       | Some true -> mk_true_term
+       | None -> mk_undefined Bool)
+   | App (OrTerm, [], _) -> mk_false_term
    | App (sym, args, srt) ->
       let arg_srts, arg_vals = 
         List.split (List.map (fun arg -> sort_of arg, eval model arg) args)
@@ -352,10 +157,10 @@ let rec eval model = function
 
 and interp_symbol model sym arity args =
   match sym with
-  | Constructor id -> ADT (id, args)
+  | Constructor id -> mk_constr (snd arity) id args
   | Destructor id ->
     (match args with
-    | [ADT (cons, args)] ->
+    | [App (Constructor cons, args, _)] ->
       (* Find the defn of constructor cons *)
       let adt_defs =
         (match arity with
@@ -376,7 +181,14 @@ and interp_symbol model sym arity args =
     | _ -> failwith "Destructor applied to non-ADT args")
   | _ ->
       SortedSymbolMap.find_opt (sym, arity) model.intp |>
-      Opt.map (fun (m, d) -> fun_app model (MapVal (m, d)) args) |>
+      Opt.map (fun (ids, t) ->
+        let model1 = 
+          List.fold_left2 
+            (fun model1 (id, srt) arg -> 
+              add_interp model1 (FreeSym id) ([], srt) [] arg)
+            model ids args
+        in
+        eval model1 t) |>
       Opt.lazy_get_or_else (fun () ->
         if Debug.is_debug 2 then
           begin
@@ -388,44 +200,13 @@ and interp_symbol model sym arity args =
             SortedSymbolMap.iter (fun (s,a) _ -> print_endline ("  " ^ (string_of_symbol s) ^ ": " ^ string_of_arity a)) model.intp;
             flush_all ()
           end;
-        raise Undefined)
-
-and fun_app model funv args =
-  let default = function
-    | TermVal (ids, t) ->
-        let model1 = 
-          List.fold_left2 
-            (fun model1 (id, srt) arg -> 
-              add_def model1 (FreeSym id) ([], srt) [] arg)
-            model ids args
-        in eval model1 t
-    | BaseVal v -> v
-    | _ -> raise Undefined
-  in
-  let rec fr = function
-    | MapVal (m, d) ->
-        (try ValueListMap.find args m with Not_found -> default d)
-    | _ -> raise Undefined
-  in
-  fr funv
+        mk_undefined (snd arity))
 
 and eval_int model t =
-  match eval model t with
-  | I i -> i
-  | _ -> raise Undefined
+  eval model t |> int_opt_of_value
 
 and eval_bool model t =
-  match eval model t with
-  | B b -> b
-  | _ -> raise Undefined
-
-let eval_bool_opt model t =
-  try Some (eval_bool model t) 
-  with Undefined -> None
-
-let eval_int_opt model t =
-  try Some (eval_int model t)
-  with Undefined -> None
+  eval model t |> bool_opt_of_value 
 
 let rec eval_form model = function
   | BoolOp (Not, [f]) ->
@@ -446,73 +227,14 @@ let rec eval_form model = function
           | Some true -> Some true
           | None -> None) 
         (Some false) fs
-  | Atom (t, _) -> eval_bool_opt model t
+  | Atom (t, _) -> eval_bool model t
   | Binder (b, [], f, _) -> eval_form model f
   | _ -> None
 
 let is_defined model sym arity args =
-  try 
-    ignore (interp_symbol model sym arity args);
-    true
-  with Undefined -> false
-
-
-(* TODO: precompute/cache this?
-  We could have an eval function that takes a (value, sort) and returns the GRASS
-  value. It could use the ext_interpretation to cache these?
-  Right now code is repeated here and in ModelPrinting to evaluate 
-  sets/functions/adts.
-*)
-let get_values_of_sort model srt =
-  let vals = 
-    SortedSymbolMap.fold (fun (sym, (arg_srts, res_srt)) (m, d) vals ->
-      (* make a list of indices of arg_srts that = srt *)
-      let indices =
-        let indices = ref IntSet.empty in
-        arg_srts |> List.iteri (fun i a -> if a = srt then indices := IntSet.add i !indices);
-        !indices
-      in
-      (* now go through keys of m and add projection to indices to vals *)
-      let vals =
-        ValueListMap.fold (fun args _ vals ->
-            let res = ref ValueSet.empty in
-            args |> List.iteri (fun i a ->
-              if IntSet.mem i indices then res := ValueSet.add a !res);
-            ValueSet.union !res vals
-          ) m vals
-      in
-      (* Then if res_srt = srt, also take d and the range of m *)
-      let vals =
-        if res_srt = srt 
-        then 
-          let map_vals = 
-            ValueListMap.fold (fun _ -> ValueSet.add) m vals
-          in 
-          match arg_srts, d with
-          | _, BaseVal v -> ValueSet.add v map_vals
-          | _, _ -> map_vals
-        else vals
-      in
-      (* If sym is a constant value of an ADT type, also check its components *)
-      match d, res_srt with
-      | BaseVal v, Adt (ty, adt_defs) ->
-        let ty_def = List.assoc ty adt_defs in
-        (try
-          (match interp_symbol model sym ([], res_srt) [] with
-          | ADT (cons, args) ->
-            let cons_def = List.assoc cons ty_def in
-            List.combine args cons_def
-            |> List.fold_left
-                (fun vals (v, (_, v_srt)) ->
-                  if v_srt = srt then ValueSet.add v vals else vals)
-                vals
-          | _ -> failwith "Expected ADT value")
-        with Undefined -> vals)
-      | _ -> vals
-      )
-      model.intp ValueSet.empty
-  in
-  ValueSet.elements vals
+  match interp_symbol model sym arity args with
+  | App (Undefined, _, _) -> true
+  | _ -> false
 
 let get_sorts model =
   SortedSymbolMap.fold
@@ -616,50 +338,55 @@ let succ model sid fld x =
   let loc_srt = Loc sid in
   let btwn_arity = [loc_field_sort sid; loc_srt; loc_srt; loc_srt], Bool in
   let locs = get_values_of_sort model loc_srt in
-  List.fold_left (fun s y ->
-    try
-      if y <> x && 
+  TermSet.fold (fun y s ->
+    if y <> x && 
       bool_of_value (interp_symbol model Btwn btwn_arity [fld; x; y; y]) &&
       (s == x || bool_of_value (interp_symbol model Btwn btwn_arity [fld; x; y; s]))
-      then y else s
-    with Undefined -> s)
-    x locs
+    then y else s)
+    locs x 
       
 let complete model =
   let locs srt = get_values_of_sort model (Loc srt) in
   let loc_flds srt = get_values_of_sort model (loc_field_sort srt) in
   let flds srt =
-    try
-      let loc_srt = Loc srt in
-      let null = interp_symbol model Null ([], loc_srt) [] in
-      let btwn_arity = [loc_field_sort srt; loc_srt; loc_srt; loc_srt], Bool in
-      List.filter (fun f ->
-        try 
-          bool_of_value 
-            (interp_symbol model Btwn btwn_arity [f; null; null; null])
-        with Undefined -> false) (loc_flds srt)
-    with Undefined -> []
+    let loc_srt = Loc srt in
+    let null = interp_symbol model Null ([], loc_srt) [] in
+    let btwn_arity = [loc_field_sort srt; loc_srt; loc_srt; loc_srt], Bool in
+    TermSet.filter (fun f ->
+      let is_reach_fld = interp_symbol model Btwn btwn_arity [f; null; null; null] in
+      bool_of_value is_reach_fld)
+      (loc_flds srt)
   in
   let loc_srts = get_loc_sorts model in
   let new_model =
     SortSet.fold (fun srt model ->
-      List.fold_left 
-        (fun new_model fld ->
-          List.fold_left 
-            (fun new_model arg ->
+      TermSet.fold
+        (fun fld new_model ->
+          TermSet.fold
+            (fun arg new_model ->
               let res = succ model srt fld arg in
               let read_arity = [loc_field_sort srt; Loc srt], Loc srt in
-              add_def new_model Read read_arity [fld; arg] res)
-            new_model (locs srt))
-        model (flds srt))
+              extend_interp new_model Read read_arity [fld; arg] res)
+            (locs srt) new_model)
+        (flds srt) model)
       loc_srts model
   in
   new_model
 
 
+(*
+let get_args model sym arity =
+  let params, def = SortedSymbolMap.find (sym, arity) model.intp in
+  let add id arg args =
+    let old_args = TermSet.
+  let rec ea args = function
+    | App (Eq, [Var (id, _); arg], _) ->
+        add id arg args
+ *)
+    
 module PQ = PrioQueue.Make
     (struct
-      type t = value * sort
+      type t = term
       let compare = compare
     end)
     (struct
@@ -678,61 +405,60 @@ let find_term model =
   (* compute FD-graph of model *)
   let fedges, dedges, init_reach =
     SortedSymbolMap.fold 
-      (fun (sym, (arg_srts, res_srt)) (m, d) (fedges, dedges, init_reach) ->
+      (fun (sym, (arg_srts, res_srt)) def (fedges, dedges, init_reach) ->
         match sym, res_srt with
         | _, Bool | _, Int (*| Write, _*) -> (fedges, dedges, init_reach)
         | _ ->
             let m1 =
-              match d with
-              | BaseVal v ->
-                  let arg_vals =
-                    List.map (function
-                      | Int -> [I Int64.zero]
-                      | Bool -> [B false]
-                      | srt ->
-                          match get_values_of_sort model srt with
-                          | v1 :: v2 :: v3 :: _ -> [v1; v2; v3]
-                          | vs -> vs)
-                      arg_srts
-                  in
-                  let arg_product =
-                    List.fold_right (fun args arg_product ->
+              let arg_vals =
+                List.map (function
+                  | Int -> [mk_int 0]
+                  | Bool -> [mk_false_term]
+                  | srt ->
+                      match get_values_of_sort model srt |> TermSet.elements with
+                      | v1 :: v2 :: v3 :: _ -> [v1; v2; v3]
+                      | vs -> vs)
+                  arg_srts
+              in
+              let arg_product =
+                List.fold_right (fun args arg_product ->
+                  List.fold_left
+                    (fun acc arg ->
                       List.fold_left
-                        (fun acc arg ->
-                          List.fold_left
-                            (fun acc args -> (arg :: args) :: acc)
-                            acc arg_product)
-                        [] args)
-                      arg_vals [[]]
-                  in
-                  List.fold_left (fun m args ->
-                    if ValueListMap.mem args m then m
-                    else ValueListMap.add args v m)
-                    m arg_product
-              | _ -> m
+                        (fun acc args -> (arg :: args) :: acc)
+                        acc arg_product)
+                    [] args)
+                  arg_vals [[]]
+              in
+              List.fold_left (fun m args ->
+                if TermListMap.mem args m then m
+                else
+                  let v = interp_symbol model sym (arg_srts, res_srt) args in
+                  TermListMap.add args v m)
+                TermListMap.empty arg_product
             in
-            ValueListMap.fold
+            TermListMap.fold
               (fun args v (fedges, dedges, init_reach) ->
-                let s = List.combine args arg_srts in
-                let t = v, res_srt in
+                let s = args in
+                let t = v in
                 let es =
-                  try SortedValueListMap.find s fedges
-                  with Not_found -> []
+                  TermListMap.find_opt s fedges |>
+                  Opt.get_or_else []
                 in
-                let fedges1 = SortedValueListMap.add s ((sym, t) :: es) fedges in
-                let init_reach1 = SortedValueListMap.add s (List.length s) init_reach in
-                let init_reach2 = SortedValueListMap.add [t] 1 init_reach1 in
+                let fedges1 = TermListMap.add s ((sym, t) :: es) fedges in
+                let init_reach1 = TermListMap.add s (List.length s) init_reach in
+                let init_reach2 = TermListMap.add [t] 1 init_reach1 in
                 let dedges1, init_reach3 =
                   List.fold_left
-                    (fun (dedges1, init_reach3) (_, srt as z) ->
+                    (fun (dedges1, init_reach3) z ->
                       let es =
-                        try SortedValueMap.find z dedges1
-                        with Not_found -> []
+                        TermMap.find_opt z dedges1 |>
+                        Opt.get_or_else []
                       in
-                      SortedValueMap.add z (s :: es) dedges1,
-                      match srt with
+                      TermMap.add z (s :: es) dedges1,
+                      match sort_of z with
                       | Bool | Int ->
-                          SortedValueListMap.add [z] 0 init_reach3
+                          TermListMap.add [z] 0 init_reach3
                       | _ -> init_reach3
                     )
                     (dedges, init_reach2) s
@@ -741,39 +467,38 @@ let find_term model =
               )
               m1 (fedges, dedges, init_reach)
       )
-      model.intp (SortedValueListMap.empty, SortedValueMap.empty, SortedValueListMap.empty)
+      model.intp (TermListMap.empty, TermMap.empty, TermListMap.empty)
   in
   (* initialize remaining data structures *)
   let init_queue, init_reach, init_dist, init_prev =
     SortedSymbolMap.fold 
-      (fun (sym, (arg_srts, res_srt)) (m, d) (init_queue, init_reach, init_dist, init_prev) ->
-        let add v =
-          let x = v, res_srt in
+      (fun (sym, (arg_srts, res_srt)) def (init_queue, init_reach, init_dist, init_prev) ->
+        let add () =
+          let x = interp_symbol model sym (arg_srts, res_srt) [] in
           PQ.insert x 0 init_queue,
-          SortedValueListMap.add [x] 0 init_reach,
-          SortedValueMap.add x 0 init_dist,
-          SortedValueMap.add x (sym, []) init_prev
+          TermListMap.add [x] 0 init_reach,
+          TermMap.add x 0 init_dist,
+          TermMap.add x (sym, []) init_prev
         in
-        match arg_srts, d with
-        | [], BaseVal v -> add v
-        | [], Undef -> add (ValueListMap.find [] m)
-        | _, _ ->
+        match arg_srts with
+        | [] -> add ()
+        | _ ->
             init_queue, init_reach, init_dist, init_prev)
-      model.intp (PQ.empty, init_reach, SortedValueMap.empty, SortedValueMap.empty)
+      model.intp (PQ.empty, init_reach, TermMap.empty, TermMap.empty)
   in
   (* auxiliary function for shortest path algorithm *)
   let scan t d_t (reach, dist, prev, queue) (sym, x) =
     let d_t_x = d_t + 1 in
-    let reach_x = SortedValueListMap.find [x] reach in
+    let reach_x = TermListMap.find [x] reach in
     if reach_x = 1 then
-      SortedValueListMap.add [x] 0 reach,
-      SortedValueMap.add x d_t_x dist,
-      SortedValueMap.add x (sym, t) prev,
+      TermListMap.add [x] 0 reach,
+      TermMap.add x d_t_x dist,
+      TermMap.add x (sym, t) prev,
       PQ.insert x d_t_x queue
-    else if d_t_x < SortedValueMap.find x dist then
+    else if d_t_x < TermMap.find x dist then
       reach, 
-      SortedValueMap.add x d_t_x dist,
-      SortedValueMap.add x (sym, t) prev,
+      TermMap.add x d_t_x dist,
+      TermMap.add x (sym, t) prev,
       PQ.adjust (fun _ -> d_t_x) x queue
     else
       reach, dist, prev, queue
@@ -783,26 +508,26 @@ let find_term model =
     if PQ.is_empty queue then prev else
     let t, d_t, queue = PQ.extract_min queue in
     let get_fedges t =
-      try SortedValueListMap.find t fedges
-      with Not_found -> []
+      TermListMap.find_opt t fedges |>
+      Opt.get_or_else []
     in
     let reach, dist, prev, queue =
       List.fold_left (scan [t] d_t) (reach, dist, prev, queue) (get_fedges [t])
     in
     let dedges_t =
-      try SortedValueMap.find t dedges
-      with Not_found -> []
+      TermMap.find_opt t dedges |>
+      Opt.get_or_else []
     in
     let reach, dist, prev, queue =
       List.fold_left
         (fun (reach, dist, prev, queue) z ->
-          let reach_z = SortedValueListMap.find z reach - 1 in
-          let reach1 = SortedValueListMap.add z reach_z reach in
+          let reach_z = TermListMap.find z reach - 1 in
+          let reach1 = TermListMap.add z reach_z reach in
           if reach_z = 0 then
             let d_z =
               List.fold_left
                 (fun d_z x ->
-                  let d_x = try SortedValueMap.find x dist with Not_found -> 0 in
+                  let d_x = TermMap.find_opt x dist |> Opt.get_or_else 0 in
                   d_z + d_x)
                 0 z
             in
@@ -816,17 +541,75 @@ let find_term model =
   in
   (* compute shortest paths *)
   let prev = shortest_paths init_reach init_dist init_prev init_queue in
-  let rec find (v, srt) =
+  let rec find v =
+    let srt = sort_of v in
     match srt with 
-    | Bool -> mk_bool_term (bool_of_value v)
-    | Int -> mk_int64 (int_of_value v)
+    | Bool | Int -> v
     | _ ->
-        let sym, vs = SortedValueMap.find (v, srt) prev in
-        if List.mem (v, srt) vs then failwith "fixme";
+        let sym, vs = TermMap.find v prev in
+        if List.mem v vs then failwith "fixme";
         let args = List.map find vs in
         mk_app srt sym args
-  in fun v srt -> find (v, srt)
+  in find
 
+let get_set_of_value model s =
+  let rec is_finite_set_sort = function
+    | Bool -> true
+    | Loc _ -> true
+    | Set srt -> is_finite_set_sort srt
+    | Map (dsrts, rsrt) ->
+        List.for_all is_finite_set_sort dsrts && is_finite_set_sort rsrt
+    | Array _ -> true
+    | ArrayCell _ -> true
+    | FreeSrt _ -> true
+    | _ -> false
+  in
+  let elem_srt = element_sort_of_set s in
+  if not @@ is_finite_set_sort elem_srt then s else
+  let vals = get_values_of_sort model elem_srt in
+  let vset =
+    TermSet.fold
+      (fun e vset ->
+        let e_in_s = interp_symbol model Elem ([elem_srt; Set elem_srt], Bool) [e; s] in
+        if bool_of_value e_in_s 
+        then e :: vset
+        else vset)
+      vals []
+  in
+  mk_app (Set elem_srt) SetEnum vset
+
+let get_map_of_value model m =
+  let srt = sort_of m in
+  match dom_sort srt with
+  | [dsrt] ->
+      let rsrt = range_sort srt in
+      let fmap =
+        TermSet.fold (fun e fmap ->
+          let f_of_e = interp_symbol model Read ([srt; dsrt], rsrt) [m; e] in
+          (e, f_of_e) :: fmap)
+          (get_values_of_sort model dsrt)
+          []
+      in
+      Either.First fmap
+  | _ -> Either.Second m
+
+(*
+let get_map_of_fun model sym arity =
+  let arg_srts, res_srt = arity in
+  match dom_sort srt with
+  | [dsrt] ->
+      let rsrt = range_sort srt in
+      let fmap =
+        TermSet.fold (fun e fmap ->
+          let f_of_e = interp_symbol model Read ([srt; dsrt], rsrt) [m; e] in
+          (e, f_of_e) :: fmap)
+          (get_values_of_sort model dsrt)
+          []
+      in
+      Either.First fmap
+  | _ -> Either.Second m
+
+        
 let finalize_values model =
   let mk_finite_set srt s =
     let vset =
@@ -893,54 +676,32 @@ let finalize_values model =
   SortSet.iter generate_sets (get_set_sorts model);
   SortSet.iter generate_fields (get_map_sorts model);
   model
-
+*)
 
 (** Utils to pretty print sets and maps *)
 
-let rec pr_sorted_value model ppf (term, srt) =
-  try
-    (match srt with
-    | Set s ->
-      let cnt = find_set_value model term s in
-      pr_set model s ppf cnt
-    | Map (arg_s, res_s) ->
-      let map_val, def_val = find_map_value model term arg_s res_s in
-      pr_map model (arg_s, res_s) ppf (map_val, def_val)
-    | _ ->
-      Format.fprintf ppf "%s" (string_of_sorted_value srt term))
-  with Undefined ->
-      Format.fprintf ppf "%s" (string_of_sorted_value srt term)
+let rec pr_value model ppf term =
+  match sort_of term with
+  | Set _ ->
+      let set = get_set_of_value model term in
+      pr_term ppf set
+  | Map (arg_s, res_s) ->
+      get_map_of_value model term |>
+      Either.fold (pr_map ppf) (pr_term ppf)
+  | _ ->
+      pr_term ppf term
+          
+and pr_value_list model ppf svals =
+  pr_list_comma (pr_value model) ppf svals
 
-and pr_sorted_value_list model ppf svals =
-  pr_list_comma (pr_sorted_value model) ppf svals
-
-and pr_sorted_ext_value model srt ppf = function
-  | BaseVal v -> pr_sorted_value model ppf (v, srt)
-  | MapVal (m, d) ->
-    (match srt with
-    | Map (s1, s2) -> pr_map model (s1, s2) ppf (m, d)
-    | _ -> failwith "Got map value with non-map sort")
-  | SetVal v ->
-    (match srt with
-    | Set srt -> pr_set model srt ppf v
-    | _ -> failwith "Got set value with non-set sort")
-  | TermVal _
-  | FormVal _
-  | Undef -> Format.fprintf ppf "Undef"
-
-and pr_map model (arg_s, res_s) ppf (map, def_val) =
-  let pr_map_elem ppf (args, v) = 
-    Format.fprintf ppf "%a: %a"
-      (pr_sorted_value_list model) (List.combine args arg_s)
-      (pr_sorted_value model) (v, res_s)
+and pr_map ppf ts =
+  let pr_map_elem ppf (arg, res) = 
+    Format.fprintf ppf "%a -> %a"
+      pr_term arg
+      pr_term res
   in
-  Format.fprintf ppf "{@[<hv 2>%a@]}(__default: %a)"
-    (pr_list_comma pr_map_elem) (ValueListMap.bindings map)
-    (pr_sorted_ext_value model res_s) def_val
+  Format.fprintf ppf "{@[<hv 2>%a@]}"
+    (pr_list_comma pr_map_elem) ts
 
-and pr_set model srt ppf vs =
-  Format.fprintf ppf "{@[<hv 2>%a@]}" (pr_sorted_value_list model)
-    (ValueSet.elements vs |> List.map (fun v -> (v, srt)))
-
-let string_of_eval model srt v =
-  string_of_format (pr_sorted_value model) (v, srt)
+let string_of_value model v =
+  string_of_format (pr_value model) v

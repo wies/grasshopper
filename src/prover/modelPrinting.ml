@@ -12,11 +12,11 @@ let replace_newlines str =
   Str.global_replace (Str.regexp "\n") "<br>" str
 
 let output_json chan model =
-  let string_of_sorted_value srt v = 
-    "\"" ^ replace_lt_gt (string_of_sorted_value srt v) ^ "\""
+  let string_of_value v = 
+    "\"" ^ replace_lt_gt (string_of_value model v) ^ "\""
   in
-  let output_set s esrt =
-    let vals = List.map (fun e ->  string_of_sorted_value esrt e) s in
+  let output_set s =
+    let vals = List.map (fun e ->  string_of_value e) s in
     let set_rep = String.concat ", " vals in
     output_string chan ("[" ^ set_rep ^ "]")
   in
@@ -25,34 +25,30 @@ let output_json chan model =
     match srt with
     | Loc _ | Bool | Int -> 
         let v = interp_symbol model sym ([], srt) [] in
-        output_string chan (string_of_sorted_value srt v)
+        output_string chan (string_of_value v)
     | Set esrt ->
-        (try
-          let set = interp_symbol model sym ([], srt) [] in
-          let s = find_set_value model set esrt in
-          output_set (ValueSet.elements s) esrt
-        with Undefined -> output_set [] esrt (* FIXME *))
+        let set = interp_symbol model sym ([], srt) [] in
+        let s = get_set_of_value model set in
+        output_set [s]
     | Map ([dsrt], rsrt) ->
         let fld = interp_symbol model sym ([], srt) [] in
-        let args = get_values_of_sort model dsrt in
+        let args = get_values_of_sort model dsrt |> TermSet.elements in
         let arg_res = 
           Util.flat_map 
             (fun arg ->
-              try
-                let res = interp_symbol model Read ([srt; dsrt], rsrt) [fld; arg] in
-                if is_loc_sort dsrt &&
-                  (arg = null_val (struct_sort_of_sort dsrt) ||
-                  res = null_val (struct_sort_of_sort dsrt))
-                then [] 
-                else  [(arg, res)]
-              with Undefined -> [])
+              let res = interp_symbol model Read ([srt; dsrt], rsrt) [fld; arg] in
+              if is_loc_sort dsrt &&
+                (arg = null_val (struct_sort_of_sort dsrt) ||
+                res = null_val (struct_sort_of_sort dsrt))
+              then [] 
+              else  [(arg, res)])
             args
         in
         output_string chan "[";
         Util.output_list chan 
           (fun (arg, res) -> 
             Printf.fprintf chan "{\"arg\": %s, \"res\": %s}" 
-              (string_of_sorted_value dsrt arg) (string_of_sorted_value rsrt res)
+              (string_of_value arg) (string_of_value res)
           )
           ", " arg_res;
         output_string chan "]"
@@ -79,8 +75,8 @@ let output_json chan model =
   in
   output_string chan "[";
   SortSet.iter (fun srt ->
-    let locs = get_values_of_sort model (Loc srt) in
-    output_id (fun () -> output_set locs (Loc srt)) (string_of_sort (Loc srt)) (Set (Loc srt)))
+    let locs = get_values_of_sort model (Loc srt) |> TermSet.elements in
+    output_id (fun () -> output_set locs) (string_of_sort (Loc srt)) (Set (Loc srt)))
     (get_loc_sorts model);
   List.iter output_symbol defs;
   output_string chan "]"
@@ -459,11 +455,11 @@ let print_graph output chan model terms =
   let colors2 = ["blueviolet"; "crimson"; "olivedrab"; "orangered"; "purple"] in
   let all_flds =
     Util.flat_map
-      (fun srt -> List.map (fun fld -> (srt, fld)) (get_values_of_sort model srt))
+      (fun srt -> List.map (fun fld -> (srt, fld)) (get_values_of_sort model srt |> TermSet.elements))
       (SortSet.elements fld_srts)
   in
   let fld_colors = Util.fold_left2 (fun acc fld color -> ((fld, color)::acc)) [] all_flds colors1 in
-  let ep_colors = Util.fold_left2 (fun acc fld color -> (fld, color)::acc) [] all_flds colors2 in
+  let _ep_colors = Util.fold_left2 (fun acc fld color -> (fld, color)::acc) [] all_flds colors2 in
   let get_color fsrt fld = try List.assoc (fsrt, fld) fld_colors with Not_found -> "black" in
   let out_tbl = output.table chan in
   let output_constants () =
@@ -483,7 +479,7 @@ let print_graph output chan model terms =
               (fun sym acc ->
                 let str = string_of_symbol sym in
                 let value = interp_symbol model sym ([], srt) [] in
-                (str, (string_of_sorted_value srt value)) :: acc
+                (str, (string_of_value model value)) :: acc
               )
               syms acc
         )
@@ -492,28 +488,6 @@ let print_graph output chan model terms =
       out_tbl "constants" rows
   in
   let output_adts () =
-    let str_adt (adt_defs, cons, cons_def, args) =
-      let str_one_arg (v, (destr, srt)) =
-        (* Convert FreeSyms in srt to Adts *)
-        let rec convert = function
-          | (Bool | Int | Byte | Pat) as s -> s
-          | Loc e -> Loc (convert e)
-          | Set e -> Set (convert e)
-          | Array e -> Array (convert e)
-          | ArrayCell e -> ArrayCell (convert e)
-          | Adt (id, defs) -> Adt (id, defs)
-          | Map (ds, r) -> Map (List.map convert ds, convert r)
-          | FreeSrt id ->
-            if List.mem_assoc id adt_defs then
-              Adt (id, adt_defs)
-            else FreeSrt id
-        in
-        Printf.sprintf "%s: %s" (string_of_ident destr)
-          (string_of_eval model (convert srt) v)
-      in
-      Printf.sprintf "%s(%s)" (string_of_ident cons)
-        (List.map str_one_arg (List.combine args cons_def) |> String.concat ", ")
-    in
     (* TODO why doesn't this work? *)
     (* let pr_adt ppf (adt_defs, cons, cons_def, args) =
       let pr_one_arg ppf (v, (destr, srt)) =
@@ -539,22 +513,12 @@ let print_graph output chan model terms =
     let string_of_adt adt_defs cons cons_def args =
       Util.string_of_format pr_adt (adt_defs, cons, cons_def, args)
     in *)
-    let string_of_adt adt_defs cons cons_def args =
-      str_adt (adt_defs, cons, cons_def, args)
-    in
     let rows_of_srt acc srt =
       let row_of_sym adt_defs t_def sym =
-        let str = string_of_symbol sym in
         let value = interp_symbol model sym ([], srt) [] in
-        let value_str =
-          (match value with
-          | ADT (cons, args) ->
-            let cons_def = List.assoc cons t_def in
-            string_of_adt adt_defs cons cons_def args
-          | _ ->
-            failwith @@ "Expected ADT value but got " ^ (string_of_value value))
+        let value_str = string_of_value model value
         in
-        str, value_str
+        string_of_symbol sym, value_str
       in
       match srt with
       | Adt (t, adt_defs) -> 
@@ -576,9 +540,9 @@ let print_graph output chan model terms =
           | App (FreeSym _, _, Set srt1) as set_t when srt = srt1 ->
               (try
                 let set = eval model set_t in
-                let set_rep = string_of_eval model (Set srt1) set in
+                let set_rep = string_of_value model set in
                 ((string_of_term set_t), set_rep) :: acc
-              with Failure _ | Undefined -> acc)
+              with Failure _ -> acc)
           | _ -> acc)
         terms []
     in
@@ -589,7 +553,7 @@ let print_graph output chan model terms =
   (* functions and pred *)
   let output_freesyms () =
     (* Get the functions and predicates from ground terms *)
-    let funs = TermSet.fold
+    let _funs = TermSet.fold
       (fun t acc -> match t with
         | App ((FreeSym _ as sym), args, srt) when args <> [] ->
           let arity = List.map sort_of args, srt in
@@ -597,7 +561,7 @@ let print_graph output chan model terms =
         | _ -> acc
       ) terms SortedSymbolSet.empty
     in
-    let rows =
+    (*let rows =
       let row_of_func (func, arity) =
         let m, d = SortedSymbolMap.find (func, arity) model.intp in
         let val_str = string_of_format (pr_map model arity) (m, d) in
@@ -605,21 +569,21 @@ let print_graph output chan model terms =
       in
       SortedSymbolSet.fold (fun func acc -> (row_of_func func) :: acc) funs []
     in
-    out_tbl "predicates and functions" rows
+    out_tbl "predicates and functions" rows*)()
   in
   let node_counter = ref 0 in
-  let sorted_value_to_node = Hashtbl.create 64 in
+  let value_to_node = Hashtbl.create 64 in
   let sym_to_node = Hashtbl.create 64 in
   let nodes = ref [] in
   let declare_value srt v values =
-    try Hashtbl.find sorted_value_to_node (srt, v)
+    try Hashtbl.find value_to_node v
     with Not_found ->
       begin
         (*print_endline ("declare_value: " ^ (string_of_sorted_value srt v));*)
         let i = !node_counter in
         node_counter := i + 1;
-        nodes := (i, string_of_sorted_value srt v, values,Box) :: !nodes;
-        Hashtbl.add sorted_value_to_node (srt, v) i;
+        nodes := (i, string_of_value model v, values,Box) :: !nodes;
+        Hashtbl.add value_to_node v i;
         i
       end
   in
@@ -634,9 +598,9 @@ let print_graph output chan model terms =
       end
   in
   let get_node srt v =
-    try Hashtbl.find sorted_value_to_node (srt, v)
+    try Hashtbl.find value_to_node v
     with Not_found ->
-      failwith ("not found: " ^ (string_of_sorted_value srt v))
+      failwith ("not found: " ^ (string_of_value model v))
   in
   let edges = ref [] in
   let declare_locs srt =
@@ -644,13 +608,10 @@ let print_graph output chan model terms =
     let output_data_fields loc rsrt =
       SymbolSet.fold
         (fun fld acc ->
-          try 
-            let f = interp_symbol model fld ([], field_sort srt rsrt) [] in
-            let fld_str = string_of_symbol fld in
-            let m, d = find_map_value model f [Loc srt] rsrt in
-            let v = fun_app model (MapVal (m, d)) [loc] in
-            (fld_str, (string_of_sorted_value rsrt v)) :: acc
-          with Undefined -> acc)
+          let f = interp_symbol model fld ([], field_sort srt rsrt) [] in
+          let fld_str = string_of_symbol fld in
+          let v = interp_symbol model Read ([field_sort srt rsrt; Loc srt], rsrt) [f; loc] in
+          (fld_str, (string_of_value model v)) :: acc)
         (get_symbols_of_sort model ([], field_sort srt rsrt)) []
     in
     let data_fields_sort =
@@ -661,7 +622,7 @@ let print_graph output chan model terms =
         )
         (get_sorts model) [Int;Bool]
     in
-    List.iter
+    TermSet.iter
       (fun loc ->
         let values = List.flatten (List.map (output_data_fields loc) data_fields_sort) in
 
@@ -684,7 +645,7 @@ let print_graph output chan model terms =
       SymbolSet.iter (fun sym ->
         let v = interp_symbol model sym ([], Loc srt) [] in
         let src = declare_symbol sym in
-        let dst = Hashtbl.find sorted_value_to_node (srt, v) in
+        let dst = Hashtbl.find value_to_node v in
         edges := (src, dst, "", Solid, "black") :: !edges)
         (get_symbols_of_sort model ([], Loc srt))
     in
@@ -696,19 +657,17 @@ let print_graph output chan model terms =
       let fld_srt = Map ([Loc srt], Loc rsrt) in
       let flds = get_values_of_sort model fld_srt in
       let read_arity = [fld_srt; Loc srt], Loc rsrt in
-      List.iter 
+      TermSet.iter 
         (fun f ->
-          List.iter (fun l ->
-            try
-              let r = interp_symbol model Read read_arity [f; l] in
-              if not (filter_null r) then 
-                try 
-	          let label = string_of_term (find_term f fld_srt) in
-                  let src = get_node srt l in
-                  let dst = get_node rsrt r in
-                  edges := (src,dst,label,Solid,get_color fld_srt f) :: !edges
-                with _ -> ()
-            with Undefined -> ())
+          TermSet.iter (fun l ->
+            let r = interp_symbol model Read read_arity [f; l] in
+            if not (filter_null r) then 
+              try 
+	        let label = string_of_term (find_term f) in
+                let src = get_node srt l in
+                let dst = get_node rsrt r in
+                edges := (src, dst, label, Solid, get_color fld_srt f) :: !edges
+              with _ -> ())
             locs)
         flds
     in
@@ -717,9 +676,9 @@ let print_graph output chan model terms =
       | Array esrt ->
           let cell_srt = Loc (ArrayCell esrt) in
           let cell_locs = get_values_of_sort model cell_srt in
-          List.iter (fun l ->
+          TermSet.iter (fun l ->
             try
-              List.iter (fun c ->
+              TermSet.iter (fun c ->
                 let l1 = interp_symbol model ArrayOfCell ([cell_srt], Loc (Array esrt)) [c] in
                 if l1 = l then begin
                   let src = declare_value (ArrayCell esrt) c [] in
@@ -729,10 +688,10 @@ let print_graph output chan model terms =
                   let i = interp_symbol model IndexOfCell ([cell_srt], Int) [c] in
                   let c1 = interp_symbol model Read ([Map ([Int], cell_srt); Int], cell_srt) [cells; i] in
                   if c1 = c then
-                    edges := (dst, src, Int64.to_string (int_of_value i), Solid, "black") :: !edges
+                    edges := (dst, src, string_of_value model i, Solid, "black") :: !edges
                 end)
                 cell_locs
-            with Not_found | Undefined -> ())
+            with Not_found -> ())
             locs
       | _ -> ()
     in
@@ -743,20 +702,22 @@ let print_graph output chan model terms =
           (fun t seen -> match t with
             | App (Read, [array_state; arr ; idx], s) when s = esrt && sort_of arr = (Loc srt) ->
               (try
-                let i = eval model idx in
-                if (Int64.compare (int_of_value i) Int64.zero) >= 0 then
+                let iv = eval model idx in
+                let i = iv |> int_opt_of_value |> Opt.get_or_else Int64.minus_one in
+                if (Int64.compare i (Int64.zero)) >= 0 then
                   begin
                     let _src = eval model arr in
                     let src = get_node srt _src in
                     let _dst = eval model t in
                     let dst = get_node inner _dst in
                     let astate = eval model array_state in
-                    let label = (string_of_value astate) ^ ", " ^ (string_of_value i) in
-                    let id = (string_of_sorted_value srt _src) ^ (string_of_sorted_value inner _dst) ^ label in
+                    let label = (string_of_value model astate) ^ ", " ^ (string_of_value model iv) in
+                    let id = (string_of_value model _src) ^ (string_of_value model _dst) ^ label in
                     if not (StringSet.mem id seen) then
                       begin
-                        let color = try List.nth colors2 (Int64.to_int (int_of_value astate))
-                                    with Failure _ | Undefined -> "black" in
+                        let iastate = int_opt_of_value astate |> Opt.get_or_else Int64.zero in
+                        let color = try List.nth colors2 (Int64.to_int iastate)
+                                    with Failure _ -> "black" in
                         edges := (src, dst, label, Solid, color) :: !edges;
                         StringSet.add id seen
                       end
@@ -765,7 +726,7 @@ let print_graph output chan model terms =
                   end
                 else
                   seen
-              with Failure _ | Undefined -> seen)
+              with Failure _ -> seen)
             | _ -> seen)
           terms StringSet.empty
         in
@@ -778,21 +739,21 @@ let print_graph output chan model terms =
       else output_cell_array ()
     in
     let output_reach () =
-      List.iter 
+      TermSet.iter 
         (fun f ->
-          List.iter
+          TermSet.iter
             (fun l ->
               let r = succ model srt f l in
               if is_defined model Read read_arity [f; l] || r == l then () else
               let src = get_node srt l in
               let dst = get_node srt r in
-	      let label = string_of_term (find_term f (loc_field_sort srt)) in
+	      let label = string_of_term (find_term f) in
               edges := (src,dst,label,Dashed,get_color (loc_field_sort srt) f) :: !edges)
             locs)
         flds
     in
     let output_eps () =
-      let arg_srts = [loc_field_sort srt; Set (Loc srt); Loc srt] in
+      (*let arg_srts = [loc_field_sort srt; Set (Loc srt); Loc srt] in
       let m, _ = get_interp model EntPnt (arg_srts, Loc srt) in
       ValueListMap.iter (function 
         | [f; s; l] -> fun v ->
@@ -804,7 +765,7 @@ let print_graph output chan model terms =
             let label = "ep(" ^ (string_of_term fld) ^ ", " ^ (string_of_term set) ^ ")" in
               edges := (src,dst,label,Dashed,color) :: !edges
         | _ -> fun v -> ()) 
-        m
+        m*)()
     in
       SortSet.iter output_flds rsrts;
       output_array ();

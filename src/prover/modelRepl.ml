@@ -79,14 +79,14 @@ let rec term_of_expr model e =
   | e -> fail ("TODO: can't yet handle: " ^ string_of_expr e)
 
 let repl model =
-  printf "\nModel:\nintp:\n";
+  (*printf "\nModel:\nintp:\n";
   SortedSymbolMap.iter (fun (sym, ar) (m, d) ->
     printf "  %s: %s = {%s} | def: ??\n" (string_of_symbol sym) (string_of_arity ar)
       (ValueListMap.bindings m
       |> List.map (fun (vs, v) ->
         (List.map string_of_value vs |> String.concat ", ") ^ " : " ^ (string_of_value v))
       |> String.concat ", ")
-    ) model.intp;
+    ) model.intp;*)
   (* printf "vals:\n";
   SortedValueMap.iter (fun (v, s) ev ->
     printf "  %s: %s = ??\n" (string_of_value v) (string_of_sort s)) model.vals; *)
@@ -99,7 +99,7 @@ let repl model =
       let e = SplParser.expr SplLexer.token lexbuf in
       let t = term_of_expr model e in
       let v = Model.eval model t in
-      print_endline @@ string_of_eval model (sort_of t) v;
+      print_endline @@ string_of_value model v;
       repl_loop ()
     with
     | Parsing.Parse_error ->
@@ -109,10 +109,6 @@ let repl model =
     | Unsupported str
     | Failure str ->
       print_string @@ "Error: " ^ str ^ "\n";
-      Parsing.clear_parser ();
-      repl_loop ()
-    | Undefined ->
-      print_string "Error: Model says undefined.\n";
       Parsing.clear_parser ();
       repl_loop ()
     | Not_found ->

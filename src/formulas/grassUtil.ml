@@ -303,6 +303,8 @@ let mk_bool_term b = App (BoolConst b, [], Bool)
 let mk_true_term = mk_bool_term true
 let mk_false_term = mk_bool_term false
 
+let mk_undefined srt = App (Undefined, [], srt)
+    
 let mk_int i = App (IntConst (Int64.of_int i), [], Int)
 let mk_int64 i = App (IntConst i, [], Int)
 

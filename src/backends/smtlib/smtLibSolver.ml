@@ -986,9 +986,6 @@ let is_sat session =
   | Error e -> fail session e
   | _ -> fail session "unexpected response from prover"
 	
-(** Used to signal that a function definition has a complex ITE term and needs
-  to be represented as an explicit term. *)
-exception Complex_ite
 
 (** Covert SMT-LIB model to GRASS model *)
 let convert_model session smtModel =
@@ -1039,33 +1036,6 @@ let convert_model session smtModel =
   (* solver_info for symbol conversion *)
   let solver_info = (fst (List.hd session.solvers)).info in
   let to_sym = grass_symbol_of_smtlib_symbol signs solver_info in
-  (* detect Z3/CVC4 identifiers that represent values of uninterpreted sorts *)
-  let rec to_val t = match t with
-  | SmtLibSyntax.App (SmtLibSyntax.BoolConst b, [], _) -> Some (Model.value_of_bool b)
-  | SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _) -> Some (Model.value_of_int i)
-  | SmtLibSyntax.App (SmtLibSyntax.Ident id, args, _) ->
-    (match to_sym id with
-    | Constructor id ->
-        List.fold_right
-          (fun arg ->
-            Opt.flat_map (fun vargs -> Opt.map (fun v -> v :: vargs) (to_val arg)))
-          args (Some []) |>
-        Opt.map (fun vargs -> Model.ADT (id, vargs))
-    | _ ->
-        let name, num = id in
-        let id = name ^ "_" ^ string_of_int num in
-        let z3_val_re = Str.regexp "\\([^!]*\\)!val!\\([0-9]*\\)" in
-        let cvc4_val_re = Str.regexp "@uc__\\(.*\\)__\\([0-9]*\\)$" in
-        let cvc4_val_simple_re = Str.regexp "@uc_\\(.*\\)_\\([0-9]*\\)$" in
-        if Str.string_match z3_val_re id 0 || 
-        Str.string_match cvc4_val_re id 0 ||
-        Str.string_match cvc4_val_simple_re id 0
-        then 
-          let index = int_of_string (Str.matched_group 2 id) in
-          Some (Model.value_of_int index)
-        else None)
-  | _ -> None
-  in
   (* remove suffix from overloaded identifiers *)
   let normalize_ident =
     let name_re = Str.regexp "\\([^\\$]*\\)\\$[0-9]+$" in
@@ -1078,240 +1048,121 @@ let convert_model session smtModel =
         else (nname, 0)
       else id
   in
-  (* start model construction *)
-  let model0 = Model.empty in
-  (* define all symbols *)
-  let process_def model sym arity args def =
-    let fail pos_opt = 
-      let pos = match pos_opt with
-      | Some pos -> pos
-      | None -> dummy_position
-      in
-      let msg = 
-        ProgError.error_to_string pos
-          "Encountered unexpected definition during model conversion" 
-      in failwith msg
+  let fail pos_opt = 
+    let pos = match pos_opt with
+    | Some pos -> pos
+    | None -> dummy_position
     in
-    let add_val pos model arg_map v =
-      if IdMap.is_empty arg_map && args <> []
-      then Model.add_default_val model sym arity v
-      else
-        begin
-          let rec fill_vals model acc args = match args with
-          | (x, srt) :: xs ->
-            if IdMap.mem x arg_map
-            then fill_vals model ((IdMap.find x arg_map) :: acc) xs
-            else
-              begin
-                let values = Model.get_values_of_sort model srt in
-                List.fold_left
-                  (fun m xv -> fill_vals m (xv :: acc) xs)
-                  model
-                  values
-              end
-          | [] ->
-            Model.add_def model sym arity (List.rev acc) v
-          in
-            fill_vals model [] args
-        end
-    in
-    let add_term pos model arg_map t =
-      if IdMap.is_empty arg_map 
-      then Model.add_default_term model sym arity args t
-      else fail pos
-    in
-    let add_form pos model arg_map t =
-      if IdMap.is_empty arg_map 
-      then Model.add_default_form model sym arity args t
-      else fail pos
-    in
-    let rec convert_term bvs = function
-      | SmtLibSyntax.App (SmtLibSyntax.BoolConst b, [], _) -> 
-          mk_bool_term b
-      | SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _) -> 
-          mk_int i
-      | SmtLibSyntax.App (Ident id, ts, pos) ->
-          let cts = List.map (convert_term bvs) ts in
-          let id = normalize_ident id in
-          let sym = to_sym id in
-          let ts_srts = List.map sort_of cts in
-          let res_srt = 
-            get_result_sort model sym ts_srts |>
-            Opt.lazy_or_else (fun () -> List.assoc_opt id args) |>
-            Opt.lazy_or_else (fun () -> List.assoc_opt id bvs) |>
-            Opt.lazy_get_or_else (fun () -> snd arity)
-          in
-          if List.exists (fun (id2, _) -> id = id2) bvs 
-          then mk_var res_srt id
-          else mk_app res_srt sym cts
-      | SmtLibSyntax.App (SmtLibSyntax.Plus as op, [t1; t2], _)
-      | SmtLibSyntax.App (SmtLibSyntax.Mult as op, [t1; t2], _)
-      | SmtLibSyntax.App (SmtLibSyntax.Minus as op, [t1; t2], _)
-      | SmtLibSyntax.App (SmtLibSyntax.Div as op, [t1; t2], _)
-      | SmtLibSyntax.App (SmtLibSyntax.Mod as op, [t1; t2], _)
-      | SmtLibSyntax.App (SmtLibSyntax.Lt as op, [t1; t2], _)
-      | SmtLibSyntax.App (SmtLibSyntax.Gt as op, [t1; t2], _)
-      | SmtLibSyntax.App (SmtLibSyntax.Leq as op, [t1; t2], _)
-      | SmtLibSyntax.App (SmtLibSyntax.Geq as op, [t1; t2], _) ->
-          let ct1 = convert_term bvs t1 in
-          let ct2 = convert_term bvs t2 in
-          let mk_term = match op with
-          | SmtLibSyntax.Plus -> mk_plus
-          | SmtLibSyntax.Minus -> mk_minus
-          | SmtLibSyntax.Mult -> mk_mult
-          | SmtLibSyntax.Div -> mk_div
-          | SmtLibSyntax.Mod -> mk_mod
-          | SmtLibSyntax.Lt -> (fun s t -> mk_app (sort_of s) Lt [s; t])
-          | SmtLibSyntax.Gt -> (fun s t -> mk_app (sort_of s) Gt [s; t])
-          | SmtLibSyntax.Leq -> (fun s t -> mk_app (sort_of s) LtEq [s; t])
-          | SmtLibSyntax.Geq -> (fun s t -> mk_app (sort_of s) GtEq [s; t])
-          | _ -> failwith "unexpected match case"
-          in mk_term ct1 ct2          
-      | SmtLibSyntax.App (SmtLibSyntax.Ite, [cond; t; e], _) ->
-          let cond1 = convert_term bvs cond in
-          let t1 = convert_term bvs t in
-          let e1 = convert_term bvs e in
-          mk_ite cond1 t1 e1
-      | SmtLibSyntax.Annot (t, _, _) ->
-          convert_term bvs t
-      | SmtLibSyntax.App (_, _, pos)
-      | SmtLibSyntax.Binder (_, _, _, pos) 
-      | SmtLibSyntax.Let (_, _, pos) -> fail pos
-    in
-    let rec convert_form bvs = function
-      | SmtLibSyntax.App (SmtLibSyntax.BoolConst b, [], _) -> 
-          mk_bool b
-      | SmtLibSyntax.App (SmtLibSyntax.And, fs, _) ->
-          let cfs = List.map (convert_form bvs) fs in
-          mk_and cfs
-      | SmtLibSyntax.App (SmtLibSyntax.Or, fs, _) ->
-          let cfs = List.map (convert_form bvs) fs in
-          mk_or cfs
-      | SmtLibSyntax.App (SmtLibSyntax.Not, [f], _) ->
-          mk_not (convert_form bvs f)
-      | SmtLibSyntax.App (SmtLibSyntax.Impl, [f1; f2], _) ->
-          mk_implies (convert_form bvs f1) (convert_form bvs f2)
-      | SmtLibSyntax.App (Ident id, ts, _) ->
-          let cts = List.map (convert_term bvs) ts in
-          let id = normalize_ident id in
-          let sym = to_sym id in
-          mk_atom sym cts
-      | SmtLibSyntax.App (SmtLibSyntax.Eq, [t1; t2], pos) -> 
-          (try 
-            let ct1, ct2 = convert_term bvs t1, convert_term bvs t2 in
-            if sort_of ct1 = Bool
-            then mk_iff (Atom (ct1, [])) (Atom (ct2, []))
-            else mk_eq ct1 ct2
-          with _ ->
-            let cf1, cf2 = convert_form bvs t1, convert_form bvs t2 in
-            mk_iff cf1 cf2)
-      | SmtLibSyntax.App (sym, [t1; t2], pos) ->
-          let mk_form = match sym with
-          | SmtLibSyntax.Gt -> mk_gt
-          | SmtLibSyntax.Lt -> mk_lt
-          | SmtLibSyntax.Geq -> mk_geq 
-          | SmtLibSyntax.Leq -> mk_leq
-          | _ -> fail pos
-          in
-          let ct1 = convert_term bvs t1 in
-          let ct2 = convert_term bvs t2 in
-          mk_form ct1 ct2
-      | SmtLibSyntax.App (_, _, pos) -> fail pos
-      | SmtLibSyntax.Binder (SmtLibSyntax.Forall, ids, f, _) ->
-          let cids = List.map (fun (id, srt) -> normalize_ident id, convert_sort srt) ids in
-          mk_forall cids (convert_form (cids @ bvs) f)
-      | SmtLibSyntax.Binder (SmtLibSyntax.Exists, ids, f, _) ->
-          let cids = List.map (fun (id, srt) -> normalize_ident id, convert_sort srt) ids in
-          mk_exists cids (convert_form (cids @ bvs) f)
-      | SmtLibSyntax.Annot (t, _, _) ->
-          convert_form bvs t
-      | SmtLibSyntax.Let (_, _, pos) -> fail pos
-    in
-    let rec convert_cond arg_map = function
-      | SmtLibSyntax.App 
-          (SmtLibSyntax.Eq, [SmtLibSyntax.App (Ident id1, [], _) as t1; 
-                             SmtLibSyntax.App (Ident id2, [], _) as t2], pos) ->
-          (match to_val t1, to_val t2 with
-          | Some v, None ->
-              IdMap.add id2 v arg_map
-          | None, Some v ->
-              IdMap.add id1 v arg_map
-          | _ -> raise Complex_ite)
-      | SmtLibSyntax.App
-          (SmtLibSyntax.Eq, [SmtLibSyntax.App (Ident id, [], _); t], pos) ->
-            Opt.map (fun v -> IdMap.add id v arg_map) (to_val t) |>
-            Opt.lazy_get_or_else (fun () -> raise Complex_ite)
-      | SmtLibSyntax.App (SmtLibSyntax.And, conds, _) ->
-          List.fold_left convert_cond arg_map conds
-      | SmtLibSyntax.Annot (def, _, _) -> 
-          convert_cond arg_map def
-      | SmtLibSyntax.App (_, _, pos) 
-      | SmtLibSyntax.Binder (_, _, _, pos)
-      | SmtLibSyntax.Let (_, _, pos) -> raise Complex_ite
-    in 
-    let rec convert_defun_body model arg_map = function
-      | SmtLibSyntax.App (Ident (name, _), [], pos) when name = "#unspecified" ->
-          model
-      | SmtLibSyntax.App (Ident id, ts, pos) as t ->
-          to_val t |>
-          Opt.map (add_val pos model arg_map) |>
-          Opt.lazy_or_else
-            (fun () ->
-              let t1 = convert_term [] t in
-              Some (add_term pos model arg_map t1)
-            ) |>
-            Opt.lazy_get_or_else (fun () -> print_endline ("Failed to match " ^ name id); fail pos)
-      | SmtLibSyntax.App (SmtLibSyntax.BoolConst b, [], pos) ->
-          add_val pos model arg_map (Model.value_of_bool b)
-      | SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], pos) -> 
-          add_val pos model arg_map (Model.value_of_int i)
-      | SmtLibSyntax.App (SmtLibSyntax.Ite, [cond; t; e], _) ->
-          let arg_map1 = convert_cond arg_map cond in
-          let model1 = convert_defun_body model arg_map e in
-          convert_defun_body model1 arg_map1 t
-      | SmtLibSyntax.App (SmtLibSyntax.Eq, _, pos) as cond ->
-          let t = SmtLibSyntax.App (SmtLibSyntax.BoolConst true, [], pos) in
-          let e = SmtLibSyntax.App (SmtLibSyntax.BoolConst false, [], pos) in
-          convert_defun_body model arg_map (SmtLibSyntax.App (SmtLibSyntax.Ite, [cond; t; e], pos))
-      | SmtLibSyntax.App (asym, _, pos) as t ->
-          (match asym with
-          | SmtLibSyntax.And
-          | SmtLibSyntax.Or 
-          | SmtLibSyntax.Not
-          | SmtLibSyntax.Impl -> 
-              let f = convert_form [] t in
-              add_form pos model arg_map f
-          | _ ->
-              (* Z3-specific work around *)
-              (match convert_term [] t with
-              | App (FreeSym (id2, _) as sym2, ts, srt) as t1 ->
-                  let re1 = Str.regexp (string_of_symbol sym ^ "\\$[0-9]+![0-9]+") in
-                  let re2 = Str.regexp (grass_smtlib_prefix ^ (string_of_symbol sym) ^ "\\$[0-9]+![0-9]+") in
-                  if (Str.string_match re1 id2 0 || Str.string_match re2 id2 0) &&
-                    List.fold_left2 (fun acc (id1, _) -> function
-                      | App (FreeSym _, [App (FreeSym id2, [], _)], _)
-                      | App (FreeSym id2, [], _) -> acc && id1 = id2
-                      | _ -> false) true args ts
-                  then 
-                    let def = Model.get_interp model sym2 arity in
-                    Model.add_interp model sym arity def
-                  else
-                    add_term pos model arg_map t1
-              | t1 -> add_term pos model arg_map t1))
-      | SmtLibSyntax.Annot (def, _, _) -> 
-          convert_defun_body model arg_map def
-      | SmtLibSyntax.Binder (_, _, _, pos) as t ->
-          let f = convert_form [] t in
-          add_form pos model arg_map f
-      | SmtLibSyntax.Let (_, _, pos) -> fail pos
-    in
-    try
-      convert_defun_body model IdMap.empty def
-    with
-      | Complex_ite ->
-        let t = convert_term [] def in
-        add_term (pos_of_term def) model IdMap.empty t
+    let msg = 
+      ProgError.error_to_string pos
+        "Encountered unexpected definition during model conversion" 
+    in failwith msg
   in
+  (* convert SMT-LIB term to GRASS term *)
+  let rec convert_term model res_srt bvs t =
+    let ct = match t with
+    | SmtLibSyntax.App (SmtLibSyntax.And as op, ts, _)
+    | SmtLibSyntax.App (SmtLibSyntax.Or as op, ts, _) ->
+        let cts = List.map (convert_term model res_srt bvs) ts in
+        (match op with
+        | SmtLibSyntax.And -> mk_app Bool AndTerm cts
+        | SmtLibSyntax.Or -> mk_app Bool OrTerm cts
+        | _ -> failwith "unexpected match case")
+    | SmtLibSyntax.App (SmtLibSyntax.BoolConst b, [], _) -> 
+        mk_bool_term b
+    | SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _) -> 
+        mk_int i
+    | SmtLibSyntax.App (Ident (name, _), [], pos) when name = "#unspecified" -> mk_undefined res_srt
+    | SmtLibSyntax.App (Ident id, ts, pos) ->
+        let cts = List.map (convert_term model res_srt bvs) ts in
+        let id = normalize_ident id in
+        let sym = to_sym id in
+        let ts_srts = List.map sort_of cts in
+        let res_srt = 
+          get_result_sort model sym ts_srts |>
+          Opt.lazy_or_else (fun () -> List.assoc_opt id bvs) |>
+          Opt.lazy_get_or_else (fun () -> res_srt)
+        in
+        (match to_sym id with
+        | Constructor id ->
+            mk_constr res_srt id cts
+        | sym ->
+            (* detect Z3/CVC4 identifiers that represent values of uninterpreted sorts *)
+            let name, num = id in
+            let var_id = name ^ "_" ^ string_of_int num in
+            let z3_val_re = Str.regexp "\\([^!]*\\)!val!\\([0-9]*\\)" in
+            let cvc4_val_re = Str.regexp "@uc__\\(.*\\)__\\([0-9]*\\)$" in
+            let cvc4_val_simple_re = Str.regexp "@uc_\\(.*\\)_\\([0-9]*\\)$" in
+            if Str.string_match z3_val_re var_id 0 ||
+               Str.string_match cvc4_val_re var_id 0 ||
+               Str.string_match cvc4_val_simple_re var_id 0
+            then begin
+              let index = Int64.of_string (Str.matched_group 2 var_id) in 
+              let v = mk_app res_srt (Value index) [] in
+              Model.add_univ model v;
+              v
+            end
+            else if List.exists (fun (id2, _) -> id = id2) bvs 
+            then mk_var res_srt id
+            else mk_app res_srt sym cts)
+    | SmtLibSyntax.App (SmtLibSyntax.Eq, [t1; t2], _) ->
+        let t1_srt =
+          let open SmtLibSyntax in
+          match t1 with
+          | App ((Plus | Mult | Minus | Div | Mod | IntConst _), _, _) -> Some Int
+          | App (Ident id, _, _)
+          | App (Ite, [App (Eq, [App (Ident id, _, _); _], _); _; _], _) -> List.assoc_opt id bvs
+          | _ -> None
+        in
+        let ct1 = convert_term model (t1_srt |> Opt.get_or_else res_srt) bvs t1 in
+        let ct2 = convert_term model (sort_of ct1) bvs t2 in
+        mk_eq_term ct1 ct2
+    | SmtLibSyntax.App (SmtLibSyntax.Plus as op, [t1; t2], _)
+    | SmtLibSyntax.App (SmtLibSyntax.Mult as op, [t1; t2], _)
+    | SmtLibSyntax.App (SmtLibSyntax.Minus as op, [t1; t2], _)
+    | SmtLibSyntax.App (SmtLibSyntax.Div as op, [t1; t2], _)
+    | SmtLibSyntax.App (SmtLibSyntax.Mod as op, [t1; t2], _)
+    | SmtLibSyntax.App (SmtLibSyntax.Lt as op, [t1; t2], _)
+    | SmtLibSyntax.App (SmtLibSyntax.Gt as op, [t1; t2], _)
+    | SmtLibSyntax.App (SmtLibSyntax.Leq as op, [t1; t2], _)
+    | SmtLibSyntax.App (SmtLibSyntax.Geq as op, [t1; t2], _) ->
+        let ct1 = convert_term model Int bvs t1 in
+        let ct2 = convert_term model Int bvs t2 in
+        let mk_term = match op with
+        | SmtLibSyntax.Plus -> mk_plus
+        | SmtLibSyntax.Minus -> mk_minus
+        | SmtLibSyntax.Mult -> mk_mult
+        | SmtLibSyntax.Div -> mk_div
+        | SmtLibSyntax.Mod -> mk_mod
+        | SmtLibSyntax.Lt -> (fun s t -> mk_app (sort_of s) Lt [s; t])
+        | SmtLibSyntax.Gt -> (fun s t -> mk_app (sort_of s) Gt [s; t])
+        | SmtLibSyntax.Leq -> (fun s t -> mk_app (sort_of s) LtEq [s; t])
+        | SmtLibSyntax.Geq -> (fun s t -> mk_app (sort_of s) GtEq [s; t])
+        | _ -> failwith "unexpected match case"
+        in mk_term ct1 ct2          
+    | SmtLibSyntax.App (SmtLibSyntax.Ite, [cond; t; e], _) ->
+        let cond1 = convert_term model Bool bvs cond in
+        let t1 = convert_term model res_srt bvs t in
+        let e1 = convert_term model res_srt bvs e in
+        mk_ite cond1 t1 e1
+    | SmtLibSyntax.Annot (t, _, _) ->
+        convert_term model res_srt bvs t
+    | SmtLibSyntax.App (_, _, pos)
+    | SmtLibSyntax.Binder (_, _, _, pos) 
+    | SmtLibSyntax.Let (_, _, pos) -> fail pos
+    in
+    match ct with
+    | App (FreeSym (id2, _) as sym2, ts, srt) as t1 ->
+        (* Z3-specific work around *)
+        let re = Str.regexp "k![0-9]+" in
+        if Str.string_match re id2 0 then
+          let args, def = Model.get_interp model sym2 (List.map sort_of ts, srt) in
+          let sm = List.fold_left2 (fun sm (id, _) t -> IdMap.add id t sm) IdMap.empty args ts in
+          subst_term sm def
+        else t1
+    | ct -> ct
+  in
+  (* Construct model by converting all predicate and function definitions *)
   let model1 =
     List.fold_left 
       (fun model cmd ->
@@ -1323,12 +1174,13 @@ let convert_model session smtModel =
             let cargs = List.map (fun (x, srt) -> x, convert_sort srt) args in
             let carg_srts = List.map snd cargs in
             (try
-              process_def model sym (carg_srts, cres_srt) cargs (SmtLibSyntax.unletify def)
+              let cdef =  convert_term model cres_srt cargs (SmtLibSyntax.unletify def) in
+              Model.add_interp model sym (carg_srts, cres_srt) cargs cdef
             with Failure s -> 
               if !Config.model_file <> "" then Debug.warn (fun () -> "Warning: " ^ s ^ "\n\n");
               model)
         | _ -> model)
-      model0 smtModel 
+      Model.empty smtModel 
   in
   let model2 = 
     match session.signature with
@@ -1336,8 +1188,8 @@ let convert_model session smtModel =
       { model1 with sign = signature }
     | None -> failwith "convert_model: expected session to have a signature"
   in
-  (if !Config.model_file = "" then model2 else Model.finalize_values model2)
-
+  Model.complete model2
+    
 let rec get_model session = 
   let gm state =
     writeln session "(get-model)";

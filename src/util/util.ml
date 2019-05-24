@@ -94,6 +94,10 @@ module Either = struct
     | First a -> First (f a)
     | Second b -> Second (s b)
 
+  let fold f s = function
+    | First a -> f a
+    | Second b -> s b
+          
   let value_map f s = function
     | First a -> f a
     | Second b -> s b 

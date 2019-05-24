@@ -634,7 +634,7 @@ let get_err_msg_from_labels model labels =
     IdMap.fold 
       (fun id (pos, msg) error_msgs ->
         let p = mk_free_const Bool id in
-        match Model.eval_bool_opt model p with
+        match Model.eval_bool model p with
         | Some true ->
             add_msg pos msg error_msgs
         | _ -> error_msgs
