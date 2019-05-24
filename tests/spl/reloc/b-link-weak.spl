@@ -951,39 +951,40 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
           && domMult(Icx.inf[n], Icx.fm[n][n1]).ir[k] == domMult(Icx1.inf[n], Icx1.fm[n][n1]).ir[k]
           && Icx.inf[n].ks[k] * Icx.fm[n][n1].ks[k] == Icx1.inf[n].ks[k] * Icx1.fm[n][n1].ks[k]
           && Icx.inf[n].ir[k] * Icx.fm[n][n1].ir[k] == Icx1.inf[n].ir[k] * Icx1.fm[n][n1].ir[k]
-        with {
-          // Old and new inflow equations (only for x though)
-          pure assert Ix.inf[x].ks[k] == Icx.inf[x].ks[k] + domMult(Ic.inf[c], Ic.fm[c][x]).ks[k]
-            && Ix.inf[x].ir[k] == Icx.inf[x].ir[k] + domMult(Ic.inf[c], Ic.fm[c][x]).ir[k]
-            && Ix.inf[x].ks[k] == Icx.inf[x].ks[k] + Ic.inf[c].ks[k] * Ic.fm[c][x].ks[k]
-            && Ix.inf[x].ir[k] == Icx.inf[x].ir[k] + Ic.inf[c].ir[k] * Ic.fm[c][x].ir[k]
-            && Ix1.inf[x].ks[k] == Icx1.inf[x].ks[k] + Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k]
-            && Ix1.inf[x].ir[k] == Icx1.inf[x].ir[k] + Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k];
-
-          // Old flow map equation
-          pure assert
-            Icx.fm[c][n1] == domPlus(Ic.fm[c][n1], domMult(Ic.fm[c][x], Ix.fm[x][n1]))
-            && Icx.fm[c][n1].ks[k] == Ic.fm[c][n1].ks[k] + domMult(Ic.fm[c][x], Ix.fm[x][n1]).ks[k]
-            && Icx.fm[c][n1].ir[k] == Ic.fm[c][n1].ir[k] + domMult(Ic.fm[c][x], Ix.fm[x][n1]).ir[k]
-            && Icx.fm[c][n1].ks[k] == Ic.fm[c][n1].ks[k] + Ic.fm[c][x].ks[k] * Ix.fm[x][n1].ks[k]
-            && Icx.fm[c][n1].ir[k] == Ic.fm[c][n1].ir[k] + Ic.fm[c][x].ir[k] * Ix.fm[x][n1].ir[k];
-
-          // New flow map equation
-          pure assert
-            Icx1.fm[c][n1] == domPlus(Ic1.fm[c][n1], domMult(Ic1.fm[c][x], Ix1.fm[x][n1]))
-            && Icx1.fm[c][n1].ks[k] == Ic1.fm[c][n1].ks[k] + domMult(Ic1.fm[c][x], Ix1.fm[x][n1]).ks[k]
-            && Icx1.fm[c][n1].ir[k] == Ic1.fm[c][n1].ir[k] + domMult(Ic1.fm[c][x], Ix1.fm[x][n1]).ir[k]
-            && Icx1.fm[c][n1].ks[k] == Ic1.fm[c][n1].ks[k] + Ic1.fm[c][x].ks[k] * Ix1.fm[x][n1].ks[k]
-            && Icx1.fm[c][n1].ir[k] == Ic1.fm[c][n1].ir[k] + Ic1.fm[c][x].ir[k] * Ix1.fm[x][n1].ir[k];
-
-          if (old(c.next) == n1 && old(c.indices[n1][k]) == -1) {  // n1 was c's right sibling
+          with {
+            // Old and new inflow equations (only for x though)
             pure assert true
-              && Ic1.fm[c][n1].ks[k] == 0
-              && Ic1.fm[c][n1].ir[k] == 0
-              && Ic.fm[c][x].ks[k] == 0
-              && Ic.fm[c][x].ir[k] == 0
-              && x.keys[x.len] == old(c.keys)[old(c.len)];
-            pure assert "test5" Icx.inf[n].ks[k] * Icx.fm[n][n1].ks[k] == Icx1.inf[n].ks[k] * Icx1.fm[n][n1].ks[k];
+              && Ix.inf[x].ks[k] == Icx.inf[x].ks[k] + domMult(Ic.inf[c], Ic.fm[c][x]).ks[k]
+              && Ix.inf[x].ir[k] == Icx.inf[x].ir[k] + domMult(Ic.inf[c], Ic.fm[c][x]).ir[k]
+              && Ix.inf[x].ks[k] == Icx.inf[x].ks[k] + Ic.inf[c].ks[k] * Ic.fm[c][x].ks[k]
+              && Ix.inf[x].ir[k] == Icx.inf[x].ir[k] + Ic.inf[c].ir[k] * Ic.fm[c][x].ir[k]
+              && Ix1.inf[x].ks[k] == Icx1.inf[x].ks[k] + Ic1.inf[c].ks[k] * Ic1.fm[c][x].ks[k]
+              && Ix1.inf[x].ir[k] == Icx1.inf[x].ir[k] + Ic1.inf[c].ir[k] * Ic1.fm[c][x].ir[k];
+            
+            // Old flow map equation
+            pure assert
+              Icx.fm[c][n1] == domPlus(Ic.fm[c][n1], domMult(Ic.fm[c][x], Ix.fm[x][n1]))
+              && Icx.fm[c][n1].ks[k] == Ic.fm[c][n1].ks[k] + domMult(Ic.fm[c][x], Ix.fm[x][n1]).ks[k]
+              && Icx.fm[c][n1].ir[k] == Ic.fm[c][n1].ir[k] + domMult(Ic.fm[c][x], Ix.fm[x][n1]).ir[k]
+              && Icx.fm[c][n1].ks[k] == Ic.fm[c][n1].ks[k] + Ic.fm[c][x].ks[k] * Ix.fm[x][n1].ks[k]
+              && Icx.fm[c][n1].ir[k] == Ic.fm[c][n1].ir[k] + Ic.fm[c][x].ir[k] * Ix.fm[x][n1].ir[k];
+
+            // New flow map equation
+            pure assert true
+              && Icx1.fm[c][n1] == domPlus(Ic1.fm[c][n1], domMult(Ic1.fm[c][x], Ix1.fm[x][n1]))
+              && Icx1.fm[c][n1].ks[k] == Ic1.fm[c][n1].ks[k] + domMult(Ic1.fm[c][x], Ix1.fm[x][n1]).ks[k]
+              && Icx1.fm[c][n1].ir[k] == Ic1.fm[c][n1].ir[k] + domMult(Ic1.fm[c][x], Ix1.fm[x][n1]).ir[k]
+              && Icx1.fm[c][n1].ks[k] == Ic1.fm[c][n1].ks[k] + Ic1.fm[c][x].ks[k] * Ix1.fm[x][n1].ks[k]
+              && Icx1.fm[c][n1].ir[k] == Ic1.fm[c][n1].ir[k] + Ic1.fm[c][x].ir[k] * Ix1.fm[x][n1].ir[k];
+
+            if (old(c.next) == n1 && old(c.indices[n1][k]) == -1) {  // n1 was c's right sibling
+              pure assert true
+                && Ic1.fm[c][n1].ks[k] == 0
+                && Ic1.fm[c][n1].ir[k] == 0
+                && Ic.fm[c][x].ks[k] == 0
+                && Ic.fm[c][x].ir[k] == 0
+                && x.keys[x.len] == old(c.keys)[old(c.len)];
+              pure assert "test5" Icx.inf[n].ks[k] * Icx.fm[n][n1].ks[k] == Icx1.inf[n].ks[k] * Icx1.fm[n][n1].ks[k];
             pure assert "test5" Icx.inf[n].ir[k] * Icx.fm[n][n1].ir[k] == Icx1.inf[n].ir[k] * Icx1.fm[n][n1].ir[k];
           } else if (0 <= old(c.indices)[n1][k] <= old(c.len)) {  // n1 was c's child
             if (old(c.indices)[n1][k] <= c.len) {  // n1 stayed at c
@@ -1053,6 +1054,10 @@ procedure half_split(c: Node, Ic: Interface, x: Node, Ix: Interface, Icx: Interf
             pure assert "test12" true
               && (Ix1.fm[x][n1].ks[k] == 0 || Ic1.fm[c][x].ks[k] == 0)
               && Ix1.fm[x][n1].ir[k] == 0;
+            pure assert "test9"
+              Icx.inf[n].ks[k] * Icx.fm[n][n1].ks[k] == Icx1.inf[n].ks[k] * Icx1.fm[n][n1].ks[k];
+            pure assert "test9"
+              Icx.inf[n].ir[k] * Icx.fm[n][n1].ir[k] == Icx1.inf[n].ir[k] * Icx1.fm[n][n1].ir[k];
           }
         }
       }
