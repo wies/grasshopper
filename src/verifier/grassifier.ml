@@ -208,8 +208,6 @@ let elim_arrays prog =
         Sl.Pure (compile_grass_form p, pos)
     | Sl.Atom (a, ts, pos) ->
         Sl.Atom (a, List.map compile_term ts, pos)
-    | Sl.Dirty (f, ts, pos) ->
-        Sl.Dirty (compile_sl_form f, List.map compile_term ts, pos)
     | Sl.SepOp (op, f1, f2, pos) ->
         Sl.SepOp (op, compile_sl_form f1, compile_sl_form f2, pos)
     | Sl.BoolOp (op, fs, pos) ->

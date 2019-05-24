@@ -5,7 +5,6 @@ open Sl
 let pos_of_sl_form = function
   | Pure (_, pos)
   | Atom (_, _, pos)
-  | Dirty (_, _, pos)
   | SepOp (_, _, _, pos)
   | BoolOp (_, _, pos) 
   | Binder (_, _, _, pos) -> pos
@@ -127,9 +126,6 @@ let free_symbols f =
           GrassUtil.free_symbols_term_acc 
           acc1 args
     | Binder (b, vs, f, _) -> fsym acc f
-    | Dirty (f, ts, _) ->
-      let acc = List.fold_left GrassUtil.free_symbols_term_acc acc ts in
-      fsym acc f
   in
   fsym IdSet.empty f
 
@@ -137,7 +133,6 @@ let map_pure_and_terms ffct tfct f =
   let rec m = function 
   | Pure (p, pos) -> Pure (ffct p, pos)
   | Atom (s, args, pos) -> mk_atom ?pos:pos s (List.map tfct args)
-  | Dirty (f, ts, pos) -> Dirty (m f, List.map tfct ts, pos)
   | BoolOp (op, fs, pos) -> BoolOp (op, List.map m fs, pos)
   | SepOp (op, f1, f2, pos) -> SepOp (op, m f1, m f2, pos)
   | Binder (b, vs, f, pos) -> Binder (b, vs, m f, pos)
@@ -180,9 +175,6 @@ let rec fold_terms fct acc f =
   | SepOp (_, f1, f2, _) -> fold_terms fct (fold_terms fct acc f1) f2
   | Atom (_, args, _) -> List.fold_left fct acc args
   | Pure (g, _) -> GrassUtil.fold_terms fct acc g
-  | Dirty (f, ts, _) ->
-    let acc = List.fold_left fct acc ts in
-    fold_terms fct acc f
 
 let free_consts f =
   fold_terms GrassUtil.free_consts_term_acc IdSet.empty f

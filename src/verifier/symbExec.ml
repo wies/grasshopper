@@ -35,7 +35,6 @@ type spatial_pred =
   | PointsTo of term * (ident * term) list  (** x |-> [f1: E1, ..] *)
   | Pred of ident * term list
   | Arr of term * term * term  (** Array(address, length, map) *)
-  | Dirty of spatial_pred list * term list  (** Dirty region: [f1 * ..]_(e1, ..) *)
   | Conj of spatial_pred list list  (** Conjunction of spatial states *)
 
 (** A symbolic state is a (pure formula, a list of spatial predicates).
@@ -101,8 +100,6 @@ let rec string_of_spatial_pred = function
       (ts |> List.map string_of_term |> String.concat ", ")
   | Arr (x, l, m) ->
     sprintf "arr(%s, %s, %s)" (string_of_term x) (string_of_term l) (string_of_term m)
-  | Dirty (fs, ts) ->
-    sprintf "[%s](%s)" (string_of_spatial_pred_list fs) (ts |> List.map string_of_term |> String.concat ", ")
   | Conj fss ->
     List.map (function
         | [p] -> string_of_spatial_pred p
@@ -150,16 +147,6 @@ let rec find_ptsto loc spatial =
   | PointsTo (x, fs) :: spatial' when x = loc ->
     let repl_fn = (fun fs' -> PointsTo (x, fs') :: spatial') in
     Some fs, repl_fn, repl_fn
-  | Dirty (f, ts) as sp :: spatial' ->
-    (match find_ptsto loc f with
-    | Some fs, repl_fn_rd, repl_fn_wr  ->
-      let repl_fn_rd = (fun fs' -> Dirty (repl_fn_rd fs', ts) :: spatial') in
-      let repl_fn_wr = (fun fs' -> Dirty (repl_fn_wr fs', ts) :: spatial') in
-      Some fs, repl_fn_rd, repl_fn_wr
-    | None, _, _ ->
-      let res, repl_fn_rd, repl_fn_wr = find_ptsto loc spatial' in
-      res, (fun fs' -> sp :: repl_fn_rd fs'), (fun fs' -> sp :: repl_fn_wr fs')
-    )
   | Conj spss as sp :: spatial' ->
     let rec find_conj spss1 = function
       | sps :: spss2 ->
@@ -196,15 +183,6 @@ let rec find_array loc spatial =
   | Arr (x, l, m) :: spatial' when x = loc ->
     let repl_fn = (fun m' -> Arr(x, l, m') :: spatial') in
     Some (l, m), repl_fn
-  | Dirty (f, ts) as sp :: spatial' ->
-    (match find_array loc f with
-    | Some lm, repl_fn_wr  ->
-      let repl_fn_wr = (fun fs' -> Dirty (repl_fn_wr fs', ts) :: spatial') in
-      Some lm, repl_fn_wr
-    | None, _ ->
-      let res, repl_fn_wr = find_array loc spatial' in
-      res, (fun fs' -> sp :: repl_fn_wr fs')
-    )
   | Conj spss as sp :: spatial' ->
     let rec find_conj spss1 = function
       | sps :: spss2 ->
@@ -412,11 +390,6 @@ let state_of_spec_list fields old_state specs : state * state =
         old_state, add (smk_binder b vs state1.pure, []) state, spatial'
       else
         failwith @@ "Confused by spatial under binder: " ^ (Sl.string_of_form f)
-    | Sl.Dirty (f, ts, _) ->
-      let old_state, state1, spatial' =
-        convert_sl_form (old_state, empty_state, spatial') f
-      in
-      old_state, add (state1.pure, [Dirty (state1.spatial, ts)]) state, spatial'
   in
   (* Convert all the specs into a state *)
   let (old_state, state, spatial') =
@@ -451,8 +424,6 @@ let rec subst_spatial_pred sm = function
     Pred (id, List.map (subst_term sm) ts)
   | Arr (x, l, m) ->
     Arr (subst_term sm x, subst_term sm l, subst_term sm m)
-  | Dirty (sps, ts) ->
-    Dirty (List.map (subst_spatial_pred sm) sps, List.map (subst_term sm) ts)
   | Conj spss ->
     Conj (List.map (List.map (subst_spatial_pred sm)) spss)
 
@@ -569,9 +540,6 @@ let add_neq_constraints st =
         locs acc 
       in
       f acc1 (TermSet.add x locs) sps
-    | Dirty (sp', _) :: sps ->
-      let acc, locs = f acc locs sp' in
-      f acc locs sps
     | Pred _ :: sps ->
       f acc locs sps
     | Conj spss :: sps ->
@@ -700,10 +668,6 @@ let rec find_frame st ?(inst=empty_eqs) state1 state2 =
         let inst = inst |> IdMap.add l2_id l1 |> IdMap.add m2_id m1 in
         Some inst
       | _ -> None)
-    | Dirty (sp2a, ts), Dirty (sp1a, ts') when ts = ts' ->
-      (match check_entailment st ~inst:inst (mk_spatial_state sp1a) (mk_spatial_state sp2a) with
-      | Ok inst -> Some inst
-      | Error _ -> None)
     | Conj spss2, Conj spss1 ->
       let match_up_conjunct inst sps2 sps1 =
         (match check_entailment st ~inst:inst (mk_spatial_state sps1) (mk_spatial_state sps2) with
@@ -832,27 +796,16 @@ let find_frame_conj st state1 state2 =
   [state2] must have only PointsTo/Arr - no predicates allowed.*)
 let find_frame_dirty st state1 state2 =
   let find_inside_dirty = function
-    | Dirty (sp1a, ts) ->
-      (match find_frame st { state1 with spatial = sp1a } state2 with
-      | Ok (fr, inst) ->
-        let repl_fn sm post =
-          Dirty ((List.map (subst_spatial_pred sm) fr) @ post, ts)
-        in
-        Ok (repl_fn, inst)
-      | Error (msgs, m) -> Error (msgs, m))
     | sp -> Error ([], Model.empty)
   in
   (* Cycle through sp1 looking for a dirty that works, keeping seen stuff in sp1a *)
   let rec find_dirty sp1a = function
     | sp :: sp1b ->
       (match find_inside_dirty sp with
-      | Ok (rf, inst) ->
-        let repl_fn sm post =
-          (rf sm post) :: (List.map (subst_spatial_pred sm) (sp1a @ sp1b))
-        in
-        Ok (repl_fn, inst)
       | Error ([], m) -> find_dirty (sp :: sp1a) sp1b
-      | Error (msgs, m) -> Error (msgs, m))
+      | Error (msgs, m) -> Error (msgs, m)
+      | Ok (rf, inst) -> assert false)
+
     | [] -> Error ([], Model.empty)
   in
   match List.exists (function PointsTo _ | Arr _ -> false | _ -> true) state2.spatial with

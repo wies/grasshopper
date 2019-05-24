@@ -79,7 +79,6 @@ let removeGhost cu =
       else
         Ident (id, p)
     | Annot (expr, annots, p) -> Annot ((process_expr scope expr), annots, p)
-    | Dirty _ -> failwith "TODO - what should we do with dirty regions?"
 
   and process_args current_scope callee formals expr =
     let nonImplicit = List.filter (fun v -> not (is_implicit callee v)) formals in

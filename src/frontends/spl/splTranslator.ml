@@ -481,8 +481,6 @@ let convert cu =
     | PredApp (Pred id, es, pos) ->
         let ts = List.map (convert_term locals) es in 
         SlUtil.mk_pred ~pos:pos id ts
-    | Dirty (e, es, pos) ->
-        Sl.Dirty (convert_sl_form locals e, List.map (convert_term locals) es, Some pos)
     | BinaryOp (e1, OpPts, e2, _, pos) ->
         let fld, ind = 
           match convert_term locals e1 with

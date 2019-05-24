@@ -27,7 +27,6 @@ type sep_op =
 type form =
   | Pure of Grass.form * source_position option
   | Atom of pred_symbol * Grass.term list * source_position option
-  | Dirty of form * Grass.term list * source_position option (** For flows: a dirty region *)
   | SepOp of sep_op * form * form * source_position option
   | BoolOp of bool_op * form list * source_position option
   | Binder of binder * (ident * sort) list * form * source_position option
@@ -67,7 +66,6 @@ let rec pr_form ppf = function
       fprintf ppf "%a(@[%a@])" Grass.pr_ident p Grass.pr_term_list ts
   | Binder (b, vs, f, _) ->
       fprintf ppf "@[(%a)@]" pr_quantifier (b, vs, f)
-  | Dirty (f, ts, _) -> fprintf ppf "[@[<2>%a@]]_(@[%a@])" pr_form f Grass.pr_term_list ts
 
 and pr_sep_star ppf = function
   | [] -> fprintf ppf "%s" "emp"
