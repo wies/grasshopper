@@ -16,7 +16,7 @@ module rec Node : sig
       get_parent: t option;
       set_parent: t -> unit;
       get_funs: sorted_symbol BloomFilter.t;
-      set_funs: sorted_symbol BloomFilter.t -> unit;    
+      set_funs: sorted_symbol BloomFilter.t -> unit;
       find: t;
       union: t -> unit;
       ccpar: NodeSet.t;
@@ -46,7 +46,7 @@ module rec Node : sig
       ccpar: NodeSet.t;
       congruent: t -> bool;
       merge: t -> bool;
-      to_term: term
+      to_term: term;
     >
 
   let compare n1 n2 = n1#get_id - n2#get_id
@@ -92,7 +92,7 @@ module rec Node : sig
       
     method get_funs: sorted_symbol BloomFilter.t = funs
     method set_funs symbols = funs <- symbols
-            
+
     method union (that: node) = 
       let n1 = self#find in
       let n2 = that#find in
@@ -125,8 +125,7 @@ module rec Node : sig
     method to_term =
       let sym, (_, srt) = self#get_sym in
       mk_app srt sym (List.map (fun n -> n#to_term) args)
-      
-        
+
     method merge (that: node) =
       self#find != that#find &&
       begin
@@ -166,7 +165,7 @@ module EGraphP =
     let compare = compare
   end)
 
-type egraph = NodeListSet.t EGraphA.t * (NodeListSet.t * NodeSet.t) EGraphP.t
+type egraph = (Node.t list list) SortedSymbolMap.t * NodeListSet.t EGraphA.t * (NodeListSet.t * NodeSet.t) EGraphP.t
       
 class dag = fun (terms: TermSet.t) ->
   let id_count = ref 0 in
@@ -306,37 +305,50 @@ class dag = fun (terms: TermSet.t) ->
         Hashtbl.fold (fun _ cc acc -> List.rev cc :: acc) node_to_cc []
 
     method get_egraph: egraph =
-      let egraph = 
+      let ge = measure_call "CC.get_egraph" (fun () ->
+      let egrapha, egraphp = 
         Hashtbl.fold (fun _ n (egrapha, egraphp) -> 
           let n_rep = n#find in
           let arg_reps =
             List.map (fun n -> n#find) n#get_args
           in
-          let other_args_reps =
-            EGraphA.find_opt (n_rep, n#get_sym) egrapha |>
-            Opt.get_or_else NodeListSet.empty
-          in
           let egrapha' =
-            EGraphA.add (n_rep, n#get_sym) (NodeListSet.add arg_reps other_args_reps) egrapha
+            EGraphA.update (n_rep, n#get_sym)
+              (function
+                | Some other_args_reps -> Some (NodeListSet.add arg_reps other_args_reps)
+                | None -> Some (NodeListSet.singleton arg_reps)
+              )
+              egrapha
           in
           let egraphp', _ =
             List.fold_left
               (fun (egraphp', k) arg_rep ->
-                let other_args, other_parents =
-                  EGraphP.find_opt (arg_rep, n#get_sym, k) egraphp' |>
-                  Opt.get_or_else (NodeListSet.empty, NodeSet.empty)
-                in
-                let args' = NodeListSet.add arg_reps other_args in
-                let parents' = NodeSet.add n_rep other_parents in
-                EGraphP.add (arg_rep, n#get_sym, k) (args', parents') egraphp',
+                EGraphP.update (arg_rep, n#get_sym, k) (function
+                  | Some (other_args, other_parents) ->
+                      let args' = NodeListSet.add arg_reps other_args in
+                      let parents' = NodeSet.add n_rep other_parents in
+                      Some (args', parents')
+                  | None -> Some (NodeListSet.singleton arg_reps, NodeSet.singleton n_rep))
+                  egraphp',
                 k + 1)
               (egraphp, 0) arg_reps
           in
           egrapha', egraphp')
           nodes (EGraphA.empty, EGraphP.empty)
       in
-      egraph
-          
+      let egraphs =
+        EGraphA.fold
+          (fun (_, sym) arg_lists egraphs ->
+            let arg_lists = NodeListSet.elements arg_lists in
+            SortedSymbolMap.update sym
+              (function
+                | Some old_args -> Some (arg_lists @ old_args)
+                | None -> Some arg_lists)
+              egraphs)
+          egrapha SortedSymbolMap.empty
+      in
+      egraphs, egrapha, egraphp)
+      in ge ()
         
     (* Returns a function that tests if two terms must be different *)
     method get_conflicts =

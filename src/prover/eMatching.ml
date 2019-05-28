@@ -542,19 +542,13 @@ let filter_term filters t sm =
  *  Yields a hash table mapping templates of type 'a to the computed variable substitutions. 
  *)
 let run ?(pr_tpl = (fun ppf _ -> ())) (code: 'a ematch_code) ccgraph : ('a, subst_map) Hashtbl.t =
-  let egrapha, egraphp = CC.get_egraph ccgraph in
+  let egraphs, egrapha, egraphp = CC.get_egraph ccgraph in
   (* some utility functions for working with the e-graph *)
   let get_apps sym =
-    CC.EGraphA.fold
-      (fun (n, sym') n_apps apps ->
-        if sym = sym'
-        then CC.NodeListSet.union n_apps apps
-        else apps)
-      egrapha CC.NodeListSet.empty |>
-    CC.NodeListSet.elements
+    SortedSymbolMap.find_opt sym egraphs
+    |> Opt.get_or_else []
   in
-  let get_reps srt =
-    CC.EGraphA.fold
+  let get_reps srt = CC.EGraphA.fold
       (fun (n, sym) _ reps ->
         if snd @@ snd sym = srt
         then CC.NodeListSet.add [n] reps
@@ -580,7 +574,7 @@ let run ?(pr_tpl = (fun ppf _ -> ())) (code: 'a ematch_code) ccgraph : ('a, subs
   (* initialize registers *)
   let regs = Array.make (max_reg code + 1) (CC.rep_of_term ccgraph mk_true_term) in
   (* create result table *)
-  let insts = Hashtbl.create 1000 in
+  let insts = Hashtbl.create 500 in
   let prune pm ts =
     TermSet.filter (fun t ->
       TermMap.find_opt t pm |>
