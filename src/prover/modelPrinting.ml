@@ -5,11 +5,12 @@ open GrassUtil
 open Model
 
 let replace_lt_gt str =
-  Str.global_replace (Str.regexp "<") "&lt;"
-    (Str.global_replace (Str.regexp ">") "&gt;" str)
+  str
+  |> Str.global_replace (Str.regexp "<") "&lt;"
+  |> Str.global_replace (Str.regexp ">") "&gt;"
 
 let replace_newlines str =
-  Str.global_replace (Str.regexp "\n") "<br>" str
+  Str.global_replace (Str.regexp "&lt;br/&gt;") "<br/>" str
 
 let output_json chan model =
   let string_of_value v = 
@@ -165,6 +166,9 @@ let mixed_graphviz_html =
     td,th {
        padding: 0 10px;
        border-bottom: 1px solid;
+    }
+    .value-td {
+      min-width: 40em;
     }
     .selected { background: rgba(100,200,100,0.5) }
     .highlighted { background: rgba(200,100,100,0.5) }
@@ -409,7 +413,7 @@ let mixed_graphviz_html =
             (fun (k, v) ->
               Printf.fprintf
               chan
-              "    <tr><td>%s</td><td>%s</td></tr>\n"
+              "    <tr><td>%s</td><td class=\"value-td\">%s</td></tr>\n"
               (* Alternatively, use <pre> block for k and v? *)
               (replace_lt_gt k) (replace_lt_gt v |> replace_newlines)
             )
@@ -553,7 +557,7 @@ let print_graph output chan model terms =
   (* functions and pred *)
   let output_freesyms () =
     (* Get the functions and predicates from ground terms *)
-    let _funs = TermSet.fold
+    let funs = TermSet.fold
       (fun t acc -> match t with
         | App ((FreeSym _ as sym), args, srt) when args <> [] ->
           let arity = List.map sort_of args, srt in
@@ -561,15 +565,15 @@ let print_graph output chan model terms =
         | _ -> acc
       ) terms SortedSymbolSet.empty
     in
-    (*let rows =
+    let rows =
       let row_of_func (func, arity) =
-        let m, d = SortedSymbolMap.find (func, arity) model.intp in
-        let val_str = string_of_format (pr_map model arity) (m, d) in
+        let defs, _ = get_defs model func arity in
+        let val_str = string_of_format (pr_map (fun ppf _ -> Format.fprintf ppf ",<br/>")) defs in
         (string_of_symbol func, val_str)
       in
       SortedSymbolSet.fold (fun func acc -> (row_of_func func) :: acc) funs []
     in
-    out_tbl "predicates and functions" rows*)()
+    out_tbl "predicates and functions" rows
   in
   let node_counter = ref 0 in
   let value_to_node = Hashtbl.create 64 in

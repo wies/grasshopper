@@ -374,16 +374,54 @@ let complete model =
   new_model
 
 
-(*
-let get_args model sym arity =
+let get_defs model sym arity =
   let params, def = SortedSymbolMap.find (sym, arity) model.intp in
-  let add id arg args =
-    let old_args = TermSet.
-  let rec ea args = function
+  let add id arg args_list =
+    List.map (IdMap.add id arg) args_list
+  in
+  let rec ea args_list = function
+    | App (AndTerm, ts, _) ->
+        List.fold_left ea args_list ts
+    | App (OrTerm, ts, _) ->
+        Util.flat_map (ea args_list) ts
+    | App (Ite, [c; t; e], Bool) ->
+        ea args_list (App (OrTerm, [App (AndTerm, [c; t], Bool); e], Bool))
     | App (Eq, [Var (id, _); arg], _) ->
-        add id arg args
- *)
-    
+        add id arg args_list
+    | App (Eq, [App (Ite, [c; t; e], _); App (Value _, _, _) as v], _) ->
+        ea args_list (App (Ite, [c; App (Eq, [t; v], Bool); App (Eq, [e; v], Bool)], Bool))
+    | App (Eq, [App (Value i1, _, _); App (Value i2, _, _)], _) when i1 <> i2 -> []
+    | _ -> args_list
+  in
+  let rec get_defs defs arg_lists = function
+    | App (Ite, [c; t; e], _) ->
+        let defs_e = get_defs defs arg_lists e in
+        get_defs defs_e (ea arg_lists c) t
+    | App (Value _, _, _) as v ->
+        List.map (fun args -> args, v) arg_lists @ defs
+    | App ((OrTerm | AndTerm), _, _) as t ->
+        let arg_lists = ea arg_lists t in
+        List.map (fun args -> args, mk_true_term) arg_lists @ defs
+    | _ -> defs
+  in
+  let defs = get_defs [] [IdMap.empty] def in
+  let process_def args v =
+    if IdMap.is_empty args then [], Some v else
+    let ts =
+      List.fold_right (fun (id, _) ts ->
+        IdMap.find_opt id args
+        |> Opt.map (fun t -> t :: ts)
+        |> Opt.get_or_else [])
+        params []
+    in
+    if List.length ts <> List.length params then [], None
+    else [ts, v], None
+  in
+  List.fold_left (fun (defs, default) (args, v) ->
+    let defs1, default1 = process_def args v in
+    defs1 @ defs, Opt.lazy_or_else (fun () -> default1) default)
+    ([], None) defs
+  
 module PQ = PrioQueue.Make
     (struct
       type t = term
@@ -409,7 +447,11 @@ let find_term model =
         match sym, res_srt with
         | _, Bool | _, Int (*| Write, _*) -> (fedges, dedges, init_reach)
         | _ ->
+            let m, _ = get_defs model sym (arg_srts, res_srt) in
             let m1 =
+              if m <> []
+              then TermListMap.of_seq (List.to_seq m)
+              else
               let arg_vals =
                 List.map (function
                   | Int -> [mk_int 0]
@@ -586,7 +628,7 @@ let get_map_of_value model m =
       let fmap =
         TermSet.fold (fun e fmap ->
           let f_of_e = interp_symbol model Read ([srt; dsrt], rsrt) [m; e] in
-          (e, f_of_e) :: fmap)
+          ([e], f_of_e) :: fmap)
           (get_values_of_sort model dsrt)
           []
       in
@@ -687,21 +729,21 @@ let rec pr_value model ppf term =
       pr_term ppf set
   | Map (arg_s, res_s) ->
       get_map_of_value model term |>
-      Either.fold (pr_map ppf) (pr_term ppf)
+      Either.fold (pr_map (fun ppf _ -> Format.fprintf ppf ",@ ") ppf) (pr_term ppf)
   | _ ->
       pr_term ppf term
           
 and pr_value_list model ppf svals =
   pr_list_comma (pr_value model) ppf svals
 
-and pr_map ppf ts =
+and pr_map sep ppf ts =
   let pr_map_elem ppf (arg, res) = 
     Format.fprintf ppf "%a -> %a"
-      pr_term arg
+      pr_term_list arg
       pr_term res
   in
   Format.fprintf ppf "{@[<hv 2>%a@]}"
-    (pr_list_comma pr_map_elem) ts
+    (pr_list 0 sep (fun _ -> pr_map_elem)) ts
 
 let string_of_value model v =
   string_of_format (pr_value model) v
