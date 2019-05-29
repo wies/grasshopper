@@ -202,55 +202,19 @@ let rec valid = function
 (** Simplifies set constraints and adds axioms for set operations.
  ** Assumes that f is typed and in negation normal form. *)
 let add_set_axioms fs =
-  let split ts = List.fold_left (fun (ts1, ts2) t -> (ts2, t :: ts1)) ([], []) ts in
-  let rec unflatten = function
-    | App (Union, [t], _) 
-    | App (Inter, [t], _) -> unflatten t
-    | App (Union, [], srt) -> mk_empty srt
-    | App (Union, ts, srt) ->
-        let ts1, ts2 = split ts in
-        App (Union, [unflatten (mk_union ts1); unflatten (mk_union ts2)], srt)
-    | App (SetEnum, (_ :: _ as ts), srt) ->
-        List.fold_left (fun acc t -> mk_union [acc; mk_setenum [t]]) (mk_empty srt) ts
-    | App (sym, ts, srt) -> App (sym, List.map unflatten ts, srt)
-    | t -> t
-  in
-  let rec simplify = function
-    (* TODO figure out why these were necessary and remove if obsolete *)
-    | BoolOp (Not, [Atom (App (Disjoint, [t1; t2], _), a)]) when false && not !Config.abstract_preds ->
-        let srt = element_sort_of_set t1 in
-        let t11 = unflatten t1 in
-        let t21 = unflatten t2 in
-        mk_or [mk_not (mk_disjoint t11 t21);
-               mk_not (Atom (mk_eq_term (mk_empty (Set srt)) (mk_inter [t11; t21]), a))]
-    | BoolOp (op, fs) -> BoolOp (op, List.map simplify fs)
-    | Binder (b, vs, f, a) -> Binder (b, vs, simplify f, a)
-    | Atom (App (Disjoint, [t1; t2], _), a) when false && not !Config.abstract_preds ->
-        let srt = element_sort_of_set t1 in
-        let t11 = unflatten t1 in
-        let t21 = unflatten t2 in
-        mk_and [mk_disjoint t11 t21;
-                Atom (mk_eq_term (mk_empty (Set srt)) (mk_inter [t11; t21]), a)]
-    | Atom (App (SubsetEq, [t1; t2], _), a) when false && not !Config.abstract_preds -> 
-        let t11 = unflatten t1 in
-        let t21 = unflatten t2 in
-        mk_and [mk_subseteq t11 t21;
-                Atom (mk_eq_term t21 (mk_union [t11; t21]), a)]
-    | Atom (t, a) -> Atom (unflatten t, a)
-  in
-  let fs1 = List.map simplify fs in
+  let _split ts = List.fold_left (fun (ts1, ts2) t -> (ts2, t :: ts1)) ([], []) ts in
   let elem_srts = 
     let set_srts =
       List.fold_left 
         (fun acc f -> SortSet.union (sorts f) acc)
-        SortSet.empty fs1
+        SortSet.empty fs
     in
     SortSet.fold (fun set_srt acc -> 
       match set_srt with 
       | Set srt -> srt :: acc
       | _ -> acc) set_srts []
   in
-  rev_concat [fs1; Axioms.set_axioms elem_srts]
+  rev_concat [fs; Axioms.set_axioms elem_srts]
 
 (** Compute the set of struct sorts of the domain sort from the set of field terms [flds]. *)
 let struct_sorts_of_fields flds =

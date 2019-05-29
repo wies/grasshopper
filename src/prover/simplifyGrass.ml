@@ -99,8 +99,14 @@ let massage_field_reads fs =
 
 (** Simplify set expressions by propagating empty sets, etc. *)
 let rec simplify_sets fs =
+  let rec mk_setenum = function
+    | t1 :: _ as ts ->
+        mk_union [GrassUtil.mk_setenum [t1]; GrassUtil.mk_setenum ts]
+    | ts -> GrassUtil.mk_setenum ts
+  in
   let rec simp (t : term) = 
     match t with
+    | App ((Union | Inter), [t], _) -> simp t
     | App (Union, ts, srt) ->
         let ts1 =
           List.filter
@@ -124,7 +130,7 @@ let rec simplify_sets fs =
             match (s1', s2') with
             | (App (Empty, _, _), s) | (s, App (Empty, _, _)) -> s
             | (App (SetEnum, ts1, _), App (SetEnum, ts2, _)) ->
-              let ts = List.filter (fun t -> not (List.mem t ts2)) ts1 in
+                let ts = List.filter (fun t -> not (List.mem t ts2)) ts1 in
                 mk_setenum ts
             | _ -> mk_diff s1' s2'
           end
