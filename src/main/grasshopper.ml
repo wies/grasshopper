@@ -131,14 +131,16 @@ let check_spl_program spl_prog proc =
     if !Config.symbexec
     then SymbExec.simplify proc prog
     else Verifier.simplify procs prog in
+  let check_proc =
+    if !Config.typeonly then
+      fun proc -> []
+    else if !Config.symbexec then
+      SymbExec.check spl_prog simple_prog
+    else
+      Verifier.check_proc simple_prog
+  in    
   let check simple_prog first proc =
-    let errors =
-      if !Config.typeonly then []
-      else
-      if !Config.symbexec then
-        SymbExec.check spl_prog simple_prog proc
-      else Verifier.check_proc simple_prog proc
-    in
+    let errors = check_proc proc in
     List.fold_left
       (fun first (pp, error_msg, model) ->
         if not !Config.symbexec then output_trace simple_prog proc (pp, model);

@@ -383,9 +383,6 @@ let instantiate_and_prove session fs =
 let instantiate_and_prove session = measure_call "Prover.instantiate_and_prove" (instantiate_and_prove session)
 
 let prove name sat_means f =
-  if false && name = "b-link-ghost_half_split_precondition_of_lemma_int_valid_fold_627_4" then begin
-    Debug.more_verbose (); Debug.more_verbose ()
-  end;
   let fs = Reduction.reduce f in
   let session = SmtLibSolver.start name sat_means in
   let result, session, fs = instantiate_and_prove session fs in

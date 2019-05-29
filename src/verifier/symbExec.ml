@@ -592,11 +592,11 @@ let check_pure_entail st p1 p2 =
     (* Close the formulas: assuming all free variables are existential *)
     let close f = smk_exists (IdSrtSet.elements (sorted_free_vars f)) f in
     let labels, f =
-      smk_and [p1; mk_not p2] |> close |> nnf
+      smk_and [p1; mk_not p2] |> close |> nnf |> Verifier.finalize_form st.se_prog
       (* Add definitions of all referenced predicates and functions *)
-      |> Verifier.add_pred_insts st.se_prog
+      |> fun f -> f :: Verifier.pred_axioms st.se_prog
       (* Add axioms *)
-      |> (fun f -> smk_and (f :: axioms))
+      |> (fun fs -> smk_and (fs @ axioms))
       (* Add labels *)
       |> Verifier.add_labels
     in
