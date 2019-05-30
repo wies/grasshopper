@@ -171,7 +171,7 @@ module WQ = PrioQueue.Make
       let compare t1 t2 =
         (* Rational for the following definition: 
          * Entries i -> x and i -> t where t is ground should be processed before entries i -> f(t_1, ..., t_n).
-         * This is to delay the creation of e-matching code that introduces backtracking points. *)
+         * This is to delay the creation of E-matching code that introduces backtracking points. *)
         if is_ground_term t1 && not @@ is_ground_term t2 then -1
         else match t1, t2 with
         | Var _, App _ -> -1
@@ -184,9 +184,12 @@ type trigger = term * filter list
 
 (** A multi-pattern for instantiating templates of generic type 'a. *)
 type 'a pattern = 'a * trigger list
-    
-(** Compile the list of multi-patterns [patterns] into an ematching code tree. *)
-let compile (patterns: ('a pattern) list): 'a ematch_code =
+
+(** Create an empty E-matching code tree *)
+let empty: 'a ematch_code = Choose []
+      
+(** Compile the list of multi-patterns [patterns] and add them to the E-matching code tree [code]. *)
+let compile (code: 'a ematch_code) (patterns: ('a pattern) list): 'a ematch_code =
   (* do some heuristic analysis on the patterns so as to optimize the order 
    * of their triggers to faciliate sharing across patterns in the code tree *)
   (* First count how often each trigger term occurs across all patterns *)
@@ -442,7 +445,7 @@ let compile (patterns: ('a pattern) list): 'a ematch_code =
         | _ -> None)
     | _ -> None
   in
-  let rec insert_code f pattern w v o comps incomps code: 'a ematch_code * int =
+  let rec insert_code f pattern w v o comps incomps code : 'a ematch_code * int =
     match code with
     | Choose cs ->
         if incomps = [] then
@@ -501,7 +504,7 @@ let compile (patterns: ('a pattern) list): 'a ematch_code =
       let code', _ = insert_code (f, None) pattern WQ.empty IdMap.empty (max_reg code + 1) [] [] code in
       code'
     )
-    (Choose []) patterns
+    code patterns
 
 (** Check whether term [t] and substitution [sm] satisfy the filters [filters]. *)
 let filter_term filters t sm =
@@ -543,7 +546,7 @@ let filter_term filters t sm =
  *)
 let run ?(pr_tpl = (fun ppf _ -> ())) (code: 'a ematch_code) ccgraph : ('a, subst_map) Hashtbl.t =
   let egraphs, egrapha, egraphp = CC.get_egraph ccgraph in
-  (* some utility functions for working with the e-graph *)
+  (* some utility functions for working with the E-graph *)
   let get_apps sym =
     SortedSymbolMap.find_opt sym egraphs
     |> Opt.get_or_else []
@@ -728,8 +731,8 @@ let run ?(pr_tpl = (fun ppf _ -> ())) (code: 'a ematch_code) ccgraph : ('a, subs
   run TermSet.empty [code]
 
     
-(** Generate an E-matching code tree from the given set of axioms. *)
-let compile_axioms_to_ematch_code ?(force=false) ?(stratify=(!Config.stratify)) axioms :
+(** Add [axioms] to the E-matching code tree [code]. *)
+let add_axioms_to_ematch_code ?(force=false) ?(stratify=(!Config.stratify)) code axioms :
     (form * _) ematch_code * (form * _) pattern list = 
   (* *)
   let epr_axioms, axioms = 
@@ -841,7 +844,7 @@ let compile_axioms_to_ematch_code ?(force=false) ?(stratify=(!Config.stratify)) 
     List.fold_right
       (fun f patterns -> generate_pattern f :: patterns) axioms patterns
   in
-  compile patterns, patterns
+  compile code patterns, patterns
     
 (** Instantiate the axioms encoded in patterns [patterns] and code tree [code] for E-graph [ccgraph]. *)
 let instantiate_axioms_from_code patterns code ccgraph : form list =
@@ -898,11 +901,11 @@ let instantiate_axioms_from_code patterns code ccgraph =
   measure_call "EMatching.instantiate_axioms" (instantiate_axioms_from_code patterns code) ccgraph
 
 let instantiate_axioms ?(force=false) ?(stratify=(!Config.stratify)) axioms ccgraph =
-  let code, patterns = compile_axioms_to_ematch_code ~force:force ~stratify:stratify axioms in
+  let code, patterns = add_axioms_to_ematch_code ~force:force ~stratify:stratify empty axioms in
   instantiate_axioms_from_code patterns code ccgraph
     
-(** Compile term generators [generators] into an E-matching code tree. *)
-let compile_term_generators_to_ematch_code generators =
+(** Add term generators [generators] to E-matching code tree [code]. *)
+let add_term_generators_to_ematch_code code generators =
   let generators =
     let remove_generic_filters (ms, ts) =
       List.map (function Match (m, fs) -> (m, List.filter (function FilterGeneric _ -> false | _ -> true) fs)) ms, ts 
@@ -917,7 +920,7 @@ let compile_term_generators_to_ematch_code generators =
         (ts, triggers) :: patterns
   in
   let patterns = List.fold_left generate_pattern [] generators in
-  compile patterns
+  compile code patterns
 
 (** Generate new terms according to term generators encoded in [code] and E-graph [ccgraph].
  *  The new terms are added to the E-graph. Returns a Boolean indicating whether new terms 
