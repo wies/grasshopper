@@ -1,0 +1,193 @@
+
+options "-abspreds"
+include "ordered_type.spl"
+include "flows.spl"
+
+datatype KeyTS = pair(key: Int, ts: K)
+
+// datatype Message = m(ks: Map<Int, K>)
+
+
+// Definition of a node and good condition:
+
+
+struct Node {
+  var next: Node;
+  ghost var intf: Interface;
+  // ghost var pred: Node;
+  ghost var pred_f: Map<Int,K>;
+  var contents: Set<KeyTS>;
+}
+
+
+pure function func_of_cont(s: Set<KeyTS>) returns (m: Map<Int, K>)
+  requires forall kt1: KeyTS, kt2: KeyTS :: kt1.key == kt2.key ==> kt1 !in s || kt2 !in s
+  ensures forall kt: KeyTS :: kt in s ==> m[kt.key] == kt.ts
+  ensures forall k: Int :: (forall t: K :: !(pair(k, t) in s)) ==> m[k] == top
+
+pure function out_of_node(x: Node, y: Node, xn: Node, s: Set<KeyTS>) returns (f: Set<Map<Int,K>>)
+{
+  (xn != null && xn == y) ? {func_of_cont(s)} : {}
+}
+
+
+define hrepSpatial(x) { acc(x) }
+
+define hrep(q) {
+  dom(q.intf) == {q}
+  && (forall w: Node :: q.intf.out[w] == out_of_node(q, w, q.next, q.contents))
+  && (forall w: Node :: w != q ==> q.intf.ins[w] == {} 
+                     && w == q ==> q.intf.ins[w] == {q.pred_f})
+  && (forall p: KeyTS :: p in q.contents ==> le(p.ts, q.pred_f[p.key]))
+  && (q == r ==> (forall k: Int :: q.pred_f[k] == top))
+}
+ 
+define globalInt(r, I) {
+  true
+  && r in dom(I)
+  && (forall x: Node :: x in dom(I) ==> I.ins[x] == {})
+  && (forall x: Node :: x !in dom(I) ==> I.out[x] == {})
+  && (forall x: Node :: x in dom(I) && x.next != null ==> x.next in dom(I))
+}
+
+
+/* -------------------- Actual list procedures -------------------- */
+
+var t: K;
+
+
+procedure checkContents(x: Node, k: Int) returns (r: KeyTS)
+  requires acc(x)
+  ensures acc(x)
+  ensures old(x.contents) == x.contents
+  ensures old(x.intf) == x.intf
+  ensures old(x.next) == x.next
+  // ensures old(x.pred) == x.pred
+  ensures r.key == k 
+  ensures lt(bottom,r.ts) ==> r in old(x.contents) && (forall t: K :: pair(k,t) in old(x.contents) ==> le(t,r.ts))
+  ensures (r.ts == bottom) ==> (forall t: K :: pair(k, t) !in old(x.contents))
+{
+  assume false;
+}
+
+
+procedure updateContents(x:Node, k:Int, t:K)
+  requires acc(x)
+  // requires forall kt1: KeyTS, kt2: KeyTS :: kt1.key == kt2.key ==> kt1 !in x.contents || kt2 !in x.contents
+  ensures acc(x)
+  ensures old(x.intf) == x.intf
+  // ensures old(x.pred) == x.pred
+  ensures old(x.next) == x.next
+  ensures pair(k,t) in x.contents
+  // ensures forall kt1: KeyTS, kt2: KeyTS :: kt1.key == kt2.key ==> kt1 !in x.contents || kt2 !in x.contents
+  ensures forall kt:KeyTS :: kt.key != k && kt in old(x.contents) ==> kt in x.contents
+  ensures forall kt:KeyTS :: kt.key != k && kt in x.contents ==> kt in old(x.contents)    
+
+ 
+
+/*
+procedure search(r: Node, X: Set<Node>, k: Int) returns (res: KeyTS)
+  requires acc(X)
+  requires forall x: Node :: x in X ==> hrep(x)
+  requires globalInt(r, intCompSet(X))
+  ensures acc(X)
+  ensures forall x: Node :: x in X ==> hrep(x)
+  ensures globalInt(r, intCompSet(X))
+{
+  var st := t;
+  pure assume forall n: Node, kt: KeyTS :: n in X && kt in n.contents ==> le(kt.ts,st); 
+
+  pure assume forall x: Node ::
+    x in X ==> intCompSet(X).ins[x] subsetof x.intf.ins[x];
+  pure assume forall x: Node, y: Node ::
+    x in X && y in X
+    ==> x.intf.out[y] subsetof y.intf.ins[y];
+
+
+  var c:Node := r;
+  res := pair(k, bottom);
+  var b:Bool := false; 
+
+  while (c != null && b == false)
+    invariant acc(X)
+    invariant forall x: Node :: x in X ==> hrep(x)
+    invariant globalInt(r, intCompSet(X))
+    invariant (c == null || c in X)
+    invariant forall n: Node, kt: KeyTS :: n in X && kt in n.contents ==> le(kt.ts,st)
+  {
+    pure assume forall x: Node ::
+      x in X ==> intCompSet(X).ins[x] subsetof x.intf.ins[x];
+    pure assume forall x: Node, y: Node ::
+      x in X && y in X
+      ==> x.intf.out[y] subsetof y.intf.ins[y];
+
+    pure assert c != r ==> c.pred.dt.func[k] == top;
+    res := checkContents(c,k);
+    
+    if (res.ts == bottom) {
+      c := c.next;      
+    } else {
+      pure assert res in c.contents;
+      // pure assert le(st, c.pred.dt.func[k]);
+      b := true;
+    } 
+  }
+
+  return res;
+}
+*/
+
+
+procedure upsert(r: Node, n: Node, I: Interface, k:Int, t:K)
+  returns (I1:Interface)
+  requires acc({r,n})
+  requires hrep(r) &*& hrep(n)
+  requires I == intComp(r.intf,n.intf) && intValid(I) && n == r.next && r != n.next
+  requires forall z: Node, f: Map<Int,K>, l: Int ::
+    z in I.dom && f in I.ins[z] ==> le(f[l],t) 
+  ensures acc({r,n})
+  ensures hrep(r) &*& hrep(n)
+  ensures I1 == intComp(r.intf,n.intf) && intValid(I1) && n == r.next && r != n.next
+  ensures intEq(I,I1)
+{
+  lemma_int_comp_unfold(r,r.intf,n,n.intf, I);
+
+  // pure assume forall p: KeyTS, z: Node :: p in z.contents ==> lt(p.ts,v);
+  // assumption that t represents the time
+
+  updateContents(r, k, increment(t));
+
+  n.pred_f := func_of_cont(r.contents);
+
+  pure assert !le(func_of_cont(r.contents)[k],t);
+
+  var rout := {z:Node :: out_of_node(r, z, r.next, r.contents)};
+  var nout := {z:Node :: out_of_node(n, z, n.next, n.contents)};
+  var Iout := {z:Node :: rout[z] ++ nout[z]};
+
+  var rins := {z:Node :: I.ins[z] ++ nout[z]};
+  var nins := {z:Node :: I.ins[z] ++ rout[z]};
+
+  r.intf := int(rins,rout,{r});
+  n.intf := int(nins,nout,{n});
+
+  pure assume intValid(r.intf) && intValid(n.intf);
+  pure assert r.intf.dom == {r} && n.intf.dom == {n} && r != n;
+  pure assert r.intf.out[n] subsetof n.intf.ins[n];
+  pure assert n.intf.out[r] == {};
+
+  I1 := lemma_int_comp_fold(r,r.intf,n,n.intf);
+
+  pure assert I1 = intComp(r.intf,n.intf);
+  pure assert intEq(I,I1);
+
+  // assert acc({r,n});
+
+  pure assert hrep(r);
+  pure assert hrep(n);
+
+
+  return I1;
+}
+
+
