@@ -915,8 +915,10 @@ let rec symb_exec st postcond comms =
   let se = function
   | [] ->
     Debug.debug (fun () ->
-      sprintf "%sExecuting check postcondition: %s%s\n"
-        lineSep (string_of_state postcond) lineSep);
+      sprintf "%sExecuting check postcondition: %s%sCurrent state:\n%s\n"
+        lineSep (string_of_state postcond)
+        lineSep (string_of_se_state st)
+    );
     (* TODO do this better *)
     let st = add_neq_constraints st in
     (* First, check if current state is unsat *)
