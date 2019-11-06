@@ -110,7 +110,11 @@ let convert cu =
   in
   let rec convert_type adt_defs ty pos =
     let rec ct = function
-      | IdentType id -> FreeSrt id
+      | IdentType id ->
+          (match IdMap.find_opt id cu.type_decls with
+          | Some { t_def = AliasTypeDef (Some ty); _ } ->
+              ct ty
+          | _ -> FreeSrt id)
       | StructType id -> Loc (FreeSrt id)
       | ADType id ->
           (match adt_defs with
@@ -334,11 +338,17 @@ let convert cu =
         in
         let t1 = convert_term locals e1 in
         let t2 = convert_term locals e2 in
-        (match type_of_expr cu locals e1 with
-        | IntType | ByteType -> mk_int_term t1 t2
-        | SetType _ ->
-            mk_set_term t1 t2
-        | ty -> failwith "unexpected type") 
+        let rec mk_term ty =
+          match ty with
+          | IntType | ByteType -> mk_int_term t1 t2
+          | SetType _ ->
+              mk_set_term t1 t2
+          | IdentType id ->
+              (match resolve_type_alias cu id with
+              | Some ty1 -> mk_term ty1
+              | None -> failwith ("unexpected type: " ^ string_of_type ty))
+          | ty -> failwith ("unexpected type: " ^ string_of_type ty)
+        in mk_term (type_of_expr cu locals e1)
     | PredApp (FramePred, [set1; set2; fld1; fld2], pos) ->
         let tset1 = convert_term locals set1 in
         let tset2 = convert_term locals set2 in

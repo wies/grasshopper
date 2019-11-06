@@ -145,14 +145,18 @@ background_th:
 ;
   
 type_decl:
-| TYPE IDENT semicolon_opt {
+| TYPE IDENT type_decl_def_opt semicolon_opt {
   { t_name = $2;
-    t_def = FreeTypeDef;
+    t_def = AliasTypeDef $3;
     t_pos = mk_position 2 2 }
 }
 | datatype_decl { $1 }
 | struct_decl { $1 }
 ;
+
+type_decl_def_opt:
+| EQ var_type { Some $2 }
+| /* empty */ { None }
 
 ident_list_opt:
 | ident_list { $1 }

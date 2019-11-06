@@ -96,7 +96,7 @@ and typedecl =
     }
 
 and type_def =
-  | FreeTypeDef
+  | AliasTypeDef of typ option
   | StructTypeDef of vars
   | ADTypeDef of constrs
 
@@ -320,6 +320,12 @@ let subst_id sm =
     | NoInstAnnot x -> NoInstAnnot (si bv x)
   in s IdSet.empty
 
+(** Resolve type alias *)
+let resolve_type_alias cu id =
+  match IdMap.find_opt id cu.type_decls with
+  | Some { t_def = AliasTypeDef ty_opt } -> ty_opt
+  | _ -> None
+    
 (** General (id -> expr) substitution for expressions (not capture avoiding) *)
 let subst sm =
   let rec s bv = function
@@ -418,7 +424,7 @@ let extend_spl_program incls decls bg_th prog =
     List.fold_left (fun (tdecls, vdecls, pdecls, prdecls, mdecls as decls) -> function
       | TypeDecl decl ->
           IdMap.find_opt decl.t_name tdecls |>
-          Opt.iter (function { t_def = FreeTypeDef; _ } -> () | _ -> redeclaration_error decl.t_name decl.t_pos);
+          Opt.iter (function { t_def = AliasTypeDef None; _ } -> () | _ -> redeclaration_error decl.t_name decl.t_pos);
           IdMap.add decl.t_name decl tdecls, vdecls, pdecls, prdecls, mdecls
       | VarDecl decl -> 
           check_uniqueness decl.v_name decl.v_pos decls;
@@ -820,7 +826,8 @@ let rec pr_adt_constrs ppf = function
     
 let pr_type_decl ppf (_, tyd) =
   match tyd.t_def with
-  | FreeTypeDef -> fprintf ppf "type@ @[%a@];@\n" pr_ident tyd.t_name
+  | AliasTypeDef None -> fprintf ppf "type@ @[%a@];@\n" pr_ident tyd.t_name
+  | AliasTypeDef (Some typ) -> fprintf ppf "type@ @[%a@]@ =@ %a;@\n" pr_ident tyd.t_name pr_type typ
   | StructTypeDef sfields ->
       fprintf ppf "struct %a {@\n@[<2>  %a@]@\n}@\n"
         pr_ident tyd.t_name pr_var_decls (IdMap.bindings sfields)
@@ -969,7 +976,7 @@ let pr_cu ppf cu =
   let fld_ids =
     IdMap.fold (fun _ tdecl fld_ids ->
       match tdecl.t_def with
-      | FreeTypeDef -> fld_ids
+      | AliasTypeDef _ -> fld_ids
       | StructTypeDef fields ->
           IdMap.fold (fun id _ fld_ids -> IdSet.add id fld_ids) fields fld_ids
       | ADTypeDef _ -> fld_ids)

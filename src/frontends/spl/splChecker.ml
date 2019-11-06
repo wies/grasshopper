@@ -210,6 +210,8 @@ let resolve_names cu =
           let map1 = Ident (id, map_pos) in
           if IdMap.mem id cu.fun_decls
           then DestrApp (id, idx1, pos)
+          else if IdMap.mem id cu.pred_decls
+          then Read (PredApp (Pred id, [], map_pos), idx1, pos)
           else Read (map1, idx1, pos)
       | Read (map, idx, pos) ->
           Read (re locals tbl map, re locals tbl idx, pos)
