@@ -518,7 +518,7 @@ let infer_types cu locals ty e =
     | PredApp (DisjointPred, es, pos) ->
       (match es with
         [e1; e2] ->
-          let e1, set_ty = it locals (SetType AnyRefType) e1 in
+          let e1, set_ty = it locals (SetType AnyType) e1 in
           let e2, _ = it locals set_ty e2 in
           PredApp (DisjointPred, [e1; e2], pos), match_types pos ty BoolType
       | _ -> pred_arg_mismatch_error pos ("Disjoint", 0) 2)
