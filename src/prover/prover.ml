@@ -1,3 +1,5 @@
+(** {5 Interface to prover backend} *)
+
 open Grass
 open GrassUtil
 open Util
@@ -34,30 +36,6 @@ let get_signature fs =
     SymbolMap.add (FreeSym ("inst-closure", 0)) inst_closure_variants |>
     SymbolMap.add Known known_variants
   else sign
-
-  
-let encode_labels fs =
-  let mk_label annots f = 
-    let lbls = 
-      Util.partial_map 
-        (function 
-          | Label (pol, t) ->
-              Some (if pol then Atom (t, []) else mk_not (Atom (t, [])))
-          | _ -> None)
-        annots
-    in
-    mk_and (f :: lbls)
-  in
-  let rec el = function
-    | Binder (b, vs, f, annots) ->
-        let f1 = el f in
-        mk_label annots (Binder (b, vs, f1, annots))
-    | (BoolOp (Not, [Atom (_, annots)]) as f)
-    | (Atom (_, annots) as f) ->
-        mk_label annots f
-    | BoolOp (op, fs) ->
-        BoolOp (op, List.map el fs)
-  in List.rev_map el fs
 
 let add_inst_closures fs gts =
   if not !Config.smtpatterns && !Config.instantiate then fs else
@@ -201,8 +179,7 @@ let flatten fs =
     
 (** Generate local instances of all axioms of [fs] in which variables occur below function symbols *)
 let instantiate_and_prove session fs =
-  let fs1 = encode_labels fs in
-  let signature = get_signature fs1 in
+  let signature = get_signature fs in
   let session = SmtLibSolver.declare session signature in
   let rename_forms fs =
     if !Config.named_assertions then
@@ -235,11 +212,11 @@ let instantiate_and_prove session fs =
         | _ -> gts)
       gts gts
   in
-  let fs1, generators = open_axioms isFunVar fs1 in
+  let fs1, generators = open_axioms isFunVar fs in
   let btwn_gen = btwn_field_generators fs in
   let gts = ground_terms ~include_atoms:true (mk_and fs) in
   (*let gts = generate_knowns gts in*)
-  let tgcode = EMatching.compile_term_generators_to_ematch_code (btwn_gen @ generators) in
+  let tgcode = EMatching.add_term_generators_to_ematch_code EMatching.empty (btwn_gen @ generators) in
   (*let _ =
     print_endline "Term Generator code:";
     EMatching.print_ematch_code pr_term_list stdout tgcode;
@@ -254,7 +231,7 @@ let instantiate_and_prove session fs =
     let _, cc_graph = EMatching.generate_terms_from_code tgcode cc_graph in
     let equations = List.filter (fun f -> is_horn false [f]) fs_inst in
     let ground_fs = List.filter is_ground fs_inst in
-    let code, patterns = EMatching.compile_axioms_to_ematch_code equations in
+    let code, patterns = EMatching.add_axioms_to_ematch_code EMatching.empty equations in
     let eqs = EMatching.instantiate_axioms_from_code patterns code cc_graph in
     let gts1 = ground_terms ~include_atoms:true (mk_and eqs) in
     let eqs1 = List.filter (fun f -> IdSet.is_empty (fv f)) eqs in
@@ -282,7 +259,7 @@ let instantiate_and_prove session fs =
     in
     let cc_graph = CongruenceClosure.add_terms core_terms cc_graph in
     let fs1 = linearize fs1 in
-    let code, patterns = EMatching.compile_axioms_to_ematch_code fs1 in
+    let code, patterns = EMatching.add_axioms_to_ematch_code EMatching.empty fs1 in
     (*let _ =
       print_endline "E-matching code:";
       EMatching.print_ematch_code
