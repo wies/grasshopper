@@ -752,6 +752,35 @@ let footprint_sorts_basic_cmd prog = function
       let decl = find_proc prog cc.call_name in
       List.fold_left (footprint_sorts_term_acc prog) (footprint_sorts_proc decl) cc.call_args
 
+let occuring_vars =
+  let rec ov vars = function
+    | Loop (lc, _) ->
+        let vars1 = ov vars lc.loop_prebody in
+        let vars2 = ov vars1 lc.loop_postbody in
+        let vars3 = free_consts_acc vars2 lc.loop_test in
+        List.fold_left (fun vars sf ->
+          fold_spec_form (free_consts_acc vars) (SlUtil.free_consts_acc vars) sf)
+          vars3 lc.loop_inv
+    | Seq (cc, _) | Choice (cc, _) ->
+        List.fold_left ov vars cc
+    | Basic (bc, _) -> match bc with
+      | Assign ac ->
+          let vars1 = List.fold_left free_consts_term_acc vars ac.assign_rhs in
+          List.fold_left (fun vars x -> IdSet.add x vars) vars1 ac.assign_lhs
+      | Havoc hc ->
+          List.fold_left (fun vars x -> IdSet.add x vars) vars hc.havoc_args
+      | New nc ->
+          List.fold_left free_consts_term_acc (IdSet.add nc.new_lhs vars) nc.new_args
+      | Dispose dc ->
+          free_consts_term_acc vars dc.dispose_arg
+      | Assume sf | Assert sf | Split sf ->
+          fold_spec_form (free_consts_acc vars) (SlUtil.free_consts_acc vars) sf
+      | Return rc ->
+          List.fold_left free_consts_term_acc vars rc.return_args
+      | Call cc ->
+          let vars1 = List.fold_left free_consts_term_acc vars cc.call_args in
+          List.fold_left (fun vars x -> IdSet.add x vars) vars1 cc.call_lhs
+  in ov IdSet.empty
         
 (** Smart constructors for commands *)
 
