@@ -730,10 +730,20 @@ let run ?(pr_tpl = (fun ppf _ -> ())) (code: 'a ematch_code) ccgraph : ('a, subs
   in
   run TermSet.empty [code]
 
-    
+
+type pattern_stats =
+    { matched_vars: IdSrtSet.t;
+      unmatched_vars: IdSet.t;
+      strat_vars: IdSrtSet.t;
+      fun_vars: IdSet.t;
+      fun_terms_with_filters: (term * filter list) list;
+    }
+
+type axiom_template = form * pattern_stats
+      
 (** Add [axioms] to the E-matching code tree [code]. *)
 let add_axioms_to_ematch_code ?(force=false) ?(stratify=(!Config.stratify)) code axioms :
-    (form * _) ematch_code * (form * _) pattern list = 
+    axiom_template ematch_code * axiom_template pattern list = 
   (* *)
   let epr_axioms, axioms = 
     List.partition 
@@ -832,12 +842,24 @@ let add_axioms_to_ematch_code ?(force=false) ?(stratify=(!Config.stratify)) code
         fun_terms []
     in
     let f = mk_forall (IdSrtSet.elements strat_vars1) f in
-    (f, (fvars0, strat_vars1, unmatched_vars, fun_vars, fun_terms_with_filters)), fun_terms_with_filters
+    let pattern_stats =
+      { matched_vars = fvars0;
+        unmatched_vars = unmatched_vars;
+        strat_vars = strat_vars1;
+        fun_vars = fun_vars;
+        fun_terms_with_filters = fun_terms_with_filters }
+    in  
+    (f, pattern_stats), fun_terms_with_filters
   in
   let patterns = [] in
   let patterns =
     List.fold_right
-      (fun f patterns -> ((f, (IdSrtSet.empty, IdSrtSet.empty, IdSet.empty, IdSet.empty, [])), []) :: patterns)
+      (fun f patterns -> ((f,
+                           { matched_vars = IdSrtSet.empty;
+                             unmatched_vars = IdSet.empty;
+                             strat_vars = IdSrtSet.empty;
+                             fun_vars = IdSet.empty;
+                             fun_terms_with_filters = []}), []) :: patterns)
       epr_axioms patterns
   in
   let patterns =
@@ -848,23 +870,23 @@ let add_axioms_to_ematch_code ?(force=false) ?(stratify=(!Config.stratify)) code
     
 (** Instantiate the axioms encoded in patterns [patterns] and code tree [code] for E-graph [ccgraph]. *)
 let instantiate_axioms_from_code patterns code ccgraph : form list =
-  let print_debug ((f, (fvars, strat_vars, unmatched_vars, fun_vars, fun_terms_with_filters)), subst_maps) =
+  let print_debug ((f, ap), subst_maps) =
     print_endline "--------------------";
     print_endline (string_of_form f);
     Printf.printf "all vars: ";
-    print_list stdout pr_ident (List.map fst (IdSrtSet.elements fvars));
+    print_list stdout pr_ident (List.map fst (IdSrtSet.elements ap.matched_vars));
     print_newline ();
     Printf.printf "strat vars: ";
-    print_list stdout pr_ident (List.map fst (IdSrtSet.elements strat_vars));
+    print_list stdout pr_ident (List.map fst (IdSrtSet.elements ap.strat_vars));
     print_newline ();
     Printf.printf "unmatched vars: ";
-    print_list stdout pr_ident (IdSet.elements unmatched_vars);
+    print_list stdout pr_ident (IdSet.elements ap.unmatched_vars);
     print_newline ();
     Printf.printf "inst vars: ";
-    print_list stdout pr_ident (IdSet.elements fun_vars);
+    print_list stdout pr_ident (IdSet.elements ap.fun_vars);
     print_newline ();
     Printf.printf "fun terms: ";
-    print_list stdout pr_term (List.map fst fun_terms_with_filters);
+    print_list stdout pr_term (List.map fst ap.fun_terms_with_filters);
     print_newline ();
     Printf.printf "# of insts: %d\n" (List.length subst_maps);
     print_endline "subst_maps:";
