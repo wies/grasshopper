@@ -1,5 +1,6 @@
 (** {5 Simplifications for verification condition generation} *)
 
+open Util
 open Grass
 open GrassUtil
 open Prog
@@ -478,22 +479,18 @@ let elim_state prog =
             List.fold_left 
               (fun sm1 sm2 -> 
                 IdMap.merge 
-                  (fun x -> function 
-                    | None -> (function 
-                        | None -> None
-                        | Some z -> Some z)
-                    | Some y -> (function
-                        | None -> Some y
-                        | Some z -> 
-                            let old_x = 
-                              try IdMap.find x sm with Not_found -> x 
-                            in 
-                            if y = old_x then Some z else Some y)
-                  )
-                  sm1 sm2
-              )
+                  (fun x oy oz -> match oy, oz with
+                  | Some y, Some z ->
+                      let old_x =
+                        IdMap.find_opt x sm |> Opt.get_or_else x 
+                      in
+                      if y = old_x then Some z else Some y
+                  | Some x, None -> Some x
+                  | None, Some y -> Some y
+                  | None, None -> None)
+                  sm1 sm2)              
               IdMap.empty sms
-          in          
+          in
           (* add missing equalities to commands cs according to joined substitution map *)
           let cs2 =
             List.fold_right2 (fun sm_c c cs2 ->
@@ -502,9 +499,9 @@ let elim_state prog =
                   (fun x eqs ->
                     let x_join = IdMap.find x sm_join in
                     let x_c = 
-                      try IdMap.find x sm_c with Not_found -> x
+                      IdMap.find_opt x sm_c |> Opt.get_or_else x
                     in
-                    if x_join  = x_c then eqs
+                    if x_join = x_c then eqs
                     else 
                       let x_decl = find_var prog proc x in
                       let x_srt = x_decl.var_sort in
@@ -762,6 +759,5 @@ let elim_state prog =
     { proc with proc_contract = contract; proc_body = body }
   in
   { prog with prog_procs = IdMap.map elim_proc prog.prog_procs }
-
 
 
