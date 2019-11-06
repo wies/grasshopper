@@ -488,7 +488,7 @@ let add_read_write_axioms fs =
   in
   let ccgraph = CongruenceClosure.congruence_classes gts fs in
   let _ =
-    let tgcode = EMatching.compile_term_generators_to_ematch_code generators in
+    let tgcode = EMatching.add_term_generators_to_ematch_code EMatching.empty generators in
     EMatching.generate_terms_from_code tgcode ccgraph
   in
   (* CAUTION: not forcing the instantiation here would yield an inconsistency with the read/write axioms *)
@@ -546,6 +546,29 @@ let add_array_axioms fs =
   let axioms = SortSet.fold (fun srt axioms -> Axioms.array_axioms srt @ axioms) srts [] in
   axioms @ fs
            
+(** Encode label annotations as propositional guards *)
+let encode_labels fs =
+  let mk_label annots f = 
+    let lbls = 
+      Util.partial_map 
+        (function 
+          | Label (pol, t) ->
+              Some (if pol then Atom (t, []) else mk_not (Atom (t, [])))
+          | _ -> None)
+        annots
+    in
+    mk_and (f :: lbls)
+  in
+  let rec el = function
+    | Binder (b, vs, f, annots) ->
+        let f1 = el f in
+        mk_label annots (Binder (b, vs, f1, annots))
+    | (BoolOp (Not, [Atom (_, annots)]) as f)
+    | (Atom (_, annots) as f) ->
+        mk_label annots f
+    | BoolOp (op, fs) ->
+        BoolOp (op, List.map el fs)
+  in List.rev_map el fs
        
 (** Reduces the given formula to the target theory fragment, as specified b the configuration. *)
 let reduce f =
@@ -558,7 +581,6 @@ let reduce f =
   (* some formula rewriting that helps the SMT solver *)
   let fs = massage_field_reads fs in
   let fs = simplify_sets fs in
-  let fs = pull_up_equalities fs in
   let fs = add_ep_axioms fs in
   let fs = add_frame_axioms fs in
   let fs = factorize_axioms (split_ands fs) in
@@ -568,9 +590,6 @@ let reduce f =
   let fs = add_array_axioms fs in
   let fs = if !Config.named_assertions then fs else List.map strip_names fs in
   let fs = fs |> split_ands in
-  (*let fs = add_terms fs gts in*)
-  (*let fs = encode_labels fs in*)
-  (*let fs = add_split_lemmas fs gts in*)
   let _ =
     if Debug.is_debug 1 then begin
       print_endline "VC before instantiation:";
@@ -578,4 +597,5 @@ let reduce f =
       print_newline ()
     end
   in
+  let fs = encode_labels fs in
   fs
