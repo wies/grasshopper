@@ -1,0 +1,266 @@
+/** Linked list implementation of the lock coupling template for linearizable dictionaries. */
+
+options "-abspreds -simplearrays -propreads -stratify"
+
+include "multiset-dom.spl"
+include "array_util.spl"
+
+/** Definition of a node */
+
+struct Node {
+  var data: K;
+  var next: Node;
+}
+
+define unchanged(x) {
+  x.data == old(x.data) && x.next == old(x.next)
+}
+
+
+/** Definition of heap representation, hrep */
+
+define hrepSpatial(x) {
+  acc(x)
+}
+
+define heapGood(x) {
+  x.next != x
+}
+
+function edgeFn(x: Node) returns (res: Map<Node, FlowDom>)
+  requires acc(x)
+{
+  { n1: Node ::
+      (n1 != x.next || n1 == null ? domZero :
+      { k: K :: lt(x.data, k) ? 1 : 0 @(noinst k)})
+  }
+}
+
+define hrep(x, I, C) {
+  hrepSpatial(x) &*& heapGood(x) &*& I.dom == {x} &*& C == {x.data}
+  &*& (forall k: K :: I.inf[x][k] == 1 || I.inf[x][k] == 0)
+  &*& (forall k: K :: le(x.data, k) ==> I.inf[x][k] == 1)
+  &*& I.out == edgeFn(x)
+  &*& (x.next == null && x.data == top 
+     || x.next != null && x.data != top)
+}
+
+// The good condition
+define searchStrInv(x, I, C) {
+    // Contents subsetof keyset
+    (forall k1: K :: k1 in C ==> I.inf[x][k1] >= 1)
+    && (forall k1: K, y: Node :: k1 !in C || I.out[y][k1] == 0)
+    // Edgesets are disjoint
+    && (forall k1: K, y: Node, z: Node :: y == z
+       || I.out[y][k1] == 0 || I.out[z][k1] == 0)
+}
+
+define node(x, I, C) {
+  hrep(x, I, C) &*& searchStrInv(x, I, C)
+}
+
+
+/** Begin programs */
+
+/*
+procedure int_of_node(p: Node, pinfLb: K) returns (Ip: Interface)
+  requires acc(p) &*& p.next != p &*& lt(pinfLb, p.data) &*& p.next != null &*& p.data != top
+  ensures hrep(p, Ip) &*& nu(p, Ip)
+{
+  var pinf := { x: Node :: x == p ? fd({ k: K :: lt(pinfLb, k) ? 1 : 0 }) : domZero };
+  Ip := int(pinf, nd({p.data}), fmap(p), {p});
+}
+ */
+
+/** findNext */
+procedure findNext(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
+  returns (n: Node)
+  requires node(x, Ix, C) &*& intValid(Ix)
+  ensures node(x, Ix, C)
+  ensures n != null ==> Ix.out[n][k] >= 1
+  ensures n == null ==> (forall y: Node :: Ix.out[y][k] == 0)
+{
+  if (x.next == null) {
+    return null;
+  } else {
+    if (le(k, x.data)) {
+      return null;
+    } else {
+      return x.next;
+    }
+  }
+}
+
+/** search */
+procedure search(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
+  returns (res: Bool, ghost Ix1: Interface, implicit ghost C1: Set<K>)
+  requires node(x, Ix, C) &*& intValid(Ix)
+  requires Ix.inf[x][k] == 1 && (forall y: Node :: Ix.out[y][k] == 0)
+  ensures node(x, Ix1, C1) &*& intLeq(Ix, Ix1)
+  // decisiveOpSpec(x, Ix1, res, k):
+  ensures (C1 == C && (res == k in C))
+{
+  if (k == x.data)
+    return true, Ix;
+  else
+    return false, Ix;
+}
+
+
+/** insert */
+procedure insert(p: Node, n: Node, k: K,
+                 Ip: Interface, In: Interface, Ipn: Interface,
+                 Cp: Set<K>, Cn: Set<K>, Cpn: Set<K>)
+  returns (res: Bool, Ip1: Interface, In1: Interface, Im1: Interface, Ipnm1: Interface, ghost m: Node,
+           implicit ghost Cp1: Set<K>, implicit ghost Cn1: Set<K>, implicit ghost Cm1: Set<K>,
+           implicit ghost Cpnm1: Set<K>
+  )
+  requires node(p, Ip, Cp) &*& node(n, In, Cn)
+  //requires intValid(Ip) &*& intValid(In) // is this needed?
+  requires Ipn == intComp(Ip, In) &*& intValid(Ipn)
+  requires Cpn == Cp ++ Cn
+  requires Ip.out[n][k] == 1
+  requires In.inf[n][k] == 1 && (forall y: Node :: In.out[y][k] == 0)
+  ensures res ==> node(p, Ip1, Cp1) &*& node(n, In1, Cn1) &*& node(m, Im1, Cm1)
+  ensures !res ==> node(p, Ip1, Cp1) &*& node(n, In1, Cn1) &*& Cm1 == {}
+  ensures intValid(Ip1) &*& intValid(In1) &*& intValid(Im1)
+  ensures Ipnm1 == intComp(Ip1, intComp(Im1, In1))
+  ensures intLeq(Ipn, Ipnm1)
+  ensures Cpnm1 == Cpn ++ Cn1 ++ Cm1;
+  // decisiveOpSpec(x, Ix1, res, k):
+  ensures (Cpnm1 == Cpn ++ {k} && (res == k !in Cpn))
+{
+  // Actual implementation
+  if (n.data == k) {
+    return false, Ip, In, intEmp, Ipn, null;
+  }
+
+  m := new Node;
+  pure assume n.next != m; // GC assumption
+  
+  m.data := k;
+  m.next := n;
+  p.next := m;  
+  res := true;
+
+  // Proof - not pretty but almost all of this is just manual expansion of definitions
+
+  // Define Ip1
+  Ip1 := int(Ip.inf, edgeFn(p), {p});
+  pure assert intValid(Ip1);
+  //assert node(p, Ip1, Cp) &*& acc(n) &*& acc(m);
+
+  pure assert Ip.out[m] == domZero;
+  
+  // Define Im1
+  ghost var minf1 := { n1: Node :: n1 == m ? { k1: K :: lt(p.data, k1) ? 1 : 0}: domZero };
+  Im1 := int(minf1, edgeFn(m), {m});
+  pure assert intValid(Im1);
+  //assert node(m, Im1, {k}) &*& acc(p) &*& acc(n);
+
+  // Define In1
+  ghost var ninf1 := { n1: Node :: n1 == n ? { k1: K :: In.inf[n][k1] == 1 && le(k1, p.data) || lt(k, k1) ? 1 : 0} : domZero };
+
+  In1 := int(ninf1, edgeFn(n), In.dom);
+  pure assert forall n1: Node, k1: K :: ninf1[n1][k1] >= 0 with {
+    pure assert n1 != n ==> ninf1[n1][k1] == 0;
+    if (n == n1 && In.inf[n][k1] == 1 && le(k1, p.data) || lt(k, k1)) {
+      pure assert ninf1[n][k1] == 1;
+    } else {
+      pure assert ninf1[n1][k1] == 0;
+    }
+  }
+  pure assert intValid(In1);
+  //assert node(n, In1, Cn) &*& acc(p) &*& acc(m);
+
+  // intComp(In1, Im1)
+  pure assert forall n1: Node, k1: K ::
+    n1 in In1.dom ==> In1.inf[n1][k1] == domPlus(Im1.out[n1], domMinus(In1.inf[n1], Im1.out[n1]))[k1]
+    with {
+      pure assert
+        In1.inf[n1][k1] == Im1.out[n1][k1] + (In1.inf[n1][k1] - Im1.out[n1][k1]);
+      pure assert In1.inf[n1][k1] == Im1.out[n1][k1] + domMinus(In1.inf[n1], Im1.out[n1])[k1];
+  }
+  pure assert forall n1: Node, k1: K ::
+    n1 in Im1.dom ==> Im1.inf[n1][k1] == domPlus(In1.out[n1], domMinus(Im1.inf[n1], In1.out[n1]))[k1]
+    with {
+      if (n1 == m) {
+        pure assert
+          Im1.inf[n1][k1] == In1.out[n1][k1] + (Im1.inf[n1][k1] - In1.out[n1][k1]);
+          pure assert Im1.inf[n1][k1] == In1.out[n1][k1] + domMinus(Im1.inf[n1], In1.out[n1])[k1];
+      }
+  }
+  lemma_int_comp_fold(Im1, In1);
+
+  // intComp(ip1, intComp(In1, Im1))
+  ghost var Inm1 := intComp(In1, Im1);
+  lemma_int_comp_unfold(In1, Im1);
+
+  pure assert forall n1: Node, k1: K ::
+    n1 in Ip1.dom ==> Ip1.inf[n1][k1] == domPlus(Inm1.out[n1], domMinus(Ip1.inf[n1], Inm1.out[n1]))[k1] with {
+      if (n1 == p) {
+        pure assert Inm1.out[n1][k1] == domPlus(In1.out[n1], Im1.out[n1])[k1];
+        pure assert Inm1.out[n1][k1] == In1.out[n1][k1] + Im1.out[n1][k1];
+        pure assert Ip1.inf[n1][k1] == Inm1.out[n1][k1] + (Ip1.inf[n1][k1] - Inm1.out[n1][k1]);
+        pure assert Ip1.inf[n1][k1] == Inm1.out[n1][k1] + domMinus(Ip1.inf[n1], Inm1.out[n1])[k1];
+      }
+  }
+    
+  pure assert "test3" forall n1: Node, k1: K ::
+    n1 in Inm1.dom ==> Inm1.inf[n1][k1] == domPlus(Ip1.out[n1], domMinus(Inm1.inf[n1], Ip1.out[n1]))[k1] with {
+      if (n1 in Inm1.dom) {
+        pure assert "test2" n1 == n ==> In1.inf[n1][k1] == domPlus(Inm1.inf[n1], Im1.out[n1])[k1];
+        pure assert "test2" n1 == m ==> Im1.inf[n1][k1] == domPlus(Inm1.inf[n1], In1.out[n1])[k1];
+        pure assert "test2" n1 == m ==> Im1.inf[n1][k1] == Inm1.inf[n1][k1] + In1.out[n1][k1];
+        pure assert "test3" Inm1.inf[n1][k1] == Ip1.out[n1][k1] + (Inm1.inf[n1][k1] - Ip1.out[n1][k1]);
+        pure assert "test3" Inm1.inf[n1][k1] == Ip1.out[n1][k1] + domMinus(Inm1.inf[n1], Ip1.out[n1])[k1];
+      }
+  }
+
+  lemma_int_comp_fold(Ip1, intComp(Im1, In1));
+
+  lemma_int_comp_unfold(Ip1, intComp(Im1, In1));
+
+  Ipnm1 := intComp(Ip1, intComp(Im1, In1));
+  
+  pure assert "test" intLeq(Ipn, Ipnm1) with {
+    lemma_int_comp_unfold(Ip, In);
+    pure assert "test1" (forall n1: Node, k1: K :: n1 in Ipn.dom ==> Ipn.inf[n1][k1] == Ipnm1.inf[n1][k1]) with {
+      if (n1 in Ipn.dom) {
+        pure assert "test1" n1 == p ==> Ip.inf[n1][k1] == domPlus(Ipn.inf[n1], In.out[n1])[k1];
+        pure assert "test1" n1 == p ==> Ip.inf[n1][k1] == Ipn.inf[n1][k1] + In.out[n1][k1];
+        pure assert "test1" n1 == n ==> In.inf[n1][k1] == domPlus(Ipn.inf[n1], Ip.out[n1])[k1];
+        pure assert "test1" n1 == n ==> In.inf[n1][k1] == Ipn.inf[n1][k1] + Ip.out[n1][k1];
+
+        pure assert "test1" n1 == n ==> In1.inf[n1][k1] == domPlus(Inm1.inf[n1], Im1.out[n1])[k1];
+        pure assert "test1" n1 == n ==> In1.inf[n1][k1] == Inm1.inf[n1][k1] + Im1.out[n1][k1];
+        pure assert "test1" n1 == n ==> Inm1.inf[n1][k1] == domPlus(Ipnm1.inf[n1], Ip1.out[n1])[k1];
+        pure assert "test1" n1 == n ==> Inm1.inf[n1][k1] == Ipnm1.inf[n1][k1] + Ip1.out[n1][k1];
+
+        pure assert "test1" n1 == p ==> Ip1.inf[n1][k1] == domPlus(Ipnm1.inf[n1], Inm1.out[n1])[k1];
+        pure assert "test1" n1 == p ==> Ip1.inf[n1][k1] == Ipnm1.inf[n1][k1] + Inm1.out[n1][k1];
+
+        pure assert "test4" Inm1.out[p][k1] == domPlus(In1.out[p], Im1.out[p])[k1];
+        pure assert "test4" Inm1.out[p][k1] == In1.out[p][k1] + Im1.out[p][k1];
+        
+        //pure assert "test4" n1 == n ==> Ipn.inf[n1][k1] == Ipnm1.inf[n1][k1];
+        //pure assert "test4" n1 == p ==> Ipn.inf[n1][k1] == Ipnm1.inf[n1][k1];
+      }
+    }
+
+    pure assert "test6" (forall n1: Node, k1: K :: n1 !in Ipn.dom ==> Ipn.out[n1][k1] == Ipnm1.out[n1][k1]) with {
+      if (n1 !in Ipn.dom) {
+        pure assert "test5" Ipn.out[n1][k1] == domPlus(Ip.out[n1], In.out[n1])[k1];
+        pure assert "test5" Ipn.out[n1][k1] == Ip.out[n1][k1] + In.out[n1][k1];
+
+        pure assert "test5" Inm1.out[m][k1] == 0;
+        pure assert "test5" n1 != m ==> Inm1.out[n1][k1] == domPlus(In1.out[n1], Im1.out[n1])[k1];
+        pure assert "test5" n1 != m ==> Inm1.out[n1][k1] == In1.out[n1][k1] + Im1.out[n1][k1];
+
+        pure assert "test6" n1 != m ==> Ipnm1.out[n1][k1] == domPlus(Ip1.out[n1], Inm1.out[n1])[k1];
+        pure assert "test6" n1 != m ==> Ipnm1.out[n1][k1] == Ip1.out[n1][k1] + Inm1.out[n1][k1];
+      }
+    }
+  }
+}
+
