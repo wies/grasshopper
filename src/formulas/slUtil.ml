@@ -178,7 +178,11 @@ let rec fold_terms fct acc f =
 
 let free_consts f =
   fold_terms GrassUtil.free_consts_term_acc IdSet.empty f
- 
+
+let free_consts_acc consts f =
+  fold_terms GrassUtil.free_consts_term_acc consts f
+
+    
 let rec fold_atoms fct acc f = 
   match f with
   | Binder (b, vs, f, _) -> fold_atoms fct acc f
