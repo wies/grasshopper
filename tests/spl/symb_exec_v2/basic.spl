@@ -1,0 +1,265 @@
+options "-symbexec-v2"
+
+procedure assign(x: Int, y: Int)
+  requires x == 0 && y == x
+  ensures x == 10 && y == 0
+{
+  x := 5;
+  x := 10;
+}
+
+procedure assign2(x: Int, y: Int)
+  requires x == 0 && y == 1
+  ensures x == 10 && y == 5
+{
+  x := 5;
+  y := 3;
+  x := x;
+  x := 10;
+  y := 5;
+  y := y;
+}
+
+struct Node {
+  var next: Node;
+}
+
+procedure lookup_heap(x: Node) returns (y: Node)
+  requires x.next |-> null
+  ensures x.next |-> y
+{
+ y := x.next;
+}
+
+procedure lookup_heap2(x: Node, y: Node, z: Node)
+  requires x.next |-> null &*& x == y &*& y == z
+  ensures x.next |-> null &*& y == null &*& x == z
+{
+ y := y.next;
+}
+
+procedure assign_heap(x: Node)
+  requires x.next |-> null
+  ensures x.next |-> x
+{
+  x.next := x;
+  x.next := null;
+  x.next := x;
+}
+
+procedure assign_heap2(x: Node, y: Node)
+  requires x.next |-> null &*& y.next |-> x
+  ensures x.next |-> x &*& y.next |-> null
+{
+  x.next := x;
+  x.next := null;
+  y.next := null;
+  x.next := x;
+}
+
+procedure assign_heap3(x: Node, y: Node)
+  requires x.next |-> null &*& y == x
+  ensures x.next |-> x
+{
+  y.next := x;
+}
+
+procedure assign_heap4(x: Node, y: Node)
+  requires x.next |-> y &*& x.next.next |-> null
+  ensures x.next |-> y &*& y.next |-> x
+{
+  y.next := x;
+}
+
+procedure assign_heap5(x: Node) returns (y: Node)
+  requires x.next |-> null
+  ensures x.next |-> y
+{
+  next := next[x := y];
+}
+
+procedure assign_lookup(x: Node, y: Node)
+  requires acc(x) &*& y.next |-> y
+  ensures x.next |-> y &*& y.next |-> y
+{
+  x.next := y.next;
+}
+
+procedure acc_to_ptsto(x: Node, y: Node)
+  requires acc(x) &*& acc(x.next) &*& x.next == y
+  ensures x.next |-> y &*& acc(y)
+{}
+
+procedure pure1(x: Int)
+  requires x == 0
+  ensures x == 10
+{
+  x := 2;
+  x := x + 5;
+  x := x + 3;
+}
+
+procedure pure2(x: Int, y: Int)
+  requires x == y
+  ensures x == y + 8
+{
+  x := x + 5;
+  x := x + 3;
+}
+
+procedure havoc1(x: Int, y: Int, z: Int)
+  requires y == x && z == x
+  ensures y == z
+{
+  havoc(x);
+}
+
+procedure if1(x: Int)
+  requires true
+  ensures x > 2
+{
+  if (x < 2) {
+    x := 3;
+  } else {
+    x := x + 1;
+  }
+}
+
+procedure if2(x: Node, y: Node)
+  requires acc(x) &*& acc(y)
+  ensures x.next |-> x &*& y.next |-> x
+{
+  if (x.next != x) {
+    x.next := x;
+  }
+  y.next := x;
+}
+
+
+struct DNode {
+  var data: Int;
+}
+
+procedure loop0(x: DNode)
+  requires x.data |-> 0
+  ensures x.data |-> 10
+{
+  var i := 1;
+  while (i < 11)
+    invariant x.data |-> i - 1 &*& i <= 11
+  {
+    x.data := i;
+    i := i + 1;
+  }
+}
+
+procedure loop1(x: Node)
+  requires x.next |-> x
+  ensures x.next |-> null
+{
+  var i := 0;
+  while (i < 10)
+    invariant acc(x) &*& (i > 6 ==> x.next == null)
+  {
+    if (i > 5) x.next := null;
+    i := i + 1;
+  }
+}
+
+procedure spatial_neq1(x: Node, y: Node)
+  requires acc(x) &*& acc(y)
+  ensures acc(x) &*& acc(y) &*& x != y
+{}
+
+predicate ls(x: Node)
+
+procedure spatial_neq2(x1: Node, x2: Node, x3: Node, x4: Node, x5: Node,
+                       x6: Node, x7: Node)
+  requires acc(x1) &*& (ls(x7) && acc(x2))
+  &*& ((acc(x3) &*& ls(x4)) && (ls(x6) &*& acc(x5)))
+  ensures acc(x1) &*& (ls(x7) && acc(x2))
+  &*& ((acc(x3) &*& ls(x4)) && (ls(x6) &*& acc(x5)))
+{
+  pure assert x1 != x5 && x2 != x3;
+}
+
+procedure assert1(x: Node, y: Node)
+  requires x.next |-> null &*& y.next |-> x
+  ensures x.next |-> x &*& y.next |-> null
+{
+  x.next := x;
+  assert x.next |-> x &*& y.next |-> x;
+  x.next := null;
+  assert x.next |-> null &*& y.next |-> x;
+  y.next := null;
+  pure assert x != y;
+  x.next := x;
+}
+
+procedure split1(x: Int, y: Int)
+  requires x == 0 && y == x
+  ensures x == 10 && y < x
+{
+  x := 5;
+  split 5 > y;
+  x := 10;
+}
+
+procedure split2(x: Node, y: Node)
+  requires x.next |-> null &*& y.next |-> x
+  ensures x.next |-> x &*& y.next |-> null
+{
+  x.next := x;
+  split x.next |-> x &*& y.next |-> x;
+  x.next := null;
+  split acc(x) &*& acc(y);
+  y.next := null;
+  pure assert x != y;
+  x.next := x;
+}
+
+procedure old1(x: Node, y: Node)
+  requires acc(x) &*& acc(y)
+  ensures x.next |-> old(y.next) &*& y.next |-> old(x.next)
+{
+  var z := x.next;
+  x.next := y.next;
+  y.next := z;
+}
+
+procedure old2(x: Node, y: Node)
+  requires x.next |-> null &*& y.next |-> x
+  ensures x.next |-> x &*& y.next |-> null
+{
+  old1(y, x);
+}
+
+lemma lemma_swap(x: Node, y: Node)
+  requires acc(x) &*& acc(y)
+  ensures x.next |-> old(y.next) &*& y.next |-> old(x.next)
+
+procedure old3(x: Node, y: Node)
+  requires x.next |-> null &*& y.next |-> x
+  ensures x.next |-> x &*& y.next |-> null
+{
+  lemma_swap(y, x);
+}
+
+
+/* Bugs to be fixed:
+
+// TODO fix this bug by also calling eval_term on loc at line 555.
+procedure boo(x: Node, y: Node)
+  requires x.next |-> y &*& y.next |-> null
+  ensures  x.next |-> y &*& y.next |-> x
+{
+  x.next.next := x;
+}
+
+// TODO fix this bug by subst_eqs while converting spec?
+procedure boo(x: Node, y: Node)
+  requires acc(x) &*& x == y &*& y.next == null
+  ensures acc(x)
+{}
+
+*/
