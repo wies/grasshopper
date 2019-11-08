@@ -1254,6 +1254,7 @@ let elim_sl prog =
                 { proc_contract = contract;
                   proc_body = Some (Seq ([], mk_ppoint pos));
                   proc_is_lemma = true;
+                  proc_is_auto = true;
                   proc_is_tailrec = false;
                   proc_deps = [];
                 }

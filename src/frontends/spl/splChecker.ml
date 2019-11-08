@@ -1063,7 +1063,7 @@ let infer_types cu =
           match pred.pr_outputs with
           | [res_id] ->
               (IdMap.find res_id pred.pr_locals).v_type
-          | _ -> PermType
+          | _ -> if pred.pr_is_pure then BoolType else PermType
         in
         let contracts =
           List.map (function

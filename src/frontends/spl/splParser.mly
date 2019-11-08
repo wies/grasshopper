@@ -65,7 +65,7 @@ type rhs_string_maybe =
 %token IF ELSE WHILE
 %token <bool> FUNCTION
 %token <bool> PREDICATE
-%token GHOST IMPLICIT VAR CONST STRUCT PURE LEMMA PROCEDURE INCLUDE OPTIONS AXIOM TYPE
+%token AUTO GHOST IMPLICIT VAR CONST STRUCT PURE LEMMA PROCEDURE INCLUDE OPTIONS AXIOM TYPE
 %token DEFINE DATATYPE OUTPUTS RETURNS REQUIRES ENSURES INVARIANT
 %token LOC INT BOOL BYTE SET MAP ARRAY ARRAYCELL
 %token MATCHING YIELDS WITHOUT WITH COMMENT PATTERN NOINST
@@ -187,7 +187,7 @@ proc_decl:
 
 proc_header:
 | proc_head {
-  let name, formals0, returns0, contracts, pos, is_lemma = $1 in
+  let name, formals0, returns0, contracts, pos, is_lemma, is_auto = $1 in
   let formals, locals0 =
     List.fold_right (fun decl (formals, locals0) ->
       decl.v_name :: formals, IdMap.add decl.v_name decl locals0)
@@ -205,6 +205,7 @@ proc_header:
       p_locals = locals;
       p_contracts = contracts;
       p_is_lemma = is_lemma;
+      p_is_auto = is_auto;
       p_body = Skip GrassUtil.dummy_position;
       p_pos = pos;
     }
@@ -215,12 +216,16 @@ proc_header:
 
 proc_head:
 | PROCEDURE IDENT LPAREN var_decls_with_modifiers RPAREN proc_returns contracts {
-  ($2, $4, $6, $7, mk_position 2 2, false)
+  ($2, $4, $6, $7, mk_position 2 2, false, false)
 }
-| LEMMA IDENT LPAREN var_decls_with_modifiers RPAREN proc_returns contracts {
-  ($2, $4, $6, $7, mk_position 2 2, true)
+| auto_opt LEMMA IDENT LPAREN var_decls_with_modifiers RPAREN proc_returns contracts {
+  ($3, $5, $7, $8, mk_position 3 3, true, $1)
 }
 ;
+
+auto_opt:
+| AUTO { true }
+| /* empty */ { false }
   
 contracts:
 | contract contracts { $1 :: $2 }

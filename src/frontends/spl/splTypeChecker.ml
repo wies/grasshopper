@@ -185,7 +185,9 @@ let type_of_expr cu locals e =
     | PredApp (Pred id, _, _) ->
         let decl = IdMap.find id cu.pred_decls in
         (match decl.pr_outputs with
-        | [] -> decl.pr_body |> Opt.map te |> Opt.get_or_else (if decl.pr_is_pure then BoolType else PermType)
+        | [] ->
+            let ty = decl.pr_body |> Opt.map te |> Opt.get_or_else (if decl.pr_is_pure then BoolType else PermType) in
+            ty
         | [rid] -> 
             let rdecl = IdMap.find rid decl.pr_locals in
             rdecl.v_type

@@ -16,6 +16,7 @@ let _ =
       ("ArrayCell", ARRAYCELL);
       ("assert", ASSERT);
       ("assume", ASSUME);
+      ("auto", AUTO);
       ("Bool", BOOL);
       ("Byte", BYTE);
       ("choose", CHOOSE);

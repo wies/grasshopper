@@ -163,6 +163,7 @@ let removeGhost cu =
       p_locals = IdMap.filter (fun _ v -> not v.v_ghost) proc.p_locals;
       p_contracts = [];
       p_is_lemma = false;
+      p_is_auto = false;
       p_body = process_stmt proc.p_name proc.p_body;
       p_pos = proc.p_pos;
     }

@@ -189,6 +189,7 @@ let elim_loops (prog : program) =
             proc_deps = [];
             proc_is_tailrec = true;
             proc_is_lemma = false;
+            proc_is_auto = false;
           } 
         in
         let call_loop =

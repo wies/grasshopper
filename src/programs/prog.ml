@@ -144,6 +144,7 @@ type proc_decl = {
     proc_deps: ident list; (** names of dependant procedures *)
     proc_is_tailrec: bool; (** whether the procedure is tail recursive *)
     proc_is_lemma: bool;  (** whether this procedure is a lemma *)
+    proc_is_auto: bool; (** whether this lemma should be automatically applied *)
   }
 
 (** Predicate declaration *)
@@ -241,6 +242,7 @@ let dummy_proc name =
     proc_deps = [];
     proc_is_tailrec = false;
     proc_is_lemma = false;
+    proc_is_auto = false;
   }
 
 let name_of_pred decl = decl.pred_contract.contr_name
@@ -1253,7 +1255,11 @@ let pr_proc ppf proc =
     then locals
     else (id, decl) :: locals) (locals_of_proc proc) []
   in
-  let intro = if proc.proc_is_lemma then "lemma" else "procedure" in
+  let intro =
+    if proc.proc_is_lemma then
+      if proc.proc_is_auto then "auto lemma" else "lemma"
+    else "procedure"
+  in
   let pr_returns ppf returns =
     if returns = [] then ()
     else fprintf ppf "@\nreturns (@[<0>%a@])" pr_id_srt_list (add_srts returns)

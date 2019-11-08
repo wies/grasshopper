@@ -35,7 +35,7 @@
 ))
 
 
-(defconst spl-defuns '("const" "define" "function" "predicate" "lemma" "procedure" "struct" "type" "datatype" 
+(defconst spl-defuns '("auto" "const" "define" "function" "predicate" "lemma" "procedure" "struct" "type" "datatype" 
                          "pure function" "pure predicate" "include" "options" "var"))
 
 (defconst spl-specifiers '("axiom" "ensures" "free" "invariant" "requires" "pure" "assert" "assume" "split" "returns"))

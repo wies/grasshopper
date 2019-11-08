@@ -31,7 +31,7 @@ let not_a_field_error id pos =
 
 let redeclaration_error id pos =
   ProgError.error pos ("Identifier " ^ GrassUtil.name id ^ " has already been declared in this scope.")
-
+    
 let illegal_side_effect_error pos source =
   ProgError.error pos ("Operations that may have side effects are not allowed in " ^ source)
 
