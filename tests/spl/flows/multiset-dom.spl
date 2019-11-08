@@ -15,7 +15,7 @@ function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 
 function domMinus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
 {
-  { k: K :: p1[k] >= p2[k] ? p1[k] - p2[k] : 0 }
+  { k: K :: p1[k] - p2[k] } //p1[k] >= p2[k] ? p1[k] - p2[k] : 0 }
 }
 
 function domZero() returns(p: FlowDom)
@@ -23,11 +23,11 @@ function domZero() returns(p: FlowDom)
   { k: K :: 0 }
 }
 
-define domValid(p) {
+pure predicate domValid(p: FlowDom) {
   forall k1: K :: p[k1] >= 0
 }
 
-/** Show that (FlowDom, domPlus, domZero) is a cancellative commutative monoid */
+/** Show that (FlowDom, domPlus, domMinus, domZero) is a cancellative commutative monoid */
 
 // domZero is unit of domPlus
 lemma domZero_unit(p: FlowDom)
@@ -70,9 +70,18 @@ lemma domPlus_canc(p1: FlowDom, p2: FlowDom, p3: FlowDom)
   }
 }
 
+// Validity is preserved by domPlus
+lemma domPlus_valid(p1: FlowDom, p2: FlowDom)
+  requires domValid(p1) && domValid(p2)
+  ensures domValid(domPlus(p1, p2))
+{
+  pure assert forall k: K :: domPlus(p1, p2)[k] >= 0 with {
+    pure assert p1[k] + p2[k] >= 0;
+  }
+}
+
 // domMinus is partial inverse of domPlus
 lemma domMinus_pinv(p1: FlowDom, p2: FlowDom)
-  requires domValid(p1) && domValid(p2)
   ensures domMinus(domPlus(p1, p2), p1) == p2 
 {
   pure assert forall k: K :: domMinus(domPlus(p1, p2), p1)[k] == p2[k] with {
@@ -81,55 +90,17 @@ lemma domMinus_pinv(p1: FlowDom, p2: FlowDom)
   }
 }
 
-/** Validity of interfaces */
-
-pure predicate intValid(I: Interface) {
-    // Inflow and outflow properly defined
-    (forall n: Node :: I.inf[n] != domZero ==> n in I.dom)
-  && (forall n: Node :: I.out[n] != domZero ==> n !in I.dom)
-    // Inflow and outflow are positive
-  && (forall x: Node, k1: K :: I.inf[x][k1] >= 0)
-  && (forall x: Node, k1: K :: I.out[x][k1] >= 0)
-  && I != intUndef
-}
-
-lemma intEmp_valid()
-  ensures intValid(intEmp)
-{
-}
-
-// No longer needed...
-lemma lemma_int_valid_unfold(I: Interface)
-  requires intValid(I)
-  ensures forall n: Node :: I.inf[n] != domZero ==> n in I.dom
-  ensures forall n: Node :: I.out[n] != domZero ==> n !in I.dom
-{
-}
-
-// Valid interfaces are not undefined
-axiom forall I: Interface :: intValid(I) ==> I != intUndef @(pattern intValid(I));
-
-// Defined compositions of valid interfaces are valid
-axiom forall I1: Interface, I2: Interface ::
-  intValid(I1) && intValid(I2) && intComp(I1, I2) != intUndef ==> intValid(intComp(I1, I2));
-
-// Compositions of invalid interfaces are undefined
-axiom forall I1: Interface, I2: Interface ::
-  (! intValid(I1) || ! intValid(I2)) ==> intComp(I1, I2) == intUndef;
-
 
 /** Lemmas needed by Coq */
 
 lemma flowint_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Node, k: K)
   requires I == intComp(I1, I2) && intValid(I)
-  requires forall n1: Node :: I.out[n1] == domZero
+  requires I.out[y] == domZero
   requires I1.out[y][k] >= 1
-  requires x in I1.dom
   ensures y in I2.dom
 {
   pure assert I1.out[y] != domZero;
   lemma_int_comp_unfold(I1, I2);
-  //lemma_int_valid_unfold(I1);
   if (y !in I.dom) {
     pure assert I.out[y] == domPlus(I1.out[y], I2.out[y]);
     pure assert I.out[y][k] == I1.out[y][k] + I2.out[y][k];

@@ -217,10 +217,10 @@ procedure insert(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
   requires node(x, Ix, C) &*& intValid(Ix)
   requires Ix.inf[x][k] == 1 && (forall y: Node :: Ix.out[y][k] == 0)
   ensures intLeq(Ix, Ix1)
-  ensures node(x, Ix1, C1) &*& intValid(Ix1)
+  ensures node(x, Ix1, C1)
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> res == k !in C && C1 == C ++ {k}
-  ensures !succ ==> C1 == C
+  //ensures !succ ==> C1 == C
 {
   keyset_implies_bucket(x, Ix, k, C);
 
@@ -245,6 +245,7 @@ procedure insert(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
     pure assert forall k1: K :: k1 in C ++ {k} ==> Ix1.inf[x][k1] >= 1 with {
       pure assert Ix1.inf[x][k] >= 1;
     }
+    pure assert intLeq(Ix, Ix1);
     return true, old_len != new_len, Ix1;
   } else {
     return false, false, Ix;

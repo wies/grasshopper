@@ -206,14 +206,14 @@ procedure insert(p: Node, n: Node, k: K,
       }
   }
     
-  pure assert "test3" forall n1: Node, k1: K ::
+  pure assert forall n1: Node, k1: K ::
     n1 in Inm1.dom ==> Inm1.inf[n1][k1] == domPlus(Ip1.out[n1], domMinus(Inm1.inf[n1], Ip1.out[n1]))[k1] with {
       if (n1 in Inm1.dom) {
-        pure assert "test2" n1 == n ==> In1.inf[n1][k1] == domPlus(Inm1.inf[n1], Im1.out[n1])[k1];
-        pure assert "test2" n1 == m ==> Im1.inf[n1][k1] == domPlus(Inm1.inf[n1], In1.out[n1])[k1];
-        pure assert "test2" n1 == m ==> Im1.inf[n1][k1] == Inm1.inf[n1][k1] + In1.out[n1][k1];
-        pure assert "test3" Inm1.inf[n1][k1] == Ip1.out[n1][k1] + (Inm1.inf[n1][k1] - Ip1.out[n1][k1]);
-        pure assert "test3" Inm1.inf[n1][k1] == Ip1.out[n1][k1] + domMinus(Inm1.inf[n1], Ip1.out[n1])[k1];
+        pure assert n1 == n ==> In1.inf[n1][k1] == domPlus(Inm1.inf[n1], Im1.out[n1])[k1];
+        pure assert n1 == m ==> Im1.inf[n1][k1] == domPlus(Inm1.inf[n1], In1.out[n1])[k1];
+        pure assert n1 == m ==> Im1.inf[n1][k1] == Inm1.inf[n1][k1] + In1.out[n1][k1];
+        pure assert Inm1.inf[n1][k1] == Ip1.out[n1][k1] + (Inm1.inf[n1][k1] - Ip1.out[n1][k1]);
+        pure assert Inm1.inf[n1][k1] == Ip1.out[n1][k1] + domMinus(Inm1.inf[n1], Ip1.out[n1])[k1];
       }
   }
 
@@ -223,42 +223,40 @@ procedure insert(p: Node, n: Node, k: K,
 
   Ipnm1 := intComp(Ip1, intComp(Im1, In1));
   
-  pure assert "test" intLeq(Ipn, Ipnm1) with {
+  pure assert intLeq(Ipn, Ipnm1) with {
     lemma_int_comp_unfold(Ip, In);
-    pure assert "test1" (forall n1: Node, k1: K :: n1 in Ipn.dom ==> Ipn.inf[n1][k1] == Ipnm1.inf[n1][k1]) with {
+    pure assert (forall n1: Node, k1: K :: n1 in Ipn.dom ==> Ipn.inf[n1][k1] == Ipnm1.inf[n1][k1]) with {
       if (n1 in Ipn.dom) {
-        pure assert "test1" n1 == p ==> Ip.inf[n1][k1] == domPlus(Ipn.inf[n1], In.out[n1])[k1];
-        pure assert "test1" n1 == p ==> Ip.inf[n1][k1] == Ipn.inf[n1][k1] + In.out[n1][k1];
-        pure assert "test1" n1 == n ==> In.inf[n1][k1] == domPlus(Ipn.inf[n1], Ip.out[n1])[k1];
-        pure assert "test1" n1 == n ==> In.inf[n1][k1] == Ipn.inf[n1][k1] + Ip.out[n1][k1];
+        pure assert n1 == p ==> Ip.inf[n1][k1] == domPlus(Ipn.inf[n1], In.out[n1])[k1];
+        pure assert n1 == p ==> Ip.inf[n1][k1] == Ipn.inf[n1][k1] + In.out[n1][k1];
+        pure assert n1 == n ==> In.inf[n1][k1] == domPlus(Ipn.inf[n1], Ip.out[n1])[k1];
+        pure assert n1 == n ==> In.inf[n1][k1] == Ipn.inf[n1][k1] + Ip.out[n1][k1];
 
-        pure assert "test1" n1 == n ==> In1.inf[n1][k1] == domPlus(Inm1.inf[n1], Im1.out[n1])[k1];
-        pure assert "test1" n1 == n ==> In1.inf[n1][k1] == Inm1.inf[n1][k1] + Im1.out[n1][k1];
-        pure assert "test1" n1 == n ==> Inm1.inf[n1][k1] == domPlus(Ipnm1.inf[n1], Ip1.out[n1])[k1];
-        pure assert "test1" n1 == n ==> Inm1.inf[n1][k1] == Ipnm1.inf[n1][k1] + Ip1.out[n1][k1];
+        pure assert n1 == n ==> In1.inf[n1][k1] == domPlus(Inm1.inf[n1], Im1.out[n1])[k1];
+        pure assert n1 == n ==> In1.inf[n1][k1] == Inm1.inf[n1][k1] + Im1.out[n1][k1];
+        pure assert n1 == n ==> Inm1.inf[n1][k1] == domPlus(Ipnm1.inf[n1], Ip1.out[n1])[k1];
+        pure assert n1 == n ==> Inm1.inf[n1][k1] == Ipnm1.inf[n1][k1] + Ip1.out[n1][k1];
 
-        pure assert "test1" n1 == p ==> Ip1.inf[n1][k1] == domPlus(Ipnm1.inf[n1], Inm1.out[n1])[k1];
-        pure assert "test1" n1 == p ==> Ip1.inf[n1][k1] == Ipnm1.inf[n1][k1] + Inm1.out[n1][k1];
+        pure assert n1 == p ==> Ip1.inf[n1][k1] == domPlus(Ipnm1.inf[n1], Inm1.out[n1])[k1];
+        pure assert n1 == p ==> Ip1.inf[n1][k1] == Ipnm1.inf[n1][k1] + Inm1.out[n1][k1];
 
-        pure assert "test4" Inm1.out[p][k1] == domPlus(In1.out[p], Im1.out[p])[k1];
-        pure assert "test4" Inm1.out[p][k1] == In1.out[p][k1] + Im1.out[p][k1];
+        pure assert Inm1.out[p][k1] == domPlus(In1.out[p], Im1.out[p])[k1];
+        pure assert Inm1.out[p][k1] == In1.out[p][k1] + Im1.out[p][k1];
         
-        //pure assert "test4" n1 == n ==> Ipn.inf[n1][k1] == Ipnm1.inf[n1][k1];
-        //pure assert "test4" n1 == p ==> Ipn.inf[n1][k1] == Ipnm1.inf[n1][k1];
       }
     }
 
-    pure assert "test6" (forall n1: Node, k1: K :: n1 !in Ipn.dom ==> Ipn.out[n1][k1] == Ipnm1.out[n1][k1]) with {
+    pure assert (forall n1: Node, k1: K :: n1 !in Ipn.dom ==> Ipn.out[n1][k1] == Ipnm1.out[n1][k1]) with {
       if (n1 !in Ipn.dom) {
-        pure assert "test5" Ipn.out[n1][k1] == domPlus(Ip.out[n1], In.out[n1])[k1];
-        pure assert "test5" Ipn.out[n1][k1] == Ip.out[n1][k1] + In.out[n1][k1];
+        pure assert Ipn.out[n1][k1] == domPlus(Ip.out[n1], In.out[n1])[k1];
+        pure assert Ipn.out[n1][k1] == Ip.out[n1][k1] + In.out[n1][k1];
 
-        pure assert "test5" Inm1.out[m][k1] == 0;
-        pure assert "test5" n1 != m ==> Inm1.out[n1][k1] == domPlus(In1.out[n1], Im1.out[n1])[k1];
-        pure assert "test5" n1 != m ==> Inm1.out[n1][k1] == In1.out[n1][k1] + Im1.out[n1][k1];
+        pure assert Inm1.out[m][k1] == 0;
+        pure assert n1 != m ==> Inm1.out[n1][k1] == domPlus(In1.out[n1], Im1.out[n1])[k1];
+        pure assert n1 != m ==> Inm1.out[n1][k1] == In1.out[n1][k1] + Im1.out[n1][k1];
 
-        pure assert "test6" n1 != m ==> Ipnm1.out[n1][k1] == domPlus(Ip1.out[n1], Inm1.out[n1])[k1];
-        pure assert "test6" n1 != m ==> Ipnm1.out[n1][k1] == Ip1.out[n1][k1] + Inm1.out[n1][k1];
+        pure assert n1 != m ==> Ipnm1.out[n1][k1] == domPlus(Ip1.out[n1], Inm1.out[n1])[k1];
+        pure assert n1 != m ==> Ipnm1.out[n1][k1] == Ip1.out[n1][k1] + Inm1.out[n1][k1];
       }
     }
   }

@@ -1,14 +1,14 @@
-/* -- Lemma library for flows. Independent of Flow domain. -- */
+/** Theory of flow interfaces - parametric in underlying CCM. */
 
 options "-simplearrays -propreads -abspreds -stratify"
+
+include "ccm.spl"
+
+/** Flow interfaces and related functions and lemmas */
 
 // The type of nodes
 type Node
 
-// The type of the flow domain
-type FlowDom
-  
-  
 // Flow Interfaces
 datatype Interface =
   int(inf: Map<Node, FlowDom>,
@@ -25,63 +25,208 @@ function zeroFlow() returns (f: Map<Node, FlowDom>) {
 function intEmp() returns (I: Interface) {
   int(zeroFlow, zeroFlow, {})
 }
-  
+
+pure predicate intValid(I: Interface) {
+  // Inflow and outflow properly defined
+    (forall n: Node :: I.inf[n] != domZero ==> n in I.dom)
+  && (forall n: Node :: I.out[n] != domZero ==> n !in I.dom)
+  // Inflow and outflow are valid
+  && (forall n in I.dom :: domValid(I.inf[n]))
+  && (forall n: Node :: n !in I.dom ==> domValid(I.out[n]))
+  && I != intUndef
+}
+
+// The empty interface is valid */
+lemma intEmp_valid()
+  ensures intValid(intEmp)
+{
+  domZero_valid();
+}
+
+// Condition ensuring that two flow interfaces compose
+pure predicate intComposable(I1: Interface, I2: Interface) {
+  intValid(I1) && intValid(I2) && Disjoint(I1.dom, I2.dom)
+  && (forall n in I1.dom :: I1.inf[n] == domPlus(I2.out[n], domMinus(I1.inf[n], I2.out[n])))
+  && (forall n in I2.dom :: I2.inf[n] == domPlus(I1.out[n], domMinus(I2.inf[n], I1.out[n])))
+  && (forall n in I1.dom :: domValid(domMinus(I1.inf[n], I2.out[n])))
+  && (forall n in I2.dom :: domValid(domMinus(I2.inf[n], I1.out[n])))
+}
+
 // Interface composition
 pure function intComp(I1: Interface, I2: Interface) returns (I: Interface)
-/*{
-  I1 == intUndef || I2 == intUndef || !(Disjoint(I1.dom, I2.dom))
-    || (exists n in I1.dom :: I1.inf[n] != domPlus(I2.out[n], domMinus(I1.inf[n], I2.out[n])))
-    || (exists n in I2.dom :: I2.inf[n] != domPlus(I1.out[n], domMinus(I2.inf[n], I1.out[n]))) ?
-    intUndef :
+{
+  intComposable(I1, I2) ?
     int({n: Node :: n in I1.dom ? domMinus(I1.inf[n], I2.out[n]) :
          (n in I2.dom ? domMinus(I2.inf[n], I1.out[n]) :
          domZero)},
       {n: Node :: n !in I1.dom && n !in I2.dom ? domPlus(I1.out[n], I2.out[n]) : domZero},
-      I1.dom ++ I2.dom)
-}*/
+      I1.dom ++ I2.dom) :
+    intUndef
+}
 
-axiom forall I: Interface, I1: Interface, I2: Interface :: I == intComp(I1, I2) && I != intUndef ==> I.dom == I1.dom ++ I2.dom
+// Domain of interface composition is union of its component domains
+auto lemma intComp_dom(I1: Interface, I2: Interface)
+  requires intComp(I1, I2) != intUndef
+  ensures intComp(I1, I2).dom == I1.dom ++ I2.dom
+{
+}
 
-axiom forall I: Interface, I1: Interface, I2: Interface :: I == intComp(I1, I2) && I != intUndef ==> Disjoint(I1.dom, I2.dom)
+// Domains of composit interfaces must be disjoint
+auto lemma intComp_disjoint(I1: Interface, I2: Interface)
+  requires intComp(I1, I2) != intUndef
+  ensures Disjoint(I1.dom, I2.dom)
+{
+}
+
+// Valid interfaces are defined
+auto lemma intValid_defined(I: Interface)
+  requires intValid(I)
+  ensures I != intUndef @(pattern intValid(I))
+{
+}
+
+// Defined compositions of valid interfaces are valid
+auto lemma intComp_valid(I1: Interface, I2: Interface)
+  requires intValid(I1) && intValid(I2) && intComp(I1, I2) != intUndef
+  ensures intValid(intComp(I1, I2))
+{
+  pure assert intComposable(I1, I2);
+  pure assert forall n: Node :: intComp(I1, I2).inf[n] != domZero ==> n in intComp(I1, I2).dom;
+  pure assert forall n: Node :: intComp(I1, I2).out[n] != domZero ==> n !in intComp(I1, I2).dom;
+  pure assert forall n: Node :: n in intComp(I1, I2).dom ==> domValid(intComp(I1, I2).inf[n]) with {
+    if (n in intComp(I1, I2).dom) {
+      pure assert n in I1.dom ==> intComp(I1, I2).inf[n] == domMinus(I1.inf[n], I2.out[n]);
+      pure assert n in I2.dom ==> intComp(I1, I2).inf[n] == domMinus(I2.inf[n], I1.out[n]);
+    }
+  }
+  pure assert forall n: Node :: n !in intComp(I1, I2).dom ==> domValid(intComp(I1, I2).out[n]) with {
+    domZero_valid();
+    domPlus_valid(I1.out[n], I2.out[n]);
+  }
+}
+
+// Compositions of invalid interfaces are invalid. Is this needed?
+//axiom forall I1: Interface, I2: Interface ::
+//(! intValid(I1) || ! intValid(I2)) ==> !(intValid(intComp(I1, I2)));
+
+// Interface composition is associative
+auto lemma intComp_assoc(I1: Interface, I2: Interface, I3: Interface)
+  ensures intComp(I1, intComp(I2, I3)) == intComp(intComp(I1, I2), I3)
+{
+  assume false; // TODO
+  if (intComposable(I2, I3)) {
+    //pure assert intComp(I2, I3) != intUndef;
+    if (intComposable(I1, intComp(I2, I3))) {
+      pure assert intComposable(I1, I2) with {
+        pure assert Disjoint(I1.dom, I2.dom);
+        pure assert forall n in I1.dom :: I1.inf[n] == domPlus(I2.out[n], domMinus(I1.inf[n], I2.out[n]));
+      }
+      
+      pure assert intComposable(I1, intComp(I2, I3)) with {
+      }
+    }
+  }
+}
+
+
+// Interface composition is commutative
+auto lemma intComp_comm(I1: Interface, I2: Interface)
+  ensures intComp(I1, I2) == intComp(I2, I1) @(matching intComp(I1, I2) yields intComp(I2, I1))
+{
+ if (intComposable(I1, I2)) {
+   pure assert intComposable(I2, I1);
+    
+   pure assert intComp(I1, I2).dom == intComp(I2, I1).dom;
+
+   pure assert intComp(I1, I2).inf == intComp(I2, I1).inf with {
+     pure assert forall n: Node :: intComp(I1, I2).inf[n] == intComp(I2, I1).inf[n] with {
+       pure assert n in I1.dom ==> intComp(I1, I2).inf[n] == domMinus(I1.inf[n], I2.out[n]);
+       pure assert n in I2.dom ==> intComp(I1, I2).inf[n] == domMinus(I2.inf[n], I1.out[n]);
+     }
+   }
+
+   pure assert forall n: Node :: intComp(I1, I2).out[n] == intComp(I2, I1).out[n] with {
+     domPlus_comm(I1.out[n], I2.out[n]);
+   }
+
+   pure assert intComp(I1, I2).out == intComp(I2, I1).out;
+ }
+}
+
+    
+// Composition of undef with anything is undef - needed?
+//axiom forall I1: Interface, I2: Interface ::
+//  intComp(I1, I2) != intUndef ==> (I1 != intUndef && I2 != intUndef);
+
+// The empty interface is the unit of interface composition
+auto lemma intComp_unit(I: Interface)
+  requires intValid(I);
+  ensures intComp(I, intEmp) == I
+{
+  pure assert forall n: Node :: n in I.dom ==> I.inf[n] == domPlus(intEmp.out[n], domMinus(I.inf[n], intEmp.out[n])) with {
+    domPlus_comm(intEmp.out[n], domMinus(I.inf[n], intEmp.out[n]));
+    domZero_unit(domMinus(I.inf[n], intEmp.out[n]));
+    domMinus_unit(I.inf[n]);
+  }
+  pure assert forall n: Node :: n in I.dom ==> domValid(domMinus(I.inf[n], intEmp.out[n])) with {
+    if (n in I.dom) {
+      domMinus_unit(I.inf[n]);
+    }
+  }
+  intEmp_valid();
+  pure assert intComposable(I, intEmp);
+  pure assert forall n: Node :: I.out[n] == domPlus(I.out[n], intEmp.out[n]) with {
+    domZero_unit(I.out[n]);
+  }
+  pure assert forall n: Node :: intComp(I, intEmp).out[n] == I.out[n] with {
+    pure assert intComp(I, intEmp).out[n] == domPlus(I.out[n], intEmp.out[n]);      
+  }
+  pure assert forall n: Node :: intComp(I, intEmp).inf[n] == I.inf[n] with {
+    domMinus_unit(I.inf[n]);
+    pure assert domMinus(I.inf[n], intEmp.out[n]) == I.inf[n];
+  }
+  pure assert intComp(I, intEmp).out == I.out;
+  pure assert intComp(I, intEmp).inf == I.inf;
+}
+    
+// Unfolds definition of interface composition, avoiding domMinus
+lemma lemma_int_comp_unfold(I1: Interface, I2: Interface)
+  requires intComp(I1, I2) != intUndef
+  ensures intComp(I1, I2).dom == I1.dom ++ I2.dom
+  ensures Disjoint(I1.dom, I2.dom)
+  ensures intValid(I1) && intValid(I2)
+  ensures forall n: Node :: n in I1.dom ==> I1.inf[n] == domPlus(intComp(I1, I2).inf[n], I2.out[n])
+  ensures forall n: Node :: n in I2.dom ==> I2.inf[n] == domPlus(intComp(I1, I2).inf[n], I1.out[n])
+  ensures forall n: Node :: n !in intComp(I1, I2).dom ==> intComp(I1, I2).out[n] = domPlus(I1.out[n], I2.out[n])
+{
+ pure assert forall n: Node :: n in I1.dom ==> I1.inf[n] == domPlus(intComp(I1, I2).inf[n], I2.out[n]) with {
+   if (n in I1.dom) {
+     pure assert intComp(I1, I2).inf[n] == domMinus(I1.inf[n], I2.out[n]);
+     pure assert I1.inf[n] == domPlus(I2.out[n], domMinus(I1.inf[n], I2.out[n]));
+     domPlus_comm(I2.out[n], domMinus(I1.inf[n], I2.out[n]));
+   }
+ }
+ pure assert forall n: Node :: n in I2.dom ==> I2.inf[n] == domPlus(intComp(I1, I2).inf[n], I1.out[n]) with {
+   if (n in I2.dom) {
+     pure assert intComp(I1, I2).inf[n] == domMinus(I2.inf[n], I1.out[n]);
+     pure assert I2.inf[n] == domPlus(I1.out[n], domMinus(I2.inf[n], I1.out[n]));
+     domPlus_comm(I1.out[n], domMinus(I2.inf[n], I1.out[n]));
+   }
+ }
+}
+  
+lemma lemma_int_comp_fold(I1: Interface, I2: Interface)
+  requires intComposable(I1, I2);
+  ensures intComp(I1, I2) != intUndef
+{
+}
 
 // Contextually extension of interfaces
 pure predicate intLeq(I1: Interface, I2: Interface) {
-  I1 != intUndef && I2 != intUndef &&
+  intValid(I1) && intValid(I2) &&
   I1.dom <= I2.dom
   && (forall x: Node :: x in I1.dom ==> I1.inf[x] == I2.inf[x]
      @(matching x yields I1.inf[x]) @(matching x yields I2.inf[x]))
   && (forall x: Node :: x !in I1.dom ==> I1.out[x] == I2.out[x]
      @(matching x yields I1.out[x]) @(matching x yields I2.out[x]))
 }
-
-// Associativity, commutativity, cancellativity of intComp
-axiom forall I1: Interface, I2: Interface, I3: Interface ::
-  intComp(I1, intComp(I2, I3)) == intComp(intComp(I1, I2), I3)
-axiom forall I1: Interface, I2: Interface ::
-  intComp(I1, I2) == intComp(I2, I1) @(matching intComp(I1, I2) yields intComp(I2, I1))
-
-// Composition of undef with anything is undef
-axiom forall I1: Interface, I2: Interface ::
-  intComp(I1, I2) != intUndef ==> (I1 != intUndef && I2 != intUndef);
-
-// The empty interface is the unit of interface composition
-axiom forall I: Interface :: intComp(I, intEmp) == I
-    
-// Unfolds definition of interface composition
-lemma lemma_int_comp_unfold(I1: Interface, I2: Interface)
-  requires intComp(I1, I2) != intUndef
-  ensures intComp(I1, I2).dom == I1.dom ++ I2.dom
-  ensures Disjoint(I1.dom, I2.dom)
-  ensures I1 != intUndef
-  ensures I2 != intUndef
-  ensures forall n: Node :: n in I1.dom ==> I1.inf[n] == domPlus(intComp(I1, I2).inf[n], I2.out[n])
-  ensures forall n: Node :: n in I2.dom ==> I2.inf[n] == domPlus(intComp(I1, I2).inf[n], I1.out[n])
-  ensures forall n: Node :: n !in intComp(I1, I2).dom ==> intComp(I1, I2).out[n] = domPlus(I1.out[n], I2.out[n])
-
-lemma lemma_int_comp_fold(I1: Interface, I2: Interface)
-  requires I1 != intUndef && I2 != intUndef
-  requires Disjoint(I1.dom, I2.dom)
-  requires forall n in I1.dom :: I1.inf[n] == domPlus(I2.out[n], domMinus(I1.inf[n], I2.out[n]))
-  requires forall n in I2.dom :: I2.inf[n] == domPlus(I1.out[n], domMinus(I2.inf[n], I1.out[n]))
-  ensures intComp(I1, I2) != intUndef
-   
