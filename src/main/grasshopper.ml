@@ -187,6 +187,43 @@ let check_spl_program spl_prog proc =
   let lemmas, procs = List.partition (fun proc -> proc.Prog.proc_is_lemma) sorted_procs in
   List.fold_left (check simple_prog) ([], true) (lemmas @ procs)
 
+let check_spl_program_v2 spl_prog proc =
+  let prog = SplTranslator.to_program spl_prog in
+  let procs =  (* Split proc string to get names of multiple procedures *)
+    match proc with
+    | Some p ->
+      p |> String.split_on_char ' '
+      |> List.fold_left (fun ps s -> IdSet.add (s, 0) ps) IdSet.empty
+    | None ->
+      IdMap.fold (fun id _ -> IdSet.add id) prog.prog_procs IdSet.empty
+  in
+  let simple_prog =
+    if !Config.symbexec
+    then SymbExec.simplify proc prog
+    else Verifier.simplify procs prog in
+  let debug_symb_exec_v2 simple_prog first proc =
+    let _ = if !Config.symbexec_v2 then
+      SymbState.exec simple_prog
+    in
+    true
+  in
+  let procs =
+    IdSet.fold (fun p procs ->
+      match Prog.find_proc_with_deps simple_prog p with
+      | [] ->
+        let available =
+          Prog.fold_procs
+            (fun acc proc ->
+              let name = Prog.name_of_proc proc in
+              "\t" ^ string_of_ident name ^ "\n" ^ acc)
+            "" prog
+        in
+        failwith ("Could not find a procedure named " ^ (string_of_ident p) ^
+                  ". Available procedures are:\n" ^ available)
+      | ps -> ps :: procs) procs []
+    |> List.concat |> List.sort_uniq compare
+  in
+  List.fold_left (debug_symb_exec_v2 simple_prog) true procs
 
 (** Get current time *)
 let current_time () =
@@ -231,6 +268,8 @@ let _ =
       if !Config.simplify then
         SplSyntax.print_cu stdout spl_prog
       else begin
+        (** TODO(eric): Remove this hack for testing symbState *)
+        let _ = check_spl_program_v2 spl_prog !Config.procedure in
         let _, res = check_spl_program spl_prog !Config.procedure in
         print_stats start_time; 
         print_c_program spl_prog;
@@ -251,4 +290,3 @@ let _ =
       print_stats start_time; 
       output_string stderr (ProgError.to_string e ^ "\n");
       exit 1
-	

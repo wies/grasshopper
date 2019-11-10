@@ -12,7 +12,7 @@ let simplify proc prog =
   Analyzer.infer_accesses true |>
   Simplifier.elim_loops |>
   Simplifier.elim_global_deps |>
-  dump_if 1 
+  dump_if 1
   
 exception NotYetImplemented
 let todo () = raise NotYetImplemented
