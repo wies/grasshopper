@@ -133,15 +133,15 @@ let check_spl_program spl_prog proc =
     else Verifier.simplify procs prog in
   let check_proc =
     if !Config.typeonly then
-      fun proc -> []
+      fun aux_axioms proc -> aux_axioms, []
     else if !Config.symbexec then
       SymbExec.check spl_prog simple_prog
     else
       Verifier.check_proc simple_prog
   in    
-  let check simple_prog first proc =
-    let errors = check_proc proc in
-    List.fold_left
+  let check simple_prog (aux_axioms, first) proc =
+    let aux_axioms, errors = check_proc aux_axioms proc in
+    aux_axioms, List.fold_left
       (fun first (pp, error_msg, model) ->
         if not !Config.symbexec then output_trace simple_prog proc (pp, model);
         let _ =
@@ -172,7 +172,20 @@ let check_spl_program spl_prog proc =
       | ps -> ps :: procs) procs []
     |> List.concat |> List.sort_uniq compare
   in
-  List.fold_left (check simple_prog) true procs
+  (* Do a topological sort of the call graph *)
+  let g = List.fold_left (fun g proc -> IdGraph.add_vertex g (Prog.name_of_proc proc)) IdGraph.empty procs in
+  let proc_ids = IdGraph.vertices g in
+  let g =
+    IdMap.fold
+      (fun id proc g ->
+        IdGraph.add_edges g id
+          (IdSet.inter proc_ids @@ Prog.accesses_proc prog proc))
+      prog.prog_procs g
+  in
+  let sccs = IdGraph.topsort g in
+  let sorted_procs = List.map (Prog.find_proc simple_prog) (List.flatten sccs) in
+  let lemmas, procs = List.partition (fun proc -> proc.Prog.proc_is_lemma) sorted_procs in
+  List.fold_left (check simple_prog) ([], true) (lemmas @ procs)
 
 
 (** Get current time *)
@@ -218,7 +231,7 @@ let _ =
       if !Config.simplify then
         SplSyntax.print_cu stdout spl_prog
       else begin
-        let res = check_spl_program spl_prog !Config.procedure in
+        let _, res = check_spl_program spl_prog !Config.procedure in
         print_stats start_time; 
         print_c_program spl_prog;
         if !Config.verify && res then

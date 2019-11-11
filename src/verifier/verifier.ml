@@ -543,7 +543,7 @@ let finalize_form prog f =
 (** Generate verification conditions for procedure [proc] of program [prog]. 
  ** Assumes that [proc] has been transformed into SSA form. *)
 let vcgen prog =
-  let axioms = 
+  let spec_forms_to_forms =
     Util.flat_map 
       (fun sf -> 
         let name = 
@@ -555,11 +555,39 @@ let vcgen prog =
             let f1 = f |> mk_name name in
             [f1]
         | SL _ -> [])
-      prog.prog_axioms
+  in
+  let axiom_from_lemma proc =
+    let locals = locals_of_proc proc in
+    let formals = formals_of_proc proc in
+    let returns = returns_of_proc proc in
+    let _ = assert (returns = []) in
+    let _name = name_of_proc proc in
+    let sorted_vs, sm =
+      List.fold_right
+        (fun id (sorted_vs, sm) ->
+          let var = IdMap.find id locals in
+          (id, var.var_sort) :: sorted_vs,
+          IdMap.add id (Var (id, var.var_sort)) sm
+        )
+        formals ([], IdMap.empty)
+    in
+    let pre_conds = spec_forms_to_forms (precond_of_proc proc) in
+    let post_conds = spec_forms_to_forms (postcond_of_proc proc) in
+    mk_forall sorted_vs (mk_sequent pre_conds [mk_and post_conds] |> subst_consts sm)
+  in
+  let assumed_auto_lemmas =
+    prog.prog_procs |>
+    IdMap.bindings |>
+    Util.filter_map (fun (_, proc) -> proc.proc_is_auto && proc.proc_body = None) snd
+  in
+  let axioms =
+    spec_forms_to_forms prog.prog_axioms
+    @
+      List.map axiom_from_lemma assumed_auto_lemmas
     @
       pred_axioms prog
   in
-  fun proc ->
+  fun aux_axioms proc ->
     let proc_name = name_of_proc proc in
     let rec vcs acc pre = function
       | Loop _ -> 
@@ -620,13 +648,20 @@ let vcgen prog =
               let vc = pre @ [mk_name name f] in
               let vc_and_preds = finalize_form prog (smk_and vc) in
               let labels, vc_and_preds = add_labels vc_and_preds in
-              (vc_name, vc_msg, smk_and (axioms @ [vc_and_preds]), labels) :: acc, []
+              (vc_name, vc_msg, smk_and (axioms @ aux_axioms @ [vc_and_preds]), labels) :: acc, []
           | _ -> 
               failwith "vcgen: found unexpected basic command that should have been desugared"
     in
+    let aux_axioms1 =
+      if proc.proc_is_auto then
+        [axiom_from_lemma proc]
+      else []
+        @ aux_axioms
+    in
     match proc.proc_body with
-    | Some body -> List.rev (fst (vcs [] [] body))
-    | None -> []
+    | Some body ->
+        aux_axioms1, List.rev (fst (vcs [] [] body))
+    | None -> aux_axioms1, []
 
 (** Generate error message from labels in the model *)
 let get_err_msg_from_labels model labels =
@@ -665,7 +700,7 @@ let get_err_msg_from_labels model labels =
 (** Generate verification conditions for procedure [proc] of program [prog] and check them. *)
 let check_proc prog =
   let vcgen = vcgen prog in
-  fun proc ->
+  fun aux_axioms proc ->
   let check_vc errors (vc_name, (vc_msg, pp), vc0, labels) =
     let check_one vc =
       let is_requested_assert =
@@ -698,8 +733,8 @@ let check_proc prog =
     "Checking " ^ (if proc.proc_is_lemma then "lemma " else "procedure ") ^
     string_of_ident (name_of_proc proc) ^ "...\n")
   in
-  let vcs = vcgen proc in
-  List.fold_left check_vc [] vcs
+  let aux_axioms, vcs = vcgen aux_axioms proc in
+  aux_axioms, List.fold_left check_vc [] vcs
 
 (** Generate a counterexample trace from a failed VC of procedure [proc] in [prog]. 
   * Here [pp] is the point of failure in [proc] and [model] is the counterexample model. *)

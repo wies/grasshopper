@@ -146,6 +146,7 @@ let infer_accesses abspred prog =
       | _ -> false, None, SortSet.empty
     in
     let fps =
+      if proc.proc_is_auto then SortSet.empty else 
       List.fold_left (footprint_sorts_spec_form_acc prog)
         body_fps (proc.proc_contract.contr_precond @ proc.proc_contract.contr_postcond)
     in

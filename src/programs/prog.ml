@@ -734,7 +734,8 @@ let footprint_sorts_spec_form_acc prog acc sf =
 
 let footprint_sorts_spec_form prog sf = footprint_sorts_spec_form_acc prog SortSet.empty sf
 
-let footprint_sorts_proc proc = proc.proc_contract.contr_footprint_sorts
+let footprint_sorts_proc proc =
+  proc.proc_contract.contr_footprint_sorts
     
 let footprint_sorts_basic_cmd prog = function
   | Assign ac -> 

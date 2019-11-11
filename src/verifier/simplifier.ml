@@ -22,7 +22,11 @@ let prune_uncalled init_procs prog =
     IdMap.filter (fun id _ -> IdSet.mem id accessed_with_implicit) prog.prog_preds
   in
   let pruned_procs =
-    IdMap.filter (fun id _ -> IdSet.mem id accessed_with_implicit) prog.prog_procs
+    prog.prog_procs |>
+    IdMap.filter (fun id decl -> decl.proc_is_auto || IdSet.mem id accessed_with_implicit) |>
+    IdMap.map (fun decl ->
+      if not (IdSet.mem (name_of_proc decl) init_procs) && decl.proc_is_auto
+      then { decl with proc_body = None } else decl)
   in
   { prog with
     prog_preds = pruned_preds;
@@ -38,7 +42,7 @@ let elim_loops (prog : program) =
       var_orig_name = name first_iter_id;
       var_sort = Bool;
       var_is_ghost = true;
-      var_is_implicit = false; 
+      var_is_implicit = false;
       var_is_aux  = true;
       var_pos = pos;
       var_scope = pos;

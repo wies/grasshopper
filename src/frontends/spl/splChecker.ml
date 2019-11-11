@@ -947,6 +947,7 @@ let infer_types cu =
   (* infer types within given statement *)
   let rec check_stmt proc =
     let locals = proc.p_locals in
+    let mk_pure pure = pure || proc.p_is_auto in
     function
     | Skip pos -> Skip pos
     | Block (stmts, pos) ->
@@ -954,8 +955,10 @@ let infer_types cu =
     | LocalVars (_, _, pos) ->
         failwith "infer_types: LocalVars should have been eliminated"
     | Assume (e, pure, pos) ->
+        let pure = mk_pure pure in
         Assume (check_spec locals pure e, pure, pos)
     | Assert (e, pure, name, pos) ->
+        let pure = mk_pure pure in
         Assert (check_spec locals pure e, pure, name, pos)
     | Split (e, pos) ->
         Split (check_spec locals false e, pos)
@@ -1034,6 +1037,7 @@ let infer_types cu =
         let inv1 = 
           List.map 
             (function Invariant (e, pure) ->
+              let pure = mk_pure pure in
               Invariant (check_spec locals pure e, pure))
             inv
         in
@@ -1089,11 +1093,14 @@ let infer_types cu =
   let procs =
     IdMap.fold
       (fun _ proc procs ->
+        let mk_pure pure = pure || proc.p_is_auto in
         let contracts =
           List.map (function
             | Requires (e, pure, free) ->
+                let pure = mk_pure pure in        
                 Requires (check_spec proc.p_locals pure e, pure, free)
             | Ensures (e, pure, free) ->
+                let pure = mk_pure pure in
                 Ensures (check_spec proc.p_locals pure e, pure, free)) proc.p_contracts
         in
         let body = check_stmt proc proc.p_body in

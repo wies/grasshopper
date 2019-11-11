@@ -1294,6 +1294,7 @@ let elim_sl prog =
   let preds, aux_lemmas = fold_preds translate_pred (IdMap.empty, []) prog in
   let prog = { prog with prog_preds = preds; prog_axioms = axioms } in
   let compile_proc proc =
+    if proc.proc_is_auto then proc else
     let proc_footprints = footprint_sorts_proc proc in
     let contract, footprint_sets, footprint_pre_context =
       translate_contract proc.proc_contract true proc.proc_is_tailrec false (modifies_proc prog proc)
@@ -1426,7 +1427,7 @@ let annotate_runtime_checks prog =
     | App (Read, map :: idx :: _, _) ->
         let acc1 =
           match sort_of map with
-          | Map (Loc _ :: _, _) -> TermSet.add idx acc
+          | Map (Loc _ :: _, _) when false (* FIXME *) -> TermSet.add idx acc
           | _ -> acc
         in
         checks (checks acc1 map) idx

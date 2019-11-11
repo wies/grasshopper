@@ -1211,7 +1211,8 @@ let rec symb_exec st postcond comms =
 
 
 (** Check procedure [proc] in program [prog] using symbolic execution. *)
-let check spl_prog prog proc =
+(* TODO: take care of aux_axioms *)
+let check spl_prog prog aux_axioms proc =
   Debug.info (fun () ->
       "Checking procedure " ^ string_of_ident (name_of_proc proc) ^ "...\n");
   (* Extract the list of field names from the spl_prog. *)
@@ -1235,7 +1236,7 @@ let check spl_prog prog proc =
         )}
     )
   in
-  match proc.proc_body with
+  let errors = match proc.proc_body with
   | Some comm ->
     let pre =
       try
@@ -1266,3 +1267,4 @@ let check spl_prog prog proc =
     | Error errs -> errs)
   | None ->
     []
+  in aux_axioms, errors
