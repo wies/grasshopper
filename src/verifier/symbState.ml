@@ -15,7 +15,7 @@ type symb_val =
 (** symbolic store maintains a mapping from grasshopper vars to symbolic vals
   ident -> symb_val . *)
 (* Note: adding sort so we can remember type when we sub in symbolic vals *)
-type symb_store = (ident * sort) IdMap.t
+type symb_store = symb_val IdMap.t
 let empty_store = IdMap.empty
 
 (** path condition (pc) stack
@@ -54,7 +54,10 @@ type symb_state = {
   }
 
 let mk_fresh_symb_state =
-  {store = empty_store; pc = []; heap = []; old = []}
+  {store = empty_store; pc=[]; heap=[]; old=[]}
+
+let mk_symb_state st =
+  {store=st; pc=[]; heap=[]; old=[]}
 
 (** Helpers to format prints *)
 let lineSep = "\n--------------------\n"
@@ -76,12 +79,8 @@ let string_of_symb_val_list vals =
   |> sprintf "[%s]"
 
 let string_of_symb_store s =
-  let string_of_ident_sort_pair p =
-    match p with
-    | (id, srt) -> (string_of_ident id) ^ ":" ^ (string_of_sort srt)
-  in
   IdMap.bindings s
-  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_ident_sort_pair v))
+  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_symb_val v))
   |> String.concat ", "
   |> sprintf "{%s}"
 
@@ -108,11 +107,13 @@ let string_of_pc_stack pc =
 let string_of_hc chunk =
   match chunk with
   | Obj ((id, srt), symb_fields) ->
-      sprintf "Obj(Id:%s, Sort:%s, Fields:%s)" (string_of_ident id) (string_of_sort srt) (string_of_symb_fields symb_fields)
-  | Pred (id, symb_vals) -> sprintf "Pred(Id:%s, Args:%s)" (string_of_ident id) (string_of_symb_val_list symb_vals)
+    sprintf "Obj(Id:%s, Sort:%s, Fields:%s)" (string_of_ident id)
+      (string_of_sort srt) (string_of_symb_fields symb_fields)
+  | Pred (id, symb_vals) -> sprintf "Pred(Id:%s, Args:%s)" (string_of_ident id)
+      (string_of_symb_val_list symb_vals)
 
 let string_of_heap h =
-  h 
+  h
   |> List.map (fun ele -> (string_of_hc ele))
   |> String.concat ", "
   |> sprintf "[%s]"
@@ -122,16 +123,30 @@ let string_of_state s =
   let pc = string_of_pc_stack s.pc in
   let heap = string_of_heap s.heap in
   let old = string_of_heap s.old in
-  sprintf "Store: %s\nPCStack: %s\nHeap: %s\nOld: %s" store pc heap old
+  sprintf "\n\tStore: %s,\n\tPCStack: %s\n\tHeap: %s\n\tOld: %s" store pc heap old
 
 (** Entry point for the symbexec engine *)
-let exec prog =
-  (* TODO build up state by iterating over procs *)
-  let exec_proc id proc =
-    Debug.debug(fun() ->
-      sprintf "%sProc Decl: %s\n"
-      lineSep (string_of_ident id)
-    );
-    pr_proc Format.std_formatter proc 
+let exec spl_prog prog proc =
+  Debug.info (fun () ->
+      "Checking procedure " ^ string_of_ident (name_of_proc proc) ^ "...\n");
+
+  (** Extract sorts of formal params and havoc them into the store. *)
+  let formals = proc.proc_contract.contr_formals in
+  let locs = proc.proc_contract.contr_locals in
+
+  (** create a map[id -> symb_val] from arg identifiers *)
+  let symbval_map_of_args args locals =
+    List.fold_left
+      (fun sm arg ->
+        let srt = IdMap.find arg locals in
+        IdMap.add arg (Term (mk_fresh_var srt.var_sort "v")) sm) 
+      empty_store args
   in
-  IdMap.iter exec_proc prog.prog_procs
+  let fresh_store = symb_val_map_of_args formals locs in
+
+  (** initialize state from symbolic store *)
+  let init_state = mk_symb_state fresh_store in
+  Debug.debug(fun() ->
+      sprintf "%sInitial State:\n{%s\n}\n\n"
+      lineSep (string_of_state init_state)
+  )

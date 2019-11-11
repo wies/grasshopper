@@ -187,6 +187,7 @@ let check_spl_program spl_prog proc =
   let lemmas, procs = List.partition (fun proc -> proc.Prog.proc_is_lemma) sorted_procs in
   List.fold_left (check simple_prog) ([], true) (lemmas @ procs)
 
+(** TODO(eric): remove me, hack for testing symbState funs *)
 let check_spl_program_v2 spl_prog proc =
   let prog = SplTranslator.to_program spl_prog in
   let procs =  (* Split proc string to get names of multiple procedures *)
@@ -198,12 +199,13 @@ let check_spl_program_v2 spl_prog proc =
       IdMap.fold (fun id _ -> IdSet.add id) prog.prog_procs IdSet.empty
   in
   let simple_prog =
-    if !Config.symbexec
+    if !Config.symbexec_v2
     then SymbExec.simplify proc prog
     else Verifier.simplify procs prog in
+  (** TODO(eric): Remove me, hack for testing only. *)
   let debug_symb_exec_v2 simple_prog first proc =
     let _ = if !Config.symbexec_v2 then
-      SymbState.exec simple_prog
+      SymbState.exec simple_prog prog proc
     in
     true
   in
