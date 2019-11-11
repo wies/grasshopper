@@ -37,7 +37,7 @@ pure predicate intValid(I: Interface) {
 }
 
 // The empty interface is valid */
-lemma intEmp_valid()
+auto lemma intEmp_valid()
   ensures intValid(intEmp)
 {
   domZero_valid();
@@ -113,13 +113,22 @@ auto lemma intComp_valid(I1: Interface, I2: Interface)
 auto lemma intComp_assoc(I1: Interface, I2: Interface, I3: Interface)
   ensures intComp(I1, intComp(I2, I3)) == intComp(intComp(I1, I2), I3)
 {
-  assume false; // TODO
+  assume false;
   if (intComposable(I2, I3)) {
     //pure assert intComp(I2, I3) != intUndef;
     if (intComposable(I1, intComp(I2, I3))) {
+      intComp_valid(I1, intComp(I2, I3));
       pure assert intComposable(I1, I2) with {
-        pure assert Disjoint(I1.dom, I2.dom);
-        pure assert forall n in I1.dom :: I1.inf[n] == domPlus(I2.out[n], domMinus(I1.inf[n], I2.out[n]));
+        pure assert "test" Disjoint(I1.dom, I2.dom);
+        pure assert "test" forall n: Node :: n in I1.dom ==> I1.inf[n] == domPlus(I2.out[n], domMinus(I1.inf[n], I2.out[n])) with {
+          if (n in I1.dom) {
+            pure assert "test2" I1.inf[n] == domPlus(intComp(I2, I3).out[n], domMinus(I1.inf[n], intComp(I2, I3).out[n]));
+            pure assert "test2" intComp(I2, I3).out[n] == domPlus(I2.out[n], I3.out[n]);
+            domMinus_distr(I1.inf[n], I2.out[n], I3.out[n]);
+            domPlus_assoc(I2.out[n], I3.out[n], domMinus(I1.inf[n], intComp(I2, I3).out[n]));
+            
+          }
+        }
       }
       
       pure assert intComposable(I1, intComp(I2, I3)) with {
@@ -133,24 +142,24 @@ auto lemma intComp_assoc(I1: Interface, I2: Interface, I3: Interface)
 auto lemma intComp_comm(I1: Interface, I2: Interface)
   ensures intComp(I1, I2) == intComp(I2, I1) @(matching intComp(I1, I2) yields intComp(I2, I1))
 {
- if (intComposable(I1, I2)) {
-   pure assert intComposable(I2, I1);
+  if (intComposable(I1, I2)) {
+    pure assert intComposable(I2, I1);
     
-   pure assert intComp(I1, I2).dom == intComp(I2, I1).dom;
+    pure assert intComp(I1, I2).dom == intComp(I2, I1).dom;
+    
+    pure assert intComp(I1, I2).inf == intComp(I2, I1).inf with {
+      pure assert forall n: Node :: intComp(I1, I2).inf[n] == intComp(I2, I1).inf[n] with {
+        pure assert n in I1.dom ==> intComp(I1, I2).inf[n] == domMinus(I1.inf[n], I2.out[n]);
+        pure assert n in I2.dom ==> intComp(I1, I2).inf[n] == domMinus(I2.inf[n], I1.out[n]);
+      }
+    }
 
-   pure assert intComp(I1, I2).inf == intComp(I2, I1).inf with {
-     pure assert forall n: Node :: intComp(I1, I2).inf[n] == intComp(I2, I1).inf[n] with {
-       pure assert n in I1.dom ==> intComp(I1, I2).inf[n] == domMinus(I1.inf[n], I2.out[n]);
-       pure assert n in I2.dom ==> intComp(I1, I2).inf[n] == domMinus(I2.inf[n], I1.out[n]);
-     }
-   }
-
-   pure assert forall n: Node :: intComp(I1, I2).out[n] == intComp(I2, I1).out[n] with {
-     domPlus_comm(I1.out[n], I2.out[n]);
-   }
-
-   pure assert intComp(I1, I2).out == intComp(I2, I1).out;
- }
+    pure assert forall n: Node :: intComp(I1, I2).out[n] == intComp(I2, I1).out[n] with {
+      domPlus_comm(I1.out[n], I2.out[n]);
+    }
+    
+    pure assert intComp(I1, I2).out == intComp(I2, I1).out;
+  }
 }
 
     
@@ -199,22 +208,22 @@ lemma lemma_int_comp_unfold(I1: Interface, I2: Interface)
   ensures forall n: Node :: n in I2.dom ==> I2.inf[n] == domPlus(intComp(I1, I2).inf[n], I1.out[n])
   ensures forall n: Node :: n !in intComp(I1, I2).dom ==> intComp(I1, I2).out[n] = domPlus(I1.out[n], I2.out[n])
 {
- pure assert forall n: Node :: n in I1.dom ==> I1.inf[n] == domPlus(intComp(I1, I2).inf[n], I2.out[n]) with {
-   if (n in I1.dom) {
-     pure assert intComp(I1, I2).inf[n] == domMinus(I1.inf[n], I2.out[n]);
-     pure assert I1.inf[n] == domPlus(I2.out[n], domMinus(I1.inf[n], I2.out[n]));
-     domPlus_comm(I2.out[n], domMinus(I1.inf[n], I2.out[n]));
-   }
- }
- pure assert forall n: Node :: n in I2.dom ==> I2.inf[n] == domPlus(intComp(I1, I2).inf[n], I1.out[n]) with {
-   if (n in I2.dom) {
-     pure assert intComp(I1, I2).inf[n] == domMinus(I2.inf[n], I1.out[n]);
-     pure assert I2.inf[n] == domPlus(I1.out[n], domMinus(I2.inf[n], I1.out[n]));
-     domPlus_comm(I1.out[n], domMinus(I2.inf[n], I1.out[n]));
-   }
- }
+  pure assert forall n: Node :: n in I1.dom ==> I1.inf[n] == domPlus(intComp(I1, I2).inf[n], I2.out[n]) with {
+    if (n in I1.dom) {
+      pure assert intComp(I1, I2).inf[n] == domMinus(I1.inf[n], I2.out[n]);
+      pure assert I1.inf[n] == domPlus(I2.out[n], domMinus(I1.inf[n], I2.out[n]));
+      domPlus_comm(I2.out[n], domMinus(I1.inf[n], I2.out[n]));
+    }
+  }
+  pure assert forall n: Node :: n in I2.dom ==> I2.inf[n] == domPlus(intComp(I1, I2).inf[n], I1.out[n]) with {
+    if (n in I2.dom) {
+      pure assert intComp(I1, I2).inf[n] == domMinus(I2.inf[n], I1.out[n]);
+      pure assert I2.inf[n] == domPlus(I1.out[n], domMinus(I2.inf[n], I1.out[n]));
+      domPlus_comm(I1.out[n], domMinus(I2.inf[n], I1.out[n]));
+    }
+  }
 }
-  
+
 lemma lemma_int_comp_fold(I1: Interface, I2: Interface)
   requires intComposable(I1, I2);
   ensures intComp(I1, I2) != intUndef

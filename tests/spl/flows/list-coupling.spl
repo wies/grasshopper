@@ -190,6 +190,23 @@ procedure insert(p: Node, n: Node, k: K,
           pure assert Im1.inf[n1][k1] == In1.out[n1][k1] + domMinus(Im1.inf[n1], In1.out[n1])[k1];
       }
   }
+
+  pure assert forall n1: Node :: n1 in Im1.dom ==> domValid(domMinus(Im1.inf[n1], In1.out[n1])) with {
+    if (n1 in Im1.dom) {
+      pure assert forall k: K :: domMinus(Im1.inf[n1], In1.out[n1])[k] >= 0 with {
+        pure assert Im1.inf[n1][k] -  In1.out[n1][k] >= 0;
+      }
+    }
+  }
+
+  pure assert forall n1: Node :: n1 in In1.dom ==> domValid(domMinus(In1.inf[n1], Im1.out[n1])) with {
+    if (n1 in In1.dom) {
+      pure assert forall k: K :: domMinus(In1.inf[n1], Im1.out[n1])[k] >= 0 with {
+        pure assert In1.inf[n1][k] - Im1.out[n1][k] >= 0;
+      }
+    }
+  }
+
   lemma_int_comp_fold(Im1, In1);
 
   // intComp(ip1, intComp(In1, Im1))
@@ -215,6 +232,28 @@ procedure insert(p: Node, n: Node, k: K,
         pure assert Inm1.inf[n1][k1] == Ip1.out[n1][k1] + (Inm1.inf[n1][k1] - Ip1.out[n1][k1]);
         pure assert Inm1.inf[n1][k1] == Ip1.out[n1][k1] + domMinus(Inm1.inf[n1], Ip1.out[n1])[k1];
       }
+  }
+
+  pure assert forall n1: Node :: n1 in Ip1.dom ==> domValid(domMinus(Ip1.inf[n1], Inm1.out[n1])) with {
+    if (n1 in Ip1.dom) {
+      pure assert forall k: K :: domMinus(Ip1.inf[n1], Inm1.out[n1])[k] >= 0 with {
+        pure assert Inm1.out[n1][k] == domPlus(Im1.out[n1], In1.out[n1])[k];
+        pure assert Inm1.out[n1][k] == Im1.out[n1][k] + In1.out[n1][k];
+        pure assert Ip1.inf[n1][k] - Inm1.out[n1][k] >= 0;
+      }
+    }
+  }
+
+  pure assert forall n1: Node :: n1 in Inm1.dom ==> domValid(domMinus(Inm1.inf[n1], Ip1.out[n1])) with {
+    if (n1 in Inm1.dom) {
+      pure assert forall k: K :: domMinus(Inm1.inf[n1], Ip1.out[n1])[k] >= 0 with {
+        pure assert n1 in In1.dom ==> In1.inf[n1][k] == domPlus(Inm1.inf[n1], Im1.out[n1])[k];
+        pure assert n1 in In1.dom ==> In1.inf[n1][k] == Inm1.inf[n1][k] + Im1.out[n1][k];
+        pure assert n1 in Im1.dom ==> Im1.inf[n1][k] == domPlus(Inm1.inf[n1], In1.out[n1])[k];
+        pure assert n1 in Im1.dom ==> Im1.inf[n1][k] == Inm1.inf[n1][k] + In1.out[n1][k];
+        pure assert Inm1.inf[n1][k] - Ip1.out[n1][k] >= 0;
+      }
+    }
   }
 
   lemma_int_comp_fold(Ip1, intComp(Im1, In1));

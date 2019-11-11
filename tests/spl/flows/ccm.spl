@@ -60,3 +60,9 @@ lemma domMinus_unit(p: FlowDom)
   domPlus_comm(domZero, p);
   domZero_unit(p);
 }
+
+lemma domMinus_distr1(p1: FlowDom, p2: FlowDom, p3: FlowDom)
+  ensures domPlus(p1, domMinus(p2, p3)) == domMinus(domPlus(p1, p2), p3) 
+
+lemma domMinus_distr(p1: FlowDom, p2: FlowDom, p3: FlowDom)
+  ensures domMinus(p1, domPlus(p2, p3)) == domMinus(domMinus(p1, p2), p3)
