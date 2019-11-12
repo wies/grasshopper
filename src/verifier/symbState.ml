@@ -12,22 +12,55 @@ type symb_val =
   | Term of term
   | Form of form
 
-(** symbolic store maintains a mapping from grasshopper vars to symbolic vals
+(** Symbolic store:
+  maintains a mapping from grasshopper vars to symbolic vals
   ident -> symb_val . *)
 (* Note: adding sort so we can remember type when we sub in symbolic vals *)
 type symb_store = symb_val IdMap.t
 let empty_store = IdMap.empty
 
+(** havoc a list of terms into a symbolic store *)
+let havoc_terms symb_store terms =
+  List.fold_left
+    (fun sm term ->
+      match term with
+      | App (_, _, _) -> failwith "tried to havoc a term that isn't a Var"
+      | Var (id, srt) -> IdMap.add id (Term (mk_fresh_var srt "v")) sm)
+    symb_store terms
+
 (** path condition (pc) stack
-  A sequence of scopes a tuple of (identifier of pc, scope identifier V, set[V])
-  set[V] is the set of path conditions.
-  Note: scope identifiers are used to label branch and path conds obtained from two
-  points of program execution.
+  A sequence of scopes a tuple of (scope id, branch condition, [V])
+  list[V] is the list of path conditions.
+  Note: scope identifiers are used to label branche conditions 
+    and path conds obtained from two points of program execution.
  *)
 
-(** path condition chunks are of shape (branch id, scope id, pc list)
+(** path condition chunks are of shape (scope id, branch cond, pc list)
  TODO: optimize symb_val list to use a set. *)
-type pc_stack = (ident * ident * symb_val list) list
+type pc_stack = (ident * symb_val * symb_val list) list
+
+let pc_add_path_cond pc_stack pc_val =
+  match pc_stack with
+  | [] -> failwith "tried to add path cond to an empty stack"  
+  | (sid, bc, pcs) :: stack' -> (sid, bc, pc_val :: pcs) :: stack'
+
+let pc_push_new pc_stack scope_id br_cond =
+  match pc_stack with
+  | [] -> [(scope_id, br_cond, [])] 
+  | stack -> (scope_id, br_cond, []) :: stack
+
+let rec pc_after pc_stack scope_id =
+  match pc_stack with
+  | [] -> []
+  | (sid, bc, pcs) :: stack' -> 
+        if sid = scope_id
+        then (sid, bc, pcs) :: pc_after stack' scope_id
+        else pc_after stack' scope_id
+
+let pc_collect_constr stack =
+  List.fold_left
+  (fun pclist (id, bc, pcs) -> bc :: (pcs @ pclist))
+  [] stack
 
 (** heap elements and symbolic heap
   The symbolic maintains a multiset of heap chunks which are
@@ -98,8 +131,8 @@ let string_of_symb_fields fields =
 
 let string_of_pc_stack pc =
   pc
-  |> List.map (fun (pc, scope_ident, vars) ->
-      "(" ^ (string_of_ident pc) ^ ", " ^ (string_of_ident scope_ident) ^ ", "
+  |> List.map (fun (pc, bc, vars) ->
+      "(" ^ (string_of_ident pc) ^ ", " ^ (string_of_symb_val bc) ^ ", "
       ^ (string_of_pcset vars) ^ ")")
   |> String.concat ", "
   |> sprintf "[%s]"
@@ -130,22 +163,17 @@ let exec spl_prog prog proc =
   Debug.info (fun () ->
       "Checking procedure " ^ string_of_ident (name_of_proc proc) ^ "...\n");
 
-  (** Extract sorts of formal params and havoc them into the store. *)
+  (** Extract sorts of formal params and havoc them into a fresh store. *)
   let formals = proc.proc_contract.contr_formals in
   let locs = proc.proc_contract.contr_locals in
-
-  (** create a map[id -> symb_val] from arg identifiers *)
-  let symbval_map_of_args args locals =
+  let formal_arg_terms =
     List.fold_left
-      (fun sm arg ->
-        let srt = IdMap.find arg locals in
-        IdMap.add arg (Term (mk_fresh_var srt.var_sort "v")) sm) 
-      empty_store args
+      (fun term_lst var ->
+        let srt = IdMap.find var locs in
+        Var (var, srt.var_sort) :: term_lst)
+      [] formals 
   in
-  let fresh_store = symbval_map_of_args formals locs in
-
-  (** initialize state from symbolic store *)
-  let init_state = mk_symb_state fresh_store in
+  let init_state = mk_symb_state (havoc_terms empty_store formal_arg_terms) in
   Debug.debug(fun() ->
       sprintf "%sInitial State:\n{%s\n}\n\n"
       lineSep (string_of_state init_state)
