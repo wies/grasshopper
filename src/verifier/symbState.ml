@@ -62,12 +62,34 @@ let pc_collect_constr stack =
   (fun pclist (id, bc, pcs) -> bc :: (pcs @ pclist))
   [] stack
 
+(** snapshot defintions *)
+type snap =
+  | Unit
+  | Snap of symb_val
+  | SnapPair of symb_val * symb_val
+
+let snap_pair s1 s2 = SnapPair (s1, s2)
+
+let snap_first s =
+  match s with
+  | Unit -> failwith "can't get first snapshot of unit snapshot" 
+  | Snap s -> Snap s
+  | SnapPair (s1, s2) -> Snap s1
+
+let snap_second s =
+  match s with
+  | Unit -> failwith "can't get second of unit snapshot"
+  | Snap s -> failwith "can't get second of single snapshot" 
+  | SnapPair (s1, s2) -> Snap s2
+
 (** heap elements and symbolic heap
   The symbolic maintains a multiset of heap chunks which are
-  of the form (obj, V, [Id -> V]) or predicate and list of args.
+  of the form obj(V, snap, [Id -> V]) or a predicate with an id
+  and list of args.
   *)
+
 type heap_chunk =
-  | Obj of (ident * sort) * symb_val IdMap.t
+  | Obj of (ident * sort) * snap * symb_val IdMap.t
   | Pred of ident * symb_val list
 
 type symb_heap = heap_chunk list
@@ -137,11 +159,18 @@ let string_of_pc_stack pc =
   |> String.concat ", "
   |> sprintf "[%s]"
 
+let string_of_snap s =
+  match s with
+  | Unit -> "unit"
+  | Snap ss -> string_of_symb_val ss 
+  | SnapPair (s1, s2) ->
+      sprintf "%s(%s)" (string_of_symb_val s1) (string_of_symb_val s2)
+
 let string_of_hc chunk =
   match chunk with
-  | Obj ((id, srt), symb_fields) ->
-    sprintf "Obj(Id:%s, Sort:%s, Fields:%s)" (string_of_ident id)
-      (string_of_sort srt) (string_of_symb_fields symb_fields)
+  | Obj ((id, srt), snap, symb_fields) ->
+    sprintf "Obj((Id:%s, Sort:%s), Snap:%s, Fields:%s)" (string_of_ident id)
+      (string_of_sort srt) (string_of_snap snap) (string_of_symb_fields symb_fields)
   | Pred (id, symb_vals) -> sprintf "Pred(Id:%s, Args:%s)" (string_of_ident id)
       (string_of_symb_val_list symb_vals)
 
