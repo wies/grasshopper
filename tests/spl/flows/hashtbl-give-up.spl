@@ -58,8 +58,8 @@ define hrep(x, I, C) {
         && (forall y: Node, k1: K :: x != y && y == x.bkts[hash(x, k1)] ==> I.out[y][k1] == I.inf[x][k1])
         && (forall y: Node, k1: K :: x == y || y != x.bkts[hash(x, k1)] ==> I.out[y][k1] == 0)
         && (forall k1: K :: 0 <= hash(x, k1) && hash(x, k1) < x.bkts.length)
-        && (forall k1: K :: I.inf[x][k1] == 1 /* && k in outset(x, I.fm)*/
-        && C == {}))
+        && (forall k1: K :: I.inf[x][k1] == 1) /* && k in outset(x, I.fm)*/
+        && (C == {}))
      || (x.typ == bucket
         && x.next != x
         // The keys are within the range

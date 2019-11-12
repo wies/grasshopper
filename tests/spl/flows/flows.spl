@@ -109,34 +109,66 @@ auto lemma intComp_valid(I1: Interface, I2: Interface)
 //axiom forall I1: Interface, I2: Interface ::
 //(! intValid(I1) || ! intValid(I2)) ==> !(intValid(intComp(I1, I2)));
 
-// Interface composition is associative
-auto lemma intComp_assoc(I1: Interface, I2: Interface, I3: Interface)
-  ensures intComp(I1, intComp(I2, I3)) == intComp(intComp(I1, I2), I3)
+// Folds definition of interface composition, avoiding domMinus
+lemma lemma_int_comp_fold_plus(I1: Interface, I2: Interface, I: Interface)
+  requires I != intUndef
+  requires I.dom == I1.dom ++ I2.dom
+  requires Disjoint(I1.dom, I2.dom)
+  requires intValid(I1) && intValid(I2)
+  requires forall n: Node :: n in I.dom ==> domValid(I.inf[n]);
+  requires forall n: Node :: n in I1.dom ==> I1.inf[n] == domPlus(I.inf[n], I2.out[n])
+  requires forall n: Node :: n in I2.dom ==> I2.inf[n] == domPlus(I.inf[n], I1.out[n])
+  requires forall n: Node :: n !in I.dom ==> I.inf[n] == domZero;
+  requires forall n: Node :: n !in I.dom ==> I.out[n] = domPlus(I1.out[n], I2.out[n])
+  requires forall n: Node :: n in I.dom ==> I.out[n] == domZero;
+  ensures intComp(I1, I2) == I
 {
-  assume false;
-  if (intComposable(I2, I3)) {
-    //pure assert intComp(I2, I3) != intUndef;
-    if (intComposable(I1, intComp(I2, I3))) {
-      intComp_valid(I1, intComp(I2, I3));
-      pure assert intComposable(I1, I2) with {
-        pure assert "test" Disjoint(I1.dom, I2.dom);
-        pure assert "test" forall n: Node :: n in I1.dom ==> I1.inf[n] == domPlus(I2.out[n], domMinus(I1.inf[n], I2.out[n])) with {
-          if (n in I1.dom) {
-            pure assert "test2" I1.inf[n] == domPlus(intComp(I2, I3).out[n], domMinus(I1.inf[n], intComp(I2, I3).out[n]));
-            pure assert "test2" intComp(I2, I3).out[n] == domPlus(I2.out[n], I3.out[n]);
-            domMinus_distr(I1.inf[n], I2.out[n], I3.out[n]);
-            domPlus_assoc(I2.out[n], I3.out[n], domMinus(I1.inf[n], intComp(I2, I3).out[n]));
-            
-          }
-        }
-      }
-      
-      pure assert intComposable(I1, intComp(I2, I3)) with {
-      }
+  pure assert (forall n: Node :: n in I1.dom ==> I.inf[n] == domMinus(I1.inf[n], I2.out[n])) with {
+    if (n in I1.dom) {
+      domMinus_plus(I1.inf[n], I.inf[n], I2.out[n]);
     }
   }
-}
+  pure assert (forall n: Node :: n in I1.dom ==> I1.inf[n] == domPlus(I2.out[n], domMinus(I1.inf[n], I2.out[n]))) with {
+    domPlus_comm(I.inf[n], I2.out[n]);
+  }
+  pure assert (forall n: Node :: n in I2.dom ==> I.inf[n] == domMinus(I2.inf[n], I1.out[n])) with {
+    if (n in I2.dom) {
+      domMinus_plus(I2.inf[n], I.inf[n], I1.out[n]);
+    }
+  }
+  pure assert (forall n: Node :: n in I2.dom ==> I2.inf[n] == domPlus(I1.out[n], domMinus(I2.inf[n], I1.out[n]))) with {
+    domPlus_comm(I.inf[n], I1.out[n]);
+  }
+  pure assert forall n: Node :: n in I1.dom ==> domValid(domMinus(I1.inf[n], I2.out[n])) with {
+    if (n in I1.dom) {
+      pure assert I.inf[n] == domMinus(I1.inf[n], I2.out[n]); // WTF?
+    }
+  }
+  pure assert forall n: Node :: n in I2.dom ==> domValid(domMinus(I2.inf[n], I1.out[n])) with {
+    if (n in I2.dom) {
+      pure assert I.inf[n] == domMinus(I2.inf[n], I1.out[n]); // WTF?
+    }
+  }
+  
+  pure assert intComposable(I1, I2);
 
+  pure assert I.dom == intComp(I1, I2).dom;
+  pure assert forall n: Node :: I.inf[n] == intComp(I1, I2).inf[n] with {
+    if (n in I1.dom) {
+      pure assert I.inf[n] == domMinus(I1.inf[n], I2.out[n]); // more WTF
+    }
+    if (n in I2.dom) {
+      pure assert I.inf[n] == domMinus(I2.inf[n], I1.out[n]);
+    }
+  }
+  pure assert I.inf == intComp(I1, I2).inf;
+  pure assert forall n: Node :: I.out[n] == intComp(I1, I2).out[n] with {
+    if (n !in I1.dom ++ I2.dom) {
+      pure assert I.out[n] == domPlus(I1.out[n], I2.out[n]);
+    }
+  }
+  pure assert I.out == intComp(I1, I2).out;
+}
 
 // Interface composition is commutative
 auto lemma intComp_comm(I1: Interface, I2: Interface)
@@ -162,6 +194,81 @@ auto lemma intComp_comm(I1: Interface, I2: Interface)
   }
 }
 
+// Auxiliary lemma to prove that interface composition is associative
+lemma intComp_assoc_aux(I1: Interface, I2: Interface, I3: Interface)
+  requires intComp(I1, intComp(I2, I3)) != intUndef
+  ensures intComp(I1, intComp(I2, I3)) == intComp(intComp(I1, I2), I3)
+{
+  var I23 := intComp(I2, I3);
+  var I := intComp(I1, I23);
+
+  pure assert intComposable(I1, I23);
+  pure assert intComposable(I2, I3);
+  intComp_valid(I1, I23);  // TODO: make sure that auto lemmas are proved _in the right order. Then this call is not needed.
+  
+  lemma_int_comp_unfold(I1, I23);
+  lemma_int_comp_unfold(I2, I3);
+
+  var I12 := int({ n: Node :: n in I1.dom ++ I2.dom ? domPlus(I.inf[n], I3.out[n]) : domZero },
+                 { n: Node :: n !in I1.dom ++ I2.dom ? domPlus(I1.out[n], I2.out[n]) : domZero },
+                 I1.dom ++ I2.dom);
+                 
+  pure assert forall n: Node :: n in I1.dom ==> I1.inf[n] == domPlus(I12.inf[n], I2.out[n]) with {
+    domPlus_assoc(I.inf[n], I3.out[n], I2.out[n]);
+    domPlus_comm(I2.out[n], I3.out[n]);
+    pure assert  n in I1.dom ==> I1.inf[n] == domPlus(I.inf[n], I23.out[n]);
+  }
+      
+  pure assert forall n: Node :: n in I2.dom ==> I2.inf[n] == domPlus(I12.inf[n], I1.out[n]) with {
+    pure assert n in I2.dom ==> I2.inf[n] == domPlus(I23.inf[n], I3.out[n]);
+    domPlus_assoc(I.inf[n], I1.out[n], I3.out[n]);
+    domPlus_comm(I1.out[n], I3.out[n]);
+    domPlus_assoc(I.inf[n], I3.out[n], I1.out[n]);
+  }
+
+  pure assert forall n: Node :: n in I12.dom ==> domValid(I12.inf[n]) with {
+    domZero_valid();
+    domPlus_valid(I.inf[n], I3.out[n]);
+  }
+  
+  lemma_int_comp_fold_plus(I1, I2, I12);
+  
+  pure assert forall n: Node :: n in I3.dom ==> I3.inf[n] == domPlus(I.inf[n], I12.out[n]) with {
+    if (n in I3.dom) {
+      pure assert I23.inf[n] == domPlus(I.inf[n], I1.out[n]);
+      domPlus_assoc(I.inf[n], I1.out[n], I2.out[n]);
+    }        
+  }
+  
+  pure assert forall n: Node :: n !in I.dom ==> I.out[n] = domPlus(I12.out[n], I3.out[n]) with {
+    if (n !in I.dom) {
+      pure assert I.out[n] == domPlus(I1.out[n], I23.out[n]);
+      domPlus_assoc(I1.out[n], I2.out[n], I3.out[n]);
+    }
+  }
+    
+  lemma_int_comp_fold_plus(I12, I3, I);
+}
+
+// Interface composition is associative
+auto lemma intComp_assoc(I1: Interface, I2: Interface, I3: Interface)
+  ensures intComp(I1, intComp(I2, I3)) == intComp(intComp(I1, I2), I3)
+{
+  var I12 := intComp(I1, I2);
+  var I23 := intComp(I2, I3);
+  var I1_23 := intComp(I1, I23);
+  var I12_3 := intComp(I12, I3);
+
+  if (I1_23 != intUndef) {
+    intComp_assoc_aux(I1, I2, I3);
+  } else if (I12_3 != intUndef) {
+    intComp_comm(I1, I2);
+    intComp_comm(I12, I3);
+    intComp_assoc_aux(I3, I2, I1);
+    intComp_comm(I3, I2);
+    intComp_comm(I23, I1);
+  }
+}
     
 // Composition of undef with anything is undef - needed?
 //axiom forall I1: Interface, I2: Interface ::
