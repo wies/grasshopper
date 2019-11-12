@@ -2,7 +2,7 @@
 
 options "-simplearrays -propreads -abspreds -stratify"
 
-include "multiset-dom.spl"
+include "multiset-flows.spl"
 include "array_util.spl"
 
 function edgeFn(x: Node, y: Node, p1: FlowDom)

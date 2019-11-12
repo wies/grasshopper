@@ -1,36 +1,34 @@
 /** Flow domain for multisets over some element type K */
 
-include "flows.spl"
-
 /** Flow domain definitions */
 
 type K
 
-type FlowDom = Map<K, Int>
+type Multiset = Map<K, Int>
 
-function domPlus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+function domPlus(p1: Multiset, p2: Multiset) returns (p: Multiset)
 {
   { k: K :: p1[k] + p2[k] }
 }
 
-function domMinus(p1: FlowDom, p2: FlowDom) returns (p: FlowDom)
+function domMinus(p1: Multiset, p2: Multiset) returns (p: Multiset)
 {
   { k: K :: p1[k] - p2[k] } //p1[k] >= p2[k] ? p1[k] - p2[k] : 0 }
 }
 
-function domZero() returns(p: FlowDom)
+function domZero() returns(p: Multiset)
 {
   { k: K :: 0 }
 }
 
-pure predicate domValid(p: FlowDom) {
+pure predicate domValid(p: Multiset) {
   forall k1: K :: p[k1] >= 0
 }
 
-/** Show that (FlowDom, domPlus, domMinus, domZero) is a cancellative commutative monoid */
+/** Show that (Multiset, domPlus, domMinus, domZero) is a cancellative commutative monoid */
 
 // domZero is unit of domPlus
-lemma domZero_unit(p: FlowDom)
+lemma domZero_unit(p: Multiset)
   ensures domPlus(p, domZero) == p
 {
  pure assert forall k: K :: domPlus(p, domZero)[k] == p[k] with {
@@ -39,7 +37,7 @@ lemma domZero_unit(p: FlowDom)
 }
 
 // domPlus is associative
-lemma domPlus_assoc(p1: FlowDom, p2: FlowDom, p3: FlowDom)
+lemma domPlus_assoc(p1: Multiset, p2: Multiset, p3: Multiset)
   ensures domPlus(p1, domPlus(p2, p3)) == domPlus(domPlus(p1, p2), p3)
 {
   pure assert forall k: K :: domPlus(p1, domPlus(p2, p3))[k] == domPlus(domPlus(p1, p2), p3)[k] with {
@@ -49,7 +47,7 @@ lemma domPlus_assoc(p1: FlowDom, p2: FlowDom, p3: FlowDom)
 }
 
 // domPlus is commutative
-lemma domPlus_comm(p1: FlowDom, p2: FlowDom)
+lemma domPlus_comm(p1: Multiset, p2: Multiset)
   ensures domPlus(p1, p2) == domPlus(p2, p1)
 {
   pure assert forall k: K :: domPlus(p1, p2)[k] == domPlus(p2, p1)[k] with {
@@ -58,7 +56,7 @@ lemma domPlus_comm(p1: FlowDom, p2: FlowDom)
 }
 
 // domPlus is cancellative
-lemma domPlus_canc(p1: FlowDom, p2: FlowDom, p3: FlowDom)
+lemma domPlus_canc(p1: Multiset, p2: Multiset, p3: Multiset)
   requires domPlus(p1, p2) == domPlus(p1, p3)
   ensures p2 == p3
 {
@@ -71,7 +69,7 @@ lemma domPlus_canc(p1: FlowDom, p2: FlowDom, p3: FlowDom)
 }
 
 // Validity is preserved by domPlus
-lemma domPlus_valid(p1: FlowDom, p2: FlowDom)
+lemma domPlus_valid(p1: Multiset, p2: Multiset)
   requires domValid(p1) && domValid(p2)
   ensures domValid(domPlus(p1, p2))
 {
@@ -81,28 +79,11 @@ lemma domPlus_valid(p1: FlowDom, p2: FlowDom)
 }
 
 // domMinus is partial inverse of domPlus
-lemma domMinus_pinv(p1: FlowDom, p2: FlowDom)
+lemma domMinus_pinv(p1: Multiset, p2: Multiset)
   ensures domMinus(domPlus(p1, p2), p1) == p2 
 {
   pure assert forall k: K :: domMinus(domPlus(p1, p2), p1)[k] == p2[k] with {
     pure assert (p1[k] + p2[k]) - p1[k] == p2[k];
     pure assert domPlus(p1, p2)[k] - p1[k] == p2[k];
-  }
-}
-
-
-/** Lemmas needed by Coq */
-
-lemma flowint_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Node, k: K)
-  requires I == intComp(I1, I2) && intValid(I)
-  requires I.out[y] == domZero
-  requires I1.out[y][k] >= 1
-  ensures y in I2.dom
-{
-  pure assert I1.out[y] != domZero;
-  lemma_int_comp_unfold(I1, I2);
-  if (y !in I.dom) {
-    pure assert I.out[y] == domPlus(I1.out[y], I2.out[y]);
-    pure assert I.out[y][k] == I1.out[y][k] + I2.out[y][k];
   }
 }

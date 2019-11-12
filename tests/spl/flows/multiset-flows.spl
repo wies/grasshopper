@@ -1,0 +1,22 @@
+/** Flow domain for multisets over some element type K */
+
+include "flows.spl"
+include "multiset-ccm.spl"
+
+type FlowDom = Multiset
+
+/** Lemmas needed by Coq */
+
+lemma flowint_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Node, k: K)
+  requires I == intComp(I1, I2) && intValid(I)
+  requires I.out[y] == domZero
+  requires I1.out[y][k] >= 1
+  ensures y in I2.dom
+{
+  pure assert I1.out[y] != domZero;
+  lemma_int_comp_unfold(I1, I2);
+  if (y !in I.dom) {
+    pure assert I.out[y] == domPlus(I1.out[y], I2.out[y]);
+    pure assert I.out[y][k] == I1.out[y][k] + I2.out[y][k];
+  }
+}

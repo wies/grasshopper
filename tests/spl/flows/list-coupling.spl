@@ -2,7 +2,7 @@
 
 options "-abspreds -simplearrays -propreads -stratify"
 
-include "multiset-dom.spl"
+include "multiset-flows.spl"
 include "array_util.spl"
 
 /** Definition of a node */
