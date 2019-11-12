@@ -142,7 +142,7 @@ let exec spl_prog prog proc =
         IdMap.add arg (Term (mk_fresh_var srt.var_sort "v")) sm) 
       empty_store args
   in
-  let fresh_store = symb_val_map_of_args formals locs in
+  let fresh_store = symbval_map_of_args formals locs in
 
   (** initialize state from symbolic store *)
   let init_state = mk_symb_state fresh_store in
