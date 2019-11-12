@@ -1427,7 +1427,7 @@ let annotate_runtime_checks prog =
     | App (Read, map :: idx :: _, _) ->
         let acc1 =
           match sort_of map with
-          | Map (Loc _ :: _, _) when false (* FIXME *) -> TermSet.add idx acc
+          | Map (Loc _ :: _, _) (* FIXME *) -> TermSet.add idx acc
           | _ -> acc
         in
         checks (checks acc1 map) idx
