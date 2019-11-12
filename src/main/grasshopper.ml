@@ -77,7 +77,7 @@ let parse_spl_program main_file =
           begin
             Debug.debug (fun () -> "parsing: " ^ file ^ "\n");
             let cu = 
-              try 
+              try
                 parse_cu (fun lexbuf -> SplParser.main SplLexer.token lexbuf) file 
               with Sys_error _ ->
                 ProgError.error pos ("Could not find file " ^ file)
@@ -92,7 +92,7 @@ let parse_spl_program main_file =
                 to_parse1
                 cu.SplSyntax.includes 
             in
-            parse parsed1 to_parse2 (SplSyntax.merge_spl_programs spl_prog cu)
+            parse parsed1 to_parse2 (SplSyntax.merge_spl_programs cu spl_prog)
           end
         else
           begin

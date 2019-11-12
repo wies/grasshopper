@@ -811,8 +811,34 @@ let pos_of_stmt = function
   | Loop (_, _, _, _, pos)
   | Return (_, pos) -> pos
 
-(** Check structural equality of expressions modulo source code positions *)
-let rec equal_expr e1 e2 =
+(** Check structural equality of types modulo type aliasing *)
+let rec equal_type cu ty1 ty2 =
+  match ty1, ty2 with
+  | IdentType id1, IdentType id2 when id1 <> id2 ->
+      (match resolve_type_alias cu id1, resolve_type_alias cu id2 with
+      | Some ty1, Some ty2 -> equal_type cu ty1 ty2
+      | None, Some ty2 -> equal_type cu ty1 ty2
+      | Some ty1, None -> equal_type cu ty1 ty2
+      | _ -> false)
+  | IdentType id, ty
+  | ty, IdentType id ->
+      (match resolve_type_alias cu id with
+      | Some aty ->
+          equal_type cu aty ty
+      | None ->
+          IdentType id = ty)
+  | MapType(ty11, ty12), MapType(ty21, ty22) ->
+      equal_type cu ty11 ty21 && equal_type cu ty12 ty22
+  | ArrayType ty11, ArrayType ty21
+  | ArrayCellType ty11, ArrayCellType ty21
+  | SetType ty11, SetType ty21 ->
+      equal_type cu ty11 ty21
+  | _, _ -> ty1 = ty2
+
+
+(** Check structural equality of expressions modulo source code positions / type aliasing *)
+let rec equal_expr cu e1 e2 =
+  let equal_expr = equal_expr cu in
   let forall f es1 es2 =
     try
       List.for_all2 f es1 es2
@@ -835,11 +861,12 @@ let rec equal_expr e1 e2 =
     | a1, a2 -> a1 = a2
   in
   match e1, e2 with
-  | Null (ty1, _), Null (ty2, _) -> ty1 = ty2
+  | Null (ty1, _), Null (ty2, _) ->
+      equal_type cu ty1 ty2
   | Emp _, Emp _ -> true
   | Setenum (ty1, es1, _), Setenum (ty2, es2, _)
   | New (ty1, es1, _), New (ty2, es2, _) ->
-      ty1 = ty2 && forall equal_expr es1 es2
+      equal_type cu ty1 ty2 && forall equal_expr es1 es2
   | IntVal (i1, _), IntVal (i2, _) ->
     i1 = i2
   | BoolVal (b1, _), BoolVal (b2, _) ->
@@ -867,32 +894,34 @@ let rec equal_expr e1 e2 =
   | UnaryOp (op1, e1, _), UnaryOp (op2, e2, _) ->
       op1 = op2 && equal_expr e1 e2
   | BinaryOp (e11, op1, e12, ty1, _), BinaryOp (e21, op2, e22, ty2, _) ->
-      op1 = op2 && ty1 = ty2 && equal_expr e11 e21 && equal_expr e12 e22
+      op1 = op2 &&
+      equal_type cu ty1 ty2 &&
+      equal_expr e11 e21 && equal_expr e12 e22
   | Annot (e1, a1, _), Annot (e2, a2, _) ->
       equal_expr e1 e2 && equal_annot a1 a2
   | _ -> false
 
-let equal_contract c1 c2 =
+let equal_contract cu c1 c2 =
   match c1, c2 with
   | Requires (e1, b11, b12), Requires (e2, b21, b22) 
   | Ensures (e1, b11, b12), Ensures (e2, b21, b22) ->
-      b11 = b21 && b12 = b22 && equal_expr e1 e2
+      b11 = b21 && b12 = b22 && equal_expr cu e1 e2
   | _ -> false
 
-let equal_contracts cs1 cs2 =
+let equal_contracts cu cs1 cs2 =
   try
-    List.for_all2 equal_contract cs1 cs2
+    List.for_all2 (equal_contract cu) cs1 cs2
   with _ -> false
 
-let equal_var v1 v2 =
+let equal_var cu v1 v2 =
   v1.v_name = v2.v_name &&
-  v1.v_type = v2.v_type &&
+  equal_type cu v1.v_type v2.v_type &&
   v1.v_aux = v2.v_aux &&
   v1.v_implicit = v2.v_implicit &&
   v1.v_ghost = v2.v_ghost
 
-let equal_vars vs1 vs2 =
-  IdMap.equal equal_var vs1 vs2
+let equal_vars cu vs1 vs2 =
+  IdMap.equal (equal_var cu) vs1 vs2
   
 let proc_decl hdr body =
   { hdr with p_body = body }
@@ -934,11 +963,11 @@ let extend_spl_program incls decls bg_th prog =
         IdMap.filter
           (fun id _ -> List.mem id (decl1.p_formals @ decl1.p_returns)) decl.p_locals
       in
-      if not (equal_vars decl1_locals decl2.p_locals) ||
+      if not (equal_vars prog decl1_locals decl2.p_locals) ||
       decl1.p_returns <> decl2.p_returns ||
       decl1.p_formals <> decl2.p_formals ||
       decl1.p_is_lemma <> decl2.p_is_lemma ||
-      not (equal_contracts decl1.p_contracts decl2.p_contracts)
+      not (equal_contracts prog decl1.p_contracts decl2.p_contracts)
       then inconsistent_redeclaration_error id pos
       else
         let decl1 = { decl1 with p_is_auto = decl1.p_is_auto || decl2.p_is_auto } in
@@ -957,11 +986,11 @@ let extend_spl_program incls decls bg_th prog =
       | None, Some _ -> decl2, decl
       | _ -> redeclaration_error id pos
       in
-      if not (equal_vars decl1.pr_locals decl2.pr_locals) ||
+      if not (equal_vars prog decl1.pr_locals decl2.pr_locals) ||
       decl1.pr_outputs <> decl2.pr_outputs ||
       decl1.pr_formals <> decl2.pr_formals ||
       decl1.pr_is_pure <> decl2.pr_is_pure ||
-      not (equal_contracts decl1.pr_contracts decl2.pr_contracts)
+      not (equal_contracts prog decl1.pr_contracts decl2.pr_contracts)
       then inconsistent_redeclaration_error id pos
       else 
         IdMap.add id decl1 prdecls) |>
@@ -970,8 +999,17 @@ let extend_spl_program incls decls bg_th prog =
   let tdecls, vdecls, pdecls, prdecls, mdecls =
     List.fold_left (fun (tdecls, vdecls, pdecls, prdecls, mdecls as decls) -> function
       | TypeDecl decl ->
-          IdMap.find_opt decl.t_name tdecls |>
-          Opt.iter (function { t_def = AliasTypeDef None; _ } -> () | _ -> redeclaration_error decl.t_name decl.t_pos);
+          let decl =
+            match decl, IdMap.find_opt decl.t_name tdecls with
+            | _, None -> decl
+            | { t_def = tdef; _ }, Some ({t_def = old_tdef } as old_decl) ->
+                match tdef, old_tdef with
+                | AliasTypeDef None, _ -> old_decl
+                | _, AliasTypeDef None -> decl
+                | AliasTypeDef (Some ty), AliasTypeDef (Some old_ty) ->
+                    if equal_type prog ty old_ty then old_decl else redeclaration_error decl.t_name decl.t_pos
+                | _ -> redeclaration_error decl.t_name decl.t_pos
+          in
           IdMap.add decl.t_name decl tdecls, vdecls, pdecls, prdecls, mdecls
       | VarDecl decl -> 
           check_uniqueness decl.v_name decl.v_pos decls;
