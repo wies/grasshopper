@@ -256,7 +256,8 @@ let add_generators prog aux_match f =
           match sort_of t, sort_of pt with
           | (Map _ | Adt _) as tsrt, Adt (tid, adts)
             when not @@ IdSet.mem tid seen_adts ->
-              let cstrs = List.assoc tid adts in
+              let cstrs =
+                List.assoc tid adts in
               let destrs = flat_map (fun (_, destrs) -> destrs) cstrs in
               let seen_adts1 = IdSet.add tid seen_adts in
               List.fold_left

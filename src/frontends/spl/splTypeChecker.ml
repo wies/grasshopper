@@ -31,13 +31,27 @@ let match_types cu pos oty1 oty2 =
         let dty = mt dty1 dty2 in
         let rty = mt rty1 rty2 in
         MapType (dty, rty)
-    | ty, tty when ty = tty -> ty2
-      | IdentType id1, ty2
-      | ty2, IdentType id1 ->
-        (match IdMap.find_opt id1 cu.type_decls with
-        | Some { t_def = AliasTypeDef (Some ty1); _} -> mt ty1 ty2
+    | IdentType id1, IdentType id2 when id1 <> id2 ->
+        (match resolve_type_alias cu id1, resolve_type_alias cu id2 with
+        | Some ty1, Some ty2 -> mt ty1 ty2
+        | Some ty1, None -> mt ty1 ty2
+        | None, Some ty2 -> mt ty1 ty2
         | _ -> type_error pos oty1 oty2)
-    | _ -> type_error pos oty1 oty2
+    | IdentType id1, ty2
+    | ty2, IdentType id1 ->
+        (match resolve_type_alias cu id1 with
+        | Some ty1 -> mt ty1 ty2
+        | _ ->
+            match ty2 with
+            | ADType id2 | IdentType id2 when id1 = id2 -> ty2
+            | _ ->
+                type_error pos oty1 oty2)
+    | ty, tty when ty = tty -> ty2
+    | _ ->
+        print_endline "error";
+        print_endline (string_of_type ty1);
+        print_endline (string_of_type ty2);
+        type_error pos oty1 oty2
   in mt oty1 oty2
 
 let merge_types cu pos oty1 oty2 =
@@ -67,13 +81,22 @@ let merge_types cu pos oty1 oty2 =
         let dty = mt dty1 dty2 in
         let rty = mt rty1 rty2 in
         MapType (dty, rty)
-    | ty, tty when ty = tty -> ty2
+    | IdentType id1, IdentType id2 when id1 <> id2 ->
+        (match resolve_type_alias cu id1, resolve_type_alias cu id2 with
+        | Some ty1, Some ty2 -> mt ty1 ty2
+        | Some ty1, None -> mt ty1 ty2
+        | None, Some ty2 -> mt ty1 ty2
+        | _ -> type_error pos oty1 oty2)
     | IdentType id1, ty2
     | ty2, IdentType id1 ->
-        (match IdMap.find_opt id1 cu.type_decls with
-        | Some { t_def = AliasTypeDef (Some ty1); _} ->
-            mt ty1 ty2
-        | _ -> type_error pos oty1 oty2)
+        (match resolve_type_alias cu id1 with
+        | Some ty1 -> mt ty1 ty2
+        | _ ->
+            match ty2 with
+            | ADType id2 | IdentType id2 when id1 = id2 -> ty2
+            | _ ->
+                type_error pos oty1 oty2)
+    | ty, tty when ty = tty -> ty2
     | _ -> type_error pos oty1 oty2
   in mt oty1 oty2
 

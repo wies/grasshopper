@@ -288,7 +288,7 @@ let _ =
       print_stats start_time; 
       print_endline "parse error"; 
       exit 1
-  | ProgError.Prog_error _ as e ->
+  | ProgError.Prog_error _ as e  ->
       print_stats start_time; 
       output_string stderr (ProgError.to_string e ^ "\n");
       exit 1

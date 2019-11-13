@@ -737,7 +737,7 @@ let resolve_type_alias cu id =
   match IdMap.find_opt id cu.type_decls with
   | Some { t_def = AliasTypeDef ty_opt } -> ty_opt
   | _ -> None
-    
+        
 (** General (id -> expr) substitution for expressions (not capture avoiding) *)
 let subst sm =
   let rec s bv = function
@@ -1004,7 +1004,8 @@ let extend_spl_program incls decls bg_th prog =
             | _, None -> decl
             | { t_def = tdef; _ }, Some ({t_def = old_tdef } as old_decl) ->
                 match tdef, old_tdef with
-                | AliasTypeDef None, _ -> old_decl
+                | AliasTypeDef None, _ ->
+                    old_decl
                 | _, AliasTypeDef None -> decl
                 | AliasTypeDef (Some ty), AliasTypeDef (Some old_ty) ->
                     if equal_type prog ty old_ty then old_decl else redeclaration_error decl.t_name decl.t_pos

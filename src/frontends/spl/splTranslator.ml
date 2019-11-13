@@ -114,6 +114,10 @@ let convert cu =
           (match IdMap.find_opt id cu.type_decls with
           | Some { t_def = AliasTypeDef (Some ty); _ } ->
               ct ty
+          | Some { t_def = ADTypeDef _; _ } ->
+              (match adt_defs with
+              | [] -> FreeSrt id
+              | _ -> Adt (id, adt_defs))
           | _ -> FreeSrt id)
       | StructType id -> Loc (FreeSrt id)
       | ADType id ->
@@ -143,7 +147,8 @@ let convert cu =
               cnsts
           in
           (id, cnsts) :: adt_defs
-      | _ -> adt_defs)
+      | _ ->
+          adt_defs)
       cu.type_decls []
   in
   let convert_type = convert_type adt_defs in
