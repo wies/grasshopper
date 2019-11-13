@@ -1,0 +1,115 @@
+/** Flow domain for pairs of multisets over some element type K */
+// TODO: Factor this out into a generic pair construction over CCMs
+
+/** Flow domain definitions */
+
+type K
+
+datatype MultiPair = pair(ks: Map<K, Int>, ir: Map<K, Int>)
+
+function domPlus(p1: MultiPair, p2: MultiPair) returns (p: MultiPair)
+{
+  pair({ k: K :: p1.ks[k] + p2.ks[k] }, { k: K :: p1.ir[k] + p2.ir[k] })
+}
+
+function domMinus(p1: MultiPair, p2: MultiPair) returns (p: MultiPair)
+{
+  pair({ k: K :: p1.ks[k] - p2.ks[k] }, { k: K :: p1.ir[k] - p2.ir[k] })
+}
+
+function domZero() returns(p: MultiPair)
+{
+  pair({ k: K :: 0 }, { k: K :: 0})
+}
+
+pure predicate domValid(p: MultiPair) {
+  forall k1: K :: p.ks[k1] >= 0 && p.ir[k1] >= 0
+}
+
+/** Show that (MultiPair, domPlus, domMinus, domZero) is a cancellative commutative monoid */
+
+// domZero is unit of domPlus
+lemma domZero_unit(p: MultiPair)
+  ensures domPlus(p, domZero) == p
+{
+ pure assert forall k: K :: domPlus(p, domZero).ks[k] == p.ks[k] with {
+   pure assert p.ks[k] + domZero.ks[k] == p.ks[k];
+ }
+
+ pure assert forall k: K :: domPlus(p, domZero).ir[k] == p.ir[k] with {
+   pure assert p.ir[k] + domZero.ir[k] == p.ir[k];
+ }
+}
+
+// domPlus is associative
+lemma domPlus_assoc(p1: MultiPair, p2: MultiPair, p3: MultiPair)
+  ensures domPlus(p1, domPlus(p2, p3)) == domPlus(domPlus(p1, p2), p3)
+{
+  pure assert forall k: K :: domPlus(p1, domPlus(p2, p3)).ks[k] == domPlus(domPlus(p1, p2), p3).ks[k] with {
+    pure assert p1.ks[k] + (p2.ks[k] + p3.ks[k]) == (p1.ks[k] + p2.ks[k]) + p3.ks[k];
+    pure assert p1.ks[k] + domPlus(p2, p3).ks[k] == domPlus(p1, p2).ks[k] + p3.ks[k];
+  }
+
+  pure assert forall k: K :: domPlus(p1, domPlus(p2, p3)).ir[k] == domPlus(domPlus(p1, p2), p3).ir[k] with {
+    pure assert p1.ir[k] + (p2.ir[k] + p3.ir[k]) == (p1.ir[k] + p2.ir[k]) + p3.ir[k];
+    pure assert p1.ir[k] + domPlus(p2, p3).ir[k] == domPlus(p1, p2).ir[k] + p3.ir[k];
+  }
+}
+
+// domPlus is commutative
+lemma domPlus_comm(p1: MultiPair, p2: MultiPair)
+  ensures domPlus(p1, p2) == domPlus(p2, p1)
+{
+  pure assert forall k: K :: domPlus(p1, p2).ks[k] == domPlus(p2, p1).ks[k] with {
+    pure assert p1.ks[k] + p2.ks[k] == p2.ks[k] + p1.ks[k];
+  }
+  pure assert forall k: K :: domPlus(p1, p2).ir[k] == domPlus(p2, p1).ir[k] with {
+    pure assert p1.ir[k] + p2.ir[k] == p2.ir[k] + p1.ir[k];
+  }
+}
+
+// domPlus is cancellative
+lemma domPlus_canc(p1: MultiPair, p2: MultiPair, p3: MultiPair)
+  requires domPlus(p1, p2) == domPlus(p1, p3)
+  ensures p2 == p3
+{
+  pure assert forall k: K :: p1.ks[k] + p2.ks[k] == p1.ks[k] + p3.ks[k] with {
+    pure assert domPlus(p1, p2).ks[k] == domPlus(p1, p3).ks[k];
+  }
+  pure assert forall k: K :: p2.ks[k] == p3.ks[k] with {
+    pure assert p1.ks[k] + p2.ks[k] == p1.ks[k] + p3.ks[k];
+  }
+  pure assert forall k: K :: p1.ir[k] + p2.ir[k] == p1.ir[k] + p3.ir[k] with {
+    pure assert domPlus(p1, p2).ir[k] == domPlus(p1, p3).ir[k];
+  }
+  pure assert forall k: K :: p2.ir[k] == p3.ir[k] with {
+    pure assert p1.ir[k] + p2.ir[k] == p1.ir[k] + p3.ir[k];
+  }
+}
+
+// Validity is preserved by domPlus
+lemma domPlus_valid(p1: MultiPair, p2: MultiPair)
+  requires domValid(p1) && domValid(p2)
+  ensures domValid(domPlus(p1, p2))
+{
+  pure assert forall k: K :: domPlus(p1, p2).ks[k] >= 0 with {
+    pure assert p1.ks[k] + p2.ks[k] >= 0;
+  }
+  pure assert forall k: K :: domPlus(p1, p2).ir[k] >= 0 with {
+    pure assert p1.ir[k] + p2.ir[k] >= 0;
+  }
+}
+
+// domMinus is partial inverse of domPlus
+lemma domMinus_pinv(p1: MultiPair, p2: MultiPair)
+  ensures domMinus(domPlus(p1, p2), p1) == p2 
+{
+  pure assert forall k: K :: domMinus(domPlus(p1, p2), p1).ks[k] == p2.ks[k] with {
+    pure assert (p1.ks[k] + p2.ks[k]) - p1.ks[k] == p2.ks[k];
+    pure assert domPlus(p1, p2).ks[k] - p1.ks[k] == p2.ks[k];
+  }
+  pure assert forall k: K :: domMinus(domPlus(p1, p2), p1).ir[k] == p2.ir[k] with {
+    pure assert (p1.ir[k] + p2.ir[k]) - p1.ir[k] == p2.ir[k];
+    pure assert domPlus(p1, p2).ir[k] - p1.ir[k] == p2.ir[k];
+  }
+}

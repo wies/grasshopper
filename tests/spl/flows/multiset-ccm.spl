@@ -13,7 +13,7 @@ function domPlus(p1: Multiset, p2: Multiset) returns (p: Multiset)
 
 function domMinus(p1: Multiset, p2: Multiset) returns (p: Multiset)
 {
-  { k: K :: p1[k] - p2[k] } //p1[k] >= p2[k] ? p1[k] - p2[k] : 0 }
+  { k: K :: p1[k] - p2[k] }
 }
 
 function domZero() returns(p: Multiset)

@@ -1,0 +1,293 @@
+/** Hash table implementation of the link template for linearizable dictionaries. */
+
+options "-simplearrays -propreads -abspreds -stratify"
+
+include "multipair-flows.spl"
+include "array_util.spl"
+
+
+//datatype InrFn = inrfnC(inrfn: Map<Node, Set<K>>, inrdom: Set<Node>) | inrfnUndef;
+  
+/** Definition of a node */
+
+datatype NodeType = root | bucket | nodeTop;
+
+struct Node {
+  var len: Int;
+  var bkts: Array<Node>;
+  var keys: Array<K>;
+  var next: Node;
+  ghost var typ: NodeType;
+}
+
+define unchanged(x) {
+  x.len == old(x.len) && x.bkts == old(x.bkts)
+    && x.keys == old(x.keys) && x.next == old(x.next) && x.typ == old(x.typ)
+    && x.bkts.length == old(x.bkts.length) && x.bkts.map == old(x.bkts.map)
+    && x.keys.length == old(x.keys.length) && x.keys.map == old(x.keys.map)
+}
+
+
+/** Definition of good condition, gamma */
+
+function hash(x: Node, k: K) returns (i: Int)
+
+// function flowmap(x: Node)
+//   returns (res: Map<Node,Map<Node, FlowDom>>)
+//   requires acc(x)
+// {
+//   { n: Node ::
+//     n == x ?
+//       (x.typ == root ?  // TODO ir component?
+//         { u: Node :: fd({ k: K :: u == x.bkts[hash(x, k)] ? 1 : 0 }, {k: K :: 0}) }
+//         : (x.next == null ? { u: Node :: domZero }
+//           : { u: Node :: fd({ k: K :: u == x.next ? 1 : 0 }, { k: K :: 0})}))
+//     : { u: Node :: domZero }
+//   }
+// }
+
+define hrepSpatial(x) {
+  acc(x) &*& acc(x.bkts)  &*& acc(x.keys)
+}
+
+define hrep(x, I, C) {
+  hrepSpatial(x) &*& I.dom == {x}
+  && 0 <= x.len < x.keys.length
+    && ((x.typ == root
+        && (forall i: Int :: 0 <= i && i < x.bkts.length ==> x.bkts[i] != null)
+        && (forall y: Node, k: K :: y == x.bkts[hash(x, k)] ==> I.out[y].ks[k] == 1)
+        && (forall k: K :: 0 <= hash(x, k) && hash(x, k) < x.bkts.length)
+        && (forall k: K :: I.inf[x].ks[k] == 1 /* && k in outset(x, I.out)*/)
+        && C == {})
+     || (x.typ == bucket
+     && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> lt(x.keys[i], x.keys[j]) @(noinst i) @(noinst j))
+        && C == set_of_map(x.keys.map, 0, x.len)
+        && (x.next == null && (forall y: Node :: I.out[y] == domZero)
+        || x.next != null && (forall k: K :: I.out[x.next].ks[k] == 1)
+          && (forall y: Node :: y != x.next ==> I.out[y] == domZero))))
+}
+
+// The good condition
+define searchStrInv(x, I, C) {
+    // Contents subsetof keyset
+    (forall k1: K :: k1 in C ==> I.inf[x].ks[k1] >= 1)
+    && (forall k1: K, y: Node :: k1 !in C || I.out[y].ks[k1] == 0)
+    // Edgesets are disjoint
+    && (forall k1: K, y: Node, z: Node :: y == z
+       || I.out[y].ks[k1] == 0 || I.out[z].ks[k1] == 0)
+    // Inreach keyset subsetof inset
+    //&& (forall k: K :: I.inf[x].ir[k] >= 1 && k !in I.na.outs
+    //   ==> I.inf[x].ks[k] >= 1)
+    // Inreach edgesets subsetof normal edgesets
+    && (forall k1: K, y: Node :: I.out[y].ir[k1] <= I.out[y].ks[k1])
+    // If k ∈ inreach, then inreach edgeset is same as normal edgeset (for step)
+    && (forall k1: K, y: Node :: I.inf[x].ir[k1] >= 1 && I.inf[x].ks[k1] <= 0
+       && I.out[y].ks[k1] >= 1 ==> I.out[y].ir[k1] >= 1)
+    // The node label stores the actual inreach
+    //&& I.na.inr.inrdom == {x}
+    //&& (forall k: K :: (k in I.na.inr.inrfn[x]) == (I.inf[x].ks[k] >= 1 || I.inf[x].ir[k] >= 1))
+}
+
+define node(x, I, C) {
+  hrep(x, I, C) &*& searchStrInv(x, I, C)
+}
+    
+lemma keyset_implies_bucket(x: Node, Ix: Interface, k: K, implicit ghost C: Set<K>)
+  requires hrep(x, Ix, C) &*& intValid(Ix)
+  requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.out[y].ks[k] == 0)
+  ensures hrep(x, Ix, C)
+  ensures x.typ == bucket
+{
+  if (x.typ == root) {
+    var y := x.bkts[hash(x, k)];
+    pure assert Ix.out[y].ks[k] == 1;
+  }
+}
+
+/*
+/** Lemmas needed by Coq */
+
+lemma inreach_impl_inset(n: Node, In: Interface, k: K)
+  requires k in In.na.inr.inrfn[n]
+  requires k !in In.na.outs && intValid(In) && In.dom == {n}
+  ensures In.inf[n].ks[k] > 0
+{
+  lemma_int_valid_unfold(n, In);
+  pure assert In.inf[n].ks[k] >= 1 || In.inf[n].ir[k] >= 1;
+}
+
+lemma flowint_inset_step(I: Interface, x: Node, Ix: Interface, y: Node, Iy: Interface, k: K)
+  requires Ix.dom == {x} && Iy.dom == {y} && I == intComp(Ix, Iy) && intValid(I)
+  requires Ix.inf[x].ks[k] >= 1 && Ix.out[x][y].ks[k] >= 1
+  ensures Iy.inf[y].ks[k] >= 1
+{
+  pure assert domMult(Ix.inf[x], Ix.out[x][y]).ks[k] == Ix.inf[x].ks[k] * Ix.out[x][y].ks[k]
+    && Ix.inf[x].ks[k] * Ix.out[x][y].ks[k] != 0;
+  pure assert !domEq(domMult(Ix.inf[x], Ix.out[x][y]), domZero());
+  lemma_acyclic_2(x, Ix, y, Iy);
+  lemma_int_comp_unfold(x, Ix, y, Iy, I);
+  lemma_int_valid_unfold_I(I);
+  pure assert Iy.inf[y].ks[k] == domPlus(I.inf[y], domMult(Ix.inf[x], Ix.out[x][y])).ks[k]
+    && domPlus(I.inf[y], domMult(Ix.inf[x], Ix.out[x][y])).ks[k]
+      == I.inf[y].ks[k] + domMult(Ix.inf[x], Ix.out[x][y]).ks[k]
+    && domMult(Ix.inf[x], Ix.out[x][y]).ks[k] == Ix.inf[x].ks[k] * Ix.out[x][y].ks[k];
+}
+
+lemma flowint_inreach_step(I: Interface, x: Node, Ix: Interface, y: Node, Iy: Interface, k: K)
+  requires Ix.dom == {x} && Iy.dom == {y} && I == intComp(Ix, Iy) && intValid(I)
+  requires k in Ix.na.inr.inrfn[x] && Ix.out[x][y].ks[k] >= 1
+  ensures k in Iy.na.inr.inrfn[y]
+{
+  lemma_int_valid_unfold(x, Ix);
+  lemma_int_valid_unfold(y, Iy);
+  lemma_int_valid_unfold_I(I);
+  
+  pure assert domMult(Ix.inf[x], Ix.out[x][y]).ks[k] == Ix.inf[x].ks[k] * Ix.out[x][y].ks[k]
+    &&  domMult(Ix.inf[x], Ix.out[x][y]).ir[k] == Ix.inf[x].ir[k] * Ix.out[x][y].ir[k]
+    && (Ix.inf[x].ks[k] * Ix.out[x][y].ks[k] != 0 || Ix.inf[x].ir[k] * Ix.out[x][y].ir[k] != 0) ;
+  pure assert !domEq(domMult(Ix.inf[x], Ix.out[x][y]), domZero());
+  lemma_acyclic_2(x, Ix, y, Iy);
+  lemma_int_comp_unfold(x, Ix, y, Iy, I);
+
+  pure assert Iy.inf[y].ks[k] == domPlus(I.inf[y], domMult(Ix.inf[x], Ix.out[x][y])).ks[k]
+    && domPlus(I.inf[y], domMult(Ix.inf[x], Ix.out[x][y])).ks[k]
+      == I.inf[y].ks[k] + domMult(Ix.inf[x], Ix.out[x][y]).ks[k]
+    && domMult(Ix.inf[x], Ix.out[x][y]).ks[k] == Ix.inf[x].ks[k] * Ix.out[x][y].ks[k];
+  pure assert Iy.inf[y].ir[k] == domPlus(I.inf[y], domMult(Ix.inf[x], Ix.out[x][y])).ir[k]
+    && domPlus(I.inf[y], domMult(Ix.inf[x], Ix.out[x][y])).ir[k]
+      == I.inf[y].ir[k] + domMult(Ix.inf[x], Ix.out[x][y]).ir[k]
+    && domMult(Ix.inf[x], Ix.out[x][y]).ir[k] == Ix.inf[x].ir[k] * Ix.out[x][y].ir[k];
+}
+
+lemma flowint_proj(I: Interface, x: Node, Ix: Interface, Iy: Interface, k: K)
+  requires I == intComp(Ix, Iy) && intValid(I) && x in Ix.dom
+  requires I.inf[x].ks[k] >= 1
+  ensures Ix.inf[x].ks[k] >= 1
+{
+  lemma_proj(x, Ix, Iy, I);
+}
+
+lemma flowint_cont(I: Interface, Im: Interface, I1: Interface, m: Node)
+  requires I1 == intComp(I, Im) && intValid(I1) && Im == newInt(m)
+  ensures I.na.contents == I1.na.contents
+{}
+
+lemma flowint_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Node, k: K)
+  requires I == intComp(I1, I2) && intValid(I) && x in I1.dom
+  requires forall n: Node, n1: Node :: domEq(I.out[n][n1], domZero)
+  requires I1.out[x][y].ks[k] >= 1
+  ensures y in I2.dom
+{
+  lemma_int_valid_unfold_I(I1);
+  lemma_step(I1, I2, I, x, y);
+}
+
+*/
+  
+/** Begin programs */
+
+/** findNext **/
+procedure findNext(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
+  returns (n: Node)
+  requires node(x, Ix, C) &*& intValid(Ix)
+  ensures node(x, Ix, C)
+  ensures (n != null && Ix.out[n].ks[k] >= 1
+           || n == null && (forall y: Node :: Ix.out[y].ks[k] == 0))
+{
+  if (x.typ == root) {
+    n := x.bkts[hash(x, k)];
+  } else {
+    pure assert x.typ == bucket;
+    if (x.next == null) {
+      return null;
+    } else {
+      return x.next;
+    }
+  }
+}
+
+/** search */
+procedure search(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
+  returns (succ: Bool, res: Bool, Ix1: Interface)
+  requires node(x, Ix, C) &*& intValid(Ix)
+  requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.out[y].ks[k] == 0)
+  ensures node(x, Ix, C)
+  ensures intLeq(Ix, Ix1)
+  // decisiveOpSpec(x, Ix1, res, k):
+  ensures succ ==> res == (k in C)
+{
+  keyset_implies_bucket(x, Ix, k);
+
+  var idx: Int;
+  res, idx := arr_find(x.keys, x.len, k);
+
+  return true, res, Ix;
+}
+
+
+/** insert */
+procedure insert(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
+  returns (succ: Bool, res: Bool, Ix1: Interface, implicit ghost C1: Set<K>)
+  requires node(x, Ix, C) &*& intValid(Ix)
+  requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.out[y].ks[k] == 0)
+  ensures node(x, Ix1, C1)
+  ensures intLeq(Ix, Ix1)
+  // decisiveOpSpec(x, Ix1, res, k):
+  ensures succ ==> (C1 == C ++ {k} && (res == k !in C))
+  ensures !succ ==> C1 == C
+{
+  keyset_implies_bucket(x, Ix, k);
+
+  if (x.len < x.keys.length - 1) {
+
+    ghost var m := x.keys.map;
+    var old_len := x.len;
+    
+    var idx, new_len := arr_insert(x.keys, k, x.len);
+    // TODO argument order consistent
+
+    map_insert_content_set(m, x.keys.map, idx, k, x.len, new_len);
+
+    x.len := new_len;
+
+    // Define Ix1 to be Ix, but with k added to contents
+    Ix1 := Ix;
+    //copy_interface(Ix, nd(Ix.na.contents ++ {k}, Ix.na.inr, Ix.na.outs));
+
+    pure assert (forall k1: K, y: Node :: k1 !in C ++ {k} || Ix.out[y].ks[k1] == 0) with {
+      pure assert Ix.out[y].ks[k] == 0;
+    }
+    return true, old_len != new_len, Ix1;
+  } else {
+    return false, false, Ix;
+  }
+}
+
+
+/** delete */
+procedure delete(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
+  returns (succ: Bool, res: Bool, Ix1: Interface, implicit ghost C1: Set<K>)
+  requires node(x, Ix, C) &*& intValid(Ix)
+  requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.out[y].ks[k] == 0)
+  ensures node(x, Ix1, C1)
+  ensures intLeq(Ix, Ix1)
+  // decisiveOpSpec(x, Ix1, res, k):
+  ensures succ ==> (C1 == C -- {k} && (res == k in C))
+{
+  keyset_implies_bucket(x, Ix, k);
+
+  ghost var m := x.keys.map;
+  var old_len := x.len;
+  
+  var new_len, idx := arr_delete(x.keys, k, x.len);
+
+  map_delete_content_set(m, x.keys.map, x.len, new_len, idx, k);
+
+  x.len := new_len;
+
+  // Define Ix1 to be Ix, but with k removed from contents
+  Ix1 := Ix;
+  //copy_interface(Ix, nd(Ix.na.contents -- {k}, Ix.na.inr, Ix.na.outs));
+  
+  return true, old_len != new_len, Ix1;
+}
