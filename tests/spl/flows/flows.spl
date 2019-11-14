@@ -341,8 +341,52 @@ lemma lemma_int_comp_fold(I1: Interface, I2: Interface)
 pure predicate intLeq(I1: Interface, I2: Interface) {
   intValid(I1) && intValid(I2) &&
   I1.dom <= I2.dom
-  && (forall x: Node :: x in I1.dom ==> I1.inf[x] == I2.inf[x]
-     @(matching x yields I1.inf[x]) @(matching x yields I2.inf[x]))
-  && (forall x: Node :: x !in I1.dom ==> I1.out[x] == I2.out[x]
-     @(matching x yields I1.out[x]) @(matching x yields I2.out[x]))
+  && (forall n: Node :: n in I1.dom ==> I1.inf[n] == I2.inf[n]
+     @(matching n yields I1.inf[n]) @(matching n yields I2.inf[n]))
+  && (forall n: Node :: n !in I2.dom ==> I1.out[n] == I2.out[n]
+     @(matching n yields I1.out[n]) @(matching n yields I2.out[n]))
+}
+
+// The replacement theorem
+lemma lemma_replacement(I1: Interface, I2: Interface, J1: Interface)
+  requires intComp(I1, I2) != intUndef
+  requires intLeq(I1, J1) && Disjoint(J1.dom, I2.dom)
+  requires forall n in J1.dom -- I1.dom :: I2.out[n] == domZero
+  ensures intComp(J1, I2) != intUndef
+  ensures intLeq(intComp(I1, I2), intComp(J1, I2))
+{
+  var I := intComp(I1, I2);
+  var J := int(
+    { n: Node :: n in I.dom ? I.inf[n] : J1.inf[n] },
+    { n: Node :: n !in J1.dom && n !in I2.dom ? domPlus(J1.out[n], I2.out[n]) : domZero },
+    J1.dom ++ I2.dom);
+
+ lemma_int_comp_unfold(I1, I2);
+    
+  pure assert forall n: Node :: n in J1.dom ==> J1.inf[n] == domPlus(J.inf[n], I2.out[n]) with {
+    if (n in J1.dom) {
+      pure assert n in I1.dom ==> I1.inf[n] == domPlus(I.inf[n], I2.out[n]);
+      domZero_unit(J1.inf[n]);
+    }
+  }
+
+  pure assert forall n: Node :: n in I2.dom ==> I2.inf[n] == domPlus(J.inf[n], J1.out[n]) with {
+    if (n in I2.dom) {
+      pure assert n in I.dom ==> I2.inf[n] == domPlus(I.inf[n], I1.out[n]);
+    }
+  }
+
+  pure assert forall n: Node :: n in J.dom ==> domValid(J.inf[n]) with {
+    pure assert n in I.dom ==> domValid(I.inf[n]);
+  }
+ 
+  lemma_int_comp_fold_plus(J1, I2, J);
+
+  pure assert forall n: Node :: n !in J.dom ==> I.out[n] == J.out[n] with {
+    if (n !in J.dom) {
+      pure assert J.out[n] == domPlus(J1.out[n], I2.out[n]);
+      pure assert I.out[n] == domPlus(I1.out[n], I2.out[n]);
+    }
+  }
+
 }
