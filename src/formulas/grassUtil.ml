@@ -892,6 +892,11 @@ let map_atoms fn f =
     | Binder (b, vs, f, a) -> Binder (b, vs, mt f, a)
   in mt f
 
+(** Oldify formula *)
+let mk_old_form f =
+  map_atoms (fun t -> Atom (mk_old t, [])) f
+
+    
 (** Like {!fold_terms} except that [fn] takes the set of bound variables of the given context as additional argument *)
 let fold_terms_with_bound fn init f =
   let fa bv acc = function

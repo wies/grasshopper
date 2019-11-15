@@ -1,4 +1,5 @@
-(** {5 Translation of SPL programs to internal representation } *)
+(** {5230
+ Translation of SPL programs to internal representation } *)
 
 open Util 
 open Prog
@@ -266,7 +267,7 @@ let convert cu =
             in
             let res_srt = convert_type res_ty pos in
             GrassUtil.mk_free_fun res_srt id ts
-        | _ -> failwith "unexpected expression")
+        | _ -> failwith @@ "unexpected expression" )
     | BinaryOp (e1, (OpDiff as op), e2, ty, _)
     | BinaryOp (e1, (OpUn as op), e2, ty, _)      
     | BinaryOp (e1, (OpInt as op), e2, ty, _) ->
@@ -381,8 +382,10 @@ let convert cu =
         failwith ("comprehension should have been desugared at " ^ string_of_src_pos pos)
     | Annot (e, Position, pos) ->
         convert_term locals e
+    |  BinaryOp (_, OpAnd, _, _, _) as e ->
+        failwith ("unexpected annotation at " ^ string_of_src_pos (pos_of_expr e) ^ ": " ^ string_of_expr e)
     | e ->
-        failwith ("unexpected expression at " ^ string_of_src_pos (pos_of_expr e))
+        failwith ("unexpected expression at " ^ string_of_src_pos (pos_of_expr e) ^ ": " ^ string_of_expr e)
   in
   let rec convert_grass_form locals = function
     | BoolVal (b, pos) -> GrassUtil.mk_srcpos pos (GrassUtil.mk_bool b)
@@ -459,6 +462,9 @@ let convert cu =
           | _ -> failwith "unexpected operator"
         in
         mk_form f1 f2
+    | UnaryOp (OpOld, e, pos) ->
+        let f = convert_grass_form locals e in
+        GrassUtil.mk_old_form f
     | Annot (e, CommentAnnot c, pos) ->
         let f = convert_grass_form locals e in
         GrassUtil.annotate f [Name (c, 0)]
