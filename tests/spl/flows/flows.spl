@@ -9,6 +9,9 @@ include "ccm.spl"
 // The type of nodes
 type Node
 
+// The type of flows
+type Flow = Map<Node, FlowDom>
+  
 // Flow Interfaces
 datatype Interface =
   int(inf: Map<Node, FlowDom>,
@@ -388,5 +391,4 @@ lemma lemma_replacement(I1: Interface, I2: Interface, J1: Interface)
       pure assert I.out[n] == domPlus(I1.out[n], I2.out[n]);
     }
   }
-
 }

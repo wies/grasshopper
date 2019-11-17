@@ -5,6 +5,20 @@ include "multipair-ccm.spl"
 
 type FlowDom = MultiPair
 
+lemma domMinus_inv(m1: MultiPair, m2: MultiPair)
+  ensures m1 == domPlus(m2, domMinus(m1, m2))
+{
+  pure assert forall k: K :: m1.ks[k] == domPlus(m2, domMinus(m1, m2)).ks[k] with {
+    pure assert m1.ks[k] == m2.ks[k] + (m1.ks[k] - m2.ks[k]);
+    pure assert m1.ks[k] == m2.ks[k] + domMinus(m1, m2).ks[k];
+  }
+  pure assert forall k: K :: m1.ir[k] == domPlus(m2, domMinus(m1, m2)).ir[k] with {
+    pure assert m1.ir[k] == m2.ir[k] + (m1.ir[k] - m2.ir[k]);
+    pure assert m1.ir[k] == m2.ir[k] + domMinus(m1, m2).ir[k];
+  }
+  
+}
+
 /** Lemmas needed by Coq */
 
 /* TODO: update once Iris proofs are stable */

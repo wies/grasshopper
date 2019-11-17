@@ -5,7 +5,9 @@
 
 type K
 
-datatype MultiPair = pair(ks: Map<K, Int>, ir: Map<K, Int>)
+type Multiset = Map<K, Int>
+  
+datatype MultiPair = pair(ks: Multiset, ir: Multiset)
 
 function domPlus(p1: MultiPair, p2: MultiPair) returns (p: MultiPair)
 {
@@ -17,7 +19,7 @@ function domMinus(p1: MultiPair, p2: MultiPair) returns (p: MultiPair)
   pair({ k: K :: p1.ks[k] - p2.ks[k] }, { k: K :: p1.ir[k] - p2.ir[k] })
 }
 
-function mapZero() returns (m: Map<K, Int>)
+function mapZero() returns (m: Multiset)
 {
  { k: K :: 0 }
 }
