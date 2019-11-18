@@ -70,7 +70,7 @@ let to_form pred_to_form domains f =
            let aux_tr = 
              match op with
              | SepPlus -> []
-             | SepStar -> 
+             | SepStar ->
                  let f1_and_f2_disjoint = 
                    List.map
                      (mk_error_msg (pos, ProgError.mk_error_info "Specified regions are not disjoint"))

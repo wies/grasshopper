@@ -197,6 +197,12 @@ let preds f =
     | _ -> acc
   in fold_atoms p IdSet.empty f
 
+let acc_srts f =
+  let p acc = function
+    | Atom (Region, [t], _) -> SortSet.add (GrassUtil.struct_sort_of_sort @@ GrassUtil.element_sort_of_set t) acc
+    | _ -> acc
+  in fold_atoms p SortSet.empty f
+    
 let preds_full f =
   let p acc = function
     | Atom (Pred _, _, _) as a -> SlSet.add a acc 

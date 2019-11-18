@@ -195,6 +195,14 @@ let convert cu =
         declare_global prog (convert_var_decl decl), IdSet.add decl.v_name globals)
       cu.var_decls (empty_prog, IdSet.empty)
   in
+  let state_vars =
+    IdMap.fold
+      (fun _ tdef acc -> match tdef.t_def with
+      | StructTypeDef decls ->
+         IdMap.fold (fun id _ acc -> IdSet.add id acc) decls acc
+      | _ -> acc) cu.type_decls IdSet.empty
+  in
+  let prog = { prog with prog_state_vars = state_vars } in
   let rec convert_term locals = function
     | Null (ty, pos) ->
         let cty = convert_type ty pos in
@@ -382,8 +390,6 @@ let convert cu =
         failwith ("comprehension should have been desugared at " ^ string_of_src_pos pos)
     | Annot (e, Position, pos) ->
         convert_term locals e
-    |  BinaryOp (_, OpAnd, _, _, _) as e ->
-        failwith ("unexpected annotation at " ^ string_of_src_pos (pos_of_expr e) ^ ": " ^ string_of_expr e)
     | e ->
         failwith ("unexpected expression at " ^ string_of_src_pos (pos_of_expr e) ^ ": " ^ string_of_expr e)
   in

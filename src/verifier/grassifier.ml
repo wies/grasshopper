@@ -355,16 +355,17 @@ let elim_arrays prog =
   in
   let elem_sorts, procs = fold_procs compile_proc (SortSet.empty, IdMap.empty) prog in
   let elem_sorts, preds = fold_preds compile_pred (elem_sorts, IdMap.empty) prog in
-  let globals =
-    SortSet.fold (fun srt globals ->
+  let globals, state_vars =
+    SortSet.fold (fun srt (globals, state_vars) ->
       let asdecl = array_state_decl simple srt in
-      IdMap.add asdecl.var_name asdecl globals)
-      elem_sorts prog.prog_vars
+      IdMap.add asdecl.var_name asdecl globals, IdSet.add asdecl.var_name state_vars)
+      elem_sorts (prog.prog_vars, prog.prog_state_vars)
   in
   { prog with
     prog_procs = procs;
     prog_preds = preds;
     prog_vars = globals;
+    prog_state_vars = state_vars;
   }
 
 (** Add frame axioms for framed predicates and functions *)
@@ -1427,7 +1428,11 @@ let annotate_runtime_checks prog =
     | App (Read, map :: idx :: _, _) ->
         let acc1 =
           match sort_of map with
-          | Map (Loc _ :: _, _) (* FIXME *) -> TermSet.add idx acc
+          | Map (Loc _ :: _, _) ->
+              (match map with
+              | App (FreeSym id, _, _) when IdSet.mem id prog.prog_state_vars ->
+                  TermSet.add idx acc
+              | _ -> acc)
           | _ -> acc
         in
         checks (checks acc1 map) idx

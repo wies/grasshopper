@@ -175,15 +175,20 @@ let check_spl_program spl_prog proc =
   (* Do a topological sort of the call graph *)
   let g = List.fold_left (fun g proc -> IdGraph.add_vertex g (Prog.name_of_proc proc)) IdGraph.empty procs in
   let proc_ids = IdGraph.vertices g in
-  let g =
+  (*let auto_procs =
     IdMap.fold
-      (fun id proc g ->
-        IdGraph.add_edges g id
-          (IdSet.inter proc_ids @@ Prog.accesses_proc prog proc))
-      prog.prog_procs g
+      (fun id proc auto_procs -> if proc.Prog.proc_is_auto then IdSet.add id auto_procs else auto_procs)
+      prog.prog_procs IdSet.empty
+  in*)
+  let g =
+    List.fold_left
+      (fun g proc ->
+        IdSet.fold (fun id1 g -> IdGraph.add_edge g id1 (Prog.name_of_proc proc))
+          (IdSet.inter proc_ids @@ Prog.accesses_proc prog proc) g)
+      g procs
   in
   let sccs = IdGraph.topsort g in
-  let sorted_procs = List.map (Prog.find_proc simple_prog) (List.flatten sccs) in
+  let sorted_procs = List.map (Prog.find_proc simple_prog) (List.flatten sccs |> List.rev) in
   let lemmas, procs = List.partition (fun proc -> proc.Prog.proc_is_lemma) sorted_procs in
   List.fold_left (check simple_prog) ([], true) (lemmas @ procs)
 

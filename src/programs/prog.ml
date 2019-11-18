@@ -162,6 +162,7 @@ type program = {
     prog_vars: var_decl IdMap.t; (** global variables *)
     prog_preds: pred_decl IdMap.t; (** predicates *)
     prog_procs: proc_decl IdMap.t; (** procedures *)
+    prog_state_vars: IdSet.t (** names of all state-dependent variables *)
   } 
 
 (** Auxiliary functions for program points *)
@@ -221,7 +222,8 @@ let empty_prog =
   { prog_axioms = [];
     prog_vars = IdMap.empty;
     prog_preds = IdMap.empty;
-    prog_procs = IdMap.empty 
+    prog_procs = IdMap.empty;
+    prog_state_vars = IdSet.empty;
   }
 
 let trivial_contract name =
@@ -652,13 +654,20 @@ let accesses_proc prog proc =
     | Some cmd -> accesses_cmd cmd
     | None -> IdSet.empty
   in
+  let auto_accs =
+    IdMap.fold (fun id proc auto_accs ->
+      if proc.proc_is_auto then
+        IdSet.add id auto_accs
+      else auto_accs)
+      prog.prog_procs body_accs 
+  in 
   let accs =
     IdSet.filter 
       (fun id ->
         IdMap.mem id prog.prog_vars ||
         IdMap.mem id prog.prog_procs ||
         IdMap.mem id prog.prog_preds)
-      (accesses_contract_acc body_accs proc.proc_contract)
+      (accesses_contract_acc auto_accs proc.proc_contract)
   in
   IdMap.fold (fun id pred accs ->
     if IdSet.mem id accs
@@ -708,11 +717,13 @@ let footprint_sorts_term_acc prog acc t =
           | FreeSym id when IdMap.mem id prog.prog_preds ->
               let decl = find_pred prog id in
               SortSet.union (footprint_sorts_pred decl) acc
+          | FreeSym id when IdSet.mem id prog.prog_state_vars ->
+              footprint_sorts_acc acc srt
           | _ -> acc
         in
-        let acc = footprint_sorts_acc acc srt in
+        (*let acc = footprint_sorts_acc acc srt in*)
         List.fold_left c acc ts
-    | Var (_, srt) -> footprint_sorts_acc acc srt
+    | Var (_, srt) -> acc (*footprint_sorts_acc acc srt*)
   in
   c acc t
 
@@ -729,6 +740,7 @@ let footprint_sorts_spec_form_acc prog acc sf =
             SortSet.union (footprint_sorts_pred (find_pred prog id)) acc)
           pids acc
       in
+      let acc = SortSet.union acc (SlUtil.acc_srts f) in
       SlUtil.fold_terms (footprint_sorts_term_acc prog) acc f
   | FOL f -> footprint_sorts_form_acc prog acc f
 
