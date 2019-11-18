@@ -108,10 +108,6 @@ auto lemma intComp_valid(I1: Interface, I2: Interface)
   }
 }
 
-// Compositions of invalid interfaces are invalid. Is this needed?
-//axiom forall I1: Interface, I2: Interface ::
-//(! intValid(I1) || ! intValid(I2)) ==> !(intValid(intComp(I1, I2)));
-
 // Folds definition of interface composition, avoiding domMinus
 lemma lemma_int_comp_fold_plus(I1: Interface, I2: Interface, I: Interface)
   requires I != intUndef
@@ -249,7 +245,8 @@ lemma intComp_assoc_aux(I1: Interface, I2: Interface, I3: Interface)
       domPlus_assoc(I1.out[n], I2.out[n], I3.out[n]);
     }
   }
-    
+
+  intComp_valid(I1, I2);
   lemma_int_comp_fold_plus(I12, I3, I);
 }
 
@@ -273,10 +270,6 @@ auto lemma intComp_assoc(I1: Interface, I2: Interface, I3: Interface)
   }
 }
     
-// Composition of undef with anything is undef - needed?
-//axiom forall I1: Interface, I2: Interface ::
-//  intComp(I1, I2) != intUndef ==> (I1 != intUndef && I2 != intUndef);
-
 // The empty interface is the unit of interface composition
 auto lemma intComp_unit(I: Interface)
   requires intValid(I);
@@ -378,7 +371,7 @@ lemma lemma_replacement(I1: Interface, I2: Interface, J1: Interface)
       pure assert n in I.dom ==> I2.inf[n] == domPlus(I.inf[n], I1.out[n]);
     }
   }
-
+  intComp_valid(I1, I2);
   pure assert forall n: Node :: n in J.dom ==> domValid(J.inf[n]) with {
     pure assert n in I.dom ==> domValid(I.inf[n]);
   }

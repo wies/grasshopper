@@ -126,6 +126,7 @@ lemma outset_correct2(x: Node, Ix: Interface, k: K, C: Set<K>)
 }
  */
 
+// The contents of a node
 function contents(x: Node) returns (C: Set<K>)
   requires hrepSpatial(x)
   requires 0 <= x.len
@@ -133,21 +134,7 @@ function contents(x: Node) returns (C: Set<K>)
   x.ptrs[0] == null ? set_of_map(x.keys.map, 0, x.len) : {}
 }
 
-/*
-// Node abstraction of a B-link tree node x with inflow inff
-function nodeabs(x: Node, inff: Map<Node, FlowDom>)
-  returns (res: NodeDom)
-  requires hrepSpatial(x)
-{
-  x.ptrs[0] == null ?
-    nd(set_of_map(x.keys.map, 0, x.len),
-       inrfnC({n: Node :: n != x ? {} : {k: K :: inff[x].ks[k] >= 1 || inff[x].ir[k] >= 1}}, {x})) :
-    nd({},
-       inrfnC({n: Node :: n != x ? {} : {k: K :: inff[x].ks[k] >= 1 || inff[x].ir[k] >= 1}}, {x}))
-}
- */
-
-// Function to compute the interface of a node
+// The interface of a node
 function interface(x: Node, inflow: Map<Node, FlowDom>)
   returns (res: Interface)
   requires hrepSpatial(x)
@@ -254,32 +241,6 @@ lemma lemma_edgesets_disjoint(x: Node, Ix: Interface, inflow: Map<Node, FlowDom>
 }
 
 /*
-/** Compute interface */
-lemma compute_interface(x: Node, inflow: Map<Node, FlowDom>) returns (Ix: Interface)
-  requires wf_inflow(x, inflow)
-  requires hrepSpatial(x)
-  requires heapGood(x)
-  requires (forall k: K :: inflow[x].ir[k] >= 1 && k !in outset(x) ==> inflow[x].ks[k] >= 1)
-  requires (forall k: K, y: Node :: inflow[x].ir[k] >= 1 && inflow[x].ks[k] <= 0
-    && flowmap(x)[x][y].ks[k] >= 1 ==> flowmap(x)[x][y].ir[k] >= 1)
-  requires forall k in nodeabs(x, inflow).contents :: inflow[x].ks[k] >= 1
-  ensures hrep(x, Ix) &*& intValid(Ix) &*& Ix.inf == inflow
-{
-  Ix := interface(x, inflow);
-
-  pure assert forall k: K, y: Node :: k in Ix.na.contents
-      ==> Ix.inf[x].ks[k] >= 1 && Ix.fm[x][y].ks[k] == 0
-  with {
-    if (k in Ix.na.contents) {
-      not_in_sorted_seg(x.keys.map, 0, x.len, k);
-    }
-  }
-
-  lemma_edgesets_disjoint(x, Ix, inflow);
-
-  lemma_int_valid_fold(x, Ix);
-}
-
 /** Lemmas needed by Coq */
 
 lemma flowint_inset_step(I: Interface, x: Node, Ix: Interface, y: Node, Iy: Interface, k: K)
@@ -833,14 +794,10 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
   }
 }
 
-/*
-
-
-
 /** Full split */
 
 procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
-  Ipc: Interface, x: Node, implicit ghost: Cp: Set<K>, implicit ghost Cc: Set<K>)
+  Ipc: Interface, x: Node, implicit ghost Cp: Set<K>, implicit ghost Cc: Set<K>)
   returns (Ip1: Interface, Ic1: Interface)
   requires hrep(p, Ip, Cp) &*& hrep(c, Ic, Cc)
   requires intValid(Ip) && intValid(Ic)
@@ -848,23 +805,17 @@ procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
   requires p.ptrs[0] != null && p.ptrs[ci] == c && 0 <= ci <= p.len && c.next == x
   requires p.len < 2*B - 1 && p.indices[c] == ci
   // Needed to show sortedness, and in range, of p.keys:
-  requires ks_child(p, c)[c.keys[c.len]] == 1
+  requires ks_child(p, c, c.keys[c.len])
   && (ci == 0 || ci > 0 && lt(p.keys[ci - 1], c.keys[c.len]))
   // Nothing == x:
   requires p.next != x && p.indices[x] == -1
-  requires Ic.fm[c][p] == domZero  // needed for int_comp_unfold
+  requires p != x
+  requires Ic.out[p] == domZero  // needed for int_comp_unfold
 
     ensures hrep(p, Ip1, Cp) &*& hrep(c, Ic1, Cc)
   ensures intValid(Ip1) && intValid(Ic1)
   ensures intComp(Ip1, Ic1) == Ipc
-  //ensures Ipc.na.contents == Ipc1.na.contents
 {
-  //pure assert p != x && c != x;
-
-  //lemma_int_valid_unfold(p, Ip);
-  //lemma_int_valid_unfold(c, Ic);
-  //lemma_int_valid_unfold_I(Ipc);
-  //lemma_int_comp_unfold(p, Ip, c, Ic, Ipc);
 
   var pind := p.indices;  // TODO why doesn't old(p.indices) work?
   var plen := p.len;
@@ -873,15 +824,14 @@ procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
   arr_shift_node(p.ptrs, ci + 1, ci + 2, p.len - ci);
 
   var k := c.keys[c.len];  // everything >= k goes to x
-  ghost var c_inflow_ks := { k1: K :: !lt(k1, k) ? Ic.inf[c].ks[k1] - Ip.inf[p].ks[k1] * Ip.fm[p][c].ks[k1] : Ic.inf[c].ks[k1] };
-  ghost var c_inflow := { n: Node :: n == c ? fd(c_inflow_ks, Ic.inf[c].ir) : domZero };
+  ghost var c_inflow_ks := { k1: K :: !lt(k1, k) ? Ic.inf[c].ks[k1] - Ip.out[c].ks[k1] : Ic.inf[c].ks[k1] };
+  ghost var c_inflow := { n: Node :: n == c ? pair(c_inflow_ks, Ic.inf[c].ir) : domZero };
   
   p.keys[ci] := k;
   p.ptrs[ci + 1] := x;
   p.len := p.len + 1;
 
   p.indices := { n: Node :: n == x ? ci + 1 : (ci + 1 <= pind[n] <= plen ? pind[n] + 1 : pind[n]) };
-
 
   pure assert heapGood(c) with {
     pure assert c.indices == old(c.indices);
@@ -910,6 +860,7 @@ procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
     }
   }
 
+  /* TODO
   pure assert (forall k: K, y: Node :: Ip.inf[p].ir[k] >= 1 && Ip.inf[p].ks[k] <= 0
     && flowmap(p)[p][y].ks[k] >= 1 ==> flowmap(p)[p][y].ir[k] >= 1) with {
       if (Ip.inf[p].ir[k] >= 1 && Ip.inf[p].ks[k] <= 0
@@ -922,171 +873,197 @@ procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
         }
       }
   }
+   */
+  
+  Ip1 := interface(p, Ip.inf);
+  Ic1 := interface(c, c_inflow);
 
-  Ip1 := compute_interface(p, Ip.inf);
-
-  pure assert (forall k: K :: c_inflow[c].ir[k] >= 1 && k !in outset(c) ==> c_inflow[c].ks[k] >= 1 @(noinst k)) with {
-    if (c_inflow[c].ir[k] >= 1 && k !in outset(c)) {
-      if (Ip.inf[p].ks[k] * Ip.fm[p][c].ks[k] >= 1 && !lt(k, c.keys[c.len])) {
-        pure assert Ic.inf[c].ks[k] - Ip.inf[p].ks[k] * Ip.fm[p][c].ks[k] >= 1;
+  pure assert intValid(Ic1) with {
+    pure assert forall n: Node :: domValid(c_inflow[n]) with {
+      pure assert forall k1: K :: c_inflow[n].ks[k1] >= 0 && c_inflow[n].ir[k1] >= 0 with {
+        pure assert Ipc.inf[c].ks[k1] >= 0;
+        pure assert Ipc.inf[c] == domMinus(Ic.inf[c], Ip.out[c]);
+        pure assert Ic.inf[c].ks[k1] - Ip.out[c].ks[k1] >= 0;
       }
     }
+    edgeFn_valid(c, c_inflow);
   }
 
-  pure assert forall k : K :: k in nodeabs(c, c_inflow).contents ==> c_inflow[c].ks[k] >= 1 @(noinst k) with {
-    not_in_sorted_seg(c.keys.map, 0, c.len, k);
+  pure assert intValid(Ip1) with {
+    edgeFn_valid(p, Ip.inf);
   }
+  
+  pure assert intComposable(Ip1, Ic1) with {
+    pure assert forall n: Node :: n in Ip1.dom ==> Ip1.inf[n] == domPlus(Ic1.out[n], domMinus(Ip1.inf[n], Ic1.out[n])) with {
+      if (n in Ip1.dom) {
+        pure assert forall k1: K ::
+            Ip1.inf[n].ks[k1] == domPlus(Ic1.out[n], domMinus(Ip1.inf[n], Ic1.out[n])).ks[k1]
+          && Ip1.inf[n].ir[k1] == domPlus(Ic1.out[n], domMinus(Ip1.inf[n], Ic1.out[n])).ir[k1] with {
+            pure assert Ic.out[p].ks[k1] == 0; 
+            pure assert Ic.inf[p].ks[k1] >= Ic1.inf[p].ks[k1];
+            pure assert edgeFn(c, Ic.inf)[n].ks[k1] != 0 ==> edgeFn(c, Ic.inf)[n].ks[k1] == Ic.inf[c].ks[k1];          
+            pure assert old(edgeFn(c, Ic.inf))[n].ks[k1] >= edgeFn(c, Ic1.inf)[n].ks[k1];
+            pure assert Ic1.out[p].ks[k1] == 0;
+            pure assert Ic1.out[p].ir[k1] == 0;
+            pure assert Ip1.inf[n].ks[k1] == Ic1.out[n].ks[k1] + (Ip1.inf[n].ks[k1] - Ic1.out[n].ks[k1]);
+            pure assert Ip1.inf[n].ir[k1] == Ic1.out[n].ir[k1] + (Ip1.inf[n].ir[k1] - Ic1.out[n].ir[k1]);
+            pure assert Ip1.inf[n].ks[k1] == Ic1.out[n].ks[k1] + domMinus(Ip1.inf[n], Ic1.out[n]).ks[k1];
+            pure assert Ip1.inf[n].ir[k1] == Ic1.out[n].ir[k1] + domMinus(Ip1.inf[n], Ic1.out[n]).ir[k1];
+            
+            pure assert Ip1.inf[n].ks[k1] == domPlus(Ic1.out[n], domMinus(Ip1.inf[n], Ic1.out[n])).ks[k1];
+            pure assert Ip1.inf[n].ir[k1] == domPlus(Ic1.out[n], domMinus(Ip1.inf[n], Ic1.out[n])).ir[k1];
+        }
+      }
+      
+    }
+    pure assert forall n: Node :: n in Ic1.dom ==> Ic1.inf[n] == domPlus(Ip1.out[n], domMinus(Ic1.inf[n], Ip1.out[n])) with {
+      pure assert forall n: Node :: n in Ic1.dom ==> Ic1.inf[n] == domPlus(Ip1.out[n], domMinus(Ic1.inf[n], Ip1.out[n])) with {
+        if (n in Ic1.dom) {
+          pure assert forall k1: K ::
+              Ic1.inf[n].ks[k1] == domPlus(Ip1.out[n], domMinus(Ic1.inf[n], Ip1.out[n])).ks[k1]
+            && Ic1.inf[n].ir[k1] == domPlus(Ip1.out[n], domMinus(Ic1.inf[n], Ip1.out[n])).ir[k1] with {
 
-  pure assert wf_inflow(c, c_inflow) with {
-    pure assert forall n: Node, k1: K :: 0 <= c_inflow[n].ks[k1] @(noinst n) @(noinst k1) with {
-      pure assert
-             Ic.inf[c].ks[k1] == Ipc.inf[c].ks[k1] + domMult(Ip.inf[p], Ip.fm[p][c]).ks[k1]
-            && Ic.inf[c].ir[k1] == Ipc.inf[c].ir[k1] + domMult(Ip.inf[p], Ip.fm[p][c]).ir[k1]
-            && Ic.inf[c].ks[k1] == Ipc.inf[c].ks[k1] + Ip.inf[p].ks[k1] * Ip.fm[p][c].ks[k1]
-            && Ic.inf[c].ir[k1] == Ipc.inf[c].ir[k1] + Ip.inf[p].ir[k1] * Ip.fm[p][c].ir[k1];
-      pure assert Ic.inf[c].ks[k1] >= Ip.inf[p].ks[k1] * Ip.fm[p][c].ks[k1];
-      if (!lt(k1, k)){
-       pure assert 0 <= Ic.inf[c].ks[k1] - Ip.inf[p].ks[k1] * Ip.fm[p][c].ks[k1];
+            pure assert Ic.inf[n].ks[k1] == domPlus(Ip.out[n], domMinus(Ic.inf[n], Ip.out[n])).ks[k1];
+            pure assert Ic.inf[n].ks[k1] == Ip.out[n].ks[k1] + domMinus(Ic.inf[n], Ip.out[n]).ks[k1];
+            pure assert Ic.inf[n].ks[k1] == Ip.out[n].ks[k1] + (Ic.inf[n].ks[k1] - Ip.out[n].ks[k1]);
+            
+            pure assert Ic1.inf[n].ks[k1] == Ip1.out[n].ks[k1] + (Ic1.inf[n].ks[k1] - Ip1.out[n].ks[k1]);
+            pure assert Ic1.inf[n].ir[k1] == Ip1.out[n].ir[k1] + (Ic1.inf[n].ir[k1] - Ip1.out[n].ir[k1]);
+
+            pure assert Ic1.inf[n].ks[k1] == Ip1.out[n].ks[k1] + domMinus(Ic1.inf[n], Ip1.out[n]).ks[k1];
+            pure assert Ic1.inf[n].ir[k1] == Ip1.out[n].ir[k1] + domMinus(Ic1.inf[n], Ip1.out[n]).ir[k1];
+            }
+        }
+      }
+    }
+    
+    pure assert forall n: Node :: n in Ip1.dom ==> domValid(domMinus(Ip1.inf[n], Ic1.out[n])) with {
+      if (n in Ip1.dom) {
+        pure assert forall k1: K :: domMinus(Ip1.inf[n], Ic1.out[n]).ks[k1] >= 0 && domMinus(Ip1.inf[n], Ic1.out[n]).ir[k1] >= 0 with {
+          pure assert Ipc.inf[n] == domMinus(Ip.inf[n], Ic.out[n]);
+          pure assert Ipc.inf[n].ks[k1] == Ip.inf[n].ks[k1] - Ic.out[n].ks[k1];
+          pure assert Ipc.inf[n].ir[k1] == Ip.inf[n].ir[k1] - Ic.out[n].ir[k1];
+          pure assert Ic.inf[n].ks[k1] >= Ic1.inf[n].ks[k1];
+          pure assert edgeFn(c, Ic.inf)[n].ks[k1] != 0 ==> edgeFn(c, Ic.inf)[n].ks[k1] == Ic.inf[c].ks[k1];          
+          pure assert old(edgeFn(c, Ic.inf))[n].ks[k1] >= edgeFn(c, Ic1.inf)[n].ks[k1];
+          pure assert Ip1.inf[n].ks[k1] - Ic1.out[n].ks[k1] >= 0;
+          pure assert Ip1.inf[n].ir[k1] - Ic1.out[n].ir[k1] >= 0;
+          
+        }
+      }
+    }
+    
+    pure assert forall n: Node :: n in Ic1.dom ==> domValid(domMinus(Ic1.inf[n], Ip1.out[n])) with {
+      if (n in Ic1.dom) {
+        pure assert forall k1: K :: domMinus(Ic1.inf[n], Ip1.out[n]).ks[k1] >= 0 && domMinus(Ic1.inf[n], Ip1.out[n]).ir[k1] >= 0 with {
+          pure assert Ipc.inf[n] == domMinus(Ic.inf[n], Ip.out[n]);
+          pure assert Ipc.inf[n].ks[k1] >= 0;
+          pure assert Ic.inf[n].ks[k1] - Ip.out[n].ks[k1] >= 0;
+          pure assert Ic.inf[n].ir[k1] - Ip.out[n].ir[k1] >= 0;
+          if (lt(k1, k)) {
+            pure assert n == c;
+            pure assert Ip1.inf[n].ks[k1] == Ip.inf[n].ks[k1];
+            pure assert ks_child(p, c, k1) ==> old(ks_child(p, c, k1));
+            pure assert ks_child(p, c, k1) ==> Ip.out[c].ks[k1] == Ip.inf[p].ks[k1];
+            pure assert ks_child(p, c, k1) ==> Ip1.out[c].ks[k1] == Ip1.inf[p].ks[k1];
+            pure assert Ip1.out[n].ks[k1] == Ip.out[n].ks[k1];
+            pure assert Ic1.inf[n].ks[k1] - Ip1.out[n].ks[k1] >= 0;
+            pure assert Ic1.inf[n].ir[k1] - Ip1.out[n].ir[k1] >= 0;
+          } else {
+            pure assert Ic1.inf[n].ks[k1] - Ip1.out[n].ks[k1] >= 0;
+          }
+        }
       }
     }
   }
   
-  Ic1 := compute_interface(c, c_inflow);
+  lemma_int_comp_fold(Ip1, Ic1);
+  var Ipc1 := intComp(Ip1, Ic1);
 
-  // pure assume domLeq(domMult(Ip1.inf[p], Ip1.fm[p][c]), Ic1.inf[c]);
-  pure assert domLeq(domMult(Ip1.inf[p], Ip1.fm[p][c]), Ic1.inf[c]) with {
-    pure assert Ic1.fm == flowmap(c) && Ip1.fm == flowmap(p);
-    pure assert forall k: K :: domMult(Ip1.inf[p], Ip1.fm[p][c]).ks[k] <= Ic1.inf[c].ks[k] &&
-      domMult(Ip1.inf[p], Ip1.fm[p][c]).ir[k] <= Ic1.inf[c].ir[k] with {
-      pure assert
-             Ic.inf[c].ks[k] == Ipc.inf[c].ks[k] + domMult(Ip.inf[p], Ip.fm[p][c]).ks[k]
-            && Ic.inf[c].ir[k] == Ipc.inf[c].ir[k] + domMult(Ip.inf[p], Ip.fm[p][c]).ir[k]
-            && Ic.inf[c].ks[k] == Ipc.inf[c].ks[k] + Ip.inf[p].ks[k] * Ip.fm[p][c].ks[k]
-            && Ic.inf[c].ir[k] == Ipc.inf[c].ir[k] + Ip.inf[p].ir[k] * Ip.fm[p][c].ir[k];
-      if (ks_child(p, c)[k] >= 1) {
-        //pure assert (p.indices[c] == 0 || !lt(k, p.keys.map[p.indices[c] - 1])) &&
-        //  (p.indices[c] == p.len && p.next == null && lt(k, top) || lt(k, p.keys.map[p.indices[c]]));
-        pure assert ci < p.indices[c] <= p.len
-          ==> p.keys.map[p.indices[c]] == old(p.keys.map)[ci + (p.indices[c] - (ci + 1))];
-        pure assert ci < p.indices[c] - 1 <= p.len
-          ==> p.keys.map[p.indices[c] - 1] == old(p.keys.map)[ci + ((p.indices[c] - 1) - (ci + 1))];
-        // pure assert Ip1.inf[p].ks[k] == Ip.inf[p].ks[k] &&  Ip1.inf[p].ir[k] == Ip.inf[p].ir[k];
-        pure assert
-          Ip1.inf[p].ks[k] * Ip1.fm[p][c].ks[k] <= Ic1.inf[c].ks[k]
-          && Ip1.inf[p].ir[k] * Ip1.fm[p][c].ir[k] <= Ic1.inf[c].ir[k]
-          && domMult_ks(Ip1.inf[p], Ip1.fm[p][c])[k] <= Ic1.inf[c].ks[k]
-          && domMult_ir(Ip1.inf[p], Ip1.fm[p][c])[k] <= Ic1.inf[c].ir[k]
-          && domMult(Ip1.inf[p], Ip1.fm[p][c]).ks[k] <= Ic1.inf[c].ks[k]
-          && domMult(Ip1.inf[p], Ip1.fm[p][c]).ir[k] <= Ic1.inf[c].ir[k];
-      } else {
-        pure assert
-          Ip1.inf[p].ks[k] * Ip1.fm[p][c].ks[k] <= Ic1.inf[c].ks[k]
-          && Ip1.inf[p].ir[k] * Ip1.fm[p][c].ir[k] <= Ic1.inf[c].ir[k]
-          && domMult_ks(Ip1.inf[p], Ip1.fm[p][c])[k] <= Ic1.inf[c].ks[k]
-          && domMult_ir(Ip1.inf[p], Ip1.fm[p][c])[k] <= Ic1.inf[c].ir[k]
-          && domMult(Ip1.inf[p], Ip1.fm[p][c]).ks[k] <= Ic1.inf[c].ks[k]
-          && domMult(Ip1.inf[p], Ip1.fm[p][c]).ir[k] <= Ic1.inf[c].ir[k];
-      }
-    }
-  } 
-  pure assert Ic1.fm[c][p] == domZero with {
-    pure assert forall k: K :: Ic1.fm[c][p].ks[k] == 0 && Ic1.fm[c][p].ir[k] == 0;
-  }
-  Ipc1 := lemma_int_comp_fold(p, Ip1, c, Ic1);
-
-  lemma_int_comp_unfold(p, Ip1, c, Ic1, Ipc1);
-  lemma_int_valid_unfold_I(Ipc1);
-
-  pure assert intEq(Ipc, Ipc1) with {
-
-  pure assert forall z: Node :: domEq(Ipc.inf[z], Ipc1.inf[z]) with {
-    pure assert forall k: K ::
-      Ipc.inf[z].ks[k] == Ipc1.inf[z].ks[k] && Ipc.inf[z].ir[k] == Ipc1.inf[z].ir[k]
+  pure assert Ipc == Ipc1 with {
+    lemma_int_comp_unfold(Ip1, Ic1);
+    lemma_int_comp_unfold(Ip, Ic);
+    pure assert Ipc.dom == Ipc1.dom;
+  pure assert forall z: Node :: Ipc.inf[z] == Ipc1.inf[z]
+    && Ipc.out[z] == Ipc1.out[z]
     with {
-      pure assert Ic1.fm == flowmap(c) && Ip1.fm == flowmap(p);
-      pure assert
-        Ip1.inf[p].ks[k] * Ip1.fm[p][c].ks[k] <= Ic1.inf[c].ks[k]
-        && Ip1.inf[p].ir[k] * Ip1.fm[p][c].ir[k] <= Ic1.inf[c].ir[k]
-        && domMult_ks(Ip1.inf[p], Ip1.fm[p][c])[k] <= Ic1.inf[c].ks[k]
-        && domMult_ir(Ip1.inf[p], Ip1.fm[p][c])[k] <= Ic1.inf[c].ir[k]
-        && domMult(Ip1.inf[p], Ip1.fm[p][c]).ks[k] <= Ic1.inf[c].ks[k]
-        && domMult(Ip1.inf[p], Ip1.fm[p][c]).ir[k] <= Ic1.inf[c].ir[k];
-      pure assert true
-        && Ic.inf[c].ks[k] == Ipc.inf[c].ks[k] + domMult(Ip.inf[p], Ip.fm[p][c]).ks[k]
-        && Ic.inf[c].ir[k] == Ipc.inf[c].ir[k] + domMult(Ip.inf[p], Ip.fm[p][c]).ir[k]
-        && Ic.inf[c].ks[k] == Ipc.inf[c].ks[k] + Ip.inf[p].ks[k] * Ip.fm[p][c].ks[k]
-        && Ic.inf[c].ir[k] == Ipc.inf[c].ir[k] + Ip.inf[p].ir[k] * Ip.fm[p][c].ir[k]
-        && Ic1.inf[c].ks[k] == Ipc1.inf[c].ks[k] + Ip1.inf[p].ks[k] * Ip1.fm[p][c].ks[k]
-        && Ic1.inf[c].ir[k] == Ipc1.inf[c].ir[k] + Ip1.inf[p].ir[k] * Ip1.fm[p][c].ir[k];
-      if (ks_child(p, c)[k] >= 1) {
-        pure assert ci < p.indices[c] <= p.len
-          ==> p.keys.map[p.indices[c]] == old(p.keys.map)[ci + (p.indices[c] - (ci + 1))];
-        pure assert ci < p.indices[c] - 1 <= p.len
-          ==> p.keys.map[p.indices[c] - 1] == old(p.keys.map)[ci + ((p.indices[c] - 1) - (ci + 1))];
-      } else {
-        pure assert !lt(k, c.keys[c.len]) ==> Ic1.inf[c].ks[k] == Ic.inf[c].ks[k] - Ip.inf[p].ks[k] * Ip.fm[p][c].ks[k];
-      }
-    }
-  }
+    pure assert forall k1: K :: Ipc.inf[z].ks[k1] == Ipc1.inf[z].ks[k1]
+      && Ipc.inf[z].ir[k1] == Ipc1.inf[z].ir[k1]
+      && Ipc.out[z].ks[k1] == Ipc1.out[z].ks[k1]
+      && Ipc.out[z].ir[k1] == Ipc1.out[z].ir[k1]
+      with {
+        //pure assert Ic1.out == edgeFn(c, c_inflow) && Ip1.out == edgeFn(p, Ip.inf);
+        // Old and new inflow equations
+        pure assert true
+          && Ic1.inf[c] == domPlus(Ipc1.inf[c], Ip1.out[c]);
+        pure assert true
+          && Ic1.inf[c].ks[k1] == Ipc1.inf[c].ks[k1] + Ip1.out[c].ks[k1];
+        pure assert true
+          && Ic1.inf[c].ir[k1] == Ipc1.inf[c].ir[k1] + Ip1.out[c].ir[k1];
+        pure assert true
+          && Ip1.inf[p] == domPlus(Ipc1.inf[p], Ic1.out[p]);
+        pure assert true
+          && Ip1.inf[p].ks[k1] == Ipc1.inf[p].ks[k1] + Ic1.out[p].ks[k1];
+        pure assert true
+          && Ip1.inf[p].ir[k1] == Ipc1.inf[p].ir[k1] + Ic1.out[p].ir[k1];
 
-  pure assert forall n: Node, n1: Node ::
-    n in Ipc.FP && n1 !in Ipc.FP ==>
-      domEq(domMult(Ipc.inf[n], Ipc.fm[n][n1]), domMult(Ipc1.inf[n], Ipc1.fm[n][n1]))
-    with {
-    if (n in Ipc.FP && n1 !in Ipc.FP) {
-      pure assert forall k: K ::
-        domMult(Ipc.inf[n], Ipc.fm[n][n1]).ks[k] == domMult(Ipc1.inf[n], Ipc1.fm[n][n1]).ks[k]
-        && domMult(Ipc.inf[n], Ipc.fm[n][n1]).ir[k] == domMult(Ipc1.inf[n], Ipc1.fm[n][n1]).ir[k]
-        && Ipc.inf[n].ks[k] * Ipc.fm[n][n1].ks[k] == Ipc1.inf[n].ks[k] * Ipc1.fm[n][n1].ks[k]
-        && Ipc.inf[n].ir[k] * Ipc.fm[n][n1].ir[k] == Ipc1.inf[n].ir[k] * Ipc1.fm[n][n1].ir[k]
-        with {
-        // Old and new inflow equations (only for c though)
-        pure assert Ic.inf[c].ks[k] == Ipc.inf[c].ks[k] + domMult(Ip.inf[p], Ip.fm[p][c]).ks[k]
-          && Ic.inf[c].ir[k] == Ipc.inf[c].ir[k] + domMult(Ip.inf[p], Ip.fm[p][c]).ir[k]
-          && Ic.inf[c].ks[k] == Ipc.inf[c].ks[k] + Ip.inf[p].ks[k] * Ip.fm[p][c].ks[k]
-          && Ic.inf[c].ir[k] == Ipc.inf[c].ir[k] + Ip.inf[p].ir[k] * Ip.fm[p][c].ir[k]
-          && Ic1.inf[c].ks[k] == Ipc1.inf[c].ks[k] + Ip1.inf[p].ks[k] * Ip1.fm[p][c].ks[k]
-          && Ic1.inf[c].ir[k] == Ipc1.inf[c].ir[k] + Ip1.inf[p].ir[k] * Ip1.fm[p][c].ir[k];
+        pure assert true
+          && Ic.inf[c] == domPlus(Ipc.inf[c], Ip.out[c]);
+        pure assert true
+          && Ic.inf[c].ks[k1] == Ipc.inf[c].ks[k1] + Ip.out[c].ks[k1];
+        pure assert true
+          && Ic.inf[c].ir[k1] == Ipc.inf[c].ir[k1] + Ip.out[c].ir[k1];
+        pure assert true
+          && Ip.inf[p] == domPlus(Ipc.inf[p], Ic.out[p]);
+        pure assert true
+          && Ip.inf[p].ks[k1] == Ipc.inf[p].ks[k1] + Ic.out[p].ks[k1];
+        pure assert true
+          && Ip.inf[p].ir[k1] == Ipc.inf[p].ir[k1] + Ic.out[p].ir[k1];
 
-        // Old flow map equation
-        pure assert
-          Ipc.fm[p][n1] == domPlus(Ip.fm[p][n1], domMult(Ip.fm[p][c], Ic.fm[c][n1]))
-          && Ipc.fm[p][n1].ks[k] == Ip.fm[p][n1].ks[k] + domMult(Ip.fm[p][c], Ic.fm[c][n1]).ks[k]
-          && Ipc.fm[p][n1].ir[k] == Ip.fm[p][n1].ir[k] + domMult(Ip.fm[p][c], Ic.fm[c][n1]).ir[k]
-          && Ipc.fm[p][n1].ks[k] == Ip.fm[p][n1].ks[k] + Ip.fm[p][c].ks[k] * Ic.fm[c][n1].ks[k]
-          && Ipc.fm[p][n1].ir[k] == Ip.fm[p][n1].ir[k] + Ip.fm[p][c].ir[k] * Ic.fm[c][n1].ir[k];
-
-        // New flow map equation
-        pure assert
-          Ipc1.fm[p][n1] == domPlus(Ip1.fm[p][n1], domMult(Ip1.fm[p][c], Ic1.fm[c][n1]))
-          && Ipc1.fm[p][n1].ks[k] == Ip1.fm[p][n1].ks[k] + domMult(Ip1.fm[p][c], Ic1.fm[c][n1]).ks[k]
-          && Ipc1.fm[p][n1].ir[k] == Ip1.fm[p][n1].ir[k] + domMult(Ip1.fm[p][c], Ic1.fm[c][n1]).ir[k]
-          && Ipc1.fm[p][n1].ks[k] == Ip1.fm[p][n1].ks[k] + Ip1.fm[p][c].ks[k] * Ic1.fm[c][n1].ks[k]
-          && Ipc1.fm[p][n1].ir[k] == Ip1.fm[p][n1].ir[k] + Ip1.fm[p][c].ir[k] * Ic1.fm[c][n1].ir[k];
-
-        pure assert !lt(k, c.keys[c.len]) ==> Ic1.inf[c].ks[k] == Ic.inf[c].ks[k] - Ip.inf[p].ks[k] * Ip.fm[p][c].ks[k];
-          
-        pure assert Ipc.inf[c].ks[k] * Ipc.fm[c][n1].ks[k] == Ipc1.inf[c].ks[k] * Ipc1.fm[c][n1].ks[k]; // OK
-
-        if (ks_child(p, n1)[k] >= 1) {
-          pure assert ci < p.indices[n1] <= p.len
-            ==> p.keys.map[p.indices[n1]] == old(p.keys.map)[ci + (p.indices[n1] - (ci + 1))];
+        // Old and new outflow equations
+        if (z !in Ipc.dom) {
+          pure assert Ipc.out[z] == domPlus(Ip.out[z], Ic.out[z]);
+          pure assert Ipc.out[z].ks[k1] == Ip.out[z].ks[k1] + Ic.out[z].ks[k1];
+          pure assert Ipc.out[z].ir[k1] == Ip.out[z].ir[k1] + Ic.out[z].ir[k1];
+          pure assert Ipc1.out[z] == domPlus(Ip1.out[z], Ic1.out[z]);
+          pure assert Ipc1.out[z].ks[k1] == Ip1.out[z].ks[k1] + Ic1.out[z].ks[k1];
+          pure assert Ipc1.out[z].ir[k1] == Ip1.out[z].ir[k1] + Ic1.out[z].ir[k1];
+        }
+        pure assert !lt(k1, c.keys[c.len]) ==> Ic1.inf[c].ks[k1] == Ic.inf[c].ks[k1] - Ip.out[c].ks[k1];
+ 
+        if (ks_child(p, c, k1)) {
+          pure assert ci < p.indices[c] <= p.len
+            ==> p.keys.map[p.indices[c]] == old(p.keys.map)[ci + (p.indices[c] - (ci + 1))];
           pure assert ci < p.indices[c] - 1 <= p.len
-            ==> p.keys.map[p.indices[n1] - 1] == old(p.keys.map)[ci + ((p.indices[n1] - 1) - (ci + 1))];
+            ==> p.keys.map[p.indices[c] - 1] == old(p.keys.map)[ci + ((p.indices[c] - 1) - (ci + 1))];
+        }
 
-        } 
+        pure assert Ipc.out[z].ir[k1] == Ipc1.out[z].ir[k1];
+        if (p.indices[z] != -1) {
+          pure assert ci + 1 < old(p.indices[z]) <= old(p.len)
+            ==> old(p.ptrs.map[p.indices[z]]) == z;
+            pure assert ci + 1 < old(p.indices[z]) <= old(p.len)
+              ==> p.ptrs[old(p.indices[z]) + 1] == z;
+              if (0 <= p.indices[z] < ci + 1) {
+              } else if (p.indices[z] == ci + 1) {
+              } else if (ci + 1 < p.indices[z] <= p.len) {
+                pure assert old(p.indices[z]) == p.indices[z] - 1;
+                pure assert p.ptrs.map[p.indices[z]] == old(p.ptrs.map)[p.indices[z] - 1];
+              }
+        }
 
-        pure assert Ipc.inf[p].ks[k] * Ipc.fm[p][n1].ks[k] == Ipc1.inf[p].ks[k] * Ipc1.fm[p][n1].ks[k]; 
-          
+        if (z !in Ipc.dom) {
+
+          pure assert Ipc.out[z].ks[k1] == Ipc1.out[z].ks[k1];
+        
+        }
       }
     }
+    pure assert Ipc.inf == Ipc1.inf;
+    pure assert Ipc.out == Ipc1.out;
+    
   }
-
-  }
-  
-  //pure assert Ipc.na.contents == Ipc1.na.contents;
-  
+    
   return Ip1, Ic1;
 }
 
-*/
