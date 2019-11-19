@@ -5,18 +5,28 @@ include "multiset-ccm.spl"
 
 type FlowDom = Multiset
 
-/** Lemmas needed by Coq */
+/** Lemmas and definitions needed by Coq/Iris */
 
-lemma flowint_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Node, k: K)
-  requires I == intComp(I1, I2) && intValid(I)
-  requires I.out[y] == domZero
-  requires I1.out[y][k] >= 1
-  ensures y in I2.dom
+predicate globalint(I: Interface)
 {
-  pure assert I1.out[y] != domZero;
+  // Global interface is closed
+  I.out == zeroFlow
+}
+
+predicate in_outset(k: K, I: Interface, n: Node) {
+  I.out[n][k] > 0
+}
+
+lemma flowint_step(I1: Interface, I2: Interface, I: Interface, k: K, n: Node)
+  requires I == intComp(I1, I2) && intValid(I)
+  requires in_outset(k, I1, n)
+  requires globalint(I)
+  ensures n in I2.dom
+{
+  pure assert I1.out[n] != domZero;
   lemma_int_comp_unfold(I1, I2);
-  if (y !in I.dom) {
-    pure assert I.out[y] == domPlus(I1.out[y], I2.out[y]);
-    pure assert I.out[y][k] == I1.out[y][k] + I2.out[y][k];
+  if (n !in I.dom) {
+    pure assert I.out[n] == domPlus(I1.out[n], I2.out[n]);
+    pure assert I.out[n][k] == I1.out[n][k] + I2.out[n][k];
   }
 }

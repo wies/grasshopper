@@ -183,6 +183,7 @@ define searchStrInv(x, I, C) {
     // Inreach keyset subsetof inset
     && (forall k1: K :: I.inf[x].ir[k1] >= 1 && k1 !in outset(x)
        ==> I.inf[x].ks[k1] >= 1)
+    && (forall k1: K :: I.inf[x].ir[k1] >= 1 && I.inf[x].ks[k1] == 0 ==> !lt(k1, x.keys[x.len]))
     // TODO: If k ∈ inreach, then inreach edgeset is same as normal edgeset (for step)
     //&& (forall k1: K, y: Node :: I.inf[x].ir[k1] >= 1 && I.inf[x].ks[k1] <= 0
     //   && I.out[y].ks[k1] >= 1 ==> I.out[y].ir[k1] >= 1)
@@ -312,10 +313,10 @@ procedure init() returns (x: Node, I: Interface)
 procedure findNext(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
   returns (n: Node)
   requires lt(k, top)
-  requires Ix.inf[x].ks[k] >= 1
+  requires Ix.inf[x].ks[k] > 0 || Ix.inf[x].ir[k] > 0
   requires node(x, Ix, C) &*& intValid(Ix)
   ensures node(x, Ix, C)
-  ensures n != null ==> Ix.out[n].ks[k] >= 1
+  ensures n != null ==> Ix.out[n].ks[k] >= 1 || Ix.out[n].ir[k] >= 1
   ensures n == null ==> (forall y: Node :: Ix.out[y].ks[k] == 0)
 {
   if (x.ptrs[0] == null) {  // Leaf node
@@ -338,14 +339,14 @@ procedure findNext(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
   if (i == x.len && x.next != null) {
     if (lt(k, x.keys[i])) {
       n := x.ptrs[i];
-      // return n;
+      return n;
     } else {
       n := x.next;
-      // return n;
+      return n;
     }
   } else {
     n := x.ptrs[i];
-    // return n;
+    return n;
   }
   return n;
 }
@@ -704,6 +705,13 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
     }
     
     pure assert searchStrInv(x, Ix1, Cx) with {
+      pure assert (forall k1: K :: Ix1.inf[x].ir[k1] >= 1 && Ix1.inf[x].ks[k1] == 0 ==> !lt(k1, x.keys[x.len])) with {
+        if (Ix1.inf[x].ir[k1] >= 1 && Ix1.inf[x].ks[k1] == 0) {
+          pure assert Ic.inf[c].ks[k1] == 0;
+          pure assert Ic.inf[c].ir[k1] >= 1;
+        }
+      }
+      
       lemma_edgesets_disjoint(x, Ix1, x_inflow);
     }
 

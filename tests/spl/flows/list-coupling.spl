@@ -36,8 +36,14 @@ function edgeFn(x: Node) returns (res: Map<Node, FlowDom>)
   }
 }
 
-define hrep(x, I, C) {
-  hrepSpatial(x) &*& heapGood(x) &*& I.dom == {x} &*& C == {x.data}
+function contents(x: Node) returns (res: Set<K>)
+  requires acc(x)
+{
+  {x.data}
+}
+
+define hrep(x, I) {
+  hrepSpatial(x) &*& heapGood(x) &*& I.dom == {x}
   &*& (forall k: K :: I.inf[x][k] == 1 || I.inf[x][k] == 0)
   &*& (forall k: K :: le(x.data, k) ==> I.inf[x][k] == 1)
   &*& I.out == edgeFn(x)
@@ -56,7 +62,7 @@ define searchStrInv(x, I, C) {
 }
 
 define node(x, I, C) {
-  hrep(x, I, C) &*& searchStrInv(x, I, C)
+  hrep(x, I) &*& searchStrInv(x, I, C) &*& C == contents(x)
 }
 
 
@@ -110,29 +116,32 @@ procedure search(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
 /** insert */
 procedure insert(p: Node, n: Node, k: K,
                  Ip: Interface, In: Interface, Ipn: Interface,
-                 Cp: Set<K>, Cn: Set<K>, Cpn: Set<K>)
+                 Cpn: Set<K>)
   returns (res: Bool, Ip1: Interface, In1: Interface, Im1: Interface, Ipnm1: Interface, ghost m: Node,
-           implicit ghost Cp1: Set<K>, implicit ghost Cn1: Set<K>, implicit ghost Cm1: Set<K>,
-           implicit ghost Cpnm1: Set<K>
+           Cpnm1: Set<K>
   )
-  requires node(p, Ip, Cp) &*& node(n, In, Cn)
+  requires node(p, Ip, contents(p)) &*& node(n, In, contents(n))
   //requires intValid(Ip) &*& intValid(In) // is this needed?
   requires Ipn == intComp(Ip, In) &*& intValid(Ipn)
-  requires Cpn == Cp ++ Cn
+  requires Cpn == contents(p) ++ contents(n)
   requires Ip.out[n][k] == 1
   requires In.inf[n][k] == 1 && (forall y: Node :: In.out[y][k] == 0)
-  ensures res ==> node(p, Ip1, Cp1) &*& node(n, In1, Cn1) &*& node(m, Im1, Cm1)
-  ensures !res ==> node(p, Ip1, Cp1) &*& node(n, In1, Cn1) &*& Cm1 == {}
+  ensures res ==> node(p, Ip1, contents(p)) &*& node(n, In1, contents(n)) &*& node(m, Im1, contents(m))
+  ensures !res ==> node(p, Ip1, contents(p)) &*& node(n, In1, contents(n))
   ensures intValid(Ip1) &*& intValid(In1) &*& intValid(Im1)
   ensures Ipnm1 == intComp(Ip1, intComp(Im1, In1))
   ensures intLeq(Ipn, Ipnm1)
-  ensures Cpnm1 == Cpn ++ Cn1 ++ Cm1;
+  ensures res ==> Cpnm1 == contents(n) ++ contents(m) ++ contents(p);
+  ensures !res ==> Cpnm1 == contents(n) ++ contents(p)
   // decisiveOpSpec(x, Ix1, res, k):
   ensures (Cpnm1 == Cpn ++ {k} && (res == k !in Cpn))
 {
+  //lemma_int_comp_unfold(Ip, In);
+  
   // Actual implementation
   if (n.data == k) {
-    return false, Ip, In, intEmp, Ipn, null;
+    intComp_comm(In, intEmp);
+    return false, Ip, In, intEmp, Ipn, null, contents(n) ++ contents(p);
   }
 
   m := new Node;
@@ -208,16 +217,18 @@ procedure insert(p: Node, n: Node, k: K,
   }
 
   lemma_int_comp_fold(Im1, In1);
-
+  //intComp_comm(Im1, In1);
+  
   // intComp(ip1, intComp(In1, Im1))
   ghost var Inm1 := intComp(In1, Im1);
-  lemma_int_comp_unfold(In1, Im1);
+  intComp_comm(In1, Im1);
+  lemma_int_comp_unfold(Im1, In1);
 
   pure assert forall n1: Node, k1: K ::
     n1 in Ip1.dom ==> Ip1.inf[n1][k1] == domPlus(Inm1.out[n1], domMinus(Ip1.inf[n1], Inm1.out[n1]))[k1] with {
       if (n1 == p) {
-        pure assert Inm1.out[n1][k1] == domPlus(In1.out[n1], Im1.out[n1])[k1];
-        pure assert Inm1.out[n1][k1] == In1.out[n1][k1] + Im1.out[n1][k1];
+        pure assert Inm1.out[n1][k1] == domPlus(Im1.out[n1], In1.out[n1])[k1];
+        pure assert Inm1.out[n1][k1] == Im1.out[n1][k1] + In1.out[n1][k1];
         pure assert Ip1.inf[n1][k1] == Inm1.out[n1][k1] + (Ip1.inf[n1][k1] - Inm1.out[n1][k1]);
         pure assert Ip1.inf[n1][k1] == Inm1.out[n1][k1] + domMinus(Ip1.inf[n1], Inm1.out[n1])[k1];
       }
@@ -237,6 +248,7 @@ procedure insert(p: Node, n: Node, k: K,
   pure assert forall n1: Node :: n1 in Ip1.dom ==> domValid(domMinus(Ip1.inf[n1], Inm1.out[n1])) with {
     if (n1 in Ip1.dom) {
       pure assert forall k: K :: domMinus(Ip1.inf[n1], Inm1.out[n1])[k] >= 0 with {
+        pure assert Inm1.out[n1] == domPlus(Im1.out[n1], In1.out[n1]);
         pure assert Inm1.out[n1][k] == domPlus(Im1.out[n1], In1.out[n1])[k];
         pure assert Inm1.out[n1][k] == Im1.out[n1][k] + In1.out[n1][k];
         pure assert Ip1.inf[n1][k] - Inm1.out[n1][k] >= 0;
@@ -279,8 +291,8 @@ procedure insert(p: Node, n: Node, k: K,
         pure assert n1 == p ==> Ip1.inf[n1][k1] == domPlus(Ipnm1.inf[n1], Inm1.out[n1])[k1];
         pure assert n1 == p ==> Ip1.inf[n1][k1] == Ipnm1.inf[n1][k1] + Inm1.out[n1][k1];
 
-        pure assert Inm1.out[p][k1] == domPlus(In1.out[p], Im1.out[p])[k1];
-        pure assert Inm1.out[p][k1] == In1.out[p][k1] + Im1.out[p][k1];
+        pure assert Inm1.out[p][k1] == domPlus(Im1.out[p], In1.out[p])[k1];
+        pure assert Inm1.out[p][k1] == Im1.out[p][k1] + In1.out[p][k1];
         
       }
     }
@@ -291,13 +303,15 @@ procedure insert(p: Node, n: Node, k: K,
         pure assert Ipn.out[n1][k1] == Ip.out[n1][k1] + In.out[n1][k1];
 
         pure assert Inm1.out[m][k1] == 0;
-        pure assert n1 != m ==> Inm1.out[n1][k1] == domPlus(In1.out[n1], Im1.out[n1])[k1];
-        pure assert n1 != m ==> Inm1.out[n1][k1] == In1.out[n1][k1] + Im1.out[n1][k1];
+        pure assert n1 != m ==> Inm1.out[n1][k1] == domPlus(Im1.out[n1], In1.out[n1])[k1];
+        pure assert n1 != m ==> Inm1.out[n1][k1] == Im1.out[n1][k1] + In1.out[n1][k1];
 
         pure assert n1 != m ==> Ipnm1.out[n1][k1] == domPlus(Ip1.out[n1], Inm1.out[n1])[k1];
         pure assert n1 != m ==> Ipnm1.out[n1][k1] == Ip1.out[n1][k1] + Inm1.out[n1][k1];
       }
     }
   }
+
+  Cpnm1 := contents(n) ++ contents(m) ++ contents(p);
 }
 

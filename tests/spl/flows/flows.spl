@@ -50,7 +50,7 @@ auto lemma intEmp_valid()
 }
 
 // The empty interface is the only valid interface with an empty domain
-auto lemma intEmp_unique(I: Interface)
+lemma intEmp_unique(I: Interface)
   requires intValid(I) && I.dom == {}
   ensures I == intEmp
 {
@@ -94,14 +94,14 @@ auto lemma intComp_disjoint(I1: Interface, I2: Interface)
 }
 
 // Valid interfaces are defined
-auto lemma intValid_defined(I: Interface)
+lemma intValid_defined(I: Interface)
   requires intValid(I)
   ensures I != intUndef @(pattern intValid(I))
 {
 }
 
 /**  The empty interface is composes with valid interfaces */
-auto lemma intEmp_composable(I: Interface)
+lemma intEmp_composable(I: Interface)
   requires intValid(I)
   ensures intComposable(I, intEmp)
 {
@@ -174,6 +174,8 @@ lemma intComp_valid2(I1: Interface, I2: Interface)
   requires intValid(intComp(I1, I2))
   ensures intValid(I1) && intValid(I2)
 {
+  intEmp_valid();
+  intComp_comm(I1, I2);
   if (!(intValid(I1))) {
     intComp_unit(I2);
   } else {
@@ -244,7 +246,7 @@ lemma lemma_int_comp_fold_plus(I1: Interface, I2: Interface, I: Interface)
 }
 
 // Interface composition is commutative
-auto lemma intComp_comm(I1: Interface, I2: Interface)
+lemma intComp_comm(I1: Interface, I2: Interface)
   ensures intComp(I1, I2) == intComp(I2, I1) @(matching intComp(I1, I2) yields intComp(I2, I1))
 {
   if (intComposable(I1, I2)) {
@@ -375,6 +377,7 @@ lemma intComp_assoc_aux(I1: Interface, I2: Interface, I3: Interface)
     }
   }
 
+  intComp_comm(I1, I2);
   intComp_valid(I1, I2);
   lemma_int_comp_fold_plus(I12, I3, I);
 }
@@ -415,7 +418,7 @@ lemma intComp_assoc_invalid(I1: Interface, I2: Interface, I3: Interface)
 }
 
 // Interface composition is associative
-auto lemma intComp_assoc(I1: Interface, I2: Interface, I3: Interface)
+lemma intComp_assoc(I1: Interface, I2: Interface, I3: Interface)
   ensures intComp(I1, intComp(I2, I3)) == intComp(intComp(I1, I2), I3)
 {
   var I12 := intComp(I1, I2);
