@@ -55,7 +55,7 @@ define hrep(x, I, C) {
   && 0 <= x.len < x.keys.length
     && ((x.typ == root
         && (forall i: Int :: 0 <= i && i < x.bkts.length ==> x.bkts[i] != null)
-        && (forall y: Node, k: K :: y == x.bkts[hash(x, k)] ==> I.out[y].ks[k] == 1)
+        && (forall y: Node, k: K :: y == x.bkts[hash(x, k)] ==> I.out[y].ks[k] == I.inf[x].ks[k])
         && (forall k: K :: 0 <= hash(x, k) && hash(x, k) < x.bkts.length)
         && (forall k: K :: I.inf[x].ks[k] == 1 /* && k in outset(x, I.out)*/)
         && C == {})
@@ -63,7 +63,7 @@ define hrep(x, I, C) {
      && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> lt(x.keys[i], x.keys[j]) @(noinst i) @(noinst j))
         && C == set_of_map(x.keys.map, 0, x.len)
         && (x.next == null && (forall y: Node :: I.out[y] == domZero)
-        || x.next != null && (forall k: K :: I.out[x.next].ks[k] == 1)
+        || x.next != null && (forall k: K :: I.out[x.next].ks[k] == I.inf[x].ks[k] && I.out[x.next].ir[k] == I.inf[x].ir[k])
           && (forall y: Node :: y != x.next ==> I.out[y] == domZero))))
 }
 
@@ -79,13 +79,7 @@ define searchStrInv(x, I, C) {
     //&& (forall k: K :: I.inf[x].ir[k] >= 1 && k !in I.na.outs
     //   ==> I.inf[x].ks[k] >= 1)
     // Inreach edgesets subsetof normal edgesets
-    && (forall k1: K, y: Node :: I.out[y].ir[k1] <= I.out[y].ks[k1])
-    // If k ∈ inreach, then inreach edgeset is same as normal edgeset (for step)
-    && (forall k1: K, y: Node :: I.inf[x].ir[k1] >= 1 && I.inf[x].ks[k1] <= 0
-       && I.out[y].ks[k1] >= 1 ==> I.out[y].ir[k1] >= 1)
-    // The node label stores the actual inreach
-    //&& I.na.inr.inrdom == {x}
-    //&& (forall k: K :: (k in I.na.inr.inrfn[x]) == (I.inf[x].ks[k] >= 1 || I.inf[x].ir[k] >= 1))
+    //&& (forall k1: K, y: Node :: I.out[y].ir[k1] <= I.out[y].ks[k1])
 }
 
 define node(x, I, C) {
@@ -190,9 +184,10 @@ lemma flowint_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Node,
 procedure findNext(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
   returns (n: Node)
   requires node(x, Ix, C) &*& intValid(Ix)
+  requires Ix.inf[x].ks[k] > 0 || Ix.inf[x].ir[k] > 0
   ensures node(x, Ix, C)
-  ensures (n != null && Ix.out[n].ks[k] >= 1
-           || n == null && (forall y: Node :: Ix.out[y].ks[k] == 0))
+  ensures n != null ==> Ix.out[n].ks[k] > 0 || Ix.out[n].ir[k] > 0
+  ensures n == null ==> (forall y: Node :: Ix.out[y].ks[k] == 0 && Ix.out[y].ir[k] == 0)
 {
   if (x.typ == root) {
     n := x.bkts[hash(x, k)];

@@ -313,11 +313,11 @@ procedure init() returns (x: Node, I: Interface)
 procedure findNext(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
   returns (n: Node)
   requires lt(k, top)
-  requires Ix.inf[x].ks[k] > 0 || Ix.inf[x].ir[k] > 0
   requires node(x, Ix, C) &*& intValid(Ix)
+  requires Ix.inf[x].ks[k] > 0 || Ix.inf[x].ir[k] > 0
   ensures node(x, Ix, C)
   ensures n != null ==> Ix.out[n].ks[k] > 0 || Ix.out[n].ir[k] > 0
-  ensures n == null ==> (forall y: Node :: Ix.out[y].ks[k] == 0)
+  ensures n == null ==> (forall y: Node :: Ix.out[y].ks[k] == 0 && Ix.out[y].ir[k] == 0)
 {
   if (x.ptrs[0] == null) {  // Leaf node
     if (x.next == null) {

@@ -1,0 +1,168 @@
+/** Theory of flow interfaces - parametric in underlying CCM. */
+
+options "-simplearrays -propreads -abspreds -stratify"
+
+include "ccm.spl"
+
+/** Flow interfaces and related functions and lemmas */
+
+// The type of nodes
+type Node
+
+// The type of flows
+type Flow = Map<Node, FlowDom>
+  
+// Flow Interfaces
+datatype Interface =
+  int(inf: Map<Node, FlowDom>,
+      out: Map<Node, FlowDom>,
+      dom: Set<Node>)
+  | intUndef; // For when compositions don't exist
+
+/* The zero flow */
+function zeroFlow() returns (f: Map<Node, FlowDom>) {
+  { n: Node :: domZero }
+}
+  
+/* The empty flow interface */
+function intEmp() returns (I: Interface) {
+  int(zeroFlow, zeroFlow, {})
+}
+
+pure predicate intValid(I: Interface) {
+  // Inflow and outflow properly defined
+    (forall n: Node :: I.inf[n] != domZero ==> n in I.dom)
+  && (forall n: Node :: I.out[n] != domZero ==> n !in I.dom)
+  // Inflow and outflow are valid
+  && (forall n in I.dom :: domValid(I.inf[n]))
+  && (forall n: Node :: n !in I.dom ==> domValid(I.out[n]))
+  // Empty domain ==> no outflow
+  && (I.dom == {} ==> I.out == zeroFlow)
+  // not undefined
+  && I != intUndef
+}
+
+// The empty interface is valid */
+auto lemma intEmp_valid()
+  ensures intValid(intEmp)
+
+// The empty interface is the only valid interface with an empty domain
+auto lemma intEmp_unique(I: Interface)
+  requires intValid(I) && I.dom == {}
+  ensures I == intEmp
+
+// Condition ensuring that two flow interfaces compose
+pure predicate intComposable(I1: Interface, I2: Interface) {
+  intValid(I1) && intValid(I2) && Disjoint(I1.dom, I2.dom)
+  && (forall n in I1.dom :: I1.inf[n] == domPlus(I2.out[n], domMinus(I1.inf[n], I2.out[n])))
+  && (forall n in I2.dom :: I2.inf[n] == domPlus(I1.out[n], domMinus(I2.inf[n], I1.out[n])))
+  && (forall n in I1.dom :: domValid(domMinus(I1.inf[n], I2.out[n])))
+  && (forall n in I2.dom :: domValid(domMinus(I2.inf[n], I1.out[n])))
+}
+
+// Interface composition
+pure function intComp(I1: Interface, I2: Interface) returns (I: Interface)
+
+// Domain of interface composition is union of its component domains
+auto lemma intComp_dom(I1: Interface, I2: Interface)
+  requires intValid(intComp(I1, I2))
+  ensures intComp(I1, I2).dom == I1.dom ++ I2.dom
+
+// Domains of composit interfaces must be disjoint
+auto lemma intComp_disjoint(I1: Interface, I2: Interface)
+  requires intValid(intComp(I1, I2))
+  ensures Disjoint(I1.dom, I2.dom)
+
+// Valid interfaces are defined
+auto lemma intValid_defined(I: Interface)
+  requires intValid(I)
+  ensures I != intUndef @(pattern intValid(I))
+
+/**  The empty interface is composes with valid interfaces */
+auto lemma intEmp_composable(I: Interface)
+  requires intValid(I)
+  ensures intComposable(I, intEmp)
+
+// The empty interface is the unit of interface composition
+auto lemma intComp_unit(I: Interface)
+  //requires intValid(I)
+  ensures intComp(I, intEmp) == I
+
+// Defined compositions of valid interfaces are valid
+auto lemma intComp_valid(I1: Interface, I2: Interface)
+  requires intValid(I1) && intValid(I2) && intComposable(I1, I2)
+  ensures intValid(intComp(I1, I2))
+
+// Composite interfaces of valid compositions are valid
+lemma intComp_valid2(I1: Interface, I2: Interface)
+  requires intValid(intComp(I1, I2))
+  ensures intValid(I1) && intValid(I2)
+
+
+// Folds definition of interface composition, avoiding domMinus
+lemma lemma_int_comp_fold_plus(I1: Interface, I2: Interface, I: Interface)
+  requires I != intUndef
+  requires I.dom == I1.dom ++ I2.dom
+  requires Disjoint(I1.dom, I2.dom)
+  requires intValid(I1) && intValid(I2)
+  requires forall n: Node :: n in I.dom ==> domValid(I.inf[n]);
+  requires forall n: Node :: n in I1.dom ==> I1.inf[n] == domPlus(I.inf[n], I2.out[n])
+  requires forall n: Node :: n in I2.dom ==> I2.inf[n] == domPlus(I.inf[n], I1.out[n])
+  requires forall n: Node :: n !in I.dom ==> I.inf[n] == domZero;
+  requires forall n: Node :: n !in I.dom ==> I.out[n] = domPlus(I1.out[n], I2.out[n])
+  requires forall n: Node :: n in I.dom ==> I.out[n] == domZero;
+  ensures intComp(I1, I2) == I
+
+
+    
+// Interface composition is commutative
+auto lemma intComp_comm(I1: Interface, I2: Interface)
+  ensures intComp(I1, I2) == intComp(I2, I1) @(matching intComp(I1, I2) yields intComp(I2, I1))
+
+// The are no non-trivial inverses
+lemma intComp_no_inverses(I1: Interface, I2: Interface)
+  requires intComp(I1, I2) == intEmp
+  ensures I1 == intEmp && I2 == intEmp
+
+// Unfolds definition of interface composition, avoiding domMinus
+lemma lemma_int_comp_unfold(I1: Interface, I2: Interface)
+  requires intValid(intComp(I1, I2))
+  ensures intComp(I1, I2).dom == I1.dom ++ I2.dom
+  ensures Disjoint(I1.dom, I2.dom)
+  ensures intValid(I1) && intValid(I2)
+  ensures forall n: Node :: n in I1.dom ==> I1.inf[n] == domPlus(intComp(I1, I2).inf[n], I2.out[n])
+  ensures forall n: Node :: n in I2.dom ==> I2.inf[n] == domPlus(intComp(I1, I2).inf[n], I1.out[n])
+  ensures forall n: Node :: n !in intComp(I1, I2).dom ==> intComp(I1, I2).out[n] = domPlus(I1.out[n], I2.out[n])
+
+  
+// Interface composition is associative
+auto lemma intComp_assoc(I1: Interface, I2: Interface, I3: Interface)
+  ensures intComp(I1, intComp(I2, I3)) == intComp(intComp(I1, I2), I3)
+
+
+lemma lemma_int_composable(I1: Interface, I2: Interface)
+  ensures intComposable(I1, I2) == intValid(intComp(I1, I2))
+
+/** Convenience lemma for folding composite interfaces */
+lemma lemma_int_comp_fold(I1: Interface, I2: Interface)
+  requires intComposable(I1, I2)
+  ensures intValid(intComp(I1, I2))
+
+  
+// Contextually extension of interfaces
+pure predicate intLeq(I1: Interface, I2: Interface) {
+  intValid(I1) && intValid(I2) &&
+  I1.dom <= I2.dom
+  && (forall n: Node :: n in I1.dom ==> I1.inf[n] == I2.inf[n]
+     @(matching n yields I1.inf[n]) @(matching n yields I2.inf[n]))
+  && (forall n: Node :: n !in I2.dom ==> I1.out[n] == I2.out[n]
+     @(matching n yields I1.out[n]) @(matching n yields I2.out[n]))
+}
+
+// The replacement theorem
+lemma lemma_replacement(I1: Interface, I2: Interface, J1: Interface)
+  requires intValid(intComp(I1, I2))
+  requires intLeq(I1, J1) && Disjoint(J1.dom, I2.dom)
+  requires forall n in J1.dom -- I1.dom :: I2.out[n] == domZero
+  ensures intComp(J1, I2) != intUndef
+  ensures intLeq(intComp(I1, I2), intComp(J1, I2))
