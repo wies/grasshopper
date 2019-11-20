@@ -571,7 +571,6 @@ let add_neq_constraints st =
 
 (** ----------- Symbolic Execution ---------- *)
 
-
 (* Returns None if the entailment holds, otherwise Some (list of error messages, model) *)
 let check_pure_entail st p1 p2 =
   let { pure = p2; _ } = apply_equalities st.se_eqs (mk_pure_state p2) in

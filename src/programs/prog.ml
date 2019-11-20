@@ -61,7 +61,6 @@ type new_command = {
 type dispose_command = {
     dispose_arg: term;
   }
-     
 
 (** Procedure call, x_1,..., x_n := p(e_1,...,e_m) *)
 type call_command = {

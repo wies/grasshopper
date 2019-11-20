@@ -23,7 +23,7 @@ type pred_symbol =
 
 type sep_op =
   | SepStar | SepPlus | SepIncl
-  
+
 type form =
   | Pure of Grass.form * source_position option
   | Atom of pred_symbol * Grass.term list * source_position option

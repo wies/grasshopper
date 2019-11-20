@@ -236,8 +236,9 @@ let check_spl_program_v2 spl_prog proc =
     else Verifier.simplify procs prog in
   (** TODO(eric): Remove me, hack for testing only. *)
   let debug_symb_exec_v2 simple_prog first proc =
-    let _ = if !Config.symbexec_v2 then
-      SymbState.exec simple_prog prog proc
+    let _  = if !Config.symbexec_v2 then
+      let _ = SymbExecV2.verify simple_prog prog proc in
+      ()
     in
     true
   in

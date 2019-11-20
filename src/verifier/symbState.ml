@@ -1,10 +1,13 @@
-(** {5 Symbolic execution based verifier V2} *)
+(** {5 Symbolic state primitives inspired by Viper's Silicon} *)
 
 open Util
 open Grass
 open GrassUtil
 open Prog
 open Printf
+
+exception NotYetImplemented
+let todo () = raise NotYetImplemented
 
 (** Symbolic values; grasshopper distinguishes between terms and forms,
   viper's silicon doesn't *)
@@ -31,7 +34,7 @@ let havoc_terms symb_store terms =
 (** path condition (pc) stack
   A sequence of scopes a tuple of (scope id, branch condition, [V])
   list[V] is the list of path conditions.
-  Note: scope identifiers are used to label branche conditions 
+  Note: scope identifiers are used to label branche conditions
     and path conds obtained from two points of program execution.
  *)
 
@@ -41,18 +44,18 @@ type pc_stack = (ident * symb_val * symb_val list) list
 
 let pc_add_path_cond pc_stack pc_val =
   match pc_stack with
-  | [] -> failwith "tried to add path cond to an empty stack"  
+  | [] -> failwith "tried to add path cond to an empty stack"
   | (sid, bc, pcs) :: stack' -> (sid, bc, pc_val :: pcs) :: stack'
 
 let pc_push_new pc_stack scope_id br_cond =
   match pc_stack with
-  | [] -> [(scope_id, br_cond, [])] 
+  | [] -> [(scope_id, br_cond, [])]
   | stack -> (scope_id, br_cond, []) :: stack
 
 let rec pc_after pc_stack scope_id =
   match pc_stack with
   | [] -> []
-  | (sid, bc, pcs) :: stack' -> 
+  | (sid, bc, pcs) :: stack' ->
         if sid = scope_id
         then (sid, bc, pcs) :: pc_after stack' scope_id
         else pc_after stack' scope_id
@@ -72,27 +75,34 @@ let snap_pair s1 s2 = SnapPair (s1, s2)
 
 let snap_first s =
   match s with
-  | Unit -> failwith "can't get first snapshot of unit snapshot" 
+  | Unit -> Unit
   | Snap s -> Snap s
   | SnapPair (s1, s2) -> Snap s1
 
 let snap_second s =
   match s with
-  | Unit -> failwith "can't get second of unit snapshot"
-  | Snap s -> failwith "can't get second of single snapshot" 
+  | Unit -> Unit
+  | Snap s -> Snap s
   | SnapPair (s1, s2) -> Snap s2
+
+let mk_fresh_snap srt = 
+  Snap (Term (mk_fresh_var srt "snap"))
 
 (** heap elements and symbolic heap
   The symbolic maintains a multiset of heap chunks which are
-  of the form obj(V, snap, [Id -> V]) or a predicate with an id
+  of the form obj(symb_val, snap, [Id -> V]) or a predicate with an id
   and list of args.
   *)
-
 type heap_chunk =
-  | Obj of (ident * sort) * snap * symb_val IdMap.t
+  | Obj of symb_val * snap * symb_val IdMap.t
   | Pred of ident * symb_val list
 
 type symb_heap = heap_chunk list
+
+let heap_add h stack hc = (hc :: h, stack)
+
+(** TODO: Not sure about q_continue and entailment checking *)
+let heap_remove h stack hc q_continue = todo ()
 
 (** Symbolic State are records that are manipulated during execution:
   1. symbolic store; a mapping from variable names to symbolic values
@@ -161,16 +171,16 @@ let string_of_pc_stack pc =
 
 let string_of_snap s =
   match s with
-  | Unit -> "unit"
-  | Snap ss -> string_of_symb_val ss 
+  | Unit -> "unit[snap]"
+  | Snap ss -> string_of_symb_val ss
   | SnapPair (s1, s2) ->
       sprintf "%s(%s)" (string_of_symb_val s1) (string_of_symb_val s2)
 
 let string_of_hc chunk =
   match chunk with
-  | Obj ((id, srt), snap, symb_fields) ->
-    sprintf "Obj((Id:%s, Sort:%s), Snap:%s, Fields:%s)" (string_of_ident id)
-      (string_of_sort srt) (string_of_snap snap) (string_of_symb_fields symb_fields)
+  | Obj (v, snap, symb_fields) ->
+    sprintf "Obj(%s, Snap:%s, Fields:%s)" (string_of_symb_val v)
+      (string_of_snap snap) (string_of_symb_fields symb_fields)
   | Pred (id, symb_vals) -> sprintf "Pred(Id:%s, Args:%s)" (string_of_ident id)
       (string_of_symb_val_list symb_vals)
 
@@ -186,24 +196,3 @@ let string_of_state s =
   let heap = string_of_heap s.heap in
   let old = string_of_heap s.old in
   sprintf "\n\tStore: %s,\n\tPCStack: %s\n\tHeap: %s\n\tOld: %s" store pc heap old
-
-(** Entry point for the symbexec engine *)
-let exec spl_prog prog proc =
-  Debug.info (fun () ->
-      "Checking procedure " ^ string_of_ident (name_of_proc proc) ^ "...\n");
-
-  (** Extract sorts of formal params and havoc them into a fresh store. *)
-  let formals = proc.proc_contract.contr_formals in
-  let locs = proc.proc_contract.contr_locals in
-  let formal_arg_terms =
-    List.fold_left
-      (fun term_lst var ->
-        let srt = IdMap.find var locs in
-        Var (var, srt.var_sort) :: term_lst)
-      [] formals 
-  in
-  let init_state = mk_symb_state (havoc_terms empty_store formal_arg_terms) in
-  Debug.debug(fun() ->
-      sprintf "%sInitial State:\n{%s\n}\n\n"
-      lineSep (string_of_state init_state)
-  )
