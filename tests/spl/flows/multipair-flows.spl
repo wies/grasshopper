@@ -1,5 +1,16 @@
 /** Flow domain for multisets over some element type K */
 
+/*
+TODOs:
+* Turn all unproven lemmas into hypothesis as it looks cleaner.
+* Get rid of not_in_outset.
+* Parameterize everything that depends on root explicitly (including globalint)
+* Lemmas keyset_in_out and inreach_impl_inset should go into a new predicate nodeint(n, I, C), then add a lemma that says node(n, I, C) implies nodeint(n, I, C). The predicate nodeint will be our new good condition. This should also have the property relating C and the keyset of I.
+* ks needs to also depend on I
+* rename globalint_inreach to inreach_monotone and change according to Grasshopper spec (see multipair-flows.spl)
+* change flowint_inreach_step according to Grasshopper spec (see multipair-flows.spl)
+*/
+
 include "flows.spl"
 include "multipair-ccm.spl"
 
@@ -19,19 +30,81 @@ lemma domMinus_inv(m1: MultiPair, m2: MultiPair)
   
 }
 
+pure predicate in_inset(k: K, I: Interface, n: Node) {
+  I.inf[n].ks[k] > 0
+}
+
+pure predicate in_inreach(k: K, I: Interface, n: Node) {
+  I.inf[n].ir[k] > 0
+}
+
+pure predicate in_outset(k: K, I: Interface, n: Node) {
+  I.out[n].ks[k] > 0 || I.out[n].ir[k] > 0
+}
+
+pure predicate in_keyset(k: K, I: Interface, n: Node) {
+  in_inset(k, I, n) && !(in_outset(k, I, n))
+}
+
+pure predicate globalint(root: Node, I: Interface) {
+    intValid(I)
+    && (forall k: K, n: Node :: !(in_outset(k, I, n)))
+    && (forall k: K :: in_inset(k, I, root) && in_inreach(k, I, root))
+    && (forall k: K, n: Node :: n != root ==> !(in_inset(k, I, n) && !(in_inreach(k, I, n))))
+}
+
+pure predicate nodeint(n: Node, I: Interface, C: Set<K>) {
+   I.dom == {n}
+   && (forall k1: K :: in_inreach(k1, I, n) && !(in_outset(k1, I, n)) ==> in_inset(k1, I, n))
+   && (forall k1: K :: in_inset(k1, I, n) && !(in_outset(k1, I, n)) ==> in_keyset(k1, I, n))
+}
+
+
 /** Lemmas needed by Coq */
 
-/* TODO: update once Iris proofs are stable */
-/*lemma flowint_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Node, k: K)
-  requires I == intComp(I1, I2) && intValid(I)
-  requires I.out[y] == domZero
-  requires I1.out[y][k] >= 1
-  ensures y in I2.dom
+lemma globalint_root_fp(I: Interface, root: Node)
+  requires globalint(root, I)
+  ensures root in I.dom
 {
-  pure assert I1.out[y] != domZero;
-  lemma_int_comp_unfold(I1, I2);
-  if (y !in I.dom) {
-    pure assert I.out[y] == domPlus(I1.out[y], I2.out[y]);
-    pure assert I.out[y].pi1[k] == I1.out[y].pi1[k] + I2.out[y].pi1[k];
+  pure assert I.inf[root].ks[top] > 0;
+  pure assert I.inf[root] != domZero;
+}
+
+lemma outset_distinct(I: Interface, n: Node)
+  requires intValid(I) && (exists k: K :: in_outset(k, I, n))
+  ensures n !in I.dom
+{
+  pure assert I.out[n] != domZero;
+}
+
+lemma inreach_monotone(I: Interface, I1: Interface, I2: Interface, k: K, n: Node)
+  requires intValid(I)
+  requires I == intComp(I1, I2)
+  requires in_inreach(k, I, n)
+  requires n in I1.dom
+  ensures in_inreach(k, I, n)
+{
+}
+
+lemma flowint_inreach_step(I: Interface, I1: Interface, I2: Interface, k: K, n1: Node, n2: Node)
+  requires I == intComp(I1, I2) && intValid(I)
+  requires in_outset(k, I1, n1)
+  requires in_inreach(k, I1, n1)
+  ensures in_inreach(k, I2, n2)
+{
+ // Todo
+}
+
+lemma flowint_step(root: Node, I: Interface, I1: Interface, I2: Interface, k: K, n: Node)
+  requires intValid(I) && I == intComp(I1, I2)
+  requires in_outset(k, I1, n)
+  requires globalint(root, I)
+  ensures n in I2.dom
+{
+  pure assert !(in_outset(k, I, n));
+  if (n !in I.dom) {
+    pure assert I.out[n] == domPlus(I1.out[n], I2.out[n]);
+    pure assert I.out[n].ir[k] == I1.out[n].ir[k] + I2.out[n].ir[k];
+    pure assert I.out[n].ks[k] == I1.out[n].ks[k] + I2.out[n].ks[k];
   }
-   }*/
+}

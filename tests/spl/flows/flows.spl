@@ -100,7 +100,7 @@ lemma intValid_defined(I: Interface)
 {
 }
 
-/**  The empty interface is composes with valid interfaces */
+//  The empty interface composes with valid interfaces
 lemma intEmp_composable(I: Interface)
   requires intValid(I)
   ensures intComposable(I, intEmp)
@@ -458,7 +458,7 @@ lemma lemma_int_composable(I1: Interface, I2: Interface)
   }
 }
 
-/** Convenience lemma for folding composite interfaces */
+// Convenience lemma for folding composite interfaces
 lemma lemma_int_comp_fold(I1: Interface, I2: Interface)
   requires intComposable(I1, I2)
   ensures intValid(intComp(I1, I2))

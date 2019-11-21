@@ -196,6 +196,17 @@ define node(x, I, C) {
   hrep(x, I, C) &*& searchStrInv(x, I, C)
 }
 
+lemma node_implies_nodeint(n: Node, I: Interface, C: Set<K>)
+  requires node(n, I, C)
+  pure ensures nodeint(n, I, C)
+{
+  pure assert (forall k1: K :: in_inreach(k1, I, n) && !(in_outset(k1, I, n)) ==> in_inset(k1, I, n)) with {
+    if (in_inreach(k1, I, n) && !(in_outset(k1, I, n))) {
+      assume false;
+    }
+  }  
+}
+
 // Show that if query key k is in the keyset of node x than x must be a leaf.
 lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int, implicit ghost C: Set<K>)
   requires hrep(x, Ix, C) &*& intValid(Ix)
@@ -352,13 +363,12 @@ procedure findNext(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
 }
 
 /** search */
-procedure search(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
-  returns (succ: Bool, res: Bool, Ix1: Interface)
+procedure search(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
+  returns (succ: Bool, res: Bool)
   requires node(x, Ix, C) &*& intValid(Ix)
   requires lt(k, top)
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.out[y].ks[k] == 0)
   ensures hrep(x, Ix, C)
-  ensures intLeq(Ix, Ix1)
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (res == k in C)
 {
@@ -367,17 +377,16 @@ procedure search(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
   var idx: Int;
   res, idx := arr_find(x.keys, x.len, k);
 
-  return true, res, Ix;
+  return true, res;
 }
 
 /** insert */
-procedure insert(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
-  returns (succ: Bool, res: Bool, Ix1: Interface, implicit ghost C1: Set<K>)
+procedure insert(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
+  returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
   requires node(x, Ix, C) &*& intValid(Ix)
   requires lt(k, top)
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.out[y].ks[k] == 0)
-  ensures node(x, Ix1, C1)
-  ensures intLeq(Ix, Ix1)
+  ensures node(x, Ix, C1)
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (C1 == C ++ {k} && (res == k !in C))
   ensures !succ ==> C1 == C
@@ -401,30 +410,31 @@ procedure insert(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
 
     map_insert_content_set(m, x.keys.map, idx, k, old_len, new_len);
 
-    Ix1 := interface(x, Ix.inf);
-
-    pure assert intLeq(Ix, Ix1) with {
-      pure assert forall n: Node, k1: K :: n !in Ix1.dom ==> Ix.out[n].ks[k1] == Ix1.out[n].ks[k1] && Ix.out[n].ir[k1] == Ix1.out[n].ir[k1] with {
-        if (n !in Ix1.dom) {
-          pure assert Ix.inf[x].ks[k1] == Ix1.inf[x].ks[k1];
-          pure assert Ix.inf[x].ir[k1] == Ix1.inf[x].ir[k1];
-        }
-      }      
+    pure assert Ix == interface(x, Ix.inf) with {
+      pure assert forall k1: K, y: Node ::
+        Ix.out[y].ks[k1] == edgeFn(x, Ix.inf)[y].ks[k1]
+        && Ix.out[y].ir[k1] == edgeFn(x, Ix.inf)[y].ir[k1]
+      with {
+        pure assert Ix.inf[x].ks[k1] == Ix.inf[x].ks[k1];
+        pure assert Ix.inf[x].ir[k1] == Ix.inf[x].ir[k1];
+      }
+      
     }
-  return true, old_len != new_len, Ix1;
+
+    
+  return true, old_len != new_len;
   } else {
-    return false, false, Ix;
+    return false, false;
   }
 }
 
 /** delete */
-procedure delete(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
-  returns (succ: Bool, res: Bool, Ix1: Interface, implicit ghost C1: Set<K>)
+procedure delete(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
+  returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
   requires node(x, Ix, C) &*& intValid(Ix)
   requires lt(k, top)
   requires Ix.inf[x].ks[k] == 1 && (forall y: Node :: Ix.out[y].ks[k] == 0)
-  ensures node(x, Ix1, C1)
-  ensures intLeq(Ix, Ix1)
+  ensures node(x, Ix, C1)
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> C1 == C -- {k} && (res == k in C)
   ensures !succ ==> C1 == C
@@ -445,18 +455,26 @@ procedure delete(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
 
   x.len := new_len;
   
-  Ix1 := interface(x, Ix.inf);
-  
-  pure assert intLeq(Ix, Ix1) with {
+  /*pure assert intLeq(Ix, Ix1) with {
     pure assert forall n: Node, k1: K :: n !in Ix1.dom ==> Ix.out[n].ks[k1] == Ix1.out[n].ks[k1] && Ix.out[n].ir[k1] == Ix1.out[n].ir[k1] with {
       if (n !in Ix1.dom) {
         pure assert Ix.inf[x].ks[k1] == Ix1.inf[x].ks[k1];
         pure assert Ix.inf[x].ir[k1] == Ix1.inf[x].ir[k1];
       }
     }      
+  }*/
+  pure assert Ix == interface(x, Ix.inf) with {
+    pure assert forall k1: K, y: Node ::
+      Ix.out[y].ks[k1] == edgeFn(x, Ix.inf)[y].ks[k1]
+      && Ix.out[y].ir[k1] == edgeFn(x, Ix.inf)[y].ir[k1]
+    with {
+      pure assert Ix.inf[x].ks[k1] == Ix.inf[x].ks[k1];
+      pure assert Ix.inf[x].ir[k1] == Ix.inf[x].ir[k1];
+    }
+    
   }
-  
-  return true, old_len != new_len, Ix1;
+
+  return true, old_len != new_len;
 }
 
 /** Half split */

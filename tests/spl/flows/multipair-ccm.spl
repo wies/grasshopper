@@ -5,6 +5,8 @@
 
 type K
 
+const top: K
+  
 type Multiset = Map<K, Int>
   
 datatype MultiPair = pair(ks: Multiset, ir: Multiset)

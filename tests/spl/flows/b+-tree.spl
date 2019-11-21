@@ -2,7 +2,7 @@
 
 options "-simplearrays -propreads"
 
-include "multiset-dom.spl"
+include "multiset-flows.spl"
 include "array_util.spl"
 
 /** Definition of a node */
@@ -176,7 +176,7 @@ procedure inRange(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
 }
 
 /** findNext */
-procedure findNext(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
+procedure findNext(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
   returns (n: Node)
   requires node(x, Ix, C) &*& intValid(Ix)
   ensures node(x, Ix, C)
@@ -199,12 +199,11 @@ procedure findNext(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
 
 
 /** search */
-procedure search(x: Node, k: K, Ix: Interface)
-  returns (succ: Bool, res: Bool, Ix1: Interface, implicit ghost C: Set<K>)
+procedure search(x: Node, k: K, ghost Ix: Interface)
+  returns (succ: Bool, res: Bool, implicit ghost C: Set<K>)
   requires node(x, Ix, C) &*& intValid(Ix)
   requires Ix.inf[x][k] == 1 && (forall y: Node :: Ix.out[y][k] == 0)
   ensures node(x, Ix, C)
-  ensures intLeq(Ix, Ix1)
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (res == k in C)
 {
@@ -213,16 +212,15 @@ procedure search(x: Node, k: K, Ix: Interface)
   var idx: Int;
   res, idx := arr_find(x.keys, x.len, k);
 
-  return true, res, Ix;
+  return true, res;
 }
 
 /** insert */
-procedure insert(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
-  returns (succ: Bool, res: Bool, Ix1: Interface, implicit ghost C1: Set<K>)
+procedure insert(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
+  returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
   requires node(x, Ix, C) &*& intValid(Ix)
   requires Ix.inf[x][k] == 1 && (forall y: Node :: Ix.out[y][k] == 0)
-  ensures node(x, Ix1, C1)
-  ensures intLeq(Ix, Ix1)
+  ensures node(x, Ix, C1)
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (C1 == C ++ {k} && (res == k !in C))
   ensures !succ ==> C1 == C
@@ -241,23 +239,19 @@ procedure insert(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
 
     x.len := new_len;
 
-    // Define Ix1 to be Ix, but with k added to contents
-    Ix1 := Ix;
-
-    return true, new_len != old_len, Ix1; 
+    return true, new_len != old_len; 
   } else {
-    return false, false, Ix;
+    return false, false;
   }
 }
 
 
 /** delete */
-procedure delete(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
-  returns (succ: Bool, res: Bool, Ix1: Interface, implicit ghost C1: Set<K>)
+procedure delete(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
+  returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
   requires node(x, Ix, C) &*& intValid(Ix)
   requires Ix.inf[x][k] == 1 && (forall y: Node :: Ix.out[y][k] == 0)
-  ensures node(x, Ix1, C1)
-  ensures intLeq(Ix, Ix1)
+  ensures node(x, Ix, C1)
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (C1 == C -- {k} && (res == k in C))
   ensures !succ ==> C1 == C
@@ -273,9 +267,6 @@ procedure delete(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
 
   x.len := new_len;
 
-  // Define Ix1 to be Ix, but with k removed from contents
-  Ix1 := Ix;
-
-  return true, new_len != old_len, Ix1;
+  return true, new_len != old_len;
 }
 
