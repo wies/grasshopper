@@ -121,7 +121,6 @@ lemma intEmp_composable(I: Interface)
 
 // The empty interface is the unit of interface composition
 auto lemma intComp_unit(I: Interface)
-  //requires intValid(I)
   ensures intComp(I, intEmp) == I
 {
   if (!(intValid(I))) {
@@ -149,7 +148,6 @@ auto lemma intComp_valid(I1: Interface, I2: Interface)
   requires intValid(I1) && intValid(I2) && intComposable(I1, I2)
   ensures intValid(intComp(I1, I2))
 {
-  //pure assert intComposable(I1, I2);
   pure assert forall n: Node :: intComp(I1, I2).inf[n] != domZero ==> n in intComp(I1, I2).dom;
   pure assert forall n: Node :: intComp(I1, I2).out[n] != domZero ==> n !in intComp(I1, I2).dom;
   pure assert forall n: Node :: n in intComp(I1, I2).dom ==> domValid(intComp(I1, I2).inf[n]) with {
@@ -295,8 +293,6 @@ lemma lemma_int_comp_unfold(I1: Interface, I2: Interface)
   
   intComp_unit(I1);
   intComp_unit(I2);
-  //pure assert intValid(I1);
-  //pure assert intValid(I2);
   intEmp_composable(I1);
   intEmp_composable(I2);
   intComp_comm(I1, I2);
@@ -334,7 +330,7 @@ lemma intComp_assoc_aux(I1: Interface, I2: Interface, I3: Interface)
   
   pure assert intComposable(I1, I23);
   pure assert intComposable(I2, I3);
-  intComp_valid(I1, I23);  // TODO: make sure that auto lemmas are proved _in the right order. Then this call is not needed.
+  intComp_valid(I1, I23); 
   
   lemma_int_comp_unfold(I1, I23);
   lemma_int_comp_unfold(I2, I3);

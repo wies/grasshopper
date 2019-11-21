@@ -5,7 +5,7 @@ options "-simplearrays"
 
 include "../include/ordered_type.spl"
 
-type Node;
+type Node
   
 // project map segment m[i..j] to set of its elements
 function set_of_map(m: Map<Int, K>, i: Int, j: Int)

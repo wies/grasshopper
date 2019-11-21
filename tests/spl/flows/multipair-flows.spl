@@ -1,16 +1,5 @@
 /** Flow domain for multisets over some element type K */
 
-/*
-TODOs:
-* Turn all unproven lemmas into hypothesis as it looks cleaner.
-* Get rid of not_in_outset.
-* Parameterize everything that depends on root explicitly (including globalint)
-* Lemmas keyset_in_out and inreach_impl_inset should go into a new predicate nodeint(n, I, C), then add a lemma that says node(n, I, C) implies nodeint(n, I, C). The predicate nodeint will be our new good condition. This should also have the property relating C and the keyset of I.
-* ks needs to also depend on I
-* rename globalint_inreach to inreach_monotone and change according to Grasshopper spec (see multipair-flows.spl)
-* change flowint_inreach_step according to Grasshopper spec (see multipair-flows.spl)
-*/
-
 include "flows.spl"
 include "multipair-ccm.spl"
 
@@ -19,55 +8,49 @@ type FlowDom = MultiPair
 lemma domMinus_inv(m1: MultiPair, m2: MultiPair)
   ensures m1 == domPlus(m2, domMinus(m1, m2))
 {
-  pure assert forall k: K :: m1.ks[k] == domPlus(m2, domMinus(m1, m2)).ks[k] with {
-    pure assert m1.ks[k] == m2.ks[k] + (m1.ks[k] - m2.ks[k]);
-    pure assert m1.ks[k] == m2.ks[k] + domMinus(m1, m2).ks[k];
+  pure assert forall k: K :: m1.is[k] == domPlus(m2, domMinus(m1, m2)).is[k] with {
+    pure assert m1.is[k] == m2.is[k] + (m1.is[k] - m2.is[k]);
+    pure assert m1.is[k] == m2.is[k] + domMinus(m1, m2).is[k];
   }
-  pure assert forall k: K :: m1.ir[k] == domPlus(m2, domMinus(m1, m2)).ir[k] with {
-    pure assert m1.ir[k] == m2.ir[k] + (m1.ir[k] - m2.ir[k]);
-    pure assert m1.ir[k] == m2.ir[k] + domMinus(m1, m2).ir[k];
-  }
-  
+  pure assert forall k: K :: m1.ls[k] == domPlus(m2, domMinus(m1, m2)).ls[k] with {
+    pure assert m1.ls[k] == m2.ls[k] + (m1.ls[k] - m2.ls[k]);
+    pure assert m1.ls[k] == m2.ls[k] + domMinus(m1, m2).ls[k];
+  } 
 }
 
-pure predicate in_inset(k: K, I: Interface, n: Node) {
-  I.inf[n].ks[k] > 0
+/** Definitions of predicates used in link template proof in Iris as well as 
+  * flow domain specific lemmas assumed by that proof. */
+
+define in_inset(k, I, n) {
+  I.inf[n].is[k] > 0
 }
 
-pure predicate in_inreach(k: K, I: Interface, n: Node) {
-  I.inf[n].ir[k] > 0
+define in_linkset(k, I, n) {
+  I.inf[n].ls[k] > 0
 }
 
-pure predicate in_outset(k: K, I: Interface, n: Node) {
-  I.out[n].ks[k] > 0 || I.out[n].ir[k] > 0
+define in_outset(k, I, n) {
+  I.out[n].is[k] > 0 || I.out[n].ls[k] > 0
 }
 
-pure predicate in_keyset(k: K, I: Interface, n: Node) {
-  in_inset(k, I, n) && !(in_outset(k, I, n))
-}
-
-pure predicate globalint(root: Node, I: Interface) {
-    intValid(I)
-    && (forall k: K, n: Node :: !(in_outset(k, I, n)))
-    && (forall k: K :: in_inset(k, I, root) && in_inreach(k, I, root))
-    && (forall k: K, n: Node :: n != root ==> !(in_inset(k, I, n) && !(in_inreach(k, I, n))))
-}
-
-pure predicate nodeint(n: Node, I: Interface, C: Set<K>) {
-   I.dom == {n}
-   && (forall k1: K :: in_inreach(k1, I, n) && !(in_outset(k1, I, n)) ==> in_inset(k1, I, n))
-   && (forall k1: K :: in_inset(k1, I, n) && !(in_outset(k1, I, n)) ==> in_keyset(k1, I, n))
-}
-
-
-/** Lemmas needed by Coq */
-
-lemma globalint_root_fp(I: Interface, root: Node)
-  requires globalint(root, I)
-  ensures root in I.dom
+define in_outsets(k, I)
 {
-  pure assert I.inf[root].ks[top] > 0;
-  pure assert I.inf[root] != domZero;
+ exists n: Node :: in_outset(k, I, n)
+}
+
+/** Global invariant that needs to be maintained */
+pure predicate globalinv(root: Node, I: Interface) {
+    intValid(I)
+    && root in I.dom
+    && (forall k: K, n: Node :: !(in_outset(k, I, n)))
+    && (forall k: K :: in_inset(k, I, root) && in_linkset(k, I, root))
+    && (forall k: K, n: Node :: n != root ==> !(in_inset(k, I, n) && !(in_linkset(k, I, n))))
+}
+
+/** Node-level invariant that needs to be maintained */
+pure predicate nodeinv(n: Node, I: Interface, C: Set<K>) {
+   I.dom == {n} // is this needed?
+   && (forall k1: K :: in_linkset(k1, I, n) && !(in_outsets(k1, I)) ==> in_inset(k1, I, n))
 }
 
 lemma outset_distinct(I: Interface, n: Node)
@@ -77,34 +60,41 @@ lemma outset_distinct(I: Interface, n: Node)
   pure assert I.out[n] != domZero;
 }
 
-lemma inreach_monotone(I: Interface, I1: Interface, I2: Interface, k: K, n: Node)
+lemma linkset_monotone(I: Interface, I1: Interface, I2: Interface, k: K, n: Node)
   requires intValid(I)
   requires I == intComp(I1, I2)
-  requires in_inreach(k, I, n)
+  requires in_linkset(k, I, n)
   requires n in I1.dom
-  ensures in_inreach(k, I, n)
+  ensures in_linkset(k, I1, n)
 {
+  lemma_int_comp_unfold(I1, I2);
+  pure assert I1.inf[n] == domPlus(I.inf[n], I2.out[n]);
+  pure assert I1.inf[n].ls[k] == I.inf[n].ls[k] + I2.out[n].ls[k];
+  pure assert I1.inf[n].is[k] == I.inf[n].is[k] + I2.out[n].is[k];
 }
 
-lemma flowint_inreach_step(I: Interface, I1: Interface, I2: Interface, k: K, n1: Node, n2: Node)
+lemma flowint_linkset_step(I: Interface, I1: Interface, I2: Interface, k: K, n: Node)
   requires I == intComp(I1, I2) && intValid(I)
-  requires in_outset(k, I1, n1)
-  requires in_inreach(k, I1, n1)
-  ensures in_inreach(k, I2, n2)
+  requires n in I2.dom
+  requires in_outset(k, I1, n)
+  ensures in_linkset(k, I2, n) || in_inset(k, I2, n)
 {
- // Todo
+  lemma_int_comp_unfold(I1, I2);
+  pure assert I2.inf[n] == domPlus(I.inf[n], I1.out[n]);
+  pure assert I2.inf[n].ls[k] == I.inf[n].ls[k] + I1.out[n].ls[k];
+  pure assert I2.inf[n].is[k] == I.inf[n].is[k] + I1.out[n].is[k];
 }
 
 lemma flowint_step(root: Node, I: Interface, I1: Interface, I2: Interface, k: K, n: Node)
   requires intValid(I) && I == intComp(I1, I2)
   requires in_outset(k, I1, n)
-  requires globalint(root, I)
+  requires globalinv(root, I)
   ensures n in I2.dom
 {
   pure assert !(in_outset(k, I, n));
   if (n !in I.dom) {
     pure assert I.out[n] == domPlus(I1.out[n], I2.out[n]);
-    pure assert I.out[n].ir[k] == I1.out[n].ir[k] + I2.out[n].ir[k];
-    pure assert I.out[n].ks[k] == I1.out[n].ks[k] + I2.out[n].ks[k];
+    pure assert I.out[n].ls[k] == I1.out[n].ls[k] + I2.out[n].ls[k];
+    pure assert I.out[n].is[k] == I1.out[n].is[k] + I2.out[n].is[k];
   }
 }
