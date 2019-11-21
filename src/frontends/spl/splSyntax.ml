@@ -947,6 +947,18 @@ let extend_spl_program incls decls bg_th prog =
         || IdMap.mem id mdecls
     then redeclaration_error id pos
   in
+  let merge_var_decl decl (tdecls, vdecls, pdecls, prdecls, mdecls) =
+    let id = decl.v_name in
+    let pos = decl.v_pos in
+    if IdMap.mem id tdecls || IdMap.mem id pdecls || IdMap.mem id prdecls || IdMap.mem id mdecls
+    then redeclaration_error id pos;
+    IdMap.find_opt id vdecls |>
+    Opt.map (fun decl2 ->
+      if not (equal_var prog decl decl2) then
+        inconsistent_redeclaration_error id pos
+      else IdMap.add id decl2 vdecls) |>
+    Opt.get_or_else (IdMap.add id decl vdecls)
+  in
   let merge_proc_decl decl (tdecls, vdecls, pdecls, prdecls, mdecls) =
     let id = decl.p_name in
     let pos = decl.p_pos in
@@ -984,6 +996,7 @@ let extend_spl_program incls decls bg_th prog =
       let decl1, decl2 = match decl.pr_body, decl2.pr_body with
       | Some _, None -> decl, decl2
       | None, Some _ -> decl2, decl
+      | None, None -> decl, decl2
       | _ -> redeclaration_error id pos
       in
       if not (equal_vars prog decl1.pr_locals decl2.pr_locals) ||
@@ -1013,8 +1026,8 @@ let extend_spl_program incls decls bg_th prog =
           in
           IdMap.add decl.t_name decl tdecls, vdecls, pdecls, prdecls, mdecls
       | VarDecl decl -> 
-          check_uniqueness decl.v_name decl.v_pos decls;
-          tdecls, IdMap.add decl.v_name decl vdecls, pdecls, prdecls, mdecls
+          let vdecls1 = merge_var_decl decl decls in
+          tdecls, vdecls1, pdecls, prdecls, mdecls
       | ProcDecl decl -> 
           let pdecls1 = merge_proc_decl decl decls in
           tdecls, vdecls, pdecls1, prdecls, mdecls

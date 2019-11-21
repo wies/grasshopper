@@ -862,7 +862,7 @@ let convert cu =
             proc_deps = [];
             proc_is_tailrec = false;
             proc_is_lemma = decl.p_is_lemma;
-            proc_is_auto = decl.p_is_auto;
+            proc_is_auto = decl.p_is_auto && !Config.auto_lemmas;
           } 
         in
         declare_proc prog proc_decl

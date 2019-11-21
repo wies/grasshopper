@@ -41,6 +41,9 @@ let stratify = ref false
 (* Flag that controls whether predicates are treated as abstract *)
 let abstract_preds = ref false
 
+(** Flag that enables auto lemmas *)
+let auto_lemmas = ref true
+
 (** Flag that controls whether split lemmas are added *)
 let split_lemmas = ref false
 
@@ -129,6 +132,7 @@ let cmd_options_spec =
    ("-noep", Arg.Clear with_ep, " Omit axioms for entry points");
    ("-fullep", Arg.Set full_ep, " Generates more ep terms");
    ("-simplearrays", Arg.Set simple_arrays, " Use simple array encoding");
+   ("-noautolemmas", Arg.Clear auto_lemmas, " Omit axioms for entry points");
    ("-abspreds", Arg.Set abstract_preds, " Treat predicates as abstract");
    ("-noinst", Arg.Clear instantiate, " Let the SMT solver deal with the quantifiers without prior instantiation");
    ("-termgen", Arg.Set_int term_gen_max_rounds, "<num> Number of rounds to run the term generation procedure");
