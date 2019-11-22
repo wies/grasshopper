@@ -9,6 +9,8 @@ type FlowDom = Multiset
 
 /** Lemmas and definitions needed by Iris/Coq */
 
+pure function KS() returns (res: Set<K>)
+
 define in_inset(k, I, n) {
   I.inf[n][k] > 0
 }
@@ -27,14 +29,22 @@ function keyset(I: Interface, n: Node) returns (res: Set<K>)
   { k: K :: in_inset(k, I, n) && !(in_outsets(k, I)) }
 }
 
-predicate globalinv(root: Node, I: Interface)
+predicate globalinv(first: Node, I: Interface)
 {
   intValid(I)
-  && root in I.dom
+  && first in I.dom
   // Global interface is closed
   && (forall n: Node, k: K :: !(in_outset(k, I, n)))
-  && (forall n: Node :: (n == root ==> (forall k: K :: in_inset(k, I, n))) &&
-                 (n != root ==> (forall k: K :: !(in_inset(k, I, n)))))
+  && (forall n: Node :: (n == first ==> (forall k: K :: in_inset(k, I, n))) &&
+                 (n != first ==> (forall k: K :: !(in_inset(k, I, n)))))
+}
+
+predicate nodeinv(first: Node, n: Node, I: Interface, C: Set<K>)
+{
+  I.dom == {n}
+  && (forall k: K :: I.inf[n][k] <= 1)
+  && C <= KS
+  && (n == first ==> (forall k1 in KS :: in_outsets(k1, I)))
 }
 
 lemma keyset_def(k: K, I_n: Interface, n: Node)
@@ -43,11 +53,11 @@ lemma keyset_def(k: K, I_n: Interface, n: Node)
   ensures k in keyset(I_n, n)
 {
 }
-              
-lemma flowint_step(root: Node, I1: Interface, I2: Interface, I: Interface, k: K, n: Node)
+
+lemma flowint_step(first: Node, I1: Interface, I2: Interface, I: Interface, k: K, n: Node)
   requires I == intComp(I1, I2) && intValid(I)
   requires in_outset(k, I1, n)
-  requires globalinv(root, I)
+  requires globalinv(first, I)
   ensures n in I2.dom
 {
   pure assert I1.out[n] != domZero;
@@ -56,4 +66,19 @@ lemma flowint_step(root: Node, I1: Interface, I2: Interface, I: Interface, k: K,
     pure assert I.out[n] == domPlus(I1.out[n], I2.out[n]);
     pure assert I.out[n][k] == I1.out[n][k] + I2.out[n][k];
   }
+}
+
+lemma successor_not_first(I: Interface, I1: Interface, I2: Interface, I3: Interface, first: Node, n: Node, k: K, C: Set<K>)
+  requires I = intComp(I1, intComp(I2, I3)) && intValid(I)
+  requires globalinv(first, I)
+  requires in_outset(k, I1, n)
+  requires nodeinv(first, n, I2, C)
+  ensures n != first
+{
+  lemma_int_comp_unfold(I1, intComp(I2, I3));
+  lemma_int_comp_unfold(I2, I3);
+  pure assert intComp(I2, I3).inf[n][k] == domPlus(I.inf[n], I1.out[n])[k];
+  pure assert intComp(I2, I3).inf[n][k] == I.inf[n][k] + I1.out[n][k];
+  pure assert I2.inf[n][k] == domPlus(intComp(I2, I3).inf[n], I3.out[n])[k];
+  pure assert I2.inf[n][k] == intComp(I2, I3).inf[n][k] + I3.out[n][k];
 }
