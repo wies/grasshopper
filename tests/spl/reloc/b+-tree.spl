@@ -193,10 +193,10 @@ procedure init() returns (x: Node, I: Interface)
   x.ptrs := new Array<Node>(2*B);
   arr_init_node(x.ptrs, 2*B, null);
   x.len := 0;
-  x.rangeLb := bottom;
+  x.rangeLb := bot;
   x.rangeUb := top;
   
-  var xkc := { k: K :: le(bottom, k) && lt(k, top) ? 1 : 0 };
+  var xkc := { k: K :: le(bot, k) && lt(k, top) ? 1 : 0 };
   var xfm := { n: Node :: { n1: Node :: domZero } };
   I := int({ n: Node :: n == x ? fd(xkc, 1) : domZero },
             nd({}), xfm, {x});
