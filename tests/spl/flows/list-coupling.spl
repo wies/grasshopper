@@ -5,17 +5,18 @@ options "-abspreds -simplearrays -propreads -stratify"
 include "multiset-flows.spl"
 include "array_util.spl"
 
+function KS() returns (res: Set<K>)
+{
+  { k: K :: k != top && k != bot }
+}
+  
 /** Definition of a node */
 
 struct Node {
   var data: K;
   var next: Node;
+  var sentinel: Bool;
 }
-
-define unchanged(x) {
-  x.data == old(x.data) && x.next == old(x.next)
-}
-
 
 /** Definition of heap representation, hrep */
 
@@ -27,150 +28,213 @@ define heapGood(x) {
   x.next != x
 }
 
-function edgeFn(x: Node) returns (res: Map<Node, FlowDom>)
+function edgeFn(x: Node, inflow: Map<Node, Multiset>) returns (res: Map<Node, FlowDom>)
   requires acc(x)
 {
   { n1: Node ::
       (n1 != x.next || n1 == null ? domZero :
-      { k: K :: lt(x.data, k) ? 1 : 0 @(noinst k)})
+      { k: K :: lt(x.data, k) ? inflow[x][k] : 0 @(noinst k)})
   }
 }
 
 function contents(x: Node) returns (res: Set<K>)
   requires acc(x)
 {
-  {x.data}
+  x.sentinel ? {} : {x.data}
 }
 
-define hrep(x, I) {
+define hrep(first, x, I) {
   hrepSpatial(x) &*& heapGood(x) &*& I.dom == {x}
-  &*& (forall k: K :: I.inf[x][k] == 1 || I.inf[x][k] == 0)
-  &*& (forall k: K :: le(x.data, k) ==> I.inf[x][k] == 1)
-  &*& I.out == edgeFn(x)
-  &*& (x.next == null && x.data == top 
-     || x.next != null && x.data != top)
+  && (x.sentinel == (x.data == top || x.data == bot))
+  && I.inf[x][top] > 0
+  && (forall k1: K :: I.inf[x][k1] == 1 || I.inf[x][k1] == 0)
+  && (forall k1: K :: le(x.data, k1) && k1 in KS ==> I.inf[x][k1] == 1)
+  && I.out == edgeFn(x, I.inf)
+  && (x.next == null && x.data == top
+    || x.next != null && x.data != top)
+  && (x == first ==> x.data == bot)
 }
+
 
 // The good condition
-define searchStrInv(x, I, C) {
-    // Contents subsetof keyset
-    (forall k1: K :: k1 in C ==> I.inf[x][k1] >= 1)
-    && (forall k1: K, y: Node :: k1 !in C || I.out[y][k1] == 0)
-    // Edgesets are disjoint
-    && (forall k1: K, y: Node, z: Node :: y == z
-       || I.out[y][k1] == 0 || I.out[z][k1] == 0)
+define searchStrInv(first, x, I, C) {
+    C <= KS
+      && (forall k1 in KS :: x == first ==> in_outset(k1, I, x.next))
 }
 
-define node(x, I, C) {
-  hrep(x, I) &*& searchStrInv(x, I, C) &*& C == contents(x)
+define node(first, x, I, C) {
+  hrep(first, x, I) &*& (searchStrInv(first, x, I, C) && C == contents(x))
 }
 
+/** Lemmas and predicates used by Iris */
+
+pure predicate nodeinv(first: Node, n: Node, I: Interface, C: Set<K>) {
+  intValid(I)
+  && C <= KS
+  && (n == first ==> (forall k1 in KS :: in_outsets(k1, I)))
+}
+
+lemma node_implies_nodeinv(first: Node, n: Node, I: Interface, C: Set<K>)
+  requires node(first, n, I, C) &*& intValid(I)
+  pure ensures nodeinv(first, n, I, C)
+{
+  pure assert forall k1: K :: k1 in KS ==> n == first ==> in_outsets(k1, I) with {
+    pure assert k1 in KS ==> n == first ==> in_outset(k1, I, n.next);
+  }
+}
 
 /** Begin programs */
 
-/*
-procedure int_of_node(p: Node, pinfLb: K) returns (Ip: Interface)
-  requires acc(p) &*& p.next != p &*& lt(pinfLb, p.data) &*& p.next != null &*& p.data != top
-  ensures hrep(p, Ip) &*& nu(p, Ip)
+/** Initialize data structure */
+procedure init()
+  returns (first: Node, ghost last: Node, ghost I1: Interface, ghost I2: Interface)
+  ensures node(first, first, I1, {}) &*& node(first, last, I2, {})
+  ensures globalinv(first, intComp(I1, I2));
+  ensures intValid(intComp(I1, I2));
 {
-  var pinf := { x: Node :: x == p ? fd({ k: K :: lt(pinfLb, k) ? 1 : 0 }) : domZero };
-  Ip := int(pinf, nd({p.data}), fmap(p), {p});
+  last := new Node;
+  last.next := null;
+  last.data := top;
+  last.sentinel := true;
+
+  first := new Node;
+  first.next := last;
+  first.data := bot;
+  first.sentinel := true;
+
+  
+  ghost var fst_inf := { n: Node :: n == first ? { k: K :: 1 } : domZero };
+  I1 := int(fst_inf, edgeFn(first, fst_inf), {first});
+
+  assert node(first, first, I1, {}) &*& acc(last);
+  
+  ghost var lst_inf := { n: Node :: n == last ? { k: K :: 1 } : domZero };
+  I2 := int(lst_inf, edgeFn(last, lst_inf), {last});
+
+  assert node(first, last, I2, {}) &*& acc(first);
+
+  pure assert forall k: K :: domMinus(I2.inf[last], I1.out[last])[k] >= 0 with {
+    pure assert I2.inf[last][k] - I1.out[last][k] >= 0;
+  }
+
+  pure assert forall k: K :: domMinus(I1.inf[first], I2.out[first])[k] >= 0 with {
+    pure assert I1.inf[first][k] - I2.out[first][k] >= 0;
+  }
+
+  pure assert domValid(domMinus(I2.inf[last], I1.out[last]));
+  pure assert domValid(domMinus(I1.inf[first], I2.out[first]));
+
+  pure assert forall k: K :: I2.inf[last][k] == domPlus(I1.out[last], domMinus(I2.inf[last], I1.out[last]))[k] with {
+    pure assert I2.inf[last][k] == I1.out[last][k] + (I2.inf[last][k] - I1.out[last][k]);
+    pure assert I2.inf[last][k] == I1.out[last][k] + domMinus(I2.inf[last], I1.out[last])[k];
+  }
+
+  pure assert forall k: K :: I1.inf[first][k] == domPlus(I2.out[first], domMinus(I1.inf[first], I2.out[first]))[k] with {
+    pure assert I1.inf[first][k] == I2.out[first][k] + (I1.inf[first][k] - I2.out[first][k]);
+    pure assert I1.inf[first][k] == I2.out[first][k] + domMinus(I1.inf[first], I2.out[first])[k];
+  }
+  pure assert intComposable(I1, I2);
+
+  ghost var I := intComp(I1, I2);
+  pure assert forall n: Node, k: K :: n !in I.dom ==> I.out[n][k] == domZero[k] with {
+    if (n !in I.dom) {
+      pure assert I.out[n][k] == domPlus(I1.out[n], I2.out[n])[k];
+      pure assert I.out[n][k] == I1.out[n][k] + I2.out[n][k];
+    }
+  }
 }
- */
+
 
 /** findNext */
-procedure findNext(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
-  returns (n: Node)
-  requires node(x, Ix, C) &*& intValid(Ix)
-  ensures node(x, Ix, C)
-  ensures n != null ==> Ix.out[n][k] >= 1
-  ensures n == null ==> (forall y: Node :: Ix.out[y][k] == 0)
+procedure findNext(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>, implicit ghost first: Node)
+  returns (n: Node, res: Bool)
+  requires node(first, x, Ix, C) &*& intValid(Ix)
+  requires in_inset(k, Ix, x)
+  ensures node(first, x, Ix, C)
+  ensures n != null ==> in_outset(k, Ix, n)
+  ensures n == null ==> (forall y: Node :: !(in_outset(k, Ix, y)))
+  ensures res == (k in C)
 {
   if (x.next == null) {
-    return null;
+    return null, false;
   } else {
     if (le(k, x.data)) {
-      return null;
+      return null, x.data == k && !x.sentinel;
     } else {
-      return x.next;
+      return x.next, false;
     }
   }
 }
 
 /** search */
-procedure search(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
-  returns (res: Bool, ghost Ix1: Interface, implicit ghost C1: Set<K>)
-  requires node(x, Ix, C) &*& intValid(Ix)
-  requires Ix.inf[x][k] == 1 && (forall y: Node :: Ix.out[y][k] == 0)
-  ensures node(x, Ix1, C1) &*& intLeq(Ix, Ix1)
+procedure search(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>, implicit ghost first: Node)
+  returns (res: Bool, implicit ghost C1: Set<K>)
+  requires node(first, x, Ix, C) &*& intValid(Ix)
+  requires in_inset(k, Ix, x) && (forall y: Node :: !(in_outset(k, Ix, y)))
+  ensures node(first, x, Ix, C1)
   // decisiveOpSpec(x, Ix1, res, k):
   ensures (C1 == C && (res == k in C))
 {
-  if (k == x.data)
-    return true, Ix;
+  if (!x.sentinel && k == x.data)
+    return true;
   else
-    return false, Ix;
+    return false;
 }
 
 
 /** insert */
 procedure insert(p: Node, n: Node, k: K,
                  Ip: Interface, In: Interface, Ipn: Interface,
-                 Cpn: Set<K>)
-  returns (res: Bool, Ip1: Interface, In1: Interface, Im1: Interface, Ipnm1: Interface, ghost m: Node,
-           Cpnm1: Set<K>
-  )
-  requires node(p, Ip, contents(p)) &*& node(n, In, contents(n))
-  //requires intValid(Ip) &*& intValid(In) // is this needed?
-  requires Ipn == intComp(Ip, In) &*& intValid(Ipn)
+                 implicit ghost Cpn: Set<K>, implicit ghost first: Node)
+  returns (Ip1: Interface, In1: Interface, Im1: Interface, Ipnm1: Interface, ghost m: Node,
+           Cpnm1: Set<K>)
+  requires k in KS
+  requires node(first, p, Ip, contents(p)) &*& node(first, n, In, contents(n)) &*& hrepSpatial(m)
+  requires Ipn == intComp(Ip, In) && intValid(Ipn) 
+  requires Ipn.out[m] == domZero
+  requires m != first
+  requires n != first
   requires Cpn == contents(p) ++ contents(n)
-  requires Ip.out[n][k] == 1
-  requires In.inf[n][k] == 1 && (forall y: Node :: In.out[y][k] == 0)
-  ensures res ==> node(p, Ip1, contents(p)) &*& node(n, In1, contents(n)) &*& node(m, Im1, contents(m))
-  ensures !res ==> node(p, Ip1, contents(p)) &*& node(n, In1, contents(n))
+  requires k !in contents(n)
+  requires in_outset(k, Ip, n);
+  requires in_inset(k, In, n) && (forall y: Node :: !(in_outset(k, In, y)))
+  ensures node(first, p, Ip1, contents(p)) &*& node(first, n, In1, contents(n)) &*& node(first, m, Im1, contents(m))
   ensures intValid(Ip1) &*& intValid(In1) &*& intValid(Im1)
   ensures Ipnm1 == intComp(Ip1, intComp(Im1, In1))
   ensures intLeq(Ipn, Ipnm1)
-  ensures res ==> Cpnm1 == contents(n) ++ contents(m) ++ contents(p);
-  ensures !res ==> Cpnm1 == contents(n) ++ contents(p)
+  ensures Cpnm1 == contents(n) ++ contents(m) ++ contents(p);
   // decisiveOpSpec(x, Ix1, res, k):
-  ensures (Cpnm1 == Cpn ++ {k} && (res == k !in Cpn))
+    ensures Cpnm1 == Cpn ++ {k}
 {
-  //lemma_int_comp_unfold(Ip, In);
-  
-  // Actual implementation
-  if (n.data == k) {
-    intComp_comm(In, intEmp);
-    return false, Ip, In, intEmp, Ipn, null, contents(n) ++ contents(p);
-  }
-
-  m := new Node;
-  pure assume n.next != m; // GC assumption
-  
   m.data := k;
   m.next := n;
+  m.sentinel := false;
   p.next := m;  
-  res := true;
 
   // Proof - not pretty but almost all of this is just manual expansion of definitions
 
-  // Define Ip1
-  Ip1 := int(Ip.inf, edgeFn(p), {p});
-  pure assert intValid(Ip1);
-  //assert node(p, Ip1, Cp) &*& acc(n) &*& acc(m);
+  pure assert Ipn.out[m][top] == 0;
+  pure assert Ipn.out[m][top] == domPlus(Ip.out[m], In.out[m])[top];
+  pure assert Ipn.out[m][top] == Ip.out[m][top] + In.out[m][top];  
+  pure assert n.next != m; 
 
-  pure assert Ip.out[m] == domZero;
+  // Define Ip1
+  Ip1 := int(Ip.inf, edgeFn(p, Ip.inf), {p});
+  pure assert intValid(Ip1);
+  
+  //pure assert Ip.out[m] == domZero;
   
   // Define Im1
   ghost var minf1 := { n1: Node :: n1 == m ? { k1: K :: lt(p.data, k1) ? 1 : 0}: domZero };
-  Im1 := int(minf1, edgeFn(m), {m});
+  Im1 := int(minf1, edgeFn(m, minf1), {m});
   pure assert intValid(Im1);
   //assert node(m, Im1, {k}) &*& acc(p) &*& acc(n);
 
+  
   // Define In1
   ghost var ninf1 := { n1: Node :: n1 == n ? { k1: K :: In.inf[n][k1] == 1 && le(k1, p.data) || lt(k, k1) ? 1 : 0} : domZero };
 
-  In1 := int(ninf1, edgeFn(n), In.dom);
+  In1 := int(ninf1, edgeFn(n, ninf1), In.dom);
   pure assert forall n1: Node, k1: K :: ninf1[n1][k1] >= 0 with {
     pure assert n1 != n ==> ninf1[n1][k1] == 0;
     if (n == n1 && In.inf[n][k1] == 1 && le(k1, p.data) || lt(k, k1)) {
@@ -217,9 +281,7 @@ procedure insert(p: Node, n: Node, k: K,
   }
 
   lemma_int_comp_fold(Im1, In1);
-  //intComp_comm(Im1, In1);
-  
-  // intComp(ip1, intComp(In1, Im1))
+
   ghost var Inm1 := intComp(In1, Im1);
   intComp_comm(In1, Im1);
   lemma_int_comp_unfold(Im1, In1);
@@ -273,6 +335,10 @@ procedure insert(p: Node, n: Node, k: K,
   lemma_int_comp_unfold(Ip1, intComp(Im1, In1));
 
   Ipnm1 := intComp(Ip1, intComp(Im1, In1));
+
+  // assert "test" node(first, p, Ip1, contents(p)) &*& hrepSpatial(n) &*& hrepSpatial(m);
+  // assert "test" node(first, n, In1, contents(n)) &*& hrepSpatial(p) &*& hrepSpatial(m);
+  // assert "test" node(first, m, Im1, contents(m)) &*& hrepSpatial(n) &*& hrepSpatial(p);
   
   pure assert intLeq(Ipn, Ipnm1) with {
     lemma_int_comp_unfold(Ip, In);
@@ -311,7 +377,6 @@ procedure insert(p: Node, n: Node, k: K,
       }
     }
   }
-
   Cpnm1 := contents(n) ++ contents(m) ++ contents(p);
 }
 

@@ -35,7 +35,7 @@ define in_outset(k, I, n) {
 
 define in_outsets(k, I)
 {
- exists n: Node :: in_outset(k, I, n)
+  exists n: Node :: in_outset(k, I, n)
 }
 
 /** Global invariant that needs to be maintained */

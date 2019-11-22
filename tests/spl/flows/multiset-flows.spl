@@ -7,20 +7,32 @@ type FlowDom = Multiset
 
 /** Lemmas and definitions needed by Coq/Iris */
 
-predicate globalint(I: Interface)
-{
-  // Global interface is closed
-  I.out == zeroFlow
+define in_inset(k, I, n) {
+  I.inf[n][k] > 0
 }
-
-predicate in_outset(k: K, I: Interface, n: Node) {
+  
+define in_outset(k, I, n) {
   I.out[n][k] > 0
 }
 
-lemma flowint_step(I1: Interface, I2: Interface, I: Interface, k: K, n: Node)
+define in_outsets(k, I)
+{
+  exists n: Node :: in_outset(k, I, n)
+}
+
+predicate globalinv(root: Node, I: Interface)
+{
+  root in I.dom
+  // Global interface is closed
+  && (forall n: Node, k: K :: !(in_outset(k, I, n)))
+}
+
+
+
+lemma flowint_step(root: Node, I1: Interface, I2: Interface, I: Interface, k: K, n: Node)
   requires I == intComp(I1, I2) && intValid(I)
   requires in_outset(k, I1, n)
-  requires globalint(I)
+  requires globalinv(root, I)
   ensures n in I2.dom
 {
   pure assert I1.out[n] != domZero;
