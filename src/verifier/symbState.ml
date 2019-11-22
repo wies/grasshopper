@@ -11,9 +11,12 @@ let todo () = raise NotYetImplemented
 
 (** Symbolic values; grasshopper distinguishes between terms and forms,
   viper's silicon doesn't *)
-type symb_val =
+type symb_val = 
   | Term of term
   | Form of form
+
+let mk_fresh_symb_val srt prefix = 
+  Term (mk_fresh_var srt prefix)
 
 (** Symbolic store:
   maintains a mapping from grasshopper vars to symbolic vals
@@ -21,6 +24,11 @@ type symb_val =
 (* Note: adding sort so we can remember type when we sub in symbolic vals *)
 type symb_store = symb_val IdMap.t
 let empty_store = IdMap.empty
+
+let find_symb_val store id =
+  try IdMap.find id store
+  with Not_found ->
+    failwith ("find_symb_val: Could not find symbolic val for " ^ (string_of_ident id))
 
 (** havoc a list of terms into a symbolic store *)
 let havoc_terms symb_store terms =
@@ -42,23 +50,23 @@ let havoc_terms symb_store terms =
  TODO: optimize symb_val list to use a set. *)
 type pc_stack = (ident * symb_val * symb_val list) list
 
-let pc_add_path_cond pc_stack pc_val =
-  match pc_stack with
-  | [] -> failwith "tried to add path cond to an empty stack"
-  | (sid, bc, pcs) :: stack' -> (sid, bc, pc_val :: pcs) :: stack'
-
-let pc_push_new pc_stack scope_id br_cond =
-  match pc_stack with
+let pc_push_new (stack: pc_stack) scope_id br_cond =
+  match stack with
   | [] -> [(scope_id, br_cond, [])]
   | stack -> (scope_id, br_cond, []) :: stack
+
+let pc_add_path_cond stack pc_val =
+  match stack with
+  | [] -> pc_push_new [] ("s", 0) (mk_fresh_symb_val Bool "v") 
+  | (sid, bc, pcs) :: stack' -> (sid, bc, pc_val :: pcs) :: stack'
 
 let rec pc_after pc_stack scope_id =
   match pc_stack with
   | [] -> []
   | (sid, bc, pcs) :: stack' ->
-        if sid = scope_id
-        then (sid, bc, pcs) :: pc_after stack' scope_id
-        else pc_after stack' scope_id
+    if sid = scope_id
+    then (sid, bc, pcs) :: pc_after stack' scope_id
+    else pc_after stack' scope_id
 
 let pc_collect_constr stack =
   List.fold_left
@@ -87,6 +95,12 @@ let snap_second s =
 
 let mk_fresh_snap srt = 
   Snap (Term (mk_fresh_var srt "snap"))
+
+let term_of_snap = function
+  | Unit -> Var (("unit", 0), Bool)
+  | Snap (Term t) -> t
+  | Snap (Form f) -> todo()
+  | SnapPair (_, _) -> todo()
 
 (** heap elements and symbolic heap
   The symbolic maintains a multiset of heap chunks which are

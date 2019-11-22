@@ -3,10 +3,11 @@
 open Printf
 open GrassUtil
 open SymbEval
+open SymbState
 
 (** SMT solver calls *)
 let check pc_stack v =
-  let _ = SymbState.pc_collect_constr pc_stack in
+  let _ = pc_collect_constr pc_stack in
   true
 
 (* Returns None if the entailment holds, otherwise Some (list of error messages, model) *)
@@ -41,21 +42,21 @@ let assert_constr pc_stack v =
 (** exec implements execution rules for grass formulas. The remaining
   work is done by encoding the remaining execution steps via a continuation
   function fc *)
-let exec state f (fc: SymbState.symb_state -> 'a option) =  SymbState.todo()
+let exec state f (fc: symb_state -> 'a option) =  todo()
 
 (** consume removes permissions from a symbolic state and then
     executes the remaining symbolic execution using fc *)
-let consume state assrtn fc = SymbState.todo()
+let consume state assrtn fc = todo()
 
 (** branch implements branching and executes each path using f1 where symbv
   holds, otherwise f2 is executed *)
-let branch state smybv f1 f2 = SymbState.todo()
+let branch state smybv f1 f2 = todo()
 
 (** produce adds permissions to symbolic state from state using formula,
     and snapshot. This function implements the production rules for a single formula,
     but it may recurse in the case of an assertion being of the form (f1 &*& f2).
     The remaining work is done using a contiuation function, fc. *)
-let rec produce state (assn: Prog.spec_form) snp (fc: SymbState.symb_state -> 'a option) =
+let rec produce state (assn: Prog.spec_form) snp (fc: symb_state -> 'a option) =
   match assn with
   | Prog.FOL f ->
     Debug.debug( fun() ->
@@ -63,23 +64,18 @@ let rec produce state (assn: Prog.spec_form) snp (fc: SymbState.symb_state -> 'a
     ); 
     (match f with
      | Grass.BoolOp (Grass.Not, fs) -> fc state
-     | Grass.BoolOp (Grass.And, fs) ->
-         produce state (Prog.FOL (List.hd fs)) (SymbState.snap_first snp)
-          (fun sig2 ->
-            produce sig2 (Prog.FOL (List.nth fs 2)) (SymbState.snap_second snp) fc)
+     | Grass.BoolOp (Grass.And, fs) -> fc state
      | Grass.BoolOp (Grass.Or, fs) -> fc state 
-     | Grass.Atom (t, ats) -> SymbState.todo() 
+     | Grass.Atom (t, ats) -> todo() 
      | Grass.Binder (Grass.Forall, ts, f, ats) -> fc state 
      | Grass.Binder (Grass.Exists, ts, f, ats) -> fc state)
   | Prog.SL f ->
     (match f with
-     | Sl.Pure (p, pos) ->
+     | Sl.Pure (p, _) ->
        Debug.debug( fun() ->
-         sprintf "%sProducing sl pure form %s\n"
-         SymbState.lineSep (Grass.string_of_form p)
-       );
-       eval_form state p (fun st2 v ->
-         produce st2 (Prog.SL (Sl.Pure (p, pos))) snp fc)
+         sprintf "%sProducing sl pure Atom Var %s\n"
+         lineSep (Grass.string_of_form p)
+       ); todo()
      | Sl.Atom (Sl.Emp, ts, _) -> fc state 
      | Sl.Atom (Sl.Region, [r], _) -> fc state 
      | Sl.Atom (Sl.Region, ts, _) -> fc state 
@@ -105,6 +101,14 @@ let rec produce state (assn: Prog.spec_form) snp (fc: SymbState.symb_state -> 'a
      | Sl.Binder (Grass.Forall, ts, f, _) -> fc state 
      | Sl.Binder (Grass.Exists, ts, f, _) -> fc state)
 
+and produce_symb_expr state v snp (fc: symb_state -> 'a option) =
+  let s2 = {
+    state with 
+    pc = pc_add_path_cond (pc_add_path_cond state.pc v) (Term (App (Eq, [term_of_snap snp; term_of_snap Unit], Bool)))
+  }
+  in
+  fc s2
+
 (** produces is the entry point for producing an assertion list (spec list),
     this function iterates over the assns calling produce on each spec. *)
 let rec produces state (assns: Prog.spec list) snp fc =
@@ -115,8 +119,6 @@ let rec produces state (assns: Prog.spec list) snp fc =
       (match produce state hd.spec_form snp fc with
       | Some err -> Some err
       | None -> produces state assns' snp fc)
-
-let mk_fresh_snap_freesrt label = SymbState.mk_fresh_snap (Grass.FreeSrt (label, 0))
 
 (** verify checks procedures and predicates for well-formed specs and the postcondition
    can be met by executing the body under the precondition *)
@@ -134,13 +136,15 @@ let verify spl_prog prog proc =
         Grass.Var (var, srt.var_sort) :: term_lst)
       [] formals
   in
-  let init_state = SymbState.mk_symb_state
-    (SymbState.havoc_terms SymbState.empty_store formal_arg_terms) in
+  let init_state = mk_symb_state
+    (havoc_terms empty_store formal_arg_terms) in
 
   Debug.debug(fun() ->
       sprintf "%sInitial State:\n{%s\n}\n\n"
-      SymbState.lineSep (SymbState.string_of_state init_state)
+      lineSep (string_of_state init_state)
   );
+
+  let mk_fresh_snap_freesrt label = mk_fresh_snap (Grass.FreeSrt (label, 0)) in
 
   let precond = Prog.precond_of_proc proc in
   let postcond = Prog.postcond_of_proc proc in

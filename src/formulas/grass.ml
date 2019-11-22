@@ -74,7 +74,7 @@ type symbol =
   | BoolConst of bool
   | IntConst of Int64.t
   (* interpreted function symbols *)
-  | Null | Read | Write | EntPnt
+  | Null | Read | Write | EntPnt (* x.f and field read here *)
   | UMinus | Plus | Minus | Mult | Div | Mod (* Int *)
   | BitAnd | BitOr | BitNot | ShiftLeft | ShiftRight (* Bit Vector *)
   | Empty | SetEnum | Union | Inter | Diff  (* Set *)
