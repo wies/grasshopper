@@ -55,7 +55,7 @@ lemma keyset_def(k: K, I_n: Interface, n: Node)
 }
 
 lemma flowint_step(first: Node, I1: Interface, I2: Interface, I: Interface, k: K, n: Node)
-  requires I == intComp(I1, I2) && intValid(I)
+  requires I == intComp(I1, I2)
   requires in_outset(k, I1, n)
   requires globalinv(first, I)
   ensures n in I2.dom
@@ -69,7 +69,7 @@ lemma flowint_step(first: Node, I1: Interface, I2: Interface, I: Interface, k: K
 }
 
 lemma successor_not_first(I: Interface, I1: Interface, I2: Interface, I3: Interface, first: Node, n: Node, k: K, C: Set<K>)
-  requires I = intComp(I1, intComp(I2, I3)) && intValid(I)
+  requires I = intComp(I1, intComp(I2, I3))
   requires globalinv(first, I)
   requires in_outset(k, I1, n)
   requires nodeinv(first, n, I2, C)

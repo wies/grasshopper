@@ -99,7 +99,7 @@ lemma flowint_linkset_step(I: Interface, I1: Interface, I2: Interface, k: K, n: 
 }
 
 lemma flowint_step(root: Node, I: Interface, I1: Interface, I2: Interface, k: K, n: Node)
-  requires intValid(I) && I == intComp(I1, I2)
+  requires I == intComp(I1, I2)
   requires in_outset(k, I1, n)
   requires globalinv(root, I)
   ensures n in I2.dom
