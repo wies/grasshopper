@@ -2,7 +2,7 @@
 
 options "-simplearrays -propreads -abspreds -stratify"
 
-include "multipair-flows.spl"
+include "link.spl"
 include "array_util.spl"
 
 /** Definition of a node */

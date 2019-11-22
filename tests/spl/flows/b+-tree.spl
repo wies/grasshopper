@@ -2,7 +2,7 @@
 
 options "-simplearrays -propreads"
 
-include "multiset-flows.spl"
+include "give-up.spl"
 include "array_util.spl"
 
 /** Definition of a node */
@@ -15,14 +15,6 @@ struct Node {
   var ptrs: Array<Node>;
 }
 
-define unchanged(x) {
-  x.len == old(x.len) && x.rangeLb == old(x.rangeLb)
-    && x.rangeUb == old(x.rangeUb) && x.keys == old(x.keys) && x.ptrs == old(x.ptrs)
-    && x.keys.length == old(x.keys.length) && x.keys.map == old(x.keys.map)
-    && x.ptrs.length == old(x.ptrs.length) && x.ptrs.map == old(x.ptrs.map)
-}
-
-
 /** Definition of heap representation, hrep */
 
 var B: Int
@@ -32,12 +24,10 @@ define hrepSpatial(x) {
   acc(x) &*& acc(x.keys) &*& acc(x.ptrs)
 }
 
-define hrep(x, I, C) {
+// The definition of the implementation-specific node predicate assumed by Iris
+define node(x, I, C) {
   hrepSpatial(x) &*& I.dom == {x} // TODO where to put this?
     && 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
-    //&& (lt(x.rangeLb, x.rangeUb) ==> I.inf[x].pc == 1)  // inset != {} ==> pc == 1
-    // edgeset != {} ==> pc == 1
-    //&& (forall n: Node, n1: Node, k: K :: I.fm[n][n1].ks[k] >= 1 ==> I.fm[n][n1].pc == 1)
     // The keys are within the range
     && (x.len != 0 ==> le(x.rangeLb, x.keys[0]) && lt(x.keys[x.len-1], x.rangeUb))
     // The range defines the inset
@@ -64,26 +54,23 @@ define hrep(x, I, C) {
        )
 }
 
-// The good condition
-define searchStrInv(x, I, C) {
-    // Contents subsetof keyset
-    (forall k: K :: k in C ==> I.inf[x][k] >= 1)
-    && (forall k: K, y: Node :: k !in C || I.out[y][k] == 0)
-    // Edgesets are disjoint
-    && (forall k: K, y: Node, z: Node :: y == z
-       || I.out[y][k] == 0 || I.out[z][k] == 0)
+
+/** Implemetation-specific lemmas needed by Iris */
+
+lemma node_sep_star(n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set<K>)
+  requires node(n, I_n, C) &*& node(n, I_np, Cp)
+  ensures false
+{
+  
 }
 
-define node(x, I, C) {
-  hrep(x, I, C) &*& searchStrInv(x, I, C)
-}
-
+/** Lemmas for proofs below */
 
 lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int, implicit ghost C: Set<K>)
-  requires hrep(x, Ix, C) &*& intValid(Ix)
+  requires node(x, Ix, C) &*& intValid(Ix)
   requires Ix.inf[x][k] == 1 && (forall y: Node :: Ix.out[y][k] == 0)
   requires (i <= 0 || le(x.keys[i-1], k)) && 0 <= i <= x.len
-  ensures hrep(x, Ix, C)
+  ensures node(x, Ix, C)
   ensures x.ptrs[0] == null  // x is a leaf
 {
   if (x.ptrs[0] != null) {
@@ -99,51 +86,6 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int, implicit ghost C
   }
 }
 
-
-/** Lemmas needed by Coq */
-
-/*
-lemma flowint_inset_step(I: Interface, x: Node, Ix: Interface, y: Node, Iy: Interface, k: K)
-  requires Ix.dom == {x} && Iy.dom == {y} && I == intComp(Ix, Iy) && intValid(I)
-  requires Ix.inf[x][k] >= 1 && Ix.fm[x][y][k] >= 1
-  ensures Iy.inf[y][k] >= 1
-{
-  pure assert domMult(Ix.inf[x], Ix.fm[x][y])[k] == Ix.inf[x][k] * Ix.fm[x][y][k]
-    && Ix.inf[x][k] * Ix.fm[x][y][k] != 0;
-  pure assert !domEq(domMult(Ix.inf[x], Ix.fm[x][y]), domZero());
-  lemma_acyclic_2(x, Ix, y, Iy);
-  lemma_int_comp_unfold(x, Ix, y, Iy, I);
-  lemma_int_valid_unfold_I(I);
-  pure assert Iy.inf[y][k] == domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y]))[k]
-    && domPlus(I.inf[y], domMult(Ix.inf[x], Ix.fm[x][y]))[k]
-      == I.inf[y][k] + domMult(Ix.inf[x], Ix.fm[x][y])[k]
-    && domMult(Ix.inf[x], Ix.fm[x][y])[k] == Ix.inf[x][k] * Ix.fm[x][y][k];
-}
-
-lemma flowint_proj(I: Interface, x: Node, Ix: Interface, Iy: Interface, k: K)
-  requires I == intComp(Ix, Iy) && intValid(I) && x in Ix.dom
-  requires I.inf[x][k] >= 1
-  ensures Ix.inf[x][k] >= 1
-{
-  lemma_proj(x, Ix, Iy, I);
-}
-
-lemma flowint_cont(I: Interface, Im: Interface, I1: Interface, m: Node)
-  requires I1 == intComp(I, Im) && intValid(I1) && Im == newInt(m)
-  ensures I.na.contents == I1.na.contents
-{}
-
-lemma flowint_step(I1: Interface, I2: Interface, I: Interface, x: Node, y: Node, k: K)
-  requires I == intComp(I1, I2) && intValid(I) && x in I1.dom
-  requires forall n: Node, n1: Node :: domEq(I.fm[n][n1], domZero)
-  requires I1.fm[x][y][k] >= 1
-  ensures y in I2.dom
-{
-  lemma_int_valid_unfold_I(I1);
-  lemma_step(I1, I2, I, x, y);
-}
- */
-
 /** Begin programs */
 
 /** Initialize root node */
@@ -155,10 +97,10 @@ procedure init() returns (x: Node, I: Interface, implicit ghost C: Set<K>)
   x.ptrs := new Array<Node>(2*B);
   arr_init_node(x.ptrs, 2*B, null);
   x.len := 0;
-  x.rangeLb := bottom;
+  x.rangeLb := bot;
   x.rangeUb := top;
   
-  var xkc := { k: K :: le(bottom, k) && lt(k, top) ? 1 : 0 };
+  var xkc := { k: K :: le(bot, k) && lt(k, top) ? 1 : 0 };
   var xfm := { n1: Node :: domZero };
   I := int({ n: Node :: n == x ? xkc : domZero },
             xfm, {x});
@@ -233,7 +175,6 @@ procedure insert(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
     var old_len := x.len;
     
     var idx, new_len := arr_insert(x.keys, k, x.len);
-    // TODO argument order consistent
 
     map_insert_content_set(m, x.keys.map, idx, k, x.len, new_len);
 

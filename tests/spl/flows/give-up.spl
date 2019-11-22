@@ -1,11 +1,12 @@
-/** Flow domain for multisets over some element type K */
+/** Flow domain setup for verifying give-up template implementations */
 
 include "flows.spl"
 include "multiset-ccm.spl"
 
 type FlowDom = Multiset
 
-/** Lemmas and definitions needed by Coq/Iris */
+/** Definitions of predicates used in give-up template proof in Iris as well as 
+  * flow domain specific lemmas assumed by that proof. */
 
 define in_inset(k, I, n) {
   I.inf[n][k] > 0
@@ -15,20 +16,33 @@ define in_outset(k, I, n) {
   I.out[n][k] > 0
 }
 
-define in_outsets(k, I)
+predicate in_outsets(k: K, I: Interface)
 {
   exists n: Node :: in_outset(k, I, n)
 }
 
-predicate globalinv(root: Node, I: Interface)
+function keyset(I: Interface, n: Node) returns (res: Set<K>)
 {
-  root in I.dom
-  // Global interface is closed
-  && (forall n: Node, k: K :: !(in_outset(k, I, n)))
+  { k: K :: in_inset(k, I, n) && !(in_outsets(k, I)) }
 }
 
+predicate globalinv(root: Node, I: Interface)
+{
+  intValid(I)
+  && root in I.dom
+  // Global interface is closed
+  && (forall n: Node, k: K :: !(in_outset(k, I, n)))
+  && (forall n: Node :: (n == root ==> (forall k: K :: in_inset(k, I, n))) &&
+                 (n != root ==> (forall k: K :: !(in_inset(k, I, n)))))
+}
 
-
+lemma keyset_def(k: K, I_n: Interface, n: Node)
+  requires in_inset(k, I_n, n)
+  requires !(in_outsets(k, I_n))
+  ensures k in keyset(I_n, n)
+{
+}
+              
 lemma flowint_step(root: Node, I1: Interface, I2: Interface, I: Interface, k: K, n: Node)
   requires I == intComp(I1, I2) && intValid(I)
   requires in_outset(k, I1, n)

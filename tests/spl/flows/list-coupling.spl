@@ -2,7 +2,7 @@
 
 options "-abspreds -simplearrays -propreads -stratify"
 
-include "multiset-flows.spl"
+include "lock-coupling.spl"
 include "array_util.spl"
 
 function KS() returns (res: Set<K>)

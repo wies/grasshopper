@@ -2,7 +2,7 @@
 
 options "-abspreds -simplearrays -propreads -stratify"
 
-include "multipair-flows.spl"
+include "link.spl"
 include "array_util.spl"
 
 function keyspace() returns (m: Multiset)
@@ -20,18 +20,18 @@ struct Node {
   ghost var indices: Map<Node, Int>;
 }
 
-/** Definition of heap representation, hrep */
-
 // Width of the B-trees
 const B: Int
 axiom B > 1
+
+/** Definition of node abstraction */
 
 // Access permissions associated with a B-link tree node x
 predicate hrepSpatial(x: Node) {
   acc(x) &*& acc(x.keys) &*& acc(x.ptrs) &*& x.keys.length == 2*B && x.ptrs.length == 2*B
 }
 
-// k in edgeset(x, u) for child u
+// k in ks_outset(x, u) for child u
 define ks_child(x, u, k)
 {
   (x.indices[u] == 0 || !lt(k, x.keys.map[x.indices[u] - 1])) &&
@@ -125,67 +125,13 @@ function blink_outsets(Ix: Interface, x: Node) returns (res: Set<K>)
            || x.ptrs[0] != null && lt(k, top))}
 }
 
-/*
-// Show that outset is defined correctly - part 1
-lemma outset_correct1(x: Node, Ix: Interface, k: K, C: Set<K>)
-  requires node(x, Ix, C) &*& intValid(Ix)
-  requires k in blink_outsets(Ix, x) && lt(k, top)
-  pure ensures in_outsets(k, Ix)
-{
-  var y: Node;
-  pure assert edgeFn(x, Ix.inf)[y] == Ix.out[y];
-  
-  if (x.ptrs[0] == null) { 
-    y := x.next;
-    return;
-  } else {
-    var i: Int := map_find(x.keys.map, 0, x.len, k);
-    
-    if (i < x.len && k == x.keys.map[i]) {  // map_find finds upper bound, we want lower
-      i := i + 1;
-    }
-
-    if (i == x.len && x.next != null) {
-      if (lt(k, x.keys.map[i])) {
-        y := x.ptrs[i];
-        pure assert in_outset(k, Ix, y);
-        return;
-      } else {
-        y := x.next;
-        pure assert in_outset(k, Ix, y);
-        return;
-      }
-    } else {
-      y := x.ptrs[i];
-      pure assert in_outset(k, Ix, y);
-      return;
-    }
-    pure assert in_outset(k, Ix, y);
-    return;
-  }
-}
-*/
-
-// Show that blink_outsets is superset of in_outsets
-lemma outsets_correct(x: Node, Ix: Interface, k: K, C: Set<K>)
-  requires hrep(x, Ix, C) &*& intValid(Ix)
-  pure ensures in_outsets(k, Ix) ==> k in blink_outsets(Ix, x)
-{
- if (in_outsets(k, Ix)) {
-     pure assert (x.ptrs[0] == null && x.next != null && !lt(k, x.keys[x.len]) && lt(k, top)
-                  || x.ptrs[0] != null && lt(k, top));
-  }
-}
-
 
 // The good condition
 define searchStrInv(x, I, C) {
-    // Contents subsetof keyset
-      (forall k1: K :: k1 in C ==> in_inset(k1, I, x))
-    && (forall k1: K, y: Node :: k1 !in C || !(in_outset(k1, I, x)))
     // Edgesets are disjoint (TODO: this should follow from heapGood, not sure this is even needed anymore)
-    && (forall k1: K, y: Node, z: Node :: y == z
-       || I.out[y].is[k1] == 0 || I.out[z].is[k1] == 0)
+    true
+    //(forall k1: K, y: Node, z: Node :: y == z
+    //   || I.out[y].is[k1] == 0 || I.out[z].is[k1] == 0)
     // Linkset keyset subsetof inset
     && (forall k1: K :: in_linkset(k1, I, x) && k1 !in blink_outsets(I, x) ==> in_inset(k1, I, x))
     && (forall k1: K :: in_linkset(k1, I, x) && !(in_inset(k1, I, x)) ==> !lt(k1, x.keys[x.len]))
@@ -194,6 +140,21 @@ define searchStrInv(x, I, C) {
 define node(x, I, C) {
   hrep(x, I, C) &*& searchStrInv(x, I, C)
 }
+
+/** Implementation specific lemmas used by Iris */
+
+// Show that blink_outsets is superset of in_outsets
+lemma outsets_correct(x: Node, Ix: Interface, k: K, C: Set<K>)
+  requires hrep(x, Ix, C) &*& intValid(Ix)
+  pure ensures in_outsets(k, Ix) ==> k in blink_outsets(Ix, x)
+{
+  if (k !in blink_outsets(Ix, x)) {
+    pure assert !((x.ptrs[0] == null && x.next != null && !lt(k, x.keys[x.len]) && lt(k, top)
+                || x.ptrs[0] != null && lt(k, top)));
+    pure assert forall n1: Node :: !(in_outset(k, Ix, n1));
+  }
+}
+
 
 // Node abstraction implies node-level invariant (this lemma is assumed by Coq)
 lemma node_implies_nodeinv(n: Node, I: Interface, C: Set<K>)
@@ -433,10 +394,9 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
   requires node(c, Ic, C) &*& hrepSpatial(x)
   requires intValid(Ic)
   requires c.len == 2 * B - 1
-  // GC assumption
+  // GC assumption -- follows from x being allocated freshly
   requires c.next != x;
   requires (forall i: Int :: 0 <= i <= c.len ==> x != c.ptrs[i]);
-  // Follows from x being allocated freshly
   ensures node(c, Ic1, Cc) &*& node(x, Ix1, Cx)
   ensures intValid(Ic1) && intValid(Ix1)
   ensures intComp(Ic1, Ix1) == Icx1 && intLeq(Ic, Icx1)
@@ -498,7 +458,7 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
     }
 
     pure assert searchStrInv(x, Ix1, Cx) with {
-      pure assert forall k1: K :: k1 in Cx ==> Ix1.inf[x].is[k1] >= 1 with {
+      /*pure assert forall k1: K :: k1 in Cx ==> Ix1.inf[x].is[k1] >= 1 with {
         if (k1 in Cx) {
           map_find_in_set(x.keys.map, 0, x.len, k1);
           pure assert Ic.inf[c].is[k1] >= 1;
@@ -508,7 +468,7 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
         if (k1 in Cx && Ix1.out[y].is[k1] != 0) {
           map_find_in_set(x.keys.map, 0, x.len, k1);
         }
-      }
+         }*/
 
       pure assert forall k1: K :: Ix1.inf[x].ls[k1] >= 1 && k1 !in blink_outsets(Ix1, x)
         ==> Ix1.inf[x].is[k1] >= 1 with {
@@ -627,9 +587,9 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
       }
     }
     
-    pure assert searchStrInv(c, Ic1, Cc) with {
-      lemma_edgesets_disjoint(c, Ic1, Ic.inf);
-    }
+    //pure assert searchStrInv(c, Ic1, Cc) with {
+    //  lemma_edgesets_disjoint(c, Ic1, Ic.inf);
+    //}
 
     pure assert intValid(Ix1) with {
       pure assert forall n: Node :: domValid(x_inflow[n]) with {
@@ -665,7 +625,7 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
         }
       }
       
-      lemma_edgesets_disjoint(x, Ix1, x_inflow);
+      //lemma_edgesets_disjoint(x, Ix1, x_inflow);
     }
 
     pure assert intComposable(Ic1, Ix1) with {

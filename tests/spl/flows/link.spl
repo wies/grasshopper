@@ -33,10 +33,16 @@ define in_outset(k, I, n) {
   I.out[n].is[k] > 0 || I.out[n].ls[k] > 0
 }
 
-define in_outsets(k, I)
+predicate in_outsets(k: K, I: Interface)
 {
   exists n: Node :: in_outset(k, I, n)
 }
+
+function keyset(I: Interface, n: Node) returns (res: Set<K>)
+{
+  { k: K :: in_inset(k, I, n) && !(in_outsets(k, I)) }
+}
+
 
 /** Global invariant that needs to be maintained */
 pure predicate globalinv(root: Node, I: Interface) {
@@ -51,6 +57,13 @@ pure predicate globalinv(root: Node, I: Interface) {
 pure predicate nodeinv(n: Node, I: Interface, C: Set<K>) {
    I.dom == {n} // is this needed?
    && (forall k1: K :: in_linkset(k1, I, n) && !(in_outsets(k1, I)) ==> in_inset(k1, I, n))
+}
+
+lemma keyset_def(k: K, I_n: Interface, n: Node)
+  requires in_inset(k, I_n, n)
+  requires !(in_outsets(k, I_n))
+  ensures k in keyset(I_n, n)
+{
 }
 
 lemma outset_distinct(I: Interface, n: Node)
