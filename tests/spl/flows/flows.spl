@@ -100,6 +100,11 @@ lemma intValid_defined(I: Interface)
 {
 }
 
+// intUndef is an absorbing element
+lemma intComp_undef_op(I: Interface)
+  ensures intComp(intUndef, I) == intUndef
+{}
+
 //  The empty interface composes with valid interfaces
 lemma intEmp_composable(I: Interface)
   requires intValid(I)
