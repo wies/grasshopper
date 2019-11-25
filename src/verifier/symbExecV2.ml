@@ -52,56 +52,7 @@ let consume state assrtn fc = todo()
   holds, otherwise f2 is executed *)
 let branch state smybv f1 f2 = todo()
 
-(** produce adds permissions to symbolic state from state using formula,
-    and snapshot. This function implements the production rules for a single formula,
-    but it may recurse in the case of an assertion being of the form (f1 &*& f2).
-    The remaining work is done using a contiuation function, fc. *)
-let rec produce state (assn: Prog.spec_form) snp (fc: symb_state -> 'a option) =
-  match assn with
-  | Prog.FOL f ->
-    Debug.debug( fun() ->
-      sprintf "FOL match\n"
-    ); 
-    (match f with
-     | Grass.BoolOp (Grass.Not, fs) -> fc state
-     | Grass.BoolOp (Grass.And, fs) -> fc state
-     | Grass.BoolOp (Grass.Or, fs) -> fc state 
-     | Grass.Atom (t, ats) -> todo() 
-     | Grass.Binder (Grass.Forall, ts, f, ats) -> fc state 
-     | Grass.Binder (Grass.Exists, ts, f, ats) -> fc state)
-  | Prog.SL f ->
-    (match f with
-     | Sl.Pure (p, _) ->
-       Debug.debug( fun() ->
-         sprintf "%sProducing sl pure Atom Var %s\n"
-         lineSep (Grass.string_of_form p)
-       ); todo()
-     | Sl.Atom (Sl.Emp, ts, _) -> fc state 
-     | Sl.Atom (Sl.Region, [r], _) -> fc state 
-     | Sl.Atom (Sl.Region, ts, _) -> fc state 
-     | Sl.Atom (Sl.Pred p, ts, _) -> fc state 
-     | Sl.SepOp (Sl.SepStar, f1, f2, _) ->
-         Debug.debug( fun() -> sprintf "SL SepOp SepStar\n"); 
-         fc state 
-     | Sl.SepOp (Sl.SepIncl, _, _, _) ->
-         Debug.debug( fun() -> sprintf "SL SepOp SepIncl\n"); 
-         fc state 
-     | Sl.SepOp (Sl.SepPlus, _, _, _) ->
-         Debug.debug( fun() -> sprintf "SL SepOp SepPlus\n"); 
-         fc state 
-     | Sl.BoolOp (Grass.And, fs, _) ->
-       Debug.debug( fun() -> sprintf "SL BoolOp And\n");
-       fc state
-     | Sl.BoolOp (Grass.Or, fs, _) ->
-      Debug.debug( fun() -> sprintf "SL BoolOp Or");
-      fc state 
-     | Sl.BoolOp (Grass.Not, fs, _) ->
-      Debug.debug( fun() -> sprintf "SL BoolOp Not\n");
-      fc state 
-     | Sl.Binder (Grass.Forall, ts, f, _) -> fc state 
-     | Sl.Binder (Grass.Exists, ts, f, _) -> fc state)
-
-and produce_symb_expr state v snp (fc: symb_state -> 'a option) =
+let produce_symb_expr state v snp (fc: symb_state -> 'a option) =
   let s2 = {
     state with 
     pc = pc_add_path_cond (pc_add_path_cond state.pc v) (Term (App (Eq, [term_of_snap snp; term_of_snap Unit], Bool)))
@@ -109,16 +60,78 @@ and produce_symb_expr state v snp (fc: symb_state -> 'a option) =
   in
   fc s2
 
-(** produces is the entry point for producing an assertion list (spec list),
-    this function iterates over the assns calling produce on each spec. *)
-let rec produces state (assns: Prog.spec list) snp fc =
+let rec produce_fol state (f: Grass.form) snp (fc: symb_state -> 'a option) =
+  match f with
+     | Grass.Atom (t, _) -> 
+       Debug.debug(fun() -> sprintf "Producing fol Atom \n");
+       produce_symb_expr state (Term t) snp (fun state' -> fc state')
+     | Grass.BoolOp (Grass.And, fs) -> 
+       Debug.debug( fun() ->
+         sprintf "Producing fol BoolOp AND \n"
+       );
+       produces_fol state fs snp fc
+     | Grass.BoolOp (Grass.Or, fs) -> todo()
+     | Grass.BoolOp (Grass.Not, fs) -> todo()
+     | Grass.Binder (Grass.Forall, ts, f, ats) -> todo()
+     | Grass.Binder (Grass.Exists, ts, f, ats) -> todo()
+
+and produces_fol state (fs: Grass.form list) snp (fc: symb_state -> 'a option) =
+  match fs with
+  | [] -> fc state
+  | hd :: fs' -> produce_fol state hd (snap_first snp) (fun state' -> 
+      produces_fol state' fs' (snap_second snp) fc) 
+
+let rec produce_sl state (f: Sl.form) snp (fc: symb_state -> 'a option) =
+  match f with
+  | Sl.Pure (p, _) ->
+   Debug.debug( fun() ->
+     sprintf "%sProducing sl pure Atom Var %s\n"
+     lineSep (Grass.string_of_form p)
+   );
+   produce_fol state p snp fc
+  | Sl.Atom (Sl.Emp, ts, _) -> fc state 
+  | Sl.Atom (Sl.Region, [r], _) -> fc state 
+  | Sl.Atom (Sl.Region, ts, _) -> fc state 
+  | Sl.Atom (Sl.Pred p, ts, _) -> fc state 
+  | Sl.SepOp (Sl.SepStar, f1, f2, _) ->
+     Debug.debug( fun() -> sprintf "SL SepOp SepStar\n"); 
+     fc state 
+  | Sl.SepOp (Sl.SepIncl, _, _, _) ->
+     Debug.debug( fun() -> sprintf "SL SepOp SepIncl\n"); 
+     fc state 
+  | Sl.SepOp (Sl.SepPlus, _, _, _) ->
+     fc state 
+  | Sl.BoolOp (Grass.And, fs, _) ->
+   Debug.debug( fun() -> sprintf "SL BoolOp And\n");
+   fc state
+  | Sl.BoolOp (Grass.Or, fs, _) ->
+    Debug.debug( fun() -> sprintf "SL BoolOp Or");
+    fc state 
+  | Sl.BoolOp (Grass.Not, fs, _) ->
+    Debug.debug( fun() -> sprintf "SL BoolOp Not\n");
+    fc state 
+  | Sl.Binder (Grass.Forall, ts, f, _) -> fc state 
+  | Sl.Binder (Grass.Exists, ts, f, _) -> fc state
+
+let produce_spec_form state sf snp (fc: symb_state -> 'a option) =
+  match sf with
+  | Prog.FOL fol ->
+    Debug.debug( fun() -> sprintf "produce spec form FOL match\n"); 
+    produce_fol state fol snp fc
+  | Prog.SL slf ->
+    Debug.debug( fun() -> sprintf "produce spec form SL match\n"); 
+    produce_sl state slf snp fc
+
+(** produce_specs is the entry point for producing an assertion list (spec list),
+    this function iterates over the assns calling produce_spec_form on each spec. *)
+let rec produce_specs state (assns: Prog.spec list) snp fc =
   match assns with
   | [] -> None 
   | hd :: assns' -> 
       Debug.debug(fun () -> sprintf "Produces calling produce on hd\n");
-      (match produce state hd.spec_form snp fc with
+      (match produce_spec_form state hd.spec_form snp fc with
       | Some err -> Some err
-      | None -> produces state assns' snp fc)
+      | None -> produce_specs state assns' snp fc)
 
 (** verify checks procedures and predicates for well-formed specs and the postcondition
    can be met by executing the body under the precondition *)
@@ -143,12 +156,11 @@ let verify spl_prog prog proc =
       sprintf "%sInitial State:\n{%s\n}\n\n"
       lineSep (string_of_state init_state)
   );
-
   let mk_fresh_snap_freesrt label = mk_fresh_snap (Grass.FreeSrt (label, 0)) in
 
   let precond = Prog.precond_of_proc proc in
   let postcond = Prog.postcond_of_proc proc in
-  produces init_state precond (mk_fresh_snap_freesrt "pre")
+  produce_specs init_state precond (mk_fresh_snap_freesrt "pre")
     (fun st ->
       let st2 = { st with heap=[]; old=st.heap } in
-      produces st2 postcond (mk_fresh_snap_freesrt "post") (fun _ -> None))
+      produce_specs st2 postcond (mk_fresh_snap_freesrt "post") (fun _ -> None))

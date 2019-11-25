@@ -304,8 +304,8 @@ let _ =
         SplSyntax.print_cu stdout spl_prog
       else begin
         (** TODO(eric): Remove this hack for testing symbState *)
-        let _ = check_spl_program_v2 spl_prog !Config.procedure in
-        let _, res = check_spl_program spl_prog !Config.procedure in
+        let res = check_spl_program_v2 spl_prog !Config.procedure in
+        (* let _, res = check_spl_program spl_prog !Config.procedure in *)
         print_stats start_time; 
         print_c_program spl_prog;
         if !Config.verify && res then

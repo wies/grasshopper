@@ -73,19 +73,32 @@ let pc_collect_constr stack =
   (fun pclist (id, bc, pcs) -> bc :: (pcs @ pclist))
   [] stack
 
-(** snapshot defintions *)
-type snap =
-  | Unit
-  | Snap of symb_val
-  | SnapPair of symb_val * symb_val
+(** snapshot defintions as an adt *)
+let snap_adt = (("snap_tree", 0),
+  [(("emp", 0), []);
+   (("tree", 0),
+    [(("fst", 0), FreeSrt ("snap_tree", 0));
+     (("snd", 0), FreeSrt ("snap_tree", 0))
+    ])
+  ])
 
-let snap_pair s1 s2 = SnapPair (s1, s2)
+let snap_typ= Adt (("snap_tree", 0), [snap_adt])
+
+let mk_empty_snap = 
+  App (Constructor ("emp", 0), [], snap_typ)
+
+let mk_snap_pair s1 s2 = 
+  App (Constructor ("tree", 0),
+    [(("fst", 0), FreeSrt s1); (("snd", 0), FreeSrt s2)], snap_typ)
+
+let mk_single_snap s1 = 
+  App (Constructor ("tree", 0), [s1; mk_empty_snap], snap_typ)
 
 let snap_first s =
   match s with
-  | Unit -> Unit
-  | Snap s -> Snap s
-  | SnapPair (s1, s2) -> Snap s1
+  | App (Constructor ("emp", 0), [], snap_typ) -> mk_empty_snap 
+  | App (Constructor ("tree", 0), [s1; (("emp", 0), [])], snap_typ)  -> mk_single_snap s1
+  | App (Constructor ("tree", 0), [(("emp", 0), []); s2], snap_typ) -> mk_single_snap s2
 
 let snap_second s =
   match s with
