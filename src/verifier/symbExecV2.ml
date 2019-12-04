@@ -39,11 +39,6 @@ let assert_constr pc_stack v =
   (** TODO add pred_axioms to pc_stack before passing in *)
   if check pc_stack v then None else None
 
-(** exec implements execution rules for grass formulas. The remaining
-  work is done by encoding the remaining execution steps via a continuation
-  function fc *)
-let exec state f (fc: symb_state -> 'a option) =  todo()
-
 (** consume removes permissions from a symbolic state and then
     executes the remaining symbolic execution using fc *)
 let consume state assrtn fc = todo()
@@ -53,18 +48,23 @@ let consume state assrtn fc = todo()
 let branch state smybv f1 f2 = todo()
 
 let produce_symb_expr state v snp (fc: symb_state -> 'a option) =
-  let s2 = {
-    state with 
-    pc = pc_add_path_cond (pc_add_path_cond state.pc v) (Term (App (Eq, [term_of_snap snp; term_of_snap Unit], Bool)))
-  }
+  let s2 = { state with pc = pc_add_path_cond (pc_add_path_cond state.pc v)
+    (Term (App (Eq, [term_of_snap snp; term_of_snap Unit], Bool))) }
   in
+  Debug.debug( fun() ->
+    sprintf "%sState: %s\n" 
+    lineSep (string_of_state s2)
+  );
   fc s2
 
 let rec produce_fol state (f: Grass.form) snp (fc: symb_state -> 'a option) =
   match f with
-     | Grass.Atom (t, _) -> 
-       Debug.debug(fun() -> sprintf "Producing fol Atom \n");
-       produce_symb_expr state (Term t) snp (fun state' -> fc state')
+     | Grass.Atom (t, _) as a -> 
+       Debug.debug(fun() -> sprintf "Producing fol Atom (%s) \n"
+         (Grass.string_of_term t)
+       );
+       eval state a (fun state' v -> 
+         produce_symb_expr state' v snp fc )
      | Grass.BoolOp (Grass.And, fs) -> 
        Debug.debug( fun() ->
          sprintf "Producing fol BoolOp AND \n"

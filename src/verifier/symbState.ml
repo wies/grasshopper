@@ -26,6 +26,11 @@ type symb_store = symb_val IdMap.t
 let empty_store = IdMap.empty
 
 let find_symb_val store id =
+  Debug.debug(
+    fun () ->
+      sprintf "trying to find symbv for identifier %s\n"
+      (string_of_ident id)
+  );
   try IdMap.find id store
   with Not_found ->
     failwith ("find_symb_val: Could not find symbolic val for " ^ (string_of_ident id))
@@ -73,32 +78,19 @@ let pc_collect_constr stack =
   (fun pclist (id, bc, pcs) -> bc :: (pcs @ pclist))
   [] stack
 
-(** snapshot defintions as an adt *)
-let snap_adt = (("snap_tree", 0),
-  [(("emp", 0), []);
-   (("tree", 0),
-    [(("fst", 0), FreeSrt ("snap_tree", 0));
-     (("snd", 0), FreeSrt ("snap_tree", 0))
-    ])
-  ])
+(** Snapshot defintions *)
+type snap =
+  | Unit 
+  | Snap of symb_val
+  | SnapPair of symb_val * symb_val
 
-let snap_typ= Adt (("snap_tree", 0), [snap_adt])
-
-let mk_empty_snap = 
-  App (Constructor ("emp", 0), [], snap_typ)
-
-let mk_snap_pair s1 s2 = 
-  App (Constructor ("tree", 0),
-    [(("fst", 0), FreeSrt s1); (("snd", 0), FreeSrt s2)], snap_typ)
-
-let mk_single_snap s1 = 
-  App (Constructor ("tree", 0), [s1; mk_empty_snap], snap_typ)
+let snap_pair s1 s2 = SnapPair (s1, s2)
 
 let snap_first s =
   match s with
-  | App (Constructor ("emp", 0), [], snap_typ) -> mk_empty_snap 
-  | App (Constructor ("tree", 0), [s1; (("emp", 0), [])], snap_typ)  -> mk_single_snap s1
-  | App (Constructor ("tree", 0), [(("emp", 0), []); s2], snap_typ) -> mk_single_snap s2
+  | Unit -> Unit
+  | Snap s -> Snap s
+  | SnapPair (s1, s2) -> Snap s1
 
 let snap_second s =
   match s with
@@ -114,6 +106,17 @@ let term_of_snap = function
   | Snap (Term t) -> t
   | Snap (Form f) -> todo()
   | SnapPair (_, _) -> todo()
+
+(** snapshot adt encoding for SMT solver *)
+let snap_adt = (("snap_tree", 0),
+  [(("emp", 0), []);
+   (("tree", 0),
+    [(("fst", 0), FreeSrt ("snap_tree", 0));
+     (("snd", 0), FreeSrt ("snap_tree", 0))
+    ])
+  ])
+
+let snap_typ= Adt (("snap_tree", 0), [snap_adt])
 
 (** heap elements and symbolic heap
   The symbolic maintains a multiset of heap chunks which are

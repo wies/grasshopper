@@ -2,67 +2,61 @@
 
 open Printf
 open Grass
+open GrassUtil
 open SymbState
 
 (** eval rules *)
+let string_of_idset s =
+  IdSet.elements s
+  |> List.map (fun e -> string_of_ident e)
+  |> String.concat ", "
+  |> sprintf "[%s]"
 
-(** evals_subs evaluates a symbolic formula list element-wise using the exec
+(** eval_fs evaluates a symbolic formula list fs element-wise using the eval
   function below, accumulating the resulting symbolic formulas into the fs_symb list. *)
-let rec evals_subs state fs symb_fs (fc: symb_state -> symb_val list -> 'a option) =
+let rec eval_fs state (fs: form list) symb_fs (fc: symb_state -> symb_val list -> 'a option) =
   match fs with
   | [] -> fc state (List.rev symb_fs) (* reverse due to the cons op below *)
   | hd :: fs' -> eval state hd (fun state' v ->
-      evals_subs state' fs' (v :: symb_fs) fc)
+      eval_fs state' fs' (v :: symb_fs) fc)
 
 and eval state f (fc: symb_state -> symb_val -> 'a option) =
-  match f with
-  | Grass.Atom (t, _) -> eval_term state t fc
-  | Grass.BoolOp (op, fs) -> eval_forms state fs fc
-  | Grass.Binder (b, ts, f1, _) -> eval_binder state b ts f1 fc
-  
-and eval_term state t (fc: symb_state -> symb_val -> 'a option) =
-  let symbv =
-    match t with
-    | Var (id, _) -> 
-      IdMap.find_opt id state.store 
-    | App (_, _, _) -> None
-  in
-  match symbv with
-  | Some v -> fc state v
-  | None -> Some ("term: " ^ (string_of_term t) ^ " not found in store")
+  (* TODO: Fill this in for commands and other things, not just formulas *)
+  Debug.debug(
+    fun() ->
+      sprintf "eval of formula %s\n"
+      (string_of_form f)
+  );
+  eval_form state f fc
 
-and eval_forms state fs (fc: symb_state -> symb_val -> 'a option) =
-  match fs with
-  | [] -> todo()
-  | [f] ->  todo()
-  | f :: fs' ->
-      match f with
-      | Atom (t, _) ->
-        (match t with
-        | Var (id, srt) ->
-          let symbv = find_symb_val state.store id in
-          Debug.debug(
-            fun () -> sprintf "%sEval Forms Atom Var (%s, %s) has symb val %s\n" 
-            lineSep (string_of_ident id) (string_of_sort srt) (string_of_symb_val symbv)
-          );
-          todo()
-        | App (sym, ts, srt) ->
-          Prog.pr_term_list Format.std_formatter ts;
-          Debug.debug(
-            fun () -> sprintf "%sEval Forms Atom App (%s, %s)\n" 
-            lineSep (string_of_symbol sym) (string_of_sort srt)
-          )); todo();
-          
-      | BoolOp (op, fs)  -> 
-          Debug.debug(
-            fun () -> sprintf "%sEval BoolOp OR\n" 
-            lineSep
-          ); todo()
-      | Binder (b, ts, f1, _) -> 
-          Debug.debug(
-            fun () -> sprintf "%sEval BoolOp OR\n" 
-            lineSep
-          ); todo()
+and eval_form state f (fc: symb_state -> symb_val -> 'a option) =
+  let rec subst_symbv = function
+    | App (symb, ts, srt) as a -> 
+      let ids = free_consts_term a in
+      let idslst = IdSet.elements ids in
+      let sm = 
+        idslst |> List.fold_left (fun sm e ->
+          (match find_symb_val state.store e with
+          | Term (Var (id2, srtt)) ->
+            Debug.debug(
+              fun () ->
+                sprintf "%s -----> %s\n"
+                (string_of_ident e) (string_of_ident id2)
+            );
+            IdMap.add e id2 sm 
+          | Term (App (_, _, _)) -> failwith "shouldn't get an App as a symb val"
+          | Form _ -> failwith "shouldn't get a form in a symb val")
+        ) IdMap.empty
+      in
+      subst_id_term sm a
+    | Var (id, srt) ->
+      let v = find_symb_val state.store id in
+      (match v with
+      | Term (Var (id2, srtt)) -> Var (id2, srt)
+      | Term (App (_, _, _)) -> failwith "shouldn't get an App as a symb val"
+      | Form _ -> failwith "shouldn't get a form in a symb val")
+  in
+  fc state (Form (map_terms subst_symbv f))
 
 and eval_binder state binding ts f1 (fc: symb_state -> symb_val -> 'a option) = todo()
 
@@ -71,4 +65,4 @@ and eval_binder state binding ts f1 (fc: symb_state -> symb_val -> 'a option) = 
  to it's continuation, which builds a list of formulas with symbolic values
  substituted *)
 and evals state fs (fc: symb_state -> symb_val list -> 'a option) = 
-  evals_subs state fs [] fc
+  eval_fs state fs [] fc
