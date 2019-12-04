@@ -38,11 +38,6 @@ and eval_form state f (fc: symb_state -> symb_val -> 'a option) =
         idslst |> List.fold_left (fun sm e ->
           (match find_symb_val state.store e with
           | Term (Var (id2, srtt)) ->
-            Debug.debug(
-              fun () ->
-                sprintf "%s -----> %s\n"
-                (string_of_ident e) (string_of_ident id2)
-            );
             IdMap.add e id2 sm 
           | Term (App (_, _, _)) -> failwith "shouldn't get an App as a symb val"
           | Form _ -> failwith "shouldn't get a form in a symb val")
