@@ -116,7 +116,7 @@ let snap_adt = (("snap_tree", 0),
     ])
   ])
 
-let snap_typ= Adt (("snap_tree", 0), [snap_adt])
+let snap_typ = Adt (("snap_tree", 0), [snap_adt])
 
 (** heap elements and symbolic heap
   The symbolic maintains a multiset of heap chunks which are
