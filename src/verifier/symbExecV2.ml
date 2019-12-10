@@ -48,9 +48,13 @@ let consume state assrtn fc = todo()
 let branch state smybv f1 f2 = todo()
 
 let produce_symb_expr state v snp (fc: symb_state -> 'a option) =
-  let s2 = { state with pc = pc_add_path_cond (pc_add_path_cond state.pc v)
-    (Term (App (Eq, [term_of_snap snp; term_of_snap Unit], Bool))) }
+  let s2 = { state with pc = pc_add_path_cond state.pc v}
   in
+  (*
+  let s3 = {s2 with pc = pc_add_path_cond s2.pc 
+    (Term (App (Eq, [term_of_snap snp; term_of_snap Unit], Bool)))}
+  in
+  *)
   Debug.debug( fun() ->
     sprintf "%sState: %s\n" 
     lineSep (string_of_state s2)
@@ -163,4 +167,13 @@ let verify spl_prog prog proc =
   produce_specs init_state precond (mk_fresh_snap_freesrt "pre")
     (fun st ->
       let st2 = { st with heap=[]; old=st.heap } in
-      produce_specs st2 postcond (mk_fresh_snap_freesrt "post") (fun _ -> None))
+      let res = produce_specs st2 postcond (mk_fresh_snap_freesrt "post") (fun _ -> None) in
+      match res with
+      | Some err -> failwith "verification failed: postcond might be ill-formed"
+      | None ->
+          Debug.debug(
+            fun () ->
+              sprintf "eval body\n"
+          );
+          None
+      )

@@ -60,9 +60,11 @@ let pc_push_new (stack: pc_stack) scope_id br_cond =
   | [] -> [(scope_id, br_cond, [])]
   | stack -> (scope_id, br_cond, []) :: stack
 
-let pc_add_path_cond stack pc_val =
+let rec pc_add_path_cond (stack: pc_stack) pc_val =
   match stack with
-  | [] -> pc_push_new [] ("s", 0) (mk_fresh_symb_val Bool "v") 
+  | [] -> 
+      pc_add_path_cond (pc_push_new stack ("scopeId", 0)
+        (mk_fresh_symb_val Bool "brcond")) pc_val 
   | (sid, bc, pcs) :: stack' -> (sid, bc, pc_val :: pcs) :: stack'
 
 let rec pc_after pc_stack scope_id =

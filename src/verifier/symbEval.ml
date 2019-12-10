@@ -18,6 +18,11 @@ let rec eval_fs state (fs: form list) symb_fs (fc: symb_state -> symb_val list -
   match fs with
   | [] -> fc state (List.rev symb_fs) (* reverse due to the cons op below *)
   | hd :: fs' -> eval state hd (fun state' v ->
+      Debug.debug(
+        fun () ->
+          sprintf "eval resolved form into %s\n"
+          (string_of_symb_val v)
+      );
       eval_fs state' fs' (v :: symb_fs) fc)
 
 and eval state f (fc: symb_state -> symb_val -> 'a option) =
@@ -38,12 +43,23 @@ and eval_form state f (fc: symb_state -> symb_val -> 'a option) =
         idslst |> List.fold_left (fun sm e ->
           (match find_symb_val state.store e with
           | Term (Var (id2, srtt)) ->
+            Debug.debug(
+              fun () ->
+                sprintf "found symb v %s\n"
+                (string_of_ident id2)
+            );
             IdMap.add e id2 sm 
           | Term (App (_, _, _)) -> failwith "shouldn't get an App as a symb val"
           | Form _ -> failwith "shouldn't get a form in a symb val")
         ) IdMap.empty
       in
-      subst_id_term sm a
+      let subv = subst_id_term sm a in
+      Debug.debug(
+        fun () ->
+          sprintf " substutituted val is %s\n"
+          (string_of_term subv)
+      );
+      subv
     | Var (id, srt) ->
       let v = find_symb_val state.store id in
       (match v with
@@ -61,3 +77,5 @@ and eval_binder state binding ts f1 (fc: symb_state -> symb_val -> 'a option) = 
  substituted *)
 and evals state fs (fc: symb_state -> symb_val list -> 'a option) = 
   eval_fs state fs [] fc
+
+
