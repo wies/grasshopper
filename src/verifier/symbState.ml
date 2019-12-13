@@ -75,7 +75,7 @@ let rec pc_after pc_stack scope_id =
     then (sid, bc, pcs) :: pc_after stack' scope_id
     else pc_after stack' scope_id
 
-let pc_collect_constr stack =
+let pc_collect_constr (stack: pc_stack) =
   List.fold_left
   (fun pclist (id, bc, pcs) -> bc :: (pcs @ pclist))
   [] stack
@@ -148,13 +148,11 @@ type symb_state = {
     pc: pc_stack;
     heap: symb_heap;
     old: symb_heap;
+    prog: program; (* need to carry around prog for prover check *)
   }
 
-let mk_fresh_symb_state =
-  {store = empty_store; pc=[]; heap=[]; old=[]}
-
-let mk_symb_state st =
-  {store=st; pc=[]; heap=[]; old=[]}
+let mk_symb_state st prog =
+  {store=st; pc=[]; heap=[]; old=[]; prog=prog}
 
 (** Helpers to format prints *)
 let lineSep = "\n--------------------\n"

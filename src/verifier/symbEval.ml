@@ -12,6 +12,40 @@ let string_of_idset s =
   |> String.concat ", "
   |> sprintf "[%s]"
 
+(** subst_symbv takes a formula and substitutes all terms with corresponding
+ * symbolic variables in the symbolic store carried in state *)
+let rec subst_symbv state = function
+  | App (symb, ts, srt) as a -> 
+    let ids = free_consts_term a in
+    let idslst = IdSet.elements ids in
+    let sm = 
+      idslst |> List.fold_left (fun sm e ->
+        (match find_symb_val state.store e with
+        | Term (Var (id2, srtt)) ->
+          Debug.debug(
+            fun () ->
+              sprintf "found symb v %s\n"
+              (string_of_ident id2)
+          );
+          IdMap.add e id2 sm 
+        | Term (App (_, _, _)) -> failwith "shouldn't get an App as a symb val"
+        | Form _ -> failwith "shouldn't get a form in a symb val")
+      ) IdMap.empty
+    in
+    let subv = subst_id_term sm a in
+    Debug.debug(
+      fun () ->
+        sprintf " substutituted val is %s\n"
+        (string_of_term subv)
+    );
+    subv
+  | Var (id, srt) ->
+    let v = find_symb_val state.store id in
+    (match v with
+    | Term (Var (id2, srtt)) -> Var (id2, srt)
+    | Term (App (_, _, _)) -> failwith "shouldn't get an App as a symb val"
+    | Form _ -> failwith "shouldn't get a form in a symb val")
+
 (** eval_fs evaluates a symbolic formula list fs element-wise using the eval
   function below, accumulating the resulting symbolic formulas into the fs_symb list. *)
 let rec eval_fs state (fs: form list) symb_fs (fc: symb_state -> symb_val list -> 'a option) =
@@ -35,39 +69,8 @@ and eval state f (fc: symb_state -> symb_val -> 'a option) =
   eval_form state f fc
 
 and eval_form state f (fc: symb_state -> symb_val -> 'a option) =
-  let rec subst_symbv = function
-    | App (symb, ts, srt) as a -> 
-      let ids = free_consts_term a in
-      let idslst = IdSet.elements ids in
-      let sm = 
-        idslst |> List.fold_left (fun sm e ->
-          (match find_symb_val state.store e with
-          | Term (Var (id2, srtt)) ->
-            Debug.debug(
-              fun () ->
-                sprintf "found symb v %s\n"
-                (string_of_ident id2)
-            );
-            IdMap.add e id2 sm 
-          | Term (App (_, _, _)) -> failwith "shouldn't get an App as a symb val"
-          | Form _ -> failwith "shouldn't get a form in a symb val")
-        ) IdMap.empty
-      in
-      let subv = subst_id_term sm a in
-      Debug.debug(
-        fun () ->
-          sprintf " substutituted val is %s\n"
-          (string_of_term subv)
-      );
-      subv
-    | Var (id, srt) ->
-      let v = find_symb_val state.store id in
-      (match v with
-      | Term (Var (id2, srtt)) -> Var (id2, srt)
-      | Term (App (_, _, _)) -> failwith "shouldn't get an App as a symb val"
-      | Form _ -> failwith "shouldn't get a form in a symb val")
-  in
-  fc state (Form (map_terms subst_symbv f))
+  let subs = subst_symbv state in
+  fc state (Form (map_terms subs f))
 
 and eval_binder state binding ts f1 (fc: symb_state -> symb_val -> 'a option) = todo()
 
@@ -77,5 +80,3 @@ and eval_binder state binding ts f1 (fc: symb_state -> symb_val -> 'a option) = 
  substituted *)
 and evals state fs (fc: symb_state -> symb_val list -> 'a option) = 
   eval_fs state fs [] fc
-
-
