@@ -84,7 +84,7 @@ let pc_collect_constr (stack: pc_stack) =
 type snap =
   | Unit 
   | Snap of symb_val
-  | SnapPair of symb_val * symb_val
+  | SnapPair of snap * snap 
 
 let snap_pair s1 s2 = SnapPair (s1, s2)
 
@@ -92,13 +92,13 @@ let snap_first s =
   match s with
   | Unit -> Unit
   | Snap s -> Snap s
-  | SnapPair (s1, s2) -> Snap s1
+  | SnapPair (s1, s2) -> s1
 
 let snap_second s =
   match s with
   | Unit -> Unit
   | Snap s -> Snap s
-  | SnapPair (s1, s2) -> Snap s2
+  | SnapPair (s1, s2) -> s2
 
 let mk_fresh_snap srt = 
   Snap (Term (mk_fresh_var srt "snap"))
@@ -199,12 +199,12 @@ let string_of_pc_stack pc =
   |> String.concat ", "
   |> sprintf "[%s]"
 
-let string_of_snap s =
+let rec string_of_snap s =
   match s with
   | Unit -> "unit[snap]"
   | Snap ss -> string_of_symb_val ss
   | SnapPair (s1, s2) ->
-      sprintf "%s(%s)" (string_of_symb_val s1) (string_of_symb_val s2)
+      sprintf "%s(%s)" (string_of_snap s1) (string_of_snap s2)
 
 let string_of_hc chunk =
   match chunk with

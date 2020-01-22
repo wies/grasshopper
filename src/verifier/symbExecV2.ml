@@ -5,6 +5,7 @@ open GrassUtil
 open Grass
 open SymbEval
 open SymbState
+open SymbConsume
 open Prog
 
 exception SymbExecFail of string
@@ -36,7 +37,7 @@ let check_entail prog p1 p2 =
     | Some model -> Some (Verifier.get_err_msg_from_labels model labels, model)
 
 (** SMT solver calls *)
-let check prog pc_stack v =
+let check pc_stack prog v =
   let constr = pc_collect_constr pc_stack in
   let forms = List.map
     (fun v ->
@@ -52,7 +53,7 @@ let check prog pc_stack v =
           f)
     constr
   in
-  match check_entail prog (smk_and forms) (mk_false) with 
+  match check_entail prog (smk_and forms) v  with 
   | Some errs -> raise_err "SMT check failed"
   | None -> ()
 
@@ -61,10 +62,6 @@ let assert_constr pc_stack v =
   (** TODO add pred_axioms to pc_stack before passing in *)
   if check pc_stack v then None else None
   *) 
-
-(** consume removes permissions from a symbolic state and then
-    executes the remaining symbolic execution using fc *)
-let consume state assrtn fc = todo()
 
 (** branch implements branching and executes each path using f1 where symbv
   holds, otherwise f2 is executed *)
@@ -191,28 +188,24 @@ let exec state comms (fc: symb_state -> 'a option) =
         fun () ->
           sprintf "foo bar ASSERT MFER \n"
       );
-      (match spec.spec_form with
-      | SL _ ->
-          Debug.debug(fun () -> sprintf "SL");
-      | FOL spec_form ->
-          let subs = subst_symbv state in
-          let symbv = (Form (map_terms subs spec_form)) in
-          Debug.debug(
-            fun () -> sprintf "Assert spec form %s\n"
-            (string_of_symb_val symbv)
-          );
-          Debug.debug( fun() ->
-            sprintf "%sState Before: %s\n" 
-            lineSep (string_of_state state)
-          );
-          let s2 = { state with pc = pc_add_path_cond state.pc symbv} in
-          Debug.debug( fun() ->
-            sprintf "%sState: %s\n" 
-            lineSep (string_of_state s2)
-          );
-          check s2.prog s2.pc mk_true
-      );
-      fc state
+      let f = function 
+        | SL _ ->
+            Debug.debug(fun () -> sprintf "SL");
+            state
+        | FOL spec_form ->
+            let subs = subst_symbv state in
+            let symbv = (Form (map_terms subs spec_form)) in
+            Debug.debug(
+              fun () -> sprintf "Assert spec form %s\n"
+              (string_of_symb_val symbv)
+            );
+            Debug.debug( fun() ->
+              sprintf "%sState Before: %s\n" 
+              lineSep (string_of_state state)
+            );
+            { state with pc = pc_add_path_cond state.pc symbv}
+      in
+      fc (f spec.spec_form)
   | Basic (Return {return_args=xs}, pp)  ->
       fc state
   | Basic (Split spec, pp) ->
@@ -259,9 +252,15 @@ let verify spl_prog prog proc =
       produce_specs st2 postcond (mk_fresh_snap_freesrt "post") (fun st' ->
            (match proc.proc_body with
            | Some body ->
-              exec st' body (fun st'' ->
+              exec st2 body (fun st3 ->
                 Debug.debug(fun () -> sprintf "consume post cond\n");
+                consume_specs st3 postcond (fun _ _ ->
+                  None)
+                (*
+                let _ = check st3.pc prog postcond in
                 None)
+              *)
+              )
            | None ->
                None)
       ))

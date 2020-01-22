@@ -517,6 +517,7 @@ let mk_old t = mk_app (sort_of t) Old [t]
 let mk_known t = mk_app Pat Known [t]
 
 (** Constructor for ADT destructor terms. *)
+(** use this to construct equalities betwween snaps and such*)
 let mk_constr srt constr ts = mk_app srt (Constructor constr) ts
 
 (** Constructor for ADT destructor terms. *)
