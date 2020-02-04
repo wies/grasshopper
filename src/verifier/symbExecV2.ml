@@ -6,70 +6,15 @@ open Grass
 open SymbEval
 open SymbState
 open SymbConsume
+open SymbUtil
 open Prog
-
-exception SymbExecFail of string
-let raise_err str = raise (SymbExecFail str)
-
-(* Returns None if the entailment holds, otherwise Some (list of error messages, model) *)
-(** carry over from Sid's SymbExec *)
-let check_entail prog p1 p2 =
-  if p1 = p2 || p2 = mk_true then None
-  else (* Dump it to an SMT solver *)
-    (** TODO: collect program axioms and add to symbolic state *)
-    let p2 = Verifier.annotate_aux_msg "Related location" p2 in
-    (* Close the formulas: assuming all free variables are existential *)
-    let close f = smk_exists (Grass.IdSrtSet.elements (sorted_free_vars f)) f in
-    let labels, f =
-      smk_and [p1; mk_not p2] |> close |> nnf
-      (* Add definitions of all referenced predicates and functions *)
-      |> fun f -> f :: Verifier.pred_axioms prog
-      (** TODO: Add axioms *)
-      |> (fun fs -> smk_and fs)
-      (* Add labels *)
-      |> Verifier.add_labels
-    in
-    let name = fresh_ident "form" |> Grass.string_of_ident in
-    Debug.debug (fun () ->
-      sprintf "\n\nCalling prover with name %s\n" name);
-    match Prover.get_model ~session_name:name f with
-    | None -> None
-    | Some model -> Some (Verifier.get_err_msg_from_labels model labels, model)
-
-(** SMT solver calls *)
-let check pc_stack prog v =
-  let constr = pc_collect_constr pc_stack in
-  let forms = List.map
-    (fun v ->
-      match v with
-      | Term t ->
-          Debug.debug(fun () -> sprintf "check term %s\n"
-          (string_of_term t)
-          );
-          Atom (t, [])
-      | Form f -> 
-          Debug.debug(fun () -> sprintf "check form %s\n"
-          (string_of_form f));
-          f)
-    constr
-  in
-  match check_entail prog (smk_and forms) v  with 
-  | Some errs -> raise_err "SMT check failed"
-  | None -> ()
-
- (*
-let assert_constr pc_stack v =
-  (** TODO add pred_axioms to pc_stack before passing in *)
-  if check pc_stack v then None else None
-  *) 
 
 (** branch implements branching and executes each path using f1 where symbv
   holds, otherwise f2 is executed *)
 let branch state smybv f1 f2 = todo()
 
 let produce_symb_expr state v snp (fc: symb_state -> 'a option) =
-  let s2 = { state with pc = pc_add_path_cond state.pc v}
-  in
+  let s2 = { state with pc = pc_add_path_cond state.pc v} in
   let s3 = {s2 with pc = pc_add_path_cond s2.pc 
     (Term (App (Eq, [term_of_snap snp; term_of_snap Unit], Bool)))}
   in
@@ -116,7 +61,7 @@ let rec produce_sl state (f: Sl.form) snp (fc: symb_state -> 'a option) =
   | Sl.Atom (Sl.Region, ts, _) -> fc state 
   | Sl.Atom (Sl.Pred p, ts, _) -> fc state 
   | Sl.SepOp (Sl.SepStar, f1, f2, _) ->
-     Debug.debug( fun() -> sprintf "SL SepOp SepStar\n"); 
+     Debug.debug( fun() -> sprintf "SL SepOp SepStar \n"); 
      fc state 
   | Sl.SepOp (Sl.SepIncl, _, _, _) ->
      Debug.debug( fun() -> sprintf "SL SepOp SepIncl\n"); 
@@ -141,7 +86,7 @@ let produce_spec_form state sf snp (fc: symb_state -> 'a option) =
     Debug.debug( fun() -> sprintf "produce spec form FOL match\n"); 
     produce_fol state fol snp fc
   | Prog.SL slf ->
-    Debug.debug( fun() -> sprintf "produce spec form SL match\n"); 
+    Debug.debug( fun() -> sprintf "produce spec form SL match \n"); 
     produce_sl state slf snp fc
 
 (** produce_specs is the entry point for producing an assertion list (spec list),
@@ -155,8 +100,9 @@ let rec produce_specs state (assns: Prog.spec list) snp fc =
       | Some err -> Some err
       | None -> produce_specs state assns' snp fc)
 
-let exec state comms (fc: symb_state -> 'a option) = 
-  match comms with
+let rec exec state comm (fc: symb_state -> 'a option) = 
+  Debug.debug( fun () -> sprintf "exec state comms *******\n");
+  match comm with
   | (Basic (Assign {assign_lhs=[_];
                     assign_rhs=[App (Write, [arr; idx; rhs], Loc (Array _))]}, pp)) ->
       Debug.debug( fun () -> sprintf "basic assign foo");
@@ -171,12 +117,34 @@ let exec state comms (fc: symb_state -> 'a option) =
       );
       fc state
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, pp) ->
-      Debug.debug( fun () -> sprintf "basic assign bar");
-      fc state
+      Debug.debug( fun () -> sprintf "basic assign bar \n");
+      let st =
+        List.combine ids ts 
+        |> List.fold_left (fun st_acc (id, rhs) ->
+          Debug.debug( fun() -> sprintf "%s := %s\n"
+              (string_of_ident id) (string_of_term rhs)
+          );
+          let _ = eval_term st_acc rhs (fun st' v ->
+            let st2'={st' with store = IdMap.add id v st'.store} in
+            Debug.debug(
+              fun() -> sprintf "State in eval_term: %s\n"
+              (string_of_state st2')
+            );
+            fc st2') in
+          st_acc)
+        state
+      in
+      fc st
   | Basic (Call {call_lhs=lhs; call_name=foo; call_args=args}, pp) ->
       fc state
-  | Seq (comms, _) ->
-      fc state
+  | Seq (s1 :: s2 :: comms, _) ->
+      Debug.debug( fun () -> sprintf "SEQ (%d) \n"
+        (List.length comms)
+      );
+      exec state s1 (fun state' ->
+        exec state' s2 fc)
+  | Seq (_::[], _) -> fc state
+  | Seq ([], _) -> fc state
   | Basic (Havoc {havoc_args=vars}, pp) ->
       fc state
   | Basic (Assume {spec_form=FOL spec}, pp) ->
@@ -203,6 +171,8 @@ let exec state comms (fc: symb_state -> 'a option) =
               sprintf "%sState Before: %s\n" 
               lineSep (string_of_state state)
             );
+            (* TODO(eric): replace this with proper consume of an assert*)
+            let _ = check state.pc state.prog (symb_val_to_form symbv) in 
             { state with pc = pc_add_path_cond state.pc symbv}
       in
       fc (f spec.spec_form)
@@ -218,6 +188,13 @@ let exec state comms (fc: symb_state -> 'a option) =
       fc state
   | Loop (l, _) ->
       fc state
+
+and execs state comms (fc: symb_state -> 'a option) =
+  match comms with
+  | [] -> fc state
+  | comm :: comms' ->
+      exec state comm (fun state' ->
+        execs state' comms' fc)
 
 (** verify checks procedures and predicates for well-formed specs and the postcondition
    can be met by executing the body under the precondition *)
@@ -256,8 +233,8 @@ let verify spl_prog prog proc =
                 Debug.debug(fun () -> sprintf "consume post cond\n");
                 consume_specs st3 postcond (fun _ _ ->
                   None)
-                (*
-                let _ = check st3.pc prog postcond in
+               (** 
+                let res = check st3.pc prog postcond in
                 None)
               *)
               )

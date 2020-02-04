@@ -25,6 +25,15 @@ let mk_fresh_symb_val srt prefix =
 type symb_store = symb_val IdMap.t
 let empty_store = IdMap.empty
 
+let merge_symb_stores g1 g2 =
+  IdMap.merge
+  (fun x oy oz -> match oy, oz with
+  | Some y, Some z -> 
+      failwith "todo: figure out how to merge symb_store variables"
+  | Some y, None -> Some y
+  | None, Some z -> Some z
+  | None, None -> None) g1 g2
+
 let find_symb_val store id =
   Debug.debug(
     fun () ->
@@ -36,12 +45,15 @@ let find_symb_val store id =
     failwith ("find_symb_val: Could not find symbolic val for " ^ (string_of_ident id))
 
 (** havoc a list of terms into a symbolic store *)
+let mk_fresh_term label srt =
+  Term (mk_fresh_var srt label)
+
 let havoc_terms symb_store terms =
   List.fold_left
     (fun sm term ->
       match term with
       | App (_, _, _) -> failwith "tried to havoc a term that isn't a Var"
-      | Var (id, srt) -> IdMap.add id (Term (mk_fresh_var srt "v")) sm)
+      | Var (id, srt) -> IdMap.add id (mk_fresh_term "v" srt) sm)
     symb_store terms
 
 (** path condition (pc) stack
@@ -154,75 +166,8 @@ type symb_state = {
 let mk_symb_state st prog =
   {store=st; pc=[]; heap=[]; old=[]; prog=prog}
 
-(** Helpers to format prints *)
-let lineSep = "\n--------------------\n"
+let mk_empty_state = 
+  {store=empty_store; pc=[]; heap=[]; old=[]; prog=empty_prog}
 
-let string_of_symb_val v =
-    match v with
-    | Term t -> string_of_term t
-    | Form f -> string_of_form f
-
-let string_of_pcset s =
-  s
-  |> List.map (fun ele -> (string_of_symb_val ele))
-  |> String.concat ", "
-
-let string_of_symb_val_list vals =
-  vals
-  |> List.map (fun v -> (string_of_symb_val v))
-  |> String.concat ", "
-  |> sprintf "[%s]"
-
-let string_of_symb_store s =
-  IdMap.bindings s
-  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_symb_val v))
-  |> String.concat ", "
-  |> sprintf "{%s}"
-
-let string_of_symb_val_map store =
-  IdMap.bindings store
-  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_symb_val v))
-  |> String.concat ", "
-  |> sprintf "{%s}"
-
-let string_of_symb_fields fields =
-  IdMap.bindings fields
-  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_symb_val v))
-  |> String.concat ", "
-  |> sprintf "{%s}"
-
-let string_of_pc_stack pc =
-  pc
-  |> List.map (fun (pc, bc, vars) ->
-      "(" ^ (string_of_ident pc) ^ ", " ^ (string_of_symb_val bc) ^ ", "
-      ^ (string_of_pcset vars) ^ ")")
-  |> String.concat ", "
-  |> sprintf "[%s]"
-
-let rec string_of_snap s =
-  match s with
-  | Unit -> "unit[snap]"
-  | Snap ss -> string_of_symb_val ss
-  | SnapPair (s1, s2) ->
-      sprintf "%s(%s)" (string_of_snap s1) (string_of_snap s2)
-
-let string_of_hc chunk =
-  match chunk with
-  | Obj (v, snap, symb_fields) ->
-    sprintf "Obj(%s, Snap:%s, Fields:%s)" (string_of_symb_val v)
-      (string_of_snap snap) (string_of_symb_fields symb_fields)
-  | Pred (id, symb_vals) -> sprintf "Pred(Id:%s, Args:%s)" (string_of_ident id)
-      (string_of_symb_val_list symb_vals)
-
-let string_of_heap h =
-  h
-  |> List.map (fun ele -> (string_of_hc ele))
-  |> String.concat ", "
-  |> sprintf "[%s]"
-
-let string_of_state s =
-  let store = string_of_symb_store s.store in
-  let pc = string_of_pc_stack s.pc in
-  let heap = string_of_heap s.heap in
-  let old = string_of_heap s.old in
-  sprintf "\n\tStore: %s,\n\tPCStack: %s\n\tHeap: %s\n\tOld: %s" store pc heap old
+let update_store state store =
+  {state with store=store}
