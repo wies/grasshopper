@@ -94,3 +94,6 @@ and eval_term state t (fc: symb_state -> symb_val -> 'a option) =
     (string_of_term v)
   );
   fc state (Term v)
+
+and evalts state ts (fc: symb_state -> symb_val list -> 'a option) =
+  eval_ts state ts [] fc 

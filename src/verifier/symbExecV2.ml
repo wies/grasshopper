@@ -117,24 +117,13 @@ let rec exec state comm (fc: symb_state -> 'a option) =
       );
       fc state
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, pp) ->
-      Debug.debug( fun () -> sprintf "basic assign bar \n");
-      let st =
-        List.combine ids ts 
-        |> List.fold_left (fun st_acc (id, rhs) ->
-          Debug.debug( fun() -> sprintf "%s := %s\n"
-              (string_of_ident id) (string_of_term rhs)
-          );
-          let _ = eval_term st_acc rhs (fun st' v ->
-            let st2'={st' with store = IdMap.add id v st'.store} in
-            Debug.debug(
-              fun() -> sprintf "State in eval_term: %s\n"
-              (string_of_state st2')
-            );
-            fc st2') in
-          st_acc)
-        state
-      in
-      fc st
+      evalts state ts (fun state' ts' ->
+        let st = List.combine ids ts'
+        |> List.fold_left (fun macc (id, t') ->
+            {macc with store = IdMap.add id t' macc.store}
+        ) state'
+        in
+        fc st)
   | Basic (Call {call_lhs=lhs; call_name=foo; call_args=args}, pp) ->
       fc state
   | Seq (s1 :: s2 :: comms, _) ->
@@ -232,12 +221,7 @@ let verify spl_prog prog proc =
               exec st2 body (fun st3 ->
                 Debug.debug(fun () -> sprintf "consume post cond\n");
                 consume_specs st3 postcond (fun _ _ ->
-                  None)
-               (** 
-                let res = check st3.pc prog postcond in
-                None)
-              *)
-              )
+                  None))
            | None ->
                None)
       ))

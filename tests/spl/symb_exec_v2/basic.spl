@@ -1,9 +1,16 @@
-options "-symbexec"
+options "-symbexec-v2"
 
 procedure assign(x: Int, y: Int)
   requires x == 0 && y == x
-  ensures x == 0 && y == 0
+  ensures x == 0 && y == x
 {
-  x := 5;
+  pure assert x == 0;
+}
+
+procedure assign2(x: Int, y: Int) 
+  requires x >= 0 && y >= 0 
+  ensures x == 10 && y == 5
+{
   x := 10;
+  y := 5;
 }
