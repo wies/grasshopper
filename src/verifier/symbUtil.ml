@@ -76,10 +76,10 @@ let string_of_heap h =
 
 let string_of_state s =
   let store = string_of_symb_store s.store in
+  let old_store = string_of_symb_store s.old_store in
   let pc = string_of_pc_stack s.pc in
   let heap = string_of_heap s.heap in
-  let old = string_of_heap s.old in
-  sprintf "\n\tStore: %s,\n\tPCStack: %s\n\tHeap: %s\n\tOld: %s" store pc heap old
+  sprintf "\n\tStore: %s,\n\tOld Store: %s\n\tPCStack: %s\n\tHeap: %s" store old_store pc heap
 
  (*
 let assert_constr pc_stack v =

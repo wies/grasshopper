@@ -157,17 +157,17 @@ let heap_remove h stack hc q_continue = todo ()
  *)
 type symb_state = {
     store: symb_store;
+    old_store: symb_store;
     pc: pc_stack;
     heap: symb_heap;
-    old: symb_heap;
     prog: program; (* need to carry around prog for prover check *)
   }
 
 let mk_symb_state st prog =
-  {store=st; pc=[]; heap=[]; old=[]; prog=prog}
+  {store=st; old_store=empty_store; pc=[]; heap=[]; prog=prog}
 
 let mk_empty_state = 
-  {store=empty_store; pc=[]; heap=[]; old=[]; prog=empty_prog}
+  {store=empty_store; old_store=empty_store; pc=[]; heap=[]; prog=empty_prog}
 
 let update_store state store =
   {state with store=store}

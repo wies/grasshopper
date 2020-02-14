@@ -185,6 +185,12 @@ and execs state comms (fc: symb_state -> 'a option) =
       exec state comm (fun state' ->
         execs state' comms' fc)
 
+(*
+let rec print_spec_list = function
+  | [] -> ()
+  | hd :: tail -> (print_form hd); printf " "; (print_spec_list tail) 
+  *)
+
 (** verify checks procedures and predicates for well-formed specs and the postcondition
    can be met by executing the body under the precondition *)
 let verify spl_prog prog proc =
@@ -204,25 +210,33 @@ let verify spl_prog prog proc =
   let init_state = mk_symb_state
     (havoc_terms empty_store formal_arg_terms) prog in
 
+  let old_store =
+    IdMap.fold (fun id v acc -> IdMap.add id v acc) init_state.store empty_store in
+  let init_state = {init_state with old_store=old_store} in
+
   Debug.debug(fun() ->
       sprintf "%sInitial State:\n{%s\n}\n\n"
       lineSep (string_of_state init_state)
   );
   let mk_fresh_snap_freesrt label = mk_fresh_snap (Grass.FreeSrt (label, 0)) in
-
   let precond = Prog.precond_of_proc proc in
   let postcond = Prog.postcond_of_proc proc in
+
   produce_specs init_state precond (mk_fresh_snap_freesrt "pre")
     (fun st ->
-      let st2 = { st with heap=[]; old=st.heap } in
+      let st2 = { st with heap=[] } in
       produce_specs st2 postcond (mk_fresh_snap_freesrt "post") (fun st' ->
            (match proc.proc_body with
            | Some body ->
               exec st2 body (fun st3 ->
                 Debug.debug(fun () -> sprintf "consume post cond\n");
-                consume_specs st3 postcond (fun _ _ ->
-                  None))
+                let st4 = {st3 with store=st3.old_store} in
+                let fs = List.map (fun s -> 
+                  match s.spec_form with
+                  | SL s -> s 
+                  | FOL _ -> todo() 
+                ) postcond in 
+                consumes st4 fs (fun _ _ -> None))
            | None ->
                None)
       ))
-      
