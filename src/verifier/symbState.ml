@@ -7,6 +7,7 @@ open Prog
 open Printf
 
 exception NotYetImplemented
+exception HeapChunkNotFound of string 
 let todo () = raise NotYetImplemented
 
 (** Symbolic values; grasshopper distinguishes between terms and forms,
@@ -17,6 +18,57 @@ type symb_val =
 
 let mk_fresh_symb_val srt prefix = 
   Term (mk_fresh_var srt prefix)
+
+let string_of_symb_val v =
+    match v with
+    | Term t -> string_of_term t
+    | Form f -> string_of_form f
+
+let equal_symb_vals v1 v2 = 
+  match v1, v2 with
+  | Term t1, Term t2 -> equal (Atom (t1, [])) (Atom (t2, [])) 
+  | Form f1, Form f2 -> equal f1 f2
+  | _ -> false
+
+(** Helpers to format prints *)
+let lineSep = "\n--------------------\n"
+
+let string_of_pcset s =
+  s
+  |> List.map (fun ele -> (string_of_symb_val ele))
+  |> String.concat ", "
+
+let string_of_symb_val_list vals =
+  vals
+  |> List.map (fun v -> (string_of_symb_val v))
+  |> String.concat ", "
+  |> sprintf "[%s]"
+
+let string_of_symb_store s =
+  IdMap.bindings s
+  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_symb_val v))
+  |> String.concat ", "
+  |> sprintf "{%s}"
+
+let string_of_symb_val_map store =
+  IdMap.bindings store
+  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_symb_val v))
+  |> String.concat ", "
+  |> sprintf "{%s}"
+
+let string_of_symb_fields fields =
+  IdMap.bindings fields
+  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_symb_val v))
+  |> String.concat ", "
+  |> sprintf "{%s}"
+
+let string_of_pc_stack pc =
+  pc
+  |> List.map (fun (pc, bc, vars) ->
+      "(" ^ (string_of_ident pc) ^ ", " ^ (string_of_symb_val bc) ^ ", "
+      ^ (string_of_pcset vars) ^ ")")
+  |> String.concat ", "
+  |> sprintf "[%s]"
 
 (** Symbolic store:
   maintains a mapping from grasshopper vars to symbolic vals
@@ -112,6 +164,14 @@ let snap_second s =
   | Snap s -> Snap s
   | SnapPair (s1, s2) -> s2
 
+let rec equal_snaps s1 s2 =
+  match s1, s2 with
+  | Unit, Unit -> true
+  | Unit, Snap ss2 | Snap ss2, Unit -> false
+  | SnapPair (l1, r1), SnapPair (l2, r2) ->
+      equal_snaps l1 r1 && equal_snaps l2 r2
+  | _ -> false
+
 let mk_fresh_snap srt = 
   Snap (Term (mk_fresh_var srt "snap"))
 
@@ -132,6 +192,13 @@ let snap_adt = (("snap_tree", 0),
 
 let snap_typ = Adt (("snap_tree", 0), [snap_adt])
 
+let rec string_of_snap s =
+  match s with
+  | Unit -> "unit[snap]"
+  | Snap ss -> string_of_symb_val ss
+  | SnapPair (s1, s2) ->
+      sprintf "%s(%s)" (string_of_snap s1) (string_of_snap s2)
+
 (** heap elements and symbolic heap
   The symbolic maintains a multiset of heap chunks which are
   of the form obj(symb_val, snap, [Id -> V]) or a predicate with an id
@@ -139,14 +206,56 @@ let snap_typ = Adt (("snap_tree", 0), [snap_adt])
   *)
 type heap_chunk =
   | Obj of symb_val * snap * symb_val IdMap.t
-  | Pred of ident * symb_val list
+  | Eps of symb_val * symb_val IdMap.t (* r.f := e *)
+  | Pred of ident * snap * symb_val list
+
+let equal_field_maps fm1 fm2 =
+  IdMap.equal equal_symb_vals fm1 fm2
+
+let equal_symb_val_lst vs1 vs2 =
+  List.fold_left2 (fun acc v1 v2 ->
+    acc && equal_symb_vals v1 v2)
+  true vs1 vs2
+
+let equal_heap_chunks c1 c2 = 
+  match c1, c2 with 
+  | Obj (v1, s1, sm1), Obj (v2, s2, sm2)
+  when v1 = v2 && equal_field_maps sm1 sm2 -> 
+    equal_snaps s1 s2
+  | Eps (v1, sm1), Eps (v2, sm2) when v1 = v2 -> 
+      equal_field_maps sm1 sm2
+  | Pred (id1, s1, vs1), Pred (id2, s2, vs2) -> todo()
+  | _ -> false
+
+let string_of_hc chunk =
+  match chunk with
+  | Obj (v, snap, symb_fields) ->
+    sprintf "Obj(%s, Snap:%s, Fields:%s)" (string_of_symb_val v)
+      (string_of_snap snap) (string_of_symb_fields symb_fields)
+  | Eps (v, symb_fields) ->
+    sprintf "Eps(%s, Fields: %s)" (string_of_symb_val v) (string_of_symb_fields symb_fields)
+  | Pred (id, snap, symb_vals) -> sprintf "Pred(Id:%s, Args:%s, Snap:%s)" (string_of_ident id)
+      (string_of_symb_val_list symb_vals) (string_of_snap snap)
 
 type symb_heap = heap_chunk list
 
-let heap_add h stack hc = (hc :: h, stack)
+let heap_add h stack hchunk = (hchunk :: h, stack)
 
-(** TODO: Not sure about q_continue and entailment checking *)
-let heap_remove h stack hc q_continue = todo ()
+let rec heap_remove h stack hchunk fc = 
+  match h with
+  | [] -> raise (HeapChunkNotFound (string_of_hc hchunk))
+  | chunk :: h' ->
+      match hchunk, chunk with 
+      | Obj (v1, s1, sm1), Obj (v2, s2, sm2) -> todo()
+      | Eps (v1, sm1), Eps (v2, sm2) -> todo()
+      | Pred (id1, s1, vs1), Pred (id2, s2, vs2) -> todo()
+      | _ -> heap_remove h' stack hchunk fc
+
+let string_of_heap h =
+  h
+  |> List.map (fun ele -> (string_of_hc ele))
+  |> String.concat ", "
+  |> sprintf "[%s]"
 
 (** Symbolic State are records that are manipulated during execution:
   1. symbolic store; a mapping from variable names to symbolic values
@@ -171,3 +280,10 @@ let mk_empty_state =
 
 let update_store state store =
   {state with store=store}
+
+let string_of_state s =
+  let store = string_of_symb_store s.store in
+  let old_store = string_of_symb_store s.old_store in
+  let pc = string_of_pc_stack s.pc in
+  let heap = string_of_heap s.heap in
+  sprintf "\n\tStore: %s,\n\tOld Store: %s\n\tPCStack: %s\n\tHeap: %s" store old_store pc heap

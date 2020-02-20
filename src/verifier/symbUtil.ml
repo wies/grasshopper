@@ -3,83 +3,10 @@
 open Printf
 open GrassUtil
 open Grass
-open SymbState 
+open SymbState
 
 exception SymbExecFail of string
 let raise_err str = raise (SymbExecFail str)
-
-(** Helpers to format prints *)
-let lineSep = "\n--------------------\n"
-
-let string_of_symb_val v =
-    match v with
-    | Term t -> string_of_term t
-    | Form f -> string_of_form f
-
-let string_of_pcset s =
-  s
-  |> List.map (fun ele -> (string_of_symb_val ele))
-  |> String.concat ", "
-
-let string_of_symb_val_list vals =
-  vals
-  |> List.map (fun v -> (string_of_symb_val v))
-  |> String.concat ", "
-  |> sprintf "[%s]"
-
-let string_of_symb_store s =
-  IdMap.bindings s
-  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_symb_val v))
-  |> String.concat ", "
-  |> sprintf "{%s}"
-
-let string_of_symb_val_map store =
-  IdMap.bindings store
-  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_symb_val v))
-  |> String.concat ", "
-  |> sprintf "{%s}"
-
-let string_of_symb_fields fields =
-  IdMap.bindings fields
-  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_symb_val v))
-  |> String.concat ", "
-  |> sprintf "{%s}"
-
-let string_of_pc_stack pc =
-  pc
-  |> List.map (fun (pc, bc, vars) ->
-      "(" ^ (string_of_ident pc) ^ ", " ^ (string_of_symb_val bc) ^ ", "
-      ^ (string_of_pcset vars) ^ ")")
-  |> String.concat ", "
-  |> sprintf "[%s]"
-
-let rec string_of_snap s =
-  match s with
-  | Unit -> "unit[snap]"
-  | Snap ss -> string_of_symb_val ss
-  | SnapPair (s1, s2) ->
-      sprintf "%s(%s)" (string_of_snap s1) (string_of_snap s2)
-
-let string_of_hc chunk =
-  match chunk with
-  | Obj (v, snap, symb_fields) ->
-    sprintf "Obj(%s, Snap:%s, Fields:%s)" (string_of_symb_val v)
-      (string_of_snap snap) (string_of_symb_fields symb_fields)
-  | Pred (id, symb_vals) -> sprintf "Pred(Id:%s, Args:%s)" (string_of_ident id)
-      (string_of_symb_val_list symb_vals)
-
-let string_of_heap h =
-  h
-  |> List.map (fun ele -> (string_of_hc ele))
-  |> String.concat ", "
-  |> sprintf "[%s]"
-
-let string_of_state s =
-  let store = string_of_symb_store s.store in
-  let old_store = string_of_symb_store s.old_store in
-  let pc = string_of_pc_stack s.pc in
-  let heap = string_of_heap s.heap in
-  sprintf "\n\tStore: %s,\n\tOld Store: %s\n\tPCStack: %s\n\tHeap: %s" store old_store pc heap
 
  (*
 let assert_constr pc_stack v =

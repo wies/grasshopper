@@ -221,7 +221,6 @@ let verify spl_prog prog proc =
   let mk_fresh_snap_freesrt label = mk_fresh_snap (Grass.FreeSrt (label, 0)) in
   let precond = Prog.precond_of_proc proc in
   let postcond = Prog.postcond_of_proc proc in
-
   produce_specs init_state precond (mk_fresh_snap_freesrt "pre")
     (fun st ->
       let st2 = { st with heap=[] } in
@@ -231,12 +230,7 @@ let verify spl_prog prog proc =
               exec st2 body (fun st3 ->
                 Debug.debug(fun () -> sprintf "consume post cond\n");
                 let st4 = {st3 with store=st3.old_store} in
-                let fs = List.map (fun s -> 
-                  match s.spec_form with
-                  | SL s -> s 
-                  | FOL _ -> todo() 
-                ) postcond in 
-                consumes st4 fs (fun _ _ -> None))
+                consume_specs st4 postcond (fun _ _ -> None))
            | None ->
                None)
       ))
