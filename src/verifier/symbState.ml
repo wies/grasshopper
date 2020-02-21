@@ -9,6 +9,14 @@ open Printf
 exception NotYetImplemented
 exception HeapChunkNotFound of string 
 let todo () = raise NotYetImplemented
+exception SymbExecFail of string
+let raise_err str = raise (SymbExecFail str)
+
+ (*
+let assert_constr pc_stack v =
+  (** TODO add pred_axioms to pc_stack before passing in *)
+  if check pc_stack v then None else None
+  *) 
 
 (** Symbolic values; grasshopper distinguishes between terms and forms,
   viper's silicon doesn't *)
@@ -30,6 +38,16 @@ let equal_symb_vals v1 v2 =
   | Form f1, Form f2 -> equal f1 f2
   | _ -> false
 
+let mk_eq_symbv s t = 
+  match s, t with
+  | Term ss, Term tt -> mk_eq ss tt
+  | _  -> todo()
+
+let symb_val_to_form v = 
+  match v with
+  | Term t -> todo() 
+  | Form f -> f
+   
 (** Helpers to format prints *)
 let lineSep = "\n--------------------\n"
 
@@ -144,6 +162,52 @@ let pc_collect_constr (stack: pc_stack) =
   (fun pclist (id, bc, pcs) -> bc :: (pcs @ pclist))
   [] stack
 
+(* Returns None if the entailment holds, otherwise Some (list of error messages, model) *)
+(** carry over from Sid's SymbExec *)
+let check_entail prog p1 p2 =
+  if p1 = p2 || p2 = mk_true then None
+  else (* Dump it to an SMT solver *)
+    (** TODO: collect program axioms and add to symbolic state *)
+    let p2 = Verifier.annotate_aux_msg "Related location" p2 in
+    (* Close the formulas: assuming all free variables are existential *)
+    let close f = smk_exists (Grass.IdSrtSet.elements (sorted_free_vars f)) f in
+    let labels, f =
+      smk_and [p1; mk_not p2] |> close |> nnf
+      (* Add definitions of all referenced predicates and functions *)
+      |> fun f -> f :: Verifier.pred_axioms prog
+      (** TODO: Add axioms *)
+      |> (fun fs -> smk_and fs)
+      (* Add labels *)
+      |> Verifier.add_labels
+    in
+    let name = fresh_ident "form" |> Grass.string_of_ident in
+    Debug.debug (fun () ->
+      sprintf "\n\nCalling prover with name %s\n" name);
+    match Prover.get_model ~session_name:name f with
+    | None -> None
+    | Some model -> Some (Verifier.get_err_msg_from_labels model labels, model)
+
+(** SMT solver calls *)
+let check pc_stack prog v =
+  let constr = pc_collect_constr pc_stack in
+  let forms = List.map
+    (fun v ->
+      match v with
+      | Term t ->
+          Debug.debug(fun () -> sprintf "check term %s\n"
+          (string_of_term t)
+          );
+          Atom (t, [])
+      | Form f -> 
+          Debug.debug(fun () -> sprintf "check form %s\n"
+          (string_of_form f));
+          f)
+    constr
+  in
+  match check_entail prog (smk_and forms) v  with 
+  | Some errs -> raise_err "SMT check failed"
+  | None -> ()
+
 (** Snapshot defintions *)
 type snap =
   | Unit 
@@ -244,12 +308,21 @@ let heap_add h stack hchunk = (hchunk :: h, stack)
 let rec heap_remove h stack hchunk fc = 
   match h with
   | [] -> raise (HeapChunkNotFound (string_of_hc hchunk))
-  | chunk :: h' ->
-      match hchunk, chunk with 
-      | Obj (v1, s1, sm1), Obj (v2, s2, sm2) -> todo()
-      | Eps (v1, sm1), Eps (v2, sm2) -> todo()
-      | Pred (id1, s1, vs1), Pred (id2, s2, vs2) -> todo()
-      | _ -> heap_remove h' stack hchunk fc
+  | chunk :: h' -> if equal_heap_chunks hchunk chunk then
+      match hchunk, chunk with
+      | Obj (v1, snp1, _), Obj (v2, snp2, _) ->
+        check stack (empty_prog) (mk_eq_symbv v1 v2);
+        fc h' snp2
+      | Eps (v1, _), Eps (v2, _) ->
+        check stack (empty_prog) (mk_eq_symbv v1 v2);
+        fc h' Unit
+      | Pred (id1, s1, args1), Pred (id2, s2, args2) -> 
+        let fs =
+          List.map2 (fun f1 f2 -> mk_eq_symbv f1 f2) args1 args2
+        in
+        check stack (empty_prog) (smk_and fs);
+        fc h' Unit
+      | _ -> raise_err "heap-remove got unexpected pairs"
 
 let string_of_heap h =
   h
