@@ -6,7 +6,6 @@ open Grass
 open SymbEval
 open SymbState
 open SymbConsume
-open SymbUtil
 open Prog
 
 (** branch implements branching and executes each path using f1 where symbv
@@ -27,7 +26,7 @@ let produce_symb_expr state v snp (fc: symb_state -> 'a option) =
 let rec produce_fol state (f: Grass.form) snp (fc: symb_state -> 'a option) =
   match f with
      | Grass.Atom (t, _) as a -> 
-       Debug.debug(fun() -> sprintf "Producing fol Atom (%s) \n"
+       Debug.debug(fun() -> sprintf "Producing fol Atom (%s)\n"
          (Grass.string_of_term t)
        );
        eval state a (fun state' v -> 
@@ -61,8 +60,10 @@ let rec produce_sl state (f: Sl.form) snp (fc: symb_state -> 'a option) =
   | Sl.Atom (Sl.Region, ts, _) -> fc state 
   | Sl.Atom (Sl.Pred p, ts, _) -> fc state 
   | Sl.SepOp (Sl.SepStar, f1, f2, _) ->
-     Debug.debug( fun() -> sprintf "SL SepOp SepStar \n"); 
-     fc state 
+     Debug.debug( fun() -> sprintf "SL SepOp SepStar f1=(%s), f2=(%s)\n"
+     (Sl.string_of_form f1) (Sl.string_of_form f2));
+     produce_sl state f1 (snap_first snp) (fun state' ->
+       produce_sl state' f2 (snap_second snp) fc)
   | Sl.SepOp (Sl.SepIncl, _, _, _) ->
      Debug.debug( fun() -> sprintf "SL SepOp SepIncl\n"); 
      fc state 

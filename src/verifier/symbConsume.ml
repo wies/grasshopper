@@ -3,7 +3,6 @@
 open Printf
 open SymbState
 open SymbEval
-open SymbUtil
 
 let consume_symb_vals (state: symb_state) heap vs (fc: symb_state -> symb_heap -> snap -> 'a option) =
   Debug.debug( fun() ->

@@ -4,7 +4,6 @@ open Printf
 open Grass
 open GrassUtil
 open SymbState
-open SymbUtil
 
 (** eval rules *)
 let string_of_idset s =
@@ -16,8 +15,15 @@ let string_of_idset s =
 (** subst_symbv takes a formula and substitutes all terms with corresponding
  * symbolic variables in the symbolic store carried in state *)
 let rec subst_symbv state = function
-  | App (symb, ts, srt) as a -> 
+  | App (symb, _, srt) as a -> 
+    Debug.debug (fun () -> sprintf "subst_symbv App (%s)\n"
+    (string_of_symbol symb));
     let ids = free_consts_term a in
+    IdSet.map (fun id -> 
+      Debug.debug (fun () -> sprintf "ids App (%s)\n"
+        (string_of_ident id));
+        id
+    ) ids;
     let idslst = IdSet.elements ids in
     let sm = 
       idslst |> List.fold_left (fun sm e ->
@@ -34,6 +40,8 @@ let rec subst_symbv state = function
     let subv = subst_id_term sm a in
     subv
   | Var (id, srt) ->
+    Debug.debug(fun () -> sprintf "subst_symbv (%s)\n"
+    (string_of_ident id));
     let v = find_symb_val state.store id in
     (match v with
     | Term (Var (id2, srtt)) -> Var (id2, srt)
@@ -53,6 +61,7 @@ and eval state f (fc: symb_state -> symb_val -> 'a option) =
   eval_form state f fc
 
 and eval_form state f (fc: symb_state -> symb_val -> 'a option) =
+  Debug.debug(fun() -> sprintf "eval_form (%s)\n" (Grass.string_of_form f));
   let subs = subst_symbv state in
   fc state (Form (map_terms subs f))
 
