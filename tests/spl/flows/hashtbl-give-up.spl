@@ -103,28 +103,6 @@ lemma keyset_implies_bucket(x: Node, Ix: Interface, k: K, C: Set<K>)
 
 /** Begin programs */
 
-/** init */
-/*
-procedure init_root(length: Int)
-  returns (x: Node, I: Interface)
-  requires length >= 0
-  ensures hrep(x, I, {})
-{
-  x := new Node;
-  x.bkts := new Array<Node>(length);
-  x.keys := null;
-  x.ptrs := new Array<Node>(2*B);
-  arr_init(x.bkts, length, null);
-  x.len := length;
-  x.next := null;
-  x.indices := { n: Node :: -1 };
-
-  ghost var x_inflow := { n: Node :: n == x ? fd(keyspace) : domZero };
-  
-  I := interface(x, x_inflow);
-}
-*/
-
 /** inRange */
 procedure inRange(x: Node, k: K, ghost Ix: Interface, ghost C: Set<K>)
   returns (res: Bool)

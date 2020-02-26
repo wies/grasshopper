@@ -44,7 +44,7 @@ function keyset(I: Interface, n: Node) returns (res: Set<K>)
 }
 
 
-/** Global invariant that needs to be maintained */
+/** Global invariant \phi that needs to be maintained */
 pure predicate globalinv(root: Node, I: Interface) {
     intValid(I)
     && root in I.dom
@@ -53,7 +53,7 @@ pure predicate globalinv(root: Node, I: Interface) {
     && (forall k: K, n: Node :: n != root ==> !(in_inset(k, I, n) && !(in_linkset(k, I, n))))
 }
 
-/** Node-level invariant that needs to be maintained */
+/** Node-level invariant \gamma that needs to be maintained */
 pure predicate nodeinv(n: Node, I: Interface, C: Set<K>) {
    I.dom == {n} // is this needed?
    && (forall k1: K :: in_linkset(k1, I, n) && !(in_outsets(k1, I)) ==> in_inset(k1, I, n))

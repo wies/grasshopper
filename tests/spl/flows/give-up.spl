@@ -42,7 +42,7 @@ lemma keyset_def(k: K, I_n: Interface, n: Node)
   ensures k in keyset(I_n, n)
 {
 }
-              
+
 lemma flowint_step(root: Node, I1: Interface, I2: Interface, I: Interface, k: K, n: Node)
   requires I == intComp(I1, I2) && intValid(I)
   requires in_outset(k, I1, n)

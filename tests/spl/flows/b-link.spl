@@ -96,20 +96,20 @@ define heapGood(x)
   && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> lt(x.keys[i], x.keys[j]) @(noinst i) @(noinst j))
   // All outgoing pointers are distinct
   && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len
-       ==> x != x.ptrs[i])
+       ==> x != x.ptrs[i] @(noinst i))
   && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len
-       ==> x.ptrs[i] != x.next)
+       ==> x.ptrs[i] != x.next @(noinst i))
   && (forall i: Int, j: Int :: x.ptrs[0] != null && 0 <= i < j <= x.len
-       ==> x.ptrs[i] != x.ptrs[j])
+       ==> x.ptrs[i] != x.ptrs[j] @(noinst i) @(noinst j))
   // Indices of outgoing pointers are stored in x.indices
   && (forall n: Node :: 0 <= x.indices[n] <= x.len ==> x.ptrs.map[x.indices[n]] == n)
-  && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x.indices[x.ptrs.map[i]] == i)
+  && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x.indices[x.ptrs.map[i]] == i @(noinst i))
   && (forall n: Node :: -1 <= x.indices[n] <= x.len)
   && (x.ptrs[0] == null ==> (forall n: Node :: x.indices[n] == -1 @(noinst n)))
   && x.indices[x.next] == -1  // TODO these two might be redundant
   && x.indices[x] == -1
   // Internal nodes don't point to null
-  && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x.ptrs[i] != null)
+  && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x.ptrs[i] != null @(noinst i))
 }
 
 // Invariant of a B-link tree node x with flow interface I
@@ -665,7 +665,7 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
     lemma_int_comp_fold(Ic1, Ix1);
     Icx1 := intComp(Ic1, Ix1);
 
-    pure assert intLeq(Ic, Icx1) with {
+    pure assert "test" intLeq(Ic, Icx1) with {
       lemma_int_comp_unfold(Ic1, Ix1);
 
       pure assert forall n1: Node :: n1 !in Icx1.dom ==> Ic.out[n1] == Icx1.out[n1] with {
@@ -968,7 +968,7 @@ procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
               } else if (p.indices[z] == ci + 1) {
               } else if (ci + 1 < p.indices[z] <= p.len) {
                 pure assert old(p.indices[z]) == p.indices[z] - 1;
-                pure assert p.ptrs.map[p.indices[z]] == old(p.ptrs.map)[p.indices[z] - 1];
+                pure assert "test" p.ptrs.map[p.indices[z]] == old(p.ptrs.map)[p.indices[z] - 1];
               }
         }
 

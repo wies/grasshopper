@@ -32,7 +32,7 @@ function domZero() returns(p: MultiPair)
 }
 
 pure predicate domValid(p: MultiPair) {
-  forall k1: K :: p.is[k1] >= 0 && p.ls[k1] >= 0
+  forall k1: K :: p.is[k1] >= 0 && p.ls[k1] >= 0 @(noinst k1)
 }
 
 /** Show that (MultiPair, domPlus, domMinus, domZero) is a cancellative commutative monoid */
