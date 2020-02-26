@@ -527,7 +527,7 @@ lemma lemma_replacement_no_inflow(I1: Interface, I2: Interface, J1: Interface)
   requires intLeq(I1, J1) && Disjoint(J1.dom, I2.dom)
   requires forall n in J1.dom -- I1.dom :: I2.out[n] == domZero
   requires forall n in J1.dom -- I1.dom :: J1.inf[n] == domZero
-  ensures intComp(J1, I2) != intUndef
+  ensures intValid(intComp(J1, I2))
   ensures intLeq(intComp(I1, I2), intComp(J1, I2))
   ensures forall n in intComp(J1, I2).dom -- intComp(I1, I2).dom :: intComp(J1, I2).inf[n] == domZero
 {
