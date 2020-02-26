@@ -1,0 +1,44 @@
+// An ordered type
+type K
+    
+/*
+pure function compare(x: K, y: K) returns (res: Int)
+pure predicate lt(x: K, y: K)
+pure predicate le(x: K, y: K)
+
+const bot: K
+const top: K
+
+auto lemma bot_smallest(x: K)
+  ensures !lt(x, bot)
+
+auto lemma top_largest(x: K)
+  ensures !lt(top, x)
+
+auto lemma lt_irreflexive(x: K)
+  ensures !lt(top, x)
+*/
+
+pure predicate lt(x: K, y: K)
+
+const bot: K
+const top: K
+
+axiom forall a: K :: !lt(a, bot)
+axiom forall a: K :: !lt(top, a)
+axiom bot != top
+
+axiom forall a: K :: !lt(a, a)
+axiom forall a: K, b: K :: !lt(a, b) || !lt(b, a)
+axiom forall a: K, b: K :: lt(a, b) || lt(b, a) || a == b
+axiom forall a: K, b: K, c: K :: lt(a, b) && lt(b, c) ==> lt(a, c)
+
+function le(x: K, y: K) returns (res: Bool) {
+  lt(x, y) || x == y
+}
+
+
+function compare(x: K, y: K) returns (res: Int)
+{
+  x == y ? 0 : (lt(x, y) ? -1 : 1)
+}
