@@ -909,6 +909,7 @@ let instantiate_axioms_from_code patterns code ccgraph : form list =
     if Debug.is_debug 1 then begin
       grouped_instances |>
       List.rev_map (fun (f, sms) -> (f, List.filter ((<>) IdMap.empty) sms)) |>
+      List.sort (fun (_, sm1) (_, sm2) -> compare (List.length sm1) (List.length sm2)) |>
       List.iter print_debug
     end
   in

@@ -125,7 +125,20 @@ let check_spl_program spl_prog proc =
       p |> String.split_on_char ' '
       |> List.fold_left (fun ps s -> IdSet.add (s, 0) ps) IdSet.empty
     | None ->
-      IdMap.fold (fun id _ -> IdSet.add id) prog.prog_procs IdSet.empty
+        match !Config.splmodule with
+        | Some m ->
+            IdMap.fold (fun id decl procs ->
+              let contains s1 s2 =
+                let re = Str.regexp_string s2
+                in
+                try ignore (Str.search_forward re s1 0); true
+                with Not_found -> false
+              in
+              if contains decl.Prog.proc_contract.contr_pos.sp_file m  then
+                IdSet.add id procs
+              else procs) prog.prog_procs IdSet.empty
+        | None ->
+            IdMap.fold (fun id _ -> IdSet.add id) prog.prog_procs IdSet.empty
   in
   let simple_prog =
     if !Config.symbexec
@@ -199,9 +212,23 @@ let check_spl_program_v2 spl_prog proc =
     match proc with
     | Some p ->
       p |> String.split_on_char ' '
-      |> List.fold_left (fun ps s -> IdSet.add (s, 0) ps) IdSet.empty
+        |> List.fold_left (fun ps s -> IdSet.add (s, 0) ps) IdSet.empty
     | None ->
-      IdMap.fold (fun id _ -> IdSet.add id) prog.prog_procs IdSet.empty
+        match !Config.splmodule with
+        | Some m ->
+            IdMap.fold (fun id decl procs ->
+              let contains s1 s2 =
+                let re = Str.regexp_string s2
+                in
+                try ignore (Str.search_forward re s1 0); true
+                with Not_found -> false
+              in
+              if contains decl.Prog.proc_contract.contr_pos.sp_file m  then
+                begin
+                  IdSet.add id procs
+                end else procs) prog.prog_procs IdSet.empty
+        | None ->
+            IdMap.fold (fun id _ -> IdSet.add id) prog.prog_procs IdSet.empty
   in
   let simple_prog =
     if !Config.symbexec_v2

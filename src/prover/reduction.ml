@@ -29,7 +29,7 @@ let elim_exists =
             let t1_read = mk_reads t1 in
             let t2_read = mk_reads t2 in
             let vs = List.flatten dom_vs in
-            elim_neq seen_adts bvs (mk_exists vs (annotate (mk_neq t1_read t2_read) a))
+            mk_and [f; elim_neq seen_adts bvs (mk_exists vs (annotate (mk_neq t1_read t2_read) a))]
         | Adt (id, adts) when not @@ IdSet.mem id seen_adts ->
             let cstrs = List.assoc id adts in
             let expand new_vs = function
