@@ -1,0 +1,391 @@
+/** B+ tree implementation of the link template for linearizable dictionaries. */
+
+options "-abspreds -simplearrays -propreads -stratify"
+
+include "link.spl"
+include "array_util.spl"
+
+function keyspace() returns (m: Multiset)
+{
+  { k: K :: 1 }
+}
+
+/** Definition of a node */
+
+struct Node {
+  var len: Int;
+  var keys: Array<K>;
+  var ptrs: Array<Node>;
+  var next: Node;
+  ghost var indices: Map<Node, Int>;
+}
+
+// Width of the B-trees
+const B: Int
+axiom B > 1
+
+/** {Spec} Definition of node abstraction */
+
+// Access permissions associated with a B-link tree node x
+predicate hrepSpatial(x: Node) {
+  acc(x) &*& acc(x.keys) &*& acc(x.ptrs) &*& x.keys.length == 2*B && x.ptrs.length == 2*B
+}
+
+// k in ks_outset(x, u) for child u
+define ks_child(x, u, k)
+{
+  (x.indices[u] == 0 || !lt(k, x.keys.map[x.indices[u] - 1])) &&
+    (x.indices[u] == x.len && x.next == null && lt(k, top) || lt(k, x.keys.map[x.indices[u]]))
+}
+
+// k in edgest(x, x.next)
+define map_next(x, k)
+{
+  x.next != null && !lt(k, x.keys[x.len]) && lt(k, top)
+}
+
+// The flow map of a B-link tree node x
+function edgeFn(x: Node, inflow: Map<Node, FlowDom>)
+  returns (res: Map<Node, FlowDom>)
+  requires hrepSpatial(x)
+{
+  { n: Node ::
+    0 <= x.indices[n] <= x.len ? pair({ k: K :: ks_child(x, n, k) ? inflow[x].is[k] : 0}, mapZero) :
+    (n == x.next ? pair({ k: K :: map_next(x, k) ? inflow[x].is[k] : 0}, { k: K :: map_next(x, k) ? inflow[x].ls[k] : 0}) : domZero)
+  }
+}
+
+// Show that edgeFn is valid if inflow is valid
+lemma edgeFn_valid(x: Node, inflow: Map<Node, FlowDom>)
+  requires forall n: Node :: domValid(inflow[n])
+  ensures forall n: Node :: domValid(edgeFn(x, inflow)[n])
+{
+  pure assert forall n: Node, k: K :: edgeFn(x, inflow)[n].is[k] >= 0 with {
+    pure assert 0 <= x.indices[n] <= x.len && ks_child(x, n, k) ==> edgeFn(x, inflow)[n].is[k] == inflow[x].is[k];
+  }
+  pure assert forall n: Node, k: K :: edgeFn(x, inflow)[n].ls[k] >= 0 with {
+    if (0 <= x.indices[n] <= x.len) {
+      pure assert edgeFn(x, inflow)[n].ls[k] == 0;
+    } else {
+      pure assert n == x.next && map_next(x, k) ==> edgeFn(x, inflow)[n].ls[k] == inflow[x].ls[k];
+    }
+  }
+}
+
+// The contents of a node
+function contents(x: Node) returns (C: Set<K>)
+  requires hrepSpatial(x)
+  requires 0 <= x.len
+{
+  x.ptrs[0] == null ? set_of_map(x.keys.map, 0, x.len) : {}
+}
+
+// The interface of a node
+function interface(x: Node, inflow: Map<Node, FlowDom>)
+  returns (res: Interface)
+  requires hrepSpatial(x)
+{
+  int(inflow, edgeFn(x, inflow), {x})
+}
+
+// These are the conditions on the fields of x for abstraction to graph to work
+define heapGood(x)
+{
+  x.next != x && 0 <= x.len < 2*B && (x.next == null ==> x.keys[x.len] == top)
+  // Keys are sorted (TODO: internal vs. child?)
+  && (forall i: Int, j: Int :: 0 <= i < j <= x.len ==> lt(x.keys[i], x.keys[j]) @(noinst i) @(noinst j))
+  // All outgoing pointers are distinct
+  && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len
+       ==> x != x.ptrs[i] @(noinst i))
+  && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len
+       ==> x.ptrs[i] != x.next @(noinst i))
+  && (forall i: Int, j: Int :: x.ptrs[0] != null && 0 <= i < j <= x.len
+       ==> x.ptrs[i] != x.ptrs[j] @(noinst i) @(noinst j))
+  // Indices of outgoing pointers are stored in x.indices
+  && (forall n: Node :: 0 <= x.indices[n] <= x.len ==> x.ptrs.map[x.indices[n]] == n)
+  && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x.indices[x.ptrs.map[i]] == i @(noinst i))
+  && (forall n: Node :: -1 <= x.indices[n] <= x.len)
+  && (x.ptrs[0] == null ==> (forall n: Node :: x.indices[n] == -1 @(noinst n)))
+  && x.indices[x.next] == -1  // TODO these two might be redundant
+  && x.indices[x] == -1
+  // Internal nodes don't point to null
+  && (forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x.ptrs[i] != null @(noinst i))
+}
+
+// Invariant of a B-link tree node x with flow interface I
+define hrep(x, I, C) {
+  hrepSpatial(x) &*& heapGood(x) &*& I == interface(x, I.inf) &*& C == contents(x)
+}
+
+// The outset of a B-link tree node x
+function blink_outsets(Ix: Interface, x: Node) returns (res: Set<K>)
+  requires hrepSpatial(x)
+{
+  {k: K :: (x.ptrs[0] == null && x.next != null && !lt(k, x.keys[x.len]) && lt(k, top)
+           || x.ptrs[0] != null && lt(k, top))}
+}
+
+
+// The good condition
+define searchStrInv(x, I, C) {
+    // Edgesets are disjoint (TODO: this should follow from heapGood, not sure this is even needed anymore)
+    true
+    //(forall k1: K, y: Node, z: Node :: y == z
+    //   || I.out[y].is[k1] == 0 || I.out[z].is[k1] == 0)
+    // Linkset keyset subsetof inset
+    && (forall k1: K :: in_linkset(k1, I, x) && k1 !in blink_outsets(I, x) ==> in_inset(k1, I, x))
+    && (forall k1: K :: in_linkset(k1, I, x) && !(in_inset(k1, I, x)) ==> !lt(k1, x.keys[x.len]))
+}
+
+define node(x, I, C) {
+  hrep(x, I, C) &*& searchStrInv(x, I, C)
+}
+
+/** {Spec} Implementation specific lemmas used by Iris */
+
+// Show that blink_outsets is superset of in_outsets
+lemma outsets_correct(x: Node, Ix: Interface, k: K, C: Set<K>)
+  requires hrep(x, Ix, C) &*& intValid(Ix)
+  pure ensures in_outsets(k, Ix) ==> k in blink_outsets(Ix, x)
+{
+  if (k !in blink_outsets(Ix, x)) {
+    pure assert !((x.ptrs[0] == null && x.next != null && !lt(k, x.keys[x.len]) && lt(k, top)
+                || x.ptrs[0] != null && lt(k, top)));
+    pure assert forall n1: Node :: !(in_outset(k, Ix, n1));
+  }
+}
+
+
+// Node abstraction implies node-level invariant (this lemma is assumed by Coq)
+lemma node_implies_nodeinv(n: Node, I: Interface, C: Set<K>)
+  requires node(n, I, C) && intValid(I)
+  pure ensures nodeinv(n, I, C)
+{
+  pure assert (forall k1: K :: in_linkset(k1, I, n) && !(in_outsets(k1, I)) ==> in_inset(k1, I, n)) with {
+    if (in_linkset(k1, I, n) && !(in_outsets(k1, I))) {
+      outsets_correct(n, I, k1, C);
+    }
+  }  
+}
+
+// Show that if query key k is in the keyset of node x than x must be a leaf.
+lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int, implicit ghost C: Set<K>)
+  requires hrep(x, Ix, C) &*& intValid(Ix)
+  requires lt(k, top)
+  requires in_inset(k, Ix, x) && (forall y: Node :: !(in_outset(k, Ix, y)))
+  requires (i <= 0 || !lt(k, x.keys[i-1])) && 0 <= i <= x.len
+  ensures hrep(x, Ix, C)
+  ensures x.ptrs[0] == null  // x is a leaf
+{
+  if (x.ptrs[0] != null && i < x.len && !lt(k, x.keys[i])) {
+    keyset_implies_leaf(x, Ix, k, i + 1);
+    return;
+  } else {
+    if (x.ptrs[0] != null && lt(k, x.keys[i])) {
+      pure assert Ix.out[x.ptrs[i]].is[k] == 0;
+    } 
+    return;
+  }
+}
+
+/*
+lemma lemma_edgesets_disjoint(x: Node, Ix: Interface, inflow: Map<Node, FlowDom>)
+  requires hrepSpatial(x)
+  requires heapGood(x)
+  requires Ix = interface(x, inflow) &*& intValid(Ix)
+  pure ensures forall k: K, y: Node, z: Node :: Ix.out[y].is[k] != 0 ==> y == z || Ix.out[z].is[k] == 0 
+{
+  pure assert forall k: K, y: Node, z: Node :: Ix.out[y].is[k] != 0 ==> y == z || Ix.out[z].is[k] == 0 with {
+    if (y != z && Ix.out[y].is[k] != 0) {
+      pure assert Ix.out == edgeFn(x, Ix.inf);
+      if (Ix.out[z].is[k] > 0) {
+        if (x.next == y || x.next == z) {
+          ghost var u: Node;
+          if (x.next == y) {
+            u := z;
+          } else {
+            u := y;
+          }
+        } else if (0 <= x.indices[y] <= x.len && 0 <= x.indices[z] <= x.len) {
+          pure assert x.indices[z] == x.indices[y] ==> x.ptrs[x.indices[z]] == y;
+        }
+      }
+    }
+  }
+}
+*/
+
+/** Begin programs */
+
+define emptyInt(x, Ix) {
+  Ix.dom == {x} && Ix.inf[x] == domZero
+  && (forall y: Node :: Ix.out[y] == domZero)
+}
+
+/** Initialize a new root node */
+procedure init() returns (x: Node, I: Interface)
+  ensures node(x, I, Set<K>()) &*& intValid(I) &*& globalinv(x, I)
+{
+  x := new Node;
+  x.keys := new Array<K>(2*B);
+  x.keys[0] := top;
+  x.ptrs := new Array<Node>(2*B);
+  x.ptrs[0] := null;
+  x.len := 0;
+  x.next := null;
+  x.indices := { n: Node :: -1 };
+
+  ghost var x_inflow := { n: Node :: n == x ? pair(keyspace, keyspace) : domZero };
+  
+  I := interface(x, x_inflow);
+}
+
+/** findNext */
+procedure findNext(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
+  returns (n: Node)
+  requires lt(k, top)
+  requires node(x, Ix, C) &*& intValid(Ix)
+  requires in_linkset(k, Ix, x) || in_inset(k, Ix, x) // TODO: get rid of 2nd disjunct
+  ensures node(x, Ix, C)
+  ensures n != null ==> in_outset(k, Ix, n)
+  ensures n == null ==> (forall y: Node :: !(in_outset(k, Ix, y)))
+{
+  if (x.ptrs[0] == null) {  // Leaf node
+    if (x.next == null) {
+      return null;
+    }
+    if (le(x.keys[x.len], k)) {
+      return x.next;
+    } else {
+      return null;
+    }
+  }
+
+  var found, i := arr_find(x.keys, x.len, k);
+
+  if (i < x.len && k == x.keys[i]) {  // arr_find finds upper bound, we want lower
+    i := i + 1;
+  }
+
+  if (i == x.len && x.next != null) {
+    if (lt(k, x.keys[i])) {
+      n := x.ptrs[i];
+      return n;
+    } else {
+      n := x.next;
+      return n;
+    }
+  } else {
+    n := x.ptrs[i];
+    return n;
+  }
+  return n;
+}
+
+/** search */
+procedure search(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
+  returns (succ: Bool, res: Bool)
+  requires node(x, Ix, C) &*& intValid(Ix)
+  requires lt(k, top)
+  requires in_inset(k, Ix, x) && (forall y: Node :: !(in_outset(k, Ix, y)))
+  ensures hrep(x, Ix, C)
+  // decisiveOpSpec(x, Ix1, res, k):
+  ensures succ ==> (res == k in C)
+{
+  keyset_implies_leaf(x, Ix, k, 0);
+
+  var idx: Int;
+  res, idx := arr_find(x.keys, x.len, k);
+
+  return true, res;
+}
+
+/** insert */
+procedure insert(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
+  returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
+  requires node(x, Ix, C) &*& intValid(Ix)
+  requires lt(k, top)
+  requires in_inset(k, Ix, x) && (forall y: Node :: !(in_outset(k, Ix, y)))
+  ensures node(x, Ix, C1)
+  // decisiveOpSpec(x, Ix1, res, k):
+  ensures succ ==> (C1 == C ++ {k} && (res == k !in C))
+  ensures !succ ==> C1 == C
+{
+  keyset_implies_leaf(x, Ix, k, 0);
+
+  if (x.len < 2*B - 1) {
+    ghost var m0 := x.keys.map;
+    if (x.next != null) {
+      x.keys[x.len + 1] := x.keys[x.len];
+      set_of_map_equal(m0, x.keys.map, 0, 0, x.len);
+    } else {
+      x.keys[x.len + 1] := top;
+      set_of_map_equal(m0, x.keys.map, 0, 0, x.len);
+    }
+    ghost var m := x.keys.map;
+    var old_len := x.len;
+
+    var idx, new_len := arr_insert(x.keys, k, x.len);
+    x.len := new_len;
+
+    map_insert_content_set(m, x.keys.map, idx, k, old_len, new_len);
+
+    pure assert Ix == interface(x, Ix.inf) with {
+      pure assert forall k1: K, y: Node ::
+        Ix.out[y].is[k1] == edgeFn(x, Ix.inf)[y].is[k1]
+        && Ix.out[y].ls[k1] == edgeFn(x, Ix.inf)[y].ls[k1]
+      with {
+        pure assert Ix.inf[x].is[k1] == Ix.inf[x].is[k1];
+        pure assert Ix.inf[x].ls[k1] == Ix.inf[x].ls[k1];
+      }
+      
+    }
+
+    
+  return true, old_len != new_len;
+  } else {
+    return false, false;
+  }
+}
+
+/** delete */
+procedure delete(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
+  returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
+  requires node(x, Ix, C) &*& intValid(Ix)
+  requires lt(k, top)
+  requires in_inset(k, Ix, x) && (forall y: Node :: !(in_outset(k, Ix, y)))
+  ensures node(x, Ix, C1)
+  // decisiveOpSpec(x, Ix1, res, k):
+  ensures succ ==> C1 == C -- {k} && (res == k in C)
+  ensures !succ ==> C1 == C
+{
+  keyset_implies_leaf(x, Ix, k, 0);
+
+  ghost var m := x.keys.map;
+  var old_len := x.len;
+  
+  pure assert set_of_map(x.keys.map, 0, x.len) == C;
+  var new_len, idx := arr_delete(x.keys, k, x.len);
+
+  map_delete_content_set(m, x.keys.map, x.len, new_len, idx, k);
+
+  ghost var m1 := x.keys.map;
+  x.keys[new_len] := x.keys[x.len];
+  set_of_map_equal(m1, x.keys.map, 0, 0, new_len);
+
+  x.len := new_len;
+  
+  pure assert Ix == interface(x, Ix.inf) with {
+    pure assert forall k1: K, y: Node ::
+      Ix.out[y].is[k1] == edgeFn(x, Ix.inf)[y].is[k1]
+      && Ix.out[y].ls[k1] == edgeFn(x, Ix.inf)[y].ls[k1]
+    with {
+      pure assert Ix.inf[x].is[k1] == Ix.inf[x].is[k1];
+      pure assert Ix.inf[x].ls[k1] == Ix.inf[x].ls[k1];
+    }
+    
+  }
+
+  return true, old_len != new_len;
+}
+

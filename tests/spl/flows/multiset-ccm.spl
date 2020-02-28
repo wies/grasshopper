@@ -1,6 +1,6 @@
-/** Flow domain for multisets over some element type K */
+/** {Spec} Flow domain for multisets over some element type K */
 
-/** Flow domain definitions */
+/** {Spec} Flow domain definitions */
 
 type K
 
@@ -25,7 +25,7 @@ pure predicate domValid(p: Multiset) {
   forall k1: K :: p[k1] >= 0
 }
 
-/** Show that (Multiset, domPlus, domMinus, domZero) is a cancellative commutative monoid */
+/** {Spec} Show that (Multiset, domPlus, domMinus, domZero) is a cancellative commutative monoid */
 
 // domZero is unit of domPlus
 lemma domZero_unit(p: Multiset)

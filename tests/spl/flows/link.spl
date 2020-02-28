@@ -1,4 +1,4 @@
-/** Flow domain for multisets over some element type K */
+/** {Spec} Flow domain for multisets over some element type K */
 
 include "flows.spl"
 include "multipair-ccm.spl"
@@ -18,8 +18,7 @@ lemma domMinus_inv(m1: MultiPair, m2: MultiPair)
   } 
 }
 
-/** Definitions of predicates used in link template proof in Iris as well as 
-  * flow domain specific lemmas assumed by that proof. */
+/* Definitions of predicates used in link template proof in Iris */
 
 define in_inset(k, I, n) {
   I.inf[n].is[k] > 0
@@ -44,7 +43,7 @@ function keyset(I: Interface, n: Node) returns (res: Set<K>)
 }
 
 
-/** Global invariant \phi that needs to be maintained */
+/* Global invariant \phi that needs to be maintained */
 pure predicate globalinv(root: Node, I: Interface) {
     intValid(I)
     && root in I.dom
@@ -53,12 +52,13 @@ pure predicate globalinv(root: Node, I: Interface) {
     && (forall k: K, n: Node :: n != root ==> !(in_inset(k, I, n) && !(in_linkset(k, I, n))))
 }
 
-/** Node-level invariant \gamma that needs to be maintained */
+/* Node-level invariant \gamma that needs to be maintained */
 pure predicate nodeinv(n: Node, I: Interface, C: Set<K>) {
    I.dom == {n} // is this needed?
    && (forall k1: K :: in_linkset(k1, I, n) && !(in_outsets(k1, I)) ==> in_inset(k1, I, n))
 }
 
+/*
 lemma keyset_def(k: K, I_n: Interface, n: Node)
   requires in_inset(k, I_n, n)
   requires !(in_outsets(k, I_n))
@@ -111,3 +111,4 @@ lemma flowint_step(root: Node, I: Interface, I1: Interface, I2: Interface, k: K,
     pure assert I.out[n].is[k] == I1.out[n].is[k] + I2.out[n].is[k];
   }
 }
+*/

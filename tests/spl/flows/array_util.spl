@@ -6,6 +6,8 @@ options "-simplearrays"
 include "ordered_type.spl"
 
 type Node
+
+/** {Spec} Utility functions on maps */
   
 // project map segment m[i..j] to set of its elements
 function set_of_map(m: Map<Int, K>, i: Int, j: Int)
@@ -231,7 +233,7 @@ lemma map_copy_content_set(a: Map<Int, K>, m: Map<Int, K>, m1: Map<Int, K>,
 }
 
 
-/** Programs */
+/** Actual library */
 
 // Initialize a[0..len] with value x
 procedure arr_init(a: Array<K>, len: Int, x: K)

@@ -1,12 +1,11 @@
-/** Flow domain setup for verifying give-up template implementations */
+/** {Spec} Flow domain setup for verifying give-up template implementations */
 
 include "flows.spl"
 include "multiset-ccm.spl"
 
 type FlowDom = Multiset
 
-/** Definitions of predicates used in give-up template proof in Iris as well as 
-  * flow domain specific lemmas assumed by that proof. */
+/** {Spec} Definitions of predicates used in give-up template proof in Iris */
 
 define in_inset(k, I, n) {
   I.inf[n][k] > 0
@@ -36,6 +35,8 @@ predicate globalinv(root: Node, I: Interface)
                  (n != root ==> (forall k: K :: !(in_inset(k, I, n)))))
 }
 
+/*
+
 lemma keyset_def(k: K, I_n: Interface, n: Node)
   requires in_inset(k, I_n, n)
   requires !(in_outsets(k, I_n))
@@ -56,3 +57,5 @@ lemma flowint_step(root: Node, I1: Interface, I2: Interface, I: Interface, k: K,
     pure assert I.out[n][k] == I1.out[n][k] + I2.out[n][k];
   }
 }
+
+*/

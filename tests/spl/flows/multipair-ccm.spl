@@ -1,7 +1,7 @@
-/** Flow domain for pairs of multisets over some element type K */
+/** {Spec} Flow domain for pairs of multisets over some element type K */
 // TODO: Factor this out into a generic pair construction over CCMs
 
-/** Flow domain definitions */
+/** {Spec} Flow domain definitions */
 
 type K
 
@@ -35,7 +35,7 @@ pure predicate domValid(p: MultiPair) {
   forall k1: K :: p.is[k1] >= 0 && p.ls[k1] >= 0 @(noinst k1)
 }
 
-/** Show that (MultiPair, domPlus, domMinus, domZero) is a cancellative commutative monoid */
+/** {Spec} Show that (MultiPair, domPlus, domMinus, domZero) is a cancellative commutative monoid */
 
 // domZero is unit of domPlus
 lemma domZero_unit(p: MultiPair)

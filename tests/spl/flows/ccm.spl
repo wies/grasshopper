@@ -1,4 +1,4 @@
-/** Theory of cancellative commutative monoids (CCMs) */
+/** {Spec} Theory of cancellative commutative monoids (CCMs) */
 
 options "-simplearrays -propreads -abspreds -stratify"
 
@@ -51,7 +51,7 @@ lemma domPlus_valid(p1: FlowDom, p2: FlowDom)
   requires domValid(p1) && domValid(p2)
   ensures domValid(domPlus(p1, p2))
   
-/** End of CCM axioms */
+/** {Spec} End of CCM axioms */
 
 lemma domMinus_unit(p: FlowDom)
   ensures domMinus(p, domZero) == p

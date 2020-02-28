@@ -1,10 +1,10 @@
-/** Theory of flow interfaces - parametric in underlying CCM. */
+/** {Spec} Theory of flow interfaces - parametric in underlying CCM. */
 
 options "-simplearrays -propreads -abspreds -stratify"
 
 include "ccm.spl"
 
-/** Flow interfaces and related functions and lemmas */
+/** {Spec} Flow interfaces and related functions and lemmas */
 
 // The type of nodes
 type Node
