@@ -45,12 +45,12 @@ rm -f $loctotalfile $timestotalfile
 echo -e "; Module\t\t& Code\t& Proof\t& Total\t& Time"
 run "Flow library" $FILES1
 run "Array library" $FILES8
-run "Hash table (link)" $FILES2
-run "Hash table (give-up)" $FILES3
 run "B-link (core)" $FILES5
 run "B-link (half split)" $FILES6
 run "B-tree (full split)" $FILES7
 run "B+ tree" $FILES4
+run "Hash table (link)" $FILES2
+run "Hash table (give-up)" $FILES3
 
 echo -n -e "Total\t\t"
 awk -F "\t" '{progs+=$1; specs+=$2; total+=$3} END{printf("\t& %d\t& %d\t& %d", progs, specs, total);}' $loctotalfile

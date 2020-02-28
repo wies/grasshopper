@@ -17,7 +17,7 @@ struct Node {
   ghost var typ: NodeType;
 }
 
-/** Definition of node abstraction, gamma */
+/** {Spec} Definition of node abstraction, gamma */
 
 function hash(x: Node, k: K) returns (i: Int)
 

@@ -15,9 +15,10 @@ struct Node {
   var ptrs: Array<Node>;
 }
 
-/** Definition of heap representation, hrep */
-
 var B: Int
+
+/** {Spec} Definition of heap representation, hrep */
+
 axiom B > 1
 
 define hrepSpatial(x) {
@@ -55,7 +56,7 @@ define node(x, I, C) {
 }
 
 
-/** Implemetation-specific lemmas needed by Iris */
+/** {Spec} Implemetation-specific lemmas needed by Iris */
 
 lemma node_sep_star(n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set<K>)
   requires node(n, I_n, C) &*& node(n, I_np, Cp)
@@ -64,7 +65,7 @@ lemma node_sep_star(n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set
   
 }
 
-/** Lemmas for proofs below */
+/** {Spec} Lemmas for proofs below */
 
 lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int, implicit ghost C: Set<K>)
   requires node(x, Ix, C) &*& intValid(Ix)
@@ -88,7 +89,7 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int, implicit ghost C
 
 /** Begin programs */
 
-/** Initialize root node */
+/* Initialize root node */
 procedure init() returns (x: Node, I: Interface, implicit ghost C: Set<K>)
   ensures node(x, I, C) &*& intValid(I) &*& C == {}
 {
@@ -108,7 +109,7 @@ procedure init() returns (x: Node, I: Interface, implicit ghost C: Set<K>)
 }
 
 
-/** inRange */
+/* inRange */
 procedure inRange(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
   returns (res: Bool)
   requires node(x, Ix, C)
@@ -117,7 +118,7 @@ procedure inRange(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
   return le(x.rangeLb, k) && lt(k, x.rangeUb);
 }
 
-/** findNext */
+/* findNext */
 procedure findNext(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
   returns (n: Node)
   requires node(x, Ix, C) &*& intValid(Ix)
@@ -140,7 +141,7 @@ procedure findNext(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
 }
 
 
-/** search */
+/* search */
 procedure search(x: Node, k: K, ghost Ix: Interface)
   returns (succ: Bool, res: Bool, implicit ghost C: Set<K>)
   requires node(x, Ix, C) &*& intValid(Ix)
@@ -157,7 +158,7 @@ procedure search(x: Node, k: K, ghost Ix: Interface)
   return true, res;
 }
 
-/** insert */
+/* insert */
 procedure insert(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
   requires node(x, Ix, C) &*& intValid(Ix)
@@ -187,7 +188,7 @@ procedure insert(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
 }
 
 
-/** delete */
+/* delete */
 procedure delete(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
   requires node(x, Ix, C) &*& intValid(Ix)

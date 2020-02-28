@@ -5,17 +5,6 @@ options "-simplearrays -propreads -abspreds -stratify"
 include "give-up.spl"
 include "array_util.spl"
 
-function edgeFn(x: Node, y: Node, p1: FlowDom)
-  returns (p: FlowDom)
-  requires acc(x)
-{
-  { k: K ::
-    y != null
-    && (  x.typ == root && x.bkts[hash(x, k)] == y
-    || x.typ == bucket && x.next == y) ?
-    p1[k] : 0}
-}
-
 /** Definition of a node */
 
 datatype NodeType = root | bucket | nodeTop;
@@ -30,9 +19,20 @@ struct Node {
   ghost var typ: NodeType;
 }
 
-/** Definition of heap representation, hrep */
-
 function hash(x: Node, k: K) returns (i: Int)
+
+/** {Spec} Definition of heap representation, hrep */
+
+function edgeFn(x: Node, y: Node, p1: FlowDom)
+  returns (p: FlowDom)
+  requires acc(x)
+{
+  { k: K ::
+    y != null
+    && (  x.typ == root && x.bkts[hash(x, k)] == y
+    || x.typ == bucket && x.next == y) ?
+    p1[k] : 0}
+}
 
 define hrepSpatial(x) {
   acc(x) &*& acc(x.bkts)  &*& acc(x.keys)
@@ -78,7 +78,7 @@ define node(x, I, C) {
   hrep(x, I, C) &*& searchStrInv(x, I, C)
 }
     
-/** Implemetation-specific lemmas needed by Iris */
+/** {Spec} Implemetation-specific lemmas needed by Iris */
 
 lemma node_sep_star(n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set<K>)
   requires node(n, I_n, C) &*& node(n, I_np, Cp)
