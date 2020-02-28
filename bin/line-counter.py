@@ -11,8 +11,8 @@ spec_total = 0
 last_heading = ""
 
 def print_counts(spec_count, prog_count):
-    print last_heading
-    print "Prog: ", prog_count, " Spec: ", spec_count, " Total: ", prog_count + spec_count
+    #print last_heading
+    print spec_count, "\t", prog_count, "\t", prog_count + spec_count
     
 
 def count(fname):
@@ -26,12 +26,29 @@ def count(fname):
             line = line.strip()
             if line == "" or line.startswith("//"):
                 continue
-            if line.startswith("/**"):
-                print_counts(spec_count, prog_count)
+            if line.startswith("/** {Spec} "):
+                #print_counts(spec_count, prog_count)
                 last_heading = line
-                prog_total += prog_count
-                spec_total += spec_count
+                if spec_context:
+                    spec_total += spec_count + prog_count
+                else :
+                    prog_total += prog_count
+                    spec_total += spec_count
                 prog_count, spec_count = 0, 0
+                spec_context = True
+                scope_level = 1
+                continue
+            if line.startswith("/**"):
+                #print_counts(spec_count, prog_count)
+                last_heading = line
+                if spec_context:
+                    spec_total += spec_count + prog_count
+                else :
+                    prog_total += prog_count
+                    spec_total += spec_count
+                prog_count, spec_count = 0, 0
+                spec_context = False
+                scope_level = 0
                 continue
 
             spec_keywords = [
@@ -56,7 +73,7 @@ def count(fname):
 
     spec_total += spec_count
     prog_total += prog_count
-    print_counts(spec_count, prog_count)
+    #print_counts(spec_count, prog_count)
 
     
 for file in sys.argv[1:]:
