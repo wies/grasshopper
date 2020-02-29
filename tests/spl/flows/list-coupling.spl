@@ -28,6 +28,7 @@ define heapGood(x) {
   x.next != x
 }
 
+// concrete keyset definition
 function keyset(I: Interface, n: Node) returns (res: Set<K>)
   requires acc(n)
 {
@@ -66,7 +67,8 @@ define in_keyset(k, I, x) {
 
 // The good condition
 define searchStrInv(first, x, I, C) {
-    C <= KS
+  C <= KS
+  && C <= keyset(I, x)
       && (forall k1 in KS :: x == first ==> in_outset(k1, I, x.next) @(noinst k1))
       && (forall k1: K :: I.inf[x][k1] <= 1 @(noinst k1))
 }
@@ -77,10 +79,28 @@ define node(first, x, I, C) {
 
 /** Implementation-specific lemmas needed by Iris */
 
+
+// Proof that concrete and abstract keysets are equivalent
+lemma keyset_ok(n: Node, first: Node, I: Interface, implicit ghost C: Set<K>)
+  requires node(first, n, I, C)
+  pure ensures keyset(I, n) == keyset_abs(I, n)
+{
+  pure assert forall k : K :: k in keyset_abs(I, n) == k in keyset(I, n) with {
+    if (k in keyset_abs(I, n)) {
+      pure assert !(in_outsets(k, I));
+    }
+    if (k in keyset(I, n)) {
+      pure assert !(in_outsets(k, I));
+      pure assert in_inset(k, I, n);
+    }
+  }
+}
+
 lemma node_implies_nodeinv(first: Node, n: Node, I: Interface, C: Set<K>)
   requires node(first, n, I, C) &*& intValid(I)
   pure ensures nodeinv(first, n, I, C)
 {
+  keyset_ok(n, first, I);
   pure assert forall k1: K :: k1 in KS ==> n == first ==> in_outsets(k1, I) with {
     pure assert k1 in KS ==> n == first ==> in_outset(k1, I, n.next);
   }
@@ -93,7 +113,7 @@ lemma node_sep_star(first: Node, n: Node, I_n: Interface, I_np: Interface, C: Se
   
 }
 
-/** Auxiliary lemmas used below */
+/** {Spec} Auxiliary lemmas */
 
 lemma keyset_impl(first: Node, n: Node, I: Interface, implicit ghost C: Set<K>)
   requires node(first, n, I, C)

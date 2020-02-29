@@ -24,12 +24,12 @@ predicate in_outsets(k: K, I: Interface)
   exists n: Node :: in_outset(k, I, n)
 }
 
-/*
-function keyset(I: Interface, n: Node) returns (res: Set<K>)
+// abstract keyset definition
+function keyset_abs(I: Interface, n: Node) returns (res: Set<K>)
 {
   { k: K :: in_inset(k, I, n) && !(in_outsets(k, I)) }
 }
-*/
+
 
 predicate globalinv(first: Node, I: Interface)
 {
@@ -45,7 +45,7 @@ predicate nodeinv(first: Node, n: Node, I: Interface, C: Set<K>)
 {
   I.dom == {n}
   && (forall k: K :: I.inf[n][k] <= 1)
-  && C <= KS
+  && C <= keyset_abs(I, n)
   && (n == first ==> (forall k1 in KS :: in_outsets(k1, I)))
 }
 
@@ -54,7 +54,7 @@ lemma expand_inf1(n: Node, k: K, I1: Interface, I2: Interface)
   ensures n in I1.dom ==> I1.inf[n][k] == intComp(I1, I2).inf[n][k] + I2.out[n][k]
 {
   lemma_int_comp_unfold(I1, I2);
-  pure assert n in I1.dom ==> I1.inf[n] == domPlus(intComp(I1, I2).inf[n], I2.out[n]);  
+  pure assert n in I1.dom ==> I1.inf[n] == domPlus(intComp(I1, I2).inf[n], I2.out[n]);
 }
 
 lemma expand_inf2(n: Node, k: K, I1: Interface, I2: Interface)
@@ -77,7 +77,7 @@ lemma expand_out(n: Node, k: K, I1: Interface, I2: Interface)
 lemma keyset_def(k: K, I_n: Interface, n: Node)
   requires in_inset(k, I_n, n)
   requires !(in_outsets(k, I_n))
-  ensures k in keyset(I_n, n)
+  ensures k in keyset_abs(I_n, n)
 {
 }
 

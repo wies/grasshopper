@@ -31,11 +31,11 @@ function intEmp() returns (I: Interface) {
 
 pure predicate intValid(I: Interface) {
   // Inflow and outflow properly defined
-    (forall n: Node :: I.inf[n] != domZero ==> n in I.dom @(noinst n))
-  && (forall n: Node :: I.out[n] != domZero ==> n !in I.dom @(noinst n))
+    (forall n: Node :: I.inf[n] != domZero ==> n in I.dom)
+  && (forall n: Node :: I.out[n] != domZero ==> n !in I.dom)
   // Inflow and outflow are valid
   && (forall n in I.dom :: domValid(I.inf[n]))
-  && (forall n: Node :: n !in I.dom ==> domValid(I.out[n]) @(noinst n))
+  && (forall n: Node :: n !in I.dom ==> domValid(I.out[n]) )
   // Empty domain ==> no outflow
   && (I.dom == {} ==> I.out == zeroFlow)
   // not undefined
