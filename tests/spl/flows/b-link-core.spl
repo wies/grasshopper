@@ -288,7 +288,7 @@ procedure search(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
   requires node(x, Ix, C) &*& intValid(Ix)
   requires lt(k, top)
   requires in_inset(k, Ix, x) && (forall y: Node :: !(in_outset(k, Ix, y)))
-  ensures hrep(x, Ix, C)
+  ensures node(x, Ix, C)
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (res == k in C)
 {
