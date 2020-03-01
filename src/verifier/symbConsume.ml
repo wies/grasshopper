@@ -45,7 +45,7 @@ let rec consume_sl state heap (f: Sl.form) (fc: symb_state -> symb_heap -> snap 
   match f with
   | Sl.Pure (p, _) ->
    Debug.debug( fun() ->
-     sprintf "%sProducing sl pure Atom Var %s\n"
+     sprintf "%sConsuming sl pure Atom Var %s\n"
      lineSep (Grass.string_of_form p)
    );
    consume_fol state heap p fc 

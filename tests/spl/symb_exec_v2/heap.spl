@@ -5,8 +5,8 @@ struct Node {
 }
 
 procedure lookup_heap(x: Node) returns (y: Node)
-  requires x.next |-> null
-  ensures x.next |-> y
+  requires acc(x) &*& x.next == null
+  ensures acc(x) &*& acc(y) &*& x.next == y
 {
  y := x.next;
 }

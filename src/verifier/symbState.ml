@@ -104,7 +104,7 @@ let merge_symb_stores g1 g2 =
   | None, Some z -> Some z
   | None, None -> None) g1 g2
 
-let find_symb_val store id =
+let find_symb_val store heap id =
   Debug.debug(
     fun () ->
       sprintf "trying to find symbv for identifier %s\n"
@@ -112,6 +112,7 @@ let find_symb_val store id =
   );
   try IdMap.find id store
   with Not_found ->
+    (* this could be a field identifier (e.g., x.next) *)
     failwith ("find_symb_val: Could not find symbolic val for " ^ (string_of_ident id))
 
 (** havoc a list of terms into a symbolic store *)
@@ -272,6 +273,9 @@ type heap_chunk =
   | Obj of symb_val * snap * symb_val IdMap.t
   | Eps of symb_val * symb_val IdMap.t (* r.f := e *)
   | Pred of ident * snap * symb_val list
+
+let mk_heap_chunk_obj v snp m =
+  Obj (v, snp, m)
 
 let equal_field_maps fm1 fm2 =
   IdMap.equal equal_symb_vals fm1 fm2

@@ -25,12 +25,19 @@ let produce_symb_expr state v snp (fc: symb_state -> 'a option) =
 
 let rec produce_fol state (f: Grass.form) snp (fc: symb_state -> 'a option) =
   match f with
-     | Grass.Atom (t, _) as a -> 
-       Debug.debug(fun() -> sprintf "Producing fol Atom (%s)\n"
-         (Grass.string_of_term t)
+     | Grass.Atom (Grass.App (symb, [field; id], _) as t, _) as a -> 
+       Debug.debug(fun() -> sprintf "Producing fol Atom App FIELD READ (%s) field=(%s) id=(%s)\n"
+         (Grass.string_of_term t) (string_of_term field) (string_of_term id)
        );
        eval state a (fun state' v -> 
          produce_symb_expr state' v snp fc )
+     | Grass.Atom (Grass.App (symb, [id], _) as t, _) as a -> 
+       Debug.debug(fun() -> sprintf "Producing fol Atom App (%s)\n"
+         (Grass.string_of_term t)
+       );
+        eval state a (fun state' v -> 
+         produce_symb_expr state' v snp fc )
+     | Grass.Atom (Grass.Var (id, srt), _) -> todo()
      | Grass.BoolOp (Grass.And, fs) -> 
        Debug.debug( fun() ->
          sprintf "Producing fol BoolOp AND \n"
@@ -50,15 +57,30 @@ and produces_fol state (fs: Grass.form list) snp (fc: symb_state -> 'a option) =
 let rec produce_sl state (f: Sl.form) snp (fc: symb_state -> 'a option) =
   match f with
   | Sl.Pure (p, _) ->
+   Debug.debug(fun() ->
+      sprintf "%sCurrent State:\n{%s\n}\n\n"
+      lineSep (string_of_state state));
    Debug.debug( fun() ->
      sprintf "%sProducing sl pure Atom Var %s\n"
-     lineSep (Grass.string_of_form p)
-   );
+     lineSep (Grass.string_of_form p));
    produce_fol state p snp fc
-  | Sl.Atom (Sl.Emp, ts, _) -> fc state 
-  | Sl.Atom (Sl.Region, [r], _) -> fc state 
-  | Sl.Atom (Sl.Region, ts, _) -> fc state 
-  | Sl.Atom (Sl.Pred p, ts, _) -> fc state 
+  | Sl.Atom (Sl.Emp, ts, _) -> 
+     Debug.debug( fun() -> sprintf "SL Atom Emp\n"); 
+     fc state 
+  | Sl.Atom (Sl.Region, [r], _) -> 
+     Debug.debug( fun() -> sprintf "SL Region r = (%s)\n"
+     (string_of_term r)); 
+     eval_region_term state r (fun state' v ->
+        Debug.debug(fun() -> sprintf "SL Region evals to r -> (%s)\n" (string_of_symb_val v));
+        let hc = mk_heap_chunk_obj v Unit empty_store in 
+        let h, stack = heap_add state'.heap state'.pc hc in
+        fc {state' with heap=h; pc = stack})
+  | Sl.Atom (Sl.Region, ts, _) -> 
+     Debug.debug( fun() -> sprintf "SL Region ts\n"); 
+     fc state 
+  | Sl.Atom (Sl.Pred p, ts, _) ->
+     Debug.debug( fun() -> sprintf "SL Region Pred\n"); 
+     fc state 
   | Sl.SepOp (Sl.SepStar, f1, f2, _) ->
      Debug.debug( fun() -> sprintf "SL SepOp SepStar f1=(%s), f2=(%s)\n"
      (Sl.string_of_form f1) (Sl.string_of_form f2));
@@ -68,6 +90,7 @@ let rec produce_sl state (f: Sl.form) snp (fc: symb_state -> 'a option) =
      Debug.debug( fun() -> sprintf "SL SepOp SepIncl\n"); 
      fc state 
   | Sl.SepOp (Sl.SepPlus, _, _, _) ->
+     Debug.debug( fun() -> sprintf "SL SepOp plus\n"); 
      fc state 
   | Sl.BoolOp (Grass.And, fs, _) ->
    Debug.debug( fun() -> sprintf "SL BoolOp And\n");
@@ -78,7 +101,9 @@ let rec produce_sl state (f: Sl.form) snp (fc: symb_state -> 'a option) =
   | Sl.BoolOp (Grass.Not, fs, _) ->
     Debug.debug( fun() -> sprintf "SL BoolOp Not\n");
     fc state 
-  | Sl.Binder (Grass.Forall, ts, f, _) -> fc state 
+  | Sl.Binder (Grass.Forall, ts, f, _) -> 
+     Debug.debug( fun() -> sprintf "SL SepOp binder forall\n"); 
+      fc state 
   | Sl.Binder (Grass.Exists, ts, f, _) -> fc state
 
 let produce_spec_form state sf snp (fc: symb_state -> 'a option) =
