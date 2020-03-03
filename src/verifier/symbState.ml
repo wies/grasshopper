@@ -24,6 +24,13 @@ type symb_val =
   | Term of term
   | Form of form
 
+let mk_symb_val_term t =
+  Term t 
+
+let term_of_symb_val = function
+  | Form _ -> None
+  | Term t -> Some t 
+
 let mk_fresh_symb_val srt prefix = 
   Term (mk_fresh_var srt prefix)
 
@@ -34,9 +41,13 @@ let string_of_symb_val v =
 
 let equal_symb_vals v1 v2 = 
   match v1, v2 with
-  | Term t1, Term t2 -> equal (Atom (t1, [])) (Atom (t2, [])) 
+  | Term t1, Term t2 -> 
+      Debug.debug(fun () -> sprintf "EQUAL SYMBV = Term case (%s) (%s)\n" (string_of_term t1) (string_of_term t2));
+      equal (Atom (t1, [])) (Atom (t2, [])) 
   | Form f1, Form f2 -> equal f1 f2
-  | _ -> false
+  | _ -> 
+      Debug.debug(fun () -> "EQUAL SYMBV = false case\n");
+      false
 
 let mk_eq_symbv s t = 
   match s, t with
@@ -47,7 +58,13 @@ let symb_val_to_form v =
   match v with
   | Term t -> todo() 
   | Form f -> f
-   
+
+let rec id_of_symb_val v = 
+  match v with
+    | Term (Var (id2, _)) -> id2
+    | Term (App (_, _, _)) -> failwith "shouldn't get an App as a symb val"
+    | Form _ -> failwith "shouldn't get a form in a symb val"
+
 (** Helpers to format prints *)
 let lineSep = "\n--------------------\n"
 
@@ -104,7 +121,7 @@ let merge_symb_stores g1 g2 =
   | None, Some z -> Some z
   | None, None -> None) g1 g2
 
-let find_symb_val store heap id =
+let find_symb_val (store: symb_store) (id: ident) =
   Debug.debug(
     fun () ->
       sprintf "trying to find symbv for identifier %s\n"
@@ -308,6 +325,33 @@ let string_of_hc chunk =
 type symb_heap = heap_chunk list
 
 let heap_add h stack hchunk = (hchunk :: h, stack)
+
+let rec heap_find_by_val h v = 
+  match h with
+  | [] -> raise (HeapChunkNotFound (sprintf "for symb_val (%s)" (string_of_symb_val v)))
+  | Obj (v1, _, _) as c :: h' ->
+      Debug.debug(fun() -> sprintf "heap chunk = (%s) (%s) (%s) (%b)\n" (string_of_hc c) (string_of_symb_val v1) (string_of_symb_val v) (equal_symb_vals v1 v));
+      if equal_symb_vals v1 v then 
+        c else heap_find_by_val h' v
+  | _ -> todo()
+
+let rec heap_find_by_id h id = 
+  match h with
+  | [] -> raise (HeapChunkNotFound (sprintf "for id(%s)" (string_of_ident id)))
+  | Obj (Term (App (_, [ts], _)), _, _) as c :: h' ->
+      let target_id =
+        match IdSet.find_first_opt (fun e -> true) (free_consts_term ts) with 
+         | Some id -> id
+         | None -> raise_err "field doesn't have an ident"
+      in
+      if target_id = id then c else heap_find_by_id h' id 
+  | Obj (Term (Var (target_id, _)), _, _) as c :: h' -> 
+      if target_id = id then c else heap_find_by_id h' id 
+  | _ -> todo()
+
+
+let heap_find_by_chunk h c = 
+  List.find (fun ch -> equal_heap_chunks ch c) h
 
 let rec heap_remove h stack hchunk fc = 
   match h with
