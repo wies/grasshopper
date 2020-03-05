@@ -6,64 +6,30 @@ open GrassUtil
 open Prog
 open Printf
 
-exception NotYetImplemented
+exception NotYetImplemented of string
 exception HeapChunkNotFound of string 
-let todo () = raise NotYetImplemented
+let todo str = raise (NotYetImplemented str)
 exception SymbExecFail of string
 let raise_err str = raise (SymbExecFail str)
 
- (*
-let assert_constr pc_stack v =
-  (** TODO add pred_axioms to pc_stack before passing in *)
-  if check pc_stack v then None else None
-  *) 
+(** Symbolic values *)
+type symb_val = ident * sort
 
-(** Symbolic values; grasshopper distinguishes between terms and forms,
-  viper's silicon doesn't *)
-type symb_val = 
-  | Term of term
-  | Form of form
+let mk_symb_val name srt = (mk_ident name, srt)
+let mk_symb_val_ident id srt = (id, srt)
+let mk_fresh_symb_val prefix srt = 
+  let id = fresh_ident prefix in
+  mk_symb_val_ident id srt
 
-let mk_symb_val_term t =
-  Term t 
+let ident_of_symb_val (id, _) = id 
+let sort_of_symb_val (_, srt) = srt
 
-let term_of_symb_val = function
-  | Form _ -> None
-  | Term t -> Some t 
+let string_of_symb_val (id, srt) =
+  sprintf "%s:(%s)\n" (string_of_ident id) (string_of_sort srt)
 
-let mk_fresh_symb_val srt prefix = 
-  Term (mk_fresh_var srt prefix)
-
-let string_of_symb_val v =
-    match v with
-    | Term t -> string_of_term t
-    | Form f -> string_of_form f
-
-let equal_symb_vals v1 v2 = 
-  match v1, v2 with
-  | Term t1, Term t2 -> 
-      Debug.debug(fun () -> sprintf "EQUAL SYMBV = Term case (%s) (%s)\n" (string_of_term t1) (string_of_term t2));
-      equal (Atom (t1, [])) (Atom (t2, [])) 
-  | Form f1, Form f2 -> equal f1 f2
-  | _ -> 
-      Debug.debug(fun () -> "EQUAL SYMBV = false case\n");
-      false
-
-let mk_eq_symbv s t = 
-  match s, t with
-  | Term ss, Term tt -> mk_eq ss tt
-  | _  -> todo()
-
-let symb_val_to_form v = 
-  match v with
-  | Term t -> todo() 
-  | Form f -> f
-
-let rec id_of_symb_val v = 
-  match v with
-    | Term (Var (id2, _)) -> id2
-    | Term (App (_, _, _)) -> failwith "shouldn't get an App as a symb val"
-    | Form _ -> failwith "shouldn't get a form in a symb val"
+let equal_symb_vals (id1, srt1) (id2, srt2) = 
+  if id1 = id2 && srt1 = srt2 
+    then true else false
 
 (** Helpers to format prints *)
 let lineSep = "\n--------------------\n"
@@ -108,7 +74,6 @@ let string_of_pc_stack pc =
 (** Symbolic store:
   maintains a mapping from grasshopper vars to symbolic vals
   ident -> symb_val . *)
-(* Note: adding sort so we can remember type when we sub in symbolic vals *)
 type symb_store = symb_val IdMap.t
 let empty_store = IdMap.empty
 
@@ -129,19 +94,15 @@ let find_symb_val (store: symb_store) (id: ident) =
   );
   try IdMap.find id store
   with Not_found ->
-    (* this could be a field identifier (e.g., x.next) *)
     failwith ("find_symb_val: Could not find symbolic val for " ^ (string_of_ident id))
 
 (** havoc a list of terms into a symbolic store *)
-let mk_fresh_term label srt =
-  Term (mk_fresh_var srt label)
-
-let havoc_terms symb_store terms =
+let havoc symb_store terms =
   List.fold_left
     (fun sm term ->
       match term with
-      | App (_, _, _) -> failwith "tried to havoc a term that isn't a Var"
-      | Var (id, srt) -> IdMap.add id (mk_fresh_term "v" srt) sm)
+      | Var (id, srt) -> IdMap.add id (mk_fresh_symb_val "v" srt) sm
+      | _ -> failwith "tried to havoc a term that isn't a Var")
     symb_store terms
 
 (** path condition (pc) stack
@@ -153,18 +114,15 @@ let havoc_terms symb_store terms =
 
 (** path condition chunks are of shape (scope id, branch cond, pc list)
  TODO: optimize symb_val list to use a set. *)
-type pc_stack = (ident * symb_val * symb_val list) list
+type pc_stack = (ident * form * form list) list
 
 let pc_push_new (stack: pc_stack) scope_id br_cond =
   match stack with
   | [] -> [(scope_id, br_cond, [])]
   | stack -> (scope_id, br_cond, []) :: stack
 
-let rec pc_add_path_cond (stack: pc_stack) pc_val =
-  match stack with
-  | [] -> 
-      pc_add_path_cond (pc_push_new stack ("scopeId", 0)
-        (mk_fresh_symb_val Bool "brcond")) pc_val 
+(*todo figure out how to push pc_val onto a list stack is empty vs stack isn't *)
+let rec pc_add_path_cond (stack: pc_stack) pc_val = 
   | (sid, bc, pcs) :: stack' -> (sid, bc, pc_val :: pcs) :: stack'
 
 let rec pc_after pc_stack scope_id =
@@ -207,22 +165,7 @@ let check_entail prog p1 p2 =
 
 (** SMT solver calls *)
 let check pc_stack prog v =
-  let constr = pc_collect_constr pc_stack in
-  let forms = List.map
-    (fun v ->
-      match v with
-      | Term t ->
-          Debug.debug(fun () -> sprintf "check term %s\n"
-          (string_of_term t)
-          );
-          Atom (t, [])
-      | Form f -> 
-          Debug.debug(fun () -> sprintf "check form %s\n"
-          (string_of_form f));
-          f)
-    constr
-  in
-  match check_entail prog (smk_and forms) v  with 
+  match check_entail prog (smk_and (pc_collect_constr pc_stack)) v  with 
   | Some errs -> raise_err "SMT check failed"
   | None -> ()
 
@@ -250,18 +193,13 @@ let rec equal_snaps s1 s2 =
   match s1, s2 with
   | Unit, Unit -> true
   | Unit, Snap ss2 | Snap ss2, Unit -> false
+  | Snap s1, Snap s2 -> equal_symb_vals s1 s2
   | SnapPair (l1, r1), SnapPair (l2, r2) ->
       equal_snaps l1 r1 && equal_snaps l2 r2
   | _ -> false
 
 let mk_fresh_snap srt = 
-  Snap (Term (mk_fresh_var srt "snap"))
-
-let term_of_snap = function
-  | Unit -> Var (("unit", 0), Bool)
-  | Snap (Term t) -> t
-  | Snap (Form f) -> todo()
-  | SnapPair (_, _) -> todo()
+  Snap (mk_fresh_symb_val "snap" srt)
 
 (** snapshot adt encoding for SMT solver *)
 let snap_adt = (("snap_tree", 0),

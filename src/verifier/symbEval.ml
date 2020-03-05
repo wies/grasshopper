@@ -22,7 +22,7 @@ let rec field_read_to_symb_term state  = function
       let field_symb = symbol_of field in
       let _ = 
       match field_symb with
-      | Some s -> 
+      | Some s -> s 
       | None -> raise_err "field doesn't have an ident"
       in
       let field_sort = sort_of field in
@@ -67,48 +67,6 @@ let rec field_read_to_symb_term state  = function
 
 let field_read_to_fun_form state f = map_terms (field_read_to_symb_term state) f
 
-(** subst_symbv takes a formula and substitutes all terms with corresponding
- * symbolic variables in the symbolic store carried in state *)
-let rec subst_symbv state = function
-  | App (symb, ts, srt) as a ->
-    Debug.debug (fun () -> sprintf "subst_symbv App (%s) (%d)\n"
-    (string_of_symbol symb) (List.length ts));
-    let ids = free_consts_term a in
-    IdSet.map (fun id ->
-      Debug.debug (fun () -> sprintf "ids App (%s)\n"
-        (string_of_ident id));
-        id
-    ) ids;
-    let idslst = IdSet.elements ids in
-    let sm = 
-      idslst |> List.fold_left (fun sm e ->
-        (match find_symb_val state.store e with
-        | Term (Var (id2, srtt)) ->
-          IdMap.add e id2 sm 
-        | Term (App (IntConst ic, [], _)) ->
-            Debug.debug( fun () -> sprintf "App IntConst \n");
-            sm
-        | Term (App (_, _, _)) -> sm 
-        | Form _ -> sm
-      )) IdMap.empty
-    in
-    let subv = subst_id_term sm a in
-    subv
-  | Var (id, srt) ->
-    Debug.debug(fun () -> sprintf "subst_symbv (%s)\n"
-    (string_of_ident id));
-    let v = find_symb_val state.store id in
-    (match v with
-    | Term (Var (id2, srtt)) -> Var (id2, srt)
-    | Term (App (_, _, _)) -> failwith "shouldn't get an App as a symb val"
-    | Form _ -> failwith "shouldn't get a form in a symb val")
-
-(*
-let map_id_app_read t state =
-  let rec sub = function
-    | Var (id, srt) -> Var (find_symb_val id
-    *)
-
 (** eval_ts evaluates a term list element-wise using the eval
   functions below, accumulating the resulting symbolic terms into the symb_ts list. *)
 let rec eval_ts state (ts: term list) symb_ts (fc: symb_state -> symb_val list -> 'a option) =
@@ -132,6 +90,7 @@ and evalt state t (fc: symb_state -> symb_val -> 'a option) =
   eval_term state t fc
 
 and eval_term state t (fc: symb_state -> symb_val -> 'a option) =
+  (* should be matching on App any value of type term. *)
   Debug.debug( fun() -> "Inside exec_term \n");
   let v = subst_symbv state t in
   Debug.debug( fun() -> sprintf "Inside exec_term (%s) \n"
@@ -178,9 +137,11 @@ and eval_form state f (fc: symb_state -> symb_val -> 'a option) =
     Debug.debug(fun() -> sprintf "eval_form Atom Var (%s)\n" (Grass.string_of_form f));
     let subs = subst_symbv state in
     fc state (Form (map_terms subs f))
+
   | Atom (App (symb, [App (Grass.Read, [var_id; field_id], srt1); t2], srt2), _) ->
     Debug.debug(fun() -> sprintf "eval_form Atom App 2x (%s) \n" (Grass.string_of_form f));
     fc state (Form (field_read_to_fun_form state f))
+
   | Atom (App (symb, [t], srt), _) ->
     Debug.debug(fun() -> sprintf "eval_form Atom App 1x (%s) \n" (Grass.string_of_form f));
     let subs = subst_symbv state in
