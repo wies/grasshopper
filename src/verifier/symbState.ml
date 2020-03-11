@@ -34,11 +34,6 @@ let equal_symb_vals (id1, srt1) (id2, srt2) =
 (** Helpers to format prints *)
 let lineSep = "\n--------------------\n"
 
-let string_of_pcset s =
-  s
-  |> List.map (fun ele -> (string_of_symb_val ele))
-  |> String.concat ", "
-
 let string_of_symb_val_list vals =
   vals
   |> List.map (fun v -> (string_of_symb_val v))
@@ -47,7 +42,7 @@ let string_of_symb_val_list vals =
 
 let string_of_symb_store s =
   IdMap.bindings s
-  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_symb_val v))
+  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_term v))
   |> String.concat ", "
   |> sprintf "{%s}"
 
@@ -63,18 +58,10 @@ let string_of_symb_fields fields =
   |> String.concat ", "
   |> sprintf "{%s}"
 
-let string_of_pc_stack pc =
-  pc
-  |> List.map (fun (pc, bc, vars) ->
-      "(" ^ (string_of_ident pc) ^ ", " ^ (string_of_symb_val bc) ^ ", "
-      ^ (string_of_pcset vars) ^ ")")
-  |> String.concat ", "
-  |> sprintf "[%s]"
-
 (** Symbolic store:
   maintains a mapping from grasshopper vars to symbolic vals
   ident -> symb_val . *)
-type symb_store = symb_val IdMap.t
+type symb_store = term IdMap.t
 let empty_store = IdMap.empty
 
 let merge_symb_stores g1 g2 =
@@ -101,7 +88,9 @@ let havoc symb_store terms =
   List.fold_left
     (fun sm term ->
       match term with
-      | Var (id, srt) -> IdMap.add id (mk_fresh_symb_val "v" srt) sm
+      | Var (id, srt) -> 
+          let (v, srt2) = mk_fresh_symb_val "v" srt in
+          IdMap.add id (Var (v, srt2)) sm
       | _ -> failwith "tried to havoc a term that isn't a Var")
     symb_store terms
 
@@ -114,16 +103,31 @@ let havoc symb_store terms =
 
 (** path condition chunks are of shape (scope id, branch cond, pc list)
  TODO: optimize symb_val list to use a set. *)
-type pc_stack = (ident * form * form list) list
+type pc_chunk = ident * form * form list
+type pc_stack = pc_chunk list
+
+let string_of_pcset s =
+  s
+  |> List.map (fun f -> (string_of_form f))
+  |> String.concat ", "
+
+let string_of_pc_stack pc =
+  pc
+  |> List.map (fun (id, bc, vars) ->
+      "(" ^ (string_of_ident id) ^ ", " ^ (string_of_form bc) ^ ", "
+      ^ (string_of_pcset vars) ^ ")")
+  |> String.concat ", "
+  |> sprintf "[%s]"
 
 let pc_push_new (stack: pc_stack) scope_id br_cond =
   match stack with
   | [] -> [(scope_id, br_cond, [])]
   | stack -> (scope_id, br_cond, []) :: stack
-
-(*todo figure out how to push pc_val onto a list stack is empty vs stack isn't *)
-let rec pc_add_path_cond (stack: pc_stack) pc_val = 
-  | (sid, bc, pcs) :: stack' -> (sid, bc, pc_val :: pcs) :: stack'
+  
+let rec pc_add_path_cond (stack: pc_stack) f =
+  match stack with
+  | [] -> raise_err "can't push formula onto empty stack"
+  | (sid, bc, pcs) :: stack' -> (sid, bc, f :: pcs) :: stack'
 
 let rec pc_after pc_stack scope_id =
   match pc_stack with
@@ -172,7 +176,7 @@ let check pc_stack prog v =
 (** Snapshot defintions *)
 type snap =
   | Unit 
-  | Snap of symb_val
+  | Snap of term 
   | SnapPair of snap * snap 
 
 let snap_pair s1 s2 = SnapPair (s1, s2)
@@ -189,17 +193,23 @@ let snap_second s =
   | Snap s -> Snap s
   | SnapPair (s1, s2) -> s2
 
+let term_of_snap = function
+  | Unit -> Var (("unit", 0), Bool)
+  | Snap t -> t
+  | SnapPair (_, _) -> todo "term_of_snap SnapPair"
+
 let rec equal_snaps s1 s2 =
   match s1, s2 with
   | Unit, Unit -> true
   | Unit, Snap ss2 | Snap ss2, Unit -> false
-  | Snap s1, Snap s2 -> equal_symb_vals s1 s2
+  | Snap s1, Snap s2 -> if s1 = s2 then true else false
   | SnapPair (l1, r1), SnapPair (l2, r2) ->
       equal_snaps l1 r1 && equal_snaps l2 r2
   | _ -> false
 
 let mk_fresh_snap srt = 
-  Snap (mk_fresh_symb_val "snap" srt)
+  let (v, _) = mk_fresh_symb_val "snap" srt in
+  Snap (Var (v, srt))
 
 (** snapshot adt encoding for SMT solver *)
 let snap_adt = (("snap_tree", 0),
@@ -215,22 +225,26 @@ let snap_typ = Adt (("snap_tree", 0), [snap_adt])
 let rec string_of_snap s =
   match s with
   | Unit -> "unit[snap]"
-  | Snap ss -> string_of_symb_val ss
+  | Snap ss -> string_of_term ss
   | SnapPair (s1, s2) ->
       sprintf "%s(%s)" (string_of_snap s1) (string_of_snap s2)
 
 (** heap elements and symbolic heap
   The symbolic maintains a multiset of heap chunks which are
-  of the form obj(symb_val, snap, [Id -> V]) or a predicate with an id
+  of the form obj(term, snap, [Id -> V]) or a predicate with an id
   and list of args.
   *)
 type heap_chunk =
-  | Obj of symb_val * snap * symb_val IdMap.t
-  | Eps of symb_val * symb_val IdMap.t (* r.f := e *)
-  | Pred of ident * snap * symb_val list
+  | Obj of term * snap * symb_val IdMap.t
+  | ObjForm of form * snap * symb_val IdMap.t
+  (*| Eps of symb_val * symb_val IdMap.t (* r.f := e *)
+  | Pred of ident * snap * symb_val list*)
 
-let mk_heap_chunk_obj v snp m =
-  Obj (v, snp, m)
+let mk_heap_chunk_obj t snp m =
+  Obj (t, snp, m)
+
+let mk_heap_chunk_obj_form f snp m =
+  ObjForm (f, snp, m)
 
 let equal_field_maps fm1 fm2 =
   IdMap.equal equal_symb_vals fm1 fm2
@@ -242,72 +256,60 @@ let equal_symb_val_lst vs1 vs2 =
 
 let equal_heap_chunks c1 c2 = 
   match c1, c2 with 
-  | Obj (v1, s1, sm1), Obj (v2, s2, sm2)
-  when v1 = v2 && equal_field_maps sm1 sm2 -> 
+  | Obj (t1, s1, sm1), Obj (t2, s2, sm2)
+  when t1 = t2 && equal_field_maps sm1 sm2 -> 
     equal_snaps s1 s2
-  | Eps (v1, sm1), Eps (v2, sm2) when v1 = v2 -> 
-      equal_field_maps sm1 sm2
-  | Pred (id1, s1, vs1), Pred (id2, s2, vs2) -> todo()
+  | ObjForm (f1, s1, sm1), ObjForm (f2, s2, sm2)
+  when equal f1 f2 && equal_field_maps sm1 sm2 ->
+    equal_snaps s1 s2
   | _ -> false
 
 let string_of_hc chunk =
   match chunk with
-  | Obj (v, snap, symb_fields) ->
-    sprintf "Obj(%s, Snap:%s, Fields:%s)" (string_of_symb_val v)
+  | Obj (t, snap, symb_fields) ->
+    sprintf "Obj(%s, Snap:%s, Fields:%s)" (string_of_term t)
       (string_of_snap snap) (string_of_symb_fields symb_fields)
-  | Eps (v, symb_fields) ->
-    sprintf "Eps(%s, Fields: %s)" (string_of_symb_val v) (string_of_symb_fields symb_fields)
-  | Pred (id, snap, symb_vals) -> sprintf "Pred(Id:%s, Args:%s, Snap:%s)" (string_of_ident id)
-      (string_of_symb_val_list symb_vals) (string_of_snap snap)
+  | ObjForm (f, snap, symb_fields) ->
+    sprintf "ObjForm(%s, Snap:%s, Fields:%s)" (string_of_form f)
+      (string_of_snap snap) (string_of_symb_fields symb_fields)
 
 type symb_heap = heap_chunk list
 
 let heap_add h stack hchunk = (hchunk :: h, stack)
 
-let rec heap_find_by_val h v = 
+let rec heap_find_by_chunk h hc = 
   match h with
-  | [] -> raise (HeapChunkNotFound (sprintf "for symb_val (%s)" (string_of_symb_val v)))
-  | Obj (v1, _, _) as c :: h' ->
-      Debug.debug(fun() -> sprintf "heap chunk = (%s) (%s) (%s) (%b)\n" (string_of_hc c) (string_of_symb_val v1) (string_of_symb_val v) (equal_symb_vals v1 v));
-      if equal_symb_vals v1 v then 
-        c else heap_find_by_val h' v
-  | _ -> todo()
+  | [] -> raise (HeapChunkNotFound (sprintf "for symb_val (%s)" (string_of_hc hc)))
+  | Obj (_,_,_) as c :: h' ->
+      Debug.debug(fun() -> sprintf "check: (%s) == (%s)\n" (string_of_hc c) (string_of_hc hc));
+      if equal_heap_chunks c hc then 
+        c else heap_find_by_chunk h' hc 
+  | ObjForm (_,_,_) as f :: h' ->
+      Debug.debug(fun() -> sprintf "check: (%s) == (%s)\n" (string_of_hc f) (string_of_hc hc));
+      if equal_heap_chunks f hc then
+        f else heap_find_by_chunk h' hc 
 
-let rec heap_find_by_id h id = 
+let rec heap_find_by_term h t = 
   match h with
-  | [] -> raise (HeapChunkNotFound (sprintf "for id(%s)" (string_of_ident id)))
-  | Obj (Term (App (_, [ts], _)), _, _) as c :: h' ->
-      let target_id =
-        match IdSet.find_first_opt (fun e -> true) (free_consts_term ts) with 
-         | Some id -> id
-         | None -> raise_err "field doesn't have an ident"
-      in
-      if target_id = id then c else heap_find_by_id h' id 
-  | Obj (Term (Var (target_id, _)), _, _) as c :: h' -> 
-      if target_id = id then c else heap_find_by_id h' id 
-  | _ -> todo()
+  | [] -> raise (HeapChunkNotFound (sprintf "for id(%s)" (string_of_term t)))
+  | Obj (tt, _, _) as c :: h' -> if tt = t then c else heap_find_by_term h' t
+  | _ :: h' -> heap_find_by_term h' t
 
+let rec heap_find_by_form h f = 
+  match h with
+  | [] -> raise (HeapChunkNotFound (sprintf "for id(%s)" (string_of_form f)))
+  | ObjForm (ff, _, _) as fc :: h' -> if equal ff f then fc else heap_find_by_form h' f 
+  | _ :: h'-> heap_find_by_form h' f 
 
-let heap_find_by_chunk h c = 
-  List.find (fun ch -> equal_heap_chunks ch c) h
 
 let rec heap_remove h stack hchunk fc = 
   match h with
   | [] -> raise (HeapChunkNotFound (string_of_hc hchunk))
   | chunk :: h' -> if equal_heap_chunks hchunk chunk then
       match hchunk, chunk with
-      | Obj (v1, snp1, _), Obj (v2, snp2, _) ->
-        check stack (empty_prog) (mk_eq_symbv v1 v2);
+      | Obj (t1, snp1, _), Obj (t2, snp2, _) ->
+        check stack (empty_prog) (mk_eq t1 t2);
         fc h' snp2
-      | Eps (v1, _), Eps (v2, _) ->
-        check stack (empty_prog) (mk_eq_symbv v1 v2);
-        fc h' Unit
-      | Pred (id1, s1, args1), Pred (id2, s2, args2) -> 
-        let fs =
-          List.map2 (fun f1 f2 -> mk_eq_symbv f1 f2) args1 args2
-        in
-        check stack (empty_prog) (smk_and fs);
-        fc h' Unit
       | _ -> raise_err "heap-remove got unexpected pairs"
 
 let string_of_heap h =

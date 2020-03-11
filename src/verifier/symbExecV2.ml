@@ -6,17 +6,18 @@ open Grass
 open SymbEval
 open SymbState
 open SymbConsume
+open SymbProduce
 open Prog
 
 (** branch implements branching and executes each path using f1 where symbv
   holds, otherwise f2 is executed *)
-let branch state smybv f1 f2 = todo()
+let branch state smybv f1 f2 = todo "branch"
 
 let rec exec state comm (fc: symb_state -> 'a option) =
   Debug.debug( fun () -> sprintf "exec state comms *******\n");
   match comm with
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, pp) ->
-      evalts state ts (fun state' ts' ->
+      eval_terms state ts (fun state' ts' ->
         let st = List.combine ids ts'
         |> List.fold_left (fun macc (id, t') ->
             {macc with store = IdMap.add id t' macc.store}
@@ -30,31 +31,14 @@ let rec exec state comm (fc: symb_state -> 'a option) =
       exec state s1 (fun state' ->
         exec state' s2 fc)
   | Basic (Assert spec, pp) ->
-      let f = function
-        | SL _ ->
-            Debug.debug(fun () -> sprintf "SL");
-            state
-        | FOL spec_form ->
-            let subs = subst_symbv state in
-            let symbv = (Form (map_terms subs spec_form)) in
-            Debug.debug(
-              fun () -> sprintf "Assert spec form %s\n"
-              (string_of_symb_val symbv)
-            );
-            Debug.debug( fun() ->
-              sprintf "%sState Before: %s\n"
-              lineSep (string_of_state state)
-            );
-            (* TODO(eric): replace this with proper consume of an assert*)
-            let _ = check state.pc state.prog (symb_val_to_form symbv) in 
-            { state with pc = pc_add_path_cond state.pc symbv}
-      in
-      fc (f spec.spec_form)
-  | (Basic (Assign {assign_lhs=[_];
-                    assign_rhs=[App (Write, [arr; idx; rhs], Loc (Array _))]}, pp)) -> todo "exec 1"
-  | Basic (Assign {assign_lhs=[fld];
-        assign_rhs=[App (Write, [App (FreeSym fld', [], _);
-          loc; rhs], srt)]}, pp) -> todo "exec 2"
+    (match spec.spec_form with
+    | SL slf ->
+      (*todo figure out continuation heap and snap arent used*)
+      consume_sl_form state state.heap slf (fun state' h' snap ->
+        fc state)
+    | FOL f->
+      consume_form state state.heap f (fun state' h' snp ->
+        fc state'))
   | Basic (Call {call_lhs=lhs; call_name=foo; call_args=args}, pp) -> todo "exec 3"
   | Seq (_::[], _) -> todo "exec 4" 
   | Seq ([], _) -> todo "exec 5"
@@ -92,7 +76,7 @@ let verify spl_prog prog proc =
       [] formals
   in
   let init_state = mk_symb_state
-    (havoc_terms empty_store formal_arg_terms) prog in
+    (havoc empty_store formal_arg_terms) prog in
 
   let old_store =
     IdMap.fold (fun id v acc -> IdMap.add id v acc) init_state.store empty_store in
@@ -105,7 +89,7 @@ let verify spl_prog prog proc =
   let mk_fresh_snap_freesrt label = mk_fresh_snap (Grass.FreeSrt (label, 0)) in
   let precond = Prog.precond_of_proc proc in
   let postcond = Prog.postcond_of_proc proc in
-  produce_specs init_state precond (mk_fresh_snap_freesrt "pre")
+  produces init_state precond (mk_fresh_snap_freesrt "pre")
     (fun st ->
       let st2 = { st with heap=[] } in
       produce_specs st2 postcond (mk_fresh_snap_freesrt "post") (fun st' ->

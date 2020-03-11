@@ -12,6 +12,96 @@ let string_of_idset s =
   |> String.concat ", "
   |> sprintf "[%s]"
 
+(** eval_terms evaluates a term list element-wise using the eval
+  functions below, accumulating the resulting symbolic terms into the symb_ts list. *)
+let rec eval_terms state (ts: term list) (fc: symb_state -> term list -> 'a option) =
+  let rec eeval state tts symb_ts fc =
+    match tts with
+    | [] -> fc state (List.rev symb_ts) (* reverse due to the cons op below *)
+    | hd :: ts' ->
+        eval_term state hd (fun state' t ->
+          eeval state' ts' (t :: symb_ts) fc)
+  in
+  eeval state ts [] fc
+
+and eval_term state t (fc: symb_state -> term -> 'a option) =
+  Debug.debug( fun() -> "Inside eval_term \n");
+  match t with
+  | Var (id1, srt1) ->
+    (match find_symb_val state.store id1 with
+    | Var (id2, srt2) as tt -> 
+        if srt1 = srt2
+        then fc state tt
+        else raise_err (sprintf "sorts are not equal (%s) != (%s), this should never happen!"
+          (string_of_sort srt1) (string_of_sort srt2))
+    | _ -> raise_err "unreachable")
+  | App (Value i, [], srt) -> todo "eval Value"
+  | App (Union, [], _) -> todo "eval Union"
+  | App (Inter, [], _) -> todo "eval Inter"
+  | App (sym, [], _) when sym <> SetEnum -> todo "eval SetEnum"
+  | App (Read, [map; t], _) ->
+      (match map, sort_of t with
+      | (App (FreeSym _, [], _) | Var _), Loc _ -> todo "eval FreeSym" 
+      | _ -> todo "eval read catch all")
+  | App (Read, map :: t :: ts, _) -> todo "eval read"
+  | App (Write, [map; t1; t2], _) -> todo "eval write"
+  | App ((Minus | Plus | Mult | Div | Mod | Diff | Inter | Union | Eq | SubsetEq | LtEq | GtEq | Lt | Gt | Elem | AndTerm | OrTerm as sym), [t1; t2], srt) ->
+      eval_term state t1 (fun state1 t3 ->
+        eval_term state1 t2 (fun state2 t4 ->
+          fc state2 (App (sym, [t3; t4], srt))))
+  | App (Length, [t], _) -> todo "eval Length"
+  | App (ArrayCells, [t], _) -> todo "eval ArrayCells"
+  | App (SetEnum, ts, _) -> todo "eval SetEnum"
+  | App (Destructor d, [t], _) -> todo "eval Destructor"
+  | App (sym, ts, _) -> todo "eval App catch all"
+
+(** eval_forms evaluates a symbolic formula list fs element-wise using the eval
+  function below, accumulating the resulting formulas carrying symbolic values *)
+let rec eval_forms state (fs: form list) (fc: symb_state -> form list -> 'a option) =
+  let rec eeval state ffs symb_fs fc =
+    match ffs with
+    | [] -> fc state (List.rev symb_fs) (* reverse due to the cons op below *)
+    | hd :: ffs' ->
+        eval_form state hd (fun state' f ->
+          eeval state' ffs' (f :: symb_fs) fc)
+  in
+  eeval state fs [] fc
+
+and eval_form state f (fc: symb_state -> form -> 'a option) =
+  Debug.debug(fun() -> sprintf "eval_form (%s)\n" (Grass.string_of_form f));
+  match f with
+  | Atom (t, a) -> 
+      eval_term state t (fun state' t' ->
+        fc state' (Atom (t', a)))
+  | BoolOp (op, fs) ->
+    Debug.debug(fun() -> sprintf "eval_form BoolOp\n");
+    eval_forms state fs (fun state' fs' ->
+      fc state' (BoolOp (op, fs')))
+  | Binder (binder, ts, f, _) -> todo "eval_form Binder"
+
+(*
+let eval_region_term state t (fc: symb_state -> symb_val -> 'a option) =
+  match t with
+  | App (symb, ts, sort) -> 
+      let vv = subst_symbv state t in
+      let _ = match vv with
+      | Var (id, sort) -> Debug.debug (fun () -> sprintf "REGION TERM EVAL VAR id(%s) srt(%s)\n"
+      (string_of_ident id) (string_of_sort sort))
+      | App (symbol, ts, sort) -> 
+        Debug.debug (fun () -> sprintf "REGION TERM EVAL APP symb(%s) srt(%s)\n"
+          (string_of_symbol symbol) (string_of_sort sort))
+      in
+      let v = subst_symbv state t in
+      let _ = match v with
+      | Var (id, srt) ->  Debug.debug (fun () -> sprintf "SYMB REGION TERM EVAL VAR id(%s) srt(%s)\n"
+      (string_of_ident id) (string_of_sort sort))
+      | App (symbol, ts, sort) -> 
+        Debug.debug (fun () -> sprintf "Symb REGION TERM EVAL APP symb(%s) srt(%s)\n"
+          (string_of_symbol symbol) (string_of_sort sort))
+      in
+      fc state (Term (subst_symbv state t))
+  | _ -> todo "eval region catch all" 
+
 let rec field_read_to_symb_term state  = function
   | App (symb, [App (Grass.Read, [field; var], srt1); t2], srt2) ->
       let field_id = 
@@ -66,107 +156,4 @@ let rec field_read_to_symb_term state  = function
   | t -> t
 
 let field_read_to_fun_form state f = map_terms (field_read_to_symb_term state) f
-
-(** eval_ts evaluates a term list element-wise using the eval
-  functions below, accumulating the resulting symbolic terms into the symb_ts list. *)
-let rec eval_ts state (ts: term list) symb_ts (fc: symb_state -> symb_val list -> 'a option) =
-  match ts with
-  | [] -> fc state (List.rev symb_ts) (* reverse due to the cons op below *)
-  | hd :: ts' -> evalt state hd (fun state' v ->
-      Debug.debug(
-        fun () ->
-          sprintf "eval resolved form into %s\n"
-          (string_of_symb_val v)
-      );
-      eval_ts state' ts' (v :: symb_ts) fc)
-
-and evalt state t (fc: symb_state -> symb_val -> 'a option) =
-  (* TODO: Fill this in for commands and other things, not just formulas *)
-  Debug.debug(
-    fun() ->
-      sprintf "eval of term %s\n"
-      (string_of_term t)
-  );
-  eval_term state t fc
-
-and eval_term state t (fc: symb_state -> symb_val -> 'a option) =
-  (* should be matching on App any value of type term. *)
-  Debug.debug( fun() -> "Inside exec_term \n");
-  let v = subst_symbv state t in
-  Debug.debug( fun() -> sprintf "Inside exec_term (%s) \n"
-    (string_of_term v)
-  );
-  fc state (Term v)
-
-and evalts state ts (fc: symb_state -> symb_val list -> 'a option) =
-  eval_ts state ts [] fc 
-
-and eval_region_term state t (fc: symb_state -> symb_val -> 'a option) =
-  match t with
-  | Var _ -> todo()
-  | App (symb, ts, sort) -> 
-      let vv = subst_symbv state t in
-      let _ = match vv with
-      | Var (id, sort) -> Debug.debug (fun () -> sprintf "REGION TERM EVAL VAR id(%s) srt(%s)\n"
-      (string_of_ident id) (string_of_sort sort))
-      | App (symbol, ts, sort) -> 
-        Debug.debug (fun () -> sprintf "REGION TERM EVAL APP symb(%s) srt(%s)\n"
-          (string_of_symbol symbol) (string_of_sort sort))
-      in
-      let v = subst_symbv state t in
-      let _ = match v with
-      | Var (id, srt) ->  Debug.debug (fun () -> sprintf "SYMB REGION TERM EVAL VAR id(%s) srt(%s)\n"
-      (string_of_ident id) (string_of_sort sort))
-      | App (symbol, ts, sort) -> 
-        Debug.debug (fun () -> sprintf "Symb REGION TERM EVAL APP symb(%s) srt(%s)\n"
-          (string_of_symbol symbol) (string_of_sort sort))
-      in
-      fc state (Term (subst_symbv state t))
-(** eval_fs evaluates a symbolic formula list fs element-wise using the eval
-  function below, accumulating the resulting symbolic formulas into the fs_symb list. *)
-let rec eval_fs state (fs: form list) symb_fs (fc: symb_state -> symb_val list -> 'a option) =
-  match fs with
-  | [] -> fc state (List.rev symb_fs) (* reverse due to the cons op below *)
-  | hd :: fs' -> eval state hd (fun state' v ->
-      eval_fs state' fs' (v :: symb_fs) fc)
-
-and eval_form state f (fc: symb_state -> symb_val -> 'a option) =
-  Debug.debug(fun() -> sprintf "eval_form (%s)\n" (Grass.string_of_form f));
-  match f with
-  | Atom (Var (id, srt), _) ->
-    Debug.debug(fun() -> sprintf "eval_form Atom Var (%s)\n" (Grass.string_of_form f));
-    let subs = subst_symbv state in
-    fc state (Form (map_terms subs f))
-
-  | Atom (App (symb, [App (Grass.Read, [var_id; field_id], srt1); t2], srt2), _) ->
-    Debug.debug(fun() -> sprintf "eval_form Atom App 2x (%s) \n" (Grass.string_of_form f));
-    fc state (Form (field_read_to_fun_form state f))
-
-  | Atom (App (symb, [t], srt), _) ->
-    Debug.debug(fun() -> sprintf "eval_form Atom App 1x (%s) \n" (Grass.string_of_form f));
-    let subs = subst_symbv state in
-    fc state (Form (map_terms subs f))
-  | Atom (App (symb, ts, srt), _) ->
-    Debug.debug(fun() -> sprintf "eval_form Atom App all (%s) \n" (Grass.string_of_form f));
-    let subs = subst_symbv state in
-    fc state (Form (map_terms subs f))
-  | BoolOp (op, fs) ->
-    Debug.debug(fun() -> sprintf "eval_form op(e_bar) (%s)\n" (Grass.string_of_form f));
-    let subs = subst_symbv state in
-    fc state (Form (map_terms subs f))
-  | Binder (binder, ts, f, _) -> 
-    Debug.debug(fun() -> sprintf "eval_form binder (%s)\n" (Grass.string_of_form f));
-    let subs = subst_symbv state in
-    fc state (Form (map_terms subs f))
-and eval state f (fc: symb_state -> symb_val -> 'a option) =
-  (* TODO: Fill this in for commands and other things, not just formulas *)
-  eval_form state f fc
-
-and eval_binder state binding ts f1 (fc: symb_state -> symb_val -> 'a option) = todo()
-
-(** evals evaulates a list of formulas by calling evals_substituted which
- processes the provided formulas one-by-one passing the evaluated formula
- to it's continuation, which builds a list of formulas with symbolic values
- substituted *)
-and evals state fs (fc: symb_state -> symb_val list -> 'a option) = 
-  eval_fs state fs [] fc
+*)
