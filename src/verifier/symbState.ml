@@ -126,7 +126,10 @@ let pc_push_new (stack: pc_stack) scope_id br_cond =
   
 let rec pc_add_path_cond (stack: pc_stack) f =
   match stack with
-  | [] -> raise_err "can't push formula onto empty stack"
+  | [] -> 
+      Debug.debug(fun () -> sprintf "pc_add_path_cond (%s)\n" (string_of_form f));
+      let s = pc_push_new [] (fresh_ident "scope") (mk_true) in
+      pc_add_path_cond s f
   | (sid, bc, pcs) :: stack' -> (sid, bc, f :: pcs) :: stack'
 
 let rec pc_after pc_stack scope_id =

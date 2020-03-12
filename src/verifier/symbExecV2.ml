@@ -92,13 +92,13 @@ let verify spl_prog prog proc =
   produces init_state precond (mk_fresh_snap_freesrt "pre")
     (fun st ->
       let st2 = { st with heap=[] } in
-      produce_specs st2 postcond (mk_fresh_snap_freesrt "post") (fun st' ->
+      produces st2 postcond (mk_fresh_snap_freesrt "post") (fun st' ->
            (match proc.proc_body with
            | Some body ->
               exec st2 body (fun st3 ->
                 Debug.debug(fun () -> sprintf "consume post cond\n");
                 let st4 = {st3 with store=st3.old_store} in
-                consume_specs st4 postcond (fun _ _ -> None))
+                consumes st4 postcond (fun _ _ -> None))
            | None ->
                None)
       ))

@@ -36,26 +36,37 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
           (string_of_sort srt1) (string_of_sort srt2))
     | _ -> raise_err "unreachable")
   | App (Value i, [], srt) -> todo "eval Value"
-  | App (Union, [], _) -> todo "eval Union"
-  | App (Inter, [], _) -> todo "eval Inter"
-  | App (sym, [], _) when sym <> SetEnum -> todo "eval SetEnum"
-  | App (Read, [map; t], _) ->
+  | App (Union, [], srt) -> todo "eval Union"
+  | App (Inter, [], srt) -> todo "eval Inter"
+  | App (Read, [map; t], srt) ->
       (match map, sort_of t with
       | (App (FreeSym _, [], _) | Var _), Loc _ -> todo "eval FreeSym" 
       | _ -> todo "eval read catch all")
-  | App (Read, map :: t :: ts, _) -> todo "eval read"
-  | App (Write, [map; t1; t2], _) -> todo "eval write"
+  | App (Read, map :: t :: ts, srt) -> todo "eval read"
+  | App (Write, [map; t1; t2], srt) -> todo "eval write"
   | App ((Minus | Plus | Mult | Div | Mod | Diff | Inter | Union | Eq | SubsetEq | LtEq | GtEq | Lt | Gt | Elem | AndTerm | OrTerm as sym), [t1; t2], srt) ->
       eval_term state t1 (fun state1 t3 ->
         eval_term state1 t2 (fun state2 t4 ->
           fc state2 (App (sym, [t3; t4], srt))))
-  | App (Length, [t], _) -> todo "eval Length"
-  | App (ArrayCells, [t], _) -> todo "eval ArrayCells"
-  | App (SetEnum, ts, _) -> todo "eval SetEnum"
-  | App (Destructor d, [t], _) -> todo "eval Destructor"
-  | App (sym, ts, _) -> todo "eval App catch all"
+  | App (Length, [t], srt) -> todo "eval Length"
+  | App (ArrayCells, [t], srt) -> todo "eval ArrayCells"
+  | App (SetEnum, ts, srt) -> todo "eval SetEnum"
+  | App (Destructor d, [t], srt) -> todo "eval Destructor"
+  | App (FreeSym id1, ts, srt1) -> 
+    (match find_symb_val state.store id1 with
+    | Var (id2, srt2) as tt -> 
+        if srt1 = srt2
+        then fc state tt
+        else raise_err (sprintf "sorts are not equal (%s) != (%s), this should never happen!"
+          (string_of_sort srt1) (string_of_sort srt2))
+    | _ -> raise_err "unreachable")
+    | App (IntConst n, [], srt) as i -> 
+        Debug.debug (fun () -> sprintf "IntConst (%s)\n" (string_of_term i));
+        fc state i 
+  | App (sym, ts, srt) -> todo "eval App catch all"
 
-(** eval_forms evaluates a symbolic formula list fs element-wise using the eval
+
+(** eval_forms evaluates a formula list fs element-wise using the eval
   function below, accumulating the resulting formulas carrying symbolic values *)
 let rec eval_forms state (fs: form list) (fc: symb_state -> form list -> 'a option) =
   let rec eeval state ffs symb_fs fc =
@@ -78,6 +89,36 @@ and eval_form state f (fc: symb_state -> form -> 'a option) =
     eval_forms state fs (fun state' fs' ->
       fc state' (BoolOp (op, fs')))
   | Binder (binder, ts, f, _) -> todo "eval_form Binder"
+
+(** eval_sl_forms evaluates a sl formula list fs element-wise using the eval
+  function below, accumulating the resulting formulas carrying symbolic values *)
+let rec eval_sl_forms state (fs: Sl.form list) (fc: symb_state -> Sl.form list -> 'a option) =
+  let rec eeval state ffs symb_fs fc =
+    match ffs with
+    | [] -> fc state (List.rev symb_fs) (* reverse due to the cons op below *)
+    | hd :: ffs' ->
+        eval_sl_form state hd (fun state' f ->
+          eeval state' ffs' (f :: symb_fs) fc)
+  in
+  eeval state fs [] fc
+
+and eval_sl_form state f (fc: symb_state -> Sl.form -> 'a option) =
+  Debug.debug(fun() -> sprintf "eval_form (%s)\n" (Sl.string_of_form f));
+  match f with
+  | Sl.Pure (ff, pos) ->
+      eval_form state ff (fun state' ff' ->
+        fc state' (Sl.Pure (ff', pos)))
+  | Sl.Atom (symb, ts, pos) -> 
+      eval_terms state ts (fun state' ts' ->
+        fc state' (Sl.Atom (symb, ts', pos)))
+  | Sl.SepOp (sop, f1, f2, pos) ->
+      eval_sl_form state f1 (fun state2 f3 ->
+        eval_sl_form state2 f2 (fun state3 f4 ->
+          fc state3 (Sl.SepOp (sop, f3, f4, pos))))
+  | Sl.BoolOp (op, slfs, pos) ->
+    eval_sl_forms state slfs (fun state' slfs' ->
+      fc state' (Sl.BoolOp (op, slfs', pos)))
+  | Sl.Binder (b, ids, slf, pos) -> todo "sl binder eval"
 
 (*
 let eval_region_term state t (fc: symb_state -> symb_val -> 'a option) =
