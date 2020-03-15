@@ -32,6 +32,7 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
         lineSep (string_of_state state));
   match t with
   | Var (id1, srt1) ->
+    Debug.debug (fun () -> sprintf "var (%s), srt (%s)\n" (string_of_ident id1) (string_of_sort srt1));
     (match find_symb_val state.store id1 with
     | Var (id2, srt2) as tt -> 
         if srt1 = srt2
@@ -77,6 +78,7 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
       fc state' (App (SetEnum, ts', srt)))
   | App (Destructor d, [t], srt) -> todo "eval Destructor"
   | App (FreeSym id1, ts, srt1) -> 
+    Debug.debug (fun () -> sprintf "free sym (%s), srt (%s)\n" (string_of_ident id1) (string_of_sort srt1));
     (match find_symb_val state.store id1 with
     | Var (id2, srt2) as tt -> 
         if srt1 = srt2
@@ -84,7 +86,7 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
         else raise_err (sprintf "sorts are not equal (%s) != (%s), this should never happen!"
           (string_of_sort srt1) (string_of_sort srt2))
     | _ -> raise_err "unreachable")
-    | App (IntConst n, [], srt) as i -> 
+  | App (IntConst n, [], srt) as i -> 
         Debug.debug (fun () -> sprintf "IntConst (%s)\n" (string_of_term i));
         fc state i 
   | App (Null, [], srt) as t-> fc state t

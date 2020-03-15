@@ -4,8 +4,22 @@ struct Node {
   var next: Node;
 }
 
-procedure lookup_heap(x: Node, y: Node)
-  requires acc(x) &*& acc(y) &*& x.next == null
+procedure lookup_heap_1(x: Node, y: Node)
+  requires acc(x) &*& x.next == null
+  ensures acc(x) &*& acc(y) &*& x.next == y
+{
+ y := x.next;
+}
+
+procedure lookup_heap_2(x: Node, y: Node)
+  requires acc(x) &*& x.next == null
+  ensures acc(x) &*& x.next == y
+{
+ y := x.next;
+}
+
+procedure lookup_heap_3(x: Node) returns (y: Node)
+  requires acc(x) &*& x.next == null
   ensures acc(x) &*& acc(y) &*& x.next == y
 {
  y := x.next;

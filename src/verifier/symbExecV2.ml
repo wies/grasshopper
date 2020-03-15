@@ -23,6 +23,11 @@ let rec exec state comm (fc: symb_state -> 'a option) =
             {macc with store = IdMap.add id t' macc.store}
         ) state'
         in
+        Debug.debug(fun() ->
+          sprintf "%sBasic Assign Done:\nState:\n{%s\n}\n\n"
+          lineSep (string_of_state st)
+        );
+
         fc st)
   | Seq (s1 :: s2 :: comms, _) ->
       Debug.debug( fun () -> sprintf "SEQ (%d) \n"
@@ -65,18 +70,20 @@ let verify spl_prog prog proc =
   Debug.info (fun () ->
       "Checking procedure " ^ Grass.string_of_ident (Prog.name_of_proc proc) ^ "...\n");
 
-  (** Extract sorts of formal params and havoc them into a fresh store. *)
+  (** Extract formal params, returns; havoc them into a fresh store as a 
+   * pre-processing phase *)
   let formals = Prog.formals_of_proc proc in
-  let locs = Prog.locals_of_proc proc in
-  let formal_arg_terms =
+  let returns = Prog.returns_of_proc proc in
+  let formal_return_terms =
+    let locs = Prog.locals_of_proc proc in
     List.fold_left
-      (fun term_lst var ->
+      (fun acc var ->
         let srt = Grass.IdMap.find var locs in
-        Grass.Var (var, srt.var_sort) :: term_lst)
-      [] formals
+        Grass.Var (var, srt.var_sort) :: acc)
+      [] (formals @ returns)
   in
   let init_state = mk_symb_state
-    (havoc empty_store formal_arg_terms) prog in
+    (havoc empty_store formal_return_terms) prog in
 
   let old_store =
     IdMap.fold (fun id v acc -> IdMap.add id v acc) init_state.store empty_store in
