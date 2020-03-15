@@ -21,6 +21,10 @@ let mk_fresh_symb_val prefix srt =
   let id = fresh_ident prefix in
   mk_symb_val_ident id srt
 
+let mk_fresh_symb_var name srt =
+  let v, _ = mk_fresh_symb_val "v" srt in
+  (Var (v, srt))
+
 let ident_of_symb_val (id, _) = id 
 let sort_of_symb_val (_, srt) = srt
 
@@ -54,7 +58,7 @@ let string_of_symb_val_map store =
 
 let string_of_symb_fields fields =
   IdMap.bindings fields
-  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_symb_val v))
+  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_term v))
   |> String.concat ", "
   |> sprintf "{%s}"
 
@@ -82,6 +86,8 @@ let find_symb_val (store: symb_store) (id: ident) =
   try IdMap.find id store
   with Not_found ->
     failwith ("find_symb_val: Could not find symbolic val for " ^ (string_of_ident id))
+
+let maybe_find_symb_val (store: symb_store) (id: ident) = IdMap.find_opt id store
 
 (** havoc a list of terms into a symbolic store *)
 let havoc symb_store terms =
@@ -238,19 +244,31 @@ let rec string_of_snap s =
   and list of args.
   *)
 type heap_chunk =
-  | Obj of term * snap * symb_val IdMap.t
-  | ObjForm of form * snap * symb_val IdMap.t
+  | Obj of term * snap * symb_store
+  | ObjForm of form * snap * symb_store
   (*| Eps of symb_val * symb_val IdMap.t (* r.f := e *)
   | Pred of ident * snap * symb_val list*)
 
 let mk_heap_chunk_obj t snp m =
   Obj (t, snp, m)
 
+let mk_fresh_heap_chunk_obj t =
+  mk_heap_chunk_obj t Unit empty_store
+
 let mk_heap_chunk_obj_form f snp m =
   ObjForm (f, snp, m)
 
+let get_field_store = function
+  | Obj (_, _, m) -> m
+  | ObjForm (_, _, m) -> m
+
+let add_to_heap_chunk_map hc k v =
+  match hc with
+  | Obj (t, snp, m) -> Obj (t, snp, IdMap.add k v m)
+  | ObjForm (f, snp, m) -> ObjForm (f, snp, IdMap.add k v m)
+
 let equal_field_maps fm1 fm2 =
-  IdMap.equal equal_symb_vals fm1 fm2
+  IdMap.equal (=) fm1 fm2
 
 let equal_symb_val_lst vs1 vs2 =
   List.fold_left2 (fun acc v1 v2 ->
@@ -270,8 +288,8 @@ let equal_heap_chunks c1 c2 =
 let string_of_hc chunk =
   match chunk with
   | Obj (t, snap, symb_fields) ->
-    sprintf "Obj(%s, Snap:%s, Fields:%s)" (string_of_term t)
-      (string_of_snap snap) (string_of_symb_fields symb_fields)
+    sprintf "Obj((term:%s, sort:%s), Snap:%s, Fields:%s)" (string_of_term t)
+    (string_of_sort (sort_of t)) (string_of_snap snap) (string_of_symb_fields symb_fields)
   | ObjForm (f, snap, symb_fields) ->
     sprintf "ObjForm(%s, Snap:%s, Fields:%s)" (string_of_form f)
       (string_of_snap snap) (string_of_symb_fields symb_fields)
@@ -295,7 +313,9 @@ let rec heap_find_by_chunk h hc =
 let rec heap_find_by_term h t = 
   match h with
   | [] -> raise (HeapChunkNotFound (sprintf "for id(%s)" (string_of_term t)))
-  | Obj (tt, _, _) as c :: h' -> if tt = t then c else heap_find_by_term h' t
+  | Obj (tt, _, _) as c :: h' -> 
+      Debug.debug(fun() -> sprintf "check: (%s), (%s) == target:(%s)\n" (string_of_hc c) (string_of_sort (sort_of tt)) (string_of_term t));
+      if tt = t then c else heap_find_by_term h' t
   | _ :: h' -> heap_find_by_term h' t
 
 let rec heap_find_by_form h f = 
@@ -304,16 +324,17 @@ let rec heap_find_by_form h f =
   | ObjForm (ff, _, _) as fc :: h' -> if equal ff f then fc else heap_find_by_form h' f 
   | _ :: h'-> heap_find_by_form h' f 
 
-
-let rec heap_remove h stack hchunk fc = 
-  match h with
-  | [] -> raise (HeapChunkNotFound (string_of_hc hchunk))
-  | chunk :: h' -> if equal_heap_chunks hchunk chunk then
-      match hchunk, chunk with
+let heap_remove h stack hchunk = 
+  List.filter (fun hc ->
+    if equal_heap_chunks hchunk hc then
+      match hchunk, hc with
       | Obj (t1, snp1, _), Obj (t2, snp2, _) ->
         check stack (empty_prog) (mk_eq t1 t2);
-        fc h' snp2
-      | _ -> raise_err "heap-remove got unexpected pairs"
+        false 
+      | ObjForm (f1, snp1, _), ObjForm (f2, snp2, _) ->
+        if equal f1 f2 then false else true
+      |_ -> true
+    else true) h
 
 let string_of_heap h =
   h

@@ -1,5 +1,6 @@
 (** {5 Symbolic evaluation of terms and formulas inspired by Viper's Silicon} *)
 
+open Util
 open Printf
 open Grass
 open GrassUtil
@@ -25,7 +26,10 @@ let rec eval_terms state (ts: term list) (fc: symb_state -> term list -> 'a opti
   eeval state ts [] fc
 
 and eval_term state t (fc: symb_state -> term -> 'a option) =
-  Debug.debug( fun() -> "Inside eval_term \n");
+  Debug.debug (fun () -> sprintf "eval_term with t = (%s)\n" (string_of_term t));
+  Debug.debug(fun() ->
+        sprintf "%sEval Term: State:\n{%s\n}\n\n"
+        lineSep (string_of_state state));
   match t with
   | Var (id1, srt1) ->
     (match find_symb_val state.store id1 with
@@ -39,8 +43,26 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
   | App (Union, [], srt) -> todo "eval Union"
   | App (Inter, [], srt) -> todo "eval Inter"
   | App (Read, [map; t], srt) ->
-      (match map, sort_of t with
-      | (App (FreeSym _, [], _) | Var _), Loc _ -> todo "eval FreeSym" 
+      (match map, t with
+      | (App (FreeSym id, [], srt1) | Var (id, srt1)), App (FreeSym x, ts, Loc _)->
+          eval_term state t (fun state' t' ->
+            let hc = heap_find_by_term state.heap (mk_setenum [t']) in
+            let h' = heap_remove state.heap state.pc hc in
+            let v = 
+              (match maybe_find_symb_val (get_field_store hc) id with
+              | Some y -> y 
+              | None ->
+                let vfield = ident_of_symb_val (mk_fresh_symb_val "v" srt) in
+                App (FreeSym vfield, [], srt1))
+            in
+            let v_map = 
+              match v with
+              | App (FreeSym vfield, _, _) -> vfield
+              | _ -> raise_err "unexpected symb term in eval read"
+            in
+            let hc_updated = add_to_heap_chunk_map hc id v in
+            let h_new, stack = heap_add h' state.pc hc_updated in
+            fc {state with heap=h_new; pc=stack} (App (FreeSym v_map, ts, srt))) 
       | _ -> todo "eval read catch all")
   | App (Read, map :: t :: ts, srt) -> todo "eval read"
   | App (Write, [map; t1; t2], srt) -> todo "eval write"
@@ -50,7 +72,9 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
           fc state2 (App (sym, [t3; t4], srt))))
   | App (Length, [t], srt) -> todo "eval Length"
   | App (ArrayCells, [t], srt) -> todo "eval ArrayCells"
-  | App (SetEnum, ts, srt) -> todo "eval SetEnum"
+  | App (SetEnum, ts, srt) ->
+    eval_terms state ts (fun state' ts' ->
+      fc state' (App (SetEnum, ts', srt)))
   | App (Destructor d, [t], srt) -> todo "eval Destructor"
   | App (FreeSym id1, ts, srt1) -> 
     (match find_symb_val state.store id1 with
@@ -63,7 +87,8 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
     | App (IntConst n, [], srt) as i -> 
         Debug.debug (fun () -> sprintf "IntConst (%s)\n" (string_of_term i));
         fc state i 
-  | App (sym, ts, srt) -> todo "eval App catch all"
+  | App (Null, [], srt) as t-> fc state t
+  | App (symb, ts, srt) -> todo "eval App catch all"
 
 
 (** eval_forms evaluates a formula list fs element-wise using the eval
@@ -82,7 +107,9 @@ and eval_form state f (fc: symb_state -> form -> 'a option) =
   Debug.debug(fun() -> sprintf "eval_form (%s)\n" (Grass.string_of_form f));
   match f with
   | Atom (t, a) -> 
+      Debug.debug (fun () -> sprintf "eval_form Atom\n");
       eval_term state t (fun state' t' ->
+        Debug.debug (fun () -> sprintf "eval_form done, got term (%s)\n" (string_of_term t'));
         fc state' (Atom (t', a)))
   | BoolOp (op, fs) ->
     Debug.debug(fun() -> sprintf "eval_form BoolOp\n");
@@ -119,82 +146,3 @@ and eval_sl_form state f (fc: symb_state -> Sl.form -> 'a option) =
     eval_sl_forms state slfs (fun state' slfs' ->
       fc state' (Sl.BoolOp (op, slfs', pos)))
   | Sl.Binder (b, ids, slf, pos) -> todo "sl binder eval"
-
-(*
-let eval_region_term state t (fc: symb_state -> symb_val -> 'a option) =
-  match t with
-  | App (symb, ts, sort) -> 
-      let vv = subst_symbv state t in
-      let _ = match vv with
-      | Var (id, sort) -> Debug.debug (fun () -> sprintf "REGION TERM EVAL VAR id(%s) srt(%s)\n"
-      (string_of_ident id) (string_of_sort sort))
-      | App (symbol, ts, sort) -> 
-        Debug.debug (fun () -> sprintf "REGION TERM EVAL APP symb(%s) srt(%s)\n"
-          (string_of_symbol symbol) (string_of_sort sort))
-      in
-      let v = subst_symbv state t in
-      let _ = match v with
-      | Var (id, srt) ->  Debug.debug (fun () -> sprintf "SYMB REGION TERM EVAL VAR id(%s) srt(%s)\n"
-      (string_of_ident id) (string_of_sort sort))
-      | App (symbol, ts, sort) -> 
-        Debug.debug (fun () -> sprintf "Symb REGION TERM EVAL APP symb(%s) srt(%s)\n"
-          (string_of_symbol symbol) (string_of_sort sort))
-      in
-      fc state (Term (subst_symbv state t))
-  | _ -> todo "eval region catch all" 
-
-let rec field_read_to_symb_term state  = function
-  | App (symb, [App (Grass.Read, [field; var], srt1); t2], srt2) ->
-      let field_id = 
-        match IdSet.find_first_opt (fun e -> true) (free_consts_term field) with 
-         | Some id -> id
-         | None -> raise_err "field doesn't have an ident"
-      in
-      let field_symb = symbol_of field in
-      let _ = 
-      match field_symb with
-      | Some s -> s 
-      | None -> raise_err "field doesn't have an ident"
-      in
-      let field_sort = sort_of field in
-      let var_id =
-        match IdSet.find_first_opt (fun e -> true) (free_consts_term var) with 
-         | Some id -> id
-         | None -> raise_err "var doesn't have an ident"
-      in
-      let var_symb  = 
-      match symbol_of var with
-      | Some s -> s
-      | None -> raise_err "var doesn't have an ident"
-      in
-      let vv = find_symb_val state.store var_id in
-      let var_id = 
-        match IdSet.find_first_opt (fun e -> true) (free_consts_term var) with 
-         | Some id -> id
-         | None -> raise_err "field doesn't have an ident"
-      in
-      let fv = 
-        match heap_find_by_id state.heap (id_of_symb_val vv) with 
-        | Obj (_, _, m) ->
-         (match IdMap.find_opt field_id m with
-          | Some id2 -> id2
-          | None -> mk_fresh_symb_val srt1 "r") 
-        | Eps _ -> todo()
-        | Pred _ -> todo()
-      in
-      (*TODO add next -> fv to Obj and update heap with Obj(v1, snp, [next -> fv]) *)
-      App (symb,
-      [
-        App (
-          Grass.Read, [
-            Var (id_of_symb_val fv, srt1);
-            Var (id_of_symb_val vv, srt1)
-          ], srt1
-        ); t2
-      ], srt2)
-  | App (sym, ts, srt) -> 
-      App (sym, List.map (fun el -> (field_read_to_symb_term state) el) ts, srt)
-  | t -> t
-
-let field_read_to_fun_form state f = map_terms (field_read_to_symb_term state) f
-*)

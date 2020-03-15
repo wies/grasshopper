@@ -6,3 +6,10 @@ procedure foo(x: Int)
 {
   pure assert x > 5 && x < 10;
 }
+
+procedure bar(x: Int, y: Int) 
+  requires x > 5 && y < 10
+  ensures x > 5 && y < 11 
+{
+  pure assert x > 5;
+}
