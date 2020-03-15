@@ -1,8 +1,10 @@
 (** {5 Symbolic execution inspired by Viper's Silicon} *)
 
 open Printf
+open Util 
 open GrassUtil
 open Grass
+open SlUtil 
 open SymbEval
 open SymbState
 open SymbConsume
@@ -17,24 +19,29 @@ let rec exec state comm (fc: symb_state -> 'a option) =
   Debug.debug( fun () -> sprintf "exec state comms *******\n");
   match comm with
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, pp) ->
-      eval_terms state ts (fun state' ts' ->
-        let st = List.combine ids ts'
-        |> List.fold_left (fun macc (id, t') ->
-            {macc with store = IdMap.add id t' macc.store}
-        ) state'
-        in
-        Debug.debug(fun() ->
-          sprintf "%sBasic Assign Done:\nState:\n{%s\n}\n\n"
-          lineSep (string_of_state st)
-        );
-
-        fc st)
+    Debug.debug (fun () -> 
+      sprintf "%sExecuting Assign: %d: %s%sCurrent state:\n%s\n"
+        lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+        lineSep (string_of_state state)
+    );
+    eval_terms state ts (fun state' ts' ->
+      let st = List.combine ids ts'
+      |> List.fold_left (fun macc (id, t') ->
+          {macc with store = IdMap.add id t' macc.store}
+      ) state'
+      in
+      Debug.debug(fun() ->
+        sprintf "%sBasic Assign Done:\nState:\n{%s\n}\n\n"
+        lineSep (string_of_state st)
+      );
+      fc st)
   | Seq (s1 :: s2 :: comms, _) ->
       Debug.debug( fun () -> sprintf "SEQ (%d) \n"
         (List.length comms)
       );
       exec state s1 (fun state' ->
-        exec state' s2 fc)
+        exec state' s2 (fun state2' ->
+          execs state2' comms fc))
   | Basic (Assert spec, pp) ->
     (match spec.spec_form with
     | SL slf ->
@@ -51,11 +58,31 @@ let rec exec state comm (fc: symb_state -> 'a option) =
   | Basic (Assume {spec_form=FOL spec}, pp) -> todo "exec 7"
   | Choice (comms, _) -> todo "exec 8"
   | Basic (Return {return_args=xs}, pp)  -> todo "exec 9"
-  | Basic (Split spec, pp) -> todo "exec 10"
-  | Basic (New {new_lhs=id; new_sort=srt; new_args=ts}, pp) -> todo "exec 10"
-  | Basic (Assume _, _) -> todo "exec 11"
-  | Basic (Dispose _, _) -> todo "exec 12"
-  | Loop (l, _) -> todo "exec 13"
+  | Basic (Split spec, pp) -> 
+    Debug.debug (fun () -> 
+      sprintf "%sExecuting split: %d: %s%sCurrent state:\n%s\n"
+        lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+        lineSep (string_of_state state)
+    );
+    todo "exec 10"
+  | Basic (New {new_lhs=id; new_sort=srt; new_args=ts}, pp) ->
+    Debug.debug (fun () -> 
+      sprintf "%sExecuting new: %d: %s%sCurrent state:\n%s\n"
+        lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+        lineSep (string_of_state state)
+    );
+    let tnew = (Var (id, srt)) in
+    (* TODO lift havoc *)
+    let st2 = {state with store=(havoc state.store [tnew])} in 
+    Debug.debug (fun () -> 
+      sprintf "%sExecuting new done: %d: %s%sCurrent state:\n%s\n"
+        lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+        lineSep (string_of_state st2)
+    );
+    produce_sl_form st2 (mk_region tnew) (mk_fresh_snap srt) fc 
+  | Basic (Assume _, _) -> todo "exec 12"
+  | Basic (Dispose _, _) -> todo "exec 13"
+  | Loop (l, _) -> todo "exec 14"
 
 and execs state comms (fc: symb_state -> 'a option) =
   match comms with
