@@ -27,12 +27,11 @@ let rec exec state comm (fc: symb_state -> 'a option) =
     );
     Debug.debug (fun () ->
       sprintf "field = %s, map = %s, t1 = %s, t2 = %s \n" (string_of_ident field) (string_of_term map) (string_of_term t1) (string_of_term t2));
-    eval_term state t2 (fun state' t2' ->
-      consume_sl_form state' state'.heap (mk_region t1) (fun state2' h _ ->
+      consume_sl_form state state.heap (mk_region t1) (fun state2' h _ ->
         let r = mk_setenum [(App (Read, [map; t1], srt))] in
-        let f = mk_sep_star (mk_region (mk_setenum [t1])) (mk_pure (GrassUtil.mk_eq r t2')) in
+        let f = mk_sep_star (mk_region (mk_setenum [t1])) (mk_pure (GrassUtil.mk_eq r t2)) in
         let state3 = {state2' with heap =h} in
-        produce_sl_form state3 f (mk_fresh_snap srt) fc)) 
+        produce_sl_form state3 f (mk_fresh_snap srt) fc) 
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, pp) ->
     Debug.debug (fun () -> 
       sprintf "%sExecuting Assign: %d: %s%sCurrent state:\n%s\n"
