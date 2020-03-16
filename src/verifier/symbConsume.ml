@@ -3,6 +3,7 @@
 open Printf
 open SymbState
 open SymbEval
+open GrassUtil
 
 let check_symb_forms (state: symb_state) heap fs (fc: symb_state -> symb_heap -> snap -> 'a option) =
   Debug.debug( fun() ->
@@ -36,7 +37,10 @@ let rec consume_sl_form state heap (f: Sl.form) (fc: symb_state -> symb_heap -> 
    );
    consume_form state heap p fc 
   | Sl.Atom (Sl.Emp, ts, _) -> fc state heap Unit
-  | Sl.Atom (Sl.Region, [r], _) -> fc state heap Unit
+  | Sl.Atom (Sl.Region, [r], _) -> 
+      eval_term state r (fun state' t' ->
+        let h' = heap_remove_by_term state.heap (mk_setenum [t']) in
+        fc state h' Unit)
   | Sl.Atom (Sl.Region, ts, _) -> fc state heap Unit
   | Sl.Atom (Sl.Pred p, ts, _) -> fc state heap Unit
   | Sl.SepOp (Sl.SepStar, f1, f2, _) ->

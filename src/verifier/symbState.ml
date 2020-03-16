@@ -298,6 +298,14 @@ type symb_heap = heap_chunk list
 
 let heap_add h stack hchunk = (hchunk :: h, stack)
 
+let rec heap_find_by_term h t =
+  match h with
+  | [] -> raise (HeapChunkNotFound (sprintf "for id(%s)" (string_of_term t)))
+  | Obj (tt, _, _) as c :: h' ->
+      Debug.debug(fun() -> sprintf "check: (%s), (%s) == target:(%s)\n" (string_of_hc c) (string_of_sort (sort_of tt)) (string_of_term t));
+      if tt = t then c else heap_find_by_term h' t
+  | _ :: h' -> heap_find_by_term h' t
+
 let rec heap_find_by_chunk h hc = 
   match h with
   | [] -> raise (HeapChunkNotFound (sprintf "for symb_val (%s)" (string_of_hc hc)))
@@ -310,19 +318,19 @@ let rec heap_find_by_chunk h hc =
       if equal_heap_chunks f hc then
         f else heap_find_by_chunk h' hc 
 
-let rec heap_find_by_term h t = 
-  match h with
-  | [] -> raise (HeapChunkNotFound (sprintf "for id(%s)" (string_of_term t)))
-  | Obj (tt, _, _) as c :: h' -> 
-      Debug.debug(fun() -> sprintf "check: (%s), (%s) == target:(%s)\n" (string_of_hc c) (string_of_sort (sort_of tt)) (string_of_term t));
-      if tt = t then c else heap_find_by_term h' t
-  | _ :: h' -> heap_find_by_term h' t
-
 let rec heap_find_by_form h f = 
   match h with
   | [] -> raise (HeapChunkNotFound (sprintf "for id(%s)" (string_of_form f)))
   | ObjForm (ff, _, _) as fc :: h' -> if equal ff f then fc else heap_find_by_form h' f 
   | _ :: h'-> heap_find_by_form h' f 
+
+let rec heap_remove_by_term h t = 
+  List.filter (fun hc ->
+    match hc with
+    | Obj (t1, _, _) as c ->
+        Debug.debug(fun() -> sprintf "check: (%s), (%s) == target:(%s)\n" (string_of_hc c) (string_of_sort (sort_of t)) (string_of_term t));
+        if t1 = t then (Debug.debug (fun() -> sprintf "Dropping element\n"); false) else true
+    |_ -> true) h
 
 let heap_remove h stack hchunk = 
   List.filter (fun hc ->

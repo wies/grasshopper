@@ -42,7 +42,7 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
   | Sl.Atom (Sl.Region, [t], a) -> 
      Debug.debug( fun() -> sprintf "SL atom = %s\n" (Sl.string_of_form f)); 
      eval_term state t (fun state' t' ->
-        let hc = mk_heap_chunk_obj t' Unit empty_store in 
+       let hc = mk_heap_chunk_obj t' Unit empty_store in 
         let h, stack = heap_add state'.heap state'.pc hc in
         fc {state' with heap=h; pc = stack})
   | Sl.Atom (Sl.Region, ts, a) -> todo "region terms"
@@ -53,8 +53,7 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
      produce_sl_form state f1 (snap_first snp) (fun state' ->
        produce_sl_form state' f2 (snap_second snp) fc)
   | Sl.BoolOp (op, fs, _) -> 
-      eval_sl_forms state fs (fun state' fs' ->
-        produce_sl_forms state' fs' snp fc)
+        produce_sl_forms state fs snp fc
   | Sl.Binder (b, ts, f, _) -> todo "Binder"
 
 let produce state sf snp (fc: symb_state -> 'a option) =

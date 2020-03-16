@@ -26,7 +26,7 @@ let rec eval_terms state (ts: term list) (fc: symb_state -> term list -> 'a opti
   eeval state ts [] fc
 
 and eval_term state t (fc: symb_state -> term -> 'a option) =
-  Debug.debug (fun () -> sprintf "eval_term with t = (%s)\n" (string_of_term t));
+  Debug.debug (fun () -> sprintf "eval_term with t = (%s) sort = (%s) \n" (string_of_term t) (string_of_sort (sort_of t)));
   Debug.debug(fun() ->
         sprintf "%sEval Term: State:\n{%s\n}\n\n"
         lineSep (string_of_state state));
@@ -67,6 +67,7 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
       | _ -> todo "eval read catch all")
   | App (Read, map :: t :: ts, srt) -> todo "eval read"
   | App (Write, [map; t1; t2], srt) -> todo "eval write"
+
   | App ((Minus | Plus | Mult | Div | Mod | Diff | Inter | Union | Eq | SubsetEq | LtEq | GtEq | Lt | Gt | Elem | AndTerm | OrTerm as sym), [t1; t2], srt) ->
       eval_term state t1 (fun state1 t3 ->
         eval_term state1 t2 (fun state2 t4 ->

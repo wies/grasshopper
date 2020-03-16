@@ -18,6 +18,21 @@ let branch state smybv f1 f2 = todo "branch"
 let rec exec state comm (fc: symb_state -> 'a option) =
   Debug.debug( fun () -> sprintf "exec state comms *******\n");
   match comm with
+  | Basic (Assign {assign_lhs=[field];
+                    assign_rhs=[App (Write, [map; t1; t2], srt)]}, pp) ->
+     Debug.debug (fun () -> 
+      sprintf "%sExecuting Assign Write: %d: %s%sCurrent state:\n%s\n"
+        lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+        lineSep (string_of_state state)
+    );
+    Debug.debug (fun () ->
+      sprintf "field = %s, map = %s, t1 = %s, t2 = %s \n" (string_of_ident field) (string_of_term map) (string_of_term t1) (string_of_term t2));
+    eval_term state t2 (fun state' t2' ->
+      consume_sl_form state' state'.heap (mk_region t1) (fun state2' h _ ->
+        let r = mk_setenum [(App (Read, [map; t1], srt))] in
+        let f = mk_sep_star (mk_region (mk_setenum [t1])) (mk_pure (GrassUtil.mk_eq r t2')) in
+        let state3 = {state2' with heap =h} in
+        produce_sl_form state3 f (mk_fresh_snap srt) fc)) 
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, pp) ->
     Debug.debug (fun () -> 
       sprintf "%sExecuting Assign: %d: %s%sCurrent state:\n%s\n"
@@ -79,7 +94,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
         lineSep (string_of_state st2)
     );
-    produce_sl_form st2 (mk_region tnew) (mk_fresh_snap srt) fc 
+    produce_sl_form st2 (mk_cell tnew) (mk_fresh_snap srt) fc 
   | Basic (Assume _, _) -> todo "exec 12"
   | Basic (Dispose _, _) -> todo "exec 13"
   | Loop (l, _) -> todo "exec 14"

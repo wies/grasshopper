@@ -3,7 +3,7 @@ options "-symbexec-v2"
 struct Node {
   var next: Node;
 }
-/*
+
 procedure lookup_heap_1(x: Node, y: Node)
   requires acc(x) &*& x.next == null
   ensures acc(x) &*& acc(y) &*& x.next == y
@@ -24,7 +24,6 @@ procedure lookup_heap_3(x: Node) returns (y: Node)
 {
  y := x.next;
 }
-*/
 
 procedure lookup_heap_assign(x: Node) returns (y: Node)
   requires acc(x) &*& x.next == null
