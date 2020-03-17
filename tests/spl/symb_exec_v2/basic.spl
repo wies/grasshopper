@@ -14,3 +14,22 @@ procedure assign2(x: Int, y: Int)
   x := 10;
   y := 5;
 }
+
+/* fails at eval_term with t = (x^2) sort = (Int) 
+procedure pure1(x: Int)
+  requires x == 0
+  ensures x == 10
+{
+  x := 2;
+  x := x + 5;
+  x := x + 3;
+}
+
+procedure pure2(x: Int, y: Int)
+  requires x == y
+  ensures x == y + 8
+{
+  x := x + 5;
+  x := x + 3;
+}
+*/
