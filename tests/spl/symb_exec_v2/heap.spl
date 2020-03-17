@@ -59,12 +59,25 @@ procedure assign_heap3(x: Node, y: Node)
   y.next := x;
 }
 
-/* fails at eval read catch all */
+procedure spatial_neq1(x: Node, y: Node)
+  requires acc(x) &*& acc(y)
+  ensures acc(x) &*& acc(y) &*& x != y
+{}
+
+// Bugs
+/* fails at eval read catch all possibly due to x.next.next */
 /*
 procedure assign_heap4(x: Node, y: Node)
   requires acc(x) &*& acc(y) &*& x.next == y &*& x.next.next == null
   ensures acc(x) &*& acc(x) &*& x.next == y &*& y.next == x
 {
   y.next := x;
+}
+
+procedure assign_heap4(x: Node, y: Node)
+  requires acc(x) &*& x.next == y &*& acc(y) &*& y.next = null
+  ensures acc(x) &*& x.next == y &*& acc(y) &*& y.next == x
+{
+  x.next.next := x;
 }
 */

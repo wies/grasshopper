@@ -67,7 +67,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
         fc state'))
   | Basic (Call {call_lhs=lhs; call_name=foo; call_args=args}, pp) -> todo "exec 3"
   | Seq (_::[], _) -> todo "exec 4" 
-  | Seq ([], _) -> todo "exec 5"
+  | Seq ([], _) -> fc state 
   | Basic (Havoc {havoc_args=vars}, pp) -> todo "exec 6"
   | Basic (Assume {spec_form=FOL spec}, pp) -> todo "exec 7"
   | Choice (comms, _) -> todo "exec 8"
