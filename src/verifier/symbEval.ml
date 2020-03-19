@@ -39,7 +39,7 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
         then fc state tt
         else raise_err (sprintf "sorts are not equal (%s) != (%s), this should never happen!"
           (string_of_sort srt1) (string_of_sort srt2))
-    | _ -> raise_err "unreachable")
+    | _ -> raise_err "unreachable found symbval that isn't a Var")
   | App (Value i, [], srt) -> todo "eval Value"
   | App (Union, [], srt) -> todo "eval Union"
   | App (Inter, [], srt) -> todo "eval Inter"
@@ -86,7 +86,9 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
         then fc state tt
         else raise_err (sprintf "sorts are not equal (%s) != (%s), this should never happen!"
           (string_of_sort srt1) (string_of_sort srt2))
-    | _ -> raise_err "unreachable")
+    | App (IntConst n, ts, Int) as tt ->
+        Debug.debug( fun () -> sprintf "IntConst (%s)\n" (string_of_term tt));
+        fc state tt)
   | App (IntConst n, [], srt) as i -> 
         Debug.debug (fun () -> sprintf "IntConst (%s)\n" (string_of_term i));
         fc state i 

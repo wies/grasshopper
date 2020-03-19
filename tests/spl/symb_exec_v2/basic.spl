@@ -15,7 +15,6 @@ procedure assign2(x: Int, y: Int)
   y := 5;
 }
 
-/* fails at eval_term with t = (x^2) sort = (Int) 
 procedure pure1(x: Int)
   requires x == 0
   ensures x == 10
@@ -25,6 +24,7 @@ procedure pure1(x: Int)
   x := x + 3;
 }
 
+/* fails at eval_term with t = (x^2) sort = (Int) 
 procedure pure2(x: Int, y: Int)
   requires x == y
   ensures x == y + 8
