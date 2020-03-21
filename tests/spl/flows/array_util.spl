@@ -88,7 +88,7 @@ function map_shift(m: Map<Int, K>, src: Int, dst: Int, len: Int)
 {
   { i: Int :: i < dst || dst + len <= i ? m[i] : m[src + (i - dst)]
     @(matching res[i] yields m[src + (i - dst)])
-    /*@(matching res[i] yields m[i])*/
+    @(matching res[i] yields m[i])
   }
 }
 
@@ -98,7 +98,7 @@ function map_shift_node(m: Map<Int, Node>, src: Int, dst: Int, len: Int)
 {
   { i: Int :: i < dst || dst + len <= i ? m[i] : m[src + (i - dst)]
     @(matching res[i] yields m[src + (i - dst)])
-    /*@(matching res[i] yields m[i])*/
+    @(matching res[i] yields m[i])
   }
 }
 
