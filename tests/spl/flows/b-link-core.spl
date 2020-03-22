@@ -234,22 +234,22 @@ procedure init() returns (x: Node, I: Interface)
 }
 
 procedure findNext(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
-  returns (np: Node)
+  returns (succ: Bool, np: Node)
   requires k in KS
   requires node(n, In, C)
   requires in_linkset(k, In, n) || in_inset(k, In, n) // TODO: get rid of 2nd disjunct
   ensures node(n, In, C)
-  ensures np != null ==> in_outset(k, In, np)
-  ensures np == null ==> (forall y: Node :: !(in_outset(k, In, y)))
+  ensures succ ==> in_outset(k, In, np)
+  ensures !succ ==> !(in_outsets(k, In))
 {
   if (n.ptrs[0] == null) {  // Leaf node
     if (n.next == null) {
-      return null;
+      return false, null;
     }
     if (le(n.keys[n.len], k)) {
-      return n.next;
+      return true, n.next;
     } else {
-      return null;
+      return false, null;
     }
   }
 
@@ -262,14 +262,14 @@ procedure findNext(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
   if (i == n.len && n.next != null) {
     if (lt(k, n.keys[i])) {
       np := n.ptrs[i];
-      return np;
+      return true, np;
     } else {
       np := n.next;
-      return np;
+      return true, np;
     }
   } else {
     np := n.ptrs[i];
-    return np;
+    return true, np;
   }
 }
 
