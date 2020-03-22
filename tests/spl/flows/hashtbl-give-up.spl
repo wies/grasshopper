@@ -28,7 +28,7 @@ struct Node {
 
 function hash(x: Node, k: K) returns (i: Int)
 
-/** {Spec} Definition of heap representation, hrep */
+/** {Spec} Definition of heap representation predicate, node */
 
 function edgeFn(x: Node, y: Node, p1: FlowDom)
   returns (p: FlowDom)
@@ -144,7 +144,6 @@ procedure findNext(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
     }
   }
 }
-
 
 procedure search(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, res: Bool)

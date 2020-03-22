@@ -20,7 +20,7 @@ struct Node {
   ghost var indices: Map<Node, Int>;
 }
 
-/** Definition of heap representation, hrep */
+/** Definition of heap representation predicate, node */
 
 // Width of the B-trees
 const B: Int

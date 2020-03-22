@@ -1,4 +1,4 @@
-/** B+ tree implementation of the link template for linearizable dictionaries. */
+/** B+ tree implementation of the link template. */
 
 options "-abspreds -simplearrays -propreads -stratify"
 
@@ -31,7 +31,7 @@ struct Node {
 // Width of the B-trees
 const B: Int
 
-/** {Spec} Definition of heap representation, hrep */
+/** {Spec} Definition of heap representation predicate, node */
 
 axiom B > 1
 

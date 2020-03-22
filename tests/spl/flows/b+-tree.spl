@@ -24,7 +24,7 @@ struct Node {
 
 const B: Int
 
-/** {Spec} Definition of heap representation, hrep */
+/** {Spec} Definition of heap representation predicate, node */
 
 axiom B > 1
 

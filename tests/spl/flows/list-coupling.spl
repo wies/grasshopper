@@ -20,7 +20,7 @@ struct Node {
   var sentinel: Bool;
 }
 
-/** Definition of heap representation, hrep */
+/** Definition of heap representation predicate, node */
 
 define hrepSpatial(x) {
   acc(x)
