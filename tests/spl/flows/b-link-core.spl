@@ -237,7 +237,7 @@ procedure findNext(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, np: Node)
   requires k in KS
   requires node(n, In, C)
-  requires in_linkset(k, In, n) || in_inset(k, In, n) // TODO: get rid of 2nd disjunct
+  requires in_linkset(k, In, n) || in_inset(k, In, n)
   ensures node(n, In, C)
   ensures succ ==> in_outset(k, In, np)
   ensures !succ ==> !(in_outsets(k, In))
