@@ -5,6 +5,8 @@ options "-abspreds -simplearrays -propreads -stratify"
 include "lock-coupling.spl"
 include "array_util.spl"
 
+/** Definition of key space */
+
 pure function KS() returns (res: Set<K>)
 {
   { k: K :: k != top && k != bot }

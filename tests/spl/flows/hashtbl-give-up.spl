@@ -5,6 +5,14 @@ options "-simplearrays -propreads -abspreds -stratify"
 include "give-up.spl"
 include "array_util.spl"
 
+/** {Spec} Definition of keyspace */
+
+pure function KS() returns (res: Set<K>)
+{
+  { k : K :: true }
+}
+
+
 /** Definition of a node */
 
 datatype NodeType = root | bucket | nodeTop;
@@ -91,6 +99,7 @@ lemma node_sep_star(n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set
 
 lemma keyset_implies_bucket(x: Node, Ix: Interface, k: K, C: Set<K>)
   requires hrep(x, Ix, C) &*& intValid(Ix)
+  requires k in KS
   requires Ix.inf[x][k] == 1 && (forall y: Node :: Ix.out[y][k] == 0)
   ensures hrep(x, Ix, C) // &*& unchanged(x)
   ensures x.typ == bucket
@@ -106,6 +115,7 @@ lemma keyset_implies_bucket(x: Node, Ix: Interface, k: K, C: Set<K>)
 /** inRange */
 procedure inRange(x: Node, k: K, ghost Ix: Interface, ghost C: Set<K>)
   returns (res: Bool)
+  requires k in KS
   requires node(x, Ix, C)
   ensures node(x, Ix, C) &*& (res ==> Ix.inf[x][k] >= 1)
 {
@@ -116,6 +126,7 @@ procedure inRange(x: Node, k: K, ghost Ix: Interface, ghost C: Set<K>)
 /** findNext **/
 procedure findNext(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
   returns (n: Node)
+  requires k in KS
   requires node(x, Ix, C) &*& intValid(Ix)
   requires Ix.inf[x][k] >= 1
   ensures node(x, Ix, C)
@@ -139,6 +150,7 @@ procedure findNext(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
 /** search */
 procedure search(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, res: Bool)
+  requires k in KS
   requires node(x, Ix, C) &*& intValid(Ix)
   requires Ix.inf[x][k] == 1 && (forall y: Node :: Ix.out[y][k] == 0)
   ensures node(x, Ix, C) &*& intValid(Ix)
@@ -156,6 +168,7 @@ procedure search(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
 /** insert */
 procedure insert(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
+  requires k in KS
   requires node(x, Ix, C) &*& intValid(Ix)
   requires Ix.inf[x][k] == 1 && (forall y: Node :: Ix.out[y][k] == 0)
   ensures node(x, Ix, C1)
@@ -186,6 +199,7 @@ procedure insert(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
 /** delete */
 procedure delete(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
+  requires k in KS
   requires node(x, Ix, C) &*& intValid(Ix)
   requires Ix.inf[x][k] == 1 && (forall y: Node :: Ix.out[y][k] == 0)
   ensures node(x, Ix, C1)

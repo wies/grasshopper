@@ -5,10 +5,18 @@ options "-abspreds -simplearrays -propreads -stratify"
 include "link.spl"
 include "array_util.spl"
 
-function keyspace() returns (m: Multiset)
+/** {Spec} Definition of keyspace */
+  
+pure function KS() returns (res: Set<K>)
 {
-  { k: K :: 1 }
+  { k: K :: lt(k, top) }
 }
+
+function KS_multiset() returns (m: Multiset)
+{
+  { k: K :: k in KS ? 1 : 0 }
+}
+
 
 /** Definition of a node */
 
@@ -155,6 +163,13 @@ lemma outsets_correct(x: Node, Ix: Interface, k: K, C: Set<K>)
   }
 }
 
+// Node predicate is not duplicable
+lemma node_sep_star(n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set<K>)
+  requires node(n, I_n, C) &*& node(n, I_np, Cp)
+  ensures false
+{
+  
+}
 
 // Node abstraction implies node-level invariant (this lemma is assumed by Coq)
 lemma node_implies_nodeinv(n: Node, I: Interface, C: Set<K>)
@@ -171,7 +186,7 @@ lemma node_implies_nodeinv(n: Node, I: Interface, C: Set<K>)
 // Show that if query key k is in the keyset of node x than x must be a leaf.
 lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int, implicit ghost C: Set<K>)
   requires hrep(x, Ix, C) &*& intValid(Ix)
-  requires lt(k, top)
+  requires k in KS
   requires in_inset(k, Ix, x) && (forall y: Node :: !(in_outset(k, Ix, y)))
   requires (i <= 0 || !lt(k, x.keys[i-1])) && 0 <= i <= x.len
   ensures hrep(x, Ix, C)
@@ -235,7 +250,7 @@ procedure init() returns (x: Node, I: Interface)
   x.next := null;
   x.indices := { n: Node :: -1 };
 
-  ghost var x_inflow := { n: Node :: n == x ? pair(keyspace, keyspace) : domZero };
+  ghost var x_inflow := { n: Node :: n == x ? pair(KS_multiset, KS_multiset) : domZero };
   
   I := interface(x, x_inflow);
 }
@@ -243,7 +258,7 @@ procedure init() returns (x: Node, I: Interface)
 /** findNext */
 procedure findNext(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
   returns (n: Node)
-  requires lt(k, top)
+  requires k in KS
   requires node(x, Ix, C) &*& intValid(Ix)
   requires in_linkset(k, Ix, x) || in_inset(k, Ix, x) // TODO: get rid of 2nd disjunct
   ensures node(x, Ix, C)
@@ -285,11 +300,11 @@ procedure findNext(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
 /** search */
 procedure search(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, res: Bool)
+  requires k in KS
   requires node(x, Ix, C) &*& intValid(Ix)
-  requires lt(k, top)
   requires in_inset(k, Ix, x) && (forall y: Node :: !(in_outset(k, Ix, y)))
   ensures node(x, Ix, C)
-  // decisiveOpSpec(x, Ix1, res, k):
+  // decisiveOpSpec(x, Ix, res, k):
   ensures succ ==> (res == k in C)
 {
   keyset_implies_leaf(x, Ix, k, 0);
@@ -303,11 +318,11 @@ procedure search(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
 /** insert */
 procedure insert(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
+  requires k in KS
   requires node(x, Ix, C) &*& intValid(Ix)
-  requires lt(k, top)
   requires in_inset(k, Ix, x) && (forall y: Node :: !(in_outset(k, Ix, y)))
   ensures node(x, Ix, C1)
-  // decisiveOpSpec(x, Ix1, res, k):
+  // decisiveOpSpec(x, Ix, res, k):
   ensures succ ==> (C1 == C ++ {k} && (res == k !in C))
   ensures !succ ==> C1 == C
 {
@@ -351,8 +366,8 @@ procedure insert(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
 /** delete */
 procedure delete(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
+  requires k in KS
   requires node(x, Ix, C) &*& intValid(Ix)
-  requires lt(k, top)
   requires in_inset(k, Ix, x) && (forall y: Node :: !(in_outset(k, Ix, y)))
   ensures node(x, Ix, C1)
   // decisiveOpSpec(x, Ix1, res, k):

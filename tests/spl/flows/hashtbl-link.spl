@@ -5,6 +5,13 @@ options "-simplearrays -propreads -abspreds -stratify"
 include "link.spl"
 include "array_util.spl"
 
+/** {Spec} Definition of keyspace */
+
+pure function KS() returns (res: Set<K>)
+{
+  { k : K :: true }
+}
+
 /** Definition of a node */
 
 datatype NodeType = root | bucket;
@@ -96,11 +103,34 @@ lemma keyset_implies_bucket(x: Node, Ix: Interface, k: K, implicit ghost C: Set<
   }
 }
   
+/** {Spec} Implementation specific lemmas used by Iris */
+
+// Node predicate is not duplicable
+lemma node_sep_star(n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set<K>)
+  requires node(n, I_n, C) &*& node(n, I_np, Cp)
+  ensures false
+{
+  
+}
+
+// Node abstraction implies node-level invariant (this lemma is assumed by Coq)
+lemma node_implies_nodeinv(n: Node, I: Interface, C: Set<K>)
+  requires node(n, I, C) && intValid(I)
+  pure ensures nodeinv(n, I, C)
+{
+  pure assert (forall k1: K :: in_linkset(k1, I, n) && !(in_outsets(k1, I)) ==> in_inset(k1, I, n)) with {
+    if (in_linkset(k1, I, n) && !(in_outsets(k1, I))) {
+      outsets_correct(n, I, k1, C);
+    }
+  }
+}
+
 /** Begin programs */
 
 /** findNext **/
 procedure findNext(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
   returns (n: Node)
+  requires k in KS
   requires node(x, Ix, C) &*& intValid(Ix)
   requires in_inset(k, Ix, x) || in_linkset(k, Ix, x)
   ensures node(x, Ix, C)
@@ -122,6 +152,7 @@ procedure findNext(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
 /** search */
 procedure search(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, res: Bool)
+  requires k in KS
   requires node(x, Ix, C) &*& intValid(Ix)
   requires in_inset(k, Ix, x) && (forall y: Node :: !(in_outset(k, Ix, y)))
   ensures node(x, Ix, C)
@@ -140,6 +171,7 @@ procedure search(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
 /** insert */
 procedure insert(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
+  requires k in KS
   requires node(x, Ix, C) &*& intValid(Ix)
   requires in_inset(k, Ix, x) && (forall y: Node :: !(in_outset(k, Ix, y)))
   ensures node(x, Ix, C1)
@@ -175,6 +207,7 @@ procedure insert(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
 /** delete */
 procedure delete(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
+  requires k in KS
   requires node(x, Ix, C) &*& intValid(Ix)
   requires in_inset(k, Ix, x) && (forall y: Node :: !(in_outset(k, Ix, y)))
   ensures node(x, Ix, C1)

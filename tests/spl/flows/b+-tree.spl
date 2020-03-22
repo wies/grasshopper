@@ -5,6 +5,13 @@ options "-simplearrays -propreads"
 include "give-up.spl"
 include "array_util.spl"
 
+/** {Spec} Definition of key space */
+
+pure function KS() returns (res: Set<K>)
+{
+  { k: K :: k != top && k != bot }
+}
+
 /** Definition of a node */
 
 struct Node {
@@ -27,7 +34,7 @@ define hrepSpatial(x) {
 
 // The definition of the implementation-specific node predicate assumed by Iris
 define node(x, I, C) {
-  hrepSpatial(x) &*& I.dom == {x} // TODO where to put this?
+  hrepSpatial(x) &*& I.dom == {x} &*& intValid(I) 
     && 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
     // The keys are within the range
     && (x.len != 0 ==> le(x.rangeLb, x.keys[0]) && lt(x.keys[x.len-1], x.rangeUb))
@@ -68,7 +75,7 @@ lemma node_sep_star(n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set
 /** {Spec} Lemmas for proofs below */
 
 lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int, implicit ghost C: Set<K>)
-  requires node(x, Ix, C) &*& intValid(Ix)
+  requires node(x, Ix, C)
   requires Ix.inf[x][k] == 1 && (forall y: Node :: Ix.out[y][k] == 0)
   requires (i <= 0 || le(x.keys[i-1], k)) && 0 <= i <= x.len
   ensures node(x, Ix, C)
@@ -110,76 +117,81 @@ procedure init() returns (x: Node, I: Interface, implicit ghost C: Set<K>)
 
 
 /* inRange */
-procedure inRange(x: Node, k: K, Ix: Interface, implicit ghost C: Set<K>)
+procedure inRange(n: Node, k: K, In: Interface, implicit ghost C: Set<K>)
   returns (res: Bool)
-  requires node(x, Ix, C)
-  ensures node(x, Ix, C) &*& (res ==> Ix.inf[x][k] >= 1)
+  requires k in KS
+  requires node(n, In, C)
+  ensures node(n, In, C) &*& (res ==> in_inset(k, In, n))
 {
-  return le(x.rangeLb, k) && lt(k, x.rangeUb);
+  return le(n.rangeLb, k) && lt(k, n.rangeUb);
 }
 
 /* findNext */
-procedure findNext(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
-  returns (n: Node)
-  requires node(x, Ix, C) &*& intValid(Ix)
-  ensures node(x, Ix, C)
-  ensures n != null ==> Ix.out[n][k] >= 1
-  ensures n == null ==> (forall y: Node :: Ix.out[y][k] == 0)
+procedure findNext(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
+  returns (succ: Bool, np: Node)
+  requires k in KS
+  requires node(n, In, C)
+  ensures node(n, In, C)
+  ensures succ ==> in_outset(k, In, np)
+  ensures !succ ==> !(in_outsets(k, In))
 {
-  if (x.ptrs[0] == null) {  // Leaf node
-    return null;
+  if (n.ptrs[0] == null) {  // Leaf node
+    return false, null;
   }
   
-  var found, i := arr_find(x.keys, x.len, k);
+  var found, i := arr_find(n.keys, n.len, k);
 
-  if (i < x.len && k == x.keys[i]) {
+  if (i < n.len && k == n.keys[i]) {
     i := i + 1;
   }
   
-  n := x.ptrs[i];
+  np := n.ptrs[i];
+  succ := true;
   // return n;
 }
 
 
 /* search */
-procedure search(x: Node, k: K, ghost Ix: Interface)
+procedure search(n: Node, k: K, ghost In: Interface)
   returns (succ: Bool, res: Bool, implicit ghost C: Set<K>)
-  requires node(x, Ix, C) &*& intValid(Ix)
-  requires Ix.inf[x][k] == 1 && (forall y: Node :: Ix.out[y][k] == 0)
-  ensures node(x, Ix, C)
+  requires k in KS
+  requires node(n, In, C)
+  requires in_inset(k, In, n) && !(in_outsets(k, In))
+  ensures node(n, In, C)
   // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (res == k in C)
 {
-  keyset_implies_leaf(x, Ix, k, 0);
+  keyset_implies_leaf(n, In, k, 0);
 
   var idx: Int;
-  res, idx := arr_find(x.keys, x.len, k);
+  res, idx := arr_find(n.keys, n.len, k);
 
   return true, res;
 }
 
 /* insert */
-procedure insert(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
+procedure insert(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
-  requires node(x, Ix, C) &*& intValid(Ix)
-  requires Ix.inf[x][k] == 1 && (forall y: Node :: Ix.out[y][k] == 0)
-  ensures node(x, Ix, C1)
-  // decisiveOpSpec(x, Ix1, res, k):
+  requires k in KS
+  requires node(n, In, C)
+  requires in_inset(k, In, n) && !(in_outsets(k, In))
+  ensures node(n, In, C1)
+  // decisiveOpSpec(n, In1, res, k):
   ensures succ ==> (C1 == C ++ {k} && (res == k !in C))
   ensures !succ ==> C1 == C
 {
-  keyset_implies_leaf(x, Ix, k, 0);
+  keyset_implies_leaf(n, In, k, 0);
 
-  if (x.len < 2*B - 1) {
+  if (n.len < 2*B - 1) {
   
-    ghost var m := x.keys.map;
-    var old_len := x.len;
+    ghost var m := n.keys.map;
+    var old_len := n.len;
     
-    var idx, new_len := arr_insert(x.keys, k, x.len);
+    var idx, new_len := arr_insert(n.keys, k, n.len);
 
-    map_insert_content_set(m, x.keys.map, idx, k, x.len, new_len);
+    map_insert_content_set(m, n.keys.map, idx, k, n.len, new_len);
 
-    x.len := new_len;
+    n.len := new_len;
 
     return true, new_len != old_len; 
   } else {
@@ -189,25 +201,26 @@ procedure insert(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
 
 
 /* delete */
-procedure delete(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>)
+procedure delete(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
-  requires node(x, Ix, C) &*& intValid(Ix)
-  requires Ix.inf[x][k] == 1 && (forall y: Node :: Ix.out[y][k] == 0)
-  ensures node(x, Ix, C1)
-  // decisiveOpSpec(x, Ix1, res, k):
+  requires k in KS
+  requires node(n, In, C)
+  requires in_inset(k, In, n) && !(in_outsets(k, In))
+  ensures node(n, In, C1)
+  // decisiveOpSpec(n, In, res, k):
   ensures succ ==> (C1 == C -- {k} && (res == k in C))
   ensures !succ ==> C1 == C
 {
-  keyset_implies_leaf(x, Ix, k, 0);
+  keyset_implies_leaf(n, In, k, 0);
 
-  ghost var m := x.keys.map;
-  var old_len := x.len;
+  ghost var m := n.keys.map;
+  var old_len := n.len;
   
-  var new_len, idx := arr_delete(x.keys, k, x.len);
+  var new_len, idx := arr_delete(n.keys, k, n.len);
 
-  map_delete_content_set(m, x.keys.map, x.len, new_len, idx, k);
+  map_delete_content_set(m, n.keys.map, n.len, new_len, idx, k);
 
-  x.len := new_len;
+  n.len := new_len;
 
   return true, new_len != old_len;
 }

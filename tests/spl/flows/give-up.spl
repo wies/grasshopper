@@ -5,6 +5,8 @@ include "multiset-ccm.spl"
 
 type FlowDom = Multiset
 
+pure function KS() returns (res: Set<K>)
+
 /** {Spec} Definitions of predicates used in give-up template proof in Iris */
 
 define in_inset(k, I, n) {
@@ -30,9 +32,9 @@ predicate globalinv(root: Node, I: Interface)
   intValid(I)
   && root in I.dom
   // Global interface is closed
-  && (forall n: Node, k: K :: !(in_outset(k, I, n)))
-  && (forall n: Node :: (n == root ==> (forall k: K :: in_inset(k, I, n))) &&
-                 (n != root ==> (forall k: K :: !(in_inset(k, I, n)))))
+  && (forall n: Node, k: K :: k in KS ==> !(in_outset(k, I, n)))
+  && (forall n: Node :: (n == root ==> (forall k: K :: k in KS ==> in_inset(k, I, n))) &&
+                 (n != root ==> (forall k: K :: k in KS ==> !(in_inset(k, I, n)))))
 }
 
 /*

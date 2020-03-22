@@ -733,7 +733,7 @@ procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
   requires p != x
   requires Ic.out[p] == domZero  // needed for int_comp_unfold
 
-    ensures hrep(p, Ip1, Cp) &*& hrep(c, Ic1, Cc)
+  ensures hrep(p, Ip1, Cp) &*& hrep(c, Ic1, Cc)
   ensures intValid(Ip1) && intValid(Ic1)
   ensures intComp(Ip1, Ic1) == Ipc
 {
