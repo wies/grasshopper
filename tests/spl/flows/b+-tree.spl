@@ -1,4 +1,4 @@
-/** B+ tree implementation of the give-up template for linearizable dictionaries. */
+/** B+ tree implementation of the give-up template. */
 
 options "-simplearrays -propreads"
 
@@ -35,7 +35,7 @@ define hrepSpatial(x) {
 
 // The definition of the implementation-specific node predicate assumed by Iris
 define node(x, I, C) {
-  hrepSpatial(x) &*& I.dom == {x} &*& intValid(I) 
+  hrepSpatial(x) &*& I.dom == {x} &*& intValid(I)
     && 0 <= x.len && x.len < 2*B && x.keys.length == 2*B && x.ptrs.length == 2*B
     // The keys are within the range
     && (x.len != 0 ==> le(x.rangeLb, x.keys[0]) && lt(x.keys[x.len-1], x.rangeUb))
@@ -71,7 +71,7 @@ lemma node_sep_star(n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set
   requires node(n, I_n, C) &*& node(n, I_np, Cp)
   ensures false
 {
-  
+
 }
 
 /** {Spec} Lemmas for proofs below */
@@ -110,7 +110,7 @@ procedure init() returns (x: Node, I: Interface, implicit ghost C: Set<K>)
   x.len := 0;
   x.rangeLb := bot;
   x.rangeUb := top;
-  
+
   var xkc := { k: K :: le(bot, k) && lt(k, top) ? 1 : 0 };
   var xfm := { n1: Node :: domZero };
   I := int({ n: Node :: n == x ? xkc : domZero },
@@ -119,7 +119,7 @@ procedure init() returns (x: Node, I: Interface, implicit ghost C: Set<K>)
 }
 
 
-procedure inRange(n: Node, k: K, In: Interface, implicit ghost C: Set<K>)
+procedure inRange(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
   returns (res: Bool)
   requires k in KS
   requires node(n, In, C)
@@ -132,6 +132,7 @@ procedure findNext(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, np: Node)
   requires k in KS
   requires node(n, In, C)
+  requires in_inset(k, In, n)
   ensures node(n, In, C)
   ensures succ ==> in_outset(k, In, np)
   ensures !succ ==> !(in_outsets(k, In))
@@ -178,17 +179,17 @@ procedure insert(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
   keyset_implies_leaf(n, In, k, 0);
 
   if (n.len < 2*B - 1) {
-  
+
     ghost var m := n.keys.map;
     var old_len := n.len;
-    
+
     var idx, new_len := arr_insert(n.keys, k, n.len);
 
     map_insert_content_set(m, n.keys.map, idx, k, n.len, new_len);
 
     n.len := new_len;
 
-    return true, new_len != old_len; 
+    return true, new_len != old_len;
   } else {
     return false, false;
   }
@@ -207,7 +208,7 @@ procedure delete(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
 
   ghost var m := n.keys.map;
   var old_len := n.len;
-  
+
   var new_len, idx := arr_delete(n.keys, k, n.len);
 
   map_delete_content_set(m, n.keys.map, n.len, new_len, idx, k);
@@ -216,4 +217,3 @@ procedure delete(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
 
   return true, new_len != old_len;
 }
-
