@@ -9,7 +9,7 @@ include "array_util.spl"
 
 pure function KS() returns (res: Set<K>)
 {
-  { k: K :: k != top && k != bot }
+  { k: K :: lt(k, top) }
 }
 
 /** Definition of a node */
@@ -22,12 +22,13 @@ struct Node {
   var ptrs: Array<Node>;
 }
 
-var B: Int
+const B: Int
 
 /** {Spec} Definition of heap representation, hrep */
 
 axiom B > 1
 
+// Access permissions associated with a node x
 define hrepSpatial(x) {
   acc(x) &*& acc(x.keys) &*& acc(x.ptrs)
 }
@@ -63,8 +64,9 @@ define node(x, I, C) {
 }
 
 
-/** {Spec} Implemetation-specific lemmas needed by Iris */
+/** {Spec} Implementation-specific lemmas needed by Iris */
 
+// Node predicate is not duplicable
 lemma node_sep_star(n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set<K>)
   requires node(n, I_n, C) &*& node(n, I_np, Cp)
   ensures false
@@ -74,6 +76,7 @@ lemma node_sep_star(n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set
 
 /** {Spec} Lemmas for proofs below */
 
+// Show that if query key k is in the keyset of node x than x must be a leaf.
 lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int, implicit ghost C: Set<K>)
   requires node(x, Ix, C)
   requires Ix.inf[x][k] == 1 && (forall y: Node :: Ix.out[y][k] == 0)
@@ -96,7 +99,7 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int, implicit ghost C
 
 /** Begin programs */
 
-/* Initialize root node */
+/** Initialize a new root node */
 procedure init() returns (x: Node, I: Interface, implicit ghost C: Set<K>)
   ensures node(x, I, C) &*& intValid(I) &*& C == {}
 {
@@ -116,7 +119,6 @@ procedure init() returns (x: Node, I: Interface, implicit ghost C: Set<K>)
 }
 
 
-/* inRange */
 procedure inRange(n: Node, k: K, In: Interface, implicit ghost C: Set<K>)
   returns (res: Bool)
   requires k in KS
@@ -126,7 +128,6 @@ procedure inRange(n: Node, k: K, In: Interface, implicit ghost C: Set<K>)
   return le(n.rangeLb, k) && lt(k, n.rangeUb);
 }
 
-/* findNext */
 procedure findNext(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, np: Node)
   requires k in KS
@@ -138,27 +139,23 @@ procedure findNext(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
   if (n.ptrs[0] == null) {  // Leaf node
     return false, null;
   }
-  
+
   var found, i := arr_find(n.keys, n.len, k);
 
-  if (i < n.len && k == n.keys[i]) {
+  if (i < n.len && k == n.keys[i]) {  // arr_find finds upper bound, we want lower
     i := i + 1;
   }
-  
+
   np := n.ptrs[i];
   succ := true;
-  // return n;
 }
 
-
-/* search */
-procedure search(n: Node, k: K, ghost In: Interface)
-  returns (succ: Bool, res: Bool, implicit ghost C: Set<K>)
+procedure search(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
+  returns (succ: Bool, res: Bool)
   requires k in KS
   requires node(n, In, C)
   requires in_inset(k, In, n) && !(in_outsets(k, In))
   ensures node(n, In, C)
-  // decisiveOpSpec(x, Ix1, res, k):
   ensures succ ==> (res == k in C)
 {
   keyset_implies_leaf(n, In, k, 0);
@@ -169,14 +166,12 @@ procedure search(n: Node, k: K, ghost In: Interface)
   return true, res;
 }
 
-/* insert */
 procedure insert(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
   requires k in KS
   requires node(n, In, C)
   requires in_inset(k, In, n) && !(in_outsets(k, In))
   ensures node(n, In, C1)
-  // decisiveOpSpec(n, In1, res, k):
   ensures succ ==> (C1 == C ++ {k} && (res == k !in C))
   ensures !succ ==> C1 == C
 {
@@ -199,15 +194,12 @@ procedure insert(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
   }
 }
 
-
-/* delete */
 procedure delete(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
   requires k in KS
   requires node(n, In, C)
   requires in_inset(k, In, n) && !(in_outsets(k, In))
   ensures node(n, In, C1)
-  // decisiveOpSpec(n, In, res, k):
   ensures succ ==> (C1 == C -- {k} && (res == k in C))
   ensures !succ ==> C1 == C
 {

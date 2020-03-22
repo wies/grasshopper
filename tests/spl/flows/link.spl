@@ -36,7 +36,7 @@ define in_outset(k, I, n) {
 
 predicate in_outsets(k: K, I: Interface)
 {
-  exists n: Node :: in_outset(k, I, n)
+  exists y: Node :: in_outset(k, I, y)
 }
 
 function keyset(I: Interface, n: Node) returns (res: Set<K>)
