@@ -1,5 +1,6 @@
 /** {Spec} Flow domain setup for verifying give-up template implementations */
 
+include "css.spl"
 include "flows.spl"
 include "multiset-ccm.spl"
 
@@ -36,28 +37,3 @@ predicate globalinv(root: Node, I: Interface)
   && (forall n: Node :: (n == root ==> (forall k: K :: k in KS ==> in_inset(k, I, n))) &&
                  (n != root ==> (forall k: K :: k in KS ==> !(in_inset(k, I, n)))))
 }
-
-/*
-
-lemma keyset_def(k: K, I_n: Interface, n: Node)
-  requires in_inset(k, I_n, n)
-  requires !(in_outsets(k, I_n))
-  ensures k in keyset(I_n, n)
-{
-}
-
-lemma flowint_step(root: Node, I1: Interface, I2: Interface, I: Interface, k: K, n: Node)
-  requires I == intComp(I1, I2) && intValid(I)
-  requires in_outset(k, I1, n)
-  requires globalinv(root, I)
-  ensures n in I2.dom
-{
-  pure assert I1.out[n] != domZero;
-  lemma_int_comp_unfold(I1, I2);
-  if (n !in I.dom) {
-    pure assert I.out[n] == domPlus(I1.out[n], I2.out[n]);
-    pure assert I.out[n][k] == I1.out[n][k] + I2.out[n][k];
-  }
-}
-
-*/

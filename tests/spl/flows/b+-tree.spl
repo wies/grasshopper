@@ -152,12 +152,13 @@ procedure findNext(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
 }
 
 procedure search(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
-  returns (succ: Bool, res: Bool)
+  returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
   requires k in KS
   requires node(n, In, C)
   requires in_inset(k, In, n) && !(in_outsets(k, In))
-  ensures node(n, In, C)
-  ensures succ ==> (res == k in C)
+  ensures node(n, In, C1)
+  ensures succ ==> Psi(searchOp, k, C, C1, res)
+  ensures !succ ==> C1 == C
 {
   keyset_implies_leaf(n, In, k, 0);
 
@@ -173,7 +174,7 @@ procedure insert(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
   requires node(n, In, C)
   requires in_inset(k, In, n) && !(in_outsets(k, In))
   ensures node(n, In, C1)
-  ensures succ ==> (C1 == C ++ {k} && (res == k !in C))
+  ensures succ ==> Psi(insertOp, k, C, C1, res)
   ensures !succ ==> C1 == C
 {
   keyset_implies_leaf(n, In, k, 0);
@@ -201,7 +202,7 @@ procedure delete(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
   requires node(n, In, C)
   requires in_inset(k, In, n) && !(in_outsets(k, In))
   ensures node(n, In, C1)
-  ensures succ ==> (C1 == C -- {k} && (res == k in C))
+  ensures succ ==> Psi(deleteOp, k, C, C1, res)
   ensures !succ ==> C1 == C
 {
   keyset_implies_leaf(n, In, k, 0);

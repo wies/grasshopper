@@ -1,0 +1,11 @@
+/** {Spec} Abstract specification of concurrent search structures */
+
+
+datatype DOp = searchOp | insertOp | deleteOp;
+
+/* The predicate Ψ in Figure 5 of the paper */
+predicate Psi(dop: DOp, k: K, C: Set<K>, C1: Set<K>, res: Bool) {
+  (dop == searchOp && C1 == C && (res == k in C))
+  || (dop == insertOp && C1 == C ++ {k} && (res == k !in C))
+  || (dop == deleteOp && C1 == C -- {k} && (res == k in C))
+}

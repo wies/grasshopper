@@ -5,7 +5,7 @@ source bin/osx_gnu.sh
 #echo "Building Grasshopper"
 #./build.sh
 
-FILES1="flows ccm multiset-ccm multipair-ccm give-up link"
+FILES1="flows css ccm multiset-ccm multipair-ccm give-up link"
 FILES2="hashtbl-give-up"
 FILES3="hashtbl-link"
 FILES4="b+-tree"
