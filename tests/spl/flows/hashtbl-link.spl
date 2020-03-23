@@ -73,22 +73,9 @@ lemma outsets_correct(x: Node, Ix: Interface, k: K, C: Set<K>)
   }
 }
 
-
-// The good condition
-define searchStrInv(x, I, C) {
-    // Contents subsetof keyset
-    (forall k1: K :: k1 in C ==> I.inf[x].is[k1] >= 1)
-    && (forall k1: K, y: Node :: k1 !in C || I.out[y].is[k1] == 0)
-    // Edgesets are disjoint
-    && (forall k1: K, y: Node, z: Node :: y == z
-       || I.out[y].is[k1] == 0 || I.out[z].is[k1] == 0)
-    // Linkset keyset subsetof inset
-       && (forall k: K :: in_linkset(k, I, x) && k !in hashtbl_outsets(I, x) ==> in_inset(k, I, x))
-}
-
 // The definition of the implementation-specific node predicate assumed by Iris
 define node(x, I, C) {
-  hrep(x, I, C) &*& searchStrInv(x, I, C) &*& intValid(I)
+  hrep(x, I, C) &*& intValid(I)
 }
 
 

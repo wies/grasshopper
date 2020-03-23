@@ -71,19 +71,9 @@ define hrep(x, I, C) {
           && (forall y: Node :: y == null || y != x.next ==> I.out[y] == domZero))))
 }
 
-
-define searchStrInv(x, I, C) {
-    // Contents subsetof keyset
-    (forall k1: K :: k1 in C ==> I.inf[x][k1] >= 1)
-    && (forall k1: K, y: Node :: k1 !in C || I.out[y][k1] == 0)
-    // Edgesets are disjoint
-    && (forall k1: K, y: Node, z: Node :: y == z
-       || I.out[y][k1] == 0 || I.out[z][k1] == 0)
-}
-
 // The definition of the implementation-specific node predicate assumed by Iris
 define node(x, I, C) {
-  hrep(x, I, C) &*& searchStrInv(x, I, C) &*& intValid(I)
+  hrep(x, I, C) &*& intValid(I)
 }
 
 

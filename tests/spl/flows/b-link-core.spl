@@ -134,15 +134,10 @@ function blink_outsets(Ix: Interface, x: Node) returns (res: Set<K>)
            || x.ptrs[0] != null && lt(k, top))}
 }
 
-
-// The good condition
+// Constraints needed to ensure nodeinv holds for this implementation
 define searchStrInv(x, I, C) {
-    // Edgesets are disjoint (TODO: this should follow from heapGood, not sure this is even needed anymore)
-    true
-    //(forall k1: K, y: Node, z: Node :: y == z
-    //   || I.out[y].is[k1] == 0 || I.out[z].is[k1] == 0)
     // Linkset keyset subsetof inset
-    && (forall k1: K :: in_linkset(k1, I, x) && k1 !in blink_outsets(I, x) ==> in_inset(k1, I, x))
+    (forall k1: K :: in_linkset(k1, I, x) && k1 !in blink_outsets(I, x) ==> in_inset(k1, I, x))
     && (forall k1: K :: in_linkset(k1, I, x) && !(in_inset(k1, I, x)) ==> !lt(k1, x.keys[x.len]))
 }
 

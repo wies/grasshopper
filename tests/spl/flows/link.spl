@@ -59,6 +59,6 @@ pure predicate globalinv(root: Node, I: Interface) {
 
 /* Node-level invariant \gamma that needs to be maintained */
 pure predicate nodeinv(n: Node, I: Interface, C: Set<K>) {
-   I.dom == {n} // is this needed?
-   && (forall k1: K :: in_linkset(k1, I, n) && !(in_outsets(k1, I)) ==> in_inset(k1, I, n))
+  (forall k1: K :: in_linkset(k1, I, n) && !(in_outsets(k1, I))
+    ==> in_inset(k1, I, n))
 }
