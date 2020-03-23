@@ -51,8 +51,10 @@ pure predicate globalinv(root: Node, I: Interface) {
     intValid(I)
     && root in I.dom
     && (forall k: K, n: Node :: !(in_outset(k, I, n)))
-    && (forall k: K :: k in KS ==> in_inset(k, I, root) && in_linkset(k, I, root))
-    && (forall k: K, n: Node :: n != root ==> !(in_inset(k, I, n) && !(in_linkset(k, I, n))))
+    && (forall k: K :: k in KS
+      ==> in_inset(k, I, root) && in_linkset(k, I, root))
+    && (forall k: K, n: Node :: n != root
+      ==> !(in_inset(k, I, n) && !(in_linkset(k, I, n))))
 }
 
 /* Node-level invariant \gamma that needs to be maintained */

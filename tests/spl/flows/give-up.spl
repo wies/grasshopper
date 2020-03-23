@@ -28,12 +28,14 @@ function keyset(I: Interface, n: Node) returns (res: Set<K>)
   { k: K :: in_inset(k, I, n) && !(in_outsets(k, I)) }
 }
 
+/* Global invariant \phi that needs to be maintained */
 predicate globalinv(root: Node, I: Interface)
 {
   intValid(I)
   && root in I.dom
   // Global interface is closed
-  && (forall n: Node, k: K :: k in KS ==> !(in_outset(k, I, n)))
-  && (forall n: Node :: (n == root ==> (forall k: K :: k in KS ==> in_inset(k, I, n))) &&
-                 (n != root ==> (forall k: K :: k in KS ==> !(in_inset(k, I, n)))))
+  && (forall n: Node, k: K :: !(in_outset(k, I, n)))
+  && (forall n: Node ::
+    (n == root ==> (forall k: K :: k in KS ==> in_inset(k, I, n)))
+    && (n != root ==> (forall k: K :: !(in_inset(k, I, n)))))
 }
