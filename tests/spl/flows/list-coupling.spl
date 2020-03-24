@@ -4,7 +4,8 @@ options "-abspreds -simplearrays -propreads -stratify"
 
 include "lock-coupling.spl"
 include "array_util.spl"
-
+include "css.spl"
+  
 /** Definition of key space */
 
 pure function KS() returns (res: Set<K>)
@@ -221,18 +222,14 @@ procedure findNext(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>,
 }
 
 /** search */
-procedure search(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>, implicit ghost root: Node)
+procedure search(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>, implicit ghost root: Node)
   returns (res: Bool, implicit ghost C1: Set<K>)
-  requires node(root, x, Ix, C) &*& intValid(Ix)
-  requires in_inset(k, Ix, x) && (forall y: Node :: !(in_outset(k, Ix, y)))
-  ensures node(root, x, Ix, C1)
-  // decisiveOpSpec(x, Ix1, res, k):
-  ensures (C1 == C && (res == k in C))
+  requires node(root, n, In, C) &*& intValid(In)
+  requires in_inset(k, In, n) && !(in_outsets(k, In))
+  ensures node(root, n, In, C1)
+  ensures Psi(searchOp, k, C, C1, res)
 {
-  if (!x.sentinel && k == x.data)
-    return true;
-  else
-    return false;
+  return !n.sentinel && k == n.data;
 }
 
 
@@ -260,13 +257,12 @@ procedure insert(p: Node, n: Node, m: Node, k: K,
   ensures Disjoint(keyset(Ip1, p), keyset(Im1, m))
   ensures Disjoint(keyset(Im1, m), keyset(In1, n))
   ensures keyset(Ip1, p) ++ keyset(In1, n) ++ keyset(Im1, m) == old(keyset(Ip, p) ++ keyset(In, n))
-  // decisiveOpSpec(x, Ix1, res, k):
-  ensures Cp1 ++ Cn1 ++ Cm1 == Cp ++ Cn ++ {k}
+  ensures Psi(insertOp, k, Cp ++ Cn, Cp1 ++ Cn1 ++ Cm1, true)
 {
   m.data := k;
   m.next := n;
   m.sentinel := false;
-  p.next := m;  
+  p.next := m;
 
   // Proof - not pretty but almost all of this is just manual expansion of definitions
 
