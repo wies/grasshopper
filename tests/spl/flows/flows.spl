@@ -468,7 +468,7 @@ lemma lemma_int_comp_fold(I1: Interface, I2: Interface)
 
 
 // Contextually extension of interfaces
-pure predicate intLeq(I1: Interface, I2: Interface) {
+pure predicate contextualLeq(I1: Interface, I2: Interface) {
   intValid(I1) && intValid(I2) &&
   I1.dom <= I2.dom
   && (forall n: Node :: n in I1.dom ==> I1.inf[n] == I2.inf[n]
@@ -480,10 +480,10 @@ pure predicate intLeq(I1: Interface, I2: Interface) {
 // The replacement lemma
 lemma lemma_replacement(I1: Interface, I2: Interface, J1: Interface)
   requires intValid(intComp(I1, I2))
-  requires intLeq(I1, J1) && Disjoint(J1.dom, I2.dom)
+  requires contextualLeq(I1, J1) && Disjoint(J1.dom, I2.dom)
   requires forall n in J1.dom -- I1.dom :: I2.out[n] == domZero
   ensures intComp(J1, I2) != intUndef
-  ensures intLeq(intComp(I1, I2), intComp(J1, I2))
+  ensures contextualLeq(intComp(I1, I2), intComp(J1, I2))
 {
   var I := intComp(I1, I2);
   var J := int(
@@ -524,11 +524,11 @@ lemma lemma_replacement(I1: Interface, I2: Interface, J1: Interface)
 // Like replacement lemma, but additionally guarantees that no inflow was added
 lemma lemma_replacement_no_inflow(I1: Interface, I2: Interface, J1: Interface)
   requires intValid(intComp(I1, I2))
-  requires intLeq(I1, J1) && Disjoint(J1.dom, I2.dom)
+  requires contextualLeq(I1, J1) && Disjoint(J1.dom, I2.dom)
   requires forall n in J1.dom -- I1.dom :: I2.out[n] == domZero
   requires forall n in J1.dom -- I1.dom :: J1.inf[n] == domZero
   ensures intValid(intComp(J1, I2))
-  ensures intLeq(intComp(I1, I2), intComp(J1, I2))
+  ensures contextualLeq(intComp(I1, I2), intComp(J1, I2))
   ensures forall n in intComp(J1, I2).dom -- intComp(I1, I2).dom :: intComp(J1, I2).inf[n] == domZero
 {
   var I := intComp(I1, I2);

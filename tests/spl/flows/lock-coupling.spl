@@ -31,22 +31,22 @@ function keyset_abs(I: Interface, n: Node) returns (res: Set<K>)
 }
 
 
-predicate globalinv(first: Node, I: Interface)
+predicate globalinv(root: Node, I: Interface)
 {
   intValid(I)
-  && first in I.dom
+  && root in I.dom
   // Global interface is closed
   && (forall n: Node, k: K :: !(in_outset(k, I, n)))
-  && (forall n: Node :: (n == first ==> (forall k: K :: in_inset(k, I, n))) &&
-                 (n != first ==> (forall k: K :: !(in_inset(k, I, n)))))
+  && (forall n: Node :: (n == root ==> (forall k: K :: k in KS ==> in_inset(k, I, n))) &&
+                 (n != root ==> (forall k: K :: !(in_inset(k, I, n)))))
 }
 
-predicate nodeinv(first: Node, n: Node, I: Interface, C: Set<K>)
+predicate nodeinv(root: Node, n: Node, I: Interface, C: Set<K>)
 {
   I.dom == {n}
-  && (forall k: K :: I.inf[n][k] <= 1)
   && C <= keyset_abs(I, n)
-  && (n == first ==> (forall k1 in KS :: in_outsets(k1, I)))
+  && (forall k: K :: I.inf[n][k] <= 1)
+  && (n == root ==> (forall k1 in KS :: in_outsets(k1, I)))
 }
 
 lemma expand_inf1(n: Node, k: K, I1: Interface, I2: Interface)
@@ -81,23 +81,24 @@ lemma keyset_def(k: K, I_n: Interface, n: Node)
 {
 }
 
-lemma flowint_step(first: Node, I1: Interface, I2: Interface, I: Interface, k: K, n: Node)
+/*
+lemma flowint_step(root: Node, I1: Interface, I2: Interface, I: Interface, k: K, n: Node)
   requires I == intComp(I1, I2)
   requires in_outset(k, I1, n)
-  requires globalinv(first, I)
+  requires globalinv(root, I)
   ensures n in I2.dom
 {
   pure assert I1.out[n] != domZero;
   expand_out(n, k, I1, I2);
 }
 
-lemma contextualLeq_impl_globalint(first: Node, I: Interface, I1: Interface)
-  requires globalinv(first, I)
+lemma contextualLeq_impl_globalint(root: Node, I: Interface, I1: Interface)
+  requires globalinv(root, I)
   requires intLeq(I, I1)
   requires forall n in I1.dom -- I.dom :: I1.inf[n] == domZero
-  ensures globalinv(first, I1)
+  ensures globalinv(root, I1)
 {
- pure assert forall n: Node, k: K :: n in I1.dom && n != first ==> !(in_inset(k, I1, n)) with {
+ pure assert forall n: Node, k: K :: n in I1.dom && n != root ==> !(in_inset(k, I1, n)) with {
    if (n !in I.dom) {
      pure assert I1.inf[n][k] == 0;
    }
@@ -113,12 +114,12 @@ lemma flowint_inset_step(I: Interface, I1: Interface, I2: Interface, k: K, n: No
   expand_inf2(n, k, I1, I2);
 }
 
-lemma successor_not_first(I: Interface, I1: Interface, I2: Interface, I3: Interface, first: Node, n: Node, k: K, C: Set<K>)
+lemma successor_not_root(I: Interface, I1: Interface, I2: Interface, I3: Interface, root: Node, n: Node, k: K, C: Set<K>)
   requires I = intComp(I1, intComp(I2, I3))
-  requires globalinv(first, I)
+  requires globalinv(root, I)
   requires in_outset(k, I1, n)
-  requires nodeinv(first, n, I2, C)
-  ensures n != first
+  requires nodeinv(root, n, I2, C)
+  ensures n != root
 {
   lemma_int_comp_unfold(I1, intComp(I2, I3));
   lemma_int_comp_unfold(I2, I3);
@@ -144,3 +145,4 @@ lemma outset_distinct(I: Interface, n: Node)
   pure assert I.out[n] != domZero;
 }
 
+ */

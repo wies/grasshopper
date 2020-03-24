@@ -52,7 +52,7 @@ function contents(x: Node) returns (res: Set<K>)
   x.sentinel ? {} : {x.data}
 }
 
-define hrep(first, x, I) {
+define hrep(root, x, I) {
   hrepSpatial(x) &*& heapGood(x) &*& I.dom == {x}
   && (x.sentinel == (x.data == top || x.data == bot))
   && I.inf[x][top] > 0
@@ -60,7 +60,7 @@ define hrep(first, x, I) {
   && I.out == edgeFn(x, I.inf)
   && (x.next == null && x.data == top
     || x.next != null && x.data != top)
-  && (x == first ==> x.data == bot)
+  && (x == root ==> x.data == bot)
 }
 
 define in_keyset(k, I, x) {
@@ -68,23 +68,24 @@ define in_keyset(k, I, x) {
 }
 
 // The good condition
-define searchStrInv(first, x, I, C) {
-  C <= KS
+define searchStrInv(root, x, I, C) {
+  root != null
+  && C <= KS
   && C <= keyset(I, x)
-      && (forall k1 in KS :: x == first ==> in_outset(k1, I, x.next) @(noinst k1))
+      && (forall k1 in KS :: x == root ==> in_outset(k1, I, x.next) @(noinst k1))
       && (forall k1: K :: I.inf[x][k1] <= 1 @(noinst k1))
 }
 
-define node(first, x, I, C) {
-  hrep(first, x, I) &*& (searchStrInv(first, x, I, C) && C == contents(x))
+define node(root, n, In, C) {
+  hrep(root, n, In) &*& (searchStrInv(root, n, In, C) && C == contents(n)) && intValid(In)
 }
 
 /** Implementation-specific lemmas needed by Iris */
 
 
 // Proof that concrete and abstract keysets are equivalent
-lemma keyset_ok(n: Node, first: Node, I: Interface, implicit ghost C: Set<K>)
-  requires node(first, n, I, C)
+lemma keyset_ok(n: Node, root: Node, I: Interface, implicit ghost C: Set<K>)
+  requires node(root, n, I, C)
   pure ensures keyset(I, n) == keyset_abs(I, n)
 {
   pure assert forall k : K :: k in keyset_abs(I, n) == k in keyset(I, n) with {
@@ -98,18 +99,18 @@ lemma keyset_ok(n: Node, first: Node, I: Interface, implicit ghost C: Set<K>)
   }
 }
 
-lemma node_implies_nodeinv(first: Node, n: Node, I: Interface, C: Set<K>)
-  requires node(first, n, I, C) &*& intValid(I)
-  pure ensures nodeinv(first, n, I, C)
+lemma node_implies_nodeinv(root: Node, n: Node, I: Interface, C: Set<K>)
+  requires node(root, n, I, C) &*& intValid(I)
+  pure ensures nodeinv(root, n, I, C)
 {
-  keyset_ok(n, first, I);
-  pure assert forall k1: K :: k1 in KS ==> n == first ==> in_outsets(k1, I) with {
-    pure assert k1 in KS ==> n == first ==> in_outset(k1, I, n.next);
+  keyset_ok(n, root, I);
+  pure assert forall k1: K :: k1 in KS ==> n == root ==> in_outsets(k1, I) with {
+    pure assert k1 in KS ==> n == root ==> in_outset(k1, I, n.next);
   }
 }
 
-lemma node_sep_star(first: Node, n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set<K>)
-  requires node(first, n, I_n, C) &*& node(first, n, I_np, Cp)
+lemma node_sep_star(root: Node, n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set<K>)
+  requires node(root, n, I_n, C) &*& node(root, n, I_np, Cp)
   ensures false
 {
   
@@ -117,9 +118,9 @@ lemma node_sep_star(first: Node, n: Node, I_n: Interface, I_np: Interface, C: Se
 
 /** {Spec} Auxiliary lemmas */
 
-lemma keyset_impl(first: Node, n: Node, I: Interface, implicit ghost C: Set<K>)
-  requires node(first, n, I, C)
-  ensures node(first, n, I, C)
+lemma keyset_impl(root: Node, n: Node, I: Interface, implicit ghost C: Set<K>)
+  requires node(root, n, I, C)
+  ensures node(root, n, I, C)
   ensures (forall k: K :: (in_keyset(k, I, n) == (k in keyset(I, n))) @(noinst k))
 {
   pure assert forall k: K :: in_keyset(k, I, n) == (k in keyset(I, n)) with {
@@ -134,52 +135,52 @@ lemma keyset_impl(first: Node, n: Node, I: Interface, implicit ghost C: Set<K>)
 
 /** Initialize data structure */
 procedure init()
-  returns (first: Node, ghost last: Node, ghost I1: Interface, ghost I2: Interface)
-  ensures node(first, first, I1, {}) &*& node(first, last, I2, {})
-  ensures globalinv(first, intComp(I1, I2))
+  returns (root: Node, ghost last: Node, ghost I1: Interface, ghost I2: Interface)
+  ensures node(root, root, I1, {}) &*& node(root, last, I2, {})
+  ensures globalinv(root, intComp(I1, I2))
   ensures intValid(intComp(I1, I2))
-  ensures Disjoint(keyset(I1, first), keyset(I2, last))
+  ensures Disjoint(keyset(I1, root), keyset(I2, last))
 {
   last := new Node;
   last.next := null;
   last.data := top;
   last.sentinel := true;
 
-  first := new Node;
-  first.next := last;
-  first.data := bot;
-  first.sentinel := true;
+  root := new Node;
+  root.next := last;
+  root.data := bot;
+  root.sentinel := true;
 
   
-  ghost var fst_inf := { n: Node :: n == first ? { k: K :: 1 } : domZero };
-  I1 := int(fst_inf, edgeFn(first, fst_inf), {first});
+  ghost var fst_inf := { n: Node :: n == root ? { k: K :: 1 } : domZero };
+  I1 := int(fst_inf, edgeFn(root, fst_inf), {root});
 
-  assert node(first, first, I1, {}) &*& acc(last);
+  assert node(root, root, I1, {}) &*& acc(last);
   
   ghost var lst_inf := { n: Node :: n == last ? { k: K :: k != bot ? 1 : 0 } : domZero };
   I2 := int(lst_inf, edgeFn(last, lst_inf), {last});
 
-  assert node(first, last, I2, {}) &*& acc(first);
+  assert node(root, last, I2, {}) &*& acc(root);
 
   pure assert forall k: K :: domMinus(I2.inf[last], I1.out[last])[k] >= 0 with {
     pure assert I2.inf[last][k] - I1.out[last][k] >= 0;
   }
 
-  pure assert forall k: K :: domMinus(I1.inf[first], I2.out[first])[k] >= 0 with {
-    pure assert I1.inf[first][k] - I2.out[first][k] >= 0;
+  pure assert forall k: K :: domMinus(I1.inf[root], I2.out[root])[k] >= 0 with {
+    pure assert I1.inf[root][k] - I2.out[root][k] >= 0;
   }
 
   pure assert domValid(domMinus(I2.inf[last], I1.out[last]));
-  pure assert domValid(domMinus(I1.inf[first], I2.out[first]));
+  pure assert domValid(domMinus(I1.inf[root], I2.out[root]));
 
   pure assert forall k: K :: I2.inf[last][k] == domPlus(I1.out[last], domMinus(I2.inf[last], I1.out[last]))[k] with {
     pure assert I2.inf[last][k] == I1.out[last][k] + (I2.inf[last][k] - I1.out[last][k]);
     pure assert I2.inf[last][k] == I1.out[last][k] + domMinus(I2.inf[last], I1.out[last])[k];
   }
 
-  pure assert forall k: K :: I1.inf[first][k] == domPlus(I2.out[first], domMinus(I1.inf[first], I2.out[first]))[k] with {
-    pure assert I1.inf[first][k] == I2.out[first][k] + (I1.inf[first][k] - I2.out[first][k]);
-    pure assert I1.inf[first][k] == I2.out[first][k] + domMinus(I1.inf[first], I2.out[first])[k];
+  pure assert forall k: K :: I1.inf[root][k] == domPlus(I2.out[root], domMinus(I1.inf[root], I2.out[root]))[k] with {
+    pure assert I1.inf[root][k] == I2.out[root][k] + (I1.inf[root][k] - I2.out[root][k]);
+    pure assert I1.inf[root][k] == I2.out[root][k] + domMinus(I1.inf[root], I2.out[root])[k];
   }
   pure assert intComposable(I1, I2);
   ghost var I := intComp(I1, I2);
@@ -192,9 +193,9 @@ procedure init()
       pure assert I.out[n][k] == I1.out[n][k] + I2.out[n][k];
     }
   }
-  pure assert forall k: K :: I.inf[first][k] > 0 with {
-    pure assert I1.inf[first][k] == domPlus(I.inf[first], I2.out[first])[k];
-    pure assert I1.inf[first][k] == I.inf[first][k] + I2.out[first][k];
+  pure assert forall k: K :: I.inf[root][k] > 0 with {
+    pure assert I1.inf[root][k] == domPlus(I.inf[root], I2.out[root])[k];
+    pure assert I1.inf[root][k] == I.inf[root][k] + I2.out[root][k];
   }
   pure assert "test" forall k: K :: I.inf[last][k] == 0 with {
     pure assert "test2" I2.inf[last][k] == domPlus(I.inf[last], I1.out[last])[k];
@@ -204,32 +205,27 @@ procedure init()
 
 
 /** findNext */
-procedure findNext(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>, implicit ghost first: Node)
-  returns (n: Node, res: Bool)
-  requires node(first, x, Ix, C) &*& intValid(Ix)
-  requires in_inset(k, Ix, x)
-  ensures node(first, x, Ix, C)
-  ensures n != null ==> in_outset(k, Ix, n)
-  ensures n == null ==> (forall y: Node :: !(in_outset(k, Ix, y)))
-  ensures res == (k in C)
+procedure findNext(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>, implicit ghost root: Node)
+  returns (succ: Bool, np: Node)
+  requires node(root, n, In, C)
+  requires in_inset(k, In, n)
+  ensures node(root, n, In, C)
+  ensures succ ==> in_outset(k, In, np)
+  ensures !succ ==> !(in_outsets(k, In)) && np != root
 {
-  if (x.next == null) {
-    return null, false;
+  if (le(k, n.data)) {
+    return false, null; //, x.data == k && !x.sentinel;
   } else {
-    if (le(k, x.data)) {
-      return null, x.data == k && !x.sentinel;
-    } else {
-      return x.next, false;
-    }
+    return true, n.next;
   }
 }
 
 /** search */
-procedure search(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>, implicit ghost first: Node)
+procedure search(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>, implicit ghost root: Node)
   returns (res: Bool, implicit ghost C1: Set<K>)
-  requires node(first, x, Ix, C) &*& intValid(Ix)
+  requires node(root, x, Ix, C) &*& intValid(Ix)
   requires in_inset(k, Ix, x) && (forall y: Node :: !(in_outset(k, Ix, y)))
-  ensures node(first, x, Ix, C1)
+  ensures node(root, x, Ix, C1)
   // decisiveOpSpec(x, Ix1, res, k):
   ensures (C1 == C && (res == k in C))
 {
@@ -243,32 +239,29 @@ procedure search(x: Node, k: K, ghost Ix: Interface, implicit ghost C: Set<K>, i
 /** insert */
 procedure insert(p: Node, n: Node, m: Node, k: K,
                  Ip: Interface, In: Interface, Ipn: Interface,
-                 implicit ghost Cpn: Set<K>, implicit ghost first: Node, ks: Set<K>)
+                 implicit ghost Cp: Set<K>, implicit ghost Cn: Set<K>,
+                 implicit ghost root: Node, ks: Set<K>)
   returns (Ip1: Interface, In1: Interface, Im1: Interface, Ipnm1: Interface,
-  Cpnm1: Set<K>)
+  Cp1: Set<K>, Cn1: Set<K>, Cm1: Set<K>)
   requires k in KS
+  requires node(root, p, Ip, Cp) &*& node(root, n, In, Cn) &*& hrepSpatial(m)
   requires Disjoint(keyset(Ip, p), keyset(In, n))
-  requires node(first, p, Ip, contents(p)) &*& node(first, n, In, contents(n)) &*& hrepSpatial(m)
   requires Ipn == intComp(Ip, In) && intValid(Ipn) 
   requires Ipn.out[m] == domZero
-  requires m != first
-  requires n != first
-  requires Cpn == contents(p) ++ contents(n)
-  requires k !in contents(n)
+  requires m != root && n != root
+  requires k !in Cn
   requires in_outset(k, Ip, n);
-  requires in_inset(k, In, n) && (forall y: Node :: !(in_outset(k, In, y)) @(noinst k))
-  ensures node(first, p, Ip1, contents(p)) &*& node(first, n, In1, contents(n)) &*& node(first, m, Im1, contents(m))
+  requires in_inset(k, In, n) && !(in_outsets(k, In))
+  ensures node(root, p, Ip1, Cp1) &*& node(root, n, In1, Cn1) &*& node(root, m, Im1, Cm1)
   ensures Ipnm1 == intComp(Ip1, intComp(Im1, In1))
   ensures Ipnm1.inf[m] == domZero
-  ensures intValid(Ipnm1)
-  ensures intLeq(Ipn, Ipnm1)
-  ensures Cpnm1 == contents(n) ++ contents(m) ++ contents(p)
-  ensures old(keyset(Ip, p) ++ keyset(In, n)) == keyset(Ip1, p) ++ keyset(In1, n) ++ keyset(Im1, m)
-  ensures Disjoint(keyset(Ip1, n), keyset(In1, m))
-  ensures Disjoint(keyset(Ip1, n), keyset(Im1, m))
-  ensures Disjoint(keyset(In1, n), keyset(Im1, m))
+  ensures contextualLeq(Ipn, Ipnm1)
+  ensures Disjoint(keyset(Ip1, p), keyset(In1, n))
+  ensures Disjoint(keyset(Ip1, p), keyset(Im1, m))
+  ensures Disjoint(keyset(Im1, m), keyset(In1, n))
+  ensures keyset(Ip1, p) ++ keyset(In1, n) ++ keyset(Im1, m) == old(keyset(Ip, p) ++ keyset(In, n))
   // decisiveOpSpec(x, Ix1, res, k):
-  ensures Cpnm1 == Cpn ++ {k}
+  ensures Cp1 ++ Cn1 ++ Cm1 == Cp ++ Cn ++ {k}
 {
   m.data := k;
   m.next := n;
@@ -389,7 +382,7 @@ procedure insert(p: Node, n: Node, m: Node, k: K,
 
   Ipnm1 := intComp(Ip1, intComp(Im1, In1));
 
-  pure assert intLeq(Ipn, Ipnm1) && Ipnm1.inf[m] == domZero with {
+  pure assert contextualLeq(Ipn, Ipnm1) && Ipnm1.inf[m] == domZero with {
     pure assert forall n1: Node, k1: K :: n1 in Ipn.dom ==> Ipn.inf[n1][k1] == Ipnm1.inf[n1][k1]
       && Ipnm1.inf[m][k1] == 0
       with {
@@ -413,8 +406,10 @@ procedure insert(p: Node, n: Node, m: Node, k: K,
     }
   }
   
-  Cpnm1 := contents(n) ++ contents(m) ++ contents(p);
-
+  Cp1 := contents(p);
+  Cn1 := contents(n);
+  Cm1 := contents(m);
+  
   pure assert "test1" old(keyset(Ip, p)) == keyset(Ip1, p) with {
     pure assert "test" forall k: K :: Ip.out[n][k] == Ip1.out[m][k];
     pure assert "test5" forall k: K :: old(in_keyset(k, Ip, p)) == in_keyset(k, Ip1, p);
