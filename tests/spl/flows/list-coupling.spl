@@ -207,21 +207,21 @@ procedure init()
 
 /** findNext */
 procedure findNext(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>, implicit ghost root: Node)
-  returns (np: Node, res: Bool)
+  returns (succ: Bool, np: Node, res: Bool)
   requires node(root, n, In, C)
   requires in_inset(k, In, n)
   ensures node(root, n, In, C)
-  ensures np != null ==> in_outset(k, In, np)
-  ensures np == null ==> (forall y: Node :: !(in_outset(k, In, np)))
+  ensures succ ==> in_outset(k, In, np)
+  ensures !succ ==> !(in_outsets(k, In))
   ensures res == (k in C)
 {
   if (n.next == null) {
-    return null, false;
+    return false, null, false;
   } else {
     if (le(k, n.data)) {
-      return null, n.data == k && !n.sentinel;
+      return false, null, n.data == k && !n.sentinel;
     } else {
-      return n.next, false;
+      return true, n.next, false;
     }
   }
 }
