@@ -44,3 +44,15 @@ predicate nodeinv(n: Node, I_n: Interface, C: Set<K>)
     (forall k: K :: k in C ==> in_inset(k, I_n, n))
   && (forall k: K, n1: Node :: k !in C || !(in_outset(k, I_n, n1)))
 }
+
+
+/* Useful auxiliary lemma */
+lemma domMinus_inv(m1: Multiset, m2: Multiset)
+  ensures m1 == domPlus(m2, domMinus(m1, m2))
+{
+  pure assert forall k: K :: m1[k] == domPlus(m2, domMinus(m1, m2))[k] with {
+    pure assert m1[k] == m2[k] + (m1[k] - m2[k]);
+    pure assert m1[k] == m2[k] + domMinus(m1, m2)[k];
+  }
+}
+

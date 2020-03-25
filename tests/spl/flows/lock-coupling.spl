@@ -7,7 +7,7 @@ include "multiset-ccm.spl"
 
 type FlowDom = Multiset
 
-/** Lemmas and definitions needed by Iris/Coq */
+/** {Spec} Lemmas and definitions needed by Iris/Coq */
 
 pure function KS() returns (res: Set<K>)
 
@@ -37,8 +37,7 @@ predicate globalinv(root: Node, I: Interface)
   && root in I.dom
   // Global interface is closed
   && (forall n: Node, k: K :: !(in_outset(k, I, n)))
-  && (forall n: Node :: (n == root ==> (forall k: K :: k in KS ==> in_inset(k, I, n))) &&
-                 (n != root ==> (forall k: K :: !(in_inset(k, I, n)))))
+  && (forall k: K :: k in KS ==> in_inset(k, I, root))
 }
 
 predicate nodeinv(root: Node, n: Node, I: Interface, C: Set<K>)

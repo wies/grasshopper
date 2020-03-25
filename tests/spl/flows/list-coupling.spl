@@ -6,7 +6,7 @@ include "lock-coupling.spl"
 include "array_util.spl"
 include "css.spl"
   
-/** Definition of key space */
+/** {Spec} Definition of key space */
 
 pure function KS() returns (res: Set<K>)
 {
@@ -21,7 +21,7 @@ struct Node {
   var sentinel: Bool;
 }
 
-/** Definition of heap representation predicate, node */
+/** {Spec} Definition of heap representation predicate, node */
 
 define hrepSpatial(x) {
   acc(x)
@@ -81,7 +81,7 @@ define node(root, n, In, C) {
   hrep(root, n, In) &*& (searchStrInv(root, n, In, C) && C == contents(n)) && intValid(In)
 }
 
-/** Implementation-specific lemmas needed by Iris */
+/** {Spec} Implementation-specific lemmas needed by Iris */
 
 
 // Proof that concrete and abstract keysets are equivalent
