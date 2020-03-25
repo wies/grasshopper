@@ -207,20 +207,24 @@ procedure init()
 
 /** findNext */
 procedure findNext(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>, implicit ghost root: Node)
-  returns (succ: Bool, np: Node)
+  returns (np: Node, res: Bool)
   requires node(root, n, In, C)
   requires in_inset(k, In, n)
   ensures node(root, n, In, C)
-  ensures succ ==> in_outset(k, In, np)
-  ensures !succ ==> !(in_outsets(k, In)) && np != root
+  ensures np != null ==> in_outset(k, In, np)
+  ensures np == null ==> (forall y: Node :: !(in_outset(k, In, np)))
+  ensures res == (k in C)
 {
-  if (le(k, n.data)) {
-    return false, null; //, x.data == k && !x.sentinel;
+  if (n.next == null) {
+    return null, false;
   } else {
-    return true, n.next;
+    if (le(k, n.data)) {
+      return null, n.data == k && !n.sentinel;
+    } else {
+      return n.next, false;
+    }
   }
 }
-
 /** search */
 procedure search(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>, implicit ghost root: Node)
   returns (res: Bool, implicit ghost C1: Set<K>)
