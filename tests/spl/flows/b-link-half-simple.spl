@@ -1,0 +1,303 @@
+include "b-link-core-simple.spl"
+  
+/** Half split */
+
+procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
+  returns (Ic1: Interface, Ix1: Interface, Icx1: Interface, Cc: Set<K>, Cx: Set<K>)
+  requires node(c, Ic, C) &*& hrepSpatial(x)
+  requires intValid(Ic)
+  requires c.len == 2 * B - 1
+  // GC assumption -- follows from x being allocated freshly
+  requires c.next != x;
+  requires (forall i: Int :: 0 <= i <= c.len ==> x != c.ptrs[i]);
+  ensures node(c, Ic1, Cc) &*& node(x, Ix1, Cx)
+  ensures intValid(Ic1) && intValid(Ix1)
+  ensures intComp(Ic1, Ix1) == Icx1 && contextualLeq(Ic, Icx1)
+  ensures C == Cc ++ Cx
+{
+  var m := (c.len + 1) / 2;
+
+  pure assert Ic.out[x] == domZero with {
+    pure assert forall k: K :: Ic.out[x][k] == 0 with {
+      pure assert 0 <= c.indices[x] <= c.len ==> c.ptrs.map[c.indices[x]] == x;
+    }
+  }
+  
+  if (c.ptrs[0] == null) {  // Leaf
+    arr_copy(c.keys, x.keys, m, 0, m);
+    x.ptrs[0] := null;
+    x.len := m - 1;
+    x.next := c.next;
+    c.len := m;
+    c.next := x;
+    
+    ghost var x_inflow_ms := { k: K :: !lt(k, c.keys[c.len]) && lt(k, top) ? Ic.inf[c][k] : 0 };
+    ghost var x_inflow := { n: Node :: n == x ? x_inflow_ms : domZero };
+    
+    c.indices := { n: Node :: -1 };
+    x.indices := { n: Node :: -1 };
+
+    Ic1 := interface(c, Ic.inf);
+    Cc := set_of_map(c.keys.map, 0, c.len);
+    Ix1 := interface(x, x_inflow);
+    Cx := set_of_map(x.keys.map, 0, x.len);
+
+    pure assert C = Cc ++ Cx with {
+      set_of_map_split(c.keys.map, 0, m, old(c.len));
+      map_copy_content_set(c.keys.map, old(x.keys.map), x.keys.map, m, 0, m, 0, m - 1);
+    }
+
+    pure assert intValid(Ic1) with {
+      edgeFn_valid(c, Ic.inf);
+    }
+
+    pure assert nodeinv(c, Ic1, Cc) with {
+      pure assume false;
+      //pure assert forall k1: K, y: Node :: k1 !in Cc || Ic1.out[y].is[k1] == 0 with {
+      //  if (k1 in Cc && Ic1.out[y].is[k1] != 0) {
+      //    map_find_in_set(c.keys.map, 0, c.len, k1);
+      //  }
+      //}
+    }
+
+    pure assert intValid(Ix1) with {
+      pure assert forall n: Node :: domValid(x_inflow[n]) with {
+        pure assert forall k1: K :: x_inflow[n][k1] >= 0 with {
+          pure assert Ic.inf[c][k1] >= 0;
+        }
+      }
+      edgeFn_valid(x, x_inflow);
+    }
+
+    pure assert nodeinv(x, Ix1, Cx) with {
+      pure assume false;
+      /*pure assert forall k1: K :: k1 in Cx ==> Ix1.inf[x].is[k1] >= 1 with {
+        if (k1 in Cx) {
+          map_find_in_set(x.keys.map, 0, x.len, k1);
+          pure assert Ic.inf[c].is[k1] >= 1;
+        }
+      }
+      pure assert forall k1: K, y: Node :: k1 !in Cx || Ix1.out[y].is[k1] == 0 with {
+        if (k1 in Cx && Ix1.out[y].is[k1] != 0) {
+          map_find_in_set(x.keys.map, 0, x.len, k1);
+        }
+         }*/
+
+      /*pure assert forall k1: K :: Ix1.inf[x].ls[k1] >= 1 && k1 !in blink_outsets(Ix1, x)
+        ==> Ix1.inf[x].is[k1] >= 1 with {
+          if (Ix1.inf[x].ls[k1] >= 1 && k1 !in blink_outsets(Ix1, x)) {
+            pure assert Ic.inf[c].ls[k1] >= 1;
+            pure assert k1 !in old(blink_outsets(Ic, c));
+            pure assert Ic.inf[c].is[k1] >= 1;
+          }
+         }*/
+    }
+
+    pure assert intComposable(Ic1, Ix1) with {
+      pure assert (forall n: Node :: n in Ix1.dom ==> Ix1.inf[n] == domPlus(Ic1.out[n], domMinus(Ix1.inf[n], Ic1.out[n]))) with {
+        if (n in Ix1.dom) domMinus_inv(Ix1.inf[n], Ic1.out[n]);
+      }
+      
+      pure assert (forall n: Node :: n in Ix1.dom ==> domValid(domMinus(Ix1.inf[n], Ic1.out[n]))) with {
+        if (n in Ix1.dom) {
+          pure assert forall k: K :: domMinus(Ix1.inf[n], Ic1.out[n])[k] >= 0 with {
+            pure assert !lt(k, c.keys[c.len]) && lt(k, top) ==> Ix1.inf[n][k] == Ic.inf[c][k];
+            pure assert Ix1.inf[n][k] - Ic1.out[n][k] >= 0;
+          }
+        }
+      }
+        
+      pure assert (forall n: Node :: n in Ic1.dom ==> domValid(domMinus(Ic1.inf[n], Ix1.out[n]))) with {
+        if (n in Ic1.dom) {
+          pure assert forall k: K :: domMinus(Ic1.inf[n], Ix1.out[n])[k] >= 0 with {
+            pure assert Ic1.inf[n][k] - Ix1.out[n][k] >= 0;
+          }
+        }
+      }
+
+      pure assert (forall n: Node :: n in Ic1.dom ==> Ic1.inf[n] == domPlus(Ix1.out[n], domMinus(Ic1.inf[n], Ix1.out[n]))) with {
+        if (n in Ic1.dom) domMinus_inv(Ic1.inf[n], Ix1.out[n]);
+      }
+    }    
+
+    lemma_int_comp_fold(Ic1, Ix1);
+    Icx1 := intComp(Ic1, Ix1);
+
+    pure assert contextualLeq(Ic, Icx1) with {
+      lemma_int_comp_unfold(Ic1, Ix1);
+      pure assert forall n: Node :: n !in Icx1.dom ==> Ic.out[n] == Icx1.out[n] with {
+        if (n !in Icx1.dom) {
+
+          pure assert Icx1.out[n] == domPlus(Ic1.out[n], Ix1.out[n]);
+          pure assert forall k: K :: Ic.out[n][k] == Icx1.out[n][k] with {
+            pure assert Icx1.out[n][k] == Ic1.out[n][k] + Ix1.out[n][k];
+
+            if (!lt(k, c.keys[c.len]) && lt(k, top) && !lt(k, old(c.keys.map[c.len]))) {
+              pure assert Ix1.inf[x][k] == Ic.inf[c][k];
+            }
+          }
+        }
+      }
+
+      pure assert forall n: Node :: n in Ic.dom ==> Ic.inf[n] == Icx1.inf[n] with {
+        if (n in Ic.dom) {
+          pure assert Ic1.inf[n] == domPlus(Icx1.inf[n], Ix1.out[n]);
+          domZero_unit(Icx1.inf[n]);
+        }
+      }
+    
+    }
+   
+    return Ic1, Ix1, Icx1, Cc, Cx;
+    
+  } else {  // Internal node
+    
+    ghost var clen := c.len;
+    ghost var cind := c.indices;
+
+    arr_copy(c.keys, x.keys, m, 0, c.len - m + 1);
+    arr_copy_node(c.ptrs, x.ptrs, m, 0, c.len - m + 1);
+    x.len := m - 1;
+    c.len := m - 1;
+    x.next := c.next;
+    c.next := x;
+
+    ghost var x_inflow_ms := { k: K :: !lt(k, c.keys[c.len]) && lt(k, top) ? Ic.inf[c][k] : 0};
+    ghost var x_inflow := { n: Node :: n == x ? x_inflow_ms : domZero };
+
+    
+    c.indices := { n: Node :: n != x && 0 <= cind[n] < m ? cind[n] : -1 };
+    x.indices := { n: Node :: n != x && m <= cind[n] <= clen ? cind[n] - m : -1 };
+
+    Ic1 := interface(c, Ic.inf);
+    Cc := {};
+    Ix1 := interface(x, x_inflow);
+    Cx := {};
+
+    pure assert intValid(Ic1) with {
+      edgeFn_valid(c, Ic.inf);
+    }
+
+    pure assert heapGood(c) with {
+      pure assert forall n: Node :: 0 <= c.indices[n] <= c.len ==> c.ptrs.map[c.indices[n]] == n with {
+        pure assert 0 <= old(c.indices[n]) <= c.len ==> old(c.ptrs.map[c.indices[n]]) == n;
+      }
+    }
+    
+    //pure assert searchStrInv(c, Ic1, Cc) with {
+    //  lemma_edgesets_disjoint(c, Ic1, Ic.inf);
+    //}
+
+    pure assert intValid(Ix1) with {
+      pure assert forall n: Node :: domValid(x_inflow[n]) with {
+        pure assert forall k1: K :: x_inflow[n][k1] >= 0 && x_inflow[n][k1] >= 0 with {
+          pure assert Ic.inf[c][k1] >= 0;
+        }
+      }
+      edgeFn_valid(x, x_inflow);
+    }
+
+    pure assert heapGood(x) with {
+      pure assert forall i: Int :: x.ptrs[0] != null && 0 <= i <= x.len ==> x.indices[x.ptrs.map[i]] == i with {
+        if (0 <= i <= x.len) {
+          ghost var n := old(c.ptrs.map[m + (i - 0)]);
+          pure assert x.ptrs.map[i] == n;
+          pure assert cind[n] == m + (i - 0);
+          pure assert x.indices[n] == cind[n] - m;
+        }
+      }
+
+      pure assert forall n: Node :: 0 <= x.indices[n] <= x.len ==> x.ptrs.map[x.indices[n]] == n with {
+        pure assert m <= old(c.indices[n]) <= old(c.len) ==> old(c.ptrs.map[c.indices[n]]) == n;
+        pure assert m <= old(c.indices[n]) <= old(c.len) ==> x.ptrs.map[old(c.indices[n]) - m] == n;
+      }
+    }
+    
+    pure assert nodeinv(x, Ix1, Cx) with {
+      pure assume false;
+      /*pure assert (forall k1: K :: Ix1.inf[x].ls[k1] >= 1 && Ix1.inf[x].is[k1] == 0 ==> !lt(k1, x.keys[x.len])) with {
+        if (Ix1.inf[x].ls[k1] >= 1 && Ix1.inf[x].is[k1] == 0) {
+          pure assert Ic.inf[c].is[k1] == 0;
+          pure assert Ic.inf[c].ls[k1] >= 1;
+        }
+      }*/
+      
+      //lemma_edgesets_disjoint(x, Ix1, x_inflow);
+    }
+
+    pure assert intComposable(Ic1, Ix1) with {
+      pure assert (forall n: Node :: n in Ix1.dom ==> Ix1.inf[n] == domPlus(Ic1.out[n], domMinus(Ix1.inf[n], Ic1.out[n]))) with {
+        if (n in Ix1.dom) domMinus_inv(Ix1.inf[n], Ic1.out[n]);
+      }
+      
+      pure assert (forall n: Node :: n in Ix1.dom ==> domValid(domMinus(Ix1.inf[n], Ic1.out[n]))) with {
+        if (n in Ix1.dom) {
+          pure assert forall k: K :: domMinus(Ix1.inf[n], Ic1.out[n])[k] >= 0 with {
+            pure assert !lt(k, c.keys[c.len]) && lt(k, top) ==> Ix1.inf[n][k] == Ic.inf[c][k];
+            pure assert Ix1.inf[n][k] - Ic1.out[n][k] >= 0;
+          }
+        }
+      }
+        
+      pure assert (forall n: Node :: n in Ic1.dom ==> domValid(domMinus(Ic1.inf[n], Ix1.out[n]))) with {
+        if (n in Ic1.dom) {
+          pure assert forall k: K :: domMinus(Ic1.inf[n], Ix1.out[n])[k] >= 0 with {
+            pure assert Ic1.inf[n][k] - Ix1.out[n][k] >= 0;
+          }
+        }
+      }
+
+      pure assert (forall n: Node :: n in Ic1.dom ==> Ic1.inf[n] == domPlus(Ix1.out[n], domMinus(Ic1.inf[n], Ix1.out[n]))) with {
+        if (n in Ic1.dom) domMinus_inv(Ic1.inf[n], Ix1.out[n]);
+      }
+    }
+    
+    lemma_int_comp_fold(Ic1, Ix1);
+    Icx1 := intComp(Ic1, Ix1);
+
+    pure assert "test" contextualLeq(Ic, Icx1) with {
+      lemma_int_comp_unfold(Ic1, Ix1);
+
+      pure assert forall n1: Node :: n1 !in Icx1.dom ==> Ic.out[n1] == Icx1.out[n1] with {
+        if (n1 !in Icx1.dom) {
+
+          pure assert Icx1.out[n1] == domPlus(Ic1.out[n1], Ix1.out[n1]);
+
+          pure assert forall k: K :: Ic.out[n1][k] == Icx1.out[n1][k] with {
+            pure assert Icx1.out[n1][k] == Ic1.out[n1][k] + Ix1.out[n1][k];
+
+            if (0 <= old(c.indices)[n1] <= old(c.len)) {  // n1 was c's child
+              if (old(c.indices)[n1] <= c.len) {  // n1 stayed at c
+                pure assert c.indices[n1] == old(c.indices)[n1];
+                pure assert ks_child(c, n1, k) ==> Ic1.out[n1][k] == Ic.inf[c][k];
+              } else {  // n1 moved to x
+                pure assert true
+                   && x.ptrs.map[x.indices[n1]] == n1
+                   && old(c.ptrs.map)[m + x.indices[n1] - 0] == n1
+                   && old(c.keys.map)[m + x.indices[n1] - 0] == x.keys.map[x.indices[n1]]
+                   && (x.indices[n1] > 0 ==>
+                   old(c.keys.map)[m + (x.indices[n1] - 1) - 0] == x.keys.map[x.indices[n1] - 1]);
+                pure assert ks_child(x, n1, k) ==> Ix1.out[n1][k] == Ix1.inf[x][k];
+                pure assert old(ks_child(c, n1, k)) ==> Ic.out[n1][k] == Ic.inf[c][k];
+              }              
+            } else if (n1 == old(c.next)) {  // n1 was c's right sibling
+              if (!lt(k, c.keys[c.len]) && lt(k, top) && !lt(k, old(c.keys.map[c.len]))) {
+                pure assert true
+                  && Ix1.inf[x][k] == Ic.inf[c][k];
+              }
+            } else {} // there was no edge from n1 to c
+          }
+        }
+      }
+
+      pure assert forall n: Node :: n in Ic.dom ==> Ic.inf[n] == Icx1.inf[n] with {
+        if (n in Ic.dom) {
+          pure assert Ic1.inf[n] == domPlus(Icx1.inf[n], Ix1.out[n]);
+          domZero_unit(Icx1.inf[n]);
+        }
+      }
+    }
+    return Ic1, Ix1, Icx1, Cc, Cx;
+  }
+}
+
