@@ -18,12 +18,7 @@ let elim_exists =
 	    mk_exists [(e, srt)] (smk_or [smk_and [smk_elem ~ann:a ve t1; mk_not (smk_elem ~ann:a ve t2)];
 					 smk_and [smk_elem ~ann:a ve t2; mk_not (smk_elem ~ann:a ve t1)]])
         | Map (dsrts, rsrt) ->
-            let rec curried_domains doms = function
-              | Map (dsrts, rsrt) -> curried_domains (dsrts :: doms) rsrt
-              | _ -> doms
-            in
-            let doms = curried_domains [dsrts] rsrt in
-            let dom_vs = List.map (fun dsrts -> List.map (fun srt -> fresh_ident "?i", srt) dsrts) doms in
+            let dom_vs = List.map (fun dsrts -> List.map (fun srt -> fresh_ident "?i", srt) dsrts) [dsrts] in
             let dom_vts = List.map (fun vs -> List.map (fun (v, srt) -> mk_var srt v) vs) dom_vs in
             let mk_reads t = List.fold_left (fun t_read vts -> mk_read t_read vts) t dom_vts in
             let t1_read = mk_reads t1 in
