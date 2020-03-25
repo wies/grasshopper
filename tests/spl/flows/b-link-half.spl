@@ -278,7 +278,7 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
     lemma_int_comp_fold(Ic1, Ix1);
     Icx1 := intComp(Ic1, Ix1);
 
-    pure assert "test" intLeq(Ic, Icx1) with {
+    pure assert "test" contextualLeq(Ic, Icx1) with {
       lemma_int_comp_unfold(Ic1, Ix1);
 
       pure assert forall n1: Node :: n1 !in Icx1.dom ==> Ic.out[n1] == Icx1.out[n1] with {

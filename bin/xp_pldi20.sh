@@ -5,7 +5,7 @@ source bin/osx_gnu.sh
 #echo "Building Grasshopper"
 #./build.sh
 
-FILES1="flows ccm multiset-ccm multipair-ccm give-up link"
+FILES1="flows ccm multiset-ccm multipair-ccm give-up link lock-coupling"
 FILES2="hashtbl-give-up"
 FILES3="hashtbl-link"
 FILES4="b+-tree"
@@ -13,6 +13,7 @@ FILES5="b-link-core"
 FILES6="b-link-half"
 FILES7="b-link-full"
 FILES8="ordered_type array_util"
+FILES9="list-coupling"
 
 timesfile=/tmp/times-grasshopper
 locfile=/tmp/loc-grasshopper
@@ -57,6 +58,7 @@ run "B-link (half split)" $FILES6
 run "B-tree (full split)" $FILES7
 run "Hash table (link)" $FILES2
 run "Hash table (give-up)" $FILES3
+run "Lock-coupling list" $FILES9
 
 echo -n -e "Total\t\t" >> $outputfile
 awk -F "\t" '{progs+=$1; specs+=$2; total+=$3} END{printf("\t& %d\t& %d\t& %d", progs, specs, total);}' $loctotalfile >> $outputfile

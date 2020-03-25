@@ -224,7 +224,7 @@ procedure resize(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
   requires c.next == null
   ensures node(c, Ic1, {}) &*& node(x, Ix1, C)
   ensures intValid(Ic1) && intValid(Ix1)
-  ensures intComp(Ic1, Ix1) == Icx1 && intLeq(Ic, Icx1)
+  ensures intComp(Ic1, Ix1) == Icx1 && contextualLeq(Ic, Icx1)
 {
   arr_copy(c.keys, x.keys, 0, 0, c.len);
   x.len := c.len;
@@ -281,7 +281,7 @@ procedure resize(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
 
   lemma_int_comp_unfold(Ic1, Ix1);
 
-  pure assert intLeq(Ic, Icx1) with {
+  pure assert contextualLeq(Ic, Icx1) with {
     pure assert forall k: K :: Ic1.inf[c].ls[k] == Icx1.inf[c].ls[k] &&
       Ic1.inf[c].is[k] == Icx1.inf[c].is[k]
       with {
