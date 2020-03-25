@@ -224,7 +224,7 @@ procedure findNext(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>,
 /** search */
 procedure search(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>, implicit ghost root: Node)
   returns (res: Bool, implicit ghost C1: Set<K>)
-  requires node(root, n, In, C) &*& intValid(In)
+  requires node(root, n, In, C)
   requires in_inset(k, In, n) && !(in_outsets(k, In))
   ensures node(root, n, In, C1)
   ensures Psi(searchOp, k, C, C1, res)

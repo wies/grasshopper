@@ -35,7 +35,12 @@ predicate globalinv(root: Node, I: Interface)
   && root in I.dom
   // Global interface is closed
   && (forall n: Node, k: K :: !(in_outset(k, I, n)))
-  && (forall n: Node ::
-    (n == root ==> (forall k: K :: k in KS ==> in_inset(k, I, n)))
-    && (n != root ==> (forall k: K :: !(in_inset(k, I, n)))))
+  && (forall k: K :: k in KS ==> in_inset(k, I, root))
+}
+
+/* The node-level invariant (\gamma in the paper). */
+predicate nodeinv(n: Node, I_n: Interface, C: Set<K>)
+{
+    (forall k: K :: k in C ==> in_inset(k, I_n, n))
+  && (forall k: K, n1: Node :: k !in C || !(in_outset(k, I_n, n1)))
 }

@@ -12,7 +12,7 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
   requires (forall i: Int :: 0 <= i <= c.len ==> x != c.ptrs[i]);
   ensures node(c, Ic1, Cc) &*& node(x, Ix1, Cx)
   ensures intValid(Ic1) && intValid(Ix1)
-  ensures intComp(Ic1, Ix1) == Icx1 && intLeq(Ic, Icx1)
+  ensures intComp(Ic1, Ix1) == Icx1 && contextualLeq(Ic, Icx1)
   ensures C == Cc ++ Cx
 {
   var m := (c.len + 1) / 2;
@@ -131,7 +131,7 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
     lemma_int_comp_fold(Ic1, Ix1);
     Icx1 := intComp(Ic1, Ix1);
 
-    pure assert intLeq(Ic, Icx1) with {
+    pure assert contextualLeq(Ic, Icx1) with {
       lemma_int_comp_unfold(Ic1, Ix1);
       pure assert forall n: Node :: n !in Icx1.dom ==> Ic.out[n] == Icx1.out[n] with {
         if (n !in Icx1.dom) {
