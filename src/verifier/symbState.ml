@@ -138,8 +138,13 @@ let rec pc_add_path_cond (stack: pc_stack) f =
       pc_add_path_cond s f
   | (sid, bc, pcs) :: stack' -> (sid, bc, f :: pcs) :: stack'
 
-let rec pc_after pc_stack scope_id =
-  match pc_stack with
+let pc_add_path_conds (stack: pc_stack) fs = 
+  List.fold_left (fun pcs f -> 
+    pc_add_path_cond pcs f)
+  stack fs
+
+let rec pc_after (pcs: pc_stack) scope_id =
+  match pcs with
   | [] -> []
   | (sid, bc, pcs) :: stack' ->
     if sid = scope_id
@@ -373,6 +378,9 @@ let mk_empty_state =
 
 let update_store state store =
   {state with store=store}
+
+let update_pc state pcs =
+  {state with pc=pcs}
 
 let string_of_state s =
   let store = string_of_symb_store s.store in

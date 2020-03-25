@@ -9,11 +9,8 @@ open SymbEval
 open SymbState
 open SymbConsume
 open SymbProduce
+open SymbBranch
 open Prog
-
-(** branch implements branching and executes each path using f1 where symbv
-  holds, otherwise f2 is executed *)
-let branch state smybv f1 f2 = todo "branch"
 
 let rec exec state comm (fc: symb_state -> 'a option) =
   Debug.debug( fun () -> sprintf "exec state comms *******\n");
