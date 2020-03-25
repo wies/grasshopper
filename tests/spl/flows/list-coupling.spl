@@ -225,6 +225,7 @@ procedure findNext(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>,
     }
   }
 }
+
 /** search */
 procedure search(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>, implicit ghost root: Node)
   returns (res: Bool, implicit ghost C1: Set<K>)
