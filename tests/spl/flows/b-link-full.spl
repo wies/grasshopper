@@ -5,7 +5,7 @@ include "b-link-core.spl"
 procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
   Ipc: Interface, x: Node, implicit ghost Cp: Set<K>, implicit ghost Cc: Set<K>)
   returns (Ip1: Interface, Ic1: Interface)
-  requires hrep(p, Ip, Cp) &*& hrep(c, Ic, Cc)
+  requires node(p, Ip, Cp) &*& node(c, Ic, Cc)
   requires intValid(Ip) && intValid(Ic)
   requires intComp(Ip, Ic) == Ipc && intValid(Ipc)
   requires p.ptrs[0] != null && p.ptrs[ci] == c && 0 <= ci <= p.len && c.next == x
@@ -18,7 +18,7 @@ procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
   requires p != x
   requires Ic.out[p] == domZero  // needed for int_comp_unfold
 
-    ensures hrep(p, Ip1, Cp) &*& hrep(c, Ic1, Cc)
+  ensures node(p, Ip1, Cp) &*& node(c, Ic1, Cc)
   ensures intValid(Ip1) && intValid(Ic1)
   ensures intComp(Ip1, Ic1) == Ipc
 {
@@ -66,6 +66,7 @@ procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
     }
   }
 
+  
   /* Still needed?
   pure assert (forall k: K, y: Node :: Ip.inf[p].ls[k] >= 1 && Ip.inf[p].is[k] <= 0
     && flowmap(p)[p][y].is[k] >= 1 ==> flowmap(p)[p][y].ls[k] >= 1) with {
@@ -97,6 +98,31 @@ procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
 
   pure assert intValid(Ip1) with {
     edgeFn_valid(p, Ip.inf);
+  }
+  
+  pure assert searchStrInv(c, Ic1, Cc) with {
+    pure assert (forall k1: K :: in_inset(k1, Ic1, c) ==> k1 in KS) with {
+      if(in_inset(k1, Ic1, c)) {
+        pure assert !lt(k1, k) ==> Ic.inf[c].is[k1] - Ip.out[c].is[k1] > 0;
+        pure assert Ic.inf[c].is[k1] > 0;
+      }
+    }
+    
+    pure assert (forall k1: K :: in_linkset(k1, Ic1, c) && k1 !in blink_outsets(Ic1, c) ==> in_inset(k1, Ic1, c)) with {
+      if (in_linkset(k1, Ic1, c) && k1 !in blink_outsets(Ic1, c)) {
+        pure assert in_linkset(k1, Ic, c) && k1 !in blink_outsets(Ic, c);
+        pure assert in_inset(k1, Ic, c);
+      }
+    }
+
+    pure assert (forall k1: K :: in_linkset(k1, Ic1, c) && !(in_inset(k1, Ic1, c)) ==> !lt(k1, c.keys[c.len])) with {
+      if (in_linkset(k1, Ic1, c) && !(in_inset(k1, Ic1, c))) {
+        pure assert lt(k1, k) ==> !(in_inset(k1, Ic, c));
+      }
+    }
+  }
+
+  pure assert "test01" searchStrInv(p, Ip1, Cp) with {
   }
   
   pure assert intComposable(Ip1, Ic1) with {

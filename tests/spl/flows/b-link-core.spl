@@ -136,8 +136,9 @@ function blink_outsets(Ix: Interface, x: Node) returns (res: Set<K>)
 
 // Constraints needed to ensure nodeinv holds for this implementation
 define searchStrInv(x, I, C) {
+    (forall k1: K :: in_inset(k1, I, x) ==> k1 in KS)
     // Linkset keyset subsetof inset
-    (forall k1: K :: in_linkset(k1, I, x) && k1 !in blink_outsets(I, x) ==> in_inset(k1, I, x))
+    && (forall k1: K :: in_linkset(k1, I, x) && k1 !in blink_outsets(I, x) ==> in_inset(k1, I, x))
     && (forall k1: K :: in_linkset(k1, I, x) && !(in_inset(k1, I, x)) ==> !lt(k1, x.keys[x.len]))
 }
 
