@@ -64,7 +64,7 @@ lemma frame_set_of_map(m: Map<Int, K>, i: Int, j: Int)
 }
 
 lemma not_in_sorted_seg(m: Map<Int, K>, i: Int, j: Int, k: K)
-  requires sorted_map_seg(m, i, j) == true
+  requires sorted_map_seg(m, i, j)
   ensures i >= j || lt(k, m[i]) || lt(m[j-1], k) ==> k !in set_of_map(m, i, j)
 {
   if (i >= j) return;
