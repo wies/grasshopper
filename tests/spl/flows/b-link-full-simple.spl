@@ -1,5 +1,12 @@
 include "b-link-core-simple.spl"
 
+lemma parent_outflow_bound(p: Node, c: Node, k: K, Ip: Interface, implicit ghost Cp: Set<K>)
+  requires node(p, Ip, Cp)
+  requires p.next != c;
+  pure ensures Ip.out[c][k] <= 1
+{
+}
+  
 /** Full split */
 
 procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
@@ -166,8 +173,8 @@ procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
             pure assert n == c;
             pure assert Ip1.inf[n][k1] == Ip.inf[n][k1];
             pure assert ks_child(p, c, k1) ==> old(ks_child(p, c, k1));
-            pure assert ks_child(p, c, k1) ==> Ip.out[c][k1] == Ip.inf[p][k1];
-            pure assert ks_child(p, c, k1) ==> Ip1.out[c][k1] == Ip1.inf[p][k1];
+            pure assert ks_child(p, c, k1) ==> (Ip.out[c][k1] == 1) == (Ip.inf[p][k1] > 0);
+            pure assert ks_child(p, c, k1) ==> (Ip1.out[c][k1] == 1) == (Ip1.inf[p][k1] > 0);
             pure assert Ip1.out[n][k1] == Ip.out[n][k1];
             pure assert Ic1.inf[n][k1] - Ip1.out[n][k1] >= 0;
           } else {

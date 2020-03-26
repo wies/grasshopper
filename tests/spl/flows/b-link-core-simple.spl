@@ -59,7 +59,7 @@ function edgeFn(x: Node, inflow: Map<Node, FlowDom>)
   requires hrepSpatial(x)
 {
   { n: Node ::
-    0 <= x.indices[n] <= x.len ? { k: K :: ks_child(x, n, k) ? inflow[x][k] : 0} :
+    0 <= x.indices[n] <= x.len ? { k: K :: ks_child(x, n, k) && inflow[x][k] > 0 ? 1 : 0} :
     (n == x.next ? { k: K :: map_next(x, k) ? inflow[x][k] : 0} : domZero)
   }
 }
@@ -70,7 +70,7 @@ lemma edgeFn_valid(x: Node, inflow: Map<Node, FlowDom>)
   ensures forall n: Node :: domValid(edgeFn(x, inflow)[n])
 {
   pure assert forall n: Node, k: K :: edgeFn(x, inflow)[n][k] >= 0 with {
-    pure assert 0 <= x.indices[n] <= x.len && ks_child(x, n, k) ==> edgeFn(x, inflow)[n][k] == inflow[x][k];
+    pure assert 0 <= x.indices[n] <= x.len && ks_child(x, n, k) ==> (edgeFn(x, inflow)[n][k] == 1) == inflow[x][k] > 0;
   }
   pure assert forall n: Node, k: K :: edgeFn(x, inflow)[n][k] >= 0 with {
     if (0 <= x.indices[n] <= x.len) {

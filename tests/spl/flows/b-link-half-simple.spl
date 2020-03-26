@@ -140,7 +140,6 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
     return Ic1, Ix1, Icx1, Cc, Cx;
     
   } else {  // Internal node
-    
     ghost var clen := c.len;
     ghost var cind := c.indices;
 
@@ -253,7 +252,7 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
             if (0 <= old(c.indices)[n1] <= old(c.len)) {  // n1 was c's child
               if (old(c.indices)[n1] <= c.len) {  // n1 stayed at c
                 pure assert c.indices[n1] == old(c.indices)[n1];
-                pure assert ks_child(c, n1, k) ==> Ic1.out[n1][k] == Ic.inf[c][k];
+                pure assert ks_child(c, n1, k) ==> (Ic1.out[n1][k] == 1) == (Ic.inf[c][k] > 0);
               } else {  // n1 moved to x
                 pure assert true
                    && x.ptrs.map[x.indices[n1]] == n1
@@ -261,8 +260,8 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
                    && old(c.keys.map)[m + x.indices[n1] - 0] == x.keys.map[x.indices[n1]]
                    && (x.indices[n1] > 0 ==>
                    old(c.keys.map)[m + (x.indices[n1] - 1) - 0] == x.keys.map[x.indices[n1] - 1]);
-                pure assert ks_child(x, n1, k) ==> Ix1.out[n1][k] == Ix1.inf[x][k];
-                pure assert old(ks_child(c, n1, k)) ==> Ic.out[n1][k] == Ic.inf[c][k];
+                   pure assert ks_child(x, n1, k) ==> (Ix1.out[n1][k] == 1) == (Ix1.inf[x][k] > 0);
+                   pure assert old(ks_child(c, n1, k)) ==> (Ic.out[n1][k] == 1) == (Ic.inf[c][k] > 0);
               }              
             } else if (n1 == old(c.next)) {  // n1 was c's right sibling
               if (!lt(k, c.keys[c.len]) && lt(k, top) && !lt(k, old(c.keys.map[c.len]))) {
