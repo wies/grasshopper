@@ -14,7 +14,7 @@ pure function KS() returns (res: Set<K>)
 
 function KS_multiset() returns (m: Multiset)
 {
-  { k: K :: k in KS ? 1 : 0 }
+  { k: K :: k in KS ? 2 : 0 }
 }
 
 
@@ -124,6 +124,8 @@ define heapGood(x)
 // Invariant of a B-link tree node x with flow interface I
 define hrep(x, I, C) {
   hrepSpatial(x) &*& heapGood(x) &*& I == interface(x, I.inf) &*& C == contents(x)
+    // Inflow is sufficiently large
+    && (forall k: K :: in_inset(k, I, x) && lt(k, x.keys[x.len]) ==> I.inf[x][k] > 1)
 }
 
 // The outset of a B-link tree node x

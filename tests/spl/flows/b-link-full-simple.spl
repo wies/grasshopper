@@ -5,8 +5,7 @@ include "b-link-core-simple.spl"
 procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
   Ipc: Interface, x: Node, implicit ghost Cp: Set<K>, implicit ghost Cc: Set<K>)
   returns (Ip1: Interface, Ic1: Interface)
-  requires hrep(p, Ip, Cp) &*& hrep(c, Ic, Cc)
-  requires intValid(Ip) && intValid(Ic)
+  requires node(p, Ip, Cp) &*& node(c, Ic, Cc)
   requires intComp(Ip, Ic) == Ipc && intValid(Ipc)
   requires p.ptrs[0] != null && p.ptrs[ci] == c && 0 <= ci <= p.len && c.next == x
   requires p.len < 2*B - 1 && p.indices[c] == ci
@@ -18,8 +17,7 @@ procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
   requires p != x
   requires Ic.out[p] == domZero  // needed for int_comp_unfold
 
-    ensures hrep(p, Ip1, Cp) &*& hrep(c, Ic1, Cc)
-  ensures intValid(Ip1) && intValid(Ic1)
+  ensures node(p, Ip1, Cp) &*& node(c, Ic1, Cc)
   ensures intComp(Ip1, Ic1) == Ipc
 {
 
@@ -98,6 +96,15 @@ procedure full_split(p: Node, Ip: Interface, ci: Int, c: Node, Ic: Interface,
   pure assert intValid(Ip1) with {
     edgeFn_valid(p, Ip.inf);
   }
+  
+  pure assert nodeinv(c, Ic1, Cc) with {
+    pure assert (forall k1: K :: k1 in Cc ==> in_inset(k1, Ic1, c)) with {
+      not_in_sorted_seg(c.keys.map, 0, c.len, k1);
+    }
+  }
+
+  //pure assert "nodeinv" nodeinv(p, Ip1, Cp) with {
+  //}
   
   pure assert intComposable(Ip1, Ic1) with {
     pure assert forall n: Node :: n in Ip1.dom ==> Ip1.inf[n] == domPlus(Ic1.out[n], domMinus(Ip1.inf[n], Ic1.out[n])) with {
