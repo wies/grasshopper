@@ -5,13 +5,13 @@ source bin/osx_gnu.sh
 #echo "Building Grasshopper"
 #./build.sh
 
-FILES1="flows ccm multiset-ccm multipair-ccm give-up link lock-coupling"
+FILES1="flows ccm multiset-ccm inset-flows give-up lock-coupling"
 FILES2="hashtbl-give-up"
-FILES3="hashtbl-link"
+FILES3="hashtbl-link-simple"
 FILES4="b+-tree"
-FILES5="b-link-core"
-FILES6="b-link-half"
-FILES7="b-link-full"
+FILES5="b-link-core-simple"
+FILES6="b-link-half-simple"
+FILES7="b-link-full-simple"
 FILES8="ordered_type array_util"
 FILES9="list-coupling"
 

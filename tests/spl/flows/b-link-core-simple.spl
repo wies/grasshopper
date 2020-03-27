@@ -60,7 +60,7 @@ function edgeFn(x: Node, inflow: Map<Node, FlowDom>)
 {
   { n: Node ::
     0 <= x.indices[n] <= x.len ? { k: K :: ks_child(x, n, k) && inflow[x][k] > 0 ? 1 : 0} :
-    (n == x.next ? { k: K :: map_next(x, k) ? inflow[x][k] : 0} : domZero)
+    (n == x.next ? { k: K :: map_next(x, k) && inflow[x][k] > 0 ? 1 : 0} : domZero)
   }
 }
 
@@ -76,7 +76,7 @@ lemma edgeFn_valid(x: Node, inflow: Map<Node, FlowDom>)
     if (0 <= x.indices[n] <= x.len) {
       //pure assert edgeFn(x, inflow)[n][k] == 0;
     } else {
-      pure assert n == x.next && map_next(x, k) ==> edgeFn(x, inflow)[n][k] == inflow[x][k];
+      pure assert n == x.next && map_next(x, k) ==> (edgeFn(x, inflow)[n][k] == 1) == (inflow[x][k] > 0);
     }
   }
 }
@@ -124,24 +124,6 @@ define heapGood(x)
 // Invariant of a B-link tree node x with flow interface I
 define hrep(x, I, C) {
   hrepSpatial(x) &*& heapGood(x) &*& I == interface(x, I.inf) &*& C == contents(x)
-    // Inflow is sufficiently large
-    && (forall k: K :: in_inset(k, I, x) && lt(k, x.keys[x.len]) ==> I.inf[x][k] > 1)
-}
-
-// The outset of a B-link tree node x
-function blink_outsets(Ix: Interface, x: Node) returns (res: Set<K>)
-  requires hrepSpatial(x)
-{
-  {k: K :: (x.ptrs[0] == null && x.next != null && !lt(k, x.keys[x.len]) && lt(k, top)
-           || x.ptrs[0] != null && lt(k, top))}
-}
-
-// Constraints needed to ensure nodeinv holds for this implementation
-define searchStrInv(x, I, C) {
-    true
-    // Linkset keyset subsetof inset
-    //(forall k1: K :: in_linkset(k1, I, x) && k1 !in blink_outsets(I, x) ==> in_inset(k1, I, x))
-    //&& (forall k1: K :: in_linkset(k1, I, x) && !(in_inset(k1, I, x)) ==> !lt(k1, x.keys[x.len]))
 }
 
 // The definition of the implementation-specific node predicate assumed by Iris
@@ -151,18 +133,6 @@ define node(x, I, C) {
 
 
 /** {Spec} Implementation-specific lemmas needed by Iris */
-
-// Show that blink_outsets is superset of in_outsets
-lemma outsets_correct(x: Node, Ix: Interface, k: K, C: Set<K>)
-  requires hrep(x, Ix, C) &*& intValid(Ix)
-  pure ensures in_outsets(k, Ix) ==> k in blink_outsets(Ix, x)
-{
-  if (k !in blink_outsets(Ix, x)) {
-    pure assert !((x.ptrs[0] == null && x.next != null && !lt(k, x.keys[x.len]) && lt(k, top)
-                || x.ptrs[0] != null && lt(k, top)));
-    pure assert forall n1: Node :: !(in_outset(k, Ix, n1));
-  }
-}
 
 // Node predicate is not duplicable
 lemma node_sep_star(n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set<K>)

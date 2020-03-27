@@ -1,58 +1,11 @@
 /** {Spec} Flow domain setup for verifying give-up template implementations */
 
-include "css.spl"
-include "flows.spl"
-include "multiset-ccm.spl"
-
-type FlowDom = Multiset
-
-pure function KS() returns (res: Set<K>)
-
-/** {Spec} Definitions of predicates used in give-up template proof in Iris */
-
-define in_inset(k, I, n) {
-  I.inf[n][k] > 0
-}
-  
-define in_outset(k, I, n) {
-  I.out[n][k] > 0
-}
-
-predicate in_outsets(k: K, I: Interface)
-{
-  exists n: Node :: in_outset(k, I, n)
-}
-
-function keyset(I: Interface, n: Node) returns (res: Set<K>)
-{
-  { k: K :: in_inset(k, I, n) && !(in_outsets(k, I)) }
-}
-
-/* Global invariant \phi that needs to be maintained */
-predicate globalinv(root: Node, I: Interface)
-{
-  intValid(I)
-  && root in I.dom
-  // Global interface is closed
-  && (forall n: Node, k: K :: !(in_outset(k, I, n)))
-  && (forall k: K :: k in KS ==> in_inset(k, I, root))
-}
+include "inset-flows.spl"
 
 /* The node-level invariant (\gamma in the paper). */
 predicate nodeinv(n: Node, I_n: Interface, C: Set<K>)
 {
     (forall k: K :: k in C ==> in_inset(k, I_n, n))
   && (forall k: K, n1: Node :: k !in C || !(in_outset(k, I_n, n1)))
-}
-
-
-/* Useful auxiliary lemma */
-lemma domMinus_inv(m1: Multiset, m2: Multiset)
-  ensures m1 == domPlus(m2, domMinus(m1, m2))
-{
-  pure assert forall k: K :: m1[k] == domPlus(m2, domMinus(m1, m2))[k] with {
-    pure assert m1[k] == m2[k] + (m1[k] - m2[k]);
-    pure assert m1[k] == m2[k] + domMinus(m1, m2)[k];
-  }
 }
 

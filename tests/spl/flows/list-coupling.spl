@@ -32,7 +32,7 @@ define heapGood(x) {
 }
 
 // concrete keyset definition
-function keyset(I: Interface, n: Node) returns (res: Set<K>)
+function keyset_impl(I: Interface, n: Node) returns (res: Set<K>)
   requires acc(n)
 {
   { k: K :: in_inset(k, I, n) && !(in_outset(k, I, n.next)) }
@@ -64,7 +64,7 @@ define hrep(root, x, I) {
   && (x == root ==> x.data == bot)
 }
 
-define in_keyset(k, I, x) {
+define in_keyset_impl(k, I, x) {
   in_inset(k, I, x) && !(in_outset(k, I, x.next))
 }
 
@@ -72,7 +72,7 @@ define in_keyset(k, I, x) {
 define searchStrInv(root, x, I, C) {
   root != null
   && C <= KS
-  && C <= keyset(I, x)
+  && C <= keyset_impl(I, x)
       && (forall k1 in KS :: x == root ==> in_outset(k1, I, x.next) @(noinst k1))
       && (forall k1: K :: I.inf[x][k1] <= 1 @(noinst k1))
 }
@@ -87,13 +87,13 @@ define node(root, n, In, C) {
 // Proof that concrete and abstract keysets are equivalent
 lemma keyset_ok(n: Node, root: Node, I: Interface, implicit ghost C: Set<K>)
   requires node(root, n, I, C)
-  pure ensures keyset(I, n) == keyset_abs(I, n)
+  pure ensures keyset_impl(I, n) == keyset(I, n)
 {
-  pure assert forall k : K :: k in keyset_abs(I, n) == k in keyset(I, n) with {
-    if (k in keyset_abs(I, n)) {
+  pure assert forall k : K :: k in keyset(I, n) == k in keyset_impl(I, n) with {
+    if (k in keyset(I, n)) {
       pure assert !(in_outsets(k, I));
     }
-    if (k in keyset(I, n)) {
+    if (k in keyset_impl(I, n)) {
       pure assert !(in_outsets(k, I));
       pure assert in_inset(k, I, n);
     }
@@ -119,13 +119,13 @@ lemma node_sep_star(root: Node, n: Node, I_n: Interface, I_np: Interface, C: Set
 
 /** {Spec} Auxiliary lemmas */
 
-lemma keyset_impl(root: Node, n: Node, I: Interface, implicit ghost C: Set<K>)
+lemma keyset_impl_equiv(root: Node, n: Node, I: Interface, implicit ghost C: Set<K>)
   requires node(root, n, I, C)
   ensures node(root, n, I, C)
-  ensures (forall k: K :: (in_keyset(k, I, n) == (k in keyset(I, n))) @(noinst k))
+  ensures (forall k: K :: (in_keyset_impl(k, I, n) == (k in keyset_impl(I, n))) @(noinst k))
 {
-  pure assert forall k: K :: in_keyset(k, I, n) == (k in keyset(I, n)) with {
-    if (k in keyset(I, n)) {
+  pure assert forall k: K :: in_keyset_impl(k, I, n) == (k in keyset_impl(I, n)) with {
+    if (k in keyset_impl(I, n)) {
       pure assert in_inset(k, I, n);
       pure assert !(in_outsets(k, I));
     }
@@ -140,7 +140,7 @@ procedure init()
   ensures node(root, root, I1, {}) &*& node(root, last, I2, {})
   ensures globalinv(root, intComp(I1, I2))
   ensures intValid(intComp(I1, I2))
-  ensures Disjoint(keyset(I1, root), keyset(I2, last))
+  ensures Disjoint(keyset_impl(I1, root), keyset_impl(I2, last))
 {
   last := new Node;
   last.next := null;
@@ -247,7 +247,7 @@ procedure insert(p: Node, n: Node, m: Node, k: K,
   Cp1: Set<K>, Cn1: Set<K>, Cm1: Set<K>)
   requires k in KS
   requires node(root, p, Ip, Cp) &*& node(root, n, In, Cn) &*& hrepSpatial(m)
-  requires Disjoint(keyset(Ip, p), keyset(In, n))
+  requires Disjoint(keyset_impl(Ip, p), keyset_impl(In, n))
   requires Ipn == intComp(Ip, In) && intValid(Ipn) 
   requires Ipn.out[m] == domZero
   requires m != root && n != root
@@ -258,10 +258,10 @@ procedure insert(p: Node, n: Node, m: Node, k: K,
   ensures Ipnm1 == intComp(Ip1, intComp(Im1, In1))
   ensures Ipnm1.inf[m] == domZero
   ensures contextualLeq(Ipn, Ipnm1)
-  ensures Disjoint(keyset(Ip1, p), keyset(In1, n))
-  ensures Disjoint(keyset(Ip1, p), keyset(Im1, m))
-  ensures Disjoint(keyset(Im1, m), keyset(In1, n))
-  ensures keyset(Ip1, p) ++ keyset(In1, n) ++ keyset(Im1, m) == old(keyset(Ip, p) ++ keyset(In, n))
+  ensures Disjoint(keyset_impl(Ip1, p), keyset_impl(In1, n))
+  ensures Disjoint(keyset_impl(Ip1, p), keyset_impl(Im1, m))
+  ensures Disjoint(keyset_impl(Im1, m), keyset_impl(In1, n))
+  ensures keyset_impl(Ip1, p) ++ keyset_impl(In1, n) ++ keyset_impl(Im1, m) == old(keyset_impl(Ip, p) ++ keyset_impl(In, n))
   ensures Psi(insertOp, k, Cp ++ Cn, Cp1 ++ Cn1 ++ Cm1, true)
 {
   m.data := k;
@@ -411,12 +411,12 @@ procedure insert(p: Node, n: Node, m: Node, k: K,
   Cn1 := contents(n);
   Cm1 := contents(m);
   
-  pure assert "test1" old(keyset(Ip, p)) == keyset(Ip1, p) with {
+  pure assert "test1" old(keyset_impl(Ip, p)) == keyset_impl(Ip1, p) with {
     pure assert "test" forall k: K :: Ip.out[n][k] == Ip1.out[m][k];
-    pure assert "test5" forall k: K :: old(in_keyset(k, Ip, p)) == in_keyset(k, Ip1, p);
+    pure assert "test5" forall k: K :: old(in_keyset_impl(k, Ip, p)) == in_keyset_impl(k, Ip1, p);
 
-    pure assert "test6" forall k: K :: old(k in keyset(Ip, p)) == (k in keyset(Ip1, p)) with {
-      if (k in old(keyset(Ip, p))) {        
+    pure assert "test6" forall k: K :: old(k in keyset_impl(Ip, p)) == (k in keyset_impl(Ip1, p)) with {
+      if (k in old(keyset_impl(Ip, p))) {        
         pure assert "test7" old(in_inset(k, Ip, p));
       } 
     }
@@ -425,20 +425,20 @@ procedure insert(p: Node, n: Node, m: Node, k: K,
   } // OK
 
   pure assert "test3"
-    old(keyset(In, n)) == keyset(In1, n) ++ keyset(Im1, m)
-    && Disjoint(keyset(In1, n), keyset(Im1, m))
+    old(keyset_impl(In, n)) == keyset_impl(In1, n) ++ keyset_impl(Im1, m)
+    && Disjoint(keyset_impl(In1, n), keyset_impl(Im1, m))
     with {
-      pure assert "test2" forall k1: K :: old(k1 in keyset(In, n)) ==> (k1 in keyset(In1, n) || k1 in keyset(Im1, m)) with {
-      pure assert "test2" old(k1 in keyset(In, n)) ==> old(in_inset(k1, In, n));
+      pure assert "test2" forall k1: K :: old(k1 in keyset_impl(In, n)) ==> (k1 in keyset_impl(In1, n) || k1 in keyset_impl(Im1, m)) with {
+      pure assert "test2" old(k1 in keyset_impl(In, n)) ==> old(in_inset(k1, In, n));
     } // OK
-    pure assert "test4" forall k1: K :: k1 in keyset(In1, n) ==> old(k1 in keyset(In, n)) with {
-      pure assert "test4" k1 in keyset(In1, n) ==> in_inset(k1, In1, n);
+    pure assert "test4" forall k1: K :: k1 in keyset_impl(In1, n) ==> old(k1 in keyset_impl(In, n)) with {
+      pure assert "test4" k1 in keyset_impl(In1, n) ==> in_inset(k1, In1, n);
     }
-    pure assert "test12" forall k1: K :: (k1 in keyset(Im1, m) ==> old(k1 in keyset(In, n)))
-      && (k1 in keyset(Im1, m) ==> k1 !in keyset(In1, n))
-      && (k1 in keyset(In1, n) ==> k1 !in keyset(Im1, m))
+    pure assert "test12" forall k1: K :: (k1 in keyset_impl(Im1, m) ==> old(k1 in keyset_impl(In, n)))
+      && (k1 in keyset_impl(Im1, m) ==> k1 !in keyset_impl(In1, n))
+      && (k1 in keyset_impl(In1, n) ==> k1 !in keyset_impl(Im1, m))
       with {
-      if (in_keyset(k1, Im1, m)) {
+      if (in_keyset_impl(k1, Im1, m)) {
         lemma_int_comp_unfold(Ip, In);
         pure assert "test10" In.inf[n] == domPlus(Ipn.inf[n], Ip.out[n]);
         pure assert "test10" In.inf[n][k1] == Ipn.inf[n][k1] + Ip.out[n][k1];

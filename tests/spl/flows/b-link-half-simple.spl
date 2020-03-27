@@ -11,7 +11,6 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
   requires c.next != x;
   requires (forall i: Int :: 0 <= i <= c.len ==> x != c.ptrs[i]);
   ensures node(c, Ic1, Cc) &*& node(x, Ix1, Cx)
-  ensures intValid(Ic1) && intValid(Ix1)
   ensures intComp(Ic1, Ix1) == Icx1 && contextualLeq(Ic, Icx1)
   ensures C == Cc ++ Cx
 {
@@ -31,7 +30,7 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
     c.len := m;
     c.next := x;
     
-    ghost var x_inflow_ms := { k: K :: !lt(k, c.keys[c.len]) && lt(k, top) ? Ic.inf[c][k] : 0 };
+    ghost var x_inflow_ms := { k: K :: !lt(k, c.keys[c.len]) && lt(k, top) && Ic.inf[c][k] > 0 ? 1 : 0 };
     ghost var x_inflow := { n: Node :: n == x ? x_inflow_ms : domZero };
     
     c.indices := { n: Node :: -1 };
@@ -90,7 +89,7 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
       pure assert (forall n: Node :: n in Ix1.dom ==> domValid(domMinus(Ix1.inf[n], Ic1.out[n]))) with {
         if (n in Ix1.dom) {
           pure assert forall k: K :: domMinus(Ix1.inf[n], Ic1.out[n])[k] >= 0 with {
-            pure assert !lt(k, c.keys[c.len]) && lt(k, top) ==> Ix1.inf[n][k] == Ic.inf[c][k];
+            pure assert !lt(k, c.keys[c.len]) && lt(k, top) ==> (Ix1.inf[n][k] == 1) == (Ic.inf[c][k] > 0);
             pure assert Ix1.inf[n][k] - Ic1.out[n][k] >= 0;
           }
         }
@@ -122,7 +121,7 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
             pure assert Icx1.out[n][k] == Ic1.out[n][k] + Ix1.out[n][k];
 
             if (!lt(k, c.keys[c.len]) && lt(k, top) && !lt(k, old(c.keys.map[c.len]))) {
-              pure assert Ix1.inf[x][k] == Ic.inf[c][k];
+              pure assert (Ix1.inf[x][k] == 1) == (Ic.inf[c][k] > 0);
             }
           }
         }
@@ -150,7 +149,7 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
     x.next := c.next;
     c.next := x;
 
-    ghost var x_inflow_ms := { k: K :: !lt(k, c.keys[c.len]) && lt(k, top) ? Ic.inf[c][k] : 0};
+    ghost var x_inflow_ms := { k: K :: !lt(k, c.keys[c.len]) && lt(k, top) && Ic.inf[c][k] > 0 ? 1 : 0};
     ghost var x_inflow := { n: Node :: n == x ? x_inflow_ms : domZero };
 
     
@@ -197,17 +196,6 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
       }
     }
     
-    //pure assert nodeinv(x, Ix1, Cx) with {
-      /*pure assert (forall k1: K :: Ix1.inf[x].ls[k1] >= 1 && Ix1.inf[x].is[k1] == 0 ==> !lt(k1, x.keys[x.len])) with {
-        if (Ix1.inf[x].ls[k1] >= 1 && Ix1.inf[x].is[k1] == 0) {
-          pure assert Ic.inf[c].is[k1] == 0;
-          pure assert Ic.inf[c].ls[k1] >= 1;
-        }
-      }*/
-      
-      //lemma_edgesets_disjoint(x, Ix1, x_inflow);
-    //}
-
     pure assert intComposable(Ic1, Ix1) with {
       pure assert (forall n: Node :: n in Ix1.dom ==> Ix1.inf[n] == domPlus(Ic1.out[n], domMinus(Ix1.inf[n], Ic1.out[n]))) with {
         if (n in Ix1.dom) domMinus_inv(Ix1.inf[n], Ic1.out[n]);
@@ -216,7 +204,7 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
       pure assert (forall n: Node :: n in Ix1.dom ==> domValid(domMinus(Ix1.inf[n], Ic1.out[n]))) with {
         if (n in Ix1.dom) {
           pure assert forall k: K :: domMinus(Ix1.inf[n], Ic1.out[n])[k] >= 0 with {
-            pure assert !lt(k, c.keys[c.len]) && lt(k, top) ==> Ix1.inf[n][k] == Ic.inf[c][k];
+            pure assert !lt(k, c.keys[c.len]) && lt(k, top) ==> (Ix1.inf[n][k] == 1) == (Ic.inf[c][k] > 0);
             pure assert Ix1.inf[n][k] - Ic1.out[n][k] >= 0;
           }
         }
@@ -266,7 +254,7 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
             } else if (n1 == old(c.next)) {  // n1 was c's right sibling
               if (!lt(k, c.keys[c.len]) && lt(k, top) && !lt(k, old(c.keys.map[c.len]))) {
                 pure assert true
-                  && Ix1.inf[x][k] == Ic.inf[c][k];
+                  && (Ix1.inf[x][k] == 1) == (Ic.inf[c][k] > 0);
               }
             } else {} // there was no edge from n1 to c
           }

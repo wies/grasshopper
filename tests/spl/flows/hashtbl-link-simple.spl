@@ -1,0 +1,287 @@
+/** Hash table implementation of the link template. */
+
+options "-simplearrays -propreads -abspreds -stratify"
+
+include "give-up.spl"
+include "array_util.spl"
+
+/** {Spec} Definition of keyspace */
+
+pure function KS() returns (res: Set<K>)
+{
+  { k: K :: true }
+}
+
+/** Definition of a node */
+
+datatype NodeType = root | bucket;
+
+struct Node {
+  var len: Int;
+  var bkts: Array<Node>;
+  var keys: Array<K>;
+  var next: Node;
+  ghost var typ: NodeType;
+}
+
+function hash(x: Node, k: K) returns (i: Int)
+
+/** {Spec} Definition of heap representation predicate, node */
+
+// Access permissions associated with a node x
+define hrepSpatial(x) {
+  acc(x) &*& acc(x.bkts)  &*& acc(x.keys)
+}
+
+function contents(x: Node)
+  returns (res: Set<K>)
+  requires hrepSpatial(x)
+{
+  x.typ == bucket && x.next == null ? set_of_map(x.keys.map, 0, x.len) : {}
+}
+
+define hrep(x, I, C) {
+  hrepSpatial(x) &*& I.dom == {x}
+  && 0 <= x.len < x.keys.length
+    && ((x.typ == root
+        && (forall i: Int :: 0 <= i && i < x.bkts.length ==> x.bkts[i] != null)
+        && (forall y: Node, k: K :: y == x.bkts[hash(x, k)] ==> I.out[y][k] == I.inf[x][k])
+        && (forall k: K :: 0 <= hash(x, k) && hash(x, k) < x.bkts.length)
+        && (forall k: K :: I.inf[x][k] == 1 /* && k in outset(x, I.out)*/)
+      )
+     || (x.typ == bucket
+     && (forall i: Int, j: Int :: 0 <= i < j < x.len ==> lt(x.keys[i], x.keys[j]) @(noinst i) @(noinst j))
+        && (x.next == null && (forall y: Node :: I.out[y] == domZero)
+        || x.next != null && (forall k: K :: I.out[x.next][k] == I.inf[x][k])
+          && (forall y: Node :: y != x.next ==> I.out[y] == domZero))))
+     && C == contents(x)
+}
+
+function hashtbl_outsets(Ix: Interface, x: Node) returns (res: Set<K>)
+  requires hrepSpatial(x)
+{
+  { k: K :: x.typ == root || x.typ == bucket && x.next != null }
+}
+
+// Show that hashtbl_outsets is superset of in_outsets
+lemma outsets_correct(x: Node, Ix: Interface, k: K, C: Set<K>)
+  requires hrep(x, Ix, C) &*& intValid(Ix)
+  pure ensures in_outsets(k, Ix) ==> k in hashtbl_outsets(Ix, x)
+{
+  if (in_outsets(k, Ix)) {
+    pure assert x.typ == root || x.typ == bucket && x.next != null;
+  }
+}
+
+// The definition of the implementation-specific node predicate assumed by Iris
+define node(x, I, C) {
+  hrep(x, I, C) &*& nodeinv(x, I, C) && intValid(I)
+}
+
+
+/** {Spec} Implementation-specific lemmas needed by Iris */
+
+// Node predicate is not duplicable
+lemma node_sep_star(n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set<K>)
+  requires node(n, I_n, C) &*& node(n, I_np, Cp)
+  ensures false
+{
+
+}
+
+// Node abstraction implies node-level invariant (this lemma is assumed by Coq)
+lemma node_implies_nodeinv(n: Node, I: Interface, C: Set<K>)
+  requires node(n, I, C) && intValid(I)
+  pure ensures nodeinv(n, I, C)
+{
+  //pure assert (forall k1: K :: in_linkset(k1, I, n) && !(in_outsets(k1, I)) ==> in_inset(k1, I, n)) with {
+  //  if (in_linkset(k1, I, n) && !(in_outsets(k1, I))) {
+  //    outsets_correct(n, I, k1, C);
+  //  }
+  //}
+}
+
+/** {Spec} Lemmas for proofs below */
+
+lemma keyset_implies_bucket(x: Node, Ix: Interface, k: K, C: Set<K>)
+  requires hrep(x, Ix, C) &*& intValid(Ix)
+  requires in_inset(k, Ix, x) && (forall y: Node :: !(in_outset(k, Ix, y)))
+  ensures hrep(x, Ix, C)
+  ensures x.typ == bucket && x.next == null
+{
+  if (x.typ == root) {
+    var y := x.bkts[hash(x, k)];
+    pure assert Ix.out[y][k] == 1;
+  } else if (x.next != null) {
+    pure assert Ix.out[x.next][k] == 1;
+  }
+}
+
+/** Begin programs */
+
+procedure findNext(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
+  returns (succ: Bool, np: Node)
+  requires k in KS
+  requires node(n, In, C)
+  requires in_inset(k, In, n)
+  ensures node(n, In, C)
+  ensures succ ==> in_outset(k, In, np)
+  ensures !succ ==> !(in_outsets(k, In))
+{
+  if (n.typ == root) {
+    np := n.bkts[hash(n, k)];
+    return true, np;
+  } else {
+    pure assert n.typ == bucket;
+    if (n.next == null) {
+      return false, null;
+    } else {
+      return true, n.next;
+    }
+  }
+}
+
+procedure search(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
+  returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
+  requires k in KS
+  requires node(n, In, C)
+  requires in_inset(k, In, n) && !(in_outsets(k, In))
+  ensures node(n, In, C1)
+  ensures succ ==> Psi(searchOp, k, C, C1, res)
+  ensures !succ ==> C1 == C
+{
+  keyset_implies_bucket(n, In, k, C);
+  var idx: Int;
+  res, idx := arr_find(n.keys, n.len, k);
+
+  return true, res;
+}
+
+procedure insert(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
+  returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
+  requires k in KS
+  requires node(n, In, C)
+  requires in_inset(k, In, n) && !(in_outsets(k, In))
+  ensures node(n, In, C1)
+  ensures succ ==> Psi(insertOp, k, C, C1, res)
+  ensures !succ ==> C1 == C
+{
+  keyset_implies_bucket(n, In, k, C);
+
+  if (n.len < n.keys.length - 1) {
+
+    ghost var m := n.keys.map;
+    var old_len := n.len;
+
+    var idx, new_len := arr_insert(n.keys, k, n.len);
+
+    map_insert_content_set(m, n.keys.map, idx, k, n.len, new_len);
+
+    n.len := new_len;
+
+    pure assert (forall k1: K, y: Node :: k1 !in C ++ {k} || In.out[y][k1] == 0) with {
+      pure assert domValid(In.out[y]);
+      pure assert In.out[y][k] == 0;
+    }
+
+    return true, old_len != new_len;
+  } else {
+    return false, false;
+  }
+}
+
+procedure delete(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
+  returns (succ: Bool, res: Bool, implicit ghost C1: Set<K>)
+  requires k in KS
+  requires node(n, In, C)
+  requires in_inset(k, In, n) && !(in_outsets(k, In))
+  ensures node(n, In, C1)
+  ensures succ ==> Psi(deleteOp, k, C, C1, res)
+  ensures !succ ==> C1 == C
+{
+  keyset_implies_bucket(n, In, k, C);
+
+  ghost var m := n.keys.map;
+  var old_len := n.len;
+
+  var new_len, idx := arr_delete(n.keys, k, n.len);
+
+  map_delete_content_set(m, n.keys.map, n.len, new_len, idx, k);
+
+  n.len := new_len;
+
+  return true, old_len != new_len;
+}
+
+/** resize of bucket */
+procedure resize(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
+  returns (Ic1: Interface, Ix1: Interface, Icx1: Interface, Cc: Set<K>, Cx: Set<K>)
+  requires node(c, Ic, C) &*& hrepSpatial(x)
+  requires intValid(Ic)
+  requires forall k: K, n: Node :: !(in_outset(k, Ic, n))
+  requires x.keys.length > c.len
+  requires x.typ == bucket && c.typ == bucket
+  requires c.next == null
+  ensures node(c, Ic1, {}) &*& node(x, Ix1, C)
+  ensures intValid(Ic1) && intValid(Ix1)
+  ensures intComp(Ic1, Ix1) == Icx1 && contextualLeq(Ic, Icx1)
+{
+  arr_copy(c.keys, x.keys, 0, 0, c.len);
+  x.len := c.len;
+  c.next := x;
+  x.next := null;
+
+
+  ghost var cout := { n: Node :: n == x ? Ic.inf[c] : domZero };
+
+  Ic1 := int(Ic.inf, cout, {c});
+
+  pure assert intValid(Ic1);
+
+  ghost var cinf := { n: Node :: n == x ? Ic.inf[c] : domZero };
+
+  Ix1 := int(cinf, zeroFlow, {x});
+
+  pure assert intValid(Ix1);
+
+  pure assert intComposable(Ic1, Ix1) with {
+    pure assert forall n: Node :: n in Ic1.dom ==> Ic1.inf[n] == domPlus(Ix1.out[n], domMinus(Ic1.inf[n], Ix1.out[n])) && domValid(domMinus(Ic1.inf[n], Ix1.out[n])) with {
+      if (n in Ic1.dom) {
+        pure assert forall k: K :: Ic1.inf[n][k] == domPlus(Ix1.out[n], domMinus(Ic1.inf[n], Ix1.out[n]))[k]
+          && domMinus(Ic1.inf[n], Ix1.out[n])[k] >= 0
+          with {
+          pure assert Ic1.inf[n][k] == Ix1.out[n][k] + (Ic1.inf[n][k] - Ix1.out[n][k]);
+          pure assert Ic1.inf[n][k] == Ix1.out[n][k] + domMinus(Ic1.inf[n], Ix1.out[n])[k];
+        }
+      }
+    }
+    pure assert forall n: Node :: n in Ix1.dom ==> Ix1.inf[n] == domPlus(Ic1.out[n], domMinus(Ix1.inf[n], Ic1.out[n])) && domValid(domMinus(Ix1.inf[n], Ic1.out[n])) with {
+      if (n in Ix1.dom) {
+        pure assert forall k: K :: Ix1.inf[n][k] == domPlus(Ic1.out[n], domMinus(Ix1.inf[n], Ic1.out[n]))[k]
+          && domMinus(Ix1.inf[n], Ic1.out[n])[k] >= 0
+          with {
+          pure assert Ix1.inf[n][k] == Ic1.out[n][k] + (Ix1.inf[n][k] - Ic1.out[n][k]);
+          pure assert Ix1.inf[n][k] == Ic1.out[n][k] + domMinus(Ix1.inf[n], Ic1.out[n])[k];
+        }
+      }
+    }
+  }
+
+  map_copy_content_set(c.keys.map, old(x.keys.map), x.keys.map, 0, 0, x.len, 0, x.len);
+
+  Icx1 := intComp(Ic1, Ix1);
+
+  lemma_int_comp_unfold(Ic1, Ix1);
+
+  pure assert contextualLeq(Ic, Icx1) with {
+    pure assert forall k: K :: Ic1.inf[c][k] == Icx1.inf[c][k] with {
+      pure assert Ic1.inf[c] == domPlus(Icx1.inf[c], Ix1.out[c]);
+      pure assert Ic1.inf[c][k] == Icx1.inf[c][k] + Ix1.out[c][k];
+    }
+    pure assert Ic1.inf[c] == Icx1.inf[c];
+    pure assert forall n: Node, k: K :: n !in Icx1.dom ==> Icx1.out[n][k] == 0 with {
+      pure assert n !in Icx1.dom ==> Icx1.out[n][k] == domPlus(Ic1.out[n], Ix1.out[n])[k];
+      pure assert n !in Icx1.dom ==> Icx1.out[n][k] == Ic1.out[n][k] + Ix1.out[n][k];
+    }
+  }
+}
