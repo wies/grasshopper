@@ -57,21 +57,6 @@ define hrep(x, I, C) {
      && C == contents(x)
 }
 
-function hashtbl_outsets(Ix: Interface, x: Node) returns (res: Set<K>)
-  requires hrepSpatial(x)
-{
-  { k: K :: x.typ == root || x.typ == bucket && x.next != null }
-}
-
-// Show that hashtbl_outsets is superset of in_outsets
-lemma outsets_correct(x: Node, Ix: Interface, k: K, C: Set<K>)
-  requires hrep(x, Ix, C) &*& intValid(Ix)
-  pure ensures in_outsets(k, Ix) ==> k in hashtbl_outsets(Ix, x)
-{
-  if (in_outsets(k, Ix)) {
-    pure assert x.typ == root || x.typ == bucket && x.next != null;
-  }
-}
 
 // The definition of the implementation-specific node predicate assumed by Iris
 define node(x, I, C) {
@@ -86,7 +71,6 @@ lemma node_sep_star(n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set
   requires node(n, I_n, C) &*& node(n, I_np, Cp)
   ensures false
 {
-
 }
 
 // Node abstraction implies node-level invariant (this lemma is assumed by Coq)
@@ -94,11 +78,6 @@ lemma node_implies_nodeinv(n: Node, I: Interface, C: Set<K>)
   requires node(n, I, C) && intValid(I)
   pure ensures nodeinv(n, I, C)
 {
-  //pure assert (forall k1: K :: in_linkset(k1, I, n) && !(in_outsets(k1, I)) ==> in_inset(k1, I, n)) with {
-  //  if (in_linkset(k1, I, n) && !(in_outsets(k1, I))) {
-  //    outsets_correct(n, I, k1, C);
-  //  }
-  //}
 }
 
 /** {Spec} Lemmas for proofs below */
