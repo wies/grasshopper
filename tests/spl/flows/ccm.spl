@@ -61,7 +61,6 @@ lemma domMinus_unit(p: FlowDom)
   domZero_unit(p);
 }
 
-
 lemma domMinus_plus(p1: FlowDom, p2: FlowDom, p3: FlowDom)
   requires p1 == domPlus(p2, p3)
   ensures p2 == domMinus(p1, p3)
@@ -69,4 +68,13 @@ lemma domMinus_plus(p1: FlowDom, p2: FlowDom, p3: FlowDom)
   domPlus_comm(p2, p3);
   domMinus_pinv(p3, p2);
 }
-  
+
+// TODO
+// I think this lemma is true but I don't know how to prove it from the above
+// Perhaps it's another axiom of domMinus?
+// Why don't we define domMinus in terms of exists and cancellativity?
+lemma domMinus_plus_dist(p1: FlowDom, p2: FlowDom, p3: FlowDom)
+  ensures domPlus(p1, domMinus(p2, p3)) == domMinus(domPlus(p1, p2), p3)
+{
+  pure assume false;
+}

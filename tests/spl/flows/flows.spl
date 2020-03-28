@@ -467,7 +467,7 @@ lemma lemma_int_comp_fold(I1: Interface, I2: Interface)
 
 
 
-// Contextually extension of interfaces
+// Contextual extension of interfaces
 pure predicate contextualLeq(I1: Interface, I2: Interface) {
   intValid(I1) && intValid(I2) &&
   I1.dom <= I2.dom
@@ -565,4 +565,94 @@ lemma lemma_replacement_no_inflow(I1: Interface, I2: Interface, J1: Interface)
       pure assert I.out[n] == domPlus(I1.out[n], I2.out[n]);
     }
   }  
+}
+
+// Contextual extension allowing increase of inflow of existing nodes
+pure predicate contextualExt(I: Interface, J: Interface) {
+  intValid(I) && intValid(J) &&
+  I.dom <= J.dom
+  && (forall n: Node :: n in I.dom ==> domValid(domMinus(J.inf[n], I.inf[n]))
+    // @(matching n yields domValid(domMinus(J.inf[n], I.inf[n])))
+    )
+  && (forall n: Node :: n !in J.dom ==> I.out[n] == J.out[n]
+    @(matching n yields I.out[n]) @(matching n yields J.out[n]))
+}
+
+lemma lemma_replacement_ext(I1: Interface, I2: Interface, J1: Interface)
+  requires intValid(intComp(I1, I2))
+  requires contextualExt(I1, J1) && Disjoint(J1.dom, I2.dom)
+  requires forall n in J1.dom -- I1.dom :: I2.out[n] == domZero
+  ensures intComp(J1, I2) != intUndef
+  ensures contextualExt(intComp(I1, I2), intComp(J1, I2))
+{
+  var I := intComp(I1, I2);
+  var J := int(
+    { n: Node :: n in I.dom ?
+      (n in I1.dom ? domPlus(I.inf[n], domMinus(J1.inf[n], I1.inf[n]))
+        : I.inf[n]) : J1.inf[n] },
+    { n: Node :: n !in J1.dom && n !in I2.dom ?
+      domPlus(J1.out[n], I2.out[n]) : domZero },
+    J1.dom ++ I2.dom);
+
+  lemma_int_comp_unfold(I1, I2);
+    
+  pure assert forall n: Node :: n in J1.dom ==> J1.inf[n] == domPlus(J.inf[n], I2.out[n]) with {
+    if (n in I1.dom) {
+      pure assert domPlus(J.inf[n], I2.out[n])
+        == domPlus(domPlus(I.inf[n], domMinus(J1.inf[n], I1.inf[n])), I2.out[n]);
+      domPlus_comm(I.inf[n], domMinus(J1.inf[n], I1.inf[n]));
+      domPlus_assoc(domMinus(J1.inf[n], I1.inf[n]), I.inf[n], I2.out[n]);
+      pure assert domPlus(J.inf[n], I2.out[n])
+        == domPlus(domMinus(J1.inf[n], I1.inf[n]), domPlus(I.inf[n], I2.out[n]));
+      pure assert domPlus(J.inf[n], I2.out[n])
+        == domPlus(domMinus(J1.inf[n], I1.inf[n]), I1.inf[n]);
+      domPlus_comm(domMinus(J1.inf[n], I1.inf[n]), I1.inf[n]);
+      pure assert domPlus(J.inf[n], I2.out[n])
+        == domPlus(I1.inf[n], domMinus(J1.inf[n], I1.inf[n]));
+      domMinus_plus_dist(I1.inf[n], J1.inf[n], I1.inf[n]);
+      pure assert domPlus(J.inf[n], I2.out[n])
+        == domMinus(domPlus(I1.inf[n], J1.inf[n]), I1.inf[n]);
+      domMinus_pinv(I1.inf[n], J1.inf[n]);
+      pure assert J1.inf[n] == domPlus(J.inf[n], I2.out[n]);
+    } else if (n in J1.dom) {
+      domZero_unit(J1.inf[n]);
+    }
+  }
+
+  pure assert forall n: Node ::
+    n in I2.dom ==> I2.inf[n] == domPlus(J.inf[n], J1.out[n]) with
+  {
+    if (n in I2.dom) {
+      pure assert n in I.dom ==> I2.inf[n] == domPlus(I.inf[n], I1.out[n]);
+    }
+  }
+
+  intComp_valid2(I1, I2);
+  pure assert forall n: Node :: n in J.dom ==> domValid(J.inf[n]) with {
+    if (n in J.dom && n in I.dom && n in I1.dom) {
+      domPlus_valid(I.inf[n], domMinus(J1.inf[n], I1.inf[n]));
+    }
+  }
+ 
+  lemma_int_comp_fold_plus(J1, I2, J);
+
+  pure assert forall n: Node :: n !in J.dom ==> I.out[n] == J.out[n] with {
+    if (n !in J.dom) {
+      pure assert J.out[n] == domPlus(J1.out[n], I2.out[n]);
+      pure assert I.out[n] == domPlus(I1.out[n], I2.out[n]);
+    }
+  }
+
+  pure assert forall n: Node ::
+    n in I.dom ==> domValid(domMinus(J.inf[n], I.inf[n])) with
+  {
+    if (n in I.dom) {
+      if (n in I1.dom) {
+        domMinus_pinv(I.inf[n], domMinus(J1.inf[n], I1.inf[n]));
+      } else {
+        domMinus_pinv(J.inf[n], domZero);
+        domZero_unit(J.inf[n]);
+      }
+    }
+  }
 }
