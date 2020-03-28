@@ -652,6 +652,7 @@ lemma lemma_replacement_ext(I1: Interface, I2: Interface, J1: Interface)
       } else {
         domMinus_pinv(J.inf[n], domZero);
         domZero_unit(J.inf[n]);
+        domZero_valid();
       }
     }
   }
