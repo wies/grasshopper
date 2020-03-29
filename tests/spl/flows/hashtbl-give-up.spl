@@ -2,7 +2,7 @@
 
 options "-simplearrays -propreads -abspreds -stratify"
 
-include "give-up.spl"
+include "inset-flows.spl"
 include "array_util.spl"
 
 /** {Spec} Definition of keyspace */
@@ -73,7 +73,7 @@ define hrep(x, I, C) {
 
 // The definition of the implementation-specific node predicate assumed by Iris
 define node(x, I, C) {
-  hrep(x, I, C) &*& intValid(I) && nodeinv(x, I, C)
+  hrep(x, I, C) &*& intValid(I)
 }
 
 
@@ -85,13 +85,6 @@ lemma node_sep_star(n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set
   ensures false
 {
 
-}
-
-// Node abstraction implies node-level invariant (this lemma is assumed by Coq)
-lemma node_implies_nodeinv(n: Node, I: Interface, C: Set<K>)
-  requires node(n, I, C)
-  pure ensures nodeinv(n, I, C)
-{
 }
 
 /** {Spec} Lemmas for proofs below */

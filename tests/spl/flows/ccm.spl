@@ -35,46 +35,37 @@ lemma domPlus_comm(p1: FlowDom, p2: FlowDom)
   
 // domPlus is cancellative
 lemma domPlus_canc(p1: FlowDom, p2: FlowDom, p3: FlowDom)
-  requires domPlus(p1, p2) == domPlus(p1, p3)
-  ensures p2 == p3
+requires domPlus(p1, p2) == domPlus(p1, p3)
+ensures p2 == p3
 
 // domMinus is partial inverse of domPlus
 lemma domMinus_pinv(p1: FlowDom, p2: FlowDom)
-  ensures domMinus(domPlus(p1, p2), p1) == p2 
+ensures domMinus(domPlus(p1, p2), p1) == p2 
 
 // domZero is valid
 lemma domZero_valid()
-  ensures domValid(domZero);
+ensures domValid(domZero);
 
 // Validity is preserved by domPlus
 lemma domPlus_valid(p1: FlowDom, p2: FlowDom)
-  requires domValid(p1) && domValid(p2)
-  ensures domValid(domPlus(p1, p2))
-  
+requires domValid(p1) && domValid(p2)
+ensures domValid(domPlus(p1, p2))
+
 /** {Spec} End of CCM axioms */
 
 lemma domMinus_unit(p: FlowDom)
-  ensures domMinus(p, domZero) == p
+ensures domMinus(p, domZero) == p
 {
-  domMinus_pinv(domZero, p);
-  domPlus_comm(domZero, p);
-  domZero_unit(p);
+domMinus_pinv(domZero, p);
+domPlus_comm(domZero, p);
+domZero_unit(p);
 }
 
 lemma domMinus_plus(p1: FlowDom, p2: FlowDom, p3: FlowDom)
-  requires p1 == domPlus(p2, p3)
-  ensures p2 == domMinus(p1, p3)
+requires p1 == domPlus(p2, p3)
+ensures p2 == domMinus(p1, p3)
 {
-  domPlus_comm(p2, p3);
-  domMinus_pinv(p3, p2);
+domPlus_comm(p2, p3);
+domMinus_pinv(p3, p2);
 }
 
-// TODO
-// I think this lemma is true but I don't know how to prove it from the above
-// Perhaps it's another axiom of domMinus?
-// Why don't we define domMinus in terms of exists and cancellativity?
-lemma domMinus_plus_dist(p1: FlowDom, p2: FlowDom, p3: FlowDom)
-  ensures domPlus(p1, domMinus(p2, p3)) == domMinus(domPlus(p1, p2), p3)
-{
-  pure assume false;
-}

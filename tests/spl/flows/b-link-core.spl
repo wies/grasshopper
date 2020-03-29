@@ -2,7 +2,7 @@
 
 options "-abspreds -simplearrays -propreads -stratify"
 
-include "link.spl"
+include "inset-flows.spl"
 include "array_util.spl"
 
 /** {Spec} Definition of keyspace */
@@ -14,7 +14,7 @@ pure function KS() returns (res: Set<K>)
 
 function KS_multiset() returns (m: Multiset)
 {
-  { k: K :: k in KS ? 1 : 0 }
+  { k: K :: k in KS ? 2 : 0 }
 }
 
 
@@ -59,8 +59,8 @@ function edgeFn(x: Node, inflow: Map<Node, FlowDom>)
   requires hrepSpatial(x)
 {
   { n: Node ::
-    0 <= x.indices[n] <= x.len ? pair({ k: K :: ks_child(x, n, k) ? inflow[x].is[k] : 0}, mapZero) :
-    (n == x.next ? pair({ k: K :: map_next(x, k) ? inflow[x].is[k] : 0}, { k: K :: map_next(x, k) ? inflow[x].ls[k] : 0}) : domZero)
+    0 <= x.indices[n] <= x.len ? { k: K :: ks_child(x, n, k) && inflow[x][k] > 0 ? 1 : 0} :
+    (n == x.next ? { k: K :: map_next(x, k) && inflow[x][k] > 0 ? 1 : 0} : domZero)
   }
 }
 
@@ -69,14 +69,14 @@ lemma edgeFn_valid(x: Node, inflow: Map<Node, FlowDom>)
   requires forall n: Node :: domValid(inflow[n])
   ensures forall n: Node :: domValid(edgeFn(x, inflow)[n])
 {
-  pure assert forall n: Node, k: K :: edgeFn(x, inflow)[n].is[k] >= 0 with {
-    pure assert 0 <= x.indices[n] <= x.len && ks_child(x, n, k) ==> edgeFn(x, inflow)[n].is[k] == inflow[x].is[k];
+  pure assert forall n: Node, k: K :: edgeFn(x, inflow)[n][k] >= 0 with {
+    pure assert 0 <= x.indices[n] <= x.len && ks_child(x, n, k) ==> (edgeFn(x, inflow)[n][k] == 1) == inflow[x][k] > 0;
   }
-  pure assert forall n: Node, k: K :: edgeFn(x, inflow)[n].ls[k] >= 0 with {
+  pure assert forall n: Node, k: K :: edgeFn(x, inflow)[n][k] >= 0 with {
     if (0 <= x.indices[n] <= x.len) {
-      pure assert edgeFn(x, inflow)[n].ls[k] == 0;
+      //pure assert edgeFn(x, inflow)[n][k] == 0;
     } else {
-      pure assert n == x.next && map_next(x, k) ==> edgeFn(x, inflow)[n].ls[k] == inflow[x].ls[k];
+      pure assert n == x.next && map_next(x, k) ==> (edgeFn(x, inflow)[n][k] == 1) == (inflow[x][k] > 0);
     }
   }
 }
@@ -126,41 +126,13 @@ define hrep(x, I, C) {
   hrepSpatial(x) &*& heapGood(x) &*& I == interface(x, I.inf) &*& C == contents(x)
 }
 
-// The outset of a B-link tree node x
-function blink_outsets(Ix: Interface, x: Node) returns (res: Set<K>)
-  requires hrepSpatial(x)
-{
-  {k: K :: (x.ptrs[0] == null && x.next != null && !lt(k, x.keys[x.len]) && lt(k, top)
-           || x.ptrs[0] != null && lt(k, top))}
-}
-
-// Constraints needed to ensure nodeinv holds for this implementation
-define searchStrInv(x, I, C) {
-    (forall k1: K :: in_inset(k1, I, x) ==> k1 in KS)
-    // Linkset keyset subsetof inset
-    && (forall k1: K :: in_linkset(k1, I, x) && k1 !in blink_outsets(I, x) ==> in_inset(k1, I, x))
-    && (forall k1: K :: in_linkset(k1, I, x) && !(in_inset(k1, I, x)) ==> !lt(k1, x.keys[x.len]))
-}
-
 // The definition of the implementation-specific node predicate assumed by Iris
 define node(x, I, C) {
-  hrep(x, I, C) &*& searchStrInv(x, I, C) &*& intValid(I)
+  hrep(x, I, C) &*& intValid(I)
 }
 
 
 /** {Spec} Implementation-specific lemmas needed by Iris */
-
-// Show that blink_outsets is superset of in_outsets
-lemma outsets_correct(x: Node, Ix: Interface, k: K, C: Set<K>)
-  requires hrep(x, Ix, C) &*& intValid(Ix)
-  pure ensures in_outsets(k, Ix) ==> k in blink_outsets(Ix, x)
-{
-  if (k !in blink_outsets(Ix, x)) {
-    pure assert !((x.ptrs[0] == null && x.next != null && !lt(k, x.keys[x.len]) && lt(k, top)
-                || x.ptrs[0] != null && lt(k, top)));
-    pure assert forall n1: Node :: !(in_outset(k, Ix, n1));
-  }
-}
 
 // Node predicate is not duplicable
 lemma node_sep_star(n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set<K>)
@@ -168,18 +140,6 @@ lemma node_sep_star(n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set
   ensures false
 {
 
-}
-
-// Node abstraction implies node-level invariant (this lemma is assumed by Coq)
-lemma node_implies_nodeinv(n: Node, I: Interface, C: Set<K>)
-  requires node(n, I, C)
-  pure ensures nodeinv(n, I, C)
-{
-  pure assert (forall k1: K :: in_linkset(k1, I, n) && !(in_outsets(k1, I)) ==> in_inset(k1, I, n)) with {
-    if (in_linkset(k1, I, n) && !(in_outsets(k1, I))) {
-      outsets_correct(n, I, k1, C);
-    }
-  }
 }
 
 /** {Spec} Lemmas for proofs below */
@@ -198,7 +158,7 @@ lemma keyset_implies_leaf(x: Node, Ix: Interface, k: K, i: Int, implicit ghost C
     return;
   } else {
     if (x.ptrs[0] != null && lt(k, x.keys[i])) {
-      pure assert Ix.out[x.ptrs[i]].is[k] == 0;
+      pure assert Ix.out[x.ptrs[i]][k] == 0;
     }
     return;
   }
@@ -224,7 +184,7 @@ procedure init() returns (x: Node, I: Interface)
   x.next := null;
   x.indices := { n: Node :: -1 };
 
-  ghost var x_inflow := { n: Node :: n == x ? pair(KS_multiset, KS_multiset) : domZero };
+  ghost var x_inflow := { n: Node :: n == x ? KS_multiset : domZero };
 
   I := interface(x, x_inflow);
 }
@@ -233,7 +193,7 @@ procedure findNext(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
   returns (succ: Bool, np: Node)
   requires k in KS
   requires node(n, In, C)
-  requires in_inset(k, In, n) || in_linkset(k, In, n)
+  requires in_inset(k, In, n)
   ensures node(n, In, C)
   ensures succ ==> in_outset(k, In, np)
   ensures !succ ==> !(in_outsets(k, In))
@@ -275,8 +235,8 @@ procedure search(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
   requires node(n, In, C)
   requires in_inset(k, In, n) && !(in_outsets(k, In))
   ensures node(n, In, C1)
-  ensures succ ==> Psi(searchOp, k, C, C1, res)
   ensures !succ ==> C1 == C
+  ensures succ ==> Psi(searchOp, k, C, C1, res)
 {
   keyset_implies_leaf(n, In, k, 0);
 
@@ -292,8 +252,8 @@ procedure insert(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
   requires node(n, In, C)
   requires in_inset(k, In, n) && !(in_outsets(k, In))
   ensures node(n, In, C1)
-  ensures succ ==> Psi(insertOp, k, C, C1, res)
   ensures !succ ==> C1 == C
+  ensures succ ==> Psi(insertOp, k, C, C1, res)
 {
   keyset_implies_leaf(n, In, k, 0);
 
@@ -315,18 +275,14 @@ procedure insert(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
     map_insert_content_set(m, n.keys.map, idx, k, old_len, new_len);
 
     pure assert In == interface(n, In.inf) with {
-      pure assert forall k1: K, y: Node ::
-        In.out[y].is[k1] == edgeFn(n, In.inf)[y].is[k1]
-        && In.out[y].ls[k1] == edgeFn(n, In.inf)[y].ls[k1]
+      pure assert (forall k1: K, y: Node ::
+        In.out[y][k1] == edgeFn(n, In.inf)[y][k1])
       with {
-        pure assert In.inf[n].is[k1] == In.inf[n].is[k1];
-        pure assert In.inf[n].ls[k1] == In.inf[n].ls[k1];
-      }
-
+        pure assert In.inf[n][k1] == In.inf[n][k1];
+      }      
     }
 
-
-  return true, old_len != new_len;
+    return true, old_len != new_len;
   } else {
     return false, false;
   }
@@ -338,8 +294,8 @@ procedure delete(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
   requires node(n, In, C)
   requires in_inset(k, In, n) && !(in_outsets(k, In))
   ensures node(n, In, C1)
-  ensures succ ==> Psi(deleteOp, k, C, C1, res)
   ensures !succ ==> C1 == C
+  ensures succ ==> Psi(deleteOp, k, C, C1, res)
 {
   keyset_implies_leaf(n, In, k, 0);
 
@@ -359,11 +315,9 @@ procedure delete(n: Node, k: K, ghost In: Interface, implicit ghost C: Set<K>)
 
   pure assert In == interface(n, In.inf) with {
     pure assert forall k1: K, y: Node ::
-      In.out[y].is[k1] == edgeFn(n, In.inf)[y].is[k1]
-      && In.out[y].ls[k1] == edgeFn(n, In.inf)[y].ls[k1]
+      In.out[y][k1] == edgeFn(n, In.inf)[y][k1]
     with {
-      pure assert In.inf[n].is[k1] == In.inf[n].is[k1];
-      pure assert In.inf[n].ls[k1] == In.inf[n].ls[k1];
+      pure assert In.inf[n][k1] == In.inf[n][k1];
     }
 
   }

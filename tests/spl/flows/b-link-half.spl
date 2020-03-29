@@ -11,14 +11,13 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
   requires c.next != x;
   requires (forall i: Int :: 0 <= i <= c.len ==> x != c.ptrs[i]);
   ensures node(c, Ic1, Cc) &*& node(x, Ix1, Cx)
-  ensures intValid(Ic1) && intValid(Ix1)
   ensures intComp(Ic1, Ix1) == Icx1 && contextualLeq(Ic, Icx1)
   ensures C == Cc ++ Cx
 {
   var m := (c.len + 1) / 2;
 
   pure assert Ic.out[x] == domZero with {
-    pure assert forall k: K :: Ic.out[x].is[k] == 0 with {
+    pure assert forall k: K :: Ic.out[x][k] == 0 with {
       pure assert 0 <= c.indices[x] <= c.len ==> c.ptrs.map[c.indices[x]] == x;
     }
   }
@@ -31,9 +30,8 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
     c.len := m;
     c.next := x;
     
-    ghost var x_inflow_ks := { k: K :: !lt(k, c.keys[c.len]) && lt(k, top) ? Ic.inf[c].is[k] : 0 };
-    ghost var x_inflow_ir := { k: K :: !lt(k, c.keys[c.len]) && lt(k, top) ? Ic.inf[c].ls[k] : 0 };
-    ghost var x_inflow := { n: Node :: n == x ? pair(x_inflow_ks, x_inflow_ir) : domZero };
+    ghost var x_inflow_ms := { k: K :: !lt(k, c.keys[c.len]) && lt(k, top) && Ic.inf[c][k] > 0 ? 1 : 0 };
+    ghost var x_inflow := { n: Node :: n == x ? x_inflow_ms : domZero };
     
     c.indices := { n: Node :: -1 };
     x.indices := { n: Node :: -1 };
@@ -52,47 +50,36 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
       edgeFn_valid(c, Ic.inf);
     }
 
-    pure assert searchStrInv(c, Ic1, Cc) with {
-      pure assert forall k1: K, y: Node :: k1 !in Cc || Ic1.out[y].is[k1] == 0 with {
-        if (k1 in Cc && Ic1.out[y].is[k1] != 0) {
+    /*pure assert nodeinv(c, Ic1, Cc) with {
+      pure assert (forall k1: K, n1: Node :: k1 !in Cc || !(in_outset(k1, Ic1, n1))) with {
+        if (k1 in Cc && Ic1.out[n1][k1] != 0) {
           map_find_in_set(c.keys.map, 0, c.len, k1);
         }
       }
-    }
+    }*/
 
     pure assert intValid(Ix1) with {
       pure assert forall n: Node :: domValid(x_inflow[n]) with {
-        pure assert forall k1: K :: x_inflow[n].is[k1] >= 0 && x_inflow[n].ls[k1] >= 0 with {
-          pure assert Ic.inf[c].is[k1] >= 0;
-          pure assert Ic.inf[c].ls[k1] >= 0;
+        pure assert forall k1: K :: x_inflow[n][k1] >= 0 with {
+          pure assert Ic.inf[c][k1] >= 0;
         }
       }
       edgeFn_valid(x, x_inflow);
     }
 
-    pure assert searchStrInv(x, Ix1, Cx) with {
-      /*pure assert forall k1: K :: k1 in Cx ==> Ix1.inf[x].is[k1] >= 1 with {
+    /*pure assert "nodeinv" nodeinv(x, Ix1, Cx) with {
+      pure assert "test1" (forall k1: K, n1: Node :: k1 !in Cx || !(in_outset(k1, Ix1, n1))) with {
+        if (k1 in Cx && Ix1.out[n1][k1] != 0) {
+          map_find_in_set(x.keys.map, 0, x.len, k1);
+        }
+      }
+      pure assert (forall k1: K :: k1 in Cx ==> in_inset(k1, Ix1, x)) with {
         if (k1 in Cx) {
           map_find_in_set(x.keys.map, 0, x.len, k1);
-          pure assert Ic.inf[c].is[k1] >= 1;
+          pure assert in_inset(k1, Ic, c);
         }
       }
-      pure assert forall k1: K, y: Node :: k1 !in Cx || Ix1.out[y].is[k1] == 0 with {
-        if (k1 in Cx && Ix1.out[y].is[k1] != 0) {
-          map_find_in_set(x.keys.map, 0, x.len, k1);
-        }
-         }*/
-
-      pure assert forall k1: K :: Ix1.inf[x].ls[k1] >= 1 && k1 !in blink_outsets(Ix1, x)
-        ==> Ix1.inf[x].is[k1] >= 1 with {
-          if (Ix1.inf[x].ls[k1] >= 1 && k1 !in blink_outsets(Ix1, x)) {
-            pure assert Ic.inf[c].ls[k1] >= 1;
-            pure assert k1 !in old(blink_outsets(Ic, c));
-            pure assert Ic.inf[c].is[k1] >= 1;
-          }
-      }
-
-    }
+    }*/
 
     pure assert intComposable(Ic1, Ix1) with {
       pure assert (forall n: Node :: n in Ix1.dom ==> Ix1.inf[n] == domPlus(Ic1.out[n], domMinus(Ix1.inf[n], Ic1.out[n]))) with {
@@ -101,24 +88,17 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
       
       pure assert (forall n: Node :: n in Ix1.dom ==> domValid(domMinus(Ix1.inf[n], Ic1.out[n]))) with {
         if (n in Ix1.dom) {
-          pure assert forall k: K :: domMinus(Ix1.inf[n], Ic1.out[n]).is[k] >= 0 with {
-            pure assert !lt(k, c.keys[c.len]) && lt(k, top) ==> Ix1.inf[n].is[k] == Ic.inf[c].is[k];
-            pure assert Ix1.inf[n].is[k] - Ic1.out[n].is[k] >= 0;
-          }
-          pure assert forall k: K :: domMinus(Ix1.inf[n], Ic1.out[n]).ls[k] >= 0 with {
-            pure assert !lt(k, c.keys[c.len]) && lt(k, top) ==> Ix1.inf[n].ls[k] == Ic.inf[c].ls[k];
-            pure assert Ix1.inf[n].ls[k] - Ic1.out[n].ls[k] >= 0;
+          pure assert forall k: K :: domMinus(Ix1.inf[n], Ic1.out[n])[k] >= 0 with {
+            pure assert !lt(k, c.keys[c.len]) && lt(k, top) ==> (Ix1.inf[n][k] == 1) == (Ic.inf[c][k] > 0);
+            pure assert Ix1.inf[n][k] - Ic1.out[n][k] >= 0;
           }
         }
       }
         
       pure assert (forall n: Node :: n in Ic1.dom ==> domValid(domMinus(Ic1.inf[n], Ix1.out[n]))) with {
         if (n in Ic1.dom) {
-          pure assert forall k: K :: domMinus(Ic1.inf[n], Ix1.out[n]).is[k] >= 0 with {
-            pure assert Ic1.inf[n].is[k] - Ix1.out[n].is[k] >= 0;
-          }
-          pure assert forall k: K :: domMinus(Ic1.inf[n], Ix1.out[n]).ls[k] >= 0 with {
-            pure assert Ic1.inf[n].ls[k] - Ix1.out[n].ls[k] >= 0;
+          pure assert forall k: K :: domMinus(Ic1.inf[n], Ix1.out[n])[k] >= 0 with {
+            pure assert Ic1.inf[n][k] - Ix1.out[n][k] >= 0;
           }
         }
       }
@@ -137,18 +117,11 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
         if (n !in Icx1.dom) {
 
           pure assert Icx1.out[n] == domPlus(Ic1.out[n], Ix1.out[n]);
-          pure assert forall k: K :: Ic.out[n].is[k] == Icx1.out[n].is[k] with {
-            pure assert Icx1.out[n].is[k] == Ic1.out[n].is[k] + Ix1.out[n].is[k];
+          pure assert forall k: K :: Ic.out[n][k] == Icx1.out[n][k] with {
+            pure assert Icx1.out[n][k] == Ic1.out[n][k] + Ix1.out[n][k];
 
             if (!lt(k, c.keys[c.len]) && lt(k, top) && !lt(k, old(c.keys.map[c.len]))) {
-              pure assert Ix1.inf[x].is[k] == Ic.inf[c].is[k];
-            }
-          }
-          pure assert forall k: K :: Ic.out[n].ls[k] == Icx1.out[n].ls[k] with {
-            pure assert Icx1.out[n].ls[k] == Ic1.out[n].ls[k] + Ix1.out[n].ls[k];
-
-            if (!lt(k, c.keys[c.len]) && lt(k, top) && !lt(k, old(c.keys.map[c.len]))) {
-              pure assert Ix1.inf[x].ls[k] == Ic.inf[c].ls[k];
+              pure assert (Ix1.inf[x][k] == 1) == (Ic.inf[c][k] > 0);
             }
           }
         }
@@ -166,7 +139,6 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
     return Ic1, Ix1, Icx1, Cc, Cx;
     
   } else {  // Internal node
-    
     ghost var clen := c.len;
     ghost var cind := c.indices;
 
@@ -177,9 +149,8 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
     x.next := c.next;
     c.next := x;
 
-    ghost var x_inflow_ks := { k: K :: !lt(k, c.keys[c.len]) && lt(k, top) ? Ic.inf[c].is[k] : 0};
-    ghost var x_inflow_ir := { k: K :: !lt(k, c.keys[c.len]) && lt(k, top) ? Ic.inf[c].ls[k] : 0};
-    ghost var x_inflow := { n: Node :: n == x ? pair(x_inflow_ks, x_inflow_ir) : domZero };
+    ghost var x_inflow_ms := { k: K :: !lt(k, c.keys[c.len]) && lt(k, top) && Ic.inf[c][k] > 0 ? 1 : 0};
+    ghost var x_inflow := { n: Node :: n == x ? x_inflow_ms : domZero };
 
     
     c.indices := { n: Node :: n != x && 0 <= cind[n] < m ? cind[n] : -1 };
@@ -200,15 +171,10 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
       }
     }
     
-    //pure assert searchStrInv(c, Ic1, Cc) with {
-    //  lemma_edgesets_disjoint(c, Ic1, Ic.inf);
-    //}
-
     pure assert intValid(Ix1) with {
       pure assert forall n: Node :: domValid(x_inflow[n]) with {
-        pure assert forall k1: K :: x_inflow[n].is[k1] >= 0 && x_inflow[n].ls[k1] >= 0 with {
-          pure assert Ic.inf[c].is[k1] >= 0;
-          pure assert Ic.inf[c].ls[k1] >= 0;
+        pure assert forall k1: K :: x_inflow[n][k1] >= 0 && x_inflow[n][k1] >= 0 with {
+          pure assert Ic.inf[c][k1] >= 0;
         }
       }
       edgeFn_valid(x, x_inflow);
@@ -230,17 +196,6 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
       }
     }
     
-    pure assert searchStrInv(x, Ix1, Cx) with {
-      pure assert (forall k1: K :: Ix1.inf[x].ls[k1] >= 1 && Ix1.inf[x].is[k1] == 0 ==> !lt(k1, x.keys[x.len])) with {
-        if (Ix1.inf[x].ls[k1] >= 1 && Ix1.inf[x].is[k1] == 0) {
-          pure assert Ic.inf[c].is[k1] == 0;
-          pure assert Ic.inf[c].ls[k1] >= 1;
-        }
-      }
-      
-      //lemma_edgesets_disjoint(x, Ix1, x_inflow);
-    }
-
     pure assert intComposable(Ic1, Ix1) with {
       pure assert (forall n: Node :: n in Ix1.dom ==> Ix1.inf[n] == domPlus(Ic1.out[n], domMinus(Ix1.inf[n], Ic1.out[n]))) with {
         if (n in Ix1.dom) domMinus_inv(Ix1.inf[n], Ic1.out[n]);
@@ -248,24 +203,17 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
       
       pure assert (forall n: Node :: n in Ix1.dom ==> domValid(domMinus(Ix1.inf[n], Ic1.out[n]))) with {
         if (n in Ix1.dom) {
-          pure assert forall k: K :: domMinus(Ix1.inf[n], Ic1.out[n]).is[k] >= 0 with {
-            pure assert !lt(k, c.keys[c.len]) && lt(k, top) ==> Ix1.inf[n].is[k] == Ic.inf[c].is[k];
-            pure assert Ix1.inf[n].is[k] - Ic1.out[n].is[k] >= 0;
-          }
-          pure assert forall k: K :: domMinus(Ix1.inf[n], Ic1.out[n]).ls[k] >= 0 with {
-            pure assert !lt(k, c.keys[c.len]) && lt(k, top) ==> Ix1.inf[n].ls[k] == Ic.inf[c].ls[k];
-            pure assert Ix1.inf[n].ls[k] - Ic1.out[n].ls[k] >= 0;
+          pure assert forall k: K :: domMinus(Ix1.inf[n], Ic1.out[n])[k] >= 0 with {
+            pure assert !lt(k, c.keys[c.len]) && lt(k, top) ==> (Ix1.inf[n][k] == 1) == (Ic.inf[c][k] > 0);
+            pure assert Ix1.inf[n][k] - Ic1.out[n][k] >= 0;
           }
         }
       }
         
       pure assert (forall n: Node :: n in Ic1.dom ==> domValid(domMinus(Ic1.inf[n], Ix1.out[n]))) with {
         if (n in Ic1.dom) {
-          pure assert forall k: K :: domMinus(Ic1.inf[n], Ix1.out[n]).is[k] >= 0 with {
-            pure assert Ic1.inf[n].is[k] - Ix1.out[n].is[k] >= 0;
-          }
-          pure assert forall k: K :: domMinus(Ic1.inf[n], Ix1.out[n]).ls[k] >= 0 with {
-            pure assert Ic1.inf[n].ls[k] - Ix1.out[n].ls[k] >= 0;
+          pure assert forall k: K :: domMinus(Ic1.inf[n], Ix1.out[n])[k] >= 0 with {
+            pure assert Ic1.inf[n][k] - Ix1.out[n][k] >= 0;
           }
         }
       }
@@ -286,15 +234,13 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
 
           pure assert Icx1.out[n1] == domPlus(Ic1.out[n1], Ix1.out[n1]);
 
-          pure assert forall k: K :: Ic.out[n1].is[k] == Icx1.out[n1].is[k] &&
-          Ic.out[n1].ls[k] == Icx1.out[n1].ls[k] with {
-            pure assert Icx1.out[n1].is[k] == Ic1.out[n1].is[k] + Ix1.out[n1].is[k]
-                      && Icx1.out[n1].ls[k] == Ic1.out[n1].ls[k] + Ix1.out[n1].ls[k];
+          pure assert forall k: K :: Ic.out[n1][k] == Icx1.out[n1][k] with {
+            pure assert Icx1.out[n1][k] == Ic1.out[n1][k] + Ix1.out[n1][k];
 
             if (0 <= old(c.indices)[n1] <= old(c.len)) {  // n1 was c's child
               if (old(c.indices)[n1] <= c.len) {  // n1 stayed at c
                 pure assert c.indices[n1] == old(c.indices)[n1];
-                pure assert ks_child(c, n1, k) ==> Ic1.out[n1].is[k] == Ic.inf[c].is[k];
+                pure assert ks_child(c, n1, k) ==> (Ic1.out[n1][k] == 1) == (Ic.inf[c][k] > 0);
               } else {  // n1 moved to x
                 pure assert true
                    && x.ptrs.map[x.indices[n1]] == n1
@@ -302,14 +248,13 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
                    && old(c.keys.map)[m + x.indices[n1] - 0] == x.keys.map[x.indices[n1]]
                    && (x.indices[n1] > 0 ==>
                    old(c.keys.map)[m + (x.indices[n1] - 1) - 0] == x.keys.map[x.indices[n1] - 1]);
-                pure assert ks_child(x, n1, k) ==> Ix1.out[n1].is[k] == Ix1.inf[x].is[k];
-                pure assert old(ks_child(c, n1, k)) ==> Ic.out[n1].is[k] == Ic.inf[c].is[k];
+                   pure assert ks_child(x, n1, k) ==> (Ix1.out[n1][k] == 1) == (Ix1.inf[x][k] > 0);
+                   pure assert old(ks_child(c, n1, k)) ==> (Ic.out[n1][k] == 1) == (Ic.inf[c][k] > 0);
               }              
             } else if (n1 == old(c.next)) {  // n1 was c's right sibling
               if (!lt(k, c.keys[c.len]) && lt(k, top) && !lt(k, old(c.keys.map[c.len]))) {
                 pure assert true
-                  && Ix1.inf[x].is[k] == Ic.inf[c].is[k]
-                  && Ix1.inf[x].ls[k] == Ic.inf[c].ls[k];
+                  && (Ix1.inf[x][k] == 1) == (Ic.inf[c][k] > 0);
               }
             } else {} // there was no edge from n1 to c
           }
@@ -323,7 +268,6 @@ procedure half_split(c: Node, x: Node, Ic: Interface, implicit ghost C: Set<K>)
         }
       }
     }
-    
     return Ic1, Ix1, Icx1, Cc, Cx;
   }
 }

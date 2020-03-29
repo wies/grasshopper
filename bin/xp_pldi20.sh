@@ -5,13 +5,13 @@ source bin/osx_gnu.sh
 #echo "Building Grasshopper"
 #./build.sh
 
-FILES1="flows ccm multiset-ccm inset-flows give-up lock-coupling"
+FILES1="flows ccm multiset-ccm inset-flows lock-coupling"
 FILES2="hashtbl-give-up"
 FILES3="hashtbl-link-simple"
 FILES4="b+-tree"
-FILES5="b-link-core-simple"
-FILES6="b-link-half-simple"
-FILES7="b-link-full-simple"
+FILES5="b-link-core"
+FILES6="b-link-half"
+FILES7="b-link-full"
 FILES8="ordered_type array_util"
 FILES9="list-coupling"
 
@@ -27,6 +27,7 @@ run()
 {
     name="${1}"
     tabs=$((2 - ${#name} / 8))
+    echo  "\\hline" >> $outputfile
     echo -n "$name" >> $outputfile
     perl -E "print \"\t\" x $tabs" >> $outputfile
     shift
@@ -43,7 +44,7 @@ run()
     done
     awk -F "\t" '{specs+=$1; progs+=$2; total+=$3} END{printf("\t& %d\t& %d\t& %d", progs, specs, total);}' $locfile >> $outputfile
     awk -F "\t" '{specs+=$1; progs+=$2; total+=$3} END{printf("%d\t%d\t%d\n", progs, specs, total);}' $locfile >> $loctotalfile
-    awk '{sum+=$1;} END{printf("\t& %d\n", int(sum+0.5));}' $timesfile >> $outputfile
+    awk '{sum+=$1;} END{printf("\t& %d\\\\\n", int(sum+0.5));}' $timesfile >> $outputfile
     awk '{sum+=$1;} END{printf("%d\n", int(sum+0.5));}' $timesfile >> $timestotalfile
 }
 

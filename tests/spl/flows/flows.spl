@@ -568,7 +568,7 @@ lemma lemma_replacement_no_inflow(I1: Interface, I2: Interface, J1: Interface)
 }
 
 // Contextual extension allowing increase of inflow of existing nodes
-pure predicate contextualExt(I: Interface, J: Interface) {
+/*pure predicate contextualExt(I: Interface, J: Interface) {
   intValid(I) && intValid(J) &&
   I.dom <= J.dom
   && (forall n: Node :: n in I.dom ==> domValid(domMinus(J.inf[n], I.inf[n]))
@@ -657,3 +657,4 @@ lemma lemma_replacement_ext(I1: Interface, I2: Interface, J1: Interface)
     }
   }
 }
+*/

@@ -2,7 +2,7 @@
 
 options "-simplearrays -propreads"
 
-include "give-up.spl"
+include "inset-flows.spl"
 include "array_util.spl"
 
 /** {Spec} Definition of key space */
@@ -61,7 +61,6 @@ define node(x, I, C) {
           @(matching x.ptrs[i] yields x.keys[i]))
           //       && (forall i: Int :: 0 <= i <= x.len ==> I.fm[x][x.ptrs[i]].pc == 1)
        )
-    && nodeinv(x, I, C)
 }
 
 
@@ -73,13 +72,6 @@ lemma node_sep_star(n: Node, I_n: Interface, I_np: Interface, C: Set<K>, Cp: Set
   ensures false
 {
 
-}
-
-// Node abstraction implies node-level invariant (this lemma is assumed by Coq)
-lemma node_implies_nodeinv(n: Node, I: Interface, C: Set<K>)
-  requires node(n, I, C)
-  pure ensures nodeinv(n, I, C)
-{
 }
 
 /** {Spec} Lemmas for proofs below */
