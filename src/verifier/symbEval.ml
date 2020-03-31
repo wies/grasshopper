@@ -120,7 +120,11 @@ and eval_form state f (fc: symb_state -> form -> 'a option) =
     Debug.debug(fun() -> sprintf "eval_form BoolOp\n");
     eval_forms state fs (fun state' fs' ->
       fc state' (BoolOp (op, fs')))
-  | Binder (binder, ts, f, _) -> todo "eval_form Binder"
+  | Binder (binder, [], f, a) -> 
+    Debug.debug(fun() -> sprintf "eval_form Binder, binder(%s)\n" (string_of_form f));
+    fc state (Binder (binder, [], f, a))
+  | Binder (binder, ts, f, _) -> todo "eval binder catch all"
+    
 
 (** eval_sl_forms evaluates a sl formula list fs element-wise using the eval
   function below, accumulating the resulting formulas carrying symbolic values *)

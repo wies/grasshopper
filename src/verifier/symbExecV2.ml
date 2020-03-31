@@ -13,7 +13,6 @@ open SymbBranch
 open Prog
 
 let rec exec state comm (fc: symb_state -> 'a option) =
-  Debug.debug( fun () -> sprintf "exec state comms *******\n");
   match comm with
   | Basic (Assign {assign_lhs=[field];
                     assign_rhs=[App (Write, [map; t1; t2], srt)]}, pp) ->
@@ -46,13 +45,14 @@ let rec exec state comm (fc: symb_state -> 'a option) =
         lineSep (string_of_state st)
       );
       fc st)
-  | Seq (s1 :: s2 :: comms, _) ->
-      Debug.debug( fun () -> sprintf "SEQ (%d) \n"
-        (List.length comms)
+  | Seq (comms, pp) ->
+      Debug.debug (fun () -> 
+        sprintf "%sExecuting Seq: %d: %s%sCurrent state:\n%s\n"
+          lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+          lineSep (string_of_state state)
       );
-      exec state s1 (fun state' ->
-        exec state' s2 (fun state2' ->
-          execs state2' comms fc))
+      execs state comms (fun state' ->
+        fc state')
   | Basic (Assert spec, pp) ->
     (match spec.spec_form with
     | SL slf ->
@@ -63,11 +63,35 @@ let rec exec state comm (fc: symb_state -> 'a option) =
       consume_form state state.heap f (fun state' h' snp ->
         fc state'))
   | Basic (Call {call_lhs=lhs; call_name=foo; call_args=args}, pp) -> todo "exec 3"
-  | Seq (_::[], _) -> todo "exec 4" 
-  | Seq ([], _) -> fc state 
   | Basic (Havoc {havoc_args=vars}, pp) -> todo "exec 6"
-  | Basic (Assume {spec_form=FOL spec}, pp) -> todo "exec 7"
-  | Choice (comms, _) -> todo "exec 8"
+  | Basic (Assume {spec_form=FOL f; spec_name="if_then"}, pp) |
+      Basic (Assume {spec_form=FOL f; spec_name="if_else"}, pp) -> 
+      Debug.debug (fun () ->
+        sprintf "%sExecuting Assume (if-then-else): %d: %s %sCurrent state:\n%s\n"
+          lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm) lineSep (string_of_state state));
+      eval_form state f (fun state' f' ->
+        Debug.debug (fun () -> sprintf "State in eval_form continuation %s\n" (string_of_state state'));
+        fc {state' with pc=(pc_push_new state'.pc (fresh_ident "br") f')})
+  | Basic (Assume {spec_form=f; }, pp) -> 
+      produce state f Unit (fun state' -> fc state')
+  | Choice (comms, pp) ->
+      (* generically process and don't pattern match on the internal commands here*)
+      (* generalize the branch for arbitrarly many branches. *)
+      (* do a fold over the branches, which collects the results from each branch,
+       * then call continuation on the result. *)
+      Debug.debug (fun () ->
+        sprintf "%sExecuting choice: %d: %s %sCurrent state:\n%s\n"
+          lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm) lineSep (string_of_state state));
+      branch_fold_2 state comms exec (fun states ->
+        Debug.debug(fun () ->
+          sprintf "%sBRFOLD States: %s\n" lineSep (string_of_states states));
+
+        (*
+        let state2' =
+          {state' with pc=(pc_add_path_conds state.pc constraints)}
+        in
+        *)
+        fc (List.hd states))
   | Basic (Return {return_args=xs}, pp)  -> todo "exec 9"
   | Basic (Split spec, pp) -> 
     Debug.debug (fun () -> 
@@ -91,7 +115,6 @@ let rec exec state comm (fc: symb_state -> 'a option) =
         lineSep (string_of_state st2)
     );
     produce_sl_form st2 (mk_cell tnew) (mk_fresh_snap srt) fc 
-  | Basic (Assume _, _) -> todo "exec 12"
   | Basic (Dispose _, _) -> todo "exec 13"
   | Loop (l, _) -> todo "exec 14"
 

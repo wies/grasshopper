@@ -13,3 +13,5 @@ procedure bar(x: Int, y: Int)
 {
   pure assert x > 5;
 }
+
+

@@ -44,6 +44,12 @@ let string_of_symb_val_list vals =
   |> String.concat ", "
   |> sprintf "[%s]"
 
+let string_of_form_list fs =
+  fs 
+  |> List.map (fun v -> (string_of_form v))
+  |> String.concat ", "
+  |> sprintf "[%s]"
+
 let string_of_symb_store s =
   IdMap.bindings s
   |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_term v))
@@ -67,15 +73,6 @@ let string_of_symb_fields fields =
   ident -> symb_val . *)
 type symb_store = term IdMap.t
 let empty_store = IdMap.empty
-
-let merge_symb_stores g1 g2 =
-  IdMap.merge
-  (fun x oy oz -> match oy, oz with
-  | Some y, Some z -> 
-      failwith "todo: figure out how to merge symb_store variables"
-  | Some y, None -> Some y
-  | None, Some z -> Some z
-  | None, None -> None) g1 g2
 
 let find_symb_val (store: symb_store) (id: ident) =
   Debug.debug(
@@ -121,14 +118,17 @@ let string_of_pc_stack pc =
   pc
   |> List.map (fun (id, bc, vars) ->
       "(" ^ (string_of_ident id) ^ ", " ^ (string_of_form bc) ^ ", "
-      ^ (string_of_pcset vars) ^ ")")
+      ^ "[" ^ (string_of_pcset vars) ^ "]" ^ ")")
   |> String.concat ", "
   |> sprintf "[%s]"
 
 let pc_push_new (stack: pc_stack) scope_id br_cond =
   match stack with
   | [] -> [(scope_id, br_cond, [])]
-  | stack -> (scope_id, br_cond, []) :: stack
+  | stack ->
+      let s = (scope_id, br_cond, []) :: stack in
+      Debug.debug( fun() -> sprintf "pc_push_new %s\n" (string_of_pc_stack s));
+      s
   
 let rec pc_add_path_cond (stack: pc_stack) f =
   match stack with
@@ -388,3 +388,23 @@ let string_of_state s =
   let pc = string_of_pc_stack s.pc in
   let heap = string_of_heap s.heap in
   sprintf "\n\tStore: %s,\n\tOld Store: %s\n\tPCStack: %s\n\tHeap: %s" store old_store pc heap
+
+let string_of_states ss =
+  ss
+  |> List.map (fun s -> (string_of_state s))
+  |> String.concat ", "
+  |> sprintf "[%s]"
+
+let merge_lsts h1 h2 =
+  match h1, h2 with
+  | [], [] -> []
+  | [], x -> x 
+  | x, [] -> x
+  | x, y -> x @ y
+
+let merge_states s1 s2 = 
+ {store=s1.store;
+   old_store=s1.old_store;
+   heap=merge_lsts s1.heap s2.heap;
+   pc=merge_lsts s1.pc s2.pc;
+   prog=s1.prog (* programs are the same *)}

@@ -9,8 +9,7 @@ let produce_symb_form state f snp (fc: symb_state -> 'a option) =
   let s3 = {s2 with pc = pc_add_path_cond s2.pc 
     (mk_atom Eq [term_of_snap snp; term_of_snap Unit])}
   in
-  Debug.debug( fun() -> sprintf "%sState: %s\n" lineSep (string_of_state s3));
-  fc s2
+  fc s3
 
 let rec produce_symb_forms state fs snp (fc: symb_state -> 'a option) =
   match fs with
@@ -37,7 +36,6 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
   match f with
   | Sl.Pure (p, _) ->
    Debug.debug( fun() -> sprintf "pure Atom = %s\n" (Grass.string_of_form p));
-
    produce_form state p snp fc
   | Sl.Atom (Sl.Region, [t], a) -> 
      Debug.debug( fun() -> sprintf "SL atom = %s\n" (Sl.string_of_form f)); 

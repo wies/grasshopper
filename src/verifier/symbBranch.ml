@@ -3,7 +3,18 @@
 open SymbState
 open GrassUtil
 open Grass
+open Prog 
 open Printf
+
+let branch_fold_2 state comms fbr (fc: symb_state list -> 'a option) = 
+  let rec bf2_helper state ccomms br_states fbr fc =
+    match ccomms with
+    | [] -> fc (List.rev br_states)
+    | comm :: comms' -> 
+        fbr state comm (fun state' ->
+          bf2_helper state comms' (state'::br_states) fbr fc)
+  in
+  bf2_helper state comms [] fbr fc
 
 let branch state f fc_f fc_notf =
   let fpush ff =
@@ -30,7 +41,7 @@ let pc_segs (pi: pc_stack) =
     List.fold_left (fun (cnds, bcs) (_, bci, pci) -> 
       (mk_implies (mk_and (bci :: bcs)) (mk_and pci)) :: cnds,
         bci :: bcs)
-    ([], []) pi
+    ([], [mk_true]) (List.rev pi)
   in
   (List.rev impls, List.rev bcs)
 
