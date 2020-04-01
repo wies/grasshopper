@@ -97,6 +97,13 @@ let havoc symb_store terms =
       | _ -> failwith "tried to havoc a term that isn't a Var")
     symb_store terms
 
+let merge_stores s1 s2 =
+  IdMap.merge (fun k xo yo ->
+    match xo,yo with
+    | Some x, Some y -> Some y
+    | _ -> None
+  ) s1 s2
+
 (** path condition (pc) stack
   A sequence of scopes a tuple of (scope id, branch condition, [V])
   list[V] is the list of path conditions.
@@ -376,8 +383,8 @@ let mk_symb_state st prog =
 let mk_empty_state = 
   {store=empty_store; old_store=empty_store; pc=[]; heap=[]; prog=empty_prog}
 
-let update_store state store =
-  {state with store=store}
+let update_store state store old_store =
+  {state with store=store; old_store=old_store}
 
 let update_pc state pcs =
   {state with pc=pcs}

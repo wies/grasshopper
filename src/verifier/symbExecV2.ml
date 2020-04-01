@@ -64,34 +64,10 @@ let rec exec state comm (fc: symb_state -> 'a option) =
         fc state'))
   | Basic (Call {call_lhs=lhs; call_name=foo; call_args=args}, pp) -> todo "exec 3"
   | Basic (Havoc {havoc_args=vars}, pp) -> todo "exec 6"
-  | Basic (Assume {spec_form=FOL f; spec_name="if_then"}, pp) |
-      Basic (Assume {spec_form=FOL f; spec_name="if_else"}, pp) -> 
-      Debug.debug (fun () ->
-        sprintf "%sExecuting Assume (if-then-else): %d: %s %sCurrent state:\n%s\n"
-          lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm) lineSep (string_of_state state));
-      eval_form state f (fun state' f' ->
-        Debug.debug (fun () -> sprintf "State in eval_form continuation %s\n" (string_of_state state'));
-        fc {state' with pc=(pc_push_new state'.pc (fresh_ident "br") f')})
   | Basic (Assume {spec_form=f; }, pp) -> 
-      produce state f Unit (fun state' -> fc state')
+      produce state f (mk_fresh_snap Bool) (fun state' -> fc state')
   | Choice (comms, pp) ->
-      (* generically process and don't pattern match on the internal commands here*)
-      (* generalize the branch for arbitrarly many branches. *)
-      (* do a fold over the branches, which collects the results from each branch,
-       * then call continuation on the result. *)
-      Debug.debug (fun () ->
-        sprintf "%sExecuting choice: %d: %s %sCurrent state:\n%s\n"
-          lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm) lineSep (string_of_state state));
-      branch_fold_2 state comms exec (fun states ->
-        Debug.debug(fun () ->
-          sprintf "%sBRFOLD States: %s\n" lineSep (string_of_states states));
-
-        (*
-        let state2' =
-          {state' with pc=(pc_add_path_conds state.pc constraints)}
-        in
-        *)
-        fc (List.hd states))
+      branch_simple state comms exec (fun state' -> fc state')
   | Basic (Return {return_args=xs}, pp)  -> todo "exec 9"
   | Basic (Split spec, pp) -> 
     Debug.debug (fun () -> 
@@ -154,19 +130,18 @@ let verify spl_prog prog proc =
       sprintf "%sInitial State:\n{%s\n}\n\n"
       lineSep (string_of_state init_state)
   );
-  let mk_fresh_snap_freesrt label = mk_fresh_snap (Grass.FreeSrt (label, 0)) in
   let precond = Prog.precond_of_proc proc in
   let postcond = Prog.postcond_of_proc proc in
-  produces init_state precond (mk_fresh_snap_freesrt "pre")
+  produces init_state precond (mk_fresh_snap Bool)
     (fun st ->
       let st2 = { st with heap=[] } in
-      produces st2 postcond (mk_fresh_snap_freesrt "post") (fun _ ->
+      produces st2 postcond (mk_fresh_snap Bool) (fun _ ->
            (match proc.proc_body with
            | Some body ->
               exec st body (fun st3 ->
                 Debug.debug(fun () -> sprintf "consume post cond\n");
-                let st4 = {st3 with store=st3.old_store} in
-                consumes st4 postcond (fun _ _ -> None))
+                (*let st4 = {st3 with store=st3.old_store} in *)
+                consumes st3 postcond (fun _ _ -> None))
            | None ->
                None)
       ))

@@ -5,16 +5,26 @@ open GrassUtil
 open Grass
 open Prog 
 open Printf
+open Util
 
-let branch_fold_2 state comms fbr (fc: symb_state list -> 'a option) = 
-  let rec bf2_helper state ccomms br_states fbr fc =
-    match ccomms with
-    | [] -> fc (List.rev br_states)
-    | comm :: comms' -> 
-        fbr state comm (fun state' ->
-          bf2_helper state comms' (state'::br_states) fbr fc)
+let rec branch_simple (state: symb_state) comms (fexec: symb_state -> Prog.command -> (symb_state -> 'a option) -> 'a option) fc =
+  match comms with
+  | [] -> None
+  | comm :: comms' ->
+      fexec state comm fc |>
+      Opt.lazy_or_else (fun () ->
+        branch_simple state comms' fexec fc)
+
+let pc_segs (pi: pc_stack) =
+  (* the accumulator is a pair of implications of type list[term],
+   * and branch conds of type list[term] *)
+  let (impls, bcs) =
+    List.fold_left (fun (cnds, bcs) (_, bci, (pci: form list)) -> 
+      (mk_implies (mk_and (bci :: bcs)) (mk_and pci)) :: cnds,
+        bci :: bcs)
+    ([], []) (List.rev pi)
   in
-  bf2_helper state comms [] fbr fc
+  (List.rev impls, List.rev bcs)
 
 let branch state f fc_f fc_notf =
   let fpush ff =
@@ -29,21 +39,6 @@ let branch state f fc_f fc_notf =
       | Some _ -> 
           fc_notf {state with pc = (fpush fs)} (* f infeasable, branch with q_notf*)
       | None -> None)
-
-(* pc_result holds the path constraints pi, and a join_result for an entire path traversed
- * for a branch condition*)
-type pc_result = pc_stack * term
-
-let pc_segs (pi: pc_stack) =
-  (* the accumulator is a pair of implications of type list[term],
-   * and branch conds of type list[term] *)
-  let (impls, bcs) =
-    List.fold_left (fun (cnds, bcs) (_, bci, pci) -> 
-      (mk_implies (mk_and (bci :: bcs)) (mk_and pci)) :: cnds,
-        bci :: bcs)
-    ([], [mk_true]) (List.rev pi)
-  in
-  (List.rev impls, List.rev bcs)
 
 let join state (fc_branch: symb_state -> (symb_state -> term -> 'a option) -> 'a option) fc =
   let id = (fresh_ident "j") in

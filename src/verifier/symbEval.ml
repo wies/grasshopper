@@ -26,13 +26,11 @@ let rec eval_terms state (ts: term list) (fc: symb_state -> term list -> 'a opti
   eeval state ts [] fc
 
 and eval_term state t (fc: symb_state -> term -> 'a option) =
-  Debug.debug (fun () -> sprintf "eval_term with t = (%s) sort = (%s) \n" (string_of_term t) (string_of_sort (sort_of t)));
   Debug.debug(fun() ->
         sprintf "%sEval Term: State:\n{%s\n}\n\n"
         lineSep (string_of_state state));
   match t with
   | Var (id1, srt1) ->
-    Debug.debug (fun () -> sprintf "var (%s), srt (%s)\n" (string_of_ident id1) (string_of_sort srt1));
     (match find_symb_val state.store id1 with
     | Var (id2, srt2) as tt -> 
         if srt1 = srt2
@@ -88,7 +86,8 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
           (string_of_sort srt1) (string_of_sort srt2))
     | App (IntConst n, ts, Int) as tt ->
         Debug.debug( fun () -> sprintf "IntConst (%s)\n" (string_of_term tt));
-        fc state tt)
+        fc state tt
+    | _ as tt -> fc state tt)
   | App (IntConst n, [], srt) as i -> 
         Debug.debug (fun () -> sprintf "IntConst (%s)\n" (string_of_term i));
         fc state i 

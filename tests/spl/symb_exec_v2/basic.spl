@@ -1,6 +1,5 @@
 options "-symbexec-v2"
 
-/*
 procedure assign(x: Int, y: Int)
   requires x == 0 && y == x
   ensures x == 0 && y == x
@@ -30,23 +29,21 @@ procedure assume1(x: Int)
   ensures x == 100 
 {
 
-   pure assume x == 100;
    x := 10;
+   pure assume x == 100;
 }
-*/
 
-procedure if1(x: Int)
+procedure if1(x: Int, y: Int)
   requires x == 0
-  ensures x > 2
+  ensures x > 2  
 {
-  if (x < 2) {
+  if (x > 2) {
     x := 3;
   } else {
     x := x + 3;
   }
 }
 
-/* fails at eval_term with t = (x^2) sort = (Int) 
 procedure pure2(x: Int, y: Int)
   requires x == y
   ensures x == y + 8
@@ -54,4 +51,3 @@ procedure pure2(x: Int, y: Int)
   x := x + 5;
   x := x + 3;
 }
-*/

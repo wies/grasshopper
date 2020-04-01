@@ -1,5 +1,15 @@
 options "-symbexec"
 
+procedure assume1(x: Int) 
+  requires x > 0
+  ensures x == 100 
+{
+
+   pure assume x == 100;
+   x := 10;
+}
+
+/*
 procedure assign(x: Int, y: Int)
   requires x == 0 && y == x
   ensures x == 10 && y == 0
@@ -244,3 +254,4 @@ procedure old3(x: Node, y: Node)
 {
   lemma_swap(y, x);
 }
+*/
