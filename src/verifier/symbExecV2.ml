@@ -62,7 +62,16 @@ let rec exec state comm (fc: symb_state -> 'a option) =
     | FOL f->
       consume_form state state.heap f (fun state' h' snp ->
         fc state'))
-  | Basic (Call {call_lhs=lhs; call_name=foo; call_args=args}, pp) -> todo "exec 3"
+  | Basic (Call {call_lhs=lhs; call_name=foo; call_args=args}, pp) -> 
+      eval_terms state args (fun state' args' ->
+        List.combine args args' |>
+        Debug.debug(fun () ->
+          sprintf "args' = (%s)\n" (string_of_term_list args'));
+          fc state');
+        (*let contr =(find_proc state'.prog foo).proc_contract in 
+         let precond, postcond = contr.contr_precond, contr.contr_postcond in*)
+
+
   | Basic (Havoc {havoc_args=vars}, pp) -> todo "exec 6"
   | Basic (Assume {spec_form=f; }, pp) -> 
       produce state f (mk_fresh_snap Bool) (fun state' -> fc state')
@@ -139,9 +148,6 @@ let verify spl_prog prog proc =
            (match proc.proc_body with
            | Some body ->
               exec st body (fun st3 ->
-                Debug.debug(fun () -> sprintf "consume post cond\n");
-                (*let st4 = {st3 with store=st3.old_store} in *)
                 consumes st3 postcond (fun _ _ -> None))
-           | None ->
-               None)
+           | None -> None)
       ))

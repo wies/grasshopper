@@ -50,6 +50,12 @@ let string_of_form_list fs =
   |> String.concat ", "
   |> sprintf "[%s]"
 
+let string_of_term_list ts =
+  ts 
+  |> List.map (fun v -> (string_of_term v))
+  |> String.concat ", "
+  |> sprintf "[%s]"
+
 let string_of_symb_store s =
   IdMap.bindings s
   |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_term v))
