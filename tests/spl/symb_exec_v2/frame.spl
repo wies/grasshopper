@@ -1,0 +1,12 @@
+options "-symbexec-v2"
+
+procedure foo(a: Int) returns (b: Int)
+  requires a == 2
+  ensures b == 3 
+
+procedure pure_call(c: Int, d:Int)
+  requires c == 2 && d == c
+  ensures d == 4 
+{
+  c := foo(c);
+}

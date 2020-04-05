@@ -99,6 +99,7 @@ let havoc symb_store terms =
       match term with
       | Var (id, srt) -> 
           let (v, srt2) = mk_fresh_symb_val "v" srt in
+          Debug.debug(fun() -> sprintf "havocing (%s) -> (%s)" (string_of_ident id) (string_of_ident v));
           IdMap.add id (Var (v, srt2)) sm
       | _ -> failwith "tried to havoc a term that isn't a Var")
     symb_store terms

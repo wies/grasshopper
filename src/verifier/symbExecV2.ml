@@ -12,6 +12,49 @@ open SymbProduce
 open SymbBranch
 open Prog
 
+(* Substitutes all constants in spec_form [sf] with other terms according to substution map [subst_map]. *) 
+let subst_spec_form subst_map sf =
+  match sf with
+  | SL slf -> SL (SlUtil.subst_consts subst_map slf)
+  | FOL f -> Prog.FOL (GrassUtil.subst_consts subst_map f)
+
+(* Substitutes identifiers of a spec list with other terms according to substitution map [subst_map]. *)
+let subst_spec_list subst_map sl =
+  List.map (fun s -> 
+    {s with spec_form=subst_spec_form subst_map s.spec_form}) sl
+
+(* Extract the formal input parameter identifiers of a procedure foo in program prog *)
+let formal_ids_of foo prog =
+  let foo_contr =(find_proc prog foo).proc_contract in 
+  foo_contr.contr_formals
+
+(* Extract the formal output parameters identifiers of a procedure foo in program prog *)
+let return_ids_of foo prog =
+  let foo_contr =(find_proc prog foo).proc_contract in 
+  foo_contr.contr_returns
+
+let precond_of foo prog =
+  (find_proc prog foo).proc_contract.contr_precond
+
+let postcond_of foo prog =
+  (find_proc prog foo).proc_contract.contr_postcond
+
+(* Collect the formal return terms of a procedure foo in program prog *)
+let formal_return_terms foo prog =
+  let returns = return_ids_of foo prog in
+  let locs = (find_proc prog foo).proc_contract.contr_locals in 
+    List.fold_left
+      (fun acc var ->
+        let srt = Grass.IdMap.find var locs in
+        Grass.Var (var, srt.var_sort) :: acc)
+      [] (returns)
+
+let pr_spec_form_list sfl =
+  sfl
+  |> List.map (fun v -> (string_of_format pr_spec_form v))
+  |> String.concat ", "
+  |> sprintf "[%s]"
+
 let rec exec state comm (fc: symb_state -> 'a option) =
   match comm with
   | Basic (Assign {assign_lhs=[field];
@@ -63,15 +106,36 @@ let rec exec state comm (fc: symb_state -> 'a option) =
       consume_form state state.heap f (fun state' h' snp ->
         fc state'))
   | Basic (Call {call_lhs=lhs; call_name=foo; call_args=args}, pp) -> 
+      Debug.debug (fun () -> 
+        sprintf "%sExecuting Procedure Call: %d: %s%sCurrent state:\n%s\n"
+          lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+          lineSep (string_of_state state)
+      );
+      Debug.debug(fun () -> sprintf "\nOn args: %s\n" (string_of_format pr_term_list args));
       eval_terms state args (fun state' args' ->
-        List.combine args args' |>
-        Debug.debug(fun () ->
-          sprintf "args' = (%s)\n" (string_of_term_list args'));
-          fc state');
-        (*let contr =(find_proc state'.prog foo).proc_contract in 
-         let precond, postcond = contr.contr_precond, contr.contr_postcond in*)
+        Debug.debug(fun () -> sprintf "\nEvalated args: %s\n" (string_of_format pr_term_list args'));
+        let sm = 
+          List.combine (formal_ids_of foo state'.prog) args
+          |> List.fold_left (fun sm (f, a) -> IdMap.add f a sm) IdMap.empty 
+        in
+        let precond' = subst_spec_list sm (precond_of foo state'.prog) in
+        Debug.debug(fun () -> sprintf "\nPrecond[x -> e'] = %s\n" (pr_spec_form_list precond'));
+        consumes state' precond' (fun state2' _ ->
+          let state3' = {state2' with
+            store = havoc state2'.store (formal_return_terms foo state2'.prog)}
+          in
 
-
+          let form_ret = List.combine (return_ids_of foo state'.prog) (formal_return_terms foo state'.prog) in
+          let sm_lhs = 
+            List.combine form_ret lhs
+            |> List.fold_left (fun sm ((id, frt), id2) ->
+                Debug.debug (fun () -> sprintf "return fold (%s, %s)\n" (string_of_ident id) (string_of_ident id2));
+                IdMap.add id (mk_free_const (sort_of frt) id2) sm) IdMap.empty 
+          in
+          let postcond' = subst_spec_list sm_lhs (subst_spec_list sm (postcond_of foo state'.prog)) in
+          Debug.debug(fun () -> sprintf "\nPostcond[x -> e'][y->z] = %s\n" (pr_spec_form_list postcond'));
+          produces state3' postcond' (mk_fresh_snap Bool) (fun state4' ->
+            fc state4')))
   | Basic (Havoc {havoc_args=vars}, pp) -> todo "exec 6"
   | Basic (Assume {spec_form=f; }, pp) -> 
       produce state f (mk_fresh_snap Bool) (fun state' -> fc state')
@@ -134,7 +198,6 @@ let verify spl_prog prog proc =
   let old_store =
     IdMap.fold (fun id v acc -> IdMap.add id v acc) init_state.store empty_store in
   let init_state = {init_state with old_store=old_store} in
-
   Debug.debug(fun() ->
       sprintf "%sInitial State:\n{%s\n}\n\n"
       lineSep (string_of_state init_state)
