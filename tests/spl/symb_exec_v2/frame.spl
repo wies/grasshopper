@@ -4,9 +4,27 @@ procedure foo(a: Int) returns (b: Int)
   requires a == 2
   ensures b == 3 
 
-procedure pure_call(c: Int, d:Int)
+procedure pure_call(c: Int) returns (a: Int)
+  requires c == 2
+  ensures a == 3 
+{
+  a := foo(c);
+}
+
+procedure pure_call2(c: Int, d:Int)
   requires c == 2 && d == c
+  ensures c == 2 && d == 4
+{
+  d := foo(c);
+}
+
+procedure foo3(a: Int) returns (b: Int)
+  requires a == 2
+  ensures b == 4 && a == 3
+
+procedure pure_call3(c: Int) returns (d: Int)
+  requires c == 2
   ensures d == 4 
 {
-  c := foo(c);
+  d := foo3(c);
 }

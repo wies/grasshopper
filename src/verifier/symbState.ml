@@ -88,7 +88,16 @@ let find_symb_val (store: symb_store) (id: ident) =
   );
   try IdMap.find id store
   with Not_found ->
-    failwith ("find_symb_val: Could not find symbolic val for " ^ (string_of_ident id))
+    let ts = 
+      IdMap.fold (fun k v acc -> 
+        match v with
+        | Var (id2, srt) as t ->
+            if id2 = id then t :: acc else acc
+        | _ -> acc) store []
+    in
+    match ts with
+    | [] -> failwith ("find_symb_val: Could not find symbolic val for " ^ (string_of_ident id))
+    | hd :: _ -> hd
 
 let maybe_find_symb_val (store: symb_store) (id: ident) = IdMap.find_opt id store
 

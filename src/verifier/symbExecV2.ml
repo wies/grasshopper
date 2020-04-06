@@ -49,6 +49,29 @@ let formal_return_terms foo prog =
         Grass.Var (var, srt.var_sort) :: acc)
       [] (returns)
 
+let subst_precond_formals foo prog args =
+  let sm = 
+    List.combine (formal_ids_of foo prog) args
+    |> List.fold_left (fun sm (f, a) -> IdMap.add f a sm) IdMap.empty 
+  in
+  subst_spec_list sm (precond_of foo prog) 
+
+let subst_postcond_formals foo prog args lhs_args =
+  let form_ret = List.combine (return_ids_of foo prog) (formal_return_terms foo prog) in
+  let sm = 
+    List.combine (formal_ids_of foo prog) args
+    |> List.fold_left (fun sm (f, a) -> IdMap.add f a sm) IdMap.empty 
+  in
+  let postcond = subst_spec_list sm (postcond_of foo prog) in
+  let sm_lhs = 
+    List.combine form_ret lhs_args
+    |> List.fold_left (fun sm ((id, frt), id2) ->
+        Debug.debug (fun () -> sprintf "return fold (%s, %s)\n"
+         (string_of_ident id) (string_of_ident id2));
+        IdMap.add id (mk_free_const (sort_of frt) id2) sm) IdMap.empty 
+  in
+  subst_spec_list sm_lhs postcond
+
 let pr_spec_form_list sfl =
   sfl
   |> List.map (fun v -> (string_of_format pr_spec_form v))
@@ -83,10 +106,6 @@ let rec exec state comm (fc: symb_state -> 'a option) =
           {macc with store = IdMap.add id t' macc.store}
       ) state'
       in
-      Debug.debug(fun() ->
-        sprintf "%sBasic Assign Done:\nState:\n{%s\n}\n\n"
-        lineSep (string_of_state st)
-      );
       fc st)
   | Seq (comms, pp) ->
       Debug.debug (fun () -> 
@@ -111,32 +130,19 @@ let rec exec state comm (fc: symb_state -> 'a option) =
           lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
           lineSep (string_of_state state)
       );
-      Debug.debug(fun () -> sprintf "\nOn args: %s\n" (string_of_format pr_term_list args));
       eval_terms state args (fun state' args' ->
-        Debug.debug(fun () -> sprintf "\nEvalated args: %s\n" (string_of_format pr_term_list args'));
-        let sm = 
-          List.combine (formal_ids_of foo state'.prog) args
-          |> List.fold_left (fun sm (f, a) -> IdMap.add f a sm) IdMap.empty 
-        in
-        let precond' = subst_spec_list sm (precond_of foo state'.prog) in
+        let precond' = subst_precond_formals foo state'.prog args' in
         Debug.debug(fun () -> sprintf "\nPrecond[x -> e'] = %s\n" (pr_spec_form_list precond'));
         consumes state' precond' (fun state2' _ ->
           let state3' = {state2' with
             store = havoc state2'.store (formal_return_terms foo state2'.prog)}
           in
-
-          let form_ret = List.combine (return_ids_of foo state'.prog) (formal_return_terms foo state'.prog) in
-          let sm_lhs = 
-            List.combine form_ret lhs
-            |> List.fold_left (fun sm ((id, frt), id2) ->
-                Debug.debug (fun () -> sprintf "return fold (%s, %s)\n" (string_of_ident id) (string_of_ident id2));
-                IdMap.add id (mk_free_const (sort_of frt) id2) sm) IdMap.empty 
-          in
-          let postcond' = subst_spec_list sm_lhs (subst_spec_list sm (postcond_of foo state'.prog)) in
+          let postcond' = subst_postcond_formals foo state'.prog args lhs in
           Debug.debug(fun () -> sprintf "\nPostcond[x -> e'][y->z] = %s\n" (pr_spec_form_list postcond'));
           produces state3' postcond' (mk_fresh_snap Bool) (fun state4' ->
+            (* todo, re-instate the old heap?*)
             fc state4')))
-  | Basic (Havoc {havoc_args=vars}, pp) -> todo "exec 6"
+  | Basic (Havoc {havoc_args=vars}, pp) -> todo "havoc"
   | Basic (Assume {spec_form=f; }, pp) -> 
       produce state f (mk_fresh_snap Bool) (fun state' -> fc state')
   | Choice (comms, pp) ->

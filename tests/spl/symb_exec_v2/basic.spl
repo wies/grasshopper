@@ -51,3 +51,10 @@ procedure pure2(x: Int, y: Int)
   x := x + 5;
   x := x + 3;
 }
+
+procedure pure_swap(x: Int, y: Int)
+  requires x == 0 && y == 10 
+  ensures x == 10 && y == 0
+{
+  y, x := x, y;
+}

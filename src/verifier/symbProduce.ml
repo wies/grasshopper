@@ -46,7 +46,7 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
   | Sl.Atom (Sl.Region, ts, a) -> todo "region terms"
   | Sl.Atom (Sl.Emp, ts, _) -> todo "Atom emp"
   | Sl.Atom (Sl.Pred _, ts, _) -> todo "Atom Pred"
-  | Sl.SepOp (op, f1, f2, _) as slf ->
+  | Sl.SepOp (op, f1, f2, _) ->
      produce_sl_form state f1 (snap_first snp) (fun state' ->
        produce_sl_form state' f2 (snap_second snp) fc)
   | Sl.BoolOp (op, fs, _) -> 

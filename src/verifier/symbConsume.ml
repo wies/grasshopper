@@ -72,6 +72,5 @@ let rec consumes state (assns: Prog.spec list) fc =
   match assns with
   | [] -> fc state Unit
   | hd :: assns' -> 
-      Debug.debug(fun () -> sprintf "Produces calling produce on hd\n");
       consume state state.heap hd.spec_form (fun state' h' snap' ->
         consumes state assns' fc)

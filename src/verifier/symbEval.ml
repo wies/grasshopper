@@ -31,6 +31,8 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
         lineSep (string_of_state state));
   match t with
   | Var (id1, srt1) ->
+   Debug.debug(fun() ->
+        sprintf "%sERIC Var sort (%s)\n" lineSep (string_of_sort srt1));
     (match find_symb_val state.store id1 with
     | Var (id2, srt2) as tt -> 
         if srt1 = srt2
