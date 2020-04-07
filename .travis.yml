@@ -1,24 +1,37 @@
 language: c
-sudo: required
+dist: xenial
+
 install:
-  - wget https://github.com/Z3Prover/z3/releases/download/z3-4.6.0/z3-4.6.0-x64-ubuntu-14.04.zip -O ~/z3.zip
+  - wget https://github.com/Z3Prover/z3/releases/download/z3-4.8.7/z3-4.8.7-x64-ubuntu-16.04.zip -O ~/z3.zip
   - unzip ~/z3.zip -d ~/z3
   - z3 --version
   - wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-ocaml.sh
   - bash -ex .travis-ocaml.sh
-  - opam install -y ocamlfind
-  - opam install -y ocamlbuild
+  - opam install -y ocamlfind ocamlbuild
   - eval $(opam config env)
+
+cache:
+  apt: true
+  directories:
+  - $HOME/.opam
+
 env:
-  - OCAML_VERSION=4.06 PATH="$HOME/z3/z3-4.6.0-x64-ubuntu-14.04/bin/:$PATH"
+  global:
+  - OCAML_VERSION=4.06
+  - PATH="$HOME/z3/z3-4.8.7-x64-ubuntu-16.04/bin/:$PATH"
+  - OPAMVERBOSE=1
+  - OPAMYES=true
+  - OPAMKEEPBUILDDIR=true
+
 script:
   - bash build.sh
   - bash build.sh tests
+
 os: linux
+
 notifications:
   slack:
     rooms: 'grasshopper-tool:XSTpOLbUL9oeQcdiIZ5BFBpa'
     template:
       - "Build <%{build_url}|#%{build_number}> (<%{compare_url}|%{commit}>) of %{repository_slug}@%{branch} by %{author} %{result} in %{duration}"
       - "Commit message: %{commit_subject}"
-
