@@ -3,11 +3,12 @@ open SymbEval
 open SymbState
 open GrassUtil
 open Printf
+open Util
 
 let produce_symb_form state f snp (fc: symb_state -> 'a option) =
   let s2 = { state with pc = pc_add_path_cond state.pc f} in
   let s3 = {s2 with pc = pc_add_path_cond s2.pc 
-    (mk_atom Eq [term_of_snap snp; term_of_snap Unit])}
+    (mk_atom Eq [term_of (term_of_snap snp); term_of (term_of_snap Unit)])}
   in
   fc s3
 
@@ -20,7 +21,7 @@ let rec produce_symb_forms state fs snp (fc: symb_state -> 'a option) =
 
 let produce_form state (f: Grass.form) snp (fc: symb_state -> 'a option) =
   eval_form state f (fun state' f' -> 
-    produce_symb_form state' f' snp fc)
+    produce_symb_form state' (form_of f') snp fc)
 
 let rec produce_sl_forms state (fs: Sl.form list) snp (fc: symb_state -> 'a option) =
   match fs with
@@ -64,6 +65,18 @@ let rec produces state (assns: Prog.spec list) snp fc =
   match assns with
   | [] -> None 
   | hd :: assns' -> 
-      (match produce state hd.spec_form snp fc with
-      | Some err -> Some err
-      | None -> produces state assns' snp fc)
+    (match produce state hd.spec_form snp fc with
+    | Some err -> Some err
+    | None -> produces state assns' snp fc)
+
+let produce_symb_sf state sf snp (fc: symb_state -> 'a option) =
+  match sf with
+  | SymbFOL fol -> produce_symb_form state (form_of fol) snp fc
+  | SymbSL (Symbslf slf) -> produce_sl_form state slf snp fc
+
+let rec produces_symb_sf state (assns: symb_spec list) snp fc =
+  match assns with
+  | [] -> None 
+  | hd :: assns' -> 
+    produce_symb_sf state hd.symb_spec_form snp fc
+    |> Opt.lazy_or_else (fun () -> produces_symb_sf state assns' snp fc)

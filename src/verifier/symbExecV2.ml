@@ -16,12 +16,22 @@ open Prog
 let subst_spec_form subst_map sf =
   match sf with
   | SL slf -> SL (SlUtil.subst_consts subst_map slf)
-  | FOL f -> Prog.FOL (GrassUtil.subst_consts subst_map f)
+  | FOL f -> FOL (GrassUtil.subst_consts subst_map f)
 
-(* Substitutes identifiers of a spec list with other terms according to substitution map [subst_map]. *)
+let subst_symb_spec_form subst_map sf =
+  match sf with
+  | SL slf -> SymbSL (Symbslf (SlUtil.subst_consts subst_map slf))
+  | FOL f -> SymbFOL (Symbf (GrassUtil.subst_consts subst_map f))
+
 let subst_spec_list subst_map sl =
   List.map (fun s -> 
     {s with spec_form=subst_spec_form subst_map s.spec_form}) sl
+
+(* Substitutes identifiers of a spec list with other terms according to substitution map [subst_map]. *)
+let subst_symb_spec_list subst_map sl =
+  List.map (fun s -> 
+    let sf = subst_symb_spec_form subst_map s.spec_form in
+    mk_symb_spec sf s.spec_kind s.spec_name s.spec_msg s.spec_pos) sl
 
 (* Extract the formal input parameter identifiers of a procedure foo in program prog *)
 let formal_ids_of foo prog =
@@ -52,9 +62,9 @@ let formal_return_terms foo prog =
 let subst_precond_formals foo prog args =
   let sm = 
     List.combine (formal_ids_of foo prog) args
-    |> List.fold_left (fun sm (f, a) -> IdMap.add f a sm) IdMap.empty 
+    |> List.fold_left (fun sm (f, Symbt a) -> IdMap.add f a sm) IdMap.empty 
   in
-  subst_spec_list sm (precond_of foo prog) 
+  subst_symb_spec_list sm (precond_of foo prog) 
 
 let subst_postcond_formals foo prog args lhs_args =
   let form_ret = List.combine (return_ids_of foo prog) (formal_return_terms foo prog) in
@@ -62,7 +72,7 @@ let subst_postcond_formals foo prog args lhs_args =
     List.combine (formal_ids_of foo prog) args
     |> List.fold_left (fun sm (f, a) -> IdMap.add f a sm) IdMap.empty 
   in
-  let postcond = subst_spec_list sm (postcond_of foo prog) in
+  let f = subst_spec_list sm (postcond_of foo prog) in
   let sm_lhs = 
     List.combine form_ret lhs_args
     |> List.fold_left (fun sm ((id, frt), id2) ->
@@ -70,7 +80,7 @@ let subst_postcond_formals foo prog args lhs_args =
          (string_of_ident id) (string_of_ident id2));
         IdMap.add id (mk_free_const (sort_of frt) id2) sm) IdMap.empty 
   in
-  subst_spec_list sm_lhs postcond
+  subst_symb_spec_list sm_lhs f 
 
 let pr_spec_form_list sfl =
   sfl
@@ -131,15 +141,15 @@ let rec exec state comm (fc: symb_state -> 'a option) =
           lineSep (string_of_state state)
       );
       eval_terms state args (fun state' args' ->
-        let precond' = subst_precond_formals foo state'.prog args' in
-        Debug.debug(fun () -> sprintf "\nPrecond[x -> e'] = %s\n" (pr_spec_form_list precond'));
-        consumes state' precond' (fun state2' _ ->
+        let precond_symb_sf' = subst_precond_formals foo state'.prog args' in
+        Debug.debug(fun () -> sprintf "\nPrecond[x -> e'] = %s\n" (string_of_symb_spec_list precond_symb_sf'));
+        consumes_symb_sf state' precond_symb_sf' (fun state2' _ ->
           let state3' = {state2' with
             store = havoc state2'.store (formal_return_terms foo state2'.prog)}
           in
-          let postcond' = subst_postcond_formals foo state'.prog args lhs in
-          Debug.debug(fun () -> sprintf "\nPostcond[x -> e'][y->z] = %s\n" (pr_spec_form_list postcond'));
-          produces state3' postcond' (mk_fresh_snap Bool) (fun state4' ->
+          let post_symbf' = subst_postcond_formals foo state'.prog args lhs in
+          Debug.debug(fun () -> sprintf "\nPostcond[x -> e'][y->z] = %s\n" (string_of_symb_spec_list post_symbf'));
+          produces_symb_sf state3' post_symbf' (mk_fresh_snap Bool) (fun state4' ->
             (* todo, re-instate the old heap?*)
             fc state4')))
   | Basic (Havoc {havoc_args=vars}, pp) -> todo "havoc"
@@ -217,6 +227,7 @@ let verify spl_prog prog proc =
            (match proc.proc_body with
            | Some body ->
               exec st body (fun st3 ->
+                Debug.debug(fun () -> "EXEC DONE ********\n");
                 consumes st3 postcond (fun _ _ -> None))
            | None -> None)
       ))

@@ -12,8 +12,7 @@ let rec branch_simple (state: symb_state) comms (fexec: symb_state -> Prog.comma
   | [] -> None
   | comm :: comms' ->
       fexec state comm fc |>
-      Opt.lazy_or_else (fun () ->
-        branch_simple state comms' fexec fc)
+      Opt.lazy_or_else (fun () -> branch_simple state comms' fexec fc)
 
 let pc_segs (pi: pc_stack) =
   (* the accumulator is a pair of implications of type list[term],
