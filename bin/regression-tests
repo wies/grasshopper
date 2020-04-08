@@ -148,5 +148,8 @@ OPTIONS="$@" ./bin/run-tests $SYMB_EXEC_TESTS || res=$?
 ./bin/xp_pldi20.sh || res=$?
 
 duration=$SECONDS
-echo -e "\nRegression tests done. Elapsed time: $(($duration / 60))m $(($duration % 60))s"
+if [ $res -ne 0 ]; then
+    echo -e "\n\033[31mThere were failing test cases!\033[0m"
+fi
+echo -e "Regression tests done. Elapsed time: $(($duration / 60))m $(($duration % 60))s"
 exit $res

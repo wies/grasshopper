@@ -41,7 +41,7 @@ ensure_fails()
     echo -e "$tabs\033[31mFailed.\033[0m    "
     echo -e "\033[31m*** SOUNDNESS ERROR ***************************************"
     echo "*** SOUNDNESS ERROR: Expected benchmark to fail."
-    echo -e "*** SOUNDNESS ERROR ***************************************"
+    echo -e "*** SOUNDNESS ERROR ***************************************\033[0m"
     PASSED=0
   else
     echo -ne "$tabs\033[32mPassed.\033[0m    "
