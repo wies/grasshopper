@@ -140,26 +140,13 @@ flows:hashtbl-gu_cont   tests/spl/reloc/hashtbl-give-up.spl      'flowint_cont' 
 flows:hashtbl-gu_step   tests/spl/reloc/hashtbl-give-up.spl      'flowint_step'     pass
 "
 
-# These are the old inductive b-link version that's broken now because it still uses FPo
-# flows:b-link-tree_init tests/spl/reloc/b-link.spl           'init' pass
-# flows:b-link-tree_findNext tests/spl/reloc/b-link.spl           'findNext' pass
-# flows:b-link-tree_search   tests/spl/reloc/b-link.spl           'search'   pass
-# flows:b-link-tree_insert   tests/spl/reloc/b-link.spl           'insert'   pass
-# flows:b-link-tree_delete   tests/spl/reloc/b-link.spl           'delete'   pass
-# flows:b-link-tree_keyset   tests/spl/reloc/b-link.spl           'keyset_implies_leaf'     pass
-# flows:b-link-tree_lemma_fm   tests/spl/reloc/b-link.spl         'lemma_fm'     pass
-# flows:b-link-tree_int_ind   tests/spl/reloc/b-link.spl      'lemma_int_ind_is_valid'     pass
-# flows:b-link-tree_compute_int   tests/spl/reloc/b-link.spl      'compute_int'     pass
-# flows:b-link-tree_cont_props   tests/spl/reloc/b-link.spl      'lemma_cont_props'     pass
-# flows:b-link-tree_int_stable   tests/spl/reloc/b-link.spl      'lemma_int_stable'     pass
-# flows:b-link-tree_inreach_impl_inset   tests/spl/reloc/b-link.spl      'inreach_impl_inset'     pass
-# flows:b-link-tree_inset_step   tests/spl/reloc/b-link.spl      'flowint_inset_step'     pass
-# flows:b-link-tree_inreach_step   tests/spl/reloc/b-link.spl      'flowint_inreach_step'     pass
-# flows:b-link-tree_proj   tests/spl/reloc/b-link.spl      'flowint_proj'     pass
-# flows:b-link-tree_cont   tests/spl/reloc/b-link.spl      'flowint_cont'     pass
-# flows:b-link-tree_step   tests/spl/reloc/b-link.spl      'flowint_step'     pass
-
 res=0
-OPTIONS=$@ time -f "Elapsed user time: %Us.\nElapsed real time: %es." ./bin/run-tests $TESTS || res=$?
-OPTIONS="$@" time -f "Elapsed user time: %Us.\nElapsed real time: %es." ./bin/run-tests $SYMB_EXEC_TESTS || res=$?
+SECONDS=0 # Using simpler timing logic for the entire script since individual tests are timed
+
+OPTIONS="$@" ./bin/run-tests $TESTS || res=$?
+OPTIONS="$@" ./bin/run-tests $SYMB_EXEC_TESTS || res=$?
+./bin/xp_pldi20.sh || res=$?
+
+duration=$SECONDS
+echo -e "\nRegression tests done. Elapsed time: $(($duration / 60))m $(($duration % 60))s"
 exit $res

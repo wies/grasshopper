@@ -23,6 +23,8 @@ outputfile=/tmp/implementations-table
 
 SPLPATH=tests/spl/flows
 
+res=0
+
 run()
 {
     name="${1}"
@@ -39,7 +41,8 @@ run()
         { TIMEFORMAT=%3R; time ./grasshopper.native $SPLPATH/$f.spl -module $f 2>&1 ; } 2>> $timesfile
         retcode=$?
         if [ $retcode -ne 0 ]; then
-            echo -e "\nGrasshopper exited with errors on file $f.spl.\n"
+            echo -e "\n\033[31mGrasshopper exited with errors on file $f.spl.\033[0m\n"
+            res=$retcode
         fi
     done
     awk -F "\t" '{specs+=$1; progs+=$2; total+=$3} END{printf("\t& %d\t& %d\t& %d", progs, specs, total);}' $locfile >> $outputfile
@@ -56,7 +59,8 @@ run "Array library" $FILES8
 run "B+ tree" $FILES4
 run "B-link (core)" $FILES5
 run "B-link (half split)" $FILES6
-run "B-tree (full split)" $FILES7
+echo "WARNING: skipping B-link (full split) because it's too long for Travis CI"
+# run "B-tree (full split)" $FILES7
 run "Hash table (link)" $FILES2
 run "Hash table (give-up)" $FILES3
 run "Lock-coupling list" $FILES9
@@ -67,3 +71,4 @@ awk '{sum+=$1;} END{printf("\t& %d\n", int(sum+0.5));}' $timestotalfile >> $outp
 
 echo ""
 cat $outputfile
+exit $res
