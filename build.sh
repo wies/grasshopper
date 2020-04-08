@@ -22,7 +22,7 @@ else
 fi
 
 case $action in
-    clean)  ocb -clean;;
+    clean)  ocb -clean; echo "" ;;
     native) ocb ${TARGET//" "/".native "} ;;
     byte)   ocb ${TARGET//" "/".byte "} ;;
     all)    ocb ${TARGET//" "/".native "} ${TARGET//" "/".byte "} ;;
