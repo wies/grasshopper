@@ -17,7 +17,7 @@ cache:
 
 env:
   global:
-  - OCAML_VERSION=4.06
+  - OCAML_VERSION=4.07
   - PATH="$HOME/z3/z3-4.8.7-x64-ubuntu-16.04/bin/:$PATH"
   - OPAMVERBOSE=1
   - OPAMYES=true
