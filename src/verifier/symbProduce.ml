@@ -2,6 +2,7 @@
 open SymbEval
 open SymbState
 open GrassUtil
+open Grass
 open Printf
 open Util
 
@@ -20,6 +21,9 @@ let rec produce_symb_forms state fs snp (fc: symb_state -> 'a option) =
         produce_symb_forms state' fs' snp fc)
 
 let produce_form state (f: Grass.form) snp (fc: symb_state -> 'a option) =
+  Debug.debug(fun() ->
+    sprintf "%sProduce Form: %s\n Current State:\n{%s\n}\n\n"
+    lineSep (string_of_form f) (string_of_state state));
   eval_form state f (fun state' f' -> 
     produce_symb_form state' (form_of f') snp fc)
 
@@ -32,14 +36,12 @@ let rec produce_sl_forms state (fs: Sl.form list) snp (fc: symb_state -> 'a opti
 
 and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
    Debug.debug(fun() ->
-      sprintf "%sProduce SL form in Current State:\n{%s\n}\n\n"
-      lineSep (string_of_state state));
+      sprintf "%sProduce SL Form: %s\n Current State:\n{%s\n}\n\n"
+      lineSep (Sl.string_of_form f) (string_of_state state));
   match f with
   | Sl.Pure (p, _) ->
-   Debug.debug( fun() -> sprintf "pure Atom = %s\n" (Grass.string_of_form p));
    produce_form state p snp fc
   | Sl.Atom (Sl.Region, [t], a) -> 
-     Debug.debug( fun() -> sprintf "SL atom = %s\n" (Sl.string_of_form f)); 
      eval_term state t (fun state' t' ->
        let hc = mk_heap_chunk_obj t' Unit empty_store in 
         let h, stack = heap_add state'.heap state'.pc hc in

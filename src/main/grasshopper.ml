@@ -141,14 +141,18 @@ let check_spl_program spl_prog proc =
             IdMap.fold (fun id _ -> IdSet.add id) prog.prog_procs IdSet.empty
   in
   let simple_prog =
-    if !Config.symbexec
-    then SymbExec.simplify proc prog
+    if !Config.symbexec then
+      SymbExec.simplify proc prog
+    else if !Config.symbexec_v2 then
+      SymbExecV2.simplify proc prog
     else Verifier.simplify procs prog in
   let check_proc =
     if !Config.typeonly then
       fun aux_axioms proc -> aux_axioms, []
     else if !Config.symbexec then
       SymbExec.check spl_prog simple_prog
+    else if !Config.symbexec_v2 then
+      SymbExecV2.verify spl_prog simple_prog
     else
       Verifier.check_proc simple_prog
   in    
@@ -205,61 +209,6 @@ let check_spl_program spl_prog proc =
   let lemmas, procs = List.partition (fun proc -> proc.Prog.proc_is_lemma) sorted_procs in
   List.fold_left (check simple_prog) ([], true) (lemmas @ procs)
 
-(** TODO(eric): remove me, hack for testing symbState funs *)
-let check_spl_program_v2 spl_prog proc =
-  let prog = SplTranslator.to_program spl_prog in
-  let procs =  (* Split proc string to get names of multiple procedures *)
-    match proc with
-    | Some p ->
-      p |> String.split_on_char ' '
-        |> List.fold_left (fun ps s -> IdSet.add (s, 0) ps) IdSet.empty
-    | None ->
-        match !Config.splmodule with
-        | Some m ->
-            IdMap.fold (fun id decl procs ->
-              let contains s1 s2 =
-                let re = Str.regexp_string s2
-                in
-                try ignore (Str.search_forward re s1 0); true
-                with Not_found -> false
-              in
-              if contains decl.Prog.proc_contract.contr_pos.sp_file m  then
-                begin
-                  IdSet.add id procs
-                end else procs) prog.prog_procs IdSet.empty
-        | None ->
-            IdMap.fold (fun id _ -> IdSet.add id) prog.prog_procs IdSet.empty
-  in
-  let simple_prog =
-    if !Config.symbexec_v2
-    then SymbExec.simplify proc prog
-    else Verifier.simplify procs prog in
-  (** TODO(eric): Remove me, hack for testing only. *)
-  let debug_symb_exec_v2 simple_prog first proc =
-    let _  = if !Config.symbexec_v2 then
-      let _ = SymbExecV2.verify simple_prog prog proc in
-      ()
-    in
-    true
-  in
-  let procs =
-    IdSet.fold (fun p procs ->
-      match Prog.find_proc_with_deps simple_prog p with
-      | [] ->
-        let available =
-          Prog.fold_procs
-            (fun acc proc ->
-              let name = Prog.name_of_proc proc in
-              "\t" ^ string_of_ident name ^ "\n" ^ acc)
-            "" prog
-        in
-        failwith ("Could not find a procedure named " ^ (string_of_ident p) ^
-                  ". Available procedures are:\n" ^ available)
-      | ps -> ps :: procs) procs []
-    |> List.concat |> List.sort_uniq compare
-  in
-  List.fold_left (debug_symb_exec_v2 simple_prog) true procs
-
 (** Get current time *)
 let current_time () =
   let ptime = Unix.times () in
@@ -303,9 +252,7 @@ let _ =
       if !Config.simplify then
         SplSyntax.print_cu stdout spl_prog
       else begin
-        (** TODO(eric): Remove this hack for testing symbState *)
-        let res = check_spl_program_v2 spl_prog !Config.procedure in
-        (* let _, res = check_spl_program spl_prog !Config.procedure in *)
+        let _, res = check_spl_program spl_prog !Config.procedure in
         print_stats start_time; 
         print_c_program spl_prog;
         if !Config.verify && res then

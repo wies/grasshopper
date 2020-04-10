@@ -140,11 +140,19 @@ flows:hashtbl-gu_cont   tests/spl/reloc/hashtbl-give-up.spl      'flowint_cont' 
 flows:hashtbl-gu_step   tests/spl/reloc/hashtbl-give-up.spl      'flowint_step'     pass
 "
 
+SYMB_EXEC_VIPER_TESTS="
+symb_exec_viper:basic   tests/spl/symb_exec_v2/basic.spl               ''     pass
+symb_exec_viper:assert  tests/spl/symb_exec_v2/basic_assert.spl        ''     pass
+symb_exec_viper:frame   tests/spl/symb_exec_v2/frame.spl               ''     pass
+symb_exec_viper:heap    tests/spl/symb_exec/array.spl                  ''     pass
+"
+
 res=0
 SECONDS=0 # Using simpler timing logic for the entire script since individual tests are timed
 
 OPTIONS="$@" ./bin/run-tests $TESTS || res=$?
 OPTIONS="$@" ./bin/run-tests $SYMB_EXEC_TESTS || res=$?
+OPTIONS="$@" ./bin/run-tests $SYMB_EXEC_VIPER_TESTS || res=$?
 ./bin/xp_pldi20.sh || res=$?
 
 duration=$SECONDS

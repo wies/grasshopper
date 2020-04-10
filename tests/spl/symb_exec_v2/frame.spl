@@ -2,11 +2,11 @@ options "-symbexec-v2"
 
 procedure foo(a: Int) returns (b: Int)
   requires a == 2
-  ensures b == 3 
+  ensures b == 4
 
 procedure pure_call(c: Int) returns (a: Int)
   requires c == 2
-  ensures a == 3 
+  ensures a == 4
 {
   a := foo(c);
 }
@@ -24,7 +24,39 @@ procedure foo3(a: Int) returns (b: Int)
 
 procedure pure_call3(c: Int) returns (d: Int)
   requires c == 2
-  ensures d == 4 
+  ensures d == 4
 {
   d := foo3(c);
+}
+
+procedure foo4(a: Int, b: Int) returns (c: Int)
+  requires a < 2 && b < 5
+  ensures c == 4
+
+procedure pure_call4(d: Int, e: Int) returns (f: Int)
+  requires d == 0 && e == 1 
+  ensures f == 4
+{
+  f := foo4(d, e);
+}
+
+/* test with acc predicates */
+struct Node {
+  var next: Node;
+}
+
+procedure foo_heap(x: Node, y: Node)
+  requires acc(x)
+  ensures acc(x) &*& x.next == y
+{
+  x.next := y;
+}
+
+procedure bar_heap(x: Node, y: Node)
+  requires acc(x) &*& acc(y)
+  ensures acc(x) &*& acc(y) &*& y.next == old(y.next)
+{
+  var z := y.next;
+  foo_heap(x, y);
+  pure assert (y.next == z);
 }

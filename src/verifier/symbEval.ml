@@ -27,12 +27,10 @@ let rec eval_terms state (ts: term list) (fc: symb_state -> symb_term list -> 'a
 
 and eval_term state t (fc: symb_state -> symb_term -> 'a option) =
   Debug.debug(fun() ->
-        sprintf "%sEval Term: State:\n{%s\n}\n\n"
-        lineSep (string_of_state state));
+    sprintf "%sEval Term: %s\n State:\n{%s\n}\n\n"
+    lineSep (string_of_term t) (string_of_state state));
   match t with
   | Var (id1, srt1) ->
-   Debug.debug(fun() ->
-        sprintf "%sERIC Var sort (%s)\n" lineSep (string_of_sort srt1));
     (match find_symb_val state.store id1 with
     | Symbt (Var (id2, srt2)) as tt -> 
         if srt1 = srt2
@@ -92,7 +90,14 @@ and eval_term state t (fc: symb_state -> symb_term -> 'a option) =
         Debug.debug (fun () -> sprintf "IntConst (%s)\n" (string_of_term i));
         fc state (Symbt i)
   | App (Null, [], srt) as t-> fc state (Symbt t)
-  | App (symb, ts, srt) -> todo "eval App catch all"
+  | App (Old, ts, srt) ->
+     let state2 = {state with store=state.old_store} in
+     eval_terms state2 ts (fun state2' ts' ->
+       fc state2' (Symbt (App (Old, List.map (fun t -> term_of t) ts', srt))))
+  | _ -> todo "eval_term catch all"
+
+let eval_symb_term state (symbf: symb_term) (fc: symb_state -> symb_term -> 'a option) =
+  fc state symbf
 
 (** eval_forms evaluates a formula list fs element-wise using the eval
   function below, accumulating the resulting formulas carrying symbolic values *)
@@ -107,20 +112,17 @@ let rec eval_forms state (fs: form list) (fc: symb_state -> symb_form list -> 'a
   eeval state fs [] fc
 
 and eval_form state f (fc: symb_state -> symb_form -> 'a option) =
-  Debug.debug(fun() -> sprintf "eval_form (%s)\n" (Grass.string_of_form f));
+  Debug.debug(fun() ->
+    sprintf "%sEval Form: %s\n State:\n{%s\n}\n\n"
+    lineSep (string_of_form f) (string_of_state state));
   match f with
   | Atom (t, a) -> 
-      Debug.debug (fun () -> sprintf "eval_form Atom\n");
       eval_term state t (fun state' t' ->
-        Debug.debug (fun () -> sprintf "eval_form done, got term (%s)\n" (string_of_symb_term t'));
         fc state' (Symbf (Atom (term_of t', a))))
   | BoolOp (op, fs) ->
-    Debug.debug(fun() -> sprintf "eval_form BoolOp\n");
     eval_forms state fs (fun state' fs' ->
       fc state' (Symbf (BoolOp (op, List.map (fun f -> form_of f) fs'))))
-  | Binder (binder, [], f, a) -> 
-    Debug.debug(fun() -> sprintf "eval_form Binder, binder(%s)\n" (string_of_form f));
-    fc state (Symbf (Binder (binder, [], f, a)))
+  | Binder (binder, [], f, a) -> fc state (Symbf (Binder (binder, [], f, a)))
   | Binder (binder, ts, f, _) -> todo "eval binder catch all"
 
 (** eval_sl_forms evaluates a sl formula list fs element-wise using the eval
@@ -136,7 +138,9 @@ let rec eval_sl_forms state (fs: Sl.form list) (fc: symb_state -> symb_sl_form l
   eeval state fs [] fc
 
 and eval_sl_form state f (fc: symb_state -> symb_sl_form -> 'a option) =
-  Debug.debug(fun() -> sprintf "eval_form (%s)\n" (Sl.string_of_form f));
+  Debug.debug(fun() ->
+    sprintf "%sEval SL Form: %s\n State:\n{%s\n}\n\n"
+    lineSep (Sl.string_of_form f) (string_of_state state));
   match f with
   | Sl.Pure (ff, pos) ->
       eval_form state ff (fun state' ff' ->

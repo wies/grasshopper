@@ -12,6 +12,14 @@ open SymbProduce
 open SymbBranch
 open Prog
 
+let simplify proc prog =
+  prog |>
+  dump_if 0 |>
+  Analyzer.infer_accesses true |>
+  Simplifier.elim_loops |>
+  Simplifier.elim_global_deps |>
+  dump_if 1
+
 (* Substitutes all constants in spec_form [sf] with other terms according to substution map [subst_map]. *) 
 let subst_spec_form subst_map sf =
   match sf with
@@ -192,7 +200,7 @@ and execs state comms (fc: symb_state -> 'a option) =
 
 (** verify checks procedures and predicates for well-formed specs and the postcondition
    can be met by executing the body under the precondition *)
-let verify spl_prog prog proc =
+let verify spl_prog prog aux_axioms proc =
   Debug.info (fun () ->
       "Checking procedure " ^ Grass.string_of_ident (Prog.name_of_proc proc) ^ "...\n");
 
@@ -220,14 +228,15 @@ let verify spl_prog prog proc =
   );
   let precond = Prog.precond_of_proc proc in
   let postcond = Prog.postcond_of_proc proc in
-  produces init_state precond (mk_fresh_snap Bool)
+  let _ = produces init_state precond (mk_fresh_snap Bool)
     (fun st ->
-      let st2 = { st with heap=[] } in
+      let st2 = { st with heap=[]; old_store=st.store } in
       produces st2 postcond (mk_fresh_snap Bool) (fun _ ->
            (match proc.proc_body with
            | Some body ->
               exec st body (fun st3 ->
-                Debug.debug(fun () -> "EXEC DONE ********\n");
                 consumes st3 postcond (fun _ _ -> None))
            | None -> None)
       ))
+  in 
+  aux_axioms, []

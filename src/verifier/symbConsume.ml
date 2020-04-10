@@ -6,10 +6,6 @@ open SymbEval
 open GrassUtil
 
 let check_symb_forms (state: symb_state) heap fs (fc: symb_state -> symb_heap -> snap -> 'a option) =
-  Debug.debug( fun() ->
-    sprintf "Consume Symb expr State: %s\n" 
-    (string_of_state state)
-  );
   let fset =
     List.fold_left (fun acc f ->
       GrassUtil.FormSet.add f acc)
@@ -32,12 +28,11 @@ let rec consume_symb_form state heap (f: symb_form) (fc: symb_state -> symb_heap
     check_symb_forms state heap [form_of f] fc
 
 let rec consume_sl_form state heap (f: Sl.form) (fc: symb_state -> symb_heap -> snap -> 'a option) =
+  Debug.debug(fun() ->
+    sprintf "%sConsume SL Form: %s\n State:\n{%s\n}\n\n"
+    lineSep (Sl.string_of_form f) (string_of_state state));
   match f with
   | Sl.Pure (p, _) ->
-   Debug.debug( fun() ->
-     sprintf "%sConsuming sl pure Atom Var %s\n"
-     lineSep (Grass.string_of_form p)
-   );
    consume_form state heap p fc 
   | Sl.Atom (Sl.Emp, ts, _) -> fc state heap Unit
   | Sl.Atom (Sl.Region, [r], _) -> 
@@ -67,39 +62,37 @@ let rec consume_sl_form state heap (f: Sl.form) (fc: symb_state -> symb_heap -> 
   | Sl.Binder (Grass.Exists, ts, f, _) -> fc state heap Unit
 
 let rec consume_symb_sl_form state heap (f: symb_sl_form) (fc: symb_state -> symb_heap -> snap -> 'a option) =
-  match (slform_of f) with
-  | Sl.Pure (p, _) ->
-   Debug.debug( fun() ->
-     sprintf "%sConsuming SYMB sl pure Atom Var %s\n"
-     lineSep (Grass.string_of_form p)
-   );
+  Debug.debug(fun() ->
+    sprintf "%sConsume Symbolic SL Form: %s\n State:\n{%s\n}\n\n"
+    lineSep (string_of_symb_sl_form f) (string_of_state state));
+  match (f) with
+  | Symbslf (Sl.Pure (p, _)) ->
    consume_symb_form state heap (Symbf p) fc 
-  | Sl.Atom (Sl.Emp, ts, _) -> fc state heap Unit
-  | Sl.Atom (Sl.Region, [r], _) -> 
-      eval_term state r (fun state' t' ->
-        let h' = heap_remove_by_term state.heap (mk_setenum [term_of t']) in
-        fc state h' Unit)
-  | Sl.Atom (Sl.Region, ts, _) -> fc state heap Unit
-  | Sl.Atom (Sl.Pred p, ts, _) -> fc state heap Unit
-  | Sl.SepOp (Sl.SepStar, f1, f2, _) ->
+  | Symbslf (Sl.Atom (Sl.Emp, ts, _)) -> fc state heap Unit
+  | Symbslf (Sl.Atom (Sl.Region, [r], _)) ->
+      (* TODO: implement a symb_form type? *)
+      eval_symb_term state (mk_symb_term r) (fun state' t' -> fc state heap Unit)
+  | Symbslf (Sl.Atom (Sl.Region, ts, _)) -> fc state heap Unit
+  | Symbslf (Sl.Atom (Sl.Pred p, ts, _)) -> fc state heap Unit
+  | Symbslf (Sl.SepOp (Sl.SepStar, f1, f2, _)) ->
      Debug.debug( fun() -> sprintf "SL SepOp SepStar \n"); 
      fc state heap Unit 
-  | Sl.SepOp (Sl.SepIncl, _, _, _) ->
+  | Symbslf (Sl.SepOp (Sl.SepIncl, _, _, _)) ->
      Debug.debug( fun() -> sprintf "SL SepOp SepIncl\n"); 
      fc state heap Unit 
-  | Sl.SepOp (Sl.SepPlus, _, _, _) ->
+  | Symbslf (Sl.SepOp (Sl.SepPlus, _, _, _)) ->
      fc state heap Unit 
-  | Sl.BoolOp (Grass.And, fs, _) ->
+  | Symbslf (Sl.BoolOp (Grass.And, fs, _)) ->
    Debug.debug( fun() -> sprintf "SL BoolOp And\n");
      fc state heap Unit 
-  | Sl.BoolOp (Grass.Or, fs, _) ->
+  | Symbslf (Sl.BoolOp (Grass.Or, fs, _)) ->
     Debug.debug( fun() -> sprintf "SL BoolOp Or");
      fc state heap Unit 
-  | Sl.BoolOp (Grass.Not, fs, _) ->
+  | Symbslf (Sl.BoolOp (Grass.Not, fs, _)) ->
     Debug.debug( fun() -> sprintf "SL BoolOp Not\n");
      fc state heap Unit 
-  | Sl.Binder (Grass.Forall, ts, f, _) -> fc state heap Unit
-  | Sl.Binder (Grass.Exists, ts, f, _) -> fc state heap Unit
+  | Symbslf (Sl.Binder (Grass.Forall, ts, f, _)) -> fc state heap Unit
+  | Symbslf (Sl.Binder (Grass.Exists, ts, f, _)) -> fc state heap Unit
 
 
 let consume state heap (sf: Prog.spec_form) (fc: symb_state -> symb_heap -> snap -> 'a option) =
