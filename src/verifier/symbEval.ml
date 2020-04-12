@@ -75,7 +75,8 @@ and eval_term state t (fc: symb_state -> symb_term -> 'a option) =
       fc state' (Symbt (App (SetEnum, List.map (fun t -> term_of t) ts', srt))))
   | App (Destructor d, [t], srt) -> todo "eval Destructor"
   | App (FreeSym id1, ts, srt1) -> 
-    Debug.debug (fun () -> sprintf "free sym (%s), srt (%s)\n" (string_of_ident id1) (string_of_sort srt1));
+  | App (FreeSym id1, ts, srt1) -> 
+    Debug.debug (fun () -> sprintf "free sym (%s), ts(%s) srt (%s)\n" (string_of_ident id1) (string_of_term_list ts) (string_of_sort srt1));
     (match find_symb_val state.store id1 with
     | Symbt (Var (id2, srt2)) as tt -> 
         if srt1 = srt2
@@ -94,7 +95,8 @@ and eval_term state t (fc: symb_state -> symb_term -> 'a option) =
      let state2 = {state with store=state.old_store} in
      eval_terms state2 ts (fun state2' ts' ->
        fc state2' (Symbt (App (Old, List.map (fun t -> term_of t) ts', srt))))
-  | _ -> todo "eval_term catch all"
+  | App (BoolConst b, ts, srt) as f -> fc state (Symbt f)
+  | App (symb, ts, srt) -> todo "eval_term catch all"
 
 let eval_symb_term state (symbf: symb_term) (fc: symb_state -> symb_term -> 'a option) =
   fc state symbf

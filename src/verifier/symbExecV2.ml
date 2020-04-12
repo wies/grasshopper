@@ -148,7 +148,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
           lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
           lineSep (string_of_state state)
       );
-      eval_terms state args (fun state' args' ->
+      eval_terms state (List.map (fun arg -> unoldify_term arg) args) (fun state' args' ->
         let precond_symb_sf' = subst_precond_formals foo state'.prog args' in
         Debug.debug(fun () -> sprintf "\nPrecond[x -> e'] = %s\n" (string_of_symb_spec_list precond_symb_sf'));
         consumes_symb_sf state' precond_symb_sf' (fun state2' _ ->
@@ -165,7 +165,14 @@ let rec exec state comm (fc: symb_state -> 'a option) =
       produce state f (mk_fresh_snap Bool) (fun state' -> fc state')
   | Choice (comms, pp) ->
       branch_simple state comms exec (fun state' -> fc state')
-  | Basic (Return {return_args=xs}, pp)  -> todo "exec 9"
+  | Basic (Return {return_args=xs}, pp)  -> 
+    Debug.debug (fun () -> 
+      sprintf "%sExecuting return: %d: %s%sCurrent state:\n%s\n"
+        lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+        lineSep (string_of_state state)
+    );
+    eval_terms state xs (fun state' xs' -> 
+      (*TODO assign values *) fc state')
   | Basic (Split spec, pp) -> 
     Debug.debug (fun () -> 
       sprintf "%sExecuting split: %d: %s%sCurrent state:\n%s\n"
