@@ -36,13 +36,38 @@ procedure assume1(x: Int)
 
 procedure if1(x: Int, y: Int)
   requires x == 0
-  ensures x > 2  
+  ensures x > 2 
 {
   if (x > 2) {
     x := 3;
   } else {
     x := x + 3;
   }
+}
+
+procedure if2(x: Int, y: Int)
+  requires x == 0
+  ensures x >= 3 
+{
+  if (x > 2) {
+    x := 3;
+  } else {
+    pure assume x >= 3;
+  }
+}
+
+struct Node {
+  var next: Node;
+}
+
+procedure if3(x: Node, y: Node)
+  requires acc(x) &*& acc(y)
+  ensures acc(x) &*& x.next == x &*& acc(y) &*& y.next == x
+{
+  if (x.next != x) {
+    x.next := x;
+  }
+  y.next := x;
 }
 
 procedure pure2(x: Int, y: Int)
@@ -59,7 +84,6 @@ procedure pure_swap(x: Int, y: Int)
 {
   y, x := x, y;
 }
-*/
 
 procedure loop0(x: Int)
   requires x == 0
@@ -73,8 +97,8 @@ procedure loop0(x: Int)
     i := i + 1;
   }
 }
+*/
 
-/*
 struct DNode {
   var data: Int;
 }
@@ -91,4 +115,3 @@ procedure loop1(x: DNode)
     i := i + 1;
   }
 }
-*/

@@ -67,12 +67,14 @@ let equal_symb_vals (id1, srt1) (id2, srt2) =
   if id1 = id2 && srt1 = srt2 
     then true else false
 
+let string_of_symb_spec_form sf = 
+  match sf with
+  | SymbFOL sl -> (string_of_symb_form sl)
+  | SymbSL sl -> (string_of_symb_sl_form sl)
+
 let string_of_symb_spec_list specs =
   specs 
-  |> List.map (fun t -> 
-      match t.symb_spec_form with
-      | SymbFOL sl -> (string_of_symb_form sl)
-      | SymbSL sl -> (string_of_symb_sl_form sl))
+  |> List.map (fun sf -> string_of_symb_spec_form sf.symb_spec_form) 
   |> String.concat ", "
   |> sprintf "[%s]"
 
@@ -94,6 +96,12 @@ let string_of_symb_form_list fs =
 let string_of_term_list ts =
   ts 
   |> List.map (fun v -> (string_of_term v))
+  |> String.concat ", "
+  |> sprintf "[%s]"
+
+let string_of_ident_list ts =
+  ts 
+  |> List.map (fun v -> (string_of_ident v))
   |> String.concat ", "
   |> sprintf "[%s]"
 
@@ -423,13 +431,17 @@ type symb_state = {
     pc: pc_stack;
     heap: symb_heap;
     prog: program; (* need to carry around prog for prover check *)
+    proc: proc_decl;
   }
 
-let mk_symb_state st prog =
-  {store=st; old_store=empty_store; pc=[]; heap=[]; prog=prog}
-
-let mk_empty_state = 
-  {store=empty_store; old_store=empty_store; pc=[]; heap=[]; prog=empty_prog}
+let mk_symb_state st prog proc =
+  { store=st;
+    old_store=empty_store;
+    pc=[];
+    heap=[];
+    prog=prog;
+    proc=proc
+  }
 
 let update_store state store old_store =
   {state with store=store; old_store=old_store}
@@ -458,8 +470,10 @@ let merge_lsts h1 h2 =
   | x, y -> x @ y
 
 let merge_states s1 s2 = 
- {store=s1.store;
+ { store=s1.store;
    old_store=s1.old_store;
    heap=merge_lsts s1.heap s2.heap;
    pc=merge_lsts s1.pc s2.pc;
-   prog=s1.prog (* programs are the same *)}
+   prog=s1.prog (* programs are the same *);
+   proc=s1.proc (* procs are the same *);
+ }

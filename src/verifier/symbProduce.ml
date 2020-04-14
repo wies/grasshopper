@@ -7,6 +7,7 @@ open Printf
 open Util
 
 let produce_symb_form state f snp (fc: symb_state -> 'a option) =
+  Debug.debug(fun () -> sprintf "PUSHING onto pi = (%s)\n" (string_of_form f));
   let s2 = { state with pc = pc_add_path_cond state.pc f} in
   let s3 = {s2 with pc = pc_add_path_cond s2.pc 
     (mk_atom Eq [term_of (term_of_snap snp); term_of (term_of_snap Unit)])}
@@ -56,6 +57,26 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
         produce_sl_forms state fs snp fc
   | Sl.Binder (b, ts, f, _) -> todo "Binder"
 
+and produce_symb_sl_form state (f: symb_sl_form) snp (fc: symb_state -> 'a option) =
+   Debug.debug(fun() ->
+      sprintf "%sProduce Symb SL Form: %s\n Current State:\n{%s\n}\n\n"
+      lineSep (string_of_symb_sl_form f) (string_of_state state));
+  match f with
+  | Symbslf (Sl.Pure (p, _)) ->
+    produce_symb_form state p snp fc
+  | Symbslf (Sl.Atom (Sl.Region, [t], a)) -> 
+      let hc = mk_heap_chunk_obj (Symbt t) Unit empty_store in 
+      let h, stack = heap_add state.heap state.pc hc in
+      fc {state with heap=h; pc = stack}
+  | Symbslf (Sl.Atom (Sl.Region, ts, a)) -> todo "symb region terms"
+  | Symbslf (Sl.Atom (Sl.Emp, ts, _)) -> todo "symb Atom emp"
+  | Symbslf (Sl.Atom (Sl.Pred _, ts, _)) -> todo "symb Atom Pred"
+  | Symbslf (Sl.SepOp (op, f1, f2, _)) ->
+    produce_symb_sl_form state (Symbslf f1) (snap_second snp) (fun state' ->
+       produce_symb_sl_form state' (Symbslf f2) (snap_second snp) fc)
+  | Symbslf (Sl.BoolOp (op, fs, _)) -> todo "symb BoolOp"
+  | Symbslf (Sl.Binder (b, ts, f, _)) -> todo "Binder"
+
 let produce state sf snp (fc: symb_state -> 'a option) =
   match sf with
   | Prog.FOL fol -> produce_form state fol snp fc
@@ -73,8 +94,16 @@ let rec produces state (assns: Prog.spec list) snp fc =
 
 let produce_symb_sf state sf snp (fc: symb_state -> 'a option) =
   match sf with
-  | SymbFOL fol -> produce_symb_form state (form_of fol) snp fc
-  | SymbSL (Symbslf slf) -> produce_sl_form state slf snp fc
+  | SymbFOL fol -> 
+   Debug.debug(fun() ->
+      sprintf "%sProduce Symb FOL Form: %s\n Current State:\n{%s\n}\n\n"
+      lineSep (string_of_symb_spec_form sf) (string_of_state state));
+      produce_symb_form state (form_of fol) snp fc
+  | SymbSL slf -> 
+   Debug.debug(fun() ->
+      sprintf "%sProduce Symb SL Form: %s\n Current State:\n{%s\n}\n\n"
+      lineSep (string_of_symb_spec_form sf) (string_of_state state));
+      produce_symb_sl_form state slf snp fc
 
 let rec produces_symb_sf state (assns: symb_spec list) snp fc =
   match assns with

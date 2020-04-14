@@ -74,21 +74,33 @@ let subst_precond_formals foo prog args =
   in
   subst_symb_spec_list sm (precond_of foo prog) 
 
-let subst_postcond_formals foo prog args lhs_args =
-  let form_ret = List.combine (return_ids_of foo prog) (formal_return_terms foo prog) in
+let subst_spec_list_formals_symb state sl proc args =
   let sm = 
-    List.combine (formal_ids_of foo prog) args
-    |> List.fold_left (fun sm (f, a) -> IdMap.add f a sm) IdMap.empty 
+    List.combine (formal_ids_of proc state.prog) args
+    |> List.fold_left (fun sm (f, Symbt a) -> IdMap.add f a sm) IdMap.empty 
   in
-  let f = subst_spec_list sm (postcond_of foo prog) in
-  let sm_lhs = 
-    List.combine form_ret lhs_args
-    |> List.fold_left (fun sm ((id, frt), id2) ->
-        Debug.debug (fun () -> sprintf "return fold (%s, %s)\n"
-         (string_of_ident id) (string_of_ident id2));
-        IdMap.add id (mk_free_const (sort_of frt) id2) sm) IdMap.empty 
+  subst_symb_spec_list sm sl
+
+let subst_spec_list_formals state sl proc args =
+  let sm = 
+    List.combine (formal_ids_of proc state.prog) args
+    |> List.fold_left (fun sm (f, Symbt a) -> IdMap.add f a sm) IdMap.empty 
   in
-  subst_symb_spec_list sm_lhs f 
+  subst_spec_list sm sl
+
+
+let subst_spec_list_return_ids state postcond foo lhs_ids =
+  let sm_lhs =
+    let lhs_ts =
+      List.fold_left (fun acc id ->
+        (term_of (find_symb_val state.store id)) :: acc)
+      [] lhs_ids
+    in
+    List.combine (return_ids_of foo state.prog) (List.rev lhs_ts)
+    |> List.fold_left (fun sm (id, t) ->
+        IdMap.add id t sm) IdMap.empty 
+  in
+  subst_symb_spec_list sm_lhs postcond
 
 let pr_spec_form_list sfl =
   sfl
@@ -149,30 +161,61 @@ let rec exec state comm (fc: symb_state -> 'a option) =
           lineSep (string_of_state state)
       );
       eval_terms state (List.map (fun arg -> unoldify_term arg) args) (fun state' args' ->
-        let precond_symb_sf' = subst_precond_formals foo state'.prog args' in
+        let precond_symb_sf' = 
+          subst_spec_list_formals_symb state (precond_of foo state'.prog) foo args'
+        in
         Debug.debug(fun () -> sprintf "\nPrecond[x -> e'] = %s\n" (string_of_symb_spec_list precond_symb_sf'));
         consumes_symb_sf state' precond_symb_sf' (fun state2' _ ->
           let state3' = {state2' with
             store = havoc state2'.store (formal_return_terms foo state2'.prog)}
           in
-          let post_symbf' = subst_postcond_formals foo state'.prog args lhs in
+          let postcond =(postcond_of foo state'.prog) in
+          (* fold multiple postcondition specs into 1 *)
+          let postcond' =
+            let spec_f' = List.fold_left (fun facc a ->
+              match a with
+              | SL slf -> mk_sep_star facc  slf
+              | FOL f -> mk_sep_star facc (mk_pure f))
+            (mk_atom Emp []) (List.map (fun s -> s.spec_form) postcond)
+            in
+            [{(List.hd (List.rev postcond)) with spec_form=SL spec_f'}]
+          in
+          let post_symbf' =
+            let p =
+              subst_spec_list_formals state postcond' foo args'
+            in
+            subst_spec_list_return_ids state p foo lhs
+          in
           Debug.debug(fun () -> sprintf "\nPostcond[x -> e'][y->z] = %s\n" (string_of_symb_spec_list post_symbf'));
-          produces_symb_sf state3' post_symbf' (mk_fresh_snap Bool) (fun state4' ->
-            (* todo, re-instate the old heap?*)
-            fc state4')))
-  | Basic (Havoc {havoc_args=vars}, pp) -> todo "havoc"
+          produces_symb_sf state3' post_symbf' (mk_fresh_snap Bool) (fun state4' -> fc state4')))
+  | Basic (Havoc {havoc_args=vars}, pp) -> 
+    let vars_terms =
+      let locs = Prog.locals_of_proc state.proc in
+      List.fold_left
+        (fun acc var ->
+          let srt = Grass.IdMap.find var locs in
+          Grass.Var (var, srt.var_sort) :: acc)
+        [] (vars)
+    in
+    fc {state with store = (havoc state.store vars_terms)} 
   | Basic (Assume {spec_form=f; }, pp) -> 
-      produce state f (mk_fresh_snap Bool) (fun state' -> fc state')
+    Debug.debug (fun () -> 
+      sprintf "%sExecuting Assume: %d: %s%sCurrent state:\n%s\n"
+        lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+        lineSep (string_of_state state)
+    );
+    produce state f (mk_fresh_snap Bool) (fun state' -> fc state')
   | Choice (comms, pp) ->
       branch_simple state comms exec (fun state' -> fc state')
-  | Basic (Return {return_args=xs}, pp)  -> 
+  | Basic (Return {return_args=xs}, pp) -> 
     Debug.debug (fun () -> 
       sprintf "%sExecuting return: %d: %s%sCurrent state:\n%s\n"
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
         lineSep (string_of_state state)
     );
-    eval_terms state xs (fun state' xs' -> 
-      (*TODO assign values *) fc state')
+    let locs = Prog.returns_of_proc state.proc in
+    exec state (Basic (Assign {assign_lhs=locs; assign_rhs=xs}, pp)) (fun state' ->
+      fc state')
   | Basic (Split spec, pp) -> 
     Debug.debug (fun () -> 
       sprintf "%sExecuting split: %d: %s%sCurrent state:\n%s\n"
@@ -196,7 +239,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
     );
     produce_sl_form st2 (mk_cell tnew) (mk_fresh_snap srt) fc 
   | Basic (Dispose _, _) -> todo "exec 13"
-  | Loop (l, _) -> todo "exec 14"
+  | Loop (l, _) -> raise (SymbExecFail "Loops should not exist after elim_loops"); 
 
 and execs state comms (fc: symb_state -> 'a option) =
   match comms with
@@ -214,7 +257,9 @@ let verify spl_prog prog aux_axioms proc =
   (** Extract formal params, returns; havoc them into a fresh store as a 
    * pre-processing phase *)
   let formals = Prog.formals_of_proc proc in
+  Debug.debug (fun () -> sprintf "\nformals = (%s)\n" (string_of_format pr_ident_list formals));
   let returns = Prog.returns_of_proc proc in
+  Debug.debug (fun () -> sprintf "\nreturns = (%s)\n" (string_of_format pr_ident_list returns));
   let formal_return_terms =
     let locs = Prog.locals_of_proc proc in
     List.fold_left
@@ -224,7 +269,7 @@ let verify spl_prog prog aux_axioms proc =
       [] (formals @ returns)
   in
   let init_state = mk_symb_state
-    (havoc empty_store formal_return_terms) prog in
+    (havoc empty_store formal_return_terms) prog proc in
 
   let old_store =
     IdMap.fold (fun id v acc -> IdMap.add id v acc) init_state.store empty_store in
@@ -234,7 +279,10 @@ let verify spl_prog prog aux_axioms proc =
       lineSep (string_of_state init_state)
   );
   let precond = Prog.precond_of_proc proc in
+  Debug.debug(fun () -> sprintf "\nPrecond = %s\n" (string_of_format pr_precond precond));
+
   let postcond = Prog.postcond_of_proc proc in
+  Debug.debug(fun () -> sprintf "\nPostcond = %s\n" (string_of_format pr_postcond postcond));
   let _ = produces init_state precond (mk_fresh_snap Bool)
     (fun st ->
       let st2 = { st with heap=[]; old_store=st.store } in

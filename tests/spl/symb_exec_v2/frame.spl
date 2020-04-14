@@ -1,6 +1,5 @@
 options "-symbexec-v2"
 
-/*
 procedure foo(a: Int) returns (b: Int)
   requires a == 2
   ensures b == 4
@@ -40,34 +39,28 @@ procedure pure_call4(d: Int, e: Int) returns (f: Int)
 {
   f := foo4(d, e);
 }
-*/
 
 procedure foo5(a: Int, b: Int, c: Int) returns (d: Int, e:Int) 
   requires a == 0 && b == 1 && c == 2
   ensures d == 5 && e == 6
 
-/*
-procedure pure_call5(f: Int, g: Int, h: Int) returns (i: Int, j: Int)
+procedure pure_call5(f: Int, g: Int, h: Int) returns (x: Int, y: Int)
+  requires f == 0 && g == 1 && h == 2 
+  ensures x == 5 && y == 6 
+{
+  var i: Int;
+  var j: Int;
+  i, j := foo5(f, g, h);
+  return i, j;
+}
+
+procedure pure_call6(f: Int, g: Int, h: Int) returns (i: Int, j: Int)
   requires f == 0 && g == 1 && h == 2 
   ensures i == 5 && j == 6 
 {
   i, j := foo5(f, g, h);
 }
-*/
 
-procedure pure_call6(a: Int, b: Int) returns (x: Int, i: Int)
-  requires a == 1 && b == 2
-  ensures x == 5 && i == 9
-{
-  x, i := a, b;
-  if (i < 10) {
-    x, i := foo5(0, x, i);
-  } else {
-    return x, i;
-  } 
-}
-
-/*
 /* test with acc predicates */
 struct Node {
   var next: Node;
@@ -88,4 +81,3 @@ procedure bar_heap(x: Node, y: Node)
   foo_heap(x, y);
   pure assert (y.next == z);
 }
-*/

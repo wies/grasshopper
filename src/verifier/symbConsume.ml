@@ -109,7 +109,9 @@ let rec consumes state (assns: Prog.spec list) fc =
 
 let consume_symb_sf state heap (sf: symb_spec_form) (fc: symb_state -> symb_heap -> snap -> 'a option) =
   match sf with
-  | SymbFOL fol -> consume_symb_form state heap fol fc
+  | SymbFOL fol ->
+      Debug.debug(fun() -> sprintf "Consume SymbSF = (%s)\n" (string_of_symb_form fol));
+      consume_symb_form state heap fol fc
   | SymbSL slf -> consume_symb_sl_form state heap slf fc
 
 let rec consumes_symb_sf state (assns: symb_spec list) fc =
