@@ -443,6 +443,12 @@ let mk_symb_state st prog proc =
     proc=proc
   }
 
+let update_store_prog state proc prog =
+  { state with
+    proc=proc;
+    prog=prog;
+  }
+
 let update_store state store old_store =
   {state with store=store; old_store=old_store}
 

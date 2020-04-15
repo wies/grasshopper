@@ -1,4 +1,5 @@
 options "-symbexec-v2"
+/*
 
 procedure assign(x: Int, y: Int)
   requires x == 0 && y == x
@@ -96,8 +97,8 @@ procedure loop0(x: Int)
     i := i + 1;
   }
 }
+*/
 
-/*
 struct DNode {
   var data: Int;
 }
@@ -114,4 +115,3 @@ procedure loop1(x: DNode)
     i := i + 1;
   }
 }
-*/

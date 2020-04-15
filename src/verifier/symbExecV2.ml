@@ -67,6 +67,18 @@ let formal_return_terms foo prog =
         Grass.Var (var, srt.var_sort) :: acc)
       [] (returns)
 
+let fold_spec_list f acc specs =
+  let folded =List.fold_left (fun facc a ->
+    match a with
+    | SL slf -> mk_sep_star facc  slf
+    | FOL f -> mk_sep_star facc (mk_pure f))
+    acc (List.map (fun s -> s.spec_form) specs)
+  in
+  [{(List.hd (List.rev specs)) with spec_form=SL folded}]
+
+let declare_contract proc contract = 
+  {proc with proc_contract=contract}
+
 let subst_precond_formals foo prog args =
   let sm = 
     List.combine (formal_ids_of foo prog) args
@@ -161,25 +173,18 @@ let rec exec state comm (fc: symb_state -> 'a option) =
           lineSep (string_of_state state)
       );
       eval_terms state (List.map (fun arg -> unoldify_term arg) args) (fun state' args' ->
+        let precond' = fold_spec_list mk_sep_star (mk_atom Emp []) (precond_of foo state'.prog) in
         let precond_symb_sf' = 
-          subst_spec_list_formals_symb state (precond_of foo state'.prog) foo args'
+          subst_spec_list_formals_symb state precond' foo args'
         in
         Debug.debug(fun () -> sprintf "\nPrecond[x -> e'] = %s\n" (string_of_symb_spec_list precond_symb_sf'));
         consumes_symb_sf state' precond_symb_sf' (fun state2' _ ->
           let state3' = {state2' with
             store = havoc state2'.store (formal_return_terms foo state2'.prog)}
           in
+          (* fold multiple postcondition specs into 1 for the callee *)
           let postcond =(postcond_of foo state'.prog) in
-          (* fold multiple postcondition specs into 1 *)
-          let postcond' =
-            let spec_f' = List.fold_left (fun facc a ->
-              match a with
-              | SL slf -> mk_sep_star facc  slf
-              | FOL f -> mk_sep_star facc (mk_pure f))
-            (mk_atom Emp []) (List.map (fun s -> s.spec_form) postcond)
-            in
-            [{(List.hd (List.rev postcond)) with spec_form=SL spec_f'}]
-          in
+          let postcond' = fold_spec_list mk_sep_star (mk_atom Emp []) postcond in
           let post_symbf' =
             let p =
               subst_spec_list_formals state postcond' foo args'
@@ -248,6 +253,7 @@ and execs state comms (fc: symb_state -> 'a option) =
       exec state comm (fun state' ->
         execs state' comms' fc)
 
+
 (** verify checks procedures and predicates for well-formed specs and the postcondition
    can be met by executing the body under the precondition *)
 let verify spl_prog prog aux_axioms proc =
@@ -268,9 +274,21 @@ let verify spl_prog prog aux_axioms proc =
         Grass.Var (var, srt.var_sort) :: acc)
       [] (formals @ returns)
   in
+  let precond = 
+    fold_spec_list
+      mk_sep_star (mk_atom Emp []) (Prog.precond_of_proc proc)
+  in
+  let postcond =
+    fold_spec_list
+      mk_sep_star (mk_atom Emp []) (Prog.postcond_of_proc proc)
+  in
+  let contr' = {
+    proc.proc_contract with 
+    contr_precond=precond;
+    contr_postcond=postcond;
+    } in
   let init_state = mk_symb_state
-    (havoc empty_store formal_return_terms) prog proc in
-
+    (havoc empty_store formal_return_terms) (declare_proc prog proc) (declare_contract proc contr'); in
   let old_store =
     IdMap.fold (fun id v acc -> IdMap.add id v acc) init_state.store empty_store in
   let init_state = {init_state with old_store=old_store} in
@@ -278,16 +296,11 @@ let verify spl_prog prog aux_axioms proc =
       sprintf "%sInitial State:\n{%s\n}\n\n"
       lineSep (string_of_state init_state)
   );
-  let precond = Prog.precond_of_proc proc in
-  Debug.debug(fun () -> sprintf "\nPrecond = %s\n" (string_of_format pr_precond precond));
-
-  let postcond = Prog.postcond_of_proc proc in
-  Debug.debug(fun () -> sprintf "\nPostcond = %s\n" (string_of_format pr_postcond postcond));
   let _ = produces init_state precond (mk_fresh_snap Bool)
     (fun st ->
       let st2 = { st with heap=[]; old_store=st.store } in
       produces st2 postcond (mk_fresh_snap Bool) (fun _ ->
-           (match proc.proc_body with
+           (match init_state.proc.proc_body with
            | Some body ->
               exec st body (fun st3 ->
                 consumes st3 postcond (fun _ _ -> None))
