@@ -1,5 +1,4 @@
 options "-symbexec-v2"
-/*
 
 procedure assign(x: Int, y: Int)
   requires x == 0 && y == x
@@ -85,6 +84,7 @@ procedure pure_swap(x: Int, y: Int)
   y, x := x, y;
 }
 
+
 procedure loop0(x: Int)
   requires x == 0
   ensures x == 1
@@ -97,7 +97,6 @@ procedure loop0(x: Int)
     i := i + 1;
   }
 }
-*/
 
 struct DNode {
   var data: Int;
@@ -108,10 +107,13 @@ procedure loop1(x: DNode)
   ensures acc(x) &*& x.data == 10
 {
   var i := 1;
+  var y := new DNode();
+  y.data := 10;
   while (i < 11)
-    invariant acc(x) &*& x.data == i - 1 &*& i <= 11
+    invariant acc(x) &*& acc(y) &*& x.data == i - 1 &*& y.data == 10 &*& i <= 11
   {
     x.data := i;
+    y.data := 10;
     i := i + 1;
   }
 }

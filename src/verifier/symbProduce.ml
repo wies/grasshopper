@@ -53,7 +53,7 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
   | Sl.SepOp (op, f1, f2, _) ->
      produce_sl_form state f1 (snap_first snp) (fun state' ->
        produce_sl_form state' f2 (snap_second snp) fc)
-  | Sl.BoolOp (op, fs, _) -> 
+  | Sl.BoolOp (op, fs, p) -> 
         produce_sl_forms state fs snp fc
   | Sl.Binder (b, ts, f, _) -> todo "Binder"
 
@@ -74,7 +74,7 @@ and produce_symb_sl_form state (f: symb_sl_form) snp (fc: symb_state -> 'a optio
   | Symbslf (Sl.SepOp (op, f1, f2, _)) ->
     produce_symb_sl_form state (Symbslf f1) (snap_second snp) (fun state' ->
        produce_symb_sl_form state' (Symbslf f2) (snap_second snp) fc)
-  | Symbslf (Sl.BoolOp (op, fs, _)) -> todo "symb BoolOp"
+  | Symbslf (Sl.BoolOp (op, fs, _)) -> todo "Symb produce BoolOp"
   | Symbslf (Sl.Binder (b, ts, f, _)) -> todo "Binder"
 
 let produce state sf snp (fc: symb_state -> 'a option) =

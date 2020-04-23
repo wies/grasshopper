@@ -13,11 +13,11 @@ open SymbBranch
 open Prog
 
 let simplify proc prog =
+  let info msg prog = Debug.info (fun () -> msg); prog in
   prog |>
   dump_if 0 |>
+  info "Inferring accesses.\n" |>
   Analyzer.infer_accesses true |>
-  Simplifier.elim_loops |>
-  Simplifier.elim_global_deps |>
   dump_if 1
 
 (* Substitutes all constants in spec_form [sf] with other terms according to substution map [subst_map]. *) 
@@ -76,6 +76,15 @@ let fold_spec_list f acc specs =
   in
   [{(List.hd (List.rev specs)) with spec_form=SL folded}]
 
+let fold_spec_form_sl f acc specs =
+  let folded = List.fold_left (fun facc a ->
+    match a with
+    | SL slf -> mk_sep_star slf facc
+    | FOL f -> mk_sep_star (mk_pure f) facc)
+    acc (List.map (fun s -> s.spec_form) specs)
+  in
+  folded
+
 let declare_contract proc contract = 
   {proc with proc_contract=contract}
 
@@ -100,7 +109,6 @@ let subst_spec_list_formals state sl proc args =
   in
   subst_spec_list sm sl
 
-
 let subst_spec_list_return_ids state postcond foo lhs_ids =
   let sm_lhs =
     let lhs_ts =
@@ -120,6 +128,15 @@ let pr_spec_form_list sfl =
   |> String.concat ", "
   |> sprintf "[%s]"
 
+let loop_target_terms state comm = 
+  let loop_modified = modifies_cmd comm in
+  let locals = locals_of_proc state.proc in
+  List.fold_left (fun ts id ->
+    match IdMap.find_opt id locals with
+    | Some x -> (Var (x.var_name, x.var_sort)) :: ts
+    | None -> ts)
+  [] (IdSet.elements loop_modified)
+
 let rec exec state comm (fc: symb_state -> 'a option) =
   match comm with
   | Basic (Assign {assign_lhs=[field];
@@ -129,13 +146,11 @@ let rec exec state comm (fc: symb_state -> 'a option) =
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
         lineSep (string_of_state state)
     );
-    Debug.debug (fun () ->
-      sprintf "field = %s, map = %s, t1 = %s, t2 = %s \n" (string_of_ident field) (string_of_term map) (string_of_term t1) (string_of_term t2));
-      consume_sl_form state state.heap (mk_region t1) (fun state2' h _ ->
-        let r = mk_setenum [(App (Read, [map; t1], srt))] in
-        let f = mk_sep_star (mk_region (mk_setenum [t1])) (mk_pure (GrassUtil.mk_eq r t2)) in
-        let state3 = {state2' with heap =h} in
-        produce_sl_form state3 f (mk_fresh_snap srt) fc) 
+    consume_sl_form state state.heap (mk_region t1) (fun state2' h _ ->
+      let r = mk_setenum [(App (Read, [map; t1], srt))] in
+      let f = mk_sep_star (mk_region (mk_setenum [t1])) (mk_pure (GrassUtil.mk_eq r t2)) in
+      let state3 = {state2' with heap =h} in
+      produce_sl_form state3 f (mk_fresh_snap srt) fc) 
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, pp) ->
     Debug.debug (fun () -> 
       sprintf "%sExecuting Assign: %d: %s%sCurrent state:\n%s\n"
@@ -244,7 +259,28 @@ let rec exec state comm (fc: symb_state -> 'a option) =
     );
     produce_sl_form st2 (mk_cell tnew) (mk_fresh_snap srt) fc 
   | Basic (Dispose _, _) -> todo "exec 13"
-  | Loop (l, _) -> raise (SymbExecFail "Loops should not exist after elim_loops"); 
+  | Loop (l, pp) ->
+      Debug.debug (fun () -> 
+        sprintf "%sExecuting loop: %d: %s%sCurrent state:\n%s\n"
+          lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+          lineSep (string_of_state state)
+      );
+      let new_gamma = havoc state.store (loop_target_terms state comm) in
+      let state1 = {state with store=new_gamma} in
+      exec state1 l.loop_prebody (fun state2 ->
+        let invar = fold_spec_form_sl mk_sep_star (mk_atom Emp []) l.loop_inv in
+        let test_inv_form = 
+            mk_sep_star invar (mk_pure l.loop_test)
+          in
+          produce_sl_form state2 test_inv_form (mk_fresh_snap Bool) (fun state3 ->
+            exec state3 l.loop_postbody (fun state4 ->
+              consume_sl_form state4 state.heap invar (fun _ _ _ -> None)))
+          |> Opt.lazy_or_else (fun () ->
+            consume_sl_form state state.heap invar (fun state1' h s ->
+              let state2' = {state1' with store=new_gamma} in
+              exec state2' l.loop_prebody (fun state3' ->
+                let slf = mk_sep_star invar (mk_pure (GrassUtil.mk_not l.loop_test)) in
+                produce_sl_form state2' slf (mk_fresh_snap Bool) fc))))
 
 and execs state comms (fc: symb_state -> 'a option) =
   match comms with
@@ -252,7 +288,6 @@ and execs state comms (fc: symb_state -> 'a option) =
   | comm :: comms' ->
       exec state comm (fun state' ->
         execs state' comms' fc)
-
 
 (** verify checks procedures and predicates for well-formed specs and the postcondition
    can be met by executing the body under the precondition *)

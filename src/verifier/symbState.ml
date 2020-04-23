@@ -298,6 +298,8 @@ let snap_adt = (("snap_tree", 0),
 
 let snap_typ = Adt (("snap_tree", 0), [snap_adt])
 
+(* encode the snap tree as a Grass.term encoded as a snap_typ *)
+
 let rec string_of_snap s =
   match s with
   | Unit -> "unit[snap]"
