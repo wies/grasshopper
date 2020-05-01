@@ -599,8 +599,8 @@ let modifies_proc prog proc =
       if proc.proc_is_lemma then IdSet.empty else
       IdMap.fold (fun id decl acc ->
         match decl.var_sort with
-        (* | Set (Loc srt) when id = alloc_id srt && not @@ SortSet.mem srt proc.proc_contract.contr_footprint_sorts ->
-            acc *)
+        | Set (Loc srt) when id = alloc_id srt && not @@ SortSet.mem srt proc.proc_contract.contr_footprint_sorts ->
+            acc
         | _ -> IdSet.add id acc) prog.prog_vars IdSet.empty
 
 let modifies_basic_cmd = function
@@ -719,7 +719,8 @@ let footprint_sorts_term_acc prog acc t =
               SortSet.union (footprint_sorts_pred decl) acc
           | FreeSym id when IdSet.mem id prog.prog_state_vars ->
               footprint_sorts_acc acc srt
-          | _ -> acc
+          | _ ->
+              acc
         in
         (*let acc = footprint_sorts_acc acc srt in*)
         List.fold_left c acc ts
