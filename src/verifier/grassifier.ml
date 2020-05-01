@@ -1646,7 +1646,13 @@ let elim_new_dispose prog =
         struct_srts
         prog.prog_vars
     in
-    { prog with prog_vars = globals_with_alloc_sets }
+    let state_vars_with_alloc_sets =
+      SortSet.fold
+        (fun ssrt acc -> IdSet.add (alloc_id ssrt) acc)
+        struct_srts
+        prog.prog_state_vars
+    in
+    { prog with prog_vars = globals_with_alloc_sets; prog_state_vars = state_vars_with_alloc_sets }
   in
   let elim_proc proc =
     { proc with proc_body = Util.Opt.map (map_basic_cmds elim) proc.proc_body } 
