@@ -28,6 +28,10 @@ type spec_form =
 type spec_kind =
   | Free | Checked
 
+(** Predicate fold/unfold enum *)
+type pred_exchange =
+  | Unfold | Fold
+
 (** Assume or assert of pure formula *)
 type spec = {
     spec_form: spec_form;
@@ -76,6 +80,13 @@ and return_command = {
     return_args: term list;
   }
 
+(** predicate unfold/fold, unfold q(e_1,...,e_m) *)
+type predicate_command = {
+  pred_action: pred_exchange; (** unfold/fold *)
+  pred_name: ident;
+  pred_args: term list; (** e_1,...,e_m *)
+}
+
 (** Basic commands *)
 type basic_command =
   | Assign of assign_command
@@ -87,6 +98,8 @@ type basic_command =
   | Split of spec
   | Call of call_command
   | Return of return_command
+  | Unfold of predicate_command
+  | Fold of predicate_command
 
 (** Program point *)
 type program_point = {
@@ -632,6 +645,8 @@ let modifies_basic_cmd = function
   | Assume _
   | Assert _
   | Split _
+  | Unfold _
+  | Fold _
   | Return _ -> IdSet.empty
 
 let accesses_spec_form_acc acc sf =
@@ -831,6 +846,28 @@ let mk_assert_cmd sf pos =
 
 let mk_split_cmd sf pos =
   mk_basic_cmd (Split sf) pos
+
+let mk_unfold_cmd name t pos =
+  let pc =
+    {
+      pred_action = Unfold;
+      pred_name = name;
+      pred_args = t;
+
+    }
+  in
+  mk_basic_cmd (Unfold pc) pos
+
+let mk_fold_cmd name t pos =
+  let pc =
+    {
+      pred_action = Fold;
+      pred_name = name;
+      pred_args = t;
+
+    }
+  in
+  mk_basic_cmd (Fold pc) pos
 
 let mk_return_cmd args pos = 
   let rc = { return_args = args } in

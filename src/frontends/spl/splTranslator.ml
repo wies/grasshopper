@@ -640,6 +640,16 @@ let convert cu =
       | Split (e, pos) ->
           let sf = convert_spec_form false false proc.p_locals e "assert" None in
           mk_split_cmd sf pos
+      | Unfold (id, es, pos) ->
+          let args = 
+            List.map (convert_term proc.p_locals) es
+          in 
+          mk_unfold_cmd id args pos
+      | Fold (id, es, pos) ->
+          let args = 
+            List.map (convert_term proc.p_locals) es
+          in 
+          mk_fold_cmd id args pos
       | Assign (lhs, [ProcCall (id, es, cpos)], pos) ->
           let args = 
             List.map (convert_term proc.p_locals) es

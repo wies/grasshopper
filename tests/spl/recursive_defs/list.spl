@@ -26,7 +26,7 @@ lemma lseg_grass_to_lseg(x: Node, y: Node)
   }
 }
 
-lemma unfold(x: Node, y: Node)
+lemma unfold_lseg(x: Node, y: Node)
   requires lseg(x, y) &*& x != y
   ensures acc(x) &*& lseg(x.next, y)
 {
@@ -95,7 +95,7 @@ procedure traverse(x: Node)
   while (y != null)
     invariant lseg(x, y) &*& lseg(y, null)
   {
-    unfold(y, null);
+    unfold_lseg(y, null);
     fold_right(x, y);
     y := y.next;
   }
@@ -118,7 +118,7 @@ procedure copy(lst: Node) returns (res: Node)
     invariant lseg(lst, curr) &*& lseg(curr, null)
     invariant lseg(cp, null)
   {
-    unfold(curr, null);
+    unfold_lseg(curr, null);
     fold_right(lst, curr);
     var old_cp := cp;
     cp := new Node;

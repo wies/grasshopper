@@ -268,6 +268,12 @@ let elim_arrays prog =
     | Basic (Split sf, pp) ->
         let sf1 = compile_spec sf in
         mk_split_cmd sf1 pp.pp_pos
+    | Basic (Unfold pc, pp) ->
+        let args1 = List.map compile_term pc.pred_args in
+        mk_unfold_cmd pc.pred_name args1 pp.pp_pos
+    | Basic (Fold pc, pp) ->
+        let args1 = List.map compile_term pc.pred_args in
+        mk_fold_cmd pc.pred_name args1 pp.pp_pos
     | Basic (Return rc, pp) ->
         let args1 = List.map compile_term rc.return_args in
         mk_return_cmd args1 pp.pp_pos

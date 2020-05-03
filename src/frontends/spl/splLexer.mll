@@ -30,6 +30,7 @@ let _ =
       ("false", BOOLVAL(false));
       ("forall", QUANT(SplSyntax.Forall));
       ("exists", QUANT(SplSyntax.Exists));
+      ("fold", FOLD);
       ("free", FREE);
       ("function", FUNCTION false);
       ("ghost", GHOST);
@@ -63,6 +64,7 @@ let _ =
       ("Set", SET);
       ("true", BOOLVAL(true));
       ("type", TYPE);
+      ("unfold", UNFOLD);
       ("var", VAR);
       ("while", WHILE);
       ("with", WITH);

@@ -281,6 +281,8 @@ let rec exec state comm (fc: symb_state -> 'a option) =
               exec state2' l.loop_prebody (fun state3' ->
                 let slf = mk_sep_star invar (mk_pure (GrassUtil.mk_not l.loop_test)) in
                 produce_sl_form state2' slf (mk_fresh_snap Bool) fc))))
+  | Basic (Unfold pc, pos) -> todo "unfold"
+  | Basic (Fold pc, pos) -> todo "fold"
 
 and execs state comms (fc: symb_state -> 'a option) =
   match comms with

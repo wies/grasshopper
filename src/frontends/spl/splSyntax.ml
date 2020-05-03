@@ -148,6 +148,8 @@ and stmt =
   | Choice of stmts * pos
   | Loop of loop_contracts * stmt * expr * stmt * pos
   | Return of exprs * pos
+  | Fold of ident * exprs * pos
+  | Unfold of ident * exprs * pos
 
 and stmts = stmt list
 
@@ -543,6 +545,11 @@ let rec pr_stmt ppf =
         pr_stmt postb
   | Return (es, _) ->
       fprintf ppf "return @[<2>%a@];" pr_expr_list es
+  | Fold (id, es, _) ->
+      fprintf ppf "fold %a(@[%a@])" pr_ident id pr_expr_list es
+  | Unfold (id, es, _) ->
+      fprintf ppf "unfold %a(@[%a@])" pr_ident id pr_expr_list es
+
 and pr_stmt_list sts = Util.pr_list_nl pr_stmt sts 
 
 and pr_choice ppf = function
@@ -798,6 +805,8 @@ let subst sm =
     
 let pos_of_stmt = function
   | Skip pos
+  | Unfold (_, _, pos)
+  | Fold (_, _, pos)
   | Block (_, pos)
   | LocalVars (_, _, pos)
   | Assume (_, _, pos)
@@ -1140,6 +1149,8 @@ let replace_macros prog =
   in
   let rec repl_stmt = function
     | Skip _ as s -> s
+    | Unfold _ as s -> s
+    | Fold _ as s -> s
     | Block (sts, p) ->
       Block (List.map repl_stmt sts, p)
     | LocalVars (vs, es, p) ->

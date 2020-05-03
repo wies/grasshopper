@@ -1202,6 +1202,8 @@ let rec symb_exec st postcond comms =
   | Basic (Assume _, _) :: _ -> failwith "TODO Assume SL command"
   | Basic (Dispose _, _) :: _ -> failwith "TODO Dispose command"
   | Loop _ :: _ -> failwith "TODO Loop command"
+  | Basic (Unfold _, _) :: _ -> failwith "TODO Unfold command"
+  | Basic (Fold _, _) :: _ -> failwith "TODO Fold command"
   in
   try
     se comms

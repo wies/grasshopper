@@ -402,6 +402,12 @@ let resolve_names cu =
         Assert (resolve_expr locals tbl e, pure, name, pos), locals, tbl
     | Split (e, pos) ->
         Split (resolve_expr locals tbl e, pos), locals, tbl
+    | Fold (id, es, pos) ->
+        let es1 = List.map (resolve_expr locals tbl) es in
+        Fold (id, es1, pos), locals, tbl
+    | Unfold (id, es, pos) ->
+        let es1 = List.map (resolve_expr locals tbl) es in
+        Unfold (id, es1, pos), locals, tbl
     | Assign (lhs, rhs, pos) ->
         let lhs1 = List.map (resolve_expr locals tbl) lhs in
         let rhs1 = List.map (resolve_expr locals tbl) rhs in
@@ -764,6 +770,12 @@ let flatten_exprs cu =
     | Split (e, pos) ->
         let e1, aux1, locals = flatten_expr scope ([], aux_funs) locals locals e in
         Split (e1, pos), locals, snd aux1
+    | Fold (id, es, pos) ->
+        let e1, aux1, locals = flatten_expr_list ~flatten_bool:true scope ([], aux_funs) locals locals es in 
+        Fold (id, e1, pos), locals, snd aux1
+    | Unfold (id, es, pos) ->
+        let e1, aux1, locals = flatten_expr_list ~flatten_bool:true scope ([], aux_funs) locals locals es in 
+        Unfold (id, e1, pos), locals, snd aux1
     | Assign (lhs, [ProcCall (id, args, cpos)], pos) ->
         let args1, aux1, locals = flatten_expr_list ~flatten_bool:true scope ([], aux_funs) locals locals args in 
         begin
@@ -962,6 +974,10 @@ let infer_types cu =
         Assert (check_spec locals pure e, pure, name, pos)
     | Split (e, pos) ->
         Split (check_spec locals false e, pos)
+    | Fold (id, es, pos) ->
+        Fold (id, List.map (fun e -> check_spec locals false e) es, pos)
+    | Unfold (id, es, pos) ->
+        Unfold (id, List.map (fun e -> check_spec locals false e) es, pos)
     | Assign (lhs, [ProcCall (id, args, cpos) as e], pos) ->
         let decl = IdMap.find id cu.proc_decls in
         let returns = List.filter (fun p -> not (IdMap.find p decl.p_locals).v_implicit) decl.p_returns in
