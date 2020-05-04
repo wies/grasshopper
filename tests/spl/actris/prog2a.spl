@@ -1,0 +1,109 @@
+struct Chan { }
+
+// protocol state reification for linearity
+
+struct Send {
+  var cs: Chan;
+}
+
+struct Receive {
+  var cr: Chan;
+  var xr: Int;
+}
+
+struct dual_Send {
+  var cds: Chan;
+}
+
+struct dual_Receive {
+  var cdr: Chan;
+  var xdr: Int;
+}
+
+struct End {
+  var ce: Chan;
+}
+
+// protocol pushed into the send/receive spec
+
+// thread 1
+procedure overloaded_send_1(c: Chan, msg: Int, ghost pState: Send) returns (ghost pState1: Receive)
+  requires acc(c) &*& acc(pState)
+  requires pState.cs == c
+  ensures acc(old(c)) &*& acc(pState1)
+  ensures pState1.cr == old(c)
+  ensures pState1.xr == msg + 2
+
+// thread 2
+procedure overloaded_send_2(c: Chan, msg: Int, ghost pState: dual_Receive) returns (ghost pState1: End)
+  requires acc(c) &*& acc(pState)
+  requires pState.cdr == c
+  requires pState.xdr == msg
+  ensures acc(old(c)) &*& acc(pState1)
+  ensures pState1.ce == old(c)
+
+// thread 1
+procedure overloaded_recv_1(c: Chan, ghost pState: Receive) returns (msg: Int, ghost pState1: End)
+  requires acc(c) &*& acc(pState)
+  requires pState.cr == c
+  ensures acc(old(c)) &*& acc(pState1)
+  ensures pState1.ce == old(c)
+  ensures msg == old(pState.xr)
+
+// thread 2
+procedure overloaded_recv_2(c: Chan, ghost pState: dual_Send) returns (msg: Int, ghost pState1: dual_Receive)
+  requires acc(c) &*& acc(pState)
+  requires pState.cds == c
+  ensures acc(old(c)) &*& acc(pState1)
+  ensures pState1.cdr == old(c)
+  ensures msg + 2 == pState1.xdr
+
+// both thread
+procedure close(c: Chan, ghost pState: End)
+  requires acc(c)
+  requires pState.ce == c
+  ensures emp
+
+procedure new_chan() returns (c1: Chan, c2: Chan, ghost pStateC1: Send, ghost pStateC2: dual_Send)
+  requires emp
+  ensures acc(c1) &*& acc(c2) &*& acc(pStateC1) &*& acc(pStateC2)
+  ensures pStateC1.cs == c1
+  ensures pStateC2.cds == c2
+
+
+//client code
+
+procedure prog2_thread2(c: Chan, ghost pState: dual_Send)
+  requires acc(c) &*& acc(pState)
+  requires pState.cds == c
+  ensures emp
+{
+  var x, pState1 := overloaded_recv_2(c, pState);
+  var pState2 := overloaded_send_2(c, x + 2, pState1);
+  close(c, pState2);
+}
+  
+procedure fork_prog2_thread2(c: Chan, ghost pState: dual_Send)
+  requires acc(c) &*& acc(pState)
+  requires pState.cds == c
+  //requires pState.cds = c //FIXME? this parses fine
+  ensures emp
+
+procedure prog2_thread1(c: Chan, ghost pState: Send)
+  requires acc(c) &*& acc(pState)
+  requires pState.cs == c
+  ensures emp
+{
+  var pState1 := overloaded_send_1(c, 40, pState);
+  var res, pState2 := overloaded_recv_1(c, pState1);
+  pure assert(res == 42);
+  close(c, pState2);
+}
+
+procedure prog2_main()
+{
+  var c1,c2,s1,s2 := new_chan();
+  pure assert(false); //FIXME !!!!
+  fork_prog2_thread2(c2,s2);
+  prog2_thread1(c1,s1);
+}
