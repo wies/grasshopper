@@ -1,0 +1,65 @@
+options "abspreds"
+
+datatype Message = Send(sx: Int) | Receive(rx: Int)
+
+struct Action {
+  var next: Action;
+  var msg: Message;
+}
+
+struct Chan {
+  var act: Action;
+}
+  
+predicate sendAct(a: Action, x: Int, na: Action) {
+  acc(a) &*& a.msg == Send(x) &*& a.next == na
+}
+
+predicate recvAct(a: Action, x: Int, na: Action) {
+  acc(a) &*& a.msg == Receive(x) &*& a.next == na
+}
+    
+predicate protocol(c: Chan) {
+  exists x: Int, act2: Action :: acc(c) &*& sendAct(c.act, x, act2) &*& recvAct(act2, x + 2, null)
+}
+
+predicate dual_protocol(c: Chan) {
+  exists x: Int, act2: Action :: acc(c) &*& recvAct(c.act, x, act2) &*& sendAct(act2, x + 2, null)
+}
+
+procedure new_chan()
+  returns (c1: Chan, c2: Chan)
+  ensures protocol(c1) &*& dual_protocol(c2)
+
+procedure send(c: Chan, x: Int, implicit ghost y: Int)
+  requires acc(c) &*& acc(c.act)
+  requires c.act.msg == Send(y)
+  ensures acc(c) &*& c.act == old(c.act.next) && y == x
+
+procedure recv(c: Chan, implicit ghost y: Int)
+  returns (x: Int)
+  requires acc(c) &*& acc(c.act)
+  requires c.act.msg == Receive(y)
+  ensures acc(c) &*& c.act == old(c.act.next)
+  ensures x == y
+
+procedure prog3_thread2(c2: Chan)
+  requires dual_protocol(c2)
+{
+  var x := recv(c2);
+  send(c2, x + 2);
+}
+  
+procedure fork_prog3_thread2(c2: Chan)
+  requires dual_protocol(c2)
+  ensures emp
+
+procedure prog3_main()
+{
+  var c1,c2 := new_chan();
+  fork_prog3_thread2(c2);
+  var l := ref(40);
+  send(c1, l);
+  var res := recv(c1);
+  load(res);
+}
