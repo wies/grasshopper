@@ -13,21 +13,21 @@ predicate end(c:Chan) {
   acc(c) &*& c.act == null
 }
   
-predicate sendAct(a: Action, x: Int, na: Action) {
+define sendAct(a, x, na) {
   acc(a) &*& a.msg == Send(x) &*& a.next == na
 }
 
-predicate sendExAct(a: Action, x: Int, na: Action) {
+define sendExAct(a, x, na) {
   acc(a) &*& a.msg == SendEx(x) &*& a.next == na
 }
 
-predicate recvAct(a: Action, x: Int, na: Action) {
+define recvAct(a, x, na) {
   acc(a) &*& a.msg == Receive(x) &*& a.next == na
 }
 
-/*
-predicate protocol(c: Chan) {
-  exists x: Int, act2: Action :: acc(c) &*& sendAct(c.act, x, act2) &*& recvAct(act2, x + 2, null)
+
+/*predicate protocol(c: Chan) {
+  exists x: Int, act2: Action :: acc(c) &*& sendExAct(c.act, x, act2) &*& recvAct(act2, x + 2, null)
 }*/
 
 predicate protocol(c: Chan) {
@@ -76,7 +76,6 @@ procedure thread(c2: Chan)
   send(c2, x + 2);
   assert acc(c2);
   free_chan(c2);
-  assert emp;
 }
   
 procedure fork_thread(c2: Chan)
@@ -87,13 +86,8 @@ procedure main()
   ensures emp
 {
   var c1,c2 := new_chan();
-  pure assert c1.act.next.next == null;
   fork_thread(c2);
-  //pure assert c1.act.next.next == null;
   send(c1, 40);
-  //pure assert c1.act.next == null;
   var res := recv(c1);
-  assert acc(c1);
-  //pure assert c1.act == null;
   free_chan(c1);
 }
