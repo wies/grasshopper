@@ -1005,14 +1005,15 @@ let elim_sl prog =
       let frame_preds =
         IdMap.fold
           (fun fld srt frames ->
-            if !Config.opt_field_mod && not (IdSet.mem fld modifies)
+            let loc_srt = dom_sort srt |> List.hd |> struct_sort_of_sort in
+            if !Config.opt_field_mod && (not (IdSet.mem fld modifies) || not (SortSet.mem loc_srt contr.contr_footprint_sorts))
             then frames else
-            let old_fld = oldify fld in
-            let ssrt = struct_sort_of_sort (List.hd (dom_sort srt)) in
-            mk_framecond (mk_frame (init_footprint_set ssrt) (init_alloc_set ssrt)
-                             (mk_free_const srt old_fld)
-                             (mk_free_const srt fld)) ::
-            frames
+              let old_fld = oldify fld in
+              let ssrt = struct_sort_of_sort (List.hd (dom_sort srt)) in
+              mk_framecond (mk_frame (init_footprint_set ssrt) (init_alloc_set ssrt)
+                              (mk_free_const srt old_fld)
+                              (mk_free_const srt fld)) ::
+              frames
           )
           all_fields []
       in
@@ -1655,6 +1656,7 @@ let elim_new_dispose prog =
     { prog with prog_vars = globals_with_alloc_sets; prog_state_vars = state_vars_with_alloc_sets }
   in
   let elim_proc proc =
-    { proc with proc_body = Util.Opt.map (map_basic_cmds elim) proc.proc_body } 
+    let proc_body1 = Util.Opt.map (map_basic_cmds elim) proc.proc_body in
+    { proc with proc_body = proc_body1 } 
   in
   { prog with prog_procs = IdMap.map elim_proc prog.prog_procs }
