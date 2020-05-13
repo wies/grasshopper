@@ -1,0 +1,22 @@
+options "-symbexec-v2"
+
+struct Counter {
+  var count: Int;
+}
+
+predicate counter(c: Counter) {
+  acc(c)
+}
+
+procedure foo(x: Int) returns (y: Int) {
+  return 10;
+}
+
+procedure incr(c: Counter) 
+  requires counter(c)
+  ensures counter(c)
+{
+  unfold counter(c);
+  c.count := c.count + 1;
+  fold counter(c);
+}

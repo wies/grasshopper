@@ -402,11 +402,13 @@ let resolve_names cu =
         Assert (resolve_expr locals tbl e, pure, name, pos), locals, tbl
     | Split (e, pos) ->
         Split (resolve_expr locals tbl e, pos), locals, tbl
-    | Fold (id, es, pos) ->
+    | Fold (init_id, es, pos) ->
         let es1 = List.map (resolve_expr locals tbl) es in
+        let id = lookup_id init_id tbl pos in
         Fold (id, es1, pos), locals, tbl
-    | Unfold (id, es, pos) ->
+    | Unfold (init_id, es, pos) ->
         let es1 = List.map (resolve_expr locals tbl) es in
+        let id = lookup_id init_id tbl pos in
         Unfold (id, es1, pos), locals, tbl
     | Assign (lhs, rhs, pos) ->
         let lhs1 = List.map (resolve_expr locals tbl) lhs in
@@ -975,9 +977,33 @@ let infer_types cu =
     | Split (e, pos) ->
         Split (check_spec locals false e, pos)
     | Fold (id, es, pos) ->
-        Fold (id, List.map (fun e -> check_spec locals false e) es, pos)
+        let decl = IdMap.find id cu.pred_decls in
+        let arg_ids = List.filter (fun p -> not (IdMap.find p decl.pr_locals).v_implicit) decl.pr_formals in
+        let atys = List.map (fun aid ->
+          let adecl = IdMap.find aid decl.pr_locals in
+          adecl.v_type) arg_ids
+        in
+        let es1 =
+          try List.map2 (infer_types cu locals) atys es 
+          with Invalid_argument _ -> 
+            ProgError.error pos
+              (Printf.sprintf "Unfold of %s invalid argument type" (fst id)) 
+        in
+        Fold (id, es1, pos)
     | Unfold (id, es, pos) ->
-        Unfold (id, List.map (fun e -> check_spec locals false e) es, pos)
+        let decl = IdMap.find id cu.pred_decls in
+        let arg_ids = List.filter (fun p -> not (IdMap.find p decl.pr_locals).v_implicit) decl.pr_formals in
+        let atys = List.map (fun aid ->
+          let adecl = IdMap.find aid decl.pr_locals in
+          adecl.v_type) arg_ids
+        in
+        let es1 =
+          try List.map2 (infer_types cu locals) atys es 
+          with Invalid_argument _ -> 
+            ProgError.error pos
+              (Printf.sprintf "Unfold of %s invalid argument type" (fst id)) 
+        in
+        Unfold (id, es1, pos)
     | Assign (lhs, [ProcCall (id, args, cpos) as e], pos) ->
         let decl = IdMap.find id cu.proc_decls in
         let returns = List.filter (fun p -> not (IdMap.find p decl.p_locals).v_implicit) decl.p_returns in

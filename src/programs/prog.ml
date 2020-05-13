@@ -709,6 +709,8 @@ let accesses_basic_cmd = function
   | Assert sf
   | Split sf -> accesses_spec_form sf
   | Return rc -> List.fold_left free_symbols_term_acc IdSet.empty rc.return_args
+  | Unfold pc
+  | Fold pc ->  List.fold_left free_symbols_term_acc IdSet.empty pc.pred_args  
   | Call cc ->
       IdSet.union cc.call_accesses @@
       List.fold_left
@@ -776,6 +778,8 @@ let footprint_sorts_basic_cmd prog = function
   | Assume sf
   | Assert sf
   | Split sf -> footprint_sorts_spec_form prog sf
+  | Unfold pc
+  | Fold pc -> List.fold_left (footprint_sorts_term_acc prog) SortSet.empty pc.pred_args
   | Return rc -> List.fold_left (footprint_sorts_term_acc prog) SortSet.empty rc.return_args
   | Call cc ->
       let decl = find_proc prog cc.call_name in
@@ -806,6 +810,8 @@ let occuring_vars =
           fold_spec_form (free_consts_acc vars) (SlUtil.free_consts_acc vars) sf
       | Return rc ->
           List.fold_left free_consts_term_acc vars rc.return_args
+      | Unfold pc | Fold pc ->
+          List.fold_left free_consts_term_acc vars pc.pred_args
       | Call cc ->
           let vars1 = List.fold_left free_consts_term_acc vars cc.call_args in
           List.fold_left (fun vars x -> IdSet.add x vars) vars1 cc.call_lhs
@@ -1029,6 +1035,16 @@ let rec map_terms_cmd fn =
         Assume (map_terms_spec fn sf)
     | Split sf ->
         Split (map_terms_spec fn sf)
+    | Unfold pc ->
+        let pc1 = 
+          { pc with pred_args = List.map fn pc.pred_args }
+        in
+        Unfold pc1
+    | Fold pc -> 
+        let pc2 = 
+          { pc with pred_args = List.map fn pc.pred_args }
+        in
+        Fold pc2
   in
   function
   | Basic (bc, pp) -> mk_basic_cmd (map_terms_basic_cmd bc) pp.pp_pos
@@ -1172,6 +1188,14 @@ let pr_basic_cmd ppf = function
       fprintf ppf "%a@[<2>split@ %a@]" 
         pr_comment sf.spec_name
         pr_spec_form sf
+  | Unfold pc->
+      fprintf ppf "@[unfold@ %a(@[%a@])@]" 
+        pr_ident pc.pred_name 
+        pr_term_list pc.pred_args 
+  | Fold pc->
+      fprintf ppf "@[fold@ %a(@[%a@])@]" 
+        pr_ident pc.pred_name 
+        pr_term_list pc.pred_args 
   | Return rc -> 
       fprintf ppf "@[<2>return@ %a@]" pr_term_list rc.return_args
   | Call cc -> 
