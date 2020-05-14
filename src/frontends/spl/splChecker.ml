@@ -405,10 +405,12 @@ let resolve_names cu =
     | Fold (init_id, es, pos) ->
         let es1 = List.map (resolve_expr locals tbl) es in
         let id = lookup_id init_id tbl pos in
+        check_pred id preds0 pos;
         Fold (id, es1, pos), locals, tbl
     | Unfold (init_id, es, pos) ->
         let es1 = List.map (resolve_expr locals tbl) es in
         let id = lookup_id init_id tbl pos in
+        check_pred id preds0 pos;
         Unfold (id, es1, pos), locals, tbl
     | Assign (lhs, rhs, pos) ->
         let lhs1 = List.map (resolve_expr locals tbl) lhs in

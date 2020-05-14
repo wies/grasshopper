@@ -16,7 +16,7 @@ procedure incr(c: Counter)
   requires counter(c)
   ensures counter(c)
 {
-  unfold counter(c);
+  unfold foo(10);
   c.count := c.count + 1;
   fold counter(c);
 }
