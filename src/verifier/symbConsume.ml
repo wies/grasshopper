@@ -40,7 +40,11 @@ let rec consume_sl_form state heap (f: Sl.form) (fc: symb_state -> symb_heap -> 
         let h' = heap_remove_by_term state.heap (mk_setenum [term_of t']) in
         fc state h' Unit)
   | Sl.Atom (Sl.Region, ts, _) -> fc state heap Unit
-  | Sl.Atom (Sl.Pred p, ts, _) -> fc state heap Unit
+  | Sl.Atom (Sl.Pred id, ts, _) -> 
+     eval_terms state ts (fun state' ts' ->
+        let pred_chunk = heap_find_pred_chunk state'.heap id in
+        let h' = heap_remove state'.heap state'.pc pred_chunk in 
+        fc {state' with heap=h'} h' (get_pred_chunk_snap pred_chunk))
   | Sl.SepOp (Sl.SepStar, f1, f2, _) ->
      Debug.debug( fun() -> sprintf "SL SepOp SepStar \n"); 
      fc state heap Unit 

@@ -5,18 +5,21 @@ struct Counter {
 }
 
 predicate counter(c: Counter) {
-  acc(c)
-}
-
-procedure foo(x: Int) returns (y: Int) {
-  return 10;
+  acc(c) 
 }
 
 procedure incr(c: Counter) 
   requires counter(c)
   ensures counter(c)
 {
-  unfold foo(10);
+  unfold counter(c);
   c.count := c.count + 1;
   fold counter(c);
+}
+
+procedure decr(c: Counter)
+  requires counter(c)
+  ensures counter(c)
+{
+  c.count := c.count - 1;
 }

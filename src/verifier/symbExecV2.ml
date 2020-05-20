@@ -281,8 +281,56 @@ let rec exec state comm (fc: symb_state -> 'a option) =
               exec state2' l.loop_prebody (fun state3' ->
                 let slf = mk_sep_star invar (mk_pure (GrassUtil.mk_not l.loop_test)) in
                 produce_sl_form state2' slf (mk_fresh_snap Bool) fc))))
-  | Basic (Unfold pc, pos) -> todo "unfold"
-  | Basic (Fold pc, pos) -> todo "fold"
+  | Basic (Unfold pc, pp) -> 
+    Debug.debug (fun () -> 
+        sprintf "%sExecuting unfold: %d: %s%sCurrent state:\n%s\n"
+          lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+          lineSep (string_of_state state)
+    );
+    eval_terms state pc.pred_args (fun state' args' ->
+      Debug.debug (fun () -> sprintf "unfold terms (%s)\n" (string_of_symb_term_list args'));
+      let body = (IdMap.find pc.pred_name state.prog.prog_preds).pred_body in
+      match body with
+      | Some b ->
+        Debug.debug (fun () -> sprintf "body (%s)\n" (string_of_format pr_spec_form b));
+        let ids = (IdMap.find pc.pred_name state.prog.prog_preds).pred_contract.contr_formals in 
+        let sm =
+          List.combine ids args' 
+          |> List.fold_left (fun sm (id, Symbt a) -> IdMap.add id a sm) IdMap.empty 
+        in
+        let body' = subst_symb_spec_form sm b.spec_form in
+        Debug.debug (fun () -> sprintf "body[x -> e] (%s)\n" (string_of_symb_spec_form body'));
+        consume_sl_form state' state'.heap (SlUtil.mk_pred pc.pred_name pc.pred_args) (fun state2 heap' snap ->
+          produce_symb_sf state2 body' snap (fun state3 -> fc state3))
+      | None ->
+        Debug.debug (fun () -> sprintf "no body\n");
+        fc state'
+    )
+  | Basic (Fold pc, pp) ->
+    Debug.debug (fun () -> 
+        sprintf "%sExecuting fold: %d: %s%sCurrent state:\n%s\n"
+          lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+          lineSep (string_of_state state)
+    );
+    eval_terms state pc.pred_args (fun state' args' ->
+      Debug.debug (fun () -> sprintf "fold terms (%s)\n" (string_of_symb_term_list args'));
+      let body = (IdMap.find pc.pred_name state.prog.prog_preds).pred_body in
+      match body with
+      | Some b ->
+        Debug.debug (fun () -> sprintf "body (%s)\n" (string_of_format pr_spec_form b));
+        let ids = (IdMap.find pc.pred_name state.prog.prog_preds).pred_contract.contr_formals in 
+        let sm =
+          List.combine ids args' 
+          |> List.fold_left (fun sm (id, Symbt a) -> IdMap.add id a sm) IdMap.empty 
+        in
+        let body' = subst_symb_spec_form sm b.spec_form in
+        Debug.debug (fun () -> sprintf "body[x -> e] (%s)\n" (string_of_symb_spec_form body'));
+        consume_symb_sf state' state'.heap body' (fun state2 heap' snap ->
+          produce_sl_form state2 (SlUtil.mk_pred pc.pred_name pc.pred_args) snap (fun state3 -> fc state3))
+      | None ->
+        Debug.debug (fun () -> sprintf "no body\n");
+        fc state'
+    )
 
 and execs state comms (fc: symb_state -> 'a option) =
   match comms with

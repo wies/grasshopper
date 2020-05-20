@@ -1,4 +1,6 @@
 (** {5 Symbolic execution inspired by Viper's Silicon} *)
+open Printf
+open Prog
 open SymbEval
 open SymbState
 open GrassUtil
@@ -49,7 +51,11 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
         fc {state' with heap=h; pc = stack})
   | Sl.Atom (Sl.Region, ts, a) -> todo "region terms"
   | Sl.Atom (Sl.Emp, ts, _) -> todo "Atom emp"
-  | Sl.Atom (Sl.Pred _, ts, _) -> todo "Atom Pred"
+  | Sl.Atom (Sl.Pred id, ts, _) -> 
+      eval_terms state ts (fun state' ts' ->
+        let pred_chunk = mk_heap_chunk_obj_pred id snp ts' in
+        let h, stack = heap_add state'.heap state'.pc pred_chunk in
+        fc {state' with heap=h; pc = stack})
   | Sl.SepOp (op, f1, f2, _) ->
      produce_sl_form state f1 (snap_first snp) (fun state' ->
        produce_sl_form state' f2 (snap_second snp) fc)
@@ -75,6 +81,7 @@ and produce_symb_sl_form state (f: symb_sl_form) snp (fc: symb_state -> 'a optio
     produce_symb_sl_form state (Symbslf f1) (snap_second snp) (fun state' ->
        produce_symb_sl_form state' (Symbslf f2) (snap_second snp) fc)
   | Symbslf (Sl.BoolOp (op, fs, _)) -> todo "Symb produce BoolOp"
+  | Symbslf (Sl.Binder (b, [], f, _)) -> fc state 
   | Symbslf (Sl.Binder (b, ts, f, _)) -> todo "Binder"
 
 let produce state sf snp (fc: symb_state -> 'a option) =

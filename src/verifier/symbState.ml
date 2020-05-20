@@ -57,6 +57,12 @@ let sort_of_symb_val (_, srt) = srt
 let string_of_symb_term t =
   sprintf "%s" (string_of_term (term_of t))
 
+let string_of_symb_terms ts =
+  ts
+  |> List.map (fun t -> string_of_symb_term t)
+  |> String.concat ", "
+  |> sprintf "[%s]"
+
 let string_of_symb_form f =
   sprintf "%s" (string_of_form (form_of f))
 
@@ -309,14 +315,14 @@ let rec string_of_snap s =
 
 (** heap elements and symbolic heap
   The symbolic maintains a multiset of heap chunks which are
-  of the form obj(term, snap, [Id -> V]) or a predicate with an id
-  and list of args.
+  of the form obj(term, snap, [Id -> V]) or a predicate with an id a
+  snapshot and list of args.
   *)
 type heap_chunk =
   | Obj of symb_term * snap * symb_store
   | ObjForm of symb_form * snap * symb_store
-  (*| Eps of symb_val * symb_val IdMap.t (* r.f := e *)
-  | Pred of ident * snap * symb_val list*)
+  | ObjPred of ident * snap * symb_term list
+  (*| Eps of symb_val * symb_val IdMap.t (* r.f := e *)*)
 
 let mk_heap_chunk_obj t snp m =
   Obj (t, snp, m)
@@ -327,14 +333,23 @@ let mk_fresh_heap_chunk_obj t =
 let mk_heap_chunk_obj_form f snp m =
   ObjForm (f, snp, m)
 
+let mk_heap_chunk_obj_pred id snp vals  =
+  ObjPred (id, snp, vals)
+
+let get_pred_chunk_snap = function
+  | ObjPred (_, snp, _) -> snp
+  | _ -> failwith "pred chunk doesn't carry a snapshot" 
+
 let get_field_store = function
   | Obj (_, _, m) -> m
   | ObjForm (_, _, m) -> m
+  | ObjPred (_, _, m) -> failwith "pred chunk doesn't carry a store" 
 
 let add_to_heap_chunk_map hc k v =
   match hc with
   | Obj (t, snp, m) -> Obj (t, snp, IdMap.add k v m)
   | ObjForm (f, snp, m) -> ObjForm (f, snp, IdMap.add k v m)
+  | ObjPred (_, _, _) as p -> p
 
 let equal_field_maps fm1 fm2 =
   IdMap.equal (=) fm1 fm2
@@ -352,6 +367,9 @@ let equal_heap_chunks c1 c2 =
   | ObjForm (f1, s1, sm1), ObjForm (f2, s2, sm2)
   when equal (form_of f1) (form_of f2) && equal_field_maps sm1 sm2 ->
     equal_snaps s1 s2
+  | ObjPred (id1, s1, ts1), ObjPred(id2, s2, ts2)
+  when id1 = id2 && ts1 = ts2 ->
+    equal_snaps s1 s2
   | _ -> false
 
 let string_of_hc chunk =
@@ -362,6 +380,9 @@ let string_of_hc chunk =
   | ObjForm (f, snap, symb_fields) ->
     sprintf "ObjForm(%s, Snap:%s, Fields:%s)" (string_of_symb_form f)
       (string_of_snap snap) (string_of_symb_fields symb_fields)
+  | ObjPred (id, snap, ts) ->
+    sprintf "ObjPred(%s, Snap:%s, terms:%s)" (string_of_ident id)
+      (string_of_snap snap) (string_of_symb_term_list ts)
 
 type symb_heap = heap_chunk list
 
@@ -387,6 +408,19 @@ let rec heap_find_by_chunk h hc =
       Debug.debug(fun() -> sprintf "check: (%s) == (%s)\n" (string_of_hc f) (string_of_hc hc));
       if equal_heap_chunks f hc then
         f else heap_find_by_chunk h' hc 
+  | ObjPred(_,_,_) as p :: h' ->
+      Debug.debug(fun() -> sprintf "check: (%s) == (%s)\n" (string_of_hc p) (string_of_hc hc));
+      if equal_heap_chunks p hc then
+        p else heap_find_by_chunk h' hc 
+
+let rec heap_find_pred_chunk h id = 
+  match h with
+  | [] -> raise (HeapChunkNotFound (sprintf "for ident (%s)" (string_of_ident id)))
+  | ObjPred(id1, _, _) as p :: h'
+    when id = id1 ->
+      if id = id1 then
+        p else heap_find_pred_chunk h' id 
+  | p :: h' -> heap_find_pred_chunk h' id 
 
 let rec heap_find_by_form h (Symbf f) = 
   match h with
@@ -411,7 +445,9 @@ let heap_remove h stack hchunk =
         false 
       | ObjForm (Symbf f1, snp1, _), ObjForm (Symbf f2, snp2, _) ->
         if equal f1 f2 then false else true
-      |_ -> true
+      | ObjPred (id1, snp1, ts1), ObjPred (id2, snp2, ts2) -> 
+        if id1 = id2 && ts1 = ts2 && (equal_snaps snp1 snp2) then false else true 
+      | _ -> true 
     else true) h
 
 let string_of_heap h =
