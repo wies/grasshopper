@@ -31,6 +31,11 @@ procedure new_chan()
   returns (c1: Chan, c2: Chan)
   ensures protocol(c1) &*& dual_protocol(c2)
 
+procedure ref(x:Int)
+  returns (y:Int)
+
+  procedure load(y:Int)
+  
 procedure send(c: Chan, x: Int, implicit ghost y: Int)
   requires acc(c) &*& acc(c.act)
   requires c.act.msg == Send(y)
