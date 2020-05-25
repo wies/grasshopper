@@ -719,7 +719,8 @@ let footprint_sorts_term_acc prog acc t =
               SortSet.union (footprint_sorts_pred decl) acc
           | FreeSym id when IdSet.mem id prog.prog_state_vars ->
               footprint_sorts_acc acc srt
-          | _ -> acc
+          | _ ->
+              acc
         in
         (*let acc = footprint_sorts_acc acc srt in*)
         List.fold_left c acc ts

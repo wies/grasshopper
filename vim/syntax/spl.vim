@@ -12,9 +12,9 @@ endif
 " case is significant
 " syn case ignore
 " spl Keywords
-syn keyword splStatement	include procedure returns if else while return new var free
-syn keyword splStatement	axiom assert assume requires ensures invariant matching yields
-syn keyword splStatement	struct function predicate pure ghost implicit type
+syn keyword splStatement	include procedure returns if else while return new var free const
+syn keyword splStatement	axiom assert assume requires ensures invariant matching yields lemma
+syn keyword splStatement	struct function predicate pure ghost implicit type define datatype
 syn keyword splTodo         contained TODO ToDo Todo todo XXX FIXME
 " spl Types
 syn keyword splType     Bool Int Node

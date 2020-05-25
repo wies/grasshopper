@@ -1,0 +1,149 @@
+include "../adt/lists.spl"
+
+struct Node {
+  var next: Node;
+  var data: Int;
+}
+
+predicate lseg(x: Node, y: Node, lst: List) {
+  (x == y &*& lst == nil) ||
+  (x != y &*& lst != nil &*& acc(x) &*& x.data == lst.hd &*& lseg(x.next, y, lst.tl))
+}
+
+predicate list(x: Node, lst: List) {
+  lseg(x, null, lst)
+}
+
+datatype Message = SendCons(sx: Int)
+                 | ReceiveCons(rx: Int)
+                 | SendNil
+                 | ReceiveNil
+
+const flagCons: Int
+const flagNil: Int
+axiom flagCons == 1
+axiom flagNil == 0
+
+struct Action {
+  var nextAct: Action;
+  var msg: Message;
+}
+
+struct Chan {
+  var act: Action;
+}
+
+/////////////////////////////
+
+predicate end(c:Chan) {
+  acc(c) &*& c.act == null
+}
+  
+predicate sendConsAct(a: Action, x: Int, na: Action) {
+  acc(a) &*& a.msg == SendCons(x) &*& a.nextAct == na
+}
+
+predicate sendNilAct(a: Action) {
+  acc(a) &*& a.msg == SendNil &*& a.nextAct == null
+}
+
+predicate recvConsAct(a: Action, x: Int, na: Action) {
+  acc(a) &*& a.msg == ReceiveCons(x) &*& a.nextAct == na
+}
+
+predicate recvNilAct(a: Action) {
+  acc(a) &*& a.msg == ReceiveNil &*& a.nextAct == null
+}
+
+predicate protocol1(act: Action, lst: List) {
+     (lst != nil &*& sendConsAct(act, lst.hd, act.nextAct) &*& protocol1(act.nextAct, lst.tl))
+  || (lst == nil &*& sendNilAct(act))
+}
+
+predicate protocol(c: Chan, lst: List) {
+  acc(c) &*& protocol1(c.act, lst)
+}
+
+predicate dual_protocol1(act: Action, lst: List) {
+     (recvConsAct(act, lst.hd, act.nextAct) &*& lst != nil &*& dual_protocol1(act.nextAct, lst.tl))
+  || (recvNilAct(act) &*& lst == nil)
+}
+
+predicate dual_protocol(c: Chan, lst: List) {
+  acc(c) &*& dual_protocol1(c.act, lst)
+}
+
+/////////////////////////////
+
+procedure new_chan(ghost lst: List)
+  returns (c1: Chan, c2: Chan)
+  ensures protocol(c1, lst) &*& dual_protocol(c2, lst)
+
+procedure send(c: Chan, flag: Int, x: Int)
+  requires acc(c) &*& acc(c.act)
+  requires (c.act.msg == SendCons(x) &*& flag == flagCons)
+        || (c.act.msg == SendNil &*& flag == flagNil)
+  ensures acc(c) &*& c.act == old(c.act.nextAct)
+
+procedure recv(c: Chan, implicit ghost y: Int)
+  returns (flag: Int, x: Int)
+  requires acc(c) &*& acc(c.act)
+  requires c.act.msg == ReceiveCons(y)
+        || c.act.msg == ReceiveNil
+  ensures acc(c) &*& c.act == old(c.act.nextAct)
+  ensures (c.act.msg == ReceiveCons(x) &*& flag == flagCons)
+       || (c.act.msg == ReceiveNil &*& flag == flagNil)
+
+procedure free_chan(c: Chan)
+  requires end(c)
+  ensures emp
+
+
+/////////////////////////////
+
+procedure thread1(c1: Chan, n: Node, ghost lst: List)
+  requires protocol(c1, lst)
+  requires list(n, lst)
+  ensures emp
+{
+  if (n != null) {
+    send(c1, flagCons, n.data);
+    thread1(c1, n.next, lst.tl);
+    free(n);
+  } else {
+    send(c1, flagNil, -1);
+    free_chan(c1);
+  }
+}
+
+procedure thread2(c2: Chan, ghost lst: List)
+  returns (res: Node)
+  requires dual_protocol(c2, lst)
+  ensures list(res, lst)
+{
+  var flag, x := recv(c2);
+  if (flag == flagCons) {
+    assume false;
+    var tail := thread2(c2, lst.tl);
+    res := new Node;
+    res.data := x;
+    res.next := tail;
+    return res;
+  } else {
+    pure assert flag == flagNil;
+    pure assert lst == nil;
+    pure assert c2.act == null;
+    free_chan(c2);
+    return null;
+  }
+}
+
+procedure main(n: Node, ghost lst: List)
+  requires list(n, lst)
+  ensures list(n, lst)
+{
+  var c1,c2 := new_chan(lst);
+  //TODO as separate threads
+  thread1(c1, n, lst);
+  n := thread2(c2, lst);
+}

@@ -69,7 +69,7 @@ procedure overloaded_recv_2(c: Chan, ghost pState: dual_Send) returns (msg: Ref,
 
 // both thread
 procedure close(c: Chan, ghost pState: End)
-  requires acc(c)
+  requires acc(c) &*& acc(pState)
   requires pState.ce == c
   ensures emp
 
@@ -83,8 +83,7 @@ procedure new_chan() returns (c1: Chan, c2: Chan, ghost pStateC1: Send, ghost pS
 //client code
 
 procedure prog3_thread2(c: Chan, ghost pState: dual_Send)
-  requires acc(c)
-  requires acc(pState)
+  requires acc(c) &*& acc(pState)
   requires pState.cds = c
   ensures emp
 {
@@ -119,7 +118,6 @@ procedure prog3_thread1(c: Chan, ghost pState: Send)
 procedure prog3_main()
 {
   var c1,c2,s1,s2 := new_chan();
-  pure assert(false); //FIXME !!!!
   fork_prog3_thread2(c2,s2);
   prog3_thread1(c1,s1);
 }

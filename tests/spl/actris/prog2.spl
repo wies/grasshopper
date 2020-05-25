@@ -1,6 +1,4 @@
-options "abspreds"
-
-datatype Message = Send(sx: Int) | Receive(rx: Int)
+datatype Message = Send(sx: Int) | SendEx(sex: Int) | Receive(rx: Int)
 
 struct Action {
   var next: Action;
@@ -10,31 +8,54 @@ struct Action {
 struct Chan {
   var act: Action;
 }
+
+predicate end(c:Chan) {
+  acc(c) &*& c.act == null
+}
   
 predicate sendAct(a: Action, x: Int, na: Action) {
   acc(a) &*& a.msg == Send(x) &*& a.next == na
 }
 
+predicate sendExAct(a: Action, x: Int, na: Action) {
+  acc(a) &*& a.msg == SendEx(x) &*& a.next == na
+}
+
 predicate recvAct(a: Action, x: Int, na: Action) {
   acc(a) &*& a.msg == Receive(x) &*& a.next == na
 }
-    
+
+/*
 predicate protocol(c: Chan) {
   exists x: Int, act2: Action :: acc(c) &*& sendAct(c.act, x, act2) &*& recvAct(act2, x + 2, null)
+}*/
+
+predicate protocol(c: Chan) {
+  acc(c) &*&
+  sendExAct(c.act, c.act.msg.sx, c.act.next) &*&
+  recvAct(c.act.next, c.act.msg.sx + 2, null)
 }
 
+/*
 predicate dual_protocol(c: Chan) {
   exists x: Int, act2: Action :: acc(c) &*& recvAct(c.act, x, act2) &*& sendAct(act2, x + 2, null)
+}*/
+
+predicate dual_protocol(c: Chan) {
+  acc(c) &*&
+  recvAct(c.act, c.act.msg.rx, c.act.next) &*&
+  sendAct(c.act.next, c.act.msg.rx + 2, null)
 }
 
 procedure new_chan()
   returns (c1: Chan, c2: Chan)
   ensures protocol(c1) &*& dual_protocol(c2)
 
-  procedure send(c: Chan, x: Int, implicit ghost y: Int)
+procedure send(c: Chan, x: Int, implicit ghost y: Int)
   requires acc(c) &*& acc(c.act)
-  requires c.act.msg == Send(y)
-  ensures acc(c) &*& c.act == old(c.act.next) && y == x
+  requires c.act.msg == Send(x) || c.act.msg == SendEx(y)
+  ensures acc(c) &*& c.act == old(c.act.next)
+  ensures x == y
 
 procedure recv(c: Chan, implicit ghost y: Int)
   returns (x: Int)
@@ -43,21 +64,36 @@ procedure recv(c: Chan, implicit ghost y: Int)
   ensures acc(c) &*& c.act == old(c.act.next)
   ensures x == y
 
-procedure prog2_thread2(c2: Chan)
+procedure free_chan(c: Chan)
+  requires end(c)
+  ensures emp
+  
+procedure thread(c2: Chan)
   requires dual_protocol(c2)
+  ensures emp
 {
   var x := recv(c2);
   send(c2, x + 2);
+  assert acc(c2);
+  free_chan(c2);
+  assert emp;
 }
   
-procedure fork_prog2_thread2(c2: Chan)
+procedure fork_thread(c2: Chan)
   requires dual_protocol(c2)
   ensures emp
 
-procedure prog2_main()
+procedure main()
+  ensures emp
 {
   var c1,c2 := new_chan();
-  fork_prog2_thread2(c2);
+  pure assert c1.act.next.next == null;
+  fork_thread(c2);
+  //pure assert c1.act.next.next == null;
   send(c1, 40);
+  //pure assert c1.act.next == null;
   var res := recv(c1);
+  assert acc(c1);
+  //pure assert c1.act == null;
+  free_chan(c1);
 }
