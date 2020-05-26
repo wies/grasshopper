@@ -167,16 +167,19 @@ and interp_symbol model sym arity args =
         | ([Adt(_, adt_defs)], _) -> adt_defs
         | _ -> failwith "Destructor has unexpected sort");
       in
-      let cons_def =
+      let cid, cons_def =
         find_map (fun (a, adt_def) ->
           find_map (fun (id, def) ->
-            if id = cons then Some def else None) adt_def)
+            if id = cons then Some (id, def) else None) adt_def)
           adt_defs
         |> Opt.lazy_get_or_else (fun () -> failwith "Couldn't find constructor")
       in
       (* Look for the position corresponding to destructor id *)
       List.combine cons_def args
-      |> List.find (fun ((des_id, _), v) -> des_id = id)
+      |> List.find_opt (fun ((des_id, _), v) -> des_id = id)
+      |> Opt.lazy_get_or_else (fun () ->
+          failwith ("Constructor " ^ string_of_ident cid ^ " has no destructor " ^
+                    string_of_ident id))
       |> snd
     | _ -> failwith "Destructor applied to non-ADT args")
   | _ ->
