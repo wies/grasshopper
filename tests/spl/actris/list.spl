@@ -1,3 +1,5 @@
+options "-abspreds"
+
 include "../adt/lists.spl"
 
 struct Node {
@@ -77,6 +79,7 @@ predicate dual_protocol(c: Chan, lst: List) {
 
 procedure new_chan(ghost lst: List)
   returns (c1: Chan, c2: Chan)
+  requires emp
   ensures protocol(c1, lst) &*& dual_protocol(c2, lst)
 
 procedure send(c: Chan, flag: Int, x: Int)
@@ -98,6 +101,23 @@ procedure free_chan(c: Chan)
   requires end(c)
   ensures emp
 
+
+/////////////////////////////
+
+//TODO strengthen by lst
+predicate lseg_grass(x: Node, y: Node) {
+  acc({ z: Node :: Btwn(next, x, z, y) && z != y }) &*& Reach(next, x, y)
+}
+
+lemma lseg_to_lseg_grass(x: Node, y: Node, lst: List)
+  requires lseg(x, y, lst)
+  ensures lseg_grass(x, y)
+{
+  if (x == y) {
+  } else {
+    lseg_to_lseg_grass(x.next, y, lst.tl);
+  }
+}
 
 /////////////////////////////
 
@@ -123,7 +143,6 @@ procedure thread2(c2: Chan, ghost lst: List)
 {
   var flag, x := recv(c2);
   if (flag == flagCons) {
-    assume false;
     var tail := thread2(c2, lst.tl);
     res := new Node;
     res.data := x;
@@ -142,7 +161,10 @@ procedure main(n: Node, ghost lst: List)
   requires list(n, lst)
   ensures list(n, lst)
 {
+  assert list(n, lst) ;
   var c1,c2 := new_chan(lst);
+  //assert list(n, lst) &*& true ;
+  assert list(n, lst) &*& protocol(c1, lst) &*& dual_protocol(c2, lst) ;
   //TODO as separate threads
   thread1(c1, n, lst);
   n := thread2(c2, lst);
