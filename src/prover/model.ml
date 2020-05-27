@@ -141,6 +141,11 @@ let rec eval model = function
        | Some true -> eval model (App (AndTerm, fs, Bool))
        | Some false -> mk_false_term
        | None -> mk_undefined Bool)
+   | App (NotTerm, [t], _) ->
+       eval model t |>
+       bool_opt_of_value |>
+       Opt.map (fun b -> mk_bool_term b) |>
+       Opt.get_or_else (mk_undefined Bool)
    | App (AndTerm, [], _) -> mk_true_term
    | App (OrTerm, f1 :: fs, _) ->
        (match eval model f1 |> bool_opt_of_value with

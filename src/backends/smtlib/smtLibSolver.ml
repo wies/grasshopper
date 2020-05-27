@@ -1068,6 +1068,9 @@ let convert_model session smtModel =
         | SmtLibSyntax.And -> mk_app Bool AndTerm cts
         | SmtLibSyntax.Or -> mk_app Bool OrTerm cts
         | _ -> failwith "unexpected match case")
+    | SmtLibSyntax.App (SmtLibSyntax.Not, [t], _) ->
+        let ct = convert_term model res_srt bvs t in
+        mk_app Bool NotTerm [ct]
     | SmtLibSyntax.App (SmtLibSyntax.BoolConst b, [], _) -> 
         mk_bool_term b
     | SmtLibSyntax.App (SmtLibSyntax.IntConst i, [], _) -> 
@@ -1147,9 +1150,13 @@ let convert_model session smtModel =
         mk_ite cond1 t1 e1
     | SmtLibSyntax.Annot (t, _, _) ->
         convert_term model res_srt bvs t
-    | SmtLibSyntax.App (_, _, pos)
-    | SmtLibSyntax.Binder (_, _, _, pos) 
-    | SmtLibSyntax.Let (_, _, pos) -> fail pos
+    | SmtLibSyntax.App (sym, _, pos) ->
+        print_endline @@ "app" ^ SmtLibSyntax.string_of_symbol sym; fail pos
+    | SmtLibSyntax.Binder (_, _, _, pos) ->
+        print_endline "binder"; fail pos
+    | SmtLibSyntax.Let (_, _, pos) ->
+        print_endline "let";
+        fail pos
     in
     match ct with
     | App (FreeSym (id2, _) as sym2, ts, srt) as t1 ->

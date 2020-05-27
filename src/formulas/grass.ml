@@ -81,7 +81,7 @@ type symbol =
   | Length | IndexOfCell | ArrayOfCell | ArrayCells | ArrayMap
   | ByteToInt | IntToByte (* explicit conversion *)
   (* symbols for model representation *)
-  | AndTerm | OrTerm | Ite (* if-then-else *)
+  | AndTerm | OrTerm | NotTerm | Ite (* if-then-else *)
   | Undefined | Value of Int64.t 
   (* interpreted predicate symbols *)
   | Eq
@@ -285,6 +285,7 @@ let string_of_symbol = function
   | Disjoint -> "Disjoint"
   | Frame -> "Frame"
   | AndTerm -> "&&"
+  | NotTerm -> "!"
   | OrTerm -> "||"
   (* constructors and destructors *)
   | Constructor id 
@@ -309,7 +310,7 @@ let prio_of_symbol = function
   | Read | Write | Constructor _ | Destructor _ | Old | SetEnum | ArrayMap
   | Length | IndexOfCell | ArrayOfCell | ArrayCells | EntPnt | ByteToInt | IntToByte
   | Btwn | Frame | Disjoint | Known | FreeSym _ -> 1
-  | UMinus | BitNot -> 2 
+  | UMinus | BitNot | NotTerm -> 2 
   | Mult | Div | Mod -> 3
   | Minus | Plus -> 4
   | ShiftLeft | ShiftRight -> 5
