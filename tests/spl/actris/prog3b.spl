@@ -10,7 +10,14 @@ struct Action {
 struct Chan {
   var act: Action;
 }
-  
+
+struct Ref{
+  var x: Int;
+}
+
+predicate end(c: Chan){
+  acc(c) &*& c.act == null
+}
 predicate sendAct(a: Action, x: Int, na: Action) {
   acc(a) &*& a.msg == Send(x) &*& a.next == na
 }
@@ -31,11 +38,10 @@ procedure new_chan()
   returns (c1: Chan, c2: Chan)
   ensures protocol(c1) &*& dual_protocol(c2)
 
-procedure ref(x:Int)
-  returns (y:Int)
+procedure free_chan(c: Chan)
+  requires end(c)
+  ensures emp
 
-  procedure load(y:Int)
-  
 procedure send(c: Chan, x: Int, implicit ghost y: Int)
   requires acc(c) &*& acc(c.act)
   requires c.act.msg == Send(y)
@@ -58,13 +64,15 @@ procedure prog3_thread2(c2: Chan)
 procedure fork_prog3_thread2(c2: Chan)
   requires dual_protocol(c2)
   ensures emp
-
+  
 procedure prog3_main()
 {
-  var c1,c2 := new_chan();
+  var c1, c2 := new_chan();
   fork_prog3_thread2(c2);
-  var l := ref(40);
-  send(c1, l);
+  var l := new Ref;
+  l.x := 40;
+  send(c1, l.x);
   var res := recv(c1);
-  load(res);
+  free_chan(c1);
+  l.x := res;
 }
