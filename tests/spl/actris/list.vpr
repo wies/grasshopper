@@ -1,0 +1,154 @@
+domain Message {
+  function sendVal(x: Int) : Message
+  function receiveVal(x: Int) : Message
+  function sendNil() : Message
+  function receiveNil(): Message
+  function val(m: Message) : Int
+  
+  axiom sendValInjective {
+    forall i : Int :: {sendVal(i)} val(sendVal(i)) == i 
+  }
+  
+  axiom receiveValInjective {
+    forall i : Int :: {receiveVal(i)} val(receiveVal(i)) == i 
+  }
+
+  axiom sendValDistinct {
+    forall i : Int :: {sendVal(i)} sendVal(i) != sendNil() && sendVal(i) != receiveNil() && sendVal(i) != receiveVal(i)
+  }
+
+  axiom receiveValDistinct {
+    forall i : Int :: {receiveVal(i)} receiveVal(i) != sendNil() && receiveVal(i) != receiveNil() && sendVal(i) != receiveVal(i)
+  }
+
+}
+
+field data: Int
+field next: Ref
+
+predicate lseg(first: Ref, last: Ref, values: Seq[Int])
+{
+  first != last ?
+    acc(first.data) && acc(first.next) &&
+    0 < |values| &&
+    first.data == values[0] &&
+    lseg(first.next, last, values[1..])
+    : |values| == 0
+}
+
+predicate list(first: Ref, values: Seq[Int])
+{
+  lseg(first, null, values)
+}
+
+field act: Ref
+field nextAct: Ref
+field msg: Message
+
+predicate end(c: Ref) {
+  acc(c.act) && c.act == null
+}
+
+predicate protocol1(a: Ref, lst: Seq[Int]) {
+  lst == Seq[Int]() ? acc(a.msg) && acc(a.nextAct) && a.msg == sendNil() && a.nextAct == null :
+               acc(a.msg) && acc(a.nextAct) && a.msg == sendVal(lst[0]) && protocol1(a.nextAct, lst[1..])
+}
+
+predicate protocol(c: Ref, lst: Seq[Int]) {
+  acc(c.act) && protocol1(c.act, lst)
+}
+
+predicate dual_protocol1(a: Ref, lst: Seq[Int]) {
+  lst == Seq[Int]() ? acc(a.msg) && acc(a.nextAct) && a.msg == receiveNil() && a.nextAct == null :
+               acc(a.msg) && acc(a.nextAct) && a.msg == receiveVal(lst[0]) && dual_protocol1(a.nextAct, lst[1..])
+}
+
+predicate dual_protocol(c: Ref, lst: Seq[Int]) {
+  acc(c.act) && dual_protocol1(c.act, lst)
+}
+
+method new_chan(lst: Seq[Int])
+  returns (c1: Ref, c2: Ref)
+  ensures protocol(c1, lst) && dual_protocol(c2, lst)
+
+method sendV(c: Ref, x: Int)
+  requires acc(c.act) && acc(c.act.msg) && acc(c.act.nextAct)
+  requires c.act.msg == sendVal(x)
+  ensures acc(c.act) && c.act == old(c.act.nextAct)
+
+method sendN(c: Ref)
+  requires acc(c.act) && acc(c.act.msg) && acc(c.act.nextAct)
+  requires c.act.msg == sendNil()
+  ensures acc(c.act) && c.act == old(c.act.nextAct)
+
+method recv(c: Ref)
+  returns (flag: Bool, x: Int)
+  requires acc(c.act) && acc(c.act.msg) && acc(c.act.nextAct)
+  requires c.act.msg == receiveNil() || exists y: Int :: c.act.msg == receiveVal(y)
+  ensures acc(c.act) && c.act == old(c.act.nextAct)
+  ensures flag ==> (old(c.act.msg) == receiveVal(x))
+  ensures !flag ==> (old(c.act.msg) == receiveNil())
+
+method thread1(c1: Ref, n: Ref, lst: Seq[Int])
+  requires protocol(c1, lst)
+  requires list(n, lst)
+  ensures true
+{
+  unfold list(n, lst)
+  unfold lseg(n, null, lst)
+  unfold protocol(c1, lst)
+  unfold protocol1(c1.act, lst)
+    
+  if (n != null) {
+    sendV(c1, n.data)
+    var n1 : Ref
+    n1 := n.next;
+    fold protocol(c1, lst[1..])
+    fold list(n1, lst[1..])
+    thread1(c1, n1, lst[1..])
+  } else {
+    sendN(c1)
+  }
+}
+
+method thread2(c2: Ref, lst: Seq[Int])
+  returns (res: Ref)
+  requires dual_protocol(c2, lst)
+  ensures list(res, lst)
+{
+  var x : Int
+  var flag : Bool
+  unfold dual_protocol(c2, lst)
+  unfold dual_protocol1(c2.act, lst)
+
+  var om : Message
+  om := c2.act.msg
+
+  flag, x := recv(c2)
+  if (flag) {
+    fold dual_protocol(c2, lst[1..])
+    var tail : Ref
+    tail := thread2(c2, lst[1..])
+    res := new(data, next)
+    res.data := x
+    res.next := tail
+    unfold list(tail, lst[1..])
+    fold lseg(res, null, lst)
+    fold list(res, lst)
+  } else {
+    res := null
+    fold lseg(null, null, Seq[Int]())
+    fold list(null, Seq[Int]())
+  }
+}
+
+method main(n: Ref, lst: Seq[Int])
+  returns (n1: Ref)
+  requires list(n, lst)
+  ensures list(n1, lst)
+{
+  var c1 : Ref; var c2 : Ref
+  c1, c2 := new_chan(lst)
+  thread1(c1, n, lst);
+  n1 := thread2(c2, lst);
+}
