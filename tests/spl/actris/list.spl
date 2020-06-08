@@ -41,25 +41,9 @@ predicate end(c:Chan) {
   acc(c) &*& c.act == null
 }
   
-predicate sendConsAct(a: Action, x: Int, na: Action) {
-  acc(a) &*& a.msg == SendCons(x) &*& a.nextAct == na
-}
-
-predicate sendNilAct(a: Action) {
-  acc(a) &*& a.msg == SendNil &*& a.nextAct == null
-}
-
-predicate recvConsAct(a: Action, x: Int, na: Action) {
-  acc(a) &*& a.msg == ReceiveCons(x) &*& a.nextAct == na
-}
-
-predicate recvNilAct(a: Action) {
-  acc(a) &*& a.msg == ReceiveNil &*& a.nextAct == null
-}
-
 predicate protocol1(act: Action, lst: List) {
-     (lst != nil &*& sendConsAct(act, lst.hd, act.nextAct) &*& protocol1(act.nextAct, lst.tl))
-  || (lst == nil &*& sendNilAct(act))
+     (lst != nil &*& acc(act) &*& act.msg == SendCons(lst.hd) &*& protocol1(act.nextAct, lst.tl))
+  || (lst == nil &*& acc(act) &*& act.msg == SendNil &*& act.nextAct == null)
 }
 
 predicate protocol(c: Chan, lst: List) {
@@ -67,8 +51,8 @@ predicate protocol(c: Chan, lst: List) {
 }
 
 predicate dual_protocol1(act: Action, lst: List) {
-     (recvConsAct(act, lst.hd, act.nextAct) &*& lst != nil &*& dual_protocol1(act.nextAct, lst.tl))
-  || (recvNilAct(act) &*& lst == nil)
+     (lst != nil &*& acc(act) &*& act.msg == ReceiveCons(lst.hd) &*& dual_protocol1(act.nextAct, lst.tl))
+  || (lst == nil &*& acc(act) &*& act.msg == ReceiveNil &*& act.nextAct == null)
 }
 
 predicate dual_protocol(c: Chan, lst: List) {
@@ -84,8 +68,8 @@ procedure new_chan(ghost lst: List)
 
 procedure send(c: Chan, flag: Int, x: Int)
   requires acc(c) &*& acc(c.act)
-  requires (c.act.msg == SendCons(x) &*& flag == flagCons)
-        || (c.act.msg == SendNil &*& flag == flagNil)
+  requires (c.act.msg == SendCons(x) && flag == flagCons)
+        || (c.act.msg == SendNil && flag == flagNil)
   ensures acc(c) &*& c.act == old(c.act.nextAct)
 
 procedure recv(c: Chan, implicit ghost y: Int)
@@ -94,8 +78,8 @@ procedure recv(c: Chan, implicit ghost y: Int)
   requires c.act.msg == ReceiveCons(y)
         || c.act.msg == ReceiveNil
   ensures acc(c) &*& c.act == old(c.act.nextAct)
-  ensures (c.act.msg == ReceiveCons(x) &*& flag == flagCons)
-       || (c.act.msg == ReceiveNil &*& flag == flagNil)
+  ensures (old(c.act.msg) == ReceiveCons(x) && flag == flagCons)
+       || (old(c.act.msg) == ReceiveNil && flag == flagNil)
 
 procedure free_chan(c: Chan)
   requires end(c)
@@ -128,8 +112,9 @@ procedure thread1(c1: Chan, n: Node, ghost lst: List)
 {
   if (n != null) {
     send(c1, flagCons, n.data);
-    thread1(c1, n.next, lst.tl);
+    var n1 := n.next;
     free(n);
+    thread1(c1, n1, lst.tl);
   } else {
     send(c1, flagNil, -1);
     free_chan(c1);
@@ -149,9 +134,6 @@ procedure thread2(c2: Chan, ghost lst: List)
     res.next := tail;
     return res;
   } else {
-    pure assert flag == flagNil;
-    pure assert lst == nil;
-    pure assert c2.act == null;
     free_chan(c2);
     return null;
   }
@@ -163,8 +145,7 @@ procedure main(n: Node, ghost lst: List)
 {
   assert list(n, lst) ;
   var c1,c2 := new_chan(lst);
-  //assert list(n, lst) &*& true ;
-  assert list(n, lst) &*& protocol(c1, lst) &*& dual_protocol(c2, lst) ;
+  //assert list(n, lst) &*& protocol(c1, lst) &*& dual_protocol(c2, lst) ;
   //TODO as separate threads
   thread1(c1, n, lst);
   n := thread2(c2, lst);
