@@ -1,6 +1,10 @@
 options "abspreds"
 
-datatype Message = Send(sx: Int) | Receive(rx: Int)
+struct Ref {
+  var x: Int;
+}
+
+datatype Message = Send(sr: Ref) | Receive(rr: Ref)
 
 struct Action {
   var next: Action;
@@ -10,28 +14,23 @@ struct Action {
 struct Chan {
   var act: Action;
 }
-
-struct Ref{
-  var x: Int;
-}
-
 predicate end(c: Chan){
   acc(c) &*& c.act == null
 }
-predicate sendAct(a: Action, x: Int, na: Action) {
-  acc(a) &*& a.msg == Send(x) &*& a.next == na
+predicate sendAct(a: Action, l: Ref, na: Action) {
+  acc(a) &*& a.msg == Send(l) &*& a.next == na
 }
 
-predicate recvAct(a: Action, x: Int, na: Action) {
-  acc(a) &*& a.msg == Receive(x) &*& a.next == na
+predicate recvAct(a: Action, l: Ref, na: Action) {
+  acc(a) &*& a.msg == Receive(l)  &*& a.next == na
 }
     
 predicate protocol(c: Chan) {
-  exists x: Int, act2: Action :: acc(c) &*& sendAct(c.act, x, act2) &*& recvAct(act2, x + 2, null)
+  exists l: Ref, act2: Action :: acc(c) &*& sendAct(c.act, l, act2) &*& recvAct(act2, l, null)
 }
 
 predicate dual_protocol(c: Chan) {
-  exists x: Int, act2: Action :: acc(c) &*& recvAct(c.act, x, act2) &*& sendAct(act2, x + 2, null)
+  exists l: Ref, act2: Action :: acc(c) &*& recvAct(c.act, l, act2) &*& sendAct(act2, l, null)
 }
 
 procedure new_chan()
@@ -42,23 +41,26 @@ procedure free_chan(c: Chan)
   requires end(c)
   ensures emp
 
-procedure send(c: Chan, x: Int, implicit ghost y: Int)
+procedure send(c: Chan, l: Ref, implicit ghost m: Ref)
   requires acc(c) &*& acc(c.act)
-  requires c.act.msg == Send(y)
-  ensures acc(c) &*& c.act == old(c.act.next) && y == x
-
-procedure recv(c: Chan, implicit ghost y: Int)
-  returns (x: Int)
-  requires acc(c) &*& acc(c.act)
-  requires c.act.msg == Receive(y)
+  requires c.act.msg == Send(m)
   ensures acc(c) &*& c.act == old(c.act.next)
-  ensures x == y
+  ensures l == m
+
+procedure recv(c: Chan, implicit ghost m: Ref)
+  returns (l: Ref)
+  requires acc(c) &*& acc(c.act)
+  requires c.act.msg == Receive(m)
+  ensures acc(c) &*& c.act == old(c.act.next)
+  ensures l == m
 
 procedure prog3_thread2(c2: Chan)
   requires dual_protocol(c2)
 {
-  var x := recv(c2);
-  send(c2, x + 2);
+  var l := recv(c2);
+  var val:= l.x + 2;
+  l.x := val;
+  send(c2, l);
 }
   
 procedure fork_prog3_thread2(c2: Chan)
@@ -71,8 +73,7 @@ procedure prog3_main()
   fork_prog3_thread2(c2);
   var l := new Ref;
   l.x := 40;
-  send(c1, l.x);
-  var res := recv(c1);
+  send(c1, l);
+  l := recv(c1);
   free_chan(c1);
-  l.x := res;
 }
