@@ -44,6 +44,7 @@ procedure free_chan(c: Chan)
 procedure send(c: Chan, l: Ref, implicit ghost m: Ref)
   requires acc(c) &*& acc(c.act)
   requires c.act.msg == Send(m)
+  requires acc(l)
   ensures acc(c) &*& c.act == old(c.act.next)
   ensures l == m
 
@@ -52,7 +53,7 @@ procedure recv(c: Chan, implicit ghost m: Ref)
   requires acc(c) &*& acc(c.act)
   requires c.act.msg == Receive(m)
   ensures acc(c) &*& c.act == old(c.act.next)
-  ensures l == m
+  ensures acc(l) &*& l == m
 
 procedure prog3_thread2(c2: Chan)
   requires dual_protocol(c2)
