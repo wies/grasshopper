@@ -1,0 +1,150 @@
+include "../include/slsset.spl"
+
+datatype Message = SendCons(sx: Int)
+                 | ReceiveCons(rx: Int)
+                 | SendNil
+                 | ReceiveNil
+
+const flagCons: Int
+const flagNil: Int
+axiom flagCons == 1
+axiom flagNil == 0
+
+struct Action {
+  var nextAct: Action;
+  var msg: Message;
+}
+
+struct Chan {
+  var act: Action;
+}
+
+/////////////////////////////
+
+function send_data_witness(v: Int, FP: Set<Action>) returns (res: Action)
+  requires acc(FP)
+  ensures forall x in FP :: x.msg == SendNil || x == send_data_witness(x.msg.sx, FP)
+
+function send_content(FP: Set<Action>)
+  returns (C: Set<Int>)
+  requires acc(FP)
+  ensures forall x in FP :: exists v: Int ::  x.msg == SendCons(v) && v in C
+  ensures forall v in C :: send_data_witness(v, FP) in FP
+  ensures forall v: Int :: v !in C ==> send_data_witness(v, FP) == null
+  ensures forall v in C :: v == send_data_witness(v, FP).msg.sx @(matching v yields send_data_witness(v, FP).msg.sx)
+  ensures forall v in C, FP1: Set<Action> :: send_data_witness(v, FP) in FP1 ==> send_data_witness(v, FP) == send_data_witness(v, FP1)
+
+predicate protocol(c: Chan, content: Set<Int>) {
+  exists X: Set<Action>, last: Action ::
+    acc(c) &*&
+    acc(X) &*& (
+      X == { z: Action :: Btwn(nextAct, c.act, z, last) } &&
+      Btwn(nextAct, c.act, last, last) &&
+      last.nextAct == null && last.msg == SendNil &&
+      content == send_content(X -- {last}) &&
+      (forall y: Action, z: Action :: y in X && z in X && Btwn(nextAct,c.act,y,z) && z != last && z != null ==> y.msg.sx < z.msg.sx || y == z)
+    )
+}
+
+function recv_data_witness(v: Int, FP: Set<Action>) returns (res: Action)
+  requires acc(FP)
+  ensures forall x in FP :: x.msg == ReceiveNil || x == recv_data_witness(x.msg.rx, FP)
+
+function recv_content(FP: Set<Action>)
+  returns (C: Set<Int>)
+  requires acc(FP)
+  ensures forall x in FP :: exists v: Int ::  x.msg == ReceiveCons(v) && v in C
+  ensures forall v in C :: recv_data_witness(v, FP) in FP
+  ensures forall v: Int :: v !in C ==> recv_data_witness(v, FP) == null
+  ensures forall v in C :: v == recv_data_witness(v, FP).msg.rx @(matching v yields recv_data_witness(v, FP).msg.rx)
+  ensures forall v in C, FP1: Set<Action> :: recv_data_witness(v, FP) in FP1 ==> recv_data_witness(v, FP) == recv_data_witness(v, FP1)
+
+predicate dual_protocol(c: Chan, content: Set<Int>) {
+  exists X: Set<Action>, last: Action ::
+    acc(c) &*&
+    acc(X) &*& (
+      X == { z: Action :: Btwn(nextAct, c.act, z, last) } &&
+      Btwn(nextAct, c.act, last, last) &&
+      last.nextAct == null && last.msg == ReceiveNil &&
+      content == recv_content(X -- {last}) &&
+      (forall y: Action, z: Action :: y in X && z in X && Btwn(nextAct,c.act,y,z) && z != last && z != null ==> y.msg.rx < z.msg.rx || y == z)
+    )
+}
+
+predicate end(c:Chan) {
+  acc(c) &*& c.act == null
+}
+
+
+/////////////////////////////
+
+procedure new_chan(ghost content: Set<Int>)
+  returns (c1: Chan, c2: Chan)
+  requires emp
+  ensures protocol(c1, content) &*& dual_protocol(c2, content)
+
+procedure send(c: Chan, flag: Int, x: Int)
+  requires acc(c) &*& acc(c.act)
+  requires (c.act.msg == SendCons(x) && flag == flagCons)
+        || (c.act.msg == SendNil && flag == flagNil)
+  ensures acc(c) &*& c.act == old(c.act.nextAct)
+
+procedure recv(c: Chan, implicit ghost y: Int)
+  returns (flag: Int, x: Int)
+  requires acc(c) &*& acc(c.act)
+  requires c.act.msg == ReceiveCons(y)
+        || c.act.msg == ReceiveNil
+  ensures acc(c) &*& c.act == old(c.act.nextAct)
+  ensures (old(c.act.msg) == ReceiveCons(x) && flag == flagCons)
+       || (old(c.act.msg) == ReceiveNil && flag == flagNil)
+
+procedure free_chan(c: Chan)
+  requires end(c)
+  ensures emp
+
+
+/////////////////////////////
+
+procedure thread1(c1: Chan, n: Node, ghost content: Set<Int>)
+  requires protocol(c1, content)
+  requires list_set(n, null, content)
+  ensures emp
+{
+  if (n != null) {
+    send(c1, flagCons, n.data);
+    var n1 := n.next;
+    thread1(c1, n1, content -- {n.data});
+    free(n);
+  } else {
+    send(c1, flagNil, -1);
+    free_chan(c1);
+  }
+}
+
+procedure thread2(c2: Chan, ghost content: Set<Int>)
+  returns (res: Node)
+  requires dual_protocol(c2, content)
+  ensures list_set(res, null, content)
+{
+  var flag, x := recv(c2);
+  if (flag == flagCons) {
+    var tail := thread2(c2, content -- {x});
+    res := new Node;
+    res.data := x;
+    res.next := tail;
+    return res;
+  } else {
+    free_chan(c2);
+    return null;
+  }
+}
+
+procedure main(n: Node, ghost content: Set<Int>)
+  requires list_set(n, null, content)
+  ensures list_set(n, null, content)
+{
+  var c1,c2 := new_chan(content);
+  //TODO proper fork
+  thread1(c1, n, content);
+  n := thread2(c2, content);
+}
