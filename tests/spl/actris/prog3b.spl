@@ -26,11 +26,11 @@ predicate recvAct(a: Action, l: Ref, na: Action) {
 }
     
 predicate protocol(c: Chan) {
-  exists l: Ref, act2: Action :: acc(c) &*& sendAct(c.act, l, act2) &*& recvAct(act2, l, null)
+  exists l: Ref, act2: Action :: acc(c) &*& sendAct(c.act, l, act2) &*& recvAct(c.act.next, l, null)
 }
 
 predicate dual_protocol(c: Chan) {
-  exists l: Ref, act2: Action :: acc(c) &*& recvAct(c.act, l, act2) &*& sendAct(act2, l, null)
+  exists l: Ref, act2: Action :: acc(c) &*& recvAct(c.act, l, act2) &*& sendAct(c.act.next, l, null)
 }
 
 procedure new_chan()
