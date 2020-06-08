@@ -1,0 +1,96 @@
+domain Message {
+  function sendVal(x: Int) : Message
+  function sendExVal(x: Int) : Message
+  function receiveVal(x: Int) : Message
+  function val(m: Message) : Int
+  
+  axiom sendValInjective {
+    forall i : Int :: {sendVal(i)} val(sendVal(i)) == i 
+  }
+
+  axiom sendExValInjective {
+    forall i : Int :: {sendExVal(i)} val(sendExVal(i)) == i 
+  }
+  
+  axiom receiveValInjective {
+    forall i : Int :: {receiveVal(i)} val(receiveVal(i)) == i 
+  }
+
+  axiom sendValDistinct {
+    forall i : Int :: {sendVal(i)} sendVal(i) != receiveVal(i) && sendVal(i) != sendExVal(i)
+  }
+
+  axiom sendExValDistinct {
+    forall i : Int :: {sendExVal(i)} sendExVal(i) != sendVal(i) && sendExVal(i) != receiveVal(i)
+  }
+
+  axiom receiveValDistinct {
+    forall i : Int :: {receiveVal(i)} sendVal(i) != receiveVal(i) && receiveVal(i) != sendExVal(i)
+  }
+}
+
+field act: Ref
+field next: Ref
+field msg: Message
+
+predicate end(c: Ref) {
+  acc(c.act) && c.act == null
+}
+
+define sendAct(a, x, na)
+  acc(a.msg) && acc(a.next) && a.msg == sendVal(x) && a.next == na
+
+define recvAct(a, x, na)
+  acc(a.msg) && acc(a.next) && a.msg == receiveVal(x) && a.next == na
+
+define sendExAct(a, x, na)
+  acc(a.msg) && acc(a.next) && a.msg == sendExVal(x) && a.next == na
+
+predicate protocol(c: Ref) {
+  acc(c.act) &&
+  sendExAct(c.act, val(c.act.msg), c.act.next) && recvAct(c.act.next, val(c.act.msg) + 2, null)
+}
+
+predicate dual_protocol(c: Ref) {
+  acc(c.act) &&
+  recvAct(c.act, val(c.act.msg), c.act.next) && sendAct(c.act.next, val(c.act.msg) + 2, null)
+}
+
+method new_chan()
+  returns (c1: Ref, c2: Ref)
+  ensures protocol(c1) && dual_protocol(c2)
+
+method send(c: Ref, x: Int)
+  requires acc(c.act) && acc(c.act.msg) && acc(c.act.next)
+  requires c.act.msg == sendVal(x) || exists y: Int :: c.act.msg == sendExVal(y)
+  ensures acc(c.act) && c.act == old(c.act.next)
+  ensures val(old(c.act.msg)) == x
+
+method recv(c: Ref)
+  returns (x: Int)
+  requires acc(c.act) && acc(c.act.msg) && acc(c.act.next)
+  requires exists y: Int :: c.act.msg == receiveVal(y)
+  ensures acc(c.act) && c.act == old(c.act.next)
+  ensures val(old(c.act.msg)) == x
+
+method thread(c2: Ref)
+  requires dual_protocol(c2)
+  ensures true
+{
+  var x : Int
+  unfold dual_protocol(c2)
+  x := recv(c2)
+  send(c2, x + 2)
+}
+
+method main()
+{
+  var c1 : Ref; var c2 : Ref
+  c1, c2 := new_chan()
+  thread(c2)
+  unfold protocol(c1)
+  send(c1, 40)
+  var res : Int
+  res := recv(c1)
+  assert res == 42
+}
