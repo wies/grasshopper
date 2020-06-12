@@ -112,6 +112,7 @@ let subst_spec_list_formals state sl proc args =
 let subst_spec_list_return_ids state postcond foo lhs_ids =
   let sm_lhs =
     let lhs_ts =
+      Debug.debug(fun () -> sprintf "find %s\n" (string_of_ident foo));
       List.fold_left (fun acc id ->
         (term_of (find_symb_val state.store id)) :: acc)
       [] lhs_ids
@@ -146,11 +147,12 @@ let rec exec state comm (fc: symb_state -> 'a option) =
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
         lineSep (string_of_state state)
     );
-    consume_sl_form state state.heap (mk_region t1) (fun state2' h _ ->
-      let r = mk_setenum [(App (Read, [map; t1], srt))] in
-      let f = mk_sep_star (mk_region (mk_setenum [t1])) (mk_pure (GrassUtil.mk_eq r t2)) in
-      let state3 = {state2' with heap =h} in
-      produce_sl_form state3 f (mk_fresh_snap srt) fc) 
+    consume_sl_form state state.heap (mk_region t1) (fun state2' h snp ->
+      let r = (App (Read, [map; t1], srt)) in
+      let f = mk_sep_star (mk_region t1) (mk_pure (GrassUtil.mk_eq r t2)) in
+      Debug.debug(fun() -> sprintf "CONSUME CONTINUE heap %s\n" (string_of_heap h));
+      let state3 = {state2' with heap=h} in
+      produce_sl_form state3 f snp fc) 
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, pp) ->
     Debug.debug (fun () -> 
       sprintf "%sExecuting Assign: %d: %s%sCurrent state:\n%s\n"
@@ -170,8 +172,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
           lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
           lineSep (string_of_state state)
       );
-      execs state comms (fun state' ->
-        fc state')
+      execs state comms (fun state' -> fc state')
   | Basic (Assert spec, pp) ->
     (match spec.spec_form with
     | SL slf ->
@@ -194,20 +195,27 @@ let rec exec state comm (fc: symb_state -> 'a option) =
         in
         Debug.debug(fun () -> sprintf "\nPrecond[x -> e'] = %s\n" (string_of_symb_spec_list precond_symb_sf'));
         consumes_symb_sf state' precond_symb_sf' (fun state2' _ ->
-          let state3' = {state2' with
-            store = havoc state2'.store (formal_return_terms foo state2'.prog)}
+          let proc_contr = (IdMap.find foo state.prog.prog_procs).proc_contract in
+          let store' =
+            List.combine proc_contr.contr_returns lhs
+            |> List.fold_left (fun st (formal_id, id) ->
+              let srt = (IdMap.find formal_id proc_contr.contr_locals).var_sort in  
+              havoc_id st id srt)
+            state2'.store
           in
+            
+          let state3' = {state2' with store = store'} in
+
           (* fold multiple postcondition specs into 1 for the callee *)
-          let postcond =(postcond_of foo state'.prog) in
-          let postcond' = fold_spec_list mk_sep_star (mk_atom Emp []) postcond in
+          let postcond' = fold_spec_list mk_sep_star (mk_atom Emp []) (postcond_of foo state'.prog)in
           let post_symbf' =
             let p =
-              subst_spec_list_formals state postcond' foo args'
+              subst_spec_list_formals state3' postcond' foo args'
             in
-            subst_spec_list_return_ids state p foo lhs
+            subst_spec_list_return_ids state3' p foo lhs
           in
           Debug.debug(fun () -> sprintf "\nPostcond[x -> e'][y->z] = %s\n" (string_of_symb_spec_list post_symbf'));
-          produces_symb_sf state3' post_symbf' (mk_fresh_snap Bool) (fun state4' -> fc state4')))
+          produces_symb_sf state3' post_symbf' (fresh_snap_tree ()) (fun state4' -> fc state4')))
   | Basic (Havoc {havoc_args=vars}, pp) -> 
     let vars_terms =
       let locs = Prog.locals_of_proc state.proc in
@@ -224,7 +232,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
         lineSep (string_of_state state)
     );
-    produce state f (mk_fresh_snap Bool) (fun state' -> fc state')
+    produce state f (fresh_snap_tree ()) (fun state' -> fc state')
   | Choice (comms, pp) ->
       branch_simple state comms exec (fun state' -> fc state')
   | Basic (Return {return_args=xs}, pp) -> 
@@ -257,8 +265,14 @@ let rec exec state comm (fc: symb_state -> 'a option) =
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
         lineSep (string_of_state st2)
     );
-    produce_sl_form st2 (mk_cell tnew) (mk_fresh_snap srt) fc 
-  | Basic (Dispose _, _) -> todo "exec 13"
+    produce_sl_form st2 (mk_cell tnew) (fresh_snap_tree ()) fc 
+  | Basic (Dispose d, pp) -> 
+      (*
+      eval_term state d.dispose_arg (fun state' t' ->
+        consume_symb_sl_form state' state'.heap (Symbslf (mk_setenum [(term_of t')])) (fun state'' h'' snap ->
+          fc state''))
+          *)
+      fc state
   | Loop (l, pp) ->
       Debug.debug (fun () -> 
         sprintf "%sExecuting loop: %d: %s%sCurrent state:\n%s\n"
@@ -272,7 +286,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
         let test_inv_form = 
             mk_sep_star invar (mk_pure l.loop_test)
           in
-          produce_sl_form state2 test_inv_form (mk_fresh_snap Bool) (fun state3 ->
+          produce_sl_form state2 test_inv_form (fresh_snap_tree ()) (fun state3 ->
             exec state3 l.loop_postbody (fun state4 ->
               consume_sl_form state4 state.heap invar (fun _ _ _ -> None)))
           |> Opt.lazy_or_else (fun () ->
@@ -280,7 +294,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
               let state2' = {state1' with store=new_gamma} in
               exec state2' l.loop_prebody (fun state3' ->
                 let slf = mk_sep_star invar (mk_pure (GrassUtil.mk_not l.loop_test)) in
-                produce_sl_form state2' slf (mk_fresh_snap Bool) fc))))
+                produce_sl_form state2' slf (fresh_snap_tree ()) fc))))
   | Basic (Unfold pc, pp) -> 
     Debug.debug (fun () -> 
         sprintf "%sExecuting unfold: %d: %s%sCurrent state:\n%s\n"
@@ -289,7 +303,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
     );
     eval_terms state pc.pred_args (fun state' args' ->
       Debug.debug (fun () -> sprintf "unfold terms (%s)\n" (string_of_symb_term_list args'));
-      let body = (IdMap.find pc.pred_name state.prog.prog_preds).pred_body in
+      let body = (IdMap.find pc.pred_name state'.prog.prog_preds).pred_body in
       match body with
       | Some b ->
         Debug.debug (fun () -> sprintf "body (%s)\n" (string_of_format pr_spec_form b));
@@ -301,7 +315,11 @@ let rec exec state comm (fc: symb_state -> 'a option) =
         let body' = subst_symb_spec_form sm b.spec_form in
         Debug.debug (fun () -> sprintf "body[x -> e] (%s)\n" (string_of_symb_spec_form body'));
         consume_sl_form state' state'.heap (SlUtil.mk_pred pc.pred_name pc.pred_args) (fun state2 heap' snap ->
-          produce_symb_sf state2 body' snap (fun state3 -> fc state3))
+
+          Debug.debug( fun() -> sprintf "state2 in produce symb sf %s\n" (string_of_state state2));
+          produce_symb_sf state2 body' snap (fun state3 ->
+            Debug.debug( fun() -> sprintf "state in produce symb sf %s\n" (string_of_state state3));
+            fc state3))
       | None ->
         Debug.debug (fun () -> sprintf "no body\n");
         fc state'
@@ -381,10 +399,10 @@ let verify spl_prog prog aux_axioms proc =
       sprintf "%sInitial State:\n{%s\n}\n\n"
       lineSep (string_of_state init_state)
   );
-  let _ = produces init_state precond (mk_fresh_snap Bool)
+  let _ = produces init_state precond (fresh_snap_tree ())
     (fun st ->
       let st2 = { st with heap=[]; old_store=st.store } in
-      produces st2 postcond (mk_fresh_snap Bool) (fun _ ->
+      produces st2 postcond (fresh_snap_tree ()) (fun _ ->
            (match init_state.proc.proc_body with
            | Some body ->
               exec st body (fun st3 ->

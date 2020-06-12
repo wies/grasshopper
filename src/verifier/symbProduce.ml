@@ -9,10 +9,9 @@ open Printf
 open Util
 
 let produce_symb_form state f snp (fc: symb_state -> 'a option) =
-  Debug.debug(fun () -> sprintf "PUSHING onto pi = (%s)\n" (string_of_form f));
   let s2 = { state with pc = pc_add_path_cond state.pc f} in
   let s3 = {s2 with pc = pc_add_path_cond s2.pc 
-    (mk_atom Eq [term_of (term_of_snap snp); term_of (term_of_snap Unit)])}
+    (mk_atom Eq [snp; emp_snap])}
   in
   fc s3
 
@@ -45,12 +44,16 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
   | Sl.Pure (p, _) ->
    produce_form state p snp fc
   | Sl.Atom (Sl.Region, [t], a) -> 
+     Debug.debug(fun () -> "eric");
      eval_term state t (fun state' t' ->
-       let hc = mk_heap_chunk_obj t' Unit empty_store in 
+       let hc = mk_heap_chunk_obj t' snp empty_store in 
         let h, stack = heap_add state'.heap state'.pc hc in
         fc {state' with heap=h; pc = stack})
   | Sl.Atom (Sl.Region, ts, a) -> todo "region terms"
-  | Sl.Atom (Sl.Emp, ts, _) -> todo "Atom emp"
+  | Sl.Atom (Sl.Emp, [], _) ->
+      Debug.debug(fun () -> sprintf "atom emp");
+      fc state
+  | Sl.Atom (Sl.Emp, ts, _) -> todo "Atom emp ts"
   | Sl.Atom (Sl.Pred id, ts, _) -> 
       eval_terms state ts (fun state' ts' ->
         let pred_chunk = mk_heap_chunk_obj_pred id snp ts' in
@@ -70,18 +73,22 @@ and produce_symb_sl_form state (f: symb_sl_form) snp (fc: symb_state -> 'a optio
   match f with
   | Symbslf (Sl.Pure (p, _)) ->
     produce_symb_form state p snp fc
-  | Symbslf (Sl.Atom (Sl.Region, [t], a)) -> 
-      let hc = mk_heap_chunk_obj (Symbt t) Unit empty_store in 
+  | Symbslf (Sl.Atom (Sl.Region, [App (SetEnum, [t], srt)], a)) -> 
+      Debug.debug (fun() -> (sprintf "REGION %s\n" (string_of_term t)));
+      let hc = mk_heap_chunk_obj (Symbt t) snp empty_store in 
       let h, stack = heap_add state.heap state.pc hc in
-      fc {state with heap=h; pc = stack}
+      Debug.debug (fun() -> (sprintf "heap %s\n" (string_of_heap h)));
+      fc {state with heap=h; pc=stack}
   | Symbslf (Sl.Atom (Sl.Region, ts, a)) -> todo "symb region terms"
   | Symbslf (Sl.Atom (Sl.Emp, ts, _)) -> todo "symb Atom emp"
   | Symbslf (Sl.Atom (Sl.Pred _, ts, _)) -> todo "symb Atom Pred"
   | Symbslf (Sl.SepOp (op, f1, f2, _)) ->
-    produce_symb_sl_form state (Symbslf f1) (snap_second snp) (fun state' ->
+    produce_symb_sl_form state (Symbslf f1) (snap_first snp) (fun state' ->
        produce_symb_sl_form state' (Symbslf f2) (snap_second snp) fc)
   | Symbslf (Sl.BoolOp (op, fs, _)) -> todo "Symb produce BoolOp"
-  | Symbslf (Sl.Binder (b, [], f, _)) -> fc state 
+  | Symbslf (Sl.Binder (b, [], f, _)) ->
+      produce_symb_sl_form state (Symbslf f) snp (fun state' ->
+        fc state') 
   | Symbslf (Sl.Binder (b, ts, f, _)) -> todo "Binder"
 
 let produce state sf snp (fc: symb_state -> 'a option) =

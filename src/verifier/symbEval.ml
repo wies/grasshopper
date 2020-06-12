@@ -45,7 +45,7 @@ and eval_term state t (fc: symb_state -> symb_term -> 'a option) =
       (match map, t with
       | (App (FreeSym id, [], srt1) | Var (id, srt1)), App (FreeSym x, ts, Loc _)->
           eval_term state t (fun state' t' ->
-            let hc = heap_find_by_term state.heap (Symbt (mk_setenum [term_of t'])) in
+            let hc = heap_find_by_symb_term state.heap (Symbt (term_of t')) in
             let h' = heap_remove state.heap state.pc hc in
             let v = 
               (match maybe_find_symb_val (get_field_store hc) id with
@@ -70,9 +70,10 @@ and eval_term state t (fc: symb_state -> symb_term -> 'a option) =
           fc state2 (Symbt (App (sym, [term_of t3; term_of t4], srt)))))
   | App (Length, [t], srt) -> todo "eval Length"
   | App (ArrayCells, [t], srt) -> todo "eval ArrayCells"
-  | App (SetEnum, ts, srt) ->
-    eval_terms state ts (fun state' ts' ->
-      fc state' (Symbt (App (SetEnum, List.map (fun t -> term_of t) ts', srt))))
+  | App (SetEnum, [t], srt) ->
+    Debug.debug(fun () -> sprintf "SetEnum sort %s\n" (string_of_sort srt));
+    eval_term state t (fun state' t' -> fc state' t')
+  | App (SetEnum, ts, srt) -> todo "set enum non-singleton"
   | App (Destructor d, [t], srt) -> todo "eval Destructor"
   | App (FreeSym id1, ts, srt1) -> 
     Debug.debug (fun () -> sprintf "free sym (%s), ts(%s) srt (%s)\n" (string_of_ident id1) (string_of_term_list ts) (string_of_sort srt1));

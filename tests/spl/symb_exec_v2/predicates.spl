@@ -5,7 +5,7 @@ struct Counter {
 }
 
 predicate counter(c: Counter) {
-  acc(c) 
+ acc(c)
 }
 
 procedure incr(c: Counter) 
@@ -21,5 +21,41 @@ procedure decr(c: Counter)
   requires counter(c)
   ensures counter(c)
 {
+  unfold counter(c);
   c.count := c.count - 1;
+  fold counter(c);
+}
+
+procedure create() returns (c: Counter)
+  // todo assume emp if this is missing 
+  requires emp
+  ensures counter(c)
+{
+  c := new Counter();
+  c.count := 0;
+  fold counter(c);
+}
+
+procedure delete(c: Counter)
+  requires counter(c)
+  ensures emp
+{
+  unfold counter(c);
+  free c;
+  fold counter(c);
+}
+
+procedure client()
+  requires emp
+  ensures emp
+{
+  var c1 := create();
+  var c2 := create();
+  
+  incr(c1);
+  // prove that the counter c2 wasn’t affected by incr(c1)
+  //assert counter(c1, 1) &*& counter(c2, 0)
+
+  delete(c1);
+  delete(c2); 
 }

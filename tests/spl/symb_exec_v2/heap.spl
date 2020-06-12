@@ -53,7 +53,7 @@ procedure assign_heap2(x: Node, y: Node)
 }
 
 procedure assign_heap3(x: Node, y: Node)
-  requires acc(x) &*& x.next == null &*& y == x
+  requires acc(x) &*& x.next == null &*& acc(y) &*& y == x
   ensures acc(x) &*& x.next == x
 {
   y.next := x;
@@ -81,4 +81,3 @@ procedure assign_heap4(x: Node, y: Node)
   x.next.next := x;
 }
 */
-

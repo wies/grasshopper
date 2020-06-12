@@ -84,7 +84,6 @@ procedure pure_swap(x: Int, y: Int)
   y, x := x, y;
 }
 
-
 procedure loop0(x: Int)
   requires x == 0
   ensures x == 1
