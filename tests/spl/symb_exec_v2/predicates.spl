@@ -27,7 +27,7 @@ procedure decr(c: Counter)
 }
 
 procedure create() returns (c: Counter)
-  // todo assume emp if this is missing 
+  // todo assume emp if this is missing
   requires emp
   ensures counter(c)
 {
@@ -42,7 +42,6 @@ procedure delete(c: Counter)
 {
   unfold counter(c);
   free c;
-  fold counter(c);
 }
 
 procedure client()
@@ -51,11 +50,54 @@ procedure client()
 {
   var c1 := create();
   var c2 := create();
-  
+
   incr(c1);
-  // prove that the counter c2 wasn’t affected by incr(c1)
-  //assert counter(c1, 1) &*& counter(c2, 0)
 
   delete(c1);
   delete(c2); 
+}
+
+predicate counter2(c: Counter, v: Int) {
+ acc(c) &*& v == c.count
+}
+
+procedure incr2(c: Counter, ghost v: Int)
+  requires counter2(c, v)
+  ensures counter2(c, v+1)
+{
+  unfold counter2(c, v);
+  c.count := c.count + 1;
+  fold counter2(c, v+1);
+}
+
+procedure delete2(c: Counter, ghost v: Int)
+  requires counter2(c, v)
+  ensures emp
+{
+  unfold counter2(c, v);
+  free c;
+}
+
+procedure create2() returns (c: Counter)
+  // todo assume emp if this is missing
+  requires emp
+  ensures counter2(c, 0)
+{
+  c := new Counter();
+  c.count := 0;
+  fold counter2(c, 0);
+}
+
+procedure client2()
+  requires emp
+  ensures emp
+{
+  var c1 := create2();
+  var c2 := create2();
+
+  incr2(c1, 0);
+  assert counter2(c1, 1) &*& counter2(c2, 0);
+
+  delete2(c1, 0 + 1);
+  delete2(c2, 0);
 }

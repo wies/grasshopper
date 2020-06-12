@@ -43,8 +43,7 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
   match f with
   | Sl.Pure (p, _) ->
    produce_form state p snp fc
-  | Sl.Atom (Sl.Region, [t], a) -> 
-     Debug.debug(fun () -> "eric");
+  | Sl.Atom (Sl.Region, [t], a) ->
      eval_term state t (fun state' t' ->
        let hc = mk_heap_chunk_obj t' snp empty_store in 
         let h, stack = heap_add state'.heap state'.pc hc in
@@ -62,7 +61,7 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
   | Sl.SepOp (op, f1, f2, _) ->
      produce_sl_form state f1 (snap_first snp) (fun state' ->
        produce_sl_form state' f2 (snap_second snp) fc)
-  | Sl.BoolOp (op, fs, p) -> 
+  | Sl.BoolOp (op, fs, p) ->
         produce_sl_forms state fs snp fc
   | Sl.Binder (b, ts, f, _) -> todo "Binder"
 
@@ -74,14 +73,16 @@ and produce_symb_sl_form state (f: symb_sl_form) snp (fc: symb_state -> 'a optio
   | Symbslf (Sl.Pure (p, _)) ->
     produce_symb_form state p snp fc
   | Symbslf (Sl.Atom (Sl.Region, [App (SetEnum, [t], srt)], a)) -> 
-      Debug.debug (fun() -> (sprintf "REGION %s\n" (string_of_term t)));
       let hc = mk_heap_chunk_obj (Symbt t) snp empty_store in 
       let h, stack = heap_add state.heap state.pc hc in
-      Debug.debug (fun() -> (sprintf "heap %s\n" (string_of_heap h)));
       fc {state with heap=h; pc=stack}
   | Symbslf (Sl.Atom (Sl.Region, ts, a)) -> todo "symb region terms"
-  | Symbslf (Sl.Atom (Sl.Emp, ts, _)) -> todo "symb Atom emp"
-  | Symbslf (Sl.Atom (Sl.Pred _, ts, _)) -> todo "symb Atom Pred"
+  | Symbslf (Sl.Atom (Sl.Emp, ts, _)) -> fc state
+  | Symbslf (Sl.Atom (Sl.Pred id, ts, _)) ->
+    eval_symb_terms state (List.map (fun t -> Symbt t) ts) (fun state' ts' ->
+        let pred_chunk = mk_heap_chunk_obj_pred id snp ts' in
+        let h, stack = heap_add state'.heap state'.pc pred_chunk in
+        fc {state' with heap=h; pc = stack})
   | Symbslf (Sl.SepOp (op, f1, f2, _)) ->
     produce_symb_sl_form state (Symbslf f1) (snap_first snp) (fun state' ->
        produce_symb_sl_form state' (Symbslf f2) (snap_second snp) fc)

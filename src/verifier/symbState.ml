@@ -386,34 +386,30 @@ let rec heap_find_by_symb_term h t =
   match h with
   | [] -> raise (HeapChunkNotFound (sprintf "for id(%s) %s" (string_of_symb_term t) (string_of_sort (sort_of (term_of t)))))
   | Obj (tt, _, _) as c :: h' ->
-      Debug.debug(fun() -> sprintf "check: (%s), (%s) == target:(%s)\n"
         (string_of_hc c) (string_of_sort (sort_of (term_of tt))) (string_of_term (term_of t)));
       if tt = t then c else heap_find_by_symb_term h' t
   | ObjPred (id1, _, _) as c :: h' ->
       let id2 = free_symbols_term (term_of t) in
-      Debug.debug(fun() -> sprintf "(%s)\n" (string_of_ident_list (IdSet.elements id2)));
       if IdSet.mem id1 id2 then c else heap_find_by_symb_term h' t
   | _ :: h' -> heap_find_by_symb_term h' t
 
-let rec heap_find_pred_chunk h id = 
+let rec heap_find_pred_chunk h id ts =
   match h with
   | [] -> raise (HeapChunkNotFound (sprintf "for ident (%s)" (string_of_ident id)))
-  | ObjPred(id1, _, _) as p :: h'
+  | ObjPred(id1, _, ts1) as p :: h'
     when id = id1 ->
-      if id = id1 then
-        p else heap_find_pred_chunk h' id 
-  | p :: h' -> heap_find_pred_chunk h' id 
+      if id = id1 && ts = ts1 then
+        p else heap_find_pred_chunk h' id ts
+  | p :: h' -> heap_find_pred_chunk h' id ts
 
 let rec heap_remove_by_term h t = 
   let chunk = heap_find_by_symb_term h (Symbt t) in
   (chunk, List.filter (fun hc ->
       match hc with
       | Obj (Symbt t1, _, _) as c ->
-          Debug.debug(fun() -> sprintf "check: (%s), (%s) == target:(%s)\n" (string_of_hc c) (string_of_sort (sort_of t)) (string_of_term t));
           if t1 = t then (Debug.debug (fun() -> sprintf "Dropping element\n"); false) else true
       | ObjPred (id1, _, _) ->
           let id2 = free_consts_term t in
-          Debug.debug(fun() -> sprintf "(%s)" (string_of_ident_list (IdSet.elements id2)));
           IdSet.mem id1 id2
       |_ -> true) h)
 

@@ -43,26 +43,26 @@ let rec consume_sl_form state heap (f: Sl.form) (fc: symb_state -> symb_heap -> 
   | Sl.Atom (Sl.Region, ts, _) -> fc state heap (emp_snap)
   | Sl.Atom (Sl.Pred id, ts, _) -> 
      eval_terms state ts (fun state' ts' ->
-        let pred_chunk = heap_find_pred_chunk state'.heap id in
+        let pred_chunk = heap_find_pred_chunk state'.heap id ts' in
         let h' = heap_remove state'.heap state'.pc pred_chunk in 
         fc {state' with heap=h'} h' (get_pred_chunk_snap pred_chunk))
   | Sl.SepOp (Sl.SepStar, f1, f2, _) ->
-     Debug.debug( fun() -> sprintf "SL SepOp SepStar \n"); 
-     fc state heap (emp_snap) 
+     Debug.debug( fun() -> sprintf "SL SepOp SepStar \n");
+     fc state heap (emp_snap)
   | Sl.SepOp (Sl.SepIncl, _, _, _) ->
-     Debug.debug( fun() -> sprintf "SL SepOp SepIncl\n"); 
-     fc state heap (emp_snap) 
+     Debug.debug( fun() -> sprintf "SL SepOp SepIncl\n");
+     fc state heap (emp_snap)
   | Sl.SepOp (Sl.SepPlus, _, _, _) ->
-     fc state heap (emp_snap) 
+     fc state heap (emp_snap)
   | Sl.BoolOp (Grass.And, fs, _) ->
    Debug.debug( fun() -> sprintf "SL BoolOp And\n");
-     fc state heap (emp_snap) 
+     fc state heap (emp_snap)
   | Sl.BoolOp (Grass.Or, fs, _) ->
     Debug.debug( fun() -> sprintf "SL BoolOp Or");
-     fc state heap (emp_snap) 
+     fc state heap (emp_snap)
   | Sl.BoolOp (Grass.Not, fs, _) ->
     Debug.debug( fun() -> sprintf "SL BoolOp Not\n");
-     fc state heap (emp_snap) 
+     fc state heap (emp_snap)
   | Sl.Binder (Grass.Forall, ts, f, _) -> fc state heap (emp_snap)
   | Sl.Binder (Grass.Exists, ts, f, _) -> fc state heap (emp_snap)
 
@@ -72,37 +72,40 @@ let rec consume_symb_sl_form state heap (f: symb_sl_form) (fc: symb_state -> sym
     lineSep (string_of_symb_sl_form f) (string_of_state state));
   match (f) with
   | Symbslf (Sl.Pure (p, _)) ->
-   consume_symb_form state heap (Symbf p) fc 
+   consume_symb_form state heap (Symbf p) fc
   | Symbslf (Sl.Atom (Sl.Emp, ts, _)) -> fc state heap (emp_snap)
   | Symbslf (Sl.Atom (Sl.Region, [App (SetEnum, [t], srt)], _)) ->
       (* TODO: implement a symb_form type? *)
-      eval_symb_term state (mk_symb_term t) (fun state' t' -> 
+      eval_symb_term state (mk_symb_term t) (fun state' t' ->
         let (_, h') = heap_remove_by_term state.heap (term_of t') in
         fc state h' (emp_snap))
   | Symbslf (Sl.Atom (Sl.Region, ts, _)) -> fc state heap (emp_snap)
-  | Symbslf (Sl.Atom (Sl.Pred p, ts, _)) -> fc state heap (emp_snap)
+  | Symbslf (Sl.Atom (Sl.Pred id, ts, _)) ->
+     eval_symb_terms state (List.map (fun t -> Symbt t) ts) (fun state' ts' ->
+        let pred_chunk = heap_find_pred_chunk state'.heap id ts' in
+        let h' = heap_remove state'.heap state'.pc pred_chunk in
+        fc {state' with heap=h'} h' (get_pred_chunk_snap pred_chunk))
   | Symbslf (Sl.SepOp (Sl.SepStar, f1, f2, _)) ->
-     Debug.debug( fun() -> sprintf "SL SepOp SepStar \n"); 
-     fc state heap (emp_snap) 
+     Debug.debug( fun() -> sprintf "SL SepOp SepStar \n");
+     fc state heap (emp_snap)
   | Symbslf (Sl.SepOp (Sl.SepIncl, _, _, _)) ->
-     Debug.debug( fun() -> sprintf "SL SepOp SepIncl\n"); 
-     fc state heap (emp_snap) 
+     Debug.debug( fun() -> sprintf "SL SepOp SepIncl\n");
+     fc state heap (emp_snap)
   | Symbslf (Sl.SepOp (Sl.SepPlus, _, _, _)) ->
-     fc state heap (emp_snap) 
+     fc state heap (emp_snap)
   | Symbslf (Sl.BoolOp (Grass.And, fs, _)) ->
    Debug.debug( fun() -> sprintf "SL BoolOp And\n");
-     fc state heap (emp_snap) 
+     fc state heap (emp_snap)
   | Symbslf (Sl.BoolOp (Grass.Or, fs, _)) ->
     Debug.debug( fun() -> sprintf "SL BoolOp Or");
-     fc state heap (emp_snap) 
+     fc state heap (emp_snap)
   | Symbslf (Sl.BoolOp (Grass.Not, fs, _)) ->
     Debug.debug( fun() -> sprintf "SL BoolOp Not\n");
-     fc state heap (emp_snap) 
-  | Symbslf (Sl.Binder (b, [], f, _)) -> 
+     fc state heap (emp_snap)
+  | Symbslf (Sl.Binder (b, [], f, _)) ->
       consume_symb_sl_form state heap (Symbslf f) fc
   | Symbslf (Sl.Binder (Grass.Forall, ts, f, _)) -> fc state heap (emp_snap)
   | Symbslf (Sl.Binder (Grass.Exists, ts, f, _)) -> fc state heap (emp_snap)
-
 
 let consume state heap (sf: Prog.spec_form) (fc: symb_state -> symb_heap -> term -> 'a option) =
   match sf with
@@ -119,7 +122,6 @@ let rec consumes state (assns: Prog.spec list) fc =
 let consume_symb_sf state heap (sf: symb_spec_form) (fc: symb_state -> symb_heap -> term -> 'a option) =
   match sf with
   | SymbFOL fol ->
-      Debug.debug(fun() -> sprintf "Consume SymbSF = (%s)\n" (string_of_symb_form fol));
       consume_symb_form state heap fol fc
   | SymbSL slf -> consume_symb_sl_form state heap slf fc
 
@@ -128,4 +130,4 @@ let rec consumes_symb_sf state (assns: symb_spec list) fc =
   | [] -> fc state (emp_snap)
   | hd :: assns' -> 
       consume_symb_sf state state.heap hd.symb_spec_form (fun state' h' snap' ->
-        consumes_symb_sf state assns' fc)
+        consumes_symb_sf state' assns' fc)

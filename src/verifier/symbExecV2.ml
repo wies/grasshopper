@@ -174,6 +174,11 @@ let rec exec state comm (fc: symb_state -> 'a option) =
       );
       execs state comms (fun state' -> fc state')
   | Basic (Assert spec, pp) ->
+    Debug.debug (fun () ->
+      sprintf "%sExecuting Assert: %d: %s%sCurrent state:\n%s\n"
+        lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+        lineSep (string_of_state state)
+    );
     (match spec.spec_form with
     | SL slf ->
       (*todo figure out continuation heap and snap arent used*)
@@ -204,6 +209,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
             state2'.store
           in
             
+          Debug.debug(fun () -> sprintf "state %s\n" (string_of_state state2'));
           let state3' = {state2' with store = store'} in
 
           (* fold multiple postcondition specs into 1 for the callee *)
@@ -267,12 +273,14 @@ let rec exec state comm (fc: symb_state -> 'a option) =
     );
     produce_sl_form st2 (mk_cell tnew) (fresh_snap_tree ()) fc 
   | Basic (Dispose d, pp) -> 
-      (*
+      Debug.debug (fun () ->
+        sprintf "%sExecuting Dispose: %d: %s%sCurrent state:\n%s\n"
+          lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
+          lineSep (string_of_state state)
+      );
       eval_term state d.dispose_arg (fun state' t' ->
-        consume_symb_sl_form state' state'.heap (Symbslf (mk_setenum [(term_of t')])) (fun state'' h'' snap ->
+        consume_symb_sl_form state' state'.heap (Symbslf (mk_cell (term_of t'))) (fun state'' h'' snap ->
           fc state''))
-          *)
-      fc state
   | Loop (l, pp) ->
       Debug.debug (fun () -> 
         sprintf "%sExecuting loop: %d: %s%sCurrent state:\n%s\n"

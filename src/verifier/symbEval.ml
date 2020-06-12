@@ -99,8 +99,18 @@ and eval_term state t (fc: symb_state -> symb_term -> 'a option) =
   | App (BoolConst b, ts, srt) as f -> fc state (Symbt f)
   | App (symb, ts, srt) -> todo "eval_term catch all"
 
-let eval_symb_term state (symbf: symb_term) (fc: symb_state -> symb_term -> 'a option) =
-  fc state symbf
+let eval_symb_term state (symbt: symb_term) (fc: symb_state -> symb_term -> 'a option) =
+  fc state symbt
+
+let rec eval_symb_terms state (ts: symb_term list) (fc: symb_state -> symb_term list -> 'a option) =
+  let rec eeval state tts symb_ts fc =
+    match tts with
+    | [] -> fc state (List.rev symb_ts) (* reverse due to the cons op below *)
+    | hd :: tts' ->
+        eval_symb_term state hd (fun state' t ->
+          eeval state' tts' (t :: symb_ts) fc)
+  in
+  eeval state ts [] fc
 
 (** eval_forms evaluates a formula list fs element-wise using the eval
   function below, accumulating the resulting formulas carrying symbolic values *)
