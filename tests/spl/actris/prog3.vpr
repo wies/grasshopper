@@ -13,9 +13,9 @@ domain  Reference {
 }
 
 domain Message {
-  function sendVal(r: Reference) : Message
-  function sendExVal(r: Reference) : Message
-  function receiveVal(r: Reference) : Message
+  function sendVal(r: Ref) : Message
+  function sendExVal(r: Ref) : Message
+  function receiveVal(r: Ref) : Message
   function val(m: Message) : Reference
   
   axiom sendValInjective {
@@ -46,6 +46,7 @@ domain Message {
 field act: Ref
 field next: Ref
 field msg: Message
+field ref: Ref
 
 predicate end(c: Ref) {
   acc(c.act) && c.act == null
@@ -74,18 +75,18 @@ method new_chan()
   returns (c1: Ref, c2: Ref)
   ensures protocol(c1) && dual_protocol(c2)
 
-method send(c: Ref, r: Reference)
-  requires acc(c.act) && acc(c.act.msg) && acc(c.act.next)
+method send(c: Ref, r: Ref)
+  requires acc(c.act) && acc(c.act.msg) && acc(c.act.next) && acc(r.ref)
   requires c.act.msg == sendVal(r) || exists y: Reference :: c.act.msg == sendExVal(y)
   ensures acc(c.act) && c.act == old(c.act.next)
   ensures val(old(c.act.msg)) == r
 
 method recv(c: Ref)
-  returns (r: Reference)
+  returns (r: Ref)
   requires acc(c.act) && acc(c.act.msg) && acc(c.act.next)
   requires exists y: Reference :: c.act.msg == receiveVal(y)
   ensures acc(c.act) && c.act == old(c.act.next)
-  ensures val(old(c.act.msg)) == r
+  ensures val(old(c.act.msg)) == r && acc(r.ref)
 
 method thread(c2: Ref)
   requires dual_protocol(c2)
@@ -94,7 +95,8 @@ method thread(c2: Ref)
   var r : Reference
   unfold dual_protocol(c2)
   r := recv(c2)
-  send(c2, add(r, 2))
+  r.ref := r.ref + 2
+  send(c2, r)
 }
 
 method main()
@@ -108,5 +110,6 @@ method main()
   r := set(40)
   send(c1, r)
   r := recv(c1)
-  assert get(r) == 42
+  assert acc(r.ref)
+  //assert get(r) == 42
 }
