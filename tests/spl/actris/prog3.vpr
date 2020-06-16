@@ -1,52 +1,37 @@
-domain  Reference {
-    function set(x: Int) : Reference
-    function get(r: Reference) : Int
-    function add(r: Reference, x: Int): Reference
-
-    axiom setAxiom {
-        forall i : Int :: {set(i)} get(set(i))  == i
-    }
-
-    axiom addAxiom {
-        forall i : Int, r: Reference :: {add(r, i)} get(add(r, i)) == get(r) + i
-    }
-}
-
 domain Message {
   function sendVal(r: Ref) : Message
   function sendExVal(r: Ref) : Message
   function receiveVal(r: Ref) : Message
-  function val(m: Message) : Reference
-  
+  function val(m: Message) : Ref
   axiom sendValInjective {
-    forall i : Reference :: {sendVal(i)} val(sendVal(i)) == i 
+    forall i : Ref :: {sendVal(i)} val(sendVal(i)) == i 
   }
 
   axiom sendExValInjective {
-    forall i : Reference :: {sendExVal(i)} val(sendExVal(i)) == i 
+    forall i : Ref :: {sendExVal(i)} val(sendExVal(i)) == i 
   }
   
   axiom receiveValInjective {
-    forall i : Reference :: {receiveVal(i)} val(receiveVal(i)) == i 
+    forall i : Ref :: {receiveVal(i)} val(receiveVal(i)) == i 
   }
 
   axiom sendValDistinct {
-    forall i : Reference :: {sendVal(i)} sendVal(i) != receiveVal(i) && sendVal(i) != sendExVal(i)
+    forall i : Ref :: {sendVal(i)} sendVal(i) != receiveVal(i) && sendVal(i) != sendExVal(i)
   }
 
   axiom sendExValDistinct {
-    forall i : Reference :: {sendExVal(i)} sendExVal(i) != sendVal(i) && sendExVal(i) != receiveVal(i)
+    forall i : Ref :: {sendExVal(i)} sendExVal(i) != sendVal(i) && sendExVal(i) != receiveVal(i)
   }
 
   axiom receiveValDistinct {
-    forall i : Reference :: {receiveVal(i)} sendVal(i) != receiveVal(i) && receiveVal(i) != sendExVal(i)
+    forall i : Ref :: {receiveVal(i)} sendVal(i) != receiveVal(i) && receiveVal(i) != sendExVal(i)
   }
 }
 
 field act: Ref
 field next: Ref
 field msg: Message
-field ref: Ref
+field ref: Int
 
 predicate end(c: Ref) {
   acc(c.act) && c.act == null
@@ -63,13 +48,17 @@ define sendExAct(a, r, na)
 
 predicate protocol(c: Ref) {
   acc(c.act) &&
-  sendExAct(c.act, val(c.act.msg), c.act.next) && recvAct(c.act.next, add(val(c.act.msg), 2), null)
+  sendExAct(c.act, val(c.act.msg), c.act.next) && recvAct(c.act.next, val(c.act.msg), null)
 }
 
 predicate dual_protocol(c: Ref) {
   acc(c.act) &&
-  recvAct(c.act, val(c.act.msg), c.act.next) && sendAct(c.act.next, add(val(c.act.msg), 2), null)
+  recvAct(c.act, val(c.act.msg), c.act.next) && sendAct(c.act.next, val(c.act.msg), null)
 }
+
+method new_ref(i: Int)
+    returns (r: Ref)
+    ensures acc(r.ref) && r.ref == i
 
 method new_chan()
   returns (c1: Ref, c2: Ref)
@@ -77,14 +66,14 @@ method new_chan()
 
 method send(c: Ref, r: Ref)
   requires acc(c.act) && acc(c.act.msg) && acc(c.act.next) && acc(r.ref)
-  requires c.act.msg == sendVal(r) || exists y: Reference :: c.act.msg == sendExVal(y)
+  requires c.act.msg == sendVal(r) || exists y: Ref :: c.act.msg == sendExVal(y)
   ensures acc(c.act) && c.act == old(c.act.next)
   ensures val(old(c.act.msg)) == r
 
 method recv(c: Ref)
   returns (r: Ref)
   requires acc(c.act) && acc(c.act.msg) && acc(c.act.next)
-  requires exists y: Reference :: c.act.msg == receiveVal(y)
+  requires exists y: Ref :: c.act.msg == receiveVal(y)
   ensures acc(c.act) && c.act == old(c.act.next)
   ensures val(old(c.act.msg)) == r && acc(r.ref)
 
@@ -92,10 +81,9 @@ method thread(c2: Ref)
   requires dual_protocol(c2)
   ensures true
 {
-  var r : Reference
+  var r : Ref
   unfold dual_protocol(c2)
   r := recv(c2)
-  r.ref := r.ref + 2
   send(c2, r)
 }
 
@@ -106,8 +94,8 @@ method main()
   thread(c2)
   unfold protocol(c1)
   
-  var r : Reference
-  r := set(40)
+  var r : Ref
+  r := new_ref(40)
   send(c1, r)
   r := recv(c1)
   assert acc(r.ref)
