@@ -84,6 +84,7 @@ method thread(c2: Ref)
   var r : Ref
   unfold dual_protocol(c2)
   r := recv(c2)
+  r.ref := r.ref + 2;
   send(c2, r)
 }
 
