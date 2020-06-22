@@ -1,0 +1,156 @@
+domain Message {
+  function sendVal(x: Int) : Message
+  function receiveVal(x: Int) : Message
+  function sendNil() : Message
+  function receiveNil(): Message
+  function val(m: Message) : Int
+  
+  axiom sendValInjective {
+    forall i : Int :: {sendVal(i)} val(sendVal(i)) == i 
+  }
+  
+  axiom receiveValInjective {
+    forall i : Int :: {receiveVal(i)} val(receiveVal(i)) == i 
+  }
+
+  axiom sendValDistinct {
+    forall i : Int :: {sendVal(i)} sendVal(i) != sendNil() && sendVal(i) != receiveNil() && sendVal(i) != receiveVal(i)
+  }
+
+  axiom receiveValDistinct {
+    forall i : Int :: {receiveVal(i)} receiveVal(i) != sendNil() && receiveVal(i) != receiveNil() && sendVal(i) != receiveVal(i)
+  }
+
+}
+
+field data: Int
+field left: Ref
+field right: Ref
+
+predicate tree(node: Ref)
+{
+  node == null ?
+    true :
+    ( acc(node.data) && acc(node.left) && acc(node.right) &&
+      tree(node.left) && tree(node.right) )
+}
+
+field act: Ref
+field nextAct: Ref
+field msg: Message
+
+predicate end(c: Ref) {
+  acc(c.act) && c.act == null
+}
+
+predicate protocol1(a: Ref, lastA: Ref) {
+  acc(a.msg) && acc(a.nextAct) && (
+      (a.msg == sendNil() && a.nextAct == lastA) ||
+      (exists i: Int, afterLeft: Ref :: a.msg == sendVal(i) && protocol1(a.nextAct, afterLeft) && protocol1(afterLeft, lastA))
+  )
+}
+
+predicate protocol(c: Ref) {
+  acc(c.act) && protocol1(c.act, null)
+}
+
+predicate dual_protocol1(a: Ref, lastA: Ref) {
+    acc(a.msg) && acc(a.nextAct) && (
+      (a.msg == receiveNil() && a.nextAct == lastA) ||
+      (exists i: Int, afterLeft: Ref :: a.msg == receiveVal(i) && dual_protocol1(a.nextAct, afterLeft) && dual_protocol1(afterLeft, lastA))
+  )
+}
+
+predicate dual_protocol(c: Ref) {
+  acc(c.act) && dual_protocol1(c.act, null)
+}
+
+method new_chan()
+  returns (c1: Ref, c2: Ref)
+  ensures protocol(c1) && dual_protocol(c2)
+
+method sendV(c: Ref, x: Int)
+  requires acc(c.act) && acc(c.act.msg) && acc(c.act.nextAct)
+  requires c.act.msg == sendVal(x)
+  ensures acc(c.act) && c.act == old(c.act.nextAct)
+
+method sendN(c: Ref)
+  requires acc(c.act) && acc(c.act.msg) && acc(c.act.nextAct)
+  requires c.act.msg == sendNil()
+  ensures acc(c.act) && c.act == old(c.act.nextAct)
+
+method recv(c: Ref)
+  returns (flag: Bool, x: Int)
+  requires acc(c.act) && acc(c.act.msg) && acc(c.act.nextAct)
+  requires c.act.msg == receiveNil() || exists y: Int :: c.act.msg == receiveVal(y)
+  ensures acc(c.act) && c.act == old(c.act.nextAct)
+  ensures flag ==> (old(c.act.msg) == receiveVal(x))
+  ensures !flag ==> (old(c.act.msg) == receiveNil())
+
+method thread1(c1: Ref, n: Ref)
+  requires protocol(c1)
+  requires tree(n)
+  ensures true
+{
+  unfold tree(n)
+  unfold protocol(c1)
+  var a: Ref
+  unfold protocol1(c1.act, a)
+    
+  if (n != null) {
+    sendV(c1, n.data)
+    fold protocol(c1)
+    var b: Ref
+    fold protocol1(c1.act, b)
+    fold tree(n.left)
+    thread1(c1, n.left)
+    unfold protocol1(b, a)
+    fold tree(n.right)
+    thread1(c1, n.right)
+  } else {
+    sendN(c1)
+  }
+}
+
+method thread2(c2: Ref)
+  returns (res: Ref)
+  requires dual_protocol(c2)
+  ensures tree(res)
+{
+  var x : Int
+  var flag : Bool
+  var a: Ref
+  unfold dual_protocol(c2)
+  unfold dual_protocol1(c2.act, a)
+
+  flag, x := recv(c2)
+  if (flag) {
+    var tailL : Ref
+    var tailR : Ref
+    var b: Ref
+    fold dual_protocol1(c2.act, b)
+    tailL := thread2(c2)
+    fold dual_protocol1(b, a)
+    tailR := thread2(c2)
+    res := new(data, left, right)
+    res.data := x
+    res.left := tailL
+    res.right := tailR
+    fold tree(res)
+  } else {
+    res := null
+    fold tree(null)
+  }
+}
+
+method main(n: Ref)
+  returns (n1: Ref)
+  requires tree(n)
+  ensures tree(n1)
+{
+  var c1 : Ref
+  var c2 : Ref
+  c1, c2 := new_chan()
+  thread1(c1, n)
+  n1 := thread2(c2)
+}
