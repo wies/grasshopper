@@ -14,6 +14,11 @@ domain Message {
     receivePing() != receivePong() && receivePing() != receiveDone() && receivePong() != receiveDone()
   }
 
+  axiom inDomain {
+    forall m:Message :: m == sendPing() || m == sendPong() || m == sendDone()
+                     || m == receivePing() || m == receivePong() || m == receiveDone()
+  }
+
 }
 
 field act: Ref
@@ -21,42 +26,46 @@ field next: Ref
 field msg: Message
 
 define sendPi(a, na)
-  acc(a.msg) && acc(a.next) && a.msg == sendPing() && a.next == na
+  acc(a.next) && a.msg == sendPing() && a.next == na
 
 define recvPi(a, na)
-  acc(a.msg) && acc(a.next) && a.msg == receivePing() && a.next == na
+  acc(a.next) && a.msg == receivePing() && a.next == na
 
 define sendPo(a, na)
-  acc(a.msg) && acc(a.next) && a.msg == sendPong() && a.next == na
+  acc(a.next) && a.msg == sendPong() && a.next == na
 
 define recvPo(a, na)
-  acc(a.msg) && acc(a.next) && a.msg == receivePong() && a.next == na
+  acc(a.next) && a.msg == receivePong() && a.next == na
 
 define sendDo(a, na)
-  acc(a.msg) && acc(a.next) && a.msg == sendDone() && a.next == na
+  acc(a.next) && a.msg == sendDone() && a.next == na
 
 define recvDo(a, na)
-  acc(a.msg) && acc(a.next) && a.msg == receiveDone() && a.next == na
+  acc(a.next) && a.msg == receiveDone() && a.next == na
 
 
-predicate protocol1(a: Ref, m: Message) {
-  m == sendPing() ?
-    (sendPi(a, a.next) && recvPo(a.next, a.next.next) && acc(a.next.next.msg) && protocol1(a.next.next, a.next.next.msg)) :
+predicate protocol1(a: Ref) {
+  acc(a.msg) && (
+  a.msg == sendPing() ?
+    (sendPi(a, a.next) && acc(a.next.msg) && recvPo(a.next, a.next.next) && protocol1(a.next.next)) :
     sendDo(a, null)
+  )
 }
 
 predicate protocol(c: Ref) {
-  acc(c.act) && acc(c.act.msg) && protocol1(c.act, c.act.msg)
+  acc(c.act) && protocol1(c.act)
 }
 
-predicate dual_protocol1(a: Ref, m: Message) {
-  m == receivePing() ?
-    (recvPi(a, a.next) && sendPo(a.next, a.next.next) && acc(a.next.next.msg) && dual_protocol1(a.next.next, a.next.next.msg))
+predicate dual_protocol1(a: Ref) {
+  acc(a.msg) && (
+  a.msg == receivePing() ?
+    (recvPi(a, a.next) && acc(a.next.msg) && sendPo(a.next, a.next.next) && dual_protocol1(a.next.next))
     : recvDo(a, null)
+  )
 }
 
 predicate dual_protocol(c: Ref) {
-  acc(c.act) && acc(c.act.msg) && dual_protocol1(c.act, c.act.msg)
+  acc(c.act) && dual_protocol1(c.act)
 }
 
 method new_chan()
@@ -70,13 +79,37 @@ method send(c: Ref, x: Int)
         || (c.act.msg == sendDone() && x == 2)
   ensures acc(c.act) && c.act == old(c.act.next)
 
+// something goes wrong with that method!?
 method recv(c: Ref)
   returns (x: Int)
   requires acc(c.act) && acc(c.act.msg) && acc(c.act.next)
+  requires c.act.msg == receivePing() 
+        || c.act.msg == receivePong()
+        || c.act.msg == receiveDone()
   ensures acc(c.act) && c.act == old(c.act.next)
   ensures (old(c.act.msg) == receivePing() && x == 0)
        || (old(c.act.msg) == receivePong() && x == 1)
        || (old(c.act.msg) == receiveDone() && x == 2)
+{
+    if (c.act.msg == receivePing()) {
+        x := 0
+    } else {
+        if (c.act.msg == receivePong()) {
+            x := 1
+        } else {
+            x := 2
+        }
+    }
+    c.act := c.act.next
+}
+
+method test(a: Ref)
+  requires dual_protocol(a)
+{
+    unfold dual_protocol(a)
+    unfold dual_protocol1(a.act)
+    assert dual_protocol1(a.act.next.next) // this fails as expected
+}
 
 method thread(c2: Ref)
   requires dual_protocol(c2)
@@ -88,16 +121,26 @@ method thread(c2: Ref)
       invariant dual_protocol(c2)
   {
       unfold dual_protocol(c2)
-      unfold dual_protocol1(c2.act, c2.act.msg)
+      unfold dual_protocol1(c2.act)
+      assert dual_protocol1(c2.act.next.next) //XXX this should not hold!!!
       x := recv(c2)
       if (x == 0) {
         send(c2, 1)
       }
-        
+      fold dual_protocol1(c2.act)
+      fold dual_protocol(c2)
   }
   unfold dual_protocol(c2)
-  unfold dual_protocol1(c2.act, c2.act.msg)
+  unfold dual_protocol1(c2.act)
   assert x == 2
+}
+
+method test2(a: Ref)
+  requires protocol(a)
+{
+    unfold protocol(a)
+    unfold protocol1(a.act)
+    assert protocol1(a.act.next.next) // this fails as expected
 }
 
 method main()
@@ -110,13 +153,16 @@ method main()
     invariant protocol(c1)
   {
     unfold protocol(c1)
-    unfold protocol1(c1.act, c1.act.msg)
-    send(c1, 1)
+    unfold protocol1(c1.act)
+    assert protocol1(c1.act.next.next) //XXX this should not hold!!!
+    send(c1, 0)
     var res : Int
     res := recv(c1)
     assert res == 1
+    fold protocol1(c1.act)
+    fold protocol(c1)
   }
   unfold protocol(c1)
-  unfold protocol1(c1.act, c1.act.msg)
+  unfold protocol1(c1.act)
   send(c1, 2)
 }
