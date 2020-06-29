@@ -39,20 +39,24 @@ define recvDo(a, na)
   acc(a.msg) && acc(a.next) && a.msg == receiveDone() && a.next == na
 
 
-predicate protocol1(a: Ref) {
-  (sendPi(a, a.next) && recvPo(a.next, a.next.next) && protocol1(a.next.next)) || sendDo(a, null)
+predicate protocol1(a: Ref, m: Message) {
+  m == sendPing() ?
+    (sendPi(a, a.next) && recvPo(a.next, a.next.next) && acc(a.next.next.msg) && protocol1(a.next.next, a.next.next.msg)) :
+    sendDo(a, null)
 }
 
 predicate protocol(c: Ref) {
-  acc(c.act) && protocol1(c.act)
+  acc(c.act) && acc(c.act.msg) && protocol1(c.act, c.act.msg)
 }
 
-predicate dual_protocol1(a: Ref) {
-  (recvPi(a, a.next) && sendPo(a.next, a.next.next) && dual_protocol1(a.next.next)) || recvDo(a, null)
+predicate dual_protocol1(a: Ref, m: Message) {
+  m == receivePing() ?
+    (recvPi(a, a.next) && sendPo(a.next, a.next.next) && acc(a.next.next.msg) && dual_protocol1(a.next.next, a.next.next.msg))
+    : recvDo(a, null)
 }
 
 predicate dual_protocol(c: Ref) {
-  acc(c.act) && dual_protocol1(c.act)
+  acc(c.act) && acc(c.act.msg) && dual_protocol1(c.act, c.act.msg)
 }
 
 method new_chan()
@@ -84,12 +88,15 @@ method thread(c2: Ref)
       invariant dual_protocol(c2)
   {
       unfold dual_protocol(c2)
+      unfold dual_protocol1(c2.act, c2.act.msg)
       x := recv(c2)
       if (x == 0) {
         send(c2, 1)
       }
         
   }
+  unfold dual_protocol(c2)
+  unfold dual_protocol1(c2.act, c2.act.msg)
   assert x == 2
 }
 
@@ -102,11 +109,14 @@ method main()
   while (nonDet)
     invariant protocol(c1)
   {
+    unfold protocol(c1)
+    unfold protocol1(c1.act, c1.act.msg)
     send(c1, 1)
     var res : Int
     res := recv(c1)
     assert res == 1
   }
   unfold protocol(c1)
+  unfold protocol1(c1.act, c1.act.msg)
   send(c1, 2)
 }
