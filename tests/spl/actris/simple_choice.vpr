@@ -1,0 +1,112 @@
+domain Message {
+  function sendPing() : Message
+  function sendPong() : Message
+  function sendDone() : Message
+  function receivePing() : Message
+  function receivePong() : Message
+  function receiveDone() : Message
+
+  axiom allDifferent {
+    sendPing() != sendPong() && sendPing() != sendDone() && sendPong() != sendDone() &&
+    sendPing() != receivePing() && sendPing() != receivePong() && sendPing() != receiveDone() &&
+    sendPong() != receivePing() && sendPong() != receivePong() && sendPong() != receiveDone() &&
+    sendDone() != receivePing() && sendDone() != receivePong() && sendDone() != receiveDone() &&
+    receivePing() != receivePong() && receivePing() != receiveDone() && receivePong() != receiveDone()
+  }
+
+}
+
+field act: Ref
+field next: Ref
+field msg: Message
+
+define sendPi(a, na)
+  acc(a.msg) && acc(a.next) && a.msg == sendPing() && a.next == na
+
+define recvPi(a, na)
+  acc(a.msg) && acc(a.next) && a.msg == receivePing() && a.next == na
+
+define sendPo(a, na)
+  acc(a.msg) && acc(a.next) && a.msg == sendPong() && a.next == na
+
+define recvPo(a, na)
+  acc(a.msg) && acc(a.next) && a.msg == receivePong() && a.next == na
+
+define sendDo(a, na)
+  acc(a.msg) && acc(a.next) && a.msg == sendDone() && a.next == na
+
+define recvDo(a, na)
+  acc(a.msg) && acc(a.next) && a.msg == receiveDone() && a.next == na
+
+
+predicate protocol1(a: Ref) {
+  (sendPi(a, a.next) && recvPo(a.next, a.next.next) && protocol1(a.next.next)) || sendDo(a, null)
+}
+
+predicate protocol(c: Ref) {
+  acc(c.act) && protocol1(c.act)
+}
+
+predicate dual_protocol1(a: Ref) {
+  (recvPi(a, a.next) && sendPo(a.next, a.next.next) && dual_protocol1(a.next.next)) || recvDo(a, null)
+}
+
+predicate dual_protocol(c: Ref) {
+  acc(c.act) && dual_protocol1(c.act)
+}
+
+method new_chan()
+  returns (c1: Ref, c2: Ref)
+  ensures protocol(c1) && dual_protocol(c2)
+
+method send(c: Ref, x: Int)
+  requires acc(c.act) && acc(c.act.msg) && acc(c.act.next)
+  requires (c.act.msg == sendPing() && x == 0)
+        || (c.act.msg == sendPong() && x == 1)
+        || (c.act.msg == sendDone() && x == 2)
+  ensures acc(c.act) && c.act == old(c.act.next)
+
+method recv(c: Ref)
+  returns (x: Int)
+  requires acc(c.act) && acc(c.act.msg) && acc(c.act.next)
+  ensures acc(c.act) && c.act == old(c.act.next)
+  ensures (old(c.act.msg) == receivePing() && x == 0)
+       || (old(c.act.msg) == receivePong() && x == 1)
+       || (old(c.act.msg) == receiveDone() && x == 2)
+
+method thread(c2: Ref)
+  requires dual_protocol(c2)
+  ensures true
+{
+  var x : Int
+  x := 0
+  while (x == 0)
+      invariant dual_protocol(c2)
+  {
+      unfold dual_protocol(c2)
+      x := recv(c2)
+      if (x == 0) {
+        send(c2, 1)
+      }
+        
+  }
+  assert x == 2
+}
+
+method main()
+{
+  var c1 : Ref; var c2 : Ref
+  c1, c2 := new_chan()
+  thread(c2)
+  var nonDet: Bool
+  while (nonDet)
+    invariant protocol(c1)
+  {
+    send(c1, 1)
+    var res : Int
+    res := recv(c1)
+    assert res == 1
+  }
+  unfold protocol(c1)
+  send(c1, 2)
+}

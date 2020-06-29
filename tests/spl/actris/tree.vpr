@@ -101,7 +101,7 @@ method thread1(c1: Ref, n: Ref)
     sendV(c1, n.data)
     fold protocol(c1)
     var b: Ref
-    fold protocol1(c1.act, b)
+    fold protocol1(c1.act, a)
     fold tree(n.left)
     thread1(c1, n.left)
     unfold protocol1(b, a)
