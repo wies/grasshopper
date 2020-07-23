@@ -74,10 +74,12 @@ method new_chan()
 
 method send(c: Ref, x: Int)
   requires acc(c.act) && acc(c.act.msg) && acc(c.act.next)
-  requires (c.act.msg == sendPing() && x == 0)
+  requires x == 0
         || (c.act.msg == sendPong() && x == 1)
-        || (c.act.msg == sendDone() && x == 2)
+        || x == 2
   ensures acc(c.act) && c.act == old(c.act.next)
+  ensures (x == 0 ==> old(c.act.msg) == sendPing()) &&
+          (x == 2 ==> old(c.act.msg) == sendDone())
 
 // something goes wrong with that method!?
 method recv(c: Ref)
@@ -103,14 +105,6 @@ method recv(c: Ref)
     c.act := c.act.next
 }
 
-method test(a: Ref)
-  requires dual_protocol(a)
-{
-    unfold dual_protocol(a)
-    unfold dual_protocol1(a.act)
-    //assert dual_protocol1(a.act.next.next) // this fails as expected
-}
-
 method thread(c2: Ref)
   requires dual_protocol(c2)
   ensures true
@@ -130,13 +124,7 @@ method thread(c2: Ref)
   assert x == 2
 }
 
-method test2(a: Ref)
-  requires protocol(a)
-{
-    unfold protocol(a)
-    unfold protocol1(a.act)
-    //assert protocol1(a.act.next.next) // this fails as expected
-}
+method nondet() returns (res: Bool)
 
 method main()
 {
@@ -144,18 +132,17 @@ method main()
   c1, c2 := new_chan()
   thread(c2)
   var nonDet: Bool
+  nonDet := nondet()
   while (nonDet)
     invariant protocol(c1)
   {
     unfold protocol(c1)
     unfold protocol1(c1.act)
-    //assert protocol1(c1.act.next.next) //XXX this should not hold!!!
     send(c1, 0)
     var res : Int
     res := recv(c1)
-    assert res == 1
-    fold protocol1(c1.act)
     fold protocol(c1)
+    nonDet := nondet()
   }
   unfold protocol(c1)
   unfold protocol1(c1.act)
