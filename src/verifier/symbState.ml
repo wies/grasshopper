@@ -386,7 +386,6 @@ let rec heap_find_by_symb_term h t =
   match h with
   | [] -> raise (HeapChunkNotFound (sprintf "for id(%s) %s" (string_of_symb_term t) (string_of_sort (sort_of (term_of t)))))
   | Obj (tt, _, _) as c :: h' ->
-        (string_of_hc c) (string_of_sort (sort_of (term_of tt))) (string_of_term (term_of t)));
       if tt = t then c else heap_find_by_symb_term h' t
   | ObjPred (id1, _, _) as c :: h' ->
       let id2 = free_symbols_term (term_of t) in
@@ -406,7 +405,7 @@ let rec heap_remove_by_term h t =
   let chunk = heap_find_by_symb_term h (Symbt t) in
   (chunk, List.filter (fun hc ->
       match hc with
-      | Obj (Symbt t1, _, _) as c ->
+      | Obj (Symbt t1, _, _) ->
           if t1 = t then (Debug.debug (fun() -> sprintf "Dropping element\n"); false) else true
       | ObjPred (id1, _, _) ->
           let id2 = free_consts_term t in

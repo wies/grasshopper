@@ -98,6 +98,6 @@ procedure client2()
   incr2(c1, 0);
   assert counter2(c1, 1) &*& counter2(c2, 0);
 
-  delete2(c1, 0 + 1);
+  delete2(c1, 1);
   delete2(c2, 0);
 }
