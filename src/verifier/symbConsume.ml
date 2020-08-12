@@ -38,12 +38,12 @@ let rec consume_sl_form state heap (f: Sl.form) (fc: symb_state -> symb_heap -> 
   | Sl.Atom (Sl.Emp, ts, _) -> fc state heap (emp_snap) 
   | Sl.Atom (Sl.Region, [r], _) -> 
       eval_term state r (fun state' t' ->
-        let (chunk, h') = heap_remove_by_term state.heap (term_of t') in
+        let (chunk, h') = heap_remove_by_term state.pc state.heap (term_of t') in
         fc state h' (emp_snap))
   | Sl.Atom (Sl.Region, ts, _) -> fc state heap (emp_snap)
   | Sl.Atom (Sl.Pred id, ts, _) -> 
      eval_terms state ts (fun state' ts' ->
-        let pred_chunk = heap_find_pred_chunk state'.heap id ts' in
+        let pred_chunk = heap_find_pred_chunk state'.pc state'.heap id ts' in
         let h' = heap_remove state'.heap state'.pc pred_chunk in 
         fc {state' with heap=h'} h' (get_pred_chunk_snap pred_chunk))
   | Sl.SepOp (Sl.SepStar, f1, f2, _) ->
@@ -77,12 +77,12 @@ let rec consume_symb_sl_form state heap (f: symb_sl_form) (fc: symb_state -> sym
   | Symbslf (Sl.Atom (Sl.Region, [App (SetEnum, [t], srt)], _)) ->
       (* TODO: implement a symb_form type? *)
       eval_symb_term state (mk_symb_term t) (fun state' t' ->
-        let (_, h') = heap_remove_by_term state.heap (term_of t') in
+        let (_, h') = heap_remove_by_term state.pc state.heap (term_of t') in
         fc state h' (emp_snap))
   | Symbslf (Sl.Atom (Sl.Region, ts, _)) -> fc state heap (emp_snap)
   | Symbslf (Sl.Atom (Sl.Pred id, ts, _)) ->
      eval_symb_terms state (List.map (fun t -> Symbt t) ts) (fun state' ts' ->
-        let pred_chunk = heap_find_pred_chunk state'.heap id ts' in
+        let pred_chunk = heap_find_pred_chunk state.pc state'.heap id ts' in
         let h' = heap_remove state'.heap state'.pc pred_chunk in
         fc {state' with heap=h'} h' (get_pred_chunk_snap pred_chunk))
   | Symbslf (Sl.SepOp (Sl.SepStar, f1, f2, _)) ->

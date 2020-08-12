@@ -148,7 +148,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
         lineSep (string_of_state state)
     );
     consume_sl_form state state.heap (mk_region t1) (fun state2' h snp ->
-      let r = (App (Read, [map; t1], srt)) in
+      let r = (App (Read, [map; t1], range_sort_of_map map)) in
       let f = mk_sep_star (mk_region t1) (mk_pure (GrassUtil.mk_eq r t2)) in
       Debug.debug(fun() -> sprintf "CONSUME CONTINUE heap %s\n" (string_of_heap h));
       let state3 = {state2' with heap=h} in

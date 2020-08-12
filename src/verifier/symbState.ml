@@ -270,6 +270,11 @@ let check pc_stack prog v =
   | Some errs -> raise_err "SMT check failed"
   | None -> ()
 
+let check_bool pc_stack prog v =
+  match check_entail prog (smk_and (pc_collect_constr pc_stack)) v with
+  | Some errs -> false
+  | None -> true
+
 (** Snapshot defintions *)
 (** snapshot adt encoding for SMT solver *)
 let snap_tree_id = fresh_ident "snap_tree" 
@@ -356,7 +361,7 @@ let equal_symb_val_lst vs1 vs2 =
     acc && equal_symb_vals v1 v2)
   true vs1 vs2
 
-let equal_heap_chunks c1 c2 = 
+let equal_heap_chunks stack c1 c2 =
   match c1, c2 with 
   | Obj (t1, s1, sm1), Obj (t2, s2, sm2)
   when t1 = t2 && equal_field_maps sm1 sm2 -> true
@@ -382,31 +387,36 @@ type symb_heap = heap_chunk list
 
 let heap_add h stack hchunk = (hchunk :: h, stack)
 
-let rec heap_find_by_symb_term h t =
+let rec heap_find_by_symb_term stack h t =
   match h with
   | [] -> raise (HeapChunkNotFound (sprintf "for id(%s) %s" (string_of_symb_term t) (string_of_sort (sort_of (term_of t)))))
-  | Obj (tt, _, _) as c :: h' ->
-      if tt = t then c else heap_find_by_symb_term h' t
+  | Obj (Symbt tt, _, _) as c :: h' ->
+      if (check_bool stack (empty_prog) (mk_eq tt (term_of t))) then c else heap_find_by_symb_term stack h' t
   | ObjPred (id1, _, _) as c :: h' ->
       let id2 = free_symbols_term (term_of t) in
-      if IdSet.mem id1 id2 then c else heap_find_by_symb_term h' t
-  | _ :: h' -> heap_find_by_symb_term h' t
+      if IdSet.mem id1 id2 then c else heap_find_by_symb_term stack h' t
+  | _ :: h' -> heap_find_by_symb_term stack h' t
 
-let rec heap_find_pred_chunk h id ts =
+let rec heap_find_pred_chunk stack h id ts =
   match h with
   | [] -> raise (HeapChunkNotFound (sprintf "for ident (%s)" (string_of_ident id)))
   | ObjPred(id1, _, ts1) as p :: h'
     when id = id1 ->
-      if id = id1 && ts = ts1 then
-        p else heap_find_pred_chunk h' id ts
-  | p :: h' -> heap_find_pred_chunk h' id ts
+      let ts_conj =
+        List.combine ts ts1
+        |> List.map (fun (t1, t2) -> mk_eq (term_of t1) (term_of t2))
+        |> smk_and
+      in
+      if id = id1 && (check_bool stack (empty_prog) ts_conj) then
+        p else heap_find_pred_chunk stack h' id ts
+  | p :: h' -> heap_find_pred_chunk stack h' id ts
 
-let rec heap_remove_by_term h t = 
-  let chunk = heap_find_by_symb_term h (Symbt t) in
+let rec heap_remove_by_term stack h t =
+  let chunk = heap_find_by_symb_term stack h (Symbt t) in
   (chunk, List.filter (fun hc ->
       match hc with
       | Obj (Symbt t1, _, _) ->
-          if t1 = t then (Debug.debug (fun() -> sprintf "Dropping element\n"); false) else true
+          if (check_bool stack (empty_prog) (mk_eq t1 t)) then (Debug.debug (fun() -> sprintf "Dropping element\n"); false) else true
       | ObjPred (id1, _, _) ->
           let id2 = free_consts_term t in
           IdSet.mem id1 id2
@@ -414,17 +424,16 @@ let rec heap_remove_by_term h t =
 
 let heap_remove h stack hchunk = 
   List.filter (fun hc ->
-    if equal_heap_chunks hchunk hc then
-      match hchunk, hc with
+    (match hchunk, hc with
       | Obj (Symbt t1, snp1, _), Obj (Symbt t2, snp2, _) ->
-        check stack (empty_prog) (mk_eq t1 t2);
-        false 
+          if (check_bool stack (empty_prog) (mk_eq t1 t2)) then false else true
       | ObjForm (Symbf f1, snp1, _), ObjForm (Symbf f2, snp2, _) ->
-        if equal f1 f2 then false else true
+        if equal f1 f2 && (check_bool stack (empty_prog) (mk_eq snp1 snp2))
+        then false else true
       | ObjPred (id1, snp1, ts1), ObjPred (id2, snp2, ts2) -> 
-        if id1 = id2 && ts1 = ts2 && snp1 = snp2 then false else true 
-      | _ -> true 
-    else true) h
+        if id1 = id2 &&
+          (check_bool stack (empty_prog) (mk_eq snp1 snp2)) then false else true
+      | _ -> true)) h
 
 let string_of_heap h =
   h
