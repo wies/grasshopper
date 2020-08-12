@@ -42,8 +42,8 @@ and eval_term state t (fc: symb_state -> symb_term -> 'a option) =
   | App (Union, [], srt) -> todo "eval Union"
   | App (Inter, [], srt) -> todo "eval Inter"
   | App (Read, [map; t], srt) ->
-      (match map, t with
-      | (App (FreeSym id, [], srt1) | Var (id, srt1)), App (FreeSym x, ts, Loc _)->
+      (match map with
+      | (App (FreeSym id, [], srt1) | Var (id, srt1)) ->
           eval_term state t (fun state' t' ->
             let hc = heap_find_by_symb_term state.pc state.heap (Symbt (term_of t')) in
             let h' = heap_remove state.heap state.pc hc in
@@ -59,8 +59,8 @@ and eval_term state t (fc: symb_state -> symb_term -> 'a option) =
             in
             let hc_updated = add_to_heap_chunk_map hc id v in
             let h_new, stack = heap_add h' state.pc hc_updated in
-            fc {state with heap=h_new; pc=stack} (Symbt (App (FreeSym v_map, ts, srt)))) 
-      | _ -> todo "eval read catch all")
+            fc {state with heap=h_new; pc=stack} (Symbt (App (FreeSym v_map, [(term_of t')], srt))))
+      | _ -> todo "map catch all")
   | App (Read, map :: t :: ts, srt) -> todo "eval read"
   | App (Write, [map; t1; t2], srt) -> todo "eval write"
 
