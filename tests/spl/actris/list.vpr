@@ -26,6 +26,12 @@ domain Message {
 field data: Int
 field next: Ref
 
+function plus2(lst: Seq[Int]): Seq[Int] 
+  //ensures (|lst| == 0) ? lst : Seq(lst[0] + 2) ++ plus2(lst[1..])
+{
+  |lst| == 0 ? lst : Seq(lst[0] + 2) ++ plus2(lst[1..])
+}
+
 predicate lseg(first: Ref, last: Ref, values: Seq[Int])
 {
   first != last ?
@@ -45,31 +51,42 @@ field act: Ref
 field nextAct: Ref
 field msg: Message
 
+
 predicate end(c: Ref) {
   acc(c.act) && c.act == null
 }
 
-predicate protocol1(a: Ref, lst: Seq[Int]) {
-  lst == Seq[Int]() ? acc(a.msg) && acc(a.nextAct) && a.msg == sendNil() && a.nextAct == null :
-               acc(a.msg) && acc(a.nextAct) && a.msg == sendVal(lst[0]) && protocol1(a.nextAct, lst[1..])
+predicate send_list(a: Ref, lst: Seq[Int], cnt: Ref) {
+  lst == Seq[Int]() ? acc(a.msg) && acc(a.nextAct) && a.msg == sendNil() && a.nextAct == cnt :
+               acc(a.msg) && acc(a.nextAct) && a.msg == sendVal(lst[0]) && send_list(a.nextAct, lst[1..], cnt)
 }
 
-predicate protocol(c: Ref, lst: Seq[Int]) {
-  acc(c.act) && protocol1(c.act, lst)
+//predicate protocol1(a: Ref, lst: Seq[Int], cnt: Ref) {
+//  lst == Seq[Int]() ? acc(a.msg) && acc(a.nextAct) && a.msg == sendNil() && a.nextAct == cnt :
+//               acc(a.msg) && acc(a.nextAct) && a.msg == sendVal(lst[0]) && protocol1(a.nextAct, lst[1..])
+//}
+
+predicate recv_list(a: Ref, lst: Seq[Int], cnt: Ref) {
+  lst == Seq[Int]() ? acc(a.msg) && acc(a.nextAct) && a.msg == receiveNil() && a.nextAct == cnt :
+               acc(a.msg) && acc(a.nextAct) && a.msg == receiveVal(lst[0]) && recv_list(a.nextAct, lst[1..], cnt)
 }
 
-predicate dual_protocol1(a: Ref, lst: Seq[Int]) {
-  lst == Seq[Int]() ? acc(a.msg) && acc(a.nextAct) && a.msg == receiveNil() && a.nextAct == null :
-               acc(a.msg) && acc(a.nextAct) && a.msg == receiveVal(lst[0]) && dual_protocol1(a.nextAct, lst[1..])
+predicate protocol(c: Ref, lst: Seq[Int], cnt: Ref) {
+  acc(c.act) && send_list(c.act, lst, cnt) && recv_list(cnt, plus2(lst), null)
 }
 
-predicate dual_protocol(c: Ref, lst: Seq[Int]) {
-  acc(c.act) && dual_protocol1(c.act, lst)
+//predicate dual_protocol1(a: Ref, lst: Seq[Int]) {
+//  lst == Seq[Int]() ? acc(a.msg) && acc(a.nextAct) && a.msg == receiveNil() && a.nextAct == null :
+//              acc(a.msg) && acc(a.nextAct) && a.msg == receiveVal(lst[0]) && dual_protocol1(a.nextAct, lst[1..])
+//}
+
+predicate dual_protocol(c: Ref, lst: Seq[Int], cnt: Ref) {
+  acc(c.act) && recv_list(c.act, lst, cnt) && send_list(cnt, plus2(lst), cnt)
 }
 
 method new_chan(lst: Seq[Int])
-  returns (c1: Ref, c2: Ref)
-  ensures protocol(c1, lst) && dual_protocol(c2, lst)
+  returns (c1: Ref, c2: Ref, cnt1: Ref, cnt2: Ref)
+  ensures protocol(c1, lst, cnt1) && dual_protocol(c2, lst, cnt2)
 
 method sendV(c: Ref, x: Int)
   requires acc(c.act) && acc(c.act.msg) && acc(c.act.nextAct)
@@ -89,37 +106,78 @@ method recv(c: Ref)
   ensures flag ==> (old(c.act.msg) == receiveVal(x))
   ensures !flag ==> (old(c.act.msg) == receiveNil())
 
-method thread1(c1: Ref, n: Ref, lst: Seq[Int])
-  requires protocol(c1, lst)
+method thread1_send(c1: Ref, cnt: Ref, n: Ref, olst: Seq[Int], lst: Seq[Int]) returns (res: Ref)
+  requires acc(c1.act)
+  requires send_list(c1.act, lst, cnt)
+  requires recv_list(cnt, plus2(olst), null)
   requires list(n, lst)
-  ensures true
+  ensures acc(c1.act) && list(res, plus2(olst))
 {
   unfold list(n, lst)
   unfold lseg(n, null, lst)
-  unfold protocol(c1, lst)
-  unfold protocol1(c1.act, lst)
-    
+  unfold send_list(c1.act, lst, cnt)
+  
   if (n != null) {
-    sendV(c1, n.data + 2)
+    sendV(c1, n.data)
     var n1 : Ref
-    n1 := n.next;
-    fold protocol(c1, lst[1..])
+    n1 := n.next
     fold list(n1, lst[1..])
-    thread1(c1, n1, lst[1..])
+    res := thread1_send(c1, cnt, n1, olst, lst[1..])
   } else {
     sendN(c1)
+    res := thread1_recv(c1, plus2(olst))
   }
 }
 
-method thread2(c2: Ref, lst: Seq[Int])
-  returns (res: Ref)
-  requires dual_protocol(c2, lst)
-  ensures list(res, lst)
+method thread1_recv(c1: Ref, lst: Seq[Int]) returns (res: Ref)
+  requires acc(c1.act)
+  requires recv_list(c1.act, lst, null)
+  ensures acc(c1.act) && list(res, lst)
 {
   var x : Int
   var flag : Bool
-  unfold dual_protocol(c2, lst)
-  unfold dual_protocol1(c2.act, lst)
+  unfold recv_list(c1.act, lst, null)
+  //unfold dual_protocol(c2, lst)
+  //unfold dual_protocol1(c2.act, lst)
+
+  //var om : Message
+  //om := c1.act.msg
+
+  flag, x := recv(c1)
+  if (flag) {
+    var tail : Ref
+    tail := thread1_recv(c1, lst[1..])
+    res := new(data, next)
+    res.data := x // ???
+    res.next := tail
+    unfold list(tail, lst[1..])
+    fold lseg(res, null, lst)
+    fold list(res, lst)
+  } else {
+    res := null
+    fold lseg(null, null, Seq[Int]())
+    fold list(null, Seq[Int]())
+  }
+}
+
+method thread1(c1: Ref, cnt: Ref, n: Ref, lst: Seq[Int]) returns (res: Ref)
+  requires protocol(c1, lst, cnt)
+  requires list(n, lst)
+  ensures list(res, plus2(lst))
+{
+  unfold protocol(c1, lst, cnt)
+  res := thread1_send(c1, cnt, n, lst, lst)
+}
+
+/*
+method thread2(c2: Ref, lst: Seq[Int])
+  returns (res: Ref)
+  requires dual_protocol(c2, lst)
+{
+  var x : Int
+  var flag : Bool
+  //unfold dual_protocol(c2, lst)
+  //unfold dual_protocol1(c2.act, lst)
 
   var om : Message
   om := c2.act.msg
@@ -141,14 +199,15 @@ method thread2(c2: Ref, lst: Seq[Int])
     fold list(null, Seq[Int]())
   }
 }
+*/
 
 method main(n: Ref, lst: Seq[Int])
   returns (n1: Ref)
   requires list(n, lst)
-  ensures list(n1, lst)
+  ensures list(n1, plus2(lst))
 {
-  var c1 : Ref; var c2 : Ref
-  c1, c2 := new_chan(lst)
-  thread1(c1, n, lst);
-  n1 := thread2(c2, lst);
+  var c1 : Ref; var c2 : Ref; var cnt1: Ref; var cnt2: Ref
+  c1, c2, cnt1, cnt2 := new_chan(lst)
+  n1 := thread1(c1, cnt1, n, lst);
+  //n1 := thread2(c2, lst);
 }
