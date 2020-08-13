@@ -73,7 +73,7 @@ method new_chan(lst: Seq[Int])
 
 method sendV(c: Ref, x: Int)
   requires acc(c.act) && acc(c.act.msg) && acc(c.act.nextAct)
-  requires c.act.msg == sendVal(x)
+  requires c.act.msg == sendVal(x) || exists y: Int :: c.act.msg == sendVal(y)
   ensures acc(c.act) && c.act == old(c.act.nextAct)
 
 method sendN(c: Ref)
@@ -100,7 +100,7 @@ method thread1(c1: Ref, n: Ref, lst: Seq[Int])
   unfold protocol1(c1.act, lst)
     
   if (n != null) {
-    sendV(c1, n.data)
+    sendV(c1, n.data + 2)
     var n1 : Ref
     n1 := n.next;
     fold protocol(c1, lst[1..])
@@ -130,7 +130,7 @@ method thread2(c2: Ref, lst: Seq[Int])
     var tail : Ref
     tail := thread2(c2, lst[1..])
     res := new(data, next)
-    res.data := x
+    res.data := x // ???
     res.next := tail
     unfold list(tail, lst[1..])
     fold lseg(res, null, lst)
