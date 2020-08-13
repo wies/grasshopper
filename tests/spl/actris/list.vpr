@@ -73,7 +73,7 @@ method new_chan(lst: Seq[Int])
 
 method sendV(c: Ref, x: Int)
   requires acc(c.act) && acc(c.act.msg) && acc(c.act.nextAct)
-  requires c.act.msg == sendVal(x) || exists y: Int :: c.act.msg == sendVal(y)
+  requires c.act.msg == sendVal(x)// || exists y: Int :: c.act.msg == sendVal(y)
   ensures acc(c.act) && c.act == old(c.act.nextAct)
 
 method sendN(c: Ref)
