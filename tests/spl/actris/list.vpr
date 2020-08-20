@@ -32,6 +32,11 @@ function plus2(lst: Seq[Int]): Seq[Int]
   |lst| == 0 ? lst : Seq(lst[0] + 2) ++ plus2(lst[1..])
 }
 
+function plus(lst: Seq[Int], n: Int): Seq[Int]
+{
+  |lst| == 0 ? lst : Seq(lst[0] + n) ++ plus(lst[1..], n)
+}
+
 predicate lseg(first: Ref, last: Ref, values: Seq[Int])
 {
   first != last ?
@@ -81,7 +86,7 @@ predicate protocol(c: Ref, lst: Seq[Int], cnt: Ref) {
 //}
 
 predicate dual_protocol(c: Ref, lst: Seq[Int], cnt: Ref) {
-  acc(c.act) && recv_list(c.act, lst, cnt) && send_list(cnt, plus2(lst), cnt)
+  acc(c.act) && recv_list(c.act, lst, cnt) && send_list(cnt, plus2(lst), null)
 }
 
 method new_chan(lst: Seq[Int])
@@ -90,7 +95,7 @@ method new_chan(lst: Seq[Int])
 
 method sendV(c: Ref, x: Int)
   requires acc(c.act) && acc(c.act.msg) && acc(c.act.nextAct)
-  requires c.act.msg == sendVal(x)// || exists y: Int :: c.act.msg == sendVal(y)
+  requires c.act.msg == sendVal(x)
   ensures acc(c.act) && c.act == old(c.act.nextAct)
 
 method sendN(c: Ref)
@@ -148,7 +153,7 @@ method thread1_recv(c1: Ref, lst: Seq[Int]) returns (res: Ref)
     var tail : Ref
     tail := thread1_recv(c1, lst[1..])
     res := new(data, next)
-    res.data := x // ???
+    res.data := x
     res.next := tail
     unfold list(tail, lst[1..])
     fold lseg(res, null, lst)
@@ -160,6 +165,8 @@ method thread1_recv(c1: Ref, lst: Seq[Int]) returns (res: Ref)
   }
 }
 
+
+
 method thread1(c1: Ref, cnt: Ref, n: Ref, lst: Seq[Int]) returns (res: Ref)
   requires protocol(c1, lst, cnt)
   requires list(n, lst)
@@ -167,6 +174,62 @@ method thread1(c1: Ref, cnt: Ref, n: Ref, lst: Seq[Int]) returns (res: Ref)
 {
   unfold protocol(c1, lst, cnt)
   res := thread1_send(c1, cnt, n, lst, lst)
+}
+
+method thread2_recv(c1: Ref, cnt: Ref, n: Ref, olst: Seq[Int], lst: Seq[Int]) returns (res: Ref)
+  requires acc(c1.act)
+  requires recv_list(c1.act, lst, cnt)
+  requires send_list(cnt, plus2(olst), null)
+  requires list(n, lst)
+  ensures acc(c1.act) && list(res, plus2(olst))
+{
+  var x : Int
+  var flag : Bool
+  unfold list(n, lst)
+  unfold lseg(n, null, lst)
+  unfold recv_list(c1.act, lst, cnt)
+
+  flag, x := recv(c1)
+  if (flag) {
+    var tail : Ref
+    tail := thread2_send(c1, n, plus2(lst[1..]))
+    res := new(data, next)
+    res.data := x
+    res.next := tail
+    unfold list(tail, lst[1..])
+    fold lseg(res, null, lst)
+    fold list(res, lst)
+  } else {
+    res := null
+    fold lseg(null, null, Seq[Int]())
+    fold list(null, Seq[Int]())
+  }
+}
+
+method thread2_send(c1: Ref, n: Ref, lst: Seq[Int]) returns (res: Ref)
+  requires acc(c1.act)
+  requires send_list(c1.act, lst, null)
+  requires acc(n.data)
+  ensures acc(c1.act) && list(res, lst)
+{
+  unfold send_list(c1.act, lst, null)
+  
+  if (n != null) {
+    sendV(c1, n.data)
+    var n1 : Ref
+    n1 := c1.next
+    fold list(n1, lst[1..])
+    res := thread2_send(c1, n1, lst[1..])
+  }
+}
+
+method thread2(c1: Ref, cnt: Ref, n: Ref, lst: Seq[Int]) returns (res: Ref)
+  requires dual_protocol(c1, lst, cnt)
+  requires list(n, lst)
+  ensures list(res, plus2(lst))
+{
+  unfold dual_protocol(c1, lst, cnt)
+  res := thread2_recv(c1, cnt, n, lst, lst)
 }
 
 /*
@@ -209,5 +272,7 @@ method main(n: Ref, lst: Seq[Int])
   var c1 : Ref; var c2 : Ref; var cnt1: Ref; var cnt2: Ref
   c1, c2, cnt1, cnt2 := new_chan(lst)
   n1 := thread1(c1, cnt1, n, lst);
+  n1 := thread2(c1, cnt1, n1, lst);
+
   //n1 := thread2(c2, lst);
 }
