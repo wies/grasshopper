@@ -176,23 +176,19 @@ method thread1(c1: Ref, cnt: Ref, n: Ref, lst: Seq[Int]) returns (res: Ref)
   res := thread1_send(c1, cnt, n, lst, lst)
 }
 
-method thread2_recv(c1: Ref, cnt: Ref, n: Ref, olst: Seq[Int], lst: Seq[Int]) returns (res: Ref)
+method thread2_recv(c1: Ref, cnt: Ref, lst: Seq[Int]) returns (res: Ref)
   requires acc(c1.act)
   requires recv_list(c1.act, lst, cnt)
-  requires send_list(cnt, plus2(olst), null)
-  requires list(n, lst)
-  ensures acc(c1.act) && list(res, plus2(olst))
+  ensures acc(c1.act) && list(res, lst) && c1.act == cnt
 {
   var x : Int
   var flag : Bool
-  unfold list(n, lst)
-  unfold lseg(n, null, lst)
   unfold recv_list(c1.act, lst, cnt)
 
   flag, x := recv(c1)
   if (flag) {
     var tail : Ref
-    tail := thread2_send(c1, n, plus2(lst[1..]))
+    tail := thread2_recv(c1, cnt, plus2(lst[1..]))
     res := new(data, next)
     res.data := x
     res.next := tail
@@ -206,30 +202,32 @@ method thread2_recv(c1: Ref, cnt: Ref, n: Ref, olst: Seq[Int], lst: Seq[Int]) re
   }
 }
 
-method thread2_send(c1: Ref, n: Ref, lst: Seq[Int]) returns (res: Ref)
+method thread2_send(c1: Ref, n: Ref, lst: Seq[Int]) 
   requires acc(c1.act)
-  requires send_list(c1.act, lst, null)
-  requires acc(n.data)
-  ensures acc(c1.act) && list(res, lst)
+  requires list(n, lst)
+  requires send_list(c1.act, plus2(lst), null)
+  ensures acc(c1.act) 
 {
-  unfold send_list(c1.act, lst, null)
-  
+  unfold send_list(c1.act, plus2(lst), null)
+  unfold list(n, lst)
+  unfold lseg(n, null, lst)
+
   if (n != null) {
-    sendV(c1, n.data)
+    sendV(c1, n.data + 2)
     var n1 : Ref
-    n1 := c1.next
+    n1 := n.next
     fold list(n1, lst[1..])
-    res := thread2_send(c1, n1, lst[1..])
+    thread2_send(c1, n1, lst[1..])
   }
 }
 
-method thread2(c1: Ref, cnt: Ref, n: Ref, lst: Seq[Int]) returns (res: Ref)
+method thread2(c1: Ref, cnt: Ref, lst: Seq[Int])
   requires dual_protocol(c1, lst, cnt)
-  requires list(n, lst)
-  ensures list(res, plus2(lst))
 {
   unfold dual_protocol(c1, lst, cnt)
-  res := thread2_recv(c1, cnt, n, lst, lst)
+  var res : Ref
+  res := thread2_recv(c1, cnt, lst)
+  thread2_send(c1, res, lst)
 }
 
 /*
@@ -272,7 +270,7 @@ method main(n: Ref, lst: Seq[Int])
   var c1 : Ref; var c2 : Ref; var cnt1: Ref; var cnt2: Ref
   c1, c2, cnt1, cnt2 := new_chan(lst)
   n1 := thread1(c1, cnt1, n, lst);
-  n1 := thread2(c1, cnt1, n1, lst);
+  thread2(c1, cnt1, lst);
 
   //n1 := thread2(c2, lst);
 }
