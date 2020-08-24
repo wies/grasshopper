@@ -15,11 +15,14 @@ lemma fold_left(x: Node, y: Node)
   unfold lseg(x.next, y);
 }
 
+/*
 lemma empty_list(x: Node)
   ensures lseg(x, x)
 {
   unfold lseg(x, x);
+  fold lseg(x, x);
 }
+*/
 
 procedure delete(x: Node)
   requires lseg(x, null)
