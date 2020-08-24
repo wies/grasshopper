@@ -50,7 +50,6 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
         fc {state' with heap=h; pc = stack})
   | Sl.Atom (Sl.Region, ts, a) -> todo "region terms"
   | Sl.Atom (Sl.Emp, [], _) ->
-      Debug.debug(fun () -> sprintf "atom emp");
       fc state
   | Sl.Atom (Sl.Emp, ts, _) -> todo "Atom emp ts"
   | Sl.Atom (Sl.Pred id, ts, _) -> 
@@ -64,6 +63,13 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
   | Sl.BoolOp (op, fs, p) ->
         produce_sl_forms state fs snp fc
   | Sl.Binder (b, ts, f, _) -> todo "Binder"
+
+let rec produce_symb_sl_forms state fs snp (fc: symb_state -> 'a option) =
+  match fs with
+  | [] -> fc state
+  | hd :: fs' ->
+      produce_symb_sl_form state hd snp (fun state' ->
+        produce_symb_sl_forms state' fs' snp fc)
 
 and produce_symb_sl_form state (f: symb_sl_form) snp (fc: symb_state -> 'a option) =
    Debug.debug(fun() ->
@@ -86,7 +92,8 @@ and produce_symb_sl_form state (f: symb_sl_form) snp (fc: symb_state -> 'a optio
   | Symbslf (Sl.SepOp (op, f1, f2, _)) ->
     produce_symb_sl_form state (Symbslf f1) (snap_first snp) (fun state' ->
        produce_symb_sl_form state' (Symbslf f2) (snap_second snp) fc)
-  | Symbslf (Sl.BoolOp (op, fs, _)) -> todo "Symb produce BoolOp"
+  | Symbslf (Sl.BoolOp (op, fs, _)) -> 
+      produce_symb_sl_forms state (List.map (fun f -> Symbslf f) fs) snp fc 
   | Symbslf (Sl.Binder (b, [], f, _)) ->
       produce_symb_sl_form state (Symbslf f) snp (fun state' ->
         fc state') 

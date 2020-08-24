@@ -1,0 +1,8 @@
+options "-symbexec-v2"
+
+procedure foo(x: Int, y: Int) 
+  requires x > 5 && y < 10
+  ensures x < 10 
+{
+   x, y := y, x;
+}

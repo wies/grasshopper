@@ -1,0 +1,61 @@
+options "-symbexec-v2"
+
+include "../include/sllist_rec.spl"
+
+lemma unfold_lseg(x: Node, y: Node)
+  requires lseg(x, y) &*& x != y
+  ensures acc(x) &*& lseg(x.next, y)
+{
+}
+
+lemma fold_left(x: Node, y: Node)
+  requires acc(x) &*& lseg(x.next, y) &*& y != x
+  ensures lseg(x, y)
+{
+  unfold lseg(x.next, y);
+}
+
+lemma empty_list(x: Node)
+  ensures lseg(x, x)
+{
+  unfold lseg(x, x);
+}
+
+procedure delete(x: Node)
+  requires lseg(x, null)
+  ensures emp
+{
+  unfold lseg(x, null);
+  if (x != null) {
+    delete(x.next);
+    free x;
+  }
+  fold lseg(x, null);
+}
+
+procedure test_frame(x: Node, y: Node, z1: Node, z2: Node)
+  requires acc(x) &*& x.next == z1 &*& lseg(y, null)
+  ensures acc(x) &*& x.next == z2 &*& lseg(y, null)
+{
+  x.next := z2;
+}
+
+
+procedure reverse(lst: Node) 
+  returns (rev: Node)
+  requires lseg(lst, null)
+  ensures lseg(rev, null)
+{
+  rev := null;
+  var curr := lst;
+  unfold lseg(lst, null);
+  while (curr != null) 
+    invariant lseg(rev, null)
+    invariant lseg(curr, null)
+  {
+    var tmp := curr;
+    curr := curr.next;
+    tmp.next := rev;
+    rev := tmp;
+  }
+}

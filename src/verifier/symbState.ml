@@ -136,11 +136,6 @@ type symb_store = symb_term IdMap.t
 let empty_store = IdMap.empty
 
 let find_symb_val (store: symb_store) (id: ident) =
-  Debug.debug(
-    fun () ->
-      sprintf "trying to find symbv for identifier %s\n"
-      (string_of_ident id)
-  );
   try IdMap.find id store
   with Not_found ->
     failwith ("find_symb_val: Could not find symbolic val for " ^ (string_of_ident id))
@@ -148,11 +143,6 @@ let find_symb_val (store: symb_store) (id: ident) =
 let maybe_find_symb_val (store: symb_store) (id: ident) = IdMap.find_opt id store
 
 let find_or_make_symb_val (store: symb_store) (id: ident) srt =
-  Debug.debug(
-    fun () ->
-      sprintf "trying to find symbv for identifier %s\n"
-      (string_of_ident id)
-  );
   try (store, IdMap.find id store)
   with Not_found ->
     let v = mk_fresh_symb_var "v" srt in
