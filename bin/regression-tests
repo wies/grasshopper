@@ -144,7 +144,10 @@ SYMB_EXEC_VIPER_TESTS="
 symb_exec_viper:basic   tests/spl/symb_exec_v2/basic.spl               ''     pass
 symb_exec_viper:assert  tests/spl/symb_exec_v2/basic_assert.spl        ''     pass
 symb_exec_viper:frame   tests/spl/symb_exec_v2/frame.spl               ''     pass
-symb_exec_viper:heap    tests/spl/symb_exec/array.spl                  ''     pass
+symb_exec_viper:heap    tests/spl/symb_exec_v2/heap.spl                ''     pass
+symb_exec_viper:functions tests/spl/symb_exec_v2/func.spl              ''     pass
+symb_exec_viper:predicate tests/spl/symb_exec_v2/predicates.spl        ''     pass
+symb_exec_viper:list    tests/spl/symb_exec_v2/list.spl                ''     pass
 "
 
 res=0

@@ -17,6 +17,7 @@ lemma fold_left(x: Node, y: Node)
 
 /*
 lemma empty_list(x: Node)
+  requires emp
   ensures lseg(x, x)
 {
   unfold lseg(x, x);

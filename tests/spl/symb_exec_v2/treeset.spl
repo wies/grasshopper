@@ -1,0 +1,78 @@
+options "-symbexec-v2"
+
+include "../include/bstree_rec.spl";
+
+procedure traverse(root: Node)
+  requires tree(root);
+  ensures tree(root);
+{
+  unfold tree(root);
+  if (root != null) {
+    traverse(root.left);
+    traverse(root.right);
+  }
+  fold tree(root);
+}
+
+procedure insert(root: Node, value: Int)
+  returns (new_root: Node)
+  requires tree(root)
+  ensures  tree(new_root)
+{
+  unfold tree(root);
+  if (root == null) {
+    var t := new Node;
+    t.left := null;
+    t.right := null;
+    t.data := value;
+    return t;
+  } else { 
+    var n: Node;
+    if (root.data > value) {
+      n := insert(root.left, value);
+      root.left := n;
+      return root;
+    } else if (root.data < value) {
+      n := insert(root.right, value);
+      root.right := n;
+      return root;
+    }
+    return root;
+  }
+  fold tree(root);
+  unfold tree(new_root);
+}
+
+/* bugs
+procedure rotate_left(h: Node) 
+  returns (res: Node)
+  requires tree(h)
+  requires h != null && h.right != null
+  ensures  tree(res)
+{
+  unfold tree(h);
+  var x: Node;
+  x := h.right;
+  h.right := x.left;
+  x.left := h;
+  fold tree(h);
+  unfold tree(res);
+  return x;
+}
+
+procedure rotate_right(h: Node ) 
+  returns (res: Node)
+  requires tree(h)
+  requires h != null && h.left != null
+  ensures  tree(res)
+{
+  unfold tree(h);
+  var x: Node;
+  x := h.left;
+  h.left := x.right;
+  x.right := h;
+  fold tree(h);
+  unfold tree(res);
+  return x;
+}
+*/
