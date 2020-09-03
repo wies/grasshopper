@@ -26,8 +26,7 @@ domain Message {
 field data: Int
 field next: Ref
 
-function plus2(lst: Seq[Int]): Seq[Int] 
-  //ensures (|lst| == 0) ? lst : Seq(lst[0] + 2) ++ plus2(lst[1..])
+function plus2(lst: Seq[Int]): Seq[Int]
 {
   |lst| == 0 ? lst : Seq(lst[0] + 2) ++ plus2(lst[1..])
 }
@@ -142,11 +141,6 @@ method thread1_recv(c1: Ref, lst: Seq[Int]) returns (res: Ref)
   var x : Int
   var flag : Bool
   unfold recv_list(c1.act, lst, null)
-  //unfold dual_protocol(c2, lst)
-  //unfold dual_protocol1(c2.act, lst)
-
-  //var om : Message
-  //om := c1.act.msg
 
   flag, x := recv(c1)
   if (flag) {
@@ -164,8 +158,6 @@ method thread1_recv(c1: Ref, lst: Seq[Int]) returns (res: Ref)
     fold list(null, Seq[Int]())
   }
 }
-
-
 
 method thread1(c1: Ref, cnt: Ref, n: Ref, lst: Seq[Int]) returns (res: Ref)
   requires protocol(c1, lst, cnt)
@@ -188,7 +180,7 @@ method thread2_recv(c1: Ref, cnt: Ref, lst: Seq[Int]) returns (res: Ref)
   flag, x := recv(c1)
   if (flag) {
     var tail : Ref
-    tail := thread2_recv(c1, cnt, plus2(lst[1..]))
+    tail := thread2_recv(c1, cnt, lst[1..])
     res := new(data, next)
     res.data := x
     res.next := tail
@@ -230,38 +222,6 @@ method thread2(c1: Ref, cnt: Ref, lst: Seq[Int])
   thread2_send(c1, res, lst)
 }
 
-/*
-method thread2(c2: Ref, lst: Seq[Int])
-  returns (res: Ref)
-  requires dual_protocol(c2, lst)
-{
-  var x : Int
-  var flag : Bool
-  //unfold dual_protocol(c2, lst)
-  //unfold dual_protocol1(c2.act, lst)
-
-  var om : Message
-  om := c2.act.msg
-
-  flag, x := recv(c2)
-  if (flag) {
-    fold dual_protocol(c2, lst[1..])
-    var tail : Ref
-    tail := thread2(c2, lst[1..])
-    res := new(data, next)
-    res.data := x // ???
-    res.next := tail
-    unfold list(tail, lst[1..])
-    fold lseg(res, null, lst)
-    fold list(res, lst)
-  } else {
-    res := null
-    fold lseg(null, null, Seq[Int]())
-    fold list(null, Seq[Int]())
-  }
-}
-*/
-
 method main(n: Ref, lst: Seq[Int])
   returns (n1: Ref)
   requires list(n, lst)
@@ -270,7 +230,5 @@ method main(n: Ref, lst: Seq[Int])
   var c1 : Ref; var c2 : Ref; var cnt1: Ref; var cnt2: Ref
   c1, c2, cnt1, cnt2 := new_chan(lst)
   n1 := thread1(c1, cnt1, n, lst);
-  thread2(c1, cnt1, lst);
-
-  //n1 := thread2(c2, lst);
+  thread2(c2, cnt2, lst);
 }
