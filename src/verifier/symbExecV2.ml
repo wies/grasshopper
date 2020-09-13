@@ -26,33 +26,14 @@ let subst_spec_form subst_map sf =
   | SL slf -> SL (SlUtil.subst_consts subst_map slf)
   | FOL f -> FOL (GrassUtil.subst_consts subst_map f)
 
-let subst_symb_spec_form subst_map sf =
-  match sf with
-  | SL slf -> SymbSL (Symbslf (SlUtil.subst_consts subst_map slf))
-  | FOL f -> SymbFOL (Symbf (GrassUtil.subst_consts subst_map f))
-
 let subst_spec_list subst_map sl =
   List.map (fun s -> 
     {s with spec_form=subst_spec_form subst_map s.spec_form}) sl
-
-(* Substitutes identifiers of a spec list with other terms according to substitution map [subst_map]. *)
-let subst_symb_spec_list subst_map sl =
-  List.map (fun s -> 
-    let sf = subst_symb_spec_form subst_map s.spec_form in
-    mk_symb_spec sf s.spec_kind s.spec_name s.spec_msg s.spec_pos) sl
-
-(* Extract the formal input parameter identifiers of a procedure foo in program prog *)
-let formal_ids_of foo prog =
-  let foo_contr =(find_proc prog foo).proc_contract in 
-  foo_contr.contr_formals
 
 (* Extract the formal output parameters identifiers of a procedure foo in program prog *)
 let return_ids_of foo prog =
   let foo_contr =(find_proc prog foo).proc_contract in 
   foo_contr.contr_returns
-
-let precond_of foo prog =
-  (find_proc prog foo).proc_contract.contr_precond
 
 let postcond_of foo prog =
   (find_proc prog foo).proc_contract.contr_postcond
@@ -66,15 +47,6 @@ let formal_return_terms foo prog =
         let srt = Grass.IdMap.find var locs in
         Grass.Var (var, srt.var_sort) :: acc)
       [] (returns)
-
-let fold_spec_list f acc specs =
-  let folded =List.fold_left (fun facc a ->
-    match a with
-    | SL slf -> mk_sep_star facc  slf
-    | FOL f -> mk_sep_star facc (mk_pure f))
-    acc (List.map (fun s -> s.spec_form) specs)
-  in
-  [{(List.hd (List.rev specs)) with spec_form=SL folded}]
 
 let fold_spec_form_sl f acc specs =
   let folded = List.fold_left (fun facc a ->
@@ -94,13 +66,6 @@ let subst_precond_formals foo prog args =
     |> List.fold_left (fun sm (f, Symbt a) -> IdMap.add f a sm) IdMap.empty 
   in
   subst_symb_spec_list sm (precond_of foo prog) 
-
-let subst_spec_list_formals_symb state sl proc args =
-  let sm = 
-    List.combine (formal_ids_of proc state.prog) args
-    |> List.fold_left (fun sm (f, Symbt a) -> IdMap.add f a sm) IdMap.empty 
-  in
-  subst_symb_spec_list sm sl
 
 let subst_spec_list_formals state sl proc args =
   let sm = 

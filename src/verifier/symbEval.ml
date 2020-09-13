@@ -1,10 +1,48 @@
 (** {5 Symbolic evaluation of terms and formulas inspired by Viper's Silicon} *)
 
-open Util
 open Printf
-open Grass
+open Util
 open GrassUtil
+open Grass
+open Prog
 open SymbState
+open SymbConsume
+open SlUtil 
+
+(* Extract the formal input parameter identifiers of a procedure foo in program prog *)
+let formal_ids_of foo prog =
+  let foo_contr =(find_proc prog foo).proc_contract in 
+  foo_contr.contr_formals
+
+let precond_of foo prog =
+  (find_proc prog foo).proc_contract.contr_precond
+
+let subst_symb_spec_form subst_map sf =
+  match sf with
+  | SL slf -> SymbSL (Symbslf (SlUtil.subst_consts subst_map slf))
+  | FOL f -> SymbFOL (Symbf (GrassUtil.subst_consts subst_map f))
+
+(* Substitutes identifiers of a spec list with other terms according to substitution map [subst_map]. *)
+let subst_symb_spec_list subst_map sl =
+  List.map (fun s -> 
+    let sf = subst_symb_spec_form subst_map s.spec_form in
+    mk_symb_spec sf s.spec_kind s.spec_name s.spec_msg s.spec_pos) sl
+
+let fold_spec_list f acc specs =
+  let folded =List.fold_left (fun facc a ->
+    match a with
+    | SL slf -> mk_sep_star facc  slf
+    | FOL f -> mk_sep_star facc (mk_pure f))
+    acc (List.map (fun s -> s.spec_form) specs)
+  in
+  [{(List.hd (List.rev specs)) with spec_form=SL folded}]
+
+let subst_spec_list_formals_symb state sl proc args =
+  let sm = 
+    List.combine (formal_ids_of proc state.prog) args
+    |> List.fold_left (fun sm (f, Symbt a) -> IdMap.add f a sm) IdMap.empty 
+  in
+  subst_symb_spec_list sm sl
 
 (** eval rules *)
 let string_of_idset s =
@@ -12,6 +50,29 @@ let string_of_idset s =
   |> List.map (fun e -> string_of_ident e)
   |> String.concat ", "
   |> sprintf "[%s]"
+
+let eval_symb_term state (symbt: symb_term) (fc: symb_state -> symb_term -> 'a option) =
+  fc state symbt
+
+let rec eval_symb_terms state (ts: symb_term list) (fc: symb_state -> symb_term list -> 'a option) =
+  let rec eeval state tts symb_ts fc =
+    match tts with
+    | [] -> fc state (List.rev symb_ts) (* reverse due to the cons op below *)
+    | hd :: tts' ->
+        eval_symb_term state hd (fun state' t ->
+          eeval state' tts' (t :: symb_ts) fc)
+  in
+  eeval state ts [] fc
+
+and consumes_symb_sf state (assns: symb_spec list) fc =
+  consumes_symb_sf_impl state assns eval_symb_terms eval_symb_term fc
+
+and consume_symb_sf state heap (sf: symb_spec_form) (fc: symb_state -> symb_heap -> term -> 'a option) =
+  consume_symb_sf_impl state heap sf eval_symb_terms eval_symb_term fc
+
+and consume_symb_sl_form state heap (f: symb_sl_form) (fc: symb_state -> symb_heap -> term -> 'a option) =
+  consume_symb_sl_form_impl state heap f eval_symb_terms eval_symb_term fc
+
 
 (** eval_terms evaluates a term list element-wise using the eval
   functions below, accumulating the resulting symbolic terms into the symb_ts list. *)
@@ -31,6 +92,7 @@ and eval_term state t (fc: symb_state -> symb_term -> 'a option) =
     lineSep (string_of_term t) (string_of_state state));
   match t with
   | Var (id1, srt1) ->
+    Debug.debug(fun() -> sprintf "Var Term\n");
     (match find_symb_val state.store id1 with
     | Symbt (Var (id2, srt2)) as tt -> 
         if srt1 = srt2
@@ -74,7 +136,8 @@ and eval_term state t (fc: symb_state -> symb_term -> 'a option) =
     eval_term state t (fun state' t' -> fc state' t')
   | App (SetEnum, ts, srt) -> todo "set enum non-singleton"
   | App (Destructor d, [t], srt) -> todo "eval Destructor"
-  | App (FreeSym id1, ts, srt1) -> 
+  | App (FreeSym id1, [], srt1) -> 
+      Debug.debug(fun() -> sprintf "FreeSym [] srt: %s\n" (string_of_sort srt1));
     (match find_symb_val state.store id1 with
     | Symbt (Var (id2, srt2)) as tt -> 
         if srt1 = srt2
@@ -85,6 +148,35 @@ and eval_term state t (fc: symb_state -> symb_term -> 'a option) =
         Debug.debug( fun () -> sprintf "IntConst (%s)\n" (string_of_symb_term tt));
         fc state tt
     | _ as tt -> fc state tt)
+  | App (FreeSym id, ts, srt1) -> 
+      Debug.debug(fun() -> sprintf "FreeSym ts (%s) srt: %s\n" (string_of_terms ts) (string_of_sort srt1));
+      eval_terms state ts (fun state' ts' ->
+        (*let precond' = fold_spec_list mk_sep_star (mk_atom Emp []) (precond_of id state'.prog) in*)
+        (*
+        let precond_symb_sf' = 
+          subst_spec_list_formals_symb state precond' id ts' 
+        in
+        *)
+        fc state' (Symbt (App (Old, List.map (fun t -> term_of t) ts', srt1))))
+
+        (*
+        consumes_symb_sf state' precond_symb_sf' (fun state2' _ ->
+          fc state2'.heap snap
+          let proc_contr = (IdMap.find id state.prog.prog_procs).proc_contract in
+            
+          Debug.debug(fun () -> sprintf "state %s\n" (string_of_state state2'));
+          let state3' = {state2' with store = store'} in
+
+          (* fold multiple postcondition specs into 1 for the callee *)
+          let postcond' = fold_spec_list mk_sep_star (mk_atom Emp []) (postcond_of id state'.prog)in
+          let post_symbf' =
+            let p =
+              subst_spec_list_formals state3' postcond' id ts'
+            in
+            subst_spec_list_return_ids state3' p id lhs
+          in
+          Debug.debug(fun () -> sprintf "\nPostcond[x -> e'][y->z] = %s\n" (string_of_symb_spec_list post_symbf'));
+          produces_symb_sf state4' post_symbf' (fresh_snap_tree ()) (fun state4' -> fc state4'))*)
   | App (IntConst n, [], srt) as i -> 
         Debug.debug (fun () -> sprintf "IntConst (%s)\n" (string_of_term i));
         fc state (Symbt i)
@@ -95,19 +187,6 @@ and eval_term state t (fc: symb_state -> symb_term -> 'a option) =
        fc state2' (Symbt (App (Old, List.map (fun t -> term_of t) ts', srt))))
   | App (BoolConst b, ts, srt) as f -> fc state (Symbt f)
   | App (symb, ts, srt) -> todo "eval_term catch all"
-
-let eval_symb_term state (symbt: symb_term) (fc: symb_state -> symb_term -> 'a option) =
-  fc state symbt
-
-let rec eval_symb_terms state (ts: symb_term list) (fc: symb_state -> symb_term list -> 'a option) =
-  let rec eeval state tts symb_ts fc =
-    match tts with
-    | [] -> fc state (List.rev symb_ts) (* reverse due to the cons op below *)
-    | hd :: tts' ->
-        eval_symb_term state hd (fun state' t ->
-          eeval state' tts' (t :: symb_ts) fc)
-  in
-  eeval state ts [] fc
 
 (** eval_forms evaluates a formula list fs element-wise using the eval
   function below, accumulating the resulting formulas carrying symbolic values *)
@@ -134,6 +213,16 @@ and eval_form state f (fc: symb_state -> symb_form -> 'a option) =
       fc state' (Symbf (BoolOp (op, List.map (fun f -> form_of f) fs'))))
   | Binder (binder, [], f, a) -> fc state (Symbf (Binder (binder, [], f, a)))
   | Binder (binder, ts, f, _) -> todo "eval binder catch all"
+
+(* Handles a cyclical depdendency *)
+and consumes state (assns: Prog.spec list) fc =
+  consumes_impl state assns eval_form eval_terms eval_term fc
+
+and consume_sl_form state heap (f: Sl.form) (fc: symb_state -> symb_heap -> term -> 'a option) =
+  consume_sl_form_impl state heap f eval_form eval_terms eval_term fc
+
+and consume_form state heap (f: Grass.form) (fc: symb_state -> symb_heap -> term -> 'a option) = 
+  consume_form_impl state heap f eval_form fc
 
 (** eval_sl_forms evaluates a sl formula list fs element-wise using the eval
   function below, accumulating the resulting formulas carrying symbolic values *)

@@ -23,8 +23,7 @@ lemma empty_list(x: Node)
   unfold lseg(x, x);
   fold lseg(x, x);
 }
-*/
-
+*/ 
 procedure delete(x: Node)
   requires lseg(x, null)
   ensures emp

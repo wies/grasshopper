@@ -63,6 +63,12 @@ let string_of_symb_terms ts =
   |> String.concat ", "
   |> sprintf "[%s]"
 
+let string_of_terms ts =
+  ts
+  |> List.map (fun t -> string_of_term t)
+  |> String.concat ", "
+  |> sprintf "[%s]"
+
 let string_of_symb_form f =
   sprintf "%s" (string_of_form (form_of f))
 

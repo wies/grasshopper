@@ -1,12 +1,33 @@
-options "-symbexec"
+options "-symbexec-v2"
 
 procedure foo(a: Int) returns (b: Int)
   requires a == 2
   ensures b == 4
 
-procedure pure_proc_call(c: Int, d:Int)
+procedure pure_proc_call(c: Int, d: Int)
   requires c == 2 && d == c
   ensures c == 4
 {
   c := foo(c);
+}
+
+struct Node {
+   var  data: Int;
+   var  next: Node;
+}
+
+function f(x: Node, y: Node) returns (z: Int)
+  requires acc(x) &*& acc(y)
+  ensures z == x.data + y.data
+{
+  x.data + y.data
+}
+
+procedure add_nodes(a: Node, b: Node) returns (c: Node)
+  requires acc(a) &*& acc(b)
+  ensures acc(a) &*& acc(b) &*& acc(c) &*& c.data == a.data + b.data
+{
+  var z := f(a, b);
+  c := new Node();
+  c.data := z;
 }
