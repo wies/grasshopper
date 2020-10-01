@@ -1,0 +1,163 @@
+struct Chan {
+  var act: Action;
+}
+
+/* The protocol is
+start:   !Incr(x)[x >= 0].incr(x)
+       + !Decr(x)[x > 0].decr(x)
+       + !End.end
+incr(x): ?Value(y)[y = x+1].start
+decr(x): ?Value(y)[y = x-1].start
+end: -
+*/
+
+struct Action {
+  // state is
+  // 1: start
+  // 2: incr
+  // 3: decr
+  // 4: end
+  var state: Int;
+  // 1st or 2nd process
+  var role: Bool;
+  // the 'x' in the protocol
+  var value: Int;
+}
+
+predicate validAction(a: Action) {
+  acc(a) &*& (
+    a.state >= 1 &&
+    a.state <= 4 &&
+    (a.state == 2 ==> a.value >= 0) &&
+    (a.state == 3 ==> a.value > 0)
+  )
+}
+
+datatype Flag = Incr | Decr | Value | End;
+
+
+procedure send(c: Chan, flag: Flag, msg: Int)
+  requires acc(c) &*& validAction(c.act)
+  // who can send when
+  requires (c.act.state == 1 &&  c.act.role) ||
+           (c.act.state == 2 && !c.act.role) ||
+           (c.act.state == 3 && !c.act.role)
+  // what can be sent when
+  requires c.act.state == 1 ==> (
+            (flag == Incr && msg >= 0) ||
+            (flag == Decr && msg > 0) ||
+            (flag == End ) )
+  requires c.act.state == 2 ==> (flag == Value && msg == c.act.value + 1)
+  requires c.act.state == 3 ==> (flag == Value && msg == c.act.value - 1)
+  // the channel is still there but with an updated action
+  ensures c == old(c)
+  ensures acc(c) &*& validAction(c.act)
+  // update the protocol state
+  ensures old(c.act.state) == 1 && old(flag) == Incr ==> (c.act.value == msg && c.act.state == 2)
+  ensures old(c.act.state) == 1 && old(flag) == Decr ==> (c.act.value == msg && c.act.state == 3)
+  ensures old(c.act.state) == 1 && old(flag) == End ==> c.act.state == 4
+  ensures old(c.act.state) == 2 ==> c.act.state == 1
+  ensures old(c.act.state) == 3 ==> c.act.state == 1
+  // role is unchanged
+  ensures old(c.act.role) == c.act.role
+
+procedure receive(c: Chan) returns (flag: Flag, msg: Int)
+  requires acc(c) &*& validAction(c.act)
+  // who can receive when
+  requires (c.act.state == 1 && !c.act.role) ||
+           (c.act.state == 2 &&  c.act.role) ||
+           (c.act.state == 3 &&  c.act.role)
+  // the channel is still there but with an updated action
+  ensures c == old(c)
+  ensures acc(c) &*& validAction(c.act)
+  // what can be received when, next state
+  ensures old(c.act.state) == 1 ==> (
+            (flag == Incr && msg >= 0 && c.act.state == 2 && c.act.value == msg) ||
+            (flag == Decr && msg > 0 && c.act.state == 3 && c.act.value == msg) ||
+            (flag == End  && c.act.state == 4) )
+  ensures old(c.act.state) == 2 ==> (flag == Value && msg == old(c.act.value) + 1 && c.act.state == 1)
+  ensures old(c.act.state) == 3 ==> (flag == Value && msg == old(c.act.value) - 1 && c.act.state == 1)
+  // role is unchanged
+  ensures old(c.act.role) == c.act.role
+
+
+procedure close(c: Chan)
+  requires acc(c) &*& validAction(c.act)
+  requires c.act.state == 4
+  ensures emp
+
+
+procedure new_chan() returns (c1: Chan, c2: Chan)
+  requires emp
+  ensures acc(c1) &*& validAction(c1.act) &*&  c1.act.role &*& c1.act.state == 1
+  ensures acc(c2) &*& validAction(c2.act) &*& !c2.act.role &*& c2.act.state == 1
+
+
+//client code
+
+procedure non_det() returns (choice: Bool)
+  requires emp
+  ensures emp
+{
+}
+
+procedure thread1(c: Chan)
+  requires acc(c) &*& validAction(c.act)
+  requires c.act.role && c.act.state == 1
+  ensures emp
+{
+  var done := false;
+  while (!done)
+    invariant acc(c) &*& validAction(c.act)
+    invariant c.act.role
+    invariant !done ==> c.act.state == 1
+    invariant done ==> c.act.state == 4
+  {
+    if (non_det()) {
+      send(c, Incr, 10);
+      var flag, res := receive(c);
+      pure assert(res == 11);
+    } else if (non_det()) {
+      send(c, Decr, 10);
+      var flag, res := receive(c);
+      pure assert(res == 9);
+    } else {
+      done := true;
+      send(c, End, 0);
+    }
+  }
+  close(c);
+}
+
+procedure thread2(c: Chan)
+  requires acc(c) &*& validAction(c.act)
+  requires !c.act.role && c.act.state == 1
+  ensures emp
+{
+  var done := false;
+  while (!done)
+    invariant acc(c) &*& validAction(c.act)
+    invariant !c.act.role
+    invariant !done ==> c.act.state == 1
+    invariant done ==> c.act.state == 4
+  {
+    var flag, x := receive(c);
+    if (flag == Incr) {
+      send(c, Value, x+1);
+    } else if (flag == Decr) {
+      send(c, Value, x-1);
+    } else if (flag == End) {
+      done := true;
+    } else {
+      pure assert false;
+    }
+  }
+  close(c);
+}
+
+procedure main()
+{
+  var c1,c2 := new_chan();
+  thread2(c2); //TODO should be in a fork
+  thread1(c1);
+}
