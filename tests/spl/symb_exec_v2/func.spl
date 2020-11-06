@@ -11,6 +11,7 @@ procedure pure_proc_call(c: Int, d: Int)
   c := foo(c);
 }
 
+/*
 struct Node {
    var  data: Int;
    var  next: Node;
@@ -31,3 +32,4 @@ procedure add_nodes(a: Node, b: Node) returns (c: Node)
   c := new Node();
   c.data := z;
 }
+*/

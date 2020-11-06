@@ -1,5 +1,7 @@
 include "../include/bstree_rec.spl";
 
+// just use the tree predicate. and remove implict ghost var.
+// can techinaclly do this with the others in this file. 
 procedure contains(root: Node, val: Int, implicit ghost content: Set<Int>)
   returns (res: Bool)
   requires tree_set(root, content)

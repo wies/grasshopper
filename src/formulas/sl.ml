@@ -57,6 +57,8 @@ let rec pr_form ppf = function
   | Atom (Emp, _, _) -> fprintf ppf "emp"
   | Atom (Region, [r], _) -> 
       (match r with
+      | Grass.App (Grass.SetEnum, [o; f], _) ->
+          fprintf ppf "acc(%a.@[%a@])" Grass.pr_term o Grass.pr_term f 
       | Grass.App (Grass.SetEnum, [t], _) ->
           fprintf ppf "acc(@[%a@])" Grass.pr_term t
       | _ ->

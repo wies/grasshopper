@@ -105,6 +105,7 @@ let mk_atom ?pos s args = Atom (s, args, pos)
 let mk_emp pos = mk_atom ?pos:pos Emp []
 let mk_cell ?pos t = mk_atom ?pos:pos Region [GrassUtil.mk_setenum [t]]
 let mk_region ?pos r = mk_atom ?pos:pos Region [r]
+let mk_field_region ?pos r1 r2 = mk_atom ?pos:pos Region [r1; r2]
 let mk_pred ?pos p ts = mk_atom ?pos:pos (Pred p) ts
 let mk_pts ?pos f a b = 
   mk_sep_star ?pos:pos (mk_eq ?pos:pos (GrassUtil.mk_read f [a]) b) (mk_cell ?pos:pos a)

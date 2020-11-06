@@ -45,6 +45,7 @@ lemma compose(x: Node, y: Node, z: Node)
   if (x == y) {
   } else {
     compose(x.next, y, z);
+    // ignore
   }
 }
 
@@ -73,6 +74,7 @@ lemma fold_right_with_frame(x: Node, y: Node, z: Node)
   ensures lseg(x, z) &*& lseg(z, null)
 {
   fold_right(x, y);
+  // ignore
 }
 
 procedure delete(x: Node)

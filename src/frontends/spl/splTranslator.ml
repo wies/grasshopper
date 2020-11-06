@@ -502,6 +502,10 @@ let convert cu =
   in
   let rec convert_sl_form locals = function
     | Emp pos -> SlUtil.mk_emp (Some pos)
+    | PredApp (AccessPred, [obj; fld], pos) ->
+        let t1 = convert_term locals obj in
+        let t2 = convert_term locals fld in
+        SlUtil.mk_field_region ~pos:pos t1 t2
     | PredApp (AccessPred, [e], pos) ->
         let t = convert_term locals e in
         SlUtil.mk_region ~pos:pos t
