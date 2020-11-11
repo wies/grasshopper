@@ -243,30 +243,14 @@ let resolve_names cu =
       | ProcCall (("acc", _ as id), args, pos) ->
           let args1 = List.map (re locals tbl) args in
           (match args1 with
-          (* a single argument, if the flag is set, in the field case you can decompose into the field and object.*)
-          | [arg] ->
-              (* conditional check for global flag object-mode keep current code, and field-based code we have a different translation. *)
-              if !Config.symbexec_v2 then
-                (match type_of_expr cu locals arg with
-                | SetType _ | MapType _ -> 
-                    PredApp (AccessPred, [arg], pos)
-                | ty ->
-                    PredApp (AccessPred, [Setenum (resolve_typ types pos tbl ty, [arg], pos)], pos))
-              else
-                (match args1 with
-                | [obj; field] ->
-                  (match type_of_expr cu locals arg with
-                  | SetType _ | MapType _ -> 
-                      PredApp (AccessPred, [obj; field], pos)
-                  | ty ->
-                      PredApp (AccessPred, [Setenum (resolve_typ types pos tbl ty, [obj; field], pos)], pos))
-                | [a] -> 
-                  (match type_of_expr cu locals arg with
-                  | SetType _ | MapType _ -> 
-                      PredApp (AccessPred, [a], pos)
-                  | ty ->
-                      PredApp (AccessPred, [Setenum (resolve_typ types pos tbl ty, [a], pos)], pos))
-                | _ -> pred_arg_mismatch_error pos id 1)
+          | [Read (obj, field, pos)] when !Config.symbexec_v2 ->
+              PredApp (AccessPred, [obj; field], pos)
+          | [arg] when not !Config.symbexec_v2 ->
+            (match type_of_expr cu locals arg with
+            | SetType _ | MapType _ -> 
+              PredApp (AccessPred, [arg], pos)
+            | ty ->
+              PredApp (AccessPred, [Setenum (resolve_typ types pos tbl ty, [arg], pos)], pos))
           | [map; idx] ->
               (match type_of_expr cu locals map with
               | ArrayType typ ->

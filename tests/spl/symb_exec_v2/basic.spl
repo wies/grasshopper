@@ -60,8 +60,8 @@ struct Node {
 }
 
 procedure if3(x: Node, y: Node)
-  requires acc(x) &*& acc(y)
-  ensures acc(x) &*& x.next == x &*& acc(y) &*& y.next == x
+  requires acc(x.next) &*& acc(y.next)
+  ensures acc(x.next) &*& x.next == x &*& acc(y.next) &*& y.next == x
 {
   if (x.next != x) {
     x.next := x;
@@ -102,14 +102,14 @@ struct DNode {
 }
 
 procedure loop1(x: DNode)
-  requires acc(x) &*& x.data == 0
-  ensures acc(x) &*& x.data == 10
+  requires acc(x.data) &*& x.data == 0
+  ensures acc(x.data) &*& x.data == 10
 {
   var i := 1;
   var y := new DNode();
   y.data := 10;
   while (i < 11)
-    invariant acc(x) &*& acc(y) &*& x.data == i - 1 &*& y.data == 10 &*& i <= 11
+    invariant acc(x.data) &*& acc(y.data) &*& x.data == i - 1 &*& y.data == 10 &*& i <= 11
   {
     x.data := i;
     y.data := 10;

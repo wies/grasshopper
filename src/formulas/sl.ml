@@ -55,10 +55,10 @@ let rec pr_form ppf = function
   | SepOp (SepIncl, f1, f2, _) -> 
       fprintf ppf "@[<2>%a@] -**@ %a" pr_form f1 pr_form f2
   | Atom (Emp, _, _) -> fprintf ppf "emp"
+  | Atom (Region, [o; f], _) ->
+      fprintf ppf "acc(%a.@[%a@])" Grass.pr_term o Grass.pr_term f 
   | Atom (Region, [r], _) -> 
       (match r with
-      | Grass.App (Grass.SetEnum, [o; f], _) ->
-          fprintf ppf "acc(%a.@[%a@])" Grass.pr_term o Grass.pr_term f 
       | Grass.App (Grass.SetEnum, [t], _) ->
           fprintf ppf "acc(@[%a@])" Grass.pr_term t
       | _ ->
