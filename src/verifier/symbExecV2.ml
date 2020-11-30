@@ -63,14 +63,14 @@ let declare_contract proc contract =
 let subst_precond_formals foo prog args =
   let sm = 
     List.combine (formal_ids_of foo prog) args
-    |> List.fold_left (fun sm (f, Symbt a) -> IdMap.add f a sm) IdMap.empty 
+    |> List.fold_left (fun sm (f, a) -> IdMap.add f a sm) IdMap.empty 
   in
-  subst_symb_spec_list sm (precond_of foo prog) 
+  subst_spec_list sm (precond_of foo prog) 
 
 let subst_spec_list_formals state sl proc args =
   let sm = 
     List.combine (formal_ids_of proc state.prog) args
-    |> List.fold_left (fun sm (f, Symbt a) -> IdMap.add f a sm) IdMap.empty 
+    |> List.fold_left (fun sm (f, a) -> IdMap.add f a sm) IdMap.empty 
   in
   subst_spec_list sm sl
 
@@ -86,7 +86,7 @@ let subst_spec_list_return_ids state postcond foo lhs_ids =
     |> List.fold_left (fun sm (id, t) ->
         IdMap.add id t sm) IdMap.empty 
   in
-  subst_symb_spec_list sm_lhs postcond
+  subst_spec_list sm_lhs postcond
 
 let pr_spec_form_list sfl =
   sfl
@@ -160,11 +160,11 @@ let rec exec state comm (fc: symb_state -> 'a option) =
       );
       eval_terms state (List.map (fun arg -> unoldify_term arg) args) (fun state' args' ->
         let precond' = fold_spec_list mk_sep_star (mk_atom Emp []) (precond_of foo state'.prog) in
-        let precond_symb_sf' = 
-          subst_spec_list_formals_symb state precond' foo args'
+        let precond_sf' = 
+          subst_spec_list_formals state precond' foo args'
         in
-        Debug.debug(fun () -> sprintf "\nPrecond[x -> e'] = %s\n" (string_of_symb_spec_list precond_symb_sf'));
-        consumes_symb_sf state' precond_symb_sf' (fun state2' _ ->
+        Debug.debug(fun () -> sprintf "\nPrecond[x -> e'] = %s\n" (pr_spec_form_list precond_sf'));
+        consumes state' precond_sf' (fun state2' _ ->
           let proc_contr = (IdMap.find foo state.prog.prog_procs).proc_contract in
           let store' =
             List.combine proc_contr.contr_returns lhs
@@ -179,14 +179,14 @@ let rec exec state comm (fc: symb_state -> 'a option) =
 
           (* fold multiple postcondition specs into 1 for the callee *)
           let postcond' = fold_spec_list mk_sep_star (mk_atom Emp []) (postcond_of foo state'.prog)in
-          let post_symbf' =
+          let post_sf' =
             let p =
               subst_spec_list_formals state3' postcond' foo args'
             in
             subst_spec_list_return_ids state3' p foo lhs
           in
-          Debug.debug(fun () -> sprintf "\nPostcond[x -> e'][y->z] = %s\n" (string_of_symb_spec_list post_symbf'));
-          produces_symb_sf state3' post_symbf' (fresh_snap_tree ()) (fun state4' -> fc state4')))
+          Debug.debug(fun () -> sprintf "\nPostcond[x -> e'][y->z] = %s\n" (pr_spec_form_list post_sf'));
+          produces state3' post_sf' (fresh_snap_tree ()) (fun state4' -> fc state4')))
   | Basic (Havoc {havoc_args=vars}, pp) -> 
     let vars_terms =
       let locs = Prog.locals_of_proc state.proc in
@@ -244,7 +244,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
           lineSep (string_of_state state)
       );
       eval_term state d.dispose_arg (fun state' t' ->
-        consume_symb_sl_form state' state'.heap (Symbslf (mk_cell (term_of t'))) (fun state'' h'' snap ->
+        consume_sl_form state' state'.heap (mk_cell (term_of t')) (fun state'' h'' snap ->
           fc state''))
   | Loop (l, pp) ->
       Debug.debug (fun () -> 
@@ -275,7 +275,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
           lineSep (string_of_state state)
     );
     eval_terms state pc.pred_args (fun state' args' ->
-      Debug.debug (fun () -> sprintf "unfold terms (%s)\n" (string_of_symb_term_list args'));
+      Debug.debug (fun () -> sprintf "unfold terms (%s)\n" (string_of_term_list args'));
       let body = (IdMap.find pc.pred_name state'.prog.prog_preds).pred_body in
       match body with
       | Some b ->
@@ -283,10 +283,10 @@ let rec exec state comm (fc: symb_state -> 'a option) =
         let ids = (IdMap.find pc.pred_name state.prog.prog_preds).pred_contract.contr_formals in 
         let sm =
           List.combine ids args' 
-          |> List.fold_left (fun sm (id, Symbt a) -> IdMap.add id a sm) IdMap.empty 
+          |> List.fold_left (fun sm (id, a) -> IdMap.add id a sm) IdMap.empty 
         in
         let body' = subst_symb_spec_form sm b.spec_form in
-        Debug.debug (fun () -> sprintf "body[x -> e] (%s)\n" (string_of_symb_spec_form body'));
+        Debug.debug (fun () -> sprintf "body[x -> e] (%s)\n" (string_of_spec_form body'));
         consume_sl_form state' state'.heap (SlUtil.mk_pred pc.pred_name pc.pred_args) (fun state2 heap' snap ->
 
           Debug.debug( fun() -> sprintf "state2 in produce symb sf %s\n" (string_of_state state2));
@@ -304,7 +304,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
           lineSep (string_of_state state)
     );
     eval_terms state pc.pred_args (fun state' args' ->
-      Debug.debug (fun () -> sprintf "fold terms (%s)\n" (string_of_symb_term_list args'));
+      Debug.debug (fun () -> sprintf "fold terms (%s)\n" (string_of_term_list args'));
       let body = (IdMap.find pc.pred_name state.prog.prog_preds).pred_body in
       match body with
       | Some b ->
@@ -312,10 +312,10 @@ let rec exec state comm (fc: symb_state -> 'a option) =
         let ids = (IdMap.find pc.pred_name state.prog.prog_preds).pred_contract.contr_formals in 
         let sm =
           List.combine ids args' 
-          |> List.fold_left (fun sm (id, Symbt a) -> IdMap.add id a sm) IdMap.empty 
+          |> List.fold_left (fun sm (id, a) -> IdMap.add id a sm) IdMap.empty 
         in
         let body' = subst_symb_spec_form sm b.spec_form in
-        Debug.debug (fun () -> sprintf "body[x -> e] (%s)\n" (string_of_symb_spec_form body'));
+        Debug.debug (fun () -> sprintf "body[x -> e] (%s)\n" (string_of_spec_form body'));
         consume_symb_sf state' state'.heap body' (fun state2 heap' snap ->
           produce_sl_form state2 (SlUtil.mk_pred pc.pred_name pc.pred_args) snap (fun state3 -> fc state3))
       | None ->

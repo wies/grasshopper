@@ -12,56 +12,14 @@ let todo str = raise (NotYetImplemented str)
 exception SymbExecFail of string
 let raise_err str = raise (SymbExecFail str)
 
-(* symbolic val types, used to reconstruct terms and forms with
- * symbolic identifiers/vars *)
-type symb_term = Symbt of term
-type symb_form = Symbf of form 
-type symb_sl_form = Symbslf of Sl.form 
-
-let mk_symb_term t = Symbt t
-let mk_symb_form f = Symbf f 
-
-let term_of (Symbt t) = t
-let form_of (Symbf f) = f 
-let slform_of (Symbslf slf) = slf 
-
-type symb_spec_form = 
-  | SymbSL of symb_sl_form
-  | SymbFOL of symb_form
-
-type symb_spec = {
-  symb_spec_form: symb_spec_form;
-  spec_kind: spec_kind;
-  spec_name: string;
-  spec_msg: (ident -> (string * string)) option;
-  spec_pos: source_position;
-}
-
-let mk_symb_spec sf k n m p = 
-  {symb_spec_form=sf;
-   spec_kind=k;
-   spec_name=n;
-   spec_msg=m;
-   spec_pos=p}
-
 (** Symbolic values *)
 let mk_fresh_symb_var prefix srt = 
-  let id = fresh_ident prefix in
-  mk_symb_term (mk_var srt id)
+  mk_var srt (fresh_ident prefix) 
 
-let mk_fresh_symb_free_app srt id ts = mk_symb_term (mk_free_app srt id ts)
+let mk_fresh_symb_free_app srt id ts = mk_free_app srt id ts
 
 let ident_of_symb_val (id, _) = id 
 let sort_of_symb_val (_, srt) = srt
-
-let string_of_symb_term t =
-  sprintf "%s" (string_of_term (term_of t))
-
-let string_of_symb_terms ts =
-  ts
-  |> List.map (fun t -> string_of_symb_term t)
-  |> String.concat ", "
-  |> sprintf "[%s]"
 
 let string_of_terms ts =
   ts
@@ -69,41 +27,12 @@ let string_of_terms ts =
   |> String.concat ", "
   |> sprintf "[%s]"
 
-let string_of_symb_form f =
-  sprintf "%s" (string_of_form (form_of f))
-
-let string_of_symb_sl_form f =
-  sprintf "%s" (string_of_format pr_sl_form (slform_of f))
-
 let equal_symb_vals (id1, srt1) (id2, srt2) = 
   if id1 = id2 && srt1 = srt2 
     then true else false
 
-let string_of_symb_spec_form sf = 
-  match sf with
-  | SymbFOL sl -> (string_of_symb_form sl)
-  | SymbSL sl -> (string_of_symb_sl_form sl)
-
-let string_of_symb_spec_list specs =
-  specs 
-  |> List.map (fun sf -> string_of_symb_spec_form sf.symb_spec_form) 
-  |> String.concat ", "
-  |> sprintf "[%s]"
-
 (** Helpers to format prints *)
 let lineSep = "\n--------------------\n"
-
-let string_of_symb_term_list vals =
-  vals
-  |> List.map (fun t -> (string_of_symb_term t))
-  |> String.concat ", "
-  |> sprintf "[%s]"
-
-let string_of_symb_form_list fs =
-  fs 
-  |> List.map (fun v -> (string_of_symb_form v))
-  |> String.concat ", "
-  |> sprintf "[%s]"
 
 let string_of_term_list ts =
   ts 
@@ -119,26 +48,20 @@ let string_of_ident_list ts =
 
 let string_of_symb_store s =
   IdMap.bindings s
-  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_symb_term v))
+  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_term v))
   |> String.concat ", "
   |> sprintf "{%s}"
 
 let string_of_symb_val_map store =
   IdMap.bindings store
-  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_symb_term v))
-  |> String.concat ", "
-  |> sprintf "{%s}"
-
-let string_of_symb_fields fields =
-  IdMap.bindings fields
-  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_symb_term v))
+  |> List.map (fun (k, v) -> (string_of_ident k) ^ ":" ^ (string_of_term v))
   |> String.concat ", "
   |> sprintf "{%s}"
 
 (** Symbolic store:
   maintains a mapping from grasshopper vars to symbolic vals
   ident -> term . *)
-type symb_store = symb_term IdMap.t
+type symb_store = term IdMap.t
 let empty_store = IdMap.empty
 
 let find_symb_val (store: symb_store) (id: ident) =
@@ -311,70 +234,44 @@ let fresh_snap =
 
 (* snap is already a term *)
 
-(** heap elements and symbolic heap
-  The symbolic maintains a multiset of heap chunks which are
-  of the form obj(term, snap, [Id -> V]) or a predicate with an id a
-  snapshot and list of args.
-  *)
+(* heap elements and symbolic heap *)
 type heap_chunk =
-  | Obj of symb_term * term * symb_store
-  | ObjForm of symb_form * term * symb_store
-  | ObjPred of ident * term * symb_term list
-  (*| Eps of symb_val * symb_val IdMap.t (* r.f := e *)*)
+  | Obj of ident * ident * term (* r.id -> (rid, id, snapshot) *)
+  | ObjPred of ident * term list * term (* id, args, snapshot *)
 
-let mk_heap_chunk_obj t snp m =
-  Obj (t, snp, m)
+let mk_heap_chunk_obj id fld snp =
+  Obj (id, fld, snp)
 
-let mk_fresh_heap_chunk_obj t =
-  mk_heap_chunk_obj t (emp_snap) empty_store
+let mk_fresh_heap_chunk_obj id fld =
+  mk_heap_chunk_obj id fld (emp_snap)
 
-let mk_heap_chunk_obj_form f snp m =
-  ObjForm (f, snp, m)
+let mk_heap_chunk_obj_pred id args snp = 
+  ObjPred (id, args, snp)
 
-let mk_heap_chunk_obj_pred id snp vals  =
-  ObjPred (id, snp, vals)
+let get_heap_chunk_snap = function
+  | Obj (_, _, snp) -> snp
+  | ObjPred (_, _, snp) -> snp
 
-let get_pred_chunk_snap = function
-  | ObjPred (_, snp, _) -> snp
-  | _ -> failwith "other chunks don't carry a snapshot" 
-
-let get_field_store = function
-  | Obj (_, _, m) -> m
-  | ObjForm (_, _, m) -> m
-  | ObjPred (_, _, m) -> failwith "pred chunk doesn't carry a store" 
-
-let add_to_heap_chunk_map hc k v =
-  match hc with
-  | Obj (t, snp, m) -> Obj (t, snp, IdMap.add k v m)
-  | ObjForm (f, snp, m) -> ObjForm (f, snp, IdMap.add k v m)
-  | ObjPred (_, _, _) as p -> p
-
-let equal_field_maps fm1 fm2 =
-  IdMap.equal (=) fm1 fm2
-
-let equal_symb_val_lst vs1 vs2 =
-  List.fold_left2 (fun acc v1 v2 ->
-    acc && equal_symb_vals v1 v2)
+let equal_term_lst ts1 ts2 =
+  List.fold_left2 (fun acc t1 t2 ->
+    acc && t1 = t2)
   true vs1 vs2
 
 let equal_heap_chunks stack c1 c2 =
+  let equal_terms t =
+    check_bool stack (empty_prog) t 
+  in
   match c1, c2 with 
-  | Obj (t1, s1, sm1), Obj (t2, s2, sm2)
-  when t1 = t2 && equal_field_maps sm1 sm2 -> true
-  | ObjForm (f1, s1, sm1), ObjForm (f2, s2, sm2)
-  when equal (form_of f1) (form_of f2) && equal_field_maps sm1 sm2 -> true
-  | ObjPred (id1, s1, ts1), ObjPred(id2, s2, ts2)
-  when id1 = id2 && ts1 = ts2 -> true
+  | Obj (id1, _, s1), Obj (id2, _, s2)
+  when equal_terms (smk_and (mk_eq id1 id2) (mk_eq s1 s2)) -> true
+  | ObjPred (id1, args1, s1), ObjPred(id2, args2, s2)
+  when equal_terms (smk_and (mk_eq id1 id2) (mk_eq s1 s2)) && equal_term_lst args1 args2 -> true
   | _ -> false
 
 let string_of_hc chunk =
   match chunk with
-  | Obj (t, snap, symb_fields) ->
-    sprintf "Obj((term:%s, sort:%s), Snap:%s, Fields:%s)" (string_of_symb_term t)
-    (string_of_sort (sort_of (term_of t))) (string_of_term snap) (string_of_symb_fields symb_fields)
-  | ObjForm (f, snap, symb_fields) ->
-    sprintf "ObjForm(%s, Snap:%s, Fields:%s)" (string_of_symb_form f)
-      (string_of_term snap) (string_of_symb_fields symb_fields)
+  | Obj (id, fld, snp) ->
+    sprintf "Obj(id:%s, fld:%s, snp:%s)" (string_of_ident id) (string_of_term fld) (string_of_term snap)
   | ObjPred (id, snap, ts) ->
     sprintf "ObjPred(%s, Snap:%s, terms:%s)" (string_of_ident id)
       (string_of_term snap) (string_of_symb_term_list ts)
@@ -421,11 +318,8 @@ let rec heap_remove_by_term stack h t =
 let heap_remove h stack hchunk = 
   List.filter (fun hc ->
     (match hchunk, hc with
-      | Obj (Symbt t1, snp1, _), Obj (Symbt t2, snp2, _) ->
+      | Obj (t1, snp1, _), Obj (t2, snp2, _) ->
           if (check_bool stack (empty_prog) (mk_eq t1 t2)) then false else true
-      | ObjForm (Symbf f1, snp1, _), ObjForm (Symbf f2, snp2, _) ->
-        if equal f1 f2 && (check_bool stack (empty_prog) (mk_eq snp1 snp2))
-        then false else true
       | ObjPred (id1, snp1, ts1), ObjPred (id2, snp2, ts2) -> 
         if id1 = id2 &&
           (check_bool stack (empty_prog) (mk_eq snp1 snp2)) then false else true

@@ -243,7 +243,7 @@ let resolve_names cu =
       | ProcCall (("acc", _ as id), args, pos) ->
           let args1 = List.map (re locals tbl) args in
           (match args1 with
-          | [Read (obj, field, pos)] when !Config.symbexec_v2 ->
+          | [Read (field, obj, pos)] when !Config.symbexec_v2 ->
               PredApp (AccessPred, [obj; field], pos)
           | [arg] when not !Config.symbexec_v2 ->
             (match type_of_expr cu locals arg with

@@ -324,9 +324,9 @@ let infer_types cu locals ty e =
             let e, _ = it locals (SetType AnyRefType) e in
             PredApp (AccessPred, [e], pos), match_types cu pos ty PermType
         | [obj; field] ->
-            let e1, ty1 = it locals (MapType (AnyRefType, AnyType)) obj in
-            let e2, ty2 = it locals AnyType field in
-            PredApp (AccessPred, [e2; e1], pos), ty
+            let e1, ty2 = it locals AnyType obj in
+            let e2, ty1 = it locals (MapType (AnyRefType, AnyType)) field in
+            PredApp (AccessPred, [e1; e2], pos), ty
         | _ -> pred_arg_mismatch_error pos ("acc", 0) 1)
     | BinaryOp (e1, (OpSepStar as op), e2, _, pos)
     | BinaryOp (e1, (OpSepPlus as op), e2, _, pos)
