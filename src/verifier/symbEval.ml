@@ -104,7 +104,7 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
       (match map with
       | (App (FreeSym id, [], srt1) | Var (id, srt1)) ->
           eval_term state t (fun state' t' ->
-            let hc = heap_find_by_symb_term state.pc state.heap t') in
+            let hc = heap_find_by_symb_term state.pc state.heap t' in
             let h' = heap_remove state.heap state.pc hc in
             let v = 
               (match maybe_find_symb_val (get_field_store hc) id with
@@ -118,7 +118,7 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
             in
             let hc_updated = add_to_heap_chunk_map hc id v in
             let h_new, stack = heap_add h' state.pc hc_updated in
-            fc {state with heap=h_new; pc=stack} (App (FreeSym v_map, [t'], srt))
+            fc {state with heap=h_new; pc=stack} (App (FreeSym v_map, [t'], srt)))
       | _ -> todo "map catch all")
   | App (Read, map :: t :: ts, srt) -> todo "eval read"
   | App (Write, [map; t1; t2], srt) -> todo "eval write"
@@ -155,7 +155,6 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
         fc state' (App (Old, ts', srt1)))
 
         consumes_symb_sf state' precond_symb_sf' (fun state2' _ ->
-          fc state2'.heap snap
           let proc_contr = (IdMap.find id state.prog.prog_procs).proc_contract in
             
           Debug.debug(fun () -> sprintf "state %s\n" (string_of_state state2'));

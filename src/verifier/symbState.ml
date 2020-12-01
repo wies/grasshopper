@@ -255,7 +255,7 @@ let get_heap_chunk_snap = function
 let equal_term_lst ts1 ts2 =
   List.fold_left2 (fun acc t1 t2 ->
     acc && t1 = t2)
-  true vs1 vs2
+  true ts1 ts2
 
 let equal_heap_chunks stack c1 c2 =
   let equal_terms t =
@@ -263,18 +263,18 @@ let equal_heap_chunks stack c1 c2 =
   in
   match c1, c2 with 
   | Obj (id1, _, s1), Obj (id2, _, s2)
-  when equal_terms (smk_and (mk_eq id1 id2) (mk_eq s1 s2)) -> true
+  when id1 = id2 && equal_terms (mk_eq s1 s2) -> true
   | ObjPred (id1, args1, s1), ObjPred(id2, args2, s2)
-  when equal_terms (smk_and (mk_eq id1 id2) (mk_eq s1 s2)) && equal_term_lst args1 args2 -> true
+  when id1 = id2 && equal_terms (mk_eq s1 s2) && equal_term_lst args1 args2 -> true
   | _ -> false
 
 let string_of_hc chunk =
   match chunk with
   | Obj (id, fld, snp) ->
-    sprintf "Obj(id:%s, fld:%s, snp:%s)" (string_of_ident id) (string_of_term fld) (string_of_term snap)
-  | ObjPred (id, snap, ts) ->
-    sprintf "ObjPred(%s, Snap:%s, terms:%s)" (string_of_ident id)
-      (string_of_term snap) (string_of_symb_term_list ts)
+    sprintf "Obj(id:%s, fld:%s, snp:%s)" (string_of_ident id) (string_of_ident fld) (string_of_term snp)
+  | ObjPred (id, args, snp) ->
+    sprintf "ObjPred(%s, args:%s, snp:%s)" (string_of_ident id)
+      (string_of_term snp) (string_of_term_list args)
 
 type symb_heap = heap_chunk list
 
@@ -282,45 +282,44 @@ let heap_add h stack hchunk = (hchunk :: h, stack)
 
 let rec heap_find_by_symb_term stack h t =
   match h with
-  | [] -> raise (HeapChunkNotFound (sprintf "for id(%s) %s" (string_of_symb_term t) (string_of_sort (sort_of (term_of t)))))
-  | Obj (Symbt tt, _, _) as c :: h' ->
-      if (check_bool stack (empty_prog) (mk_eq tt (term_of t))) then c else heap_find_by_symb_term stack h' t
+  | [] -> raise (HeapChunkNotFound (sprintf "for id(%s) %s" (string_of_term t) (string_of_sort (sort_of t))))
+  | Obj (obj, id, tt) as c :: h' ->
+      if (check_bool stack (empty_prog) (mk_eq tt t)) then c else heap_find_by_symb_term stack h' t
   | ObjPred (id1, _, _) as c :: h' ->
-      let id2 = free_symbols_term (term_of t) in
+      let id2 = free_symbols_term t in
       if IdSet.mem id1 id2 then c else heap_find_by_symb_term stack h' t
-  | _ :: h' -> heap_find_by_symb_term stack h' t
 
-let rec heap_find_pred_chunk stack h id ts =
+let mk_and_args args1 args2 = 
+  List.combine args1 args2
+  |> List.map (fun (t1, t2) -> mk_eq t1 t2)
+  |> smk_and
+
+let rec heap_find_pred_chunk stack h id args =
   match h with
   | [] -> raise (HeapChunkNotFound (sprintf "for ident (%s)" (string_of_ident id)))
-  | ObjPred(id1, _, ts1) as p :: h'
+  | ObjPred(id1, args1, ts1) as p :: h'
     when id = id1 ->
-      let ts_conj =
-        List.combine ts ts1
-        |> List.map (fun (t1, t2) -> mk_eq (term_of t1) (term_of t2))
-        |> smk_and
-      in
-      if id = id1 && (check_bool stack (empty_prog) ts_conj) then
-        p else heap_find_pred_chunk stack h' id ts
-  | p :: h' -> heap_find_pred_chunk stack h' id ts
+      let ts_conj = mk_and_args args1 args in
+      if (check_bool stack (empty_prog) ts_conj) then
+        p else heap_find_pred_chunk stack h' id args 
+  | p :: h' -> heap_find_pred_chunk stack h' id args 
 
 let rec heap_remove_by_term stack h t =
-  let chunk = heap_find_by_symb_term stack h (Symbt t) in
+  let chunk = heap_find_by_symb_term stack h t in
   (chunk, List.filter (fun hc ->
       match hc with
-      | Obj (Symbt t1, _, _) ->
+      | Obj (_, _, t1) ->
           if (check_bool stack (empty_prog) (mk_eq t1 t)) then (Debug.debug (fun() -> sprintf "Dropping element\n"); false) else true
       | ObjPred (id1, _, _) ->
           let id2 = free_consts_term t in
-          IdSet.mem id1 id2
-      |_ -> true) h)
+          IdSet.mem id1 id2) h)
 
 let heap_remove h stack hchunk = 
   List.filter (fun hc ->
     (match hchunk, hc with
-      | Obj (t1, snp1, _), Obj (t2, snp2, _) ->
-          if (check_bool stack (empty_prog) (mk_eq t1 t2)) then false else true
-      | ObjPred (id1, snp1, ts1), ObjPred (id2, snp2, ts2) -> 
+      | Obj (id1, fld1, s1), Obj (id2, fld2, s2) ->
+          if id1 = id2 && fld1 = fld2 && (check_bool stack (empty_prog) (mk_eq s1 s2)) then false else true
+      | ObjPred (id1, args1, snp1), ObjPred (id2, args2, snp2) -> 
         if id1 = id2 &&
           (check_bool stack (empty_prog) (mk_eq snp1 snp2)) then false else true
       | _ -> true)) h
