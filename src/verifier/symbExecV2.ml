@@ -79,7 +79,7 @@ let subst_spec_list_return_ids state postcond foo lhs_ids =
     let lhs_ts =
       Debug.debug(fun () -> sprintf "find %s\n" (string_of_ident foo));
       List.fold_left (fun acc id ->
-        (term_of (find_symb_val state.store id)) :: acc)
+        (find_symb_val state.store id) :: acc)
       [] lhs_ids
     in
     List.combine (return_ids_of foo state.prog) (List.rev lhs_ts)
@@ -244,7 +244,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
           lineSep (string_of_state state)
       );
       eval_term state d.dispose_arg (fun state' t' ->
-        consume_sl_form state' state'.heap (mk_cell (term_of t')) (fun state'' h'' snap ->
+        consume_sl_form state' state'.heap (mk_cell t') (fun state'' h'' snap ->
           fc state''))
   | Loop (l, pp) ->
       Debug.debug (fun () -> 
@@ -285,12 +285,12 @@ let rec exec state comm (fc: symb_state -> 'a option) =
           List.combine ids args' 
           |> List.fold_left (fun sm (id, a) -> IdMap.add id a sm) IdMap.empty 
         in
-        let body' = subst_symb_spec_form sm b.spec_form in
-        Debug.debug (fun () -> sprintf "body[x -> e] (%s)\n" (string_of_spec_form body'));
+        let body' = subst_spec_form sm b.spec_form in
+        Debug.debug (fun () -> sprintf "body[x -> e] (%s)\n" (string_of_format pr_sspec_form body'));
         consume_sl_form state' state'.heap (SlUtil.mk_pred pc.pred_name pc.pred_args) (fun state2 heap' snap ->
 
           Debug.debug( fun() -> sprintf "state2 in produce symb sf %s\n" (string_of_state state2));
-          produce_symb_sf state2 body' snap (fun state3 ->
+          produce state2 body' snap (fun state3 ->
             Debug.debug( fun() -> sprintf "state in produce symb sf %s\n" (string_of_state state3));
             fc state3))
       | None ->
@@ -308,15 +308,16 @@ let rec exec state comm (fc: symb_state -> 'a option) =
       let body = (IdMap.find pc.pred_name state.prog.prog_preds).pred_body in
       match body with
       | Some b ->
+
         Debug.debug (fun () -> sprintf "body (%s)\n" (string_of_format pr_spec_form b));
         let ids = (IdMap.find pc.pred_name state.prog.prog_preds).pred_contract.contr_formals in 
         let sm =
           List.combine ids args' 
           |> List.fold_left (fun sm (id, a) -> IdMap.add id a sm) IdMap.empty 
         in
-        let body' = subst_symb_spec_form sm b.spec_form in
-        Debug.debug (fun () -> sprintf "body[x -> e] (%s)\n" (string_of_spec_form body'));
-        consume_symb_sf state' state'.heap body' (fun state2 heap' snap ->
+        let body' = subst_spec_form sm b.spec_form in
+        Debug.debug (fun () -> sprintf "body[x -> e] (%s)\n" (string_of_format pr_sspec_form body'));
+        consume state' state'.heap body' (fun state2 heap' snap ->
           produce_sl_form state2 (SlUtil.mk_pred pc.pred_name pc.pred_args) snap (fun state3 -> fc state3))
       | None ->
         Debug.debug (fun () -> sprintf "no body\n");

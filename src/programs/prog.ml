@@ -1154,6 +1154,11 @@ let pr_spec_form ppf sf =
   | SL f -> pr_sl_form ppf f
   | FOL f -> pr_form ppf f
 
+let pr_sspec_form ppf sf =
+  match sf with
+  | SL f -> pr_sl_form ppf f
+  | FOL f -> pr_form ppf f
+
 let pr_basic_cmd ppf = function
   | Assign ac -> 
       fprintf ppf "@[<2>%a@ :=@ %a@]" 

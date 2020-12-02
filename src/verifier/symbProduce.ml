@@ -43,9 +43,14 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
   match f with
   | Sl.Pure (p, _) ->
    produce_form state p snp fc
-  | Sl.Atom (Sl.Region, [obj; fld], a) ->
+  | Sl.Atom (Sl.Region, [obj; Var (id, _)], a) ->
      eval_term state obj (fun state' obj' ->
-       let hc = mk_heap_chunk_obj obj' snp empty_store in 
+       let objId =
+         (match obj' with
+         | Var (id, _) -> id
+         | App _ -> failwith "shouldn't get an app in region\n")
+       in
+       let hc = mk_heap_chunk_obj id objId snp in 
         let h, stack = heap_add state'.heap state'.pc hc in
         fc {state' with heap=h; pc = stack})
   | Sl.Atom (Sl.Region, ts, a) -> todo "region terms"
@@ -54,7 +59,7 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
   | Sl.Atom (Sl.Emp, ts, _) -> todo "Atom emp ts"
   | Sl.Atom (Sl.Pred id, ts, _) -> 
       eval_terms state ts (fun state' ts' ->
-        let pred_chunk = mk_heap_chunk_obj_pred id snp ts' in
+        let pred_chunk = mk_heap_chunk_obj_pred id ts' snp in
         let h, stack = heap_add state'.heap state'.pc pred_chunk in
         fc {state' with heap=h; pc = stack})
   | Sl.SepOp (op, f1, f2, _) ->
