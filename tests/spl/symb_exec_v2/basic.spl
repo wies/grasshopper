@@ -55,20 +55,6 @@ procedure if2(x: Int, y: Int)
   }
 }
 
-struct Node {
-  var next: Node;
-}
-
-procedure if3(x: Node, y: Node)
-  requires acc(x.next) &*& acc(y.next)
-  ensures acc(x.next) &*& x.next == x &*& acc(y.next) &*& y.next == x
-{
-  if (x.next != x) {
-    x.next := x;
-  }
-  y.next := x;
-}
-
 procedure pure2(x: Int, y: Int)
   requires x == y
   ensures x == y + 8
@@ -101,6 +87,7 @@ struct DNode {
   var data: Int;
 }
 
+/*
 procedure loop1(x: DNode)
   requires acc(x.data) &*& x.data == 0
   ensures acc(x.data) &*& x.data == 10
@@ -115,4 +102,19 @@ procedure loop1(x: DNode)
     y.data := 10;
     i := i + 1;
   }
+}
+*/
+
+struct Node {
+  var next: Node;
+}
+
+procedure if3(x: Node, y: Node)
+  requires acc(x.next) &*& acc(y.next)
+  ensures acc(x.next) &*& x.next == x &*& acc(y.next) &*& y.next == x
+{
+  if (x.next != x) {
+    x.next := x;
+  }
+  y.next := x;
 }

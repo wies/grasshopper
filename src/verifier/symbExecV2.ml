@@ -164,7 +164,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
           subst_spec_list_formals state precond' foo args'
         in
         Debug.debug(fun () -> sprintf "\nPrecond[x -> e'] = %s\n" (pr_spec_form_list precond_sf'));
-        consumes state' precond_sf' (fun state2' _ ->
+        consumes_symb state' precond_sf' (fun state2' _ ->
           let proc_contr = (IdMap.find foo state.prog.prog_procs).proc_contract in
           let store' =
             List.combine proc_contr.contr_returns lhs
@@ -186,7 +186,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
             subst_spec_list_return_ids state3' p foo lhs
           in
           Debug.debug(fun () -> sprintf "\nPostcond[x -> e'][y->z] = %s\n" (pr_spec_form_list post_sf'));
-          produces state3' post_sf' (fresh_snap_tree ()) (fun state4' -> fc state4')))
+          produces_symb state3' post_sf' (fresh_snap_tree ()) (fun state4' -> fc state4')))
   | Basic (Havoc {havoc_args=vars}, pp) -> 
     let vars_terms =
       let locs = Prog.locals_of_proc state.proc in

@@ -62,6 +62,7 @@ procedure pure_call6(f: Int, g: Int, h: Int) returns (i: Int, j: Int)
 }
 
 /* test with acc predicates */
+/*
 struct Node {
   var next: Node;
 }
@@ -81,3 +82,4 @@ procedure bar_heap(x: Node, y: Node)
   foo_heap(x, y);
   pure assert (y.next == z);
 }
+*/

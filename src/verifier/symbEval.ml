@@ -155,8 +155,14 @@ and eval_form state f (fc: symb_state -> form -> 'a option) =
 and consume state heap (sf: Prog.spec_form) fc =
   consume_impl state heap sf eval_form eval_terms eval_term fc
 
+and consume_symb state heap (sf: Prog.spec_form) fc =
+  consume_symb_impl state heap sf eval_form eval_terms eval_term fc
+
 and consumes state (assns: Prog.spec list) fc =
   consumes_impl state assns eval_form eval_terms eval_term fc
+
+and consumes_symb state (assns: Prog.spec list) fc =
+  consumes_symb_impl state assns eval_form eval_terms eval_term fc
 
 and consume_sl_form state heap (f: Sl.form) (fc: symb_state -> symb_heap -> term -> 'a option) =
   consume_sl_form_impl state heap f eval_form eval_terms eval_term fc

@@ -53,7 +53,8 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
        let hc = mk_heap_chunk_obj id objId snp in 
         let h, stack = heap_add state'.heap state'.pc hc in
         fc {state' with heap=h; pc = stack})
-  | Sl.Atom (Sl.Region, ts, a) -> todo "region terms"
+  | Sl.Atom (Sl.Region, [obj; fld], a) -> todo "region terms e.f"
+  | Sl.Atom (Sl.Region, ts, a) -> todo "region terms ts"
   | Sl.Atom (Sl.Emp, [], _) ->
       fc state
   | Sl.Atom (Sl.Emp, ts, _) -> todo "Atom emp ts"
@@ -69,10 +70,32 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
         produce_sl_forms state fs snp fc
   | Sl.Binder (b, ts, f, _) -> todo "Binder"
 
+and produce_sl_symb_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
+   Debug.debug(fun() ->
+      sprintf "%sProduce SYMB SL Form: %s\n Current State:\n{%s\n}\n\n"
+      lineSep (Sl.string_of_form f) (string_of_state state));
+  match f with
+  | Sl.Pure (p, _) ->
+   produce_symb_form state p snp fc
+  | _ -> todo "add cases for produce_sl_symb_form"
+
 let produce state sf snp (fc: symb_state -> 'a option) =
   match sf with
   | Prog.FOL fol -> produce_form state fol snp fc
   | Prog.SL slf -> produce_sl_form state slf snp fc
+
+let produce_symb state sf snp (fc: symb_state -> 'a option) =
+  match sf with
+  | Prog.FOL fol -> produce_form state fol snp fc
+  | Prog.SL slf -> produce_sl_symb_form state slf snp fc
+
+let rec produces_symb state (assns: Prog.spec list) snp fc =
+  match assns with
+  | [] -> None 
+  | hd :: assns' -> 
+    (match produce_symb state hd.spec_form snp fc with
+    | Some err -> Some err
+    | None -> produces_symb state assns' snp fc)
 
 (** produce_specs is the entry point for producing an assertion list (spec list),
     this function iterates over the assns calling produce_spec_form on each spec. *)
