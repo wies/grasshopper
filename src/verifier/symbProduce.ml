@@ -43,7 +43,7 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
   match f with
   | Sl.Pure (p, _) ->
    produce_form state p snp fc
-  | Sl.Atom (Sl.Region, [obj; Var (id, _)], a) ->
+  | Sl.Atom (Sl.Region, [obj; App (FreeSym id, _, _)], a) ->
      eval_term state obj (fun state' obj' ->
        let objId =
          (match obj' with
@@ -53,7 +53,6 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
        let hc = mk_heap_chunk_obj id objId snp in 
         let h, stack = heap_add state'.heap state'.pc hc in
         fc {state' with heap=h; pc = stack})
-  | Sl.Atom (Sl.Region, [obj; fld], a) -> todo "region terms e.f"
   | Sl.Atom (Sl.Region, ts, a) -> todo "region terms ts"
   | Sl.Atom (Sl.Emp, [], _) ->
       fc state

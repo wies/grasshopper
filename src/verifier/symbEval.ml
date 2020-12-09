@@ -69,9 +69,9 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
   | Var (id1, srt1) ->
     Debug.debug(fun() -> sprintf "Var Term\n");
     (match find_symb_val state.store id1 with
-    | Var (id2, srt2) as tt -> 
+    | Var (id2, srt2) as tt' -> 
         if srt1 = srt2
-        then fc state tt
+        then fc state tt'
         else raise_err (sprintf "sorts are not equal (%s) != (%s), this should never happen!"
           (string_of_sort srt1) (string_of_sort srt2))
     | _ -> raise_err "unreachable found symbval that isn't a Var")
@@ -79,10 +79,11 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
   | App (Union, [], srt) -> todo "eval Union"
   | App (Inter, [], srt) -> todo "eval Inter"
   | App (Read, [map; t], srt) ->
+      Debug.debug(fun () -> sprintf "field read sort (%s)\n" (string_of_sort srt));
       (match map with
       | (App (FreeSym id, [], srt1) | Var (id, srt1)) ->
           eval_term state t (fun state' t' ->
-            let hc = heap_find_by_symb_term state.pc state.heap t' in
+            let hc = heap_find_by_field_id state.pc state.heap t' id in
             let v = get_heap_chunk_snap hc in 
             fc state' v)
       | _ -> todo "map catch all")
@@ -143,6 +144,7 @@ and eval_form state f (fc: symb_state -> form -> 'a option) =
     lineSep (string_of_form f) (string_of_state state));
   match f with
   | Atom (t, a) -> 
+      Debug.debug(fun () -> "DANG\n");
       eval_term state t (fun state' t' ->
         fc state' (Atom (t', a)))
   | BoolOp (op, fs) ->

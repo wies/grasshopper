@@ -289,6 +289,14 @@ let rec heap_find_by_symb_term stack h t =
       let id2 = free_symbols_term t in
       if IdSet.mem id1 id2 then c else heap_find_by_symb_term stack h' t
 
+let rec heap_find_by_field_id stack h receiver_term fldId =
+  match h with
+  | [] -> raise (HeapChunkNotFound (sprintf "for %s(%s) %s" (string_of_ident fldId) (string_of_term receiver_term) (string_of_sort (sort_of receiver_term))))
+  | Obj (obj, id, tt) as c :: h' ->
+      if (check_bool stack (empty_prog) (mk_eq tt receiver_term)) then c else heap_find_by_field_id stack h' receiver_term fldId
+  | _ :: h' ->
+       heap_find_by_field_id stack h' receiver_term fldId
+
 let mk_and_args args1 args2 = 
   List.combine args1 args2
   |> List.map (fun (t1, t2) -> mk_eq t1 t2)
