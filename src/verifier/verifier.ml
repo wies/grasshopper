@@ -463,8 +463,67 @@ let pred_axioms prog =
       (*(fun fs -> print_forms stdout fs; print_newline (); fs)*)
   in
   Prog.fold_preds (fun acc pred -> pred_def pred @ acc) [] prog
-  
-    
+
+let pred_def_symb pred =
+  let locals = locals_of_pred pred in
+  let formals = formals_of_pred pred in
+  let returns = returns_of_pred pred in
+  let name = name_of_pred pred in
+  let sorted_vs, sm =
+    List.fold_right
+      (fun id (sorted_vs, sm) ->
+        let var = IdMap.find id locals in
+        (id, var.var_sort) :: sorted_vs,
+        IdMap.add id (Var (id, var.var_sort)) sm
+      )
+      formals ([], IdMap.empty)
+  in
+  let defs =
+    List.map
+      (fun f -> f |> form_of_spec |> strip_error_msgs)
+      (Opt.to_list pred.pred_body @ postcond_of_pred pred)
+  in
+  let defs =
+    let rec split acc = function
+      | Binder (Forall, vs, BoolOp (And, fs), a) :: ofs ->
+          split acc (List.map (fun f -> Binder (Forall, vs, f, a)) fs @ ofs)
+      | BoolOp (And, fs) :: ofs ->
+          split acc (fs @ ofs)
+      | f :: ofs -> split (f :: acc) ofs
+      | [] -> List.rev acc
+    in split [] defs
+  in
+  let vs = List.map (fun (id, srt) -> Var (id, srt)) sorted_vs in
+  let sm, defs =
+    match returns with
+    | [] ->
+        sm, List.map (fun f -> mk_implies (mk_pred name vs) f) defs            
+    | [id] -> 
+        let var = IdMap.find id locals in
+        IdMap.add id (mk_free_fun var.var_sort name vs) sm, defs
+    | _ -> failwith "Functions may only have a single return value."
+  in
+  let annot () =
+    Name (fresh_ident @@ "definition_of_" ^ (string_of_ident name))
+  in
+  let pat =
+    match returns with
+    | [] -> [Pattern (mk_known (mk_free_fun Bool name vs), [])]
+    | _ -> []
+  in
+  List.map (fun f ->
+    f |>
+    subst_consts sm |>
+    smk_forall ~ann:(annot () :: pat) sorted_vs |>
+    skolemize |>
+    (*propagate_forall |>*)
+    (*annotate_term_generators pred |>*)
+    (if IdSet.mem name (accesses_pred pred)
+    then (fun f -> f)
+    else add_match_filters))
+    defs
+    (*(fun fs -> print_forms stdout fs; print_newline (); fs)*)
+ 
 (** Expand negative occurrences of predicates in formula [f] according to program [prog] and add term generators. *)
 let finalize_form prog f =
   (* Expands definition of predicate [p] for arguments [ts] assuming polarity of occurrence [pol] *)

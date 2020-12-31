@@ -6,6 +6,7 @@ open Prog
 open Util
 
 (** Auxiliary variables for desugaring SL specifications *)
+(** function takes a struct sort that returns an identifier unique for the Loc<T>*)
 let footprint_id = mk_name_generator "FP"
 let footprint_set struct_srt = mk_loc_set struct_srt (footprint_id struct_srt)
 

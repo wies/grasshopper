@@ -470,6 +470,8 @@ let array_axioms elem_srt =
   let array_map_simple1 =
     smk_or ((if !Config.instantiate then [] else [mk_lt i (mk_int 0); mk_geq i (mk_length a)]) @
             [mk_eq (mk_read arrstate [a]) (App (ArrayMap, [mk_read arrstate [a]], Map ([Int], elem_srt)))]) |>
+            (* idea tell the grasshopper smt backent that there is a quantified variabale that you should let the smt solver.
+             * annotate f list of identifiers *)
             (fun f -> annotate f [NoInst [fst i1]])
   in
   let array_map_simple2 =

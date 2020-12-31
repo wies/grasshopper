@@ -5,6 +5,7 @@ open Axioms
 
 (** Alloc sets *)
 
+(* when building the axioms it will be good to use this name generator to generate names for struct sort functions *)
 let mk_name_generator base_name =
   let set_ids = Hashtbl.create 0 in
   fun ?(aux_name="") srt ->

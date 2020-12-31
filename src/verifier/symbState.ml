@@ -4,6 +4,7 @@ open Util
 open Grass
 open GrassUtil
 open Prog
+open Axioms 
 open Printf
 
 exception NotYetImplemented of string
@@ -158,42 +159,6 @@ let pc_collect_constr (stack: pc_stack) =
   (fun pclist (id, bc, pcs) -> bc :: (pcs @ pclist))
   [] stack
 
-(* Returns None if the entailment holds, otherwise Some (list of error messages, model) *)
-(** carry over from Sid's SymbExec *)
-let check_entail prog p1 p2 =
-  if p1 = p2 || p2 = mk_true then None
-  else (* Dump it to an SMT solver *)
-    (** TODO: collect program axioms and add to symbolic state *)
-    let p2 = Verifier.annotate_aux_msg "Related location" p2 in
-    (* Close the formulas: assuming all free variables are existential *)
-    let close f = smk_exists (Grass.IdSrtSet.elements (sorted_free_vars f)) f in
-    let labels, f =
-      smk_and [p1; mk_not p2] |> close |> nnf
-      (* Add definitions of all referenced predicates and functions *)
-      |> fun f -> f :: Verifier.pred_axioms prog
-      (** TODO: Add axioms *)
-      |> (fun fs -> smk_and fs)
-      (* Add labels *)
-      |> Verifier.add_labels
-    in
-    let name = fresh_ident "form" |> Grass.string_of_ident in
-    Debug.debug (fun () ->
-      sprintf "\n\nCalling prover with name %s\n" name);
-    match Prover.get_model ~session_name:name f with
-    | None -> None
-    | Some model -> Some (Verifier.get_err_msg_from_labels model labels, model)
-
-(** SMT solver calls *)
-let check pc_stack prog v =
-  match check_entail prog (smk_and (pc_collect_constr pc_stack)) v  with 
-  | Some errs -> raise_err "SMT check failed"
-  | None -> ()
-
-let check_bool pc_stack prog v =
-  match check_entail prog (smk_and (pc_collect_constr pc_stack)) v with
-  | Some errs -> false
-  | None -> true
-
 (** Snapshot defintions *)
 (** snapshot adt encoding for SMT solver *)
 let snap_tree_id = fresh_ident "snap_tree" 
@@ -257,17 +222,6 @@ let equal_term_lst ts1 ts2 =
     acc && t1 = t2)
   true ts1 ts2
 
-let equal_heap_chunks stack c1 c2 =
-  let equal_terms t =
-    check_bool stack (empty_prog) t 
-  in
-  match c1, c2 with 
-  | Obj (id1, _, s1), Obj (id2, _, s2)
-  when id1 = id2 && equal_terms (mk_eq s1 s2) -> true
-  | ObjPred (id1, args1, s1), ObjPred(id2, args2, s2)
-  when id1 = id2 && equal_terms (mk_eq s1 s2) && equal_term_lst args1 args2 -> true
-  | _ -> false
-
 let string_of_hc chunk =
   match chunk with
   | Obj (id, fld, snp) ->
@@ -280,27 +234,87 @@ type symb_heap = heap_chunk list
 
 let heap_add h stack hchunk = (hchunk :: h, stack)
 
-let rec heap_find_by_symb_term stack h t =
-  match h with
-  | [] -> raise (HeapChunkNotFound (sprintf "for id(%s) %s" (string_of_term t) (string_of_sort (sort_of t))))
-  | Obj (obj, id, tt) as c :: h' ->
-      if (check_bool stack (empty_prog) (mk_eq tt t)) then c else heap_find_by_symb_term stack h' t
-  | ObjPred (id1, _, _) as c :: h' ->
-      let id2 = free_symbols_term t in
-      if IdSet.mem id1 id2 then c else heap_find_by_symb_term stack h' t
+let f_snap_id = mk_name_generator "f_snap_Loc"
+let f_snap_inv_id = mk_name_generator "f_inv_snap_Loc"
+let f_snp_loc_srt_id struct_srt = f_snap_id struct_srt
+let f_snp_loc_srt_inv_id struct_srt = f_snap_inv_id struct_srt
 
-let rec heap_find_by_field_id stack h receiver_term fldId =
-  match h with
-  | [] -> raise (HeapChunkNotFound (sprintf "for %s(%s) %s" (string_of_ident fldId) (string_of_term receiver_term) (string_of_sort (sort_of receiver_term))))
-  | Obj (obj, id, tt) as c :: h' ->
-      if (check_bool stack (empty_prog) (mk_eq tt receiver_term)) then c else heap_find_by_field_id stack h' receiver_term fldId
-  | _ :: h' ->
-       heap_find_by_field_id stack h' receiver_term fldId
+let mk_f_snap srt snp = 
+  mk_free_fun (Loc srt) (f_snp_loc_srt_id srt) [snp]
+
+let snap_axiom struct_srt =
+  let x = mk_ident "x" in
+  let xvar = mk_var snap_typ x in
+  (* f(loc<T>) snap_typ *)
+  (*let finv = mk_f_symb_val struct_srt xvar in*)
+  let f = mk_f_snap struct_srt xvar in
+  let finv_app = App (FreeSym (f_snp_loc_srt_inv_id struct_srt), [f], snap_typ) in
+  (* f(snap_typ) loc<T> *)
+  
+  let f_inj = mk_eq finv_app xvar in 
+  let name, _ = (f_snp_loc_srt_id struct_srt) in
+
+  let axiom = mk_axiom ("snap_axiom_" ^ name) (mk_forall [x, snap_typ] (annotate f_inj [NoInst [x]])) in
+  Debug.debug (fun () -> sprintf "snap_axiom (%s)\n" (string_of_form axiom));
+  axiom
+
+let snapshot_axioms prog =
+  let axioms = SortSet.fold (fun srt axioms -> 
+    snap_axiom srt :: axioms) (struct_sorts prog) [] in
+  axioms
 
 let mk_and_args args1 args2 = 
   List.combine args1 args2
   |> List.map (fun (t1, t2) -> mk_eq t1 t2)
   |> smk_and
+
+(* Returns None if the entailment holds, otherwise Some (list of error messages, model) *)
+(** carry over from Sid's SymbExec *)
+let check_entail prog p1 p2 =
+  let snap_axioms = snapshot_axioms prog in
+  if p1 = p2 || p2 = mk_true then None
+  else (* Dump it to an SMT solver *)
+    (** TODO: collect program axioms and add to symbolic state *)
+    let p2 = Verifier.annotate_aux_msg "Related location" p2 in
+    (* Close the formulas: assuming all free variables are existential *)
+    let close f = smk_exists (Grass.IdSrtSet.elements (sorted_free_vars f)) f in
+    let labels, f =
+      smk_and [p1; mk_not p2] |> close |> nnf
+      (* Add definitions of all referenced predicates and functions *)
+      |> fun f -> f :: Verifier.pred_axioms prog
+      (** TODO: Add axioms *)
+      |> (fun fs -> smk_and (fs @ snap_axioms))
+      (* Add labels *)
+      |> Verifier.add_labels
+    in
+    let name = fresh_ident "form" |> Grass.string_of_ident in
+    Debug.debug (fun () ->
+      sprintf "\n\nCalling prover with name %s\n" name);
+    match Prover.get_model ~session_name:name f with
+    | None -> None
+    | Some model -> Some (Verifier.get_err_msg_from_labels model labels, model)
+
+(** SMT solver calls *)
+let check pc_stack prog v =
+  match check_entail prog (smk_and (pc_collect_constr pc_stack)) v  with 
+  | Some errs -> raise_err "SMT check failed"
+  | None -> ()
+
+let check_bool pc_stack prog v =
+  match check_entail prog (smk_and (pc_collect_constr pc_stack)) v with
+  | Some errs -> false
+  | None -> true
+
+let equal_heap_chunks stack c1 c2 =
+  let equal_terms t =
+    check_bool stack (empty_prog) t 
+  in
+  match c1, c2 with 
+  | Obj (id1, _, s1), Obj (id2, _, s2)
+  when id1 = id2 && equal_terms (mk_eq s1 s2) -> true
+  | ObjPred (id1, args1, s1), ObjPred(id2, args2, s2)
+  when id1 = id2 && equal_terms (mk_eq s1 s2) && equal_term_lst args1 args2 -> true
+  | _ -> false
 
 let rec heap_find_pred_chunk stack h id args =
   match h with
@@ -312,16 +326,6 @@ let rec heap_find_pred_chunk stack h id args =
         p else heap_find_pred_chunk stack h' id args 
   | p :: h' -> heap_find_pred_chunk stack h' id args 
 
-let rec heap_remove_by_term stack h t =
-  let chunk = heap_find_by_symb_term stack h t in
-  (chunk, List.filter (fun hc ->
-      match hc with
-      | Obj (_, _, t1) ->
-          if (check_bool stack (empty_prog) (mk_eq t1 t)) then (Debug.debug (fun() -> sprintf "Dropping element\n"); false) else true
-      | ObjPred (id1, _, _) ->
-          let id2 = free_consts_term t in
-          IdSet.mem id1 id2) h)
-
 let heap_remove h stack hchunk = 
   List.filter (fun hc ->
     (match hchunk, hc with
@@ -331,6 +335,39 @@ let heap_remove h stack hchunk =
         if id1 = id2 &&
           (check_bool stack (empty_prog) (mk_eq snp1 snp2)) then false else true
       | _ -> true)) h
+
+let rec heap_find_by_symb_term stack h t =
+  match h with
+  | [] -> raise (HeapChunkNotFound (sprintf "for id(%s) %s" (string_of_term t) (string_of_sort (sort_of t))))
+  | Obj (obj, id, tt) as c :: h' ->
+      if (check_bool stack (empty_prog) (mk_eq tt t)) then c else heap_find_by_symb_term stack h' t
+  | ObjPred (id1, _, _) as c :: h' ->
+      let id2 = free_symbols_term t in
+      if IdSet.mem id1 id2 then c else heap_find_by_symb_term stack h' t
+
+let rec heap_find_by_field_id stack h prog receiver_term fldId =
+  match h with
+  | [] -> raise (HeapChunkNotFound (sprintf "for %s(%s) %s" (string_of_ident fldId) (string_of_term receiver_term) (string_of_sort (sort_of receiver_term))))
+  | Obj (obj, id, tt) as c :: h' ->
+      let srt = match (sort_of receiver_term) with
+      | Loc s -> s
+      | _ -> failwith "should have sort loc\n"
+      in
+      Debug.debug (fun () -> sprintf "Sort of receiver term (%s)\n" (string_of_sort (srt)));
+      Debug.debug (fun () -> sprintf "Sort of snap term (%s)\n" (string_of_sort (sort_of tt)));
+      if (check_bool stack prog (mk_eq (mk_f_snap srt tt) (receiver_term))) then c else heap_find_by_field_id stack h' prog receiver_term fldId
+  | _ :: h' ->
+       heap_find_by_field_id stack h' prog receiver_term fldId
+
+let rec heap_remove_by_term stack h t =
+  let chunk = heap_find_by_symb_term stack h t in
+  (chunk, List.filter (fun hc ->
+      match hc with
+      | Obj (_, _, t1) ->
+          if (check_bool stack (empty_prog) (mk_eq t1 t)) then (Debug.debug (fun() -> sprintf "Dropping element\n"); false) else true
+      | ObjPred (id1, _, _) ->
+          let id2 = free_consts_term t in
+          IdSet.mem id1 id2) h)
 
 let string_of_heap h =
   h
