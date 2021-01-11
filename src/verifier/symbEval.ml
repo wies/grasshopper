@@ -84,9 +84,10 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
       | (App (FreeSym id, [], srt1) | Var (id, srt1)) ->
           eval_term state t (fun state' t' ->
             Debug.debug(fun () -> sprintf "tprime (%s)\n" (string_of_term t'));
+            Debug.debug(fun () -> sprintf "tprime srt (%s)\n" (string_of_sort (sort_of t'))); 
             let hc = heap_find_by_field_id state.pc state.heap state.prog t' id in
             let v = get_heap_chunk_snap hc in 
-            fc state' v)
+            fc state' (mk_f_snap srt v))
       | _ -> todo "map catch all")
   | App (Read, map :: t :: ts, srt) -> todo "eval read"
   | App (Write, [map; t1; t2], srt) -> todo "eval write"
@@ -145,9 +146,13 @@ and eval_form state f (fc: symb_state -> form -> 'a option) =
     lineSep (string_of_form f) (string_of_state state));
   match f with
   | Atom (t, a) -> 
+    Debug.debug(fun () ->
+      sprintf "***** Atom \n");
       eval_term state t (fun state' t' ->
         fc state' (Atom (t', a)))
   | BoolOp (op, fs) ->
+    Debug.debug(fun () ->
+      sprintf "***** BoolOp\n");
     eval_forms state fs (fun state' fs' ->
       fc state' (BoolOp (op, fs')))
   | Binder (binder, [], f, a) -> fc state (Binder (binder, [], f, a))

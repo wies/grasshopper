@@ -172,6 +172,7 @@ type pred_decl = {
 (** Program *)
 type program = {
     prog_axioms: spec list; (** background axioms *)
+    (* fields are stored in this global var map, map<Loc<T>> *)
     prog_vars: var_decl IdMap.t; (** global variables *)
     prog_preds: pred_decl IdMap.t; (** predicates *)
     prog_procs: proc_decl IdMap.t; (** procedures *)

@@ -30,7 +30,6 @@ let rec consume_sl_symb_form_impl state heap (f: Sl.form) f_eval_form f_eval_ter
     lineSep (Sl.string_of_form f) (string_of_state state));
   match f with
   | Sl.Pure (p, _) ->
-   Debug.debug(fun() -> "Pure Fuckery ******\n");
    check_symb_forms state heap [p] fc
   | Sl.Atom (Sl.Emp, ts, _) -> fc state heap (emp_snap) 
   | Sl.Atom (Sl.Region, [r], _) -> 
@@ -69,7 +68,6 @@ let rec consume_sl_form_impl state heap (f: Sl.form) f_eval_form f_eval_terms f_
     lineSep (Sl.string_of_form f) (string_of_state state));
   match f with
   | Sl.Pure (p, _) ->
-   Debug.debug(fun() -> "Pure Fuckery ******\n");
    consume_form_impl state heap p f_eval_form fc 
   | Sl.Atom (Sl.Emp, ts, _) -> fc state heap (emp_snap) 
   | Sl.Atom (Sl.Region, [r], _) -> 

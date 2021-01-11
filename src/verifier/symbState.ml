@@ -201,14 +201,14 @@ let fresh_snap =
 
 (* heap elements and symbolic heap *)
 type heap_chunk =
-  | Obj of ident * ident * term (* r.id -> (rid, id, snapshot) *)
+  | Obj of ident * term * term (* r.id -> (field id, r (term), snapshot) *)
   | ObjPred of ident * term list * term (* id, args, snapshot *)
 
-let mk_heap_chunk_obj id fld snp =
-  Obj (id, fld, snp)
+let mk_heap_chunk_obj field_id rcvr snp =
+  Obj (field_id, rcvr, snp)
 
-let mk_fresh_heap_chunk_obj id fld =
-  mk_heap_chunk_obj id fld (emp_snap)
+let mk_fresh_heap_chunk_obj field_id rcvr =
+  mk_heap_chunk_obj field_id rcvr (emp_snap)
 
 let mk_heap_chunk_obj_pred id args snp = 
   ObjPred (id, args, snp)
@@ -224,8 +224,8 @@ let equal_term_lst ts1 ts2 =
 
 let string_of_hc chunk =
   match chunk with
-  | Obj (id, fld, snp) ->
-    sprintf "Obj(id:%s, fld:%s, snp:%s)" (string_of_ident id) (string_of_ident fld) (string_of_term snp)
+  | Obj (id, rcvr, snp) ->
+    sprintf "Obj(fld:%s, rcvr:%s, snp:%s)" (string_of_ident id) (string_of_term rcvr) (string_of_term snp)
   | ObjPred (id, args, snp) ->
     sprintf "ObjPred(%s, args:%s, snp:%s)" (string_of_ident id)
       (string_of_term snp) (string_of_term_list args)
@@ -234,34 +234,36 @@ type symb_heap = heap_chunk list
 
 let heap_add h stack hchunk = (hchunk :: h, stack)
 
-let f_snap_id = mk_name_generator "f_snap_Loc"
-let f_snap_inv_id = mk_name_generator "f_inv_snap_Loc"
+let f_snap_id = mk_name_generator "f_snap"
+let f_snap_inv_id = mk_name_generator "f_inv_snap"
 let f_snp_loc_srt_id struct_srt = f_snap_id struct_srt
-let f_snp_loc_srt_inv_id struct_srt = f_snap_inv_id struct_srt
+let f_snp_loc_srt_inv_id struct_srt = f_snap_inv_id struct_srt 
 
 let mk_f_snap srt snp = 
-  mk_free_fun (Loc srt) (f_snp_loc_srt_id srt) [snp]
+  mk_free_fun srt (f_snp_loc_srt_id srt) [snp]
 
-let snap_axiom struct_srt =
+let snap_axiom srt =
   let x = mk_ident "x" in
   let xvar = mk_var snap_typ x in
   (* f(loc<T>) snap_typ *)
   (*let finv = mk_f_symb_val struct_srt xvar in*)
-  let f = mk_f_snap struct_srt xvar in
-  let finv_app = App (FreeSym (f_snp_loc_srt_inv_id struct_srt), [f], snap_typ) in
+  let f = mk_f_snap srt xvar in
+  let finv_app = App (FreeSym (f_snp_loc_srt_inv_id srt), [f], snap_typ) in
   (* f(snap_typ) loc<T> *)
   
   let f_inj = mk_eq finv_app xvar in 
-  let name, _ = (f_snp_loc_srt_id struct_srt) in
+  let name, _ = (f_snp_loc_srt_id srt) in
 
   let axiom = mk_axiom ("snap_axiom_" ^ name) (mk_forall [x, snap_typ] (annotate f_inj [NoInst [x]])) in
   Debug.debug (fun () -> sprintf "snap_axiom (%s)\n" (string_of_form axiom));
   axiom
 
 let snapshot_axioms prog =
-  let axioms = SortSet.fold (fun srt axioms -> 
-    snap_axiom srt :: axioms) (struct_sorts prog) [] in
-  axioms
+  (* rather fold over the global var decls, and pattern match Map<Loc<T1>, T2> extract T2. *)
+  IdMap.fold (fun _ var axioms -> 
+    match var.var_sort with
+    | Map ([Loc _], rsrt) -> snap_axiom rsrt :: axioms
+    | _ -> axioms) prog.prog_vars []
 
 let mk_and_args args1 args2 = 
   List.combine args1 args2
@@ -348,14 +350,11 @@ let rec heap_find_by_symb_term stack h t =
 let rec heap_find_by_field_id stack h prog receiver_term fldId =
   match h with
   | [] -> raise (HeapChunkNotFound (sprintf "for %s(%s) %s" (string_of_ident fldId) (string_of_term receiver_term) (string_of_sort (sort_of receiver_term))))
-  | Obj (obj, id, tt) as c :: h' ->
-      let srt = match (sort_of receiver_term) with
-      | Loc s -> s
-      | _ -> failwith "should have sort loc\n"
-      in
-      Debug.debug (fun () -> sprintf "Sort of receiver term (%s)\n" (string_of_sort (srt)));
+  | Obj (field_id, rcvr, tt) as c :: h' ->
+      Debug.debug (fun () -> sprintf "Sort of receiver term (%s)\n" (string_of_sort (sort_of receiver_term)));
+      Debug.debug (fun () -> sprintf "Sort of receiver hc term (%s)\n" (string_of_sort (sort_of rcvr)));
       Debug.debug (fun () -> sprintf "Sort of snap term (%s)\n" (string_of_sort (sort_of tt)));
-      if (check_bool stack prog (mk_eq (mk_f_snap srt tt) (receiver_term))) then c else heap_find_by_field_id stack h' prog receiver_term fldId
+      if field_id = fldId && (check_bool stack prog (mk_eq rcvr (receiver_term))) then c else heap_find_by_field_id stack h' prog receiver_term fldId
   | _ :: h' ->
        heap_find_by_field_id stack h' prog receiver_term fldId
 
