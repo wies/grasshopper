@@ -258,6 +258,11 @@ let snap_axiom srt =
   Debug.debug (fun () -> sprintf "snap_axiom (%s)\n" (string_of_form axiom));
   axiom
 
+let get_map_range_sort srt = 
+  match srt with
+  | Map ([Loc _], ran_srt) -> ran_srt
+  | _ -> failwith "illtyped sort" 
+
 let snapshot_axioms prog =
   (* rather fold over the global var decls, and pattern match Map<Loc<T1>, T2> extract T2. *)
   IdMap.fold (fun _ var axioms -> 
@@ -292,6 +297,7 @@ let check_entail prog p1 p2 =
     let name = fresh_ident "form" |> Grass.string_of_ident in
     Debug.debug (fun () ->
       sprintf "\n\nCalling prover with name %s\n" name);
+    Debug.debug(fun () -> sprintf "FORM Before SMT (%s) \n" (string_of_form f));
     match Prover.get_model ~session_name:name f with
     | None -> None
     | Some model -> Some (Verifier.get_err_msg_from_labels model labels, model)
@@ -352,7 +358,9 @@ let rec heap_find_by_field_id stack h prog receiver_term fldId =
   | [] -> raise (HeapChunkNotFound (sprintf "for %s(%s) %s" (string_of_ident fldId) (string_of_term receiver_term) (string_of_sort (sort_of receiver_term))))
   | Obj (field_id, rcvr, tt) as c :: h' ->
       Debug.debug (fun () -> sprintf "Sort of receiver term (%s)\n" (string_of_sort (sort_of receiver_term)));
+      Debug.debug (fun () -> sprintf "receiver term (%s)\n" (string_of_term receiver_term));
       Debug.debug (fun () -> sprintf "Sort of receiver hc term (%s)\n" (string_of_sort (sort_of rcvr)));
+      Debug.debug (fun () -> sprintf "receiver rcvr (%s)\n" (string_of_term rcvr));
       Debug.debug (fun () -> sprintf "Sort of snap term (%s)\n" (string_of_sort (sort_of tt)));
       if field_id = fldId && (check_bool stack prog (mk_eq rcvr (receiver_term))) then c else heap_find_by_field_id stack h' prog receiver_term fldId
   | _ :: h' ->

@@ -85,13 +85,14 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
           eval_term state t (fun state' t' ->
             Debug.debug(fun () -> sprintf "tprime (%s)\n" (string_of_term t'));
             Debug.debug(fun () -> sprintf "tprime srt (%s)\n" (string_of_sort (sort_of t'))); 
+            Debug.debug(fun () -> sprintf "srt1 (%s)\n" (string_of_sort srt1)); 
             let hc = heap_find_by_field_id state.pc state.heap state.prog t' id in
+            Debug.debug(fun () -> sprintf "found heap chunk (%s)\n" (string_of_hc hc)); 
             let v = get_heap_chunk_snap hc in 
-            fc state' (mk_f_snap srt v))
+            fc state' (mk_f_snap (get_map_range_sort srt1) v))
       | _ -> todo "map catch all")
   | App (Read, map :: t :: ts, srt) -> todo "eval read"
   | App (Write, [map; t1; t2], srt) -> todo "eval write"
-
   | App ((Minus | Plus | Mult | Div | Mod | Diff | Inter | Union | Eq | SubsetEq | LtEq | GtEq | Lt | Gt | Elem | AndTerm | OrTerm as sym), [t1; t2], srt) ->
       eval_term state t1 (fun state1 t3 ->
         eval_term state1 t2 (fun state2 t4 ->
@@ -99,7 +100,7 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
   | App (Length, [t], srt) -> todo "eval Length"
   | App (ArrayCells, [t], srt) -> todo "eval ArrayCells"
   | App (SetEnum, [t], srt) ->
-    eval_term state t (fun state' t' -> fc state' t')
+    eval_term state t (fun state' t' -> fc state' (mk_f_snap srt t'))
   | App (SetEnum, ts, srt) -> todo "set enum non-singleton"
   | App (Destructor d, [t], srt) -> todo "eval Destructor"
   | App (FreeSym id1, [], srt1) -> 
@@ -120,11 +121,11 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
   | App (IntConst n, [], srt) as i -> 
         Debug.debug (fun () -> sprintf "IntConst (%s)\n" (string_of_term i));
         fc state i
-  | App (Null, [], srt) as t-> fc state t
+  | App (Null, [], srt) as t -> fc state t
   | App (Old, ts, srt) ->
      let state2 = {state with store=state.old_store} in
      eval_terms state2 ts (fun state2' ts' ->
-       fc state2' (App (Old, ts', srt)))
+       fc state2' (mk_f_snap srt (App (Old, ts', srt))))
   | App (BoolConst b, ts, srt) as f -> fc state f
   | App (symb, ts, srt) -> todo "eval_term catch all"
 
