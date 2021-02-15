@@ -245,16 +245,14 @@ let mk_f_snap srt snp =
 let snap_axiom srt =
   let x = mk_ident "x" in
   let xvar = mk_var snap_typ x in
-  (* f(loc<T>) snap_typ *)
-  (*let finv = mk_f_symb_val struct_srt xvar in*)
   let f = mk_f_snap srt xvar in
-  let finv_app = App (FreeSym (f_snp_loc_srt_inv_id srt), [f], snap_typ) in
-  (* f(snap_typ) loc<T> *)
+  let finv_app = mk_app snap_typ (FreeSym (f_snp_loc_srt_inv_id srt)) [f] in
   
-  let f_inj = mk_eq finv_app xvar in 
+  let f_inj = mk_eq finv_app xvar in
   let name, _ = (f_snp_loc_srt_id srt) in
+  let f_app_gen = ([Match (xvar, [])], [f]) in
 
-  let axiom = mk_axiom ("snap_axiom_" ^ name) (mk_forall [x, snap_typ] (annotate f_inj [NoInst [x]])) in
+  let axiom = mk_axiom ~gen:[f_app_gen] ("snap_axiom_" ^ name) (mk_forall [x, snap_typ] f_inj) in
   Debug.debug (fun () -> sprintf "snap_axiom (%s)\n" (string_of_form axiom));
   axiom
 
