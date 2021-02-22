@@ -234,6 +234,7 @@ type symb_heap = heap_chunk list
 
 let heap_add h stack hchunk = (hchunk :: h, stack)
 
+(* axioms for snapshot reads *)
 let f_snap_id = mk_name_generator "f_snap"
 let f_snap_inv_id = mk_name_generator "f_inv_snap"
 let f_snp_loc_srt_id struct_srt = f_snap_id struct_srt
@@ -250,7 +251,7 @@ let snap_axiom srt =
   
   let f_inj = mk_eq finv_app xvar in
   let name, _ = (f_snp_loc_srt_id srt) in
-  let f_app_gen = ([Match (xvar, [])], [f]) in
+  let f_app_gen = ([Match (f, [])], [finv_app]) in
 
   let axiom = mk_axiom ~gen:[f_app_gen] ("snap_axiom_" ^ name) (mk_forall [x, snap_typ] f_inj) in
   Debug.debug (fun () -> sprintf "snap_axiom (%s)\n" (string_of_form axiom));

@@ -230,14 +230,14 @@ let rec exec state comm (fc: symb_state -> 'a option) =
         lineSep (string_of_state state)
     );
     let tnew = (Var (id, srt)) in
-    (* TODO lift havoc *)
     let st2 = {state with store=(havoc state.store [tnew])} in 
-    Debug.debug (fun () -> 
-      sprintf "%sExecuting new done: %d: %s%sCurrent state:\n%s\n"
-        lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
-        lineSep (string_of_state st2)
-    );
-    produce_sl_form st2 (mk_cell tnew) (fresh_snap_tree ()) fc 
+    let loc_srt = strip_loc srt in
+    let field_regions = IdMap.fold (fun _ v regions ->
+      match v.var_sort with
+      | Map ([Loc l], field_sort) when l = loc_srt ->
+          mk_field_region tnew (mk_free_app field_sort v.var_name []) :: regions 
+      | _ -> regions) state.prog.prog_vars [] in
+    produce_sl_forms st2 field_regions (fresh_snap_tree ()) fc 
   | Basic (Dispose d, pp) -> 
       Debug.debug (fun () ->
         sprintf "%sExecuting Dispose: %d: %s%sCurrent state:\n%s\n"
@@ -245,8 +245,15 @@ let rec exec state comm (fc: symb_state -> 'a option) =
           lineSep (string_of_state state)
       );
       eval_term state d.dispose_arg (fun state' t' ->
-        consume_sl_form state' state'.heap (mk_cell t') (fun state'' h'' snap ->
-          fc state''))
+        let loc_srt = sort_of t' in
+        let field_regions = IdMap.fold (fun _ v regions ->
+          match v.var_sort with
+          | Map ([Loc l], field_sort) when l = loc_srt ->
+              mk_field_region t' (mk_free_app field_sort v.var_name []) :: regions 
+          | _ -> regions) state.prog.prog_vars [] in
+
+          consumes_sl_form state' state'.heap field_regions (fun state'' h'' snap ->
+            fc state''))
   | Loop (l, pp) ->
       Debug.debug (fun () -> 
         sprintf "%sExecuting loop: %d: %s%sCurrent state:\n%s\n"

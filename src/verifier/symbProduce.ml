@@ -56,7 +56,9 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
        let hc = mk_heap_chunk_obj id obj' snp in 
         let h, stack = heap_add state'.heap state'.pc hc in
         fc {state' with heap=h; pc = stack})
-  | Sl.Atom (Sl.Region, ts, a) -> todo "region terms ts"
+  | Sl.Atom (Sl.Region, ts, a) -> 
+      Debug.debug (fun () -> sprintf "region ts (%s)\n" (string_of_term_list ts));
+      todo "region terms ts"
   | Sl.Atom (Sl.Emp, [], _) ->
       fc state
   | Sl.Atom (Sl.Emp, ts, _) -> todo "Atom emp ts"

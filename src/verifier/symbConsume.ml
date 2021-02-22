@@ -117,6 +117,13 @@ let rec consumes_symb_impl state (assns: Prog.spec list) f_eval_form f_eval_term
       consume_symb_impl state state.heap hd.spec_form f_eval_form f_eval_terms f_eval_term (fun state' h' snap' ->
         consumes_symb_impl state assns' f_eval_form f_eval_terms f_eval_term fc)
 
+let rec consumes_sl_form_impl state heap (forms: Sl.form list) f_eval_form f_eval_terms f_eval_term fc =
+  match forms with
+  | [] -> fc state heap (emp_snap)
+  | hd :: forms' -> 
+      consume_sl_form_impl state state.heap hd f_eval_form f_eval_terms f_eval_term (fun state' h' snap' ->
+        consumes_sl_form_impl state state.heap forms' f_eval_form f_eval_terms f_eval_term fc)
+
 let rec consumes_impl state (assns: Prog.spec list) f_eval_form f_eval_terms f_eval_term fc =
   match assns with
   | [] -> fc state (emp_snap)
