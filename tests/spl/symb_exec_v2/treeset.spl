@@ -1,6 +1,6 @@
 options "-symbexec-v2"
 
-include "../include/bstree_rec.spl";
+include "../include/bstree_rec_viper.spl";
 
 procedure traverse(root: Node)
   requires tree(root);

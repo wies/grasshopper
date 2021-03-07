@@ -62,24 +62,22 @@ procedure pure_call6(f: Int, g: Int, h: Int) returns (i: Int, j: Int)
 }
 
 /* test with acc predicates */
-/*
 struct Node {
   var next: Node;
 }
 
 procedure foo_heap(x: Node, y: Node)
-  requires acc(x)
-  ensures acc(x) &*& x.next == y
+  requires acc(x.next)
+  ensures acc(x.next) &*& x.next == y
 {
   x.next := y;
 }
 
 procedure bar_heap(x: Node, y: Node)
-  requires acc(x) &*& acc(y)
-  ensures acc(x) &*& acc(y) &*& y.next == old(y.next)
+  requires acc(x.next) &*& acc(y.next)
+  ensures acc(x.next) &*& acc(y.next) &*& y.next == old(y.next)
 {
   var z := y.next;
   foo_heap(x, y);
   pure assert (y.next == z);
 }
-*/

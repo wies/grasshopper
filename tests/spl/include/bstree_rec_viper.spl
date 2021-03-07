@@ -1,0 +1,12 @@
+// Structure and predicate declarations for binary search trees
+
+struct Node {
+  var left: Node;
+  var right: Node;
+  var data: Int;
+}
+
+predicate tree(r: Node) {
+  r == null ||
+  r != null &*& acc(r.data) &*& acc(r.left) &*& acc(r.right) &*& tree(r.left) &*& tree(r.right)
+}

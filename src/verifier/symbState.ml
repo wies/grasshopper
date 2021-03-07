@@ -70,7 +70,13 @@ let find_symb_val (store: symb_store) (id: ident) =
   with Not_found ->
     failwith ("find_symb_val: Could not find symbolic val for " ^ (string_of_ident id))
 
-let maybe_find_symb_val (store: symb_store) (id: ident) = IdMap.find_opt id store
+let maybe_find_symb_val (store: symb_store) t = 
+  let rec get_t = function
+    | Var (id, _) ->
+       IdMap.find_opt id store |> Opt.get_or_else t
+    | App (sym, ts, srt) -> App (sym, List.map get_t ts, srt)
+  in
+  get_t t
 
 let find_or_make_symb_val (store: symb_store) (id: ident) srt =
   try (store, IdMap.find id store)
@@ -284,10 +290,11 @@ let check_entail prog p1 p2 =
     let p2 = Verifier.annotate_aux_msg "Related location" p2 in
     (* Close the formulas: assuming all free variables are existential *)
     let close f = smk_exists (Grass.IdSrtSet.elements (sorted_free_vars f)) f in
+    let prog2 = { prog with prog_preds = IdMap.empty } in
     let labels, f =
       smk_and [p1; mk_not p2] |> close |> nnf
       (* Add definitions of all referenced predicates and functions *)
-      |> fun f -> f :: Verifier.pred_axioms prog
+      |> fun f -> f :: Verifier.pred_axioms prog2 
       (** TODO: Add axioms *)
       |> (fun fs -> smk_and (fs @ snap_axioms))
       (* Add labels *)

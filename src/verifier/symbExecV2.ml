@@ -12,12 +12,14 @@ open SymbProduce
 open SymbBranch
 open Prog
 
+(* todo filter out predicates in the program so we don't hit that problem. *)
 let simplify proc prog =
   let info msg prog = Debug.info (fun () -> msg); prog in
   prog |>
   dump_if 0 |>
   info "Inferring accesses.\n" |>
   Analyzer.infer_accesses true |>
+  (*filter_preds |>*)
   dump_if 1
 
 (* Substitutes all constants in spec_form [sf] with other terms according to substution map [subst_map]. *) 
@@ -165,7 +167,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
           subst_spec_list_formals state precond' foo args'
         in
         Debug.debug(fun () -> sprintf "\nPrecond[x -> e'] = %s\n" (pr_spec_form_list precond_sf'));
-        consumes_symb state' precond_sf' (fun state2' _ ->
+        consumes state' precond_sf' (fun state2' _ ->
           let proc_contr = (IdMap.find foo state.prog.prog_procs).proc_contract in
           let store' =
             List.combine proc_contr.contr_returns lhs
@@ -187,7 +189,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
             subst_spec_list_return_ids state3' p foo lhs
           in
           Debug.debug(fun () -> sprintf "\nPostcond[x -> e'][y->z] = %s\n" (pr_spec_form_list post_sf'));
-          produces_symb state3' post_sf' (fresh_snap_tree ()) (fun state4' -> fc state4')))
+          produces state3' post_sf' (fresh_snap_tree ()) (fun state4' -> fc state4')))
   | Basic (Havoc {havoc_args=vars}, pp) -> 
     let vars_terms =
       let locs = Prog.locals_of_proc state.proc in
@@ -289,6 +291,16 @@ let rec exec state comm (fc: symb_state -> 'a option) =
       | Some b ->
         Debug.debug (fun () -> sprintf "body (%s)\n" (string_of_format pr_spec_form b));
         let ids = (IdMap.find pc.pred_name state.prog.prog_preds).pred_contract.contr_formals in 
+        (*
+        let _ = IdMap.iter (fun k v -> 
+          Debug.debug (fun () -> sprintf "k, v = %s, %s, %s\n" (string_of_ident k) (string_of_ident v.var_name) (string_of_sort v.var_sort))) locals in
+        let _ = IdSet.iter (fun v -> 
+          Debug.debug (fun () -> sprintf "v = %s\n" (string_of_ident v))) locals in
+
+        *)
+
+        Debug.debug (fun () -> sprintf "ids (%s)\n" (string_of_ident_list ids));
+        Debug.debug (fun () -> sprintf "terms (%s)\n" (string_of_term_list args'));
         let sm =
           List.combine ids args' 
           |> List.fold_left (fun sm (id, a) -> IdMap.add id a sm) IdMap.empty 

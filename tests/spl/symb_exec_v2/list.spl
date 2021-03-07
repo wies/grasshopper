@@ -1,15 +1,15 @@
 options "-symbexec-v2"
 
-include "../include/sllist_rec.spl"
+include "../include/sllist_rec_symbexec.spl"
 
 lemma unfold_lseg(x: Node, y: Node)
   requires lseg(x, y) &*& x != y
-  ensures acc(x) &*& lseg(x.next, y)
+  ensures acc(x.next) &*& lseg(x.next, y)
 {
 }
 
 lemma fold_left(x: Node, y: Node)
-  requires acc(x) &*& lseg(x.next, y) &*& y != x
+  requires acc(x.next) &*& lseg(x.next, y) &*& y != x
   ensures lseg(x, y)
 {
   unfold lseg(x.next, y);
@@ -37,8 +37,8 @@ procedure delete(x: Node)
 }
 
 procedure test_frame(x: Node, y: Node, z1: Node, z2: Node)
-  requires acc(x) &*& x.next == z1 &*& lseg(y, null)
-  ensures acc(x) &*& x.next == z2 &*& lseg(y, null)
+  requires acc(x.next) &*& x.next == z1 &*& lseg(y, null)
+  ensures acc(x.next) &*& x.next == z2 &*& lseg(y, null)
 {
   x.next := z2;
 }

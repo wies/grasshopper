@@ -5,7 +5,7 @@ struct Counter {
 }
 
 predicate counter(c: Counter) {
- acc(c)
+ acc(c.count)
 }
 
 procedure incr(c: Counter) 
@@ -58,7 +58,7 @@ procedure client()
 }
 
 predicate counter2(c: Counter, v: Int) {
- acc(c) &*& v == c.count
+ acc(c.count) &*& v == c.count
 }
 
 procedure incr2(c: Counter, ghost v: Int)

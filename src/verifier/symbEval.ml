@@ -22,6 +22,12 @@ let subst_spec_form subst_map sf =
   | SL slf -> SL (SlUtil.subst_consts subst_map slf)
   | FOL f -> FOL (GrassUtil.subst_consts subst_map f)
 
+let subst_spec_form subst_map sf =
+  match sf with
+  | SL slf -> SL (SlUtil.subst_consts subst_map slf)
+  | FOL f -> FOL (GrassUtil.subst_consts subst_map f)
+
+
 (* Substitutes identifiers of a spec list with other terms according to substitution map [subst_map]. *)
 let subst_spec_list subst_map sl =
   List.map (fun s -> subst_spec_form subst_map s.spec_form) sl
@@ -66,15 +72,9 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
     sprintf "%sEval Term: %s\n State:\n{%s\n}\n\n"
     lineSep (string_of_term t) (string_of_state state));
   match t with
-  | Var (id1, srt1) ->
+  | Var (id1, srt1) as t->
     Debug.debug(fun() -> sprintf "Var Term\n");
-    (match find_symb_val state.store id1 with
-    | Var (id2, srt2) -> 
-        if srt1 = srt2
-        then fc state (Var (id2, snap_typ))
-        else raise_err (sprintf "sorts are not equal (%s) != (%s), this should never happen!"
-          (string_of_sort srt1) (string_of_sort srt2))
-    | _ -> raise_err "unreachable found symbval that isn't a Var")
+    fc state (maybe_find_symb_val state.store t)
   | App (Value i, [], srt) -> todo "eval Value"
   | App (Union, [], srt) -> todo "eval Union"
   | App (Inter, [], srt) -> todo "eval Inter"
@@ -115,8 +115,10 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
         Debug.debug( fun () -> sprintf "IntConst (%s)\n" (string_of_term tt));
         fc state tt
     | _ as tt -> fc state tt)
-  | App (FreeSym id, ts, srt1) -> 
-      Debug.debug(fun() -> sprintf "FreeSym ts (%s) srt: %s\n" (string_of_terms ts) (string_of_sort srt1));
+  | App (FreeSym id, [t], srt1) -> 
+      Debug.debug(fun() -> sprintf "FreeSym ts (%s) srt: %s\n" (string_of_term t) (string_of_sort srt1));
+      fc state t
+  | App (FreeSym id, ts, srt1) ->
       todo "FreeSym"
   | App (IntConst n, [], srt) as i -> 
         Debug.debug (fun () -> sprintf "IntConst (%s)\n" (string_of_term i));

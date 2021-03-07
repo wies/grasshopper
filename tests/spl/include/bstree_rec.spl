@@ -6,7 +6,6 @@ struct Node {
   var data: Int;
 }
 
-// just use the tree predicate. 
 predicate tree(r: Node) {
   r == null ||
   r != null &*& acc(r) &*& tree(r.left) &*& tree(r.right)

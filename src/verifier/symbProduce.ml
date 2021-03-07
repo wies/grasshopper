@@ -72,15 +72,35 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
        produce_sl_form state' f2 (snap_second snp) fc)
   | Sl.BoolOp (op, fs, p) ->
         produce_sl_forms state fs snp fc
+  | Sl.Binder (b, [], f, _) ->
+      produce_sl_form state f snp fc
   | Sl.Binder (b, ts, f, _) -> todo "Binder"
+
+let rec produce_sl_symb_forms state (fs: Sl.form list) snp (fc: symb_state -> 'a option) =
+  match fs with
+  | [] -> fc state
+  | hd :: fs' ->
+      produce_sl_symb_form state hd snp (fun state' ->
+        produce_sl_symb_forms state' fs' snp fc)
 
 and produce_sl_symb_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
    Debug.debug(fun() ->
       sprintf "%sProduce SYMB SL Form: %s\n Current State:\n{%s\n}\n\n"
       lineSep (Sl.string_of_form f) (string_of_state state));
   match f with
-  | Sl.Pure (Atom (t, _) as p, _) ->
-   produce_symb_form_2 state p (sort_of t) snp fc
+  | Sl.Pure (p, _) ->
+   Debug.debug(fun () -> sprintf "PURE \n");
+   produce_symb_form state p snp fc
+  | Sl.Atom (Sl.Region, ts, a) -> 
+      Debug.debug (fun () -> sprintf "region ts (%s)\n" (string_of_term_list ts));
+      todo "SL symb region"
+  | Sl.Binder (b, [], f, _) ->
+      produce_sl_symb_form state f snp fc
+  | Sl.SepOp (op, f1, f2, _) ->
+     produce_sl_symb_form state f1 (snap_first snp) (fun state' ->
+       produce_sl_symb_form state' f2 (snap_second snp) fc)
+  | Sl.BoolOp (op, fs, p) ->
+        produce_sl_symb_forms state fs snp fc
   | _ -> todo "add cases for produce_sl_symb_form"
 
 let produce state sf snp (fc: symb_state -> 'a option) =

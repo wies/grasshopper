@@ -148,6 +148,7 @@ symb_exec_viper:heap    tests/spl/symb_exec_v2/heap.spl                ''     pa
 symb_exec_viper:functions tests/spl/symb_exec_v2/func.spl              ''     pass
 symb_exec_viper:predicate tests/spl/symb_exec_v2/predicates.spl        ''     pass
 symb_exec_viper:list    tests/spl/symb_exec_v2/list.spl                ''     pass
+symb_exec_viper:tree tests/spl/symb_exec_v2/treeset.spl                ''     pass
 "
 
 res=0
