@@ -154,7 +154,7 @@ type contract = {
 type proc_decl = {
     proc_contract: contract; (** contract *)
     proc_body: command option; (** procedure body *)
-    proc_deps: ident list; (** names of dependant procedures *)
+    proc_deps: ident list; (** names of dependent procedures *)
     proc_is_tailrec: bool; (** whether the procedure is tail recursive *)
     proc_is_lemma: bool;  (** whether this procedure is a lemma *)
     proc_is_auto: bool; (** whether this lemma should be automatically applied *)

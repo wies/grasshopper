@@ -98,7 +98,7 @@ let pr_spec_form_list sfl =
 
 let loop_target_terms state comm = 
   let loop_modified = modifies_cmd comm in
-  let locals = locals_of_proc state.proc in
+  let locals = state.contract.contr_locals in
   List.fold_left (fun ts id ->
     match IdMap.find_opt id locals with
     | Some x -> (Var (x.var_name, x.var_sort)) :: ts
@@ -192,7 +192,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
           produces state3' post_sf' (fresh_snap_tree ()) (fun state4' -> fc state4')))
   | Basic (Havoc {havoc_args=vars}, pp) -> 
     let vars_terms =
-      let locs = Prog.locals_of_proc state.proc in
+      let locs = state.contract.contr_locals in
       List.fold_left
         (fun acc var ->
           let srt = Grass.IdMap.find var locs in
@@ -215,7 +215,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
         lineSep (pp.pp_pos.sp_start_line) (string_of_format pr_cmd comm)
         lineSep (string_of_state state)
     );
-    let locs = Prog.returns_of_proc state.proc in
+    let locs = state.contract.contr_returns in
     exec state (Basic (Assign {assign_lhs=locs; assign_rhs=xs}, pp)) (fun state' ->
       fc state')
   | Basic (Split spec, pp) -> 
@@ -351,9 +351,35 @@ and execs state comms (fc: symb_state -> 'a option) =
       exec state comm (fun state' ->
         execs state' comms' fc)
 
-(** verify checks procedures and predicates for well-formed specs and the postcondition
-   can be met by executing the body under the precondition *)
-let verify spl_prog prog aux_axioms proc =
+(* verifies that predicates are well-formed *)
+let verify_pred spl_prog prog aux_axioms pred =
+  let name = Prog.name_of_pred pred in
+  Debug.info (fun () ->
+    "Checking predicate " ^ Grass.string_of_ident name ^ "...\n");
+
+  (** Extract formal params; havoc them into a fresh store as a *)
+  let formals = Prog.formals_of_pred pred in
+
+  let formal_return_terms =
+    let locs = Prog.locals_of_pred pred in
+    List.fold_left
+      (fun acc var ->
+        let srt = Grass.IdMap.find var locs in
+        Grass.Var (var, srt.var_sort) :: acc)
+      [] (formals)
+  in
+
+  let init_state = mk_symb_state
+    (havoc empty_store formal_return_terms) prog pred.pred_contract in
+
+  let body = (IdMap.find name prog.prog_preds).pred_body |> Opt.get in
+  let _ = produce init_state body.spec_form (fresh_snap_tree ()) (fun _ -> None) in
+
+  aux_axioms, []
+ 
+
+(** verify checks procedures are well-formed specs and the postcondition can be met by executing the body under the precondition *)
+let verify spl_prog prog aux_axioms proc = 
   Debug.info (fun () ->
       "Checking procedure " ^ Grass.string_of_ident (Prog.name_of_proc proc) ^ "...\n");
 
@@ -385,7 +411,7 @@ let verify spl_prog prog aux_axioms proc =
     contr_postcond=postcond;
     } in
   let init_state = mk_symb_state
-    (havoc empty_store formal_return_terms) (declare_proc prog proc) (declare_contract proc contr'); in
+    (havoc empty_store formal_return_terms) (declare_proc prog proc) contr' in
 
   let old_store =
     IdMap.fold (fun id v acc -> IdMap.add id v acc) init_state.store empty_store in
@@ -399,7 +425,7 @@ let verify spl_prog prog aux_axioms proc =
     (fun st ->
       let st2 = { st with heap=[]; old_store=st.store } in
       produces st2 postcond (fresh_snap_tree ()) (fun _ ->
-           (match init_state.proc.proc_body with
+           (match proc.proc_body with
            | Some body ->
               Debug.debug (fun () -> "EXEC BODY\n");
               exec st body (fun st3 ->

@@ -401,23 +401,18 @@ type symb_state = {
     pc: pc_stack;
     heap: symb_heap;
     prog: program; (* need to carry around prog for prover check *)
-    proc: proc_decl;
+    contract: contract;
   }
 
-let mk_symb_state st prog proc =
+let mk_symb_state st prog contract =
   { store=st;
     old_store=empty_store;
     pc=[];
     heap=[];
     prog=prog;
-    proc=proc
+    contract=contract
   }
 
-let update_store_prog state proc prog =
-  { state with
-    proc=proc;
-    prog=prog;
-  }
 
 let update_store state store old_store =
   {state with store=store; old_store=old_store}
@@ -451,5 +446,5 @@ let merge_states s1 s2 =
    heap=merge_lsts s1.heap s2.heap;
    pc=merge_lsts s1.pc s2.pc;
    prog=s1.prog (* programs are the same *);
-   proc=s1.proc (* procs are the same *);
+   contract=s1.contract (* procs are the same *);
  }

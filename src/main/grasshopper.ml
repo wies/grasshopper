@@ -1,6 +1,7 @@
 (** Main module of GRASShopper *)
 
 open Util
+open Printf
 open SplCompiler
 open Grass
     
@@ -115,7 +116,46 @@ let parse_spl_program main_file =
   |> SplSyntax.add_alloc_decl
   |> SplChecker.check
 
-   
+let check_predicate spl_prog pred =
+  if not !Config.symbexec_v2 then failwith ("Cannot check predicates unless symbexec-v2 engine is used.\n");
+  
+  let prog = SplTranslator.to_program spl_prog in
+  let preds =  (* Split pred string to get names of multiple predicates *)
+    match pred with
+    | Some p ->
+      p |> String.split_on_char ' '
+      |> List.fold_left (fun ps s -> IdSet.add (s, 0) ps) IdSet.empty
+    | None ->
+        match !Config.splmodule with
+        | Some m ->
+            IdMap.fold (fun id decl preds ->
+              let contains s1 s2 =
+                let re = Str.regexp_string s2
+                in
+                try ignore (Str.search_forward re s1 0); true
+                with Not_found -> false
+              in
+              if contains decl.Prog.pred_contract.contr_pos.sp_file m  then
+                IdSet.add id preds
+              else preds) prog.prog_preds IdSet.empty
+        | None ->
+            IdMap.fold (fun id _ -> IdSet.add id) prog.prog_preds IdSet.empty
+  in
+
+  let preds =
+    IdSet.fold (fun p preds -> (Prog.find_pred prog p) :: preds) preds []
+  in
+
+  let check_pred =
+      SymbExecV2.verify_pred spl_prog prog
+  in
+
+  let check simple_prog (aux_axioms, first) pred =
+    let aux_axioms, first = check_pred aux_axioms pred in
+    aux_axioms, true 
+  in
+  List.fold_left (check prog) ([], true) (preds)
+  
 (** Check SPL program in main file [file] and procedure [proc] *)
 let check_spl_program spl_prog proc =
   let prog = SplTranslator.to_program spl_prog in
@@ -145,7 +185,8 @@ let check_spl_program spl_prog proc =
       SymbExec.simplify proc prog
     else if !Config.symbexec_v2 then
       SymbExecV2.simplify proc prog
-    else Verifier.simplify procs prog in
+    else Verifier.simplify procs prog
+  in
   let check_proc =
     if !Config.typeonly then
       fun aux_axioms proc -> aux_axioms, []
@@ -155,7 +196,7 @@ let check_spl_program spl_prog proc =
       SymbExecV2.verify spl_prog simple_prog
     else
       Verifier.check_proc simple_prog
-  in    
+  in
   let check simple_prog (aux_axioms, first) proc =
     let aux_axioms, errors = check_proc aux_axioms proc in
     aux_axioms, List.fold_left
@@ -173,6 +214,7 @@ let check_spl_program spl_prog proc =
       )
       first errors
   in
+
   let procs =
     IdSet.fold (fun p procs ->
       match Prog.find_proc_with_deps simple_prog p with
@@ -252,6 +294,7 @@ let _ =
       if !Config.simplify then
         SplSyntax.print_cu stdout spl_prog
       else begin
+        let _ = check_predicate spl_prog !Config.predicate in
         let _, res = check_spl_program spl_prog !Config.procedure in
         print_stats start_time; 
         print_c_program spl_prog;
