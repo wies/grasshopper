@@ -360,7 +360,7 @@ let verify_pred spl_prog prog aux_axioms pred =
   (** Extract formal params; havoc them into a fresh store as a *)
   let formals = Prog.formals_of_pred pred in
 
-  let formal_return_terms =
+  let formal_terms =
     let locs = Prog.locals_of_pred pred in
     List.fold_left
       (fun acc var ->
@@ -370,7 +370,7 @@ let verify_pred spl_prog prog aux_axioms pred =
   in
 
   let init_state = mk_symb_state
-    (havoc empty_store formal_return_terms) prog pred.pred_contract in
+    (havoc empty_store formal_terms) prog pred.pred_contract in
 
   let body = (IdMap.find name prog.prog_preds).pred_body |> Opt.get in
   let _ = produce init_state body.spec_form (fresh_snap_tree ()) (fun _ -> None) in
@@ -382,6 +382,23 @@ let verify_function spl_prog prog aux_axioms func =
   let name = Prog.name_of_pred func in
   Debug.info (fun () ->
     "Checking function " ^ Grass.string_of_ident name ^ "...\n");
+  
+  (** Extract formal params; havoc them into a fresh store as a *)
+  let formals = Prog.formals_of_pred pred in
+
+  let formal_terms =
+    let locs = Prog.locals_of_pred pred in
+    List.fold_left
+      (fun acc var ->
+        let srt = Grass.IdMap.find var locs in
+        Grass.Var (var, srt.var_sort) :: acc)
+      [] (formals)
+  in
+
+  let init_state = mk_symb_state
+    (havoc empty_store formal_terms) prog pred.pred_contract in
+
+
   aux_axioms, []
 
 
