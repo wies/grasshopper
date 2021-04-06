@@ -377,6 +377,13 @@ let verify_pred spl_prog prog aux_axioms pred =
 
   aux_axioms, []
  
+let verify_function spl_prog prog aux_axioms func =
+  (* again functions are represented as predicates with a single return value *)
+  let name = Prog.name_of_pred func in
+  Debug.info (fun () ->
+    "Checking function " ^ Grass.string_of_ident name ^ "...\n");
+  aux_axioms, []
+
 
 (** verify checks procedures are well-formed specs and the postcondition can be met by executing the body under the precondition *)
 let verify spl_prog prog aux_axioms proc = 

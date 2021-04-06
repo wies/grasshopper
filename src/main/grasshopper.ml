@@ -136,14 +136,21 @@ let check_predicate spl_prog pred =
                 with Not_found -> false
               in
               if contains decl.Prog.pred_contract.contr_pos.sp_file m  then
-                IdSet.add id preds
+                match decl.Prog.pred_contract.contr_returns with
+                | [] -> IdSet.add id preds
+                | _ -> preds
               else preds) prog.prog_preds IdSet.empty
         | None ->
-            IdMap.fold (fun id _ -> IdSet.add id) prog.prog_preds IdSet.empty
+            IdMap.fold (fun id _ -> 
+              IdSet.add id) prog.prog_preds IdSet.empty
   in
 
   let preds =
-    IdSet.fold (fun p preds -> (Prog.find_pred prog p) :: preds) preds []
+    IdSet.fold (fun p preds -> 
+      let decl = Prog.find_pred prog p in
+      match decl.pred_contract.contr_returns with
+      | [] -> decl :: preds 
+      | _ -> preds) preds []
   in
 
   let check_pred =
@@ -155,7 +162,60 @@ let check_predicate spl_prog pred =
     aux_axioms, true 
   in
   List.fold_left (check prog) ([], true) (preds)
+
+let check_function spl_prog func =
+  if not !Config.symbexec_v2 then failwith ("Cannot check function unless symbexec-v2 engine is used.\n");
   
+  let prog = SplTranslator.to_program spl_prog in
+
+  (* functions are represented the same as predicates with only one return variable *)
+  let functions =  (* Split pred string to get names of multiple predicates *)
+    match func with
+    | Some p ->
+      p |> String.split_on_char ' '
+      |> List.fold_left (fun ps s -> IdSet.add (s, 0) ps) IdSet.empty
+    | None ->
+        match !Config.splmodule with
+        | Some m ->
+            IdMap.fold (fun id decl funcs ->
+              let contains s1 s2 =
+                let re = Str.regexp_string s2
+                in
+                try ignore (Str.search_forward re s1 0); true
+                with Not_found -> false
+              in
+              let contract = decl.Prog.pred_contract in
+              if contains contract.contr_pos.sp_file m then
+                match contract.contr_returns with
+                | [returns] -> IdSet.add id funcs 
+                | _ -> funcs
+              else funcs) prog.prog_preds IdSet.empty
+        | None ->
+            IdMap.fold (fun id decl funcs -> 
+              match decl.Prog.pred_contract.contr_returns with
+              | [returns] -> 
+                  IdSet.add id funcs
+              | _ -> funcs) prog.prog_preds IdSet.empty
+  in
+
+  let functions =
+    IdSet.fold (fun p funcs -> 
+      let decl = Prog.find_pred prog p in
+      match decl.pred_contract.contr_returns with
+      | [returns] -> decl :: funcs
+      | _ -> funcs) functions []
+  in
+
+  let check_func =
+      SymbExecV2.verify_function spl_prog prog
+  in
+
+  let check simple_prog (aux_axioms, first) func =
+    let aux_axioms, first = check_func aux_axioms func in
+    aux_axioms, true 
+  in
+  List.fold_left (check prog) ([], true) (functions)
+ 
 (** Check SPL program in main file [file] and procedure [proc] *)
 let check_spl_program spl_prog proc =
   let prog = SplTranslator.to_program spl_prog in
@@ -295,6 +355,7 @@ let _ =
         SplSyntax.print_cu stdout spl_prog
       else begin
         let _ = check_predicate spl_prog !Config.predicate in
+        let _ = check_function spl_prog !Config.func in
         let _, res = check_spl_program spl_prog !Config.procedure in
         print_stats start_time; 
         print_c_program spl_prog;

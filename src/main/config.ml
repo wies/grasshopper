@@ -10,9 +10,11 @@ let procedure = ref None
 (** Name of predicate that is to be checked *)
 let predicate = ref None 
 
+(** Name of function that is to be checked *)
+let func = ref None 
+
 (** Name of module that is to be checked *)
 let splmodule = ref None
-
     
 (** Name of assertion that is to be checked *)
 let assertion = ref None
@@ -126,6 +128,7 @@ let cmd_options_spec =
    ("-dumpcores", Arg.Set unsat_cores, " Produce unsat cores with every unsat SMT query\n\nOptions for controlling what is checked:");
    ("-procedure", Arg.String (fun p -> procedure := Some p), "<string>  Only check the specified procedure");
    ("-predicate", Arg.String (fun p -> predicate := Some p), "<string>  Only check the specified predicate");
+   ("-function", Arg.String (fun p -> func := Some p), "<string>  Only check the specified function");
    ("-module", Arg.String (fun p -> splmodule := Some p), "<string>  Only check the specified module");
    ("-assertion", Arg.String (fun p -> assertion := Some p), "<string>  Only check the specified assertion");
    ("-typeonly", Arg.Set typeonly, " Only type-check the program");
