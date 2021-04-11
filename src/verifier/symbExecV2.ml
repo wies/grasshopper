@@ -7,6 +7,7 @@ open Grass
 open SlUtil 
 open SymbEval
 open SymbState
+open SymbFunc
 open SymbConsume
 open SymbProduce
 open SymbBranch
@@ -384,10 +385,13 @@ let verify_function spl_prog prog aux_axioms func =
     "Checking function " ^ Grass.string_of_ident name ^ "...\n");
   
   (** Extract formal params; havoc them into a fresh store as a *)
-  let formals = Prog.formals_of_pred pred in
+  let formals_of_func = Prog.formals_of_pred in
+  let returns_of_func = Prog.returns_of_pred in
+  let formals = formals_of_func func in
+  let returns = returns_of_func func in
 
   let formal_terms =
-    let locs = Prog.locals_of_pred pred in
+    let locs = Prog.locals_of_pred func in
     List.fold_left
       (fun acc var ->
         let srt = Grass.IdMap.find var locs in
@@ -395,10 +399,33 @@ let verify_function spl_prog prog aux_axioms func =
       [] (formals)
   in
 
+  let return_term =
+      let var = List.hd returns in
+        let srt = Grass.IdMap.find var (Prog.locals_of_pred func) in
+         Grass.Var (var, srt.var_sort) 
+  in
+
+  let precond = 
+    fold_spec_list
+      mk_sep_star (mk_atom Emp []) (Prog.precond_of_pred func)
+  in
+  let postcond = 
+    fold_spec_list
+      mk_sep_star (mk_atom Emp []) (Prog.postcond_of_pred func)
+  in
+
   let init_state = mk_symb_state
-    (havoc empty_store formal_terms) prog pred.pred_contract in
+    (havoc empty_store formal_terms) prog func.pred_contract in
 
+  let body = (IdMap.find name prog.prog_preds).pred_body |> Opt.get in
 
+  let _ = produces init_state precond (fresh_snap_tree ()) (fun st ->
+    let st2 = {st with store = havoc st.store [return_term]} in
+    produce_symb st2 body.spec_form (fresh_snap_tree ()) (fun st3 ->
+        consumes st3 postcond (fun st3' snap -> 
+          gen_fun_axiom name formal_terms (sort_of return_term) st3' 
+    )))
+  in
   aux_axioms, []
 
 

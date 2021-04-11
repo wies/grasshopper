@@ -973,6 +973,7 @@ let sorted_free_vars f =
 	List.fold_left (fvt bv) vars ts
   in fold_terms_with_bound fvt IdSrtSet.empty f
 
+
 (** Computes the set of all sorts of the terms appearing in formula [f]. *)
 let sorts f =
   let rec s acc = function
@@ -1014,6 +1015,21 @@ let free_consts_term t = free_consts_term_acc IdSet.empty t
 (** Computes the set of free constants occuring in formula [f].
  ** Takes accumulator [consts] as additional argument. *)
 let free_consts_acc consts f = fold_terms free_consts_term_acc consts f
+
+(** Computes the set of free variables of term [t] together with their sorts. *)
+let sorted_free_vars_term t = 
+  let rec fvt vars = function
+    | Var (id, srt) -> IdSrtSet.add (id, srt) vars
+    | App (_, ts, _) -> List.fold_left fvt vars ts
+  in fvt IdSrtSet.empty t 
+
+(** Computes the set of free constants of term [t] together with their sorts. *)
+let sorted_free_consts t = 
+  let rec fct consts = function
+    | Var _ -> consts 
+    | App (FreeSym id, [], srt) -> IdSrtSet.add (id, srt) consts 
+    | App (_, ts, _) -> List.fold_left fct consts ts
+  in fct IdSrtSet.empty t 
 
 (** Computes the set of free constants occuring in formula [f]. *)
 let free_consts f =

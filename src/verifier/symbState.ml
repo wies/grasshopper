@@ -59,6 +59,12 @@ let string_of_symb_val_map store =
   |> String.concat ", "
   |> sprintf "{%s}"
 
+let string_of_idset s =
+  IdSet.elements s
+  |> List.map (fun e -> string_of_ident e)
+  |> String.concat ", "
+  |> sprintf "[%s]"
+
 (** Symbolic store:
   maintains a mapping from grasshopper vars to symbolic vals
   ident -> term . *)

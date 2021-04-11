@@ -49,11 +49,6 @@ let subst_spec_list_formals state sl proc args =
   subst_spec_list sm sl
 
 (** eval rules *)
-let string_of_idset s =
-  IdSet.elements s
-  |> List.map (fun e -> string_of_ident e)
-  |> String.concat ", "
-  |> sprintf "[%s]"
 
 (** eval_terms evaluates a term list element-wise using the eval
   functions below, accumulating the resulting symbolic terms into the symb_ts list. *)
@@ -107,6 +102,7 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
       Debug.debug(fun() -> sprintf "FreeSym [] srt: %s\n" (string_of_sort srt1));
     (match find_symb_val state.store id1 with
     | Var (id2, srt2) as tt -> 
+        Debug.debug(fun () -> sprintf "term (%s)\n" (string_of_term tt));
         if srt1 = srt2
         then fc state tt
         else raise_err (sprintf "sorts are not equal (%s) != (%s), this should never happen!"
@@ -115,11 +111,10 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
         Debug.debug( fun () -> sprintf "IntConst (%s)\n" (string_of_term tt));
         fc state tt
     | _ as tt -> fc state tt)
-  | App (FreeSym id, [t], srt1) -> 
-      Debug.debug(fun() -> sprintf "FreeSym ts (%s) srt: %s\n" (string_of_term t) (string_of_sort srt1));
-      fc state t
   | App (FreeSym id, ts, srt1) ->
-      todo "FreeSym"
+      Debug.debug(fun() -> sprintf "FreeSym ts (%s) srt: %s\n" (string_of_term_list ts) (string_of_sort srt1));
+      eval_terms state ts (fun st' ts' ->
+        fc st' (App (FreeSym id, ts', srt1)))
   | App (IntConst n, [], srt) as i -> 
         Debug.debug (fun () -> sprintf "IntConst (%s)\n" (string_of_term i));
         fc state i
@@ -142,6 +137,25 @@ let rec eval_forms state (fs: form list) (fc: symb_state -> form list -> 'a opti
           eeval state' ffs' (f :: symb_fs) fc)
   in
   eeval state fs [] fc
+
+and eval_form_2 state f (fc: symb_state -> form -> 'a option) =
+  Debug.debug(fun() ->
+    sprintf "%sEval Form: %s\n State:\n{%s\n}\n\n"
+    lineSep (string_of_form f) (string_of_state state));
+  match f with
+  | Atom (t, a) -> 
+    Debug.debug(fun () ->
+      sprintf "***** Atom \n");
+      eval_term state t (fun state' t' ->
+        fc state' (Atom ((mk_f_snap (sort_of t') t'), a)))
+  | BoolOp (op, fs) ->
+    Debug.debug(fun () ->
+      sprintf "***** BoolOp\n");
+    eval_forms state fs (fun state' fs' ->
+      fc state' (BoolOp (op, fs')))
+  | Binder (binder, [], f, a) -> fc state (Binder (binder, [], f, a))
+  | Binder (binder, ts, f, _) -> todo "eval binder catch all"
+
 
 and eval_form state f (fc: symb_state -> form -> 'a option) =
   Debug.debug(fun() ->
@@ -214,3 +228,16 @@ and eval_sl_form state f (fc: symb_state -> Sl.form -> 'a option) =
     eval_sl_forms state slfs (fun state' slfs' ->
       fc state' (Sl.BoolOp (op, slfs', pos)))
   | Sl.Binder (b, ids, slf, pos) -> todo "sl binder eval"
+
+let eval_spec_form state sf (fc: symb_state -> form -> 'a option) =
+  match sf with
+  | Prog.FOL fol -> eval_form state fol fc
+  | Prog.SL slf -> failwith "cannot call eval_spec_form on an sl formula"
+
+let rec eval_spec_list state (assns: Prog.spec list) fc =
+  match assns with
+  | [] -> None 
+  | hd :: assns' -> 
+    (match eval_spec_form state hd.spec_form fc with
+    | Some err -> Some err
+    | None -> eval_spec_list state assns' fc)
