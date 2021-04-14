@@ -423,7 +423,8 @@ let verify_function spl_prog prog aux_axioms func =
     let st2 = {st with store = havoc st.store [return_term]} in
     produce_symb st2 body.spec_form (fresh_snap_tree ()) (fun st3 ->
         consumes st3 postcond (fun st3' snap -> 
-          gen_fun_axiom name formal_terms (sort_of return_term) st3' 
+          let _ = fun_axiom name formal_terms (sort_of return_term) st3' in
+          None
     )))
   in
   aux_axioms, []

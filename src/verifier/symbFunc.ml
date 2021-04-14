@@ -35,7 +35,7 @@ let string_of_sorted_ids ids =
   |> String.concat ", "
   |> sprintf "[%s]"
 
-let gen_fun_axiom name args srt state =
+let fun_axiom name args srt state =
   Debug.debug(fun () -> sprintf "Generating function axiom for (%s) \n State:\n {%s\n}\n\n"
     (string_of_ident name) (string_of_state state));
 
@@ -68,6 +68,4 @@ let gen_fun_axiom name args srt state =
   let name, _ = (fun_axiom_id rhs_srt) in
 
   let fun_axiom = mk_forall bounds pred in
-  let axiom = mk_axiom name fun_axiom in  
-  Debug.debug(fun () -> sprintf "%s\n" (string_of_form axiom));
-  None
+  mk_axiom name fun_axiom
