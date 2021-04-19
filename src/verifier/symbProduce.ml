@@ -8,13 +8,6 @@ open Grass
 open Printf
 open Util
 
-let produce_symb_form_2 state f srt snp (fc: symb_state -> 'a option) =
-  let s2 = { state with pc = pc_add_path_cond state.pc f} in
-  let s3 = {s2 with pc = pc_add_path_cond s2.pc 
-    (mk_atom Eq [mk_f_snap srt snp; emp_snap])}
-  in
-  fc s3
-
 let produce_symb_form state f snp (fc: symb_state -> 'a option) =
   let s2 = { state with pc = pc_add_path_cond state.pc f} in
   let s3 = {s2 with pc = pc_add_path_cond s2.pc 
@@ -128,5 +121,6 @@ let rec produces state (assns: Prog.spec list) snp fc =
   | [] -> None 
   | hd :: assns' -> 
     (match produce state hd.spec_form snp fc with
+    (* either type err or value. *) 
     | Some err -> Some err
     | None -> produces state assns' snp fc)

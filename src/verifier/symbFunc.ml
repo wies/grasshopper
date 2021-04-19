@@ -17,7 +17,7 @@ let sort_of_ret_val f =
 let subst_ret_val f sub = 
   match f with
   | Atom (App (Eq, [h1; h2], a), b) ->  Atom (App (Eq, [sub; h2], a), b)  
-  | _ -> failwith "foo"
+  | _ -> f 
 
 let get_ret_val f = 
   match f with

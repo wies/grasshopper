@@ -73,6 +73,7 @@ module Opt = struct
 end
 
 (** The Either type to represent values of two possible types. *)
+(* first will be the normal value and the second will be the error. Unit can mean we don't care about the value.*)
 module Either = struct
   type ('a, 'b) t =
     | First of 'a

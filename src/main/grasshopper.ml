@@ -212,6 +212,7 @@ let check_function spl_prog func =
 
   let check simple_prog (aux_axioms, first) func =
     let aux_axioms, first = check_func aux_axioms func in
+    let _ = List.iter (fun f -> Printf.printf "axioms (%s)\n" (string_of_form f))    aux_axioms in
     aux_axioms, true 
   in
   List.fold_left (check prog) ([], true) (functions)

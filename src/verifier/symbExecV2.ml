@@ -33,10 +33,24 @@ let subst_spec_list subst_map sl =
   List.map (fun s -> 
     {s with spec_form=subst_spec_form subst_map s.spec_form}) sl
 
+let pr_spec_form_list sfl =
+  sfl
+  |> List.map (fun v -> (string_of_format pr_spec_form v))
+  |> String.concat ", "
+  |> sprintf "[%s]"
+
+
 (* Extract the formal output parameters identifiers of a procedure foo in program prog *)
 let return_ids_of foo prog =
   let foo_contr =(find_proc prog foo).proc_contract in 
   foo_contr.contr_returns
+
+let subst_spec_list_formals state sl proc args =
+  let sm = 
+    List.combine (formal_ids_of proc state.prog) args
+    |> List.fold_left (fun sm (f, a) -> IdMap.add f a sm) IdMap.empty 
+  in
+  subst_spec_list sm sl
 
 let postcond_of foo prog =
   (find_proc prog foo).proc_contract.contr_postcond
@@ -70,13 +84,6 @@ let subst_precond_formals foo prog args =
   in
   subst_spec_list sm (precond_of foo prog) 
 
-let subst_spec_list_formals state sl proc args =
-  let sm = 
-    List.combine (formal_ids_of proc state.prog) args
-    |> List.fold_left (fun sm (f, a) -> IdMap.add f a sm) IdMap.empty 
-  in
-  subst_spec_list sm sl
-
 let subst_spec_list_return_ids state postcond foo lhs_ids =
   let sm_lhs =
     let lhs_ts =
@@ -90,12 +97,6 @@ let subst_spec_list_return_ids state postcond foo lhs_ids =
         IdMap.add id t sm) IdMap.empty 
   in
   subst_spec_list sm_lhs postcond
-
-let pr_spec_form_list sfl =
-  sfl
-  |> List.map (fun v -> (string_of_format pr_spec_form v))
-  |> String.concat ", "
-  |> sprintf "[%s]"
 
 let loop_target_terms state comm = 
   let loop_modified = modifies_cmd comm in
@@ -329,7 +330,6 @@ let rec exec state comm (fc: symb_state -> 'a option) =
       let body = (IdMap.find pc.pred_name state.prog.prog_preds).pred_body in
       match body with
       | Some b ->
-
         Debug.debug (fun () -> sprintf "body (%s)\n" (string_of_format pr_spec_form b));
         let ids = (IdMap.find pc.pred_name state.prog.prog_preds).pred_contract.contr_formals in 
         let sm =
@@ -419,14 +419,18 @@ let verify_function spl_prog prog aux_axioms func =
 
   let body = (IdMap.find name prog.prog_preds).pred_body |> Opt.get in
 
+  (* change this to be an either type *)
   let _ = produces init_state precond (fresh_snap_tree ()) (fun st ->
     let st2 = {st with store = havoc st.store [return_term]} in
     produce_symb st2 body.spec_form (fresh_snap_tree ()) (fun st3 ->
         consumes st3 postcond (fun st3' snap -> 
           let _ = fun_axiom name formal_terms (sort_of return_term) st3' in
+          (* instea of let aux_axioms = fa :: aux_axioms in *)
+          (* we can use an either type and return an error if the continuation fails, or the axioms.*)
           None
     )))
   in
+
   aux_axioms, []
 
 

@@ -36,15 +36,26 @@ let rec consume_sl_symb_form_impl state heap (f: Sl.form) f_eval_form f_eval_ter
       f_eval_term state r (fun state' t' ->
         let (chunk, h') = heap_remove_by_term state.pc state.heap t' in
         fc state h' (emp_snap))
-  | Sl.Atom (Sl.Region, ts, _) -> fc state heap (emp_snap)
+  | Sl.Atom (Sl.Region, [obj; App (FreeSym id, _, _)], _) -> 
+     
+     f_eval_term state obj (fun state' obj' ->
+       let hc = heap_find_by_field_id state'.pc state'.heap state'.prog obj' id in
+        Debug.debug(fun () -> sprintf "found heap chunk (%s)\n" (string_of_hc hc)); 
+        let h' = heap_remove state'.heap state'.pc hc in 
+
+        fc {state' with heap=h'} h' (get_heap_chunk_snap hc))
+  | Sl.Atom (Sl.Region, ts, _) -> todo "region ts" 
   | Sl.Atom (Sl.Pred id, ts, _) -> 
      f_eval_terms state ts (fun state' ts' ->
         let pred_chunk = heap_find_pred_chunk state'.pc state'.heap id ts' in
         let h' = heap_remove state'.heap state'.pc pred_chunk in 
+
         fc {state' with heap=h'} h' (get_heap_chunk_snap pred_chunk))
   | Sl.SepOp (Sl.SepStar, f1, f2, _) ->
      Debug.debug( fun() -> sprintf "SL SepOp SepStar \n");
-     fc state heap (emp_snap)
+    consume_sl_symb_form_impl state heap f1 f_eval_form f_eval_terms f_eval_term (fun st2 h2 s1 ->
+      consume_sl_symb_form_impl st2 h2 f2 f_eval_form f_eval_terms f_eval_term (fun st3 h3 s2 ->
+        fc st3 h3 (snap_pair s1 s2)))
   | Sl.SepOp (Sl.SepIncl, _, _, _) ->
      Debug.debug( fun() -> sprintf "SL SepOp SepIncl\n");
      fc state heap (emp_snap)
@@ -83,7 +94,9 @@ let rec consume_sl_form_impl state heap (f: Sl.form) f_eval_form f_eval_terms f_
         fc {state' with heap=h'} h' (get_heap_chunk_snap pred_chunk))
   | Sl.SepOp (Sl.SepStar, f1, f2, _) ->
      Debug.debug( fun() -> sprintf "SL SepOp SepStar \n");
-     fc state heap (emp_snap)
+     consume_sl_form_impl state heap f1 f_eval_form f_eval_terms f_eval_term (fun st2 h2 s1 ->
+       consume_sl_form_impl st2 h2 f2 f_eval_form f_eval_terms f_eval_term (fun st3 h3 s2 ->
+         fc st3 h3 (snap_pair s1 s2)))
   | Sl.SepOp (Sl.SepIncl, _, _, _) ->
      Debug.debug( fun() -> sprintf "SL SepOp SepIncl\n");
      fc state heap (emp_snap)
@@ -110,6 +123,13 @@ let consume_symb_impl state heap (sf: Prog.spec_form) f_eval_form f_eval_terms f
   match sf with
   | Prog.FOL fol -> consume_form_impl state heap fol f_eval_form fc
   | Prog.SL slf -> consume_sl_symb_form_impl state heap slf f_eval_form f_eval_terms f_eval_term fc
+
+let rec consumes_sf_impl state heap (sf: Prog.spec_form list) f_eval_form f_eval_terms f_eval_term (fc: symb_state -> symb_heap -> term -> 'a option) =
+  match sf with
+  | [] -> fc state heap (emp_snap)
+  | hd :: sfs' -> 
+      consume_symb_impl state state.heap hd f_eval_form f_eval_terms f_eval_term (fun state' h' snap' ->
+        consumes_sf_impl state state.heap sfs' f_eval_form f_eval_terms f_eval_term (fun state'' h'' snap'' -> fc state'' h'' (snap_pair snap' snap'')))
 
 let rec consumes_symb_impl state (assns: Prog.spec list) f_eval_form f_eval_terms f_eval_term fc =
   match assns with

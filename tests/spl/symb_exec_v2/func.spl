@@ -12,6 +12,15 @@ function f(x: Node, y: Node) returns (z: Int)
   x.data + y.data
 }
 
+procedure add_nodes(a: Node, b: Node) returns (c: Node)
+  requires acc(a.data) &*& acc(b.data)
+  ensures acc(a.data) &*& acc(b.data) &*& acc(c.data) &*& c.data == a.data + b.data
+{
+  var z := f(a, b);
+  c := new Node();
+  c.data := z;
+}
+
 /*
 procedure foo(a: Int) returns (b: Int)
   requires a == 2
@@ -23,12 +32,5 @@ procedure pure_proc_call(c: Int, d: Int)
 {
   c := foo(c);
 }
-procedure add_nodes(a: Node, b: Node) returns (c: Node)
-  requires acc(a) &*& acc(b)
-  ensures acc(a) &*& acc(b) &*& acc(c) &*& c.data == a.data + b.data
-{
-  var z := f(a, b);
-  c := new Node();
-  c.data := z;
-}
+
 */

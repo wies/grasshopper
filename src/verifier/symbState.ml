@@ -13,6 +13,10 @@ let todo str = raise (NotYetImplemented str)
 exception SymbExecFail of string
 let raise_err str = raise (SymbExecFail str)
 
+(** Verification result type. *)
+(* first indicates a successful verification, the second indicates an error and carries a message. *)
+type result = (form list, string) Either.t 
+
 (** Symbolic values *)
 let mk_fresh_symb_var prefix srt = 
   mk_var srt (fresh_ident prefix) 
